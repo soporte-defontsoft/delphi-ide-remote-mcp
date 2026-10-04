@@ -155,14 +155,14 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Masks,
-  System.RegularExpressions,
   System.Generics.Collections,
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,
   Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
   Mcp.Vault.Session,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Regex;
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K
@@ -509,7 +509,7 @@ var
   Max, Hits, LineNo: Integer;
   Sb: TStringBuilder;
   ByContent: Boolean;
-  Rx: TRegEx;
+  Expr: TExprDelAgente;
   F: string;
 begin
   if not VaultConfigured then
@@ -544,16 +544,21 @@ begin
         [Params.Subfolder.Trim]));
   end;
 
+  // la expresion es del AGENTE: Lsp.Regex, que la compila antes de leer nada
+  // y dice tambien cuando el motor se rinde. Con TRegEx, una que agota los
+  // pasos del motor ((a+)+$ en una linea larga) daba "sin resultados" en
+  // silencio: el gemelo de delphi_search (revision de la 1.13.0)
+  Expr := nil;
   if ByContent then
-    try
-      Rx := TRegEx.Create(Pat, [roIgnoreCase]);
-      // la compilacion es perezosa: sin esto una regex rota reventaba en el
-      // primer IsMatch (INTERNAL) o contestaba "sin resultados"
-      Rx.IsMatch('');
-    except
-      on E: Exception do
-        Exit(MsgFmt(SR_VAULT_PATTERN_REGEX_INVALIDA_FMT, [E.Message]));
+  begin
+    var ErrRx: string;
+    Expr := TExprDelAgente.Create(Pat, ErrRx);
+    if ErrRx <> '' then
+    begin
+      Expr.Free;
+      Exit(MsgFmt(SR_VAULT_PATTERN_REGEX_INVALIDA_FMT, [ErrRx]));
     end;
+  end;
   // el gemelo para target=files: una mascara rota ("[a-") reventaba en el
   // primer MatchesMask (INTERNAL) (verificacion de la tercera ronda)
   if not ByContent then
@@ -587,12 +592,17 @@ begin
         for Line in LineasDelTexto(Text) do // numeradas como vault_read
         begin
           Inc(LineNo);
-          if Rx.IsMatch(Line) then
-          begin
-            Sb.AppendLine(Format('%s:%d: %s', [Rel, LineNo, Line.Trim]));
-            Inc(Hits);
-            if Hits >= Max then
-              Break;
+          var Ini, Lon: Integer;
+          case Expr.Busca(Line, 1, Ini, Lon) of
+            rbCasa:
+              begin
+                Sb.AppendLine(Format('%s:%d: %s', [Rel, LineNo, Line.Trim]));
+                Inc(Hits);
+                if Hits >= Max then
+                  Break;
+              end;
+            rbSeRinde:
+              Exit(MsgFmt(SR_SEARCH_REGEX_CARA_FMT, [LineNo, Rel]));
           end;
         end;
       end
@@ -613,6 +623,7 @@ begin
   finally
     Sb.Free;
     Notes.Free;
+    Expr.Free;
   end;
 end;
 

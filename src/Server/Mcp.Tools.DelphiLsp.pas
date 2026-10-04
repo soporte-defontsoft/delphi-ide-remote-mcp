@@ -343,8 +343,8 @@ end;
   puede hacer una tool de lectura es contestar algo FALSO con seguridad. El
   arbol, los kinds y las lineas siguen siendo del LSP: lo unico que se deja de
   creer es su forma de escribir una declaracion. }
-function StatementAt(const ALines, AVista: TArray<string>; ADesde: Integer;
-  out AHasta: Integer): string;
+function StatementAt(const ALines, AVista: TArray<string>; AUnidad: TUnidadPas;
+  ADesde: Integer; out AHasta: Integer): string;
 
   // Cuantos '(' quedan abiertos en AText (la vista: sin comentarios), fuera
   // de sus cadenas: el '(' de una cadena no abre nada
@@ -436,10 +436,12 @@ begin
   K := ADesde;
   // Una cabecera de class/record/interface ABRE un bloque; no es una
   // sentencia a medias, y unirle lo que viene detras pegaba el primer campo
-  // a la linea de la clase.
-  if TRegEx.IsMatch(Vista,
-    '(?i)^' + PATRON_IDENT + '[ ]*=[ ]*(packed[ ]+)?(class|record|interface)\b') and
-     not Vista.EndsWith(';') then
+  // a la linea de la clase. Cual lo es lo dice EL lector de clases: con una
+  // regex, la de un generico (TFoo<T: class> = class) no lo era y se pegaba
+  // (revision de la 1.13.0, medido en vendor\src\Resources)
+  var Tipo := AUnidad.TipoQueEmpiezaEn(ADesde);
+  if (Tipo <> nil) and (Tipo.Clase in [ctClase, ctRegistro, ctInterfaz, ctAyudante]) and
+     not Tipo.SinCuerpo and not Vista.EndsWith(';') then
     Exit;
   // Un ';' DENTRO de la lista de parametros es un separador, no el final de
   // nada: "function Alta(const A, B: string; C: Integer;" parece terminada y
@@ -585,7 +587,8 @@ end;
 
   Solo los kinds que SON una declaracion: en la clausula uses cada unit es un
   simbolo de kind "file" y unir desde su linea se tragaria la clausula entera. }
-procedure DecorateSymbolDecls(V: TJSONValue; const ALines, AVista: TArray<string>);
+procedure DecorateSymbolDecls(V: TJSONValue; const ALines, AVista: TArray<string>;
+  AUnidad: TUnidadPas);
 const
   DECLARAN = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 22, 23];
 var
@@ -597,7 +600,7 @@ begin
   if V is TJSONArray then
   begin
     for Item in TJSONArray(V) do
-      DecorateSymbolDecls(Item, ALines, AVista);
+      DecorateSymbolDecls(Item, ALines, AVista, AUnidad);
     Exit;
   end;
   if not (V is TJSONObject) then
@@ -612,12 +615,12 @@ begin
     if (Obj.GetValue<Integer>('kind', 0) in DECLARAN) and (Ln >= 0) and
        (Obj.GetValue('decl') = nil) then
     begin
-      Decl := StatementAt(ALines, AVista, Ln, Fin);
+      Decl := StatementAt(ALines, AVista, AUnidad, Ln, Fin);
       if Decl <> '' then
         Obj.AddPair('decl', Decl);
     end;
   end;
-  DecorateSymbolDecls(SymChildren(Obj), ALines, AVista);
+  DecorateSymbolDecls(SymChildren(Obj), ALines, AVista, AUnidad);
 end;
 
 { El arbol de un fichero tal como sale (mode=full, o el automatico de uno
@@ -842,7 +845,7 @@ var
   var
     Fin: Integer;
   begin
-    Result := StatementAt(Lines, Vista, AIdx, Fin);
+    Result := StatementAt(Lines, Vista, U, AIdx, Fin);
     AIdx := Fin;
   end;
 
@@ -866,7 +869,12 @@ begin
   // la linea donde empieza y acaba cada tipo. Aqui se abria con una regex y
   // se cerraba en el primer 'end;': un record anidado cerraba la clase y lo
   // de detras quedaba sin dueno (censo del 4-oct-2026)
-  U := LeeFuentePascal(Text);
+  try
+    U := LeeFuentePascal(Text);
+  except
+    Result.Free;
+    raise;
+  end;
   try
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
@@ -905,9 +913,12 @@ begin
     // member belonged to which class, and hid the private fields entirely -
     // one of them being the subject of a refactor. (La linea del nombre de un
     // tipo es de donde se declara; un helper es un tipo con bloque tambien)
-    Dueno := U.TipoEnLinea(I, [ctClase, ctRegistro, ctInterfaz, ctOtro], True);
+    Dueno := U.TipoEnLinea(I, [ctClase, ctRegistro, ctInterfaz, ctAyudante, ctOtro], True);
     J := I;
-    if TRegEx.IsMatch(L, '(?i)^(class[ ]+)?(?:' + PatronPalabraDeRutina + '|property)\b') or
+    // la cabecera de un tipo, del lector: la de un generico (TFoo<T: class,
+    // constructor> = class) no casaba con las regex y no salia
+    if (U.TipoQueEmpiezaEn(I) <> nil) or
+       TRegEx.IsMatch(L, '(?i)^(class[ ]+)?(?:' + PatronPalabraDeRutina + '|property)\b') or
        TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*=[ ]*(class|record|interface|packed|\()') or
        TRegEx.IsMatch(L, '(?i)^' + PATRON_IDENT + '[ ]*=[ ]*') or
        ((Dueno <> nil) and TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*:[ ]*' + PATRON_IDENT)) then
@@ -998,7 +1009,7 @@ begin
       Ret.AddPair('total', TJSONNumber.Create(N));
       if N > Units.Count then
         Ret.AddPair('notShownNote', MsgFmt(SN_SYMBOLS_DIGEST_FUERA_FMT,
-          [TOPE_DIGEST_CARPETA, N - Units.Count]))
+          [TOPE_DIGEST_CARPETA, N - Units.Count, Fuera.Count]))
       else
         Ret.RemovePair('notShown').Free;
       Ret.AddPair('note', MsgText(SN_SYMBOLS_DIGEST_NOTE));
@@ -1046,7 +1057,12 @@ begin
     try
       var EncSim: string;
       var TextoSim := PatchLoadText(Params.Path, EncSim);
-      DecorateSymbolDecls(V, LineasDelTexto(TextoSim), LineasDelTexto(BlankComments(TextoSim)));
+      var USim := LeeFuentePascal(TextoSim);
+      try
+        DecorateSymbolDecls(V, LineasDelTexto(TextoSim), LineasDelTexto(BlankComments(TextoSim)), USim);
+      finally
+        USim.Free;
+      end;
     except
       // un fichero que el LSP si pudo abrir y nosotros no: mejor el arbol
       // pelado que ningun arbol
@@ -1108,8 +1124,12 @@ begin
     begin
       var TgtPath := TLspClient.UriToPath(DefLoc.Uri);
       var Col := RoutineIdentCol(TgtPath, DefLoc.Line);
-      var C2 := TLspSession.Instance.AcquireFor(TgtPath, Settings);
-      var DeclResp := C2.Declaration(DefLoc.Uri, DefLoc.Line, Col);
+      // al MISMO motor, que es el que ha llevado hasta ahi (Lsp.Session.AbreEn):
+      // con AcquireFor, una unidad de la RTL o de otro proyecto arrancaba su
+      // propio motor y pisaba Settings con el suyo (una nota LSP-021 falsa).
+      // El gemelo del arreglo de references (revision de la 1.13.0)
+      TLspSession.Instance.AbreEn(Client, TgtPath);
+      var DeclResp := Client.Declaration(DefLoc.Uri, DefLoc.Line, Col);
       var DeclLoc: TLoc;
       if ParseLoc(DeclResp.GetValue('result'), DeclLoc) and
          not ((DeclLoc.Line = DefLoc.Line) and SameText(DeclLoc.Uri, DefLoc.Uri)) then

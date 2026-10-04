@@ -31,6 +31,23 @@ seen red against the line readers, the 1.12.1 exe):
   C8  ONE list of routine directives (Lsp.Pascal): insert=metodo did not
       know noreturn, and left it on the implementation
 
+And what the review of 1.13.0 found in the reader itself:
+
+  C9  a class helper has methods: insert=metodo found it with the old regex
+      and not with the reader (it skipped the helper whole)
+  C10 a generic class qualifies its implementation with its parameters
+      (TCaja<T>.X; TCaja.X does not compile) and sees the one already there
+  C11 an interposer class (TBaseInter = class(UBaseInter.TBaseInter)) is
+      not a cycle: check-binding called the inherited components missing
+  C12 a class header repeated in the two branches of an IFDEF is not a
+      nested type: everything after it was nested in it
+  C13 a routine body repeated in the two branches is not the main block:
+      the implementation classes after it were gone
+  C14 the header of a generic class is a header: missing from the digest,
+      and its first field glued to it by symbols filter
+  C15 the fields of a 'class var' are class fields (the record said so and
+      nobody set it): a component with only a class var has no field
+
 Usage:  python tests/test_lector_clases.py [path-to-DelphiLspMcp.exe]
 """
 import os
@@ -308,6 +325,260 @@ check('C8 noreturn es una directiva: va con la declaracion, no con la implementa
       'procedure TDir.Fallar;' in impl and 'noreturn' not in impl, r[:300] + ' | ' + u)
 ok, err = build_ok(DPROJ)
 check('C8b ...y el proyecto COMPILA', ok, err)
+
+# ---- C9..C14: lo que dejo la revision de la 1.13.0 ----
+def unidad(nombre, texto):
+    call('delphi_create', {'kind': 'unit', 'name': nombre, 'project': DPR})
+    ruta = os.path.join(PRJ, nombre + '.pas')
+    escribe(ruta, texto)
+    return ruta
+
+
+# C9: un class helper tiene metodos (el lector lo saltaba y insert no lo veia)
+UAYU = unidad('UAyuda', """unit UAyuda;
+
+interface
+
+uses
+  System.Classes;
+
+type
+  TListaAyuda = class helper for TStringList
+  public
+    function Cuantas: Integer;
+  end;
+
+implementation
+
+function TListaAyuda.Cuantas: Integer;
+begin
+  Result := Count;
+end;
+
+end.
+""")
+r = call('delphi_edit', {'path': UAYU, 'insert': 'metodo', 'inclass': 'TListaAyuda',
+                         'code': 'function Vacia: Boolean;\nbegin\n  Result := Count = 0;\nend;'})
+u = rd(UAYU)
+check('C9 insert=metodo en un class helper: las dos mitades',
+      mc.abre(r, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and 'function TListaAyuda.Vacia: Boolean;' in u,
+      r[:300] + ' | ' + u[-400:])
+
+# C10: una clase generica se cualifica con sus parametros (TCaja.X no compila)
+UCAJA = unidad('UCaja', """unit UCaja;
+
+interface
+
+type
+  TCaja<T: class, constructor> = class(TObject)
+  private
+    FValor: T;
+  public
+    procedure Pon(const AValor: T);
+  end;
+
+implementation
+
+procedure TCaja<T>.Pon(const AValor: T);
+begin
+  FValor := AValor;
+end;
+
+end.
+""")
+r = call('delphi_edit', {'path': UCAJA, 'insert': 'metodo', 'inclass': 'TCaja',
+                         'code': 'procedure Vacia;\nbegin\n  FValor := Default(T);\nend;'})
+u = rd(UCAJA)
+check('C10 insert=metodo en una generica: TCaja<T>.Vacia en la implementacion',
+      mc.abre(r, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and 'procedure TCaja<T>.Vacia;' in u,
+      r[:300] + ' | ' + u[-400:])
+antes = open(UCAJA, 'rb').read()
+r = call('delphi_edit', {'path': UCAJA, 'insert': 'metodo', 'inclass': 'TCaja',
+                         'code': 'procedure Pon(const AValor: T);\nbegin\nend;'})
+check('C10b ...y la que ya estaba (TCaja<T>.Pon) se ve: entera, nada escrito',
+      mc.rechazado(r) and mc.es(r, 'SR_EDIT_EXISTE_ENTERO_DECLARACION_LINEA_FMT') and
+      open(UCAJA, 'rb').read() == antes, r[:300])
+
+# C11: la clase interpuesta (TBaseInter = class(UBaseInter.TBaseInter)) no es un
+# ciclo: la cadena sale de la unidad y lo heredado no "falta"
+FI_PAS = os.path.join(PRJ, 'UFormInter.pas')
+escribe(FI_PAS, """unit UFormInter;
+
+interface
+
+uses
+  Vcl.Forms, Vcl.StdCtrls, System.Classes, UBaseInter;
+
+type
+  TBaseInter = class(UBaseInter.TBaseInter)
+  end;
+
+  TFormInter = class(TBaseInter)
+    lblPropio: TLabel;
+  end;
+
+implementation
+
+{$R *.dfm}
+
+end.
+""")
+FI_DFM = os.path.join(PRJ, 'UFormInter.dfm')
+escribe(FI_DFM, """inherited FormInter: TFormInter
+  inherited lblHeredado: TLabel
+  end
+  object lblPropio: TLabel
+  end
+end
+""")
+d = J(call('delphi_designer', {'command': 'check-binding', 'path': FI_DFM}))
+check('C11 check-binding con una interpuesta: lo heredado no falta y se dice que la cadena sale',
+      d.get('clean') is True and not d.get('componentsWithoutField') and 'partialNote' in d,
+      str(d)[:500])
+
+# C12: las dos ramas de un IFDEF con la cabecera repetida: lo de detras no es
+# un tipo anidado (insert escribia TDos.TDetras.Tres)
+UDOS = unidad('UDosRamas', """unit UDosRamas;
+
+interface
+
+type
+{$IFDEF NUNCA_DEFINIDO}
+  TDos = class(TInterfacedObject)
+{$ELSE}
+  TDos = class(TObject)
+{$ENDIF}
+  public
+    procedure Uno;
+  end;
+
+  TDetras = class
+  public
+    procedure Dos;
+  end;
+
+implementation
+
+procedure TDos.Uno;
+begin
+end;
+
+procedure TDetras.Dos;
+begin
+end;
+
+end.
+""")
+r = call('delphi_edit', {'path': UDOS, 'insert': 'metodo', 'inclass': 'TDetras',
+                         'code': 'procedure Tres;\nbegin\nend;'})
+u = rd(UDOS)
+check('C12 detras de una cabecera repetida por un IFDEF: TDetras.Tres, no TDos.TDetras.Tres',
+      mc.abre(r, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and 'procedure TDetras.Tres;' in u and
+      'TDos.TDetras' not in u, r[:300] + ' | ' + u[-500:])
+
+# C13: el cuerpo de una rutina repetido en las dos ramas: las clases del
+# implementation de detras siguen ahi
+UCUE = unidad('UCuerpoDoble', """unit UCuerpoDoble;
+
+interface
+
+procedure Suma;
+
+implementation
+
+procedure Suma;
+{$IFDEF NUNCA_DEFINIDO}
+begin
+end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
+
+type
+  TDetrasImpl = class
+  public
+    procedure Hola;
+  end;
+
+procedure TDetrasImpl.Hola;
+begin
+end;
+
+end.
+""")
+r = call('delphi_edit', {'path': UCUE, 'insert': 'metodo', 'inclass': 'TDetrasImpl',
+                         'code': 'procedure Adios;\nbegin\nend;'})
+u = rd(UCUE)
+check('C13 una clase del implementation detras de un cuerpo repetido: insert la encuentra',
+      mc.abre(r, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and 'procedure TDetrasImpl.Adios;' in u,
+      r[:300] + ' | ' + u[-400:])
+ok, err = build_ok(DPROJ)
+check('C9b..C13b ...y el proyecto COMPILA (helper, generica, dos ramas, cuerpo doble)', ok, err)
+
+# C14: la cabecera de una generica (TGen<T: class, constructor> = class) es
+# una cabecera: sale en el resumen y no se le pega su primer campo
+UGEN = os.path.join(DIG, 'UDigGen.pas')
+escribe(UGEN, """unit UDigGen;
+
+interface
+
+type
+  TGen<T: class, constructor> = class(TObject)
+  protected
+    FDato: T;
+  end;
+
+implementation
+
+end.
+""")
+d = J(call('delphi_symbols', {'path': DIG}))
+decls = [x for u_ in d.get('units', []) if u_.get('unit') == 'UDigGen' for x in u_.get('declares', [])]
+cab = [x for x in decls if x.get('decl', '').startswith('TGen<')]
+check('C14 digest: la cabecera de una generica sale, sin su primer campo',
+      len(cab) == 1 and 'FDato' not in cab[0]['decl'] and
+      any(x.get('decl') == 'FDato: T;' and x.get('of') == 'TGen' for x in decls), str(decls)[:500])
+# (el texto tal cual: sin settings de proyecto, detras del JSON va la nota LSP-021)
+f = call('delphi_symbols', {'path': UGEN, 'filter': 'TGen'})
+check('C14b symbols filter: el decl de la generica no lleva pegado su primer campo',
+      '"decl":"TGen<T: class, constructor> = class(TObject)"' in f, f[:500])
+
+# C15: un class var no es el campo de un componente (el streaming busca campos
+# de la instancia): el lector no marcaba los campos de un 'class var'. En la
+# seccion published implicita, donde check-binding mira
+CV_PAS = os.path.join(PRJ, 'UFormCV.pas')
+escribe(CV_PAS, """unit UFormCV;
+
+interface
+
+uses
+  Vcl.Forms, Vcl.StdCtrls, System.Classes;
+
+type
+  TFormCV = class(TForm)
+    lblBien: TLabel;
+    class var lblDeClase: TLabel;
+  end;
+
+implementation
+
+{$R *.dfm}
+
+end.
+""")
+CV_DFM = os.path.join(PRJ, 'UFormCV.dfm')
+escribe(CV_DFM, """object FormCV: TFormCV
+  object lblBien: TLabel
+  end
+  object lblDeClase: TLabel
+  end
+end
+""")
+d = J(call('delphi_designer', {'command': 'check-binding', 'path': CV_DFM}))
+check('C15 check-binding: el componente que solo tiene un class var no tiene campo',
+      d.get('clean') is False and 'lblDeClase' in str(d.get('componentsWithoutField')) and
+      'lblBien' not in str(d.get('componentsWithoutField')), str(d)[:500])
 
 srv.cierra()
 mc.fin('lector-clases battery')

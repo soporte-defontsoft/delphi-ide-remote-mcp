@@ -1237,7 +1237,9 @@ procedure OlvidaSalidaHecha;
 function CitaDeLinea(N: Integer; const ATexto: string): string;
 { Para la tool que devuelve JSON con CONTENIDO de un fichero en algunos
   campos (references y rename_symbol: "text" y "anchor", la linea tal cual;
-  symbols: las declaraciones; designer: los valores de las propiedades):
+  symbols: las declaraciones; signature y completion: la documentacion; NO
+  delphi_designer: su get devuelve las lineas del .dfm como texto, por el
+  filtro general):
   enmascara todas las demas cadenas y deja esos campos, con todo lo que cuelga
   de ellos, como estan; el filtro de salida de ESTA llamada deja pasar el
   resultado. Lo que no se nombra se enmascara: un campo nuevo no se escapa.
@@ -1322,7 +1324,8 @@ uses
   Lsp.Patch,            // TrashFolderName: el nombre de la papelera, de SU nombrador
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Sandbox,          // PurgaContenedoresHuerfanos: la otra mitad de la casa
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Json;
 
 type
   { A token-scoped sandbox from a [Workspace.<name>] section. }
@@ -3975,7 +3978,7 @@ const
 function ConNota(const AText, AClave, ANota: string;
   const ASeparador: string): string;
 var
-  V: TJSONValue;
+  O: TJSONObject;
   T: string;
 begin
   Result := AText;
@@ -3984,16 +3987,14 @@ begin
   T := AText.TrimRight;
   if T.StartsWith('{') and T.EndsWith('}') then
   begin
-    V := TJSONObject.ParseJSONValue(T);
-    if V is TJSONObject then
+    O := ObjetoJson(T); // EL lector (Lsp.Json): estaba su cuerpo aqui
+    if O <> nil then
       try
-        TJSONObject(V).AddPair(AClave, ANota.Trim);
-        Exit(V.ToJSON);
+        O.AddPair(AClave, ANota.Trim);
+        Exit(O.ToJSON);
       finally
-        V.Free;
-      end
-    else
-      V.Free;
+        O.Free;
+      end;
   end;
   Result := AText + ASeparador + ANota;
 end;
@@ -7369,7 +7370,10 @@ var
   Claves: TArray<string>;
 
   // una copia de AValor con sus cadenas enmascaradas, salvo lo que cuelga de
-  // un campo de Claves (que se copia tal cual)
+  // un campo de Claves (que se copia tal cual). Las CLAVES tambien: antes de
+  // esto el texto entero pasaba por la mascara y las cubria, y un objeto con
+  // rutas por clave (los changes de un WorkspaceEdit) saldria con la letra
+  // real (revision de la 1.13.0)
   function Transforma(AValor: TJSONValue): TJSONValue;
   begin
     if AValor is TJSONObject then
@@ -7379,7 +7383,7 @@ var
         if MatchText(P.JsonString.Value, Claves) then
           O.AddPair(P.JsonString.Value, TJSONValue(P.JsonValue.Clone))
         else
-          O.AddPair(P.JsonString.Value, Transforma(P.JsonValue));
+          O.AddPair(MaskDriveText('', P.JsonString.Value), Transforma(P.JsonValue));
       Result := O;
     end
     else if AValor is TJSONArray then

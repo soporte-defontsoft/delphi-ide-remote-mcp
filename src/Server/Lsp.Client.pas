@@ -181,14 +181,6 @@ type
     class function LoadSourceText(const AFilePath: string): string;
   end;
 
-{ EL lector de un JSON que tiene que ser un OBJETO: nil si el texto no es
-  JSON o es otra cosa (un array, un numero) - y lo leido se libera. Eran
-  cinco 'ParseJSONValue(...) as TJSONObject': con un .delphilsp.json que era
-  un array, toda tool del motor contestaba SYS-006 INTERNAL "Invalid class
-  typecast" (menor de la ronda 16, medido el 4-oct-2026), y lo leido se
-  perdia sin liberar. Quien llama libera el resultado. }
-function ObjetoJson(const ATexto: string): TJSONObject;
-
 implementation
 
 uses
@@ -196,18 +188,8 @@ uses
   Lsp.DesignerBin,
   System.StrUtils,
   MCPServer.Logger,
-  Lsp.Texts; // DecodeSourceBytes: el detector de encoding de delphi_read
-
-function ObjetoJson(const ATexto: string): TJSONObject;
-var
-  V: TJSONValue;
-begin
-  V := TJSONObject.ParseJSONValue(ATexto);
-  if V is TJSONObject then
-    Exit(TJSONObject(V));
-  V.Free;
-  Result := nil;
-end;
+  Lsp.Texts, // DecodeSourceBytes: el detector de encoding de delphi_read
+  Lsp.Json;  // ObjetoJson: EL lector de un JSON que tiene que ser un objeto
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);

@@ -143,8 +143,14 @@ if mc.junction(ENLACE, FUERA):
     try: j = json.loads(r)
     except Exception: j = {}
     uf = next((m for m in (j.get('missingUnits') or []) if m.get('unit') == 'UFueraX'), None)
+    # diagnostico: rojo una vez en una regresion entera (4-oct-2026) y verde
+    # suelto; si vuelve, que diga si en ESE momento la puerta de lectura deja
+    # leer por el enlace (jaula) o no (el filtro de UnitSourceFolders)
+    diag = ''
+    if uf is None or uf.get('sourceFolders'):
+        diag = ' | read por el enlace: ' + call('delphi_read', {'path': os.path.join(ENLACE, 'UFueraX.pas')})[:160]
     check('BUILD-042: un junction a una carpeta de fuera de la jaula no da candidatas',
-          uf is not None and not uf.get('sourceFolders'), json.dumps(uf or j)[:300])
+          uf is not None and not uf.get('sourceFolders'), json.dumps(uf or j)[:300] + diag)
     os.rmdir(ENLACE)  # el enlace, no lo de detras
 else:
     check('BUILD-042 (preparacion): el junction se pudo crear', False, ENLACE)

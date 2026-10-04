@@ -77,6 +77,10 @@ type
     [Test] procedure LasClasesDeUnPrograma;
     [Test] procedure LaCadenaDeAncestros;
     [Test] procedure UnaEtiquetaDeAsmNoCierraLaRutina;
+    [Test] procedure UnHelperEsUnTipoConMetodos;
+    [Test] procedure LosParametrosGenericosYSuImplementation;
+    [Test] procedure LasDosRamasDeUnIfdef;
+    [Test] procedure ClassVarYUnCampoStrict;
   end;
 
 implementation
@@ -90,7 +94,8 @@ uses
   Lsp.PascalDecl,
   Lsp.DesignerMetaGen,
   Lsp.DesignerMeta,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  System.RegularExpressions;
 
 function Codigo(const S: string): string;
 begin
@@ -226,13 +231,14 @@ begin
   S := SimbolosDeDelphi('37.0', 'Win32');
   try
     for var T in ['AnsiChar', 'WideString', 'UTF8Char', 'ShortString',
-      'PUTF8Char', 'TBytes', 'Float64', 'FixedInt', 'FixedUInt', 'AnsiString',
+      'PUTF8Char', 'TDateTime', 'Float64', 'FixedInt', 'FixedUInt', 'AnsiString',
       'System.AnsiChar'] do
       Assert.IsTrue(EvaluaCondicion('Declared(' + T + ')', S), T);
     Assert.IsFalse(EvaluaCondicion('Declared(TNoExiste)', S));
     Assert.IsFalse(EvaluaCondicion('not Declared(UTF8Char)', S));
     Assert.IsTrue(EvaluaCondicion('SizeOf(ShortString) = 256', S));
-    Assert.IsTrue(EvaluaCondicion('SizeOf(TBytes) = 4', S), 'un array dinamico es un puntero');
+    // TBytes es de System.SysUtils: sin ella, dcc dice que no (medido)
+    Assert.IsFalse(EvaluaCondicion('Declared(TBytes)', S), 'TBytes no es de System');
   finally
     S.Free;
   end;
@@ -1248,6 +1254,8 @@ begin
     '  TPack = packed class abstract(TBase)'#13#10 +
     '  end;'#13#10 +
     '  TSell = class sealed(TPack) end;'#13#10 +
+    '  TInter = class(Otra.TInter) end;'#13#10 +
+    '  TUsaInter = class(TInter) end;'#13#10 +
     'implementation end.');
   Mapa := TDictionary<string, string>.Create;
   try
@@ -1266,6 +1274,9 @@ begin
     Assert.AreEqual('TSell,TPack,TBase,TForm', string.Join(',', CadenaDeAncestros(Mapa, 'TSell', Sale)),
       'packed, abstract y sealed');
     Assert.AreEqual<Integer>(9, U.Clase('TPack').LineaFin);
+    // la interpuesta: la de fuera se llama igual y no es un ciclo
+    Assert.AreEqual('TUsaInter,TInter,Otra.TInter', string.Join(',', CadenaDeAncestros(Mapa, 'TUsaInter', Sale)));
+    Assert.IsTrue(Sale, 'Otra.TInter no se ha leido: por ahi sale');
   finally
     Mapa.Free;
     U.Free;
@@ -1300,6 +1311,161 @@ begin
     Assert.IsNotNull(U.Clase('TEntre'), 'la de detras de un asm dentro de un begin');
     Assert.IsNotNull(U.Clase('TDetras'), 'la de detras de un cuerpo asm');
     Assert.AreEqual<Integer>(14, U.Clase('TDetras').Linea);
+  finally
+    U.Free;
+  end;
+end;
+
+{ Un class helper se saltaba entero (ctOtro) e insert=metodo no lo encontraba;
+  no es una clase de un form ni de las tablas del disenador (revision de la
+  1.13.0). }
+procedure TLectorDeClasesTests.UnHelperEsUnTipoConMetodos;
+var
+  U: TUnidadPas;
+  T: TTipoPas;
+begin
+  U := LeeFuentePascal('unit A; interface type'#13#10 +
+    '  TAyuda = class helper (TBaseAyuda) for TStringList'#13#10 +
+    '  private'#13#10 +
+    '    function Interna: Integer;'#13#10 +
+    '  public'#13#10 +
+    '    function Cuantas: Integer;'#13#10 +
+    '  end;'#13#10 +
+    '  TDetras = class end;'#13#10 +
+    'implementation end.');
+  try
+    Assert.IsNull(U.Clase('TAyuda'), 'no es una clase');
+    T := U.Clase('TAyuda', [ctClase, ctAyudante]);
+    Assert.IsNotNull(T, 'insert=metodo lo pide asi');
+    Assert.AreEqual(Ord(ctAyudante), Ord(T.Clase));
+    Assert.AreEqual('TStringList', T.Base);
+    Assert.AreEqual<Integer>(6, T.LineaFin);
+    Assert.AreEqual<Integer>(2, Length(T.Secciones));
+    Assert.AreEqual('Cuantas', T.Rutinas[1].Nombre);
+    Assert.IsTrue(U.TipoEnLinea(5, [ctAyudante]) = T, 'el dueno de su miembro');
+    Assert.IsNotNull(U.Clase('TDetras'));
+  finally
+    U.Free;
+  end;
+end;
+
+{ Las comas de las restricciones no son parametros (TFoo<T: class,
+  constructor> tenia dos), y un metodo de una generica se cualifica con los
+  suyos: TCaja.Foo no compila (revision de la 1.13.0). }
+procedure TLectorDeClasesTests.LosParametrosGenericosYSuImplementation;
+var
+  U: TUnidadPas;
+  T: TTipoPas;
+begin
+  U := LeeFuentePascal('unit A; interface type'#13#10 +
+    '  TUno<T: class, constructor> = class end;'#13#10 +
+    '  TTres<K, V: class; [Weak] W: constructor> = class end;'#13#10 +
+    '  TDentro<T: IComparable<T>> = class end;'#13#10 +
+    '  TFuera<T> = class'#13#10 +
+    '  public type'#13#10 +
+    '    TInner = class end;'#13#10 +
+    '  end;'#13#10 +
+    '  TLlana = class end;'#13#10 +
+    'implementation end.');
+  try
+    T := U.Clase('TUno');
+    Assert.AreEqual('T', string.Join(',', T.ParametrosGenericos));
+    Assert.AreEqual<Integer>(1, T.Aridad, 'las restricciones no cuentan');
+    T := U.Clase('TTres');
+    Assert.AreEqual('K,V,W', string.Join(',', T.ParametrosGenericos));
+    Assert.AreEqual('TTres<K, V, W>', U.NombreDeImplementacion(T));
+    Assert.AreEqual('T', string.Join(',', U.Clase('TDentro').ParametrosGenericos),
+      'un generico dentro de una restriccion');
+    T := U.Clase('TInner');
+    Assert.AreEqual('TFuera<T>.TInner', U.NombreDeImplementacion(T));
+    Assert.IsTrue(TRegEx.IsMatch('procedure TFuera<X>.TInner.Hola;',
+      '^procedure ' + U.PatronDeImplementacion(T) + '\.Hola;'), 'otro nombre de parametro');
+    Assert.IsFalse(TRegEx.IsMatch('procedure TFuera.TInner.Hola;',
+      '^procedure ' + U.PatronDeImplementacion(T) + '\.Hola;'), 'TFuera y TFuera<T> son dos');
+    T := U.Clase('TLlana');
+    Assert.AreEqual('TLlana', U.NombreDeImplementacion(T));
+    Assert.IsFalse(TRegEx.IsMatch('procedure TLlana<T>.Hola;',
+      '^procedure ' + U.PatronDeImplementacion(T) + '\.Hola;'));
+  finally
+    U.Free;
+  end;
+end;
+
+{ El lector de las dos ramas de un IFDEF: la cabecera repetida no es un tipo
+  anidado (todo lo de detras quedaba dentro), el cuerpo repetido de una
+  rutina no es el bloque principal (lo de detras desaparecia), y una clase
+  sin su end acaba donde empieza el tipo siguiente (revision de la 1.13.0). }
+procedure TLectorDeClasesTests.LasDosRamasDeUnIfdef;
+var
+  U: TUnidadPas;
+begin
+  // CodigoPascal deja las directivas en blanco: el lector ve las dos ramas
+  U := LeeFuentePascal('unit A; interface type'#13#10 +
+    '{$IFDEF NUNCA}'#13#10 +
+    '  TDos = class(TInterfacedObject)'#13#10 +
+    '{$ELSE}'#13#10 +
+    '  TDos = class(TObject)'#13#10 +
+    '{$ENDIF}'#13#10 +
+    '  public'#13#10 +
+    '    procedure Uno;'#13#10 +
+    '  end;'#13#10 +
+    '  TDetras = class'#13#10 +
+    '    procedure Dos;'#13#10 +
+    '  end;'#13#10 +
+    '  TAbierta = class'#13#10 +
+    '    procedure Tres;'#13#10 +
+    '  TTrasLaAbierta = class end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure Suma;'#13#10 +
+    '{$IFDEF NUNCA}'#13#10 +
+    'begin'#13#10 +
+    'end;'#13#10 +
+    '{$ELSE}'#13#10 +
+    'asm'#13#10 +
+    'end;'#13#10 +
+    '{$ENDIF}'#13#10 +
+    'type TDelImpl = class end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual('', U.Clase('TDetras').Contenedor, 'no es una anidada de TDos');
+    Assert.AreEqual<Integer>(8, U.Clase('TDos').LineaFin, 'TDos acaba en su end');
+    Assert.AreEqual('Uno', U.Clase('TDos').Rutinas[0].Nombre);
+    Assert.AreEqual<Integer>(-1, U.Clase('TAbierta').LineaFin, 'sin su end');
+    Assert.AreEqual('', U.Clase('TTrasLaAbierta').Contenedor, 'la de detras es de la unidad');
+    Assert.IsNotNull(U.Clase('TDelImpl'), 'la de detras del cuerpo repetido');
+  finally
+    U.Free;
+  end;
+end;
+
+{ Los campos de un 'class var' llevan DeClase (lo decia el record y nadie lo
+  ponia), y un campo que se llama Strict no es la palabra de una seccion
+  (revision de la 1.13.0). }
+procedure TLectorDeClasesTests.ClassVarYUnCampoStrict;
+var
+  U: TUnidadPas;
+  T: TTipoPas;
+begin
+  U := LeeFuentePascal('unit A; interface type'#13#10 +
+    '  TCosa = class'#13#10 +
+    '    Strict: Boolean;'#13#10 +
+    '  public'#13#10 +
+    '    class var Cuenta, Otra: Integer;'#13#10 +
+    '    Tambien: Integer;'#13#10 +
+    '    procedure Hola;'#13#10 +
+    '  var'#13#10 +
+    '    Normal: Integer;'#13#10 +
+    '  end;'#13#10 +
+    'implementation end.');
+  try
+    T := U.Clase('TCosa');
+    Assert.AreEqual<Integer>(1, Length(T.Secciones), 'solo public');
+    Assert.AreEqual('Strict', T.Campos[0].Nombre);
+    Assert.IsTrue(Ord(T.Campos[0].Visibilidad) = Ord(vpDefecto));
+    Assert.IsTrue(T.Campos[1].DeClase and T.Campos[2].DeClase and T.Campos[3].DeClase,
+      'Cuenta, Otra y Tambien son de clase');
+    Assert.AreEqual('Normal', T.Campos[4].Nombre);
+    Assert.IsFalse(T.Campos[4].DeClase, 'detras de un var, de la instancia');
   finally
     U.Free;
   end;

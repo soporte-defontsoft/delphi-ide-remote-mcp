@@ -16,6 +16,11 @@
       the time, stayed valid while the .dproj did not change: a
       <project>.delphilsp.json the IDE writes later was never taken. Now the
       entry stops being valid when it appears
+  R4  delphi_definition kind=declaration chained to the target file with
+      AcquireFor too - the twin of R2: a declaration in a shared unit
+      started another engine and overwrote the settings of the answer
+      with the other one's (an LSP-021 note that was false). Now it asks
+      the same engine (review of 1.13.0)
 
 Measured and NOT reproduced, so no code change: the "two millisecond windows"
 of a transient FILE-036 (0 of 15 hover-then-delete, 0 of 12 with three
@@ -56,8 +61,9 @@ for nombre, cuerpo in (('array', '[]'), ('settings_texto', '{"settings": "x"}'),
     dpr, _ = proyecto('P', os.path.join(BASE, 'r1_' + nombre))
     open(os.path.join(os.path.dirname(dpr), 'P.delphilsp.json'), 'w').write(cuerpo)
     r = call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
-    check('R1 un .delphilsp.json %s no es un INTERNAL' % nombre,
-          not mc.tiene(r, 'SYS-006') and 'typecast' not in r, r[:200])
+    # y contesta: no vale cualquier otro fallo (un timeout, otro INTERNAL)
+    check('R1 un .delphilsp.json %s no es un INTERNAL: el hover contesta' % nombre,
+          not mc.tiene(r, 'SYS-006') and 'typecast' not in r and not mc.fallo(r), r[:200])
 
 # R2: references no arranca el motor de otro proyecto para calentar un candidato
 comun = os.path.join(BASE, 'r2', 'comun')
@@ -81,14 +87,26 @@ check('R2 references confirma la llamada y las dos lineas de la comun',
 check('R2 ...sin arrancar el motor del otro proyecto (%d -> %d)' % (antes, motores()),
       antes >= 1 and motores() == antes, (antes, motores()))
 
-# R3: el .delphilsp.json que el IDE escribe DESPUES se toma
-dpr, _ = proyecto('P', os.path.join(BASE, 'r3'))
+# R4: declaration va al motor que pregunta, no arranca el de la comun
+antes = motores()
+r = call('delphi_definition', {'path': uso_z, 'line': 7, 'character': 4, 'kind': 'declaration'}, 300)
+check('R4 declaration de una rutina de la unidad compartida: la encuentra',
+      'UComun' in r and not mc.fallo(r), r[:300])
+check('R4 ...sin arrancar otro motor (%d -> %d) ni una nota LSP-021 falsa' % (antes, motores()),
+      antes >= 1 and motores() == antes and not mc.tiene(r, 'LSP-021'), (antes, motores(), r[:300]))
+
+# R3: el .delphilsp.json que el IDE escribe DESPUES se toma. Con su propio
+# nombre: los settings fabricados se llaman <proyecto>-<hash>-..., y los
+# tres P de R1 casaban con el mismo glob (revision de la 1.13.0)
+dpr, _ = proyecto('PTres', os.path.join(BASE, 'r3'))
 call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
 antes = motores()
-fab = glob.glob(os.path.join(mc.cache_servidor('configs', APPDATA), 'P-*.delphilsp.json'))
-check('R3 preparacion: los settings fabricados de P', len(fab) >= 1, fab)
+fab = glob.glob(os.path.join(mc.cache_servidor('configs', APPDATA), 'PTres-*.delphilsp.json'))
+check('R3 preparacion: los settings fabricados de PTres, y solo esos', len(fab) == 1, fab)
 if fab:
-    shutil.copy(sorted(fab, key=os.path.getmtime)[-1], os.path.join(BASE, 'r3', 'P.delphilsp.json'))
+    # el motor nuevo es el de los settings del IDE; el de los fabricados se
+    # queda hasta que el barrendero lo pare por no usarse
+    shutil.copy(fab[0], os.path.join(BASE, 'r3', 'PTres.delphilsp.json'))
     time.sleep(1)
     call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
     check('R3 el del IDE que aparece despues se toma: un motor con SUS settings (%d -> %d)'

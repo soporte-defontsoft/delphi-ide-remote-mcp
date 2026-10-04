@@ -188,11 +188,12 @@ begin
   // SizeOf() de los tipos del compilador en esa plataforma (son del
   // lenguaje, no de una version). Tambien son lo que Declared() sabe que esta
   // declarado de System: el fuente pregunta Declared(AnsiChar),
-  // Declared(UTF8Char), Declared(TBytes)... y dcc dice que si en Windows
+  // Declared(UTF8Char)... y dcc dice que si en Windows. Solo los de System:
+  // TBytes es de System.SysUtils, y sin ella dcc dice que no (medido el
+  // 4-oct-2026; estaba en esta lista, revision de la 1.13.0)
   for var T in ['Pointer', 'NativeInt', 'NativeUInt', 'string', 'UnicodeString',
     'AnsiString', 'WideString', 'RawByteString', 'UTF8String', 'TObject',
-    'IInterface', 'PChar', 'PAnsiChar', 'PWideChar', 'PUTF8Char', 'PByte',
-    'TBytes'] do
+    'IInterface', 'PChar', 'PAnsiChar', 'PWideChar', 'PUTF8Char', 'PByte'] do
     Result.PonTamano(T, Puntero);
   for var T in ['Byte', 'ShortInt', 'Int8', 'UInt8', 'AnsiChar', 'UTF8Char',
     'Boolean', 'ByteBool'] do

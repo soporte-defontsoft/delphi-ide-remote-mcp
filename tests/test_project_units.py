@@ -26,12 +26,18 @@ srv = mc.Stdio(EXE, env, nombre='punits-battery', t=300)  # el plazo de esta bat
 call = srv.call
 
 
-# los de la casa (mcp_cliente): un build y un fichero (vacio si no existe)
+# los de la casa (mcp_cliente): un build y un fichero (que tiene que existir)
 def build_ok(dproj):
     return mc.build_ok(call, dproj)
 
 
-rd = mc.lee
+def rd(p):
+    """El fichero, que TIENE que existir: aqui casi todo lo que se mide es que
+    algo NO esta ('UManual' not in rd(DPR)), y con mc.lee a secas (vacio si no
+    existe) eso pasaba con el .dpr borrado (revision de la 1.13.0)."""
+    if not os.path.exists(p):
+        check('el fichero que se lee existe: %s' % p, False, p)
+    return mc.lee(p)
 
 
 VDIR = os.path.join(BASE, 'App')

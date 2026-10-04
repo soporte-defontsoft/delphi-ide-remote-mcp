@@ -41,7 +41,8 @@ uses
   Lsp.DesignerBin,
   System.Generics.Collections,
   Lsp.Pascal,
-  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
+  Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
+  Lsp.Json;
 
 const
   // UNA expresion para "evento cableado por nombre": la lee el informe y la
@@ -76,7 +77,10 @@ var
   procedure LeeMiembros(AClase: TTipoPas);
   begin
     for var C in AClase.Campos do
-      if (C.Visibilidad in [vpDefecto, vpPublicada]) and (C.Tipo <> '') and not C.Generico then
+      // un class var no es el campo de un componente: el streaming busca
+      // campos de la instancia
+      if (C.Visibilidad in [vpDefecto, vpPublicada]) and (C.Tipo <> '') and not C.Generico and
+         not C.DeClase then
         Fields.Values[C.Nombre] := UltimoTrozo(C.Tipo);
     for var R in AClase.Rutinas do
       if not R.DeClase and ((R.Rutina = 'procedure') or (R.Rutina = 'function')) then
@@ -324,7 +328,6 @@ function DesignerBindingWarnings(const ADfm: string;
   const ADfmLines: TArray<string>): TArray<string>;
 var
   Pas, Enc, S, Nombre: string;
-  J: TJSONValue;
   O: TJSONObject;
   Arr: TJSONArray;
   Res: TStringList;
@@ -335,13 +338,9 @@ begin
   if not TFile.Exists(Pas) then
     Exit;
   S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc), Pas);
-  J := TJSONObject.ParseJSONValue(S);
-  if not (J is TJSONObject) then
-  begin
-    J.Free;
+  O := ObjetoJson(S); // EL lector (Lsp.Json): estaba su cuerpo aqui
+  if O = nil then
     Exit;
-  end;
-  O := TJSONObject(J);
   Res := TStringList.Create;
   try
     for Nombre in ['eventsWithMethodNotPublished', 'eventsWithoutMethod',

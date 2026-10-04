@@ -147,7 +147,8 @@ type
     function TakeOut(const AKey: string): TLspClient;
     procedure DoFolderLeaves(const AFolder: string);
     procedure DoFolderLeft(const AFolder: string);
-    function AbreDocumento(AClient: TLspClient; const AFullPath: string): Boolean;
+    function RutaParaAbrir(const AFilePath: string): string;
+    procedure AbreDocumento(AClient: TLspClient; const AFullPath: string);
   public
     constructor Create;
     destructor Destroy; override;
@@ -1329,26 +1330,30 @@ function TLspSession.AcquireFor(const AFilePath: string;
 var
   FullPath, Key, RootDir: string;
 begin
-  FullPath := TPath.GetFullPath(AFilePath);
-  var Denied := ReadPathDenied(FullPath); // navigating RTL/components is reading
-  if Denied <> '' then
-    raise ELspSession.Create(Denied);
-  if not FileExists(FullPath) then
-    raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
-
+  FullPath := RutaParaAbrir(AFilePath);
   Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
-  // The indexing head start sleeps OUTSIDE the lock: it buys answer quality
-  // for THIS caller's first question and must not stall everyone else
-  // (retries on -32800 cover whatever 500ms does not).
-  if AbreDocumento(Result, FullPath) then
-    Sleep(500);
+  AbreDocumento(Result, FullPath);
 end;
 
-{ El documento abierto y al dia en ESE motor (AcquireFor y AbreEn): True si
-  acaba de abrirse o de refrescarse, para la ventaja de indexado. }
-function TLspSession.AbreDocumento(AClient: TLspClient; const AFullPath: string): Boolean;
+{ LA puerta de abrir un fichero en un motor (AcquireFor y AbreEn): abrir es
+  leer (navigating RTL/components is reading), y lo que no existe no se abre.
+  Su ruta completa. Estaba copiada en los dos (revision de la 1.13.0). }
+function TLspSession.RutaParaAbrir(const AFilePath: string): string;
+begin
+  Result := TPath.GetFullPath(AFilePath);
+  var Denied := ReadPathDenied(Result);
+  if Denied <> '' then
+    raise ELspSession.Create(Denied);
+  if not FileExists(Result) then
+    raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
+end;
+
+{ El documento abierto y al dia en ESE motor (AcquireFor y AbreEn), con la
+  ventaja de indexado si acaba de abrirse o de refrescarse. }
+procedure TLspSession.AbreDocumento(AClient: TLspClient; const AFullPath: string);
 var
   DocKey: string;
+  Nuevo: Boolean;
 begin
   var Mine := AClient as TSessionClient;
   DocKey := AFullPath.ToLower;
@@ -1365,35 +1370,30 @@ begin
     // scaffolding, git, an external editor...): an answer must reflect the
     // CURRENT source of every unit it crosses, never a stale snapshot. The
     // engine reads the disk itself only for units it does NOT have open.
-    Result := Mine.Refresh('', DocKey);
+    Nuevo := Mine.Refresh('', DocKey);
     if not Mine.FDocs.ContainsKey(DocKey) then
     begin
       // the stamp BEFORE the text: a write between the two is seen next time
       var Stamp := DiskStamp(AFullPath);
       AClient.DidOpenFile(AFullPath);
       Mine.FDocs.Add(DocKey, DocState(AFullPath, 1, Stamp));
-      Result := True;
+      Nuevo := True;
     end
     else
       Mine.Touch(DocKey);
   finally
     Mine.FDocLock.Leave;
   end;
+  // The indexing head start sleeps OUTSIDE the lock: it buys answer quality
+  // for THIS caller's first question and must not stall everyone else
+  // (retries on -32800 cover whatever 500ms does not).
+  if Nuevo then
+    Sleep(500);
 end;
 
 procedure TLspSession.AbreEn(AClient: TLspClient; const AFilePath: string);
-var
-  FullPath: string;
 begin
-  FullPath := TPath.GetFullPath(AFilePath);
-  // la misma puerta que AcquireFor: abrir es leer
-  var Denied := ReadPathDenied(FullPath);
-  if Denied <> '' then
-    raise ELspSession.Create(Denied);
-  if not FileExists(FullPath) then
-    raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
-  if AbreDocumento(AClient, FullPath) then
-    Sleep(500);
+  AbreDocumento(AClient, RutaParaAbrir(AFilePath));
 end;
 
 function TLspSession.LintFile(const AFilePath: string; ATimeoutMs: Integer;

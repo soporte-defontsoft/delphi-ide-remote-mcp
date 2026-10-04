@@ -61,7 +61,8 @@ uses
   Lsp.Guard,
   Lsp.Session,
   Lsp.Texts,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.Json;
 
 { Occurrences of AIdent as a whole word INSIDE string literals of AText.
   LINEAR scan, never a regex over the whole text: the obvious '(...|'')*'
@@ -535,11 +536,13 @@ begin
       Exit;
     end;
     R := ChangesetExecute('preview', Id, '', '', '', '', '', '', 0);
-    var Prev := TJSONObject.ParseJSONValue(R);
+    // EL lector (Lsp.Json): estaba su cuerpo aqui. Un "unresolved" que no
+    // fuera un numero lanzaba en GetValue<Integer>
+    var Prev := ObjetoJson(R);
     try
-      if not (Prev is TJSONObject) or
-         (TJSONObject(Prev).GetValue('unresolved') = nil) or
-         (TJSONObject(Prev).GetValue('unresolved').GetValue<Integer> <> 0) then
+      var Pendientes: Integer;
+      if (Prev = nil) or not Prev.TryGetValue<Integer>('unresolved', Pendientes) or
+         (Pendientes <> 0) then
       begin
         Fallo(R);
         Exit;

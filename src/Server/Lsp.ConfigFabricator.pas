@@ -60,7 +60,8 @@ uses
   Lsp.Guard,  // ExpandIdeMacros, EscribeEnCasaDelServidor (entero o nada)
   Lsp.Dproj,
   Lsp.Texts,
-  Lsp.NetDrives;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
+  Lsp.NetDrives,  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
+  Lsp.Json;
 
 const
   STANDARD_ALIASES =

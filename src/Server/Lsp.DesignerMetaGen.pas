@@ -75,7 +75,7 @@ type
 const
   { Sube cuando cambian las reglas del generador: una tabla de otra
     generacion no se reutiliza aunque el fuente sea el mismo. }
-  GENERACION_TABLAS = 5; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina
+  GENERACION_TABLAS = 6; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0)
   // lo que se recuerda un fallo del generador antes de intentarlo otra vez
   MINUTOS_REINTENTO_TABLA = 10;
 

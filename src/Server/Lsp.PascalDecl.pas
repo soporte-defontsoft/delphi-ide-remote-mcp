@@ -67,8 +67,12 @@ type
     Linea: Integer;    // 0-based, la de su nombre
   end;
 
+  // ctAyudante: un 'class helper for TX' (Base = TX). Sus metodos se leen como
+  // los de una clase (insert=metodo, el dueno de un miembro), pero no es una
+  // clase de un form ni de las tablas del disenador
   TClaseTipoPas = (ctEnumerado, ctConjunto, ctSubrango, ctAlias, ctMetodo,
-    ctClase, ctRegistro, ctInterfaz, ctReferenciaClase, ctProcedimiento, ctOtro);
+    ctClase, ctRegistro, ctInterfaz, ctReferenciaClase, ctProcedimiento, ctOtro,
+    ctAyudante);
   TClasesTipoPas = set of TClaseTipoPas;
 
   TTipoPas = class
@@ -84,6 +88,9 @@ type
     Ancestro: string;          // clase: el primero de su lista, sin <...>; '' = TObject
     Propiedades: TArray<TPropiedadPas>;
     Generica: Boolean;
+    // los nombres de sus parametros genericos, como van escritos: TFoo<K, V:
+    // class> = ['K', 'V'] (las restricciones no); [] si no es generico
+    ParametrosGenericos: TArray<string>;
     // cuantos parametros genericos tiene (0 = ninguno) y cuantos lleva su
     // ancestro: TFoo y TFoo<T, U> son DOS tipos en la misma unidad
     // (REST.Backend.BindSource: el generico desciende del que no lo es)
@@ -123,13 +130,26 @@ type
     destructor Destroy; override;
     // LA clase llamada ANombre: por su nombre completo (TOuter.TInner) o por el
     // simple, la de la unidad antes que una anidada; las declaraciones
-    // adelantadas no estan. nil si no hay
-    function Clase(const ANombre: string): TTipoPas;
+    // adelantadas no estan. nil si no hay. AClases: de que clases de tipo
+    // (insert=metodo tambien toma un class helper)
+    function Clase(const ANombre: string;
+      AClases: TClasesTipoPas = [ctClase]): TTipoPas;
+    // ATipo y los tipos que lo contienen, del de fuera al suyo
+    function Niveles(ATipo: TTipoPas): TArray<TTipoPas>;
+    // como se cualifica en el implementation un metodo de ATipo: cada nivel
+    // con sus parametros genericos (TOuter<T>.TInner). Y la regex que lo lee,
+    // con otros nombres de parametro o espacios: su inversa
+    function NombreDeImplementacion(ATipo: TTipoPas): string;
+    function PatronDeImplementacion(ATipo: TTipoPas): string;
     // el tipo mas de dentro de los de AClases que contiene ALinea; nil si
     // ninguno. ASinCabecera: la linea del nombre de un tipo no es suya, es de
     // donde se declara (el dueno de una declaracion)
     function TipoEnLinea(ALinea: Integer; AClases: TClasesTipoPas;
       ASinCabecera: Boolean = False): TTipoPas;
+    // el tipo cuyo nombre se declara en ALinea (con bloque antes que sin el:
+    // dos en una linea); nil si ninguno. Que una linea es la cabecera de un
+    // tipo lo sabe el lector: TFoo<T: class> = class no lo veia una regex
+    function TipoQueEmpiezaEn(ALinea: Integer): TTipoPas;
   end;
 
 function LeeUnidadPascal(const ATextoActivo: string): TUnidadPas;
@@ -151,8 +171,9 @@ procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, s
   ATope eslabones; y en el primero que AMapa no tiene, que va el ultimo y deja
   ASale = True: es por donde la cadena sale de lo leido. Un ancestro
   cualificado (Vcl.Forms.TForm) se busca por su ultimo trozo y va en la cadena
-  como esta escrito. Habia tres recorridos, cada uno con sus topes y sus
-  raices (check-binding, add-unit, references). }
+  como esta escrito; si su nombre es el de una ya vista, es otra clase (la de
+  fuera de una interpuesta) y la cadena sale por ella. Habia tres recorridos,
+  cada uno con sus topes y sus raices (check-binding, add-unit, references). }
 function CadenaDeAncestros(const AMapa: TDictionary<string, string>;
   const AClase: string; out ASale: Boolean; ATope: Integer = 32): TArray<string>;
 
@@ -186,6 +207,7 @@ type
     function EsIdentEn(AIdx: Integer): Boolean;
     function AbreRecord: Boolean;
     function SaltaGenericos: Integer;
+    function LeeParametrosGenericos: TArray<string>;
     function Texto(AIdx: Integer): string;
     function Toma: string;
     function Fin: Boolean;
@@ -204,8 +226,8 @@ type
     procedure LeeSeccionConst(AGuarda: Boolean);
     procedure SaltaSeccionVar;
     procedure LeeDefinicionDeTipo(const ANombre, AContenedor: string;
-      AGenerica, AFuerte: Boolean; AAridad, ALinea: Integer);
-    procedure LeeCuerpoDeClase(ATipo: TTipoPas);
+      AGenerica, AFuerte: Boolean; const AParametros: TArray<string>; ALinea: Integer);
+    function LeeCuerpoDeClase(ATipo: TTipoPas): Boolean;
     procedure LeeCuerpoDeRegistro(ATipo: TTipoPas);
     function LeeMiembrosDeEnumerado: TArray<string>;
   public
@@ -260,13 +282,13 @@ begin
   inherited;
 end;
 
-function TUnidadPas.Clase(const ANombre: string): TTipoPas;
+function TUnidadPas.Clase(const ANombre: string; AClases: TClasesTipoPas): TTipoPas;
 var
   T: TTipoPas;
 begin
   Result := nil;
   for T in Tipos do
-    if (T.Clase = ctClase) and (MismoIdentificador(T.NombreCompleto, ANombre) or
+    if (T.Clase in AClases) and (MismoIdentificador(T.NombreCompleto, ANombre) or
        MismoIdentificador(T.Nombre, ANombre)) then
     begin
       if (T.Contenedor = '') or MismoIdentificador(T.NombreCompleto, ANombre) then
@@ -274,6 +296,87 @@ begin
       if Result = nil then
         Result := T; // una anidada, si no hay otra
     end;
+end;
+
+function TUnidadPas.TipoQueEmpiezaEn(ALinea: Integer): TTipoPas;
+begin
+  Result := nil;
+  for var T in Tipos do
+    if (T.Linea = ALinea) and ((Result = nil) or (T.LineaFin > Result.LineaFin)) then
+      Result := T;
+end;
+
+function TUnidadPas.Niveles(ATipo: TTipoPas): TArray<TTipoPas>;
+var
+  Cur, Padre: TTipoPas;
+begin
+  Result := [ATipo];
+  Cur := ATipo;
+  while Cur.Contenedor <> '' do
+  begin
+    // el que se llama como su contenedor y lo contiene (dos del mismo nombre,
+    // las ramas de un IFDEF: el suyo)
+    Padre := nil;
+    for var T in Tipos do
+      if (T <> Cur) and MismoIdentificador(T.NombreCompleto, Cur.Contenedor) and
+         T.Contiene(Cur.Linea) then
+      begin
+        Padre := T;
+        Break;
+      end;
+    if Padre = nil then
+      Break;
+    Result := [Padre] + Result;
+    Cur := Padre;
+  end;
+end;
+
+function TUnidadPas.NombreDeImplementacion(ATipo: TTipoPas): string;
+var
+  N: TArray<TTipoPas>;
+begin
+  N := Niveles(ATipo);
+  // un contenedor que no se encontro: como esta escrito
+  if N[0].Contenedor <> '' then
+    Result := N[0].Contenedor + '.'
+  else
+    Result := '';
+  for var K := 0 to High(N) do
+  begin
+    if K > 0 then
+      Result := Result + '.';
+    Result := Result + N[K].Nombre;
+    if Length(N[K].ParametrosGenericos) > 0 then
+      Result := Result + '<' + string.Join(', ', N[K].ParametrosGenericos) + '>';
+  end;
+end;
+
+function TUnidadPas.PatronDeImplementacion(ATipo: TTipoPas): string;
+var
+  N: TArray<TTipoPas>;
+begin
+  N := Niveles(ATipo);
+  Result := '';
+  if N[0].Contenedor <> '' then
+    for var Trozo in N[0].Contenedor.Split(['.']) do
+      Result := Result + PatronIdentEntero(Trozo) + '\s*\.\s*';
+  for var K := 0 to High(N) do
+  begin
+    if K > 0 then
+      Result := Result + '\s*\.\s*';
+    Result := Result + PatronIdentEntero(N[K].Nombre);
+    // tantos parametros como tiene, se llamen como se llamen; uno sin ellos
+    // no lleva '<' (TFoo y TFoo<T> son dos tipos)
+    if Length(N[K].ParametrosGenericos) > 0 then
+    begin
+      Result := Result + '\s*<\s*' + PATRON_IDENT;
+      for var J := 2 to Length(N[K].ParametrosGenericos) do
+        Result := Result + '\s*,\s*' + PATRON_IDENT;
+      Result := Result + '\s*>';
+    end
+    else
+      Result := Result + '(?!\s*<)';
+  end;
 end;
 
 function TUnidadPas.TipoEnLinea(ALinea: Integer; AClases: TClasesTipoPas;
@@ -502,6 +605,44 @@ begin
     end
     else if (T = ',') and (Prof = 1) then
       Inc(Result);
+  end;
+end;
+
+{ Desde el '<' de la cabecera de un tipo generico hasta su '>' (consumido):
+  los nombres de sus parametros. En TFoo<K, V: class; T: constructor> son K,
+  V y T: detras de ':' las comas separan restricciones, no parametros, y el
+  ';' empieza otro grupo. Contadas como SaltaGenericos (que es para los
+  ARGUMENTOS: TList<A, B>), TFoo<T: class, constructor> tenia dos y su
+  descendiente class(TFoo<X>) buscaba otro (revision de la 1.13.0). }
+function TLectorPas.LeeParametrosGenericos: TArray<string>;
+var
+  Prof: Integer;
+  EnRestriccion: Boolean;
+  T: string;
+begin
+  Result := [];
+  Prof := 0;
+  EnRestriccion := False;
+  while not Fin do
+  begin
+    if (Prof = 1) and not EnRestriccion and EsIdent then
+      Result := Result + [Texto(FI)];
+    T := Mira;
+    Toma;
+    if T = '<' then
+      Inc(Prof)
+    else if T = '>' then
+    begin
+      Dec(Prof);
+      if Prof <= 0 then
+        Exit;
+    end
+    else if (Prof = 1) and (T = ':') then
+      EnRestriccion := True
+    else if (Prof = 1) and (T = ';') then
+      EnRestriccion := False
+    else if (Prof = 1) and (T = '[') then
+      SaltaBalanceado('[', ']'); // un atributo del parametro
   end;
 end;
 
@@ -929,7 +1070,7 @@ begin
 end;
 
 procedure TLectorPas.LeeDefinicionDeTipo(const ANombre, AContenedor: string;
-  AGenerica, AFuerte: Boolean; AAridad, ALinea: Integer);
+  AGenerica, AFuerte: Boolean; const AParametros: TArray<string>; ALinea: Integer);
 var
   T: TTipoPas;
   P: string;
@@ -943,7 +1084,8 @@ begin
   T.LineaFin := ALinea;
   T.Contenedor := AContenedor;
   T.Generica := AGenerica;
-  T.Aridad := AAridad;
+  T.ParametrosGenericos := AParametros;
+  T.Aridad := Length(AParametros);
   T.Fuerte := AFuerte;
   T.EnImplementation := FEnImpl;
   T.Clase := ctOtro;
@@ -967,20 +1109,29 @@ begin
         Toma; // la declaracion adelantada: el cuerpo viene despues
         FreeAndNil(T);
       end
-      else if P = 'helper' then
-      begin
-        Toma;
-        SaltaHastaEnd;
-        T.LineaFin := FinDeBloque;
-        FinLeido := True;
-        SaltaHastaPuntoYComa;
-      end
       else
       begin
-        while (Mira = 'abstract') or (Mira = 'sealed') do
+        if P = 'helper' then
+        begin
+          // class helper [(TOtroHelper)] for TX: su cuerpo, como el de una
+          // clase. Se saltaba entero (ctOtro) e insert=metodo contestaba que
+          // no encontraba la clase (revision de la 1.13.0)
           Toma;
-        T.Clase := ctClase;
-        if Mira = '(' then
+          T.Clase := ctAyudante;
+          if Mira = '(' then
+            SaltaBalanceado('(', ')');
+          if Mira = 'for' then
+          begin
+            Toma;
+            T.Base := LeeNombreDeTipo;
+          end;
+        end
+        else
+          while (Mira = 'abstract') or (Mira = 'sealed') do
+            Toma;
+        if T.Clase <> ctAyudante then
+          T.Clase := ctClase;
+        if (T.Clase = ctClase) and (Mira = '(') then
         begin
           Toma;
           T.Ancestro := LeeNombreDeTipo;
@@ -1010,10 +1161,16 @@ begin
         end
         else
         begin
-          LeeCuerpoDeClase(T);
-          T.LineaFin := FinDeBloque;
+          // sin su end (un fuente a medio escribir: empezo otro tipo antes),
+          // LineaFin -1 y lo que sigue es de la seccion
+          if LeeCuerpoDeClase(T) then
+          begin
+            T.LineaFin := FinDeBloque;
+            SaltaHastaPuntoYComa; // 'end' ya pasado; sus directivas y el ';'
+          end
+          else
+            T.LineaFin := -1;
           FinLeido := True;
-          SaltaHastaPuntoYComa; // 'end' ya pasado; sus directivas y el ';'
         end;
       end;
     end
@@ -1227,7 +1384,10 @@ begin
   end;
 end;
 
-procedure TLectorPas.LeeCuerpoDeClase(ATipo: TTipoPas);
+{ El cuerpo de una clase (o de un class helper), desde detras de su cabecera
+  hasta su 'end' (consumido): True. False si no se cierra: empieza otro tipo
+  de la seccion antes (un fuente a medio escribir), que queda sin consumir. }
+function TLectorPas.LeeCuerpoDeClase(ATipo: TTipoPas): Boolean;
 var
   Vis: TVisibilidadPas;
   Props: TList<TPropiedadPas>;
@@ -1235,6 +1395,8 @@ var
   LosCampos, LasRutinas: TList<TMiembroPas>;
   T: string;
   DeClase: Boolean;
+  // los campos de detras de un 'class var', hasta otra seccion o miembro
+  EnClassVar: Boolean;
 
   procedure LeePropiedad;
   var
@@ -1329,6 +1491,7 @@ var
       M.Linea := LineaDeTok(FI);
       M.Nombre := Toma;
       M.Visibilidad := Vis;
+      M.DeClase := EnClassVar;
       Nuevos := Nuevos + [M];
       if Mira = ',' then
         Toma
@@ -1365,7 +1528,9 @@ var
 var
   NuevaVis: TVisibilidadPas;
 begin
+  Result := True;
   Vis := vpDefecto;
+  EnClassVar := False;
   Props := TList<TPropiedadPas>.Create;
   Secs := TList<TSeccionPas>.Create;
   LosCampos := TList<TMiembroPas>.Create;
@@ -1380,8 +1545,10 @@ begin
         Toma;
         Break;
       end;
-      if T = 'strict' then
+      // 'strict' delante de private/protected; un campo Strict: Boolean no
+      if (T = 'strict') and ((Mira(1) = 'private') or (Mira(1) = 'protected')) then
       begin
+        EnClassVar := False;
         var LineaStrict := LineaDeTok(FI);
         Toma;
         if Mira = 'private' then
@@ -1396,6 +1563,7 @@ begin
          (Mira(1) <> '=') then
       begin
         Vis := NuevaVis;
+        EnClassVar := False;
         AnotaSeccion(Vis, T, LineaDeTok(FI));
         Toma;
         Continue;
@@ -1418,34 +1586,44 @@ begin
           SaltaCabeceraDeRutina;
         end
         else if (T = 'var') or (T = 'threadvar') then
+        begin
           Toma;
+          EnClassVar := True;
+          Continue;
+        end;
+        EnClassVar := False;
         Continue;
       end;
       if EnLista(T, PALABRAS_DE_RUTINA) then
       begin
+        EnClassVar := False;
         AnotaRutina;
         SaltaCabeceraDeRutina;
         Continue;
       end;
       if T = 'property' then
       begin
+        EnClassVar := False;
         LeePropiedad;
         Continue;
       end;
       if T = 'type' then
       begin
+        EnClassVar := False;
         Toma;
         LeeSeccionType(ATipo.NombreCompleto);
         Continue;
       end;
       if (T = 'const') or (T = 'resourcestring') then
       begin
+        EnClassVar := False;
         Toma;
         LeeSeccionConst(False);
         Continue;
       end;
       if (T = 'var') or (T = 'threadvar') then
       begin
+        EnClassVar := False;
         Toma;
         Continue;
       end;
@@ -1456,9 +1634,38 @@ begin
       end;
       if EsIdent then
       begin
-        // un tipo anidado que sigue a otro de la misma seccion, o un campo
+        // 'Nombre =' fuera de una seccion type no es un tipo anidado (esos van
+        // detras de su 'type', y LeeSeccionType los lee todos). Con el nombre
+        // de esta clase es su cabecera otra vez: la otra rama de un IFDEF
+        // ({$IFDEF A} TFoo = class(TA) {$ELSE} TFoo = class(TB) {$ENDIF}),
+        // que el lector de las dos ramas ve aqui; se salta y lo de detras
+        // sigue siendo suyo. Con otro, la clase no se cerro: acaba aqui sin su
+        // end y ese tipo es el siguiente de la seccion. Leidos como anidados,
+        // todo lo de detras quedaba dentro de esta clase e insert=metodo
+        // escribia TFoo.TBar.X (revision de la 1.13.0)
         if (Mira(1) = '=') or (Mira(1) = '<') then
-          LeeSeccionType(ATipo.NombreCompleto)
+        begin
+          if not MismoIdentificador(Texto(FI), ATipo.Nombre) then
+          begin
+            Result := False;
+            Break;
+          end;
+          Toma;
+          if Mira = '<' then
+            SaltaBalanceado('<', '>');
+          if Mira = '=' then
+            Toma;
+          if Mira = 'packed' then
+            Toma;
+          if Mira = 'class' then
+          begin
+            Toma;
+            while (Mira = 'abstract') or (Mira = 'sealed') do
+              Toma;
+            if Mira = '(' then
+              SaltaBalanceado('(', ')');
+          end;
+        end
         else
           LeeCampos;
         Continue;
@@ -1521,7 +1728,8 @@ procedure TLectorPas.LeeSeccionType(const AContenedor: string);
 var
   Nombre: string;
   Generica, Fuerte: Boolean;
-  Aridad, LineaNombre: Integer;
+  Parametros: TArray<string>;
+  LineaNombre: Integer;
 begin
   while not Fin do
   begin
@@ -1540,10 +1748,10 @@ begin
     LineaNombre := LineaDeTok(FI);
     Nombre := Toma;
     Generica := False;
-    Aridad := 0;
+    Parametros := [];
     if Mira = '<' then
     begin
-      Aridad := SaltaGenericos;
+      Parametros := LeeParametrosGenericos;
       Generica := True;
     end;
     if Mira <> '=' then
@@ -1558,7 +1766,7 @@ begin
       Toma;
       Fuerte := True;
     end;
-    LeeDefinicionDeTipo(Nombre, AContenedor, Generica, Fuerte, Aridad, LineaNombre);
+    LeeDefinicionDeTipo(Nombre, AContenedor, Generica, Fuerte, Parametros, LineaNombre);
   end;
 end;
 
@@ -1570,8 +1778,25 @@ begin
   begin
     T := Mira;
     if (T = 'implementation') or (T = 'initialization') or (T = 'finalization') or
-       (T = 'begin') or (T = 'end') then
+       (T = 'end') or (AInterface and (T = 'begin')) then
       Exit;
+    if (T = 'begin') or (T = 'asm') then
+    begin
+      // el bloque principal (begin..end.) o el cuerpo de una rutina otra vez:
+      // la otra rama de un IFDEF ({$IFDEF PUREPASCAL} begin..end; {$ELSE}
+      // asm..end; {$ENDIF}), que el lector de las dos ramas ve suelto. Si
+      // detras de su end no viene el punto, era eso: se salta y se sigue.
+      // Paraba aqui, y las clases del implementation que venian detras no
+      // estaban (revision de la 1.13.0)
+      var Ini := FI;
+      SaltaBloque;
+      if Fin or (Mira = '.') then
+      begin
+        FI := Ini;
+        Exit;
+      end;
+      Continue;
+    end;
     if T = 'uses' then
     begin
       Toma;
@@ -1703,10 +1928,22 @@ begin
   while (Cur <> '') and (Length(Result) < ATope) do
   begin
     K := ClaveDeIdentificador(UltimoTrozo(Cur));
-    // un ciclo (un fuente a medio escribir): se para
+    // un ciclo (un fuente a medio escribir): se para. Pero uno cualificado
+    // con el nombre de una ya vista es OTRA clase, la de fuera de una
+    // interpuesta (TBaseForm = class(UBase.TBaseForm)): una clase no es su
+    // propio ancestro, y la cadena sale por ahi. Se tomaba por un ciclo y la
+    // cadena quedaba completa: check-binding daba por sobrantes los
+    // componentes heredados (revision de la 1.13.0)
     for var V in Vistas do
       if V = K then
+      begin
+        if Pos('.', Cur) > 0 then
+        begin
+          Result := Result + [Cur];
+          ASale := True;
+        end;
         Exit;
+      end;
     Vistas := Vistas + [K];
     Result := Result + [Cur];
     if not AMapa.TryGetValue(K, Anc) then

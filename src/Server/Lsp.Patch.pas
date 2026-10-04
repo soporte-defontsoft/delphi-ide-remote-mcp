@@ -2989,7 +2989,7 @@ begin
           // un metodo) se AVISA, no se niega: dcc dira si es la misma, y no
           // somos la ninera (David, 23-sep). Se insertaba a ciegas (decima)
           var YaEsta := '';
-          var RutinaRe := TRegEx.Create('^\s*(class\s+)?(procedure|function)\s+' +
+          var RutinaRe := TRegEx.Create('^\s*(class\s+)?' + PatronPalabraDeRutina + '\s+' +
             TRegEx.Escape(MF.Groups[3].Value) + '\s*[(;:]', [roIgnoreCase]);
           for I := 0 to High(Codigo) do
             if RutinaRe.IsMatch(Codigo[I]) then
@@ -3073,10 +3073,15 @@ begin
         var SinCuerpo := False;
         var Secciones: TArray<TSeccionPas> := [];
         var RutinasClase: TArray<TMiembroPas> := [];
-        var ClaseCompleta := A.ClassName_; // con su contenedor si va anidada
+        // con su contenedor si va anidada y los parametros genericos de cada
+        // nivel (TCaja<T>.Foo): sin ellos se escribia TCaja.Foo, que no
+        // compila, y la implementacion que ya estaba no se veia (revision de
+        // la 1.13.0). Un class helper tambien lleva metodos
+        var ClaseCompleta := A.ClassName_;
+        var PatronClase := '';
         var Unidad := LeeFuentePascal(Text);
         try
-          var Clase := Unidad.Clase(A.ClassName_);
+          var Clase := Unidad.Clase(A.ClassName_, [ctClase, ctAyudante]);
           if Clase <> nil then
           begin
             IClase := Clase.Linea;
@@ -3084,7 +3089,8 @@ begin
             SinCuerpo := Clase.SinCuerpo;
             Secciones := Clase.Secciones;
             RutinasClase := Clase.Rutinas;
-            ClaseCompleta := Clase.NombreCompleto;
+            ClaseCompleta := Unidad.NombreDeImplementacion(Clase);
+            PatronClase := Unidad.PatronDeImplementacion(Clase);
           end;
         finally
           Unidad.Free;
@@ -3116,7 +3122,7 @@ begin
             Break;
           end;
         var ImplRe := TRegEx.Create('^\s*(class\s+)?' + PatronPalabraDeRutina + '\s+' +
-          TRegEx.Escape(ClaseCompleta) + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
+          PatronClase + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
         var IImplExiste := -1;
         for I := 0 to High(Codigo) do
           if ImplRe.IsMatch(Codigo[I]) then

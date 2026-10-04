@@ -1725,7 +1725,8 @@ begin
       Result.AddPair('sdkWarning', SdkAviso);
     Result.AddPair('errors', Errors);
     // En quiet NO va un warnings:[] vacio: se leeria como "no hay warnings" y
-    // seria mentira - es que no se han pedido. Va la nota y punto.
+    // seria mentira - es que no se han pedido. Y sin nota: lo dice la
+    // descripcion de verbosity, una vez (no en cada build)
     if SameText(AVerbosity, 'quiet') then
       Warnings.Free
     else

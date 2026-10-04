@@ -83,12 +83,20 @@ _rx = _fixed('regex')
 with open(os.path.join(_rx, 'URx.pas'), 'w', encoding='utf-8', newline='\r\n') as _f:
     _f.write('unit URx;\ninterface\nprocedure Pinta1;\nprocedure PintaDos;\nfunction Pinta3: Integer;\n'
              'implementation\nend.\n')
-_d = json.loads(call('delphi_search', {"root": _rx, "query": r"^procedure\s+Pinta\d+;", "regex": True}))
+_d = json.loads(call('delphi_search', {"root": _rx, "query": r"^PROCEDURE\s+pinta\d+;", "regex": True}))
 check('search regex: casa por linea (^ es el principio de una linea), sin distinguir mayusculas',
       _d.get('total') == 1 and mc.aciertos(_d)[0]['text'] == 'procedure Pinta1;' and mc.aciertos(_d)[0]['character0'] == 0,
       str(_d)[:300])
-_d = json.loads(call('delphi_search', {"root": _rx, "query": r"pinta\w*", "regex": True, "wholeword": True}))
+# (revision de la 1.13.0) con pinta\w* wholeword no media nada: \w* acaba
+# siempre en un borde. Un prefijo no es la palabra entera
+_d = json.loads(call('delphi_search', {"root": _rx, "query": r"PINTA\w*", "regex": True, "wholeword": True}))
 check('search regex + wholeword: la palabra entera de lo que caso', _d.get('total') == 3, str(_d)[:300])
+_d = json.loads(call('delphi_search', {"root": _rx, "query": "pinta", "regex": True, "wholeword": True}))
+check('search regex + wholeword: un prefijo (pinta de Pinta1) no es la palabra entera',
+      _d.get('total') == 0, str(_d)[:300])
+_r = call('delphi_search', {"root": _rx, "query": "procedure Pinta1;\nprocedure PintaDos;"})
+check('search con una consulta de dos lineas: rechazada, no un total 0 en silencio (SEARCH-008)',
+      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-008'), _r[:200])
 _r = call('delphi_search', {"root": _rx, "query": "(sin cerrar", "regex": True})
 check('search regex mal escrita: rechazada antes de buscar (SEARCH-004)',
       mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-004'), _r[:200])
@@ -463,6 +471,28 @@ try:
     out4 = call('delphi_git', {"repo": tmpgit, "command": "add", "args": ".", "offset": 5})
     check('git offset con una orden que escribe: no va con ella (repetirla la volveria a ejecutar)',
           mc.rechazado(out4) and mc.es(out4, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out4[:200])
+    # (revision de la 1.13.0) una linea mas larga que la pagina sale cortada y
+    # se DICE: la pagina siguiente empieza en la otra y su cola no se veia
+    with open(os.path.join(tmpgit, 'nota.txt'), 'w') as f:
+        f.write('corta\n' + 'L' * 40000 + 'FINAL\n' + 'otra\n')
+    # (no cabe con las de antes: va sola en la pagina siguiente)
+    out5 = call('delphi_git', {"repo": tmpgit, "command": "diff"})
+    _m5 = _re.search(r'offset=(\d+)', out5) if mc.tiene(out5, 'GIT-053') else None
+    out5b = call('delphi_git', {"repo": tmpgit, "command": "diff",
+                                "offset": int(_m5.group(1))}) if _m5 else ''
+    check('git diff con una linea mas larga que la pagina: cortada y dicho (GIT-055)',
+          mc.tiene(out5b, 'GIT-055') and 'LLLL' in out5b and 'LFINAL' not in out5b,
+          out5[-200:] + ' | ' + out5b[-400:])
+    # branch y tag sin argumentos son consultas: su nota GIT-053 ofrece offset
+    # y el parametro se rechazaba; con argumentos escriben, y ahi no va
+    out6 = call('delphi_git', {"repo": tmpgit, "command": "branch", "offset": 5})
+    check('git branch (consulta) admite offset: pasado del final, GIT-054',
+          mc.tiene(out6, 'GIT-054') and not mc.es(out6, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out6[:200])
+    out7 = call('delphi_git', {"repo": tmpgit, "command": "tag", "args": "v9.9",
+                               "message": "x", "offset": 5})
+    out8 = call('delphi_git', {"repo": tmpgit, "command": "tag"})
+    check('git tag que escribe con offset: GIT-056 y la etiqueta NO se crea',
+          mc.rechazado(out7) and mc.tiene(out7, 'GIT-056') and 'v9.9' not in out8, out7[:200] + ' | ' + out8[:200])
 finally:
     mc.borra(tmpgit)
 

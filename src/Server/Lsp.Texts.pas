@@ -172,6 +172,17 @@ const
     'specific - anchor it, avoid nested repetitions like (a+)+. Nothing ' +
     'more was searched.';
 
+  { Una consulta de varias lineas no casa con nada: la busqueda va linea a
+    linea, y daba total 0 sin decir por que - el agente concluia que no habia
+    nada parecido y escribia el gemelo, justo lo que el punto 14 de las
+    convenciones manda evitar (revision de la 1.13.0). }
+  SR_SEARCH_VARIAS_LINEAS =
+    '[SEARCH-008 INVALID_PARAM] The query spans several lines, and the ' +
+    'search goes line by line: it could match nothing, and "total 0" would ' +
+    'not mean the text is not there. Search for ONE characteristic line ' +
+    '(the most specific one), then read around the hits. Nothing was ' +
+    'searched.';
+
   SN_SEARCH_GRANDES_FMT =
     '[SEARCH-006] %d file(s) larger than %d MB were not searched: %s';
 
@@ -349,11 +360,12 @@ const
   { El resumen de una carpeta tenia un tope de 60 UNIDADES y no de tamano:
     src\Server daba 40K de una vez, y lo que no cabia solo decia
     "truncated" (revisor de tokens, 4-oct-2026). %d: el tope en caracteres;
-    %d: cuantas no entraron. }
+    %d: cuantas no entraron; %d: cuantas nombra notShown (tiene tope: decia
+    que las nombraba todas, revision de la 1.13.0). }
   SN_SYMBOLS_DIGEST_FUERA_FMT =
     '[LSP-034] The digest stops at about %d characters: %d units are not ' +
-    'in it, named in "notShown". Ask for one of them by its path, or for ' +
-    'a subfolder.';
+    'in it, and "notShown" names %d of them (relative to the folder). Ask ' +
+    'for one of them by its path, or for a subfolder.';
 
   SN_SYMBOLS_DIGEST_NOTE =
     '[LSP-007] This is the DIGEST: only what each unit declares in its ' +
@@ -372,7 +384,8 @@ const
   SP_SYMBOLS_MODE =
     'For a FILE only: "summary" = the skeleton (each section with its ' +
     'members and its line; containers say how many they hold), "full" = ' +
-    'the complete LSP tree with ranges. Empty = automatic: full if the ' +
+    'the LSP tree with its ranges, minus what it repeats (a selectionRange ' +
+    'equal to the range, empty children and details). Empty = automatic: full if the ' +
     'tree is small, summary if it is large (the answer says which one ' +
     'was used and how big the full one was).';
 
@@ -3725,9 +3738,10 @@ const
     'and what you expected: this whole server has been built from those ' +
     'reports.'#10#10 +
     '14. BEFORE WRITING NEW CODE, LOOK AT THE LANDSCAPE. One search ' +
-    'answers most of it: (a) search for what the code DOES - two or three ' +
-    'characteristic lines of its body, with delphi_search (regex=true ' +
-    'when needed) - not for the name you would give it; (b) where else ' +
+    'answers most of it: (a) search for what the code DOES - a ' +
+    'characteristic line of its body, one per delphi_search (it searches ' +
+    'line by line; regex=true when needed) - not for the name you would ' +
+    'give it; (b) where else ' +
     'does this rule live? Fix it where it lives, not where you happen to ' +
     'be looking (delphi_references gives the callers); (c) does something ' +
     'like it exist already? Often it is a parameter on what exists, not a ' +
@@ -7431,7 +7445,7 @@ const
     'reference project). The destination must be inside the workspace ' +
     'roots, and so must the source of a move. Parent folders of the ' +
     'destination are created. ' +
-    'The source is copied to the recoverable trash first. Jailed, ' +
+    'A move copies the source to the recoverable trash first. Jailed, ' +
     'refused in read-only mode. A FOLDER moves only as a rename on the ' +
     'same drive, whole or not at all (links inside travel as links); to ' +
     'another drive, copy=true and then delphi_delete. A folder that is ' +
@@ -7456,9 +7470,10 @@ const
     '(a sibling project, an {$I} from another unit, a group and its ' +
     'dependencies), whatever pointed inside - a project moved one level ' +
     'deeper still compiles. What it could not re-point is named, for ' +
-    'delphi_config command=fix-references. A copy goes through the same ' +
-    'door: what it points to outside IS re-pointed, so it compiles where ' +
-    'it lands; to start a project from another, delphi_create.';
+    'delphi_config command=fix-references. A copy re-points only its OWN ' +
+    'relative paths that cross its border, so it compiles where it lands: ' +
+    'no project that lists the source is touched (see copy); to start a ' +
+    'project from another, delphi_create.';
 
   // Descripciones que estaban en linea en Mcp.Tools.Messages.pas (paso 3d, 27-sep-2026)
   SP_MSGS_COMMAND =
@@ -7678,8 +7693,9 @@ const
     '.dproj, .dpr, .inc, .xml...) to search inside it in a single call';
 
   SP_WS_QUERY =
-    'Literal text to find (case-insensitive - it is Pascal); with ' +
-    'regex=true, a regular expression';
+    'Text to find on ONE line (case-insensitive - it is Pascal): literal, ' +
+    'or with regex=true a regular expression. The search goes line by ' +
+    'line, so a query with a line break is refused';
 
   SP_WS_REGEX =
     'true = query is a regular expression (PCRE, case-insensitive), matched ' +
@@ -7797,8 +7813,10 @@ const
   { la salida de git por paginas (muro de la lista del 4-oct-2026: un diff
     de mas de 30000 caracteres salia cortado y no habia forma de ver el resto) }
   SP_WS_OFFSET_GIT =
-    'status/diff/log/show/stash list/worktree list: the line to start from ' +
-    'when the answer did not fit in one page (its note says which)';
+    'status/diff/log/show, branch and tag without arguments, stash list, ' +
+    'worktree list: how many lines to skip ' +
+    'when the answer did not fit in one page - pass the offset its note ' +
+    'gives (offset=412 starts at line 413)';
 
   SN_GIT_PAGINA_FMT =
     '[GIT-053] Lines %d-%d of %d: the answer is longer than one page. The ' +
@@ -7807,6 +7825,23 @@ const
 
   SN_GIT_OFFSET_FUERA_FMT =
     '[GIT-054] offset=%d is past the end: the answer has %d lines.';
+
+  { Una linea mas larga que la pagina sale cortada y la pagina siguiente
+    empieza en la otra: su cola no se veia nunca, sin aviso (revision de la
+    1.13.0). %s: sus numeros (1-based); %d: lo que se ensena de cada una. }
+  SN_GIT_LINEA_CORTADA_FMT =
+    '[GIT-055] Line(s) %s are longer than a page: only their first %d ' +
+    'characters are shown, and offset does not reach the rest. Narrow it ' +
+    '(args="-- <path>", --stat) or read the file.';
+
+  { offset pagina la respuesta de una CONSULTA: branch y tag sin argumentos
+    lo son, y su nota GIT-053 lo ofrecia mientras el parametro se rechazaba
+    (revision de la 1.13.0). Con los que escriben no: repetir la llamada con
+    offset la volveria a ejecutar. %s: el comando. }
+  SR_GIT_OFFSET_SOLO_CONSULTA_FMT =
+    '[GIT-056 INVALID_PARAM] offset pages the answer of a query, and this ' +
+    '%s writes (with arguments or a message it creates, not lists). Call ' +
+    'it without offset. Nothing was done.';
 
   SP_WS_PATH_2 =
     'Absolute path of the file to download from the server';
@@ -8180,8 +8215,11 @@ const
   SF_EDIT_NO_ES_OBJETO =
     'not an {old,new} object';
 
+  { Otra forma que la de una cita (N|texto, de CitaDeLinea): con '%d| (line
+    removed)' un lector de citas la tomaba por una linea que decia eso
+    (revision de paisaje de la 1.13.0) }
   SF_EDIT_LINEA_QUITADA_FMT =
-    '%d| (line removed)';
+    '(line %d removed)';
 
   SF_EDIT_OK_BLOQUE_LINEAS_FMT =
     '  %d OK (block of %d lines)';

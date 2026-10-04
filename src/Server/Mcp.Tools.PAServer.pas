@@ -123,7 +123,7 @@ uses
   Lsp.Dproj,
   Lsp.BuildRunner,
   Lsp.NetDrives,
-  Lsp.Client;
+  Lsp.Json;
 
 constructor TDelphiPAServerTool.Create;
 begin
@@ -476,6 +476,7 @@ var
   O: TJSONObject;
 begin
   Result := TJSONObject.Create;
+  try
   Result.AddPair('name', TPath.GetFileNameWithoutExtension(ASdkFile));
   Xml := '';
   try
@@ -499,31 +500,26 @@ begin
   Ficha := VersionDeGlibc(Raiz);
   if Ficha <> '' then
     Result.AddPair('glibc', Ficha);
-  Ficha := TPath.Combine(Raiz, SDK_FICHA);
-  if not TFile.Exists(Ficha) then
-  begin
-    if SysrootMezclado(Raiz) then
-      Result.AddPair('warning', MsgText(SN_PAS_DOS_DISTROS_MISMO_SYSROOT));
-    Exit;
-  end;
-  O := nil;
-  try
-    O := ObjetoJson(TFile.ReadAllText(Ficha));
-  except
-    O := nil;
-  end;
-  if not Assigned(O) then
-    Exit;
+  // LA ficha del sysroot, por SU lector (FichaDeSysroot: aqui estaba su
+  // cuerpo otra vez). Un campo que no es texto ("distro": {} en una ficha
+  // tocada a mano) se salta: GetValue<string> lanzaba, y la respuesta de
+  // profiles entera era un INTERNAL (revision de la 1.13.0)
+  O := FichaDeSysroot(Raiz);
+  if Assigned(O) then
   try
     for var Clave in TArray<string>.Create('distro', 'gcc', 'profile',
       'pulled') do
-      if O.GetValue(Clave) <> nil then
-        Result.AddPair(Clave, O.GetValue<string>(Clave));
+      if O.GetValue(Clave) is TJSONString then
+        Result.AddPair(Clave, TJSONString(O.GetValue(Clave)).Value);
   finally
     O.Free;
   end;
   if SysrootMezclado(Raiz) then
     Result.AddPair('warning', MsgText(SN_PAS_DOS_DISTROS_MISMO_SYSROOT));
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 function ListProfiles: string;

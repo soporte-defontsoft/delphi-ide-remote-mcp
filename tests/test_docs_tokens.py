@@ -50,8 +50,21 @@ campos = [c.strip() for c in m.group(1).split(',')] if m else []
 check('T2 EDIT-012 dice los campos de una entrada', len(campos) >= 7, r[:300])
 for tool in ('delphi_edit', 'delphi_textedit'):
     d = prop(tool, 'edits')
-    faltan = [c for c in campos if not re.search(r'\b%s\b' % re.escape(c), d)]
+    # entre comillas, como los escribe la descripcion: \bnew\b casaba la
+    # palabra inglesa en cualquier frase (revision de la 1.13.0)
+    faltan = [c for c in campos if '"%s"' % c not in d]
     check('T2 %s.edits nombra todos los campos' % tool, campos and not faltan, faltan)
+
+# T2b: el eco de una tanda que borra la ultima linea no tiene la forma de una
+# cita (N|texto): '3| (line removed)' se leia como una linea que decia eso
+# (revision de paisaje de la 1.13.0)
+TRES = os.path.join(BASE, 'tres.txt')
+# (sin salto al final: con el, la que queda detras es una linea vacia y el
+# eco la cita a ella)
+open(TRES, 'w', encoding='utf-8', newline='\n').write('uno\ndos\ntres')
+r = call('delphi_textedit', {'path': TRES, 'edits': json.dumps([{'old': 'tres', 'delete': True}])})
+check('T2b el eco de una linea borrada dice (line N removed), no N| (line removed)',
+      '(line 3 removed)' in r and '| (line removed)' not in r, r[:300])
 
 # T3: la ruta, una vez por fichero
 PAS = os.path.join(BASE, 'Agujas.pas')
@@ -107,6 +120,25 @@ check('T8 una carpeta grande se corta por tamano y NOMBRA lo que falta (LSP-034)
       j.get('total') == 12 and fuera and len(j.get('units', [])) + len(fuera) == 12 and
       all(f.endswith('.pas') and ':' not in f for f in fuera) and
       'LSP-034' in j.get('notShownNote', ''), json.dumps(j)[:300])
+# (revision de la 1.13.0) notShown tiene tope: la nota dice cuantas nombra, y
+# decia que las nombraba todas
+check('T8 la nota dice cuantas no entraron y cuantas nombra notShown',
+      ('%d units are not in it' % len(fuera)) in j.get('notShownNote', '') and
+      ('names %d of them' % len(fuera)) in j.get('notShownNote', ''), j.get('notShownNote', ''))
+# ...y con mas de las que nombra (tope 200): las cuenta todas y nombra 200
+MUCHAS = os.path.join(BASE, 'muchas')
+os.makedirs(MUCHAS)
+for i in range(260):
+    open(os.path.join(MUCHAS, 'M%03d.pas' % i), 'w', encoding='utf-8', newline='\r\n').write(
+        'unit M%03d;\ninterface\nconst\n' % i +
+        ''.join('  LARGA_%03d_%02d = %d;\n' % (i, k, k) for k in range(40)) +
+        'implementation\nend.\n')
+j = mc.como_json(call('delphi_symbols', {'path': MUCHAS}))
+nota, fuera = j.get('notShownNote', ''), j.get('notShown', [])
+no_entran = j.get('total', 0) - len(j.get('units', []))
+check('T8 con mas de 200 fuera: notShown nombra 200 y la nota lo dice (no "todas")',
+      j.get('total') == 260 and len(fuera) == 200 and no_entran > 200 and
+      ('%d units are not in it' % no_entran) in nota and 'names 200 of them' in nota, nota)
 PEQUE = os.path.join(BASE, 'peque')
 os.makedirs(PEQUE)
 open(os.path.join(PEQUE, 'P.pas'), 'w').write('unit P;\ninterface\nconst X = 1;\nimplementation\nend.\n')
@@ -114,11 +146,21 @@ j = mc.como_json(call('delphi_symbols', {'path': PEQUE}))
 check('T8 una carpeta pequena entra entera, sin notShown',
       j.get('total') == 1 and 'notShown' not in j and 'notShownNote' not in j, json.dumps(j)[:300])
 
-# T9: el arbol entero, sin lo que el motor repite
-r = call('delphi_symbols', {'path': PAS, 'mode': 'full'}, 120)
+# T9: el arbol entero, sin lo que el motor repite - y con lo que NO repite:
+# los children de una clase y el detail de una declaracion se quedan (con dos
+# constantes, quitarlos todos tambien pasaba; revision de la 1.13.0)
+FAM = os.path.join(BASE, 'UFam.pas')
+open(FAM, 'w', encoding='utf-8', newline='\r\n').write(
+    'unit UFam;\ninterface\nconst A1 = 1;\ntype\n  TCosa = class\n  public\n'
+    '    procedure Hola;\n  end;\nimplementation\nprocedure TCosa.Hola;\nbegin\nend;\nend.\n')
+r = call('delphi_symbols', {'path': FAM, 'mode': 'full'}, 120)
 check('T9 mode=full: con rangos, sin selectionRange repetido ni children/detail vacios',
       r.lstrip().startswith('[') and '"range"' in r and 'selectionRange' not in r and
       '"children":[]' not in r and '"detail":""' not in r, r[:300])
+check('T9 ...y lo que no esta vacio se queda: los children de la clase, el detail de la declaracion',
+      '"children":[{"name":"Hola"' in r and '"detail":"declaration"' in r, r[:600])
+print('NOTA: T9 no mide que un selectionRange DISTINTO del range se quede: DelphiLSP '
+      'los da iguales en todos los simbolos (medido el 4-oct-2026, tambien los declaration)')
 
 srv.cierra()
 mc.borra(BASE)

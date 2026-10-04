@@ -185,6 +185,20 @@ try:
     check('ideSdkDefaults: los Default_ del IDE, los mismos que el registro (%d aqui)' % len(esperados),
           dados is not None and all(e in dados for e in esperados), (esperados, dados))
 
+    # --- 5-ter) una ficha tocada a mano: lo que no es texto se salta -------
+    # (revision de la 1.13.0: GetValue<string> de un objeto lanzaba, y la
+    # respuesta de profiles entera era un INTERNAL)
+    with open(os.path.join(BASE, 'sysroot-limpio', 'mcp-sdk.json'), 'w', encoding='utf-8') as f:
+        f.write('{"distro": {"nombre": "x"}, "gcc": "12.2"}')
+    out = srv.call('delphi_paserver', {"command": "profiles"})
+    try:
+        fichas = {s['name']: s for s in json.loads(out).get('sdks', [])}
+    except Exception:
+        fichas = {}
+    check('una ficha con un campo que no es texto: profiles contesta, sin ese campo',
+          fichas.get('limpio', {}).get('gcc') == '12.2' and 'distro' not in fichas.get('limpio', {}),
+          out[:400])
+
     # --- 5-bis) el proyecto se lo fija EL SOLO con set-sdk -----------------
     # Es el modelo del IDE: muchos SDK registrados y el proyecto elige. Hasta
     # ahora el servidor respetaba el PlatformSDK del proyecto pero no sabia

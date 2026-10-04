@@ -329,7 +329,7 @@ begin
     PatronIdentEntero(AIdent));
   if M.Success then
     Exit(M.Groups[2].Value);
-  T := AUnidad.TipoEnLinea(ALine, [ctClase, ctInterfaz, ctRegistro]);
+  T := AUnidad.TipoEnLinea(ALine, [ctClase, ctInterfaz, ctRegistro, ctAyudante]);
   if (T <> nil) and (T.Clase <> ctRegistro) then
     Result := T.Nombre;
 end;

@@ -433,6 +433,9 @@ begin
     Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Params.Root]));
   if Params.Query = '' then
     Exit(MsgText(SR_WS_EMPTY_QUERY));
+  // linea a linea: una consulta con un salto no casaria con nada
+  if Params.Query.Contains(#10) or Params.Query.Contains(#13) then
+    Exit(MsgText(SR_SEARCH_VARIAS_LINEAS));
   Max := Params.MaxResults;
   if Max <= 0 then Max := 100;
   if Max > 500 then Max := 500;
@@ -1466,12 +1469,15 @@ const
 
 { Las lineas de AOutput desde la ADesde (0-based) que caben en una pagina, y
   si queda algo, la nota que dice cuales son y como pedir el resto. Corta
-  siempre en un salto (una linea mas larga que la pagina, sola, se corta) }
+  siempre en un salto; una linea mas larga que la pagina, sola, se corta y
+  se dice (GIT-055): la siguiente pagina empieza en la otra, y su cola se
+  perdia sin aviso (revision de la 1.13.0) }
 function PaginaDeSalidaGit(const AOutput: string; ADesde: Integer): string;
 var
   Lineas: TArray<string>;
   Sb: TStringBuilder;
   K: Integer;
+  Cortadas: string;
 begin
   if (ADesde <= 0) and (Length(AOutput) <= TOPE_SALIDA_GIT) then
     Exit(AOutput);
@@ -1480,6 +1486,7 @@ begin
     SetLength(Lineas, Length(Lineas) - 1); // el salto del final no es una linea
   if ADesde >= Length(Lineas) then
     Exit(MsgFmt(SN_GIT_OFFSET_FUERA_FMT, [ADesde, Length(Lineas)]));
+  Cortadas := '';
   Sb := TStringBuilder.Create;
   try
     K := ADesde;
@@ -1487,12 +1494,16 @@ begin
           ((K = ADesde) or (Sb.Length + Length(Lineas[K]) + 1 <= TOPE_SALIDA_GIT)) do
     begin
       Sb.Append(Copy(Lineas[K], 1, TOPE_SALIDA_GIT)).Append(#10);
+      if Length(Lineas[K]) > TOPE_SALIDA_GIT then
+        Cortadas := Cortadas + IfThen(Cortadas <> '', ', ') + IntToStr(K + 1);
       Inc(K);
     end;
     Result := Sb.ToString;
   finally
     Sb.Free;
   end;
+  if Cortadas <> '' then
+    Result := Result + MsgFmt(SN_GIT_LINEA_CORTADA_FMT, [Cortadas, TOPE_SALIDA_GIT]) + #10;
   if K < Length(Lineas) then
     Result := Result + MsgFmt(SN_GIT_PAGINA_FMT, [ADesde + 1, K, Length(Lineas), K]);
 end;
@@ -1583,11 +1594,11 @@ begin
   var SuyosGit: string;
   var SobraGit := ParametroQueNoVa(ModoGit, [
       'status', 'offset', 'diff', 'offset', 'log', 'offset', 'show', 'offset',
-      'branch', '', 'add', '',
+      'branch', 'offset', 'add', '',
       'pull', '', 'fetch', '', 'init', '', 'merge', '', 'push', '',
       'commit', 'message', 'clone', 'message', 'config', 'message',
       'stash push', 'message', 'stash pop', '', 'stash list', 'offset',
-      'tag', 'message', 'switch', 'create', 'restore', '',
+      'tag', 'message offset', 'switch', 'create', 'restore', '',
       'worktree add', 'path ref', 'worktree list', 'offset', 'worktree remove', 'path'],
     ['message', Params.Message, '', 'path', Params.Path, '', 'ref', Params.Ref, '',
      'create', IfThen(Params.Create, 'true'), '',
@@ -1601,6 +1612,10 @@ begin
       Muestra := Cmd + ' args=' + Copy(ModoGit, Length(Cmd) + 2, MaxInt);
     Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Muestra, Muestra, ONinguno(SuyosGit)]));
   end;
+  // offset, solo con una CONSULTA: branch y tag listan sin argumentos (su
+  // nota GIT-053 lo ofrece) y escriben con ellos
+  if (Params.Offset <> 0) and not GitCommandIsQuery(Cmd, Params.Args, Params.Message) then
+    Exit(MsgFmt(SR_GIT_OFFSET_SOLO_CONSULTA_FMT, [Cmd]));
   // Un comando que no es de la lista se dice ANTES de preguntar nada a git
   // (la lista de abajo acaba en el mismo texto: esta es la que manda, y un
   // comando nuevo que no se apunte aqui no funciona - cerrado).

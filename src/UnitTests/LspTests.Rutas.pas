@@ -64,6 +64,7 @@ type
     [Test] procedure ElUncPegadoAUnaOpcionSeEnmascara;
     [Test] procedure ElUncDobladoDosVecesSeEnmascara;
     [Test] procedure ElUncExtendidoYElHostRaroSeEnmascaran;
+    [Test] procedure LasClavesDeUnJsonTambienSeEnmascaran;
     [Test] procedure LaFilaDeUnaTandaDejaElDiscoComoEsta;
   end;
 
@@ -397,6 +398,19 @@ begin
   Assert.DoesNotContain(S, 'nas', S);
   S := MaskDriveText('', 'copia en \\_nas\s\x.dcu');
   Assert.DoesNotContain(S, '_nas', S);
+end;
+
+{ EnmascaraJsonSalvo enmascara las cadenas una a una: las claves se copiaban
+  tal cual, y antes el texto entero pasaba por la mascara y las cubria
+  (revision de la 1.13.0). Lo de un campo de contenido sigue tal cual. }
+procedure TBarridoDeUnidadesTests.LasClavesDeUnJsonTambienSeEnmascaran;
+var
+  S: string;
+begin
+  S := EnmascaraJsonSalvo('{"changes":{"' + Letra + ':\\x.pas":[1]},"text":"' +
+    Letra + ':\\y"}', ['text']);
+  Assert.Contains(S, '"' + Virtual + '\\x.pas"', S);
+  Assert.Contains(S, '"text":"' + Letra + ':\\y"', S + ' (el contenido, tal cual)');
 end;
 
 { La negativa de una tanda de delphi_edit (un ROLLBACK), en la forma que la

@@ -245,6 +245,18 @@ check('search: sin resultados lo dice y recuerda el indice',
 out = s.call('vault_search', {"target": "files", "pattern": "[a-"})
 check('search files: una mascara rota es INVALID_PARAM (salia INTERNAL)',
       mc.abre(out, 'SR_VAULT_PATTERN_MASCARA_INVALIDA_FMT') and mc.resultado(out) == 'INVALID_PARAM', out[:150])
+# (revision de la 1.13.0) la expresion de content es del AGENTE (Lsp.Regex):
+# una que agota los pasos del motor lo DICE, no "sin resultados" en
+# silencio - el gemelo de delphi_search; y una mal escrita, antes de leer
+with open(os.path.join(VAULT, 'conventions', 'aes.md'), 'w', encoding='utf-8') as f:
+    f.write('# aes\n\n' + 'a' * 40 + 'b\n')
+out = s.call('vault_search', {"target": "content", "pattern": "(a+)+$"})
+check('search content: una regex que se dispara lo dice, con la nota y la linea (SEARCH-005)',
+      mc.rechazado(out) and mc.tiene(out, 'SEARCH-005') and 'aes.md' in out, out[:300])
+out = s.call('vault_search', {"target": "content", "pattern": "(sin cerrar"})
+check('search content: una regex mal escrita es INVALID_PARAM',
+      mc.abre(out, 'SR_VAULT_PATTERN_REGEX_INVALIDA_FMT') and mc.resultado(out) == 'INVALID_PARAM', out[:200])
+os.remove(os.path.join(VAULT, 'conventions', 'aes.md'))
 out = s.call('vault_search', {"target": "files", "pattern": "*.md", "subfolder": "../.."})
 check('search: subfolder con .. rechazado', mc.rechazado(out) and mc.es(out, 'SR_VAULT_JAIL'), out[:150])
 
