@@ -155,10 +155,12 @@ function BdsUserDir(const AInfo: TRadStudioInfo): string;
 function VersionDeFichero(const AExe: string): string;
 
 { La plataforma del IDE de una instalacion (ARootDir, la de RootDir), la de
-  la RTTI de su disenador: 'Win64' si trae bin64\bds.exe, 'Win32' si solo
-  el de 32 bits. Con los dos, Win64: lo publicado es lo
-  mismo, y lo que cambia es el tipo de lo que depende de la plataforma
-  (NativeInt es Int64 o Integer). }
+  la RTTI de su disenador: 'Win32' si trae el IDE de 32 bits (bin\bds.exe),
+  'Win64' si solo el de 64 (bin64\bds.exe). Con los dos, Win32: es el que se
+  usa normalmente (David, 4-oct-2026: los dos segun el proyecto, el de 32 lo
+  normal; con los dos se tomaba el de 64). Lo publicado es casi lo mismo; lo
+  que cambia es el tipo de lo que depende de la plataforma (NativeInt es
+  Integer o Int64) y lo que va bajo un IFDEF de la CPU. }
 function PlataformaDelIde(const ARootDir: string): string;
 
 implementation
@@ -283,7 +285,8 @@ end;
 
 function PlataformaDelIde(const ARootDir: string): string;
 begin
-  if FileExists(TPath.Combine(TPath.Combine(ARootDir, 'bin64'), 'bds.exe')) then
+  if not FileExists(TPath.Combine(TPath.Combine(ARootDir, 'bin'), 'bds.exe')) and
+     FileExists(TPath.Combine(TPath.Combine(ARootDir, 'bin64'), 'bds.exe')) then
     Result := 'Win64'
   else
     Result := 'Win32';

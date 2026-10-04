@@ -1682,7 +1682,9 @@ const
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     '[RUN-007 DENIED] The project "%s" is not in the list of projects ' +
     'this server allows to run on a target ([Workspace.<name>] ' +
-    'RemoteRunProjects). Allowed: %s.';
+    'RemoteRunProjects). Allowed: %s. Only the operator extends that list, ' +
+    'in the server''s settings.ini: it is what may run on a target, so no ' +
+    'tool changes it - ask the operator.';
 
   SR_PASERVER_RUN_DISABLED =
     '[PAS-003 DENIED] Remote execution is OFF on this server. The ' +

@@ -64,6 +64,8 @@ type
     function FindStyle(const AStyleName: string): TStyleObj;
     { Resolves 'style' then an optional 'a/b/c' path of parts. }
     function Resolve(const AStyleName, AChildPath: string; out AErr: string): TStyleObj;
+    { Las lineas de AObj, cada una numerada como las numera delphi_read
+      (Lsp.Guard.CitaDeLinea): el get de delphi_designer y el de delphi_styles }
     function BlockText(AObj: TStyleObj): string;
     { Sets (or adds) a property line of AObj. AValue is written verbatim, as
       it would appear in the file. Returns the resulting line. }
@@ -297,8 +299,13 @@ var
 begin
   L := TStringList.Create;
   try
+    // cada linea con su numero, como delphi_read (CitaDeLinea): es lo que se
+    // copia para un ancla, y el filtro la deja tal cual. Salia sin numero y
+    // enmascarada: una ruta de un valor (Picture.FileName) salia srvd: y el
+    // ancla no casaba con el disco (revision de la 1.13.0; David: el get de
+    // delphi_designer como delphi_read - y el de delphi_styles, su gemelo)
     for I := AObj.StartLine - 1 to AObj.EndLine - 1 do
-      L.Add(FLines[I]);
+      L.Add(CitaDeLinea(I + 1, FLines[I]));
     Result := string.Join(#10, L.ToStringArray);
   finally
     L.Free;

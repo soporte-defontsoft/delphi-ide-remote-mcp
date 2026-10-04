@@ -5,7 +5,7 @@ designers, one component's block, and the designer lint on demand.
 
 Usage:  python tests/test_designer.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -31,6 +31,7 @@ open(DFM, 'w', encoding='utf-8', newline='\r\n').write(
     Caption = 'panel'
     object BotonUno: TButton
       Caption = 'Uno'
+      Hint = 'D:\\datos\\ayuda.txt'
       TabOrder = 0
     end
   end
@@ -136,6 +137,12 @@ check('maxdepth con otro comando: no va con el (DSGN-047)', mc.rechazado(r) and 
 # ---- get ----
 r = call('delphi_designer', {'command': 'get', 'path': DFM, 'component': 'BotonUno'})
 check('get: bloque del componente', 'BotonUno (TButton)' in r and "Caption = 'Uno'" in r, r[:250])
+# (David, revision de la 1.13.0) como delphi_read: cada linea con su numero y
+# tal cual - salia sin numero y ENMASCARADA (una ruta de un valor salia srvd:,
+# y un ancla copiada de ahi no casaba con el disco)
+check('get: las lineas numeradas como delphi_read, y una ruta de un valor tal cual',
+      re.search(r"(?m)^\s*\d+\|\s*Caption = 'Uno'", r) is not None and
+      "Hint = 'D:\\datos\\ayuda.txt'" in r and 'srv' not in r, r[:400])
 r = call('delphi_designer', {'command': 'get', 'path': DFM, 'component': 'NoEsta'})
 # el form SI se leyo y el componente no esta en el (no un fichero ilegible)
 check('get: componente inexistente',

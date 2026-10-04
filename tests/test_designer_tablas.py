@@ -20,7 +20,8 @@ not warned about; info says what a class streams by code and, for one that
 publishes nothing, what its descendants publish.
 
 1.13.0 (4-oct-2026): the header names the platform the source was read for
-(the one of the installation's IDE: Win64 with bin64/bds.exe, else Win32); a
+(the one of the installation's IDE: Win32 with bin/bds.exe, the usual one,
+Win64 when there is only bin64/bds.exe); a
 table that is there but cannot be read says DSGN-054 and does not judge; a
 generation that fails says DSGN-053 and is remembered for a while (both
 rules had no check).

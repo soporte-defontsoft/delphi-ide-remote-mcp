@@ -104,7 +104,9 @@ function IdDePagina(const ACorto, APagina, AAncla: string): string;
 { Las palabras de una consulta, en minusculas, sin las comillas ni la
   puntuacion que las rodea: '"class helpers"' busca class y helpers (la
   descripcion de la tool lo escribe asi, y con las comillas no casaba nada;
-  revision de la 1.10.0). El punto de dentro se queda: TStringList.Sort. }
+  revision de la 1.10.0). El punto de dentro se queda: TStringList.Sort. Sin
+  argumentos genericos (TList<T>.Add busca TList.Add), y de una firma solo
+  su nombre (FormatDateTime(const Format: string) busca FormatDateTime). }
 function PalabrasDeConsulta(const AConsulta: string): TArray<string>;
 
 { --- con la ayuda instalada --- }
@@ -594,10 +596,34 @@ const
   // lo que rodea a una palabra sin ser de ella; el punto de dentro se queda
   BORDES: TSysCharSet = ['"', '''', '`', '(', ')', '[', ']', '{', '}', ',', ';', ':', '!', '?'];
 var
-  P: string;
+  P, S: string;
+  I, J, Prof: Integer;
 begin
   Result := nil;
-  for var W in AConsulta.ToLower.Split([' ', #9, #10, #13], TStringSplitOptions.ExcludeEmpty) do
+  // Los argumentos genericos fuera: la ayuda titula TList.Add, no
+  // TList<T>.Add (solo los que van pegados a un nombre: '<>' suelto se queda).
+  // Y una FIRMA, como la da delphi_hover (FormatDateTime(const Format:
+  // string; ...): string), busca su NOMBRE: los tipos de sus parametros no
+  // estan en el titulo de ninguna pagina y la consulta entera daba DOCS-006
+  // (dato de Hermes, dogfooding de la 1.12.0; medido el 4-oct-2026)
+  S := '';
+  Prof := 0;
+  for I := 1 to Length(AConsulta) do
+    if (AConsulta[I] = '<') and ((Prof > 0) or ((I > 1) and EsCaracterDeIdent(AConsulta[I - 1]))) then
+      Inc(Prof)
+    else if (AConsulta[I] = '>') and (Prof > 0) then
+      Dec(Prof)
+    else if Prof = 0 then
+      S := S + AConsulta[I];
+  I := Pos('(', S);
+  if (I > 1) and EsCaracterDeIdent(S[I - 1]) then
+  begin
+    J := I - 1;
+    while (J > 1) and (EsCaracterDeIdent(S[J - 1]) or (S[J - 1] = '.')) do
+      Dec(J);
+    S := Copy(S, J, I - J);
+  end;
+  for var W in S.ToLower.Split([' ', #9, #10, #13], TStringSplitOptions.ExcludeEmpty) do
   begin
     P := W;
     while (P <> '') and CharInSet(P[1], BORDES) do

@@ -165,6 +165,12 @@ try:
             ('class helpers', 'topics:Class_and_Record_Helpers_(Delphi).htm'),
             ('anonymous methods', 'topics:Anonymous_Methods_in_Delphi.htm'),
             ('managed records', 'topics:Custom_Managed_Records.htm'),
+            # una FIRMA busca su nombre y los argumentos genericos no estan en
+            # los titulos (dato de Hermes, dogfooding de la 1.12.0: DOCS-006)
+            ('FormatDateTime(const Format: string; DateTime: TDateTime)',
+             'system:System.SysUtils.FormatDateTime.htm'),
+            ('System.Generics.Collections.TList<T>.Add',
+             'system:System.Generics-Collections.TList.Add.htm'),
         ]
         for q, esperado in CASOS:
             got = ids_de(docs({'command': 'search', 'query': q}))

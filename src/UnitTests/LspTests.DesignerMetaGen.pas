@@ -683,10 +683,14 @@ procedure TDesignerMetaGenTests.LaPlataformaDelIde;
 var
   V32, V64: TArray<string>;
 begin
-  Assert.AreEqual('Win32', PlataformaDelIde(FDir), 'sin bin64\bds.exe');
+  Assert.AreEqual('Win32', PlataformaDelIde(FDir), 'sin ninguno: la de siempre');
   TDirectory.CreateDirectory(TPath.Combine(FDir, 'bin64'));
   Escribe('bin64\bds.exe', '');
-  Assert.AreEqual('Win64', PlataformaDelIde(FDir), 'con el IDE de 64 bits');
+  Assert.AreEqual('Win64', PlataformaDelIde(FDir), 'solo el IDE de 64 bits');
+  // con los dos, el de 32: el que se usa normalmente (David, 4-oct-2026)
+  TDirectory.CreateDirectory(TPath.Combine(FDir, 'bin'));
+  Escribe('bin\bds.exe', '');
+  Assert.AreEqual('Win32', PlataformaDelIde(FDir), 'con los dos, el de 32 bits');
   Escribe('System.pas', 'unit System; interface type TObject = class end; implementation end.');
   Escribe('System.Classes.pas', 'unit System.Classes; interface type TPersistent = class(TObject) end;'#13#10 +
     'TComponent = class(TPersistent) end;'#13#10 +

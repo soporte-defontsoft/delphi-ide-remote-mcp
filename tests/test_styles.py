@@ -8,7 +8,7 @@ src/StyleConvert/DelphiStyleConvert.dproj) for build and for the platform defaul
 
 Usage:  python tests/test_styles.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -138,6 +138,10 @@ check('view: filter', json.loads(out)['count'] == 1, out[:200])
 # ---- get ----
 out = call('delphi_styles', {"path": S, "command": "get", "style": "formheader"})
 check('get: bloque entero', out.startswith('formheader (TLayout) lines 7-29') and "Text = 'cabecera'" in out, out[:200])
+# (revision de la 1.13.0) como delphi_read: cada linea con su numero, tal cual
+# (el gemelo del get de delphi_designer, el mismo BlockText)
+check('get: las lineas numeradas como delphi_read',
+      re.search(r"(?m)^\s*\d+\|\s*Text = 'cabecera'", out) is not None, out[:400])
 out = call('delphi_styles', {"path": S, "command": "get", "style": "formheader", "child": "background"})
 check('get: parte por child', 'background (TRectangle)' in out and 'Fill.Color = xFFF6ECDB' in out and 'cabecera' not in out, out[:300])
 out = call('delphi_styles', {"path": S, "command": "get", "style": "noexiste"})

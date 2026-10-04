@@ -523,6 +523,19 @@ begin
   Assert.AreEqual('tstringlist.sort', string.Join('|', PalabrasDeConsulta(' TStringList.Sort ')),
     'el punto de dentro se queda');
   Assert.AreEqual(0, Integer(Length(PalabrasDeConsulta(' "" (), '))), 'solo signos: nada');
+  // una firma busca su nombre, y los argumentos genericos no estan en los
+  // titulos de la ayuda (dato de Hermes, revision de la 1.13.0)
+  Assert.AreEqual('formatdatetime', string.Join('|',
+    PalabrasDeConsulta('FormatDateTime(const Format: string; DateTime: TDateTime): string')));
+  Assert.AreEqual('system.sysutils.formatdatetime', string.Join('|',
+    PalabrasDeConsulta('System.SysUtils.FormatDateTime(const F: string)')));
+  Assert.AreEqual('tlist.add', string.Join('|', PalabrasDeConsulta('TList<T>.Add')));
+  Assert.AreEqual('tdictionary.trygetvalue', string.Join('|',
+    PalabrasDeConsulta('TDictionary<TKey, TValue>.TryGetValue(const Key: TKey; out Value: TValue): Boolean')));
+  Assert.AreEqual('class|helpers|delphi', string.Join('|', PalabrasDeConsulta('class helpers (Delphi)')),
+    'un parentesis que no va pegado a un nombre no es una firma');
+  Assert.AreEqual('<>|operator', string.Join('|', PalabrasDeConsulta('<> operator')),
+    'un < suelto no abre argumentos');
 end;
 
 procedure TDocsPurasTests.LasEntidadesYElMetaLejano;
