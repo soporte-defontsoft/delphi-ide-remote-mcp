@@ -40,7 +40,8 @@ VIRT = mc.virtual(DRIVE)                             # 'srvc:'
 # servidor: es texto del fichero, y tiene que viajar intacto para que sirva
 # de ancla. El enmascarador tapa CUALQUIER letra, no solo las servidas, asi
 # que si alguien enmascara de mas esto se ve aqui.
-RUTA = r'D:\Proyectos\Cliente\datos.ini'
+# La ruta del contenido usa OTRA letra: L7 vigila la de la jaula.
+RUTA = ('D:' if DRIVE != 'D:' else 'C:') + r'\Proyectos\Cliente\datos.ini'
 
 TOK = 'r40'
 PORT = mc.puerto_libre()
@@ -136,7 +137,7 @@ try:
           VIRT in z, z[:240])
 
     # ------------------------------------------------------------------ L6
-    s = call('delphi_search', {'root': JAIL, 'query': r'D:\Proyectos'})
+    s = call('delphi_search', {'root': JAIL, 'query': RUTA})
     try:
         hits = mc.aciertos(json.loads(s))
     except Exception:

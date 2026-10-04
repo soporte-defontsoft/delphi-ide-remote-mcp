@@ -39,6 +39,10 @@ from mcp_cliente import check
 REPO = mc.REPO
 BASE = mc.carpeta('tray')
 EXE = mc.copia_exe(BASE)
+# Git tiene su propia jaula completa; .git comun de un worktree queda fuera.
+GIT_REPO = os.path.join(BASE, 'git-fixture')
+subprocess.run(['git', 'init', '-b', 'main', GIT_REPO],
+               check=True, capture_output=True)
 
 TOK = 'tray-bat'
 PORT_GUI = mc.puerto_libre()
@@ -53,7 +57,7 @@ open(os.path.join(BASE, 'settings.ini'), 'w').write('\n'.join([
     '',
     '[Workspace.Bandeja]',
     'Token=%s' % TOK,
-    'Roots=%s' % REPO,
+    'Roots=%s;%s' % (REPO, BASE),
     '',
 ]))
 
@@ -141,7 +145,7 @@ try:
                          'fromline': 1, 'toline': 20}),
         ('delphi_search', {'root': os.path.join(REPO, 'src'),
                            'query': 'SERVER_VERSION'}),
-        ('delphi_git', {'repo': REPO, 'command': 'status'}),
+        ('delphi_git', {'repo': GIT_REPO, 'command': 'status'}),
         ('delphi_symbols', {'path': os.path.join(REPO, 'src', 'Server',
                                                  'Lsp.Service.pas')}),
     ]

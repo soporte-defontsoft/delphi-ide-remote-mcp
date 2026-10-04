@@ -242,14 +242,15 @@ check('I6c la cita del disco de la entrada que fallo, tambien tal cual',
 check('I6d lo que tecleo el agente (el fragmento, no la linea del disco) sale enmascarado',
       ('OK: ' + mc.virtual('%s:\\datos' % L) + '  ->') in r and ('OK: %s:' % L) not in r, r[:600])
 
-# ---- I7 la negativa de la PUERTA: nunca trae contenido, sale enmascarada ----
+# ---- I7 la PUERTA rechaza los controles sin citar rutas ni raices ----
 # una ruta con un salto y '1|' dentro hacia que el filtro de las tools de eco
 # tomara su segunda linea por una cita del disco: las raices del servidor
 # salian con su letra real (revision del 4-oct-2026; tambien en la 1.12.1)
 for _p in ('a\n1|', 'a\nb  ->  1|'):
     r = call('delphi_read', {'path': _p})
-    check('I7 la negativa de la puerta con %r enmascara las raices' % _p,
-          mc.rechazado(r) and mc.virtual(BASE) in r and BASE not in r, r[:400])
+    check('I7 la negativa de la puerta con %r no cita ninguna raiz' % _p,
+          mc.rechazado(r) and mc.es(r, 'SR_GUARD_CONTROL_EN_RUTA_FMT')
+          and mc.virtual(BASE) not in r and BASE not in r, r[:400])
 
 # ---- I8 la cabecera que ABRE una clase (PATRON_ABRE_CLASE) ----
 # insert=metodo tomaba la primera 'TFoo = class': una declaracion adelantada,

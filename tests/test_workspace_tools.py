@@ -1,7 +1,7 @@
 """E2E battery for delphi_search / delphi_list / delphi_git over MCP stdio.
 
 Usage:  python tests/test_workspace_tools.py [path-to-DelphiLspMcp.exe]
-Exit code 0 = all green. Uses this very repository as the git fixture.
+Exit code 0 = all green. Uses an independent repository as the git fixture.
 """
 import json, os, base64, hashlib, subprocess
 import mcp_cliente as mc
@@ -28,6 +28,20 @@ SRC = os.path.join(REPO, 'src', 'Server')  # la carpeta del servidor: units, .dp
 # Release): 'list: root explicito DENTRO de build output' lists that folder,
 # not the repo's.
 EXE = mc.copia_exe(os.path.join(BASE, 'Compiled', 'Win64', 'Release'))
+
+# La forma de un checkout (rama y .git comun) no condiciona estas pruebas.
+GIT_REPO = os.path.join(BASE, 'git-fixture')
+subprocess.run(['git', 'init', '-b', 'main', GIT_REPO],
+               check=True, capture_output=True)
+for _i in range(5):
+    with open(os.path.join(GIT_REPO, 'dato.txt'), 'a', encoding='utf-8') as _f:
+        _f.write('dato %d\n' % _i)
+    subprocess.run(['git', '-C', GIT_REPO, 'add', 'dato.txt'],
+                   check=True, capture_output=True)
+    subprocess.run(['git', '-C', GIT_REPO, '-c', 'user.name=Fixture',
+                    '-c', 'user.email=fixture@example.invalid',
+                    'commit', '-m', 'Fixture %d' % _i],
+                   check=True, capture_output=True)
 
 # Explicit git URLs need the operator's allowlist since v0.62 (an arbitrary URL
 # made the SERVER open the connection). The clone check below is about cloning,
@@ -283,30 +297,30 @@ try:
 finally:
     mc.borra(capdir)
 
-# --- git (this repo as fixture) ---
-out = call('delphi_git', {"repo": REPO, "command": "status"})
+# --- git (repo independiente dentro de la jaula) ---
+out = call('delphi_git', {"repo": GIT_REPO, "command": "status"})
 check('git: status', out.startswith('exit=0') and '## main' in out, out[:150])
-out = call('delphi_git', {"repo": REPO, "command": "log"})
+out = call('delphi_git', {"repo": GIT_REPO, "command": "log"})
 # --oneline -20: assert on the SHAPE (hash + subject lines), never on a
 # specific old commit message - it scrolls out of the window as we release.
 check('git: log', out.startswith('exit=0')
       and len([l for l in out.splitlines()[1:] if l.strip()]) >= 5, out[:150])
-out = call('delphi_git', {"repo": REPO, "command": "branch"})
+out = call('delphi_git', {"repo": GIT_REPO, "command": "branch"})
 check('git: branch', out.startswith('exit=0') and 'main' in out, out[:150])
 # The stat of the LAST COMMIT, not of the working tree: the working tree is
 # being edited while the battery runs, the commit is fixed. And it has to be
 # the SAME stat git gives here - until 2026-09-26 any "exit=" passed, a
 # fatal "exit=128" included.
-out = call('delphi_git', {"repo": REPO, "command": "diff", "args": "--stat HEAD~1 HEAD"})
-_git = subprocess.run(['git', '-C', REPO, 'diff', '--stat', 'HEAD~1', 'HEAD'],
+out = call('delphi_git', {"repo": GIT_REPO, "command": "diff", "args": "--stat HEAD~1 HEAD"})
+_git = subprocess.run(['git', '-C', GIT_REPO, 'diff', '--stat', 'HEAD~1', 'HEAD'],
                       capture_output=True, text=True, encoding='utf-8', errors='replace')
 _stat = lambda t: [l.strip() for l in t.splitlines() if l.strip()]
 check('git: diff --stat', out.startswith('exit=0') and bool(_stat(_git.stdout))
       and _stat(out)[1:] == _stat(_git.stdout) and 'changed' in _stat(out)[-1],
       (out[:120], _git.stdout[-120:]))
-out = call('delphi_git', {"repo": REPO, "command": "rebase"})
+out = call('delphi_git', {"repo": GIT_REPO, "command": "rebase"})
 check('git: comando fuera de whitelist rechaza', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_UNKNOWN_COMMAND_FMT'), out[:120])
-out = call('delphi_git', {"repo": REPO, "command": "log", "args": "; del *"})
+out = call('delphi_git', {"repo": GIT_REPO, "command": "log", "args": "; del *"})
 check('git: metacaracteres rechazados', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_SHELL_METACHARS_ARGS'), out[:120])
 
 # --- delphi_signature + definition kind variants (real LSP semantics) ---
@@ -671,7 +685,7 @@ try:
     check('textedit: backup automatico creado', os.path.isdir(bdir), bdir)
 finally:
     mc.borra(tmptxt)
-out = call('delphi_git', {"repo": REPO, "command": "commit"})
+out = call('delphi_git', {"repo": GIT_REPO, "command": "commit"})
 check('git: commit sin message rechaza', mc.es(out, 'SR_GIT_COMMIT_NEEDS_MESSAGE'), out[:120])
 
 servidor.cierra()
