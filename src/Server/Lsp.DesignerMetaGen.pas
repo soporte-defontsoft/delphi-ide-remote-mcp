@@ -75,7 +75,7 @@ type
 const
   { Sube cuando cambian las reglas del generador: una tabla de otra
     generacion no se reutiliza aunque el fuente sea el mismo. }
-  GENERACION_TABLAS = 3; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0)
+  GENERACION_TABLAS = 4; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1)
   // lo que se recuerda un fallo del generador antes de intentarlo otra vez
   MINUTOS_REINTENTO_TABLA = 10;
 
@@ -382,7 +382,9 @@ begin
       end;
       // los tipos que nombra: un ayudante que lee por ella (FMX:
       // TTextControl.DefineProperties crea un TTextSettingsInfo.TTextPropLoader)
-      for var C in TRegEx.Matches(Cuerpo, '\bT[A-Za-z_]\w*(?:\.T[A-Za-z_]\w*)*\b') do
+      // (T y una MAYUSCULA, como se nombra un tipo: con T[A-Za-z_] entraban
+      // True o TextHeight como si fueran tipos; ruido, revision de la 1.12.0)
+      for var C in TRegEx.Matches(Cuerpo, '\bT[A-Z]\w*(?:\.T[A-Z]\w*)*\b') do
       begin
         E := '>' + Clase + ' ' + C.Value;
         if not Lista.Contains(E) then

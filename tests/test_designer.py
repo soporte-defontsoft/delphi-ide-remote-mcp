@@ -230,6 +230,63 @@ check('tras el insert, el lint ya no avisa de btnNadaClick (y sigue avisando de 
 r = call('delphi_designer', {'command': 'lint', 'path': DFM})
 check('lint de un designer SIN .pas pareja sigue limpio (no hay contra que comparar)', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:200])
 
+# 1.12.1 (prueba en vivo de la 1.12.0): la linea 'object Nombre: TClase' la
+# leian seis regex con \w ASCII. Un objeto sin nombre o un nombre con acento
+# no casaba, su end descolocaba el anidamiento y el componente de despues se
+# tomaba por el form: nunca se miraba. Ahora UN lector (LineaDeObjeto).
+ACP = os.path.join(BASE, 'UAcento.pas')
+ACD = os.path.join(BASE, 'UAcento.dfm')
+open(ACP, 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""unit UAcento;
+
+interface
+
+uses
+  Vcl.Forms, Vcl.StdCtrls, System.Classes;
+
+type
+  TFormAcento = class(TForm)
+    lblDirecci\u00f3n: TLabel;
+  end;
+
+implementation
+
+{$R *.dfm}
+
+end.
+""")
+open(ACD, 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""object FormAcento: TFormAcento
+  Caption = 'A'
+  object TMemo
+  end
+  object btnSinCampo: TButton
+    Caption = 'z'
+  end
+  object lblDirecci\u00f3n: TLabel
+    Caption = 'x'
+  end
+  object lblSinCampo\u00d1: TLabel
+    Caption = 'y'
+  end
+end
+""")
+r = call('delphi_designer', {'command': 'check-binding', 'path': ACD})
+faltan = ' '.join(mc.como_json(r).get('componentsWithoutField', []))
+check('check-binding: tras un objeto SIN nombre, el siguiente se mira (antes se tomaba por el form)',
+      'btnSinCampo' in faltan, r[:600])
+check('check-binding: un nombre con acento se lee entero: sin campo se avisa, con campo no',
+      'lblSinCampo\u00d1' in faltan and 'lblDirecci\u00f3n' not in faltan, r[:600])
+r = call('delphi_designer', {'command': 'tree', 'path': ACD})
+# (el JSON trae el acento escapado: se mira el arbol, no el texto)
+def _nodos(n):
+    yield n
+    for h in n.get('children', []):
+        yield from _nodos(h)
+pares = [(x.get('name', ''), x.get('class', '')) for x in _nodos(mc.como_json(r).get('root', {}))]
+check('tree: el componente de nombre con acento sale con su nombre y su clase',
+      ('lblDirecci\u00f3n', 'TLabel') in pares and not any(c.startswith('lblDirecci') for _, c in pares), pares)
+
 r = call('delphi_designer', {'command': 'totext', 'path': BIN})
 # aceptado = llego al conversor (el BIN de prueba esta danado: lo dice el)
 check('to-text sin guion (totext) se acepta como alias: no es "comando invalido"',

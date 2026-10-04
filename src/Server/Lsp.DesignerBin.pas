@@ -43,12 +43,43 @@ function DesignerFileToText(const APath: string; out AText: string): string;
   Devuelve '' si bien; si no, el error del parser con su linea. }
 function DesignerTextToBinary(const AText: string; out ABytes: TBytes): string;
 
+{ LA linea que abre un objeto en un designer de texto: 'object Nombre: TClase',
+  'inherited ...' o 'inline ...', con o sin nombre ('object TMemo') y con o
+  sin indice ('[2]'). True si lo es: AClave en minusculas (object, inherited
+  o inline), ANombre ('' sin el) y AClase. El nombre y la clase por lo que
+  los rodea, no por \w, que en TRegEx es ASCII: 'object lblDireccion: TLabel'
+  con su acento se leia como la clase 'lblDirecci', y su end descolocaba el
+  anidamiento. La leian seis regex - el lint, el binding (dos), tree
+  (Lsp.Styles), el renombrado (Lsp.ProjectUnits) y layout -, cada una con su
+  parte de la regla; lo destapo la prueba en vivo de la 1.12.0. Una linea de
+  propiedad ('Inline = True') no es una. }
+function LineaDeObjeto(const ALinea: string; out AClave, ANombre, AClase: string): Boolean;
+
 implementation
 
 uses
   System.Classes,
   System.IOUtils,
+  System.RegularExpressions,
   Lsp.Texts;
+
+function LineaDeObjeto(const ALinea: string; out AClave, ANombre, AClase: string): Boolean;
+var
+  M: TMatch;
+begin
+  AClave := '';
+  ANombre := '';
+  AClase := '';
+  M := TRegEx.Match(ALinea.Trim,
+    '(?i)^(object|inherited|inline)\s+(?:([^\s:=]+)\s*:\s*)?([^\s\[=:]+)');
+  Result := M.Success;
+  if Result then
+  begin
+    AClave := M.Groups[1].Value.ToLower;
+    ANombre := M.Groups[2].Value;
+    AClase := M.Groups[3].Value;
+  end;
+end;
 
 function DesignerShapeOf(const ABytes: TBytes): TDesignerShape;
 begin

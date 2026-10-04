@@ -21,6 +21,8 @@ type
     [Test] procedure ElAcentoSaleComoNumeral;
     [Test] procedure FueraDeAnsiSeRechaza;
     [Test] procedure BinarioDanadoDaMotivo;
+    [Test]
+    procedure LaLineaDeUnObjeto;
   end;
 
 implementation
@@ -112,6 +114,33 @@ begin
     B([$FF, $0A, $00, Ord('T'), Ord('R'), Ord('O'), Ord('T'), Ord('O'), 0, $30, $10, $10, 0, 0, 0,
        Ord('T'), Ord('P'), Ord('F'), Ord('0'), Ord('b'), Ord('a'), Ord('s'), Ord('u'), Ord('r'), Ord('a')]), Txt),
     'un binario roto devuelve el motivo, no una excepcion');
+end;
+
+procedure TDesignerBinTests.LaLineaDeUnObjeto;
+var
+  K, N, C: string;
+begin
+  // LA lectura de 'object Nombre: TClase' (antes seis regex con \w ASCII:
+  // un nombre con acento o un objeto sin nombre descolocaban el anidamiento)
+  Assert.IsTrue(LineaDeObjeto('object Form1: TForm1', K, N, C));
+  Assert.AreEqual('object', K);
+  Assert.AreEqual('Form1', N);
+  Assert.AreEqual('TForm1', C);
+  Assert.IsTrue(LineaDeObjeto('  inherited Marco2: TMarco2 [0]', K, N, C), 'con su indice');
+  Assert.AreEqual('inherited', K);
+  Assert.AreEqual('Marco2', N);
+  Assert.AreEqual('TMarco2', C);
+  Assert.IsTrue(LineaDeObjeto('object TMemo', K, N, C), 'sin nombre');
+  Assert.AreEqual('', N);
+  Assert.AreEqual('TMemo', C);
+  Assert.IsTrue(LineaDeObjeto('object lblDirecci'#$F3'n: TLabel', K, N, C), 'con acento');
+  Assert.AreEqual('lblDirecci'#$F3'n', N);
+  Assert.AreEqual('TLabel', C);
+  Assert.IsTrue(LineaDeObjeto('inline Marco1: TMarco', K, N, C));
+  Assert.AreEqual('inline', K);
+  Assert.IsFalse(LineaDeObjeto('Inline = True', K, N, C), 'una propiedad no es un objeto');
+  Assert.IsFalse(LineaDeObjeto('objects = 3', K, N, C));
+  Assert.IsFalse(LineaDeObjeto('Caption = ''object x: y''', K, N, C));
 end;
 
 initialization

@@ -173,6 +173,7 @@ var
   Cur, O: TStyleObj;
   InBinary: Boolean;
   M: TMatch;
+  OClave, ONombre, OClase: string;
 begin
   FRoot := nil;
   Cur := nil;
@@ -209,12 +210,13 @@ begin
         Dec(CollDepth);
       Continue; // item / end / props inside a collection are opaque here
     end;
-    M := TRegEx.Match(T, '^(object|inherited|inline)\s+(?:(\w+)\s*:\s*)?(\w+)', [roIgnoreCase]);
-    if M.Success then
+    // THE reader of an object line (Lsp.DesignerBin): with \w (ASCII) a name
+    // with an accent was read as the class (live test of 1.12.0)
+    if LineaDeObjeto(T, OClave, ONombre, OClase) then
     begin
       O := TStyleObj.Create;
-      O.ObjName := M.Groups[2].Value;
-      O.ClassName_ := M.Groups[3].Value;
+      O.ObjName := ONombre;
+      O.ClassName_ := OClase;
       O.StartLine := I + 1;
       O.EndLine := I + 1;
       O.Parent := Cur;

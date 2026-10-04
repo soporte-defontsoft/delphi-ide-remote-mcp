@@ -270,9 +270,8 @@ end;
 function DesignerHeaderName(const ADesigner: string; out AName, AClass: string): Boolean;
 var
   B: TBytes;
-  Enc, Line: string;
+  Enc, Line, Clave, Nombre, Clase: string;
   Lines: TArray<string>;
-  M: TMatch;
 begin
   Result := False;
   AName := '';
@@ -292,11 +291,12 @@ begin
     Lines := SplitToLines(PatchLoadText(ADesigner, Enc));
   for Line in Lines do
   begin
-    M := TRegEx.Match(Line, '^\s*(object|inherited)\s+(\w+)\s*:\s*(\w+)', [roIgnoreCase]);
-    if M.Success then
+    // THE reader of an object line (Lsp.DesignerBin); the root is never an
+    // inline frame and always has a name
+    if LineaDeObjeto(Line, Clave, Nombre, Clase) and (Clave <> 'inline') and (Nombre <> '') then
     begin
-      AName := M.Groups[2].Value;
-      AClass := M.Groups[3].Value;
+      AName := Nombre;
+      AClass := Clase;
       Exit(True);
     end;
     if Line.Trim <> '' then

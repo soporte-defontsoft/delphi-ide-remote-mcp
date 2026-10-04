@@ -551,6 +551,7 @@ var
   Ret: TJSONObject;
   Zero, Outside, Overlap, NoRoom, Unknown, Boxes: TJSONArray;
   RootW, RootH, Opens, Closes, I: Integer;
+  OClave, ONombre, OClase: string;
   Found, Estimated: Boolean;
   L: string;
 
@@ -817,7 +818,9 @@ begin
     for I := 0 to High(Doc.Lines) do
     begin
       L := Doc.Lines[I].Trim;
-      if TRegEx.IsMatch(L, '(?i)^(object|inherited|inline)\s') then Inc(Opens);
+      // THE reader of an object line (Lsp.DesignerBin): a property line such
+      // as 'Inline = True' is not one
+      if LineaDeObjeto(L, OClave, ONombre, OClase) then Inc(Opens);
       if TRegEx.IsMatch(L, '(?i)^end\b') then Inc(Closes);
     end;
 

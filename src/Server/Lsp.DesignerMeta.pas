@@ -144,10 +144,15 @@ function MetaTable(const AIsFmx: Boolean; out AFalta: TFaltaTabla;
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.StrUtils, System.RegularExpressions,
-  System.IOUtils, Lsp.Texts,
+  System.SysUtils,
+  System.Classes,
+  System.StrUtils,
+  System.RegularExpressions,
+  System.IOUtils,
+  Lsp.Texts,
   Lsp.Discovery,       // DiscoverRadStudio: el Delphi activo
-  Lsp.DesignerMetaGen; // la tabla de ese Delphi, sacada de su fuente
+  Lsp.DesignerMetaGen, // la tabla de ese Delphi, sacada de su fuente
+  Lsp.DesignerBin;
 
 type
   TJubilada = record
@@ -560,6 +565,7 @@ var
   Warns, Notas: TStringList;
   I, SIdx, CollDepth: Integer;
   L, Lhs, Rhs, Cur, CurShow, Seg, Key, Have, Members, V, Desc, Obj: string;
+  OClave, ONombre, OClase: string;
   Mt: TMatch;
   Segs: TArray<string>;
   R: TPropRec;
@@ -610,32 +616,28 @@ begin
           Inc(CollDepth);
         Continue;
       end;
-      Mt := TRegEx.Match(L,
-        // the name is optional: 'object TMemo' is an unnamed component, and
-        // without it its properties went to the PARENT (and its end popped
-        // the parent: 1.12.0 review, a FireDAC sample). The name and the
-        // class by what surrounds them, not by \w: TRegEx's \w is ASCII, and
-        // 'lblDireccion' with its accent read 'lblDirecci' as the class
-        // (1.12.0 review)
-        '^(object|inherited|inline) +(?:[^\s:]+ *: *)?([^\s\[]+)');
-      if Mt.Success then
+      // the name is optional: 'object TMemo' is an unnamed component, and
+      // without it its properties went to the PARENT (and its end popped the
+      // parent: 1.12.0 review, a FireDAC sample). THE reader of that line
+      // (Lsp.DesignerBin), shared with binding, tree and the rename
+      if LineaDeObjeto(L, OClave, ONombre, OClase) then
       begin
-        Cur := Mt.Groups[2].Value.ToLower;
+        Cur := OClase.ToLower;
         // The ROOT object and an inline frame are user classes by definition
         // (a form, a frame, a data module): never judged. With the tables
         // read from the library paths a user's TForm1 can share its name
         // with a demo's (202 form classes there: TForm1, TAboutBox...), and
         // judging it said TextHeight/PixelsPerInch did not exist (1.12.0
         // review: 33 Samples forms).
-        if (Stack.Count = 0) or SameText(Mt.Groups[1].Value, 'inline') then
+        if (Stack.Count = 0) or (OClave = 'inline') then
         begin
           Stack.Push('');
           Continue;
         end;
         // the NAME a form writes -> the class identity (with its unit)
-        if not M.ClaseDeNombre(Mt.Groups[2].Value, Cur) then
+        if not M.ClaseDeNombre(OClase, Cur) then
         begin
-          Cur := Mt.Groups[2].Value.ToLower;
+          Cur := OClase.ToLower;
           // Not judging an unknown class is right (a user form or a
           // third-party component is not an error), but saying NOTHING was
           // read as "checked and fine" - and lint's own description promises
@@ -645,16 +647,16 @@ begin
           // a frame and a data module are user classes by definition and no
           // table will ever hold them. Only a nested `object` of an unknown
           // class is worth a word (a third-party component, or a typo).
-          if (Stack.Count > 0) and SameText(Mt.Groups[1].Value, 'object') and
+          if (Stack.Count > 0) and (OClave = 'object') and
              not Unknown.Contains(',' + Cur + ',') then
           begin
             Unknown := Unknown + Cur + ',';
             if M.Ambiguas.TryGetValue(Cur, Have) then
-              Nota(MsgFmt(SN_LINT_CLASE_AMBIGUA_FMT, [Mt.Groups[2].Value,
+              Nota(MsgFmt(SN_LINT_CLASE_AMBIGUA_FMT, [OClase,
                 IfThen(AIsFmx, 'FMX', 'VCL'), Have.Substring(Have.IndexOf('|') + 1)]))
             else
               Nota(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
-                [Mt.Groups[2].Value, IfThen(AIsFmx, 'FMX', 'VCL')]));
+                [OClase, IfThen(AIsFmx, 'FMX', 'VCL')]));
           end;
           Cur := '';
         end;

@@ -48,10 +48,10 @@ const
 
 function BindingReport(const DfmLines, PasLines: TArray<string>; const Pas: string): string;
 var
-  DfmTxt, L, Nm, Cl2, Ev, Handler, RootClass, Chain: string;
+  L, Nm, Cl2, Ev, Handler, RootClass, Chain, OClave: string;
   Ret: TJSONObject;
   Miss, MissEv, NotPub, Extra, Dups, Empty: TJSONArray;
-  Fields, PubMethods, AnyMethods, Seen: TStringList;
+  Fields, PubMethods, AnyMethods, Seen, Objetos: TStringList;
   M: TMatch;
   I, Depth, SkipBelow: Integer;
   AncestorOutside, ClassFound, Complete: Boolean;
@@ -109,7 +109,10 @@ var
       // "A, B: TButton;" is one declaration of two components, and the type
       // may be qualified ("Vcl.StdCtrls.TButton"). Either shape used to make
       // the whole line unreadable, so every name on it was called missing.
-      Mt := TRegEx.Match(Line, '^([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*:\s*([A-Za-z_][\w.]*)\s*;');
+      // The names by what surrounds them, like the .dfm side (LineaDeObjeto):
+      // with \w (ASCII) 'lblDireccion' with its accent had no field. The type
+      // without '<', as before: a generic list is not a component
+      Mt := TRegEx.Match(Line, '^([^\s,:;]+(?:\s*,\s*[^\s,:;]+)*)\s*:\s*([^\s,:;<]+)\s*;');
       if not Mt.Success then
         Continue;
       Names := Mt.Groups[1].Value;
@@ -171,32 +174,35 @@ var
   end;
 
 begin
-  DfmTxt := string.Join(#10, DfmLines);
-
   Fields := TStringList.Create;
   PubMethods := TStringList.Create;
   AnyMethods := TStringList.Create;
   Seen := TStringList.Create;
+  Objetos := TStringList.Create;
   Ret := TJSONObject.Create;
   try
     Fields.CaseSensitive := False;
     PubMethods.CaseSensitive := False;
     AnyMethods.CaseSensitive := False;
     Seen.CaseSensitive := False;
+    Objetos.CaseSensitive := False;
+    // the names of every object of the .dfm, at any depth (for the fields
+    // without a component, below)
+    for I := 0 to High(DfmLines) do
+      if LineaDeObjeto(DfmLines[I], OClave, Nm, Cl2) and (Nm <> '') then
+        Objetos.Add(Nm);
 
     // the root object of the .dfm names the class this form really is
     RootClass := '';
+    // (THE reader of an object line: Lsp.DesignerBin.LineaDeObjeto)
     for I := 0 to High(DfmLines) do
-    begin
-      M := TRegEx.Match(DfmLines[I].Trim, '(?i)^(object|inherited|inline)\s+([A-Za-z_]\w*)\s*:\s*([A-Za-z_][\w.]*)');
-      if M.Success then
+      if LineaDeObjeto(DfmLines[I], OClave, Nm, Cl2) then
       begin
-        Ret.AddPair('form', M.Groups[2].Value);
-        Ret.AddPair('class', M.Groups[3].Value);
-        RootClass := M.Groups[3].Value;
+        Ret.AddPair('form', Nm);
+        Ret.AddPair('class', Cl2);
+        RootClass := Cl2;
         Break;
       end;
-    end;
     if RootClass = '' then
       Exit(MsgText(SR_DESIGNER_BINDING_NO_ROOT));
 
@@ -228,11 +234,12 @@ begin
     for I := 0 to High(DfmLines) do
     begin
       L := DfmLines[I].Trim;
-      M := TRegEx.Match(L, '(?i)^(object|inherited|inline)\s+([A-Za-z_]\w*)\s*:\s*([A-Za-z_][\w.]*)');
-      if M.Success then
+      // every object line counts for the nesting, named or not: an unnamed
+      // one ('object TMemo') or a name with an accent did not match, its end
+      // popped the parent, and the next component was taken for the form
+      // itself and never checked (live test of 1.12.0)
+      if LineaDeObjeto(L, OClave, Nm, Cl2) then
       begin
-        Nm := M.Groups[2].Value;
-        Cl2 := M.Groups[3].Value;
         Inc(Depth);
         if Depth = 1 then
           Continue; // the form itself
@@ -240,13 +247,17 @@ begin
         // not to this form: checking them here called every one missing.
         if (SkipBelow >= 0) and (Depth > SkipBelow) then
           Continue;
-        if Seen.IndexOf(Nm) >= 0 then
-          Dups.Add(MsgFmt(SF_DSGN_REPITE_UN_NOMBRE_FMT, [Nm, I + 1]))
-        else
-          Seen.Add(Nm);
-        if Complete and (Fields.IndexOfName(Nm) < 0) then
-          Miss.Add(MsgFmt(SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT, [Nm, Cl2, I + 1]));
-        if SameText(M.Groups[1].Value, 'inline') then
+        // an unnamed object has no field to check
+        if Nm <> '' then
+        begin
+          if Seen.IndexOf(Nm) >= 0 then
+            Dups.Add(MsgFmt(SF_DSGN_REPITE_UN_NOMBRE_FMT, [Nm, I + 1]))
+          else
+            Seen.Add(Nm);
+          if Complete and (Fields.IndexOfName(Nm) < 0) then
+            Miss.Add(MsgFmt(SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT, [Nm, Cl2, I + 1]));
+        end;
+        if OClave = 'inline' then
           SkipBelow := Depth;
         Continue;
       end;
@@ -280,11 +291,12 @@ begin
       end;
     end;
 
-    // a published field with no component is the other half of the same slip
+    // a published field with no component is the other half of the same slip:
+    // the names of every object of the .dfm, by THE reader of that line (it
+    // was a third regex here, built per field)
     if Complete then
       for I := 0 to Fields.Count - 1 do
-        if not TRegEx.IsMatch(DfmTxt,
-          '(?im)^\s*(?:object|inherited|inline)\s+' + TRegEx.Escape(Fields.Names[I]) + '\s*:') then
+        if Objetos.IndexOf(Fields.Names[I]) < 0 then
           Extra.Add(Fields.Names[I]);
 
     // clean = el form cuadra. Se llamaba ok, el mismo nombre que "la llamada
@@ -307,6 +319,7 @@ begin
     Result := Ret.ToJSON;
   finally
     Ret.Free;
+    Objetos.Free;
     Seen.Free;
     AnyMethods.Free;
     PubMethods.Free;

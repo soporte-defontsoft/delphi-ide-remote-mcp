@@ -710,6 +710,8 @@ begin
   Assert.Contains(Todo, '|TRejilla *|', 'el nombre construido al vuelo no se adivina');
   Assert.Contains(Todo, '|~TOtra NoEsDeAqui|', 'fuera de un DefineProperties: lo lee un ayudante (su clase)');
   Assert.Contains(Todo, '|>TForma TFiler|', 'los tipos que nombra un DefineProperties (por si es un ayudante)');
+  Assert.IsFalse(Todo.Contains('|>TForma True|') or Todo.Contains('|>TForma TextHeight|'),
+    'True o TextHeight no son tipos (T y una mayuscula): ' + Todo);
   Assert.Contains(Todo, '|* Global|', 'una rutina suelta: de alguna clase, no del metodo de antes');
   Assert.DoesNotContain(Todo, '~TOtra Global');
   Assert.Contains(Todo, '|TScroll Viewport.Height|', 'una constante de su cuerpo');

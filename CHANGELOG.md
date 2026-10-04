@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.12.1] - 2026-10-04
+
+What the live test of 1.12.0 found: the line that opens an object in a form
+was read by six regular expressions, and 1.12.0 had fixed one.
+
+### Fixed
+
+- **One reader for `object Name: TClass`.** The lint, `check-binding` (twice,
+  plus a third pattern built per field), `tree`/`get` (`Lsp.Styles`), the
+  unit rename and `layout` each had their own pattern, with `\w`, which in
+  `TRegEx` is ASCII. A component name with an accent (`object lblDirección:
+  TLabel`) was read as the class `lblDirecci`, and in `check-binding` an
+  unnamed object (`object TMemo`) or an accented name did not count as an
+  object while its `end` did: the next component was taken for the form
+  itself and never checked. Measured live: a `TComponenteQueNoExiste`
+  without a field went unreported. Now one function (`LineaDeObjeto`, in
+  `Lsp.DesignerBin`) reads it for all six, and `check-binding` reads the
+  published field names of the `.pas` the same way.
+
+### Internal
+
+- The generator's list of the types a `DefineProperties` names takes a `T`
+  and an upper-case letter, as a type is named: `True` and `TextHeight` got
+  in. The tables' generation goes to 4.
+- Measured, no change: a table generated from a process launched by the
+  desktop app had another fingerprint than the service's for the same
+  source - same 125 folders, same 3,938 units, the same facts in another
+  order. That process sees the IDE's library path in another order - most
+  likely because the desktop app's package virtualizes the user's registry;
+  not confirmed from outside it - and the fingerprint follows the order the
+  compiler searches in. Only the service generates the tables it uses.
+- Tests: `LaLineaDeUnObjeto` (DUnitX) and `check-binding`/`tree` with an
+  unnamed object and accented names (`test_designer`).
+
 ## [1.12.0] - 2026-10-04
 
 The designer tables (what `delphi_designer info`, `prop` and the lint answer
