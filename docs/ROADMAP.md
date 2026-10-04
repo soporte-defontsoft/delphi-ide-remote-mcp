@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-04 (current release v1.12.1; 42 tools).
+Status page as of 2026-10-04 (current release v1.13.0; 42 tools).
 
 ## Delivered
 
@@ -36,9 +36,11 @@ Status page as of 2026-10-04 (current release v1.12.1; 42 tools).
 - One lexicon for Pascal text (`Lsp.Pascal`): what is code, a string, a comment or a directive, asked by every tool that reads Pascal instead of a dozen readers with a piece of the rule each (1.10.0)
 - The designer tables read from the source of each installed Delphi - its own preprocessor and declarations reader, generated in the background and cached per version - instead of tables of one RAD Studio compiled into the exe (1.12.0)
 - A cap on warm DelphiLSP engines: `[Server] MaxEngines`, the least recently used one that is not working makes room (1.13.0)
+- One reader for Pascal classes, one composer for the citation of a line, the agent's regular expressions through PCRE, `delphi_git ls-remote`; a jail where Git never recurses into submodules and no tool names what lies behind a junction (1.13.0)
 
 ## Open
 
+- Next: designer `insert` and `set`, for small models - a visual component with the IDE's minimum (position, caption, the published field and its unit, a parent it may live in), and one property changed or added, checked against the tables before it is written
 - KDE and other non-GNOME Linux desktops on the desktop node
 - The two-Delphi-versions case, measured on a machine that has them
 - Completion prefix filter
@@ -47,7 +49,7 @@ Status page as of 2026-10-04 (current release v1.12.1; 42 tools).
 
 ## Parked (the operator keeps them on the list, not now)
 
-- Designer phase 2: structural `.dfm` edits validated by RTTI
+- The designer beyond `insert` / `set` (events, collections, non-visual components), and the defaults a component's constructor sets, read from its source
 - Reading the newest MCP spec and noting the differences
 
 ## Declined by the operator (do not re-propose)
