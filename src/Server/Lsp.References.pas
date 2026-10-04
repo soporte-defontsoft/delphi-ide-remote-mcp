@@ -318,17 +318,18 @@ end;
 function ClaseDeMetodo(const ALines: TStringList; AUnidad: TUnidadPas; ALine: Integer;
   const AIdent: string): string;
 var
-  M: TMatch;
   T: TTipoPas;
 begin
   Result := '';
   if (ALine < 0) or (ALine >= ALines.Count) or (AIdent = '') then
     Exit;
-  M := TRegEx.Match(ALines[ALine],
-    '(?i)\b(' + PatronPalabraDeRutina + ')\s+(' + PATRON_IDENT + ')\s*\.\s*' +
-    PatronIdentEntero(AIdent));
-  if M.Success then
-    Exit(M.Groups[2].Value);
+  // la cabecera cualificada, por SU lector (Lsp.PascalDecl): con un solo
+  // identificador delante del punto, la de un metodo de una generica
+  // (THija<T>.Pinta) o de una anidada no casaba, y la llamada a un override
+  // suyo salia rechazada como homonimo (medido el 4-oct-2026)
+  Result := ClaseDeImplementacion(ALines[ALine], AIdent);
+  if Result <> '' then
+    Exit;
   T := AUnidad.TipoEnLinea(ALine, [ctClase, ctInterfaz, ctRegistro, ctAyudante]);
   if (T <> nil) and (T.Clase <> ctRegistro) then
     Result := T.Nombre;

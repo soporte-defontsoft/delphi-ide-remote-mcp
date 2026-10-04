@@ -81,6 +81,8 @@ type
     [Test] procedure LosParametrosGenericosYSuImplementation;
     [Test] procedure LasDosRamasDeUnIfdef;
     [Test] procedure ClassVarYUnCampoStrict;
+    [Test] procedure LaClaseDeUnaCabeceraDeImplementacion;
+    [Test] procedure LaCabeceraDeUnAnidadoEsDeSuContenedor;
   end;
 
 implementation
@@ -1470,6 +1472,47 @@ begin
       'Cuenta, Otra y Tambien son de clase');
     Assert.AreEqual('Normal', T.Campos[4].Nombre);
     Assert.IsFalse(T.Campos[4].DeClase, 'detras de un var, de la instancia');
+  finally
+    U.Free;
+  end;
+end;
+
+{ La clase de una cabecera del implementation, de un tipo cualquiera: con un
+  solo identificador delante del punto no se veia la de una generica ni la
+  de una anidada, y references rechazaba como homonimo la llamada a un
+  override suyo (medido el 4-oct-2026). }
+procedure TLectorDeClasesTests.LaClaseDeUnaCabeceraDeImplementacion;
+begin
+  Assert.AreEqual('TBase', ClaseDeImplementacion('procedure TBase.Pinta;', 'Pinta'));
+  Assert.AreEqual('THija', ClaseDeImplementacion('procedure THija<T>.Pinta;', 'Pinta'));
+  Assert.AreEqual('TInner', ClaseDeImplementacion('procedure TOuter<K, V>.TInner.Pinta(A: Integer);', 'Pinta'));
+  Assert.AreEqual('TCaja', ClaseDeImplementacion('class function TCaja < T > . Crea: TCaja<T>;', 'Crea'));
+  Assert.AreEqual('', ClaseDeImplementacion('procedure Pinta;', 'Pinta'), 'una global');
+  Assert.AreEqual('', ClaseDeImplementacion('procedure TBase.PintaOtra;', 'Pinta'), 'otra rutina');
+  Assert.AreEqual('', ClaseDeImplementacion('  H.Pinta;', 'Pinta'), 'una llamada no es una cabecera');
+end;
+
+{ ASinCabecera (el dueno de una declaracion en el resumen de carpeta): la
+  linea del nombre de un tipo anidado es de donde se declara, su
+  contenedor; sin el, del propio tipo. No tenia prueba (revision de la
+  1.13.0). }
+procedure TLectorDeClasesTests.LaCabeceraDeUnAnidadoEsDeSuContenedor;
+var
+  U: TUnidadPas;
+begin
+  U := LeeFuentePascal('unit A; interface type'#13#10 +
+    '  TOuter = class'#13#10 +
+    '  public type'#13#10 +
+    '    TInner = class'#13#10 +
+    '      procedure Dentro;'#13#10 +
+    '    end;'#13#10 +
+    '  end;'#13#10 +
+    'implementation end.');
+  try
+    Assert.IsTrue(U.TipoEnLinea(3, [ctClase]) = U.Clase('TInner'), 'sin ASinCabecera: la del propio tipo');
+    Assert.IsTrue(U.TipoEnLinea(3, [ctClase], True) = U.Clase('TOuter'), 'con ASinCabecera: la de su contenedor');
+    Assert.IsTrue(U.TipoEnLinea(4, [ctClase], True) = U.Clase('TInner'), 'un miembro: la de dentro');
+    Assert.IsNull(U.TipoEnLinea(1, [ctClase], True), 'la cabecera de uno de la unidad: de nadie');
   finally
     U.Free;
   end;

@@ -580,5 +580,94 @@ check('C15 check-binding: el componente que solo tiene un class var no tiene cam
       d.get('clean') is False and 'lblDeClase' in str(d.get('componentsWithoutField')) and
       'lblBien' not in str(d.get('componentsWithoutField')), str(d)[:500])
 
+# C16: references en una familia GENERICA: la llamada a un override y su
+# declaracion son el mismo metodo (via override). Su definicion es la
+# cabecera 'procedure THija<T>.Pinta;', y la clase se leia con UN
+# identificador delante del punto: salian rechazadas como homonimos (medido
+# el 4-oct-2026; sin genericos, confirmadas)
+UFAMG = unidad('UFamG', """unit UFamG;
+
+interface
+
+type
+  TBaseG<T> = class
+  public
+    procedure Pinta; virtual;
+  end;
+
+  THijaG<T> = class(TBaseG<T>)
+  public
+    procedure Pinta; override;
+  end;
+
+procedure UsaG(H: THijaG<Integer>);
+
+implementation
+
+procedure TBaseG<T>.Pinta;
+begin
+end;
+
+procedure THijaG<T>.Pinta;
+begin
+end;
+
+procedure UsaG(H: THijaG<Integer>);
+begin
+  H.Pinta;
+end;
+
+end.
+""")
+ok, err = build_ok(DPROJ)
+check('C16a la familia generica compila', ok, err)
+lineas = rd(UFAMG).split('\r\n')
+base = next(i for i, l in enumerate(lineas) if l.strip() == 'procedure Pinta; virtual;')
+j = J(call('delphi_references', {'path': UFAMG, 'line': base,
+                                 'character': lineas[base].index('Pinta') + 1}))
+de_la_familia = [c for c in j.get('confirmed', []) if c.get('via') == 'override']
+# (los rechazados de OTRA unidad son otra familia: la de C7 tambien llama H.Pinta)
+rechazados_aqui = [c for c in j.get('rejected', []) if c.get('path', '').endswith('UFamG.pas')]
+check('C16 references en una generica: la llamada y el override son el mismo metodo (via override)',
+      any('H.Pinta' in c.get('text', '') for c in de_la_familia) and
+      any('Pinta; override' in c.get('text', '') for c in de_la_familia) and
+      not any('Pinta' in c.get('text', '') for c in rechazados_aqui), str(j)[:700])
+
+# C17: insert=metodo visibility=published en una clase que EMPIEZA por una
+# seccion type anidada: la published implicita acaba en la primera palabra de
+# visibilidad, y el metodo va detras de los tipos (no tenia prueba)
+UTP = unidad('UTipoPrimero', """unit UTipoPrimero;
+
+interface
+
+uses
+  System.Classes;
+
+type
+  TConTipo = class(TComponent)
+  type
+    TModo = (mUno, mDos);
+  public
+    procedure Base;
+  end;
+
+implementation
+
+procedure TConTipo.Base;
+begin
+end;
+
+end.
+""")
+r = call('delphi_edit', {'path': UTP, 'insert': 'metodo', 'inclass': 'TConTipo', 'visibility': 'published',
+                         'code': 'procedure Nuevo;\nbegin\nend;'})
+u = rd(UTP)
+check('C17 published en una clase que empieza por un type: detras de los tipos, antes de public',
+      mc.abre(r, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and
+      u.index('TModo = (mUno, mDos);') < u.index('procedure Nuevo;') < u.index('  public') and
+      'procedure TConTipo.Nuevo;' in u, r[:300] + ' | ' + u[:500])
+ok, err = build_ok(DPROJ)
+check('C17b ...y el proyecto COMPILA', ok, err)
+
 srv.cierra()
 mc.fin('lector-clases battery')

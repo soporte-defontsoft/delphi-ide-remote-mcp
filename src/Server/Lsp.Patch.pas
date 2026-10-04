@@ -2145,7 +2145,14 @@ begin
           // agente no tenia forma de enterarse (medido 2026-09-20). Es una
           // cita del disco (CitaDeLinea), recortada: verificacion, no un ancla
           // para copiar (eso es delphi_read)
-          if Cambio < Length(DespuesL) then
+          // la ultima de SplitToLines, vacia, es lo que va detras del ultimo
+          // salto: no es una linea (delphi_read no la cuenta). Al borrar la
+          // ultima linea de un fichero con salto final, el eco citaba ESA
+          // como la linea de alli: '3|' (revision de la 1.13.0)
+          var Reales := Length(DespuesL);
+          if (Reales > 0) and (DespuesL[Reales - 1] = '') then
+            Dec(Reales);
+          if Cambio < Reales then
             Eco := CitaDeLinea(Cambio + 1, Copy(DespuesL[Cambio].Trim, 1, 90))
           else if Delta < 0 then
             Eco := MsgFmt(SF_EDIT_LINEA_QUITADA_FMT, [Cambio + 1]);

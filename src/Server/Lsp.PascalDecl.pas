@@ -177,10 +177,20 @@ procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, s
 function CadenaDeAncestros(const AMapa: TDictionary<string, string>;
   const AClase: string; out ASale: Boolean; ATope: Integer = 32): TArray<string>;
 
+{ La clase de la cabecera de un metodo en el implementation, por su nombre
+  simple ('procedure TOuter<T>.TInner.Pinta;' -> 'TInner'); '' si ALinea no
+  es ARutina cualificada. El lector de lo que escribe
+  TUnidadPas.NombreDeImplementacion, para un tipo cualquiera: con UN
+  identificador delante del punto, references no veia la clase de un metodo
+  de una generica ni de una anidada, y la llamada a un override suyo salia
+  como un homonimo (medido el 4-oct-2026). }
+function ClaseDeImplementacion(const ALinea, ARutina: string): string;
+
 implementation
 
 uses
   System.SysUtils,
+  System.RegularExpressions,
   Lsp.Pascal;
 
 type
@@ -1899,6 +1909,23 @@ begin
   // CodigoPascal: comentarios, cadenas y directivas en blanco, con el mismo
   // largo y los saltos en su sitio (las lineas del lector son las del fuente)
   Result := LeeUnidadPascal(CodigoPascal(AFuente));
+end;
+
+function ClaseDeImplementacion(const ALinea, ARutina: string): string;
+const
+  // un nivel: su nombre y, si es generico, sus parametros (en una cabecera
+  // del implementation son nombres: TFoo<K, V>)
+  NIVEL = PATRON_IDENT + '(?:\s*<[^<>()]*>)?';
+var
+  M: TMatch;
+begin
+  Result := '';
+  M := TRegEx.Match(ALinea, '(?i)\b' + PatronPalabraDeRutina + '\s+(' + NIVEL +
+    '(?:\s*\.\s*' + NIVEL + ')*?)\s*\.\s*' + PatronIdentEntero(ARutina));
+  if not M.Success then
+    Exit;
+  Result := TRegEx.Replace(M.Groups[1].Value, '\s*<[^<>()]*>', '');
+  Result := UltimoTrozo(TRegEx.Replace(Result, '\s', ''));
 end;
 
 procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, string>);

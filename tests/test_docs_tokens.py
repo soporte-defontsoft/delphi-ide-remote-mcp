@@ -65,6 +65,12 @@ open(TRES, 'w', encoding='utf-8', newline='\n').write('uno\ndos\ntres')
 r = call('delphi_textedit', {'path': TRES, 'edits': json.dumps([{'old': 'tres', 'delete': True}])})
 check('T2b el eco de una linea borrada dice (line N removed), no N| (line removed)',
       '(line 3 removed)' in r and '| (line removed)' not in r, r[:300])
+# ...y CON salto al final igual: lo de detras del ultimo salto no es una linea,
+# y el eco citaba ese hueco como '3|' (revision de la 1.13.0)
+open(TRES, 'w', encoding='utf-8', newline='\n').write('uno\ndos\ntres\n')
+r = call('delphi_textedit', {'path': TRES, 'edits': json.dumps([{'old': 'tres', 'delete': True}])})
+check('T2b con salto final: tambien (line 3 removed), no la cita de un hueco',
+      '(line 3 removed)' in r and not re.search(r'(?m)^\s*3\|\s*$', r), r[:300])
 
 # T3: la ruta, una vez por fichero
 PAS = os.path.join(BASE, 'Agujas.pas')
