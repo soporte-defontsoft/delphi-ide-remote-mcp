@@ -532,7 +532,7 @@ try:
     small = os.path.join(jail4, 'small.txt')
     with open(small, 'wb') as f:
         f.write(b'hola mundo\r\n')
-    bigdata = os.urandom(5 * 1024 * 1024 + 17)          # > 4 MB threshold
+    bigdata = os.urandom(5 * 1024 * 1024 + 17)          # > 1 MB threshold (4 MB until 1.13.1)
     big = os.path.join(jail4, 'big.bin')
     with open(big, 'wb') as f:
         f.write(bigdata)
@@ -608,7 +608,7 @@ try:
               body[:200])
         code, body = call('delphi_fetch', {'path': vjail + '\\big.bin'}, TOKEN)
         js = json.loads(json.loads(body)['result']['content'][0]['text'])
-        check('fetch: fichero > 4 MB responde SOLO enlace (sin chunk, con sha256)',
+        check('fetch: fichero > 1 MB responde SOLO enlace (sin chunk, con sha256)',
               'chunkBase64' not in js and js.get('bytes') == 0 and js.get('sha256') == big_sha
               and 'download' in js and mc.es(js.get('note', ''), 'SN_FETCH_BIG_FMT'),
               body[:300])

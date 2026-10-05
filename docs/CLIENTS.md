@@ -85,7 +85,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" -o C:/dest/file.zip "<download link>"
 ```
 
 The base64 chunks inline in the tool result remain for small files, or for
-clients that have no shell to run `curl` from. Files over 4 MB answer with the
+clients that have no shell to run `curl` from. Files over 1 MB answer with the
 link only, unless `maxbytes<=1048576` is passed to force chunks.
 
 Recommended flow for binaries: `delphi_build` (the result names the artifact

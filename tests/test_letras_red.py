@@ -95,25 +95,6 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 
-def letras_libres(cuantas):
-    """Letras que no son una unidad de esta sesion ni un mapeo persistente de
-    la cuenta: para el servidor, letras que no existen y que no puede conectar."""
-    mapa = ctypes.windll.kernel32.GetLogicalDrives()
-    libres = []
-    for i, letra in reversed(list(enumerate(string.ascii_uppercase))):
-        if i < 2 or mapa & (1 << i):
-            continue
-        try:
-            winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Network\\' + letra))
-            continue
-        except OSError:
-            pass
-        libres.append(letra)
-        if len(libres) == cuantas:
-            break
-    return libres
-
-
 BASE = mc.carpeta('letras_red')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
@@ -123,7 +104,7 @@ os.makedirs(JAIL)
 os.makedirs(os.path.join(JAIL2, 'dentro'))
 EXE = mc.copia_exe(EXEDIR)
 
-LIBRES = letras_libres(5)
+LIBRES = mc.letras_libres(5)
 if len(LIBRES) < 5:
     raise RuntimeError('esta maquina no tiene cinco letras libres: %s' % LIBRES)
 FALTA, REF, CERRADA, ENTORNO, VAULT = LIBRES

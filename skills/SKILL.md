@@ -54,7 +54,7 @@ handshake.
   header:
   `curl -H "Authorization: Bearer $TOKEN" -o file "http://host:port/files?path=..."`.
   Verify with `sha256sum` against the `X-File-SHA256` header. This is the
-  standard way for any size; files over 4 MB answer with the link only.
+  standard way for any size; files over 1 MB answer with the link only.
   Inline base64 chunks (`maxbytes<=1048576`, loop `offset` until `eof`)
   are for clients without a shell.
 

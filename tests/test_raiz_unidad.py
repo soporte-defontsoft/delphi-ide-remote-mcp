@@ -81,24 +81,7 @@ for _l, _c in substs().items():
 BASE = mc.carpeta(BASE_NOMBRE)
 
 
-def libres(cuantas):
-    mapa = ctypes.windll.kernel32.GetLogicalDrives()
-    res = []
-    for i, letra in reversed(list(enumerate(string.ascii_uppercase))):
-        if i < 2 or mapa & (1 << i):
-            continue
-        try:
-            winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Network\\' + letra))
-            continue
-        except OSError:
-            pass
-        res.append(letra)
-        if len(res) == cuantas:
-            break
-    return res
-
-
-LETRAS = libres(3)
+LETRAS = mc.letras_libres(3)
 if len(LETRAS) < 3:
     raise RuntimeError('esta maquina no tiene tres letras libres: %s' % LETRAS)
 Q, R, V = LETRAS

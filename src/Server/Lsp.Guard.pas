@@ -139,6 +139,21 @@ function WorkspaceReadOnlyRoots: TArray<string>;
   delphi_projects. }
 function ReadOnlyRootOf(const APath: string): string;
 
+{ Por que el servidor no llega AHORA a una raiz o referencia del workspace,
+  sin salir a la red: '' si llega - o si saberlo pediria salir -; si no, el
+  motivo. Dos casos: su LETRA no esta conectada en este proceso (la tabla de
+  unidades, ClaseDeLetra de Lsp.NetDrives) o, en una unidad LOCAL, su carpeta
+  no existe. En una letra de red conectada no se mira la carpeta: un recurso
+  que no contesta tarda lo que Windows quiera. Lo listan delphi_workspace y
+  delphi_projects (Hermes, 5-oct-2026: una referencia en una letra sin montar
+  salia listada como si estuviera). }
+function MotivoRaizNoDisponible(const ARaiz: string): string;
+
+{ La negativa de una ruta que cae en una raiz o referencia cuya LETRA no esta
+  conectada en este proceso (WS-022); '' si no es el caso. Sin disco ni red:
+  va en la puerta de cada llamada (ArgPathOutsideDenied). }
+function RaizEnLetraNoConectada(const APath: string): string;
+
 { Bearer authorization - the ONE place that knows every credential: the
   per-workspace tokens from
   [Workspace.<name>] sections (Token= read-write inside its Roots,
@@ -4232,6 +4247,19 @@ begin
       Result := JaulaDenegada(V);
     if Result <> '' then
       Exit;
+    // Dentro, pero en una raiz cuya LETRA no esta conectada en el servidor:
+    // ninguna tool puede salir bien ahi, y cada una lo decia a su manera
+    // ("Directory not found", WS-008) sin decir que no es un error de nombre
+    // ni que el arreglo es del operador (Hermes, 5-oct-2026). Sin disco ni
+    // red, asi que cabe en cada llamada; y no niega nada que una tool habria
+    // aceptado. Una raiz LOCAL cuya carpeta no existe no se niega aqui: una
+    // tool que crea podria crearla.
+    if not ARelativas then
+    begin
+      Result := RaizEnLetraNoConectada(V);
+      if Result <> '' then
+        Exit;
+    end;
   end;
 end;
 
@@ -4731,6 +4759,53 @@ begin
     if StartsText(FormaLarga(R), Full) or
        StartsText(IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(R))), Real) then
       Exit(SinBarraFinal(R));
+end;
+
+{ La letra de un sitio no existe para este proceso: nada de lo que hay
+  detras puede salir bien, en ninguna tool. }
+function LetraNoConectada(const ASitio: string): Boolean;
+begin
+  Result := (LetraDeRuta(ASitio) <> #0) and
+    (ClaseDeLetra(LetraDeRuta(ASitio)) = clAusente);
+end;
+
+function MotivoRaizNoDisponible(const ARaiz: string): string;
+begin
+  Result := '';
+  if LetraNoConectada(ARaiz) then
+    Result := MsgFmt(SF_WS_LETRA_NO_CONECTADA_FMT, [LetraDeRuta(ARaiz)])
+  else if (LetraDeRuta(ARaiz) <> #0) and
+          (ClaseDeLetra(LetraDeRuta(ARaiz)) = clLocal) and
+          not TDirectory.Exists(SinBarraFinal(ARaiz)) then
+    Result := MsgText(SF_WS_CARPETA_RAIZ_NO_EXISTE);
+end;
+
+{ Las raices y referencias a las que SI se llega: donde seguir trabajando. }
+function RaicesDisponibles: string;
+var
+  R: string;
+begin
+  Result := '';
+  for R in WorkspaceRoots + WorkspaceReadOnlyRoots do
+    if MotivoRaizNoDisponible(R) = '' then
+    begin
+      if Result <> '' then
+        Result := Result + ', ';
+      Result := Result + SinBarraFinal(R);
+    end;
+  if Result = '' then
+    Result := MsgText(SF_WS_NINGUNA_RAIZ_DISPONIBLE);
+end;
+
+function RaizEnLetraNoConectada(const APath: string): string;
+var
+  R: string;
+begin
+  Result := '';
+  for R in WorkspaceRoots + WorkspaceReadOnlyRoots do
+    if LetraNoConectada(R) and EnLugar(APath, R) then
+      Exit(MsgFmt(SR_WS_RAIZ_NO_DISPONIBLE_FMT, [SinBarraFinal(R),
+        MotivoRaizNoDisponible(R), RaicesDisponibles]));
 end;
 
 function WorkspaceJailSummary(out AWarning: Boolean): string;

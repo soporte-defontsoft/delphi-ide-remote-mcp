@@ -6,6 +6,56 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.13.1] - 2026-10-05
+
+What the night reports from the 13.2 machine ran into: answers that did not
+say whose fix it was, or what the agent could do instead.
+
+### Changed
+
+- A root or reference whose drive letter is not connected on the server is
+  refused by the gate of every call with `WS-022 DENIED`, which names the
+  root, says the drive is not connected and that it is the operator's to
+  fix, and lists the roots that are there. It was a `Directory not found`
+  (`WS-008`) in each tool, read as a typo - and a write there ended as an
+  internal error (`SYS-009`, "The drive cannot be found"). Nothing is opened
+  to decide it: the process's own drive table.
+- `delphi_workspace` lists the roots it cannot reach right now
+  (`unavailableRoots`, each with its reason: a drive letter not connected, a
+  local root folder that does not exist).
+- `delphi_projects` without `root` skips a configured root that is not there
+  and names it (`PROJ-005`); the first missing root used to fail the whole
+  list (`PROJ-003`). With an explicit `root` that does not exist it is still
+  `PROJ-003`.
+- `delphi_fetch` answers with the download link only above 1 MB (it was
+  4 MB): a 1.37 MB zip came back as 3.6 million characters of base64 inside
+  the answer. `maxbytes<=1048576` still asks for inline chunks.
+- Git's "detected dubious ownership" (a repository on a network share or a
+  NAS, owned by another account) carries `GIT-057`: the fix is the
+  operator's, `safe.directory` in the global Git configuration of the
+  server's account, which no tool writes. The hints drawn from what Git said
+  now go with every `GIT-036`, also when the refusal comes from the
+  repository jail before the command.
+
+### Fixed
+
+- The note on mentions (`LSP-015`) and the description of
+  `delphi_references` said that a name inside a string never blocks a
+  rename; it does (`RENAME-020`), because it may be a `FindComponent` or RTTI
+  by name. A comment does not.
+- `WS-020` (`delphi_package`) promised a download link for "big zips" without
+  saying from what size; it says 1 MB now, like `delphi_fetch`.
+- `region` and `window` of a capture say upfront that they do not combine.
+
+### Internal
+
+- `tests/test_paredes_1131.py`: each wall above, each fix with its mutant
+  red; a dubious-ownership repository is reproduced with
+  `GIT_TEST_ASSUME_DIFFERENT_OWNER` and the machine's Git configuration
+  isolated.
+- `letras_libres` lives once, in `tests/mcp_cliente.py` (it was copied in two
+  batteries).
+
 ## [1.13.0] - 2026-10-04
 
 One reader where there were several - Pascal classes, the citation of a

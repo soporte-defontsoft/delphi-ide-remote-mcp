@@ -16,6 +16,7 @@ import ctypes
 import glob
 import json, os, queue, re, shutil, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
+import string, winreg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -388,6 +389,27 @@ def puerto_libre():
     p = s.getsockname()[1]
     s.close()
     return p
+
+
+def letras_libres(cuantas):
+    """Letras que no son una unidad de esta sesion ni un mapeo persistente de
+    la cuenta: para el servidor, letras que no existen y que no puede conectar.
+    Una copia: estaba igual en test_letras_red y test_raiz_unidad, y la tercera
+    bateria que la necesitaba (test_paredes_1131) la trajo aqui."""
+    mapa = ctypes.windll.kernel32.GetLogicalDrives()
+    libres = []
+    for i, letra in reversed(list(enumerate(string.ascii_uppercase))):
+        if i < 2 or mapa & (1 << i):
+            continue
+        try:
+            winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Network\\' + letra))
+            continue
+        except OSError:
+            pass
+        libres.append(letra)
+        if len(libres) == cuantas:
+            break
+    return libres
 
 
 def espera_puerto(puerto, proc=None, segundos=30):

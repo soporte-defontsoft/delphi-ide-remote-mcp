@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.13.0';
+  SERVER_VERSION = '1.13.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -148,6 +148,13 @@ const
     '[PROJ-003 NOT_FOUND] The working folder "%s" does not exist on this ' +
     'server. It is not that there are no projects: there is nothing ' +
     'there. See delphi_workspace for the real folders.';
+  { Sin "root", una raiz del workspace que no esta se salta y se dice: la
+    primera que faltaba cortaba la lista ENTERA con PROJ-003, y el agente
+    creyo que esa era la carpeta por defecto (Hermes, 5-oct-2026). }
+  SN_PROJECTS_RAICES_SALTADAS_FMT =
+    '[PROJ-005] Skipped, because the server cannot reach them right now: ' +
+    '%s. The projects listed come from the other roots; delphi_workspace ' +
+    'says why (unavailableRoots).';
 
   SN_SEARCH_CAPPED_FMT =
     '[SEARCH-001] Here are %d of %d entries: the rest are NOT listed. ' +
@@ -602,9 +609,12 @@ const
     '[LSP-015] The name also appears %d time(s) in COMMENTS or inside ' +
     'strings (%d are listed in "mentions"). They are not references - ' +
     'there is nothing there for the compiler to resolve - so they do not ' +
-    'count as "unverified" and do not block a delphi_rename_symbol, ' +
-    'which renames code, not prose. If you want the comments to say the ' +
-    'new name too, change them by hand with delphi_edit.';
+    'count as "unverified". A COMMENT never blocks delphi_rename_symbol, ' +
+    'which renames code, not prose; a STRING LITERAL in a file the rename ' +
+    'touches DOES (RENAME-020): it may be a FindComponent, RTTI or ' +
+    'StyleLookup by name, which a rename would leave pointing at a name ' +
+    'that no longer exists. If you want the comments to say the new name ' +
+    'too, change them by hand with delphi_edit.';
 
   SR_READONLY_PATH_FMT =
     '[GUARD-012 DENIED] "%s" is inside a folder declared READ-ONLY in ' +
@@ -2133,8 +2143,10 @@ const
     'the API shrinks every image to one fixed size, so a crop is how you ' +
     'get the detail). The answer carries origin {x,y}: what you measure ' +
     'on the crop is pressed at (origin.x + x, origin.y + y). One frame, ' +
-    'one coordinate space. When in doubt - a dialog may have opened ' +
-    'elsewhere - capture the whole desktop.';
+    'one coordinate space. It does not combine with window: for a piece ' +
+    'OF a window, add that window''s origin to your x,y and pass it as ' +
+    'region. When in doubt - a dialog may have opened elsewhere - capture ' +
+    'the whole desktop.';
   // Lsp.InlineImages: la entrega de una captura, la misma en toda tool que capture.
   SP_CAPTURE_INLINE =
     'Default true: the screenshot comes back IN this answer as an image ' +
@@ -2226,7 +2238,8 @@ const
     'it (case-insensitive), with origin {x,y} like region, plus the whole ' +
     'list - so a dialog that popped up OUTSIDE the crop still shows in it. ' +
     'On Linux the list holds the X11/Xwayland windows (every FMX ' +
-    'application); a native Wayland window has no rectangle: use region.';
+    'application); a native Wayland window has no rectangle: use region. ' +
+    'Not together with region: one crop or the other.';
   SR_ADBLINUX_REGION_OR_WINDOW =
     '[DESK-003 INVALID_PARAM] region and window do not combine: either a ' +
     'rectangle or a window.';
@@ -2519,7 +2532,7 @@ const
     'the standard way for any file, installers and binaries included; ' +
     '(2) base64 chunks inline, for small files or clients without a shell: ' +
     'loop offset until eof=true, concatenate the decoded chunks, verify the ' +
-    'sha256 (whole file, returned on the offset=0 call). Files over 4 MB ' +
+    'sha256 (whole file, returned on the offset=0 call). Files over 1 MB ' +
     'answer with the download link only; pass maxbytes<=1048576 explicitly ' +
     'to get inline chunks instead. Jailed to the workspace roots and the ' +
     'read-only library zone.';
@@ -4608,7 +4621,7 @@ const
   SP_FETCH_MAXBYTES =
     'NOTE: asking for maxbytes<=1048576 (1 MB) FORCES inline base64 ' +
     'chunks - exactly the opposite of what you want with a large file. ' +
-    'For a large download OMIT this parameter: above 4 MB the answer ' +
+    'For a large download OMIT this parameter: above 1 MB the answer ' +
     'carries the download LINK and no inline chunk ("inline":false, ' +
     '"bytes":0), which is the cheap way. maxbytes only sets the chunk ' +
     'size (max 8388608) when the content goes inline.';
@@ -6200,6 +6213,32 @@ const
   SR_WS_DIR_NOT_FOUND_FMT =
     '[WS-008 NOT_FOUND] Directory not found: %s';
 
+  { Una raiz o referencia a la que el servidor no llega AHORA (informe de
+    Hermes, 5-oct-2026: una referencia en una letra sin montar salia listada
+    como si estuviera, y cada tool contestaba "Directory not found" sin decir
+    que no era un error de nombre ni de quien era el arreglo). La negativa la
+    da la puerta de cada llamada cuando la LETRA no esta conectada; la lista,
+    delphi_workspace. }
+  SR_WS_RAIZ_NO_DISPONIBLE_FMT =
+    '[WS-022 DENIED] %s is a root of this workspace, but the server ' +
+    'cannot reach it right now: %s. It is not a typo and no tool can fix ' +
+    'it - it is the operator''s (connect that drive on the server, bring ' +
+    'the share back). Until then, work in the roots that are there: %s.';
+  { Con su barra: "Z:\" es la forma que el enmascarador de salida convierte
+    en srvz:\; la letra suelta delante de un espacio la deja, a proposito
+    ("opcion C: haz esto"), y salia la letra REAL (medido con la bateria). }
+  SF_WS_LETRA_NO_CONECTADA_FMT =
+    'drive %s:\ is not connected on the server';
+  SF_WS_CARPETA_RAIZ_NO_EXISTE =
+    'its folder does not exist';
+  SF_WS_NINGUNA_RAIZ_DISPONIBLE =
+    'none - ask the operator';
+  SN_WS_RAICES_NO_DISPONIBLES =
+    '[WS-023] These roots are declared, but the server cannot reach them ' +
+    'right now (the reason is next to each): calls on them fail, and it ' +
+    'is not a typo - only the operator can bring them back. Work in the ' +
+    'other roots; this list shows them until they are back.';
+
   SR_WS_EMPTY_QUERY =
     '[WS-009 INVALID_PARAM] Empty query';
 
@@ -6291,6 +6330,19 @@ const
     '[GIT-035] Hint: set the repo identity and repeat: delphi_git ' +
     'command=config args=user.name message=<name> and then ' +
     'command=config args=user.email message=<email>.';
+  { git que no se fia del dueno de la carpeta ("detected dubious ownership",
+    tipico de un recurso de red o un NAS): su propio consejo es un git config
+    --global que ninguna tool puede ejecutar, y el agente se quedaba ahi
+    (Hermes, 5-oct-2026, en el NAS de la VM). }
+  SN_GIT_PISTA_PROPIEDAD_DUDOSA =
+    '[GIT-057] git refuses this repository because its folder belongs to ' +
+    'another account than the one this server runs as (usual on a network ' +
+    'share or a NAS). The fix is the OPERATOR''s, on the server: the ' +
+    'safe.directory line git printed above, in the GLOBAL git config of ' +
+    'the server''s account. No tool writes that setting - it lives outside ' +
+    'the workspace, and command=config only sets user.name/user.email of ' +
+    'the repo - so ask the operator (delphi_report) and work in another ' +
+    'repository meanwhile.';
 
   SN_WS_READONLY_TERRITORY =
     '[WS-011] Read-only territory: RTL/VCL/FMX sources, installed ' +
@@ -6331,8 +6383,9 @@ const
     'does not have this problem).';
 
   SN_WS_DOWNLOAD_WITH_FETCH =
-    '[WS-020] download it with delphi_fetch (chunked, sha256-verified); ' +
-    'big zips answer a download link - do NOT set maxbytes';
+    '[WS-020] download it with delphi_fetch, sha256-verified: a zip over ' +
+    '1 MB answers with a download link (one curl) and no inline base64, ' +
+    'a smaller one comes inline - do NOT set maxbytes';
 
   // Mensajes que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3c a mano, 27-sep-2026)
   SN_LSP_NO_SETTINGS_WARNING =
@@ -7216,9 +7269,11 @@ const
     'the compiler engine for its definition - only candidates resolving ' +
     'to the SAME symbol are confirmed, homonyms are rejected. A name ' +
     'written in a COMMENT or inside a string literal is not a reference ' +
-    'and does not count as unverified: those go to "mentions", listed ' +
-    'but harmless. Bounded work: leftovers are listed as unverified, ' +
-    'never silently dropped.';
+    'and does not count as unverified: those go to "mentions". A comment ' +
+    'is harmless; a string literal blocks delphi_rename_symbol ' +
+    '(RENAME-020), because it may be a FindComponent/RTTI by name. ' +
+    'Bounded work: leftovers are listed as unverified, never silently ' +
+    'dropped.';
 
   SD_BUILD_BUILD =
     'Build a Delphi project for real with MSBuild on this machine. How ' +

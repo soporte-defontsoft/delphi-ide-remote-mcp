@@ -283,8 +283,9 @@ uses
   Lsp.Pascal,
   Lsp.Regex; // TExprDelAgente: la expresion de delphi_search regex=true
 
-// la tool git va por delante de su compositor
+// la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
+function GitFallo(ACodigo: Cardinal; const ASalida: string): string; forward;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -1230,7 +1231,7 @@ begin
     Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ACarpeta]));
   end;
   if not DondeViveElRepo(ACarpeta, GitDir, Comun, Raiz, Salida, Codigo) then
-    Exit(MsgFmt(SR_GIT_EXIT_FMT, [Codigo, Salida.Trim]));
+    Exit(GitFallo(Codigo, Salida));
   for Sitio in TArray<string>.Create(GitDir, Comun, Raiz) do
     if Sitio <> '' then
     begin
@@ -1546,7 +1547,7 @@ begin
      TDirectory.Exists(TPath.Combine(Repo, '.git'))) then
   begin
     if not DondeViveElRepo(Repo, GitDir, Comun, Raiz, Output, ExitCode) then
-      Exit(MsgFmt(SR_GIT_EXIT_FMT, [ExitCode, Output.Trim]));
+      Exit(GitFallo(ExitCode, Output));
     for Sitio in TArray<string>.Create(Raiz, GitDir, Comun) do
       if Sitio <> '' then
       begin
@@ -2021,7 +2022,7 @@ begin
     Result := GitExito(MsgText(SN_GIT_DIFF_HAY_CAMBIOS) +
       IfThen(Output.Trim <> '', #10 + Output.Trim, ''), 1)
   else if ExitCode <> 0 then
-    Result := MsgFmt(SR_GIT_EXIT_FMT, [ExitCode, Output.Trim])
+    Result := GitFallo(ExitCode, Output)
   else
     Result := GitExito(Output.Trim, 0);
   // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
@@ -2049,11 +2050,6 @@ begin
   if (ExitCode <> 0) and not DiffConCambios and (Output.Contains('--no-ff') or Output.Contains('rebase') or
      Output.Contains('specify the URL')) then
     Result := Result + #10 + MsgText(SN_GIT_HINT_OVERRIDE);
-  // A fresh repo has no author identity and commit dies with exit 128:
-  // the fix is already whitelisted, say so (measured 2026-08-24).
-  if (ExitCode <> 0) and not DiffConCambios and Output.Contains('Author identity unknown') then
-    Result := Result + #10 +
-      MsgText(SN_GIT_PISTA_CONFIGURA_IDENTIDAD);
   // El CONTENIDO de un diff, de un show o de un log - las lineas de un
   // fichero o de un mensaje de commit, que empiezan por +, - o espacio -
   // viaja como esta en el disco: el barrido de unidades las reescribia
@@ -2129,6 +2125,24 @@ var
 function GitExito(const ACuerpo: string; AExit: Integer): string;
 begin
   Result := 'exit=' + IntToStr(AExit) + #10 + ACuerpo;
+end;
+
+{ La que acabo MAL: GIT-036, lo que dijo git y las pistas que salen de lo que
+  dijo - lo que el agente SI puede hacer, o de quien es el arreglo cuando no
+  es suyo. Las tres salidas que acaban en GIT-036 (la carpeta de un remoto,
+  la jaula del repo y la orden misma) pasan por aqui: las pistas iban solo en
+  la ultima, y el "dubious ownership" de un NAS sale en la jaula, antes de la
+  orden (Hermes, 5-oct-2026). Las pistas que dependen de la orden (merge,
+  pull) se quedan con la orden. }
+function GitFallo(ACodigo: Cardinal; const ASalida: string): string;
+begin
+  Result := MsgFmt(SR_GIT_EXIT_FMT, [ACodigo, ASalida.Trim]);
+  // A fresh repo has no author identity and commit dies with exit 128:
+  // the fix is already whitelisted, say so (measured 2026-08-24).
+  if ASalida.Contains('Author identity unknown') then
+    Result := Result + #10 + MsgText(SN_GIT_PISTA_CONFIGURA_IDENTIDAD);
+  if ASalida.Contains('dubious ownership') then
+    Result := Result + #10 + MsgText(SN_GIT_PISTA_PROPIEDAD_DUDOSA);
 end;
 
 { Cuanto lleva en marcha, en algo que se lee de un vistazo. }
@@ -2295,6 +2309,28 @@ begin
         RefArr.Add(SinBarraFinal(R));
       Return.AddPair('readOnlyRootsNote', MsgText(SN_WORKSPACE_REFERENCE_NOTE));
     end;
+    // Las declaradas que el servidor no alcanza AHORA, con su motivo (sin
+    // salir a la red: MotivoRaizNoDisponible). Una referencia en una letra
+    // sin montar salia aqui como si estuviera, y el agente se estrellaba
+    // contra WS-008 en cada tool (Hermes, 5-oct-2026).
+    var NoEstan: TJSONArray := nil;
+    for R in Roots + WorkspaceReadOnlyRoots do
+    begin
+      var Motivo := MotivoRaizNoDisponible(R);
+      if Motivo = '' then
+        Continue;
+      if NoEstan = nil then
+      begin
+        NoEstan := TJSONArray.Create;
+        Return.AddPair('unavailableRoots', NoEstan);
+      end;
+      var Una := TJSONObject.Create;
+      NoEstan.AddElement(Una);
+      Una.AddPair('root', SinBarraFinal(R));
+      Una.AddPair('reason', Motivo);
+    end;
+    if NoEstan <> nil then
+      Return.AddPair('unavailableRootsNote', MsgText(SN_WS_RAICES_NO_DISPONIBLES));
     if ModoLocalCerrado <> '' then
       // el modo local cerrado al cargar: decia "may look at any path" y cada
       // llamada contestaba GUARD-030 (segunda revision de la 1.9.0)
@@ -2534,9 +2570,20 @@ begin
   // A root that is not there answered {"total":0}, which reads as "there are
   // no projects" instead of "you mistyped the path" - delphi_list says
   // "directory not found" for the same thing (measured 2026-08-25).
+  // Eso vale para la carpeta que NOMBRA quien llama. Una raiz del workspace
+  // que no esta (una letra sin montar) se salta y se dice: la primera que
+  // faltaba cortaba la lista ENTERA con PROJ-003, y el agente creyo que esa
+  // era la carpeta por defecto (Hermes, 5-oct-2026).
+  var Saltadas := '';
   for RootDir in Roots do
     if (RootDir.Trim <> '') and not TDirectory.Exists(RootDir.Trim) then
-      Exit(MsgFmt(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim]));
+    begin
+      if Params.Root <> '' then
+        Exit(MsgFmt(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim]));
+      if Saltadas <> '' then
+        Saltadas := Saltadas + ', ';
+      Saltadas := Saltadas + SinBarraFinal(RootDir.Trim);
+    end;
   Filt := Params.Name.Trim.ToLower;
   // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
   // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
@@ -2684,6 +2731,8 @@ begin
       Return.AddPair('hidden', TJSONNumber.Create(Ocultos));
       Return.AddPair('hiddenNote', MsgFmt(SN_PROJECTS_HIDDEN_FMT, [Ocultos]));
     end;
+    if Saltadas <> '' then
+      Return.AddPair('skippedRootsNote', MsgFmt(SN_PROJECTS_RAICES_SALTADAS_FMT, [Saltadas]));
     Return.AddPair('projects', Arr);
     Result := Return.ToJSON;
   finally
@@ -2704,12 +2753,15 @@ end;
 function TDelphiFetchTool.ExecuteWithParams(const Params: TDelphiFetchParams): string;
 const
   MAX_CHUNK = 8 * 1024 * 1024;
-  // Above BIG_FILE the offset=0 answer carries the download link and NO
+  // Above SMALL_CHUNK the offset=0 answer carries the download link and NO
   // chunk (field 2026-08-21: a 72 MB installer pulled as base64 through a
   // 262K-token context). An explicit maxbytes <= SMALL_CHUNK is the opt-in
   // for inline chunks anyway (a client without a shell) - the parameter that
   // already exists doubles as the switch; nothing new to learn.
-  BIG_FILE = 4 * 1024 * 1024;
+  // Era un umbral aparte de 4 MB: un zip de 1,37 MB llegaba entero en base64,
+  // 3,6 millones de caracteres en la respuesta de un modelo (Hermes,
+  // 5-oct-2026). Una medida para las dos cosas: lo que no cabe en un trozo
+  // pequeno va por el enlace.
   SMALL_CHUNK = 1024 * 1024;
 var
   FullPath, Sha: string;
@@ -2750,7 +2802,7 @@ begin
 
     if Params.Offset > Size then
       Exit(MsgFmt(SR_WS_OFFSET_MAS_ALLA_FINAL_FMT, [Size]));
-    LinkOnly := GFilesServed and (Size > BIG_FILE) and (Params.Offset = 0) and
+    LinkOnly := GFilesServed and (Size > SMALL_CHUNK) and (Params.Offset = 0) and
       ((Params.MaxBytes <= 0) or (Params.MaxBytes > SMALL_CHUNK));
     Stream.Position := Params.Offset;
     ChunkLen := Size - Params.Offset;

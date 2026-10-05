@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-04 (current release v1.13.0; 42 tools).
+Status page as of 2026-10-05 (current release v1.13.1; 42 tools).
 
 ## Delivered
 
@@ -37,6 +37,7 @@ Status page as of 2026-10-04 (current release v1.13.0; 42 tools).
 - The designer tables read from the source of each installed Delphi - its own preprocessor and declarations reader, generated in the background and cached per version - instead of tables of one RAD Studio compiled into the exe (1.12.0)
 - A cap on warm DelphiLSP engines: `[Server] MaxEngines`, the least recently used one that is not working makes room (1.13.0)
 - One reader for Pascal classes, one composer for the citation of a line, the agent's regular expressions through PCRE, `delphi_git ls-remote`; a jail where Git never recurses into submodules and no tool names what lies behind a junction (1.13.0)
+- Answers that say whose fix it is: a root whose drive is not connected (`WS-022`, `unavailableRoots`, `PROJ-005`), Git's dubious ownership (`GIT-057`), the download link above 1 MB (1.13.1)
 
 ## Open
 
