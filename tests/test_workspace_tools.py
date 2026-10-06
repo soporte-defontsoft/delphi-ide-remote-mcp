@@ -136,7 +136,7 @@ check('search: ...y nombrado a solas, se dice por que no (SEARCH-007)',
 # el 2026-09-20 usando el servidor como agente).
 _p1 = json.loads(call('delphi_projects', {"root": REPO, "maxresults": 5}))
 check('projects: la pagina respeta maxresults',
-      _p1.get('shown') == 5 and len(_p1.get('projects', [])) == 5,
+      _p1.get('shown') == 5 and len(mc.ficheros(_p1, 'projects')) == 5,
       str(_p1.get('shown')))
 check('projects: dice que hay mas y por donde seguir',
       _p1.get('hasMore') is True and _p1.get('nextOffset') == 5 and
@@ -154,13 +154,13 @@ _p2 = json.loads(call('delphi_projects',
                       {"root": REPO, "maxresults": 5, "offset": 5}))
 check('projects: la siguiente pagina es OTRA y dice su offset',
       _p2.get('offset') == 5 and
-      _p2['projects'][0]['project'] != _p1['projects'][0]['project'],
-      (_p2.get('offset'), _p2['projects'][0]['name'], _p1['projects'][0]['name']))
+      mc.ficheros(_p2, 'projects')[0]['path'] != mc.ficheros(_p1, 'projects')[0]['path'],
+      (_p2.get('offset'), mc.ficheros(_p2, 'projects')[0]['name'], mc.ficheros(_p1, 'projects')[0]['name']))
 _vistos, _off, _vueltas = [], 0, 0
 while _vueltas < 20:
     _pg = json.loads(call('delphi_projects',
                           {"root": REPO, "maxresults": 5, "offset": _off}))
-    _vistos += [p['project'] for p in _pg.get('projects', [])]
+    _vistos += [p['path'] for p in mc.ficheros(_pg, 'projects')]
     _vueltas += 1
     if not _pg.get('hasMore'):
         break
@@ -176,9 +176,10 @@ check('projects: por defecto no vuelca la lista entera',
 out = call('delphi_list', {"root": SRC, "pattern": "*.pas"})
 try:
     d = json.loads(out)
-    names = [os.path.basename(f['path']) for f in d['files']]
+    fs = mc.ficheros(d)
+    names = [os.path.basename(f['path']) for f in fs]
     check('list: unidades presentes', 'Lsp.Patch.pas' in names and 'Lsp.Client.pas' in names, names[:10])
-    check('list: sin artefactos', not any('Win64' in f['path'] for f in d['files']), '')
+    check('list: sin artefactos', fs and not any('Win64' in f['path'] for f in fs), '')
 except Exception:
     check('list: parsea', False, out[:200])
 
@@ -186,7 +187,7 @@ except Exception:
 out = call('delphi_list', {"root": REPO, "dirs": True})
 try:
     d = json.loads(out)
-    names = [os.path.basename(x) for x in d['dirs']]
+    names = [f['name'] for f in mc.ficheros(d, hijos='dirs')]
     check('list dirs: carpetas de primer nivel', 'src' in names and 'docs' in names
           and 'vendor' in names, names)
     check('list dirs: oculta artefactos', '.git' not in names, names)
@@ -208,8 +209,8 @@ out = call('delphi_list', {"root": RELDIR, "pattern": "*.exe"})
 try:
     d = json.loads(out)
     check('list: root explicito DENTRO de build output lista el exe',
-          any(os.path.basename(EXE).lower() == os.path.basename(f['path']).lower()
-              for f in d['files']), out[:200])
+          any(os.path.basename(EXE).lower() == f['name'].lower()
+              for f in mc.ficheros(d)), out[:200])
 except Exception:
     check('list: parsea (root en build output)', False, out[:200])
 # dirs browse of the folder holding the platform dirs: hidden children counted
@@ -224,7 +225,7 @@ except Exception:
 out = call('delphi_list', {"root": os.path.dirname(RELDIR), "dirs": True})
 try:
     d = json.loads(out)
-    names = [os.path.basename(x) for x in d['dirs']]
+    names = [f['name'] for f in mc.ficheros(d, hijos='dirs')]
     check('list dirs: root dentro de build output muestra sus hijos',
           os.path.basename(RELDIR) in names, out[:200])
 except Exception:
@@ -234,7 +235,7 @@ except Exception:
 out = call('delphi_projects', {"root": REPO})
 try:
     d = json.loads(out)
-    names = sorted(p['name'] for p in d['projects'])
+    names = sorted(os.path.splitext(p['name'])[0] for p in mc.ficheros(d, 'projects'))
     # ONE server project now: the terminal, the service and the tray are three
     # modes of the same executable, not three projects.
     check('projects: encuentra los del repo',
@@ -245,7 +246,7 @@ except Exception:
     check('projects: parsea', False, out[:200])
 out = call('delphi_projects', {"root": REPO, "name": "unittests"})
 d = json.loads(out)
-check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'LspUnitTests', out[:150])
+check('projects: filtro por nombre', d['total'] == 1 and mc.ficheros(d, 'projects')[0]['name'] == 'LspUnitTests.dproj', out[:150])
 out = call('delphi_projects', {})
 # v0.98: la bateria declara su jaula, asi que sin root explicito descubre
 # DENTRO de ella (el estado "sin configurar" ya no existe: o jaula o RO)

@@ -78,17 +78,46 @@ BEFORE = sha_all()
 r = call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Duplica'})
 j = J(r)
 check('preview aplicable (Doble -> Duplica)', j.get('applicable') is True, r[:400])
-check('ocurrencias >= 2 y ficheros >= 2', j.get('occurrences', 0) >= 2 and j.get('files', 0) >= 2, r[:300])
-check('changes con path/line/text', bool(j.get('changes')) and all('path' in c and 'line' in c for c in j.get('changes', [])), str(j.get('changes'))[:250])
+# filesTouched: 'files' es, en toda la casa, la lista de una carpeta (1.15.0)
+check('ocurrencias >= 2 y ficheros >= 2 (filesTouched; files ya no es un numero)',
+      j.get('occurrences', 0) >= 2 and j.get('filesTouched', 0) >= 2 and 'files' not in j, r[:300])
+# ('path' lo pone el lector, no el servidor: medirlo no media nada)
+check('changes con line y text', bool(mc.aciertos(j, 'changes')) and all('text' in c and 'line' in c for c in mc.aciertos(j, 'changes')), str(j.get('changes'))[:250])
 # field 2026-08-25: 'changes' omitia la CABECERA DE LA IMPLEMENTACION (la
 # linea que el propio campo definition señala), y un agente que aplicara solo
 # lo listado rompia la unit (E2065 Unsatisfied forward declaration)
 _def = j.get('definition') or {}
-_chg = j.get('changes') or []
+_chg = mc.aciertos(j, 'changes')
+
+
+def _linea_de(p, n):
+    """La linea n (1-based) del fichero de disco, tal cual."""
+    with open(mc.real(p), encoding='utf-8-sig', newline='') as fh:
+        return [l.rstrip('\r') for l in fh.read().split('\n')][n - 1]
+
+
+# la convencion de la casa (1.15.0): line 1-based, line0 y character0 las del
+# motor, text la linea TAL CUAL (el ancla); ni anchor, ni character, ni line1
+check('changes: line y line0, character0 y text = la linea de disco tal cual; sin anchor/character/line1',
+      bool(_chg) and all(c.get('line0') == c.get('line', 0) - 1
+                         and ('character0' in c or c.get('kind') == 'definition')
+                         and c.get('text') == _linea_de(c['path'], c['line'])
+                         and not {'anchor', 'character', 'line1'} & set(c) for c in _chg)
+      and _def.get('line0') == _def.get('line', 0) - 1 and 'line1' not in _def,
+      str(_chg)[:400])
 check('changes INCLUYE la linea de la definicion',
       any(c.get('line') == _def.get('line') and c.get('path') == _def.get('path') for c in _chg),
       'definition=%s changes=%s' % (_def, [(c.get('path','')[-20:], c.get('line')) for c in _chg]))
-check('cero sin confirmar', j.get('unverified') == 0, r[:200])
+# cada carpeta y cada fichero UNA vez: la fila de la definicion se anade al
+# FINAL y su fichero ya salio con los usos (revisor de baterias de la 1.15.0)
+check('changes: cada carpeta y cada fichero una vez (la fila de la definicion va con los de su fichero)',
+      mc.unicos(j, 'changes'), str(j.get('changes'))[:400])
+if not any(c.get('kind') == 'definition' for c in _chg):
+    print('NOTA: el motor devolvio la definicion entre los usos (sin fila kind=definition): '
+          'la unicidad de changes no ve una entrada desordenada')
+# los nombres de delphi_references: unverifiedCount la cuenta, unverified la lista
+check('cero sin confirmar (unverifiedCount; la lista, unverified, no sale vacia)',
+      j.get('unverifiedCount') == 0 and 'unverified' not in j and 'unverifiedRefs' not in j, r[:200])
 # el '{ it''s what Doble''s for }' del fixture: las comillas de dentro de un
 # comentario no abren una cadena (1.10.0, el lexico de la casa; antes "'s
 # what Doble'" contaba como un literal que lo nombraba y bloqueaba)
@@ -216,13 +245,31 @@ j = J(call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd}))
 check('unidad editada en disco: definition desde el .dpr contesta la linea de HOY, no la que tenia el motor',
       ((j.get('range') or {}).get('start') or {}).get('line') == impl and str(j.get('path', '')).endswith('UCalc.pas'),
       (str(j)[:200], impl))
+# la ruta una vez: el uri file:/// repetia el path entero (1.15.0, el organizador)
+check('definition: path y line (la 1-based de la casa), sin uri ni line1',
+      'uri' not in j and 'line1' not in j and j.get('line') == impl + 1, str(j)[:200])
+# ...y line0/character0 como un acierto, para encadenar sin cuentas (revisor
+# de contrato de la 1.15.0): las del range del motor
+_st = ((j.get('range') or {}).get('start') or {})
+check('definition: line0 y character0 como un acierto (las del range)',
+      j.get('line0') == impl and j.get('line0') == _st.get('line')
+      and j.get('character0') == _st.get('character') and 'character0' in j, str(j)[:200])
 j = J(call('delphi_rename_symbol', {'path': DPR, 'line': ld, 'character': cd, 'newname': 'Triplica'}))
 check('unidad editada en disco: el PRIMER preview desde el .dpr es aplicable (era RENAME-017 hasta la 1.7.7)',
       j.get('applicable') is True and not j.get('blockers') and (j.get('definition') or {}).get('line') == impl + 1,
       str(j)[:400])
 j = J(call('delphi_references', {'path': DPR, 'line': ld, 'character': cd}))
 check('references desde el .dpr cuenta las cinco (decl, impl, Existente y las dos llamadas del .dpr)',
-      len(j.get('confirmed') or []) == 5 and not j.get('unverified'), str(j)[:300])
+      len(mc.aciertos(j, 'confirmed')) == 5 and not j.get('unverified'), str(j)[:300])
+check('references: cada carpeta y cada fichero una vez en confirmed', mc.unicos(j, 'confirmed'),
+      str(j.get('confirmed'))[:400])
+_conf = mc.aciertos(j, 'confirmed')
+check('references: la convencion de rename y search (line 1-based, line0, character0, text tal cual)',
+      len(_conf) == 5 and all(c.get('line0') == c.get('line', 0) - 1 and 'character0' in c
+                              and c.get('text') == _linea_de(c['path'], c['line'])
+                              and not {'anchor', 'character', 'line1'} & set(c) for c in _conf)
+      and (j.get('definition') or {}).get('line0') == (j.get('definition') or {}).get('line', 0) - 1,
+      str(_conf)[:400])
 
 # 10. El motor del LINTER cruza unidades igual: con UCalc abierta en el (un
 # diagnostics), una funcion NUEVA en UCalc y su llamada en el .dpr, escritas
@@ -249,6 +296,13 @@ open(DPR, 'w', encoding='utf-8-sig', newline='').write(dp.replace(
 d2 = J(call('delphi_diagnostics', {'path': DPR}, t=120))
 check('linter (control): una funcion que no existe si da exactamente un E2003',
       d2.get('errors') == 1 and 'E2003' in str(d2.get('diagnostics')), str(d2)[:300])
+# 'line', la 1-based de la casa (era line1): la de disco, y el range la 0-based
+_dg = (d2.get('diagnostics') or [{}])[0]
+_lq = [i for i, l in enumerate(open(DPR, encoding='utf-8-sig').read().splitlines()) if 'Quintuple' in l]
+check('diagnostics: line es la linea 1-based de disco del E2003 (y el range, la 0-based)',
+      bool(_lq) and _dg.get('line') == _lq[0] + 1
+      and ((_dg.get('range') or {}).get('start') or {}).get('line') == _lq[0] and 'line1' not in _dg,
+      (_dg, _lq))
 
 # 11. FANTASMA: la unidad se BORRA del disco con el motor teniendola abierta
 # (lo esta desde el punto 9). Hasta la 1.7.8 definition, hover y references

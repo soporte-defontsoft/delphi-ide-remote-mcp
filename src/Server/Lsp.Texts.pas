@@ -1118,7 +1118,7 @@ const
     '[LIST-012] %d entries are not shown here:';
   SN_HIDDEN_ARTIFACTS_FMT =
     '[LIST-003] %d are in build folders (Win32, Win64, Debug, Release, ' +
-    'dcu, __history): they exist on disk, pass that folder as root to ' +
+    'dcu, __history, __recovery, __pycache__): they exist on disk, pass that folder as root to ' +
     'see them or download the output with delphi_package + delphi_fetch';
   SN_HIDDEN_TEMP_FMT =
     '[LIST-004] %d are server temporaries (__delphi-temp): they never ' +
@@ -1133,7 +1133,7 @@ const
     'includetrash=true shows them';
   SN_HIDDEN_FOLDERS_FMT =
     '[LIST-007] %d are folders of other tools (.vs, .github, ' +
-    '__pycache__...), which dirs mode does not show: pass one as root to ' +
+    '.idea...), which dirs mode does not show: pass one as root to ' +
     'see inside';
 
   { Las marcas de dueno (.by) se cuentan aparte: la nota las llamaba
@@ -1715,7 +1715,8 @@ const
   { Lo que significa un salto de linea al FINAL de "new", dicho igual en
     delphi_edit, delphi_textedit y delphi_changeset (LineasDeNew, Lsp.Patch). }
   SP_NEW_SALTO_FINAL =
-    '. A final line break is dropped; each extra one adds a blank line.';
+    '. A final line break is dropped; each extra one adds a blank line. ' +
+    'Same rule for one-line and block anchors.';
   SP_PASERVER_JOB =
     'kill / output: the "jobId" a remote-run answer gave you; with name ' +
     'and project (the same .dproj path) - only a job of THAT project on ' +
@@ -2148,7 +2149,8 @@ const
   SP_ADBLINUX_MODIFIERS =
     'key OPTIONAL: keys held while it is pressed, comma separated - ctrl, ' +
     'shift, alt, super (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on ' +
-    'Windows: code=f4 modifiers=alt).';
+    'Windows: code=f4 modifiers=alt). Pressed in that order and released ' +
+    'in reverse.';
   SR_ADBLINUX_MODIFIERS_BAD_FMT =
     '[DESK-001 INVALID_PARAM] modifiers does not know "%s": the valid ones are ' +
     'ctrl, shift, alt and super (comma-separated).';
@@ -2161,7 +2163,8 @@ const
   SP_ADBLINUX_TEXT =
     'type: the text to write. Windows: typed as Unicode. Linux: key by key ' +
     'with the target''s own keyboard layout (Shift, AltGr, dead keys); a ' +
-    'character it cannot compose (an emoji) is refused by name. Typed as ' +
+    'character it cannot compose (an emoji) is refused by name, and the ' +
+    'answer says which keyboard was used. Typed as ' +
     'TEXT, never run. With x,y it presses there first to focus the field.';
   SR_ADBLINUX_NEEDTEXT =
     '[DESK-002 INVALID_PARAM] type needs "text". If you also pass x and y, it ' +
@@ -2180,7 +2183,7 @@ const
   SP_CAPTURE_OUT_RULE =
     ': a FOLDER (existing, or ending in \ - the server names the file) ' +
     'or a FILE whose extension matches the capture''s real format. Empty ' +
-    '= __delphi-temp\<agent>, wiped on server restart. Jailed like any ' +
+    '= __delphi-temp\<agent>, wiped on server restart. On THIS server, jailed like any ' +
     'path. With inline=false the capture stays there and the answer ' +
     'carries its download link.';
   SP_ADBLINUX_OUT =
@@ -2423,7 +2426,8 @@ const
     'logcat: only lines containing this text (e.g. your app tag or package). ' +
     'Optional';
   SP_ADB_LINES =
-    'logcat: how many recent lines (default 300, max 5000). An inline ' +
+    'logcat: how many recent lines (default 300, max 5000; 0 = the ' +
+    'default). An inline ' +
     'answer carries at most the newest 400 - for more, pass out=<file.txt> ' +
     'and read it in ranges.';
 
@@ -3331,10 +3335,11 @@ const
     'The .pas/.dpr with the symbol (any occurrence works)';
 
   SP_RENAME_LINE =
-    'Zero-based line of the identifier (same convention as delphi_definition)';
+    'Zero-based line of the identifier (a hit''s "line0"; same convention ' +
+    'as delphi_definition)';
 
   SP_RENAME_CHARACTER =
-    'Zero-based column inside the identifier';
+    'Zero-based column inside the identifier (a hit''s "character0")';
 
   SP_RENAME_NEWNAME =
     'The new identifier (legal Delphi name, no reserved words)';
@@ -3890,8 +3895,8 @@ const
 
   SR_TEST_NAME_NOT_PATH_FMT =
     '[TEST-005 INVALID_PARAM] "%s" looks like the NAME of the project, ' +
-    'and here its full PATH is needed (the one delphi_projects gives you ' +
-    'in the "project" field).';
+    'and here its full PATH is needed: dir + name of its entry in ' +
+    'delphi_projects or delphi_test discover.';
 
   SR_TEST_CONFIG_FMT =
     '[CFG-107 NOT_FOUND] The configuration "%s" does not exist in this ' +
@@ -4009,9 +4014,11 @@ const
     'test/spec.';
 
   SN_TEST_DISCOVER_NOTE =
-    '[TEST-022] Run them with command=run project=<the .dproj from the ' +
-    'list>. If any comes with hasDproj=false, build it first with ' +
-    'delphi_build on its .dpr.';
+    '[TEST-022] Run them with command=run project=<dir + name from the ' +
+    'list> (the .dpr: run takes it for its .dproj). One with ' +
+    'hasDproj=false cannot be built or run here (delphi_build takes a ' +
+    '.dproj): opening it once in the IDE creates it, or create the test ' +
+    'project with delphi_create kind=project-test.';
 
   SN_TEST_BUILD_FAILED =
     '[TEST-023] The test project does NOT compile, so there is nothing ' +
@@ -5450,8 +5457,8 @@ const
   SP_CHANGESET_OLD =
     'stage kind=edit: the anchor - ONE full line copied verbatim from ' +
     'delphi_read, unique in the file (or fragment + atline instead). ' +
-    'kind=delete-line: optional, the line you expect at atline (the ' +
-    'preview refuses when it is not that one).';
+    'kind=delete-line: optional, the line you expect at atline, compared ' +
+    'like an anchor (the preview refuses when it is not that one).';
 
   SP_CHANGESET_NEW =
     'stage kind=edit: the replacement text (may span several lines)' +
@@ -7214,10 +7221,11 @@ const
     'Absolute path of the Delphi source file';
 
   SP_BUILD_LINE =
-    'Zero-based line of the identifier to find references for';
+    'Zero-based line of the identifier to find references for (a hit''s ' +
+    '"line0"; its "line" is 1-based)';
 
   SP_BUILD_CHARACTER =
-    'Zero-based character inside the identifier';
+    'Zero-based character inside the identifier (a hit''s "character0")';
 
   SP_BUILD_PROJECT =
     'Absolute path of the .dproj to build';
@@ -7259,7 +7267,7 @@ const
     'Compiler-grade errors/warnings/hints for one Delphi source file ' +
     '(Error Insight via the official DelphiLSP linter), WITHOUT ' +
     'building. Real compiler codes (E2003, W1000, H2164...) with exact ' +
-    '0-based positions (range) and line1, the 1-based line delphi_read ' +
+    '0-based positions (range) and line, the 1-based line delphi_read ' +
     'shows. Severity is the LSP scale: 1=error, 2=warning, ' +
     '3=information, 4=hint. The "hints" counter groups 3 and 4 together; ' +
     'the per-diagnostic severity tells them apart. Lints the CURRENT ' +
@@ -7301,10 +7309,12 @@ const
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3d, 27-sep-2026)
   SP_LSP_LINE =
-    'Zero-based line number of the identifier';
+    'Zero-based line number of the identifier: the "line0" of a search, ' +
+    'references, symbols or definition hit (their "line" is 1-based)';
 
   SP_LSP_CHARACTER =
-    'Zero-based character (column) inside the identifier';
+    'Zero-based character (column) inside the identifier (a hit''s ' +
+    '"character0")';
 
   SP_LSP_TRIGGER =
     'Optional trigger character, e.g. "." (empty = manual invocation)';
@@ -7570,7 +7580,8 @@ const
     'name (e.g. UCustomers)';
 
   SP_CREATE_PROJECT =
-    'Everything but projects: the .dpr, .dpk or .dproj that registers the ' +
+    'Everything but projects: the ABSOLUTE path of the .dpr, .dpk or ' +
+    '.dproj that registers the ' +
     'new unit (uses of a program, contains of a package). kind=unit may go ' +
     'without it, with an ABSOLUTE dir (standalone, listed by no project ' +
     'yet). kind=include: optional, and dir is then relative to it.';
@@ -7699,7 +7710,11 @@ const
     'conventions...)';
 
   SP_VAULT_MAXRESULTS =
-    'Maximum number of results (default 50)';
+    'Results PER PAGE (default 50, cap 500).';
+
+  SP_VAULT_SEARCH_OFFSET =
+    'Skip the first N results of the FULL list: pass the offset the ' +
+    'previous answer gives; walking it reaches every result.';
 
   SP_VAULT_PATH =
     'RELATIVE path of the note inside the vault (projects/x/context.md). ' +
@@ -7844,7 +7859,7 @@ const
 
   SP_WS_CREATE =
     'switch: true = create the branch and move to it (git switch -c). ' +
-    'Refused with any other command.';
+    'Refused with any other command (GIT-038).';
 
   SP_WS_MESSAGE =
     'commit: the commit message. tag: makes the tag annotated. config: ' +
@@ -7937,19 +7952,23 @@ const
     'server''s __delphi-temp...) - naming such a folder as root searches ' +
     'inside it, and skipped files are counted with why ("hidden" + ' +
     '"note"). Files are decoded with their real encoding, so accented text ' +
-    'matches. Hits come grouped by file: files = [{path, hits = [{line ' +
-    '(1-based, as delphi_read numbers it), line0 and character0 (0-based, ' +
-    'what the LSP tools take), text}]}]; total and shown count hits. A ' +
+    'matches. Hits come grouped by folder and file: folders = [{dir, files ' +
+    '= [{name, hits = [{line (1-based, as delphi_read numbers it), line0 ' +
+    'and character0 (0-based, what the LSP tools take), text}]}]}]; total ' +
+    'and shown count hits. A ' +
     'file over 8 MB is not read: the result names it.';
 
   SD_WS_LIST =
     'List Delphi files under a directory recursively (sources and project ' +
     'files, or a mask), skipping IDE artifacts BELOW the root (naming a ' +
     'build-output folder - Win32/Win64/Debug/Release... - as root lists ' +
-    'inside it; hidden entries are counted). Path, size and last-write ' +
-    'time; 500 entries per page (offset walks the rest). dirs=true lists ' +
+    'inside it; hidden entries are counted). Each folder once with its ' +
+    'files by name, size and last-write time: folders = [{dir, files = ' +
+    '[{name, size, modified}]}]; 500 entries per page (offset walks the ' +
+    'rest; a page that starts inside a folder names it again). dirs=true lists ' +
     'the SUBDIRECTORIES of root ' +
-    'instead (one level, explorer-style) - to browse the machine and ' +
+    'instead (one level, explorer-style: folders = [{dir, dirs = [names]}]) ' +
+    '- to browse the machine and ' +
     'decide where to create or look for projects. includeTrash=true also ' +
     'shows the recoverable trash (__delphi-patch), to find a file ' +
     'delphi_delete moved and restore it with delphi_move.';
@@ -7965,7 +7984,7 @@ const
     '"message"; push/pull use the credentials and remotes stored on the ' +
     'server. The repository - root folder and .git - has to be inside your ' +
     'roots: git works on the whole repository it finds from "repo" ' +
-    'upwards, so one that starts above your roots is refused. No arbitrary ' +
+    'upwards, so one that starts above your roots is refused (GIT-041). No arbitrary ' +
     'git commands, no shell.';
 
   SD_WS_INSTALLS =
@@ -7985,7 +8004,10 @@ const
     'under the workspace roots when root is empty; optional name filter. ' +
     'The way to answer "open project X" without knowing the disk layout. ' +
     'Answers in PAGES (maxresults, default 50; offset + nextOffset to walk ' +
-    'them): a work machine holds thousands of .dproj.';
+    'them): a work machine holds thousands of .dproj. Grouped by folder: ' +
+    'projects = [{dir, files = [{name, kind}]}], and each git repository ' +
+    'once in repos = [{dir, branch}]: a project''s is the LONGEST dir its ' +
+    'folder is inside.';
 
   SD_WS_UPLOAD =
     'Upload a file TO the server in base64 chunks - the mirror of ' +
@@ -8526,8 +8548,11 @@ const
     ' Only the note NAMES were searched: to search inside the text, ' +
     'repeat with target=content.';
 
-  SF_VAULT_TOPE_ALCANZADO =
-    ' (limit reached)';
+  SF_VAULT_PAGINA_FMT =
+    ' of %d, from offset=%d';
+
+  SF_VAULT_SIGUIENTE_FMT =
+    ' - the next page is offset=%d';
 
   SN_VAULT_CABECERA_NOTA_FMT =
     '[VAULT-039] # %s (%d lines)';

@@ -56,6 +56,7 @@ uses
   Lsp.Dproj,
   Lsp.BuildRunner,
   Lsp.References,
+  Lsp.Listas, // AgrupaPorCarpeta: los proyectos de tests por carpeta
   Lsp.Patch,
   Lsp.Pascal, // DirectivasPascal: el lector de directivas
   Lsp.Sandbox, // la jaula: un contenedor por ejecucion
@@ -150,8 +151,10 @@ begin
     Inc(N);
     Obj := TJSONObject.Create;
     Arr.AddElement(Obj);
-    Obj.AddPair('project', TPath.ChangeExtension(F, '.dproj'));
-    Obj.AddPair('dpr', F);
+    // el .dpr (run lo acepta igual que el .dproj, del mismo nombre: hasDproj
+    // dice si esta); 'project' y 'dpr' repetian la carpeta. El organizador
+    // los agrupa al final
+    Obj.AddPair('path', F);
     Obj.AddPair('framework', KindName(K));
     Obj.AddPair('why', Why);
     Obj.AddPair('hasDproj', TJSONBool.Create(
@@ -159,6 +162,8 @@ begin
     if K = tkConsole then
       Obj.AddPair('countsFormat', MsgText(SN_TEST_CONSOLE_FORMAT));
   end;
+  // por carpeta (el organizador de las listas de ficheros, 1.15.0)
+  AgrupaPorCarpeta(Result, 'projects');
   Result.AddPair('total', TJSONNumber.Create(N));
   if N = 0 then
     Result.AddPair('note', MsgText(SN_TEST_NONE))

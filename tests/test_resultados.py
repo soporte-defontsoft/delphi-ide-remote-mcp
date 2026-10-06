@@ -810,7 +810,7 @@ try:
     llama('delphi_delete', {'path': os.path.join(LT, 'a.txt')})
     res, sc, t = llama('delphi_list', {'root': LT, 'pattern': '*;*.txt', 'includetrash': True})
     j = mc.como_json(t)
-    rutas = [f.get('path') for f in j.get('files', [])]
+    rutas = [f.get('path') for f in mc.ficheros(j)]
     vivas = [r for r in rutas if '__delphi-patch' not in r]
     check('E62 delphi_list includetrash con mascaras solapadas: cada fichero UNA vez',
           len(vivas) == 2 and len(rutas) > 2 and len(set(rutas)) == len(rutas) and

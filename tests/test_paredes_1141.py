@@ -145,7 +145,7 @@ try:
     # ---------------------------------------------------------------- P7
     p1 = mc.como_json(llama('delphi_list', {'root': LISTA}))
     check('P7 delphi_list de 720: pagina de 500 con hasMore y nextOffset=500',
-          p1.get('total') == 720 and p1.get('shown') == 500 and len(p1.get('files', [])) == 500
+          p1.get('total') == 720 and p1.get('shown') == 500 and len(mc.ficheros(p1)) == 500
           and p1.get('hasMore') is True and p1.get('nextOffset') == 500,
           {k: p1.get(k) for k in ('total', 'shown', 'hasMore', 'nextOffset')})
     check('P7 ...LIST-010 dice cuantas de cuantas y la pagina siguiente',
@@ -157,7 +157,7 @@ try:
     while paginas < 10:
         pg = mc.como_json(llama('delphi_list', {'root': LISTA, 'offset': ofs}))
         paginas += 1
-        vistos += [e['path'] for e in pg.get('files', [])]
+        vistos += [e['path'] for e in mc.ficheros(pg)]
         if not pg.get('hasMore'):
             break
         ofs = pg['nextOffset']
@@ -175,12 +175,14 @@ try:
     # ---------------------------------------------------------------- P8
     d1 = mc.como_json(llama('delphi_list', {'root': MUCHAS, 'dirs': True}))
     d2 = mc.como_json(llama('delphi_list', {'root': MUCHAS, 'dirs': True, 'offset': d1.get('nextOffset', 0)}))
+    n1 = [f['path'] for f in mc.ficheros(d1, hijos='dirs')]
+    n2 = [f['path'] for f in mc.ficheros(d2, hijos='dirs')]
     check('P8 dirs=true por paginas: 500 + 10 de 510, sin repetir, con LIST-013',
-          d1.get('total') == 510 and len(d1.get('dirs', [])) == 500 and d1.get('nextOffset') == 500
+          d1.get('total') == 510 and len(n1) == 500 and d1.get('nextOffset') == 500
           and pista('SN_LIST_DIRS_CAPPED_FMT', 500, 510, 500) in d1.get('shownNote', '')
-          and len(d2.get('dirs', [])) == 10 and d2.get('hasMore') is False
-          and not set(d1.get('dirs', [])) & set(d2.get('dirs', [])),
-          ({k: d1.get(k) for k in ('total', 'shown', 'nextOffset')}, len(d2.get('dirs', []))))
+          and len(n2) == 10 and d2.get('hasMore') is False
+          and not set(n1) & set(n2),
+          ({k: d1.get(k) for k in ('total', 'shown', 'nextOffset')}, len(n2)))
 finally:
     proc.kill()
 proc.wait(10)

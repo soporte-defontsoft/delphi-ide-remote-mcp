@@ -177,7 +177,7 @@ try:
     # ------------------------------------------------------------------ S3
     dig = json.loads(sinaviso(call('delphi_symbols',
                                    {'path': os.path.join(JAIL, 'u')})))
-    decls = [d['decl'] for u in dig['units'] for d in u['declares']]
+    decls = [d['decl'] for u in mc.ficheros(dig, 'units') for d in u['declares']]
     check('S3 el digest de carpeta sigue acertando tras compartir el lector',
           any('B: Integer = 0' in d for d in decls) and
           any('array [0 .. 7] of Byte' in d for d in decls), str(decls)[:240])
@@ -192,7 +192,7 @@ try:
           str(decls)[:300])
 
     dg = json.loads(sinaviso(call('delphi_symbols', {'path': os.path.join(JAIL, 'd')})))
-    dd = [d['decl'] for u in dg['units'] for d in u['declares']]
+    dd = [d['decl'] for u in mc.ficheros(dg, 'units') for d in u['declares']]
     check('S11a una declaracion dentro de un comentario de llave no sale en el digest',
           not any('Vieja' in d for d in dd), str(dd)[:300])
     check('S11b un // detras de una firma no le pega la declaracion de la linea siguiente',

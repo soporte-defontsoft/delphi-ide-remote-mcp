@@ -122,6 +122,15 @@ for name, out, rc in failed:
         # la causa del P8 de test_lsp_paralelo (pendientes 1.11.0, punto 5;
         # 3-oct-2026). Lo demas (Error, Traceback), recortado como siempre
         print('   ', line if line.lstrip().startswith('FAIL') else line[:220])
+    # Un Traceback dice DONDE en sus lineas "File ..., line N", que el filtro
+    # de arriba no ve: salian "Traceback" y el error, sin el sitio. Su bloque
+    # entero, el ultimo, hasta 25 lineas (pendientes tras la 1.14.0)
+    lineas = out.splitlines()
+    tb = [i for i, line in enumerate(lineas) if line.startswith('Traceback')]
+    if tb:
+        print('    (el ultimo Traceback, entero:)')
+        for line in lineas[tb[-1]:tb[-1] + 25]:
+            print('   ', line[:220])
     # Roja sin decir por que: se ensena el final. El 26-sep-2026
     # test_readonly_roots salio roja con 57 PASS y 0 FAIL y aqui no quedo
     # ni una linea: una bateria roja tiene que decir por que.

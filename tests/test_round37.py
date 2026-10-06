@@ -74,7 +74,7 @@ try:
 
     # ------------------------------------------------------------------ T1
     lst = json.loads(call('delphi_list', {'root': PROY, 'includetrash': True}))
-    rutas = [f['path'] for f in lst['files']]
+    rutas = [f['path'] for f in mc.ficheros(lst)]
     enpap = [p for p in rutas if 'deleted' in p.replace('/', '\\')]
     check('T1 includetrash encuentra la unit BORRADA',
           any('UFicha.pas-' in p for p in enpap), str(rutas)[:300])
@@ -91,9 +91,9 @@ try:
     # escondida = el listado la CUENTA como oculta (hiddenTrash), no solo que
     # no aparezca: un listado vacio tampoco la ensenaba
     check('T7 sin includetrash la papelera sigue escondida',
-          sin.get('hiddenTrash', 0) >= 1 and
+          sin.get('hiddenTrash', 0) >= 1 and bool(mc.ficheros(sin)) and  # lo vivo si sale
           not any('deleted' in f['path'].replace('/', '\\')
-                  for f in sin['files']), str(sin)[:260])
+                  for f in mc.ficheros(sin)), str(sin)[:260])
 
     # ------------------------------------------------------------------ T3
     # La copia se localiza EN DISCO y no en la respuesta de T1, a proposito:
@@ -164,8 +164,8 @@ try:
     lst2 = json.loads(call('delphi_list', {'root': PROY,
                                            'includetrash': True}))
     check('T8c ...y includetrash la encuentra, como a las de borrado',
-          any('UMain.pas-' in f['path'] for f in lst2['files']),
-          str([f['path'] for f in lst2['files']])[:300])
+          any('UMain.pas-' in f['path'] for f in mc.ficheros(lst2)),
+          str([f['path'] for f in mc.ficheros(lst2)])[:300])
 finally:
     try:
         proc.kill()

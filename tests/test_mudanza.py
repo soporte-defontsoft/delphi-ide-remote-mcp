@@ -593,6 +593,28 @@ try:
                              'new': 'interface\n\n// {$IFDEF X}\n(* { dentro *)\n{ normal }'})
     check('W6c un // o un (* *) con llaves dentro, o un comentario normal: sin aviso',
           not mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT') and mc.abre(r, 'SK_EDIT_ESCRITO_EN_FMT'), r[:300])
+    # W6d el MISMO aviso cuando el fuente ENTERO lo trae el agente (1.15.0):
+    #     solo lo daban los motores de edicion, y una unit creada con el
+    #     ejemplo de un comentario entre llaves no compilaba sin que nadie lo
+    #     dijera (Lsp.Listas, E2065 tres veces, 6-oct-2026)
+    aviso = mc.catalogo()['SN_AVISO_LLAVE_ANIDADA_FMT']
+    PLANO = ruta('w', 'plano')
+    r = call('delphi_create', {'kind': 'unit', 'name': 'ULlaves', 'dir': PLANO,
+                               'content': 'unit ULlaves;\n\n{ ejemplo: { x } }\n\ninterface\n\nimplementation\n\nend.\n'})
+    check('W6d delphi_create de una unit con content: el aviso, con su linea (3)',
+          mc.abre(r, 'SN_CREATE_UNIT_SUELTA_FMT') and aviso % 3 in r, r[:400])
+    r = call('delphi_create', {'kind': 'include', 'name': 'Llaves', 'dir': PLANO,
+                               'content': '// cabecera\n{ uno { dos } }\n'})
+    check('W6d ...y de un .inc (linea 2)',
+          mc.abre(r, 'SN_CREATE_INCLUDE_FMT') and aviso % 2 in r, r[:400])
+    r = call('delphi_edit', {'path': ruta('w', 'plano', 'UNueva.pas'), 'createunit': True,
+                             'content': 'unit UNueva;\n\ninterface\n\n{ a { b } }\n\nimplementation\n\nend.\n'})
+    check('W6d ...y delphi_edit createunit con content (linea 5)',
+          mc.abre(r, 'SK_EDIT_CREADA_UNIT_FMT') and aviso % 5 in r, r[:400])
+    r = call('delphi_create', {'kind': 'unit', 'name': 'ULimpia', 'dir': PLANO,
+                               'content': 'unit ULimpia;\n\n{ normal }\n\ninterface\n\nimplementation\n\nend.\n'})
+    check('W6d (control) una unit con un comentario normal: sin aviso',
+          mc.abre(r, 'SN_CREATE_UNIT_SUELTA_FMT') and not mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT'), r[:300])
 finally:
     srv.mata()
     mc.borra(BASE)

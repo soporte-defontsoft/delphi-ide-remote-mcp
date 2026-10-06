@@ -110,6 +110,7 @@ uses
   Lsp.References,
   Lsp.Patch,      // PositionOutOfRange: la misma validacion que las otras cinco
   Lsp.BuildRunner,
+  Lsp.Listas,     // AgrupaPorFichero: los usos por carpeta y fichero
   Lsp.Guard;      // ReadPathDenied: la guarda antes que nada (ruta vacia)
 
 const
@@ -176,11 +177,12 @@ begin
           end;
           // La 1-based al lado del range 0-based del motor, como en
           // definition/hover/references: diagnostics era la ultima tool del
-          // motor sin gemela (Hermes, 2026-09-23).
+          // motor sin gemela (Hermes, 2026-09-23). 'line', como toda la casa
+          // (era 'line1', 1.15.0).
           var D := V.Clone as TJSONObject;
           var L0 := D.FindValue('range.start.line');
           if L0 <> nil then
-            D.AddPair('line1', TJSONNumber.Create(L0.GetValue<Integer> + 1));
+            D.AddPair('line', TJSONNumber.Create(L0.GetValue<Integer> + 1));
           OutArr.Add(D);
         end;
       Return.AddPair('errors', TJSONNumber.Create(Errors));
@@ -225,6 +227,11 @@ begin
     Exit;
   R := FindDelphiReferences(Params.Path, Params.Line, Params.Character);
   try
+    // cada lista de usos por carpeta y fichero (el organizador), al
+    // contestar: por dentro sigue plana, que es como la consume el rename.
+    // La ruta repetida en cada uso era el 20% de la respuesta (6-oct-2026)
+    for var Campo in TArray<string>.Create('confirmed', 'unverified', 'mentions', 'rejected') do
+      AgrupaPorFichero(R, Campo);
     // la linea de cada uso, tal cual (un ancla); lo demas, enmascarado
     Result := EnmascaraJsonSalvo(R.ToJSON, CONTENIDO_DE_UN_USO);
   finally

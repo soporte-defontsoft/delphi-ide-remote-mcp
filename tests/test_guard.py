@@ -412,7 +412,7 @@ for cand in (r'C:\Users\Public\Documents\Embarcadero\Studio\37.0\CatalogReposito
 if CAT:
     out = call('delphi_list', {"root": CAT, "pattern": "*"})
     check('lib: repositorio de catalogo (paquetes GetIt) legible',
-          not denied(out) and mc.como_json(out).get('files'), out[:150])
+          not denied(out) and mc.ficheros(out), out[:150])
     pkg = None
     for d in os.listdir(CAT):
         src = os.path.join(CAT, d)

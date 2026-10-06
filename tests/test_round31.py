@@ -106,7 +106,8 @@ try:
             'character0']
         refs = json.loads(call('delphi_references', {
             'path': ayuda, 'line': cuerpo, 'character': col + 1}))
-        confirmadas = sorted(c['line'] for c in refs.get('confirmed', []))
+        # line0, como las de search (desde la 1.15.0 'line' es la 1-based)
+        confirmadas = sorted(c['line0'] for c in mc.aciertos(refs, 'confirmed'))
         check('R1 preguntando DESDE EL CUERPO salen las llamadas, no solo '
               'ella misma (%s de %s)' % (len(confirmadas), len(lineas)),
               len(confirmadas) >= 3,
@@ -135,15 +136,32 @@ try:
     _decl = [i for i, x in enumerate(_uno) if x.strip() == 'procedure Saluda;'][0]
     hom = mc.como_json(call('delphi_references', {
         'path': UUNO, 'line': _decl, 'character': _uno[_decl].index('Saluda') + 1}))
-    rej = hom.get('rejected') if isinstance(hom.get('rejected'), list) else []
+    rej = mc.aciertos(hom, 'rejected')
     check('R1b los descartes se listan, no solo se cuentan',
           hom.get('rejectedHomonyms') == 3 and len(rej) == 3 and
           all(x.get('resolvedTo', '').lower().endswith('udos.pas') for x in rej) and
-          any(x.get('text') == 'UDos.Saluda;' and
+          any(x.get('text', '').strip() == 'UDos.Saluda;' and
               x.get('path', '').lower().endswith('homo.dpr') for x in rej),
           'rejectedHomonyms=%s rejected=%s' % (hom.get('rejectedHomonyms'), [
               (os.path.basename(x.get('path', '')), x.get('line'),
                os.path.basename(x.get('resolvedTo', ''))) for x in rej]))
+    # resolvedLine cambio de base con la MISMA clave en la 1.15.0 (0-based ->
+    # 1-based, y nace resolvedLine0): se fija contra la linea de disco de UDos,
+    # que es la de 'procedure Saluda;' (revisor de baterias)
+    _dos = open(os.path.join(HOMO, 'UDos.pas'), newline='').read().split('\r\n')
+    check('R1b ...resolvedLine es la 1-based de disco donde resolvio (y resolvedLine0 la 0-based)',
+          bool(rej) and all(x.get('resolvedLine0') == x.get('resolvedLine', 0) - 1
+                            and _dos[x['resolvedLine'] - 1].strip() == 'procedure Saluda;' for x in rej),
+          [(x.get('resolvedLine'), x.get('resolvedLine0')) for x in rej])
+    # R1c el rename los da como lookalikes, agrupados como todas las listas:
+    # ninguna bateria leia esa lista (revisor de baterias de la 1.15.0)
+    rn = mc.como_json(call('delphi_rename_symbol', {
+        'path': UUNO, 'line': _decl, 'character': _uno[_decl].index('Saluda') + 1, 'newname': 'SaludaX'}))
+    look = mc.aciertos(rn, 'lookalikes')
+    check('R1c rename: los homonimos en lookalikes, por carpeta y fichero (cada uno una vez), y no aplicable',
+          rn.get('applicable') is False and len(look) == 3 and mc.unicos(rn, 'lookalikes')
+          and all(x.get('line0') == x.get('line', 0) - 1 and 'character0' in x for x in look),
+          json.dumps(rn.get('lookalikes'))[:300])
 
     # ----------------------------------------------------------------- R2
     r = json.loads(call('delphi_search', {
@@ -213,7 +231,7 @@ try:
     # lo de arriba: apuntar a __delphi-patch contestaba total 0 teniendo un
     # .dproj dentro. delphi_list ya lo hacia bien; el arreglo no habia viajado.
     r = json.loads(call('delphi_projects', {'root': PROY}))
-    nombres = [p['project'] for p in r.get('projects', [])]
+    nombres = [p['path'] for p in mc.ficheros(r, 'projects')]
     check('R8 un barrido normal NO declara la copia de la papelera',
           r.get('total') == 1 and not any('delphi-patch' in n for n in nombres),
           json.dumps(r)[:240])

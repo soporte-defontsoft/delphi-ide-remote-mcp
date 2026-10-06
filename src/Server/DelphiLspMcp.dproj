@@ -235,6 +235,7 @@
         <DCCReference Include="Lsp.DesignerMetaGen.pas"/>
         <DCCReference Include="Lsp.Regex.pas"/>
         <DCCReference Include="Lsp.Json.pas"/>
+        <DCCReference Include="Lsp.Listas.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -83,7 +83,7 @@ call('delphi_hover', {'path': uso_z, 'line': 7, 'character': 4}, 300)
 antes = motores()
 j = mc.como_json(call('delphi_references', {'path': uso_z, 'line': 7, 'character': 4}, 300))
 check('R2 references confirma la llamada y las dos lineas de la comun',
-      len(j.get('confirmed', [])) == 3, str(j)[:300])
+      len(mc.aciertos(j, 'confirmed')) == 3, str(j)[:300])
 check('R2 ...sin arrancar el motor del otro proyecto (%d -> %d)' % (antes, motores()),
       antes >= 1 and motores() == antes, (antes, motores()))
 

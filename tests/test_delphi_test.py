@@ -140,10 +140,10 @@ end.
 
 # ---- discover ----
 j = J(A.call('delphi_test', {'command': 'discover', 'path': BASE}))
-names = [os.path.basename(p.get('dpr', '')) for p in j.get('projects', [])]
+names = [p.get('name', '') for p in mc.ficheros(j, 'projects')]
 check('discover encuentra las dos suites', 'VerdeTest.dpr' in names and 'RojoTest.dpr' in names, str(j)[:300])
 check('discover NO cuenta un proyecto normal', 'NormalApp.dpr' not in names, names)
-check('discover dice el framework y el porque', all(p.get('framework') and p.get('why') for p in j.get('projects', [])), str(j)[:250])
+check('discover dice el framework y el porque', mc.ficheros(j, 'projects') and all(p.get('framework') and p.get('why') for p in mc.ficheros(j, 'projects')), str(j)[:250])
 j = J(A.call('delphi_test', {'command': 'discover', 'path': os.path.join(BASE, 'NormalApp')}))
 check('carpeta sin tests: total 0 con explicacion', j.get('total') == 0 and mc.es(j.get('note') or '', 'SN_TEST_NONE'), str(j)[:250])
 

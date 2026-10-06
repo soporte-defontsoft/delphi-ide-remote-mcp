@@ -112,17 +112,18 @@ try:
           '%s %s' % (code, body[:120]))
 
     # [Server] DelphiVersion= pins the RAD Studio (a [Workspace] did until
-    # 5-oct-2026); pinned to the installed one it is simply the active one,
-    # with no note
+    # 5-oct-2026); pinned to the installed one it is simply the active one
+    # (no note to look for: since 1.14.0 one that is not installed does not
+    # start - test_un_delphi U5 - and nothing writes delphiVersionNote)
     code, body = post({"jsonrpc": "2.0", "id": 21, "method": "tools/call",
                        "params": {"name": "delphi_workspace", "arguments": {}}}, TOKEN)
     try:
         ws = json.loads(json.loads(body)['result']['content'][0]['text'])
     except Exception:
         ws = {}
-    check('DelphiVersion=37.0 instalada: activeDelphi 37.0, pedida 37.0, sin nota',
-          ws.get('activeDelphi') == '37.0' and ws.get('delphiVersionRequested') == '37.0'
-          and 'delphiVersionNote' not in ws, json.dumps(ws)[:200])
+    check('DelphiVersion=37.0 instalada: activeDelphi 37.0, pedida 37.0',
+          ws.get('activeDelphi') == '37.0' and ws.get('delphiVersionRequested') == '37.0',
+          json.dumps(ws)[:200])
     # the number means nothing to an agent: the NAME travels with it
     check('activeDelphiName nombra la version (RAD Studio 13) y activeDelphiRoot su carpeta',
           'RAD Studio 13' in ws.get('activeDelphiName', '') and '37.0' in ws.get('activeDelphiRoot', ''),

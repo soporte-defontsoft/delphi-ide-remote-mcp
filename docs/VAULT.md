@@ -58,7 +58,7 @@ agent should have to know in advance — hence the no-path call.
 | Tool | What it does |
 |---|---|
 | `vault_read` | Read a note by relative path, with line numbers and optional `offset`/`limit`. **No path = bootstrap** (rules + index). |
-| `vault_search` | `target=files` (glob over note names) or `target=content` (regex inside notes, returns path + line number + line). Optional `subfolder`. |
+| `vault_search` | `target=files` (glob over note names) or `target=content` (regex inside notes, returns path + line number + line). Optional `subfolder`. By pages: `maxresults` per page (50, up to 500) and `offset`; the first line says how many in all and the offset of the next page. |
 | `vault_append` | Append to an existing note — a dated log entry, a progress line. Optional `anchor`: insert after a unique fragment instead of at the end. |
 | `vault_create` | Create a new note. **Never overwrites**: an existing path is refused. |
 | `vault_patch` | Replace `old_text` (which must appear **exactly once**) with `new_text`. For closing a line in a progress file or fixing a fact. |

@@ -332,6 +332,27 @@ check('config: add-platform Linux64 en consola aceptado',
       mc.abre(out, 'SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT')
       or mc.abre(out, 'SN_CFG_HABILITADA_PLATAFORMA_ESTABA_DECLARAD_FMT'), out[:150])
 
+# Un .dproj editado a mano, con otra etiqueta delante de </Platforms> en su
+# linea: la "sangria" era TODO lo de delante y la entrada nueva duplicaba
+# esa etiqueta (revisor de la 1.15.0; el gemelo, el manifiesto de despliegue)
+import re as _re
+import xml.etree.ElementTree as _ET
+CON2 = os.path.join(INSIDE, 'ConfMano.dproj')
+_t2 = _re.sub(r'[ \t]*<Platform value="Linux64">False</Platform>\r?\n', '',
+              _real.replace('<FrameworkType>VCL</FrameworkType>', '<FrameworkType>None</FrameworkType>'))
+_t2 = _re.sub(r'(<Platform value="Win64">True</Platform>)\r?\n[ \t]*(</Platforms>)', r'\1\2', _t2)
+assert 'Linux64' not in _t2 and 'True</Platform></Platforms>' in _t2, 'el fixture no quedo como un .dproj editado a mano'
+open(CON2, 'w', encoding='utf-8').write(_t2)
+out = call('delphi_config', {"project": CON2, "command": "add-platform", "platform": "Linux64"})
+_d2 = open(CON2, encoding='utf-8-sig').read()
+try:
+    _ps = [p.get('value') for p in _ET.fromstring(_d2).iter() if p.tag.endswith('}Platform') and p.get('value')]
+except Exception as _e:
+    _ps = ['XML ROTO: %s' % _e]
+check('config: add-platform con </Platforms> detras de otra etiqueta: la entrada DENTRO del bloque, sin duplicar la de delante',
+      mc.abre(out, 'SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT') and _ps.count('Win64') == 1
+      and _ps.count('Linux64') == 1 and _d2.count('<Platform value="Win64">') == 1, (out[:120], _ps))
+
 # R5-B: platform name is whitelisted - XML injection into the .dproj refused
 inj = 'Win64"/><Import Project=' + chr(34) + 'evilshare' + chr(34) + '/><X y='
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": inj})
@@ -549,7 +570,7 @@ check('deployfile: quitar lo que no esta responde honesto',
 out = call('delphi_paserver', {"command": "packages"})
 pk = json.loads(out)
 check('paserver: packages lista los instaladores',
-      any('linux' in p.get('path', '').lower() for p in pk.get('packages', [])), out[:150])
+      any('linux' in p.get('path', '').lower() for p in mc.ficheros(pk, 'packages')), out[:150])
 out = call('delphi_paserver', {"command": "platforms"})
 pf = json.loads(out)
 check('paserver: platforms distingue local vs remoto',
@@ -599,10 +620,11 @@ check('delete: no se puede borrar la propia papelera',
 # includeTrash=true so a deleted file can be found and restored.
 out = call('delphi_list', {"root": INSIDE, "pattern": "*.pas"})
 check('R6-B: delphi_list normal NO muestra __delphi-patch',
-      not any('__delphi-patch' in e.get('path', '') for e in json.loads(out).get('files', [])), out[:200])
+      'folders' in json.loads(out) and bool(mc.ficheros(out)) and  # no vacia: si no, no mide nada
+      not any('__delphi-patch' in e.get('path', '') for e in mc.ficheros(out)), out[:200])
 out = call('delphi_list', {"root": INSIDE, "pattern": "*.pas", "includeTrash": True})
 check('R6-B: delphi_list includeTrash=true SI muestra la papelera',
-      any('__delphi-patch' in e.get('path', '') for e in json.loads(out).get('files', [])), out[:200])
+      any('__delphi-patch' in e.get('path', '') for e in mc.ficheros(out)), out[:200])
 
 # ---- an exception that escapes a tool is NOT content ----------------------
 # delphi_read/vault_read/vault_search are exempt from drive masking so their

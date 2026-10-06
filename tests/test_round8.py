@@ -125,8 +125,16 @@ PROJ = os.path.join(BASE, 'FugaTest')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'FugaTest', 'dir': PROJ})
 assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 DPR = os.path.join(PROJ, 'FugaTest.dpr')
+# El error va en una unidad que el .dpr nombra por su ruta ABSOLUTA: dcc la
+# escribe entera al principio de la linea del error. Desde la 1.15.0 el
+# sufijo [ruta del .dproj] ya no viaja en cada linea, y era la unica ruta de
+# un error del propio .dpr: sin esto el check de la fuga no media nada.
+FUGAU = os.path.join(BASE, 'FugaLib', 'FugaU.pas')
+os.makedirs(os.path.dirname(FUGAU), exist_ok=True)
+open(FUGAU, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'unit FugaU;\n\ninterface\n\nimplementation\n\ninitialization\n  esto no compila;\nend.\n')
 open(DPR, 'w', encoding='utf-8-sig', newline='\r\n').write(
-    'program FugaTest;\n\n{$APPTYPE CONSOLE}\n\nbegin\n  esto no compila;\nend.\n')
+    'program FugaTest;\n\n{$APPTYPE CONSOLE}\n\nuses\n  FugaU in \'' + FUGAU + '\';\n\nbegin\nend.\n')
 raw = raw_result(A, 'delphi_build', {'project': os.path.join(PROJ, 'FugaTest.dproj'),
                                      'platform': 'Win64', 'config': 'Debug'}, t=900)
 import re as _re
@@ -136,6 +144,15 @@ check('#7 ninguna unidad REAL viaja en la respuesta del build (ni tras un \\n)',
       not leaked, (leaked, raw[:400]))
 check('#7 ...y las virtuales si estan (la respuesta no viene vacia)',
       'srv' in raw.lower(), raw[:300])
+# ...y lo que se mide TIENE ruta: el error es el de FugaU con su unidad
+# virtual. 'srv' en la respuesta lo cumplia cualquier campo enmascarado (el
+# exe, el proyecto), y sin errores las dos de aqui pasaban vacias (revisor de
+# baterias de la 1.15.0)
+_b7 = J(json.loads(raw)['result']['content'][0]['text'])
+check('#7 ...y hay de que hablar: el error es el de FugaU, con su ruta virtual',
+      any(mc.virtual(FUGAU).lower() in e.lower() for e in _b7.get('errors', [])), _b7.get('errors'))
+check('#7 ...y la ruta del .dproj no se repite al final de cada linea (1.15.0)',
+      '.dproj]' not in raw.lower(), raw[:300])
 
 # ------------------------------------------------------------- #1 #2 #3 #4 --
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'begin',
@@ -479,9 +496,14 @@ check('M4 command invalido: los tres validos', 'tasks' in r and 'conventions' in
 
 # ------------------------------------------------ C2/C4/F2 del campo -------
 j = J(A.call('delphi_projects', {}))
-proj = [p for p in j.get('projects', []) if p.get('name') == 'Sano']
-check('C2 delphi_projects dice el repo y la rama cuando los hay',
-      all(('repo' in p) == ('branch' in p) for p in j.get('projects', [])), str(j)[:200])
+proj = mc.ficheros(j, 'projects')
+# desde la 1.15.0 el repositorio va UNA vez arriba (repos = [{dir, branch}]),
+# no en cada proyecto: ('repo' in p) == ('branch' in p) era siempre False ==
+# False (revisor de baterias). Con un repositorio de verdad lo mide
+# test_listas_1150 L7; aqui, que ningun proyecto lo lleve y la forma de repos
+check('C2 delphi_projects: repo y rama UNA vez arriba (repos), ninguno en cada proyecto',
+      bool(proj) and not any({'repo', 'branch'} & set(p) for p in proj)
+      and all(set(r) <= {'dir', 'branch'} and 'dir' in r for r in j.get('repos', [])), str(j)[:200])
 raw = raw_result(A, 'delphi_build', {'project': os.path.join(PROJ, 'FugaTest.dproj'),
                                      'platform': 'Win64', 'config': 'Debug'}, t=900)
 b = json.loads(raw)['result']['content'][0]['text']

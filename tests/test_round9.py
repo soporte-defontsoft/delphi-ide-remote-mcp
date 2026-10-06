@@ -217,7 +217,7 @@ check('C3 discover dice EN QUE plataforma se ejecutara y donde puede escribir',
       'Win64' in (j.get('runsOn') or '') and
       mc.es(j.get('runsOn') or '', 'SN_TEST_RUNS_ON'), str(j)[:400])
 check('M4 ...y que formato de salida se cuenta',
-      any('PASS' in (p.get('countsFormat') or '') for p in j.get('projects', [])), str(j)[:400])
+      any('PASS' in (p.get('countsFormat') or '') for p in mc.ficheros(j, 'projects')), str(j)[:400])
 j = J(A.call('delphi_test', {'command': 'run', 'project': os.path.join(TDIR, 'MiTest.dproj'),
                              'timeoutms': 3000}, t=900))
 check('B2 un test cortado por tiempo se DISTINGUE de uno que falla',
@@ -234,7 +234,7 @@ check('F3(test) una config que no existe: RECHAZADA nombrando las que hay',
 # un separador de ruta normal (en JSON un "\" viaja como "\\", que es
 # exactamente la forma de una UNC). Las dos cosas, fijadas aqui.
 jw = J(A.call('delphi_list', {'root': os.path.join(BASE, 'Proy')}))
-paths = [f.get('path', '') for f in jw.get('files', [])]
+paths = [f.get('path', '') for f in mc.ficheros(jw)]
 check('F6 una ruta normal NO se rompe al enmascarar (srvhost fantasma)',
       paths and all('srvhost' not in p for p in paths), paths[:2])
 check('F6 ...y sigue viajando virtualizada',

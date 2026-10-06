@@ -62,7 +62,7 @@ r = call('delphi_list', {'root': BASE})
 sc = r.get('structuredContent', {})
 check('R1b exito en JSON: el JSON ES structuredContent, ok true, sin isError',
       sc.get('ok') is True and 'code' not in sc and 'isError' not in r
-      and 'files' in sc,
+      and 'folders' in sc,
       (list(sc)[:6], r.get('isError')))
 
 # R2: in-jail missing file

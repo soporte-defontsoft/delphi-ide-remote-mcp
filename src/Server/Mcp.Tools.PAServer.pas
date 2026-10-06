@@ -123,6 +123,7 @@ uses
   Lsp.Dproj,
   Lsp.BuildRunner,
   Lsp.NetDrives,
+  Lsp.Listas, // AgrupaPorCarpeta: los paquetes por carpeta
   Lsp.Json;
 
 constructor TDelphiPAServerTool.Create;
@@ -242,6 +243,8 @@ begin
       end;
     end;
     Return.AddPair('note', MsgText(SN_PAS_DOWNLOAD_PACKAGE_DELPHI_FETCH));
+    // por carpeta (el organizador): casi todos viven en la misma
+    AgrupaPorCarpeta(Return, 'packages');
     Result := Return.ToJSON;
   finally
     Return.Free;

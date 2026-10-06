@@ -209,7 +209,7 @@ try:
                                    'dir': os.path.join(JAIL, 'SrvTest')})
     check('fixture: proyecto de test DUnitX creado', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
 
-    unidades = J(cli.call('delphi_list', {'root': os.path.join(JAIL, 'SrvTest'), 'pattern': '*.pas'})).get('files', [])
+    unidades = mc.ficheros(J(cli.call('delphi_list', {'root': os.path.join(JAIL, 'SrvTest'), 'pattern': '*.pas'})))
     unidad = mc.real(unidades[0]['path'])
     leido = cli.call('delphi_read', {'path': unidad})
     texto = '\n'.join(l.split('|', 1)[1] for l in leido.splitlines() if re.match(r'^\d+\|', l))

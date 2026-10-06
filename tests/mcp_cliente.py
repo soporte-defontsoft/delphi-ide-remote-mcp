@@ -905,14 +905,80 @@ def junction(link, target):
     return r.returncode == 0 and os.path.isdir(link)
 
 
-def aciertos(t):
-    """Los aciertos de delphi_search, planos y cada uno con su path. Desde la
-    1.13.0 vienen agrupados por fichero (files = [{path, hits}]: la ruta iba
-    repetida en cada acierto); EL lector de esa forma para las baterias. t:
-    el texto de la tool o su JSON ya leido."""
+def junta(carpeta, nombre):
+    """La ruta de un nombre en su carpeta, como la compondria un agente.
+    Una carpeta que acaba en ':' (una unidad sin su barra: para Windows es
+    la carpeta ACTUAL de esa unidad) no se arregla aqui: es la regresion que
+    vigila test_raiz_unidad (GUARD-021), y poner la barra por el servidor la
+    tapaba (revisor de baterias de la 1.15.0). Se dice."""
+    if carpeta.endswith(':'):
+        raise AssertionError('dir de una unidad SIN barra (la carpeta actual para Windows): %r' % carpeta)
+    return carpeta + nombre if carpeta.endswith('\\') else carpeta + '\\' + nombre
+
+
+def ficheros(t, campo='folders', hijos='files'):
+    """EL lector de una lista de ficheros del servidor (su organizador,
+    Lsp.Listas.TListaDeFicheros, 1.15.0): folders = [{dir, files = [{name,
+    ...}]}], la carpeta una vez. Devuelve las entradas planas, cada una con
+    su 'path' (dir + name) y sus campos; las de una lista de nombres sueltos
+    (dirs = ["c000", ...]) salen como {'path', 'name'}. Las baterias leen
+    la forma por aqui, nunca a mano: si cambia, cambia en un sitio. t: el
+    texto de la tool o su JSON ya leido.
+    ESTRICTO con la forma: un grupo sin dir o sin su lista, o una entrada que
+    ya trae su propia ruta (path/dir, que el organizador quita), es un
+    AssertionError y la bateria sale roja. Aplanando a ciegas, el path del
+    lector pisaba el que el servidor siguiera mandando y ninguna bateria lo
+    veia (revisor de baterias de la 1.15.0, con dos mutantes que pasaban)."""
     j = como_json(t) if isinstance(t, str) else (t or {})
-    return [dict(h, path=f.get('path', '')) for f in j.get('files', [])
-            for h in f.get('hits', [])]
+    out = []
+    for g in j.get(campo) or []:
+        if not isinstance(g, dict) or 'dir' not in g or not isinstance(g.get(hijos), list):
+            raise AssertionError('%s: un grupo sin la forma {dir, %s = [...]}: %r' % (campo, hijos, g))
+        for e in g[hijos]:
+            if isinstance(e, str):
+                out.append({'path': junta(g['dir'], e), 'name': e})
+            else:
+                if 'path' in e or 'dir' in e:
+                    raise AssertionError('%s: una entrada trae su propia ruta, que el organizador '
+                                         'quita: %r' % (campo, e))
+                out.append(dict(e, path=junta(g['dir'], e.get('name', ''))))
+    return out
+
+
+def unicos(t, campo='folders', hijos='files'):
+    """True si la lista agrupada nombra cada carpeta UNA vez y, dentro de
+    cada una, cada fichero una vez: la promesa del organizador. Aplanando
+    con ficheros() o aciertos() un fichero repetido no se ve (revisor de
+    baterias de la 1.15.0: rename anade la fila de la definicion al final)."""
+    j = como_json(t) if isinstance(t, str) else (t or {})
+    grupos = j.get(campo) or []
+    dirs = [g.get('dir', '').lower() for g in grupos]
+    if len(dirs) != len(set(dirs)):
+        return False
+    for g in grupos:
+        nombres = [(e if isinstance(e, str) else e.get('name', '')).lower() for e in g.get(hijos) or []]
+        if len(nombres) != len(set(nombres)):
+            return False
+    return True
+
+
+def aciertos(t, campo='folders'):
+    """Los aciertos de una lista agrupada por carpeta y fichero (folders =
+    [{dir, files = [{name, hits}]}]), planos y cada uno con su path: los de
+    delphi_search (por fichero desde la 1.13.0), y desde la 1.15.0 tambien
+    los usos de delphi_references (campo confirmed, unverified, mentions,
+    rejected) y los cambios de delphi_rename_symbol (changes, unverified,
+    lookalikes). EL lector de esa forma para las baterias, encima de
+    ficheros(). t: el texto de la tool o su JSON ya leido. Igual de estricto:
+    un acierto con su propia ruta es un AssertionError."""
+    out = []
+    for f in ficheros(t, campo):
+        for h in f.get('hits', []):
+            if 'path' in h or 'dir' in h:
+                raise AssertionError('%s: un acierto trae su propia ruta, que el organizador '
+                                     'quita: %r' % (campo, h))
+            out.append(dict(h, path=f['path']))
+    return out
 
 
 # ---------------------------------------------------------------- stdio

@@ -344,7 +344,7 @@ begin
   if AWasThere then
   begin
     // keep the file's own indentation of that line
-    Indent := Copy(FLines[Idx], 1, Length(FLines[Idx]) - Length(FLines[Idx].TrimLeft));
+    Indent := LeadingWhite(FLines[Idx]); // la sangria de la casa (Lsp.Patch)
     Result := Indent + AProp + ' = ' + AValue;
     FLines[Idx] := Result;
     Exit;
@@ -403,7 +403,7 @@ begin
       T := FLines[I];
       if not Renamed and T.TrimLeft.StartsWith('StyleName', True) then
       begin
-        T := Copy(T, 1, Length(T) - Length(T.TrimLeft)) + 'StyleName = ''' + ANewName + '''';
+        T := LeadingWhite(T) + 'StyleName = ''' + ANewName + '''';
         Renamed := True;
       end;
       Block.Add(T);

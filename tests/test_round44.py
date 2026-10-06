@@ -195,7 +195,7 @@ try:
 
     def lista(t):
         """las rutas de un listado de VERDAD (el JSON de delphi_list)"""
-        return [f.get('path', '') for f in mc.como_json(t).get('files', [])]
+        return [f.get('path', '') for f in mc.ficheros(t)]
     # Por las RUTAS del listado, no por su texto: desde 1.5.0 la nota nombra
     # __delphi-temp para decir QUE escondio, y nombrarla no es listarla.
     check('T6 __delphi-temp no aparece en un listado del workspace',
@@ -229,13 +229,15 @@ try:
     # En el modo dirs, una carpeta de cada motivo: la temporal, una de
     # compilacion (Win64, que antes no entraba en ningun cajon) y una de otra
     # herramienta (.vs, que antes se contaba como git).
-    for d in ('Win64', '.vs'):
+    # ...y una VISIBLE al lado, el control en positivo: la negativa sobre una
+    # lista vacia no mide nada (revisor de baterias de la 1.15.0)
+    for d in ('Win64', '.vs', 'VisibleT6'):
         os.makedirs(os.path.join(JAIL, d), exist_ok=True)
     ld = call('delphi_list', {'root': JAIL, 'dirs': True})
     jd = mc.como_json(ld)
-    nombres = [os.path.basename(x) for x in jd.get('dirs', [])]
+    nombres = [f['name'] for f in mc.ficheros(jd, hijos='dirs')]
     check('T6f dirs: cada carpeta en su cajon (temporal, compilacion, herramienta) y el total cuadra',
-          not {'__delphi-temp', 'Win64', '.vs'} & set(nombres) and
+          'VisibleT6' in nombres and not {'__delphi-temp', 'Win64', '.vs'} & set(nombres) and
           jd.get('hiddenServerTemp') == 1 and jd.get('hiddenBuildArtifacts') == 1 and
           jd.get('hiddenToolFolders') == 1 and 'hiddenGitInternals' not in jd and
           jd.get('hidden') == cajones(jd), ld[:300])

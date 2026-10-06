@@ -40,6 +40,7 @@ type
     FPattern: string;
     FSubfolder: string;
     FMaxResults: Integer;
+    FOffset: Integer;
   public
     [SchemaDescription(SP_VAULT_TARGET)]
     property Target: string read FTarget write FTarget;
@@ -49,7 +50,11 @@ type
     [SchemaDescription(SP_VAULT_SUBFOLDER)]
     property Subfolder: string read FSubfolder write FSubfolder;
     [SchemaDescription(SP_VAULT_MAXRESULTS)]
+    [SchemaDefault('50')]
     property MaxResults: Integer read FMaxResults write FMaxResults;
+    [SchemaDescription(SP_VAULT_SEARCH_OFFSET)]
+    [SchemaDefault('0')]
+    property Offset: Integer read FOffset write FOffset;
   end;
 
   TVaultReadParams = class
@@ -162,7 +167,8 @@ uses
   Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
   Mcp.Vault.Session,
   Lsp.NetDrives,
-  Lsp.Regex;
+  Lsp.Regex,
+  Lsp.Listas; // TPagina: la pagina de una lista, como delphi_list y delphi_search
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K
@@ -506,7 +512,8 @@ function TVaultSearchTool.ExecuteWithParams(const Params: TVaultSearchParams): s
 var
   Notes: TStringList;
   Root, Rel, Pat, Line: string;
-  Max, Hits, LineNo: Integer;
+  LineNo: Integer;
+  Pag: TPagina;
   Sb: TStringBuilder;
   ByContent: Boolean;
   Expr: TExprDelAgente;
@@ -523,11 +530,9 @@ begin
   if not MatchText(Params.Target.Trim, ['', 'files', 'content']) then
     Exit(MsgFmt(SR_VAULT_TARGET_FMT, [Params.Target.Trim]));
   ByContent := SameText(Params.Target.Trim, 'content');
-  Max := Params.MaxResults;
-  if Max <= 0 then
-    Max := 50;
-  if Max > 500 then
-    Max := 500;
+  // por paginas, como delphi_search: cortaba en el maximo con un "(limit
+  // reached)" y lo de detras no se alcanzaba (6-oct-2026)
+  Pag := PaginaDe(Params.Offset, Params.MaxResults, 50, 500);
 
   Root := VaultPath;
   if Params.Subfolder.Trim <> '' then
@@ -574,11 +579,9 @@ begin
   try
     CollectNotes(Root, Notes);
     Notes.Sort;
-    Hits := 0;
+    // se recorre entero: el total dice cuantas paginas hay
     for F in Notes do
     begin
-      if Hits >= Max then
-        Break;
       Rel := VaultRelative(F);
       if ByContent then
       begin
@@ -595,12 +598,8 @@ begin
           var Ini, Lon: Integer;
           case Expr.Busca(Line, 1, Ini, Lon) of
             rbCasa:
-              begin
+              if Pag.Entra then
                 Sb.AppendLine(Format('%s:%d: %s', [Rel, LineNo, Line.Trim]));
-                Inc(Hits);
-                if Hits >= Max then
-                  Break;
-              end;
             rbSeRinde:
               Exit(MsgFmt(SR_SEARCH_REGEX_CARA_FMT, [LineNo, Rel]));
           end;
@@ -608,18 +607,23 @@ begin
       end
       else if MatchesMask(TPath.GetFileName(F), Pat) or
               MatchesMask(Rel, Pat) then
-      begin
-        Sb.AppendLine(Rel);
-        Inc(Hits);
-      end;
+        if Pag.Entra then
+          Sb.AppendLine(Rel);
     end;
-    if Hits = 0 then
+    if Pag.Total = 0 then
       Result := MsgFmt(SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT,
         [Pat, IfThen(ByContent, MsgText(SF_VAULT_CONTENIDO), MsgText(SF_VAULT_NOMBRES)),
          IfThen(ByContent, '', MsgText(SF_VAULT_SOLO_NOMBRES_NOTAS))])
     else
-      Result := MsgFmt(SN_VAULT_RESULTADOS_FMT, [Hits,
-        IfThen(Hits >= Max, MsgText(SF_VAULT_TOPE_ALCANZADO), '')]) + #10#10 + Sb.ToString;
+    begin
+      // de cuantos y desde donde, y la pagina siguiente si la hay
+      var Donde := '';
+      if (Pag.Desde > 0) or Pag.HayMas then
+        Donde := MsgFmt(SF_VAULT_PAGINA_FMT, [Pag.Total, Pag.Desde]);
+      if Pag.HayMas then
+        Donde := Donde + MsgFmt(SF_VAULT_SIGUIENTE_FMT, [Pag.Siguiente]);
+      Result := MsgFmt(SN_VAULT_RESULTADOS_FMT, [Pag.Mostrados, Donde]) + #10#10 + Sb.ToString;
+    end;
   finally
     Sb.Free;
     Notes.Free;

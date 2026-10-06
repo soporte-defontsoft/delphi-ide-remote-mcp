@@ -522,7 +522,7 @@ check('dentro-del-root: delphi_textedit NO puede tocar el indice',
       mc.es(out, 'SR_VAULT_NOT_CODE'), out[:180])
 out = s7.call('delphi_list', {"root": WORK, "pattern": "*.md"})
 check('dentro-del-root: delphi_list no sirve notas del vault',
-      mc.como_json(out).get('total') == 0 and mc.como_json(out).get('files') == []
+      mc.como_json(out).get('total') == 0 and mc.como_json(out).get('folders') == []
       and 'idea.md' not in out, out[:250])
 # ...y a traves de una JUNCTION de la raiz que apunte al vault: ni list ni
 # search entran, y copy=true / package no se lo llevan. La lista de la 1.7.1

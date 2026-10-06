@@ -189,7 +189,7 @@ def linea0(lineas, texto):
 
 
 def anclas(lista):
-    return [c.get('anchor', '') for c in lista]
+    return [c.get('text', '') for c in lista]  # la linea tal cual (1.15.0: text, sin anchor)
 
 
 try:
@@ -199,8 +199,8 @@ try:
     j = call('delphi_references',
              {'path': PAS, 'line': decl, 'character': col})
 
-    conf = anclas(j.get('confirmed', []))
-    ment = anclas(j.get('mentions', []))
+    conf = anclas(mc.aciertos(j, 'confirmed'))
+    ment = anclas(mc.aciertos(j, 'mentions'))
 
     # ------------------------------------------------------------------ M1
     check('M1 las 5 apariciones en prosa se cuentan aparte',
@@ -256,9 +256,9 @@ try:
           rn.get('applicable') is True,
           'blockers=%s' % json.dumps(rn.get('blockers'))[:260])
     check('M8b ...con las menciones contadas y avisadas, no escondidas',
-          rn.get('mentions') == 2 and
+          rn.get('mentionsCount') == 2 and  # el nombre de references (1.15.0)
           any(mc.es(w, 'SN_RENAME_MENTIONS_FMT') for w in rn.get('warnings', [])),
-          'mentions=%s warnings=%s' % (rn.get('mentions'),
+          'mentionsCount=%s warnings=%s' % (rn.get('mentionsCount'),
                                        rn.get('warnings')))
 finally:
     try:

@@ -198,13 +198,19 @@ try:
     CON_LSP = [i for i in TODAS if i.get('delphilsp')]
     if not CON_LSP:
         raise RuntimeError('esta maquina no tiene ningun RAD Studio con DelphiLSP: %s' % json.dumps(ins)[:300])
-    NUEVA = CON_LSP[0]['version']          # newest first, como las lista el servidor
+    # la mas moderna, calculada AQUI por su numero (no el orden de la lista
+    # del servidor: el check seria circular); con una sola instalacion no se
+    # mide cual es la mas moderna, y el titulo lo dice (revisores, 6-oct-2026)
+    NUEVA_I = max(CON_LSP, key=lambda i: tuple(int(x) for x in i['version'].split('.')))
+    NUEVA = NUEVA_I['version']
+    QUE = ('la mas moderna de %d con DelphiLSP' % len(CON_LSP) if len(CON_LSP) > 1 else
+           'la UNICA con DelphiLSP (con una sola no se mide cual es la mas moderna)')
     NO_ESTA = next(v for v in ('23.0', '22.0', '99.0') if v not in [i['version'] for i in TODAS])
     ws = llama(c, 'delphi_workspace', {})
     log = mensajes(ruta)
     LINEA = ('DelphiVersion=%s\r\n' % NUEVA).encode('ascii')
     ESCRITO = ini_de(d1)
-    check('U1 sin clave: activa la mas moderna (%s), y desde ya es la pedida' % NUEVA,
+    check('U1 sin clave: activa %s (%s), y desde ya es la pedida' % (QUE, NUEVA),
           ws.get('activeDelphi') == NUEVA and ws.get('delphiVersionRequested') == NUEVA
           and ins.get('activeForLsp') == NUEVA, json.dumps(ws)[:300])
     check('U1 ...la ESCRIBE en su settings.ini, una linea dentro de [Server]',
@@ -220,7 +226,7 @@ try:
     faltan = [linea_de(i, NUEVA) for i in TODAS if linea_de(i, NUEVA) not in log]
     check('U1 el log lista CADA instalacion, linea entera, con la clave que copiaria el operador',
           not faltan, json.dumps(faltan)[:400])
-    usa = CAT['SL_DISC_USA_FMT'] % (nombre_con_version(CON_LSP[0]), CAT['SL_DISC_POR_CLAVE'])
+    usa = CAT['SL_DISC_USA_FMT'] % (nombre_con_version(NUEVA_I), CAT['SL_DISC_POR_CLAVE'])
     check('U1 ...y cual usa: "DelphiVersion=%s (nombre), pinned by [Server] DelphiVersion"' % NUEVA,
           usa in log, log[-12:])
     check('U2 ...pero de una seccion que se ignora entera (sin token) no se dice',
@@ -234,11 +240,11 @@ try:
     check('U8 el registro de esta maquina dice el update de la %s (si no, U8 no mide nada): %r'
           % (NUEVA, UPDATE), UPDATE != '', UPDATE)
     check('U8 ...y es una pista: sale tal cual en delphi_installs (installedUpdate) y NO en delphi_workspace',
-          UPDATE != '' and CON_LSP[0].get('installedUpdate') == UPDATE and UPDATE not in json.dumps(ws),
+          UPDATE != '' and NUEVA_I.get('installedUpdate') == UPDATE and UPDATE not in json.dumps(ws),
           json.dumps(ws)[:300])
     check('U8 ...y en el log de arranque, en la linea de su instalacion y en la de "uses"',
-          UPDATE != '' and (', %s  ->' % UPDATE) in linea_de(CON_LSP[0], NUEVA)
-          and linea_de(CON_LSP[0], NUEVA) in log and UPDATE in usa and usa in log, log[-12:])
+          UPDATE != '' and (', %s  ->' % UPDATE) in linea_de(NUEVA_I, NUEVA)
+          and linea_de(NUEVA_I, NUEVA) in log and UPDATE in usa and usa in log, log[-12:])
     para(proc)
 
     # ------------------------------------------------------------------ U2
@@ -260,7 +266,7 @@ try:
     proc, ruta, c = lanza(exe1, 'sin-clave-2')
     ws = llama(c, 'delphi_workspace', {}) if c else {}
     log = mensajes(ruta)
-    check('U3 segundo arranque: manda la clave escrita ("pinned by") y no se escribe otra vez',
+    check('U3 segundo arranque: la clave ya escrita no se escribe otra vez, y el log dice la misma linea "pinned by"',
           ws.get('activeDelphi') == NUEVA and usa in log
           and CAT['SL_DISC_ESCRITA_FMT'] % NUEVA not in log, log[-12:])
     check('U3 ...el ini no se toca', ini_de(d1) == ESCRITO, ini_de(d1)[:300])
@@ -403,7 +409,7 @@ try:
         ws = mc.como_json(s.call('delphi_workspace', {}))
     finally:
         s.cierra()
-    check('U7 sin settings.ini (modo local, stdio): la mas moderna, y NO crea un ini',
+    check('U7 sin settings.ini (modo local, stdio): %s, y NO crea un ini' % QUE,
           ws.get('activeDelphi') == NUEVA and not os.path.exists(os.path.join(d7, 'settings.ini')),
           json.dumps(ws)[:300])
 finally:

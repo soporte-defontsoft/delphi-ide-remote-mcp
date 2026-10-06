@@ -72,8 +72,8 @@ check('M3 las unidades siguen enmascaradas (srvc:)',
 rs = call('delphi_search', {'root': probe, 'query': 'copia real'})
 check('M3b el TEXTO de un acierto de search llega verbatim (ancla valida)',
       'nas01' in rs, rs[:220])
-check('M3c ...pero su campo path si viaja como unidad virtual',
-      '"path":"srv' in rs.replace(' ', ''), rs[:220])
+check('M3c ...pero la carpeta de sus ficheros si viaja como unidad virtual',
+      '"dir":"srv' in rs.replace(' ', ''), rs[:220])
 
 # La unidad SIN separador detras. El enmascarador pedia <letra>:<separador>,
 # asi que "D:" a secas y "D:relativo\x" salian con la LETRA REAL en cada

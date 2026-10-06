@@ -136,10 +136,10 @@ check('C2 delphi_config acepta unit= como alias de path= (y la unit ENTRA en el 
 j = J(A.call('delphi_rename_symbol', {'path': UCALC, 'line': 7, 'character': 14,
                                        'newname': 'Triple'}, t=600))
 check('R1 el rename dice DONDE ha buscado', bool(j.get('scope')), str(j)[:300])
-defchg = [c for c in j.get('changes', []) if c.get('kind') == 'definition']
+defchg = [c for c in mc.aciertos(j, 'changes') if c.get('kind') == 'definition']
 if defchg:
-    check('R2 el cambio de la definicion trae anchor, como los demas',
-          all('anchor' in c for c in defchg), str(defchg)[:250])
+    check('R2 el cambio de la definicion trae su linea tal cual (text), como los demas',
+          all(c.get('text') and 'anchor' not in c for c in defchg), str(defchg)[:250])
 else:
     print('NOTA: R2 no se mide: el motor devolvio la definicion entre los usos (no hay cambio "definition")')
 
@@ -156,7 +156,7 @@ check('C1 delphi_test con solo "project" se entiende como run',
 A.call('delphi_config', {'project': os.path.join(T, 'MiTest.dproj'),
                           'command': 'add-searchpath', 'path': P1})
 j = J(A.call('delphi_projects', {}))
-mit = [p for p in j.get('projects', []) if p.get('name') == 'MiTest']
+mit = [p for p in mc.ficheros(j, 'projects') if p.get('name') == 'MiTest.dproj']
 check('C3 delphi_projects dice contra que carpetas compila',
       bool(mit) and bool(mit[0].get('compilesAgainst')), str(mit)[:300])
 
@@ -185,8 +185,8 @@ check('W1 un "edits" que no es JSON se explica', mc.rechazado(r) and mc.es(r, 'S
 # W2: orientarse en codigo ajeno costaba un delphi_read por fichero
 jd = J(A.call('delphi_symbols', {'path': P1}))
 check('W2 delphi_symbols sobre una CARPETA resume todas sus units',
-      jd.get('total', 0) >= 1 and bool(jd.get('units')), str(jd)[:250])
-ucalc = [u for u in jd.get('units', []) if u.get('unit') == 'UCalc']
+      jd.get('total', 0) >= 1 and bool(mc.ficheros(jd, 'units')), str(jd)[:250])
+ucalc = [u for u in mc.ficheros(jd, 'units') if u.get('unit') == 'UCalc']
 # Cada declaracion es un objeto: el texto ENTERO (aunque ocupe varias lineas),
 # a que clase pertenece y en que linea esta.
 _decls = ucalc[0].get('declares', []) if ucalc else []

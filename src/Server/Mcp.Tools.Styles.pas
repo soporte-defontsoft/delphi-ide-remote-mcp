@@ -77,6 +77,7 @@ uses
   Lsp.Patch,
   Lsp.ProjectUnits,
   Lsp.References,   // SkipIdeArtifacts: el filtro compartido de artefactos
+  Lsp.Listas,       // AgrupaPorFichero: los avisos por carpeta y fichero
   Lsp.Styles,
   Lsp.Pascal;
 
@@ -416,7 +417,9 @@ begin
           end;
           Issue := TJSONObject.Create;
           Issue.AddPair('lookup', M.Groups[1].Value);
-          Issue.AddPair('file', MaskDriveText('', F));
+          // la ruta, para agruparlos por carpeta y fichero al final (el
+          // organizador enmascara la carpeta)
+          Issue.AddPair('path', F);
           Issue.AddPair('line', TJSONNumber.Create(I + 1));
           Missing.AddElement(Issue);
         end;
@@ -488,6 +491,9 @@ begin
       Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
     else
       Ret.AddPair('note', MsgText(SN_STYLES_LINT_NOTE));
+    // por carpeta y fichero, y DESPUES de 'clean': el par libera la lista
+    // plana (Missing) al quedarse la agrupada
+    AgrupaPorFichero(Ret, 'lookupsWithoutStyle');
     Result := Ret.ToJSON;
   finally
     Ret.Free; // owns Dups/Missing/Tokens/Rc once added

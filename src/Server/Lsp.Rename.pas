@@ -152,17 +152,10 @@ begin
         Blockers.Add(MsgText(SR_RENAME_SAME_NAME));
       DefObj := Refs.GetValue('definition') as TJSONObject;
       DefPath := DefObj.GetValue('path').Value;
-      DefLine := DefObj.GetValue('line').GetValue<Integer>;
-      // Same two conventions as "changes", and for the same reason: the
-      // number a reader compares them by has to mean the same thing in both.
-      var DefOut := TJSONObject(DefObj.Clone);
-      if DefOut.GetValue('line') <> nil then
-      begin
-        DefOut.RemovePair('line').Free;
-        DefOut.AddPair('line', TJSONNumber.Create(DefLine + 1));
-        DefOut.AddPair('line0', TJSONNumber.Create(DefLine));
-      end;
-      Result.AddPair('definition', DefOut);
+      // references ya da las dos convenciones de la casa (line 1-based,
+      // line0 0-based), las mismas que "changes" (1.15.0)
+      DefLine := DefObj.GetValue('line0').GetValue<Integer>;
+      Result.AddPair('definition', TJSONObject(DefObj.Clone));
       // the definition must be OURS to rename - and a definition outside
       // the jail (an RTL unit can be 1 MB) is NEVER scanned further
       if PathDenied(DefPath) <> '' then
@@ -192,20 +185,17 @@ begin
         // off-by-one, and worst exactly where an anchor repeats (a method's
         // declaration and its implementation). delphi_search already answers
         // like this; now so does rename.
-        Chg.AddPair('line', TJSONNumber.Create(
-          Item.GetValue('line').GetValue<Integer> + 1));
-        Chg.AddPair('line0', TJSONNumber.Create(
-          Item.GetValue('line').GetValue<Integer>));
+        // (references las trae ya asi desde la 1.15.0)
+        Chg.AddPair('line', Item.GetValue('line').Clone as TJSONValue);
+        Chg.AddPair('line0', Item.GetValue('line0').Clone as TJSONValue);
+        // la linea tal cual, que es el ancla (iba dos veces: text y anchor)
         Chg.AddPair('text', Item.GetValue('text').Value);
-        if Item.GetValue('anchor') <> nil then
-          Chg.AddPair('anchor', Item.GetValue('anchor').Value);
         // Two occurrences on ONE line came out as two identical entries with
         // no column, and "one edit per line" then staged the same line twice
         // (measured 2026-08-25). The column tells them apart, and the count
         // says a single edit has to replace both.
-        if Item.GetValue('character') <> nil then
-          Chg.AddPair('character', TJSONNumber.Create(
-            Item.GetValue('character').GetValue<Integer>));
+        if Item.GetValue('character0') <> nil then
+          Chg.AddPair('character0', Item.GetValue('character0').Clone as TJSONValue);
       end;
       // "occurrences" cuenta REFERENCIAS; "changes" puede llevar una fila mas,
       // la de la propia definicion, que no es una referencia pero si hay que
@@ -255,11 +245,9 @@ begin
             Chg.AddPair('path', DefPath);
             Chg.AddPair('line', TJSONNumber.Create(DefLine + 1));
             Chg.AddPair('line0', TJSONNumber.Create(DefLine));
-            Chg.AddPair('text', Lines[DefLine].Trim);
-            // ...and the anchor, which is the line as it IS. Giving it for
-            // every occurrence except the definition meant one last trip to
-            // delphi_read for no reason (field round 11).
-            Chg.AddPair('anchor', Lines[DefLine].TrimRight([#13, #10]));
+            // the line as it IS - the anchor, as for every occurrence: without
+            // it, one last trip to delphi_read for no reason (field round 11)
+            Chg.AddPair('text', Lines[DefLine].TrimRight([#13, #10]));
             Chg.AddPair('kind', 'definition');
             // a qualified implementation header (TClass.Method) must keep the
             // class part: say it instead of letting the agent replace the lot
@@ -285,7 +273,9 @@ begin
       if Refs.GetValue('mentionsCount') <> nil then
       begin
         var Menciones := Refs.GetValue('mentionsCount').GetValue<Integer>;
-        Result.AddPair('mentions', TJSONNumber.Create(Menciones));
+        // los nombres de delphi_references: ahi 'mentions' es la LISTA y
+        // 'mentionsCount' la cuenta; aqui 'mentions' era la cuenta (1.15.0)
+        Result.AddPair('mentionsCount', TJSONNumber.Create(Menciones));
         if Menciones > 0 then
           Warnings.Add(MsgFmt(SN_RENAME_MENTIONS_FMT, [Menciones]));
       end;
@@ -294,7 +284,8 @@ begin
       Arr := Refs.GetValue('unverified') as TJSONArray;
       if Arr.Count > 0 then
         Blockers.Add(MsgFmt(SR_RENAME_UNVERIFIED_FMT, [Arr.Count]));
-      Result.AddPair('unverified', TJSONNumber.Create(Arr.Count));
+      // la cuenta, aparte; 'unverified' es la LISTA, como en references
+      Result.AddPair('unverifiedCount', TJSONNumber.Create(Arr.Count));
       // A "homonym" the engine resolved somewhere else may be the real thing
       // seen through another project's settings - which is exactly how a
       // rename came back applicable and broke a sibling's build (measured
@@ -318,7 +309,8 @@ begin
       if Arr.Count > 0 then
       begin
         UnvArr := TJSONArray.Create;
-        Result.AddPair('unverifiedRefs', UnvArr);
+        // 'unverified', como en delphi_references (era 'unverifiedRefs')
+        Result.AddPair('unverified', UnvArr);
         for I := 0 to Arr.Count - 1 do
         begin
           if I >= 50 then
@@ -329,11 +321,13 @@ begin
           Chg.AddPair('path', Item.GetValue('path').Value);
           if Item.GetValue('line') <> nil then
           begin
-            Chg.AddPair('line', TJSONNumber.Create(
-              Item.GetValue('line').GetValue<Integer> + 1));
-            Chg.AddPair('line0', TJSONNumber.Create(
-              Item.GetValue('line').GetValue<Integer>));
+            Chg.AddPair('line', Item.GetValue('line').Clone as TJSONValue);
+            Chg.AddPair('line0', Item.GetValue('line0').Clone as TJSONValue);
           end;
+          // la columna tambien, como en changes: sin ella no se puede
+          // preguntar a delphi_definition por ese uso (revisor de la 1.15.0)
+          if Item.GetValue('character0') <> nil then
+            Chg.AddPair('character0', Item.GetValue('character0').Clone as TJSONValue);
           if Item.GetValue('text') <> nil then
             Chg.AddPair('text', Item.GetValue('text').Value);
           if Item.GetValue('why') <> nil then
@@ -400,7 +394,9 @@ begin
       Blockers.Add(MsgFmt(SR_RENAME_COLLISION_FMT, [ANewName, N]));
 
     Files := Touched.Count;
-    Result.AddPair('files', TJSONNumber.Create(Files));
+    // filesTouched: en ESTA respuesta 'files' es tambien la lista de cada
+    // carpeta de changes (el organizador), y aqui era un numero (1.15.0)
+    Result.AddPair('filesTouched', TJSONNumber.Create(Files));
     Result.AddPair('changes', Changes);
     Changes := nil;
     Result.AddPair('applicable', TJSONBool.Create(Blockers.Count = 0));

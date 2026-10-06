@@ -36,9 +36,9 @@ def J(t):
 
 check('la suite existe en src/', os.path.isfile(SUITE), SUITE)
 j = J(call('delphi_test', {'command': 'discover', 'path': SUITE}))
-names = [p.get('project', '') for p in j.get('projects', [])]
+names = [p.get('path', '') for p in mc.ficheros(j, 'projects')]
 check('discover la reconoce como DUnitX', any('LspUnitTests' in n for n in names) and
-      all(p.get('framework') == 'DUnitX' for p in j.get('projects', []) if 'LspUnitTests' in p.get('project', '')), str(j)[:300])
+      all(p.get('framework') == 'DUnitX' for p in mc.ficheros(j, 'projects') if 'LspUnitTests' in p.get('path', '')), str(j)[:300])
 
 # Since 1.11.0 delphi_test runs a test in a Windows container of its own, on
 # a copy of its output folder: it sees nothing else (Lsp.Sandbox). Part of

@@ -365,7 +365,7 @@ open(os.path.join(DIG, 'UDig.pas'), 'w', encoding='utf-8-sig', newline='\r\n').w
     '  TCosa = class\n  public\n    procedure Hola;\n  end;\n\nimplementation\n\n'
     'procedure TCosa.Hola;\nbegin\nend;\n\nend.\n')
 d = mc.como_json(call('delphi_symbols', {'path': DIG}))
-decl = {x.get('decl'): x.get('of', '') for u_ in d.get('units', []) for x in u_.get('declares', [])}
+decl = {x.get('decl'): x.get('of', '') for u_ in mc.ficheros(d, 'units') for x in u_.get('declares', [])}
 check('I11 symbols de carpeta: un tipo detras de una adelantada no sale como de esa clase',
       decl.get('TProc = procedure of object;', 'falta') == '' and decl.get('procedure Hola;') == 'TCosa', str(decl)[:400])
 

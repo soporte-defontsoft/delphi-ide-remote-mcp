@@ -381,9 +381,9 @@ end;
 function AddPlatform(const ADproj, ARawPlatform: string): string;
 var
   Info: TDprojInfo;
-  Reason, Enc, Xml, Indent, NewLine, APlatform: string;
+  Reason, Enc, Xml, Indent, APlatform: string;
   P: TDprojPlatform;
-  ClosePos, OpenPos, LineStart: Integer;
+  ClosePos, OpenPos: Integer;
 begin
   if ARawPlatform.Trim = '' then
     Exit(MsgText(SR_CFG_ADD_PLATFORM_NECESITA_PLATFORM));
@@ -428,13 +428,15 @@ begin
   OpenPos := Pos('<Platforms>', Xml);
   if (ClosePos = 0) or (OpenPos = 0) or (ClosePos < OpenPos) then
     Exit(MsgText(SR_CFG_NO_ENCUENTRO_BLOQUE_PLATFORMS));
-  // indentation = whitespace before </Platforms>
-  LineStart := ClosePos;
-  while (LineStart > 1) and not CharInSet(Xml[LineStart - 1], [#10, #13]) do
-    Dec(LineStart);
-  Indent := Copy(Xml, LineStart, ClosePos - LineStart);
-  NewLine := Indent + '    ' + Format('<Platform value="%s">True</Platform>', [APlatform]) + sLineBreak;
-  Xml := Copy(Xml, 1, LineStart - 1) + NewLine + Copy(Xml, LineStart, MaxInt);
+  // la sangria (solo el blanco) de la linea de </Platforms>, y la entrada
+  // nueva JUSTO delante de </Platforms>. Con </Platforms> lo primero de su
+  // linea (lo normal) sale igual que antes; con otra etiqueta delante en esa
+  // linea (un .dproj editado a mano) se copiaba esa etiqueta como sangria y
+  // la entrada nueva podia quedar fuera del bloque (revisor de la 1.15.0)
+  Indent := SangriaDeLaLineaEn(Xml, ClosePos);
+  Xml := Copy(Xml, 1, ClosePos - 1) + '    ' +
+    Format('<Platform value="%s">True</Platform>', [APlatform]) + sLineBreak + Indent +
+    Copy(Xml, ClosePos, MaxInt);
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   Result := MsgFmt(SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT, [APlatform, APlatform]);
 end;

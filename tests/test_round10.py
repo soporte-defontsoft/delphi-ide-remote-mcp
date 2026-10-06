@@ -239,16 +239,16 @@ open(UPAS, 'w', encoding='utf-8', newline='\r\n').write(
 A.call('delphi_config', {'project': DPROJ, 'command': 'add-unit', 'path': UPAS})
 j = J(A.call('delphi_rename_symbol', {'path': UPAS, 'line': 4, 'character': 9,
                                        'newname': 'Triple'}, t=600))
-chg = j.get('changes', [])
+chg = mc.aciertos(j, 'changes')
 _disco = open(UPAS, encoding='utf-8', newline='').read().split('\r\n')
 _L = _disco.index('    Result := Doble(Doble(A));') + 1  # 1-based, como 'line'
 _doble = [c for c in chg if c.get('line') == _L]
-check('D1 cada cambio trae un ancla con su indentacion, no el texto recortado',
-      len(chg) == 4 and all(c.get('anchor') == _disco[c['line'] - 1] for c in chg)
-      and any(c['anchor'].startswith('    ') for c in _doble),
+check('D1 cada cambio trae su linea tal cual (el ancla, con su indentacion), no el texto recortado',
+      len(chg) == 4 and all(c.get('text') == _disco[c['line'] - 1] for c in chg)
+      and any(c['text'].startswith('    ') for c in _doble) and not any('anchor' in c for c in chg),
       str(chg)[:300])
 check('D1 ...y la columna, para dos apariciones en una misma linea',
-      sorted(c.get('character') for c in _doble) == [14, 20],
+      sorted(c.get('character0') for c in _doble) == [14, 20],
       str(chg)[:300])
 
 # -------------------------------------------------------------- F5 / varios -

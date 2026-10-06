@@ -102,7 +102,7 @@ try:
                                'query': 'agujaenelartefacto'})
     # una busqueda de VERDAD (su JSON con hits) que no trae el artefacto
     check('S1 desde arriba, la carpeta de compilacion sigue oculta',
-          isinstance(mc.como_json(a).get('files'), list) and 'Generado.pas' not in a,
+          isinstance(mc.como_json(a).get('folders'), list) and 'Generado.pas' not in a,
           a[:200])
     b = call('delphi_search', {'root': salida, 'query': 'agujaenelartefacto'})
     check('S2 nombrada como raiz, se busca dentro (como hace delphi_list)',
@@ -134,7 +134,7 @@ try:
     # el listado de la referencia se HIZO (su JSON) y aun asi no purgo: si la
     # llamada fallaba, "sigue ahi" pasaba sin que el recorredor pasara
     check('P3 bajo ReadOnlyPaths no se purga nada: se lee, no se toca',
-          isinstance(mc.como_json(lro).get('files'), list) and
+          isinstance(mc.como_json(lro).get('folders'), list) and
           os.path.exists(os.path.join(intocable, 'Ajena.pas')), (intocable, lro[:160]))
 
     # ------------------------------------------------------------------- R

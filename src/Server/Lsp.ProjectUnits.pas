@@ -1055,12 +1055,15 @@ begin
     // the last one could land inside that one's conditional block
     if RunAt <> -1 then
     begin
-      Indent := Copy(Lines[RunAt], 1, Length(Lines[RunAt]) - Length(Lines[RunAt].TrimLeft));
+      // la sangria, con el lector de la casa (Lsp.Patch.LeadingWhite):
+      // habia cinco copias a mano con TrimLeft, que se lleva tambien los
+      // caracteres de control (#0..#31) a la linea nueva (1.15.0)
+      Indent := LeadingWhite(Lines[RunAt]);
       L.Insert(RunAt, Indent + CreateFormLine(AInfo));
     end
     else
     begin
-      Indent := Copy(Lines[Last], 1, Length(Lines[Last]) - Length(Lines[Last].TrimLeft));
+      Indent := LeadingWhite(Lines[Last]);
       L.Insert(Last + 1, Indent + CreateFormLine(AInfo));
     end;
     Dpr := string.Join(NL, L.ToStringArray);

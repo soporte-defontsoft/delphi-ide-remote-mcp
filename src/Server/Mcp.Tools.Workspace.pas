@@ -278,6 +278,7 @@ uses
   Lsp.Client,
   Lsp.Discovery,
   Lsp.References,
+  Lsp.Listas, // TPagina, TPorCarpeta y el organizador de listas de ficheros
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.Patch,
@@ -324,7 +325,7 @@ const
 function TDelphiSearchTool.ExecuteWithParams(const Params: TDelphiSearchParams): string;
 var
   Return: TJSONObject;
-  Ficheros, Hits: TJSONArray;
+  Hits: TJSONArray;
   I, P, Len, ScanFrom, FilesScanned: Integer;
   F, Text, Q, LineText, GrupoDe: string;
   Lines: TArray<string>;
@@ -367,11 +368,11 @@ begin
 
   Return := TJSONObject.Create;
   // los aciertos AGRUPADOS por fichero: la ruta iba repetida en cada uno
-  // (revisor de tokens, 4-oct-2026: el mayor ahorro de una sesion tipica)
-  // (con dueno desde ya: un Exit a media busqueda -SEARCH-005- dejaba sin
-  // liberar la lista, que solo se colgaba al final)
-  Ficheros := TJSONArray.Create;
-  Return.AddPair('files', Ficheros);
+  // (revisor de tokens, 4-oct-2026: el mayor ahorro de una sesion tipica);
+  // y los ficheros por carpeta, con el organizador de todas las listas
+  // (1.15.0). Se libera en el finally: un Exit a media busqueda -SEARCH-005-
+  // no la deja suelta.
+  var Lista := TListaDeFicheros.Create;
   GrupoDe := '';
   Grupo := nil;
   Hits := nil;
@@ -483,14 +484,12 @@ begin
                 if (Grupo = nil) or (GrupoDe <> F) then
                 begin
                   GrupoDe := F;
-                  Grupo := TJSONObject.Create;
-                  Ficheros.Add(Grupo);
-                  // This tool masks its OWN paths, because its answer is
-                  // exempt from the blanket outbound filter - see the
-                  // delphi_search note in MaskDriveText. Any path field
+                  // This tool's answer is exempt from the blanket outbound
+                  // filter (the delphi_search note in MaskDriveText): the
+                  // organizer masks the folder it writes. Any OTHER path field
                   // added from now on MUST go through MaskDriveText too, or
                   // a real drive letter walks out.
-                  Grupo.AddPair('path', MaskDriveText('', F));
+                  Grupo := Lista.Add(F);
                   Hits := TJSONArray.Create;
                   Grupo.AddPair('hits', Hits);
                 end;
@@ -530,9 +529,10 @@ begin
       Return.AddPair('maskNote', MsgFmt(SN_SEARCH_MASK_NO_MATCH_FMT, [Params.Pattern.Trim]));
     Ocultos.Report(Return);
     // la lista, detras de los contadores y las notas, como iba
-    Return.AddPair(Return.RemovePair('files'));
+    Lista.Cuelga(Return);
     Result := Return.ToJSON;
   finally
+    Lista.Free;
     Return.Free;
     Expr.Free;
   end;
@@ -567,7 +567,6 @@ end;
 function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): string;
 var
   Return: TJSONObject;
-  Arr: TJSONArray;
   F, Mask, Root, Reason: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
@@ -604,7 +603,9 @@ begin
   if Params.Dirs then
   begin
     Return := TJSONObject.Create;
-    Arr := TJSONArray.Create;
+    // la carpeta una vez y sus subcarpetas por su nombre (el organizador):
+    // la raiz repetida en cada una era el 80% de la respuesta (6-oct-2026)
+    var ListaDirs := TListaDeFicheros.Create('dirs');
     // por paginas, como su hermana delphi_search: cortaba en 500 y las de
     // detras no se alcanzaban
     var PagDirs := PaginaDe(Params.Offset, Params.MaxResults, LIST_CAP, LIST_CAP);
@@ -631,7 +632,8 @@ begin
            not Nombre.StartsWith('__') then
           Reason := '';
         // Explorador: las carpetas de otras herramientas (.vs, .github,
-        // __pycache__) tampoco salen en este modo; la papelera, si se pidio.
+        // .idea) tampoco salen en este modo; la papelera, si se pidio
+        // (__pycache__ es compilado: lo esconde SkipReason en los dos modos).
         if (Reason = '') and (Nombre.StartsWith('.') or Nombre.StartsWith('__')) and
            (SkipReason(RelToRoot(F, Root) + '\', False) <> SKIP_TRASH) then
           Reason := SKIP_FOLDERS;
@@ -641,7 +643,7 @@ begin
           Continue;
         end;
         if PagDirs.Entra then
-          Arr.Add(F);
+          ListaDirs.AddNombre(F);
       end;
       PagDirs.Report(Return);
       // el recorte se dice, como en el modo ficheros (callaba)
@@ -649,9 +651,10 @@ begin
         Return.AddPair('shownNote', MsgFmt(SN_LIST_DIRS_CAPPED_FMT,
           [PagDirs.Mostrados, PagDirs.Total, PagDirs.Siguiente]));
       Ocultos.Report(Return);
-      Return.AddPair('dirs', Arr);
+      ListaDirs.Cuelga(Return);
       Result := Return.ToJSON;
     finally
+      ListaDirs.Free;
       Return.Free;
     end;
     Exit;
@@ -666,7 +669,9 @@ begin
   end;
 
   Return := TJSONObject.Create;
-  Arr := TJSONArray.Create;
+  // la carpeta una vez y debajo sus ficheros (el organizador): la ruta
+  // repetida en cada entrada era el 42% de una pagina (6-oct-2026)
+  var Lista := TListaDeFicheros.Create;
   // por paginas, y lo que no cabe dice DONDE esta (byFolder): las 500
   // primeras de la raiz de referencia de un ERP eran copias de backups\ y lo
   // vivo no se alcanzaba (Hermes, 5-oct-2026)
@@ -716,9 +721,7 @@ begin
             Inc(ShownTrash);
         if Entra then
         begin
-          Entry := TJSONObject.Create;
-          Arr.Add(Entry);
-          Entry.AddPair('path', F);
+          Entry := Lista.Add(F);
           // Size/date can fail on paths past the classic length limit (the
           // Android NDK is full of them) - measured: one such file aborted
           // the whole listing. The entry still goes out, just without them.
@@ -755,7 +758,10 @@ begin
     // filter nobody mentioned reads as "there is nothing else here".
     if Params.Pattern.Trim = '' then
       Return.AddPair('maskNote', MsgText(SN_LIST_DEFAULT_MASK))
-    else if Pag.Total = 0 then
+    // ...y "no caso con nada" solo si no se escondio nada: con *.pyc los 125
+    // de __pycache__ casaban, salian contados en LIST-003 y esta nota decia
+    // a la vez que la mascara no habia casado (en vivo, 6-oct-2026)
+    else if (Pag.Total = 0) and (Ocultos.Total = 0) then
     begin
       // Solo el primer nivel, que es barato y basta para probar que la
       // carpeta no esta vacia: recorrerla entera otra vez para dar una cifra
@@ -770,9 +776,10 @@ begin
         Return.AddPair('maskNote', MsgFmt(SN_LIST_MASK_NO_MATCH_FMT,
           [Params.Pattern.Trim, Cuantas]));
     end;
-    Return.AddPair('files', Arr);
+    Lista.Cuelga(Return);
     Result := Return.ToJSON;
   finally
+    Lista.Free;
     Return.Free;
   end;
 end;
@@ -2529,7 +2536,6 @@ end;
 function TDelphiProjectsTool.ExecuteWithParams(const Params: TDelphiProjectsParams): string;
 var
   Return: TJSONObject;
-  Arr: TJSONArray;
   Roots: TArray<string>;
   RootDir, F, Filt: string;
   Entry: TJSONObject;
@@ -2599,7 +2605,14 @@ begin
   // = limite del cliente reventado, o sea la tool inservible sin "root").
   var Pag := PaginaDe(Params.Offset, Params.MaxResults, 50, 300);
   Return := TJSONObject.Create;
-  Arr := TJSONArray.Create;
+  // la carpeta una vez y debajo sus proyectos (el organizador): 'project' y
+  // 'dir' repetian la carpeta, el 30% de la respuesta (6-oct-2026)
+  var Lista := TListaDeFicheros.Create;
+  // cada repositorio UNA vez, con su rama: repo y branch iban en cada
+  // proyecto, la misma ruta otra vez (1.15.0). El de un proyecto es el que
+  // empieza su carpeta, y delphi_git acepta cualquier ruta de dentro
+  var Repos := TStringList.Create;
+  var Ramas := TStringList.Create;
   // Donde estan, no solo cuantos: en una maquina de trabajo la lista la
   // COPAN los componentes de terceros y sus copias de seguridad (medido el
   // 2026-09-20 en este servidor: de 7025 proyectos, 6420 eran backups de
@@ -2634,11 +2647,7 @@ begin
           PorCarpeta.Add(F, RootDir.Trim);
           if Pag.Entra then
           begin
-            Entry := TJSONObject.Create;
-            Arr.Add(Entry);
-            Entry.AddPair('name', TPath.GetFileNameWithoutExtension(F));
-            Entry.AddPair('project', F);
-            Entry.AddPair('dir', TPath.GetDirectoryName(F));
+            Entry := Lista.Add(F);
             Entry.AddPair('kind', LowerCase(TPath.GetExtension(F)).Substring(1));
             if ReadOnlyRootOf(F) <> '' then
               Entry.AddPair('readOnly', TJSONBool.Create(True)); // referencia: se lee, no se toca
@@ -2658,11 +2667,10 @@ begin
               end;
             end;
             Repo := RepoOf(F, Branch);
-            if Repo <> '' then
+            if (Repo <> '') and (Repos.IndexOf(Repo) < 0) then
             begin
-              Entry.AddPair('repo', Repo);
-              if Branch <> '' then
-                Entry.AddPair('branch', Branch);
+              Repos.Add(Repo);
+              Ramas.Add(Branch);
             end;
           end;
         end;
@@ -2698,9 +2706,28 @@ begin
     end;
     if Saltadas <> '' then
       Return.AddPair('skippedRootsNote', MsgFmt(SN_PROJECTS_RAICES_SALTADAS_FMT, [Saltadas]));
-    Return.AddPair('projects', Arr);
+    if Repos.Count > 0 then
+    begin
+      var RepoArr := TJSONArray.Create;
+      Return.AddPair('repos', RepoArr);
+      for var K := 0 to Repos.Count - 1 do
+      begin
+        var RO := TJSONObject.Create;
+        RepoArr.AddElement(RO);
+        RO.AddPair('dir', Repos[K]);
+        if Ramas[K] <> '' then
+          RO.AddPair('branch', Ramas[K]);
+      end;
+    end;
+    // la lista conserva su nombre ('projects', como la de delphi_test
+    // discover): solo files y dirs pasan a 'folders', porque se repetirian
+    // dentro de cada carpeta (revisor de contrato de la 1.15.0)
+    Lista.Cuelga(Return, 'projects');
     Result := Return.ToJSON;
   finally
+    Ramas.Free;
+    Repos.Free;
+    Lista.Free;
     Return.Free;
   end;
 end;

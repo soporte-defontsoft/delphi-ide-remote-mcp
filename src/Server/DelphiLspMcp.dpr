@@ -132,7 +132,8 @@ uses
   Lsp.PascalDecl in 'Lsp.PascalDecl.pas',
   Lsp.DesignerMetaGen in 'Lsp.DesignerMetaGen.pas',
   Lsp.Regex in 'Lsp.Regex.pas',
-  Lsp.Json in 'Lsp.Json.pas';
+  Lsp.Json in 'Lsp.Json.pas',
+  Lsp.Listas in 'Lsp.Listas.pas';
 
 {$R *.res}
 

@@ -238,7 +238,7 @@ end;
 end.
 """)
 d = J(call('delphi_symbols', {'path': DIG}))
-decl = {x.get('decl'): x.get('of', '') for u_ in d.get('units', []) for x in u_.get('declares', [])}
+decl = {x.get('decl'): x.get('of', '') for u_ in mc.ficheros(d, 'units') for x in u_.get('declares', [])}
 check('C6 digest: lo de detras de un record anidado sigue siendo de su clase',
       decl.get('procedure Despues;') == 'TCosa2' and decl.get('A: Integer;') == 'TCosa2.TR', str(decl)[:400])
 
@@ -286,10 +286,10 @@ lineas = FAM.split('\n')
 base = next(i for i, l in enumerate(lineas) if l.strip() == 'procedure Pinta; virtual;')
 j = J(call('delphi_references', {'path': UFAM, 'line': base,
                                  'character': lineas[base].index('Pinta') + 1}))
-llamada = [c for c in j.get('confirmed', []) if 'H.Pinta' in c.get('text', '')]
+llamada = [c for c in mc.aciertos(j, 'confirmed') if 'H.Pinta' in c.get('text', '')]
 check('C7 references: la llamada a un override de detras de un tipo anidado es el mismo metodo (via override)',
       len(llamada) == 1 and llamada[0].get('via') == 'override' and
-      not any('H.Pinta' in c.get('text', '') for c in j.get('rejected', [])), str(j)[:600])
+      not any('H.Pinta' in c.get('text', '') for c in mc.aciertos(j, 'rejected')), str(j)[:600])
 
 # ---- C8: la lista UNICA de directivas de rutina ----
 r = call('delphi_create', {'kind': 'unit', 'name': 'UDirectiva', 'project': DPR})
@@ -534,7 +534,7 @@ implementation
 end.
 """)
 d = J(call('delphi_symbols', {'path': DIG}))
-decls = [x for u_ in d.get('units', []) if u_.get('unit') == 'UDigGen' for x in u_.get('declares', [])]
+decls = [x for u_ in mc.ficheros(d, 'units') if u_.get('unit') == 'UDigGen' for x in u_.get('declares', [])]
 cab = [x for x in decls if x.get('decl', '').startswith('TGen<')]
 check('C14 digest: la cabecera de una generica sale, sin su primer campo',
       len(cab) == 1 and 'FDato' not in cab[0]['decl'] and
@@ -625,9 +625,9 @@ lineas = rd(UFAMG).split('\r\n')
 base = next(i for i, l in enumerate(lineas) if l.strip() == 'procedure Pinta; virtual;')
 j = J(call('delphi_references', {'path': UFAMG, 'line': base,
                                  'character': lineas[base].index('Pinta') + 1}))
-de_la_familia = [c for c in j.get('confirmed', []) if c.get('via') == 'override']
+de_la_familia = [c for c in mc.aciertos(j, 'confirmed') if c.get('via') == 'override']
 # (los rechazados de OTRA unidad son otra familia: la de C7 tambien llama H.Pinta)
-rechazados_aqui = [c for c in j.get('rejected', []) if c.get('path', '').endswith('UFamG.pas')]
+rechazados_aqui = [c for c in mc.aciertos(j, 'rejected') if c.get('path', '').endswith('UFamG.pas')]
 check('C16 references en una generica: la llamada y el override son el mismo metodo (via override)',
       any('H.Pinta' in c.get('text', '') for c in de_la_familia) and
       any('Pinta; override' in c.get('text', '') for c in de_la_familia) and

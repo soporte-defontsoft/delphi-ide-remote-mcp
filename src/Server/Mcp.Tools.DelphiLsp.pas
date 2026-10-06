@@ -126,6 +126,7 @@ uses
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.References,
+  Lsp.Listas, // AgrupaPorCarpeta: las unidades de una carpeta, por carpeta
   Lsp.Patch,
   Lsp.NetDrives,
   Lsp.Pascal,
@@ -259,10 +260,24 @@ begin
       if Start <> nil then
       begin
         L := Start.GetValue('line');
+        // 'line', la 1-based de toda la casa (era 'line1': las tools del
+        // motor y las de ficheros contaban con nombres distintos, 1.15.0)
         if L <> nil then
-          Obj.AddPair('line1', TJSONNumber.Create(L.GetValue<Integer> + 1));
+        begin
+          Obj.AddPair('line', TJSONNumber.Create(L.GetValue<Integer> + 1));
+          // ...y las 0-based que toman las tools del motor, con el nombre de
+          // los aciertos de search/references: se encadena sin hacer cuentas
+          // (revisor de contrato de la 1.15.0)
+          Obj.AddPair('line0', TJSONNumber.Create(L.GetValue<Integer>));
+          var C := Start.GetValue('character');
+          if C <> nil then
+            Obj.AddPair('character0', TJSONNumber.Create(C.GetValue<Integer>));
+        end;
       end;
     end;
+    // ...y el uri se va: es la MISMA ruta (file:///srvd%3A/...), que ninguna
+    // tool acepta como argumento; iba dos veces en cada ubicacion (1.15.0)
+    Obj.RemovePair('uri').Free;
   end;
   for Pair in Obj do
     DecorateLocations(Pair.JsonValue);
@@ -1012,6 +1027,9 @@ begin
       else
         Ret.RemovePair('notShown').Free;
       Ret.AddPair('note', MsgText(SN_SYMBOLS_DIGEST_NOTE));
+      // las unidades por carpeta (el organizador): la ruta de cada una
+      // repetia la carpeta (6-oct-2026)
+      AgrupaPorCarpeta(Ret, 'units');
       Exit(EnmascaraJsonSalvo(Ret.ToJSON, CONTENIDO_DE_SYMBOLS));
     finally
       Ret.Free;

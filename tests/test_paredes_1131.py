@@ -158,7 +158,7 @@ try:
     # ------------------------------------------------------------------ W4
     t = llama(c, 'delphi_projects', {})
     js = mc.como_json(t)
-    nombres = [p.get('name') for p in js.get('projects') or []]
+    nombres = [os.path.splitext(p.get('name', ''))[0] for p in mc.ficheros(js, 'projects')]
     check('W4 delphi_projects sin root lista los proyectos de la raiz que esta (antes: PROJ-003 y ninguno)',
           'Pared' in nombres and not mc.fallo(t), t[:400])
     nota = js.get('skippedRootsNote', '')

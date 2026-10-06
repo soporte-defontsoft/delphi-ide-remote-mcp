@@ -54,7 +54,8 @@ uses
   Lsp.Guard,
   Lsp.Patch,      // PositionOutOfRange
   Lsp.Rename,
-  Lsp.References; // CONTENIDO_DE_UN_USO: los campos que son la linea tal cual
+  Lsp.References, // CONTENIDO_DE_UN_USO: los campos que son la linea tal cual
+  Lsp.Listas;     // AgrupaPorFichero: los cambios por carpeta y fichero
 
 constructor TDelphiRenameTool.Create;
 begin
@@ -101,6 +102,10 @@ begin
       Ret := RenamePreview(Params.Path, Params.Line, Params.Character,
         Params.NewName.Trim);
     try
+      // cada lista por carpeta y fichero (el organizador), al contestar: por
+      // dentro sigue plana (apply la recorta y la apila asi)
+      for var Campo in TArray<string>.Create('changes', 'unverified', 'lookalikes') do
+        AgrupaPorFichero(Ret, Campo);
       // la linea de cada cambio, tal cual (un ancla); lo demas, enmascarado
       Result := EnmascaraJsonSalvo(Ret.ToJSON, CONTENIDO_DE_UN_USO);
     finally

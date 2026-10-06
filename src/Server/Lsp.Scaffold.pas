@@ -933,7 +933,9 @@ begin
     Result := CreaFuenteSuelto(ASubDir, AUnitName, '.pas', Body, PasPath);
     if Result <> '' then
       Exit;
-    Exit(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT, [AUnitName, PasPath, Length(LineasDelTexto(Body))]));
+    // el content es del agente: lo audita el mismo aviso que delphi_edit
+    Exit(ConAvisosDeLlaves(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT,
+      [AUnitName, PasPath, Length(LineasDelTexto(Body))]), PasPath, Body));
   end;
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
@@ -978,8 +980,8 @@ begin
     Result := MsgConCausa(SR_CREATE_CREADA_NO_REGISTRADA_FMT, Result, [AUnitName, Result]);
   end
   else
-    Result := MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
-      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]);
+    Result := ConAvisosDeLlaves(MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
+      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]), PasPath, Body);
 end;
 
 function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
@@ -1012,7 +1014,8 @@ begin
   if Result <> '' then
     Exit;
   // las lineas como delphi_read: contaba la fantasma del salto final (septima revision)
-  Result := MsgFmt(SN_CREATE_INCLUDE_FMT, [Nombre, Ruta, Length(LineasDelTexto(Body)), Nombre]);
+  Result := ConAvisosDeLlaves(MsgFmt(SN_CREATE_INCLUDE_FMT,
+    [Nombre, Ruta, Length(LineasDelTexto(Body)), Nombre]), Ruta, Body);
 end;
 
 end.

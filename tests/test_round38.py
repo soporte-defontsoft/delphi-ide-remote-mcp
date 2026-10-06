@@ -175,12 +175,12 @@ def refs(line0):
 
 def tiene(j, lista, texto):
     """Algun ancla de j[lista] ('confirmed' / 'rejected') contiene texto."""
-    return any(texto in c.get('anchor', '') for c in j.get(lista, []))
+    return any(texto in c.get('text', '') for c in mc.aciertos(j, lista))
 
 
 def llamadas(j):
     """Las LLAMADAS confirmadas (H.Pinta / N.Pinta), no las declaraciones."""
-    return [c for c in j.get('confirmed', []) if '.Pinta;' in c.get('text', '')
+    return [c for c in mc.aciertos(j, 'confirmed') if '.Pinta;' in c.get('text', '')
             and not c.get('text', '').strip().startswith('procedure')]
 
 
@@ -196,7 +196,7 @@ try:
     check('V1 el virtual de la base ve las llamadas reales',
           len(ll) >= 3, 'confirmed=%s' % json.dumps(j.get('confirmed'))[:260])
     check('V1b ...y NO dice que no lo llama nadie',
-          len(j.get('confirmed', [])) > 2, json.dumps(j)[:260])
+          len(mc.aciertos(j, 'confirmed')) > 2, json.dumps(j)[:260])
 
     # ------------------------------------------------------------------ V2
     check('V2 las de la familia van marcadas via:"override"',
@@ -217,7 +217,7 @@ try:
 
     # ------------------------------------------------------------------ V6
     check('V6 la jerarquia de tres alturas tambien cuenta',
-          any('N.Pinta' in c.get('anchor', '') for c in j.get('confirmed', [])),
+          any('N.Pinta' in c.get('text', '') for c in mc.aciertos(j, 'confirmed')),
           json.dumps(j.get('confirmed'))[:260])
 
     # ------------------------------------------------------------------ V4

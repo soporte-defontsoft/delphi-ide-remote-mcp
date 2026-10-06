@@ -28,7 +28,7 @@ const
   // fichero tal cual: contenido, no van enmascarados (Lsp.Guard.
   // EnmascaraJsonSalvo); un ancla copiada de ahi casaba con 'srvd:' y no con
   // el disco (revision del 4-oct-2026)
-  CONTENIDO_DE_UN_USO: array [0 .. 1] of string = ('text', 'anchor');
+  CONTENIDO_DE_UN_USO: array [0 .. 0] of string = ('text');
 
 { True for IDE artifacts that must never be scanned/edited/reasoned about. }
 function SkipIdeArtifacts(const APath: string): Boolean; overload;
@@ -53,7 +53,7 @@ const
   SKIP_GIT = 'git';
   SKIP_TRASH = 'trash';
   { No sale de SkipReason: son las carpetas de otras herramientas (.vs,
-    .github, __pycache__) que solo esconde el modo dirs de delphi_list. }
+    .github) que solo esconde el modo dirs de delphi_list. }
   SKIP_FOLDERS = 'folders';
 
 type
@@ -73,42 +73,6 @@ type
     procedure Report(AObj: TJSONObject);
   end;
 
-  { UNA pagina de una lista recorrida entera. delphi_search y delphi_projects
-    contaban, cortaban y escribian total/shown/offset/hasMore/nextOffset cada
-    una a mano, y delphi_list ni paginaba: cortaba en 500 y lo de detras no
-    se alcanzaba (Hermes en la raiz de referencia de un ERP, 5-oct-2026: las
-    500 primeras entradas eran copias de backups\). Se empieza con PaginaDe. }
-  TPagina = record
-    Desde, Max, Total, Mostrados: Integer;
-    { uno mas de la lista: True si cae en ESTA pagina (y ya cuenta como
-      mostrado) }
-    function Entra: Boolean;
-    function HayMas: Boolean;
-    function Siguiente: Integer;
-    { total, shown, offset (si no es 0), hasMore y nextOffset (si hay mas):
-      lo que hace falta para pedir la siguiente sin adivinar }
-    procedure Report(AObj: TJSONObject);
-  end;
-
-  { DONDE esta una lista que no cabe, no solo cuanto: la carpeta de cada
-    entrada a dos niveles bajo la raiz ('.' la propia raiz), y las que mas
-    acumulan. Con eso el agente elige root en vez de pasear paginas: en una
-    maquina de trabajo las listas las copan las copias de seguridad y los
-    componentes (delphi_projects lo hacia a mano: 7.025 proyectos, 6.420
-    eran copias; 20-sep-2026). Se empieza con Default(TPorCarpeta). }
-  TPorCarpeta = record
-    Carpetas: TArray<string>;
-    Cuentas: TArray<Integer>;
-    Ultima: Integer; // un paseo da seguidas las de una carpeta
-    procedure Add(const AFichero, ARaiz: string);
-    { byFolder: las ACuantas que mas, "carpeta = N", de mas a menos }
-    procedure Report(AObj: TJSONObject; ACuantas: Integer = 10);
-  end;
-
-{ La pagina que pide quien llama: un offset negativo es 0, un maximo que no
-  es positivo es APorDefecto y uno mayor que ATope es ATope. }
-function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
-
 implementation
 
 uses
@@ -125,8 +89,7 @@ uses
   Lsp.Dproj,        // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.ProjectUnits,
   Lsp.Pascal,
-  Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
-  Lsp.NetDrives;  // SinBarraFinal
+  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
 
 type
   TCandidate = record
@@ -219,9 +182,12 @@ end;
   array const no puede llamar a una funcion. Que digan lo mismo no se deja a
   la buena fe: lo comprueba la bateria (test_round44 T6c y T6d). }
 const
-  CARPETAS_ARTEFACTO: array [0 .. 6] of string = (
+  // __pycache__ es compilado (el de Python): el modo ficheros de delphi_list
+  // lo ensenaba entero con pattern=* y solo el modo dirs lo escondia
+  // (en vivo, 6-oct-2026)
+  CARPETAS_ARTEFACTO: array [0 .. 7] of string = (
     '\__history\', '\__recovery\', '\win32\', '\win64\', '\debug\',
-    '\release\', '\dcu\');
+    '\release\', '\dcu\', '\__pycache__\');
   CARPETA_TEMPORAL = '\__delphi-temp\';
   CARPETAS_PAPELERA: array [0 .. 1] of string = (
     '\__pascal-patch\', '\__delphi-patch\');
@@ -254,117 +220,6 @@ begin
     for B in CARPETAS_PAPELERA do
       if Low.Contains(B) then
         Exit(SKIP_TRASH);
-end;
-
-{ TPagina }
-
-function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
-begin
-  Result := Default(TPagina);
-  if AOffset > 0 then
-    Result.Desde := AOffset;
-  if AMax <= 0 then
-    AMax := APorDefecto;
-  if AMax > ATope then
-    AMax := ATope;
-  Result.Max := AMax;
-end;
-
-function TPagina.Entra: Boolean;
-begin
-  Inc(Total);
-  Result := (Total > Desde) and (Mostrados < Max);
-  if Result then
-    Inc(Mostrados);
-end;
-
-function TPagina.HayMas: Boolean;
-begin
-  Result := Total > Desde + Mostrados;
-end;
-
-function TPagina.Siguiente: Integer;
-begin
-  Result := Desde + Mostrados;
-end;
-
-procedure TPagina.Report(AObj: TJSONObject);
-begin
-  AObj.AddPair('total', TJSONNumber.Create(Total));
-  AObj.AddPair('shown', TJSONNumber.Create(Mostrados));
-  if Desde > 0 then
-    AObj.AddPair('offset', TJSONNumber.Create(Desde));
-  // Truncated lists used to be a wall: the cap hit, no way to ask for the
-  // rest (hermes, release audit 2026-08-26). hasMore + nextOffset make the
-  // next page one deterministic call away.
-  AObj.AddPair('hasMore', TJSONBool.Create(HayMas));
-  if HayMas then
-    AObj.AddPair('nextOffset', TJSONNumber.Create(Siguiente));
-end;
-
-{ TPorCarpeta }
-
-procedure TPorCarpeta.Add(const AFichero, ARaiz: string);
-var
-  Carpeta, Raiz, Rel: string;
-  I: Integer;
-begin
-  Carpeta := SinBarraFinal(TPath.GetDirectoryName(AFichero));
-  Raiz := SinBarraFinal(ARaiz);
-  if SameText(Carpeta, Raiz) then
-    // en la propia raiz: decia la raiz recortada a dos segmentos y parecia
-    // OTRA carpeta
-    Rel := '.'
-  else if StartsText(IncludeTrailingPathDelimiter(Raiz), Carpeta) then
-  begin
-    Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(Raiz)));
-    var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);
-    if Length(Trozos) > 2 then
-      Rel := Trozos[0] + TPath.DirectorySeparatorChar + Trozos[1];
-  end
-  else
-    Rel := Carpeta;
-  if (Ultima < Length(Carpetas)) and SameText(Carpetas[Ultima], Rel) then
-  begin
-    Inc(Cuentas[Ultima]);
-    Exit;
-  end;
-  for I := 0 to High(Carpetas) do
-    if SameText(Carpetas[I], Rel) then
-    begin
-      Inc(Cuentas[I]);
-      Ultima := I;
-      Exit;
-    end;
-  Carpetas := Carpetas + [Rel];
-  Cuentas := Cuentas + [1];
-  Ultima := High(Carpetas);
-end;
-
-procedure TPorCarpeta.Report(AObj: TJSONObject; ACuantas: Integer);
-var
-  Quedan: TArray<Integer>;
-  Arr: TJSONArray;
-  I, J, Mejor, MejorN: Integer;
-begin
-  Quedan := Copy(Cuentas);
-  Arr := TJSONArray.Create;
-  AObj.AddPair('byFolder', Arr);
-  for I := 1 to ACuantas do
-  begin
-    Mejor := -1;
-    MejorN := 0;
-    for J := 0 to High(Quedan) do
-      if Quedan[J] > MejorN then
-      begin
-        MejorN := Quedan[J];
-        Mejor := J;
-      end;
-    if Mejor < 0 then
-      Break;
-    Arr.Add(Format('%s = %d', [Carpetas[Mejor], MejorN]));
-    Quedan[Mejor] := 0;
-  end;
 end;
 
 { THiddenCount }
@@ -561,16 +416,18 @@ var
   begin
     Result := TJSONObject.Create;
     Result.AddPair('path', C.Path);
-    Result.AddPair('line', TJSONNumber.Create(C.Line));
-    // La 1-based al lado de la 0-based, como definition/hover: references y
-    // diagnostics eran las dos tools del motor sin gemela (Hermes, 2026-09-23)
-    Result.AddPair('line1', TJSONNumber.Create(C.Line + 1));
-    Result.AddPair('character', TJSONNumber.Create(C.Col));
-    Result.AddPair('text', C.Text.Trim);
-    // The trimmed text reads well but is NOT an anchor: delphi_edit wants the
-    // WHOLE line, indentation included, so every caller had to go and read
-    // the file again (measured 2026-08-25, five wasted calls). Give both.
-    Result.AddPair('anchor', C.Text.TrimRight([#13, #10]));
+    // Como toda la casa (delphi_search, symbols, rename): line la 1-based de
+    // delphi_read, line0 y character0 las 0-based que toman las tools del
+    // motor. references era la unica hermana con line 0-based y line1 al
+    // lado (1.15.0: las dos convenciones en tools que se encadenan).
+    Result.AddPair('line', TJSONNumber.Create(C.Line + 1));
+    Result.AddPair('line0', TJSONNumber.Create(C.Line));
+    Result.AddPair('character0', TJSONNumber.Create(C.Col));
+    // La linea TAL CUAL, sangria incluida: es el ancla que pide delphi_edit
+    // (recortada no lo era: cinco llamadas releyendo el fichero, 2026-08-25).
+    // Iba dos veces, recortada en text y entera en anchor; como en
+    // delphi_search, una (1.15.0).
+    Result.AddPair('text', C.Text.TrimRight([#13, #10]));
   end;
 
 begin
@@ -894,7 +751,10 @@ begin
             var PObj := CandidateJson(Cand);
             PObj.AddPair('via', 'override');
             PObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
-            PObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
+            // las dos de la casa, como line/line0 (1.15.0: aqui iba solo la
+            // 0-based y en los rechazados la 0-based y resolvedLine1)
+            PObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine + 1));
+            PObj.AddPair('resolvedLine0', TJSONNumber.Create(CandLine));
             Confirmed.Add(PObj);
             Familia := True;
           end
@@ -934,8 +794,8 @@ begin
             begin
               var RObj := CandidateJson(Cand);
               RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
-              RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
-              RObj.AddPair('resolvedLine1', TJSONNumber.Create(CandLine + 1));
+              RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine + 1));
+              RObj.AddPair('resolvedLine0', TJSONNumber.Create(CandLine));
               RejectedArr.AddElement(RObj);
             end;
           end;
@@ -949,8 +809,8 @@ begin
       Entry := TJSONObject.Create;
       Result.AddPair('definition', Entry);
       Entry.AddPair('path', TLspClient.UriToPath(TargetUri));
-      Entry.AddPair('line', TJSONNumber.Create(TargetLine));
-      Entry.AddPair('line1', TJSONNumber.Create(TargetLine + 1));
+      Entry.AddPair('line', TJSONNumber.Create(TargetLine + 1));
+      Entry.AddPair('line0', TJSONNumber.Create(TargetLine));
       Result.AddPair('confirmed', Confirmed);
       Result.AddPair('unverified', Unverified);
       // Menciones: el nombre esta escrito ahi, pero en prosa. No son

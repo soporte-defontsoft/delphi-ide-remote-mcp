@@ -785,14 +785,11 @@ begin
   var Dproj := PatchLoadText(ADprojPath, Enc);
   var Changed := False;
   var P := Pos(ANCHOR.ToLower, Dproj.ToLower);
-  var LineStart := P;
   var Indent := '';
+  // solo el blanco de la linea del ancla: se copiaba todo lo de delante, y
+  // con otra etiqueta en esa linea se duplicaba (revisor de la 1.15.0)
   if P > 0 then
-  begin
-    while (LineStart > 1) and not CharInSet(Dproj[LineStart - 1], [#10, #13]) do
-      Dec(LineStart);
-    Indent := Copy(Dproj, LineStart, P - LineStart);
-  end;
+    Indent := SangriaDeLaLineaEn(Dproj, P);
   if (P > 0) and not Dproj.ToLower.Contains('.deployproj') then
   begin
     var AnchorEnd := Pos('/>', Dproj, P);
@@ -822,9 +819,11 @@ begin
           Jars := Jars + ';';
         Jars := Jars + TPath.GetFileName(J);
       end;
-    Dproj := Copy(Dproj, 1, LineStart - 1) + Indent +
+    // justo delante del ancla (con el ancla lo primero de su linea, igual que
+    // al principio de la linea; con algo delante, no se mete antes de ello)
+    Dproj := Copy(Dproj, 1, P - 1) +
       Format(ANDROID_PROPS, [APlat, Indent, Indent, Indent, XmlEscape(Jars), Indent,
-        Indent]) + sLineBreak + Copy(Dproj, LineStart, MaxInt);
+        Indent]) + sLineBreak + Indent + Copy(Dproj, P, MaxInt);
     Changed := True;
   end;
   if Changed then
@@ -1624,6 +1623,13 @@ begin
   YaDicho.Sorted := True;
   YaDicho.Duplicates := dupIgnore;
   Lines := Output.Split([#13#10, #10]);
+  // msbuild cierra cada aviso y cada error con " [<ruta del .dproj>]": la
+  // MISMA ruta en cada linea, cerca del 40% de un aviso (medido el
+  // 6-oct-2026 compilando este repo). Fuera aqui, una vez, antes de
+  // clasificar: errors[], warnings[] y la cola salen sin ella.
+  for var K := 0 to High(Lines) do
+    Lines[K] := TRegEx.Replace(Lines[K],
+      '\s\[[^\[\]]+\.(?:dproj|groupproj|cbproj)\]\s*$', '', [roIgnoreCase]);
   for Line in Lines do
   begin
     if Line.Contains(': error ') or Line.Contains(' error E') or

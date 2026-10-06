@@ -5,7 +5,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 > **The contract of every tool below - its description and its parameter table - is GENERATED from the live `tools/list`** by `scripts/tools_md.py`, between two `<!-- contract -->` markers inside each section, and `tests/test_docs_consistency.py` fails when a block differs from the server; the *Access* line inside the block comes from the server's own access table (what `tools/list` announces as `annotations.readOnlyHint` and `_meta.access`, the same table its gate consults); the notes around each block (history, worked examples) are written by hand. Until 2026-09-28 the whole page was written by hand: an audit on 2026-09-20 found it missing the headline features of three releases, and a measurement on 2026-09-28 found 35 of 41 descriptions and 127 parameter texts saying something other than the server, with 4 parameters missing. The authority is still the server itself: **`delphi_help command=tool name=<tool>`** returns the live schema of one tool, and `docs/CAPABILITIES.json` is generated from the same `tools/list`. To refresh this page after changing a tool: `python scripts/tools_md.py`.
 
 - **Paths** use virtual drive units (`srvd:\...`, `srvc:\...`) — call `delphi_workspace` first to learn the roots.
-- **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier. Every answer that names a location also carries the 1-based line next to it (`line1` in definition, hover, signature, references and diagnostics; `line` + `line0` in symbols, search and rename): the 1-based one is what `delphi_read` shows and `delphi_edit` takes.
+- **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier. Every answer that names a location uses one convention (1.15.0): `line` is the 1-based line `delphi_read` shows and `delphi_edit` takes; `line0` and `character0` are the 0-based position the semantic tools take, so a hit is chained by passing its `line0`/`character0` (search, references, rename, symbols, definition). Definition and diagnostics keep the engine's raw `range` (0-based) next to them; hover answers its `range` only.
 - **Access**: with a read-only credential only the read-only tools run; mutating ones are refused at the gate. Without a workspace token there is no access at all (HTTP 401; a tokenless local stdio process is read-only unless `DELPHI_MCP_ROOTS` gives it roots).
 - **Required column**: every schema carries its real `required` list (the same one `delphi_help command=tool` returns); the table below says the same — the rest are optional and have sensible defaults, as their descriptions note.
 
@@ -62,8 +62,8 @@ Resolve the identifier at a 0-based line:character position in a Delphi source f
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `kind` | string | optional | Optional: definition (default) \| declaration (jump to the interface declaration) \| implementation (accepted, but DelphiLSP answers it like declaration - measured) |
-| `line` | integer | **yes** | Zero-based line number of the identifier |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier |
+| `line` | integer | **yes** | Zero-based line number of the identifier: the "line0" of a search, references, symbols or definition hit (their "line" is 1-based) |
+| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
 | `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
 <!-- /contract -->
 
@@ -77,8 +77,8 @@ Signature help (parameter completion) for the call under a 0-based line:characte
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `line` | integer | **yes** | Zero-based line number of the identifier |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier |
+| `line` | integer | **yes** | Zero-based line number of the identifier: the "line0" of a search, references, symbols or definition hit (their "line" is 1-based) |
+| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
 | `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
 <!-- /contract -->
 
@@ -92,8 +92,8 @@ Type/signature information for the identifier at a 0-based line:character positi
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `line` | integer | **yes** | Zero-based line number of the identifier |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier |
+| `line` | integer | **yes** | Zero-based line number of the identifier: the "line0" of a search, references, symbols or definition hit (their "line" is 1-based) |
+| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
 | `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
 <!-- /contract -->
 
@@ -108,8 +108,8 @@ Code completion candidates at a 0-based line:character position (official Delphi
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `trigger` | string | optional | Optional trigger character, e.g. "." (empty = manual invocation) |
-| `line` | integer | **yes** | Zero-based line number of the identifier |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier |
+| `line` | integer | **yes** | Zero-based line number of the identifier: the "line0" of a search, references, symbols or definition hit (their "line" is 1-based) |
+| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
 | `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
 <!-- /contract -->
 
@@ -124,15 +124,15 @@ Find references to the identifier at a 0-based line:character position. Hybrid m
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi source file |
-| `line` | integer | **yes** | Zero-based line of the identifier to find references for |
-| `character` | integer | **yes** | Zero-based character inside the identifier |
+| `line` | integer | **yes** | Zero-based line of the identifier to find references for (a hit's "line0"; its "line" is 1-based) |
+| `character` | integer | **yes** | Zero-based character inside the identifier (a hit's "character0") |
 <!-- /contract -->
 
 ### `delphi_diagnostics`
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight via the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions (range) and line1, the 1-based line delphi_read shows. Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint. The "hints" counter groups 3 and 4 together; the per-diagnostic severity tells them apart. Lints the CURRENT on-disk content. A big unit can take over a minute the first time: the answer then says the lint is in progress - call again with the same file and the result is returned (the lint is not restarted while the file is unchanged).
+Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight via the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions (range) and line, the 1-based line delphi_read shows. Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint. The "hints" counter groups 3 and 4 together; the per-diagnostic severity tells them apart. Lints the CURRENT on-disk content. A big unit can take over a minute the first time: the answer then says the lint is in progress - call again with the same file and the result is returned (the lint is not restarted while the file is unchanged).
 
 *Access: read-only OK.*
 
@@ -182,7 +182,7 @@ The help files are the IDE's own list (`Help\HtmlHelp1Files` of the active Delph
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Search Delphi sources recursively for a text (case-insensitive; literal, or a regular expression with regex=true), skipping IDE artifacts BELOW the root (__history, Win32/Win64, dcu, .git, the server's __delphi-temp...) - naming such a folder as root searches inside it, and skipped files are counted with why ("hidden" + "note"). Files are decoded with their real encoding, so accented text matches. Hits come grouped by file: files = [{path, hits = [{line (1-based, as delphi_read numbers it), line0 and character0 (0-based, what the LSP tools take), text}]}]; total and shown count hits. A file over 8 MB is not read: the result names it.
+Search Delphi sources recursively for a text (case-insensitive; literal, or a regular expression with regex=true), skipping IDE artifacts BELOW the root (__history, Win32/Win64, dcu, .git, the server's __delphi-temp...) - naming such a folder as root searches inside it, and skipped files are counted with why ("hidden" + "note"). Files are decoded with their real encoding, so accented text matches. Hits come grouped by folder and file: folders = [{dir, files = [{name, hits = [{line (1-based, as delphi_read numbers it), line0 and character0 (0-based, what the LSP tools take), text}]}]}]; total and shown count hits. A file over 8 MB is not read: the result names it.
 
 *Access: read-only OK.*
 
@@ -201,7 +201,7 @@ Search Delphi sources recursively for a text (case-insensitive; literal, or a re
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-List Delphi files under a directory recursively (sources and project files, or a mask), skipping IDE artifacts BELOW the root (naming a build-output folder - Win32/Win64/Debug/Release... - as root lists inside it; hidden entries are counted). Path, size and last-write time; 500 entries per page (offset walks the rest). dirs=true lists the SUBDIRECTORIES of root instead (one level, explorer-style) - to browse the machine and decide where to create or look for projects. includeTrash=true also shows the recoverable trash (__delphi-patch), to find a file delphi_delete moved and restore it with delphi_move.
+List Delphi files under a directory recursively (sources and project files, or a mask), skipping IDE artifacts BELOW the root (naming a build-output folder - Win32/Win64/Debug/Release... - as root lists inside it; hidden entries are counted). Each folder once with its files by name, size and last-write time: folders = [{dir, files = [{name, size, modified}]}]; 500 entries per page (offset walks the rest; a page that starts inside a folder names it again). dirs=true lists the SUBDIRECTORIES of root instead (one level, explorer-style: folders = [{dir, dirs = [names]}]) - to browse the machine and decide where to create or look for projects. includeTrash=true also shows the recoverable trash (__delphi-patch), to find a file delphi_delete moved and restore it with delphi_move.
 
 *Access: read-only OK.*
 
@@ -215,13 +215,13 @@ List Delphi files under a directory recursively (sources and project files, or a
 | `offset` | integer | optional | Skip the first N entries of the FULL list: pass the previous answer's nextOffset; walking it until hasMore=false reaches every entry. |
 <!-- /contract -->
 
-What it does not show is counted BY REASON (1.5.0, one counter shared with `delphi_search`): `hidden` is the total, and each reason that is not zero gets its field - `hiddenBuildArtifacts` (Win32/Win64/Debug/Release/dcu/__history: pass that folder as root to see it), `hiddenServerTemp` (the server's `__delphi-temp`: never shown, not even with includetrash), `hiddenGitInternals` (.git), `hiddenTrash` (`__delphi-patch`: includetrash shows it) and, in dirs mode only, `hiddenToolFolders` (.vs, .github, __pycache__...). The `note` says what each one is and how to see it. Until 1.5.0 the server temp was counted as a build folder, with the advice to pass it as root.
+What it does not show is counted BY REASON (1.5.0, one counter shared with `delphi_search`): `hidden` is the total, and each reason that is not zero gets its field - `hiddenBuildArtifacts` (Win32/Win64/Debug/Release/dcu/__history/__recovery/__pycache__: pass that folder as root to see it), `hiddenServerTemp` (the server's `__delphi-temp`: never shown, not even with includetrash), `hiddenGitInternals` (.git), `hiddenTrash` (`__delphi-patch`: includetrash shows it) and, in dirs mode only, `hiddenToolFolders` (.vs, .github, .idea...). The `note` says what each one is and how to see it. Until 1.5.0 the server temp was counted as a build folder, with the advice to pass it as root.
 
 ### `delphi_projects`
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots when root is empty; optional name filter. The way to answer "open project X" without knowing the disk layout. Answers in PAGES (maxresults, default 50; offset + nextOffset to walk them): a work machine holds thousands of .dproj.
+Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots when root is empty; optional name filter. The way to answer "open project X" without knowing the disk layout. Answers in PAGES (maxresults, default 50; offset + nextOffset to walk them): a work machine holds thousands of .dproj. Grouped by folder: projects = [{dir, files = [{name, kind}]}], and each git repository once in repos = [{dir, branch}]: a project's is the LONGEST dir its folder is inside.
 
 *Access: read-only OK.*
 
@@ -233,7 +233,7 @@ Locate Delphi projects (.dproj/.groupproj) under a directory - or under the work
 | `offset` | integer | optional | Skip the first N projects of the FULL list: pass the previous answer's nextOffset. |
 <!-- /contract -->
 
-**Answer (hand-written).** Pages: `maxresults` (default 50) and `offset` + `nextOffset` to walk them; when there are more, the answer also reports `byFolder` - the ten folders holding the most projects - so the next call can narrow `root` instead of walking pages. Measured on a server whose root was a whole drive: 6420 of 7025 projects were third-party component sources and their backups, and the operator's own were 73.
+**Answer (hand-written).** The projects come grouped by folder, each folder once: `projects = [{dir, files = [{name, kind, readOnly?, compilesAgainst?}]}]`, like every list of files of this server (the list keeps its name; only `files` and `dirs` become `folders`, since the name would repeat inside); each git repository once in `repos = [{dir, branch}]` - a project's repository is the LONGEST `dir` its folder is inside (a nested repository or a submodule is its own entry; a submodule has no `branch`). Pages: `maxresults` (default 50) and `offset` + `nextOffset` to walk them; when there are more, the answer also reports `byFolder` - the ten folders holding the most projects - so the next call can narrow `root` instead of walking pages. Measured on a server whose root was a whole drive: 6420 of 7025 projects were third-party component sources and their backups, and the operator's own were 73.
 
 ### `delphi_installs`
 
@@ -273,7 +273,7 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keepi
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi file |
 | `old` | string | optional | EDIT mode: the line to replace - ONE full line copied from delphi_read (everything after the \| bar). It must be UNIQUE in the whole file, and indentation does not count: if the same text is on another line too, add atline (occurrence inside edits). |
-| `new` | string | optional | EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new with the added code). A final line break is dropped; each extra one adds a blank line. |
+| `new` | string | optional | EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new with the added code). A final line break is dropped; each extra one adds a blank line. Same rule for one-line and block anchors. |
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers) |
 | `toline` | integer | optional | RANGE (1-based, inclusive): with this, "old" becomes the FIRST line of a range that ends here - delete:true removes it all (a whole method, without pasting it), "new" replaces it all. Refused if backwards, past the end or the whole file. |
 | `edits` | string | optional | SEVERAL edits on THIS SAME file, in a single call and ALL OR NOTHING: a JSON array [{"old":"...","new":"...","atline":12}, ...] applied IN ORDER. Each entry accepts two forms of anchor: ONE LINE (the same as a single edit) or a BLOCK of several consecutive lines in "old", searched for whole and in order - useful for replacing in one piece the body of a method or a long documentation paragraph. If the anchor appears more than once, break the tie with "occurrence": 1, 2... (better than "atline" inside a batch: line numbers MOVE as earlier entries add or remove lines, and "occurrence" does not: it counts on the file as it was BEFORE the batch, so if one entry changes occurrence 1, the next entry asks for 2, not for 1 again; two entries on the same line are refused). "delete": true removes the line; and with "toline": \<number> the anchor stops being ONE line and becomes a RANGE - from the anchor's line to that one, both included - that is removed whole (delete) or replaced by "new". It is the way to drop a method without pasting it whole as an anchor. Inside a batch the range shifts too: if an earlier entry added or removed lines, "toline" is corrected on its own. If an entry fails, the file goes back byte for byte to how it was and you are told which one failed. For a LONG line, an entry can carry "fragment" instead of "old": {"fragment":"68","new":"69","atline":12} changes only that piece of line 12 (atline mandatory, and the piece exactly once in it). If the change touches SEVERAL files, that is delphi_changeset. "edits" is the whole call: old/new/fragment/delete are another mode (EDIT-111) and atline/toline go INSIDE each entry (EDIT-115). |
@@ -309,8 +309,8 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, the whole batch 
 | `kind` | string | optional | stage: edit (replace ONE line by anchor) \| create (new file, never overwrites) \| delete (the WHOLE FILE; the snapshot is the way back) \| delete-line (remove ONE line by atline - the only way to remove a BLANK line, which has no usable anchor) \| move (rename/move; the destination must not exist) |
 | `path` | string | optional | stage: the file the operation touches (inside the workspace roots) |
 | `dest` | string | optional | stage kind=move: the destination path |
-| `old` | string | optional | stage kind=edit: the anchor - ONE full line copied verbatim from delphi_read, unique in the file (or fragment + atline instead). kind=delete-line: optional, the line you expect at atline (the preview refuses when it is not that one). |
-| `new` | string | optional | stage kind=edit: the replacement text (may span several lines). A final line break is dropped; each extra one adds a blank line. |
+| `old` | string | optional | stage kind=edit: the anchor - ONE full line copied verbatim from delphi_read, unique in the file (or fragment + atline instead). kind=delete-line: optional, the line you expect at atline, compared like an anchor (the preview refuses when it is not that one). |
+| `new` | string | optional | stage kind=edit: the replacement text (may span several lines). A final line break is dropped; each extra one adds a blank line. Same rule for one-line and block anchors. |
 | `content` | string | optional | stage kind=create: the whole content of the new file |
 | `atline` | integer | optional | stage kind=edit optional: the 1-based line that pins the anchor when the same line appears more than once. REQUIRED for kind=delete-line. Rebased automatically against what earlier operations of the changeset did to that file. |
 | `fragment` | string | optional | FRAGMENT mode for a LONG line: "fragment" = the exact piece to change (case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY) and "new" = what replaces just that piece; the rest of the line stays byte for byte. One line only; it goes INSTEAD of "old" and combines with no other mode (nor toline). |
@@ -329,7 +329,7 @@ SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .b
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the text file (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml ... any plain text - Delphi files are refused, use delphi_edit) |
 | `old` | string | optional | EDIT mode: the line to replace - ONE full line copied from delphi_read (everything after the \| bar). It must be UNIQUE in the whole file, and indentation does not count: if the same text is on another line too, add atline (occurrence inside edits). |
-| `new` | string | optional | EDIT mode: the new text; may be several lines. Empty = blank the line. A final line break is dropped; each extra one adds a blank line. |
+| `new` | string | optional | EDIT mode: the new text; may be several lines. Empty = blank the line. A final line break is dropped; each extra one adds a blank line. Same rule for one-line and block anchors. |
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence |
 | `toline` | integer | optional | RANGE (1-based, inclusive): with this, "old" becomes the FIRST line of a range that ends here - delete:true removes it all (a whole method, without pasting it), "new" replaces it all. Refused if backwards, past the end or the whole file. |
 | `edits` | string | optional | SEVERAL edits on THIS SAME file in ONE all-or-nothing call: a JSON array [{"old":"...","new":"...","atline":12}, ...] applied in order. An entry anchors on ONE line or on a BLOCK of consecutive lines; "occurrence": N breaks a tie (counted on the file BEFORE the batch, so it does not move like atline); "delete": true removes; "toline" makes the anchor the first line of a range; "fragment" + "atline" changes a piece of a long line. If one entry fails, the file goes back byte for byte and you are told which one. Several files: delphi_changeset. |
@@ -353,7 +353,7 @@ Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable .dproj + main fo
 | `kind` | string | **yes** | project-console \| project-vcl \| project-fmx \| project-package (requires rtl; its units go into contains with kind=unit or add-unit) \| project-test (green at birth; DUnitX ships with RAD Studio) \| form-vcl \| form-fmx \| frame-vcl \| frame-fmx \| datamodule \| unit \| include (never registered; used with {$I}). The description says what each one creates. |
 | `dir` | string | optional | Projects: ABSOLUTE target folder (created if missing). Units, forms, frames, data modules: optional SUBFOLDER relative to the project, as deep as you like (Domain\Models\Dto), created if missing and registered with that path - no drive, no absolute path, no "..". Empty = next to the .dpr. kind=unit or include WITHOUT project: the ABSOLUTE folder of the standalone file. |
 | `name` | string | **yes** | Projects: project name. Forms, frames, data modules and units: unit name (e.g. UCustomers) |
-| `project` | string | optional | Everything but projects: the .dpr, .dpk or .dproj that registers the new unit (uses of a program, contains of a package). kind=unit may go without it, with an ABSOLUTE dir (standalone, listed by no project yet). kind=include: optional, and dir is then relative to it. |
+| `project` | string | optional | Everything but projects: the ABSOLUTE path of the .dpr, .dpk or .dproj that registers the new unit (uses of a program, contains of a package). kind=unit may go without it, with an ABSOLUTE dir (standalone, listed by no project yet). kind=include: optional, and dir is then relative to it. |
 | `formname` | string | optional | Forms/frames/data modules optional: instance name without the T (default: Form+unit, Frame+unit, DM+unit) |
 | `content` | string | optional | kind=unit optional: the FULL source, written as it comes (CRLF) and registered in the same call - no empty skeleton first. Its `unit X;` must match "name" and it must end in `end.`. Without it, a standard empty skeleton. kind=include: REQUIRED, the text of the .inc. |
 <!-- /contract -->
@@ -584,12 +584,12 @@ Android devices for remote development: phones/tablets hang off THIS server (USB
 | `device` | string | optional | Device serial or ip:port (from command=devices). REQUIRED for every command that touches a device, and it must be in the workspace's AdbAllowedDevices: the device is named, never implied, even when only one is attached. |
 | `apk` | string | optional | Path of the .apk to install (inside the workspace) |
 | `app` | string | optional | run: package name of the installed app to launch (e.g. com.embarcadero.MyApp - the build/install results state it) |
-| `out` | string | optional | screenshot, optional: where the capture lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format. Empty = __delphi-temp\\<agent>, wiped on server restart. Jailed like any path. With inline=false the capture stays there and the answer carries its download link. logcat: an optional .txt/.log FILE to dump into instead of answering inline - read it in ranges with delphi_read. |
+| `out` | string | optional | screenshot, optional: where the capture lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format. Empty = __delphi-temp\\<agent>, wiped on server restart. On THIS server, jailed like any path. With inline=false the capture stays there and the answer carries its download link. logcat: an optional .txt/.log FILE to dump into instead of answering inline - read it in ranges with delphi_read. |
 | `x` | string | optional | tap: X measured on a screenshot; pass its frame and the server converts to display pixels. Without frame, X is display pixels (multiply by tapScale.x when the answer carried it). |
 | `y` | string | optional | tap: Y measured on a screenshot; pass its frame and the server converts to display pixels. Without frame, Y is display pixels (multiply by tapScale.y when the answer carried it). |
 | `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package). Optional |
-| `lines` | string | optional | logcat: how many recent lines (default 300, max 5000). An inline answer carries at most the newest 400 - for more, pass out=\<file.txt> and read it in ranges. |
+| `lines` | string | optional | logcat: how many recent lines (default 300, max 5000; 0 = the default). An inline answer carries at most the newest 400 - for more, pass out=\<file.txt> and read it in ranges. |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image (scaled to maxwidth), and no file is kept to download later. false = a file and its download link (a client without vision, or one that wants the bytes). |
 | `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels (or pass frame). |
 | `frame` | string | optional | tap (and type, on delphi_desktop): the "frame" of the screenshot you measured on, copied verbatim; then x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, x,y are capture pixels. |
@@ -620,9 +620,9 @@ The desktop of the machine behind a PAServer profile (a Linux or Windows target,
 | `x` | string | optional | tap/type: horizontal pixel measured on the screenshot this tool returned (pass its frame too and the server converts) |
 | `y` | string | optional | tap/type: vertical pixel measured on the screenshot this tool returned (pass its frame too and the server converts) |
 | `code` | string | optional | key. Linux target: the evdev key code (NOT an X11 keycode): Escape 1, Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the key NAME - escape, enter, tab, space, backspace, delete, home, end, up, down, left, right, super, alt, ctrl, shift, f1..f12, or a letter a..z. The other kind is refused. |
-| `modifiers` | string | optional | key OPTIONAL: keys held while it is pressed, comma separated - ctrl, shift, alt, super (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on Windows: code=f4 modifiers=alt). |
-| `text` | string | optional | type: the text to write. Windows: typed as Unicode. Linux: key by key with the target's own keyboard layout (Shift, AltGr, dead keys); a character it cannot compose (an emoji) is refused by name. Typed as TEXT, never run. With x,y it presses there first to focus the field. |
-| `out` | string | optional | screenshot: where the capture lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format. Empty = __delphi-temp\\<agent>, wiped on server restart. Jailed like any path. With inline=false the capture stays there and the answer carries its download link. |
+| `modifiers` | string | optional | key OPTIONAL: keys held while it is pressed, comma separated - ctrl, shift, alt, super (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on Windows: code=f4 modifiers=alt). Pressed in that order and released in reverse. |
+| `text` | string | optional | type: the text to write. Windows: typed as Unicode. Linux: key by key with the target's own keyboard layout (Shift, AltGr, dead keys); a character it cannot compose (an emoji) is refused by name, and the answer says which keyboard was used. Typed as TEXT, never run. With x,y it presses there first to focus the field. |
+| `out` | string | optional | screenshot: where the capture lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format. Empty = __delphi-temp\\<agent>, wiped on server restart. On THIS server, jailed like any path. With inline=false the capture stays there and the answer carries its download link. |
 | `region` | string | optional | screenshot OPTIONAL: "x,y,w,h" in desktop pixels - only that piece, at full resolution (every image is shrunk to one fixed size, so a crop is how you read a small dialog). The answer carries origin {x,y}: press at (origin.x + x, origin.y + y), or pass its frame. Not with window: for a piece of a window, add the window's origin and use region. When in doubt (a dialog may open elsewhere), capture the whole desktop. |
 | `window` | string | optional | screenshot OPTIONAL: part of a window title; the capture is cropped to the first window of "windows" whose title contains it (case-insensitive), with origin {x,y} like region, plus the whole list (a dialog outside the crop still shows there). A native Wayland window has no rectangle: use region. Not with region. |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image (scaled to maxwidth), and no file is kept to download later. false = a file and its download link (a client without vision, or one that wants the bytes). |
@@ -679,8 +679,8 @@ SEMANTIC RENAME of a Delphi symbol: point at the identifier (path + 0-based line
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | The .pas/.dpr with the symbol (any occurrence works) |
-| `line` | integer | **yes** | Zero-based line of the identifier (same convention as delphi_definition) |
-| `character` | integer | **yes** | Zero-based column inside the identifier |
+| `line` | integer | **yes** | Zero-based line of the identifier (a hit's "line0"; same convention as delphi_definition) |
+| `character` | integer | **yes** | Zero-based column inside the identifier (a hit's "character0") |
 | `newname` | string | **yes** | The new identifier (legal Delphi name, no reserved words) |
 | `mode` | string | optional | preview (default; never writes) \| apply (writes it when applicable, through the changeset engine; refused with the blockers otherwise) |
 <!-- /contract -->
@@ -792,7 +792,7 @@ Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for w
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work - the rules of each are in "command". clone is the fast way to get a whole repo onto the server (far better than recreating files one by one). worktree puts ANOTHER version of the repo next to it to build and compare, without touching anybody's working tree (yours to clean up). Commit/tag messages, config values and the clone URL travel in "message"; push/pull use the credentials and remotes stored on the server. The repository - root folder and .git - has to be inside your roots: git works on the whole repository it finds from "repo" upwards, so one that starts above your roots is refused. No arbitrary git commands, no shell.
+Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work - the rules of each are in "command". clone is the fast way to get a whole repo onto the server (far better than recreating files one by one). worktree puts ANOTHER version of the repo next to it to build and compare, without touching anybody's working tree (yours to clean up). Commit/tag messages, config values and the clone URL travel in "message"; push/pull use the credentials and remotes stored on the server. The repository - root folder and .git - has to be inside your roots: git works on the whole repository it finds from "repo" upwards, so one that starts above your roots is refused (GIT-041). No arbitrary git commands, no shell.
 
 *Access: mixed (`command` status / diff / log / show / ls-remote read-only; branch only without args or message (then it lists); tag only without args or message (then it lists); worktree only with args=list; stash only with args=list; every other command read-write, refused to a read-only credential).*
 
@@ -801,7 +801,7 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | `repo` | string | **yes** | Path of the repository (or any path inside it). The repository ITSELF - root folder and .git - has to be inside your roots: git works on the whole tree. clone: the DESTINATION folder (created if needed, inside your roots). |
 | `command` | string | **yes** | status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| restore \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch \| ls-remote \| worktree. switch: args=\<branch> (create=true for a new one). merge: args=\<branch>, always --ff-only (one needing a commit is refused, never left half-done). pull: args=\<remote> \<branch>, always --ff-only; options: only the download ones (--tags, --no-tags, --prune, --depth=\<n>, --unshallow). fetch: those and --all. push: --tags, -u, --set-upstream, --dry-run, and after the remote the NAMES to send (main, v1.3.2, local:remote): it adds to the remote, never overwrites or deletes. ls-remote: args=\<remote> [refs], read-only, same remote policy (--heads, --tags, --refs, --symref, --exit-code). The remote of these is a network address the operator allows or a folder inside your roots. stash: args=push\|pop\|list (never drop); push -- \<paths> parks ONLY those paths and sets them back to HEAD - how you discard one file's changes without losing them (pop brings them back); its label goes in message. config: args=user.name\|user.email, the value in message. clone: URL in message, destination in repo. worktree: args=list \| add (path = a NEW folder inside your roots, ref = tag\|branch\|commit, detached) \| remove (path = one that list shows; refused with changes or a link inside). restore: args=\<paths> (. = all), always --staged: they leave the index and the working tree is never touched - how you undo an add (to discard changes: stash push -- \<paths>). |
 | `args` | string | optional | Optional extra arguments (paths, --staged, a commit hash...), SPLIT ON SPACES: a path with spaces goes in double quotes (args="my notes.txt"). No shell, and shell metacharacters (; \| & ` $ < >) are refused anyway - if a legitimate option needs one (--pretty=format:...), ask for it with delphi_report. |
-| `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Refused with any other command. |
+| `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Refused with any other command (GIT-038). |
 | `message` | string | optional | commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL |
 | `path` | string | optional | worktree add: a NEW folder inside your roots for the second working copy (like the destination of a clone). worktree remove: a folder that command=worktree args=list shows |
 | `ref` | string | optional | worktree add: the tag, branch or commit to put there, detached - a version to build and compare, not a place to work (v1.3.2, main, HEAD~3, a commit hash) |
@@ -992,7 +992,8 @@ Searches the knowledge vault (Markdown notes linked with [[wikilinks]]). PROTOCO
 | `target` | string | optional | files (search by note NAME, a glob pattern such as *meeting*.md) \| content (search INSIDE the notes, pattern is a regular expression) |
 | `pattern` | string | **yes** | Name glob if target=files (*.md, *delphi*), or a regular expression if target=content |
 | `subfolder` | string | optional | Optional: vault-relative folder to narrow the search (projects, conventions...) |
-| `maxresults` | integer | optional | Maximum number of results (default 50) |
+| `maxresults` | integer | optional | Results PER PAGE (default 50, cap 500). |
+| `offset` | integer | optional | Skip the first N results of the FULL list: pass the offset the previous answer gives; walking it reaches every result. |
 <!-- /contract -->
 
 ### `vault_append`

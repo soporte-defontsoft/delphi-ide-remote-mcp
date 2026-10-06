@@ -64,6 +64,12 @@ function DetectEnc(const B: TArray<Byte>): TEncKind;
 function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
 { La sangria (espacios y tabuladores) del principio de S. }
 function LeadingWhite(const S: string): string;
+{ La sangria de la linea de ATexto en la que esta la posicion APos (1-based):
+  solo el blanco del principio de esa linea. Para meter una etiqueta al lado
+  de otra en un .dproj: BuildRunner y Config copiaban TODO lo que habia
+  delante del ancla en su linea, y con dos etiquetas en una linea (un .dproj
+  editado a mano) duplicaban la de delante (revisor de la 1.15.0). }
+function SangriaDeLaLineaEn(const ATexto: string; APos: Integer): string;
 { LA regla de la sangria que el agente deja fuera del ancla, para delphi_edit
   y delphi_textedit (6-oct-2026: estaba escrita dos veces, de dos formas, y
   delphi_edit la duplicaba). Si el ancla (AAncla, tal como llego) trae menos
@@ -354,6 +360,15 @@ function ModosQueNoCombinan(const AModos: array of string): string;
   "unit Otra;" contestando CREATED (quinta revision). }
 function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
 
+{ AMsg y detras, en su linea, el aviso EDIT-091 de cada comentario de llave
+  con otra llave dentro en ANuevo -el texto que el agente acaba de escribir
+  en APath, que empieza en la linea ALineaBase+1-. Para los que escriben un
+  fuente ENTERO con el content del agente (delphi_create, delphi_edit
+  createunit): solo lo auditaban los motores de edicion, y una unit nueva
+  con el ejemplo de un comentario entre llaves no compilaba sin que nadie lo
+  dijera (6-oct-2026, Lsp.Listas: E2065 tres veces). }
+function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string; ALineaBase: Integer = 0): string;
+
 { Encoding for NEW Delphi files, honouring the IDE's configured default
   (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
   'cp1252' when ANSI. }
@@ -638,6 +653,16 @@ begin
   while (I <= Length(S)) and ((S[I] = ' ') or (S[I] = #9)) do
     Inc(I);
   Result := Copy(S, 1, I - 1);
+end;
+
+function SangriaDeLaLineaEn(const ATexto: string; APos: Integer): string;
+var
+  Ini: Integer;
+begin
+  Ini := APos;
+  while (Ini > 1) and not CharInSet(ATexto[Ini - 1], [#10, #13]) do
+    Dec(Ini);
+  Result := LeadingWhite(Copy(ATexto, Ini, APos - Ini));
 end;
 
 function SangraComoLaLinea(const ALinea, AAncla: string;
@@ -1709,6 +1734,13 @@ begin
     Result := Result + [MsgFmt(SN_AVISO_LLAVE_ANIDADA_FMT, [ALineaBase + L])];
 end;
 
+function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string; ALineaBase: Integer): string;
+begin
+  Result := AMsg;
+  for var Aviso in AvisosDeLlaves(APath, ANuevo, ALineaBase) do
+    Result := Result + #10 + Aviso;
+end;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer): string;
 var
@@ -2583,10 +2615,10 @@ begin
         end;
         var NotaCreada: string;
         var CM := Measure(RelecturaDe(A.Path, CreadoBytes, NotaCreada));
-        Exit(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
+        Exit(ConAvisosDeLlaves(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
           [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
            IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Auditoria(CM)]) +
-          IfThen(NotaCreada <> '', #10 + NotaCreada, ''));
+          IfThen(NotaCreada <> '', #10 + NotaCreada, ''), A.Path, Skel));
       end;
 
       if not TFile.Exists(A.Path) then
@@ -3275,7 +3307,7 @@ begin
               IsSec := True;
           if (TrimL <> '') and not IsSec then
           begin
-            Sangria := Copy(Lines[I], 1, Length(Lines[I]) - Length(Lines[I].TrimLeft));
+            Sangria := LeadingWhite(Lines[I]);
             Break;
           end;
         end;

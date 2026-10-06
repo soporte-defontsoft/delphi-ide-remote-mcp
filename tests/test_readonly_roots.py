@@ -119,9 +119,9 @@ except Exception as e:
 out = call('delphi_projects', {})
 try:
     d = json.loads(out)
-    items = d.get('projects') or d.get('items') or []
-    ref = [p for p in items if p.get('name') == 'Ref']
-    amb = [p for p in items if p.get('name') == 'Ambos']
+    items = mc.ficheros(d, 'projects')
+    ref = [p for p in items if p.get('name') == 'Ref.dproj']
+    amb = [p for p in items if p.get('name') == 'Ambos.dproj']
     check('projects: el proyecto de referencia aparece', len(ref) == 1, out[:400])
     check('projects: ...marcado readOnly:true', ref and ref[0].get('readOnly') is True, json.dumps(ref)[:200])
     check('projects: carpeta en Roots Y ReadOnlyRoots: UNA vez y readOnly', len(amb) == 1 and amb[0].get('readOnly') is True, json.dumps(amb)[:200])
@@ -129,7 +129,7 @@ except Exception as e:
     check('projects: parsea', False, '%s | %s' % (e, out[:300]))
 out = call('delphi_projects', {'root': REF})
 check('projects root=referencia: listar es leer, no se rechaza',
-      mc.como_json(out).get('total') == 1 and [p.get('name') for p in mc.como_json(out).get('projects', [])] == ['Ref'], out[:200])
+      mc.como_json(out).get('total') == 1 and [p.get('name') for p in mc.ficheros(out, 'projects')] == ['Ref.dproj'], out[:200])
 
 # reading works exactly like in the roots
 out = call('delphi_read', {'path': REF_PAS})

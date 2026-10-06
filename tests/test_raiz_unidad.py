@@ -174,10 +174,15 @@ try:
     check('D1 ...y la referencia-unidad (%s)' % VR, sc.get('readOnlyRoots') == [VR], sc.get('readOnlyRoots'))
     raiz = (sc.get('roots') or [VQ])[0]
     res, sc, t = llama('delphi_list', {'root': raiz, 'dirs': True})
-    dirs = [d.lower() for d in sc.get('dirs', [])]
+    dirs = [f['path'].lower() for f in mc.ficheros(sc, hijos='dirs')]
     check('D1 ...y la raiz, devuelta tal cual, se lista: las carpetas de la UNIDAD',
           bien(res, t) and (VQ + 'sub').lower() in dirs and (VQ + 'srv').lower() in dirs
           and (VQ + 'vendor').lower() in dirs, t[:300])
+    # el dir TAL CUAL llega, con su barra: una raiz-unidad sin ella (srvq:) es
+    # la carpeta actual para Windows (GUARD-021), y componiendo la ruta por el
+    # servidor el lector la tapaba (revisor de baterias de la 1.15.0)
+    check('D1 ...y la carpeta del organizador es la raiz con su barra (%s), no %s' % (VQ, VQ.rstrip('\\')),
+          [g.get('dir') for g in sc.get('folders') or []] == [VQ], sc.get('folders'))
 
     # D2 leer y buscar
     res, sc, t = llama('delphi_read', {'path': VQ + 'raiz.txt'})
@@ -186,9 +191,10 @@ try:
     check('D2 buscar desde la raiz encuentra lo de la UNIDAD',
           bien(res, t) and any('raiz.txt' in h.get('path', '') for h in mc.aciertos(sc)), t[:300])
     res, sc, t = llama('delphi_list', {'root': VQ, 'pattern': '*.txt'})
-    rutas = [f.get('path', '').lower() for f in sc.get('files', [])]
+    rutas = [f.get('path', '').lower() for f in mc.ficheros(sc)]
     check('D2 listar ficheros desde la raiz: con su unidad y su barra',
-          bien(res, t) and (VQ + 'raiz.txt').lower() in rutas, t[:300])
+          bien(res, t) and (VQ + 'raiz.txt').lower() in rutas
+          and VQ in [g.get('dir') for g in sc.get('folders') or []], t[:300])
 
     # D3 escribir: crear, editar, mover, borrar
     res, sc, t = llama('delphi_textedit', {'path': VQ + 'nuevo.txt', 'create': True, 'content': 'uno\ndos\n'})
@@ -239,7 +245,7 @@ try:
           and not os.path.exists(os.path.join(REFERENCIA, 'x.txt')), t[:300])
     res, sc, t = llama('delphi_list', {'root': VR, 'pattern': '*.txt'})
     check('D6 ...y se lista desde su raiz',
-          bien(res, t) and any('ref.txt' in f.get('path', '') for f in sc.get('files', [])), t[:300])
+          bien(res, t) and any('ref.txt' in f.get('path', '') for f in mc.ficheros(sc)), t[:300])
 
     # D7 ReadOnlyPaths relativo bajo la raiz-unidad
     res, sc, t = llama('delphi_read', {'path': VQ + 'vendor\\v.txt'})

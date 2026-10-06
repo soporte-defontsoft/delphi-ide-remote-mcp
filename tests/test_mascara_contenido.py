@@ -65,7 +65,7 @@ def ruta_enmascarada(t):
 # ---- M1 / M2: symbols ----
 r = call('delphi_symbols', {'path': PRJ})
 d = J(r)
-decls = [x.get('decl', '') for u in d.get('units', []) for x in u.get('declares', [])]
+decls = [x.get('decl', '') for u in mc.ficheros(d, 'units') for x in u.get('declares', [])]
 check('M1 symbols de carpeta: la declaracion TAL CUAL (con la letra real) y las rutas enmascaradas',
       ("RUTA = '" + REAL + "datos';") in decls and ruta_enmascarada(r), str(decls)[:300] + ' | ' + r[:300])
 r = call('delphi_symbols', {'path': U, 'mode': 'full'})
@@ -82,16 +82,18 @@ check('M3 hover: el bloque de codigo TAL CUAL, el enlace enmascarado',
 
 # ---- M4: references ----
 d = J(call('delphi_references', {'path': U, 'line': L_USO, 'character': lineas[L_USO].index('RUTA') + 1}))
-textos = [c.get('anchor', '') for c in d.get('confirmed', [])]
+conf = mc.aciertos(d, 'confirmed')
+textos = [c.get('text', '') for c in conf]  # la linea tal cual (1.15.0: text, sin anchor)
 check('M4 references: la linea de cada uso TAL CUAL (un ancla) y las rutas enmascaradas',
-      LINEA_RUTA in textos and all(VIRTUAL in c.get('path', '') for c in d.get('confirmed', [])) and d.get('confirmed'),
+      LINEA_RUTA in textos and all(VIRTUAL in c.get('path', '') for c in conf) and conf,
       str(d)[:500])
 
 # ---- M5: rename preview ----
 d = J(call('delphi_rename_symbol', {'path': U, 'line': L_RUTA, 'character': 3, 'newname': 'RUTA2'}))
-anclas = [c.get('anchor', '') for c in d.get('changes', [])]
+chg = mc.aciertos(d, 'changes')
+anclas = [c.get('text', '') for c in chg]
 check('M5 rename preview: la linea de cada cambio TAL CUAL',
-      LINEA_RUTA in anclas and all(VIRTUAL in c.get('path', '') for c in d.get('changes', [])) and d.get('changes'),
+      LINEA_RUTA in anclas and all(VIRTUAL in c.get('path', '') for c in chg) and chg,
       str(d)[:500])
 
 # ---- M6: la pista de changeset ----

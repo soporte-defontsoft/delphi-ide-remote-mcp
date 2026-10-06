@@ -43,11 +43,11 @@ check('list: ";" list works', j.get('total') == 2, r[:200])
 r = call('delphi_list', {'root': BASE, 'filter': '*.pas'})
 try: j = json.loads(r)
 except Exception: j = {}
-check('list alias filter->pattern', j.get('total') == 1 and j['files'][0]['path'].endswith('U1.pas'), r[:200])
+check('list alias filter->pattern', j.get('total') == 1 and mc.ficheros(j)[0]['path'].endswith('U1.pas'), r[:200])
 r = call('delphi_list', {'root': BASE, 'filter': '*.pas', 'pattern': '*.dfm'})
 try: j = json.loads(r)
 except Exception: j = {}
-check('alias never overrides the real name', j.get('total') == 1 and j['files'][0]['path'].endswith('U1.dfm'), r[:200])
+check('alias never overrides the real name', j.get('total') == 1 and mc.ficheros(j)[0]['path'].endswith('U1.dfm'), r[:200])
 
 # --- delphi_read aliases
 r = call('delphi_read', {'path': os.path.join(BASE, 'Big.dproj'), 'startline': 602, 'endline': 602})

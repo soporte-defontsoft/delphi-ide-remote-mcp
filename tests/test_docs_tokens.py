@@ -79,7 +79,7 @@ open(PAS, 'w', encoding='utf-8', newline='\r\n').write(
     'implementation\nend.\n')
 r = call('delphi_search', {'root': BASE, 'query': '// aguja'})
 j = mc.como_json(r)
-fs = j.get('files', [])
+fs = mc.ficheros(j)
 check('T3 search agrupa por fichero: un grupo con sus dos aciertos y la ruta una vez',
       j.get('total') == 2 and len(fs) == 1 and len(fs[0].get('hits', [])) == 2 and
       all('path' not in h for h in fs[0]['hits']) and r.count('Agujas.pas') == 1, r[:400])
@@ -123,7 +123,7 @@ for i in range(12):
 j = mc.como_json(call('delphi_symbols', {'path': GRANDE}))
 fuera = j.get('notShown', [])
 check('T8 una carpeta grande se corta por tamano y NOMBRA lo que falta (LSP-034)',
-      j.get('total') == 12 and fuera and len(j.get('units', [])) + len(fuera) == 12 and
+      j.get('total') == 12 and fuera and len(mc.ficheros(j, 'units')) + len(fuera) == 12 and
       all(f.endswith('.pas') and ':' not in f for f in fuera) and
       'LSP-034' in j.get('notShownNote', ''), json.dumps(j)[:300])
 # (revision de la 1.13.0) notShown tiene tope: la nota dice cuantas nombra, y
@@ -141,7 +141,7 @@ for i in range(260):
         'implementation\nend.\n')
 j = mc.como_json(call('delphi_symbols', {'path': MUCHAS}))
 nota, fuera = j.get('notShownNote', ''), j.get('notShown', [])
-no_entran = j.get('total', 0) - len(j.get('units', []))
+no_entran = j.get('total', 0) - len(mc.ficheros(j, 'units'))
 check('T8 con mas de 200 fuera: notShown nombra 200 y la nota lo dice (no "todas")',
       j.get('total') == 260 and len(fuera) == 200 and no_entran > 200 and
       ('%d units are not in it' % no_entran) in nota and 'names 200 of them' in nota, nota)
