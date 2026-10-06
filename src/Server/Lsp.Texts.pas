@@ -260,9 +260,11 @@ const
 
   SR_SEARCH_REGEX_CARA_FMT =
     '[SEARCH-005 INVALID_PARAM] The regular expression gave up on line %d of ' +
-    '%s: too much backtracking (the engine has a step limit). Make it more ' +
-    'specific - anchor it, avoid nested repetitions like (a+)+. Nothing ' +
-    'more was searched.';
+    '%s: too much backtracking, or a repeated group too deep for that line ' +
+    '(the engine has a step limit and a depth limit). Make it more ' +
+    'specific - anchor it, avoid nested repetitions like (a+)+, and write ' +
+    'a class instead of a repeated alternative on long lines ([ab]* does ' +
+    'what (a|b)* does, with no depth). Nothing more was searched.';
 
   { Una consulta de varias lineas no casa con nada: la busqueda va linea a
     linea, y daba total 0 sin decir por que - el agente concluia que no habia

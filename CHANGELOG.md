@@ -58,8 +58,9 @@ the MCP `initialize` response (`serverInfo.version`).
   (`(?:a|b)*c`, measured): the first time the call failed with a bare
   "Stack overflow" (`SYS-006`), the second time in the same process killed
   it - two read-only searches took the server down. PCRE now stops at 500
-  levels and the search says it gave up (`SEARCH-005`); the same expression
-  on a short line still matches.
+  levels and the search says it gave up (`SEARCH-005`, which now also says
+  how to write it with no depth: `[ab]*` instead of `(a|b)*`); the same
+  expression on a short line still matches.
 
 ### Internal
 
