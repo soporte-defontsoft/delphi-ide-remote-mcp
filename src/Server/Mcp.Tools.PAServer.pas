@@ -88,11 +88,6 @@ type
     constructor Create; override;
   end;
 
-{ '' si el workspace activo permite marcar al host del perfil AProfName; el
-  motivo si no. Existe porque tener un perfil en el IDE NO es permiso del
-  workspace (v0.98): el host del perfil pasa por la MISMA lista RemoteHosts
-  que un host escrito a mano. Lo usa tambien delphi_adb_linux. }
-function ProfileHostDenied(const AProfName: string): string;
 
 { LA puerta de todo lo que se ejecuta en un destino por PAServer, sea para
   lanzarlo, pararlo, leer lo que dejo o hacer un gesto en su escritorio:
@@ -552,7 +547,7 @@ begin
     if (Dir <> '') and TDirectory.Exists(Dir) then
     begin
       for F in TDirectory.GetFiles(Dir, '*.profile') do
-        Profs.Add(TPath.GetFileNameWithoutExtension(F));
+        Profs.Add(NombreDePerfil(F));
       { Cada SDK con SU ficha: de que distro salio y con que glibc. Es lo
         que permite elegir el generico con criterio - se compila con la
         glibc MAS VIEJA del parque - en vez de por el nombre. }
@@ -680,7 +675,6 @@ end;
   the link is verified separately with test-connection. The command line runs
   with no shell and is never logged, so the password only lives in this one
   process argument. }
-function ProbeHostDenied(const AHost: string): string; forward;
 
 { Los asientos del IDE. Medido 2026-09-19, arqueologia con David delante:
   el Connection Profile Manager del IDE NO enumera los .profile del disco -
@@ -837,18 +831,18 @@ begin
   // con una contrasena que este no conoce); y si otro perfil ya apunta al
   // mismo host:puerto, se crea pero avisando - contra los perfiles a lo
   // loco (David, 2026-09-19).
-  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
+  ProfileFile := RutaDePerfil(Info.Version, ProfName);
   if TFile.Exists(ProfileFile) then
     Exit(MsgFmt(SR_PASERVER_PROFILE_EXISTS_FMT,
-      [ProfName, TagValue(TFile.ReadAllText(ProfileFile), 'Profile_host')]));
+      [ProfName, HostDePerfil(Info.Version, ProfName)]));
   AvisoDup := '';
-  if TDirectory.Exists(ProfilesDir(Info.Version)) then
-    for F in TDirectory.GetFiles(ProfilesDir(Info.Version), '*.profile') do
+  if TDirectory.Exists(IdeProfilesDir(Info.Version)) then
+    for F in TDirectory.GetFiles(IdeProfilesDir(Info.Version), '*.profile') do
     try
       if SameText(TagValue(TFile.ReadAllText(F), 'Profile_host'), Host) and
          (TagValue(TFile.ReadAllText(F), 'Profile_port') = Port) then
         AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT,
-          [TPath.GetFileNameWithoutExtension(F)]);
+          [NombreDePerfil(F)]);
     except
       // un perfil ilegible no impide crear el nuevo
     end;
@@ -896,61 +890,7 @@ end;
   chasing credentials (field request from the first live PAServer session:
   the agent had no way to ask whether we reached it). Route only, no
   credentials involved, so a failure here is ALWAYS network/NAT/firewall. }
-{ El host de un perfil, pasado por la MISMA lista que un host escrito a
-  mano. Todo comando que marca por perfil (test-connection name=, get-sdk,
-  remote-run, delphi_adb_linux) pasa por aqui ANTES de tocar la red: medido
-  2026-09-19 que el perfil de otra maquina marcaba desde un workspace cuya
-  lista no lo incluia. El perfil dice COMO conectar; el workspace dice SI. }
-function ProfileHostDenied(const AProfName: string): string;
-var
-  Info: TRadStudioInfo;
-  ProfileFile, Xml: string;
-begin
-  Result := '';
-  // los perfiles del Delphi de ESTE servidor, los mismos que usa quien marca
-  // con el perfil (5-oct-2026: la puerta miraba los de TODAS las
-  // instalaciones y el paclient los de una sola)
-  Info := DiscoverRadStudio;
-  if not Info.Found then
-    Exit;
-  ProfileFile := TPath.Combine(ProfilesDir(Info.Version),
-    AProfName.Trim + '.profile');
-  if not TFile.Exists(ProfileFile) then
-    Exit; // el no-existe lo reporta cada comando con su propio texto
-  try
-    Xml := TFile.ReadAllText(ProfileFile);
-  except
-    Exit;
-  end;
-  if TagValue(Xml, 'Profile_host') <> '' then
-    Result := ProbeHostDenied(TagValue(Xml, 'Profile_host'));
-end;
 
-{ Whether this server may open a TCP connection to AHost. '' = it may.
-
-  Measured 2026-08-25: the whitelist that closed the git hole left this door
-  wide open. `test-connection host=127.0.0.1 port=3131` made the server dial
-  its own MCP port, and any host:port answered "reachable / refused / timed
-  out" - a port scanner run from inside this machine's network, behind its
-  firewall, with no execution permission needed. Same primitive, same rule:
-  SOLO lo que el operador escribio en RemoteHosts del workspace activo.
-  Nada mas - desde v0.98 ni siquiera los hosts de los perfiles del IDE:
-  el perfil dice COMO conectar, el workspace dice SI se puede. }
-function ProbeHostDenied(const AHost: string): string;
-var
-  H, Allowed: string;
-begin
-  Result := '';
-  H := AHost.Trim.ToLower;
-  if H = '' then
-    Exit;
-  Allowed := RemoteProbeHosts;
-  for var A in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
-    if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
-      Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
-  Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim,
-    ONinguno(Allowed)]);
-end;
 
 function TcpProbe(const AHost, APort: string): string;
 var
@@ -1022,7 +962,7 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
-  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
+  ProfileFile := RutaDePerfil(Info.Version, ProfName);
   if not TFile.Exists(ProfileFile) then
     Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   try
@@ -1065,7 +1005,7 @@ begin
   end;
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
-  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
+  ProfileFile := RutaDePerfil(Info.Version, ProfName);
   if not TFile.Exists(ProfileFile) then
     Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   Result := ProfileHostDenied(ProfName);
@@ -1291,7 +1231,7 @@ begin
     Exit(MsgText(SR_PASERVER_NEED_NAME));
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
-  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
+  ProfileFile := RutaDePerfil(Info.Version, ProfName);
   if not TFile.Exists(ProfileFile) then
     Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   Result := ProfileHostDenied(ProfName);
@@ -1540,7 +1480,7 @@ begin
     begin
       for F in TDirectory.GetFiles(Dir, '*.profile') do
       begin
-        Nombre := TPath.GetFileNameWithoutExtension(F);
+        Nombre := NombreDePerfil(F);
         Reg := TRegistry.Create(KEY_READ);
         try
           Reg.RootKey := HKEY_CURRENT_USER;

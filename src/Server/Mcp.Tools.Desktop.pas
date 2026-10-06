@@ -297,21 +297,10 @@ begin
       Exit;
   end;
 
-  { Ejecutar en el destino es remote-run con otro volante: la MISMA puerta
-    que delphi_paserver (EjecucionRemotaDenegada): AllowRemoteRun, perfil,
-    host del perfil y el proyecto -el del agente, o el nodo empaquetado-
-    en RemoteRunProjects. Esta tool llevaba su copia. }
-  Proj := Params.Project.Trim;
-  Result := EjecucionRemotaDenegada(Params.Profile.Trim, Proj,
-    MsgText(SR_ADBLINUX_NEEDPROFILE));
-  if Result <> '' then
-    Exit;
-  { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca
-    el nombre del perfil (que no significa nada). }
-  EsWin := PlataformaDelPerfil(Params.Profile.Trim).StartsWith('Win', True);
-  { Recorte: una VISTA del mismo fotograma, hecha aqui (Lsp.Imagen). region
-    vale en todos; window por la lista que trae cada captura (en Linux, las
-    ventanas X11/Xwayland: toda aplicacion FMX). }
+  { La region/window y los argumentos del gesto son PROPIOS de la llamada (sin
+    red ni disco): se validan ANTES de la puerta, para que un error de la
+    peticion se diga sin un destino vivo. Lo que necesita el perfil -"key", que
+    habla el idioma del destino- va DESPUES de la puerta. }
   ConRecorte := False;
   RX := 0; RY := 0; RW := 0; RH := 0;
   if (Params.Region.Trim <> '') and (Params.Window.Trim <> '') then
@@ -360,17 +349,35 @@ begin
     else
       Args := Args + ['texto', Params.Text.Trim];
   end
-  else if Cmd = 'key' then
+  else if Cmd = 'overview' then
+    Args := Args + ['ventanas'];
+
+  { Ejecutar en el destino es remote-run con otro volante: la MISMA puerta que
+    delphi_paserver (EjecucionRemotaDenegada): AllowRemoteRun, perfil, host del
+    perfil y el proyecto -el del agente, o el nodo empaquetado- en
+    RemoteRunProjects. Va AQUI, tras validar los argumentos propios y ANTES de
+    leer el perfil, marcar o escribir. }
+  Proj := Params.Project.Trim;
+  Result := EjecucionRemotaDenegada(Params.Profile.Trim, Proj,
+    MsgText(SR_ADBLINUX_NEEDPROFILE));
+  if Result <> '' then
+    Exit;
+  { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca el
+    nombre del perfil (que no significa nada). "key" habla el idioma del destino
+    (codigo evdev en Linux, nombre en Windows), por eso su validacion va DESPUES
+    de la puerta. }
+  EsWin := PlataformaDelPerfil(Params.Profile.Trim).StartsWith('Win', True);
+  if Cmd = 'key' then
   begin
     { Cada nodo habla el idioma de su sistema: en Linux un codigo evdev (una
       POSICION del teclado), en Windows el NOMBRE de la tecla. Un numero en
       Windows no es la misma tecla que en Linux, asi que no se traduce: se
       rechaza diciendo lo que ese destino espera. }
-    { Modificadores (Ctrl+K, Alt+Tab, Ctrl+Shift+S): por nombre en la tool,
-      y el nodo los recibe DELANTE de la tecla, que es el orden en que se
-      pulsan (y se sueltan al reves). En Linux viajan como codigos evdev; en
-      Windows por su nombre, que el nodo ya conoce. Hasta 1.0.17 no habia
-      forma (informe de Hermes 2026-09-22: un campo que solo abre Ctrl+K). }
+    { Modificadores (Ctrl+K, Alt+Tab, Ctrl+Shift+S): por nombre en la tool, y
+      el nodo los recibe DELANTE de la tecla, que es el orden en que se pulsan
+      (y se sueltan al reves). En Linux viajan como codigos evdev; en Windows
+      por su nombre, que el nodo ya conoce. Hasta 1.0.17 no habia forma (informe
+      de Hermes 2026-09-22: un campo que solo abre Ctrl+K). }
     var Mods: TArray<string> := nil;
     for var M in Params.Modifiers.ToLower.Split([',', '+', ' '], TStringSplitOptions.ExcludeEmpty) do
     begin
@@ -398,9 +405,7 @@ begin
         Exit(MsgText(SR_ADBLINUX_NEEDCODE));
       Args := Args + ['tecla'] + Mods + [IntToStr(StrToIntDef(Params.Code.Trim, 0))];
     end;
-  end
-  else if Cmd = 'overview' then
-    Args := Args + ['ventanas'];
+  end;
   { La lista de ventanas viaja con CADA captura (24-sep): window= no manda
     nada al nodo; se recorta aqui con la lista que trae la captura. }
   { screenshot y status corren el nodo sin argumentos: el nodo siempre

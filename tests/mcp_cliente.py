@@ -613,6 +613,53 @@ def entorno(extra=None):
     return env
 
 
+def appdata_perfil(base, nombre='x', host='127.0.0.1', platform='Win64', por_defecto=False):
+    """Un %APPDATA% de PRUEBA para un servidor de bateria, con un perfil FALSO.
+    Copia del real los ficheros de config que HEREDAN los hijos (paclient,
+    msbuild): los .sdk y .proj de cada BDS\\<ver> -copiar es solo leer-, y
+    planta <nombre>.profile con host propio. Los .profile reales NO se copian:
+    llevan la contrasena del PAServer, y ninguna bateria los necesita.
+    por_defecto=True escribe ademas <DefaultProfile> de esa plataforma en la
+    copia de EnvOptions.proj: el perfil que msbuild usa cuando nadie le da
+    uno (lo que el IDE llama perfil por defecto). Devuelve (appdata_dir,
+    host): el primero a env['APPDATA'], el segundo a DELPHI_MCP_REMOTE_HOSTS.
+    Desde 1.15.1 la puerta ProfileHostDenido FALLA CERRADO: un perfil de
+    bateria tiene que EXISTIR y tener un host permitido para pasar."""
+    import shutil
+    ad = os.path.join(base, 'appdata')
+    real = os.path.join(os.environ.get('APPDATA', ''), 'Embarcadero', 'BDS')
+    xml = ('<?xml version="1.0" encoding="utf-8"?>\n'
+           '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="">\n'
+           '  <PropertyGroup>\n'
+           '    <Profile_platform>%s</Profile_platform>\n'
+           '    <Profile_host>%s</Profile_host>\n'
+           '    <Profile_port>64211</Profile_port>\n'
+           '    <Profile_password>00</Profile_password>\n'
+           '  </PropertyGroup>\n'
+           '</Project>\n' % (platform, host))
+    for ver in (os.listdir(real) if os.path.isdir(real) else []):
+        sv = os.path.join(real, ver)
+        if not os.path.isdir(sv):
+            continue
+        dv = os.path.join(ad, 'Embarcadero', 'BDS', ver)
+        os.makedirs(dv, exist_ok=True)
+        for f in os.listdir(sv):
+            if f.lower().endswith(('.proj', '.sdk')):
+                try:
+                    shutil.copy(os.path.join(sv, f), os.path.join(dv, f))
+                except Exception:
+                    pass
+        open(os.path.join(dv, nombre + '.profile'), 'w', encoding='utf-8').write(xml)
+        env_opts = os.path.join(dv, 'EnvOptions.proj')
+        if por_defecto and os.path.isfile(env_opts):
+            t = open(env_opts, encoding='utf-8-sig').read()
+            grupo = '<PropertyGroup Condition="\'$(Platform)\'==\'%s\'">' % platform
+            assert grupo in t, 'EnvOptions.proj sin el grupo de ' + platform
+            t = t.replace(grupo, grupo + '\n        <DefaultProfile>%s</DefaultProfile>' % nombre, 1)
+            open(env_opts, 'w', encoding='utf-8').write(t)
+    return ad, host
+
+
 # Las etiquetas de los mensajes del catalogo (Lsp.Texts.MSG_TAG_REGEX, decision
 # de David 27-sep-2026): [AREA-NNN] o [AREA-NNN RESULTADO] al PRINCIPIO de cada
 # mensaje. Las baterias reconocen un mensaje por su id, no por su frase, asi

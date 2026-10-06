@@ -63,11 +63,14 @@ DEV = '127.0.0.1:5555'
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R43]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
-    'AllowRemoteRun=1',
+    'AllowRemoteRun=1', 'RemoteHosts=127.0.0.1',
     'RemoteRunProjects=NodoLinux', 'AdbAllowedDevices=%s' % DEV, '',
 ]))
 
-proc = mc.lanza_http(EXE, PORT, mc.entorno())
+# perfil FALSO 'x' (Linux64) en un APPDATA de prueba: la puerta ProfileHostDenido
+# falla cerrado desde 1.15.1; el host 127.0.0.1 esta en RemoteHosts del workspace.
+_ad43, _ = mc.appdata_perfil(BASE, 'x', '127.0.0.1', 'Linux64')
+proc = mc.lanza_http(EXE, PORT, mc.entorno({'APPDATA': _ad43}))
 # sin texto, el mensaje entero en el detalle (como siempre en esta bateria)
 cli = mc.Http(PORT, TOK, t=180, respaldo_json=True)
 cli.session('r43')

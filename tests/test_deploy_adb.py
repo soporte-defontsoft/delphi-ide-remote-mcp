@@ -27,10 +27,16 @@ BASE = mc.carpeta('deploy-adb')
 # su PROPIA copia del servidor (antes corria el compilado en su sitio, con
 # los logs y temporales de la carpeta de la build)
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+# perfil FALSO 'mcp-e2e-noprof' (Linux64) en un APPDATA de prueba, host 127.0.0.1
+# permitido: la puerta ProfileHostDenido (fail-closed 1.15.1) lo deja pasar, y el
+# deploy llega a generar el manifiesto y falla DESPUES en el PAClient (host
+# caido), que es lo que la bateria mide. No se despliega a ninguna maquina real.
+_ADB_AD, _ADB_HOST = mc.appdata_perfil(BASE, 'mcp-e2e-noprof', '127.0.0.1', 'Linux64')
 
 
 def Server(extra_args=(), env=None):
-    e = {'DELPHI_MCP_ROOTS': BASE}  # v0.98: sin jaula declarada = solo lectura
+    e = {'DELPHI_MCP_ROOTS': BASE, 'APPDATA': _ADB_AD,
+         'DELPHI_MCP_REMOTE_HOSTS': _ADB_HOST}  # 1.15.1: perfil FALSO + su host permitido
     e.update(env or {})
     return mc.Stdio(EXE, mc.entorno(e), nombre='deploy-adb-battery', args=extra_args)
 

@@ -68,6 +68,13 @@ env['MCP_STUB_SCRATCH'] = SCRATCH
 env['MCP_STUB_RUNJOB_EXE'] = RUNJOB_EXE   # el gemelo Win64 del lanzador que corre el stub
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'   # v0.48.1: remote execution is opt-in
 env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'Saluda'  # v0.98: lista vacia = NADA (fail closed)
+# APPDATA de prueba con el perfil FALSO (mc.appdata_perfil, un solo sitio): los
+# hijos (el stub de paclient, msbuild) lo heredan; la puerta ProfileHostDenido
+# (fail-closed desde 1.15.1) encuentra 'perfil' con host 127.0.0.1, y ese host
+# es del perfil FALSO -de ninguno real-, lo que el control positivo comprueba.
+_ad, _host = mc.appdata_perfil(BASE, PROFILE, '127.0.0.1')
+env['APPDATA'] = _ad
+env['DELPHI_MCP_REMOTE_HOSTS'] = _host
 srv = mc.Stdio(EXE, env, nombre='rr')
 call = srv.call
 
@@ -93,6 +100,19 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
 j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
+# Control POSITIVO: con RemoteHosts a OTRO host, remote-run al MISMO perfil se
+# deniega NOMBRANDO 127.0.0.1 - el host del perfil FALSO. Prueba que la puerta
+# leyo ESTE perfil (del APPDATA de prueba), no el real (donde 'perfil' no
+# existe), y que compara el host del perfil contra RemoteHosts.
+env_otro = dict(env); env_otro['DELPHI_MCP_REMOTE_HOSTS'] = '10.1.2.3'
+srv_otro = mc.Stdio(EXE, env_otro, nombre='otrohost')
+try:
+    ro = srv_otro.call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                                           'exe': PROJNAME + '.exe', 'timeoutms': 20000})
+    check('control positivo: la puerta leyo el perfil FALSO (deniega nombrando su 127.0.0.1)',
+          mc.es(ro, 'SR_PASERVER_HOST_DENIED_FMT') and '127.0.0.1' in ro, ro[:300])
+finally:
+    srv_otro.mata()
 # 1.7.11: el programa nace en modo SIN cuadro de error aunque el lanzador no
 # lo tenga: se lo fija el. En un destino el lanzador nace de PAServer, que
 # corre en modo 0 (medido contra uno de verdad); aqui nace del anfitrion de WMI

@@ -6,6 +6,52 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **`delphi_build target=Deploy` goes through the `RemoteHosts` gate.** A
+  deploy by profile dials the profile's host (PAClient), like `test-connection`
+  and `remote-run`, and skipped the gate they use: measured, a deploy reached
+  a host that `RemoteHosts` does not list. The gate judges the profile msbuild
+  will use - the call's `profile`, else the one the project declares for that
+  platform (`set-profile`; a first version of this fix looked at the argument
+  only, and a deploy without `profile` still dialed the project's) - and
+  msbuild receives it explicitly, even empty: `/p:Profile=` is a global
+  property, so neither the project nor the IDE's default profile can put
+  another one there. With no profile anywhere, a deploy to a remote platform
+  stops with msbuild's own "Missing profile name".
+- **The profile gate fails closed.** No RAD Studio, a profile that does not
+  exist, one that cannot be read or one that declares no host: refused with
+  its reason (`PAS-052` to `PAS-055`) in the deploy of `delphi_build`,
+  `delphi_paserver remote-run` and `delphi_desktop`. They went through.
+- `delphi_desktop` checks the call's own arguments (coordinates, text, code)
+  before the profile gate, so a wrong request is told without a live target;
+  `key`, which speaks the target's language, is checked after it.
+- `delphi_git log -S<text>` and `-G<regex>` (history search, read only) pass
+  the argument filter: the value was read as short options, and an `O` or an
+  `F` in it refused the call (`GIT-003`).
+
+### Internal
+
+- One namer for a profile file (`RutaDePerfil`, and `NombreDePerfil` its
+  inverse) and one reader of its host (`HostDePerfil`), in `Lsp.Discovery`,
+  for the gate and for every place that built `<name>.profile` by hand: the
+  gate trimmed the name and those places did not. The host check itself
+  (`ProbeHostDenied`) moved to `Lsp.Guard`, with the other gates.
+- New battery `test_deploy_remotehost` (D1-D9): the deploy gate by argument
+  and by project, the environment's default profile, a profile that does not
+  exist in the three callers - each red against its mutant (five measured:
+  without the gate, without the project's profile, without the explicit
+  `/p:Profile=`, with the gate failing open; D1 and D6 are controls, and D4,
+  a name with spaces, is a guard: the deploy trims it before the gate, and the
+  gate and msbuild use that same value).
+  `mc.appdata_perfil` gives a battery server a test `APPDATA` with a fake
+  profile, so that round30, round43, deploy_adb and remoterun keep testing
+  what they test with a gate that fails closed; it copies the `.sdk` and
+  `.proj` files the build needs and never the real `.profile` files, which
+  carry the PAServer password.
+
 ## [1.15.0] - 2026-10-06
 
 File lists name each folder once, and every answer speaks one convention

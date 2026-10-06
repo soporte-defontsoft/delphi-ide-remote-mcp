@@ -1485,7 +1485,7 @@ begin
   try
     if TDirectory.Exists(Dir) then
       for F in TDirectory.GetFiles(Dir, '*.profile') do
-        L.Add(TPath.GetFileNameWithoutExtension(F));
+        L.Add(NombreDePerfil(F));
     Disponibles := ONinguno(string.Join(', ', L.ToStringArray)); // nunca "Registered: ."
   finally
     L.Free;
@@ -1499,7 +1499,7 @@ begin
   begin
     if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then
       Exit(MsgText(SR_PASERVER_PROFILE_NAME));
-    if not TFile.Exists(TPath.Combine(Dir, Perfil + '.profile')) then
+    if not TFile.Exists(RutaDePerfil(Info.Version, Perfil)) then
       Exit(MsgFmt(SR_CONFIG_PROFILE_NOEXISTE_FMT, [Perfil, Disponibles]));
   end;
 

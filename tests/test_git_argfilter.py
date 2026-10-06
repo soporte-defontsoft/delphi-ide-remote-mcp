@@ -86,6 +86,19 @@ check('log --grep con espacios (comillas legitimas): pasa y las conserva',
       'exit=0' in r, r[:200])
 r = git({'command': 'log', 'args': '-- "a.txt"'})
 check('log -- <ruta comillada>: pasa (recompuesta bien)', 'exit=0' in r, r[:200])
+# 1.15.1: el pickaxe -S<texto> / -G<texto> (busqueda en el historial, SOLO
+# LECTURA) pasa aunque el valor lleve 'F'/'O'/'c' (antes `-SOpen` caia por la
+# 'O' del valor, medido 2026-10-06). El valor va PEGADO; no es ruta ni fichero
+# ni comando.
+r = git({'command': 'log', 'args': '-SOpen --max-count=1 --oneline'})
+check('log -SOpen (pickaxe, valor con O mayuscula): pasa', 'exit=0' in r, r[:200])
+r = git({'command': 'log', 'args': '-GOpen --max-count=1 --oneline'})
+check('log -GOpen (pickaxe -G, valor con O mayuscula): pasa', 'exit=0' in r, r[:200])
+# ...pero -S SUELTO no se traga el siguiente argumento como su valor: cada token
+# se revisa por separado, asi que una opcion prohibida DETRAS se caza igual.
+r = git({'command': 'log', 'args': '-S --output=' + LEAK})
+check('log -S --output=... (-S suelto + opcion prohibida detras): RECHAZADO y no escribe',
+      (mc.rechazado(r) and not mc.llego_a_git(r)) and sin_fuga(), r[:200])
 
 srv.mata()
 

@@ -5158,6 +5158,23 @@ const
     'there is NOT permission: the profile says HOW to connect, the ' +
     'workspace says WHETHER you may.';
 
+  // ProfileHostDenido (Lsp.Discovery) falla CERRADO: los cuatro motivos por los
+  // que no puede comprobar el host del perfil, cada uno con el suyo (1.15.1).
+  SR_PROFILE_NO_DELPHI =
+    '[PAS-052 INTERNAL] I cannot check the profile''s host: no RAD Studio ' +
+    'installation was found on this server. Nothing was dialed or deployed.';
+  SR_PROFILE_NO_EXISTE_FMT =
+    '[PAS-053 DENIED] The connection profile "%s" does not exist on this ' +
+    'server, so I cannot check its host against RemoteHosts: nothing was ' +
+    'dialed or deployed. delphi_paserver command=profiles lists the ones there are.';
+  SR_PROFILE_NO_LEIDO_FMT =
+    '[PAS-054 INTERNAL] I could not read the connection profile "%s" to check ' +
+    'its host, so nothing was dialed or deployed. Tell the operator.';
+  SR_PROFILE_SIN_HOST_FMT =
+    '[PAS-055 DENIED] The connection profile "%s" declares no host ' +
+    '(Profile_host), so there is nothing to check against RemoteHosts and ' +
+    'nothing was dialed or deployed.';
+
   SR_GIT_REMOTE_OFF_FMT =
     '[GIT-004 DENIED] This server does not talk to "%s". An explicit URL ' +
     'in a git command makes THE SERVER open the connection, so deciding ' +

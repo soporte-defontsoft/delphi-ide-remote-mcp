@@ -1142,23 +1142,30 @@ begin
   end;
 end;
 
-{ El SDK que declara EL PROYECTO (propiedad PlatformSDK, que es la que lee
-  CodeGear.Profiles.Targets). El modelo del IDE es que cada proyecto diga con
-  cual se compila; si lo dice, no se le pisa. }
-function ProyectoDeclaraSdk(const ADproj, APlat: string; out ASdk: string): Boolean;
+{ Lo que EL PROYECTO declara para una plataforma (PlatformSDK, Profile: las
+  propiedades que CodeGear.Profiles.Targets lee del .dproj). '' si no lo
+  declara o el .dproj no se lee. Un lector para el SDK y para el perfil. }
+function PropiedadDelProyecto(const ADproj, APlat, ATag: string): string;
 var
   Xml: string;
 begin
-  ASdk := '';
-  Result := False;
+  Result := '';
   try
     Xml := TFile.ReadAllText(ADproj);
   except
     Exit;
   end;
-  // POR PLATAFORMA, que es como lo escriben el IDE y set-sdk: el primer
-  // <PlatformSDK> del fichero le daba a un build OSX64 el SDK de Linux64.
-  ASdk := PlatformProperty(Xml, APlat, 'PlatformSDK');
+  // POR PLATAFORMA, que es como lo escriben el IDE, set-sdk y set-profile: el
+  // primer <PlatformSDK> del fichero le daba a un build OSX64 el SDK de Linux64.
+  Result := PlatformProperty(Xml, APlat, ATag);
+end;
+
+{ El SDK que declara EL PROYECTO (propiedad PlatformSDK, que es la que lee
+  CodeGear.Profiles.Targets). El modelo del IDE es que cada proyecto diga con
+  cual se compila; si lo dice, no se le pisa. }
+function ProyectoDeclaraSdk(const ADproj, APlat: string; out ASdk: string): Boolean;
+begin
+  ASdk := PropiedadDelProyecto(ADproj, APlat, 'PlatformSDK');
   Result := ASdk <> '';
 end;
 
@@ -1428,12 +1435,36 @@ begin
   // never deploys stale either.
   if SameText(Target, 'Deploy') then
     Target := 'Build;Deploy';
+  // La puerta de RemoteHosts, tambien aqui: un deploy por perfil MARCA el host
+  // del perfil (PAClient), igual que test-connection / remote-run, asi que pasa
+  // por la MISMA puerta (ProfileHostDenied). Hasta la 1.15 el deploy la saltaba
+  // (R1, medido 2026-10-06: llegaba a marcar un host fuera de RemoteHosts).
+  // Falla cerrado: host no permitido, o perfil que no se puede comprobar, y no
+  // compila ni despliega.
+  // El perfil juzgado es el MISMO que usa msbuild: el de la llamada y, si no
+  // viene, el que el proyecto declara para esa plataforma (set-profile, o el
+  // IDE), que es lo que $(Profile) lee del .dproj. Juzgar solo el argumento
+  // dejaba la puerta abierta por el proyecto (medido 2026-10-06: deploy sin
+  // profile= y con <Profile> en el .dproj, E0003 contra un host fuera de
+  // RemoteHosts). msbuild lo recibe EXPLICITO, tambien vacio: /p:Profile= es
+  // una propiedad global, y ni el proyecto ni el $(DefaultProfile) de
+  // EnvOptions.proj pueden ponerle otro que nadie juzgo. Sin perfil, un
+  // destino remoto para con "Missing profile name" de msbuild.
+  var Perfil := AProfile.Trim;
+  if Target.Contains('Deploy') and (Perfil = '') then
+    Perfil := PropiedadDelProyecto(ADprojPath, Plat, 'Profile');
+  if Target.Contains('Deploy') and (Perfil <> '') then
+  begin
+    var HostDenegado := ProfileHostDenied(Perfil);
+    if HostDenegado <> '' then
+      raise Exception.Create(HostDenegado);
+  end;
   // The deployment targets address the remote machine through $(Profile)
   // (their PAClient task takes ProfileName="$(Profile)"). Vetted at the gate
   // like every argument that lands on this command line.
   var ProfileArg := '';
-  if AProfile.Trim <> '' then
-    ProfileArg := ' /p:Profile=' + AProfile.Trim;
+  if Target.Contains('Deploy') or (Perfil <> '') then
+    ProfileArg := ' /p:Profile=' + Perfil;
   // Remote platforms get a deployment manifest when the project has none:
   // minimal (the project output) for PAServer targets, the full measured
   // apk staging map for Android. An IDE-written .deployproj is used as-is.
@@ -1458,7 +1489,7 @@ begin
   // sin manifiesto, msbuild "desplegaba" cero ficheros y decia exito. La
   // plataforma local solo lo es cuando no hay perfil (medido 2026-09-22 con
   // el primer deploy Win64 a windows-local: carpeta vacia en el destino).
-  if Target.Contains('Deploy') and ((ProfileArg <> '') or not IsLocalPlatform(Plat)) then
+  if Target.Contains('Deploy') and ((Perfil <> '') or not IsLocalPlatform(Plat)) then
   begin
     ManifestFilled := TFile.Exists(TPath.ChangeExtension(TPath.GetFullPath(ADprojPath), '.deployproj'));
     EnsureDeployManifest(TPath.GetFullPath(ADprojPath), Plat, Info.RootDir,
@@ -1915,7 +1946,7 @@ begin
       end;
       // Same statelessness rule for a remote deploy: say where the files
       // landed ON THE TARGET, or the agent has to guess PAServer's layout.
-      if (ProfileArg <> '') and Target.Contains('Deploy') then
+      if (Perfil <> '') and Target.Contains('Deploy') then
       begin
         var Shipped := TRegEx.Matches(Output, 'Deploying\s+"([^"]+)"', [roIgnoreCase]).Count +
           TRegEx.Matches(Output, 'Copying\s+"?([^"\r\n]+?)"?\s+to\s+remote', [roIgnoreCase]).Count;
@@ -1925,7 +1956,7 @@ begin
         for var MP in TRegEx.Matches(Output, '--put="?([^"\r\n]+)', [roIgnoreCase]) do
           Shipped := Shipped + Length(MP.Groups[1].Value.Split([';']));
         Result.AddPair('deployNote', MsgFmt(SN_BUILD_DEPLOYED_FMT,
-          [AProfile.Trim, GetEnvironmentVariable('USERNAME'), AProfile.Trim,
+          [Perfil, GetEnvironmentVariable('USERNAME'), Perfil,
            TPath.GetFileNameWithoutExtension(ADprojPath)]));
         if Output.Contains('Local file "" not found') then
           Result.AddPair('deployWarning', MsgText(SN_BUILD_DEPLOY_EMPTY_ENTRY));
@@ -1951,7 +1982,7 @@ begin
         ')\.wait(?:\.[0-9]+)?\.exe', [roIgnoreCase]);
       if MLock.Success then
         Result.AddPair('deployLockedNote', MsgFmt(SN_BUILD_DEPLOY_LOCKED_FMT,
-          [MLock.Groups[1].Value, AProfile.Trim, ADprojPath, MLock.Groups[1].Value]));
+          [MLock.Groups[1].Value, Perfil, ADprojPath, MLock.Groups[1].Value]));
     end;
     // The agent should know its project just gained a manifest whether or
     // not this particular msbuild run succeeded.

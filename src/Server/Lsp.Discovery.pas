@@ -74,6 +74,27 @@ function IdeDefaultUtf8(const AVersion: string): Boolean;
   ONE definition, shared by delphi_paserver and the build runner. }
 function IdeProfilesDir(const AVersion: string): string;
 
+{ EL nombre del fichero de un perfil del IDE: IdeProfilesDir + nombre +
+  '.profile'. Nombrador UNICO (se componia a mano en ~7 sitios), con Trim como
+  la puerta, para que todos nombren el MISMO fichero. NombreDePerfil es su
+  inversa, para quien lista con GetFiles('*.profile'). }
+function RutaDePerfil(const AVersion, AName: string): string;
+function NombreDePerfil(const APath: string): string;
+
+{ EL host (Profile_host) de un perfil, leido del MISMO fichero que compone
+  RutaDePerfil. La version con AMotivo dice por que no hay host (no existe / no
+  se lee / sin Profile_host): la puerta niega con ese motivo; quien solo quiere
+  el host usa la otra. '' si no hay. }
+function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string; overload;
+function HostDePerfil(const AVersion, AName: string): string; overload;
+
+{ '' si este servidor PUEDE marcar el host del perfil AProfName: la puerta de
+  RemoteHosts (ProbeHostDenied en Lsp.Guard) con el host leido del perfil.
+  Falla CERRADO: sin Delphi, perfil que no existe, que no se lee o sin host ->
+  niega con su motivo (hasta la 1.15 dejaba pasar los cuatro). La llaman
+  delphi_paserver, remote-run y el deploy de delphi_build. }
+function ProfileHostDenied(const AProfName: string): string;
+
 { Where THIS installation keeps the platform sysroots - the folder the IDE
   calls $(BDSPLATFORMSDKSDIR), with one <name>.sdk subfolder per SDK.
 
@@ -214,6 +235,7 @@ uses
   System.Win.Registry,
   Lsp.Guard, // ServerDelphiVersion: la version que fija el settings.ini
   Lsp.Texts,
+  Lsp.Dproj, // TagValue: EL lector de los tags del .profile
   Winapi.Windows,
   Lsp.NetDrives;
 
@@ -748,6 +770,60 @@ function IdeProfilesDir(const AVersion: string): string;
 begin
   Result := TPath.Combine(TPath.Combine(TPath.Combine(
     GetEnvironmentVariable('APPDATA'), 'Embarcadero'), 'BDS'), AVersion);
+end;
+
+function RutaDePerfil(const AVersion, AName: string): string;
+begin
+  Result := TPath.Combine(IdeProfilesDir(AVersion), AName.Trim + '.profile');
+end;
+
+function NombreDePerfil(const APath: string): string;
+begin
+  Result := TPath.GetFileNameWithoutExtension(APath);
+end;
+
+function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string;
+var
+  Ruta, Xml: string;
+begin
+  AMotivo := '';
+  Result := '';
+  Ruta := RutaDePerfil(AVersion, AName);
+  if not TFile.Exists(Ruta) then
+  begin
+    AMotivo := MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [AName.Trim]);
+    Exit;
+  end;
+  try
+    Xml := TFile.ReadAllText(Ruta);
+  except
+    AMotivo := MsgFmt(SR_PROFILE_NO_LEIDO_FMT, [AName.Trim]);
+    Exit;
+  end;
+  Result := TagValue(Xml, 'Profile_host');
+  if Result = '' then
+    AMotivo := MsgFmt(SR_PROFILE_SIN_HOST_FMT, [AName.Trim]);
+end;
+
+function HostDePerfil(const AVersion, AName: string): string;
+var
+  Ignorado: string;
+begin
+  Result := HostDePerfil(AVersion, AName, Ignorado);
+end;
+
+function ProfileHostDenied(const AProfName: string): string;
+var
+  Info: TRadStudioInfo;
+  Host, Motivo: string;
+begin
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit(MsgText(SR_PROFILE_NO_DELPHI));
+  Host := HostDePerfil(Info.Version, AProfName, Motivo);
+  if Motivo <> '' then
+    Exit(Motivo); // falla cerrado: no existe / no se lee / sin host
+  Result := ProbeHostDenied(Host);
 end;
 
 function IdeSdksDir(const AVersion: string): string;

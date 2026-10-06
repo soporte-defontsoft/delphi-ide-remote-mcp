@@ -691,7 +691,7 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit;
-  P := TPath.Combine(IdeProfilesDir(Info.Version), AProfile + '.profile');
+  P := RutaDePerfil(Info.Version, AProfile);
   if TFile.Exists(P) then
     Result := TagValue(TFile.ReadAllText(P), 'Profile_platform');
 end;
