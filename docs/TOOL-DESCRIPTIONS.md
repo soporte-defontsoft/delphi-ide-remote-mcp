@@ -85,9 +85,9 @@ What the measures taught:
   indentation are the same anchor; "it must be UNIQUE in the whole file, and
   indentation does not count" did.
 - **Descriptions lie quietly.** Measuring found a description promising a key
-  combination the desktop node cannot press on Windows, and three commands
-  of `delphi_paserver` that required the project's full .dproj path without
-  saying so.
+  combination the desktop node could not press on Windows (the node has
+  learned the letters since), and three commands of `delphi_paserver` that
+  required the project's full .dproj path without saying so.
 - **The suite guards concepts the bench did not ask about.** Several
   batteries check that a description still says a given thing. One of them
   caught a concept the trimmed text had dropped and no task measured (`type`
@@ -99,8 +99,8 @@ What the measures taught:
 
 | `tools/list`, 37 tools, no vault | 1.13.1 | after |
 | --- | --- | --- |
-| characters | 99,879 | 89,027 (-10.9%) |
-| Qwen3.8 tokens of the same JSON | 24,574 | 22,225 (-9.6%) |
+| characters | 99,879 | 89,016 (-10.9%) |
+| Qwen3.8 tokens of the same JSON | 24,574 | 22,226 (-9.6%) |
 
 Twenty-four tools were trimmed. The largest cuts: `delphi_desktop` -25%,
 `delphi_projects` -23%, `delphi_config` -21%, `delphi_symbols` -17%,

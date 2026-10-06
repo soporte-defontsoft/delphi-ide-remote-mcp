@@ -165,6 +165,10 @@ begin
   else if N = 'down' then Result := VK_DOWN
   else if N = 'left' then Result := VK_LEFT
   else if N = 'right' then Result := VK_RIGHT
+  // una letra es su propia tecla virtual (VK_A..VK_Z son 'A'..'Z'): Ctrl+S
+  // llega como "tecla ctrl s" (6-oct-2026; hasta hoy "no conozco la tecla")
+  else if (Length(N) = 1) and CharInSet(N[1], ['a'..'z']) then
+    Result := Ord(UpCase(N[1]))
   else if (N = 'f1') or (N = 'f2') or (N = 'f3') or (N = 'f4') or (N = 'f5') or
           (N = 'f6') or (N = 'f7') or (N = 'f8') or (N = 'f9') or (N = 'f10') or
           (N = 'f11') or (N = 'f12') then

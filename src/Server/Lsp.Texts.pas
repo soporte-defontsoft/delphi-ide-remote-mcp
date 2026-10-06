@@ -2116,8 +2116,8 @@ const
     'key. Linux target: the evdev key code (NOT an X11 keycode): Escape 1, ' +
     'Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the key ' +
     'NAME - escape, enter, tab, space, backspace, delete, home, end, up, ' +
-    'down, left, right, super, alt, ctrl, shift, f1..f12 (letters are not ' +
-    'keys there). The other kind is refused.';
+    'down, left, right, super, alt, ctrl, shift, f1..f12, or a letter a..z. ' +
+    'The other kind is refused.';
   SP_ADBLINUX_TEXT =
     'type: the text to write. Windows: typed as Unicode. Linux: key by key ' +
     'with the target''s own keyboard layout (Shift, AltGr, dead keys); a ' +

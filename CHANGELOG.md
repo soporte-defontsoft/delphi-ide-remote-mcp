@@ -39,7 +39,7 @@ One server, one Delphi.
   one in use and says why; an installation without DelphiLSP is listed
   without a key.
 - **The tool descriptions are about 11% shorter**: `tools/list` goes from
-  99,879 to 89,027 characters (24,574 to 22,225 tokens for Qwen3.8), room an
+  99,879 to 89,016 characters (24,574 to 22,226 tokens for Qwen3.8), room an
   agent gets back on every round of a session. Twenty-four tools were
   trimmed, and every change was measured against a small local model - the
   current text and the trimmed one on the same tasks - before it went in;
@@ -91,10 +91,14 @@ One server, one Delphi.
   have read it as a second root), and in the vault's two samples
   (`docs/VAULT.md`, `examples/vault/README.md`), where a copied
   `VaultReadOnly=0 ; ...` would have left the vault read-only.
-- `delphi_desktop`'s description gave `Ctrl+K` as the example of a key
-  with modifiers, also for Windows, where the node presses named keys only
-  (enter, tab, f1..f12, the arrows...) and refuses a letter. It says which
-  keys each target takes, with an example that works on each.
+- **`delphi_desktop` presses letters on a Windows target** (Ctrl+S, Ctrl+A,
+  Ctrl+K...): its node knew only named keys (enter, tab, f1..f12, the
+  arrows...) and answered "Unknown key" to a letter, while the description
+  had offered Ctrl+K as its example. The node translates a..z now, and the
+  `code` parameter says so (measured with Qwen3.8 on the key tasks before
+  it went in). New battery `test_nodo_teclas` (7 checks): the node runs on
+  a separate Windows desktop where nothing it sends arrives, so the keys
+  are checked without pressing anything on the operator's screen.
 - `delphi_paserver` `remote-run`, `kill` and `output` take the ABSOLUTE
   path of the project's .dproj, and no description said so: a model passed
   the project's name and was refused. The `project` and `job` parameters
