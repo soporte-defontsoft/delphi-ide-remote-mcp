@@ -46,12 +46,18 @@ type
     // see Destroy for the double-free this replaces.
     FRegistryIntf: IMCPManagerRegistry;
     FCore: TMCPCoreManager;
+    // lo que paso con [Server] DelphiVersion al arrancar ('' = ya estaba)
+    FNotaDelphiIni: string;
   public
     constructor Create;
     destructor Destroy; override;
 
     { Builds the managers, wires the gate and the outbound filter, and declares
-      the vault when one is configured. Call once, before starting anything. }
+      the vault when one is configured. Call once, before starting anything.
+      FIRST it makes sure this server has its Delphi: without it, it raises
+      and the host reports it and does not start (a Delphi MCP server needs
+      its Delphi); and with no [Server] DelphiVersion in settings.ini it
+      writes the one it chose there. }
     procedure Wire;
 
     { Creates the HTTP server already configured: credentials, bind address,
@@ -97,7 +103,8 @@ uses
   Mcp.Vault.Seed,
   Lsp.LogSink,
   Mcp.Tools.Workspace, // NombreDeMaquina: the one reader of the host name
-  Lsp.DesignerMetaGen; // CalientaTablasDelDisenador
+  Lsp.DesignerMetaGen, // CalientaTablasDelDisenador
+  Lsp.Discovery; // NotasDeArranqueDelphi
 
 constructor TMcpHost.Create;
 begin
@@ -154,16 +161,30 @@ begin
 end;
 
 procedure TMcpHost.Wire;
+var
+  ErrorIni: string;
 begin
-  // Lo primero: vaciar los temporales del servidor. Lo que quede ahi es de
-  // una ejecucion anterior, y un temporal que nadie recoge son 56 MB dentro
-  // de dos dias (medido 2026-09-21, cuando vivian en el %TEMP% de la
-  // maquina). Declarar la carpeta borrable no vale de nada si no la borra
-  // nadie.
+  // Lo primero: el Delphi de este servidor. Sin el no hay servidor - es un
+  // servidor MCP para Delphi (David, 5-oct-2026) -, y la excepcion la cuenta
+  // cada host: el log y un codigo de salida, el visor de eventos, la bandeja.
+  ExigeElDelphiDelServidor;
+  // Sin [Server] DelphiVersion en su settings.ini, la que eligio (la mas
+  // nueva) se escribe alli: desde ahi manda la clave, y no cambia sola el
+  // dia que se instale otro Delphi. Si no puede, sigue y lo dice.
+  FNotaDelphiIni := '';
+  if ServerDelphiVersion = '' then
+    if FijaDelphiVersionEnElIni(DiscoverRadStudio.Version, ErrorIni) then
+      FNotaDelphiIni := MsgFmt(SL_DISC_ESCRITA_FMT, [DiscoverRadStudio.Version])
+    else if ErrorIni <> '' then
+      FNotaDelphiIni := MsgFmt(SL_DISC_NO_ESCRITA_FMT, [DiscoverRadStudio.Version, ErrorIni]);
+  // Vaciar los temporales del servidor. Lo que quede ahi es de una
+  // ejecucion anterior, y un temporal que nadie recoge son 56 MB dentro de
+  // dos dias (medido 2026-09-21, cuando vivian en el %TEMP% de la maquina).
+  // Declarar la carpeta borrable no vale de nada si no la borra nadie.
   PurgeServerTemp;
-  // Las tablas del disenador de cada Delphi instalado, sacadas de su fuente:
-  // en un hilo, de una en una, y solo la que falta (la primera vez tras
-  // instalar, actualizar o tocar las rutas del IDE). Nadie espera a esto.
+  // Las tablas del disenador del Delphi de este servidor, sacadas de su
+  // fuente: en un hilo, y solo si falta (la primera vez tras instalar,
+  // actualizar o tocar las rutas del IDE). Nadie espera a esto.
   CalientaTablasDelDisenador;
   FRegistry := TMCPManagerRegistry.Create;
   FRegistryIntf := FRegistry; // pin: from here, reference counting owns it
@@ -250,6 +271,15 @@ var
       Notes := Notes + [S];
   end;
 
+  // las notas de otra unidad: las que empiezan por SL_MARCA_AVISO son avisos
+  procedure AddNota(const S: string);
+  begin
+    if S.StartsWith(SL_MARCA_AVISO) then
+      Add(NOTE_WARNING_PREFIX + S)
+    else
+      Add(S);
+  end;
+
 var
   JailWarn: Boolean;
   Jail: string;
@@ -282,10 +312,13 @@ begin
   // here as the "default" workspace; misconfigured sections stop vanishing
   // silently (operator decision 2026-09-11).
   for var WsNote in WorkspaceStartupNotes do
-    if WsNote.StartsWith(SL_MARCA_AVISO) then
-      Add(NOTE_WARNING_PREFIX + WsNote)
-    else
-      Add(WsNote);
+    AddNota(WsNote);
+  // Las instalaciones de Delphi de la maquina, cada una con la clave que el
+  // operador copiaria a su settings.ini, y cual usa este servidor (David,
+  // 5-oct-2026: un servidor es un Delphi).
+  for var DelphiNote in NotasDeArranqueDelphi do
+    AddNota(DelphiNote);
+  AddNota(FNotaDelphiIni);
   Add(LogSinkNote);
   Result := Notes;
 end;

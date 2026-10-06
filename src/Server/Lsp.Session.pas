@@ -506,13 +506,12 @@ function TLspSession.EnsureExe: string;
 var
   Info: TRadStudioInfo;
 begin
-  // Sin cache: la instalacion la elige DiscoverRadStudio por WORKSPACE
-  // (DelphiVersion=), asi que dos workspaces pueden pedir motores
-  // distintos en el mismo proceso. Se llama solo al arrancar un motor.
+  // La instalacion la elige DiscoverRadStudio: la del servidor ([Server]
+  // DelphiVersion), una por proceso. Se llama solo al arrancar un motor.
   Info := DiscoverRadStudio;
   if not Info.Found or (Info.DelphiLspExe = '') then
     raise ELspSession.Create(
-      MsgText(SE_LSP_RAD_STUDIO_INSTALLATION_DELPHILSP));
+      MsgText(SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED));
   Result := Info.DelphiLspExe;
 end;
 
@@ -1062,7 +1061,8 @@ begin
   // le regalaba al estrecho una raiz que su jaula le prohibe
   // (auditoria 2026-09-21).
   // ...y la VERSION de RAD Studio, porque los settings fabricados salen de
-  // los paths de ESA instalacion (DelphiVersion= por workspace).
+  // los paths de ESA instalacion (la del servidor: no cambia en vida del
+  // proceso, pero la clave no tiene que saberlo).
   Dir := DiscoverRadStudio.Version + '|' +
     string.Join(';', WorkspaceRoots).ToLower + '|' +
     TPath.GetDirectoryName(TPath.GetFullPath(AFilePath)).ToLower;
@@ -1136,8 +1136,8 @@ const
   Prefix: array [Boolean] of string = ('agent|', 'linter|');
 begin
   ASettingsUsed := ResolveSettings(AFullPath, ARootDir);
-  // La VERSION entra en la clave: un workspace fijado a otra RAD Studio
-  // (DelphiVersion=) necesita SU DelphiLSP, no el que ya corre para otro.
+  // La VERSION entra en la clave: cada RAD Studio necesita SU DelphiLSP.
+  // Hoy hay una por servidor, pero la clave no tiene que saberlo.
   var Ver := DiscoverRadStudio.Version;
   if ASettingsUsed <> '' then
     Result := Prefix[ALinter] + Ver + '|' + ASettingsUsed.ToLower

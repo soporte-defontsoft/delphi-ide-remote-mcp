@@ -165,7 +165,8 @@ check('R6b search.maxresults dice PER PAGE, no tope global',
       'PER PAGE' in prop('delphi_search', 'maxresults').get('description', ''),
       prop('delphi_search', 'maxresults').get('description', '')[:120])
 check('R6b search.offset dice que recorre la lista COMPLETA',
-      'FULL hit list' in prop('delphi_search', 'offset').get('description', ''),
+      'FULL list' in prop('delphi_search', 'offset').get('description', '')
+      and 'every hit' in prop('delphi_search', 'offset').get('description', ''),
       prop('delphi_search', 'offset').get('description', '')[:120])
 
 # R7 (v0.79): package hands the exact next call - a model invented the zip

@@ -49,8 +49,7 @@ def lanza(entorno=None):
     with open(os.path.join(SRVDIR, 'settings.ini'), 'w') as f:
         f.write('[Server]' + NL + 'Port=%d' % puerto + NL + 'BindIP=127.0.0.1' + NL
                 + 'EngineIdleMinutes=0.2' + NL * 2
-                + '[Workspace.Op]' + NL + 'Token=%s' % TOKEN + NL + 'Roots=%s' % BASE + NL
-                + 'DelphiVersion=37.0' + NL)
+                + '[Workspace.Op]' + NL + 'Token=%s' % TOKEN + NL + 'Roots=%s' % BASE + NL)
     proc = mc.lanza_http(EXE, None, mc.entorno(entorno), espera_en=puerto)
     return proc, puerto
 

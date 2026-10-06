@@ -215,8 +215,8 @@ try:
           'over 1 MB' in desc('delphi_fetch') and 'above 1 MB' in prop('delphi_fetch', 'maxbytes')
           and '1 MB' in cat['SN_WS_DOWNLOAD_WITH_FETCH'] and '4 MB' not in fetch, fetch[:600])
     check('W9 region y window (delphi_desktop, delphi_adb) dicen que no se combinan',
-          'does not combine with window' in cat['SP_ADBLINUX_REGION']
-          and 'Not together with region' in cat['SP_ADBLINUX_WINDOW'],
+          'Not with window' in cat['SP_ADBLINUX_REGION']
+          and 'Not with region' in cat['SP_ADBLINUX_WINDOW'],
           cat['SP_ADBLINUX_REGION'][-200:] + ' | ' + cat['SP_ADBLINUX_WINDOW'][-120:])
 finally:
     proc.kill()

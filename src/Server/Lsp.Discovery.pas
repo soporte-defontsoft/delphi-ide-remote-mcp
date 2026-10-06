@@ -2,8 +2,9 @@ unit Lsp.Discovery;
 
 { Locates the RAD Studio installation via the Windows registry - no hardcoded
   paths. Checks HKCU first (per-user data also lives there), then HKLM, in
-  both 32-bit and 64-bit registry views. Picks the highest installed BDS
-  version that actually ships a DelphiLSP.exe. }
+  both 32-bit and 64-bit registry views. ONE server = ONE Delphi (David,
+  5-oct-2026): the one [Server] DelphiVersion pins, or else the highest
+  installed BDS version that actually ships a DelphiLSP.exe. }
 
 interface
 
@@ -19,12 +20,27 @@ type
     { Como se llama a si misma, leido de la instalacion y NUNCA compuesto
       aqui (David, 22-sep-2026: "o los tenemos o no los tenemos"): el
       registro guarda el nombre en Personalities ("RAD Studio 13" /
-      "Delphi 13") y bds.exe lleva la edicion y el build exacto en su
-      informacion de version. '' = esa instalacion no lo dice. }
+      "Delphi 13") y el update instalado en InstalledUpdates, y bds.exe
+      lleva la edicion y el build exacto en su informacion de version.
+      '' = esa instalacion no lo dice. }
     ProductName: string;  // 'RAD Studio 13'   (Personalities, valor por defecto)
     DelphiName: string;   // 'Delphi 13'       (Personalities\Delphi.Win32)
     Edition: string;      // 'Enterprise/Architect' (bds.exe ProductName)
     Build: string;        // '37.0.59082.6021'     (bds.exe FileVersion)
+    { El update que el instalador apunto: 'Delphi 13 and C++Builder 13
+      Update 1' (InstalledUpdates\Main Product Update), lo que el IDE pone en
+      su Acerca de. Embarcadero saca la 13 (BDS 37.0) y luego sus updates:
+      Update 1 es la 13.1 y Update 2 la 13.2, la misma 37.0 con la misma
+      carpeta - una sustituye a la otra. Es una ETIQUETA para el operador
+      (el log de arranque, delphi_installs) y el codigo nunca la compara ni
+      la trocea: es texto, y puede cambiar de redaccion o venir traducido.
+      El update que cuenta lo declara el operador (ServerDelphiUpdate, David,
+      5-oct-2026). Los parches de GetIt son otra cosa y no van aqui. }
+    InstalledUpdate: string;
+    { El sufijo de su compilador, LEIDO del disco: '370' de bin\dcc32370.dll.
+      No sale del numero BDS: solo coinciden desde la 13 (la 12 es BDS 23.0 y
+      su compilador dcc32290.dll; revision R1, 5-oct-2026). '' si no hay. }
+    SufijoCompilador: string;
     function Found: Boolean;
   end;
 
@@ -72,21 +88,44 @@ function IdeSdksDir(const AVersion: string): string;
 
 { ALL RAD Studio installations on the machine (a machine may host several
   Delphi versions side by side), newest first. Installs WITHOUT DelphiLSP
-  are included too: they still build via msbuild. }
+  are listed too (delphi_installs, the startup log), but a server cannot
+  use them: it needs DelphiLSP. }
 function DiscoverAllRadStudios: TArray<TRadStudioInfo>;
 
-{ The ACTIVE install - the ONE place that chooses one. The version the
-  active workspace asks for (PreferredDelphiVersion: [Workspace.<x>]
-  DelphiVersion=36.0) when it is installed; otherwise, and by default, the
-  highest version that ships a DelphiLSP.exe. Every tool that needs an
-  install (build, LSP engine, profiles, SDKs, components) asks here, so a
-  workspace pinned to one version gets it everywhere at once. }
+{ THE Delphi of this server - the ONE place that chooses one, and ONCE: the
+  first call fixes it for the life of the process (no registry walk per
+  request, and no switching when a RAD Studio is installed or removed while
+  it runs). The version settings.ini pins (ServerDelphiVersion: [Server]
+  DelphiVersion=37.0); without one, the highest version that ships a
+  DelphiLSP.exe - and the server writes it into settings.ini at startup
+  (Lsp.Host.Wire). A pinned version that is not installed gives NONE
+  (Found = False), and the server does not start (ExigeElDelphiDelServidor):
+  it never uses another version instead (David, 5-oct-2026). Every tool
+  that needs an install (build, LSP engine, profiles, SDKs, paclient, adb,
+  components, the library zone, the designer tables) asks here and never
+  walks DiscoverAllRadStudios looking for whichever has what it wants.
+  The future landscape: what one release needs done differently (a path, a
+  bug of that release, a table) hangs from HERE, keyed by what the install
+  says of itself - Info.Version (the BDS number) - AND the update its
+  operator declares (ServerDelphiUpdate, [Server] DelphiUpdate=13.2). 13.1
+  and 13.2 are both BDS 37.0, and today the server works the same with
+  both; the update is declared for what a given one will need, never
+  deduced (the installer's text, Info.InstalledUpdate, is only a label for
+  the operator). Never a table of names written by hand. }
 function DiscoverRadStudio: TRadStudioInfo;
 
-{ '' when the active install is the one asked for (or none was asked for);
-  otherwise the note that says which version was requested and which one
-  answers instead - delphi_workspace and delphi_installs show it. }
-function DiscoverRadStudioNote: string;
+{ Sin su Delphi NO hay servidor (David, 5-oct-2026: "siempre debe haber uno,
+  por eso es un servidor MCP para Delphi"): lanza una excepcion con el
+  motivo - la fijada que no esta, con las que sirven aqui y su clave, o que
+  no hay ninguna con DelphiLSP. La llama TMcpHost.Wire antes que nada, y cada
+  host lo cuenta a su manera. }
+procedure ExigeElDelphiDelServidor;
+
+{ Lo que el servidor escribe en su log al arrancar: CADA instalacion de la
+  maquina con la clave que el operador copiaria a su settings.ini (la que no
+  trae DelphiLSP, sin clave: no la puede usar), y cual usa este servidor y
+  por que (David, 5-oct-2026). }
+function NotasDeArranqueDelphi: TArray<string>;
 
 { The IDE's global Library Search Path for a platform ('Win32'/'Win64'),
   raw, with its $() variables unexpanded. This is where INSTALLED COMPONENT
@@ -173,7 +212,7 @@ uses
   System.Generics.Collections,
   System.Generics.Defaults,
   System.Win.Registry,
-  Lsp.Guard, // PreferredDelphiVersion: la version que pide el workspace activo
+  Lsp.Guard, // ServerDelphiVersion: la version que fija el settings.ini
   Lsp.Texts,
   Winapi.Windows,
   Lsp.NetDrives;
@@ -217,6 +256,24 @@ begin
     if VerQueryValue(@Buf[0], PChar(Format('\StringFileInfo\%.4x%.4x\ProductName',
          [LoWord(Trad^), HiWord(Trad^)])), P, Len) and (Len > 1) then
       AEdicion := string(PChar(P)).Trim;
+  end;
+end;
+
+{ El sufijo del compilador de una instalacion, del fichero que HAY en su
+  bin: dcc32<3 digitos>.dll ('370'). '' si no hay ninguno. }
+function SufijoDelCompilador(const ARootDir: string): string;
+var
+  F, N: string;
+begin
+  Result := '';
+  if not TDirectory.Exists(ARootDir + 'bin') then
+    Exit;
+  for F in TDirectory.GetFiles(ARootDir + 'bin', 'dcc32*.dll') do
+  begin
+    N := LowerCase(TPath.GetFileName(F));
+    if (Length(N) = 12) and CharInSet(N[6], ['0'..'9']) and
+       CharInSet(N[7], ['0'..'9']) and CharInSet(N[8], ['0'..'9']) then
+      Exit(Copy(N, 6, 3));
   end;
 end;
 
@@ -267,7 +324,16 @@ begin
           Info.DelphiName := Reg.ReadString('Delphi.Win32').Trim;
         Reg.CloseKey;
       end;
+      // el update instalado, lo que el IDE pone en su Acerca de (13.1 es
+      // "Update 1", 13.2 "Update 2"); ausente = no lo dice
+      if Reg.OpenKeyReadOnly('SOFTWARE\Embarcadero\BDS\' + Ver + '\InstalledUpdates') then
+      begin
+        if Reg.ValueExists('Main Product Update') then
+          Info.InstalledUpdate := Reg.ReadString('Main Product Update').Trim;
+        Reg.CloseKey;
+      end;
       InfoDelExe(Info.RootDir + 'bin\bds.exe', Info.Edition, Info.Build);
+      Info.SufijoCompilador := SufijoDelCompilador(Info.RootDir);
       AMap.Add(Ver, Info);
     end;
   finally
@@ -318,35 +384,121 @@ begin
     end));
 end;
 
-function DiscoverRadStudio: TRadStudioInfo;
+var
+  // El Delphi del servidor, elegido UNA vez (DiscoverRadStudio)
+  GDelphiCandado: TObject;
+  GDelphiElegido: Boolean = False;
+  GDelphiDelServidor: TRadStudioInfo;
+
+{ La eleccion: la fijada si esta (y trae DelphiLSP), si no hay fijada la
+  mas nueva con DelphiLSP; fijada y no instalada, NINGUNA. Hasta el
+  5-oct-2026 se caia a la mas nueva y el "servidor del 12" compilaba con
+  el 13. }
+function EligeDelphi: TRadStudioInfo;
 var
   Info: TRadStudioInfo;
   Pedida: string;
 begin
-  Pedida := PreferredDelphiVersion;
-  if Pedida <> '' then
-    for Info in DiscoverAllRadStudios do
-      if SameText(Info.Version, Pedida) and (Info.DelphiLspExe <> '') then
-        Exit(Info);
-  // sin peticion, o pedida y no instalada (la nota lo cuenta): la de siempre
+  Pedida := ServerDelphiVersion;
   for Info in DiscoverAllRadStudios do // newest first
-    if Info.DelphiLspExe <> '' then
+    if Info.Found and ((Pedida = '') or SameText(Info.Version, Pedida)) then
       Exit(Info);
   Result := Default(TRadStudioInfo);
 end;
 
-function DiscoverRadStudioNote: string;
-var
-  Pedida: string;
-  Activa: TRadStudioInfo;
+function DiscoverRadStudio: TRadStudioInfo;
 begin
-  Result := '';
-  Pedida := PreferredDelphiVersion;
-  if Pedida = '' then
+  TMonitor.Enter(GDelphiCandado);
+  try
+    if not GDelphiElegido then
+    begin
+      GDelphiDelServidor := EligeDelphi;
+      GDelphiElegido := True;
+    end;
+    Result := GDelphiDelServidor;
+  finally
+    TMonitor.Exit(GDelphiCandado);
+  end;
+end;
+
+{ Como se llama una instalacion, de lo que ella dice de si misma: '37.0
+  (RAD Studio 13, Delphi 13 and C++Builder 13 Update 1)', o solo la version
+  si no lo dice. }
+function NombreConVersion(const AInfo: TRadStudioInfo): string;
+var
+  Dice: string;
+begin
+  Dice := AInfo.ProductName;
+  if (Dice <> '') and (AInfo.InstalledUpdate <> '') then
+    Dice := Dice + ', ';
+  Dice := Dice + AInfo.InstalledUpdate;
+  Result := AInfo.Version;
+  if Dice <> '' then
+    Result := Result + ' (' + Dice + ')';
+end;
+
+procedure ExigeElDelphiDelServidor;
+var
+  Info: TRadStudioInfo;
+  Usables: TArray<string>;
+  Lista: string;
+begin
+  if DiscoverRadStudio.Found then
     Exit;
-  Activa := DiscoverRadStudio;
-  if not SameText(Activa.Version, Pedida) then
-    Result := MsgFmt(SN_DELPHIVERSION_MISSING_FMT, [Pedida, Activa.Version]);
+  if ServerDelphiVersion = '' then
+    raise Exception.Create(MsgText(SE_DISC_NINGUNA));
+  Usables := nil;
+  for Info in DiscoverAllRadStudios do
+    if Info.Found then
+      Usables := Usables + [MsgFmt(SF_DISC_USABLE_FMT, [NombreConVersion(Info), Info.Version])];
+  if Length(Usables) = 0 then
+    Lista := MsgText(SF_DISC_NINGUNA_USABLE)
+  else
+    Lista := string.Join('; ', Usables);
+  raise Exception.Create(MsgFmt(SE_DISC_FIJADA_NO_ESTA_FMT,
+    [ServerDelphiVersion, Lista]));
+end;
+
+function NotasDeArranqueDelphi: TArray<string>;
+var
+  Info, LaMia: TRadStudioInfo;
+  Quien, Marca, Porque: string;
+begin
+  Result := nil;
+  LaMia := DiscoverRadStudio;
+  for Info in DiscoverAllRadStudios do
+  begin
+    // como se llama, de la instalacion misma; si no lo dice, la version
+    Quien := Trim(Info.ProductName + ' ' + Info.Build);
+    if Info.InstalledUpdate <> '' then
+      if Quien = '' then
+        Quien := Info.InstalledUpdate
+      else
+        Quien := Quien + ', ' + Info.InstalledUpdate;
+    if Quien = '' then
+      Quien := Info.Version;
+    if not Info.Found then
+    begin
+      Result := Result + [MsgFmt(SL_DISC_SIN_DELPHILSP_FMT, [Quien, Info.Version])];
+      Continue;
+    end;
+    Marca := '';
+    if LaMia.Found and SameText(Info.Version, LaMia.Version) then
+      Marca := MsgText(SL_DISC_LA_DEL_SERVIDOR);
+    Result := Result + [MsgFmt(SL_DISC_INSTALACION_FMT, [Quien, Info.Version, Marca])];
+  end;
+  if not LaMia.Found then
+    Exit; // no arranca: lo dice ExigeElDelphiDelServidor
+  if ServerDelphiVersion <> '' then
+    Porque := MsgText(SL_DISC_POR_CLAVE)
+  else
+    Porque := MsgText(SL_DISC_POR_DEFECTO);
+  Result := Result + [MsgFmt(SL_DISC_USA_FMT, [NombreConVersion(LaMia), Porque])];
+  // el update que declara el operador: hoy no decide nada (prevision)
+  if ServerDelphiUpdate <> '' then
+    Result := Result + [MsgFmt(SL_DISC_UPDATE_DECLARADO_FMT, [ServerDelphiUpdate])]
+  else
+    Result := Result + [MsgText(SL_DISC_UPDATE_SIN_DECLARAR)];
 end;
 
 function BdsCommonDir(const AInfo: TRadStudioInfo): string;
@@ -648,5 +800,11 @@ begin
   Result := TPath.Combine(TPath.Combine(TPath.Combine(
     TPath.GetDocumentsPath, 'Embarcadero'), 'Studio'), 'SDKs');
 end;
+
+initialization
+  GDelphiCandado := TObject.Create;
+
+finalization
+  GDelphiCandado.Free;
 
 end.

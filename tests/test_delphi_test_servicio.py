@@ -33,7 +33,7 @@ os.makedirs(JAIL)
 EXE = mc.copia_exe(SRV)
 with open(os.path.join(SRV, 'settings.ini'), 'w') as f:
     f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n' % PORT +
-            '[Workspace.Srv]\nToken=%s\nRoots=%s\nAllowTests=1\nDelphiVersion=37.0\n'
+            '[Workspace.Srv]\nToken=%s\nRoots=%s\nAllowTests=1\n'
             % (TOKEN, JAIL))
 
 k32 = ctypes.WinDLL('kernel32', use_last_error=True)

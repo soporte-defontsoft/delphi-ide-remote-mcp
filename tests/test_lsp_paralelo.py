@@ -93,7 +93,7 @@ TOKEN = 'test-token-paralelo'
 with open(os.path.join(SRVDIR, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10) * 2
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
-            + 'Roots=%s' % BASE + chr(10) + 'DelphiVersion=37.0' + chr(10)
+            + 'Roots=%s' % BASE + chr(10)
             + 'AllowTests=1' + chr(10))
 # El servidor nace con el modo de error de quien lo lanza. Aqui se le lanza en
 # el 0 (con informe de caida y con cuadro), que no es el de esta bateria: asi

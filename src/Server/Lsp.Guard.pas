@@ -226,8 +226,10 @@ procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
   out. What "delphi_components platform=X" shows and what the F2613 helper
   of delphi_build compares against. AValor es la lista del IDE que se lee:
   'Search Path' (la de siempre) o 'Browsing Path', la del fuente que el IDE
-  ensena (las tablas del disenador leen las dos: Lsp.DesignerMetaGen). }
-function IdePlatformLibraryPaths(const AVersion, APlatform: string;
+  ensena (las tablas del disenador leen las dos: Lsp.DesignerMetaGen). De
+  ESA instalacion, la que se le da - la del servidor, DiscoverRadStudio:
+  hasta el 5-oct-2026 la buscaba por su numero entre todas. }
+function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
   const AValor: string = 'Search Path'): TArray<string>;
 
 { EL NOMBRADOR DE LOS TEMPORALES, hermana de __delphi-patch y con la misma
@@ -886,13 +888,41 @@ function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
 function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
 
-{ Que RAD Studio usa el workspace ACTIVO cuando la maquina tiene varios lado
-  a lado: [Workspace.<x>] DelphiVersion=36.0 (o DELPHI_MCP_DELPHI_VERSION en
-  el modo local de lanzamiento). '' = la regla de siempre, la mas nueva con
-  DelphiLSP. La decide el workspace y no el agente porque la version la manda
-  el PROYECTO, y un workspace es un proyecto. Quien la aplica es
-  DiscoverRadStudio (Lsp.Discovery), el unico sitio que elige instalacion. }
-function PreferredDelphiVersion: string;
+{ La version de RAD Studio de ESTE servidor: [Server] DelphiVersion=37.0 de
+  su settings.ini, y de nada mas (David, 5-oct-2026: "o hay version en el
+  ini o cogemos la mas nueva instalada, punto"). '' = la mas nueva con
+  DelphiLSP, que el servidor escribe al arrancar (FijaDelphiVersionEnElIni).
+  Un servidor es UN Delphi: hasta entonces la fijaba cada workspace y un
+  mismo proceso mantenia motores y rutas de varias versiones; para otra
+  version, otro servidor en su propia carpeta con su puerto. Quien la
+  aplica es DiscoverRadStudio (Lsp.Discovery), el unico sitio que elige
+  instalacion. }
+function ServerDelphiVersion: string;
+
+{ Escribe [Server] DelphiVersion=AVersion en el settings.ini del servidor y
+  desde ahi manda la clave: el primer arranque sin ella guarda el Delphi que
+  eligio, y no cambia solo el dia que se instale otro (David, 5-oct-2026).
+  Sin settings.ini (el modo local de lanzamiento) no crea uno: False y
+  AError vacio. Si no puede: False y el motivo en AError. }
+function FijaDelphiVersionEnElIni(const AVersion: string; out AError: string): Boolean;
+
+{ El update de su Delphi que DECLARA el operador: [Server] DelphiUpdate=13.2
+  de su settings.ini (13.1, 13.2, manana 14.1). Hoy no decide nada: 13.1 y
+  13.2 son la misma 37.0 y el servidor funciona igual con las dos (David,
+  5-oct-2026). Es la prevision para las excepciones que traiga un update
+  concreto, que se colgaran de aqui. Se declara, no se deduce: el texto que
+  apunta el instalador (TRadStudioInfo.InstalledUpdate) es solo una pista
+  para el operador. '' = sin declarar, o declarado con otra forma que
+  numero.numero (el log lo avisa y se ignora). }
+function ServerDelphiUpdate: string;
+
+{ El settings.ini del disco es mas nuevo que el que tiene cargado este
+  proceso: se lee una vez al arrancar y no se recarga en caliente (David,
+  24-sep-2026), asi que lo tocado despues no esta cargado. AFecha = la del
+  fichero. Lo que escribe el propio servidor (FijaDelphiVersionEnElIni) SI
+  esta cargado y no cuenta: comparar con la hora de arranque lo daba por
+  editado en el primer arranque de cada servidor (medido en produccion, 5-oct-2026). }
+function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
 
 { The knowledge-vault root (Obsidian notes). Empty when unset.
   Env DELPHI_MCP_VAULT_PATH (solo el workspace por defecto), si no el
@@ -1383,7 +1413,6 @@ type
     // A donde puede llegar ESTE workspace: sin declarar = a ninguna parte.
     GitRemotes: string;               // hosts que un git clone/push puede nombrar
     RemoteHosts: string;              // hosts que un dial PAServer puede marcar
-    DelphiVersion: string;            // DelphiVersion=36.0: que RAD Studio usa ('' = la mas nueva con DelphiLSP)
     RemoteProjects: TArray<string>;   // proyectos ejecutables en un target
     VaultPath: string;                // vault de conocimiento de ESTE workspace
     OvVaultReadOnly: Integer;         // tri-estado: ausente = solo lectura
@@ -1421,7 +1450,9 @@ var
   GReadOnlyToken: string;
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
-  GDelphiVersion: string = '';      // DELPHI_MCP_DELPHI_VERSION (modo local de lanzamiento)
+  GDelphiVersion: string = '';      // [Server] DelphiVersion: el Delphi del servidor
+  GDelphiUpdate: string = '';       // [Server] DelphiUpdate: el update que declara el operador
+  GIniCargadoEn: TDateTime = 0;     // la fecha del settings.ini que tiene cargado este proceso
   GAllowTests: Boolean = False;     // running test suites is opt-in too
   GGitRemotes: string = '';         // hosts an explicit git URL may name
   GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
@@ -2147,6 +2178,25 @@ begin
   Result := (V = '') or not EsSitioConLetra(IncludeTrailingPathDelimiter(V));
 end;
 
+{ La forma de un update: numero, punto, numero ('13.2'). }
+function EsFormaDeUpdate(const S: string): Boolean;
+var
+  Partes: TArray<string>;
+begin
+  Partes := S.Split(['.']);
+  if Length(Partes) <> 2 then
+    Exit(False);
+  for var P in Partes do
+  begin
+    if P = '' then
+      Exit(False);
+    for var C in P do
+      if not CharInSet(C, ['0'..'9']) then
+        Exit(False);
+  end;
+  Result := True;
+end;
+
 procedure LoadSecurity;
 var
   IniPath: string;
@@ -2156,7 +2206,6 @@ begin
   if GSecLoaded then
     Exit;
   ParseAdbDevices(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'));
-  GDelphiVersion := GetEnvironmentVariable('DELPHI_MCP_DELPHI_VERSION').Trim;
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
@@ -2209,6 +2258,8 @@ begin
   IniPath := SettingsIniPath;
   if TFile.Exists(IniPath) then
   begin
+    // la fecha ANTES de leerlo: si lo tocan mientras, se avisa de mas, nunca de menos
+    GIniCargadoEn := TFile.GetLastWriteTime(IniPath);
     Ini := TIniFile.Create(IniPath);
     try
       // v0.98 (David): el ini NO tiene seccion generica - todo permiso
@@ -2227,6 +2278,17 @@ begin
       GIniSessionTimeout := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
       GIniEngineIdle := Ini.ReadString('Server', 'EngineIdleMinutes', '').Trim;
       GIniMaxEngines := Ini.ReadString('Server', 'MaxEngines', '').Trim;
+      // de aqui y de ningun otro sitio: sin variable de entorno (David)
+      GDelphiVersion := Ini.ReadString('Server', 'DelphiVersion', '').Trim;
+      // el update lo declara el operador (13.2); otra forma se avisa y se
+      // ignora, como si no estuviera
+      GDelphiUpdate := Ini.ReadString('Server', 'DelphiUpdate', '').Trim;
+      if (GDelphiUpdate <> '') and not EsFormaDeUpdate(GDelphiUpdate) then
+      begin
+        GWorkspaceNotes := GWorkspaceNotes +
+          [MsgFmt(SL_GUARD_DELPHIUPDATE_MAL_FMT, [GDelphiUpdate])];
+        GDelphiUpdate := '';
+      end;
       GIniLogLines := Ini.ReadInteger('Log', 'LinesPerFile', 2000);
       GIniLogMaxFiles := Ini.ReadInteger('Log', 'MaxFiles', 10);
       // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
@@ -2267,7 +2329,6 @@ begin
             W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement');
             W.GitRemotes := Ini.ReadString(S, 'GitRemotes', '').Trim;
             W.RemoteHosts := Ini.ReadString(S, 'RemoteHosts', '').Trim;
-            W.DelphiVersion := Ini.ReadString(S, 'DelphiVersion', '').Trim;
             W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
               .Split([';'], TStringSplitOptions.ExcludeEmpty);
             W.VaultPath := Ini.ReadString(S, 'VaultPath', '').Trim;
@@ -2296,6 +2357,11 @@ begin
               // (de una seccion sin token, que se ignora entera, no se dice)
               AvisaDeSoloLecturaFuera('[' + S + '] ReadOnlyPaths=', 'ReadOnlyRoots',
                 W.ReadOnlyPaths, W.Roots, W.ReadOnlyRoots);
+              // La version es del SERVIDOR desde el 5-oct-2026: la de un
+              // workspace ya no se lee, y se dice en vez de callarlo.
+              if Ini.ValueExists(S, 'DelphiVersion') then
+                GWorkspaceNotes := GWorkspaceNotes +
+                  [MsgFmt(SL_GUARD_DELPHIVERSION_EN_WORKSPACE_FMT, [W.Name])];
               GWorkspaces := GWorkspaces + [W];
             end
             else
@@ -2961,17 +3027,64 @@ begin
   Result := GIniBindIP;
 end;
 
-function PreferredDelphiVersion: string;
+function ServerDelphiVersion: string;
 begin
   LoadSecurity;
-  if HasActiveWS then
-    Result := ActiveWS.DelphiVersion
-  else
-    Result := GDelphiVersion;
-  Result := Result.Trim;
+  Result := GDelphiVersion.Trim;
   // '36' y '36.0' son la misma: el registro la escribe con decimal
   if (Result <> '') and (Result.IndexOf('.') < 0) then
     Result := Result + '.0';
+end;
+
+function ServerDelphiUpdate: string;
+begin
+  LoadSecurity;
+  Result := GDelphiUpdate;
+end;
+
+function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
+begin
+  LoadSecurity;
+  AFecha := 0;
+  if not TFile.Exists(SettingsIniPath) then
+    Exit(False);
+  AFecha := TFile.GetLastWriteTime(SettingsIniPath);
+  Result := AFecha > GIniCargadoEn;
+end;
+
+function FijaDelphiVersionEnElIni(const AVersion: string; out AError: string): Boolean;
+var
+  Ini: TIniFile;
+begin
+  Result := False;
+  AError := '';
+  if not TFile.Exists(SettingsIniPath) then
+    Exit;
+  try
+    // El escritor de Windows anade la linea al final de [Server] (o la
+    // seccion al final del fichero) y deja los demas bytes como estaban:
+    // medido el 5-oct-2026 con acentos, CRLF y LF. Lo comprueba ademas
+    // test_un_delphi, byte a byte.
+    Ini := TIniFile.Create(SettingsIniPath);
+    try
+      Ini.WriteString('Server', 'DelphiVersion', AVersion);
+      Result := SameText(Ini.ReadString('Server', 'DelphiVersion', '').Trim, AVersion);
+    finally
+      Ini.Free;
+    end;
+    if Result then
+    begin
+      GDelphiVersion := AVersion; // desde aqui, la clave
+      // lo que hay en disco es lo que este proceso tiene cargado: su propia
+      // escritura no es un ini editado (SettingsIniMasNuevoQueElCargado)
+      GIniCargadoEn := TFile.GetLastWriteTime(SettingsIniPath);
+    end
+    else
+      AError := MsgText(SF_DISC_NO_SE_LEE);
+  except
+    on E: Exception do
+      AError := E.Message;
+  end;
 end;
 
 { Un VaultPath= como lo escribio el operador, en la forma con la que se
@@ -6442,51 +6555,43 @@ begin
       IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
 end;
 
-function IdePlatformLibraryPaths(const AVersion, APlatform: string;
+function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
   const AValor: string): TArray<string>;
 var
-  Installs: TArray<TRadStudioInfo>;
-  Info: TRadStudioInfo;
   Vars, List: TStringList;
   Item, Expanded: string;
 begin
   Result := nil;
-  Installs := DiscoverAllRadStudios;
-  for Info in Installs do
-  begin
-    if not Info.Found or not SameText(Info.Version, AVersion) then
-      Continue;
-    Vars := TStringList.Create;
-    List := TStringList.Create;
-    try
-      IdeMacroVars(Info, Vars);
-      Vars.Values['Platform'] := APlatform;
-      for Item in IdeConfigValue(Info.Version, 'Library\' + APlatform, AValor).Split([';']) do
-      begin
-        Expanded := ExpandIdeMacros(Item.Trim, Vars);
-        if (Expanded = '') or Expanded.Contains('$(') or
-           not TPath.IsPathRooted(Expanded) then
-          Continue;
-        try
-          Expanded := PrefijoSinBarra(TPath.GetFullPath(Expanded));
-        except
-          Continue;
-        end;
-        if List.IndexOf(Expanded) < 0 then
-          List.Add(Expanded);
-      end;
-      Result := List.ToStringArray;
-    finally
-      List.Free;
-      Vars.Free;
-    end;
+  if not AInfo.Found then
     Exit;
+  Vars := TStringList.Create;
+  List := TStringList.Create;
+  try
+    IdeMacroVars(AInfo, Vars);
+    Vars.Values['Platform'] := APlatform;
+    for Item in IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor).Split([';']) do
+    begin
+      Expanded := ExpandIdeMacros(Item.Trim, Vars);
+      if (Expanded = '') or Expanded.Contains('$(') or
+         not TPath.IsPathRooted(Expanded) then
+        Continue;
+      try
+        Expanded := PrefijoSinBarra(TPath.GetFullPath(Expanded));
+      except
+        Continue;
+      end;
+      if List.IndexOf(Expanded) < 0 then
+        List.Add(Expanded);
+    end;
+    Result := List.ToStringArray;
+  finally
+    List.Free;
+    Vars.Free;
   end;
 end;
 
 function LibraryRoots: TArray<string>;
 var
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   List, Vars: TStringList;
   Plat, Raw, Item, Expanded: string;
@@ -6495,13 +6600,13 @@ begin
   begin
     List := TStringList.Create;
     try
-      // EVERY installation: reading the sources of any installed Delphi is
-      // legitimate, and each one owns its packages and its catalog.
-      Installs := DiscoverAllRadStudios;
-      for Info in Installs do
+      // THE Delphi of this server, and no other (David, 5-oct-2026: "nos
+      // centramos en el Delphi que usemos en el server"). Until then EVERY
+      // installation was readable; another version's sources are no use
+      // to a server that builds with this one.
+      Info := DiscoverRadStudio;
+      if Info.Found then
       begin
-        if not Info.Found then
-          Continue;
         List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
         Vars := TStringList.Create;
         try

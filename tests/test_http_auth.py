@@ -21,11 +21,11 @@ REPOROOT = mc.REPO
 _maindir = mc.carpeta('http-main')
 _mainexe = mc.copia_exe(_maindir)
 with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
-    f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)*2
+    f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
+            + 'DelphiVersion=37.0' + chr(10) * 2   # pinned to the one install here (of the server since 5-oct-2026)
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
             + 'Roots=%s' % REPOROOT + chr(10)
-            + 'AllowTests=1' + chr(10) + 'LibraryZone=1' + chr(10)
-            + 'DelphiVersion=37.0' + chr(10))   # 1.0.17: pinned to the one install here
+            + 'AllowTests=1' + chr(10) + 'LibraryZone=1' + chr(10))
 # sin las DELPHI_MCP_* de quien lanza la bateria: el token lo pone el ini
 proc = mc.lanza_http(_mainexe, None, mc.entorno(), espera_en=PORT)   # sin puerto: el del ini
 
@@ -111,8 +111,9 @@ try:
     check('http: la sesion emitida por este proceso sigue valiendo', code == 200 and 'delphi_build' in body,
           '%s %s' % (code, body[:120]))
 
-    # 1.0.17: [Workspace] DelphiVersion= pins the RAD Studio; pinned to the
-    # installed one it is simply the active one, with no note
+    # [Server] DelphiVersion= pins the RAD Studio (a [Workspace] did until
+    # 5-oct-2026); pinned to the installed one it is simply the active one,
+    # with no note
     code, body = post({"jsonrpc": "2.0", "id": 21, "method": "tools/call",
                        "params": {"name": "delphi_workspace", "arguments": {}}}, TOKEN)
     try:
@@ -656,8 +657,7 @@ try:
         f.write('[Server]' + chr(10) + 'Port=%d' % TTL_PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
                 + 'SessionTimeoutMinutes=0.05' + chr(10) * 2
                 + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
-                + 'Roots=%s' % tmpdir5 + chr(10)
-                + 'DelphiVersion=12.0' + chr(10))   # NOT installed here: falls back, says so
+                + 'Roots=%s' % tmpdir5 + chr(10))
     proc5 = mc.lanza_http(exe5, None, mc.entorno(), espera_en=TTL_PORT)
     # Accept: application/json a secas, como el post() de arriba
     cli5 = mc.Http(TTL_PORT, TOKEN, t=60)
@@ -676,22 +676,8 @@ try:
         check('ttl: delphi_workspace publica sessions y sessionTimeoutMinutes',
               srv.get('sessions', 0) >= 1 and abs(float(srv.get('sessionTimeoutMinutes', -1)) - 0.05) < 1e-6,
               json.dumps(srv)[:200])
-        try:
-            ws5 = json.loads(json.loads(body)['result']['content'][0]['text'])
-        except Exception:
-            ws5 = {}
-        check('DelphiVersion=12.0 NO instalada: cae a la de siempre y lo dice',
-              ws5.get('activeDelphi') == '37.0' and ws5.get('delphiVersionRequested') == '12.0'
-              and '12.0' in ws5.get('delphiVersionNote', '') and '37.0' in ws5.get('delphiVersionNote', ''),
-              json.dumps(ws5)[:300])
-        code, _, body = cli5.post({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
-                               "params": {"name": "delphi_installs", "arguments": {}}}, sid5, accept=JSON)
-        try:
-            ins = json.loads(json.loads(body)['result']['content'][0]['text'])
-        except Exception:
-            ins = {}
-        check('delphi_installs dice la pedida y la nota',
-              ins.get('requested') == '12.0' and '37.0' in ins.get('requestedNote', ''), json.dumps(ins)[:300])
+        # (5-oct-2026: la version fijada que no esta ya no se mide aqui - un
+        # servidor sin su Delphi no arranca; test_un_delphi U5)
         time.sleep(1.5)
         code, _, body = cli5.post({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}, sid5, accept=JSON)
         check('ttl: cada peticion la toca (1,5 s despues sigue viva)', code == 200 and 'delphi_build' in body,

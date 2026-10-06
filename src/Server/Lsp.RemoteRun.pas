@@ -71,6 +71,14 @@ function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
   que teclas espera el destino. }
 function PlataformaDelPerfil(const AProfile: string): string;
 
+{ EL paclient.exe de ESTE servidor: DELPHI_MCP_PACLIENT si apunta a un
+  fichero (la bateria lo apunta a un stub), si no el bin\paclient.exe del
+  Delphi del servidor (DiscoverRadStudio) - nunca el de otra instalacion.
+  '' si no hay. Lo usan remote-run y la gestion de perfiles de
+  delphi_paserver: hasta el 5-oct-2026 esa tenia su gemelo (FindPaClient),
+  que no respetaba DELPHI_MCP_PACLIENT. }
+function PaClientPath: string;
+
 { Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
   AProfile. The remote path is DERIVED here, never taken from the caller:
   <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
@@ -146,7 +154,6 @@ const
 
 function PaClientPath: string;
 var
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   P: string;
 begin
@@ -154,16 +161,13 @@ begin
   if (Result <> '') and TFile.Exists(Result) then
     Exit;
   Result := '';
-  Installs := DiscoverAllRadStudios;
-  for Info in Installs do
-  begin
-    if not Info.Found then
-      Continue;
-    P := TPath.Combine(TPath.Combine(
-      SinBarraFinal(Info.RootDir), 'bin'), 'paclient.exe');
-    if TFile.Exists(P) then
-      Exit(P);
-  end;
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit;
+  P := TPath.Combine(TPath.Combine(
+    SinBarraFinal(Info.RootDir), 'bin'), 'paclient.exe');
+  if TFile.Exists(P) then
+    Result := P;
 end;
 
 function Paclient(const APaclient, AOps, AProfile: string;
@@ -677,24 +681,19 @@ end;
 
 function PlataformaDelPerfil(const AProfile: string): string;
 var
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   P: string;
 begin
   { El .profile dice para que plataforma se creo (Profile_platform). Es la
-    unica fuente fiable: el nombre del perfil no significa nada. }
+    unica fuente fiable: el nombre del perfil no significa nada. Los
+    perfiles del Delphi de ESTE servidor, no los de otra instalacion. }
   Result := '';
-  Installs := DiscoverAllRadStudios;
-  for Info in Installs do
-  begin
-    P := TPath.Combine(IdeProfilesDir(Info.Version), AProfile + '.profile');
-    if TFile.Exists(P) then
-    begin
-      Result := TagValue(TFile.ReadAllText(P), 'Profile_platform');
-      if Result <> '' then
-        Exit;
-    end;
-  end;
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit;
+  P := TPath.Combine(IdeProfilesDir(Info.Version), AProfile + '.profile');
+  if TFile.Exists(P) then
+    Result := TagValue(TFile.ReadAllText(P), 'Profile_platform');
 end;
 
 function BundledNodePath(const APlataforma: string): string;

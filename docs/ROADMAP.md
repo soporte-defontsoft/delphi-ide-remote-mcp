@@ -17,7 +17,7 @@ Status page as of 2026-10-05 (current release v1.13.1; 42 tools).
 - Vault, messages, reports
 - Auth model: workspace-or-nothing (0.91) and nothing-global (0.98)
 - Jail floor at the gate (1.0.14); `__delphi-temp` inside the jail (1.0.12)
-- `DelphiVersion` per workspace and the named Delphi (1.0.17)
+- `DelphiVersion` per workspace and the named Delphi (1.0.17) - superseded: one server, one Delphi, `[Server] DelphiVersion` (written by the server at its first start)
 - `rename_symbol mode=apply` (1.0.17)
 - HTTP session TTL (1.0.17)
 - Bounded per-client notification queue (200)

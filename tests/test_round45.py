@@ -163,6 +163,7 @@ PROBAR = [
 # motivo escrito es por donde se cuela la siguiente.
 EXCLUIDOS = {
     ('delphi_paserver', 'exe'): 'fichero de la carpeta desplegada EN EL TARGET',
+    ('delphi_paserver', 'job'): 'el jobId que dio remote-run, no una ruta (su texto nombra el .dproj de project)',
     ('delphi_move', 'copy'): 'booleano (copiar en vez de mover); la ruta es path/dest, probados arriba',
     ('delphi_desktop', 'inline'): 'booleano (imagen en la respuesta o fichero); la ruta es out, probada aparte',
     ('delphi_adb', 'inline'): 'idem delphi_desktop: la entrega de la captura (Lsp.InlineImages)',

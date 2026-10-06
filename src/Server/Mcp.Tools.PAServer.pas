@@ -189,7 +189,6 @@ end;
 
 function ListPackages: string;
 var
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   Dirs: TStringList;
   Return: TJSONObject;
@@ -205,10 +204,11 @@ begin
   Seen.Sorted := True;
   Seen.Duplicates := dupIgnore;
   try
-    Installs := DiscoverAllRadStudios;
-    for Info in Installs do
+    // los instaladores del PAServer del Delphi de ESTE servidor: el PAServer
+    // va con su version (5-oct-2026: antes, los de todas las instalaciones)
+    Info := DiscoverRadStudio;
+    if Info.Found then
     begin
-      if not Info.Found then Continue;
       Dirs := TStringList.Create;
       try
         CollectPackageDirs(Info, Dirs);
@@ -527,7 +527,6 @@ var
   Asientos: TJSONArray;
   Reg: TRegistry;
   Claves: TStringList;
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   Dir, F: string;
   Return: TJSONObject;
@@ -539,12 +538,14 @@ begin
   Return.AddPair('profiles', Profs);
   Return.AddPair('sdks', Sdks);
   try
-    Installs := DiscoverAllRadStudios;
-    for Info in Installs do
-    begin
-      if not Info.Found then Continue;
+    // los perfiles y SDKs del Delphi de ESTE servidor (5-oct-2026: antes,
+    // los de todas las instalaciones)
+    Info := DiscoverRadStudio;
+    Dir := '';
+    if Info.Found then
       Dir := ProfilesDir(Info.Version);
-      if not TDirectory.Exists(Dir) then Continue;
+    if (Dir <> '') and TDirectory.Exists(Dir) then
+    begin
       for F in TDirectory.GetFiles(Dir, '*.profile') do
         Profs.Add(TPath.GetFileNameWithoutExtension(F));
       { Cada SDK con SU ficha: de que distro salio y con que glibc. Es lo
@@ -564,17 +565,12 @@ begin
     Return.AddPair('ideSdkSeats', SdkSeats);
     var SdkDefs := TJSONArray.Create;
     Return.AddPair('ideSdkDefaults', SdkDefs);
-    for Info in Installs do
-      if Info.Found then
-      begin
-        for F in AsientosDeSdk(Info.Version) do
-          SdkSeats.Add(F);
-        for F in DefaultsDeSdk(Info.Version) do
-          SdkDefs.Add(F);
-      end;
-    for Info in Installs do
+    if Info.Found then
     begin
-      if not Info.Found then Continue;
+      for F in AsientosDeSdk(Info.Version) do
+        SdkSeats.Add(F);
+      for F in DefaultsDeSdk(Info.Version) do
+        SdkDefs.Add(F);
       Reg := TRegistry.Create(KEY_READ);
       try
         Reg.RootKey := HKEY_CURRENT_USER;
@@ -620,7 +616,6 @@ end;
 
 function ListPlatforms: string;
 var
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   Plat: string;
   Return: TJSONObject;
@@ -632,10 +627,10 @@ begin
   Arr := TJSONArray.Create;
   Return.AddPair('platforms', Arr);
   try
-    Installs := DiscoverAllRadStudios;
-    for Info in Installs do
+    // las plataformas del Delphi de ESTE servidor (5-oct-2026)
+    Info := DiscoverRadStudio;
+    if Info.Found then
     begin
-      if not Info.Found then Continue;
       for Plat in IdeLibraryPlatforms(Info.Version) do
       begin
         Obj := TJSONObject.Create;
@@ -659,27 +654,17 @@ begin
   end;
 end;
 
-{ The newest install that ships bin\paclient.exe. Profiles are managed with
-  the IDE's own client so the on-disk format is always the IDE's. }
+{ The paclient.exe of THIS server's Delphi, and that install (AInfo, for the
+  folder of its profiles). Profiles are managed with the IDE's own client so
+  the on-disk format is always the IDE's. EL lector es PaClientPath
+  (Lsp.RemoteRun): aqui vivia un gemelo que buscaba en todas las
+  instalaciones y no respetaba DELPHI_MCP_PACLIENT (5-oct-2026). }
 function FindPaClient(out AInfo: TRadStudioInfo): string;
-var
-  Installs: TArray<TRadStudioInfo>;
-  Info: TRadStudioInfo;
-  P: string;
 begin
-  Result := '';
-  Installs := DiscoverAllRadStudios;
-  for Info in Installs do
-  begin
-    if not Info.Found then Continue;
-    P := TPath.Combine(TPath.Combine(
-      SinBarraFinal(Info.RootDir), 'bin'), 'paclient.exe');
-    if TFile.Exists(P) then
-    begin
-      AInfo := Info;
-      Exit(P);
-    end;
-  end;
+  AInfo := DiscoverRadStudio;
+  if not AInfo.Found then
+    Exit('');
+  Result := PaClientPath;
 end;
 
 { add-profile: paclient --local writes <name>.profile in %APPDATA% with the
@@ -911,28 +896,27 @@ end;
   lista no lo incluia. El perfil dice COMO conectar; el workspace dice SI. }
 function ProfileHostDenied(const AProfName: string): string;
 var
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   ProfileFile, Xml: string;
 begin
   Result := '';
-  Installs := DiscoverAllRadStudios;
-  for Info in Installs do
-  begin
-    if not Info.Found then
-      Continue;
-    ProfileFile := TPath.Combine(ProfilesDir(Info.Version),
-      AProfName.Trim + '.profile');
-    if not TFile.Exists(ProfileFile) then
-      Continue; // el no-existe lo reporta cada comando con su propio texto
-    try
-      Xml := TFile.ReadAllText(ProfileFile);
-    except
-      Continue;
-    end;
-    if TagValue(Xml, 'Profile_host') <> '' then
-      Exit(ProbeHostDenied(TagValue(Xml, 'Profile_host')));
+  // los perfiles del Delphi de ESTE servidor, los mismos que usa quien marca
+  // con el perfil (5-oct-2026: la puerta miraba los de TODAS las
+  // instalaciones y el paclient los de una sola)
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit;
+  ProfileFile := TPath.Combine(ProfilesDir(Info.Version),
+    AProfName.Trim + '.profile');
+  if not TFile.Exists(ProfileFile) then
+    Exit; // el no-existe lo reporta cada comando con su propio texto
+  try
+    Xml := TFile.ReadAllText(ProfileFile);
+  except
+    Exit;
   end;
+  if TagValue(Xml, 'Profile_host') <> '' then
+    Result := ProbeHostDenied(TagValue(Xml, 'Profile_host'));
 end;
 
 { Whether this server may open a TCP connection to AHost. '' = it may.
@@ -1525,7 +1509,6 @@ end;
   lo tienen: no es una migracion, es un remiendo idempotente. }
 function ReseatProfiles: string;
 var
-  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   Dir, F, Nombre, Plat, Host, Pwd: string;
   Puerto: Integer;
@@ -1541,14 +1524,13 @@ begin
   Return.AddPair('seated', Sembrados);
   Return.AddPair('alreadyThere', Intactos);
   try
-    Installs := DiscoverAllRadStudios;
-    for Info in Installs do
-    begin
-      if not Info.Found then
-        Continue;
+    // los perfiles del Delphi de ESTE servidor (5-oct-2026)
+    Info := DiscoverRadStudio;
+    Dir := '';
+    if Info.Found then
       Dir := ProfilesDir(Info.Version);
-      if not TDirectory.Exists(Dir) then
-        Continue;
+    if (Dir <> '') and TDirectory.Exists(Dir) then
+    begin
       for F in TDirectory.GetFiles(Dir, '*.profile') do
       begin
         Nombre := TPath.GetFileNameWithoutExtension(F);

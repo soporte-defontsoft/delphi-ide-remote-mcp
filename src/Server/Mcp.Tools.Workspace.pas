@@ -2081,12 +2081,16 @@ begin
   Return := TJSONObject.Create;
   try
     Return.AddPair('total', TJSONNumber.Create(Length(All)));
-    Return.AddPair('activeForLsp', Active.Version); // '' = none has DelphiLSP
-    // La que pide el workspace (DelphiVersion=) y, si no esta, la nota
-    if PreferredDelphiVersion <> '' then
-      Return.AddPair('requested', PreferredDelphiVersion);
-    if DiscoverRadStudioNote <> '' then
-      Return.AddPair('requestedNote', DiscoverRadStudioNote);
+    // la del servidor: sin ella no arranca (ExigeElDelphiDelServidor)
+    Return.AddPair('activeForLsp', Active.Version);
+    // la que fija su settings.ini ([Server] DelphiVersion; el servidor la
+    // escribe al arrancar si no estaba)
+    if ServerDelphiVersion <> '' then
+      Return.AddPair('requested', ServerDelphiVersion);
+    // el update que declara el operador ([Server] DelphiUpdate): hoy no
+    // decide nada, es la prevision para lo que traiga uno concreto
+    if ServerDelphiUpdate <> '' then
+      Return.AddPair('requestedUpdate', ServerDelphiUpdate);
     Arr := TJSONArray.Create;
     Return.AddPair('installs', Arr);
     for Info in All do
@@ -2102,6 +2106,9 @@ begin
         Entry.AddPair('personality', Info.DelphiName);
       if Info.Edition <> '' then
         Entry.AddPair('edition', Info.Edition);
+      // el texto que apunto su instalador: una etiqueta para el operador
+      if Info.InstalledUpdate <> '' then
+        Entry.AddPair('installedUpdate', Info.InstalledUpdate);
       if Info.Build <> '' then
         Entry.AddPair('build', Info.Build);
       Entry.AddPair('rootdir', Info.RootDir);
@@ -2232,10 +2239,13 @@ begin
   // El ini se lee UNA vez al arrancar y no se recarga en caliente (decision
   // de David, 24-sep-2026: cambiar la jaula bajo sesiones vivas es una
   // superficie nueva). Lo que si se dice es que el fichero en disco es mas
-  // nuevo que este proceso: lo tocado no esta cargado, hay que reiniciar.
-  if TFile.Exists(SettingsIniPath) and (TFile.GetLastWriteTime(SettingsIniPath) > GArranque) then
+  // nuevo que el que tiene cargado: lo tocado no esta cargado, hay que
+  // reiniciar. Lo decide Lsp.Guard, el dueno del ini, que sabe lo que
+  // escribio el mismo.
+  var IniEn: TDateTime;
+  if SettingsIniMasNuevoQueElCargado(IniEn) then
     Srv.AddPair('settingsChangedNote', MsgFmt(SN_SERVER_INI_CHANGED_FMT,
-      [FormatDateTime('yyyy-mm-dd hh:nn:ss', TFile.GetLastWriteTime(SettingsIniPath)),
+      [FormatDateTime('yyyy-mm-dd hh:nn:ss', IniEn),
        FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque)]));
   // La maquina y la cuenta, juntas: son lo que distingue dos despliegues del
   // mismo binario (el mismo dato va en serverInfo.host, por Lsp.Host).
@@ -2425,13 +2435,14 @@ begin
     end
     else
       Return.AddPair('activeDelphi', '');
-    // Un workspace fijado a una version (DelphiVersion=) lo dice aqui, y si
-    // esa version no esta instalada lo dice mas alto: es el primer sitio que
-    // mira quien no entiende por que compila con otra.
-    if PreferredDelphiVersion <> '' then
-      Return.AddPair('delphiVersionRequested', PreferredDelphiVersion);
-    if DiscoverRadStudioNote <> '' then
-      Return.AddPair('delphiVersionNote', DiscoverRadStudioNote);
+    // La version que fija su settings.ini ([Server] DelphiVersion): un
+    // servidor es un Delphi y sin el no arranca (5-oct-2026).
+    if ServerDelphiVersion <> '' then
+      Return.AddPair('delphiVersionRequested', ServerDelphiVersion);
+    // el update que declara el operador ([Server] DelphiUpdate=13.2): hoy
+    // no decide nada, es la prevision para lo que traiga uno concreto
+    if ServerDelphiUpdate <> '' then
+      Return.AddPair('delphiUpdate', ServerDelphiUpdate);
     AnadirFichaDelServidor(Return);
     Result := Return.ToJSON;
   finally

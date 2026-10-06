@@ -1692,7 +1692,7 @@ begin
       Result.AddPair('queuedNote', MsgText(SN_BUILD_QUEUED));
     end;
     // Con QUE instalacion se compilo: vital para un agente en una maquina
-    // con varias (DelphiVersion= por workspace), y nada obvio sin decirlo.
+    // con varias (la del servidor, [Server] DelphiVersion), y nada obvio sin decirlo.
     // Con una sola, ruido en cada build; y el proyecto, el eco de lo que se
     // pidio (revisor de tokens, 4-oct-2026)
     if Length(DiscoverAllRadStudios) > 1 then

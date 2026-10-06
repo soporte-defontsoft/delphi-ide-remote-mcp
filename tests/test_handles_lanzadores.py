@@ -10,7 +10,7 @@ from handles_windows import K, sockets, children, event_in
 BASE=mc.carpeta('handles-lanzadores')
 sd=os.path.join(BASE,'srv');exe=mc.copia_exe(sd);port=mc.puerto_libre()
 with open(os.path.join(sd,'settings.ini'),'w') as f:
-    f.write('[Server]\nBindIP=127.0.0.1\nPort=%d\n[Workspace.Probe]\nToken=fixture-handles\nRoots=%s\nDelphiVersion=37.0\n'%(port,BASE))
+    f.write('[Server]\nBindIP=127.0.0.1\nPort=%d\n[Workspace.Probe]\nToken=fixture-handles\nRoots=%s\n'%(port,BASE))
 p=None; job=None; direct=None; event=None; child_pid=None
 def observes(cli, tool, args, process_name):
     result=[];measured=[]

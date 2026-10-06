@@ -130,24 +130,25 @@ begin
 end;
 
 { The SDK Manager's own adb, recorded in the Android .sdk files it writes
-  (SDKAdbPath). Newest install first; '' when no Android SDK is configured. }
+  (SDKAdbPath) - those of THIS server's Delphi, never another install's
+  (5-oct-2026); '' when it has no Android SDK configured. }
 function FindAdb: string;
 var
   Info: TRadStudioInfo;
   Dir, F, P: string;
 begin
   Result := '';
-  for Info in DiscoverAllRadStudios do
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit;
+  Dir := IdeProfilesDir(Info.Version);
+  if not TDirectory.Exists(Dir) then
+    Exit;
+  for F in TDirectory.GetFiles(Dir, '*.sdk') do
   begin
-    if not Info.Found then Continue;
-    Dir := IdeProfilesDir(Info.Version);
-    if not TDirectory.Exists(Dir) then Continue;
-    for F in TDirectory.GetFiles(Dir, '*.sdk') do
-    begin
-      P := TagValue(TFile.ReadAllText(F), 'SDKAdbPath');
-      if (P <> '') and TFile.Exists(P) then
-        Exit(P);
-    end;
+    P := TagValue(TFile.ReadAllText(F), 'SDKAdbPath');
+    if (P <> '') and TFile.Exists(P) then
+      Exit(P);
   end;
 end;
 

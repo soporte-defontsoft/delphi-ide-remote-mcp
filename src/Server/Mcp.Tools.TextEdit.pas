@@ -40,7 +40,7 @@ type
     property New: string read FNew write FNew;
     [SchemaDescription(SP_TEXT_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
-    [SchemaDescription(SP_PATCH_TOLINE_CORTO)]
+    [SchemaDescription(SP_PATCH_TOLINE)]
     property ToLine: Integer read FToLine write FToLine;
     // La descripcion de "edits" estaba COPIADA aqui, palabra por palabra pero
     // no del todo, de la de delphi_edit: el rango, documentado en una sola,
@@ -52,7 +52,7 @@ type
     [SchemaDescription(SP_PATCH_EDITS_CORTO)]
     [JsonComoTexto]
     property Edits: string read FEdits write FEdits;
-    [SchemaDescription(SP_PATCH_FRAGMENT_CORTO)]
+    [SchemaDescription(SP_PATCH_FRAGMENT)]
     property Fragment: string read FFragment write FFragment;
     [SchemaDescription(SP_TEXT_DELETE)]
     property Delete: Boolean read FDelete write FDelete;

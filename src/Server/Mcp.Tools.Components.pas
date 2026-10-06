@@ -95,7 +95,7 @@ begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
     Exit(MsgFmt(SR_COMPONENTS_PLATFORM_FMT, [ARawPlatform, KnownPlatformsList]));
-  Mine := IdePlatformLibraryPaths(AInfo.Version, Plat);
+  Mine := IdePlatformLibraryPaths(AInfo, Plat);
   UserDocs := PrefijoSinBarra(BdsUserDir(AInfo));
   CommonDocs := PrefijoSinBarra(BdsCommonDir(AInfo));
   Sb := TStringBuilder.Create;
@@ -118,7 +118,7 @@ begin
     begin
       if SameText(Other, Plat) then
         Continue;
-      Others := IdePlatformLibraryPaths(AInfo.Version, Other);
+      Others := IdePlatformLibraryPaths(AInfo, Other);
       for P in Others do
       begin
         Root := ComponentRootOf(P);

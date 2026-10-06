@@ -47,6 +47,12 @@ Roots=D:\Projects
 - Everything else is **off until you turn it on** (tests, remote execution,
   build scripts, git remotes...). The example file documents every key, one
   by one, when you want them.
+- Which RAD Studio? At its first start the server takes the newest and writes
+  it into this file (`DelphiVersion=37.0` under `[Server]`); from then on the
+  key rules. The first lines of its log list every installation, each with the
+  line that pins it (`[Server] DelphiVersion=23.0`). Two versions = two
+  servers, each in its own folder with its own port: README, *One server, one
+  Delphi*.
 
 ## 3. Run it
 

@@ -76,7 +76,7 @@ desc = (T or {}).get('description', '') + ' ' + \
 check('su descripcion ensena el flujo (captura -> mide -> pulsa)',
       'screenshot' in desc and 'measured on' in desc.lower(), desc[:200])
 check('avisa de que la escala la convierte el nodo',
-      'scale' in desc.lower() and 'logical' in desc.lower(), desc[:200])
+      'node handles the screen scale' in desc, desc[:200])
 check('dice que el escritorio es del TARGET, no del agente',
       'PAServer profile' in desc, desc[:200])
 check('cuenta como alcanzar una ventana tapada',

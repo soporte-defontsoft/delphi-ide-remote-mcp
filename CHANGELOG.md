@@ -6,6 +6,112 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+One server, one Delphi.
+
+### Changed
+
+- **The Delphi version belongs to the server, and lives in its
+  `settings.ini`**: `[Server] DelphiVersion`, next to `Port`, and nothing
+  else - the `DELPHI_MCP_DELPHI_VERSION` environment variable is gone, and a
+  `[Workspace.<name>] DelphiVersion` is no longer read (the startup log says
+  so). Several Delphi versions on one machine = several servers, each one in
+  its own folder with its own `settings.ini`, port and roots.
+- With no key, the server takes the newest installation with DelphiLSP and
+  writes it into its `settings.ini` at startup (one line under `[Server]`; the
+  rest of the file stays byte for byte): from then on the key rules, and
+  installing a newer RAD Studio does not switch the server by itself. With
+  no `settings.ini` (a client launching it over stdio) it is the newest, and
+  no file is created.
+- **Without its Delphi the server does not start**: a pinned version that is
+  not installed (or ships no DelphiLSP), or no RAD Studio with DelphiLSP at
+  all, stops it with the reason and the keys that would work on that machine
+  (exit code 1 in a terminal, the event log for the service, the tray's
+  icon). It used to fall back to the newest.
+- The server's Delphi is chosen once per process, and every tool works with
+  it and no other: the PAServer installers, profiles, SDKs and platforms,
+  `paclient`, `adb`, the library zone (the readable RTL and component
+  sources) and the designer tables warmed at startup used to take whichever
+  installation had what they looked for - or all of them.
+- At startup the log lists every RAD Studio on the machine with the exact
+  line to copy into `settings.ini` (`[Server] DelphiVersion=23.0`), marks the
+  one in use and says why; an installation without DelphiLSP is listed
+  without a key.
+- **The tool descriptions are about 11% shorter**: `tools/list` goes from
+  99,879 to 89,027 characters (24,574 to 22,225 tokens for Qwen3.8), room an
+  agent gets back on every round of a session. Twenty-four tools were
+  trimmed, and every change was measured against a small local model - the
+  current text and the trimmed one on the same tasks - before it went in;
+  the one variant that lost (`delphi_styles`) was left out. Where a
+  description did not say a rule the tool already applied, it says it now
+  (`delphi_edit`: indentation does not make an anchor unique, and an
+  inserted method's signature goes unqualified). How it was done, and what
+  was left alone and why: `docs/TOOL-DESCRIPTIONS.md`.
+
+### Added
+
+- **`[Server] DelphiUpdate`** (optional): which update of its RAD Studio a
+  server runs, as its operator declares it (`13.1`, `13.2`, tomorrow
+  `14.1`). RAD Studio 13.1 and 13.2 are both BDS 37.0 - same folders, same
+  registry key - and today the server works the same with both, so nothing
+  reads the key to decide anything yet: it is there so that what a given
+  update may need one day has one place to hang from. It shows in the
+  startup log, `delphi_installs` (`requestedUpdate`) and `delphi_workspace`
+  (`delphiUpdate`). A value that is not `number.number` is ignored, with a
+  warning in the log.
+- It is declared, never deduced: the text each installer recorded (the
+  one the IDE's About box lists, "Delphi 13 and C++Builder 13 Update 1") is
+  shown as a hint for the operator - in the startup list of installations
+  and as `installedUpdate` in `delphi_installs` - and the code never
+  compares it. GetIt patches are not part of it.
+
+### Fixed
+
+- The compiler library the engine settings name (`dcc32<suffix>.dll`) was
+  composed from the BDS number, in two places and two ways, which is right
+  only from RAD Studio 13 on (12 is BDS 23.0 with `dcc32290.dll`); it is read
+  from the installation's `bin` now.
+- The gate that decides whether a PAServer profile may dial its host read
+  the profiles of every installation, while `paclient` used those of one;
+  both read the server's now. `delphi_paserver`'s profile management had its
+  own copy of "where is paclient", which ignored `DELPHI_MCP_PACLIENT`; it
+  uses the one reader.
+- The README's `settings.ini` sample put its comments at the end of the
+  lines; Windows keeps a trailing `; ...` as part of the value, so a copied
+  `Port=3000 ; ...` was not port 3000. The comments go on their own line now,
+  there and in the workspace examples of `settings.example.ini` (where an
+  uncommented `Token=` would have carried its comment, and a `Roots=` would
+  have read it as a second root).
+- `delphi_desktop`'s description gave `Ctrl+K` as the example of a key
+  with modifiers, also for Windows, where the node presses named keys only
+  (enter, tab, f1..f12, the arrows...) and refuses a letter. It says which
+  keys each target takes, with an example that works on each.
+- `delphi_paserver` `remote-run`, `kill` and `output` take the ABSOLUTE
+  path of the project's .dproj, and no description said so: a model passed
+  the project's name and was refused. The `project` and `job` parameters
+  say it now.
+
+### Internal
+
+- New battery `test_un_delphi` (26 checks): writing the key and leaving the
+  rest of the file byte for byte, the second start, a pin without decimals,
+  a pin that is not installed (the server does not listen and exits 1), the
+  environment variable ignored, no `settings.ini` created in local mode, a
+  declared update (one that is NOT this machine's: declared, not deduced),
+  a malformed one ignored, the installer's text compared with what the
+  registry itself says, and the server's own write of the key not taken for
+  an edited `settings.ini` (with a control that edits it while running).
+  Found by using it: deployed with the whole suite green, the first
+  `delphi_workspace` said SYS-001 - "settings.ini was modified after this
+  process started, restart it" - about the server's own write. Whether the
+  file is newer than what the process loaded is now decided by `Lsp.Guard`,
+  which owns the file and knows what it wrote.
+  Not measured on this machine: that each tool uses only the server's Delphi
+  among SEVERAL installations - that needs a machine with two. Three
+  independent reviewers walked every site, and all of them go through one
+  reader (`DiscoverRadStudio`).
+
 ## [1.13.1] - 2026-10-05
 
 What the night reports from the 13.2 machine ran into: answers that did not

@@ -92,6 +92,32 @@ Recommended flow for binaries: `delphi_build` (the result names the artifact
 in `output`) → `delphi_package` (zip, compressed, dcu excluded) →
 `delphi_fetch` the zip → `curl` its `download` link.
 
+## Several Delphi servers: one entry per server
+
+A server works with ONE RAD Studio (README: *One server, one Delphi*). Two
+versions on one Windows machine are two servers, each one on its own port with
+its own tokens - and the same version can also run on SEVERAL machines (13.1 on
+the workstation, 13.2 on a VM, 13.2 again on a second VM). The client gets one
+entry per server; name each one after its MACHINE and its version, never after
+the version alone:
+
+```bash
+claude mcp add --transport http delphi-pc-13.1 http://WORKSTATION:3131/mcp \
+  --header "Authorization: Bearer TOKEN_OF_THAT_SERVER"
+claude mcp add --transport http delphi-pc-12 http://WORKSTATION:3132/mcp \
+  --header "Authorization: Bearer TOKEN_OF_THAT_SERVER"
+claude mcp add --transport http delphi-vm1-13.2 http://VM1:3131/mcp \
+  --header "Authorization: Bearer TOKEN_OF_THAT_SERVER"
+```
+
+The entry name is only your label. What each server IS comes from
+`delphi_workspace` on it: `activeDelphiName` ("RAD Studio 13"),
+`activeDelphiBuild`, `delphiUpdate` and `server.host` (the machine). RAD
+Studio 13.1 and 13.2 are both "RAD Studio 13" and BDS 37.0; `delphiUpdate`
+is the update the server's operator declares (`[Server] DelphiUpdate=13.2`),
+and the build is the exact one (37.0.59082.x here, 37.0.60952.x on the 13.2
+VM).
+
 ## Any other MCP client (Hermes, custom agents, SDKs)
 
 - **stdio**: spawn `DelphiLspMcp.exe`; JSON-RPC 2.0, one message per line,

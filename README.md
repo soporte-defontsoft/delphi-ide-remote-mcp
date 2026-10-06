@@ -254,7 +254,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `vault_read` · `vault_search` | **Optional persistent memory** (off unless configured): read and search a vault of Markdown notes — your decisions, conventions and project context — so a remote agent starts with more than the source tree. Lazy loading: it bootstraps with the vault's own rules + index and pulls only the notes it needs |
 | `vault_append` · `vault_create` · `vault_patch` | Let the agent **record what it learned** (opt-in, read-write credential only): append a log entry, create a note, replace an anchored fragment. New notes are linked from the project's own notes, never from the root index: `MEMORY.md` and the vault rules are **governance files**, refused on every write - the agent asks for their update in its reply (or a `delphi_report`) and a person applies it. No rewrites, no deletes, and the server always backs the original up first. See **[docs/VAULT.md](docs/VAULT.md)** |
 
-**→ Full parameter-by-parameter reference with types, defaults and worked workflows: [docs/TOOLS.md](docs/TOOLS.md)** (the contract of every tool - description, access line and parameter table - is generated from the live `tools/list` by `scripts/tools_md.py` and checked by the batteries; the notes around it are written by hand; the authority is always `delphi_help command=tool name=<tool>`). `tools/list` also announces what a read-only credential may call, per tool: `annotations.readOnlyHint` (MCP) and `_meta.access` (`read-only` | `read-write` | `mixed` with `readOnlyCommands` and `readOnlyWhen`).
+**→ Full parameter-by-parameter reference with types, defaults and worked workflows: [docs/TOOLS.md](docs/TOOLS.md)** (the contract of every tool - description, access line and parameter table - is generated from the live `tools/list` by `scripts/tools_md.py` and checked by the batteries; the notes around it are written by hand; the authority is always `delphi_help command=tool name=<tool>`). `tools/list` also announces what a read-only credential may call, per tool: `annotations.readOnlyHint` (MCP) and `_meta.access` (`read-only` | `read-write` | `mixed` with `readOnlyCommands` and `readOnlyWhen`). What those descriptions cost an agent, the budget that keeps them in check and how they are trimmed without losing a concept (measured against a small model): [docs/TOOL-DESCRIPTIONS.md](docs/TOOL-DESCRIPTIONS.md).
 
 **→ Handing this server to an AI agent?** Give it [skills/SKILL.md](skills/SKILL.md) — a field-tested agent skill (drop it into the agent's skills folder or paste it as instructions) covering the path model, the safe-editing contract, the deploy chains and how to move files and logs the right way.
 
@@ -409,6 +409,111 @@ Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom
 
 **Getting the best out of the server from an AI agent** — the manual is [skills/SKILL.md](skills/SKILL.md); [docs/AGENT.md](docs/AGENT.md) is a short pointer to it.
 
+### One server, one Delphi - several versions on one machine
+
+A server works with **one** RAD Studio installation and nothing else: the build
+(rsvars/msbuild), the DelphiLSP engine, the installed components, the designer tables, the
+PAServer profiles and SDKs, `paclient`, `adb` and the readable library zone all come from it,
+and no tool reaches into another installation. **Without its Delphi the server does not
+start** - it is a Delphi MCP server.
+
+**Which one**, at every start:
+
+1. `[Server] DelphiVersion` in its `settings.ini` says it - and nothing else does.
+2. The key is there and that version is installed (with DelphiLSP): that is the server's Delphi.
+3. The key is there but that version is not installed (a typo, a Delphi uninstalled since): the
+   server **does not start**. It says why and which keys would work on this machine - in its
+   log, with exit code 1 in a terminal, in the Windows event log as a service, on the tray's
+   icon - and it never falls back to another version.
+4. There is no key: the server takes the newest installation that ships DelphiLSP and **writes
+   it into its `settings.ini`** (`DelphiVersion=37.0`, one new line under `[Server]`; nothing
+   else in the file changes, accents and line endings included). From then on the key rules:
+   installing a newer RAD Studio later does not switch the server by itself, editing the key
+   does. With no `settings.ini` at all (a client launching the exe over stdio) it is the newest,
+   and no file is created.
+
+A machine holds at most ONE installation per BDS version - its folders and registry keys are
+named after the version, so a second one would land on the first - and that is why the number
+alone picks it. The same version on several servers only happens on several machines.
+
+**Which versions does this machine have?** The first lines of the server's log (the tray
+window, `logs\actual.log` next to the exe, or the terminal) list them, each with the exact key
+to copy into `settings.ini`:
+
+```
+RAD Studio on this machine: RAD Studio 13 37.0.59082.6021, Delphi 13 and C++Builder 13 Update 1  ->  [Server] DelphiVersion=37.0   <- this server
+RAD Studio on this machine: RAD Studio 12 23.0.xxxxx.xxxx  ->  [Server] DelphiVersion=23.0
+This server uses DelphiVersion=37.0 (RAD Studio 13, Delphi 13 and C++Builder 13 Update 1), pinned by [Server] DelphiVersion in settings.ini. One server, one Delphi: ...
+Update declared in settings.ini: [Server] DelphiUpdate=13.1.
+```
+
+An agent sees the same list with `delphi_installs`, and its server's Delphi in
+`delphi_workspace` (`activeDelphiName`, `activeDelphiBuild`, and `delphiUpdate` when one is
+declared).
+
+**Two versions = two servers.** To serve RAD Studio 12 and 13 from the same machine:
+
+1. Copy the server folder (the exe with its `node\` folder and `DelphiStyleConvert.exe` - what
+   the release zip unpacks) to a second folder, e.g. `C:\Delphi-mcp-Server-12\`.
+2. Give that copy its own `settings.ini`:
+
+   ```ini
+   [Server]
+   Port=3132
+   DelphiVersion=23.0
+
+   [Workspace.Legacy]
+   Token=another-long-random-secret
+   Roots=D:\Projects\Delphi12
+   ```
+
+   - its own **port**;
+   - its own **roots** - never the same roots as the other server: each process locks the
+     files it writes only against its own threads, so two servers on one project would write
+     the same files blind to each other. A project lives in one place;
+   - its own workspaces and tokens.
+3. Run it however you like. `-install` registers the one service called `DelphiLspMcp`, so it
+   is for ONE server per machine; run the others with `-gui` (tray), with `--http` in a
+   terminal, or under whatever keeps a program running for you. How you run it is yours to
+   decide: the server only has to know which Delphi it is.
+4. Open the firewall for the new port: `scripts\firewall-allow.ps1 -Port 3132` as
+   Administrator. The rule is named after its port, so the first server's rule stays.
+5. In the client, one MCP entry per server, named after its machine AND its version
+   (`delphi-pc-13.1` on `:3131`, `delphi-pc-12` on `:3132`; see
+   [docs/CLIENTS.md](docs/CLIENTS.md)). The name is only a label - the same version can
+   also run on several machines (13.1 here, 13.2 on a VM, 13.2 on another VM). What a server
+   IS comes from `delphi_workspace` on it: `activeDelphiName`, `activeDelphiBuild`,
+   `delphiUpdate` - the update its operator declares, since 13.1 and 13.2 are both "RAD Studio
+   13" and BDS 37.0 - and `server.host`, the machine.
+
+Everything else is already separate per folder: settings, logs, `__delphi-temp`, mailbox,
+reports, and the presence mark that decides the startup purges. What two servers share is the
+cache under `%LOCALAPPDATA%\DelphiLspMcp`: the engine configurations and the designer tables
+carry the Delphi version in their file names, every cache file is written whole, and the
+designer tables are generated under a lock shared by every process - so each server finds its
+own version's files. One tool shares its converter on purpose: `delphi_styles` converts styles
+with the one shipped with the server (`DelphiStyleConvert.exe`, built with RAD Studio 13's
+FireMonkey), whatever the server's Delphi.
+
+RAD Studio 13.1 and 13.2 are both BDS 37.0: one replaces the other, they never sit side by
+side. For that, one machine (or VM) per version, each with its own server - the same model,
+only further apart. The key stays `DelphiVersion=37.0`: the BDS number is what gives the
+folders and registry keys of that Delphi, and on one machine it can only be one of them.
+Which update it is, the operator may declare in `[Server] DelphiUpdate=13.1` (or `13.2`, and
+tomorrow `14.1`). Today the server works the same with 13.1 and 13.2 - both are 37.0 - and
+nothing reads that key to decide anything: it is there so that what a given update may need
+one day has one place to hang from, and the server shows it in its startup log,
+`delphi_installs` (`requestedUpdate`) and `delphi_workspace` (`delphiUpdate`). It is declared,
+never deduced: the startup log and `delphi_installs` (`installedUpdate`) show the update each
+installer recorded, the text the IDE's About box lists ("Delphi 13 and C++Builder 13 Update 1"
+is 13.1, "... Update 2" is 13.2), as a hint for the operator, and the code never compares that
+text. A value that is not `number.number` is ignored, with a warning in the log; GetIt patches
+and hotfixes are something else and are not part of it.
+
+Until 1.13 each workspace could pin its own version (`[Workspace.<name>] DelphiVersion`) and one
+process kept engines and paths of several versions at once. That key is no longer read, and
+the startup log says so.
+
 ### Configuration (`settings.ini` next to the exe, or environment variables)
 
 The file is read **once, when the process starts**, and never reloaded live -
@@ -444,44 +549,67 @@ section is completely inert.
    small models; never a permission.
 
 ```ini
+; Comments go on their OWN line: Windows keeps a trailing "; ..." as part of
+; the value, so "Port=3000 ; my port" is not port 3000 (measured 2026-10-05).
 [Server]
-Port=3000                               ; HTTP port for --http and the tray (-gui)
-SessionTimeoutMinutes=720               ; idle HTTP sessions expire after this (0 = never)
-EngineIdleMinutes=30                    ; an LSP engine nobody uses for this long is stopped (0 = never)
-MaxEngines=0                            ; at most this many LSP engines alive; past it, the least recently used one stops (0 = no cap)
+; HTTP port for --http and the tray (-gui)
+Port=3000
+; idle HTTP sessions expire after this (0 = never)
+SessionTimeoutMinutes=720
+; an LSP engine nobody uses for this long is stopped (0 = never)
+EngineIdleMinutes=30
+; at most this many LSP engines alive; past it, the least recently used one stops (0 = no cap)
+MaxEngines=0
+; the ONE RAD Studio this server uses; absent = the newest with DelphiLSP,
+; which the server then writes here at its first start
+DelphiVersion=37.0
+; optional: which update of it you run (13.1, 13.2...); absent = none declared
+DelphiUpdate=13.1
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
 ; workspaces' roots are not even readable. Overlap is allowed and never
 ; subtracts (note Audit's root is a subfolder of Galatea's). EACH SECTION IS
 ; COMPLETE IN ITSELF: absent switch = off, absent list = empty.
 [Workspace.Galatea]
-Token=galatea-secret                    ; read-write, but only inside THESE roots
-ReadOnlyToken=galatea-reviewer-secret   ; optional read-only twin, same roots
+; read-write, but only inside THESE roots
+Token=galatea-secret
+; optional read-only twin, same roots
+ReadOnlyToken=galatea-reviewer-secret
 Roots=D:\Projects\Galatea;D:\Projects\Shared
-ReadOnlyPaths=vendor;third-party\libx   ; INSIDE the jail: read, never write
-ReadOnlyRoots=D:\Projects\ReferenceERP    ; OUTSIDE the jail: reference projects, read only, win over Roots
+; INSIDE the jail: read, never write
+ReadOnlyPaths=vendor;third-party\libx
+; OUTSIDE the jail: reference projects, read only, win over Roots
+ReadOnlyRoots=D:\Projects\ReferenceERP
 ; Declare each place by a path with its DRIVE LETTER. An entry written as a network path (\\server\share\x)
 ; is NOT loaded, and the startup log says so: map the share to a letter with "reconnect at sign-in" - at
 ; startup the server tries to connect that letter for itself.
-LibraryZone=1                           ; ITS declaration - nothing is inherited
-AllowTests=1                            ; may build+run ITS test suites
-VaultPath=D:\Vaults\TeamMemory          ; ITS persistent memory (vault_* tools)
-AdbAllowedDevices=192.168.1.163         ; ITS Android devices (absent = NONE)
-DelphiVersion=23.0                      ; which RAD Studio it uses (absent = newest with DelphiLSP)
-Profile=coder                           ; optional: trims tools/list for this token
+; ITS declaration - nothing is inherited
+LibraryZone=1
+; may build+run ITS test suites
+AllowTests=1
+; ITS persistent memory (vault_* tools)
+VaultPath=D:\Vaults\TeamMemory
+; ITS Android devices (absent = NONE)
+AdbAllowedDevices=192.168.1.163
+; optional: trims tools/list for this token
+Profile=coder
 
 [Workspace.Audit]
 Token=audit-secret
-Roots=D:\Projects\Galatea\src\Forms     ; a SUBFOLDER of Galatea - deliberate
-Profile=reader                          ; navigation tools only in its listing
-                                        ; (declares nothing else: it HAS nothing else)
+; a SUBFOLDER of Galatea - deliberate
+Roots=D:\Projects\Galatea\src\Forms
+; navigation tools only in its listing (declares nothing else: it HAS nothing else)
+Profile=reader
 
 [Tools]
-Profile=full                            ; global surface: full | coder | reader
+; global surface: full | coder | reader
+Profile=full
 
 [Log]
-LinesPerFile=2000                       ; log on disk (every mode): a block every N lines
-MaxFiles=10                             ; rotation: keep the newest N block files
+; log on disk (every mode): a block every N lines
+LinesPerFile=2000
+; rotation: keep the newest N block files
+MaxFiles=10
 ```
 
 Every key is documented in depth in [`settings.example.ini`](settings.example.ini).
@@ -685,13 +813,19 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   must name its `device` explicitly (an implicit target could be an unlisted device that
   happens to be the only one attached) — and, like every list since v0.98, **absent means
   NO devices**, never unrestricted.
-- **`[Workspace.<name>] DelphiVersion`** (or `DELPHI_MCP_DELPHI_VERSION` in launch mode): which RAD
-  Studio a workspace uses when the machine hosts several side by side - the BDS version number
-  (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria; `delphi_installs` lists them with their names, and `delphi_workspace` names the active one in `activeDelphiName`). One key governs the
-  build, the DelphiLSP engine, profiles and SDKs, because every tool asks the same one place
-  for its installation. Absent = the newest with DelphiLSP; a version that is not installed
-  falls back to that and `delphi_workspace` says so in `delphiVersionNote`. The workspace
-  decides, not the agent: the version is the project's, and a workspace is a project.
+- **`[Server] DelphiVersion`**: the ONE RAD Studio this server uses - the BDS version number
+  (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria), and only from here.
+  Absent = the newest with DelphiLSP, which the server then writes here at its first start. A
+  version that is not installed stops the server from starting - it never uses another one.
+  The startup list of installations with the key to copy, several versions on one machine
+  (several servers) and what they share:
+  [One server, one Delphi](#one-server-one-delphi---several-versions-on-one-machine).
+- **`[Server] DelphiUpdate`** (optional): which update of that RAD Studio the server runs, as
+  its operator declares it (`13.1`, `13.2`). Both are `37.0`, and today the server works the
+  same with both: nothing reads the key to decide anything yet - it is there for what a given
+  update may need one day. Declared, never deduced (the startup log shows the update each
+  installer recorded, as a hint). A value that is not `number.number` is ignored with a
+  warning; absent = none declared.
 - **`[Server] SessionTimeoutMinutes`** (or `DELPHI_MCP_SESSION_TIMEOUT_MINUTES`): an HTTP
   session that sits idle longer than this (default 720 minutes; 0 = never) expires, and the
   next request on it answers 404 with the reason so the client re-initializes - the

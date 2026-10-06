@@ -26,6 +26,12 @@ handshake.
    path model. **Server paths use virtual drive units**: `srvd:\...`,
    `srvc:\...`. They only exist inside this MCP. Always send paths in
    that form; never invent local-looking paths of your own.
+   One server is ONE Delphi: another version is another MCP server the
+   operator gives you, never a parameter. The name of an MCP entry is only
+   the operator's label - the same version may run on several machines.
+   What a server IS: `activeDelphiName`, `activeDelphiBuild`,
+   `delphiUpdate` (13.1 and 13.2 are both "RAD Studio 13": the operator
+   declares which, when it matters) and `server.host`, the machine.
 2. `delphi_components` - what the server's RAD Studio has installed to
    program with (design packages, any install channel). Check BEFORE
    writing uses clauses for third-party libraries. Base RTL/VCL/FMX are

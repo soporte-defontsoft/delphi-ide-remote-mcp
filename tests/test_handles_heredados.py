@@ -8,7 +8,7 @@ import mcp_cliente as mc
 from handles_windows import K, sockets, bind_result
 base=mc.carpeta('handles-heredados'); sd=os.path.join(base,'srv'); exe=mc.copia_exe(sd); port=mc.puerto_libre()
 with open(os.path.join(sd,'settings.ini'),'w') as f:
-    f.write('[Server]\nBindIP=127.0.0.1\nPort=%d\n[Workspace.Probe]\nToken=probe-handles-local\nRoots=%s\nDelphiVersion=37.0\n'%(port,base))
+    f.write('[Server]\nBindIP=127.0.0.1\nPort=%d\n[Workspace.Probe]\nToken=probe-handles-local\nRoots=%s\n'%(port,base))
 p=None; engines=[];
 try:
     print('PORT_BEFORE',port,bind_result(port),flush=True)

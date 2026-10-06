@@ -144,7 +144,20 @@ begin
   // and forgotten in another is a hole that exists on one host only. Lsp.Host
   // builds it once for all three.
   FHost := TMcpHost.Create;
-  FHost.Wire;
+  // Sin su Delphi (o lo que impida montarlo) no hay servidor que escuchar:
+  // el motivo al log y al icono, como un puerto ocupado. Fuera de un try
+  // salia el cuadro de excepcion de la VCL (5-oct-2026).
+  TrayIcon.Icon.Assign(Application.Icon);
+  try
+    FHost.Wire;
+  except
+    on E: Exception do
+    begin
+      TLogger.Error(MsgFmt(SL_SYS_ERROR_STARTING_SERVER_FMT, [E.Message]));
+      TrayIcon.Hint := MsgFmt(SF_SYS_SERVICE_ERROR_FMT, [E.Message]);
+      Exit;
+    end;
+  end;
   FServer := FHost.CreateHttpServer(0);
 
   FUrl := Format('http://%s:%d%s',

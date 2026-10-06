@@ -46,8 +46,8 @@
   elige el codigo): por eso la herencia (H) - el lint busca en los
   descendientes del tipo declarado antes de decir que algo no existe.
 
-  Cuando: al arrancar el servidor, una por cada Delphi instalado, en el
-  hilo del generador y de una en una (CalientaTablasDelDisenador); y si se
+  Cuando: al arrancar el servidor, la de SU Delphi (un servidor es un
+  Delphi, 5-oct-2026), en el hilo del generador (CalientaTablasDelDisenador); y si se
   instala o se toca algo en esas carpetas (cambia la huella del fuente), al
   primer uso, en ese mismo hilo - quien pregunta nunca genera, y mientras
   vale la de antes. En la cache del servidor (ServerCacheDir), con la huella
@@ -170,9 +170,9 @@ function LeeNombreDeTabla(const ANombre: string; out AVersion, ABuild: string;
 function TablaDeInstalacion(const AInfo: TRadStudioInfo; AMarco: TMarcoDisenador;
   AEsperaMs: Cardinal; out AFichero, ADetalle: string): TEstadoTabla;
 
-{ Al arrancar: las tablas de cada Delphi instalado, en el hilo del generador
-  (prioridad baja, de una en una), y fuera las de los que ya no estan. Lo
-  que tarda se apunta en el log. No espera. }
+{ Al arrancar: las tablas del Delphi de ESTE servidor, en el hilo del
+  generador (prioridad baja), y fuera las de los que ya no estan instalados.
+  Lo que tarda se apunta en el log. No espera. }
 procedure CalientaTablasDelDisenador;
 
 implementation
@@ -1819,7 +1819,7 @@ begin
     // el Search Path primero: lo que el compilador encontraria
     for var Valor in ['Search Path', 'Browsing Path'] do
       for var Plat in ['Win32', 'Win64'] do
-        for var C in IdePlatformLibraryPaths(AInfo.Version, Plat, Valor) do
+        for var C in IdePlatformLibraryPaths(AInfo, Plat, Valor) do
           if not Vistas.ContainsKey(AnsiLowerCase(C)) and TDirectory.Exists(C) then
           begin
             Vistas.Add(AnsiLowerCase(C), True);
@@ -2225,19 +2225,24 @@ begin
   end;
 end;
 
-// La vuelta del arranque: lo de las instalaciones que ya no estan se borra, y
-// las que estan se ponen en la cola
+// La vuelta del arranque: lo de las instalaciones que ya no estan se borra -
+// con TODAS: la cache es de todos los servidores de la maquina y la purga de
+// uno no puede llevarse las tablas de otro -, y a la cola SOLO la del Delphi
+// de este servidor. Hasta el 5-oct-2026 entraban todas: unos 22 s de CPU por
+// cada version ajena (revisores R1 y R2).
 procedure Calienta;
 var
   Todas: TArray<TRadStudioInfo>;
+  LaMia: TRadStudioInfo;
 begin
   try
     Todas := DiscoverAllRadStudios;
     PurgaTablasDeLoQueNoEsta(ServerCacheDir('designer'), Todas);
+    LaMia := DiscoverRadStudio;
     TMonitor.Enter(GGenLock);
     try
-      for var Info in Todas do
-        GCola.Add(Info);
+      if LaMia.Found then
+        GCola.Add(LaMia);
     finally
       TMonitor.Exit(GGenLock);
     end;
