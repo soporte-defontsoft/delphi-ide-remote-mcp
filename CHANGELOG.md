@@ -21,7 +21,10 @@ One server, one Delphi.
 - With no key, the server takes the newest installation with DelphiLSP and
   writes it into its `settings.ini` at startup (one line under `[Server]`; the
   rest of the file stays byte for byte): from then on the key rules, and
-  installing a newer RAD Studio does not switch the server by itself. With
+  installing a newer RAD Studio does not switch the server by itself. A
+  `[Workspace.<name>] DelphiVersion=` left from 1.13 stops that write: the
+  workspace wanted a version, so the server starts with the newest this
+  time and the log says to move the one meant to `[Server]`. With
   no `settings.ini` (a client launching it over stdio) it is the newest, and
   no file is created.
 - **Without its Delphi the server does not start**: a pinned version that is
@@ -53,7 +56,17 @@ One server, one Delphi.
   while its vault is read-only (the default). They were announced anyway
   because a vault anywhere registers them, and in a read-only workspace
   they cost 2,760 characters on every round to answer "read-only". They
-  stay callable: the call says why not.
+  stay callable: the call says why not. It goes by what the workspace
+  declares, without touching the disk on each `tools/list` (a vault on an
+  unreachable network drive would stall it), and `delphi_help`'s task table
+  asks the same filter instead of repeating its rule.
+- **Nor the write tools to a read-only credential**: a `ReadOnlyToken=`
+  (or a read-only process) is no longer announced the tools that only
+  write - edit, textedit, create, changeset, build, package, upload, move,
+  delete, desktop and the vault's writers, the `read-write` ones of the
+  gate's own access table - since the gate refuses them every time. The
+  mixed tools stay (their reading commands work), and `delphi_help`'s task
+  table tells the credential it is read-only.
 
 ### Added
 
@@ -110,20 +123,46 @@ One server, one Delphi.
   `BindIP` were ignored and the server listened on port 3000 on EVERY
   network interface, and `DelphiVersion` went into a second `[Server]`
   appended at the end. It now stops at startup and says how to save the
-  file. A BOM followed by a comment line was always fine, and still is.
+  file. The same for a BOM in the middle of the file (a piece pasted from
+  another one) or two in a row; the startup says which line. The reader
+  decides it before reading anything, so nothing acts on a half-read file
+  - not the network drives of the roots, not the log rotation, which kept
+  its default 10 files where the lost `[Log]` said more. A BOM followed by
+  a comment line was always fine, and still is.
+- **`[Server]` written twice, or `DelphiVersion` twice in it, no longer
+  pins the newest Delphi**: Windows reads only the first one, so the
+  version the operator meant could be in the other, and the server wrote
+  the newest into the first - for good. It now starts as before and says
+  why it did not write the key. Also, an edit to `settings.ini` that lands
+  between the server's start and its own write of the key is no longer
+  hidden from SYS-001.
+- **`delphi_edit` no longer doubles the indentation an anchor leaves out**:
+  given without it, the line kept its indentation in front of the FIRST
+  line of `new`, always - a `new` written with its own came out with twice
+  as much, and the other lines of a several-line `new` with none.
+  `delphi_textedit` had a sensible rule of its own; there is one now for
+  both (`Lsp.Patch.SangraComoLaLinea`): a `new` that starts without
+  indentation takes the line's on every line, and one that brings its own
+  is written as given.
+- Review of the trimmed descriptions: `delphi_desktop` `overview` only takes
+  a fresh capture on a Windows target (the Super overview is Linux's), and
+  says so again; the DESK-010 refusal lists the letters; `delphi_docs`
+  lists `related` on the first chunk of a page, not on every read; a
+  `fragment` edit does not combine with `toline` either.
 
 ### Internal
 
-- New battery `test_un_delphi` (30 checks): writing the key and leaving the
+- New battery `test_un_delphi` (33 checks): writing the key and leaving the
   rest of the file byte for byte, the second start, a pin without decimals,
   a pin that is not installed (the server does not listen and exits 1), the
-  environment variable ignored, no `settings.ini` created in local mode, a
-  declared update (one that is NOT this machine's: declared, not deduced),
-  a malformed one ignored, the installer's text compared with what the
-  registry itself says, the server's own write of the key not taken for
-  an edited `settings.ini` (with a control that edits it while running),
-  and a `settings.ini` with a BOM before `[Server]` (red against the build
-  without the check: the server started and wrote a second `[Server]`).
+  environment variable ignored (with no key in the ini, where it used to
+  count), no `settings.ini` created in local mode, a declared update (one
+  that is NOT this machine's: declared, not deduced), a malformed one
+  ignored, the installer's text compared with what the registry itself
+  says, the server's own write of the key not taken for an edited
+  `settings.ini` (with a control that edits it while running), a BOM before
+  `[Server]` and one in the middle of the file, and `[Server]` written twice.
+  Each new check was red against the build without its fix.
   Found by using it: deployed with the whole suite green, the first
   `delphi_workspace` said SYS-001 - "settings.ini was modified after this
   process started, restart it" - about the server's own write. Whether the

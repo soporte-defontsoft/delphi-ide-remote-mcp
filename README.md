@@ -430,7 +430,10 @@ start** - it is a Delphi MCP server.
    else in the file changes, accents and line endings included). From then on the key rules:
    installing a newer RAD Studio later does not switch the server by itself, editing the key
    does. With no `settings.ini` at all (a client launching the exe over stdio) it is the newest,
-   and no file is created.
+   and no file is created. Two cases start with the newest but do NOT write it, and the log
+   says why: `[Server]` written twice (or `DelphiVersion` twice in it - Windows reads only the
+   first, and the version meant may be in the other), and a `[Workspace.<name>]` that still
+   carries the `DelphiVersion=` of 1.13 (that workspace wanted a version: move it to `[Server]`).
 
 A machine holds at most ONE installation per BDS version - its folders and registry keys are
 named after the version, so a second one would land on the first - and that is why the number
@@ -631,7 +634,8 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   inside its roots) or `ReadOnlyToken=` (read-only inside the same roots: it can read,
   search, navigate symbols, get diagnostics, download, run query git commands and file
   reports — but `delphi_edit`, `delphi_create`, `delphi_build`,
-  `delphi_package`, `delphi_upload` and git write commands are refused).
+  `delphi_package`, `delphi_upload` and git write commands are refused; `tools/list` does
+  not even announce it the tools that only write, and `delphi_help` tells it so).
   Tokenless HTTP is **always 401** — the anonymous mode is gone in v0.98. A secret that appears in two sections (or a `Token=` equal to its `ReadOnlyToken=`), a key repeated inside a section, or a section written twice is a copy-paste the ini parser would swallow silently, so the server **closes the workspaces involved** (fail closed) and says which in the startup log.
   The whole classification is enforced at a **single gate** in front of every
   `tools/call` — including the git argument filter, so no option can turn a "read" command

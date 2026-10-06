@@ -70,15 +70,7 @@ begin
 end;
 
 
-function LeadingWhite(const S: string): string;
-var
-  I: Integer;
-begin
-  I := 1;
-  while (I <= Length(S)) and ((S[I] = ' ') or (S[I] = #9)) do
-    Inc(I);
-  Result := Copy(S, 1, I - 1);
-end;
+// LeadingWhite vive en Lsp.Patch, con la regla de la sangria de las dos tools
 
 function ExtGate(const APath: string): string;
 var
@@ -150,7 +142,7 @@ end;
 
 function DoEditLine(const A: TTextEditArgs): string;
 var
-  EncNm, Text, Eol, Prefix, S: string;
+  EncNm, Text, Eol, S: string;
   Lines, NewLines: TArray<string>;
   Matches: TArray<Integer>;
   I, Target: Integer;
@@ -228,20 +220,14 @@ begin
     Exit(MalRango);
   var Cuantas := Fin - Target + 1;
 
-  // Replacement. If the anchor was given without its indentation, the
-  // original prefix is preserved on the first replacement line.
+  // Replacement, con LA regla de la sangria que el ancla dejo fuera, la de
+  // las dos tools (Lsp.Patch.SangraComoLaLinea: aqui vivia una copia propia,
+  // distinta de la de delphi_edit - 6-oct-2026).
   if A.DeleteLine then
     SetLength(NewLines, 0)  // la linea se va entera: ni una vacia queda
   else
-    NewLines := LineasDeNew(A.NewText); // la regla del salto final, una
-  if (not A.DeleteLine) and (Length(NewLines) > 0) and (LeadingWhite(A.OldLine) = '') and
-     (LeadingWhite(NewLines[0]) = '') then
-  begin
-    Prefix := LeadingWhite(Lines[Target]);
-    for I := 0 to High(NewLines) do
-      if NewLines[I] <> '' then
-        NewLines[I] := Prefix + NewLines[I];
-  end;
+    NewLines := SangraComoLaLinea(Lines[Target], A.OldLine,
+      LineasDeNew(A.NewText)); // la regla del salto final, una
 
   Sb := TStringBuilder.Create;
   try

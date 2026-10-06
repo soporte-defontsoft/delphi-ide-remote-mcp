@@ -163,7 +163,9 @@ PROBAR = [
 # motivo escrito es por donde se cuela la siguiente.
 EXCLUIDOS = {
     ('delphi_paserver', 'exe'): 'fichero de la carpeta desplegada EN EL TARGET',
-    ('delphi_paserver', 'job'): 'el jobId que dio remote-run, no una ruta (su texto nombra el .dproj de project)',
+    ('delphi_paserver', 'job'): 'el jobId que dio remote-run (su texto nombra el .dproj de project): '
+        'compone un fichero local (<job>.out en Lsp.RemoteRun) y lo guarda JobIdValido, hex y guiones; '
+        'lo prueba test_remoterun',
     ('delphi_move', 'copy'): 'booleano (copiar en vez de mover); la ruta es path/dest, probados arriba',
     ('delphi_desktop', 'inline'): 'booleano (imagen en la respuesta o fichero); la ruta es out, probada aparte',
     ('delphi_adb', 'inline'): 'idem delphi_desktop: la entrega de la captura (Lsp.InlineImages)',
@@ -259,11 +261,12 @@ try:
           not sin_clasificar,
           'sin clasificar: %s  (anadelo a PROBAR o a EXCLUIDOS con su motivo)'
           % sorted(sin_clasificar))
-    # 41 = el contrato entero (delphi_run retirada el 23-sep) con los interruptores y el vault encendidos.
+    # 42 = el contrato entero (37 + las 5 vault_*) con los interruptores y el vault de escritura
+    # encendidos (decia 41 desde que se retiro delphi_run, y una tool que desapareciese pasaba).
     # Con >=30, un recorte de ocho tools pasaba callado y el descubridor
     # perdia justo a las de registro condicional (auditoria 21-sep).
     check('G1b ...y la lista mira el contrato VIVO, no una copia',
-          len(tools) >= 41, '%d tools' % len(tools))
+          len(tools) >= 42, '%d tools' % len(tools))
 
     # ------------------------------------------------------------------ G2
     # Y ahora, una por una. Cada fallo aqui es un parametro por el que se

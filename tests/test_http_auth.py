@@ -360,6 +360,24 @@ try:
         check('anuncio: en las mixtas, un comando que no lee se niega (cerrado)', not mal_mix_no, mal_mix_no)
         check('anuncio: en las mixtas, cada comando anunciado como lectura pasa la puerta',
               not mal_mix_si, mal_mix_si)
+        # A la credencial de SOLO LECTURA tools/list no le anuncia las tools
+        # enteras de escritura - la puerta se las niega siempre (David,
+        # 6-oct-2026) -, y si las de lectura y las mixtas. El control: al
+        # token de escritura si se le anuncian (la lista de arriba).
+        code, body = post({"jsonrpc": "2.0", "id": 41, "method": "tools/list"}, RO_TOKEN)
+        ro_nombres = {t['name'] for t in json.loads(body)['result']['tools']}
+        rw = {t['name'] for t in anunciadas if (t.get('_meta') or {}).get('access') == 'read-write'}
+        resto = {t['name'] for t in anunciadas} - rw
+        check('anuncio: al token RO no se le anuncian las de escritura (al RW si: %d)' % len(rw),
+              len(rw) >= 9 and not (rw & ro_nombres), sorted(rw & ro_nombres))
+        check('anuncio: al token RO SI se le anuncian las de lectura y las mixtas',
+              resto <= ro_nombres, sorted(resto - ro_nombres))
+        # ...y la tabla de delphi_help, que las nombraria, se lo dice
+        _, ayuda_ro = call('delphi_help', {}, RO_TOKEN)
+        _, ayuda_rw = call('delphi_help', {}, TOKEN)
+        check('anuncio: delphi_help avisa al token RO de que es de solo lectura (al RW no)',
+              'YOUR CREDENTIAL IS READ-ONLY' in ayuda_ro and 'YOUR CREDENTIAL IS READ-ONLY' not in ayuda_rw,
+              ayuda_ro[-200:])
         # las mixtas SIN el parametro del comando: el defecto de cada una es una
         # lectura... salvo delphi_test, cuyo vacio con project es run (r11c/r11d)
         code, body = call('delphi_test', {'project': tmpdir3 + '\\Sample.dproj'}, RO_TOKEN)

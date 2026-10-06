@@ -22,13 +22,18 @@ salida distingue lo que se mide:
 
 Usage:  python tests/test_nodo_teclas.py [path-to-McpDesktopNode.exe]
 """
-import ctypes, os, re, shutil, sys
+import ctypes, os, re, shutil, subprocess, sys
 import ctypes.wintypes as w
 import mcp_cliente as mc
 from mcp_cliente import check
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NODO_SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, 'node', 'McpDesktopNode.exe')
+# run_all le pasa a cada bateria el exe del SERVIDOR: solo se toma el
+# argumento si es el nodo (revision del 6-oct-2026: la suite lanzaba el
+# servidor siete veces en el escritorio oculto)
+NODO_SRC = os.path.join(REPO, 'node', 'McpDesktopNode.exe')
+if len(sys.argv) > 1 and os.path.basename(sys.argv[1]).lower() == 'mcpdesktopnode.exe':
+    NODO_SRC = sys.argv[1]
 u32 = ctypes.WinDLL('user32', use_last_error=True)
 k32 = ctypes.WinDLL('kernel32', use_last_error=True)
 
@@ -74,7 +79,8 @@ def en_escritorio_aparte(nodo, args, base):
     if not hdesk:
         raise OSError('CreateDesktop: %d' % ctypes.get_last_error())
     try:
-        out = os.path.join(base, 'salida.txt')
+        # un fichero por llamada: uno que quedase escribiendo no pisa al siguiente
+        out = os.path.join(base, 'salida-%d.txt' % len(os.listdir(base)))
         cmd = 'cmd.exe /c ""%s" %s > "%s" 2>&1"' % (nodo, ' '.join([clave_del_nodo()] + args), out)
         si = STARTUPINFOW()
         si.cb = ctypes.sizeof(si)
@@ -83,9 +89,15 @@ def en_escritorio_aparte(nodo, args, base):
         if not k32.CreateProcessW(None, ctypes.create_unicode_buffer(cmd), None, None, False,
                                   CREATE_NO_WINDOW, None, base, ctypes.byref(si), ctypes.byref(pi)):
             raise OSError('CreateProcess: %d' % ctypes.get_last_error())
-        k32.WaitForSingleObject(pi.hProcess, 30000)
-        k32.CloseHandle(pi.hThread)
-        k32.CloseHandle(pi.hProcess)
+        try:
+            if k32.WaitForSingleObject(pi.hProcess, 30000) != 0:
+                # agotado: el arbol entero (cmd y lo que lanzo) fuera, y se dice
+                subprocess.run(['taskkill', '/PID', str(pi.dwProcessId), '/T', '/F'],
+                               capture_output=True)
+                return 'TIMEOUT: el nodo no acabo en 30 s'
+        finally:
+            k32.CloseHandle(pi.hThread)
+            k32.CloseHandle(pi.hProcess)
         with open(out, 'rb') as f:
             return f.read().decode('utf-8', 'replace')
     finally:
@@ -98,8 +110,7 @@ def codigo(salida):
 
 
 if not os.path.exists(NODO_SRC):
-    print('NOTA: no hay node/McpDesktopNode.exe (BuildGroup lo deja ahi); no se mide.')
-    mc.fin('teclas del nodo')
+    mc.fin('teclas del nodo', sin_checks='no hay node/McpDesktopNode.exe (BuildGroup lo deja ahi)')
     sys.exit(0)
 
 BASE = mc.carpeta('nodo_teclas')
@@ -113,9 +124,12 @@ try:
     control = tecla('shift')
     check('K1 control: shift en el escritorio aparte se BLOQUEA (NODE-011)',
           codigo(control) == 'NODE-011', control[-300:])
-    if codigo(control) == 'NODE-044':
-        # el escritorio aparte no aisla: mandar letras tecleaba en el de verdad
-        print('NOTA: el escritorio aparte dejo pasar la tecla; K2-K4 no se miden.')
+    if codigo(control) != 'NODE-011':
+        # Solo con el bloqueo MEDIDO se mandan letras: si el escritorio aparte
+        # dejo pasar la tecla (NODE-044), o si no hubo salida, o salio otra
+        # cosa (otro exe, un tiempo agotado), seguir podria teclear en el de
+        # verdad (revision del 6-oct-2026: solo paraba con NODE-044)
+        print('NOTA: el control no dio NODE-011 (dio %r); K2-K4 no se miden.' % codigo(control))
     else:
         for combo in (('ctrl', 'k'), ('ctrl', 's'), ('ctrl', 'a')):
             s = tecla(*combo)

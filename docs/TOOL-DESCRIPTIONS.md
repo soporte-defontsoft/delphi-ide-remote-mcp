@@ -94,6 +94,15 @@ What the measures taught:
   with x,y costs one start of the desktop node, `tap` + `type` two); it went
   back in. The others had only lost their exact words, and their checks now
   look for the concept as it is written today.
+- **The words that carry a concept are measured too, not only cut.**
+  `delphi_edit`'s `old` says "indentation does not count", which is not
+  exact (an anchor with MORE indentation than the line is refused, and the
+  refusal says how to copy it). Three truer phrasings were measured against
+  it, eight times each on the three hardest tasks, and every one lost a
+  task: with the plain words the model sees that two lines differing only
+  in indentation are one anchor and adds `occurrence`; with the careful
+  ones it stops doing so. The plain words stay, and the refusal covers the
+  rest.
 
 ## The first pass (October 2026)
 

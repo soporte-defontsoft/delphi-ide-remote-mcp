@@ -82,16 +82,18 @@ const
   SE_DISC_NINGUNA =
     'This server does not start: no RAD Studio with DelphiLSP is ' +
     'installed on this machine, and a Delphi MCP server needs its Delphi.';
-  { Un settings.ini con el BOM de UTF-8 delante de su primera seccion: la API
-    de los ini de Windows no ve esa seccion (Lsp.Guard.ExigeSettingsIniLegible,
-    medido el 6-oct-2026). %s = el fichero. }
+  { Un settings.ini con el BOM de UTF-8 delante de una cabecera de seccion: la
+    API de los ini de Windows no ve esa seccion (Lsp.Guard,
+    LineaConBomAntesDeSeccion, medido el 6-oct-2026). %s = el fichero, %d =
+    la linea. }
   SE_GUARD_INI_BOM_FMT =
-    'This server does not start: its settings.ini (%s) begins with a UTF-8 ' +
-    'BOM right before its first section header, and the Windows ini reader ' +
+    'This server does not start: its settings.ini (%s) has, on line %d, a ' +
+    'UTF-8 BOM right before a section header, and the Windows ini reader ' +
     'does not see a header with a BOM in front - that whole section would be ' +
-    'lost (a [Server] first: its Port, BindIP and DelphiVersion, so the ' +
+    'lost (for a [Server]: its Port, BindIP and DelphiVersion, so the ' +
     'server would listen on another port and on every network interface). ' +
-    'Save the file as UTF-8 without BOM, or put a comment line (; ...) first.';
+    'Save the file as UTF-8 without BOM (one BOM at the very start followed ' +
+    'by a comment line is harmless).';
   { Una instalacion que sirve, con su clave, para la negativa. }
   SF_DISC_USABLE_FMT =
     '%s -> [Server] DelphiVersion=%s';
@@ -144,6 +146,22 @@ const
     'Studio is installed.';
   SF_DISC_NO_SE_LEE =
     'the key did not read back after writing it';
+  { [Server] dos veces, o su DelphiVersion dos veces: Windows lee el primero
+    y la clave del operador puede estar en el otro; escribirla la taparia
+    (Lsp.Guard.FijaDelphiVersionEnElIni, revision del 6-oct-2026). }
+  SF_GUARD_SERVER_DOBLE_NO_ESCRIBE =
+    'settings.ini has [Server] twice, or DelphiVersion twice in it, and ' +
+    'Windows reads only the first one - the version you meant may be in ' +
+    'the other, and writing here would hide it for good. Merge them and ' +
+    'set [Server] DelphiVersion yourself';
+  { Un [Workspace.<nombre>] DelphiVersion= de la 1.13: quien lo tenia
+    queria una version, y la mas nueva no se fija por el (David, 6-oct-2026).
+    %s = el workspace. }
+  SF_GUARD_WS_DELPHIVERSION_NO_ESCRIBE_FMT =
+    '[Workspace.%s] still declares DelphiVersion (read until 1.13, ignored ' +
+    'now), so that workspace wanted a version - pinning the newest here ' +
+    'could be the wrong one. Move the version you mean to [Server] ' +
+    'DelphiVersion';
   SN_WORKSPACE_LIBZONE_OFF =
     '[WS-001] The library zone is OFF on this server ([Workspace.<name>] ' +
     'LibraryZone=0): reading is limited to the roots, the same as ' +
@@ -740,9 +758,10 @@ const
     '- INSERTING: anchor on ONE existing line and in "new" send back ' +
     'that same line together with the new text.';
 
-  { Un texto por concepto en las tres hermanas (delphi_edit, delphi_textedit
-    y delphi_changeset): medido con Qwen3.8 y Glimmer el 5-oct-2026 contra el
-    largo de antes, sin perder acierto (scratchpad banco_edit). }
+  { Un texto por concepto en las hermanas que lo tienen (delphi_edit y
+    delphi_textedit: delphi_changeset no lleva toline): medido con Qwen3.8 y
+    Glimmer el 5-oct-2026 contra el largo de antes, sin perder acierto
+    (scratchpad banco_edit). }
   SP_PATCH_TOLINE =
     'RANGE (1-based, inclusive): with this, "old" becomes the FIRST line ' +
     'of a range that ends here - delete:true removes it all (a whole ' +
@@ -805,7 +824,7 @@ const
     '(case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based ' +
     'line (MANDATORY) and "new" = what replaces just that piece; the rest ' +
     'of the line stays byte for byte. One line only; it goes INSTEAD of ' +
-    '"old" and combines with no other mode.';
+    '"old" and combines with no other mode (nor toline).';
 
   SR_FRAG_NEEDS_ATLINE =
     '[EDIT-002 INVALID_PARAM] "fragment" needs "atline": the number (1-based, ' +
@@ -2088,7 +2107,9 @@ const
     'twice). Typed means the keys were SENT: nothing checks ' +
     'where the focus was, so read the screenshot each answer brings) | key ' +
     '(one key: Linux code on a Linux target, key NAME on a Windows one) | ' +
-    'overview (bring every window into view when one covers another) | ' +
+    'overview (when one window covers another - Linux: the Super overview ' +
+    'brings every window into view; Windows: only a fresh capture with the ' +
+    'windows list) | ' +
     'status (is the desktop reachable, and what to ask for if not)';
   SP_ADBLINUX_PROFILE =
     'PAServer profile of the target machine - Linux, Windows, or this ' +
@@ -2156,7 +2177,8 @@ const
   // Lsp.InlineImages: la entrega de una captura, la misma en toda tool que capture.
   SP_CAPTURE_INLINE =
     'Default true: the screenshot comes back IN this answer as an image ' +
-    '(scaled to maxwidth), nothing to download. false = a file and its ' +
+    '(scaled to maxwidth), and no file is kept to download later. false = a ' +
+    'file and its ' +
     'download link (a client without vision, or one that wants the bytes).';
 
   SP_CAPTURE_MAXWIDTH =
@@ -2293,7 +2315,8 @@ const
   SR_DESKTOP_NEEDCODE =
     '[DESK-010 INVALID_PARAM] The target is Windows and key needs "code" with ' +
     'the key NAME: escape, enter, tab, space, backspace, delete, home, ' +
-    'end, up, down, left, right, super, alt, ctrl, shift or f1..f12.';
+    'end, up, down, left, right, super, alt, ctrl, shift, f1..f12 or a letter ' +
+    'a..z.';
 
   SR_ADBLINUX_CMD =
     '[DESK-011 INVALID_PARAM] command must be screenshot, tap, type, key, ' +
@@ -3423,8 +3446,8 @@ const
     'framework''s page first when both have one. command=read id=<an id of ' +
     'that list>: the page as plain text, in chunks (offset); a long page ' +
     'first gives its introduction and its sections, and <id>#<section> ' +
-    '(its anchor or its title as the text shows it) reads one alone. Each ' +
-    'read also lists related: the pages around it (a class: its unit and ' +
+    '(its anchor or its title as the text shows it) reads one alone. The ' +
+    'first chunk also lists related: the pages around it (a class: its unit and ' +
     'member lists; a topic: its parent index); other pages it names (See ' +
     'Also, examples) are found with search. Read-only, in any workspace, ' +
     'only the help files the IDE registers. It says what something is for ' +
@@ -3665,6 +3688,15 @@ const
   SF_HELP_TASKS_VAULT_ESCRIBIR =
     '  write to the memory ................ vault_append, vault_patch, ' +
     'vault_create'#10;
+
+  { La credencial de solo lectura: tools/list no le anuncia las tools enteras
+    de escritura (Lsp.Guard.ToolHiddenFromList), y la tabla de arriba se las
+    nombraria igual (6-oct-2026). }
+  SF_HELP_TASKS_SOLO_LECTURA =
+    #10#10'YOUR CREDENTIAL IS READ-ONLY: the tools that only write are not ' +
+    'announced to you (they would refuse), and the mixed ones answer only ' +
+    'their reading commands - tools/list says which in _meta.access and ' +
+    'readOnlyCommands.';
 
   SN_HELP_CONVENTIONS =
     '[HELP-006] HOUSE RULES (they apply to every tool)'#10#10 +

@@ -585,11 +585,14 @@ open(os.path.join(HDIR, 'settings.ini'), 'w', encoding='utf-8').write(
     '[Workspace.MismoVault]\nToken=tok-mismo-vault\nRoots=%s\nVaultPath=%s\n'
     'VaultReadOnly=1\n\n'
     '[Workspace.PorDefecto]\nToken=tok-por-defecto\nRoots=%s\nVaultPath=%s\n\n'
-    '[Workspace.SinVault]\nToken=tok-sin-vault\nRoots=%s\n'
+    '[Workspace.SinVault]\nToken=tok-sin-vault\nRoots=%s\n\n'
+    '[Workspace.Escribe]\nToken=tok-escribe\nReadOnlyToken=tok-escribe-ro\nRoots=%s\n'
+    'VaultPath=%s\nVaultReadOnly=0\n'
     % (HPORT, os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
        os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
        os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
-       os.path.join(HDIR, 'codigo')))
+       os.path.join(HDIR, 'codigo'),
+       os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido')))
 _henv = mc.entorno()  # ni DELPHI_MCP_TOKEN ni VAULT_PATH heredados: manda el settings.ini
 # sin puerto en la linea de comandos: el del settings.ini
 _hp = mc.lanza_http(_hexe, None, _henv, espera_en=HPORT, cwd=HDIR)
@@ -682,6 +685,25 @@ try:
               'vault_read' in _ro_n and 'vault_search' in _ro_n and
               not any(t in _ro_n for t in ('vault_append', 'vault_create', 'vault_patch')),
               [t for t in _ro_n if t.startswith('vault_')])
+    # el control positivo por HTTP: con VaultReadOnly=0 se anuncian las cinco
+    # (sin el, "no se anuncian" pasaria tambien si el filtro las ocultase a
+    # todo workspace con nombre - revision del 6-oct-2026)
+    _esc = _nombres('tok-escribe', 72)
+    check('por-workspace (VaultReadOnly=0): se le anuncian las cinco vault_*',
+          all(t in _esc for t in ('vault_read', 'vault_search', 'vault_append',
+                                  'vault_create', 'vault_patch')),
+          [t for t in _esc if t.startswith('vault_')])
+    # ...y a SU credencial de solo lectura no se le anuncian las de escritura,
+    # ni la tabla de delphi_help le ofrece escribir en la memoria
+    _esc_ro = _nombres('tok-escribe-ro', 73)
+    check('por-workspace (VaultReadOnly=0, credencial RO): leer SI, escribir NO',
+          'vault_read' in _esc_ro and not any(t in _esc_ro for t in
+                                              ('vault_append', 'vault_create', 'vault_patch')),
+          [t for t in _esc_ro if t.startswith('vault_')])
+    _tabla_ro = _texto(_http('tok-escribe-ro', 'tools/call', {'name': 'delphi_help', 'arguments': {}}, 74))
+    _tabla_rw = _texto(_http('tok-escribe', 'tools/call', {'name': 'delphi_help', 'arguments': {}}, 75))
+    check('por-workspace: la tabla de delphi_help ofrece escribir la memoria a la credencial RW y no a la RO',
+          'vault_append' in _tabla_rw and 'vault_append' not in _tabla_ro, _tabla_ro[-300:])
 finally:
     _hp.kill()
     _hp.wait(10)  # su exe esta en HDIR: muerto del todo antes de barrerla

@@ -121,7 +121,9 @@ begin
   // parallel load.
   SetErrorMode(GetErrorMode or SEM_FAILCRITICALERRORS);
   StartLogSink; // first: everything from here on reaches the disk
-  FSettings := TMCPSettings.Create('', False); // no settings.ini side effects
+  // no settings.ini side effects; y EL nombre del fichero, el de Lsp.Guard: el
+  // vendor componia el suyo (revision del 6-oct-2026)
+  FSettings := TMCPSettings.Create(SettingsIniPath, False);
   FSettings.ServerName := SERVER_NAME;
   FSettings.ServerVersion := SERVER_VERSION;
   // serverInfo.host: two servers of the same name and version (a 13.1 and a

@@ -214,10 +214,12 @@ try:
     check('W9 WS-020, delphi_fetch y su maxbytes dicen el umbral de 1 MB, y ninguno los 4 MB de antes',
           'over 1 MB' in desc('delphi_fetch') and 'above 1 MB' in prop('delphi_fetch', 'maxbytes')
           and '1 MB' in cat['SN_WS_DOWNLOAD_WITH_FETCH'] and '4 MB' not in fetch, fetch[:600])
-    check('W9 region y window (delphi_desktop, delphi_adb) dicen que no se combinan',
-          'Not with window' in cat['SP_ADBLINUX_REGION']
-          and 'Not with region' in cat['SP_ADBLINUX_WINDOW'],
-          cat['SP_ADBLINUX_REGION'][-200:] + ' | ' + cat['SP_ADBLINUX_WINDOW'][-120:])
+    # del tools/list VIVO, no de las constantes del catalogo; y solo
+    # delphi_desktop tiene region y window (revision del 6-oct-2026)
+    check('W9 region y window de delphi_desktop dicen que no se combinan',
+          'Not with window' in prop('delphi_desktop', 'region')
+          and 'Not with region' in prop('delphi_desktop', 'window'),
+          prop('delphi_desktop', 'region')[-200:] + ' | ' + prop('delphi_desktop', 'window')[-120:])
 finally:
     proc.kill()
 proc.wait(10)

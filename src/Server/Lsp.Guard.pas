@@ -924,15 +924,17 @@ function ServerDelphiUpdate: string;
   editado en el primer arranque de cada servidor (medido en produccion, 5-oct-2026). }
 function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
 
-{ Un settings.ini con el BOM de UTF-8 justo delante de su primera seccion NO
+{ Un settings.ini con el BOM de UTF-8 delante de una cabecera de seccion NO
   arranca (6-oct-2026). Lo lee la API de los ini de Windows - aqui (TIniFile)
-  y en MCPServer.Settings, que lee el Port -, y esa API toma el BOM por parte
-  de la primera linea: no ve la cabecera y pierde la seccion entera. Medido
-  con un [Server] primero: su Port y su BindIP no se leian (el servidor en el
-  3000 y en TODAS las interfaces) y DelphiVersion se escribia en un [Server]
+  y en MCPServer.Settings, que lee el Port -, y esa API toma el BOM por texto
+  de esa linea: no ve la cabecera y pierde la seccion entera. Medido con un
+  [Server] primero: su Port y su BindIP no se leian (el servidor en el 3000
+  y en TODAS las interfaces) y DelphiVersion se escribia en un [Server]
   nuevo al final. Con un comentario delante el BOM se queda en el comentario
-  y todo se lee: eso pasa. Leerlo de otra manera seria un segundo lector, y
-  el del Port ni siquiera es nuestro. Lo llama TMcpHost.Wire, lo primero. }
+  y todo se lee: eso pasa. Lo decide LoadSecurity, el lector, antes de leer
+  nada (y entonces no lee); esto lo lanza, y lo llama TMcpHost.Wire lo
+  primero. Leerlo de otra manera seria un segundo lector, y el del Port ni
+  siquiera es nuestro. }
 procedure ExigeSettingsIniLegible;
 
 { The knowledge-vault root (Obsidian notes). Empty when unset.
@@ -1464,6 +1466,9 @@ var
   GDelphiVersion: string = '';      // [Server] DelphiVersion: el Delphi del servidor
   GDelphiUpdate: string = '';       // [Server] DelphiUpdate: el update que declara el operador
   GIniCargadoEn: TDateTime = 0;     // la fecha del settings.ini que tiene cargado este proceso
+  GIniIlegible: string = '';        // por que no se lee el settings.ini (un BOM delante de una seccion): no arranca
+  GServerIniDoble: Boolean = False; // [Server] dos veces, o su DelphiVersion: la clave no se escribe
+  GWorkspaceConDelphiVersion: string = ''; // un workspace con DelphiVersion= de la 1.13: la clave no se escribe
   GAllowTests: Boolean = False;     // running test suites is opt-in too
   GGitRemotes: string = '';         // hosts an explicit git URL may name
   GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
@@ -2034,8 +2039,13 @@ begin
               [MsgFmt(SL_GUARD_SECCION_DOS_VECES_CERRADO_FMT, [Seccion])];
           end
           else
+          begin
             GWorkspaceNotes := GWorkspaceNotes +
               [MsgFmt(SL_GUARD_SECCION_DOS_VECES_FUSIONALAS_FMT, [Seccion])];
+            // lo del segundo no lo ve Windows: la clave no se escribe encima
+            if SameText(Seccion, 'Server') then
+              GServerIniDoble := True;
+          end;
         end
         else
           Secciones.Add(Seccion);
@@ -2054,8 +2064,12 @@ begin
             [MsgFmt(SL_GUARD_REPITE_CLAVE_CERRADO_FMT, [Seccion, T.Substring(0, P).Trim])];
         end
         else
+        begin
           GWorkspaceNotes := GWorkspaceNotes +
             [MsgFmt(SL_GUARD_REPITE_CLAVE_IGNORA_FMT, [Seccion, T.Substring(0, P).Trim])];
+          if SameText(Clave, 'Server|DelphiVersion') then
+            GServerIniDoble := True;
+        end;
       end
       else
         Claves.Add(Clave);
@@ -2208,11 +2222,58 @@ begin
   Result := True;
 end;
 
+{ La linea (1-based) donde un BOM de UTF-8 va delante de la cabecera de una
+  seccion, o 0. La API de los ini de Windows toma el BOM por texto de esa
+  linea: no ve la cabecera y pierde la seccion entera (medido el 6-oct-2026
+  con un [Server] primero: el servidor en el 3000 y en todas las
+  interfaces). Al principio del fichero, que es lo normal, y tambien a mitad
+  - un trozo pegado de otro fichero - o dos seguidos. Lo pregunta
+  LoadSecurity ANTES de leer nada (revision del 6-oct-2026: estaba en Wire,
+  despues de que el ini se hubiera leido y usado). }
+function LineaConBomAntesDeSeccion(const AIniPath: string): Integer;
+var
+  B: TArray<Byte>;
+  I, J, Linea: Integer;
+  ConBom: Boolean;
+begin
+  Result := 0;
+  try
+    B := TFile.ReadAllBytes(AIniPath);
+  except
+    Exit; // sin poder leerlo no se sabe: que lo lea TIniFile, como siempre
+  end;
+  I := 0;
+  Linea := 1;
+  while I < Length(B) do
+  begin
+    // un principio de linea: los BOM que haya, los blancos, y si sigue '['
+    J := I;
+    ConBom := False;
+    while BomUtf8En(B, J) do
+    begin
+      ConBom := True;
+      Inc(J, 3);
+    end;
+    if ConBom then
+    begin
+      while (J < Length(B)) and ((B[J] = Ord(' ')) or (B[J] = 9)) do
+        Inc(J);
+      if (J < Length(B)) and (B[J] = Ord('[')) then
+        Exit(Linea);
+    end;
+    while (I < Length(B)) and (B[I] <> 10) do
+      Inc(I);
+    Inc(I);
+    Inc(Linea);
+  end;
+end;
+
 procedure LoadSecurity;
 var
   IniPath: string;
   Ini: TIniFile;
   Fuera: TArray<string>;
+  LineaBom: Integer;
 begin
   if GSecLoaded then
     Exit;
@@ -2267,7 +2328,15 @@ begin
   // baterias fuerzan un vault de solo lectura por encima de cualquier ini).
   GVaultEnvWritable := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY') = '0';
   IniPath := SettingsIniPath;
+  // un BOM de UTF-8 delante de una seccion: Windows la pierde entera, y nada
+  // de lo que se leyera seria lo que escribio el operador. No se lee, y el
+  // servidor no arranca (ExigeSettingsIniLegible, desde TMcpHost.Wire)
+  LineaBom := 0;
   if TFile.Exists(IniPath) then
+    LineaBom := LineaConBomAntesDeSeccion(IniPath);
+  if LineaBom > 0 then
+    GIniIlegible := MsgFmt(SE_GUARD_INI_BOM_FMT, [IniPath, LineaBom]);
+  if TFile.Exists(IniPath) and (LineaBom = 0) then
   begin
     // la fecha ANTES de leerlo: si lo tocan mientras, se avisa de mas, nunca de menos
     GIniCargadoEn := TFile.GetLastWriteTime(IniPath);
@@ -2370,9 +2439,14 @@ begin
                 W.ReadOnlyPaths, W.Roots, W.ReadOnlyRoots);
               // La version es del SERVIDOR desde el 5-oct-2026: la de un
               // workspace ya no se lee, y se dice en vez de callarlo.
+              // Y quien la tenia queria una: la mas nueva no se fija en
+              // [Server] por el (David, 6-oct-2026)
               if Ini.ValueExists(S, 'DelphiVersion') then
+              begin
                 GWorkspaceNotes := GWorkspaceNotes +
                   [MsgFmt(SL_GUARD_DELPHIVERSION_EN_WORKSPACE_FMT, [W.Name])];
+                GWorkspaceConDelphiVersion := W.Name;
+              end;
               GWorkspaces := GWorkspaces + [W];
             end
             else
@@ -2485,6 +2559,10 @@ begin
   LoadSecurity;
   ALinesPerFile := GIniLogLines;
   AMaxFiles := GIniLogMaxFiles;
+  // un ini que no se lee no poda la historia del log: sus [Log] no se han
+  // leido y el servidor no va a arrancar (revision del 6-oct-2026)
+  if GIniIlegible <> '' then
+    AMaxFiles := MaxInt;
 end;
 
 function AuthToken: string;
@@ -3064,35 +3142,39 @@ begin
 end;
 
 procedure ExigeSettingsIniLegible;
-var
-  B: TArray<Byte>;
-  I: Integer;
 begin
-  if not TFile.Exists(SettingsIniPath) then
-    Exit;
-  try
-    B := TFile.ReadAllBytes(SettingsIniPath);
-  except
-    Exit; // sin poder leerlo no se sabe: que lo lea TIniFile, como siempre
-  end;
-  if DetectEnc(B) <> ekUtf8Bom then
-    Exit;
-  // el BOM y, sin salto de linea por medio, la cabecera de una seccion
-  I := 3;
-  while (I < Length(B)) and ((B[I] = Ord(' ')) or (B[I] = 9)) do
-    Inc(I);
-  if (I < Length(B)) and (B[I] = Ord('[')) then
-    raise Exception.Create(MsgFmt(SE_GUARD_INI_BOM_FMT, [SettingsIniPath]));
+  LoadSecurity;
+  if GIniIlegible <> '' then
+    raise Exception.Create(GIniIlegible);
 end;
 
 function FijaDelphiVersionEnElIni(const AVersion: string; out AError: string): Boolean;
 var
   Ini: TIniFile;
+  Intacto: Boolean;
 begin
   Result := False;
   AError := '';
   if not TFile.Exists(SettingsIniPath) then
     Exit;
+  // [Server] dos veces, o su DelphiVersion dos veces: Windows lee el primero,
+  // y la clave que el operador queria puede estar en el otro - escribirla
+  // aqui la taparia para siempre (revision del 6-oct-2026)
+  if GServerIniDoble then
+  begin
+    AError := MsgText(SF_GUARD_SERVER_DOBLE_NO_ESCRIBE);
+    Exit;
+  end;
+  // un workspace que aun declara DelphiVersion= (se leia hasta la 1.13)
+  // queria una version: la mas nueva no se fija por el (David, 6-oct-2026)
+  if GWorkspaceConDelphiVersion <> '' then
+  begin
+    AError := MsgFmt(SF_GUARD_WS_DELPHIVERSION_NO_ESCRIBE_FMT, [GWorkspaceConDelphiVersion]);
+    Exit;
+  end;
+  // lo editado desde que se cargo no esta cargado: se escribe igual, pero la
+  // fecha no avanza y SYS-001 lo sigue diciendo (revision del 6-oct-2026)
+  Intacto := TFile.GetLastWriteTime(SettingsIniPath) = GIniCargadoEn;
   try
     // El escritor de Windows anade la linea al final de [Server] (o la
     // seccion al final del fichero) y deja los demas bytes como estaban:
@@ -3110,7 +3192,8 @@ begin
       GDelphiVersion := AVersion; // desde aqui, la clave
       // lo que hay en disco es lo que este proceso tiene cargado: su propia
       // escritura no es un ini editado (SettingsIniMasNuevoQueElCargado)
-      GIniCargadoEn := TFile.GetLastWriteTime(SettingsIniPath);
+      if Intacto then
+        GIniCargadoEn := TFile.GetLastWriteTime(SettingsIniPath);
     end
     else
       AError := MsgText(SF_DISC_NO_SE_LEE);
@@ -3192,11 +3275,12 @@ begin
       Exit(True);
 end;
 
-function VaultWritable: Boolean;
+{ Si el vault del workspace activo se declaro de escritura, por su
+  configuracion y sin mirar el disco: lo pregunta tools/list en cada
+  peticion (ToolHiddenFromList), y un vault en una letra de red caida lo
+  paraba (revision del 6-oct-2026). }
+function VaultModoEscritura: Boolean;
 begin
-  Result := False;
-  if not VaultConfigured then
-    Exit;
   LoadSecurity;
   // Solo lectura POR DEFECTO: escribir en el vault se pide a proposito.
   // Un workspace con nombre tiene exactamente lo que declara: VaultReadOnly=0
@@ -3206,6 +3290,11 @@ begin
   // Workspace por defecto: el entorno gana en AMBOS sentidos (las baterias
   // fuerzan un vault de solo lectura por encima de cualquier ini).
   Result := GVaultEnvWritable; // leido por LoadSecurity con las demas claves
+end;
+
+function VaultWritable: Boolean;
+begin
+  Result := VaultConfigured and VaultModoEscritura;
 end;
 
 { Si HAY vault en alguna parte (workspace por defecto o cualquier seccion):
@@ -7679,10 +7768,19 @@ begin
   // se anuncian donde sirven: ninguna a un workspace sin vault, y las de
   // escritura (las atEscritura de LA tabla de accesos) no a uno de solo
   // lectura - eran 2.760 caracteres por ronda de tools que solo rechazan
-  // (6-oct-2026). Siguen llamables: la llamada dice por que no.
+  // (6-oct-2026). Siguen llamables: la llamada dice por que no. Por lo
+  // DECLARADO, sin mirar el disco: esto corre en cada tools/list, y un vault
+  // en una letra de red caida lo paraba (revision del 6-oct-2026); si la
+  // carpeta no esta, la llamada lo dice.
   if N.StartsWith('vault_') and
-     (not VaultConfigured or
-      ((AccesoDeTool(N).Acceso = atEscritura) and not VaultWritable)) then
+     ((VaultPath = '') or
+      ((AccesoDeTool(N).Acceso = atEscritura) and not VaultModoEscritura)) then
+    Exit(True);
+  // A una credencial de SOLO LECTURA no se le anuncian las tools enteras de
+  // escritura: la puerta se las niega siempre (LecturaDenegada) y solo
+  // ocupaban sitio. Las mixtas se quedan, sus lecturas valen (David,
+  // 6-oct-2026). Lo mismo que arriba: siguen llamables y la llamada dice por que.
+  if IsReadOnlyNow and (AccesoDeTool(N).Acceso = atEscritura) then
     Exit(True);
   if Length(GToolsOnly) > 0 then
     Exit(not MatchText(N, GToolsOnly));

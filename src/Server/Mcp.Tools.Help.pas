@@ -53,7 +53,7 @@ uses
   System.Math,
   System.JSON,
   MCPServer.Registration,
-  Lsp.Guard; // VaultConfigured / VaultWritable: la tabla no anuncia lo que no hay
+  Lsp.Guard; // ToolHiddenFromList / IsReadOnlyNow: la tabla dice lo que tools/list anuncia
 
 constructor TDelphiHelpTool.Create;
 begin
@@ -175,10 +175,19 @@ begin
   if Cmd = '' then
     Cmd := 'tasks';
   if MatchText(Cmd, ['tasks', 'task', 'index']) then
-    // la memoria solo si el workspace tiene vault (tools/list no trae las
-    // vault_* sin el), y escribirla solo si es escribible
-    Result := MsgFmt(SN_HELP_TASKS, [IfThen(VaultConfigured, MsgText(SF_HELP_TASKS_VAULT_LEER) +
-      IfThen(VaultWritable, MsgText(SF_HELP_TASKS_VAULT_ESCRIBIR), ''), '')])
+  begin
+    // las filas del vault, las que tools/list anuncia a ESTE workspace: se le
+    // pregunta al mismo filtro (ToolHiddenFromList), no se repite su regla -
+    // repetida, no siguio a la de la credencial de solo lectura (revision del
+    // 6-oct-2026)
+    Result := MsgFmt(SN_HELP_TASKS, [IfThen(not ToolHiddenFromList('vault_read'),
+      MsgText(SF_HELP_TASKS_VAULT_LEER) + IfThen(not ToolHiddenFromList('vault_append'),
+      MsgText(SF_HELP_TASKS_VAULT_ESCRIBIR), ''), '')]);
+    // y a una credencial de solo lectura, lo mismo que tools/list: las de
+    // escritura no se le anuncian, y la tabla se las nombraria
+    if IsReadOnlyNow then
+      Result := Result + MsgText(SF_HELP_TASKS_SOLO_LECTURA);
+  end
   else if MatchText(Cmd, ['conventions', 'rules', 'reglas']) then
     Result := MsgText(SN_HELP_CONVENTIONS)
   else if MatchText(Cmd, ['tool', 'tools']) then

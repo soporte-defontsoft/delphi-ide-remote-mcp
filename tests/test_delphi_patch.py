@@ -758,5 +758,34 @@ out = call('delphi_edit', {'path': _occ, 'edits': '{"old": "x", "new": "y"}'})
 check('tanda: "edits" que no es array -> RECHAZADO diciendo cuantos caracteres llegaron y como empieza',
       mc.rechazado(out) and mc.es(out, 'SR_PATCH_EDITS_JSON_FMT') and '24 characters arrived' in out and '{"old": "x"' in out, out[:300])
 
+# 2026-10-06 (revision): LA sangria que el ancla deja fuera, una regla para
+# las dos tools (Lsp.Patch.SangraComoLaLinea). delphi_edit la ponia delante
+# de la PRIMERA linea de new SIEMPRE: con new ya sangrado salia doble (medido:
+# 4 + 4 = 8 espacios), y las demas lineas de new se quedaban sin ella.
+_san = os.path.join(DIR, 'Sangria.pas')
+open(_san, 'w', encoding='utf-8', newline='').write(CRLF.join([
+    'unit Sangria;', '', 'interface', '', 'implementation', '',
+    'procedure P;', 'begin', '    Foo := 1;', 'end;', '', 'end.', '']))
+call('delphi_edit', {'path': _san, 'old': 'Foo := 1;', 'new': '    Foo := 2;'})
+_t = open(_san, encoding='utf-8', newline='').read()
+check('sangria: ancla sin ella y new YA sangrado -> se respeta, no se duplica',
+      '\r\n    Foo := 2;\r\n' in _t, repr(_t[-60:]))
+call('delphi_edit', {'path': _san, 'old': 'Foo := 2;', 'new': 'Foo := 3;'})
+_t = open(_san, encoding='utf-8', newline='').read()
+check('sangria: ancla y new sin ella -> new toma la de la linea',
+      '\r\n    Foo := 3;\r\n' in _t, repr(_t[-60:]))
+call('delphi_edit', {'path': _san, 'old': 'Foo := 3;', 'new': 'Foo := 4;\nBar := 5;'})
+_t = open(_san, encoding='utf-8', newline='').read()
+check('sangria: new de varias lineas sin ella -> TODAS toman la de la linea, no solo la primera',
+      '\r\n    Foo := 4;\r\n    Bar := 5;\r\n' in _t, repr(_t[-60:]))
+# la gemela, con la MISMA regla, en una linea sangrada de un .txt
+_txt = os.path.join(DIR, 'sangria.txt')
+open(_txt, 'w', encoding='utf-8', newline='').write('lista\r\n    - uno\r\nfin\r\n')
+call('delphi_textedit', {'path': _txt, 'old': '- uno', 'new': '    - dos'})
+call('delphi_textedit', {'path': _txt, 'old': '- dos', 'new': '- tres\n- cuatro'})
+_t = open(_txt, encoding='utf-8', newline='').read()
+check('sangria: delphi_textedit sigue la misma regla (no duplica, y en todas las lineas)',
+      _t == 'lista\r\n    - tres\r\n    - cuatro\r\nfin\r\n', repr(_t))
+
 srv.cierra()
 mc.fin('delphi_edit battery')

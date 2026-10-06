@@ -15,7 +15,8 @@ nombres y su build los dice el propio servidor (delphi_installs).
       instalacion, linea entera, con la clave que el operador copiaria, y
       marca la del servidor
   U2  [Workspace.x] DelphiVersion= ya no se lee y el log lo avisa; de una
-      seccion que se ignora entera (sin token) no se dice
+      seccion que se ignora entera (sin token) no se dice. Y quien lo tenia
+      queria una version: la mas nueva NO se fija en [Server] por el
   U3  segundo arranque en esa misma carpeta: la clave ya esta y manda ella
       ("pinned by"), sin volver a escribir: el ini no se toca
   U4  [Server] DelphiVersion=37 (sin decimal): activa y pedida la 37.0; el
@@ -41,7 +42,10 @@ nombres y su build los dice el propio servidor (delphi_installs).
   U11 un settings.ini con el BOM de UTF-8 justo delante de [Server]: Windows
       no ve esa cabecera y la seccion se pierde entera (Port, BindIP,
       DelphiVersion): NO arranca y dice por que; con un comentario delante
-      el BOM no molesta, arranca y la clave entra en SU [Server]
+      el BOM no molesta, arranca y la clave entra en SU [Server]; a MITAD
+      del fichero (un trozo pegado) tampoco arranca, y dice la linea
+  U12 [Server] dos veces: Windows lee el primero y la version del operador
+      puede estar en el otro - arranca, NO escribe la clave y lo dice
 
 Lo que NO mide, y por que: que cada tool use solo el Delphi del servidor y
 nunca el de otra instalacion necesita una maquina con DOS Delphi (aqui hay
@@ -88,8 +92,12 @@ def lanza(exe, nombre, extra=None):
     salida = open(ruta, 'wb')
     env = mc.entorno(dict({'DELPHI_MCP_BIND_IP': '127.0.0.1'}, **(extra or {})))
     puerto = mc.puerto_libre()
-    proc = subprocess.Popen([exe, '--http', str(puerto)], env=env,
-                            stdout=salida, stderr=subprocess.STDOUT)
+    try:
+        proc = subprocess.Popen([exe, '--http', str(puerto)], env=env,
+                                stdout=salida, stderr=subprocess.STDOUT)
+    except Exception:
+        salida.close()  # sin proceso no entra en procs: se cierra aqui
+        raise
     procs.append((proc, salida))
     cli = None
     if mc.espera_puerto(puerto, proc, 30):
@@ -179,7 +187,7 @@ def en_server(ini, linea):
 try:
     # ------------------------------------------------------------- U1 / U2
     INI1 = ini_bytes(['SessionTimeoutMinutes=720'],
-                     ['DelphiVersion=99.0', '', '[Workspace.SinToken]', 'Roots=%s' % JAIL,
+                     ['', '[Workspace.SinToken]', 'Roots=%s' % JAIL,
                       'DelphiVersion=99.0'])
     d1, exe1 = carpeta_servidor('sin-clave', INI1)
     proc, ruta, c = lanza(exe1, 'sin-clave')
@@ -215,8 +223,6 @@ try:
     usa = CAT['SL_DISC_USA_FMT'] % (nombre_con_version(CON_LSP[0]), CAT['SL_DISC_POR_CLAVE'])
     check('U1 ...y cual usa: "DelphiVersion=%s (nombre), pinned by [Server] DelphiVersion"' % NUEVA,
           usa in log, log[-12:])
-    check('U2 [Workspace] DelphiVersion= ya no se lee: el log lo avisa',
-          CAT['SL_GUARD_DELPHIVERSION_EN_WORKSPACE_FMT'] % 'Op' in log, log[-12:])
     check('U2 ...pero de una seccion que se ignora entera (sin token) no se dice',
           CAT['SL_GUARD_SIN_TOKEN_IGNORADA_FMT'] % 'SinToken' in log
           and CAT['SL_GUARD_DELPHIVERSION_EN_WORKSPACE_FMT'] % 'SinToken' not in log, log[-12:])
@@ -233,6 +239,21 @@ try:
     check('U8 ...y en el log de arranque, en la linea de su instalacion y en la de "uses"',
           UPDATE != '' and (', %s  ->' % UPDATE) in linea_de(CON_LSP[0], NUEVA)
           and linea_de(CON_LSP[0], NUEVA) in log and UPDATE in usa and usa in log, log[-12:])
+    para(proc)
+
+    # ------------------------------------------------------------------ U2
+    # [Workspace.Op] DelphiVersion= (se leia hasta la 1.13): ya no se lee y el
+    # log lo avisa; y quien lo tenia queria una version, asi que la mas nueva
+    # NO se fija en [Server] por el (David, 6-oct-2026)
+    INI2 = ini_bytes([], ['DelphiVersion=99.0'])
+    d2, exe2 = carpeta_servidor('ws-con-version', INI2)
+    proc, ruta, c = lanza(exe2, 'ws-con-version')
+    log = mensajes(ruta)
+    check('U2 [Workspace] DelphiVersion= ya no se lee: el log lo avisa',
+          c is not None and CAT['SL_GUARD_DELPHIVERSION_EN_WORKSPACE_FMT'] % 'Op' in log, log[-12:])
+    check('U2 ...y la mas nueva NO se fija en [Server] (el ini no se toca), y el log dice por que',
+          ini_de(d2) == INI2 and CAT['SF_GUARD_WS_DELPHIVERSION_NO_ESCRIBE_FMT'] % 'Op' in '\n'.join(log),
+          '\n'.join(log)[-400:])
     para(proc)
 
     # ------------------------------------------------------------------ U3
@@ -309,10 +330,11 @@ try:
     except subprocess.TimeoutExpired:
         rc = None
     texto = '\n'.join(mensajes(ruta))
-    antes, despues = CAT['SE_GUARD_INI_BOM_FMT'].split('%s')
+    partes = re.split(r'%[sd]', CAT['SE_GUARD_INI_BOM_FMT'])
     check('U11 settings.ini con BOM delante de [Server]: NO arranca - no escucha y sale con 1',
           c is None and rc == 1, 'cli=%s rc=%s' % (c, rc))
-    check('U11 ...y dice por que y como arreglarlo', antes in texto and despues in texto, texto[-600:])
+    check('U11 ...y dice por que, en que linea (la 1) y como arreglarlo',
+          all(p in texto for p in partes) and ', on line 1, ' in texto, texto[-600:])
     check('U11 ...el ini no se toca', ini_de(d11) == INI11, ini_de(d11)[:200])
     para(proc)
     # con un comentario delante el BOM se queda en el comentario: arranca, y
@@ -321,19 +343,51 @@ try:
     d11b, exe11b = carpeta_servidor('bom-comentario', INI11B)
     proc, ruta, c = lanza(exe11b, 'bom-comentario')
     escrito = ini_de(d11b)
-    check('U11b con BOM y un comentario delante: arranca y escribe la clave en su [Server]',
-          c is not None and escrito.startswith(BOM) and escrito.count(b'[Server]') == 1
-          and b'DelphiVersion=' in escrito.split(b'[Workspace.Op]')[0],
+    check('U11b con BOM y un comentario delante: arranca y escribe la clave en su [Server], el resto byte a byte',
+          c is not None and escrito.replace(LINEA, b'', 1) == INI11B and en_server(escrito, LINEA),
           escrito[:300])
+    para(proc)
+    # y a MITAD del fichero (un trozo pegado de otro con BOM): la seccion que
+    # sigue se pierde igual; no arranca y dice en que linea
+    INI11C = ini_bytes([]).replace(b'[Workspace.Op]', BOM + b'[Workspace.Op]')
+    d11c, exe11c = carpeta_servidor('bom-medio', INI11C)
+    proc, ruta, c = lanza(exe11c, 'bom-medio')
+    try:
+        rc = proc.wait(30)
+    except subprocess.TimeoutExpired:
+        rc = None
+    texto = '\n'.join(mensajes(ruta))
+    linea = INI11C[:INI11C.find(BOM)].count(b'\n') + 1
+    check('U11c un BOM a MITAD del fichero, delante de [Workspace.Op]: NO arranca y dice la linea (%d)' % linea,
+          c is None and rc == 1 and (', on line %d, ' % linea) in texto,
+          'cli=%s rc=%s %s' % (c, rc, texto[-300:]))
+    check('U11c ...el ini no se toca', ini_de(d11c) == INI11C, ini_de(d11c)[:200])
+    para(proc)
+
+    # ------------------------------------------------------------------ U12
+    # [Server] dos veces: Windows lee el primero, y la version del operador
+    # puede estar en el segundo; escribir la clave la taparia para siempre.
+    # Arranca, NO escribe, y el log dice por que (revision del 6-oct-2026)
+    INI12 = ini_bytes([]) + ('[Server]\r\nDelphiVersion=%s\r\n' % NUEVA).encode('ascii')
+    d12, exe12 = carpeta_servidor('server-doble', INI12)
+    proc, ruta, c = lanza(exe12, 'server-doble')
+    texto = '\n'.join(mensajes(ruta))
+    check('U12 [Server] dos veces: arranca, NO escribe la clave y el log dice por que',
+          c is not None and ini_de(d12) == INI12 and CAT['SF_GUARD_SERVER_DOBLE_NO_ESCRIBE'] in texto,
+          texto[-400:])
     para(proc)
 
     # ------------------------------------------------------------------ U6
     # U10 en el mismo arranque: un DelphiUpdate con otra forma
-    d6, exe6 = carpeta_servidor('entorno', ini_bytes(['DelphiVersion=%s' % NUEVA, 'DelphiUpdate=13,2']))
+    # SIN clave en el ini: con ella el ini ganaba igual y el check no veia que
+    # la variable volviese como respaldo (revision del 6-oct-2026)
+    d6, exe6 = carpeta_servidor('entorno', ini_bytes(['DelphiUpdate=13,2']))
     proc, ruta, c = lanza(exe6, 'entorno', {'DELPHI_MCP_DELPHI_VERSION': NO_ESTA})
     ws = llama(c, 'delphi_workspace', {}) if c else {}
-    check('U6 DELPHI_MCP_DELPHI_VERSION ya no existe: con una que no esta en el entorno, arranca igual',
-          ws.get('activeDelphi') == NUEVA and ws.get('delphiVersionRequested') == NUEVA, json.dumps(ws)[:300])
+    check('U6 DELPHI_MCP_DELPHI_VERSION ya no existe: con una que no esta en el entorno y SIN clave, '
+          'arranca con la mas moderna y escribe ESA',
+          ws.get('activeDelphi') == NUEVA and ws.get('delphiVersionRequested') == NUEVA
+          and en_server(ini_de(d6), LINEA), json.dumps(ws)[:300])
     log = mensajes(ruta)
     check('U10 [Server] DelphiUpdate=13,2 (no es numero.numero): el log lo avisa y se ignora, como si no estuviera',
           CAT['SL_GUARD_DELPHIUPDATE_MAL_FMT'] % '13,2' in log and 'delphiUpdate' not in ws

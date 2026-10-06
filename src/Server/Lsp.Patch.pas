@@ -58,6 +58,20 @@ type
   end;
 
 function DetectEnc(const B: TArray<Byte>): TEncKind;
+{ Si hay un BOM de UTF-8 (EF BB BF) en B a partir de AIndice. El de un
+  fichero va en el 0 (DetectEnc); Lsp.Guard busca tambien los de mitad de un
+  settings.ini, que Windows no ve (LineaConBomAntesDeSeccion). }
+function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
+{ La sangria (espacios y tabuladores) del principio de S. }
+function LeadingWhite(const S: string): string;
+{ LA regla de la sangria que el agente deja fuera del ancla, para delphi_edit
+  y delphi_textedit (6-oct-2026: estaba escrita dos veces, de dos formas, y
+  delphi_edit la duplicaba). Si el ancla (AAncla, tal como llego) trae menos
+  sangria que la linea real (ALinea) y la primera linea de ANuevas no trae
+  ninguna, todas las lineas con texto de ANuevas toman la de ALinea; si no,
+  van tal cual: nunca se duplica. }
+function SangraComoLaLinea(const ALinea, AAncla: string;
+  const ANuevas: TArray<string>): TArray<string>;
 function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
 function EncodeText(const S: string; K: TEncKind): TArray<Byte>;
 function EncName(K: TEncKind): string;
@@ -610,12 +624,44 @@ begin
   Result := True;
 end;
 
+function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
+begin
+  Result := (AIndice >= 0) and (AIndice + 2 <= High(B)) and (B[AIndice] = $EF) and
+    (B[AIndice + 1] = $BB) and (B[AIndice + 2] = $BF);
+end;
+
+function LeadingWhite(const S: string): string;
+var
+  I: Integer;
+begin
+  I := 1;
+  while (I <= Length(S)) and ((S[I] = ' ') or (S[I] = #9)) do
+    Inc(I);
+  Result := Copy(S, 1, I - 1);
+end;
+
+function SangraComoLaLinea(const ALinea, AAncla: string;
+  const ANuevas: TArray<string>): TArray<string>;
+var
+  Sangria: string;
+  I: Integer;
+begin
+  Result := Copy(ANuevas);
+  Sangria := LeadingWhite(ALinea);
+  if (Length(Result) = 0) or (LeadingWhite(Result[0]) <> '') or
+     (Length(LeadingWhite(AAncla)) >= Length(Sangria)) then
+    Exit;
+  for I := 0 to High(Result) do
+    if Result[I] <> '' then
+      Result[I] := Sangria + Result[I];
+end;
+
 function DetectEnc(const B: TBytes): TEncKind;
 var
   I: Integer;
   HasHigh: Boolean;
 begin
-  if (Length(B) >= 3) and (B[0] = $EF) and (B[1] = $BB) and (B[2] = $BF) then
+  if BomUtf8En(B, 0) then
     Exit(ekUtf8Bom);
   // UTF-16 solo por BOM: sin el, ningun fuente Delphi es UTF-16 (el IDE lo
   // escribe siempre con marca) y adivinarlo por ceros seria otro detector.
@@ -3446,7 +3492,7 @@ var
   Lines: TArray<string>;
   Hits: TList<Integer>;
   I, HitIdx: Integer;
-  Prefix, Replacement: string;
+  Replacement: string;
   Warnings: TStringList;
 
   function HighCount(const S: string): Integer;
@@ -3547,12 +3593,13 @@ begin
     if Cuantas > 1 then
       Salido := string.Join(#10, Copy(Lines, HitIdx, Cuantas));
 
-    // The anchor may omit leading indentation: whatever prefix the real line
-    // has beyond the anchor is preserved in front of the new text.
-    Prefix := Copy(Lines[HitIdx], 1, Length(Lines[HitIdx]) - Length(AOld));
+    // La sangria que el ancla dejo fuera: LA regla de las dos tools
+    // (SangraComoLaLinea). Aqui iba otra: el resto de la linea delante de la
+    // PRIMERA linea de new, SIEMPRE - con new ya sangrado salia doble, y las
+    // demas lineas de new sin ella (medido el 6-oct-2026: 4 + 4 = 8 espacios).
     // LA regla del salto final, la misma en las dos tools y en los bloques
     // (LineasDeNew): uno es el fin de linea; cada uno de mas, una en blanco.
-    Replacement := string.Join(#10, LineasDeNew(ANew));
+    Replacement := string.Join(#10, SangraComoLaLinea(Lines[HitIdx], AOld, LineasDeNew(ANew)));
     // Empty replacement (old given + new='') blanks the line - a legitimate
     // edit. Never index Split()[0] on it: '' yields an empty array (measured
     // Access Violation in the field test) - PrimerTrozo, Lsp.Guard. Line
@@ -3589,7 +3636,7 @@ begin
           Warnings.Add(MsgFmt(SN_EDIT_DUP_BELOW_FMT,
             [HitIdx + Length(Replacement.Split([#10])) + 1, LastNew.Trim]));
       end;
-      Lines[HitIdx] := Prefix + Replacement;
+      Lines[HitIdx] := Replacement;
       Quita := Cuantas - 1; // la del ancla se queda, con el texto nuevo
       Desde := HitIdx + 1;
     end;
@@ -3685,7 +3732,7 @@ begin
     if (M.High = 0) and (D.High > 0) then
       Warnings.Add(MsgFmt(SN_EDIT_ERA_ASCII_PURO_FMT, [EncName(K)]));
     var Salen := HighCount(Salido);
-    var Entran := HighCount(Prefix + Replacement) - HighCount(Prefix);
+    var Entran := HighCount(Replacement);
     if (Salen >= 0) and (Entran >= 0) and (D.High <> M.High - Salen + Entran) then
       Warnings.Add(MsgFmt(SN_EDIT_ACENTOS_FUERA_CUADRO_FMT,
         [M.High - Salen + Entran, D.High]));
