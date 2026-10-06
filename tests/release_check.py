@@ -9,6 +9,8 @@ Verifies, in order:
      vX.Y.0-beta) and VerInfo is enabled for Windows builds;
   3. the built exe EMBEDS that version (read via the Windows version API);
   4. docs/CAPABILITIES.json is coherent (count == list length);
+  4b. skills/SKILL.md carries the mark of this version: the docs that teach
+     the contract were reread against its CHANGELOG;
   5. the full regression (tests/run_all.py) ends with 0 failures;
   6. packages DelphiLspMcp-v<version>-win64.zip and prints its SHA-256.
 
@@ -100,6 +102,21 @@ check('CAPABILITIES coherent', cap.get('tools') == len(cap.get('toolNames', []))
 # ...y de ESTA version: decia 1.5.0 en los tags v1.5.1 a v1.6.2, porque solo
 # se miraba la cuenta de tools (septima revision)
 check('CAPABILITIES version == %s' % ver, cap.get('version') == ver, cap.get('version'))
+
+# 4b) Lo que ENSENA el contrato se relee en cada version (David, 6-oct-2026:
+# "hay que incluirlos en las revisiones o se nos desactualizan"). Los
+# revisores leen el diff, y skills/SKILL.md, las filas de tools del README y
+# QUICKSTART.md solo entran en el si alguien se acuerda: SKILL.md llevaba dos
+# versiones sin releer, y la 1.16.0 lo encontro con su flujo de Linux
+# compilando Linux64 sin declararla (BUILD-046) y el README diciendo que
+# delphi_test corre Win64 por defecto. La marca del final de SKILL.md la pone
+# quien los ha releido contra el CHANGELOG de ESTA version.
+skill = open(os.path.join(REPO, 'skills', 'SKILL.md'), encoding='utf-8').read()
+marca = re.search(r'<!-- contract reviewed: v([^ ]+) -->', skill)
+check('skills/SKILL.md reviewed for v%s' % ver, bool(marca) and marca.group(1) == ver,
+      'reread skills/SKILL.md, the tool rows of README.md and QUICKSTART.md against the '
+      'CHANGELOG of v%s, fix what they still teach the old way, then end SKILL.md with '
+      '<!-- contract reviewed: v%s -->' % (ver, ver))
 
 # 5) full regression
 if '--skip-regression' in sys.argv:

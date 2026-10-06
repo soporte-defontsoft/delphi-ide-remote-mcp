@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-06 (current release v1.15.0; 42 tools).
+Status page as of 2026-10-06 (current release v1.16.0; 42 tools).
 
 ## Delivered
 
@@ -40,6 +40,7 @@ Status page as of 2026-10-06 (current release v1.15.0; 42 tools).
 - Answers that say whose fix it is: a root whose drive is not connected (`WS-022`, `unavailableRoots`, `PROJ-005`), Git's dubious ownership (`GIT-057`), the download link above 1 MB (1.13.1)
 - One server, one Delphi (`[Server] DelphiVersion`, and `DelphiUpdate` to check the installed update); tool descriptions about 11% shorter, each change measured against a small local model; `tools/list` without the tools the caller cannot use - the vault's where there is none or it is read-only, the write tools for a read-only credential (1.14.0)
 - File lists that name each folder once (about 40% fewer tokens over ten list calls, measured); one convention for line numbers in every answer (`line` 1-based, `line0`/`character0` for the engine tools); `delphi_list` and `vault_search` by pages; a lint with no project settings answers at once (`LSP-035`) (1.15.0)
+- A build is what the IDE would build (only a declared platform, `BUILD-046`; without `platform`, the project's default); a deploy through the `RemoteHosts` gate and a profile gate that fails closed (`PAS-052` to `PAS-055`); one helper for every paclient call, which says what to do against another Delphi's PAServer (`PAS-056`, `PAS-057`); a recursion limit for the agent's regular expressions; a battery that watches each format has one home (`test_paisaje`) (1.16.0)
 
 ## Open
 

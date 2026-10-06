@@ -6,7 +6,14 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.16.0] - 2026-10-06
+
+A build is what the IDE would build: only a platform the project declares,
+and without `platform` the project's own default. A deploy goes through the
+`RemoteHosts` gate and the profile gate fails closed; an agent's regular
+expression can no longer bring the server down; and every call to paclient
+goes through one helper, which says what to do when a profile points to
+another Delphi's PAServer.
 
 ### Changed
 
@@ -27,7 +34,6 @@ the MCP `initialize` response (`serverInfo.version`).
   `BUILD-036` note that warned they did not is gone, and each project of
   `delphi_test discover` says its `platform`. A `.dproj` with no
   `<Platforms>` block (from before platforms) builds only its default one.
-
 - **paclient against a PAServer that is not its own says what to do.** One
   machine can run one PAServer per Delphi, each on its own port, and each
   Delphi has to use its own paclient. When a profile points to the port of
@@ -123,6 +129,15 @@ the MCP `initialize` response (`serverInfo.version`).
   through `delphi_search` and `vault_search` on stdio and through the HTTP
   mode of the service, plus a short line that still matches; red against the
   binary without the limit.
+- **The docs that teach the contract are reread at every release.**
+  `release_check` refuses a version whose `skills/SKILL.md` does not end
+  with the mark of that version: putting it there says that SKILL.md, the
+  tool rows of the README and QUICKSTART were read against its CHANGELOG.
+  Reviewers read the diff, and those files only entered it when somebody
+  remembered: for this release SKILL.md still built Linux64 without
+  `add-platform`, and the README said that `delphi_test` runs Win64 by
+  default and that `delphi_search` is a literal search (it takes regular
+  expressions since 1.13.0).
 
 ## [1.15.0] - 2026-10-06
 

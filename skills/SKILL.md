@@ -122,7 +122,8 @@ handshake.
 ## Renaming a symbol
 
 - `delphi_rename_symbol path=<unit> line=<0-based> character=<0-based>
-  newname=<NewName>` previews a semantic rename: every occurrence
+  newname=<NewName>` (a hit's `line0` and `character0`: its `line` is the
+  1-based one `delphi_read` shows) previews a semantic rename: every occurrence
   re-confirmed, and `applicable` tells you if it is safe. NEVER rename by
   search-and-replace: the preview exists precisely because designers,
   string literals (FindComponent/RTTI/StyleLookup) and homonyms break
@@ -181,7 +182,9 @@ handshake.
 
 ## Running on the target (not on this server)
 
-- `delphi_build target=Deploy` ships the binary; to RUN it there use
+- `delphi_build target=Deploy` ships the binary to the host of its PAServer
+  profile (the call's `profile`, else the project's `set-profile`), which
+  has to be in `RemoteHosts`; to RUN it there use
   `delphi_paserver command=remote-run name=<profile> project=<the .dproj>
   args=... timeoutms=...`. It returns `exitCode` and the program's output.
   You never give a remote path: the server runs what THAT project deployed
@@ -294,6 +297,11 @@ gesture you came for and nothing else.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).
+- **A build is what the IDE would build**: only a platform the project
+  declares and has enabled (another is refused with `BUILD-046`:
+  `delphi_config command=add-platform` declares it, as the IDE does), and
+  without `platform` the project's own default. What you build, the
+  operator builds the same in the IDE without reconfiguring anything.
 - **"Unit 'X' not found" on a platform you just added** (and only
   there): the unit belongs to an installed component whose folder is in
   the IDE's library path for the other platforms only. The failed build
@@ -326,10 +334,17 @@ missing from the IDE, `command=reseat` writes the missing seats
 from the files themselves, no PAServer and no passwords needed)
 -> `test-connection` -> `get-sdk` once (pulls the sysroot; minutes -
 re-running it is safe and incremental: `already up to date` is success) ->
-`delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
+`delphi_config command=add-platform platform=Linux64` (once per project)
+-> `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
 (`download` link, sha256) to run the ELF on YOUR machine - or run it ON
 the target with `command=remote-run` and drive its window with
 `delphi_desktop`.
+
+One PAServer per Delphi version: a machine can run several, each on its
+own port, and a profile has to point to the one of THIS server's Delphi
+(`delphi_paserver packages` gives its installer; 13.1 and 13.2 both say
+37.0, so the version number does not tell them apart). Another Delphi's
+PAServer refuses paclient, and the answer says so (`PAS-056`).
 
 ## Windows (PAServer too)
 
@@ -415,3 +430,5 @@ grants is ALL there is (an absent switch is off, an absent list is empty -
 hosts, projects, devices, vault). A refusal naming `RemoteHosts`,
 `RemoteRunProjects` or `AdbAllowedDevices` is your workspace's declared
 reach, not a server bug: `delphi_report` it if you need more.
+
+<!-- contract reviewed: v1.16.0 -->
