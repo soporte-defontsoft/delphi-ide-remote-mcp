@@ -795,7 +795,9 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
 - **`VaultPath=` / `VaultReadOnly=` (per workspace)**: optional persistent memory for
   agents (a folder of Markdown notes) — each workspace declares its own, and two workspaces
   may remember in *different* vaults. Read-only by default; writes, when enabled, are
-  append/create/anchored-replace only, always backed up first. See `docs/VAULT.md`.
+  append/create/anchored-replace only, always backed up first. `tools/list` announces a
+  workspace only the vault tools its vault allows (none without one, no write tools while
+  it is read-only). See `docs/VAULT.md`.
 - **AllowBuildScripts**: `delphi_build` refuses a project whose `.dproj` (or an imported
   `.targets`) carries a task that *executes a program or plants/deletes files* at build
   time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a

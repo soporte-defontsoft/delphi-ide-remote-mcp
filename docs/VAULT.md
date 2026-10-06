@@ -64,7 +64,9 @@ agent should have to know in advance — hence the no-path call.
 | `vault_patch` | Replace `old_text` (which must appear **exactly once**) with `new_text`. For closing a line in a progress file or fixing a fact. |
 
 Reading is available to read-only credentials. The three write tools need
-`VaultReadOnly=0` **and** a read-write credential.
+`VaultReadOnly=0` **and** a read-write credential, and `tools/list` does not
+announce them while the workspace's vault is read-only (a workspace without a
+vault is announced none of the five).
 
 ## What writing deliberately cannot do
 
@@ -100,7 +102,8 @@ On top of that:
 Token=your-secret
 Roots=D:\Projects\MyWorkspace
 VaultPath=D:\Vaults\MyKnowledge
-VaultReadOnly=1     ; 0 to also allow append/create/patch
+; 0 to also allow append/create/patch
+VaultReadOnly=1
 ```
 
 The vault is PER WORKSPACE (v0.98): each workspace declares its own, and two

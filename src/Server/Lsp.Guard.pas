@@ -7642,6 +7642,15 @@ begin
   N := AToolName.Trim.ToLower;
   if MatchText(N, ALWAYS) then
     Exit(False);
+  // Las vault_* se registran si CUALQUIER workspace declara vault, pero solo
+  // se anuncian donde sirven: ninguna a un workspace sin vault, y las de
+  // escritura (las atEscritura de LA tabla de accesos) no a uno de solo
+  // lectura - eran 2.760 caracteres por ronda de tools que solo rechazan
+  // (6-oct-2026). Siguen llamables: la llamada dice por que no.
+  if N.StartsWith('vault_') and
+     (not VaultConfigured or
+      ((AccesoDeTool(N).Acceso = atEscritura) and not VaultWritable)) then
+    Exit(True);
   if Length(GToolsOnly) > 0 then
     Exit(not MatchText(N, GToolsOnly));
   // a workspace may carry its own profile; it wins over the global one

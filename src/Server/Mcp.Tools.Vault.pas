@@ -865,7 +865,8 @@ initialization
   // que al arrancar aun no existe: se registra si CUALQUIER workspace
   // declara vault y cada peticion decide con el suyo (VaultConfigured /
   // VaultWritable resuelven el workspace activo y las de escritura se
-  // rechazan por peticion cuando su vault es de solo lectura).
+  // rechazan por peticion cuando su vault es de solo lectura). tools/list
+  // anuncia a cada workspace solo las que le sirven (ToolHiddenFromList).
   if VaultConfiguredAnywhere then
   begin
     TMCPRegistry.RegisterTool('vault_search',

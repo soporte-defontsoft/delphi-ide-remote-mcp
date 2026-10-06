@@ -48,6 +48,12 @@ One server, one Delphi.
   (`delphi_edit`: indentation does not make an anchor unique, and an
   inserted method's signature goes unqualified). How it was done, and what
   was left alone and why: `docs/TOOL-DESCRIPTIONS.md`.
+- **`tools/list` announces the vault tools only where they work**: none to
+  a workspace without a vault of its own, and not the three write ones
+  while its vault is read-only (the default). They were announced anyway
+  because a vault anywhere registers them, and in a read-only workspace
+  they cost 2,760 characters on every round to answer "read-only". They
+  stay callable: the call says why not.
 
 ### Added
 
@@ -82,7 +88,9 @@ One server, one Delphi.
   `Port=3000 ; ...` was not port 3000. The comments go on their own line now,
   there and in the workspace examples of `settings.example.ini` (where an
   uncommented `Token=` would have carried its comment, and a `Roots=` would
-  have read it as a second root).
+  have read it as a second root), and in the vault's two samples
+  (`docs/VAULT.md`, `examples/vault/README.md`), where a copied
+  `VaultReadOnly=0 ; ...` would have left the vault read-only.
 - `delphi_desktop`'s description gave `Ctrl+K` as the example of a key
   with modifiers, also for Windows, where the node presses named keys only
   (enter, tab, f1..f12, the arrows...) and refuses a letter. It says which

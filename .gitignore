@@ -53,3 +53,5 @@ __delphi-temp/
 __pycache__/
 *.pyc
 release-out/
+# cerrojo de las tareas programadas de Claude Code: entro por accidente en la v0.60
+.claude/scheduled_tasks.lock

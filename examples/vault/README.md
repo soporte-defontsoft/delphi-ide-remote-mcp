@@ -16,7 +16,8 @@ cp -r examples/vault ~/MyVault        # or copy the folder in Explorer
 Token=its-secret
 Roots=D:\Projects\MySpace
 VaultPath=C:\Users\you\MyVault
-VaultReadOnly=1   ; 0 when you want the agent to write too
+; 0 when you want the agent to write too
+VaultReadOnly=1
 ```
 
 Restart the server. Connect an agent and it will be told, at connect time, that

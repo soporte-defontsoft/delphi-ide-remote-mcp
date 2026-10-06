@@ -202,7 +202,9 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'AllowRemoteRun=1', 'AllowTests=1',
     'RemoteRunProjects=Ajeno;McpDesktopNode',
     'AdbAllowedDevices=%s' % DEV,
-    'VaultPath=%s' % VAULT, '',
+    # el vault tambien de escritura: tools/list no anuncia las de escritura de
+    # un vault de solo lectura (6-oct-2026) y el descubridor no las veria
+    'VaultPath=%s' % VAULT, 'VaultReadOnly=0', '',
 ]))
 
 proc = mc.lanza_http(EXE, PORT, mc.entorno())

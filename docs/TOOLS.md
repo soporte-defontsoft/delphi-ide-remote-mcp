@@ -945,8 +945,11 @@ Operator side: drop a `.md` in `messages\<agent>\` next to the server exe (`scri
 ## Knowledge vault (optional — only for workspaces that declare `VaultPath=`)
 
 Persistent memory: a folder of Markdown notes linked with `[[wikilinks]]`.
-These tools are **not registered at all** unless a vault is configured, and the
-three write ones need the workspace's `VaultReadOnly=0` on top of a read-write credential.
+These tools are **not registered at all** unless a vault is configured, and
+`tools/list` announces each workspace only the ones its vault allows: none
+without a vault of its own, and not the three write ones while it is
+read-only (`VaultReadOnly=0` turns them on; they also need a read-write
+credential).
 
 - **Start with `vault_read` and NO path**: it returns the vault's rules plus its
   index, which is how you decide what to load. Lazy loading — never read a vault

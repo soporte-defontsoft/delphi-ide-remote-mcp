@@ -401,16 +401,17 @@ check('R9: la nota conserva su contenido',
 # ===========================================================================
 # 10. Read-only vault (VaultReadOnly=1). Desde v0.98 el vault es del
 # workspace ACTIVO, asi que las tools de escritura se registran igualmente
-# (otro workspace del mismo servidor podria escribir) y es CADA peticion la
-# que se rechaza cuando su vault es de solo lectura.
+# (otro workspace del mismo servidor podria escribir); tools/list no las
+# anuncia a quien no puede usarlas (6-oct-2026), y si las llama igual, CADA
+# peticion se rechaza diciendo por que.
 # ===========================================================================
 s.close()
 s2 = Server(writable=False)
 names = s2.tools()
 check('ReadOnly=1: vault_read/search SI se registran',
       'vault_read' in names and 'vault_search' in names, names)
-check('ReadOnly=1: las de escritura se registran pero RECHAZAN por peticion',
-      'vault_append' in names, names)
+check('ReadOnly=1: las de escritura NO se anuncian (solo rechazarian)',
+      not any(t in names for t in ('vault_append', 'vault_create', 'vault_patch')), names)
 out = s2.call('vault_append', {"path": "projects/delphi/log.md", "content": "- x\n"})
 check('ReadOnly=1: vault_append rechazado (vault de solo lectura)',
       mc.rechazado(out) and mc.es(out, 'SR_VAULT_READONLY'), out[:200])
@@ -563,11 +564,12 @@ s7.close()
 # env DELPHI_MCP_VAULT_PATH es solo para un arranque local por stdio). Varios
 # workspaces PUEDEN compartir el mismo vault - pero solo el que declaran.
 #
-# Por HTTP con tokens, que es como funciona produccion. Y las tools vault_*
-# las VE tambien el workspace sin vault (se registran si CUALQUIERA lo tiene),
-# asi que su rechazo es lo unico que ese agente tiene: decia "este servidor no
-# tiene vault ([Vault] Path en settings.ini)" y las dos mitades eran falsas
-# desde v0.98 (medido el 2026-09-20).
+# Por HTTP con tokens, que es como funciona produccion. Las tools vault_*
+# se registran si CUALQUIERA tiene vault, y el workspace sin vault puede
+# llamarlas aunque tools/list ya no se las anuncie: su rechazo es lo unico
+# que ese agente tiene. Decia "este servidor no tiene vault ([Vault] Path en
+# settings.ini)" y las dos mitades eran falsas desde v0.98 (medido el
+# 2026-09-20).
 # ===========================================================================
 HPORT = mc.puerto_libre()
 HDIR = mc.carpeta('vault-http-ws')
@@ -663,11 +665,23 @@ try:
           mc.es(_ro, 'SR_VAULT_READONLY') and 'VaultReadOnly' in _ro and '[Vault]' not in _ro,
           _ro[:200])
 
-    _lst = _http('tok-sin-vault', 'tools/list', {}, 7)
-    _nombres = [t['name'] for t in _lst.get('result', {}).get('tools', [])]
-    check('por-workspace: las tools vault_* SI se le ofrecen igual '
-          '(las registra quien si tiene)',
-          'vault_read' in _nombres and 'vault_search' in _nombres, _nombres[:8])
+    # tools/list anuncia a cada workspace las vault_* que le SIRVEN (6-oct-2026):
+    # ninguna al que no tiene vault, y las de escritura no a uno de solo
+    # lectura. Siguen llamables - las llamadas de arriba son las mismas y su
+    # rechazo dice por que.
+    def _nombres(tok, rid):
+        _l = _http(tok, 'tools/list', {}, rid)
+        return [t['name'] for t in _l.get('result', {}).get('tools', [])]
+    _sinv = _nombres('tok-sin-vault', 70)
+    check('por-workspace: al que no tiene vault no se le anuncia ninguna vault_*',
+          not any(t.startswith('vault_') for t in _sinv) and 'delphi_read' in _sinv,
+          [t for t in _sinv if t.startswith('vault_')] or _sinv[:5])
+    for _tok in ('tok-con-vault', 'tok-por-defecto'):
+        _ro_n = _nombres(_tok, 71)
+        check('por-workspace (%s, solo lectura): vault_read/search SI, las de escritura NO' % _tok,
+              'vault_read' in _ro_n and 'vault_search' in _ro_n and
+              not any(t in _ro_n for t in ('vault_append', 'vault_create', 'vault_patch')),
+              [t for t in _ro_n if t.startswith('vault_')])
 finally:
     _hp.kill()
     _hp.wait(10)  # su exe esta en HDIR: muerto del todo antes de barrerla
