@@ -28,6 +28,18 @@ the MCP `initialize` response (`serverInfo.version`).
   `delphi_test discover` says its `platform`. A `.dproj` with no
   `<Platforms>` block (from before platforms) builds only its default one.
 
+- **paclient against a PAServer that is not its own says what to do.** One
+  machine can run one PAServer per Delphi, each on its own port, and each
+  Delphi has to use its own paclient. When a profile points to the port of
+  another Delphi's PAServer, paclient refuses with its raw text ("Platform
+  Assistant Server version mismatch - expecting version '...'", or a
+  profile of another platform); the answer now adds what to do (`PAS-056`,
+  `PAS-057`): the port of this Delphi's PAServer, or its installer from
+  `delphi_paserver packages`. Every call to paclient goes through one helper
+  (`Lsp.RemoteRun.Paclient`): `test-connection`, `get-sdk` and
+  `add-profile` built theirs by hand. A deploy, where msbuild runs paclient
+  itself, reads the same messages from its output.
+
 ### Fixed
 
 - **`delphi_build target=Deploy` goes through the `RemoteHosts` gate.** A
@@ -85,6 +97,28 @@ the MCP `initialize` response (`serverInfo.version`).
   platform not declared, declared, disabled, the default of `delphi_test`, a
   `.dproj` with no `<Platforms>`), red against the previous binary except
   its control.
+- **A reviewer of the code that was already there.** Reviewers read the
+  diff, so a format written by hand in two places that never met in one diff
+  survives: the five hand-built paclient calls lived for many releases. New
+  battery `test_paisaje`: a table "format -> its one home (unit and
+  routine)" walked over the sources of the group (`UnitTests` aside: a test
+  of a namer computes what it expects on its own), failing when a format
+  shows up anywhere else; each rule carries its own mutant, a planted copy it
+  has to catch. It watches launching paclient, the style converter and any
+  external program, the names of a `.profile` and a `.sdk`, `__delphi-temp`,
+  `__delphi-patch`, the `srvX:` shape and `GetTempPath`. Its first pass was
+  the audit, and found three more: the gate tested the `srvX:` shape by hand
+  (now `EmpiezaPorUnidadVirtual`, which `VirtualUnitLetter` uses too), the
+  style converter was launched from two units (now `CorreStyleConvert`), and
+  the name of an SDK - one name for its file, its IDE key, `SDKName`,
+  `Default_<Platform>` and its sysroot folder - was composed by hand in 16
+  places (now `NombreDeSdk`, `RutaDeSdk`, `CarpetaDeSdk` and the inverse
+  `NombreSinSdk`, in `Lsp.Discovery`).
+- New battery `test_paclient_ajeno` (A1-A5, a fake paclient that prints
+  paclient's own messages: `test-connection`, `get-sdk`, `remote-run` and a
+  control), red against the previous binary except the control. The deploy
+  path runs the real paclient through msbuild and is not in it: it will be
+  measured live against the PAServer of the other Delphi on its own port.
 - New battery `test_regex_pila`: the long line five times in one process,
   through `delphi_search` and `vault_search` on stdio and through the HTTP
   mode of the service, plus a short line that still matches; red against the

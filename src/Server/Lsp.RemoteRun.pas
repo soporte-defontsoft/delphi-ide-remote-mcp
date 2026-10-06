@@ -79,6 +79,15 @@ function PlataformaDelPerfil(const AProfile: string): string;
   que no respetaba DELPHI_MCP_PACLIENT. }
 function PaClientPath: string;
 
+{ LA llamada a paclient: "<APaclient>" <AOps> "<AProfile>", con su salida y
+  su codigo. Todo lo que habla con un PAServer pasa por aqui (remote-run, el
+  nodo, McpRunJob, y test-connection, get-sdk y add-profile de
+  delphi_paserver, que la construian a mano hasta la 1.16.0). Si paclient
+  dice que el otro lado no es el suyo (otro Delphi, otra plataforma), la
+  salida lleva ademas que hacer (Lsp.BuildRunner.AvisoDePaclient). }
+function Paclient(const APaclient, AOps, AProfile: string;
+  out AOutput: string; ATimeoutMs: Integer = 120000): Integer;
+
 { Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
   AProfile. The remote path is DERIVED here, never taken from the caller:
   <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
@@ -171,13 +180,18 @@ begin
 end;
 
 function Paclient(const APaclient, AOps, AProfile: string;
-  out AOutput: string): Integer;
+  out AOutput: string; ATimeoutMs: Integer = 120000): Integer;
 var
   Exit_: Cardinal;
 begin
   AOutput := RunCaptured(Format('"%s" %s "%s"', [APaclient, AOps, AProfile]),
-    120000, Exit_);
+    ATimeoutMs, Exit_);
   Result := Integer(Exit_);
+  // el PAServer de otro Delphi, o un perfil de otra plataforma: paclient lo
+  // dice en crudo; viaja con su salida, que cada llamador ya ensena
+  var Aviso := AvisoDePaclient(AOutput);
+  if Aviso <> '' then
+    AOutput := AOutput.TrimRight + sLineBreak + Aviso;
 end;
 
 function JsonEsc(const S: string): string;

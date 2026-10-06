@@ -1338,6 +1338,14 @@ function ExpandDriveValue(const AValue: string): string;
   unit: refuse it by name, never let it near GetFullPath. }
 function VirtualUnitLetter(const AValue: string): Char;
 
+{ True si AValue EMPIEZA con la forma de una unidad virtual ('srvd:', o el
+  centinela 'srv0:'), sea lo que sea lo que venga detras. La unica prueba de
+  esa forma: VirtualUnitLetter la usa (y exige ademas la barra o el final) y
+  la puerta rechaza con ella 'srvd:x', una unidad sin su barra. Hasta la
+  1.16.0 la puerta la probaba a mano (lo encontro test_paisaje en su primera
+  pasada). }
+function EmpiezaPorUnidadVirtual(const AValue: string): Boolean;
+
 { Expands $(NAME) macros with the IDE's environment table (AVars as
   NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
   path vetting of delphi_config: a path with macros must resolve before the
@@ -5178,7 +5186,7 @@ begin
   // Windows, y un move dejaba copia y carpeta (septima revision)
   if (APath.IndexOf('*') >= 0) or (APath.IndexOf('?') >= 0) then
     Exit(MsgFmt(SR_GUARD_COMODIN_FMT, [APath]));
-  if (Length(APath) >= 5) and StartsText('srv', APath) and (APath[5] = ':') then
+  if EmpiezaPorUnidadVirtual(APath) then
     Exit(MsgFmt(SR_GUARD_UNIDAD_SIN_BARRA_FMT, [APath, Copy(APath, 1, 5)]));
   // ':' is legal only as the drive separator (C:\...): anywhere else it
   // opens an Alternate Data Stream, which hides content from every check.
@@ -7473,11 +7481,16 @@ end;
   unidad no servida. Returns the upper-case letter, or #0 when the value is not a
   virtual unit at all. Both the inbound expansion and the rejection of an
   unserved unit ask this - the shape is never re-tested by hand. }
+function EmpiezaPorUnidadVirtual(const AValue: string): Boolean;
+begin
+  Result := (Length(AValue) >= 5) and StartsText('srv', AValue) and
+    CharInSet(AValue[4], ['A'..'Z', 'a'..'z', '0']) and (AValue[5] = ':');
+end;
+
 function VirtualUnitLetter(const AValue: string): Char;
 begin
   Result := #0;
-  if (Length(AValue) >= 5) and StartsText('srv', AValue) and
-     CharInSet(AValue[4], ['A'..'Z', 'a'..'z', '0']) and (AValue[5] = ':') then
+  if EmpiezaPorUnidadVirtual(AValue) then
     if (Length(AValue) = 5) or CharInSet(AValue[6], ['\', '/']) then
       Result := UpCase(AValue[4]);
 end;

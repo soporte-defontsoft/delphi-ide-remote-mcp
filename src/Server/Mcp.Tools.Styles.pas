@@ -533,7 +533,7 @@ begin
     for F in Files do
     begin
       Bin := TPath.Combine(Dir, TPath.GetFileNameWithoutExtension(F) + '.bin.style');
-      Out := RunCapturedIn('"' + Exe + '" tobin "' + F + '" "' + Bin + '"', Dir, 120000, Code);
+      Out := CorreStyleConvert(Exe, 'tobin "' + F + '" "' + Bin + '"', Dir, 120000, Code);
       E := TJSONObject.Create;
       E.AddPair('source', TPath.GetFileName(F));
       E.AddPair('binary', TPath.GetFileName(Bin));

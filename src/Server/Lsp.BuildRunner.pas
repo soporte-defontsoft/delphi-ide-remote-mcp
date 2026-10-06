@@ -54,6 +54,17 @@ function RunDetached(const ACmdLine: string; ATimeoutMs: Integer): Boolean;
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
+{ Lo que hacer cuando paclient no reconoce el otro lado, leido de su propia
+  salida: "Platform Assistant Server version mismatch - expecting version
+  'X'" (el PAServer de ese host:puerto es el de otro Delphi: una maquina
+  puede tener uno por Delphi, cada uno en su puerto - el Zorin de David, la
+  13.1 y la 13.2) o "Profile platform (A) does not match remote/host machine
+  platform (B)". '' si no dice ninguna. Los textos de paclient, leidos de
+  paclient.exe (37.1.10.6). Lo usan el helper de paclient
+  (Lsp.RemoteRun.Paclient) y el deploy, que lanza paclient por la tarea
+  PAClient de msbuild. }
+function AvisoDePaclient(const ASalida: string): string;
+
 { Same, with an explicit working directory ('' = inherit). }
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
@@ -524,6 +535,23 @@ begin
       Enc.Free; // GetEncoding returns a new object, not a singleton
     end;
   end;
+end;
+
+function AvisoDePaclient(const ASalida: string): string;
+var
+  M: TMatch;
+begin
+  Result := '';
+  M := TRegEx.Match(ASalida,
+    'Platform Assistant Server version mismatch - expecting version ''([^'']*)''',
+    [roIgnoreCase]);
+  if M.Success then
+    Exit(MsgFmt(SN_PACLIENT_OTRO_DELPHI_FMT, [GrupoDe(M, 1)]));
+  M := TRegEx.Match(ASalida,
+    'Profile platform \(([^)]*)\) does not match remote/host machine platform \(([^)]*)\)',
+    [roIgnoreCase]);
+  if M.Success then
+    Result := MsgFmt(SN_PACLIENT_OTRA_PLATAFORMA_FMT, [GrupoDe(M, 1), GrupoDe(M, 2)]);
 end;
 
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
@@ -1190,7 +1218,7 @@ begin
   Result := 0;
   ANota := '';
   try
-    Xml := TFile.ReadAllText(TPath.Combine(IdeProfilesDir(AVersion), ASdkFile));
+    Xml := TFile.ReadAllText(RutaDeSdk(AVersion, ASdkFile));
   except
     Exit;
   end;
@@ -1270,7 +1298,7 @@ var
 begin
   Result := '';
   try
-    Xml := TFile.ReadAllText(TPath.Combine(IdeProfilesDir(AVersion), ASdkFile));
+    Xml := TFile.ReadAllText(RutaDeSdk(AVersion, ASdkFile));
   except
     Exit;
   end;
@@ -1526,12 +1554,10 @@ begin
   var SdkArg := '';
   if not IsLocalPlatform(Plat) then
   begin
-    var Dir := IdeProfilesDir(Info.Version);
     var Pedido := ASdk.Trim;
     if Pedido <> '' then
     begin
-      if not Pedido.ToLower.EndsWith('.sdk') then
-        Pedido := Pedido + '.sdk';
+      Pedido := NombreDeSdk(Pedido);
       // No basta con que exista un fichero con ese nombre: la lista de SDKs
       // de la plataforma, la MISMA que usa set-sdk (auditoria 25-sep-2026).
       if not MatchText(Pedido, SdksDePlataforma(Info.Version, Plat)) then
@@ -1546,14 +1572,14 @@ begin
     else
     begin
       var Cand := SdksDePlataforma(Info.Version, Plat);
-      var Historico := CanonicalPlatform(Plat) + '.sdk';
+      var Historico := NombreDeSdk(CanonicalPlatform(Plat));
       // El default del SDK Manager es la eleccion del operador EN EL IDE:
       // manda sobre el nombre historico y sobre cualquier adivinanza, y es lo
       // que evita negarse a compilar en una maquina que ya tenia respuesta a
       // esta pregunta (medido: al retirar el Linux64.sdk viejo, media bateria
       // se quedo sin poder compilar).
       var PorDefecto := SdkPorDefectoDelIde(Info.Version, Plat);
-      if (PorDefecto <> '') and TFile.Exists(TPath.Combine(Dir, PorDefecto)) then
+      if (PorDefecto <> '') and TFile.Exists(RutaDeSdk(Info.Version, PorDefecto)) then
       begin
         SdkUsado := PorDefecto;
         if Length(Cand) > 1 then
@@ -1561,7 +1587,7 @@ begin
             [SdkUsado, string.Join(', ', Cand)]);
       end
       else if (CanonicalPlatform(Plat) <> '') and
-         TFile.Exists(TPath.Combine(Dir, Historico)) then
+         TFile.Exists(RutaDeSdk(Info.Version, Historico)) then
         SdkUsado := Historico
       else if Length(Cand) = 1 then
         SdkUsado := Cand[0]
@@ -1989,6 +2015,14 @@ begin
       if MLock.Success then
         Result.AddPair('deployLockedNote', MsgFmt(SN_BUILD_DEPLOY_LOCKED_FMT,
           [MLock.Groups[1].Value, Perfil, ADprojPath, MLock.Groups[1].Value]));
+    end;
+    // El PAServer del perfil es de otro Delphi (u otra plataforma): la tarea
+    // PAClient de msbuild lo dice en crudo; aqui, que hacer.
+    if (ExitCode <> 0) and Target.Contains('Deploy') then
+    begin
+      var Aviso := AvisoDePaclient(Output);
+      if Aviso <> '' then
+        Result.AddPair('paserverNote', Aviso);
     end;
     // The agent should know its project just gained a manifest whether or
     // not this particular msbuild run succeeded.

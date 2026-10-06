@@ -90,6 +90,13 @@ function TextStylesIn(const ADir: string): TArray<string>;
 { Path of the DelphiStyleConvert helper next to the server exe ('' if absent). }
 function StyleConverterExe: string;
 
+{ LA llamada al conversor: "<AExe>" <AArgs> en ADir ('' = el de siempre),
+  con su salida y su codigo. La usan los nombres por defecto de la plataforma
+  (defaults) y el build de estilos (tobin): cada uno componia la orden a mano
+  (lo encontro test_paisaje en su primera pasada, 1.16.0). }
+function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
+  out ACode: Cardinal): string;
+
 { StyleNames of the Windows platform default style, extracted once through the
   helper and cached under LOCALAPPDATA. Empty when the helper is missing. }
 function PlatformDefaultStyleNames: TArray<string>;
@@ -481,6 +488,12 @@ begin
   end;
 end;
 
+function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
+  out ACode: Cardinal): string;
+begin
+  Result := RunCapturedIn('"' + AExe + '" ' + AArgs, ADir, ATimeoutMs, ACode);
+end;
+
 function StyleConverterExe: string;
 begin
   Result := ServerDir('DelphiStyleConvert.exe');
@@ -503,7 +516,7 @@ begin
     if Exe = '' then
       Exit;
     CrearCarpeta(TPath.GetDirectoryName(Cache));
-    RunCaptured('"' + Exe + '" defaults "' + Cache + '"', 60000, Code);
+    CorreStyleConvert(Exe, 'defaults "' + Cache + '"', '', 60000, Code);
     if (Code <> 0) or not TFile.Exists(Cache) then
       Exit;
   end;

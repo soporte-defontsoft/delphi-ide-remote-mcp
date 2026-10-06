@@ -81,6 +81,19 @@ function IdeProfilesDir(const AVersion: string): string;
 function RutaDePerfil(const AVersion, AName: string): string;
 function NombreDePerfil(const APath: string): string;
 
+{ EL nombre de un SDK del IDE: '<nombre>.sdk'. Es UNO para todo: el fichero
+  junto a los .profile, su clave en PlatformSDKs, los valores SDKName y
+  Default_<Plataforma>, y la carpeta de su sysroot. Con o sin '.sdk' en
+  ANombre, devuelve una sola. Nombrador UNICO (se componia a mano en 16
+  sitios: lo encontro test_paisaje en su primera pasada, 1.16.0);
+  NombreSinSdk es su inversa (lo que se ensena: 'zorin18'). }
+function NombreDeSdk(const ANombre: string): string;
+function NombreSinSdk(const ANombreSdk: string): string;
+{ El fichero <nombre>.sdk del IDE (junto a los perfiles) y la carpeta de su
+  sysroot ($(BDSPLATFORMSDKSDIR)\<nombre>.sdk), por el MISMO nombrador. }
+function RutaDeSdk(const AVersion, ANombre: string): string;
+function CarpetaDeSdk(const AVersion, ANombre: string): string;
+
 { EL host (Profile_host) de un perfil, leido del MISMO fichero que compone
   RutaDePerfil. La version con AMotivo dice por que no hay host (no existe / no
   se lee / sin Profile_host): la puerta niega con ese motivo; quien solo quiere
@@ -782,6 +795,30 @@ begin
   Result := TPath.GetFileNameWithoutExtension(APath);
 end;
 
+function NombreDeSdk(const ANombre: string): string;
+begin
+  Result := ANombre.Trim;
+  if not Result.ToLower.EndsWith('.sdk') then
+    Result := Result + '.sdk';
+end;
+
+function NombreSinSdk(const ANombreSdk: string): string;
+begin
+  Result := ANombreSdk.Trim;
+  if Result.ToLower.EndsWith('.sdk') then
+    SetLength(Result, Length(Result) - Length('.sdk'));
+end;
+
+function RutaDeSdk(const AVersion, ANombre: string): string;
+begin
+  Result := TPath.Combine(IdeProfilesDir(AVersion), NombreDeSdk(ANombre));
+end;
+
+function CarpetaDeSdk(const AVersion, ANombre: string): string;
+begin
+  Result := TPath.Combine(IdeSdksDir(AVersion), NombreDeSdk(ANombre));
+end;
+
 function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string;
 var
   Ruta, Xml: string;
@@ -861,7 +898,8 @@ begin
           // solo sirve el que apunte a una carpeta <algo>.sdk: los SDK de
           // Android viven en el CatalogRepository, que es otra cosa
           if (Raiz <> '') and not Raiz.Contains('$(') and
-             TPath.GetFileName(PrefijoSinBarra(Raiz)).ToLower.EndsWith('.sdk') then
+             SameText(NombreDeSdk(TPath.GetFileName(PrefijoSinBarra(Raiz))),
+               TPath.GetFileName(PrefijoSinBarra(Raiz))) then
             Exit(SinBarraFinal(TPath.GetDirectoryName(
               PrefijoSinBarra(Raiz))));
         except

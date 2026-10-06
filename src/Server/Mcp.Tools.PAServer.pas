@@ -296,8 +296,7 @@ end;
   (no es motivo para no traerse el sysroot: se cae al nombre del perfil). }
 function EtiquetaDelTarget(const APaClient, AProfName: string): string;
 var
-  Tmp, F, L, Id, Ver: string;
-  Rc: Cardinal;
+  Tmp, F, L, Id, Ver, Salida: string;
 begin
   Result := '';
   // Temporal DEL SERVIDOR: se baja el /etc/os-release del target, se lee y se
@@ -307,8 +306,8 @@ begin
     FragmentoUnico);
   try
     CrearCarpeta(Tmp);
-    RunCaptured(Format('"%s" --timeout=30 "--get=/etc/os-release,%s" "%s"',
-      [APaClient, Tmp, AProfName]), 120000, Rc);
+    Paclient(APaClient, Format('--timeout=30 "--get=/etc/os-release,%s"', [Tmp]),
+      AProfName, Salida);
     F := TPath.Combine(Tmp, 'os-release');
     if not TFile.Exists(F) then
       Exit;
@@ -462,7 +461,7 @@ var
   S: string;
 begin
   for S in AsientosDeSdk(AVersion) do
-    if SameText(S, ANombre + '.sdk') then
+    if SameText(S, NombreDeSdk(ANombre)) then
       Exit(True);
   Result := False;
 end;
@@ -477,7 +476,7 @@ var
 begin
   Result := TJSONObject.Create;
   try
-  Result.AddPair('name', TPath.GetFileNameWithoutExtension(ASdkFile));
+  Result.AddPair('name', NombreSinSdk(TPath.GetFileName(ASdkFile)));
   Xml := '';
   try
     Xml := TFile.ReadAllText(ASdkFile);
@@ -753,9 +752,9 @@ begin
     // si la llevan): el SDK quedaba perfecto para msbuild - que solo mira el
     // fichero .sdk - y jamas aparecia en el SDK Manager del IDE.
     Clave := '\Software\Embarcadero\BDS\' + AVersion + '\PlatformSDKs';
-    if not R.OpenKey(Clave + '\' + ASdkName + '.sdk', True) then
+    if not R.OpenKey(Clave + '\' + NombreDeSdk(ASdkName), True) then
       Exit;
-    R.WriteString('SDKName', ASdkName + '.sdk');
+    R.WriteString('SDKName', NombreDeSdk(ASdkName));
     R.WriteString('SDKDisplayName', 'Linux64 ' + ASdkName + ' (MCP get-sdk)');
     R.WriteString('PlatformName', 'Linux64');
     R.WriteString('Version', '');
@@ -788,7 +787,7 @@ begin
       // lo piden (David, 20-sep): traerse un sysroot no es decidir con que
       // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
       if AFijarDefault then
-        R.WriteString('Default_Linux64', ASdkName + '.sdk');
+        R.WriteString('Default_Linux64', NombreDeSdk(ASdkName));
       R.CloseKey;
     end;
     Result := I > 0;
@@ -800,7 +799,7 @@ end;
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
-  PaClient, ProfName, Host, Port, Plat, P, Cmd, Output, ProfileFile: string;
+  PaClient, ProfName, Host, Port, Plat, P, Output, ProfileFile: string;
   AvisoDup, F: string;
   ExitCode: Cardinal;
   Return: TJSONObject;
@@ -846,10 +845,10 @@ begin
     except
       // un perfil ilegible no impide crear el nuevo
     end;
-  Cmd := '"' + PaClient + '" --local "--host=' + Host + '" --port=' + Port +
-    ' "--password=' + Params.Password + '" "--platform=' + Plat + '" "' +
-    ProfName + '"';
-  Output := RunCaptured(Cmd, 30000, ExitCode);
+  // cualificada: la variable local PaClient tapa a la funcion (sin mayusculas)
+  ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--local "--host=' + Host + '" --port=' +
+    Port + ' "--password=' + Params.Password + '" "--platform=' + Plat + '"',
+    ProfName, Output, 30000));
   if (ExitCode = 0) and TFile.Exists(ProfileFile) then
   begin
     // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient
@@ -985,7 +984,7 @@ end;
 function TestConnection(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
-  PaClient, ProfName, ProfileFile, Cmd, Output: string;
+  PaClient, ProfName, ProfileFile, Output: string;
   ExitCode: Cardinal;
   Return: TJSONObject;
 begin
@@ -1011,8 +1010,7 @@ begin
   Result := ProfileHostDenied(ProfName);
   if Result <> '' then
     Exit;
-  Cmd := '"' + PaClient + '" --timeout=20 "' + ProfName + '"';
-  Output := RunCaptured(Cmd, 45000, ExitCode);
+  ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=20', ProfName, Output, 45000));
   Return := TJSONObject.Create;
   try
     Return.AddPair('profile', ProfName);
@@ -1213,7 +1211,7 @@ function GetSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
   PaClient, ProfName, ProfileFile, ProfXml, Plat, SysRoot: string;
-  Cmd, Output, Pattern, DestDir, GccVer, SdkFile, D: string;
+  Output, Pattern, DestDir, GccVer, SdkFile, D: string;
   SdkName, Etiqueta, Otra, Glibc: string;
   Ficha: TJSONObject;
   ExitCode: Cardinal;
@@ -1251,7 +1249,7 @@ begin
     SdkName := Etiqueta;
   if SdkName = '' then
     SdkName := SoloAlfanumerico(ProfName);
-  SysRoot := TPath.Combine(IdeSdksDir(Info.Version), SdkName + '.sdk');
+  SysRoot := CarpetaDeSdk(Info.Version, SdkName);
   // Una distro NO se superpone a otra. Eso es exactamente lo que dejaba dos
   // libc.so.6 y dos arboles de gcc en la misma carpeta, con las rutas de
   // ambos en el Profile_LibraryPath que ve el linker.
@@ -1263,7 +1261,7 @@ begin
         Otra := Ficha.GetValue<string>('distro');
       if (Otra <> '') and (Etiqueta <> '') and not SameText(Otra, Etiqueta) then
         Exit(MsgFmt(SR_PASERVER_SDK_OTRA_FMT,
-          [SdkName + '.sdk', Otra, Etiqueta, Etiqueta]));
+          [NombreDeSdk(SdkName), Otra, Etiqueta, Etiqueta]));
     finally
       Ficha.Free;
     end;
@@ -1271,7 +1269,7 @@ begin
   // descarga salia "skipped (not on this target)" y el final culpaba a la
   // distro (PAS-030; sexta revision). paclient solo con el perfil conecta y
   // se autentica, como test-connection.
-  Output := RunCaptured('"' + PaClient + '" --timeout=20 "' + ProfName + '"', 45000, ExitCode);
+  ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=20', ProfName, Output, 45000));
   if ExitCode <> 0 then
     Exit(MsgFmt(SR_FETCHTARGET_FAIL_FMT, [ExitCode, Output.Trim]));
   CrearCarpeta(SysRoot);
@@ -1293,9 +1291,8 @@ begin
       DestDir := TPath.Combine(SysRoot,
         Pull.RemoteBase.TrimLeft(['/']).Replace('/', '\'));
       CrearCarpeta(DestDir);
-      Cmd := '"' + PaClient + '" --timeout=30 "--get=' + Pattern + ',' +
-        DestDir + '" "' + ProfName + '"';
-      Output := RunCaptured(Cmd, 1200000, ExitCode);
+      ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=30 "--get=' + Pattern + ',' +
+        DestDir + '"', ProfName, Output, 1200000));
       ParseCopied(Output, NFiles, NBytes);
       PullObj := TJSONObject.Create;
       Pulls.AddElement(PullObj);
@@ -1375,7 +1372,7 @@ begin
       Sb.AppendLine('    <Profile_platform>Linux64</Profile_platform>');
       Sb.AppendLine('    ' + XmlElemento('Profile_host', TagValue(ProfXml, 'Profile_host')));
       Sb.AppendLine('    ' + XmlElemento('Profile_port', TagValue(ProfXml, 'Profile_port')));
-      Sb.AppendLine('    ' + XmlElemento('Profile_sdkname', SdkName + '.sdk'));
+      Sb.AppendLine('    ' + XmlElemento('Profile_sdkname', NombreDeSdk(SdkName)));
       Sb.AppendLine('    ' + XmlElemento('Profile_displayname', 'Linux64 ' + SdkName +
         ' (delphi_paserver get-sdk, profile ' + ProfName + ')'));
       Sb.AppendLine('    ' + XmlElemento('Profile_sysroot', SysRoot));
@@ -1404,7 +1401,7 @@ begin
       Sb.AppendLine('  </ItemGroup>');
       Sb.AppendLine('</Project>');
 
-      SdkFile := TPath.Combine(ProfilesDir(Info.Version), SdkName + '.sdk');
+      SdkFile := RutaDeSdk(Info.Version, SdkName);
       TFile.WriteAllText(SdkFile, Sb.ToString, TEncoding.UTF8);
       // y el asiento del SDK Manager del IDE, leyendo la tabla del
       // defaultsdkpaths de ESTA instalacion (nada clavado)
@@ -1420,7 +1417,7 @@ begin
     Glibc := VersionDeGlibc(SysRoot);
     EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName);
 
-    Return.AddPair('sdk', SdkName + '.sdk');
+    Return.AddPair('sdk', NombreDeSdk(SdkName));
     Return.AddPair('sdkFile', SdkFile);
     Return.AddPair('sysroot', SysRoot);
     if Etiqueta <> '' then
@@ -1542,7 +1539,7 @@ begin
   if Nombre = '' then
     Nombre := SoloAlfanumerico(Params.Name);
   if Nombre <> '' then
-    Ficheros := [TPath.Combine(ProfilesDir(Info.Version), Nombre + '.sdk')]
+    Ficheros := [RutaDeSdk(Info.Version, Nombre)]
   else
     // sin nombre: todos los que haya, que es lo que hace falta despues de un
     // despliegue ("registra lo que tengas")
@@ -1580,8 +1577,8 @@ begin
       if Raiz.Contains('$(') or not TDirectory.Exists(Raiz) then
         Continue;
       if RegistrarSdkEnIde(Info.Version, Info.RootDir, Raiz,
-           TPath.GetFileNameWithoutExtension(Fichero), False) then
-        Hechos.Add(TPath.GetFileNameWithoutExtension(Fichero));
+           NombreSinSdk(TPath.GetFileName(Fichero)), False) then
+        Hechos.Add(NombreSinSdk(TPath.GetFileName(Fichero)));
     end;
     Return.AddPair('note', MsgText(SN_PASERVER_SDK_RESEAT));
     Result := Return.ToJSON;
@@ -1609,7 +1606,7 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
-  Fichero := TPath.Combine(ProfilesDir(Info.Version), Nombre + '.sdk');
+  Fichero := RutaDeSdk(Info.Version, Nombre);
   // El fichero puede no estar y el ASIENTO seguir ahi - pasa en cuanto alguien
   // borra el .sdk a mano, y entonces el IDE sigue ofreciendo un SDK que ya no
   // existe. Esta tool es la escoba: si no hay nada que limpiar, NI fichero ni
@@ -1637,13 +1634,13 @@ begin
   try
     R.RootKey := HKEY_CURRENT_USER;
     R.DeleteKey('\Software\Embarcadero\BDS\' + Info.Version +
-      '\PlatformSDKs\' + Nombre + '.sdk');
+      '\PlatformSDKs\' + NombreDeSdk(Nombre));
   finally
     R.Free;
   end;
   Return := TJSONObject.Create;
   try
-    Return.AddPair('removed', Nombre + '.sdk');
+    Return.AddPair('removed', NombreDeSdk(Nombre));
     if Raiz <> '' then
     begin
       Return.AddPair('sysrootLeftBehind', Raiz);

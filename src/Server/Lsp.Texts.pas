@@ -5181,6 +5181,21 @@ const
     '(Profile_host), so there is nothing to check against RemoteHosts and ' +
     'nothing was dialed or deployed.';
 
+  // Lo que paclient dice en ingles crudo cuando el otro lado no es el suyo
+  // (Lsp.BuildRunner.AvisoDePaclient): una maquina puede tener un PAServer por
+  // Delphi, cada uno en su puerto (el Zorin de David: 13.1 y 13.2).
+  SN_PACLIENT_OTRO_DELPHI_FMT =
+    '[PAS-056] The PAServer at that host and port is not the one of this ' +
+    'server''s Delphi: its paclient expects version %s. One machine can run ' +
+    'one PAServer per Delphi, each on its own port: point the profile to the ' +
+    'port of this Delphi''s PAServer (delphi_paserver add-profile with port=), ' +
+    'or install that one there (delphi_paserver packages lists this ' +
+    'Delphi''s installers).';
+  SN_PACLIENT_OTRA_PLATAFORMA_FMT =
+    '[PAS-057] The profile says %s and the machine behind it is %s: the ' +
+    'profile points to another machine or to another PAServer. delphi_paserver ' +
+    'profiles lists them; create one for that platform with add-profile.';
+
   SR_GIT_REMOTE_OFF_FMT =
     '[GIT-004 DENIED] This server does not talk to "%s". An explicit URL ' +
     'in a git command makes THE SERVER open the connection, so deciding ' +

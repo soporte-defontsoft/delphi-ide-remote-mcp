@@ -1408,8 +1408,7 @@ begin
   Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default');
   if not Quitar then
   begin
-    if not Sdk.ToLower.EndsWith('.sdk') then
-      Sdk := Sdk + '.sdk';
+    Sdk := NombreDeSdk(Sdk);
     // No basta con que exista: CADA .sdk declara SU plataforma (por eso el
     // dialogo del IDE empieza preguntandola y la lista sale agrupada), asi
     // que un SDK de Android no puede acabar puesto en Linux64.
