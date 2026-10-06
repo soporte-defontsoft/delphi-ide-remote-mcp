@@ -924,6 +924,17 @@ function ServerDelphiUpdate: string;
   editado en el primer arranque de cada servidor (medido en produccion, 5-oct-2026). }
 function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
 
+{ Un settings.ini con el BOM de UTF-8 justo delante de su primera seccion NO
+  arranca (6-oct-2026). Lo lee la API de los ini de Windows - aqui (TIniFile)
+  y en MCPServer.Settings, que lee el Port -, y esa API toma el BOM por parte
+  de la primera linea: no ve la cabecera y pierde la seccion entera. Medido
+  con un [Server] primero: su Port y su BindIP no se leian (el servidor en el
+  3000 y en TODAS las interfaces) y DelphiVersion se escribia en un [Server]
+  nuevo al final. Con un comentario delante el BOM se queda en el comentario
+  y todo se lee: eso pasa. Leerlo de otra manera seria un segundo lector, y
+  el del Port ni siquiera es nuestro. Lo llama TMcpHost.Wire, lo primero. }
+procedure ExigeSettingsIniLegible;
+
 { The knowledge-vault root (Obsidian notes). Empty when unset.
   Env DELPHI_MCP_VAULT_PATH (solo el workspace por defecto), si no el
   VaultPath= del workspace activo. Canonicalized, no trailing delimiter. The vault_read/vault_search tools register only when
@@ -3050,6 +3061,28 @@ begin
     Exit(False);
   AFecha := TFile.GetLastWriteTime(SettingsIniPath);
   Result := AFecha > GIniCargadoEn;
+end;
+
+procedure ExigeSettingsIniLegible;
+var
+  B: TArray<Byte>;
+  I: Integer;
+begin
+  if not TFile.Exists(SettingsIniPath) then
+    Exit;
+  try
+    B := TFile.ReadAllBytes(SettingsIniPath);
+  except
+    Exit; // sin poder leerlo no se sabe: que lo lea TIniFile, como siempre
+  end;
+  if DetectEnc(B) <> ekUtf8Bom then
+    Exit;
+  // el BOM y, sin salto de linea por medio, la cabecera de una seccion
+  I := 3;
+  while (I < Length(B)) and ((B[I] = Ord(' ')) or (B[I] = 9)) do
+    Inc(I);
+  if (I < Length(B)) and (B[I] = Ord('[')) then
+    raise Exception.Create(MsgFmt(SE_GUARD_INI_BOM_FMT, [SettingsIniPath]));
 end;
 
 function FijaDelphiVersionEnElIni(const AVersion: string; out AError: string): Boolean;

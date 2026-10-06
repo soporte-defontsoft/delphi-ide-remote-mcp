@@ -551,6 +551,9 @@ section is completely inert.
 ```ini
 ; Comments go on their OWN line: Windows keeps a trailing "; ..." as part of
 ; the value, so "Port=3000 ; my port" is not port 3000 (measured 2026-10-05).
+; Save the file as UTF-8 WITHOUT BOM (or ANSI): Windows does not see a section
+; header with a BOM in front, so a BOM right before [Server] loses Port and
+; BindIP - the server refuses to start and says so (a comment line first is fine).
 [Server]
 ; HTTP port for --http and the tray (-gui)
 Port=3000

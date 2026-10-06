@@ -38,6 +38,10 @@ nombres y su build los dice el propio servidor (delphi_installs).
       a proposito uno que NO es el de esta maquina: se declara, no se deduce
   U10 DelphiUpdate=13,2 (otra forma que numero.numero): el log lo avisa y se
       ignora, como si no estuviera; sin la clave (U1), ningun update
+  U11 un settings.ini con el BOM de UTF-8 justo delante de [Server]: Windows
+      no ve esa cabecera y la seccion se pierde entera (Port, BindIP,
+      DelphiVersion): NO arranca y dice por que; con un comentario delante
+      el BOM no molesta, arranca y la clave entra en SU [Server]
 
 Lo que NO mide, y por que: que cada tool use solo el Delphi del servidor y
 nunca el de otra instalacion necesita una maquina con DOS Delphi (aqui hay
@@ -287,6 +291,40 @@ try:
     check('U5 ...y dice por que y que claves sirven aqui',
           CAT['SE_DISC_FIJADA_NO_ESTA_FMT'] % (NO_ESTA, usables) in texto, texto[-600:])
     check('U5 ...el ini no se toca', ini_de(d5) == INI5, ini_de(d5)[:300])
+    para(proc)
+
+    # ------------------------------------------------------------------ U11
+    # El BOM de UTF-8 delante de [Server]: la API de los ini de Windows (la
+    # nuestra y la que lee el Port) no ve esa cabecera y pierde la seccion
+    # (medido el 6-oct-2026: Port y BindIP perdidos, el servidor en el 3000 y
+    # en todas las interfaces). lanza() fija el puerto y la IP por fuera, asi
+    # que ni sin el arreglo se abre nada a la red.
+    BOM = b'\xef\xbb\xbf'
+    INI11 = BOM + ('[Server]\r\n\r\n[Workspace.Op]\r\nToken=%s\r\nRoots=%s\r\n'
+                   % (TOKEN, JAIL)).encode('utf-8')
+    d11, exe11 = carpeta_servidor('bom', INI11)
+    proc, ruta, c = lanza(exe11, 'bom')
+    try:
+        rc = proc.wait(30)
+    except subprocess.TimeoutExpired:
+        rc = None
+    texto = '\n'.join(mensajes(ruta))
+    antes, despues = CAT['SE_GUARD_INI_BOM_FMT'].split('%s')
+    check('U11 settings.ini con BOM delante de [Server]: NO arranca - no escucha y sale con 1',
+          c is None and rc == 1, 'cli=%s rc=%s' % (c, rc))
+    check('U11 ...y dice por que y como arreglarlo', antes in texto and despues in texto, texto[-600:])
+    check('U11 ...el ini no se toca', ini_de(d11) == INI11, ini_de(d11)[:200])
+    para(proc)
+    # con un comentario delante el BOM se queda en el comentario: arranca, y
+    # la clave entra en SU [Server], no en uno nuevo al final
+    INI11B = BOM + ini_bytes([])
+    d11b, exe11b = carpeta_servidor('bom-comentario', INI11B)
+    proc, ruta, c = lanza(exe11b, 'bom-comentario')
+    escrito = ini_de(d11b)
+    check('U11b con BOM y un comentario delante: arranca y escribe la clave en su [Server]',
+          c is not None and escrito.startswith(BOM) and escrito.count(b'[Server]') == 1
+          and b'DelphiVersion=' in escrito.split(b'[Workspace.Op]')[0],
+          escrito[:300])
     para(proc)
 
     # ------------------------------------------------------------------ U6

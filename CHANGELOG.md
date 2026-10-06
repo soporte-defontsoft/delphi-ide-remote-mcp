@@ -99,17 +99,27 @@ One server, one Delphi.
   path of the project's .dproj, and no description said so: a model passed
   the project's name and was refused. The `project` and `job` parameters
   say it now.
+- **A `settings.ini` saved with a UTF-8 BOM right before its first section
+  does not start the server any more**: the Windows ini reader (ours, and
+  the one that reads `Port`) does not see a header with a BOM in front, so
+  that whole section was lost - with `[Server]` first, its `Port` and
+  `BindIP` were ignored and the server listened on port 3000 on EVERY
+  network interface, and `DelphiVersion` went into a second `[Server]`
+  appended at the end. It now stops at startup and says how to save the
+  file. A BOM followed by a comment line was always fine, and still is.
 
 ### Internal
 
-- New battery `test_un_delphi` (26 checks): writing the key and leaving the
+- New battery `test_un_delphi` (30 checks): writing the key and leaving the
   rest of the file byte for byte, the second start, a pin without decimals,
   a pin that is not installed (the server does not listen and exits 1), the
   environment variable ignored, no `settings.ini` created in local mode, a
   declared update (one that is NOT this machine's: declared, not deduced),
   a malformed one ignored, the installer's text compared with what the
-  registry itself says, and the server's own write of the key not taken for
-  an edited `settings.ini` (with a control that edits it while running).
+  registry itself says, the server's own write of the key not taken for
+  an edited `settings.ini` (with a control that edits it while running),
+  and a `settings.ini` with a BOM before `[Server]` (red against the build
+  without the check: the server started and wrote a second `[Server]`).
   Found by using it: deployed with the whole suite green, the first
   `delphi_workspace` said SYS-001 - "settings.ini was modified after this
   process started, restart it" - about the server's own write. Whether the

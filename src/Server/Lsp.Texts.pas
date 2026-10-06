@@ -82,6 +82,16 @@ const
   SE_DISC_NINGUNA =
     'This server does not start: no RAD Studio with DelphiLSP is ' +
     'installed on this machine, and a Delphi MCP server needs its Delphi.';
+  { Un settings.ini con el BOM de UTF-8 delante de su primera seccion: la API
+    de los ini de Windows no ve esa seccion (Lsp.Guard.ExigeSettingsIniLegible,
+    medido el 6-oct-2026). %s = el fichero. }
+  SE_GUARD_INI_BOM_FMT =
+    'This server does not start: its settings.ini (%s) begins with a UTF-8 ' +
+    'BOM right before its first section header, and the Windows ini reader ' +
+    'does not see a header with a BOM in front - that whole section would be ' +
+    'lost (a [Server] first: its Port, BindIP and DelphiVersion, so the ' +
+    'server would listen on another port and on every network interface). ' +
+    'Save the file as UTF-8 without BOM, or put a comment line (; ...) first.';
   { Una instalacion que sirve, con su clave, para la negativa. }
   SF_DISC_USABLE_FMT =
     '%s -> [Server] DelphiVersion=%s';
