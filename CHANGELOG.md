@@ -60,6 +60,17 @@ the MCP `initialize` response (`serverInfo.version`).
   project: a project's repository is the LONGEST `dir` its folder is
   inside (a nested repository or a submodule is its own entry), and
   `delphi_git` takes any path inside it.
+- `delphi_diagnostics` no longer repeats `source` (always `DelphiLSP`) and
+  an empty `tags` on every diagnostic, and `delphi_paserver platforms` and
+  `packages` say `delphiVersion` once at the top instead of on every entry
+  (one server, one Delphi): about 15% of each of those answers. Found by a
+  census of 24 real calls (Qwen3.8 tokenizer) that looked for what else
+  could be slimmed after the file lists; what remains is mostly the fixed
+  notes, instructions that go out the same on every call, left for the
+  next release with the comprehension bench.
+- `filesCount` is the number of files in `delphi_package`, in each pull of
+  `delphi_paserver get-sdk` and in the preview of `delphi_changeset`: it
+  was `files`, the name every other answer gives a list of files.
 - `delphi_rename_symbol` speaks the names of `delphi_references`:
   `filesTouched` is the number of files it touches (`files` was a number
   in the same answer whose lists group their files under `files`),
@@ -124,6 +135,10 @@ the MCP `initialize` response (`serverInfo.version`).
   `__pycache__`) said at once "125 are in build folders" and "the mask
   matched nothing". The second note now appears only when nothing was
   hidden. `LIST-003` names `__recovery` too, which it always hid.
+- `[Server] DelphiVersion=37,0` - the decimal comma of a Spanish keyboard -
+  and `37.00` are read as `37.0`, like `37` already was; the server did not
+  start with them. Anything else that is not an installed version still
+  stops it, saying why and which keys would work.
 - `delphi_test`: the discover note told to build a test `.dpr` that has no
   `.dproj` "with delphi_build on its .dpr", and `delphi_build` takes a
   `.dproj` only; it now says that such a project cannot be built here and
@@ -173,6 +188,11 @@ the MCP `initialize` response (`serverInfo.version`).
   folder next to the hidden ones), `test_round8` C2 (always true once
   `repo` left the projects) measures `repos`, and `diagnostics` `line` and
   `resolvedLine` are pinned against the lines on disk.
+- Measured, nothing to change: DelphiLSP sends no `relatedInformation` in
+  its diagnostics, not even for E2037 (a declaration that differs from the
+  previous one) or E2065, so `delphi_diagnostics` has no location without
+  `path` to convert. `test_workspace_tools` clones this repository by its
+  current URL (it used the old name, which GitHub redirects).
 
 ## [1.14.0] - 2026-10-06
 

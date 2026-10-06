@@ -46,6 +46,9 @@ nombres y su build los dice el propio servidor (delphi_installs).
       del fichero (un trozo pegado) tampoco arranca, y dice la linea
   U12 [Server] dos veces: Windows lee el primero y la version del operador
       puede estar en el otro - arranca, NO escribe la clave y lo dice
+  U13 [Server] DelphiVersion=37,0 (la coma decimal de un teclado espanol) y
+      37.00 (ceros de mas): la misma version, arranca y no toca el ini
+      (1.15.0; antes no arrancaba: "si escribes mal, te aguantas?")
 
 Lo que NO mide, y por que: que cada tool use solo el Delphi del servidor y
 nunca el de otra instalacion necesita una maquina con DOS Delphi (aqui hay
@@ -301,6 +304,18 @@ try:
           and '[SYS-001]' in tocado.get('server', {}).get('settingsChangedNote', ''),
           json.dumps(tocado.get('server', {}))[:400])
     para(proc)
+
+    # ------------------------------------------------------------------ U13
+    for i, forma in enumerate((NUEVA.replace('.', ','), NUEVA + '0')):
+        INI13 = ini_bytes(['DelphiVersion=%s' % forma])
+        d13, exe13 = carpeta_servidor('forma%d' % i, INI13)
+        proc, ruta, c = lanza(exe13, 'forma%d' % i)
+        ws = llama(c, 'delphi_workspace', {}) if c else {}
+        check('U13 [Server] DelphiVersion=%s: arranca y es la %s' % (forma, NUEVA),
+              ws.get('activeDelphi') == NUEVA and ws.get('delphiVersionRequested') == NUEVA,
+              (json.dumps(ws)[:300], mensajes(ruta)[-5:]))
+        check('U13 ...el ini no se toca (%s)' % forma, ini_de(d13) == INI13, ini_de(d13)[:200])
+        para(proc)
 
     # ------------------------------------------------------------------ U5
     INI5 = ini_bytes(['DelphiVersion=%s' % NO_ESTA])

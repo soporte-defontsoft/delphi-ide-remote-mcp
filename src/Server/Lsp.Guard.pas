@@ -896,7 +896,9 @@ function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] Bind
   mismo proceso mantenia motores y rutas de varias versiones; para otra
   version, otro servidor en su propia carpeta con su puerto. Quien la
   aplica es DiscoverRadStudio (Lsp.Discovery), el unico sitio que elige
-  instalacion. }
+  instalacion. Normalizada aqui, una vez: '37', '37,0' (la coma decimal de
+  un teclado espanol) y '37.00' son '37.0', como la escribe el registro; lo
+  demas pasa tal cual y no arranca diciendo por que (1.15.0). }
 function ServerDelphiVersion: string;
 
 { Escribe [Server] DelphiVersion=AVersion en el settings.ini del servidor y
@@ -3120,9 +3122,22 @@ function ServerDelphiVersion: string;
 begin
   LoadSecurity;
   Result := GDelphiVersion.Trim;
-  // '36' y '36.0' son la misma: el registro la escribe con decimal
-  if (Result <> '') and (Result.IndexOf('.') < 0) then
-    Result := Result + '.0';
+  // '36', '36,0' y '36.00' son la misma que '36.0', como la escribe el
+  // registro: la coma decimal de un teclado espanol tumbaba el arranque
+  // ("si escribes mal, te aguantas?", David, 6-oct-2026). Solo lo que no
+  // admite duda: digitos, y como mucho UNA coma o punto con digitos detras
+  if TRegEx.IsMatch(Result, '^\d+([.,]\d+)?$') then
+  begin
+    Result := Result.Replace(',', '.');
+    if Result.IndexOf('.') < 0 then
+      Result := Result + '.0'
+    else
+    begin
+      // los ceros de mas del decimal, dejando uno: 37.00 -> 37.0
+      while Result.EndsWith('0') and (Result.Length - Result.IndexOf('.') > 2) do
+        Result := Result.Substring(0, Result.Length - 1);
+    end;
+  end;
 end;
 
 function ServerDelphiUpdate: string;

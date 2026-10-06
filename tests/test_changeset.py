@@ -53,7 +53,7 @@ r = cs({'command': 'stage', 'id': cid, 'kind': 'move', 'path': B_PATH,
 check('stage move', mc.abre(r, 'SN_CHANGESET_STAGED_FMT') and ' move ' in r, r[:150])
 r = cs({'command': 'preview', 'id': cid})
 j = json.loads(r)
-check('preview limpio', j.get('unresolved') == 0 and j.get('files') == 4, r[:300])
+check('preview limpio', j.get('unresolved') == 0 and j.get('filesCount') == 4 and 'files' not in j, r[:300])  # filesCount (1.15.0)
 r = cs({'command': 'commit', 'id': cid})
 check('commit completo', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT'), r[:200])
 disk = open(A_PATH, 'rb').read()

@@ -190,6 +190,10 @@ try:
     names = zipfile.ZipFile(zp).namelist()
     check('package: zip creado con el exe', 'HolaVcl.exe' in names, names)
     check('package: sin dcu dentro', not any(n.endswith('.dcu') for n in names), names)
+    # la cuenta se llama filesCount: 'files' es una LISTA en la casa (1.15.0)
+    check('package: filesCount es lo que hay en el zip (y files ya no es una cuenta)',
+          d.get('filesCount') == len([n for n in names if not n.endswith('/')]) and 'files' not in d,
+          {k: d.get(k) for k in ('filesCount', 'files')})
 except Exception:
     check('package: parsea', False, out[:200])
 

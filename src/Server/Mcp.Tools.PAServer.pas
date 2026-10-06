@@ -210,6 +210,9 @@ begin
     Info := DiscoverRadStudio;
     if Info.Found then
     begin
+      // la version UNA vez: un servidor es un Delphi, e iba en cada
+      // instalador (censo de respuestas de la 1.15.0)
+      Return.AddPair('delphiVersion', Info.Version);
       Dirs := TStringList.Create;
       try
         CollectPackageDirs(Info, Dirs);
@@ -229,7 +232,6 @@ begin
             Seen.Add(LowerCase(TPath.GetFileName(F)));
             Obj := TJSONObject.Create;
             Arr.AddElement(Obj);
-            Obj.AddPair('delphiVersion', Info.Version);
             Obj.AddPair('platform', PlatformOfPackage(F));
             Obj.AddPair('path', F);
             try
@@ -634,12 +636,14 @@ begin
     Info := DiscoverRadStudio;
     if Info.Found then
     begin
+      // la version UNA vez: iba en cada plataforma, la misma en las trece
+      // (un servidor es un Delphi; censo de respuestas de la 1.15.0)
+      Return.AddPair('delphiVersion', Info.Version);
       for Plat in IdeLibraryPlatforms(Info.Version) do
       begin
         Obj := TJSONObject.Create;
         Arr.AddElement(Obj);
         Obj.AddPair('platform', Plat);
-        Obj.AddPair('delphiVersion', Info.Version);
         Local := IsLocalPlatform(Plat); // la lista de Lsp.Dproj, no una copia
         Obj.AddPair('buildsLocally', TJSONBool.Create(Local));
         if Local then
@@ -1356,7 +1360,7 @@ begin
       PullObj := TJSONObject.Create;
       Pulls.AddElement(PullObj);
       PullObj.AddPair('dir', Pull.RemoteBase);
-      PullObj.AddPair('files', TJSONNumber.Create(NFiles));
+      PullObj.AddPair('filesCount', TJSONNumber.Create(NFiles)); // una cuenta: 'files' es una lista en la casa (1.15.0)
       PullObj.AddPair('bytes', TJSONNumber.Create(NBytes));
       // paclient --get es INCREMENTAL: sobre un sysroot ya traido copia solo
       // lo que cambio, y muchas veces eso es CERO ficheros. Leer "0 copiados"

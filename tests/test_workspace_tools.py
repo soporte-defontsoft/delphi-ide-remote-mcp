@@ -577,12 +577,12 @@ tmpcl = _fixed('clone')
 try:
     dest = os.path.join(tmpcl, 'repo')
     out = call('delphi_git', {"repo": dest, "command": "clone",
-        "message": "https://github.com/soporte-defontsoft/delphi-lsp-mcp-service.git"}, 600)
+        "message": "https://github.com/soporte-defontsoft/delphi-ide-remote-mcp.git"}, 600)  # la URL de hoy, no la redireccion del nombre viejo
     if 'exit=0' in out:
         check('git clone: repo entero en una llamada',
               os.path.isdir(os.path.join(dest, 'src')), out[:150])
         out2 = call('delphi_git', {"repo": dest, "command": "clone",
-            "message": "https://github.com/soporte-defontsoft/delphi-lsp-mcp-service.git"})
+            "message": "https://github.com/soporte-defontsoft/delphi-ide-remote-mcp.git"})
         check('git clone: no re-clona sobre un repo existente',
               mc.resultado(out2) == 'DENIED' and mc.abre(out2, 'SR_GIT_YA_ES_REPOSITORIO_FMT'), out2[:120])
         out3 = call('delphi_git', {"repo": dest, "command": "pull"}, 300)

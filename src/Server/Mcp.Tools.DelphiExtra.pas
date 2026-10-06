@@ -180,6 +180,13 @@ begin
           // motor sin gemela (Hermes, 2026-09-23). 'line', como toda la casa
           // (era 'line1', 1.15.0).
           var D := V.Clone as TJSONObject;
+          // lo que no dice nada: source es siempre el motor (DelphiLSP) y
+          // tags va vacio; los dos iban en CADA diagnostico (censo de
+          // respuestas de la 1.15.0: el 15% de la respuesta)
+          if (D.GetValue('source') <> nil) and SameText(D.GetValue('source').Value, 'DelphiLSP') then
+            D.RemovePair('source').Free;
+          if (D.GetValue('tags') is TJSONArray) and (TJSONArray(D.GetValue('tags')).Count = 0) then
+            D.RemovePair('tags').Free;
           var L0 := D.FindValue('range.start.line');
           if L0 <> nil then
             D.AddPair('line', TJSONNumber.Create(L0.GetValue<Integer> + 1));

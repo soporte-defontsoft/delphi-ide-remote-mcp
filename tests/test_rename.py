@@ -299,6 +299,11 @@ check('linter (control): una funcion que no existe si da exactamente un E2003',
 # 'line', la 1-based de la casa (era line1): la de disco, y el range la 0-based
 _dg = (d2.get('diagnostics') or [{}])[0]
 _lq = [i for i, l in enumerate(open(DPR, encoding='utf-8-sig').read().splitlines()) if 'Quintuple' in l]
+# sin lo que no dice nada: source (siempre DelphiLSP) y tags vacio iban en
+# CADA diagnostico (censo de respuestas de la 1.15.0)
+check('diagnostics: sin source ni tags vacios, y con lo que importa (code, message, severity)',
+      bool(_dg) and not {'source', 'tags'} & set(_dg) and _dg.get('code') == 'E2003'
+      and bool(_dg.get('message')) and _dg.get('severity') == 1, _dg)
 check('diagnostics: line es la linea 1-based de disco del E2003 (y el range, la 0-based)',
       bool(_lq) and _dg.get('line') == _lq[0] + 1
       and ((_dg.get('range') or {}).get('start') or {}).get('line') == _lq[0] and 'line1' not in _dg,

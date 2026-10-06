@@ -899,7 +899,10 @@ begin
         C.Fingerprints.Clear;
         for P in TouchedPaths(C) do
           C.Fingerprints.AddOrSetValue(P, FingerprintBytes(P));
-        Ret.AddPair('files', TJSONNumber.Create(C.Fingerprints.Count));
+        // filesCount: 'files' es una LISTA de ficheros en las demas
+        // respuestas (el organizador; delphi_test run). Un solo nombre para
+        // una cuenta (1.15.0, revisores)
+        Ret.AddPair('filesCount', TJSONNumber.Create(C.Fingerprints.Count));
         Ret.AddPair('unresolved', TJSONNumber.Create(N));
         C.Previewed := N = 0;
         if C.Previewed then

@@ -101,11 +101,20 @@ out = srv.call('delphi_paserver', {"command": "platforms"})
 try:
     d = json.loads(out)
     check('platforms: JSON con lista', isinstance(d.get('platforms'), list), out[:150])
+    # la version del Delphi UNA vez arriba: iba en cada plataforma, la misma
+    # en las trece (censo de respuestas de la 1.15.0)
+    check('platforms: delphiVersion una vez arriba, ninguna plataforma la repite',
+          bool(d.get('delphiVersion')) and bool(d.get('platforms'))
+          and not any('delphiVersion' in p for p in d['platforms']), out[:200])
 except Exception:
     check('platforms: parsea', False, out[:200])
 
 out = srv.call('delphi_paserver', {"command": "packages"})
 check('packages: lista el PAServer de Linux', 'LinuxPAServer' in out, out[:200])
+_pk = mc.como_json(out)
+check('packages: delphiVersion una vez arriba, ningun instalador la repite',
+      bool(_pk.get('delphiVersion')) and bool(mc.ficheros(_pk, 'packages'))
+      and not any('delphiVersion' in p for p in mc.ficheros(_pk, 'packages')), out[:200])
 check('packages: el hint de Linux avisa del bucle de stdin y del passfile',
       mc.es(out, 'SN_PAS_LINUX_FETCH_TAR_FMT') and 'sleep infinity' in out
       and '-password' in out and 'passfile' in out,

@@ -3258,7 +3258,7 @@ begin
   Return := TJSONObject.Create;
   try
     Return.AddPair('zip', OutZip);
-    Return.AddPair('files', TJSONNumber.Create(Count));
+    Return.AddPair('filesCount', TJSONNumber.Create(Count)); // una cuenta: 'files' es una lista en la casa (1.15.0)
     Return.AddPair('uncompressedBytes', TJSONNumber.Create(TotalBytes));
     Return.AddPair('zipBytes', TJSONNumber.Create(TFile.GetSize(OutZip)));
     if Elfs > 0 then
