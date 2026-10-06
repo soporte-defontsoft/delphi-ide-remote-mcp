@@ -187,9 +187,9 @@ begin
       Return.AddPair('warnings', TJSONNumber.Create(WarningsC));
       Return.AddPair('hints', TJSONNumber.Create(Hints));
       Return.AddPair('diagnostics', OutArr);
+      // (sin ajustes de proyecto ya no se llega aqui: LintFile lo dice antes,
+      // LSP-035 - el motor sin ellos no publica nunca, medido 2026-10-06)
       Result := Return.ToJSON;
-      if Settings = '' then
-        Result := Result + MsgText(SN_BUILD_NO_PROJECT_SETTINGS);
     finally
       Return.Free;
     end;

@@ -65,6 +65,10 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
 
 - **Indexing latency**: requests sent while a freshly opened document is being indexed return `-32800 "Request removed"`. Retry with escalating delays; a ~12k-line unit needed ~10–30 s on first open.
 - `hover`/`definition` return `null` (not an error) when no project settings are loaded; `documentSymbol` still works.
+- **`publishDiagnostics` never arrives when no project settings are loaded** (measured 2026-10-06:
+  a valid 14-line unit waited 4.5 minutes, one with a syntax error 80 seconds): the linter needs a
+  project. A unit that no project lists but that lives next to one IS linted with that project's
+  settings (`E2029` at once). The server answers `LSP-035` instead of waiting, and starts no engine.
 - Without keeping stdin open the process exits before answering (pipe-close on EOF).
 - **Closing stdin with a request in flight crashes the agent** (measured 2026-09-30, engine
   launched by hand): access violation `0xC0000005` in `dcc64370.dll`, 8 of 8 with a `definition`

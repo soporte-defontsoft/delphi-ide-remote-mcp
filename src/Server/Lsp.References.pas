@@ -73,6 +73,42 @@ type
     procedure Report(AObj: TJSONObject);
   end;
 
+  { UNA pagina de una lista recorrida entera. delphi_search y delphi_projects
+    contaban, cortaban y escribian total/shown/offset/hasMore/nextOffset cada
+    una a mano, y delphi_list ni paginaba: cortaba en 500 y lo de detras no
+    se alcanzaba (Hermes en la raiz de referencia de un ERP, 5-oct-2026: las
+    500 primeras entradas eran copias de backups\). Se empieza con PaginaDe. }
+  TPagina = record
+    Desde, Max, Total, Mostrados: Integer;
+    { uno mas de la lista: True si cae en ESTA pagina (y ya cuenta como
+      mostrado) }
+    function Entra: Boolean;
+    function HayMas: Boolean;
+    function Siguiente: Integer;
+    { total, shown, offset (si no es 0), hasMore y nextOffset (si hay mas):
+      lo que hace falta para pedir la siguiente sin adivinar }
+    procedure Report(AObj: TJSONObject);
+  end;
+
+  { DONDE esta una lista que no cabe, no solo cuanto: la carpeta de cada
+    entrada a dos niveles bajo la raiz ('.' la propia raiz), y las que mas
+    acumulan. Con eso el agente elige root en vez de pasear paginas: en una
+    maquina de trabajo las listas las copan las copias de seguridad y los
+    componentes (delphi_projects lo hacia a mano: 7.025 proyectos, 6.420
+    eran copias; 20-sep-2026). Se empieza con Default(TPorCarpeta). }
+  TPorCarpeta = record
+    Carpetas: TArray<string>;
+    Cuentas: TArray<Integer>;
+    Ultima: Integer; // un paseo da seguidas las de una carpeta
+    procedure Add(const AFichero, ARaiz: string);
+    { byFolder: las ACuantas que mas, "carpeta = N", de mas a menos }
+    procedure Report(AObj: TJSONObject; ACuantas: Integer = 10);
+  end;
+
+{ La pagina que pide quien llama: un offset negativo es 0, un maximo que no
+  es positivo es APorDefecto y uno mayor que ATope es ATope. }
+function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
+
 implementation
 
 uses
@@ -89,7 +125,8 @@ uses
   Lsp.Dproj,        // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.ProjectUnits,
   Lsp.Pascal,
-  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
+  Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
+  Lsp.NetDrives;  // SinBarraFinal
 
 type
   TCandidate = record
@@ -217,6 +254,117 @@ begin
     for B in CARPETAS_PAPELERA do
       if Low.Contains(B) then
         Exit(SKIP_TRASH);
+end;
+
+{ TPagina }
+
+function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
+begin
+  Result := Default(TPagina);
+  if AOffset > 0 then
+    Result.Desde := AOffset;
+  if AMax <= 0 then
+    AMax := APorDefecto;
+  if AMax > ATope then
+    AMax := ATope;
+  Result.Max := AMax;
+end;
+
+function TPagina.Entra: Boolean;
+begin
+  Inc(Total);
+  Result := (Total > Desde) and (Mostrados < Max);
+  if Result then
+    Inc(Mostrados);
+end;
+
+function TPagina.HayMas: Boolean;
+begin
+  Result := Total > Desde + Mostrados;
+end;
+
+function TPagina.Siguiente: Integer;
+begin
+  Result := Desde + Mostrados;
+end;
+
+procedure TPagina.Report(AObj: TJSONObject);
+begin
+  AObj.AddPair('total', TJSONNumber.Create(Total));
+  AObj.AddPair('shown', TJSONNumber.Create(Mostrados));
+  if Desde > 0 then
+    AObj.AddPair('offset', TJSONNumber.Create(Desde));
+  // Truncated lists used to be a wall: the cap hit, no way to ask for the
+  // rest (hermes, release audit 2026-08-26). hasMore + nextOffset make the
+  // next page one deterministic call away.
+  AObj.AddPair('hasMore', TJSONBool.Create(HayMas));
+  if HayMas then
+    AObj.AddPair('nextOffset', TJSONNumber.Create(Siguiente));
+end;
+
+{ TPorCarpeta }
+
+procedure TPorCarpeta.Add(const AFichero, ARaiz: string);
+var
+  Carpeta, Raiz, Rel: string;
+  I: Integer;
+begin
+  Carpeta := SinBarraFinal(TPath.GetDirectoryName(AFichero));
+  Raiz := SinBarraFinal(ARaiz);
+  if SameText(Carpeta, Raiz) then
+    // en la propia raiz: decia la raiz recortada a dos segmentos y parecia
+    // OTRA carpeta
+    Rel := '.'
+  else if StartsText(IncludeTrailingPathDelimiter(Raiz), Carpeta) then
+  begin
+    Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(Raiz)));
+    var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);
+    if Length(Trozos) > 2 then
+      Rel := Trozos[0] + TPath.DirectorySeparatorChar + Trozos[1];
+  end
+  else
+    Rel := Carpeta;
+  if (Ultima < Length(Carpetas)) and SameText(Carpetas[Ultima], Rel) then
+  begin
+    Inc(Cuentas[Ultima]);
+    Exit;
+  end;
+  for I := 0 to High(Carpetas) do
+    if SameText(Carpetas[I], Rel) then
+    begin
+      Inc(Cuentas[I]);
+      Ultima := I;
+      Exit;
+    end;
+  Carpetas := Carpetas + [Rel];
+  Cuentas := Cuentas + [1];
+  Ultima := High(Carpetas);
+end;
+
+procedure TPorCarpeta.Report(AObj: TJSONObject; ACuantas: Integer);
+var
+  Quedan: TArray<Integer>;
+  Arr: TJSONArray;
+  I, J, Mejor, MejorN: Integer;
+begin
+  Quedan := Copy(Cuentas);
+  Arr := TJSONArray.Create;
+  AObj.AddPair('byFolder', Arr);
+  for I := 1 to ACuantas do
+  begin
+    Mejor := -1;
+    MejorN := 0;
+    for J := 0 to High(Quedan) do
+      if Quedan[J] > MejorN then
+      begin
+        MejorN := Quedan[J];
+        Mejor := J;
+      end;
+    if Mejor < 0 then
+      Break;
+    Arr.Add(Format('%s = %d', [Carpetas[Mejor], MejorN]));
+    Quedan[Mejor] := 0;
+  end;
 end;
 
 { THiddenCount }

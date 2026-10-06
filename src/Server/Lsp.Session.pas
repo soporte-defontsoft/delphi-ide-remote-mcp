@@ -1411,6 +1411,13 @@ begin
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
     raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
+  // Sin ajustes de proyecto el motor no publica NUNCA (medido 2026-10-06,
+  // ver SR_LSP_LINT_SIN_AJUSTES_FMT): se dice aqui, antes de arrancar un
+  // motor para nada, y no tras 40 s de "in-progress" en bucle. La misma
+  // resolucion que hace GetClient; FabricateSettings no devuelve '' nunca
+  // (o su fichero o una excepcion), asi que '' es que no se encontro nada.
+  if ResolveSettings(FullPath, RootDir) = '' then
+    raise ELspSession.Create(MsgFmt(SR_LSP_LINT_SIN_AJUSTES_FMT, [AFilePath]));
 
   Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
   Uri := TLspClient.PathToUri(FullPath);

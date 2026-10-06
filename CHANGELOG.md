@@ -6,6 +6,56 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- **`delphi_list` goes by pages, like `delphi_search`**: 500 entries per
+  page (`maxresults` up to 500), with `offset`, `nextOffset` and `hasMore`,
+  in both modes (`dirs=true` too). It used to stop at 500 with nothing past
+  them reachable: in the reference root of an ERP the first 500 were copies
+  under `backups\` and the live project could not be listed (a night report
+  from the 13.2 machine). A listing that does not fit also says where its
+  entries are (`byFolder`, the folders that hold the most, as
+  `delphi_projects` already did), so the next call picks a root instead of
+  walking pages.
+
+### Fixed
+
+- **`delphi_diagnostics` of a unit with no project settings answers at
+  once**: `LSP-035 NOT_FOUND` - no `.delphilsp.json` or `.dproj` was found for
+  it in its folder or the ones above - and says the way out
+  (`delphi_config command=add-unit`, or `delphi_create`). It used to answer
+  "in progress, call again" forever: with no project settings the engine
+  never publishes diagnostics, not even for a syntax error (measured: 4.5
+  minutes and 80 seconds), and an agent following the natural flow - create a
+  standalone unit, lint it - spent its client's whole timeout and took it for
+  a dropped connection (a night report from the 13.2 machine). No engine is
+  started for it now. A unit that no project lists but that lives next to one
+  is still linted with that project's settings.
+- `delphi_build` with a platform in `target` (`target=Win32`): `BUILD-004`
+  now says it is a platform and that it goes in `platform=`.
+- The startup cleanup of temporary folders walked a root once per workspace
+  that declared it: the same network root in two workspaces was walked twice
+  (two lines in the log of the 13.2 machine). Each place once now, compared
+  the way the jail compares places.
+
+### Internal
+
+- New battery `test_paredes_1141`, each fix with its mutant red. It also
+  keeps that `delphi_config add-unit` takes `unit=` as an alias of `path`, as
+  it has since 0.64: the refusal in that report most likely came from the
+  client's own bridge, which checks calls before sending them.
+- The `BUILD-041` note of `delphi_diagnostics` (a lint with no project
+  settings) is gone: that branch can no longer be reached.
+- One page of a list (`TPagina`) and one count by folder (`TPorCarpeta`),
+  for `delphi_search`, `delphi_projects` and `delphi_list`: the first two
+  wrote theirs by hand. The `SEARCH-001` note is gone (it could not be
+  reached either).
+- `test_paredes_1141` also covers the pages of `delphi_list` and the
+  cleanup of a repeated network root (that one needs
+  `DELPHI_MCP_TEST_NETDIR`, a folder on a connected network drive).
+
 ## [1.14.0] - 2026-10-06
 
 One server, one Delphi: the version lives in `[Server] DelphiVersion` and

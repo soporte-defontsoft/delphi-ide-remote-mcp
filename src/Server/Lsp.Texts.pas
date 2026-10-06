@@ -246,11 +246,6 @@ const
     '%s. The projects listed come from the other roots; delphi_workspace ' +
     'says why (unavailableRoots).';
 
-  SN_SEARCH_CAPPED_FMT =
-    '[SEARCH-001] Here are %d of %d entries: the rest are NOT listed. ' +
-    'Narrow it (a more specific pattern, or a subfolder) before drawing ' +
-    'conclusions from this listing.';
-
   { Los ficheros que no se dejaron leer en una busqueda de carpeta: se
     caia la busqueda entera (SYS-027) por uno solo (sexta revision). }
   SN_SEARCH_ILEGIBLES_FMT =
@@ -592,6 +587,20 @@ const
     '[LSP-011 NOT_FOUND] %s does not exist. Check the name and the ' +
     'folder: delphi_list root=<folder> shows what is really there, and ' +
     'delphi_search finds it by content.';
+
+  { Un motor sin ajustes de proyecto NO publica diagnosticos: ni de una unidad
+    valida ni de un error de sintaxis (medido 2026-10-06: 4,5 min y 80 s en
+    "in-progress"; Hermes, la VM 13.2, se fue a los 300 s de su cliente). Se
+    dice antes de arrancar un motor para nada. Una unidad que ningun proyecto
+    lista pero que vive junto a uno SI se analiza con los de ese proyecto
+    (medido el mismo dia: E2029 al momento). }
+  SR_LSP_LINT_SIN_AJUSTES_FMT =
+    '[LSP-035 NOT_FOUND] %s has no project settings to be linted with: no ' +
+    '.delphilsp.json or .dproj was found for it in its folder or the ones ' +
+    'above. The engine compiles a unit with the settings of a project and, ' +
+    'with none, never answers - nothing was linted. Put it in a project ' +
+    '(delphi_config command=add-unit) or create one (delphi_create), and ' +
+    'lint it again.';
 
   { La ruta existe, pero es de otro tipo - que no es lo mismo que no existir.
     Medido 2026-09-20: delphi_read sobre la raiz del repo contestaba "no
@@ -1141,10 +1150,13 @@ const
     '[LIST-009] Delphi files only (no "pattern"): pattern=* lists ' +
     'everything.';
 
+  { Una lista que no cabe en una pagina: la siguiente, y DONDE esta lo que
+    no cabe (byFolder). Cortaba en 500 y lo de detras no se alcanzaba (Hermes,
+    5-oct-2026: las 500 primeras eran copias de backups\). }
   SN_LIST_CAPPED_FMT =
-    '[LIST-010] The list is cut to %d entries ("total" says how many ' +
-    'there are). Narrow it with pattern (*.pas) or go down to a ' +
-    'subfolder.';
+    '[LIST-010] Here are %d of %d entries. The next page is offset=%d; ' +
+    'byFolder says where they are, and one of those folders as root (or a ' +
+    'pattern, *.pas) narrows it down.';
 
   SR_LIST_ROOT_IS_FILE_FMT =
     '[LIST-011 INVALID_PARAM] "%s" is a FILE, not a folder, so there is nothing ' +
@@ -1193,6 +1205,13 @@ const
     'Make (incremental), Clean or Deploy (builds and deploys: to the ' +
     'PAServer of the profile parameter on Linux/macOS, or packages the ' +
     'app on Android). After changing platform use Build.';
+
+  { ...y si lo que vino en target es una PLATAFORMA (el conjunto cerrado de
+    CanonicalPlatform), la pista: "target" se lee como "target platform"
+    (Hermes, 5-oct-2026). }
+  SF_BUILD_TARGET_ES_PLATAFORMA_FMT =
+    ' "%s" is a platform: it goes in platform=%s, and target says what to ' +
+    'do with it.';
 
   SN_BUILD_MANIFEST_NEW =
     '[BUILD-005] No .deployproj existed, so a MINIMAL deployment ' +
@@ -6740,11 +6759,6 @@ const
   SL_BUILD_DELPHI_BUILD_TARGET_FMT =
     'delphi_build: BUILD "%s" %s/%s target=%s%s';
 
-  // Mensajes que estaban en linea en Mcp.Tools.DelphiExtra.pas (paso 3c a mano, 27-sep-2026)
-  SN_BUILD_NO_PROJECT_SETTINGS =
-    ' [BUILD-041] [warning: no project settings found - results may be ' +
-    'incomplete]';
-
   // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c a mano, 27-sep-2026)
   SR_EDIT_FICHERO_BINARIO_NUL_FMT =
     '[EDIT-063 DENIED] %s is a BINARY file (NUL byte in the first 64 ' +
@@ -7769,6 +7783,14 @@ const
     'true = also show the recoverable trash (__delphi-patch). Default ' +
     'false.';
 
+  SP_WS_LIST_MAXRESULTS =
+    'Entries PER PAGE (default and cap 500).';
+
+  SP_WS_LIST_OFFSET =
+    'Skip the first N entries of the FULL list: pass the previous ' +
+    'answer''s nextOffset; walking it until hasMore=false reaches every ' +
+    'entry.';
+
   SP_WS_ROOT_3 =
     'Directory to search under; empty = the workspace roots.';
 
@@ -7925,7 +7947,8 @@ const
     'files, or a mask), skipping IDE artifacts BELOW the root (naming a ' +
     'build-output folder - Win32/Win64/Debug/Release... - as root lists ' +
     'inside it; hidden entries are counted). Path, size and last-write ' +
-    'time; at most 500 entries. dirs=true lists the SUBDIRECTORIES of root ' +
+    'time; 500 entries per page (offset walks the rest). dirs=true lists ' +
+    'the SUBDIRECTORIES of root ' +
     'instead (one level, explorer-style) - to browse the machine and ' +
     'decide where to create or look for projects. includeTrash=true also ' +
     'shows the recoverable trash (__delphi-patch), to find a file ' +
@@ -8958,8 +8981,7 @@ const
     'Method %s is not handled by %s.';
 
   SN_LIST_DIRS_CAPPED_FMT =
-    '[LIST-013] Only the first %d folders are listed ("total" says how ' +
-    'many there are): go down to a subfolder.';
+    '[LIST-013] Here are %d of %d folders. The next page is offset=%d.';
 
   SR_SYS_PARAM_VALUE_FMT =
     '[SYS-016 INVALID_PARAM] Parameter "%s": %s';

@@ -201,7 +201,7 @@ Search Delphi sources recursively for a text (case-insensitive; literal, or a re
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-List Delphi files under a directory recursively (sources and project files, or a mask), skipping IDE artifacts BELOW the root (naming a build-output folder - Win32/Win64/Debug/Release... - as root lists inside it; hidden entries are counted). Path, size and last-write time; at most 500 entries. dirs=true lists the SUBDIRECTORIES of root instead (one level, explorer-style) - to browse the machine and decide where to create or look for projects. includeTrash=true also shows the recoverable trash (__delphi-patch), to find a file delphi_delete moved and restore it with delphi_move.
+List Delphi files under a directory recursively (sources and project files, or a mask), skipping IDE artifacts BELOW the root (naming a build-output folder - Win32/Win64/Debug/Release... - as root lists inside it; hidden entries are counted). Path, size and last-write time; 500 entries per page (offset walks the rest). dirs=true lists the SUBDIRECTORIES of root instead (one level, explorer-style) - to browse the machine and decide where to create or look for projects. includeTrash=true also shows the recoverable trash (__delphi-patch), to find a file delphi_delete moved and restore it with delphi_move.
 
 *Access: read-only OK.*
 
@@ -211,6 +211,8 @@ List Delphi files under a directory recursively (sources and project files, or a
 | `pattern` | string | optional | Filename mask, e.g. *.pas (default: Delphi source and project files) |
 | `dirs` | boolean | optional | true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files |
 | `includetrash` | boolean | optional | true = also show the recoverable trash (__delphi-patch). Default false. |
+| `maxresults` | integer | optional | Entries PER PAGE (default and cap 500). |
+| `offset` | integer | optional | Skip the first N entries of the FULL list: pass the previous answer's nextOffset; walking it until hasMore=false reaches every entry. |
 <!-- /contract -->
 
 What it does not show is counted BY REASON (1.5.0, one counter shared with `delphi_search`): `hidden` is the total, and each reason that is not zero gets its field - `hiddenBuildArtifacts` (Win32/Win64/Debug/Release/dcu/__history: pass that folder as root to see it), `hiddenServerTemp` (the server's `__delphi-temp`: never shown, not even with includetrash), `hiddenGitInternals` (.git), `hiddenTrash` (`__delphi-patch`: includetrash shows it) and, in dirs mode only, `hiddenToolFolders` (.vs, .github, __pycache__...). The `note` says what each one is and how to see it. Until 1.5.0 the server temp was counted as a build folder, with the advice to pass it as root.

@@ -61,6 +61,8 @@ type
     FPattern: string;
     FDirs: Boolean;
     FIncludeTrash: Boolean;
+    FMaxResults: Integer;
+    FOffset: Integer;
   public
     [SchemaDescription(SP_WS_ROOT_2)]
     [Required]
@@ -72,6 +74,12 @@ type
     property Dirs: Boolean read FDirs write FDirs;
     [SchemaDescription(SP_WS_INCLUDETRASH)]
     property IncludeTrash: Boolean read FIncludeTrash write FIncludeTrash;
+    [SchemaDescription(SP_WS_LIST_MAXRESULTS)]
+    [SchemaDefault('500')]
+    property MaxResults: Integer read FMaxResults write FMaxResults;
+    [SchemaDescription(SP_WS_LIST_OFFSET)]
+    [SchemaDefault('0')]
+    property Offset: Integer read FOffset write FOffset;
   end;
 
   TDelphiProjectsParams = class
@@ -317,7 +325,7 @@ function TDelphiSearchTool.ExecuteWithParams(const Params: TDelphiSearchParams):
 var
   Return: TJSONObject;
   Ficheros, Hits: TJSONArray;
-  Max, I, P, Len, ScanFrom, Total, FilesScanned, Mostrados: Integer;
+  I, P, Len, ScanFrom, FilesScanned: Integer;
   F, Text, Q, LineText, GrupoDe: string;
   Lines: TArray<string>;
   Mask: string;
@@ -336,11 +344,9 @@ begin
   // linea a linea: una consulta con un salto no casaria con nada
   if Params.Query.Contains(#10) or Params.Query.Contains(#13) then
     Exit(MsgText(SR_SEARCH_VARIAS_LINEAS));
-  Max := Params.MaxResults;
-  if Max <= 0 then Max := 100;
-  if Max > 500 then Max := 500;
+  // la pagina: 100 por defecto, 500 como mucho (TPagina, la de las listas)
+  var Pag := PaginaDe(Params.Offset, Params.MaxResults, 100, 500);
   Q := Params.Query.ToLower;
-  var Ofs := Params.Offset;
   // regex=true: la consulta es una expresion (PCRE, sin distinguir
   // mayusculas, como la literal), que se aplica linea a linea; una que no
   // compila se dice antes de leer nada. Es del AGENTE: Lsp.Regex.
@@ -369,8 +375,6 @@ begin
   GrupoDe := '';
   Grupo := nil;
   Hits := nil;
-  Mostrados := 0;
-  Total := 0;
   FilesScanned := 0;
   try
     var Masks: TArray<string> := [];
@@ -473,8 +477,7 @@ begin
                 ((P + Len > Length(LineText)) or
                  not EsCaracterDeIdent(LineText[P + Len]))) then
             begin
-              Inc(Total);
-              if (Total > Ofs) and (Mostrados < Max) then
+              if Pag.Entra then
               begin
                 // el grupo de ESTE fichero: los aciertos de uno van seguidos
                 if (Grupo = nil) or (GrupoDe <> F) then
@@ -493,7 +496,6 @@ begin
                 end;
                 Entry := TJSONObject.Create;
                 Hits.Add(Entry);
-                Inc(Mostrados);
                 Entry.AddPair('line', TJSONNumber.Create(I + 1));
                 // The LSP tools want a 0-based line:character, and the hit
                 // used to arrive Trim'ed - so the column could not be derived
@@ -510,16 +512,7 @@ begin
           until False;
         end;
       end;
-    Return.AddPair('total', TJSONNumber.Create(Total));
-    Return.AddPair('shown', TJSONNumber.Create(Mostrados));
-    if Ofs > 0 then
-      Return.AddPair('offset', TJSONNumber.Create(Ofs));
-    // Truncated searches used to be a wall: maxresults hit, no way to ask
-    // for the rest (hermes, release audit 2026-08-26). hasMore + nextOffset
-    // make the next page one deterministic call away.
-    Return.AddPair('hasMore', TJSONBool.Create(Total > Ofs + Mostrados));
-    if Total > Ofs + Mostrados then
-      Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Mostrados));
+    Pag.Report(Return);
     Return.AddPair('filesScanned', TJSONNumber.Create(FilesScanned));
     if Length(Ilegibles) > 0 then
       Return.AddPair('unreadableNote', MsgFmt(SN_SEARCH_ILEGIBLES_FMT,
@@ -578,7 +571,7 @@ var
   F, Mask, Root, Reason: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
-  Total, ShownTrash, ShownMarcas: Integer;
+  ShownTrash, ShownMarcas: Integer;
   Ocultos: THiddenCount;
   RootInArtifacts: Boolean;
 begin
@@ -612,7 +605,9 @@ begin
   begin
     Return := TJSONObject.Create;
     Arr := TJSONArray.Create;
-    Total := 0;
+    // por paginas, como su hermana delphi_search: cortaba en 500 y las de
+    // detras no se alcanzaban
+    var PagDirs := PaginaDe(Params.Offset, Params.MaxResults, LIST_CAP, LIST_CAP);
     Ocultos := Default(THiddenCount);
     try
       // A root already inside artifact territory was asked for by name:
@@ -645,14 +640,14 @@ begin
           Ocultos.Add(Reason);
           Continue;
         end;
-        Inc(Total);
-        if Arr.Count < LIST_CAP then
+        if PagDirs.Entra then
           Arr.Add(F);
       end;
-      Return.AddPair('total', TJSONNumber.Create(Total));
+      PagDirs.Report(Return);
       // el recorte se dice, como en el modo ficheros (callaba)
-      if Total > Arr.Count then
-        Return.AddPair('shownNote', MsgFmt(SN_LIST_DIRS_CAPPED_FMT, [LIST_CAP]));
+      if PagDirs.HayMas then
+        Return.AddPair('shownNote', MsgFmt(SN_LIST_DIRS_CAPPED_FMT,
+          [PagDirs.Mostrados, PagDirs.Total, PagDirs.Siguiente]));
       Ocultos.Report(Return);
       Return.AddPair('dirs', Arr);
       Result := Return.ToJSON;
@@ -672,7 +667,11 @@ begin
 
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
-  Total := 0;
+  // por paginas, y lo que no cabe dice DONDE esta (byFolder): las 500
+  // primeras de la raiz de referencia de un ERP eran copias de backups\ y lo
+  // vivo no se alcanzaba (Hermes, 5-oct-2026)
+  var Pag := PaginaDe(Params.Offset, Params.MaxResults, LIST_CAP, LIST_CAP);
+  var PorCarpeta := Default(TPorCarpeta);
   Ocultos := Default(THiddenCount);
   ShownTrash := 0;
   ShownMarcas := 0;
@@ -703,7 +702,8 @@ begin
           Ocultos.Add(Reason);
           Continue;
         end;
-        Inc(Total);
+        var Entra := Pag.Entra;
+        PorCarpeta.Add(F, Root);
         // Con includetrash la papelera entra en el listado y deja de contarse
         // como oculta; el lector sigue queriendo saber cuantas de las entradas
         // son copias y cuantas ficheros vivos (Hermes, 2026-09-22).
@@ -714,7 +714,7 @@ begin
             Inc(ShownMarcas)
           else
             Inc(ShownTrash);
-        if Arr.Count < LIST_CAP then
+        if Entra then
         begin
           Entry := TJSONObject.Create;
           Arr.Add(Entry);
@@ -731,23 +731,23 @@ begin
           end;
         end;
       end;
-    Return.AddPair('total', TJSONNumber.Create(Total));
-    Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
+    Pag.Report(Return);
     if ShownTrash + ShownMarcas > 0 then
     begin
       Return.AddPair('shownTrash', TJSONNumber.Create(ShownTrash));
       // las marcas, en su campo tambien: solo estaban dentro del texto
       Return.AddPair('shownMarkers', TJSONNumber.Create(ShownMarcas));
       Return.AddPair('trashNote', MsgFmt(SN_LIST_SHOWN_TRASH_FMT,
-        [Total, ShownTrash, ShownMarcas]));
+        [Pag.Total, ShownTrash, ShownMarcas]));
     end;
     // Una sola nota de lo que falta: con mas de 500 salian DOS claves
     // "shownNote" en el mismo objeto (revision 27-sep-2026)
-    if Arr.Count >= LIST_CAP then
-      Return.AddPair('shownNote', MsgFmt(SN_LIST_CAPPED_FMT, [LIST_CAP]))
-    else if Total > Arr.Count then
-      Return.AddPair('shownNote', MsgFmt(SN_SEARCH_CAPPED_FMT,
-        [Arr.Count, Total]));
+    if Pag.HayMas then
+    begin
+      Return.AddPair('shownNote', MsgFmt(SN_LIST_CAPPED_FMT,
+        [Pag.Mostrados, Pag.Total, Pag.Siguiente]));
+      PorCarpeta.Report(Return);
+    end;
     // Say WHICH, because "42 hidden" plus the wrong reason sends the reader
     // hunting for build output that is not there (measured 2026-08-25).
     Ocultos.Report(Return);
@@ -755,7 +755,7 @@ begin
     // filter nobody mentioned reads as "there is nothing else here".
     if Params.Pattern.Trim = '' then
       Return.AddPair('maskNote', MsgText(SN_LIST_DEFAULT_MASK))
-    else if Total = 0 then
+    else if Pag.Total = 0 then
     begin
       // Solo el primer nivel, que es barato y basta para probar que la
       // carpeta no esta vacia: recorrerla entera otra vez para dar una cifra
@@ -2533,10 +2533,8 @@ var
   Roots: TArray<string>;
   RootDir, F, Filt: string;
   Entry: TJSONObject;
-  Total: Integer;
   Mask, Repo, Branch: string;
-  AllCount, Ofs, Max: Integer;
-  PorCarpeta: TStringList;
+  AllCount: Integer;
 begin
   if Params.Root <> '' then
   begin
@@ -2599,15 +2597,9 @@ begin
   // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
   // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
   // = limite del cliente reventado, o sea la tool inservible sin "root").
-  Ofs := Params.Offset;
-  Max := Params.MaxResults;
-  if Max <= 0 then
-    Max := 50;
-  if Max > 300 then
-    Max := 300;
+  var Pag := PaginaDe(Params.Offset, Params.MaxResults, 50, 300);
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
-  Total := 0;
   // Donde estan, no solo cuantos: en una maquina de trabajo la lista la
   // COPAN los componentes de terceros y sus copias de seguridad (medido el
   // 2026-09-20 en este servidor: de 7025 proyectos, 6420 eran backups de
@@ -2615,7 +2607,7 @@ begin
   // Una pagina de 50 de esos no vale para nada; el reparto por carpeta si,
   // porque dice a que "root" volver a llamar.
   var Ocultos := 0;
-  PorCarpeta := TStringList.Create;
+  var PorCarpeta := Default(TPorCarpeta);
   try
     for RootDir in Roots do
     begin
@@ -2639,25 +2631,8 @@ begin
           end;
           if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
             Continue;
-          Inc(Total);
-          var Carpeta := SinBarraFinal(TPath.GetDirectoryName(F));
-          var Raiz := SinBarraFinal(RootDir.Trim);
-          var Rel: string;
-          if SameText(Carpeta, Raiz) then
-            // el proyecto vive en la propia raiz (un .groupproj, tipicamente).
-            // Decia la raiz recortada a dos segmentos y parecia OTRA carpeta.
-            Rel := '.'
-          else if StartsText(IncludeTrailingPathDelimiter(Raiz), Carpeta) then
-          begin
-            Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(Raiz)));
-            var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);
-            if Length(Trozos) > 2 then
-              Rel := Trozos[0] + TPath.DirectorySeparatorChar + Trozos[1];
-          end
-          else
-            Rel := Carpeta;
-          PorCarpeta.Values[Rel] := (StrToIntDef(PorCarpeta.Values[Rel], 0) + 1).ToString;
-          if (Total > Ofs) and (Arr.Count < Max) then
+          PorCarpeta.Add(F, RootDir.Trim);
+          if Pag.Entra then
           begin
             Entry := TJSONObject.Create;
             Arr.Add(Entry);
@@ -2692,37 +2667,16 @@ begin
           end;
         end;
     end;
-    Return.AddPair('total', TJSONNumber.Create(Total));
-    Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
-    if Ofs > 0 then
-      Return.AddPair('offset', TJSONNumber.Create(Ofs));
-    Return.AddPair('hasMore', TJSONBool.Create(Total > Ofs + Arr.Count));
-    if Total > Ofs + Arr.Count then
+    Pag.Report(Return);
+    if Pag.HayMas then
     begin
-      Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Arr.Count));
       Return.AddPair('note', MsgFmt(SN_PROJECTS_PAGE_FMT,
-        [Arr.Count, Total, Ofs + Arr.Count]));
+        [Pag.Mostrados, Pag.Total, Pag.Siguiente]));
       // Las 10 carpetas que mas acumulan, ordenadas: con esto el agente elige
       // "root" y deja de pasear paginas de cosas que no son suyas.
-      var Carpetas := TJSONArray.Create;
-      Return.AddPair('byFolder', Carpetas);
-      for var I := 0 to 9 do
-      begin
-        var Mejor := -1;
-        var MejorN := 0;
-        for var J := 0 to PorCarpeta.Count - 1 do
-          if StrToIntDef(PorCarpeta.ValueFromIndex[J], 0) > MejorN then
-          begin
-            MejorN := StrToIntDef(PorCarpeta.ValueFromIndex[J], 0);
-            Mejor := J;
-          end;
-        if Mejor < 0 then
-          Break;
-        Carpetas.Add(Format('%s = %d', [PorCarpeta.Names[Mejor], MejorN]));
-        PorCarpeta.ValueFromIndex[Mejor] := '0';
-      end;
+      PorCarpeta.Report(Return);
     end;
-    if (Total = 0) and (Filt <> '') then
+    if (Pag.Total = 0) and (Filt <> '') then
     begin
       // {"total":0} for a name that matches nothing reads as "this server has
       // no projects" (field round 10). Count them without the filter and say
@@ -2747,7 +2701,6 @@ begin
     Return.AddPair('projects', Arr);
     Result := Return.ToJSON;
   finally
-    PorCarpeta.Free;
     Return.Free;
   end;
 end;

@@ -4068,7 +4068,13 @@ begin
     Exit(MsgFmt(SR_BUILD_PLATFORM_FMT, [V]));
   V := ArgStr(AArguments, 'target').Trim;
   if (V <> '') and not MatchText(V, ['Build', 'Make', 'Clean', 'Deploy']) then
-    Exit(MsgFmt(SR_BUILD_TARGET_FMT, [V]));
+  begin
+    Result := MsgFmt(SR_BUILD_TARGET_FMT, [V]);
+    // una plataforma en target ("target platform"): donde va
+    if CanonicalPlatform(V) <> '' then
+      Result := Result + MsgFmt(SF_BUILD_TARGET_ES_PLATAFORMA_FMT, [V, CanonicalPlatform(V)]);
+    Exit;
+  end;
   // "profile" is a PAServer profile name reaching the msbuild command line
   // (/p:Profile=) - the same identifier rule as delphi_paserver's "name",
   // ONE definition for both mouths.
@@ -6324,6 +6330,33 @@ begin
     end;
 end;
 
+{ Las raices de la purga, cada SITIO una vez: la misma raiz declarada en dos
+  workspaces se purgaba dos veces - en la VM 13.2, N:\CodeSandBox de Claude y
+  de Hermes daba dos recorridos por el NAS y dos lineas en el log (6-oct-2026).
+  Comparadas en la forma larga (FormaLarga, la de toda comparacion de sitio);
+  como la forma larga pregunta al disco, las de RED se pasan aqui DENTRO de su
+  hilo, no en el arranque. }
+function RaicesSinRepetir(const ARaices: TArray<string>): TArray<string>;
+var
+  Vistas: TArray<string>;
+begin
+  Result := nil;
+  Vistas := nil;
+  for var R in ARaices do
+  begin
+    var Larga: string;
+    try
+      Larga := FormaLarga(R);
+    except
+      Larga := IncludeTrailingPathDelimiter(R); // una raiz no se pierde por no canonizarse
+    end;
+    if IndexText(Larga, Vistas) >= 0 then
+      Continue;
+    Vistas := Vistas + [Larga];
+    Result := Result + [R];
+  end;
+end;
+
 procedure PurgeServerTemp;
 var
   W: TWorkspaceDef;
@@ -6378,13 +6411,16 @@ begin
     // Va en un hilo, despues de las locales (nadie mas toca la lista de
     // TemporalEsMia), y deja lo de la ultima hora (VaciaDesechable).
     var DeRed: TArray<string> := nil;
+    var Locales: TArray<string> := nil;
     for R in Raices do
       // (tambien la letra que AUN no esta: si la conecta el reintento
       // mientras tanto, se recorre igual de aparte y con el mismo corte)
       if ClaseDeLetra(LetraDeRuta(R)) <> clLocal then
         DeRed := DeRed + [R]
       else
-        PurgaRaiz(R, NoSeTocan, 0);
+        Locales := Locales + [R];
+    for R in RaicesSinRepetir(Locales) do
+      PurgaRaiz(R, NoSeTocan, 0);
     if Length(DeRed) > 0 then
       TThread.CreateAnonymousThread(
         procedure
@@ -6393,7 +6429,8 @@ begin
           T0: UInt64;
           N: Integer;
         begin
-          for Rd in DeRed do
+          // (cada sitio una vez: aqui, que la forma larga pregunta a la red)
+          for Rd in RaicesSinRepetir(DeRed) do
             try
               if not TDirectory.Exists(Rd) then
                 Continue; // la letra sigue sin estar: nada que limpiar ni que decir
