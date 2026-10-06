@@ -6,7 +6,13 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.15.0] - 2026-10-06
+
+File lists name each folder once, and every answer speaks one convention
+for line numbers: `line` is 1-based, `line0` and `character0` are the
+0-based positions the engine tools take. `delphi_list` and `vault_search`
+go by pages, and the census of real answers took out what they repeated
+(about 40% fewer tokens over ten list calls, measured).
 
 ### Changed
 
