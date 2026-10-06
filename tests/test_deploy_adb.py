@@ -197,6 +197,9 @@ check('create: proyecto console para deploy', mc.abre(out, 'SK_CREATE_CREADO_PRO
 
 DPROJ = os.path.join(CDIR, 'DeployCli.dproj')
 DEPLOYPROJ = os.path.join(CDIR, 'DeployCli.deployproj')
+# 1.16.0: solo se compila una plataforma que el proyecto declara (BUILD-046),
+# como en el IDE: Linux64 entra en el proyecto antes de desplegarla
+srv.call('delphi_config', {"command": "add-platform", "platform": "Linux64", "project": DPROJ})
 
 # Deploy to a PAServer platform with a profile that does not exist: msbuild
 # fails (no live PAServer here), but the manifest half must happen BEFORE.

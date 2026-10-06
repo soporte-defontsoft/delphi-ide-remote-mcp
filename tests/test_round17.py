@@ -23,8 +23,9 @@
   R2  in-jail missing file answers NOT_FOUND + isError
   R3  outside-the-jail answers DENIED whether the target exists or not
   R4  a wrong parameter value answers INVALID_PARAM
-  R5  tools/list carries typed defaults (build platform/config, search
-      maxresults, config section)
+  R5  tools/list carries typed defaults (build config, search maxresults,
+      config section); the platform of build and test has NONE since 1.16.0:
+      omitted, it is the project's own, as in the IDE
 
 Usage:  python tests/test_round17.py [path-to-DelphiLspMcp.exe]
 """
@@ -107,8 +108,8 @@ def prop(tool, name):
         'properties', {}).get(name, {})
 
 
-check('R5 delphi_build: platform default Win32, config default Debug (tipados)',
-      prop('delphi_build', 'platform').get('default') == 'Win32' and
+check('R5 delphi_build: platform SIN default (la del proyecto), config default Debug (tipados)',
+      'default' not in prop('delphi_build', 'platform') and
       prop('delphi_build', 'config').get('default') == 'Debug' and
       prop('delphi_build', 'target').get('default') == 'Build',
       {k: prop('delphi_build', k).get('default') for k in ('platform', 'config', 'target')})
@@ -146,9 +147,9 @@ check('R5 delphi_search: maxresults default 100 como NUMERO',
       prop('delphi_search', 'maxresults').get('default') == 100 and
       not isinstance(prop('delphi_search', 'maxresults').get('default'), str),
       prop('delphi_search', 'maxresults'))
-check('R5 delphi_config: section default summary; delphi_test: platform Win64',
+check('R5 delphi_config: section default summary; delphi_test: platform SIN default (la del proyecto)',
       prop('delphi_config', 'section').get('default') == 'summary' and
-      prop('delphi_test', 'platform').get('default') == 'Win64',
+      'default' not in prop('delphi_test', 'platform') and bool(prop('delphi_test', 'platform')),
       (prop('delphi_config', 'section'), prop('delphi_test', 'platform')))
 
 # v0.79 - hermes' blind eval: the two texts that misled small models.

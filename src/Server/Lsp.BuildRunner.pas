@@ -1407,14 +1407,23 @@ begin
   Plat := CanonicalPlatform(APlatform);
   if (Plat = '') and (APlatform.Trim <> '') then
     raise Exception.Create(MsgFmt(SR_BUILD_PLATFORM_FMT, [APlatform.Trim]));
+  // Sin plataforma, la del proyecto: la que compilan el IDE y msbuild
+  // mientras nadie la cambia (hasta la 1.15 era Win32 a fuego, aunque el
+  // proyecto tuviera Win64 por defecto, como los que crea delphi_create).
+  var Proyecto := ReadDproj(ADprojPath);
   if Plat = '' then
-    Plat := 'Win32';
+    Plat := Proyecto.PlataformaPorDefecto;
   // Lo que el proyecto no puede ser en esa plataforma (VCL fuera de Windows)
   // se dice ANTES de compilar, con la regla de add-platform (CanTarget): el
   // build caia con F2613 Vcl.Forms y la pista mandaba a add-searchpath.
   var NoPuede := '';
-  if not ReadDproj(ADprojPath).CanTarget(Plat, NoPuede) then
+  if not Proyecto.CanTarget(Plat, NoPuede) then
     raise Exception.Create(MsgEnvuelve(SR_RECHAZADO_FMT, NoPuede));
+  // Y solo una plataforma que el proyecto declara activa: lo que se compila
+  // aqui lo compila igual el operador en el IDE sin reconfigurar nada.
+  NoPuede := PlataformaNoDeclarada(Proyecto, Plat);
+  if NoPuede <> '' then
+    raise Exception.Create(NoPuede);
   Cfg := AConfig;
   if Cfg = '' then
     Cfg := 'Debug';
@@ -1741,12 +1750,9 @@ begin
         Result.AddPair('delphiBuild', Info.Build);
     end;
     Result.AddPair('platform', Plat);
-    // Two tools, two defaults: this one builds Win32 when nobody says, and
-    // delphi_test runs Win64. An agent that built by hand and then ran the
-    // tests was looking at two different binaries and could not see why
-    // (field round 10). Say which one this was, when nobody chose.
-    if APlatform = '' then
-      Result.AddPair('platformNote', MsgText(SN_BUILD_DEFAULT_PLATFORM));
+    // Hasta la 1.15 cada tool tenia su plataforma por defecto (aqui Win32,
+    // delphi_test Win64) y una nota (BUILD-036) lo avisaba; ahora las dos
+    // toman la del proyecto, como el IDE, y "platform" dice cual fue.
     Result.AddPair('config', Cfg);
     Result.AddPair('target', Target);
     if EventosSaltados then

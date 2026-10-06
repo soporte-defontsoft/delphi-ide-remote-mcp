@@ -417,7 +417,7 @@ Build a Delphi project for real with MSBuild on this machine - the closing check
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string | **yes** | Absolute path of the .dproj to build |
-| `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile - a profile is only for target=Deploy. |
+| `platform` | string | optional | Target platform. Omitted: the project's own default, the one the IDE builds while nobody changes it. Only a platform the project declares and has enabled (delphi_config add-platform / remove-platform), so the IDE builds the same: Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile - a profile is only for target=Deploy. |
 | `config` | string | optional | A configuration the project declares, e.g. Debug (default) or Release; another is refused (delphi_config view lists them). |
 | `target` | string | optional | Build (full, default) \| Make (incremental) \| Clean \| Deploy (builds first, then deploys: to the PAServer of "profile" for Linux/macOS, or packages the app for Android). After switching platforms use Build. |
 | `profile` | string | optional | target=Deploy on a PAServer platform: the connection profile (delphi_paserver command=profiles). The files land on the target under its PAServer scratch dir, in \<windows user>-\<profile>/\<project name>/. |
@@ -477,7 +477,7 @@ TESTS: the difference between "it compiles" and "it works". discover (path = a f
 | `config` | string | optional | run: configuration to build and run (Debug by default) |
 | `filter` | string | optional | run optional: test filter for frameworks that read it (DUnitX --run:, through TDUnitX.CheckCommandLine, which the delphi_create kind=project-test project calls); a runner that does not read its command line ignores it. |
 | `timeoutms` | integer | optional | run optional: maximum run time in milliseconds (120000 by default, maximum 600000); a test that hangs is cut off and the answer says so. |
-| `platform` | string | optional | run optional: platform to build and run (Win64 by default). Only platforms of THIS machine: the binary runs here |
+| `platform` | string | optional | run optional: platform to build and run - by default the project's own, as the IDE. Only one the project declares and of THIS machine: the binary runs here |
 | `nobuild` | boolean | optional | run optional: true = run the binary that already exists, without building first (by default it builds: running an old binary is lying). |
 <!-- /contract -->
 

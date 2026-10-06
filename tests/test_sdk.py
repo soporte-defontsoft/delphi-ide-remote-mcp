@@ -105,6 +105,11 @@ try:
                                      "name": "SdkProbe"})
     dproj = os.path.join(JAIL, 'proj', 'SdkProbe.dproj')
     check('proyecto de prueba creado', os.path.exists(dproj), out[:200])
+    # la sonda nace Win32/Win64: Linux64 entra en el proyecto como en el IDE
+    # (1.16.0: una plataforma que no declara no se compila, BUILD-046); SIN
+    # sdk=, que la eleccion de SDK es lo que esta bateria mide
+    srv.call('delphi_config', {"project": dproj, "command": "add-platform",
+                               "platform": "Linux64"})
 
     # --- 1) dos SDK y nadie dice cual -------------------------------------
     sdk_file(os.path.join(PROFILES_DIR, 'uno.sdk'))
@@ -234,9 +239,6 @@ try:
     check('un PlatformSDK del grupo de OTRA plataforma no manda en Linux64',
           'uno.sdk' in out and 'ajeno' not in out, out[:300])
     # y view lo DICE: SDK y perfil por plataforma remota, con su procedencia
-    # (la sonda nace Win32/Win64: Linux64 entra en el proyecto como en el IDE)
-    srv.call('delphi_config', {"project": dproj, "command": "add-platform",
-                               "platform": "Linux64"})
     out = srv.call('delphi_config', {"project": dproj, "command": "view",
                                      "section": "platforms"})
     flat = out.replace(' ', '')

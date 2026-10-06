@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Changed
+
+- **A build is what the IDE would build.** What an agent builds of the
+  operator's project, the operator has to be able to build the same in the
+  IDE without reconfiguring anything. `delphi_build` (and `delphi_test`,
+  which builds through it) only builds a platform the project declares and
+  has enabled; another one is refused (`BUILD-046`) and
+  `delphi_config add-platform` declares it as the IDE does (`remove-platform`
+  disables it, as the IDE). Measured before: Linux64 built from a project
+  that does not declare it, without that platform's settings and invisible
+  in the IDE - a night report from the 13.2 machine took that for a platform
+  "lost" by a tool; nothing had removed it, it had never been there.
+- **Without `platform`, the project's own default** is built - the one the
+  IDE and msbuild build while nobody changes it - instead of Win32 in
+  `delphi_build` and Win64 in `delphi_test` (the projects `delphi_create`
+  makes default to Win64). The two tools now pick the same one, so the
+  `BUILD-036` note that warned they did not is gone, and each project of
+  `delphi_test discover` says its `platform`. A `.dproj` with no
+  `<Platforms>` block (from before platforms) builds only its default one.
+
 ### Fixed
 
 - **`delphi_build target=Deploy` goes through the `RemoteHosts` gate.** A
@@ -31,6 +51,15 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_git log -S<text>` and `-G<regex>` (history search, read only) pass
   the argument filter: the value was read as short options, and an `O` or an
   `F` in it refused the call (`GIT-003`).
+- **An agent's regular expression can no longer bring the server down.**
+  `delphi_search regex=true` and `vault_search` run it through PCRE, which
+  recurses on the thread's stack, and with no recursion limit of its own a
+  repeated group over a line of about 2,000 characters overflowed it
+  (`(?:a|b)*c`, measured): the first time the call failed with a bare
+  "Stack overflow" (`SYS-006`), the second time in the same process killed
+  it - two read-only searches took the server down. PCRE now stops at 500
+  levels and the search says it gave up (`SEARCH-005`); the same expression
+  on a short line still matches.
 
 ### Internal
 
@@ -51,6 +80,14 @@ the MCP `initialize` response (`serverInfo.version`).
   what they test with a gate that fails closed; it copies the `.sdk` and
   `.proj` files the build needs and never the real `.profile` files, which
   carry the PAServer password.
+- New battery `test_plataforma_declarada` (Q1-Q6: the default platform, a
+  platform not declared, declared, disabled, the default of `delphi_test`, a
+  `.dproj` with no `<Platforms>`), red against the previous binary except
+  its control.
+- New battery `test_regex_pila`: the long line five times in one process,
+  through `delphi_search` and `vault_search` on stdio and through the HTTP
+  mode of the service, plus a short line that still matches; red against the
+  binary without the limit.
 
 ## [1.15.0] - 2026-10-06
 

@@ -61,7 +61,6 @@ type
     [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_BUILD_PLATFORM)]
-    [SchemaDefault('Win32')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription(SP_BUILD_CONFIG)]
     [SchemaDefault('Debug')]

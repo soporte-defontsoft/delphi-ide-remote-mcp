@@ -157,8 +157,12 @@ begin
     Obj.AddPair('path', F);
     Obj.AddPair('framework', KindName(K));
     Obj.AddPair('why', Why);
-    Obj.AddPair('hasDproj', TJSONBool.Create(
-      TFile.Exists(TPath.ChangeExtension(F, '.dproj'))));
+    var DprojDe := TPath.ChangeExtension(F, '.dproj');
+    Obj.AddPair('hasDproj', TJSONBool.Create(TFile.Exists(DprojDe)));
+    // la plataforma en la que run lo compila y lo corre si no se pide otra:
+    // la del proyecto, como el IDE (TEST-012 ya no puede nombrar una para todos)
+    if TFile.Exists(DprojDe) then
+      Obj.AddPair('platform', ReadDproj(DprojDe).PlataformaPorDefecto);
     if K = tkConsole then
       Obj.AddPair('countsFormat', MsgText(SN_TEST_CONSOLE_FORMAT));
   end;
@@ -653,8 +657,10 @@ begin
       [APlatform.Trim]));
     Exit;
   end;
+  // sin plataforma, la del proyecto, como el IDE (hasta la 1.15, Win64 a
+  // fuego); que la declare lo dice el build (Lsp.Dproj.PlataformaNoDeclarada)
   if Plat = '' then
-    Plat := 'Win64';
+    Plat := ReadDproj(Dproj).PlataformaPorDefecto;
   if not IsLocalPlatform(Plat) then
   begin
     Result.AddPair('error', MsgFmt(SR_TEST_PLATFORM_FMT, [Plat]));

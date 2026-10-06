@@ -24,8 +24,16 @@ type
     AppType: string;       // 'Application' | 'Console' | ''
     Configs: TArray<string>;         // 'Base','Debug','Release',...
     Platforms: TArray<TDprojPlatform>;
+    DefaultPlatform: string; // el selector <Platform Condition="'$(Platform)'==''">X</Platform>
     function HasConfig(const AName: string): Boolean;
     function HasPlatform(const AName: string): Boolean;
+    { La plataforma que compilan el IDE y msbuild mientras nadie pide otra: la
+      que el proyecto tiene por defecto, y Win32 si no dice ninguna. }
+    function PlataformaPorDefecto: string;
+    { True si el proyecto DECLARA APlatform y la tiene activa: lo que el IDE
+      compila sin tocar nada. Sin bloque <Platforms> (un proyecto anterior a
+      las plataformas), solo la suya por defecto. }
+    function Declara(const APlatform: string): Boolean;
     { True if this project's framework can target APlatform. VCL is Windows
       only; FMX and non-visual (console/None) cross platforms. }
     function CanTarget(const APlatform: string; out AReason: string): Boolean;
@@ -88,6 +96,15 @@ function ReadDproj(const ADprojPath: string): TDprojInfo;
   delphi_build: aceptarla en silencio compilaba en Win64\<Inventada>\ con
   los ajustes de Base (medido el 2026-08-25 en test y el 27-sep en build). }
 function ConfigDesconocida(const ADproj, AConfig: string): string;
+
+{ La negativa de una plataforma que el proyecto no declara o tiene
+  desactivada ('' = la declara activa). Lo que compila un agente lo tiene que
+  compilar igual el operador al abrir el proyecto en el IDE, sin
+  reconfigurar nada (David, 6-oct-2026): msbuild compilaba Linux64 de un
+  proyecto que no la declaraba, sin sus ajustes de plataforma, y el IDE no la
+  mostraba (medido; el GuiProbe de Hermes "perdio" asi una plataforma que
+  nunca tuvo). delphi_config add-platform / remove-platform las declaran. }
+function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string): string;
 
 { Las plataformas de paclient, para los mensajes que las ensenan: las de
   PACLIENT_PLATFORMS, la misma lista que valida (estaban copiadas a mano). }
@@ -542,6 +559,44 @@ begin
   Result := False;
 end;
 
+function TDprojInfo.PlataformaPorDefecto: string;
+begin
+  Result := CanonicalPlatform(DefaultPlatform);
+  if Result = '' then
+    Result := 'Win32';
+end;
+
+function TDprojInfo.Declara(const APlatform: string): Boolean;
+var
+  P: TDprojPlatform;
+begin
+  if Length(Platforms) = 0 then
+    Exit(SameText(APlatform, PlataformaPorDefecto));
+  for P in Platforms do
+    if SameText(P.Name, APlatform) then
+      Exit(P.Enabled);
+  Result := False;
+end;
+
+function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string): string;
+var
+  P: TDprojPlatform;
+  Activas: TArray<string>;
+begin
+  Result := '';
+  if AInfo.Declara(APlatform) then
+    Exit;
+  Activas := nil;
+  if Length(AInfo.Platforms) = 0 then
+    Activas := [AInfo.PlataformaPorDefecto]
+  else
+    for P in AInfo.Platforms do
+      if P.Enabled then
+        Activas := Activas + [P.Name];
+  Result := MsgFmt(SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT,
+    [APlatform, ONinguno(string.Join(', ', Activas)), APlatform]);
+end;
+
 function TDprojInfo.CanTarget(const APlatform: string; out AReason: string): Boolean;
 begin
   AReason := '';
@@ -629,6 +684,16 @@ begin
     Result.Platforms := Plats.ToArray;
   finally
     Plats.Free;
+  end;
+  // la plataforma por defecto: el selector, que no lleva value (el bucle de
+  // arriba no lo ve); la que compilan el IDE y msbuild si nadie pide otra
+  Op := Pos('<platform condition=', Low);
+  if Op > 0 then
+  begin
+    TagEnd := Pos('>', Xml, Op);
+    CloseP := Pos('</platform>', Low, TagEnd + 1);
+    if (TagEnd > 0) and (CloseP > TagEnd) then
+      Result.DefaultPlatform := Copy(Xml, TagEnd + 1, CloseP - TagEnd - 1).Trim;
   end;
 end;
 

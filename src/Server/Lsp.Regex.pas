@@ -47,6 +47,7 @@ type
   TExprDelAgente = class
   private
     FPatron: PPCRE;
+    FExtra: TPCREExtra; // el tope de recursion: sin el, PCRE desborda la pila
   public
     // AError <> '': no compila, con el motivo del motor y su posicion
     constructor Create(const AExpr: string; out AError: string);
@@ -98,6 +99,19 @@ begin
 {$ENDIF}
   if FPatron = nil then
     AError := Format('%s (at %d)', [string(AnsiString(Err)), ErrOfs]);
+  { PCRE recursa en la pila de C, y sin tope propio su limite de recursion es
+    el de pasos (diez millones): mucho antes desborda la pila del hilo.
+    Medido el 6-oct-2026: (?:a|b)*c sobre una linea de 2.000 caracteres daba
+    "Stack overflow"; el proceso aguanta el primero y el SEGUNDO lo tumba (la
+    pagina de guarda ya no esta): dos busquedas de lectura bastaban para
+    tirar el servicio. Con el tope, PCRE para y lo dice
+    (PCRE_ERROR_RECURSIONLIMIT -> rbSeRinde -> SEARCH-005 / VAULT). Cada
+    nivel ocupa unos cientos de bytes de pila: 500 niveles caben con holgura
+    en el megabyte de un hilo, y no limitan nada que no sea un grupo repetido
+    cientos de veces en una sola linea. }
+  FillChar(FExtra, SizeOf(FExtra), 0);
+  FExtra.flags := PCRE_EXTRA_MATCH_LIMIT_RECURSION;
+  FExtra.match_limit_recursion := 500;
 end;
 
 destructor TExprDelAgente.Destroy;
@@ -119,12 +133,12 @@ begin
   AIndice := 0;
   ALongitud := 0;
 {$IFDEF MSWINDOWS}
-  R := pcre_exec(FPatron, nil, PCRE_STR(PChar(ATexto)), Length(ATexto), AInicio - 1,
+  R := pcre_exec(FPatron, @FExtra, PCRE_STR(PChar(ATexto)), Length(ATexto), AInicio - 1,
     PCRE_NO_UTF8_CHECK, @Ofs[0], 3);
 {$ELSE}
   // en UTF-8 el motor cuenta en bytes: lo que ocupan los caracteres de delante
   U := UTF8String(ATexto);
-  R := pcre_exec(FPatron, nil, PCRE_STR(PAnsiChar(U)), Length(U),
+  R := pcre_exec(FPatron, @FExtra, PCRE_STR(PAnsiChar(U)), Length(U),
     Length(UTF8String(Copy(ATexto, 1, AInicio - 1))), PCRE_NO_UTF8_CHECK, @Ofs[0], 3);
 {$ENDIF}
   // (0: casa, pero no caben los grupos; aqui no hacen falta)

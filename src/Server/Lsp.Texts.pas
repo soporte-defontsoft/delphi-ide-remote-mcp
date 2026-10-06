@@ -1411,6 +1411,16 @@ const
     'nothing (%s), so it is not built. If another process holds it, ' +
     'close it and repeat.';
 
+  { Una plataforma que el proyecto no declara (o tiene desactivada) no se
+    compila: lo que compila un agente lo tiene que compilar igual el operador
+    en el IDE sin reconfigurar (Lsp.Dproj.PlataformaNoDeclarada). }
+  SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT =
+    '[BUILD-046 DENIED] %s is not an enabled platform of this project ' +
+    '(enabled: %s), so it is not built: the IDE would not build it without ' +
+    'adding it, and what is built here has to build the same there. ' +
+    'delphi_config command=add-platform platform=%s declares it as the IDE ' +
+    'does (for a remote one, sdk= and profile= go in the same call).';
+
   SR_BUILD_HAZARD_FMT =
     '[BUILD-017 DENIED] The project contains %s. This server only ' +
     'COMPILES, never executes, and that task would run a program or ' +
@@ -3868,8 +3878,9 @@ const
     'building first (by default it builds: running an old binary is lying).';
 
   SP_TEST_PLATFORM =
-    'run optional: platform to build and run (Win64 by default). Only ' +
-    'platforms of THIS machine: the binary runs here';
+    'run optional: platform to build and run - by default the project''s ' +
+    'own, as the IDE. Only one the project declares and of THIS machine: ' +
+    'the binary runs here';
 
   SR_TEST_PLATFORM_UNKNOWN_FMT =
     '[TEST-001 INVALID_PARAM] "%s" is not a Delphi platform. Valid for ' +
@@ -3947,10 +3958,9 @@ const
     'needed: its summary is read.';
 
   SN_TEST_RUNS_ON =
-    '[TEST-012] command=run builds AND runs the SAME platform: Win64 ' +
-    'unless you pass platform=. Careful if you built by hand with ' +
-    'delphi_build, which uses Win32 by default: they are different ' +
-    'binaries. The program runs in a Windows container on a COPY of its ' +
+    '[TEST-012] command=run builds AND runs the SAME platform: the ' +
+    'project''s own unless you pass platform=, the one delphi_build ' +
+    'builds by default too. The program runs in a Windows container on a COPY of its ' +
     'output folder, with it as the current directory: it reads and ' +
     'writes that copy and, besides it, only what Windows gives every ' +
     'container (its own temp folder, deleted with it, and the system ' +
@@ -4459,12 +4469,6 @@ const
     'version of that library: the target machine is missing the whole ' +
     'package. Install the library there (with its -dev) and repeat ' +
     'delphi_paserver get-sdk; or remove that dependency from the project.';
-
-  SN_BUILD_DEFAULT_PLATFORM =
-    '[BUILD-036] You did not give me "platform", so I built Win32, which ' +
-    'is the default of this tool. NOTE: delphi_test runs Win64 by ' +
-    'default, so if you are going to run the tests afterwards, build ' +
-    'Win64 (platform=Win64) or let delphi_test build it on its own.';
 
   SR_PASERVER_IDE_OPEN =
     '[PAS-029 DENIED] The IDE (bds.exe) is OPEN on the server and ' +
@@ -7248,10 +7252,12 @@ const
     'Absolute path of the .dproj to build';
 
   SP_BUILD_PLATFORM =
-    'Target platform (default Win32): Win32/Win64 build natively here. ' +
-    'Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform ' +
-    'enabled in the project (delphi_config) and their SDK pulled once ' +
-    '(delphi_paserver get-sdk). Building is LOCAL against that SDK and ' +
+    'Target platform. Omitted: the project''s own default, the one the IDE ' +
+    'builds while nobody changes it. Only a platform the project declares ' +
+    'and has enabled (delphi_config add-platform / remove-platform), so the ' +
+    'IDE builds the same: Win32/Win64 build natively here; ' +
+    'Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need their SDK pulled ' +
+    'once (delphi_paserver get-sdk). Building is LOCAL against that SDK and ' +
     'does NOT use profile - a profile is only for target=Deploy.';
 
   SP_BUILD_CONFIG =

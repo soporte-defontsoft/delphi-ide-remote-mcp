@@ -213,8 +213,10 @@ open(os.path.join(TDIR, 'MiTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n'
     "program MiTest;\n\n{$APPTYPE CONSOLE}\n\nuses\n  System.SysUtils;\n\n"
     "begin\n  Writeln('PASS uno');\n  Sleep(120000);\nend.\n")
 j = J(A.call('delphi_test', {'command': 'discover', 'path': TDIR}))
+# 1.15.1: la plataforma es la de CADA proyecto (la por defecto del .dproj, como
+# el IDE; delphi_create la deja en Win64), y va en su entrada
 check('C3 discover dice EN QUE plataforma se ejecutara y donde puede escribir',
-      'Win64' in (j.get('runsOn') or '') and
+      any(p.get('platform') == 'Win64' for p in mc.ficheros(j, 'projects')) and
       mc.es(j.get('runsOn') or '', 'SN_TEST_RUNS_ON'), str(j)[:400])
 check('M4 ...y que formato de salida se cuenta',
       any('PASS' in (p.get('countsFormat') or '') for p in mc.ficheros(j, 'projects')), str(j)[:400])

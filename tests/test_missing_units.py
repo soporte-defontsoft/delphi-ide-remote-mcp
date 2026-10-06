@@ -59,6 +59,8 @@ s = open(dpr, encoding='utf-8-sig').read()
 s = s.replace('uses', 'uses\n  Tee.Grid, NoSuchUnitXyz,', 1)
 open(dpr, 'w', encoding='utf-8').write(s)
 dproj = dpr[:-4] + '.dproj'
+# 1.16.0: solo se compila una plataforma que el proyecto declara (BUILD-046)
+call('delphi_config', {'command': 'add-platform', 'platform': 'Linux64', 'project': dproj})
 
 r = call('delphi_build', {'project': dproj, 'platform': 'Linux64', 'config': 'Debug'})
 try:

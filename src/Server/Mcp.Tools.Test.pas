@@ -42,7 +42,6 @@ type
     [SchemaDescription(SP_TEST_TIMEOUT)]
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
     [SchemaDescription(SP_TEST_PLATFORM)]
-    [SchemaDefault('Win64')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription(SP_TEST_NOBUILD)]
     property NoBuild: Boolean read FNoBuild write FNoBuild;
