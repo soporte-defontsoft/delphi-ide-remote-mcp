@@ -6,9 +6,12 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.14.0] - 2026-10-06
 
-One server, one Delphi.
+One server, one Delphi: the version lives in `[Server] DelphiVersion` and
+every tool works with that installation and no other. The tool descriptions
+are about 11% shorter, and `tools/list` announces only what the caller can
+use.
 
 ### Changed
 

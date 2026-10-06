@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-05 (current release v1.13.1; 42 tools).
+Status page as of 2026-10-06 (current release v1.14.0; 42 tools).
 
 ## Delivered
 
@@ -38,6 +38,7 @@ Status page as of 2026-10-05 (current release v1.13.1; 42 tools).
 - A cap on warm DelphiLSP engines: `[Server] MaxEngines`, the least recently used one that is not working makes room (1.13.0)
 - One reader for Pascal classes, one composer for the citation of a line, the agent's regular expressions through PCRE, `delphi_git ls-remote`; a jail where Git never recurses into submodules and no tool names what lies behind a junction (1.13.0)
 - Answers that say whose fix it is: a root whose drive is not connected (`WS-022`, `unavailableRoots`, `PROJ-005`), Git's dubious ownership (`GIT-057`), the download link above 1 MB (1.13.1)
+- One server, one Delphi (`[Server] DelphiVersion`, and `DelphiUpdate` to check the installed update); tool descriptions about 11% shorter, each change measured against a small local model; `tools/list` without the tools the caller cannot use - the vault's where there is none or it is read-only, the write tools for a read-only credential (1.14.0)
 
 ## Open
 
