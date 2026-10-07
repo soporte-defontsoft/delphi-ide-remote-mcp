@@ -28,6 +28,7 @@ type
   TStyleObj = class
     ClassName_: string;   // TLayout, TRectangle...
     ObjName: string;      // the name before ':' when present
+    Clave: string;        // object | inherited | inline (Lsp.DesignerBin.LineaDeObjeto)
     StyleName: string;    // '' when the object has none
     StartLine: Integer;   // 1-based, the 'object' line
     EndLine: Integer;     // 1-based, the matching 'end'
@@ -49,8 +50,12 @@ type
     FEol: string;
     FBinaryOnDisk: Boolean;
     procedure Parse;
+    constructor CreateVacio;
   public
     constructor Create(const APath: string);
+    { A document from a TEXT with no file behind it (the DUnitX tests of
+      Lsp.DesignerEdit): it reads like any other; Save has nowhere to go. }
+    class function DeTexto(const AText: string): TStyleDoc;
     destructor Destroy; override;
     property Root: TStyleObj read FRoot;
     property Lines: TArray<string> read FLines;
@@ -74,12 +79,35 @@ type
     function DeleteProp(AObj: TStyleObj; const AProp: string): Boolean;
     { Copies ASrc right after itself with the new StyleName. }
     procedure CloneStyle(ASrc: TStyleObj; const ANewName: string);
-    { Removes a whole top-level style (its block, object..end). }
+    { The lines AProp's value takes at AObj's own level (0-based, AIni..AFin:
+      a list, a binary block, a collection or a string split with '+' run
+      over several); False when absent. What SetProp and DeleteProp replace. }
+    function PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
+    { The object named AName at any depth (a form's component, by its Name;
+      the same identifier as dcc sees it); nil when there is none. }
+    function ObjetoDeNombre(const AName: string): TStyleObj;
+    { The file text these lines would make, with the file's own line break:
+      what Save writes. A caller that writes several files at once
+      (delphi_designer insert/delete: the form and its unit, all or
+      nothing) composes with it and writes with PatchSaveText + Encoding. }
+    function TextoDe(const ALines: TArray<string>): string;
+    { Replaces every line (an edit composed outside); Save or TextoDe next. }
+    procedure SetLines(const ALines: TArray<string>);
+    property Encoding: string read FEnc;
+    { Removes a whole object, its block object..end: a top-level style, or a
+      component of a form with everything inside it. }
     procedure DeleteStyle(AObj: TStyleObj);
     procedure Save;
     { Re-parses after an edit (line numbers moved). }
     procedure Reload;
   end;
+
+{ Does this look like a value a text DFM (.style, .dfm, .fmx) can hold? The
+  streaming grammar: number, $hex, 'string', identifier, [set], and the
+  block forms. Measured field round 8: `Fill.Color = no soy un color` was
+  written happily and only surfaced later as `EParserError` from build. It
+  lived in delphi_styles; delphi_designer set is its second caller. }
+function ValidStyleValue(const AValue: string): Boolean;
 
 { True for the binary forms (FMX_STYLE signature or the $FF wrapper). }
 function IsBinaryStyle(const APath: string): Boolean;
@@ -111,6 +139,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.DesignerBin,
+  Lsp.Pascal, // EL identificador: ValidStyleValue y la linea de una propiedad
   Lsp.Texts;
 
 { TStyleObj }
@@ -144,6 +173,21 @@ begin
   inherited Create;
   FPath := TPath.GetFullPath(APath);
   Reload;
+end;
+
+constructor TStyleDoc.CreateVacio;
+begin
+  inherited Create;
+end;
+
+class function TStyleDoc.DeTexto(const AText: string): TStyleDoc;
+begin
+  Result := TStyleDoc.CreateVacio;
+  Result.FPath := '';
+  Result.FEnc := 'utf8';
+  Result.FEol := SaltoDominante(AText);
+  Result.FLines := SplitToLines(AText);
+  Result.Parse;
 end;
 
 destructor TStyleDoc.Destroy;
@@ -226,6 +270,7 @@ begin
       O := TStyleObj.Create;
       O.ObjName := ONombre;
       O.ClassName_ := OClase;
+      O.Clave := OClave;
       O.StartLine := I + 1;
       O.EndLine := I + 1;
       O.Parent := Cur;
@@ -319,55 +364,123 @@ begin
   end;
 end;
 
-{ The line index (0-based) of AProp at AObj's own level, or -1. Own level =
-  the lines after the header and before the first child object. }
-function OwnPropLine(AObj: TStyleObj; const ALines: TArray<string>; const AProp: string): Integer;
+// La ultima linea (0-based) del valor que empieza en la linea AIni con el
+// texto AValor (lo de detras del '='), sin pasar de AStop: las formas que
+// salta el lint (Lsp.DesignerMeta.LintConTabla) - una lista entre parentesis,
+// un bloque binario entre llaves, una coleccion < ... > con sus items, una
+// cadena partida en trozos que acaban en '+'.
+function FinDeValor(const ALines: TArray<string>; AIni: Integer;
+  const AValor: string; AStop: Integer): Integer;
 var
-  I, Stop: Integer;
-  T: string;
+  T, Cierre: string;
+  Prof: Integer;
 begin
+  Result := AIni;
+  if AValor = '' then
+    Exit;
+  if (AValor = '(') or ((AValor[1] = '{') and not AValor.EndsWith('}')) then
+  begin
+    Cierre := IfThen(AValor = '(', ')', '}');
+    while Result + 1 < AStop do
+    begin
+      Inc(Result);
+      if ALines[Result].Trim.EndsWith(Cierre) then
+        Exit;
+    end;
+    Exit;
+  end;
+  if AValor = '<' then
+  begin
+    Prof := 1;
+    while Result + 1 < AStop do
+    begin
+      Inc(Result);
+      T := ALines[Result].Trim;
+      if T.StartsWith('end', True) and T.EndsWith('>') then
+      begin
+        Dec(Prof);
+        if Prof = 0 then
+          Exit;
+      end
+      else if T.EndsWith('<') then
+        Inc(Prof);
+    end;
+    Exit;
+  end;
+  T := AValor;
+  while T.EndsWith('+') and (Result + 1 < AStop) do
+  begin
+    Inc(Result);
+    T := ALines[Result].Trim;
+  end;
+end;
+
+{ La propiedad AProp del nivel PROPIO de AObj - las lineas tras su cabecera
+  y antes de su primer hijo - y las lineas que ocupa su valor, AIni y AFin
+  (0-based). Lo de DENTRO de un valor de varias lineas no es del nivel
+  propio: se miraba linea a linea, el 'Caption =' de un item de una coleccion
+  pasaba por el del objeto, y un set reescribia la primera linea de un valor
+  partido dejando el resto debajo (delphi_designer set, 1.17.0). False si
+  no esta. }
+function RangoDePropiedad(AObj: TStyleObj; const ALines: TArray<string>;
+  const AProp: string; out AIni, AFin: Integer): Boolean;
+var
+  I, Stop, Fin: Integer;
+  M: TMatch;
+begin
+  Result := False;
+  AIni := -1;
+  AFin := -1;
   Stop := AObj.EndLine - 1;
   if AObj.Children.Count > 0 then
     Stop := AObj.Children[0].StartLine - 1;
-  for I := AObj.StartLine to Stop - 1 do
+  I := AObj.StartLine;
+  while I < Stop do
   begin
-    T := ALines[I].TrimLeft;
-    if T.StartsWith(AProp + ' =', True) or T.StartsWith(AProp + '=', True) then
-      Exit(I);
+    M := TRegEx.Match(ALines[I].Trim, '^(' + PATRON_IDENT_PUNTOS + ')\s*=\s*(.*)$');
+    if not M.Success then
+    begin
+      Inc(I);
+      Continue;
+    end;
+    Fin := FinDeValor(ALines, I, M.Groups[2].Value.Trim, Stop);
+    if SameText(M.Groups[1].Value, AProp) then
+    begin
+      AIni := I;
+      AFin := Fin;
+      Exit(True);
+    end;
+    I := Fin + 1;
   end;
-  Result := -1;
 end;
 
 function TStyleDoc.SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string;
 var
-  Idx, InsertAt, I: Integer;
-  Indent: string;
+  Ini, Fin, InsertAt: Integer;
   L: TList<string>;
 begin
-  Indent := StringOfChar(' ', (AObj.Depth + 1) * 2);
-  Result := Indent + AProp + ' = ' + AValue;
-  Idx := OwnPropLine(AObj, FLines, AProp);
-  AWasThere := Idx >= 0;
-  if AWasThere then
-  begin
-    // keep the file's own indentation of that line
-    Indent := LeadingWhite(FLines[Idx]); // la sangria de la casa (Lsp.Patch)
-    Result := Indent + AProp + ' = ' + AValue;
-    FLines[Idx] := Result;
-    Exit;
-  end;
-  // after the StyleName line when there is one, else right after the header
-  InsertAt := AObj.StartLine; // 0-based index of the line AFTER the header
-  for I := AObj.StartLine to AObj.EndLine - 2 do
-    if FLines[I].TrimLeft.StartsWith('StyleName', True) then
-    begin
-      InsertAt := I + 1;
-      Break;
-    end;
+  Result := StringOfChar(' ', (AObj.Depth + 1) * 2) + AProp + ' = ' + AValue;
+  AWasThere := RangoDePropiedad(AObj, FLines, AProp, Ini, Fin);
   L := TList<string>.Create;
   try
     L.AddRange(FLines);
-    L.Insert(InsertAt, Result);
+    if AWasThere then
+    begin
+      // la sangria de la casa de esa linea (Lsp.Patch), y el valor entero
+      // fuera: uno partido en varias lineas queda en una
+      Result := LeadingWhite(FLines[Ini]) + AProp + ' = ' + AValue;
+      L.DeleteRange(Ini, Fin - Ini + 1);
+      L.Insert(Ini, Result);
+    end
+    else
+    begin
+      // detras de su StyleName si lo tiene (el SUYO: se buscaba en todo el
+      // bloque, hijos incluidos), si no justo detras de la cabecera
+      InsertAt := AObj.StartLine; // 0-based: la linea DETRAS de la cabecera
+      if RangoDePropiedad(AObj, FLines, 'StyleName', Ini, Fin) then
+        InsertAt := Fin + 1;
+      L.Insert(InsertAt, Result);
+    end;
     FLines := L.ToArray;
   finally
     L.Free;
@@ -376,17 +489,16 @@ end;
 
 function TStyleDoc.DeleteProp(AObj: TStyleObj; const AProp: string): Boolean;
 var
-  Idx: Integer;
+  Ini, Fin: Integer;
   L: TList<string>;
 begin
-  Idx := OwnPropLine(AObj, FLines, AProp);
-  Result := Idx >= 0;
+  Result := RangoDePropiedad(AObj, FLines, AProp, Ini, Fin);
   if not Result then
     Exit;
   L := TList<string>.Create;
   try
     L.AddRange(FLines);
-    L.Delete(Idx);
+    L.DeleteRange(Ini, Fin - Ini + 1);
     FLines := L.ToArray;
   finally
     L.Free;
@@ -426,6 +538,42 @@ begin
   end;
 end;
 
+function TStyleDoc.ObjetoDeNombre(const AName: string): TStyleObj;
+
+  function Busca(O: TStyleObj): TStyleObj;
+  begin
+    if (O.ObjName <> '') and MismoIdentificador(O.ObjName, AName) then
+      Exit(O);
+    for var K in O.Children do
+    begin
+      Result := Busca(K);
+      if Result <> nil then
+        Exit;
+    end;
+    Result := nil;
+  end;
+
+begin
+  Result := nil;
+  if (FRoot <> nil) and (AName <> '') then
+    Result := Busca(FRoot);
+end;
+
+function TStyleDoc.TextoDe(const ALines: TArray<string>): string;
+begin
+  Result := string.Join(FEol, ALines);
+end;
+
+procedure TStyleDoc.SetLines(const ALines: TArray<string>);
+begin
+  FLines := Copy(ALines);
+end;
+
+function TStyleDoc.PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
+begin
+  Result := RangoDePropiedad(AObj, FLines, AProp, AIni, AFin);
+end;
+
 procedure TStyleDoc.DeleteStyle(AObj: TStyleObj);
 var
   L: TList<string>;
@@ -444,11 +592,26 @@ procedure TStyleDoc.Save;
 begin
   if FBinaryOnDisk then
     raise Exception.Create(MsgFmt(SR_STYLE_BINARIO_NO_SE_GUARDA_FMT, [TPath.GetFileName(FPath)]));
-  PatchSaveText(FPath, string.Join(FEol, FLines), FEnc);
+  PatchSaveText(FPath, TextoDe(FLines), FEnc);
   Reload;
 end;
 
 { ---- files ---- }
+
+function ValidStyleValue(const AValue: string): Boolean;
+var
+  V: string;
+begin
+  V := AValue.Trim;
+  Result := (V <> '') and (
+    TRegEx.IsMatch(V, '^-?\d+(\.\d+)?$') or                    // 12   -3.5
+    TRegEx.IsMatch(V, '^\$[0-9A-Fa-f]+$') or                   // $FF00FF00
+    EsIdentificador(V, True) or                                // claRed  True  TAlignLayout.Top
+    TRegEx.IsMatch(V, '^\[.*\]$') or                           // [a, b]
+    TRegEx.IsMatch(V, '^<.*>$') or                             // inline collection
+    V.StartsWith('''') or V.StartsWith('#') or                 // 'text'  #13#10
+    CharInSet(V[1], ['{', '(']));                              // binary / list block
+end;
 
 function IsBinaryStyle(const APath: string): Boolean;
 var

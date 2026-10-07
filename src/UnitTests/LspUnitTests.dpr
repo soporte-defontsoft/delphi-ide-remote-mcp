@@ -24,7 +24,8 @@ uses
   LspTests.Regex in 'LspTests.Regex.pas',
   LspTests.FormRender in 'LspTests.FormRender.pas',
   FormRender.Comun in '..\Render\FormRender.Comun.pas',
-  FormRender.Textos in '..\Render\FormRender.Textos.pas';
+  FormRender.Textos in '..\Render\FormRender.Textos.pas',
+  LspTests.DesignerEdit in 'LspTests.DesignerEdit.pas';
 
 var
   Runner: ITestRunner;

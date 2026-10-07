@@ -66,6 +66,16 @@ type
     // clase que varias unidades declaran con otras publicadas (X): lower ->
     // 'Nombre|Unidad1,Unidad2'. No esta en Classes: no se juzga
     Ambiguas: TDictionary<string, string>;
+    // clase lower -> su SetName pone el Text desde el nombre (T)
+    TextoEsNombre: TDictionary<string, Boolean>;
+    // tipo 'o' lower -> su base: integer, int64, char, single, float, string
+    // o variant (B, Lsp.DesignerMetaGen: lo que TReader mira de un valor)
+    Bases: TDictionary<string, string>;
+    // tipo entero lower -> sus constantes con nombre, ',a,b,' lower, o '*'
+    // si acepta cualquier identificador (I: RegisterIntegerConsts); y como
+    // se ensenan ('clBlack, clMaroon')
+    Constantes: TDictionary<string, string>;
+    ConstantesShow: TDictionary<string, string>;
     constructor Create(const AFacts: array of string);
     // la tabla de un fichero generado (una linea por hecho)
     class function DeFichero(const AFichero: string): TMetaTable;
@@ -85,6 +95,16 @@ type
       su identidad ('Vcl.StdCtrls:TButton'). AId, la identidad en minusculas;
       False si no esta o si es ambigua (Ambiguas). }
     function ClaseDeNombre(const ANombre: string; out AId: string): Boolean;
+    { AClase (su identidad, 'vcl.stdctrls:tbutton') es AAncestro o desciende
+      de el, por Padres. AAncestro, otra identidad ('Vcl.Controls:TWinControl'):
+      el TControl de la VCL no es el de FMX. Lo que pregunta delphi_designer
+      insert/set: un padre VCL es un TWinControl, el Text de un control FMX
+      nuevo es de los TTextControl, insert solo pone controles. }
+    function Desciende(const AClase, AAncestro: string): Boolean;
+    { Al nacer, el Text (Caption en la VCL) de AClase es su Name: lo decide
+      el SetName mas cercano de su cadena que el fuente sobrescribe (hecho T,
+      Lsp.DesignerMetaGen.SetNamesDeTexto). Lo que escribe insert. }
+    function TextoSigueAlNombre(const AClase: string): Boolean;
     // Lo que AClase y sus ancestros guardan por codigo ('*' incluido)
     function DefinidasDeLaCadena(const AClase: string): TArray<string>;
     destructor Destroy; override;
@@ -106,6 +126,18 @@ const
     rutas del IDE tarda segundos. El lint que va detras de cada edicion de
     un form no espera (0): dice que no valido. }
   ESPERA_TABLA_MS = 30000; // hay clientes MCP que se rinden al minuto
+  { Las identidades de las clases que se preguntan por su nombre con
+    TMetaTable.Desciende (unidad:clase: el TControl de la VCL no es el de
+    FMX): las RAICES del marco - que es un control, que es un padre VCL. Lo
+    que hace una clase concreta (si su Text sigue al nombre) no va aqui: lo
+    dice el fuente (hecho T, TextoSigueAlNombre). }
+  ID_VCL_CONTROL = 'Vcl.Controls:TControl';
+  ID_VCL_WINCONTROL = 'Vcl.Controls:TWinControl';
+  ID_FMX_CONTROL = 'FMX.Controls:TControl';
+  // un frame en linea (inline) de un form: su clase es del proyecto, no de
+  // la tabla, y es un TFrame (lo que set juzga de su tamano y su sitio)
+  ID_VCL_FRAME = 'Vcl.Forms:TFrame';
+  ID_FMX_FRAME = 'FMX.Forms:TFrame';
 
 type
   { Por que no hay tabla, de las dos formas que hacen falta: la respuesta
@@ -129,9 +161,34 @@ function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
   out ANotas: TArray<string>; out AFalta: TFaltaTabla;
   AEsperaMs: Cardinal = ESPERA_TABLA_MS): TArray<string>;
 
+{ EL juez de una linea de propiedad de un form, ALhs = ARhs en un objeto de
+  la clase AClase (su identidad): si la clase publica (o guarda por codigo)
+  esa ruta y si el valor es de los que existen. '' = nada que decir - o no
+  se puede saber, y entonces calla (la politica de silencio de arriba); si
+  no, el aviso. AHoja, la propiedad final cuando se llego a ella (AHayHoja):
+  su tipo. Estaba dentro del bucle del lint; delphi_designer set le pregunta
+  ANTES de escribir (1.17.0). }
+function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
+  out AHoja: TPropRec; out AHayHoja: Boolean): string;
+
+{ Lo que toma una propiedad de tipo 'o' por su base (hecho B), como la lee
+  TReader.ReadPropValue: un entero, o una de las constantes que registra su
+  tipo (hecho I: clRed en un TColor); un Int64; un caracter; un numero; una
+  cadena. '' si AValor (escrito como en el form) vale, o si la base no se
+  sabe (calla); si no, lo que toma, para el mensaje, y AParecida la
+  constante que quiso decir (' Did you mean clRed?'). Lo pregunta
+  delphi_designer set antes de escribir. }
+function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: string;
+  out AParecida: string): string;
+
 // El mismo lint contra una tabla dada (las pruebas le dan la suya)
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   const ALines: TArray<string>; out ANotas: TArray<string>): TArray<string>;
+
+{ Por que una clase no esta en la tabla M: no existe para ella (DSGN-015),
+  o dos unidades la declaran con otras publicadas (DSGN-056). Lo dicen info,
+  prop e insert de delphi_designer. }
+function ClaseQueNoEsta(M: TMetaTable; const AClass, AFramework: string): string;
 
 { The framework table of the ACTIVE Delphi - what delphi_designer asks about
   classes, published properties and enum members. nil when there is none
@@ -294,6 +351,10 @@ begin
   Hijas := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
   Definidas := TDictionary<string, string>.Create;
   Ambiguas := TDictionary<string, string>.Create;
+  TextoEsNombre := TDictionary<string, Boolean>.Create;
+  Bases := TDictionary<string, string>.Create;
+  Constantes := TDictionary<string, string>.Create;
+  ConstantesShow := TDictionary<string, string>.Create;
   for F in AFacts do
   begin
     P := F.Split([' ']);
@@ -340,6 +401,18 @@ begin
       // el nombre que escribe un form es de OTRA que la primera C (la
       // registrada en la paleta, la que no es un modulo...): van al final
       PorNombre.AddOrSetValue(ClaveDeIdentificador(P[1]), ClaveDeIdentificador(P[2]))
+    else if (P[0] = 'T') and (Length(P) >= 3) then
+      TextoEsNombre.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2] = '1')
+    else if (P[0] = 'B') and (Length(P) >= 3) then
+      Bases.AddOrSetValue(ClaveDeIdentificador(P[1]), LowerCase(P[2]))
+    else if (P[0] = 'I') and (Length(P) >= 3) then
+    begin
+      if P[2] = '*' then
+        Constantes.AddOrSetValue(ClaveDeIdentificador(P[1]), '*')
+      else
+        Constantes.AddOrSetValue(ClaveDeIdentificador(P[1]), ',' + ClaveDeIdentificador(P[2]) + ',');
+      ConstantesShow.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2].Replace(',', ', '));
+    end
     else if (P[0] = 'X') and (Length(P) >= 3) then
       Ambiguas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[1] + '|' + P[2])
     else if (P[0] = 'D') and (Length(P) >= 3) then
@@ -359,6 +432,10 @@ end;
 
 destructor TMetaTable.Destroy;
 begin
+  ConstantesShow.Free;
+  Constantes.Free;
+  Bases.Free;
+  TextoEsNombre.Free;
   Ambiguas.Free;
   Definidas.Free;
   Hijas.Free;
@@ -468,6 +545,47 @@ begin
   Result := False;
 end;
 
+function TMetaTable.TextoSigueAlNombre(const AClase: string): Boolean;
+var
+  C: string;
+  N: Integer;
+begin
+  C := ClaveDeIdentificador(AClase);
+  N := 0;
+  while (C <> '') and (N < 64) do
+  begin
+    if TextoEsNombre.TryGetValue(C, Result) then
+      Exit;
+    var Padre: string;
+    if not Padres.TryGetValue(C, Padre) then
+      Break;
+    C := Padre;
+    Inc(N);
+  end;
+  Result := False;
+end;
+
+function TMetaTable.Desciende(const AClase, AAncestro: string): Boolean;
+var
+  C, Meta: string;
+  N: Integer;
+begin
+  C := ClaveDeIdentificador(AClase);
+  Meta := ClaveDeIdentificador(AAncestro);
+  N := 0;
+  while (C <> '') and (N < 64) do
+  begin
+    if C = Meta then
+      Exit(True);
+    var Padre: string;
+    if not Padres.TryGetValue(C, Padre) then
+      Break;
+    C := Padre;
+    Inc(N);
+  end;
+  Result := False;
+end;
+
 function TMetaTable.DefinidasDeLaCadena(const AClase: string): TArray<string>;
 var
   C: string;
@@ -536,6 +654,17 @@ begin
   end;
 end;
 
+function ClaseQueNoEsta(M: TMetaTable; const AClass, AFramework: string): string;
+var
+  A: string;
+begin
+  if M.Ambiguas.TryGetValue(ClaveDeIdentificador(AClass.Trim), A) then
+    Result := MsgFmt(SR_DESIGNER_CLASE_AMBIGUA_FMT, [A.Substring(0, A.IndexOf('|')),
+      UpperCase(AFramework), A.Substring(A.IndexOf('|') + 1)])
+  else
+    Result := MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]);
+end;
+
 function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
   out ANotas: TArray<string>; out AFalta: TFaltaTabla; AEsperaMs: Cardinal): TArray<string>;
 var
@@ -559,17 +688,191 @@ begin
   end;
 end;
 
+function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
+  out AHoja: TPropRec; out AHayHoja: Boolean): string;
+var
+  SIdx: Integer;
+  Cur, CurShow, Seg, Key, Have, Members, V, Desc: string;
+  Segs: TArray<string>;
+  R: TPropRec;
+begin
+  Result := '';
+  AHayHoja := False;
+  AHoja := Default(TPropRec);
+  Cur := AClase;
+  if not M.Classes.TryGetValue(Cur, CurShow) then
+    Exit;
+  Segs := ALhs.Split(['.']);
+  for SIdx := 0 to High(Segs) do
+  begin
+    Seg := ClaveDeIdentificador(Segs[SIdx]);
+    Key := ClaveProp(Cur, Seg);
+    // going down a class-typed property, the instance may be of a
+    // DESCENDANT of the declared type (TLabel.TextSettings declares
+    // TTextSettings and holds a TLabelTextSettings, chosen by code): what
+    // a descendant publishes is not denied. The object of a form line is
+    // its exact class: no such leeway at segment 0.
+    if not M.Props.TryGetValue(Key, R) and (SIdx > 0) and
+       M.PublicadaEnDescendiente(Cur, Seg, Desc) then
+    begin
+      Cur := Desc;
+      Key := ClaveProp(Cur, Seg);
+      M.Classes.TryGetValue(Cur, CurShow);
+    end;
+    if not M.Props.TryGetValue(Key, R) then
+    begin
+      // lo que la clase guarda POR CODIGO (Filer.DefineProperty) lo
+      // escribe el IDE sin publicarlo: Left/Top de un no visual, los
+      // Explicit*, TextHeight, Viewport.Width (con su punto: es UN
+      // nombre de la clase del objeto), y bajando por una propiedad objeto
+      // lo que guarda ESA clase (FMX TPosition guarda Point). DESPUES de
+      // lo publicado: preguntado antes, el 'TCustomScrollBox *' callaba
+      // todo TListBox, valores incluidos (Align = alClient; revision)
+      if M.DefinidaPorCodigo(Cur, string.Join('.', Segs, SIdx, Length(Segs) - SIdx)) or
+         ((SIdx > 0) and M.DefinidaPorCodigo(AClase, ALhs)) then
+        Exit;
+      // down a class-typed property whose type has descendants: what no
+      // class of the family publishes (TTextSettings publishes nothing;
+      // its descendants do)
+      if (SIdx > 0) and M.Hijas.ContainsKey(Cur) then
+      begin
+        Have := M.PublicadasDeLaFamilia(Cur);
+        if Have <> '' then
+          Result := MsgFmt(SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT,
+            [Segs[SIdx], CurShow, Have]);
+        Exit;
+      end;
+      if not M.PropNames.TryGetValue(Cur, Have) then
+        Exit; // class without data: silence, never guess
+      // (What the DESIGNER writes without publishing it - Left/Top of a
+      // non-visual component, the VCL's Explicit* and DesignSize, FMX's
+      // Viewport.Width - was a hand list here until 1.12.0, after field
+      // reports of 2026-08-24 and round 8. It is streamed by the class's
+      // own DefineProperties, and the table now reads those names from
+      // the source: DefinidaPorCodigo, at the top of this branch.)
+      Exit(MsgFmt(SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT,
+        [Segs[SIdx], CurShow, Have]));
+    end;
+    if SIdx < High(Segs) then
+    begin
+      if R.Kind = '?' then
+        Exit; // a type the source did not let us read: silence
+      if R.Kind <> 'c' then
+        Exit(MsgFmt(SF_DSGN_SIN_SUBPROPIEDADES_FMT, [Segs[SIdx], R.TypeName]));
+      // descend into the declared type (its descendants, above): one that
+      // publishes nothing but has descendants is not "no data". By its
+      // IDENTITY: TeeChart's TFont is not the VCL's
+      Cur := ClaveDeIdentificador(R.TypeId);
+      if (not M.Classes.TryGetValue(Cur, CurShow)) or
+         (not M.PropNames.ContainsKey(Cur) and not M.Hijas.ContainsKey(Cur)) then
+        Exit; // no data for the subtree: silence
+    end
+    else
+    begin
+      AHoja := R;
+      AHayHoja := True;
+      // leaf value checks, only where the table can KNOW
+      if (R.Kind = 'e') and EsIdentificador(ARhs, True) then
+      begin
+        V := UltimoTrozo(ARhs);
+        if M.Enums.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
+           (not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
+          Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT,
+            [ARhs, R.TypeName, M.EnumShow[ClaveDeIdentificador(R.TypeId)]]));
+      end
+      else if (R.Kind = 's') and EsIdentificador(ARhs) then
+        Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, ARhs]))
+      else if (R.Kind = 's') and (ARhs <> '') and (ARhs[1] = '[') and
+              ARhs.EndsWith(']') and
+              M.Sets.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) then
+      begin
+        for V in ARhs.Substring(1, Length(ARhs) - 2).Split([',']) do
+          if (V.Trim <> '') and
+             (not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
+            Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [V.Trim, R.TypeName]));
+      end;
+    end;
+  end;
+end;
+
+function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: string;
+  out AParecida: string): string;
+const
+  MAX_MUESTRA = 12;
+var
+  Base, K, Lista, Show: string;
+  Nombres: TArray<string>;
+  Tope: Integer;
+begin
+  Result := '';
+  AParecida := '';
+  if AHoja.Kind <> 'o' then
+    Exit;
+  K := ClaveDeIdentificador(AHoja.TypeId);
+  if not M.Bases.TryGetValue(K, Base) then
+    Exit;
+  if (Base = 'integer') or (Base = 'int64') then
+  begin
+    if TRegEx.IsMatch(AValor, '^(?:-?\d+|\$[0-9A-Fa-f]+)$') then
+      Exit;
+    // un identificador solo si el tipo registra constantes, y entonces una
+    // de las suyas (ReadPropValue le pregunta a su IdentToInt); un Int64 no
+    if (Base = 'integer') and M.Constantes.TryGetValue(K, Lista) then
+    begin
+      if Lista = '*' then
+      begin
+        if EsIdentificador(AValor, False) then
+          Exit;
+        Exit(MsgText(SF_DESIGNER_TOMA_CONSTANTE));
+      end;
+      if EsIdentificador(AValor, False) and Lista.Contains(',' + ClaveDeIdentificador(AValor) + ',') then
+        Exit;
+      Show := M.ConstantesShow[K];
+      Nombres := Show.Split([', ']);
+      if EsIdentificador(AValor, False) then
+      begin
+        Tope := Length(AValor) div 3;
+        if Tope < 2 then
+          Tope := 2;
+        var Cerca := ElMasParecido(AValor, Nombres, Tope);
+        if Cerca <> '' then
+          AParecida := MsgFmt(SF_DESIGNER_QUIZAS_FMT, [Cerca]);
+      end;
+      if Length(Nombres) > MAX_MUESTRA then
+        Show := string.Join(', ', Copy(Nombres, 0, MAX_MUESTRA)) + ', ...';
+      Exit(MsgFmt(SF_DESIGNER_TOMA_CONSTANTES_FMT, [Show]));
+    end;
+    Exit(MsgText(SF_DESIGNER_TOMA_ENTERO));
+  end;
+  if (Base = 'float') or (Base = 'single') then
+  begin
+    if not TRegEx.IsMatch(AValor, '^-?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?$') then
+      Result := MsgText(SF_DESIGNER_TOMA_NUMERO);
+  end
+  else if Base = 'char' then
+  begin
+    if not EsCaracterDeForm(AValor) then
+      Result := MsgText(SF_DESIGNER_TOMA_CARACTER);
+  end
+  else if Base = 'string' then
+  begin
+    if not EsLiteralDeForm(AValor) then
+      Result := MsgText(SF_DESIGNER_TOMA_CADENA);
+  end;
+  // variant: cualquier valor de una linea
+end;
+
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   const ALines: TArray<string>; out ANotas: TArray<string>): TArray<string>;
 var
   Stack: TStack<string>;    // owner class per nesting level ('' = unknown)
   Warns, Notas: TStringList;
-  I, SIdx, CollDepth: Integer;
-  L, Lhs, Rhs, Cur, CurShow, Seg, Key, Have, Members, V, Desc, Obj: string;
+  I, CollDepth: Integer;
+  L, Lhs, Rhs, Cur, Have: string;
   OClave, ONombre, OClase: string;
   Mt: TMatch;
-  Segs: TArray<string>;
   R: TPropRec;
+  Hoja: Boolean;
   InBlock: Boolean;
   BlockCh: Char;
   Unknown: string;
@@ -700,107 +1003,10 @@ begin
       Cur := Stack.Peek;
       if Cur = '' then
         Continue;
-      if not M.Classes.TryGetValue(Cur, CurShow) then
-        Continue;
-      Obj := Cur;
-      Segs := Lhs.Split(['.']);
-      for SIdx := 0 to High(Segs) do
-      begin
-        Seg := ClaveDeIdentificador(Segs[SIdx]);
-        Key := ClaveProp(Cur, Seg);
-        // going down a class-typed property, the instance may be of a
-        // DESCENDANT of the declared type (TLabel.TextSettings declares
-        // TTextSettings and holds a TLabelTextSettings, chosen by code): what
-        // a descendant publishes is not denied. The object of a form line is
-        // its exact class: no such leeway at segment 0.
-        if not M.Props.TryGetValue(Key, R) and (SIdx > 0) and
-           M.PublicadaEnDescendiente(Cur, Seg, Desc) then
-        begin
-          Cur := Desc;
-          Key := ClaveProp(Cur, Seg);
-          M.Classes.TryGetValue(Cur, CurShow);
-        end;
-        if not M.Props.TryGetValue(Key, R) then
-        begin
-          // lo que la clase guarda POR CODIGO (Filer.DefineProperty) lo
-          // escribe el IDE sin publicarlo: Left/Top de un no visual, los
-          // Explicit*, TextHeight, Viewport.Width (con su punto: es UN
-          // nombre de la clase del objeto), y bajando por una propiedad objeto
-          // lo que guarda ESA clase (FMX TPosition guarda Point). DESPUES de
-          // lo publicado: preguntado antes, el 'TCustomScrollBox *' callaba
-          // todo TListBox, valores incluidos (Align = alClient; revision)
-          if M.DefinidaPorCodigo(Cur, string.Join('.', Segs, SIdx, Length(Segs) - SIdx)) or
-             ((SIdx > 0) and M.DefinidaPorCodigo(Obj, Lhs)) then
-            Break;
-          // down a class-typed property whose type has descendants: what no
-          // class of the family publishes (TTextSettings publishes nothing;
-          // its descendants do)
-          if (SIdx > 0) and M.Hijas.ContainsKey(Cur) then
-          begin
-            Have := M.PublicadasDeLaFamilia(Cur);
-            if Have <> '' then
-              Warn(MsgFmt(SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT,
-                [Segs[SIdx], CurShow, Have]));
-            Break;
-          end;
-          if not M.PropNames.TryGetValue(Cur, Have) then
-            Break; // class without data: silence, never guess
-          // (What the DESIGNER writes without publishing it - Left/Top of a
-          // non-visual component, the VCL's Explicit* and DesignSize, FMX's
-          // Viewport.Width - was a hand list here until 1.12.0, after field
-          // reports of 2026-08-24 and round 8. It is streamed by the class's
-          // own DefineProperties, and the table now reads those names from
-          // the source: DefinidaPorCodigo, at the top of this branch.)
-          Warn(MsgFmt(SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT,
-            [Segs[SIdx], CurShow, Have]));
-          Break;
-        end;
-        if SIdx < High(Segs) then
-        begin
-          if R.Kind = '?' then
-            Break; // a type the source did not let us read: silence
-          if R.Kind <> 'c' then
-          begin
-            Warn(MsgFmt(SF_DSGN_SIN_SUBPROPIEDADES_FMT,
-              [Segs[SIdx], R.TypeName]));
-            Break;
-          end;
-          // descend into the declared type (its descendants, above): one that
-          // publishes nothing but has descendants is not "no data". By its
-          // IDENTITY: TeeChart's TFont is not the VCL's
-          Cur := ClaveDeIdentificador(R.TypeId);
-          if (not M.Classes.TryGetValue(Cur, CurShow)) or
-             (not M.PropNames.ContainsKey(Cur) and not M.Hijas.ContainsKey(Cur)) then
-            Break; // no data for the subtree: silence
-        end
-        else
-        begin
-          // leaf value checks, only where the table can KNOW
-          if (R.Kind = 'e') and EsIdentificador(Rhs, True) then
-          begin
-            V := UltimoTrozo(Rhs);
-            if M.Enums.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
-               (not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
-              Warn(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT,
-                [Rhs, R.TypeName, M.EnumShow[ClaveDeIdentificador(R.TypeId)]]));
-          end
-          else if (R.Kind = 's') and EsIdentificador(Rhs) then
-            Warn(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, Rhs]))
-          else if (R.Kind = 's') and (Rhs <> '') and (Rhs[1] = '[') and
-                  Rhs.EndsWith(']') and
-                  M.Sets.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) then
-          begin
-            for V in Rhs.Substring(1, Length(Rhs) - 2).Split([',']) do
-              if (V.Trim <> '') and
-                 (not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
-              begin
-                Warn(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT,
-                  [V.Trim, R.TypeName]));
-                Break;
-              end;
-          end;
-        end;
-      end;
+      // EL juez de una linea, el mismo que pregunta delphi_designer set
+      Have := JuzgaPropiedad(M, Cur, Lhs, Rhs, R, Hoja);
+      if Have <> '' then
+        Warn(Have);
     end;
     Result := Warns.ToStringArray;
     ANotas := Notas.ToStringArray;

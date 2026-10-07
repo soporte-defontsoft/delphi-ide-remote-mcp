@@ -112,6 +112,15 @@ function CabeceraDeUnit(const ASrc: string; out ANombre: string;
   implementation) de un .pas; la clausula la escribe el motor. }
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
+{ El nucleo de adduses sobre un TEXTO: ANames (identificadores ya
+  validados) entran en el uses de ASec (interface|implementation) y AText
+  sale con la clausula reescrita. '' = hecho, o la negativa (sin esa
+  seccion, una clausula en ramas IFDEF). AFaltan entran; AYaEstan ya
+  estaban; AEnOtra estan en la otra seccion y no entran (E2004); ACreada,
+  la clausula nacio. AFichero, solo para los mensajes. }
+function UsesConUnidades(var AText: string; const ANames: TArray<string>;
+  const ASec, AFichero: string; out AFaltan, AYaEstan, AEnOtra: TArray<string>;
+  out ACreada: Boolean): string;
 { removeuses de delphi_edit: la inversa; la clausula se va entera si queda vacia. }
 function RemoveUsesFromUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
@@ -1340,34 +1349,20 @@ end;
 function ProyectoTodoONada(const AProject: string; const AMas: TArray<string>;
   const AAccion: TFunc<string>): string; overload;
 var
-  Dpr, Dproj, NoVolvio: string;
+  Dpr, Dproj: string;
   Rutas: TArray<string>;
-  Foto: TFotoDeFicheros;
 begin
   if ResolveProjectPair(AProject, Dpr, Dproj) <> '' then
     Exit(AAccion()); // la accion dira lo que no cuadra; no hay que deshacer
   // AMas: lo que la accion reescribe ADEMAS del par (un rename, las units)
   Rutas := [Dpr, Dproj];
   Rutas := Rutas + AMas;
-  Foto.Toma(Rutas);
-  try
-    Result := AAccion();
-  except
-    on E: Exception do
+  // la foto y su vuelta atras, las de todos (Lsp.Guard.FicherosTodoONada)
+  Result := FicherosTodoONada(Rutas,
+    function: string
     begin
-      NoVolvio := Foto.Restaura;
-      if NoVolvio <> '' then
-        raise Exception.Create(MsgFmt(SR_FOTO_NO_VOLVIO_FMT,
-          [NoVolvio, MsgExcepcion(E.ClassName, E.Message)]));
-      raise;
-    end;
-  end;
-  if EsFallo(Result) then
-  begin
-    NoVolvio := Foto.Restaura;
-    if NoVolvio <> '' then
-      Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Result]);
-  end;
+      Result := AAccion();
+    end);
 end;
 
 function ProyectoTodoONada(const AProject: string; const AAccion: TFunc<string>): string; overload;
@@ -1838,6 +1833,69 @@ begin
   AReturn.AddPair('units', Arr);
 end;
 
+{ El nucleo de adduses sobre un TEXTO (ver AddUsesToUnit): estaba dentro de
+  ella, y el insert de delphi_designer escribe la unidad JUNTO con su form,
+  todo o nada (1.17.0). }
+function UsesConUnidades(var AText: string; const ANames: TArray<string>;
+  const ASec, AFichero: string; out AFaltan, AYaEstan, AEnOtra: TArray<string>;
+  out ACreada: Boolean): string;
+var
+  Blank, OtraSec, NL, Nombre, E: string;
+  M, MO: TMatch;
+  U, UOtra: TUsesClause;
+  Entries: TArray<string>;
+  PosSec, FinLinea: Integer;
+begin
+  Result := '';
+  AFaltan := [];
+  AYaEstan := [];
+  AEnOtra := [];
+  ACreada := False;
+  Blank := CodigoPascal(AText);
+  M := TRegEx.Match(Blank, '^[ \t]*' + ASec + '\b', [roIgnoreCase, roMultiline]);
+  if not M.Success then
+    Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [ASec, AFichero]));
+  PosSec := M.Index + M.Length;
+  NL := SaltoDominante(AText);
+  U := FindUses(AText, PosSec);
+  if U.Found and U.EnRamas then
+    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, AFichero]));
+  Entries := U.Entries;
+  // La OTRA seccion tambien cuenta: una unit no puede ir en interface e
+  // implementation a la vez (E2004 Identifier redeclared; Hermes lo midio
+  // el 2026-09-23 con UPkgA en las dos).
+  OtraSec := IfThen(ASec = 'interface', 'implementation', 'interface');
+  UOtra := Default(TUsesClause);
+  MO := TRegEx.Match(Blank, '^[ \t]*' + OtraSec + '\b', [roIgnoreCase, roMultiline]);
+  if MO.Success then
+    UOtra := FindUses(AText, MO.Index + MO.Length);
+  for Nombre in ANames do
+    if U.Found and LocateEntry(U, Nombre, E) then
+      AYaEstan := AYaEstan + [Nombre]
+    else if UOtra.Found and LocateEntry(UOtra, Nombre, E) then
+      AEnOtra := AEnOtra + [Nombre]
+    else
+    begin
+      AFaltan := AFaltan + [Nombre];
+      Entries := Entries + [Nombre];
+    end;
+  if Length(AFaltan) = 0 then
+    Exit;
+  ACreada := not U.Found;
+  if U.Found then
+    AText := ReplaceUses(AText, U, Entries)
+  else
+  begin
+    // sin clausula: nace justo debajo de la palabra de seccion, con su
+    // linea en blanco, como la escribe el IDE; debajo de donde ACABA esa
+    // linea, que un comentario abierto en ella se la llevaba dentro
+    // (revision de la 1.10.0, medido)
+    FinLinea := FinDeLinea(AText, PosSec);
+    AText := Copy(AText, 1, FinLinea - 1) + NL + NL + 'uses' + NL + '  ' +
+      string.Join(', ', AFaltan) + ';' + Copy(AText, FinLinea, MaxInt);
+  end;
+end;
+
 { adduses de delphi_edit (David, 2026-09-23): una unit entra en el uses de
   OTRA unit, en la seccion que se diga, y la clausula la escribe el motor:
   comas, terminador y, si no existia, la clausula entera bajo la palabra de
@@ -1847,11 +1905,10 @@ end;
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
 var
-  Text, Enc, Sec, OtraSec, NL, Nombre, E, Clausula, Blank: string;
-  M, MO: TMatch;
-  U, UOtra: TUsesClause;
-  Names, Entries, Faltan, YaEstan, EnOtra: TArray<string>;
-  PosSec, FinLinea: Integer;
+  Text, Enc, Sec, OtraSec, Nombre, Clausula, Blank: string;
+  M: TMatch;
+  U: TUsesClause;
+  Names, Faltan, YaEstan, EnOtra: TArray<string>;
   Creada: Boolean;
 begin
   if not SameText(TPath.GetExtension(APasPath), '.pas') then
@@ -1870,61 +1927,22 @@ begin
     Sec := 'implementation';
   if not MatchText(Sec, ['interface', 'implementation']) then
     Exit(MsgFmt(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
+  OtraSec := IfThen(Sec = 'interface', 'implementation', 'interface');
   EnterFileEdit;
   try
     if not TFile.Exists(APasPath) then
       Exit(NoEsFichero(APasPath, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath])));
     Text := PatchLoadText(APasPath, Enc);
-    Blank := CodigoPascal(Text);
-    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
-    if not M.Success then
-      Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
-    PosSec := M.Index + M.Length;
-    NL := SaltoDominante(Text);
-    U := FindUses(Text, PosSec);
-    if U.Found and U.EnRamas then
-      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
-    Creada := not U.Found;
-    Faltan := [];
-    YaEstan := [];
-    Entries := U.Entries;
-    // La OTRA seccion tambien cuenta: una unit no puede ir en interface e
-    // implementation a la vez (E2004 Identifier redeclared; Hermes lo midio
-    // el 2026-09-23 con UPkgA en las dos).
-    OtraSec := IfThen(Sec = 'interface', 'implementation', 'interface');
-    UOtra := Default(TUsesClause);
-    MO := TRegEx.Match(Blank, '^[ \t]*' + OtraSec + '\b', [roIgnoreCase, roMultiline]);
-    if MO.Success then
-      UOtra := FindUses(Text, MO.Index + MO.Length);
-    EnOtra := [];
-    for Nombre in Names do
-      if U.Found and LocateEntry(U, Nombre, E) then
-        YaEstan := YaEstan + [Nombre]
-      else if UOtra.Found and LocateEntry(UOtra, Nombre, E) then
-        EnOtra := EnOtra + [Nombre]
-      else
-      begin
-        Faltan := Faltan + [Nombre];
-        Entries := Entries + [Nombre];
-      end;
+    Result := UsesConUnidades(Text, Names, Sec, TPath.GetFileName(APasPath),
+      Faltan, YaEstan, EnOtra, Creada);
+    if Result <> '' then
+      Exit;
     if (Length(Faltan) = 0) and (Length(EnOtra) > 0) then
       Exit(MsgFmt(SN_ADDUSES_PRESENT_OTHER_FMT, [string.Join(', ', EnOtra), OtraSec,
         TPath.GetFileName(APasPath)]));
     if Length(Faltan) = 0 then
       Exit(MsgFmt(SN_ADDUSES_PRESENT_FMT, [string.Join(', ', Names), Sec,
         TPath.GetFileName(APasPath)]));
-    if U.Found then
-      Text := ReplaceUses(Text, U, Entries)
-    else
-    begin
-      // sin clausula: nace justo debajo de la palabra de seccion, con su
-      // linea en blanco, como la escribe el IDE; debajo de donde ACABA esa
-      // linea, que un comentario abierto en ella se la llevaba dentro
-      // (revision de la 1.10.0, medido)
-      FinLinea := FinDeLinea(Text, PosSec);
-      Text := Copy(Text, 1, FinLinea - 1) + NL + NL + 'uses' + NL + '  ' +
-        string.Join(', ', Faltan) + ';' + Copy(Text, FinLinea, MaxInt);
-    end;
     PatchSaveText(APasPath, Text, Enc);
     // el eco, releido del disco: la clausula tal y como ha quedado
     Text := PatchLoadText(APasPath, Enc);

@@ -54,6 +54,8 @@ type
     FInline: string;
     FMaxWidth: Integer;
     FOut: string;
+    FParent: string;
+    FValue: string;
   public
     [SchemaDescription(SP_DESIGNER_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -91,6 +93,10 @@ type
     [SchemaDescription(SP_DESIGNER_OUT)]
     [RutaDelServidor]
     property Out_: string read FOut write FOut;
+    [SchemaDescription(SP_DESIGNER_PARENT)]
+    property Parent: string read FParent write FParent;
+    [SchemaDescription(SP_DESIGNER_VALUE)]
+    property Value: string read FValue write FValue;
   end;
 
   TDelphiDesignerTool = class(TMCPToolBase<TDelphiDesignerParams>)
@@ -122,7 +128,9 @@ uses
   Lsp.Discovery,     // DiscoverRadStudio: la version del Delphi del servidor
   Lsp.FormRender,    // preview: el renderizador y su protocolo
   Lsp.Imagen,        // RecortaPng: el recorte al componente, en el servidor
-  Lsp.InlineImages;  // DeliverCapture / ColocaCaptura: como se entrega una captura
+  Lsp.InlineImages,  // DeliverCapture / ColocaCaptura: como se entrega una captura
+  Lsp.DesignerEdit,  // insert / set / delete: el form y su unidad, como el IDE
+  Lsp.Json;          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
 
 const
   MAX_PROPS = 400;
@@ -156,18 +164,8 @@ begin
   Result := '';
 end;
 
-// Por que una clase no esta: no existe para esta tabla (DSGN-015), o dos
-// unidades la declaran con otras publicadas (DSGN-056)
-function ClaseQueNoEsta(M: TMetaTable; const AClass, AFramework: string): string;
-var
-  A: string;
-begin
-  if M.Ambiguas.TryGetValue(ClaveDeIdentificador(AClass.Trim), A) then
-    Result := MsgFmt(SR_DESIGNER_CLASE_AMBIGUA_FMT, [A.Substring(0, A.IndexOf('|')),
-      UpperCase(AFramework), A.Substring(A.IndexOf('|') + 1)])
-  else
-    Result := MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]);
-end;
+// (ClaseQueNoEsta vive en Lsp.DesignerMeta desde la 1.17.0: el insert de
+// Lsp.DesignerEdit dice lo mismo de una clase que no esta)
 
 function MetaClassInfo(const AFramework, AClass, AFilter: string): string;
 var
@@ -389,20 +387,8 @@ begin
   end;
 end;
 
-function FindByName(O: TStyleObj; const AName: string): TStyleObj;
-var
-  K: TStyleObj;
-begin
-  if MismoIdentificador(O.ObjName, AName) then
-    Exit(O);
-  for K in O.Children do
-  begin
-    Result := FindByName(K, AName);
-    if Result <> nil then
-      Exit;
-  end;
-  Result := nil;
-end;
+// (FindByName es TStyleDoc.ObjetoDeNombre desde la 1.17.0: insert, set y
+// delete de Lsp.DesignerEdit buscan igual)
 
 function GetComponent(const APath, AName: string): string;
 var
@@ -416,7 +402,7 @@ begin
   try
     if Doc.Root = nil then
       Exit(MsgText(SR_DESIGNER_EMPTY));
-    O := FindByName(Doc.Root, AName.Trim);
+    O := Doc.ObjetoDeNombre(AName.Trim);
     if O = nil then
       Exit(MsgFmt(SR_DESIGNER_COMPONENT_FMT, [AName]));
     Result := MsgFmt(SF_DSGN_BLOQUE_LINEAS_FMT,
@@ -600,6 +586,8 @@ var
   OClave, ONombre, OClase: string;
   Found, Estimated: Boolean;
   L: string;
+  TablaVcl: TMetaTable;
+  FaltaVcl: TFaltaTabla;
 
   function Vis(AObj: TStyleObj): Boolean;
   var
@@ -608,6 +596,17 @@ var
   begin
     V := PropRaw(Doc, AObj, 'Visible', F2);
     Result := not (F2 and SameText(V.Trim, 'False'));
+  end;
+
+  // un control segun la tabla de la VCL (si ya esta: layout no la espera): uno
+  // sin Width/Height tiene el tamano de su constructor, y se saltaba como si
+  // fuera un TTimer (David, 4-oct-2026: lo que deja el insert)
+  function EsControl(AObj: TStyleObj): Boolean;
+  var
+    Id: string;
+  begin
+    Result := (TablaVcl <> nil) and TablaVcl.ClaseDeNombre(AObj.ClassName_, Id) and
+      TablaVcl.Desciende(Id, ID_VCL_CONTROL);
   end;
 
   function IsVisual(AObj: TStyleObj): Boolean;
@@ -623,7 +622,7 @@ var
     // skipping it hid everything inside it. Children, or a non-alNone class
     // default, give it away.
     Result := HasW or HasH or (AObj.Children.Count > 0) or
-      not SameText(DefaultAlign(AObj.ClassName_), 'alNone');
+      not SameText(DefaultAlign(AObj.ClassName_), 'alNone') or EsControl(AObj);
   end;
 
   procedure Walk(AParent: TStyleObj; AClientW, AClientH, AAbsX, AAbsY: Integer;
@@ -690,8 +689,13 @@ var
           Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [Nm, Cls, Kid.StartLine,
             IfThen(HasW, IntToStr(W), '?'), IfThen(HasH, IntToStr(H), '?')]));
         if (NeedW and not HasW) or (NeedH and not HasH) then
-          Unknown.Add(MsgFmt(SF_DSGN_NO_LLEVA_EN_DFM_FMT, [Nm, Cls, Kid.StartLine,
-            IfThen(NeedW and not HasW, 'Width', 'Height'), Align]));
+          // un control sin tamano en el .dfm tiene el de su constructor: lo
+          // que deja el insert de delphi_designer, como el IDE
+          if not HasW and not HasH and SameText(Align, 'alNone') and EsControl(Kid) then
+            Unknown.Add(MsgFmt(SF_DSGN_TAMANO_DEL_CONSTRUCTOR_FMT, [Nm, Cls, Kid.StartLine]))
+          else
+            Unknown.Add(MsgFmt(SF_DSGN_NO_LLEVA_EN_DFM_FMT, [Nm, Cls, Kid.StartLine,
+              IfThen(NeedW and not HasW, 'Width', 'Height'), Align]));
       end;
       if W < 0 then W := 0;
       if H < 0 then H := 0;
@@ -855,6 +859,7 @@ begin
   end;
   Result := LoadDoc(APath, Doc);
   if Result <> '' then Exit;
+  TablaVcl := MetaTable(False, FaltaVcl, 0);
   try
     if Doc.Root = nil then Exit(MsgText(SR_DESIGNER_BINDING_NO_ROOT));
     // a truncated .dfm parses into something; only openers left unclosed betray
@@ -1260,6 +1265,49 @@ begin
   end;
 end;
 
+{ insert y set parent= en un .dfm: si el control cae fuera del area de su
+  padre, la respuesta lo dice - lo que calcula layout, aqui al lado (David,
+  4-oct-2026). Un fallo, o un .fmx (layout no mide FMX), pasan tal cual. }
+function ConFueraDelPadre(const AResult, APath: string): string;
+var
+  Ret, Lay: TJSONObject;
+  Fuera, Suyas: TJSONArray;
+  Nombre: string;
+begin
+  Result := AResult;
+  if EsFallo(AResult) or not APath.Trim.EndsWith('.dfm', True) then
+    Exit;
+  Ret := ObjetoJson(AResult);
+  if Ret = nil then
+    Exit;
+  try
+    if not (Ret.TryGetValue<string>('inserted', Nombre) or Ret.TryGetValue<string>('moved', Nombre)) then
+      Exit;
+    Lay := ObjetoJson(LayoutOf(APath.Trim));
+    if Lay = nil then
+      Exit;
+    try
+      Suyas := nil;
+      if Lay.TryGetValue<TJSONArray>('outsideParent', Fuera) then
+        for var V in Fuera do
+          if V.Value.StartsWith(Nombre + ':') then
+          begin
+            if Suyas = nil then
+            begin
+              Suyas := TJSONArray.Create;
+              Ret.AddPair('outsideParent', Suyas);
+            end;
+            Suyas.Add(V.Value);
+          end;
+    finally
+      Lay.Free;
+    end;
+    Result := Ret.ToJSON;
+  finally
+    Ret.Free;
+  end;
+end;
+
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de escritura. }
 function GestoDeDisenador(const Params: TDelphiDesignerParams): string;
 var
@@ -1287,6 +1335,8 @@ begin
       'get', 'path component',
       'check-binding', 'path unit',
       'preview', 'path component framework state style nonvisual inline maxwidth out',
+      'insert', 'path classname component parent', 'set', 'path component prop value parent',
+      'delete', 'path component',
       'to-text', 'path', 'to-binary', 'path'],
     ['path', Params.Path, '', 'classname', Params.ClassName_, '', 'prop', Params.Prop, '',
      'component', Params.Component, '', 'unit', Params.Unit_, '',
@@ -1295,7 +1345,7 @@ begin
      'state', Params.State, '', 'style', Params.Style, '',
      'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', Params.Inline_, '',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
-     'out', Params.Out_, ''], Suyos);
+     'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, ''], Suyos);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]));
   if MatchText(Cmd, ['info', 'prop']) then
@@ -1342,6 +1392,20 @@ begin
       Exit(MsgText(SR_DESIGNER_NEED_PATH));
     Result := ConvertDesigner(Params.Path, Cmd = 'to-text');
   end
+  else if MatchText(Cmd, ['insert', 'set', 'delete']) then
+  begin
+    // editar el form y su unidad como el IDE (Lsp.DesignerEdit, 1.17.0)
+    if Params.Path.Trim = '' then
+      Exit(MsgText(SR_DESIGNER_NEED_PATH));
+    if Cmd = 'insert' then
+      Result := ConFueraDelPadre(InsertaComponente(Params.Path, Params.ClassName_,
+        Params.Component, Params.Parent), Params.Path)
+    else if Cmd = 'set' then
+      Result := ConFueraDelPadre(CambiaPropiedad(Params.Path, Params.Component,
+        Params.Prop, Params.Value, Params.Parent), Params.Path)
+    else
+      Result := BorraComponente(Params.Path, Params.Component);
+  end
   else
     Result := MsgText(SR_DESIGNER_CMD);
   // (lo enmascara el filtro de salida, Lsp.Host; una segunda pasada con el
@@ -1349,15 +1413,26 @@ begin
 end;
 
 function TDelphiDesignerTool.ExecuteWithParams(const Params: TDelphiDesignerParams): string;
+var
+  Cmd: string;
+  Falta: TFaltaTabla;
 begin
-  // to-text y to-binary reescriben el .dfm entero: son una edicion como
-  // cualquier otra y van bajo el mismo cerrojo. Los de LECTURA no: info, prop
-  // y lint pueden esperar a la tabla del disenador mientras se genera
-  // (Lsp.DesignerMetaGen), y con el cerrojo cogido paraban todas las
-  // ediciones del servidor (revision de la 1.12.0); leen como delphi_read,
-  // que tampoco lo coge (lo que se escribe se escribe entero o nada).
-  if not MatchText(Params.Command.Trim, ['to-text', 'to-binary', 'totext', 'tobinary']) then
+  // to-text y to-binary reescriben el .dfm entero, e insert/set/delete el form
+  // y su unidad: son ediciones como cualquier otra y van bajo el mismo
+  // cerrojo. Los de LECTURA no: info, prop y lint pueden esperar a la tabla
+  // del disenador mientras se genera (Lsp.DesignerMetaGen), y con el cerrojo
+  // cogido paraban todas las ediciones del servidor (revision de la 1.12.0);
+  // leen como delphi_read, que tampoco lo coge (lo que se escribe se escribe
+  // entero o nada).
+  Cmd := Params.Command.Trim.ToLower;
+  if not MatchText(Cmd, ['to-text', 'to-binary', 'totext', 'tobinary', 'insert', 'set', 'delete']) then
     Exit(GestoDeDisenador(Params));
+  // la tabla que piden insert y set se espera FUERA del cerrojo, por lo mismo
+  if ((Cmd = 'insert') or ((Cmd = 'set') and (Params.Parent.Trim = '') and
+     not SameText(Params.Prop.Trim, 'Name'))) and
+     (MetaTable(Params.Path.Trim.EndsWith('.fmx', True), Falta) = nil) and
+     (Falta.Negativa <> '') then
+    Exit(Falta.Negativa);
   EnterFileEdit;
   try
     Result := GestoDeDisenador(Params);

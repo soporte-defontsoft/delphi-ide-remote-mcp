@@ -160,27 +160,8 @@ end;
 
 { ---- set / clone ---- }
 
-{ Does this look like a value a .style (a text DFM) can hold? Measured field
-  round 8: `Fill.Color = no soy un color` was written happily and only
-  surfaced later as `EParserError: ''='' expected on line 16` from command=build,
-  with the .style unreadable in between. The grammar here is the streaming
-  one - number, $hex, 'string', identifier, [set], and the block forms the
-  caller has already handled. }
-function ValidStyleValue(const AValue: string): Boolean;
-var
-  V: string;
-begin
-  V := AValue.Trim;
-  Result := (V <> '') and (
-    TRegEx.IsMatch(V, '^-?\d+(\.\d+)?$') or                    // 12   -3.5
-    TRegEx.IsMatch(V, '^\$[0-9A-Fa-f]+$') or                   // $FF00FF00
-    EsIdentificador(V, True) or                                // claRed  True  TAlignLayout.Top
-    TRegEx.IsMatch(V, '^\[.*\]$') or                           // [a, b]
-    TRegEx.IsMatch(V, '^<.*>$') or                             // inline collection
-    V.StartsWith('''') or V.StartsWith('#') or                 // 'text'  #13#10
-    CharInSet(V[1], ['{', '(']));                              // binary / list block
-end;
-
+// (ValidStyleValue, la gramatica de un valor de un DFM de texto, vive en
+// Lsp.Styles desde la 1.17.0: delphi_designer set es su segundo usuario)
 function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelete: Boolean): string;
 var
   Doc: TStyleDoc;

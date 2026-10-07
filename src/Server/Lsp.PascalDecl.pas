@@ -65,6 +65,38 @@ type
     DeClase: Boolean;  // class procedure, class var
     Visibilidad: TVisibilidadPas;
     Linea: Integer;    // 0-based, la de su nombre
+    // 0-based, la declaracion entera: la palabra de la rutina (o su 'class')
+    // y el ';' que la cierra con sus directivas; en un campo, su nombre y el
+    // ';' de la declaracion ('A, B: TButton;' lo comparten). Para quitarla
+    LineaIni: Integer;
+    LineaFin: Integer;
+  end;
+
+  // una rutina CON CUERPO del implementation (o de un programa), de las de la
+  // unidad (las anidadas van dentro de la suya): donde esta y que tiene, para
+  // quien tiene que saber si un metodo esta vacio o quitarlo entero (el
+  // delete de delphi_designer). Las posiciones, en el texto leido, que en
+  // LeeFuentePascal es el del fichero
+  TCuerpoPas = record
+    // como va escrito tras la palabra, sin espacios ni genericos:
+    // 'TForm1.Button1Click', 'Rutina'
+    Nombre: string;
+    Rutina: string;    // 'procedure', 'function', 'constructor'...
+    DeClase: Boolean;  // class procedure / class function
+    // 0-based: la linea de la palabra (o de su 'class') y la del 'end' del
+    // cuerpo
+    Linea: Integer;
+    LineaFin: Integer;
+    // 1-based: el primer caracter de la palabra (o de 'class') y el ultimo de
+    // la rutina (el ';' de detras del end, o el end)
+    PosIni: Integer;
+    PosFin: Integer;
+    // 1-based: lo que hay entre el begin (o el asm) y su end, de CuerpoIni a
+    // CuerpoFin (vacio si CuerpoFin < CuerpoIni)
+    CuerpoIni: Integer;
+    CuerpoFin: Integer;
+    // declara algo antes del begin: var, const, type, label o una rutina
+    ConLocales: Boolean;
   end;
 
   // ctAyudante: un 'class helper for TX' (Base = TX). Sus metodos se leen como
@@ -126,6 +158,8 @@ type
     // un programa o una biblioteca: su nombre (Nombre se queda en '': no es
     // una unidad); sus tipos se leen igual
     Programa: string;
+    // las rutinas con cuerpo del implementation, en orden (TCuerpoPas)
+    Cuerpos: TArray<TCuerpoPas>;
     constructor Create;
     destructor Destroy; override;
     // LA clase llamada ANombre: por su nombre completo (TOuter.TInner) o por el
@@ -209,6 +243,8 @@ type
     FUltimaAridad: Integer; // la de los <...> del ultimo LeeNombreDeTipo
     // donde empieza cada linea de FTxt (1-based): la linea de un token
     FLineas: TArray<Integer>;
+    // las rutinas con cuerpo del implementation (LeeRutinaConCuerpo)
+    FCuerpos: TList<TCuerpoPas>;
     procedure Tokeniza;
     function LineaDeTok(AIdx: Integer): Integer;
     function FinDeBloque: Integer;
@@ -229,7 +265,8 @@ type
     function LeeUses: TArray<string>;
     function SaltaCabeceraDeRutina: Boolean;
     function SaltaDirectivas: Boolean;
-    procedure SaltaRutina;
+    procedure SaltaRutina(out ACuerpo: Integer; out ALocales: Boolean);
+    procedure LeeRutinaConCuerpo;
     procedure SaltaBloque;
     procedure LeeDeclaraciones(AInterface: Boolean);
     procedure LeeSeccionType(const AContenedor: string);
@@ -242,6 +279,7 @@ type
     function LeeMiembrosDeEnumerado: TArray<string>;
   public
     constructor Create(const ATexto: string; AUnidad: TUnidadPas);
+    destructor Destroy; override;
     procedure Lee;
   end;
 
@@ -412,6 +450,7 @@ begin
   FTxt := ATexto;
   FLow := LowerCase(ATexto);
   FUnidad := AUnidad;
+  FCuerpos := TList<TCuerpoPas>.Create;
   // las lineas como las cuentan los que leen por lineas: CRLF, LF o un CR
   // suelto, un salto
   var N := 1;
@@ -433,6 +472,12 @@ begin
   end;
   SetLength(FLineas, N);
   Tokeniza;
+end;
+
+destructor TLectorPas.Destroy;
+begin
+  FCuerpos.Free;
+  inherited;
 end;
 
 procedure TLectorPas.Tokeniza;
@@ -949,11 +994,17 @@ begin
 end;
 
 { Una rutina del implementation: cabecera, declaraciones locales (sus
-  tipos se leen: una clase local tambien es una clase) y cuerpo. }
-procedure TLectorPas.SaltaRutina;
+  tipos se leen: una clase local tambien es una clase) y cuerpo. ACuerpo, el
+  token de su begin (o asm); -1 si no tiene (forward, external) o si lo que
+  viene no es de una rutina. ALocales: declara algo antes del begin. }
+procedure TLectorPas.SaltaRutina(out ACuerpo: Integer; out ALocales: Boolean);
 var
   T: string;
+  Anidado: Integer;
+  SusLocales: Boolean;
 begin
+  ACuerpo := -1;
+  ALocales := False;
   if SaltaCabeceraDeRutina then
     Exit;
   while not Fin do
@@ -961,6 +1012,7 @@ begin
     T := Mira;
     if (T = 'begin') or (T = 'asm') then
     begin
+      ACuerpo := FI;
       SaltaBloque;
       if Mira = ';' then
         Toma;
@@ -968,28 +1020,102 @@ begin
     end
     else if T = 'type' then
     begin
+      ALocales := True;
       Toma;
       LeeSeccionType('');
     end
     else if (T = 'const') or (T = 'resourcestring') then
     begin
+      ALocales := True;
       Toma;
       LeeSeccionConst(False);
     end
     else if (T = 'var') or (T = 'threadvar') then
     begin
+      ALocales := True;
       Toma;
       SaltaSeccionVar;
     end
     else if EnLista(T, PALABRAS_DE_RUTINA) then
-      SaltaRutina
+    begin
+      ALocales := True;
+      SaltaRutina(Anidado, SusLocales);
+    end
     else if T = 'class' then
       Toma
     else if T = 'label' then
-      SaltaHastaPuntoYComa
+    begin
+      ALocales := True;
+      SaltaHastaPuntoYComa;
+    end
     else
       Exit; // algo que no es de una rutina: la deja el que llamo
   end;
+end;
+
+{ Una rutina de la unidad en el implementation (o en un programa): se salta
+  como cualquiera y, si tiene cuerpo, se apunta en Cuerpos con su nombre y
+  donde esta. Mira = su palabra; un 'class' delante ya lo tomo el que llama. }
+procedure TLectorPas.LeeRutinaConCuerpo;
+var
+  Ini, K, Prof, Cuerpo, FinTok: Integer;
+  Locales: Boolean;
+  C: TCuerpoPas;
+  Nombre: string;
+begin
+  C := Default(TCuerpoPas);
+  C.Rutina := Mira;
+  Ini := FI;
+  if (FI > 0) and SameText(Texto(FI - 1), 'class') then
+  begin
+    Ini := FI - 1;
+    C.DeClase := True;
+  end;
+  // el nombre como va escrito: los niveles con sus puntos, sin <...>
+  Nombre := '';
+  K := FI + 1;
+  while EsIdentEn(K) do
+  begin
+    Nombre := Nombre + Texto(K);
+    Inc(K);
+    if Texto(K) = '<' then
+    begin
+      Prof := 0;
+      while K < FN do
+      begin
+        if Texto(K) = '<' then
+          Inc(Prof)
+        else if Texto(K) = '>' then
+          Dec(Prof);
+        Inc(K);
+        if Prof <= 0 then
+          Break;
+      end;
+    end;
+    if Texto(K) <> '.' then
+      Break;
+    Nombre := Nombre + '.';
+    Inc(K);
+  end;
+  SaltaRutina(Cuerpo, Locales);
+  if (Cuerpo < 0) or (FI <= Cuerpo + 1) then
+    Exit;
+  // lo ultimo tomado: el ';' de detras del end, o el end; un texto que se
+  // acaba sin el end no apunta nada
+  FinTok := FI - 1;
+  C.PosFin := FIni[FinTok] + FLen[FinTok] - 1;
+  if Texto(FinTok) = ';' then
+    Dec(FinTok);
+  if not SameText(Texto(FinTok), 'end') or (FinTok <= Cuerpo) then
+    Exit;
+  C.Nombre := Nombre;
+  C.Linea := LineaDeTok(Ini);
+  C.LineaFin := LineaDeTok(FinTok);
+  C.PosIni := FIni[Ini];
+  C.CuerpoIni := FIni[Cuerpo] + FLen[Cuerpo];
+  C.CuerpoFin := FIni[FinTok] - 1;
+  C.ConLocales := Locales;
+  FCuerpos.Add(C);
 end;
 
 procedure TLectorPas.SaltaSeccionVar;
@@ -1467,21 +1593,35 @@ var
     Secs.Add(S);
   end;
 
-  // la rutina que empieza aqui (Mira = su palabra); 'procedure IFoo.Bar = Baz;'
-  // (la clausula de resolucion de una interfaz) no declara ninguna
-  procedure AnotaRutina;
+  // la rutina que empieza aqui (Mira = su palabra) y su cabecera entera,
+  // saltada; 'procedure IFoo.Bar = Baz;' (la clausula de resolucion de una
+  // interfaz) no declara ninguna
+  procedure LeeRutina;
   var
     M: TMiembroPas;
+    Anota: Boolean;
   begin
-    if not EsIdent(1) or (Mira(2) = '.') then
-      Exit;
+    Anota := EsIdent(1) and (Mira(2) <> '.');
     M := Default(TMiembroPas);
-    M.Nombre := Texto(FI + 1);
-    M.Rutina := Mira;
-    M.DeClase := DeClase;
-    M.Visibilidad := Vis;
-    M.Linea := LineaDeTok(FI + 1);
-    LasRutinas.Add(M);
+    if Anota then
+    begin
+      M.Nombre := Texto(FI + 1);
+      M.Rutina := Mira;
+      M.DeClase := DeClase;
+      M.Visibilidad := Vis;
+      M.Linea := LineaDeTok(FI + 1);
+      // la de su 'class', que el que llama ya tomo
+      if DeClase then
+        M.LineaIni := LineaDeTok(FI - 1)
+      else
+        M.LineaIni := LineaDeTok(FI);
+    end;
+    SaltaCabeceraDeRutina;
+    if Anota then
+    begin
+      M.LineaFin := LineaDeTok(FI - 1);
+      LasRutinas.Add(M);
+    end;
   end;
 
   // 'A, B: TButton;': los campos de una declaracion, con su tipo si es un
@@ -1531,6 +1671,9 @@ var
       var C := M;
       C.Tipo := Tipo;
       C.Generico := Generico;
+      // la declaracion entera: su nombre y el ';' que comparte con las demas
+      C.LineaIni := C.Linea;
+      C.LineaFin := LineaDeTok(FI - 1);
       LosCampos.Add(C);
     end;
   end;
@@ -1592,8 +1735,7 @@ begin
           LeePropiedad
         else if EnLista(T, PALABRAS_DE_RUTINA) then
         begin
-          AnotaRutina;
-          SaltaCabeceraDeRutina;
+          LeeRutina
         end
         else if (T = 'var') or (T = 'threadvar') then
         begin
@@ -1607,8 +1749,7 @@ begin
       if EnLista(T, PALABRAS_DE_RUTINA) then
       begin
         EnClassVar := False;
-        AnotaRutina;
-        SaltaCabeceraDeRutina;
+        LeeRutina;
         Continue;
       end;
       if T = 'property' then
@@ -1835,7 +1976,7 @@ begin
       if AInterface then
         SaltaCabeceraDeRutina
       else
-        SaltaRutina;
+        LeeRutinaConCuerpo;
     end
     else if T = '[' then
       SaltaBalanceado('[', ']')
@@ -1894,7 +2035,8 @@ begin
   try
     L := TLectorPas.Create(ATextoActivo, Result);
     try
-      L.Lee;
+    L.Lee;
+    Result.Cuerpos := L.FCuerpos.ToArray;
     finally
       L.Free;
     end;

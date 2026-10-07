@@ -46,7 +46,8 @@ uses
   Lsp.ProjectUnits,
   Lsp.Texts,
   Lsp.Guard,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.DesignerBin; // la linea de objeto, el literal y el flotante: sus compositores
 
 const
   CRLF = #13#10;
@@ -222,10 +223,10 @@ end;
 function VclFormDfm(const AFormName: string): string;
 begin
   Result :=
-    'object ' + AFormName + ': T' + AFormName + CRLF +
+    ComponeLineaDeObjeto('object', AFormName, 'T' + AFormName) + CRLF +
     '  Left = 0' + CRLF +
     '  Top = 0' + CRLF +
-    '  Caption = ''' + AFormName + '''' + CRLF +
+    '  Caption = ' + LiteralDeForm(AFormName) + CRLF +
     '  ClientHeight = 420' + CRLF +
     '  ClientWidth = 620' + CRLF +
     '  Color = clBtnFace' + CRLF +
@@ -261,10 +262,10 @@ end;
 function FmxFormFmx(const AFormName: string): string;
 begin
   Result :=
-    'object ' + AFormName + ': T' + AFormName + CRLF +
+    ComponeLineaDeObjeto('object', AFormName, 'T' + AFormName) + CRLF +
     '  Left = 0' + CRLF +
     '  Top = 0' + CRLF +
-    '  Caption = ''' + AFormName + '''' + CRLF +
+    '  Caption = ' + LiteralDeForm(AFormName) + CRLF +
     '  ClientHeight = 480' + CRLF +
     '  ClientWidth = 640' + CRLF +
     '  FormFactor.Width = 320' + CRLF +
@@ -295,7 +296,7 @@ end;
 function VclFrameDfm(const AFrameName: string): string;
 begin
   Result :=
-    'object ' + AFrameName + ': T' + AFrameName + CRLF +
+    ComponeLineaDeObjeto('object', AFrameName, 'T' + AFrameName) + CRLF +
     '  Left = 0' + CRLF +
     '  Top = 0' + CRLF +
     '  Width = 320' + CRLF +
@@ -325,9 +326,9 @@ end;
 function FmxFrameFmx(const AFrameName: string): string;
 begin
   Result :=
-    'object ' + AFrameName + ': T' + AFrameName + CRLF +
-    '  Size.Width = 320.000000000000000000' + CRLF +
-    '  Size.Height = 240.000000000000000000' + CRLF +
+    ComponeLineaDeObjeto('object', AFrameName, 'T' + AFrameName) + CRLF +
+    '  Size.Width = ' + FlotanteFmx(320) + CRLF +
+    '  Size.Height = ' + FlotanteFmx(240) + CRLF +
     '  Size.PlatformDefault = False' + CRLF +
     'end' + CRLF;
 end;
@@ -357,7 +358,7 @@ end;
 function DataModuleDfm(const AModuleName: string): string;
 begin
   Result :=
-    'object ' + AModuleName + ': T' + AModuleName + CRLF +
+    ComponeLineaDeObjeto('object', AModuleName, 'T' + AModuleName) + CRLF +
     '  Height = 480' + CRLF +
     '  Width = 640' + CRLF +
     'end' + CRLF;

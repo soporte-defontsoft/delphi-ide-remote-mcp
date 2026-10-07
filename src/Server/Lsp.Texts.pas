@@ -4156,10 +4156,12 @@ const
     'browsing paths, so installed components with source are in too; forms ' +
     '(tree, get, lint, check-binding, layout) from the .dfm/.fmx, a BINARY ' +
     '.dfm read on the fly; preview DRAWS the form as the IDE designer shows ' +
-    'it and returns the image. Only to-text/to-binary write the form (preview ' +
-    'leaves its PNG in the workspace temp, so a read-only credential cannot ' +
-    'call it): to edit a form, delphi_edit on the .dfm/.fmx with the property ' +
-    'line as anchor, then lint to verify and preview to see it.';
+    'it and returns the image. insert, set and delete EDIT the form and its ' +
+    'unit the way the IDE does: to add a component use insert (its block is ' +
+    'never written by hand), to change one property set, to remove one ' +
+    'delete; then preview to see it. to-text/to-binary convert a .dfm. A ' +
+    'read-only credential gets the reading commands (preview leaves its PNG ' +
+    'in the workspace temp, so it is not one of them).';
 
   SP_DESIGNER_COMMAND =
     'info (every property a class really publishes: kind and type, events ' +
@@ -4182,22 +4184,41 @@ const
     'designer shows for the .dfm/.fmx, in this answer: built in design mode ' +
     'with the IDE''s installed packages, no code run and nothing on any ' +
     'screen; nonVisual lists the non-visual components, fidelity says how ' +
-    'it was painted). Default: info';
+    'it was painted) | insert (a NEW visual control: classname; component, ' +
+    'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
+    'form by default; placed at 10,10 as the last child, with its published ' +
+    'field in the form''s class and its unit in the uses; the answer is its ' +
+    'numbered block) | set (ONE property: prop + value, checked against the ' +
+    'property''s type and the ' +
+    'class BEFORE writing; parent= alone moves the component; prop=Name ' +
+    'renames it, its field and the form lines that name it) | delete (the ' +
+    'component and what is inside it, the references to it in the form, its ' +
+    'field and its EMPTY handlers; refused while a method of its own has ' +
+    'code - the answer lists them with their line, to clean first). ' +
+    'Default: info';
 
   SP_DESIGNER_PATH =
-    'tree/get/lint/check-binding/layout/preview/to-text/to-binary: the .dfm ' +
-    'or .fmx file (a binary .dfm is read on the fly; the answer says so)';
+    'tree/get/lint/check-binding/layout/preview/insert/set/delete/to-text/' +
+    'to-binary: the .dfm or .fmx file (a binary .dfm is read on the fly; the ' +
+    'answer says so). insert, delete and a rename also write its unit, the ' +
+    '.pas of the same name';
 
   SP_DESIGNER_CLASS =
-    'info/prop: the component class, e.g. TButton, TEdit, TLayout';
+    'info/prop: the component class, e.g. TButton, TEdit, TLayout. insert: ' +
+    'the class of the new control';
 
   SP_DESIGNER_PROP =
-    'prop: the property name, e.g. Align, Caption, TextSettings';
+    'prop: the property name, e.g. Align, Caption, TextSettings. set: the ' +
+    'property to write, dotted for a sub-property (Font.Size, Position.X); ' +
+    'Name renames the component';
 
   SP_DESIGNER_COMPONENT =
     'get: the component Name as it appears in the form (object <Name>: ' +
     '<Class>). preview: crop the image to that component; componentRect ' +
-    'says where it is in the form';
+    'says where it is in the form. set/delete: the component to change or ' +
+    'delete. insert optional: the Name of the new control (an identifier ' +
+    'free in the form and its class), its text too when the class shows ' +
+    'one; without it, the IDE''s own (Button1, Button2...)';
 
   SP_DESIGNER_FRAMEWORK =
     'info/prop: vcl | fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); ' +
@@ -4239,6 +4260,19 @@ const
   SP_DESIGNER_OUT =
     'preview: where the PNG lands' + SP_CAPTURE_OUT_RULE;
 
+  { insert / set (1.17.0) }
+  SP_DESIGNER_PARENT =
+    'insert: the container that receives the new control, by its Name (the ' +
+    'form by default). set: MOVE the component, with its children, into this ' +
+    'container - alone, without prop or value; it keeps its Left/Top, now ' +
+    'relative to the new parent, and takes the next TabOrder there.';
+
+  SP_DESIGNER_VALUE =
+    'set: the new value, as the form file writes it: 120, True, alClient, ' +
+    '[akLeft, akTop], clRed, the Name of another component (PopupMenu1). A ' +
+    'string goes quoted (''OK'') or not (OK): set quotes it; a number as ' +
+    'typed (0.7): set writes it the way the IDE does.';
+
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
   SR_DESIGNER_NO_VA_CON_COMANDO_FMT =
     '[DSGN-047 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
@@ -4246,7 +4280,8 @@ const
 
   SR_DESIGNER_CMD =
     '[DSGN-001 INVALID_PARAM] Command must be info | prop | tree | get | ' +
-    'lint | check-binding | layout | preview | to-text | to-binary';
+    'lint | check-binding | layout | preview | insert | set | delete | ' +
+    'to-text | to-binary';
 
   { delphi_designer command=preview: el renderizador (Lsp.FormRender) }
   SR_DESIGNER_SIN_RENDER_FMT =
@@ -4329,6 +4364,221 @@ const
   SR_DESIGNER_FW_NO_CASA_FMT =
     '[DSGN-074 INVALID_PARAM] framework=%s does not go with %s: a .dfm is ' +
     'VCL and a .fmx is FMX. Leave framework out for preview.';
+
+  { delphi_designer insert / set / delete (Lsp.DesignerEdit, 1.17.0): editar
+    el form y su unidad como el IDE, lo basico (David, 4 y 7-oct-2026). }
+  SR_DESIGNER_EDIT_BINARIO_FMT =
+    '[DSGN-075 INVALID_PARAM] %s is a BINARY .dfm: insert, set and delete ' +
+    'edit a text form. Convert it first with command=to-text (backup first) ' +
+    'and repeat.';
+
+  SR_DESIGNER_EDIT_SIN_UNIDAD_FMT =
+    '[DSGN-076 NOT_FOUND] The unit of %s is not next to it (%s): insert, ' +
+    'delete and a rename write the form AND its class, where each component ' +
+    'has its published field. The unit has the name of the form file.';
+
+  SR_DESIGNER_EDIT_SIN_CLASE_FMT =
+    '[DSGN-077 NOT_FOUND] The class %s of the form is not declared in %s, so ' +
+    'its fields cannot be written. Nothing was written: command=check-binding ' +
+    'says where the form and its unit disagree.';
+
+  SR_DESIGNER_COMPONENTE_NO_ESTA_FMT =
+    '[DSGN-078 NOT_FOUND] There is no component %s in %s. Nothing was ' +
+    'written. Its components: %s. To add one, command=insert.';
+
+  SR_DESIGNER_INSERT_NO_VISUAL_FMT =
+    '[DSGN-079 INVALID_PARAM] %s is not a visual control (it does not descend ' +
+    'from %s): insert places controls only, so nothing was written. A ' +
+    'non-visual component (a TTimer, a dataset, an image list) is not inserted ' +
+    'with it.';
+
+  SR_DESIGNER_PADRE_VCL_FMT =
+    '[DSGN-080 INVALID_PARAM] %s (%s) cannot hold controls: in VCL a parent ' +
+    'is the form or a windowed control (TPanel, TGroupBox, TScrollBox, a ' +
+    'TTabSheet rather than its TPageControl). Nothing was written.';
+
+  SR_DESIGNER_PADRE_FMX_FMT =
+    '[DSGN-081 INVALID_PARAM] %s (%s) is not a control, so it cannot hold ' +
+    'one: in FMX a parent is the form or a control (TLayout, TRectangle, ' +
+    'TPanel...). Nothing was written.';
+
+  SR_DESIGNER_CLASE_SIN_TABLA_FMT =
+    '[DSGN-082 INVALID_PARAM] %s is a %s, a class the %s table does not have ' +
+    '(a component without source in the library paths, or of the other ' +
+    'framework): %s cannot be checked, so nothing was written. Edit the line ' +
+    'with delphi_edit and run command=lint after.';
+  SF_DESIGNER_QUE_PROPIEDADES =
+    'its properties';
+  SF_DESIGNER_QUE_CONTENEDOR =
+    'whether it holds controls';
+
+  SR_DESIGNER_DENTRO_DE_INLINE_FMT =
+    '[DSGN-083 INVALID_PARAM] %s is part of the frame %s placed in this form ' +
+    '(inline): its components belong to the frame''s own file. Insert, ' +
+    'delete, rename or move them there.';
+
+  SR_DESIGNER_HEREDADO_FMT =
+    '[DSGN-084 INVALID_PARAM] %s is inherited from the ancestor form: it is ' +
+    'deleted, renamed or moved in the ancestor''s file. Its properties can ' +
+    'be set here.';
+
+  SR_DESIGNER_RAIZ_FMT =
+    '[DSGN-085 INVALID_PARAM] %s is the form itself: delete, rename and ' +
+    'parent do not apply to it (set changes its properties).';
+
+  { La regla de David (7-oct-2026): nunca codigo huerfano como el IDE. }
+  SR_DESIGNER_DELETE_BLOQUEADO_FMT =
+    '[DSGN-086 DENIED] %s was NOT deleted: it would leave %d method(s) of ' +
+    'its own with code behind in %s - code that keeps compiling and never ' +
+    'runs again. Clean each one first (move what it does elsewhere, or empty ' +
+    'it) and repeat the delete; an empty one goes with the component:%s';
+  SF_DESIGNER_METODO_LINEA_FMT =
+    #10'  - %s (%s, %s)';
+  SF_DESIGNER_POR_SU_NOMBRE =
+    'named after it';
+
+  SR_DESIGNER_SET_INVALIDO_FMT =
+    '[DSGN-087 INVALID_PARAM] %s.%s = %s was NOT written: %s%s';
+  SF_DESIGNER_QUIZAS_FMT =
+    ' Did you mean %s?';
+
+  SR_DESIGNER_SET_EVENTO_FMT =
+    '[DSGN-088 INVALID_PARAM] %s is an event of %s: set does not bind ' +
+    'events. To handle it: delphi_edit insert=metodo visibility=published in ' +
+    'the form''s class, then the line %s = <method> in the component''s ' +
+    'block (check-binding verifies the pair).';
+
+  SR_DESIGNER_SET_BLOQUE_FMT =
+    '[DSGN-089 INVALID_PARAM] %s.%s holds a list, a collection or a binary ' +
+    'block (lines %d-%d of %s): set writes one-line values. Edit that block ' +
+    'with delphi_edit.';
+
+  SR_DESIGNER_SET_SIN_VALOR =
+    '[DSGN-090 INVALID_PARAM] "value" is missing: set writes prop = value ' +
+    '(or moves the component with parent=, alone).';
+
+  SR_DESIGNER_SET_VALOR_LINEA =
+    '[DSGN-091 INVALID_PARAM] value is one line: a form property holds no ' +
+    'line break (#13#10 in a string value writes one).';
+
+  SR_DESIGNER_SET_GRAMATICA_FMT =
+    '[DSGN-092 INVALID_PARAM] value %s is not a one-line form value: a ' +
+    'number, True/False, an identifier (alClient, clRed, a component name), ' +
+    'a set [a, b] or a string. Nothing was written; lists, collections and ' +
+    'binary blocks are edited with delphi_edit.';
+
+  SR_DESIGNER_SET_TIPO_FMT =
+    '[DSGN-093 INVALID_PARAM] %s.%s is %s and takes %s, not %s.%s Nothing ' +
+    'was written.';
+  SF_DESIGNER_TOMA_ENTERO =
+    'a whole number';
+  SF_DESIGNER_TOMA_NUMERO =
+    'a number';
+  SF_DESIGNER_TOMA_CARACTER =
+    'one character, quoted (''A'') or by its code (#65)';
+  SF_DESIGNER_TOMA_CONSTANTE =
+    'a whole number or one of the named constants of its type';
+  SF_DESIGNER_TOMA_CONSTANTES_FMT =
+    'a whole number or one of its named constants (%s)';
+  SF_DESIGNER_TOMA_CADENA =
+    'a string (quoted as the file writes it, or without quotes: set adds them)';
+  SF_DESIGNER_TOMA_COMPONENTE =
+    'the Name of a component of this form - or its sub-properties one by one ' +
+    '(Font.Size)';
+
+  SR_DESIGNER_SET_PARENT_SOLO =
+    '[DSGN-094 INVALID_PARAM] parent moves the component and goes alone, ' +
+    'without prop or value: change a property with another call.';
+
+  SR_DESIGNER_NOMBRE_INVALIDO_FMT =
+    '[DSGN-095 INVALID_PARAM] "%s" is not a valid component name: an ' +
+    'identifier (letters, digits and _, not starting with a digit, not a ' +
+    'reserved word).';
+
+  SR_DESIGNER_NOMBRE_OCUPADO_FMT =
+    '[DSGN-096 INVALID_PARAM] The name %s is taken by %s. Nothing was ' +
+    'written.';
+  SF_DESIGNER_OCUPA_COMPONENTE =
+    'another component of the form';
+  SF_DESIGNER_OCUPA_CLASE =
+    'the form''s class';
+  SF_DESIGNER_OCUPA_CAMPO_FMT =
+    'a field of %s';
+  SF_DESIGNER_OCUPA_METODO_FMT =
+    'a method of %s';
+  SF_DESIGNER_OCUPA_PROPIEDAD_FMT =
+    'a property of %s';
+
+  SR_DESIGNER_PADRE_CICLO_FMT =
+    '[DSGN-097 INVALID_PARAM] %s cannot go inside %s: that is itself or one ' +
+    'of its own children.';
+
+  SR_DESIGNER_REFERENCIA_NO_ESTA_FMT =
+    '[DSGN-098 INVALID_PARAM] There is no component %s in %s for %s.%s to ' +
+    'point at. Nothing was written.';
+
+  SR_DESIGNER_REFERENCIA_TIPO_FMT =
+    '[DSGN-107 INVALID_PARAM] %s is a %s, and %s.%s takes a %s or a ' +
+    'descendant of it (%s). Nothing was written.';
+  SF_DESIGNER_CABEN_FMT =
+    'in this form: %s';
+  SF_DESIGNER_NO_CABE_NINGUNO =
+    'none in this form';
+
+  SR_DESIGNER_CAMPO_COMPARTIDO_FMT =
+    '[DSGN-099 INVALID_PARAM] The field of %s shares a declaration with ' +
+    'others across lines (%s): write it on a line of its own (Button1: ' +
+    'TButton;) and repeat. Nothing was written.';
+
+  SN_DESIGNER_INSERT_NOTE =
+    '[DSGN-100] Inserted with the minimum the IDE writes: position, its Name ' +
+    'as text when the class shows one, TabOrder; its size is the class''s ' +
+    'own (its constructor). Change a property with command=set, move it ' +
+    'with set parent=, see it with command=preview.';
+
+  SN_DESIGNER_YA_ESTA_FMT =
+    '[DSGN-101] %s is already inside %s: nothing to move.';
+
+  SN_DESIGNER_DELETE_NOTE =
+    '[DSGN-102] Deleted with everything inside it, the references to it in ' +
+    'the form, its field and its empty handlers; handlersKept are used by ' +
+    'something else and were not touched. usesInCode are lines of the unit ' +
+    'that still name a deleted component: the compiler stops there (E2003) - ' +
+    'fix them with delphi_edit.';
+
+  SN_DESIGNER_RENAME_NOTE =
+    '[DSGN-103] Renamed in the form - every line of it that names the ' +
+    'component included - and in its field. Its methods keep their names, as ' +
+    'in the IDE (methodsWithOldName); usesInCode are lines of the unit that ' +
+    'still use the old name and will not compile until changed (delphi_edit).';
+
+  SN_DESIGNER_IMPACTO_SIN_CLASE_FMT =
+    '[DSGN-104] The class %s is not in %s: its code was not looked at.';
+
+  SR_DESIGNER_SET_PROP_FMT =
+    '[DSGN-105 INVALID_PARAM] "%s" is not a valid property name: an ' +
+    'identifier, dotted for a sub-property (Font.Size, Position.X).';
+
+  SN_DESIGNER_YA_SE_LLAMA_FMT =
+    '[DSGN-106] The component is already called %s: nothing to rename.';
+
+  SF_DESIGNER_SOBRECARGADO =
+    'overloaded: several methods carry this name';
+  SF_DESIGNER_LO_ATA_FMT =
+    'bound by %s';
+  SF_DESIGNER_LO_USA_FMT =
+    'used at %s';
+  SF_DESIGNER_COMPARTE_LINEAS =
+    'its implementation shares lines with other code: left in place';
+  SF_DESIGNER_USOS_MAS_FMT =
+    '... and %d more lines';
+  SF_DESIGNER_USES_EN_IMPL_FMT =
+    '%s is in the implementation uses of %s, and the field in the interface ' +
+    'needs it there: move it (delphi_edit removeuses, then adduses ' +
+    'section=interface)';
+  SF_DESIGNER_SIN_CAMPO_FMT =
+    '%s had no published field in %s (command=check-binding says what else ' +
+    'is missing)';
 
   SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT =
     'exit code %d and no answer (%s)';
@@ -8790,6 +9040,13 @@ const
   SF_DSGN_LADO_A_CERO_FMT =
     '%s: %s (line %d) is %s x %s: with one side at zero it is not ' +
     'visible, even if the form loads';
+
+  // un control sin Width/Height en el .dfm: el tamano de su constructor (lo
+  // deja asi el insert de delphi_designer; antes se saltaba como no visual)
+  SF_DSGN_TAMANO_DEL_CONSTRUCTOR_FMT =
+    '%s: %s (line %d) carries no Width/Height: it takes the size its ' +
+    'constructor gives, which is not in the .dfm and is not measured here ' +
+    '(command=preview shows it)';
 
   SF_DSGN_NO_LLEVA_EN_DFM_FMT =
     '%s: %s (line %d) has no %s in the .dfm; with align %s it is needed ' +

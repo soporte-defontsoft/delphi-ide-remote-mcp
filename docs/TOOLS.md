@@ -691,17 +691,17 @@ SEMANTIC RENAME of a Delphi symbol: point at the identifier (path + 0-based line
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-FORMS AND COMPONENTS, structured - never guess what a class publishes or what a form contains (each command in "command"). Classes (info, prop) are read from the source of the active Delphi - its library and browsing paths, so installed components with source are in too; forms (tree, get, lint, check-binding, layout) from the .dfm/.fmx, a BINARY .dfm read on the fly; preview DRAWS the form as the IDE designer shows it and returns the image. Only to-text/to-binary write the form (preview leaves its PNG in the workspace temp, so a read-only credential cannot call it): to edit a form, delphi_edit on the .dfm/.fmx with the property line as anchor, then lint to verify and preview to see it.
+FORMS AND COMPONENTS, structured - never guess what a class publishes or what a form contains (each command in "command"). Classes (info, prop) are read from the source of the active Delphi - its library and browsing paths, so installed components with source are in too; forms (tree, get, lint, check-binding, layout) from the .dfm/.fmx, a BINARY .dfm read on the fly; preview DRAWS the form as the IDE designer shows it and returns the image. insert, set and delete EDIT the form and its unit the way the IDE does: to add a component use insert (its block is never written by hand), to change one property set, to remove one delete; then preview to see it. to-text/to-binary convert a .dfm. A read-only credential gets the reading commands (preview leaves its PNG in the workspace temp, so it is not one of them).
 
 *Access: mixed (`command` info / prop / tree / get / lint / check-binding / binding / layout read-only; every other command read-write, refused to a read-only credential).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | info (every property a class really publishes: kind and type, events apart) \| prop (one property in detail, with the legal members of an enum/set) \| tree (the component tree: name, class, line) \| get (one component's block, verbatim) \| lint (properties the class does not publish and enum values that do not exist; objects it could not check - a class not in the table, or ambiguous - go apart as notes) \| check-binding (does the .dfm agree with the class in the .pas: components with no published field, events naming a method that is not published, published fields with no component, duplicate names - all of which COMPILE and then throw when the form is created) \| layout (WHERE things end up on a VCL .dfm: resolves Align and returns every control's rectangle plus those of size zero, outside their container, overlapping or clipped by the bands around them - a form can bind perfectly and still be unusable) \| to-text (a BINARY .dfm becomes text on disk, the IDE's own conversion, backup first - reading never needs it) \| to-binary (the way back, the resource-wrapped form the IDE writes) \| preview (a PNG of what the IDE designer shows for the .dfm/.fmx, in this answer: built in design mode with the IDE's installed packages, no code run and nothing on any screen; nonVisual lists the non-visual components, fidelity says how it was painted). Default: info |
-| `path` | string | optional | tree/get/lint/check-binding/layout/preview/to-text/to-binary: the .dfm or .fmx file (a binary .dfm is read on the fly; the answer says so) |
-| `classname` | string | optional | info/prop: the component class, e.g. TButton, TEdit, TLayout |
-| `prop` | string | optional | prop: the property name, e.g. Align, Caption, TextSettings |
-| `component` | string | optional | get: the component Name as it appears in the form (object \<Name>: \<Class>). preview: crop the image to that component; componentRect says where it is in the form |
+| `command` | string | optional | info (every property a class really publishes: kind and type, events apart) \| prop (one property in detail, with the legal members of an enum/set) \| tree (the component tree: name, class, line) \| get (one component's block, verbatim) \| lint (properties the class does not publish and enum values that do not exist; objects it could not check - a class not in the table, or ambiguous - go apart as notes) \| check-binding (does the .dfm agree with the class in the .pas: components with no published field, events naming a method that is not published, published fields with no component, duplicate names - all of which COMPILE and then throw when the form is created) \| layout (WHERE things end up on a VCL .dfm: resolves Align and returns every control's rectangle plus those of size zero, outside their container, overlapping or clipped by the bands around them - a form can bind perfectly and still be unusable) \| to-text (a BINARY .dfm becomes text on disk, the IDE's own conversion, backup first - reading never needs it) \| to-binary (the way back, the resource-wrapped form the IDE writes) \| preview (a PNG of what the IDE designer shows for the .dfm/.fmx, in this answer: built in design mode with the IDE's installed packages, no code run and nothing on any screen; nonVisual lists the non-visual components, fidelity says how it was painted) \| insert (a NEW visual control: classname; component, its Name - the IDE's Button1, Button2... by default; parent - the form by default; placed at 10,10 as the last child, with its published field in the form's class and its unit in the uses; the answer is its numbered block) \| set (ONE property: prop + value, checked against the property's type and the class BEFORE writing; parent= alone moves the component; prop=Name renames it, its field and the form lines that name it) \| delete (the component and what is inside it, the references to it in the form, its field and its EMPTY handlers; refused while a method of its own has code - the answer lists them with their line, to clean first). Default: info |
+| `path` | string | optional | tree/get/lint/check-binding/layout/preview/insert/set/delete/to-text/to-binary: the .dfm or .fmx file (a binary .dfm is read on the fly; the answer says so). insert, delete and a rename also write its unit, the .pas of the same name |
+| `classname` | string | optional | info/prop: the component class, e.g. TButton, TEdit, TLayout. insert: the class of the new control |
+| `prop` | string | optional | prop: the property name, e.g. Align, Caption, TextSettings. set: the property to write, dotted for a sub-property (Font.Size, Position.X); Name renames the component |
+| `component` | string | optional | get: the component Name as it appears in the form (object \<Name>: \<Class>). preview: crop the image to that component; componentRect says where it is in the form. set/delete: the component to change or delete. insert optional: the Name of the new control (an identifier free in the form and its class), its text too when the class shows one; without it, the IDE's own (Button1, Button2...) |
 | `unit` | string | optional | check-binding, optional: the .pas with the form's class. By default, the one with the same name as the .dfm. |
 | `framework` | string | optional | info/prop: vcl \| fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); default vcl. preview: the file decides; if given, it must agree |
 | `filter` | string | optional | info optional: only properties whose name contains this text |
@@ -712,6 +712,8 @@ FORMS AND COMPONENTS, structured - never guess what a class publishes or what a 
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image (scaled to maxwidth), and no file is kept to download later. false = a file and its download link (a client without vision, or one that wants the bytes). |
 | `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels (or pass frame). |
 | `out` | string | optional | preview: where the PNG lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format. Empty = __delphi-temp\\<agent>, wiped on server restart. On THIS server, jailed like any path. With inline=false the capture stays there and the answer carries its download link. |
+| `parent` | string | optional | insert: the container that receives the new control, by its Name (the form by default). set: MOVE the component, with its children, into this container - alone, without prop or value; it keeps its Left/Top, now relative to the new parent, and takes the next TabOrder there. |
+| `value` | string | optional | set: the new value, as the form file writes it: 120, True, alClient, [akLeft, akTop], clRed, the Name of another component (PopupMenu1). A string goes quoted ('OK') or not (OK): set quotes it; a number as typed (0.7): set writes it the way the IDE does. |
 <!-- /contract -->
 
 `preview` (1.17.0) is drawn by two renderers that ship next to the server,
@@ -727,6 +729,30 @@ their own way come out native-looking), `canvas` (FMX, always its own canvas).
 The answer lists `nonVisual` always, `substituted` for classes no installed
 package registers (a named box at their place), `ignored` and `warnings` from
 the reader, and `ms`.
+
+`insert`, `set` and `delete` (1.17.0) write the form and its unit together, all
+or nothing (`Lsp.DesignerEdit`). A name, given by `insert component=` or by
+`set prop=Name`, is judged by one rule: an identifier, not a reserved word, taken
+by nothing in the form or its class (`DSGN-095`/`096`); without one, insert takes the IDE's
+first free `Button1`, `Button2`... The Caption/Text follows the name when the
+class's `SetName` does that, read from the source by the table generator.
+`delete` is refused (`DSGN-086`) while a method of the component - a handler it
+is bound to, or one named after it - still has code; an empty one goes with it,
+a shared one stays, and `usesInCode` lists the code that still names it.
+`set` checks a value against what its type takes, as the form loader
+(`TReader`) reads it, from facts the table generator takes from the Delphi
+source: what a simple type reduces to (`TColor` is a subrange of integers,
+`TCaption` a string) and the named constants an integer type registers
+(`RegisterIntegerConsts`: `clRed`, `crHandPoint`; a misspelt one gets the
+close one). A reference has to name a component of the property's class or
+of a descendant: the `DataSource` of a `TDBGrid` takes a `TDataSource`, and
+`DSGN-107` lists the components of the form that fit. A number with decimals is
+written as the 32-bit IDE writes it (`FloatToStrF(V, ffFixed, 16, 18)` of the
+value the property stores - a `Single` rounded as a `Single`: `0.7` becomes
+`0.699999988079071000`), computed from the exact digits of the number, because
+the 64-bit RTL of the server rounds differently; no IDE rewrites the form
+afterwards. An inline frame's class belongs to the project and is not in the
+table: `set` judges its properties as a `TFrame`'s.
 
 Since 1.2.3 `check-binding` is not only on request: `lint` includes it when the
 `.pas` sits next to the form, every write to a designer through `delphi_edit`

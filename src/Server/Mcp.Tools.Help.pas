@@ -53,7 +53,8 @@ uses
   System.Math,
   System.JSON,
   MCPServer.Registration,
-  Lsp.Guard; // ToolHiddenFromList / IsReadOnlyNow: la tabla dice lo que tools/list anuncia
+  Lsp.Guard, // ToolHiddenFromList / IsReadOnlyNow: la tabla dice lo que tools/list anuncia
+  Lsp.Pascal; // EditDistance
 
 constructor TDelphiHelpTool.Create;
 begin
@@ -64,34 +65,8 @@ end;
 
 function OneTool(const AName: string): string; forward;
 
-{ Levenshtein distance, capped: enough to tell "delphi_edt" from
-  "delphi_edit" without pretending to be a spell checker. }
-function EditDistance(const A, B: string): Integer;
-var
-  I, J, Cost, Prev, Cur: Integer;
-  Row: TArray<Integer>;
-begin
-  if A = B then
-    Exit(0);
-  if (A = '') or (B = '') then
-    Exit(Max(Length(A), Length(B)));
-  SetLength(Row, Length(B) + 1);
-  for J := 0 to Length(B) do
-    Row[J] := J;
-  for I := 1 to Length(A) do
-  begin
-    Prev := Row[0];
-    Row[0] := I;
-    for J := 1 to Length(B) do
-    begin
-      Cost := IfThen(A[I] = B[J], 0, 1);
-      Cur := Row[J];
-      Row[J] := Min(Min(Row[J] + 1, Row[J - 1] + 1), Prev + Cost);
-      Prev := Cur;
-    end;
-  end;
-  Result := Row[Length(B)];
-end;
+// (EditDistance, Levenshtein: vive en Lsp.Pascal desde la 1.17.0, cuando
+// delphi_designer set la necesito para la propiedad casi bien escrita)
 
 { One tool in full: what tools/list would say about it, alone. }
 function OneTool(const AName: string): string;

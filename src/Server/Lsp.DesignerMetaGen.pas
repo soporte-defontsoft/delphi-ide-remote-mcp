@@ -75,7 +75,7 @@ type
 const
   { Sube cuando cambian las reglas del generador: una tabla de otra
     generacion no se reutiliza aunque el fuente sea el mismo. }
-  GENERACION_TABLAS = 6; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0)
+  GENERACION_TABLAS = 9; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // lo que se recuerda un fallo del generador antes de intentarlo otra vez
   MINUTOS_REINTENTO_TABLA = 10;
 
@@ -119,6 +119,27 @@ function PropiedadesDefinidasPorCodigo(const ATexto: string): TArray<string>;
   cuando dos unidades tienen un TFoo (el THttpServer de ICS, registrado, y
   el THTTPServer de HTTPIntr, un modulo). }
 function RegistradosEnPaleta(const ATexto: string): TArray<string>;
+
+{ Las clases de ATexto (un texto ACTIVO) que sobrescriben SetName, como
+  'TClase 1' si con su SetName el Text sigue al nombre (el TTextControl y el
+  TPresentedTextControl de FMX, el TControl de la VCL: Text := Value) o
+  'TClase 0' si no (el TEditButton de FMX lo vacia). Una clase hereda el del
+  SetName mas cercano de su cadena (hecho T; TMetaTable.TextoSigueAlNombre).
+  Un comportamiento de clases concretas sale del fuente, no de una lista: la
+  de Delphi 13.1 (7-oct-2026) se queda como caso medido en las pruebas. }
+function SetNamesDeTexto(const ATexto: string): TArray<string>;
+
+{ Las constantes con nombre de los tipos enteros que registra el fuente
+  ATexto para los forms: RegisterIntegerConsts, lo
+  que TReader.ReadPropValue acepta como identificador en una propiedad
+  entera (clRed en un TColor, crHandPoint en un TCursor). Una linea por
+  cosa: 'R <Tipo> <Funcion>' cada registro; 'L <funcion> a,b,c' una funcion
+  IdentTo que solo busca en su mapa (Result := IdentToInt(I, V, Mapa)), con
+  los nombres del mapa; 'D <funcion> <Otra>' una que solo llama a otra con
+  lo mismo (Vcl.Controls.IdentToCursor llama a la de System.UIConsts). Una
+  que hace otra cosa no sale (IdentToAlphaColor acepta tambien xFF00FF00):
+  quien la busca no la encuentra y acepta cualquier identificador. }
+function ConstantesDeTexto(const ATexto: string): TArray<string>;
 
 { Las tablas sacadas del fuente que hay en ACarpetas (cada una sin bajar;
   las primeras ganan cuando dos tienen la misma unidad), con los simbolos
@@ -445,6 +466,163 @@ begin
   end;
 end;
 
+{ El SetName que sobrescribe cada clase de una unidad: 'TClase 1' si con el
+  el Text sigue al nombre (asigna Text, o Caption, desde su parametro: lo que
+  hace el IDE al nombrar un control nuevo), 'TClase 0' si no. Sobre los
+  Cuerpos que apunta EL lector (Lsp.PascalDecl) en el texto activo. }
+function SetNamesDeUnidad(const ATexto: string; ADecl: TUnidadPas): TArray<string>;
+var
+  M: TMatch;
+  Clase, Param: string;
+begin
+  Result := [];
+  for var C in ADecl.Cuerpos do
+  begin
+    if C.DeClase or not SameText(C.Rutina, 'procedure') or (Pos('.', C.Nombre) = 0) or
+       not MismoIdentificador(UltimoTrozo(C.Nombre), 'SetName') then
+      Continue;
+    Clase := Copy(C.Nombre, 1, C.Nombre.LastIndexOf('.'));
+    // el parametro del nombre nuevo, en su cabecera
+    M := TRegEx.Match(Copy(ATexto, C.PosIni, C.CuerpoIni - C.PosIni),
+      '(?i)\bSetName\s*\(\s*(?:const\s+)?(' + PATRON_IDENT + ')\s*:');
+    if not M.Success then
+      Continue;
+    Param := M.Groups[1].Value;
+    if TRegEx.IsMatch(Copy(ATexto, C.CuerpoIni, C.CuerpoFin - C.CuerpoIni + 1),
+         '(?i)\b(?:Text|Caption)\s*:=\s*' + PatronIdentEntero(Param) + '\s*(?:;|end\b|else\b|$)') then
+      Result := Result + [Clase + ' 1']
+    else
+      Result := Result + [Clase + ' 0'];
+  end;
+end;
+
+function SetNamesDeTexto(const ATexto: string): TArray<string>;
+var
+  D: TUnidadPas;
+begin
+  D := LeeUnidadPascal(ATexto);
+  try
+    Result := SetNamesDeUnidad(ATexto, D);
+  finally
+    D.Free;
+  end;
+end;
+
+{ Los nombres (Name: 'clBlack') del mapa AMapa de ATexto: su declaracion
+  'AMapa: array[...] of TIdentMapEntry = (...);', recorrida por sus
+  parentesis sin entrar en cadenas ni comentarios. [] si no esta. }
+function NombresDeMapa(const ATexto, AMapa: string): TArray<string>;
+var
+  M: TMatch;
+  I, Prof, Fin: Integer;
+  N: string;
+begin
+  Result := [];
+  M := TRegEx.Match(ATexto, '(?i)\b' + TRegEx.Escape(AMapa) +
+    '\s*:\s*array\s*\[[^\]]*\]\s*of\s+TIdentMapEntry\s*=\s*\(');
+  if not M.Success then
+    Exit;
+  I := M.Index + M.Length; // detras del '(' que abre la lista
+  Prof := 1;
+  Fin := 0;
+  while (I <= Length(ATexto)) and (Fin = 0) do
+  begin
+    case ATexto[I] of
+      '''':
+        begin
+          Inc(I);
+          while (I <= Length(ATexto)) and (ATexto[I] <> '''') do
+            Inc(I);
+        end;
+      '{':
+        while (I <= Length(ATexto)) and (ATexto[I] <> '}') do
+          Inc(I);
+      '/':
+        if (I < Length(ATexto)) and (ATexto[I + 1] = '/') then
+          while (I <= Length(ATexto)) and not CharInSet(ATexto[I], [#10, #13]) do
+            Inc(I);
+      '(':
+        if (I < Length(ATexto)) and (ATexto[I + 1] = '*') then
+        begin
+          Inc(I, 2);
+          while (I < Length(ATexto)) and not ((ATexto[I] = '*') and (ATexto[I + 1] = ')')) do
+            Inc(I);
+          Inc(I);
+        end
+        else
+          Inc(Prof);
+      ')':
+        begin
+          Dec(Prof);
+          if Prof = 0 then
+            Fin := I;
+        end;
+    end;
+    Inc(I);
+  end;
+  if Fin = 0 then
+    Exit;
+  for var Nm in TRegEx.Matches(Copy(ATexto, M.Index + M.Length, Fin - M.Index - M.Length),
+      '(?i)\bName\s*:\s*''((?:[^'']|'''')*)''') do
+  begin
+    N := Nm.Groups[1].Value;
+    // un nombre que no es un identificador no lo escribe un form
+    if EsIdentificador(N, False) then
+      Result := Result + [N];
+  end;
+end;
+
+{ Lo de ConstantesDeTexto sobre un texto CON sus cadenas (los nombres de un
+  mapa son cadenas) y ADecl leida de otro con las mismas posiciones sin
+  ellas (LeeUnidadPascal pide un texto activo: una cadena con un '(' le
+  descoloca las rutinas de detras; medido el 7-oct-2026). }
+function ConstantesDeUnidad(const ATexto: string; ADecl: TUnidadPas): TArray<string>;
+var
+  M: TMatch;
+  Cuerpo: string;
+  Nombres: TArray<string>;
+begin
+  Result := [];
+  for M in TRegEx.Matches(ATexto, '(?i)\bRegisterIntegerConsts\s*\(\s*Type(?:Info|Of)\s*\(\s*(' +
+      PATRON_IDENT_PUNTOS + ')\s*\)\s*,\s*@?(' + PATRON_IDENT_PUNTOS + ')') do
+    Result := Result + ['R ' + M.Groups[1].Value + ' ' + M.Groups[2].Value];
+  for var C in ADecl.Cuerpos do
+  begin
+    if C.DeClase or C.ConLocales or not SameText(C.Rutina, 'function') or
+       (Pos('.', C.Nombre) > 0) then
+      Continue;
+    Cuerpo := Trim(Copy(ATexto, C.CuerpoIni, C.CuerpoFin - C.CuerpoIni + 1));
+    // Result := IdentToInt(Ident, Color, Colors), con un molde si lo lleva
+    M := TRegEx.Match(Cuerpo, '(?i)^Result\s*:=\s*IdentToInt\s*\(\s*' + PATRON_IDENT +
+      '\s*,\s*(?:' + PATRON_IDENT + '\s*\(\s*)?' + PATRON_IDENT + '\s*\)?\s*,\s*(' +
+      PATRON_IDENT + ')\s*\)\s*;?$');
+    if M.Success then
+    begin
+      Nombres := NombresDeMapa(ATexto, M.Groups[1].Value);
+      if Length(Nombres) > 0 then
+        Result := Result + ['L ' + C.Nombre + ' ' + string.Join(',', Nombres)];
+      Continue;
+    end;
+    // Result := System.UIConsts.IdentToCursor(Ident, Cursor)
+    M := TRegEx.Match(Cuerpo, '(?i)^Result\s*:=\s*(' + PATRON_IDENT_PUNTOS + ')\s*\(\s*' +
+      PATRON_IDENT + '\s*,\s*' + PATRON_IDENT + '\s*\)\s*;?$');
+    if M.Success then
+      Result := Result + ['D ' + C.Nombre + ' ' + M.Groups[1].Value];
+  end;
+end;
+
+function ConstantesDeTexto(const ATexto: string): TArray<string>;
+var
+  D: TUnidadPas;
+begin
+  D := LeeFuentePascal(ATexto);
+  try
+    Result := ConstantesDeUnidad(ATexto, D);
+  finally
+    D.Free;
+  end;
+end;
+
 { ---- el generador ---- }
 
 type
@@ -453,6 +631,10 @@ type
     Nombre: string;           // el nombre de su informacion de tipo
     Miembros: TArray<string>; // enumerado o conjunto
     Unidad: string;           // donde se declara ('' = del compilador): IdDeTipo
+    // 'o': a que tipo del lenguaje se reduce, lo que mira TReader al leer su
+    // valor: integer, int64, char, single, float, string o variant; '' = no
+    // se sabe (single aparte: el IDE lo escribe redondeado a Single)
+    Base: string;
   end;
 
   TUnidadLeida = class
@@ -468,6 +650,8 @@ type
     Marcos: TMarcosDisenador;
     Definidas: TArray<string>; // PropiedadesDefinidasPorCodigo: 'TClase Nombre'
     Registra: TArray<string>;  // RegistradosEnPaleta: los nombres, sin resolver
+    SetNames: TArray<string>;  // SetNamesDeUnidad: 'TClase 1' / 'TClase 0'
+    Constantes: TArray<string>; // ConstantesDeTexto: 'R Tipo Funcion' / 'L ...' / 'D ...'
     constructor Create;
     destructor Destroy; override;
   end;
@@ -519,7 +703,10 @@ type
     procedure ResuelveRegistradas;
     procedure ResuelveAyudantes;
     function HechosDeClase(ATipo: TTipoPas; const ACadena: TArray<TTipoPas>;
-      AEnums, ASets: TDictionary<string, TArray<string>>): TArray<string>;
+      AEnums, ASets: TDictionary<string, TArray<string>>;
+      ABases: TDictionary<string, string>): TArray<string>;
+    function NombresDeConstantes(AUnidad: TUnidadLeida; const AFuncion: string;
+      AProf: Integer): string;
   public
     constructor Create(const AVersionCompilador, ARaizBds, APlataforma: string);
     destructor Destroy; override;
@@ -775,10 +962,15 @@ begin
       U.Prioridad := 1;
     U.Decl := Decl;
     FUnidades.Add(U.Clave, U);
+    // el SetName de sus clases: si con el el Text sigue al nombre (lo que
+    // escribe el insert de delphi_designer, 1.17.0)
+    if ContainsText(Act, 'SetName') then
+      U.SetNames := SetNamesDeUnidad(Act, Decl);
     // lo que guarda por codigo (Filer.DefineProperty): otra pasada que deja
     // las cadenas, solo en las que lo nombran (unas cien de 4.000)
     if ContainsText(Txt, 'DefineProperty') or ContainsText(Txt, 'DefineBinaryProperty') or
-       ContainsText(Txt, 'RegisterComponents') or ContainsText(Txt, 'RegisterNoIcon') then
+       ContainsText(Txt, 'RegisterComponents') or ContainsText(Txt, 'RegisterNoIcon') or
+       ContainsText(Txt, 'RegisterIntegerConsts') or ContainsText(Txt, 'IdentToInt') then
     begin
       Sim := FBase.Copia;
       try
@@ -791,9 +983,13 @@ begin
           U.Definidas := PropiedadesDefinidasPorCodigo(ConCadenas);
           // y lo que registra en la paleta (quien se queda un nombre)
           U.Registra := RegistradosEnPaleta(ConCadenas);
+          // y las constantes con nombre de sus tipos enteros (hecho I)
+          if ContainsText(Txt, 'RegisterIntegerConsts') or ContainsText(Txt, 'IdentToInt') then
+            U.Constantes := ConstantesDeUnidad(ConCadenas, Decl);
         except
           U.Definidas := nil; // lo que no se sabe leer no tumba la tabla
           U.Registra := nil;
+          U.Constantes := nil;
         end;
       finally
         Sim.Free;
@@ -1116,6 +1312,14 @@ begin
   Result.Nombre := ANombre;
   Result.Miembros := AMiembros;
   Result.Unidad := '';
+  Result.Base := '';
+end;
+
+// un tipo 'o' y su base: lo que es para TReader (integer, char, string...)
+function InfoBase(const ANombre, ABase: string): TInfoTipo;
+begin
+  Result := Info('o', ANombre);
+  Result.Base := ABase;
 end;
 
 { Los tipos que pone el compilador (no estan declarados en System.pas) con
@@ -1126,51 +1330,51 @@ function Intrinseco(const L, APlataforma: string; out AInfo: TInfoTipo): Boolean
 begin
   Result := True;
   if (L = 'string') or (L = 'unicodestring') then
-    AInfo := Info('o', 'string')
+    AInfo := InfoBase('string', 'string')
   else if L = 'ansistring' then
-    AInfo := Info('o', 'AnsiString')
+    AInfo := InfoBase('AnsiString', 'string')
   else if L = 'widestring' then
-    AInfo := Info('o', 'WideString')
+    AInfo := InfoBase('WideString', 'string')
   else if L = 'shortstring' then
-    AInfo := Info('o', 'ShortString')
+    AInfo := InfoBase('ShortString', 'string')
   else if (L = 'char') or (L = 'widechar') then
-    AInfo := Info('o', 'Char')
+    AInfo := InfoBase('Char', 'char')
   else if L = 'ansichar' then
-    AInfo := Info('o', 'AnsiChar')
+    AInfo := InfoBase('AnsiChar', 'char')
   else if (L = 'integer') or (L = 'longint') then
-    AInfo := Info('o', 'Integer')
+    AInfo := InfoBase('Integer', 'integer')
   else if (L = 'cardinal') or (L = 'longword') then
-    AInfo := Info('o', 'Cardinal')
+    AInfo := InfoBase('Cardinal', 'integer')
   else if L = 'shortint' then
-    AInfo := Info('o', 'ShortInt')
+    AInfo := InfoBase('ShortInt', 'integer')
   else if L = 'smallint' then
-    AInfo := Info('o', 'SmallInt')
+    AInfo := InfoBase('SmallInt', 'integer')
   else if L = 'byte' then
-    AInfo := Info('o', 'Byte')
+    AInfo := InfoBase('Byte', 'integer')
   else if L = 'word' then
-    AInfo := Info('o', 'Word')
+    AInfo := InfoBase('Word', 'integer')
   else if (L = 'nativeint') and not SameText(APlataforma, 'Win64') then
-    AInfo := Info('o', 'Integer')
+    AInfo := InfoBase('Integer', 'integer')
   else if (L = 'nativeuint') and not SameText(APlataforma, 'Win64') then
-    AInfo := Info('o', 'Cardinal')
+    AInfo := InfoBase('Cardinal', 'integer')
   else if (L = 'int64') or (L = 'nativeint') then
-    AInfo := Info('o', 'Int64')
+    AInfo := InfoBase('Int64', 'int64')
   else if (L = 'uint64') or (L = 'nativeuint') then
-    AInfo := Info('o', 'UInt64')
+    AInfo := InfoBase('UInt64', 'int64')
   else if L = 'single' then
-    AInfo := Info('o', 'Single')
+    AInfo := InfoBase('Single', 'single') // se escribe redondeado a Single (FlotanteDeForm)
   else if (L = 'double') or (L = 'real') then
-    AInfo := Info('o', 'Double')
+    AInfo := InfoBase('Double', 'float')
   else if L = 'extended' then
-    AInfo := Info('o', 'Extended')
+    AInfo := InfoBase('Extended', 'float')
   else if L = 'currency' then
-    AInfo := Info('o', 'Currency')
+    AInfo := InfoBase('Currency', 'float')
   else if L = 'comp' then
-    AInfo := Info('o', 'Comp')
+    AInfo := InfoBase('Comp', 'float')
   else if L = 'variant' then
-    AInfo := Info('o', 'Variant')
+    AInfo := InfoBase('Variant', 'variant')
   else if L = 'olevariant' then
-    AInfo := Info('o', 'OleVariant')
+    AInfo := InfoBase('OleVariant', 'variant')
   else if L = 'pointer' then
     AInfo := Info('o', 'Pointer')
   else if L = 'boolean' then
@@ -1270,7 +1474,22 @@ begin
         Result := Info('o', T.NombreCompleto);
         Result.Miembros := MiembrosDeBase(T, UT, AProf);
         if Length(Result.Miembros) > 0 then
-          Result.Kind := 'e';
+          Result.Kind := 'e'
+        else
+        begin
+          // uno de numeros (TColor, TCursor) es un entero, uno de
+          // caracteres un caracter (el texto activo deja las cadenas en
+          // blanco: 'a'..'z' llega con el limite vacio); uno que empieza
+          // por una constante con nombre no se adivina
+          var Bajo := T.Base;
+          if Bajo.Contains('..') then
+            Bajo := Bajo.Substring(0, Bajo.IndexOf('..'));
+          Bajo := Trim(Bajo);
+          if TRegEx.IsMatch(Bajo, '^[-+]?\s*(?:\$[0-9A-Fa-f]|\d)') then
+            Result.Base := 'integer'
+          else if (Bajo = '') or Bajo.StartsWith('#') or Bajo.StartsWith('''') then
+            Result.Base := 'char';
+        end;
       end;
     ctAlias:
       begin
@@ -1318,6 +1537,51 @@ end;
 
 // Las clases que alguna unidad registra en la paleta, resueltas con el
 // alcance de esa unidad (su uses dice de cual de los homonimos es)
+// dos registros del mismo tipo: '*' si alguno lo es; si no, los nombres de los dos
+function UneConstantes(const A, B: string): string;
+begin
+  if (A = '*') or (B = '*') then
+    Exit('*');
+  Result := A;
+  for var N in B.Split([',']) do
+    if not (',' + LowerCase(Result) + ',').Contains(',' + LowerCase(N) + ',') then
+      Result := Result + ',' + N;
+end;
+
+{ Los nombres que acepta la funcion IdentTo AFuncion de AUnidad: los de su
+  mapa, siguiendo las que solo llaman a otra (Vcl.Controls.IdentToCursor ->
+  System.UIConsts.IdentToCursor); '*' si hace otra cosa o no se encuentra:
+  cualquier identificador vale, no se adivina. }
+function TGenerador.NombresDeConstantes(AUnidad: TUnidadLeida; const AFuncion: string;
+  AProf: Integer): string;
+var
+  X: TUnidadLeida;
+  Fn: string;
+  Partes: TArray<string>;
+begin
+  Result := '*';
+  if AProf > 4 then
+    Exit;
+  X := AUnidad;
+  Fn := AFuncion;
+  if Pos('.', Fn) > 0 then
+  begin
+    if not FUnidades.TryGetValue(ClaveDeIdentificador(Copy(Fn, 1, Fn.LastIndexOf('.'))), X) then
+      Exit;
+    Fn := UltimoTrozo(Fn);
+  end;
+  for var L in X.Constantes do
+  begin
+    Partes := L.Split([' ']);
+    if (Length(Partes) < 3) or not MismoIdentificador(Partes[1], Fn) then
+      Continue;
+    if Partes[0] = 'L' then
+      Exit(Partes[2]);
+    if Partes[0] = 'D' then
+      Exit(NombresDeConstantes(X, Partes[2], AProf + 1));
+  end;
+end;
+
 procedure TGenerador.ResuelveRegistradas;
 var
   T: TTipoPas;
@@ -1487,7 +1751,8 @@ type
   cercana; una con indices no va nunca a un form, tampoco redeclarada. Los
   enumerados y los conjuntos que usa van a AEnums/ASets. }
 function TGenerador.HechosDeClase(ATipo: TTipoPas; const ACadena: TArray<TTipoPas>;
-  AEnums, ASets: TDictionary<string, TArray<string>>): TArray<string>;
+  AEnums, ASets: TDictionary<string, TArray<string>>;
+  ABases: TDictionary<string, string>): TArray<string>;
 var
   Lineas, Orden: TList<string>;
   Pub: TDictionary<string, string>;
@@ -1574,6 +1839,16 @@ begin
       if CharInSet(I.Kind, ['c', 'e', 's']) then
         Id := IdDeTipo(I.Unidad, I.Nombre);
       Lineas.Add(Format('P %s %s %s %s', [IdDeClase(ATipo), Pub[K], I.Kind, Id]));
+      // y la base de un tipo 'o', una vez por tipo (B); dos con el mismo
+      // nombre y otra base no se juzgan
+      if (I.Kind = 'o') and (I.Base <> '') then
+      begin
+        var Ya: string;
+        if not ABases.TryGetValue(ClaveDeIdentificador(Id), Ya) then
+          ABases.Add(ClaveDeIdentificador(Id), Id + ' ' + I.Base)
+        else if not SameText(Ya, Id + ' ' + I.Base) then
+          ABases[ClaveDeIdentificador(Id)] := Id + ' ?';
+      end;
       if (I.Kind = 'e') and (Length(I.Miembros) > 0) and not AEnums.ContainsKey(Id) then
         AEnums.Add(Id, I.Miembros)
       else if (I.Kind = 's') and (Length(I.Miembros) > 0) and not ASets.ContainsKey(Id) then
@@ -1637,6 +1912,7 @@ var
   Lineas: array [TMarcoDisenador] of TList<string>;
   Primeras: array [TMarcoDisenador] of TDictionary<string, TArray<TPrimera>>;
   Enums, Sets: array [TMarcoDisenador] of TDictionary<string, TArray<string>>;
+  Bases, Consts: array [TMarcoDisenador] of TDictionary<string, string>;
   Ms: TMarcosDisenador;
   Hechos: TArray<string>;
   Cad: TArray<TTipoPas>;
@@ -1661,6 +1937,8 @@ begin
     Primeras[M] := TDictionary<string, TArray<TPrimera>>.Create;
     Enums[M] := TDictionary<string, TArray<string>>.Create;
     Sets[M] := TDictionary<string, TArray<string>>.Create;
+    Bases[M] := TDictionary<string, string>.Create;
+    Consts[M] := TDictionary<string, string>.Create;
   end;
   try
     Orden.AddRange(FUnidades.Values);
@@ -1712,12 +1990,17 @@ begin
           begin
             if Emitidas[M].ContainsKey(K) then
               Continue;
-            Hechos := HechosDeClase(T, Cad, Enums[M], Sets[M]);
+            Hechos := HechosDeClase(T, Cad, Enums[M], Sets[M], Bases[M]);
             // lo que guarda por codigo, en ELLA (no en cada descendiente: el
             // lint sube por la herencia, y la tabla no engorda)
             for var Def in U.Definidas do
               if MismoIdentificador(Def.Substring(0, Def.IndexOf(' ')), T.NombreCompleto) then
                 Hechos := Hechos + ['D ' + Id + Def.Substring(Def.IndexOf(' '))];
+            // y si su SetName hace que el Text siga al nombre: tambien en
+            // ELLA, que lo heredan sus descendientes
+            for var SN in U.SetNames do
+              if MismoIdentificador(SN.Substring(0, SN.IndexOf(' ')), T.NombreCompleto) then
+                Hechos := Hechos + ['T ' + Id + SN.Substring(SN.IndexOf(' '))];
             Lineas[M].AddRange(Hechos);
             Emitidas[M].Add(K, True);
             // ...pero un form escribe el NOMBRE ('object X: TScrollBar'):
@@ -1733,6 +2016,30 @@ begin
               Primeras[M].Add(Nombre, nil);
             Primeras[M][Nombre] := Primeras[M][Nombre] + [Pri];
           end;
+        end;
+      end;
+    // las constantes con nombre de los tipos enteros (hecho I), en el marco
+    // de la unidad que las registra: lo que el cargador acepta como
+    // identificador en una propiedad de ese tipo
+    for var U in Orden do
+      for var R in U.Constantes do
+      begin
+        var Partes := R.Split([' ']);
+        if (Length(Partes) < 3) or (Partes[0] <> 'R') then
+          Continue;
+        var Inf := Clasifica(Partes[1], U, nil, True);
+        var Tipo := IfThen(Inf.Kind = '?', UltimoTrozo(Partes[1]), Inf.Nombre);
+        var Lista := NombresDeConstantes(U, Partes[2], 0);
+        Ms := MarcosDe(U);
+        if Ms = [] then
+          Ms := [mdVcl, mdFmx];
+        for M in Ms do
+        begin
+          var Une := Lista;
+          var Viejo: string;
+          if Consts[M].TryGetValue(ClaveDeIdentificador(Tipo), Viejo) then
+            Une := UneConstantes(Viejo.Substring(Viejo.IndexOf(' ') + 1), Lista);
+          Consts[M].AddOrSetValue(ClaveDeIdentificador(Tipo), Tipo + ' ' + Une);
         end;
       end;
     for M := Low(TMarcoDisenador) to High(TMarcoDisenador) do
@@ -1777,11 +2084,20 @@ begin
         Lineas[M].Add('E ' + E.Key + ' ' + string.Join(',', E.Value));
       for var S in Sets[M] do
         Lineas[M].Add('S ' + S.Key + ' ' + string.Join(',', S.Value));
+      // la base de los tipos 'o' (B) y las constantes de los enteros (I):
+      // lo que set mira de un valor
+      for var Bs in Bases[M].Values do
+        if not Bs.EndsWith(' ?') then
+          Lineas[M].Add('B ' + Bs);
+      for var Cn in Consts[M].Values do
+        Lineas[M].Add('I ' + Cn);
       Result.Hechos[M] := Lineas[M].ToArray;
     end;
   finally
     for M := Low(TMarcoDisenador) to High(TMarcoDisenador) do
     begin
+      Consts[M].Free;
+      Bases[M].Free;
       Sets[M].Free;
       Enums[M].Free;
       Primeras[M].Free;

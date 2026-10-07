@@ -134,7 +134,8 @@ uses
   Lsp.Regex in 'Lsp.Regex.pas',
   Lsp.Json in 'Lsp.Json.pas',
   Lsp.Listas in 'Lsp.Listas.pas',
-  Lsp.FormRender in 'Lsp.FormRender.pas';
+  Lsp.FormRender in 'Lsp.FormRender.pas',
+  Lsp.DesignerEdit in 'Lsp.DesignerEdit.pas';
 
 {$R *.res}
 

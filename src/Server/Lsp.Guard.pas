@@ -874,6 +874,18 @@ type
     function Cambiados: Integer;
   end;
 
+type
+  { Lo que se hace bajo FicherosTodoONada: un exito, o un fallo (EsFallo). }
+  TAccionTodoONada = reference to function: string;
+
+{ Una operacion sobre varios ficheros TODO O NADA: la foto de ARutas antes,
+  y si AAccion lanza o devuelve un fallo, cada fichero vuelve como estaba (lo
+  que no pudo volver se dice, con el motivo del fallo). Estaba escrita en
+  ProyectoTodoONada para el .dpr y el .dproj; el form y su unidad de
+  delphi_designer insert/delete eran la segunda copia (1.17.0). }
+function FicherosTodoONada(const ARutas: array of string;
+  const AAccion: TAccionTodoONada): string;
+
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
   llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
   arrancar TODO lo que quede es basura de una ejecucion anterior - la que
@@ -3661,6 +3673,33 @@ begin
       except
         Inc(Result); // no se puede leer: no se da por igual
       end;
+end;
+
+function FicherosTodoONada(const ARutas: array of string;
+  const AAccion: TAccionTodoONada): string;
+var
+  NoVolvio: string;
+  Foto: TFotoDeFicheros;
+begin
+  Foto.Toma(ARutas);
+  try
+    Result := AAccion();
+  except
+    on E: Exception do
+    begin
+      NoVolvio := Foto.Restaura;
+      if NoVolvio <> '' then
+        raise Exception.Create(MsgFmt(SR_FOTO_NO_VOLVIO_FMT,
+          [NoVolvio, MsgExcepcion(E.ClassName, E.Message)]));
+      raise;
+    end;
+  end;
+  if EsFallo(Result) then
+  begin
+    NoVolvio := Foto.Restaura;
+    if NoVolvio <> '' then
+      Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Result]);
+  end;
 end;
 
 { Trocea una linea de comando con las reglas del runtime de C de Windows

@@ -187,6 +187,21 @@ function MismoIdentificador(const A, B: string): Boolean;
 // La CLAVE de un identificador para un diccionario o un conjunto: dos tienen
 // la misma clave si son el mismo (MismoIdentificador es su lector)
 function ClaveDeIdentificador(const S: string): string;
+// La distancia de edicion (Levenshtein) entre dos textos, tal cual: quien la
+// quiera sin mayusculas los pliega antes. Vivia dentro de delphi_help (el
+// nombre de una tool casi bien escrito); delphi_designer set es su segundo
+// usuario (la propiedad casi bien escrita, 1.17.0)
+function EditDistance(const A, B: string): Integer;
+// El candidato MAS parecido a A, sin mayusculas: el UNICO a la menor
+// distancia, si esa distancia no pasa de ATope; '' si no lo hay (empate,
+// demasiado lejos, o A ya esta entre ellos)
+function ElMasParecido(const A: string; const ACandidatos: array of string;
+  ATope: Integer): string;
+// La linea (1-based) de la posicion APos (1-based) de ATexto: un salto es
+// CRLF, LF o un CR suelto, como en el troceador (Lsp.Patch.SplitToLines).
+// Estaba a mano en LlavesAnidadas; el analizador de impacto de
+// delphi_designer (los usos de un componente en su unidad) es el segundo
+function LineaDePosicion(const ATexto: string; APos: Integer): Integer;
 
 implementation
 
@@ -238,6 +253,57 @@ begin
   // no plegaba a i): en ASCII da lo mismo que LowerCase, y las claves que ya
   // estaban escritas en minusculas (las tablas del disenador) no cambian
   Result := S.ToLowerInvariant;
+end;
+
+function EditDistance(const A, B: string): Integer;
+var
+  I, J, Cost, Prev, Cur: Integer;
+  Row: TArray<Integer>;
+begin
+  if A = B then
+    Exit(0);
+  if (A = '') or (B = '') then
+    Exit(Max(Length(A), Length(B)));
+  SetLength(Row, Length(B) + 1);
+  for J := 0 to Length(B) do
+    Row[J] := J;
+  for I := 1 to Length(A) do
+  begin
+    Prev := Row[0];
+    Row[0] := I;
+    for J := 1 to Length(B) do
+    begin
+      Cost := IfThen(A[I] = B[J], 0, 1);
+      Cur := Row[J];
+      Row[J] := Min(Min(Row[J] + 1, Row[J - 1] + 1), Prev + Cost);
+      Prev := Cur;
+    end;
+  end;
+  Result := Row[Length(B)];
+end;
+
+function ElMasParecido(const A: string; const ACandidatos: array of string;
+  ATope: Integer): string;
+var
+  Mejor, Empates, D: Integer;
+begin
+  Result := '';
+  Mejor := MaxInt;
+  Empates := 0;
+  for var C in ACandidatos do
+  begin
+    D := EditDistance(ClaveDeIdentificador(A), ClaveDeIdentificador(C));
+    if D < Mejor then
+    begin
+      Mejor := D;
+      Result := C;
+      Empates := 0;
+    end
+    else if (D = Mejor) and not MismoIdentificador(C, Result) then
+      Inc(Empates);
+  end;
+  if (Mejor = 0) or (Mejor > ATope) or (Empates > 0) then
+    Result := '';
 end;
 
 function MismoIdentificador(const A, B: string): Boolean;
@@ -518,6 +584,14 @@ begin
       Inc(Result);
 end;
 
+function LineaDePosicion(const ATexto: string; APos: Integer): Integer;
+begin
+  Result := 1;
+  for var K := 1 to Min(APos, Length(ATexto) + 1) - 1 do
+    if (ATexto[K] = #10) or ((ATexto[K] = #13) and ((K = Length(ATexto)) or (ATexto[K + 1] <> #10))) then
+      Inc(Result);
+end;
+
 function LlavesAnidadas(const ATexto: string): TArray<Integer>;
 var
   I, N, Dentro, Linea: Integer;
@@ -542,10 +616,7 @@ begin
       begin
         // un salto es CRLF, LF o un CR suelto, como en el troceador (contaba
         // solo los LF: un texto en CR daba la linea 1 a todo)
-        Linea := 1;
-        for var K := 1 to I - 1 do
-          if (ATexto[K] = #10) or ((ATexto[K] = #13) and (ATexto[K + 1] <> #10)) then
-            Inc(Linea);
+        Linea := LineaDePosicion(ATexto, I);
         Result := Result + [Linea];
       end;
     end;

@@ -143,11 +143,46 @@ handshake.
   block. After editing a form with `delphi_edit`, run `delphi_designer lint
   path=<form>`: a property the class does not publish or an enum value that
   does not exist will not stream, and nobody tells you at build time.
+- To ADD a component: `delphi_designer command=insert path=<form>
+  classname=TButton component=BtnOk` (`component` names it, its text too
+  when the class shows its Name, so no `set prop=Name` afterwards - without
+  it, the first free Button1, Button2... as the IDE; `parent=Panel1` puts it
+  inside a container, the form by default). Never write the block by hand:
+  insert places it at 10,10 as
+  the last child with the minimum the IDE writes (its Name as text when its
+  class does that, its TabOrder), adds its published field to the form's
+  class and its unit to the uses, and answers the numbered block. In VCL a
+  parent is the form or a windowed control (a TTabSheet, not its
+  TPageControl); in FMX any control.
+- To CHANGE one property: `set component=Button1 prop=Caption value=OK`. It
+  is checked against the class BEFORE writing: a property the class does
+  not publish (the answer suggests the close one), an enum value that does
+  not exist (the answer lists the legal ones), a value its type does not
+  take (read from the Delphi source: a whole number or one of its named
+  constants such as clRed, a number, a character, a string), a component
+  of another class (a DBGrid's DataSource takes a TDataSource: the answer
+  lists the ones that fit) - nothing is written. A string may go without
+  quotes, and a number as you would type it (130, 0.7): set writes it the
+  way the IDE does. The form's own size (`component=<the form>
+  prop=ClientWidth`) and an inline frame's Width/Height go through set too.
+  `set component=X
+  parent=Panel1` (alone) moves X with its children; `prop=Name` renames it,
+  its field and the form lines that name it (its methods keep their names,
+  and `usesInCode` lists the code that still says the old one).
+- To REMOVE one: `delete component=X`. It is REFUSED while a method of its
+  own - a handler it is bound to, or one named after it - has code, and the
+  answer lists each with its line: clean them first (move what they do, or
+  empty them) and repeat. Empty handlers, its field and the references to
+  it in the form go with it; a method something else also uses stays.
+  `usesInCode` lists the lines of the unit that still name it: the compiler
+  stops there. insert, delete and a rename write the form and its unit
+  together, all or nothing.
 - A binary `.dfm` reads on the fly; editing it needs `to-text` first (see
   above). `.fmx` is always text.
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows, in the same
-  answer. The loop is edit the `.dfm`/`.fmx` -> `lint` -> `preview` -> fix.
+  answer. The loop is insert/set (or `delphi_edit` for the rest) -> `lint`
+  -> `preview` -> fix.
   To place something, measure on the image and convert with its `frame`
   (image pixels to form units; `Left`/`Top` in the file are relative to the
   parent, whose rectangle `component=<parent>` gives as `componentRect`).

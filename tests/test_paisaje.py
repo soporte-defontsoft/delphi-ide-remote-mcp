@@ -73,6 +73,14 @@ REGLAS = [
      [('Lsp.FormRender.pas', 'ComponeOrdenDeRender'), ('FormRender.Comun.pas', 'ParseaArgumentos'),
       ('FormRender.Textos.pas', '*')],
      'ComponeOrdenDeRender la escribe y ParseaArgumentos del ayudante la lee (1.17.0)'),
+    ('la linea de objeto de un form', r"'(?:object|inherited|inline) '\s*\+",
+     [('Lsp.DesignerBin.pas', 'ComponeLineaDeObjeto')],
+     'ComponeLineaDeObjeto la escribe y LineaDeObjeto la lee (1.17.0: el insert de delphi_designer; '
+     'las plantillas de Lsp.Scaffold la componian a mano)'),
+    ('un flotante de un form', r"\.0{18}'|ffFixed\s*,\s*16\s*,\s*18",
+     [('Lsp.DesignerBin.pas', 'FlotanteDeForm')],
+     'FlotanteDeForm: el numero de coma flotante como lo escribe el IDE en UN sitio (1.17.0: insert, '
+     'set y las plantillas FMX)'),
 ]
 
 
@@ -157,6 +165,8 @@ PLANTADO = {
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el exe de un renderizador de forms': "  E := ServerDir('DelphiFormRenderVcl.exe');",
     'la orden del renderizador de forms': "  O := '\"' + Exe + '\" --path \"' + P + '\"';",
+    'la linea de objeto de un form': "  L := 'object ' + Nombre + ': ' + Clase;",
+    'un flotante de un form': "  V := IntToStr(N) + '.000000000000000000';",
 }
 for regla in REGLAS:
     nombre = regla[0]

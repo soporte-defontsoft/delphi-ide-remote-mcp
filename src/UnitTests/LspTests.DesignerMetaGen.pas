@@ -49,6 +49,7 @@ type
     [TearDown] procedure Limpia;
     [Test] procedure LasTablasDeUnFuenteDeMentira;
     [Test] procedure LasReglasQueSalieronDeMedir;
+    [Test] procedure LasBasesYLasConstantesDelFuente;
     [Test] procedure ElNombradorYSuLector;
     [Test] procedure LaHuellaCambiaConElFuente;
     [Test] procedure LoQuePublicaUnDescendiente;
@@ -624,6 +625,83 @@ begin
     'el de la unidad antes que el anidado heredado');
   Assert.IsTrue(Hechos(V, 'P System.Classes:TAccion Conexion ? TConexionDeFuera'),
     'lo que no se lee es ? (con o el lint decia que no tiene subpropiedades)');
+end;
+
+{ Lo que delphi_designer set mira de un valor, sacado del fuente (David,
+  7-oct-2026: "comprobar tipos realmente"): la base de cada tipo 'o' (B) -
+  un subrango de numeros es un entero, uno de caracteres un caracter, un
+  alias fuerte la de su destino, uno que empieza por una constante con
+  nombre no se sabe - y las constantes con nombre de los enteros (I), por el
+  marco de la unidad que las registra: las del mapa, siguiendo a quien
+  llama a otra; '*' si su IdentTo hace mas que buscar. }
+procedure TDesignerMetaGenTests.LasBasesYLasConstantesDelFuente;
+var
+  T: TTablasDeFuente;
+  V, F: TArray<string>;
+begin
+  Escribe('System.pas', 'unit System; interface type TObject = class end; implementation end.');
+  Escribe('System.UITypes.pas', 'unit System.UITypes; interface type'#13#10 +
+    'TColor = -$7FFFFFFF-1..$7FFFFFFF; TCursor = -32768..32767; TAlphaColor = type Cardinal;'#13#10 +
+    'TLetra = ''a''..''z''; TRaro = MinCosa..MaxCosa;'#13#10 +
+    'implementation end.');
+  Escribe('System.Classes.pas', 'unit System.Classes; interface uses System.UITypes; type'#13#10 +
+    'TCaption = type string; TImageIndex = type Integer;'#13#10 +
+    'TPersistent = class(TObject) end;'#13#10 +
+    'TComponent = class(TPersistent) end;'#13#10 +
+    'TCosa = class(TComponent) published'#13#10 +
+    '  property Color: TColor read FC; property Cursor: TCursor read FK;'#13#10 +
+    '  property Fondo: TAlphaColor read FF; property Inicial: TLetra read FI;'#13#10 +
+    '  property Letra: Char read FL; property Peso: Double read FP;'#13#10 +
+    '  property Titulo: TCaption read FT; property Indice: TImageIndex read FX;'#13#10 +
+    '  property Dato: Variant read FD; property Grande: Int64 read FG;'#13#10 +
+    '  property Rango: TRaro read FR; property Opacidad: Single read FO; end;'#13#10 +
+    'implementation end.');
+  Escribe('System.UIConsts.pas', 'unit System.UIConsts; interface uses System.UITypes;'#13#10 +
+    'implementation uses System.Classes;'#13#10 +
+    'const'#13#10 +
+    // una cadena con un '(' suelto: el lector de rutinas no la ve (texto activo)
+    '  Aviso = ''un ( suelto'';'#13#10 +
+    '  Colors: array[0..1] of TIdentMapEntry = ((Value: 0; Name: ''clBlack''), (Value: 255; Name: ''clRed''));'#13#10 +
+    '  Cursors: array[0..1] of TIdentMapEntry = ((Value: 0; Name: ''crDefault''), (Value: -21; Name: ''crHandPoint''));'#13#10 +
+    '  AlphaColors: array[0..0] of TIdentMapEntry = ((Value: 1; Name: ''claRed''));'#13#10 +
+    'function IdentToColor(const Ident: string; var Color: Integer): Boolean;'#13#10 +
+    'begin Result := IdentToInt(Ident, Color, Colors); end;'#13#10 +
+    'function IdentToCursor(const Ident: string; var Cursor: Integer): Boolean;'#13#10 +
+    'begin Result := IdentToInt(Ident, Cursor, Cursors); end;'#13#10 +
+    'function IdentToAlphaColor(const Ident: string; var Color: Integer): Boolean;'#13#10 +
+    'begin if Ident = '''' then Result := False else Result := IdentToInt(Ident, Color, AlphaColors); end;'#13#10 +
+    'initialization'#13#10 +
+    '  RegisterIntegerConsts(TypeInfo(TColor), IdentToColor, ColorToIdent);'#13#10 +
+    '  RegisterIntegerConsts(TypeInfo(TCursor), IdentToCursor, CursorToIdent);'#13#10 +
+    '  RegisterIntegerConsts(TypeInfo(TAlphaColor), IdentToAlphaColor, AlphaColorToIdent);'#13#10 +
+    'end.');
+  Escribe('Vcl.Controls.pas', 'unit Vcl.Controls; interface uses System.UITypes;'#13#10 +
+    'implementation uses System.UIConsts;'#13#10 +
+    'function IdentToCursor(const Ident: string; var Cursor: Longint): Boolean;'#13#10 +
+    'begin Result := System.UIConsts.IdentToCursor(Ident, Cursor); end;'#13#10 +
+    'initialization'#13#10 +
+    '  RegisterIntegerConsts(TypeInfo(TCursor), IdentToCursor, CursorToIdent);'#13#10 +
+    'end.');
+  T := GeneraTablasDeFuente([FDir], '37.0', 'Z:\no-es-bds');
+  V := T.Hechos[mdVcl];
+  F := T.Hechos[mdFmx];
+  Assert.IsTrue(Hechos(V, 'B TColor integer'), 'un subrango de numeros es un entero');
+  Assert.IsTrue(Hechos(V, 'B TCursor integer'));
+  Assert.IsTrue(Hechos(V, 'B TAlphaColor integer'), 'el alias fuerte, la de su destino (Cardinal)');
+  Assert.IsTrue(Hechos(V, 'B TLetra char'), 'uno de caracteres, un caracter');
+  Assert.IsTrue(Hechos(V, 'B Single single'), 'una Single aparte: se escribe redondeada a Single');
+  Assert.IsTrue(Hechos(V, 'B Char char') and Hechos(V, 'B Double float') and
+    Hechos(V, 'B Variant variant') and Hechos(V, 'B Int64 int64'), 'los del compilador');
+  Assert.IsTrue(Hechos(V, 'B TCaption string') and Hechos(V, 'B TImageIndex integer'),
+    'los alias fuertes del lenguaje');
+  for var H in V do
+    Assert.IsFalse(H.StartsWith('B TRaro '), 'uno que empieza por una constante con nombre no se sabe: ' + H);
+  Assert.IsTrue(Hechos(V, 'I TColor clBlack,clRed'), 'las de su mapa');
+  Assert.IsTrue(Hechos(V, 'I TCursor crDefault,crHandPoint'),
+    'el de Vcl.Controls llama al de System.UIConsts: las mismas');
+  Assert.IsTrue(Hechos(V, 'I TAlphaColor *'), 'su IdentTo hace mas que buscar: cualquier identificador');
+  Assert.IsTrue(Hechos(F, 'I TColor clBlack,clRed') and Hechos(F, 'B TColor integer'),
+    'System.UIConsts no es de ningun marco: en los dos');
 end;
 
 procedure TDesignerMetaGenTests.ElNombradorYSuLector;

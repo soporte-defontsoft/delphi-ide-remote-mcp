@@ -35,9 +35,65 @@ the MCP `initialize` response (`serverInfo.version`).
   (`DSGN-073`); the renderer's own (`RENDER-0xx`) pass through as they are.
   `preview` is not a read for a read-only credential: its PNG lands in the
   workspace, as an `adb` screenshot does.
+- **`delphi_designer insert`, `set` and `delete`: the form and its unit
+  edited the way the IDE does**, and only the basics - the test is that the
+  component is SEEN when the form opens and when the program runs.
+  `insert classname=TButton [component=BtnOk] [parent=Panel1]` places a new
+  visual control at 10,10 as the last child of its parent with the minimum
+  the IDE writes (its Name as text when its class's `SetName` does that,
+  read from the source; its TabOrder; no size - the class's constructor
+  gives it), adds its published field to the form's class and its unit to
+  the uses, and answers the numbered block. Its Name is `component`, judged
+  as a rename is (an identifier, not a reserved word, taken by nothing in
+  the form or its class), or else the IDE's first free one (Button1,
+  Button2...). `set component=X prop=P value=V` writes ONE
+  property after checking it against the class with the same judge as
+  `lint`: a property the class does not publish (with the close one: `Did
+  you mean Caption?`), an enum value that does not exist (with the legal
+  ones), a value its type does not take - what the form loader (`TReader`)
+  accepts, read from the source: a whole number or one of the named
+  constants its type registers (`clRed` in a `TColor`, with the close one
+  when misspelt; a `TAlphaColor` also takes `xFF00FF00`), a number, one
+  character, a string -, a reference to a component that is not in the
+  form or is not of the property's class (the `DataSource` of a `TDBGrid`
+  takes a `TDataSource`; the answer lists the ones that fit, `DSGN-107`),
+  an event - nothing is written. A string may go
+  without quotes (set adds them, accents as the IDE writes them: `#243`),
+  and a number with decimals is written as the 32-bit IDE writes it, since
+  no IDE will rewrite the form afterwards: `130` in a `Position.X` is
+  `130.000000000000000000`, `0.7` in a `Single` `0.699999988079071000`
+  (checked against the 80 distinct values of the Delphi 13.1 `.fmx`
+  samples). The form itself (`ClientWidth`...) and an inline frame take
+  `set` too - a frame's class belongs to the project, so its properties
+  are judged as a `TFrame`'s. A list, a collection or a binary block is
+  left to `delphi_edit`. `set
+  parent=Y` (alone) moves the component with its children, keeps its
+  Left/Top and takes the next TabOrder there; in VCL the answer says when
+  it falls outside the parent (`layout`). `set prop=Name` renames the
+  component in the form (and every line of it that names it), its field,
+  and its Caption/Text when that was its name; its methods keep theirs, as
+  in the IDE, and `usesInCode` lists the code that still says the old one.
+  `delete component=X` takes the component and everything inside it, the
+  references to it from other components, its field and its EMPTY
+  handlers - and is **refused** while a method of its own (a handler it is
+  bound to, or one named after it) still has code (`DSGN-086`, each method
+  with its line): the IDE leaves such code behind, compiling and never
+  running again; here the agent cleans it first. A method something else
+  also uses is not touched, and what uses the component from other code is
+  listed, not judged (the compiler's). insert, delete and a rename write
+  the `.dfm`/`.fmx` and its `.pas` all or nothing. Refused without touching
+  anything: a binary `.dfm` (`DSGN-075`), a form without its unit
+  (`DSGN-076`), a component of an inline frame (`DSGN-083`) or inherited
+  from an ancestor form (`DSGN-084`), the form itself (`DSGN-085`), a parent
+  that cannot hold controls (`DSGN-080`/`081`), a non-visual class
+  (`DSGN-079`).
 
 ### Changed
 
+- `delphi_designer layout` lists a VCL control that carries no
+  Width/Height (the size of its constructor, what `insert` leaves) under
+  `sizeNotWritten` with that reason, instead of skipping it as if it were
+  non-visual.
 - **`delphi_paserver` calls the PAServer profile `profile`**, as
   `delphi_build`, `delphi_desktop` and `delphi_config` do: it was `name`
   there, the same idea with two names, and an agent that learned one tool
@@ -71,6 +127,15 @@ the MCP `initialize` response (`serverInfo.version`).
   vault in the workspace (the five `vault_*` tools), a read-only vault, the
   workspace's tool profile. An agent counted 37 tools where the
   documentation says 42 and believed they had been merged.
+
+### Fixed
+
+- **`delphi_styles set` and `delete` found a property inside a
+  collection item** before the style's own one (`Width` of an item instead
+  of the object's), and a value split over several lines (`'abc' +` /
+  `'def'`) was replaced only in its first line, leaving the rest below. A
+  property is now looked for at the object's own level only, and its whole
+  value is replaced.
 
 ### Internal
 
@@ -107,6 +172,45 @@ the MCP `initialize` response (`serverInfo.version`).
   forced `print`), run after touching a renderer and before a release.
   `mcp_cliente` gains one table of helpers for `run_all` and `copia_exe`
   and a PNG reader for batteries that look inside a capture.
+- `insert`/`set`/`delete` live in `Lsp.DesignerEdit`, with ONE impact
+  analyzer for `delete` and for `set prop=Name` (renaming is, for the code,
+  taking one name away and putting another), and ONE judge of a new name
+  for the rename and for `insert component=`. What they needed was grown
+  where it already lived, not copied: the Pascal reader records each
+  routine body of the implementation and where every class member's
+  declaration ends; `TStyleDoc` finds a property's whole value at the
+  object's own level (the `delphi_styles` fix above) and an object by name;
+  the `lint` judge of one property line is a function (`JuzgaPropiedad`)
+  that `set` asks before writing; the table generator reads each class's
+  `SetName` (new fact `T`, table generation 7: whether the Text follows the
+  Name - a behaviour of concrete classes comes from the source, not from a
+  list) and the table answers `Desciende` and `TextoSigueAlNombre`; it
+  also records what each simple type reduces to (fact `B`: `TColor` is a
+  subrange of integers, `TCaption` a string) and the named constants of an
+  integer type, from the map of its `RegisterIntegerConsts` and following
+  the functions that only call another (fact `I`; table generation 9) -
+  `set` had three hand lists of type names until then, and a `TColor`
+  `'hola'` or a `TCursor` `3.5` got written (measured live); the
+  event-line reader of `check-binding` is shared; the "all or nothing" of
+  several files is one helper (`FicherosTodoONada`, which
+  `ProyectoTodoONada` now calls); `adduses` has its text core
+  (`UsesConUnidades`); the edit distance of `delphi_help` moved to
+  `Lsp.Pascal`. The object line, a string value and an FMX float of a text
+  form each have one composer in `Lsp.DesignerBin` (`ComponeLineaDeObjeto`,
+  inverse of `LineaDeObjeto`; `LiteralDeForm`; `FlotanteFmx`), and the
+  templates of `delphi_create` use them; `test_paisaje` watches the first
+  and the last.
+- Tests: `LspTests.DesignerEdit` (the analyzer, the delete and rename
+  plans, the reader's bodies, a property inside a collection, the `SetName`
+  rule measured in the Delphi 13.1 source - `TTextControl`,
+  `TPresentedTextControl`, `TSkLabel` yes, `TEditButton` no - with mutants
+  for the delete gate, the collection skip, the digit rule and the
+  `SetName` reader; the type facts and the lines a declaration shares with
+  another member, also with mutants) and `test_designer_edit` through the
+  server: fresh VCL
+  and FMX projects that keep compiling with `check-binding` and `lint`
+  clean after every step, and `preview` as the oracle of where things were
+  drawn, by pixel.
 
 ## [1.16.0] - 2026-10-06
 

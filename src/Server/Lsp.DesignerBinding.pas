@@ -24,6 +24,12 @@ function DesignerBindingJson(const ADfm, APas: string): string;
 function DesignerBindingWarnings(const ADfm: string;
   const ADfmLines: TArray<string>): TArray<string>;
 
+{ EL lector de una linea de evento de un form ('OnClick = Button1Click',
+  sangrada o no): el evento y el metodo; False si no lo es. Lo usan el
+  informe, insert=metodo y el analizador de impacto de delphi_designer
+  (delete, set de Name), que leia la misma linea con su propia regex. }
+function EventoDeLinea(const ALinea: string; out AEvento, AMetodo: string): Boolean;
+
 { El designer (texto o binario) cablea AMethod como evento (OnX = AMethod). }
 function DesignerWiresMethodFile(const ADfm, AMethod: string): Boolean;
 
@@ -57,13 +63,31 @@ const
   RAICES_DE_FORM: array [0 .. 5] of string = ('TForm', 'TFrame', 'TDataModule',
     'TCustomForm', 'TComponent', 'TObject');
 
+function EventoDeLinea(const ALinea: string; out AEvento, AMetodo: string): Boolean;
+var
+  M: TMatch;
+begin
+  // sobre la linea RECORTADA: empieza por On, sin sangria
+  M := TRegEx.Match(ALinea.Trim, EVENT_LINE_RE);
+  Result := M.Success;
+  if Result then
+  begin
+    AEvento := M.Groups[1].Value;
+    AMetodo := M.Groups[2].Value;
+  end
+  else
+  begin
+    AEvento := '';
+    AMetodo := '';
+  end;
+end;
+
 function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string): string;
 var
   L, Nm, Cl2, Ev, Handler, RootClass, Chain, OClave: string;
   Ret: TJSONObject;
   Miss, MissEv, NotPub, Extra, Dups, Empty: TJSONArray;
   Fields, PubMethods, AnyMethods, Seen, Objetos: TStringList;
-  M: TMatch;
   I, Depth, SkipBelow: Integer;
   AncestorOutside, ClassFound, Complete: Boolean;
 
@@ -239,11 +263,8 @@ begin
         Empty.Add(MsgFmt(SF_DSGN_QUEDADO_SIN_VALOR_FMT, [L, I + 1]));
         Continue;
       end;
-      M := TRegEx.Match(L, EVENT_LINE_RE);
-      if M.Success then
+      if EventoDeLinea(L, Ev, Handler) then
       begin
-        Ev := M.Groups[1].Value;
-        Handler := M.Groups[2].Value;
         if PubMethods.IndexOf(Handler) >= 0 then
           Continue;
         // Declared, but not where the form loader can find it: the one case
@@ -363,8 +384,7 @@ end;
 
 function DesignerWiresMethodFile(const ADfm, AMethod: string): Boolean;
 var
-  Txt, Enc: string;
-  M: TMatch;
+  Txt, Enc, Ev, Metodo: string;
 begin
   Result := False;
   if not TFile.Exists(ADfm) then
@@ -379,13 +399,10 @@ begin
   // La misma expresion que el informe, y como la aplica el informe: sobre
   // cada linea RECORTADA (empieza por ^On, sin sangria).
   for var Linea in SplitToLines(Txt) do
-  begin
-    M := TRegEx.Match(Linea.Trim, EVENT_LINE_RE);
     // el mismo metodo aunque la caja de una letra acentuada difiera: asi lo
     // encuentra el streaming (MethodAddress) al cargar el form
-    if M.Success and MismoIdentificador(M.Groups[2].Value, AMethod) then
+    if EventoDeLinea(Linea, Ev, Metodo) and MismoIdentificador(Metodo, AMethod) then
       Exit(True);
-  end;
 end;
 
 end.
