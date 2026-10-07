@@ -50,6 +50,8 @@
         <DCCReference Include="FormRender.Comun.pas"/>
         <DCCReference Include="FormRender.Fmx.pas"/>
         <DCCReference Include="FormRender.Textos.pas"/>
+        <DCCReference Include="..\Server\Lsp.DesignerForma.pas"/>
+        <DCCReference Include="..\Server\Lsp.Pascal.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -121,6 +121,30 @@ runs, events are ignored), FMX's dialog services are removed on start,
 `Application.OnException` records instead of showing, and the watchdog kills
 a render that waits on anything.
 
+## What a form file can and cannot do to the renderer
+
+The code the renderer loads is fixed by the machine, never by the file: its runtime BPLs,
+and - only when the file names a class the standard palette does not know - the design
+packages registered in the IDE (HKCU Known Packages, all of them, their initialization
+included; the file can trigger that load, it cannot choose or add a package). BPLs opened
+for icons and platform styles are opened as data: nothing of theirs runs. TReader creates
+registered classes only; an unknown class becomes a labelled substitute. Every path involved
+comes from the server through its read gate: the form, its sibling .pas and .dfm/.fmx files
+in the same folder (links are skipped), a style file.
+
+What a hostile file CAN do is feed bad values and binary blobs (pictures, image lists,
+collections) to the loaded classes and crash or stall the renderer. That is why it runs as a
+process of its own, with its watchdog and the server's own time limit, and why the server
+answers with the error instead of dying with it. A deeper adversarial pass is listed for
+1.18.0.
+
+**Cleanup: what is measured and what is not.** The renderer starts no
+processes of its own. Measured: its watchdog (exit code 3, in `Pruebas`) and
+the server's time limit (`RunCapturedIn` kills the renderer when it runs
+out). `RunCapturedIn` also puts it in a Job Object that kills the tree when it
+is closed; that part is best-effort (if the job cannot be created the
+renderer runs without one) and, for the renderer, not measured.
+
 ## Tests, in three layers
 
 - **`tests/test_designer_preview.py`** (every `run_all`): `preview` through the

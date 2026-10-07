@@ -241,6 +241,8 @@ begin
   end;
 end;
 
+{ El nombre como lee la RTL una referencia (FindNestedComponent): uno de
+  dentro de un frame inline va como Marco1.LblAviso (revision de la 1.17.0) }
 function RectDe(AForm: TForm; ARaiz: TComponent; const ANombre: string; out R: TRect): Boolean;
 var
   C: TComponent;
@@ -248,9 +250,9 @@ var
   RF: TRectF;
 begin
   Result := False;
-  C := ARaiz.FindComponent(ANombre);
+  C := ComponenteDeRuta(ARaiz, ANombre);
   if C = nil then
-    C := AForm.FindComponent(ANombre);
+    C := ComponenteDeRuta(AForm, ANombre);
   if C = nil then
     Exit;
   if C is TControl then
@@ -260,11 +262,17 @@ begin
     Result := True;
   end
   else
-  begin
-    P := PosicionDeNoVisual(C);
-    R := Rect(P.X, P.Y, P.X + 28, P.Y + 28 + 14);
-    Result := True;
-  end;
+    // un no visual esta en la imagen solo si se dibujan (nonvisual=true) y es
+    // de la raiz, como en el designer: el de un frame metido no se ensena, y
+    // su "rect" era un trozo de form cualquiera (segunda revision de la 1.17.0)
+    if GPeticion.NoVisuales then
+      for var N in NoVisualesDe(ARaiz, TControl) do
+        if N = C then
+        begin
+          P := PosicionDeNoVisual(C);
+          R := Rect(P.X, P.Y, P.X + 28, P.Y + 28 + 14);
+          Exit(True);
+        end;
 end;
 
 { Crea la form de diseno y lee el fichero (form o frame) en ella }

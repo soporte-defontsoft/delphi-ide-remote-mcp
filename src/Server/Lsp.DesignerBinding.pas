@@ -45,6 +45,7 @@ uses
   Lsp.Texts,
   Lsp.Patch,
   Lsp.DesignerBin,
+  Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un form
   System.Generics.Collections,
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
@@ -90,6 +91,7 @@ var
   Fields, PubMethods, AnyMethods, Seen, Objetos: TStringList;
   I, Depth, SkipBelow: Integer;
   AncestorOutside, ClassFound, Complete: Boolean;
+  Form: TArray<TLineaForm>;
 
   { Los campos y metodos publicados de UNA clase, del lector de clases
     (Lsp.PascalDecl): lo que va antes de cualquier palabra de visibilidad es
@@ -174,21 +176,26 @@ begin
     AnyMethods.CaseSensitive := False;
     Seen.CaseSensitive := False;
     Objetos.CaseSensitive := False;
+    // EL lector de las lineas (Lsp.DesignerBin.LineasDeForm): el end de un
+    // item de una coleccion no cierra un objeto. Aqui se contaba, el siguiente
+    // componente pasaba por el form mismo y no se comprobaba: clean=true en
+    // 20 .dfm de ejemplo que no lo estaban (revision de la 1.17.0)
+    Form := LineasDeForm(DfmLines);
     // the names of every object of the .dfm, at any depth (for the fields
     // without a component, below)
     for I := 0 to High(DfmLines) do
-      if LineaDeObjeto(DfmLines[I], OClave, Nm, Cl2) and (Nm <> '') then
-        Objetos.Add(Nm);
+      if (Form[I].Clase = clfObjeto) and (Form[I].Nombre <> '') then
+        Objetos.Add(Form[I].Nombre);
 
     // the root object of the .dfm names the class this form really is
     RootClass := '';
     // (THE reader of an object line: Lsp.DesignerBin.LineaDeObjeto)
     for I := 0 to High(DfmLines) do
-      if LineaDeObjeto(DfmLines[I], OClave, Nm, Cl2) then
+      if Form[I].Clase = clfObjeto then
       begin
-        Ret.AddPair('form', Nm);
-        Ret.AddPair('class', Cl2);
-        RootClass := Cl2;
+        Ret.AddPair('form', Form[I].Nombre);
+        Ret.AddPair('class', Form[I].ClaseObj);
+        RootClass := Form[I].ClaseObj;
         Break;
       end;
     if RootClass = '' then
@@ -226,8 +233,11 @@ begin
       // one ('object TMemo') or a name with an accent did not match, its end
       // popped the parent, and the next component was taken for the form
       // itself and never checked (live test of 1.12.0)
-      if LineaDeObjeto(L, OClave, Nm, Cl2) then
+      if Form[I].Clase = clfObjeto then
       begin
+        OClave := Form[I].Clave;
+        Nm := Form[I].Nombre;
+        Cl2 := Form[I].ClaseObj;
         Inc(Depth);
         if Depth = 1 then
           Continue; // the form itself
@@ -249,14 +259,16 @@ begin
           SkipBelow := Depth;
         Continue;
       end;
-      if TRegEx.IsMatch(L, '(?i)^end\s*$') then
+      if Form[I].Clase = clfFin then
       begin
         if (SkipBelow >= 0) and (Depth <= SkipBelow) then
           SkipBelow := -1;
         Dec(Depth);
         Continue;
       end;
-      if (SkipBelow >= 0) and (Depth > SkipBelow) then
+      // un evento es una propiedad, tambien la de un item de una coleccion
+      // (el OnClick de un TButtonItem); un trozo de una cadena partida no
+      if (Form[I].Clase <> clfPropiedad) or ((SkipBelow >= 0) and (Depth > SkipBelow)) then
         Continue;
       if TRegEx.IsMatch(L, '^(' + PATRON_EVENTO + ')\s*=\s*$') then
       begin
@@ -332,7 +344,7 @@ begin
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, MotivoBin));
   end;
   if Pas = '' then
-    Pas := TPath.ChangeExtension(ADfm, '.pas');
+    Pas := UnidadDeDesigner(ADfm);
   if not TFile.Exists(Pas) then
     Exit(MsgFmt(SR_DESIGNER_NO_UNIT_FMT, [Pas]));
   if IsBinaryDesignerFile(ADfm) then
@@ -355,7 +367,7 @@ var
   I: Integer;
 begin
   Result := [];
-  Pas := TPath.ChangeExtension(ADfm, '.pas');
+  Pas := UnidadDeDesigner(ADfm);
   if not TFile.Exists(Pas) then
     Exit;
   S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc), Pas);

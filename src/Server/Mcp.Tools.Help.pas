@@ -76,7 +76,6 @@ var
   Schema: TJSONObject;
   Names: TArray<string>;
   N, Close, BestName: string;
-  Best, Ties: Integer;
 begin
   N := AName.Trim.ToLower.Replace(' ', '_').Replace('-', '_');
   if (N <> '') and not N.StartsWith('delphi_') and not N.StartsWith('vault_') then
@@ -95,22 +94,10 @@ begin
     // (field round 10). When ONE name is closer than every other, that is
     // what was meant: answer it and say so, instead of handing back a list
     // and charging another call for the obvious.
-    Best := MaxInt;
-    BestName := '';
-    Ties := 0;
-    for var Cand in Names do
-    begin
-      var D := EditDistance(N, Cand);
-      if D < Best then
-      begin
-        Best := D;
-        BestName := Cand;
-        Ties := 1;
-      end
-      else if D = Best then
-        Inc(Ties);
-    end;
-    if (Best <= 1) and (Ties = 1) then
+    // EL mas parecido de la casa (Lsp.Pascal): este bucle era su copia
+    // (revision de la 1.17.0)
+    BestName := ElMasParecido(N, Names, 1);
+    if BestName <> '' then
       Exit(MsgFmt(SN_HELP_ASSUMED_FMT, [AName.Trim, BestName]) + #10 +
         OneTool(BestName));
     if Close = '' then

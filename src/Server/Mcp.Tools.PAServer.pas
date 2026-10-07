@@ -1677,8 +1677,15 @@ begin
      'job', Params.Job, '', 'sdk', Params.Sdk, '', 'active', Params.Active, '',
      'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), ''], Suyos);
   if Sobra <> '' then
+  begin
+    // la nota de "name" solo donde nombraba un SDK (reseat-sdk, remove-sdk):
+    // en los demas comandos no lo hizo nunca (segunda revision de la 1.17.0)
+    var Nota := '';
+    if (Sobra = 'profile') and MatchText(Cmd, ['reseat-sdk', 'remove-sdk']) then
+      Nota := MsgText(SF_PASERVER_NAME_ES_PROFILE);
     Exit(MsgFmt(SR_PASERVER_NO_VA_CON_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'platforms', Cmd),
-      IfThen(Cmd = '', 'platforms', Cmd), Suyos]));
+      IfThen(Cmd = '', 'platforms', Cmd), Suyos, Nota]));
+  end;
   if (Cmd = '') or (Cmd = 'platforms') then
     Result := ListPlatforms
   else if Cmd = 'packages' then

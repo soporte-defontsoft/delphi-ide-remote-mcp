@@ -444,29 +444,30 @@ begin
     // el dispositivo: un argumento malo de quien llama se contesta sin
     // preguntarle a nadie.
     const DevPng = '/sdcard/delphi_mcp_screen.png';
-    var Destino: string;
+    var Destino, Propia: string;
     Denied := CaptureTarget(Params.Out, CAPTURE_SUB_ANDROID, 'android',
-      TPath.GetExtension(DevPng), Destino);
+      TPath.GetExtension(DevPng), Propia);
     if Denied <> '' then
       Exit(Denied);
+    // se baja SIEMPRE a un temporal nuestro y sin cerrojo (el pull tarda
+    // hasta 60 s); un out= se coloca despues con ColocaCaptura, como preview
+    // y delphi_desktop: la puerta en el momento de escribir, la copia sellada
+    // de lo que habia y el cerrojo, en un solo sitio (revision de la 1.17.0)
+    Destino := Propia;
+    if Params.Out.Trim <> '' then
+    begin
+      Denied := CaptureTarget('', CAPTURE_SUB_ANDROID, 'android',
+        TPath.GetExtension(DevPng), Destino);
+      if Denied <> '' then
+        Exit(Denied);
+    end;
     CrearCarpeta(TPath.GetDirectoryName(Destino));
     Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
       ExitCode);
     if (ExitCode <> 0) or DeviceGone(Output) then
       Exit(ResultadoAdb(Output, ExitCode));
-    // out= un .png que ya estaba: adb pull lo pisaba sin copia (su gemelo
-    // logcat ya la hacia; quinta revision)
-    // con el cerrojo de escritura, como todo escritor (sexta revision): la
-    // copia sellada de lo que habia y el pull que lo sustituye, sin que otro
-    // escritor se cuele entre los dos (el pull tiene su tope de tiempo)
-    EnterFileEdit;
-    try
-      GuardaContenidoActual(Destino); // el que habia, sellado (si lo habia)
-      Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
-        Destino + '"', 60000, ExitCode);
-    finally
-      LeaveFileEdit;
-    end;
+    Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
+      Destino + '"', 60000, ExitCode);
     RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitCode);
     if not TFile.Exists(Destino) then
     begin
@@ -474,6 +475,17 @@ begin
         ExitCode := 1; // no hay captura: es un fallo aunque adb dijera 0
       Exit(ResultadoAdb(Output, ExitCode));
     end;
+    if Destino <> Propia then
+      try
+        ColocaCaptura(Destino, Propia);
+        Destino := Propia;
+      except
+        on E: Exception do
+        begin
+          ConsumeAgentCapture(Destino); // el temporal es nuestro: no se queda
+          Exit(MsgExcepcion(E.ClassName, E.Message));
+        end;
+      end;
     Return := TJSONObject.Create;
     try
       Return.AddPair('screenshot', Destino);

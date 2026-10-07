@@ -42,16 +42,29 @@ sobre textos (el analizador de impacto, los planes) esta en LspTests.DesignerEdi
   F2  set de un color FMX que se ve, por pixel (una cadena no; xFF00FF00 si);
       una Single escrita como el IDE (0.7 -> 0.699999988079071000);
       set parent= en FMX; delete
+  R1-R16 la revision de la 1.17.0 (escrituras que rompian el form diciendo OK):
+      la cadena larga del IDE reescrita entera, #39, un Hint de 5000 en trozos;
+      una llave en una cadena; Items = <> en un item y check-binding despues;
+      literales como el IDE; valores que el cargador no lee; nil quita;
+      TStrings (DSGN-109); csAcceptsControls (TPageControl/TButton no,
+      TGroupBox si); los nombres de un frame en linea no son del form; un data
+      module no recibe controles; la base de otra unidad de la carpeta; FMX
+      Align = Client no es una referencia; TAlphaColor abierta (DSGN-110); el
+      mapa de delphi_help; insert sin salida: no visual a mano, uses en ramas;
+      una referencia de tipo interfaz (TFDBatchMove.Reader) renombrada y borrada
   X1  rechazos sin tabla: .dfm binario, sin unidad, frame inline, heredado, el
       form mismo; parametros; fuera de la jaula; credencial de solo lectura
 
 Uso:  python tests/test_designer_edit.py [ruta-a-DelphiLspMcp.exe]
 """
-import glob, json, os, re, shutil
+import atexit, glob, json, os, re, shutil
 import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('designer_edit')
+# se borra AUNQUE la bateria caiga a medias: sin esto una excepcion dejaba el
+# arbol en %TEMP% (revision de la 1.17.0)
+atexit.register(mc.borra, BASE)
 JAIL = os.path.join(BASE, 'jail')
 FUERA = os.path.join(BASE, 'fuera')
 OUT = os.path.join(JAIL, 'out')
@@ -152,7 +165,7 @@ try:
     j = J(r)
     check('V1 insert: Button1 en el form, con su bloque numerado, su campo y su unidad',
           j.get('inserted') == 'Button1' and j.get('class') == 'TButton' and
-          j.get('parent') == re.search(r'^object (\w+)', mc.lee(VDFM)).group(1) and
+          j.get('parent') == (re.search(r'^object (\w+)', mc.lee(VDFM)) or re.search('()', '')).group(1) and
           j.get('usesAdded') == 'Vcl.StdCtrls' and j.get('field') == 'Button1: TButton' and
           any('object Button1: TButton' in b for b in j.get('block', [])) and
           mc.es(j.get('note', ''), 'SN_DESIGNER_INSERT_NOTE'), r[:700])
@@ -486,9 +499,16 @@ try:
     r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Opacity', value='0.7')
     check('F2 una Single como la escribe el IDE: redondeada a Single, 18 decimales',
           '    Opacity = 0.699999988079071000' in mc.lee(FFMX), r[:300])
+    r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Opacity', value='1E39')
+    check('F2 ...una que no cabe en una Single (1E39): no se escribe', mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and
+          'a number its type holds' in r and 'Opacity = 0.699999988079071000' in mc.lee(FFMX), r[:300])
     r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Size.Width', value='51')
     check('F2 ...y un entero en una Single, con sus 18 decimales',
           '    Size.Width = 51.000000000000000000' in mc.lee(FFMX), r[:300])
+    r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Size.Height', value='$20')
+    check('F2 ...y un entero hexadecimal ($20) en una Single: 32 con sus 18 decimales',
+          re.search(r"object Rectangle1: TRectangle\r\n(    [^\r\n]*\r\n)*?    Size\.Height = 32\.000000000000000000\r\n",
+                    mc.lee(FFMX)) is not None, r[:300])
     r = dsg(command='set', path=FFMX, component='Button1', parent='Layout1')
     check('F2 set parent= en FMX: a un TLayout', J(r).get('moved') == 'Button1' and J(r).get('to') == 'Layout1' and
           'outsideParent' not in J(r), r[:300])
@@ -496,6 +516,306 @@ try:
     check('F2 delete en FMX', J(r).get('deleted') == 'Rectangle1' and 'Rectangle1' not in mc.lee(FFMX) and
           'Rectangle1' not in mc.lee(FPAS), r[:400])
     compila_y_cuadra('F2', FPROJ, FFMX)
+
+    # =================================================================== R
+    # La revision de la 1.17.0: lo que trajeron cinco revisores y la suite no
+    # veia, escrituras que rompian el form diciendo OK (medido en vivo en
+    # DisenoVivo\SondaRev). Un proyecto propio: cada caso, contra el servidor
+    RDIR = os.path.join(JAIL, 'EdRev')
+    r = call('delphi_create', {'kind': 'project-vcl', 'dir': RDIR, 'name': 'EdRev'})
+    check('R0 un proyecto VCL para la revision', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
+    RPROJ = os.path.join(RDIR, 'EdRev.dproj')
+    RDPR = os.path.join(RDIR, 'EdRev.dpr')
+    RDFM = (glob.glob(os.path.join(RDIR, '*.dfm')) or [''])[0]
+    RPAS = RDFM[:-4] + '.pas'
+    RFORM = (re.search(r'^object (\w+)', mc.lee(RDFM)) or re.search('()', '')).group(1)
+
+    def hijos_de(path):
+        t = J(dsg(command='tree', path=path)).get('root', {})
+        return t.get('name'), [c.get('name') for c in t.get('children', [])]
+
+    # ------------------------------------------------------------------ R1
+    dsg(command='insert', path=RDFM, classname='TLabel')
+    # la cadena larga como la escribe el IDE: empieza en la linea de DEBAJO
+    escribe(RDFM, mc.lee(RDFM).replace("    Caption = 'Label1'\r\n",
+                                       "    Caption = \r\n      '" + 'a' * 64 + "' +\r\n      '" + 'b' * 10 + "'\r\n"))
+    r = dsg(command='set', path=RDFM, component='Label1', prop='Caption', value='Corto')
+    dfm = mc.lee(RDFM)
+    check('R1 set sobre la cadena larga del IDE (empieza debajo): la reescribe ENTERA, sin trozos sueltos',
+          "    Caption = 'Corto'\r\n  end" in dfm and 'aaaa' not in dfm and 'bbbb' not in dfm, (r[:200], dfm[-300:]))
+    r = dsg(command='set', path=RDFM, component='Label1', prop='Caption', value="Conway's Life")
+    check("R1 una comilla como la escribe el IDE: 'Conway'#39's Life'",
+          "    Caption = 'Conway'#39's Life'" in mc.lee(RDFM), r[:300])
+    r = dsg(command='set', path=RDFM, component='Label1', prop='Hint', value='x' * 5000)
+    dfm = mc.lee(RDFM)
+    check('R1 un Hint de 5000: trozos de 64 en las lineas de debajo, ninguna linea larga (4095 = "Line too long")',
+          max(len(x) for x in dfm.split('\r\n')) < 100 and
+          "    Hint = \r\n      '" + 'x' * 64 + "' +\r\n" in dfm, (r[:200], max(len(x) for x in dfm.split('\r\n'))))
+    compila_y_cuadra('R1', RPROJ, RDFM)
+
+    # ------------------------------------------------------------------ R2
+    dsg(command='set', path=RDFM, component='Label1', prop='Caption', value='Total = {0}')
+    r = dsg(command='insert', path=RDFM, classname='TButton')
+    raiz, hijos = hijos_de(RDFM)
+    check('R2 una llave en una cadena (Total = {0}) no abre un bloque binario: el insert cae en el form',
+          J(r).get('inserted') == 'Button1' and J(r).get('parent') == RFORM and raiz == RFORM and
+          {'Label1', 'Button1'} <= set(hijos), (r[:300], raiz, hijos))
+    compila_y_cuadra('R2', RPROJ, RDFM)
+
+    # ------------------------------------------------------------------ R3
+    escribe(RDFM, re.sub(r'\r\nend\r\n$', "\r\n  object Cats: TCategoryButtons\r\n    Left = 10\r\n    Top = 60\r\n"
+                         "    Width = 150\r\n    Height = 100\r\n    Categories = <\r\n      item\r\n"
+                         "        Caption = 'Uno'\r\n        Items = <>\r\n      end>\r\n    TabOrder = 5\r\n  end\r\n"
+                         "  object Lbl2: TLabel\r\n    Left = 10\r\n    Top = 170\r\n    Caption = 'Lbl2'\r\n  end\r\n"
+                         "end\r\n", mc.lee(RDFM)))
+    escribe(RPAS, mc.lee(RPAS).replace('    Button1: TButton;\r\n', '    Button1: TButton;\r\n    Cats: TCategoryButtons;\r\n'))
+    call('delphi_edit', {'path': RPAS, 'adduses': 'Vcl.CategoryButtons', 'section': 'interface'})
+    raiz, hijos = hijos_de(RDFM)
+    check('R3 un Items = <> dentro de un item no descoloca el arbol: la raiz es el form, Cats y Lbl2 sus hijos',
+          raiz == RFORM and {'Cats', 'Lbl2'} <= set(hijos), (raiz, hijos))
+    r = dsg(command='check-binding', path=RDFM)
+    check('R3 ...y check-binding ve el Lbl2 de DESPUES de la coleccion, sin su campo',
+          J(r).get('clean') is False and 'Lbl2' in r, r[:400])
+    escribe(RPAS, mc.lee(RPAS).replace('    Cats: TCategoryButtons;\r\n', '    Cats: TCategoryButtons;\r\n    Lbl2: TLabel;\r\n'))
+    compila_y_cuadra('R3', RPROJ, RDFM)
+
+    # ------------------------------------------------------------------ R4
+    dsg(command='set', path=RDFM, component='Label1', prop='Caption', value="'Acción'")
+    dsg(command='set', path=RDFM, component='Lbl2', prop='Caption', value="It's")
+    r = dsg(command='set', path=RDFM, component='Label1', prop='Hint', value='#hashtag')
+    dfm = mc.lee(RDFM)
+    check("R4 los literales como el IDE: un acento entre comillas es #243, It's es #39, #hashtag es texto",
+          "    Caption = 'Acci'#243'n'" in dfm and "    Caption = 'It'#39's'" in dfm and
+          "    Hint = '#hashtag'" in dfm and 'ó' not in dfm, (r[:200], dfm[-500:]))
+
+    # ------------------------------------------------------------------ R5
+    antes = bytes_de(RDFM)
+    casos = [('Button1', 'Align', '2'), ('Button1', 'Align', "'alClient'"), ('Button1', 'Anchors', '3'),
+             ('Button1', 'Anchors', '[akLeft,]'), ('Label1', 'Font.Style', "'fsBold'"),
+             ('Label1', 'Color', '$FFFF0000')]
+    rs = [dsg(command='set', path=RDFM, component=c, prop=p, value=v) for c, p, v in casos]
+    check('R5 lo que el cargador no lee se niega (Align=2, un enumerado entre comillas, Anchors=3, '
+          '[akLeft,], fsBold suelto, un TColor de mas de 32 bits) y no se escribe nada',
+          all(J(x).get('set') is None and any(mc.abre(x, k) for k in (
+              'SR_DESIGNER_SET_TIPO_FMT', 'SR_DESIGNER_SET_INVALIDO_FMT', 'SR_DESIGNER_SET_GRAMATICA_FMT'))
+              for x in rs) and bytes_de(RDFM) == antes, [x[:120] for x in rs])
+    # un numero que no cabe en su tipo: 1E400 en un TDate (Double), que el
+    # servidor no llega a leer, se escribia tal cual (segunda revision)
+    dsg(command='insert', path=RDFM, classname='TDateTimePicker')
+    antes = bytes_de(RDFM)
+    r = dsg(command='set', path=RDFM, component='DateTimePicker1', prop='Date', value='1E400')
+    check('R5 ...1E400 en un TDate (un Double): no cabe, nada escrito',
+          mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and 'a number its type holds' in r and bytes_de(RDFM) == antes,
+          r[:300])
+    r = dsg(command='set', path=RDFM, component='Label1', prop='Font', value='x')
+    check('R5 ...Font, un objeto que el componente guarda, no toma valor: sus subpropiedades, nada escrito',
+          J(r).get('set') is None and 'no value of its own' in r and bytes_de(RDFM) == antes, r[:300])
+
+    # ------------------------------------------------------------------ R6
+    dsg(command='insert', path=RDFM, classname='TEdit')
+    dsg(command='set', path=RDFM, component='Label1', prop='FocusControl', value='Edit1')
+    check('R6 (de partida) Label1.FocusControl = Edit1 escrito', '    FocusControl = Edit1' in mc.lee(RDFM))
+    r = dsg(command='set', path=RDFM, component='Label1', prop='FocusControl', value='nil')
+    check('R6 nil en una referencia la quita (lo que escribe el IDE): ni la linea ni un DSGN-098',
+          J(r).get('removed') is True and 'FocusControl' not in mc.lee(RDFM), r[:300])
+    antes = bytes_de(RDFM)
+    r = dsg(command='set', path=RDFM, component='Label1', prop='FocusControl', value='nil')
+    check('R6 ...otra vez nil, sin linea que quitar: DSGN-112 (nada cambiado), no un removed',
+          mc.abre(r, 'SN_DESIGNER_NADA_QUE_QUITAR_FMT') and bytes_de(RDFM) == antes, r[:300])
+
+    # ------------------------------------------------------------------ R7
+    dsg(command='insert', path=RDFM, classname='TMemo')
+    r = dsg(command='set', path=RDFM, component='Memo1', prop='Lines', value="'hola'")
+    check('R7 una TStrings (Memo1.Lines) se escribe con delphi_edit: DSGN-109, no "un componente"',
+          mc.abre(r, 'SR_DESIGNER_SET_LISTA_FMT'), r[:300])
+
+    # ------------------------------------------------------------------ R8
+    dsg(command='insert', path=RDFM, classname='TPageControl')
+    dsg(command='insert', path=RDFM, classname='TGroupBox')
+    r1 = dsg(command='insert', path=RDFM, classname='TButton', parent='PageControl1')
+    r2 = dsg(command='insert', path=RDFM, classname='TButton', parent='Button1')
+    r3 = dsg(command='insert', path=RDFM, classname='TCheckBox', parent='GroupBox1')
+    check('R8 csAcceptsControls del constructor: un TPageControl y un TButton no son padre (DSGN-080), '
+          'un TGroupBox si',
+          mc.abre(r1, 'SR_DESIGNER_PADRE_VCL_FMT') and mc.abre(r2, 'SR_DESIGNER_PADRE_VCL_FMT') and
+          J(r3).get('parent') == 'GroupBox1', (r1[:200], r2[:200], r3[:200]))
+    compila_y_cuadra('R8', RPROJ, RDFM)
+
+    # ------------------------------------------------------------------ R9
+    # un frame en linea con su LblAviso, y el form con un LblAviso propio: los
+    # nombres del frame no son del form (el fixup de TReader resuelve en el form)
+    call('delphi_create', {'kind': 'frame-vcl', 'name': 'UMarcoRev', 'formname': 'MarcoRev', 'project': RDPR})
+    MRDFM = os.path.join(RDIR, 'UMarcoRev.dfm')
+    dsg(command='insert', path=MRDFM, classname='TLabel', component='LblAviso')
+    escribe(RDFM, re.sub(r'\r\nend\r\n$', "\r\n  inline MarcoRev1: TMarcoRev\r\n    Left = 300\r\n    Top = 10\r\n"
+                         "    Width = 150\r\n    Height = 40\r\n    TabOrder = 9\r\n    inherited LblAviso: TLabel\r\n"
+                         "      Caption = 'Del frame'\r\n    end\r\n  end\r\nend\r\n", mc.lee(RDFM)))
+    escribe(RPAS, mc.lee(RPAS).replace('    Lbl2: TLabel;\r\n', '    Lbl2: TLabel;\r\n    MarcoRev1: TMarcoRev;\r\n'))
+    call('delphi_edit', {'path': RPAS, 'adduses': 'UMarcoRev', 'section': 'interface'})
+    r = dsg(command='insert', path=RDFM, classname='TLabel', component='LblAviso')
+    check('R9 un LblAviso del FORM aunque el frame en linea tenga el suyo', J(r).get('inserted') == 'LblAviso', r[:300])
+    r = dsg(command='set', path=RDFM, component='LblAviso', prop='Caption', value='Del form')
+    dfm = mc.lee(RDFM)
+    check('R9 ...set va al del form, y el del frame se queda',
+          "    Caption = 'Del form'" in dfm and "      Caption = 'Del frame'" in dfm, (r[:200], dfm[-600:]))
+    r = dsg(command='delete', path=RDFM, component='LblAviso')
+    dfm = mc.lee(RDFM)
+    check('R9 ...delete borra el del form, y la redefinicion dentro del frame sigue',
+          J(r).get('deleted') == 'LblAviso' and 'Del form' not in dfm and 'inherited LblAviso: TLabel' in dfm,
+          (r[:300], dfm[-400:]))
+    compila_y_cuadra('R9', RPROJ, RDFM)
+
+    # ------------------------------------------------------------------ R10
+    call('delphi_create', {'kind': 'datamodule', 'name': 'UDatosRev', 'project': RDPR})
+    r = dsg(command='insert', path=os.path.join(RDIR, 'UDatosRev.dfm'), classname='TButton')
+    check('R10 un control en un data module: DSGN-080 (entraba)', mc.abre(r, 'SR_DESIGNER_PADRE_VCL_FMT'), r[:300])
+
+    # ------------------------------------------------------------------ R11
+    call('delphi_create', {'kind': 'form-vcl', 'name': 'UBaseRev', 'formname': 'FormBaseRev', 'project': RDPR})
+    HRDFM = escribe(os.path.join(RDIR, 'UHijaRev.dfm'),
+                    "inherited FormHijaRev: TFormHijaRev\r\n  Caption = 'FormHijaRev'\r\nend\r\n")
+    escribe(os.path.join(RDIR, 'UHijaRev.pas'),
+            "unit UHijaRev;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, UBaseRev;\r\n\r\ntype\r\n"
+            "  TFormHijaRev = class(TFormBaseRev)\r\n  end;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n")
+    r = dsg(command='set', path=HRDFM, component='FormHijaRev', prop='Caption', value='Hija')
+    check('R11 la raiz de una form que hereda de una base de OTRA unidad de la carpeta: set entra (era DSGN-082)',
+          J(r).get('set') == 'FormHijaRev.Caption' and "  Caption = 'Hija'" in mc.lee(HRDFM), r[:300])
+
+    # ------------------------------------------------------------------ R12
+    dsg(command='insert', path=FFMX, classname='TLayout', component='Client')
+    dsg(command='insert', path=FFMX, classname='TRectangle', component='Fondo')
+    r = dsg(command='set', path=FFMX, component='Fondo', prop='Align', value='Client')
+    check('R12 FMX: Align = Client (un enumerado sin prefijo) con un componente llamado Client',
+          '    Align = Client' in mc.lee(FFMX), r[:300])
+    # el renombrado pasa por el mismo juez: Client -> Cliente no toca el Align
+    r = dsg(command='set', path=FFMX, component='Client', prop='Name', value='Cliente')
+    fmx = mc.lee(FFMX)
+    check('R12 ...renombrar Client tampoco lo toca: el bloque cambia y el Align de Fondo sigue en Client',
+          J(r).get('renamed') == 'Client' and 'object Cliente: TLayout' in fmx and '    Align = Client' in fmx and
+          'Align = Cliente' not in fmx, (r[:300], fmx[-400:]))
+    r = dsg(command='delete', path=FFMX, component='Cliente')
+    check('R12 ...borrar Cliente no se lleva el Align de Fondo: no es una referencia (lo dice la tabla)',
+          J(r).get('deleted') == 'Cliente' and '    Align = Client' in mc.lee(FFMX) and
+          not J(r).get('referencesRemoved'), r[:400])
+
+    # ------------------------------------------------------------------ R13
+    # TAlphaColor: una lista ABIERTA, con lo que su IdentTo lee de verdad,
+    # sacado de su fuente (generacion 12): las tres formas que cargan entran
+    # sin aviso, y lo demas se niega - 'Rojo' se escribia callado y el form no
+    # abria (segunda revision de la 1.17.0). claRde y no claRedd: la parecida
+    # no puede estar ya en el valor (un check que no podia fallar)
+    for v in ('claRed', 'clRed', 'xFF00FF00'):
+        r = dsg(command='set', path=FFMX, component='Fondo', prop='Fill.Color', value=v)
+        check('R13 TAlphaColor %s: lo carga IdentToAlphaColor, se escribe sin aviso' % v,
+              J(r).get('set') == 'Fondo.Fill.Color' and 'warning' not in J(r) and
+              ('    Fill.Color = %s' % v) in mc.lee(FFMX), r[:300])
+    antes = bytes_de(FFMX)
+    r = dsg(command='set', path=FFMX, component='Fondo', prop='Fill.Color', value='Rojo')
+    check('R13 ...Rojo no lo carga: se niega (y dice que formas toma), nada escrito',
+          mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and 'keeps the form from opening' in r and
+          'xFF00FF00' in r and bytes_de(FFMX) == antes, r[:400])
+    r = dsg(command='set', path=FFMX, component='Fondo', prop='Fill.Color', value='claRde')
+    check('R13 ...claRde tampoco: se niega con la parecida (Did you mean claRed?)',
+          mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and 'Did you mean claRed?' in r and bytes_de(FFMX) == antes,
+          r[:400])
+    compila_y_cuadra('R13', FPROJ, FFMX)
+
+    # ------------------------------------------------------------------ R14
+    r = call('delphi_help', {'command': 'tasks'})
+    check('R14 el mapa de delphi_help nombra preview e insert / set / delete',
+          'delphi_designer preview' in r and 'delphi_designer insert / set' in r, r[:200])
+
+    # ------------------------------------------------------------------ R15
+    # las salidas cuando insert no puede: a mano, y dicho como
+    # con TImageList: el ejemplo del mensaje es un TTimer fijo, y un check que
+    # buscaba 'object Timer1' no podia fallar (segunda revision de la 1.17.0)
+    antes = bytes_de(RDFM)
+    r = dsg(command='insert', path=RDFM, classname='TImageList')
+    check('R15 un no visual: DSGN-079 nombra su clase y dice como ponerlo a mano (bloque, campo, uses con '
+          'section=interface, check-binding), nada escrito',
+          mc.abre(r, 'SR_DESIGNER_INSERT_NO_VISUAL_FMT') and r.startswith('[DSGN-079') and
+          'TImageList is not a visual control' in r and 'section=interface' in r and 'check-binding' in r and
+          bytes_de(RDFM) == antes, r[:500])
+    call('delphi_create', {'kind': 'form-vcl', 'name': 'URamas', 'formname': 'FormRamas', 'project': RDPR})
+    RAMDFM, RAMPAS = os.path.join(RDIR, 'URamas.dfm'), os.path.join(RDIR, 'URamas.pas')
+    pas = mc.lee(RAMPAS)
+    m = re.search(r'uses\r\n(.*?);\r\n', pas, re.S)
+    lista = m.group(1) if m else ''
+    escribe(RAMPAS, pas[:m.start()] + 'uses\r\n{$IFDEF MSWINDOWS}\r\n' + lista + ';\r\n{$ELSE}\r\n' + lista +
+            ';\r\n{$ENDIF}\r\n' + pas[m.end():] if m else pas)
+    antes_dfm, antes_pas = bytes_de(RAMDFM), bytes_de(RAMPAS)
+    r = dsg(command='insert', path=RAMDFM, classname='TButton')
+    check('R15 un uses partido en ramas sin la unidad: USES-001 y que hacer (anadirla a mano y repetir), nada escrito',
+          mc.abre(r, 'SR_USES_EN_RAMAS_FMT') and 'Vcl.StdCtrls' in r and 'repeat the insert' in r and
+          bytes_de(RAMDFM) == antes_dfm and bytes_de(RAMPAS) == antes_pas, r[:500])
+    escribe(RAMPAS, mc.lee(RAMPAS).replace(lista + ';', lista + ', Vcl.StdCtrls;'))
+    r = dsg(command='insert', path=RAMDFM, classname='TButton')
+    check('R15 ...con la unidad en las ramas, el insert entra y no la vuelve a poner',
+          J(r).get('inserted') == 'Button1' and not J(r).get('usesAdded') and
+          mc.lee(RAMPAS).count('Vcl.StdCtrls') == 2, r[:400])
+    compila_y_cuadra('R15', RPROJ, RAMDFM)
+
+    # ------------------------------------------------------------------ R16
+    # una propiedad de tipo INTERFAZ (TFDBatchMove.Reader: IFDBatchMoveReader)
+    # tambien es una referencia: el renombrado la sigue y el delete la quita
+    # (revision de la 1.17.0: el juez solo miraba las clases)
+    escribe(RDFM, re.sub(r'\r\nend\r\n$', '\r\n  object FDBatchMove1: TFDBatchMove\r\n    Reader = FDBatchMoveTextReader1\r\n'
+                         '    Left = 400\r\n    Top = 200\r\n  end\r\n  object FDBatchMoveTextReader1: TFDBatchMoveTextReader\r\n'
+                         '    Left = 440\r\n    Top = 200\r\n  end\r\nend\r\n', mc.lee(RDFM)))
+    escribe(RPAS, mc.lee(RPAS).replace('    Lbl2: TLabel;\r\n', '    Lbl2: TLabel;\r\n    FDBatchMove1: TFDBatchMove;\r\n'
+                                       '    FDBatchMoveTextReader1: TFDBatchMoveTextReader;\r\n'))
+    call('delphi_edit', {'path': RPAS, 'adduses': 'FireDAC.Comp.BatchMove;FireDAC.Comp.BatchMove.Text',
+                         'section': 'interface'})
+    compila_y_cuadra('R16 (de partida)', RPROJ, RDFM)
+    r = dsg(command='set', path=RDFM, component='FDBatchMoveTextReader1', prop='Name', value='LectorTxt')
+    dfm = mc.lee(RDFM)
+    check('R16 renombrar el lector reescribe la referencia de tipo interfaz: Reader = LectorTxt',
+          J(r).get('renamed') == 'FDBatchMoveTextReader1' and '    Reader = LectorTxt' in dfm and
+          'FDBatchMoveTextReader1' not in dfm + mc.lee(RPAS), (r[:300], dfm[-400:]))
+    compila_y_cuadra('R16', RPROJ, RDFM)
+    r = dsg(command='delete', path=RDFM, component='LectorTxt')
+    dfm = mc.lee(RDFM)
+    check('R16 ...y borrarlo quita la linea Reader del que lo usaba (con el campo)',
+          J(r).get('deleted') == 'LectorTxt' and
+          any('Reader = LectorTxt' in x for x in J(r).get('referencesRemoved', [])) and
+          'Reader =' not in dfm and 'object FDBatchMove1: TFDBatchMove' in dfm and 'LectorTxt' not in mc.lee(RPAS),
+          (r[:400], dfm[-300:]))
+    compila_y_cuadra('R16b', RPROJ, RDFM)
+
+    # ------------------------------------------------------------------ R17
+    # un nombre con acento: solo con el form en UTF-8 con BOM (TParser lee en
+    # ANSI un form sin el, y en ANSI no hay letra alta en un nombre) y la unidad
+    # con BOM o en CP1252 (dcc lee en ANSI un fuente sin BOM). Sin el, el
+    # proyecto dejaba de compilar (RLINK32) diciendo OK, y la codificacion de
+    # un fichero no se cambia de paso: DSGN-111 (segunda revision de la 1.17.0)
+    BOM = b'\xef\xbb\xbf'
+    call('delphi_create', {'kind': 'form-vcl', 'name': 'UAcento', 'formname': 'FormAcento', 'project': RDPR})
+    ACDFM, ACPAS = os.path.join(RDIR, 'UAcento.dfm'), os.path.join(RDIR, 'UAcento.pas')
+    check('R17 (de partida) el form y la unidad recien creados llevan BOM (el IDE de esta maquina, en UTF-8)',
+          bytes_de(ACDFM).startswith(BOM) and bytes_de(ACPAS).startswith(BOM), bytes_de(ACDFM)[:3])
+    sin_bom = bytes_de(ACDFM)[3:]  # leido ANTES: open('wb') lo vacia
+    open(ACDFM, 'wb').write(sin_bom)  # como lo guarda el IDE con todo ASCII
+    antes_dfm, antes_pas = bytes_de(ACDFM), bytes_de(ACPAS)
+    r = dsg(command='insert', path=ACDFM, classname='TLabel', component='LblDirección')
+    check('R17 un nombre con acento en un form sin BOM: DSGN-111 nombrando el form, y nada escrito',
+          mc.abre(r, 'SR_DESIGNER_NOMBRE_SIN_BOM_FMT') and 'UAcento.dfm' in r and
+          bytes_de(ACDFM) == antes_dfm and bytes_de(ACPAS) == antes_pas, r[:300])
+    open(ACDFM, 'wb').write(BOM + antes_dfm)
+    open(ACPAS, 'wb').write(antes_pas[3:])
+    r = dsg(command='insert', path=ACDFM, classname='TButton')
+    check('R17 ...un nombre ASCII entra igual con la unidad sin BOM', J(r).get('inserted') == 'Button1', r[:300])
+    antes_dfm, antes_pas = bytes_de(ACDFM), bytes_de(ACPAS)
+    r = dsg(command='set', path=ACDFM, component='Button1', prop='Name', value='BtnAcción')
+    check('R17 ...y el renombrado a uno con acento con la unidad en UTF-8 sin BOM: DSGN-111 nombrando la '
+          'unidad, nada escrito', mc.abre(r, 'SR_DESIGNER_NOMBRE_SIN_BOM_FMT') and 'UAcento.pas' in r and
+          bytes_de(ACDFM) == antes_dfm and bytes_de(ACPAS) == antes_pas, r[:300])
+    open(ACPAS, 'wb').write(BOM + antes_pas)
+    r = dsg(command='insert', path=ACDFM, classname='TLabel', component='LblDirección')
+    check('R17 ...con los dos con BOM, entra (y los dos siguen con BOM)', J(r).get('inserted') == 'LblDirección' and
+          bytes_de(ACDFM).startswith(BOM) and bytes_de(ACPAS).startswith(BOM), r[:300])
+    compila_y_cuadra('R17', RPROJ, ACDFM)
+    rect, _ = rect_de(ACDFM, 'LblDirección')
+    check('R17 ...y preview lo encuentra por su nombre con acento', bool(rect) and rect.startswith('10,10,'), rect)
 
     # =================================================================== X1
     r = call('delphi_create', {'kind': 'form-vcl', 'name': 'UOtra', 'project': os.path.join(VDIR, 'EdVcl.dpr')})
@@ -544,8 +864,13 @@ try:
     antes = bytes_de(VDFM)
     r = ro.call('delphi_designer', {'command': 'insert', 'path': VDFM, 'classname': 'TButton'}, t=120)
     r2 = ro.call('delphi_designer', {'command': 'delete', 'path': VDFM, 'component': 'Label1'}, t=120)
-    check('X1 en solo lectura insert y delete se niegan, y el form no cambia',
-          mc.rechazado(r) and mc.rechazado(r2) and bytes_de(VDFM) == antes, (r[:200], r2[:200]))
+    r3 = ro.call('delphi_designer', {'command': 'set', 'path': VDFM, 'component': 'Label1', 'prop': 'Caption',
+                                     'value': 'x'}, t=120)
+    # con SU codigo (READ-002), no un rechazado cualquiera: otro motivo de
+    # rechazo tambien pasaba (revision de la 1.17.0)
+    check('X1 en solo lectura insert, set y delete se niegan con READ-002, y el form no cambia',
+          all(mc.rechazado(x) and mc.es(x, 'SR_READ_ONLY_FMT') for x in (r, r2, r3)) and bytes_de(VDFM) == antes,
+          (r[:200], r2[:200], r3[:200]))
     r = ro.call('delphi_designer', {'command': 'tree', 'path': VDFM}, t=120)
     check('X1 ...y leerlo si', not mc.fallo(r) and 'Label1' in r, r[:200])
 finally:

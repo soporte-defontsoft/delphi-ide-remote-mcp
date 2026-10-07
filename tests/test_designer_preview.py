@@ -19,7 +19,9 @@ pedir uno corto (lo dice una NOTA).
   P3  state: un estado de vista que se ve (el color del panel) y el que
       nombra un componente que no existe (RENDER-011, del ayudante tal cual)
   P4  una form heredada: el color que pone la hija, no el de la base
-  P5  frames inline VCL: el fichero del frame y los inherited de cada uno
+  P5  frames inline VCL: el fichero del frame y los inherited de cada uno; un
+      componente dentro de un frame por su ruta (component= y state=); el
+      .dfm binario del IDE; form o frame por el lector de clases del servidor
   P6  FMX: frames inline por pixel, fidelity canvas, el estilo de una
       plataforma del designer y la que no existe (RENDER-017)
   P7  nonvisual=true dibuja el icono donde lo guarda el dfm
@@ -32,14 +34,19 @@ pedir uno corto (lo dice una NOTA).
       casa, out= con otra extension, parametro que no va con preview
   P11 sin los renderizadores junto al exe: DSGN-060
   P12 un estilo .vsf: la form VCL sale fuera de modo diseno con ese estilo
+  P13 lo que el lector se salta (el Ignore del IDE), VCL y FMX: ignored como
+      objetos con componente, propiedad, motivo y linea, y la nota DSGN-114;
+      la form buena (P1) no trae ni lo uno ni la otra
 
 Uso:  python tests/test_designer_preview.py [ruta-a-DelphiLspMcp.exe]
 """
-import glob, json, os, shutil
+import atexit, glob, json, os, shutil
 import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('designer_preview')
+# se borra AUNQUE la bateria caiga a medias (revision de la 1.17.0)
+atexit.register(mc.borra, BASE)
 JAIL = os.path.join(BASE, 'jail')
 FUERA = os.path.join(BASE, 'fuera')
 OUT = os.path.join(JAIL, 'out')
@@ -187,6 +194,7 @@ type
   TFrameX = class(TFrame)
     EditFrame: TEdit;
     PanelFrame: TPanel;
+    TimerFrame: TTimer;
   end;
 implementation
 {$R *.dfm}
@@ -215,6 +223,10 @@ escribe('UFrameX.dfm', """object FrameX: TFrameX
     Color = clSkyBlue
     ParentBackground = False
     TabOrder = 1
+  end
+  object TimerFrame: TTimer
+    Left = 250
+    Top = 8
   end
 end
 """)
@@ -340,6 +352,63 @@ INVENTADA = escribe('Inventada.dfm', """object FormInventada: TFormInventada
   end
 end
 """)
+# lo que el lector se salta (el Ignore del IDE): un TColor que no es una
+# constante y un Width que no es un numero; y en FMX un TAlphaColor que su
+# IdentTo no carga (David, 7-oct-2026: la red de seguridad de set y lint)
+MALA = escribe('Mala.dfm', """object FormMala: TFormMala
+  Left = 0
+  Top = 0
+  Caption = 'Mala'
+  ClientHeight = 120
+  ClientWidth = 300
+""" + FONT + """  object Panel1: TPanel
+    Left = 16
+    Top = 16
+    Width = 120
+    Height = 40
+    Color = Rojo
+    TabOrder = 0
+  end
+  object Button1: TButton
+    Left = 150
+    Top = 16
+    Width = abc
+    Height = 25
+    Caption = 'Ok'
+    TabOrder = 1
+  end
+end
+""")
+MALAF = escribe('MalaF.fmx', """object FormMalaF: TFormMalaF
+  Left = 0
+  Top = 0
+  Caption = 'Mala FMX'
+  ClientHeight = 120
+  ClientWidth = 300
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object RectM: TRectangle
+    Position.X = 8.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 100.000000000000000000
+    Size.Height = 40.000000000000000000
+    Size.PlatformDefault = False
+    Fill.Color = Rojo
+  end
+end
+""")
+
+
+def linea_de(ruta, texto):
+    """La linea (1-based) de ruta que es texto, sin su sangria."""
+    for n, l in enumerate(open(ruta, encoding='utf-8').read().splitlines(), 1):
+        if l.strip() == texto:
+            return n
+    return 0
+
+
 FORM_FUERA = escribe('Fuera.dfm', open(PRUEBA, encoding='utf-8').read(), FUERA)
 
 CIELO = (166, 202, 240)     # clSkyBlue = $F0CAA6
@@ -384,7 +453,8 @@ try:
           raiz.get('name') == 'FormPrueba' and raiz.get('kind') == 'form' and
           j.get('framework') == 'vcl' and j.get('components') == 5, r[:400])
     check('P1 una form estandar no carga ningun paquete del IDE (packages 0/0)',
-          j.get('packages') == '0/0' and 'substituted' not in j and 'ignored' not in j, r[:400])
+          j.get('packages') == '0/0' and 'substituted' not in j and 'ignored' not in j and
+          'ignoredNote' not in j, r[:400])
     nv = sorted((x.get('name'), x.get('class')) for x in j.get('nonVisual') or [])
     check('P1 nonVisual lista los no visuales SIN dibujarlos (por defecto)',
           nv == [('ActionList1', 'TActionList'), ('Timer1', 'TTimer')] and
@@ -451,6 +521,65 @@ try:
     check('P5 un frame suelto: frame por su .pas, dibujado en una form de su tamano',
           (j.get('root') or {}).get('kind') == 'frame' and os.path.exists(png('p5b.png')) and
           mc.png_pixeles(png('p5b.png'))[:2] == (300, 120), r[:300])
+    # un componente DENTRO de un frame en linea, por su ruta (como la RTL lee
+    # una referencia): no se encontraba (DSGN-066; revision de la 1.17.0)
+    r = preview(path=CONFRAME, component='FrameX2.PanelFrame', out=png('p5c.png'), inline='false')
+    check('P5 component=FrameX2.PanelFrame: el panel del segundo frame, en coordenadas de la form',
+          J(r).get('componentRect') == '24,232,280,41' and cerca(pixel_de(png('p5c.png'), 10, 10), AMARILLO),
+          (r[:300], pixel_de(png('p5c.png'), 10, 10)))
+    r = preview(path=CONFRAME, state='FrameX1.PanelFrame.Color=255', out=png('p5d.png'), inline='false')
+    check('P5 state=FrameX1.PanelFrame.Color: el estado llega al panel del primer frame',
+          cerca(pixel_de(png('p5d.png'), 34, 106), ROJO), (r[:300], pixel_de(png('p5d.png'), 34, 106)))
+    # el no visual de un frame metido no se dibuja nunca (el designer no lo
+    # ensena): su "rect" era un trozo de form cualquiera (segunda revision)
+    r = preview(path=CONFRAME, component='FrameX1.TimerFrame', nonvisual=True, out=png('p5g.png'), inline='false')
+    check('P5 component= de un no visual de un frame: DSGN-066, que dice que solo se dibujan los de la form',
+          mc.abre(r, 'SR_DESIGNER_PREVIEW_SIN_COMPONENTE_FMT') and 'nonvisual=true' in r, r[:300])
+    # en un frame suelto, el estado con el nombre de la raiz delante (como
+    # FrameX1.PanelFrame en la form) llega al panel (segunda revision)
+    r = preview(path=os.path.join(JAIL, 'UFrameX.dfm'), state='FrameX.PanelFrame.Color=255', out=png('p5h.png'),
+                inline='false')
+    check('P5 un frame suelto, state=FrameX.PanelFrame.Color: con la raiz delante tambien llega',
+          cerca(pixel_de(png('p5h.png'), 18, 74), ROJO), (r[:300], pixel_de(png('p5h.png'), 18, 74)))
+    # el .dfm BINARIO que escribe el IDE (cabecera de recurso): el ayudante se
+    # la saltaba mal ("Invalid stream format", medido en vivo; revision de la
+    # 1.17.0). La form y su frame, los dos binarios
+    BIN = os.path.join(JAIL, 'bin')
+    os.makedirs(BIN, exist_ok=True)
+    for f in ('UFrameX.pas', 'UFrameX.dfm', 'UConFrame.pas', 'UConFrame.dfm'):
+        shutil.copy(os.path.join(JAIL, f), os.path.join(BIN, f))
+    for f in ('UFrameX.dfm', 'UConFrame.dfm'):
+        call('delphi_designer', {'command': 'to-binary', 'path': os.path.join(BIN, f)})
+    binarios = all(open(os.path.join(BIN, f), 'rb').read(3) == b'\xff\x0a\x00' for f in ('UFrameX.dfm', 'UConFrame.dfm'))
+    r = preview(path=os.path.join(BIN, 'UConFrame.dfm'), out=png('p5e.png'), inline='false')
+    check('P5 un .dfm binario del IDE (y su frame binario): se dibuja igual, el inherited aplicado',
+          binarios and cerca(pixel_de(png('p5e.png'), 34, 106), CIELO) and
+          cerca(pixel_de(png('p5e.png'), 34, 242), AMARILLO), (binarios, r[:300]))
+    # form o frame lo decide EL lector de clases del servidor (--root): una
+    # linea comentada engana a la regex del ayudante, no a el
+    escribe('UFrameAbs.pas', """unit UFrameAbs;
+interface
+uses Vcl.Forms;
+type
+  // TFrameAbs = class(TForm) era antes
+  TFrameAbs = class abstract(TFrame)
+  end;
+implementation
+{$R *.dfm}
+end.
+""")
+    escribe('UFrameAbs.dfm', """object FrameAbs: TFrameAbs
+  Left = 0
+  Top = 0
+  Width = 200
+  Height = 80
+  TabOrder = 0
+end
+""")
+    r = preview(path=os.path.join(JAIL, 'UFrameAbs.dfm'), out=png('p5f.png'), inline='false')
+    check('P5 un frame "class abstract(TFrame)" con una linea comentada que dice TForm: frame (lo dice el servidor)',
+          (J(r).get('root') or {}).get('kind') == 'frame' and os.path.exists(png('p5f.png')) and
+          mc.png_pixeles(png('p5f.png'))[:2] == (200, 80), r[:300])
 
     # ------------------------------------------------------------------ P6
     r = preview(path=CONFRAMEF, out=png('p6.png'), inline='false')
@@ -467,6 +596,9 @@ try:
     r = preview(path=CONFRAMEF, component='FrameF2', out=png('p6c.png'), inline='false')
     check('P6 FMX component: el rect del frame metido, en coordenadas de la form',
           J(r).get('componentRect') == '16,168,300,120', r[:400])
+    r = preview(path=CONFRAMEF, component='FrameF2.RectF', out=png('p6r.png'), inline='false')
+    check('P6 FMX component= de un hijo de frame (FrameF2.RectF): su rect en coordenadas de la form',
+          J(r).get('componentRect') == '24,232,280,40', r[:400])
     r = preview(path=os.path.join(JAIL, 'FrameF.fmx'), inline='false')
     check('P6 un frame FMX suelto: frame por su .pas',
           (J(r).get('root') or {}).get('kind') == 'frame', r[:300])
@@ -487,6 +619,14 @@ try:
     check('P7 nonvisual=true dibuja el icono en el Left/Top que guarda el dfm (y sin el, fondo)',
           J(r).get('nonVisualDrawn') is True and on is not None and off is not None and on != off,
           (on, off))
+    # recortar a un no visual: solo si esta dibujado; sin nonvisual=true su
+    # "rect" era un trozo de form (segunda revision de la 1.17.0)
+    r = preview(path=PRUEBA, component='Timer1', out=png('p7c.png'), inline='false')
+    check('P7 component=Timer1 sin nonvisual: DSGN-066 (no esta en la imagen), no un recorte cualquiera',
+          mc.abre(r, 'SR_DESIGNER_PREVIEW_SIN_COMPONENTE_FMT'), r[:300])
+    r = preview(path=PRUEBA, component='Timer1', nonvisual=True, out=png('p7d.png'), inline='false')
+    check('P7 ...con nonvisual=true, el recuadro de su icono en su Left/Top',
+          (J(r).get('componentRect') or '').startswith('300,60,'), r[:300])
 
     # ------------------------------------------------------------------ P8
     r = preview(path=INVENTADA, inline='false')
@@ -496,6 +636,26 @@ try:
           mc.es(j.get('substitutedNote', ''), 'SN_DESIGNER_SUSTITUIDAS'), r[:500])
     check('P8 ...despues de buscarla en los paquetes del IDE (packages ya no es 0/0)',
           str(j.get('packages', '0/0')).split('/')[0] not in ('', '0'), j.get('packages'))
+
+    # ------------------------------------------------------------------ P13
+    # lo que el lector se salta, como objetos que guian: componente,
+    # propiedad, motivo de TReader y su LINEA (la pone el servidor), y la nota
+    # de que el form no abre hasta arreglarlas (David, 7-oct-2026)
+    r = preview(path=MALA, inline='false')
+    j = J(r)
+    ig = sorted((x.get('component'), x.get('property'), x.get('line'), x.get('reason'))
+                for x in j.get('ignored') or [])
+    check('P13 VCL: Color = Rojo y Width = abc salen en ignored con su componente, propiedad, motivo y linea',
+          ig == [('Button1', 'Width', linea_de(MALA, 'Width = abc'), 'Invalid property value'),
+                 ('Panel1', 'Color', linea_de(MALA, 'Color = Rojo'), 'Invalid property value')], (ig, r[:500]))
+    check('P13 ...con la nota DSGN-114 (no abrira hasta arreglarlas: set), y el resto dibujado',
+          mc.es(j.get('ignoredNote', ''), 'SN_DESIGNER_PREVIEW_IGNORADAS') and j.get('components') == 2, r[:500])
+    r = preview(path=MALAF, inline='false')
+    j = J(r)
+    ig = [(x.get('component'), x.get('property'), x.get('line')) for x in j.get('ignored') or []]
+    check('P13 FMX: un TAlphaColor que su IdentTo no carga (Fill.Color = Rojo), con su linea, y la nota',
+          ig == [('RectM', 'Fill.Color', linea_de(MALAF, 'Fill.Color = Rojo'))] and
+          mc.es(j.get('ignoredNote', ''), 'SN_DESIGNER_PREVIEW_IGNORADAS'), (ig, r[:500]))
 
     # ------------------------------------------------------------------ P9
     # P8 dejo el suyo a proposito (inline=false sin out=: se consume al
@@ -509,7 +669,10 @@ try:
           j.get('inlineImage') is True and j.get('consumed') is True and 'screenshot' not in j and
           mc.es(j.get('inlineNote', ''), 'SN_DESIGNER_INLINE_NOTE_FMT') and
           mc.es(j.get('frameNote', ''), 'SN_DESIGNER_FRAME_NOTE'), r[:600])
-    check('P9 ...y no deja PNG en la carpeta de capturas del diseñador', not sueltos, sueltos)
+    # 'antes' no vacio: el glob ve la carpeta de capturas (el de P8 esta ahi);
+    # con la ruta mal, los dos conjuntos vacios pasaban (revision de la 1.17.0)
+    check('P9 ...y no deja PNG en la carpeta de capturas del diseñador (que el glob ve: la de P8 esta)',
+          bool(antes) and not sueltos, (sorted(antes), sueltos))
     escribe('existente.png', 'contenido de antes', OUT)
     r = preview(path=PRUEBA, out=png('existente.png'), inline='false')
     sellada = glob.glob(os.path.join(JAIL, '**', '__delphi-patch', '**', 'existente.png*'), recursive=True)

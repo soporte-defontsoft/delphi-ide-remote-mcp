@@ -21,15 +21,20 @@ type
     [Test] procedure ElAcentoSaleComoNumeral;
     [Test] procedure FueraDeAnsiSeRechaza;
     [Test] procedure BinarioDanadoDaMotivo;
+    [Test] procedure CadaFormaLlegaATReader;
     [Test]
     procedure LaLineaDeUnObjeto;
+    [Test]
+    procedure NombreConAcentoSoloConBom;
   end;
 
 implementation
 
 uses
   System.SysUtils,
-  Lsp.DesignerBin;
+  System.Classes,
+  Lsp.DesignerBin,
+  Lsp.DesignerForma;
 
 const
   FORM_TXT = 'object FormX: TFormX'#13#10 +
@@ -116,6 +121,61 @@ begin
     'un binario roto devuelve el motivo, no una excepcion');
 end;
 
+// el texto que sale de DesignerAFlujo leido como lo leeria TReader
+function TextoDelFlujo(const AFichero: TBytes): string;
+var
+  Entrada, Flujo, Txt: TMemoryStream;
+  Bytes: TBytes;
+begin
+  Entrada := TMemoryStream.Create;
+  Flujo := TMemoryStream.Create;
+  Txt := TMemoryStream.Create;
+  try
+    Entrada.WriteBuffer(AFichero[0], Length(AFichero));
+    DesignerAFlujo(Entrada, Flujo);
+    Flujo.Position := 0;
+    ObjectBinaryToText(Flujo, Txt);
+    SetLength(Bytes, Txt.Size);
+    Move(Txt.Memory^, Bytes[0], Txt.Size);
+    Result := TEncoding.UTF8.GetString(Bytes);
+  finally
+    Txt.Free;
+    Flujo.Free;
+    Entrada.Free;
+  end;
+end;
+
+procedure TDesignerBinTests.CadaFormaLlegaATReader;
+var
+  Bin, Tpf0: TBytes;
+  S: TMemoryStream;
+begin
+  // El renderizador le daba a TReader el binario del IDE tal cual:
+  // TestStreamFormat lo llama binario y nadie se saltaba la cabecera del
+  // recurso ("Invalid stream format" en preview, 7-oct-2026)
+  Assert.AreEqual('', DesignerTextToBinary(FORM_TXT, Bin));
+  S := TMemoryStream.Create;
+  try
+    S.WriteBuffer(Bin[0], Length(Bin));
+    S.Position := 0;
+    S.ReadResHeader;
+    SetLength(Tpf0, S.Size - S.Position);
+    S.ReadBuffer(Tpf0[0], Length(Tpf0));
+  finally
+    S.Free;
+  end;
+  Assert.IsTrue(DesignerShapeOf(Tpf0) = dsTpf0, 'tras la cabecera, el flujo a pelo');
+  Assert.AreEqual(FORM_TXT, TextoDelFlujo(TEncoding.ASCII.GetBytes(FORM_TXT)), 'el texto');
+  Assert.AreEqual(FORM_TXT, TextoDelFlujo(Tpf0), 'el flujo TPF0');
+  Assert.AreEqual(FORM_TXT, TextoDelFlujo(Bin), 'el recurso que escribe el IDE en disco');
+  // un texto que el editor del IDE guardo en UTF-16: TParser no lo lee
+  // (SAnsiUTF8Expected) y tumbaba el preview (segunda revision de la 1.17.0)
+  Assert.AreEqual(FORM_TXT, TextoDelFlujo(TEncoding.Unicode.GetPreamble +
+    TEncoding.Unicode.GetBytes(FORM_TXT)), 'el texto en UTF-16 LE');
+  Assert.AreEqual(FORM_TXT, TextoDelFlujo(TEncoding.BigEndianUnicode.GetPreamble +
+    TEncoding.BigEndianUnicode.GetBytes(FORM_TXT)), 'el texto en UTF-16 BE');
+end;
+
 procedure TDesignerBinTests.LaLineaDeUnObjeto;
 var
   K, N, C: string;
@@ -141,6 +201,27 @@ begin
   Assert.IsFalse(LineaDeObjeto('Inline = True', K, N, C), 'una propiedad no es un objeto');
   Assert.IsFalse(LineaDeObjeto('objects = 3', K, N, C));
   Assert.IsFalse(LineaDeObjeto('Caption = ''object x: y''', K, N, C));
+end;
+
+procedure TDesignerBinTests.NombreConAcentoSoloConBom;
+var
+  R: string;
+begin
+  // un nombre ASCII entra siempre; uno con acento, solo con el form en UTF-8
+  // con BOM (TParser) y la unidad con BOM o en CP1252 (dcc): medido el
+  // 7-oct-2026, sin eso el proyecto no compilaba o el campo no casaba con su
+  // componente, y las dos cosas decian OK
+  Assert.AreEqual('', NombreQueElFicheroNoLee('LblCalle', 'U.dfm', 'utf8', 'U.pas', 'utf8'), 'ASCII');
+  R := NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8', 'U.pas', 'utf8-bom');
+  Assert.IsTrue(R.StartsWith('[DSGN-111') and R.Contains('U.dfm'), 'el form sin BOM: ' + R);
+  R := NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'cp1252', 'U.pas', 'utf8-bom');
+  Assert.IsTrue(R.Contains('U.dfm'), 'en CP1252 TParser tampoco lo lee: ' + R);
+  R := NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8-bom', 'U.pas', 'utf8');
+  Assert.IsTrue(R.Contains('U.pas') and not R.Contains('U.dfm'), 'la unidad en UTF-8 sin BOM: ' + R);
+  Assert.AreEqual('', NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8-bom', 'U.pas', 'cp1252'),
+    'una unidad CP1252 la lee dcc');
+  Assert.AreEqual('', NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8-bom', 'U.pas', 'utf8-bom'),
+    'los dos con BOM');
 end;
 
 initialization

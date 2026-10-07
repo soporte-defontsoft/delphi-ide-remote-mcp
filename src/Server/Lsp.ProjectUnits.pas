@@ -30,6 +30,11 @@ type
     Ancestor: string;    // TForm / TDataModule / TFrame / ...
     FormType: string;    // 'dfm' | 'fmx' | ''
     DesignClass: string; // 'TDataModule' | 'TFrame' | '' (plain form)
+    // la raiz del marco a la que LLEGA la cadena por las clases de la unidad
+    // (TForm, TFrame, TDataModule); '' si sale de ella sin llegar, y entonces
+    // DesignClass adivina por el sufijo (segunda revision de la 1.17.0: preview
+    // tomaba esa adivinanza por un hecho)
+    DesignRoot: string;
     function IsDesigner: Boolean;
     function NeedsCreateForm: Boolean; // forms and data modules, not frames
   end;
@@ -193,6 +198,7 @@ uses
   Lsp.Guard,
   System.Generics.Defaults,
   Lsp.DesignerBin, // ReadPathDenied: hasta donde se puede subir buscando un .dpr
+  Lsp.DesignerForma, // LineaDeObjeto: la raiz del designer
   Lsp.Dproj,       // XmlUnescape: el lector de la casa
   Lsp.References,
   Lsp.NetDrives,  // SkipIdeArtifacts: una mudanza no entra en artefactos
@@ -251,7 +257,7 @@ begin
     ADpr := Stem + '.dpk'
   else
     ADpr := Stem + '.dpr';
-  ADproj := Stem + '.dproj';
+  ADproj := DprojDe(TPath.GetFullPath(AProject)); // el nombrador de la casa (Lsp.Dproj)
   if not TFile.Exists(ADpr) then
     Exit(NoEsFichero(ADpr, MsgFmt(SR_UNIT_NO_DPR_FMT, [ADpr])));
   // a missing .dproj is tolerated: the .dpr alone still builds with dcc, and
@@ -323,23 +329,36 @@ end;
   THE one (Lsp.PascalDecl.CadenaDeAncestros) over the classes of this unit
   (AnotaAncestros): its own regex did not follow 'class abstract(TFrame)'
   and add-unit wrote a CreateForm for a frame (4-oct-2026). }
-function DesignClassOf(const AMapa: TDictionary<string, string>; const AAncestor: string): string;
+function RaizDeLaCadena(const AMapa: TDictionary<string, string>; const AAncestor: string;
+  out AUltimo: string): string;
 var
-  Name: string;
   Sale: Boolean;
 begin
   Result := '';
-  Name := '';
+  AUltimo := '';
   for var C in CadenaDeAncestros(AMapa, AAncestor, Sale, 9) do // 8 saltos
   begin
-    Name := UltimoTrozo(C);
-    if SameText(Name, 'TFrame') or SameText(Name, 'TCustomFrame') then
+    AUltimo := UltimoTrozo(C);
+    if SameText(AUltimo, 'TFrame') or SameText(AUltimo, 'TCustomFrame') then
       Exit('TFrame');
-    if SameText(Name, 'TDataModule') then
+    if SameText(AUltimo, 'TDataModule') then
       Exit('TDataModule');
-    if SameText(Name, 'TForm') or SameText(Name, 'TCustomForm') or SameText(Name, 'TForm3D') then
-      Exit('');
+    if SameText(AUltimo, 'TForm') or SameText(AUltimo, 'TCustomForm') or SameText(AUltimo, 'TForm3D') then
+      Exit('TForm');
   end;
+end;
+
+function DesignClassOf(const AMapa: TDictionary<string, string>; const AAncestor: string): string;
+var
+  Name: string;
+begin
+  // la raiz a la que llega la cadena; si sale de la unidad sin llegar, por el
+  // sufijo de la ultima clase que se ve
+  Result := RaizDeLaCadena(AMapa, AAncestor, Name);
+  if Result = 'TForm' then
+    Exit('');
+  if Result <> '' then
+    Exit;
   if Name.EndsWith('Frame', True) then
     Result := 'TFrame'
   else if Name.EndsWith('DataModule', True) then
@@ -348,7 +367,7 @@ end;
 
 function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
 var
-  Enc, Src, Stem, DName, DClass, Cab: string;
+  Enc, Src, Stem, DName, DClass, Cab, Ultima: string;
   Ini: Integer;
   U: TUnidadPas;
   Mapa: TDictionary<string, string>;
@@ -425,6 +444,7 @@ begin
       end;
     end;
     AInfo.DesignClass := DesignClassOf(Mapa, AInfo.Ancestor);
+    AInfo.DesignRoot := RaizDeLaCadena(Mapa, AInfo.Ancestor, Ultima);
   finally
     Mapa.Free;
     U.Free;

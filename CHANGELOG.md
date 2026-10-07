@@ -19,17 +19,24 @@ the MCP `initialize` response (`serverInfo.version`).
   packages loaded into THEM - a package that crashes takes the renderer
   down, never the server - no code of the form runs, and nothing reaches
   any screen. Inherited forms and inline frames are read from their own
-  files. `component` crops to one component (`componentRect` says where it
-  is), `state` sets a view state that is never written
-  (`PageControl1.ActivePage=TabSheet2`), `style` takes a `.vsf`, a `.style`
-  or a platform of the designer's Style list, and `nonvisual=true` draws
+  files, and a binary `.dfm` is drawn as it is. `component` crops to one
+  component (`componentRect` says where it is; one inside an inline frame
+  goes as `Frame1.Name`, as the form loader names it; a non-visual one only
+  when it is drawn), `state` sets a view
+  state that is never written (`PageControl1.ActivePage=TabSheet2`),
+  `style` takes a `.vsf`, a `.style` or a platform of the designer's Style
+  list, and `nonvisual=true` draws
   the non-visual components; `nonVisual` lists them always. The `frame` of
   the image converts what the agent measures into form units, and
   `fidelity` says how it was painted: `window` in an interactive session,
   `print` from a service (controls that paint their own way come out
   native-looking; layout and text are the real ones), `canvas` for FMX.
   Classes no installed package registers are drawn as a named box
-  (`substituted`). Refusals before anything is launched: a value with a
+  (`substituted`). A property the form loader cannot read is skipped as the
+  IDE's Ignore would, and the rest is drawn: `ignored` lists each one with
+  its component, property, the loader's reason and its line in the file,
+  and `DSGN-114` says the form will not open until they are fixed - the
+  safety net when a value got past `set` or `lint`. Refusals before anything is launched: a value with a
   double quote or a control character (`DSGN-065`), a platform style on a
   VCL form (`DSGN-072`), a style that is neither a file nor a name
   (`DSGN-073`); the renderer's own (`RENDER-0xx`) pass through as they are.
@@ -45,7 +52,10 @@ the MCP `initialize` response (`serverInfo.version`).
   gives it), adds its published field to the form's class and its unit to
   the uses, and answers the numbered block. Its Name is `component`, judged
   as a rename is (an identifier, not a reserved word, taken by nothing in
-  the form or its class), or else the IDE's first free one (Button1,
+  the form or its class; one with letters outside ASCII needs the form in
+  UTF-8 with BOM and the unit with a BOM or in CP1252 - the IDE and the
+  compiler read a file without BOM as ANSI - and a file's encoding is not
+  changed on the way, `DSGN-111`), or else the IDE's first free one (Button1,
   Button2...). `set component=X prop=P value=V` writes ONE
   property after checking it against the class with the same judge as
   `lint`: a property the class does not publish (with the close one: `Did
@@ -53,12 +63,20 @@ the MCP `initialize` response (`serverInfo.version`).
   ones), a value its type does not take - what the form loader (`TReader`)
   accepts, read from the source: a whole number or one of the named
   constants its type registers (`clRed` in a `TColor`, with the close one
-  when misspelt; a `TAlphaColor` also takes `xFF00FF00`), a number, one
-  character, a string -, a reference to a component that is not in the
-  form or is not of the property's class (the `DataSource` of a `TDBGrid`
+  when misspelt; a `TAlphaColor` takes what its reader really reads, read
+  from that reader's source - its names, `xFF00FF00`, and `clRed` for
+  `claRed` - and nothing else, which would keep the form from opening; a
+  type whose reader does more than can be read is written with a warning,
+  `DSGN-110`), a whole number that fits the 32 bits the loader reads, a
+  number its type holds, one character, a string -, a reference to a component that is
+  not in the form or is not of the property's class (the `DataSource` of a `TDBGrid`
   takes a `TDataSource`; the answer lists the ones that fit, `DSGN-107`),
-  an event - nothing is written. A string may go
-  without quotes (set adds them, accents as the IDE writes them: `#243`),
+  an event, a list (`Memo1.Lines`: `DSGN-109`) - nothing is written; `nil`
+  clears a reference, as the IDE does (`DSGN-112` when there was none). A
+  reference to a component inside an inline frame (`Frame1.Edit1`) or of
+  another form goes as given: the loader resolves it. A string may go without quotes (set
+  adds them) and is written as the IDE writes it: accents and quotes as
+  `#243` and `#39`, a long one in pieces of 64 on the lines below,
   and a number with decimals is written as the 32-bit IDE writes it, since
   no IDE will rewrite the form afterwards: `130` in a `Position.X` is
   `130.000000000000000000`, `0.7` in a `Single` `0.699999988079071000`
@@ -85,8 +103,15 @@ the MCP `initialize` response (`serverInfo.version`).
   anything: a binary `.dfm` (`DSGN-075`), a form without its unit
   (`DSGN-076`), a component of an inline frame (`DSGN-083`) or inherited
   from an ancestor form (`DSGN-084`), the form itself (`DSGN-085`), a parent
-  that cannot hold controls (`DSGN-080`/`081`), a non-visual class
-  (`DSGN-079`).
+  that cannot hold controls (`DSGN-080`/`081`: in VCL, whether its
+  constructor sets `csAcceptsControls`, read from the source - a `TGroupBox`
+  yes, a `TPageControl` or a `TButton` no - and never a data module), a
+  non-visual class (`DSGN-079`); when `insert` cannot place a control - a
+  non-visual class, a class the table does not have, a parent it cannot
+  judge, a uses clause split in branches - the refusal says how to do it by
+  hand instead (its block, its field, its unit in the interface, then
+  `check-binding`), and a move that cannot be judged says how to move the
+  block.
 
 ### Changed
 
@@ -101,7 +126,8 @@ the MCP `initialize` response (`serverInfo.version`).
   answer); messages, descriptions and notes say `profile`. `reseat-sdk` and
   `remove-sdk` take only `sdk`, as their description says: `name` also
   named an SDK there, undocumented, and called `profile` it would have
-  named an SDK with a profile (`PAS-051` now).
+  named an SDK with a profile (`PAS-051` now, and to whoever sent `name`
+  it says that `name` is the old spelling of `profile`).
 - **A `.dpr` (or `.dpk`) stands for its `.dproj` in every tool that takes a
   project**: `delphi_build` refused it with `BUILD-016` ("not a Delphi
   project") while `delphi_config` and `delphi_test` resolved it;
@@ -112,10 +138,14 @@ the MCP `initialize` response (`serverInfo.version`).
 - **An empty git query says what git received.** A `delphi_git log
   -S<text>` that found nothing answered "finished fine, prints nothing",
   and an agent concluded the text was lost on the way - its file said
-  "Oben", not "Open". A read-only command that prints nothing now repeats
+  "Oben", not "Open". A query that prints nothing (`status`, `diff`, `log`,
+  `show`, `ls-remote`, and a bare `branch`, `tag`, `stash list` or
+  `worktree list`) now repeats
   what git received (`git log --oneline -20 -SOpen`), and an empty `-S` or
   `-G` adds what they look at and that they distinguish capitals
-  (`GIT-058`; `-i` ignores them).
+  (`GIT-058`; `-i` ignores them). It no longer calls that a success
+  (`GIT-060`: nothing matches, or there is nothing to list); a command that
+  writes and prints nothing keeps `GIT-002`.
 - **The message of a commit or a tag goes in `message`**: `-m` or
   `--message` in `args` is refused with `GIT-059`; together with `message`
   it ended in git's own exit 129, with no code of ours. `GIT-014` says that
@@ -126,7 +156,8 @@ the MCP `initialize` response (`serverInfo.version`).
 - **`delphi_help tasks` says what `tools/list` leaves out, and why**: no
   vault in the workspace (the five `vault_*` tools), a read-only vault, the
   workspace's tool profile. An agent counted 37 tools where the
-  documentation says 42 and believed they had been merged.
+  documentation says 42 and believed they had been merged. Its map now
+  names `preview` and `insert` / `set` / `delete` too.
 
 ### Fixed
 
@@ -135,7 +166,26 @@ the MCP `initialize` response (`serverInfo.version`).
   of the object's), and a value split over several lines (`'abc' +` /
   `'def'`) was replaced only in its first line, leaving the rest below. A
   property is now looked for at the object's own level only, and its whole
-  value is replaced.
+  value is replaced - also a long string the IDE starts on the line below,
+  and with an empty collection (`<>`) inside an item or a `{` inside a
+  string no longer taken for the end of a collection or a binary block.
+- **`delphi_styles` writes a `StyleName` as the IDE does** (`#243` for an
+  accent, pieces for a long one) when it clones a style or renames one with
+  `set`; it was quoted by hand, the rename stripped quotes by hand
+  (`'Bot'#243'n'` became a broken name) and judged nothing, and `clone`
+  took the first `StyleName` of the block - a child's when the style had
+  none of its own. The rename judges the new name as `clone` does.
+- **`delphi_adb screenshot` and `delphi_desktop screenshot` with `out=`**
+  place the capture through one helper, as `preview` does: the write gate
+  is asked at the moment of writing; `adb` pulls into its own temp first,
+  and the server's write lock is no longer held for the whole pull (up to
+  60 s).
+- **`delphi_styles set prop=StyleName` takes a name without quotes**
+  (`my-style`), as the style tree reads it: the grammar of a value refused
+  it before the name was judged.
+- **A command that takes no parameters says so** when one is sent
+  (`platforms takes no parameters`); every tool with commands answered
+  `takes .`.
 
 ### Internal
 
@@ -188,7 +238,7 @@ the MCP `initialize` response (`serverInfo.version`).
   also records what each simple type reduces to (fact `B`: `TColor` is a
   subrange of integers, `TCaption` a string) and the named constants of an
   integer type, from the map of its `RegisterIntegerConsts` and following
-  the functions that only call another (fact `I`; table generation 9) -
+  the functions that only call another (fact `I`; table generations 8 and 9) -
   `set` had three hand lists of type names until then, and a `TColor`
   `'hola'` or a `TCursor` `3.5` got written (measured live); the
   event-line reader of `check-binding` is shared; the "all or nothing" of
@@ -196,10 +246,10 @@ the MCP `initialize` response (`serverInfo.version`).
   `ProyectoTodoONada` now calls); `adduses` has its text core
   (`UsesConUnidades`); the edit distance of `delphi_help` moved to
   `Lsp.Pascal`. The object line, a string value and an FMX float of a text
-  form each have one composer in `Lsp.DesignerBin` (`ComponeLineaDeObjeto`,
-  inverse of `LineaDeObjeto`; `LiteralDeForm`; `FlotanteFmx`), and the
-  templates of `delphi_create` use them; `test_paisaje` watches the first
-  and the last.
+  form each have one composer (`ComponeLineaDeObjeto` with its reader
+  `LineaDeObjeto`, in `Lsp.DesignerForma`; `TrozosDeLiteral` with its
+  reader `LeeLiteralDeForm`, and `FlotanteFmx`, in `Lsp.DesignerBin`), and
+  the templates of `delphi_create` use them; `test_paisaje` watches them.
 - Tests: `LspTests.DesignerEdit` (the analyzer, the delete and rename
   plans, the reader's bodies, a property inside a collection, the `SetName`
   rule measured in the Delphi 13.1 source - `TTextControl`,
@@ -211,6 +261,111 @@ the MCP `initialize` response (`serverInfo.version`).
   and FMX projects that keep compiling with `check-binding` and `lint`
   clean after every step, and `preview` as the oracle of where things were
   drawn, by pixel.
+- **The review before the tag.** Five reviewers on the diff, and the suite
+  was green (`run_all` 128/4008/0) while writes broke a form saying OK -
+  measured live before anything was changed: `set` on a long string the
+  IDE starts on the line below left pieces of the old value behind; an
+  `Items = <>` inside a collection item put the tree's root on the last
+  label; a `Caption = 'Total = {0}'` was read as a binary block to the end
+  of the file. The common cause: four hand-made readers of the text-form
+  grammar. Now ONE (`LineasDeForm`, which knows collections and items) for
+  the tree, a property's range, `lint`, `check-binding` and `layout`, and
+  one composer of a string value as `ObjectBinaryToText` writes it
+  (`TrozosDeLiteral`, checked against the 13.1 source and its sample
+  forms) with its inverse. Measured in the RTL before deciding: inside an
+  inline frame a reference without a dot resolves in the FORM (the fixup
+  uses the root, not the frame), so the frame's names are not the form's
+  and a frame's child is `Frame1.Name`. The table generator reads
+  `csAcceptsControls` and `csSetCaption` from each constructor (fact `K`,
+  local constants and branches that agree included) and marks open
+  constant lists (`TAlphaColor`): table generations 10 and 11 - the first
+  version passed its test on a made-up `IdentToAlphaColor` and skipped the
+  real one, which has a local variable, so the real table listed no names
+  (measured in the generated table; the fixture now has the real shape).
+  The judge of which
+  property is a reference to a component is the table (`Align = Client`
+  in FMX is an enum, not a component called Client).
+- **One reader of a form file's shape** for the server and the renderers
+  (`Lsp.DesignerForma`: `DesignerShapeOf`, `DesignerAFlujo`, the object
+  line, `UnidadDeDesigner`): `preview` of a binary `.dfm` written by the
+  IDE failed with "Invalid stream format" - the RTL's `TestStreamFormat`
+  calls anything starting with `$FF` binary, a UTF-16 text included, and
+  nobody skipped the resource header (measured live). The server tells the
+  renderer whether the root is a form or a frame (`--root`, from the class
+  reader `add-unit` uses), and a component path is resolved as the RTL
+  does (`FindNestedComponent`).
+- Grown where it lived, not copied: the guess of `delphi_help` for a tool
+  name is `ElMasParecido`; which property carries the text that follows a
+  Name is one judge for `insert` and the rename (`PropiedadesDeTexto`); a
+  style's name has one judge for `clone` and the rename; the `.dproj` of a
+  new project and of `add-unit` comes from `DprojDe`. `test_paisaje` gains
+  five rules, each with its planted mutant: the `.dproj` composed with `+`,
+  the unit of a form, `TestStreamFormat`, a hand reader of the object line,
+  a form string value quoted by hand.
+- Tests: `LspTests.DesignerEdit`, `DesignerMetaGen`, `DesignerBin` and
+  `FormRender` grow with the review (a mutant for every fix: red; one that
+  stayed green showed a test that could not tell, and was strengthened);
+  `test_designer_edit` gains R1-R15 through the server and
+  `test_designer_preview` the frame paths, the binary `.dfm` and the root
+  decided by the server. Checks that could not fail now can: the git
+  message refusal runs on a dirty tree with a control commit, the
+  leftover-capture glob must see the captures folder, the read-only refusal
+  needs its own code, `FormRenderExe` is tested with and without the exe,
+  and `EsEnlace` has its positive case (a junction). The two designer
+  batteries clean up even when they fail half way.
+- **The second review**, on the delta of the first, and every finding
+  measured before it was changed:
+  - Names with letters outside ASCII. An `insert component=` with an accent
+    in a form without BOM left the project not compiling (RLINK32) saying
+    OK, and in a unit without BOM the field got another name than its
+    component in the executable's RTTI: the form loader (`TParser`) reads a
+    form without BOM as ANSI and takes no high letter in a name
+    (`TParser.CharType`), and dcc reads a source without BOM as ANSI. A
+    file's encoding is not changed on the way (the house editing contract),
+    so the name judge refuses it, `DSGN-111` (`NombreQueElFicheroNoLee`, in
+    `Lsp.DesignerBin`).
+  - Table generation 12: the generator reads from `IdentToAlphaColor`'s
+    body what it reads besides its names (`x` with a hex number, and an `a`
+    inserted at 2), and `set` judges a `TAlphaColor` exactly - `Rojo` was
+    written and the form did not open. The `T` fact counts only a class's
+    own `Text`/`Caption`: `TCustomLabeledEdit` sets its label's and empties
+    its own, and `insert` wrote a Text the IDE leaves empty.
+  - `preview`: a text form saved in UTF-16 reached `TParser`, which reads
+    only ASCII, ANSI or UTF-8 with BOM (`DesignerAFlujo` gives it UTF-8);
+    the root goes as `form`/`frame` only when the class chain reaches it
+    and the unit's designer is the form asked for (`RaizParaElRender`,
+    `TUnitInfo.DesignRoot`), not from a guessed suffix; a commented class
+    declaration no longer passes for the class (the renderers read the
+    `.pas` through `CodigoPascal`, linking `Lsp.Pascal`); a non-visual
+    component has a rectangle only when drawn; one reader of a component
+    path (`ComponenteDeRuta`) for `component=` and `state=`, which takes
+    the root's name in front; a crop failure has its own message
+    (`DSGN-113`), not the renderer's.
+  - `set` and the rename: a reference held in an interface property
+    (`TFDBatchMove.Reader`) follows a rename and goes with a delete; a
+    number its type cannot hold (`1E400` in a `Double`) is refused; `nil`
+    on a reference that is not there changes nothing; `-$FF` is not a
+    number for the loader; a long `StyleName` in pieces is read whole.
+  - Texts that said more than the code does, corrected: the by-hand way of
+    `insert` (the unit in the interface; a non-visual component in the
+    form's block), a move by hand, a reference into an inline frame,
+    `DSGN-061`, `DSGN-066`, `DSGN-078`, `DSGN-098`, `PAS-051`, `STYLE-006`,
+    the frame of a capture.
+  - Checks that could not fail now can: `claRedd` already contained the
+    suggestion, R15 looked for a fixed example text, two generator fixtures
+    had a made-up shape (now copied from the 13.1 source, plus a test
+    measured against the installed source when it is there), and the test
+    helpers read another text than the generator (`TextoDelGenerador`). The
+    battery helpers wait for a killed server and retry a deletion, and a
+    server's log is read once it is closed: under the full suite's load a
+    check read it before the reader had a line, and the check that a
+    warning is absent could pass without having read it. A wait that was
+    not the measure no longer cuts a battery short. New through the server:
+    R16, R17, P5, P7 and P13 (`ignored` with its lines, VCL and FMX), H11,
+    and three fixes that had no test (a frame child's rectangle in FMX,
+    `Font` takes no value, `$20` in a `Single`). Every fix a test can tell
+    has its mutant, red - 14 against the DUnitX suite and 12 against the
+    batteries; the corrected texts and the by-hand way of a move have none.
 
 ## [1.16.0] - 2026-10-06
 

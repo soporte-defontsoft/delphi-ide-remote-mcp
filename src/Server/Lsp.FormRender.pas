@@ -37,6 +37,17 @@ type
     Estilo: string;            // fichero (ya por la puerta), plataforma, none o ''
     NoVisuales: Boolean;       // dibujar los no visuales
     Bds: string;               // la version del Delphi del servidor (37.0)
+    Raiz: string;              // form | frame, por el lector de clases del servidor; '' = que mire el ayudante
+  end;
+
+  { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
+    el ayudante contesta Ignore): lo que dijo tal cual y, si casa con su forma
+    ('Error reading Panel1.Color: Invalid property value', SPropertyException
+    de System.RTLConsts), sus partes. Uno traducido, o de otra forma, queda
+    solo en Texto (David, 7-oct-2026: que guien al modelo). }
+  TIgnorada = record
+    Texto: string;
+    Componente, Propiedad, Motivo: string; // '' si no casa
   end;
 
   TRespuestaRender = record
@@ -49,7 +60,8 @@ type
     RaizNombre, RaizClase, RaizTipo: string; // ROOT=<nombre>:<clase>:<form|frame>
     Fidelidad, Estilo, Paquetes: string;     // FIDELITY=, STYLE=, PACKAGES=
     Componentes: Integer;      // COMPONENTS=
-    Sustituidas, Ignoradas, Avisos: TArray<string>;
+    Sustituidas, Avisos: TArray<string>;
+    Ignoradas: TArray<TIgnorada>;
     NoVisuales: TArray<string>; // NONVISUALS=: 'Nombre:Clase'
     NoVisualesDibujados: Integer; // NONVISUAL=
     HayRect: Boolean;          // RECT= del componente pedido
@@ -69,6 +81,20 @@ function FormRenderExe(const AFramework: string; out ANombre: string): string;
 function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRender;
   out AOrden: string): string;
 
+{ El --root de un render (form | frame), por EL lector de clases del servidor
+  (InspectUnit): solo cuando la cadena de la clase de la unidad LLEGA a la
+  raiz del marco (TForm/TCustomForm/TForm3D/TDataModule, TFrame/TCustomFrame)
+  y su designer es el form pedido (un X.fmx al lado de un X.dfm: la unidad
+  es del .dfm). Si no se sabe, '': que mire el ayudante. La unidad, ya por la
+  puerta de lectura de quien llama. Nunca lanza (segunda revision de la
+  1.17.0: un sufijo adivinado viajaba como un hecho). }
+function RaizParaElRender(const ARuta: string): string;
+
+{ Una linea IGNORED= -> sus partes (TIgnorada): el UNICO lector del texto de
+  TReader. Componente es el Name del objeto (o su clase, el de un item de una
+  coleccion: lo que pone TReader) y Propiedad su ruta (Font.Size). }
+function IgnoradaDeTexto(const ATexto: string): TIgnorada;
+
 { La salida del renderizador -> sus campos (las lineas '#' son traza). }
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
 
@@ -83,8 +109,11 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.Diagnostics,
+  System.RegularExpressions,
   Lsp.Guard,        // ServerDir: la carpeta del exe del servidor
   Lsp.BuildRunner,  // RunCapturedIn: el lanzador de los programas externos
+  Lsp.ProjectUnits, // InspectUnit: la clase de la unidad y a que raiz llega
+  Lsp.DesignerForma, // UnidadDeDesigner
   Lsp.Texts;
 
 const
@@ -112,6 +141,24 @@ begin
   Result := ServerDir(ANombre);
   if not TFile.Exists(Result) then
     Result := '';
+end;
+
+function RaizParaElRender(const ARuta: string): string;
+var
+  Unidad: TUnitInfo;
+begin
+  Result := '';
+  try
+    if (InspectUnit(UnidadDeDesigner(ARuta), Unidad) <> '') or (Unidad.ClassName = '') or
+       not SameFileName(Unidad.Designer, TPath.GetFullPath(ARuta)) then
+      Exit;
+    if Unidad.DesignRoot = 'TFrame' then
+      Result := 'frame'
+    else if Unidad.DesignRoot <> '' then
+      Result := 'form';
+  except
+    Result := ''; // una unidad que no se deja leer: que mire el ayudante
+  end;
 end;
 
 { Un valor que viaja como UN argumento entre comillas }
@@ -151,8 +198,27 @@ begin
       AOrden := AOrden + Arg('--state', E);
   if APeticion.Componente <> '' then
     AOrden := AOrden + Arg('--component', APeticion.Componente);
+  if (APeticion.Raiz = 'form') or (APeticion.Raiz = 'frame') then
+    AOrden := AOrden + ' --root ' + APeticion.Raiz;
   if APeticion.Estilo <> '' then
     AOrden := AOrden + Arg('--style', APeticion.Estilo);
+end;
+
+function IgnoradaDeTexto(const ATexto: string): TIgnorada;
+var
+  M: TMatch;
+begin
+  Result := Default(TIgnorada);
+  Result.Texto := ATexto;
+  // 'Error reading %s%s%s: %s' (SPropertyException): el Name, sin puntos; un
+  // punto; la ruta de la propiedad, que si los lleva (Font.Size); el motivo
+  M := TRegEx.Match(ATexto, '\AError reading ([^.:\s]+)\.([^:\s]+): (.+)\z');
+  if M.Success then
+  begin
+    Result.Componente := M.Groups[1].Value;
+    Result.Propiedad := M.Groups[2].Value;
+    Result.Motivo := M.Groups[3].Value;
+  end;
 end;
 
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
@@ -210,7 +276,7 @@ begin
     else if Es(FR_SUBSTITUTED) then
       Result.Sustituidas := V.Split([','], TStringSplitOptions.ExcludeEmpty)
     else if Es(FR_IGNORED) then
-      Result.Ignoradas := Result.Ignoradas + [V]
+      Result.Ignoradas := Result.Ignoradas + [IgnoradaDeTexto(V)]
     else if Es(FR_NONVISUALS) then
       Result.NoVisuales := V.Split([','], TStringSplitOptions.ExcludeEmpty)
     else if Es(FR_NONVISUAL) then

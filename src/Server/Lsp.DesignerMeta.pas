@@ -76,7 +76,19 @@ type
     // se ensenan ('clBlack, clMaroon')
     Constantes: TDictionary<string, string>;
     ConstantesShow: TDictionary<string, string>;
+    // tipo entero lower -> lo que su IdentTo ABIERTA lee ademas de sus
+    // nombres, sacado de su cuerpo: ';hex=x' (x y un hexadecimal) y
+    // ';ins=2a' (una 'a' en el sitio 2 y otra vez al mapa: clRed es claRed).
+    // Sin entrada, no se sabe que mas lee (generacion 12)
+    FormasAbiertas: TDictionary<string, string>;
+    // clase lower -> el ControlStyle de su constructor (K): 'AS', A de
+    // csAcceptsControls y S de csSetCaption, '+', '-', '?' o '.'
+    Estilos: TDictionary<string, string>;
     constructor Create(const AFacts: array of string);
+    // AClase y sus ancestros por Padres, de ella hacia arriba (claves, 64
+    // eslabones a lo sumo): EL recorrido de la herencia de los de abajo, que
+    // eran cuatro bucles iguales (revision de la 1.17.0)
+    function CadenaDe(const AClase: string): TArray<string>;
     // la tabla de un fichero generado (una linea por hecho)
     class function DeFichero(const AFichero: string): TMetaTable;
     { Una hija, nieta... de AClase que publica AProp (la primera que se
@@ -105,6 +117,14 @@ type
       el SetName mas cercano de su cadena que el fuente sobrescribe (hecho T,
       Lsp.DesignerMetaGen.SetNamesDeTexto). Lo que escribe insert. }
     function TextoSigueAlNombre(const AClase: string): Boolean;
+    { El valor ABandera (0 csAcceptsControls, 1 csSetCaption) del ControlStyle
+      de AClase: lo dice el constructor mas cercano de su cadena que lo toca
+      (hecho K); '.' si ninguno, '?' si no se sabe. }
+    function EstiloDe(const AClase: string; ABandera: Integer): Char;
+    { El disenador deja soltar controles dentro de AClase: su ControlStyle
+      tiene csAcceptsControls (un TPanel si; un TPageControl no, sus paginas
+      si; un TButton no). Lo que no se sabe, si: no se niega por ello. }
+    function AceptaControles(const AClase: string): Boolean;
     // Lo que AClase y sus ancestros guardan por codigo ('*' incluido)
     function DefinidasDeLaCadena(const AClase: string): TArray<string>;
     destructor Destroy; override;
@@ -138,6 +158,13 @@ const
   // la tabla, y es un TFrame (lo que set juzga de su tamano y su sitio)
   ID_VCL_FRAME = 'Vcl.Forms:TFrame';
   ID_FMX_FRAME = 'FMX.Forms:TFrame';
+  // un form FMX no es un control: es de esta (revision de la 1.17.0, la raiz
+  // de un insert)
+  ID_FMX_FORMA = 'FMX.Forms:TCommonCustomForm';
+  // lo que una propiedad de clase guarda: un componente (una referencia) o un
+  // objeto suyo (TFont, una lista de cadenas)
+  ID_COMPONENTE = 'System.Classes:TComponent';
+  ID_CADENAS = 'System.Classes:TStrings';
 
 type
   { Por que no hay tabla, de las dos formas que hacen falta: la respuesta
@@ -179,6 +206,7 @@ function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
   constante que quiso decir (' Did you mean clRed?'). Lo pregunta
   delphi_designer set antes de escribir. }
 function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: string;
+  out AAviso: string;
   out AParecida: string): string;
 
 // El mismo lint contra una tabla dada (las pruebas le dan la suya)
@@ -332,7 +360,7 @@ end;
 
 constructor TMetaTable.Create(const AFacts: array of string);
 var
-  F, Names: string;
+  F, Names, Formas: string;
   P: TArray<string>;
   R: TPropRec;
   L: TList<string>;
@@ -355,6 +383,8 @@ begin
   Bases := TDictionary<string, string>.Create;
   Constantes := TDictionary<string, string>.Create;
   ConstantesShow := TDictionary<string, string>.Create;
+  FormasAbiertas := TDictionary<string, string>.Create;
+  Estilos := TDictionary<string, string>.Create;
   for F in AFacts do
   begin
     P := F.Split([' ']);
@@ -407,12 +437,27 @@ begin
       Bases.AddOrSetValue(ClaveDeIdentificador(P[1]), LowerCase(P[2]))
     else if (P[0] = 'I') and (Length(P) >= 3) then
     begin
-      if P[2] = '*' then
+      // '*' cualquiera; '*a,b' abierta (esos nombres y algo mas); 'a,b' esos;
+      // detras de ';', las formas de la abierta
+      Names := P[2];
+      Formas := '';
+      if Names.Contains(';') then
+      begin
+        Formas := Copy(Names, Pos(';', Names), MaxInt);
+        Names := Copy(Names, 1, Pos(';', Names) - 1);
+        FormasAbiertas.AddOrSetValue(ClaveDeIdentificador(P[1]), Formas);
+      end;
+      if Names.StartsWith('*') then
+        Delete(Names, 1, 1);
+      if Names = '' then
         Constantes.AddOrSetValue(ClaveDeIdentificador(P[1]), '*')
       else
-        Constantes.AddOrSetValue(ClaveDeIdentificador(P[1]), ',' + ClaveDeIdentificador(P[2]) + ',');
-      ConstantesShow.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2].Replace(',', ', '));
+        Constantes.AddOrSetValue(ClaveDeIdentificador(P[1]),
+          IfThen(P[2].StartsWith('*'), '*', '') + ',' + ClaveDeIdentificador(Names) + ',');
+      ConstantesShow.AddOrSetValue(ClaveDeIdentificador(P[1]), Names.Replace(',', ', '));
     end
+    else if (P[0] = 'K') and (Length(P) >= 3) and (Length(P[2]) = 2) then
+      Estilos.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2])
     else if (P[0] = 'X') and (Length(P) >= 3) then
       Ambiguas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[1] + '|' + P[2])
     else if (P[0] = 'D') and (Length(P) >= 3) then
@@ -432,6 +477,8 @@ end;
 
 destructor TMetaTable.Destroy;
 begin
+  Estilos.Free;
+  FormasAbiertas.Free;
   ConstantesShow.Free;
   Constantes.Free;
   Bases.Free;
@@ -523,90 +570,83 @@ end;
 function TMetaTable.DefinidaPorCodigo(const AClase, ANombre: string): Boolean;
 var
   C: string;
-  N: Integer;
 begin
   // los que lee un ayudante para alguna clase del marco ('D * Font.Size')
   if Definidas.ContainsKey(ClaveProp('*', ANombre)) then
     Exit(True);
-  C := ClaveDeIdentificador(AClase);
-  N := 0;
-  while (C <> '') and (N < 64) do
-  begin
+  for C in CadenaDe(AClase) do
     if Definidas.ContainsKey(ClaveProp(C, ANombre)) or Definidas.ContainsKey(ClaveProp(C, '*')) then
       Exit(True);
+  Result := False;
+end;
+
+function TMetaTable.CadenaDe(const AClase: string): TArray<string>;
+var
+  C: string;
+begin
+  Result := [];
+  C := ClaveDeIdentificador(AClase);
+  while (C <> '') and (Length(Result) < 64) do
+  begin
+    Result := Result + [C];
     // la clave y la salida en variables distintas: un out de string se vacia
     // ANTES de la llamada, y con la misma la clave llegaria vacia
     var Padre: string;
     if not Padres.TryGetValue(C, Padre) then
       Break;
     C := Padre;
-    Inc(N);
   end;
-  Result := False;
 end;
 
 function TMetaTable.TextoSigueAlNombre(const AClase: string): Boolean;
-var
-  C: string;
-  N: Integer;
 begin
-  C := ClaveDeIdentificador(AClase);
-  N := 0;
-  while (C <> '') and (N < 64) do
-  begin
-    if TextoEsNombre.TryGetValue(C, Result) then
-      Exit;
-    var Padre: string;
-    if not Padres.TryGetValue(C, Padre) then
-      Break;
-    C := Padre;
-    Inc(N);
-  end;
   Result := False;
+  for var C in CadenaDe(AClase) do
+    if TextoEsNombre.TryGetValue(C, Result) then
+      Break;
+  // el SetName de TControl solo lo hace con csSetCaption en su ControlStyle
+  // (TControlListButton lo quita y publica Caption: revision de la 1.17.0)
+  if Result and Desciende(AClase, ID_VCL_CONTROL) then
+    Result := EstiloDe(AClase, 1) <> '-';
+end;
+
+function TMetaTable.EstiloDe(const AClase: string; ABandera: Integer): Char;
+var
+  E: string;
+begin
+  for var C in CadenaDe(AClase) do
+    if Estilos.TryGetValue(C, E) and (E[ABandera + 1] <> '.') then
+      Exit(E[ABandera + 1]);
+  Result := '.';
+end;
+
+function TMetaTable.AceptaControles(const AClase: string): Boolean;
+begin
+  Result := EstiloDe(AClase, 0) <> '-';
 end;
 
 function TMetaTable.Desciende(const AClase, AAncestro: string): Boolean;
 var
-  C, Meta: string;
-  N: Integer;
+  Meta: string;
 begin
-  C := ClaveDeIdentificador(AClase);
   Meta := ClaveDeIdentificador(AAncestro);
-  N := 0;
-  while (C <> '') and (N < 64) do
-  begin
+  for var C in CadenaDe(AClase) do
     if C = Meta then
       Exit(True);
-    var Padre: string;
-    if not Padres.TryGetValue(C, Padre) then
-      Break;
-    C := Padre;
-    Inc(N);
-  end;
   Result := False;
 end;
 
 function TMetaTable.DefinidasDeLaCadena(const AClase: string): TArray<string>;
 var
   C: string;
-  N: Integer;
   Lista: TList<string>;
 begin
   Lista := TList<string>.Create;
   try
-    C := ClaveDeIdentificador(AClase);
-    N := 0;
-    while (C <> '') and (N < 64) do
-    begin
+    for C in CadenaDe(AClase) do
       for var Par in Definidas do
         if Par.Key.StartsWith(ClaveProp(C, '')) and not Lista.Contains(Par.Value) then
           Lista.Add(Par.Value);
-      var Padre: string;
-      if not Padres.TryGetValue(C, Padre) then
-        Break;
-      C := Padre;
-      Inc(N);
-    end;
     Result := Lista.ToArray;
   finally
     Lista.Free;
@@ -772,40 +812,112 @@ begin
       AHoja := R;
       AHayHoja := True;
       // leaf value checks, only where the table can KNOW
-      if (R.Kind = 'e') and EsIdentificador(ARhs, True) then
+      // Un enumerado es UN identificador (ReadIdent): su valor, o Tipo.valor
+      // con el nombre del tipo, que GetEnumValue tambien lee. Un numero, una
+      // cadena o Vcl.Controls.TAlign.alClient no los lee: se escribian y el
+      // form no cargaba (revision de la 1.17.0)
+      if R.Kind = 'e' then
       begin
-        V := UltimoTrozo(ARhs);
-        if M.Enums.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
-           (not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
-          Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT,
-            [ARhs, R.TypeName, M.EnumShow[ClaveDeIdentificador(R.TypeId)]]));
+        V := ARhs;
+        if (Pos('.', V) > 0) and SameText(Copy(V, 1, Pos('.', V) - 1), R.TypeName) then
+          V := Copy(V, Pos('.', V) + 1, MaxInt);
+        if not M.EnumShow.TryGetValue(ClaveDeIdentificador(R.TypeId), Have) then
+          Have := '?';
+        if not EsIdentificador(V, False) or
+           (M.Enums.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
+            not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
+          Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [ARhs, R.TypeName, Have]));
       end
-      else if (R.Kind = 's') and EsIdentificador(ARhs) then
-        Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, ARhs]))
-      else if (R.Kind = 's') and (ARhs <> '') and (ARhs[1] = '[') and
-              ARhs.EndsWith(']') and
-              M.Sets.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) then
+      // un conjunto, entre corchetes y de nombres sueltos (ReadSet): un
+      // numero, una cadena o [fsBold,] no los lee
+      else if R.Kind = 's' then
       begin
-        for V in ARhs.Substring(1, Length(ARhs) - 2).Split([',']) do
-          if (V.Trim <> '') and
-             (not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
-            Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [V.Trim, R.TypeName]));
+        if not (ARhs.StartsWith('[') and ARhs.EndsWith(']')) then
+        begin
+          V := ARhs;
+          if not EsIdentificador(V, False) and M.SetShow.TryGetValue(ClaveDeIdentificador(R.TypeId), Have) then
+            V := Have.Split([','])[0].Trim;
+          Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, V]));
+        end;
+        if ARhs.Substring(1, Length(ARhs) - 2).Trim <> '' then
+          for V in ARhs.Substring(1, Length(ARhs) - 2).Split([',']) do
+            if not EsIdentificador(V.Trim, False) or
+               (M.Sets.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
+                not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
+              Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', ARhs, V.Trim), R.TypeName]));
       end;
     end;
   end;
 end;
 
+{ Si AValor carga por una de las formas de una lista abierta (AFormas, las
+  de FormasAbiertas) con sus nombres ALista (',a,b,' en minusculas). }
+function CargaPorSusFormas(const AFormas, AValor, ALista: string): Boolean;
+var
+  N: Integer;
+begin
+  Result := False;
+  for var F in AFormas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
+    if F.StartsWith('hex=') and (Length(F) = 5) then
+    begin
+      // la letra como la compara su cuerpo (Chars[0] = 'x', con su caja) y un
+      // hexadecimal que quepa en 64 bits (StrToInt64 de '$' y el resto)
+      if (Length(AValor) >= 2) and (Length(AValor) <= 17) and (AValor[1] = F[5]) and
+         TRegEx.IsMatch(Copy(AValor, 2, MaxInt), '\A[0-9A-Fa-f]+\z') then
+        Exit(True);
+    end
+    else if F.StartsWith('ins=') and (Length(F) >= 6) then
+    begin
+      N := StrToIntDef(Copy(F, 5, Length(F) - 5), -1);
+      if (N >= 0) and (Length(AValor) > N) and ALista.Contains(',' +
+           ClaveDeIdentificador(Copy(AValor, 1, N) + F[Length(F)] + Copy(AValor, N + 1, MaxInt)) + ',') then
+        Exit(True);
+    end;
+end;
+
+{ Como se ensenan esas formas: la letra y un hexadecimal; los nombres sin la
+  letra que inserta, con un ejemplo de los suyos (clAliceblue por
+  claAliceblue). }
+function FormasQueSeEnsenan(const AFormas: string; const ANombres: TArray<string>): string;
+var
+  N: Integer;
+  C: Char;
+  Ejemplo: string;
+begin
+  Result := '';
+  for var F in AFormas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
+    if F.StartsWith('hex=') and (Length(F) = 5) then
+      Result := Result + IfThen(Result <> '', '; ') + MsgFmt(SF_DESIGNER_FORMA_HEX_FMT, [F[5]])
+    else if F.StartsWith('ins=') and (Length(F) >= 6) then
+    begin
+      N := StrToIntDef(Copy(F, 5, Length(F) - 5), -1);
+      C := F[Length(F)];
+      Ejemplo := '';
+      for var Nm in ANombres do
+        if (N >= 0) and (Length(Nm) > N) and (Nm[N + 1] = C) then
+        begin
+          Ejemplo := MsgFmt(SF_DESIGNER_FORMA_INSERTA_EJEMPLO_FMT, [Copy(Nm, 1, N) + Copy(Nm, N + 2, MaxInt), Nm]);
+          Break;
+        end;
+      Result := Result + IfThen(Result <> '', '; ') + MsgFmt(SF_DESIGNER_FORMA_INSERTA_FMT, [C, Ejemplo]);
+    end;
+end;
+
 function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: string;
+  out AAviso: string;
   out AParecida: string): string;
 const
   MAX_MUESTRA = 12;
 var
-  Base, K, Lista, Show: string;
+  Base, K, Lista, Show, Formas: string;
   Nombres: TArray<string>;
   Tope: Integer;
+  N: Int64;
+  Abierta: Boolean;
 begin
   Result := '';
   AParecida := '';
+  AAviso := '';
   if AHoja.Kind <> 'o' then
     Exit;
   K := ClaveDeIdentificador(AHoja.TypeId);
@@ -813,8 +925,16 @@ begin
     Exit;
   if (Base = 'integer') or (Base = 'int64') then
   begin
-    if TRegEx.IsMatch(AValor, '^(?:-?\d+|\$[0-9A-Fa-f]+)$') then
-      Exit;
+    // y que quepa donde lo lee el cargador: ReadInteger lee 32 bits (un
+    // $FFFF0000 sale del texto como Int64 y el form no carga), ReadInt64 64
+    // (revision de la 1.17.0)
+    if EsEnteroDeForm(AValor) then
+    begin
+      if TryStrToInt64(AValor, N) and
+         ((Base = 'int64') or ((N >= Low(Integer)) and (N <= High(Integer)))) then
+        Exit;
+      Exit(MsgText(IfThen(Base = 'int64', SF_DESIGNER_TOMA_ENTERO64, SF_DESIGNER_TOMA_ENTERO32)));
+    end;
     // un identificador solo si el tipo registra constantes, y entonces una
     // de las suyas (ReadPropValue le pregunta a su IdentToInt); un Int64 no
     if (Base = 'integer') and M.Constantes.TryGetValue(K, Lista) then
@@ -827,6 +947,7 @@ begin
       end;
       if EsIdentificador(AValor, False) and Lista.Contains(',' + ClaveDeIdentificador(AValor) + ',') then
         Exit;
+      Abierta := Lista.StartsWith('*');
       Show := M.ConstantesShow[K];
       Nombres := Show.Split([', ']);
       if EsIdentificador(AValor, False) then
@@ -840,13 +961,35 @@ begin
       end;
       if Length(Nombres) > MAX_MUESTRA then
         Show := string.Join(', ', Copy(Nombres, 0, MAX_MUESTRA)) + ', ...';
+      // ABIERTA (su IdentTo lee mas que sus nombres): con sus formas leidas
+      // del fuente (generacion 12) el juicio es exacto - 'Rojo' en un
+      // TAlphaColor se escribia y el form no abria; clRed y xFF00FF00 si
+      // cargan (segunda revision de la 1.17.0) -; sin ellas no se sabe que
+      // mas lee: se escribe, y con su aviso siempre
+      if Abierta and EsIdentificador(AValor, False) then
+      begin
+        if M.FormasAbiertas.TryGetValue(K, Formas) then
+        begin
+          if CargaPorSusFormas(Formas, AValor, Lista) then
+          begin
+            AParecida := '';
+            Exit;
+          end;
+          Exit(MsgFmt(SF_DESIGNER_TOMA_ABIERTA_FMT, [Show, FormasQueSeEnsenan(Formas, Nombres)]));
+        end;
+        AAviso := MsgFmt(SN_DESIGNER_CONSTANTE_ABIERTA_FMT, [AValor, AHoja.TypeName, AParecida]);
+        AParecida := '';
+        Exit;
+      end;
       Exit(MsgFmt(SF_DESIGNER_TOMA_CONSTANTES_FMT, [Show]));
     end;
     Exit(MsgText(SF_DESIGNER_TOMA_ENTERO));
   end;
   if (Base = 'float') or (Base = 'single') then
   begin
-    if not TRegEx.IsMatch(AValor, '^-?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?$') then
+    // LA gramatica del numero (Lsp.DesignerBin): con exponente, y un $hex
+    // tambien, que ReadFloat lee como entero
+    if not EsNumeroDeForm(AValor) then
       Result := MsgText(SF_DESIGNER_TOMA_NUMERO);
   end
   else if Base = 'char' then
@@ -858,8 +1001,15 @@ begin
   begin
     if not EsLiteralDeForm(AValor) then
       Result := MsgText(SF_DESIGNER_TOMA_CADENA);
+  end
+  // un Variant: lo que ReadVariant lee - un numero, una cadena, True, False,
+  // Null o nil; un identificador cualquiera, no (Valor = Hola pasaba)
+  else if Base = 'variant' then
+  begin
+    if not (EsNumeroDeForm(AValor) or EsLiteralDeForm(AValor) or
+            MatchText(AValor, ['True', 'False', 'Null', 'nil'])) then
+      Result := MsgText(SF_DESIGNER_TOMA_VARIANTE);
   end;
-  // variant: cualquier valor de una linea
 end;
 
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
@@ -867,15 +1017,13 @@ function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
 var
   Stack: TStack<string>;    // owner class per nesting level ('' = unknown)
   Warns, Notas: TStringList;
-  I, CollDepth: Integer;
-  L, Lhs, Rhs, Cur, Have: string;
-  OClave, ONombre, OClase: string;
-  Mt: TMatch;
+  I: Integer;
+  Lhs, Rhs, Cur, Have: string;
+  OClave, OClase: string;
   R: TPropRec;
   Hoja: Boolean;
-  InBlock: Boolean;
-  BlockCh: Char;
   Unknown: string;
+  Form: TArray<TLineaForm>;
 
   procedure Warn(const AMsg: string);
   begin
@@ -895,119 +1043,88 @@ begin
   Stack := TStack<string>.Create;
   Warns := TStringList.Create;
   Notas := TStringList.Create;
-  CollDepth := 0;
   Unknown := ',';
-  InBlock := False;
-  BlockCh := ' ';
+  // EL lector de las lineas (Lsp.DesignerBin.LineasDeForm), el mismo del
+  // arbol: lo de dentro de una coleccion (las clases de sus items no salen en
+  // el texto), de una lista o de un bloque binario no se juzga, y una cadena
+  // partida se juzga entera. Aqui habia un salto propio, uno de los cuatro
   try
+    Form := LineasDeForm(ALines);
     for I := 0 to High(ALines) do
-    begin
-      L := ALines[I].Trim;
-      if InBlock then
-      begin
-        if ((BlockCh = '{') and L.EndsWith('}')) or
-           ((BlockCh = '(') and L.EndsWith(')')) then
-          InBlock := False;
-        Continue;
-      end;
-      // collections (Prop = < item ... end>): the item classes never
-      // appear in the text - silence inside
-      if CollDepth > 0 then
-      begin
-        if L.StartsWith('end') and L.EndsWith('>') then
-          Dec(CollDepth)
-        else if L.EndsWith('<') then
-          Inc(CollDepth);
-        Continue;
-      end;
-      // the name is optional: 'object TMemo' is an unnamed component, and
-      // without it its properties went to the PARENT (and its end popped the
-      // parent: 1.12.0 review, a FireDAC sample). THE reader of that line
-      // (Lsp.DesignerBin), shared with binding, tree and the rename
-      if LineaDeObjeto(L, OClave, ONombre, OClase) then
-      begin
-        Cur := ClaveDeIdentificador(OClase);
-        // The ROOT object and an inline frame are user classes by definition
-        // (a form, a frame, a data module): never judged. With the tables
-        // read from the library paths a user's TForm1 can share its name
-        // with a demo's (202 form classes there: TForm1, TAboutBox...), and
-        // judging it said TextHeight/PixelsPerInch did not exist (1.12.0
-        // review: 33 Samples forms).
-        if (Stack.Count = 0) or (OClave = 'inline') then
-        begin
-          Stack.Push('');
-          Continue;
-        end;
-        // the NAME a form writes -> the class identity (with its unit)
-        if not M.ClaseDeNombre(OClase, Cur) then
-        begin
-          Cur := ClaveDeIdentificador(OClase);
-          // Not judging an unknown class is right (a user form or a
-          // third-party component is not an error), but saying NOTHING was
-          // read as "checked and fine" - and lint's own description promises
-          // unknown classes (field round 8). One honest line, no verdict:
-          // it says why that whole subtree went unchecked.
-          // ...but NOT for the root object, nor for inherited/inline: a form,
-          // a frame and a data module are user classes by definition and no
-          // table will ever hold them. Only a nested `object` of an unknown
-          // class is worth a word (a third-party component, or a typo).
-          if (Stack.Count > 0) and (OClave = 'object') and
-             not Unknown.Contains(',' + Cur + ',') then
+      case Form[I].Clase of
+        clfObjeto:
           begin
-            Unknown := Unknown + Cur + ',';
-            if M.Ambiguas.TryGetValue(Cur, Have) then
-              Nota(MsgFmt(SN_LINT_CLASE_AMBIGUA_FMT, [OClase,
-                IfThen(AIsFmx, 'FMX', 'VCL'), Have.Substring(Have.IndexOf('|') + 1)]))
-            else
-              Nota(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
-                [OClase, IfThen(AIsFmx, 'FMX', 'VCL')]));
+            OClave := Form[I].Clave;
+            OClase := Form[I].ClaseObj;
+            // the name is optional: 'object TMemo' is an unnamed component, and
+            // without it its properties went to the PARENT (and its end popped the
+            // parent: 1.12.0 review, a FireDAC sample). THE reader of that line
+            // (Lsp.DesignerBin), shared with binding, tree and the rename
+            Cur := ClaveDeIdentificador(OClase);
+            // The ROOT object and an inline frame are user classes by definition
+            // (a form, a frame, a data module): never judged. With the tables
+            // read from the library paths a user's TForm1 can share its name
+            // with a demo's (202 form classes there: TForm1, TAboutBox...), and
+            // judging it said TextHeight/PixelsPerInch did not exist (1.12.0
+            // review: 33 Samples forms).
+            if (Stack.Count = 0) or (OClave = 'inline') then
+            begin
+              Stack.Push('');
+              Continue;
+            end;
+            // the NAME a form writes -> the class identity (with its unit)
+            if not M.ClaseDeNombre(OClase, Cur) then
+            begin
+              Cur := ClaveDeIdentificador(OClase);
+              // Not judging an unknown class is right (a user form or a
+              // third-party component is not an error), but saying NOTHING was
+              // read as "checked and fine" - and lint's own description promises
+              // unknown classes (field round 8). One honest line, no verdict:
+              // it says why that whole subtree went unchecked.
+              // ...but NOT for the root object, nor for inherited/inline: a form,
+              // a frame and a data module are user classes by definition and no
+              // table will ever hold them. Only a nested `object` of an unknown
+              // class is worth a word (a third-party component, or a typo).
+              if (Stack.Count > 0) and (OClave = 'object') and
+                 not Unknown.Contains(',' + Cur + ',') then
+              begin
+                Unknown := Unknown + Cur + ',';
+                if M.Ambiguas.TryGetValue(Cur, Have) then
+                  Nota(MsgFmt(SN_LINT_CLASE_AMBIGUA_FMT, [OClase,
+                    IfThen(AIsFmx, 'FMX', 'VCL'), Have.Substring(Have.IndexOf('|') + 1)]))
+                else
+                  Nota(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
+                    [OClase, IfThen(AIsFmx, 'FMX', 'VCL')]));
+              end;
+              Cur := '';
+            end;
+            Stack.Push(Cur);
           end;
-          Cur := '';
-        end;
-        Stack.Push(Cur);
-        Continue;
+        clfFin:
+          if Stack.Count > 0 then
+            Stack.Pop;
+        clfPropiedad:
+          begin
+            // lo de un item de una coleccion: su clase no sale en el texto
+            if Form[I].Coleccion > 0 then
+              Continue;
+            Lhs := Form[I].Prop;
+            Rhs := ValorEnteroDe(ALines, Form, I);
+            // una coleccion, una lista o un bloque binario (lo que guarda la
+            // clase por codigo, DefineProperties): no se juzgan
+            if (Rhs <> '') and CharInSet(Rhs[1], ['<', '{', '(']) then
+              Continue;
+            if Stack.Count = 0 then
+              Continue;
+            Cur := Stack.Peek;
+            if Cur = '' then
+              Continue;
+            // EL juez de una linea, el mismo que pregunta delphi_designer set
+            Have := JuzgaPropiedad(M, Cur, Lhs, Rhs, R, Hoja);
+            if Have <> '' then
+              Warn(Have);
+          end;
       end;
-      if L = 'end' then
-      begin
-        if Stack.Count > 0 then
-          Stack.Pop;
-        Continue;
-      end;
-      Mt := TRegEx.Match(L, '^(' + PATRON_IDENT_PUNTOS + ') = (.*)$');
-      if not Mt.Success then
-        Continue;
-      Lhs := Mt.Groups[1].Value;
-      Rhs := Mt.Groups[2].Value.Trim;
-      if Rhs = '<' then
-      begin
-        Inc(CollDepth);
-        Continue;
-      end;
-      if (Rhs <> '') and (Rhs[1] = '{') and not Rhs.EndsWith('}') then
-      begin
-        InBlock := True;
-        BlockCh := '{';
-        Continue;
-      end;
-      if Rhs = '(' then
-      begin
-        InBlock := True;
-        BlockCh := '(';
-        Continue;
-      end;
-      // one-line binary/list values: DefineProperties land - not judged
-      if (Rhs <> '') and CharInSet(Rhs[1], ['{', '(']) then
-        Continue;
-      if Stack.Count = 0 then
-        Continue;
-      Cur := Stack.Peek;
-      if Cur = '' then
-        Continue;
-      // EL juez de una linea, el mismo que pregunta delphi_designer set
-      Have := JuzgaPropiedad(M, Cur, Lhs, Rhs, R, Hoja);
-      if Have <> '' then
-        Warn(Have);
-    end;
     Result := Warns.ToStringArray;
     ANotas := Notas.ToStringArray;
   finally

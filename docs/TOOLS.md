@@ -544,7 +544,7 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through PA
 | `exe` | string | optional | remote-run OPTIONAL: another file of that same deploy folder to run instead of the project binary - a plain file name, no path. |
 | `args` | string | optional | remote-run: optional command-line arguments for the program (no shell metacharacters) |
 | `job` | string | optional | kill / output: the "jobId" a remote-run answer gave you; with profile and project (the same .dproj path) - only a job of THAT project on THAT machine. |
-| `sdk` | string | optional | get-sdk optional: the NAME of the SDK folder to write. Default: the target distro from its /etc/os-release (zorin18, fedora44, ubuntu2404). Pass one to keep "the one this shop builds with". |
+| `sdk` | string | optional | get-sdk optional: the NAME of the SDK folder to write. Default: the target distro from its /etc/os-release (zorin18, fedora44, ubuntu2404). Pass one to keep "the one this shop builds with". reseat-sdk: the SDK whose IDE seat is rewritten (none = all). remove-sdk: the SDK to remove, by name (command=profiles lists them). |
 | `active` | string | optional | get-sdk optional: "yes" makes it the ACTIVE SDK of the platform (the bold entry of the IDE SDK Manager, used by projects that declare none). Default: nothing is touched - what a project builds with belongs to the project (delphi_config set-sdk) or to you. |
 | `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
 <!-- /contract -->
@@ -591,7 +591,7 @@ Android devices for remote development: phones/tablets hang off THIS server (USB
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package). Optional |
 | `lines` | string | optional | logcat: how many recent lines (default 300, max 5000; 0 = the default). An inline answer carries at most the newest 400 - for more, pass out=\<file.txt> and read it in ranges. |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image (scaled to maxwidth), and no file is kept to download later. false = a file and its download link (a client without vision, or one that wants the bytes). |
-| `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels (or pass frame). |
+| `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels, or use the answer's frame (a tap takes it, and delphi_desktop's type too; preview's converts to form units). |
 | `frame` | string | optional | tap (and type, on delphi_desktop): the "frame" of the screenshot you measured on, copied verbatim; then x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, x,y are capture pixels. |
 <!-- /contract -->
 
@@ -626,7 +626,7 @@ The desktop of the machine behind a PAServer profile (a Linux or Windows target,
 | `region` | string | optional | screenshot OPTIONAL: "x,y,w,h" in desktop pixels - only that piece, at full resolution (every image is shrunk to one fixed size, so a crop is how you read a small dialog). The answer carries origin {x,y}: press at (origin.x + x, origin.y + y), or pass its frame. Not with window: for a piece of a window, add the window's origin and use region. When in doubt (a dialog may open elsewhere), capture the whole desktop. |
 | `window` | string | optional | screenshot OPTIONAL: part of a window title; the capture is cropped to the first window of "windows" whose title contains it (case-insensitive), with origin {x,y} like region, plus the whole list (a dialog outside the crop still shows there). A native Wayland window has no rectangle: use region. Not with region. |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image (scaled to maxwidth), and no file is kept to download later. false = a file and its download link (a client without vision, or one that wants the bytes). |
-| `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels (or pass frame). |
+| `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels, or use the answer's frame (a tap takes it, and delphi_desktop's type too; preview's converts to form units). |
 | `frame` | string | optional | tap (and type, on delphi_desktop): the "frame" of the screenshot you measured on, copied verbatim; then x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, x,y are capture pixels. |
 <!-- /contract -->
 
@@ -691,29 +691,29 @@ SEMANTIC RENAME of a Delphi symbol: point at the identifier (path + 0-based line
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-FORMS AND COMPONENTS, structured - never guess what a class publishes or what a form contains (each command in "command"). Classes (info, prop) are read from the source of the active Delphi - its library and browsing paths, so installed components with source are in too; forms (tree, get, lint, check-binding, layout) from the .dfm/.fmx, a BINARY .dfm read on the fly; preview DRAWS the form as the IDE designer shows it and returns the image. insert, set and delete EDIT the form and its unit the way the IDE does: to add a component use insert (its block is never written by hand), to change one property set, to remove one delete; then preview to see it. to-text/to-binary convert a .dfm. A read-only credential gets the reading commands (preview leaves its PNG in the workspace temp, so it is not one of them).
+FORMS AND COMPONENTS, structured - never guess what a class publishes or what a form contains (each command in "command"). Classes (info, prop) are read from the source of the active Delphi - its library and browsing paths, so installed components with source are in too; forms (tree, get, lint, check-binding, layout) from the .dfm/.fmx, a BINARY .dfm read on the fly; preview DRAWS the form as the IDE designer shows it and returns the image. insert, set and delete EDIT the form and its unit the way the IDE does: to add a visual control use insert (its block is not written by hand; a non-visual component, or a class the table does not have, is - the refusal says how), to change one property set, to remove one delete; then preview to see it. to-text/to-binary convert a .dfm. A read-only credential gets the reading commands (preview leaves its PNG in the workspace temp, so it is not one of them).
 
 *Access: mixed (`command` info / prop / tree / get / lint / check-binding / binding / layout read-only; every other command read-write, refused to a read-only credential).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `command` | string | optional | info (every property a class really publishes: kind and type, events apart) \| prop (one property in detail, with the legal members of an enum/set) \| tree (the component tree: name, class, line) \| get (one component's block, verbatim) \| lint (properties the class does not publish and enum values that do not exist; objects it could not check - a class not in the table, or ambiguous - go apart as notes) \| check-binding (does the .dfm agree with the class in the .pas: components with no published field, events naming a method that is not published, published fields with no component, duplicate names - all of which COMPILE and then throw when the form is created) \| layout (WHERE things end up on a VCL .dfm: resolves Align and returns every control's rectangle plus those of size zero, outside their container, overlapping or clipped by the bands around them - a form can bind perfectly and still be unusable) \| to-text (a BINARY .dfm becomes text on disk, the IDE's own conversion, backup first - reading never needs it) \| to-binary (the way back, the resource-wrapped form the IDE writes) \| preview (a PNG of what the IDE designer shows for the .dfm/.fmx, in this answer: built in design mode with the IDE's installed packages, no code run and nothing on any screen; nonVisual lists the non-visual components, fidelity says how it was painted) \| insert (a NEW visual control: classname; component, its Name - the IDE's Button1, Button2... by default; parent - the form by default; placed at 10,10 as the last child, with its published field in the form's class and its unit in the uses; the answer is its numbered block) \| set (ONE property: prop + value, checked against the property's type and the class BEFORE writing; parent= alone moves the component; prop=Name renames it, its field and the form lines that name it) \| delete (the component and what is inside it, the references to it in the form, its field and its EMPTY handlers; refused while a method of its own has code - the answer lists them with their line, to clean first). Default: info |
-| `path` | string | optional | tree/get/lint/check-binding/layout/preview/insert/set/delete/to-text/to-binary: the .dfm or .fmx file (a binary .dfm is read on the fly; the answer says so). insert, delete and a rename also write its unit, the .pas of the same name |
+| `path` | string | optional | tree/get/lint/check-binding/layout/preview/insert/set/delete/to-text/to-binary: the .dfm or .fmx file. The reading commands and preview read a binary .dfm too, on the fly; insert, set and delete edit a text form (command=to-text converts it, backup first). insert, delete and a rename also write its unit, the .pas of the same name |
 | `classname` | string | optional | info/prop: the component class, e.g. TButton, TEdit, TLayout. insert: the class of the new control |
 | `prop` | string | optional | prop: the property name, e.g. Align, Caption, TextSettings. set: the property to write, dotted for a sub-property (Font.Size, Position.X); Name renames the component |
-| `component` | string | optional | get: the component Name as it appears in the form (object \<Name>: \<Class>). preview: crop the image to that component; componentRect says where it is in the form. set/delete: the component to change or delete. insert optional: the Name of the new control (an identifier free in the form and its class), its text too when the class shows one; without it, the IDE's own (Button1, Button2...) |
+| `component` | string | optional | get: the component Name as it appears in the form (object \<Name>: \<Class>). preview: crop the image to that component (one inside an inline frame goes as Frame1.Name); componentRect says where it is in the form. set/delete: the component to change or delete. insert optional: the Name of the new control (an identifier free in the form and its class), its text too when the class shows one; without it, the IDE's own (Button1, Button2...) |
 | `unit` | string | optional | check-binding, optional: the .pas with the form's class. By default, the one with the same name as the .dfm. |
-| `framework` | string | optional | info/prop: vcl \| fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); default vcl. preview: the file decides; if given, it must agree |
+| `framework` | string | optional | info/prop: vcl \| fmx (default vcl). preview: the file decides (.dfm = vcl, .fmx = fmx); if given, it must agree |
 | `filter` | string | optional | info optional: only properties whose name contains this text |
 | `maxdepth` | integer | optional | tree optional: how many levels to show (1 = only the form; 0 or empty = all). An object on the last level shows childrenCount instead of its children |
-| `state` | string | optional | preview optional: a VIEW state applied before drawing, never written to the file - Component.Property=Value, several separated by ; (PageControl1.ActivePage=TabSheet2;Edit1.Text=hello). A property that holds a component takes the component's name. No double quotes. |
+| `state` | string | optional | preview optional: a VIEW state applied before drawing, never written to the file - Component.Property=Value (inside an inline frame, Frame1.Component.Property=Value), several separated by ; (PageControl1.ActivePage=TabSheet2;Edit1.Text=hello). A property that holds a component takes the component's name. No double quotes. |
 | `style` | string | optional | preview optional. VCL: a .vsf file (the form is then drawn out of design mode: VCL styles never apply to designed controls) or none (the default, as the designer). FMX: empty = the form's own StyleBook (as the designer), none = the Windows default, a .style file, or a platform of the designer's Style list (android, ios, win11...; an unknown name is answered with the list). A file goes by absolute path. |
 | `nonvisual` | boolean | optional | preview optional: true = draw the non-visual components (TTimer, TActionList, datasets...) where the designer puts them, with their icon and name. Default false: the image shows the form as it will look, and nonVisual lists them anyway. |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image (scaled to maxwidth), and no file is kept to download later. false = a file and its download link (a client without vision, or one that wants the bytes). |
-| `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels (or pass frame). |
+| `maxwidth` | integer | optional | Inline only: the width the image is scaled to before it travels (0 = 1280). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels, or use the answer's frame (a tap takes it, and delphi_desktop's type too; preview's converts to form units). |
 | `out` | string | optional | preview: where the PNG lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format. Empty = __delphi-temp\\<agent>, wiped on server restart. On THIS server, jailed like any path. With inline=false the capture stays there and the answer carries its download link. |
 | `parent` | string | optional | insert: the container that receives the new control, by its Name (the form by default). set: MOVE the component, with its children, into this container - alone, without prop or value; it keeps its Left/Top, now relative to the new parent, and takes the next TabOrder there. |
-| `value` | string | optional | set: the new value, as the form file writes it: 120, True, alClient, [akLeft, akTop], clRed, the Name of another component (PopupMenu1). A string goes quoted ('OK') or not (OK): set quotes it; a number as typed (0.7): set writes it the way the IDE does. |
+| `value` | string | optional | set: the new value, as the form file writes it: 120, True, alClient, [akLeft, akTop], clRed, the Name of another component (PopupMenu1), nil to clear one. A string goes quoted ('OK', 'Acci'#243'n') or not (OK): set writes it the way the IDE does, accents as #N and a long one in pieces; so does a number as typed (0.7). |
 <!-- /contract -->
 
 `preview` (1.17.0) is drawn by two renderers that ship next to the server,
@@ -730,8 +730,11 @@ The answer lists `nonVisual` always, `substituted` for classes no installed
 package registers (a named box at their place), `ignored` and `warnings` from
 the reader, and `ms`.
 
-`insert`, `set` and `delete` (1.17.0) write the form and its unit together, all
-or nothing (`Lsp.DesignerEdit`). A name, given by `insert component=` or by
+`insert`, `delete` and a rename (`set prop=Name`) (1.17.0) write the form and
+its unit together, all or nothing; any other `set` writes the form only
+(`Lsp.DesignerEdit`). What `insert` cannot place - a non-visual component, a
+class or a parent the tables do not have, a unit missing from a `uses` split in
+`{$IFDEF}` branches - is written by hand, and its refusal says how. A name, given by `insert component=` or by
 `set prop=Name`, is judged by one rule: an identifier, not a reserved word, taken
 by nothing in the form or its class (`DSGN-095`/`096`); without one, insert takes the IDE's
 first free `Button1`, `Button2`... The Caption/Text follows the name when the
@@ -752,7 +755,13 @@ value the property stores - a `Single` rounded as a `Single`: `0.7` becomes
 `0.699999988079071000`), computed from the exact digits of the number, because
 the 64-bit RTL of the server rounds differently; no IDE rewrites the form
 afterwards. An inline frame's class belongs to the project and is not in the
-table: `set` judges its properties as a `TFrame`'s.
+table: `set` judges its properties as a `TFrame`'s. A string is written as
+`ObjectBinaryToText` writes it (accents and quotes as `#N`, a long one in
+pieces of 64 on the lines below); `nil` clears a reference; a reference to a
+component inside an inline frame is written `Frame1.Name`, as the form loader
+resolves it (the frame's names are not the form's), and like one to another
+form (`Form2.ImageList1`) it goes as given: set does not read the other file.
+The frame's own components are edited in its own file (`DSGN-083`).
 
 Since 1.2.3 `check-binding` is not only on request: `lint` includes it when the
 `.pas` sits next to the form, every write to a designer through `delphi_edit`
@@ -959,8 +968,8 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 1. `delphi_config {project}` — see the framework and platforms. **VCL is Windows-only**; only FMX or console apps cross.
 2. `delphi_config {project, command:"add-platform", platform:"Linux64"}` — enable the platform (refused on a VCL project, with the reason).
 3. `delphi_paserver {command:"packages"}` — get the PAServer installer; download it with `delphi_fetch` and run it on the target (it listens on port 64211).
-4. `delphi_paserver {command:"test-connection", host:"...", port:"64211"}` — raw TCP probe: does this server reach your PAServer at all? Then `{command:"add-profile", name:"mi-linux", host, password}` and `{command:"test-connection", name:"mi-linux"}` — full handshake.
-5. `delphi_paserver {command:"get-sdk", name:"mi-linux"}` — pull the SDK/sysroot once (can take minutes); after this the linker works.
+4. `delphi_paserver {command:"test-connection", host:"...", port:"64211"}` — raw TCP probe: does this server reach your PAServer at all? Then `{command:"add-profile", profile:"mi-linux", host, password}` and `{command:"test-connection", profile:"mi-linux"}` — full handshake.
+5. `delphi_paserver {command:"get-sdk", profile:"mi-linux"}` — pull the SDK/sysroot once (can take minutes); after this the linker works.
 6. `delphi_build {project, platform:"Linux64", config:"Debug"}` — build; add `target:"Deploy", profile:"mi-linux"` to build **and ship** to the target's PAServer scratch dir, exec bit set.
 
 ### Deploy and drive an app on an Android device (the device hangs off the server)

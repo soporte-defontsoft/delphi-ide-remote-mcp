@@ -350,16 +350,18 @@ begin
   end;
 end;
 
-{ El rectangulo de un componente en el PNG (el cliente de la form) }
+{ El rectangulo de un componente en el PNG (el cliente de la form). El
+  nombre como lee la RTL una referencia (FindNestedComponent): Marco1.LblAviso
+  es uno de dentro de un frame inline (revision de la 1.17.0: DSGN-066) }
 function RectDe(AForm: TForm; ARaiz: TComponent; const ANombre: string; out R: TRect): Boolean;
 var
   C: TComponent;
   P: TPoint;
 begin
   Result := False;
-  C := ARaiz.FindComponent(ANombre);
+  C := ComponenteDeRuta(ARaiz, ANombre);
   if C = nil then
-    C := AForm.FindComponent(ANombre);
+    C := ComponenteDeRuta(AForm, ANombre);
   if C = nil then
     Exit;
   if C is TControl then
@@ -373,11 +375,17 @@ begin
     Result := True;
   end
   else
-  begin
-    P := PosicionDeNoVisual(C);
-    R := Rect(P.X, P.Y, P.X + 28, P.Y + 28 + 12);
-    Result := True;
-  end;
+    // un no visual esta en la imagen solo si se dibujan (nonvisual=true) y es
+    // de la raiz, como en el designer: el de un frame metido no se ensena, y
+    // su "rect" era un trozo de form cualquiera (segunda revision de la 1.17.0)
+    if GPeticion.NoVisuales then
+      for var N in NoVisualesDe(ARaiz, TControl) do
+        if N = C then
+        begin
+          P := PosicionDeNoVisual(C);
+          R := Rect(P.X, P.Y, P.X + 28, P.Y + 28 + 12);
+          Exit(True);
+        end;
 end;
 
 procedure GuardaPng(ABmp: TBitmap; const APng: string);

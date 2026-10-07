@@ -179,6 +179,42 @@ out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle"
 check('clone: nombre ocupado rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLES_NAME_TAKEN_FMT'), out)
 out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": "mal nombre"})
 check('clone: nombre invalido rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLES_NAME_CHARS_FMT'), out)
+# el StyleName como lo escribe el IDE (un acento es #243), por el compositor
+# de la casa, al clonar y al renombrar; y el renombrado juzga el nombre como
+# clone. Se escribia entre comillas a mano y el renombrado quitaba comillas
+# a mano (revision de la 1.17.0)
+out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": "tarjetaBotón"})
+check('clone con acento: el StyleName como el IDE (#243)', mc.abre(out, 'SN_STYLES_CLONED_FMT') and
+      "StyleName = 'tarjetaBot'#243'n'" in rd(S) and 'tarjetaBotón' not in rd(S), out[:200])
+out = call('delphi_styles', {"path": S, "command": "set", "style": "tarjetaBotón", "prop": "StyleName",
+                             "value": "'tarjeta'#243'2'"})
+d = json.loads(call('delphi_styles', {"path": S}))
+check('set StyleName con el literal del IDE: se lee como texto y se escribe igual',
+      mc.abre(out, 'SN_STYLES_RENAMED_FMT') and "StyleName = 'tarjeta'#243'2'" in rd(S) and
+      'tarjetaó2' in [x['style'] for x in d['styles']], out[:200])
+out = call('delphi_styles', {"path": S, "command": "set", "style": "tarjetaó2", "prop": "StyleName",
+                             "value": "'mal nombre'"})
+check('set StyleName juzga el nombre como clone', mc.rechazado(out) and mc.es(out, 'SR_STYLES_NAME_CHARS_FMT'), out)
+# sin comillas y con guion: lo juzga el juez del NOMBRE, no la gramatica de un
+# valor de form, que lo negaba (revision de la 1.17.0)
+out = call('delphi_styles', {"path": S, "command": "set", "style": "tarjetaó2", "prop": "StyleName",
+                             "value": "tarjeta-3"})
+check('set StyleName sin comillas con guion: renombra', mc.abre(out, 'SN_STYLES_RENAMED_FMT') and
+      "StyleName = 'tarjeta-3'" in rd(S), out[:300])
+# un nombre de mas de 64 caracteres va en trozos, como el IDE: el arbol lo lee
+# entero (ValorEnteroDe), y clonar DESDE el era un AV (revision de la 1.17.0)
+LARGO = 'tarjeta' + 'x' * 63
+out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": LARGO})
+d = json.loads(call('delphi_styles', {"path": S}))
+check('clone con un nombre de 70 caracteres: en trozos como el IDE, y la lista lo lee entero',
+      mc.abre(out, 'SN_STYLES_CLONED_FMT') and LARGO in [x['style'] for x in d['styles']] and
+      ("'" + LARGO[:64] + "' +") in rd(S) and ("'" + LARGO + "'") not in rd(S), out[:300])
+out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": LARGO})
+check('...otra vez: nombre ocupado (el nombre en trozos se encuentra)', mc.rechazado(out) and
+      mc.es(out, 'SR_STYLES_NAME_TAKEN_FMT'), out[:300])
+out = call('delphi_styles', {"path": S, "command": "clone", "style": LARGO, "name": "tarjeta_corta"})
+check('...y clonar DESDE el largo: el clon con su nombre corto', mc.abre(out, 'SN_STYLES_CLONED_FMT') and
+      "StyleName = 'tarjeta_corta'" in rd(S), out[:300])
 
 # ---- lint ----
 out = call('delphi_styles', {"path": STY, "command": "lint", "project": PRJ})

@@ -76,7 +76,7 @@ uses
   System.RegularExpressions,
   Lsp.Base64,   // BytesToBase64: EL codificador de la casa
   Lsp.Imagen,   // EscalaPngBytes: escalar en memoria
-  Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture
+  Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture / EscrituraDenegada
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
   Lsp.Patch,    // EnterFileEdit / GuardaContenidoActual: ColocaCaptura
   Lsp.Texts;
@@ -251,7 +251,18 @@ begin
 end;
 
 procedure ColocaCaptura(const ALocal, ADestino: string);
+var
+  Veto: string;
 begin
+  // EL escritor pregunta el mismo, en el momento de escribir: la puerta que
+  // paso CaptureTarget pudo quedar atras (un preview tarda hasta 75 s y la
+  // carpeta del out= puede cambiar mientras). Carpeta y fichero, como la
+  // papelera; quien llama ya trata la excepcion como 'no se coloco'.
+  Veto := EscrituraDenegada(TPath.GetDirectoryName(ADestino));
+  if Veto = '' then
+    Veto := EscrituraDenegada(ADestino);
+  if Veto <> '' then
+    raise Exception.Create(Veto);
   CrearCarpeta(TPath.GetDirectoryName(ADestino));
   EnterFileEdit;
   try

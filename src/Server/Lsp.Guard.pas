@@ -6989,7 +6989,13 @@ begin
     if (AEnviados[I + 1].Trim <> '') and
        not SameText(AEnviados[I + 1].Trim, AEnviados[I + 2]) and
        not Suyos.Contains(' ' + LowerCase(AEnviados[I]) + ' ') then
+    begin
+      // un modo que no toma ninguno: "takes no parameters", no "takes ."
+      // (segunda revision de la 1.17.0, PAS-051 de platforms)
+      if ASuyos.Trim = '' then
+        ASuyos := MsgText(SF_MODO_SIN_PARAMETROS);
       Exit(AEnviados[I]);
+    end;
     Inc(I, 3);
   end;
 end;

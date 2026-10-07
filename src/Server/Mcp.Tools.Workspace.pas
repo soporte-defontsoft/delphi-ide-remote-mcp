@@ -2064,7 +2064,7 @@ begin
       // se perdia por el camino, y era que el fichero decia otra cosa (Hermes,
       // validacion de la 1.16.0). Solo en las que leen: en las que escriben,
       // callar ya es el exito y el eco repetiria URLs y valores.
-      Result := GitExito(MsgFmt(SN_GIT_SILENT_OK_FMT, [GitArgs.Trim]), 0);
+      Result := GitExito(MsgFmt(SN_GIT_CONSULTA_VACIA_FMT, [GitArgs.Trim]), 0);
       if SameText(Cmd, 'log') then
         for var Trozo in TrocearArgs(Params.Args) do
           if Trozo.StartsWith('-S') or Trozo.StartsWith('-G') then

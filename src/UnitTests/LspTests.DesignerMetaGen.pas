@@ -654,8 +654,21 @@ begin
     '  property Letra: Char read FL; property Peso: Double read FP;'#13#10 +
     '  property Titulo: TCaption read FT; property Indice: TImageIndex read FX;'#13#10 +
     '  property Dato: Variant read FD; property Grande: Int64 read FG;'#13#10 +
-    '  property Rango: TRaro read FR; property Opacidad: Single read FO; end;'#13#10 +
-    'implementation end.');
+    '  property Rango: TRaro read FR; property Opacidad: Single read FO;'#13#10 +
+    '  public constructor Create(AOwner: TComponent); override; end;'#13#10 +
+    'TBoton = class(TCosa) public constructor Create(AOwner: TComponent); override; end;'#13#10 +
+    'implementation'#13#10 +
+    // el ControlStyle de un constructor: una constante suya y dos ramas que
+    // coinciden (como el TCustomEdit de Vcl.StdCtrls), y uno que quita y pone
+    'constructor TCosa.Create(AOwner: TComponent);'#13#10 +
+    'const'#13#10 + '  Estilo = [csAcceptsControls, csCaptureMouse];'#13#10 +
+    'begin'#13#10 + '  inherited;'#13#10 +
+    '  if Algo then ControlStyle := Estilo else ControlStyle := Estilo + [csFramed];'#13#10 +
+    'end;'#13#10 +
+    'constructor TBoton.Create(AOwner: TComponent);'#13#10 +
+    'begin'#13#10 + '  inherited;'#13#10 +
+    '  ControlStyle := ControlStyle - [csAcceptsControls] + [csSetCaption];'#13#10 +
+    'end;'#13#10 + 'end.');
   Escribe('System.UIConsts.pas', 'unit System.UIConsts; interface uses System.UITypes;'#13#10 +
     'implementation uses System.Classes;'#13#10 +
     'const'#13#10 +
@@ -669,7 +682,9 @@ begin
     'function IdentToCursor(const Ident: string; var Cursor: Integer): Boolean;'#13#10 +
     'begin Result := IdentToInt(Ident, Cursor, Cursors); end;'#13#10 +
     'function IdentToAlphaColor(const Ident: string; var Color: Integer): Boolean;'#13#10 +
-    'begin if Ident = '''' then Result := False else Result := IdentToInt(Ident, Color, AlphaColors); end;'#13#10 +
+    // con una local, como la real (la generacion 10 se saltaba estas)
+    'var L: string;'#13#10 +
+    'begin L := Ident; if L = '''' then Result := False else Result := IdentToInt(L, Color, AlphaColors); end;'#13#10 +
     'initialization'#13#10 +
     '  RegisterIntegerConsts(TypeInfo(TColor), IdentToColor, ColorToIdent);'#13#10 +
     '  RegisterIntegerConsts(TypeInfo(TCursor), IdentToCursor, CursorToIdent);'#13#10 +
@@ -699,7 +714,10 @@ begin
   Assert.IsTrue(Hechos(V, 'I TColor clBlack,clRed'), 'las de su mapa');
   Assert.IsTrue(Hechos(V, 'I TCursor crDefault,crHandPoint'),
     'el de Vcl.Controls llama al de System.UIConsts: las mismas');
-  Assert.IsTrue(Hechos(V, 'I TAlphaColor *'), 'su IdentTo hace mas que buscar: cualquier identificador');
+  Assert.IsTrue(Hechos(V, 'I TAlphaColor *claRed'),
+    'su IdentTo hace mas que buscar, pero busca en su mapa: abierta, con sus nombres');
+  Assert.IsTrue(Hechos(V, 'K System.Classes:TCosa +-'), 'csAcceptsControls si, csSetCaption no');
+  Assert.IsTrue(Hechos(V, 'K System.Classes:TBoton -+'), 'quita el uno y pone el otro');
   Assert.IsTrue(Hechos(F, 'I TColor clBlack,clRed') and Hechos(F, 'B TColor integer'),
     'System.UIConsts no es de ningun marco: en los dos');
 end;

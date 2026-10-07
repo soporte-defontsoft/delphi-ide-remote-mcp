@@ -22,7 +22,8 @@ unit Lsp.Styles;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections;
+  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
+  Lsp.DesignerBin; // EL lector de las lineas de un designer de texto (LineasDeForm)
 
 type
   TStyleObj = class
@@ -49,6 +50,11 @@ type
     FPath: string;
     FEol: string;
     FBinaryOnDisk: Boolean;
+    // que es cada linea (Lsp.DesignerBin.LineasDeForm), de las FLines que
+    // FFormDe es por identidad: cada edicion pone un array nuevo
+    FForm: TArray<TLineaForm>;
+    FFormDe: TArray<string>;
+    function Clasificadas: TArray<TLineaForm>;
     procedure Parse;
     constructor CreateVacio;
   public
@@ -74,7 +80,12 @@ type
     function BlockText(AObj: TStyleObj): string;
     { Sets (or adds) a property line of AObj. AValue is written verbatim, as
       it would appear in the file. Returns the resulting line. }
-    function SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string;
+    function SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string; overload;
+    { The same with a value in pieces, as the IDE writes a long string
+      (Lsp.DesignerBin.TrozosDeLiteral): one piece on the property's line,
+      several below it. Returns the property's line. }
+    function SetProp(AObj: TStyleObj; const AProp: string; const ATrozos: TArray<string>;
+      out AWasThere: Boolean): string; overload;
     { Removes a property line of AObj; False when absent. }
     function DeleteProp(AObj: TStyleObj; const AProp: string): Boolean;
     { Copies ASrc right after itself with the new StyleName. }
@@ -134,12 +145,12 @@ implementation
 uses
   System.IOUtils,
   System.StrUtils,
+  System.Math,
   System.RegularExpressions,
   Lsp.Patch,
   Lsp.BuildRunner,
   Lsp.Guard,
-  Lsp.DesignerBin,
-  Lsp.Pascal, // EL identificador: ValidStyleValue y la linea de una propiedad
+  Lsp.Pascal, // EL identificador: ValidStyleValue
   Lsp.Texts;
 
 { TStyleObj }
@@ -219,87 +230,70 @@ begin
   Parse;
 end;
 
+function TStyleDoc.Clasificadas: TArray<TLineaForm>;
+begin
+  if (FLines = nil) or (Pointer(FFormDe) <> Pointer(FLines)) then
+  begin
+    FForm := LineasDeForm(FLines);
+    FFormDe := FLines;
+  end;
+  Result := FForm;
+end;
+
 procedure TStyleDoc.Parse;
 var
-  I, Depth, CollDepth: Integer;
-  L, T: string;
+  I, Depth: Integer;
   Cur, O: TStyleObj;
-  InBinary: Boolean;
-  M: TMatch;
-  OClave, ONombre, OClase: string;
+  Form: TArray<TLineaForm>;
+  Estilo: string;
 begin
   FRoot := nil;
   Cur := nil;
   Depth := -1;
-  CollDepth := 0;
-  InBinary := False;
+  // EL lector de las lineas: lo de dentro de un valor - una coleccion con sus
+  // items, una cadena partida, una lista, un bloque binario - no abre ni
+  // cierra objetos. Aqui se cerraba una coleccion con cualquier linea acabada
+  // en '>' y un '= {' dentro de una cadena abria un bloque binario hasta el
+  // final (revision de la 1.17.0, medido en vivo)
+  Form := Clasificadas;
   for I := 0 to High(FLines) do
-  begin
-    L := FLines[I];
-    T := L.Trim;
-    if InBinary then
-    begin
-      if T.EndsWith('}') then
-        InBinary := False;
-      Continue;
+    case Form[I].Clase of
+      clfObjeto:
+        begin
+          // un segundo objeto de fuera: no es un fichero de una raiz, y lo de
+          // detras no se lee (se reasignaba la raiz y la anterior se perdia)
+          if (Cur = nil) and (FRoot <> nil) then
+            Break;
+          O := TStyleObj.Create;
+          O.ObjName := Form[I].Nombre;
+          O.ClassName_ := Form[I].ClaseObj;
+          O.Clave := Form[I].Clave;
+          O.StartLine := I + 1;
+          O.EndLine := I + 1;
+          O.Parent := Cur;
+          Inc(Depth);
+          O.Depth := Depth;
+          if Cur = nil then
+            FRoot := O
+          else
+            Cur.Children.Add(O);
+          Cur := O;
+        end;
+      clfFin:
+        if Cur <> nil then
+        begin
+          Cur.EndLine := I + 1;
+          Cur := Cur.Parent;
+          Dec(Depth);
+        end;
+      clfPropiedad:
+        if (Cur <> nil) and (Cur.StyleName = '') and (Form[I].Coleccion = 0) and
+           SameText(Form[I].Prop, 'StyleName') and
+           // el valor ENTERO: uno largo va en trozos en las lineas de debajo,
+           // como lo escribe el IDE y set/clone (segunda revision de la 1.17.0)
+           LeeLiteralDeForm(ValorEnteroDe(FLines, Form, I), Estilo) then
+          Cur.StyleName := Estilo;
     end;
-    if T = '' then
-      Continue;
-    // a binary block (brace-delimited, may close on the same line)
-    if T.EndsWith('= {') or (T.Contains('= {') and not T.EndsWith('}')) then
-    begin
-      InBinary := True;
-      Continue;
-    end;
-    // collections: Prop = <  item ... end  ... >
-    if T.EndsWith('= <') or (T = '<') then
-    begin
-      Inc(CollDepth);
-      Continue;
-    end;
-    if CollDepth > 0 then
-    begin
-      if T.EndsWith('>') then
-        Dec(CollDepth);
-      Continue; // item / end / props inside a collection are opaque here
-    end;
-    // THE reader of an object line (Lsp.DesignerBin): with \w (ASCII) a name
-    // with an accent was read as the class (live test of 1.12.0)
-    if LineaDeObjeto(T, OClave, ONombre, OClase) then
-    begin
-      O := TStyleObj.Create;
-      O.ObjName := ONombre;
-      O.ClassName_ := OClase;
-      O.Clave := OClave;
-      O.StartLine := I + 1;
-      O.EndLine := I + 1;
-      O.Parent := Cur;
-      Inc(Depth);
-      O.Depth := Depth;
-      if Cur = nil then
-        FRoot := O
-      else
-        Cur.Children.Add(O);
-      Cur := O;
-      Continue;
-    end;
-    if SameText(T, 'end') then
-    begin
-      if Cur <> nil then
-      begin
-        Cur.EndLine := I + 1;
-        Cur := Cur.Parent;
-        Dec(Depth);
-      end;
-      Continue;
-    end;
-    if (Cur <> nil) and (Cur.StyleName = '') then
-    begin
-      M := TRegEx.Match(T, '^StyleName\s*=\s*''([^'']*)''', [roIgnoreCase]);
-      if M.Success then
-        Cur.StyleName := M.Groups[1].Value;
-    end;
-  end;
   if FRoot = nil then
   begin
     FRoot := TStyleObj.Create;
@@ -364,69 +358,17 @@ begin
   end;
 end;
 
-// La ultima linea (0-based) del valor que empieza en la linea AIni con el
-// texto AValor (lo de detras del '='), sin pasar de AStop: las formas que
-// salta el lint (Lsp.DesignerMeta.LintConTabla) - una lista entre parentesis,
-// un bloque binario entre llaves, una coleccion < ... > con sus items, una
-// cadena partida en trozos que acaban en '+'.
-function FinDeValor(const ALines: TArray<string>; AIni: Integer;
-  const AValor: string; AStop: Integer): Integer;
-var
-  T, Cierre: string;
-  Prof: Integer;
-begin
-  Result := AIni;
-  if AValor = '' then
-    Exit;
-  if (AValor = '(') or ((AValor[1] = '{') and not AValor.EndsWith('}')) then
-  begin
-    Cierre := IfThen(AValor = '(', ')', '}');
-    while Result + 1 < AStop do
-    begin
-      Inc(Result);
-      if ALines[Result].Trim.EndsWith(Cierre) then
-        Exit;
-    end;
-    Exit;
-  end;
-  if AValor = '<' then
-  begin
-    Prof := 1;
-    while Result + 1 < AStop do
-    begin
-      Inc(Result);
-      T := ALines[Result].Trim;
-      if T.StartsWith('end', True) and T.EndsWith('>') then
-      begin
-        Dec(Prof);
-        if Prof = 0 then
-          Exit;
-      end
-      else if T.EndsWith('<') then
-        Inc(Prof);
-    end;
-    Exit;
-  end;
-  T := AValor;
-  while T.EndsWith('+') and (Result + 1 < AStop) do
-  begin
-    Inc(Result);
-    T := ALines[Result].Trim;
-  end;
-end;
-
 { La propiedad AProp del nivel PROPIO de AObj - las lineas tras su cabecera
-  y antes de su primer hijo - y las lineas que ocupa su valor, AIni y AFin
-  (0-based). Lo de DENTRO de un valor de varias lineas no es del nivel
-  propio: se miraba linea a linea, el 'Caption =' de un item de una coleccion
-  pasaba por el del objeto, y un set reescribia la primera linea de un valor
-  partido dejando el resto debajo (delphi_designer set, 1.17.0). False si
-  no esta. }
-function RangoDePropiedad(AObj: TStyleObj; const ALines: TArray<string>;
+  y antes de su primer hijo, fuera de sus colecciones - y las lineas que
+  ocupa su valor, AIni y AFin (0-based), por EL lector de las lineas
+  (AForm): una lista, un bloque binario, una coleccion o una cadena partida
+  ocupan varias, y lo de dentro de un valor no es del nivel propio (el
+  'Caption =' de un item pasaba por el del objeto, y un set dejaba debajo el
+  resto de un valor partido: delphi_designer set, 1.17.0). False si no esta. }
+function RangoDePropiedad(AObj: TStyleObj; const AForm: TArray<TLineaForm>;
   const AProp: string; out AIni, AFin: Integer): Boolean;
 var
-  I, Stop, Fin: Integer;
-  M: TMatch;
+  I, Stop: Integer;
 begin
   Result := False;
   AIni := -1;
@@ -434,57 +376,59 @@ begin
   Stop := AObj.EndLine - 1;
   if AObj.Children.Count > 0 then
     Stop := AObj.Children[0].StartLine - 1;
-  I := AObj.StartLine;
-  while I < Stop do
-  begin
-    M := TRegEx.Match(ALines[I].Trim, '^(' + PATRON_IDENT_PUNTOS + ')\s*=\s*(.*)$');
-    if not M.Success then
-    begin
-      Inc(I);
-      Continue;
-    end;
-    Fin := FinDeValor(ALines, I, M.Groups[2].Value.Trim, Stop);
-    if SameText(M.Groups[1].Value, AProp) then
+  for I := AObj.StartLine to Min(Stop, Length(AForm)) - 1 do
+    if (AForm[I].Clase = clfPropiedad) and (AForm[I].Coleccion = 0) and
+       SameText(AForm[I].Prop, AProp) then
     begin
       AIni := I;
-      AFin := Fin;
+      AFin := AForm[I].Fin;
       Exit(True);
     end;
-    I := Fin + 1;
-  end;
 end;
 
 function TStyleDoc.SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string;
+begin
+  Result := SetProp(AObj, AProp, [AValue], AWasThere);
+end;
+
+function TStyleDoc.SetProp(AObj: TStyleObj; const AProp: string; const ATrozos: TArray<string>;
+  out AWasThere: Boolean): string;
 var
   Ini, Fin, InsertAt: Integer;
+  Sangria: string;
+  Nuevas: TArray<string>;
   L: TList<string>;
 begin
-  Result := StringOfChar(' ', (AObj.Depth + 1) * 2) + AProp + ' = ' + AValue;
-  AWasThere := RangoDePropiedad(AObj, FLines, AProp, Ini, Fin);
+  AWasThere := RangoDePropiedad(AObj, Clasificadas, AProp, Ini, Fin);
+  // la sangria de la casa de esa linea (Lsp.Patch); la del nivel si es nueva
+  if AWasThere then
+    Sangria := LeadingWhite(FLines[Ini])
+  else
+    Sangria := StringOfChar(' ', (AObj.Depth + 1) * 2);
+  Nuevas := LineasDePropiedad(Sangria, AProp, ATrozos);
   L := TList<string>.Create;
   try
     L.AddRange(FLines);
     if AWasThere then
     begin
-      // la sangria de la casa de esa linea (Lsp.Patch), y el valor entero
-      // fuera: uno partido en varias lineas queda en una
-      Result := LeadingWhite(FLines[Ini]) + AProp + ' = ' + AValue;
+      // el valor entero fuera, el nuevo con sus lineas
       L.DeleteRange(Ini, Fin - Ini + 1);
-      L.Insert(Ini, Result);
+      L.InsertRange(Ini, Nuevas);
     end
     else
     begin
       // detras de su StyleName si lo tiene (el SUYO: se buscaba en todo el
       // bloque, hijos incluidos), si no justo detras de la cabecera
       InsertAt := AObj.StartLine; // 0-based: la linea DETRAS de la cabecera
-      if RangoDePropiedad(AObj, FLines, 'StyleName', Ini, Fin) then
+      if RangoDePropiedad(AObj, Clasificadas, 'StyleName', Ini, Fin) then
         InsertAt := Fin + 1;
-      L.Insert(InsertAt, Result);
+      L.InsertRange(InsertAt, Nuevas);
     end;
     FLines := L.ToArray;
   finally
     L.Free;
   end;
+  Result := Nuevas[0];
 end;
 
 function TStyleDoc.DeleteProp(AObj: TStyleObj; const AProp: string): Boolean;
@@ -492,7 +436,7 @@ var
   Ini, Fin: Integer;
   L: TList<string>;
 begin
-  Result := RangoDePropiedad(AObj, FLines, AProp, Ini, Fin);
+  Result := RangoDePropiedad(AObj, Clasificadas, AProp, Ini, Fin);
   if not Result then
     Exit;
   L := TList<string>.Create;
@@ -508,27 +452,33 @@ end;
 procedure TStyleDoc.CloneStyle(ASrc: TStyleObj; const ANewName: string);
 var
   Block: TList<string>;
-  I: Integer;
-  Renamed: Boolean;
+  I, Ini, Fin: Integer;
   L: TList<string>;
-  T: string;
+  Nuevas: TArray<string>;
 begin
   Block := TList<string>.Create;
   L := TList<string>.Create;
   try
-    Renamed := False;
-    for I := ASrc.StartLine - 1 to ASrc.EndLine - 1 do
+    // su StyleName, el SUYO y entero (uno largo va en trozos), por los
+    // compositores de la casa: se escribia a mano entre comillas, sin #N ni
+    // trozos, y se tomaba la primera linea StyleName del bloque aunque fuera
+    // la de un hijo (revision de la 1.17.0)
+    Nuevas := LineasDePropiedad(StringOfChar(' ', (ASrc.Depth + 1) * 2), 'StyleName',
+      TrozosDeLiteral(ANewName));
+    if RangoDePropiedad(ASrc, Clasificadas, 'StyleName', Ini, Fin) then
+      Nuevas := LineasDePropiedad(LeadingWhite(FLines[Ini]), 'StyleName', TrozosDeLiteral(ANewName))
+    else
     begin
-      T := FLines[I];
-      if not Renamed and T.TrimLeft.StartsWith('StyleName', True) then
-      begin
-        T := LeadingWhite(T) + 'StyleName = ''' + ANewName + '''';
-        Renamed := True;
-      end;
-      Block.Add(T);
+      Ini := -1;
+      Fin := -1;
     end;
-    if not Renamed then
-      Block.Insert(1, StringOfChar(' ', (ASrc.Depth + 1) * 2) + 'StyleName = ''' + ANewName + '''');
+    for I := ASrc.StartLine - 1 to ASrc.EndLine - 1 do
+      if I = Ini then
+        Block.AddRange(Nuevas)
+      else if (Ini < 0) or (I < Ini) or (I > Fin) then
+        Block.Add(FLines[I]);
+    if Ini < 0 then
+      Block.InsertRange(1, Nuevas);
     L.AddRange(FLines);
     L.InsertRange(ASrc.EndLine, Block); // right after the source block
     FLines := L.ToArray;
@@ -571,7 +521,7 @@ end;
 
 function TStyleDoc.PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
 begin
-  Result := RangoDePropiedad(AObj, FLines, AProp, AIni, AFin);
+  Result := RangoDePropiedad(AObj, Clasificadas, AProp, AIni, AFin);
 end;
 
 procedure TStyleDoc.DeleteStyle(AObj: TStyleObj);
@@ -604,12 +554,13 @@ var
 begin
   V := AValue.Trim;
   Result := (V <> '') and (
-    TRegEx.IsMatch(V, '^-?\d+(\.\d+)?$') or                    // 12   -3.5
-    TRegEx.IsMatch(V, '^\$[0-9A-Fa-f]+$') or                   // $FF00FF00
+    // LA gramatica del numero y LA de la cadena (Lsp.DesignerBin): aqui un
+    // 1e3 no era numero y un 'abc sin cerrar era cadena (revision de la 1.17.0)
+    EsNumeroDeForm(V) or                                       // 12  -3.5  1e3  $FF00FF00
     EsIdentificador(V, True) or                                // claRed  True  TAlignLayout.Top
     TRegEx.IsMatch(V, '^\[.*\]$') or                           // [a, b]
     TRegEx.IsMatch(V, '^<.*>$') or                             // inline collection
-    V.StartsWith('''') or V.StartsWith('#') or                 // 'text'  #13#10
+    EsLiteralDeForm(V) or                                      // 'text'  #13#10  'a' + 'b'
     CharInSet(V[1], ['{', '(']));                              // binary / list block
 end;
 

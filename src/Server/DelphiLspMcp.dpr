@@ -135,7 +135,8 @@ uses
   Lsp.Json in 'Lsp.Json.pas',
   Lsp.Listas in 'Lsp.Listas.pas',
   Lsp.FormRender in 'Lsp.FormRender.pas',
-  Lsp.DesignerEdit in 'Lsp.DesignerEdit.pas';
+  Lsp.DesignerEdit in 'Lsp.DesignerEdit.pas',
+  Lsp.DesignerForma in 'Lsp.DesignerForma.pas';
 
 {$R *.res}
 

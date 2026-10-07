@@ -122,6 +122,7 @@ uses
   Lsp.Styles,
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
+  Lsp.DesignerForma, // DesignerShapeOf: la forma del fichero
   Lsp.DesignerBinding,
   Lsp.DesignerMetaGen,
   Lsp.Pascal,
@@ -325,6 +326,45 @@ begin
   except
     on E: Exception do
       Exit(MsgEnvuelve(SR_DESIGNER_ILEGIBLE_FMT, E.Message, [APath, E.Message]));
+  end;
+end;
+
+{ Las propiedades que el lector se salto en un preview, como objetos que
+  guian: el componente, la propiedad, el motivo de TReader y su linea en el
+  form - la localiza el servidor, que el renderizador no sabe lineas (en un
+  binario, la del texto que ensenan delphi_read y get) -. Una que no esta en
+  este fichero (de un ancestro, de un frame) va sin linea; lo que no casa con
+  la forma de TReader, como texto (David, 7-oct-2026). }
+function IgnoradasConLinea(const ARuta: string; const AIgnoradas: TArray<TIgnorada>): TJSONArray;
+var
+  Doc: TStyleDoc;
+  Obj: TStyleObj;
+  Ini, Fin: Integer;
+begin
+  Result := TJSONArray.Create;
+  if LoadDoc(ARuta, Doc) <> '' then
+    Doc := nil;
+  try
+    for var I in AIgnoradas do
+    begin
+      var Uno := TJSONObject.Create;
+      Result.Add(Uno);
+      if I.Componente = '' then
+      begin
+        Uno.AddPair('text', I.Texto);
+        Continue;
+      end;
+      Uno.AddPair('component', I.Componente);
+      Uno.AddPair('property', I.Propiedad);
+      Uno.AddPair('reason', I.Motivo);
+      if Doc = nil then
+        Continue;
+      Obj := Doc.ObjetoDeNombre(I.Componente);
+      if (Obj <> nil) and Doc.PropLines(Obj, I.Propiedad, Ini, Fin) then
+        Uno.AddPair('line', TJSONNumber.Create(Ini + 1));
+    end;
+  finally
+    Doc.Free;
   end;
 end;
 
@@ -583,9 +623,7 @@ var
   Ret: TJSONObject;
   Zero, Outside, Overlap, NoRoom, Unknown, Boxes: TJSONArray;
   RootW, RootH, Opens, Closes, I: Integer;
-  OClave, ONombre, OClase: string;
   Found, Estimated: Boolean;
-  L: string;
   TablaVcl: TMetaTable;
   FaltaVcl: TFaltaTabla;
 
@@ -863,17 +901,16 @@ begin
   try
     if Doc.Root = nil then Exit(MsgText(SR_DESIGNER_BINDING_NO_ROOT));
     // a truncated .dfm parses into something; only openers left unclosed betray
-    // it. Collection items add opener-less "end"s, so we flag ONLY opens>closes,
-    // which they can never cause - no false alarm on a form full of collections.
+    // it. THE reader of the lines (Lsp.DesignerBin.LineasDeForm) tells the end
+    // of a collection item from the end of an object; we still flag ONLY
+    // opens>closes
     Opens := 0; Closes := 0;
-    for I := 0 to High(Doc.Lines) do
-    begin
-      L := Doc.Lines[I].Trim;
-      // THE reader of an object line (Lsp.DesignerBin): a property line such
-      // as 'Inline = True' is not one
-      if LineaDeObjeto(L, OClave, ONombre, OClase) then Inc(Opens);
-      if TRegEx.IsMatch(L, '(?i)^end\b') then Inc(Closes);
-    end;
+    var Form := LineasDeForm(Doc.Lines);
+    for I := 0 to High(Form) do
+      if Form[I].Clase = clfObjeto then
+        Inc(Opens)
+      else if Form[I].Clase = clfFin then
+        Inc(Closes);
 
     Ret := TJSONObject.Create;
     try
@@ -1151,6 +1188,12 @@ begin
   Peticion.Estilo := Estilo;
   Peticion.NoVisuales := Params.NonVisual;
   Peticion.Bds := DiscoverRadStudio.Version;
+  // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
+  // lo adivinaba con su regex y no seguia 'class abstract(TFrame)'. Sin .pas
+  // legible, o sin saberlo, que mire el (revision de la 1.17.0)
+  var Pas := UnidadDeDesigner(Ruta);
+  if TFile.Exists(Pas) and (ReadPathDenied(Pas) = '') then
+    Peticion.Raiz := RaizParaElRender(Ruta);
   for var E in Params.State.Split([';']) do
     if E.Trim <> '' then
       Peticion.Estados := Peticion.Estados + [E.Trim];
@@ -1183,7 +1226,8 @@ begin
     if Fallo <> '' then
     begin
       TiraTemporal;
-      Exit(MsgEnvuelve(SR_DESIGNER_RENDER_FALLO_FMT, Fallo, [TPath.GetFileName(Ruta), Fallo]));
+      Exit(MsgEnvuelve(SR_DESIGNER_RECORTE_FALLO_FMT, Fallo, [TPath.GetFileName(Ruta), Peticion.Componente,
+        Fallo]));
     end;
     OX := RX;
     OY := RY;
@@ -1223,7 +1267,10 @@ begin
       Return.AddPair('substitutedNote', MsgText(SN_DESIGNER_SUSTITUIDAS));
     end;
     if Length(R.Ignoradas) > 0 then
-      Return.AddPair('ignored', Textos(R.Ignoradas));
+    begin
+      Return.AddPair('ignored', IgnoradasConLinea(Ruta, R.Ignoradas));
+      Return.AddPair('ignoredNote', MsgText(SN_DESIGNER_PREVIEW_IGNORADAS));
+    end;
     if Length(R.Avisos) > 0 then
       Return.AddPair('warnings', Textos(R.Avisos));
     // los no visuales SIEMPRE, se dibujen o no (David, 7-oct-2026: lo que
@@ -1427,9 +1474,10 @@ begin
   Cmd := Params.Command.Trim.ToLower;
   if not MatchText(Cmd, ['to-text', 'to-binary', 'totext', 'tobinary', 'insert', 'set', 'delete']) then
     Exit(GestoDeDisenador(Params));
-  // la tabla que piden insert y set se espera FUERA del cerrojo, por lo mismo
-  if ((Cmd = 'insert') or ((Cmd = 'set') and (Params.Parent.Trim = '') and
-     not SameText(Params.Prop.Trim, 'Name'))) and
+  // la tabla que piden insert, set (parent= y Name tambien) y delete se
+  // espera FUERA del cerrojo, por lo mismo: set parent= la esperaba dentro y
+  // paraba todas las ediciones mientras se generaba (revision de la 1.17.0)
+  if MatchText(Cmd, ['insert', 'set', 'delete']) and
      (MetaTable(Params.Path.Trim.EndsWith('.fmx', True), Falta) = nil) and
      (Falta.Negativa <> '') then
     Exit(Falta.Negativa);

@@ -47,7 +47,8 @@ uses
   Lsp.Texts,
   Lsp.Guard,
   Lsp.Pascal,
-  Lsp.DesignerBin; // la linea de objeto, el literal y el flotante: sus compositores
+  Lsp.DesignerBin, // el literal y el flotante: sus compositores
+  Lsp.DesignerForma; // la linea de objeto: su compositor
 
 const
   CRLF = #13#10;
@@ -226,7 +227,7 @@ begin
     ComponeLineaDeObjeto('object', AFormName, 'T' + AFormName) + CRLF +
     '  Left = 0' + CRLF +
     '  Top = 0' + CRLF +
-    '  Caption = ' + LiteralDeForm(AFormName) + CRLF +
+    string.Join(CRLF, LineasDePropiedad('  ', 'Caption', TrozosDeLiteral(AFormName))) + CRLF +
     '  ClientHeight = 420' + CRLF +
     '  ClientWidth = 620' + CRLF +
     '  Color = clBtnFace' + CRLF +
@@ -265,7 +266,7 @@ begin
     ComponeLineaDeObjeto('object', AFormName, 'T' + AFormName) + CRLF +
     '  Left = 0' + CRLF +
     '  Top = 0' + CRLF +
-    '  Caption = ' + LiteralDeForm(AFormName) + CRLF +
+    string.Join(CRLF, LineasDePropiedad('  ', 'Caption', TrozosDeLiteral(AFormName))) + CRLF +
     '  ClientHeight = 480' + CRLF +
     '  ClientWidth = 640' + CRLF +
     '  FormFactor.Width = 320' + CRLF +
@@ -414,7 +415,7 @@ end;
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
 var
-  Kind, Dir, Dpr, MainUnit, MainForm, Clash: string;
+  Kind, Dir, Dpr, Dproj, MainUnit, MainForm, Clash: string;
   Files: TStringList;
 begin
   Kind := AKind.Trim.ToLower;
@@ -443,7 +444,8 @@ begin
   if Result <> '' then
     Exit;
   Dpr := TPath.Combine(Dir, AName + IfThen(Kind = 'package', '.dpk', '.dpr'));
-  if TFile.Exists(Dpr) or TFile.Exists(TPath.Combine(Dir, AName + '.dproj')) or
+  Dproj := DprojDe(Dpr); // el .dproj de su .dpr/.dpk: el nombrador de la casa
+  if TFile.Exists(Dpr) or TFile.Exists(Dproj) or
      TFile.Exists(TPath.Combine(Dir, AName + '.dpr')) or TFile.Exists(TPath.Combine(Dir, AName + '.dpk')) then
     Exit(MsgFmt(SR_CREATE_YA_EXISTE_PROYECTO_FMT, [AName, Dir]));
   // All or nothing. The files used to be written one by one, so a collision
@@ -486,10 +488,10 @@ begin
         'requires' + CRLF +
         '  rtl;' + CRLF + CRLF +
         'end.' + CRLF);
-      WriteNewFile(TPath.Combine(Dir, AName + '.dproj'),
+      WriteNewFile(Dproj,
         DprojTemplate(AName, NewGuidStr, 'Package', 'None', '', '', ''));
       Files.Add(AName + '.dpk');
-      Files.Add(AName + '.dproj');
+      Files.Add(TPath.GetFileName(Dproj));
     end
     else if Kind = 'console' then
     begin
@@ -506,10 +508,10 @@ begin
         '      Writeln(E.ClassName, '': '', E.Message);' + CRLF +
         '  end;' + CRLF +
         'end.' + CRLF);
-      WriteNewFile(TPath.Combine(Dir, AName + '.dproj'),
+      WriteNewFile(Dproj,
         DprojTemplate(AName, NewGuidStr, 'Console', 'None', '', '', ''));
       Files.Add(AName + '.dpr');
-      Files.Add(AName + '.dproj');
+      Files.Add(TPath.GetFileName(Dproj));
     end
     else if Kind = 'test' then
     begin
@@ -572,10 +574,10 @@ begin
         'initialization' + CRLF +
         '  TDUnitX.RegisterTestFixture(T' + AName + ');' + CRLF + CRLF +
         'end.' + CRLF);
-      WriteNewFile(TPath.Combine(Dir, AName + '.dproj'),
+      WriteNewFile(Dproj,
         DprojTemplate(AName, NewGuidStr, 'Console', 'None', MainUnit, '', ''));
       Files.Add(AName + '.dpr');
-      Files.Add(AName + '.dproj');
+      Files.Add(TPath.GetFileName(Dproj));
       Files.Add(MainUnit + '.pas');
     end
     else
@@ -598,7 +600,7 @@ begin
           'end.' + CRLF);
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.pas'), VclFormPas(MainUnit, MainForm));
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.dfm'), VclFormDfm(MainForm));
-        WriteNewFile(TPath.Combine(Dir, AName + '.dproj'),
+        WriteNewFile(Dproj,
           DprojTemplate(AName, NewGuidStr, 'Application', 'VCL', MainUnit, MainForm, 'dfm'));
       end
       else // fmx
@@ -617,11 +619,11 @@ begin
           'end.' + CRLF);
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.pas'), FmxFormPas(MainUnit, MainForm));
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.fmx'), FmxFormFmx(MainForm));
-        WriteNewFile(TPath.Combine(Dir, AName + '.dproj'),
+        WriteNewFile(Dproj,
           DprojTemplate(AName, NewGuidStr, 'Application', 'FMX', MainUnit, MainForm, 'fmx'));
       end;
       Files.Add(AName + '.dpr');
-      Files.Add(AName + '.dproj');
+      Files.Add(TPath.GetFileName(Dproj));
       Files.Add(MainUnit + '.pas');
       if Kind = 'vcl' then Files.Add(MainUnit + '.dfm') else Files.Add(MainUnit + '.fmx');
     end;

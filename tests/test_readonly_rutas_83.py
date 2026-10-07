@@ -38,8 +38,6 @@ try:
                     check('proteccion %s / raiz %s / acceso %s deniega' % (etiqueta, nombre, acceso),
                           mc.es(out, 'SR_READONLY_PATH_FMT') and
                           not os.path.exists(os.path.join(DEST, leaf)), out)
-                check('proteccion %s / raiz %s no dice que esta fuera' % (etiqueta, nombre),
-                      not any(AVISO in s for s in srv.errores), srv.errores)
             finally:
                 srv.cierra()
                 # El baseline rojo puede dejar el fichero: cada caso es independiente.
@@ -47,11 +45,13 @@ try:
                     f = os.path.join(DEST, 'no-escribir-%s-%s-%s.txt' % (etiqueta, nombre, acceso))
                     if os.path.exists(f):
                         os.remove(f)
+            # el stderr se lee tras cierra(): vivo, el hilo que lo recoge puede
+            # ir por detras y una ausencia saldria verde sin haberlo leido
+            check('proteccion %s / raiz %s no dice que esta fuera' % (etiqueta, nombre),
+                  not any(AVISO in s for s in srv.errores), srv.errores)
     srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': DEST,
         'DELPHI_MCP_READONLY_PATHS': CAJA}), nombre='ro-fuera-control', lee_stderr=True)
     try:
-        check('control: una entrada realmente fuera SI deja aviso',
-              any(AVISO in s for s in srv.errores), srv.errores)
         permitido = os.path.join(DEST, 'control-escribible.txt')
         out = srv.call('delphi_textedit', {'path': permitido, 'create': True, 'content': 'control'})
         check('control: sin proteccion que lo contenga SI escribe',
@@ -60,6 +60,8 @@ try:
             os.remove(permitido)
     finally:
         srv.cierra()
+    check('control: una entrada realmente fuera SI deja aviso',
+          any(AVISO in s for s in srv.errores), srv.errores)
     check('destino intacto tras todas las peticiones', os.listdir(DEST) == [])
 finally:
     os.rmdir(RAIZ)

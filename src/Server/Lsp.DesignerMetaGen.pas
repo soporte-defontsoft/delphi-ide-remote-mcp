@@ -75,7 +75,17 @@ type
 const
   { Sube cuando cambian las reglas del generador: una tabla de otra
     generacion no se reutiliza aunque el fuente sea el mismo. }
-  GENERACION_TABLAS = 9; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+  GENERACION_TABLAS = 12; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+  // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
+  // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
+  // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
+  // VCL -; revision de la 1.17.0. 11: la lista abierta tambien con locales,
+  // como el IdentToAlphaColor real: la 10 la saltaba y dejaba '*' sin nombres,
+  // medido en la tabla de la bateria. 12: el hecho T solo con el Text o el
+  // Caption PROPIOS - el FEditLabel.Caption := Value de TCustomLabeledEdit es
+  // el de su etiqueta, y su Text lo vacia -; y las FORMAS de una lista
+  // abierta, leidas de su IdentTo - ';hex=x;ins=2a' en I: xFF00FF00 y clRed
+  // cargan en un TAlphaColor, Rojo no -; segunda revision de la 1.17.0)
   // lo que se recuerda un fallo del generador antes de intentarlo otra vez
   MINUTOS_REINTENTO_TABLA = 10;
 
@@ -129,6 +139,15 @@ function RegistradosEnPaleta(const ATexto: string): TArray<string>;
   de Delphi 13.1 (7-oct-2026) se queda como caso medido en las pruebas. }
 function SetNamesDeTexto(const ATexto: string): TArray<string>;
 
+{ El ControlStyle que pone el constructor Create de cada clase de ATexto,
+  para dos valores: csAcceptsControls (el disenador deja soltar controles
+  dentro: el padre de un insert; un TPageControl no, sus paginas si) y
+  csSetCaption (el SetName de TControl solo pone el texto con el). 'TClase
+  AS', cada letra '+' lo pone, '-' lo quita, '?' no se sabe (un valor que no
+  se lee, ramas que no coinciden: no se niega nada por el), '.' no lo toca
+  (lo hereda). Hecho K; TMetaTable.AceptaControles. }
+function EstilosDeTexto(const ATexto: string): TArray<string>;
+
 { Las constantes con nombre de los tipos enteros que registra el fuente
   ATexto para los forms: RegisterIntegerConsts, lo
   que TReader.ReadPropValue acepta como identificador en una propiedad
@@ -137,8 +156,9 @@ function SetNamesDeTexto(const ATexto: string): TArray<string>;
   IdentTo que solo busca en su mapa (Result := IdentToInt(I, V, Mapa)), con
   los nombres del mapa; 'D <funcion> <Otra>' una que solo llama a otra con
   lo mismo (Vcl.Controls.IdentToCursor llama a la de System.UIConsts). Una
-  que hace otra cosa no sale (IdentToAlphaColor acepta tambien xFF00FF00):
-  quien la busca no la encuentra y acepta cualquier identificador. }
+  que hace mas que eso (IdentToAlphaColor acepta tambien xFF00FF00) y llama
+  a IdentToInt con un mapa, 'A <funcion> a,b,c': lista ABIERTA, sus nombres
+  y algo mas que no se adivina (set avisa de uno que no esta, no lo niega). }
 function ConstantesDeTexto(const ATexto: string): TArray<string>;
 
 { Las tablas sacadas del fuente que hay en ACarpetas (cada una sin bajar;
@@ -489,20 +509,183 @@ begin
       Continue;
     Param := M.Groups[1].Value;
     if TRegEx.IsMatch(Copy(ATexto, C.CuerpoIni, C.CuerpoFin - C.CuerpoIni + 1),
-         '(?i)\b(?:Text|Caption)\s*:=\s*' + PatronIdentEntero(Param) + '\s*(?:;|end\b|else\b|$)') then
+         // el suyo: sin nada delante, o Self.; el FEditLabel.Caption := Value
+         // de TCustomLabeledEdit es el de otro objeto (segunda revision de la
+         // 1.17.0: insert le ponia un Text que el IDE deja vacio)
+         '(?i)(?<![\w.])(?:Self\s*\.\s*)?(?:Text|Caption)\s*:=\s*' + PatronIdentEntero(Param) +
+         '\s*(?:;|end\b|else\b|$)') then
       Result := Result + [Clase + ' 1']
     else
       Result := Result + [Clase + ' 0'];
   end;
 end;
 
+{ El texto que lee el generador de un fuente suelto - el de las pruebas -:
+  el ACTIVO de este Delphi en Win64 (TextoActivo), con sus cadenas o sin
+  ellas, el mismo que ve LeeUnidades. Las pruebas leian otro (CodigoPascal,
+  con las dos ramas de un IFDEF; el texto crudo, comentarios incluidos) y
+  podian pasar en lo que la tabla no ve (segunda revision de la 1.17.0). }
+function TextoDelGenerador(const ATexto: string; AConCadenas: Boolean): string;
+var
+  Sim: TSimbolosPascal;
+begin
+  Sim := SimbolosDeDelphi(FloatToStrF(CompilerVersion, ffFixed, 4, 1, TFormatSettings.Invariant), 'Win64');
+  try
+    Result := TextoActivo(ATexto, Sim, nil, AConCadenas);
+  finally
+    Sim.Free;
+  end;
+end;
+
 function SetNamesDeTexto(const ATexto: string): TArray<string>;
 var
   D: TUnidadPas;
+  Act: string;
 begin
-  D := LeeUnidadPascal(ATexto);
+  // sobre el texto activo, como el generador (un 'Text := Value' comentado
+  // contaba en la prueba y no en la tabla: revision de la 1.17.0)
+  Act := TextoDelGenerador(ATexto, False);
+  D := LeeUnidadPascal(Act);
   try
-    Result := SetNamesDeUnidad(ATexto, D);
+    Result := SetNamesDeUnidad(Act, D);
+  finally
+    D.Free;
+  end;
+end;
+
+// EstilosDeTexto sobre un texto activo y su lector
+function EstilosDeUnidad(const ATexto: string; ADecl: TUnidadPas): TArray<string>;
+const
+  BANDERAS: array[0..1] of string = ('csAcceptsControls', 'csSetCaption');
+var
+  Clase, Cuerpo: string;
+  Marca: array[0..1] of Char;
+  B: Integer;
+
+  // dos marcas de lo mismo: si no coinciden, no se sabe
+  function Junta(A, X: Char): Char;
+  begin
+    if X = '.' then
+      Exit(A);
+    if (A = '.') or (A = X) then
+      Exit(X);
+    Result := '?';
+  end;
+
+  // los valores de un conjunto escrito ([a, b]) o de una constante de la
+  // unidad (EditStyle = [a, b], la de un constructor de Vcl.StdCtrls)
+  function Conjunto(const ATermino: string; out AValores: string): Boolean;
+  var
+    M: TMatch;
+  begin
+    AValores := '';
+    if ATermino.StartsWith('[') and ATermino.EndsWith(']') then
+    begin
+      AValores := ATermino;
+      Exit(True);
+    end;
+    Result := False;
+    if not EsIdentificador(ATermino, False) then
+      Exit;
+    M := TRegEx.Match(ATexto, PATRON_NO_IDENT_ANTES + TRegEx.Escape(ATermino) +
+      '\s*=\s*(\[[^\]]*\])', [roIgnoreCase]);
+    if M.Success then
+    begin
+      AValores := M.Groups[1].Value;
+      Result := True;
+    end;
+  end;
+
+  // la marca de 'ControlStyle := AExpr' para la bandera AB
+  function DeExpresion(const AExpr: string; AB: Integer): Char;
+  var
+    Terminos: TArray<string>;
+    Ops, T, Vals: string;
+    Prof, K, Ini: Integer;
+    Tiene: Boolean;
+  begin
+    // los terminos de fuera de los corchetes, separados por + y -
+    Terminos := [];
+    Ops := '+';
+    Prof := 0;
+    Ini := 1;
+    for K := 1 to Length(AExpr) do
+      if AExpr[K] = '[' then
+        Inc(Prof)
+      else if AExpr[K] = ']' then
+        Dec(Prof)
+      else if CharInSet(AExpr[K], ['+', '-']) and (Prof = 0) then
+      begin
+        Terminos := Terminos + [Trim(Copy(AExpr, Ini, K - Ini))];
+        Ops := Ops + AExpr[K];
+        Ini := K + 1;
+      end;
+    Terminos := Terminos + [Trim(Copy(AExpr, Ini, MaxInt))];
+    Result := '?';
+    for K := 0 to High(Terminos) do
+    begin
+      T := Terminos[K];
+      if MatchText(T, ['ControlStyle', 'FControlStyle', 'Self.ControlStyle']) then
+      begin
+        if K > 0 then
+          Exit('?');
+        Result := '.';
+        Continue;
+      end;
+      if not Conjunto(T, Vals) then
+        Exit('?');
+      Tiene := TRegEx.IsMatch(Vals, PATRON_NO_IDENT_ANTES + BANDERAS[AB] + PATRON_NO_IDENT_DESPUES,
+        [roIgnoreCase]);
+      if K = 0 then
+      begin
+        if Tiene then
+          Result := '+'
+        else
+          Result := '-';
+      end
+      else if Tiene then
+        Result := Ops[K + 1];
+    end;
+  end;
+
+begin
+  Result := [];
+  for var C in ADecl.Cuerpos do
+  begin
+    if C.DeClase or not SameText(C.Rutina, 'constructor') or (Pos('.', C.Nombre) = 0) or
+       not MismoIdentificador(UltimoTrozo(C.Nombre), 'Create') then
+      Continue;
+    Clase := Copy(C.Nombre, 1, C.Nombre.LastIndexOf('.'));
+    Cuerpo := Copy(ATexto, C.CuerpoIni, C.CuerpoFin - C.CuerpoIni + 1);
+    Marca[0] := '.';
+    Marca[1] := '.';
+    // ControlStyle := ... (hasta el ';', o el else / end de su rama)
+    for var M in TRegEx.Matches(Cuerpo, '(?i)(?<![\w.])(?:Self\.)?F?ControlStyle\s*:=\s*(.+?)\s*(?=;|\belse\b|\bend\b|$)',
+        [roSingleLine]) do
+      for B := 0 to 1 do
+        Marca[B] := Junta(Marca[B], DeExpresion(M.Groups[1].Value.Replace(#13, ' ').Replace(#10, ' '), B));
+    // Include / Exclude (FControlStyle, csSetCaption)
+    for var M in TRegEx.Matches(Cuerpo, '(?i)\b(Include|Exclude)\s*\(\s*F?ControlStyle\s*,\s*(\w+)\s*\)') do
+      for B := 0 to 1 do
+        if SameText(M.Groups[2].Value, BANDERAS[B]) then
+          if SameText(M.Groups[1].Value, 'Include') then
+            Marca[B] := Junta(Marca[B], '+')
+          else
+            Marca[B] := Junta(Marca[B], '-');
+    if (Marca[0] <> '.') or (Marca[1] <> '.') then
+      Result := Result + [Clase + ' ' + Marca[0] + Marca[1]];
+  end;
+end;
+
+function EstilosDeTexto(const ATexto: string): TArray<string>;
+var
+  D: TUnidadPas;
+  Act: string;
+begin
+  Act := TextoDelGenerador(ATexto, False);
+  D := LeeUnidadPascal(Act);
+  try
+    Result := EstilosDeUnidad(Act, D);
   finally
     D.Free;
   end;
@@ -572,6 +755,27 @@ begin
   end;
 end;
 
+{ Lo que una IdentTo ABIERTA lee ademas de su mapa, leido de su cuerpo (con
+  sus cadenas): un primer caracter que la manda a convertir un numero
+  (IdentToAlphaColor: Chars[0] = 'x' y StringToAlphaColor, xFF00FF00:
+  ';hex=x'), y una letra que inserta antes de buscar otra vez en el mapa
+  (Insert(2, 'a'): clRed es claRed, ';ins=2a'). Lo que no se reconoce no se
+  apunta, y entonces set no sabe que mas lee y avisa (DSGN-110). Generacion
+  12, segunda revision de la 1.17.0: 'Rojo' en un TAlphaColor se escribia y
+  el form no abria. }
+function FormasDeAbierta(const ACuerpo: string): string;
+var
+  M: TMatch;
+begin
+  Result := '';
+  M := TRegEx.Match(ACuerpo, '(?i)\.Chars\s*\[\s*0\s*\]\s*=\s*''([A-Za-z])''');
+  if M.Success and TRegEx.IsMatch(ACuerpo, '(?i)\b(?:StringTo\w+|StrToInt(?:64)?|HexToInt)\s*\(') then
+    Result := Result + ';hex=' + M.Groups[1].Value;
+  M := TRegEx.Match(ACuerpo, '(?i)\.Insert\s*\(\s*(\d+)\s*,\s*''([A-Za-z])''\s*\)');
+  if M.Success then
+    Result := Result + ';ins=' + M.Groups[1].Value + M.Groups[2].Value;
+end;
+
 { Lo de ConstantesDeTexto sobre un texto CON sus cadenas (los nombres de un
   mapa son cadenas) y ADecl leida de otro con las mismas posiciones sin
   ellas (LeeUnidadPascal pide un texto activo: una cadena con un '(' le
@@ -588,26 +792,47 @@ begin
     Result := Result + ['R ' + M.Groups[1].Value + ' ' + M.Groups[2].Value];
   for var C in ADecl.Cuerpos do
   begin
-    if C.DeClase or C.ConLocales or not SameText(C.Rutina, 'function') or
+    if C.DeClase or not SameText(C.Rutina, 'function') or
        (Pos('.', C.Nombre) > 0) then
       Continue;
     Cuerpo := Trim(Copy(ATexto, C.CuerpoIni, C.CuerpoFin - C.CuerpoIni + 1));
-    // Result := IdentToInt(Ident, Color, Colors), con un molde si lo lleva
-    M := TRegEx.Match(Cuerpo, '(?i)^Result\s*:=\s*IdentToInt\s*\(\s*' + PATRON_IDENT +
+    // Result := IdentToInt(Ident, Color, Colors), con un molde si lo lleva:
+    // la busqueda simple, sin locales (una funcion con locales hace algo mas)
+    if not C.ConLocales then
+    begin
+      M := TRegEx.Match(Cuerpo, '(?i)^Result\s*:=\s*IdentToInt\s*\(\s*' + PATRON_IDENT +
+        '\s*,\s*(?:' + PATRON_IDENT + '\s*\(\s*)?' + PATRON_IDENT + '\s*\)?\s*,\s*(' +
+        PATRON_IDENT + ')\s*\)\s*;?$');
+      if M.Success then
+      begin
+        Nombres := NombresDeMapa(ATexto, M.Groups[1].Value);
+        if Length(Nombres) > 0 then
+          Result := Result + ['L ' + C.Nombre + ' ' + string.Join(',', Nombres)];
+        Continue;
+      end;
+      // Result := System.UIConsts.IdentToCursor(Ident, Cursor)
+      M := TRegEx.Match(Cuerpo, '(?i)^Result\s*:=\s*(' + PATRON_IDENT_PUNTOS + ')\s*\(\s*' +
+        PATRON_IDENT + '\s*,\s*' + PATRON_IDENT + '\s*\)\s*;?$');
+      if M.Success then
+      begin
+        Result := Result + ['D ' + C.Nombre + ' ' + M.Groups[1].Value];
+        Continue;
+      end;
+    end;
+    // una que hace mas que buscar en su mapa, pero busca en uno
+    // (IdentToAlphaColor: xFF00FF00, y los de AlphaColors): ABIERTA, con los
+    // nombres de ese mapa - un claRedd se avisa, no se calla; con sus locales,
+    // como la real (var LIdent) - (revision de la
+    // 1.17.0: con '*' pasaba cualquier identificador)
+    M := TRegEx.Match(Cuerpo, '(?i)\bIdentToInt\s*\(\s*' + PATRON_IDENT +
       '\s*,\s*(?:' + PATRON_IDENT + '\s*\(\s*)?' + PATRON_IDENT + '\s*\)?\s*,\s*(' +
-      PATRON_IDENT + ')\s*\)\s*;?$');
+      PATRON_IDENT + ')\s*\)');
     if M.Success then
     begin
       Nombres := NombresDeMapa(ATexto, M.Groups[1].Value);
       if Length(Nombres) > 0 then
-        Result := Result + ['L ' + C.Nombre + ' ' + string.Join(',', Nombres)];
-      Continue;
+        Result := Result + ['A ' + C.Nombre + ' ' + string.Join(',', Nombres) + FormasDeAbierta(Cuerpo)];
     end;
-    // Result := System.UIConsts.IdentToCursor(Ident, Cursor)
-    M := TRegEx.Match(Cuerpo, '(?i)^Result\s*:=\s*(' + PATRON_IDENT_PUNTOS + ')\s*\(\s*' +
-      PATRON_IDENT + '\s*,\s*' + PATRON_IDENT + '\s*\)\s*;?$');
-    if M.Success then
-      Result := Result + ['D ' + C.Nombre + ' ' + M.Groups[1].Value];
   end;
 end;
 
@@ -615,9 +840,11 @@ function ConstantesDeTexto(const ATexto: string): TArray<string>;
 var
   D: TUnidadPas;
 begin
-  D := LeeFuentePascal(ATexto);
+  // como LeeUnidades: la unidad del texto activo y las constantes del mismo
+  // texto con sus cadenas (los nombres de un mapa son cadenas)
+  D := LeeUnidadPascal(TextoDelGenerador(ATexto, False));
   try
-    Result := ConstantesDeUnidad(ATexto, D);
+    Result := ConstantesDeUnidad(TextoDelGenerador(ATexto, True), D);
   finally
     D.Free;
   end;
@@ -651,6 +878,7 @@ type
     Definidas: TArray<string>; // PropiedadesDefinidasPorCodigo: 'TClase Nombre'
     Registra: TArray<string>;  // RegistradosEnPaleta: los nombres, sin resolver
     SetNames: TArray<string>;  // SetNamesDeUnidad: 'TClase 1' / 'TClase 0'
+    Estilos: TArray<string>;   // EstilosDeUnidad: 'TClase AS' (hecho K)
     Constantes: TArray<string>; // ConstantesDeTexto: 'R Tipo Funcion' / 'L ...' / 'D ...'
     constructor Create;
     destructor Destroy; override;
@@ -966,6 +1194,10 @@ begin
     // escribe el insert de delphi_designer, 1.17.0)
     if ContainsText(Act, 'SetName') then
       U.SetNames := SetNamesDeUnidad(Act, Decl);
+    // y el ControlStyle de sus constructores: quien recibe controles en el
+    // disenador, y csSetCaption (revision de la 1.17.0)
+    if ContainsText(Act, 'ControlStyle') then
+      U.Estilos := EstilosDeUnidad(Act, Decl);
     // lo que guarda por codigo (Filer.DefineProperty): otra pasada que deja
     // las cadenas, solo en las que lo nombran (unas cien de 4.000)
     if ContainsText(Txt, 'DefineProperty') or ContainsText(Txt, 'DefineBinaryProperty') or
@@ -1539,13 +1771,43 @@ end;
 // alcance de esa unidad (su uses dice de cual de los homonimos es)
 // dos registros del mismo tipo: '*' si alguno lo es; si no, los nombres de los dos
 function UneConstantes(const A, B: string): string;
+var
+  LA, LB, FA, FB: string;
+
+  // las formas de una abierta van detras de ';' (FormasDeAbierta)
+  procedure Parte(var ALista: string; out AFormas: string);
+  begin
+    AFormas := '';
+    if Pos(';', ALista) > 0 then
+    begin
+      AFormas := Copy(ALista, Pos(';', ALista), MaxInt);
+      ALista := Copy(ALista, 1, Pos(';', ALista) - 1);
+    end;
+  end;
+
 begin
   if (A = '*') or (B = '*') then
     Exit('*');
-  Result := A;
-  for var N in B.Split([',']) do
+  // una abierta (*a,b) deja abierta la union
+  LA := A;
+  LB := B;
+  Parte(LA, FA);
+  Parte(LB, FB);
+  if LA.StartsWith('*') then
+    Delete(LA, 1, 1);
+  if LB.StartsWith('*') then
+    Delete(LB, 1, 1);
+  Result := LA;
+  for var N in LB.Split([',']) do
     if not (',' + LowerCase(Result) + ',').Contains(',' + LowerCase(N) + ',') then
       Result := Result + ',' + N;
+  if A.StartsWith('*') or B.StartsWith('*') then
+    Result := '*' + Result;
+  // y las formas de las dos, cada una una vez
+  for var F in FB.Split([';'], TStringSplitOptions.ExcludeEmpty) do
+    if not (FA + ';').Contains(';' + F + ';') then
+      FA := FA + ';' + F;
+  Result := Result + FA;
 end;
 
 { Los nombres que acepta la funcion IdentTo AFuncion de AUnidad: los de su
@@ -1579,6 +1841,8 @@ begin
       Exit(Partes[2]);
     if Partes[0] = 'D' then
       Exit(NombresDeConstantes(X, Partes[2], AProf + 1));
+    if Partes[0] = 'A' then
+      Exit('*' + Partes[2]);
   end;
 end;
 
@@ -2001,6 +2265,10 @@ begin
             for var SN in U.SetNames do
               if MismoIdentificador(SN.Substring(0, SN.IndexOf(' ')), T.NombreCompleto) then
                 Hechos := Hechos + ['T ' + Id + SN.Substring(SN.IndexOf(' '))];
+            // y su ControlStyle, en ELLA tambien
+            for var E in U.Estilos do
+              if MismoIdentificador(E.Substring(0, E.IndexOf(' ')), T.NombreCompleto) then
+                Hechos := Hechos + ['K ' + Id + E.Substring(E.IndexOf(' '))];
             Lineas[M].AddRange(Hechos);
             Emitidas[M].Add(K, True);
             // ...pero un form escribe el NOMBRE ('object X: TScrollBar'):

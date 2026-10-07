@@ -92,7 +92,7 @@ try:
 
     out = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '-SOpen'})
     check('H4 log -S vacio: dice lo que recibio git (-SOpen) y como comprobar el texto (GIT-058)',
-          mc.es(out, 'SN_GIT_SILENT_OK_FMT') and '-SOpen' in out and mc.es(out, 'SN_GIT_PICKAXE_VACIO'), out[:300])
+          mc.es(out, 'SN_GIT_CONSULTA_VACIA_FMT') and '-SOpen' in out and mc.es(out, 'SN_GIT_PICKAXE_VACIO'), out[:300])
 
     out = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '-SOben'})
     vacia = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '--author=nadie'})
@@ -100,9 +100,16 @@ try:
     check('H5 control: -S bien escrito encuentra su commit; otra consulta vacia repite lo recibido sin la '
           'pista de -S/-G; una orden que escribe y calla no repite sus argumentos',
           'add open.txt' in out and '--author=nadie' in vacia and not mc.es(vacia, 'SN_GIT_PICKAXE_VACIO')
+          and mc.es(vacia, 'SN_GIT_CONSULTA_VACIA_FMT') and not mc.es(tag, 'SN_GIT_CONSULTA_VACIA_FMT')
           and mc.es(tag, 'SN_GIT_SILENT_OK_FMT') and 'ligero1170' not in tag,
           '%s | %s | %s' % (out[:120], vacia[:200], tag[:160]))
 
+    # el arbol SUCIO: si la negativa fallase, -m y -am SI harian un commit (con
+    # el arbol limpio antes == despues no podia fallar: revision de la 1.17.0);
+    # el commit de control de abajo prueba que habia algo que commitear
+    open(os.path.join(R, 'open.txt'), 'a').write('cambio\n')
+    open(os.path.join(R, 'nuevo.txt'), 'w').write('nuevo\n')
+    srv.call('delphi_git', {'repo': R, 'command': 'add', 'args': 'nuevo.txt'})
     antes = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '--format=%s'})
     c1 = srv.call('delphi_git', {'repo': R, 'command': 'commit', 'args': '-m hola', 'message': 'x'})
     c2 = srv.call('delphi_git', {'repo': R, 'command': 'commit', 'args': '-am hola', 'message': 'x'})
@@ -111,9 +118,12 @@ try:
     tags = srv.call('delphi_git', {'repo': R, 'command': 'tag'})
     t2 = srv.call('delphi_git', {'repo': R, 'command': 'tag', 'args': 'v3', 'message': 'anotado'})
     tags2 = srv.call('delphi_git', {'repo': R, 'command': 'tag'})
+    srv.call('delphi_git', {'repo': R, 'command': 'commit', 'message': 'control 1170'})
+    control = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '--format=%s'})
     check('H6 el mensaje en args (-m, -am) de commit y tag -> GIT-059 sin hacer nada; control: tag con message=',
           all(mc.es(x, 'SR_GIT_MENSAJE_EN_ARGS') for x in (c1, c2, t1)) and antes == despues
-          and 'v2' not in tags and 'v3' in tags2 and not mc.es(t2, 'SR_GIT_MENSAJE_EN_ARGS'),
+          and 'v2' not in tags and 'v3' in tags2 and not mc.es(t2, 'SR_GIT_MENSAJE_EN_ARGS')
+          and 'control 1170' in control and 'control 1170' not in despues,
           '%s | %s | %s | %s' % (c1[:120], c2[:120], t1[:120], tags2[:120]))
 
     out = srv.call('delphi_git', {'repo': R, 'command': 'worktree', 'args': 'add path=otra'})
@@ -168,8 +178,16 @@ try:
     q1 = srv.call('delphi_paserver', {'command': 'remove-sdk', 'profile': 'noexiste1170'})
     q2 = srv.call('delphi_paserver', {'command': 'reseat-sdk', 'name': 'noexiste1170'})
     check('H11 reseat-sdk y remove-sdk toman solo "sdk": un perfil (o "name") ahi -> PAS-051 sin hacer nada',
-          all(mc.es(q, 'SR_PASERVER_NO_VA_CON_COMANDO_FMT') and 'takes sdk' in q for q in (q1, q2)),
+          all(mc.es(q, 'SR_PASERVER_NO_VA_CON_COMANDO_FMT') and 'takes sdk' in q for q in (q1, q2))
+          # quien mando "name" lee por que se habla de "profile" (revision de la 1.17.0)
+          and 'old spelling of "profile"' in q2,
           '%s | %s' % (q1[:200], q2[:200]))
+    # en un comando que nunca tomo "name" no hay nota de "name", y uno sin
+    # parametros dice que no toma ninguno, no "takes ." (segunda revision)
+    q3 = srv.call('delphi_paserver', {'command': 'platforms', 'profile': 'noexiste1170'})
+    check('H11 ...platforms con un perfil: PAS-051 "takes no parameters" y sin la nota de "name"',
+          mc.es(q3, 'SR_PASERVER_NO_VA_CON_COMANDO_FMT') and 'takes no parameters' in q3 and
+          'old spelling' not in q3, q3[:200])
 
     malos = [srv.call('delphi_paserver', {'command': 'add-profile', k: 'mal nombre!',
                                           'host': '192.0.2.1', 'password': 'x'}) for k in ('profile', 'name')]

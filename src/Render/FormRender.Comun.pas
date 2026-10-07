@@ -140,8 +140,18 @@ function PaquetesCargados: Boolean;
 procedure Apunta(const AClases: array of TComponentClass);
 function ClaseRegistrada(const AClase: string): Boolean;
 
+{ El componente de ARaiz que nombra ARuta como lee la RTL una referencia
+  (FindNestedComponent: Marco1.LblAviso, dentro de un frame en linea), y
+  tambien con el nombre de la raiz delante (FrameX.PanelFrame en un frame
+  suelto) o la raiz misma; nil si no hay. UN lector para component= y
+  state= (segunda revision de la 1.17.0: el estado con la raiz delante no
+  llegaba en un frame suelto). }
+function ComponenteDeRuta(ARaiz: TComponent; const ARuta: string): TComponent;
+
 { Estado de vista "Comp.Prop=Valor" por RTTI sobre un componente de ARoot;
-  tkClass resuelve Valor como nombre de componente. Lanza si no existe. }
+  tkClass resuelve Valor como nombre de componente. Comp y Valor se resuelven
+  como lee la RTL una referencia (ComponenteDeRuta): Marco1.LblAviso, uno
+  dentro de un frame inline. Lanza si no existe. }
 procedure AplicaEstado(ARoot: TComponent; const AEspec: string);
 
 { El icono de una clase como lo tiene el paquete de diseno: RCDATA
@@ -167,7 +177,9 @@ implementation
 uses
   System.TypInfo, System.Win.Registry, System.IOUtils, System.RegularExpressions,
   System.Actions, System.Variants, System.SyncObjs, System.Diagnostics,
-  FormRender.Textos;
+  FormRender.Textos,
+  Lsp.DesignerForma, // la forma del fichero, la misma que lee el servidor
+  Lsp.Pascal;        // EL lexico Pascal: que es codigo y que comentario
 
 type
   TComponentCrack = class(TComponent);
@@ -376,44 +388,44 @@ end;
 
 function Cabecera(const AFichero: string): TCabecera;
 var
-  Texto, Bin: TMemoryStream;
+  Bytes: TBytes;
+  Entrada, Bin, Texto: TMemoryStream;
   Lineas: TStringList;
-  M: TMatch;
 begin
   Result := Default(TCabecera);
-  Texto := TMemoryStream.Create;
   Lineas := TStringList.Create;
   try
-    Texto.LoadFromFile(AFichero);
-    if TestStreamFormat(Texto) = sofBinary then
+    Bytes := TFile.ReadAllBytes(AFichero);
+    // la forma por el lector de la casa (Lsp.DesignerForma): el binario del
+    // IDE lleva cabecera de recurso, y un texto UTF-16 empieza por FF FE
+    if DesignerShapeOf(Bytes) <> dsText then
     begin
       Result.Binario := True;
+      Entrada := TMemoryStream.Create;
       Bin := TMemoryStream.Create;
+      Texto := TMemoryStream.Create;
       try
-        Texto.Position := 0;
-        ObjectBinaryToText(Texto, Bin);
+        Entrada.WriteBuffer(Bytes[0], Length(Bytes));
+        DesignerAFlujo(Entrada, Bin);
         Bin.Position := 0;
-        Lineas.LoadFromStream(Bin);
+        ObjectBinaryToText(Bin, Texto);
+        Texto.Position := 0;
+        Lineas.LoadFromStream(Texto);
       finally
+        Texto.Free;
         Bin.Free;
+        Entrada.Free;
       end;
     end
     else
       Lineas.LoadFromFile(AFichero);
+    // EL lector de la linea de objeto (Lsp.DesignerForma), el del servidor:
+    // con \w un nombre con acento se cortaba (revision de la 1.17.0)
     for var L in Lineas do
-    begin
-      M := TRegEx.Match(L, '^\s*(object|inherited|inline)\s+(?:(\w+)\s*:\s*)?(\w+)', [roIgnoreCase]);
-      if M.Success then
-      begin
-        Result.Palabra := M.Groups[1].Value.ToLower;
-        Result.Nombre := M.Groups[2].Value;
-        Result.Clase := M.Groups[3].Value;
+      if LineaDeObjeto(L, Result.Palabra, Result.Nombre, Result.Clase) then
         Exit;
-      end;
-    end;
   finally
     Lineas.Free;
-    Texto.Free;
   end;
 end;
 
@@ -423,12 +435,19 @@ var
   M: TMatch;
 begin
   Result := '';
-  Pas := ChangeFileExt(AFichero, '.pas');
+  Pas := UnidadDeDesigner(AFichero);
   if not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
-  M := TRegEx.Match(TFile.ReadAllText(Pas), '\b' + TRegEx.Escape(AClase) + '\s*=\s*class\s*\(\s*(\w+)', [roIgnoreCase]);
+  // 'TX = class(TY)', tambien 'class abstract(...)' y con la unidad delante
+  // (Unidad.TY); el nombre por lo que lo rodea, no por \w (ASCII). El lector
+  // de clases del servidor (Lsp.PascalDecl) no se enlaza aqui; la raiz, form
+  // o frame, ya la manda el servidor con --root (revision de la 1.17.0). Sobre
+  // el CODIGO solo (CodigoPascal): una declaracion vieja comentada encima de
+  // la buena se tomaba por ella (segunda revision de la 1.17.0)
+  M := TRegEx.Match(CodigoPascal(TFile.ReadAllText(Pas)), '\b' + TRegEx.Escape(AClase) +
+    '\s*=\s*class(?:\s+(?:abstract|sealed))?\s*\(\s*([^\s,)]+)', [roIgnoreCase]);
   if M.Success then
-    Result := M.Groups[1].Value;
+    Result := M.Groups[1].Value.Substring(M.Groups[1].Value.LastIndexOf('.') + 1);
 end;
 
 function EsFrame(const AFichero, AClase: string): Boolean;
@@ -650,28 +669,51 @@ end;
 
 { ---- estado de vista ---- }
 
+function ComponenteDeRuta(ARaiz: TComponent; const ARuta: string): TComponent;
+begin
+  if (ARaiz.Name <> '') and SameText(ARuta, ARaiz.Name) then
+    Exit(ARaiz);
+  Result := FindNestedComponent(ARaiz, ARuta);
+  if (Result = nil) and (ARaiz.Name <> '') and ARuta.StartsWith(ARaiz.Name + '.', True) then
+    Result := FindNestedComponent(ARaiz, ARuta.Substring(Length(ARaiz.Name) + 1));
+end;
+
 procedure AplicaEstado(ARoot: TComponent; const AEspec: string);
 var
-  Comp, Valor, Nombre, Prop: string;
+  Comp, Valor, Prop: string;
+  Partes: TArray<string>;
   C, Ref: TComponent;
   PI: PPropInfo;
 begin
   Comp := AEspec.Substring(0, AEspec.IndexOf('=')).Trim;
   Valor := AEspec.Substring(AEspec.IndexOf('=') + 1).Trim;
-  Nombre := Comp.Substring(0, Comp.IndexOf('.')).Trim;
-  Prop := Comp.Substring(Comp.IndexOf('.') + 1).Trim;
-  if SameText(Nombre, ARoot.Name) then
-    C := ARoot
-  else
-    C := ARoot.FindComponent(Nombre);
+  // el componente es el prefijo MAS LARGO que nombra uno, como lee la RTL una
+  // referencia: Marco1.LblAviso.Caption, dentro de un frame inline; lo que
+  // sigue es la propiedad (revision de la 1.17.0: no se llegaba a los hijos
+  // de un frame)
+  Partes := Comp.Split(['.']);
+  C := nil;
+  for var N := High(Partes) downto 1 do
+  begin
+    C := ComponenteDeRuta(ARoot, string.Join('.', Partes, 0, N).Trim);
+    if C <> nil then
+    begin
+      Prop := string.Join('.', Partes, N, Length(Partes) - N).Trim;
+      Break;
+    end;
+  end;
   if C = nil then
-    raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_COMPONENTE_FMT, [Nombre]));
+  begin
+    if Comp.Contains('.') then
+      Comp := Comp.Substring(0, Comp.LastIndexOf('.')).Trim;
+    raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_COMPONENTE_FMT, [Comp]));
+  end;
   PI := GetPropInfo(C, Prop);
   if PI = nil then
     raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [C.ClassName, Prop]));
   if PI.PropType^.Kind = tkClass then
   begin
-    Ref := ARoot.FindComponent(Valor);
+    Ref := ComponenteDeRuta(ARoot, Valor);
     if Ref = nil then
       raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_REFERIDO_FMT, [Valor, Comp]));
     SetObjectProp(C, PI, Ref);
@@ -884,10 +926,8 @@ begin
   Bin := TMemoryStream.Create;
   try
     Texto.LoadFromFile(AFichero);
-    if TestStreamFormat(Texto) = sofBinary then
-      Bin.CopyFrom(Texto, 0)
-    else
-      ObjectTextToBinary(Texto, Bin);
+    // texto, flujo TPF0 o el recurso del IDE: el flujo que lee TReader
+    DesignerAFlujo(Texto, Bin);
     Bin.Position := 0;
     Reader := TReader.Create(Bin, 4096);
     try

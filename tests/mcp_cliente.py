@@ -285,7 +285,14 @@ def borra(ruta):
             func(p)
         except OSError:
             pass
-    shutil.rmtree(ruta, onexc=quita_ro)
+    # unas pasadas: un proceso que acaba de morir (el servidor, un
+    # renderizador suyo) suelta sus ficheros un poco despues, y una sola
+    # pasada dejaba el arbol a medias en %TEMP% (segunda revision de la 1.17.0)
+    for _ in range(20):
+        shutil.rmtree(ruta, onexc=quita_ro)
+        if not os.path.exists(ruta):
+            return
+        time.sleep(0.5)
 
 
 import contextlib
@@ -1092,7 +1099,8 @@ class Stdio:
     args: argumentos del exe (--readonly...). t: el plazo por defecto de cada
     peticion de ESTE cliente. protocolo: el protocolVersion que se presenta.
     lee_stderr: el log del servidor (stderr en modo terminal) se recoge en
-    self.errores -una tuberia que nadie lee acaba bloqueando al servidor-.
+    self.errores -una tuberia que nadie lee acaba bloqueando al servidor-;
+    entero solo tras cierra(), que espera al hilo que lo lee.
     respaldo_json: ver texto(). self.init es la respuesta del initialize."""
 
     def __init__(self, exe, env=None, nombre='bateria', cwd=None, stderr=subprocess.DEVNULL,
@@ -1111,8 +1119,10 @@ class Stdio:
         self._lock = threading.Lock()
         self.init = None
         threading.Thread(target=self._lee, daemon=True).start()
+        self._hilo_err = None
         if lee_stderr:
-            threading.Thread(target=self._lee_stderr, daemon=True).start()
+            self._hilo_err = threading.Thread(target=self._lee_stderr, daemon=True)
+            self._hilo_err.start()
         if inicializa:
             self.inicializa(nombre)
 
@@ -1183,10 +1193,19 @@ class Stdio:
             self.p.wait(t)
         except subprocess.TimeoutExpired:
             self.p.kill()
+        if self._hilo_err:
+            # el stderr ENTERO antes de que la bateria lo lea: con carga el hilo
+            # iba por detras del initialize y un check leyo [] (run_all del
+            # 7-oct-2026, test_readonly_rutas_83)
+            self._hilo_err.join(10)
 
     def mata(self):
         try:
             self.p.kill()
+            # y a que muera: el borrado de su carpeta justo detras (el atexit
+            # de una bateria) fallaba con el exe aun abierto (segunda revision
+            # de la 1.17.0)
+            self.p.wait(timeout=15)
         except Exception:
             pass
 

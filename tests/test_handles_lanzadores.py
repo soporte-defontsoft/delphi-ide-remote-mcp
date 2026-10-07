@@ -62,7 +62,10 @@ try:
     startup=subprocess.STARTUPINFO();startup.lpAttributeList={'handle_list':[event]}
     direct=subprocess.Popen([app,script],startupinfo=startup,close_fds=True,creationflags=subprocess.CREATE_NO_WINDOW)
     mc.check('R6 control positivo: el evento propio llega cuando se pide',event_in(direct.pid,name))
-    direct.wait(10)
+    # esperar a la sonda no es la medida (R6 ya se midio): con carga, 10 s no
+    # bastaron y el TimeoutExpired corto la bateria antes de R7-R9 (run_all
+    # del 5-oct y del 7-oct-2026)
+    direct.wait(60)
     origin=os.environ.get('MCP_RUNJOB_EXE',os.path.join(mc.REPO,'src','RunJob','Win64','Release','McpRunJob.exe'))
     launcher=os.path.join(remote,'run-1234.exe');shutil.copy(origin,launcher)
     out=os.path.join(remote,'1234.out');pidfile=os.path.join(remote,'1234.pid')
@@ -75,7 +78,7 @@ try:
     mc.check('R7 fixture: McpRunJob arranca el programa nativo',child_pid is not None)
     if child_pid:
         mc.check('R8 programa remoto no recibe el evento ajeno',not event_in(child_pid,name))
-    job.wait(10)
+    job.wait(60)
     deadline=time.monotonic()+15;text=''
     while time.monotonic()<deadline:
         if os.path.isfile(out):

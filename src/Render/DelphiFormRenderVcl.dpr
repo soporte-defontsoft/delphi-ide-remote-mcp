@@ -14,7 +14,9 @@ uses
   System.SysUtils,
   FormRender.Comun in 'FormRender.Comun.pas',
   FormRender.Vcl in 'FormRender.Vcl.pas',
-  FormRender.Textos in 'FormRender.Textos.pas';
+  FormRender.Textos in 'FormRender.Textos.pas',
+  Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas',
+  Lsp.Pascal in '..\Server\Lsp.Pascal.pas';
 
 begin
   ExitCode := Main;

@@ -79,6 +79,7 @@ uses
   Lsp.References,   // SkipIdeArtifacts: el filtro compartido de artefactos
   Lsp.Listas,       // AgrupaPorFichero: los avisos por carpeta y fichero
   Lsp.Styles,
+  Lsp.DesignerBin,  // el literal de cadena: su lector y su compositor
   Lsp.Pascal;
 
 constructor TDelphiStylesTool.Create;
@@ -162,6 +163,17 @@ end;
 
 // (ValidStyleValue, la gramatica de un valor de un DFM de texto, vive en
 // Lsp.Styles desde la 1.17.0: delphi_designer set es su segundo usuario)
+{ EL juez del nombre de un estilo, el de clone y el del renombrado de set:
+  una letra (de cualquier alfabeto, como EL identificador de Lsp.Pascal) o
+  '_', y detras tambien puntos y guiones. El renombrado no juzgaba nada y
+  quitaba comillas a mano (revision de la 1.17.0). }
+function NombreDeEstiloQueNoVale(const ANombre: string): string;
+begin
+  Result := '';
+  if not TRegEx.IsMatch(ANombre, '\A' + PATRON_LETRA_IDENT + '(?:' + PATRON_CAR_IDENT + '|[.\-])*\z') then
+    Result := MsgFmt(SR_STYLES_NAME_CHARS_FMT, [ANombre]);
+end;
+
 function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelete: Boolean): string;
 var
   Doc: TStyleDoc;
@@ -177,7 +189,10 @@ begin
     Exit(MsgText(SR_STYLES_NEED_VALUE));
   if AValue.Contains(#10) or AValue.Contains(#13) then
     Exit(MsgText(SR_STYLES_VALUE_LINE));
-  if (not ADelete) and not ValidStyleValue(AValue) then
+  // el StyleName lo juzga el juez del NOMBRE (sin comillas tambien vale, como
+  // lo lee el arbol): la gramatica de un valor negaba my-style (revision de
+  // la 1.17.0)
+  if (not ADelete) and not SameText(AProp.Trim, 'StyleName') and not ValidStyleValue(AValue) then
     Exit(MsgFmt(SR_STYLES_VALUE_GRAMMAR_FMT, [AValue.Trim]));
   Doc := TStyleDoc.Create(APath);
   try
@@ -191,12 +206,19 @@ begin
     // allowed and says what it really did.
     if (not ADelete) and SameText(AProp.Trim, 'StyleName') then
     begin
-      NewName := AValue.Trim.Trim(['''']).Trim;
+      // el nombre como lo lee el arbol (LeeLiteralDeForm): 'Bot'#243'n' es
+      // Boton con su acento; sin comillas, tal cual
+      if not LeeLiteralDeForm(AValue.Trim, NewName) then
+        NewName := AValue.Trim;
       if NewName = '' then
         Exit(MsgText(SR_STYLES_RENAME_EMPTY));
+      Err := NombreDeEstiloQueNoVale(NewName);
+      if Err <> '' then
+        Exit(Err);
       if Doc.FindStyle(NewName) <> nil then
         Exit(MsgFmt(SR_STYLES_RENAME_DUP_FMT, [NewName]));
-      Line := Doc.SetProp(O, AProp.Trim, '''' + NewName + '''', WasThere);
+      // escrito por el compositor de la casa: #N y trozos como el IDE
+      Line := Doc.SetProp(O, AProp.Trim, TrozosDeLiteral(NewName), WasThere);
       Doc.Save;
       Exit(MsgFmt(SN_STYLES_RENAMED_FMT,
         [AStyle, NewName, TPath.GetFileName(Doc.Path)]));
@@ -225,10 +247,9 @@ var
 begin
   if ANew.Trim = '' then
     Exit(MsgText(SR_STYLES_NEED_NAME));
-  // una letra (de cualquier alfabeto, como EL identificador de Lsp.Pascal)
-  // o '_', y detras tambien puntos y guiones
-  if not TRegEx.IsMatch(ANew.Trim, '\A' + PATRON_LETRA_IDENT + '(?:' + PATRON_CAR_IDENT + '|[.\-])*\z') then
-    Exit(MsgFmt(SR_STYLES_NAME_CHARS_FMT, [ANew]));
+  Result := NombreDeEstiloQueNoVale(ANew.Trim);
+  if Result <> '' then
+    Exit;
   Doc := TStyleDoc.Create(APath);
   try
     Src := Doc.FindStyle(AStyle);

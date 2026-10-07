@@ -91,7 +91,7 @@ handshake.
   `Font.Size`), `TextSettings.HorzAlign = Center` (not `taCenter`).
 - A binary `.dfm` (TPF0 stream or `$FF` resource wrapper, the legacy shape)
   is READ on the fly everywhere - `delphi_read`, `delphi_search`,
-  `delphi_designer tree/get/lint/check-binding/layout` - and the answer says
+  `delphi_designer tree/get/lint/check-binding/layout/preview` - and the answer says
   so. To EDIT it: `delphi_designer command=to-text` (the IDE's own
   conversion, backup first), edit as text, then `lint` and `check-binding`
   (what the IDE reports when it reopens the form); `to-binary` is the way
@@ -147,13 +147,21 @@ handshake.
   classname=TButton component=BtnOk` (`component` names it, its text too
   when the class shows its Name, so no `set prop=Name` afterwards - without
   it, the first free Button1, Button2... as the IDE; `parent=Panel1` puts it
-  inside a container, the form by default). Never write the block by hand:
-  insert places it at 10,10 as
+  inside a container, the form by default). Do not write a visual control's
+  block by hand: insert places it at 10,10 as
   the last child with the minimum the IDE writes (its Name as text when its
   class does that, its TabOrder), adds its published field to the form's
   class and its unit to the uses, and answers the numbered block. In VCL a
-  parent is the form or a windowed control (a TTabSheet, not its
-  TPageControl); in FMX any control.
+  parent is the form or a control whose class accepts controls (a TPanel, a
+  TGroupBox, a TTabSheet - not its TPageControl, not a TButton; never a data
+  module); in FMX any control. What insert cannot place - a non-visual
+  component such as a TTimer, a class or a parent the tables do not have -
+  goes by hand, and the refusal says how: its block, its published field,
+  its unit in the uses, then `check-binding`. A name with letters outside
+  ASCII needs the form saved as UTF-8 with BOM, and the unit with a BOM or in
+  CP1252: the IDE and the compiler read a file without BOM as ANSI, so
+  insert and a rename refuse it there (`DSGN-111`) rather than change the
+  file's encoding.
 - To CHANGE one property: `set component=Button1 prop=Caption value=OK`. It
   is checked against the class BEFORE writing: a property the class does
   not publish (the answer suggests the close one), an enum value that does
@@ -161,9 +169,15 @@ handshake.
   take (read from the Delphi source: a whole number or one of its named
   constants such as clRed, a number, a character, a string), a component
   of another class (a DBGrid's DataSource takes a TDataSource: the answer
-  lists the ones that fit) - nothing is written. A string may go without
-  quotes, and a number as you would type it (130, 0.7): set writes it the
-  way the IDE does. The form's own size (`component=<the form>
+  lists the ones that fit), a list such as Memo1.Lines (edit it with
+  `delphi_edit`) - nothing is written. `value=nil` clears a reference. A
+  string may go without quotes, and a number as you would type it (130,
+  0.7): set writes it the way the IDE does (an accent as #243, a long string
+  in pieces). A reference to a component inside an inline frame is written
+  `Frame1.Name` (one of another form, `Form2.Name`) and goes as given: the
+  form loader resolves it, set does not read the other file; the frame's
+  own components are edited in the frame's file. The
+  form's own size (`component=<the form>
   prop=ClientWidth`) and an inline frame's Width/Height go through set too.
   `set component=X
   parent=Panel1` (alone) moves X with its children; `prop=Name` renames it,
@@ -177,7 +191,7 @@ handshake.
   `usesInCode` lists the lines of the unit that still name it: the compiler
   stops there. insert, delete and a rename write the form and its unit
   together, all or nothing.
-- A binary `.dfm` reads on the fly; editing it needs `to-text` first (see
+- A binary `.dfm` reads (and previews) on the fly; editing it needs `to-text` first (see
   above). `.fmx` is always text.
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows, in the same
@@ -187,8 +201,13 @@ handshake.
   (image pixels to form units; `Left`/`Top` in the file are relative to the
   parent, whose rectangle `component=<parent>` gives as `componentRect`).
   `state=PageControl1.ActivePage=TabSheet2` shows another page without
-  touching the file; `nonVisual` lists the non-visual components even when
-  they are not drawn (`nonvisual=true` draws them). From a service the
+  touching the file (inside an inline frame, `Frame1.Edit1.Text=x`); and
+  `component=Frame1.Edit1` crops to a frame's child;
+  `nonVisual` lists the non-visual components even when
+  they are not drawn (`nonvisual=true` draws them). `ignored` lists each
+  property the form loader could not read - component, property, reason
+  and its line in the file -: the rest is drawn, but the form will not open
+  until you fix them with `set`. From a service the
   answer says `fidelity=print`: controls that paint their own way come out
   native-looking, the layout is the real one.
 
