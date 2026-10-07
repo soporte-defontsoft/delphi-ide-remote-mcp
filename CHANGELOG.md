@@ -6,7 +6,15 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.17.0] - 2026-10-07
+
+The designer sees and edits. `preview` draws a form as the IDE designer
+shows it and returns the image, with renderers of its own that load the
+IDE's packages (a package that crashes never takes the server down);
+`insert`, `set` and `delete` edit the
+form and its unit the way the IDE does, each value judged against what its
+type takes before it is written, and a change that would keep the form from
+opening is refused. And the server answers where Hermes got confused.
 
 ### Added
 
