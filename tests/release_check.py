@@ -60,7 +60,8 @@ check('built exe exists', os.path.exists(exe), exe)
 def newest_source(folder):
     t = 0.0
     for root, dirs, files in os.walk(folder):
-        dirs[:] = [d for d in dirs if d not in ('Win64', 'Win32', 'Linux64', 'Compiled', '__delphi-patch', '__history')]
+        # Pruebas: la bateria manual de src/Render no es fuente de los ayudantes
+        dirs[:] = [d for d in dirs if d not in ('Win64', 'Win32', 'Linux64', 'Compiled', '__delphi-patch', '__history', 'Pruebas')]
         for f in files:
             if f.lower().endswith(('.pas', '.dpr', '.inc', '.dproj')):
                 t = max(t, os.path.getmtime(os.path.join(root, f)))
@@ -169,6 +170,11 @@ CONTENT = [
     # binario del 20 de agosto - un servidor de hace un mes, con los agujeros
     # de jaula de entonces dentro. Nadie lo recompilaba y nadie lo miraba.
     (os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
+    # 1.17.0: los dos renderizadores de forms de delphi_designer preview
+    # (src/Render, Win32), junto al exe como el conversor. Entran en la lista
+    # el dia que nacen.
+    (os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', 'DelphiFormRenderVcl.exe'), 'DelphiFormRenderVcl.exe'),
+    (os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', 'DelphiFormRenderFmx.exe'), 'DelphiFormRenderFmx.exe'),
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
     (os.path.join(REPO, 'QUICKSTART.md'), 'QUICKSTART.md'),  # en la raiz del repo y del zip (David, 25-sep)
     # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita
@@ -207,6 +213,15 @@ for binario, fuente in (('McpDesktopNode', 'DesktopNode'), ('McpDesktopNode.exe'
         check('node binary not older than its sources: %s' % binario,
               os.path.getmtime(b) >= newest_source(os.path.join(REPO, 'src', fuente)),
               'src/%s changed after the binary: run BuildGroup.bat quiet build Release' % fuente)
+# ...y los renderizadores, igual: un binario de otro codigo no viaja
+for binario in ('DelphiFormRenderVcl.exe', 'DelphiFormRenderFmx.exe'):
+    b = os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', binario)
+    if not os.path.exists(b):
+        check('renderer present: %s' % binario, False, 'run BuildGroup.bat quiet build Release')
+    else:
+        check('renderer not older than its sources: %s' % binario,
+              os.path.getmtime(b) >= newest_source(os.path.join(REPO, 'src', 'Render')),
+              'src/Render changed after the binary: run BuildGroup.bat quiet build Release')
 
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for src, arc in CONTENT:

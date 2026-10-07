@@ -827,7 +827,7 @@ begin
   else
   begin
     // data module: the designer file is a .dfm on BOTH frameworks
-    Fmx := SameText(ReadDproj(ChangeFileExt(TPath.GetFullPath(ADprPath), '.dproj')).FrameworkType, 'FMX');
+    Fmx := SameText(ReadDproj(DprojDe(TPath.GetFullPath(ADprPath))).FrameworkType, 'FMX');
     WriteNewFile(PasPath, DataModulePas(AUnitName, FormName, Fmx));
     WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), DataModuleDfm(FormName));
   end;

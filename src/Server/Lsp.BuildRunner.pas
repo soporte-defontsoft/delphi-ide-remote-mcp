@@ -18,7 +18,7 @@ type
     TEST-027). }
   ETestNoConfinado = class(Exception);
 
-function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
+function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
   ATimeoutMs: Integer = 600000; const ASdk: string = '';
   const AVerbosity: string = ''): TJSONObject;
@@ -1322,7 +1322,7 @@ begin
     Result := Raiz;
 end;
 
-function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
+function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer;
   const ASdk, AVerbosity: string): TJSONObject;
 var
@@ -1337,6 +1337,10 @@ var
   Lines: TArray<string>;
   I, TailFrom: Integer;
 begin
+  // Un .dpr/.dpk se compila por su .dproj, como lo resuelven delphi_config y
+  // delphi_test (DprojDe): aqui contestaba BUILD-016 "no es un proyecto"
+  // (Hermes, validacion de la 1.16.0). Antes de la puerta: juzga el fichero real.
+  ADprojPath := DprojDe(ADprojPath);
   var Denied := WriteTargetDenied(ADprojPath); // compilar escribe junto al proyecto
   if Denied <> '' then
     raise Exception.Create(Denied);

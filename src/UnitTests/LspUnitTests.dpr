@@ -21,7 +21,10 @@ uses
   LspTests.LetrasDeRed in 'LspTests.LetrasDeRed.pas',
   LspTests.Docs in 'LspTests.Docs.pas',
   LspTests.DesignerMetaGen in 'LspTests.DesignerMetaGen.pas',
-  LspTests.Regex in 'LspTests.Regex.pas';
+  LspTests.Regex in 'LspTests.Regex.pas',
+  LspTests.FormRender in 'LspTests.FormRender.pas',
+  FormRender.Comun in '..\Render\FormRender.Comun.pas',
+  FormRender.Textos in '..\Render\FormRender.Textos.pas';
 
 var
   Runner: ITestRunner;

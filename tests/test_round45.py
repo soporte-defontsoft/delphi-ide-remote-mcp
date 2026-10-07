@@ -80,6 +80,9 @@ AJENO_EXE = os.path.join(FUERA, 'ajeno.exe')
 open(AJENO_EXE, 'wb').write(b'MZ')
 # Y uno DENTRO, para poder probar "workdir" sin que el "path" falle antes.
 open(os.path.join(JAIL, 'propio.exe'), 'wb').write(b'MZ')
+# ...y una form DENTRO para preview: el path pasa y la negativa es la de out/style
+PROPIO_DFM = os.path.join(JAIL, 'Propia.dfm')
+open(PROPIO_DFM, 'w', newline='\r\n').write('object Form1: TForm1\nend\n')
 AJENO_TXT = os.path.join(FUERA, 'ajeno.txt')
 open(AJENO_TXT, 'w').write('hola\n')
 AJENO_STYLE = os.path.join(FUERA, 'ajeno.style')
@@ -133,6 +136,8 @@ PROBAR = [
                                   'project': AJENO_DPROJ}),
     ('delphi_designer', 'path', {'command': 'tree', 'path': AJENO_DFM}),
     ('delphi_styles', 'path', {'command': 'view', 'path': AJENO_STYLE}),
+    ('delphi_designer', 'out', {'command': 'preview', 'path': PROPIO_DFM, 'out': AJENO_PNG}),
+    ('delphi_designer', 'style', {'command': 'preview', 'path': PROPIO_DFM, 'style': AJENO_STYLE}),
     ('delphi_git', 'repo', {'repo': FUERA, 'command': 'status'}),
     ('delphi_git', 'path', {'repo': JAIL, 'command': 'worktree', 'args': 'add',
                             'path': os.path.join(FUERA, 'wt'), 'ref': 'v1'}),
@@ -169,6 +174,9 @@ EXCLUIDOS = {
     ('delphi_move', 'copy'): 'booleano (copiar en vez de mover); la ruta es path/dest, probados arriba',
     ('delphi_desktop', 'inline'): 'booleano (imagen en la respuesta o fichero); la ruta es out, probada aparte',
     ('delphi_adb', 'inline'): 'idem delphi_desktop: la entrega de la captura (Lsp.InlineImages)',
+    ('delphi_designer', 'inline'): 'idem: la entrega del PNG de preview; la ruta es out, probada arriba',
+    ('delphi_designer', 'state'): 'estado de vista Componente.Propiedad=Valor (su "file" es "never written '
+        'to the file"); viaja al renderizador como un valor, comillas negadas (DSGN-065)',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
     ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',
@@ -300,13 +308,14 @@ try:
     # 22-sep: 43 -> 41, al retirar el alias delphi_adb_linux (out y project).
     # 23-sep: 41 -> 39, al retirar delphi_run (path y workdir).
     # 26-sep: 39 -> 40, delphi_git gana path (worktree, 1.4.0).
+    # 7-oct: 40 -> 42, delphi_designer gana out y style (preview, 1.17.0).
     w = call('delphi_workspace', {})
     try:
         vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
     except Exception:
         vigilados = -1
-    check('G4 el suelo de la puerta vigila los 40 parametros marcados',
-          vigilados == 40, 'jailedParams=%s' % vigilados)
+    check('G4 el suelo de la puerta vigila los 42 parametros marcados',
+          vigilados == 42, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar

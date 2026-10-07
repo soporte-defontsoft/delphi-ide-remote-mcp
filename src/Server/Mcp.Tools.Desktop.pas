@@ -115,6 +115,7 @@ uses
   Mcp.Tools.PAServer,
   Lsp.InlineImages, // DeliverCapture: como se entrega una captura, la misma en toda tool
   Lsp.RemoteRun,
+  Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
   Lsp.Patch;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
@@ -357,7 +358,7 @@ begin
     perfil y el proyecto -el del agente, o el nodo empaquetado- en
     RemoteRunProjects. Va AQUI, tras validar los argumentos propios y ANTES de
     leer el perfil, marcar o escribir. }
-  Proj := Params.Project.Trim;
+  Proj := DprojDe(Params.Project.Trim);
   Result := EjecucionRemotaDenegada(Params.Profile.Trim, Proj,
     MsgText(SR_ADBLINUX_NEEDPROFILE));
   if Result <> '' then
@@ -497,22 +498,11 @@ begin
       if Fallo = '' then
       begin
         try
-          CrearCarpeta(Destino);
           // un out= que ya estaba: su contenido, sellado, y se sustituye, como
           // hace su gemela de adb (sexta revision: aqui fallaba el Move y la
-          // captura no se colocaba)
-          // con el cerrojo de escritura, como todo escritor (sexta revision)
-          EnterFileEdit;
-          try
-            if TFile.Exists(Propia) then
-            begin
-              GuardaContenidoActual(Propia);
-              TFile.Delete(Propia);
-            end;
-            TFile.Move(Local, Propia);
-          finally
-            LeaveFileEdit;
-          end;
+          // captura no se colocaba), con el cerrojo de escritura como todo
+          // escritor. Vive en Lsp.InlineImages: preview lo hace igual (1.17.0)
+          ColocaCaptura(Local, Propia);
           Local := Propia;
         except
           // Antes la imagen se quedaba 'donde cayo', dentro de la .tmp-, y la

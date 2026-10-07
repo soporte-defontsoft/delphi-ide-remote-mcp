@@ -133,7 +133,8 @@ uses
   Lsp.DesignerMetaGen in 'Lsp.DesignerMetaGen.pas',
   Lsp.Regex in 'Lsp.Regex.pas',
   Lsp.Json in 'Lsp.Json.pas',
-  Lsp.Listas in 'Lsp.Listas.pas';
+  Lsp.Listas in 'Lsp.Listas.pas',
+  Lsp.FormRender in 'Lsp.FormRender.pas';
 
 {$R *.res}
 

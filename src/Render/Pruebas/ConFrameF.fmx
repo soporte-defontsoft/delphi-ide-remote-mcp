@@ -1,0 +1,33 @@
+object FormConFrameF: TFormConFrameF
+  Left = 0
+  Top = 0
+  Caption = 'Con frames FMX'
+  ClientHeight = 300
+  ClientWidth = 340
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object LabelForm: TLabel
+    Position.X = 16.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 200.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Dos frames inline FMX:'
+  end
+  inline FrameF1: TFrameF
+    Position.X = 16.000000000000000000
+    Position.Y = 32.000000000000000000
+    inherited EditF: TEdit
+      Text = 'cambiado en el primero'
+    end
+  end
+  inline FrameF2: TFrameF
+    Position.X = 16.000000000000000000
+    Position.Y = 168.000000000000000000
+    inherited RectF: TRectangle
+      Fill.Color = xFFFFFF80
+    end
+  end
+end

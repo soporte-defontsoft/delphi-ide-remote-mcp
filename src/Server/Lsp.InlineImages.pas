@@ -34,10 +34,23 @@ function WrapWithAttachedImages(const AText: string): TJSONArray;
 { Entrega una captura ya en disco (AFile) en AReturn. AInline = el parametro
   inline de la tool ('false'/'0'/'no' = fichero + enlace), AMaxWidth = el
   maxwidth (0 = el de la casa). True si viajo inline. Nunca modifica AFile:
-  si es un temporal del agente (IsAgentCapture) lo consume; un out= se queda. }
+  si es un temporal del agente (IsAgentCapture) lo consume; un out= se queda.
+  ANotaEnLineaFmt (con un %s: la escala) y ANotaFrame son las notas de la
+  tool cuando las de la familia de escritorio no le valen: esas hablan de
+  pulsar con tap, y lo que mide un agente en un preview del disenador se
+  escribe en el .dfm (1.17.0). Vacias = las de siempre. }
 function DeliverCapture(const AToolName, AFile, AInline: string;
   AMaxWidth, AOriginX, AOriginY: Integer; ATapScaleX, ATapScaleY: Double;
-  AReturn: TJSONObject): Boolean;
+  AReturn: TJSONObject; const ANotaEnLineaFmt: string = '';
+  const ANotaFrame: string = ''): Boolean;
+
+{ Lleva una captura hecha en un temporal (ALocal) a ADestino, el out= que
+  eligio el agente y ya paso CaptureTarget: lo que hubiera alli, sellado en
+  la papelera, y la captura en su sitio, bajo el cerrojo de escritura como
+  todo escritor. Lanza si no se puede. Lo hacia a mano delphi_desktop (la
+  captura bajada del destino) y lo necesita delphi_designer preview (la del
+  renderizador): la proxima captura con out= llama aqui. }
+procedure ColocaCaptura(const ALocal, ADestino: string);
 
 { EL nombrador del frame y su inversa. Un frame es la geometria de la imagen
   que el agente mira, dentro del token: '<imgW>x<imgH>@<srcW>x<srcH>+<ox>+<oy>'
@@ -65,6 +78,7 @@ uses
   Lsp.Imagen,   // EscalaPngBytes: escalar en memoria
   Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
+  Lsp.Patch,    // EnterFileEdit / GuardaContenidoActual: ColocaCaptura
   Lsp.Texts;
 
 const
@@ -157,7 +171,8 @@ end;
 
 function DeliverCapture(const AToolName, AFile, AInline: string;
   AMaxWidth, AOriginX, AOriginY: Integer; ATapScaleX, ATapScaleY: Double;
-  AReturn: TJSONObject): Boolean;
+  AReturn: TJSONObject; const ANotaEnLineaFmt: string;
+  const ANotaFrame: string): Boolean;
 var
   Bytes: TArray<Byte>;
   Escala: Double;
@@ -171,7 +186,10 @@ var
     if (IW <= 0) or (SrcW <= 0) then
       Exit;
     AReturn.AddPair('frame', FrameOf(IW, IH, SrcW, SrcH, AOriginX, AOriginY));
-    AReturn.AddPair('frameNote', MsgText(SN_CAPTURE_FRAME_NOTE));
+    if ANotaFrame <> '' then
+      AReturn.AddPair('frameNote', ANotaFrame)
+    else
+      AReturn.AddPair('frameNote', MsgText(SN_CAPTURE_FRAME_NOTE));
   end;
 
 begin
@@ -209,8 +227,11 @@ begin
       end
       else if IsAgentCapture(AFile) then
         AReturn.AddPair('consumed', TJSONBool.Create(False)); // no era nuestra: se queda
-      AReturn.AddPair('inlineNote', MsgFmt(SN_CAPTURE_INLINE_NOTE_FMT,
-        [FormatFloat('0.000', Escala, TFormatSettings.Invariant)]));
+      var EscalaTexto := FormatFloat('0.000', Escala, TFormatSettings.Invariant);
+      if ANotaEnLineaFmt <> '' then
+        AReturn.AddPair('inlineNote', MsgFmt(ANotaEnLineaFmt, [EscalaTexto]))
+      else
+        AReturn.AddPair('inlineNote', MsgFmt(SN_CAPTURE_INLINE_NOTE_FMT, [EscalaTexto]));
       Exit(True);
     end;
     // no se pudo escalar: se dice y se entrega como fichero, que nada se pierde
@@ -226,6 +247,22 @@ begin
     AReturn.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
     if IsAgentCapture(AFile) then
       AReturn.AddPair('consumedOnDownload', TJSONBool.Create(True)); // se borra al recogerla
+  end;
+end;
+
+procedure ColocaCaptura(const ALocal, ADestino: string);
+begin
+  CrearCarpeta(TPath.GetDirectoryName(ADestino));
+  EnterFileEdit;
+  try
+    if TFile.Exists(ADestino) then
+    begin
+      GuardaContenidoActual(ADestino);
+      TFile.Delete(ADestino);
+    end;
+    TFile.Move(ALocal, ADestino);
+  finally
+    LeaveFileEdit;
   end;
 end;
 

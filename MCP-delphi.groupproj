@@ -18,6 +18,12 @@
         <Projects Include="src\UnitTests\LspUnitTests.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="src\Render\DelphiFormRenderVcl.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="src\Render\DelphiFormRenderFmx.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -71,14 +77,32 @@
     <Target Name="LspUnitTests:Make">
         <MSBuild Projects="src\UnitTests\LspUnitTests.dproj" Targets="Make"/>
     </Target>
+    <Target Name="DelphiFormRenderVcl">
+        <MSBuild Projects="src\Render\DelphiFormRenderVcl.dproj"/>
+    </Target>
+    <Target Name="DelphiFormRenderVcl:Clean">
+        <MSBuild Projects="src\Render\DelphiFormRenderVcl.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DelphiFormRenderVcl:Make">
+        <MSBuild Projects="src\Render\DelphiFormRenderVcl.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DelphiFormRenderFmx">
+        <MSBuild Projects="src\Render\DelphiFormRenderFmx.dproj"/>
+    </Target>
+    <Target Name="DelphiFormRenderFmx:Clean">
+        <MSBuild Projects="src\Render\DelphiFormRenderFmx.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DelphiFormRenderFmx:Make">
+        <MSBuild Projects="src\Render\DelphiFormRenderFmx.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;DelphiStyleConvert;McpRunJob;LspUnitTests"/>
+        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;DelphiStyleConvert;McpRunJob;LspUnitTests;DelphiFormRenderVcl;DelphiFormRenderFmx"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean;DelphiStyleConvert:Clean;McpRunJob:Clean;LspUnitTests:Clean"/>
+        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean;DelphiStyleConvert:Clean;McpRunJob:Clean;LspUnitTests:Clean;DelphiFormRenderVcl:Clean;DelphiFormRenderFmx:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make;DelphiStyleConvert:Make;McpRunJob:Make;LspUnitTests:Make"/>
+        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make;DelphiStyleConvert:Make;McpRunJob:Make;LspUnitTests:Make;DelphiFormRenderVcl:Make;DelphiFormRenderFmx:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

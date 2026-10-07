@@ -236,6 +236,7 @@
         <DCCReference Include="Lsp.Regex.pas"/>
         <DCCReference Include="Lsp.Json.pas"/>
         <DCCReference Include="Lsp.Listas.pas"/>
+        <DCCReference Include="Lsp.FormRender.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

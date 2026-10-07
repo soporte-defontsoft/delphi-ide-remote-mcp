@@ -275,6 +275,10 @@ begin
       Return.AddPair('configurations', Cfgs);
       for C in Info.Configs do
         Cfgs.Add(C);
+      // la que delphi_build y delphi_test compilan sin platform=, con el MISMO
+      // lector: no habia forma de saberla sin compilar (Hermes, validacion de
+      // la 1.16.0)
+      Return.AddPair('defaultPlatform', Info.PlataformaPorDefecto);
     end;
     if (Sec = 'all') or (Sec = 'platforms') then
     begin
@@ -1653,7 +1657,7 @@ begin
   end;
   if MatchText(TPath.GetExtension(Proj), ['.dpr', '.dpk']) then
   begin
-    Sibling := TPath.ChangeExtension(Proj, '.dproj');
+    Sibling := DprojDe(Proj);
     if TFile.Exists(Sibling) then
       Proj := Sibling
     else if not MatchText(Cmd, ['', 'view', 'add-unit', 'remove-unit', 'add-requires']) then

@@ -362,22 +362,29 @@ def carpeta(nombre):
 
 CONVERSOR = 'DelphiStyleConvert.exe'
 CONVERSOR_COMPILADO = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', CONVERSOR)
+# Los renderizadores de forms de delphi_designer preview (1.17.0): Win32, junto
+# al servidor como el conversor. UNA tabla de ayudantes -> donde se compilan,
+# para run_all (la copia limpia) y copia_exe (la de cada bateria).
+RENDERIZADORES = ('DelphiFormRenderVcl.exe', 'DelphiFormRenderFmx.exe')
+AYUDANTES = {CONVERSOR: CONVERSOR_COMPILADO}
+AYUDANTES.update({r: os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', r) for r in RENDERIZADORES})
 
 
-def copia_exe(dest_dir, src=None, con_conversor=False):
+def copia_exe(dest_dir, src=None, con_conversor=False, con_render=False):
     """Copia el servidor a dest_dir y devuelve la ruta de la copia: cada
     bateria corre el suyo, con su settings.ini, sus logs y su __delphi-temp.
     con_conversor: delphi_styles necesita DelphiStyleConvert.exe AL LADO del
     servidor; va el que acompane al exe bajo prueba (run_all lo pone junto a
-    su copia limpia) o, si no lo trae, el compilado de src/StyleConvert."""
+    su copia limpia) o, si no lo trae, el compilado de src/StyleConvert.
+    con_render: los dos renderizadores de delphi_designer preview, igual."""
     os.makedirs(dest_dir, exist_ok=True)
     origen = src or exe_origen()
     exe = os.path.join(dest_dir, 'DelphiLspMcp.exe')
     shutil.copy(origen, exe)
-    if con_conversor:
-        junto = os.path.join(os.path.dirname(os.path.abspath(origen)), CONVERSOR)
-        shutil.copy(junto if os.path.exists(junto) else CONVERSOR_COMPILADO,
-                    os.path.join(dest_dir, CONVERSOR))
+    for nombre in ((CONVERSOR,) if con_conversor else ()) + (RENDERIZADORES if con_render else ()):
+        junto = os.path.join(os.path.dirname(os.path.abspath(origen)), nombre)
+        shutil.copy(junto if os.path.exists(junto) else AYUDANTES[nombre],
+                    os.path.join(dest_dir, nombre))
     return exe
 
 
@@ -805,10 +812,12 @@ _CATALOGO = {}
 
 
 def catalogo():
-    """{NOMBRE: texto} de Lsp.Texts y de Mld.Textos (el del nodo y el
-    lanzador), leidos una vez por bateria."""
+    """{NOMBRE: texto} de Lsp.Texts, de Mld.Textos (el del nodo y el
+    lanzador) y de FormRender.Textos (los renderizadores de forms), leidos
+    una vez por bateria."""
     if not _CATALOGO:
-        for rel in (('src', 'Server', 'Lsp.Texts.pas'), ('src', 'DesktopNode', 'Mld.Textos.pas')):
+        for rel in (('src', 'Server', 'Lsp.Texts.pas'), ('src', 'DesktopNode', 'Mld.Textos.pas'),
+                    ('src', 'Render', 'FormRender.Textos.pas')):
             with open(os.path.join(REPO, *rel), encoding='utf-8-sig') as fh:
                 for n, tx in constantes(fh.read()).items():
                     _CATALOGO.setdefault(n, tx)
@@ -856,6 +865,53 @@ def pascal_sin_comentarios(src):
             out.append(c)
             i += 1
     return ''.join(out)
+
+
+def png_pixeles(ruta):
+    """(ancho, alto, pixel) de un PNG de 8 bits RGB o RGBA sin entrelazar (lo
+    que escriben la VCL y FMX); pixel(x, y) -> (r, g, b). Sin PIL: zlib y los
+    cinco filtros del estandar. Para las baterias que miran DENTRO de una
+    captura (delphi_designer preview, 1.17.0): el tamano no dice si se pinto."""
+    import zlib, struct
+    datos = open(ruta, 'rb').read()
+    if datos[:8] != b'\x89PNG\r\n\x1a\n':
+        raise ValueError('no es un PNG: %s' % ruta)
+    i, idat, ancho, alto, prof, color, entrelazado = 8, b'', 0, 0, 0, 0, 0
+    while i < len(datos):
+        n, tipo = struct.unpack('>I4s', datos[i:i + 8])
+        cuerpo = datos[i + 8:i + 8 + n]
+        if tipo == b'IHDR':
+            ancho, alto, prof, color, _, _, entrelazado = struct.unpack('>IIBBBBB', cuerpo)
+        elif tipo == b'IDAT':
+            idat += cuerpo
+        i += 12 + n
+    if prof != 8 or color not in (2, 6) or entrelazado:
+        raise ValueError('PNG no soportado (profundidad %d, color %d, entrelazado %d)' % (prof, color, entrelazado))
+    bpp = 3 if color == 2 else 4
+    crudo, fila = zlib.decompress(idat), ancho * bpp
+    filas, prev, p = [], bytearray(fila), 0
+    for _ in range(alto):
+        filtro, linea = crudo[p], bytearray(crudo[p + 1:p + 1 + fila])
+        p += 1 + fila
+        for x in range(fila):
+            a = linea[x - bpp] if x >= bpp else 0
+            b = prev[x]
+            c = prev[x - bpp] if x >= bpp else 0
+            if filtro == 1:
+                linea[x] = (linea[x] + a) & 255
+            elif filtro == 2:
+                linea[x] = (linea[x] + b) & 255
+            elif filtro == 3:
+                linea[x] = (linea[x] + (a + b) // 2) & 255
+            elif filtro == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                linea[x] = (linea[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        filas.append(linea)
+        prev = linea
+
+    def pixel(x, y):
+        return tuple(filas[y][x * bpp:x * bpp + 3])
+    return ancho, alto, pixel
 
 
 def es(t, nombre):

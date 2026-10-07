@@ -1,10 +1,12 @@
 @echo off
 REM ============================================================================
 REM  BuildGroup.bat - compila el GRUPO entero (MCP-delphi.groupproj):
-REM  el servidor (DelphiLspMcp), DelphiStyleConvert, LspUnitTests, McpRunJob y el nodo
-REM  de escritorio. Cada proyecto compila en SU plataforma por defecto
-REM  (Win64 los cuatro primeros, Linux64 el nodo) y ADEMAS, en Release, el
-REM  nodo se compila TAMBIEN para Win64: un mismo codigo, dos escritorios.
+REM  el servidor (DelphiLspMcp), DelphiStyleConvert, LspUnitTests, McpRunJob, el nodo
+REM  de escritorio y los dos renderizadores de forms (DelphiFormRenderVcl/Fmx,
+REM  src\Render). Cada proyecto compila en SU plataforma por defecto (Win64
+REM  los cuatro primeros, Linux64 el nodo, Win32 los renderizadores: cargan
+REM  los paquetes del IDE de 32 bits) y ADEMAS, en Release, el nodo se
+REM  compila TAMBIEN para Win64: un mismo codigo, dos escritorios.
 REM
 REM  USO:  BuildGroup.bat [quiet^|normal^|verbose] [make^|build] [Debug^|Release]
 REM        (sin parametros = quiet make Debug)

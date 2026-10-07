@@ -588,8 +588,11 @@ try:
           t[:250])
 
     res, sc, t = llama('delphi_help', {})
-    check('E40 delphi_help no anuncia vault_* sin vault', not res.get('isError') and
-          'delphi_git' in t and 'vault_' not in t, t[-400:])
+    # desde la 1.17.0 dice ademas POR QUE faltan (un agente creyo que se habian
+    # fusionado): la fila del vault no esta y la nota de "sin vault" si
+    check('E40 delphi_help no anuncia vault_* sin vault (y dice por que faltan)', not res.get('isError') and
+          'delphi_git' in t and mc.catalogo()['SF_HELP_TASKS_VAULT_LEER'].strip()[:20] not in t
+          and mc.catalogo()['SF_HELP_TASKS_SIN_VAULT'].strip()[:30] in t, t[-400:])
 
     LFU = os.path.join(JAIL, 'Lf.pas')
     res, sc, t = llama('delphi_edit', {'path': LFU, 'createunit': True, 'eol': 'lf'})

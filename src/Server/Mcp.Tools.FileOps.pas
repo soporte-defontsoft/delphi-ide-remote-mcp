@@ -73,6 +73,7 @@ uses
   Lsp.Guard,
   Lsp.Patch,
   Lsp.ProjectUnits,
+  Lsp.Dproj,     // DprojDe: el .dproj de un .dpr/.dpk, un solo nombrador
   Lsp.NetDrives,
   Lsp.Pascal,
   Lsp.Scaffold;
@@ -533,7 +534,7 @@ begin
     // error. La foto: cada proyecto (.dpr/.dpk y su .dproj) y el form.
     var RutasFoto: TArray<string> := [];
     for P in Projects do
-      RutasFoto := RutasFoto + [P, ChangeFileExt(P, '.dproj')];
+      RutasFoto := RutasFoto + [P, DprojDe(P)];
     for Ext in DESIGNER_EXTS do
       RutasFoto := RutasFoto + [ChangeFileExt(Params.Path, Ext)];
     FotoUnit.Toma(RutasFoto);
@@ -555,7 +556,7 @@ begin
       if EsFallo(R) then
         Exit(DeshaceUnit(R));
       FotoUnit.Anota(P);
-      FotoUnit.Anota(ChangeFileExt(P, '.dproj'));
+      FotoUnit.Anota(DprojDe(P));
       ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
     end;
     if Length(Projects) > 0 then
@@ -618,7 +619,7 @@ begin
             ProyPares := ProyPares + [P];
             UnitPares := UnitPares + [U];
             Fotos.Add(P);
-            Fotos.Add(ChangeFileExt(P, '.dproj'));
+            Fotos.Add(DprojDe(P));
           end;
         end;
         FotoUnit.Toma(Fotos.ToStringArray);
@@ -651,7 +652,7 @@ begin
         if EsFallo(R) then
           Exit(DeshaceUnit(R));
         FotoUnit.Anota(P);
-        FotoUnit.Anota(ChangeFileExt(P, '.dproj'));
+        FotoUnit.Anota(DprojDe(P));
       end;
       Inc(Cuantas);
       ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
@@ -1064,7 +1065,7 @@ begin
       if PathDenied(P) = '' then
       begin
         RutasFoto.Add(P);
-        RutasFoto.Add(ChangeFileExt(P, '.dproj'));
+        RutasFoto.Add(DprojDe(P));
         if not MismoIdentificador(OldStem, NewStem) then
         begin
           var NoEscritos: TArray<string>;
@@ -1178,7 +1179,7 @@ begin
       Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P), R,
         Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P), R])));
     FotoUnit.Anota(P);
-    FotoUnit.Anota(ChangeFileExt(P, '.dproj'));
+    FotoUnit.Anota(DprojDe(P));
     // ...y todo lo que ese rename pudo reescribir (las units del proyecto y
     // la propia en su sitio nuevo): sin anotar, el deshacer las tomaba por
     // cambiadas "por otro" y dejaba la unit vieja con la cabecera nueva

@@ -175,8 +175,8 @@ check('gate: password con comillas rechazada',
 # --- add-profile: functional validation of required params ---
 out = srv.call('delphi_paserver', {"command": "add-profile", "host": "127.0.0.1",
                                    "password": "x"})
-check('add-profile sin name: pide name',
-      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NEED_FMT') and '"name"' in out, out[:200])
+check('add-profile sin profile: pide profile (se llama asi desde la 1.17.0, como en delphi_build)',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NEED_FMT') and '"profile"' in out, out[:200])
 
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1"})

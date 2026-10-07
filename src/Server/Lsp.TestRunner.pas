@@ -157,12 +157,12 @@ begin
     Obj.AddPair('path', F);
     Obj.AddPair('framework', KindName(K));
     Obj.AddPair('why', Why);
-    var DprojDe := TPath.ChangeExtension(F, '.dproj');
-    Obj.AddPair('hasDproj', TJSONBool.Create(TFile.Exists(DprojDe)));
+    var SuDproj := DprojDe(F);
+    Obj.AddPair('hasDproj', TJSONBool.Create(TFile.Exists(SuDproj)));
     // la plataforma en la que run lo compila y lo corre si no se pide otra:
     // la del proyecto, como el IDE (TEST-012 ya no puede nombrar una para todos)
-    if TFile.Exists(DprojDe) then
-      Obj.AddPair('platform', ReadDproj(DprojDe).PlataformaPorDefecto);
+    if TFile.Exists(SuDproj) then
+      Obj.AddPair('platform', ReadDproj(SuDproj).PlataformaPorDefecto);
     if K = tkConsole then
       Obj.AddPair('countsFormat', MsgText(SN_TEST_CONSOLE_FORMAT));
   end;
@@ -613,9 +613,7 @@ begin
     Result.AddPair('error', MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [AProject]));
     Exit;
   end;
-  Dproj := AProject;
-  if SameText(TPath.GetExtension(Dproj), '.dpr') then
-    Dproj := TPath.ChangeExtension(Dproj, '.dproj');
+  Dproj := DprojDe(AProject);
   Dpr := TPath.ChangeExtension(Dproj, '.dpr');
   if not TFile.Exists(Dpr) then
   begin

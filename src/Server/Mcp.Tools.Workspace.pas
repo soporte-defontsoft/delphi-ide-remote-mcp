@@ -813,6 +813,19 @@ begin
   end;
 end;
 
+{ True si los argumentos de un commit o un tag traen el MENSAJE (-m, -m<texto>,
+  -am, --message, --message=): el mensaje va en "message", que llega a git por
+  -F byte a byte, y los dos juntos acababan en el exit 129 de git sin un
+  codigo nuestro (Hermes, validacion de la 1.16.0). }
+function MensajeEnArgsGit(const AArgs: string): Boolean;
+begin
+  for var Tok in TrocearArgs(AArgs) do
+    if Tok.StartsWith('-m') or SameText(Tok, '-am') or (Tok = '--message') or
+       Tok.StartsWith('--message=') then
+      Exit(True);
+  Result := False;
+end;
+
 { Las RUTAS de un comando de git que las lleva (stash push -- <rutas>,
   restore <rutas>): cada trozo desde ADesde es un fichero o carpeta DE ESTE
   repo, con su nombre tal cual (sin opciones ni comodines), y sale como
@@ -1612,6 +1625,8 @@ begin
   end
   else if Cmd = 'commit' then
   begin
+    if MensajeEnArgsGit(Params.Args) then
+      Exit(MsgText(SR_GIT_MENSAJE_EN_ARGS));
     if Params.Message.Trim = '' then
       Exit(MsgText(SR_GIT_COMMIT_NEEDS_MESSAGE));
     // -F <file>: the message reaches git byte-exact. Embedding it in the
@@ -1807,6 +1822,8 @@ begin
   end
   else if Cmd = 'tag' then
   begin
+    if MensajeEnArgsGit(Params.Args) then
+      Exit(MsgText(SR_GIT_MENSAJE_EN_ARGS));
     if Params.Message.Trim <> '' then
     begin
       // -F makes it annotated (like -m) and keeps quotes byte-exact;
@@ -2040,6 +2057,22 @@ begin
   begin
     if SameText(Cmd, 'diff') then
       Result := GitExito(MsgText(SN_GIT_DIFF_CLEAN), 0)
+    else if GitCommandIsQuery(Cmd, Params.Args, Params.Message) then
+    begin
+      // Una consulta vacia dice LO QUE RECIBIO git (sin la -C del repo ni la
+      // configuracion de la casa): "log -S<texto>" vacio parecia que el texto
+      // se perdia por el camino, y era que el fichero decia otra cosa (Hermes,
+      // validacion de la 1.16.0). Solo en las que leen: en las que escriben,
+      // callar ya es el exito y el eco repetiria URLs y valores.
+      Result := GitExito(MsgFmt(SN_GIT_SILENT_OK_FMT, [GitArgs.Trim]), 0);
+      if SameText(Cmd, 'log') then
+        for var Trozo in TrocearArgs(Params.Args) do
+          if Trozo.StartsWith('-S') or Trozo.StartsWith('-G') then
+          begin
+            Result := Result + #10 + MsgText(SN_GIT_PICKAXE_VACIO);
+            Break;
+          end;
+    end
     else
       Result := GitExito(MsgFmt(SN_GIT_SILENT_OK_FMT, [Cmd]), 0);
   end;

@@ -145,6 +145,17 @@ handshake.
   does not exist will not stream, and nobody tells you at build time.
 - A binary `.dfm` reads on the fly; editing it needs `to-text` first (see
   above). `.fmx` is always text.
+- SEE the form instead of imagining it: `delphi_designer command=preview
+  path=<form>` returns a PNG of what the IDE designer shows, in the same
+  answer. The loop is edit the `.dfm`/`.fmx` -> `lint` -> `preview` -> fix.
+  To place something, measure on the image and convert with its `frame`
+  (image pixels to form units; `Left`/`Top` in the file are relative to the
+  parent, whose rectangle `component=<parent>` gives as `componentRect`).
+  `state=PageControl1.ActivePage=TabSheet2` shows another page without
+  touching the file; `nonVisual` lists the non-visual components even when
+  they are not drawn (`nonvisual=true` draws them). From a service the
+  answer says `fidelity=print`: controls that paint their own way come out
+  native-looking, the layout is the real one.
 
 ## FMX styles
 
@@ -185,7 +196,7 @@ handshake.
 - `delphi_build target=Deploy` ships the binary to the host of its PAServer
   profile (the call's `profile`, else the project's `set-profile`), which
   has to be in `RemoteHosts`; to RUN it there use
-  `delphi_paserver command=remote-run name=<profile> project=<the .dproj>
+  `delphi_paserver command=remote-run profile=<profile> project=<the .dproj>
   args=... timeoutms=...`. It returns `exitCode` and the program's output.
   You never give a remote path: the server runs what THAT project deployed
   and nothing else on that machine (a script in the same folder is refused
@@ -195,7 +206,7 @@ handshake.
   expires it is NOT killed - you get `stillRunning: true` and its partial
   output; a GUI app stays up, ready to be driven with delphi_desktop. If a
   job is stuck or no longer wanted, the same answer's `killNote` gives the
-  call: `delphi_paserver command=kill name= project= job=<jobId>` - it
+  call: `delphi_paserver command=kill profile= project= job=<jobId>` - it
   stops only that job, on that machine.
 - Only the NATIVE binary that project deployed can run (the native
   launcher, McpRunJob, verifies the file signature). Remember
@@ -356,9 +367,9 @@ installer for a machine without the IDE) from a terminal INSIDE the user's
 session - never as a service, session 0 has no desktop - and open its port
 in that machine's firewall, Windows' or the antivirus suite's (measured:
 ESET's was the one blocking). From here: `test-connection host= port=`
-(no name) is the probe - unreachable with the machine answering a ping is
+(no profile) is the probe - unreachable with the machine answering a ping is
 a firewall - then `add-profile ... platform=Win64`, `test-connection
-name=`, and `delphi_desktop profile=` deploys the node on its first gesture.
+profile=`, and `delphi_desktop profile=` deploys the node on its first gesture.
 
 ## Android (`delphi_adb`) - eyes and hands
 

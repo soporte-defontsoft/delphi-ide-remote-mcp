@@ -6,6 +6,108 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Added
+
+- **`delphi_designer command=preview`: a PNG of what the IDE designer shows**
+  for a `.dfm` or `.fmx`, in the same answer. An agent edits the form, looks
+  at it, and corrects it, without running the application or taking the
+  desktop. Two renderers ship next to the server,
+  `DelphiFormRenderVcl.exe` and `DelphiFormRenderFmx.exe` (`src/Render`,
+  Win32): the form is built in design mode with the IDE's installed
+  packages loaded into THEM - a package that crashes takes the renderer
+  down, never the server - no code of the form runs, and nothing reaches
+  any screen. Inherited forms and inline frames are read from their own
+  files. `component` crops to one component (`componentRect` says where it
+  is), `state` sets a view state that is never written
+  (`PageControl1.ActivePage=TabSheet2`), `style` takes a `.vsf`, a `.style`
+  or a platform of the designer's Style list, and `nonvisual=true` draws
+  the non-visual components; `nonVisual` lists them always. The `frame` of
+  the image converts what the agent measures into form units, and
+  `fidelity` says how it was painted: `window` in an interactive session,
+  `print` from a service (controls that paint their own way come out
+  native-looking; layout and text are the real ones), `canvas` for FMX.
+  Classes no installed package registers are drawn as a named box
+  (`substituted`). Refusals before anything is launched: a value with a
+  double quote or a control character (`DSGN-065`), a platform style on a
+  VCL form (`DSGN-072`), a style that is neither a file nor a name
+  (`DSGN-073`); the renderer's own (`RENDER-0xx`) pass through as they are.
+  `preview` is not a read for a read-only credential: its PNG lands in the
+  workspace, as an `adb` screenshot does.
+
+### Changed
+
+- **`delphi_paserver` calls the PAServer profile `profile`**, as
+  `delphi_build`, `delphi_desktop` and `delphi_config` do: it was `name`
+  there, the same idea with two names, and an agent that learned one tool
+  tripped on the other (`PAS-051`). `name` still works (an alias, the same
+  answer); messages, descriptions and notes say `profile`. `reseat-sdk` and
+  `remove-sdk` take only `sdk`, as their description says: `name` also
+  named an SDK there, undocumented, and called `profile` it would have
+  named an SDK with a profile (`PAS-051` now).
+- **A `.dpr` (or `.dpk`) stands for its `.dproj` in every tool that takes a
+  project**: `delphi_build` refused it with `BUILD-016` ("not a Delphi
+  project") while `delphi_config` and `delphi_test` resolved it;
+  `remote-run`, `kill`, `output` and `delphi_desktop` resolve it too.
+- `delphi_config view` says `defaultPlatform`: the platform `delphi_build`
+  and `delphi_test` build without `platform`, from the same reader. There
+  was no way to know it without building.
+- **An empty git query says what git received.** A `delphi_git log
+  -S<text>` that found nothing answered "finished fine, prints nothing",
+  and an agent concluded the text was lost on the way - its file said
+  "Oben", not "Open". A read-only command that prints nothing now repeats
+  what git received (`git log --oneline -20 -SOpen`), and an empty `-S` or
+  `-G` adds what they look at and that they distinguish capitals
+  (`GIT-058`; `-i` ignores them).
+- **The message of a commit or a tag goes in `message`**: `-m` or
+  `--message` in `args` is refused with `GIT-059`; together with `message`
+  it ended in git's own exit 129, with no code of ours. `GIT-014` says that
+  the `path` and `ref` of `worktree` are parameters, never inside `args`.
+- **`delphi_report` says what it saved**: `REPORT-005` gives the characters
+  of the message and how it ends, so a report cut on the way is seen at
+  once (a client cut one at 4,000 characters).
+- **`delphi_help tasks` says what `tools/list` leaves out, and why**: no
+  vault in the workspace (the five `vault_*` tools), a read-only vault, the
+  workspace's tool profile. An agent counted 37 tools where the
+  documentation says 42 and believed they had been merged.
+
+### Internal
+
+- Where these came from: the nightly validation of 1.16.0 by an independent
+  agent on the 13.2 machine, read for where it got confused rather than for
+  what failed. Two of its reports did not stand when measured (the empty
+  `git log -S`: its file said "Oben"; `-G` reading a dot literally: it does
+  not).
+- One namer for the `.dproj` of a `.dpr`/`.dpk` (`DprojDe`, in
+  `Lsp.Dproj`): the rule was written by hand in ten places, and
+  `test_paisaje` now watches it.
+- One rule for what `tools/list` leaves out, now with its reason
+  (`MotivoToolOculta`); `ToolHiddenFromList` asks it.
+- New battery `test_ayudas_1170` (H1-H12), red against 1.16.0 except its
+  control.
+- `preview` (RenderForm, measured in a sandbox on 6 and 7 October before it
+  came in): `Lsp.FormRender` composes the renderer's command line in one
+  place and reads its answer as the inverse of `FormRenderProtocolo.inc`,
+  which both sides include; `test_paisaje` watches both the command line
+  and the renderer's name. The renderers run OUTSIDE `delphi_test`'s
+  container (no window can be created there: measured, 1 of 20), with the
+  server's time limit and a watchdog of their own a little earlier. The
+  PNG is always drawn in the server's own temp and cropped there
+  (`RecortaPng`); an `out=` gets it afterwards through `ColocaCaptura`, now
+  shared with `delphi_desktop`, which wrote that step by hand.
+  `DeliverCapture` takes the tool's own notes (a designer image is measured
+  to write the `.dfm`, not to tap). The renderers have their message
+  catalog (`FormRender.Textos`, area `RENDER`) under `test_catalogo`.
+- Tests for `preview` in three layers: `test_designer_preview` (through
+  the server, by pixel), `LspTests.FormRender` in the DUnitX suite (the
+  protocol, the command line and its refusals, the non-visual criterion)
+  and `src/Render/Pruebas`, a MANUAL DUnitX battery that launches the
+  renderers from the user's session (the watchdog's exit code, usage,
+  forced `print`), run after touching a renderer and before a release.
+  `mcp_cliente` gains one table of helpers for `run_all` and `copia_exe`
+  and a PNG reader for batteries that look inside a capture.
+
 ## [1.16.0] - 2026-10-06
 
 A build is what the IDE would build: only a platform the project declares,

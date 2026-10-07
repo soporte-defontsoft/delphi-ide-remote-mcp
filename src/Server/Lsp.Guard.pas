@@ -64,6 +64,14 @@ uses
 
 { '' = allowed; otherwise the rejection message to return to the agent.
   This is the WRITE jail: only the configured workspace roots. }
+type
+  { POR QUE tools/list deja fuera una tool (moNinguna = la anuncia). }
+  TMotivoOculta = (moNinguna, moSinVault, moVaultLectura, moCredencialLectura, moPerfil);
+
+{ La regla de lo que tools/list anuncia, con su motivo: delphi_help lo dice
+  (un agente contaba 37 tools donde la documentacion dice 42 y creyo que se
+  habian fusionado: la VM no declara vault; Hermes, validacion de la 1.16.0). }
+function MotivoToolOculta(const AToolName: string): TMotivoOculta;
 { True = leave this tool OUT of tools/list under the active [Tools] profile
   or allowlist. Listing only - the tool stays callable; permissions are
   ToolCallDenied's job. delphi_help/messages/report always stay listed. }
@@ -356,6 +364,7 @@ const
   // acumulaban sin consumirse.
   CAPTURE_SUB_DESKTOP = 'desktop';
   CAPTURE_SUB_ANDROID = 'android';
+  CAPTURE_SUB_DESIGNER = 'designer'; // delphi_designer preview (1.17.0)
 
 function IsAgentCapture(const APath: string): Boolean;
 { Una captura es NUESTRA si esta donde nuestro nombrador la deja: bajo la
@@ -4005,7 +4014,7 @@ end;
   a charset that admits no shell metacharacter. '' = clean. }
 { The identifier rule for a PAServer profile name: it becomes a file name in
   %APPDATA% and travels on command lines (paclient and msbuild /p:Profile=).
-  ONE definition - PAServerArgDenied (name) and BuildArgDenied (profile) both
+  ONE definition - PAServerArgDenied and BuildArgDenied ("profile" in both) both
   read it, so the two mouths cannot drift. True = refuse. }
 function BadProfileName(const V: string): Boolean;
 var
@@ -4136,7 +4145,7 @@ begin
     Exit;
   end;
   // "profile" is a PAServer profile name reaching the msbuild command line
-  // (/p:Profile=) - the same identifier rule as delphi_paserver's "name",
+  // (/p:Profile=) - the same identifier rule as delphi_paserver's "profile",
   // ONE definition for both mouths.
   V := ArgStr(AArguments, 'profile').Trim;
   if (V <> '') and BadProfileName(V) then
@@ -4176,9 +4185,17 @@ var
   N: Integer;
 begin
   Result := '';
-  V := ArgStr(AArguments, 'name').Trim;
-  if (V <> '') and BadProfileName(V) then
-    Exit(MsgFmt(SR_PASERVER_NAME_FMT, [V]));
+  // El perfil se llama "profile" desde la 1.17.0 ("name" es su alias, y el
+  // alias se aplica ANTES de esta puerta): la puerta leia la clave cruda
+  // "name", y al renombrar el parametro un nombre con espacios y simbolos
+  // paso y llego a ser un .profile de verdad en el APPDATA (medido por
+  // test_paserver, 7-oct-2026). Las dos claves, por si el orden cambia.
+  for var Clave in ['profile', 'name'] do
+  begin
+    V := ArgStr(AArguments, Clave).Trim;
+    if (V <> '') and BadProfileName(V) then
+      Exit(MsgFmt(SR_PASERVER_NAME_FMT, [V]));
+  end;
   V := ArgStr(AArguments, 'host').Trim;
   if V <> '' then
     for C in V do
@@ -4227,7 +4244,7 @@ end;
 procedure ApplyArgAliases(const AToolName: string; AArguments: TJSONObject);
 const
   // tool, alias, real
-  Aliases: array [0 .. 24, 0 .. 2] of string = (
+  Aliases: array [0 .. 25, 0 .. 2] of string = (
     // "path" is what almost every other tool calls it; delphi_list calls it
     // "root" and delphi_projects too. Each spelling cost a wasted call
     // (measured 2026-08-25), and the fix is free: accept both.
@@ -4260,7 +4277,12 @@ const
     ('delphi_edit', 'to', 'toline'),
     ('delphi_edit', 'endline', 'toline'),
     ('delphi_textedit', 'to', 'toline'),
-    ('delphi_textedit', 'endline', 'toline'));
+    ('delphi_textedit', 'endline', 'toline'),
+    // El perfil de PAServer es "profile" en delphi_build, delphi_desktop y
+    // delphi_config, y era "name" en delphi_paserver: el mismo concepto con
+    // dos nombres (Hermes, validacion de la 1.16.0, PAS-051). Se llama
+    // "profile" en todas desde la 1.17.0; el nombre viejo sigue valiendo.
+    ('delphi_paserver', 'name', 'profile'));
 var
   I: Integer;
   P: TJSONPair;
@@ -4764,7 +4786,9 @@ begin
   // los listados leen; add-profile escribe un perfil en el servidor y
   // test-connection marca al destino con su credencial guardada
   AnadeAcceso('delphi_paserver', atMixta, ['platforms', 'packages', 'profiles']);
-  // to-text / to-binary reescriben el .dfm/.fmx; el resto mira
+  // to-text / to-binary reescriben el .dfm/.fmx; el resto mira. preview NO
+  // es lectura: deja su PNG en la jaula (la casa de entregables, que no
+  // mira el modo de la credencial), como el screenshot de adb (r11a H5)
   AnadeAcceso('delphi_designer', atMixta, ['info', 'prop', 'tree', 'get', 'lint',
     'check-binding', 'binding', 'layout']);
   // mirar el dispositivo (lista, log) no cambia nada; screenshot y logcat
@@ -5322,7 +5346,7 @@ begin
   Result := SameText(TPath.GetExtension(Full), '.png') and
     EnTemporal(Full) and
     MatchText(TPath.GetFileName(TPath.GetDirectoryName(Full)),
-      [CAPTURE_SUB_DESKTOP, CAPTURE_SUB_ANDROID]);
+      [CAPTURE_SUB_DESKTOP, CAPTURE_SUB_ANDROID, CAPTURE_SUB_DESIGNER]);
 end;
 
 function CapturaConsumible(const APath: string): Boolean;
@@ -7844,7 +7868,7 @@ begin
 end;
 
 
-function ToolHiddenFromList(const AToolName: string): Boolean;
+function MotivoToolOculta(const AToolName: string): TMotivoOculta;
 const
   // the mailbox and the manual never disappear: they are how an agent asks
   // for help and how it reports that something is missing
@@ -7865,7 +7889,7 @@ var
 begin
   N := AToolName.Trim.ToLower;
   if MatchText(N, ALWAYS) then
-    Exit(False);
+    Exit(moNinguna);
   // Las vault_* se registran si CUALQUIER workspace declara vault, pero solo
   // se anuncian donde sirven: ninguna a un workspace sin vault, y las de
   // escritura (las atEscritura de LA tabla de accesos) no a uno de solo
@@ -7874,28 +7898,42 @@ begin
   // DECLARADO, sin mirar el disco: esto corre en cada tools/list, y un vault
   // en una letra de red caida lo paraba (revision del 6-oct-2026); si la
   // carpeta no esta, la llamada lo dice.
-  if N.StartsWith('vault_') and
-     ((VaultPath = '') or
-      ((AccesoDeTool(N).Acceso = atEscritura) and not VaultModoEscritura)) then
-    Exit(True);
+  if N.StartsWith('vault_') and (VaultPath = '') then
+    Exit(moSinVault);
+  if N.StartsWith('vault_') and (AccesoDeTool(N).Acceso = atEscritura) and
+     not VaultModoEscritura then
+    Exit(moVaultLectura);
   // A una credencial de SOLO LECTURA no se le anuncian las tools enteras de
   // escritura: la puerta se las niega siempre (LecturaDenegada) y solo
   // ocupaban sitio. Las mixtas se quedan, sus lecturas valen (David,
   // 6-oct-2026). Lo mismo que arriba: siguen llamables y la llamada dice por que.
   if IsReadOnlyNow and (AccesoDeTool(N).Acceso = atEscritura) then
-    Exit(True);
+    Exit(moCredencialLectura);
   if Length(GToolsOnly) > 0 then
-    Exit(not MatchText(N, GToolsOnly));
+  begin
+    if MatchText(N, GToolsOnly) then
+      Exit(moNinguna);
+    Exit(moPerfil);
+  end;
   // a workspace may carry its own profile; it wins over the global one
   Prof := GToolsProfile;
   if HasActiveWS and
      (ActiveWS.Profile <> '') then
     Prof := ActiveWS.Profile;
   if Prof = 'reader' then
-    Exit(not MatchText(N, READER));
-  if Prof = 'coder' then
-    Exit(MatchText(N, DEPLOY_ONLY));
-  Result := False; // full, or an unknown profile name: hide nothing
+  begin
+    if MatchText(N, READER) then
+      Exit(moNinguna);
+    Exit(moPerfil);
+  end;
+  if (Prof = 'coder') and MatchText(N, DEPLOY_ONLY) then
+    Exit(moPerfil);
+  Result := moNinguna; // full, or an unknown profile name: hide nothing
+end;
+
+function ToolHiddenFromList(const AToolName: string): Boolean;
+begin
+  Result := MotivoToolOculta(AToolName) <> moNinguna;
 end;
 
 function EnmascaraSalvoContenido(const ATexto, AEmpiezaPor: string): string;

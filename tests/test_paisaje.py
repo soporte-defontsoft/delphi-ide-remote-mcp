@@ -25,7 +25,9 @@ from mcp_cliente import check
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(REPO, 'src')
-FUERA = ('__delphi-patch', '__history', '__recovery', 'Compiled', 'UnitTests')
+# UnitTests y Pruebas (la bateria manual de src/Render): una prueba calcula lo
+# esperado POR SU CUENTA, y la de los renderizadores compone su orden a mano
+FUERA = ('__delphi-patch', '__history', '__recovery', 'Compiled', 'UnitTests', 'Pruebas')
 LANZA = r'\b(?:RunCaptured(?:In|EnContenedor)?|RunDetached|CreateProcess[AW]?|ShellExecute\w*)\s*\('
 
 # (nombre, formato, casas: [(fichero, funcion o '*' = todo el fichero)], por que)
@@ -39,7 +41,7 @@ REGLAS = [
       ('Lsp.ProcessLaunch.pas', '*'), ('Lsp.RemoteRun.pas', 'Paclient'),
       ('Lsp.Styles.pas', 'CorreStyleConvert'), ('Mcp.Tools.Styles.pas', 'BuildStyles'),
       ('Lsp.TestRunner.pas', 'CorreEnContenedor'), ('Mcp.Tools.Adb.pas', 'RunAdb'),
-      ('Mcp.Tools.Workspace.pas', 'GitCorre')],
+      ('Mcp.Tools.Workspace.pas', 'GitCorre'), ('Lsp.FormRender.pas', 'CorreRender')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
     ('lanzar el conversor de estilos', LANZA + r""".*'"' \+ A?Exe \+""",
      [('Lsp.Styles.pas', 'CorreStyleConvert')],
@@ -61,6 +63,16 @@ REGLAS = [
      'VirtualUnitOf la escribe y EmpiezaPorUnidadVirtual la prueba: nadie la compone ni la prueba a mano'),
     ('GetTempPath suelto', r'\bGetTempPath\w*\s*\(', [],
      'lo temporal del servidor va en su casa (ServerTempDir), nunca en el %TEMP% del sistema'),
+    ('el .dproj de un .dpr', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.dproj'\)",
+     [('Lsp.Dproj.pas', 'DprojDe')],
+     'DprojDe (1.17.0: diez a mano, y delphi_build rechazaba el .dpr que delphi_config resolvia)'),
+    ('el exe de un renderizador de forms', r"'DelphiFormRender",
+     [('Lsp.FormRender.pas', 'FormRenderExe')],
+     'FormRenderExe (1.17.0, delphi_designer preview): el nombre del ayudante se compone en UN sitio'),
+    ('la orden del renderizador de forms', r"'[^']*--(?:path|state|component|nonvisual)\b",
+     [('Lsp.FormRender.pas', 'ComponeOrdenDeRender'), ('FormRender.Comun.pas', 'ParseaArgumentos'),
+      ('FormRender.Textos.pas', '*')],
+     'ComponeOrdenDeRender la escribe y ParseaArgumentos del ayudante la lee (1.17.0)'),
 ]
 
 
@@ -142,6 +154,9 @@ PLANTADO = {
     '__delphi-patch': "  D := TPath.Combine(Raiz, '__delphi-patch');",
     "la forma 'srvX:'": "  U := 'srv' + LowerCase(Letra) + ':';",
     'GetTempPath suelto': "  T := TPath.GetTempPath();",
+    'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
+    'el exe de un renderizador de forms': "  E := ServerDir('DelphiFormRenderVcl.exe');",
+    'la orden del renderizador de forms': "  O := '\"' + Exe + '\" --path \"' + P + '\"';",
 }
 for regla in REGLAS:
     nombre = regla[0]

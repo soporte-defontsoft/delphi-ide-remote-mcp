@@ -61,7 +61,8 @@ uses
   Winapi.Windows,
   MCPServer.Registration,
   MCPServer.Logger,
-  Lsp.Guard;      // CrearCarpeta: crear la carpeta tolerando la carrera
+  Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
+  System.Character;
 
 const
   REPORTS_DIR = 'reports';
@@ -191,9 +192,22 @@ begin
 
   // The confirmation names the folder too, so the agent knows where its
   // history accumulates.
+  // Y dice cuanto guardo y como acaba: el informe final de Hermes llego
+  // cortado a 4.000 caracteres por SU lado (validacion de la 1.16.0) y la
+  // respuesta solo decia "guardado"; viendo el final, el corte se ve.
+  var Guardado := Params.Message.TrimRight;
+  var Cola := Guardado;
+  if Length(Cola) > 60 then
+  begin
+    Cola := Copy(Cola, Length(Cola) - 59, 60);
+    if (Cola <> '') and Cola[1].IsLowSurrogate then // no partir un par UTF-16
+      Delete(Cola, 1, 1);
+    Cola := '...' + Cola;
+  end;
+  Cola := Cola.Replace(#13, ' ').Replace(#10, ' ');
   Result := MsgFmt(SN_REPORT_OK_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path),
-     SERVER_VERSION]) + KindNote;
+     SERVER_VERSION, Length(Guardado), Cola]) + KindNote;
 end;
 
 initialization

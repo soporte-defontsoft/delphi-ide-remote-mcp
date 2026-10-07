@@ -12,6 +12,7 @@ Since 2026-09-24 every project of the repo has its own folder under `src/`:
 |---|---|
 | `Server/` | the server (this folder) |
 | `StyleConvert/` | `DelphiStyleConvert`, the VCL/FMX style converter `delphi_styles` drives |
+| `Render/` | `DelphiFormRenderVcl` / `DelphiFormRenderFmx`, the form renderers `delphi_designer preview` drives (`Lsp.FormRender` here launches them and reads their answer) |
 | `UnitTests/` | `LspUnitTests`, the DUnitX suite of the engine, run by `delphi_test` |
 | `DesktopNode/` | `McpDesktopNode`, the desktop node for Linux and Windows targets |
 | `RunJob/` | `McpRunJob`, the native launcher PAServer starts for every remote job |

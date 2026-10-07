@@ -1,0 +1,29 @@
+object FrameF: TFrameF
+  Size.Width = 300.000000000000000000
+  Size.Height = 120.000000000000000000
+  Size.PlatformDefault = False
+  object LabelF: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 200.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Etiqueta del frame FMX'
+  end
+  object EditF: TEdit
+    Position.X = 8.000000000000000000
+    Position.Y = 32.000000000000000000
+    Size.Width = 200.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'texto del frame'
+  end
+  object RectF: TRectangle
+    Position.X = 8.000000000000000000
+    Position.Y = 64.000000000000000000
+    Size.Width = 280.000000000000000000
+    Size.Height = 40.000000000000000000
+    Size.PlatformDefault = False
+    Fill.Color = xFFC0E0FF
+  end
+end

@@ -35,7 +35,7 @@ type
   TDelphiPAServerParams = class
   private
     FCommand: string;
-    FName: string;
+    FProfile: string;
     FHost: string;
     FPort: string;
     FPassword: string;
@@ -51,7 +51,7 @@ type
     [SchemaDescription(SP_PASERVER_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_PASERVER_NAME)]
-    property Name: string read FName write FName;
+    property Profile: string read FProfile write FProfile;
     [SchemaDescription(SP_PASERVER_HOST)]
     property Host: string read FHost write FHost;
     [SchemaDescription(SP_PASERVER_PORT)]
@@ -804,9 +804,9 @@ var
   ExitCode: Cardinal;
   Return: TJSONObject;
 begin
-  ProfName := Params.Name.Trim;
+  ProfName := Params.Profile.Trim;
   Host := Params.Host.Trim;
-  if ProfName = '' then Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['name']));
+  if ProfName = '' then Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['profile']));
   if Host = '' then Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['host']));
   if Params.Password = '' then Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['password']));
   // Creating a profile IS declaring where this machine may connect, so it
@@ -953,7 +953,7 @@ var
   Info: TRadStudioInfo;
   ProfName, ProfileFile: string;
 begin
-  ProfName := Params.Name.Trim;
+  ProfName := Params.Profile.Trim;
   if ProfName = '' then
     Exit(MsgText(SR_PASERVER_NEED_NAME));
   if not TRegEx.IsMatch(ProfName, '^[A-Za-z0-9_.-]+$') then
@@ -988,7 +988,7 @@ var
   ExitCode: Cardinal;
   Return: TJSONObject;
 begin
-  ProfName := Params.Name.Trim;
+  ProfName := Params.Profile.Trim;
   if ProfName = '' then
   begin
     // no profile named: with a host this is the raw reachability probe
@@ -1121,8 +1121,9 @@ end;
 function TrabajoDenegado(const Params: TDelphiPAServerParams;
   const ANecesita: string; AConJob: Boolean; out AProf, AProj: string): string;
 begin
-  AProf := Params.Name.Trim;
-  AProj := Params.Project.Trim;
+  AProf := Params.Profile.Trim;
+  // un .dpr vale por su .dproj, como en delphi_build (DprojDe)
+  AProj := DprojDe(Params.Project.Trim);
   if AllowRemoteRun and ((AProf = '') or (AProj = '') or
      (AConJob and (Params.Job.Trim = ''))) then
     Exit(ANecesita);
@@ -1224,7 +1225,7 @@ var
   Sb: TStringBuilder;
   LibDirs: TStringList;
 begin
-  ProfName := Params.Name.Trim;
+  ProfName := Params.Profile.Trim;
   if ProfName = '' then
     Exit(MsgText(SR_PASERVER_NEED_NAME));
   PaClient := FindPaClient(Info);
@@ -1535,9 +1536,9 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_PASERVER_NO_PACLIENT));
+  // el SDK lo nombra "sdk", como dice su descripcion: "name" valia de
+  // reserva y, llamado "profile" (1.17.0), nombraria un SDK con un perfil
   Nombre := SoloAlfanumerico(Params.Sdk);
-  if Nombre = '' then
-    Nombre := SoloAlfanumerico(Params.Name);
   if Nombre <> '' then
     Ficheros := [RutaDeSdk(Info.Version, Nombre)]
   else
@@ -1598,9 +1599,7 @@ var
   R: TRegistry;
   Return: TJSONObject;
 begin
-  Nombre := SoloAlfanumerico(Params.Sdk);
-  if Nombre = '' then
-    Nombre := SoloAlfanumerico(Params.Name);
+  Nombre := SoloAlfanumerico(Params.Sdk); // el SDK lo nombra "sdk" (ver reseat-sdk)
   if Nombre = '' then
     Exit(MsgText(SR_PASERVER_NEED_SDK));
   Info := DiscoverRadStudio;
@@ -1663,16 +1662,16 @@ begin
   var Suyos: string;
   var Sobra := ParametroQueNoVa(IfThen(Cmd = '', 'platforms', Cmd), [
       'platforms', '', 'packages', '', 'profiles', '', 'reseat', '',
-      'add-profile', 'name host port password platform',
-      'remove-profile', 'name',
-      'test-connection', 'name host port',
-      'remote-run', 'name project job exe args timeoutms',
-      'kill', 'name project job',
-      'output', 'name project job',
-      'get-sdk', 'name sdk active',
-      'reseat-sdk', 'name sdk',
-      'remove-sdk', 'name sdk'],
-    ['name', Params.Name, '', 'host', Params.Host, '', 'port', Params.Port, '',
+      'add-profile', 'profile host port password platform',
+      'remove-profile', 'profile',
+      'test-connection', 'profile host port',
+      'remote-run', 'profile project job exe args timeoutms',
+      'kill', 'profile project job',
+      'output', 'profile project job',
+      'get-sdk', 'profile sdk active',
+      'reseat-sdk', 'sdk',
+      'remove-sdk', 'sdk'],
+    ['profile', Params.Profile, '', 'host', Params.Host, '', 'port', Params.Port, '',
      'password', Params.Password, '', 'platform', Params.Platform, '',
      'project', Params.Project, '', 'exe', Params.Exe, '', 'args', Params.Args, '',
      'job', Params.Job, '', 'sdk', Params.Sdk, '', 'active', Params.Active, '',

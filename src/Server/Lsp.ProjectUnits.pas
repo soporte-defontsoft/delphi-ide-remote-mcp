@@ -2722,14 +2722,6 @@ begin
   Result := AllTagAttr(PatchLoadText(AGroup, Enc), 'Projects', 'Include');
 end;
 
-{ El .dproj de lo que nombra el agente (el .dproj, o su .dpr/.dpk al lado). }
-function DprojDe(const AProject: string): string;
-begin
-  Result := TPath.GetFullPath(AProject);
-  if MatchText(TPath.GetExtension(Result), ['.dpr', '.dpk']) then
-    Result := TPath.ChangeExtension(Result, '.dproj');
-end;
-
 function MismoProyecto(const AGroup, AInclude, AAbs: string): Boolean;
 begin
   try
@@ -2761,7 +2753,7 @@ var
   end;
 
 begin
-  Proj := DprojDe(AProject);
+  Proj := TPath.GetFullPath(DprojDe(AProject));
   if not TFile.Exists(Proj) then
     Exit(MsgFmt(SR_GRUPO_SIN_DPROJ_FMT, [TPath.GetFileName(Proj)]));
   for var I in ProyectosDeGrupo(AGroup) do
@@ -2876,7 +2868,7 @@ var
   end;
 
 begin
-  Proj := DprojDe(AProject);
+  Proj := TPath.GetFullPath(DprojDe(AProject));
   Texto := PatchLoadText(AGroup, Enc);
   Cambios := [];
   // 1. el item <Projects> (con su linea)

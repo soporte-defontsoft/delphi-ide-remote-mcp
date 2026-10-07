@@ -62,10 +62,10 @@ os.makedirs(CLEAN)
 EXE = os.path.join(CLEAN, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
 # The helper executables travel WITH the server (delphi_styles needs the
-# text<->binary converter beside it); settings.ini deliberately does not.
-for helper in ('DelphiStyleConvert.exe',):  # el Tray.exe era un fosil de agosto
-    # el conversor tiene su propio proyecto y carpeta desde la reorganizacion del 24-sep
-    _h = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', helper)
+# text<->binary converter beside it, delphi_designer preview the two form
+# renderers); settings.ini deliberately does not. La tabla es UNA, en
+# mcp_cliente (el Tray.exe era un fosil de agosto).
+for helper, _h in mc.AYUDANTES.items():
     if os.path.exists(_h):
         shutil.copy(_h, os.path.join(CLEAN, helper))
 

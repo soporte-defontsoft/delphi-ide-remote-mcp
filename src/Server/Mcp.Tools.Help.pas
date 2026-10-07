@@ -187,6 +187,23 @@ begin
     // escritura no se le anuncian, y la tabla se las nombraria
     if IsReadOnlyNow then
       Result := Result + MsgText(SF_HELP_TASKS_SOLO_LECTURA);
+    // y lo que falta y POR QUE, con la misma regla (MotivoToolOculta): sin
+    // decirlo, un agente conto 37 tools donde la documentacion dice 42 y creyo
+    // que se habian fusionado (Hermes, validacion de la 1.16.0: la VM no
+    // declara vault). vault_read se pregunta aunque no este registrada: sin
+    // vault en ningun workspace no se registra, y es justo cuando falta.
+    case MotivoToolOculta('vault_read') of
+      moSinVault: Result := Result + MsgText(SF_HELP_TASKS_SIN_VAULT);
+    else
+      if MotivoToolOculta('vault_append') = moVaultLectura then
+        Result := Result + MsgText(SF_HELP_TASKS_VAULT_LECTURA);
+    end;
+    var PorPerfil := '';
+    for var T in TMCPRegistry.GetToolNames do
+      if MotivoToolOculta(T) = moPerfil then
+        PorPerfil := PorPerfil + IfThen(PorPerfil <> '', ', ', '') + T;
+    if PorPerfil <> '' then
+      Result := Result + MsgFmt(SF_HELP_TASKS_PERFIL_FMT, [PorPerfil]);
   end
   else if MatchText(Cmd, ['conventions', 'rules', 'reglas']) then
     Result := MsgText(SN_HELP_CONVENTIONS)

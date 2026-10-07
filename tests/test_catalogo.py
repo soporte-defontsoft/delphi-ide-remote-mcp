@@ -48,6 +48,13 @@ MLD = os.path.join(mc.REPO, 'src', 'DesktopNode', 'Mld.Textos.pas')
 CN = constantes(open(MLD, encoding='utf-8-sig').read())
 check('el catalogo del nodo se lee (Mld.Textos)', len(CN) > 30, len(CN))
 C.update({n + '@nodo': t for n, t in CN.items()})
+# el de los renderizadores de forms (src/Render, delphi_designer preview,
+# 1.17.0): tampoco enlazan Lsp.Texts; mismas reglas, y un id no se repite
+# entre los tres catalogos
+REN = os.path.join(mc.REPO, 'src', 'Render', 'FormRender.Textos.pas')
+CR = constantes(open(REN, encoding='utf-8-sig').read())
+check('el catalogo de los renderizadores se lee (FormRender.Textos)', len(CR) > 15, len(CR))
+C.update({n + '@render': t for n, t in CR.items()})
 
 m = re.search(r"MSG_TAG_REGEX\s*=\s*'((?:[^']|'')*)'", src)
 check('C1 el patron de las baterias es el del servidor (MSG_TAG_REGEX)',
@@ -143,8 +150,10 @@ FUENTES = [f for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas'))
            glob.glob(os.path.join(mc.REPO, 'vendor', 'src', '**', '*.pas'), recursive=True) +
            glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.pas')) +
            glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.dpr')) +
-           glob.glob(os.path.join(mc.REPO, 'src', 'RunJob', '*.dpr'))
-           if '__' not in f and not f.endswith(('Lsp.Texts.pas', 'Mld.Textos.pas'))]
+           glob.glob(os.path.join(mc.REPO, 'src', 'RunJob', '*.dpr')) +
+           glob.glob(os.path.join(mc.REPO, 'src', 'Render', '*.pas')) +
+           glob.glob(os.path.join(mc.REPO, 'src', 'Render', '*.dpr'))
+           if '__' not in f and not f.endswith(('Lsp.Texts.pas', 'Mld.Textos.pas', 'FormRender.Textos.pas'))]
 LIMPIAS = {f: mc.pascal_sin_comentarios(open(f, encoding='utf-8-sig', errors='replace').read())
            for f in FUENTES}
 

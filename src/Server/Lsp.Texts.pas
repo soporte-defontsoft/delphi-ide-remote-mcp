@@ -438,6 +438,13 @@ const
   SN_GIT_SILENT_OK_FMT =
     '[GIT-002] (git %s finished fine, and it prints nothing when it ' +
     'succeeds. It is not a lost answer: it is this command''s success.)';
+  { Un log -S/-G vacio: que miran y como comprobar el texto. -S y -G
+    distinguen mayusculas y -i las iguala (medido el 7-oct-2026: -Srelease
+    126 commits, con -i 185). }
+  SN_GIT_PICKAXE_VACIO =
+    '[GIT-058] -S and -G look for exactly that text, capitals included, in ' +
+    'what each commit adds or removes: no commit does. -i ignores capitals; ' +
+    'delphi_search shows where a text is today.';
 
   SP_LSP_FILE_PATH =
     'A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a ' +
@@ -1274,7 +1281,7 @@ const
     '[BUILD-012] The deploy could not rewrite the project folder on the ' +
     'target: msbuild hit E0017 on the watcher of remote-run job %s, ' +
     'which is alive because THAT PROGRAM IS STILL RUNNING there. Stop it ' +
-    'first (delphi_paserver command=kill name=%s project=%s job=%s) and ' +
+    'first (delphi_paserver command=kill profile=%s project=%s job=%s) and ' +
     'deploy again. Careful: this failed deploy may already have deleted ' +
     'the job''s .pid on the target; if kill then answers JOB-006 (no job ' +
     'alive), close the program on the target by hand (delphi_desktop) ' +
@@ -1402,7 +1409,7 @@ const
     repeat. }
   SR_BUILD_NOT_A_PROJECT_FMT =
     '[BUILD-016 INVALID_PARAM] "%s" is not a Delphi project. ' +
-    'delphi_build compiles a .dproj. Find the project''s .dproj with ' +
+    'delphi_build compiles a .dproj, or the .dpr/.dpk next to one. Find the project with ' +
     'delphi_projects, or look at the ones in a folder with delphi_list.';
 
   { El .dproj no se pudo LEER para comprobar que no ejecuta nada: se
@@ -1662,30 +1669,30 @@ const
     '| packages (PAServer installers to download and run on the target) | ' +
     'profiles (connection profiles and SDKs) | reseat (write the missing ' +
     'IDE seats of profiles already on disk; no PAServer, no password) | ' +
-    'add-profile (name, host, password; optional port, platform. The host ' +
+    'add-profile (profile, host, password; optional port, platform. The host ' +
     'must be allowed in the workspace''s RemoteHosts: registering a profile ' +
     'IS declaring where this machine may connect. An existing name is ' +
     'refused, never overwritten; the profile shows in the IDE too) | ' +
-    'remove-profile (by name, from the IDE too; profiles live outside the ' +
-    'workspace, so there is no trash) | test-connection (with name: full ' +
-    'handshake; with host+port and no name: raw TCP probe, same host rule) ' +
-    '| get-sdk (pull the sysroot from the PAServer of profile "name" into ' +
+    'remove-profile (that profile, from the IDE too; profiles live outside the ' +
+    'workspace, so there is no trash) | test-connection (with profile: full ' +
+    'handshake; with host+port and no profile: raw TCP probe, same host rule) ' +
+    '| get-sdk (pull the sysroot from the PAServer of "profile" into ' +
     'a folder of its own named after the target distro, registered for ' +
     'delphi_build AND the IDE SDK Manager; minutes) | reseat-sdk (rewrite ' +
     'the IDE seat of an SDK already on disk, no network; "sdk" names one, ' +
     'none = all) | remove-sdk (its .sdk file and IDE seat; the sysroot ' +
     'stays on disk and the answer says where) | remote-run (run what THAT ' +
-    'project deployed on the target of profile "name" - nothing else - and ' +
+    'project deployed on the target of "profile" - nothing else - and ' +
     'return exit code and output; nothing to install, PAServer runs it. On ' +
     'timeout it is NOT killed: a program with a window stays up, you get ' +
     'its partial output and stillRunning=true) | kill (stop a job a ' +
-    'remote-run left running: name, project and its job id; only a job of ' +
+    'remote-run left running: profile, project and its job id; only a job of ' +
     'THAT project on THAT machine) | output (what a running job wrote ' +
     'SINCE its answer: so far while it lives; once it ended, all of it ' +
-    'with its exit code, and then it is deleted on the target; same name, ' +
+    'with its exit code, and then it is deleted on the target; same profile, ' +
     'project and job as kill)';
   SP_PASERVER_PROJECT =
-    'remote-run, kill, output: the ABSOLUTE path of the .dproj whose ' +
+    'remote-run, kill, output: the ABSOLUTE path of the .dproj (or its .dpr) whose ' +
     'DEPLOYED program it is (not its name); the server derives the path on ' +
     'the target (<user>-<profile>/<Project>/<Project>, what target=Deploy ' +
     'wrote) - nothing else there can be run.';
@@ -1699,11 +1706,12 @@ const
     'remote-run: max milliseconds to wait for the program (default 30000, ' +
     'max 300000)';
   SP_PASERVER_NAME =
-    'Profile name (letters, digits, "_", "-"): add-profile creates it, ' +
-    'test-connection dials it';
+    'The PAServer connection profile, by name (letters, digits, "_", "-") - ' +
+    'the same "profile" delphi_build and delphi_desktop take: add-profile ' +
+    'creates it; test-connection, get-sdk, remote-run, kill and output use it';
   SP_PASERVER_HOST =
     'Host or IP where the target PAServer listens (add-profile, or ' +
-    'test-connection without name for a raw TCP probe)';
+    'test-connection without profile for a raw TCP probe)';
   SP_PASERVER_PORT =
     'Port of the target PAServer (add-profile / test-connection). ' +
     'Default: 64211';
@@ -1730,11 +1738,11 @@ const
     '. A final line break is dropped; each extra one adds a blank line. ' +
     'Same rule for one-line and block anchors.';
   SP_PASERVER_JOB =
-    'kill / output: the "jobId" a remote-run answer gave you; with name ' +
+    'kill / output: the "jobId" a remote-run answer gave you; with profile ' +
     'and project (the same .dproj path) - only a job of THAT project on ' +
     'THAT machine.';
   SR_PASERVER_JOB_NEEDS_FMT =
-    '[PAS-002 INVALID_PARAM] %s needs "name" (the profile), "project" (the ' +
+    '[PAS-002 INVALID_PARAM] %s needs "profile", "project" (the ' +
     '.dproj of that remote-run) and "job" (the jobId it returned). Only ' +
     'a job this server started for that project on that machine is ' +
     'touched.';
@@ -1743,7 +1751,7 @@ const
     '(date-time-fragment, as remote-run returns it).';
   SN_REMOTERUN_KILL_FMT =
     '[RUN-002] If it hung or you no longer need it: delphi_paserver ' +
-    'command=kill name=%s project=<the same .dproj> job=%s. It kills ' +
+    'command=kill profile=%s project=<the same .dproj> job=%s. It kills ' +
     'only that job: nothing else on that machine.';
   SN_REMOTERUN_KILL_NOTE =
     '[RUN-003] kill stops ONLY the program that job started (the ' +
@@ -1754,7 +1762,7 @@ const
     'and the same job.';
   SN_REMOTERUN_OUTPUT_FMT =
     '[RUN-004] What it writes from now on -an error on closing, its exit ' +
-    'code- you read with delphi_paserver command=output name=%s ' +
+    'code- you read with delphi_paserver command=output profile=%s ' +
     'project=<the same .dproj> job=%s: while it lives, what it has so ' +
     'far; once it ends, all of it and its code, and then it is deleted ' +
     'from the target.';
@@ -1762,7 +1770,7 @@ const
     '[RUN-005] Still alive: this is what it has written so far. Ask ' +
     'again whenever you want; once it ends it brings everything and its ' +
     'exit code, and then it is deleted from the target. To stop it: ' +
-    'command=kill name=%s project=<the same .dproj> job=%s.';
+    'command=kill profile=%s project=<the same .dproj> job=%s.';
   SN_REMOTERUN_OUTPUT_DONE =
     '[RUN-006] Finished: its whole output and its exit code. Read in ' +
     'full, it has been deleted from the target (like a mailbox): asking ' +
@@ -1797,7 +1805,7 @@ const
     'in [Workspace.<name>] RemoteRunProjects.';
 
   SR_PASERVER_RUN_NEEDS =
-    '[PAS-004 INVALID_PARAM] remote-run needs "name" (the PAServer profile) and ' +
+    '[PAS-004 INVALID_PARAM] remote-run needs "profile" (the PAServer profile) and ' +
     '"project" (the .dproj whose deployed program you want to run). The ' +
     'server derives the path on the target: ' +
     '<user>-<profile>/<Project>/<Project>. Nothing else on the remote ' +
@@ -2046,21 +2054,21 @@ const
     'bin\paclient.exe, which is needed to manage PAServer profiles.';
 
   SR_PASERVER_NEED_FMT =
-    '[PAS-021 INVALID_PARAM] add-profile needs "%s". Parameters: name (the ' +
-    'profile name), host (IP or hostname of the PAServer), password (the ' +
+    '[PAS-021 INVALID_PARAM] add-profile needs "%s". Parameters: profile (its ' +
+    'name), host (IP or hostname of the PAServer), password (the ' +
     'PAServer one); optional port (default 64211) and platform (default ' +
     'Linux64).';
 
   SR_PASERVER_NO_PROFILE_FMT =
     '[PAS-022 NOT_FOUND] The profile "%s" does not exist. List the ' +
     'registered ones with command=profiles, or create one with ' +
-    'command=add-profile (name, host, password; optional port and ' +
+    'command=add-profile (profile, host, password; optional port and ' +
     'platform). To know only whether there IS A ROUTE to your PAServer, ' +
-    'call test-connection with host and port WITHOUT name (TCP probe, no ' +
+    'call test-connection with host and port WITHOUT profile (TCP probe, no ' +
     'credentials).';
 
   SR_PASERVER_NEED_NAME =
-    '[PAS-049 INVALID_PARAM] Missing "name": the PAServer profile ' +
+    '[PAS-049 INVALID_PARAM] Missing "profile": the PAServer profile ' +
     '(command=profiles lists them).';
 
   SR_PASERVER_NEED_SDK =
@@ -2076,7 +2084,7 @@ const
   SR_PASERVER_PROFILE_EXISTS_FMT =
     '[PAS-024 DENIED] A profile "%s" already exists (it points to %s). A ' +
     'credential is not overwritten silently: use it as it is ' +
-    '(test-connection name=%0:s) or remove it first with ' +
+    '(test-connection profile=%0:s) or remove it first with ' +
     'command=remove-profile.';
   SN_PASERVER_DUP_HOST_FMT =
     '[PAS-025] NOTE: the profile "%s" already points to that same host ' +
@@ -2089,7 +2097,7 @@ const
   SN_PASERVER_TCP_OK =
     '[PAS-027] TCP route open: this server reaches that host:port. This ' +
     'only proves the route - the full PAServer handshake with ' +
-    'credentials is test-connection with a profile name (add-profile ' +
+    'credentials is test-connection with a profile (add-profile ' +
     'first).';
 
   SN_PASERVER_TCP_FAIL =
@@ -3734,6 +3742,22 @@ const
     'their reading commands - tools/list says which in _meta.access and ' +
     'readOnlyCommands.';
 
+  { Lo que tools/list no anuncia y POR QUE (Lsp.Guard.MotivoToolOculta): un
+    agente conto 37 tools donde la documentacion dice 42 y creyo que se
+    habian fusionado (Hermes, validacion de la 1.16.0). }
+  SF_HELP_TASKS_SIN_VAULT =
+    #10#10'NO VAULT IN THIS WORKSPACE: the vault_* tools (the project memory: ' +
+    'vault_read, vault_search, vault_append, vault_patch, vault_create) are ' +
+    'not in tools/list here, so it has fewer tools than the documentation ' +
+    'lists. Nothing was merged or removed: there is no memory to read.';
+  SF_HELP_TASKS_VAULT_LECTURA =
+    #10#10'THE VAULT IS READ-ONLY HERE: vault_append, vault_patch and ' +
+    'vault_create are not in tools/list (they would refuse); vault_read and ' +
+    'vault_search work.';
+  SF_HELP_TASKS_PERFIL_FMT =
+    #10#10'LEFT OUT OF tools/list BY THIS WORKSPACE''S TOOL PROFILE (the ' +
+    'operator''s choice): %s.';
+
   SN_HELP_CONVENTIONS =
     '[HELP-006] HOUSE RULES (they apply to every tool)'#10#10 +
     '1. PATHS. The server''s drives travel VIRTUAL: srvd:, srvc:... Use ' +
@@ -4131,9 +4155,11 @@ const
     'prop) are read from the source of the active Delphi - its library and ' +
     'browsing paths, so installed components with source are in too; forms ' +
     '(tree, get, lint, check-binding, layout) from the .dfm/.fmx, a BINARY ' +
-    '.dfm read on the fly. Read-only except to-text/to-binary: to edit a ' +
-    'form, delphi_edit on the .dfm/.fmx with the property line as anchor, ' +
-    'then lint to verify.';
+    '.dfm read on the fly; preview DRAWS the form as the IDE designer shows ' +
+    'it and returns the image. Only to-text/to-binary write the form (preview ' +
+    'leaves its PNG in the workspace temp, so a read-only credential cannot ' +
+    'call it): to edit a form, delphi_edit on the .dfm/.fmx with the property ' +
+    'line as anchor, then lint to verify and preview to see it.';
 
   SP_DESIGNER_COMMAND =
     'info (every property a class really publishes: kind and type, events ' +
@@ -4152,11 +4178,15 @@ const
     'can bind perfectly and still be unusable) | to-text (a BINARY .dfm ' +
     'becomes text on disk, the IDE''s own conversion, backup first - ' +
     'reading never needs it) | to-binary (the way back, the ' +
-    'resource-wrapped form the IDE writes). Default: info';
+    'resource-wrapped form the IDE writes) | preview (a PNG of what the IDE ' +
+    'designer shows for the .dfm/.fmx, in this answer: built in design mode ' +
+    'with the IDE''s installed packages, no code run and nothing on any ' +
+    'screen; nonVisual lists the non-visual components, fidelity says how ' +
+    'it was painted). Default: info';
 
   SP_DESIGNER_PATH =
-    'tree/get/lint/check-binding/layout/to-text/to-binary: the .dfm or .fmx ' +
-    'file (a binary .dfm is read on the fly; the answer says so)';
+    'tree/get/lint/check-binding/layout/preview/to-text/to-binary: the .dfm ' +
+    'or .fmx file (a binary .dfm is read on the fly; the answer says so)';
 
   SP_DESIGNER_CLASS =
     'info/prop: the component class, e.g. TButton, TEdit, TLayout';
@@ -4165,11 +4195,13 @@ const
     'prop: the property name, e.g. Align, Caption, TextSettings';
 
   SP_DESIGNER_COMPONENT =
-    'get: the component Name as it appears in the form (object <Name>: <Class>)';
+    'get: the component Name as it appears in the form (object <Name>: ' +
+    '<Class>). preview: crop the image to that component; componentRect ' +
+    'says where it is in the form';
 
   SP_DESIGNER_FRAMEWORK =
     'info/prop: vcl | fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); ' +
-    'default vcl';
+    'default vcl. preview: the file decides; if given, it must agree';
 
   SP_DESIGNER_FILTER =
     'info optional: only properties whose name contains this text';
@@ -4181,6 +4213,32 @@ const
     '= all). An object on the last level shows childrenCount instead of its ' +
     'children';
 
+  { preview (RenderForm, 1.17.0): el estado de vista, el estilo, los no
+    visuales y donde cae el PNG. inline y maxwidth son los de la familia de
+    captura (SP_CAPTURE_INLINE / SP_CAPTURE_MAXWIDTH). }
+  SP_DESIGNER_STATE =
+    'preview optional: a VIEW state applied before drawing, never written ' +
+    'to the file - Component.Property=Value, several separated by ; ' +
+    '(PageControl1.ActivePage=TabSheet2;Edit1.Text=hello). A property that ' +
+    'holds a component takes the component''s name. No double quotes.';
+
+  SP_DESIGNER_STYLE =
+    'preview optional. VCL: a .vsf file (the form is then drawn out of ' +
+    'design mode: VCL styles never apply to designed controls) or none (the ' +
+    'default, as the designer). FMX: empty = the form''s own StyleBook (as ' +
+    'the designer), none = the Windows default, a .style file, or a ' +
+    'platform of the designer''s Style list (android, ios, win11...; an ' +
+    'unknown name is answered with the list). A file goes by absolute path.';
+
+  SP_DESIGNER_NONVISUAL =
+    'preview optional: true = draw the non-visual components (TTimer, ' +
+    'TActionList, datasets...) where the designer puts them, with their ' +
+    'icon and name. Default false: the image shows the form as it will ' +
+    'look, and nonVisual lists them anyway.';
+
+  SP_DESIGNER_OUT =
+    'preview: where the PNG lands' + SP_CAPTURE_OUT_RULE;
+
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
   SR_DESIGNER_NO_VA_CON_COMANDO_FMT =
     '[DSGN-047 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
@@ -4188,7 +4246,92 @@ const
 
   SR_DESIGNER_CMD =
     '[DSGN-001 INVALID_PARAM] Command must be info | prop | tree | get | ' +
-    'lint | check-binding | layout | to-text | to-binary';
+    'lint | check-binding | layout | preview | to-text | to-binary';
+
+  { delphi_designer command=preview: el renderizador (Lsp.FormRender) }
+  SR_DESIGNER_SIN_RENDER_FMT =
+    '[DSGN-060 INTERNAL] The form renderer %s is not next to the server ' +
+    '(%s). It ships in the release zip beside DelphiLspMcp.exe; the ' +
+    'operator copies it there. tree, get, lint and layout read the form ' +
+    'without it.';
+
+  SR_DESIGNER_RENDER_FALLO_FMT =
+    '[DSGN-061 INTERNAL] The renderer could not draw %s: %s. It loads the ' +
+    'IDE''s design packages the form needs, and one that fails while ' +
+    'loading takes the renderer down with it (never the server). tree, ' +
+    'lint and layout read the file without loading anything.';
+
+  SR_DESIGNER_RENDER_TIEMPO_FMT =
+    '[DSGN-062 DENIED] %s did not answer in %d s and was stopped: something ' +
+    'in the form waits (a package, a dialog it could not show). Nothing ' +
+    'reached the server''s desktop.';
+
+  SR_DESIGNER_RENDER_SIN_BPL_FMT =
+    '[DSGN-063 INTERNAL] %s could not start: Windows did not find its ' +
+    'runtime packages (rtl, vcl, fmx of RAD Studio %s; code 0x%.8x). They ' +
+    'live in that RAD Studio''s bin folder, which has to be on the PATH of ' +
+    'the account the server runs as.';
+
+  SR_DESIGNER_RENDER_NO_ARRANCA_FMT =
+    '[DSGN-064 INTERNAL] %s could not be started: %s';
+
+  SR_DESIGNER_VALOR_CON_COMILLAS_FMT =
+    '[DSGN-065 INVALID_PARAM] "%s" carries a double quote or a control ' +
+    'character, which cannot travel to the renderer as one value. Nothing ' +
+    'was drawn: write it without them.';
+
+  SR_DESIGNER_PREVIEW_SIN_COMPONENTE_FMT =
+    '[DSGN-066 NOT_FOUND] There is no component %s in %s, so there is ' +
+    'nothing to crop to: delphi_designer command=tree lists its ' +
+    'components. Without component the whole form comes back.';
+
+  SN_DESIGNER_FIDELIDAD_PRINT =
+    '[DSGN-067] fidelity=print: drawn control by control (WM_PRINT), the ' +
+    'way that works from a Windows service. Controls that paint their own ' +
+    'way come out with the native look; geometry, text and layout are the ' +
+    'real ones. A server in tray mode (an interactive session) paints them ' +
+    'for real: fidelity=window.';
+
+  SN_DESIGNER_SUSTITUIDAS =
+    '[DSGN-068] substituted: classes no installed package registers, drawn ' +
+    'as a pink box with the class name, at their place and size. If they ' +
+    'should exist, the package that brings them is not installed in this ' +
+    'RAD Studio (delphi_components lists what is).';
+
+  SN_DESIGNER_NO_VISUALES_OCULTOS =
+    '[DSGN-069] nonVisual: the non-visual components of the form, NOT ' +
+    'drawn (nonvisual=false, the default). nonvisual=true draws each one ' +
+    'with its icon and name where the designer puts it.';
+
+  SN_DESIGNER_FRAME_NOTE =
+    '[DSGN-070] frame (<imgW>x<imgH>@<srcW>x<srcH>+<ox>+<oy>) maps this ' +
+    'image to the form: a point (x,y) measured ON THIS IMAGE is at ' +
+    'ox + x*srcW/imgW, oy + y*srcH/imgH of the form''s client area, in ' +
+    '.dfm/.fmx units (the renderer is not DPI-aware: 1 pixel = 1 unit). ' +
+    'Left/Top in the file are relative to the control''s parent: subtract ' +
+    'the parent''s componentRect.';
+
+  SN_DESIGNER_INLINE_NOTE_FMT =
+    '[DSGN-071] The image is IN this answer (scaled %s of the render). ' +
+    'Measure on it and convert with frame (below). Its temp file was ' +
+    'consumed: preview again for a new one; inline=false gives file + ' +
+    'download instead; a preview with out= is yours and stays.';
+
+  SR_DESIGNER_STYLE_VCL_FMT =
+    '[DSGN-072 INVALID_PARAM] A VCL form takes a .vsf file as style (by ' +
+    'absolute path) or none; "%s" is neither, and the designer''s platform ' +
+    'styles are FMX.';
+
+  SR_DESIGNER_STYLE_NOMBRE_FMT =
+    '[DSGN-073 INVALID_PARAM] style "%s" is neither a file (an absolute ' +
+    'path that exists) nor a platform name (letters, digits and -).';
+
+  SR_DESIGNER_FW_NO_CASA_FMT =
+    '[DSGN-074 INVALID_PARAM] framework=%s does not go with %s: a .dfm is ' +
+    'VCL and a .fmx is FMX. Leave framework out for preview.';
+
+  SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT =
+    'exit code %d and no answer (%s)';
 
   SR_DESIGNER_FRAMEWORK =
     '[DSGN-002 INVALID_PARAM] framework must be vcl or fmx.';
@@ -5405,8 +5548,16 @@ const
 
   SR_GIT_WORKTREE_ARGS =
     '[GIT-014 INVALID_PARAM] worktree accepts args=list (the working copies of ' +
-    'this repo), add (path=<a NEW folder inside your roots> ref=<tag, ' +
-    'branch or commit>) or remove (path=<one that list shows>).';
+    'this repo), args=add with the PARAMETERS path (a NEW folder inside your ' +
+    'roots) and ref (a tag, branch or commit), or args=remove with the ' +
+    'parameter path (one that list shows). path and ref are parameters of ' +
+    'the call, never inside args.';
+
+  SR_GIT_MENSAJE_EN_ARGS =
+    '[GIT-059 INVALID_PARAM] The message of a commit or a tag goes in the ' +
+    'parameter "message", not in args (-m, --message): it reaches git byte ' +
+    'for byte from there. args keeps the rest (the tag name, its options). ' +
+    'Nothing was done.';
 
   SR_GIT_WORKTREE_PATH =
     '[GIT-015 INVALID_PARAM] worktree add/remove need "path": the folder of the ' +
@@ -5769,7 +5920,9 @@ const
     'reports folder. Change the "title" and retry.';
 
   SN_REPORT_OK_FMT =
-    '[REPORT-005] THANKS - report saved as %s (v%s).'#10 +
+    '[REPORT-005] THANKS - report saved as %s (v%s): %d characters of ' +
+    'message, ending in "%s" - if that is not how yours ends, it was cut on ' +
+    'the way: send the rest in another report.'#10 +
     'We will read it carefully together with the others. If you find ' +
     'more details, send another report: they add up, they do not ' +
     'overwrite each other.';
@@ -7228,7 +7381,7 @@ const
   SD_CFG_CONFIG =
     'See and manage a project''s build configurations and target PLATFORMS. ' +
     'view (read-only): the framework (VCL is Windows-only; FMX and console ' +
-    'cross platforms), the configurations (Debug/Release/custom) and every ' +
+    'cross platforms), the configurations (Debug/Release/custom), the defaultPlatform (what delphi_build builds without platform=) and every ' +
     'platform - enabled or not, possible for THIS project, needing a ' +
     'PAServer profile. add-platform / remove-platform: enable or disable a ' +
     'platform in the .dproj (a curated edit of <Platforms> only). ' +
@@ -7266,7 +7419,7 @@ const
     'Zero-based character inside the identifier (a hit''s "character0")';
 
   SP_BUILD_PROJECT =
-    'Absolute path of the .dproj to build';
+    'Absolute path of the project''s .dproj (its .dpr/.dpk resolves to it)';
 
   SP_BUILD_PLATFORM =
     'Target platform. Omitted: the project''s own default, the one the IDE ' +

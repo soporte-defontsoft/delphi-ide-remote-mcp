@@ -17,6 +17,9 @@ unit Mcp.Tools.Designer;
     lint  <file>             the designer lint on demand: unknown classes,
                              properties the class does not publish, enum
                              values that do not exist.
+    preview <file>           a PNG of what the IDE designer shows, drawn by
+                             the form renderers of src\Render (Lsp.FormRender)
+                             in a process of their own (RenderForm, 1.17.0).
 
   A binary .dfm is READ on the fly as text (Lsp.DesignerBin, the IDE's own
   conversion) and every answer says so; to-text / to-binary convert it on
@@ -45,6 +48,12 @@ type
     FFramework: string;
     FFilter: string;
     FMaxDepth: Integer;
+    FState: string;
+    FStyle: string;
+    FNonVisual: Boolean;
+    FInline: string;
+    FMaxWidth: Integer;
+    FOut: string;
   public
     [SchemaDescription(SP_DESIGNER_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -65,6 +74,23 @@ type
     property Filter: string read FFilter write FFilter;
     [SchemaDescription(SP_DESIGNER_MAXDEPTH)]
     property MaxDepth: Integer read FMaxDepth write FMaxDepth;
+    [SchemaDescription(SP_DESIGNER_STATE)]
+    property State: string read FState write FState;
+    // un fichero .vsf/.style del servidor, o el NOMBRE de una plataforma del
+    // designer (android, none...): la tool explica un valor relativo
+    [SchemaDescription(SP_DESIGNER_STYLE)]
+    [RutaDelServidor]
+    [RutaRelativa]
+    property Style: string read FStyle write FStyle;
+    [SchemaDescription(SP_DESIGNER_NONVISUAL)]
+    property NonVisual: Boolean read FNonVisual write FNonVisual;
+    [SchemaDescription(SP_CAPTURE_INLINE)]
+    property Inline_: string read FInline write FInline;
+    [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
+    property MaxWidth: Integer read FMaxWidth write FMaxWidth;
+    [SchemaDescription(SP_DESIGNER_OUT)]
+    [RutaDelServidor]
+    property Out_: string read FOut write FOut;
   end;
 
   TDelphiDesignerTool = class(TMCPToolBase<TDelphiDesignerParams>)
@@ -92,7 +118,11 @@ uses
   Lsp.DesignerBin,
   Lsp.DesignerBinding,
   Lsp.DesignerMetaGen,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.Discovery,     // DiscoverRadStudio: la version del Delphi del servidor
+  Lsp.FormRender,    // preview: el renderizador y su protocolo
+  Lsp.Imagen,        // RecortaPng: el recorte al componente, en el servidor
+  Lsp.InlineImages;  // DeliverCapture / ColocaCaptura: como se entrega una captura
 
 const
   MAX_PROPS = 400;
@@ -1025,6 +1055,211 @@ begin
   Result := ConNota(AResult, 'binaryOnDiskNote', MsgText(SN_DESIGNER_BINARY_VIEW));
 end;
 
+{ preview: un PNG de lo que ensena el designer del IDE, por el renderizador
+  de su framework (Lsp.FormRender, src\Render). Lee el fichero: no coge el
+  cerrojo de escritura salvo para colocar un out= (ColocaCaptura). El PNG se
+  dibuja SIEMPRE en un temporal nuestro y se recorta ahi (RecortaPng con el
+  RECT= del componente); con out= se lleva despues a su sitio: el
+  renderizador nunca escribe en la jaula por su cuenta. }
+function PreviewDeForm(const Params: TDelphiDesignerParams): string;
+var
+  Ruta, Fw, Estilo, Propia, Temporal, Fallo: string;
+  Peticion: TPeticionRender;
+  R: TRespuestaRender;
+  Return, Raiz, Ms: TJSONObject;
+  NoVis: TJSONArray;
+  RX, RY, RW, RH, AnchoOrig, AltoOrig, OX, OY: Integer;
+  Recortada: Boolean;
+
+  // el temporal es nuestro: si algo falla despues del render, no se queda
+  procedure TiraTemporal;
+  begin
+    if (Temporal <> '') and IsAgentCapture(Temporal) then
+      ConsumeAgentCapture(Temporal);
+  end;
+
+  function Textos(const AValores: TArray<string>): TJSONArray;
+  begin
+    Result := TJSONArray.Create;
+    for var V in AValores do
+      Result.Add(V);
+  end;
+
+begin
+  if Params.Path.Trim = '' then
+    Exit(MsgText(SR_DESIGNER_NEED_PATH));
+  Ruta := TPath.GetFullPath(Params.Path.Trim);
+  Fw := ResolveFramework('', Ruta);
+  if Fw = '' then
+    Exit(MsgText(SR_DESIGNER_NOT_FORM));
+  if (Params.Framework.Trim <> '') and not SameText(Params.Framework.Trim, Fw) then
+    Exit(MsgFmt(SR_DESIGNER_FW_NO_CASA_FMT, [Params.Framework.Trim, TPath.GetFileName(Ruta)]));
+  // la puerta de lectura, la de siempre (la entrada ya la paso: por si la
+  // tool llega por otro camino)
+  Fallo := ReadPathDenied(Ruta);
+  if Fallo <> '' then
+    Exit(Fallo);
+  if not TFile.Exists(Ruta) then
+    Exit(NoEsFichero(Ruta, MsgFmt(SR_NO_EXISTE_FMT, [Ruta])));
+
+  // style: none, el NOMBRE de una plataforma del designer (la lista la tiene
+  // el renderizador FMX: UNA tabla) o un fichero por ruta completa
+  Estilo := Params.Style.Trim;
+  if SameText(Estilo, 'none') then
+    Estilo := 'none'
+  else if TRegEx.IsMatch(Estilo, '^[A-Za-z0-9-]+$') then
+  begin
+    if Fw = 'vcl' then
+      Exit(MsgFmt(SR_DESIGNER_STYLE_VCL_FMT, [Estilo]));
+  end
+  else if Estilo <> '' then
+  begin
+    if not EsRutaAbsoluta(Estilo) then
+      Exit(MsgFmt(SR_DESIGNER_STYLE_NOMBRE_FMT, [Estilo]));
+    Estilo := TPath.GetFullPath(Estilo);
+    Fallo := ReadPathDenied(Estilo);
+    if Fallo <> '' then
+      Exit(Fallo);
+    if not TFile.Exists(Estilo) then
+      Exit(NoEsFichero(Estilo, MsgFmt(SR_NO_EXISTE_FMT, [Estilo])));
+  end;
+
+  // donde cae: el out= de toda la familia de capturas (CaptureTarget). Se
+  // dibuja en un temporal nuestro aunque haya out=
+  Fallo := CaptureTarget(Params.Out_, CAPTURE_SUB_DESIGNER, 'designer', '.png', Propia);
+  if Fallo <> '' then
+    Exit(Fallo);
+  Temporal := Propia;
+  if Params.Out_.Trim <> '' then
+  begin
+    Fallo := CaptureTarget('', CAPTURE_SUB_DESIGNER, 'designer', '.png', Temporal);
+    if Fallo <> '' then
+      Exit(Fallo);
+  end;
+  CrearCarpeta(TPath.GetDirectoryName(Temporal));
+
+  Peticion := Default(TPeticionRender);
+  Peticion.Framework := Fw;
+  Peticion.Path := Ruta;
+  Peticion.Salida := Temporal;
+  Peticion.Componente := Params.Component.Trim;
+  Peticion.Estilo := Estilo;
+  Peticion.NoVisuales := Params.NonVisual;
+  Peticion.Bds := DiscoverRadStudio.Version;
+  for var E in Params.State.Split([';']) do
+    if E.Trim <> '' then
+      Peticion.Estados := Peticion.Estados + [E.Trim];
+  R := CorreRender(Peticion);
+  if R.Fallo <> '' then
+  begin
+    TiraTemporal;
+    Exit(R.Fallo);
+  end;
+
+  // el recorte al componente, aqui y por el recortador de la casa: el
+  // renderizador solo dice donde esta (RECT=)
+  OX := 0;
+  OY := 0;
+  Recortada := False;
+  AnchoOrig := R.Ancho;
+  AltoOrig := R.Alto;
+  if Peticion.Componente <> '' then
+  begin
+    if not R.HayRect then
+    begin
+      TiraTemporal;
+      Exit(MsgFmt(SR_DESIGNER_PREVIEW_SIN_COMPONENTE_FMT, [Peticion.Componente, R.RaizNombre]));
+    end;
+    RX := R.RectX;
+    RY := R.RectY;
+    RW := R.RectW;
+    RH := R.RectH;
+    Fallo := RecortaPng(Temporal, RX, RY, RW, RH, AnchoOrig, AltoOrig);
+    if Fallo <> '' then
+    begin
+      TiraTemporal;
+      Exit(MsgEnvuelve(SR_DESIGNER_RENDER_FALLO_FMT, Fallo, [TPath.GetFileName(Ruta), Fallo]));
+    end;
+    OX := RX;
+    OY := RY;
+    Recortada := True;
+  end;
+
+  if Temporal <> Propia then
+    try
+      ColocaCaptura(Temporal, Propia);
+      Temporal := '';
+    except
+      on E: Exception do
+      begin
+        TiraTemporal;
+        Exit(MsgExcepcion(E.ClassName, E.Message));
+      end;
+    end;
+
+  Return := TJSONObject.Create;
+  try
+    Return.AddPair('path', Ruta);
+    Return.AddPair('framework', Fw);
+    Raiz := TJSONObject.Create;
+    Raiz.AddPair('name', R.RaizNombre);
+    Raiz.AddPair('class', R.RaizClase);
+    Raiz.AddPair('kind', R.RaizTipo);
+    Return.AddPair('root', Raiz);
+    Return.AddPair('fidelity', R.Fidelidad);
+    if R.Fidelidad = 'print' then
+      Return.AddPair('fidelityNote', MsgText(SN_DESIGNER_FIDELIDAD_PRINT));
+    Return.AddPair('style', R.Estilo);
+    Return.AddPair('packages', R.Paquetes);
+    Return.AddPair('components', TJSONNumber.Create(R.Componentes));
+    if Length(R.Sustituidas) > 0 then
+    begin
+      Return.AddPair('substituted', Textos(R.Sustituidas));
+      Return.AddPair('substitutedNote', MsgText(SN_DESIGNER_SUSTITUIDAS));
+    end;
+    if Length(R.Ignoradas) > 0 then
+      Return.AddPair('ignored', Textos(R.Ignoradas));
+    if Length(R.Avisos) > 0 then
+      Return.AddPair('warnings', Textos(R.Avisos));
+    // los no visuales SIEMPRE, se dibujen o no (David, 7-oct-2026: lo que
+    // el modelo necesita es saber que existen)
+    NoVis := TJSONArray.Create;
+    for var NV in R.NoVisuales do
+    begin
+      var Uno := TJSONObject.Create;
+      Uno.AddPair('name', NV.Substring(0, NV.LastIndexOf(':')));
+      Uno.AddPair('class', NV.Substring(NV.LastIndexOf(':') + 1));
+      NoVis.AddElement(Uno);
+    end;
+    Return.AddPair('nonVisual', NoVis);
+    Return.AddPair('nonVisualDrawn', TJSONBool.Create(Params.NonVisual));
+    if (Length(R.NoVisuales) > 0) and not Params.NonVisual then
+      Return.AddPair('nonVisualNote', MsgText(SN_DESIGNER_NO_VISUALES_OCULTOS));
+    if Recortada then
+    begin
+      Return.AddPair('component', Peticion.Componente);
+      Return.AddPair('componentRect', Format('%d,%d,%d,%d', [R.RectX, R.RectY, R.RectW, R.RectH]));
+      Return.AddPair('croppedFrom', Format('%dx%d', [AnchoOrig, AltoOrig]));
+    end;
+    Ms := TJSONObject.Create;
+    Ms.AddPair('load', TJSONNumber.Create(R.MsCarga));
+    Ms.AddPair('paint', TJSONNumber.Create(R.MsPintado));
+    Ms.AddPair('total', TJSONNumber.Create(R.MsTotal));
+    Return.AddPair('ms', Ms);
+    Return.AddPair('screenshot', Propia);
+    Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Propia)));
+    // UN SOLO PASO, como toda captura: inline (y su temporal consumido) o
+    // fichero + enlace. El frame lleva el origen del recorte: pixeles de la
+    // imagen -> unidades de la form, sin cuentas del agente
+    DeliverCapture('delphi_designer', Propia, Params.Inline_, Params.MaxWidth,
+      OX, OY, 1.0, 1.0, Return, MsgText(SN_DESIGNER_INLINE_NOTE_FMT),
+      MsgText(SN_DESIGNER_FRAME_NOTE));
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de escritura. }
 function GestoDeDisenador(const Params: TDelphiDesignerParams): string;
 var
@@ -1051,11 +1286,16 @@ begin
       'tree', 'path maxdepth', 'lint', 'path', 'layout', 'path',
       'get', 'path component',
       'check-binding', 'path unit',
+      'preview', 'path component framework state style nonvisual inline maxwidth out',
       'to-text', 'path', 'to-binary', 'path'],
     ['path', Params.Path, '', 'classname', Params.ClassName_, '', 'prop', Params.Prop, '',
      'component', Params.Component, '', 'unit', Params.Unit_, '',
      'framework', Params.Framework, '', 'filter', Params.Filter, '',
-     'maxdepth', IfThen(Params.MaxDepth <> 0, IntToStr(Params.MaxDepth)), ''], Suyos);
+     'maxdepth', IfThen(Params.MaxDepth <> 0, IntToStr(Params.MaxDepth)), '',
+     'state', Params.State, '', 'style', Params.Style, '',
+     'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', Params.Inline_, '',
+     'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
+     'out', Params.Out_, ''], Suyos);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]));
   if MatchText(Cmd, ['info', 'prop']) then
@@ -1094,6 +1334,8 @@ begin
     if IsBinaryDesigner(TPath.GetFullPath(Params.Path)) then
       Result := ConNotaBinario(Result);
   end
+  else if Cmd = 'preview' then
+    Result := PreviewDeForm(Params)
   else if MatchText(Cmd, ['to-text', 'to-binary']) then
   begin
     if Params.Path.Trim = '' then

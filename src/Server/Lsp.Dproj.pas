@@ -91,6 +91,14 @@ function XmlElemento(const ATag, AValor: string): string;
   blank), never raises. }
 function ReadDproj(const ADprojPath: string): TDprojInfo;
 
+{ EL .dproj de lo que nombra el agente: el de al lado de un .dpr o un .dpk,
+  y cualquier otra cosa tal cual (la tool decide si es un proyecto). Solo
+  cambia la extension: ni completa ni normaliza la ruta, quien la necesite
+  entera la pide aparte. delphi_config resolvia el .dpr y delphi_build lo
+  rechazaba con BUILD-016 diciendo que no era un proyecto (Hermes, validacion
+  de la 1.16.0), y la regla estaba escrita a mano en diez sitios. }
+function DprojDe(const AProject: string): string;
+
 { La negativa de una configuracion que el proyecto no tiene ('' = la tiene,
   o el proyecto no declara ninguna). UNA regla para delphi_test y
   delphi_build: aceptarla en silencio compilaba en Win64\<Inventada>\ con
@@ -576,6 +584,13 @@ begin
     if SameText(P.Name, APlatform) then
       Exit(P.Enabled);
   Result := False;
+end;
+
+function DprojDe(const AProject: string): string;
+begin
+  Result := AProject;
+  if MatchText(TPath.GetExtension(Result), ['.dpr', '.dpk']) then
+    Result := TPath.ChangeExtension(Result, '.dproj');
 end;
 
 function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string): string;
