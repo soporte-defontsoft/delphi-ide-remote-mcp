@@ -121,32 +121,63 @@ check('tag --sign (en tag SI es gpg) RECHAZADO por el filtro',
 
 srv.mata()
 
-# ---- la URL de clone viaja en "message" y TAMBIEN pasa por la puerta:
-# GitRemoteDenied la trocea con TrocearArgs, asi que un segundo host colado
-# tras uno permitido se caza igual; el ejecutor la recompone con EnComillas. ----
+# ---- la URL de clone viaja en "message" y TAMBIEN pasa por la puerta, ENTERA:
+# git la recibe como UN argumento, asi que la puerta la juzga como un trozo (la
+# troceaba: 'ssh://permitido:22 @otro/x' eran dos trozos sin host y git iba al
+# otro; revisor de addc44e). Una direccion con un blanco no la lee igual nadie:
+# GIT-062. ----
 env2 = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_GIT_REMOTES': 'allowed.example'})
 srv2 = mc.Stdio(EXE, env2, nombre='gaf2')
 r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon'), 'command': 'clone',
               'message': 'https://allowed.example/a https://evil.example/b'})
-check('clone: segundo host colado en el message, cazado por la puerta al trocear',
-      (mc.rechazado(r) and not mc.llego_a_git(r)) and 'evil.example' in r, r[:200])
+check('clone: segundo host colado en el message (con un blanco): GIT-062 y no llega a git',
+      mc.abre(r, 'SR_GIT_REMOTE_AMBIGUA_FMT') and not mc.llego_a_git(r), r[:200])
 # ---- la @ que viene DESPUES de la autoridad es del camino, no del usuario
 # (revisor "adivinar vs medir", 8-oct-2026, medido): la puerta tomaba por host
-# lo que seguia a la ULTIMA @ de toda la cadena, asi que con allowed.example
-# permitido estas direcciones -que conectan con evil.example- pasaban (la
-# forma corta sin usuario, host:ruta, no la acepta clone: va en test_git_jaula
-# J15b, por los remotos del repo). ----
-for url in ('https://evil.example/x@allowed.example',
-            'https://evil.example?x@allowed.example',
-            'git@evil.example:x@allowed.example'):
+# lo que seguia a la PRIMERA @ del resto de la cadena, asi que con
+# allowed.example permitido estas direcciones -que conectan con evil.example-
+# pasaban (la forma corta sin usuario, host:ruta, no la acepta clone: va en
+# test_git_jaula J15b, por los remotos del repo). La de la ruta se lee bien
+# (GIT-005 nombra evil.example); la que cada programa parte de otra forma se
+# niega por ilegible (GIT-062). ----
+for url, msg in (('https://evil.example/x@allowed.example', 'SR_GIT_REMOTE_HOST_FMT'),
+                 ('git@evil.example:x@allowed.example', 'SR_GIT_REMOTE_HOST_FMT'),
+                 ('https://evil.example?x@allowed.example', 'SR_GIT_REMOTE_AMBIGUA_FMT')):
     r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon2'), 'command': 'clone',
                   'message': url})
-    check('clone %s: el host es evil.example (la @ es de la ruta), negado' % url,
-          (mc.rechazado(r) and not mc.llego_a_git(r)) and 'evil.example' in r, r[:200])
-# dos @ en la autoridad: cada programa lee una distinta; se niega en vez de adivinar
-r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon2'), 'command': 'clone',
-              'message': 'https://a@evil.example@allowed.example/x'})
-check('clone con DOS @ en la autoridad: ambiguo, negado',
-      mc.rechazado(r) and not mc.llego_a_git(r), r[:200])
+    check('clone %s: negado por SU host (%s), sin llegar a git' % (url, msg),
+          mc.abre(r, msg) and not mc.llego_a_git(r) and
+          (msg != 'SR_GIT_REMOTE_HOST_FMT' or '"evil.example"' in r), r[:200])
+# ---- lo que git, ssh y curl parten de otra forma (revisor de addc44e, medido con
+# git real y contra el binario): con allowed.example permitido, la primera
+# lectura por la autoridad dejaba pasar estas, y git iba a evil.example; la
+# vieja dejaba pasar las de los corchetes y el %. Se niegan por ilegibles. ----
+for url in ('ssh://allowed.example?@evil.example/x', 'ssh://allowed.example#@evil.example/x',
+            'https://allowed.example\\x@evil.example/x', 'ssh://allowed.example/x@[evil.example]/y',
+            'ssh://[evil.example]@allowed.example/y', 'ssh://evil.example%2f@allowed.example/y',
+            'git://evil.example%2f@allowed.example/y', 'ssh://allowed.example:22 @evil.example/y',
+            'https://a@evil.example@allowed.example/x'):
+    r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon2'), 'command': 'clone',
+                  'message': url})
+    check('clone %s: ilegible, GIT-062, sin llegar a git' % url,
+          mc.abre(r, 'SR_GIT_REMOTE_AMBIGUA_FMT') and not mc.llego_a_git(r), r[:200])
+# ---- un enlace en el MENSAJE de un commit es texto (va por -F): la puerta solo
+# juzga el message de clone (se negaba con GIT-004, medido el 9-oct-2026) ----
+open(os.path.join(REPO_T, 'a.txt'), 'w').write('dos\n')
+srv2.call('delphi_git', {'repo': REPO_T, 'command': 'add', 'args': '.'})
+r = srv2.call('delphi_git', {'repo': REPO_T, 'command': 'commit',
+              'message': 'ver https://evil.example/x y git@evil.example:org/repo'})
+check('commit con enlaces en el mensaje: no es una conexion, se hace', 'exit=0' in r, r[:200])
 srv2.mata()
+# ---- con GitRemotes VACIO (como se distribuye): una autoridad que empieza por
+# ? # \ o que no tiene host era '' ('no es una direccion') en la primera lectura
+# por la autoridad, y clone pasaba a CUALQUIER host (revisor de addc44e, E1) ----
+srv3 = mc.Stdio(EXE, env, nombre='gaf3')
+for url in ('ssh://?@evil.example/x', 'ssh://#@evil.example/x', 'ssh://\\x@evil.example/x',
+            'https://\\x@evil.example/x', 'https:///evil.example/x', 'ssh://:22 @evil.example/y'):
+    r = srv3.call('delphi_git', {'repo': os.path.join(BASE, 'clon3'), 'command': 'clone',
+                  'message': url})
+    check('GitRemotes vacio, clone %s: negado sin llegar a git' % url,
+          mc.rechazado(r) and not mc.llego_a_git(r), r[:200])
+srv3.mata()
 mc.fin('git arg filter battery')

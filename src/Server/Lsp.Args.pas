@@ -189,66 +189,149 @@ begin
   end;
 end;
 
-{ Host of a git URL, '' when the token is not a URL at all. Understands the
-  two shapes git takes: scheme://[user@]host[:port]/... and the scp-like
-  [user@]host:path. }
+const
+  { El host de una DIRECCION que no se lee sin adivinar (GitUrlHost): no casa
+    con ninguna lista, y GitRemoteDenied lo niega con su motivo (GIT-062). }
+  GIT_HOST_ILEGIBLE = '?';
+
+{ Host of a git address, '' when the token is not an address at all (a
+  branch, a path, an option). Understands the two shapes git takes:
+  scheme://[user@]host[:port]/... and the scp-like [user@]host:path.
+
+  Una DIRECCION cuyo host no se lee sin adivinar contesta GIT_HOST_ILEGIBLE,
+  que no casa con ninguna lista. git, ssh y curl no parten igual la
+  autoridad: git busca '@[' en toda la cadena y decodifica los %xx de ssh://,
+  OpenSSH toma la ULTIMA @ y curl corta en ? y #. La primera version que leia
+  el host de la autoridad (addc44e) eligio unos terminadores, y su revisor
+  midio una docena de direcciones que cada programa leia de otra forma -
+  algunas pasaban con GitRemotes vacio -. Asi que no se elige: la autoridad
+  (hasta la primera / de una URL, hasta el primer : de la forma scp, sin
+  contar un literal IPv6 entre corchetes) solo vale con lo que todos leen
+  igual - usuario [A-Za-z0-9._~+-] (y ':' en una URL), una sola @, host
+  [A-Za-z0-9._-] o [v6], puerto en cifras -, y lo demas (% \ ? # blancos,
+  corchetes fuera de su sitio, dos @, un '@[' fuera de la autoridad, un host
+  vacio, un usuario en git://) se niega por ilegible. file:// no es de red:
+  lo juzga la jaula. }
 function GitUrlHost(const AToken: string; AScpCorto: Boolean): string;
+const
+  DE_USUARIO = ['A'..'Z', 'a'..'z', '0'..'9', '.', '_', '~', '+', '-'];
+  DE_HOST = ['A'..'Z', 'a'..'z', '0'..'9', '.', '_', '-'];
+  DE_V6 = ['0'..'9', 'A'..'F', 'a'..'f', ':', '.'];
 var
-  T: string;
-  P: Integer;
-  EsUrl, Corchete: Boolean;
+  T, Esquema, Autoridad, Usuario, Host, Puerto: string;
+  P, K, Fin: Integer;
+  EsUrl: Boolean;
 begin
   Result := '';
   T := AToken.Trim.Trim(['"', '''']);
   P := Pos('://', T);
   EsUrl := P > 0;
+  Esquema := '';
   if EsUrl then
-    T := Copy(T, P + 3, MaxInt)
+  begin
+    Esquema := LowerCase(Copy(T, 1, P - 1));
+    if Esquema = 'file' then
+      Exit; // una carpeta: la juzga la jaula, no la lista de hosts
+    T := Copy(T, P + 3, MaxInt);
+  end
   else if not ((Pos('@', T) > 0) and (Pos(':', T) > Pos('@', T))) and
           not (AScpCorto and TRegEx.IsMatch(T, '^[A-Za-z0-9][A-Za-z0-9.-]+:[^:\\]')) then
     { scp corto host:ruta: dos letras o mas antes del ':' -> no es una unidad
       (C:\ o C:/) }
-    Exit; // not a URL: a branch, a path, an option
-  { LA AUTORIDAD ([user@]host[:puerto]) acaba en la primera / \ ? # de una
-    URL, o en el primer ':' de la forma scp (lo que sigue es la ruta), fuera
-    de unos corchetes. Una @ que venga DESPUES es del camino, no del usuario:
-    https://ejemplo.invalido/x@github.com y git@ejemplo.invalido:x@github.com
-    conectan con ejemplo.invalido, y esta puerta leia github.com (revisor
-    "adivinar vs medir", 8-oct-2026). }
-  Corchete := False;
-  for P := 1 to Length(T) do
-    if T[P] = '[' then
-      Corchete := True
-    else if T[P] = ']' then
-      Corchete := False
-    else if not Corchete and (CharInSet(T[P], ['/', '\', '?', '#']) or
-            (not EsUrl and (T[P] = ':'))) then
+    Exit; // not an address: a branch, a path, an option
+  Result := GIT_HOST_ILEGIBLE; // ES una direccion: lo que no se lea, no casa
+  // un blanco dentro de una direccion: git la recibe entera (el message de
+  // clone) y nadie la lee igual
+  if T.IndexOfAny([' ', #9, #13, #10]) >= 0 then
+    Exit;
+  // la autoridad: en una URL, hasta la primera /; en la forma scp, hasta el
+  // primer ':', salvo el de dentro de un literal IPv6 al principio del host
+  // ([v6]:ruta o usuario@[v6]:ruta)
+  if EsUrl then
+  begin
+    Fin := Pos('/', T);
+    if Fin = 0 then
+      Fin := Length(T) + 1;
+  end
+  else
+  begin
+    K := Pos('@[', T);
+    if T.StartsWith('[') then
+      K := 0
+    else if (K > 0) and (K < Pos(':', T)) then
+      K := K + 1
+    else
+      K := -1;
+    if K >= 0 then
     begin
-      T := Copy(T, 1, P - 1);
-      Break;
-    end;
-  // [user@]host: DOS @ en la autoridad es ambiguo (cada programa lee una
-  // distinta) y se niega en vez de adivinar: un host con @ no casa con
-  // ninguno de la lista
-  P := Pos('@', T);
+      P := Pos(']', T, K + 1);
+      if (P = 0) or (P >= Length(T)) or (T[P + 1] <> ':') then
+        Exit;
+      Fin := P + 1;
+    end
+    else
+      Fin := Pos(':', T);
+  end;
+  Autoridad := Copy(T, 1, Fin - 1);
+  // git busca '@[' en TODO el resto (host_end): solo vale el de la autoridad,
+  // justo detras del usuario
+  K := Pos('@[', T);
+  if (K > 0) and ((K > Length(Autoridad)) or (Pos('@', Autoridad) <> K)) then
+    Exit;
+  // [usuario@]host[:puerto]
+  P := Pos('@', Autoridad);
   if P > 0 then
   begin
-    if Pos('@', T, P + 1) > 0 then
-      Exit(T.Trim.ToLower);
-    T := Copy(T, P + 1, MaxInt);
+    Usuario := Copy(Autoridad, 1, P - 1);
+    Autoridad := Copy(Autoridad, P + 1, MaxInt);
+    if Pos('@', Autoridad) > 0 then
+      Exit; // dos @: cada programa lee una
+    if Esquema = 'git' then
+      Exit; // git:// no tiene usuario: git buscaria 'usuario@host' entero
+    for var C in Usuario do
+      if not (CharInSet(C, DE_USUARIO) or (EsUrl and (C = ':'))) then
+        Exit;
   end;
-  // [::1]:3131 - the host is what the brackets hold, not the bracket
-  if T.StartsWith('[') then
+  Puerto := '';
+  if Autoridad.StartsWith('[') then
   begin
-    P := Pos(']', T);
-    if P > 1 then
-      Exit(Copy(T, 2, P - 2).Trim.ToLower);
-    Exit('[' + T); // malformed: keep it unrecognisable so it cannot match
+    P := Pos(']', Autoridad);
+    if P = 0 then
+      Exit;
+    Host := Copy(Autoridad, 2, P - 2);
+    Puerto := Copy(Autoridad, P + 1, MaxInt);
+    if Host = '' then
+      Exit;
+    for var C in Host do
+      if not CharInSet(C, DE_V6) then
+        Exit;
+  end
+  else
+  begin
+    P := Pos(':', Autoridad);
+    if P > 0 then
+    begin
+      Host := Copy(Autoridad, 1, P - 1);
+      Puerto := Copy(Autoridad, P, MaxInt);
+    end
+    else
+      Host := Autoridad;
+    if Host = '' then
+      Exit;
+    for var C in Host do
+      if not CharInSet(C, DE_HOST) then
+        Exit;
   end;
-  P := Pos(':', T); // el puerto de una URL
-  if P > 0 then
-    T := Copy(T, 1, P - 1);
-  Result := T.Trim.ToLower;
+  // el puerto, solo en una URL: ':' y cifras
+  if Puerto <> '' then
+  begin
+    if not EsUrl or (Puerto[1] <> ':') then
+      Exit;
+    for var C in Copy(Puerto, 2, MaxInt) do
+      if not CharInSet(C, ['0'..'9']) then
+        Exit;
+  end;
+  Result := Host.ToLower;
 end;
 
 function GitRemoteDenied(const AText: string; AScpCorto: Boolean): string;
@@ -262,6 +345,8 @@ begin
     Host := GitUrlHost(Tok, AScpCorto);
     if Host = '' then
       Continue;
+    if Host = GIT_HOST_ILEGIBLE then
+      Exit(MsgFmt(SR_GIT_REMOTE_AMBIGUA_FMT, [Tok]));
     Allowed := GitRemoteHosts;
     if Allowed = '' then
       Exit(MsgFmt(SR_GIT_REMOTE_OFF_FMT, [Host]));

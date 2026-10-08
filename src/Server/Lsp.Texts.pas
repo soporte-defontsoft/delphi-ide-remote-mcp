@@ -5749,6 +5749,16 @@ const
     '(%s). If one more is needed, ask for it with delphi_report: the ' +
     'operator adds it.';
 
+  { Una direccion cuyo host no se lee sin adivinar (GitUrlHost, Lsp.Args):
+    git, ssh y curl no parten igual la autoridad, asi que se niega en vez de
+    elegir (revisor de addc44e, 9-oct-2026). }
+  SR_GIT_REMOTE_AMBIGUA_FMT =
+    '[GIT-062 DENIED] The address "%s" does not show its host plainly (a ' +
+    '%%, \, ?, #, a space, a bracket or a second @ before the host, a @[ ' +
+    'anywhere, or no host at all): git, ssh and curl would not all read ' +
+    'the same host from it. Write it plainly: scheme://[user@]host[:port]/' +
+    'path or user@host:path.';
+
   SN_GIT_HINT_OVERRIDE =
     '[GIT-006] NOTE about the "hint:" lines above: git writes them, not ' +
     'me, and some recommend exactly what this tool does not allow ' +

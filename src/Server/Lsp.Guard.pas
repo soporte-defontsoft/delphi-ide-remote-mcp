@@ -1900,10 +1900,15 @@ begin
       Exit;
     // An explicit URL anywhere in a git call is an outbound connection this
     // machine is about to make. It goes through the operator's allowlist -
-    // args AND message, because clone carries the URL in the latter.
+    // args AND, for clone, message, which carries the URL. git receives that
+    // message WHOLE, as one argument: it is judged as one piece (split, the
+    // two halves of 'ssh://allowed:22 @other/x' had no host each and git went
+    // to the other; review of addc44e). In the other commands message is
+    // text - a commit's goes through -F - and a link in it was refused
+    // (GIT-004, measured 9-oct-2026).
     Result := GitRemoteDenied(GitArgs);
-    if Result = '' then
-      Result := GitRemoteDenied(ArgStr(AArguments, 'message'));
+    if (Result = '') and SameText(ArgStr(AArguments, 'command').Trim, 'clone') then
+      Result := GitRemoteDenied(EnComillas(ArgStr(AArguments, 'message')));
     if Result <> '' then
       Exit;
   end;

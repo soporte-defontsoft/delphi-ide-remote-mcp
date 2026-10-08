@@ -486,9 +486,23 @@ try:
 finally:
     srv15b.cierra()
 check('J15b un remoto host:ruta o user@host:ruta con el host PERMITIDO detras de una @ de la ruta '
-      'se niega por el host de verdad (otra-maquina), sin llegar a git',
-      all(not mc.abre(r, 'SR_GIT_EXIT_FMT') and 'otra-maquina' in r for r in rs),
+      'se niega por el host de verdad (GIT-005 nombra otra-maquina), sin llegar a git',
+      all(mc.abre(r, 'SR_GIT_REMOTE_HOST_FMT') and '"otra-maquina.invalid"' in r for r in rs),
       [corto(r, 200) for r in rs])
+
+# J15c - ...y lo que git y OpenSSH parten de otra forma que la puerta (revisor de
+# addc44e, medido con git real): un ? delante de la @ y un @[ en la ruta. Con
+# el host permitido delante, ssh iba a otra-maquina; ilegibles, GIT-062.
+git('remote', 'add', 'raro1', 'maquina-que-no-existe.invalid?@otra-maquina.invalid:x', cwd=REPO)
+git('remote', 'add', 'raro2', 'git@maquina-que-no-existe.invalid:x@[otra-maquina.invalid]:y', cwd=REPO)
+srv15c = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': DENTRO,
+    'DELPHI_MCP_GIT_REMOTES': 'maquina-que-no-existe.invalid'}), nombre='git-jaula-j15c', t=120)
+try:
+    rs = [srv15c.call('delphi_git', dict(repo=REPO, command='fetch', args=n)) for n in ('raro1', 'raro2')]
+finally:
+    srv15c.cierra()
+check('J15c un remoto con un ? delante de la @ o un @[ en la ruta: ilegible (GIT-062), sin llegar a git',
+      all(mc.abre(r, 'SR_GIT_REMOTE_AMBIGUA_FMT') for r in rs), [corto(r, 200) for r in rs])
 
 # J16 - push sin nombres desde un repo ESPEJO
 ESPEJO = os.path.join(DENTRO, 'espejo.git')

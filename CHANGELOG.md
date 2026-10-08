@@ -10,17 +10,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
-- **The git remote gate reads the host where git reads it.** It took for the
-  host whatever followed the LAST `@` of the whole address, so with a host
-  allowed in `GitRemotes=`, an address carrying that host after an `@` of its
-  PATH (`https://other.host/x@allowed.host`, `other.host:x@allowed.host`,
+- **The git remote gate reads a host only where git, ssh and curl all read
+  the same one.** It took for the host whatever followed the first `@` of
+  the rest of the address, so with a host allowed in `GitRemotes=`, an
+  address carrying that host after an `@` of its PATH
+  (`https://other.host/x@allowed.host`, `other.host:x@allowed.host`,
   `git@other.host:x@allowed.host`) passed the gate and git connected to the
-  other machine (measured against the production binary: git ran). The host
-  now comes from the address's authority only (up to the first `/ \ ? #` of
-  a URL, or the first `:` of the scp form, outside brackets), and two `@` in
-  the authority are refused instead of guessed. With `GitRemotes=` empty, as
-  it ships, nothing reached git. `test_git_argfilter` and `test_git_jaula`
-  (J15b) carry the cases, red against the old binary.
+  other machine (measured against the production binary: git ran), and so
+  did a bracket or a `%xx` before the host. The host now comes from the
+  address's authority (up to the first `/` of a URL, or the first `:` of the
+  scp form, past an IPv6 literal), and only from what every program reads
+  alike: a plain user, one `@`, a plain host or `[v6]`, a numeric port. An
+  address with a `% \ ? #`, a blank, a misplaced bracket, two `@`, an `@[`
+  outside its authority, a user in `git://` or no host at all is refused
+  as unreadable (`GIT-062`) instead of guessed; a first version of this fix
+  chose some terminators and its reviewer measured a dozen addresses each
+  program split differently, some of which passed with `GitRemotes=` empty.
+  `clone`'s message is judged whole, as git receives it, and only `clone`'s:
+  a link in a commit message was refused as a connection (`GIT-004`).
+  `test_git_argfilter` and `test_git_jaula` (J15b, J15c) carry the cases,
+  red against both earlier binaries.
 - **A batch of `delphi_edit` judges the structure of the WHOLE file at the
   end.** Each entry was audited on the file half-way through the batch, so
   an entry that opened a `(*` and the next one that closed it warned of a
