@@ -84,6 +84,14 @@ the MCP `initialize` response (`serverInfo.version`).
     WITH the trash (stamping, keeping, purging) stays in `Lsp.Patch`.
     `test_paisaje` pins the mark's extension to its one home, and
     `Lsp.Guard` now uses `Lsp.Patch` for a single thing (`PurgaAlPasar`).
+- `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
+  and tool, the composer of its command line, its one launcher
+  (`GitCorre`), the gates on remotes, pushes and the repo's configuration,
+  and its answers - moved out of `Mcp.Tools.Workspace` without changing a
+  line ("where is git?" was answered "in Workspace", which nobody guesses).
+  Workspace's header now names the tools it really registers, and it drops
+  four units only git used. The order of `tools/list` is unchanged
+  (measured), and `test_paisaje` finds the git launcher in its new home.
 - `test_round16` measures the symbols summary against a frozen copy of
   `Lsp.Guard.pas` (commit 6544a95, in `tests/fixtures/`): the live unit
   changes with this cleanup, and the summary-to-tree ratio had already

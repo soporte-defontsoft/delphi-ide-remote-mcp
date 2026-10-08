@@ -46,7 +46,7 @@ REGLAS = [
       ('Lsp.ProcessLaunch.pas', '*'), ('Lsp.RemoteRun.pas', 'Paclient'),
       ('Lsp.Styles.pas', 'CorreStyleConvert'), ('Mcp.Tools.Styles.pas', 'BuildStyles'),
       ('Lsp.TestRunner.pas', 'CorreEnContenedor'), ('Mcp.Tools.Adb.pas', 'RunAdb'),
-      ('Mcp.Tools.Workspace.pas', 'GitCorre'), ('Lsp.FormRender.pas', 'CorreRender')],
+      ('Mcp.Tools.Git.pas', 'GitCorre'), ('Lsp.FormRender.pas', 'CorreRender')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
     ('lanzar el conversor de estilos', LANZA + r""".*'"' \+ A?Exe \+""",
      [('Lsp.Styles.pas', 'CorreStyleConvert')],

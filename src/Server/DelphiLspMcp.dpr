@@ -143,7 +143,8 @@ uses
   Lsp.Identidad in 'Lsp.Identidad.pas',
   Lsp.TodoONada in 'Lsp.TodoONada.pas',
   Lsp.Args in 'Lsp.Args.pas',
-  Lsp.Codificacion in 'Lsp.Codificacion.pas';
+  Lsp.Codificacion in 'Lsp.Codificacion.pas',
+  Mcp.Tools.Git in 'Mcp.Tools.Git.pas';
 
 {$R *.res}
 
