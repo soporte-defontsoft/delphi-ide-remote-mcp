@@ -67,7 +67,7 @@ function AvisoDePaclient(const ASalida: string): string;
 
 { Same, with an explicit working directory ('' = inherit). }
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
-  out AExitCode: Cardinal): string;
+  out AExitCode: Cardinal; const AEntorno: string = ''): string;
 
 { Como RunCapturedIn, pero DENTRO del contenedor AC (Lsp.Sandbox), que ya
   tiene su carpeta preparada: AWorkDir. Falla cerrado: si Windows no lo lanza
@@ -315,7 +315,7 @@ end;
 
 function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   AContenedor: PContenedor; out AExitCode: Cardinal;
-  out ATimedOut: Boolean): string;
+  out ATimedOut: Boolean; const AEntorno: string = ''): string;
 var
   SA: TSecurityAttributes;
   ReadH, WriteH: THandle;
@@ -372,8 +372,16 @@ begin
     Launched := CreateProcessEnContenedor(AContenedor^, Cmd, WorkDirPtr,
       CREATE_NO_WINDOW or CREATE_SUSPENDED, SI, PI)
   else
-    Launched := CreateProcessConHandles(Cmd, WorkDirPtr,
-      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, SI, PI);
+  begin
+    var Env: PChar := nil;
+    var Flags: DWORD := CREATE_NO_WINDOW or CREATE_SUSPENDED;
+    if AEntorno <> '' then
+    begin
+      Env := PChar(AEntorno);
+      Flags := Flags or CREATE_UNICODE_ENVIRONMENT;
+    end;
+    Launched := CreateProcessConHandles(Cmd, WorkDirPtr, Flags, Env, SI, PI);
+  end;
   if not Launched then
   begin
     // What Windows said, read before anything else is called, and CARRIED
@@ -555,11 +563,11 @@ begin
 end;
 
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
-  out AExitCode: Cardinal): string;
+  out AExitCode: Cardinal; const AEntorno: string): string;
 var
   Ignored: Boolean;
 begin
-  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, nil, AExitCode, Ignored);
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, nil, AExitCode, Ignored, AEntorno);
 end;
 
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;

@@ -1,0 +1,7 @@
+﻿object DummyBlobsF: TDummyBlobsF
+  ClientWidth = 160
+  ClientHeight = 100
+  object Image1: TImage
+    Bitmap.PNG = {00010203040506070809}
+  end
+end

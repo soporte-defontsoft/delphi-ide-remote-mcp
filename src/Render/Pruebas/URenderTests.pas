@@ -52,6 +52,22 @@ type
     [Test] procedure Fmx_frames_inline_con_cambios;
   end;
 
+  { Con las cobayas DUMMY: RENDER_COBAYAS apunta a Pruebas\DUMMY. }
+  [TestFixture]
+  TRenderDUMMYTests = class
+  public
+    [Test] procedure Vcl_eventos;
+    [Test] procedure Vcl_referencias;
+    [Test] procedure Fmx_referencias;
+    [Test] procedure Vcl_blobs;
+    [Test] procedure Fmx_blobs;
+    [Test] procedure Vcl_coleccion;
+    [Test] procedure Vcl_herencia_ciclica;
+    [Test] procedure Vcl_inline_ciclico;
+    [Test] procedure Fmx_inline_ciclico;
+    [Test] procedure Vcl_archivo_avi;
+  end;
+
   { Con las cobayas de Galatea: solo si su carpeta existe }
   [TestFixture]
   TRenderGalateaTests = class
@@ -519,6 +535,119 @@ begin
   Assert.IsTrue(R.Valor(FR_RECT).StartsWith('pnlVelo='), R.Valor(FR_RECT));
 end;
 
+
+{ ---- cobayas DUMMY: solo datos propios, sin proyectos privados ---- }
+
+function RenderDUMMY(const ANombre: string): TRespuesta;
+var
+  Args: string;
+begin
+  Args := Format('--path "%s" --out "%s" --root form --packages none --nonvisual off ' +
+    '--fidelity print --style none --timeout 2500', [Cobaya(ANombre), Salida(ANombre)]);
+  if SameText(ExtractFileExt(ANombre), '.fmx') then
+    Result := Fmx(Args)
+  else
+    Result := Vcl(Args);
+end;
+
+procedure CompruebaDUMMY(const R: TRespuesta);
+begin
+  Assert.AreEqual<Cardinal>(FR_RC_OK, R.Rc, string.Join(' | ', R.Lineas));
+  Assert.IsTrue(TFile.Exists(R.Valor(FR_CAPTURE)), 'PNG propio creado');
+end;
+
+procedure TRenderDUMMYTests.Vcl_eventos;
+begin
+  CompruebaDUMMY(RenderDUMMY('DUMMY-events.dfm'));
+end;
+
+procedure TRenderDUMMYTests.Vcl_referencias;
+begin
+  CompruebaDUMMY(RenderDUMMY('DUMMY-references.dfm'));
+end;
+
+procedure TRenderDUMMYTests.Fmx_referencias;
+begin
+  CompruebaDUMMY(RenderDUMMY('DUMMY-references.fmx'));
+end;
+
+procedure TRenderDUMMYTests.Vcl_blobs;
+var
+  R: TRespuesta;
+begin
+  R := RenderDUMMY('DUMMY-blobs.dfm');
+  CompruebaDUMMY(R);
+  Assert.IsTrue(R.Tiene(FR_IGNORED), 'el blob invalido se ignora');
+end;
+
+procedure TRenderDUMMYTests.Fmx_blobs;
+var
+  R: TRespuesta;
+begin
+  R := RenderDUMMY('DUMMY-blobs.fmx');
+  CompruebaDUMMY(R);
+  Assert.IsTrue(R.Tiene(FR_IGNORED), 'el bitmap invalido se ignora');
+end;
+
+procedure TRenderDUMMYTests.Vcl_coleccion;
+begin
+  CompruebaDUMMY(RenderDUMMY('DUMMY-collection.dfm'));
+end;
+
+procedure TRenderDUMMYTests.Vcl_herencia_ciclica;
+begin
+  CompruebaDUMMY(RenderDUMMY('DUMMY-inherited.dfm'));
+end;
+
+procedure TRenderDUMMYTests.Vcl_inline_ciclico;
+var
+  R: TRespuesta;
+begin
+  R := RenderDUMMY('DUMMY-inline.dfm');
+  Assert.AreEqual<Cardinal>(FR_RC_TIMEOUT, R.Rc, string.Join(' | ', R.Lineas));
+  Assert.IsTrue(R.Valor(FR_ERROR).Contains('RENDER-007'));
+end;
+
+procedure TRenderDUMMYTests.Fmx_inline_ciclico;
+var
+  R: TRespuesta;
+begin
+  R := RenderDUMMY('DUMMY-inline.fmx');
+  Assert.AreEqual<Cardinal>(FR_RC_TIMEOUT, R.Rc, string.Join(' | ', R.Lineas));
+  Assert.IsTrue(R.Valor(FR_ERROR).Contains('RENDER-007'));
+end;
+
+procedure TRenderDUMMYTests.Vcl_archivo_avi;
+var
+  Dfm, Avi: string;
+  H: THandle;
+  R: TRespuesta;
+begin
+  // Control positivo y negativo del MISMO dato: distingue un setter que
+  // abre el fichero de una propiedad que solo conserva texto.
+  Dfm := TPath.Combine(Carpeta, 'DUMMY-path-runtime.dfm');
+  Avi := Cobaya('DUMMY.avi');
+  TFile.WriteAllText(Dfm, TFile.ReadAllText(Cobaya('DUMMY-path.dfm')).Replace(
+    'DUMMY.avi', Avi));
+  try
+    R := Vcl(Format('--path "%s" --out "%s" --root form --packages none ' +
+      '--fidelity print --timeout 2500', [Dfm, Salida('DUMMY-avi')]));
+    CompruebaDUMMY(R);
+    H := CreateFile(PChar(Avi), GENERIC_READ, 0, nil, OPEN_EXISTING, 0, 0);
+    Assert.IsTrue(H <> INVALID_HANDLE_VALUE, 'la cobaya se bloquea en exclusiva');
+    try
+      R := Vcl(Format('--path "%s" --out "%s" --root form --packages none ' +
+        '--fidelity print --timeout 2500', [Dfm, Salida('DUMMY-avi-locked')]));
+      Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc, string.Join(' | ', R.Lineas));
+      Assert.IsTrue(R.Tiene(FR_ERROR), 'el mismo archivo bloqueado no se abre');
+    finally
+      CloseHandle(H);
+    end;
+  finally
+    TFile.Delete(Dfm);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TRenderTests);
   // DUnitX no tiene "saltado" en marcha: un test sale Ignored solo por el
@@ -527,7 +656,12 @@ initialization
   // (ExecuteSuccessfulResult; fuente del IDE 37.0, leido el 7-oct-2026). Sin
   // las cobayas de Galatea su fixture ni se registra, y se dice.
   if HayCobayas then
-    TDUnitX.RegisterTestFixture(TRenderGalateaTests)
+  begin
+    if TFile.Exists(Cobaya('DUMMY-events.dfm')) then
+      TDUnitX.RegisterTestFixture(TRenderDUMMYTests)
+    else
+      TDUnitX.RegisterTestFixture(TRenderGalateaTests);
+  end
   else
     Writeln('NO MEDIDO: sin las cobayas de Galatea (RENDER_COBAYAS, o render_cobayas.txt junto al ' +
       'runner): los 7 casos de paquetes de terceros y estilos reales no se pasan.');

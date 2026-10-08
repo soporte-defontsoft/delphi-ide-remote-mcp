@@ -1297,6 +1297,8 @@ begin
   Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents);
 end;
 
+{ LISTA NEGRA: DANGER_TASKS y otras construcciones peligrosas conocidas.
+  No es un interprete cerrado de MSBuild; AllowBuildScripts lo decide el operador. }
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
   AIgnoreBuildEvents: Boolean): string;
 var

@@ -89,6 +89,10 @@ procedure PurgaContenedoresHuerfanos;
 procedure EnterSpawn;
 procedure LeaveSpawn;
 
+{ Un solo lector del entorno: sin secretos del servidor y con ajustes fijos
+  del hijo. No modifica el entorno del servidor ni carreras entre llamadas. }
+function EntornoSinConfiguracion(const AFijas: TArray<string> = nil): string;
+
 implementation
 
 uses
@@ -204,28 +208,46 @@ end;
   con su propia AC\Temp -existente y escribible, borrada con el perfil- y la
   API GetTempPath la devuelve (medido 2-oct-2026; solo TPath.GetTempPath de la
   RTL sale vacio bajo AppContainer, y eso es del binario del test). }
-function EntornoSinConfiguracion: string;
+function EntornoSinConfiguracion(const AFijas: TArray<string>): string;
 var
   P, Q: PChar;
   Linea: string;
+  Lineas: TStringList;
+  Sustituida: Boolean;
 begin
   Result := '';
-  P := GetEnvironmentStrings;
-  if P = nil then
-    Exit(#0#0); // un bloque de entorno vacio es DOS nulos, no uno
+  Lineas := TStringList.Create;
   try
-    Q := P;
-    while Q^ <> #0 do
-    begin
-      Linea := Q;
-      if not StartsText('DELPHI_MCP_', Linea) then
-        Result := Result + Linea + #0;
-      Inc(Q, Length(Linea) + 1);
+    Lineas.Sorted := True;
+    Lineas.CaseSensitive := False;
+    P := GetEnvironmentStrings;
+    if P <> nil then
+    try
+      Q := P;
+      while Q^ <> #0 do
+      begin
+        Linea := Q;
+        Sustituida := StartsText('DELPHI_MCP_', Linea);
+        for var Fija in AFijas do
+          if StartsText(Copy(Fija, 1, Pos('=', Fija)), Linea) then
+            Sustituida := True;
+        if not Sustituida then
+          Lineas.Add(Linea);
+        Inc(Q, Length(Linea) + 1);
+      end;
+    finally
+      FreeEnvironmentStrings(P);
     end;
+    for var Fija in AFijas do
+      Lineas.Add(Fija);
+    for Linea in Lineas do
+      Result := Result + Linea + #0;
+    if Result = '' then
+      Result := #0;
+    Result := Result + #0;
   finally
-    FreeEnvironmentStrings(P);
+    Lineas.Free;
   end;
-  Result := Result + #0;
 end;
 
 { Un descriptor de seguridad en SDDL puesto sobre ADir con AQue. 0 o el error. }

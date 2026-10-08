@@ -1,0 +1,8 @@
+﻿object DummyReferencesF: TDummyReferencesF
+  ClientWidth = 160
+  ClientHeight = 100
+  StyleBook = OtraForm.StyleBook1
+  object Label1: TLabel
+    Text = 'DUMMY'
+  end
+end

@@ -6910,10 +6910,14 @@ const
 
   { El repo no puede activar programas ni esconderlos en includes locales. }
   SR_GIT_CONFIG_PROGRAMA_FMT =
-    '[GIT-051 DENIED] Local repository configuration "%s" can load another ' +
-    'configuration or run a program. delphi_git does not use repository ' +
-    'includes or custom repository programs. Remove this local setting before using ' +
-    'delphi_git; the setting value is deliberately not included here.';
+    '[GIT-051 DENIED] Local/worktree repository configuration key "%s" ' +
+    'is not admitted by this server. No requested git operation was run. ' +
+    'Remove this local setting before using delphi_git; its value is never shown.';
+
+  SR_GUARD_GIT_METADATA_FMT =
+    '[GUARD-033 DENIED] "%s" is Git metadata (.git), or contains it. ' +
+    'Only delphi_git may access repository metadata; file tools cannot read, ' +
+    'write, copy, move or delete it, including through links.';
 
   SR_GIT_CONFIG_NO_VERIFICABLE =
     '[GIT-052 DENIED] The local repository configuration could not be ' +

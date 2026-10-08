@@ -17,6 +17,11 @@ regla busca su formato FUERA de su casa (fichero y funcion). Cada regla lleva
 su MUTANTE dentro: una copia plantada en un fragmento de Pascal que el
 mismo buscador tiene que cazar (si no la caza, la regla no mide nada).
 
+Deuda declarada (listas negras): GitArgDenied (opciones libres),
+ShellArgDenied (metacaracteres), HazardScan (DANGER_TASKS de MSBuild) y
+BorradoDenegado (lugares protegidos tras su lista blanca de desechables).
+La config local/worktree de Git y los hosts de todos sus remotos son listas blancas.
+
 Uso:  python tests/test_paisaje.py
 """
 import os, re, glob
@@ -205,4 +210,24 @@ for regla in REGLAS:
     malos = fuera_de_casa(regla, TEXTOS)
     check('"%s" solo en su casa - %s' % (regla[0], regla[3]), not malos, '\n      ' + '\n      '.join(malos))
 
+# Toda puerta de este censo dice LISTA NEGRA en su cabecera. Este control
+# mide la declaracion, NO que una lista negra sea completa.
+LISTAS_NEGRAS = [
+    ('Lsp.Guard.pas','GitArgDenied'),
+    ('Lsp.Guard.pas','ShellArgDenied'),
+    ('Lsp.Guard.pas','BorradoDenegado'),
+    ('Lsp.Dproj.pas','HazardScan'),
+]
+def negra_declarada(texto,funcion):
+    for m in re.finditer(r'(?m)^function '+re.escape(funcion)+r'\b',texto):
+        antes=texto[:m.start()].rstrip()
+        inicio=antes.rfind('{')
+        if inicio>=0 and antes.endswith('}') and 'LISTA NEGRA' in antes[inicio:]:
+            return True
+    return False
+for fichero,funcion in LISTAS_NEGRAS:
+    texto=next(t for f,t in TEXTOS if os.path.basename(f)==fichero)
+    check('deuda declarada '+fichero+' '+funcion,negra_declarada(texto,funcion))
+    check('mutante cabecera sin declarar '+funcion,
+          not negra_declarada(texto.replace('LISTA NEGRA','sin declarar'),funcion))
 mc.fin('paisaje battery')

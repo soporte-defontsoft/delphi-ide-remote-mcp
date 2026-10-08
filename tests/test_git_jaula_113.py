@@ -119,8 +119,10 @@ try:
     CFG = os.path.join(REPO, '.git', 'config')
     out = srv.call('delphi_textedit', {'path': CFG, 'old': '[core]',
         'new': '[push]\n\trecurseSubmodules = on-demand\n[core]'})
-    check('el agente pone push.recurseSubmodules por textedit',
-          not mc.fallo(out) and 'on-demand' in mc.lee(CFG), out)
+    check('el agente ya no toca config por textedit',
+          '[GUARD-033 DENIED]' in out, out)
+    # El operador del arnes planta la config para medir TAMBIEN el compositor.
+    git('config', 'push.recurseSubmodules', 'on-demand')
     open(TRACE, 'w').close()
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'push', 'args': 'origin main'})
     trace = mc.lee(TRACE)

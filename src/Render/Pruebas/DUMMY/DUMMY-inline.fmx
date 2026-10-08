@@ -1,0 +1,6 @@
+﻿object DummyCycleF: TDummyCycleF
+  ClientWidth = 160
+  ClientHeight = 100
+  inline Frame1: TDummyCycleFrameF
+  end
+end

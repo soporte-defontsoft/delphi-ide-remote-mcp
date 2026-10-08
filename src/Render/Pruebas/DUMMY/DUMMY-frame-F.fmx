@@ -1,0 +1,6 @@
+﻿object DummyCycleFrameF: TDummyCycleFrameF
+  Width = 100.000000000000000000
+  Height = 60.000000000000000000
+  inline Frame1: TDummyCycleFrameF
+  end
+end

@@ -290,7 +290,8 @@ uses
   Lsp.DesignerBin,
   Lsp.NetDrives, // DirectedMessagesPending, para la ficha del servidor
   Lsp.Pascal,
-  Lsp.Regex; // TExprDelAgente: la expresion de delphi_search regex=true
+  Lsp.Regex, // TExprDelAgente: la expresion de delphi_search regex=true
+  Lsp.Sandbox;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
@@ -913,7 +914,8 @@ begin
   // Nunca ejecutar los hooks ni el monitor de un repo del workspace.
   // El directorio del servidor no admite escrituras de los clientes.
   // La regla general tambien manda en switch/restore y en los hijos de Git.
-  Result := 'git.exe -c submodule.recurse=false -c core.fsmonitor=false -c core.hooksPath=' +
+  Result := 'git.exe -c submodule.recurse=false -c core.fsmonitor=false ' +
+    '-c commit.gpgsign=false -c tag.gpgsign=false -c core.hooksPath=' +
     EnComillas(ServerTempDir('git-hooks-off')) + ' -C ' +
     EnComillas(ARepo) + AFijado + ' ' + Resto;
 end;
@@ -931,7 +933,8 @@ function GitCorre(const ARepo, AFijado, AResto: string; ATimeoutMs: Integer;
   out ACodigo: Cardinal): string;
 begin
   try
-    Result := RunCaptured(GitLinea(ARepo, AFijado, AResto), ATimeoutMs, ACodigo);
+    Result := RunCapturedIn(GitLinea(ARepo, AFijado, AResto), '', ATimeoutMs,
+      ACodigo, EntornoSinConfiguracion(['GIT_TERMINAL_PROMPT=0', 'GCM_INTERACTIVE=never']));
   except
     on E: EOSError do
     begin
@@ -951,7 +954,7 @@ end;
 
 function ConfiguracionGitDenegada(const ARepo, AFijado: string): string;
 var
-  Salida, Registro, Clave: string;
+  Salida, Registro, Clave, Valor: string;
   Registros: TArray<string>;
   Codigo: Cardinal;
   P: Integer;
@@ -977,25 +980,51 @@ begin
       P := Pos(#10, Registro);
       // Una clave sin valor es un booleano true valido en la sintaxis de git.
       if P = 0 then
-        Clave := LowerCase(Registro)
+      begin
+        Clave := LowerCase(Registro);
+        Valor := 'true';
+      end
       else
+      begin
         Clave := LowerCase(Copy(Registro, 1, P - 1));
+        Valor := Copy(Registro, P + 1, MaxInt);
+      end;
       // El valor no sale en el rechazo: podria llevar credenciales.
-      if (Clave = 'include.path') or
-         (Clave.StartsWith('includeif.') and Clave.EndsWith('.path')) or
-         (Clave.StartsWith('filter.') and
-           (Clave.EndsWith('.clean') or Clave.EndsWith('.smudge') or
-            Clave.EndsWith('.process'))) or
-         (Clave = 'diff.external') or
-         (Clave.StartsWith('diff.') and
-           (Clave.EndsWith('.command') or Clave.EndsWith('.textconv'))) or
-         (Clave.StartsWith('gpg.') and Clave.EndsWith('.program')) or
-         (Clave = 'core.sshcommand') or
-         (Clave = 'credential.helper') or
-         (Clave.StartsWith('credential.') and Clave.EndsWith('.helper')) or
-         (Clave = 'core.gitproxy') or
-         (Clave.StartsWith('remote.') and
-           (Clave.EndsWith('.uploadpack') or Clave.EndsWith('.receivepack'))) then
+      // LISTA BLANCA: claves conocidas sin programas ni rutas de lectura.
+      // No se permiten familias enteras: gc.*, diff.* o remote.* crecen.
+      var Permitida := MatchText(Clave, [
+        'core.repositoryformatversion', 'core.filemode', 'core.bare',
+        'core.logallrefupdates', 'core.symlinks', 'core.ignorecase',
+        'core.autocrlf', 'core.eol', 'core.safecrlf', 'core.precomposeunicode',
+        'core.protectntfs', 'core.protecthfs', 'core.worktree',
+        'user.name', 'user.email', 'user.signingkey',
+        'commit.gpgsign', 'tag.gpgsign', 'extensions.worktreeconfig',
+        'extensions.objectformat', 'fetch.recursesubmodules',
+        'push.recursesubmodules', 'submodule.recurse', 'push.default']);
+      var Partes := Clave.Split(['.']);
+      if Length(Partes) >= 3 then
+      begin
+        var Familia := Partes[0];
+        var Campo := Partes[High(Partes)];
+        if Familia = 'remote' then
+          Permitida := MatchText(Campo, ['url', 'pushurl', 'fetch', 'push',
+            'mirror', 'tagopt', 'prune', 'prunetags'])
+        else if Familia = 'branch' then
+          Permitida := MatchText(Campo, ['remote', 'pushremote', 'merge', 'description'])
+        else if Familia = 'submodule' then
+          Permitida := MatchText(Campo, ['url', 'path', 'active', 'ignore',
+            'branch', 'fetchrecursesubmodules']);
+      end;
+      // LFS es el UNICO programa local admitido, con su comando estandar EXACTO.
+      if Clave = 'filter.lfs.clean' then
+        Permitida := Valor = 'git-lfs clean -- %f'
+      else if Clave = 'filter.lfs.smudge' then
+        Permitida := Valor = 'git-lfs smudge -- %f'
+      else if Clave = 'filter.lfs.process' then
+        Permitida := Valor = 'git-lfs filter-process'
+      else if Clave = 'filter.lfs.required' then
+        Permitida := SameText(Valor, 'true');
+      if not Permitida then
         Exit(MsgFmt(SR_GIT_CONFIG_PROGRAMA_FMT, [Clave]));
     end;
   end;
@@ -1221,9 +1250,9 @@ function CarpetaDeRemotoDenegada(const ACmd, ACarpeta: string;
   function Puerta(const ASitio: string): string;
   begin
     if ACmd = 'push' then
-      Result := PathDenied(ASitio)
+      Result := PathDenied(ASitio, True)
     else
-      Result := ReadPathDenied(ASitio);
+      Result := ReadPathDenied(ASitio, True);
     if Result <> '' then
       Result := MsgFmt(SR_GIT_REMOTO_FUERA_FMT, [ACmd, ASitio,
         IfThen(ACmd = 'push', 'write', 'read')]);
@@ -1271,10 +1300,9 @@ end;
 
   Un nombre se cambia por sus direcciones - TODAS las que tenga: git envia a
   cada una - y se juzgan esas. Sin remoto en la llamada, git usa uno de los
-  del repo: se juzgan todos. Las de red de un remoto del repo valen, como
-  siempre (las puso el operador, o un clone que paso por su lista de hosts);
-  la de red que se escribe en la llamada la juzga esa lista, en la puerta, y
-  tiene que ser de las que la lista entiende: con su esquema, o con usuario.
+  del repo: se juzgan todos. Cada direccion de red pasa por la lista de
+  hosts, proceda de la llamada o del repo. Tiene que ser una direccion que
+  esa lista entiende: con su esquema, o con usuario.
 
   Si git no contesta a lo que se le pregunta para juzgar, no se usa.
 
@@ -1316,9 +1344,14 @@ begin
   for Direccion in Direcciones do
     case ClaseDeDireccion(Direccion, Carpeta) of
       drRed:
-        // la escrita en la llamada, de las que la lista de hosts entiende
-        if EscritaEnLaLlamada and (GitUrlHost(Direccion) = '') then
-          Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
+        begin
+          // Tanto la config como la llamada pasan por la MISMA lista de hosts.
+          if GitUrlHost(Direccion) = '' then
+            Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
+          Result := GitRemoteDenied(EnComillas(Direccion));
+          if Result <> '' then
+            Exit;
+        end;
       drCarpeta:
         begin
           try
@@ -1459,14 +1492,14 @@ begin
   // de escritura y sale con el motivo de referencia.
   if (ReadOnlyRootOf(Repo) <> '') and
      GitCommandIsQuery(Params.Command, Params.Args, Params.Message) then
-    Result := ReadPathDenied(Repo)
+    Result := ReadPathDenied(Repo, True)
   // el destino de un clone es un sitio donde se ESCRIBE: la puerta de
   // escritura (jaula + carpetas muertas), como su gemela worktree add. Se
   // clonaba dentro de __delphi-temp, __delphi-patch o __history (septima)
   else if SameText(Params.Command.Trim, 'clone') then
     Result := WriteTargetDenied(Repo)
   else
-    Result := PathDenied(Repo);
+    Result := PathDenied(Repo, True);
   if Result <> '' then
     Exit;
   if TFile.Exists(Repo) then
@@ -1573,9 +1606,9 @@ begin
       begin
         if (ReadOnlyRootOf(Sitio) <> '') and
            GitCommandIsQuery(Params.Command, Params.Args, Params.Message) then
-          Result := ReadPathDenied(Sitio)
+          Result := ReadPathDenied(Sitio, True)
         else
-          Result := PathDenied(Sitio);
+          Result := PathDenied(Sitio, True);
         if Result <> '' then
           Exit(MsgFmt(SR_GIT_REPO_FUERA_FMT, [Params.Repo, Sitio]));
       end;
@@ -2520,7 +2553,7 @@ begin
     begin
       Result := Dir;
       Head := TPath.Combine(Dir, '.git\HEAD');
-      if TFile.Exists(Head) then
+      if (ReadPathDenied(Head) = '') and TFile.Exists(Head) then
         try
           ABranch := TFile.ReadAllText(Head).Trim;
           if ABranch.StartsWith('ref:') then

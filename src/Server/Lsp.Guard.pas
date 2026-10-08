@@ -106,7 +106,7 @@ function ComandoDeTest(const ACmd, AProject, APath: string): string;
   correcto respecto a esa tabla, y el tope de rutas largas de la 1.7.2 cayo
   antes de la jaula con un perdon y abrio la lectura de toda ruta larga
   (undecima revision; David: "dos preguntas, dos helpers"). }
-function JaulaDenegada(const APath: string): string; overload;
+function JaulaDenegada(const APath: string; APermiteGit: Boolean = False): string; overload;
 
 { LA PREGUNTA DE ESCRITURA: la jaula (JaulaDenegada) y DESPUES lo que solo
   importa al escribir - una referencia se lee y no se toca, un ReadOnlyPaths
@@ -115,14 +115,15 @@ function JaulaDenegada(const APath: string): string; overload;
   la jaula ya paso, una regla mal puesta niega de mas y nunca abre. Los
   escritores preguntan por EscrituraDenegada (suma el modo solo lectura) y
   WriteTargetDenied (suma temporales, papelera y la medida del escritor). }
-function PathDenied(const APath: string): string;
+function PathDenied(const APath: string; APermiteGit: Boolean = False): string;
 
 { La puerta de las tools que LEEN (read/search/list/fetch/LSP): la jaula tal
   cual, mas la pista de la zona de biblioteca en la negativa de fuera. }
-function ReadPathDenied(const APath: string): string;
+function ReadPathDenied(const APath: string; APermiteGit: Boolean = False): string;
 
 { The configured roots (empty array = unrestricted). }
 function WorkspaceRoots: TArray<string>;
+
 
 { Carpetas de DENTRO de la jaula que se leen pero no se escriben: el
   ReadOnlyPaths= del workspace activo. Vacio = ninguna, que es el
@@ -565,7 +566,8 @@ type
   si lo cruzaria (quitar un worktree: git lo atraviesa, medido el
   26-sep-2026). Un parametro del recorredor, no otro recorredor. }
 procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
-  const AAlEnlace: TVisitaRuta = nil);
+  const AAlEnlace: TVisitaRuta = nil; const AOmite: TOmiteAlCopiar = nil;
+  AFallaSiIlegible: Boolean = False);
 
 { LA regla de enlaces de quien RECORRE un arbol: se sigue solo si lo de
   detras se puede LEER en esta sesion. La usan el copiador, la decision de
@@ -1388,13 +1390,10 @@ function ShellArgDenied(const AText: string): string;
   a proxy into its own network (localhost, internal services, metadata
   endpoints) and into an exfiltration channel.
 
-  So: an EXPLICIT url in a git argument must match GitRemotes= del workspace
-  activo, a
-  comma-separated list of host names the operator wrote down. With that
-  setting empty - the default - explicit URLs are refused outright. The remotes
-  the OPERATOR configured in the repository keep working untouched (`push
-  origin main` names a remote, not a URL): the decision about where this
-  machine may talk to belongs to whoever owns the machine. }
+  Toda direccion de red pasa por GitRemotes= del workspace activo, una
+  lista de hosts que declara el operador. Vacia (el valor por defecto),
+  niega tanto las direcciones de la llamada como las de un remoto del repo.
+  Solo el operador decide los hosts con los que esta maquina puede hablar. }
 function GitRemoteDenied(const AText: string): string;
 
 { El host de una direccion de RED de git; '' si no lo es (un nombre, una
@@ -3898,7 +3897,9 @@ begin
   end;
 end;
 
-function GitArgDenied(const AArgs: string): string;
+{ LISTA NEGRA: argumentos libres de git, con opciones peligrosas conocidas.
+  La config y los remotos tienen sus puertas cerradas independientes. }
+function GitArgDenied(const AArgs, ACmd: string): string;
 var
   Tok, T: string;
 begin
@@ -3906,6 +3907,29 @@ begin
   for Tok in TrocearArgs(AArgs) do
   begin
     T := Tok.ToLower;
+    if MatchText(ACmd, ['commit', 'tag']) then
+    begin
+      // Git admite abreviaciones largas y grupos cortos: --gpg, -aS, -fs.
+      // Una opcion que consume texto corta el grupo; la S de -mMENSAJE no firma.
+      var Opcion := PrimerTrozo(T, ['=']);
+      var Firma := (Length(Opcion) >= 3) and
+        ('--gpg-sign'.StartsWith(Opcion) or '--sign'.StartsWith(Opcion) or
+         Opcion.StartsWith('--sign') or
+         ((ACmd = 'tag') and '--local-user'.StartsWith(Opcion)));
+      if Tok.StartsWith('-') and not Tok.StartsWith('--') then
+        for var I := 2 to Length(Tok) do
+        begin
+          if (Tok[I] = 'S') or ((ACmd = 'tag') and CharInSet(Tok[I], ['s', 'u'])) then
+          begin
+            Firma := True;
+            Break;
+          end;
+          if not CharInSet(Tok[I], ['a', 'f', 'v', 'q', 'e', 'i', 'o', 'd', 'l']) then
+            Break;
+        end;
+      if Firma then
+        Exit(MsgFmt(SR_GIT_OPTION_FMT, [Tok]));
+    end;
     if OpcionDeFicheroGit(Tok) or
        T.StartsWith('--output') or          // writes a file (diff/show)
        T.StartsWith('--no-index') or        // reads arbitrary paths, any dir
@@ -3983,6 +4007,8 @@ begin
   end;
 end;
 
+{ LISTA NEGRA: metacaracteres de shell conocidos; no sustituye las listas
+  blancas de ordenes, identificadores o plataformas de cada herramienta. }
 function ShellArgDenied(const AText: string): string;
 const
   Bad: array [0 .. 8] of string = (';', '|', '&', '`', '$', '<', '>', #13, #10);
@@ -4604,9 +4630,9 @@ begin
     // quien ESCRIBE, la jaula a secas: una pista de lectura en la negativa
     // de un textedit create despistaba (duodecima revision, r12c)
     if LlamadaLee(AToolName, AArguments, Que) then
-      Result := ReadPathDenied(V)
+      Result := ReadPathDenied(V, SameText(AToolName, 'delphi_git'))
     else
-      Result := JaulaDenegada(V);
+      Result := JaulaDenegada(V, SameText(AToolName, 'delphi_git'));
     if Result <> '' then
       Exit;
     // Dentro, pero en una raiz cuya LETRA no esta conectada en el servidor:
@@ -5012,7 +5038,7 @@ begin
   if SameText(AToolName, 'delphi_git') and Assigned(AArguments) then
   begin
     GitArgs := ArgStr(AArguments, 'args');
-    Result := GitArgDenied(GitArgs);
+    Result := GitArgDenied(GitArgs, LowerCase(ArgStr(AArguments, 'command').Trim));
     if Result <> '' then
       Exit;
     // An explicit URL anywhere in a git call is an outbound connection this
@@ -5676,6 +5702,47 @@ begin
   end;
 end;
 
+{ .git se reconoce por su lugar declarado Y real, con alias 8.3 incluidos.
+  Una unica decision para lectores, escritores y operaciones del arbol. }
+function MetadatosGitDenegados(const APath: string): string;
+begin
+  Result := '';
+  for var Ruta in TArray<string>.Create(LongCanonical(APath), LongCanonical(RealPath(APath))) do
+    for var Segmento in Ruta.Split(['\', '/'], TStringSplitOptions.ExcludeEmpty) do
+      if SameText(Segmento, '.git') then
+        Exit(MsgFmt(SR_GUARD_GIT_METADATA_FMT, [APath]));
+end;
+
+{ Operaciones del PADRE: decidir antes de copiar/borrar/renombrar nada.
+  El recorrido de la casa corta al primer metadato, sin entrar en .git.
+  No poder revisar una rama no autoriza a moverla. }
+function MetadatosGitEnArbolDenegados(const APath: string): string;
+var
+  Motivo: string;
+  Visita: TVisitaRuta;
+begin
+  Motivo := MetadatosGitDenegados(APath);
+  if (Motivo = '') and TDirectory.Exists(APath) and not EsEnlace(APath) then
+  begin
+    Visita :=
+      procedure(const P: string)
+      begin
+        if Motivo = '' then
+          Motivo := MetadatosGitDenegados(P);
+      end;
+    try
+      RecorreSinEnlaces(APath, Visita, Visita,
+        function(const P: string): Boolean
+        begin
+          Result := Motivo <> '';
+        end, True);
+    except
+      Motivo := MsgFmt(SR_GUARD_GIT_METADATA_FMT, [APath]);
+    end;
+  end;
+  Result := Motivo;
+end;
+
 function BorradoDenegado(const ADir: string): string;
 var
   Full, Real, Seg, P: string;
@@ -5694,6 +5761,9 @@ begin
   if (Length(Full) <= 3) or (Full.StartsWith('\\') and
      (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_UNIDAD_O_RECURSO_ENTERO)]));
+  Result := MetadatosGitEnArbolDenegados(Full);
+  if Result <> '' then
+    Exit;
   // la ruta REAL del padre + el nombre (ver la nota de la interface)
   Real := RutaDelEnlace(Full);
   // (1) lista blanca
@@ -5743,7 +5813,8 @@ begin
 end;
 
 procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
-  const AAlEnlace: TVisitaRuta = nil);
+  const AAlEnlace: TVisitaRuta; const AOmite: TOmiteAlCopiar;
+  AFallaSiIlegible: Boolean);
 var
   Entradas: TArray<string>;
   E: string;
@@ -5751,10 +5822,14 @@ begin
   try
     Entradas := TDirectory.GetFileSystemEntries(ADir);
   except
-    Exit; // una rama ilegible se salta
+    if AFallaSiIlegible then
+      raise;
+    Exit; // quien no pide cierre tolera ramas ilegibles
   end;
   for E in Entradas do
   begin
+    if Assigned(AOmite) and AOmite(E) then
+      Continue;
     if EsEnlace(E) then
     begin
       // ni se visita ni se entra: lo de detras no es de este arbol. Quien
@@ -5771,8 +5846,8 @@ begin
     except
       // una entrada que no se deja tocar no para las demas
     end;
-    if TDirectory.Exists(E) then
-      RecorreSinEnlaces(E, AVisita, AAlEnlace);
+    if TDirectory.Exists(E) and (not Assigned(AOmite) or not AOmite(E)) then
+      RecorreSinEnlaces(E, AVisita, AAlEnlace, AOmite, AFallaSiIlegible);
   end;
 end;
 
@@ -6027,6 +6102,9 @@ var
 begin
   if DentroDeSiMismo(AOrigen, ADestino) then
     Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
+  Result := MetadatosGitEnArbolDenegados(AOrigen);
+  if Result <> '' then
+    Exit;
   Hallado := '';
   if TFile.Exists(AOrigen) then
   begin
@@ -6079,6 +6157,9 @@ begin
   except
     Exit; // una ruta que no parsea es cosa de PathDenied
   end;
+  Result := MetadatosGitEnArbolDenegados(Full);
+  if Result <> '' then
+    Exit;
   P := LugarProtegidoEn(RutaDelEnlace(Full));
   if P = '' then
     Exit;
@@ -6716,9 +6797,12 @@ begin
   Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
-function JaulaDenegada(const APath: string; out AFueraDeJaula: Boolean): string; overload;
+function JaulaDenegada(const APath: string; out AFueraDeJaula: Boolean;
+  APermiteGit: Boolean): string; overload;
 begin
   Result := JaulaDecide(APath, AFueraDeJaula);
+  if (Result = '') and not APermiteGit then
+    Result := MetadatosGitDenegados(APath);
   // Un FICHERO que llega con separador final (x.txt\) nombrado como carpeta:
   // se leia como el fichero y fallaba dentro de Windows (INTERNAL, septima
   // revision). Una carpeta con su separador es lo normal. Y DESPUES de la
@@ -6730,20 +6814,20 @@ begin
     Result := MsgFmt(SR_GUARD_BARRA_FINAL_FMT, [APath]);
 end;
 
-function JaulaDenegada(const APath: string): string; overload;
+function JaulaDenegada(const APath: string; APermiteGit: Boolean): string; overload;
 var
   Fuera: Boolean;
 begin
-  Result := JaulaDenegada(APath, Fuera);
+  Result := JaulaDenegada(APath, Fuera, APermiteGit);
 end;
 
-function PathDenied(const APath: string): string;
+function PathDenied(const APath: string; APermiteGit: Boolean): string;
 var
   Roots: TArray<string>;
   Full, R: string;
 begin
-  // PRIMERO la jaula, sin perdones; lo que sigue solo importa al escribir
-  Result := JaulaDenegada(APath);
+  // PRIMERO la jaula; solo delphi_git recibe el permiso de metadatos.
+  Result := JaulaDenegada(APath, APermiteGit);
   if Result <> '' then
     Exit;
   Roots := WorkspaceRoots;
@@ -7425,13 +7509,13 @@ begin
   Result := LibraryRoots;
 end;
 
-function ReadPathDenied(const APath: string): string;
+function ReadPathDenied(const APath: string; APermiteGit: Boolean): string;
 var
   Fuera: Boolean;
 begin
   // la jaula tal cual: sin perdones que acertar (hasta la 1.7.3 era PathDenied
   // menos una tabla de perdones por motivo; ver JaulaDenegada)
-  Result := JaulaDenegada(APath, Fuera);
+  Result := JaulaDenegada(APath, Fuera, APermiteGit);
   // Refused for reading: say that a library zone exists and how to see it.
   // Field 2026-08-22: an agent listed the PARENT of a registered component
   // folder, got the plain jail refusal, and concluded list and read disagreed.
