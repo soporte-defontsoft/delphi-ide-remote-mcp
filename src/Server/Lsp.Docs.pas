@@ -1264,7 +1264,7 @@ begin
   Vars := TStringList.Create;
   try
     // LA tabla de macros del IDE ($(BDS), $(BDSCOMMONDIR), el catalogo de
-    // GetIt...), la de Lsp.Guard: una propia con solo $(BDS) perdia en
+    // GetIt...), la de Lsp.Discovery: una propia con solo $(BDS) perdia en
     // silencio la ayuda registrada con otra macro (revision de la 1.10.0)
     IdeMacroVars(Info, Vars);
     for var H in IdeHelpFiles(Info.Version) do

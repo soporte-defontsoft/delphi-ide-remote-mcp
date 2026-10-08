@@ -69,7 +69,6 @@ uses
   System.Classes,
   System.SyncObjs,
   System.Generics.Collections,
-  Lsp.Texts,
   Lsp.Settings;         // SessionTimeoutMinutes: cuanto dura una sesion sin uso
 
 var

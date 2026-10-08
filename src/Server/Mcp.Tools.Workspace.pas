@@ -901,7 +901,7 @@ begin
   // de David, 24-sep-2026: cambiar la jaula bajo sesiones vivas es una
   // superficie nueva). Lo que si se dice es que el fichero en disco es mas
   // nuevo que el que tiene cargado: lo tocado no esta cargado, hay que
-  // reiniciar. Lo decide Lsp.Guard, el dueno del ini, que sabe lo que
+  // reiniciar. Lo decide Lsp.Settings, el dueno del ini, que sabe lo que
   // escribio el mismo.
   var IniEn: TDateTime;
   if SettingsIniMasNuevoQueElCargado(IniEn) then

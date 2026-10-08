@@ -304,7 +304,7 @@ begin
   Result := '';
   // Temporal DEL SERVIDOR: se baja el /etc/os-release del target, se lee y se
   // tira. El agente no lo ve nunca, asi que va junto al ejecutable y no en la
-  // jaula de nadie (ver el nombrador en Lsp.Guard).
+  // jaula de nadie (ver el nombrador en Lsp.Casa).
   Tmp := ServerTempDir('sdk-' +
     FragmentoUnico);
   try

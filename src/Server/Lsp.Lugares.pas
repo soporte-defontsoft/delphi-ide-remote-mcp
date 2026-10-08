@@ -76,7 +76,7 @@ function LibraryRoots: TArray<string>;
   (Lsp.Guard). }
 function LugaresDeclarados: TArray<string>;
 { El host UNC de los lugares declarados si es UNO solo: lo que \\srvhost\
-  significa al volver del agente (ExpandDriveValue, Lsp.Guard). }
+  significa al volver del agente (ExpandDriveValue, Lsp.Mascara). }
 function HostUncDeclarado: string;
 { Las raices y referencias de una letra de red, con su ruta de red (por
   indice): las leen FormaDeclarada y el enmascarador (MaskDriveText). }

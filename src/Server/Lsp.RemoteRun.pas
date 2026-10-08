@@ -466,7 +466,7 @@ begin
   // lo busca con su patron.
   JobId := SelloUnico;
   // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a
-  // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Guard).
+  // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Casa).
   TmpDir := ServerTempDir('remoterun');
   CrearCarpeta(TmpDir);
   // El lanzador del sistema del destino, con el nombre del trabajo: PAServer

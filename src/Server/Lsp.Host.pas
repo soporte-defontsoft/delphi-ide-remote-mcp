@@ -123,7 +123,7 @@ begin
   // parallel load.
   SetErrorMode(GetErrorMode or SEM_FAILCRITICALERRORS);
   StartLogSink; // first: everything from here on reaches the disk
-  // no settings.ini side effects; y EL nombre del fichero, el de Lsp.Guard: el
+  // no settings.ini side effects; y EL nombre del fichero, el de Lsp.Settings: el
   // vendor componia el suyo (revision del 6-oct-2026)
   FSettings := TMCPSettings.Create(SettingsIniPath, False);
   FSettings.ServerName := SERVER_NAME;
@@ -366,7 +366,7 @@ begin
     begin
       SetRequestReadOnly(AReadOnly);
     end;
-  // Full bearer authorization lives in ONE place (Lsp.Guard): the
+  // Full bearer authorization lives in ONE place (Lsp.Settings, AuthorizeBearer): the
   // [Workspace.*] tokens - the secret
   // decides the jail (operator decision 2026-08-28, v0.88). Worker threads
   // are reused, so BOTH per-thread flags are set on every request.

@@ -100,8 +100,8 @@ j = jload(rbig)
 check('S1 arbol grande por defecto = summary compacto con secciones',
       j.get('mode') == 'summary' and isinstance(j.get('sections'), list) and
       j.get('totalSymbols', 0) > 50 and 'autoNote' in j, rbig[:260])
-# the fixture is Lsp.Guard.pas itself, which grows with the server: assert
-# compact relative to a hard ceiling, not to last month's size.
+# the fixture was Lsp.Guard.pas itself and grew with the server (a frozen copy
+# since 8-oct-2026, see below): compact relative to a ceiling, not to a size.
 #
 # El techo subio de 12k a 14k el 2026-09-20, A PROPOSITO y medido: desde la
 # v1.0.7 el resumen da la declaracion REAL del fuente en vez de la firma que

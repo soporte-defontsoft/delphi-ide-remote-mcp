@@ -41,7 +41,8 @@ REGLAS = [
      [('Lsp.RemoteRun.pas', 'Paclient')],
      'UN helper para todo lo que habla con un PAServer (1.16.0: cinco a mano)'),
     ('lanzar un programa', LANZA,
-     [('Lsp.BuildRunner.pas', 'RunCapturedIn'), ('Lsp.BuildRunner.pas', 'RunCaptured'),
+     # (RunCapturedIn no es casa: delega en RunCore y no lanza nada por su cuenta)
+     [('Lsp.BuildRunner.pas', 'RunCaptured'),
       ('Lsp.BuildRunner.pas', 'RunMsBuild'), ('Lsp.BuildRunner.pas', 'RunDetached'),
       ('Lsp.ProcessLaunch.pas', '*'), ('Lsp.RemoteRun.pas', 'Paclient'),
       ('Lsp.Styles.pas', 'CorreStyleConvert'), ('Mcp.Tools.Styles.pas', 'BuildStyles'),
@@ -98,7 +99,8 @@ REGLAS = [
       ('FormRender.Textos.pas', '*')],
      'ComponeOrdenDeRender la escribe y ParseaArgumentos del ayudante la lee (1.17.0)'),
     ('la linea de objeto de un form', r"'(?:object|inherited|inline) '\s*\+",
-     [('Lsp.DesignerForma.pas', 'ComponeLineaDeObjeto')],
+     # sin casa: ComponeLineaDeObjeto recibe la palabra (AClave) y no la escribe asi
+     [],
      'ComponeLineaDeObjeto la escribe y LineaDeObjeto la lee (1.17.0: el insert de delphi_designer; '
      'las plantillas de Lsp.Scaffold la componian a mano)'),
     ('un componente por su ruta en el renderizador', r'\bFindNestedComponent\s*\(',
@@ -106,13 +108,14 @@ REGLAS = [
      'ComponenteDeRuta: UN lector de Marco1.LblAviso, y de la raiz delante, para component= y state= '
      '(segunda revision de la 1.17.0: el estado de un frame suelto con su nombre delante no llegaba)'),
     ('un flotante de un form', r"\.0{18}'|ffFixed\s*,\s*16\s*,\s*18",
-     [('Lsp.DesignerBin.pas', 'FlotanteDeForm')],
+     # sin casa: FlotanteDeForm saca sus cifras (CifrasExactas), sin FloatToStrF ni el literal
+     [],
      'FlotanteDeForm: el numero de coma flotante como lo escribe el IDE en UN sitio (1.17.0: insert, '
      'set y las plantillas FMX)'),
     ('decidir la codificacion de unos bytes',
      r'\bGetBufferEncoding\b|\$FF\b[^;]*\$FE\b|\$FE\b[^;]*\$FF\b|\$EF\b[^;]*\$BB\b|\$BB\b[^;]*\$BF\b',
+     # (EncodeText escribe el BOM byte a byte, una forma que esta regla no ve: 2.1g)
      [('Lsp.Patch.pas', 'DetectEnc'), ('Lsp.Codificacion.pas', 'BomUtf8En'),
-      ('Lsp.Codificacion.pas', 'EncodeText'),
       # deuda declarada (2.1g de la 1.18.0): dos detectores sueltos; solo puede encoger
       ('Lsp.DesignerForma.pas', 'DesignerAFlujo'), ('Lsp.Docs.pas', 'KindDeAyuda')],
      'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
@@ -131,13 +134,14 @@ REGLAS = [
      'el bucle de la busqueda)'),
     ('las listas crudas de los sitios',
      r'\b(?:WorkspaceRoots|WorkspaceReadOnlyRoots|WorkspaceReadOnlyPaths|LugaresDeclarados|LibraryRoots|'
-     r'TodosLosVaults)\b',
+     r'TodosLosVaults|RaicesDeLosWorkspaces|RaicesDelModoLocal|SitiosQueNoSeTocan)\b',
      [('Lsp.Settings.pas', '*'), ('Lsp.Lugares.pas', '*'),
       # deuda declarada (2.1c de la 1.18.0): quien recorre los sitios por su cuenta
       # recalcula sus formas en cada llamada; se va con el cache de formas y el
       # comparador unico de Lsp.Lugares. Por (fichero, funcion): solo puede encoger
       ('Lsp.Guard.pas', 'ArgPathOutsideDenied'), ('Lsp.Guard.pas', 'CasasDeEntregables'),
       ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'), ('Lsp.Guard.pas', 'NegativaDeUnc'),
+      ('Lsp.Guard.pas', 'LugaresProtegidos'), ('Lsp.Guard.pas', 'PurgeServerTemp'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
       ('Lsp.Guard.pas', 'RootItselfDenied'), ('Lsp.Guard.pas', 'RutaRelativaDenegada'),
@@ -198,10 +202,10 @@ def funcion_de(lineas, n):
     return ''
 
 
-def fuera_de_casa(regla, ficheros_texto):
+def aciertos(regla, ficheros_texto):
+    """Cada linea de codigo con el formato de la regla: (fichero, n, rutina, linea)."""
     nombre, formato, casas, _ = regla
     rx = re.compile(formato)
-    malos = []
     for f, texto in ficheros_texto:
         if os.path.basename(f) == 'Lsp.Texts.pas':
             continue
@@ -209,14 +213,31 @@ def fuera_de_casa(regla, ficheros_texto):
         for n, l in enumerate(lineas):
             # una cabecera (la declaracion de un lanzador) no es una llamada
             if rx.search(l) and not CABECERA.match(l.strip()):
-                fn = funcion_de(lineas, n)
-                base = os.path.basename(f)
-                # una casa con su clase delante (TClase.Metodo) es ESE metodo; sin
-                # ella, la rutina o el metodo de ese nombre en cualquier clase
-                if not any(base == cf and (cfn == '*' or cfn.lower() in (fn.lower(), fn.split('.')[-1].lower()))
-                           for cf, cfn in casas):
-                    malos.append('%s:%d (%s) %s' % (os.path.relpath(f, REPO), n + 1, fn or '-', l.strip()[:90]))
+                yield f, n, funcion_de(lineas, n), l
+
+
+def casas_de(base, fn, casas):
+    """Las casas en las que cae la rutina fn del fichero base: una casa con su
+    clase delante (TClase.Metodo) es ESE metodo; sin ella, la rutina o el metodo
+    de ese nombre en cualquier clase; '*' es el fichero entero."""
+    return [(cf, cfn) for cf, cfn in casas
+            if base == cf and (cfn == '*' or cfn.lower() in (fn.lower(), fn.split('.')[-1].lower()))]
+
+
+def fuera_de_casa(regla, ficheros_texto):
+    malos = []
+    for f, n, fn, l in aciertos(regla, ficheros_texto):
+        if not casas_de(os.path.basename(f), fn, regla[2]):
+            malos.append('%s:%d (%s) %s' % (os.path.relpath(f, REPO), n + 1, fn or '-', l.strip()[:90]))
     return malos
+
+
+def casas_sin_uso(regla, ficheros_texto):
+    """Las casas declaradas en las que el formato ya no aparece."""
+    usadas = set()
+    for f, n, fn, l in aciertos(regla, ficheros_texto):
+        usadas.update(casas_de(os.path.basename(f), fn, regla[2]))
+    return [c for c in regla[2] if c not in usadas]
 
 
 TEXTOS = [(f, open(f, encoding='utf-8-sig', errors='replace').read()) for f in fuentes()]
@@ -274,6 +295,20 @@ check('...y el de la clase declarada no', not SUYA, SUYA)
 for regla in REGLAS:
     malos = fuera_de_casa(regla, TEXTOS)
     check('"%s" solo en su casa - %s' % (regla[0], regla[3]), not malos, '\n      ' + '\n      '.join(malos))
+
+# "Solo puede encoger" (David, 8-oct-2026): una casa declarada en la que el
+# formato ya no aparece es una puerta abierta para la proxima copia. La que
+# pierde su uso se quita de la lista (y su porque se resuelve), no se excluye.
+REGLA_DE_PRUEBA = ('de prueba', r"'zz'", [('Plantado.pas', 'ConUso'), ('Plantado.pas', 'SinUso'),
+                                          ('Plantado.pas', 'TCon.Uso'), ('Otro.pas', '*')], '')
+PLANTA_CASAS = ("unit Plantado;\nimplementation\nprocedure ConUso;\nbegin\n  X := 'zz';\nend;\n"
+                "procedure SinUso;\nbegin\n  X := 'yy';\nend;\nprocedure TCon.Uso;\nbegin\n  X := 'zz';\nend;\nend.\n")
+VACIAS = casas_sin_uso(REGLA_DE_PRUEBA, [('Plantado.pas', PLANTA_CASAS), ('Otro.pas', 'unit Otro;\nend.\n')])
+check('mutante de la casa sin uso: se cazan la rutina y el fichero sin el formato, y solo esos',
+      VACIAS == [('Plantado.pas', 'SinUso'), ('Otro.pas', '*')], VACIAS)
+for regla in REGLAS:
+    vacias = casas_sin_uso(regla, TEXTOS)
+    check('"%s": cada casa declarada tiene uso (la deuda solo puede encoger)' % regla[0], not vacias, vacias)
 
 # Toda puerta de este censo dice LISTA NEGRA en su cabecera. Este control
 # mide la declaracion, NO que una lista negra sea completa.

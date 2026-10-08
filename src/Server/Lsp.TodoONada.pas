@@ -94,7 +94,6 @@ implementation
 uses
   Winapi.Windows,
   System.SysUtils,
-  System.Classes,
   System.StrUtils,
   System.IOUtils,
   Lsp.Texts,

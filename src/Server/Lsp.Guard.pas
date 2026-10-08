@@ -10,11 +10,13 @@ unit Lsp.Guard;
 
   2. Credentials - SOLO tokens por workspace ([Workspace.<nombre>] Token= /
      ReadOnlyToken=). Sin coincidencia, 401: no hay anonimo ni modo abierto
-     (v0.98). Enforced by the HTTP transport; this unit reads and caches.
+     (v0.98). Enforced by the HTTP transport; Lsp.Settings reads and caches them.
 
   3. Read-only gate - ToolCallDenied is THE single entry gate, consulted by
      the tools dispatcher before ANY tool executes. The read/write
-     classification of every tool lives HERE and nowhere else.
+     classification of every tool lives HERE and nowhere else (git, which
+     decides by its arguments, is asked through GitCommandIsQuery, in
+     Lsp.Args).
 
   4. Reference projects - [Workspace.<name>] ReadOnlyRoots (David,
      2026-09-25): folders OUTSIDE Roots that this workspace may READ as if
@@ -730,18 +732,14 @@ uses
   Winapi.TlHelp32,      // HayOtraInstanciaViva: los procesos por su nombre, sin abrirlos
   System.SysUtils,
   System.StrUtils,
-  System.IniFiles,
   System.IOUtils,
   System.Generics.Collections,
   System.Rtti,
-  MCPServer.Types,      // BearerToken: UN lector de la cabecera Authorization
   MCPServer.Serializer, // NormalizeKey: ONE rule for argument names
   MCPServer.Tool.Base,     // IMCPToolParams: la clase de parametros de una tool
   MCPServer.Registration,  // el registro REAL de tools, no una lista nuestra
   Lsp.Attributes,          // [RutaDelServidor]
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
-  System.RegularExpressions,
-  System.Hash,
   Lsp.Patch,            // PurgaAlPasar: el recorredor purga cada papelera por la que pasa
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Sandbox,          // PurgaContenedoresHuerfanos: la otra mitad de la casa

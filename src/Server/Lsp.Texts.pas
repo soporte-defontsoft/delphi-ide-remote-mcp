@@ -49,8 +49,9 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  { La marca de las notas de arranque que son un AVISO: la escriben las SL_
-    de Lsp.Guard y la lee Lsp.Host para ponerles el prefijo de aviso. Una
+  { La marca de las notas de arranque que son un AVISO: la llevan las SL_ de
+    los que leen el arranque (Lsp.Settings, Lsp.NetDrives, Lsp.Discovery...)
+    y la lee Lsp.Host para ponerles el prefijo de aviso. Una
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';

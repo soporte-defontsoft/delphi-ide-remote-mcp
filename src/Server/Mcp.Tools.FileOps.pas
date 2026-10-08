@@ -82,12 +82,6 @@ uses
   Lsp.Identidad,
   Lsp.TodoONada;
 
-var
-  // El nombre de la carpeta de copias estaba escrito DOS veces, aqui y en
-  // Lsp.Patch. Una constante repetida es una convencion esperando a
-  // separarse: ahora la dice su duenno.
-  BACKUP_SUB: string;
-
 function IsBackupPath(const APath: string): Boolean;
 begin
   // inside the trash, OR the trash folder itself: EL lector de Lsp.Guard,
@@ -1217,7 +1211,6 @@ begin
 end;
 
 initialization
-  BACKUP_SUB := TrashFolderName;
   TMCPRegistry.RegisterTool('delphi_delete',
     function: IMCPTool begin Result := TDelphiDeleteTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_move',

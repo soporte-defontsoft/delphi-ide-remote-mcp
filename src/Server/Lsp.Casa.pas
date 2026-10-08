@@ -7,7 +7,8 @@ unit Lsp.Casa;
   compone una de esas rutas o nombres a mano: se piden aqui.
 
   Salen de Lsp.Guard el 8-oct-2026 (la 1.18.0, la version de la limpieza),
-  movidos sin cambiar una linea. Solo los nombradores: no usan nada de la
+  movidos sin cambiar una linea. Los nombradores y el escritor de la casa
+  (EscribeEnCasaDelServidor), que no pasa por la jaula: no usan nada de la
   jaula, y los usan la jaula y el lector del settings.ini (SettingsIniPath).
   Lo que se hace CON esas carpetas - los entregables del agente
   (AgentTempDir, CaptureTarget), la purga del arranque y la presencia de

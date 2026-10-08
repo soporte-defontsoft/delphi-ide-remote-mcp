@@ -194,8 +194,9 @@ end;
 // never told (field report 2026-08-25: a garbage id was accepted). Auth is
 // the Bearer token, so this was never a security hole - but the streamable
 // HTTP contract says an unknown session must answer 404 so the client
-// re-initializes. Since 1.0.17 the registry lives in Lsp.Identidad, the SAME one
-// that holds the session's identity (this unit kept a second ring of ids
+// re-initializes. Since 1.0.17 the registry lives in ONE place - Lsp.Guard
+// then, Lsp.Identidad since 1.18.0 - the SAME one that holds the session's
+// identity (this unit kept a second ring of ids
 // until then: two writers for one thing), and a session also EXPIRES there
 // after SessionTimeoutMinutes idle.
 

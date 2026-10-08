@@ -1146,7 +1146,7 @@ begin
     // Temporal DEL SERVIDOR, y de los que importan: lleva el mensaje que
     // escribe quien llama. Vivia en el %TEMP% de la MAQUINA, fuera de toda
     // jaula; se borra siempre (mas abajo), pero mientras existe no tiene por
-    // que estar donde lo vea cualquiera. Por el nombrador (Lsp.Guard).
+    // que estar donde lo vea cualquiera. Por el nombrador (Lsp.Casa).
     CrearCarpeta(ServerTempDir('git'));
     MsgFile := NombreDeMensajeGit;
     TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));

@@ -48,6 +48,11 @@ type
 
 function ExecutePatch(const A: TPatchArgs): string;
 
+type
+  TMetrics = record
+    Bytes, CR, LF, CRLF, Loose, High, Corruption: Integer;
+  end;
+
 { EL detector de codificacion, publico para que la suite DUnitX del motor
   (LspUnitTests) lo pruebe sin pasar por un fichero; sus dos inversas
   (DecodeBytes / EncodeText) y las clases que decide (TEncKind) estan en
@@ -55,11 +60,6 @@ function ExecutePatch(const A: TPatchArgs): string;
   como lo escribe el IDE cuando se elige ese formato al ver un .dfm como
   texto) entro el 24-sep-2026; antes lo reconocia SOLO
   Lsp.Client.LoadSourceText por su cuenta. Un detector, no dos. }
-type
-  TMetrics = record
-    Bytes, CR, LF, CRLF, Loose, High, Corruption: Integer;
-  end;
-
 function DetectEnc(const B: TArray<Byte>): TEncKind;
 { La sangria (espacios y tabuladores) del principio de S. }
 function LeadingWhite(const S: string): string;

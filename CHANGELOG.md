@@ -58,9 +58,11 @@ the MCP `initialize` response (`serverInfo.version`).
     inverse (`EnComillas`), the gates on what reaches a git or launcher
     command line (`GitArgDenied`, `GitRemoteDenied` with its host reader
     `GitUrlHost`, `ShellArgDenied`), the query half of `delphi_git`
-    (`GitCommandIsQuery`) and the namer of a commit's message file. They go
-    BELOW the jail, which asks them, and they ask only `Lsp.Settings` (the
-    declared remotes) and `Lsp.Casa` (the server's temp folder).
+    (`GitCommandIsQuery`), the namer of a commit's message file and
+    `PrimerTrozo`, the one piece of the jail they used (Patch, Scaffold,
+    RemoteRun and git call it too). They go BELOW the jail, which asks
+    them, and they ask only `Lsp.Settings` (the declared remotes) and
+    `Lsp.Casa` (the server's temp folder).
     `GitArgDenied` is now in an interface: the jail's entry gate calls it
     from another unit.
   - The codecs go to **`Lsp.Codificacion`**: the encoding kinds
@@ -108,11 +110,12 @@ the MCP `initialize` response (`serverInfo.version`).
     `Lsp.Guard` no longer uses `Lsp.Discovery`. `test_paisaje` now keeps the
     raw lists of places (`WorkspaceRoots`, `WorkspaceReadOnlyRoots`,
     `WorkspaceReadOnlyPaths`, `LugaresDeclarados`, `LibraryRoots`,
-    `TodosLosVaults`) in `Lsp.Settings`, which reads them, and `Lsp.Lugares`,
-    which walks them; the 18 routines in six units that walk them on their
-    own today are declared debt, by routine, that can only shrink (a home
-    written `TClass.Method` is that method only, so one tool's exception does
-    not cover its siblings). The third of the four steps.
+    `TodosLosVaults`, `RaicesDeLosWorkspaces`, `RaicesDelModoLocal`,
+    `SitiosQueNoSeTocan`) in `Lsp.Settings`, which reads them, and
+    `Lsp.Lugares`, which walks them; the 21 routines in seven units that walk
+    them on their own today are declared debt, by routine, that can only
+    shrink (a home written `TClass.Method` is that method only, so one tool's
+    exception does not cover its siblings). The third of the four steps.
   - The drive mask goes to **`Lsp.Mascara`**, above the map of places and
     below the jail: the virtual units both ways (`ExpandVirtualDrives` and
     `ExpandDriveValue` in, `MaskDriveText` out), the three maskers of an
@@ -125,7 +128,19 @@ the MCP `initialize` response (`serverInfo.version`).
     `Mcp.Tools.Docs` and `Mcp.Vault.Session` no longer use `Lsp.Guard`,
     `Lsp.Guard` drops `System.SyncObjs`, and `test_paisaje` finds the `srvX:`
     form in its new home. The last of the four steps: `Lsp.Guard` goes from
-    8,207 lines to 3,695.
+    8,207 lines to 3,693.
+- Five reviewers read the whole cleanup over its final state: start-up
+  order and `uses`, the public surface and the jail, the texts against the
+  code, the landscape, and whatever was not a pure move. No behaviour had
+  changed (the entry gate and every gate of the jail arrive byte for byte).
+  What they found is fixed: 22 texts that still sent the reader to
+  `Lsp.Guard` for something that had moved (the credentials, the ini, the
+  IDE's macros, the server's temp folder, a masker) or said something the
+  code does not do, six `uses` left with nothing to use, a second name for
+  the trash folder in `Mcp.Tools.FileOps`, and the raw-lists rule, which
+  missed three lists. `test_paisaje` now also checks that every declared
+  home still holds its format, so the declared debt can only shrink: four
+  homes that held nothing are gone, each for its own reason.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

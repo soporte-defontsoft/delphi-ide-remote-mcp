@@ -244,9 +244,11 @@ procedure SetRequestReadOnly(AValue: Boolean);
 { Whether the CURRENT request/process is read-only (for delphi_workspace). }
 function IsReadOnlyNow: Boolean;
 
-{ Lo que la jaula, la casa y el enmascarador preguntan a la configuracion y
-  hasta la 1.18.0 era privado de Lsp.Guard: cada uno lleva su nota en la
-  implementacion. }
+{ Lo que la jaula (Lsp.Guard), el mapa de los lugares (Lsp.Lugares) y el
+  enmascarador (Lsp.Mascara) preguntan a la configuracion, y que hasta la
+  1.18.0 era privado de Lsp.Guard. LoadSecurity carga el settings.ini y el
+  entorno UNA vez (llamarla otra vez no hace nada); lo demas lleva su nota
+  en la implementacion. }
 procedure LoadSecurity;
 function TWorkspaceIx1: Integer;
 function HasActiveWS: Boolean;
@@ -264,10 +266,12 @@ function AdbTargetAllowed(const ATarget: string): Boolean;
   son de TODO lo declarado y no de la sesion (eso es WorkspaceRoots). }
 function RaicesDeLosWorkspaces: TArray<string>;
 function RaicesDelModoLocal: TArray<string>;
-{ Lo que vale para ESTA sesion, del workspace activo o del modo local, sin
-  herencia: los proyectos que remote-run puede ejecutar ([Workspace]
-  RemoteRunProjects=), la lista explicita de tools que se anuncian ([Tools]
-  Only=, solo del modo local) y el perfil de tools (el del workspace gana). }
+{ Lo que vale para ESTA sesion: los proyectos que remote-run puede ejecutar
+  (RemoteRunProjects=: los del workspace activo, o los del modo local si no
+  hay workspace; uno no hereda del otro), la lista explicita de tools que se
+  anuncian ([Tools] Only=: UNA, de todo el servidor, tambien para las
+  sesiones con workspace) y el perfil de tools (el del workspace si declara
+  uno; si no, el de [Tools]). }
 function RemoteProjectsNow: TArray<string>;
 function ToolsOnly: TArray<string>;
 function ToolsProfileNow: string;
