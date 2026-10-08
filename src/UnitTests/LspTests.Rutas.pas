@@ -87,7 +87,8 @@ uses
   System.SysUtils,
   Lsp.Guard,
   Lsp.Casa,
-  Lsp.Lugares;
+  Lsp.Lugares,
+  Lsp.Mascara;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;

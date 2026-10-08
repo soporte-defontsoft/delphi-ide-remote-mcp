@@ -64,7 +64,7 @@ uses
   System.JSON,
   MCPServer.Registration,
   Lsp.Discovery,
-  Lsp.Guard,  // MaskDriveText
+  Lsp.Mascara,  // MaskDriveText
   Lsp.Docs;
 
 const

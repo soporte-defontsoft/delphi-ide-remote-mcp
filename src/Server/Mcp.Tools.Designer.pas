@@ -132,7 +132,8 @@ uses
   Lsp.InlineImages,  // DeliverCapture / ColocaCaptura: como se entrega una captura
   Lsp.DesignerEdit,  // insert / set / delete: el form y su unidad, como el IDE
   Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.Mascara;
 
 const
   MAX_PROPS = 400;

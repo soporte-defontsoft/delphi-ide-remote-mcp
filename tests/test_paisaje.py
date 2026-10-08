@@ -68,7 +68,7 @@ REGLAS = [
      'MARCA_DUENO_EXT: MarcaDeDueno la escribe, CopiaDeLaMarca la deshace y EsMarcaDeDueno la '
      'reconoce, los tres en Lsp.Casa con su formato (David, 8-oct-2026: viajan juntos o ninguno)'),
     ("la forma 'srvX:'", r"'srv'",
-     [('Lsp.Guard.pas', 'VirtualUnitOf'), ('Lsp.Guard.pas', 'EmpiezaPorUnidadVirtual')],
+     [('Lsp.Mascara.pas', 'VirtualUnitOf'), ('Lsp.Mascara.pas', 'EmpiezaPorUnidadVirtual')],
      'VirtualUnitOf la escribe y EmpiezaPorUnidadVirtual la prueba: nadie la compone ni la prueba a mano'),
     ('GetTempPath suelto', r'\bGetTempPath\w*\s*\(', [],
      'lo temporal del servidor va en su casa (ServerTempDir), nunca en el %TEMP% del sistema'),
@@ -141,7 +141,7 @@ REGLAS = [
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
       ('Lsp.Guard.pas', 'RootItselfDenied'), ('Lsp.Guard.pas', 'RutaRelativaDenegada'),
-      ('Lsp.Guard.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
+      ('Lsp.Mascara.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
       ('Lsp.BuildRunner.pas', 'UnitSourceFolders'), ('Lsp.ProjectUnits.pas', 'BordeDeMudanza'),
       ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.ResolveSettings'),
       ('Mcp.Tools.Workspace.pas', 'TDelphiWorkspaceTool.ExecuteWithParams'),

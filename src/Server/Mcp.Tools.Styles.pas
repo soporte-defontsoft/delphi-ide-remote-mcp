@@ -80,7 +80,8 @@ uses
   Lsp.Listas,       // AgrupaPorFichero: los avisos por carpeta y fichero
   Lsp.Styles,
   Lsp.DesignerBin,  // el literal de cadena: su lector y su compositor
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.Mascara;
 
 constructor TDelphiStylesTool.Create;
 begin

@@ -114,7 +114,8 @@ uses
   System.Character,
   System.Generics.Collections,
   Lsp.Texts,
-  Lsp.Guard,           // WriteTargetDenied, CitaDeLinea
+  Lsp.Guard,           // WriteTargetDenied
+  Lsp.Mascara,         // CitaDeLinea
   Lsp.Patch,           // PatchLoadText/PatchSaveText y los troceadores
   Lsp.Pascal,          // EL identificador, CodigoPascal, LineaDePosicion
   Lsp.PascalDecl,      // EL lector de clases: campos, rutinas y cuerpos

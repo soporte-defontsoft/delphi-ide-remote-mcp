@@ -63,7 +63,8 @@ uses
   Lsp.Patch,
   Lsp.TextEdit,
   Lsp.Texts,
-  Lsp.TodoONada;
+  Lsp.TodoONada,
+  Lsp.Mascara;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);

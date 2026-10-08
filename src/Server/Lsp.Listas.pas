@@ -117,7 +117,7 @@ uses
   System.IOUtils,
   System.StrUtils,
   Lsp.NetDrives, // SinBarraFinal
-  Lsp.Guard;     // MaskDriveText
+  Lsp.Mascara;   // MaskDriveText
 
 { TPagina }
 

@@ -56,7 +56,7 @@ implementation
 uses
   System.IOUtils,
   System.Classes,
-  Lsp.Guard,
+  Lsp.Mascara,
   Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
   Lsp.Texts,
   Mcp.Vault.Seed,

@@ -255,7 +255,8 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.Identidad,
-  Lsp.Lugares;
+  Lsp.Lugares,
+  Lsp.Mascara;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =

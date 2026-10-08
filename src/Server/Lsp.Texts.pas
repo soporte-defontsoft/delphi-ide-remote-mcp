@@ -83,7 +83,7 @@ const
     'This server does not start: no RAD Studio with DelphiLSP is ' +
     'installed on this machine, and a Delphi MCP server needs its Delphi.';
   { Un settings.ini con el BOM de UTF-8 delante de una cabecera de seccion: la
-    API de los ini de Windows no ve esa seccion (Lsp.Guard,
+    API de los ini de Windows no ve esa seccion (Lsp.Settings,
     LineaConBomAntesDeSeccion, medido el 6-oct-2026). %s = el fichero, %d =
     la linea. }
   SE_GUARD_INI_BOM_FMT =
@@ -873,12 +873,12 @@ const
     '[EDIT-007 NOT_FOUND] The fragment |%s| does not appear on line %d (the ' +
     'comparison is case-sensitive). Nothing was written. The real line ' +
     'is:'#10 +
-    '  %s'; // la cita, de su compositor (Lsp.Guard.CitaDeLinea)
+    '  %s'; // la cita, de su compositor (Lsp.Mascara.CitaDeLinea)
   SR_FRAG_SEVERAL_FMT =
     '[EDIT-008 INVALID_PARAM] The fragment |%s| appears %d times on line %d, ' +
     'and I will not guess which one. Nothing was written. Lengthen it ' +
     'with what is next to it until it is unique. The real line is:'#10 +
-    '  %s'; // la cita, de su compositor (Lsp.Guard.CitaDeLinea)
+    '  %s'; // la cita, de su compositor (Lsp.Mascara.CitaDeLinea)
   // EDIT-009 ("new" igual a "fragment") se retiro el 28-sep: era un ERROR
   // donde la edicion suelta dice una NOTA (EDIT-113, sin cambios); ahora un
   // fragment que no cambia nada va por ese mismo camino.

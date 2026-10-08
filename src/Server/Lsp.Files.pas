@@ -53,7 +53,8 @@ uses
   System.NetEncoding,
   Lsp.Guard,
   Lsp.Texts,
-  Lsp.ShaCache;
+  Lsp.ShaCache,
+  Lsp.Mascara;
 
 function DownloadLinkFor(const AFullPath: string): string;
 begin

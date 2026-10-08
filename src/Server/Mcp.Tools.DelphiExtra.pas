@@ -110,7 +110,8 @@ uses
   Lsp.Patch,      // PositionOutOfRange: la misma validacion que las otras cinco
   Lsp.BuildRunner,
   Lsp.Listas,     // AgrupaPorFichero: los usos por carpeta y fichero
-  Lsp.Guard;      // ReadPathDenied: la guarda antes que nada (ruta vacia)
+  Lsp.Guard,      // ReadPathDenied: la guarda antes que nada (ruta vacia)
+  Lsp.Mascara;
 
 const
   DIAG_WAIT_MS = 40000; // under the 60 s most MCP clients allow per call

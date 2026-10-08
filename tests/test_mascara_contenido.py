@@ -19,7 +19,7 @@ came back as 'srvc:\\datos' and an anchor copied from it never matched:
       changeset is not an echo tool: the whole refusal was masked)
 
 And the filter no longer guesses by the shape of a line: only the citations
-the tool composed in THAT call (Lsp.Guard.CitaDeLinea) pass (the unit test
+the tool composed in THAT call (Lsp.Mascara.CitaDeLinea) pass (the unit test
 LaFilaDeUnaTandaDejaElDiscoComoEsta measures the line that only looks like
 one). Every check was seen red against the 1.12.1 exe.
 

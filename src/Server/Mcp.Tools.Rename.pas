@@ -55,7 +55,8 @@ uses
   Lsp.Patch,      // PositionOutOfRange
   Lsp.Rename,
   Lsp.References, // CONTENIDO_DE_UN_USO: los campos que son la linea tal cual
-  Lsp.Listas;     // AgrupaPorFichero: los cambios por carpeta y fichero
+  Lsp.Listas,     // AgrupaPorFichero: los cambios por carpeta y fichero
+  Lsp.Mascara;
 
 constructor TDelphiRenameTool.Create;
 begin

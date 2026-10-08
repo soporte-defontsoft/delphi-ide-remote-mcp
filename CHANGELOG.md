@@ -113,6 +113,19 @@ the MCP `initialize` response (`serverInfo.version`).
     own today are declared debt, by routine, that can only shrink (a home
     written `TClass.Method` is that method only, so one tool's exception does
     not cover its siblings). The third of the four steps.
+  - The drive mask goes to **`Lsp.Mascara`**, above the map of places and
+    below the jail: the virtual units both ways (`ExpandVirtualDrives` and
+    `ExpandDriveValue` in, `MaskDriveText` out), the three maskers of an
+    answer that carries file content (`EnmascaraSalvoContenido`,
+    `EnmascaraJsonSalvo`, `EnmascaraSalvoCodigo`) with what each call notes
+    (`CitaDeLinea`, `OlvidaSalidaHecha`), the namer and the one test of the
+    `srvX:` form (`VirtualUnitOf`, `EmpiezaPorUnidadVirtual`) and the letters
+    served (`ServedDriveLetters`). Its lock is created in its own
+    `initialization`, as it was in `Lsp.Guard`'s. `Lsp.Listas`,
+    `Mcp.Tools.Docs` and `Mcp.Vault.Session` no longer use `Lsp.Guard`,
+    `Lsp.Guard` drops `System.SyncObjs`, and `test_paisaje` finds the `srvX:`
+    form in its new home. The last of the four steps: `Lsp.Guard` goes from
+    8,207 lines to 3,695.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

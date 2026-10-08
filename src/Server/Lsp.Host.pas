@@ -105,7 +105,8 @@ uses
   Mcp.Tools.Workspace, // NombreDeMaquina: the one reader of the host name
   Lsp.DesignerMetaGen, // CalientaTablasDelDisenador
   Lsp.Discovery, // NotasDeArranqueDelphi
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Mascara;
 
 constructor TMcpHost.Create;
 begin

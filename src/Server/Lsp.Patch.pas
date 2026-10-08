@@ -507,7 +507,8 @@ uses
   Lsp.Settings,
   Lsp.Identidad,
   Lsp.TodoONada,
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Mascara;
 
 const
   RETENTION_DAYS = 15;
@@ -757,7 +758,7 @@ begin
       Result := AEscrito;
       // E.Message lleva la ruta REAL (EFOpenError) y esta nota va dentro de
       // un EXITO de delphi_edit/textedit, que el filtro de salida deja tal
-      // cual: lo que la tool compone, enmascarado a mano (Lsp.Guard,
+      // cual: lo que la tool compone, enmascarado a mano (Lsp.Mascara,
       // MaskDriveText; revision de paisaje del 4-oct-2026)
       ANota := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [MaskDriveText('', E.Message)]);
     end;

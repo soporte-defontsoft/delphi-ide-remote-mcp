@@ -96,7 +96,7 @@ try:
               'quedo: %s' % lineas)
         check('B4 %s: la tanda devuelve ECO de lo que hay en disco, no solo '
               'el ancla' % tool,
-              # linea y texto del disco, en LA forma de una cita (Lsp.Guard.CitaDeLinea, 4-oct-2026)
+              # linea y texto del disco, en LA forma de una cita (Lsp.Mascara.CitaDeLinea, 4-oct-2026)
               '->' in r and '3|PRIMERO-1' in r and '9|TERCERO-1' in r,
               r[:200])
         # el eco sale con UN separador de linea: mezclaba el CRLF de

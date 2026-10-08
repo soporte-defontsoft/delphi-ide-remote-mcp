@@ -25,7 +25,7 @@ function FindDelphiReferences(const AFilePath: string;
 
 const
   // los campos de un uso (references, rename_symbol) que son la LINEA del
-  // fichero tal cual: contenido, no van enmascarados (Lsp.Guard.
+  // fichero tal cual: contenido, no van enmascarados (Lsp.Mascara.
   // EnmascaraJsonSalvo); un ancla copiada de ahi casaba con 'srvd:' y no con
   // el disco (revision del 4-oct-2026)
   CONTENIDO_DE_UN_USO: array [0 .. 0] of string = ('text');

@@ -76,7 +76,7 @@ type
     { Resolves 'style' then an optional 'a/b/c' path of parts. }
     function Resolve(const AStyleName, AChildPath: string; out AErr: string): TStyleObj;
     { Las lineas de AObj, cada una numerada como las numera delphi_read
-      (Lsp.Guard.CitaDeLinea): el get de delphi_designer y el de delphi_styles }
+      (Lsp.Mascara.CitaDeLinea): el get de delphi_designer y el de delphi_styles }
     function BlockText(AObj: TStyleObj): string;
     { Sets (or adds) a property line of AObj. AValue is written verbatim, as
       it would appear in the file. Returns the resulting line. }
@@ -152,7 +152,8 @@ uses
   Lsp.Guard,
   Lsp.Pascal, // EL identificador: ValidStyleValue
   Lsp.Texts,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Mascara;
 
 { TStyleObj }
 

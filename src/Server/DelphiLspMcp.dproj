@@ -248,6 +248,7 @@
         <DCCReference Include="Lsp.Codificacion.pas"/>
         <DCCReference Include="Mcp.Tools.Git.pas"/>
         <DCCReference Include="Lsp.Lugares.pas"/>
+        <DCCReference Include="Lsp.Mascara.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

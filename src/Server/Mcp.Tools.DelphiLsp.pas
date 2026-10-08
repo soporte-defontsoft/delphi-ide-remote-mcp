@@ -130,7 +130,8 @@ uses
   Lsp.Patch,
   Lsp.NetDrives,
   Lsp.Pascal,
-  Lsp.PascalDecl; // EL lector de clases: de quien es cada declaracion
+  Lsp.PascalDecl, // EL lector de clases: de quien es cada declaracion
+  Lsp.Mascara;
 
 const
   MAX_COMPLETION_ITEMS = 50;
@@ -286,7 +287,7 @@ end;
 const
   // los campos de una respuesta del motor que son TEXTO del fuente (la firma de
   // signature, las etiquetas de completion, el markdown de hover): van tal
-  // cual (Lsp.Guard.EnmascaraJsonSalvo), y una constante con una ruta salia
+  // cual (Lsp.Mascara.EnmascaraJsonSalvo), y una constante con una ruta salia
   // con la letra virtual; uri, path y lo demas, enmascarados
   CONTENIDO_DEL_MOTOR: array [0 .. 8] of string = ('label', 'detail',
     'documentation', 'value', 'insertText', 'filterText', 'sortText', 'newText',
@@ -1258,7 +1259,7 @@ begin
   if V <> nil then
   begin
     // la declaracion, entre ```, es TEXTO del fuente: tal cual; el enlace y
-    // la nota, enmascarados (Lsp.Guard.EnmascaraSalvoCodigo)
+    // la nota, enmascarados (Lsp.Mascara.EnmascaraSalvoCodigo)
     Result := EnmascaraSalvoCodigo(V.Value + NoSettingsNote(Settings));
     Resp.Free;
   end

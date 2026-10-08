@@ -80,7 +80,8 @@ uses
   Lsp.Rutas,
   Lsp.Casa,
   Lsp.Args,
-  Lsp.Lugares;
+  Lsp.Lugares,
+  Lsp.Mascara;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
@@ -1616,7 +1617,7 @@ begin
   // El CONTENIDO de un diff, de un show o de un log - las lineas de un
   // fichero o de un mensaje de commit, que empiezan por +, - o espacio -
   // viaja como esta en el disco: el barrido de unidades las reescribia
-  // (Lsp.Guard.EnmascaraSalvoContenido). Lo que dice git - cabeceras,
+  // (Lsp.Mascara.EnmascaraSalvoContenido). Lo que dice git - cabeceras,
   // avisos, que si pueden nombrar una ruta del servidor - sigue enmascarado.
   if ((ExitCode = 0) or DiffConCambios) and MatchText(Cmd, ['diff', 'show', 'log']) then
     Result := EnmascaraSalvoContenido(Result, '+- ');
