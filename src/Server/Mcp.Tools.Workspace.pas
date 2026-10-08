@@ -294,7 +294,8 @@ uses
   Lsp.Sandbox,
   Lsp.Rutas,
   Lsp.Casa,
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Identidad;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;

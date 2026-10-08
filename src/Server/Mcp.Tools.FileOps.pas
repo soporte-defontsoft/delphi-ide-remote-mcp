@@ -78,7 +78,8 @@ uses
   Lsp.Pascal,
   Lsp.Scaffold,
   Lsp.Rutas,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Identidad;
 
 var
   // El nombre de la carpeta de copias estaba escrito DOS veces, aqui y en

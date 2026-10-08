@@ -139,7 +139,8 @@ uses
   Lsp.DesignerForma in 'Lsp.DesignerForma.pas',
   Lsp.Rutas in 'Lsp.Rutas.pas',
   Lsp.Casa in 'Lsp.Casa.pas',
-  Lsp.Settings in 'Lsp.Settings.pas';
+  Lsp.Settings in 'Lsp.Settings.pas',
+  Lsp.Identidad in 'Lsp.Identidad.pas';
 
 {$R *.res}
 

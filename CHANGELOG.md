@@ -40,6 +40,14 @@ the MCP `initialize` response (`serverInfo.version`).
     uses `Lsp.Patch` for one encoding helper, a cycle that goes when the
     encodings get a unit of their own. `Lsp.Service` no longer uses
     `Lsp.Guard`.
+  - Who is calling goes to **`Lsp.Identidad`**: the identity of each
+    request (the name a client gives in `initialize`, bound to its HTTP
+    session, or the stdio process's) and the session registry, with why a
+    session ended. It uses nothing of the jail, only how long a session
+    lasts (`Lsp.Settings`); its lock and lists are created in its own
+    `initialization`, as they were in `Lsp.Guard`'s. The vendored HTTP
+    server and core manager used `Lsp.Guard` only for this and now use
+    `Lsp.Identidad`; `Mcp.Tools.Messages` no longer uses `Lsp.Guard`.
 
 ## [1.17.0] - 2026-10-07
 

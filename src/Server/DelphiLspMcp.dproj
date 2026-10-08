@@ -242,6 +242,7 @@
         <DCCReference Include="Lsp.Rutas.pas"/>
         <DCCReference Include="Lsp.Casa.pas"/>
         <DCCReference Include="Lsp.Settings.pas"/>
+        <DCCReference Include="Lsp.Identidad.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

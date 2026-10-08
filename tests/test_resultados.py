@@ -2520,7 +2520,7 @@ try:
     # E127 la sesion que se cierra para hacer sitio lo dice (SYS-033): decia "el
     # servidor se reinicio". Al final: se lleva tambien la de la bateria
     TOPE = int(re.search(r'\bSESIONES_MAX\s*=\s*(\d+)', open(os.path.join(
-        mc.REPO, 'src', 'Server', 'Lsp.Guard.pas'), encoding='utf-8', errors='replace').read()).group(1))
+        mc.REPO, 'src', 'Server', 'Lsp.Identidad.pas'), encoding='utf-8', errors='replace').read()).group(1))
 
     def sesion_nueva(nombre):
         code, h, b = mc.post(cli.url, {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {

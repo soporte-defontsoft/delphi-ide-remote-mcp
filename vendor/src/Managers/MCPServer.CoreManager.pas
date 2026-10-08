@@ -43,7 +43,7 @@ type
 implementation
 
 uses
-  Lsp.Guard,
+  Lsp.Identidad,
   Lsp.Texts; // [local change] per-session agent identity
 
 { TMCPCoreManager }

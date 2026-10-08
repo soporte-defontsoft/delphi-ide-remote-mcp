@@ -123,7 +123,7 @@ implementation
 uses
   MCPServer.Resource.Server,
   MCPServer.CoreManager,
-  Lsp.Guard, // [local change] per-session agent identity and the session registry
+  Lsp.Identidad, // [local change] per-session agent identity and the session registry
   Lsp.Texts, // [local change] the 404 texts of a dead session
   Lsp.Settings, // [local change] tokens, BindIP and the session timeout (settings.ini)
   MCPServer.Logger;
@@ -194,7 +194,7 @@ end;
 // never told (field report 2026-08-25: a garbage id was accepted). Auth is
 // the Bearer token, so this was never a security hole - but the streamable
 // HTTP contract says an unknown session must answer 404 so the client
-// re-initializes. Since 1.0.17 the registry lives in Lsp.Guard, the SAME one
+// re-initializes. Since 1.0.17 the registry lives in Lsp.Identidad, the SAME one
 // that holds the session's identity (this unit kept a second ring of ids
 // until then: two writers for one thing), and a session also EXPIRES there
 // after SessionTimeoutMinutes idle.

@@ -63,9 +63,9 @@ uses
   System.StrUtils,
   System.Generics.Collections,
   MCPServer.Registration,
-  Lsp.Guard,
   Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Identidad;
 
 const
   MESSAGES_DIR = 'messages';

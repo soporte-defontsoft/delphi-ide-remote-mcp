@@ -522,7 +522,8 @@ uses
   Lsp.Scaffold,
   Lsp.Rutas,
   Lsp.Casa,
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Identidad;
 
 const
   BACKUP_SUB = '__delphi-patch';
