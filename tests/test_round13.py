@@ -28,6 +28,9 @@ import os, glob, ctypes
 # 'mc' es aqui una copia de la papelera (R3): el modulo entra por sus nombres
 from mcp_cliente import carpeta, copia_exe, entorno, Stdio, check, fin, es, abre, rechazado
 from mcp_cliente import copias, corta  # los lectores de la papelera y del 8.3, los de todos
+# la marca de dueno, por SU nombrador (lee la extension del fuente): a mano,
+# un cambio de formato dejaba esta bateria mirando la forma vieja (7.4 de la 1.18.0)
+from mcp_cliente import marca_dueno
 
 BASE = carpeta('round13')
 EXE = copia_exe(BASE)
@@ -98,7 +101,7 @@ open(os.path.join(BASE, 'zona', 'real.txt'), 'w').write('mio de otro\n')
 call('delphi_delete', {'path': os.path.join(BASE, 'zona', 'real.txt')})
 rc = copies_of('real.txt')[0]
 # plant a lone .by (no sibling copy) with a fake owner, next to my own copy
-planted = os.path.join(os.path.dirname(rc), 'plantado.by')
+planted = marca_dueno(os.path.join(os.path.dirname(rc), 'plantado'))
 open(planted, 'w').write('fantasma')
 folder = os.path.dirname(os.path.dirname(rc))  # ...\<date>
 r = call('delphi_delete', {'path': folder, 'purge': True})
@@ -109,7 +112,7 @@ check('R2 un .by huerfano/plantado NO bloquea la purga de la carpeta',
 open(os.path.join(BASE, 'mio.txt'), 'w').write('mio\n')
 call('delphi_delete', {'path': os.path.join(BASE, 'mio.txt')})
 mc = copies_of('mio.txt')[0]
-by = mc + '.by'
+by = marca_dueno(mc)
 check('R3 al borrar, la copia lleva su marcador', os.path.exists(by), by)
 r = call('delphi_move', {'path': mc, 'dest': os.path.join(BASE, 'mio_vuelto.txt')})
 check('R3 restaurar con move barre el .by (no deja huerfano)',
@@ -120,9 +123,9 @@ open(os.path.join(BASE, 'x.txt'), 'w').write('x\n')
 call('delphi_delete', {'path': os.path.join(BASE, 'x.txt')})
 xc = copies_of('x.txt')[0]
 os.remove(xc)  # copy gone, marker orphaned
-r = call('delphi_delete', {'path': xc + '.by', 'purge': True})
+r = call('delphi_delete', {'path': marca_dueno(xc), 'purge': True})
 check('R3 un .by huerfano se puede purgar',
-      abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(xc + '.by'), r[:150])
+      abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(marca_dueno(xc)), r[:150])
 
 # ---- counter-tests: nothing over-tightened ----------
 # still cannot purge someone else's LIVE copy or its marker
@@ -134,9 +137,9 @@ sess('otro')
 r = call('delphi_delete', {'path': ac, 'purge': True})
 check('contra: no purgo la copia VIVA de otro agente',
       rechazado(r) and es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'alicia' in r and os.path.exists(ac), r[:180])
-r = call('delphi_delete', {'path': ac + '.by', 'purge': True})
+r = call('delphi_delete', {'path': marca_dueno(ac), 'purge': True})
 check('contra: ni su marcador vivo',
-      rechazado(r) and es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and os.path.exists(ac + '.by'), r[:180])
+      rechazado(r) and es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and os.path.exists(marca_dueno(ac)), r[:180])
 # ...but the owner still can
 sess('alicia')
 r = call('delphi_delete', {'path': ac, 'purge': True})
