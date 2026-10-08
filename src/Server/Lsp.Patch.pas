@@ -523,7 +523,8 @@ uses
   Lsp.Rutas,
   Lsp.Casa,
   Lsp.Settings,
-  Lsp.Identidad;
+  Lsp.Identidad,
+  Lsp.TodoONada;
 
 const
   BACKUP_SUB = '__delphi-patch';

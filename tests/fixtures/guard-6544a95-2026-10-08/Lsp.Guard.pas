@@ -121,6 +121,28 @@ function PathDenied(const APath: string; APermiteGit: Boolean = False): string;
   cual, mas la pista de la zona de biblioteca en la negativa de fuera. }
 function ReadPathDenied(const APath: string; APermiteGit: Boolean = False): string;
 
+{ The configured roots (empty array = unrestricted). }
+function WorkspaceRoots: TArray<string>;
+
+
+{ Carpetas de DENTRO de la jaula que se leen pero no se escriben: el
+  ReadOnlyPaths= del workspace activo. Vacio = ninguna, que es el
+  comportamiento de siempre. Mismo trato que la zona de biblioteca del IDE:
+  las tools de lectura entran, las de escritura no. }
+function WorkspaceReadOnlyPaths: TArray<string>;
+
+{ Proyectos de REFERENCIA: el ReadOnlyRoots= del workspace activo (o
+  DELPHI_MCP_READONLY_ROOTS en el modo local). Carpetas FUERA de Roots que
+  las tools de lectura recorren como si fueran suyas - leer, buscar,
+  simbolos, definicion, git de consulta, fetch - y las de escritura no tocan
+  jamas: ni edit, ni build (escribe dcu/exe), ni temporales. La idea (David,
+  25-sep-2026): un agente trabaja en sus roots y ademas VE otros proyectos
+  de la casa para aprender como se hacen las cosas. Separado de Roots a
+  proposito, y MANDA sobre Roots: una carpeta en los dos sitios, o una raiz
+  dentro de una referencia, es de solo lectura ('lo que tienes mas claro es
+  lo que quieres readonly'). }
+function WorkspaceReadOnlyRoots: TArray<string>;
+
 { La raiz de referencia que contiene APath ('' = ninguna). EL sitio que sabe
   si una ruta es de referencia: lo usan la guarda, los temporales y
   delphi_projects. }
@@ -140,6 +162,61 @@ function MotivoRaizNoDisponible(const ARaiz: string): string;
   conectada en este proceso (WS-022); '' si no es el caso. Sin disco ni red:
   va en la puerta de cada llamada (ArgPathOutsideDenied). }
 function RaizEnLetraNoConectada(const APath: string): string;
+
+{ Bearer authorization - the ONE place that knows every credential: the
+  per-workspace tokens from
+  [Workspace.<name>] sections (Token= read-write inside its Roots,
+  ReadOnlyToken= read-only inside its Roots). True = allowed; AReadOnly and
+  AWorkspaceIx (-1 = every root, the operator) describe the scope the request
+  gets. A workspace whose Roots failed to parse admits NOBODY (fail closed).
+  Workspaces may OVERLAP - one can hold a whole tree and another a subfolder
+  of it: each token's jail is the union of ITS OWN roots and nothing is ever
+  subtracted for belonging to another workspace too. }
+function AuthorizeBearer(const AAuth: string; out AReadOnly: Boolean;
+  out AWorkspaceIx: Integer): Boolean;
+
+{ Scopes THIS worker thread to a workspace (-1 = none: operator/stdio).
+  Worker threads are reused, so the host calls this on EVERY request. }
+procedure SetRequestWorkspace(AIx: Integer);
+
+{ The active workspace's name ('' = none) - for delphi_workspace and logs. }
+function CurrentWorkspaceName: string;
+{ La ruta del settings.ini: UN nombrador (estaba compuesta a mano en tres
+  sitios de esta unidad, 24-sep-2026). Lo lee LoadSecurity al arrancar y lo
+  mira delphi_workspace para avisar de que el fichero cambio despues. }
+function SettingsIniPath: string;
+
+{ [Log] LinesPerFile / MaxFiles tal cual los trae el settings.ini (2000 y
+  10 si no estan), leidos por el lector central, LoadSecurity. Los usa
+  Lsp.LogSink; hasta el 26-sep los leia la bandeja con su propio TIniFile. }
+procedure LogIniSettings(out ALinesPerFile, AMaxFiles: Integer);
+
+{ True when any [Workspace.*] token is configured (counts as a credential
+  for the fail-safe bind decision). }
+function WorkspaceTokensConfigured: Boolean;
+
+{ Startup lines about the workspace config: which workspaces loaded (the
+  workspaces listed by name over the global
+  roots - one mechanism, two spellings) plus a warning per misconfiguration
+  (misspelled section, tokenless workspace, unparseable roots). Empty when
+  there is nothing to say. }
+function WorkspaceStartupNotes: TArray<string>;
+
+{ One-line human summary of the WRITE jail for the startup log (the single
+  source of how the jail is described). AWarning is set when the state
+  deserves a warning level: no jail at all (unrestricted) or fail-closed
+  (Roots= had text but resolved to nothing). Paths are shown REAL here - the
+  log goes to the operator's own stderr on the server, not to a client. }
+function WorkspaceJailSummary(out AWarning: Boolean): string;
+{ Por que ESTA llamada no admite nada, '' si no esta cerrada: el modo local
+  (un proceso sin workspace activo) cerrado al cargar - una proteccion del
+  entorno que no se cargo, o el token de un workspace cerrado. UN lector: la
+  jaula, el resumen del arranque y delphi_workspace. }
+function ModoLocalCerrado: string;
+{ ...y su negativa (GUARD-030), '' si no esta cerrada: LA frase de quien
+  niega por el cierre - la jaula, la pasada de los UNC y lo que recorre las
+  raices sin pasar por una ruta (delphi_projects sin root). }
+function NegativaDeCierre: string;
 
 { The READ-ONLY library zone (RAD Studio installations, IDE library search
   paths, GetIt catalog repositories). Readable by reading tools, never
@@ -164,8 +241,73 @@ procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
   const AValor: string = 'Search Path'): TArray<string>;
 
-{ La casa de los ENTREGABLES del agente, dentro del workspace: el porque, con
-  su hermana ServerTempDir, junto a su nombrador (TempFolderName, Lsp.Casa). }
+{ EL NOMBRADOR DE LOS TEMPORALES, hermana de __delphi-patch y con la misma
+  disciplina: el nombre de la carpeta se escribe en UN SITIO y nadie compone
+  una ruta de temporales a mano.
+
+  Por que existe: hasta el 2026-09-21 el servidor escribia sus temporales en
+  el %TEMP% de la MAQUINA, en siete sitios distintos y a mano. Medido ese
+  dia: 56,4 MB olvidados ahi fuera de toda jaula -33 capturas del escritorio
+  del operador de dos dias antes y una salida de remoterun de 10,7 MB-, y un
+  fichero de 10 bytes que una bateria se dejo suelto acabo siendo el
+  "proyecto" de las units de otras tres. Un temporal repartido no se purga
+  nunca.
+
+  DOS CASAS, y el criterio es el mismo que separa a __delphi-temp de
+  __delphi-patch:
+
+    ServerTempDir  lo que es del SERVIDOR y el agente no toca nunca (el
+                   fichero del mensaje de git, la descarga de un SDK, el
+                   guion que se manda a un target). Va JUNTO AL EJECUTABLE,
+                   como reports\ y settings.ini, y se puede borrar en
+                   cualquier momento: nada de lo que hay ahi sobrevive a la
+                   llamada que lo creo. No pasa por la jaula porque no es
+                   una ruta que elija nadie de fuera.
+
+    AgentTempDir   lo que el agente tiene que ALCANZAR: una captura que se
+                   baja con delphi_fetch, una salida que se lee. Va DENTRO
+                   del workspace, porque delphi_fetch comprueba la jaula y
+                   un entregable fuera de ella es un entregable que no se
+                   puede entregar (medido: el flujo documentado de
+                   delphi_desktop estaba roto de punta a punta). Y con la
+                   carpeta del agente, porque una jaula puede estar
+                   compartida por varios: la captura de uno no se le pone
+                   delante a otro.
+
+  Componen la ruta y ya: crear la carpeta es de quien la use. }
+function TempFolderName: string;
+{ <carpeta del exe>\ASub: LA casa del servidor. Todo lo que el servidor
+  guarda o busca junto a si mismo (settings.ini, __delphi-temp, logs,
+  messages, reports, node, el conversor de estilos) se compone aqui; hasta
+  el 26-sep lo componian a mano ocho sitios. Sin ASub, la carpeta. }
+function ServerDir(const ASub: string = ''): string;
+function ServerTempDir(const ASub: string = ''): string;
+{ <LOCALAPPDATA>\DelphiLspMcp\ASub: las caches del servidor que no van junto
+  al exe (las configuraciones que se fabrican para el motor, los estilos por
+  defecto de la plataforma). Las componian a mano dos sitios. Lee la
+  variable en cada llamada: quien la redirige (una prueba) la ve. }
+function ServerCacheDir(const ASub: string = ''): string;
+{ Un fichero de una de las casas del servidor (sus caches: la configuracion
+  fabricada para el motor, las tablas del disenador) ENTERO o nada: se
+  escribe al lado y se renombra encima, porque otro hilo puede estar
+  leyendolo en ese momento. Si el renombrado no puede (alguien lo tiene
+  abierto) y el fichero ya esta, vale el que esta; sin ninguno, se lanza el
+  error. Es casa del servidor: no pasa por la jaula. Las dos copias de esto
+  (Lsp.ConfigFabricator y el generador de las tablas) eran la segunda vez. }
+procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
+
+{ LA clave corta de una carpeta, por su ruta CANONICA (larga, sin barra
+  final, en minusculas): la misma carpeta escrita en 8.3 o con otras
+  mayusculas da la misma clave, el MD5 en hexadecimal (32). La usan quien
+  reclama una carpeta mientras vive (TemporalEsMia, SoyLaPrimeraInstancia)
+  y la marca de los contenedores de delphi_test (Lsp.Sandbox). Estaba
+  compuesta de tres formas, dos sin canonizar (revision de la 1.11.0). }
+function ClaveDeCarpeta(const ADir: string): string;
+{ EL nombre del mutex de una clave del servidor ('Global\DelphiLspMcp-' +
+  AClave), el que ven todas sus instancias, el servicio y las de stdio: lo
+  usan quien reclama algo mientras vive (ReclamaNombre) y quien hace algo de
+  uno en uno entre procesos (la generacion de las tablas del disenador). }
+function NombreDeMutex(const AClave: string): string;
 function AgentTempDir(const ASub: string = ''): string;
 
 { TRES CLASES DE ESCRITURA, y lo que las separa es QUIEN COMPONE LA RUTA
@@ -282,6 +424,39 @@ procedure BorraArbol(const ADir: string);
   __: es la tercera barrera de BorradoDenegado. }
 function CarpetasDesechables: TArray<string>;
 
+{ EL trozo unico de un nombre que el servidor crea para UNA operacion (una
+  carpeta de su temporal, el intermedio de una escritura, un zip a medias):
+  8 hexadecimales en minusculas de un GUID. Estaba escrito a mano en siete
+  sitios (revision de la 1.11.0, 2-oct-2026); su lector es
+  FRAGMENTO_UNICO_PATRON. }
+function FragmentoUnico: string;
+
+{ EL sello de UNA operacion que tiene que ordenarse por cuando nacio y no
+  chocar con otra del mismo milisegundo: 'yyyymmdd-hhnnsszzz-' +
+  FragmentoUnico. Lo llevan el id de un trabajo de remote-run y el nombre de
+  una captura; su lector es SELLO_UNICO_PATRON (la nota del deploy
+  bloqueado lo busca en lo que contesta msbuild). }
+function SelloUnico: string;
+
+const
+  // las formas de los dos de arriba, para quien las BUSCA: la inversa del
+  // nombrador, nunca otra copia escrita a mano
+  FRAGMENTO_UNICO_PATRON = '[0-9a-f]{8}';
+  SELLO_UNICO_PATRON = '[0-9]{8}-[0-9]{9}-' + FRAGMENTO_UNICO_PATRON;
+
+{ EL nombrador de la carpeta de descarga temporal ('__tmp-' + 8 hex) que
+  crea quien baja algo de un target, y su lector: la unica carpeta fuera de
+  una desechable que BorraArbol acepta, porque la acaba de crear el servidor. }
+function NuevaCarpetaDescarga(const ADentroDe: string): string;
+function EsCarpetaDescarga(const ANombre: string): Boolean;
+
+{ EL normalizador de lo que un CLIENTE nombra y acaba en el disco (el
+  agente de un buzon o de un informe, el titulo de un informe): letras y
+  cifras ASCII, el resto se junta en un guion, 40 como mucho, minusculas.
+  Nada del valor crudo llega al sistema de ficheros. Uno solo: estaba
+  copiado identico en Mcp.Tools.Messages y Mcp.Tools.Report (25-sep-2026). }
+function Slug(const S: string): string;
+
 { LOS sitios que un borrado o una mudanza nunca pueden SER ni CONTENER: toda
   raiz de workspace (de escritura y de referencia, de cualquier workspace, y
   las del modo local) y sus carpetas de solo lectura (ReadOnlyPaths), el
@@ -313,6 +488,12 @@ procedure VaciaDesechable(const ADir: string; ACorte: UInt64 = 0);
 { El momento de hace AHoras, en la forma en que Windows guarda las fechas de
   un fichero (FILETIME, UTC): el corte de VaciaDesechable. }
 function CorteDePurga(AHoras: Integer): UInt64;
+
+{ Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
+  aunque otro proceso lo tenga abierto sin compartir. False si no esta. La
+  usan la foto de los escritores y la de la carpeta de un test. }
+function HuellaDeFichero(const ARuta: string; out ATam: Int64;
+  out AFecha: TDateTime): Boolean;
 
 type
   { Lo que el copiador NO copia, lo dice quien llama: True = fuera (un
@@ -637,6 +818,76 @@ function ConNota(const AText, AClave, ANota: string;
   ArgPathOutsideDenied) y delphi_create para un proyecto nuevo - una regla. }
 function RutaRelativaDenegada(const APath: string): string;
 
+type
+  { LA FOTO de unos ficheros ANTES de tocarlos, y su vuelta atras: el "todo
+    o nada" de la tanda de edits, del commit de un changeset y de
+    add-platform con sdk/perfil. Estaba escrita tres veces, solo una se
+    protegia de una excepcion y ninguna de un deshacer que fallara (un
+    fichero que otro proceso tiene abierto: el deshacer lanzaba y el
+    changeset se quedaba colgado). Revision 27-sep-2026. }
+  TFotoDeFicheros = record
+  private
+    FRutas: TArray<string>;
+    FExistian: TArray<Boolean>;
+    FBytes: TArray<TArray<Byte>>;
+    // lo que dejo la operacion en cada ruta (Anota): lo UNICO que el deshacer
+    // puede dar por suyo
+    FAnotado: TArray<Boolean>;
+    FExisteNuestro: TArray<Boolean>;
+    FNuestros: TArray<TArray<Byte>>;
+    // tamano y fecha de la foto: se leen aunque otro proceso tenga el fichero
+    // abierto sin compartir, y dicen si cambio cuando los bytes no se pueden leer
+    FTam: TArray<Int64>;
+    FFecha: TArray<TDateTime>;
+    // de una ruta que no existia: la primera carpeta que SI existia por
+    // encima (lo que la operacion cree debajo, el deshacer lo quita si vacio)
+    FAncestro: TArray<string>;
+    // otro la cambio ENTRE dos pasos de la operacion (Vigila): el deshacer no
+    // la toca, porque lleva trabajo ajeno mezclado
+    FAjeno: TArray<Boolean>;
+    // sus atributos en la foto: el deshacer devuelve el +R (un fichero
+    // reescrito o que vuelve de un move lo perdia; decima revision)
+    FAtrib: TArray<Cardinal>;
+  public
+    { Lee los bytes de cada ruta (la que no existe se apunta como tal). }
+    procedure Toma(const ARutas: array of string);
+    { Apunta como esta AHORA una ruta de la foto: lo que la operacion acaba de
+      dejar en ella. Se llama tras cada paso hecho. Nunca lanza: si no puede
+      leerla, la ruta queda sin apuntar (el deshacer la trata como siempre). }
+    procedure Anota(const ARuta: string);
+    { Antes de cada paso: si el disco ya no es lo ultimo que se sabe de la
+      ruta (la foto, o lo que dejo el paso anterior), otro la cambio entre
+      medias - otro proceso, que el cerrojo solo ordena a los de este - y el
+      paso siguiente lo absorberia como propio. Se marca y el deshacer la deja
+      y lo dice (quinta revision: 15 de 15 veces se perdia). Nunca lanza. }
+    procedure Vigila(const ARuta: string);
+    { Deja cada fichero como estaba en la foto, por la puerta de escritura:
+      solo los que CAMBIARON, y el que no existia, fuera. Lo que otro cambio
+      DESPUES de que la operacion lo escribiera (el disco ya no tiene lo
+      apuntado) no se toca: se dice. Nunca lanza: lo que no volvio lo
+      devuelve, uno por linea con su porque ('' = todo volvio). Perder una
+      edicion ajena con OK es peor que un deshacer incompleto que lo dice
+      (David, 27-sep-2026). }
+    function Restaura: string;
+    function Cuantos: Integer;
+    { Cuantas rutas de la foto son HOY distintas de como estaban (existir
+      o no, o sus bytes). Una que no se puede leer cuenta como distinta.
+      Para decir UNCHANGED cuando una operacion no cambio nada. }
+    function Cambiados: Integer;
+  end;
+
+type
+  { Lo que se hace bajo FicherosTodoONada: un exito, o un fallo (EsFallo). }
+  TAccionTodoONada = reference to function: string;
+
+{ Una operacion sobre varios ficheros TODO O NADA: la foto de ARutas antes,
+  y si AAccion lanza o devuelve un fallo, cada fichero vuelve como estaba (lo
+  que no pudo volver se dice, con el motivo del fallo). Estaba escrita en
+  ProyectoTodoONada para el .dpr y el .dproj; el form y su unidad de
+  delphi_designer insert/delete eran la segunda copia (1.17.0). }
+function FicherosTodoONada(const ARutas: array of string;
+  const AAccion: TAccionTodoONada): string;
+
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
   llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
   arrancar TODO lo que quede es basura de una ejecucion anterior - la que
@@ -655,6 +906,70 @@ function RutaRelativaDenegada(const APath: string): string;
   vuelo (visto al revisar las baterias, 26-sep-2026). }
 procedure PurgeServerTemp;
 
+{ Credentials (env var first, then settings.ini [Workspace] next to the exe). }
+function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
+function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
+function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
+
+{ La version de RAD Studio de ESTE servidor: [Server] DelphiVersion=37.0 de
+  su settings.ini, y de nada mas (David, 5-oct-2026: "o hay version en el
+  ini o cogemos la mas nueva instalada, punto"). '' = la mas nueva con
+  DelphiLSP, que el servidor escribe al arrancar (FijaDelphiVersionEnElIni).
+  Un servidor es UN Delphi: hasta entonces la fijaba cada workspace y un
+  mismo proceso mantenia motores y rutas de varias versiones; para otra
+  version, otro servidor en su propia carpeta con su puerto. Quien la
+  aplica es DiscoverRadStudio (Lsp.Discovery), el unico sitio que elige
+  instalacion. Normalizada aqui, una vez: '37', '37,0' (la coma decimal de
+  un teclado espanol) y '37.00' son '37.0', como la escribe el registro; lo
+  demas pasa tal cual y no arranca diciendo por que (1.15.0). }
+function ServerDelphiVersion: string;
+
+{ Escribe [Server] DelphiVersion=AVersion en el settings.ini del servidor y
+  desde ahi manda la clave: el primer arranque sin ella guarda el Delphi que
+  eligio, y no cambia solo el dia que se instale otro (David, 5-oct-2026).
+  Sin settings.ini (el modo local de lanzamiento) no crea uno: False y
+  AError vacio. Si no puede: False y el motivo en AError. }
+function FijaDelphiVersionEnElIni(const AVersion: string; out AError: string): Boolean;
+
+{ El update de su Delphi que DECLARA el operador: [Server] DelphiUpdate=13.2
+  de su settings.ini (13.1, 13.2, manana 14.1). Hoy no decide nada: 13.1 y
+  13.2 son la misma 37.0 y el servidor funciona igual con las dos (David,
+  5-oct-2026). Es la prevision para las excepciones que traiga un update
+  concreto, que se colgaran de aqui. Se declara, no se deduce: el texto que
+  apunta el instalador (TRadStudioInfo.InstalledUpdate) es solo una pista
+  para el operador. '' = sin declarar, o declarado con otra forma que
+  numero.numero (el log lo avisa y se ignora). }
+function ServerDelphiUpdate: string;
+
+{ El settings.ini del disco es mas nuevo que el que tiene cargado este
+  proceso: se lee una vez al arrancar y no se recarga en caliente (David,
+  24-sep-2026), asi que lo tocado despues no esta cargado. AFecha = la del
+  fichero. Lo que escribe el propio servidor (FijaDelphiVersionEnElIni) SI
+  esta cargado y no cuenta: comparar con la hora de arranque lo daba por
+  editado en el primer arranque de cada servidor (medido en produccion, 5-oct-2026). }
+function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
+
+{ Un settings.ini con el BOM de UTF-8 delante de una cabecera de seccion NO
+  arranca (6-oct-2026). Lo lee la API de los ini de Windows - aqui (TIniFile)
+  y en MCPServer.Settings, que lee el Port -, y esa API toma el BOM por texto
+  de esa linea: no ve la cabecera y pierde la seccion entera. Medido con un
+  [Server] primero: su Port y su BindIP no se leian (el servidor en el 3000
+  y en TODAS las interfaces) y DelphiVersion se escribia en un [Server]
+  nuevo al final. Con un comentario delante el BOM se queda en el comentario
+  y todo se lee: eso pasa. Lo decide LoadSecurity, el lector, antes de leer
+  nada (y entonces no lee); esto lo lanza, y lo llama TMcpHost.Wire lo
+  primero. Leerlo de otra manera seria un segundo lector, y el del Port ni
+  siquiera es nuestro. }
+procedure ExigeSettingsIniLegible;
+
+{ The knowledge-vault root (Obsidian notes). Empty when unset.
+  Env DELPHI_MCP_VAULT_PATH (solo el workspace por defecto), si no el
+  VaultPath= del workspace activo. Canonicalized, no trailing delimiter. The vault_read/vault_search tools register only when
+  VaultConfigured is true. }
+function VaultPath: string;         // DELPHI_MCP_VAULT_PATH / VaultPath= del workspace
+function VaultConfigured: Boolean;  // VaultPath set AND the directory exists
+function VaultConfiguredAnywhere: Boolean; // algun workspace declara vault (registro)
+
 { Whether APath is inside the knowledge vault. The vault belongs to the
   vault_* tools alone, so the code tools skip it in their walks even when it
   sits inside a workspace root - a listing that showed the notes would invite
@@ -669,6 +984,101 @@ function InVault(const APath: string): Boolean;
   the vault governance files in round 9), so the rule lives here once instead
   of being re-derived per toolset. '' = the name is fine. }
 function PathAnomaly(const APath: string): string;
+
+{ Whether the vault WRITE tools (vault_append/create/patch) are enabled:
+  el vault del workspace activo esta configurado Y su VaultReadOnly= es 0
+  (defecto 1 = solo lectura).
+  Even when writable, the write tools are refused for a read-only credential
+  at the gate (they are in the mutating list). }
+function VaultWritable: Boolean;    // VaultConfigured AND VaultReadOnly=0 del workspace
+
+{ Whether delphi_build may run a project's OWN build scripts: a custom <Target>,
+  a post-build step, Authenticode signing via <Exec>. Its own opt-in, for a
+  TRUSTED project that signs or copies at build time; nothing else runs here.
+  Untrusted uploads with no opt-in still hit the hazard scanner. Opt in with
+  DELPHI_MCP_ALLOW_BUILD_SCRIPTS=1 or AllowBuildScripts=1 en el workspace. }
+function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBuildScripts=1
+
+{ Whether delphi_paserver may EXECUTE the deployed program on a PAServer
+  target (command=remote-run). OFF by design. Since 2026-09-23 it is the ONLY
+  way this product executes a program (delphi_run, execution on the server
+  itself, was retired: one door instead of two), and the operator of this
+  server is not necessarily the owner of that machine. Two locks in series, on
+  purpose: this switch (server side) and the runner someone has to launch on
+  the target. Opt in with DELPHI_MCP_ALLOW_REMOTE_RUN=1 or
+  AllowRemoteRun=1. install-runner does NOT need it: copying the script
+  executes nothing. }
+function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemoteRun=1
+
+{ Whether delphi_test may RUN a test project's binary on this server. OFF by
+  default, and the ONE thing that ever runs on this machine (delphi_run,
+  arbitrary binaries, was retired 2026-09-23: one door): the binary comes
+  from a project of the jail, is built here, and runs on a copy of its
+  output folder in a Windows container of its own (Lsp.Sandbox) with a
+  timeout. Opt in with
+  DELPHI_MCP_ALLOW_TESTS=1 or AllowTests=1 en el workspace. }
+function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
+
+{ WHO is calling - as far as this server can honestly know.
+
+  Two-phase, the way the operator asked: the SHARED token (Bearer) is the door,
+  the same for everyone. Then the handshake's clientInfo.name is bound to the
+  session id the server issues in `initialize` - and that id is a secret the
+  server generated, returned once, and the client echoes on every request. So
+  the NAME is fixed at connect time and cannot be re-declared per call: to be
+  taken for another agent you would have to steal their session id, not just
+  type their name. That is the whole gain over the old self-declared 'agent'
+  string.
+
+  Not authentication (one token still lets anyone connect), but enough to keep
+  agents working in different projects from stepping on each other, and to
+  stop casual impersonation. A real per-agent token is the next rung.
+
+  Bound at initialize; read on every tool call via the per-thread context the
+  HTTP layer sets before dispatch. '' when unknown (stdio with no name, or a
+  request before initialize) - callers treat that as 'anon'. }
+procedure BindSessionIdentity(const ASessionId, AName: string);
+procedure SetThreadIdentityBySession(const ASessionId: string);
+procedure SetThreadIdentity(const AName: string); // stdio: one process, one name
+procedure ClearThreadIdentity;
+function CurrentAgent: string;               // '' = unknown
+function CurrentAgentOr(const ADefault: string): string;
+
+{ El REGISTRO de sesiones HTTP - uno solo, el mismo que guarda la identidad
+  (hasta 1.0.16 el servidor HTTP llevaba un anillo aparte de ids conocidos:
+  dos escritores para la misma cosa). Una sesion nace en initialize
+  (BindSessionIdentity, con nombre o sin el), se toca en cada peticion que
+  la usa y CADUCA tras SessionTimeoutMinutes de inactividad: [Server]
+  SessionTimeoutMinutes en settings.ini o DELPHI_MCP_SESSION_TIMEOUT_MINUTES
+  (720 por defecto, 0 = nunca). La puerta HTTP contesta 404 a una sesion
+  desconocida o caducada - lo que manda el contrato streamable-HTTP - y el
+  cliente vuelve a hacer initialize. Un initialize con un id viejo siempre
+  pasa: es el arreglo, no el problema. }
+type
+  // ssEvicted: cerrada para hacer sitio (SESIONES_MAX); salia "desconocida"
+  TSessionState = (ssUnknown, ssExpired, ssAlive, ssEvicted);
+const
+  SESIONES_MAX = 256;
+type
+  TSesion = record
+    Id, Nombre: string;
+    UltimoUso: TDateTime;
+  end;
+function SessionState(const ASessionId: string): TSessionState; // viva = la toca
+function SessionTimeoutMinutes: Double;                         // 0 = nunca caduca
+{ [Server] EngineIdleMinutes en settings.ini o DELPHI_MCP_ENGINE_IDLE_MINUTES
+  en el entorno (que gana): los minutos sin uso tras los que el servidor para
+  un motor LSP y cierra un documento abierto en el (Lsp.Session). 30 por
+  defecto; 0 = los motores no se paran por falta de uso. Decimales admitidos,
+  como en la de arriba. Fontaneria, no permiso: por eso vive en [Server]. }
+function EngineIdleMinutes: Double;
+{ [Server] MaxEngines en settings.ini o DELPHI_MCP_MAX_ENGINES en el entorno
+  (que gana): cuantos motores LSP vivos admite el servidor a la vez; el que
+  pasa del tope para al menos usado de los que no estan trabajando (LRU,
+  Lsp.Session). 0 (el defecto) = sin tope: los para solo el barrendero de
+  EngineIdleMinutes. Fontaneria, como la de arriba. }
+function MaxEngines: Integer;
+function LiveSessionCount: Integer;                             // purga las caducadas
 
 { Dead copies are not a scratchpad. The recoverable trash, and the IDE's own
   __history/__recovery, hold the LAST GOOD version of somebody's work - the
@@ -714,6 +1124,24 @@ function EnPapelera(const APath: string; out AEsLaCarpeta: Boolean): Boolean; ov
   rechazarlo empujaria los volcados dentro del proyecto (David, 25-sep-2026). }
 function WriteTargetDenied(const APath: string): string;
 
+{ The SAME directory can be named more than one way, and a guard that matches a
+  path segment literally is blind to every alias. NTFS keeps an 8.3 short name
+  for each entry ("__delphi-patch" also answers to "__DELP~1"), and it resolves
+  to the identical folder - so a path through "__DELP~1" walked straight past
+  the trash guard and reopened writing into the recoverable copies (measured
+  2026-08-25).
+
+  This expands the longest existing prefix of a path back to its real names
+  before any segment guard looks at it. It cannot blanket-reject "~": the
+  server's own scratch and home paths legitimately contain one (DFONTA~1). }
+function LongCanonical(const APath: string): string;
+
+{ LA ruta REAL: junctions y symlinks resueltos, nombres largos (la nota
+  larga, en la implementacion). Publica para COMPARAR y reconocer - una
+  clave de visitados que corta un ciclo de enlaces, un "esta dentro de" -,
+  nunca para decidir un permiso por tu cuenta: eso es de las puertas. }
+function RealPath(const APath: string): string;
+
 { Crea una carpeta (y sus padres) TOLERANDO que otro hilo la este creando a la
   vez. TDirectory.CreateDirectory mira si existe y LUEGO crea: dos hilos
   entran juntos, los dos contestan "no existe", los dos crean, y el que pierde
@@ -729,11 +1157,29 @@ function WriteTargetDenied(const APath: string): string;
   alli - si el resultado es que la carpeta esta, da igual quien la creo. }
 procedure CrearCarpeta(const ADir: string);
 
+{ Host names git may talk to when an agent writes an explicit URL, comma
+  separated; '' (the default) means none - see GitRemoteDenied. }
+function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
+
+{ Host names delphi_paserver may DIAL when the caller names one by hand
+  (test-connection host=...) O cuando un comando marca por perfil, comma
+  separated. Tener un perfil en el IDE NO da permiso: cuenta SOLO la lista
+  del workspace activo (v0.98; medido que el perfil ajeno marcaba igual). }
+function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
+
 { '' si este servidor PUEDE abrir una conexion TCP a AHost: SOLO los hosts de
   RemoteProbeHosts del workspace activo ('*' / '0.0.0.0' = cualquiera). LA
   puerta de red: test-connection, get-sdk, remote-run Y el deploy por perfil
   (el .profile dice COMO conectar, el workspace dice SI). }
 function ProbeHostDenied(const AHost: string): string;
+
+{ Whether the READ-ONLY library zone exists at all. Default True (reading the
+  RTL and the installed components is what makes an agent competent here).
+  LibraryZone=0 en el workspace lo corta: reads are then confined to the workspace
+  roots, exactly like writes. Field 2026-08-24: an agent noted that the zone
+  GROWS by itself with every component or SDK installed, so the operator
+  deserves a way to say no. }
+function LibraryZoneEnabled: Boolean; // DELPHI_MCP_LIBRARY_ZONE=0 / LibraryZone=0
 
 { '' when APath (a .dproj) may be executed remotely, else a refusal. La
   lista es la del workspace ACTIVO (RemoteRunProjects= en su seccion), sin
@@ -742,6 +1188,17 @@ function ProbeHostDenied(const AHost: string): string;
   global, ni seccion global). Field 2026-08-24: an agent working on project A could
   run the deployed binary of project B. }
 function RemoteRunProjectDenied(const APath: string): string;
+
+{ Read-only mode. Two independent sources, OR-ed together:
+  - process-wide: the whole server runs read-only (--readonly flag);
+  - per-request: the HTTP transport marks the current worker thread according
+    to which credential the request presented (full token = read-write,
+    read-only token / anonymous read-only = read-only). }
+procedure SetProcessReadOnly(AValue: Boolean);
+procedure SetRequestReadOnly(AValue: Boolean);
+
+{ Whether the CURRENT request/process is read-only (for delphi_workspace). }
+function IsReadOnlyNow: Boolean;
 
 { THE single entry gate, consulted by the tools dispatcher before ANY tool
   executes. '' = allowed; otherwise the rejection message returned to the
@@ -970,15 +1427,1471 @@ uses
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Sandbox,          // PurgaContenedoresHuerfanos: la otra mitad de la casa
   Lsp.Texts,
-  Lsp.Json,
-  Lsp.Rutas,
-  Lsp.Casa,
-  Lsp.Settings,
-  Lsp.Identidad;
+  Lsp.Json;
+
+type
+  { A token-scoped sandbox from a [Workspace.<name>] section. }
+  TWorkspaceDef = record
+    Name, Token, ReadOnlyToken, Profile: string;
+    Roots: TArray<string>;
+    // Carpetas de DENTRO del root que se leen pero no se escriben. Mismo
+    // trato que la zona de biblioteca del IDE, que ya existia con esa
+    // semantica pero cableada. Nace el 20-sep-2026: el root de este repo
+    // contiene dos clones de referencia con su PROPIO git (gdk-mcp,
+    // skybuck-mcp), y estrechar la jaula al repo los metio dentro con
+    // permiso de escritura. Como son repos aparte, un descuido ahi ni
+    // siquiera aparece en el "git status" del principal. David no quiere
+    // sacarlos fuera, y tiene razon: lo relacionado con el proyecto vive en
+    // la carpeta del proyecto, que es lo que encuentra quien lo clona. Asi
+    // que la proteccion la pone la configuracion, no la memoria del agente.
+    ReadOnlyPaths: TArray<string>;
+    ReadOnlyRoots: TArray<string>;    // proyectos de referencia: se leen, no se escriben
+    Invalid: Boolean; // Roots= had text but nothing parsed: fail closed
+    // Capacidades del workspace. Desde el 19-sep-2026 (v0.98) NO se
+    // hereda NADA de ningun sitio (decision David, rematando la del
+    // 2026-09-11: "cada workspace lleva su par, sus roots Y sus configs").
+    // Un workspace con nombre tiene EXACTAMENTE lo que declara: tri-estado
+    // ausente (-1) = APAGADO, lista ausente = VACIA = nada permitido. Las
+    // G* de este modulo alimentan SOLO el modo local de lanzamiento (el
+    // entorno de quien arranca el proceso: baterias, desarrollo); el ini
+    // NO tiene seccion generica desde v0.98.
+    OvAllowTests, OvAllowRemoteRun, OvAllowBuildScripts,
+      OvLibraryZone, OvAgentConfinement: Integer;
+    OvSharedSet: Boolean;             // SharedFolders= present in the section
+    OvSharedFolders: TArray<string>;
+    // A donde puede llegar ESTE workspace: sin declarar = a ninguna parte.
+    GitRemotes: string;               // hosts que un git clone/push puede nombrar
+    RemoteHosts: string;              // hosts que un dial PAServer puede marcar
+    RemoteProjects: TArray<string>;   // proyectos ejecutables en un target
+    VaultPath: string;                // vault de conocimiento de ESTE workspace
+    OvVaultReadOnly: Integer;         // tri-estado: ausente = solo lectura
+    AdbDevices: TArray<string>;       // dispositivos delphi_adb; ausente = ninguno
+  end;
+
+var
+  // Modo local de lanzamiento (baterias, desarrollo): lo carga LoadSecurity
+  // con todo lo demas. Sin banderas perezosas por clave (25-sep-2026).
+  GRoots: TArray<string>;
+  GRootsInvalid: Boolean = False; // Roots= had text but NO valid root: fail closed
+  // El modo local (sin workspace activo) no admite nada, y por que (un
+  // SF_CIERRE_* ya formado); '' = abierto. Lo pone el cargador: una
+  // proteccion del entorno que no se cargo, o el token de un workspace cerrado.
+  GLocalCerrado: string = '';
+  GRoPaths: TArray<string>;       // ReadOnlyPaths del modo local
+  GRoRoots: TArray<string>;       // ReadOnlyRoots del modo local
+  GVaultEnvWritable: Boolean = False; // DELPHI_MCP_VAULT_READONLY=0
+  GProcessReadOnly: Boolean = False;
+  GSecLoaded: Boolean = False;
+  GAuthToken: string;
+  GIdentLock: TCriticalSection;
+  GSesiones: TList<TSesion>;  // sesiones HTTP: id, nombre atado en initialize, ultimo uso
+  GCaducadas: TStringList;    // las ultimas que caducaron: su motivo no se pierde al purgarlas
+  GSessionTimeoutMin: Double = -1; // -1 = sin leer todavia
+  GIniBindIP: string;              // [Server] BindIP
+  GIniSessionTimeout: string;      // [Server] SessionTimeoutMinutes, sin parsear
+  GIniEngineIdle: string;          // [Server] EngineIdleMinutes, sin parsear
+  GEngineIdleMin: Double = -1;     // -1 = sin leer todavia
+  GIniMaxEngines: string;          // [Server] MaxEngines, sin parsear
+  GMaxEngines: Integer = -1;       // -1 = sin leer todavia
+  GIniLogLines: Integer = 2000;    // [Log] LinesPerFile
+  GIniLogMaxFiles: Integer = 10;   // [Log] MaxFiles
+
+  GReadOnlyToken: string;
+  GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
+  GLibraryZone: Boolean = True;     // the read-only library zone, on by default
+  GDelphiVersion: string = '';      // [Server] DelphiVersion: el Delphi del servidor
+  GDelphiUpdate: string = '';       // [Server] DelphiUpdate: el update que declara el operador
+  GIniCargadoEn: TDateTime = 0;     // la fecha del settings.ini que tiene cargado este proceso
+  GIniIlegible: string = '';        // por que no se lee el settings.ini (un BOM delante de una seccion): no arranca
+  GServerIniDoble: Boolean = False; // [Server] dos veces, o su DelphiVersion: la clave no se escribe
+  GWorkspaceConDelphiVersion: string = ''; // un workspace con DelphiVersion= de la 1.13: la clave no se escribe
+  GAllowTests: Boolean = False;     // running test suites is opt-in too
+  GGitRemotes: string = '';         // hosts an explicit git URL may name
+  GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
+  GRemoteProjects: TArray<string>;  // RemoteRunProjects del [Workspace] por defecto
+  GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
+  GAgentConfinement: Boolean = False; // each agent to its own subfolder: OFF by default
+  // [Tools] Profile: which tools appear in tools/list (all stay callable).
+  // full (default) | coder (hides the deploy trio) | reader (LSP + reading).
+  // GToolsOnly (Only=) is an explicit allowlist that overrides the profile.
+  GToolsProfile: string = 'full';
+  GToolsOnly: TArray<string>;
+  GSharedFolders: TArray<string>;     // subfolders any agent may write (opt-in)
+  GWorkspaces: TArray<TWorkspaceDef>; // [Workspace.*]: token -> its own jail
+  GWorkspaceNotes: TArray<string>;    // startup findings about that config
+  GAdbDevices: TArray<string>;      // DELPHI_MCP_ADB_DEVICES (lanzamiento local)
+  GVaultPath: string = '';          // DELPHI_MCP_VAULT_PATH (lanzamiento local)
 
 threadvar
+  TCurrentAgent: string; // WHO is calling on THIS thread (the HTTP request)
+  GRequestReadOnly: Boolean;
+  TRequestWorkspaceIx1: Integer; // workspace de la peticion HTTP (lo pone el transporte)
   TSalidaHecha: string; // lo que la tool de ESTA llamada ya enmascaro (EnmascaraSalvoContenido)
   TCitasHechas: string; // las citas (CitaDeLinea) de ESTA llamada, cada una seguida de #0
+
+var
+  GStdioIx1: Integer = 0; // workspace abierto por DELPHI_MCP_TOKEN (proceso stdio)
+  GStdioSoloLectura: Boolean = False; // ...y lo abrio su token de LECTURA
+
+{ El workspace activo de ESTA llamada, indice+1; 0 = ninguno. El transporte
+  HTTP lo fija por peticion; en un proceso local (stdio) vale el que abrio
+  el token del entorno al cargar la seguridad - asi el cliente local tambien
+  entra "con su token" cuando lo tiene, y sin token se queda en el modo
+  local de lanzamiento que definan las variables de entorno. }
+function TWorkspaceIx1: Integer;
+begin
+  Result := TRequestWorkspaceIx1;
+  if Result = 0 then
+    Result := GStdioIx1;
+end;
+
+{ EL resolvedor del workspace activo: la UNICA forma de preguntar "que vale
+  para esta sesion". Antes cada accesor repetia el par "si hay workspace
+  activo, su campo; si no, el global" (18 copias medidas el 25-sep-2026):
+  una clave nueva obligaba a escribir las dos mitades a mano, y olvidar la
+  del workspace hacia caer la clave al global SIN RUIDO - un token con un
+  permiso que otro operador declaro para otro token. La regla de v0.98 ("un
+  workspace tiene exactamente lo que declara") la cumplian 18 copias; ahora
+  la cumple este par. David: "si una aplicacion repite mucho una accion hay
+  que centralizarla con parametros, por salud del codigo". }
+function HasActiveWS: Boolean;
+begin
+  Result := (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces));
+end;
+
+function ActiveWS: TWorkspaceDef;
+begin
+  Result := GWorkspaces[TWorkspaceIx1 - 1];
+end;
+
+function ModoLocalCerrado: string;
+begin
+  // un workspace con su token tiene su propia jaula y no lee nada del
+  // entorno: el cierre del modo local no le toca
+  if HasActiveWS then
+    Result := ''
+  else
+    Result := GLocalCerrado;
+end;
+
+function NegativaDeCierre: string;
+begin
+  // unas Roots del entorno con texto y nada cargado cierran desde siempre
+  // (GRootsInvalid), con su negativa: es el mismo estado, y va por aqui
+  // para que tambien se diga ANTES de mirar nada en el disco (su comprobacion
+  // iba detras de la del vault, y la pasada de los UNC la dejaba pasar).
+  // Como el otro cierre, es del modo LOCAL: a quien entra con el token de
+  // un workspace - su jaula es la suya, no lee las raices del entorno - no
+  // le toca. Se le negaba todo (medido: con unas DELPHI_MCP_ROOTS en ruta
+  // de red, que hasta la 1.8.2 cargaban, un workspace abierto contestaba
+  // WS-004 a cada llamada, por stdio y por HTTP)
+  if GRootsInvalid and not HasActiveWS then
+    Exit(MsgText(SR_ROOTS_INVALID));
+  Result := ModoLocalCerrado;
+  if Result <> '' then
+    Result := MsgFmt(SR_LOCAL_CERRADO_FMT, [Result]);
+end;
+
+{ 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
+  unparseable entries ignored. Shared by the global Roots= and every
+  [Workspace.*] Roots=. }
+{ El nombre FINAL de una ruta que existe: sigue junctions y symlinks hasta su
+  destino de verdad. False si no se puede abrir (no existe, o no hay permiso
+  ni para preguntar). Acceso 0 = solo consultar, y FILE_FLAG_BACKUP_SEMANTICS
+  hace falta para poder abrir CARPETAS. }
+{ EL paseo hacia arriba, escrito UNA vez. Dada una ruta, busca el antecesor
+  existente mas cercano que AResuelve sepa traducir y le vuelve a pegar el
+  resto: el ultimo tramo de un create o un upload todavia no existe, y aun asi
+  hay que canonicalizar el camino ANTES de que ningun guarda lo mire.
+
+  Estaba escrito DOS veces. LongCanonical lo tenia desde siempre (8.3 ->
+  nombre largo), y el 20-sep-2026, para cerrar el escape por junctions, escribi
+  RealPath con el MISMO bucle y otra llamada de Windows - sin mirar si habia
+  algo aprovechable, teniendolo en esta misma unidad. Entre las dos cambia UNA
+  linea, el resolutor; el paseo era identico. Ahora es uno. }
+type
+  TResuelveTramo = reference to function(const ADir: string;
+    out ASalida: string): Boolean;
+
+function CanonicalSubiendo(const AFull: string;
+  const AResuelve: TResuelveTramo): string;
+var
+  Dir, Tail, Parent, Resuelto: string;
+begin
+  Dir := AFull;
+  Tail := '';
+  while Dir <> '' do
+  begin
+    if AResuelve(Dir, Resuelto) then
+    begin
+      Result := Resuelto;
+      if Tail <> '' then
+        Result := IncludeTrailingPathDelimiter(Result) + Tail;
+      Exit;
+    end;
+    Parent := TPath.GetDirectoryName(Dir);
+    if (Parent = '') or SameText(Parent, Dir) then
+      Break;
+    if Tail = '' then
+      Tail := TPath.GetFileName(Dir)
+    else
+      Tail := TPath.GetFileName(Dir) + '\' + Tail;
+    Dir := Parent;
+  end;
+  Result := AFull; // nada del camino existe: se queda la forma textual
+end;
+
+function NombreFinal(const APath: string; out AReal: string): Boolean;
+var
+  H: THandle;
+  Len: DWORD;
+  Buf: array [0 .. 32767] of Char;
+begin
+  Result := False;
+  AReal := '';
+  H := CreateFile(PChar(APath), 0,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil,
+    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+  if H = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    // flags 0 = FILE_NAME_NORMALIZED + VOLUME_NAME_DOS, que es lo que
+    // queremos: la ruta con letra de unidad, normalizada.
+    Len := GetFinalPathNameByHandle(H, Buf, Length(Buf) - 1, 0);
+    if (Len = 0) or (Len >= DWORD(Length(Buf))) then
+      Exit;
+    SetString(AReal, PChar(@Buf[0]), Len);
+    // GetFinalPathNameByHandle devuelve la forma extendida.
+    if AReal.StartsWith('\\?\UNC\') then
+      AReal := '\\' + AReal.Substring(8)
+    else if AReal.StartsWith('\\?\') then
+      AReal := AReal.Substring(4);
+    Result := AReal <> '';
+  finally
+    CloseHandle(H);
+  end;
+end;
+
+{ LA RUTA REAL, que es contra la que hay que medir la jaula.
+
+  TPath.GetFullPath normaliza el TEXTO y no sigue reparse points, asi que un
+  junction o un symlink creado DENTRO del root apuntando fuera pasaba el
+  control y el sistema de ficheros servia el destino de verdad. Medido el
+  2026-09-20 por un agente auditor: un junction a
+  C:\Windows\System32\drivers\etc dentro del root hizo que delphi_list y
+  delphi_read devolvieran el hosts de la maquina. Y no hace falta consola para
+  plantarlo: un git clone con core.symlinks=true mete el enlace sin salir del
+  MCP, o sea que era alcanzable por el propio agente.
+
+  Si la ruta NO existe todavia (crear un fichero nuevo, por ejemplo), se
+  resuelve el ANTECESOR existente mas cercano y se le vuelve a pegar el resto:
+  lo que importa es que ningun tramo del camino salte fuera. Si no existe
+  nada del camino, se queda la normalizacion textual, que es lo que habia. }
+function RealPath(const APath: string): string;
+var
+  Base: string;
+begin
+  Result := APath;
+  try
+    // (la raiz de una unidad, con su barra: una unidad a secas es para
+    // Windows su carpeta ACTUAL, y de ahi salia la ruta real de la carpeta
+    // desde la que corre el servidor en vez de la de la raiz. Lsp.NetDrives)
+    Base := SinBarraFinal(TPath.GetFullPath(RaizSiUnidad(APath)));
+  except
+    Exit;
+  end;
+  Result := CanonicalSubiendo(Base,
+    function(const ADir: string; out ASalida: string): Boolean
+    var
+      A: Cardinal;
+    begin
+      // Un fichero NORMAL no se abre: solo un enlace redirige, y su ruta real
+      // es la real de su carpeta mas su nombre largo (LongCanonical no abre
+      // el fichero). Abrirlo para pedirle el nombre final le quitaba el
+      // rename a otro escritor en ese instante: con un handle abierto, aunque
+      // comparta el borrado, MoveFileEx no puede reemplazarlo - "rename
+      // atomico fallido" y una edicion perdida en test_concurrencia (A y C,
+      // 25-sep-2026, al crecer las comparaciones por ruta real).
+      A := GetFileAttributes(PChar(ADir));
+      if (A <> INVALID_FILE_ATTRIBUTES) and
+         ((A and (FILE_ATTRIBUTE_DIRECTORY or FILE_ATTRIBUTE_REPARSE_POINT)) = 0) then
+      begin
+        Result := NombreFinal(TPath.GetDirectoryName(ADir), ASalida);
+        if Result then
+          ASalida := IncludeTrailingPathDelimiter(PrefijoSinBarra(ASalida)) +
+            TPath.GetFileName(LongCanonical(ADir));
+        Exit;
+      end;
+      Result := NombreFinal(ADir, ASalida);
+      if Result then
+        ASalida := SinBarraFinal(ASalida);
+    end);
+end;
+
+function VaultNormalizado(const ACrudo: string): string; forward;
+
+{ Un sitio se declara con su LETRA (David, 1-oct-2026): X:\... y nada mas.
+  Una entrada de Roots, ReadOnlyRoots, ReadOnlyPaths o VaultPath que, ya
+  completa, no tiene esa forma - una ruta de red (\\host\recurso\...), un
+  prefijo de dispositivo (\\?\..., \\.\...) - NO se carga: la letra es lo
+  que el agente ve como unidad virtual y sobre lo que esta hecho el
+  enmascarador, y la de red la conecta el servidor al arrancar
+  (Lsp.NetDrives). La regla dice lo que VALE, no lo que no: una lista de
+  formas prohibidas dejaba pasar \\?\GLOBALROOT\Device\Mup\... (revision de
+  la 1.9.0). AFull: la entrada ya pasada por GetFullPath.
+  Los dos lectores de abajo dejan fuera lo que no vale - y lo que no parsea -
+  y lo devuelven, como se escribio, en ARechazadas: el arranque lo dice
+  (AvisaDeSitiosNoCargados). }
+function EsSitioConLetra(const AFull: string): Boolean;
+begin
+  Result := (LetraDeRuta(AFull) <> #0) and (Length(AFull) >= 3) and
+    (AFull[3] = '\');
+end;
+
+{ La entrada, como se ESCRIBIO, puede ser un sitio: sin comodines (GetFullPath
+  los acepta: "vendor\*" se cargaba tal cual, no casaba con nada y no
+  protegia nada, sin un aviso), y si empieza por una unidad, con su raiz
+  (X:\...) o la unidad a secas (X: = su raiz, RaizSiUnidad): "X:carpeta" es
+  relativa a la carpeta ACTUAL de esa unidad, y no es un sitio. (Segunda
+  revision de la 1.9.0.) Tampoco la que empieza por una barra: "\vendor" es
+  la raiz de la unidad ACTUAL del proceso, se cargaba contra ella sin un
+  aviso y lo que el operador creia protegido se escribia (medido, tercera
+  revision; una ruta de red empieza por dos y tampoco es un sitio).
+  ARelativaVale: solo en ReadOnlyPaths, donde "vendor" es la carpeta vendor
+  de cada raiz. En Roots, ReadOnlyRoots y VaultPath una relativa se cargaba
+  contra la carpeta del PROCESO (system32 bajo el gestor de servicios): no
+  esta escrita con su letra, y no es un sitio (medido, tercera revision). }
+function EntradaDeSitio(const V: string; ARelativaVale: Boolean): Boolean;
+begin
+  Result := (V <> '') and (V.IndexOfAny(['*', '?']) < 0) and
+    not CharInSet(V[1], ['\', '/']) and
+    (ARelativaVale or (LetraDeRuta(V) <> #0)) and
+    not ((LetraDeRuta(V) <> #0) and (Length(V) > 2) and
+      not CharInSet(V[3], ['\', '/']));
+end;
+
+{ Las rutas de SOLO LECTURA de un workspace. Una entrada ABSOLUTA vale tal
+  cual; una RELATIVA se resuelve contra CADA root, que es como la lee quien la
+  escribe ("gdk-mcp" = la carpeta gdk-mcp de mi proyecto). No se puede reusar
+  ParseRootsList para esto: aquella resuelve lo relativo contra el directorio
+  ACTUAL del proceso, que bajo el SCM es system32. Misma forma canonica que
+  los roots - con barra final - para que la comparacion de despues sea la
+  misma y no una parecida. }
+function ParseReadOnlyList(const ARaw: string;
+  const ARoots: TArray<string>; var ARechazadas: TArray<string>): TArray<string>;
+var
+  List: TStringList;
+  E, R, V, Full: string;
+begin
+  List := TStringList.Create;
+  try
+    for E in ARaw.Split([';']) do
+    begin
+      V := E.Trim.Trim(['"']).Trim;
+      if V = '' then
+        Continue;
+      try
+        if not EntradaDeSitio(V, True) then
+          ARechazadas := ARechazadas + [V]
+        else if TPath.IsPathRooted(V) then
+        begin
+          Full := TPath.GetFullPath(RaizSiUnidad(V));
+          if EsSitioConLetra(Full) then
+            List.Add(IncludeTrailingPathDelimiter(Full))
+          else
+            ARechazadas := ARechazadas + [V];
+        end
+        else
+          for R in ARoots do
+            List.Add(IncludeTrailingPathDelimiter(
+              TPath.GetFullPath(TPath.Combine(R, V))));
+      except
+        // una entrada que no parsea (un comodin, un caracter que Windows no
+        // admite) nunca tumba el servidor, pero tampoco se calla: se
+        // ignoraba, y lo que nombraba se quedaba sin proteger (revision de
+        // la 1.9.0)
+        ARechazadas := ARechazadas + [V];
+      end;
+    end;
+    Result := List.ToStringArray;
+  finally
+    List.Free;
+  end;
+end;
+
+function ParseRootsList(const ARaw: string;
+  var ARechazadas: TArray<string>): TArray<string>;
+var
+  List: TStringList;
+  R, V, Full: string;
+begin
+  List := TStringList.Create;
+  try
+    for R in ARaw.Split([';']) do
+    begin
+      V := R.Trim.Trim(['"']).Trim;
+      if V = '' then
+        Continue;
+      try
+        // (la unidad a secas es su raiz: con el servidor en esa unidad,
+        // GetFullPath de "N:" era la carpeta del servidor, y la jaula, ella)
+        Full := TPath.GetFullPath(RaizSiUnidad(V));
+        if EntradaDeSitio(V, False) and EsSitioConLetra(Full) then
+          List.Add(IncludeTrailingPathDelimiter(Full))
+        else
+          ARechazadas := ARechazadas + [V];
+      except
+        // an unparseable entry never crashes the server; it is not loaded,
+        // and the startup says so
+        ARechazadas := ARechazadas + [V];
+      end;
+    end;
+    Result := List.ToStringArray;
+  finally
+    List.Free;
+  end;
+end;
+
+{ Confinamiento y carpetas compartidas: la declaracion del workspace, sin herencia. }
+function AgentConfinementNow: Boolean;
+begin
+  if HasActiveWS then
+    Exit(ActiveWS.OvAgentConfinement = 1); // ausente = apagado
+  Result := GAgentConfinement;
+end;
+
+function SharedFoldersNow: TArray<string>;
+begin
+  if HasActiveWS then
+    Exit(ActiveWS.OvSharedFolders); // ausente = ninguna
+  Result := GSharedFolders;
+end;
+
+{ 1 / 0 when the key is present in the section, -1 (inherit) when absent. }
+function ReadTriState(AIni: TIniFile; const ASection, AKey: string): Integer;
+begin
+  if not AIni.ValueExists(ASection, AKey) then
+    Exit(-1);
+  if AIni.ReadBool(ASection, AKey, False) then
+    Result := 1
+  else
+    Result := 0;
+end;
+
+procedure SetRequestWorkspace(AIx: Integer);
+begin
+  TRequestWorkspaceIx1 := AIx + 1;
+end;
+
+function SettingsIniPath: string;
+begin
+  Result := ServerDir('settings.ini');
+end;
+
+function CurrentWorkspaceName: string;
+begin
+  if HasActiveWS then
+    Result := ActiveWS.Name
+  else
+    Result := '';
+end;
+
+function WorkspaceTokensConfigured: Boolean;
+var
+  W: TWorkspaceDef;
+begin
+  for W in GWorkspaces do
+    if (W.Token <> '') or (W.ReadOnlyToken <> '') then
+      Exit(True);
+  Result := False;
+end;
+
+function WorkspaceStartupNotes: TArray<string>;
+var
+  Names: string;
+  W: TWorkspaceDef;
+begin
+  Result := [];
+  Names := '';
+  for W in GWorkspaces do
+  begin
+    if Names <> '' then
+      Names := Names + ', ';
+    Names := Names + W.Name;
+  end;
+  if Names <> '' then
+    Result := Result + ['Workspaces: ' + Names];
+  Result := Result + GWorkspaceNotes;
+end;
+
+function AuthorizeBearer(const AAuth: string; out AReadOnly: Boolean;
+  out AWorkspaceIx: Integer): Boolean;
+var
+  I: Integer;
+begin
+  AReadOnly := False;
+  AWorkspaceIx := -1;
+  // O WORKSPACE O NADA (v0.91; rematado 2026-09-19): un Bearer autentica
+  // SOLO contra un [Workspace.<nombre>]. Sin coincidencia, 401 - ya no hay
+  // modo abierto "sin configurar" ni anonimo de solo lectura. El modo de
+  // confianza queda para el proceso LOCAL (stdio) que lanza el operador.
+  // workspace tokens: the secret decides the jail, not the declared name
+  for I := 0 to High(GWorkspaces) do
+  begin
+    // fail closed: a workspace without a valid jail admits nobody
+    if GWorkspaces[I].Invalid or (Length(GWorkspaces[I].Roots) = 0) then
+      Continue;
+    // el esquema sin distinguir mayusculas y el token si (BearerToken):
+    // "bearer <token>" daba 401 (decima revision)
+    if (GWorkspaces[I].Token <> '') and
+       (BearerToken(AAuth) = GWorkspaces[I].Token) then
+    begin
+      AWorkspaceIx := I;
+      Exit(True);
+    end;
+    if (GWorkspaces[I].ReadOnlyToken <> '') and
+       (BearerToken(AAuth) = GWorkspaces[I].ReadOnlyToken) then
+    begin
+      AWorkspaceIx := I;
+      AReadOnly := True;
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+procedure SetProcessReadOnly(AValue: Boolean);
+begin
+  GProcessReadOnly := AValue;
+end;
+
+procedure SetRequestReadOnly(AValue: Boolean);
+begin
+  GRequestReadOnly := AValue;
+end;
+
+function IsReadOnlyNow: Boolean;
+begin
+  // (el token de lectura del ENTORNO ata al cliente LOCAL, el que no trae
+  // workspace en su peticion. Ponia el proceso entero en solo lectura, y un
+  // servidor HTTP con esa variable en su entorno negaba la escritura tambien
+  // a quien entraba con el token de escritura de su workspace - medido en la
+  // revision de la 1.9.0)
+  Result := GProcessReadOnly or GRequestReadOnly or
+    (GStdioSoloLectura and (TRequestWorkspaceIx1 = 0));
+  if not Result then
+    // Excepcion local sin token, SOLO LECTURA (David 2026-09-19, "menos
+    // sustos"): sin workspace activo y sin jaula declarada en el entorno
+    // se puede MIRAR todo el codigo pero no tocar nada. Solo alcanzable en
+    // stdio: todo HTTP entra con token de workspace o recibe 401 antes.
+    Result := (TWorkspaceIx1 = 0) and (Length(WorkspaceRoots) = 0);
+end;
+
+procedure ParseAdbDevices(const ARaw: string);
+var
+  E: string;
+begin
+  if ARaw.Trim = '' then
+    Exit;
+  for E in ARaw.Split([';']) do
+    if E.Trim <> '' then
+      GAdbDevices := GAdbDevices + [E.Trim];
+end;
+
+{ Un copia-pega futuro puede dejar el MISMO token en dos [Workspace.*], la
+  misma clave dos veces en una seccion, o la misma seccion dos veces. TIniFile
+  no avisa de nada de eso: coge lo primero y calla, y un agente entra en una
+  jaula que no es la suya sin que nadie lo vea. Los workspaces afectados se
+  CIERRAN (fail closed, el mismo Invalid que unas Roots que no parsean) y el
+  arranque lo dice (David, 2026-09-23). }
+procedure ComprobarDuplicadosIni(const AIniPath: string);
+var
+  I, J, P: Integer;
+  Lineas: TArray<string>;
+  Seccion, T, Clave: string;
+  Claves, Secciones: TStringList;
+
+  procedure Cierra(const ANombre: string);
+  var
+    K: Integer;
+  begin
+    for K := 0 to High(GWorkspaces) do
+      if SameText(GWorkspaces[K].Name, ANombre) then
+        GWorkspaces[K].Invalid := True;
+  end;
+
+  function Comparten(const A, B: TWorkspaceDef): Boolean;
+  begin
+    Result := ((A.Token <> '') and ((A.Token = B.Token) or (A.Token = B.ReadOnlyToken))) or
+      ((A.ReadOnlyToken <> '') and ((A.ReadOnlyToken = B.Token) or (A.ReadOnlyToken = B.ReadOnlyToken)));
+  end;
+
+begin
+  // 1. el mismo secreto en dos workspaces, o Token = ReadOnlyToken en uno
+  for I := 0 to High(GWorkspaces) do
+  begin
+    if (GWorkspaces[I].Token <> '') and (GWorkspaces[I].Token = GWorkspaces[I].ReadOnlyToken) then
+    begin
+      GWorkspaces[I].Invalid := True;
+      GWorkspaceNotes := GWorkspaceNotes +
+        [MsgFmt(SL_GUARD_MISMO_VALOR_TOKEN_FMT, [GWorkspaces[I].Name])];
+    end;
+    for J := I + 1 to High(GWorkspaces) do
+      if Comparten(GWorkspaces[I], GWorkspaces[J]) then
+      begin
+        GWorkspaces[I].Invalid := True;
+        GWorkspaces[J].Invalid := True;
+        GWorkspaceNotes := GWorkspaceNotes +
+          [MsgFmt(SL_GUARD_COMPARTEN_UN_TOKEN_FMT, [GWorkspaces[I].Name,
+           GWorkspaces[J].Name])];
+      end;
+  end;
+  // 2. la misma clave dos veces en una seccion, o la misma seccion dos veces
+  try
+    Lineas := TFile.ReadAllLines(AIniPath);
+  except
+    Exit;
+  end;
+  Claves := TStringList.Create;
+  Secciones := TStringList.Create;
+  try
+    Claves.CaseSensitive := False;
+    Secciones.CaseSensitive := False;
+    Seccion := '';
+    for var L in Lineas do
+    begin
+      T := L.Trim;
+      if (T = '') or T.StartsWith(';') or T.StartsWith('#') then
+        Continue;
+      if T.StartsWith('[') and T.EndsWith(']') then
+      begin
+        Seccion := T.Substring(1, T.Length - 2).Trim;
+        if Secciones.IndexOf(Seccion) >= 0 then
+        begin
+          if Seccion.StartsWith('Workspace.', True) then
+          begin
+            Cierra(Seccion.Substring(Length('Workspace.')));
+            GWorkspaceNotes := GWorkspaceNotes +
+              [MsgFmt(SL_GUARD_SECCION_DOS_VECES_CERRADO_FMT, [Seccion])];
+          end
+          else
+          begin
+            GWorkspaceNotes := GWorkspaceNotes +
+              [MsgFmt(SL_GUARD_SECCION_DOS_VECES_FUSIONALAS_FMT, [Seccion])];
+            // lo del segundo no lo ve Windows: la clave no se escribe encima
+            if SameText(Seccion, 'Server') then
+              GServerIniDoble := True;
+          end;
+        end
+        else
+          Secciones.Add(Seccion);
+        Continue;
+      end;
+      P := T.IndexOf('=');
+      if P <= 0 then
+        Continue;
+      Clave := Seccion + '|' + T.Substring(0, P).Trim;
+      if Claves.IndexOf(Clave) >= 0 then
+      begin
+        if Seccion.StartsWith('Workspace.', True) then
+        begin
+          Cierra(Seccion.Substring(Length('Workspace.')));
+          GWorkspaceNotes := GWorkspaceNotes +
+            [MsgFmt(SL_GUARD_REPITE_CLAVE_CERRADO_FMT, [Seccion, T.Substring(0, P).Trim])];
+        end
+        else
+        begin
+          GWorkspaceNotes := GWorkspaceNotes +
+            [MsgFmt(SL_GUARD_REPITE_CLAVE_IGNORA_FMT, [Seccion, T.Substring(0, P).Trim])];
+          if SameText(Clave, 'Server|DelphiVersion') then
+            GServerIniDoble := True;
+        end;
+      end
+      else
+        Claves.Add(Clave);
+    end;
+  finally
+    Claves.Free;
+    Secciones.Free;
+  end;
+end;
+
+{ Las entradas que un lector dejo fuera (no son una ruta con letra, o no
+  parsean), dichas en el arranque: donde estaban (la clave) y cual era. Vacia
+  la lista y devuelve si habia alguna.
+  AProtege: la clave dice lo que NO se escribe (ReadOnlyRoots, ReadOnlyPaths,
+  VaultPath). Una raiz que no se carga cierra; una proteccion que no se carga
+  ABRE - lo que nombraba podria escribirse -, asi que quien la declara queda
+  CERRADO (fail closed), y el aviso lo dice. }
+function AvisaDeSitiosNoCargados(const ADonde: string; AProtege: Boolean;
+  var AFuera: TArray<string>): Boolean;
+var
+  S, Msg: string;
+begin
+  Result := Length(AFuera) > 0;
+  if AProtege then
+    Msg := SL_GUARD_PROTECCION_NO_CARGADA_FMT
+  else
+    Msg := SL_GUARD_SITIO_NO_CARGADO_FMT;
+  for S in AFuera do
+    GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(Msg, [ADonde, S])];
+  AFuera := nil;
+end;
+
+{ Las entradas de ReadOnlyPaths que caen FUERA de todas las raices de su
+  workspace y de sus referencias, dichas en el arranque. ReadOnlyPaths marca
+  de solo lectura lo que ya esta DENTRO de la jaula: una carpeta de fuera ni
+  la abre ni la protege para sus agentes, y quien la escribe queria casi
+  siempre ReadOnlyRoots (medido 2-oct-2026: dos workspaces de la VM con
+  ReadOnlyPaths=L:\... para leer codigo de fuera, y ninguno lo leia). Se
+  carga igual: sigue entre lo que no se toca de NINGUN workspace
+  (SitiosQueNoSeTocan). Sin raices no hay "fuera": el modo local de
+  confianza lee toda la maquina, y un workspace sin raices ya esta cerrado.
+  AClaveDeFuera: la que si abre para leer, como se llama alli (ReadOnlyRoots
+  en el ini, DELPHI_MCP_READONLY_ROOTS en el entorno). Primera revision de
+  la 1.9.1: una entrada que CONTIENE una raiz la deja entera de solo lectura.
+  Correccion medida el 4-oct: cuenta el texto con sus alias 8.3 Y la ruta
+  real; que la raiz sea un junction no quita la proteccion de su entrada. }
+function EnLugar(const APath, ALugar: string;
+  AResuelveAlias: Boolean = True): Boolean; forward;
+
+procedure AvisaDeSoloLecturaFuera(const ADonde, AClaveDeFuera: string;
+  const APaths, ARoots, AReferencias: TArray<string>);
+
+  // La ruta REAL en una unidad LOCAL, como la jaula (un junction cuenta, y
+  // un nombre 8.3 tambien); en otra - de red, o una que el proceso aun no ve -
+  // el TEXTO: por una letra de red el arranque no sale a la red (lo que la
+  // toca va despues, con su plazo: VigilaLetrasDeRed). Un enlace simbolico de
+  // una unidad local a un recurso de red se sigue, como lo sigue la jaula en
+  // cada peticion (segunda revision de la 1.9.1).
+  function Comparable(const ASitio: string): string;
+  begin
+    Result := IncludeTrailingPathDelimiter(ASitio);
+    if ClaseDeLetra(LetraDeRuta(ASitio)) = clLocal then
+    try
+      Result := IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(ASitio)));
+    except
+      // la que no se resuelve se compara por el texto
+    end;
+  end;
+
+var
+  P, PC, R, RC: string;
+  Dentro, AliasLocal: Boolean;
+  Dichas: TArray<string>;
+begin
+  if Length(ARoots) = 0 then
+    Exit;
+  Dichas := nil;
+  for P in APaths do
+  begin
+    PC := Comparable(P);
+    Dentro := False;
+    // Una entrada que contiene la raiz por texto protege su descendencia.
+    // Una entrada dentro de la raiz que SALE por un enlace sigue siendo fuera.
+    // El arranque solo resuelve alias en unidades locales: no abre la red.
+    for R in ARoots do
+    begin
+      RC := Comparable(R);
+      AliasLocal := (ClaseDeLetra(LetraDeRuta(P)) = clLocal) and
+        (ClaseDeLetra(LetraDeRuta(R)) = clLocal);
+      if EnLugar(R, P, AliasLocal) or
+         EnLugar(PC, RC, False) or EnLugar(RC, PC, False) then
+      begin
+        Dentro := True;
+        Break;
+      end;
+    end;
+    // dentro de una referencia propia: lo que quien la escribe queria leer
+    // ya se lee
+    if not Dentro then
+      for R in AReferencias do
+      begin
+        if EnLugar(PC, Comparable(R), False) then
+        begin
+          Dentro := True;
+          Break;
+        end;
+      end;
+    // (una relativa que sale al mismo sitio desde dos raices, una vez)
+    if not Dentro and (IndexText(PC, Dichas) < 0) then
+    begin
+      Dichas := Dichas + [PC];
+      GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(SL_GUARD_SOLO_LECTURA_FUERA_FMT,
+        [ADonde, SinBarraFinal(P), AClaveDeFuera])];
+    end;
+  end;
+end;
+
+{ Un VaultPath= con texto que no vale como sitio: completo, no es una ruta
+  con letra, o no parsea. El vault es un sitio protegido - las tools de
+  codigo no entran en el -: lleva la regla de los demas (David, 1-oct-2026). }
+function VaultSinLetra(const ACrudo: string): Boolean;
+var
+  V: string;
+begin
+  V := ACrudo.Trim.Trim(['"']).Trim;
+  if V = '' then
+    Exit(False);
+  if not EntradaDeSitio(V, False) then
+    Exit(True);
+  V := VaultNormalizado(ACrudo);
+  Result := (V = '') or not EsSitioConLetra(IncludeTrailingPathDelimiter(V));
+end;
+
+{ La forma de un update: numero, punto, numero ('13.2'). }
+function EsFormaDeUpdate(const S: string): Boolean;
+var
+  Partes: TArray<string>;
+begin
+  Partes := S.Split(['.']);
+  if Length(Partes) <> 2 then
+    Exit(False);
+  for var P in Partes do
+  begin
+    if P = '' then
+      Exit(False);
+    for var C in P do
+      if not CharInSet(C, ['0'..'9']) then
+        Exit(False);
+  end;
+  Result := True;
+end;
+
+{ La linea (1-based) donde un BOM de UTF-8 va delante de la cabecera de una
+  seccion, o 0. La API de los ini de Windows toma el BOM por texto de esa
+  linea: no ve la cabecera y pierde la seccion entera (medido el 6-oct-2026
+  con un [Server] primero: el servidor en el 3000 y en todas las
+  interfaces). Al principio del fichero, que es lo normal, y tambien a mitad
+  - un trozo pegado de otro fichero - o dos seguidos. Lo pregunta
+  LoadSecurity ANTES de leer nada (revision del 6-oct-2026: estaba en Wire,
+  despues de que el ini se hubiera leido y usado). }
+function LineaConBomAntesDeSeccion(const AIniPath: string): Integer;
+var
+  B: TArray<Byte>;
+  I, J, Linea: Integer;
+  ConBom: Boolean;
+begin
+  Result := 0;
+  try
+    B := TFile.ReadAllBytes(AIniPath);
+  except
+    Exit; // sin poder leerlo no se sabe: que lo lea TIniFile, como siempre
+  end;
+  I := 0;
+  Linea := 1;
+  while I < Length(B) do
+  begin
+    // un principio de linea: los BOM que haya, los blancos, y si sigue '['
+    J := I;
+    ConBom := False;
+    while BomUtf8En(B, J) do
+    begin
+      ConBom := True;
+      Inc(J, 3);
+    end;
+    if ConBom then
+    begin
+      while (J < Length(B)) and ((B[J] = Ord(' ')) or (B[J] = 9)) do
+        Inc(J);
+      if (J < Length(B)) and (B[J] = Ord('[')) then
+        Exit(Linea);
+    end;
+    while (I < Length(B)) and (B[I] <> 10) do
+      Inc(I);
+    Inc(I);
+    Inc(Linea);
+  end;
+end;
+
+procedure LoadSecurity;
+var
+  IniPath: string;
+  Ini: TIniFile;
+  Fuera: TArray<string>;
+  LineaBom: Integer;
+begin
+  if GSecLoaded then
+    Exit;
+  ParseAdbDevices(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'));
+  GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
+  GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
+  GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
+  GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
+  GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
+  GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
+  GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
+  GRemoteProjects := GetEnvironmentVariable('DELPHI_MCP_REMOTE_RUN_PROJECTS')
+    .Split([';'], TStringSplitOptions.ExcludeEmpty);
+  GVaultPath := GetEnvironmentVariable('DELPHI_MCP_VAULT_PATH');
+  GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
+  GAgentConfinement := GetEnvironmentVariable('DELPHI_MCP_AGENT_CONFINEMENT') = '1';
+  GToolsProfile := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_PROFILE').Trim);
+  if GToolsProfile = '' then
+    GToolsProfile := 'full';
+  GToolsOnly := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_ONLY'))
+    .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+  GSharedFolders := LowerCase(GetEnvironmentVariable('DELPHI_MCP_SHARED_FOLDERS'))
+    .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+  // Las claves de JAULA del modo local, aqui con las demas: hasta el
+  // 25-sep-2026 Roots, ReadOnlyPaths, ReadOnlyRoots y VaultReadOnly se
+  // leian cada una en su primer uso, con su propia cache - cuatro
+  // cargadores mas que este, y cuatro sitios donde olvidar una mitad.
+  var RawRootsEnv := GetEnvironmentVariable('DELPHI_MCP_ROOTS');
+  Fuera := nil;
+  GRoots := ParseRootsList(RawRootsEnv, Fuera);
+  AvisaDeSitiosNoCargados('DELPHI_MCP_ROOTS', False, Fuera);
+  // Fail CLOSED: Roots con texto pero nada parseado = nada permitido.
+  GRootsInvalid := (RawRootsEnv.Trim <> '') and (Length(GRoots) = 0);
+  // ...y una PROTECCION del entorno que no se cargo cierra el modo local,
+  // con su motivo (GLocalCerrado): dejarla fuera sin mas abria lo que nombraba
+  GRoPaths := ParseReadOnlyList(GetEnvironmentVariable('DELPHI_MCP_READONLY_PATHS'), GRoots, Fuera);
+  if AvisaDeSitiosNoCargados('DELPHI_MCP_READONLY_PATHS', True, Fuera) then
+    GLocalCerrado := MsgText(SF_CIERRE_PROTECCION);
+  GRoRoots := ParseRootsList(GetEnvironmentVariable('DELPHI_MCP_READONLY_ROOTS'), Fuera);
+  if AvisaDeSitiosNoCargados('DELPHI_MCP_READONLY_ROOTS', True, Fuera) then
+    GLocalCerrado := MsgText(SF_CIERRE_PROTECCION);
+  AvisaDeSoloLecturaFuera('DELPHI_MCP_READONLY_PATHS', 'DELPHI_MCP_READONLY_ROOTS',
+    GRoPaths, GRoots, GRoRoots);
+  if VaultSinLetra(GVaultPath) then
+  begin
+    Fuera := [GVaultPath.Trim];
+    AvisaDeSitiosNoCargados('DELPHI_MCP_VAULT_PATH', True, Fuera);
+    GVaultPath := '';
+    GLocalCerrado := MsgText(SF_CIERRE_PROTECCION);
+  end;
+  // El entorno gana en AMBOS sentidos para el vault del modo local (las
+  // baterias fuerzan un vault de solo lectura por encima de cualquier ini).
+  GVaultEnvWritable := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY') = '0';
+  IniPath := SettingsIniPath;
+  // un BOM de UTF-8 delante de una seccion: Windows la pierde entera, y nada
+  // de lo que se leyera seria lo que escribio el operador. No se lee, y el
+  // servidor no arranca (ExigeSettingsIniLegible, desde TMcpHost.Wire)
+  LineaBom := 0;
+  if TFile.Exists(IniPath) then
+    LineaBom := LineaConBomAntesDeSeccion(IniPath);
+  if LineaBom > 0 then
+    GIniIlegible := MsgFmt(SE_GUARD_INI_BOM_FMT, [IniPath, LineaBom]);
+  if TFile.Exists(IniPath) and (LineaBom = 0) then
+  begin
+    // la fecha ANTES de leerlo: si lo tocan mientras, se avisa de mas, nunca de menos
+    GIniCargadoEn := TFile.GetLastWriteTime(IniPath);
+    Ini := TIniFile.Create(IniPath);
+    try
+      // v0.98 (David): el ini NO tiene seccion generica - todo permiso
+      // vive en un [Workspace.<nombre>]; el modo local de lanzamiento se
+      // define SOLO por el entorno de quien arranca el proceso. Del ini,
+      // fuera de los workspaces, solo queda fontaneria ([Server]/[Tools]).
+      if GToolsProfile = 'full' then
+        GToolsProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
+      if Length(GToolsOnly) = 0 then
+        GToolsOnly := LowerCase(Ini.ReadString('Tools', 'Only', ''))
+          .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+      // La fontaneria de [Server] y [Log], aqui con las demas: hasta el
+      // 26-sep BindIP, SessionTimeoutMinutes y el [Log] de la bandeja
+      // abrian el fichero cada uno por su cuenta (tres lectores mas).
+      GIniBindIP := Ini.ReadString('Server', 'BindIP', '');
+      GIniSessionTimeout := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
+      GIniEngineIdle := Ini.ReadString('Server', 'EngineIdleMinutes', '').Trim;
+      GIniMaxEngines := Ini.ReadString('Server', 'MaxEngines', '').Trim;
+      // de aqui y de ningun otro sitio: sin variable de entorno (David)
+      GDelphiVersion := Ini.ReadString('Server', 'DelphiVersion', '').Trim;
+      // el update lo declara el operador (13.2); otra forma se avisa y se
+      // ignora, como si no estuviera
+      GDelphiUpdate := Ini.ReadString('Server', 'DelphiUpdate', '').Trim;
+      if (GDelphiUpdate <> '') and not EsFormaDeUpdate(GDelphiUpdate) then
+      begin
+        GWorkspaceNotes := GWorkspaceNotes +
+          [MsgFmt(SL_GUARD_DELPHIUPDATE_MAL_FMT, [GDelphiUpdate])];
+        GDelphiUpdate := '';
+      end;
+      GIniLogLines := Ini.ReadInteger('Log', 'LinesPerFile', 2000);
+      GIniLogMaxFiles := Ini.ReadInteger('Log', 'MaxFiles', 10);
+      // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
+      // here, so AuthorizeBearer never touches the disk per request.
+      var Secs := TStringList.Create;
+      try
+        Ini.ReadSections(Secs);
+        for var S in Secs do
+          if S.StartsWith('Workspace.', True) and (S.Length > Length('Workspace.')) then
+          begin
+            var W: TWorkspaceDef;
+            W.Name := S.Substring(Length('Workspace.')).Trim;
+            W.Token := Ini.ReadString(S, 'Token', '').Trim;
+            // Everyone had typed AuthToken= for years, so the
+            // hand writes it again inside a workspace (measured: the operator
+            // himself, 2026-09-10, and the server swallowed it silently).
+            // Token= is canonical; AuthToken= works as an alias.
+            if W.Token = '' then
+              W.Token := Ini.ReadString(S, 'AuthToken', '').Trim;
+            W.ReadOnlyToken := Ini.ReadString(S, 'ReadOnlyToken', '').Trim;
+            W.Profile := LowerCase(Ini.ReadString(S, 'Profile', '').Trim);
+            var RawRoots := Ini.ReadString(S, 'Roots', '');
+            W.Roots := ParseRootsList(RawRoots, Fuera);
+            AvisaDeSitiosNoCargados('[' + S + '] Roots=', False, Fuera);
+            W.ReadOnlyPaths := ParseReadOnlyList(
+              Ini.ReadString(S, 'ReadOnlyPaths', ''), W.Roots, Fuera);
+            var SinProteccion := AvisaDeSitiosNoCargados('[' + S + '] ReadOnlyPaths=', True, Fuera);
+            // Mismo lector que Roots: son raices, solo que de lectura.
+            W.ReadOnlyRoots := ParseRootsList(Ini.ReadString(S, 'ReadOnlyRoots', ''), Fuera);
+            if AvisaDeSitiosNoCargados('[' + S + '] ReadOnlyRoots=', True, Fuera) then
+              SinProteccion := True;
+            W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
+            // capability overrides; absent key = inherit the default
+            W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests');
+            W.OvAllowRemoteRun := ReadTriState(Ini, S, 'AllowRemoteRun');
+            W.OvAllowBuildScripts := ReadTriState(Ini, S, 'AllowBuildScripts');
+            W.OvLibraryZone := ReadTriState(Ini, S, 'LibraryZone');
+            W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement');
+            W.GitRemotes := Ini.ReadString(S, 'GitRemotes', '').Trim;
+            W.RemoteHosts := Ini.ReadString(S, 'RemoteHosts', '').Trim;
+            W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
+              .Split([';'], TStringSplitOptions.ExcludeEmpty);
+            W.VaultPath := Ini.ReadString(S, 'VaultPath', '').Trim;
+            if VaultSinLetra(W.VaultPath) then
+            begin
+              Fuera := [W.VaultPath];
+              AvisaDeSitiosNoCargados('[' + S + '] VaultPath=', True, Fuera);
+              W.VaultPath := '';
+              SinProteccion := True;
+            end;
+            W.OvVaultReadOnly := ReadTriState(Ini, S, 'VaultReadOnly');
+            W.AdbDevices := Ini.ReadString(S, 'AdbAllowedDevices', '')
+              .Split([';'], TStringSplitOptions.ExcludeEmpty);
+            W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');
+            if W.OvSharedSet then
+              W.OvSharedFolders := LowerCase(Ini.ReadString(S, 'SharedFolders', ''))
+                .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+            if W.Invalid then
+              GWorkspaceNotes := GWorkspaceNotes +
+                [MsgFmt(SL_GUARD_ROOTS_NO_PARSEA_FMT, [W.Name])];
+            // (una proteccion que no se cargo: cerrado, y ya dicho en su aviso)
+            if SinProteccion then
+              W.Invalid := True;
+            if (W.Token <> '') or (W.ReadOnlyToken <> '') then
+            begin
+              // (de una seccion sin token, que se ignora entera, no se dice)
+              AvisaDeSoloLecturaFuera('[' + S + '] ReadOnlyPaths=', 'ReadOnlyRoots',
+                W.ReadOnlyPaths, W.Roots, W.ReadOnlyRoots);
+              // La version es del SERVIDOR desde el 5-oct-2026: la de un
+              // workspace ya no se lee, y se dice en vez de callarlo.
+              // Y quien la tenia queria una: la mas nueva no se fija en
+              // [Server] por el (David, 6-oct-2026)
+              if Ini.ValueExists(S, 'DelphiVersion') then
+              begin
+                GWorkspaceNotes := GWorkspaceNotes +
+                  [MsgFmt(SL_GUARD_DELPHIVERSION_EN_WORKSPACE_FMT, [W.Name])];
+                GWorkspaceConDelphiVersion := W.Name;
+              end;
+              GWorkspaces := GWorkspaces + [W];
+            end
+            else
+              GWorkspaceNotes := GWorkspaceNotes +
+                [MsgFmt(SL_GUARD_SIN_TOKEN_IGNORADA_FMT, [W.Name])];
+          end
+          else if SameText(S, 'Workspace') then
+            // [Workspace] without the dot is the v0.97 section, and it was
+            // EXEMPTED from the warning below - so it was the one spelling
+            // that vanished in total silence. Worse: until 2026-09-20 our
+            // own refusals sent the operator to edit exactly that section,
+            // in 21 user-facing strings ("settings.ini [Workspace] Roots"),
+            // two of them shipped inside tools/list. Somebody following our
+            // own instructions got no jail, no token, and not one word
+            // anywhere saying why. It gets the loudest note of the three.
+            GWorkspaceNotes := GWorkspaceNotes +
+              [MsgText(SL_GUARD_WORKSPACE_SIN_PUNTO)]
+          else if S.ToLower.StartsWith('work') then
+            // [Workopenclaw], [WorkspaceX]... a workspace section spelled
+            // wrong used to vanish silently and its token answered 401 with
+            // no clue anywhere (measured 2026-09-10). Name the fix.
+            GWorkspaceNotes := GWorkspaceNotes +
+              [MsgFmt(SL_GUARD_WORKSPACE_MAL_ESCRITO_FMT, [S])];
+      finally
+        Secs.Free;
+      end;
+    finally
+      Ini.Free;
+    end;
+    ComprobarDuplicadosIni(IniPath);
+  end;
+  // O TOKEN O NADA tambien para el cliente local con credencial: si el
+  // entorno trae DELPHI_MCP_TOKEN (o DELPHI_MCP_READONLY_TOKEN, en solo
+  // lectura) y coincide con un workspace, el proceso stdio queda ligado a
+  // ESA jaula, exactamente como un Bearer en HTTP (David, 2026-09-19).
+  // Sin coincidencia no abre nada: el par de entorno sigue inerte.
+  // ...salvo que coincida con un workspace CERRADO (sin jaula valida): ese
+  // proceso no admite nada. Se saltaba el workspace y quedaba el modo local
+  // de confianza - sin DELPHI_MCP_ROOTS, toda la maquina en solo lectura -
+  // para un cliente al que su operador habia puesto una jaula (revision de la
+  // 1.9.0: con la regla de la letra, un workspace que ayer valia hoy cierra).
+  for var K := 0 to High(GWorkspaces) do
+  begin
+    var EsSuToken := (GAuthToken <> '') and (GWorkspaces[K].Token <> '') and
+      (GAuthToken = GWorkspaces[K].Token);
+    // (de solo lectura: su token de lectura en cualquiera de las dos
+    // variables - en DELPHI_MCP_TOKEN no ataba nada y quedaba el modo local,
+    // que sin DELPHI_MCP_ROOTS lee toda la maquina -, o su token de escritura
+    // puesto en la de solo lectura: como el Bearer de HTTP, el secreto dice
+    // el workspace. Tercera revision de la 1.9.0)
+    var EsSuLector := ((GWorkspaces[K].ReadOnlyToken <> '') and
+      ((GReadOnlyToken = GWorkspaces[K].ReadOnlyToken) or
+       (GAuthToken = GWorkspaces[K].ReadOnlyToken))) or
+      ((GWorkspaces[K].Token <> '') and (GReadOnlyToken = GWorkspaces[K].Token));
+    if not (EsSuToken or EsSuLector) then
+      Continue;
+    if GWorkspaces[K].Invalid or (Length(GWorkspaces[K].Roots) = 0) then
+    begin
+      GLocalCerrado := MsgFmt(SF_CIERRE_WORKSPACE_FMT, [GWorkspaces[K].Name]);
+      Continue;
+    end;
+    GStdioIx1 := K + 1;
+    if not EsSuToken then
+      GStdioSoloLectura := True;
+    Break;
+  end;
+  // El modo local CERRADO no tiene raices: lo que las recorre sin pasar por
+  // la jaula (delphi_projects sin root) no tiene que encontrar nada, igual
+  // que con unas Roots invalidas (segunda revision de la 1.9.0). Con un
+  // workspace atado por su token, las del entorno no se usan.
+  if (GLocalCerrado <> '') and (GStdioIx1 = 0) then
+  begin
+    GRoots := nil;
+    GRoPaths := nil;
+    GRoRoots := nil;
+  end;
+  // Las letras de RED de los sitios declarados (Lsp.NetDrives): la que este
+  // proceso no ve - un servicio no ve las del escritorio - se conecta desde
+  // el mapeo persistente de la cuenta, y se comprueba que se entra a lo
+  // declarado: raices, referencias y vaults. Aqui, con todo cargado y antes
+  // de que nadie use una raiz; lo que pasa sale con las notas de arranque, y
+  // lo que llegue despues (pasado el plazo, o al reintentar), al log. Un
+  // workspace cerrado no cuenta: no admite a nadie.
+  var Sitios: TArray<string> := GRoots + GRoRoots;
+  if VaultNormalizado(GVaultPath) <> '' then
+    Sitios := Sitios + [IncludeTrailingPathDelimiter(VaultNormalizado(GVaultPath))];
+  for var K := 0 to High(GWorkspaces) do
+    if not GWorkspaces[K].Invalid then
+    begin
+      Sitios := Sitios + GWorkspaces[K].Roots + GWorkspaces[K].ReadOnlyRoots;
+      if VaultNormalizado(GWorkspaces[K].VaultPath) <> '' then
+        Sitios := Sitios + [IncludeTrailingPathDelimiter(
+          VaultNormalizado(GWorkspaces[K].VaultPath))];
+    end;
+  try
+    GWorkspaceNotes := GWorkspaceNotes + VigilaLetrasDeRed(Sitios, ManosDeWindows,
+      PLAZO_LETRAS_DE_RED_MS, REINTENTO_LETRAS_DE_RED_MS, NotaAlLog);
+  except
+    // (no poder lanzar el hilo no deja la carga a medias: GSecLoaded se
+    // quedaba a False y la siguiente llamada cargaba los workspaces otra vez)
+    on E: Exception do
+      GWorkspaceNotes := GWorkspaceNotes +
+        [MsgFmt(SL_NET_REVISION_FALLO_FMT, [E.ClassName, E.Message])];
+  end;
+  GSecLoaded := True;
+end;
+
+procedure LogIniSettings(out ALinesPerFile, AMaxFiles: Integer);
+begin
+  LoadSecurity;
+  ALinesPerFile := GIniLogLines;
+  AMaxFiles := GIniLogMaxFiles;
+  // un ini que no se lee no poda la historia del log: sus [Log] no se han
+  // leido y el servidor no va a arrancar (revision del 6-oct-2026)
+  if GIniIlegible <> '' then
+    AMaxFiles := MaxInt;
+end;
+
+function AuthToken: string;
+begin
+  LoadSecurity;
+  Result := GAuthToken;
+end;
+
+function ReadOnlyToken: string;
+begin
+  LoadSecurity;
+  Result := GReadOnlyToken;
+end;
+
+function AllowRemoteRun: Boolean;
+begin
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if HasActiveWS then
+    Exit(ActiveWS.OvAllowRemoteRun = 1); // ausente = apagado
+  Result := GAllowRemoteRun;
+end;
+
+function LibraryZoneEnabled: Boolean;
+begin
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if HasActiveWS then
+    Exit(ActiveWS.OvLibraryZone = 1); // ausente = apagado
+  Result := GLibraryZone;
+end;
+
+function AllowTests: Boolean;
+begin
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if HasActiveWS then
+    Exit(ActiveWS.OvAllowTests = 1); // ausente = apagado
+  Result := GAllowTests;
+end;
+
+{ A name safe to use as a folder tag: letters, digits, dash, underscore, dot.
+  Anything else collapses to '-', so a declared name can never traverse. }
+function SanitizeAgent(const AName: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  for C in AName.Trim do
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
+      Result := Result + C
+    else
+      Result := Result + '-';
+  Result := Result.Trim(['-', '.']);
+  if Length(Result) > 40 then
+    Result := Copy(Result, 1, 40);
+end;
+
+const
+  SESSION_TIMEOUT_DEFAULT_MIN = 720; // 12 h de inactividad
+  MINUTOS_POR_DIA = 1440;
+
+{ Bajo GIdentLock. -1 = no esta. }
+function IndiceDeSesion(const AId: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to GSesiones.Count - 1 do
+    if GSesiones[I].Id = AId then
+      Exit(I);
+  Result := -1;
+end;
+
+function SesionCaducada(const S: TSesion; ATopeMin: Double): Boolean;
+begin
+  Result := (ATopeMin > 0) and ((Now - S.UltimoUso) * MINUTOS_POR_DIA > ATopeMin);
+end;
+
+{ Bajo GIdentLock. Una sesion que caduca se RECUERDA (las ultimas 512): la
+  purga de cualquier peticion se llevaba todas las caducadas, y la segunda
+  que volvia oia "desconocida, el servidor se reinicio" (SYS-007) en vez de
+  "caducada" (SYS-008; septima revision). Y con SU motivo, en el campo (el
+  Object), no en otra lista: la expulsada por el tope tambien oia SYS-007
+  (octava revision). }
+procedure RecuerdaCaducada(const AId: string; AEstado: TSessionState = ssExpired);
+var
+  K: Integer;
+begin
+  K := GCaducadas.IndexOf(AId);
+  if K < 0 then
+    K := GCaducadas.Add(AId);
+  GCaducadas.Objects[K] := TObject(NativeInt(Ord(AEstado)));
+  while GCaducadas.Count > 512 do
+    GCaducadas.Delete(0);
+end;
+
+procedure PurgaSesionesCaducadas(ATopeMin: Double);
+var
+  I: Integer;
+begin
+  for I := GSesiones.Count - 1 downto 0 do
+    if SesionCaducada(GSesiones[I], ATopeMin) then
+    begin
+      RecuerdaCaducada(GSesiones[I].Id);
+      GSesiones.Delete(I);
+    end;
+end;
+
+{ El numero de una clave de fontaneria: el entorno gana al ini. Decimales
+  admitidos (0.05 minutos = tres segundos): asi una bateria mide sin esperar
+  minutos. Negativo o ilegible = el defecto. UN lector para las claves que
+  hay (SessionTimeoutMinutes, EngineIdleMinutes y MaxEngines; se llamaba
+  MinutosDeClave hasta que llego la tercera, que no son minutos). }
+function NumeroDeClave(const AEnvVar, AIniValue: string; ADefault: Double): Double;
+var
+  S: string;
+begin
+  S := GetEnvironmentVariable(AEnvVar).Trim;
+  if S = '' then
+    S := AIniValue;
+  Result := StrToFloatDef(S.Replace(',', '.'), ADefault, TFormatSettings.Invariant);
+  if Result < 0 then
+    Result := ADefault;
+  // ten weeks at most: whoever multiplies these minutes must not overflow
+  // on a figure like 1e30
+  if Result > 100000 then
+    Result := 100000;
+end;
+
+function SessionTimeoutMinutes: Double;
+begin
+  if GSessionTimeoutMin >= 0 then
+    Exit(GSessionTimeoutMin);
+  LoadSecurity;
+  Result := NumeroDeClave('DELPHI_MCP_SESSION_TIMEOUT_MINUTES', GIniSessionTimeout,
+    SESSION_TIMEOUT_DEFAULT_MIN);
+  GSessionTimeoutMin := Result;
+end;
+
+function EngineIdleMinutes: Double;
+const
+  ENGINE_IDLE_DEFAULT_MIN = 30;
+begin
+  if GEngineIdleMin >= 0 then
+    Exit(GEngineIdleMin);
+  LoadSecurity;
+  Result := NumeroDeClave('DELPHI_MCP_ENGINE_IDLE_MINUTES', GIniEngineIdle,
+    ENGINE_IDLE_DEFAULT_MIN);
+  GEngineIdleMin := Result;
+end;
+
+function MaxEngines: Integer;
+begin
+  if GMaxEngines >= 0 then
+    Exit(GMaxEngines);
+  LoadSecurity;
+  Result := Trunc(NumeroDeClave('DELPHI_MCP_MAX_ENGINES', GIniMaxEngines, 0));
+  GMaxEngines := Result;
+end;
+
+procedure BindSessionIdentity(const ASessionId, AName: string);
+var
+  Clean, Id: string;
+  I: Integer;
+  S: TSesion;
+begin
+  Id := ASessionId.Trim;
+  if Id = '' then
+    Exit;
+  Clean := SanitizeAgent(AName);
+  GIdentLock.Enter;
+  try
+    I := IndiceDeSesion(Id);
+    if I >= 0 then
+    begin
+      S := GSesiones[I];
+      if Clean <> '' then
+        S.Nombre := Clean;
+      S.UltimoUso := Now;
+      GSesiones[I] := S;
+    end
+    else
+    begin
+      S.Id := Id;
+      S.Nombre := Clean;
+      S.UltimoUso := Now;
+      GSesiones.Add(S);
+      // lleno: se va la que lleva MAS tiempo sin usarse, no la mas vieja (una
+      // sesion en uso contestaba 404 tras 256 initialize de otros; sexta revision)
+      while GSesiones.Count > SESIONES_MAX do
+      begin
+        var Menos := 0;
+        for var K := 1 to GSesiones.Count - 1 do
+          if GSesiones[K].UltimoUso < GSesiones[Menos].UltimoUso then
+            Menos := K;
+        RecuerdaCaducada(GSesiones[Menos].Id, ssEvicted);
+        GSesiones.Delete(Menos);
+      end;
+    end;
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+function SessionState(const ASessionId: string): TSessionState;
+var
+  Id: string;
+  I: Integer;
+  S: TSesion;
+  Tope: Double;
+begin
+  Id := ASessionId.Trim;
+  if Id = '' then
+    Exit(ssUnknown);
+  Tope := SessionTimeoutMinutes;
+  GIdentLock.Enter;
+  try
+    I := IndiceDeSesion(Id);
+    if I < 0 then
+    begin
+      // purgada por otra peticion (o expulsada por el tope): con su motivo
+      var K := GCaducadas.IndexOf(Id);
+      if K >= 0 then
+        Result := TSessionState(NativeInt(GCaducadas.Objects[K]))
+      else
+        Result := ssUnknown;
+    end
+    else if SesionCaducada(GSesiones[I], Tope) then
+    begin
+      RecuerdaCaducada(Id);
+      GSesiones.Delete(I);
+      Result := ssExpired;
+    end
+    else
+    begin
+      S := GSesiones[I];
+      S.UltimoUso := Now;
+      GSesiones[I] := S;
+      Result := ssAlive;
+    end;
+    PurgaSesionesCaducadas(Tope);
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+function LiveSessionCount: Integer;
+begin
+  GIdentLock.Enter;
+  try
+    PurgaSesionesCaducadas(SessionTimeoutMinutes);
+    Result := GSesiones.Count;
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+procedure SetThreadIdentityBySession(const ASessionId: string);
+var
+  I: Integer;
+begin
+  TCurrentAgent := '';
+  if ASessionId.Trim = '' then
+    Exit;
+  GIdentLock.Enter;
+  try
+    I := IndiceDeSesion(ASessionId.Trim);
+    if I >= 0 then
+      TCurrentAgent := GSesiones[I].Nombre;
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+procedure SetThreadIdentity(const AName: string);
+begin
+  TCurrentAgent := SanitizeAgent(AName);
+end;
+
+procedure ClearThreadIdentity;
+begin
+  TCurrentAgent := '';
+end;
+
+function CurrentAgent: string;
+begin
+  Result := TCurrentAgent;
+end;
+
+function CurrentAgentOr(const ADefault: string): string;
+begin
+  if TCurrentAgent <> '' then
+    Result := TCurrentAgent
+  else
+    Result := ADefault;
+end;
 
 function RutaLargaDenegada(const APath: string): string;
 begin
@@ -1107,6 +3020,83 @@ begin
   end;
 end;
 
+function LongCanonical(const APath: string): string;
+var
+  Full: string;
+begin
+  Full := TPath.GetFullPath(RaizSiUnidad(APath)).Replace('/', '\');
+  if Full.IndexOf('~') < 0 then
+    Exit(Full); // sin 8.3 que deshacer, no se paga el paseo
+  Result := CanonicalSubiendo(Full,
+    function(const ADir: string; out ASalida: string): Boolean
+    var
+      Buf: array [0 .. 2047] of Char;
+      N: DWORD;
+    begin
+      N := GetLongPathName(PChar(ADir), @Buf[0], Length(Buf));
+      Result := (N > 0) and (N < DWORD(Length(Buf)));
+      if Result then
+        SetString(ASalida, PChar(@Buf[0]), N);
+    end);
+end;
+
+{ La forma con la que se COMPARA un sitio con otro: la canonica LARGA, con
+  separador final. Una raiz declarada con nombres cortos (DFONTA~1) y una
+  ruta que llega con OTROS nombres cortos (DELPHI~1\RESULT~1) son el mismo
+  sitio, y por el texto no casaban: la jaula decia "fuera" de una carpeta
+  suya (28-sep, medido). Todas las comparaciones de sitio la usan A LA VEZ -
+  contencion (PathDenied), identidad (RootItselfDenied), confinamiento,
+  referencias, el vault, los lugares protegidos, lo protegido de la purga -:
+  si solo la usase una, un sitio por su alias 8.3 seria "dentro" para una y
+  "otro" para la de al lado, y se podria borrar (el incidente de las dos
+  formas del CLAUDE.md; la sexta revision lo midio con la raiz de OTRO
+  workspace, un ReadOnlyPaths, una referencia y el vault). La separacion
+  final se conserva: quitarla antes convertia "D:\" en "D:", la carpeta
+  actual. }
+function FormaLarga(const APath: string): string;
+begin
+  Result := IncludeTrailingPathDelimiter(LongCanonical(APath));
+end;
+
+{ APath ES ALugar o esta DENTRO, los dos en la forma larga: EL comparador
+  de "esta en ese sitio". Un lugar vacio no contiene nada. }
+function EnLugar(const APath, ALugar: string; AResuelveAlias: Boolean): Boolean;
+begin
+  Result := False;
+  if (APath.Trim = '') or (ALugar.Trim = '') then
+    Exit;
+  try
+    var Ruta := IncludeTrailingPathDelimiter(APath.Trim);
+    var Lugar := IncludeTrailingPathDelimiter(ALugar.Trim);
+    if AResuelveAlias then
+    begin
+      Ruta := FormaLarga(APath.Trim);
+      Lugar := FormaLarga(ALugar.Trim);
+    end;
+    Result := StartsText(Lugar, Ruta);
+  except
+    Result := False; // una ruta que no parsea no esta en ningun sitio
+  end;
+end;
+
+function GitRemoteHosts: string;
+begin
+  LoadSecurity;
+  // workspace con nombre: SUS remotos declarados, sin herencia
+  if HasActiveWS then
+    Exit(ActiveWS.GitRemotes);
+  Result := GGitRemotes.Trim;
+end;
+
+function RemoteProbeHosts: string;
+begin
+  LoadSecurity;
+  // workspace con nombre: SUS hosts declarados, sin herencia
+  if HasActiveWS then
+    Exit(ActiveWS.RemoteHosts);
+  Result := GRemoteHosts.Trim;
+end;
+
 { Medido 2026-08-25: la lista blanca que cerro el agujero de git dejaba esta
   puerta abierta de par en par. `test-connection host=127.0.0.1 port=3131`
   marcaba el propio puerto MCP, y cualquier host:port contestaba. Misma
@@ -1135,11 +3125,15 @@ var
   Lista: TArray<string>;
   E, Full, Name: string;
 begin
+  LoadSecurity;
   // La lista del workspace ACTIVO, sin herencia. Y desde el 19-sep-2026 la
   // lista vacia ya no significa "cualquiera de la jaula" sino NADA: era el
   // unico permiso que fallaba abierto, al reves que todo el resto del
   // servidor. Lo que no se declara no existe.
-  Lista := RemoteProjectsNow;
+  if HasActiveWS then
+    Lista := ActiveWS.RemoteProjects
+  else
+    Lista := GRemoteProjects;
   if Length(Lista) = 0 then
     Exit(MsgText(SR_REMOTERUN_NOPROJLIST));
   Result := '';
@@ -1164,6 +3158,184 @@ begin
     [Name, string.Join(', ', Lista)]);
 end;
 
+function AllowBuildScripts: Boolean;
+begin
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if HasActiveWS then
+    Exit(ActiveWS.OvAllowBuildScripts = 1); // ausente = apagado
+  Result := GAllowBuildScripts;
+end;
+
+function BindIP: string;
+begin
+  Result := GetEnvironmentVariable('DELPHI_MCP_BIND_IP');
+  if Result <> '' then
+    Exit;
+  LoadSecurity;
+  Result := GIniBindIP;
+end;
+
+function ServerDelphiVersion: string;
+begin
+  LoadSecurity;
+  Result := GDelphiVersion.Trim;
+  // '36', '36,0' y '36.00' son la misma que '36.0', como la escribe el
+  // registro: la coma decimal de un teclado espanol tumbaba el arranque
+  // ("si escribes mal, te aguantas?", David, 6-oct-2026). Solo lo que no
+  // admite duda: digitos, y como mucho UNA coma o punto con digitos detras
+  if TRegEx.IsMatch(Result, '^\d+([.,]\d+)?$') then
+  begin
+    Result := Result.Replace(',', '.');
+    if Result.IndexOf('.') < 0 then
+      Result := Result + '.0'
+    else
+    begin
+      // los ceros de mas del decimal, dejando uno: 37.00 -> 37.0
+      while Result.EndsWith('0') and (Result.Length - Result.IndexOf('.') > 2) do
+        Result := Result.Substring(0, Result.Length - 1);
+    end;
+  end;
+end;
+
+function ServerDelphiUpdate: string;
+begin
+  LoadSecurity;
+  Result := GDelphiUpdate;
+end;
+
+function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
+begin
+  LoadSecurity;
+  AFecha := 0;
+  if not TFile.Exists(SettingsIniPath) then
+    Exit(False);
+  AFecha := TFile.GetLastWriteTime(SettingsIniPath);
+  Result := AFecha > GIniCargadoEn;
+end;
+
+procedure ExigeSettingsIniLegible;
+begin
+  LoadSecurity;
+  if GIniIlegible <> '' then
+    raise Exception.Create(GIniIlegible);
+end;
+
+function FijaDelphiVersionEnElIni(const AVersion: string; out AError: string): Boolean;
+var
+  Ini: TIniFile;
+  Intacto: Boolean;
+begin
+  Result := False;
+  AError := '';
+  if not TFile.Exists(SettingsIniPath) then
+    Exit;
+  // [Server] dos veces, o su DelphiVersion dos veces: Windows lee el primero,
+  // y la clave que el operador queria puede estar en el otro - escribirla
+  // aqui la taparia para siempre (revision del 6-oct-2026)
+  if GServerIniDoble then
+  begin
+    AError := MsgText(SF_GUARD_SERVER_DOBLE_NO_ESCRIBE);
+    Exit;
+  end;
+  // un workspace que aun declara DelphiVersion= (se leia hasta la 1.13)
+  // queria una version: la mas nueva no se fija por el (David, 6-oct-2026)
+  if GWorkspaceConDelphiVersion <> '' then
+  begin
+    AError := MsgFmt(SF_GUARD_WS_DELPHIVERSION_NO_ESCRIBE_FMT, [GWorkspaceConDelphiVersion]);
+    Exit;
+  end;
+  // lo editado desde que se cargo no esta cargado: se escribe igual, pero la
+  // fecha no avanza y SYS-001 lo sigue diciendo (revision del 6-oct-2026)
+  Intacto := TFile.GetLastWriteTime(SettingsIniPath) = GIniCargadoEn;
+  try
+    // El escritor de Windows anade la linea al final de [Server] (o la
+    // seccion al final del fichero) y deja los demas bytes como estaban:
+    // medido el 5-oct-2026 con acentos, CRLF y LF. Lo comprueba ademas
+    // test_un_delphi, byte a byte.
+    Ini := TIniFile.Create(SettingsIniPath);
+    try
+      Ini.WriteString('Server', 'DelphiVersion', AVersion);
+      Result := SameText(Ini.ReadString('Server', 'DelphiVersion', '').Trim, AVersion);
+    finally
+      Ini.Free;
+    end;
+    if Result then
+    begin
+      GDelphiVersion := AVersion; // desde aqui, la clave
+      // lo que hay en disco es lo que este proceso tiene cargado: su propia
+      // escritura no es un ini editado (SettingsIniMasNuevoQueElCargado)
+      if Intacto then
+        GIniCargadoEn := TFile.GetLastWriteTime(SettingsIniPath);
+    end
+    else
+      AError := MsgText(SF_DISC_NO_SE_LEE);
+  except
+    on E: Exception do
+      AError := E.Message;
+  end;
+end;
+
+{ Un VaultPath= como lo escribio el operador, en la forma con la que se
+  compara: sin blancos ni comillas, completo, sin separador final; '' si no
+  hay o no parsea. UNO: estaba a mano en VaultPath y en
+  VaultConfiguredAnywhere (septima revision). }
+function VaultNormalizado(const ACrudo: string): string;
+begin
+  Result := ACrudo.Trim.Trim(['"']).Trim;
+  if Result <> '' then
+    try
+      Result := SinBarraFinal(TPath.GetFullPath(RaizSiUnidad(Result)));
+    except
+      Result := '';
+    end;
+end;
+
+{ Los vaults de TODOS los workspaces (y el del por defecto): un vault es de
+  las tools vault_* de SU workspace, y ninguna tool de codigo lo toca, sea
+  de quien sea. Solo miraba el del activo: con el token de A se reescribio
+  el AGENTS-VAULT.md del vault de B, que vivia en la raiz de A, y
+  delphi_delete se llevo el vault entero (septima revision, medido). }
+function TodosLosVaults: TArray<string>;
+var
+  W: TWorkspaceDef;
+  V: string;
+begin
+  LoadSecurity;
+  Result := [];
+  V := VaultNormalizado(GVaultPath);
+  if V <> '' then
+    Result := Result + [V];
+  for W in GWorkspaces do
+  begin
+    V := VaultNormalizado(W.VaultPath);
+    if V <> '' then
+      Result := Result + [V];
+  end;
+end;
+
+function VaultPath: string;
+begin
+  LoadSecurity;
+  // El vault es del workspace ACTIVO, como todo lo demas (v0.98): un
+  // workspace sin VaultPath= NO tiene vault. Solo el por defecto usa el
+  // entorno / [Workspace].
+  if HasActiveWS then
+    Result := VaultNormalizado(ActiveWS.VaultPath)
+  // el modo local CERRADO no tiene vault: vault_read leia el del entorno
+  // (medido, tercera revision de la 1.9.0). Sigue en TodosLosVaults: las
+  // tools de codigo de un workspace cuya raiz lo contenga no entran en el
+  else if GLocalCerrado <> '' then
+    Result := ''
+  else
+    Result := VaultNormalizado(GVaultPath);
+end;
+
+function VaultConfigured: Boolean;
+begin
+  var P := VaultPath;
+  Result := (P <> '') and TDirectory.Exists(P);
+end;
+
 function InVault(const APath: string): Boolean;
 var
   Vault: string;
@@ -1173,6 +3345,42 @@ begin
   for Vault in TodosLosVaults do
     if EnLugar(APath, Vault) then // la forma larga: KNOWLE~1 es el vault
       Exit(True);
+end;
+
+{ Si el vault del workspace activo se declaro de escritura, por su
+  configuracion y sin mirar el disco: lo pregunta tools/list en cada
+  peticion (ToolHiddenFromList), y un vault en una letra de red caida lo
+  paraba (revision del 6-oct-2026). }
+function VaultModoEscritura: Boolean;
+begin
+  LoadSecurity;
+  // Solo lectura POR DEFECTO: escribir en el vault se pide a proposito.
+  // Un workspace con nombre tiene exactamente lo que declara: VaultReadOnly=0
+  // o nada de escritura.
+  if HasActiveWS then
+    Exit(ActiveWS.OvVaultReadOnly = 0);
+  // Workspace por defecto: el entorno gana en AMBOS sentidos (las baterias
+  // fuerzan un vault de solo lectura por encima de cualquier ini).
+  Result := GVaultEnvWritable; // leido por LoadSecurity con las demas claves
+end;
+
+function VaultWritable: Boolean;
+begin
+  Result := VaultConfigured and VaultModoEscritura;
+end;
+
+{ Si HAY vault en alguna parte (workspace por defecto o cualquier seccion):
+  decide el REGISTRO de las tools vault_* al arrancar, cuando aun no hay
+  workspace activo en el hilo. El acceso real de cada peticion lo decide
+  VaultConfigured, que resuelve el del workspace ACTIVO. }
+function VaultConfiguredAnywhere: Boolean;
+var
+  P: string;
+begin
+  for P in TodosLosVaults do
+    if TDirectory.Exists(P) then
+      Exit(True);
+  Result := False;
 end;
 
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
@@ -1212,6 +3420,285 @@ begin
   Result := CarpetaEnVezDeFichero(APath);
   if Result = '' then
     Result := AMsgNoExiste;
+end;
+
+{ Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
+  aunque otro proceso lo tenga abierto sin compartir. False si no esta. }
+function HuellaDeFichero(const ARuta: string; out ATam: Int64;
+  out AFecha: TDateTime): Boolean;
+var
+  SR: TSearchRec;
+begin
+  ATam := -1;
+  AFecha := 0;
+  Result := FindFirst(ARuta, faAnyFile, SR) = 0;
+  if Result then
+    try
+      ATam := SR.Size;
+      AFecha := SR.TimeStamp;
+    finally
+      FindClose(SR);
+    end;
+end;
+
+{ Los mismos bytes: el comparador de la foto (Vigila y Restaura). }
+function BytesIguales(const A, B: TArray<Byte>): Boolean;
+begin
+  Result := (Length(A) = Length(B)) and
+    ((Length(A) = 0) or CompareMem(@A[0], @B[0], Length(A)));
+end;
+
+procedure TFotoDeFicheros.Toma(const ARutas: array of string);
+var
+  I: Integer;
+begin
+  SetLength(FRutas, Length(ARutas));
+  SetLength(FExistian, Length(ARutas));
+  SetLength(FBytes, Length(ARutas));
+  SetLength(FAnotado, Length(ARutas));
+  SetLength(FExisteNuestro, Length(ARutas));
+  SetLength(FNuestros, Length(ARutas));
+  SetLength(FTam, Length(ARutas));
+  SetLength(FFecha, Length(ARutas));
+  SetLength(FAncestro, Length(ARutas));
+  SetLength(FAjeno, Length(ARutas));
+  SetLength(FAtrib, Length(ARutas));
+  // una foto a medias no es una foto: si una ruta no se deja leer (otro
+  // proceso la tiene sin compartir), la foto queda VACIA y se lanza. Con la
+  // mitad tomada, el deshacer borraba lo que no llego a leer (FExistian en
+  // falso) y vaciaba lo que leyo a medias (28-sep-2026)
+  try
+    for I := 0 to High(ARutas) do
+    begin
+      FRutas[I] := ARutas[I];
+      FAnotado[I] := False;
+      FAjeno[I] := False;
+      FExistian[I] := TFile.Exists(ARutas[I]);
+      FAtrib[I] := GetFileAttributes(PChar(ARutas[I]));
+      if FExistian[I] then
+      begin
+        FBytes[I] := TFile.ReadAllBytes(ARutas[I]);
+        HuellaDeFichero(ARutas[I], FTam[I], FFecha[I]);
+      end
+      else
+      begin
+        FBytes[I] := nil;
+        FAncestro[I] := PrimerAncestroQueExiste(ExtractFileDir(ARutas[I]));
+      end;
+    end;
+  except
+    SetLength(FRutas, 0);
+    raise;
+  end;
+end;
+
+procedure TFotoDeFicheros.Anota(const ARuta: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(FRutas) do
+    if SameText(FRutas[I], ARuta) then
+    try
+      FAnotado[I] := False;
+      FExisteNuestro[I] := TFile.Exists(FRutas[I]);
+      if FExisteNuestro[I] then
+        FNuestros[I] := TFile.ReadAllBytes(FRutas[I])
+      else
+        FNuestros[I] := nil;
+      FAnotado[I] := True;
+    except
+      // sin apuntar: el deshacer la trata como siempre
+    end;
+end;
+
+procedure TFotoDeFicheros.Vigila(const ARuta: string);
+var
+  I: Integer;
+  Existe, Esperado: Boolean;
+  Ahora, Sabido: TArray<Byte>;
+begin
+  for I := 0 to High(FRutas) do
+    if SameText(FRutas[I], ARuta) and not FAjeno[I] then
+    try
+      // lo ultimo que se sabe de ella: lo que dejo el paso anterior, o la foto
+      if FAnotado[I] then
+      begin
+        Esperado := FExisteNuestro[I];
+        Sabido := FNuestros[I];
+      end
+      else
+      begin
+        Esperado := FExistian[I];
+        Sabido := FBytes[I];
+      end;
+      Existe := TFile.Exists(FRutas[I]);
+      Ahora := nil;
+      if Existe then
+        Ahora := TFile.ReadAllBytes(FRutas[I]);
+      FAjeno[I] := (Existe <> Esperado) or (Existe and not BytesIguales(Ahora, Sabido));
+    except
+      // no se puede leer: el paso fallara o no; el deshacer lo mirara
+    end;
+end;
+
+function TFotoDeFicheros.Restaura: string;
+
+  function Iguales(const A, B: TArray<Byte>): Boolean;
+  begin
+    Result := BytesIguales(A, B);
+  end;
+
+var
+  I: Integer;
+  Ahora: TArray<Byte>;
+  Existe: Boolean;
+  Veto, Ilegible: string;
+
+  { Las carpetas que la operacion creo por encima de una ruta que no existia
+    (un create en a\b\c.txt): se quitaban el fichero y quedaban a y b vacias.
+    RemoveDir solo quita una carpeta VACIA; por la puerta de escritura. }
+  procedure QuitaCarpetasNuevas(AIx: Integer);
+  begin
+    QuitaCarpetasCreadas(ExtractFileDir(FRutas[AIx]), FAncestro[AIx]);
+  end;
+
+  function MismaHuella(AIx: Integer): Boolean;
+  var
+    T: Int64;
+    D: TDateTime;
+  begin
+    Result := HuellaDeFichero(FRutas[AIx], T, D) and (T = FTam[AIx]) and (D = FFecha[AIx]);
+  end;
+begin
+  Result := '';
+  for I := 0 to High(FRutas) do
+    try
+      Existe := TFile.Exists(FRutas[I]);
+      Ahora := nil;
+      Ilegible := '';
+      if Existe then
+        try
+          Ahora := TFile.ReadAllBytes(FRutas[I]);
+        except
+          on E: Exception do
+            Ilegible := E.Message;
+        end;
+      // No se puede LEER (otro proceso lo tiene sin compartir): si su tamano
+      // y su fecha son los de la foto, no cambio y no hay nada que devolver.
+      // Se contaba como "no volvio" un fichero intacto (verificacion de la
+      // tercera ronda, medido: 38 de 44). Si cambio, ni se comprueba ni se
+      // escribe: se dice.
+      if Ilegible <> '' then
+      begin
+        if not (FExistian[I] and MismaHuella(I)) then
+          Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Ilegible;
+        Continue;
+      end;
+      // lo que no cambio no se toca: un fichero que otro proceso tiene
+      // abierto y nadie modifico no hace fallar el deshacer
+      if (Existe = FExistian[I]) and (not Existe or Iguales(Ahora, FBytes[I])) then
+      begin
+        if not FExistian[I] then
+          QuitaCarpetasNuevas(I);
+        Continue;
+      end;
+      // deshacer tambien escribe: por la misma puerta. Un camino que dejo de
+      // ser escribible no se restaura por el, y se DICE (se saltaba callado)
+      Veto := EscrituraDenegada(FRutas[I]);
+      if Veto <> '' then
+      begin
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Veto;
+        Continue;
+      end;
+      // otro la cambio ENTRE dos pasos: lleva su trabajo mezclado con el de
+      // la operacion, y deshacer se lo llevaria (Vigila)
+      if FAjeno[I] then
+      begin
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' +
+          MsgText(SF_FOTO_CAMBIADO_DURANTE);
+        Continue;
+      end;
+      // lo que hay NO es lo que dejo la operacion: alguien lo cambio despues
+      // (otro proceso, el IDE guardando). Se queda como esta y se dice; el
+      // deshacer borraba o pisaba su trabajo contestando "todo volvio"
+      // (verificacion de la tercera revision, 27-sep-2026, medido)
+      if FAnotado[I] and ((Existe <> FExisteNuestro[I]) or
+         (Existe and not Iguales(Ahora, FNuestros[I]))) then
+      begin
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' +
+          MsgText(SF_FOTO_CAMBIADO_POR_OTRO);
+        Continue;
+      end;
+      // lo que la operacion dejo puede traer el +R de un original (un move,
+      // una copia): se quita para borrarlo o reescribirlo, y el fichero
+      // vuelve con el atributo de la foto (decima revision)
+      if not FExistian[I] then
+      begin
+        BorraLoNuestro(FRutas[I]);
+        QuitaCarpetasNuevas(I);
+      end
+      else
+      begin
+        QuitaSoloLectura(FRutas[I]);
+        TFile.WriteAllBytes(FRutas[I], FBytes[I]);
+        if (FAtrib[I] <> INVALID_FILE_ATTRIBUTES) and
+           ((FAtrib[I] and FILE_ATTRIBUTE_READONLY) <> 0) then
+          SetFileAttributes(PChar(FRutas[I]),
+            GetFileAttributes(PChar(FRutas[I])) or FILE_ATTRIBUTE_READONLY);
+      end;
+    except
+      on E: Exception do
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + E.Message;
+    end;
+end;
+
+function TFotoDeFicheros.Cuantos: Integer;
+begin
+  Result := Length(FRutas);
+end;
+
+function TFotoDeFicheros.Cambiados: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(FRutas) do
+    if FExistian[I] <> TFile.Exists(FRutas[I]) then
+      Inc(Result)
+    else if FExistian[I] then
+      try
+        if not BytesIguales(TFile.ReadAllBytes(FRutas[I]), FBytes[I]) then
+          Inc(Result);
+      except
+        Inc(Result); // no se puede leer: no se da por igual
+      end;
+end;
+
+function FicherosTodoONada(const ARutas: array of string;
+  const AAccion: TAccionTodoONada): string;
+var
+  NoVolvio: string;
+  Foto: TFotoDeFicheros;
+begin
+  Foto.Toma(ARutas);
+  try
+    Result := AAccion();
+  except
+    on E: Exception do
+    begin
+      NoVolvio := Foto.Restaura;
+      if NoVolvio <> '' then
+        raise Exception.Create(MsgFmt(SR_FOTO_NO_VOLVIO_FMT,
+          [NoVolvio, MsgExcepcion(E.ClassName, E.Message)]));
+      raise;
+    end;
+  end;
+  if EsFallo(Result) then
+  begin
+    NoVolvio := Foto.Restaura;
+    if NoVolvio <> '' then
+      Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Result]);
+  end;
 end;
 
 { Trocea una linea de comando con las reglas del runtime de C de Windows
@@ -1625,6 +4112,35 @@ begin
     for C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '.', ':', '_', '-']) then
         Exit(True);
+end;
+
+{ The adb device allowlist ([Adb] AllowedDevices / DELPHI_MCP_ADB_DEVICES,
+  semicolon list): when configured, the ONLY devices this server will
+  address - outside it, nothing, at BOTH access levels (David's rule). An
+  entry matches the target exactly, or matches its host part (the text
+  before ':'), so '192.168.1.163' covers whatever port wifi debugging
+  negotiates and a USB serial is listed as-is. Ausente o vacia = NINGUN
+  dispositivo: cada workspace declara la suya con AdbAllowedDevices= y lo
+  que no se declara no existe (v0.98; antes fallaba abierto). }
+function AdbTargetAllowed(const ATarget: string): Boolean;
+var
+  Lista: TArray<string>;
+  E, Host: string;
+  P: Integer;
+begin
+  Result := False;
+  LoadSecurity;
+  if HasActiveWS then
+    Lista := ActiveWS.AdbDevices
+  else
+    Lista := GAdbDevices;
+  Host := ATarget;
+  P := Pos(':', ATarget);
+  if P > 0 then
+    Host := Copy(ATarget, 1, P - 1);
+  for E in Lista do
+    if SameText(E.Trim, ATarget) or SameText(E.Trim, Host) then
+      Exit(True);
 end;
 
 { delphi_adb's address/device land on the adb command line. Same lesson as
@@ -2590,6 +5106,35 @@ begin
     Result := ArgPathOutsideDenied(AToolName, AArguments, True);
 end;
 
+function WorkspaceRoots: TArray<string>;
+begin
+  // A token-scoped session sees ITS workspace's roots as the whole world:
+  // every jail check, listing and scan downstream of this ONE function
+  // inherits the boundary. Overlap is deliberate and never subtracts (v0.88).
+  if HasActiveWS then
+    Exit(ActiveWS.Roots);
+  // Modo local de lanzamiento: SOLO el entorno, leido por el cargador con
+  // todo lo demas (antes aqui, en el primer uso, con cache propia).
+  LoadSecurity;
+  Result := GRoots;
+end;
+
+function WorkspaceReadOnlyPaths: TArray<string>;
+begin
+  if HasActiveWS then
+    Exit(ActiveWS.ReadOnlyPaths);
+  LoadSecurity; // modo local: resuelto contra GRoots en el cargador
+  Result := GRoPaths;
+end;
+
+function WorkspaceReadOnlyRoots: TArray<string>;
+begin
+  if HasActiveWS then
+    Exit(ActiveWS.ReadOnlyRoots);
+  LoadSecurity; // modo local: el entorno, cargado UNA vez con todo lo demas
+  Result := GRoRoots;
+end;
+
 function ReadOnlyRootOf(const APath: string): string;
 var
   Full, Real, R: string;
@@ -2658,6 +5203,40 @@ begin
     if LetraNoConectada(R) and EnLugar(APath, R) then
       Exit(MsgFmt(SR_WS_RAIZ_NO_DISPONIBLE_FMT, [SinBarraFinal(R),
         MotivoRaizNoDisponible(R), RaicesDisponibles]));
+end;
+
+function WorkspaceJailSummary(out AWarning: Boolean): string;
+var
+  Roots: TArray<string>;
+  Shown: TArray<string>;
+  I: Integer;
+begin
+  Roots := WorkspaceRoots;
+  if ModoLocalCerrado <> '' then
+  begin
+    AWarning := True;
+    Result := MsgFmt(SN_GUARD_WORKSPACE_JAIL_CERRADA_FMT, [ModoLocalCerrado]);
+  end
+  else if GRootsInvalid then
+  begin
+    AWarning := True;
+    Result := MsgText(SN_GUARD_WORKSPACE_JAIL_INVALID_ROOTS);
+  end
+  else if Length(Roots) = 0 then
+  begin
+    AWarning := True;
+    Result := MsgText(SN_GUARD_WORKSPACE_JAIL_NONE_MODO);
+  end
+  else
+  begin
+    AWarning := False;
+    // Roots are stored with a trailing delimiter; drop it for readability.
+    SetLength(Shown, Length(Roots));
+    for I := 0 to High(Roots) do
+      Shown[I] := SinBarraFinal(Roots[I]);
+    Result := MsgFmt(SL_GUARD_WORKSPACE_JAIL_ROOTS_FMT, [Length(Roots),
+      string.Join('  |  ', Shown)]);
+  end;
 end;
 
 { Windows silently strips trailing dots/spaces from a file name, so a path
@@ -2755,6 +5334,67 @@ end;
   each other. A caller with no identity (stdio, the operator's own console) is
   trusted with everything, the same rule the recoverable trash already uses.
   Reading is never confined: an agent still sees the whole tree. }
+function TempFolderName: string;
+begin
+  Result := '__delphi-temp';
+end;
+
+function ServerDir(const ASub: string): string;
+begin
+  Result := TPath.GetDirectoryName(ParamStr(0));
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
+function ServerTempDir(const ASub: string): string;
+begin
+  Result := ServerDir(TempFolderName);
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
+function ServerCacheDir(const ASub: string): string;
+begin
+  Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'DelphiLspMcp');
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
+procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
+var
+  Tmp: string;
+  Err: DWORD;
+begin
+  // el escritor pregunta EL MISMO (revision de la 1.12.0): escribe solo DENTRO
+  // de la casa de caches, y esa casa tiene que ser una ruta absoluta: con
+  // LOCALAPPDATA vacia ServerCacheDir es relativa y caeria en la carpeta de
+  // trabajo del proceso (System32 en el servicio). Por el TEXTO canonico, no
+  // por la ruta real: lo que se guarda es un error de composicion (esa
+  // carpeta no la toca ningun agente), y bajo la virtualizacion de un
+  // paquete MSIX una subcarpeta recien creada tiene OTRA ruta real que su
+  // padre (medido el 4-oct-2026 desde la app de escritorio de Claude:
+  // ...\Packages\Claude_...\LocalCache\Local\DelphiLspMcp\designer)
+  if not TPath.IsPathRooted(ServerCacheDir) or
+     not StartsText(IncludeTrailingPathDelimiter(TPath.GetFullPath(ServerCacheDir)),
+       TPath.GetFullPath(AFichero)) then
+    raise EInOutError.Create(MsgFmt(SL_CASA_FUERA_FMT, [AFichero, ServerCacheDir]));
+  Tmp := AFichero + '.' + IntToStr(GetCurrentThreadId) + '.tmp';
+  try
+    TFile.WriteAllText(Tmp, ATexto, TEncoding.UTF8);
+  except
+    // a medias no se queda: un .tmp suelto no lo ve nadie para borrarlo
+    System.SysUtils.DeleteFile(Tmp);
+    raise;
+  end;
+  if not MoveFileEx(PChar(Tmp), PChar(AFichero), MOVEFILE_REPLACE_EXISTING) then
+  begin
+    Err := GetLastError;
+    System.SysUtils.DeleteFile(Tmp);
+    if not FileExists(AFichero) then
+      RaiseLastOSError(Err);
+  end;
+end;
+
 { El workspace de quien llama. Con varias raices manda la PRIMERA
   ESCRIBIBLE - una raiz declarada entera en ReadOnlyPaths (el clon de
   referencia) no recibe entregables: seria escribir justo donde nuestra
@@ -2962,13 +5602,82 @@ begin
   Result := [TempFolderName, TrashFolderName];
 end;
 
-function LugaresProtegidos: TArray<string>;
+function FragmentoUnico: string;
+begin
+  Result := LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
+end;
+
+function SelloUnico: string;
+begin
+  Result := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now) + '-' + FragmentoUnico;
+end;
+
+const
+  DESCARGA_PREFIJO = '__tmp-'; // empieza por __, como toda zona borrable
+
+function NuevaCarpetaDescarga(const ADentroDe: string): string;
+begin
+  Result := TPath.Combine(ADentroDe, DESCARGA_PREFIJO + FragmentoUnico);
+end;
+
+function EsCarpetaDescarga(const ANombre: string): Boolean;
+begin
+  // la inversa exacta del nombrador: el prefijo y 8 hexadecimales
+  Result := TRegEx.IsMatch(ANombre, '^' + TRegEx.Escape(DESCARGA_PREFIJO) +
+    FRAGMENTO_UNICO_PATRON + '$', [roIgnoreCase]);
+end;
+
+function Slug(const S: string): string;
+var
+  C, Prev: Char;
+begin
+  Result := '';
+  Prev := '-';
+  for C in S do
+  begin
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
+    begin
+      Result := Result + C;
+      Prev := C;
+    end
+    else if Prev <> '-' then
+    begin
+      Result := Result + '-';
+      Prev := '-';
+    end;
+    if Length(Result) >= 40 then
+      Break;
+  end;
+  Result := Result.Trim(['-']).ToLower;
+end;
+
+{ Lo que no se toca de NINGUN workspace: sus referencias, sus ReadOnlyPaths
+  y sus vaults (y los del modo local). UNA lista para la purga del arranque
+  y para los lugares protegidos: la purga protegia solo lo del workspace
+  que recorria y el vault global, y vacio el __delphi-temp del vault de un
+  workspace y el de las ReadOnlyPaths de OTRO anidadas en su raiz
+  (septima revision, medido). }
+function SitiosQueNoSeTocan: TArray<string>;
+var
+  W: TWorkspaceDef;
 begin
   LoadSecurity;
-  Result := RaicesDelModoLocal + SitiosQueNoSeTocan + [ExtractFileDir(ParamStr(0)),
+  Result := GRoRoots + GRoPaths + TodosLosVaults;
+  for W in GWorkspaces do
+    Result := Result + W.ReadOnlyRoots + W.ReadOnlyPaths;
+end;
+
+function LugaresProtegidos: TArray<string>;
+var
+  W: TWorkspaceDef;
+begin
+  LoadSecurity;
+  Result := GRoots + SitiosQueNoSeTocan + [ExtractFileDir(ParamStr(0)),
     GetEnvironmentVariable('WINDIR'), GetEnvironmentVariable('ProgramFiles'),
     GetEnvironmentVariable('ProgramFiles(x86)'),
-    GetEnvironmentVariable('USERPROFILE')] + RaicesDeLosWorkspaces;
+    GetEnvironmentVariable('USERPROFILE')];
+  for W in GWorkspaces do
+    Result := Result + W.Roots;
 end;
 
 { La ruta de un enlace se juzga por DONDE ESTA, no por adonde apunta: la ruta
@@ -3661,6 +6370,11 @@ var
   no se pudo crear (otra cuenta, otro fallo): en la duda no es nuestra, y
   no purgar es la opcion sin peligro. LA regla de "de quien es esto
   mientras vive": la usan la casa del servidor y las temporales de raiz. }
+function NombreDeMutex(const AClave: string): string;
+begin
+  Result := 'Global\DelphiLspMcp-' + AClave;
+end;
+
 function ReclamaNombre(const AClave: string; out AHandle: THandle): Boolean;
 begin
   AHandle := CreateMutex(nil, False, PChar(NombreDeMutex(AClave)));
@@ -3670,6 +6384,14 @@ begin
     AHandle := 0;
   end;
   Result := AHandle <> 0;
+end;
+
+function ClaveDeCarpeta(const ADir: string): string;
+begin
+  // AnsiLowerCase y no LowerCase: la de la RTL solo pliega A-Z, y 'C:\Ñ' y
+  // 'C:\ñ' son la misma carpeta (revision de la 1.11.0)
+  Result := LowerCase(THashMD5.GetHashString(
+    AnsiLowerCase(SinBarraFinal(LongCanonical(ADir)))));
 end;
 
 { La temporal ADir es de ESTE proceso: si ningun otro servidor vivo la ha
@@ -3869,6 +6591,7 @@ end;
 
 procedure PurgeServerTemp;
 var
+  W: TWorkspaceDef;
   R: string;
 begin
   // toda instancia se apunta como viva ANTES de decidir nada
@@ -3907,8 +6630,10 @@ begin
     // Solo lo que es de ESTE proceso (TemporalEsMia): la temporal de cada
     // raiz se reclama aunque aun no exista -las llamadas la crearan-, y una
     // que ya es de otro servidor vivo no se toca.
-    var Raices: TArray<string> := RaicesDeLosWorkspaces;
-    Raices := Raices + RaicesDelModoLocal; // modo local de lanzamiento (baterias)
+    var Raices: TArray<string> := nil;
+    for W in GWorkspaces do
+      Raices := Raices + W.Roots;
+    Raices := Raices + GRoots; // modo local de lanzamiento (baterias)
     // La raiz en una unidad de RED, aparte (1.9.0). Buscar sus temporales
     // es recorrer el arbol entero por la red - 2,6 ms por carpeta medidos
     // en el servicio de produccion con una raiz que es un recurso de un
@@ -5341,13 +8066,17 @@ begin
   // 6-oct-2026). Lo mismo que arriba: siguen llamables y la llamada dice por que.
   if IsReadOnlyNow and (AccesoDeTool(N).Acceso = atEscritura) then
     Exit(moCredencialLectura);
-  if Length(ToolsOnly) > 0 then
+  if Length(GToolsOnly) > 0 then
   begin
-    if MatchText(N, ToolsOnly) then
+    if MatchText(N, GToolsOnly) then
       Exit(moNinguna);
     Exit(moPerfil);
   end;
-  Prof := ToolsProfileNow;
+  // a workspace may carry its own profile; it wins over the global one
+  Prof := GToolsProfile;
+  if HasActiveWS and
+     (ActiveWS.Profile <> '') then
+    Prof := ActiveWS.Profile;
   if Prof = 'reader' then
   begin
     if MatchText(N, READER) then
@@ -5462,11 +8191,17 @@ begin
 end;
 
 initialization
+  GIdentLock := TCriticalSection.Create;
   GDrvLock := TCriticalSection.Create;
+  GSesiones := TList<TSesion>.Create;
+  GCaducadas := TStringList.Create;
   ConstruyeAccesos; // la tabla de accesos, antes de la primera llamada
 
 finalization
 
+  GSesiones.Free;
+  GCaducadas.Free;
+  GIdentLock.Free;
   // (GDrvLock no se libera: el enmascarador lo usa desde cualquier hilo que
   // aun este contestando, y se va con el proceso)
 

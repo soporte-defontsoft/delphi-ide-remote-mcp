@@ -25,7 +25,7 @@
   para el codigo, quitar un nombre y poner otro. Lo que USA el componente
   desde otros metodos es cosa del compilador: se lista y no bloquea ("no
   somos la ninera"). El form y su unidad se escriben juntos, todo o nada
-  (Lsp.Guard.FicherosTodoONada). }
+  (Lsp.TodoONada.FicherosTodoONada). }
 
 interface
 
@@ -114,7 +114,7 @@ uses
   System.Character,
   System.Generics.Collections,
   Lsp.Texts,
-  Lsp.Guard,           // WriteTargetDenied, FicherosTodoONada, CitaDeLinea
+  Lsp.Guard,           // WriteTargetDenied, CitaDeLinea
   Lsp.Patch,           // PatchLoadText/PatchSaveText y los troceadores
   Lsp.Pascal,          // EL identificador, CodigoPascal, LineaDePosicion
   Lsp.PascalDecl,      // EL lector de clases: campos, rutinas y cuerpos
@@ -123,7 +123,8 @@ uses
   Lsp.DesignerMeta,    // la tabla del framework y su juez (JuzgaPropiedad)
   Lsp.DesignerMetaGen, // la unidad de una clase (UnidadDeIdDeTipo)
   Lsp.DesignerBinding, // EL lector de la linea de evento; los avisos del binding
-  Lsp.ProjectUnits;    // UsesConUnidades: el uses de la unidad
+  Lsp.ProjectUnits,    // UsesConUnidades: el uses de la unidad
+  Lsp.TodoONada;       // FicherosTodoONada
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)

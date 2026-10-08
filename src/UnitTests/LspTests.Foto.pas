@@ -1,6 +1,6 @@
 ﻿unit LspTests.Foto;
 
-{ El deshacer del "todo o nada" (Lsp.Guard.TFotoDeFicheros): devuelve lo que
+{ El deshacer del "todo o nada" (Lsp.TodoONada.TFotoDeFicheros): devuelve lo que
   la operacion escribio y NO pisa lo que otro cambio despues (verificacion de
   la tercera revision, 27-sep-2026: perder una edicion ajena con OK es peor
   que un deshacer que lo dice). }
@@ -35,8 +35,8 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
-  Lsp.Guard,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.TodoONada;
 
 procedure TFotoTests.Prepara;
 begin

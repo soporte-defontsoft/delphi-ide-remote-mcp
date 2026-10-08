@@ -205,7 +205,8 @@ uses
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
   Lsp.Rutas,
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.TodoONada;
 
 { TUnitInfo }
 
@@ -1379,7 +1380,7 @@ begin
   // AMas: lo que la accion reescribe ADEMAS del par (un rename, las units)
   Rutas := [Dpr, Dproj];
   Rutas := Rutas + AMas;
-  // la foto y su vuelta atras, las de todos (Lsp.Guard.FicherosTodoONada)
+  // la foto y su vuelta atras, las de todos (Lsp.TodoONada.FicherosTodoONada)
   Result := FicherosTodoONada(Rutas,
     function: string
     begin

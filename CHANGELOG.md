@@ -48,6 +48,16 @@ the MCP `initialize` response (`serverInfo.version`).
     `initialization`, as they were in `Lsp.Guard`'s. The vendored HTTP
     server and core manager used `Lsp.Guard` only for this and now use
     `Lsp.Identidad`; `Mcp.Tools.Messages` no longer uses `Lsp.Guard`.
+  - All-or-nothing goes to **`Lsp.TodoONada`**: the photo of the files an
+    operation will touch (`TFotoDeFicheros`) and the wrapper that undoes it
+    when something fails halfway (`FicherosTodoONada`). It is the first
+    family that goes ABOVE the jail: undoing asks the write gates and uses
+    the guarded writers, and nothing in `Lsp.Guard` uses it.
+- `test_round16` measures the symbols summary against a frozen copy of
+  `Lsp.Guard.pas` (commit 6544a95, in `tests/fixtures/`): the live unit
+  changes with this cleanup, and the summary-to-tree ratio had already
+  climbed from 16% to 24.3% unseen since 1.13.0 (the full tree got leaner).
+  Base 24.3%, ceiling 30%: red only if the summary gets fatter.
 
 ## [1.17.0] - 2026-10-07
 

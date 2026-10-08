@@ -243,6 +243,7 @@
         <DCCReference Include="Lsp.Casa.pas"/>
         <DCCReference Include="Lsp.Settings.pas"/>
         <DCCReference Include="Lsp.Identidad.pas"/>
+        <DCCReference Include="Lsp.TodoONada.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -22,8 +22,10 @@ from mcp_cliente import check
 
 BASE = mc.carpeta('round16')
 EXE = mc.copia_exe(BASE)
-# a real big unit for the symbols wall (typ. >30k chars of full tree)
-shutil.copy(os.path.join(mc.REPO, 'src', 'Server', 'Lsp.Guard.pas'),
+# a real big unit for the symbols wall (typ. >30k chars of full tree),
+# FROZEN as a file since 8-oct-2026 (why: the note of S1, below)
+shutil.copy(os.path.join(mc.REPO, 'tests', 'fixtures', 'guard-6544a95-2026-10-08',
+                         'Lsp.Guard.pas'),
             os.path.join(BASE, 'Big.pas'))
 open(os.path.join(BASE, 'Small.pas'), 'w').write(
     'unit Small;\ninterface\nprocedure Uno;\nimplementation\n'
@@ -126,9 +128,19 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
 # sea COMPACTO frente al arbol completo, y eso no depende del tamano de la
 # unidad. Medido ese dia: 18.210 frente a 111.608 (16%). Techo: 25%.
 # (David: 'la proporcion, adelante'.)
+# Y el 2026-10-08, CONGELADO: la proporcion habia subido EN SILENCIO del 16%
+# al 24,3% desde la 1.13.0 (el arbol completo adelgazo: el selectionRange
+# igual al range ya no viaja), y la limpieza de la 1.18.0 la llevo al 25,2%
+# sacando cuerpos de Lsp.Guard: el check medía DOS cosas, delphi_symbols y la
+# forma de la unidad. Desde ese dia el fixture es una COPIA en fichero,
+# tests/fixtures/guard-6544a95-2026-10-08 (el Lsp.Guard.pas del commit
+# 6544a95, la produccion de ese dia; el de la v1.17.0 da hoy un error interno
+# de DelphiLSP). Base medida: 36.147 frente a 148.843 = 24,3%, el
+# 8-oct-2026, con el exe de la rama de la 1.18.0 (dice 1.17.0). Techo: 30%,
+# solo rojo si el RESUMEN engorda (David, 8-oct).
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
-check('S1 y de verdad es compacto (el resumen pesa < 25% del arbol completo)',
-      len(rfull) > 0 and len(rbig) < 0.25 * len(rfull), (len(rbig), len(rfull)))
+check('S1 y de verdad es compacto (el resumen pesa < 30% del arbol completo; base congelada 24,3%)',
+      len(rfull) > 0 and len(rbig) < 0.30 * len(rfull), (len(rbig), len(rfull)))
 check('S2 mode=full conserva el arbol completo con rangos',
       # 1.13.0: el selectionRange igual al range ya no viaja (revisor de
       # tokens); el rango, si

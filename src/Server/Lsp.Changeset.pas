@@ -62,7 +62,8 @@ uses
   Lsp.Guard,
   Lsp.Patch,
   Lsp.TextEdit,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.TodoONada;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -984,7 +985,7 @@ begin
               if Ok then
               begin
                 // lo que ESTE paso dejo: lo unico que el deshacer puede
-                // dar por suyo (Lsp.Guard.TFotoDeFicheros.Anota)
+                // dar por suyo (Lsp.TodoONada.TFotoDeFicheros.Anota)
                 Foto.Anota(Op.Path);
                 if Op.Kind = opMove then
                   Foto.Anota(Op.Dest);
@@ -1064,7 +1065,7 @@ begin
         end;
         if not Applied then
         begin
-          // el deshacer no lanza (Lsp.Guard.TFotoDeFicheros): el changeset
+          // el deshacer no lanza (Lsp.TodoONada.TFotoDeFicheros): el changeset
           // se cierra SIEMPRE; antes una restauracion que fallaba lo dejaba
           // abierto, ocupando uno de los huecos durante 30 minutos
           var NoVolvio := Foto.Restaura;

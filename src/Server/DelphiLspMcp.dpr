@@ -140,7 +140,8 @@ uses
   Lsp.Rutas in 'Lsp.Rutas.pas',
   Lsp.Casa in 'Lsp.Casa.pas',
   Lsp.Settings in 'Lsp.Settings.pas',
-  Lsp.Identidad in 'Lsp.Identidad.pas';
+  Lsp.Identidad in 'Lsp.Identidad.pas',
+  Lsp.TodoONada in 'Lsp.TodoONada.pas';
 
 {$R *.res}
 

@@ -65,7 +65,8 @@ uses
   System.Diagnostics,
   MCPServer.Logger,
   Lsp.Rutas,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.TodoONada;
 
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);

@@ -49,7 +49,8 @@ uses
   Lsp.Pascal,
   Lsp.DesignerBin, // el literal y el flotante: sus compositores
   Lsp.DesignerForma, // la linea de objeto: su compositor
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.TodoONada;
 
 const
   CRLF = #13#10;

@@ -103,7 +103,8 @@ uses
   Lsp.BuildRunner,
   Lsp.ProjectUnits,
   Lsp.Patch,
-  Lsp.Regex;
+  Lsp.Regex,
+  Lsp.TodoONada;
 
 constructor TDelphiConfigTool.Create;
 begin
