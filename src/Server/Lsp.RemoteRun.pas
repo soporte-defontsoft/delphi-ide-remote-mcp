@@ -152,7 +152,6 @@ uses
   Lsp.BuildRunner,
   Lsp.Discovery,
   Lsp.Patch,     // DecodeSourceBytes: el lector de la casa
-  Lsp.Dproj,     // TagValue: el lector del .profile
   Lsp.Texts,
   Lsp.NetDrives,
   Lsp.Casa,
@@ -712,7 +711,7 @@ begin
     Exit;
   P := RutaDePerfil(Info.Version, AProfile);
   if TFile.Exists(P) then
-    Result := TagValue(TFile.ReadAllText(P), 'Profile_platform');
+    Result := CamposDePerfil(TFile.ReadAllText(P)).Plataforma;
 end;
 
 function BundledNodePath(const APlataforma: string): string;

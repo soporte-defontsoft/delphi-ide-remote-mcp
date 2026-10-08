@@ -187,6 +187,11 @@ the MCP `initialize` response (`serverInfo.version`).
   `TrocearArgs` and its inverse move to `Lsp.ProcessLaunch`, next to the
   launcher, where the job launcher already reaches them. `test_paisaje`
   watches the server's folder and `srvhost`, each with its mutant.
+- The connection fields of a profile (`Profile_host`, `_port`, `_platform`
+  and the password paclient already encrypted) are read in one place,
+  `CamposDePerfil` in `Lsp.Discovery`, from whatever `.profile` or `.sdk`
+  text the caller holds; they were read by hand in twelve places of three
+  units (`HostDePerfil` now reads with it). `test_paisaje` keeps them there.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

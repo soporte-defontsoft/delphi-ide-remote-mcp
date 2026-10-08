@@ -94,6 +94,18 @@ function NombreSinSdk(const ANombreSdk: string): string;
 function RutaDeSdk(const AVersion, ANombre: string): string;
 function CarpetaDeSdk(const AVersion, ANombre: string): string;
 
+{ Los campos de CONEXION de un perfil del IDE (Profile_host, Profile_port,
+  Profile_platform y Profile_password, esta ya cifrada por paclient), leidos
+  de su XML en UN sitio: quien necesita uno lo pide aqui, del texto que tenga
+  en la mano (el .profile, o el .sdk, que repite host, puerto y plataforma).
+  HostDePerfil, por nombre, lee con este. Estaban leidos a mano en doce
+  sitios de tres unidades (2.4 de la 1.18.0). }
+type
+  TCamposDePerfil = record
+    Host, Puerto, Plataforma, Password: string;
+  end;
+function CamposDePerfil(const AXml: string): TCamposDePerfil;
+
 { EL host (Profile_host) de un perfil, leido del MISMO fichero que compone
   RutaDePerfil. La version con AMotivo dice por que no hay host (no existe / no
   se lee / sin Profile_host): la puerta niega con ese motivo; quien solo quiere
@@ -842,6 +854,14 @@ begin
   Result := TPath.Combine(IdeSdksDir(AVersion), NombreDeSdk(ANombre));
 end;
 
+function CamposDePerfil(const AXml: string): TCamposDePerfil;
+begin
+  Result.Host := TagValue(AXml, 'Profile_host');
+  Result.Puerto := TagValue(AXml, 'Profile_port');
+  Result.Plataforma := TagValue(AXml, 'Profile_platform');
+  Result.Password := TagValue(AXml, 'Profile_password');
+end;
+
 function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string;
 var
   Ruta, Xml: string;
@@ -860,7 +880,7 @@ begin
     AMotivo := MsgFmt(SR_PROFILE_NO_LEIDO_FMT, [AName.Trim]);
     Exit;
   end;
-  Result := TagValue(Xml, 'Profile_host');
+  Result := CamposDePerfil(Xml).Host;
   if Result = '' then
     AMotivo := MsgFmt(SR_PROFILE_SIN_HOST_FMT, [AName.Trim]);
 end;

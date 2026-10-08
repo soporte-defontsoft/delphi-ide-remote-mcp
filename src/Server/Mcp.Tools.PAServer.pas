@@ -842,8 +842,8 @@ begin
   if TDirectory.Exists(IdeProfilesDir(Info.Version)) then
     for F in TDirectory.GetFiles(IdeProfilesDir(Info.Version), '*.profile') do
     try
-      if SameText(TagValue(TFile.ReadAllText(F), 'Profile_host'), Host) and
-         (TagValue(TFile.ReadAllText(F), 'Profile_port') = Port) then
+      var Campos := CamposDePerfil(TFile.ReadAllText(F));
+      if SameText(Campos.Host, Host) and (Campos.Puerto = Port) then
         AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT,
           [NombreDePerfil(F)]);
     except
@@ -858,7 +858,7 @@ begin
     // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient
     RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host,
       StrToIntDef(Port, 64211),
-      TagValue(TFile.ReadAllText(ProfileFile), 'Profile_password'));
+      CamposDePerfil(TFile.ReadAllText(ProfileFile)).Password);
     Return := TJSONObject.Create;
     try
       Return.AddPair('profile', ProfName);
@@ -1241,7 +1241,7 @@ begin
   if Result <> '' then
     Exit;
   ProfXml := TFile.ReadAllText(ProfileFile);
-  Plat := TagValue(ProfXml, 'Profile_platform');
+  Plat := CamposDePerfil(ProfXml).Plataforma;
   if not SameText(Plat, 'Linux64') then
     Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [ProfName, Plat]));
 
@@ -1375,8 +1375,8 @@ begin
       Sb.AppendLine('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="">');
       Sb.AppendLine('  <PropertyGroup>');
       Sb.AppendLine('    <Profile_platform>Linux64</Profile_platform>');
-      Sb.AppendLine('    ' + XmlElemento('Profile_host', TagValue(ProfXml, 'Profile_host')));
-      Sb.AppendLine('    ' + XmlElemento('Profile_port', TagValue(ProfXml, 'Profile_port')));
+      Sb.AppendLine('    ' + XmlElemento('Profile_host', CamposDePerfil(ProfXml).Host));
+      Sb.AppendLine('    ' + XmlElemento('Profile_port', CamposDePerfil(ProfXml).Puerto));
       Sb.AppendLine('    ' + XmlElemento('Profile_sdkname', NombreDeSdk(SdkName)));
       Sb.AppendLine('    ' + XmlElemento('Profile_displayname', 'Linux64 ' + SdkName +
         ' (delphi_paserver get-sdk, profile ' + ProfName + ')'));
@@ -1392,8 +1392,8 @@ begin
       // with "cannot find -lgcc_s" even though the .sdk imports fine
       // (measured against the first live sysroot).
       Sb.AppendLine('    ' + XmlElemento('Profile_LibraryPath', string.Join(';', LibDirs.ToStringArray)));
-      if TagValue(ProfXml, 'Profile_password') <> '' then
-        Sb.AppendLine('    ' + XmlElemento('Profile_password', TagValue(ProfXml, 'Profile_password')));
+      if CamposDePerfil(ProfXml).Password <> '' then
+        Sb.AppendLine('    ' + XmlElemento('Profile_password', CamposDePerfil(ProfXml).Password));
       Sb.AppendLine('  </PropertyGroup>');
       Sb.AppendLine('  <ItemGroup>');
       for D in LibDirs do
@@ -1501,15 +1501,16 @@ begin
         except
           Continue;
         end;
+        var Campos := CamposDePerfil(Texto);
         Plat := 'Linux64';
-        if TagValue(Texto, 'Profile_platform') <> '' then
-          Plat := TagValue(Texto, 'Profile_platform');
+        if Campos.Plataforma <> '' then
+          Plat := Campos.Plataforma;
         Host := '';
-        Host := TagValue(Texto, 'Profile_host');
+        Host := Campos.Host;
         Puerto := 64211;
-        Puerto := StrToIntDef(TagValue(Texto, 'Profile_port'), 64211);
+        Puerto := StrToIntDef(Campos.Puerto, 64211);
         Pwd := '';
-        Pwd := TagValue(Texto, 'Profile_password'); { ya viene cifrada: se copia tal cual }
+        Pwd := Campos.Password; { ya viene cifrada: se copia tal cual }
         if Host = '' then
           Continue;
         RegistrarPerfilEnIde(Info.Version, Nombre, Plat, Host, Puerto, Pwd);
@@ -1570,7 +1571,7 @@ begin
       end;
       // solo los de PAServer: los de Android los pone GetIt y no son cosa
       // nuestra
-      if not SameText(TagValue(Xml, 'Profile_platform'), 'Linux64') then
+      if not SameText(CamposDePerfil(Xml).Plataforma, 'Linux64') then
         Continue;
       Raiz := TagValue(Xml, 'Profile_sysroot');
       if Raiz = '' then
