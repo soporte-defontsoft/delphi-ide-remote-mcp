@@ -420,7 +420,9 @@ check('adduses: clausula nueva bajo implementation, con puntos en los nombres',
 check('adduses: la de interface no se toca', 'interface\r\n\r\nuses\r\n  System.Classes;\r\n' in _src, _src)
 out = call('delphi_edit', {"path": ADDU, "adduses": "UOtra", "section": "implementation"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
-check('adduses: anade al final de la clausula existente', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'Modules.API,\r\n  UOtra;' in _src, out[:300])
+# la clausula que escribio el motor es COMPACTA (dos en una linea): se respeta
+# su forma (3.13 de la 1.18.0; antes se rehacia una por linea)
+check('adduses: anade al final de la clausula existente', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'System.SysUtils, Modules.API, UOtra;' in _src, out[:300])
 _cl = re.search(r'^uses\s.*?;', out, re.M | re.S)  # la clausula releida: su forma, no la frase que la presenta
 check('adduses: el eco trae la clausula releida', bool(_cl) and 'UOtra;' in _cl.group(0), out[:300])
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.Classes", "section": "interface"})
@@ -443,11 +445,40 @@ open(DPRX, 'wb').write(b'program Prog;\r\nbegin\r\nend.\r\n')
 out = call('delphi_edit', {"path": DPRX, "adduses": "X"})
 check('adduses: en un .dpr remite a add-unit', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_NOT_PAS_FMT') and 'add-unit' in out, out[:200])
 check('adduses: cp1252 intacto (sin BOM, CRLF)', not open(ADDU, 'rb').read().startswith(b'\xef\xbb\xbf') and b'\n' not in open(ADDU, 'rb').read().replace(b'\r\n', b''))
+# --- una clausula COMPACTA se edita en su sitio (3.13 de la 1.18.0): adduses y
+# removeuses la rehacian una por linea, un diff de cuarenta lineas por una unit
+# (medido el 9-oct-2026 en UTrayMain) ---
+COMP = os.path.join(DIR, 'Compacta.pas')
+open(COMP, 'wb').write(CRLF.join([
+    'unit Compacta;', '', 'interface', '', 'uses',
+    '  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,',
+    '  System.StrUtils, System.JSON,', '  Vcl.Forms, Vcl.Dialogs;', '',
+    'implementation', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": COMP, "removeuses": "System.Classes;Vcl.Forms", "section": "interface"})
+_src = open(COMP, 'rb').read().decode('ascii')
+check('removeuses en una clausula compacta: sale solo lo suyo, el resto en su sitio',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and
+      'uses\r\n  Winapi.Windows, Winapi.Messages, System.SysUtils,\r\n  System.StrUtils, System.JSON,\r\n'
+      '  Vcl.Dialogs;\r\n' in _src, _src)
+out = call('delphi_edit', {"path": COMP, "adduses": "System.IOUtils", "section": "interface"})
+_src = open(COMP, 'rb').read().decode('ascii')
+check('adduses en una clausula compacta: entra detras de la ultima, en su linea',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and '\r\n  Vcl.Dialogs, System.IOUtils;\r\n' in _src, _src)
+out = call('delphi_edit', {"path": COMP, "adduses": "Una.Unidad.Con.Un.Nombre.Muy.Largo.Para.Pasar.De.Ochenta",
+                           "section": "interface"})
+_src = open(COMP, 'rb').read().decode('ascii')
+check('...y la que no cabe en 80 columnas, en una linea nueva con su sangria',
+      'Vcl.Dialogs, System.IOUtils,\r\n  Una.Unidad.Con.Un.Nombre.Muy.Largo.Para.Pasar.De.Ochenta;\r\n' in _src, _src)
+out = call('delphi_edit', {"path": COMP, "removeuses": "System.StrUtils;System.JSON", "section": "interface"})
+_src = open(COMP, 'rb').read().decode('ascii')
+check('removeuses: la linea que se queda vacia se va con ellas',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and
+      'System.SysUtils,\r\n  Vcl.Dialogs, System.IOUtils,\r\n' in _src, _src)
 # --- removeuses: la inversa ---
 out = call('delphi_edit', {"path": ADDU, "removeuses": "UOtra"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('removeuses: quita de implementation y la clausula sigue bien cerrada',
-      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'UOtra' not in _src and 'System.SysUtils,\r\n  Modules.API;\r\n' in _src, out[:300])
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'UOtra' not in _src and 'System.SysUtils, Modules.API;\r\n' in _src, out[:300])
 out = call('delphi_edit', {"path": ADDU, "removeuses": "UOtra"})
 check('removeuses: la que no esta -> nada que escribir', mc.abre(out, 'SN_REMOVEUSES_ABSENT_FMT'), out[:200])
 out = call('delphi_edit', {"path": ADDU, "removeuses": "System.Classes;UInterfaz;UNoEsta", "section": "interface"})

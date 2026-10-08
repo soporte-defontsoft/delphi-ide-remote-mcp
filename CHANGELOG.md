@@ -28,6 +28,15 @@ the MCP `initialize` response (`serverInfo.version`).
   and last-line checks now run once, from the file before the batch to the
   file after it (the same helper a single edit asks), and a batch that does
   leave the file broken still warns, once. `test_round34` B6/B6b.
+- **`adduses` and `removeuses` keep the shape of a compact `uses` clause.**
+  A clause with several units on a line was rewritten one unit per line by
+  either, a forty-line diff for one unit (the tray's own unit, measured).
+  A compact clause (no comments or directives, plain unit names) is now
+  edited in place: the units that go leave with their comma, a line left
+  empty goes with them, and new units are appended after the last one, on
+  its line while it fits in 80 columns (or the widest line the clause
+  already had), else on a new line with the clause's indent. Any other
+  clause, and every `.dpr`/`.dpk`, is written one unit per line as before.
 
 ### Internal
 

@@ -849,6 +849,121 @@ begin
   end;
 end;
 
+{ Una clausula COMPACTA - alguna linea con varias units, sin comentarios ni
+  directivas, solo identificadores - editada EN SU SITIO: las que se van
+  salen con su coma (y la linea que se queda vacia, con ellas) y las nuevas
+  entran detras de la ultima, en su linea mientras quepa (80 columnas, o la
+  linea mas larga que ya tenia), si no en una nueva con su sangria. '' si
+  no es compacta o el cambio no es "quitar unas y anadir al final": entonces
+  escribe ReplaceUses, una por linea, como siempre. Rehacerla una por linea
+  era un diff de cuarenta lineas por una unit (adduses y removeuses en
+  UTrayMain, 9-oct-2026; 3.13 de la 1.18.0). }
+function UsesCompacta(const Dpr: string; const U: TUsesClause;
+  const AEntries: TArray<string>): string;
+var
+  Ini, P, I, K, Ancho: Integer;
+  Cuerpo, NL, Indent, Nuevo, Antes: string;
+  Pos_: TArray<Integer>;
+  Quedan: TArray<Boolean>;
+  M: TMatch;
+begin
+  Result := '';
+  if (Length(U.Entries) = 0) or (Length(AEntries) = 0) then
+    Exit;
+  Ini := U.StartPos + Length(U.Keyword);
+  Cuerpo := Copy(Dpr, Ini, U.EndPos - Ini);
+  // ni un comentario ni una directiva, y solo nombres de unit
+  if CodigoPascal(Cuerpo) <> Cuerpo then
+    Exit;
+  for var E in U.Entries + AEntries do
+    if not EsIdentificador(E, True) then
+      Exit;
+  // compacta: alguna linea con dos o mas
+  if not TRegEx.IsMatch(Cuerpo, ',[ \t]*[^\s]') then
+    Exit;
+  // las que se quedan, en su orden; detras, solo nuevas
+  SetLength(Quedan, Length(U.Entries));
+  K := 0;
+  for I := 0 to High(U.Entries) do
+  begin
+    Quedan[I] := (K <= High(AEntries)) and (AEntries[K] = U.Entries[I]);
+    if Quedan[I] then
+      Inc(K);
+  end;
+  if K = 0 then
+    Exit;
+  for I := K to High(AEntries) do
+    for var E in U.Entries do
+      if MismoIdentificador(AEntries[I], E) then
+        Exit; // una que estaba, fuera de su orden: el camino de siempre
+  // donde empieza cada una; entre dos, solo la coma y blancos
+  SetLength(Pos_, Length(U.Entries));
+  P := 1;
+  for I := 0 to High(U.Entries) do
+  begin
+    var Q := PosEx(U.Entries[I], Cuerpo, P);
+    if (Q = 0) or not (Copy(Cuerpo, P, Q - P).Replace(',', '').Trim = '') then
+      Exit;
+    Pos_[I] := Q;
+    P := Q + Length(U.Entries[I]);
+  end;
+  // fuera las que se van: su nombre y la coma y los blancos que la siguen
+  // en SU linea (el salto se queda)
+  Nuevo := Cuerpo;
+  for I := High(U.Entries) downto 0 do
+    if not Quedan[I] then
+    begin
+      var Fin := Pos_[I] + Length(U.Entries[I]);
+      while (Fin <= Length(Nuevo)) and CharInSet(Nuevo[Fin], [' ', #9]) do
+        Inc(Fin);
+      if (Fin <= Length(Nuevo)) and (Nuevo[Fin] = ',') then
+        Inc(Fin);
+      while (Fin <= Length(Nuevo)) and CharInSet(Nuevo[Fin], [' ', #9]) do
+        Inc(Fin);
+      Delete(Nuevo, Pos_[I], Fin - Pos_[I]);
+    end;
+  // sin coma colgando al final, sin blancos al final de linea, sin lineas
+  // que se quedaron vacias
+  Nuevo := TRegEx.Replace(Nuevo, '[\s,]+$', '');
+  Nuevo := TRegEx.Replace(Nuevo, '[ \t]+(\r?\n)', '$1');
+  repeat
+    Antes := Nuevo;
+    Nuevo := TRegEx.Replace(Nuevo, '\r?\n[ \t]*(?=\r?\n)', '');
+  until Nuevo = Antes;
+  // las nuevas, detras de la ultima
+  NL := SaltoDominante(Dpr);
+  M := TRegEx.Match(Cuerpo, '\n([ \t]+)\S');
+  if M.Success then
+    Indent := M.Groups[1].Value
+  else
+    Indent := '  ';
+  Ancho := 80;
+  for var L in SplitToLines(Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1)) do
+    if Length(L) > Ancho then
+      Ancho := Length(L);
+  for I := K to High(AEntries) do
+  begin
+    // la columna en la que acaba la ultima linea (con lo que hay delante de
+    // la palabra uses, si sigue en su linea)
+    var UltSalto := Nuevo.LastIndexOf(#10);
+    var Col: Integer;
+    if UltSalto >= 0 then
+      Col := Length(Nuevo) - UltSalto - 1
+    else
+    begin
+      var IniLinea := U.StartPos;
+      while (IniLinea > 1) and not CharInSet(Dpr[IniLinea - 1], [#10, #13]) do
+        Dec(IniLinea);
+      Col := U.StartPos - IniLinea + Length(U.Keyword) + Length(Nuevo);
+    end;
+    if Col + 2 + Length(AEntries[I]) + 1 <= Ancho then
+      Nuevo := Nuevo + ', ' + AEntries[I]
+    else
+      Nuevo := Nuevo + ',' + NL + Indent + AEntries[I];
+  end;
+  Result := Copy(Dpr, 1, Ini - 1) + Nuevo + Copy(Dpr, U.EndPos, MaxInt);
+end;
+
 function ReplaceUses(const Dpr: string; const U: TUsesClause; const AEntries: TArray<string>): string;
 var
   Body, NL, Indent, Clause, E: string;
@@ -912,6 +1027,10 @@ begin
       Inc(Fin);
     Exit(Copy(Dpr, 1, U.StartPos - 1) + Copy(Dpr, Fin, MaxInt));
   end;
+  // una clausula compacta se edita en su sitio (UsesCompacta)
+  Result := UsesCompacta(Dpr, U, AEntries);
+  if Result <> '' then
+    Exit;
   NL := SaltoDominante(Dpr);
   // the indent of the first entry line of the existing clause
   Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
