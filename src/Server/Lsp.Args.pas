@@ -232,17 +232,6 @@ begin
     'msg-' + TGUID.NewGuid.ToString + '.txt');
 end;
 
-{ Filtro de opciones peligrosas de git en la UNICA puerta: git tiene opciones
-  que escriben ficheros, leen rutas FUERA del repo o ejecutan un programa - una
-  fuga de la jaula usable hasta por un cliente de solo lectura (medido: `diff
-  --output=<ruta abs>` escribio un fichero en cualquier sitio del disco, y
-  --o"utput"= se colaba cuando la puerta troceaba solo por espacios mientras el
-  CRT de git quitaba las comillas y la ejecutaba). Trocea con TrocearArgs - el
-  mismo lector cuya inversa usa el ejecutor para componer la linea -, asi que
-  cada token se juzga TAL COMO lo recibira git. Lo pregunta la puerta, para que
-  valga en AMBOS niveles de acceso (el -C <repo> no frena un --output absoluto).
-  '' = limpio. }
-
 { Las opciones que traen ficheros o configuracion ajena al filtro. Git admite
   prefijos largos y grupos cortos (-aF, -qF, -nc): se juzgan las dos formas. }
 function OpcionDeFicheroGit(const ATok: string): Boolean;
@@ -289,6 +278,16 @@ begin
   end;
 end;
 
+{ Filtro de opciones peligrosas de git en la UNICA puerta: git tiene opciones
+  que escriben ficheros, leen rutas FUERA del repo o ejecutan un programa - una
+  fuga de la jaula usable hasta por un cliente de solo lectura (medido: `diff
+  --output=<ruta abs>` escribio un fichero en cualquier sitio del disco, y
+  --o"utput"= se colaba cuando la puerta troceaba solo por espacios mientras el
+  CRT de git quitaba las comillas y la ejecutaba). Trocea con TrocearArgs - el
+  mismo lector cuya inversa usa el ejecutor para componer la linea -, asi que
+  cada token se juzga TAL COMO lo recibira git. Lo pregunta la puerta, para que
+  valga en AMBOS niveles de acceso (el -C <repo> no frena un --output absoluto).
+  '' = limpio. }
 { LISTA NEGRA: argumentos libres de git, con opciones peligrosas conocidas.
   La config y los remotos tienen sus puertas cerradas independientes. }
 function GitArgDenied(const AArgs, ACmd: string): string;

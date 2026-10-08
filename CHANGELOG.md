@@ -144,6 +144,15 @@ the MCP `initialize` response (`serverInfo.version`).
   four homes that held nothing, three are gone, each for its own reason, and
   `FlotanteDeForm`'s stays: the rule now sees how it writes the eighteen
   zeros (`StringOfChar('0', 18)`), so a copy written the same way is caught.
+- The cleanup closes with a map, in `Lsp.Guard`'s header, of where each
+  family went and what stays. Seven notes that earlier moves (some from
+  before this cleanup) had left above the wrong function are back with their
+  own, three that said what the code no longer does are corrected (the
+  header's "three layers" lists four; the content parameters are read by one
+  pass, not two; a `uses` comment named a function of another unit), and
+  `EnLugar` carries `RealPath`'s warning: it compares, it never decides a
+  permission. Two units sat in a `uses` with nothing left to use: `Lsp.Guard`
+  in the tray and `Lsp.Patch` in `Mcp.Tools.Desktop`.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

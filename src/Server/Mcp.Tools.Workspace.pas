@@ -248,7 +248,7 @@ uses
   Lsp.Files,
   Mcp.Tools.Messages,
   Lsp.DesignerBin,
-  Lsp.NetDrives, // DirectedMessagesPending, para la ficha del servidor
+  Lsp.NetDrives, // SinBarraFinal
   Lsp.Pascal,
   Lsp.Regex, // TExprDelAgente: la expresion de delphi_search regex=true
   Lsp.Rutas,

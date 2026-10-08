@@ -53,7 +53,10 @@ function RealPath(const APath: string): string;
 function FormaLarga(const APath: string): string;
 
 { APath ES ALugar o esta DENTRO, los dos en la forma larga: EL comparador
-  de "esta en ese sitio". Un lugar vacio no contiene nada. }
+  de "esta en ese sitio". Un lugar vacio no contiene nada. Como RealPath,
+  para COMPARAR, nunca para decidir un permiso por tu cuenta: con
+  AResuelveAlias=False compara el texto tal cual (ni ..\ ni alias 8.3), y
+  eso solo vale con dos rutas que ya llegan en la misma forma. }
 function EnLugar(const APath, ALugar: string;
   AResuelveAlias: Boolean = True): Boolean;
 
@@ -83,10 +86,6 @@ uses
   System.IOUtils,
   Lsp.NetDrives;        // RaizSiUnidad, SinBarraFinal, PrefijoSinBarra
 
-{ El nombre FINAL de una ruta que existe: sigue junctions y symlinks hasta su
-  destino de verdad. False si no se puede abrir (no existe, o no hay permiso
-  ni para preguntar). Acceso 0 = solo consultar, y FILE_FLAG_BACKUP_SEMANTICS
-  hace falta para poder abrir CARPETAS. }
 { EL paseo hacia arriba, escrito UNA vez. Dada una ruta, busca el antecesor
   existente mas cercano que AResuelve sepa traducir y le vuelve a pegar el
   resto: el ultimo tramo de un create o un upload todavia no existe, y aun asi
@@ -129,6 +128,10 @@ begin
   Result := AFull; // nada del camino existe: se queda la forma textual
 end;
 
+{ El nombre FINAL de una ruta que existe: sigue junctions y symlinks hasta su
+  destino de verdad. False si no se puede abrir (no existe, o no hay permiso
+  ni para preguntar). Acceso 0 = solo consultar, y FILE_FLAG_BACKUP_SEMANTICS
+  hace falta para poder abrir CARPETAS. }
 function NombreFinal(const APath: string; out AReal: string): Boolean;
 var
   H: THandle;

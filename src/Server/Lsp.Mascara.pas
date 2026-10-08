@@ -136,11 +136,10 @@ threadvar
   TCitasHechas: string; // las citas (CitaDeLinea) de ESTA llamada, cada una seguida de #0
 
 { Los parametros que llevan CONTENIDO, no rutas: su texto es de un fichero o
-  de un mensaje y no pertenece al espacio de nombres de rutas. Lo usan las DOS
-  pasadas que recorren los argumentos de una llamada -la que expande unidades
-  virtuales y la que comprueba la jaula-, y por eso vive aqui y no copiada en
-  cada una: si una aprendiese un parametro nuevo y la otra no, o se
-  comprobaria una ruta sin expandir, o se tomaria un contenido por ruta. }
+  de un mensaje y no pertenece al espacio de nombres de rutas. Lo lee solo la
+  expansion de ida (ExpandVirtualDrives): la pasada de la jaula ya no elige
+  por una lista de nombres sino por las marcas [RutaDelServidor] de cada tool
+  (RutasNuestras, Lsp.Guard). }
 const
   PARAMS_CON_CONTENIDO: array [0 .. 6] of string = (
     'new', 'old', 'content', 'data', 'message', 'code', 'args');
@@ -248,17 +247,17 @@ begin
     Result := 'srv0';
 end;
 
-{ The ONE place that recognizes the virtual-unit shape: 'srvd:', 'srvd:\x',
-  'srvd:/x' - y el centinela 'srv0:', para que su rechazo sea el de una
-  unidad no servida. Returns the upper-case letter, or #0 when the value is not a
-  virtual unit at all. Both the inbound expansion and the rejection of an
-  unserved unit ask this - the shape is never re-tested by hand. }
 function EmpiezaPorUnidadVirtual(const AValue: string): Boolean;
 begin
   Result := (Length(AValue) >= 5) and StartsText('srv', AValue) and
     CharInSet(AValue[4], ['A'..'Z', 'a'..'z', '0']) and (AValue[5] = ':');
 end;
 
+{ The ONE place that recognizes the virtual-unit shape: 'srvd:', 'srvd:\x',
+  'srvd:/x' - y el centinela 'srv0:', para que su rechazo sea el de una
+  unidad no servida. Returns the upper-case letter, or #0 when the value is not a
+  virtual unit at all. Both the inbound expansion and the rejection of an
+  unserved unit ask this - the shape is never re-tested by hand. }
 function VirtualUnitLetter(const AValue: string): Char;
 begin
   Result := #0;

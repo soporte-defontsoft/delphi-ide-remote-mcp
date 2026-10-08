@@ -1,6 +1,6 @@
 unit Lsp.Guard;
 
-{ Access control: the security unit. Three layers, all configured in
+{ Access control: the security unit. Four layers, all configured in
   settings.ini next to the exe (env vars take precedence):
 
   1. Workspace jail - [Workspace] Roots / DELPHI_MCP_ROOTS. With roots
@@ -55,7 +55,35 @@ unit Lsp.Guard;
          floor (ArgPathOutsideDenied) uses the read gate, so it lets them in.
        - What it does NOT do: subtract. Everything under a reference root is
          readable, secrets included - point it at clean project folders.
-     Measured by tests/test_readonly_roots.py (two servers). }
+     Measured by tests/test_readonly_roots.py (two servers).
+
+  DONDE ESTA LO QUE ESTABA AQUI (la limpieza de la 1.18.0, 8-oct-2026: de
+  8.207 lineas a unas 3.700, todo movido sin cambiar una linea de logica).
+  Aqui se queda la jaula: la puerta de entrada (ToolCallDenied), las dos
+  preguntas (JaulaDenegada para leer, PathDenied para escribir) y sus
+  envoltorios (ReadPathDenied, EscrituraDenegada, WriteTargetDenied), los
+  recorredores que no cruzan un enlace (BorraArbol, CopiaArbol, MueveArbol)
+  y lo que se hace CON las carpetas de la casa pasando por las puertas (los
+  entregables del agente, la purga del arranque y la presencia). Lo demas,
+  de abajo arriba:
+    - Lsp.Rutas: las formas canonicas (LongCanonical, RealPath, FormaLarga,
+      EnLugar) y la forma de una ruta (EsUnc, EsPrefijoDeDispositivo,
+      EsRutaAbsoluta).
+    - Lsp.Json: ReescribeCadenas, el recorrido de los argumentos que
+      comparten la jaula y las unidades virtuales.
+    - Lsp.Casa: los nombradores de la casa del servidor (ServerDir, la
+      temporal, las caches, los nombres unicos, los mutex) y su escritor.
+    - Lsp.Settings: el lector de la configuracion y las credenciales, y el
+      juez de los hosts que se sondean (ProbeHostDenied).
+    - Lsp.Discovery: las macros del IDE (IdeMacroVars).
+    - Lsp.Identidad: quien llama y el registro de las sesiones.
+    - Lsp.Args: los argumentos de una orden (TrocearArgs, EnComillas), las
+      puertas de git y de los lanzadores y GitCommandIsQuery.
+    - Lsp.Lugares: el mapa de los lugares declarados y sus formas.
+    - Lsp.Mascara: las unidades virtuales srvX:, de ida y de vuelta.
+    - Lsp.TodoONada: la foto y el deshacer de todo o nada (va ENCIMA de la
+      jaula: usa sus puertas y sus escritores).
+  Lo que "era de Guard" se busca primero en esta lista. }
 
 interface
 
@@ -63,8 +91,6 @@ uses
   System.Classes,
   System.JSON;
 
-{ '' = allowed; otherwise the rejection message to return to the agent.
-  This is the WRITE jail: only the configured workspace roots. }
 type
   { POR QUE tools/list deja fuera una tool (moNinguna = la anuncia). }
   TMotivoOculta = (moNinguna, moSinVault, moVaultLectura, moCredencialLectura, moPerfil);
@@ -109,6 +135,8 @@ function ComandoDeTest(const ACmd, AProject, APath: string): string;
   (undecima revision; David: "dos preguntas, dos helpers"). }
 function JaulaDenegada(const APath: string; APermiteGit: Boolean = False): string; overload;
 
+{ '' = allowed; otherwise the rejection message to return to the agent.
+  This is the WRITE jail: only the configured workspace roots. }
 { LA PREGUNTA DE ESCRITURA: la jaula (JaulaDenegada) y DESPUES lo que solo
   importa al escribir - una referencia se lee y no se toca, un ReadOnlyPaths
   igual, la zona de biblioteca nunca se escribe, el confinamiento por
@@ -2085,22 +2113,6 @@ begin
   end;
 end;
 
-{ Optional per-agent write confinement (OFF by default). When on, an identified
-  agent may write only inside <root>\<its-name>\... or an explicitly shared
-  subfolder - so several agents can share one workspace root without stepping on
-  each other. A caller with no identity (stdio, the operator's own console) is
-  trusted with everything, the same rule the recoverable trash already uses.
-  Reading is never confined: an agent still sees the whole tree. }
-{ El workspace de quien llama. Con varias raices manda la PRIMERA
-  ESCRIBIBLE - una raiz declarada entera en ReadOnlyPaths (el clon de
-  referencia) no recibe entregables: seria escribir justo donde nuestra
-  propia jaula lo prohibe, y la misma ruta pasada a mano en "out" se
-  rechaza (auditoria 2026-09-21). Sin ninguna raiz configurada, o ninguna
-  escribible, no hay workspace donde dejar nada y se cae a la casa del
-  servidor, que siempre existe. La subcarpeta del agente sale de la misma
-  identidad que usa el modo confinado, asi que dos agentes en la misma
-  jaula no se pisan - y cuando no hay identidad (stdio, la consola del
-  operador) no se inventa una. }
 function IsAgentCapture(const APath: string): Boolean;
 var
   Full: string;
@@ -2191,6 +2203,16 @@ begin
     Result := Casas[0];
 end;
 
+{ El workspace de quien llama. Con varias raices manda la PRIMERA
+  ESCRIBIBLE - una raiz declarada entera en ReadOnlyPaths (el clon de
+  referencia) no recibe entregables: seria escribir justo donde nuestra
+  propia jaula lo prohibe, y la misma ruta pasada a mano en "out" se
+  rechaza (auditoria 2026-09-21). Sin ninguna raiz configurada, o ninguna
+  escribible, no hay workspace donde dejar nada y se cae a la casa del
+  servidor, que siempre existe. La subcarpeta del agente sale de la misma
+  identidad que usa el modo confinado, asi que dos agentes en la misma
+  jaula no se pisan - y cuando no hay identidad (stdio, la consola del
+  operador) no se inventa una. }
 function AgentTempDir(const ASub: string): string;
 var
   Me: string;
@@ -3279,6 +3301,12 @@ begin
   end;
 end;
 
+{ Optional per-agent write confinement (OFF by default). When on, an identified
+  agent may write only inside <root>\<its-name>\... or an explicitly shared
+  subfolder - so several agents can share one workspace root without stepping on
+  each other. A caller with no identity (stdio, the operator's own console) is
+  trusted with everything, the same rule the recoverable trash already uses.
+  Reading is never confined: an agent still sees the whole tree. }
 function AgentConfineDenied(const AFull, ARoot: string): string;
 var
   Me, Rel, Seg, Sh: string;

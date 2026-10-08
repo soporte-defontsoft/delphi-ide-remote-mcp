@@ -450,9 +450,6 @@ begin
     Result := MsgFmt(SR_LOCAL_CERRADO_FMT, [Result]);
 end;
 
-{ 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
-  unparseable entries ignored. Shared by the global Roots= and every
-  [Workspace.*] Roots=. }
 function VaultNormalizado(const ACrudo: string): string; forward;
 
 { Un sitio se declara con su LETRA (David, 1-oct-2026): X:\... y nada mas.
@@ -544,6 +541,9 @@ begin
   end;
 end;
 
+{ 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
+  unparseable entries ignored. Shared by the global Roots= and every
+  [Workspace.*] Roots=. }
 function ParseRootsList(const ARaw: string;
   var ARechazadas: TArray<string>): TArray<string>;
 var
