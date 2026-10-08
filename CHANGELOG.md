@@ -43,6 +43,14 @@ the MCP `initialize` response (`serverInfo.version`).
   and the Python SDK reopened it every second. A dead session still gets
   its `404` first; a GET without the event-stream `Accept` still gets the
   endpoint's card. `test_resultados` E94b.
+- **When the engine crashes on a file with no project, the answer says
+  where to go.** DelphiLSP outside a project cannot read two overloads of
+  equal arity that differ only in `TArray<string>` and `string` and answers
+  `-32603` (measured on 13.1; next to its `.dproj` the same unit answers).
+  The `LSP-022` error now carries `LSP-036` ("outside a project; next to
+  its .dproj it usually answers") when the file has no project settings;
+  the two places that composed the error share one helper.
+  `docs/DELPHILSP-NOTES.md` records it; `test_round16` S6/S6b.
 
 ### Internal
 

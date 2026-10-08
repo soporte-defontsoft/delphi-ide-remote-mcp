@@ -297,6 +297,19 @@ const
   CONTENIDO_DE_SYMBOLS: array [0 .. 5] of string = ('decl', 'name', 'detail',
     'ident', 'symbols', 'uses');
 
+{ EL error del motor con su nota: LSP-022 y, si revento (-32603) con un
+  fichero sin proyecto (la nota trae LSP-021), la pista LSP-036 - junto a su
+  .dproj suele contestar (8-oct-2026). Lo componian a mano RenderResult y
+  symbols. }
+function ErrorDelMotor(AErr: TJSONValue; const ANote: string): string;
+begin
+  Result := MsgFmt(SR_LSP_ERROR_FMT, [AErr.ToJSON]);
+  if (AErr is TJSONObject) and (TJSONObject(AErr).GetValue<Integer>('code', 0) = -32603) and
+     HasMsg(ANote, SN_LSP_NO_SETTINGS_WARNING) then
+    Result := Result + MsgText(SN_LSP_HINT_SIN_PROYECTO);
+  Result := Result + ANote;
+end;
+
 { Extracts "result" from a full JSON-RPC response and renders it, adding a
   filesystem path next to any "uri" for agent convenience. Frees AResp. }
 function RenderResult(AResp: TJSONObject; const ANote: string): string;
@@ -307,7 +320,7 @@ begin
   try
     Err := AResp.GetValue('error');
     if Err <> nil then
-      Exit(MsgFmt(SR_LSP_ERROR_FMT, [Err.ToJSON]) + ANote);
+      Exit(ErrorDelMotor(Err, ANote));
     V := AResp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
       Exit(MsgText(SN_LSP_NULL_NOTE) + ANote);
@@ -1061,7 +1074,7 @@ begin
   try
     var Err := Resp.GetValue('error');
     if Err <> nil then
-      Exit(MsgFmt(SR_LSP_ERROR_FMT, [Err.ToJSON]) + Note);
+      Exit(ErrorDelMotor(Err, Note));
     var V := Resp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
       Exit(MsgText(SN_LSP_NULL_NOTE) + Note);

@@ -79,7 +79,27 @@ open(os.path.join(BASE, 'Small.pas'), 'w').write(
     'unit Small;\ninterface\nprocedure Uno;\nimplementation\n'
     'procedure Uno;\nbegin\nend;\nend.\n')
 
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='round16')
+# S6: la unidad minima medida el 8-oct-2026 (vault, decisions/delphilsp-
+# sobrecargas-sin-proyecto): dos sobrecargas de igual aridad que solo difieren
+# en TArray<string> frente a string. Fuera de un proyecto el motor revienta
+# (-32603); en una raiz SUYA, sin .dproj por encima (FindDproj sube hasta el
+# borde de la jaula)
+SUELTA = mc.carpeta('round16-suelta')
+UMINI = '\n'.join([
+    'unit UMini;', '', 'interface', '',
+    'function WalkFiles(const ADir: string; const AMasks: TArray<string>;',
+    '  AConPapelera: Boolean = False): TArray<string>; overload;',
+    'function WalkFiles(const ADir, AMask: string;',
+    '  AConPapelera: Boolean = False): TArray<string>; overload;', '',
+    'implementation', '',
+    'function WalkFiles(const ADir: string; const AMasks: TArray<string>;',
+    '  AConPapelera: Boolean): TArray<string>;', 'begin', '  Result := nil;', 'end;', '',
+    'function WalkFiles(const ADir, AMask: string;', '  AConPapelera: Boolean): TArray<string>;',
+    'begin', '  Result := WalkFiles(ADir, TArray<string>.Create(AMask), AConPapelera);', 'end;', '',
+    'end.', ''])
+open(os.path.join(SUELTA, 'UMini.pas'), 'w').write(UMINI)
+
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE + ';' + SUELTA}), nombre='round16')
 call = srv.call
 
 
@@ -231,6 +251,18 @@ check('S4 filter encuentra el simbolo con kind, linea y contenedor',
 r = call('delphi_symbols', {'path': big, 'mode': 'arbol'})
 check('S5 mode invalido se rechaza explicando los validos',
       mc.resultado(r) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(r, 'SR_LSP_MODE_DEBE_SER_SUMMARY') and 'summary' in r and 'full' in r, r)
+
+# S6 el motor revienta con la unidad minima SIN proyecto: el error lo dice
+# (LSP-022) y la pista dice por donde seguir (LSP-036, 1.18.0)
+r = call('delphi_symbols', {'path': os.path.join(SUELTA, 'UMini.pas')})
+check('S6 sin proyecto el motor revienta (-32603) y la respuesta lo explica: LSP-022 + LSP-036',
+      mc.es(r, 'SR_LSP_ERROR_FMT') and mc.es(r, 'SN_LSP_HINT_SIN_PROYECTO') and '-32603' in r, r[:300])
+# ...y junto a un .dproj (el SecCfg de C1) la misma unidad se lee, sin la pista
+open(os.path.join(BASE, 'UMini.pas'), 'w').write(UMINI)
+r = call('delphi_symbols', {'path': os.path.join(BASE, 'UMini.pas')})
+check('S6b junto a su .dproj la misma unidad contesta, sin LSP-022 ni LSP-036',
+      not mc.es(r, 'SR_LSP_ERROR_FMT') and not mc.es(r, 'SN_LSP_HINT_SIN_PROYECTO') and 'WalkFiles' in r,
+      r[:300])
 
 srv.mata()
 mc.fin('round-16 battery')

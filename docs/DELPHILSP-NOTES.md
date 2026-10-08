@@ -69,6 +69,12 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   a valid 14-line unit waited 4.5 minutes, one with a syntax error 80 seconds): the linter needs a
   project. A unit that no project lists but that lives next to one IS linted with that project's
   settings (`E2029` at once). The server answers `LSP-035` instead of waiting, and starts no engine.
+- **Outside a project the engine crashes on two overloads of equal arity that differ only in
+  `TArray<string>` and `string`** (measured 2026-10-08 on 13.1): `documentSymbol` answers
+  `-32603 "Internal server error"`, deterministically, even for a 23-line unit holding just
+  those two overloads. Next to a `.dproj` (with its settings) the same unit answers. The server
+  adds `LSP-036` to the error (`LSP-022`) when the file has no project settings; retrying next
+  to the project is the agent's call.
 - Without keeping stdin open the process exits before answering (pipe-close on EOF).
 - **Closing stdin with a request in flight crashes the agent** (measured 2026-09-30, engine
   launched by hand): access violation `0xC0000005` in `dcc64370.dll`, 8 of 8 with a `definition`

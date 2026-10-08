@@ -7021,6 +7021,14 @@ const
   SR_LSP_ERROR_FMT =
     '[LSP-022 INTERNAL] LSP error: %s';
 
+  { El motor revento (-32603) con un fichero SIN proyecto al lado: medido el
+    8-oct-2026, DelphiLSP fuera de un proyecto no resuelve TArray<string> y
+    cae con dos sobrecargas de igual aridad que solo difieren en eso; junto
+    a su .dproj contesta. Se dice; reintentar es cosa del agente. }
+  SN_LSP_HINT_SIN_PROYECTO =
+    ' [LSP-036] [hint: the engine failed on this file OUTSIDE a project; ' +
+    'next to its .dproj it usually answers]';
+
   SN_LSP_HINT_INSIDE_CALL =
     ' [LSP-023] [hint: the position must be INSIDE the call parentheses, ' +
     'right after ( or ,]';
