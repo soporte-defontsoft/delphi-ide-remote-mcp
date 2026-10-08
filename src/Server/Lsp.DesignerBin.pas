@@ -143,7 +143,7 @@ uses
   System.Generics.Collections,
   Lsp.Pascal, // EL identificador: la linea de una propiedad
   Lsp.DesignerForma, // la forma del fichero: texto, TPF0 o recurso
-  Lsp.Patch, // EncName / EncKindOf: los nombres de las codificaciones
+  Lsp.Codificacion, // EncName / EncKindOf: los nombres de las codificaciones
   Lsp.Texts;
 
 function TrozosDeLiteral(const S: string): TArray<string>;

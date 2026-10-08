@@ -142,7 +142,8 @@ uses
   Lsp.Settings in 'Lsp.Settings.pas',
   Lsp.Identidad in 'Lsp.Identidad.pas',
   Lsp.TodoONada in 'Lsp.TodoONada.pas',
-  Lsp.Args in 'Lsp.Args.pas';
+  Lsp.Args in 'Lsp.Args.pas',
+  Lsp.Codificacion in 'Lsp.Codificacion.pas';
 
 {$R *.res}
 

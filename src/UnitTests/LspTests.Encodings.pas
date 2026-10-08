@@ -54,7 +54,8 @@ implementation
 uses
   System.SysUtils,
   Lsp.Guard, // ParametroQueNoVa
-  Lsp.Patch;
+  Lsp.Patch,
+  Lsp.Codificacion;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin

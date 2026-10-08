@@ -150,7 +150,7 @@ uses
   Lsp.Chm,
   Lsp.Discovery,
   Lsp.Guard,     // IdeMacroVars + ExpandIdeMacros: la lista del IDE trae $(BDS)
-  Lsp.Patch,     // DecodeBytes: EL decodificador
+  Lsp.Codificacion, // DecodeBytes: EL decodificador
   Lsp.Texts,     // SF_DOCS_ANCESTROS_FMT
   System.Character,
   Lsp.Pascal;
@@ -227,8 +227,9 @@ end;
 
 { CUAL es el juego de caracteres de un fichero de la ayuda, por su senal: el
   BOM o el meta de su cabecera; si no, Windows-1252. Decodifica EL
-  decodificador (Lsp.Patch.DecodeBytes, con su CP1252 compartido: crear uno
-  por bloque del indice caia en el bucle de la busqueda; revision 1.10.0). }
+  decodificador (Lsp.Codificacion.DecodeBytes, con su CP1252 compartido:
+  crear uno por bloque del indice caia en el bucle de la busqueda; revision
+  1.10.0). }
 function KindDeAyuda(const ABytes: TArray<Byte>): TEncKind;
 var
   Cabeza: string;

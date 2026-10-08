@@ -10,9 +10,9 @@ unit Lsp.Settings;
 
   Sale de Lsp.Guard el 8-oct-2026 (la 1.18.0, la version de la limpieza),
   movido sin cambiar una linea de logica. Debajo tiene Lsp.Rutas y
-  Lsp.Casa (la ruta del settings.ini) y, de momento, Lsp.Patch por
-  BomUtf8En (el BOM delante de una cabecera de seccion): un ciclo con
-  Lsp.Patch que se va cuando las codificaciones salgan a su unidad. La
+  Lsp.Casa (la ruta del settings.ini) y Lsp.Codificacion por BomUtf8En
+  (el BOM delante de una cabecera de seccion; era Lsp.Patch, un ciclo que
+  se fue cuando las codificaciones salieron a su unidad, el mismo dia). La
   jaula pregunta aqui y aqui no se pregunta a la jaula. Lo nuevo de la
   mudanza son cinco lectores de una o
   dos lineas (RaicesDeLosWorkspaces, RaicesDelModoLocal, RemoteProjectsNow,
@@ -279,7 +279,7 @@ uses
   MCPServer.Types,      // BearerToken: UN lector de la cabecera Authorization
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Texts,
-  Lsp.Patch,            // BomUtf8En (de momento: ver la cabecera)
+  Lsp.Codificacion,     // BomUtf8En: el BOM delante de una cabecera de seccion
   Lsp.Rutas,
   Lsp.Casa;             // ServerDir: la casa del settings.ini
 

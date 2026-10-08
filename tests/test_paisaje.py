@@ -105,6 +105,26 @@ REGLAS = [
      [('Lsp.DesignerBin.pas', 'FlotanteDeForm')],
      'FlotanteDeForm: el numero de coma flotante como lo escribe el IDE en UN sitio (1.17.0: insert, '
      'set y las plantillas FMX)'),
+    ('decidir la codificacion de unos bytes',
+     r'\bGetBufferEncoding\b|\$FF\b[^;]*\$FE\b|\$FE\b[^;]*\$FF\b|\$EF\b[^;]*\$BB\b|\$BB\b[^;]*\$BF\b',
+     [('Lsp.Patch.pas', 'DetectEnc'), ('Lsp.Codificacion.pas', 'BomUtf8En'),
+      ('Lsp.Codificacion.pas', 'EncodeText'),
+      # deuda declarada (2.1g de la 1.18.0): dos detectores sueltos; solo puede encoger
+      ('Lsp.DesignerForma.pas', 'DesignerAFlujo'), ('Lsp.Docs.pas', 'KindDeAyuda')],
+     'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
+     'escribe): nadie mas mira unos bytes para decidir que son (24-sep-2026: dos detectores; 1.18.0: '
+     'los codecs salen a Lsp.Codificacion y la decision se queda en Patch)'),
+    ('UTF-8 estricto preguntado a mano', r'\bValidUtf8\s*\(',
+     [('Lsp.Patch.pas', 'DetectEnc'), ('Lsp.Patch.pas', 'ExecutePatch')],
+     'ValidUtf8 lo preguntan el detector y la auditoria del cuerpo de un utf8-bom: otro que lo '
+     'pregunte esta decidiendo una codificacion por su cuenta'),
+    ('el codec CP1252', r'GetEncoding\s*\(\s*1252\s*\)',
+     [('Lsp.Codificacion.pas', '*'),
+      # deuda declarada (2.1g de la 1.18.0): Docs crea el suyo en cada llamada para medir
+      # bytes; se va con un parametro de EncodeText (sustitucion), no con un hermano
+      ('Lsp.Docs.pas', 'BytesMin')],
+     'GCp1252: UN codec compartido (revision de la 1.10.0: crear uno por bloque del indice caia en '
+     'el bucle de la busqueda)'),
 ]
 
 
@@ -197,6 +217,9 @@ PLANTADO = {
     'la linea de objeto de un form': "  L := 'object ' + Nombre + ': ' + Clase;",
     'un componente por su ruta en el renderizador': "  C := FindNestedComponent(ARaiz, ANombre);",
     'un flotante de un form': "  V := IntToStr(N) + '.000000000000000000';",
+    'decidir la codificacion de unos bytes': "  if (B[0] = $FF) and (B[1] = $FE) then K := ekUtf16LE;",
+    'UTF-8 estricto preguntado a mano': "  if ValidUtf8(B, 0) then K := ekUtf8;",
+    'el codec CP1252': "  E := TEncoding.GetEncoding(1252);",
 }
 for regla in REGLAS:
     nombre = regla[0]

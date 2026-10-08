@@ -63,6 +63,19 @@ the MCP `initialize` response (`serverInfo.version`).
     declared remotes) and `Lsp.Casa` (the server's temp folder).
     `GitArgDenied` is now in an interface: the jail's entry gate calls it
     from another unit.
+  - The codecs go to **`Lsp.Codificacion`**: the encoding kinds
+    (`TEncKind`), their names (`EncName` / `EncKindOf`), the BOM bytes
+    (`PreambleLen`, `BomUtf8En`), strict UTF-8 (`ValidUtf8`), the decoder
+    and the encoder (`DecodeBytes` / `EncodeText`, with `ECaracterNoCabe`)
+    and the one CP1252 codec they share. They are pure: DECIDING what
+    encoding some bytes are stays in `Lsp.Patch` (`DetectEnc`, which asks
+    the IDE about plain ASCII), and `test_paisaje` now pins it there:
+    nobody else reads a BOM or calls `GetBufferEncoding`, only the detector
+    and the utf8-bom audit ask `ValidUtf8`, and the CP1252 codec is created
+    in one place. Two loose detectors and a second CP1252 codec are
+    declared debt that can only shrink. The cycle between `Lsp.Settings`
+    and `Lsp.Patch` is gone, and `Lsp.Docs` and `Lsp.DesignerBin` no longer
+    use `Lsp.Patch`.
 - `test_round16` measures the symbols summary against a frozen copy of
   `Lsp.Guard.pas` (commit 6544a95, in `tests/fixtures/`): the live unit
   changes with this cleanup, and the summary-to-tree ratio had already
