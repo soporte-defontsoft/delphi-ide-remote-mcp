@@ -102,7 +102,7 @@ function HostDePerfil(const AVersion, AName: string; out AMotivo: string): strin
 function HostDePerfil(const AVersion, AName: string): string; overload;
 
 { '' si este servidor PUEDE marcar el host del perfil AProfName: la puerta de
-  RemoteHosts (ProbeHostDenied en Lsp.Guard) con el host leido del perfil.
+  RemoteHosts (ProbeHostDenied en Lsp.Settings) con el host leido del perfil.
   Falla CERRADO: sin Delphi, perfil que no existe, que no se lee o sin host ->
   niega con su motivo (hasta la 1.15 dejaba pasar los cuatro). La llaman
   delphi_paserver, remote-run y el deploy de delphi_build. }
@@ -236,6 +236,29 @@ function VersionDeFichero(const AExe: string): string;
   Integer o Int64) y lo que va bajo un IFDEF de la CPU. }
 function PlataformaDelIde(const ARootDir: string): string;
 
+{ The IDE's macro table for one installation ($(BDS), $(BDSLIB),
+  $(BDSUSERDIR), $(BDSCOMMONDIR), $(BDSCatalogRepository)...), the same one
+  the library zone is built from. ADest receives Name=Value pairs. }
+procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
+
+{ The IDE's Library Search Path of ONE platform, every entry expanded to a
+  real folder (macros resolved, no trailing delimiter), in registry order.
+  Entries that still carry an unresolved macro or are not rooted are left
+  out. What "delphi_components platform=X" shows and what the F2613 helper
+  of delphi_build compares against. AValor es la lista del IDE que se lee:
+  'Search Path' (la de siempre) o 'Browsing Path', la del fuente que el IDE
+  ensena (las tablas del disenador leen las dos: Lsp.DesignerMetaGen). De
+  ESA instalacion, la que se le da - la del servidor, DiscoverRadStudio:
+  hasta el 5-oct-2026 la buscaba por su numero entre todas. }
+function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
+  const AValor: string = 'Search Path'): TArray<string>;
+
+{ Expands $(NAME) macros with the IDE's environment table (AVars as
+  NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
+  path vetting of delphi_config: a path with macros must resolve before the
+  jail can judge it. }
+function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
+
 implementation
 
 uses
@@ -246,7 +269,6 @@ uses
   System.Generics.Collections,
   System.Generics.Defaults,
   System.Win.Registry,
-  Lsp.Guard, // ProbeHostDenied
   Lsp.Texts,
   Lsp.Dproj, // TagValue: EL lector de los tags del .profile
   Winapi.Windows,
@@ -914,6 +936,91 @@ begin
   // 3. el default documentado. UNICO literal, y aqui.
   Result := TPath.Combine(TPath.Combine(TPath.Combine(
     TPath.GetDocumentsPath, 'Embarcadero'), 'Studio'), 'SDKs');
+end;
+
+{ Expands $(MACRO) against the IDE's own macro table (plus the few values
+  that live outside it), repeatedly, since macros nest. Case-insensitive. }
+function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
+var
+  Pass, I: Integer;
+  Name: string;
+begin
+  Result := AText;
+  for Pass := 1 to 4 do
+  begin
+    if not Result.Contains('$(') then
+      Break;
+    for I := 0 to AVars.Count - 1 do
+    begin
+      Name := AVars.Names[I];
+      if Name <> '' then
+        Result := Result.Replace('$(' + Name + ')', AVars.ValueFromIndex[I],
+          [rfReplaceAll, rfIgnoreCase]);
+    end;
+  end;
+end;
+
+procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
+var
+  UserDocs, CommonDocs: string;
+begin
+  // The IDE's own macro table is authoritative: it carries
+  // $(BDSCatalogRepositoryAllUsers), where the GetIt packages live
+  // (FmxLinux, Android SDKs, PAServer installers). Without it those
+  // paths were silently dropped - measured 2026-08-19.
+  IdeEnvironmentVars(AInfo.Version, ADest);
+  // Values that are NOT in that key (authoritative from rsvars.bat /
+  // the install itself), added without overwriting the IDE's own.
+  if ADest.Values['BDS'] = '' then
+    ADest.Values['BDS'] := PrefijoSinBarra(AInfo.RootDir);
+  if ADest.Values['BDSLIB'] = '' then
+    ADest.Values['BDSLIB'] := PrefijoSinBarra(AInfo.RootDir) + '\lib';
+  UserDocs := BdsUserDir(AInfo);
+  if (UserDocs <> '') and (ADest.Values['BDSUSERDIR'] = '') then
+    ADest.Values['BDSUSERDIR'] := UserDocs;
+  CommonDocs := BdsCommonDir(AInfo);
+  if (CommonDocs <> '') and (ADest.Values['BDSCOMMONDIR'] = '') then
+    ADest.Values['BDSCOMMONDIR'] := CommonDocs;
+  // Per-user catalog repository: sibling of the common one, under the
+  // user's own documents root (the IDE exposes only the AllUsers one).
+  if (ADest.Values['BDSCatalogRepository'] = '') and (UserDocs <> '') then
+    ADest.Values['BDSCatalogRepository'] :=
+      IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
+end;
+
+function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
+  const AValor: string): TArray<string>;
+var
+  Vars, List: TStringList;
+  Item, Expanded: string;
+begin
+  Result := nil;
+  if not AInfo.Found then
+    Exit;
+  Vars := TStringList.Create;
+  List := TStringList.Create;
+  try
+    IdeMacroVars(AInfo, Vars);
+    Vars.Values['Platform'] := APlatform;
+    for Item in IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor).Split([';']) do
+    begin
+      Expanded := ExpandIdeMacros(Item.Trim, Vars);
+      if (Expanded = '') or Expanded.Contains('$(') or
+         not TPath.IsPathRooted(Expanded) then
+        Continue;
+      try
+        Expanded := PrefijoSinBarra(TPath.GetFullPath(Expanded));
+      except
+        Continue;
+      end;
+      if List.IndexOf(Expanded) < 0 then
+        List.Add(Expanded);
+    end;
+    Result := List.ToStringArray;
+  finally
+    List.Free;
+    Vars.Free;
+  end;
 end;
 
 initialization

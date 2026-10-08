@@ -54,7 +54,6 @@ uses
   MCPServer.Registration,
   Lsp.Discovery,
   Lsp.Dproj,
-  Lsp.Guard,
   Lsp.NetDrives;
 
 { The install root a registered library entry belongs to: one level above

@@ -149,7 +149,6 @@ uses
   System.Generics.Defaults,
   Lsp.Chm,
   Lsp.Discovery,
-  Lsp.Guard,     // IdeMacroVars + ExpandIdeMacros: la lista del IDE trae $(BDS)
   Lsp.Codificacion, // DecodeBytes: EL decodificador
   Lsp.Texts,     // SF_DOCS_ANCESTROS_FMT
   System.Character,

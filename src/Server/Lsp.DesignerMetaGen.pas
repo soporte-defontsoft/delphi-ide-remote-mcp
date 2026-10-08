@@ -233,7 +233,7 @@ uses
   Lsp.PascalDecl,
   Lsp.Pascal,           // CodigoPascal: el RTLVersion de System.pas
   Lsp.Patch,            // PatchLoadText: el fuente con su codificacion real
-  Lsp.Guard,            // IdePlatformLibraryPaths
+  Lsp.Guard,            // CrearCarpeta
   Lsp.ConfigFabricator, // DEFAULT_NAMESPACES
   Lsp.NetDrives,        // NotaAlLog
   Lsp.Texts,

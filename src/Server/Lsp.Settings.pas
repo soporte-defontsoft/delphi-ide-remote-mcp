@@ -219,6 +219,12 @@ function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
   del workspace activo (v0.98; medido que el perfil ajeno marcaba igual). }
 function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
 
+{ '' si este servidor PUEDE abrir una conexion TCP a AHost: SOLO los hosts de
+  RemoteProbeHosts del workspace activo ('*' / '0.0.0.0' = cualquiera). LA
+  puerta de red: test-connection, get-sdk, remote-run Y el deploy por perfil
+  (el .profile dice COMO conectar, el workspace dice SI). }
+function ProbeHostDenied(const AHost: string): string;
+
 { Whether the READ-ONLY library zone exists at all. Default True (reading the
   RTL and the installed components is what makes an agent competent here).
   LibraryZone=0 en el workspace lo corta: reads are then confined to the workspace
@@ -1418,6 +1424,29 @@ begin
   if HasActiveWS then
     Exit(ActiveWS.RemoteHosts);
   Result := GRemoteHosts.Trim;
+end;
+
+{ Medido 2026-08-25: la lista blanca que cerro el agujero de git dejaba esta
+  puerta abierta de par en par. `test-connection host=127.0.0.1 port=3131`
+  marcaba el propio puerto MCP, y cualquier host:port contestaba. Misma
+  primitiva, misma regla: SOLO lo que el operador escribio en RemoteHosts del
+  workspace activo. Desde v0.98 ni los hosts de los perfiles del IDE: el
+  perfil dice COMO conectar, el workspace dice SI. (Movida de
+  Mcp.Tools.PAServer a Lsp.Guard el 2026-10-06: la comparten las tools y el
+  deploy; y a Lsp.Settings, junto a la lista que lee, el 8-oct-2026.) }
+function ProbeHostDenied(const AHost: string): string;
+var
+  H, Allowed: string;
+begin
+  Result := '';
+  H := AHost.Trim.ToLower;
+  if H = '' then
+    Exit;
+  Allowed := RemoteProbeHosts;
+  for var A in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
+    if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
+      Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
+  Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim, ONinguno(Allowed)]);
 end;
 
 function AllowBuildScripts: Boolean;

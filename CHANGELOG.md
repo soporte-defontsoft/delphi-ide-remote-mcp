@@ -84,6 +84,13 @@ the MCP `initialize` response (`serverInfo.version`).
     WITH the trash (stamping, keeping, purging) stays in `Lsp.Patch`.
     `test_paisaje` pins the mark's extension to its one home, and
     `Lsp.Guard` now uses `Lsp.Patch` for a single thing (`PurgaAlPasar`).
+  - The IDE's macros go to **`Lsp.Discovery`**, which already reads the
+    rest of the IDE (`IdeMacroVars`, `ExpandIdeMacros`,
+    `IdePlatformLibraryPaths`), and the network gate `ProbeHostDenied` goes
+    to **`Lsp.Settings`**, next to the list it reads (`RemoteProbeHosts`).
+    `Lsp.Discovery` no longer uses `Lsp.Guard` - the cycle between the two
+    is gone - and neither do `Lsp.Docs` and `Mcp.Tools.Components`. This is
+    the first of four steps that take the drive mask out of `Lsp.Guard`.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

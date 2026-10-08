@@ -57,7 +57,7 @@ uses
   System.Hash,
   System.Generics.Collections,
   Lsp.Client, // PathToUri / UriToPath
-  Lsp.Guard,  // ExpandIdeMacros
+  Lsp.Guard,  // CrearCarpeta
   Lsp.Dproj,
   Lsp.Texts,
   Lsp.NetDrives,  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)

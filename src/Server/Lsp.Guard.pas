@@ -59,8 +59,7 @@ interface
 
 uses
   System.Classes,
-  System.JSON,
-  Lsp.Discovery; // TRadStudioInfo for IdeMacroVars
+  System.JSON;
 
 { '' = allowed; otherwise the rejection message to return to the agent.
   This is the WRITE jail: only the configured workspace roots. }
@@ -146,23 +145,6 @@ function RaizEnLetraNoConectada(const APath: string): string;
   writable - exposed so delphi_workspace can tell the agent what it may read
   besides the roots (field round 4, R4-B). }
 function LibraryReadRoots: TArray<string>;
-
-{ The IDE's macro table for one installation ($(BDS), $(BDSLIB),
-  $(BDSUSERDIR), $(BDSCOMMONDIR), $(BDSCatalogRepository)...), the same one
-  the library zone is built from. ADest receives Name=Value pairs. }
-procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
-
-{ The IDE's Library Search Path of ONE platform, every entry expanded to a
-  real folder (macros resolved, no trailing delimiter), in registry order.
-  Entries that still carry an unresolved macro or are not rooted are left
-  out. What "delphi_components platform=X" shows and what the F2613 helper
-  of delphi_build compares against. AValor es la lista del IDE que se lee:
-  'Search Path' (la de siempre) o 'Browsing Path', la del fuente que el IDE
-  ensena (las tablas del disenador leen las dos: Lsp.DesignerMetaGen). De
-  ESA instalacion, la que se le da - la del servidor, DiscoverRadStudio:
-  hasta el 5-oct-2026 la buscaba por su numero entre todas. }
-function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
-  const AValor: string = 'Search Path'): TArray<string>;
 
 { La casa de los ENTREGABLES del agente, dentro del workspace: el porque, con
   su hermana ServerTempDir, junto a su nombrador (TempFolderName, Lsp.Casa). }
@@ -722,12 +704,6 @@ function WriteTargetDenied(const APath: string): string;
   alli - si el resultado es que la carpeta esta, da igual quien la creo. }
 procedure CrearCarpeta(const ADir: string);
 
-{ '' si este servidor PUEDE abrir una conexion TCP a AHost: SOLO los hosts de
-  RemoteProbeHosts del workspace activo ('*' / '0.0.0.0' = cualquiera). LA
-  puerta de red: test-connection, get-sdk, remote-run Y el deploy por perfil
-  (el .profile dice COMO conectar, el workspace dice SI). }
-function ProbeHostDenied(const AHost: string): string;
-
 { '' when APath (a .dproj) may be executed remotely, else a refusal. La
   lista es la del workspace ACTIVO (RemoteRunProjects= en su seccion), sin
   herencia, y VACIA significa NADA ejecutable: fallar abierto aqui era la
@@ -879,12 +855,6 @@ function VirtualUnitLetter(const AValue: string): Char;
   pasada). }
 function EmpiezaPorUnidadVirtual(const AValue: string): Boolean;
 
-{ Expands $(NAME) macros with the IDE's environment table (AVars as
-  NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
-  path vetting of delphi_config: a path with macros must resolve before the
-  jail can judge it. }
-function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
-
 implementation
 
 uses
@@ -914,7 +884,8 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.Identidad,
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Discovery;
 
 threadvar
   TSalidaHecha: string; // lo que la tool de ESTA llamada ya enmascaro (EnmascaraSalvoContenido)
@@ -1045,29 +1016,6 @@ begin
       raise;
     end;
   end;
-end;
-
-{ Medido 2026-08-25: la lista blanca que cerro el agujero de git dejaba esta
-  puerta abierta de par en par. `test-connection host=127.0.0.1 port=3131`
-  marcaba el propio puerto MCP, y cualquier host:port contestaba. Misma
-  primitiva, misma regla: SOLO lo que el operador escribio en RemoteHosts del
-  workspace activo. Desde v0.98 ni los hosts de los perfiles del IDE: el
-  perfil dice COMO conectar, el workspace dice SI. (Movida de
-  Mcp.Tools.PAServer a Lsp.Guard el 2026-10-06: la comparten las tools y el
-  deploy.) }
-function ProbeHostDenied(const AHost: string): string;
-var
-  H, Allowed: string;
-begin
-  Result := '';
-  H := AHost.Trim.ToLower;
-  if H = '' then
-    Exit;
-  Allowed := RemoteProbeHosts;
-  for var A in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
-    if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
-      Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
-  Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim, ONinguno(Allowed)]);
 end;
 
 function RemoteRunProjectDenied(const APath: string): string;
@@ -3765,91 +3713,6 @@ var
 
 { The read-only library zone: RAD Studio installation + IDE Library Search
   Path directories (installed components), canonicalized. Cached. }
-{ Expands $(MACRO) against the IDE's own macro table (plus the few values
-  that live outside it), repeatedly, since macros nest. Case-insensitive. }
-function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
-var
-  Pass, I: Integer;
-  Name: string;
-begin
-  Result := AText;
-  for Pass := 1 to 4 do
-  begin
-    if not Result.Contains('$(') then
-      Break;
-    for I := 0 to AVars.Count - 1 do
-    begin
-      Name := AVars.Names[I];
-      if Name <> '' then
-        Result := Result.Replace('$(' + Name + ')', AVars.ValueFromIndex[I],
-          [rfReplaceAll, rfIgnoreCase]);
-    end;
-  end;
-end;
-
-procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
-var
-  UserDocs, CommonDocs: string;
-begin
-  // The IDE's own macro table is authoritative: it carries
-  // $(BDSCatalogRepositoryAllUsers), where the GetIt packages live
-  // (FmxLinux, Android SDKs, PAServer installers). Without it those
-  // paths were silently dropped - measured 2026-08-19.
-  IdeEnvironmentVars(AInfo.Version, ADest);
-  // Values that are NOT in that key (authoritative from rsvars.bat /
-  // the install itself), added without overwriting the IDE's own.
-  if ADest.Values['BDS'] = '' then
-    ADest.Values['BDS'] := PrefijoSinBarra(AInfo.RootDir);
-  if ADest.Values['BDSLIB'] = '' then
-    ADest.Values['BDSLIB'] := PrefijoSinBarra(AInfo.RootDir) + '\lib';
-  UserDocs := BdsUserDir(AInfo);
-  if (UserDocs <> '') and (ADest.Values['BDSUSERDIR'] = '') then
-    ADest.Values['BDSUSERDIR'] := UserDocs;
-  CommonDocs := BdsCommonDir(AInfo);
-  if (CommonDocs <> '') and (ADest.Values['BDSCOMMONDIR'] = '') then
-    ADest.Values['BDSCOMMONDIR'] := CommonDocs;
-  // Per-user catalog repository: sibling of the common one, under the
-  // user's own documents root (the IDE exposes only the AllUsers one).
-  if (ADest.Values['BDSCatalogRepository'] = '') and (UserDocs <> '') then
-    ADest.Values['BDSCatalogRepository'] :=
-      IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
-end;
-
-function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
-  const AValor: string): TArray<string>;
-var
-  Vars, List: TStringList;
-  Item, Expanded: string;
-begin
-  Result := nil;
-  if not AInfo.Found then
-    Exit;
-  Vars := TStringList.Create;
-  List := TStringList.Create;
-  try
-    IdeMacroVars(AInfo, Vars);
-    Vars.Values['Platform'] := APlatform;
-    for Item in IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor).Split([';']) do
-    begin
-      Expanded := ExpandIdeMacros(Item.Trim, Vars);
-      if (Expanded = '') or Expanded.Contains('$(') or
-         not TPath.IsPathRooted(Expanded) then
-        Continue;
-      try
-        Expanded := PrefijoSinBarra(TPath.GetFullPath(Expanded));
-      except
-        Continue;
-      end;
-      if List.IndexOf(Expanded) < 0 then
-        List.Add(Expanded);
-    end;
-    Result := List.ToStringArray;
-  finally
-    List.Free;
-    Vars.Free;
-  end;
-end;
-
 function LibraryRoots: TArray<string>;
 var
   Info: TRadStudioInfo;
