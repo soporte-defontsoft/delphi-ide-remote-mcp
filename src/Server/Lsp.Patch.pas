@@ -2506,7 +2506,7 @@ begin
             end;
             // "desde %s" sale al agente y delphi_edit esta EXENTA del filtro de
             // salida: la mascara va A MANO aqui y en el RESTAURADO de abajo,
-            // como en BackupFile (la obligacion de la lista, ver Lsp.Guard).
+            // como en BackupFile (la obligacion de la lista, ver Lsp.Mascara).
             // La copia es la PRIMERA del dia de ese fichero y no sabe de quien
             // es: si otro agente lo edito despues, restaurar se lleva TAMBIEN
             // su trabajo. Decision de David (24-sep-2026): no se hace una copia

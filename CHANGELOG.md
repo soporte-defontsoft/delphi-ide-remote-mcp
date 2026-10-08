@@ -110,7 +110,8 @@ the MCP `initialize` response (`serverInfo.version`).
     `Lsp.Guard` no longer uses `Lsp.Discovery`. `test_paisaje` now keeps the
     raw lists of places (`WorkspaceRoots`, `WorkspaceReadOnlyRoots`,
     `WorkspaceReadOnlyPaths`, `LugaresDeclarados`, `LibraryRoots`,
-    `TodosLosVaults`, `RaicesDeLosWorkspaces`, `RaicesDelModoLocal`,
+    `LibraryReadRoots`, `TodosLosVaults`, `RaicesDeLosWorkspaces`,
+    `RaicesDelModoLocal`,
     `SitiosQueNoSeTocan`) in `Lsp.Settings`, which reads them, and
     `Lsp.Lugares`, which walks them; the 21 routines in seven units that walk
     them on their own today are declared debt, by routine, that can only
@@ -139,8 +140,10 @@ the MCP `initialize` response (`serverInfo.version`).
   code does not do, six `uses` left with nothing to use, a second name for
   the trash folder in `Mcp.Tools.FileOps`, and the raw-lists rule, which
   missed three lists. `test_paisaje` now also checks that every declared
-  home still holds its format, so the declared debt can only shrink: four
-  homes that held nothing are gone, each for its own reason.
+  home still holds its format, so the declared debt can only shrink. Of the
+  four homes that held nothing, three are gone, each for its own reason, and
+  `FlotanteDeForm`'s stays: the rule now sees how it writes the eighteen
+  zeros (`StringOfChar('0', 18)`), so a copy written the same way is caught.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

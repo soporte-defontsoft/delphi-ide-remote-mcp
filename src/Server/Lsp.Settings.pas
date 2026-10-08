@@ -267,11 +267,12 @@ function AdbTargetAllowed(const ATarget: string): Boolean;
 function RaicesDeLosWorkspaces: TArray<string>;
 function RaicesDelModoLocal: TArray<string>;
 { Lo que vale para ESTA sesion: los proyectos que remote-run puede ejecutar
-  (RemoteRunProjects=: los del workspace activo, o los del modo local si no
-  hay workspace; uno no hereda del otro), la lista explicita de tools que se
-  anuncian ([Tools] Only=: UNA, de todo el servidor, tambien para las
-  sesiones con workspace) y el perfil de tools (el del workspace si declara
-  uno; si no, el de [Tools]). }
+  (los RemoteRunProjects= del [Workspace.<nombre>] activo o, sin workspace,
+  los de DELPHI_MCP_REMOTE_RUN_PROJECTS del modo local; uno no hereda del
+  otro), la lista explicita de tools que se anuncian (DELPHI_MCP_TOOLS_ONLY,
+  o si no [Tools] Only=: UNA, de todo el servidor, tambien para las sesiones
+  con workspace) y el perfil de tools (el del workspace si declara uno; si
+  no, DELPHI_MCP_TOOLS_PROFILE o [Tools] Profile=). }
 function RemoteProjectsNow: TArray<string>;
 function ToolsOnly: TArray<string>;
 function ToolsProfileNow: string;
@@ -369,7 +370,7 @@ var
   GAllowTests: Boolean = False;     // running test suites is opt-in too
   GGitRemotes: string = '';         // hosts an explicit git URL may name
   GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
-  GRemoteProjects: TArray<string>;  // RemoteRunProjects del [Workspace] por defecto
+  GRemoteProjects: TArray<string>;  // los del modo local (DELPHI_MCP_REMOTE_RUN_PROJECTS)
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAgentConfinement: Boolean = False; // each agent to its own subfolder: OFF by default
   // [Tools] Profile: which tools appear in tools/list (all stay callable).

@@ -107,9 +107,8 @@ REGLAS = [
      [('FormRender.Comun.pas', 'ComponenteDeRuta')],
      'ComponenteDeRuta: UN lector de Marco1.LblAviso, y de la raiz delante, para component= y state= '
      '(segunda revision de la 1.17.0: el estado de un frame suelto con su nombre delante no llegaba)'),
-    ('un flotante de un form', r"\.0{18}'|ffFixed\s*,\s*16\s*,\s*18",
-     # sin casa: FlotanteDeForm saca sus cifras (CifrasExactas), sin FloatToStrF ni el literal
-     [],
+    ('un flotante de un form', r"\.0{18}'|ffFixed\s*,\s*16\s*,\s*18|StringOfChar\s*\(\s*'0'\s*,\s*18\s*\)",
+     [('Lsp.DesignerBin.pas', 'FlotanteDeForm')],
      'FlotanteDeForm: el numero de coma flotante como lo escribe el IDE en UN sitio (1.17.0: insert, '
      'set y las plantillas FMX)'),
     ('decidir la codificacion de unos bytes',
@@ -133,7 +132,7 @@ REGLAS = [
      'GCp1252: UN codec compartido (revision de la 1.10.0: crear uno por bloque del indice caia en '
      'el bucle de la busqueda)'),
     ('las listas crudas de los sitios',
-     r'\b(?:WorkspaceRoots|WorkspaceReadOnlyRoots|WorkspaceReadOnlyPaths|LugaresDeclarados|LibraryRoots|'
+     r'\b(?:WorkspaceRoots|WorkspaceReadOnlyRoots|WorkspaceReadOnlyPaths|LugaresDeclarados|LibraryRoots|LibraryReadRoots|'
      r'TodosLosVaults|RaicesDeLosWorkspaces|RaicesDelModoLocal|SitiosQueNoSeTocan)\b',
      [('Lsp.Settings.pas', '*'), ('Lsp.Lugares.pas', '*'),
       # deuda declarada (2.1c de la 1.18.0): quien recorre los sitios por su cuenta
