@@ -114,8 +114,9 @@ uses
   System.SyncObjs,
   System.IOUtils,
   MCPServer.Logger,
-  Lsp.Guard,
-  Lsp.Texts; // ServerDir, LogIniSettings, CrearCarpeta, EsEnlace
+  Lsp.Guard, // LogIniSettings, CrearCarpeta, EsEnlace
+  Lsp.Texts,
+  Lsp.Casa;  // ServerDir
 
 const
   LIVE_LOG_NAME = 'actual.log';

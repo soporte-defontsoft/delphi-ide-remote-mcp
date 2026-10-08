@@ -60,7 +60,7 @@ REGLAS = [
      [('Lsp.Discovery.pas', 'NombreDeSdk'), ('Lsp.Discovery.pas', 'NombreSinSdk')],
      'NombreSinSdk es la inversa; "es un .sdk" se pregunta al nombrador'),
     ('__delphi-temp', r"'__delphi-temp",
-     [('Lsp.Guard.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
+     [('Lsp.Casa.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
     ('__delphi-patch', r"'__delphi-patch",
      [('Lsp.Patch.pas', '*')], 'BACKUP_SUB / TrashFolderName'),
     ("la forma 'srvX:'", r"'srv'",

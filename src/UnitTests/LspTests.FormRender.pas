@@ -57,7 +57,8 @@ uses
   Lsp.FormRender,
   Lsp.Guard,
   Lsp.Texts,
-  FormRender.Comun; // del ayudante (src\Render): el escritor del protocolo y lo que no crea ventanas
+  FormRender.Comun, // del ayudante (src\Render): el escritor del protocolo y lo que no crea ventanas
+  Lsp.Casa;
 
 type
   // el "control" del framework para NoVisualesDe, sin VCL ni FMX

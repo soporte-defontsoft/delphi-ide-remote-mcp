@@ -152,7 +152,8 @@ uses
   Lsp.Patch,     // DecodeSourceBytes: el lector de la casa
   Lsp.Dproj,     // TagValue: el lector del .profile
   Lsp.Texts,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Casa;
 
 var
   GNodoLock: TCriticalSection;
@@ -460,7 +461,7 @@ begin
   // Timestamp alone collided when two agents fired remote-run in the same
   // millisecond (hermes, release audit 2026-08-26, P2.8). The GUID fragment
   // makes each operation's files unique while the prefix stays sortable.
-  // Por EL nombrador (Lsp.Guard.SelloUnico): la nota del deploy bloqueado
+  // Por EL nombrador (Lsp.Casa.SelloUnico): la nota del deploy bloqueado
   // lo busca con su patron.
   JobId := SelloUnico;
   // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a

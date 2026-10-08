@@ -99,10 +99,10 @@ uses
   System.Classes,
   System.StrUtils,
   System.Win.Registry,
-  Lsp.Guard, // ServerDir y ClaveDeCarpeta: la marca de esta casa
   MCPServer.Logger,
   Lsp.Texts,
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.Casa; // ServerDir y ClaveDeCarpeta: la marca de esta casa
 
 var
   GSpawnLock: TObject;

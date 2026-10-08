@@ -280,9 +280,9 @@ try:
     # La promesa de Lsp.References.pas ("que los dos digan lo mismo no se
     # deja a la buena fe: lo comprueba la bateria") no la comprobaba nadie
     # hasta la auditoria. Esta es esa comprobacion: el nombrador
-    # (TempFolderName, Lsp.Guard) y el lector literal (CARPETAS_ARTEFACTO)
+    # (TempFolderName, Lsp.Casa) y el lector literal (CARPETAS_ARTEFACTO)
     # tienen que decir la misma carpeta.
-    g_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Guard.pas'), 'rb').read().decode('utf-8', 'replace')
+    g_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Casa.pas'), 'rb').read().decode('utf-8', 'replace')
     r_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.References.pas'), 'rb').read().decode('utf-8', 'replace')
     check('T6c el literal del lector coincide con el nombrador',
           "Result := '__delphi-temp';" in g_src and "'\\__delphi-temp\\'" in r_src,

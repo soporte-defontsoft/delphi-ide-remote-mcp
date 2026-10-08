@@ -104,7 +104,8 @@ uses
   Lsp.ProjectUnits,
   Lsp.ProcessLaunch,
   Lsp.Regex,
-  Lsp.References; // SkipIdeArtifacts: lo que no es fuente de nadie (papelera, salidas)
+  Lsp.References, // SkipIdeArtifacts: lo que no es fuente de nadie (papelera, salidas)
+  Lsp.Casa;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -2021,7 +2022,7 @@ begin
     // Medido 2026-09-23 contra 192.168.1.10 con una GUI viva.
     if (ExitCode <> 0) and Target.Contains('Deploy') and Output.Contains('E0017') then
     begin
-      // el id del trabajo por el patron de su nombrador (Lsp.Guard.SelloUnico)
+      // el id del trabajo por el patron de su nombrador (Lsp.Casa.SelloUnico)
       var MLock := TRegEx.Match(Output, '(' + SELLO_UNICO_PATRON +
         ')\.wait(?:\.[0-9]+)?\.exe', [roIgnoreCase]);
       if MLock.Success then

@@ -114,7 +114,8 @@ uses
   System.DateUtils,
   Lsp.Guard,
   Lsp.Texts,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.Casa;
 
 const
   REINTENTO_DE_PRUEBA_MS = 30;

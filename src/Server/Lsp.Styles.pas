@@ -151,7 +151,8 @@ uses
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.Pascal, // EL identificador: ValidStyleValue
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Casa;
 
 { TStyleObj }
 

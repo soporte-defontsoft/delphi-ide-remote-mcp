@@ -64,12 +64,13 @@ uses
   System.Generics.Collections,
   MCPServer.Registration,
   Lsp.Guard,
-  Lsp.Patch;   // DecodeSourceBytes: el lector de la casa
+  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
+  Lsp.Casa;
 
 const
   MESSAGES_DIR = 'messages';
 
-// Slug: EL normalizador de nombres de cliente vive en Lsp.Guard (uno solo).
+// Slug: EL normalizador de nombres de cliente vive en Lsp.Casa (uno solo).
 
 function MessagesRoot: string;
 begin

@@ -233,10 +233,11 @@ uses
   Lsp.PascalDecl,
   Lsp.Pascal,           // CodigoPascal: el RTLVersion de System.pas
   Lsp.Patch,            // PatchLoadText: el fuente con su codificacion real
-  Lsp.Guard,            // IdePlatformLibraryPaths, ServerCacheDir, EscribeEnCasaDelServidor
+  Lsp.Guard,            // IdePlatformLibraryPaths
   Lsp.ConfigFabricator, // DEFAULT_NAMESPACES
   Lsp.NetDrives,        // NotaAlLog
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Casa;             // ServerCacheDir, EscribeEnCasaDelServidor
 
 var
   // el servidor se cierra: el generador lo mira entre unidad y unidad

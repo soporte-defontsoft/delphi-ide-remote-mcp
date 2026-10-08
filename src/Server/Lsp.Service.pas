@@ -57,7 +57,8 @@ uses
   MCPServer.Logger,
   Lsp.Guard,
   Lsp.Session,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Casa;
 
 procedure ServiceController(CtrlCode: DWord); stdcall;
 begin

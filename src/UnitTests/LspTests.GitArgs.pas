@@ -58,7 +58,8 @@ implementation
 uses
   System.SysUtils,
   Lsp.Guard,
-  System.JSON;
+  System.JSON,
+  Lsp.Casa;
 
 procedure TTrocearArgsTests.EspaciosSimples;
 var

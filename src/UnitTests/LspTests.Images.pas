@@ -44,7 +44,8 @@ uses
   Lsp.Base64,
   Lsp.Guard,
   Lsp.RemoteRun, // MotivoSinCaptura
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Casa;
 
 function PngDe(W, H: Integer): TArray<Byte>;
 var

@@ -64,7 +64,8 @@ uses
   System.Character,
   System.Diagnostics,
   MCPServer.Logger,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.Casa;
 
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);

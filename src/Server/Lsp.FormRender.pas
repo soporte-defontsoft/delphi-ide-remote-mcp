@@ -110,13 +110,14 @@ uses
   System.IOUtils,
   System.Diagnostics,
   System.RegularExpressions,
-  Lsp.Guard,        // ServerDir: la carpeta del exe del servidor
+  Lsp.Guard,
   Lsp.BuildRunner,  // RunCapturedIn: el lanzador de los programas externos
   Lsp.ProjectUnits, // InspectUnit: la clase de la unidad y a que raiz llega
   Lsp.DesignerForma, // UnidadDeDesigner
   Lsp.Texts,
   Lsp.Styles,
-  Lsp.DesignerBin;
+  Lsp.DesignerBin,
+  Lsp.Casa;         // ServerDir: la carpeta del exe del servidor
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}

@@ -116,7 +116,8 @@ uses
   Lsp.InlineImages, // DeliverCapture: como se entrega una captura, la misma en toda tool
   Lsp.RemoteRun,
   Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
-  Lsp.Patch;
+  Lsp.Patch,
+  Lsp.Casa;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
 function ParseRegion(const ATexto: string; out X, Y, W, H: Integer): Boolean;

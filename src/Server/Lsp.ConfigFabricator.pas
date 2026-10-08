@@ -57,11 +57,12 @@ uses
   System.Hash,
   System.Generics.Collections,
   Lsp.Client, // PathToUri / UriToPath
-  Lsp.Guard,  // ExpandIdeMacros, EscribeEnCasaDelServidor (entero o nada)
+  Lsp.Guard,  // ExpandIdeMacros
   Lsp.Dproj,
   Lsp.Texts,
   Lsp.NetDrives,  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
-  Lsp.Json;
+  Lsp.Json,
+  Lsp.Casa;   // EscribeEnCasaDelServidor (entero o nada)
 
 const
   STANDARD_ALIASES =

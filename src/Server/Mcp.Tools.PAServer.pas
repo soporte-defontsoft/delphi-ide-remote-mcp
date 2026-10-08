@@ -119,7 +119,8 @@ uses
   Lsp.BuildRunner,
   Lsp.NetDrives,
   Lsp.Listas, // AgrupaPorCarpeta: los paquetes por carpeta
-  Lsp.Json;
+  Lsp.Json,
+  Lsp.Casa;
 
 constructor TDelphiPAServerTool.Create;
 begin

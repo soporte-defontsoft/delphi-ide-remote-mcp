@@ -69,7 +69,7 @@ type
     [Test] procedure LosControlesSonAnomaliasPorSiMismos;
   end;
 
-  { LA clave de una carpeta (Lsp.Guard.ClaveDeCarpeta): la misma carpeta
+  { LA clave de una carpeta (Lsp.Casa.ClaveDeCarpeta): la misma carpeta
     escrita con otras mayusculas, tambien fuera de A-Z, o con la barra final,
     da la misma clave - la marca de los contenedores de delphi_test y el
     cerrojo de la primera instancia salen de ella (revision de la 1.11.0:
@@ -85,7 +85,8 @@ implementation
 
 uses
   System.SysUtils,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.Casa;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;

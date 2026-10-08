@@ -520,7 +520,8 @@ uses
   Lsp.PascalDecl, // EL lector de clases (insert=metodo)
   Lsp.Regex,
   Lsp.Scaffold,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.Casa;
 
 const
   BACKUP_SUB = '__delphi-patch';

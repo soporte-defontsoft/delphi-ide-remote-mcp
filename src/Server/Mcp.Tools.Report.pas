@@ -62,7 +62,8 @@ uses
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
-  System.Character;
+  System.Character,
+  Lsp.Casa;
 
 const
   REPORTS_DIR = 'reports';
@@ -74,7 +75,7 @@ const
   // check: it is this tool's own input contract, not an access decision.
   MAX_REPORT_BYTES = 256 * 1024;
 
-// Slug: EL normalizador de nombres de cliente vive en Lsp.Guard (uno solo).
+// Slug: EL normalizador de nombres de cliente vive en Lsp.Casa (uno solo).
 
 { Reserva el nombre creando el fichero VACIO en exclusiva: si ya existe (o lo
   acaba de crear otro hilo en este mismo instante) devuelve False y el llamante

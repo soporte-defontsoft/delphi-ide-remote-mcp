@@ -20,6 +20,14 @@ the MCP `initialize` response (`serverInfo.version`).
     it in that place" comparer). They use nothing of the jail, and the
     jail, the settings reader and the server's home all compare places
     with them.
+  - The namers of the server's home go to **`Lsp.Casa`**: its folders
+    (`ServerDir`, the temp folder, the caches under LOCALAPPDATA), the
+    unique names it makes for one operation (`FragmentoUnico`,
+    `SelloUnico`, the download folder), its mutex names and `Slug`. What
+    is done WITH those folders - the agent's deliverables, the startup
+    purge, the instance presence - asks the gates and stays in
+    `Lsp.Guard`. `Lsp.Sandbox` no longer uses `Lsp.Guard`: the cycle
+    between the two is gone.
 
 ## [1.17.0] - 2026-10-07
 
