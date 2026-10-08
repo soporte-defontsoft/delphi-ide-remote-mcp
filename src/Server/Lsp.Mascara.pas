@@ -143,6 +143,10 @@ threadvar
 const
   PARAMS_CON_CONTENIDO: array [0 .. 6] of string = (
     'new', 'old', 'content', 'data', 'message', 'code', 'args');
+  { El host con el que sale enmascarado el de una ruta de red (\\srvhost\...):
+    lo escribe MaskDriveText y lo lee de vuelta ExpandDriveValue. UNA
+    constante para los dos lados (estaba escrito a mano en los dos). }
+  HOST_VIRTUAL = 'srvhost';
 
 // ---------------------------------------------------------------------------
 // Virtual drive units (srvd:, srvc:, ...)
@@ -287,11 +291,11 @@ begin
   // ensenaba (GUARD-002). Vuelve solo si el operador declaro UN unico host
   // UNC entre sus lugares (novena revision, M5b)
   V := AValue.Replace('/', '\');
-  if StartsText('\\srvhost\', V) then
+  if StartsText('\\' + HOST_VIRTUAL + '\', V) then
   begin
     Host := HostUncDeclarado;
     if Host <> '' then
-      Result := '\\' + Host + Copy(V, Length('\\srvhost') + 1, MaxInt);
+      Result := '\\' + Host + Copy(V, Length('\\' + HOST_VIRTUAL) + 1, MaxInt);
   end;
 end;
 
@@ -597,7 +601,7 @@ begin
           if (J <= L) and (CharInSet(AText[J], ['A'..'Z', 'a'..'z', '0'..'9', '_', '[']) or
              (Ord(AText[J]) >= $80)) then
           begin
-            Sb.Append(StringOfChar('\', N)).Append(Largo).Append('srvhost');
+            Sb.Append(StringOfChar('\', N)).Append(Largo).Append(HOST_VIRTUAL);
             I := J;
             while (I <= L) and not CharInSet(AText[I], ['\', '/', '"', ' ', #9]) do
               Inc(I);

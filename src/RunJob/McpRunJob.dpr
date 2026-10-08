@@ -547,34 +547,6 @@ begin
   end;
 end;
 
-{ Un argumento para la linea de comandos de Windows, con las reglas de
-  CommandLineToArgvW: entre comillas, comilla interior como \", y las barras
-  que preceden a una comilla (o al final) dobladas. Aqui no hay shell: es
-  solo la forma en que Windows entrega argv al programa. }
-function ComillasWin(const AArg: string): string;
-var
-  I, Barras: Integer;
-begin
-  Result := '"';
-  Barras := 0;
-  for I := 1 to Length(AArg) do
-  begin
-    if AArg[I] = '\' then
-      Inc(Barras)
-    else if AArg[I] = '"' then
-    begin
-      Result := Result + StringOfChar('\', Barras * 2 + 1) + '"';
-      Barras := 0;
-    end
-    else
-    begin
-      Result := Result + StringOfChar('\', Barras) + AArg[I];
-      Barras := 0;
-    end;
-  end;
-  Result := Result + StringOfChar('\', Barras * 2) + '"';
-end;
-
 { Arranca un programa con la salida en el fichero y sin ventana de consola.
   Devuelve el PID (0 si no pudo; AError dice por que). }
 function Arrancar(const ALinea, ACarpeta, ASalida: string; AHeredar: Boolean;
@@ -653,9 +625,11 @@ var
   Pid: DWORD;
   HProc: THandle;
 begin
-  Linea := ComillasWin(AExe);
+  // EnComillas (Lsp.ProcessLaunch): el compositor de la linea del servidor;
+  // aqui habia una gemela, ComillasWin (2.10 de la 1.18.0)
+  Linea := EnComillas(AExe);
   for A in AArgs do
-    Linea := Linea + ' ' + ComillasWin(A);
+    Linea := Linea + ' ' + EnComillas(A);
   HProc := 0;
   Pid := Arrancar(Linea, ACarpeta, ASalida, True, Err, @HProc);
   if Pid = 0 then

@@ -79,6 +79,7 @@ uses
   Lsp.Sandbox,
   Lsp.Rutas,
   Lsp.Casa,
+  Lsp.ProcessLaunch, // TrocearArgs y EnComillas: la linea de git
   Lsp.Args,
   Lsp.Lugares,
   Lsp.Mascara;

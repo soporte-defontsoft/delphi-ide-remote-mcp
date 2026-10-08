@@ -125,7 +125,8 @@ function CapturaDenegada(const ASalida: string): Boolean;
   que midio el lanzador: AEntorno es su graphicalEnv), Windows que la
   deniega, o la linea en que el propio nodo lo dice. Nunca la fontaneria:
   decia "el nodo no dijo donde dejo la captura" (David, 26-sep-2026). El
-  troceador de argumentos que vivia aqui esta en Lsp.Args (TrocearArgs). }
+  troceador de argumentos que vivia aqui esta en Lsp.ProcessLaunch
+  (TrocearArgs). }
 function MotivoSinCaptura(const ASalida, AEntorno: string): string;
 
 { Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
@@ -146,6 +147,7 @@ uses
   System.SyncObjs,
   System.Hash,
   System.RegularExpressions,
+  Lsp.Settings,   // PaclientDeEntorno: el paclient que pone la bateria
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
   Lsp.BuildRunner,
   Lsp.Discovery,
@@ -154,6 +156,7 @@ uses
   Lsp.Texts,
   Lsp.NetDrives,
   Lsp.Casa,
+  Lsp.ProcessLaunch, // TrocearArgs: el argv que remote-run da al programa
   Lsp.Args;
 
 var
@@ -168,7 +171,7 @@ var
   Info: TRadStudioInfo;
   P: string;
 begin
-  Result := GetEnvironmentVariable('DELPHI_MCP_PACLIENT');
+  Result := PaclientDeEntorno;
   if (Result <> '') and TFile.Exists(Result) then
     Exit;
   Result := '';

@@ -153,6 +153,19 @@ the MCP `initialize` response (`serverInfo.version`).
   `EnLugar` carries `RealPath`'s warning: it compares, it never decides a
   permission. Two units sat in a `uses` with nothing left to use: `Lsp.Guard`
   in the tray and `Lsp.Patch` in `Mcp.Tools.Desktop`.
+- Second writers of a format, each back to its one home: the server's
+  folder in the protected places (`ServerDir`, no longer
+  `ExtractFileDir(ParamStr(0))`), the commit message's file name
+  (`FragmentoUnico`, no longer a GUID of its own), the paclient a battery
+  points to (`PaclientDeEntorno` in `Lsp.Settings`, the one reader of the
+  configuration), the `srvhost` of a masked network path (one constant,
+  `HOST_VIRTUAL`, for the masker that writes it and the expansion that reads
+  it back), the host lists of `GitRemotes=` and `RemoteHosts=` (one splitter,
+  `HostsDeLista`, for the git gate and the probe gate), and the command line
+  of `McpRunJob`, which had a twin of `EnComillas`: the splitter
+  `TrocearArgs` and its inverse move to `Lsp.ProcessLaunch`, next to the
+  launcher, where the job launcher already reaches them. `test_paisaje`
+  watches the server's folder and `srvhost`, each with its mutant.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

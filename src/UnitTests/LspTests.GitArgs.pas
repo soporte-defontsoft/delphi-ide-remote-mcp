@@ -60,6 +60,7 @@ uses
   Lsp.Guard,
   System.JSON,
   Lsp.Casa,
+  Lsp.ProcessLaunch,
   Lsp.Args;
 
 procedure TTrocearArgsTests.EspaciosSimples;
@@ -237,8 +238,7 @@ end;
 
 procedure TTrocearArgsTests.NombreDelMensajeGitEsUnicoYEstaEnSuCarpeta;
 var
-  A, B, Nombre: string;
-  Id: TGUID;
+  A, B, Nombre, Parte: string;
 begin
   A := NombreDeMensajeGit;
   B := NombreDeMensajeGit;
@@ -247,9 +247,12 @@ begin
     ExtractFilePath(A), 'el temporal del servidor');
   Nombre := ExtractFileName(A);
   Assert.IsTrue(Nombre.StartsWith('msg-') and Nombre.EndsWith('.txt'), Nombre);
-  Id := StringToGUID(Copy(Nombre, 5, Length(Nombre) - 8));
-  Assert.AreEqual(Copy(Nombre, 5, Length(Nombre) - 8), GUIDToString(Id),
-    'la parte variable es un GUID');
+  // la parte variable es la de la casa (FragmentoUnico, desde el 9-oct-2026:
+  // antes un GUID propio): ocho cifras hexadecimales en minuscula
+  Parte := Copy(Nombre, 5, Length(Nombre) - 8);
+  Assert.AreEqual(8, Length(Parte), Nombre);
+  for var C in Parte do
+    Assert.IsTrue(CharInSet(C, ['0'..'9', 'a'..'f']), Nombre);
 end;
 
 function DenegacionDeArgumentosGit(const AArgs: string): string;

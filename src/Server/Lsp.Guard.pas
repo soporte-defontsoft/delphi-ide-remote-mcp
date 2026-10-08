@@ -77,8 +77,9 @@ unit Lsp.Guard;
       juez de los hosts que se sondean (ProbeHostDenied).
     - Lsp.Discovery: las macros del IDE (IdeMacroVars).
     - Lsp.Identidad: quien llama y el registro de las sesiones.
-    - Lsp.Args: los argumentos de una orden (TrocearArgs, EnComillas), las
-      puertas de git y de los lanzadores y GitCommandIsQuery.
+    - Lsp.Args: las puertas de git y de los lanzadores y GitCommandIsQuery
+      (el troceador TrocearArgs y su inversa EnComillas, desde el 9-oct en
+      Lsp.ProcessLaunch, con el lanzador).
     - Lsp.Lugares: el mapa de los lugares declarados y sus formas.
     - Lsp.Mascara: las unidades virtuales srvX:, de ida y de vuelta.
     - Lsp.TodoONada: la foto y el deshacer de todo o nada (va ENCIMA de la
@@ -777,6 +778,7 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.Identidad,
+  Lsp.ProcessLaunch, // TrocearArgs y EnComillas: la linea de una orden
   Lsp.Args,
   Lsp.Lugares,
   Lsp.Mascara;
@@ -2323,7 +2325,7 @@ end;
 function LugaresProtegidos: TArray<string>;
 begin
   LoadSecurity;
-  Result := RaicesDelModoLocal + SitiosQueNoSeTocan + [ExtractFileDir(ParamStr(0)),
+  Result := RaicesDelModoLocal + SitiosQueNoSeTocan + [ServerDir,
     GetEnvironmentVariable('WINDIR'), GetEnvironmentVariable('ProgramFiles'),
     GetEnvironmentVariable('ProgramFiles(x86)'),
     GetEnvironmentVariable('USERPROFILE')] + RaicesDeLosWorkspaces;

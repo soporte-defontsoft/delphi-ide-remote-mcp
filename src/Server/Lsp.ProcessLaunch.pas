@@ -3,7 +3,12 @@
 { El lanzamiento Windows con herencia explicita. La lista de stdhandles es
   la que ya usaba la jaula de tests; transporte, runner y lanzador remoto
   comparten ahora esa misma regla. Un SID opcional anade el AppContainer.
-  El vigia remoto declara tambien el handle del proceso que debe esperar. }
+  El vigia remoto declara tambien el handle del proceso que debe esperar.
+
+  Y la linea de una orden: el troceador con las reglas del CRT (TrocearArgs)
+  y su inversa, el compositor (EnComillas). Llegan de Lsp.Args el 9-oct-2026
+  sin cambiar una linea: aqui no dependen de nada del servidor, y McpRunJob,
+  que enlaza esta unidad, deja su gemela (ComillasWin). }
 
 interface
 
@@ -14,6 +19,26 @@ function CreateProcessConHandles(const ACmdLine: string; AWorkDir: PChar;
   AFlags: DWORD; AEntorno: Pointer; const ASI: TStartupInfo;
   out API: TProcessInformation; ASid: PSID = nil;
   const AExtra: TArray<THandle> = nil): Boolean;
+
+{ Trocea una linea de argumentos con las reglas del runtime de C de Windows
+  (CommandLineToArgvW), las mismas que aplica git.exe: las comillas dobles
+  agrupan y desaparecen ("mis notas.txt" es UNO), "" dentro de comillas es una
+  comilla literal, y una barra invertida solo es especial ante una comilla. Es
+  el UNICO troceador: el argv que remote-run da al programa, las rutas de stash
+  push de delphi_git y el filtro de opciones de git (GitArgDenied/
+  GitRemoteDenied), que asi juzga cada argumento TAL COMO lo recibira git. Su
+  inversa, aqui al lado, es el compositor EnComillas. Vivia en
+  Lsp.RemoteRun y la 1.5.1 le escribio un gemelo en Lsp.Guard (PartirArgs)
+  sin verlo: ahora es uno, donde lo alcanzan los dos. }
+function TrocearArgs(const AArgs: string): TArray<string>;
+
+{ La INVERSA de TrocearArgs: compone UN argumento para una linea de comando que
+  el CRT de Windows (git.exe, spawn directo sin shell) vuelve a trocear EXACTO
+  en este argumento. Dobla las barras invertidas que preceden a una comilla -
+  incluida la de cierre - y escapa cada comilla con \". Un solo nombrador: quien
+  COMPONE una linea de git la usa; quien la LEE, TrocearArgs. Vivia en
+  Mcp.Tools.Workspace y volvio a Lsp.Guard, con su inversa, el 26-sep-2026. }
+function EnComillas(const AValor: string): string;
 
 implementation
 
@@ -131,6 +156,138 @@ begin
     FreeMem(Lista);
     SetLastError(Err);
   end;
+end;
+
+{ Trocea una linea de comando con las reglas del runtime de C de Windows
+  (CommandLineToArgvW), las mismas que aplica git.exe (spawn directo, sin
+  shell): las comillas dobles agrupan y desaparecen, "" dentro de comillas es
+  una comilla literal, y una barra invertida SOLO es especial ante una comilla
+  (2n barras = n y la comilla delimita; 2n+1 = n y comilla literal). Es el
+  UNICO troceador, y su inversa es EnComillas (aqui al lado): la puerta valida
+  el argv que este devuelve y el ejecutor
+  recompone la linea desde el MISMO argv, asi que nadie lee la cadena de dos
+  formas distintas (medido 26-sep-2026: --o"utput"= colaba una opcion prohibida
+  ante un troceo que solo miraba espacios). }
+function TrocearArgs(const AArgs: string): TArray<string>;
+var
+  I, N, Barras, K: Integer;
+  Actual: string;
+  Dentro, Hay: Boolean;
+begin
+  Result := nil;
+  Actual := '';
+  Dentro := False; // dentro de comillas dobles
+  Hay := False;    // hay un argumento en curso (aunque sea "", que es uno vacio)
+  I := 1;
+  N := Length(AArgs);
+  while I <= N do
+  begin
+    if AArgs[I] = '\' then
+    begin
+      // Una barra invertida SOLO es especial ante una comilla. Cuenta la racha.
+      Barras := 0;
+      while (I <= N) and (AArgs[I] = '\') do
+      begin
+        Inc(Barras);
+        Inc(I);
+      end;
+      if (I <= N) and (AArgs[I] = '"') then
+      begin
+        // 2n barras + comilla = n barras y la comilla delimita; 2n+1 barras =
+        // n barras y una comilla LITERAL (no delimita).
+        for K := 1 to Barras div 2 do
+          Actual := Actual + '\';
+        Hay := True;
+        if Odd(Barras) then
+        begin
+          Actual := Actual + '"';
+          Inc(I); // la comilla se consume como literal
+        end;
+        // Barras par: la comilla queda para la vuelta siguiente (delimita).
+      end
+      else
+      begin
+        for K := 1 to Barras do
+          Actual := Actual + '\'; // no preceden a comilla: literales
+        Hay := True; // hubo contenido: un arg de SOLO barras no se pierde
+      end
+    end
+    else if AArgs[I] = '"' then
+    begin
+      if Dentro and (I < N) and (AArgs[I + 1] = '"') then
+      begin
+        Actual := Actual + '"'; // "" dentro de comillas = una comilla literal
+        Hay := True;
+        Inc(I, 2);
+      end
+      else
+      begin
+        Dentro := not Dentro; // abre o cierra: agrupa, no es un caracter
+        Hay := True;
+        Inc(I);
+      end;
+    end
+    else if CharInSet(AArgs[I], [' ', #9, #13, #10]) and not Dentro then
+    begin
+      if Hay then
+        Result := Result + [Actual];
+      Actual := '';
+      Hay := False;
+      Inc(I);
+    end
+    else
+    begin
+      Actual := Actual + AArgs[I];
+      Hay := True;
+      Inc(I);
+    end;
+  end;
+  if Hay then
+    Result := Result + [Actual];
+end;
+
+function EnComillas(const AValor: string): string;
+var
+  I, N, Barras, K: Integer;
+begin
+  // La inversa de TrocearArgs (arriba): deja un token que el runtime de C de
+  // Windows (git.exe, spawn directo sin shell) vuelve a trocear EXACTAMENTE en
+  // este argumento. Dobla las barras invertidas que preceden a una comilla -
+  // incluida la de cierre - y escapa cada comilla con \".
+  if (AValor <> '') and (AValor.IndexOfAny([' ', #9, #13, #10, '"']) < 0) then
+    Exit(AValor); // sin blancos ni comillas: no necesita comillas
+  Result := '"';
+  I := 1;
+  N := Length(AValor);
+  while I <= N do
+  begin
+    Barras := 0;
+    while (I <= N) and (AValor[I] = '\') do
+    begin
+      Inc(Barras);
+      Inc(I);
+    end;
+    if I > N then
+    begin
+      for K := 1 to Barras * 2 do
+        Result := Result + '\'; // barras finales: dobladas ante la comilla de cierre
+    end
+    else if AValor[I] = '"' then
+    begin
+      for K := 1 to Barras * 2 + 1 do
+        Result := Result + '\';
+      Result := Result + '"';
+      Inc(I);
+    end
+    else
+    begin
+      for K := 1 to Barras do
+        Result := Result + '\';
+      Result := Result + AValor[I];
+      Inc(I);
+    end;
+  end;
+  Result := Result + '"';
 end;
 
 end.

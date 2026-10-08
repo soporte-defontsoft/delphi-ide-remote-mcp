@@ -1,7 +1,6 @@
 unit Lsp.Args;
 
-{ LOS ARGUMENTOS DE UNA ORDEN: el troceador de una linea de argumentos
-  (TrocearArgs) y su compositor (EnComillas), las puertas de lo que llega a
+{ LOS ARGUMENTOS DE UNA ORDEN: las puertas de lo que llega a
   la linea de git y de los lanzadores (GitArgDenied, GitRemoteDenied con su
   lector de host GitUrlHost, ShellArgDenied), la clasificacion de una orden
   de git en consulta o escritura (GitCommandIsQuery) y el nombre del fichero
@@ -12,7 +11,9 @@ unit Lsp.Args;
   que usaban. Van DEBAJO de la jaula: la puerta de entrada (ToolCallDenied)
   y la credencial de solo lectura preguntan aqui, y aqui solo se pregunta a
   Lsp.Settings (los remotos declarados) y a Lsp.Casa (la temporal del
-  servidor). }
+  servidor). El troceador de una linea (TrocearArgs) y su compositor
+  (EnComillas) bajaron a Lsp.ProcessLaunch el 9-oct-2026, con el lanzador:
+  asi los alcanza tambien McpRunJob, que tenia una gemela (ComillasWin). }
 
 interface
 
@@ -23,25 +24,6 @@ interface
   ancla vacia y "occurrence"), con otros cinco Split()[0] sueltos. }
 function PrimerTrozo(const S: string; const ASeps: array of Char): string;
 
-{ Trocea una linea de argumentos con las reglas del runtime de C de Windows
-  (CommandLineToArgvW), las mismas que aplica git.exe: las comillas dobles
-  agrupan y desaparecen ("mis notas.txt" es UNO), "" dentro de comillas es una
-  comilla literal, y una barra invertida solo es especial ante una comilla. Es
-  el UNICO troceador: el argv que remote-run da al programa, las rutas de stash
-  push de delphi_git y el filtro de opciones de git (GitArgDenied/
-  GitRemoteDenied), que asi juzga cada argumento TAL COMO lo recibira git. Su
-  inversa, aqui al lado, es el compositor EnComillas. Vivia en
-  Lsp.RemoteRun y la 1.5.1 le escribio un gemelo en Lsp.Guard (PartirArgs)
-  sin verlo: ahora es uno, donde lo alcanzan los dos. }
-function TrocearArgs(const AArgs: string): TArray<string>;
-
-{ La INVERSA de TrocearArgs: compone UN argumento para una linea de comando que
-  el CRT de Windows (git.exe, spawn directo sin shell) vuelve a trocear EXACTO
-  en este argumento. Dobla las barras invertidas que preceden a una comilla -
-  incluida la de cierre - y escapa cada comilla con \". Un solo nombrador: quien
-  COMPONE una linea de git la usa; quien la LEE, TrocearArgs. Vivia en
-  Mcp.Tools.Workspace y volvio a Lsp.Guard, con su inversa, el 26-sep-2026. }
-function EnComillas(const AValor: string): string;
 function NombreDeMensajeGit: string;
 
 { La mitad de CONSULTA de delphi_git: lo que una credencial de solo lectura
@@ -89,147 +71,16 @@ uses
   System.StrUtils,
   System.IOUtils,
   System.RegularExpressions,
+  Lsp.ProcessLaunch,    // TrocearArgs: el troceador de la linea, y su inversa EnComillas
   Lsp.Texts,
-  Lsp.Settings,         // GitRemoteHosts: los remotos que declara el workspace
-  Lsp.Casa;             // ServerTempDir: el mensaje de un commit, en la casa
-
-{ Trocea una linea de comando con las reglas del runtime de C de Windows
-  (CommandLineToArgvW), las mismas que aplica git.exe (spawn directo, sin
-  shell): las comillas dobles agrupan y desaparecen, "" dentro de comillas es
-  una comilla literal, y una barra invertida SOLO es especial ante una comilla
-  (2n barras = n y la comilla delimita; 2n+1 = n y comilla literal). Es el
-  UNICO troceador, y su inversa es EnComillas (aqui al lado): la puerta valida
-  el argv que este devuelve y el ejecutor
-  recompone la linea desde el MISMO argv, asi que nadie lee la cadena de dos
-  formas distintas (medido 26-sep-2026: --o"utput"= colaba una opcion prohibida
-  ante un troceo que solo miraba espacios). }
-function TrocearArgs(const AArgs: string): TArray<string>;
-var
-  I, N, Barras, K: Integer;
-  Actual: string;
-  Dentro, Hay: Boolean;
-begin
-  Result := nil;
-  Actual := '';
-  Dentro := False; // dentro de comillas dobles
-  Hay := False;    // hay un argumento en curso (aunque sea "", que es uno vacio)
-  I := 1;
-  N := Length(AArgs);
-  while I <= N do
-  begin
-    if AArgs[I] = '\' then
-    begin
-      // Una barra invertida SOLO es especial ante una comilla. Cuenta la racha.
-      Barras := 0;
-      while (I <= N) and (AArgs[I] = '\') do
-      begin
-        Inc(Barras);
-        Inc(I);
-      end;
-      if (I <= N) and (AArgs[I] = '"') then
-      begin
-        // 2n barras + comilla = n barras y la comilla delimita; 2n+1 barras =
-        // n barras y una comilla LITERAL (no delimita).
-        for K := 1 to Barras div 2 do
-          Actual := Actual + '\';
-        Hay := True;
-        if Odd(Barras) then
-        begin
-          Actual := Actual + '"';
-          Inc(I); // la comilla se consume como literal
-        end;
-        // Barras par: la comilla queda para la vuelta siguiente (delimita).
-      end
-      else
-      begin
-        for K := 1 to Barras do
-          Actual := Actual + '\'; // no preceden a comilla: literales
-        Hay := True; // hubo contenido: un arg de SOLO barras no se pierde
-      end
-    end
-    else if AArgs[I] = '"' then
-    begin
-      if Dentro and (I < N) and (AArgs[I + 1] = '"') then
-      begin
-        Actual := Actual + '"'; // "" dentro de comillas = una comilla literal
-        Hay := True;
-        Inc(I, 2);
-      end
-      else
-      begin
-        Dentro := not Dentro; // abre o cierra: agrupa, no es un caracter
-        Hay := True;
-        Inc(I);
-      end;
-    end
-    else if CharInSet(AArgs[I], [' ', #9, #13, #10]) and not Dentro then
-    begin
-      if Hay then
-        Result := Result + [Actual];
-      Actual := '';
-      Hay := False;
-      Inc(I);
-    end
-    else
-    begin
-      Actual := Actual + AArgs[I];
-      Hay := True;
-      Inc(I);
-    end;
-  end;
-  if Hay then
-    Result := Result + [Actual];
-end;
-
-function EnComillas(const AValor: string): string;
-var
-  I, N, Barras, K: Integer;
-begin
-  // La inversa de TrocearArgs (arriba): deja un token que el runtime de C de
-  // Windows (git.exe, spawn directo sin shell) vuelve a trocear EXACTAMENTE en
-  // este argumento. Dobla las barras invertidas que preceden a una comilla -
-  // incluida la de cierre - y escapa cada comilla con \".
-  if (AValor <> '') and (AValor.IndexOfAny([' ', #9, #13, #10, '"']) < 0) then
-    Exit(AValor); // sin blancos ni comillas: no necesita comillas
-  Result := '"';
-  I := 1;
-  N := Length(AValor);
-  while I <= N do
-  begin
-    Barras := 0;
-    while (I <= N) and (AValor[I] = '\') do
-    begin
-      Inc(Barras);
-      Inc(I);
-    end;
-    if I > N then
-    begin
-      for K := 1 to Barras * 2 do
-        Result := Result + '\'; // barras finales: dobladas ante la comilla de cierre
-    end
-    else if AValor[I] = '"' then
-    begin
-      for K := 1 to Barras * 2 + 1 do
-        Result := Result + '\';
-      Result := Result + '"';
-      Inc(I);
-    end
-    else
-    begin
-      for K := 1 to Barras do
-        Result := Result + '\';
-      Result := Result + AValor[I];
-      Inc(I);
-    end;
-  end;
-  Result := Result + '"';
-end;
+  Lsp.Settings,         // GitRemoteHosts y HostsDeLista: los remotos que declara el workspace
+  Lsp.Casa;             // ServerTempDir y FragmentoUnico: el mensaje de un commit, en la casa
 
 { UN nombrador del fichero -F de git, junto a su filtro de argumentos. }
 function NombreDeMensajeGit: string;
 begin
   Result := TPath.Combine(ServerTempDir('git'),
-    'msg-' + TGUID.NewGuid.ToString + '.txt');
+    'msg-' + FragmentoUnico + '.txt');
 end;
 
 { Las opciones que traen ficheros o configuracion ajena al filtro. Git admite
@@ -394,8 +245,8 @@ begin
     if Allowed = '' then
       Exit(MsgFmt(SR_GIT_REMOTE_OFF_FMT, [Host]));
     Ok := False;
-    for var H in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
-      if SameText(H.Trim, Host) then
+    for var H in HostsDeLista(Allowed) do
+      if SameText(H, Host) then
       begin
         Ok := True;
         Break;

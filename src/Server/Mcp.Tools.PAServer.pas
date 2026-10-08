@@ -122,6 +122,7 @@ uses
   Lsp.Json,
   Lsp.Casa,
   Lsp.Settings,
+  Lsp.ProcessLaunch, // TrocearArgs / EnComillas
   Lsp.Args;
 
 constructor TDelphiPAServerTool.Create;

@@ -219,6 +219,17 @@ function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
   del workspace activo (v0.98; medido que el perfil ajeno marcaba igual). }
 function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
 
+{ Los hosts de una de esas dos listas: separados por coma o punto y coma, sin
+  blancos alrededor ni entradas vacias. UN troceador para las dos: la puerta
+  de git (GitRemoteDenied) y la del sondeo (ProbeHostDenied) troceaban cada
+  una por su cuenta, con la misma forma escrita dos veces. }
+function HostsDeLista(const ALista: string): TArray<string>;
+
+{ El paclient que pone la bateria (DELPHI_MCP_PACLIENT, un stub), '' si no
+  hay: lo pregunta PaClientPath (Lsp.RemoteRun). Se lee en cada llamada, como
+  se leia alli; aqui para que la configuracion siga teniendo UN lector. }
+function PaclientDeEntorno: string;
+
 { '' si este servidor PUEDE abrir una conexion TCP a AHost: SOLO los hosts de
   RemoteProbeHosts del workspace activo ('*' / '0.0.0.0' = cualquiera). LA
   puerta de red: test-connection, get-sdk, remote-run Y el deploy por perfil
@@ -1431,6 +1442,19 @@ begin
   Result := GRemoteHosts.Trim;
 end;
 
+function HostsDeLista(const ALista: string): TArray<string>;
+begin
+  Result := [];
+  for var H in ALista.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
+    if H.Trim <> '' then
+      Result := Result + [H.Trim];
+end;
+
+function PaclientDeEntorno: string;
+begin
+  Result := GetEnvironmentVariable('DELPHI_MCP_PACLIENT');
+end;
+
 { Medido 2026-08-25: la lista blanca que cerro el agujero de git dejaba esta
   puerta abierta de par en par. `test-connection host=127.0.0.1 port=3131`
   marcaba el propio puerto MCP, y cualquier host:port contestaba. Misma
@@ -1448,8 +1472,8 @@ begin
   if H = '' then
     Exit;
   Allowed := RemoteProbeHosts;
-  for var A in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
-    if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
+  for var A in HostsDeLista(Allowed) do
+    if SameText(A, H) or (A = '*') or (A = '0.0.0.0') then
       Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
   Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim, ONinguno(Allowed)]);
 end;
