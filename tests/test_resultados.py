@@ -1222,7 +1222,12 @@ try:
     # E95b lo mismo, DETERMINISTA: E95 solo caia si las dos copias coincidian en
     # el golpe de reloj (4 de 30 contra la version sin arreglo). Se plantan los
     # nombres sellados de los proximos 400 ms en deleted\ y se borra: sin la
-    # espera al sello siguiente, la copia chocaba con uno plantado (FILE-020)
+    # espera al sello siguiente, la copia chocaba con uno plantado (FILE-020).
+    # La ventana se abre DESPUES de plantar (7.5 de la 1.18.0): empezaba al
+    # plantar, y 400 ficheros tardan 0,26 s solos y 0,38 con las baterias en
+    # paralelo recien arrancado el PC, asi que un rojo de carga costaba un
+    # run_all. Ahora se planta para dentro de medio segundo y la llamada
+    # espera a que se abra: el guardian mide lo mismo con margen.
     D95 = os.path.join(JAIL, 'e95b')
     os.makedirs(D95)
     F95 = os.path.join(D95, 'dos95.txt')
@@ -1231,10 +1236,15 @@ try:
     ahora = datetime.datetime.now()
     CAJ95 = os.path.join(D95, PAP['BACKUP_SUB'], ahora.strftime('%Y%m%d'), PAP['CAJON_BORRADOS'])
     os.makedirs(CAJ95)
+    ABRE95 = 0.5  # segundos: la ventana se abre aqui, despues de plantar
+    inicio95 = ahora + datetime.timedelta(seconds=ABRE95)
     for ms in range(0, 400):
-        sello = (ahora + datetime.timedelta(milliseconds=ms)).strftime('%H%M%S%f')[:9]
+        sello = (inicio95 + datetime.timedelta(milliseconds=ms)).strftime('%H%M%S%f')[:9]
         open(os.path.join(CAJ95, 'dos95.txt-' + sello), 'w').write('plantado\n')
-    plantado_en = (datetime.datetime.now() - ahora).total_seconds()
+    espera95 = (inicio95 - datetime.datetime.now()).total_seconds()
+    if espera95 > 0:
+        time.sleep(espera95 + 0.01)  # nunca un milisegundo antes de abrirse
+    plantado_en = (datetime.datetime.now() - inicio95).total_seconds() # tras abrirse la ventana
     res, sc, t = llama('delphi_delete', {'path': F95})
     buenas = [c for c in mc.copias(D95, 'dos95.txt', 'CAJON_BORRADOS') if open(c).read() == 'v0\n']
     # la llamada EMPEZO dentro de la ventana y su copia se sello al final de
@@ -1242,10 +1252,10 @@ try:
     sello95 = -1.0
     if len(buenas) == 1:
         s95 = buenas[0][-9:]
-        sello95 = (ahora.replace(hour=int(s95[0:2]), minute=int(s95[2:4]), second=int(s95[4:6]),
-                                 microsecond=int(s95[6:9]) * 1000) - ahora).total_seconds()
+        sello95 = (inicio95.replace(hour=int(s95[0:2]), minute=int(s95[2:4]), second=int(s95[4:6]),
+                                    microsecond=int(s95[6:9]) * 1000) - inicio95).total_seconds()
     check('E95b fixture: la llamada empieza dentro de la ventana (%.2f s de 0.40)' % plantado_en,
-          plantado_en < 0.35, plantado_en)
+          0 <= plantado_en < 0.35, plantado_en)
     check('E95b ...y su copia se sella al acabar la ventana (%.3f s): espero' % sello95,
           0.399 <= sello95 <= 0.7, sello95)
     check('E95b con los sellos de los proximos 400 ms ocupados, el borrado espera al siguiente libre',
