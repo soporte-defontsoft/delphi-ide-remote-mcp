@@ -134,10 +134,18 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
 # sacando cuerpos de Lsp.Guard: el check medía DOS cosas, delphi_symbols y la
 # forma de la unidad. Desde ese dia el fixture es una COPIA en fichero,
 # tests/fixtures/guard-6544a95-2026-10-08 (el Lsp.Guard.pas del commit
-# 6544a95, la produccion de ese dia; el de la v1.17.0 da hoy un error interno
-# de DelphiLSP). Base medida: 36.147 frente a 148.843 = 24,3%, el
-# 8-oct-2026, con el exe de la rama de la 1.18.0 (dice 1.17.0). Techo: 30%,
-# solo rojo si el RESUMEN engorda (David, 8-oct).
+# 6544a95, la produccion de ese dia). Base medida: 36.147 frente a 148.843 =
+# 24,3%, el 8-oct-2026, con el exe de la rama de la 1.18.0 (dice 1.17.0).
+# Techo: 30%, solo rojo si el RESUMEN engorda (David, 8-oct).
+# Lo que S1 tiene AL LADO cuenta: Big.pas comparte carpeta con el SecCfg.dproj
+# que crea el scaffold de C1, y DelphiLSP sin proyecto revienta (LSP-022) con
+# una unidad que tenga dos sobrecargas de igual aridad que solo difieren en
+# TArray<string> frente a string; con proyecto la lee (medido el 8-oct: vault,
+# decisions/delphilsp-sobrecargas-sin-proyecto-2026-10-08). El Guard de la
+# v1.17.0 las tenia (WalkFiles): por eso no sirve de fixture SUELTO, y por eso
+# S1 paso en verde de la 1.13.1 a la 1.17.0 sin declararlo. Este fixture no
+# las tiene: medido sin proyecto 24,3% (la base) y junto a SecCfg.dproj 24,2%.
+# Quien cambie el fixture lo mide SOLO en su carpeta antes de fiarse de S1.
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
 check('S1 y de verdad es compacto (el resumen pesa < 30% del arbol completo; base congelada 24,3%)',
       len(rfull) > 0 and len(rbig) < 0.30 * len(rfull), (len(rbig), len(rfull)))
