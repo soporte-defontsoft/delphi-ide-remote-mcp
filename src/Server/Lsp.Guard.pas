@@ -5714,9 +5714,10 @@ begin
 end;
 
 { Operaciones del PADRE: decidir antes de copiar/borrar/renombrar nada.
-  El recorrido de la casa corta al primer metadato, sin entrar en .git.
+  Copiar corta al primer metadato; mover el arbol entero revisa sus enlaces.
   No poder revisar una rama no autoriza a moverla. }
-function MetadatosGitEnArbolDenegados(const APath: string): string;
+function MetadatosGitEnArbolDenegados(const APath: string;
+  AAdmiteArbolGit: Boolean = False): string;
 var
   Motivo: string;
   Visita: TVisitaRuta;
@@ -5728,7 +5729,21 @@ begin
       procedure(const P: string)
       begin
         if Motivo = '' then
-          Motivo := MetadatosGitDenegados(P);
+        begin
+          var Meta := MetadatosGitDenegados(P);
+          if (Meta <> '') and AAdmiteArbolGit then
+          begin
+            // El arbol viaja entero; un enlace de sus metadatos no abre la jaula.
+            if EsEnlace(P) then
+              try
+                if PathDenied(P, True) <> '' then Motivo := Meta;
+              except
+                Motivo := Meta; // lo que no se puede juzgar tampoco se mueve
+              end;
+          end
+          else
+            Motivo := Meta;
+        end;
       end;
     try
       RecorreSinEnlaces(APath, Visita, Visita,
@@ -6098,6 +6113,7 @@ var
       end;
     for E in TDirectory.GetDirectories(O) do
       if not SameText(TPath.GetFileName(E), TrashFolderName) and
+         (MetadatosGitDenegados(E) = '') and
          (not EsEnlace(E) or SeSigueAlCopiar(E, ADestino)) then
         Busca(E);
   end;
@@ -6105,7 +6121,8 @@ var
 begin
   if DentroDeSiMismo(AOrigen, ADestino) then
     Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
-  Result := MetadatosGitEnArbolDenegados(AOrigen);
+  // El acceso directo a metadatos sigue cerrado antes de buscar proyectos.
+  Result := MetadatosGitDenegados(AOrigen);
   if Result <> '' then
     Exit;
   Hallado := '';
@@ -6124,10 +6141,11 @@ begin
       Vistos.Free;
     end;
   end;
+  // Un proyecto nunca se duplica: ese motivo explica tambien la referencia.
   if Hallado <> '' then
     Result := MsgFmt(SR_MOVE_COPY_PROJECT_FMT, [Hallado])
   else
-    Result := '';
+    Result := MetadatosGitEnArbolDenegados(AOrigen);
 end;
 
 procedure BorraArbol(const ADir: string);
@@ -6160,7 +6178,7 @@ begin
   except
     Exit; // una ruta que no parsea es cosa de PathDenied
   end;
-  Result := MetadatosGitEnArbolDenegados(Full);
+  Result := MetadatosGitEnArbolDenegados(Full, True);
   if Result <> '' then
     Exit;
   P := LugarProtegidoEn(RutaDelEnlace(Full));

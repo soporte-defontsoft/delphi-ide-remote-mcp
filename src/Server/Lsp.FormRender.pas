@@ -331,6 +331,9 @@ var
     Ruta: string;
   begin
     Result := '';
+    // El valor se juzga por su texto ANTES de alargarlo o preguntar si existe.
+    if RutaSinTocarElDisco(AValor) then
+      Exit(MsgFmt(SR_DESIGNER_LITERAL_FUERA_FMT, [AProp]));
     if AValor = '' then
       Exit;
     for var Base in Bases do

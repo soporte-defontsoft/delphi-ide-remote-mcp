@@ -3,7 +3,7 @@
 Sin skip-smudge, sin credenciales, endpoints exclusivamente propios.
 LFS_SMUDGE_ONLY=1 mide el smudge por fichero: retirar la fijacion del endpoint
 debe poner rojo el switch. Con filter-process ese caso es una GUARDA.
-Otros mutantes: DireccionLfsAdmitida sin juez; clone sin --no-checkout.
+Otros mutantes: EndpointLfsDenegado sin juez; clone sin --no-checkout.
 Claude ejecuta las dos variantes; run_all usa filter-process.
 """
 import atexit,hashlib,http.server,json,os,subprocess,threading
@@ -31,7 +31,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith('/lfs/object/'):
             hits.append(('object',self.headers.get('Host'),self.path))
             body=objects_by_oid[self.path.rsplit('/',1)[1]]
-            self.send_response(200);self.send_header('Content-Length',str(len(body)))
+            self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.send_header('Content-Length',str(len(body)))
             self.end_headers();self.wfile.write(body)
         else:super().do_GET()
     def log_message(self,*args):pass
@@ -75,7 +75,7 @@ try:
             mc.check('hosts del control permitidos',all(h[1].startswith('127.0.0.1:') for h in hits),hits)
             mc.check('clone queda limpio',srv.call('delphi_git',dict(repo=dest,command='status')).startswith('exit=0'))
         else:
-            mc.check('LFS exterior se niega por su clave','[GIT-051 DENIED]' in out and 'lfs.url' in out,out)
+            mc.check('LFS exterior se niega por su endpoint','[GIT-060 DENIED]' in out and 'LFS endpoint' in out,out)
             mc.check('rechazo nunca muestra valor','localhost' not in out and '/lfs' not in out,out)
             mc.check('rechazo antes de batch y objeto',not hits and got!=oid,hits)
     hits.clear();dest=os.path.join(JAIL,'clone-ok')
@@ -85,33 +85,33 @@ try:
     mc.check('switch descarga segundo objeto real',out.startswith('exit=0') and got==oid2,out)
     mc.check('switch mantiene endpoint juzgado',bool(hits) and all(h[1].startswith('127.0.0.1:') for h in hits),hits)
     # El nuevo fichero no puede decidir el endpoint de la siguiente llamada.
-    next_out=srv.call('delphi_git',dict(repo=dest,command='status'))
-    mc.check('nuevo .lfsconfig se juzga de nuevo','[GIT-051 DENIED]' in next_out and 'lfs.url' in next_out,next_out)
+    next_out=srv.call('delphi_git',dict(repo=dest,command='switch',args='future'))
+    mc.check('nuevo .lfsconfig se juzga de nuevo','[GIT-060 DENIED]' in next_out,next_out)
     # Precedencia real: trabajo > indice > HEAD, sin descargar objetos.
     lfs_path=os.path.join(dest,'.lfsconfig')
     open(lfs_path,'w').write('[lfs]\n url = '+base+'/lfs\n')
     mc.check('fichero permitido prevalece sobre HEAD excluido',
-             srv.call('delphi_git',dict(repo=dest,command='status')).startswith('exit=0'))
+             srv.call('delphi_git',dict(repo=dest,command='switch',args='future')).startswith('exit=0'))
     raw('add','.lfsconfig',cwd=dest);os.remove(lfs_path)
     mc.check('indice permitido prevalece sobre HEAD excluido',
-             srv.call('delphi_git',dict(repo=dest,command='status')).startswith('exit=0'))
+             srv.call('delphi_git',dict(repo=dest,command='switch',args='future')).startswith('exit=0'))
     raw('rm','--cached','-q','.lfsconfig',cwd=dest)
-    out=srv.call('delphi_git',dict(repo=dest,command='status'))
-    mc.check('sin fichero ni indice se juzga HEAD','[GIT-051 DENIED]' in out and 'lfs.url' in out,out)
+    out=srv.call('delphi_git',dict(repo=dest,command='switch',args='future'))
+    mc.check('sin fichero ni indice se juzga HEAD','[GIT-060 DENIED]' in out,out)
     repo=os.path.join(JAIL,'ok')
     raw('config','lfs.url','http://localhost:%d/lfs'%http.server_port,cwd=repo)
-    out=srv.call('delphi_git',dict(repo=repo,command='status'))
-    mc.check('local lfs.url usa la misma puerta','[GIT-051 DENIED]' in out and 'lfs.url' in out,out)
+    out=srv.call('delphi_git',dict(repo=repo,command='switch',args='main'))
+    mc.check('local lfs.url usa la misma puerta','[GIT-060 DENIED]' in out,out)
     raw('config','lfs.url',base+'/lfs',cwd=repo)
-    mc.check('control local lfs.url permitido',srv.call('delphi_git',dict(repo=repo,command='status')).startswith('exit=0'))
+    mc.check('control local lfs.url permitido',srv.call('delphi_git',dict(repo=repo,command='switch',args='main')).startswith('exit=0'))
     raw('config','remote.origin.lfsurl','http://localhost:%d/lfs'%http.server_port,cwd=repo)
-    out=srv.call('delphi_git',dict(repo=repo,command='status'))
-    mc.check('remote.*.lfsurl tambien usa hosts','[GIT-051 DENIED]' in out and 'remote.origin.lfsurl' in out,out)
+    out=srv.call('delphi_git',dict(repo=repo,command='switch',args='main'))
+    mc.check('remote.*.lfsurl tambien usa hosts','[GIT-060 DENIED]' in out and 'origin' in out,out)
     raw('config','--unset','remote.origin.lfsurl',cwd=repo)
     raw('config','extensions.worktreeConfig','true',cwd=repo)
     open(os.path.join(repo,'.git','config.worktree'),'w').write('[lfs]\n url = http://localhost:%d/lfs\n'%http.server_port)
-    out=srv.call('delphi_git',dict(repo=repo,command='status'))
-    mc.check('worktree lfs.url tambien usa hosts','[GIT-051 DENIED]' in out and 'lfs.url' in out,out)
+    out=srv.call('delphi_git',dict(repo=repo,command='switch',args='main'))
+    mc.check('worktree lfs.url tambien usa hosts','[GIT-060 DENIED]' in out,out)
     mc.check('servidor vivo',not mc.fallo(srv.call('delphi_list',{'root':JAIL})))
 finally:
     srv.cierra();http.shutdown();http.server_close();mc.borra(BASE)

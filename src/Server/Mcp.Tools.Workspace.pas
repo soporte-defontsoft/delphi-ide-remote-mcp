@@ -952,17 +952,65 @@ end;
   Se lee sin includes: una inclusion del repo puede sacar la lectura de la
   jaula y esconder un filtro. La configuracion del servidor sigue siendo suya. }
 
+function DireccionDeRemotoDenegada(const ACmd, ADireccion, ABase: string;
+  out ACarpeta: string; out ANoEsta: Boolean): string; forward;
+
+function RemotosDelRepo(const ARepo, AFijado: string;
+  out ANombres: TArray<string>): Boolean; forward;
+
+{ Medido con objetos LFS ausentes: estas ordenes materializan el arbol.
+  Los filtros clean de add/commit/status no descargan objetos. }
+function GitMaterializaArbol(const ACmd, AArgs: string): Boolean;
+var
+  Trozos: TArray<string>;
+begin
+  Result := MatchText(ACmd, ['clone', 'switch', 'merge', 'pull']);
+  if ACmd = 'stash' then
+  begin
+    Trozos := TrocearArgs(AArgs);
+    Result := Length(Trozos) = 0;
+    if Length(Trozos) > 0 then
+      Result := MatchText(Trozos[0], ['push', 'pop']);
+  end
+  else if ACmd = 'worktree' then
+    Result := SameText(AArgs.Trim, 'add');
+end;
+
 function ConfiguracionGitDenegada(const ARepo, ARaiz: string;
-  var AFijado: string): string;
+  AExaminarLfs: Boolean; var AFijado: string): string;
 var
   Salida, RutaLfs, Endpoint: string;
   Codigo: Cardinal;
   HayLfs, HayFuenteLfs: Boolean;
+  NombresLfs: TArray<string>;
 
-  function DireccionLfsAdmitida(const ADireccion: string): Boolean;
+  function NombreDelEndpoint(const ALinea: string): string;
+  var
+    P: Integer;
   begin
-    Result := (GitUrlHost(ADireccion) <> '') and
-      (GitRemoteDenied(EnComillas(ADireccion)) = '');
+    if ALinea.StartsWith('Endpoint (') then
+    begin
+      P := Pos(')', ALinea);
+      if P > 11 then Exit(Copy(ALinea, 11, P - 11));
+    end;
+    if Length(NombresLfs) = 1 then Exit(NombresLfs[0]);
+    Result := '(default: git-lfs)';
+  end;
+
+  function EndpointLfsDenegado(const ADireccion, ARemoto: string): string;
+  var
+    Carpeta, Base: string;
+    NoEsta: Boolean;
+  begin
+    Base := ARaiz;
+    if Base = '' then Base := ARepo;
+    // El endpoint LFS se juzga con EL MISMO juez que un remoto: la red por
+    // los hosts de GitRemotes, la carpeta por la puerta de carpetas del
+    // workspace. Su valor nunca se muestra: la negativa nombra el remoto.
+    if DireccionDeRemotoDenegada('lfs', ADireccion, Base, Carpeta, NoEsta) <> '' then
+      Result := MsgFmt(SR_GIT_LFS_ENDPOINT_FMT, [ARemoto])
+    else
+      Result := '';
   end;
 
   function RevisaConfiguracion(const ATexto: string; ASoloLocal: Boolean): string;
@@ -1031,11 +1079,21 @@ var
           Permitida := Valor = 'git-lfs filter-process'
         else if Clave = 'filter.lfs.required' then
           Permitida := SameText(Valor, 'true');
-        // El endpoint es una direccion, por EL juez de hosts de los remotos.
+        // El endpoint pasa por EL juez de direcciones de los remotos.
         if MatchText(Clave, ['lfs.url', 'lfs.pushurl']) or
            ((Length(Partes) >= 3) and (Partes[0] = 'remote') and
             MatchText(Partes[High(Partes)], ['lfsurl', 'lfspushurl'])) then
-          Permitida := DireccionLfsAdmitida(Valor)
+        begin
+          Permitida := True;
+          if AExaminarLfs then
+          begin
+            var Remoto := NombreDelEndpoint('');
+            if Partes[0] = 'remote' then
+              Remoto := Copy(Clave, 8, Length(Clave) - 8 - Length(Partes[High(Partes)]));
+            Result := EndpointLfsDenegado(Valor, Remoto);
+            if Result <> '' then Exit;
+          end;
+        end
         else if Clave = 'lfs.repositoryformatversion' then
           Permitida := Valor = '0';
         if not Permitida then
@@ -1061,8 +1119,12 @@ begin
     Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
   HayLfs := ContainsText(Salida, 'filter.lfs.');
   HayFuenteLfs := False;
+  NombresLfs := nil;
+  if AExaminarLfs and not RemotosDelRepo(ARepo, AFijado, NombresLfs) then
+    Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
   Result := RevisaConfiguracion(Salida, True);
   if Result <> '' then Exit;
+  if not AExaminarLfs then Exit;
   if ARaiz <> '' then
   begin
     RutaLfs := TPath.Combine(ARaiz, '.lfsconfig');
@@ -1119,8 +1181,8 @@ begin
       P := Pos(' (auth=', Direccion);
       if P > 0 then Direccion := Copy(Direccion, 1, P - 1);
       if Direccion = '' then Continue;
-      if not DireccionLfsAdmitida(Direccion) then
-        Exit(MsgFmt(SR_GIT_CONFIG_PROGRAMA_FMT, ['lfs.url']));
+      Result := EndpointLfsDenegado(Direccion, NombreDelEndpoint(Linea));
+      if Result <> '' then Exit;
       if Endpoint = '' then Endpoint := Direccion;
     end;
   // Fijarlo evita que un checkout cambie .lfsconfig durante la misma orden.
@@ -1389,6 +1451,34 @@ begin
     end;
 end;
 
+function DireccionDeRemotoDenegada(const ACmd, ADireccion, ABase: string;
+  out ACarpeta: string; out ANoEsta: Boolean): string;
+begin
+  Result := '';
+  ACarpeta := '';
+  ANoEsta := False;
+  case ClaseDeDireccion(ADireccion, ACarpeta) of
+    drRed:
+      begin
+        if GitUrlHost(ADireccion) = '' then
+          Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ADireccion]));
+        Result := GitRemoteDenied(EnComillas(ADireccion));
+      end;
+    drCarpeta:
+      begin
+        try
+          ACarpeta := SinBarraFinal(TPath.GetFullPath(
+            TPath.Combine(ABase, ACarpeta.Replace('/', '\'))));
+        except
+          Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ADireccion]));
+        end;
+        Result := CarpetaDeRemotoDenegada(ACmd, ACarpeta, ANoEsta);
+      end;
+  else
+    Result := MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ADireccion]);
+  end;
+end;
+
 { EL REMOTO de una llamada de red, juzgado: '' = se puede usar.
 
   El remoto es adonde git va a leer (fetch, pull) o a escribir (push). En la
@@ -1441,39 +1531,14 @@ begin
     Direcciones := Direcciones + Lineas;
   end;
   for Direccion in Direcciones do
-    case ClaseDeDireccion(Direccion, Carpeta) of
-      drRed:
-        begin
-          // Tanto la config como la llamada pasan por la MISMA lista de hosts.
-          if GitUrlHost(Direccion) = '' then
-            Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
-          Result := GitRemoteDenied(EnComillas(Direccion));
-          if Result <> '' then
-            Exit;
-        end;
-      drCarpeta:
-        begin
-          try
-            // Una ruta relativa, desde ABase (la raiz del arbol): es desde
-            // donde la resuelve git
-            Carpeta := SinBarraFinal(TPath.GetFullPath(
-              TPath.Combine(ABase, Carpeta.Replace('/', '\'))));
-          except
-            Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
-          end;
-          Result := CarpetaDeRemotoDenegada(ACmd, Carpeta, NoEsta);
-          // lo que se escribio en la llamada y no es un remoto del repo ni
-          // una carpeta que este: se dice asi, con los remotos que hay
-          if NoEsta and EscritaEnLaLlamada then
-            Result := MsgFmt(SR_GIT_REMOTO_NO_ESTA_FMT, [Direccion,
-              IfThen(Length(Nombres) = 0, '(none)', string.Join(', ', Nombres)),
-              Carpeta]);
-          if Result <> '' then
-            Exit;
-        end;
-    else
-      Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
-    end;
+  begin
+    Result := DireccionDeRemotoDenegada(ACmd, Direccion, ABase, Carpeta, NoEsta);
+    if NoEsta and EscritaEnLaLlamada then
+      Result := MsgFmt(SR_GIT_REMOTO_NO_ESTA_FMT, [Direccion,
+        IfThen(Length(Nombres) = 0, '(none)', string.Join(', ', Nombres)),
+        Carpeta]);
+    if Result <> '' then Exit;
+  end;
 end;
 
 { LO QUE push ENVIA CUANDO NO SE LE DICE: sin nombres en la llamada lo
@@ -1724,7 +1789,7 @@ begin
       // Con --bare contesta lo que contesta sin fijar: log y branch van, y
       // lo que necesita un arbol dice que no lo tiene.
       Fijado := Fijado + ' --bare';
-    Result := ConfiguracionGitDenegada(Repo, Raiz, Fijado);
+    Result := ConfiguracionGitDenegada(Repo, Raiz, GitMaterializaArbol(Cmd, Params.Args), Fijado);
     if Result <> '' then
       Exit;
   end;
@@ -2143,7 +2208,7 @@ begin
           Fijado := ' --git-dir=' + EnComillas(GitDir);
           if Raiz <> '' then Fijado := Fijado + ' --work-tree=' + EnComillas(Raiz)
           else Fijado := Fijado + ' --bare';
-          Result := ConfiguracionGitDenegada(Repo, Raiz, Fijado);
+          Result := ConfiguracionGitDenegada(Repo, Raiz, GitMaterializaArbol(Cmd, Params.Args), Fijado);
           if Result <> '' then
           begin
             ExitCode := 1;
@@ -2681,7 +2746,8 @@ begin
     begin
       Result := Dir;
       Head := TPath.Combine(Dir, '.git\HEAD');
-      if (ReadPathDenied(Head) = '') and TFile.Exists(Head) then
+      // Lectura interna: conserva la jaula, sin abrir .git a las tools de ficheros.
+      if (ReadPathDenied(Head, True) = '') and TFile.Exists(Head) then
         try
           ABranch := TFile.ReadAllText(Head).Trim;
           if ABranch.StartsWith('ref:') then

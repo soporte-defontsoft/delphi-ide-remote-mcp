@@ -75,7 +75,7 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 before = snapshot(OUT)
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': MINE,
     'GIT_ALLOW_PROTOCOL': 'file', 'GIT_TRACE': TRACE,
-    'GIT_CONFIG_GLOBAL': GLOBAL, 'GIT_CONFIG_NOSYSTEM': '1'}), nombre='git-jaula-113', t=180)
+    'GIT_CONFIG_GLOBAL': GLOBAL}), nombre='git-jaula-113', t=180)
 try:
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'args': 'origin'})
     check('ls-remote local autorizado contesta las refs', out.startswith('exit=0') and 'refs/heads/main' in out, out)

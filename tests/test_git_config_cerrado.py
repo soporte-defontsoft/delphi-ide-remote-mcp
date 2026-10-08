@@ -128,10 +128,17 @@ try:
         params={'path':tree}
         if tool=='delphi_move': params.update(dest=desttree,copy=copy)
         out=srv.call(tool,params)
-        check(tool+' del padre copy='+str(copy)+' niega metadatos',
-              '[GUARD-' in out and 'delphi_git' in out,out[:350])
-        check('padre conserva hashes copy='+str(copy),os.path.isdir(tree) and snap(tree)==before)
-        check('no aparece copia de metadatos',not os.path.exists(desttree))
+        if copy:
+            check('copy del padre niega metadatos','[GUARD-' in out and 'delphi_git' in out,out[:350])
+            check('copy conserva hashes',os.path.isdir(tree) and snap(tree)==before)
+            check('no aparece copia de metadatos',not os.path.exists(desttree))
+        elif tool=='delphi_move':
+            check('move del padre permitido','[MOVE-013]' in out and os.path.isdir(desttree),out[:350])
+            check('move conserva hashes',os.path.isdir(desttree) and snap(desttree)==before)
+        else:
+            copias=mc.copias(JAIL,'padre',cajon='CAJON_BORRADOS')
+            check('delete del padre permitido','[FILE-021]' in out and not os.path.exists(tree),out[:350])
+            check('papelera conserva hashes',len(copias)==1 and snap(copias[0])==before,copias)
         mc.borra(tree); mc.borra(desttree)
     ptr = os.path.join(JAIL, 'ficha')
     os.makedirs(ptr)
