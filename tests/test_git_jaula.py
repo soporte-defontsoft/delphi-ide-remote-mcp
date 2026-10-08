@@ -472,6 +472,24 @@ check('J15 un remoto del repo con direccion de ssh en su forma corta, sin usuari
       'negaba por "forma ilegible" GIT-045)',
       mc.abre(r, 'SR_GIT_EXIT_FMT') and 'maquina-que-no-existe' in r, corto(r, 400))
 
+# J15b - ...y la @ de la RUTA no es la del usuario (revisor "adivinar vs medir",
+# 8-oct-2026, medido): con el host permitido detras de una @ de la ruta, estas
+# direcciones -que van a otra maquina- pasaban, porque GitUrlHost tomaba lo que
+# seguia a la ULTIMA @ de toda la cadena. La puerta las niega por SU host.
+git('remote', 'add', 'arroba1', 'otra-maquina.invalid:x@maquina-que-no-existe.invalid', cwd=REPO)
+git('remote', 'add', 'arroba2', 'git@otra-maquina.invalid:x@maquina-que-no-existe.invalid', cwd=REPO)
+srv15b = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': DENTRO,
+    'DELPHI_MCP_GIT_REMOTES': 'maquina-que-no-existe.invalid'}), nombre='git-jaula-j15b', t=120)
+try:
+    rs = [srv15b.call('delphi_git', dict(repo=REPO, command='fetch', args=n))
+          for n in ('arroba1', 'arroba2')]
+finally:
+    srv15b.cierra()
+check('J15b un remoto host:ruta o user@host:ruta con el host PERMITIDO detras de una @ de la ruta '
+      'se niega por el host de verdad (otra-maquina), sin llegar a git',
+      all(not mc.abre(r, 'SR_GIT_EXIT_FMT') and 'otra-maquina' in r for r in rs),
+      [corto(r, 200) for r in rs])
+
 # J16 - push sin nombres desde un repo ESPEJO
 ESPEJO = os.path.join(DENTRO, 'espejo.git')
 git('clone', '-q', '--mirror', ENVIO_GIT, ESPEJO, cwd=DENTRO)

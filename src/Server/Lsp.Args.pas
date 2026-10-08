@@ -196,23 +196,47 @@ function GitUrlHost(const AToken: string; AScpCorto: Boolean): string;
 var
   T: string;
   P: Integer;
+  EsUrl, Corchete: Boolean;
 begin
   Result := '';
   T := AToken.Trim.Trim(['"', '''']);
   P := Pos('://', T);
-  if P > 0 then
+  EsUrl := P > 0;
+  if EsUrl then
     T := Copy(T, P + 3, MaxInt)
-  else if (Pos('@', T) > 0) and (Pos(':', T) > Pos('@', T)) then
-    T := Copy(T, Pos('@', T) + 1, MaxInt)
-  else if AScpCorto and
-          TRegEx.IsMatch(T, '^[A-Za-z0-9][A-Za-z0-9.-]+:[^:\\]') then
-    { scp corto host:ruta: el host se recorta en el ':' del bucle de abajo;
-      dos letras o mas antes del ':' -> no es una unidad (C:\ o C:/) }
-  else
+  else if not ((Pos('@', T) > 0) and (Pos(':', T) > Pos('@', T))) and
+          not (AScpCorto and TRegEx.IsMatch(T, '^[A-Za-z0-9][A-Za-z0-9.-]+:[^:\\]')) then
+    { scp corto host:ruta: dos letras o mas antes del ':' -> no es una unidad
+      (C:\ o C:/) }
     Exit; // not a URL: a branch, a path, an option
+  { LA AUTORIDAD ([user@]host[:puerto]) acaba en la primera / \ ? # de una
+    URL, o en el primer ':' de la forma scp (lo que sigue es la ruta), fuera
+    de unos corchetes. Una @ que venga DESPUES es del camino, no del usuario:
+    https://ejemplo.invalido/x@github.com y git@ejemplo.invalido:x@github.com
+    conectan con ejemplo.invalido, y esta puerta leia github.com (revisor
+    "adivinar vs medir", 8-oct-2026). }
+  Corchete := False;
+  for P := 1 to Length(T) do
+    if T[P] = '[' then
+      Corchete := True
+    else if T[P] = ']' then
+      Corchete := False
+    else if not Corchete and (CharInSet(T[P], ['/', '\', '?', '#']) or
+            (not EsUrl and (T[P] = ':'))) then
+    begin
+      T := Copy(T, 1, P - 1);
+      Break;
+    end;
+  // [user@]host: DOS @ en la autoridad es ambiguo (cada programa lee una
+  // distinta) y se niega en vez de adivinar: un host con @ no casa con
+  // ninguno de la lista
   P := Pos('@', T);
   if P > 0 then
+  begin
+    if Pos('@', T, P + 1) > 0 then
+      Exit(T.Trim.ToLower);
     T := Copy(T, P + 1, MaxInt);
+  end;
   // [::1]:3131 - the host is what the brackets hold, not the bracket
   if T.StartsWith('[') then
   begin
@@ -221,12 +245,9 @@ begin
       Exit(Copy(T, 2, P - 2).Trim.ToLower);
     Exit('[' + T); // malformed: keep it unrecognisable so it cannot match
   end;
-  for P := 1 to Length(T) do
-    if CharInSet(T[P], ['/', ':', '\']) then
-    begin
-      T := Copy(T, 1, P - 1);
-      Break;
-    end;
+  P := Pos(':', T); // el puerto de una URL
+  if P > 0 then
+    T := Copy(T, 1, P - 1);
   Result := T.Trim.ToLower;
 end;
 

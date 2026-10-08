@@ -130,5 +130,23 @@ r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon'), 'command': 'clo
               'message': 'https://allowed.example/a https://evil.example/b'})
 check('clone: segundo host colado en el message, cazado por la puerta al trocear',
       (mc.rechazado(r) and not mc.llego_a_git(r)) and 'evil.example' in r, r[:200])
+# ---- la @ que viene DESPUES de la autoridad es del camino, no del usuario
+# (revisor "adivinar vs medir", 8-oct-2026, medido): la puerta tomaba por host
+# lo que seguia a la ULTIMA @ de toda la cadena, asi que con allowed.example
+# permitido estas direcciones -que conectan con evil.example- pasaban (la
+# forma corta sin usuario, host:ruta, no la acepta clone: va en test_git_jaula
+# J15b, por los remotos del repo). ----
+for url in ('https://evil.example/x@allowed.example',
+            'https://evil.example?x@allowed.example',
+            'git@evil.example:x@allowed.example'):
+    r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon2'), 'command': 'clone',
+                  'message': url})
+    check('clone %s: el host es evil.example (la @ es de la ruta), negado' % url,
+          (mc.rechazado(r) and not mc.llego_a_git(r)) and 'evil.example' in r, r[:200])
+# dos @ en la autoridad: cada programa lee una distinta; se niega en vez de adivinar
+r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon2'), 'command': 'clone',
+              'message': 'https://a@evil.example@allowed.example/x'})
+check('clone con DOS @ en la autoridad: ambiguo, negado',
+      mc.rechazado(r) and not mc.llego_a_git(r), r[:200])
 srv2.mata()
 mc.fin('git arg filter battery')

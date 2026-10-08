@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The git remote gate reads the host where git reads it.** It took for the
+  host whatever followed the LAST `@` of the whole address, so with a host
+  allowed in `GitRemotes=`, an address carrying that host after an `@` of its
+  PATH (`https://other.host/x@allowed.host`, `other.host:x@allowed.host`,
+  `git@other.host:x@allowed.host`) passed the gate and git connected to the
+  other machine (measured against the production binary: git ran). The host
+  now comes from the address's authority only (up to the first `/ \ ? #` of
+  a URL, or the first `:` of the scp form, outside brackets), and two `@` in
+  the authority are refused instead of guessed. With `GitRemotes=` empty, as
+  it ships, nothing reached git. `test_git_argfilter` and `test_git_jaula`
+  (J15b) carry the cases, red against the old binary.
+
 ### Internal
 
 - `Lsp.Guard` is split by families, one family per commit and moves only:
