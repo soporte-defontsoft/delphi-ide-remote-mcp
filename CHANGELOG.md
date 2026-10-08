@@ -53,6 +53,16 @@ the MCP `initialize` response (`serverInfo.version`).
     when something fails halfway (`FicherosTodoONada`). It is the first
     family that goes ABOVE the jail: undoing asks the write gates and uses
     the guarded writers, and nothing in `Lsp.Guard` uses it.
+  - The arguments of a command go to **`Lsp.Args`**: the one splitter of an
+    argument line (`TrocearArgs`, the Windows C runtime's rules) and its
+    inverse (`EnComillas`), the gates on what reaches a git or launcher
+    command line (`GitArgDenied`, `GitRemoteDenied` with its host reader
+    `GitUrlHost`, `ShellArgDenied`), the query half of `delphi_git`
+    (`GitCommandIsQuery`) and the namer of a commit's message file. They go
+    BELOW the jail, which asks them, and they ask only `Lsp.Settings` (the
+    declared remotes) and `Lsp.Casa` (the server's temp folder).
+    `GitArgDenied` is now in an interface: the jail's entry gate calls it
+    from another unit.
 - `test_round16` measures the symbols summary against a frozen copy of
   `Lsp.Guard.pas` (commit 6544a95, in `tests/fixtures/`): the live unit
   changes with this cleanup, and the summary-to-tree ratio had already

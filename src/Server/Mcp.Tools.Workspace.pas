@@ -295,7 +295,8 @@ uses
   Lsp.Rutas,
   Lsp.Casa,
   Lsp.Settings,
-  Lsp.Identidad;
+  Lsp.Identidad,
+  Lsp.Args;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
@@ -1657,7 +1658,7 @@ begin
     Exit(MsgText(SR_GIT_MISSING_REPO));
   // En un proyecto de REFERENCIA (ReadOnlyRoots) vale la mitad de CONSULTA
   // de git - la misma clasificacion que la credencial de solo lectura, en
-  // UNA funcion (Lsp.Guard.GitCommandIsQuery). Lo demas pasa por la puerta
+  // UNA funcion (Lsp.Args.GitCommandIsQuery). Lo demas pasa por la puerta
   // de escritura y sale con el motivo de referencia.
   if (ReadOnlyRootOf(Repo) <> '') and
      GitCommandIsQuery(Params.Command, Params.Args, Params.Message) then
@@ -1684,7 +1685,7 @@ begin
   if not SameText(Params.Command.Trim, 'clone') and not TDirectory.Exists(Repo) then
     Exit(MsgFmt(SR_GIT_DIR_NOT_FOUND_FMT, [Repo]));
 
-  // UNA lista de metacaracteres (Lsp.Guard.ShellArgDenied): la tool tenia
+  // UNA lista de metacaracteres (Lsp.Args.ShellArgDenied): la tool tenia
   // su copia (novena revision)
   if ShellArgDenied(Params.Args) <> '' then
     Exit(MsgText(SR_GIT_SHELL_METACHARS_ARGS));

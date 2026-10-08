@@ -50,7 +50,8 @@ uses
   Lsp.DesignerBin, // el literal y el flotante: sus compositores
   Lsp.DesignerForma, // la linea de objeto: su compositor
   Lsp.Casa,
-  Lsp.TodoONada;
+  Lsp.TodoONada,
+  Lsp.Args;
 
 const
   CRLF = #13#10;

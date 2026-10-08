@@ -524,7 +524,8 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.Identidad,
-  Lsp.TodoONada;
+  Lsp.TodoONada,
+  Lsp.Args;
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -3639,7 +3640,7 @@ begin
     Replacement := string.Join(#10, SangraComoLaLinea(Lines[HitIdx], AOld, LineasDeNew(ANew)));
     // Empty replacement (old given + new='') blanks the line - a legitimate
     // edit. Never index Split()[0] on it: '' yields an empty array (measured
-    // Access Violation in the field test) - PrimerTrozo, Lsp.Guard. Line
+    // Access Violation in the field test) - PrimerTrozo, Lsp.Args. Line
     // DELETION is delete:true.
     var NewFirst := PrimerTrozo(Replacement, [#10]);
     var Quita := 0;      // cuantas lineas desaparecen del array

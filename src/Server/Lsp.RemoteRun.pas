@@ -125,7 +125,7 @@ function CapturaDenegada(const ASalida: string): Boolean;
   que midio el lanzador: AEntorno es su graphicalEnv), Windows que la
   deniega, o la linea en que el propio nodo lo dice. Nunca la fontaneria:
   decia "el nodo no dijo donde dejo la captura" (David, 26-sep-2026). El
-  troceador de argumentos que vivia aqui esta en Lsp.Guard (TrocearArgs). }
+  troceador de argumentos que vivia aqui esta en Lsp.Args (TrocearArgs). }
 function MotivoSinCaptura(const ASalida, AEntorno: string): string;
 
 { Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
@@ -153,7 +153,8 @@ uses
   Lsp.Dproj,     // TagValue: el lector del .profile
   Lsp.Texts,
   Lsp.NetDrives,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Args;
 
 var
   GNodoLock: TCriticalSection;

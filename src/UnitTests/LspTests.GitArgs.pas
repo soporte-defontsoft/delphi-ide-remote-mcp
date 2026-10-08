@@ -1,6 +1,6 @@
 ﻿unit LspTests.GitArgs;
 
-{ El troceador de argumentos de la puerta de git (Lsp.Guard.TrocearArgs) tiene
+{ El troceador de argumentos de la puerta de git (Lsp.Args.TrocearArgs) tiene
   que leer una linea EXACTAMENTE como la trocea el runtime de C de Windows (lo
   que hace git.exe, spawn directo sin shell): si no, una opcion prohibida
   escrita con comillas o barras invertidas se cuela por la puerta y git la
@@ -59,7 +59,8 @@ uses
   System.SysUtils,
   Lsp.Guard,
   System.JSON,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Args;
 
 procedure TTrocearArgsTests.EspaciosSimples;
 var

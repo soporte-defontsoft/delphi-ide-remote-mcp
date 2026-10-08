@@ -121,7 +121,8 @@ uses
   Lsp.Listas, // AgrupaPorCarpeta: los paquetes por carpeta
   Lsp.Json,
   Lsp.Casa,
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Args;
 
 constructor TDelphiPAServerTool.Create;
 begin

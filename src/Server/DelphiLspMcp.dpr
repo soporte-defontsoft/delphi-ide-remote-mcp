@@ -141,7 +141,8 @@ uses
   Lsp.Casa in 'Lsp.Casa.pas',
   Lsp.Settings in 'Lsp.Settings.pas',
   Lsp.Identidad in 'Lsp.Identidad.pas',
-  Lsp.TodoONada in 'Lsp.TodoONada.pas';
+  Lsp.TodoONada in 'Lsp.TodoONada.pas',
+  Lsp.Args in 'Lsp.Args.pas';
 
 {$R *.res}
 

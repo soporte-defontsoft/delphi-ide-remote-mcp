@@ -213,8 +213,8 @@ for regla in REGLAS:
 # Toda puerta de este censo dice LISTA NEGRA en su cabecera. Este control
 # mide la declaracion, NO que una lista negra sea completa.
 LISTAS_NEGRAS = [
-    ('Lsp.Guard.pas','GitArgDenied'),
-    ('Lsp.Guard.pas','ShellArgDenied'),
+    ('Lsp.Args.pas','GitArgDenied'),
+    ('Lsp.Args.pas','ShellArgDenied'),
     ('Lsp.Guard.pas','BorradoDenegado'),
     ('Lsp.Dproj.pas','HazardScan'),
 ]
