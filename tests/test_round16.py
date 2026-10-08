@@ -16,17 +16,65 @@ a 912-line unit - a small model drowned before doing anything. Now:
 
 Usage:  python tests/test_round16.py [path-to-DelphiLspMcp.exe]
 """
-import json, time, os, shutil, glob
+import json, time, os, glob
 import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('round16')
 EXE = mc.copia_exe(BASE)
-# a real big unit for the symbols wall (typ. >30k chars of full tree),
-# FROZEN as a file since 8-oct-2026 (why: the note of S1, below)
-shutil.copy(os.path.join(mc.REPO, 'tests', 'fixtures', 'guard-6544a95-2026-10-08',
-                         'Lsp.Guard.pas'),
-            os.path.join(BASE, 'Big.pas'))
+# a big unit for the symbols wall (typ. >30k chars of full tree), GENERATED
+# here since 9-oct-2026 (why: the note of S1, below)
+def unidad_grande(n=60):
+    """Una unidad GRANDE con la forma de una de verdad: rutinas con su nota,
+    valores por defecto, const/out, constantes de array, un enumerado, un
+    record y clases con metodos y propiedades; PathDenied y ReadPathDenied
+    para el filtro de S4; NINGUNA sobrecarga (LSP-022, la nota de S1)."""
+    i_ = ['unit Big;', '', '{ Unidad GRANDE generada por test_round16: la forma de una de verdad, sin',
+          '  depender de ninguna (ver la nota de S1). }', '', 'interface', '',
+          'type', '  TMotivo = (moNinguno, moFuera, moLectura, moEnlace, moAnomalia);', '',
+          '  TPar = record', '    Nombre: string;', '    Valor: Integer;', '  end;', '']
+    im = []
+    for c in range(3):
+        i_ += ['  { La familia %d: un objeto con estado, metodos y propiedades. }' % c,
+               '  TFamilia%d = class' % c, '  private', '    FNombre: string;', '    FCuenta: Integer;',
+               '    function GetActivo: Boolean;', '  public',
+               '    constructor Create(const ANombre: string; ACuenta: Integer = %d);' % (c + 1)]
+        for m in range(6):
+            i_.append('    function Paso%d(const AValor: string; ATope: Integer = %d): string;' % (m, 10 * m + c))
+        i_ += ['    property Nombre: string read FNombre write FNombre;',
+               '    property Cuenta: Integer read FCuenta;', '    property Activo: Boolean read GetActivo;',
+               '  end;', '']
+        im += ['constructor TFamilia%d.Create(const ANombre: string; ACuenta: Integer);' % c, 'begin',
+               '  inherited Create;', '  FNombre := ANombre;', '  FCuenta := ACuenta;', 'end;', '',
+               'function TFamilia%d.GetActivo: Boolean;' % c, 'begin', '  Result := FCuenta > 0;', 'end;', '']
+        for m in range(6):
+            im += ['function TFamilia%d.Paso%d(const AValor: string; ATope: Integer): string;' % (c, m), 'begin',
+                   '  if Length(AValor) > ATope then', '    Result := Copy(AValor, 1, ATope)', '  else',
+                   '    Result := AValor + FNombre;', 'end;', '']
+    i_ += ['const', "  NOMBRES: array [0 .. 4] of string = ('uno', 'dos', 'tres', 'cuatro', 'cinco');",
+           '  TOPE_MAXIMO = 4096;', '',
+           "{ La puerta: '' si se permite, o el motivo de la negativa. }",
+           'function PathDenied(const APath: string; AEscribe: Boolean = True): string;',
+           '{ La misma puerta para leer. }',
+           'function ReadPathDenied(const APath: string; APermiteGit: Boolean = False): string;']
+    im += ['function PathDenied(const APath: string; AEscribe: Boolean): string;', 'begin',
+           "  if APath = '' then", "    Exit('vacia');", "  Result := '';", 'end;', '',
+           'function ReadPathDenied(const APath: string; APermiteGit: Boolean): string;', 'begin',
+           '  Result := PathDenied(APath, False);', 'end;', '']
+    for k in range(n):
+        i_ += ['{ La rutina %d: hace una cosa con su entrada y devuelve el resultado; los' % k,
+               '  valores por defecto viajan en la declaracion. }',
+               'function Rutina%d(const AEntrada: string; ATope: Integer = %d;' % (k, k + 1),
+               "  const ASeparador: string = ';'; out AMotivo: TMotivo): string;"]
+        im += ['function Rutina%d(const AEntrada: string; ATope: Integer;' % k,
+               '  const ASeparador: string; out AMotivo: TMotivo): string;', 'var', '  Trozos: TArray<string>;',
+               'begin', '  AMotivo := moNinguno;', '  Trozos := AEntrada.Split([ASeparador]);',
+               '  if Length(Trozos) > ATope then', '  begin', '    AMotivo := moFuera;', "    Exit('');", '  end;',
+               "  Result := string.Join('|', Trozos);", 'end;', '']
+    return '\n'.join(i_ + ['', 'implementation', '', 'uses', '  System.SysUtils;', ''] + im + ['end.', ''])
+
+
+open(os.path.join(BASE, 'Big.pas'), 'w').write(unidad_grande())
 open(os.path.join(BASE, 'Small.pas'), 'w').write(
     'unit Small;\ninterface\nprocedure Uno;\nimplementation\n'
     'procedure Uno;\nbegin\nend;\nend.\n')
@@ -101,7 +149,8 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
       j.get('mode') == 'summary' and isinstance(j.get('sections'), list) and
       j.get('totalSymbols', 0) > 50 and 'autoNote' in j, rbig[:260])
 # the fixture was Lsp.Guard.pas itself and grew with the server (a frozen copy
-# since 8-oct-2026, see below): compact relative to a ceiling, not to a size.
+# on 8-oct-2026, a GENERATED unit since 9-oct, see below): compact relative to
+# a ceiling, not to a size.
 #
 # El techo subio de 12k a 14k el 2026-09-20, A PROPOSITO y medido: desde la
 # v1.0.7 el resumen da la declaracion REAL del fuente en vez de la firma que
@@ -132,22 +181,29 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
 # al 24,3% desde la 1.13.0 (el arbol completo adelgazo: el selectionRange
 # igual al range ya no viaja), y la limpieza de la 1.18.0 la llevo al 25,2%
 # sacando cuerpos de Lsp.Guard: el check medía DOS cosas, delphi_symbols y la
-# forma de la unidad. Desde ese dia el fixture es una COPIA en fichero,
-# tests/fixtures/guard-6544a95-2026-10-08 (el Lsp.Guard.pas del commit
-# 6544a95, la produccion de ese dia). Base medida: 36.147 frente a 148.843 =
-# 24,3%, el 8-oct-2026, con el exe de la rama de la 1.18.0 (dice 1.17.0).
-# Techo: 30%, solo rojo si el RESUMEN engorda (David, 8-oct).
+# forma de la unidad. Ese dia el fixture paso a ser una COPIA en fichero del
+# Lsp.Guard.pas del commit 6544a95 (base 24,3%, techo 30%).
+# Y el 2026-10-09, GENERADO: la copia congelada era una segunda casa del codigo
+# de la jaula dentro del repo (salia en cada delphi_search y habia que
+# vigilarla), y lo que S1 necesita no es Lsp.Guard sino una unidad GRANDE con
+# la forma de una de verdad. unidad_grande() la escribe aqui, como Small.pas, y
+# es determinista: 200 simbolos. Base medida el 8 y el 9-oct-2026 con el exe
+# de la rama de la 1.18.0 (dice 1.17.0): 17.627 frente a 64.340 = 27,4%.
+# Techo: 30% (David: '30 y asi revisamos si rojo'): un rojo es una alarma para
+# mirar la forma de la respuesta, no un numero que se sube.
 # Lo que S1 tiene AL LADO cuenta: Big.pas comparte carpeta con el SecCfg.dproj
 # que crea el scaffold de C1, y DelphiLSP sin proyecto revienta (LSP-022) con
 # una unidad que tenga dos sobrecargas de igual aridad que solo difieren en
 # TArray<string> frente a string; con proyecto la lee (medido el 8-oct: vault,
 # decisions/delphilsp-sobrecargas-sin-proyecto-2026-10-08). El Guard de la
-# v1.17.0 las tenia (WalkFiles): por eso no sirve de fixture SUELTO, y por eso
-# S1 paso en verde de la 1.13.1 a la 1.17.0 sin declararlo. Este fixture no
-# las tiene: medido sin proyecto 24,3% (la base) y junto a SecCfg.dproj 24,2%.
-# Quien cambie el fixture lo mide SOLO en su carpeta antes de fiarse de S1.
+# v1.17.0 las tenia (WalkFiles): por eso S1 paso en verde de la 1.13.1 a la
+# 1.17.0 sin declararlo. La unidad generada NO lleva sobrecargas, y aun asi
+# sola, sin el .dproj al lado, la respuesta lleva LSP-021 detras del JSON y S1
+# y S4 no la leen: el SecCfg.dproj es parte de la medida.
+# Quien cambie unidad_grande() la mide SOLA y junto al .dproj antes de fiarse
+# de S1, y pone aqui la base nueva.
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
-check('S1 y de verdad es compacto (el resumen pesa < 30% del arbol completo; base congelada 24,3%)',
+check('S1 y de verdad es compacto (el resumen pesa < 30% del arbol completo; base del generado 27,4%)',
       len(rfull) > 0 and len(rbig) < 0.30 * len(rfull), (len(rbig), len(rfull)))
 check('S2 mode=full conserva el arbol completo con rangos',
       # 1.13.0: el selectionRange igual al range ya no viaja (revisor de

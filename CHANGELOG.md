@@ -111,8 +111,8 @@ the MCP `initialize` response (`serverInfo.version`).
     raw lists of places (`WorkspaceRoots`, `WorkspaceReadOnlyRoots`,
     `WorkspaceReadOnlyPaths`, `LugaresDeclarados`, `LibraryRoots`,
     `LibraryReadRoots`, `TodosLosVaults`, `RaicesDeLosWorkspaces`,
-    `RaicesDelModoLocal`,
-    `SitiosQueNoSeTocan`) in `Lsp.Settings`, which reads them, and
+    `RaicesDelModoLocal`, `SitiosQueNoSeTocan`) in `Lsp.Settings`, which
+    reads them, and
     `Lsp.Lugares`, which walks them; the 21 routines in seven units that walk
     them on their own today are declared debt, by routine, that can only
     shrink (a home written `TClass.Method` is that method only, so one tool's
@@ -152,11 +152,15 @@ the MCP `initialize` response (`serverInfo.version`).
   Workspace's header now names the tools it really registers, and it drops
   four units only git used. The order of `tools/list` is unchanged
   (measured), and `test_paisaje` finds the git launcher in its new home.
-- `test_round16` measures the symbols summary against a frozen copy of
-  `Lsp.Guard.pas` (commit 6544a95, in `tests/fixtures/`): the live unit
-  changes with this cleanup, and the summary-to-tree ratio had already
-  climbed from 16% to 24.3% unseen since 1.13.0 (the full tree got leaner).
-  Base 24.3%, ceiling 30%: red only if the summary gets fatter.
+- `test_round16` measures the symbols summary against a big unit it
+  GENERATES, as it already did with the small one: the live `Lsp.Guard.pas`
+  changed with this cleanup, the summary-to-tree ratio had climbed from 16%
+  to 24.3% unseen since 1.13.0 (the full tree got leaner), and a frozen copy
+  of a unit of the jail in the repo was a second home of that code for every
+  search. The generated unit has the shape of a real one (routines with
+  their notes, default values, classes with methods and properties) and no
+  overloads that `DelphiLSP` cannot read outside a project. Base 27.4%,
+  ceiling 30%: a red is an alarm to look at the shape of the answer.
 
 ## [1.17.0] - 2026-10-07
 
