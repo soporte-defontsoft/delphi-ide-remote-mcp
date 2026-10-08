@@ -131,7 +131,8 @@ uses
   Lsp.Imagen,        // RecortaPng: el recorte al componente, en el servidor
   Lsp.InlineImages,  // DeliverCapture / ColocaCaptura: como se entrega una captura
   Lsp.DesignerEdit,  // insert / set / delete: el form y su unidad, como el IDE
-  Lsp.Json;          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
+  Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
+  Lsp.Rutas;
 
 const
   MAX_PROPS = 400;

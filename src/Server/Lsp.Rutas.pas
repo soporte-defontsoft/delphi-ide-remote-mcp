@@ -10,7 +10,12 @@
   estas siete piezas no usan nada de la jaula y que las usan la jaula, el
   lector del settings.ini y la casa del servidor: debajo de los tres,
   ninguno tiene que pasar por Guard para canonicalizar. No usa ninguna
-  unidad del servidor salvo Lsp.NetDrives (las formas de una raiz). }
+  unidad del servidor salvo Lsp.NetDrives (las formas de una raiz).
+
+  Y los predicados de la FORMA de una ruta, que tampoco usan nada de la
+  jaula: EsRutaAbsoluta (la ruta completa), EsUnc y EsPrefijoDeDispositivo.
+  Llegan de Lsp.Guard el mismo dia, sin cambiar una linea: la segunda de
+  las cuatro mudanzas que sacan de Guard la mascara de unidades. }
 
 interface
 
@@ -51,6 +56,23 @@ function FormaLarga(const APath: string): string;
   de "esta en ese sitio". Un lugar vacio no contiene nada. }
 function EnLugar(const APath, ALugar: string;
   AResuelveAlias: Boolean = True): Boolean;
+
+{ LA regla de "ruta completa": <letra>:\ (o :/) o un UNC. "\x", "/x" y "C:x"
+  NO lo son, y TPath.IsPathRooted si las da por buenas: se resolvian contra
+  la unidad o la carpeta del PROCESO, que el agente no nombro. Toda tool que
+  pregunte "me han dado una ruta completa?" pregunta esto. }
+function EsRutaAbsoluta(const AValue: string): Boolean;
+
+{ Un prefijo de DISPOSITIVO o de ruta extendida (\\?\, \\.\, tambien con
+  barras normales): la entrada lo niega (GUARD-022) y nadie lo resuelve en
+  el disco. Estaba escrito dos veces, y NormPath resolvia un \\?\UNC\ leido
+  de un .dpr: SMB hacia ese host, 21 s (novena revision). }
+function EsPrefijoDeDispositivo(const APath: string): Boolean;
+
+{ Un UNC de verdad (\\host\...), no un prefijo de dispositivo (\\?\, \\.\).
+  Con barras de Windows. LA pregunta de quien mira un UNC por su texto:
+  estaba escrita en cuatro sitios (tercer revisor de la 1.8.2). }
+function EsUnc(const APath: string): Boolean;
 
 implementation
 
@@ -236,6 +258,35 @@ begin
   except
     Result := False; // una ruta que no parsea no esta en ningun sitio
   end;
+end;
+
+{ Una ruta ABSOLUTA de verdad: <letra>:<separador> o un UNC. A proposito NO
+  cuenta "D:" a secas ni nada relativo - el suelo de Guard solo puede morder
+  donde esta seguro, porque muerde ANTES de que la tool mire sus argumentos y
+  un falso positivo ahi rechaza una llamada legitima sin que nadie sepa por
+  que. Las formas raras (la unidad sin separador, los nombres con punto o
+  espacio al final) las sigue cazando PathAnomaly dentro de PathDenied. }
+function EsRutaAbsoluta(const AValue: string): Boolean;
+begin
+  Result := ((Length(AValue) >= 3) and (AValue[2] = ':') and
+             CharInSet(AValue[1], ['A' .. 'Z', 'a' .. 'z']) and
+             CharInSet(AValue[3], ['\', '/'])) or
+            ((Length(AValue) >= 2) and
+             (((AValue[1] = '\') and (AValue[2] = '\')) or
+              ((AValue[1] = '/') and (AValue[2] = '/'))));
+end;
+
+function EsPrefijoDeDispositivo(const APath: string): Boolean;
+var
+  P: string;
+begin
+  P := APath.Trim.Replace('/', '\');
+  Result := StartsText('\\?\', P) or StartsText('\\.\', P);
+end;
+
+function EsUnc(const APath: string): Boolean;
+begin
+  Result := APath.StartsWith('\\') and not EsPrefijoDeDispositivo(APath);
 end;
 
 end.

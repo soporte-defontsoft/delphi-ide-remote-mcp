@@ -481,12 +481,6 @@ function CarpetaEnVezDeFichero(const APath: string): string;
   diagnostics, designer, add-unit y delphi_edit (tercera revision, 27-sep-2026). }
 function NoEsFichero(const APath, AMsgNoExiste: string): string;
 
-{ LA regla de "ruta completa": <letra>:\ (o :/) o un UNC. "\x", "/x" y "C:x"
-  NO lo son, y TPath.IsPathRooted si las da por buenas: se resolvian contra
-  la unidad o la carpeta del PROCESO, que el agente no nombro. Toda tool que
-  pregunte "me han dado una ruta completa?" pregunta esto. }
-function EsRutaAbsoluta(const AValue: string): Boolean;
-
 { Un UNC (\\host\...) que no cae BAJO ningun sitio declarado - raices,
   referencias, ReadOnlyPaths, el vault, la zona de librerias -, comparado por
   TEXTO, sin tocar el disco. Resolverlo (RealPath abre un handle,
@@ -495,11 +489,6 @@ function EsRutaAbsoluta(const AValue: string): Boolean;
   del servicio se autentica si el host contesta (septima revision). Sin
   jaula configurada, False: no hay nada que proteger. }
 function UncFueraDeLugares(const APath: string): Boolean;
-{ Un prefijo de DISPOSITIVO o de ruta extendida (\\?\, \\.\, tambien con
-  barras normales): la entrada lo niega (GUARD-022) y nadie lo resuelve en
-  el disco. Estaba escrito dos veces, y NormPath resolvia un \\?\UNC\ leido
-  de un .dpr: SMB hacia ese host, 21 s (novena revision). }
-function EsPrefijoDeDispositivo(const APath: string): Boolean;
 { Una ruta que un fichero NOMBRA (un .dpr, un .groupproj) y que nadie
   resuelve en el disco: un UNC de ningun sitio declarado o un prefijo de
   dispositivo. La E/S sobre ella iria a un host que eligio el fichero, no
@@ -1442,12 +1431,6 @@ const
   PARAMS_CON_CONTENIDO: array [0 .. 6] of string = (
     'new', 'old', 'content', 'data', 'message', 'code', 'args');
 
-{ Una ruta ABSOLUTA de verdad: <letra>:<separador> o un UNC. A proposito NO
-  cuenta "D:" a secas ni nada relativo - el suelo de abajo solo puede morder
-  donde esta seguro, porque muerde ANTES de que la tool mire sus argumentos y
-  un falso positivo ahi rechaza una llamada legitima sin que nadie sepa por
-  que. Las formas raras (la unidad sin separador, los nombres con punto o
-  espacio al final) las sigue cazando PathAnomaly dentro de PathDenied. }
 function ConNota(const AText, AClave, ANota: string;
   const ASeparador: string): string;
 var
@@ -1511,16 +1494,6 @@ procedure CopiaNuestra(const AOrigen, ADestino: string);
 begin
   TFile.Copy(AOrigen, ADestino);
   QuitaSoloLectura(ADestino);
-end;
-
-function EsRutaAbsoluta(const AValue: string): Boolean;
-begin
-  Result := ((Length(AValue) >= 3) and (AValue[2] = ':') and
-             CharInSet(AValue[1], ['A' .. 'Z', 'a' .. 'z']) and
-             CharInSet(AValue[3], ['\', '/'])) or
-            ((Length(AValue) >= 2) and
-             (((AValue[1] = '\') and (AValue[2] = '\')) or
-              ((AValue[1] = '/') and (AValue[2] = '/'))));
 end;
 
 function RutaRelativaDenegada(const APath: string): string;
@@ -1700,50 +1673,6 @@ begin
       if Result <> '' then
         Exit;
     end;
-  end;
-end;
-
-type
-  TTraduceArg = reference to function(const ANombre, AValor: string): string;
-
-{ Reescribe EN SU SITIO los argumentos de texto de una llamada: ATraduce
-  recibe el nombre y el valor y devuelve el valor nuevo (el mismo = sin
-  tocar). El recorrido de las dos normalizaciones de la entrada -la unidad
-  virtual (ExpandVirtualDrives) y el nombre largo (AlargaRutas)-, escrito
-  una vez: la tercera, si llega, es otra ATraduce. }
-procedure ReescribeCadenas(const AArguments: TJSONObject; const ATraduce: TTraduceArg);
-var
-  I: Integer;
-  P: TJSONPair;
-  Names, Vals: TStringList;
-  V, N: string;
-begin
-  if not Assigned(AArguments) then
-    Exit;
-  Names := TStringList.Create;
-  Vals := TStringList.Create;
-  try
-    for I := 0 to AArguments.Count - 1 do
-    begin
-      P := AArguments.Pairs[I];
-      if not (P.JsonValue is TJSONString) then
-        Continue;
-      V := TJSONString(P.JsonValue).Value;
-      N := ATraduce(P.JsonString.Value, V);
-      if N <> V then
-      begin
-        Names.Add(P.JsonString.Value);
-        Vals.Add(N);
-      end;
-    end;
-    for I := 0 to Names.Count - 1 do
-    begin
-      AArguments.RemovePair(Names[I]).Free;
-      AArguments.AddPair(Names[I], Vals[I]);
-    end;
-  finally
-    Names.Free;
-    Vals.Free;
   end;
 end;
 
@@ -3871,25 +3800,9 @@ begin
   end;
 end;
 
-function EsPrefijoDeDispositivo(const APath: string): Boolean;
-var
-  P: string;
-begin
-  P := APath.Trim.Replace('/', '\');
-  Result := StartsText('\\?\', P) or StartsText('\\.\', P);
-end;
-
 function RutaSinTocarElDisco(const APath: string): Boolean;
 begin
   Result := UncFueraDeLugares(APath) or EsPrefijoDeDispositivo(APath);
-end;
-
-{ Un UNC de verdad (\\host\...), no un prefijo de dispositivo (\\?\, \\.\).
-  Con barras de Windows. LA pregunta de quien mira un UNC por su texto:
-  estaba escrita en cuatro sitios (tercer revisor de la 1.8.2). }
-function EsUnc(const APath: string): Boolean;
-begin
-  Result := APath.StartsWith('\\') and not EsPrefijoDeDispositivo(APath);
 end;
 
 { Los lugares que el operador declaro (raices, referencias, solo lectura, el

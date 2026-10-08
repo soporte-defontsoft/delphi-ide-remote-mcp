@@ -91,6 +91,12 @@ the MCP `initialize` response (`serverInfo.version`).
     `Lsp.Discovery` no longer uses `Lsp.Guard` - the cycle between the two
     is gone - and neither do `Lsp.Docs` and `Mcp.Tools.Components`. This is
     the first of four steps that take the drive mask out of `Lsp.Guard`.
+  - The predicates on the SHAPE of a path go to **`Lsp.Rutas`**
+    (`EsRutaAbsoluta`, `EsUnc`, `EsPrefijoDeDispositivo`), and the walk that
+    rewrites a call's text arguments in place (`ReescribeCadenas`) goes to
+    **`Lsp.Json`**, below the jail and the coming drive mask, which both use
+    it. The note of `EsRutaAbsoluta`, which sat above another function,
+    travels with it. The second of the four steps.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

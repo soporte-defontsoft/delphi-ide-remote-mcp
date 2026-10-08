@@ -104,7 +104,8 @@ uses
   Lsp.ProjectUnits,
   Lsp.Patch,
   Lsp.Regex,
-  Lsp.TodoONada;
+  Lsp.TodoONada,
+  Lsp.Rutas;
 
 constructor TDelphiConfigTool.Create;
 begin

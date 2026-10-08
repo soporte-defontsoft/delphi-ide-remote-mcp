@@ -51,7 +51,8 @@ uses
   Lsp.DesignerForma, // la linea de objeto: su compositor
   Lsp.Casa,
   Lsp.TodoONada,
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Rutas;
 
 const
   CRLF = #13#10;
