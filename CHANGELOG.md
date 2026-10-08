@@ -37,6 +37,12 @@ the MCP `initialize` response (`serverInfo.version`).
   its line while it fits in 80 columns (or the widest line the clause
   already had), else on a new line with the clause's indent. Any other
   clause, and every `.dpr`/`.dpk`, is written one unit per line as before.
+- **A GET that asks for an SSE stream gets `405 Method Not Allowed`** (with
+  `Allow: GET, POST, OPTIONS`), as the MCP transport lets a server that
+  offers no stream on GET answer. It got a `200` stream that closed at once,
+  and the Python SDK reopened it every second. A dead session still gets
+  its `404` first; a GET without the event-stream `Accept` still gets the
+  endpoint's card. `test_resultados` E94b.
 
 ### Internal
 

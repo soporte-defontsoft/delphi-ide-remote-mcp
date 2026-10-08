@@ -1192,6 +1192,21 @@ try:
     except urllib.error.HTTPError as e:
         gcode = e.code
     check('E94 el GET del flujo con una sesion muerta es 404 (era 200)', gcode == 404, gcode)
+    # 5.1 de la 1.18.0: con una sesion VIVA, el GET del flujo es 405 (la
+    # especificacion se lo deja al servidor que no ofrece flujo en el GET): un
+    # 200 que se cerraba al momento hacia que el SDK de Python lo reabriera
+    # cada segundo
+    req = urllib.request.Request(cli.url, method='GET', headers={
+        'Accept': 'text/event-stream', 'Authorization': 'Bearer ' + TOK, 'Mcp-Session-Id': cli.sid or ''})
+    gallow = ''
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            gcode = r.status
+    except urllib.error.HTTPError as e:
+        gcode = e.code
+        gallow = e.headers.get('Allow', '')
+    check('E94b el GET del flujo con una sesion viva es 405 con su Allow (era 200 y se cerraba)',
+          bool(cli.sid) and gcode == 405 and 'POST' in gallow, '%s %r %r' % (gcode, gallow, cli.sid))
     code, h, b = cli.post({'jsonrpc': '2.0', 'method': 'notifications/initialized'},
                           accept='application/json')
     check('E94 el 202 de una notificacion va SIN cuerpo (llevaba el HTML de Indy)',

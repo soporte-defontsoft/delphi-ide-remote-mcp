@@ -607,7 +607,6 @@ procedure TMCPIdHTTPServer.HandleGetRequest(RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo);
 var
   AcceptHeader: string;
-  SessionID: string;
 begin
   AcceptHeader := RequestInfo.RawHeaders.Values['Accept'];
 
@@ -619,28 +618,19 @@ begin
 
   if AcceptsSSE(AcceptHeader) then
   begin
-    TLogger.Debug('Received GET request - opening SSE stream for server-initiated messages');
-
-    ResponseInfo.ContentType := 'text/event-stream';
+    // [local change] 405, not an empty stream that closes at once: the spec
+    // (2025-03-26, "Listening for Messages from the Server") lets a server
+    // that offers no stream on GET answer 405 Method Not Allowed, and the
+    // Python SDK, given a 200 that closed, reopened it every second (5.1 de
+    // la 1.18.0). Lo que el servidor tenga que decir va en la respuesta del
+    // POST.
+    TLogger.Debug('Received GET request for an SSE stream - 405, none is offered');
+    ResponseInfo.ResponseNo := HTTP_METHOD_NOT_ALLOWED;
+    ResponseInfo.ResponseText := 'Method Not Allowed';
+    ResponseInfo.CustomHeaders.Values['Allow'] := 'GET, POST, OPTIONS';
+    ResponseInfo.ContentType := 'text/plain';
     ResponseInfo.CharSet := 'utf-8';
-    ResponseInfo.CustomHeaders.Values['Cache-Control'] := 'no-cache';
-    ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
-    ResponseInfo.CustomHeaders.Values['X-Accel-Buffering'] := 'no';
-
-    SessionID := RequestInfo.RawHeaders.Values['Mcp-Session-Id'];
-    AnunciaSesion(ResponseInfo, '', '', SessionID);
-
-    ResponseInfo.ResponseNo := HTTP_OK;
-    // Empty SSE stream, closed at once - but NOT an empty body: Indy fills an
-    // empty one with its HTML page ("<HTML><BODY><B>200 OK..."), which is
-    // not an event stream (sexta revision). An SSE comment is: clients
-    // ignore it.
-    ResponseInfo.ContentText := ': no server-initiated messages' + #10#10;
-
-    // Note: GET endpoint for SSE streams is optional per MCP spec 2025-03-26
-    // Server MAY keep connection open to send server-initiated notifications/requests
-    // Current implementation: basic support, closes stream immediately (no persistent connection)
-    TLogger.Debug('SSE stream opened (no server-initiated messages to send)');
+    ResponseInfo.ContentText := 'Method Not Allowed: no SSE stream is offered on GET.';
   end
   else
   begin
