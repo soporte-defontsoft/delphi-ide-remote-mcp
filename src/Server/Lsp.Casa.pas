@@ -11,7 +11,15 @@ unit Lsp.Casa;
   jaula, y los usan la jaula y el lector del settings.ini (SettingsIniPath).
   Lo que se hace CON esas carpetas - los entregables del agente
   (AgentTempDir, CaptureTarget), la purga del arranque y la presencia de
-  instancias - pregunta a las puertas y se queda en Lsp.Guard. }
+  instancias - pregunta a las puertas y se queda en Lsp.Guard.
+
+  Y los de la PAPELERA, la hermana de __delphi-temp, que llegan de Lsp.Patch
+  el mismo dia y tambien sin cambiar una linea: el nombre de su carpeta
+  (TrashFolderName) y la marca de dueno ENTERA - el escritor (MarcaDeDueno),
+  su inversa (CopiaDeLaMarca), quien la reconoce (EsMarcaDeDueno) y el
+  formato que los une (MARCA_DUENO_EXT): viajan juntos o no viaja ninguno.
+  Lo que se hace CON la papelera (sellar, guardar, purgar) se queda en
+  Lsp.Patch. }
 
 interface
 
@@ -114,6 +122,24 @@ function EsCarpetaDescarga(const ANombre: string): Boolean;
   Nada del valor crudo llega al sistema de ficheros. Uno solo: estaba
   copiado identico en Mcp.Tools.Messages y Mcp.Tools.Report (25-sep-2026). }
 function Slug(const S: string): string;
+
+{ El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
+  reconocerla. Estaba declarada DOS veces, en Lsp.Patch y en Mcp.Tools.FileOps. }
+function TrashFolderName: string;
+
+{ La marca de dueno: su nombrador, su inversa y quien la reconoce. Estaba
+  escrita a mano en catorce sitios. }
+function MarcaDeDueno(const ACopia: string): string;
+function CopiaDeLaMarca(const AMarca: string): string;
+function EsMarcaDeDueno(const ARuta: string): Boolean;
+
+const
+  // la carpeta de la papelera: la nombra TrashFolderName, y Lsp.Patch compone con
+  // ella las rutas de sus copias (TrashDayDir, BackupFile)
+  BACKUP_SUB = '__delphi-patch';
+  { La marca de DUENO de una copia sellada: "<copia>.by", con el agente que la
+    dejo (la purga solo deja purgar lo propio). }
+  MARCA_DUENO_EXT = '.by';
 
 implementation
 
@@ -249,6 +275,28 @@ begin
   // 'C:\ñ' son la misma carpeta (revision de la 1.11.0)
   Result := LowerCase(THashMD5.GetHashString(
     AnsiLowerCase(SinBarraFinal(LongCanonical(ADir)))));
+end;
+
+function TrashFolderName: string;
+begin
+  Result := BACKUP_SUB;
+end;
+
+function MarcaDeDueno(const ACopia: string): string;
+begin
+  Result := ACopia + MARCA_DUENO_EXT;
+end;
+
+function EsMarcaDeDueno(const ARuta: string): Boolean;
+begin
+  Result := EndsText(MARCA_DUENO_EXT, ARuta);
+end;
+
+function CopiaDeLaMarca(const AMarca: string): string;
+begin
+  Result := AMarca;
+  if EsMarcaDeDueno(AMarca) then
+    SetLength(Result, Length(AMarca) - Length(MARCA_DUENO_EXT));
 end;
 
 end.

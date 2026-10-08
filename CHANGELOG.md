@@ -76,6 +76,14 @@ the MCP `initialize` response (`serverInfo.version`).
     declared debt that can only shrink. The cycle between `Lsp.Settings`
     and `Lsp.Patch` is gone, and `Lsp.Docs` and `Lsp.DesignerBin` no longer
     use `Lsp.Patch`.
+  - The namers of the trash join the server's home in **`Lsp.Casa`**: the
+    name of its folder (`TrashFolderName`, `BACKUP_SUB`) and the owner mark
+    whole - its writer (`MarcaDeDueno`), its inverse (`CopiaDeLaMarca`),
+    what recognises it (`EsMarcaDeDueno`) and the format that binds them
+    (`MARCA_DUENO_EXT`), which travel together or not at all. What is done
+    WITH the trash (stamping, keeping, purging) stays in `Lsp.Patch`.
+    `test_paisaje` pins the mark's extension to its one home, and
+    `Lsp.Guard` now uses `Lsp.Patch` for a single thing (`PurgaAlPasar`).
 - `test_round16` measures the symbols summary against a frozen copy of
   `Lsp.Guard.pas` (commit 6544a95, in `tests/fixtures/`): the live unit
   changes with this cleanup, and the summary-to-tree ratio had already

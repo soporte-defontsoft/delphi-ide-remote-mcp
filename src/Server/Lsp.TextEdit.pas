@@ -53,7 +53,8 @@ uses
   System.JSON,
   Lsp.Guard,
   Lsp.Texts,
-  Lsp.Patch;
+  Lsp.Patch,
+  Lsp.Casa;
 
 // Las extensiones de otras tools (fuentes y designers de delphi_edit, los de
 // proyecto del IDE / delphi_create) son las listas del motor: SOURCE_EXTS,

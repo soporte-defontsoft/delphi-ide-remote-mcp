@@ -423,10 +423,6 @@ function TrashDayDir(const APath, ASub: string): string;
 { El nombre de una copia: el nombre real + el sello. La unica forma. }
 function TrashStampedName(const AName: string): string;
 
-{ El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
-  reconocerla. Estaba declarada DOS veces, aqui y en Mcp.Tools.FileOps. }
-function TrashFolderName: string;
-
 const
   { Los CAJONES de la papelera de un dia (TrashDayDir): en que carpeta cae una
     copia sellada. El nombre lo pone TrashStampedName; lo que distingue una
@@ -435,9 +431,6 @@ const
   CAJON_BORRADOS = 'deleted';                  // delete, changeset delete, la copia previa de move
   CAJON_ANTES_DE_RESTAURAR = 'before-restore'; // lo que habia antes de un restore
   CAJON_SUSTITUIDOS = 'replaced';              // lo que habia antes de pisar un fichero ENTERO
-  { La marca de DUENO de una copia sellada: "<copia>.by", con el agente que la
-    dejo (la purga solo deja purgar lo propio). }
-  MARCA_DUENO_EXT = '.by';
 
 { La ruta de una copia SELLADA de APath en el cajon ACajon de su papelera,
   por la puerta de escribir sobre la ruta REAL (lanza la negativa): un
@@ -456,11 +449,6 @@ function TrashPathFor(const APath, ACajon: string): string;
 function GuardaContenidoActual(const APath: string;
   const ACajon: string = CAJON_SUSTITUIDOS): string;
 
-{ La marca de dueno: su nombrador, su inversa y quien la reconoce. Estaba
-  escrita a mano en catorce sitios. }
-function MarcaDeDueno(const ACopia: string): string;
-function CopiaDeLaMarca(const AMarca: string): string;
-function EsMarcaDeDueno(const ARuta: string): Boolean;
 { Deja "<copia>.by" con el agente que la tiro; sin identidad, nada. }
 procedure WriteOwnerMarker(const ATrash: string);
 { El agente dueno de una copia, '' si no consta. }
@@ -522,7 +510,6 @@ uses
   Lsp.Args;
 
 const
-  BACKUP_SUB = '__delphi-patch';
   RETENTION_DAYS = 15;
   MAX_EDITS = 50; // entradas de una tanda
   { LOS campos de una entrada de "edits": los que la tanda lee y los que
@@ -1207,11 +1194,6 @@ begin
     Result := MsgFmt(SF_EDIT_EDAD_DIAS_FMT, [Mins div (24 * 60)]);
 end;
 
-function TrashFolderName: string;
-begin
-  Result := BACKUP_SUB;
-end;
-
 function TrashDayDir(const APath, ASub: string): string;
 begin
   Result := TPath.Combine(
@@ -1253,23 +1235,6 @@ begin
     Veto := EscrituraDenegada(Result);
   if Veto <> '' then
     raise Exception.Create(Veto);
-end;
-
-function MarcaDeDueno(const ACopia: string): string;
-begin
-  Result := ACopia + MARCA_DUENO_EXT;
-end;
-
-function EsMarcaDeDueno(const ARuta: string): Boolean;
-begin
-  Result := EndsText(MARCA_DUENO_EXT, ARuta);
-end;
-
-function CopiaDeLaMarca(const AMarca: string): string;
-begin
-  Result := AMarca;
-  if EsMarcaDeDueno(AMarca) then
-    SetLength(Result, Length(AMarca) - Length(MARCA_DUENO_EXT));
 end;
 
 procedure WriteOwnerMarker(const ATrash: string);

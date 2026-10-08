@@ -179,7 +179,7 @@ end;
                ahi SI se restaura.
 
   El nombre de la carpeta de temporales lo pone TempFolderName (Lsp.Casa), y
-  el de la papelera TrashFolderName (Lsp.Patch); aqui van literales porque un
+  el de la papelera TrashFolderName (Lsp.Casa); aqui van literales porque un
   array const no puede llamar a una funcion. Que digan lo mismo no se deja a
   la buena fe: lo comprueba la bateria (test_round44 T6c y T6d). }
 const

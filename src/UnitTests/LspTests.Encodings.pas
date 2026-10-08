@@ -55,7 +55,8 @@ uses
   System.SysUtils,
   Lsp.Guard, // ParametroQueNoVa
   Lsp.Patch,
-  Lsp.Codificacion;
+  Lsp.Codificacion,
+  Lsp.Casa;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin

@@ -72,17 +72,20 @@ _PAPELERA = {}
 
 
 def _papelera():
-    """Las constantes de la papelera, leidas de Lsp.Patch - el nombrador del
-    servidor -: la carpeta, los cajones y la marca de dueno. Las baterias no
-    las escriben a mano: tres checks buscaban la forma de antes de la sexta
-    revision y se pusieron rojos por eso, no por el servidor (28-sep-2026)."""
+    """Las constantes de la papelera, leidas de sus nombradores en el servidor:
+    la carpeta y la marca de dueno de Lsp.Casa (desde el 8-oct-2026), los
+    cajones de Lsp.Patch. Las baterias no las escriben a mano: tres checks
+    buscaban la forma de antes de la sexta revision y se pusieron rojos por
+    eso, no por el servidor (28-sep-2026)."""
     if not _PAPELERA:
-        with open(os.path.join(REPO, 'src', 'Server', 'Lsp.Patch.pas'),
-                  encoding='utf-8-sig', errors='replace') as fh:
-            t = fh.read()
-        for n in ('BACKUP_SUB', 'CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
-                  'CAJON_SUSTITUIDOS', 'MARCA_DUENO_EXT'):
-            _PAPELERA[n] = re.search(r"\b%s\s*=\s*'([^']*)'" % n, t).group(1)
+        for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT')),
+                                ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
+                                                   'CAJON_SUSTITUIDOS'))):
+            with open(os.path.join(REPO, 'src', 'Server', unidad),
+                      encoding='utf-8-sig', errors='replace') as fh:
+                t = fh.read()
+            for n in nombres:
+                _PAPELERA[n] = re.search(r"\b%s\s*=\s*'([^']*)'" % n, t).group(1)
     return _PAPELERA
 
 

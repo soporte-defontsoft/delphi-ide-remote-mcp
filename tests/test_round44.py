@@ -288,8 +288,8 @@ try:
           "Result := '__delphi-temp';" in g_src and "'\\__delphi-temp\\'" in r_src,
           'el nombrador o el lector han cambiado de carpeta sin avisarse')
     # ...y la PAPELERA, su hermana, por el mismo motivo: su nombrador es
-    # BACKUP_SUB / TrashFolderName (Lsp.Patch)
-    p_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Patch.pas'), 'rb').read().decode('utf-8', 'replace')
+    # BACKUP_SUB / TrashFolderName (Lsp.Casa, desde el 8-oct-2026)
+    p_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Casa.pas'), 'rb').read().decode('utf-8', 'replace')
     check('T6f el literal de la papelera del lector coincide con su nombrador',
           "BACKUP_SUB = '__delphi-patch';" in p_src and "'\\__delphi-patch\\'" in r_src,
           'el nombrador o el lector de la papelera han cambiado sin avisarse')

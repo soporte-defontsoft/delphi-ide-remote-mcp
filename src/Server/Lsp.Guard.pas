@@ -689,7 +689,7 @@ function EnTemporal(const APath: string): Boolean; overload;
 function EnTemporal(const APath: string; out AEsLaCarpeta: Boolean): Boolean; overload;
 
 { La misma pregunta para la PAPELERA (__delphi-patch, TrashFolderName de
-  Lsp.Patch). La hacian a mano cinco sitios con dos formas: la puerta de
+  Lsp.Casa). La hacian a mano cinco sitios con dos formas: la puerta de
   escritura y delphi_edit sobre la ruta canonica larga, y delphi_delete /
   delphi_move / el recorredor de includetrash sobre el texto tal cual - un
   alias 8.3 (__DELP~1) era la papelera para unos y no para otros. }
@@ -905,7 +905,7 @@ uses
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
   System.RegularExpressions,
   System.Hash,
-  Lsp.Patch,            // TrashFolderName: el nombre de la papelera, de SU nombrador
+  Lsp.Patch,            // PurgaAlPasar: el recorredor purga cada papelera por la que pasa
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Sandbox,          // PurgaContenedoresHuerfanos: la otra mitad de la casa
   Lsp.Texts,
@@ -999,7 +999,7 @@ begin
   // perfectly correct - the ".by" rule passed only because it has no slash.
   // canonical first: an 8.3 alias like __DELP~1 IS the trash
   P := LongCanonical(APath).ToLower.Replace('/', '\');
-  if EsMarcaDeDueno(P) then // la marca de dueno (Lsp.Patch)
+  if EsMarcaDeDueno(P) then // la marca de dueno (Lsp.Casa)
     Exit(MsgText(SR_GUARD_OWNER_MARKER));
   if EnPapelera(APath) then
     Exit(MsgText(SR_GUARD_DEAD_TRASH));
