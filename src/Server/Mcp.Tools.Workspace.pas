@@ -952,82 +952,181 @@ end;
   Se lee sin includes: una inclusion del repo puede sacar la lectura de la
   jaula y esconder un filtro. La configuracion del servidor sigue siendo suya. }
 
-function ConfiguracionGitDenegada(const ARepo, AFijado: string): string;
+function ConfiguracionGitDenegada(const ARepo, ARaiz: string;
+  var AFijado: string): string;
 var
-  Salida, Registro, Clave, Valor: string;
-  Registros: TArray<string>;
+  Salida, RutaLfs, Endpoint: string;
   Codigo: Cardinal;
-  P: Integer;
+  HayLfs, HayFuenteLfs: Boolean;
+
+  function DireccionLfsAdmitida(const ADireccion: string): Boolean;
+  begin
+    Result := (GitUrlHost(ADireccion) <> '') and
+      (GitRemoteDenied(EnComillas(ADireccion)) = '');
+  end;
+
+  function RevisaConfiguracion(const ATexto: string; ASoloLocal: Boolean): string;
+  var
+    Registro, Clave, Valor: string;
+    Registros: TArray<string>;
+    P: Integer;
+  begin
+    Result := '';
+    Registros := ATexto.Split([#0], TStringSplitOptions.ExcludeEmpty);
+    if Odd(Length(Registros)) then
+      Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+    for var I := 0 to Length(Registros) div 2 - 1 do
+    begin
+      if IndexStr(Registros[I * 2],
+        ['system', 'global', 'local', 'worktree', 'command']) < 0 then
+        Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+      if not ASoloLocal or
+         (IndexStr(Registros[I * 2], ['local', 'worktree']) >= 0) then
+      begin
+        Registro := Registros[I * 2 + 1];
+        P := Pos(#10, Registro);
+        // Una clave sin valor es un booleano true valido en la sintaxis de git.
+        if P = 0 then
+        begin
+          Clave := LowerCase(Registro);
+          Valor := 'true';
+        end
+        else
+        begin
+          Clave := LowerCase(Copy(Registro, 1, P - 1));
+          Valor := Copy(Registro, P + 1, MaxInt);
+        end;
+        // El valor no sale en el rechazo: podria llevar credenciales.
+        // LISTA BLANCA: claves conocidas sin programas ni rutas de lectura.
+        // No se permiten familias enteras: gc.*, diff.* o remote.* crecen.
+        var Permitida := MatchText(Clave, [
+          'core.repositoryformatversion', 'core.filemode', 'core.bare',
+          'core.logallrefupdates', 'core.symlinks', 'core.ignorecase',
+          'core.autocrlf', 'core.eol', 'core.safecrlf', 'core.precomposeunicode',
+          'core.protectntfs', 'core.protecthfs', 'core.worktree',
+          'user.name', 'user.email', 'user.signingkey',
+          'commit.gpgsign', 'tag.gpgsign', 'extensions.worktreeconfig',
+          'extensions.objectformat', 'fetch.recursesubmodules',
+          'push.recursesubmodules', 'submodule.recurse', 'push.default']);
+        var Partes := Clave.Split(['.']);
+        if Length(Partes) >= 3 then
+        begin
+          var Familia := Partes[0];
+          var Campo := Partes[High(Partes)];
+          if Familia = 'remote' then
+            Permitida := MatchText(Campo, ['url', 'pushurl', 'fetch', 'push',
+              'mirror', 'tagopt', 'prune', 'prunetags'])
+          else if Familia = 'branch' then
+            Permitida := MatchText(Campo, ['remote', 'pushremote', 'merge', 'description'])
+          else if Familia = 'submodule' then
+            Permitida := MatchText(Campo, ['url', 'path', 'active', 'ignore',
+              'branch', 'fetchrecursesubmodules']);
+        end;
+        // LFS es el UNICO programa local admitido, con su comando estandar EXACTO.
+        if Clave = 'filter.lfs.clean' then
+          Permitida := Valor = 'git-lfs clean -- %f'
+        else if Clave = 'filter.lfs.smudge' then
+          Permitida := Valor = 'git-lfs smudge -- %f'
+        else if Clave = 'filter.lfs.process' then
+          Permitida := Valor = 'git-lfs filter-process'
+        else if Clave = 'filter.lfs.required' then
+          Permitida := SameText(Valor, 'true');
+        // El endpoint es una direccion, por EL juez de hosts de los remotos.
+        if MatchText(Clave, ['lfs.url', 'lfs.pushurl']) or
+           ((Length(Partes) >= 3) and (Partes[0] = 'remote') and
+            MatchText(Partes[High(Partes)], ['lfsurl', 'lfspushurl'])) then
+          Permitida := DireccionLfsAdmitida(Valor)
+        else if Clave = 'lfs.repositoryformatversion' then
+          Permitida := Valor = '0';
+        if not Permitida then
+          Exit(MsgFmt(SR_GIT_CONFIG_PROGRAMA_FMT, [Clave]));
+      end;
+    end;
+  end;
+
+  function RevisaFuenteLfs(const AArgumento: string): string;
+  begin
+    Salida := GitCorre(ARepo, AFijado,
+      'config --no-includes --null --list --show-scope ' + AArgumento, 60000, Codigo);
+    if Codigo <> 0 then
+      Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+    Result := RevisaConfiguracion(Salida, False);
+  end;
+
 begin
   Result := '';
-  // Git resuelve los ficheros opcionales y dice el ambito de cada registro.
-  // --worktree --list falla con varias copias o si falta config.worktree.
   Salida := GitCorre(ARepo, AFijado,
     'config --no-includes --null --list --show-scope', 60000, Codigo);
   if Codigo <> 0 then
     Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
-  Registros := Salida.Split([#0], TStringSplitOptions.ExcludeEmpty);
-  if Odd(Length(Registros)) then
-    Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
-  for var I := 0 to Length(Registros) div 2 - 1 do
+  HayLfs := ContainsText(Salida, 'filter.lfs.');
+  HayFuenteLfs := False;
+  Result := RevisaConfiguracion(Salida, True);
+  if Result <> '' then Exit;
+  if ARaiz <> '' then
   begin
-    if IndexStr(Registros[I * 2],
-      ['system', 'global', 'local', 'worktree', 'command']) < 0 then
-      Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
-    if IndexStr(Registros[I * 2], ['local', 'worktree']) >= 0 then
+    RutaLfs := TPath.Combine(ARaiz, '.lfsconfig');
+    if TFile.Exists(RutaLfs) then
     begin
-      Registro := Registros[I * 2 + 1];
-      P := Pos(#10, Registro);
-      // Una clave sin valor es un booleano true valido en la sintaxis de git.
-      if P = 0 then
+      HayFuenteLfs := True;
+      if (ReadPathDenied(RutaLfs) <> '') or EsEnlace(RutaLfs) then
+        Exit(MsgFmt(SR_GIT_CONFIG_PROGRAMA_FMT, ['.lfsconfig']));
+      Result := RevisaFuenteLfs('--file ' + EnComillas(RutaLfs));
+      if Result <> '' then Exit;
+    end;
+    // Se midio la precedencia: fichero de trabajo, indice y despues HEAD.
+    if not HayFuenteLfs then
+    begin
+      Salida := GitCorre(ARepo, AFijado, 'ls-files --stage -- .lfsconfig', 60000, Codigo);
+      if Codigo <> 0 then Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+      if Salida.Trim <> '' then
       begin
-        Clave := LowerCase(Registro);
-        Valor := 'true';
-      end
-      else
-      begin
-        Clave := LowerCase(Copy(Registro, 1, P - 1));
-        Valor := Copy(Registro, P + 1, MaxInt);
+        HayFuenteLfs := True;
+        Result := RevisaFuenteLfs('--blob :.lfsconfig');
+        if Result <> '' then Exit;
       end;
-      // El valor no sale en el rechazo: podria llevar credenciales.
-      // LISTA BLANCA: claves conocidas sin programas ni rutas de lectura.
-      // No se permiten familias enteras: gc.*, diff.* o remote.* crecen.
-      var Permitida := MatchText(Clave, [
-        'core.repositoryformatversion', 'core.filemode', 'core.bare',
-        'core.logallrefupdates', 'core.symlinks', 'core.ignorecase',
-        'core.autocrlf', 'core.eol', 'core.safecrlf', 'core.precomposeunicode',
-        'core.protectntfs', 'core.protecthfs', 'core.worktree',
-        'user.name', 'user.email', 'user.signingkey',
-        'commit.gpgsign', 'tag.gpgsign', 'extensions.worktreeconfig',
-        'extensions.objectformat', 'fetch.recursesubmodules',
-        'push.recursesubmodules', 'submodule.recurse', 'push.default']);
-      var Partes := Clave.Split(['.']);
-      if Length(Partes) >= 3 then
-      begin
-        var Familia := Partes[0];
-        var Campo := Partes[High(Partes)];
-        if Familia = 'remote' then
-          Permitida := MatchText(Campo, ['url', 'pushurl', 'fetch', 'push',
-            'mirror', 'tagopt', 'prune', 'prunetags'])
-        else if Familia = 'branch' then
-          Permitida := MatchText(Campo, ['remote', 'pushremote', 'merge', 'description'])
-        else if Familia = 'submodule' then
-          Permitida := MatchText(Campo, ['url', 'path', 'active', 'ignore',
-            'branch', 'fetchrecursesubmodules']);
-      end;
-      // LFS es el UNICO programa local admitido, con su comando estandar EXACTO.
-      if Clave = 'filter.lfs.clean' then
-        Permitida := Valor = 'git-lfs clean -- %f'
-      else if Clave = 'filter.lfs.smudge' then
-        Permitida := Valor = 'git-lfs smudge -- %f'
-      else if Clave = 'filter.lfs.process' then
-        Permitida := Valor = 'git-lfs filter-process'
-      else if Clave = 'filter.lfs.required' then
-        Permitida := SameText(Valor, 'true');
-      if not Permitida then
-        Exit(MsgFmt(SR_GIT_CONFIG_PROGRAMA_FMT, [Clave]));
     end;
   end;
+  // HEAD sirve tambien a un bare y a clone --no-checkout.
+  if not HayFuenteLfs then
+  begin
+    Salida := GitCorre(ARepo, AFijado, 'rev-parse --verify --quiet HEAD', 60000, Codigo);
+    if Codigo = 0 then
+    begin
+      Salida := GitCorre(ARepo, AFijado, 'ls-tree --name-only HEAD -- .lfsconfig', 60000, Codigo);
+      if Codigo <> 0 then Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+      if Salida.Trim <> '' then
+      begin
+        Result := RevisaFuenteLfs('--blob HEAD:.lfsconfig');
+        if Result <> '' then Exit;
+      end;
+    end
+    else if Codigo <> 1 then
+      Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+  end;
+  if not HayLfs then Exit;
+  // El programa estandar interpreta la precedencia; no hacemos otro lector.
+  // Su salida (rutas y posibles credenciales) nunca se devuelve al agente.
+  Salida := GitCorre(ARepo, AFijado, 'lfs env', 60000, Codigo);
+  if Codigo <> 0 then Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+  Endpoint := '';
+  for var Linea in Salida.Split([#10]) do
+    if Linea.StartsWith('Endpoint') then
+    begin
+      var P := Pos('=', Linea);
+      if P = 0 then Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+      var Direccion := Copy(Linea, P + 1, MaxInt).Trim;
+      P := Pos(' (auth=', Direccion);
+      if P > 0 then Direccion := Copy(Direccion, 1, P - 1);
+      if Direccion = '' then Continue;
+      if not DireccionLfsAdmitida(Direccion) then
+        Exit(MsgFmt(SR_GIT_CONFIG_PROGRAMA_FMT, ['lfs.url']));
+      if Endpoint = '' then Endpoint := Direccion;
+    end;
+  // Fijarlo evita que un checkout cambie .lfsconfig durante la misma orden.
+  // La precedencia de -c lfs.url se midio contra .lfsconfig y remote.*.lfsurl.
+  AFijado := AFijado + ' -c ' + EnComillas('lfs.url=' + Endpoint) +
+    ' -c ' + EnComillas('lfs.pushurl=' + Endpoint);
 end;
 
 { DONDE VIVE el repo de ARepo (o de una carpeta de dentro), preguntado a git:
@@ -1625,7 +1724,7 @@ begin
       // Con --bare contesta lo que contesta sin fijar: log y branch van, y
       // lo que necesita un arbol dice que no lo tiene.
       Fijado := Fijado + ' --bare';
-    Result := ConfiguracionGitDenegada(Repo, Fijado);
+    Result := ConfiguracionGitDenegada(Repo, Raiz, Fijado);
     if Result <> '' then
       Exit;
   end;
@@ -1703,7 +1802,8 @@ begin
     // (field round 9: git network args travel fairly verbatim). User args go
     // BEFORE "--" so legitimate options (--depth, --branch) still apply; they
     // were already vetted for dangerous flags at the single gate (GitArgDenied).
-    GitArgs := Format('clone %s -- %s .', [ArgvSeguro(Params.Args), EnComillas(Url)]);
+    // Primero los objetos: ningun filtro ve un endpoint aun sin juzgar.
+    GitArgs := Format('clone --no-checkout %s -- %s .', [ArgvSeguro(Params.Args), EnComillas(Url)]);
   end
   else if Cmd = 'pull' then
   begin
@@ -2035,6 +2135,34 @@ begin
           IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch', 'ls-remote']), 600000, 60000),
           ExitCode);
         GitCorrio := True;
+        if (Cmd = 'clone') and (ExitCode = 0) then
+        begin
+          // El repo ya existe, pero su arbol todavia no se ha materializado.
+          if not DondeViveElRepo(Repo, GitDir, Comun, Raiz, Output, ExitCode) then
+            Exit(GitFallo(ExitCode, Output));
+          Fijado := ' --git-dir=' + EnComillas(GitDir);
+          if Raiz <> '' then Fijado := Fijado + ' --work-tree=' + EnComillas(Raiz)
+          else Fijado := Fijado + ' --bare';
+          Result := ConfiguracionGitDenegada(Repo, Raiz, Fijado);
+          if Result <> '' then
+          begin
+            ExitCode := 1;
+            Exit;
+          end;
+          // Un bare o --no-checkout no pide arbol. Un clone vacio tampoco.
+          if (Raiz <> '') and not MatchText('--no-checkout', TrocearArgs(Params.Args)) and
+             not MatchText('-n', TrocearArgs(Params.Args)) then
+          begin
+            GitCorre(Repo, Fijado, 'rev-parse --verify --quiet HEAD', 60000, ExitCode);
+            if ExitCode = 0 then
+              Output := GitCorre(Repo, Fijado, 'checkout --force', 600000, ExitCode)
+            else if ExitCode = 1 then
+            begin
+              ExitCode := 0;
+              Output := '';
+            end;
+          end;
+        end;
       finally
         if (MsgFile <> '') and TFile.Exists(MsgFile) then
           TFile.Delete(MsgFile);

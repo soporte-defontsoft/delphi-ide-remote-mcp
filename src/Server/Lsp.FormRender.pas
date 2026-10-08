@@ -114,7 +114,9 @@ uses
   Lsp.BuildRunner,  // RunCapturedIn: el lanzador de los programas externos
   Lsp.ProjectUnits, // InspectUnit: la clase de la unidad y a que raiz llega
   Lsp.DesignerForma, // UnidadDeDesigner
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Styles,
+  Lsp.DesignerBin;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -313,6 +315,119 @@ begin
   end;
 end;
 
+{ La forma del VALOR decide, nunca una lista de propiedades.
+  Se pregunta al unico juez de lectura por cada fichero existente.
+  El ayudante interpreta relativos desde la form o desde su cwd (el PNG). }
+function LiteralesDeRenderDenegados(const APeticion: TPeticionRender): string;
+var
+  Bases: TArray<string>;
+  BytesLeidos: Int64;
+  Doc: TStyleDoc;
+  Form: TArray<TLineaForm>;
+  Texto, Valor, Prop: string;
+
+  function Comprueba(const AProp, AValor: string): string;
+  var
+    Ruta: string;
+  begin
+    Result := '';
+    if AValor = '' then
+      Exit;
+    for var Base in Bases do
+    begin
+      try
+        Ruta := TPath.GetFullPath(TPath.Combine(Base, AValor));
+      except
+        Continue; // una cadena que no es ruta no nombra un fichero
+      end;
+      if TFile.Exists(Ruta) and (ReadPathDenied(Ruta) <> '') then
+        Exit(MsgFmt(SR_DESIGNER_LITERAL_FUERA_FMT, [AProp]));
+    end;
+  end;
+
+  function CompruebaForm(const ARuta: string): string;
+  begin
+    Result := '';
+    // 65 MiB de texto costaron 416 MiB en el servidor; la pasada previa
+    // sucede antes del job. El presupuesto total se mira ANTES de cargar.
+    const TOPE_LITERAL_BYTES = 16 * 1024 * 1024;
+    Inc(BytesLeidos, TFile.GetSize(ARuta));
+    if BytesLeidos > TOPE_LITERAL_BYTES then
+      Exit(MsgFmt(SR_DESIGNER_LITERAL_TOPE_FMT, [TOPE_LITERAL_BYTES div (1024 * 1024)]));
+    Doc := TStyleDoc.Create(ARuta); // tambien el binario, por el lector existente
+    try
+      Form := LineasDeForm(Doc.Lines);
+      for var I := 0 to High(Doc.Lines) do
+        if Form[I].Clase = clfPropiedad then
+        begin
+          Prop := Form[I].Prop;
+          Valor := ValorEnteroDe(Doc.Lines, Form, I);
+          if LeeLiteralDeForm(Valor, Texto) then
+          begin
+            Result := Comprueba(Prop, Texto);
+            if Result <> '' then
+              Exit;
+          end
+          else if Valor = '(' then
+          begin
+            // Strings de una lista: el mismo lector, no otra gramatica.
+            Valor := '';
+            for var K := I + 1 to Form[I].Fin - 1 do
+            begin
+              Valor := Valor + Doc.Lines[K].Trim;
+              if Valor.EndsWith('+') then
+                Continue;
+              if LeeLiteralDeForm(Valor, Texto) then
+              begin
+                Result := Comprueba(Prop, Texto);
+                if Result <> '' then
+                  Exit;
+              end;
+              Valor := '';
+            end;
+          end;
+        end;
+    finally
+      Doc.Free;
+    end;
+  end;
+
+begin
+  Result := '';
+  BytesLeidos := 0;
+  Bases := [TPath.GetDirectoryName(APeticion.Path),
+    TPath.GetDirectoryName(APeticion.Salida)];
+  try
+    Result := CompruebaForm(APeticion.Path);
+    if Result <> '' then
+      Exit;
+    // Los frames y ancestros que el ayudante puede resolver son hermanos.
+    for var Hermano in WalkFiles(Bases[0], ['*' + ExtractFileExt(APeticion.Path)], False, False) do
+      if not EsEnlace(Hermano) and not SameFileName(Hermano, APeticion.Path) then
+      begin
+        Result := CompruebaForm(Hermano);
+        if Result <> '' then
+          Exit;
+      end;
+    for var Estado in APeticion.Estados do
+    begin
+      var P := Pos('=', Estado);
+      if P = 0 then
+        Continue; // el lector de state dara su diagnostico de forma
+      Prop := Copy(Estado, 1, P - 1).Trim;
+      Valor := Copy(Estado, P + 1, MaxInt).Trim;
+      Result := Comprueba(Prop, Valor); // state se entrega crudo a SetPropValue
+      if Result = '' then
+        if LeeLiteralDeForm(Valor, Texto) then
+          Result := Comprueba(Prop, Texto);
+      if Result <> '' then
+        Exit;
+    end;
+  except
+    Result := MsgText(SR_DESIGNER_LITERAL_NO_VERIFICABLE);
+  end;
+end;
+
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
 var
   Exe, Nombre, Orden, Salida, Fallo: string;
@@ -320,6 +435,9 @@ var
   Reloj: TStopwatch;
 begin
   Result := Default(TRespuestaRender);
+  Result.Fallo := LiteralesDeRenderDenegados(APeticion);
+  if Result.Fallo <> '' then
+    Exit;
   Exe := FormRenderExe(APeticion.Framework, Nombre);
   if Exe = '' then
   begin

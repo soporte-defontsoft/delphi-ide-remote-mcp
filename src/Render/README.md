@@ -116,8 +116,8 @@ node's). A refusal of ours (a `--state` that names nothing, an unknown
 platform style) goes out tagged and the server passes it through as it is;
 anything else comes out as `<class>: <message>`.
 
-Nothing reaches the desktop: the form is created in design mode (no code
-runs, events are ignored), FMX's dialog services are removed on start,
+Nothing reaches the desktop: the form is created in design mode (application event
+handlers are ignored), FMX's dialog services are removed on start,
 `Application.OnException` records instead of showing, and the watchdog kills
 a render that waits on anything.
 
@@ -128,7 +128,7 @@ and - only when the file names a class the standard palette does not know - the 
 packages registered in the IDE (HKCU Known Packages, all of them, their initialization
 included; the file can trigger that load, it cannot choose or add a package). BPLs opened
 for icons and platform styles are opened as data: nothing of theirs runs. TReader creates
-registered classes only; an unknown class becomes a labelled substitute. Every path involved
+registered classes only; an unknown class becomes a labelled substitute. The explicit input paths
 comes from the server through its read gate: the form, its sibling .pas and .dfm/.fmx files
 in the same folder (links are skipped), a style file.
 
@@ -138,12 +138,51 @@ process of its own, with its watchdog and the server's own time limit, and why t
 answers with the error instead of dying with it. A deeper adversarial pass is listed for
 1.18.0.
 
+The server checks string literals and requested view-state values before starting the
+helper, using the existing form reader and read-path gate. The requested form and its
+examined siblings share a 16 MiB input budget; larger input is refused before decoding.
+This budget bounds the server's preliminary read, which runs outside the helper's job.
+
 **Cleanup: what is measured and what is not.** The renderer starts no
 processes of its own. Measured: its watchdog (exit code 3, in `Pruebas`) and
 the server's time limit (`RunCapturedIn` kills the renderer when it runs
 out). `RunCapturedIn` also puts it in a Job Object that kills the tree when it
 is closed; that part is best-effort (if the job cannot be created the
-renderer runs without one) and, for the renderer, not measured.
+renderer runs without one). A DUMMY measurement with the inner watchdog disabled
+confirmed the outer 75-second deadline, stopped parent and child, a stationary child
+counter and a responsive server. Omitting the job assignment left the child alive.
+Job creation and assignment failure paths remain unmeasured.
+
+## Outbound network policy (operator installation)
+
+Rendering does not need network access. The operator can declare one outbound block
+rule per deployed helper, for every firewall profile and protocol. The server never
+installs or modifies firewall policy. Use the actual installation directory; a rule
+for one executable path does not cover a copy at another path or a child with a
+different executable.
+
+Example for an elevated PowerShell console, after operator review:
+
+```powershell
+$renderDir = 'C:\Delphi-mcp-Server'
+foreach ($framework in 'Vcl', 'Fmx') {
+    $program = Join-Path $renderDir ("DelphiFormRender{0}.exe" -f $framework)
+    New-NetFirewallRule -Name ("DelphiLspMcp.Render.{0}.Outbound" -f $framework) -DisplayName ("Delphi MCP renderer {0}: block outbound" -f $framework) -Program $program -Direction Outbound -Action Block -Profile Any -Protocol Any -Enabled True -PolicyStore PersistentStore
+}
+```
+
+These are program rules as documented by
+[Microsoft](https://learn.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallrule).
+Installing the declarations is not proof of enforcement: verify the effective policy
+and run a controlled request from each exact helper path, including a loopback case
+and a child-process case. Compare the endpoint counter with the rule enabled and
+with the operator-controlled rule removed. This round does not install rules or claim
+that those enforcement tests passed.
+
+Third-party components remain available. Design mode avoids application event
+handlers, but loaded components still run their constructors and property setters.
+A process budget and program firewall rules do not by themselves restrict all of
+a component's filesystem access. Report any broader confinement requirement separately.
 
 ## Tests, in three layers
 

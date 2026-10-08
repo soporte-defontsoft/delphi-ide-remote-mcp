@@ -579,7 +579,7 @@ function EnlaceLegible(const P: string): Boolean;
 { Recorrido de lectura compartido: solo enlaces legibles, ciclos cortados y
   carpetas ilegibles toleradas. Las tools deciden sus filtros de artefactos. }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
-  AConPapelera: Boolean = False): TArray<string>; overload;
+  AConPapelera: Boolean = False; ARecursivo: Boolean = True): TArray<string>; overload;
 function WalkFiles(const ADir, AMask: string;
   AConPapelera: Boolean = False): TArray<string>; overload;
 
@@ -5867,7 +5867,7 @@ end;
   classic limit and killed an entire delphi_list. One bad folder must never
   hide the rest of the tree. }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
-  AConPapelera: Boolean): TArray<string>;
+  AConPapelera, ARecursivo: Boolean): TArray<string>;
 var
   Acc: TStringList;
   Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
@@ -5919,6 +5919,9 @@ var
     except
       // idem
     end;
+    // El renderizador solo indexa hermanos; los otros lectores recorren.
+    if not ARecursivo then
+      Exit;
     try
       for Sub in TDirectory.GetDirectories(D) do
       begin

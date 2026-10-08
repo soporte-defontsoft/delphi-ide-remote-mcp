@@ -4346,6 +4346,19 @@ const
     'live in that RAD Studio''s bin folder, which has to be on the PATH of ' +
     'the account the server runs as.';
 
+  SR_DESIGNER_LITERAL_FUERA_FMT =
+    '[DSGN-115 DENIED] Property %s names an existing file outside the allowed ' +
+    'read locations. Nothing was rendered. Keep referenced files in an allowed ' +
+    'read location; the property value is never shown.';
+
+  SR_DESIGNER_LITERAL_NO_VERIFICABLE =
+    '[DSGN-116 DENIED] The form strings could not be checked before rendering. ' +
+    'Nothing was rendered. Use tree or lint to inspect the form first.';
+
+  SR_DESIGNER_LITERAL_TOPE_FMT =
+    '[DSGN-117 DENIED] Form data to check exceeds the %d MiB rendering budget. ' +
+    'Nothing was launched. Reduce embedded assets or use a smaller form folder.';
+
   SR_DESIGNER_RENDER_NO_ARRANCA_FMT =
     '[DSGN-064 INTERNAL] %s could not be started: %s';
 
@@ -6910,8 +6923,8 @@ const
 
   { El repo no puede activar programas ni esconderlos en includes locales. }
   SR_GIT_CONFIG_PROGRAMA_FMT =
-    '[GIT-051 DENIED] Local/worktree repository configuration key "%s" ' +
-    'is not admitted by this server. No requested git operation was run. ' +
+    '[GIT-051 DENIED] Repository configuration key "%s" ' +
+    'is not admitted by this server. The requested operation was not completed. ' +
     'Remove this local setting before using delphi_git; its value is never shown.';
 
   SR_GUARD_GIT_METADATA_FMT =
@@ -6921,7 +6934,7 @@ const
 
   SR_GIT_CONFIG_NO_VERIFICABLE =
     '[GIT-052 DENIED] The local repository configuration could not be ' +
-    'verified. No requested git operation was run. Repair the repository ' +
+    'verified. The requested operation was not completed. Repair the repository ' +
     'configuration before repeating the call.';
 
   SL_GIT_NETWORK_FMT =
