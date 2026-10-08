@@ -6936,7 +6936,7 @@ const
 
   { El endpoint LFS no es una clave local que el agente tenga que quitar. }
   SR_GIT_LFS_ENDPOINT_FMT =
-    '[GIT-060 DENIED] The LFS endpoint for remote "%s" is not allowed. ' +
+    '[GIT-061 DENIED] The LFS endpoint for remote "%s" is not allowed. ' +
     'Network endpoints are decided by the operator''s GitRemotes; directory ' +
     'endpoints must stay in the allowed workspace locations. The endpoint ' +
     'value is never shown.';

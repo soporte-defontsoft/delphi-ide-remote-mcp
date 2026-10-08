@@ -174,12 +174,18 @@ try:
     open(CFG,'w').write(normal)
     # Las dos decisiones de firma: opciones del agente y ajustes del operador.
     for cmd in ('commit','tag'):
-        for i,flag in enumerate(('-S','-SDUMMY','--gpg-sign','--gpg-sign=DUMMY','--sign','--gpg','--g') +
-                                (('-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si') if cmd=='tag' else ('-aS',))):
+        for i,flag in enumerate(('-S','-SDUMMY','--gpg-sign','--gpg-sign=DUMMY','--gpg','--g') +
+                                (('-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si','--sign') if cmd=='tag' else ('-aS',))):
             args = '--allow-empty '+flag if cmd=='commit' else flag+' dummy-sign-'+str(i)
             out=call(cmd,args,'DUMMY')
             check(cmd+' niega '+flag, '[GIT-' in out and 'DENIED]' in out and
                   not mc.es(out,'SR_GIT_EXIT_FMT'), out[:350])
+    # --signoff (y -s, y --sign en commit, su abreviatura) NO firman: solo ponen
+    # "Signed-off-by" -> se admiten. En tag --sign SI es gpg (queda arriba). La
+    # firma REAL del agente (-S / --gpg-sign y abreviaturas) se sigue negando.
+    for flag in ('--signoff','--sign','-s'):
+        out=call('commit','--allow-empty '+flag,'DUMMY signoff')
+        check('commit '+flag+' (Signed-off-by, no gpg) se admite',out.startswith('exit=0'),out[:300])
     open(CFG,'w').write(normal+'\n[commit]\n gpgSign = true\n[tag]\n gpgSign = true\n')
     previous = raw('rev-parse','HEAD').strip()
     out=call('commit','--allow-empty','DUMMY sin firma')

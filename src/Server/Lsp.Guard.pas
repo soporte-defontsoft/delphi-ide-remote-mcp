@@ -1394,14 +1394,14 @@ function ShellArgDenied(const AText: string): string;
   lista de hosts que declara el operador. Vacia (el valor por defecto),
   niega tanto las direcciones de la llamada como las de un remoto del repo.
   Solo el operador decide los hosts con los que esta maquina puede hablar. }
-function GitRemoteDenied(const AText: string): string;
+function GitRemoteDenied(const AText: string; AScpCorto: Boolean = False): string;
 
 { El host de una direccion de RED de git; '' si no lo es (un nombre, una
   rama, una carpeta). El lector de GitRemoteDenied, en la interface desde la
   1.7.7: la tool de git pregunta con el si el remoto de una llamada es de red
   o es una carpeta, que pasa por la jaula. UN lector de "esto es una
   direccion de red". }
-function GitUrlHost(const AToken: string): string;
+function GitUrlHost(const AToken: string; AScpCorto: Boolean = False): string;
 
 implementation
 
@@ -3912,9 +3912,12 @@ begin
       // Git admite abreviaciones largas y grupos cortos: --gpg, -aS, -fs.
       // Una opcion que consume texto corta el grupo; la S de -mMENSAJE no firma.
       var Opcion := PrimerTrozo(T, ['=']);
+      // Firma REAL (gpg): se niega. --signoff / -s / --sign en commit solo
+      // ponen "Signed-off-by" y NO firman -> se admiten; en tag, --sign SI es
+      // -s (gpg), por eso su prefijo se niega solo ahi.
       var Firma := (Length(Opcion) >= 3) and
-        ('--gpg-sign'.StartsWith(Opcion) or '--sign'.StartsWith(Opcion) or
-         Opcion.StartsWith('--sign') or
+        ('--gpg-sign'.StartsWith(Opcion) or
+         ((ACmd = 'tag') and '--sign'.StartsWith(Opcion)) or
          ((ACmd = 'tag') and '--local-user'.StartsWith(Opcion)));
       if Tok.StartsWith('-') and not Tok.StartsWith('--') then
         for var I := 2 to Length(Tok) do
@@ -3947,7 +3950,7 @@ end;
 { Host of a git URL, '' when the token is not a URL at all. Understands the
   two shapes git takes: scheme://[user@]host[:port]/... and the scp-like
   [user@]host:path. }
-function GitUrlHost(const AToken: string): string;
+function GitUrlHost(const AToken: string; AScpCorto: Boolean): string;
 var
   T: string;
   P: Integer;
@@ -3959,6 +3962,10 @@ begin
     T := Copy(T, P + 3, MaxInt)
   else if (Pos('@', T) > 0) and (Pos(':', T) > Pos('@', T)) then
     T := Copy(T, Pos('@', T) + 1, MaxInt)
+  else if AScpCorto and
+          TRegEx.IsMatch(T, '^[A-Za-z0-9][A-Za-z0-9.-]+:[^:\\]') then
+    { scp corto host:ruta: el host se recorta en el ':' del bucle de abajo;
+      dos letras o mas antes del ':' -> no es una unidad (C:\ o C:/) }
   else
     Exit; // not a URL: a branch, a path, an option
   P := Pos('@', T);
@@ -3981,7 +3988,7 @@ begin
   Result := T.Trim.ToLower;
 end;
 
-function GitRemoteDenied(const AText: string): string;
+function GitRemoteDenied(const AText: string; AScpCorto: Boolean): string;
 var
   Tok, Host, Allowed: string;
   Ok: Boolean;
@@ -3989,7 +3996,7 @@ begin
   Result := '';
   for Tok in TrocearArgs(AText) do
   begin
-    Host := GitUrlHost(Tok);
+    Host := GitUrlHost(Tok, AScpCorto);
     if Host = '' then
       Continue;
     Allowed := GitRemoteHosts;

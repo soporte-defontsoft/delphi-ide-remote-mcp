@@ -100,6 +100,25 @@ r = git({'command': 'log', 'args': '-S --output=' + LEAK})
 check('log -S --output=... (-S suelto + opcion prohibida detras): RECHAZADO y no escribe',
       (mc.rechazado(r) and not mc.llego_a_git(r)) and sin_fuga(), r[:200])
 
+# ---- firma: la REAL (gpg) se niega; --signoff NO firma ----
+# 1.18.0: --signoff (y -s, y --sign en commit, que es su abreviatura) solo pone
+# "Signed-off-by" y se admite; -S / --gpg-sign (y en TAG --sign, que si es -s
+# de gpg) se siguen negando. Antes `commit --signoff` caia por StartsWith('--sign').
+open(os.path.join(REPO_T, 'b.txt'), 'w').write('dos\n')
+git({'command': 'add', 'args': '.'})
+r = git({'command': 'commit', 'args': '--signoff', 'message': 'con Signed-off-by'})
+check('commit --signoff (no firma gpg) pasa el filtro y llega a git',
+      mc.llego_a_git(r) and not mc.es(r, 'SR_GIT_OPTION_FMT'), r[:200])
+r = git({'command': 'commit', 'args': '--gpg-sign', 'message': 'x'})
+check('commit --gpg-sign (firma gpg) RECHAZADO por el filtro',
+      mc.rechazado(r) and not mc.llego_a_git(r) and mc.es(r, 'SR_GIT_OPTION_FMT'), r[:200])
+r = git({'command': 'commit', 'args': '-S', 'message': 'x'})
+check('commit -S (firma gpg, grupo corto) RECHAZADO por el filtro',
+      mc.rechazado(r) and not mc.llego_a_git(r), r[:200])
+r = git({'command': 'tag', 'args': '--sign probe-firma'})
+check('tag --sign (en tag SI es gpg) RECHAZADO por el filtro',
+      mc.rechazado(r) and not mc.llego_a_git(r), r[:200])
+
 srv.mata()
 
 # ---- la URL de clone viaja en "message" y TAMBIEN pasa por la puerta:

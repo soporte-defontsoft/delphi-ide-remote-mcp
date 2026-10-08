@@ -456,11 +456,20 @@ check('J14 ...y una carpeta-remoto es una carpeta que ESTA: el fichero puntero d
       os.path.isfile(PUNTERO) and not pasan and foto() == antes and bajado() == antes_bajado
       and 'x7' not in git('branch', '-a', cwd=MONO), pasan[:3] or corto(' '.join(bajado())))
 
-# J15 - la forma corta de ssh sin usuario, en un remoto del repo
+# J15 - la forma corta de ssh sin usuario, en un remoto del repo. Su host SI
+# esta en GitRemotes (servidor propio): asi se mide que un host:ruta RECONOCIDO
+# y PERMITIDO llega a git (donde el DNS falla), no que se niega por "forma"
+# (GIT-045) ni, con la lista vacia, por la lista (GIT-004). GitUrlHost y
+# ClaseDeDireccion son UN solo lector (host:ruta tambien, no solo user@host:).
 git('remote', 'add', 'corto', 'maquina-que-no-existe.invalid:org/repo.git', cwd=REPO)
-r = g(REPO, command='fetch', args='corto')
+srv15 = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': DENTRO,
+    'DELPHI_MCP_GIT_REMOTES': 'maquina-que-no-existe.invalid'}), nombre='git-jaula-j15', t=120)
+try:
+    r = srv15.call('delphi_git', dict(repo=REPO, command='fetch', args='corto'))
+finally:
+    srv15.cierra()
 check('J15 un remoto del repo con direccion de ssh en su forma corta, sin usuario, LLEGA a git (se '
-      'tomaba por una carpeta y se negaba)',
+      'negaba por "forma ilegible" GIT-045)',
       mc.abre(r, 'SR_GIT_EXIT_FMT') and 'maquina-que-no-existe' in r, corto(r, 400))
 
 # J16 - push sin nombres desde un repo ESPEJO

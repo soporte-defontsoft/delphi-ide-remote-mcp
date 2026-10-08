@@ -1383,9 +1383,10 @@ begin
     Exit(drRed);
   if ADireccion.Contains('://') then
     Exit(drOtra);
-  // la forma corta de ssh: una maquina (dos letras o mas: una sola es una
-  // unidad de disco), dos puntos y la ruta
-  if TRegEx.IsMatch(ADireccion, '^([A-Za-z0-9._-]+@)?[A-Za-z0-9][A-Za-z0-9.-]+:[^:\\]') then
+  // la forma corta de ssh ([usuario@]maquina:ruta) la decide EL MISMO lector
+  // de host que el resto (GitUrlHost con scp corto): un solo juez, sin regex
+  // gemela aqui, y asi no discrepan (C:\ o C:/ no es una maquina).
+  if GitUrlHost(ADireccion, True) <> '' then
     Exit(drRed);
   ACarpeta := ADireccion;
   Result := drCarpeta;
@@ -1460,9 +1461,9 @@ begin
   case ClaseDeDireccion(ADireccion, ACarpeta) of
     drRed:
       begin
-        if GitUrlHost(ADireccion) = '' then
+        if GitUrlHost(ADireccion, True) = '' then
           Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ADireccion]));
-        Result := GitRemoteDenied(EnComillas(ADireccion));
+        Result := GitRemoteDenied(EnComillas(ADireccion), True);
       end;
     drCarpeta:
       begin
@@ -1789,6 +1790,18 @@ begin
       // Con --bare contesta lo que contesta sin fijar: log y branch van, y
       // lo que necesita un arbol dice que no lo tiene.
       Fijado := Fijado + ' --bare';
+    // EL REMOTO antes que su endpoint LFS: un pull desde una carpeta de
+    // fuera se niega por el remoto (GIT-044), no por el endpoint que de el
+    // deriva. La puerta del remoto va delante de la de la configuracion.
+    if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then
+    begin
+      Result := RemotoDenegado(Cmd, Repo, Fijado, IfThen(Raiz <> '', Raiz, Repo),
+        Params.Args);
+      if (Result = '') and (Cmd = 'push') then
+        Result := EnvioConfiguradoDenegado(Repo, Fijado, Params.Args);
+      if Result <> '' then
+        Exit;
+    end;
     Result := ConfiguracionGitDenegada(Repo, Raiz, GitMaterializaArbol(Cmd, Params.Args), Fijado);
     if Result <> '' then
       Exit;
@@ -2124,23 +2137,6 @@ begin
   end
   else
     Exit(MsgFmt(SR_GIT_UNKNOWN_COMMAND_FMT, [Params.Command]));
-
-  // EL REMOTO de los que hablan con uno: de red (la lista de hosts, en la
-  // puerta) o una carpeta que pase por la jaula (RemotoDenegado)
-  if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then
-  begin
-    // Con arbol, Git resuelve desde su raiz; sin arbol conserva el -C de
-    // la llamada, tambien si es una subcarpeta del repo bare (medido).
-    // El juez y git tienen que mirar la MISMA carpeta.
-    Result := RemotoDenegado(Cmd, Repo, Fijado, IfThen(Raiz <> '', Raiz, Repo),
-      Params.Args);
-    // ...y lo que push envia cuando la llamada no lo dice: lo que tenga
-    // configurado el repo
-    if (Result = '') and (Cmd = 'push') then
-      Result := EnvioConfiguradoDenegado(Repo, Fijado, Params.Args);
-    if Result <> '' then
-      Exit;
-  end;
 
   if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push', 'ls-remote']) then
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,

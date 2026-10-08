@@ -67,7 +67,7 @@ try:
     mc.check('status ignora endpoint local que no usa',call(repos[0],'status').startswith('exit=0'))
     out=call(repos[0],'switch','main')
     mc.check('materializar niega endpoint LFS con mensaje propio',
-        '[GIT-060 DENIED]' in out and 'origin' in out and 'GitRemotes' in out,out[:350])
+        mc.es(out,'SR_GIT_LFS_ENDPOINT_FMT') and 'origin' in out and 'GitRemotes' in out,out[:350])
     mc.check('endpoint rechazado no muestra valor',url not in out and '127.0.0.1' not in out,out[:350])
     mc.check('endpoint rechazado no recibe peticiones',not hits,hits)
 finally:
