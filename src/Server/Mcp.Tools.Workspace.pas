@@ -254,7 +254,8 @@ uses
   Lsp.Rutas,
   Lsp.Casa,
   Lsp.Settings,
-  Lsp.Identidad;
+  Lsp.Identidad,
+  Lsp.Lugares;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =

@@ -79,7 +79,8 @@ uses
   Lsp.Sandbox,
   Lsp.Rutas,
   Lsp.Casa,
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Lugares;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
@@ -530,7 +531,7 @@ begin
         TPath.GetFullPath(TPath.Combine(ARepo, Ruta)));
       // git contesta la ruta REAL: bajo una raiz declarada en una letra de
       // red es su UNC, y la puerta juzga por la forma declarada. Se le da
-      // escrita asi (Lsp.Guard.FormaDeclarada; era GIT-041, 30-sep-2026)
+      // escrita asi (Lsp.Lugares.FormaDeclarada; era GIT-041, 30-sep-2026)
       Ruta := FormaDeclarada(Ruta, ARepo);
       if TDirectory.Exists(Ruta) then
         Carpetas := Carpetas + [Ruta];

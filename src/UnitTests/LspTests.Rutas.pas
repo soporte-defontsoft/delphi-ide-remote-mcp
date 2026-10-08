@@ -1,7 +1,7 @@
 ﻿unit LspTests.Rutas;
 
 // La forma DECLARADA de una ruta que llega resuelta, en sus dos usos
-// (Lsp.Guard): FormaDeclaradaDe sobre UNA ruta - lo que git contesta cuando
+// (Lsp.Lugares): FormaDeclaradaDe sobre UNA ruta - lo que git contesta cuando
 // se le pregunta donde vive un repo - y FormaDeclaradaEnTexto sobre un texto,
 // que es lo que el enmascarador hace con la salida antes de su barrido.
 // git dice la ruta real, y la de un sitio declarado en una letra de red es su
@@ -86,7 +86,8 @@ implementation
 uses
   System.SysUtils,
   Lsp.Guard,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Lugares;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;

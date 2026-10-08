@@ -129,6 +129,27 @@ REGLAS = [
       ('Lsp.Docs.pas', 'BytesMin')],
      'GCp1252: UN codec compartido (revision de la 1.10.0: crear uno por bloque del indice caia en '
      'el bucle de la busqueda)'),
+    ('las listas crudas de los sitios',
+     r'\b(?:WorkspaceRoots|WorkspaceReadOnlyRoots|WorkspaceReadOnlyPaths|LugaresDeclarados|LibraryRoots|'
+     r'TodosLosVaults)\b',
+     [('Lsp.Settings.pas', '*'), ('Lsp.Lugares.pas', '*'),
+      # deuda declarada (2.1c de la 1.18.0): quien recorre los sitios por su cuenta
+      # recalcula sus formas en cada llamada; se va con el cache de formas y el
+      # comparador unico de Lsp.Lugares. Por (fichero, funcion): solo puede encoger
+      ('Lsp.Guard.pas', 'ArgPathOutsideDenied'), ('Lsp.Guard.pas', 'CasasDeEntregables'),
+      ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'), ('Lsp.Guard.pas', 'NegativaDeUnc'),
+      ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
+      ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
+      ('Lsp.Guard.pas', 'RootItselfDenied'), ('Lsp.Guard.pas', 'RutaRelativaDenegada'),
+      ('Lsp.Guard.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
+      ('Lsp.BuildRunner.pas', 'UnitSourceFolders'), ('Lsp.ProjectUnits.pas', 'BordeDeMudanza'),
+      ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.ResolveSettings'),
+      ('Mcp.Tools.Workspace.pas', 'TDelphiWorkspaceTool.ExecuteWithParams'),
+      ('Mcp.Tools.Workspace.pas', 'TDelphiProjectsTool.ExecuteWithParams')],
+     'Lsp.Settings lee las listas de los sitios y Lsp.Lugares las recorre: quien las recorre por su '
+     'cuenta recalcula la forma de un sitio en cada llamada (68 llamadas a las formas medidas el '
+     '8-oct-2026, ~30 de un sitio), y dos formas de un mismo sitio fueron el workspace borrable del '
+     '20-sep-2026'),
 ]
 
 
@@ -168,11 +189,12 @@ CABECERA = re.compile(r'^(?:class\s+)?(?:function|procedure|constructor|destruct
 
 
 def funcion_de(lineas, n):
-    """La rutina que contiene la linea n: la ultima cabecera de la columna 0."""
+    """La rutina que contiene la linea n: la ultima cabecera de la columna 0,
+    con su clase delante si es un metodo (TClase.Metodo)."""
     for k in range(n, -1, -1):
         m = CABECERA.match(lineas[k])
         if m:
-            return m.group(1).split('.')[-1]
+            return m.group(1)
     return ''
 
 
@@ -189,7 +211,10 @@ def fuera_de_casa(regla, ficheros_texto):
             if rx.search(l) and not CABECERA.match(l.strip()):
                 fn = funcion_de(lineas, n)
                 base = os.path.basename(f)
-                if not any(base == cf and (cfn == '*' or cfn.lower() == fn.lower()) for cf, cfn in casas):
+                # una casa con su clase delante (TClase.Metodo) es ESE metodo; sin
+                # ella, la rutina o el metodo de ese nombre en cualquier clase
+                if not any(base == cf and (cfn == '*' or cfn.lower() in (fn.lower(), fn.split('.')[-1].lower()))
+                           for cf, cfn in casas):
                     malos.append('%s:%d (%s) %s' % (os.path.relpath(f, REPO), n + 1, fn or '-', l.strip()[:90]))
     return malos
 
@@ -225,6 +250,7 @@ PLANTADO = {
     'decidir la codificacion de unos bytes': "  if (B[0] = $FF) and (B[1] = $FE) then K := ekUtf16LE;",
     'UTF-8 estricto preguntado a mano': "  if ValidUtf8(B, 0) then K := ekUtf8;",
     'el codec CP1252': "  E := TEncoding.GetEncoding(1252);",
+    'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -233,6 +259,17 @@ for regla in REGLAS:
     cazados = fuera_de_casa(regla, [('Plantado.pas', planta)])
     check('mutante "%s": la copia plantada se caza (y el comentario no)' % nombre,
           len(cazados) == 1 and ':6 ' in cazados[0], cazados)
+
+# una casa con su clase delante es ESE metodo y no otro del mismo nombre: la
+# excepcion de una tool no tapa a sus hermanas de la unidad
+REGLA_SITIOS = next(r for r in REGLAS if r[0] == 'las listas crudas de los sitios')
+def metodo_plantado(clase):
+    return ('unit Plantado;\nimplementation\nfunction %s.ExecuteWithParams: string;\nbegin\n'
+            '  for R in WorkspaceRoots do\nend;\nend.\n' % clase)
+OTRA = fuera_de_casa(REGLA_SITIOS, [('Mcp.Tools.Workspace.pas', metodo_plantado('TDelphiListTool'))])
+check('mutante de la casa con clase: el mismo metodo de OTRA clase se caza', len(OTRA) == 1, OTRA)
+SUYA = fuera_de_casa(REGLA_SITIOS, [('Mcp.Tools.Workspace.pas', metodo_plantado('TDelphiWorkspaceTool'))])
+check('...y el de la clase declarada no', not SUYA, SUYA)
 
 for regla in REGLAS:
     malos = fuera_de_casa(regla, TEXTOS)

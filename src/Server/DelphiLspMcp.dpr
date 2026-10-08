@@ -144,7 +144,8 @@ uses
   Lsp.TodoONada in 'Lsp.TodoONada.pas',
   Lsp.Args in 'Lsp.Args.pas',
   Lsp.Codificacion in 'Lsp.Codificacion.pas',
-  Mcp.Tools.Git in 'Mcp.Tools.Git.pas';
+  Mcp.Tools.Git in 'Mcp.Tools.Git.pas',
+  Lsp.Lugares in 'Lsp.Lugares.pas';
 
 {$R *.res}
 

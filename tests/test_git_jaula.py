@@ -68,7 +68,7 @@ main repository's, for a linked worktree) - and git runs PINNED to them
       Measured 2026-09-30 on a machine with its roots on such a letter:
       GIT-041 to every command that works on an existing repository. git's
       answer is now written in the declared
-      form before it is judged (Lsp.Guard.FormaDeclarada). Needs a connected
+      form before it is judged (Lsp.Lugares.FormaDeclarada). Needs a connected
       network drive in the session that runs the battery:
       DELPHI_MCP_TEST_NETDIR names a folder of it to work in; without it the
       battery says so (NOTA) and the rule alone is in LspTests.Rutas

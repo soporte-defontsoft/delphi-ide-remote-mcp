@@ -97,6 +97,22 @@ the MCP `initialize` response (`serverInfo.version`).
     **`Lsp.Json`**, below the jail and the coming drive mask, which both use
     it. The note of `EsRutaAbsoluta`, which sat above another function,
     travels with it. The second of the four steps.
+  - The map of the declared places goes to **`Lsp.Lugares`**: the one list
+    of what the operator declared (`LugaresDeclarados`), the IDE's library
+    zone (`LibraryRoots`, and `LibraryReadRoots`, the one announced), which
+    places sit on a network drive letter and their network path
+    (`SitiosEnLetraDeRed`), the UNC host `\\srvhost\` stands for
+    (`HostUncDeclarado`), and the DECLARED form of a resolved path or text
+    (`FormaDeclarada`, `FormaDeclaradaDe`, `FormaDeclaradaEnTexto`). It
+    decides no access: the jail stays in `Lsp.Guard` and reads the map.
+    `Lsp.Guard` no longer uses `Lsp.Discovery`. `test_paisaje` now keeps the
+    raw lists of places (`WorkspaceRoots`, `WorkspaceReadOnlyRoots`,
+    `WorkspaceReadOnlyPaths`, `LugaresDeclarados`, `LibraryRoots`,
+    `TodosLosVaults`) in `Lsp.Settings`, which reads them, and `Lsp.Lugares`,
+    which walks them; the 18 routines in six units that walk them on their
+    own today are declared debt, by routine, that can only shrink (a home
+    written `TClass.Method` is that method only, so one tool's exception does
+    not cover its siblings). The third of the four steps.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,
