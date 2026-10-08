@@ -63,7 +63,8 @@ uses
   Lsp.Texts,
   System.Character,
   System.Diagnostics,
-  MCPServer.Logger;
+  MCPServer.Logger,
+  Lsp.Rutas;
 
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);

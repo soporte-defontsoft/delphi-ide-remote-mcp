@@ -76,7 +76,8 @@ uses
   Lsp.Dproj,     // DprojDe: el .dproj de un .dpr/.dpk, un solo nombrador
   Lsp.NetDrives,
   Lsp.Pascal,
-  Lsp.Scaffold;
+  Lsp.Scaffold,
+  Lsp.Rutas;
 
 var
   // El nombre de la carpeta de copias estaba escrito DOS veces, aqui y en

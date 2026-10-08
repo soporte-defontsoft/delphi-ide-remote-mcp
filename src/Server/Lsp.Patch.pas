@@ -519,7 +519,8 @@ uses
   Lsp.Pascal, // LlavesAnidadas, VistaPascal: el lexico Pascal de la casa
   Lsp.PascalDecl, // EL lector de clases (insert=metodo)
   Lsp.Regex,
-  Lsp.Scaffold;
+  Lsp.Scaffold,
+  Lsp.Rutas;
 
 const
   BACKUP_SUB = '__delphi-patch';

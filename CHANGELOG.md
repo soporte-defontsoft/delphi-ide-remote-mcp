@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Internal
+
+- `Lsp.Guard` is split by families, one family per commit and moves only:
+  not a line of logic changes, and the suite runs whole after each one. The
+  dependency graph of its routines decided the order, not the plan: a
+  family goes where nothing it uses is above it.
+  - The canonical forms of a path go to **`Lsp.Rutas`**, below everything:
+    `LongCanonical` (8.3 aliases undone), `RealPath` (links followed),
+    `FormaLarga` (the form places are compared in) and `EnLugar` (THE "is
+    it in that place" comparer). They use nothing of the jail, and the
+    jail, the settings reader and the server's home all compare places
+    with them.
+
 ## [1.17.0] - 2026-10-07
 
 The designer sees and edits. `preview` draws a form as the IDE designer

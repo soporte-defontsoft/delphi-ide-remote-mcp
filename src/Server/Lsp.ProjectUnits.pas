@@ -203,7 +203,8 @@ uses
   Lsp.References,
   Lsp.NetDrives,  // SkipIdeArtifacts: una mudanza no entra en artefactos
   Lsp.Pascal,
-  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
+  Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
+  Lsp.Rutas;
 
 { TUnitInfo }
 
@@ -221,7 +222,7 @@ end;
 
 function NormPath(const P: string): string;
 begin
-  // la forma LARGA (Lsp.Guard.LongCanonical): UPROVE~1.PAS y
+  // la forma LARGA (Lsp.Rutas.LongCanonical): UPROVE~1.PAS y
   // UProveedorModelo.pas son el mismo fichero (sexta revision). Salvo un
   // UNC que no es de ningun sitio declarado: estas rutas salen de lo que
   // dice un .dpr, y alargarla abria SMB hacia ese host (octava revision)
