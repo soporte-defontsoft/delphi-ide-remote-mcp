@@ -116,6 +116,38 @@ try:
           mc.es(r, 'SR_PATCH_EDITS_ROLLED_FMT'), r[:160])
     check('B5b ...y el fichero vuelve byte a byte',
           open(f, 'rb').read() == antes, 'el fichero cambio')
+
+    # ------------------------------------------------------------------ B6
+    # La ESTRUCTURA de una unidad se juzga sobre el fichero ENTERO al acabar
+    # la tanda (2.5 de la 1.18.0): una entrada abre un (* y la siguiente lo
+    # cierra; a mitad de tanda el end. quedaba DENTRO del comentario y la
+    # auditoria de cada entrada avisaba de BROKEN STRUCTURE de un fichero que
+    # acaba bien.
+    def unidad():
+        return ('unit UEstructura;\n\ninterface\n\nimplementation\n\n'
+                'procedure Uno;\nbegin\nend;\n\nend.\n')
+    f = os.path.join(JAIL, 'UEstructura.pas')
+    open(f, 'w', newline='\r\n').write(unidad())
+    r = call('delphi_edit', {'path': f, 'edits': json.dumps([
+        {'old': 'procedure Uno;', 'new': '(* apartado un rato\nprocedure Uno;'},
+        {'old': 'end;', 'new': 'end;\n*)'},
+    ])})
+    txt = open(f).read()
+    check('B6 una tanda que abre un (* en una entrada y lo cierra en la siguiente: aplicada, '
+          'sin aviso de BROKEN STRUCTURE',
+          mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and '(* apartado' in txt and '*)' in txt and
+          not mc.es(r, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
+          not mc.es(r, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA'), r[:300])
+    # ...y el aviso sigue saliendo cuando el fichero FINAL esta roto: el (*
+    # se abre y nadie lo cierra
+    open(f, 'w', newline='\r\n').write(unidad())
+    r = call('delphi_edit', {'path': f, 'edits': json.dumps([
+        {'old': 'procedure Uno;', 'new': '(* apartado un rato\nprocedure Uno;'},
+        {'old': 'interface', 'new': 'interface\n// nada'},
+    ])})
+    check('B6b ...y si el fichero FINAL queda roto (el (* no se cierra), la tanda avisa UNA vez',
+          mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and
+          r.count('EDIT-085') == 1, r[:400])
 finally:
     try:
         proc.kill()

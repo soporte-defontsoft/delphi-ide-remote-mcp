@@ -1748,6 +1748,40 @@ begin
   Result := Format('  %d: %s', [N, ConSalto(ATexto, #10 + SANGRIA_FILA)]);
 end;
 
+{ Cuantos 'end.' tiene el CODIGO de un fuente: un end. comentado contaba, la
+  cuenta salia 2 y la auditoria de estructura no miraba nada (censo del
+  lexico, 2-oct-2026). }
+function CountEndDot(const T: string): Integer;
+begin
+  Result := TRegEx.Matches(CodigoPascal(T), '^[ \t]*end\.[ \t]*$', [roMultiLine]).Count;
+end;
+
+{ La ESTRUCTURA de un fuente despues de escribirlo: '' si sigue en pie, o el
+  aviso (EDIT-085: tenia UN end. y ya no; EDIT-086: el end. ya no es la
+  ultima linea de codigo). La pregunta la edicion suelta (DoEdit) sobre lo
+  que acaba de escribir y la tanda (AplicaTanda) sobre el fichero ENTERO al
+  acabar: una entrada que abre un (* y la siguiente que lo cierra dejaban a
+  mitad de tanda un estado roto que el fichero final no tiene, y la tanda
+  avisaba de BROKEN STRUCTURE (2.5 de la 1.18.0). }
+function AvisoDeEstructura(const AAntes, ADespues: string): string;
+begin
+  Result := '';
+  var EA := CountEndDot(AAntes);
+  var ED := CountEndDot(ADespues);
+  if (EA = 1) and (ED <> 1) then
+    Result := MsgFmt(SN_EDIT_ESTRUCTURA_ROTA_END_FMT, [ED])
+  else if EA = 1 then
+  begin
+    // la ultima linea de CODIGO (un comentario detras del end. no la cambia)
+    var AfterCodigo := LineasDelTexto(CodigoPascal(ADespues));
+    var Ult := High(AfterCodigo);
+    while (Ult >= 0) and (AfterCodigo[Ult].Trim = '') do
+      Dec(Ult);
+    if (Ult >= 0) and not TRegEx.IsMatch(AfterCodigo[Ult], '^[ \t]*end\.[ \t]*$') then
+      Result := MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA);
+  end;
+end;
+
 function AplicaTanda(const APath, AEditsJson: string;
   const AAplicaUna: TAplicaUnaEdicion): string;
 var
@@ -1904,6 +1938,18 @@ begin
       var Avisos: TArray<string> := [];
       var SinCambios := 0; // entradas que el motor contesto EDIT-113
       var Causa := ''; // la negativa de la entrada que cayo: da el resultado
+      // La ESTRUCTURA (EDIT-085/086) es del fichero entero: la de cada entrada
+      // se aparta y se juzga UNA vez al acabar, del original al final
+      // (AvisoDeEstructura). Si al final no se puede releer, valen las de
+      // las entradas, como antes.
+      var DeEstructura: TArray<string> := [];
+      var TextoAntes := '';
+      try
+        var EncAntes: string;
+        TextoAntes := PatchLoadText(APath, EncAntes);
+      except
+        TextoAntes := '';
+      end;
       for V in Arr do
       begin
         Inc(N);
@@ -2060,7 +2106,11 @@ begin
         // va detras de la etiqueta del aviso (MsgCuerpo)
         for var LA in Una.Split([#10]) do
           if MsgCuerpo(LA.Trim).StartsWith('***') then
-            Avisos := Avisos + [FilaDeEntrada(N, LA.Trim)];
+            if EsMsg(LA.Trim, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
+               EsMsg(LA.Trim, SN_EDIT_ESTRUCTURA_ROTA_ULTIMA) then
+              DeEstructura := DeEstructura + [FilaDeEntrada(N, LA.Trim)]
+            else
+              Avisos := Avisos + [FilaDeEntrada(N, LA.Trim)];
         // lo PEDIDO: en modo fragmento, el fragmento que tecleo el agente (Anc
         // es ya la linea entera del disco que encontro FragmentoALinea, y la
         // fila la mostraba como si la hubiera pedido; revision del 4-oct-2026)
@@ -2101,6 +2151,17 @@ begin
         if NoVolvio <> '' then
           Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Sb.ToString.TrimRight]);
         Exit;
+      end;
+      if (Length(DeEstructura) > 0) and (TextoAntes = '') then
+        Avisos := Avisos + DeEstructura
+      else if Length(DeEstructura) > 0 then
+      try
+        var EncDespues: string;
+        var Final := AvisoDeEstructura(TextoAntes, PatchLoadText(APath, EncDespues));
+        if Final <> '' then
+          Avisos := Avisos + [Final];
+      except
+        Avisos := Avisos + DeEstructura;
       end;
       if SinCambios = Arr.Count then
         Result := MsgFmt(SN_PATCH_EDITS_SIN_CAMBIOS_FMT,
@@ -3354,13 +3415,6 @@ var
     end;
   end;
 
-  function CountEndDot(const T: string): Integer;
-  begin
-    // en el CODIGO: un end. comentado contaba, la cuenta salia 2 y la
-    // auditoria de estructura no miraba nada (censo del lexico, 2-oct-2026)
-    Result := TRegEx.Matches(CodigoPascal(T), '^[ \t]*end\.[ \t]*$', [roMultiLine]).Count;
-  end;
-
 begin
   B := TFile.ReadAllBytes(APath);
   K := DetectEnc(B);
@@ -3597,20 +3651,9 @@ begin
 
     if not AIsDesigner then
     begin
-      var EA := CountEndDot(Text);
-      var ED := CountEndDot(AfterText);
-      if (EA = 1) and (ED <> 1) then
-        Warnings.Add(MsgFmt(SN_EDIT_ESTRUCTURA_ROTA_END_FMT, [ED]))
-      else if EA = 1 then
-      begin
-        // la ultima linea de CODIGO (un comentario detras del end. no la cambia)
-        var AfterCodigo := LineasDelTexto(CodigoPascal(AfterText));
-        var Ult := High(AfterCodigo);
-        while (Ult >= 0) and (AfterCodigo[Ult].Trim = '') do
-          Dec(Ult);
-        if (Ult >= 0) and not TRegEx.IsMatch(AfterCodigo[Ult], '^[ \t]*end\.[ \t]*$') then
-          Warnings.Add(MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA));
-      end;
+      var Estructura := AvisoDeEstructura(Text, AfterText);
+      if Estructura <> '' then
+        Warnings.Add(Estructura);
       // lo que mira, en el CODIGO del fichero escrito: una firma dentro de un
       // comentario, o un comentario con ':=' encima de una de verdad,
       // avisaban de una insercion en un metodo que no habia (revision de la

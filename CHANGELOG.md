@@ -21,6 +21,13 @@ the MCP `initialize` response (`serverInfo.version`).
   the authority are refused instead of guessed. With `GitRemotes=` empty, as
   it ships, nothing reached git. `test_git_argfilter` and `test_git_jaula`
   (J15b) carry the cases, red against the old binary.
+- **A batch of `delphi_edit` judges the structure of the WHOLE file at the
+  end.** Each entry was audited on the file half-way through the batch, so
+  an entry that opened a `(*` and the next one that closed it warned of a
+  BROKEN STRUCTURE (EDIT-085) the final file did not have. The one-`end.`
+  and last-line checks now run once, from the file before the batch to the
+  file after it (the same helper a single edit asks), and a batch that does
+  leave the file broken still warns, once. `test_round34` B6/B6b.
 
 ### Internal
 
