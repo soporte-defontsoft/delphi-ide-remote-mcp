@@ -246,11 +246,12 @@ uses
   System.Generics.Collections,
   System.Generics.Defaults,
   System.Win.Registry,
-  Lsp.Guard, // ServerDelphiVersion: la version que fija el settings.ini
+  Lsp.Guard, // ProbeHostDenied
   Lsp.Texts,
   Lsp.Dproj, // TagValue: EL lector de los tags del .profile
   Winapi.Windows,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Settings; // ServerDelphiVersion: la version que fija el settings.ini
 
 function TRadStudioInfo.Found: Boolean;
 begin

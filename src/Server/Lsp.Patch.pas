@@ -521,7 +521,8 @@ uses
   Lsp.Regex,
   Lsp.Scaffold,
   Lsp.Rutas,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Settings;
 
 const
   BACKUP_SUB = '__delphi-patch';

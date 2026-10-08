@@ -89,7 +89,8 @@ uses
   Lsp.Dproj,        // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.ProjectUnits,
   Lsp.Pascal,
-  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
+  Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
+  Lsp.Settings;
 
 type
   TCandidate = record

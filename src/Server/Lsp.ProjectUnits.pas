@@ -204,7 +204,8 @@ uses
   Lsp.NetDrives,  // SkipIdeArtifacts: una mudanza no entra en artefactos
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.Settings;
 
 { TUnitInfo }
 

@@ -105,7 +105,8 @@ uses
   Lsp.ProcessLaunch,
   Lsp.Regex,
   Lsp.References, // SkipIdeArtifacts: lo que no es fuente de nadie (papelera, salidas)
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Settings;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Un sitio se declara con su LETRA, y las letras de red las conecta el
-servidor (1.9.0; Lsp.NetDrives y el cargador de Lsp.Guard).
+servidor (1.9.0; Lsp.NetDrives y el cargador de Lsp.Settings).
 
 Un servicio no ve las letras de red del escritorio aunque corra con la misma
 cuenta (medido el 1-oct-2026): una raiz en una letra asi fallaba ("the drive

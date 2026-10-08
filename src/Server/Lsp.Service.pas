@@ -55,10 +55,10 @@ uses
   System.Win.Registry,
   Vcl.Forms, // the application object's window: see ServiceStart
   MCPServer.Logger,
-  Lsp.Guard,
   Lsp.Session,
   Lsp.Texts,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Settings;
 
 procedure ServiceController(CtrlCode: DWord); stdcall;
 begin

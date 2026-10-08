@@ -293,7 +293,8 @@ uses
   Lsp.Regex, // TExprDelAgente: la expresion de delphi_search regex=true
   Lsp.Sandbox,
   Lsp.Rutas,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Settings;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;

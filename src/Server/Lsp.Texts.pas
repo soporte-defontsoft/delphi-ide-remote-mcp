@@ -133,7 +133,7 @@ const
     settings.ini, y a partir de ahi manda la clave - no cambia sola el dia
     que se instale otro Delphi (David, 5-oct-2026: "si no hay nada en el
     ini, podemos escribirlo con el Delphi escogido y a partir de ahi usar
-    la clave"). La escribe Lsp.Guard.FijaDelphiVersionEnElIni. }
+    la clave"). La escribe Lsp.Settings.FijaDelphiVersionEnElIni. }
   SL_DISC_ESCRITA_FMT =
     'settings.ini had no [Server] DelphiVersion: this server chose the ' +
     'newest with DelphiLSP and wrote it there (DelphiVersion=%s), so it ' +
@@ -148,7 +148,7 @@ const
     'the key did not read back after writing it';
   { [Server] dos veces, o su DelphiVersion dos veces: Windows lee el primero
     y la clave del operador puede estar en el otro; escribirla la taparia
-    (Lsp.Guard.FijaDelphiVersionEnElIni, revision del 6-oct-2026). }
+    (Lsp.Settings.FijaDelphiVersionEnElIni, revision del 6-oct-2026). }
   SF_GUARD_SERVER_DOBLE_NO_ESCRIBE =
     'settings.ini has [Server] twice, or DelphiVersion twice in it, and ' +
     'Windows reads only the first one - the version you meant may be in ' +

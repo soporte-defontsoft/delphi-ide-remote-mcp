@@ -169,7 +169,8 @@ uses
   Lsp.NetDrives,
   Lsp.Regex,
   Lsp.Listas, // TPagina: la pagina de una lista, como delphi_list y delphi_search
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.Settings;
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K

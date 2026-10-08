@@ -125,6 +125,7 @@ uses
   MCPServer.CoreManager,
   Lsp.Guard, // [local change] per-session agent identity and the session registry
   Lsp.Texts, // [local change] the 404 texts of a dead session
+  Lsp.Settings, // [local change] tokens, BindIP and the session timeout (settings.ini)
   MCPServer.Logger;
 
 { [local change 2026-09-28] LA puerta de la sesion muerta, para el POST y el

@@ -61,7 +61,8 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
-  Lsp.TestRunner;
+  Lsp.TestRunner,
+  Lsp.Settings;
 
 constructor TDelphiTestTool.Create;
 begin

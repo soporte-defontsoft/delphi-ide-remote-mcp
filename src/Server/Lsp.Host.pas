@@ -104,7 +104,8 @@ uses
   Lsp.LogSink,
   Mcp.Tools.Workspace, // NombreDeMaquina: the one reader of the host name
   Lsp.DesignerMetaGen, // CalientaTablasDelDisenador
-  Lsp.Discovery; // NotasDeArranqueDelphi
+  Lsp.Discovery, // NotasDeArranqueDelphi
+  Lsp.Settings;
 
 constructor TMcpHost.Create;
 begin
@@ -310,7 +311,7 @@ begin
     // used to say it, only in terminal mode, whenever the interface was
     // 127.0.0.1 - credentials or not - and pointing at [Security], a
     // section retired in v0.98 (found by test_round24 on 2026-09-26).
-    if Lsp.Guard.BindIP = '' then
+    if Lsp.Settings.BindIP = '' then
       Add(NOTE_WARNING_PREFIX + MsgText(SL_SYS_NO_BINDIP_LOCALHOST_ONLY));
   end;
   // One auth mechanism: workspaces. A legacy env pair shows up
@@ -348,10 +349,10 @@ begin
   Result.Settings := FSettings;
   Result.ManagerRegistry := FRegistry;
   Result.CoreManager := FCore;
-  Result.AuthToken := Lsp.Guard.AuthToken;
-  Result.ReadOnlyToken := Lsp.Guard.ReadOnlyToken;
+  Result.AuthToken := Lsp.Settings.AuthToken;
+  Result.ReadOnlyToken := Lsp.Settings.ReadOnlyToken;
   Result.AnonymousReadOnly := False; // v0.98: sin acceso anonimo
-  Result.BindIP := Lsp.Guard.BindIP;
+  Result.BindIP := Lsp.Settings.BindIP;
   // Fail SAFE: with NO credential of any kind configured, never listen on
   // every interface - bind to localhost so an unconfigured server is not
   // silently open to the whole network. Remote access requires a workspace

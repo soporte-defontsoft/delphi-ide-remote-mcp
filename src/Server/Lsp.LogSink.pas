@@ -114,9 +114,10 @@ uses
   System.SyncObjs,
   System.IOUtils,
   MCPServer.Logger,
-  Lsp.Guard, // LogIniSettings, CrearCarpeta, EsEnlace
+  Lsp.Guard, // CrearCarpeta, EsEnlace
   Lsp.Texts,
-  Lsp.Casa;  // ServerDir
+  Lsp.Casa,  // ServerDir
+  Lsp.Settings; // LogIniSettings
 
 const
   LIVE_LOG_NAME = 'actual.log';
@@ -201,7 +202,7 @@ begin
   Result := ServerDir('logs');
 end;
 
-{ [Log] del settings.ini, por el lector central (LogIniSettings, Lsp.Guard):
+{ [Log] del settings.ini, por el lector central (LogIniSettings, Lsp.Settings):
   hasta hoy lo leia la bandeja con su propio TIniFile. Aqui solo se acota. }
 procedure LeeAjustes;
 begin

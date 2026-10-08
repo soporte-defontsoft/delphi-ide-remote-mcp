@@ -241,6 +241,7 @@
         <DCCReference Include="Lsp.DesignerForma.pas"/>
         <DCCReference Include="Lsp.Rutas.pas"/>
         <DCCReference Include="Lsp.Casa.pas"/>
+        <DCCReference Include="Lsp.Settings.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

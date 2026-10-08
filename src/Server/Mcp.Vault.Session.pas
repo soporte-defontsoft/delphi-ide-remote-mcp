@@ -59,7 +59,8 @@ uses
   Lsp.Guard,
   Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
   Lsp.Texts,
-  Mcp.Vault.Seed;
+  Mcp.Vault.Seed,
+  Lsp.Settings;
 
 const
   INSTRUCTIONS_FILE = 'VAULT-INSTRUCTIONS.md';

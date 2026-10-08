@@ -28,6 +28,18 @@ the MCP `initialize` response (`serverInfo.version`).
     purge, the instance presence - asks the gates and stays in
     `Lsp.Guard`. `Lsp.Sandbox` no longer uses `Lsp.Guard`: the cycle
     between the two is gone.
+  - The settings reader goes to **`Lsp.Settings`**: `settings.ini` and the
+    environment, loaded once, and what holds for THIS session (the active
+    workspace, its roots, references, permissions and vault, the
+    credentials, read-only mode, the session and engine limits). Nobody
+    outside it sees its variables or the table of workspaces, which holds
+    the tokens: four gates of `Lsp.Guard` that read those variables by hand
+    now ask five readers of one or two lines (`RaicesDeLosWorkspaces`,
+    `RaicesDelModoLocal`, `RemoteProjectsNow`, `ToolsOnly`,
+    `ToolsProfileNow`), the same shape as `AgentConfinementNow`. It still
+    uses `Lsp.Patch` for one encoding helper, a cycle that goes when the
+    encodings get a unit of their own. `Lsp.Service` no longer uses
+    `Lsp.Guard`.
 
 ## [1.17.0] - 2026-10-07
 

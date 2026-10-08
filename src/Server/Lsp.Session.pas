@@ -239,7 +239,8 @@ implementation
 uses
   MCPServer.Logger,
   Lsp.Texts,
-  Lsp.ShaCache; // DiskStamp: one composer of the disk fingerprint
+  Lsp.ShaCache, // DiskStamp: one composer of the disk fingerprint
+  Lsp.Settings;
 
 type
   { What the engine holds of one document. }
@@ -525,7 +526,7 @@ begin
   FRetired := TList<TRetiredClient>.Create;
   FLeaving := TList<TLeavingFolder>.Create;
   FBuilding := TList<string>.Create;
-  // [Server] EngineIdleMinutes (Lsp.Guard): the engines nobody uses and the
+  // [Server] EngineIdleMinutes (Lsp.Settings): the engines nobody uses and the
   // documents nobody asks about, by one key. 0 leaves the engines alone (and
   // the documents with their half hour).
   var Min := EngineIdleMinutes;
