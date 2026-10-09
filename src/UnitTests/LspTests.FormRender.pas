@@ -46,6 +46,10 @@ type
     procedure RutaDeComponenteConLaRaizDelante;
   end;
 
+{ Una UNION de carpeta (punto de montaje) AUnion -> ADestino, para las pruebas
+  que miden un enlace: esta y las de la puerta de leer (LspTests.Rutas). }
+function CreaUnion(const AUnion, ADestino: string): Boolean;
+
 implementation
 
 uses

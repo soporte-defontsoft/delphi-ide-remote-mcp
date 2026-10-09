@@ -385,6 +385,15 @@ function CopiaDenegada(const AOrigen, ADestino: string): string;
 { P es un enlace (junction o symlink, de carpeta o de fichero). LA
   comprobacion: estaba escrita cuatro veces en esta unidad. }
 function EsEnlace(const P: string): Boolean;
+{ APath ES ALugar o esta DENTRO por su forma larga, y NINGUN tramo entre
+  ALugar (sin el) y APath es un enlace: lo de detras de un enlace no es de
+  ese lugar. Para un lugar cuya ruta REAL no sirve para compararlo: la casa
+  del servidor bajo LOCALAPPDATA, que la virtualizacion MSIX parte en dos -
+  una subcarpeta NUEVA de una carpeta real resuelve a ...\Packages\<app>\
+  LocalCache\Local\... (medido el 4 y el 9-oct-2026 desde la app de
+  escritorio) -, y eso no es un punto de reparse; una union si. No abre
+  nada: atributos. }
+function EnLugarSinEnlaces(const APath, ALugar: string): Boolean;
 { La ruta de un enlace se juzga por DONDE ESTA: la ruta REAL del padre + el
   nombre. Para quien tiene que saber donde esta DE VERDAD lo que le nombran
   (la purga de la papelera: un fichero nombrado a traves de un enlace que
@@ -2504,6 +2513,31 @@ var
 begin
   A := GetFileAttributes(PChar(P));
   Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
+end;
+
+function EnLugarSinEnlaces(const APath, ALugar: string): Boolean;
+var
+  Lugar, P: string;
+begin
+  Result := False;
+  if (APath.Trim = '') or (ALugar.Trim = '') then
+    Exit;
+  try
+    Lugar := FormaLarga(ALugar.Trim); // con su separador final
+    P := SinBarraFinal(LongCanonical(APath.Trim));
+    if not StartsText(Lugar, IncludeTrailingPathDelimiter(P)) then
+      Exit;
+    // de APath hacia arriba hasta el lugar, sin el
+    while Length(IncludeTrailingPathDelimiter(P)) > Length(Lugar) do
+    begin
+      if EsEnlace(P) then
+        Exit;
+      P := TPath.GetDirectoryName(P);
+    end;
+    Result := True;
+  except
+    Result := False; // una ruta que no parsea no esta en ningun sitio
+  end;
 end;
 
 procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;

@@ -1819,9 +1819,14 @@ begin
   if (ltIde in ALugares) and (EnAlgunLugar(Real, LugaresDelIde) or
      EnAlgunLugar(Real, SysrootsDeLosSdk)) then
     Exit('');
-  if (ltCasa in ALugares) and EnAlgunLugar(Real, CarpetasDeLaCasa) then
-    Exit('');
-  if (ltTemporal in ALugares) and EnAlgunLugar(Real, [ServerTempDir]) then
+  // los lugares del SERVIDOR (su casa y su temporal), por su forma larga y
+  // sin enlaces en el camino, no por la ruta real: la virtualizacion MSIX
+  // los parte en dos bajo AppData (Lsp.Guard.EnLugarSinEnlaces, medido)
+  if ltCasa in ALugares then
+    for var C in CarpetasDeLaCasa do
+      if EnLugarSinEnlaces(APath, C) then
+        Exit('');
+  if (ltTemporal in ALugares) and EnLugarSinEnlaces(APath, ServerTempDir) then
     Exit('');
   if (ltVault in ALugares) and EnAlgunLugar(Real, [VaultPath]) then
     Exit('');

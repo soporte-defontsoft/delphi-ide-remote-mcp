@@ -428,7 +428,11 @@ the MCP `initialize` response (`serverInfo.version`).
   `LeeTexto` and `LeeBytes` (`Lsp.Patch`) read a file only if it is in one
   of the PLACES the caller names - the workspace (the jail's own read
   rule), the IDE's places, the server's home, its temp folder, the vault -
-  judged by its real path, and decode it with the one detector. 41 reads
+  judged by its real path, and decode it with the one detector. The
+  server's own home and temp folder are judged by their long form with no
+  link on the way instead: under the desktop app's MSIX virtualization a
+  NEW subfolder of a real folder in AppData resolves to the package's
+  LocalCache (measured), which is not a link, while a junction is. 41 reads
   went their own way (the inventory of 9-oct-2026): the `.dproj` and its
   imports, the IDE's `.sdk`/`.profile`/`rsvars.bat`, `System.pas`, the
   designer's tables, the fabricated engine settings, the token `.ini` of

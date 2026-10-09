@@ -84,19 +84,21 @@ type
   { LA PUERTA DE LEER (Lsp.Patch.LugarDeLecturaDenegado, LeeTexto, LeeBytes)
     en los lugares que no dependen de la maquina: el temporal y la casa del
     servidor, que son del ejecutor (su carpeta). La jaula y el IDE los mide la
-    bateria a traves del servidor (test_build_imports: un Import de fuera), y
-    el ENLACE tambien (test_mensajes: el buzon por una union): en el
-    contenedor de delphi_test GetFinalPathNameByHandle con letra o GUID da
-    ACCESS_DENIED (solo la forma NT contesta, medido el 9-oct-2026) y RealPath
-    se queda alli con el texto, asi que una union no se mide aqui. }
+    bateria a traves del servidor (test_build_imports: un Import de fuera).
+    Un ENLACE se mide aqui solo en los lugares del servidor, que se juzgan
+    por atributos (EnLugarSinEnlaces): en el contenedor de delphi_test
+    GetFinalPathNameByHandle con letra o GUID da ACCESS_DENIED (solo la forma
+    NT contesta, medido el 9-oct-2026) y RealPath se queda alli con el texto;
+    los de la ruta real los mide la bateria (test_messages, la jaula). }
   [TestFixture]
   TPuertaDeLeerTests = class
   private
-    FDir, FNota: string;
+    FDir, FNota, FUnion: string;
   public
     [Setup] procedure Prepara;
     [TearDown] procedure Limpia;
     [Test] procedure EnSuLugarSeLeeYEnOtroNo;
+    [Test] procedure UnEnlaceNoSacaANadieDeSuSitio;
     [Test] procedure SettingsIniNoEsDeLaCasaYElBuzonSi;
     [Test] procedure UnaCasaRelativaNoEsLugar;
   end;
@@ -112,6 +114,7 @@ uses
   Lsp.Lugares,
   Lsp.Patch,          // la puerta de leer
   Lsp.Rutas,          // EsRutaAbsoluta
+  LspTests.FormRender, // CreaUnion
   Lsp.Mascara;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
@@ -515,10 +518,14 @@ begin
   ForceDirectories(FDir);
   FNota := TPath.Combine(FDir, 'nota.txt');
   TFile.WriteAllText(FNota, 'hola', TEncoding.UTF8);
+  FUnion := TPath.Combine(FDir, 'fuera');
 end;
 
 procedure TPuertaDeLeerTests.Limpia;
 begin
+  // la union se quita como union (RemoveDir): lo de detras no se toca
+  if TDirectory.Exists(FUnion) then
+    RemoveDir(FUnion);
   if TFile.Exists(FNota) then
     TFile.Delete(FNota);
   RemoveDir(FDir);
@@ -543,6 +550,27 @@ begin
     begin
       LeeBytes(FNota, [ltCasa]);
     end);
+end;
+
+procedure TPuertaDeLeerTests.UnEnlaceNoSacaANadieDeSuSitio;
+var
+  Exe, R: string;
+begin
+  // <temporal>\puerta-x\fuera -> la carpeta del ejecutor, que NO es el
+  // temporal: por el TEXTO la ruta esta dentro, pero hay un enlace en medio
+  Assert.IsTrue(CreaUnion(FUnion, ExtractFileDir(ParamStr(0))),
+    'la union se crea: ' + SysErrorMessage(GetLastError));
+  Exe := TPath.Combine(FUnion, ExtractFileName(ParamStr(0)));
+  Assert.IsTrue(TFile.Exists(Exe), 'por la union se llega: ' + Exe);
+  R := LugarDeLecturaDenegado(Exe, [ltTemporal]);
+  Assert.IsTrue(R.StartsWith('[GUARD-034'), 'la puerta niega: [' + R + ']');
+  Assert.WillRaise(
+    procedure
+    begin
+      LeeBytes(Exe, [ltTemporal]);
+    end);
+  // ...y lo que esta de verdad dentro, al lado de la union, si
+  Assert.AreEqual('', LugarDeLecturaDenegado(FNota, [ltTemporal]));
 end;
 
 procedure TPuertaDeLeerTests.SettingsIniNoEsDeLaCasaYElBuzonSi;
