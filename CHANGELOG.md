@@ -60,6 +60,12 @@ the MCP `initialize` response (`serverInfo.version`).
   its .dproj it usually answers") when the file has no project settings;
   the two places that composed the error share one helper.
   `docs/DELPHILSP-NOTES.md` records it; `test_round16` S6/S6b.
+- **Retired `settings.ini` keys are named at startup instead of ignored in
+  silence**: `AllowDesktopControl` (gone in 1.0.16) and `AllowRun` (gone in
+  1.1.1) in a `[Workspace.<name>]`, and the whole `[Security]` section (gone
+  in 0.98.0). Each gets a WARNING line in the startup log that says it does
+  nothing; a key retired later is one more entry in the same table.
+  `test_un_delphi` U2b.
 
 ### Internal
 

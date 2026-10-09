@@ -1037,6 +1037,20 @@ begin
   end;
 end;
 
+type
+  TClaveRetirada = record
+    Clave, Desde: string;
+  end;
+
+const
+  { Las claves de un [Workspace.<nombre>] que ya no se leen: no hacen nada, y
+    el arranque lo dice (11.1 de la 1.18.0). DelphiVersion= tiene su propio
+    aviso, porque ademas cambia lo que el servidor escribe. Una clave que se
+    retire entra aqui con la version que la quito. }
+  CLAVES_RETIRADAS: array [0 .. 1] of TClaveRetirada = (
+    (Clave: 'AllowDesktopControl'; Desde: '1.0.16'), // la tool local, con su interruptor
+    (Clave: 'AllowRun'; Desde: '1.1.1'));            // delphi_run
+
 procedure LoadSecurity;
 var
   IniPath: string;
@@ -1216,6 +1230,10 @@ begin
                   [MsgFmt(SL_GUARD_DELPHIVERSION_EN_WORKSPACE_FMT, [W.Name])];
                 GWorkspaceConDelphiVersion := W.Name;
               end;
+              for var R in CLAVES_RETIRADAS do
+                if Ini.ValueExists(S, R.Clave) then
+                  GWorkspaceNotes := GWorkspaceNotes +
+                    [MsgFmt(SL_GUARD_CLAVE_RETIRADA_FMT, [S, R.Clave, R.Desde])];
               GWorkspaces := GWorkspaces + [W];
             end
             else
@@ -1233,6 +1251,11 @@ begin
             // anywhere saying why. It gets the loudest note of the three.
             GWorkspaceNotes := GWorkspaceNotes +
               [MsgText(SL_GUARD_WORKSPACE_SIN_PUNTO)]
+          else if SameText(S, 'Security') then
+            // la de las credenciales hasta la 0.98 (AnonymousReadOnly): se
+            // ignoraba entera sin decirlo (11.1 de la 1.18.0)
+            GWorkspaceNotes := GWorkspaceNotes +
+              [MsgText(SL_GUARD_SECCION_SECURITY)]
           else if S.ToLower.StartsWith('work') then
             // [Workopenclaw], [WorkspaceX]... a workspace section spelled
             // wrong used to vanish silently and its token answered 401 with
