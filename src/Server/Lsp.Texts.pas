@@ -4372,6 +4372,20 @@ const
     '[DSGN-117 DENIED] Form data to check exceeds the %d MiB rendering budget. ' +
     'Nothing was launched. Reduce embedded assets or use a smaller form folder.';
 
+  { En FMX Left y Top los guarda TComponent (DefineProperties): son el sitio
+    del ICONO de un no visual en el disenador, no el de un control, que va en
+    Position.X/Y. set los escribia, contestaba bien y no movia nada (3.7 de
+    la 1.18.0, Hermes); el lint lo avisa con el fragmento de abajo, sin
+    etiqueta como todo fragmento. }
+  SR_DESIGNER_FMX_LEFT_TOP_FMT =
+    '[DSGN-118 INVALID_PARAM] In FMX the place of a control is Position.X / ' +
+    'Position.Y: %s.%s would be written and would not move it (Left and Top ' +
+    'are where the designer draws a NON-visual component''s icon). Nothing ' +
+    'was written. Use prop=%s.';
+  SF_DSGN_FMX_LEFT_TOP_FMT =
+    '%s does not place an FMX control (it is where the designer ' +
+    'draws a non-visual component''s icon); its place is %s.';
+
   SR_DESIGNER_RENDER_NO_ARRANCA_FMT =
     '[DSGN-064 INTERNAL] %s could not be started: %s';
 

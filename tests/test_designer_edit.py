@@ -508,6 +508,19 @@ try:
     rect, png = rect_de(FFMX, 'Button1')
     check('F1 ...y preview lo dibuja en 10,10 con su texto',
           (rect or '').startswith('10,10,') and oscuros(png) > 5, (rect, oscuros(png)))
+    # 3.7 de la 1.18.0 (Hermes, medido): en FMX Left/Top los guarda TComponent
+    # (el sitio del ICONO de un no visual): set los escribia, contestaba bien y
+    # el control no se movia. Ahora se niega nombrando Position.X/Y, y el lint
+    # avisa de una linea Left/Top en un control
+    antes = mc.lee(FFMX)
+    r = dsg(command='set', path=FFMX, component='Button1', prop='Left', value='50')
+    check('F1b set Left en un control FMX: DSGN-118 nombra Position.X, sin escribir',
+          mc.abre(r, 'SR_DESIGNER_FMX_LEFT_TOP_FMT') and 'Position.X' in r and mc.lee(FFMX) == antes, r[:300])
+    escribe(FFMX, antes.replace("  object Button1: TButton\r\n", "  object Button1: TButton\r\n    Top = 7\r\n", 1))
+    r = dsg(command='lint', path=FFMX)
+    check('F1b lint: una linea Top en un control FMX avisa, con Position.Y',
+          'Top does not place an FMX control' in r and 'Position.Y' in r, r[:400])
+    escribe(FFMX, antes)
 
     # ------------------------------------------------------------------ F2
     r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Fill.Color', value="'rojo'")

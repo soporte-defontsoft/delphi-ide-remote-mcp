@@ -1646,6 +1646,12 @@ begin
     Result := ClaseDeJuez(F, Obj, ClsId);
     if Result <> '' then
       Exit;
+    // en FMX Left/Top no colocan un control (son el sitio del icono de un no
+    // visual, TComponent.DefineProperties): se escribian, se contestaba bien
+    // y no se movia nada (3.7, Hermes). Su sitio es Position.X/Y.
+    if F.EsFmx and MatchText(Prop, ['Left', 'Top']) and F.Tabla.Desciende(ClsId, ID_FMX_CONTROL) then
+      Exit(MsgFmt(SR_DESIGNER_FMX_LEFT_TOP_FMT, [NombreDe(Obj), Prop,
+        IfThen(SameText(Prop, 'Left'), 'Position.X', 'Position.Y')]));
     V := AValor.Trim;
     Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
     if HayHoja and (Hoja.Kind = 'm') then

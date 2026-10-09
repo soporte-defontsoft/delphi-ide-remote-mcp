@@ -1119,6 +1119,14 @@ begin
             Cur := Stack.Peek;
             if Cur = '' then
               Continue;
+            // en FMX Left/Top no colocan un control: los guarda TComponent, el
+            // sitio del icono de un no visual (3.7 de la 1.18.0, Hermes)
+            if AIsFmx and MatchText(Lhs, ['Left', 'Top']) and M.Desciende(Cur, ID_FMX_CONTROL) then
+            begin
+              Warn(MsgFmt(SF_DSGN_FMX_LEFT_TOP_FMT,
+                [Lhs, IfThen(SameText(Lhs, 'Left'), 'Position.X', 'Position.Y')]));
+              Continue;
+            end;
             // EL juez de una linea, el mismo que pregunta delphi_designer set
             Have := JuzgaPropiedad(M, Cur, Lhs, Rhs, R, Hoja);
             if Have <> '' then

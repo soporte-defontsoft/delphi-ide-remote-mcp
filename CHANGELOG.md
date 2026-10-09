@@ -150,6 +150,12 @@ the MCP `initialize` response (`serverInfo.version`).
   component's field (and its empty handlers) above a use moved it: the
   agent went to the wrong line (measured by Hermes). They are listed again
   on the unit that remains. `test_designer_edit` V11.
+- **`delphi_designer` says where an FMX control's place really is.** In FMX
+  `Left` and `Top` are streamed by `TComponent` - the designer's position of
+  a non-visual component's icon - so `set Left` on a control wrote a line,
+  answered fine and moved nothing (measured by Hermes). `set` refuses it now
+  naming `Position.X` / `Position.Y` (DSGN-118), and `lint` warns of such a
+  line in a control. `test_designer_edit` F1b.
 
 ### Internal
 
