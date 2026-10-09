@@ -2106,8 +2106,8 @@ begin
         // va detras de la etiqueta del aviso (MsgCuerpo)
         for var LA in Una.Split([#10]) do
           if MsgCuerpo(LA.Trim).StartsWith('***') then
-            if EsMsg(LA.Trim, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
-               EsMsg(LA.Trim, SN_EDIT_ESTRUCTURA_ROTA_ULTIMA) then
+            if EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
+               EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_ULTIMA) then
               DeEstructura := DeEstructura + [FilaDeEntrada(N, LA.Trim)]
             else
               Avisos := Avisos + [FilaDeEntrada(N, LA.Trim)];
