@@ -1133,7 +1133,20 @@ begin
             // EL juez de una linea, el mismo que pregunta delphi_designer set
             Have := JuzgaPropiedad(M, Cur, Lhs, Rhs, R, Hoja);
             if Have <> '' then
-              Warn(Have);
+              Warn(Have)
+            // ...y el juez de tipos de set, con la hoja: un numero, una cadena,
+            // un entero o una constante suya. Decia CLEAN de Color = 'hola'
+            // (3.1 de la 1.18.0); lo que no se puede saber (una lista abierta
+            // sin sus formas) va a las notas
+            else if Hoja then
+            begin
+              var Aviso, Parecida: string;
+              var Toma := BaseQueNoCasa(M, R, Rhs, Aviso, Parecida);
+              if Toma <> '' then
+                Warn(MsgFmt(SF_DSGN_LINT_TIPO_FMT, [Lhs, R.TypeName, Toma, Rhs, Parecida]))
+              else if Aviso <> '' then
+                Nota(Aviso);
+            end;
           end;
       end;
     Result := Warns.ToStringArray;

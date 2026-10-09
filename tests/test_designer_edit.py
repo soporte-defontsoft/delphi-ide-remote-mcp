@@ -520,6 +520,12 @@ try:
     r = dsg(command='lint', path=FFMX)
     check('F1b lint: una linea Top en un control FMX avisa, con Position.Y',
           'Top does not place an FMX control' in r and 'Position.Y' in r, r[:400])
+    # 3.1 de la 1.18.0: lint con el juez de tipos de set - una cadena en una
+    # Single decia CLEAN, y el form no carga
+    escribe(FFMX, antes.replace("  object Button1: TButton\r\n", "  object Button1: TButton\r\n    Opacity = 'hola'\r\n", 1))
+    r = dsg(command='lint', path=FFMX)
+    check('F1c lint: una cadena en una Single (Opacity) avisa con lo que toma',
+          "Opacity is" in r and "not 'hola'" in r and 'will not load' in r, r[:400])
     escribe(FFMX, antes)
 
     # ------------------------------------------------------------------ F2

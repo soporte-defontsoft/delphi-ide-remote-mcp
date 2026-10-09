@@ -173,6 +173,12 @@ the MCP `initialize` response (`serverInfo.version`).
   `cla...` names; for an open list like `TAlphaColor` it now also shows what
   its reader takes (`xFF00FF00`, the `cl` forms), as it already did for a
   wrong name (measured by Hermes). `test_designer_edit` F2.
+- **`delphi_designer lint` judges a value's type the way `set` does.** It
+  checked that a property exists and that an enum member is valid, but
+  said CLEAN of `Color = 'hola'` or `Opacity = 'hola'`, which keep the form
+  from loading. It now asks the same judge `set` asks before writing (a
+  number, a string, a whole number or one of its named constants), and
+  what that judge cannot know goes to the notes. `test_designer_edit` F1c.
 
 ### Internal
 

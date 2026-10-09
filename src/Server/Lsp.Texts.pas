@@ -4382,6 +4382,11 @@ const
     'Position.Y: %s.%s would be written and would not move it (Left and Top ' +
     'are where the designer draws a NON-visual component''s icon). Nothing ' +
     'was written. Use prop=%s.';
+  { El juez de tipos de set (BaseQueNoCasa) tambien en lint: decia CLEAN de
+    Color = 'hola', que el form no carga (3.1 de la 1.18.0). Fragmento: la
+    linea la pone el lint. }
+  SF_DSGN_LINT_TIPO_FMT =
+    '%s is %s and takes %s, not %s.%s The form will not load.';
   SF_DSGN_FMX_LEFT_TOP_FMT =
     '%s does not place an FMX control (it is where the designer ' +
     'draws a non-visual component''s icon); its place is %s.';
