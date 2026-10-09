@@ -86,6 +86,9 @@ the MCP `initialize` response (`serverInfo.version`).
   as a lookup with no style. They go through the form's reader of a
   property line and of a literal now. `test_styles`; `test_paisaje` keeps
   the regex out.
+- **`delphi_styles set` refuses a list or a binary block left open**
+  (`('a', 'b'` or `{ 0102`): the value's grammar took anything that started
+  with `(` or `{`, and wrote a style the IDE could not open. `test_styles`.
 
 ### Internal
 
@@ -279,6 +282,10 @@ the MCP `initialize` response (`serverInfo.version`).
   `.dproj` (`DprDe`, next to `DprojDe` in `Lsp.Dproj`) for the build's
   directive filter, `delphi_test` and the scaffold's reader. `test_paisaje`
   keeps both out of hand-written code.
+- The indentation of a level of a text designer (two spaces per level, as
+  the IDE writes it) is `SangriaDeNivel` in `Lsp.DesignerBin`; four places
+  of the styles and the designer's editor computed it by hand, and
+  `test_paisaje` keeps it there.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

@@ -1298,7 +1298,7 @@ begin
       UPas.Free;
     end;
     // el bloque, con lo minimo que escribe el IDE, ultimo hijo de su padre
-    Ind := StringOfChar(' ', (Padre.Depth + 1) * 2);
+    Ind := SangriaDeNivel(Padre.Depth + 1);
     // cada linea por sus compositores (Lsp.DesignerBin): la de objeto, la de
     // una propiedad, el literal, el flotante
     Bloque := [Ind + ComponeLineaDeObjeto('object', Nombre, Clase)];
@@ -1811,7 +1811,7 @@ begin
       if F.Doc.PropLines(Obj, 'TabOrder', TIni, TFin) then
         Bloque[TIni - Ini] := LineasDePropiedad(LeadingWhite(Bloque[TIni - Ini]), 'TabOrder', [IntToStr(Tab)])[0]
       else
-        Insert(LineasDePropiedad(StringOfChar(' ', (Padre.Depth + 2) * 2), 'TabOrder', [IntToStr(Tab)]),
+        Insert(LineasDePropiedad(SangriaDeNivel(Padre.Depth + 2), 'TabOrder', [IntToStr(Tab)]),
           Bloque, 1);
     end;
     Lineas := Copy(F.Doc.Lines);

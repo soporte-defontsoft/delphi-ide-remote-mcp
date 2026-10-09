@@ -58,6 +58,11 @@ function TrozosDeLiteral(const S: string): TArray<string>;
   trozo; con varios, 'Prop = ' y cada trozo una sangria (dos espacios) mas
   adentro. ASangria, la de la linea de la propiedad. }
 function LineasDePropiedad(const ASangria, AProp: string; const ATrozos: TArray<string>): TArray<string>;
+{ La sangria de un nivel de un designer de texto, como la escribe el IDE: dos
+  espacios por nivel (las propiedades del objeto raiz van en el 1). La
+  calculaban a mano cuatro sitios de Lsp.Styles y Lsp.DesignerEdit (2.3 de la
+  1.18.0). }
+function SangriaDeNivel(ANivel: Integer): string;
 { Su lector, el inverso: el texto de un valor de cadena de un form - tramos
   entre comillas (la comilla doblada dentro), #N y #$N pegados, y trozos
   unidos con '+', que el TParser une: lo que ReadString acepta. False si no
@@ -145,6 +150,11 @@ uses
   Lsp.DesignerForma, // la forma del fichero: texto, TPF0 o recurso
   Lsp.Codificacion, // EncName / EncKindOf: los nombres de las codificaciones
   Lsp.Texts;
+
+function SangriaDeNivel(ANivel: Integer): string;
+begin
+  Result := StringOfChar(' ', ANivel * 2);
+end;
 
 function TrozosDeLiteral(const S: string): TArray<string>;
 const

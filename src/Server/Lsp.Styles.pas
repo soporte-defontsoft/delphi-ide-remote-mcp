@@ -416,7 +416,7 @@ begin
   if AWasThere then
     Sangria := LeadingWhite(FLines[Ini])
   else
-    Sangria := StringOfChar(' ', (AObj.Depth + 1) * 2);
+    Sangria := SangriaDeNivel(AObj.Depth + 1);
   Nuevas := LineasDePropiedad(Sangria, AProp, ATrozos);
   L := TList<string>.Create;
   try
@@ -475,7 +475,7 @@ begin
     // compositores de la casa: se escribia a mano entre comillas, sin #N ni
     // trozos, y se tomaba la primera linea StyleName del bloque aunque fuera
     // la de un hijo (revision de la 1.17.0)
-    Nuevas := LineasDePropiedad(StringOfChar(' ', (ASrc.Depth + 1) * 2), 'StyleName',
+    Nuevas := LineasDePropiedad(SangriaDeNivel(ASrc.Depth + 1), 'StyleName',
       TrozosDeLiteral(ANewName));
     if RangoDePropiedad(ASrc, Clasificadas, 'StyleName', Ini, Fin) then
       Nuevas := LineasDePropiedad(LeadingWhite(FLines[Ini]), 'StyleName', TrozosDeLiteral(ANewName))
