@@ -904,8 +904,10 @@ const
     'replaced by "new". It is the way to drop a method without pasting ' +
     'it whole as an anchor. Inside a batch the range shifts too: if an ' +
     'earlier entry added or removed lines, "toline" is corrected on its ' +
-    'own. If an entry fails, the file goes back byte for byte to how it ' +
-    'was and you are told which one failed. For a LONG line, an entry ' +
+    'own; with "toline", "old" is ONE line (a block already says what it ' +
+    'replaces: EDIT-020). If an entry fails, the file goes back byte for ' +
+    'byte to how it was and you are told which one failed. At most 50 ' +
+    'entries per call (EDIT-026). For a LONG line, an entry ' +
     'can carry "fragment" instead of "old": ' +
     '{"fragment":"68","new":"69","atline":12} changes only that piece of ' +
     'line 12 (atline mandatory, and the piece exactly once in it). If ' +
@@ -926,8 +928,8 @@ const
     'so it does not move like atline); "delete": true removes; "toline" ' +
     'makes the anchor the first line of a range; "fragment" + "atline" ' +
     'changes a piece of a long line. If one entry fails, the file goes ' +
-    'back byte for byte and you are told which one. Several files: ' +
-    'delphi_changeset.';
+    'back byte for byte and you are told which one. At most 50 entries ' +
+    'per call. Several files: delphi_changeset.';
 
   { Los campos de una entrada de tanda se leen a mano, uno a uno, asi que un
     nombre que no existe no daba "Unknown parameter" como en los parametros
