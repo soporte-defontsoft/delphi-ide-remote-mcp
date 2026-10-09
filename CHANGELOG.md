@@ -204,6 +204,17 @@ the MCP `initialize` response (`serverInfo.version`).
   editor holds it open, and the `DelphiVersion` writer refuses an
   unreadable ini by itself. `test_un_delphi` U11d, with U11e as the
   little-endian control.
+- **`delphi_designer set` no longer writes a path through a reference.**
+  With `PopupMenu = PopupMenu1` in a button, `prop=PopupMenu.AutoPopup`
+  was written into the button's block and answered OK, and `lint` called
+  the form clean - but the form loader reads that line before references
+  are resolved, the property is still empty there, and the form does not
+  load. `set` refuses it now (DSGN-119) and says where it belongs
+  (`component=PopupMenu1 prop=AutoPopup`), and `lint` warns about such a
+  line. A sub-component, written as sub-properties by the IDE
+  (`EditLabel.Caption` of a `TLabeledEdit`), is not a reference and is
+  written as before. Measured: not one of 4,429 text forms here and in the
+  RAD Studio samples has both lines in a block. `test_designer_edit` V10d.
 
 ### Internal
 

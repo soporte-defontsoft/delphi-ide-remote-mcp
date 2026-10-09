@@ -4392,6 +4392,19 @@ const
     'Position.Y: %s.%s would be written and would not move it (Left and Top ' +
     'are where the designer draws a NON-visual component''s icon). Nothing ' +
     'was written. Use prop=%s.';
+  { Una ruta por una propiedad que en su bloque guarda una REFERENCIA a otro
+    componente (PopupMenu = PopupMenu1 y prop=PopupMenu.AutoPopup): el
+    cargador lee la ruta antes de resolver las referencias, la propiedad
+    aun esta vacia y el form no carga. set la escribia en el boton y el lint
+    decia CLEAN (3.3 de la 1.18.0, medido); el lint lo avisa con el
+    fragmento de abajo. %s = el componente, la propiedad, el referido, el
+    resto de la ruta, la propiedad, el referido dos veces y el resto. }
+  SR_DESIGNER_SET_POR_REFERENCIA_FMT =
+    '[DSGN-119 INVALID_PARAM] %s.%s holds a reference to another ' +
+    'component, %s: %s is a property of that component, not a part of ' +
+    'this one, and the form loader reads it before references are resolved ' +
+    '(%s is still empty there and the form does not load). Nothing was ' +
+    'written. Set it on %s: component=%s prop=%s.';
   { El juez de tipos de set (BaseQueNoCasa) tambien en lint: decia CLEAN de
     Color = 'hola', que el form no carga (3.1 de la 1.18.0). Fragmento: la
     linea la pone el lint. }
@@ -4400,6 +4413,12 @@ const
   SF_DSGN_FMX_LEFT_TOP_FMT =
     '%s does not place an FMX control (it is where the designer ' +
     'draws a non-visual component''s icon); its place is %s.';
+  SF_DSGN_POR_REFERENCIA_FMT =
+    '%s holds a reference to another component (%s = %s): %s is a ' +
+    'property of that component, and the form loader reads this line ' +
+    'before references are resolved - %s is still empty there and the ' +
+    'form does not load (or it is the part the reference replaces, and the ' +
+    'value is lost). Set %s on %s.';
 
   SR_DESIGNER_RENDER_NO_ARRANCA_FMT =
     '[DSGN-064 INTERNAL] %s could not be started: %s';

@@ -1717,6 +1717,15 @@ begin
     if F.EsFmx and MatchText(Prop, ['Left', 'Top']) and F.Tabla.Desciende(ClsId, ID_FMX_CONTROL) then
       Exit(MsgFmt(SR_DESIGNER_FMX_LEFT_TOP_FMT, [NombreDe(Obj), Prop,
         IfThen(SameText(Prop, 'Left'), 'Position.X', 'Position.Y')]));
+    // una ruta por una propiedad que en su bloque guarda una referencia
+    // (PopupMenu = PopupMenu1): AutoPopup es de PopupMenu1, y el cargador lee
+    // la ruta antes de resolver la referencia (3.3 de la 1.18.0, medido:
+    // PopupMenu.AutoPopup se escribia en el boton y el form no cargaba)
+    var Pre, Ref: string;
+    if Prop.Contains('.') and RutaPorReferencia(F.Tabla, ClsId, Prop,
+       ReferenciasDeObjeto(LineasDeForm(F.Doc.Lines), Obj.StartLine - 1), Pre, Ref) then
+      Exit(MsgFmt(SR_DESIGNER_SET_POR_REFERENCIA_FMT, [NombreDe(Obj), Pre, Ref,
+        Copy(Prop, Length(Pre) + 2, MaxInt), Pre, Ref, Ref, Copy(Prop, Length(Pre) + 2, MaxInt)]));
     V := AValor.Trim;
     Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
     if HayHoja and (Hoja.Kind = 'm') then

@@ -197,6 +197,16 @@ function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
   ANTES de escribir (1.17.0). }
 function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
   out AHoja: TPropRec; out AHayHoja: Boolean): string;
+{ Si la ruta ALhs (PopupMenu.AutoPopup) pasa por una propiedad de clase que
+  en el bloque de su objeto guarda una REFERENCIA a otro componente (ARefs:
+  Lsp.DesignerBin.ReferenciasDeObjeto): esa propiedad (APrefijo) y el
+  componente (ARef). Lo de detras es de ESE componente: el cargador lee la
+  ruta antes de resolver las referencias - la propiedad aun esta vacia y el
+  form no carga, o es el subcomponente que la referencia sustituye. Lo
+  preguntan set y el lint (3.3 de la 1.18.0, medido: set lo escribia y el
+  lint decia CLEAN). Sin la tabla, False: no se sabe. }
+function RutaPorReferencia(M: TMetaTable; const AClase, ALhs: string;
+  const ARefs: TArray<string>; out APrefijo, ARef: string): Boolean;
 
 { Lo que toma una propiedad de tipo 'o' por su base (hecho B), como la lee
   TReader.ReadPropValue: un entero, o una de las constantes que registra su
@@ -850,6 +860,34 @@ begin
   end;
 end;
 
+function RutaPorReferencia(M: TMetaTable; const AClase, ALhs: string;
+  const ARefs: TArray<string>; out APrefijo, ARef: string): Boolean;
+var
+  Segs: TArray<string>;
+  Hoja: TPropRec;
+  Hay: Boolean;
+begin
+  Result := False;
+  APrefijo := '';
+  ARef := '';
+  Segs := ALhs.Split(['.']);
+  for var N := 1 to High(Segs) do
+  begin
+    var Pre := string.Join('.', Segs, 0, N);
+    for var Par in ARefs do
+      if SameText(Par.Substring(0, Par.IndexOf('=')), Pre) then
+      begin
+        JuzgaPropiedad(M, AClase, Pre, '', Hoja, Hay);
+        if Hay and (Hoja.Kind = 'c') then
+        begin
+          APrefijo := Pre;
+          ARef := Par.Substring(Par.IndexOf('=') + 1);
+          Exit(True);
+        end;
+      end;
+  end;
+end;
+
 { Si AValor carga por una de las formas de una lista abierta (AFormas, las
   de FormasAbiertas) con sus nombres ALista (',a,b,' en minusculas). }
 function CargaPorSusFormas(const AFormas, AValor, ALista: string): Boolean;
@@ -1019,6 +1057,10 @@ function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   const ALines: TArray<string>; out ANotas: TArray<string>): TArray<string>;
 var
   Stack: TStack<string>;    // owner class per nesting level ('' = unknown)
+  Heads: TStack<Integer>;   // ...y la linea de la cabecera de ese objeto
+  RefsDe: TDictionary<Integer, TArray<string>>; // ReferenciasDeObjeto, por cabecera
+  Refs: TArray<string>;
+  Pre, Ref: string;
   Warns, Notas: TStringList;
   I: Integer;
   Lhs, Rhs, Cur, Have: string;
@@ -1044,6 +1086,8 @@ var
 begin
   ANotas := nil;
   Stack := TStack<string>.Create;
+  Heads := TStack<Integer>.Create;
+  RefsDe := TDictionary<Integer, TArray<string>>.Create;
   Warns := TStringList.Create;
   Notas := TStringList.Create;
   Unknown := ',';
@@ -1073,6 +1117,7 @@ begin
             if (Stack.Count = 0) or (OClave = 'inline') then
             begin
               Stack.Push('');
+              Heads.Push(I);
               Continue;
             end;
             // the NAME a form writes -> the class identity (with its unit)
@@ -1102,10 +1147,14 @@ begin
               Cur := '';
             end;
             Stack.Push(Cur);
+            Heads.Push(I);
           end;
         clfFin:
           if Stack.Count > 0 then
+          begin
             Stack.Pop;
+            Heads.Pop;
+          end;
         clfPropiedad:
           begin
             // lo de un item de una coleccion: su clase no sale en el texto
@@ -1129,6 +1178,23 @@ begin
               Warn(MsgFmt(SF_DSGN_FMX_LEFT_TOP_FMT,
                 [Lhs, IfThen(SameText(Lhs, 'Left'), 'Position.X', 'Position.Y')]));
               Continue;
+            end;
+            // una ruta por una propiedad que en este bloque guarda una
+            // referencia (PopupMenu.AutoPopup con PopupMenu = PopupMenu1): el
+            // juez de set, que la negaba (3.3 de la 1.18.0)
+            if Lhs.Contains('.') then
+            begin
+              if not RefsDe.TryGetValue(Heads.Peek, Refs) then
+              begin
+                Refs := ReferenciasDeObjeto(Form, Heads.Peek);
+                RefsDe.Add(Heads.Peek, Refs);
+              end;
+              if RutaPorReferencia(M, Cur, Lhs, Refs, Pre, Ref) then
+              begin
+                Warn(MsgFmt(SF_DSGN_POR_REFERENCIA_FMT, [Pre, Pre, Ref,
+                  Copy(Lhs, Length(Pre) + 2, MaxInt), Pre, Copy(Lhs, Length(Pre) + 2, MaxInt), Ref]));
+                Continue;
+              end;
             end;
             // EL juez de una linea, el mismo que pregunta delphi_designer set
             Have := JuzgaPropiedad(M, Cur, Lhs, Rhs, R, Hoja);
@@ -1154,6 +1220,8 @@ begin
   finally
     Notas.Free;
     Warns.Free;
+    RefsDe.Free;
+    Heads.Free;
     Stack.Free;
   end;
 end;

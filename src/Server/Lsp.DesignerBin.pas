@@ -122,6 +122,13 @@ function ValorEnteroDe(const ALineas: TArray<string>; const AForm: TArray<TLinea
   reescribe como uno. Se preguntaba a mano en tres sitios del disenador y
   del juez de los forms (2.3 de la 1.18.0). *)
 function EsValorDeBloque(const AValor: string): Boolean;
+{ Las propiedades de un objeto que valen un IDENTIFICADOR (PopupMenu =
+  PopupMenu1), como 'Prop=Valor': las suyas, las de su bloque antes del
+  primer hijo, como las escribe el IDE, y ni las de un item. Que la
+  propiedad sea de clase - una referencia a otro componente - lo dice la
+  tabla (Lsp.DesignerMeta.RutaPorReferencia). AObj: la linea (0-based) de
+  su cabecera. Lo preguntan set y el lint (3.3 de la 1.18.0). }
+function ReferenciasDeObjeto(const AForm: TArray<TLineaForm>; AObj: Integer): TArray<string>;
 
 { Un numero como lo escribe el IDE Win32 en una propiedad de coma flotante de
   un form, VCL o FMX: TWriter.WriteFloat y ObjectBinaryToText lo dejan con
@@ -494,6 +501,21 @@ end;
 function EsValorDeBloque(const AValor: string): Boolean;
 begin
   Result := (AValor <> '') and CharInSet(AValor[1], ['(', '<', '{']);
+end;
+
+function ReferenciasDeObjeto(const AForm: TArray<TLineaForm>; AObj: Integer): TArray<string>;
+var
+  I: Integer;
+begin
+  Result := [];
+  for I := AObj + 1 to High(AForm) do
+  begin
+    if AForm[I].Clase in [clfObjeto, clfFin] then
+      Break;
+    if (AForm[I].Clase = clfPropiedad) and (AForm[I].Coleccion = 0) and
+       EsIdentificador(AForm[I].Valor, True) then
+      Result := Result + [AForm[I].Prop + '=' + AForm[I].Valor];
+  end;
 end;
 
 { Las cifras EXACTAS de un Double positivo, sin ceros delante ni detras, y

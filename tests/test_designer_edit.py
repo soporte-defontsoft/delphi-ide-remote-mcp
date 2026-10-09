@@ -38,6 +38,9 @@ sobre textos (el analizador de impacto, los planes) esta en LspTests.DesignerEdi
       la declaracion de su manejador asi se queda (handlersKept); compila
   V10c set Name: su texto en trozos al crecer y leido entero al volver, y la
       referencia de debajo contada en el form que queda (Delta); compila
+  V10d una ruta por una referencia (PopupMenu.AutoPopup con PopupMenu =
+      PopupMenu1): set la niega (DSGN-119) y el lint la avisa; un
+      subcomponente (EditLabel.Caption) entra; compila
   F1  insert en FMX: Position con 18 decimales, Text solo en las clases cuyo
       SetName lo pone, leido del fuente por el generador (TButton y TLabel si;
       TRectangle no; TEditButton no: el suyo lo vacia - el caso medido en 13.1),
@@ -518,6 +521,37 @@ try:
     ok, det = linea_de_ref(r, 'BtnCorto')
     check('V10c ...y la referencia de debajo, contada con dos lineas menos', ok, det)
     compila_y_cuadra('V10c', VPROJ, VDFM)
+
+    # ------------------------------------------------------------------ V10d
+    # 3.3 de la 1.18.0 (medido): una ruta por una REFERENCIA (PopupMenu =
+    # PopupMenu1 y prop=PopupMenu.AutoPopup) se escribia en el boton, el lint
+    # decia CLEAN y el form no cargaba: el cargador lee la ruta antes de
+    # resolver la referencia. Un subcomponente (EditLabel) si entra
+    escribe(VDFM, re.sub(r'\r\nend\r\n$', '\r\n  object PopupMenu1: TPopupMenu\r\n    Left = 300\r\n'
+                         '    Top = 60\r\n  end\r\nend\r\n', mc.lee(VDFM)))
+    escribe(VPAS, mc.lee(VPAS).replace('    LblLargo: TLabel;\r\n', '    LblLargo: TLabel;\r\n    PopupMenu1: TPopupMenu;\r\n'))
+    call('delphi_edit', {'path': VPAS, 'adduses': 'Vcl.Menus', 'section': 'interface'})
+    r = dsg(command='set', path=VDFM, component='BtnCorto', prop='PopupMenu', value='PopupMenu1')
+    check('V10d preparado: BtnCorto.PopupMenu = PopupMenu1', '    PopupMenu = PopupMenu1' in mc.lee(VDFM), r[:300])
+    antes = bytes_de(VDFM)
+    r = dsg(command='set', path=VDFM, component='BtnCorto', prop='PopupMenu.AutoPopup', value='False')
+    check('V10d set PopupMenu.AutoPopup con PopupMenu = PopupMenu1: DSGN-119, que dice donde ponerlo, nada escrito',
+          mc.abre(r, 'SR_DESIGNER_SET_POR_REFERENCIA_FMT') and 'component=PopupMenu1 prop=AutoPopup' in r and
+          bytes_de(VDFM) == antes, r[:400])
+    r = dsg(command='set', path=VDFM, component='PopupMenu1', prop='AutoPopup', value='False')
+    check('V10d ...y en PopupMenu1 entra', '    AutoPopup = False' in mc.lee(VDFM), r[:300])
+    escribe(VDFM, mc.lee(VDFM).replace('    PopupMenu = PopupMenu1\r\n',
+                                       '    PopupMenu.AutoPopup = False\r\n    PopupMenu = PopupMenu1\r\n'))
+    r = dsg(command='lint', path=VDFM)
+    check('V10d el lint la avisa (la linea a mano, antes de la referencia, como la dejaba set)',
+          not mc.es(r, 'SN_DESIGNER_LINT_OK_FMT') and 'PopupMenu.AutoPopup = False' in r and
+          'holds a reference to another component' in r, r[:500])
+    escribe(VDFM, mc.lee(VDFM).replace('    PopupMenu.AutoPopup = False\r\n', ''))
+    r = dsg(command='insert', path=VDFM, classname='TLabeledEdit', component='Etiquetado')
+    r = dsg(command='set', path=VDFM, component='Etiquetado', prop='EditLabel.Caption', value='Nombre')
+    check('V10d un subcomponente (EditLabel de un TLabeledEdit) no es una referencia: su Caption entra',
+          "    EditLabel.Caption = 'Nombre'" in mc.lee(VDFM), r[:300])
+    compila_y_cuadra('V10d', VPROJ, VDFM)
 
     # ------------------------------------------------------------------ V11
     # 3.8 de la 1.18.0 (Hermes, medido): usesInCode daba las lineas de la
