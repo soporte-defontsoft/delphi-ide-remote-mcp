@@ -79,6 +79,13 @@ the MCP `initialize` response (`serverInfo.version`).
   "outside the form". It now asks the designer's reader of a property's
   value (`TStyleDoc.ValorDe`: the object's own level, a split string whole).
   `test_layout` L10.
+- **`delphi_styles lint` reads a style name the way the form reader does.**
+  `StyleLookup` (in a `.fmx` and in a `.pas`) and the platform's default
+  `StyleName`s were read with a regex of their own that knew neither a `#N`
+  code nor a split string: `'card'#115'tyle'` was read `card` and reported
+  as a lookup with no style. They go through the form's reader of a
+  property line and of a literal now. `test_styles`; `test_paisaje` keeps
+  the regex out.
 
 ### Internal
 

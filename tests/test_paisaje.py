@@ -69,6 +69,11 @@ REGLAS = [
      [('Lsp.Casa.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
     ('__delphi-patch', r"'__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
+    ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
+     # la asignacion de un .pas (StyleLookup := ...;), que no es una linea de form
+     [('Mcp.Tools.Styles.pas', 'LintStyles')],
+     'LineaDePropiedad + LeeLiteralDeForm (2.2 de la 1.18.0: con una regex propia un '
+     '\'card\'#115\'tyle\' se leia \'card\', el lint lo daba por estilo que falta)'),
     ('el nombre de la carpeta de un dia', r"'yyyymmdd'",
      [('Lsp.Casa.pas', 'NombreDeDia')],
      'NombreDeDia: la carpeta del dia de la papelera y el limite de su purga (2.1f de la 1.18.0: a mano '
@@ -277,6 +282,7 @@ PLANTADO = {
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
     '__delphi-temp': "  D := TPath.Combine(Raiz, '__delphi-temp');",
     '__delphi-patch': "  D := TPath.Combine(Raiz, '__delphi-patch');",
+    'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",
     'la carpeta del servidor': "  D := ExtractFileDir(ParamStr(0));",

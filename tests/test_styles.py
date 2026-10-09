@@ -92,9 +92,12 @@ open(os.path.join(STY, 'Battery.Estilos.rc'), 'w', encoding='utf-8').write(
 open(os.path.join(PRJ, 'UMain.fmx'), 'w', encoding='utf-8').write(
     "object FormMain: TFormMain\n  object Panel1: TPanel\n    StyleLookup = 'cardstyle'\n  end\n"
     "  object Button1: TButton\n    StyleLookup = 'buttonstyle'\n  end\n"
-    "  object Label1: TLabel\n    StyleLookup = 'labelinventado'\n  end\nend\n")
+    "  object Label1: TLabel\n    StyleLookup = 'labelinventado'\n  end\n"
+    # un lookup con un #N (2.2 de la 1.18.0: la regex leia 'card' y lo daba
+    # por estilo que falta): es cardstyle, que existe
+    "  object Panel2: TPanel\n    StyleLookup = 'card'#115'tyle'\n  end\nend\n")
 open(os.path.join(PRJ, 'UMain.pas'), 'w', encoding='utf-8').write(
-    "unit UMain;\ninterface\nimplementation\n// NOTA: no usar Lbl.StyleLookup := 'comentado1' aqui\n{ ni StyleLookup := 'comentado2' }\n(* StyleLookup := 'comentado3' *)\nprocedure X;\nbegin\n  Btn.StyleLookup := 'formheader';\n  Lbl.StyleLookup := 'otroinventado'; // StyleLookup := 'comentado4'\nend;\nend.\n")
+    "unit UMain;\ninterface\nimplementation\n// NOTA: no usar Lbl.StyleLookup := 'comentado1' aqui\n{ ni StyleLookup := 'comentado2' }\n(* StyleLookup := 'comentado3' *)\nprocedure X;\nbegin\n  Btn.StyleLookup := 'formheader';\n  Lbl.StyleLookup := 'otroinventado'; // StyleLookup := 'comentado4'\n  Pnl.StyleLookup := 'form' + 'header';\nend;\nend.\n")
 # a binary style (signature only) to test the refusal
 open(os.path.join(STY, 'Battery.bin.style'), 'wb').write(b'FMX_STYLE\x00\x01\x02' + b'\x00' * 40)
 

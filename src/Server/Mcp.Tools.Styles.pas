@@ -406,11 +406,26 @@ begin
         Lines := SplitToLines(Text); // las lineas como las numera delphi_read
         for I := 0 to High(Lines) do
         begin
-          M := TRegEx.Match(Lines[I], 'StyleLookup\s*(?:=|:=)\s*''([^'']+)''', [roIgnoreCase]);
-          if not M.Success then
-            Continue;
+          // EL lector de una linea de propiedad y EL de un literal de form
+          // (#N y trozos incluidos): con la regex '([^']+)' un
+          // 'card'#115'tyle' se leia 'card' (2.2 de la 1.18.0). En un .pas,
+          // la asignacion, con el mismo lector del literal.
+          var Lookup := '';
+          if F.EndsWith('.pas', True) then
+          begin
+            M := TRegEx.Match(Lines[I], 'StyleLookup\s*:=\s*([^;]+);', [roIgnoreCase]);
+            if not (M.Success and LeeLiteralDeForm(M.Groups[1].Value.Trim, Lookup)) then
+              Continue;
+          end
+          else
+          begin
+            var Prop, Valor: string;
+            if not (LineaDePropiedad(Lines[I], Prop, Valor) and SameText(Prop, 'StyleLookup') and
+                    LeeLiteralDeForm(Valor, Lookup)) then
+              Continue;
+          end;
           Inc(Used);
-          N := M.Groups[1].Value.ToLower;
+          N := Lookup.ToLower;
           if Names.ContainsKey(N) then
             Continue;
           if Defaults.ContainsKey(N) then
@@ -419,7 +434,7 @@ begin
             Continue;
           end;
           Issue := TJSONObject.Create;
-          Issue.AddPair('lookup', M.Groups[1].Value);
+          Issue.AddPair('lookup', Lookup);
           // la ruta, para agruparlos por carpeta y fichero al final (el
           // organizador enmascara la carpeta)
           Issue.AddPair('path', F);

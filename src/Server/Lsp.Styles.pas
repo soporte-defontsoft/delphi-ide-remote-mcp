@@ -645,7 +645,6 @@ function PlatformDefaultStyleNames: TArray<string>;
 var
   Cache, Exe, Enc: string;
   Code: Cardinal;
-  M: TMatch;
   L: TList<string>;
 begin
   Result := [];
@@ -662,8 +661,16 @@ begin
   end;
   L := TList<string>.Create;
   try
-    for M in TRegEx.Matches(PatchLoadText(Cache, Enc), 'StyleName\s*=\s*''([^'']+)''', [roIgnoreCase]) do
-      L.Add(M.Groups[1].Value.ToLower);
+    // EL lector de una linea de propiedad y EL de un literal de form (#N y
+    // trozos incluidos): la regex de antes no leia ni lo uno ni lo otro (2.2
+    // de la 1.18.0)
+    for var Linea in SplitToLines(PatchLoadText(Cache, Enc)) do
+    begin
+      var Prop, Valor, Texto: string;
+      if LineaDePropiedad(Linea, Prop, Valor) and SameText(Prop, 'StyleName') and
+         LeeLiteralDeForm(Valor, Texto) then
+        L.Add(Texto.ToLower);
+    end;
     Result := L.ToArray;
   finally
     L.Free;
