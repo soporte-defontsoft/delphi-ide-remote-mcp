@@ -58,7 +58,9 @@ main repository's, for a linked worktree) - and git runs PINNED to them
       (<worktree>/.git), or a path git adds .git to, what git opened was not
       what had been looked at (measured by the review of this same fix)
   J15 a remote of the repository whose address is ssh in its short form,
-      with no user (host:path), reaches git: it was taken for a folder
+      with no user (host:path), reaches git: it was taken for a folder;
+      and its twin, J15d: the same form with its host OUTSIDE GitRemotes is
+      refused by the host, without reaching git
   J16 with no names in the call, what push sends is decided by the
       repository's configuration, and that is judged too: from a MIRROR
       repository a bare push deleted a branch of the remote
@@ -503,6 +505,20 @@ finally:
     srv15c.cierra()
 check('J15c un remoto con un ? delante de la @ o un @[ en la ruta: ilegible (GIT-062), sin llegar a git',
       all(mc.abre(r, 'SR_GIT_REMOTE_AMBIGUA_FMT') for r in rs), [corto(r, 200) for r in rs])
+
+# J15d (1.7 de la 1.18.0) - el gemelo de J15: la MISMA forma corta host:ruta
+# con su host FUERA de GitRemotes (que no esta vacia: se mide la lista, no
+# GIT-004) se niega por su host, sin llegar a git. Sin este, J15 tambien
+# pasaria con una puerta que dejara pasar toda forma corta.
+srv15d = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': DENTRO,
+    'DELPHI_MCP_GIT_REMOTES': 'otra-maquina.invalid'}), nombre='git-jaula-j15d', t=120)
+try:
+    r = srv15d.call('delphi_git', dict(repo=REPO, command='fetch', args='corto'))
+finally:
+    srv15d.cierra()
+check('J15d ...y su gemelo: la misma forma corta con el host FUERA de GitRemotes se niega por el host '
+      '(GIT-005 lo nombra), sin llegar a git',
+      mc.abre(r, 'SR_GIT_REMOTE_HOST_FMT') and '"maquina-que-no-existe.invalid"' in r, corto(r, 400))
 
 # J16 - push sin nombres desde un repo ESPEJO
 ESPEJO = os.path.join(DENTRO, 'espejo.git')
