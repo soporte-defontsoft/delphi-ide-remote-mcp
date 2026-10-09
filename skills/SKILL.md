@@ -210,6 +210,11 @@ handshake.
   until you fix them with `set`. From a service the
   answer says `fidelity=print`: controls that paint their own way come out
   native-looking, the layout is the real one.
+  `style=` draws it with another look, never written to the file: in FMX the
+  form's own StyleBook by default, `none` for the Windows default, a `.style`
+  file, or a platform of the designer's Style list (`android`, `ios`,
+  `win11`...); in VCL a `.vsf` file (then out of design mode: VCL styles
+  never apply to designed controls) or `none`, the default.
 
 ## FMX styles
 
