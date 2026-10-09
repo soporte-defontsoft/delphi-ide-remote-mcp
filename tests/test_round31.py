@@ -54,7 +54,7 @@ PROY = os.path.join(JAIL, 'proy')
 # dia caducadas (>15 dias), y una fija como '20260101' desaparecia -con razon-
 # antes de que R8b/R8c pudieran contarla. Lo que se mide aqui es que la
 # papelera se ESCONDE y se CUENTA, no cuanto dura.
-BASURA = os.path.join(PROY, '__delphi-patch', __import__('time').strftime('%Y%m%d'))
+BASURA = os.path.join(PROY, mc.PAPELERA, mc.dia_de_papelera())
 os.makedirs(BASURA)
 DPROJ_MIN = ('<?xml version="1.0" encoding="utf-8"?>\n'
              '<Project><PropertyGroup><MainSource>App.dpr</MainSource>'
@@ -238,7 +238,7 @@ try:
     check('R8b ...pero dice cuantas ha escondido, en vez de tragarselas',
           r.get('hidden') == 1 and 'hiddenNote' in r, json.dumps(r)[:240])
     r = json.loads(call('delphi_projects', {
-        'root': os.path.join(PROY, '__delphi-patch')}))
+        'root': os.path.join(PROY, mc.PAPELERA)}))
     check('R8c y si NOMBRAS la papelera como raiz, te la ensena (misma regla '
           'que delphi_list)', r.get('total') == 1, json.dumps(r)[:240])
 

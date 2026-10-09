@@ -233,7 +233,7 @@ check('copy: el junction a la REFERENCIA se sigue (se podia leer)', os.path.exis
 check('copy: el junction a FUERA no se sigue: nada de fuera entra', not os.path.exists(os.path.join(MINE, 'copia', 'aFuera')), out[:300])
 check('copy: la respuesta dice que enlace no se siguio', mc.es(out, 'SN_COPY_LINKS_NOT_FOLLOWED_FMT') and 'aFuera' in out, out[:400])
 out = call('delphi_move', {'path': CE, 'dest': os.path.join(MINE, 'movida')})
-fuga = [os.path.join(r, f) for r, d, fs in os.walk(os.path.join(MINE, '__delphi-patch')) for f in fs if f.startswith('Fuera')]
+fuga = [os.path.join(r, f) for r, d, fs in os.walk(os.path.join(MINE, mc.PAPELERA)) for f in fs if f.startswith('Fuera')]
 check('move: la copia de seguridad en la papelera tampoco se trae lo de fuera', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and not fuga, str(fuga)[:200] + ' ' + out[:200])
 # the hole of v0.16..v1.3.0: TDirectory.Move walked the junctions, brought
 # what was behind them into the jail and DELETED it from its place
@@ -251,7 +251,7 @@ check('delete de la carpeta que CONTIENE una referencia: RECHAZADO', mc.rechazad
 out = call('delphi_move', {'path': os.path.join(MINE, 'conref'), 'dest': os.path.join(MINE, 'conref2')})
 check('move de la carpeta que CONTIENE una referencia: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_MUDANZA_PROTEGIDA_FMT'), out[:300])
 check('...y la referencia de dentro sigue en su sitio', os.path.exists(os.path.join(NEST, 'dentro.txt')) and not os.path.exists(os.path.join(MINE, 'conref2')), '')
-check('...sin copias en la papelera de un move rechazado', not os.path.exists(os.path.join(MINE, '__delphi-patch')) or not any('conref' in f for r, d, fs in os.walk(os.path.join(MINE, '__delphi-patch')) for f in d + fs), '')
+check('...sin copias en la papelera de un move rechazado', not os.path.exists(os.path.join(MINE, mc.PAPELERA)) or not any('conref' in f for r, d, fs in os.walk(os.path.join(MINE, mc.PAPELERA)) for f in d + fs), '')
 out = call('delphi_delete', {'path': os.path.join(MINE, 'conref', 'mio.txt')})
 check('lo mio de al lado de la referencia SI se borra', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT'), out[:200])
 

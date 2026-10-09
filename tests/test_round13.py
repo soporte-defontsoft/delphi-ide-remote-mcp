@@ -27,7 +27,7 @@ Usage:  python tests/test_round13.py [path-to-DelphiLspMcp.exe]
 import os, glob, ctypes
 # 'mc' es aqui una copia de la papelera (R3): el modulo entra por sus nombres
 from mcp_cliente import carpeta, copia_exe, entorno, Stdio, check, fin, es, abre, rechazado
-from mcp_cliente import copias, corta  # los lectores de la papelera y del 8.3, los de todos
+from mcp_cliente import copias, corta, PAPELERA, dia_de_papelera  # los lectores de la papelera y del 8.3, los de todos
 # la marca de dueno, por SU nombrador (lee la extension del fuente): a mano,
 # un cambio de formato dejaba esta bateria mirando la forma vieja (7.4 de la 1.18.0)
 from mcp_cliente import marca_dueno
@@ -59,13 +59,13 @@ sess('otro')
 open(os.path.join(BASE, 'victima.txt'), 'w').write('de otro\n')
 call('delphi_delete', {'path': os.path.join(BASE, 'victima.txt')})
 copy = copies_of('victima.txt')[0]
-short = short_dir(os.path.join(BASE, '__delphi-patch'))
+short = short_dir(os.path.join(BASE, PAPELERA))
 has83 = '~' in os.path.basename(short)
 # SOLO el tramo de la papelera en 8.3, el resto en largo como la raiz. Antes
 # se acortaba la ruta ENTERA (.../Temp/DELPHI~1/round13/__DELP~1): esa ya
 # no casa con la raiz de la jaula, y los tres R1 los paraba la JAULA ("FUERA
 # de los workspaces"), no la guarda de la papelera que dicen medir.
-shortcopy = copy.replace(os.path.join(BASE, '__delphi-patch'),
+shortcopy = copy.replace(os.path.join(BASE, PAPELERA),
                          os.path.join(BASE, os.path.basename(short)))
 
 

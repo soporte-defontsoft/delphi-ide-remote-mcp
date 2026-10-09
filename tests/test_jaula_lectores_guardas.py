@@ -36,7 +36,7 @@ try:
     finally:
         if os.path.exists(DLINK):
             os.rmdir(DLINK)
-    TRASH = os.path.join(MINE, '__delphi-patch', '20990101', 'deleted', 'carpeta')
+    TRASH = os.path.join(MINE, mc.PAPELERA, '20990101', mc.CAJON_BORRADOS, 'carpeta')
     os.makedirs(TRASH)
     TLINK = os.path.join(TRASH, 'enlace')
     check('fixture junction en papelera propia', mc.junction(TLINK, OUT))

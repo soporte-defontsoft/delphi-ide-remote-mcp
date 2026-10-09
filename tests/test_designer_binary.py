@@ -74,7 +74,7 @@ b1 = open(DFM, 'rb').read()
 # la cabecera de recurso entera, FF 0A 00 (DesignerShapeOf): solo $FF tambien
 # es el BOM de un texto UTF-16 LE (la regla vieja; segunda revision de la 1.17.0)
 check('en disco: envoltorio de recurso FF 0A 00 con TPF0 dentro', b1[:3] == b'\xff\x0a\x00' and b'TPF0' in b1[:64], b1[:24])
-check('copia previa en __delphi-patch', os.path.isdir(os.path.join(BASE, '__delphi-patch')), '')
+check('copia previa en __delphi-patch', os.path.isdir(os.path.join(BASE, mc.PAPELERA)), '')
 r = call('delphi_designer', {'command': 'to-binary', 'path': DFM})
 check('to-binary dos veces: nada que hacer', mc.abre(r, 'SN_DESIGNER_ALREADY_FMT'), r[:120])
 

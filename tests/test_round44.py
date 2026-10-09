@@ -266,10 +266,10 @@ try:
           d2[:200] + ' | ' + str(rastro('suelto-t8'))[:200])
     # una papelera que YA esta dentro de la temporal (la dejaba la version
     # anterior) es un temporal mas: se borra, no se protege como papelera
-    vieja = os.path.join(TEMP_JAULA, '__delphi-patch', '20200101', 'deleted')
+    vieja = os.path.join(TEMP_JAULA, mc.PAPELERA, '20200101', mc.CAJON_BORRADOS)
     os.makedirs(vieja, exist_ok=True)
     open(os.path.join(vieja, 'vieja-t8.png'), 'wb').write(b'y')
-    d3 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, '__delphi-patch')})
+    d3 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, mc.PAPELERA)})
     check('T8c una papelera DENTRO de la temporal tambien se borra, sin copia',
           mc.abre(d3, 'SN_FILE_DELETE_TEMP_FMT') and not rastro('vieja-t8'),
           d3[:200] + ' | ' + str(rastro('vieja-t8'))[:200])

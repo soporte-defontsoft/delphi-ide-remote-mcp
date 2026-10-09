@@ -113,14 +113,14 @@ try:
     # de delphi_list pasa por delante y tira lo caducado (>15 dias). Antes la
     # purga solo salia de BackupFile, asi que esas copias eran para siempre.
     # Recorrer las raices al arrancar se midio y se descarto (5,9 s).
-    quieta = os.path.join(RW, 'quieta', '__delphi-patch')
+    quieta = os.path.join(RW, 'quieta', mc.PAPELERA)
     os.makedirs(os.path.join(quieta, '20200101'))
     open(os.path.join(quieta, '20200101', 'Vieja.pas'), 'w').write('x')
-    hoy = time.strftime('%Y%m%d')
+    hoy = mc.dia_de_papelera()
     os.makedirs(os.path.join(quieta, hoy))
     open(os.path.join(quieta, hoy, 'Reciente.pas'), 'w').write('x')
     # ...y la misma trampa bajo la raiz de SOLO LECTURA: ahi no se toca nada.
-    intocable = os.path.join(RO, 'vendor', '__delphi-patch', '20200101')
+    intocable = os.path.join(RO, 'vendor', mc.PAPELERA, '20200101')
     os.makedirs(intocable)
     open(os.path.join(intocable, 'Ajena.pas'), 'w').write('x')
     call('delphi_list', {'root': RW})

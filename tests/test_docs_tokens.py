@@ -99,10 +99,10 @@ r = call('delphi_edit', {'path': PAS, 'old': 'interface', 'new': 'interface // u
 check('T5 edit de un fichero limpio: una linea de auditoria, sin antes/despues',
       'audit=clean' in r and 'before:' not in r and 'after:' not in r, r[:400])
 check('T6 la primera edicion del dia dice donde quedo la copia',
-      '__delphi-patch' in r and 'already existed' not in r, r[:400])
+      mc.PAPELERA in r and 'already existed' not in r, r[:400])
 r = call('delphi_edit', {'path': PAS, 'old': 'interface // uno', 'new': 'interface // dos'})
 check('T6 la segunda dice que ya existia, sin repetir la ruta',
-      'already existed (the first one of today stays)' in r and '__delphi-patch' not in r, r[:400])
+      'already existed (the first one of today stays)' in r and mc.PAPELERA not in r, r[:400])
 r = call('delphi_edit', {'path': MIX, 'old': 'implementation', 'new': 'implementation // x'})
 check('T5 edit de uno con saltos mezclados: antes y despues, con los contadores',
       'before:' in r and 'after:' in r and 'loneLF=' in r, r[:400])

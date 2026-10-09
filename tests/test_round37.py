@@ -75,7 +75,7 @@ try:
     # ------------------------------------------------------------------ T1
     lst = json.loads(call('delphi_list', {'root': PROY, 'includetrash': True}))
     rutas = [f['path'] for f in mc.ficheros(lst)]
-    enpap = [p for p in rutas if 'deleted' in p.replace('/', '\\')]
+    enpap = [p for p in rutas if mc.CAJON_BORRADOS in p.replace('/', '\\')]
     check('T1 includetrash encuentra la unit BORRADA',
           any('UFicha.pas-' in p for p in enpap), str(rutas)[:300])
     check('T1b ...y tambien su designer borrado',
@@ -92,7 +92,7 @@ try:
     # no aparezca: un listado vacio tampoco la ensenaba
     check('T7 sin includetrash la papelera sigue escondida',
           sin.get('hiddenTrash', 0) >= 1 and bool(mc.ficheros(sin)) and  # lo vivo si sale
-          not any('deleted' in f['path'].replace('/', '\\')
+          not any(mc.CAJON_BORRADOS in f['path'].replace('/', '\\')
                   for f in mc.ficheros(sin)), str(sin)[:260])
 
     # ------------------------------------------------------------------ T3
@@ -115,8 +115,8 @@ try:
 
     # ------------------------------------------------------------------ T5
     anidada = []
-    for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
-        if r_.replace('/', '\\').count('__delphi-patch') > 1:
+    for r_, d_, f_ in os.walk(os.path.join(PROY, mc.PAPELERA)):
+        if r_.replace('/', '\\').count(mc.PAPELERA) > 1:
             anidada.append(r_)
     # T5/T5b miran la papelera DESPUES de una restauracion que ocurrio (la
     # unit volvio): sin restaurar, tampoco habia nada anidado ni doblado
@@ -124,7 +124,7 @@ try:
     check('T5 restaurar no crea una papelera dentro de la papelera',
           restaurada and not anidada, str(anidada)[:240])
     dobles = []
-    for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
+    for r_, d_, f_ in os.walk(os.path.join(PROY, mc.PAPELERA)):
         for x in f_:
             if x.count('-') >= 2 and x.split('-')[-1].isdigit() and \
                x.split('-')[-2].isdigit():
@@ -134,7 +134,7 @@ try:
 
     # ------------------------------------------------------------------ T6
     quedan = []
-    for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
+    for r_, d_, f_ in os.walk(os.path.join(PROY, mc.PAPELERA)):
         quedan += [x for x in f_ if mc.es_marca_dueno(x)]
     check('T6 los marcadores .by de lo restaurado se barren',
           not any('UFicha' in x for x in quedan), str(quedan)[:240])
@@ -151,7 +151,7 @@ try:
     r = call('delphi_edit', {'path': umain, 'restore': True, 'confirm': True})
     check('T8 setup: restaurado', mc.abre(r, 'SK_EDIT_RESTAURADO_DESDE_FMT'), r[:200])
     previas = []
-    for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
+    for r_, d_, f_ in os.walk(os.path.join(PROY, mc.PAPELERA)):
         for x in f_:
             # la marca de dueno de la copia no es otra copia (la lleva desde la
             # sexta revision, como toda copia sellada)

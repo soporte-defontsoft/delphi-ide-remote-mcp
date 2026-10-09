@@ -605,7 +605,7 @@ check('delete fichero normal: sin notas de proyecto', mc.abre(out, 'SK_FILE_BORR
 print()
 # ---- delphi_move copy=true: the same door, a different last step (1.2.2) ----
 cdir = os.path.join(BASE, 'Copia')
-os.makedirs(os.path.join(cdir, '__delphi-patch', 'x'), exist_ok=True)
+os.makedirs(os.path.join(cdir, mc.PAPELERA, 'x'), exist_ok=True)
 open(os.path.join(cdir, 'UOrig.pas'), 'wb').write(b'unit UOrig;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
 open(os.path.join(cdir, 'UOrig.dfm'), 'wb').write(b'object FormOrig: TFormOrig\r\nend\r\n')
 out = call('delphi_move', {"path": os.path.join(cdir, 'UOrig.pas'), "dest": os.path.join(cdir, 'UCopia.pas'), "copy": True})
@@ -614,7 +614,7 @@ check('copy unit: cabecera de la copia reescrita', 'unit UCopia;' in rd(os.path.
 check('copy unit: designer copiado, el original sigue', os.path.exists(os.path.join(cdir, 'UCopia.dfm')) and os.path.exists(os.path.join(cdir, 'UOrig.dfm')) and mc.es(out, 'SN_FILE_DESIGNER_TOO_FMT') and mc.catalogo()['SF_MOVE_COPIADO_CON_UNIT'] in out, out[:300])
 check('copy unit: ningun proyecto reapuntado, y la respuesta lo dice', not mc.es(out, 'SN_UNIT_RENAMED_FMT') and mc.es(out, 'SN_FILE_COPY_NO_PROJECT') and 'add-unit' in out and not mc.es(out, 'SN_FILE_COPIA_SEGURIDAD_EN_FMT'), out[:400])
 out = call('delphi_move', {"path": cdir, "dest": os.path.join(BASE, 'Copia2'), "copy": True})
-check('copy carpeta: COPIADO, las dos existen, sin la papelera del origen', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(BASE, 'Copia2', 'UCopia.pas')) and os.path.isdir(cdir) and not os.path.isdir(os.path.join(BASE, 'Copia2', '__delphi-patch')), out[:300])
+check('copy carpeta: COPIADO, las dos existen, sin la papelera del origen', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(BASE, 'Copia2', 'UCopia.pas')) and os.path.isdir(cdir) and not os.path.isdir(os.path.join(BASE, 'Copia2', mc.PAPELERA)), out[:300])
 out = call('delphi_move', {"path": VDIR, "dest": os.path.join(BASE, 'AppCopia'), "copy": True})
 check('copy carpeta con .dproj: RECHAZADO (un proyecto nunca en dos sitios)', mc.rechazado(out) and mc.es(out, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(os.path.join(BASE, 'AppCopia')), out[:300])
 out = call('delphi_move', {"path": os.path.join(cdir, 'UOrig.pas'), "dest": os.path.join(cdir, 'UCopia.pas'), "copy": True})

@@ -474,7 +474,7 @@ check('M4 help por defecto: la tabla tarea -> tool',
 check('M4 ...y cabe en poco: es un atajo, no el catalogo', len(r) < 4000, len(r))
 r = A.call('delphi_help', {'command': 'conventions'})
 check('M4 conventions dice lo que vale para todas',
-      'srvd:' in r and mc.es(r, 'SN_HELP_CONVENTIONS') and '__delphi-patch' in r, r[:200])
+      'srvd:' in r and mc.es(r, 'SN_HELP_CONVENTIONS') and mc.PAPELERA in r, r[:200])
 j = J(A.call('delphi_help', {'command': 'tool', 'name': 'edit'}))
 check('M4 una tool suelta: descripcion + parametros',
       j.get('tool') == 'delphi_edit' and 'properties' in j.get('parameters', {}), str(j)[:200])

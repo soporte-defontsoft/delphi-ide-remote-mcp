@@ -682,7 +682,7 @@ try:
         "new": "<html><body>hola MCP</body></html>"})
     check('textedit: edita .html', mc.abre(out, 'SK_TEXT_OK_LINEA_FMT'), out[:150])
     # backup exists next to the file
-    bdir = os.path.join(tmptxt, '__delphi-patch')
+    bdir = os.path.join(tmptxt, mc.PAPELERA)
     check('textedit: backup automatico creado', os.path.isdir(bdir), bdir)
 finally:
     mc.borra(tmptxt)

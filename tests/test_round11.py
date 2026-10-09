@@ -299,7 +299,7 @@ if _cop:
     r = A.call('delphi_delete', {'path': _cop[0], 'purge': True})
     check('P2 purge de la copia: se va de verdad',
           mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(_cop[0]), r[:200])
-r = A.call('delphi_delete', {'path': os.path.join(BASE, '__delphi-patch'),
+r = A.call('delphi_delete', {'path': os.path.join(BASE, mc.PAPELERA),
                               'purge': True})
 check('P3 la papelera ENTERA no se purga de una (ahi hay copias de otros)',
       mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_ROOT'), r[:200])

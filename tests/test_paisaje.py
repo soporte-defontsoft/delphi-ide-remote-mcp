@@ -501,4 +501,73 @@ for fichero,funcion in LISTAS_NEGRAS:
     check('deuda declarada '+fichero+' '+funcion,negra_declarada(texto,funcion))
     check('mutante cabecera sin declarar '+funcion,
           not negra_declarada(texto.replace('LISTA NEGRA','sin declarar'),funcion))
+
+# ---- LAS BATERIAS TAMBIEN (2.3 de la 1.18.0): los formatos que tests/*.py
+# escribia a mano (63 nombres de la papelera, el dia en 6 sitios, el cajon de
+# lo borrado en 7). Una comprobacion de AUSENCIA con el formato a mano pasa en
+# verde si el servidor lo cambia. Casas: (fichero, marca) - la linea que la
+# lleva, o la funcion (def) cuya cabecera la lleva. Fuera: esta bateria (sus
+# reglas y mutantes SON los formatos) y release_check (el arnes del ritual,
+# que no importa mcp_cliente: anotado para David).
+FUERA_PY = ('test_paisaje.py', 'release_check.py')
+REGLAS_PY = [
+    ('el nombre de la papelera a mano', r"""(['"])__delphi-patch\1""",
+     # fija a proposito la constante del fuente del servidor
+     [('test_round44.py', 'BACKUP_SUB =')],
+     'mc.PAPELERA, leido de BACKUP_SUB (Lsp.Casa)'),
+    ('el dia de la papelera a mano', r"""strftime\(\s*['"]%Y%m%d['"]""",
+     [('mcp_cliente.py', 'def dia_de_papelera')],
+     'mc.dia_de_papelera, como NombreDeDia del servidor'),
+    ('el cajon de lo borrado a mano', r"""os\.path\.join\([^)]*['"]deleted['"]""", [],
+     'mc.CAJON_BORRADOS, leido de Lsp.Patch'),
+]
+
+
+def codigo_py(texto):
+    """Las lineas de un .py sin comentarios ni docstrings (numeracion intacta)."""
+    out, en_doc = [], False
+    for l in texto.split('\n'):
+        cuenta = l.count('"""') + l.count("'''")
+        if en_doc or cuenta:
+            if cuenta % 2 == 1:
+                en_doc = not en_doc
+            out.append('')
+            continue
+        out.append('' if l.lstrip().startswith('#') else l)
+    return out
+
+
+def fuera_de_casa_py(regla, ficheros_texto):
+    _, formato, casas, _ = regla
+    rx = re.compile(formato)
+    malos = []
+    for f, texto in ficheros_texto:
+        base = os.path.basename(f)
+        lineas = codigo_py(texto)
+        crudas = texto.split('\n')
+        for n, l in enumerate(lineas):
+            if not rx.search(l):
+                continue
+            cabecera = next((crudas[k] for k in range(n, -1, -1) if crudas[k].startswith('def ')), '')
+            if not any(base == cf and (marca in crudas[n] or marca in cabecera) for cf, marca in casas):
+                malos.append('%s:%d %s' % (base, n + 1, l.strip()[:90]))
+    return malos
+
+
+TEXTOS_PY = [(f, open(f, encoding='utf-8', errors='replace').read())
+             for f in glob.glob(os.path.join(REPO, 'tests', '*.py')) if os.path.basename(f) not in FUERA_PY]
+check('las baterias se leen (al menos 100 .py)', len(TEXTOS_PY) >= 100, len(TEXTOS_PY))
+PLANTADO_PY = {
+    'el nombre de la papelera a mano': "    d = os.path.join(base, '__delphi-patch')",
+    'el dia de la papelera a mano': "    hoy = time.strftime('%Y%m%d')",
+    'el cajon de lo borrado a mano': "    c = os.path.join(pap, dia, 'deleted', 'x')",
+}
+for regla in REGLAS_PY:
+    nombre = regla[0]
+    planta = ('def copia_a_mano():\n    # ' + PLANTADO_PY[nombre] + '\n' + PLANTADO_PY[nombre] + '\n')
+    cazados = fuera_de_casa_py(regla, [('plantado.py', planta)])
+    check('mutante py "%s": la copia plantada se caza (y el comentario no)' % nombre,
+          len(cazados) == 1 and ':3 ' in cazados[0], cazados)
+    malos = fuera_de_casa_py(regla, TEXTOS_PY)
+    check('"%s" en ninguna bateria - %s' % (nombre, regla[3]), not malos, malos)
 mc.fin('paisaje battery')

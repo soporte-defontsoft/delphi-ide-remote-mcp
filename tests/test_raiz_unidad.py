@@ -204,8 +204,8 @@ try:
     res, sc, t = llama('delphi_textedit', {'path': VQ + 'nuevo.txt', 'old': 'uno', 'new': 'UNO'})
     check('D3 editarlo: su copia, en la papelera de la raiz',
           bien(res, t) and open(os.path.join(UNIDAD, 'nuevo.txt')).read().startswith('UNO')
-          and os.path.isdir(os.path.join(UNIDAD, '__delphi-patch'))
-          and not os.path.exists(os.path.join(SRV, 'aqui', '__delphi-patch')), t[:300])
+          and os.path.isdir(os.path.join(UNIDAD, mc.PAPELERA))
+          and not os.path.exists(os.path.join(SRV, 'aqui', mc.PAPELERA)), t[:300])
     res, sc, t = llama('delphi_move', {'path': VQ + 'nuevo.txt', 'dest': VQ + 'sub\\movido.txt'})
     check('D3 moverlo a una carpeta de la raiz',
           bien(res, t) and os.path.isfile(os.path.join(UNIDAD, 'sub', 'movido.txt'))
@@ -216,7 +216,7 @@ try:
     res, sc, t = llama('delphi_delete', {'path': VQ + 'vuelta.txt'})
     check('D3 borrarlo: a la papelera de la raiz',
           bien(res, t) and not os.path.exists(os.path.join(UNIDAD, 'vuelta.txt'))
-          and VQ.lower() in t.lower() and '__delphi-patch' in t, t[:300])
+          and VQ.lower() in t.lower() and mc.PAPELERA in t, t[:300])
 
     # D4 la raiz misma
     res, sc, t = llama('delphi_delete', {'path': VQ})
@@ -320,12 +320,12 @@ try:
     f0 = os.path.join(FUERA, 'd14.txt')
     c0.call_msg('delphi_textedit', {'path': f0, 'create': True, 'content': 'x\n'}, 120)
     c0.call_msg('delphi_delete', {'path': f0}, 120)
-    copias = [p for p in glob.glob(os.path.join(FUERA, '__delphi-patch', '*', 'deleted', '*'))
+    copias = [p for p in glob.glob(os.path.join(FUERA, mc.PAPELERA, '*', mc.CAJON_BORRADOS, '*'))
               if not mc.es_marca_dueno(os.path.basename(p))]
     t = mc.texto(c0.call_msg('delphi_delete', {'path': copias[0], 'purge': True}, 120), True) if copias else '(sin copia)'
     check('D14 purgar la ultima copia de la papelera no deja sus carpetas vacias en la raiz',
-          len(copias) == 1 and not mc.fallo(t) and not os.path.exists(os.path.join(FUERA, '__delphi-patch')),
-          '%s | %s | queda=%s' % (copias, t[:160], os.path.exists(os.path.join(FUERA, '__delphi-patch'))))
+          len(copias) == 1 and not mc.fallo(t) and not os.path.exists(os.path.join(FUERA, mc.PAPELERA)),
+          '%s | %s | queda=%s' % (copias, t[:160], os.path.exists(os.path.join(FUERA, mc.PAPELERA))))
     # D15 la purga, por donde esta de verdad lo que le nombran
     VIVO = os.path.join(FUERA, 'vivo')
     os.makedirs(VIVO)
@@ -333,7 +333,7 @@ try:
     LNK = os.path.join(FUERA, 'lnk')
     subprocess.run(['cmd', '/c', 'mklink', '/J', LNK, VIVO], capture_output=True)
     c0.call_msg('delphi_delete', {'path': LNK}, 120)
-    enl = [p for p in glob.glob(os.path.join(FUERA, '__delphi-patch', '*', 'deleted', 'lnk*')) if os.path.isdir(p)]
+    enl = [p for p in glob.glob(os.path.join(FUERA, mc.PAPELERA, '*', mc.CAJON_BORRADOS, 'lnk*')) if os.path.isdir(p)]
     t = (mc.texto(c0.call_msg('delphi_delete', {'path': os.path.join(enl[0], 'dato.txt'), 'purge': True}, 120), True)
          if enl else '(el enlace no esta en la papelera)')
     check('D15 purgar un fichero a traves de un enlace que esta en la papelera no borra el fichero vivo de detras',

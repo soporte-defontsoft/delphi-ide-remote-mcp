@@ -101,7 +101,7 @@ check('S3 no se escribe dentro de la papelera',
       mc.rechazado(r) and mc.es(r, 'SR_GUARD_DEAD_TRASH') and open(copy, encoding='utf-8').read() == before,
       r[:200])
 check('S4 y por tanto no hay papelera dentro de la papelera',
-      not os.path.exists(os.path.join(os.path.dirname(copy), '__delphi-patch')))
+      not os.path.exists(os.path.join(os.path.dirname(copy), mc.PAPELERA)))
 r = call('delphi_textedit', {'path': os.path.join(BASE, '__history', 'x.txt'),
                              'create': True, 'content': 'x'})
 check('S3 __history tampoco es escribible', mc.rechazado(r) and mc.es(r, 'SR_GUARD_DEAD_IDE'), r[:160])

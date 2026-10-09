@@ -607,12 +607,12 @@ if trash:
     out = call('delphi_move', {"path": trash[0], "dest": rec})
     check('R5-A: restaurar desde la papelera con delphi_move PERMITIDO',
           mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(rec), out[:120])
-    out = call('delphi_move', {"path": rec, "dest": os.path.join(INSIDE, '__delphi-patch', 'x.pas')})
+    out = call('delphi_move', {"path": rec, "dest": os.path.join(INSIDE, mc.PAPELERA, 'x.pas')})
     check('R5-A: meter ficheros DENTRO de la papelera a mano rechazado',
           mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TRASH'), out[:120])
 out = call('delphi_delete', {"path": os.path.join(OUTSIDE, 'Fuera.pas')})
 check('delete: fuera de la jaula rechazado', mc.es(out, 'SR_JAIL_FMT'), out[:120])
-out = call('delphi_delete', {"path": os.path.join(INSIDE, 'movidos', '__delphi-patch')})
+out = call('delphi_delete', {"path": os.path.join(INSIDE, 'movidos', mc.PAPELERA)})
 check('delete: no se puede borrar la propia papelera',
       mc.rechazado(out) and mc.es(out, 'SR_FILE_PAPELERA_NO_SE_BORRA_FMT'), out[:120])
 
@@ -621,10 +621,10 @@ check('delete: no se puede borrar la propia papelera',
 out = call('delphi_list', {"root": INSIDE, "pattern": "*.pas"})
 check('R6-B: delphi_list normal NO muestra __delphi-patch',
       'folders' in json.loads(out) and bool(mc.ficheros(out)) and  # no vacia: si no, no mide nada
-      not any('__delphi-patch' in e.get('path', '') for e in mc.ficheros(out)), out[:200])
+      not any(mc.PAPELERA in e.get('path', '') for e in mc.ficheros(out)), out[:200])
 out = call('delphi_list', {"root": INSIDE, "pattern": "*.pas", "includeTrash": True})
 check('R6-B: delphi_list includeTrash=true SI muestra la papelera',
-      any('__delphi-patch' in e.get('path', '') for e in mc.ficheros(out)), out[:200])
+      any(mc.PAPELERA in e.get('path', '') for e in mc.ficheros(out)), out[:200])
 
 # ---- an exception that escapes a tool is NOT content ----------------------
 # delphi_read/vault_read/vault_search are exempt from drive masking so their

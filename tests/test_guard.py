@@ -544,7 +544,7 @@ for tool, args in (('delphi_delete', {"path": INSIDE}),
           mc.rechazado(out) and mc.es(out, 'SR_ROOT_ITSELF_FMT'), out[:150])
 check('root: el workspace sigue existiendo', os.path.isdir(INSIDE), INSIDE)
 check('root: no se creo papelera FUERA de la jaula',
-      not os.path.exists(os.path.join(BASE, '__delphi-patch')), BASE)
+      not os.path.exists(os.path.join(BASE, mc.PAPELERA)), BASE)
 # and deleting something INSIDE still works (no over-refusal)
 _victim = os.path.join(INSIDE, 'Borrame.pas')
 open(_victim, 'wb').write(SRC.replace('Dentro', 'Borrame').encode('cp1252'))

@@ -190,7 +190,7 @@ check('apply: Doble ya no existe como palabra en UCalc.pas ni en Ren.dpr',
 check('apply: Duplica esta en la declaracion, la implementacion y los dos usos',
       uc.count('Duplica') == 3 and dp.count('Duplica') == 1, (uc.count('Duplica'), dp.count('Duplica')))
 check('apply: la copia previa esta en __delphi-patch',
-      os.path.isdir(os.path.join(PRJ, '__delphi-patch')), os.listdir(PRJ))
+      os.path.isdir(os.path.join(PRJ, mc.PAPELERA)), os.listdir(PRJ))
 r = call('delphi_build', {'project': os.path.join(PRJ, 'Ren.dproj')}, t=600)
 check('apply: el proyecto COMPILA despues del rename', '"success":true' in r.replace(' ', ''), r[:300])
 # the note says to rebuild, and the answer never floods: changes is capped in the answer

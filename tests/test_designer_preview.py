@@ -675,7 +675,7 @@ end
           bool(antes) and not sueltos, (sorted(antes), sueltos))
     escribe('existente.png', 'contenido de antes', OUT)
     r = preview(path=PRUEBA, out=png('existente.png'), inline='false')
-    sellada = glob.glob(os.path.join(JAIL, '**', '__delphi-patch', '**', 'existente.png*'), recursive=True)
+    sellada = glob.glob(os.path.join(JAIL, '**', mc.PAPELERA, '**', 'existente.png*'), recursive=True)
     check('P9 out= sobre un fichero que ya estaba: lo de antes, sellado en la papelera',
           bool(sellada) and mc.png_pixeles(png('existente.png'))[:2] == (400, 200), (r[:200], sellada))
 

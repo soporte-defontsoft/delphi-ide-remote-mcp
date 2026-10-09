@@ -179,7 +179,7 @@ check('...y cerrada entra', not mc.rechazado(out) and "Tags = ('a', 'b')" in rd(
 call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Visible"})
 check('set: sin value pide value (y menciona delete)', mc.es(out, 'SR_STYLES_NEED_VALUE') and 'delete=true' in out, out)
-check('set: copia previa en __delphi-patch', os.path.isdir(os.path.join(STY, '__delphi-patch')))
+check('set: copia previa en __delphi-patch', os.path.isdir(os.path.join(STY, mc.PAPELERA)))
 # una cadena se escribe como el IDE, igual que en delphi_designer set: los
 # acentos como #N y una larga en trozos de 64 en las lineas de debajo; iba en
 # crudo, y una de 4.095 caracteres en una linea que el IDE no lee (P6 de la

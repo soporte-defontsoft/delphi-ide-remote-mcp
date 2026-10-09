@@ -298,7 +298,7 @@ try:
     # no cambiaba ninguna clave de antes; r12b). Lo del servidor (sus temporales y
     # su papelera dentro de la raiz) no cuenta como nuevo.
     nuevo = [x for x in despues if x not in DENTRO_ANTES and
-             not x.startswith(('__delphi-temp', '__delphi-patch'))]
+             not x.startswith(('__delphi-temp', mc.PAPELERA))]
     check('J99 los fixtures de dentro siguen intactos, y nada nuevo dentro',
           not nuevo and all(despues.get(k) == v for k, v in DENTRO_ANTES.items()),
           nuevo[:6] + [k for k, v in DENTRO_ANTES.items() if despues.get(k) != v][:6])

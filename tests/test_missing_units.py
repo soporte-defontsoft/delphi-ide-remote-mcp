@@ -119,7 +119,7 @@ VEND = os.path.join(BASE, 'vendor')
 os.makedirs(VEND, exist_ok=True)
 UNIDAD = 'unit UVendorX;\n\ninterface\n\nfunction Dame: Integer;\n\nimplementation\n\nfunction Dame: Integer;\nbegin\n  Result := 1;\nend;\n\nend.\n'
 open(os.path.join(VEND, 'UVendorX.pas'), 'w', encoding='utf-8').write(UNIDAD)
-PAPELERA = os.path.join(BASE, '__delphi-patch', '20261004')
+PAPELERA = os.path.join(BASE, mc.PAPELERA, '20261004')
 os.makedirs(PAPELERA, exist_ok=True)
 open(os.path.join(PAPELERA, 'UVendorX.pas'), 'w', encoding='utf-8').write(UNIDAD)
 s = open(dpr, encoding='utf-8-sig').read()
@@ -130,7 +130,7 @@ except Exception: j = {}
 uv = next((m for m in (j.get('missingUnits') or []) if m.get('unit') == 'UVendorX'), {})
 check('BUILD-042: la unit de una carpeta del workspace tiene su carpeta como candidata',
       any(d.rstrip('\\').lower().endswith('vendor') for d in uv.get('sourceFolders', [])) and
-      not any('__delphi-patch' in d for d in uv.get('sourceFolders', [])), json.dumps(uv)[:300])
+      not any(mc.PAPELERA in d for d in uv.get('sourceFolders', [])), json.dumps(uv)[:300])
 
 # ...y el paseo por las raices no cruza a lo que no se puede leer: un junction
 # del workspace a una carpeta de FUERA de la jaula no da candidatas (la

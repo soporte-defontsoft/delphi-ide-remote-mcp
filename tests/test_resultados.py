@@ -570,7 +570,7 @@ try:
     VAL = os.path.join(JAIL, 'valioso.zip')
     open(VAL, 'wb').write(b'PK-lo-mio')
     res, sc, t = llama('delphi_package', {'dir': PKD, 'outfile': VAL})
-    copias = [os.path.join(r, n) for r, d, fs in os.walk(os.path.join(JAIL, '__delphi-patch')) for n in fs
+    copias = [os.path.join(r, n) for r, d, fs in os.walk(os.path.join(JAIL, mc.PAPELERA)) for n in fs
               if n.startswith('valioso.zip')]
     check('E36 ...y un .zip que ya estaba se copia antes de pisarlo',
           not res.get('isError') and any(open(p, 'rb').read() == b'PK-lo-mio' for p in copias),
@@ -645,7 +645,7 @@ try:
 
     TAP = os.path.join(JAIL, 'tapada')
     os.makedirs(TAP)
-    open(os.path.join(TAP, '__delphi-patch'), 'w').write('un fichero donde van las copias')
+    open(os.path.join(TAP, mc.PAPELERA), 'w').write('un fichero donde van las copias')
     open(os.path.join(TAP, 'n.txt'), 'w').write('uno\n')
     rechazo('E46 un FICHERO donde el servidor guarda sus copias es DENIED (la ruta era buena)',
             'delphi_textedit', {'path': os.path.join(TAP, 'n.txt'), 'old': 'uno', 'new': 'dos'},
@@ -662,7 +662,7 @@ try:
     import stat
 
     def copias_de(nombre):
-        return [os.path.join(r, n) for r, d, fs in os.walk(os.path.join(JAIL, '__delphi-patch'))
+        return [os.path.join(r, n) for r, d, fs in os.walk(os.path.join(JAIL, mc.PAPELERA))
                 for n in fs if n.startswith(nombre)]
 
     TJ = os.path.join(JAIL, 'tj')
@@ -672,14 +672,14 @@ try:
     # montaje en el que el codigo de antes SI fugaba (contestaba DELETED y
     # dejaba la copia dentro de la victima). Sin la carpeta del dia fallaba
     # antes de escribir y el check caia solo por el codigo (sexta revision).
-    os.makedirs(os.path.join(VICT, time.strftime('%Y%m%d'), 'deleted'))
+    os.makedirs(os.path.join(VICT, mc.dia_de_papelera(), mc.CAJON_BORRADOS))
     open(os.path.join(VICT, 'suyo.txt'), 'w').write('de otro\n')
 
     def arbol(d):
         return sorted(os.path.relpath(os.path.join(r, n), d)
                       for r, ds, fs in os.walk(d) for n in fs + ds)
     ANTES_VICT = arbol(VICT)
-    JUNCTION = os.path.join(TJ, '__delphi-patch')
+    JUNCTION = os.path.join(TJ, mc.PAPELERA)
     subprocess.run(['cmd', '/c', 'mklink', '/J', JUNCTION, VICT], capture_output=True)
     # sin el junction la prueba mide otra cosa (una papelera normal): se dice
     check('E48 fixture: la papelera es de verdad un junction a la victima',
@@ -814,7 +814,7 @@ try:
     res, sc, t = llama('delphi_list', {'root': LT, 'pattern': '*;*.txt', 'includetrash': True})
     j = mc.como_json(t)
     rutas = [f.get('path') for f in mc.ficheros(j)]
-    vivas = [r for r in rutas if '__delphi-patch' not in r]
+    vivas = [r for r in rutas if mc.PAPELERA not in r]
     check('E62 delphi_list includetrash con mascaras solapadas: cada fichero UNA vez',
           len(vivas) == 2 and len(rutas) > 2 and len(set(rutas)) == len(rutas) and
           # shownTrash cuenta COPIAS: la marca de dueno (.by) no es otra (septima)
@@ -927,9 +927,9 @@ try:
     check('E74 fixture: el borrado que crea la papelera funciona',
           not res.get('isError') and not os.path.exists(os.path.join(E74, 'borrame.txt')),
           t[:200])
-    PAPE = os.path.join(E74, '__delphi-patch')
+    PAPE = os.path.join(E74, mc.PAPELERA)
     CORTA = mc.corta(PAPE)
-    if os.path.isdir(PAPE) and CORTA and os.path.basename(CORTA).lower() != '__delphi-patch':
+    if os.path.isdir(PAPE) and CORTA and os.path.basename(CORTA).lower() != mc.PAPELERA:
         rechazo('E74 delete de la papelera por su alias 8.3 (%s): DENIED, la papelera'
                 % os.path.basename(CORTA),
                 'delphi_delete', {'path': CORTA}, 'DENIED', 'SR_FILE_PAPELERA_NO_SE_BORRA_FMT')
@@ -1249,7 +1249,7 @@ try:
     open(F95, 'w').write('v0\n')
     PAP = mc._papelera()
     ahora = datetime.datetime.now()
-    CAJ95 = os.path.join(D95, PAP['BACKUP_SUB'], ahora.strftime('%Y%m%d'), PAP['CAJON_BORRADOS'])
+    CAJ95 = os.path.join(D95, PAP['BACKUP_SUB'], mc.dia_de_papelera(ahora.timetuple()), PAP['CAJON_BORRADOS'])
     os.makedirs(CAJ95)
     ABRE95 = 0.5  # segundos: la ventana se abre aqui, despues de plantar
     inicio95 = ahora + datetime.timedelta(seconds=ABRE95)
@@ -1591,9 +1591,9 @@ try:
     # E122 delphi_package no mete la papelera en el zip
     D122 = os.path.join(JAIL, 'e122')
     SRC122 = os.path.join(D122, 'src')
-    os.makedirs(os.path.join(SRC122, PAP['BACKUP_SUB'], ahora.strftime('%Y%m%d')))
+    os.makedirs(os.path.join(SRC122, PAP['BACKUP_SUB'], mc.dia_de_papelera(ahora.timetuple())))
     open(os.path.join(SRC122, 'a.txt'), 'w').write('a\n')
-    open(os.path.join(SRC122, PAP['BACKUP_SUB'], ahora.strftime('%Y%m%d'), 'a.txt'), 'w').write('antes\n')
+    open(os.path.join(SRC122, PAP['BACKUP_SUB'], mc.dia_de_papelera(ahora.timetuple()), 'a.txt'), 'w').write('antes\n')
     Z122 = os.path.join(D122, 'p.zip')
     res, sc, t = llama('delphi_package', {'dir': SRC122, 'outfile': Z122})
     nombres = zipfile.ZipFile(Z122).namelist() if os.path.exists(Z122) else []
@@ -2168,7 +2168,7 @@ try:
     # E157 un edit rechazado por +R no deja la copia DIARIA en la papelera ("Nothing
     # was written" la dejaba: la copia iba antes de la pregunta del escritor)
     def copias_diarias(carpeta, nombre):
-        return [os.path.join(d, f) for d, _, fs in os.walk(os.path.join(carpeta, '__delphi-patch'))
+        return [os.path.join(d, f) for d, _, fs in os.walk(os.path.join(carpeta, mc.PAPELERA))
                 for f in fs if f == nombre]
     R157 = os.path.join(D155, 'ro.txt')
     open(R157, 'w').write('a\nb\n')
@@ -2527,7 +2527,7 @@ try:
         [{'old': 'uno', 'new': 'uno'}, {'old': 'dos', 'new': 'dos'}])})
     check('E77 tanda en la que nada cambia: UNCHANGED y sin papelera',
           not res.get('isError') and mc.abre(t, 'SN_PATCH_EDITS_SIN_CAMBIOS_FMT') and
-          not os.path.exists(os.path.join(SIN, '__delphi-patch')), t[:200])
+          not os.path.exists(os.path.join(SIN, mc.PAPELERA)), t[:200])
     res, sc, t = llama('delphi_textedit', {'path': T77, 'fragment': 'no', 'new': 'no',
                                            'atline': 1})
     check('E77 ...y fragment == new: la misma nota (era un error EDIT-009)',
@@ -2540,7 +2540,7 @@ try:
     res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': cid})
     check('E77 ...y un changeset que no cambia nada: UNCHANGED',
           not res.get('isError') and mc.abre(t, 'SN_CHANGESET_SIN_CAMBIOS_FMT') and
-          not os.path.exists(os.path.join(SIN, '__delphi-patch')), t[:200])
+          not os.path.exists(os.path.join(SIN, mc.PAPELERA)), t[:200])
 
     # E127 la sesion que se cierra para hacer sitio lo dice (SYS-033): decia "el
     # servidor se reinicio". Al final: se lleva tambien la de la bateria
