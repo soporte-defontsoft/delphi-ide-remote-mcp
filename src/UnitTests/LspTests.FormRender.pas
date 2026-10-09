@@ -63,6 +63,24 @@ uses
 type
   // el "control" del framework para NoVisualesDe, sin VCL ni FMX
   TControlFalso = class(TComponent);
+  // uno que vive DENTRO de otro componente (un item de menu, una accion, un
+  // campo): su contenedor lo devuelve GetParentComponent, como en TMenuItem
+  TItemDentro = class(TComponent)
+  public
+    Contenedor: TComponent;
+    function GetParentComponent: TComponent; override;
+    function HasParent: Boolean; override;
+  end;
+
+function TItemDentro.GetParentComponent: TComponent;
+begin
+  Result := Contenedor;
+end;
+
+function TItemDentro.HasParent: Boolean;
+begin
+  Result := Contenedor <> nil;
+end;
 
 { Una UNION de carpeta (punto de montaje): la crea cualquiera, sin el
   privilegio de los symlink, y tiene el atributo de punto de reparse que mira
@@ -384,26 +402,36 @@ end;
 
 procedure TFormRenderTests.NoVisualesUnCriterio;
 var
-  Raiz, Timer, SinPosicion, Boton: TComponent;
+  Raiz, SinSitio, Timer, Menu, Boton: TComponent;
+  Item: TItemDentro;
 begin
   Raiz := TComponent.Create(nil);
   try
-    // el PRIMERO sin posicion tampoco cuenta: el criterio era "(0,0) salvo el
-    // indice 0" y no tenia sentido (revision de Fable, 7-oct-2026)
-    TComponent.Create(Raiz).Name := 'Item0';
+    // uno de la raiz SIN posicion SI cuenta, y va en 0,0 como en el IDE: un
+    // no visual sin Left/Top ni se dibujaba ni se listaba (3.6 de la 1.18.0,
+    // Hermes). El criterio viejo, "sin posicion no", era para lo de abajo
+    SinSitio := TComponent.Create(Raiz);
+    SinSitio.Name := 'Item0';
     Timer := TComponent.Create(Raiz);
     Timer.Name := 'Timer1';
     Timer.DesignInfo := (60 shl 16) or 300; // Left 300, Top 60, como el dfm
-    SinPosicion := TComponent.Create(Raiz);
-    SinPosicion.Name := 'Item1'; // un item de menu: sin posicion de diseno
+    Menu := TComponent.Create(Raiz);
+    Menu.Name := 'Menu1';
+    Menu.DesignInfo := (50 shl 16) or 100;
+    Item := TItemDentro.Create(Raiz);
+    Item.Name := 'Item1'; // un item de menu: vive DENTRO del menu, sin posicion
+    Item.Contenedor := Menu;
     Boton := TControlFalso.Create(Raiz);
     Boton.Name := 'Boton1';
     Boton.DesignInfo := (10 shl 16) or 10;
     TComponent.Create(Timer).Name := 'DeOtro'; // de otro dueno: no es de la raiz
-    Assert.AreEqual('Timer1:TComponent', ListaDeNoVisuales(NoVisualesDe(Raiz, TControlFalso)),
-      'ni el control, ni los que no tienen posicion (tampoco el primero), ni el de otro dueno');
+    Assert.AreEqual('Item0:TComponent,Timer1:TComponent,Menu1:TComponent',
+      ListaDeNoVisuales(NoVisualesDe(Raiz, TControlFalso)),
+      'el de la raiz sin posicion si; ni el control, ni el que vive dentro de otro sin posicion, ni el de otro dueno');
     Assert.AreEqual(300, PosicionDeNoVisual(Timer).X);
     Assert.AreEqual(60, PosicionDeNoVisual(Timer).Y);
+    Assert.AreEqual(0, PosicionDeNoVisual(SinSitio).X, 'sin posicion, en 0,0');
+    Assert.AreEqual(0, PosicionDeNoVisual(SinSitio).Y);
   finally
     Raiz.Free;
   end;
