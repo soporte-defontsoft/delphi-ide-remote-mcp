@@ -118,6 +118,9 @@ REGLAS = [
     ('el .dpr de un .dproj', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.dpr'\)",
      [('Lsp.Dproj.pas', 'DprDe')],
      'DprDe, la inversa de DprojDe (2.2 de la 1.18.0: a mano en el build, delphi_test y el scaffold)'),
+    ('el juez del nombre de un perfil', r"(?i)(?:IsMatch|CharInSet)\s*\(\s*\w*(?:prof|perfil)\w*\s*,", [],
+     'Lsp.Guard.BadProfileName, la regla de la puerta (2.3 de la 1.18.0: set-profile y remove-profile '
+     'tenian una regex propia que dejaba pasar el punto)'),
     ('el designer de una unidad', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.(?:dfm|fmx)'\)", [],
      'DesignersDeUnidad (Lsp.Patch), la inversa de UnidadDeDesigner (2.2 de la 1.18.0: cinco a mano)'),
     ('el .dproj compuesto a mano', r"\+\s*'\.dproj'", [],
@@ -309,6 +312,7 @@ PLANTADO = {
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",
     'el .dpr de un .dproj': "  D := TPath.ChangeExtension(P, '.dpr');",
+    'el juez del nombre de un perfil': "  if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then",
     'la sangria de un nivel de un designer': "  I := StringOfChar(' ', (Obj.Depth + 1) * 2);",
     'de que marco es un designer': "  if APath.EndsWith('.fmx', True) then",
     'el designer de una unidad': "  F := ChangeFileExt(Pas, '.dfm');",

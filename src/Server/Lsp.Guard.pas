@@ -777,6 +777,15 @@ procedure AnunciaAcceso(const AToolName: string; const AEntry: TJSONObject);
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 
+{ The identifier rule for a PAServer profile name: it becomes a file name in
+  %APPDATA% and travels on command lines (paclient and msbuild /p:Profile=).
+  ONE definition - PAServerArgDenied and BuildArgDenied ("profile" in both)
+  read it, so the two mouths cannot drift. True = refuse. Tambien la leen
+  delphi_config set-profile y delphi_paserver remove-profile: tenian una
+  regex propia que dejaba pasar el punto, y set-profile fijaba en el .dproj
+  un perfil que delphi_build profile= negaba despues (9-oct-2026). }
+function BadProfileName(const V: string): Boolean;
+
 implementation
 
 uses
@@ -1058,18 +1067,6 @@ begin
           [AArguments.Pairs[I].JsonString.Value]));
 end;
 
-{ delphi_build's platform/config/target reach a cmd.exe line UNQUOTED
-  (rsvars.bat && msbuild ...), so a metacharacter there is arbitrary execution
-  that sails past the jail, the test container and the .dproj
-  hazard scanner at once. platform reuses the whitelist that ALREADY exists for
-  the .dproj XML sink (Lsp.Dproj.CanonicalPlatform) instead of a second, weaker
-  charset test; target is a fixed trio; config is NOT a fixed list - a project
-  may declare its own configurations (parity with the IDE), so it is bounded by
-  a charset that admits no shell metacharacter. '' = clean. }
-{ The identifier rule for a PAServer profile name: it becomes a file name in
-  %APPDATA% and travels on command lines (paclient and msbuild /p:Profile=).
-  ONE definition - PAServerArgDenied and BuildArgDenied ("profile" in both) both
-  read it, so the two mouths cannot drift. True = refuse. }
 function BadProfileName(const V: string): Boolean;
 var
   C: Char;
@@ -1151,6 +1148,14 @@ begin
     Exit(MsgText(SR_ADB_ALLOWLIST_DEVICE));
 end;
 
+{ delphi_build's platform/config/target reach a cmd.exe line UNQUOTED
+  (rsvars.bat && msbuild ...), so a metacharacter there is arbitrary execution
+  that sails past the jail, the test container and the .dproj
+  hazard scanner at once. platform reuses the whitelist that ALREADY exists for
+  the .dproj XML sink (Lsp.Dproj.CanonicalPlatform) instead of a second, weaker
+  charset test; target is a fixed trio; config is NOT a fixed list - a project
+  may declare its own configurations (parity with the IDE), so it is bounded by
+  a charset that admits no shell metacharacter. '' = clean. }
 function BuildArgDenied(const AArguments: TJSONObject): string;
 var
   V: string;

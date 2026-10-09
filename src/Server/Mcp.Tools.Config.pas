@@ -1502,8 +1502,8 @@ begin
   Quitar := SameText(Perfil, 'none') or SameText(Perfil, 'default');
   if not Quitar then
   begin
-    if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then
-      Exit(MsgText(SR_PASERVER_PROFILE_NAME));
+    if BadProfileName(Perfil) then // la regla de la puerta de build y paserver
+      Exit(MsgFmt(SR_PASERVER_NAME_FMT, [Perfil]));
     if not TFile.Exists(RutaDePerfil(Info.Version, Perfil)) then
       Exit(MsgFmt(SR_CONFIG_PROFILE_NOEXISTE_FMT, [Perfil, Disponibles]));
   end;

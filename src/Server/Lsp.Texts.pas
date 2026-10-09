@@ -5688,9 +5688,9 @@ const
     '[STYLE-026 DENIED] I cannot read the .rc (%s) to check which files ' +
     'it points to, so I do not compile it.';
 
-  SR_PASERVER_PROFILE_NAME =
-    '[PAS-031 INVALID_PARAM] The profile name only allows letters, digits, dot, ' +
-    'hyphen and underscore.';
+  // PAS-031 (un nombre de perfil CON punto) retirado el 9-oct-2026:
+  // set-profile y remove-profile contestan PAS-015, la regla de la puerta
+  // (Lsp.Guard.BadProfileName)
 
   SN_PASERVER_PROFILE_REMOVED_FMT =
     '[PAS-032] DELETED the connection profile "%s". NOTE: profiles live ' +

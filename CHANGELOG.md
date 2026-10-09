@@ -90,6 +90,13 @@ the MCP `initialize` response (`serverInfo.version`).
 - **`delphi_styles set` refuses a list or a binary block left open**
   (`('a', 'b'` or `{ 0102`): the value's grammar took anything that started
   with `(` or `{`, and wrote a style the IDE could not open. `test_styles`.
+- **`delphi_config set-profile` judges a profile name by the gate's rule**
+  (letters, digits, `_`, `-`, at most 64 - PAS-015). It had a regex of its
+  own that let a dot through, so it pinned in the `.dproj` a profile that
+  `delphi_build profile=` then refused; `delphi_paserver remove-profile`
+  had the same copy behind the gate. Both ask the gate's one judge now
+  (`BadProfileName`), and PAS-031, the message that promised the dot, is
+  retired. `test_sdk`; `test_paisaje` keeps the judge in its home.
 
 ### Internal
 

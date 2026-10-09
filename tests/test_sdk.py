@@ -299,6 +299,21 @@ try:
                                      "platform": "Linux64", "profile": "no-existe-este"})
     check('set-profile de un perfil que no existe: RECHAZADO',
           mc.rechazado(out) and mc.es(out, 'SR_CONFIG_PROFILE_NOEXISTE_FMT'), out[:200])
+    # 2.3 de la 1.18.0: set-profile tenia una regex propia que dejaba pasar el
+    # punto, y delphi_build profile= (la puerta, BadProfileName) lo niega: el
+    # proyecto quedaba apuntando a un perfil que el build rechaza. El perfil
+    # EXISTE aqui, para que lo unico que lo pare sea la regla del nombre.
+    con_punto = os.path.join(PROFILES_DIR, 'con.punto.profile')
+    with open(con_punto, 'w', encoding='utf-8') as f:
+        f.write('')
+    out = srv.call('delphi_config', {"project": dproj, "command": "set-profile",
+                                     "platform": "Linux64", "profile": "con.punto"})
+    os.remove(con_punto)
+    with open(dproj, encoding='utf-8', errors='replace') as f:
+        fijado = 'con.punto' in f.read()
+    check('set-profile con un punto en el nombre: la regla de la puerta (PAS-015), sin tocar el .dproj',
+          mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NAME_FMT') and not fijado,
+          out[:200] + (' | FIJADO en el .dproj' if fijado else ''))
 
     # --- 6) quitar un SDK: se desregistra, pero los gigas NO se tocan ------
     raiz_limpia = os.path.join(BASE, 'sysroot-limpio')

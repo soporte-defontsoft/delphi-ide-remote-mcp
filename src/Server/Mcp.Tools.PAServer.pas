@@ -960,8 +960,8 @@ begin
   ProfName := Params.Profile.Trim;
   if ProfName = '' then
     Exit(MsgText(SR_PASERVER_NEED_NAME));
-  if not TRegEx.IsMatch(ProfName, '^[A-Za-z0-9_.-]+$') then
-    Exit(MsgText(SR_PASERVER_PROFILE_NAME));
+  if BadProfileName(ProfName) then // la de la puerta: un '..' no llega a RemoveDir
+    Exit(MsgFmt(SR_PASERVER_NAME_FMT, [ProfName]));
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
