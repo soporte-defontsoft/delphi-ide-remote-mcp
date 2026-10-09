@@ -1717,7 +1717,7 @@ begin
         Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, Prop]));
     end
     else
-      F.Doc.SetProp(Obj, Prop, Trozos, WasThere);
+      F.Doc.SetPropTrozos(Obj, Prop, Trozos, WasThere);
     F.Doc.Save;
     // el arbol se releyo al guardar: su linea, la de ahora
     LineaN := 0;

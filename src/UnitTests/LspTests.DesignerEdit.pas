@@ -959,7 +959,7 @@ begin
     Assert.IsTrue(Era);
     Assert.Contains(Texto, '    Caption = ''x''' + CRLF + '    Hint = ');
     Assert.DoesNotContain(Texto, 'next card', 'los trozos de debajo se van con su valor');
-    Doc.SetProp(Doc.ObjetoDeNombre('Label1'), 'Caption', TrozosDeLiteral(LARGO), Era);
+    Doc.SetPropTrozos(Doc.ObjetoDeNombre('Label1'), 'Caption', TrozosDeLiteral(LARGO), Era);
     Assert.Contains(Doc.TextoDe(Doc.Lines), TROZOS + '    Hint = ', 'como la escribio el IDE en el ejemplo');
   finally
     Doc.Free;

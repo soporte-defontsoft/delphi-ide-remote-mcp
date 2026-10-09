@@ -327,6 +327,58 @@ for regla in REGLAS:
     vacias = casas_sin_uso(regla, TEXTOS)
     check('"%s": cada casa declarada tiene uso (la deuda solo puede encoger)' % regla[0], not vacias, vacias)
 
+# Dos sobrecargas de igual aridad que solo difieren en TArray<T> frente a T:
+# DelphiLSP fuera de un proyecto no resuelve TArray<string> y revienta con la
+# unidad entera (-32603; medido el 8-oct-2026, vault, decisions/delphilsp-
+# sobrecargas-sin-proyecto: lo hizo WalkFiles de la 1.13.1 a la 1.17.0). Los
+# agentes leen copias sueltas con delphi_symbols: en nuestras unidades no entra
+# ninguna pareja asi (regla de la casa, punto 4 del rojo de S1, 1.18.0).
+RX_RUTINA = re.compile(r'(?is)\b(?:function|procedure)\s+([\w.]+)\s*\(([^()]*)\)\s*(?::\s*[^;]+)?;'
+                       r'((?:\s*(?:overload|virtual|override|static|inline|stdcall|cdecl|reintroduce|'
+                       r'abstract|dynamic|register|safecall|deprecated|platform|experimental)\s*;)*)')
+def tipos_de(params):
+    tipos = []
+    for grupo in params.split(';'):
+        if ':' not in grupo:
+            continue
+        nombres, tipo = grupo.split(':', 1)
+        tipo = re.sub(r'\s+', '', tipo.split('=')[0]).lower()
+        nombres = re.sub(r'(?i)^\s*(?:const|var|out|constref)\s+', '', nombres)
+        tipos += [tipo] * len([n for n in nombres.split(',') if n.strip()])
+    return tuple(tipos)
+def parejas_tarray(ficheros_texto):
+    malas = []
+    for f, t in ficheros_texto:
+        firmas = {}
+        for m in RX_RUTINA.finditer('\n'.join(codigo(t))):
+            if 'overload' not in m.group(3).lower():
+                continue
+            firmas.setdefault(m.group(1).split('.')[-1].lower(), set()).add(tipos_de(m.group(2)))
+        for nombre, fs in firmas.items():
+            fs = sorted(fs)
+            for i, a in enumerate(fs):
+                for b in fs[i + 1:]:
+                    if len(a) != len(b):
+                        continue
+                    distintas = [(x, y) for x, y in zip(a, b) if x != y]
+                    if distintas and all(x == 'tarray<%s>' % y or y == 'tarray<%s>' % x for x, y in distintas):
+                        malas.append('%s %s: %s / %s' % (os.path.basename(f), nombre, a, b))
+    return malas
+PLANTA_TARRAY = ('unit Plantado;\ninterface\n'
+                 'function WalkFiles(const ADir: string; const AMasks: TArray<string>;\n'
+                 '  AConPapelera: Boolean = False): TArray<string>; overload;\n'
+                 'function WalkFiles(const ADir, AMask: string;\n'
+                 '  AConPapelera: Boolean = False): TArray<string>; overload;\n'
+                 'function Otra(const A: string; B: Integer): string; overload;\n'
+                 'function Otra(const A: TArray<string>): string; overload;\n'
+                 'implementation\nend.\n')
+PLANTADAS = parejas_tarray([('Plantado.pas', PLANTA_TARRAY)])
+check('mutante de las sobrecargas TArray<T>/T: la pareja de WalkFiles se caza, la de distinta aridad no',
+      len(PLANTADAS) == 1 and 'walkfiles' in PLANTADAS[0], PLANTADAS)
+MALAS = parejas_tarray(TEXTOS)
+check('ninguna unidad tiene dos sobrecargas de igual aridad que solo difieran en TArray<T> frente a T '
+      '(DelphiLSP revienta con ellas fuera de un proyecto)', not MALAS, MALAS)
+
 # Toda puerta de este censo dice LISTA NEGRA en su cabecera. Este control
 # mide la declaracion, NO que una lista negra sea completa.
 LISTAS_NEGRAS = [

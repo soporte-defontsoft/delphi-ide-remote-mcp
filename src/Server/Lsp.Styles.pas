@@ -80,12 +80,15 @@ type
     function BlockText(AObj: TStyleObj): string;
     { Sets (or adds) a property line of AObj. AValue is written verbatim, as
       it would appear in the file. Returns the resulting line. }
-    function SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string; overload;
+    function SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string;
     { The same with a value in pieces, as the IDE writes a long string
       (Lsp.DesignerBin.TrozosDeLiteral): one piece on the property's line,
-      several below it. Returns the property's line. }
-    function SetProp(AObj: TStyleObj; const AProp: string; const ATrozos: TArray<string>;
-      out AWasThere: Boolean): string; overload;
+      several below it. Returns the property's line. Con su nombre y no como
+      sobrecarga de SetProp: dos de igual aridad que solo difieren en
+      TArray<string> frente a string tumban a DelphiLSP con una copia suelta
+      de esta unidad (-32603, medido el 9-oct-2026; test_paisaje). }
+    function SetPropTrozos(AObj: TStyleObj; const AProp: string; const ATrozos: TArray<string>;
+      out AWasThere: Boolean): string;
     { Removes a property line of AObj; False when absent. }
     function DeleteProp(AObj: TStyleObj; const AProp: string): Boolean;
     { Copies ASrc right after itself with the new StyleName. }
@@ -390,10 +393,10 @@ end;
 
 function TStyleDoc.SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string;
 begin
-  Result := SetProp(AObj, AProp, [AValue], AWasThere);
+  Result := SetPropTrozos(AObj, AProp, [AValue], AWasThere);
 end;
 
-function TStyleDoc.SetProp(AObj: TStyleObj; const AProp: string; const ATrozos: TArray<string>;
+function TStyleDoc.SetPropTrozos(AObj: TStyleObj; const AProp: string; const ATrozos: TArray<string>;
   out AWasThere: Boolean): string;
 var
   Ini, Fin, InsertAt: Integer;

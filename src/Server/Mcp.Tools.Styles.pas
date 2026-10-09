@@ -219,7 +219,7 @@ begin
       if Doc.FindStyle(NewName) <> nil then
         Exit(MsgFmt(SR_STYLES_RENAME_DUP_FMT, [NewName]));
       // escrito por el compositor de la casa: #N y trozos como el IDE
-      Line := Doc.SetProp(O, AProp.Trim, TrozosDeLiteral(NewName), WasThere);
+      Line := Doc.SetPropTrozos(O, AProp.Trim, TrozosDeLiteral(NewName), WasThere);
       Doc.Save;
       Exit(MsgFmt(SN_STYLES_RENAMED_FMT,
         [AStyle, NewName, TPath.GetFileName(Doc.Path)]));

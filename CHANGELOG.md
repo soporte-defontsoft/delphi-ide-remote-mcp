@@ -224,6 +224,12 @@ the MCP `initialize` response (`serverInfo.version`).
   `CamposDePerfil` in `Lsp.Discovery`, from whatever `.profile` or `.sdk`
   text the caller holds; they were read by hand in twelve places of three
   units (`HostDePerfil` now reads with it). `test_paisaje` keeps them there.
+- `test_paisaje` refuses, in our units, two overloads of equal arity that
+  differ only in `TArray<T>` and `T`: DelphiLSP outside a project crashes on
+  the whole unit (measured), and agents read loose copies. Its first pass
+  found one: `TStyleDoc.SetProp` with a string and with pieces - a loose
+  copy of `Lsp.Styles.pas` got `-32603` (measured tonight; renamed, it
+  answers). The pieces version is now `SetPropTrozos`.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,
