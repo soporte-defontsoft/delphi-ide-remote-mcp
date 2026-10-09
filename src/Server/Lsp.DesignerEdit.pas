@@ -881,7 +881,7 @@ begin
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   F.Dfm := APath;
   F.DfmNombre := TPath.GetFileName(APath);
-  F.EsFmx := SameText(TPath.GetExtension(APath), '.fmx');
+  F.EsFmx := EsDesignerFmx(APath);
   F.Marco := IfThen(F.EsFmx, 'FMX', 'VCL');
   if IsBinaryDesignerFile(APath) then
     Exit(MsgFmt(SR_DESIGNER_EDIT_BINARIO_FMT, [F.DfmNombre]));

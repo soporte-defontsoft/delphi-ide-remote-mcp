@@ -285,7 +285,9 @@ the MCP `initialize` response (`serverInfo.version`).
 - The indentation of a level of a text designer (two spaces per level, as
   the IDE writes it) is `SangriaDeNivel` in `Lsp.DesignerBin`; four places
   of the styles and the designer's editor computed it by hand, and
-  `test_paisaje` keeps it there.
+  `test_paisaje` keeps it there. Likewise whether a designer is FMX
+  (`EsDesignerFmx` in `Lsp.DesignerForma`, by its extension), asked by hand
+  in seven places in three spellings.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

@@ -477,6 +477,7 @@ uses
   MCPServer.Serializer, // MotivoEntero / MotivoBooleano: la regla de un parametro, UNA
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
+  Lsp.DesignerForma, // EsDesignerFmx: de que marco es un designer
   Lsp.DesignerBinding,
   Lsp.ProjectUnits,
   Lsp.NetDrives,
@@ -3262,7 +3263,7 @@ begin
   Result := [];
   var Falta: TFaltaTabla;
   var Notas: TArray<string>;
-  Raw := DesignerMetaLint(APath.ToLower.EndsWith('.fmx'), ALines, Notas, Falta, 0);
+  Raw := DesignerMetaLint(EsDesignerFmx(APath), ALines, Notas, Falta, 0);
   // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
   // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
   var Bind := DesignerBindingWarnings(APath, ALines);
@@ -3286,7 +3287,7 @@ begin
       end;
       Res.Add(Raw[I]);
     end;
-    if APath.ToLower.EndsWith('.fmx') then
+    if EsDesignerFmx(APath) then
       ExtName := '.fmx'
     else
       ExtName := '.dfm';

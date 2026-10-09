@@ -160,7 +160,7 @@ begin
     Exit;
   if Result <> '' then
     Exit('?');
-  if APath.EndsWith('.fmx', True) then
+  if EsDesignerFmx(APath) then
     Exit('fmx');
   if APath.EndsWith('.dfm', True) then
     Exit('vcl');
@@ -961,7 +961,7 @@ begin
     Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
-  IsFmx := APath.EndsWith('.fmx', True);
+  IsFmx := EsDesignerFmx(APath);
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
   if IsBinaryDesigner(APath) then
   begin
@@ -1036,7 +1036,7 @@ begin
     Exit(NoEsFichero(Ruta, MsgFmt(SR_NO_EXISTE_FMT, [Ruta])));
   if not MatchText(TPath.GetExtension(Ruta), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
-  if SameText(TPath.GetExtension(Ruta), '.fmx') then
+  if EsDesignerFmx(Ruta) then
     Exit(MsgText(SR_DESIGNER_FMX_ALWAYS_TEXT));
   B := TFile.ReadAllBytes(Ruta);
   Forma := DesignerShapeOf(B);
@@ -1459,7 +1459,7 @@ begin
   // espera FUERA del cerrojo, por lo mismo: set parent= la esperaba dentro y
   // paraba todas las ediciones mientras se generaba (revision de la 1.17.0)
   if MatchText(Cmd, ['insert', 'set', 'delete']) and
-     (MetaTable(Params.Path.Trim.EndsWith('.fmx', True), Falta) = nil) and
+     (MetaTable(EsDesignerFmx(Params.Path), Falta) = nil) and
      (Falta.Negativa <> '') then
     Exit(Falta.Negativa);
   EnterFileEdit;

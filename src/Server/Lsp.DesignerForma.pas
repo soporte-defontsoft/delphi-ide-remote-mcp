@@ -53,6 +53,12 @@ function ComponeLineaDeObjeto(const AClave, ANombre, AClase: string): string;
   IDE). Escrita a mano en cuatro sitios hasta la 1.17.0. }
 function UnidadDeDesigner(const ADesigner: string): string;
 
+{ True si ADesigner es de FMX (un .fmx), por su extension, como decide el IDE;
+  un .dfm es VCL. La preguntaban a mano siete sitios del servidor, de tres
+  formas (EndsWith, ToLower.EndsWith, SameText de la extension; 2.3 de la
+  1.18.0). }
+function EsDesignerFmx(const ADesigner: string): Boolean;
+
 implementation
 
 uses
@@ -156,6 +162,11 @@ var
   Resto: string;
 begin
   Result := LineaDeObjeto(ALinea, AClave, ANombre, AClase, Resto);
+end;
+
+function EsDesignerFmx(const ADesigner: string): Boolean;
+begin
+  Result := SameText(ExtractFileExt(ADesigner.Trim), '.fmx');
 end;
 
 function UnidadDeDesigner(const ADesigner: string): string;
