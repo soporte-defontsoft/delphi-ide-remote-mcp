@@ -35,7 +35,7 @@ type
     Fidelidad: string;   // --fidelity auto | window | print (VCL)
     Raiz: string;        // --root auto | form | frame
     Estados: TArray<string>; // --state Comp.Prop=Valor (repetible)
-    NoVisuales: Boolean; // --nonvisual on|off (on: como el designer)
+    NoVisuales: Boolean; // --nonvisual on|off (off, como la tool: la imagen es el form como se vera; 3.4)
     TiempoMs: Integer;   // --timeout <ms>
     Verbose: Boolean;    // --verbose: trazas '#'
   end;
@@ -262,7 +262,9 @@ begin
   GPeticion.Paquetes := 'auto';
   GPeticion.Fidelidad := 'auto';
   GPeticion.Raiz := 'auto';
-  GPeticion.NoVisuales := True;
+  // UN solo defecto, el de delphi_designer: off (era on, como el designer, y
+  // la tool off - dos defectos para lo mismo: 3.4 de la 1.18.0)
+  GPeticion.NoVisuales := False;
   GPeticion.TiempoMs := 60000;
   try
     I := 1;

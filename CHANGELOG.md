@@ -405,6 +405,12 @@ the MCP `initialize` response (`serverInfo.version`).
   `DesignerBinarioATexto` and `LineaRaizDeDesigner` in `Lsp.DesignerForma`,
   which both link, are the one converter and the one root reader;
   `test_paisaje` keeps the RTL conversions in their homes.
+- The form renderer, run by hand, drew the non-visual components by default
+  (`--nonvisual on`, like the IDE designer) while `delphi_designer preview`
+  defaults to off; the server always passes it, so agents saw no
+  difference, but one switch had two defaults. The renderer defaults to off
+  now; its README and usage text say so, and its DUnitX case asks for `on`
+  (RenderTests 13/13).
 - `test_paisaje` looks at the batteries too: the trash folder's name (63
   places), its day (6) and its "deleted" drawer (7) were written by hand in
   `tests/*.py`, and a check of ABSENCE with a hand-written name stays green

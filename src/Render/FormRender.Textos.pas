@@ -82,7 +82,7 @@ const
   // La linea de uso (stderr, con el codigo 2)
   SF_RENDER_USO_FMT =
     '%s --path <dfm|fmx> --out <png> [--state Component.Property=Value]* ' +
-    '[--component Name] [--style <file|platform|none>] [--nonvisual on|off] ' +
+    '[--component Name] [--style <file|platform|none>] [--nonvisual on|off (off)] ' +
     '[--packages auto|none|all] [--root auto|form|frame] ' +
     '[--fidelity auto|window|print] [--bds 37.0] [--timeout ms] [--verbose]';
 

@@ -63,12 +63,12 @@ DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
   `Edit1.Text=hello`. A class-typed value names a component.
 - `--component`: the renderer answers `RECT=<name>=l,t,w,h` in PNG pixels;
   the server crops with its own cropper (`Lsp.Imagen.RecortaPng`).
-- `--nonvisual on` (the renderer's default, like the designer's "Show
-  non-visual components"): each non-visual component is drawn at the
-  Left/Top the file stores, with the icon its package ships
-  (`<CLASS>128_PNG` resource) or the class initials, and its name
-  underneath. The server passes `off` unless the agent asks: what a model
-  needs is to know they exist, and `NONVISUALS=` lists them either way.
+- `--nonvisual on` (like the designer's "Show non-visual components"):
+  each non-visual component is drawn at the Left/Top the file stores (0,0
+  without one), with the icon its package ships (`<CLASS>128_PNG`
+  resource) or the class initials, and its name underneath. The default
+  is `off`, the same as `delphi_designer`'s: what a model needs is to know
+  they exist, and `NONVISUALS=` lists them either way.
 - `--style`: VCL takes a `.vsf` and renders **out of design mode** (the VCL
   style engine never styles a designed control, which is why the VCL
   designer paints unstyled). FMX applies the style **as an application

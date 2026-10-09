@@ -403,7 +403,8 @@ procedure TRenderTests.Vcl_no_visuales_on_off;
 var
   R: TRespuesta;
 begin
-  R := Vcl(Format('--path "%s" --out "%s"', [Pruebas + 'UNoVisual.dfm', Salida('novisual_on')]));
+  // on hay que pedirlo: el defecto es off, el de la tool (3.4 de la 1.18.0)
+  R := Vcl(Format('--path "%s" --out "%s" --nonvisual on', [Pruebas + 'UNoVisual.dfm', Salida('novisual_on')]));
   CompruebaCaptura(R, '400x200');
   Assert.AreEqual('2', R.Valor(FR_NONVISUAL), 'Timer1 y ActionList1');
   Assert.AreNotEqual<TColor>(ColorToRGB(clBtnFace), Pixel(R.Valor(FR_CAPTURE), 301, 101), 'el recuadro del Timer1 en su Left/Top');
