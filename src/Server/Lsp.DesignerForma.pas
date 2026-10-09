@@ -31,6 +31,23 @@ function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
   con su excepcion. }
 procedure DesignerAFlujo(AEntrada, ASalida: TStream);
 
+{ Un designer BINARIO, con o sin la cabecera de recurso, como el texto que
+  escribe el IDE ("Ver como texto": ASCII con CRLF, lo que no cabe como #N).
+  Lanza si esta danado; un texto pasa por DesignerAFlujo y sale como lo
+  normaliza el IDE. EL conversor: lo escribian el servidor
+  (DesignerBinaryToText, que le pone sus mensajes) y el renderizador
+  (Cabecera), cada uno con su llamada a la RTL (P10 de la segunda revision
+  de la 1.17.0). }
+function DesignerBinarioATexto(const ABytes: TArray<Byte>): string;
+
+{ LA linea RAIZ de un designer de texto: la primera que no esta en blanco,
+  si es una linea de objeto (LineaDeObjeto); si no, False - un fichero que
+  no empieza por su objeto no tiene raiz, y la de un objeto anidado no lo
+  es. La leian el servidor (DesignerHeaderName) y el renderizador
+  (Cabecera), este con la primera linea de objeto de CUALQUIER sitio (P10). }
+function LineaRaizDeDesigner(const ALineas: TArray<string>;
+  out AClave, ANombre, AClase: string): Boolean;
+
 { LA linea que abre un objeto en un designer de texto: 'object Nombre: TClase',
   'inherited ...' o 'inline ...', con o sin nombre ('object TMemo') y con o
   sin indice ('[2]'). True si lo es: AClave en minusculas (object, inherited
@@ -133,6 +150,42 @@ begin
         ObjectTextToBinary(AEntrada, ASalida);
     end;
   end;
+end;
+
+function DesignerBinarioATexto(const ABytes: TArray<Byte>): string;
+var
+  Entrada, Flujo: TMemoryStream;
+  Texto: TBytesStream;
+begin
+  Entrada := TMemoryStream.Create;
+  Flujo := TMemoryStream.Create;
+  Texto := TBytesStream.Create;
+  try
+    if Length(ABytes) > 0 then
+      Entrada.WriteBuffer(ABytes[0], Length(ABytes));
+    DesignerAFlujo(Entrada, Flujo);
+    Flujo.Position := 0;
+    ObjectBinaryToText(Flujo, Texto);
+    // el texto de un .dfm es ASCII (lo que no cabe va como #N): UTF-8 lo lee
+    // tal cual y no inventa nada
+    Result := TEncoding.UTF8.GetString(Texto.Bytes, 0, Texto.Size);
+  finally
+    Texto.Free;
+    Flujo.Free;
+    Entrada.Free;
+  end;
+end;
+
+function LineaRaizDeDesigner(const ALineas: TArray<string>;
+  out AClave, ANombre, AClase: string): Boolean;
+begin
+  AClave := '';
+  ANombre := '';
+  AClase := '';
+  for var L in ALineas do
+    if L.Trim <> '' then
+      Exit(LineaDeObjeto(L, AClave, ANombre, AClase));
+  Result := False;
 end;
 
 function LineaDeObjeto(const ALinea: string; out AClave, ANombre, AClase, AResto: string): Boolean;

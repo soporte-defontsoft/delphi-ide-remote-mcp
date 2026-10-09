@@ -289,7 +289,7 @@ end;
 function DesignerHeaderName(const ADesigner: string; out AName, AClass: string): Boolean;
 var
   B: TBytes;
-  Enc, Line, Clave, Nombre, Clase: string;
+  Enc, Clave, Nombre, Clase: string;
   Lines: TArray<string>;
 begin
   Result := False;
@@ -308,18 +308,14 @@ begin
   end
   else
     Lines := SplitToLines(PatchLoadText(ADesigner, Enc));
-  for Line in Lines do
+  // EL lector de la raiz (Lsp.DesignerForma), el del renderizador tambien;
+  // aqui, la raiz nunca es un frame inline y siempre tiene nombre
+  Result := LineaRaizDeDesigner(Lines, Clave, Nombre, Clase) and
+    (Clave <> 'inline') and (Nombre <> '');
+  if Result then
   begin
-    // THE reader of an object line (Lsp.DesignerBin); the root is never an
-    // inline frame and always has a name
-    if LineaDeObjeto(Line, Clave, Nombre, Clase) and (Clave <> 'inline') and (Nombre <> '') then
-    begin
-      AName := Nombre;
-      AClass := Clase;
-      Exit(True);
-    end;
-    if Line.Trim <> '' then
-      Break; // the first non-blank line is the root object
+    AName := Nombre;
+    AClass := Clase;
   end;
 end;
 

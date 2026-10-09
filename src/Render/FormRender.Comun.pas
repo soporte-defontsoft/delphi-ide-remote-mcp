@@ -389,7 +389,6 @@ end;
 function Cabecera(const AFichero: string): TCabecera;
 var
   Bytes: TBytes;
-  Entrada, Bin, Texto: TMemoryStream;
   Lineas: TStringList;
 begin
   Result := Default(TCabecera);
@@ -401,29 +400,17 @@ begin
     if DesignerShapeOf(Bytes) <> dsText then
     begin
       Result.Binario := True;
-      Entrada := TMemoryStream.Create;
-      Bin := TMemoryStream.Create;
-      Texto := TMemoryStream.Create;
-      try
-        Entrada.WriteBuffer(Bytes[0], Length(Bytes));
-        DesignerAFlujo(Entrada, Bin);
-        Bin.Position := 0;
-        ObjectBinaryToText(Bin, Texto);
-        Texto.Position := 0;
-        Lineas.LoadFromStream(Texto);
-      finally
-        Texto.Free;
-        Bin.Free;
-        Entrada.Free;
-      end;
+      // EL conversor de la casa, el del servidor (P10 de la segunda revision
+      // de la 1.17.0: este ayudante tenia el suyo)
+      Lineas.Text := DesignerBinarioATexto(Bytes);
     end
     else
       Lineas.LoadFromFile(AFichero);
-    // EL lector de la linea de objeto (Lsp.DesignerForma), el del servidor:
-    // con \w un nombre con acento se cortaba (revision de la 1.17.0)
-    for var L in Lineas do
-      if LineaDeObjeto(L, Result.Palabra, Result.Nombre, Result.Clase) then
-        Exit;
+    // EL lector de la raiz (Lsp.DesignerForma), el del servidor: la primera
+    // linea no vacia, si es de objeto - aqui se tomaba la primera linea de
+    // objeto de CUALQUIER sitio, la de uno anidado tambien (P10); y por
+    // LineaDeObjeto: con \w un nombre con acento se cortaba (1.17.0)
+    LineaRaizDeDesigner(Lineas.ToStringArray, Result.Palabra, Result.Nombre, Result.Clase);
   finally
     Lineas.Free;
   end;

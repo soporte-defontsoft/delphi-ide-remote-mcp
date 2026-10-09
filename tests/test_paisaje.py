@@ -160,6 +160,12 @@ REGLAS = [
       ('Mcp.Tools.Help.pas', 'OneTool')],
      'ElMasParecido (Lsp.Pascal): el UNICO a la menor distancia; delphi_help tenia su copia (revision de '
      'la 1.17.0)'),
+    ('convertir un designer con la RTL',
+     r"\b(?:Object(?:Resource|Binary)ToText|ObjectTextTo(?:Resource|Binary))\s*\(|\.ReadResHeader\b",
+     [('Lsp.DesignerForma.pas', 'DesignerAFlujo'), ('Lsp.DesignerForma.pas', 'DesignerBinarioATexto'),
+      ('Lsp.DesignerBin.pas', 'DesignerTextToBinary')],
+     'DesignerAFlujo / DesignerBinarioATexto (Lsp.DesignerForma) y DesignerTextToBinary: el servidor y el '
+     'renderizador convertian cada uno con su llamada a la RTL (P10 de la segunda revision de la 1.17.0)'),
     ('la clave del nombre de un estilo', r"\.StyleName\.ToLower|SameText\(\s*[\w.\[\]]*\.StyleName\b", [],
      'ClaveDeEstilo (Lsp.Styles), la de FMX: ToLowerInvariant (P7 de la segunda revision de la 1.17.0: '
      'SameText en FindStyle y Child, ToLower en el lint)'),
@@ -375,6 +381,7 @@ PLANTADO = {
     'el mas parecido': "  if EditDistance(A, C) < Mejor then",
     'la cadena de clases de la tabla': "  while Padres.TryGetValue(C, P) do",
     'la clave del nombre de un estilo': "  if SameText(O.StyleName, AStyleName) then",
+    'convertir un designer con la RTL': "  ObjectBinaryToText(Bin, Texto);",
     'la sangria de un nivel de un designer': "  I := StringOfChar(' ', (Obj.Depth + 1) * 2);",
     'de que marco es un designer': "  if APath.EndsWith('.fmx', True) then",
     'el designer de una unidad': "  F := ChangeFileExt(Pas, '.dfm');",

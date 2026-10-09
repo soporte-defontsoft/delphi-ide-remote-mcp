@@ -701,38 +701,18 @@ begin
 end;
 
 function DesignerBinaryToText(const ABytes: TBytes; out AText: string): string;
-var
-  Entrada, Salida: TMemoryStream;
-  Bytes: TBytes;
 begin
   Result := '';
   AText := '';
-  Entrada := TMemoryStream.Create;
-  Salida := TMemoryStream.Create;
+  if DesignerShapeOf(ABytes) = dsText then
+    Exit(MsgText(SR_DSGN_NO_ES_DESIGNER_BINARIO));
+  // EL conversor de la casa (Lsp.DesignerForma), el del renderizador tambien;
+  // aqui, sus mensajes
   try
-    if Length(ABytes) > 0 then
-      Entrada.WriteBuffer(ABytes[0], Length(ABytes));
-    Entrada.Position := 0;
-    try
-      case DesignerShapeOf(ABytes) of
-        dsResource: ObjectResourceToText(Entrada, Salida);
-        dsTpf0: ObjectBinaryToText(Entrada, Salida);
-      else
-        Exit(MsgText(SR_DSGN_NO_ES_DESIGNER_BINARIO));
-      end;
-    except
-      on E: Exception do
-        Exit(MsgFmt(SR_DSGN_BINARIO_DANADO_FMT, [E.ClassName, E.Message]));
-    end;
-    SetLength(Bytes, Salida.Size);
-    if Salida.Size > 0 then
-      Move(Salida.Memory^, Bytes[0], Salida.Size);
-    // El texto de un .dfm es ASCII: lo que no cabe va como #NNN. UTF-8 lo lee
-    // tal cual y no inventa nada.
-    AText := TEncoding.UTF8.GetString(Bytes);
-  finally
-    Entrada.Free;
-    Salida.Free;
+    AText := DesignerBinarioATexto(ABytes);
+  except
+    on E: Exception do
+      Exit(MsgFmt(SR_DSGN_BINARIO_DANADO_FMT, [E.ClassName, E.Message]));
   end;
 end;
 

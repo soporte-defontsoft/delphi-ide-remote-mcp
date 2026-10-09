@@ -357,6 +357,12 @@ the MCP `initialize` response (`serverInfo.version`).
   property-line regex, binary by the first byte, the edit distance, the
   most similar name, the class chain of the table), and the object-line
   rule now sees a single keyword too.
+- The renderer and the server converted a binary form to text each with
+  its own call to the RTL, and read the root line differently (the
+  renderer took the first object line found anywhere, a nested one too).
+  `DesignerBinarioATexto` and `LineaRaizDeDesigner` in `Lsp.DesignerForma`,
+  which both link, are the one converter and the one root reader;
+  `test_paisaje` keeps the RTL conversions in their homes.
 - `test_paisaje` looks at the batteries too: the trash folder's name (63
   places), its day (6) and its "deleted" drawer (7) were written by hand in
   `tests/*.py`, and a check of ABSENCE with a hand-written name stays green
