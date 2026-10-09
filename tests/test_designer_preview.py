@@ -512,6 +512,12 @@ try:
           cerca(pixel_de(png('p3.png'), 30, 150), ROJO), (r[:200], pixel_de(png('p3.png'), 30, 150)))
     check('P3 ...y nunca se escribe en el fichero',
           'clSkyBlue' in open(PRUEBA, encoding='utf-8').read(), 'el .dfm cambio')
+    # 3.5 de la 1.18.0 (Hermes, medido): un entero con nombre (clRed en un
+    # TColor) salia DSGN-061; se lee como lo lee TReader (FindIdentToInt)
+    r = preview(path=PRUEBA, state='Panel1.Color=clRed', out=png('p3c.png'), inline='false')
+    check('P3 state con el nombre de una constante (clRed): se lee como la RTL y pinta el panel en rojo',
+          not mc.fallo(r) and cerca(pixel_de(png('p3c.png'), 30, 150), ROJO),
+          (r[:200], pixel_de(png('p3c.png'), 30, 150)))
     r = preview(path=PRUEBA, state='NoHayTal.Caption=x')
     check('P3 un estado de un componente que no existe: el RENDER-011 del ayudante, tal cual',
           mc.abre(r, 'SR_RENDER_ESTADO_SIN_COMPONENTE_FMT') and mc.outcome(r) == 'NOT_FOUND', r[:300])

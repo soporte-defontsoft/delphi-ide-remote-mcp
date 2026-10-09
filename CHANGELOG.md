@@ -163,6 +163,11 @@ the MCP `initialize` response (`serverInfo.version`).
   another component (a menu item, an action, a field) is skipped now; the
   rest goes to 0,0 as in the IDE, and `nonVisualDrawn` says what was drawn,
   not what was asked. `test_designer_preview` P7b.
+- **`preview state=` reads a named integer the way the form loader does.**
+  `state=Panel1.Color=clRed` failed with DSGN-061 (a variant cast error):
+  the renderer set the text through RTTI. A name for an integer type
+  (`clRed`, `crHandPoint`, `claRed`) is now resolved by the reader its type
+  registers, as `TReader` resolves it in a form. `test_designer_preview` P3.
 
 ### Internal
 

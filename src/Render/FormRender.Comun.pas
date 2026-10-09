@@ -671,6 +671,8 @@ var
   Partes: TArray<string>;
   C, Ref: TComponent;
   PI: PPropInfo;
+  N64: Int64;
+  Entero: Longint;
 begin
   Comp := AEspec.Substring(0, AEspec.IndexOf('=')).Trim;
   Valor := AEspec.Substring(AEspec.IndexOf('=') + 1).Trim;
@@ -705,6 +707,13 @@ begin
       raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_REFERIDO_FMT, [Valor, Comp]));
     SetObjectProp(C, PI, Ref);
   end
+  // un entero con NOMBRE (clRed en un TColor, crHandPoint en un TCursor,
+  // claRed en un TAlphaColor), como lo lee TReader: el lector que registra
+  // su tipo (RegisterIntegerConsts). SetPropValue con el texto salia
+  // DSGN-061, EVariantTypeCastError (3.5 de la 1.18.0, Hermes)
+  else if (PI.PropType^.Kind in [tkInteger, tkInt64]) and not TryStrToInt64(Valor, N64) and
+          Assigned(FindIdentToInt(PI.PropType^)) and FindIdentToInt(PI.PropType^)(Valor, Entero) then
+    SetOrdProp(C, PI, Entero)
   else
     SetPropValue(C, Prop, Valor);
 end;
