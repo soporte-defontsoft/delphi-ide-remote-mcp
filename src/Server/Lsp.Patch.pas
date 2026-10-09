@@ -5,7 +5,7 @@ unit Lsp.Patch;
   and large). Every gate below exists because a model was measured breaking
   a file through that exact hole. Design rules:
 
-  - Anchor = ONE full existing line (leading indentation may be omitted);
+  - Anchor = ONE full existing line (its indentation does not count, the end does);
     never substrings, never multi-line anchors, never whole-file rewrites.
   - Encoding is detected (UTF-8 BOM / strict UTF-8 / CP1252 / UTF-16 by BOM) and preserved;
     a character that does not fit the file's codepage REJECTS the edit with
@@ -198,9 +198,9 @@ function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
   necesita conservar la fantasma (para volver a unir el texto). }
 function LineasDelTexto(const AText: string): TArray<string>;
 { Las lineas (0-based) donde casa un ancla de UNA linea, con la regla del
-  motor que la aplica: el de Pascal (APascal, delphi_edit) la linea entera o
-  el mismo texto tras su sangria; el de texto (delphi_textedit), las dos
-  recortadas. El preview del changeset preguntaba con OTRA regla y decia
+  motor que la aplica: el de Pascal (APascal, delphi_edit) sin la sangria de
+  ninguna de las dos y el final exacto; el de texto (delphi_textedit), las
+  dos recortadas. El preview del changeset preguntaba con OTRA regla y decia
   limpio lo que el commit rechazaba (octava revision): UNA pregunta para
   los motores y para su preview. }
 function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string;
@@ -1290,28 +1290,25 @@ begin
     Result := 'LF';
 end;
 
-function IsAllWhitespace(const S: string): Boolean;
-var
-  C: Char;
-begin
-  for C in S do
-    if (C <> ' ') and (C <> #9) then
-      Exit(False);
-  Result := True;
-end;
-
 function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string;
   APascal: Boolean): TArray<Integer>;
 var
   I: Integer;
+  SinSangria: string;
 begin
   Result := [];
+  SinSangria := Copy(AAncla, Length(LeadingWhite(AAncla)) + 1, MaxInt);
   for I := 0 to High(ALines) do
     if APascal then
     begin
-      if (ALines[I] = AAncla) or
-         (ALines[I].EndsWith(AAncla) and
-          IsAllWhitespace(Copy(ALines[I], 1, Length(ALines[I]) - Length(AAncla)))) then
+      // la sangria (espacios y tabuladores: LeadingWhite) no cuenta a NINGUNO
+      // de los dos lados, como promete la descripcion de old y como cuenta
+      // delphi_textedit; el final si, exacto ("  foo;  " no es "foo;",
+      // EDIT-062). Era "la linea TERMINA en el ancla": la sangria del ancla
+      // contaba como minima, "occurrence" contaba sobre otro conjunto que el
+      // del agente, y una tanda escribio en silencio la linea equivocada
+      // (medido el 9-oct-2026: sangrias 2, 4 y 6, la ocurrencia 2 caia en la 3)
+      if Copy(ALines[I], Length(LeadingWhite(ALines[I])) + 1, MaxInt) = SinSangria then
         Result := Result + [I];
     end
     else if Trim(ALines[I]) = Trim(AAncla) then
@@ -1511,9 +1508,9 @@ begin
   except
     Exit;
   end;
-  // con la regla del motor que va a aplicar la edicion (la de Pascal: la
-  // linea entera o tras su sangria); contaba con Trim y "  foo;  " era
-  // una ocurrencia que el motor no ve (EDIT-062; novena revision)
+  // con la regla del motor que va a aplicar la edicion (LineasDondeCasaElAncla:
+  // en Pascal, sin la sangria y con el final exacto); contaba con Trim y
+  // "  foo;  " era una ocurrencia que el motor no ve (EDIT-062; novena revision)
   Seen := 0;
   for I in LineasDondeCasaElAncla(Lines, AAnchor, EsDelMotorPascal(APath)) do
   begin
@@ -1536,10 +1533,12 @@ begin
   Objetivo := AOld.Trim;
   if Objetivo = '' then
     Exit;
-  // 1. la misma linea con otra indentacion
+  // 1. la misma linea con otros blancos alrededor: en el motor de Pascal la
+  // sangria ya no cuenta, asi que lo que difiere es el FINAL (decia "otra
+  // indentacion", falso desde el 9-oct-2026; revisor propio)
   for I := 0 to High(ALines) do
     if ALines[I].Trim = Objetivo then
-      Exit(#10 + MsgFmt(SN_ANCLA_INDENTACION_FMT, [I + 1]) +
+      Exit(#10 + MsgFmt(SN_ANCLA_BLANCOS_FMT, [I + 1]) +
         #10'  ' + CitaDeLinea(I + 1, ALines[I]));
   // 2. un TROZO de una o mas lineas
   N := 0;
@@ -1929,6 +1928,81 @@ begin
   end;
 end;
 
+{ La guarda de occurrence (David, 9-oct-2026): con un ancla que TRAE
+  sangria, la linea que eligio occurrence -contando sin la sangria- tiene que
+  llevar ESA sangria, comparada exacta (un tabulador no son cuatro espacios).
+  Si no, la negativa con las candidatas: la de occurrence y las coincidencias
+  del MOTOR (la regla de cada tool; en un bloque, sus inicios) que llevan la
+  sangria del ancla, cada una con su numero de occurrence, para contestar a la
+  primera. Nunca se escribe en la "probable": la sangria como desempate
+  callado seria adivinar otra vez. La sangria la dice la primera linea CON
+  TEXTO del ancla (una en blanco no lleva). Con una sola coincidencia no hay
+  nada que elegir y no salta (como la misma edicion sin occurrence). '' = pasa. }
+function GuardaDeSangria(const ALines: TArray<string>; const AAncla: string;
+  APascal: Boolean; AEntrada, ANth, ALinea: Integer): string;
+var
+  Ancla: TArray<string>;
+  Inicios: TArray<Integer>;
+  Sangria, Lista, Resto: string;
+  J, K, N, Inicio, Cuantas: Integer;
+begin
+  Result := '';
+  if (AAncla = '') or (ALinea < 1) or (ALinea > Length(ALines)) then
+    Exit;
+  Ancla := LineasDelAncla(AAncla);
+  J := 0;
+  while (J < High(Ancla)) and (Ancla[J].Trim = '') do
+    Inc(J);
+  Sangria := '';
+  if Ancla[J].Trim <> '' then
+    Sangria := LeadingWhite(Ancla[J]);
+  if (Sangria = '') or (ALinea - 1 + J > High(ALines)) or
+     (LeadingWhite(ALines[ALinea - 1 + J]) = Sangria) then
+    Exit;
+  // todas las coincidencias del motor, en su orden: el de occurrence (el
+  // ancla normalizada: una de una linea que acaba en salto no casaba con
+  // nada cruda, y la negativa era la de un bloque corto; revisor propio)
+  if Length(Ancla) = 1 then
+    Inicios := LineasDondeCasaElAncla(ALines, Ancla[0], APascal)
+  else
+  begin
+    Inicios := [];
+    K := 1;
+    repeat
+      Inicio := BuscaBloque(ALines, Ancla, K, Cuantas);
+      if Inicio >= 0 then
+        Inicios := Inicios + [Inicio];
+      Inc(K);
+    until (Inicio < 0) or (K > 500);
+  end;
+  if Length(Inicios) <= 1 then
+    Exit;
+  // cada una citada por su linea CON TEXTO (la J del ancla): la primera de un
+  // bloque que empieza en blanco no orientaba nada; y las que no caben en la
+  // lista, con sus K, que si no no se pueden elegir (revisor propio)
+  N := 0;
+  Lista := '';
+  Resto := '';
+  for K := 0 to High(Inicios) do
+    if (Inicios[K] + J <= High(ALines)) and (LeadingWhite(ALines[Inicios[K] + J]) = Sangria) then
+    begin
+      Inc(N);
+      if N <= 5 then
+        Lista := Lista + '  ' + MsgFmt(SF_PATCH_SANGRIA_CANDIDATA_FMT,
+          [Inicios[K] + J + 1, K + 1, CitaDeLinea(Inicios[K] + J + 1, ALines[Inicios[K] + J])]) + #10
+      else
+        Resto := Resto + IfThen(Resto <> '', ', ') + IntToStr(K + 1);
+    end;
+  if N > 5 then
+    Lista := Lista + MsgFmt(SF_PATCH_SANGRIA_MAS_FMT, [N - 5, Resto]) + #10;
+  if N = 0 then
+    Lista := MsgText(SF_PATCH_SANGRIA_NINGUNA);
+  Result := MsgFmt(SR_PATCH_OCCURRENCE_SANGRIA_FMT, [AEntrada, ANth, ALinea + J,
+    '  ' + MsgFmt(SF_PATCH_SANGRIA_CANDIDATA_FMT, [ALinea + J, ANth,
+      CitaDeLinea(ALinea + J, ALines[ALinea - 1 + J])]),
+    Lista.TrimRight([#10])]);
+end;
+
 function AplicaTanda(const APath, AEditsJson: string;
   const AAplicaUna: TAplicaUnaEdicion): string;
 var
@@ -1991,6 +2065,7 @@ begin
       // llevandose por delante lineas que no eran.
       var Hasta: TArray<Integer>;
       SetLength(Hasta, Arr.Count);
+      var LineasAntes: TArray<string> := nil; // las de la guarda de sangria, leidas una vez
       for N := 0 to Arr.Count - 1 do
       begin
         Ocurr[N] := 0;
@@ -2067,6 +2142,20 @@ begin
               Exit(MsgFmt(SR_PATCH_OCCURRENCE_FMT, [N + 1, Nth,
                 Cabeza.Substring(0, Min(60, Length(Cabeza))), Hay]));
             end;
+            // ...y si el ancla trae sangria, la linea elegida lleva ESA: si no,
+            // se dicen las candidatas y no se escribe (la guarda de sangria,
+            // David 9-oct-2026; las mismas lineas que cuenta NthOccurrenceLine)
+            if LineasAntes = nil then
+            try
+              var EncG: string;
+              LineasAntes := LineasDelTexto(PatchLoadText(APath, EncG));
+            except
+              LineasAntes := nil;
+            end;
+            var Guarda := GuardaDeSangria(LineasAntes, Anc2, EsDelMotorPascal(APath),
+              N + 1, Nth, Ocurr[N]);
+            if Guarda <> '' then
+              Exit(Guarda);
           end;
         end;
       end;
@@ -2175,14 +2264,18 @@ begin
         // arreglo en el commit de un changeset y quedo aqui sin arreglar
         // (segunda revision, 27-sep-2026, medido por dos agentes)
         try
+          // el atline de la entrada gana, en las dos ramas: el de un BLOQUE no
+          // llegaba a ApplyBlockEdit - se ignoraba y, con occurrence, el bloque
+          // se contaba sobre el fichero YA mutado (la tercera puerta del bug de
+          // occurrence, abierta por atline; revisor propio, 9-oct-2026)
+          EnLinea := EnteroDeEntrada(Obj, 'atline');
+          if EnLinea = 0 then
+            EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
           if EsBloque then
             Una := ApplyBlockEdit(APath, Anc, Nue,
-              EnteroDeEntrada(Obj, 'occurrence'), Ocurr[N - 1])
+              EnteroDeEntrada(Obj, 'occurrence'), EnLinea)
           else
           begin
-            EnLinea := EnteroDeEntrada(Obj, 'atline');
-            if EnLinea = 0 then
-              EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
             Borra := BooleanoDeEntrada(Obj, 'delete');
             Una := AAplicaUna(Anc, Nue, EnLinea, Hasta[N - 1], Borra);
           end;

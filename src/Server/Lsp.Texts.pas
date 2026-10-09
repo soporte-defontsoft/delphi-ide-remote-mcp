@@ -972,6 +972,38 @@ const
     '[EDIT-011 INVALID_PARAM] Entry %d asks for occurrence %d of "%s", ' +
     'and there are only %d. Nothing was written. Re-read with ' +
     'delphi_read and count, or lengthen the anchor until it is unique.';
+  { La guarda de occurrence (David, 9-oct-2026): un ancla que TRAE sangria y
+    la linea que elige occurrence lleva otra. Nunca se escribe en la
+    "probable": se dicen las candidatas, citadas (CitaDeLinea) con su numero
+    de occurrence (SF_PATCH_SANGRIA_CANDIDATA_FMT), para contestar a la
+    primera. El consejo es occurrence y no atline: los numeros son del
+    fichero de ANTES de la tanda, occurrence se arrastra con las entradas
+    anteriores y atline no (revisor propio). %d = la entrada, %d = la
+    ocurrencia pedida, %d = su linea, %s = esa linea, %s = las que casan con
+    la sangria del ancla o SF_PATCH_SANGRIA_NINGUNA. }
+  SR_PATCH_OCCURRENCE_SANGRIA_FMT =
+    '[EDIT-121 INVALID_PARAM] Entry %d: occurrence %d of that anchor is ' +
+    'line %d, and its indentation is not the one your anchor carries. ' +
+    'Indentation does not count when occurrences are counted, so I do not ' +
+    'guess which line you meant. Nothing was written.'#10 +
+    'The one occurrence chose:'#10'%s'#10 +
+    'The ones indented as your anchor:'#10'%s'#10 +
+    'The line numbers are those of the file BEFORE the batch. Send the ' +
+    'entry again with "occurrence" set to the K of the one you mean: it ' +
+    'counts that same file and follows the lines earlier entries add or ' +
+    'remove (atline does not), in a block too.';
+  SF_PATCH_SANGRIA_NINGUNA =
+    '  (none: no line that matches your anchor carries its indentation - ' +
+    'send the anchor with the indentation of the line you mean, or the ' +
+    'occurrence of the one above if it is that one)';
+  { Las candidatas de EDIT-121 que no caben en la lista, con sus K para poder
+    elegirlas: %d = cuantas, %s = sus occurrence separadas por comas. }
+  SF_PATCH_SANGRIA_MAS_FMT =
+    '  ...and %d more: occurrence %s';
+  { Una candidata de EDIT-121 (David, 9-oct-2026: "line N = occurrence K",
+    que orienta): %d = su linea, %d = su occurrence, %s = la linea citada. }
+  SF_PATCH_SANGRIA_CANDIDATA_FMT =
+    'line %d = occurrence %d -> %s';
 
   SR_PATCH_EDIT_KEY_FMT =
     '[EDIT-012 INVALID_PARAM] Entry %d of "edits" has the field "%s", ' +
@@ -1028,9 +1060,10 @@ const
   SN_ANCLA_COPIALA =
     '[EDIT-014] Copy the literal line from delphi_read (do not rebuild ' +
     'it from memory).';
-  SN_ANCLA_INDENTACION_FMT =
-    '[EDIT-094] NOTE: line %d has that SAME text with DIFFERENT ' +
-    'indentation. Copy it as is:';
+  SN_ANCLA_BLANCOS_FMT =
+    '[EDIT-094] NOTE: line %d has that SAME text with other spaces or tabs ' +
+    'around it: the indentation does not count, but the END of the line ' +
+    'does (trailing blanks included). Copy it as is:';
   SN_ANCLA_CONTIENEN =
     '[EDIT-095] Lines that CONTAIN it:';
   SN_ANCLA_PARECIDA_FMT =

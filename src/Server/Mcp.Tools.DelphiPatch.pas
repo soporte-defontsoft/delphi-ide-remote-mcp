@@ -164,8 +164,10 @@ end;
 // Format: a JSON array, [{"old": "...", "new": "...", "atline": 12}, ...],
 // applied IN ORDER, each one with exactly the semantics of a single edit.
 // Un ancla de VARIAS lineas se sustituye entera con ApplyBlockEdit, y
-// "occurrence" se resuelve con NthOccurrenceLine EN EL MOMENTO en que corre
-// la entrada, asi que sigue al fichero segun la tanda lo reordena. Las dos
+// "occurrence" se resuelve con NthOccurrenceLine UNA vez, contra el fichero
+// de ANTES de la tanda (AplicaTanda), y se arrastra segun las entradas
+// anteriores anaden o quitan lineas (decia "en el momento en que corre la
+// entrada": era el bug de occurrence, arreglado el 2026-09-20). Las dos
 // viven en Lsp.Patch desde 2026-09-20 para que delphi_textedit tenga lo
 // mismo: son genericas, no tienen nada de Pascal.
 function ApplyEdits(const APath, AEditsJson: string): string;

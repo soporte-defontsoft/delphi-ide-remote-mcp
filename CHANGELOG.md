@@ -264,6 +264,28 @@ the MCP `initialize` response (`serverInfo.version`).
   file, and it used to fall into the trusted local mode. A file another
   process holds open with delete access and full sharing is read as
   before - the Windows ini reader reads it. `test_un_delphi` U11f, U11g.
+- **`delphi_edit`: indentation does not count in an anchor, as its
+  description says, and `occurrence` counts the lines an agent counts.** A
+  line matched when it ENDED with the anchor, so the anchor's own
+  indentation worked as a minimum: with three `X := 1;` lines indented 2, 4
+  and 6 spaces, occurrence 2 of the 4-space anchor was the 6-space line, and
+  a batch wrote the wrong line answering APPLIED (measured). Both sides are
+  now compared without their indentation (spaces and tabs) and with the end
+  exact, as before; `delphi_textedit` already counted that way. An anchor
+  that only its indentation made unique is now refused as ambiguous, with
+  its lines, instead of matching. And when an anchor that CARRIES
+  indentation picks, by `occurrence`, a line indented otherwise, the batch
+  is refused (EDIT-121) naming that line and the matching ones indented as
+  the anchor, each as `line N = occurrence K`, so the answer is that
+  `occurrence` (it counts the file as it was before the batch and follows
+  the lines earlier entries move) - the indentation is never a silent
+  tie-break, in `delphi_edit` and in `delphi_textedit` alike. EDIT-094 now
+  says the end of the line counts. `test_round34` B7-B10.
+- **In a batch, the `atline` of a block anchor is honoured.** It never
+  reached the block engine: without `occurrence` the block had to be unique
+  anyway, and with it the block was counted on the file as the batch had
+  already changed it - the first block was written, answering APPLIED.
+  Now `atline` wins, as it does for one-line anchors. `test_round34` B7d.
 
 ### Internal
 
