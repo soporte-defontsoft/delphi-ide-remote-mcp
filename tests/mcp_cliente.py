@@ -648,7 +648,11 @@ def appdata_perfil(base, nombre='x', host='127.0.0.1', platform='Win64', por_def
     uno (lo que el IDE llama perfil por defecto). Devuelve (appdata_dir,
     host): el primero a env['APPDATA'], el segundo a DELPHI_MCP_REMOTE_HOSTS.
     Desde 1.15.1 la puerta ProfileHostDenido FALLA CERRADO: un perfil de
-    bateria tiene que EXISTIR y tener un host permitido para pasar."""
+    bateria tiene que EXISTIR y tener un host permitido para pasar.
+    OJO: confina al SERVIDOR (y a msbuild), no al paclient REAL: paclient
+    --local escribe y busca los perfiles en la carpeta real diga lo que diga
+    APPDATA (medido 9-oct-2026). Lo que no deba llegar a un paclient de verdad
+    va contra uno FALSO (DELPHI_MCP_PACLIENT), como test_paserver."""
     import shutil
     ad = os.path.join(base, 'appdata')
     real = os.path.join(os.environ.get('APPDATA', ''), 'Embarcadero', 'BDS')
