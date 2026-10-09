@@ -448,6 +448,23 @@ try:
     check('V10 ...y un valor que no es un entero se niega igual', mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT'), r[:300])
     compila_y_cuadra('V10', VPROJ, VDFM)
 
+    # ------------------------------------------------------------------ V11
+    # 3.8 de la 1.18.0 (Hermes, medido): usesInCode daba las lineas de la
+    # unidad de ANTES del borrado, y el borrado quita su campo por encima del
+    # uso: el agente iba a otra linea. Ahora, las de la unidad que QUEDA. (Lo
+    # ultimo del proyecto VCL: despues de esto ya no compila, el uso queda.)
+    dsg(command='insert', path=VDFM, classname='TButton', component='BtnUso')
+    call('delphi_edit', {'path': VPAS, 'insert': 'metodo', 'inclass': CLASE, 'visibility': 'public',
+                         'code': "procedure UsaBoton;\nbegin\n  BtnUso.Caption := 'x';\nend;"})
+    r = dsg(command='delete', path=VDFM, component='BtnUso')
+    usos = J(r).get('usesInCode', [])
+    lineas_pas = mc.lee(VPAS).splitlines()
+    m = re.match(r'.*?:(\d+): ', usos[0]) if usos else None
+    n = int(m.group(1)) if m else 0
+    check('V11 delete: usesInCode senala la linea del uso en la unidad que QUEDA',
+          0 < n <= len(lineas_pas) and 'BtnUso.Caption' in lineas_pas[n - 1],
+          (usos, lineas_pas[n - 1] if 0 < n <= len(lineas_pas) else '-'))
+
     # =================================================================== FMX
     FDIR = os.path.join(JAIL, 'EdFmx')
     r = call('delphi_create', {'kind': 'project-fmx', 'dir': FDIR, 'name': 'EdFmx'})

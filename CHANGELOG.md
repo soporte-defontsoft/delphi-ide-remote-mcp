@@ -145,6 +145,11 @@ the MCP `initialize` response (`serverInfo.version`).
   retired: the cause comes from the system's rule or from the gate. The zip
   in progress takes the writer's temp name, so packaging skips any call's
   intermediate, not only its own. `test_deploy_adb`, `test_escritor_guardado`.
+- **`delphi_designer delete` points `usesInCode` at the unit as it is left.**
+  The lines came from the unit before the delete, and removing the
+  component's field (and its empty handlers) above a use moved it: the
+  agent went to the wrong line (measured by Hermes). They are listed again
+  on the unit that remains. `test_designer_edit` V11.
 
 ### Internal
 

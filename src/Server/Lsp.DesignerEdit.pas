@@ -463,6 +463,47 @@ begin
   Result := AFichero + ':' + IntToStr(ALinea);
 end;
 
+{ Donde nombra el codigo de APasTexto a alguno de ANombres - se lista, no se
+  juzga (lo juzga el compilador) -, sin las lineas de AFuera (las de sus
+  campos; nil = ninguna) y con el tope de MAX_USOS. Lo pide el analizador
+  sobre la unidad de antes, y el borrado sobre la que QUEDA: daba las
+  lineas de antes, y quitar el campo por encima las movia (3.8 de la
+  1.18.0, Hermes). }
+function UsosEnCodigo(const APasTexto, APasNombre: string; const ANombres: TArray<string>;
+  AFuera: TDictionary<Integer, Boolean>): TArray<string>;
+var
+  Usos: TStringList;
+  Codigo: string;
+  Pas: TArray<string>;
+begin
+  Usos := TStringList.Create;
+  try
+    // las mismas posiciones y saltos que el texto, sin comentarios ni cadenas
+    Codigo := CodigoPascal(APasTexto);
+    Pas := SplitToLines(APasTexto);
+    for var S in ANombres do
+      for var Mt in TRegEx.Matches(Codigo, PatronIdentEntero(S), [roIgnoreCase]) do
+      begin
+        var L := LineaDePosicion(Codigo, Mt.Index) - 1;
+        if ((AFuera <> nil) and AFuera.ContainsKey(L)) or (L > High(Pas)) then
+          Continue;
+        var Uso := Donde(APasNombre, L + 1) + ': ' + Copy(Trim(Pas[L]), 1, 120);
+        if Usos.IndexOf(Uso) < 0 then
+          Usos.Add(Uso);
+      end;
+    if Usos.Count > MAX_USOS then
+    begin
+      var Mas := Usos.Count - MAX_USOS;
+      while Usos.Count > MAX_USOS do
+        Usos.Delete(Usos.Count - 1);
+      Usos.Add(MsgFmt(SF_DESIGNER_USOS_MAS_FMT, [Mas]));
+    end;
+    Result := Usos.ToStringArray;
+  finally
+    Usos.Free;
+  end;
+end;
+
 { ---- el analizador ---- }
 
 function AnalizaImpacto(ADoc: TStyleDoc; AObj: TStyleObj; ASoloEl: Boolean;
@@ -475,8 +516,6 @@ var
   Unidad: TUnidadPas;
   Clase: TTipoPas;
   LineasFuera: TDictionary<Integer, Boolean>;
-  Usos: TStringList;
-  Pas: TArray<string>;
   Form: TArray<TLineaForm>;
   Clases: TArray<TClasePascal>;
 begin
@@ -486,7 +525,6 @@ begin
   Sub := TStringList.Create;
   Todos := TStringList.Create;
   Vistos := TStringList.Create;
-  Usos := TStringList.Create;
   Dentro := TDictionary<string, string>.Create;
   Fuera := TDictionary<string, string>.Create;
   LineasFuera := TDictionary<Integer, Boolean>.Create;
@@ -530,7 +568,6 @@ begin
       // y que es cada caracter: una directiva o un comentario que sigue fuera
       // de unas lineas no se quitan con ellas (LineasLimpias)
       Clases := ClasesPascal(APasTexto);
-      Pas := SplitToLines(APasTexto);
       // los campos publicados de esos nombres
       for K := 0 to High(Clase.Campos) do
       begin
@@ -626,24 +663,7 @@ begin
         Result.Metodos := Result.Metodos + [MP];
       end;
       // donde lo usa el codigo: se lista, no se juzga (el compilador)
-      for var S in Sub do
-        for var Mt in TRegEx.Matches(Codigo, PatronIdentEntero(S), [roIgnoreCase]) do
-        begin
-          var L := LineaDePosicion(Codigo, Mt.Index) - 1;
-          if LineasFuera.ContainsKey(L) or (L > High(Pas)) then
-            Continue;
-          var Uso := Donde(APasNombre, L + 1) + ': ' + Copy(Trim(Pas[L]), 1, 120);
-          if Usos.IndexOf(Uso) < 0 then
-            Usos.Add(Uso);
-        end;
-      if Usos.Count > MAX_USOS then
-      begin
-        var Mas := Usos.Count - MAX_USOS;
-        while Usos.Count > MAX_USOS do
-          Usos.Delete(Usos.Count - 1);
-        Usos.Add(MsgFmt(SF_DESIGNER_USOS_MAS_FMT, [Mas]));
-      end;
-      Result.Usos := Usos.ToStringArray;
+      Result.Usos := UsosEnCodigo(APasTexto, APasNombre, Sub.ToStringArray, LineasFuera);
     finally
       Unidad.Free;
     end;
@@ -651,7 +671,6 @@ begin
     LineasFuera.Free;
     Fuera.Free;
     Dentro.Free;
-    Usos.Free;
     Vistos.Free;
     Todos.Free;
     Sub.Free;
@@ -1983,6 +2002,10 @@ begin
     if Result <> '' then
       Exit;
     Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
+    // los usos que quedan, con las lineas de la unidad que QUEDA: el campo
+    // y los manejadores que se fueron estaban por encima (3.8, Hermes)
+    if (Result = '') and (Imp.Nota = '') and (F.PasTexto <> '') then
+      Imp.Usos := UsosEnCodigo(Pas, F.PasNombre, Imp.Nombres, nil);
     if Result <> '' then
       Exit;
     Ret := TJSONObject.Create;
