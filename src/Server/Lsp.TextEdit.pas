@@ -55,21 +55,14 @@ uses
   Lsp.Texts,
   Lsp.Patch,
   Lsp.Casa,
+  Lsp.Codificacion, // IsAscii
   Lsp.Mascara;
 
 // Las extensiones de otras tools (fuentes y designers de delphi_edit, los de
 // proyecto del IDE / delphi_create) son las listas del motor: SOURCE_EXTS,
 // DESIGNER_EXTS y PROJECT_EXTS de Lsp.Patch (aqui habia una copia; decima)
 
-function IsAscii(const S: string): Boolean;
-var
-  C: Char;
-begin
-  for C in S do
-    if Ord(C) > 127 then
-      Exit(False);
-  Result := True;
-end;
+// IsAscii vive en Lsp.Codificacion (4.1 de la 1.18.0: habia otra en linea)
 
 
 // LeadingWhite vive en Lsp.Patch, con la regla de la sangria de las dos tools

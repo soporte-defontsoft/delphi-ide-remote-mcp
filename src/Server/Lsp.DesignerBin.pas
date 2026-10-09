@@ -679,15 +679,9 @@ begin
 end;
 
 function NombreQueElFicheroNoLee(const ANombre, ADfm, ADfmEnc, APas, APasEnc: string): string;
-var
-  Ascii: Boolean;
 begin
   Result := '';
-  Ascii := True;
-  for var C in ANombre do
-    if Ord(C) > 127 then
-      Ascii := False;
-  if Ascii then
+  if IsAscii(ANombre) then
     Exit;
   if EncKindOf(ADfmEnc) <> ekUtf8Bom then
     Exit(MsgFmt(SR_DESIGNER_NOMBRE_SIN_BOM_FMT, [ANombre, ExtractFileName(ADfm),
@@ -750,12 +744,36 @@ function DesignerTextToBinary(const AText: string; out ABytes: TBytes): string;
 var
   Entrada, Salida: TMemoryStream;
   Bytes: TBytes;
+  Lineas: TStringList;
 begin
   Result := '';
   ABytes := nil;
   Entrada := TMemoryStream.Create;
   Salida := TMemoryStream.Create;
   try
+    // un NOMBRE con letras fuera de ASCII (BotonÑ, de un objeto, de su
+    // clase o de una propiedad): el parser de la RTL no lo lee - salia su
+    // EParserError 'Identifier expected' - y dcc si, guardandolo en UTF-8
+    // (medido 9-oct, 4.1 de la 1.18.0): se dice cual, donde y por que
+    Lineas := TStringList.Create;
+    try
+      Lineas.Text := AText;
+      var Fm := LineasDeForm(Lineas.ToStringArray);
+      for var I := 0 to High(Fm) do
+      begin
+        var Nombre := '';
+        if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].Nombre) then
+          Nombre := Fm[I].Nombre
+        else if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].ClaseObj) then
+          Nombre := Fm[I].ClaseObj
+        else if (Fm[I].Clase = clfPropiedad) and not IsAscii(Fm[I].Prop) then
+          Nombre := Fm[I].Prop;
+        if Nombre <> '' then
+          Exit(MsgFmt(SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT, [Nombre, I + 1]));
+      end;
+    finally
+      Lineas.Free;
+    end;
     // El parser de la RTL (el mismo que usa el IDE al cargar un .dfm de
     // texto) lee los bytes como ANSI: darle UTF-8 convertia una 'o' con
     // acento en #195#179 (medido 24-sep-2026). Lo normal en un .dfm de

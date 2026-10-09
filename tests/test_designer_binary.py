@@ -141,6 +141,17 @@ open(FUERA, 'wb').write("object FormF: TFormF\r\n  Caption = 'ok ✔'\r\n  Clien
 r = call('delphi_designer', {'command': 'to-binary', 'path': FUERA})
 check('caracter fuera de ANSI en crudo: to-binary RECHAZADO con #NNNN', mc.rechazado(r) and '#NNNN' in r, r[:200])
 check('...y el fichero no se toco', open(FUERA, 'rb').read().startswith(b'object FormF'), '')
+# un NOMBRE no ASCII (4.1 de la 1.18.0, medido): el parser de la RTL no lo
+# lee (salia su EParserError 'Identifier expected on line 3') y dcc si, en
+# UTF-8: se dice cual, en que linea y que hacer, y no se escribe
+NOASCII = os.path.join(BASE, 'NombreNoAscii.dfm')
+NOASCII_B = ("object FormN: TFormN\r\n  ClientHeight = 10\r\n  object Bot\u00f3n\u00d1: TButton\r\n    Left = 8\r\n"
+             "  end\r\nend\r\n").encode('utf-8-sig')
+open(NOASCII, 'wb').write(NOASCII_B)
+r = call('delphi_designer', {'command': 'to-binary', 'path': NOASCII})
+check('un nombre de componente no ASCII: to-binary DSGN-120 con el nombre y su linea, sin escribir',
+      mc.abre(r, 'SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT') and 'Bot\u00f3n\u00d1 (line 3)' in r and
+      open(NOASCII, 'rb').read() == NOASCII_B, r[:300])
 
 # ---- the IDE can save a TEXT form in UTF-16 (editor encoding menu): it
 # starts with FF FE, and "starts with $FF" used to mean binary. The real

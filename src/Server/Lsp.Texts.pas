@@ -9353,6 +9353,16 @@ const
   SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT =
     '[DSGN-046 DENIED] Could not convert the text to a binary designer ' +
     '(%s: %s).';
+  { to-binary con un NOMBRE no ASCII (de un objeto, su clase o una
+    propiedad): el parser de forms de la RTL no lo lee - salia su
+    EParserError 'Identifier expected' - y dcc si, guardandolo en UTF-8
+    (medido 9-oct, 4.1 de la 1.18.0). %s = el nombre, %d = su linea. }
+  SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT =
+    '[DSGN-120 DENIED] %s (line %d) is a name with letters outside ASCII: ' +
+    'the RTL''s form parser, the one to-binary uses, reads only ASCII ' +
+    'names. The compiler reads it (the form compiles as text, saved as ' +
+    'UTF-8 with BOM), so keep this form as text, or rename it with ASCII ' +
+    'letters to convert it. Nothing was written.';
 
   // Textos que estaban en linea en Lsp.DesignerBinding.pas (el resto, 27-sep-2026)
   SF_DSGN_REPITE_UN_NOMBRE_FMT =

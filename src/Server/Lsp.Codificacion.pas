@@ -36,6 +36,10 @@ function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
   (Lsp.Settings, que no puede usar Patch): la pregunta de FE FF estaba
   escrita a mano en los dos (9.2 de la 1.18.0). }
 function KindDeBom(const B: TArray<Byte>; out AKind: TEncKind): Boolean;
+{ Si S es solo ASCII (ningun caracter por encima de 127): cabe en cualquier
+  codificacion de la casa y en el parser de forms de la RTL. Estaba escrito
+  en Lsp.TextEdit y en linea en Lsp.DesignerBin (4.1 de la 1.18.0). }
+function IsAscii(const S: string): Boolean;
 function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
 function EncodeText(const S: string; K: TEncKind): TArray<Byte>;
 function EncName(K: TEncKind): string;
@@ -157,6 +161,16 @@ begin
     AKind := ekUtf16BE
   else
     Result := False;
+end;
+
+function IsAscii(const S: string): Boolean;
+var
+  C: Char;
+begin
+  for C in S do
+    if Ord(C) > 127 then
+      Exit(False);
+  Result := True;
 end;
 
 function DecodeBytes(const B: TBytes; K: TEncKind): string;

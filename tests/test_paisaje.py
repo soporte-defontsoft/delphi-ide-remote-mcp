@@ -230,6 +230,10 @@ REGLAS = [
      [('Lsp.Patch.pas', 'DetectEnc'), ('Lsp.Patch.pas', 'ExecutePatch')],
      'ValidUtf8 lo preguntan el detector y la auditoria del cuerpo de un utf8-bom: otro que lo '
      'pregunte esta decidiendo una codificacion por su cuenta'),
+    ('una cadena ASCII preguntada a mano', r'\bOrd\s*\(\s*\w+\s*\)\s*>\s*127\b',
+     [('Lsp.Codificacion.pas', 'IsAscii')],
+     'IsAscii (Lsp.Codificacion): estaba en Lsp.TextEdit y en linea en NombreQueElFicheroNoLee, y '
+     'to-binary iba a por la tercera (4.1 de la 1.18.0)'),
     ('el codec CP1252', r'GetEncoding\s*\(\s*1252\s*\)',
      [('Lsp.Codificacion.pas', '*'),
       # deuda declarada (2.1g de la 1.18.0): Docs crea el suyo en cada llamada para medir
@@ -398,6 +402,7 @@ PLANTADO = {
     'un flotante de un form': "  V := IntToStr(N) + '.000000000000000000';",
     'decidir la codificacion de unos bytes': "  if (B[0] = $FF) and (B[1] = $FE) then K := ekUtf16LE;",
     'UTF-8 estricto preguntado a mano': "  if ValidUtf8(B, 0) then K := ekUtf8;",
+    'una cadena ASCII preguntada a mano': "  for C in S do if Ord(C) > 127 then Exit(False);",
     'el codec CP1252': "  E := TEncoding.GetEncoding(1252);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
 }
