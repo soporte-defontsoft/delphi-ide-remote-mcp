@@ -232,8 +232,9 @@ if os.path.isfile(DEPLOYPROJ):
     m = open(DEPLOYPROJ, encoding='utf-8-sig').read()
     # como los escribe el IDE: UTF-8 con BOM (en ASCII, un nombre no ASCII salia
     # con '?'; P3-L1 de la 1.18.0)
-    check('deployproj: UTF-8 con BOM, como el del IDE',
-          open(DEPLOYPROJ, 'rb').read(3) == b'\xef\xbb\xbf', open(DEPLOYPROJ, 'rb').read(8))
+    check('deployproj: UTF-8 con UN BOM, como el del IDE',
+          open(DEPLOYPROJ, 'rb').read(3) == b'\xef\xbb\xbf' and open(DEPLOYPROJ, 'rb').read(6)[3:] != b'\xef\xbb\xbf',
+          open(DEPLOYPROJ, 'rb').read(8))
     check('deployproj: ProjectOutput + Deployment.targets + exec (Operation 1)',
           'ProjectOutput' in m and 'CodeGear.Deployment.targets' in m
           and '<Operation>1</Operation>' in m, m[:300])
@@ -285,8 +286,9 @@ check('deploy Android: genera el .deployproj con el mapa de staging completo',
       os.path.isfile(FDEPLOY), out[:250])
 if os.path.isfile(FDEPLOY):
     m = open(FDEPLOY, encoding='utf-8-sig').read()
-    check('deployproj Android: UTF-8 con BOM, como el del IDE',
-          open(FDEPLOY, 'rb').read(3) == b'\xef\xbb\xbf', open(FDEPLOY, 'rb').read(8))
+    check('deployproj Android: UTF-8 con UN BOM, como el del IDE',
+          open(FDEPLOY, 'rb').read(3) == b'\xef\xbb\xbf' and open(FDEPLOY, 'rb').read(6)[3:] != b'\xef\xbb\xbf',
+          open(FDEPLOY, 'rb').read(8))
     check('deployproj Android: manifest + so en arm64-v8a + iconos',
           'ProjectAndroidManifest' in m and 'arm64-v8a' in m
           and 'ic_launcher.png' in m, m[:300])

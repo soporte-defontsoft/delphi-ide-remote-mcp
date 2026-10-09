@@ -1176,6 +1176,14 @@ for _nom, _eds, _como in (('UOrdAO.pas', [_EA, _EO], 'la vocal y luego la Omega'
 _out = call('delphi_read', {'path': _u8})
 check('READ-008: un fuente UTF-8 sin BOM con acentos lo dice al leerlo (dcc lo compila como ANSI)',
       mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT') and 'encoding=utf8 ' in _out, _out[:500])
+# ...tambien con el acento SOLO en la ruta de una directiva: dcc la lee en ANSI
+# (revisor de la tanda rapida, TR-B1: la vista sin directivas no lo veia)
+_dir8 = os.path.join(DIR, 'UDirect8.pas')
+open(_dir8, 'wb').write(("unit UDirect8;\r\n\r\ninterface\r\n\r\n{$I ..\\Caf\u00e9\\x.inc}\r\n\r\n"
+                         "implementation\r\n\r\nend.\r\n").encode('utf-8'))
+_out = call('delphi_read', {'path': _dir8})
+check('...y con el acento solo en la ruta de un {$I} (dcc lee la directiva en ANSI)',
+      mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT'), _out[:300])
 _out = call('delphi_edit', {'path': _u8, 'old': "  A = 'Ca\u00f1a';", 'new': "  A = 'Ca\u00f1as';"})
 check('...y escribirlo no le toca la codificacion (sigue UTF-8 sin BOM)',
       open(_u8, 'rb').read().startswith(b'unit') and

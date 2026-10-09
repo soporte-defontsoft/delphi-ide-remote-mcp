@@ -543,10 +543,11 @@ the MCP `initialize` response (`serverInfo.version`).
   (`#$D83D#$DE00`) or `Char.ConvertFromUtf32` - `ChrW` stops at `$FFFF`.
   `test_resultados` E148b; `LspTests.Encodings` checks with the compiler
   that the pair it offers IS the character.
-- **READ-008 only when the accents are in the code.** A UTF-8 source
-  without a BOM whose accents were only in comments got the note, though the
-  compiler puts nothing of a comment in the program; the one Pascal lexicon
-  decides now. `test_delphi_patch`.
+- **READ-008 only when the accents are in what the compiler reads.** A UTF-8
+  source without a BOM whose accents were only in comments got the note,
+  though the compiler puts nothing of a comment in the program; the one
+  Pascal lexicon decides now - the code, its strings and its directives (the
+  path of an `{$I}`, which the compiler reads in ANSI too). `test_delphi_patch`.
 
 ### Internal
 

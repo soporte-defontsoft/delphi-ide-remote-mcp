@@ -3223,15 +3223,18 @@ end;
   no es el caso. K: la que dijo EL detector de B. Un form no: sin BOM se lee
   en ANSI, como dcc. Ni en una maquina cuya ANSI es UTF-8 (la opcion "UTF-8
   para todo el mundo" de Windows): alli dcc lo lee bien. Y solo si los
-  acentos estan en el CODIGO o en sus CADENAS, por EL lexico Pascal
-  (BlankComments: CodigoPascal blanquea tambien las cadenas): en un
-  comentario no llegan al programa, y la nota salia en fuentes que no
-  tenian nada que arreglar (r5-L8 de la 1.18.0). }
+  acentos estan en lo que LEE dcc - el codigo, sus cadenas y sus directivas
+  (la ruta de un $I) -, por EL lexico Pascal: solo los COMENTARIOS no
+  llegan al programa, y la nota salia en fuentes que no tenian nada que
+  arreglar (r5-L8 de la 1.18.0). OJO: la vista conserva las cadenas, y
+  CodigoPascal las blanquea - con el, un acento en una cadena no daria la
+  nota (medido); y con BlankComments, que blanquea las directivas, uno en
+  la ruta de un $I tampoco (revisor de la tanda, TR-B1). }
 function NotaDeUtf8SinBom(const APath: string; K: TEncKind; const B: TArray<Byte>): string;
 begin
   Result := '';
   if (K = ekUtf8) and (PaginaAnsi <> CP_UTF8) and EsRutaDeFuente(APath) and HayByteAlto(B) and
-     not IsAscii(BlankComments(DecodeBytes(B, K))) then
+     not IsAscii(VistaPascal(DecodeBytes(B, K), [cpCodigo, cpCadena, cpDirectiva])) then
     Result := MsgFmt(SN_READ_UTF8_SIN_BOM_FMT, [EncName(ekAnsi)]);
 end;
 
