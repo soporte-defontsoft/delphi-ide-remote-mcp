@@ -69,6 +69,14 @@ REGLAS = [
      [('Lsp.Casa.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
     ('__delphi-patch', r"'__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
+    ('el nombre de la carpeta de un dia', r"'yyyymmdd'",
+     [('Lsp.Casa.pas', 'NombreDeDia')],
+     'NombreDeDia: la carpeta del dia de la papelera y el limite de su purga (2.1f de la 1.18.0: a mano '
+     'en TrashDayDir y en PurgeOldBackups)'),
+    ('reconocer la carpeta de un dia', r'\\d\{8\}',
+     [('Lsp.Casa.pas', 'EsCarpetaDeDia')],
+     'EsCarpetaDeDia, la inversa de NombreDeDia (2.1f de la 1.18.0: la purga y el restore la '
+     'reconocian cada uno con su regex)'),
     ('la carpeta del servidor',
      r'\b(?:ExtractFileDir|ExtractFilePath|TPath\.GetDirectoryName)\s*\(\s*ParamStr\s*\(\s*0\s*\)',
      [('Lsp.Casa.pas', 'ServerDir'),
@@ -269,6 +277,8 @@ PLANTADO = {
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
     '__delphi-temp': "  D := TPath.Combine(Raiz, '__delphi-temp');",
     '__delphi-patch': "  D := TPath.Combine(Raiz, '__delphi-patch');",
+    'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
+    'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",
     'la carpeta del servidor': "  D := ExtractFileDir(ParamStr(0));",
     'la extension de la marca de dueno': "  M := Copia + '.by';",
     "la forma 'srvX:'": "  U := 'srv' + LowerCase(Letra) + ':';",

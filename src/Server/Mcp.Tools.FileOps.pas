@@ -266,7 +266,7 @@ begin
   try
     Others.Duplicates := dupIgnore;
     Others.Sorted := True;
-    for F in WalkFiles(APath, '*' + MARCA_DUENO_EXT) do
+    for F in WalkFiles(APath, MascaraDeMarcas) do
     begin
       // A marker only OWNS the copy sitting next to it. An orphan .by (its copy
       // already restored or purged) or a file someone just renamed to .by marks
@@ -481,7 +481,7 @@ begin
       [TPath.GetFileName(SinBarraFinal(Params.Path))]));
   end;
   if IsBackupPath(Params.Path) then
-    Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [BACKUP_SUB]));
+    Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [TrashFolderName]));
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
     Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
   // Una carpeta a la papelera se lleva TODO lo de dentro: ni ser ni contener
@@ -855,9 +855,9 @@ begin
   // tells the agent to do). What is refused: moving the trash FOLDER itself,
   // and moving anything INTO the trash by hand.
   if IsBackupRoot(Params.Path) then
-    Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_MUEVE_FMT, [BACKUP_SUB]));
+    Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_MUEVE_FMT, [TrashFolderName]));
   if IsBackupPath(Params.Dest) then
-    Exit(MsgFmt(SR_FILE_NO_MUEVAS_DENTRO_PAPELERA_FMT, [BACKUP_SUB]));
+    Exit(MsgFmt(SR_FILE_NO_MUEVAS_DENTRO_PAPELERA_FMT, [TrashFolderName]));
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
     Exit(MsgFmt(SR_FILE_NO_EXISTE_ORIGEN_FMT, [Params.Path]));
   if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then

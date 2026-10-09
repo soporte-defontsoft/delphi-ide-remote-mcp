@@ -19,8 +19,13 @@ unit Lsp.Casa;
   (TrashFolderName) y la marca de dueno ENTERA - el escritor (MarcaDeDueno),
   su inversa (CopiaDeLaMarca), quien la reconoce (EsMarcaDeDueno) y el
   formato que los une (MARCA_DUENO_EXT): viajan juntos o no viaja ninguno.
-  Lo que se hace CON la papelera (sellar, guardar, purgar) se queda en
-  Lsp.Patch. }
+  Lo que se hace CON la papelera (sellar, guardar) se queda en Lsp.Patch;
+  purgarla, con la jaula (Lsp.Guard). El 9-oct-2026 (2.1f de la 1.18.0)
+  llegan tambien la carpeta de la papelera de un fichero (CarpetaDePapelera)
+  y la de su dia (TrashDayDir), el nombre de un dia y su lector (NombreDeDia,
+  EsCarpetaDeDia) y la mascara de las marcas (MascaraDeMarcas): estaban
+  compuestos a mano en Lsp.Patch y Mcp.Tools.FileOps, y las constantes de la
+  carpeta y de la marca dejan de ser publicas. }
 
 interface
 
@@ -127,20 +132,28 @@ function Slug(const S: string): string;
 { El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
   reconocerla. Estaba declarada DOS veces, en Lsp.Patch y en Mcp.Tools.FileOps. }
 function TrashFolderName: string;
+{ La papelera de APath (un fichero o una carpeta): la __delphi-patch de su
+  carpeta. LA forma de componerla: la escribian a mano tres sitios de
+  Lsp.Patch (TrashDayDir con SinBarraFinal, BackupFile y el restore sin el;
+  2.1f de la 1.18.0). }
+function CarpetaDePapelera(const APath: string): string;
+{ La carpeta del dia dentro de la papelera de APath. ASub: '' = la raiz del
+  dia, un cajon (los CAJON_* de Lsp.Patch) = su carpeta. }
+function TrashDayDir(const APath, ASub: string): string;
+{ El nombre de la carpeta de un dia ('yyyymmdd') y su inversa: la purga y el
+  restore la reconocian a mano con una regex de ocho cifras, y la purga
+  componia el limite con su propio FormatDateTime. }
+function NombreDeDia(AFecha: TDateTime): string;
+function EsCarpetaDeDia(const ANombre: string): Boolean;
 
 { La marca de dueno: su nombrador, su inversa y quien la reconoce. Estaba
   escrita a mano en catorce sitios. }
 function MarcaDeDueno(const ACopia: string): string;
 function CopiaDeLaMarca(const AMarca: string): string;
 function EsMarcaDeDueno(const ARuta: string): Boolean;
-
-const
-  // la carpeta de la papelera: la nombra TrashFolderName, y Lsp.Patch compone con
-  // ella las rutas de sus copias (TrashDayDir, BackupFile)
-  BACKUP_SUB = '__delphi-patch';
-  { La marca de DUENO de una copia sellada: "<copia>.by", con el agente que la
-    dejo (la purga solo deja purgar lo propio). }
-  MARCA_DUENO_EXT = '.by';
+{ La mascara de las marcas de una carpeta, para recorrerlas: la componia a
+  mano Mcp.Tools.FileOps ('*' + la extension). }
+function MascaraDeMarcas: string;
 
 implementation
 
@@ -154,6 +167,15 @@ uses
   Lsp.NetDrives,        // SinBarraFinal
   Lsp.Rutas,            // LongCanonical: la clave de una carpeta, por su forma canonica
   Lsp.Texts;
+
+const
+  // la carpeta de la papelera: la nombran TrashFolderName y CarpetaDePapelera,
+  // y nadie de fuera compone con ella (era publica: quien la usaba escapaba a
+  // la regla '__delphi-patch' de test_paisaje)
+  BACKUP_SUB = '__delphi-patch';
+  { La marca de DUENO de una copia sellada: "<copia>.by", con el agente que la
+    dejo (la purga solo deja purgar lo propio). }
+  MARCA_DUENO_EXT = '.by';
 
 function TempFolderName: string;
 begin
@@ -283,6 +305,28 @@ begin
   Result := BACKUP_SUB;
 end;
 
+function CarpetaDePapelera(const APath: string): string;
+begin
+  Result := TPath.Combine(TPath.GetDirectoryName(SinBarraFinal(APath)), BACKUP_SUB);
+end;
+
+function TrashDayDir(const APath, ASub: string): string;
+begin
+  Result := TPath.Combine(CarpetaDePapelera(APath), NombreDeDia(Now));
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
+function NombreDeDia(AFecha: TDateTime): string;
+begin
+  Result := FormatDateTime('yyyymmdd', AFecha);
+end;
+
+function EsCarpetaDeDia(const ANombre: string): Boolean;
+begin
+  Result := TRegEx.IsMatch(ANombre, '^\d{8}$');
+end;
+
 function MarcaDeDueno(const ACopia: string): string;
 begin
   Result := ACopia + MARCA_DUENO_EXT;
@@ -291,6 +335,11 @@ end;
 function EsMarcaDeDueno(const ARuta: string): Boolean;
 begin
   Result := EndsText(MARCA_DUENO_EXT, ARuta);
+end;
+
+function MascaraDeMarcas: string;
+begin
+  Result := '*' + MARCA_DUENO_EXT;
 end;
 
 function CopiaDeLaMarca(const AMarca: string): string;

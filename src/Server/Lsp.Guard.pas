@@ -282,6 +282,29 @@ function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
   por BorradoDenegado (abajo). No hay otra forma de borrar un arbol. }
 procedure BorraArbol(const ADir: string);
 
+{ Tira las carpetas de dia caducadas (RETENTION_DAYS) de UNA papelera. Coste
+  medido cuando no hay nada que tirar, que es casi siempre: 0,012 ms - leer
+  una carpeta de tres entradas y comparar nombres. Nunca lanza.
+
+  Se exporta porque la purga solo salia de BackupFile: una carpeta que se
+  deja de EDITAR conservaba sus copias para siempre (lo vio David). Recorrer
+  las raices al arrancar se midio y se descarto - 5,9 s en un arbol de 8.869
+  carpetas, y una jaula puede ser un disco entero -; un hilo que lo haga
+  cada hora tampoco hace falta: el recorredor de delphi_list / search /
+  projects YA pasa por delante de cada papelera, asi que purga al pasar
+  (PurgaAlPasar). Trabajo proporcional a la actividad, cero recorridos
+  nuevos. Llega de Lsp.Patch el 9-oct-2026 (2.1f de la 1.18.0) con
+  PurgaAlPasar: las dos usan la jaula (PathDenied, BorraArbol) y la jaula
+  las usa a ellas, asi que viven con ella y Lsp.Guard ya no usa Lsp.Patch. }
+procedure PurgeOldBackups(const ADir: string);
+
+{ La purga oportunista, con sus dos frenos: una credencial de solo lectura
+  no borra nada (un listado no tiene efectos), y PathDenied decide si esa
+  papelera es NUESTRA para escribir - lo que deja fuera las ReadOnlyPaths,
+  el subarbol confinado de otro agente y, sobre todo, una "papelera" que
+  sea un junction hacia fuera de la jaula. }
+procedure PurgaAlPasar(const ATrashDir: string);
+
 { LAS carpetas desechables del servidor, por nombre de segmento: lo UNICO
   dentro de lo que BorraArbol borra (hoy la temporal y la papelera). Una
   lista: si manana nace otra (una cache, un spool), se anade AQUI y el guard
@@ -769,7 +792,6 @@ uses
   MCPServer.Registration,  // el registro REAL de tools, no una lista nuestra
   Lsp.Attributes,          // [RutaDelServidor]
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
-  Lsp.Patch,            // PurgaAlPasar: el recorredor purga cada papelera por la que pasa
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Sandbox,          // PurgaContenedoresHuerfanos: la otra mitad de la casa
   Lsp.Texts,
@@ -2798,6 +2820,36 @@ begin
     Result := MsgFmt(SR_MOVE_COPY_PROJECT_FMT, [Hallado])
   else
     Result := MetadatosGitEnArbolDenegados(AOrigen);
+end;
+
+procedure PurgaAlPasar(const ATrashDir: string);
+begin
+  try
+    if IsReadOnlyNow then
+      Exit;
+    if PathDenied(ATrashDir) <> '' then
+      Exit;
+    PurgeOldBackups(ATrashDir);
+  except
+    // purgar al pasar nunca rompe el listado que pasaba
+  end;
+end;
+
+procedure PurgeOldBackups(const ADir: string);
+const
+  RETENTION_DAYS = 15;
+var
+  D, Limit: string;
+begin
+  try
+    Limit := NombreDeDia(Now - RETENTION_DAYS);
+    for D in TDirectory.GetDirectories(ADir) do
+      if EsCarpetaDeDia(TPath.GetFileName(D)) and
+         (TPath.GetFileName(D) < Limit) then
+        BorraArbol(D); // sin cruzar enlaces: el de aqui abajo
+  except
+    // purging must never break an edit
+  end;
 end;
 
 procedure BorraArbol(const ADir: string);

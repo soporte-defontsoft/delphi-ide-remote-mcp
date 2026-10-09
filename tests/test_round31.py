@@ -241,6 +241,23 @@ try:
         'root': os.path.join(PROY, '__delphi-patch')}))
     check('R8c y si NOMBRAS la papelera como raiz, te la ensena (misma regla '
           'que delphi_list)', r.get('total') == 1, json.dumps(r)[:240])
+
+    # ----------------------------------------------------------------- R9
+    # La purga AL PASAR: el recorredor tira de la papelera por la que pasa las
+    # carpetas de dia caducadas (mas de 15 dias), y solo esas. Vive con la
+    # jaula desde el 9-oct-2026 (2.1f de la 1.18.0), con el nombre del dia y su
+    # lector en Lsp.Casa; hasta hoy ninguna bateria lo comprobaba.
+    PAP9 = os.path.join(JAIL, 'r9', '__delphi-patch')
+    VIEJA = os.path.join(PAP9, '20200101')
+    HOY9 = os.path.join(PAP9, __import__('time').strftime('%Y%m%d'))
+    OTRA9 = os.path.join(PAP9, 'no-es-un-dia')
+    for d in (VIEJA, HOY9, OTRA9):
+        os.makedirs(d)
+        open(os.path.join(d, 'copia.txt'), 'w').write('x\n')
+    call('delphi_search', {'root': os.path.join(JAIL, 'r9'), 'query': 'nada-que-buscar'})
+    check('R9 el recorredor purga al pasar el dia caducado (20200101) y deja el de hoy y lo que '
+          'no es un dia', not os.path.exists(VIEJA) and os.path.isdir(HOY9) and os.path.isdir(OTRA9),
+          sorted(os.listdir(PAP9)) if os.path.isdir(PAP9) else 'sin papelera')
 finally:
     try:
         proc.kill()

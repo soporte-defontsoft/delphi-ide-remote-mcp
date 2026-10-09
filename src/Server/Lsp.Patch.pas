@@ -416,10 +416,6 @@ function TrashOriginalName(const AName: string): string;
   que distingue una copia de otra es la CARPETA, no el nombre. Asi el lector
   sirve para todas y una copia nueva no puede inventarse una convencion. }
 
-{ La carpeta del dia dentro de la papelera, al lado del fichero.
-  ASub: '' = la raiz del dia, 'deleted' / 'before-restore' = su cajon. }
-function TrashDayDir(const APath, ASub: string): string;
-
 { El nombre de una copia: el nombre real + el sello. La unica forma. }
 function TrashStampedName(const AName: string): string;
 
@@ -453,27 +449,6 @@ function GuardaContenidoActual(const APath: string;
 procedure WriteOwnerMarker(const ATrash: string);
 { El agente dueno de una copia, '' si no consta. }
 function TrashOwner(const APath: string): string;
-
-{ Tira las carpetas de dia caducadas (RETENTION_DAYS) de UNA papelera. Coste
-  medido cuando no hay nada que tirar, que es casi siempre: 0,012 ms - leer
-  una carpeta de tres entradas y comparar nombres. Nunca lanza.
-
-  Se exporta porque la purga solo salia de BackupFile: una carpeta que se
-  deja de EDITAR conservaba sus copias para siempre (lo vio David). Recorrer
-  las raices al arrancar se midio y se descarto - 5,9 s en un arbol de 8.869
-  carpetas, y una jaula puede ser un disco entero -; un hilo que lo haga
-  cada hora tampoco hace falta: el recorredor de delphi_list / search /
-  projects YA pasa por delante de cada papelera, asi que purga al pasar
-  (PurgaAlPasar). Trabajo proporcional a la actividad, cero recorridos
-  nuevos. }
-procedure PurgeOldBackups(const ADir: string);
-
-{ La purga oportunista, con sus dos frenos: una credencial de solo lectura
-  no borra nada (un listado no tiene efectos), y PathDenied decide si esa
-  papelera es NUESTRA para escribir - lo que deja fuera las ReadOnlyPaths,
-  el subarbol confinado de otro agente y, sobre todo, una "papelera" que
-  sea un junction hacia fuera de la jaula. }
-procedure PurgaAlPasar(const ATrashDir: string);
 
 implementation
 
@@ -511,7 +486,6 @@ uses
   Lsp.Mascara;
 
 const
-  RETENTION_DAYS = 15;
   MAX_EDITS = 50; // entradas de una tanda
   { LOS campos de una entrada de "edits": los que la tanda lee y los que
     dice EDIT-012. Estaban escritos dos veces (la comprobacion y el
@@ -873,34 +847,6 @@ begin
   end;
 end;
 
-procedure PurgaAlPasar(const ATrashDir: string);
-begin
-  try
-    if IsReadOnlyNow then
-      Exit;
-    if PathDenied(ATrashDir) <> '' then
-      Exit;
-    PurgeOldBackups(ATrashDir);
-  except
-    // purgar al pasar nunca rompe el listado que pasaba
-  end;
-end;
-
-procedure PurgeOldBackups(const ADir: string);
-var
-  D, Limit: string;
-begin
-  try
-    Limit := FormatDateTime('yyyymmdd', Now - RETENTION_DAYS);
-    for D in TDirectory.GetDirectories(ADir) do
-      if TRegEx.IsMatch(TPath.GetFileName(D), '^\d{8}$') and
-         (TPath.GetFileName(D) < Limit) then
-        BorraArbol(D); // sin cruzar enlaces: ver Lsp.Guard
-  except
-    // purging must never break an edit
-  end;
-end;
-
 function CopiaDiariaDe(const APath: string): string;
 begin
   // Esta copia NO lleva sello a proposito: es una por fichero y dia, la
@@ -914,7 +860,7 @@ function BackupFile(const APath: string): string;
 var
   Dir, DayDir, Dest, Motivo: string;
 begin
-  Dir := TPath.Combine(TPath.GetDirectoryName(APath), BACKUP_SUB);
+  Dir := CarpetaDePapelera(APath);
   Dest := CopiaDiariaDe(APath);
   DayDir := TPath.GetDirectoryName(Dest);
   // Lo que DEVUELVE esta funcion es para ENSENARLO (el "copia=" del eco de
@@ -1193,16 +1139,6 @@ begin
     Result := MsgFmt(SF_EDIT_EDAD_HORAS_MIN_FMT, [Mins div 60, Mins mod 60])
   else
     Result := MsgFmt(SF_EDIT_EDAD_DIAS_FMT, [Mins div (24 * 60)]);
-end;
-
-function TrashDayDir(const APath, ASub: string): string;
-begin
-  Result := TPath.Combine(
-    TPath.Combine(TPath.GetDirectoryName(SinBarraFinal(APath)),
-      BACKUP_SUB),
-    FormatDateTime('yyyymmdd', Now));
-  if ASub <> '' then
-    Result := TPath.Combine(Result, ASub);
 end;
 
 function TrashStampedName(const AName: string): string;
@@ -2377,7 +2313,7 @@ begin
 
       PLower := LongCanonical(A.Path).ToLower.Replace('/', '\');
       if EnPapelera(A.Path) then
-        Exit(MsgFmt(SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT, [BACKUP_SUB]));
+        Exit(MsgFmt(SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT, [TrashFolderName]));
       if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
         Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
 
@@ -2510,7 +2446,7 @@ begin
       // ---------- RESTORE (2 steps) ----------
       if A.Restore then
       begin
-        var DirBk := TPath.Combine(TPath.GetDirectoryName(A.Path), BACKUP_SUB);
+        var DirBk := CarpetaDePapelera(A.Path);
         var Src := '';
         if TDirectory.Exists(DirBk) then
         begin
@@ -2519,7 +2455,7 @@ begin
           for I := High(Days) downto 0 do
           begin
             var Cand := TPath.Combine(Days[I], TPath.GetFileName(A.Path));
-            if TRegEx.IsMatch(TPath.GetFileName(Days[I]), '^\d{8}$') and TFile.Exists(Cand) then
+            if EsCarpetaDeDia(TPath.GetFileName(Days[I])) and TFile.Exists(Cand) then
             begin
               Src := Cand;
               Break;
@@ -2528,7 +2464,7 @@ begin
         end;
         if Src = '' then
           Exit(MsgFmt(SR_EDIT_HAY_COPIA_SOLO_PUEDO_FMT,
-            [TPath.GetFileName(A.Path), BACKUP_SUB]));
+            [TPath.GetFileName(A.Path), TrashFolderName]));
 
         // la copia se LEE por la puerta de leer, y la de antes de restaurar se
         // ESCRIBE por la de escribir, como en BackupFile: un __delphi-patch que

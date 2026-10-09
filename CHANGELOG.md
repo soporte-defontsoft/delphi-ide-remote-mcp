@@ -236,6 +236,19 @@ the MCP `initialize` response (`serverInfo.version`).
   found one: `TStyleDoc.SetProp` with a string and with pieces - a loose
   copy of `Lsp.Styles.pas` got `-32603` (measured tonight; renamed, it
   answers). The pieces version is now `SetPropTrozos`.
+- The trash gets one namer per format. Its folder next to a file was
+  composed by hand in three places of `Lsp.Patch` (`TrashDayDir`, the
+  pre-edit copy, the restore), the day folder was recognized by two regexes
+  of its own and the purge composed its limit with its own date format, and
+  `Mcp.Tools.FileOps` built the mask of the owner marks by hand. They are
+  now `CarpetaDePapelera`, `TrashDayDir`, `NombreDeDia` with its reader
+  `EsCarpetaDeDia`, and `MascaraDeMarcas`, all in `Lsp.Casa`, whose folder
+  and mark constants stop being public. The purge on pass and the purge of
+  a trash (`PurgaAlPasar`, `PurgeOldBackups`) move to `Lsp.Guard`, where the
+  gates and the walker they use live: `Lsp.Guard` no longer uses
+  `Lsp.Patch`. `test_paisaje` keeps the day's name and its reader in their
+  homes, and `test_round31` R9 checks that a walk purges an expired day and
+  only that (no battery checked it).
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,
