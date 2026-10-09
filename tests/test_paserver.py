@@ -9,7 +9,12 @@ the stderr log).
 
 Usage:  python tests/test_paserver.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Creates ONE throwaway profile (mcp-e2e-paserver) in
-%APPDATA%\\Embarcadero\\BDS\\<ver>\\ and deletes it at the end.
+%APPDATA%\\Embarcadero\\BDS\\<ver>\\ and deletes it at the end. The gate
+block runs against a server whose paclient is a FAKE (DELPHI_MCP_PACLIENT)
+that only leaves a marker: had the gate failed, its bad names would have
+become REAL profiles, and paclient writes to the real profile folder whatever
+APPDATA says (measured 9-oct-2026: Location: ...\\Roaming\\...). Point 7.2 of
+the 1.18.0 list, the rule of the destructive mutant.
 """
 import atexit, json, time, os, socket, glob
 import mcp_cliente as mc
@@ -25,6 +30,13 @@ PROF_PASSWORD = 'dummySecretE2E123'
 # nothing must be listening here (refused fast = the failure path we want):
 # un puerto recien soltado, no uno fijo que otro proceso pueda tener abierto
 DEAD_PORT = str(mc.puerto_libre())
+# el paclient FALSO del bloque de la puerta: solo deja un centinela y sale con
+# 1 (sin perfil, sin red). Si un argumento malo pasara la puerta, se veria
+# aqui en vez de nacer un perfil de verdad
+CENTINELA = os.path.join(BASE, 'paclient-llamado.txt')
+PACLIENT_FALSO = os.path.join(BASE, 'paclient-falso.cmd')
+with open(PACLIENT_FALSO, 'w', newline='') as _f:
+    _f.write('@echo off\r\necho llamado>> "%s"\r\nexit /b 1\r\n' % CENTINELA)
 
 
 def profile_files():
@@ -77,9 +89,10 @@ def cleanup_profile():
             pass
 
 
-def Server(extra_args=()):
+def Server(extra_args=(), paclient=None):
     """One stdio MCP server process with its stderr captured (srv.errores)
-    for the log checks."""
+    for the log checks. paclient: the one it launches (a fake for the gate
+    block); None = the real one of the install."""
     # Since v0.64 naming a host by hand (add-profile / the raw probe) needs
     # the operator's allowlist: writing a profile to any host and then
     # "testing" it was a port scanner. This battery exercises the MECHANISM
@@ -87,6 +100,8 @@ def Server(extra_args=()):
     # opts into execution.
     env = mc.entorno({'DELPHI_MCP_ROOTS': BASE,  # v0.98: sin jaula = solo lectura
                       'DELPHI_MCP_REMOTE_HOSTS': '127.0.0.1,localhost'})
+    if paclient:
+        env['DELPHI_MCP_PACLIENT'] = paclient
     return mc.Stdio(EXE, env, nombre='paserver-battery', args=extra_args, lee_stderr=True)
 
 
@@ -146,43 +161,56 @@ check('get-sdk perfil inexistente: rechazado',
       out[:250])
 
 # --- gate vetting (argument filter, BOTH access levels) ---
-out = srv.call('delphi_paserver', {"command": "add-profile", "name": "bad name!",
+# contra un servidor con el paclient FALSO: un argumento que pasara la puerta
+# llegaria al falso (el centinela), nunca al de verdad
+puerta = Server(paclient=PACLIENT_FALSO)
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": "bad name!",
                                    "host": "127.0.0.1", "password": "x"})
 check('gate: nombre con espacio/simbolo rechazado',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NAME_FMT'), out[:200])
 
-out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1; rm -rf /", "password": "x"})
 check('gate: host con metacaracteres rechazado',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_HOST_FMT') and 'host' in out, out[:200])
 
-out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "port": "99999", "password": "x"})
 check('gate: puerto fuera de rango rechazado',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PORT_FMT'), out[:200])
 
-out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "platform": "Commodore64", "password": "x"})
 check('gate: plataforma desconocida rechazada',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PLATFORM_FMT') and 'paclient' in out,
       out[:200])
 
-out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "password": 'has"quote'})
 check('gate: password con comillas rechazada',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PASSWORD') and 'password' in out, out[:200])
 
 # --- add-profile: functional validation of required params ---
-out = srv.call('delphi_paserver', {"command": "add-profile", "host": "127.0.0.1",
+out = puerta.call('delphi_paserver', {"command": "add-profile", "host": "127.0.0.1",
                                    "password": "x"})
 check('add-profile sin profile: pide profile (se llama asi desde la 1.17.0, como en delphi_build)',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NEED_FMT') and '"profile"' in out, out[:200])
 
-out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1"})
 check('add-profile sin password: pide password',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NEED_FMT') and '"password"' in out,
       out[:200])
+check('gate: ningun argumento malo llego a paclient (el falso no se llamo)',
+      not os.path.exists(CENTINELA), open(CENTINELA).read() if os.path.exists(CENTINELA) else '')
+# control: el falso ESTA conectado - con argumentos buenos si se llama (sin
+# esto, el check de arriba podria pasar sin medir nada)
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
+                                      "host": "127.0.0.1", "port": DEAD_PORT,
+                                      "password": "x", "platform": "Linux64"}, t=60)
+check('gate (control): con argumentos buenos el paclient falso SI se llama',
+      os.path.exists(CENTINELA), out[:200])
+puerta.cierra()
 
 # --- add-profile happy path: real profile written by paclient --local ---
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
