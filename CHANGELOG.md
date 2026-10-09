@@ -187,6 +187,12 @@ the MCP `initialize` response (`serverInfo.version`).
   published fields of the project's ancestors (the form's folder, up the
   chain) count now, and a refusal says which ancestor has the name.
   `test_designer_edit` R11b.
+- **The Windows desktop node reads a lone digit as its key.** Run by hand,
+  `tecla 5` sent virtual-key code 5 (a mouse button), since a number was
+  taken as a code; a single digit is now its own key, as a letter already
+  was, and a number of two or more digits stays a virtual-key code. (The
+  server already refused a digit with DESK-010.) Not measured live: it
+  would send keystrokes to the operator's desktop.
 
 ### Internal
 

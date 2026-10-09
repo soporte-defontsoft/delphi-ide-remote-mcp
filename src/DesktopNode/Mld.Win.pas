@@ -169,6 +169,10 @@ begin
   // llega como "tecla ctrl s" (6-oct-2026; hasta hoy "no conozco la tecla")
   else if (Length(N) = 1) and CharInSet(N[1], ['a'..'z']) then
     Result := Ord(UpCase(N[1]))
+  // ...y una cifra la suya (VK_0..VK_9 son '0'..'9'): "tecla 5" mandaba el
+  // codigo virtual 5, un boton del raton (9.1 de la 1.18.0)
+  else if (Length(N) = 1) and CharInSet(N[1], ['0'..'9']) then
+    Result := Ord(N[1])
   else if (N = 'f1') or (N = 'f2') or (N = 'f3') or (N = 'f4') or (N = 'f5') or
           (N = 'f6') or (N = 'f7') or (N = 'f8') or (N = 'f9') or (N = 'f10') or
           (N = 'f11') or (N = 'f12') then

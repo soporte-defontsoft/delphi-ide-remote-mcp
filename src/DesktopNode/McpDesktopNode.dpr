@@ -157,7 +157,8 @@ begin
     else if (Orden = 'tecla') and (Args >= 2) then
     begin
       { Por NOMBRE ('escape', 'enter'), que es lo mismo en los dos sistemas;
-        un numero se toma como codigo virtual de Windows. VARIAS = una
+        una cifra sola es su tecla, y un numero de dos o mas cifras se toma
+        como codigo virtual de Windows. VARIAS = una
         combinacion: se pulsan en orden y se sueltan al reves, asi que los
         modificadores van delante (tecla ctrl k = Ctrl+K). }
       var Teclas: TArray<Word> := nil;
