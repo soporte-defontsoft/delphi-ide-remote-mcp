@@ -255,11 +255,11 @@ end;
   absolute paths, no drive letters, no ".." escape, .md only. }
 { La ruta REAL (enlaces resueltos) sigue dentro del vault: UNA regla para la
   nota (VaultResolve) y para su copia (VaultBackup), que escribia por un
-  enlace en backups\ sin mirar (quinta revision). }
+  enlace en backups\ sin mirar (quinta revision). La pregunta es la del vault
+  como lugar de las puertas (Lsp.Patch): UNA, para leer y para escribir. }
 function DentroDelVault(const AFull: string): Boolean;
 begin
-  Result := StartsText(IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(VaultPath))),
-    IncludeTrailingPathDelimiter(RealPath(AFull)));
+  Result := LugarDeLecturaDenegado(AFull, [ltVault]) = '';
 end;
 
 function VaultResolve(const ARel: string; out AFull: string): string;
@@ -385,8 +385,10 @@ end;
 
 procedure VaultSave(const AFull, AText: string);
 begin
-  // UTF-8 WITHOUT BOM: GetBytes omits the preamble that WriteAllText would add.
-  TFile.WriteAllBytes(AFull, TEncoding.UTF8.GetBytes(AText));
+  // UTF-8 WITHOUT BOM. Por la puerta de escribir, con el vault como lugar:
+  // ENTERA o nada (David, 9-oct-2026), un temporal junto a la nota y el
+  // renombrado - se escribia encima, y un fallo a medias dejaba la nota rota
+  EscribeTexto(AFull, AText, ltVault, ekUtf8);
 end;
 
 type

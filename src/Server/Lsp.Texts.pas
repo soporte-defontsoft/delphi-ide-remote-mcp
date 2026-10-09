@@ -1745,13 +1745,16 @@ const
     'IS declaring where this machine may connect. An existing name is ' +
     'refused, never overwritten; the profile shows in the IDE too) | ' +
     'remove-profile (that profile, from the IDE too; profiles live outside the ' +
-    'workspace, so there is no trash) | test-connection (with profile: full ' +
+    'workspace, so there is no trash: a copy of its file is kept first in the ' +
+    'server''s own folder and the answer says where) | test-connection (with profile: full ' +
     'handshake; with host+port and no profile: raw TCP probe, same host rule) ' +
     '| get-sdk (pull the sysroot from the PAServer of "profile" into ' +
     'a folder of its own named after the target distro, registered for ' +
-    'delphi_build AND the IDE SDK Manager; minutes) | reseat-sdk (rewrite ' +
+    'delphi_build AND the IDE SDK Manager; minutes. An .sdk file or SDK ' +
+    'record it replaces is copied first and the answer says where: ' +
+    'previousSdkCopy, previousSdkRecordCopy) | reseat-sdk (rewrite ' +
     'the IDE seat of an SDK already on disk, no network; "sdk" names one, ' +
-    'none = all) | remove-sdk (its .sdk file and IDE seat; the sysroot ' +
+    'none = all) | remove-sdk (its .sdk file - copied first: removedCopy - and IDE seat; the sysroot ' +
     'stays on disk and the answer says where) | remote-run (run what THAT ' +
     'project deployed on the target of "profile" - nothing else - and ' +
     'return exit code and output; nothing to install, PAServer runs it. On ' +
@@ -5012,12 +5015,6 @@ const
   SF_DSGN_RAZON_ERROR_FMT =
     'the check itself failed (%s)';
 
-  { EscribeEnCasaDelServidor pregunta el mismo donde escribe (revision de la
-    1.12.0). }
-  SL_CASA_FUERA_FMT =
-    'Refused to write %s: it is not inside the server cache folder %s (or ' +
-    'that folder is not an absolute path: LOCALAPPDATA empty?).';
-
   SL_DESIGNER_TABLAS_GENERADAS_FMT =
     'Designer tables of %s (build %s) generated from its source: %d units ' +
     'read in %d ms; VCL %d facts, FMX %d facts.';
@@ -5156,6 +5153,13 @@ const
     'version of that library: the target machine is missing the whole ' +
     'package. Install the library there (with its -dev) and repeat ' +
     'delphi_paserver get-sdk; or remove that dependency from the project.';
+  SN_BUILD_DEVLINK_DENIED_FMT =
+    '[BUILD-047] The linker cannot find a development name that the ' +
+    'sysroot COULD give - its libX.so.N is there -, but the server did not ' +
+    'write it: %s. Nothing to install on the target: a library folder of ' +
+    'the .sdk that is not inside a sysroot the IDE has registered is not ' +
+    'the server''s to write (delphi_paserver reseat-sdk registers an SDK ' +
+    'already on disk); the reason says why.';
 
   SR_PASERVER_IDE_OPEN =
     '[PAS-029 DENIED] The IDE (bds.exe) is OPEN on the server and ' +
@@ -7104,10 +7108,19 @@ const
     %s = el fichero, %s = los lugares (SF_LUGAR_*, separados por comas). }
   SR_GUARD_FUERA_DE_LUGARES_FMT =
     '[GUARD-034 DENIED] %s is outside the places the server may use for ' +
-    'this (%s). Nothing was read or written.';
+    'this (%s). It is judged where it really lies: a junction or symbolic ' +
+    'link on the way - or, to write or delete, the file itself being one - ' +
+    'takes it outside. Nothing was read or written.';
+  SR_BORRA_JAULA_FMT =
+    '[GUARD-035 DENIED] %s is a file of the workspace: there a file goes ' +
+    'to its trash (delphi_delete), never through the delete of the server''s ' +
+    'own places. Nothing was deleted.';
   SF_LUGAR_IDE =
     'the IDE''s own folders: its installation, its BDS data folder, its SDK ' +
     'folder and the sysroot of every SDK it has registered';
+  SF_LUGAR_IDE_ESCRIBIR =
+    'the IDE''s data folder, its SDK folder and the sysroots its SDK Manager ' +
+    'registers (never its installation)';
   SF_LUGAR_CASA =
     'the server''s own folders: its cache, the agents'' mailboxes and the reports';
   SF_LUGAR_TEMPORAL =
@@ -7307,6 +7320,13 @@ const
 
   SN_PAS_TAMBIEN_CARPETA_VACIA_SDKS =
     ' [PAS-043] Also its empty folder in SDKs.';
+
+  { Lo que el servidor borra o pisa del IDE se copia antes en su cache (la
+    puerta de escribir, Lsp.Patch; David, 9-oct-2026). %s = la copia. }
+  SN_PAS_COPIA_DEL_IDE_FMT =
+    ' [PAS-058] A copy of it was kept first at %s: the server itself never ' +
+    'deletes or overwrites a file of the IDE without one (what paclient ' +
+    'brings into a sysroot is paclient''s).';
 
   SN_PAS_TOTALFILES_TOTALBYTES_COUNT =
     '[PAS-044] totalFiles/totalBytes count what was copied in THIS run. ' +

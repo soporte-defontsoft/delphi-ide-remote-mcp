@@ -151,7 +151,8 @@ uses
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
   Lsp.BuildRunner,
   Lsp.Discovery,
-  Lsp.Patch,     // DecodeSourceBytes: el lector de la casa
+  Lsp.Patch,     // LeeTexto/EscribeTexto: las puertas, con el temporal como lugar
+  Lsp.Codificacion, // ekUtf8
   Lsp.Texts,
   Lsp.NetDrives,
   Lsp.Casa,
@@ -402,7 +403,7 @@ begin
   Result := False;
   OutFile := TPath.Combine(ATmpDir, AJobId + '.out');
   if TFile.Exists(OutFile) then
-    TFile.Delete(OutFile);
+    BorraFichero(OutFile, ltTemporal); // por la puerta de borrar, con su lugar
   Ops := Format('"--get=%s/%s.out,%s"', [ADeployRel, AJobId, ATmpDir]);
   if (Paclient(APc, Ops, AProfile, Output) <> 0) or not TFile.Exists(OutFile) then
     Exit;
@@ -412,7 +413,7 @@ begin
   try
     ATexto := LeeTexto(OutFile, [ltTemporal]);
   finally
-    TFile.Delete(OutFile);
+    BorraFichero(OutFile, ltTemporal);
   end;
   AEntorno := PartirEntorno(ATexto);
   ATerminado := PartirSalida(ATexto, ASalida, ACodigo);
@@ -429,7 +430,6 @@ var
   Flag: Integer;
   Rc, Codigo, Espera: Integer;
   Sw: TStopwatch;
-  Enc: TEncoding;
   Terminado: Boolean;
 begin
   Result := TJSONObject.Create;
@@ -493,14 +493,10 @@ begin
     RemotoLanzador := 'run-' + JobId;
   end;
   GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.job');
-  // el .job: LF y sin BOM, que lo lee un programa nuestro en los dos sistemas
-  Enc := TUTF8Encoding.Create(False);
-  try
-    TFile.WriteAllText(GuionFile,
-      TrabajoDeEjecucion(ExeLeaf, JobId + '.out', AArgv), Enc);
-  finally
-    Enc.Free;
-  end;
+  // el .job: LF y sin BOM, que lo lee un programa nuestro en los dos
+  // sistemas; por la puerta de escribir, con el temporal como lugar
+  EscribeTexto(GuionFile, TrabajoDeEjecucion(ExeLeaf, JobId + '.out', AArgv),
+    ltTemporal, ekUtf8);
   // El .job va en un put PROPIO, antes del lanzador. En el MISMO --put, el
   // PAServer de Windows arrancaba el lanzador (flag 5) sin tener escrito aun
   // el .job (flag 0): el lanzador salia sin trabajo, el .job se quedaba en la
@@ -515,7 +511,7 @@ begin
     Ops := Format('"--put=%s,%s,%d,%s"', [Lanzador, DeployRel, Flag, RemotoLanzador]);
     Rc := Paclient(Pc, Ops, AProfile, Output);
   end;
-  TFile.Delete(GuionFile);
+  BorraFichero(GuionFile, ltTemporal);
   if Rc <> 0 then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
@@ -750,7 +746,6 @@ function EnsureNodeCurrentNucleo(const AProfile: string;
 var
   Bin, LocalSha, RemotoSha, Pc, Output, VerLocal, VerFile, TmpDir: string;
   Rc: Integer;
-  Enc: TEncoding;
 begin
   Result := '';
   AAccion := '';
@@ -778,7 +773,7 @@ begin
   if FetchFromTarget(AProfile, NODE_PROJECT, 'node.ver', TmpDir, VerFile) = '' then
   try
     RemotoSha := LeeTexto(VerFile, [ltTemporal]).Trim;
-    TFile.Delete(VerFile);
+    BorraFichero(VerFile, ltTemporal);
   except
     RemotoSha := '';
   end;
@@ -790,15 +785,10 @@ begin
     if Rc <> 0 then
       Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     VerLocal := TPath.Combine(TmpDir, 'node-' + LocalSha.Substring(0, 12) + '.ver');
-    Enc := TUTF8Encoding.Create(False);
-    try
-      TFile.WriteAllText(VerLocal, LocalSha, Enc);
-    finally
-      Enc.Free;
-    end;
+    EscribeTexto(VerLocal, LocalSha, ltTemporal, ekUtf8);
     Rc := Paclient(Pc, Format('"--put=%s,%s,0,node.ver"',
       [VerLocal, NODE_PROJECT]), AProfile, Output);
-    TFile.Delete(VerLocal);
+    BorraFichero(VerLocal, ltTemporal);
     if Rc <> 0 then
       Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     if RemotoSha = '' then

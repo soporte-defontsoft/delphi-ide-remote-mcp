@@ -421,6 +421,55 @@ the MCP `initialize` response (`serverInfo.version`).
   open, so the server always fell back to the default folder (the right
   one on a default installation, which is why nothing failed). The SDK
   Manager's sysroots are read by one reader now.
+- **What the server writes for itself goes through one gate, and never
+  behind a link.** Its cache, the reports, the vault, its temp folder and
+  what it keeps of the IDE were each written their own way. With a junction
+  inside the cache folder the designer tables were written behind it,
+  outside the roots (`test_puerta_escribir` C1, red against the previous
+  binary, whose tables landed in the victim folder); a report whose folder
+  is a junction is now refused before anything is created, the folder and
+  the reserved name included (R1). Where a place is judged by its real
+  path (the vault, the IDE), a write is judged by the real path of its
+  FOLDER, where the temporary file and the rename happen: a vault folder
+  that was a junction out, with a link there back into the vault, passed
+  the gate on the file's own real path and the temporary file, with the
+  note in it, was created outside (`test_vault` 9-bis c); and a path that
+  is itself a link is neither written nor deleted. The vault's seed for an
+  empty folder whose `projects` was a junction created `example-project`
+  behind it and stayed half-seeded for good: every note is now asked first
+  (`test_vault` 13). What the server deletes of its own - the temp files of
+  `remote-run` and `delphi_git`, a read message, the designer's old
+  tables - goes through the same gate (`BorraFichero`): it deleted by hand,
+  and behind a junction it would have deleted outside. A cache that cannot
+  be replaced (another thread is reading it) is kept only when it already
+  says the same; a stale one was kept silently. A path too long for the
+  whole-or-nothing writer is refused before anything is written
+  (GUARD-028).
+- **A vault note is written whole or not at all**, as decided: a file next
+  to the note and a rename. It was written in place, so a failure half-way
+  left the note broken; the vault's seed for an empty vault had no gate at
+  all. Every write of the server by replacement - the workspace's too -
+  now keeps the file's creation date (the rename left the temporary
+  file's: a vault sorted by creation saw the note born again on each
+  append); permissions, attributes and alternate streams are those of a
+  new file in that folder, as they already were for the workspace. A note
+  that is a hard link of a file outside the vault no longer writes through
+  it (`test_vault` 9-bis a and b).
+- **The server never overwrites or deletes a file of the IDE without a
+  copy.** `get-sdk` overwrote a `<sdk>.sdk` that was already there, and
+  `remove-profile` and `remove-sdk` deleted for good; now the file - and,
+  for `get-sdk`, the card of its sysroot - is first copied to the server's
+  cache (`ide-copias\<the original's folder>`, so the card of each sysroot
+  says where it came from; the last 10 of each file are kept), and the
+  answer says where (`previousSdkCopy`, `previousSdkRecordCopy`,
+  `removedCopy`, PAS-058). What the server writes of the IDE goes only to
+  its data folder, its SDK folder and the sysroots its SDK Manager
+  registers - never to its installation, nor to a folder a `.sdk` merely
+  lists: the libraries the linker asks for were copied into whatever folder
+  the `.sdk`'s library path named; when the gate refuses one, the answer
+  says so (BUILD-047) instead of telling to install the library on the
+  target (BUILD-035). `test_sdk` checks the copies of `remove-sdk` and
+  `remove-profile` byte for byte, and the purge.
 
 ### Internal
 
@@ -449,11 +498,29 @@ the MCP `initialize` response (`serverInfo.version`).
   its own is declared, with its reason, in a new `test_paisaje` rule
   (`settings.ini`, `.git\HEAD`, the bytes `delphi_fetch` serves, and the
   programs that are not the server), and can only shrink.
-  `LspTests.Rutas` covers the places that do not depend on the machine;
-  links are measured through the server, because inside `delphi_test`'s
-  container `GetFinalPathNameByHandle` refuses a drive-letter answer
-  (access denied; only the NT form answers) and a link cannot be resolved
-  there.
+  `LspTests.Rutas` covers the places that do not depend on the machine,
+  with a junction in the temp folder; the places judged by their real path
+  are measured through the server, because inside `delphi_test`'s container
+  `GetFinalPathNameByHandle` refuses a drive-letter answer (access denied;
+  only the NT form answers) and a link cannot be resolved there.
+- **One gate to write files** (the doors block, second part).
+  `EscribeTexto` and `EscribeBytes` (`Lsp.Patch`) write what the server
+  composes - not a file being edited in its own encoding, which is
+  `PatchSaveText` - into ONE place: whole or not at all, in the encoding of
+  its format through the one encoder, with the copy the place asks for.
+  The workspace is `AtomicWrite`; the vault, its real path (the vault tools'
+  own "inside the vault" is now this question); the server's home and temp
+  folder, their long form with no link on the way; the IDE, its data and SDK
+  folders and its registered sysroots, copying first what it overwrites.
+  The cache writer moved from `Lsp.Casa` to the gate. `BorraFichero` is
+  its delete, with the same places (the workspace deletes to its trash and
+  is refused there, GUARD-035). Two new `test_paisaje` rules declare what
+  still writes or deletes on its own (the jail's walkers, moves, trash and
+  undo, the vault copies, `settings.ini`, the log, the upload by chunks,
+  the three findings left for the jail point, and the programs that are
+  not the server), and can only shrink; the write rule sees `CreateFile`
+  for writing, every write mode of a stream (on its own line too), the
+  ini, zip and rename writers and the public copy of the jail.
 
 - `Lsp.Guard` is split by families, one family per commit and moves only:
   not a line of logic changes, and the suite runs whole after each one. The

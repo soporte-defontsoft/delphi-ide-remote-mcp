@@ -317,7 +317,18 @@ try:
 
     # --- 6) quitar un SDK: se desregistra, pero los gigas NO se tocan ------
     raiz_limpia = os.path.join(BASE, 'sysroot-limpio')
+    # lo que se borra del IDE se copia ANTES en la cache del servidor (la
+    # puerta de escribir de la 1.18.0; se borraba sin copia, irrecuperable),
+    # en ide-copias\<la carpeta del original>: la de perfiles se llama VER
+    antes = open(os.path.join(PROFILES_DIR, 'limpio.sdk'), 'rb').read()
+    copias = mc.cache_servidor(os.path.join('ide-copias', VER))
+    previas = set(os.listdir(copias)) if os.path.isdir(copias) else set()
     out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "limpio"})
+    nuevas = [f for f in (os.listdir(copias) if os.path.isdir(copias) else [])
+              if f not in previas and f.endswith('-limpio.sdk')]
+    check('remove-sdk: el .sdk se copia ANTES en la cache del servidor, byte a byte, y lo dice',
+          len(nuevas) == 1 and open(os.path.join(copias, nuevas[0]), 'rb').read() == antes and
+          'removedCopy' in out, (nuevas, out[:300]))
     check('remove-sdk: el .sdk desaparece',
           not os.path.exists(os.path.join(PROFILES_DIR, 'limpio.sdk')), out[:300])
     check('remove-sdk: el SYSROOT sigue en disco y lo dice',
@@ -325,6 +336,41 @@ try:
     out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "limpio"})
     check('remove-sdk de uno que no existe: RECHAZADO',
           mc.rechazado(out) and mc.es(out, 'SR_PASERVER_SDK_NOFILE_FMT'), out[:200])
+
+    # --- 7) las copias del IDE no crecen sin limite: las 10 ultimas de CADA
+    # fichero (revisor de P3: repetir get-sdk copiaba el .sdk cada vez). Un
+    # nombre que no existe en ningun IDE de verdad, en el APPDATA de mentira
+    for vuelta in range(12):
+        sdk_file(os.path.join(PROFILES_DIR, 'zzpurga.sdk'))
+        with open(os.path.join(PROFILES_DIR, 'zzpurga.sdk'), 'a', encoding='utf-8') as f:
+            f.write('<!-- vuelta %d -->' % vuelta)
+        out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "zzpurga"})
+    de_purga = sorted(f for f in os.listdir(copias) if f.endswith('-zzpurga.sdk'))
+    ultima = open(os.path.join(copias, de_purga[-1]), encoding='utf-8').read() if de_purga else ''
+    check('remove-sdk doce veces: quedan las 10 copias mas nuevas de ese .sdk, la ultima la de la vuelta 11',
+          len(de_purga) == 10 and 'vuelta 11' in ultima, (len(de_purga), out[:200]))
+    # (previas: lo que habia antes del remove-sdk de limpio, de corridas de antes)
+    check('...y la purga no toca las copias de OTRO fichero (la de limpio.sdk sigue)',
+          len([f for f in os.listdir(copias) if f.endswith('-limpio.sdk') and f not in previas]) == 1,
+          os.listdir(copias))
+
+    # --- 8) remove-profile copia el .profile ANTES (se borraba sin copia) ---
+    perfil = os.path.join(PROFILES_DIR, 'zzp3perfil.profile')
+    with open(perfil, 'w', encoding='utf-8', newline='') as f:
+        f.write('<Project><PropertyGroup><Profile_platform>Linux64</Profile_platform>'
+                '<Profile_host>192.0.2.1</Profile_host></PropertyGroup></Project>')
+    antes = open(perfil, 'rb').read()
+    previas = set(os.listdir(copias))
+    out = srv.call('delphi_paserver', {"command": "remove-profile", "profile": "zzp3perfil"})
+    nuevas = [f for f in os.listdir(copias) if f not in previas and f.endswith('-zzp3perfil.profile')]
+    check('remove-profile: el .profile se copia ANTES en la cache, byte a byte, y lo dice (PAS-058)',
+          not os.path.exists(perfil) and len(nuevas) == 1 and
+          open(os.path.join(copias, nuevas[0]), 'rb').read() == antes and 'PAS-058' in out,
+          (nuevas, out[:300]))
+    # las copias que dejo ESTA bateria, fuera: la cache de las baterias dura entre corridas
+    for f in os.listdir(copias):
+        if f.endswith(('-limpio.sdk', '-zzpurga.sdk', '-zzp3perfil.profile')):
+            os.remove(os.path.join(copias, f))
 finally:
     srv.mata()
 

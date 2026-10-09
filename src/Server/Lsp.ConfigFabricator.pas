@@ -63,7 +63,7 @@ uses
   Lsp.NetDrives,  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
   Lsp.Json,
   Lsp.Patch,  // LeeTexto: la puerta de leer
-  Lsp.Casa;   // EscribeEnCasaDelServidor (entero o nada)
+  Lsp.Casa;   // la casa del servidor (EscribeEnCasaDelServidor vive en Lsp.Patch)
 
 const
   STANDARD_ALIASES =

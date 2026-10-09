@@ -97,6 +97,7 @@ uses
   System.StrUtils,
   System.IOUtils,
   Lsp.Texts,
+  Lsp.Codificacion,     // BytesIguales, el comparador
   Lsp.Guard;            // las puertas de escritura y los escritores que deshacen
 
 { Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
@@ -116,13 +117,6 @@ begin
     finally
       FindClose(SR);
     end;
-end;
-
-{ Los mismos bytes: el comparador de la foto (Vigila y Restaura). }
-function BytesIguales(const A, B: TArray<Byte>): Boolean;
-begin
-  Result := (Length(A) = Length(B)) and
-    ((Length(A) = 0) or CompareMem(@A[0], @B[0], Length(A)));
 end;
 
 procedure TFotoDeFicheros.Toma(const ARutas: array of string);

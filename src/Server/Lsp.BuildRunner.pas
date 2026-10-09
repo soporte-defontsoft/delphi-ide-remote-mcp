@@ -1216,12 +1216,15 @@ end;
   privilegio) de la version con nombre mas corto que haya en las carpetas del
   Profile_librarypath del .sdk, y el build se repite una vez. Un libX.so que
   ya exista no se toca nunca (libc.so es un guion del enlazador, no una
-  libreria). Devuelve cuantos completo; ANota explica lo hecho y, si de alguna
-  no hay NINGUNA version, que a esa maquina le falta la libreria misma. }
+  libreria): se mira antes, y si apareciese en ese instante la puerta de
+  escribir lo copia antes de pisarlo. Devuelve cuantos completo; ANota explica
+  lo hecho, si de alguna no hay NINGUNA version que a esa maquina le falta la
+  libreria misma (BUILD-035), y si la puerta nego escribirla, por que
+  (BUILD-047). }
 function CompletaEnlacesDev(const AVersion, ASdkFile, AOutput: string;
   out ANota: string): Integer;
 var
-  Xml, Rutas, Nombre, Dir, Dev, Mejor, Hechos, Faltan: string;
+  Xml, Rutas, Nombre, Dir, Dev, Mejor, Hechos, Faltan, Negadas, Motivo: string;
   M: TMatch;
   Vistos: TStringList;
   Hecho: Boolean;
@@ -1240,6 +1243,7 @@ begin
     IdeSdksDir(AVersion), [rfIgnoreCase]);
   Hechos := '';
   Faltan := '';
+  Negadas := '';
   Vistos := TStringList.Create;
   try
     for M in TRegEx.Matches(AOutput, 'cannot find -l([A-Za-z0-9_+.\-]+)') do
@@ -1250,6 +1254,7 @@ begin
       Vistos.Add(Nombre);
       Dev := 'lib' + Nombre + '.so';
       Hecho := False;
+      Motivo := '';
       for Dir in Rutas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
       begin
         if Dir.Contains('$(') or not TDirectory.Exists(Dir) then
@@ -1268,10 +1273,18 @@ begin
         end;
         if Mejor = '' then
           Continue;
+        // por las puertas, con el IDE como lugar: Dir es una carpeta de
+        // bibliotecas del sysroot de un SDK registrado (se copiaba sin puerta)
         try
-          TFile.Copy(Mejor, TPath.Combine(Dir, Dev), False);
+          EscribeBytes(TPath.Combine(Dir, Dev), LeeBytes(Mejor, [ltIde]), ltIde);
         except
-          Continue;
+          // la puerta (o la copia) dijo que no: la version ESTA, asi que no
+          // es "le falta a la maquina" (BUILD-035 mandaba instalarla alli)
+          on E: Exception do
+          begin
+            Motivo := E.Message;
+            Continue;
+          end;
         end;
         Inc(Result);
         Hecho := True;
@@ -1280,7 +1293,13 @@ begin
         Hechos := Hechos + Format('%s <- %s (%s)', [Dev, TPath.GetFileName(Mejor), Dir]);
         Break;
       end;
-      if not Hecho then
+      if not Hecho and (Motivo <> '') then
+      begin
+        if Negadas <> '' then
+          Negadas := Negadas + '; ';
+        Negadas := Negadas + Dev + ': ' + Motivo;
+      end
+      else if not Hecho then
       begin
         if Faltan <> '' then
           Faltan := Faltan + ', ';
@@ -1297,6 +1316,12 @@ begin
     if ANota <> '' then
       ANota := ANota + ' ';
     ANota := ANota + MsgFmt(SN_BUILD_DEVLINK_MISSING_FMT, [Faltan]);
+  end;
+  if Negadas <> '' then
+  begin
+    if ANota <> '' then
+      ANota := ANota + ' ';
+    ANota := ANota + MsgFmt(SN_BUILD_DEVLINK_DENIED_FMT, [Negadas]);
   end;
 end;
 

@@ -237,7 +237,7 @@ uses
   Lsp.ConfigFabricator, // DEFAULT_NAMESPACES
   Lsp.NetDrives,        // NotaAlLog
   Lsp.Texts,
-  Lsp.Casa;             // ServerCacheDir, EscribeEnCasaDelServidor
+  Lsp.Casa;             // ServerCacheDir (EscribeEnCasaDelServidor vive en Lsp.Patch)
 
 var
   // el servidor se cierra: el generador lo mira entre unidad y unidad
@@ -2628,6 +2628,18 @@ begin
   end;
 end;
 
+{ Un fichero de la cache del disenador fuera, por la puerta de borrar con la
+  casa como lugar (borraban con DeleteFile por su cuenta: detras de una union
+  en la cache borrarian fuera; P3-L3 de la 1.18.0). Limpiar nunca tumba nada:
+  lo que no se deja borrar se queda. }
+procedure QuitaDeLaCache(const F: string);
+begin
+  try
+    BorraFichero(F, ltCasa);
+  except
+  end;
+end;
+
 { Lo que hay que borrar de la cache del disenador: de esa instalacion, las
   tablas que no son las de ahora (otra huella, otra build, una generacion MAS
   VIEJA - la de un servidor mas nuevo no es de este) con mas de una hora, y
@@ -2647,7 +2659,7 @@ begin
         Continue;
       if SameText(ExtractFileExt(F), '.tmp') then
       begin
-        System.SysUtils.DeleteFile(F);
+        QuitaDeLaCache(F);
         Continue;
       end;
       if not LeeNombreDeTabla(F, V, B, M, H, G) or not SameText(V, AVersion) or
@@ -2658,7 +2670,7 @@ begin
         if SameText(ExtractFileName(F), ExtractFileName(X)) then
           Vigente := True;
       if not Vigente then
-        System.SysUtils.DeleteFile(F);
+        QuitaDeLaCache(F);
     end;
   except
     // limpiar nunca tumba nada
@@ -2686,7 +2698,7 @@ begin
         if SameText(I.Version, V) then
           Esta := True;
       if not Esta then
-        System.SysUtils.DeleteFile(F);
+        QuitaDeLaCache(F);
     end;
   except
     // limpiar nunca tumba nada

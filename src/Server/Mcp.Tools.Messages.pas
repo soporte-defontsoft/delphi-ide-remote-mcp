@@ -192,7 +192,7 @@ begin
       // vez entregado se borra y punto, no acumulamos basura"). Nada se guarda
       // aparte y no hay purga: en el buzon solo queda lo que no se ha leido.
       try
-        TFile.Delete(F);
+        BorraFichero(F, ltCasa); // por la puerta de borrar: un buzon que es una union no borra detras
       except
         // lo que no se puede borrar sigue pendiente: se entrega otra vez
       end;

@@ -74,7 +74,8 @@ uses
   MCPServer.Logger,
   Lsp.BuildRunner,
   Lsp.Guard,
-  Lsp.Patch,
+  Lsp.Patch,     // EscribeTexto: la puerta de escribir, con el temporal como lugar
+  Lsp.Codificacion, // ekUtf8
   Lsp.NetDrives,
   Lsp.Sandbox,
   Lsp.Rutas,
@@ -1150,7 +1151,8 @@ begin
     // que estar donde lo vea cualquiera. Por el nombrador (Lsp.Casa).
     CrearCarpeta(ServerTempDir('git'));
     MsgFile := NombreDeMensajeGit;
-    TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
+    // por la puerta de escribir, con el temporal como lugar: UTF-8 sin BOM
+    EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
     GitArgs := Format('commit -F "%s" %s', [MsgFile, ArgvSeguro(Params.Args)]);
   end
   else if Cmd = 'clone' then
@@ -1344,7 +1346,7 @@ begin
       // args = tag name (and options)
       CrearCarpeta(ServerTempDir('git'));
       MsgFile := NombreDeMensajeGit;
-      TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
+      EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
       GitArgs := Format('tag -F "%s" %s', [MsgFile, ArgvSeguro(Params.Args)]);
     end
     else
@@ -1529,7 +1531,7 @@ begin
         end;
       finally
         if (MsgFile <> '') and TFile.Exists(MsgFile) then
-          TFile.Delete(MsgFile);
+          BorraFichero(MsgFile, ltTemporal); // por la puerta de borrar, con su lugar
       end;
     finally
       for Sitio in SeQuitan do

@@ -243,6 +243,9 @@ REGLAS = [
       # ASCII), la creacion de una unit nueva y la medida de un cuerpo de varios bytes
       ('Lsp.Patch.pas', 'DoEdit'), ('Lsp.Patch.pas', 'PatchSaveText'),
       ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Patch.pas', 'Measure'),
+      # la puerta de escribir: el texto que COMPONE el servidor, en la codificacion
+      # de su formato (un .job, una nota del vault, un .sdk), con la de ida y vuelta
+      ('Lsp.Patch.pas', 'EscribeTexto'),
       # la decision del escritor: como se LEERIAN los bytes ANSI de un fuente
       # sin codificacion (LecturaCambiada); no escribe nada
       ('Lsp.Patch.pas', 'EncAlEscribir'),
@@ -353,6 +356,93 @@ REGLAS = [
      '(inventario del 9-oct-2026, bloque de las puertas de la 1.18.0): el escaner de peligros leia un '
      'Import de fuera de las raices y, limpio, el build lo cargaba de alli; un buzon que era una union '
      'entregaba y BORRABA lo de detras'),
+    ('escribir sin la puerta',
+     # (revisor de P3: la primera forma solo veia la mitad - ni CreateFile para escribir,
+     # ni fmOpenWrite, ni un fmCreate en la linea de abajo, ni un ini, un zip, un
+     # RenameFile o el CopiaNuestra publico que copia sin puerta)
+     r"TFile\.(?:WriteAllText|WriteAllBytes|WriteAllLines|AppendAllText|AppendAllLines|Copy|Move|"
+     r"Create|OpenWrite|CreateText|AppendText|Replace)\s*\(|"
+     r"\.SaveToFile\s*\(|TStreamWriter\.Create\s*\(|\bfm(?:Create|OpenWrite|OpenReadWrite)\b|"
+     r"WritePrivateProfileString\w*\s*\(|\bCopyFile\w*\s*\(|\bMoveFile\w*\s*\(|"
+     r"\bCreateFile\w*\s*\([^;]*(?:GENERIC_WRITE|GENERIC_ALL|FILE_WRITE_DATA|FILE_APPEND_DATA|"
+     r"FILE_WRITE_ATTRIBUTES|CREATE_ALWAYS|CREATE_NEW|TRUNCATE_EXISTING|OPEN_ALWAYS)|"
+     r"\bzm(?:Write|ReadWrite)\b|\.ExtractAll\s*\(|\bFileCreate\s*\(|\bRenameFile\s*\(|"
+     r"TIniFile\.Create\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|\.UpdateFile\b|\bCopiaNuestra\s*\(",
+     [# LA puerta (EscribeBytes) y los escritores de la jaula que ya preguntan la suya:
+      # el atomico, el de productos, la copia diaria y la sellada de la papelera
+      ('Lsp.Patch.pas', 'EscribeBytes'), ('Lsp.Patch.pas', 'CopiaAntesDePisar'),
+      ('Lsp.Patch.pas', 'AtomicWrite'),
+      ('Lsp.Patch.pas', 'SustituyePorRenombre'), ('Lsp.Patch.pas', 'Coloca'),
+      # la fecha de creacion de lo que el escritor ACABA de sustituir
+      ('Lsp.Patch.pas', 'PonFechaDeCreacion'),
+      # la reserva del nombre de un informe, tras la puerta sobre su carpeta con el
+      # nombre mas largo (CREATE_NEW: no pisa nada)
+      ('Mcp.Tools.Report.pas', 'ReservarNombre'),
+      # settings.ini: su lector y escritor es Lsp.Settings (C1), ninguna puerta
+      ('Lsp.Settings.pas', 'LoadSecurity'), ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'),
+      # NUL como salida de error de un hijo: no es un fichero
+      ('Lsp.Transport.Process.pas', 'TLspProcessTransport.Start'),
+      # el zip de delphi_package se arma en su temporal de sustitucion junto al
+      # destino, ya comprobado por la jaula, y se pone de un golpe
+      ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
+      ('Lsp.Patch.pas', 'BackupFile'), ('Lsp.Patch.pas', 'GuardaContenidoActual'),
+      # los recorredores y movimientos de la jaula (no cruzan enlaces; la puerta antes)
+      ('Lsp.Guard.pas', 'CopiaNuestra'), ('Lsp.Guard.pas', 'CopiaArbol'),
+      ('Lsp.Guard.pas', 'MueveArbol'), ('Lsp.Changeset.pas', 'ApplyOne'),
+      ('Mcp.Tools.FileOps.pas', 'MoveToTrash'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
+      # la copia de la regla 11 dentro del vault (DentroDelVault antes) y la subida por
+      # trozos de delphi_upload (la puerta de la jaula a la entrada; no atomica)
+      ('Mcp.Tools.Vault.pas', 'VaultBackup'), ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
+      # el log rota sus bloques y anade al vivo (C5: su propio fichero, append)
+      ('Lsp.LogSink.pas', 'CierraBloque'), ('Lsp.LogSink.pas', 'Anade'),
+      # deuda declarada hasta P4 (hallazgos de jaula de la 1.18.0): el PNG recortado en
+      # sitio, la restauracion de la foto no atomica y la marca .by en ASCII
+      ('Lsp.Imagen.pas', 'RecortaPng'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
+      ('Lsp.Patch.pas', 'WriteOwnerMarker'),
+      # programas que NO son el servidor: escriben donde el servidor les dijo, ya
+      # comprobado, o en el destino
+      ('Mld.Captura.pas', 'GuardarPNG'), ('McpDesktopNode.dpr', 'RecogerCaptura'),
+      ('FormRender.Fmx.pas', 'Main'), ('FormRender.Vcl.pas', 'GuardaPng'),
+      ('McpRunJob.dpr', 'EscribePid'), ('McpRunJob.dpr', 'LanzarYVigilar'),
+      ('McpRunJob.dpr', 'Anade'), ('McpRunJob.dpr', 'Arrancar'),
+      ('DelphiStyleConvert.dpr', 'Convert'), ('DelphiStyleConvert.dpr', 'Defaults')],
+     'EscribeTexto y EscribeBytes (Lsp.Patch): LA puerta de escribir, con el LUGAR por parametro '
+     '(jaula, IDE, casa, temporal, vault), entero o nada y con la copia que pida el lugar. 18 '
+     'escritores iban por su cuenta (inventario del 9-oct-2026): el vault escribia encima, sin '
+     'temporal; la semilla del vault, los informes, los mensajes de git y los .job sin puerta; '
+     'get-sdk pisaba un .sdk del IDE sin copia y las libX.so se copiaban al sysroot sin preguntar'),
+    ('borrar sin la puerta',
+     r"TFile\.Delete\s*\(|\bDeleteFile\w*\s*\(|\bRemoveDir\w*\s*\(|TDirectory\.Delete\s*\(|"
+     r"\bRemoveDirectory\w*\s*\(|\bBorraLoNuestro\s*\(",
+     [# LA puerta de borrar fuera de la jaula (BorraFichero) y los temporales que los
+      # escritores acaban de dejar (el suyo, la copia que no se llego a usar)
+      ('Lsp.Patch.pas', 'BorraFichero'), ('Lsp.Patch.pas', 'EscribeBytes'),
+      ('Lsp.Patch.pas', 'SustituyePorRenombre'), ('Lsp.Patch.pas', 'Coloca'),
+      # la jaula: su borrado de lo que la operacion acaba de dejar, sus recorredores
+      # (no cruzan enlaces; la puerta antes), la papelera y el deshacer
+      ('Lsp.Guard.pas', 'BorraLoNuestro'), ('Lsp.Guard.pas', 'ConsumeAgentCapture'),
+      ('Lsp.Guard.pas', 'BorraArbolDentro'), ('Lsp.Guard.pas', 'VaciaDesechable'),
+      ('Lsp.Guard.pas', 'QuitaCarpetasCreadas'), ('Lsp.Changeset.pas', 'ApplyOne'),
+      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
+      ('Mcp.Tools.FileOps.pas', 'QuitaMarcaDeDueno'), ('Mcp.Tools.FileOps.pas', 'QuitaCopiaDeSeguridad'),
+      ('Mcp.Tools.FileOps.pas', 'BorraDeVerdad'), ('Mcp.Tools.FileOps.pas', 'RecogeVacias'),
+      ('Mcp.Tools.FileOps.pas', 'BorrarNucleo'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
+      # la cuarentena de una subida y el zip a medias de delphi_package: de la jaula,
+      # lo que esa misma operacion dejo
+      ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
+      ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
+      # el log poda sus bloques viejos (C5)
+      ('Lsp.LogSink.pas', 'Poda'),
+      # la carpeta VACIA que paclient deja en la de SDKs del IDE: RemoveDir solo se lleva
+      # una vacia (o un enlace, como enlace), nunca lo de dentro
+      ('Mcp.Tools.PAServer.pas', 'RemoveProfile'),
+      # programas que NO son el servidor: lo suyo, en el destino o en el temporal
+      ('McpDesktopNode.dpr', 'RecogerCaptura'), ('McpRunJob.dpr', 'BorraPid'),
+      ('McpRunJob.dpr', 'LanzarYVigilar')],
+     'BorraFichero (Lsp.Patch): LA puerta de borrar fuera de la jaula, con el LUGAR (casa, temporal, '
+     'vault, IDE con copia); en la jaula, la papelera. Los temporales de remote-run y de git, el buzon y '
+     'las purgas de la cache del disenador borraban con TFile.Delete o DeleteFile por su cuenta: detras '
+     'de una union, fuera (revisor de P3, 9-oct-2026)'),
 ]
 
 
@@ -501,6 +591,8 @@ PLANTADO = {
     'fijar la pagina ANSI': "  UsaPaginaAnsi(1251);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
     'leer texto sin la puerta': "  Xml := TFile.ReadAllText(Dproj);",
+    'escribir sin la puerta': "  TFile.WriteAllText(Ruta, Texto, TEncoding.UTF8);",
+    'borrar sin la puerta': "  TFile.Delete(Ruta);",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -547,6 +639,42 @@ for forma in ("  L := TFile.ReadAllLines(F);", "  Ini := TMemIniFile.Create(F, T
     check('mutante "%s": tambien %s' % (REGLA_LEER[0], forma.strip()), len(cazados) == 1, cazados)
 NO_CAZADO = leer_plantado("  Ini := TMemIniFile.Create('');")
 check('...y un TMemIniFile vacio (lo llena SetStrings) no es una lectura', not NO_CAZADO, NO_CAZADO)
+
+# las otras formas de escribir por su cuenta (y una apertura para LEER, que no)
+REGLA_ESCRIBIR = next(r for r in REGLAS if r[0] == 'escribir sin la puerta')
+def escribir_plantado(forma):
+    return fuera_de_casa(REGLA_ESCRIBIR, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                           'EscribeAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+for forma in ("  TFile.WriteAllBytes(Ruta, B);", "  TFile.Copy(A, B, True);", "  TFile.Move(A, B);",
+              "  L.SaveToFile(Ruta);", "  W := TStreamWriter.Create(Ruta);",
+              "  S := TFileStream.Create(Ruta, fmCreate);", "  MoveFileEx(PChar(A), PChar(B), 0);",
+              "  CopyFile(PChar(A), PChar(B), False);", "  TFile.AppendAllText(Ruta, T);"):
+    cazados = escribir_plantado(forma)
+    check('mutante "%s": tambien %s' % (REGLA_ESCRIBIR[0], forma.strip()), len(cazados) == 1, cazados)
+NO_CAZADO = escribir_plantado("  S := TFileStream.Create(Ruta, fmOpenRead or fmShareDenyNone);")
+check('...y un TFileStream para LEER no es una escritura', not NO_CAZADO, NO_CAZADO)
+# las que la primera forma no veia (revisor de P3: de 16 plantadas no cazaba ninguna)
+for forma in ("  H := CreateFile(PChar(R), GENERIC_WRITE, 0, nil, CREATE_ALWAYS, 0, 0);",
+              "  S := TFileStream.Create(Ruta, fmOpenWrite);",
+              "  S := TFileStream.Create(Ruta, fmOpenReadWrite or fmShareDenyWrite);",
+              "  S := TFileStream.Create(Ruta,\n    fmCreate);",
+              "  S := TFile.Create(Ruta);", "  S := TFile.OpenWrite(Ruta);",
+              "  W := TFile.CreateText(Ruta);", "  TFile.Replace(A, B, C);",
+              "  Ini := TIniFile.Create(Ruta); Ini.WriteString('a', 'b', 'c');",
+              "  Ini.UpdateFile;", "  Zip.Open(Ruta, zmWrite);", "  Zip.ExtractAll(Dir);",
+              "  H := FileCreate(Ruta);", "  RenameFile(A, B);", "  CopiaNuestra(A, B);"):
+    cazados = escribir_plantado(forma)
+    check('mutante "%s": tambien %s' % (REGLA_ESCRIBIR[0], ' '.join(forma.split())), len(cazados) == 1, cazados)
+NO_CAZADO = escribir_plantado("  H := CreateFile(PChar(R), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, 0, 0);")
+check('...y un CreateFile para LEER no es una escritura', not NO_CAZADO, NO_CAZADO)
+
+# las otras formas de borrar por su cuenta
+REGLA_BORRAR = next(r for r in REGLAS if r[0] == 'borrar sin la puerta')
+for forma in ("  System.SysUtils.DeleteFile(Ruta);", "  DeleteFileW(PChar(Ruta));", "  RemoveDir(Dir);",
+              "  TDirectory.Delete(Dir, False);", "  RemoveDirectory(PChar(Dir));", "  BorraLoNuestro(Ruta);"):
+    cazados = fuera_de_casa(REGLA_BORRAR, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                            'BorraAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_BORRAR[0], forma.strip()), len(cazados) == 1, cazados)
 
 for regla in REGLAS:
     malos = fuera_de_casa(regla, TEXTOS)

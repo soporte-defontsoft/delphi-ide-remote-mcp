@@ -355,6 +355,47 @@ function LeeTexto(const APath: string; ALugares: TLugaresDeTexto; out AEncName: 
   la glibc de un sysroot): la misma pregunta y la misma negativa. }
 function LeeBytes(const APath: string; ALugares: TLugaresDeTexto): TArray<Byte>;
 
+{ LA PUERTA DE ESCRIBIR, su pregunta: '' si APath se puede escribir en el
+  lugar ALugar; si no, su negativa. La jaula, lo que pregunta su escritor
+  (AtomicWrite: la puerta sobre la ruta real, el modo de solo lectura y el
+  +R); el vault y el IDE, dentro por la ruta real de la CARPETA (alli nacen
+  el temporal y el renombre) y sin que APath sea el mismo un enlace; la casa
+  y el temporal del servidor, dentro sin enlaces en el camino; solo rutas
+  absolutas. Del IDE, su carpeta de datos del
+  usuario, la de sus SDK y los sysroots que registra su SDK Manager - nunca
+  su instalacion (David, 9-oct-2026), ni lo que solo nombra un .sdk -. Fuera
+  de la jaula, tambien el +R de lo que ya esta.
+  Y siempre la medida del escritor atomico. }
+function LugarDeEscrituraDenegado(const APath: string; ALugar: TLugarDeTexto): string;
+{ ...y la escritura: ABytes en APath ENTERO o nada (un temporal junto a el y
+  el renombrado) si la puerta lo admite; si no, lanza su negativa. En la
+  jaula es AtomicWrite. En el IDE, lo que se pisa se copia ANTES en la casa
+  del servidor (Lsp.Casa.CopiaDelIde) y sin copia no se pisa: devuelve la
+  ruta de esa copia, '' si no habia nada que pisar. Crear la carpeta es de
+  quien llama. Lo que escribia cada uno por su cuenta (el vault, la casa,
+  los temporales, el IDE: inventario del 9-oct) pasa por aqui. }
+function EscribeBytes(const APath: string; const ABytes: TArray<Byte>;
+  ALugar: TLugarDeTexto): string;
+{ ...y un TEXTO que compone el servidor - no el de un fichero que se edita
+  conservando su codificacion: ese es PatchSaveText -, en AK por EL
+  codificador (EncodeText, con su ida y vuelta). }
+function EscribeTexto(const APath, ATexto: string; ALugar: TLugarDeTexto;
+  AK: TEncKind): string;
+{ ...y BORRAR un fichero de un lugar FUERA de la jaula (en la jaula se borra
+  a su papelera, y ltJaula se niega: GUARD-035): la misma pregunta, y en el
+  IDE la copia antes en la casa (las mas viejas de ese fichero se purgan) -
+  un borrado es la peor forma de pisar; remove-profile y remove-sdk borraban
+  sin copia, irrecuperable (medida M3) -. Devuelve la ruta de la copia ('' si
+  el lugar no la pide). Lanza la negativa. }
+function BorraFichero(const APath: string; ALugar: TLugarDeTexto): string;
+{ Un fichero de las caches del servidor (la configuracion fabricada para el
+  motor, las tablas del disenador) por la puerta, con la casa como lugar, en
+  UTF-8 con BOM. Si no se pudo (otro hilo la esta leyendo) y el fichero que
+  esta ya dice ese mismo texto, vale el que esta; si no - otra cache, o
+  la puerta que niega el sitio -, se lanza. Vivia en Lsp.Casa con su propia
+  pregunta de "dentro". }
+procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
+
 { Encoding-preserving load/save for other engines (scaffolder): text is
   decoded with the real encoding; save re-encodes with the SAME one, makes
   the pre-edit backup and writes atomically. AEncName as in delphi_read.
@@ -1146,8 +1187,33 @@ begin
       [TPath.GetFileName(APath), ACodigo, SysErrorMessage(ACodigo).Trim]);
 end;
 
-procedure SustituyePorRenombre(const ATmp, APath: string);
+{ La fecha de creacion de APath, un fichero que la operacion acaba de dejar;
+  nunca lanza (si no se puede, se queda la que tiene) y no sigue un enlace. }
+procedure PonFechaDeCreacion(const APath: string; const AFecha: TFileTime);
+var
+  H: THandle;
 begin
+  H := CreateFile(PChar(APath), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ or
+    FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil, OPEN_EXISTING,
+    FILE_FLAG_OPEN_REPARSE_POINT, 0);
+  if H = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    SetFileTime(H, @AFecha, nil, nil);
+  finally
+    CloseHandle(H);
+  end;
+end;
+
+procedure SustituyePorRenombre(const ATmp, APath: string);
+var
+  Antes: TWin32FileAttributeData;
+begin
+  // la fecha de CREACION de lo que se sustituye se conserva: el renombre deja
+  // la del temporal (medido por el revisor de P3: no hay tunneling), y el
+  // vault (file.ctime de Obsidian y Dataview) o quien ordene por ella veia
+  // el fichero recien nacido en cada escritura
+  var TeniaFecha := GetFileAttributesEx(PChar(APath), GetFileExInfoStandard, @Antes);
   // Un lector de un instante (el preview de un changeset, una busqueda, el
   // antivirus) tiene el fichero abierto sin compartir el borrado y el rename
   // rebota: se reintenta unos instantes antes de decir que algo lo tiene
@@ -1176,6 +1242,8 @@ begin
     end;
     raise Exception.Create(MotivoDeRenombre(APath, Codigo));
   end;
+  if TeniaFecha then
+    PonFechaDeCreacion(APath, Antes.ftCreationTime);
 end;
 
 procedure AtomicWrite(const APath: string; const B: TBytes);
@@ -1790,20 +1858,86 @@ begin
     end;
 end;
 
-function LugarDeLecturaDenegado(const APath: string; ALugares: TLugaresDeTexto): string;
-var
-  Real, Lugares: string;
+{ APath esta en el lugar ALugar - uno que no es la jaula: esa tiene sus
+  puertas (ReadPathDenied, SustitucionDenegada) -. UNA pregunta para leer y
+  para escribir; AParaEscribir quita del IDE su instalacion. }
+function EnLugarDeTexto(const APath: string; ALugar: TLugarDeTexto;
+  AParaEscribir: Boolean): Boolean;
 
-  procedure Nombra(ALugar: TLugarDeTexto; const ANombre: string);
+  // la ruta REAL que se juzga en los lugares POR ruta real (IDE, vault). Para
+  // leer, la de APath: la lectura lee lo de detras de un enlace. Para
+  // escribir o borrar, la de su CARPETA con el nombre (RutaDelEnlace): alli
+  // nacen el temporal y el renombre, y RealPath(APath) sigue tambien al
+  // ULTIMO enlace - una carpeta de fuera con un enlace que volvia dentro
+  // pasaba la puerta y el temporal nacia fuera (revisor de P3, medido con
+  // uniones) -; y un APath que es el mismo un enlace no se escribe ni se
+  // borra: lo de detras no es de la operacion. '' = no es de ningun lugar.
+  function Real: string;
   begin
-    if ALugar in ALugares then
-    begin
-      if Lugares <> '' then
-        Lugares := Lugares + ', ';
-      Lugares := Lugares + ANombre;
-    end;
+    if not AParaEscribir then
+      Result := RealPath(APath)
+    else if EsEnlace(APath) then
+      Result := ''
+    else
+      Result := RutaDelEnlace(APath);
   end;
 
+var
+  R: string;
+begin
+  Result := False;
+  // solo lo absoluto: una relativa se resolveria contra la carpeta de
+  // trabajo del proceso (System32 en el servicio)
+  if not EsRutaAbsoluta(APath.Trim) then
+    Exit;
+  case ALugar of
+    // del IDE: primero lo que se mide sin leer; los sysroots de sus .sdk (que
+    // piden leerlos) solo si no cae ahi
+    ltIde:
+      begin
+        R := Real;
+        // los que nombra un .sdk, solo para LEER: un .sdk no decide donde
+        // escribe el servidor (medida M3: la libX.so iba a lo que listase)
+        Result := (R <> '') and (EnAlgunLugar(R, LugaresDelIde(AParaEscribir)) or
+          (not AParaEscribir and EnAlgunLugar(R, SysrootsDeLosSdk)));
+      end;
+    // los lugares del SERVIDOR (su casa y su temporal), por su forma larga y
+    // sin enlaces en el camino, no por la ruta real: la virtualizacion MSIX
+    // los parte en dos bajo AppData (Lsp.Guard.EnLugarSinEnlaces, medido)
+    ltCasa:
+      for var C in CarpetasDeLaCasa do
+        if EnLugarSinEnlaces(APath, C) then
+          Exit(True);
+    ltTemporal:
+      Result := EnLugarSinEnlaces(APath, ServerTempDir);
+    ltVault:
+      begin
+        R := Real;
+        Result := (R <> '') and EnAlgunLugar(R, [VaultPath]);
+      end;
+  end;
+end;
+
+{ Como se nombra un lugar en la negativa GUARD-034. }
+function NombreDeLugar(ALugar: TLugarDeTexto; AParaEscribir: Boolean): string;
+begin
+  case ALugar of
+    ltIde:
+      if AParaEscribir then
+        Result := MsgText(SF_LUGAR_IDE_ESCRIBIR)
+      else
+        Result := MsgText(SF_LUGAR_IDE);
+    ltCasa: Result := MsgText(SF_LUGAR_CASA);
+    ltTemporal: Result := MsgText(SF_LUGAR_TEMPORAL);
+    ltVault: Result := MsgText(SF_LUGAR_VAULT);
+  else
+    Result := '';
+  end;
+end;
+
+function LugarDeLecturaDenegado(const APath: string; ALugares: TLugaresDeTexto): string;
+var
+  Lugares: string;
 begin
   Result := '';
   // la jaula primero: su negativa es la que mejor se explica
@@ -1813,31 +1947,34 @@ begin
     if Result = '' then
       Exit;
   end;
-  Real := RealPath(APath);
-  // del IDE: primero lo que se mide sin leer; los sysroots de sus .sdk (que
-  // piden leerlos) solo si no cae ahi
-  if (ltIde in ALugares) and (EnAlgunLugar(Real, LugaresDelIde) or
-     EnAlgunLugar(Real, SysrootsDeLosSdk)) then
-    Exit('');
-  // los lugares del SERVIDOR (su casa y su temporal), por su forma larga y
-  // sin enlaces en el camino, no por la ruta real: la virtualizacion MSIX
-  // los parte en dos bajo AppData (Lsp.Guard.EnLugarSinEnlaces, medido)
-  if ltCasa in ALugares then
-    for var C in CarpetasDeLaCasa do
-      if EnLugarSinEnlaces(APath, C) then
-        Exit('');
-  if (ltTemporal in ALugares) and EnLugarSinEnlaces(APath, ServerTempDir) then
-    Exit('');
-  if (ltVault in ALugares) and EnAlgunLugar(Real, [VaultPath]) then
-    Exit('');
+  for var L in ALugares - [ltJaula] do
+    if EnLugarDeTexto(APath, L, False) then
+      Exit('');
   if Result <> '' then
     Exit;
   Lugares := '';
-  Nombra(ltIde, MsgText(SF_LUGAR_IDE));
-  Nombra(ltCasa, MsgText(SF_LUGAR_CASA));
-  Nombra(ltTemporal, MsgText(SF_LUGAR_TEMPORAL));
-  Nombra(ltVault, MsgText(SF_LUGAR_VAULT));
+  for var L in ALugares - [ltJaula] do
+  begin
+    if Lugares <> '' then
+      Lugares := Lugares + ', ';
+    Lugares := Lugares + NombreDeLugar(L, False);
+  end;
   Result := MsgFmt(SR_GUARD_FUERA_DE_LUGARES_FMT, [APath, Lugares]);
+end;
+
+function LugarDeEscrituraDenegado(const APath: string; ALugar: TLugarDeTexto): string;
+begin
+  // la medida del escritor atomico (el temporal de al lado anade 27)
+  Result := RutaLargaDenegada(APath);
+  if Result <> '' then
+    Exit;
+  // la jaula: lo que pregunta su escritor (la puerta sobre la ruta real, el
+  // modo de solo lectura y el +R)
+  if ALugar = ltJaula then
+    Exit(SustitucionDenegada(APath));
+  if not EnLugarDeTexto(APath, ALugar, True) then
+    Exit(MsgFmt(SR_GUARD_FUERA_DE_LUGARES_FMT, [APath, NombreDeLugar(ALugar, True)]));
+  Result := SoloLecturaDenegado(APath);
 end;
 
 { La negativa de la puerta como excepcion: lo que comparten LeeTexto y
@@ -1868,6 +2005,117 @@ var
   Enc: string;
 begin
   Result := LeeTexto(APath, ALugares, Enc);
+end;
+
+{ La copia de un fichero del IDE en la casa del servidor ANTES de pisarlo o
+  borrarlo (CopiaDelIde); lanza si no se puede: sin copia no se toca. }
+const
+  // cuantas copias de UN fichero del IDE se guardan: politica de la casa, no
+  // hay juez. Repetir get-sdk tras actualizar el destino (lo que manda su
+  // descripcion) copia el .sdk cada vez, y ide-copias crecia sin limite
+  // (revisor de P3)
+  COPIAS_DEL_IDE_POR_FICHERO = 10;
+
+function CopiaAntesDePisar(const APath: string): string;
+var
+  Motivo: string;
+  Copias: TArray<string>;
+begin
+  Result := CopiaDelIde(APath);
+  Motivo := LugarDeEscrituraDenegado(Result, ltCasa);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+  CrearCarpeta(TPath.GetDirectoryName(Result));
+  TFile.Copy(APath, Result);
+  // las mas viejas de ESE fichero fuera, por la puerta de borrar de la casa.
+  // La purga nunca para lo que se iba a hacer (la copia ya esta), y la que
+  // se acaba de hacer no se borra aunque el reloj haya vuelto atras (el
+  // sello es la hora local: el cambio de hora repite una)
+  try
+    Copias := CopiasDelIde(APath);
+  except
+    Copias := nil;
+  end;
+  for var I := 0 to Length(Copias) - COPIAS_DEL_IDE_POR_FICHERO - 1 do
+    if not SameText(Copias[I], Result) then
+      try
+        BorraFichero(Copias[I], ltCasa);
+      except
+      end;
+end;
+
+function BorraFichero(const APath: string; ALugar: TLugarDeTexto): string;
+var
+  Motivo: string;
+begin
+  Result := '';
+  // la jaula borra a SU papelera (delphi_delete), nunca por aqui
+  if ALugar = ltJaula then
+    raise Exception.Create(MsgFmt(SR_BORRA_JAULA_FMT, [APath]));
+  Motivo := LugarDeEscrituraDenegado(APath, ALugar);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+  if ALugar = ltIde then
+    Result := CopiaAntesDePisar(APath);
+  TFile.Delete(APath);
+end;
+
+function EscribeBytes(const APath: string; const ABytes: TArray<Byte>;
+  ALugar: TLugarDeTexto): string;
+var
+  Motivo, Tmp: string;
+begin
+  Result := '';
+  // la jaula tiene SU escritor, que pregunta lo mismo y apunta lo escrito
+  // para la codificacion de origen de la llamada (EncAlEscribir)
+  if ALugar = ltJaula then
+  begin
+    AtomicWrite(APath, ABytes);
+    Exit;
+  end;
+  Motivo := LugarDeEscrituraDenegado(APath, ALugar);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+  // en el IDE, lo que se pisa se copia ANTES en la casa; sin copia no se pisa
+  if (ALugar = ltIde) and TFile.Exists(APath) then
+    Result := CopiaAntesDePisar(APath);
+  Tmp := TemporalDeSustitucion(APath);
+  try
+    TFile.WriteAllBytes(Tmp, ABytes);
+  except
+    // a medias no se queda: un temporal suelto no lo ve nadie para borrarlo
+    System.SysUtils.DeleteFile(Tmp);
+    raise;
+  end;
+  SustituyePorRenombre(Tmp, APath); // si no puede, borra el temporal y lanza
+end;
+
+function EscribeTexto(const APath, ATexto: string; ALugar: TLugarDeTexto;
+  AK: TEncKind): string;
+begin
+  Result := EscribeBytes(APath, EncodeText(ATexto, AK), ALugar);
+end;
+
+procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
+begin
+  try
+    EscribeTexto(AFichero, ATexto, ltCasa, ekUtf8Bom);
+  except
+    // una cache: si no se pudo (otro hilo la esta leyendo) y la que esta ya
+    // dice eso mismo, vale la que esta. Una cache VIEJA no vale (antes se
+    // toleraba cualquier fallo con el fichero presente: un disco lleno daba
+    // una configuracion antigua sin decir nada; revisor de P3), ni un sitio
+    // que la puerta niega
+    var Igual := False;
+    if EnLugarDeTexto(AFichero, ltCasa, True) then
+      try
+        Igual := LeeTexto(AFichero, [ltCasa]) = ATexto;
+      except
+        Igual := False;
+      end;
+    if not Igual then
+      raise;
+  end;
 end;
 
 function PatchLoadText(const APath: string; out AEncName: string): string;

@@ -7,9 +7,10 @@ unit Lsp.Casa;
   compone una de esas rutas o nombres a mano: se piden aqui.
 
   Salen de Lsp.Guard el 8-oct-2026 (la 1.18.0, la version de la limpieza),
-  movidos sin cambiar una linea. Los nombradores y el escritor de la casa
-  (EscribeEnCasaDelServidor), que no pasa por la jaula: no usan nada de la
-  jaula, y los usan la jaula y el lector del settings.ini (SettingsIniPath).
+  movidos sin cambiar una linea. Los nombradores no usan nada de la jaula,
+  y los usan la jaula y el lector del settings.ini (SettingsIniPath). El
+  escritor de la casa (EscribeEnCasaDelServidor) se fue el 9-oct-2026 a la
+  puerta de escribir (Lsp.Patch), con la casa como lugar.
   Lo que se hace CON esas carpetas - los entregables del agente
   (AgentTempDir, CaptureTarget), la purga del arranque y la presencia de
   instancias - pregunta a las puertas y se queda en Lsp.Guard.
@@ -86,14 +87,17 @@ function CarpetaDeInformes: string;
   y no lo lee ninguna puerta. Una casa que no es absoluta (LOCALAPPDATA vacia)
   no es lugar: se resolveria contra la carpeta de trabajo del proceso. }
 function CarpetasDeLaCasa: TArray<string>;
-{ Un fichero de una de las casas del servidor (sus caches: la configuracion
-  fabricada para el motor, las tablas del disenador) ENTERO o nada: se
-  escribe al lado y se renombra encima, porque otro hilo puede estar
-  leyendolo en ese momento. Si el renombrado no puede (alguien lo tiene
-  abierto) y el fichero ya esta, vale el que esta; sin ninguno, se lanza el
-  error. Es casa del servidor: no pasa por la jaula. Las dos copias de esto
-  (Lsp.ConfigFabricator y el generador de las tablas) eran la segunda vez. }
-procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
+{ EL nombre de la copia que se guarda de un fichero del IDE ANTES de pisarlo
+  o borrarlo (David, 9-oct-2026: lo que el servidor escribe en el IDE fuera
+  de las raices - un .sdk, la ficha de un sysroot - nunca pisa sin copia): en
+  la cache del servidor, ide-copias\<carpeta>\<SelloUnico>-<nombre>, con
+  <carpeta> la del original (37.0 para un .sdk o un .profile, <sdk>.sdk para
+  la ficha de un sysroot): todas las fichas se llaman igual y la copia tiene
+  que decir de donde viene (revisor de P3). El sello las ordena y no deja que
+  dos se pisen. CopiasDelIde es su inversa: las copias guardadas de ESE
+  fichero, de la mas vieja a la mas nueva. }
+function CopiaDelIde(const APath: string): string;
+function CopiasDelIde(const APath: string): TArray<string>;
 
 { LA clave corta de una carpeta, por su ruta CANONICA (larga, sin barra
   final, en minusculas): la misma carpeta escrita en 8.3 o con otras
@@ -175,6 +179,7 @@ uses
   System.StrUtils,
   System.IOUtils,
   System.RegularExpressions,
+  System.Generics.Collections,
   System.Hash,
   Lsp.NetDrives,        // SinBarraFinal
   Lsp.Rutas,            // LongCanonical: la clave de una carpeta, por su forma canonica
@@ -225,46 +230,44 @@ begin
   Result := ServerDir('reports');
 end;
 
+{ La carpeta de las copias de APath: ide-copias\<la carpeta del original>. }
+function CarpetaDeCopiasDelIde(const APath: string): string;
+var
+  Origen: string;
+begin
+  Origen := TPath.GetFileName(SinBarraFinal(TPath.GetDirectoryName(APath)));
+  if Origen = '' then
+    Origen := '_'; // la raiz de una unidad
+  Result := ServerCacheDir(TPath.Combine('ide-copias', Origen));
+end;
+
+function CopiaDelIde(const APath: string): string;
+begin
+  Result := TPath.Combine(CarpetaDeCopiasDelIde(APath),
+    SelloUnico + '-' + TPath.GetFileName(APath));
+end;
+
+function CopiasDelIde(const APath: string): TArray<string>;
+var
+  Dir, Patron: string;
+begin
+  Result := nil;
+  Dir := CarpetaDeCopiasDelIde(APath);
+  if not TDirectory.Exists(Dir) then
+    Exit;
+  Patron := '^' + SELLO_UNICO_PATRON + '-' + TRegEx.Escape(TPath.GetFileName(APath)) + '$';
+  for var F in TDirectory.GetFiles(Dir) do
+    if TRegEx.IsMatch(TPath.GetFileName(F), Patron, [roIgnoreCase]) then
+      Result := Result + [F];
+  // el sello empieza por la fecha y la hora: el orden del texto es el del tiempo
+  TArray.Sort<string>(Result);
+end;
+
 function CarpetasDeLaCasa: TArray<string>;
 begin
   Result := [CarpetaDeMensajes, CarpetaDeInformes];
   if EsRutaAbsoluta(ServerCacheDir) then
     Result := Result + [ServerCacheDir];
-end;
-
-procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
-var
-  Tmp: string;
-  Err: DWORD;
-begin
-  // el escritor pregunta EL MISMO (revision de la 1.12.0): escribe solo DENTRO
-  // de la casa de caches, y esa casa tiene que ser una ruta absoluta: con
-  // LOCALAPPDATA vacia ServerCacheDir es relativa y caeria en la carpeta de
-  // trabajo del proceso (System32 en el servicio). Por el TEXTO canonico, no
-  // por la ruta real: lo que se guarda es un error de composicion (esa
-  // carpeta no la toca ningun agente), y bajo la virtualizacion de un
-  // paquete MSIX una subcarpeta recien creada tiene OTRA ruta real que su
-  // padre (medido el 4-oct-2026 desde la app de escritorio de Claude:
-  // ...\Packages\Claude_...\LocalCache\Local\DelphiLspMcp\designer)
-  if not TPath.IsPathRooted(ServerCacheDir) or
-     not StartsText(IncludeTrailingPathDelimiter(TPath.GetFullPath(ServerCacheDir)),
-       TPath.GetFullPath(AFichero)) then
-    raise EInOutError.Create(MsgFmt(SL_CASA_FUERA_FMT, [AFichero, ServerCacheDir]));
-  Tmp := AFichero + '.' + IntToStr(GetCurrentThreadId) + '.tmp';
-  try
-    TFile.WriteAllText(Tmp, ATexto, TEncoding.UTF8);
-  except
-    // a medias no se queda: un .tmp suelto no lo ve nadie para borrarlo
-    System.SysUtils.DeleteFile(Tmp);
-    raise;
-  end;
-  if not MoveFileEx(PChar(Tmp), PChar(AFichero), MOVEFILE_REPLACE_EXISTING) then
-  begin
-    Err := GetLastError;
-    System.SysUtils.DeleteFile(Tmp);
-    if not FileExists(AFichero) then
-      RaiseLastOSError(Err);
-  end;
 end;
 
 function FragmentoUnico: string;

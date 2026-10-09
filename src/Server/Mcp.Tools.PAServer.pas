@@ -123,7 +123,8 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.ProcessLaunch, // TrocearArgs / EnComillas
-  Lsp.Patch, // LeeTexto: la puerta de leer (los ficheros del IDE)
+  Lsp.Patch, // LeeTexto/EscribeTexto: las puertas, con el IDE como lugar
+  Lsp.Codificacion, // ekUtf8Bom
   Lsp.Args;
 
 constructor TDelphiPAServerTool.Create;
@@ -401,11 +402,14 @@ begin
   end;
 end;
 
-procedure EscribirFicha(const ASysRoot, ASdk, ADistro, AGlibc, AGcc,
-  AProfile: string);
+{ La ficha del sysroot (mcp-sdk.json); devuelve donde quedo la copia de la
+  que pisa ('' si no habia o si no se pudo escribir: sin ficha se sigue). }
+function EscribirFicha(const ASysRoot, ASdk, ADistro, AGlibc, AGcc,
+  AProfile: string): string;
 var
   O: TJSONObject;
 begin
+  Result := '';
   O := TJSONObject.Create;
   try
     O.AddPair('sdk', ASdk);
@@ -415,8 +419,9 @@ begin
     O.AddPair('profile', AProfile);
     O.AddPair('pulled', FormatDateTime('yyyy-mm-dd hh:nn', Now));
     try
-      TFile.WriteAllText(TPath.Combine(ASysRoot, SDK_FICHA), O.ToJSON,
-        TEncoding.UTF8);
+      // por la puerta de escribir, con el IDE como lugar: el sysroot de un SDK
+      // registrado, y la ficha anterior copiada antes en la casa
+      Result := EscribeTexto(TPath.Combine(ASysRoot, SDK_FICHA), O.ToJSON, ltIde, ekUtf8Bom);
     except
       // sin ficha se sigue: solo se pierde el aviso de mezcla
     end;
@@ -969,14 +974,19 @@ begin
   ProfileFile := RutaDePerfil(Info.Version, ProfName);
   if not TFile.Exists(ProfileFile) then
     Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+  // por la puerta, con el IDE como lugar: se copia antes en la casa del
+  // servidor (se borraba sin copia, irrecuperable: medida M3)
+  var Copia := '';
   try
-    TFile.Delete(ProfileFile);
+    Copia := BorraFichero(ProfileFile, ltIde);
   except
     on E: Exception do
       Exit(MsgEnvuelve(SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT, E.Message));
   end;
   BorrarPerfilDelIde(Info.Version, ProfName);
   Result := MsgFmt(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
+  if Copia <> '' then
+    Result := Result + MsgFmt(SN_PAS_COPIA_DEL_IDE_FMT, [Copia]);
   // paclient deja una carpeta VACIA con el nombre del perfil en el directorio
   // de SDKs del IDE al crearlo, y nadie la recogia: medido el 2026-09-22, diez
   // carpetas huerfanas de perfiles de prueba en la maquina del operador.
@@ -1408,7 +1418,11 @@ begin
       Sb.AppendLine('</Project>');
 
       SdkFile := RutaDeSdk(Info.Version, SdkName);
-      TFile.WriteAllText(SdkFile, Sb.ToString, TEncoding.UTF8);
+      // por la puerta de escribir, con el IDE como lugar: un .sdk que ya
+      // estaba se copia ANTES en la casa del servidor (se pisaba sin copia)
+      var CopiaSdk := EscribeTexto(SdkFile, Sb.ToString, ltIde, ekUtf8Bom);
+      if CopiaSdk <> '' then
+        Return.AddPair('previousSdkCopy', CopiaSdk);
       // y el asiento del SDK Manager del IDE, leyendo la tabla del
       // defaultsdkpaths de ESTA instalacion (nada clavado)
       if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot, SdkName,
@@ -1421,7 +1435,9 @@ begin
 
     // La glibc del sysroot recien traido: ES el dato con el que se elige.
     Glibc := VersionDeGlibc(SysRoot);
-    EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName);
+    var CopiaFicha := EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName);
+    if CopiaFicha <> '' then
+      Return.AddPair('previousSdkRecordCopy', CopiaFicha);
 
     Return.AddPair('sdk', NombreDeSdk(SdkName));
     Return.AddPair('sdkFile', SdkFile);
@@ -1598,7 +1614,7 @@ end;
 function RemoveSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
-  Nombre, Fichero, Xml, Raiz: string;
+  Nombre, Fichero, Xml, Raiz, CopiaSdk: string;
   R: TRegistry;
   Return: TJSONObject;
 begin
@@ -1614,6 +1630,7 @@ begin
   // existe. Esta tool es la escoba: si no hay nada que limpiar, NI fichero ni
   // asiento, entonces si se protesta.
   Raiz := '';
+  CopiaSdk := '';
   if TFile.Exists(Fichero) then
   begin
     try
@@ -1622,8 +1639,9 @@ begin
     except
       Raiz := '';
     end;
+    // por la puerta, con el IDE como lugar: se copia antes en la casa
     try
-      TFile.Delete(Fichero);
+      CopiaSdk := BorraFichero(Fichero, ltIde);
     except
       on E: Exception do
         Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_FMT,
@@ -1643,6 +1661,8 @@ begin
   Return := TJSONObject.Create;
   try
     Return.AddPair('removed', NombreDeSdk(Nombre));
+    if CopiaSdk <> '' then
+      Return.AddPair('removedCopy', CopiaSdk);
     if Raiz <> '' then
     begin
       Return.AddPair('sysrootLeftBehind', Raiz);

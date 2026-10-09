@@ -103,6 +103,27 @@ type
     [Test] procedure UnaCasaRelativaNoEsLugar;
   end;
 
+  { LA PUERTA DE ESCRIBIR (Lsp.Patch.LugarDeEscrituraDenegado, EscribeTexto)
+    en los mismos lugares del ejecutor: entero o nada (ni un temporal de
+    sustitucion al lado), con su codificacion, y un enlace en el camino no
+    lleva la escritura detras. Del IDE, lo que no depende de lo que tenga
+    registrado: su instalacion se lee y NUNCA se escribe. Lo que se pisa o
+    se borra en el IDE con copia lo mide test_sdk (remove-sdk). }
+  [TestFixture]
+  TPuertaDeEscribirTests = class
+  private
+    FDir, FUnion, FVictima: string;
+  public
+    [Setup] procedure Prepara;
+    [TearDown] procedure Limpia;
+    [Test] procedure EnSuLugarSeEscribeEnteroYConSuCodificacion;
+    [Test] procedure UnEnlaceNoLlevaLaEscrituraDetras;
+    [Test] procedure SettingsIniNoSeEscribe;
+    [Test] procedure LaInstalacionDelIdeSeLeePeroNoSeEscribe;
+    [Test] procedure SustituirConservaLaFechaDeCreacion;
+    [Test] procedure LaJaulaNoSeBorraPorAqui;
+  end;
+
 implementation
 
 uses
@@ -112,7 +133,9 @@ uses
   Lsp.Guard,
   Lsp.Casa,
   Lsp.Lugares,
-  Lsp.Patch,          // la puerta de leer
+  Lsp.Patch,          // las puertas de leer y de escribir
+  Lsp.Codificacion,   // ekUtf8Bom
+  Lsp.Discovery,      // la instalacion del IDE
   Lsp.Rutas,          // EsRutaAbsoluta
   LspTests.FormRender, // CreaUnion
   Lsp.Mascara;
@@ -611,11 +634,140 @@ begin
   end;
 end;
 
+{ TPuertaDeEscribirTests }
+
+procedure TPuertaDeEscribirTests.Prepara;
+begin
+  FDir := ServerTempDir('escribir-' + FragmentoUnico);
+  ForceDirectories(FDir);
+  FUnion := TPath.Combine(FDir, 'fuera');
+  // la victima, FUERA del temporal: en la carpeta del ejecutor, a su lado
+  FVictima := TPath.Combine(ExtractFileDir(ParamStr(0)), 'victima-' + FragmentoUnico);
+  ForceDirectories(FVictima);
+end;
+
+procedure TPuertaDeEscribirTests.Limpia;
+begin
+  // la union se quita como union (RemoveDir): lo de detras no se toca
+  if TDirectory.Exists(FUnion) then
+    RemoveDir(FUnion);
+  for var D in TArray<string>.Create(FDir, FVictima) do
+    if TDirectory.Exists(D) then
+    begin
+      for var F in TDirectory.GetFiles(D) do
+        TFile.Delete(F);
+      RemoveDir(D);
+    end;
+end;
+
+procedure TPuertaDeEscribirTests.EnSuLugarSeEscribeEnteroYConSuCodificacion;
+var
+  F: string;
+  B: TBytes;
+begin
+  F := TPath.Combine(FDir, 'nota.md');
+  Assert.AreEqual('', LugarDeEscrituraDenegado(F, ltTemporal));
+  EscribeTexto(F, 'acentuación', ltTemporal, ekUtf8Bom);
+  B := TFile.ReadAllBytes(F);
+  Assert.IsTrue((Length(B) > 3) and (B[0] = $EF) and (B[1] = $BB) and (B[2] = $BF),
+    'con su BOM');
+  Assert.AreEqual('acentuación', TEncoding.UTF8.GetString(B, 3, Length(B) - 3));
+  // pisar lo que hay: entero, en la codificacion que se pide
+  EscribeTexto(F, 'otra', ltTemporal, ekUtf8);
+  Assert.AreEqual('otra', TEncoding.ASCII.GetString(TFile.ReadAllBytes(F)));
+  // y ni un temporal de sustitucion al lado
+  Assert.AreEqual(1, Integer(Length(TDirectory.GetFiles(FDir))));
+end;
+
+procedure TPuertaDeEscribirTests.UnEnlaceNoLlevaLaEscrituraDetras;
+var
+  F, R: string;
+begin
+  // <temporal>\escribir-x\fuera -> una carpeta FUERA del temporal: por el
+  // TEXTO la ruta esta dentro, pero hay un enlace en medio
+  Assert.IsTrue(CreaUnion(FUnion, FVictima),
+    'la union se crea: ' + SysErrorMessage(GetLastError));
+  F := TPath.Combine(FUnion, 'x.md');
+  R := LugarDeEscrituraDenegado(F, ltTemporal);
+  Assert.IsTrue(R.StartsWith('[GUARD-034'), 'la puerta niega: [' + R + ']');
+  Assert.WillRaise(
+    procedure
+    begin
+      EscribeTexto(F, 'detras', ltTemporal, ekUtf8);
+    end);
+  // la victima, intacta: ni el fichero ni un temporal de sustitucion
+  Assert.AreEqual(0, Integer(Length(TDirectory.GetFiles(FVictima))));
+end;
+
+procedure TPuertaDeEscribirTests.SettingsIniNoSeEscribe;
+var
+  R: string;
+begin
+  // la casa son sus carpetas, no la del exe entera (se pregunta el sitio:
+  // no hace falta que exista)
+  for var L in TArray<TLugarDeTexto>.Create(ltCasa, ltTemporal) do
+  begin
+    R := LugarDeEscrituraDenegado(ServerDir('settings.ini'), L);
+    Assert.IsTrue(R.StartsWith('[GUARD-034'), R);
+  end;
+end;
+
+procedure TPuertaDeEscribirTests.LaInstalacionDelIdeSeLeePeroNoSeEscribe;
+var
+  Info: TRadStudioInfo;
+  F, R: string;
+begin
+  Info := DiscoverRadStudio;
+  Assert.IsTrue(Info.Found, 'el ejecutor ve su Delphi');
+  F := TPath.Combine(TPath.Combine(Info.RootDir, 'bin'), 'rsvars.bat');
+  // para LEER es del IDE: lo afirma la lectura, asi que la negativa de
+  // abajo no sale de una lista de lugares vacia
+  Assert.AreEqual('', LugarDeLecturaDenegado(F, [ltIde]));
+  R := LugarDeEscrituraDenegado(F, ltIde);
+  Assert.IsTrue(R.StartsWith('[GUARD-034'), R);
+end;
+
+procedure TPuertaDeEscribirTests.SustituirConservaLaFechaDeCreacion;
+var
+  F: string;
+begin
+  // el renombre del temporal dejaba SU fecha de creacion (revisor de P3):
+  // el vault (file.ctime de Obsidian) veia la nota recien nacida
+  F := TPath.Combine(FDir, 'fecha.md');
+  EscribeTexto(F, 'uno', ltTemporal, ekUtf8);
+  TFile.SetCreationTime(F, EncodeDate(2001, 1, 1));
+  EscribeTexto(F, 'dos', ltTemporal, ekUtf8);
+  Assert.AreEqual('dos', TEncoding.ASCII.GetString(TFile.ReadAllBytes(F)));
+  Assert.IsTrue(TFile.GetCreationTime(F) < EncodeDate(2002, 1, 1),
+    DateTimeToStr(TFile.GetCreationTime(F)));
+end;
+
+procedure TPuertaDeEscribirTests.LaJaulaNoSeBorraPorAqui;
+var
+  F, M: string;
+begin
+  // en la jaula se borra a su papelera (delphi_delete): GUARD-035, y nada.
+  // El motivo se mira: aqui no hay raices y la puerta de la jaula negaria
+  // igual, asi que una excepcion cualquiera no prueba nada
+  F := TPath.Combine(FDir, 'jaula.md');
+  EscribeTexto(F, 'x', ltTemporal, ekUtf8);
+  M := '';
+  try
+    BorraFichero(F, ltJaula);
+  except
+    on E: Exception do
+      M := E.Message;
+  end;
+  Assert.IsTrue(M.StartsWith('[GUARD-035'), M);
+  Assert.IsTrue(TFile.Exists(F), 'sigue ahi');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
   TDUnitX.RegisterTestFixture(TBarridoDeUnidadesTests);
   TDUnitX.RegisterTestFixture(TClaveDeCarpetaTests);
   TDUnitX.RegisterTestFixture(TPuertaDeLeerTests);
+  TDUnitX.RegisterTestFixture(TPuertaDeEscribirTests);
 
 end.

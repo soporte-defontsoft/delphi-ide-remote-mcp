@@ -62,6 +62,8 @@ uses
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
+  Lsp.Patch,      // EscribeTexto: la puerta de escribir, con la casa como lugar
+  Lsp.Codificacion, // ekUtf8Bom
   System.Character,
   Lsp.Casa;
 
@@ -73,6 +75,8 @@ const
   // single call" stops being free. Bounded HERE, next to the empty-message
   // check: it is this tool's own input contract, not an access decision.
   MAX_REPORT_BYTES = 256 * 1024;
+  // the names a report may try in one folder before giving up (-2 .. -500)
+  MAX_REPORT_NAME_TRIES = 500;
 
 // Slug: EL normalizador de nombres de cliente vive en Lsp.Casa (uno solo).
 
@@ -140,12 +144,21 @@ begin
   Dir := CarpetaDeInformes;
   if Agent <> '' then
     Dir := TPath.Combine(Dir, Agent);
-  CrearCarpeta(Dir);
 
   Stamp := Now;
   FileName := FormatDateTime('yyyymmdd-hhnnss', Stamp) + '-' + Kind;
   if Slug(Title) <> '' then
     FileName := FileName + '-' + Slug(Title);
+  // la puerta de escribir ANTES de crear nada: la carpeta y la reserva del
+  // nombre ya escriben, y por una union en reports\ se escribian fuera. Con
+  // el nombre MAS LARGO que se puede llegar a probar: la medida del escritor
+  // atomico es por longitud, y con el corto pasaba, se reservaba un -N mas
+  // largo y la escritura lo negaba dejando la reserva vacia (revisor de P3)
+  var Motivo := LugarDeEscrituraDenegado(TPath.Combine(Dir,
+    Format('%s-%d.md', [FileName, MAX_REPORT_NAME_TRIES])), ltCasa);
+  if Motivo <> '' then
+    Exit(Motivo);
+  CrearCarpeta(Dir);
   // Never overwrite a previous report, even within the same second - and
   // "existe? pues el siguiente" NO basta: dos informes simultaneos contestan
   // que no a la vez, eligen el mismo nombre y uno pisa al otro (medido
@@ -156,7 +169,7 @@ begin
   while not ReservarNombre(Path) do
   begin
     Inc(I);
-    if I > 500 then // absurdo, pero nunca un bucle infinito
+    if I > MAX_REPORT_NAME_TRIES then // absurdo, pero nunca un bucle infinito
       Exit(MsgText(SR_REPORT_NO_NAME));
     Path := TPath.Combine(Dir, Format('%s-%d.md', [FileName, I]));
   end;
@@ -184,8 +197,18 @@ begin
     Sb.Free;
   end;
 
-  // UTF-8 with BOM: these are documents for humans, not Delphi sources.
-  TFile.WriteAllText(Path, Body, TEncoding.UTF8);
+  // UTF-8 with BOM: these are documents for humans, not Delphi sources. Por
+  // la puerta de escribir, entero o nada, sobre el nombre ya reservado
+  try
+    EscribeTexto(Path, Body, ltCasa, ekUtf8Bom);
+  except
+    // la reserva vacia no se queda: un informe sin cuerpo no es de nadie
+    try
+      BorraFichero(Path, ltCasa);
+    except
+    end;
+    raise;
+  end;
   TLogger.Info(MsgFmt(SL_REPORT_DELPHI_REPORT_FROM_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path), Kind,
      Params.From.Trim]));

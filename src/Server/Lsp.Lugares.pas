@@ -44,8 +44,11 @@ function LibraryReadRoots: TArray<string>;
   fuera de esto se niega; decisions/puertas-diseno-2026-10-09). NO las
   carpetas de Documentos (BdsUserDir, BdsCommonDir): de la de usuario cuelga
   Projects, donde el IDE crea los proyectos de la gente. En la forma con la
-  que se compara (FormaLarga). Sin Delphi, vacio. }
-function LugaresDelIde: TArray<string>;
+  que se compara (FormaLarga). Sin Delphi, vacio.
+  AParaEscribir: los que se pueden ESCRIBIR, que son los mismos SIN la
+  instalacion (David, 9-oct-2026: solo BDS AppData y los sysroots de los SDK
+  que el IDE registra; la instalacion se lee, no se toca). }
+function LugaresDelIde(AParaEscribir: Boolean = False): TArray<string>;
 
 { La forma DECLARADA de una ruta que llega RESUELTA. Un programa que el
   servidor lanza contesta con la ruta real (git: la raiz de un repo), y la
@@ -123,7 +126,8 @@ var
   // los lugares del IDE: se miden una vez, como la zona de biblioteca (las
   // puertas los preguntan por cada fichero, y IdeSdksDir lee el registro)
   GIdeLoaded: Boolean = False;
-  GIdeLugares: TArray<string>;
+  GIdeInstalacion: string;      // la instalacion: solo para leer
+  GIdeLugares: TArray<string>;  // datos del usuario y SDK: leer y escribir
 
 { The read-only library zone: RAD Studio installation + IDE Library Search
   Path directories (installed components), canonicalized. Cached. }
@@ -549,31 +553,45 @@ begin
   Result := LibraryRoots;
 end;
 
-function LugaresDelIde: TArray<string>;
+function LugaresDelIde(AParaEscribir: Boolean): TArray<string>;
 var
   Info: TRadStudioInfo;
   Lugares: TArray<string>;
+  Instalacion: string;
 begin
   // (no lee ningun fichero por las puertas: las puertas la preguntan a ELLA)
   Info := DiscoverRadStudio;
   if not GIdeLoaded then
   begin
+    // en locales, y las globales al final: otro hilo que ya viese GIdeLoaded
+    // no se encuentra la instalacion a medio calcular (revisor de P3)
     Lugares := nil;
+    Instalacion := '';
+    // solo lo ABSOLUTO: con APPDATA vacia la carpeta de perfiles saldria
+    // relativa a la carpeta de trabajo del proceso (medida M3), y eso no es
+    // un lugar del IDE
     if Info.Found then
-      for var L in TArray<string>.Create(Info.RootDir, IdeProfilesDir(Info.Version),
+    begin
+      if EsRutaAbsoluta(Info.RootDir.Trim) then
+        Instalacion := FormaLarga(Info.RootDir);
+      for var L in TArray<string>.Create(IdeProfilesDir(Info.Version),
         IdeSdksDir(Info.Version)) do
-        if L.Trim <> '' then
+        if EsRutaAbsoluta(L.Trim) then
           Lugares := Lugares + [FormaLarga(L)];
+    end;
+    GIdeInstalacion := Instalacion;
     GIdeLugares := Lugares;
     GIdeLoaded := True;
   end;
   Result := GIdeLugares;
+  if not AParaEscribir and (GIdeInstalacion <> '') then
+    Result := [GIdeInstalacion] + Result;
   // los sysroots registrados, EN CADA llamada: get-sdk, remove-sdk o el SDK
   // Manager los cambian con el servidor en marcha. Los que llevan la macro
   // viven en IdeSdksDir, que ya esta
   if Info.Found then
     for var S in SysrootsRegistrados(Info.Version) do
-      if (S.Trim <> '') and not S.Contains('$(') then
+      if EsRutaAbsoluta(S.Trim) and not S.Contains('$(') then
         Result := Result + [FormaLarga(S)];
 end;
 

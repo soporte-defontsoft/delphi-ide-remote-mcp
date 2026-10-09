@@ -39,6 +39,8 @@ uses
   System.IOUtils,
   System.Types,
   Lsp.Guard,
+  Lsp.Patch,          // EscribeTexto: la puerta de escribir
+  Lsp.Codificacion,   // ekUtf8
   Lsp.NetDrives;      // CrearCarpeta: crear la carpeta tolerando la carrera
 
 var
@@ -265,8 +267,9 @@ begin
   Dir := TPath.GetDirectoryName(APath);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
     CrearCarpeta(Dir);
-  // UTF-8 without BOM, same as every other vault write.
-  TFile.WriteAllBytes(APath, TEncoding.UTF8.GetBytes(AText));
+  // UTF-8 without BOM, same as every other vault write: por la puerta de
+  // escribir, con el vault como lugar (no tenia ninguna)
+  EscribeTexto(APath, AText, ltVault, ekUtf8);
 end;
 
 function SeedVaultIfEmpty(const APath: string): Boolean;
@@ -287,14 +290,24 @@ begin
     else
       CrearCarpeta(Root);
 
-    WriteNote(TPath.Combine(Root, 'VAULT-INSTRUCTIONS.md'), T_INSTRUCTIONS);
-    WriteNote(TPath.Combine(Root, 'AGENTS-VAULT.md'), T_RULES);
-    WriteNote(TPath.Combine(Root, 'MEMORY.md'), T_INDEX);
-    WriteNote(TPath.Combine(Root, 'AGENTS-VAULT-WRITE.md'), T_WRITE);
-    WriteNote(TPath.Combine(Root, 'conventions\example-conventions.md'), T_CONVENTIONS);
-    WriteNote(TPath.Combine(Root, 'projects\example-project\context.md'), T_CONTEXT);
-    WriteNote(TPath.Combine(Root, 'projects\example-project\progress.md'), T_PROGRESS);
-    WriteNote(TPath.Combine(Root, 'projects\example-project\log.md'), T_LOG);
+    var Notas := TArray<string>.Create('VAULT-INSTRUCTIONS.md', 'AGENTS-VAULT.md',
+      'MEMORY.md', 'AGENTS-VAULT-WRITE.md', 'conventions\example-conventions.md',
+      'projects\example-project\context.md', 'projects\example-project\progress.md',
+      'projects\example-project\log.md');
+    var Textos := TArray<string>.Create(T_INSTRUCTIONS, T_RULES, T_INDEX, T_WRITE,
+      T_CONVENTIONS, T_CONTEXT, T_PROGRESS, T_LOG);
+    // la puerta para TODAS antes de crear nada (WriteNote crea carpetas): por
+    // una union en projects\ se creaba example-project detras, y la semilla
+    // quedaba a medias para siempre - en el arranque siguiente ya hay .md -
+    // (revisor de P3)
+    for var N in Notas do
+    begin
+      var Motivo := LugarDeEscrituraDenegado(TPath.Combine(Root, N), ltVault);
+      if Motivo <> '' then
+        raise Exception.Create(Motivo);
+    end;
+    for var I := 0 to High(Notas) do
+      WriteNote(TPath.Combine(Root, Notas[I]), Textos[I]);
 
     GNote := 'Vault: empty folder at "' + Root + '" seeded with the starter ' +
       'templates (rules, index, write guide and an example project). Edit ' +

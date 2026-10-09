@@ -424,6 +424,64 @@ check('ida y vuelta: ...y una nota en CP1252 bien formada se reescribe entera en
 mc.borra(IDA)
 
 # ===========================================================================
+# 9-bis. La escritura del vault es una SUSTITUCION entera (bloque de las
+# puertas de la 1.18.0), medida por lo que hace y no por la falta de
+# temporales (revisor de P3: aquella comprobacion pasaba sin el arreglo):
+#  (a) una nota que es un HARDLINK de un fichero de FUERA del vault: escribir
+#      encima cambiaba tambien el de fuera (es la misma entrada del disco); la
+#      sustitucion lo deja como estaba.
+#  (b) la fecha de CREACION de la nota se conserva (file.ctime de Obsidian y
+#      Dataview): el renombre dejaba la del temporal.
+#  (c) una carpeta del vault que es una union a otra de fuera, con un enlace
+#      alli que vuelve dentro: la puerta juzgaba la ruta real del FICHERO
+#      (dentro) y el temporal nacia FUERA; ahora la de su carpeta: GUARD-034.
+# ===========================================================================
+import ctypes, time
+FUERA9 = mc.carpeta('vault-fuera')
+_hl_fuera = os.path.join(FUERA9, 'compartida.md')
+open(_hl_fuera, 'wb').write(b'# Compartida\n')
+_hl_nota = os.path.join(VAULT, 'hl.md')
+if ctypes.windll.kernel32.CreateHardLinkW(_hl_nota, _hl_fuera, None):
+    out = s.call('vault_append', {"path": "hl.md", "content": "- desde el vault\n"})
+    check('(a) una nota que es un hardlink de un fichero de fuera: se escribe la nota y el de fuera NO cambia',
+          'desde el vault' in open(_hl_nota, encoding='utf-8').read() and
+          open(_hl_fuera, 'rb').read() == b'# Compartida\n', (out[:200], open(_hl_fuera, 'rb').read()))
+    os.remove(_hl_nota)
+else:
+    check('(a) el hardlink de la prueba se crea', False, ctypes.GetLastError())
+
+w('ctime.md', '# Fecha\n')
+_nacio = os.stat(os.path.join(VAULT, 'ctime.md'))
+_nacio = getattr(_nacio, 'st_birthtime', _nacio.st_ctime)
+time.sleep(1.5)
+out = s.call('vault_append', {"path": "ctime.md", "content": "- otra linea\n"})
+_ahora = os.stat(os.path.join(VAULT, 'ctime.md'))
+_ahora = getattr(_ahora, 'st_birthtime', _ahora.st_ctime)
+check('(b) la fecha de creacion de una nota se conserva al escribirla',
+      'otra linea' in open(os.path.join(VAULT, 'ctime.md'), encoding='utf-8').read() and
+      abs(_ahora - _nacio) < 0.5, (out[:200], _nacio, _ahora))
+os.remove(os.path.join(VAULT, 'ctime.md'))
+
+_dentro9 = os.path.join(FUERA9, 'dentro')
+os.makedirs(_dentro9)
+os.makedirs(os.path.join(VAULT, 'x9'))
+_j9 = os.path.join(VAULT, 'j9')
+_vuelta9 = os.path.join(_dentro9, 'nota.md')
+if mc.junction(_j9, _dentro9) and mc.junction(_vuelta9, os.path.join(VAULT, 'x9')):
+    out = s.call('vault_create', {"path": "j9/nota.md", "content": "# Por la union\n"})
+    check('(c) una carpeta del vault que es una union afuera, con un enlace que vuelve: GUARD-034 y nada fuera',
+          'GUARD-034' in out and os.listdir(_dentro9) == ['nota.md'] and
+          not os.listdir(os.path.join(VAULT, 'x9')), (out[:300], os.listdir(_dentro9)))
+else:
+    check('(c) las uniones de la prueba se crean', False)
+# los enlaces se quitan COMO enlaces (rmdir): lo de detras no se toca
+for _l in (_vuelta9, _j9):
+    if os.path.isdir(_l):
+        os.rmdir(_l)
+os.rmdir(os.path.join(VAULT, 'x9'))
+mc.borra(FUERA9)
+
+# ===========================================================================
 # 10. Read-only vault (VaultReadOnly=1). Desde v0.98 el vault es del
 # workspace ACTIVO, asi que las tools de escritura se registran igualmente
 # (otro workspace del mismo servidor podria escribir); tools/list no las
@@ -514,6 +572,25 @@ check('siembra: un vault YA existente no se vuelve a sembrar (no pisa MEMORY.md)
       open(marker, encoding='utf-8').read() == mine, 'MEMORY.md fue modificado')
 s6.close()
 mc.borra(FRESH)
+
+# ...y una carpeta VACIA cuyo projects\ es una union a otra de fuera (vacia, para
+# que no cuente como vault con notas): la puerta para TODAS las notas antes de
+# crear nada - creaba example-project DETRAS de la union y la semilla quedaba a
+# medias para siempre (revisor de P3)
+VACIO = mc.carpeta('vault-vacio')
+FUERA13 = mc.carpeta('vault-semilla-fuera')
+_proj13 = os.path.join(VACIO, 'projects')
+if mc.junction(_proj13, FUERA13):
+    s7 = Server(vault=VACIO)
+    s7.close()
+    check('siembra: con projects\\ como union afuera no se crea NADA detras ni a medias',
+          os.listdir(FUERA13) == [] and os.listdir(VACIO) == ['projects'],
+          (os.listdir(FUERA13), os.listdir(VACIO)))
+    os.rmdir(_proj13)  # la union, como union
+else:
+    check('siembra: la union de la prueba se crea', False)
+mc.borra(VACIO)
+mc.borra(FUERA13)
 
 # ===========================================================================
 # 14. The vault INSIDE a workspace root: it still belongs to the vault_* tools
@@ -733,6 +810,13 @@ finally:
     _hp.kill()
     _hp.wait(10)  # su exe esta en HDIR: muerto del todo antes de barrerla
     mc.borra(HDIR)
+
+# La escritura del vault va ENTERA o nada (bloque de las puertas de la 1.18.0:
+# un temporal junto a la nota y el renombrado): despues de todas las escrituras
+# de arriba no queda ninguno de esos temporales en el vault
+_temporales = [os.path.join(r, f) for r, _, fs in os.walk(VAULT) for f in fs
+               if f.endswith('.delphi-patch-tmp')]
+check('el vault no se queda con temporales de sustitucion tras sus escrituras', not _temporales, _temporales)
 
 for _d in (VAULT, WORK, SRV):
     mc.borra(_d)

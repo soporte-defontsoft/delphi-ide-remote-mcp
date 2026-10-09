@@ -101,6 +101,10 @@ function CodecDeCharset(const ANombre: string): TEncoding;
   9-oct-2026: la regla de ida y vuelta, en el escritor); delphi_read la
   pregunta para avisar (READ-007). }
 function BytesVuelvenIgual(const B: TArray<Byte>; K: TEncKind): Boolean;
+
+{ Los mismos bytes, uno a uno: EL comparador (el de la foto de Lsp.TodoONada
+  y el de la ida y vuelta: estaba escrito dos veces). }
+function BytesIguales(const A, B: TArray<Byte>): Boolean;
 function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
 function EncodeText(const S: string; K: TEncKind): TArray<Byte>;
 function EncName(K: TEncKind): string;
@@ -287,7 +291,6 @@ end;
 function BytesVuelvenIgual(const B: TArray<Byte>; K: TEncKind): Boolean;
 var
   Vuelta: TArray<Byte>;
-  I: Integer;
 begin
   try
     Vuelta := EncodeText(DecodeBytes(B, K), K);
@@ -298,12 +301,13 @@ begin
     on EEncodingError do
       Exit(False);
   end;
-  if Length(Vuelta) <> Length(B) then
-    Exit(False);
-  for I := 0 to High(B) do
-    if Vuelta[I] <> B[I] then
-      Exit(False);
-  Result := True;
+  Result := BytesIguales(Vuelta, B);
+end;
+
+function BytesIguales(const A, B: TArray<Byte>): Boolean;
+begin
+  Result := (Length(A) = Length(B)) and
+    ((Length(A) = 0) or CompareMem(@A[0], @B[0], Length(A)));
 end;
 
 { UTF-32 a mano: la RTL no tiene su codec y Windows no convierte las paginas
