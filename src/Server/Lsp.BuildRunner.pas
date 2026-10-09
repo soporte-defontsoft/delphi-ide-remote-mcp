@@ -1057,7 +1057,7 @@ var
   Files: TList<string>;
 begin
   Result := '';
-  Dpr := TPath.ChangeExtension(ADprojPath, '.dpr');
+  Dpr := DprDe(ADprojPath);
   Files := TList<string>.Create;
   try
     if TFile.Exists(Dpr) then

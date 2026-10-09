@@ -397,17 +397,15 @@ begin
   if not MismoIdentificador(Stem, AInfo.UnitName) then
     Exit(MsgFmt(SR_UNIT_HEADER_MISMATCH_FMT, [AInfo.UnitName, TPath.GetFileName(APasPath)]));
 
-  // designer pair?
-  if TFile.Exists(ChangeFileExt(AInfo.PasPath, '.dfm')) then
-  begin
-    AInfo.Designer := ChangeFileExt(AInfo.PasPath, '.dfm');
-    AInfo.FormType := 'dfm';
-  end
-  else if TFile.Exists(ChangeFileExt(AInfo.PasPath, '.fmx')) then
-  begin
-    AInfo.Designer := ChangeFileExt(AInfo.PasPath, '.fmx');
-    AInfo.FormType := 'fmx';
-  end;
+  // designer pair? el primero que exista, en el orden de DESIGNER_EXTS (.dfm
+  // antes que .fmx), por su nombrador
+  for var Form in DesignersDeUnidad(AInfo.PasPath) do
+    if TFile.Exists(Form) then
+    begin
+      AInfo.Designer := Form;
+      AInfo.FormType := TPath.GetExtension(Form).Substring(1).ToLower;
+      Break;
+    end;
   if AInfo.Designer = '' then
     Exit;
 

@@ -269,6 +269,14 @@ the MCP `initialize` response (`serverInfo.version`).
   `Lsp.Patch`. `test_paisaje` keeps the day's name and its reader in their
   homes, and `test_round31` R9 checks that a walk purges an expired day and
   only that (no battery checked it).
+- The inverses of two namers get written once: the forms a unit can have
+  (`DesignersDeUnidad` in `Lsp.Patch`, next to the list of designer
+  extensions: the `.dfm` and the `.fmx` beside it, in that order) for the
+  delete, the move, its twin finder and the project's unit reader, which
+  composed them extension by extension in five places; and the `.dpr` of a
+  `.dproj` (`DprDe`, next to `DprojDe` in `Lsp.Dproj`) for the build's
+  directive filter, `delphi_test` and the scaffold's reader. `test_paisaje`
+  keeps both out of hand-written code.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

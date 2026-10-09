@@ -617,7 +617,7 @@ begin
     Exit;
   end;
   Dproj := DprojDe(AProject);
-  Dpr := TPath.ChangeExtension(Dproj, '.dpr');
+  Dpr := DprDe(Dproj);
   if not TFile.Exists(Dpr) then
   begin
     Result.AddPair('error', MsgFmt(SR_TEST_NOPATH_FMT, [AProject]));

@@ -242,6 +242,13 @@ const
   SOURCE_EXTS: array [0 .. 3] of string = ('.pas', '.dpr', '.dpk', '.inc');
   DESIGNER_EXTS: array [0 .. 1] of string = ('.dfm', '.fmx');
   PROJECT_EXTS: array [0 .. 1] of string = ('.dproj', '.groupproj');
+
+{ Los designers que puede tener una unidad: uno por DESIGNER_EXTS, al lado y
+  con su mismo nombre (la regla del IDE), existan o no, en el orden de la
+  lista. La inversa de UnidadDeDesigner (Lsp.DesignerForma): la componian a
+  mano, extension a extension, Mcp.Tools.FileOps (el borrado, el mover y su
+  gemelo) y Lsp.ProjectUnits (2.2 de la 1.18.0). }
+function DesignersDeUnidad(const AUnidad: string): TArray<string>;
 { Donde cayo un cambio entre AAntes y ADespues, para mover los numeros de
   linea de lo que viene despues: ADesde es la primera linea (1-based) del
   texto de ANTES que queda POR DEBAJO de lo cambiado (prefijo y sufijo
@@ -845,6 +852,13 @@ begin
         [TPath.GetFileName(APath), Codigo, SysErrorMessage(Codigo).Trim]);
     raise Exception.Create(Motivo);
   end;
+end;
+
+function DesignersDeUnidad(const AUnidad: string): TArray<string>;
+begin
+  Result := [];
+  for var E in DESIGNER_EXTS do
+    Result := Result + [ChangeFileExt(AUnidad, E)];
 end;
 
 function CopiaDiariaDe(const APath: string): string;

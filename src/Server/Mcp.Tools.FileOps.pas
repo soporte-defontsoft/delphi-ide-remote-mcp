@@ -125,8 +125,9 @@ end;
   por el nombre ORIGINAL si venimos de la papelera, donde cada copia lleva SU
   propio sello de hora - el del .dfm no es el del .pas, se guardaron con
   milisegundos distintos (medido: .pas-215825250 junto a .dfm-215825248). Por
-  eso aqui no vale calcular el nombre: hay que buscarlo. '' si no hay gemelo. }
-function DesignerJunto(const ASrc, AStem, AExt: string;
+  eso aqui no vale calcular el nombre: hay que buscarlo. '' si no hay gemelo.
+  AForm es el candidato de al lado (DesignersDeUnidad, Lsp.Patch). }
+function DesignerJunto(const AForm, AStem: string;
   ADesdePapelera: Boolean): string;
 var
   Dir, Mejor: string;
@@ -134,14 +135,14 @@ begin
   Result := '';
   if not ADesdePapelera then
   begin
-    if TFile.Exists(ChangeFileExt(ASrc, AExt)) then
-      Result := ChangeFileExt(ASrc, AExt);
+    if TFile.Exists(AForm) then
+      Result := AForm;
     Exit;
   end;
-  Dir := TPath.GetDirectoryName(ASrc);
+  Dir := TPath.GetDirectoryName(AForm);
   Mejor := '';
   try
-    for var F in TDirectory.GetFiles(Dir, AStem + AExt + '-*') do
+    for var F in TDirectory.GetFiles(Dir, AStem + TPath.GetExtension(AForm) + '-*') do
     begin
       // ".by" es el marcador de quien lo tiro, no el fichero
       if EsMarcaDeDueno(F) then
@@ -372,7 +373,7 @@ end;
 
 function BorrarNucleo(const Params: TDelphiDeleteParams): string;
 var
-  Denied, Trash, ProjNote, DesignerNote, P, R, Ext: string;
+  Denied, Trash, ProjNote, DesignerNote, P, R: string;
   Projects: TArray<string>;
   // borrar una UNIT es todo o nada: sus proyectos, su form y ella
   FotoUnit: TFotoDeFicheros;
@@ -533,8 +534,7 @@ begin
     var RutasFoto: TArray<string> := [];
     for P in Projects do
       RutasFoto := RutasFoto + [P, DprojDe(P)];
-    for Ext in DESIGNER_EXTS do
-      RutasFoto := RutasFoto + [ChangeFileExt(Params.Path, Ext)];
+    RutasFoto := RutasFoto + DesignersDeUnidad(Params.Path);
     FotoUnit.Toma(RutasFoto);
     HayFotoUnit := True;
     for P in Projects do
@@ -562,16 +562,16 @@ begin
         string.Join(', ', Projects)]) + ProjNote
     else
       ProjNote := MsgText(SN_FILE_PROJECTS_NONE);
-    for Ext in DESIGNER_EXTS do
-      if TFile.Exists(ChangeFileExt(Params.Path, Ext)) then
+    for var Form in DesignersDeUnidad(Params.Path) do
+      if TFile.Exists(Form) then
       try
         var AncestroForm: string;
-        MoveToTrash(ChangeFileExt(Params.Path, Ext), Trash, AncestroForm);
+        MoveToTrash(Form, Trash, AncestroForm);
         CopiasForm := CopiasForm + [Trash];
         AncestrosForm := AncestrosForm + [AncestroForm];
-        FotoUnit.Anota(ChangeFileExt(Params.Path, Ext));
+        FotoUnit.Anota(Form);
         DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-          [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), MsgText(SF_FILE_TAMBIEN_A_PAPELERA)]);
+          [TPath.GetFileName(Form), MsgText(SF_FILE_TAMBIEN_A_PAPELERA)]);
       except
         on E: Exception do
           Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
@@ -761,7 +761,7 @@ end;
 
 function MoverNucleo(const Params: TDelphiMoveParams): string;
 var
-  Denied, BackupNote, Ext, Enc, Src, OldStem, NewStem, ProjNote, P, R, PairNote: string;
+  Denied, BackupNote, Enc, Src, OldStem, NewStem, ProjNote, P, R, PairNote: string;
   Projects, NoSeguidos, NoSegCopia: TArray<string>;
   IsUnit: Boolean;
   AncestroCopia, CarpetaDestino, AncestroDestino: string;
@@ -916,9 +916,9 @@ begin
     // System pasaba; mover una unit que ya se llama asi, no se toca
     if not MismoIdentificador(OldStem, NewStem) and (BadUnitName(NewStem) <> '') then
       Exit(BadUnitName(NewStem));
-    for Ext in DESIGNER_EXTS do
-      if TFile.Exists(ChangeFileExt(Params.Dest, Ext)) then
-        Exit(MsgFmt(SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT, [ChangeFileExt(Params.Dest, Ext)]));
+    for var Form in DesignersDeUnidad(Params.Dest) do
+      if TFile.Exists(Form) then
+        Exit(MsgFmt(SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT, [Form]));
     // renombrarla es reescribir su cabecera (unit X;): con el atributo +R no
     // se puede, y se movia igual - MOVED con "unit UOld;" en UNew.pas y el
     // proyecto roto. Se dice ANTES de mover (novena revision)
@@ -1094,21 +1094,24 @@ begin
   PairNote := '';
   // los designers ya movidos (de, a): si falla el siguiente vuelven (con
   // .dfm y .fmx, el .dfm se quedaba en el destino; novena revision)
-  for Ext in DESIGNER_EXTS do
+  // los de la unidad y los del destino, en el mismo orden (DesignersDeUnidad)
+  var FormsDe := DesignersDeUnidad(Params.Path);
+  var FormsA := DesignersDeUnidad(Params.Dest);
+  for var K := 0 to High(FormsDe) do
   begin
-    var Gemelo := DesignerJunto(Params.Path, OldStem, Ext, DesdePapelera);
+    var Gemelo := DesignerJunto(FormsDe[K], OldStem, DesdePapelera);
     if Gemelo = '' then
       Continue;
     try
       if Params.Copy then
-        CopiaNuestra(Gemelo, ChangeFileExt(Params.Dest, Ext))
+        CopiaNuestra(Gemelo, FormsA[K])
       else
-        TFile.Move(Gemelo, ChangeFileExt(Params.Dest, Ext));
+        TFile.Move(Gemelo, FormsA[K]);
       DisenosDe := DisenosDe + [Gemelo];
-      DisenosA := DisenosA + [ChangeFileExt(Params.Dest, Ext)];
+      DisenosA := DisenosA + [FormsA[K]];
       // una nota por designer: con .dfm Y .fmx solo se nombraba el ultimo (decima)
       PairNote := PairNote + IfThen(PairNote <> '', #10) + MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-        [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)),
+        [TPath.GetFileName(FormsA[K]),
          IfThen(Params.Copy, MsgText(SF_MOVE_COPIADO_CON_UNIT), MsgText(SF_MOVE_MOVIDO_CON_UNIT))]);
     except
       on E: Exception do

@@ -675,9 +675,7 @@ var
   Dpr, Txt, Enc: string;
 begin
   Result := '';
-  Dpr := APath;
-  if SameText(TPath.GetExtension(Dpr), '.dproj') then
-    Dpr := TPath.ChangeExtension(Dpr, '.dpr');
+  Dpr := DprDe(APath);
   if not TFile.Exists(Dpr) then
     Exit;
   try
