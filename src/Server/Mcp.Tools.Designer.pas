@@ -491,35 +491,14 @@ begin
   Result := DesignerBindingJson(ADfm, APas);
 end;
 
-{ One property of ONE object, ignoring the properties of its children. }
+{ One property of ONE object, ignoring the properties of its children: EL
+  lector del valor (TStyleDoc.ValorDe, Lsp.Styles). Hasta la 1.18.0 lo leia
+  aqui una regex propia, que tomaba por propiedad del objeto el 'Caption =' de
+  un item de coleccion y daba solo la primera linea de una cadena partida. }
 function PropRaw(ADoc: TStyleDoc; AObj: TStyleObj; const AName: string;
   out AFound: Boolean): string;
-var
-  I, J: Integer;
-  Line: string;
-  Mt: TMatch;
-  Skip: Boolean;
 begin
-  Result := '';
-  AFound := False;
-  for I := AObj.StartLine + 1 to AObj.EndLine - 1 do
-  begin
-    if (I < 1) or (I > Length(ADoc.Lines)) then
-      Continue;
-    Skip := False;
-    for J := 0 to AObj.Children.Count - 1 do
-      if (I >= AObj.Children[J].StartLine) and (I <= AObj.Children[J].EndLine) then
-        Skip := True;
-    if Skip then
-      Continue;
-    Line := ADoc.Lines[I - 1].Trim;
-    Mt := TRegEx.Match(Line, '^(' + PATRON_IDENT_PUNTOS + ')\s*=\s*(.*)$');
-    if Mt.Success and MismoIdentificador(Mt.Groups[1].Value, AName) then
-    begin
-      AFound := True;
-      Exit(Mt.Groups[2].Value.Trim);
-    end;
-  end;
+  Result := ADoc.ValorDe(AObj, AName, AFound);
 end;
 
 function PropInt(ADoc: TStyleDoc; AObj: TStyleObj; const AName: string;

@@ -97,6 +97,12 @@ type
       a list, a binary block, a collection or a string split with '+' run
       over several); False when absent. What SetProp and DeleteProp replace. }
     function PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
+    { El VALOR de AProp en el nivel propio de AObj, entero (una cadena partida,
+      sus trozos en uno: ValorEnteroDe; de una lista o un bloque, su primera
+      linea); '' y AFound False si no esta. EL lector del valor de una
+      propiedad: Mcp.Tools.Designer (PropRaw) lo leia con su propia regex
+      (2.2 de la 1.18.0). }
+    function ValorDe(AObj: TStyleObj; const AProp: string; out AFound: Boolean): string;
     { The object named AName at any depth (a form's component, by its Name;
       the same identifier as dcc sees it); nil when there is none. }
     function ObjetoDeNombre(const AName: string): TStyleObj;
@@ -528,6 +534,16 @@ end;
 function TStyleDoc.PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
 begin
   Result := RangoDePropiedad(AObj, Clasificadas, AProp, AIni, AFin);
+end;
+
+function TStyleDoc.ValorDe(AObj: TStyleObj; const AProp: string; out AFound: Boolean): string;
+var
+  Ini, Fin: Integer;
+begin
+  Result := '';
+  AFound := PropLines(AObj, AProp, Ini, Fin);
+  if AFound then
+    Result := ValorEnteroDe(FLines, Clasificadas, Ini);
 end;
 
 procedure TStyleDoc.DeleteStyle(AObj: TStyleObj);

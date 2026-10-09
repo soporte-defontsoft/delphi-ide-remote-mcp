@@ -72,6 +72,13 @@ the MCP `initialize` response (`serverInfo.version`).
   as text. `DesignerShapeOf` (the resource header `FF 0A 00`, the `TPF0`
   stream) decides now, plus the `FMX_STYLE` signature of a compiled FMX
   style. `test_styles`.
+- **`delphi_designer layout` reads a control's own properties, not its
+  collection items'.** Its reader of one property had a regex of its own,
+  which took the `Width` of a column (`Columns = < item Width = 999 >`) for
+  the control's: a list view with no width of its own came out 999 wide and
+  "outside the form". It now asks the designer's reader of a property's
+  value (`TStyleDoc.ValorDe`: the object's own level, a split string whole).
+  `test_layout` L10.
 
 ### Internal
 

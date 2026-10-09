@@ -240,6 +240,28 @@ o = layout('NoSize', NOSIZE)
 check('L8 un tamano no escrito se declara desconocido, no se inventa',
       len(o.get('sizeNotWritten', [])) == 1 and o.get('zeroSize') == [], o)
 
+# L10 - el Width de un ITEM de coleccion no es el del objeto (2.2 de la 1.18.0:
+# el lector propio de layout, PropRaw, lo tomaba por suyo; ahora lee
+# TStyleDoc.ValorDe, el nivel propio del objeto)
+ITEMW = """object F: TF
+  ClientHeight = 200
+  ClientWidth = 400
+  object LV: TListView
+    Left = 10
+    Top = 10
+    Height = 100
+    Columns = <
+      item
+        Width = 999
+      end>
+  end
+end
+"""
+o = layout('ItemW', ITEMW)
+check('L10 el Width de una columna no es el del control: su anchura sigue sin escribir, '
+      'no se sale del form',
+      'LV' in all_text(o, 'sizeNotWritten') and 'LV' not in all_text(o, 'outsideParent', 'clipped'), o)
+
 # a form that does not say how big it is
 NOFORM = """object F: TF
   Caption = 'x'
