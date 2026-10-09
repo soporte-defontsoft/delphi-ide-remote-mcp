@@ -3104,6 +3104,15 @@ const
     'ANYTHING: moving it to the trash failed (%s). The contents are still ' +
     'INTACT in place.';
 
+  { ColocaProducto (Lsp.Patch) mueve y borra el producto que coloca: solo uno
+    NUESTRO - de la temporal del servidor, o ya en la carpeta del destino,
+    la que aprueba la puerta. Otro es un fallo de quien llama (revisor de P4,
+    9-oct-2026). }
+  SR_COLOCA_PRODUCTO_AJENO_FMT =
+    '[FILE-042 INTERNAL] %s is not a file this server made (its temp, or ' +
+    'the destination''s own folder), so it is not moved over %s. Nothing ' +
+    'was written.';
+
   SR_FILE_DELETE_LOCKED_FMT =
     '[FILE-036 DENIED] I have NOT deleted "%s" and I have NOT touched ' +
     'ANYTHING: something has the folder open and moving it as a whole ' +
@@ -4979,10 +4988,9 @@ const
     'before answering you: whatever holds it open is not a momentary ' +
     'thing.)';
 
-  SR_PACKAGE_RENAME_FMT =
-    '[PKG-002 DENIED] The zip was created but I could not put it in %s ' +
-    '(someone has it open: a download in progress, the file explorer, an ' +
-    'antivirus). Retry in a few seconds.';
+  // PKG-002 (el zip que no se pudo colocar) retirado el 9-oct-2026: lo
+  // coloca ColocaProducto (Lsp.Patch), que dice la causa por la regla de
+  // todas (MotivoDelSistema) o la negativa de la puerta
 
   // El otro lado de lo mismo: reintento y SALIO. Un build que de pronto tarda
   // cinco segundos de mas sin explicacion invita a pensar que algo va mal.

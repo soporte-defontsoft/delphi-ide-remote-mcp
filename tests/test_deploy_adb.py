@@ -149,6 +149,26 @@ out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE",
                               "out": os.path.join(BASE, 'volcado.md')})
 check('adb logcat out sin .txt/.log: rechazado', mc.rechazado(out) and mc.es(out, 'SR_ADB_OUT_LOG')
       and '.txt' in out, out[:200])
+# lo que EL escritor del out= (ColocaContenido) negaria al colocar se dice a
+# la ENTRADA, antes de adb - no tras un logcat de hasta 55 s: una CARPETA con
+# nombre de fichero, el atributo de solo lectura y una ruta que con el
+# temporal de la sustitucion no cabe (revisor de P4, 9-oct-2026). El
+# dispositivo no existe: lo que pase la entrada contesta "no esta"
+CARP = os.path.join(BASE, 'carpeta.txt')
+os.makedirs(CARP, exist_ok=True)
+out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE", "out": CARP})
+check('adb logcat out= que es una CARPETA: rechazado a la entrada (LSP-x is a folder)',
+      mc.rechazado(out) and mc.es(out, 'SR_LSP_IS_FOLDER_FMT'), out[:200])
+RO = os.path.join(BASE, 'ro.txt')
+open(RO, 'w').write('notas\n')
+with mc.solo_lectura(RO):
+    out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE", "out": RO})
+check('adb logcat out= de solo lectura: SYS-029 a la entrada',
+      mc.rechazado(out) and mc.es(out, 'SR_SOLO_LECTURA_ATRIBUTO_FMT'), out[:200])
+LARGA = os.path.join(BASE, 'L' * (240 - len(BASE) - 1 - 4) + '.txt')
+out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE", "out": LARGA})
+check('adb logcat out= de %d caracteres (no cabe con su temporal): GUARD-028 a la entrada' % len(LARGA),
+      mc.rechazado(out) and mc.es(out, 'SR_GUARD_RUTA_LARGA_FMT'), out[:200])
 
 # ====================== gate: the device-token rule (both sinks) ==========
 out = srv.call('delphi_adb', {"command": "connect", "address": "10.0.0.1:5555; rm -rf /"})

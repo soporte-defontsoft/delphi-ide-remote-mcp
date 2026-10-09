@@ -129,7 +129,7 @@ uses
   Lsp.Discovery,     // DiscoverRadStudio: la version del Delphi del servidor
   Lsp.FormRender,    // preview: el renderizador y su protocolo
   Lsp.Imagen,        // RecortaPng: el recorte al componente, en el servidor
-  Lsp.InlineImages,  // DeliverCapture / ColocaCaptura: como se entrega una captura
+  Lsp.InlineImages,  // DeliverCapture: como se entrega una captura
   Lsp.DesignerEdit,  // insert / set / delete: el form y su unidad, como el IDE
   Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
   Lsp.Rutas,
@@ -1079,7 +1079,7 @@ end;
 
 { preview: un PNG de lo que ensena el designer del IDE, por el renderizador
   de su framework (Lsp.FormRender, src\Render). Lee el fichero: no coge el
-  cerrojo de escritura salvo para colocar un out= (ColocaCaptura). El PNG se
+  cerrojo de escritura salvo para colocar un out= (ColocaProducto). El PNG se
   dibuja SIEMPRE en un temporal nuestro y se recorta ahi (RecortaPng con el
   RECT= del componente); con out= se lleva despues a su sitio: el
   renderizador nunca escribe en la jaula por su cuenta. }
@@ -1216,7 +1216,7 @@ begin
 
   if Temporal <> Propia then
     try
-      ColocaCaptura(Temporal, Propia);
+      ColocaProducto(Temporal, Propia); // EL escritor de un producto (Lsp.Patch)
       Temporal := '';
     except
       on E: Exception do

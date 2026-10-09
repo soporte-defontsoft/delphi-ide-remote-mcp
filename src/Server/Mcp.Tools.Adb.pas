@@ -94,7 +94,7 @@ uses
   Lsp.Discovery,
   Lsp.Dproj,
   Lsp.Guard,
-  Lsp.Patch,     // GuardaContenidoActual: la copia antes de pisar un out=
+  Lsp.Patch,     // ColocaProducto / ColocaContenido: un out= se coloca con la puerta, sellando lo que habia
   Lsp.Imagen,
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner;
@@ -304,6 +304,16 @@ begin
       // (sexta revision: se podia escribir dentro de __delphi-patch)
       if (Denied = '') and not EnTemporal(Params.Out) then
         Denied := DeadCopyWriteDenied(Params.Out);
+      // ...y lo que EL escritor (ColocaContenido) negaria al colocar, dicho
+      // aqui y no tras el logcat: una ruta que con su temporal no cabe, una
+      // CARPETA donde va el fichero, el atributo de solo lectura (revisor de
+      // P4)
+      if Denied = '' then
+        Denied := RutaLargaDenegada(Params.Out.Trim);
+      if Denied = '' then
+        Denied := CarpetaEnVezDeFichero(Params.Out.Trim);
+      if Denied = '' then
+        Denied := SoloLecturaDenegado(Params.Out.Trim);
       if Denied <> '' then
         Exit(Denied);
       if not (Params.Out.Trim.ToLower.EndsWith('.txt') or
@@ -353,18 +363,18 @@ begin
       // The dump goes to a FILE the agent reads in ranges (delphi_read
       // pages at 400): a thousands-of-lines inline dump drowned a
       // 200k-context client in the field (312k tokens, 4 compressions).
-      var OutDir := TPath.GetDirectoryName(Params.Out.Trim);
-      if OutDir <> '' then
-        CrearCarpeta(OutDir);
-      // un fichero que ya estaba (unas notas.txt) se pisaba sin copia: la
-      // copia de antes de tocarlo, como toda tool que escribe
-      // con el cerrojo de escritura, como su gemela la captura (septima revision)
-      EnterFileEdit;
+      // un fichero que ya estaba (unas notas.txt) se pisaba sin copia (septima
+      // revision), y la puerta de la entrada quedaba 55 s atras, los del
+      // logcat (P4 de la segunda revision de la 1.17.0): EL escritor de un
+      // producto, que la pregunta al escribir, sella lo que habia y sustituye
+      // de un solo gesto bajo el cerrojo, como su gemela la captura. El
+      // UTF-8 con su BOM, como lo escribia TFile.WriteAllText.
       try
-        GuardaContenidoActual(Params.Out.Trim); // el que habia, sellado (si lo habia)
-        TFile.WriteAllText(Params.Out.Trim, Txt, TEncoding.UTF8);
-      finally
-        LeaveFileEdit;
+        ColocaContenido(Params.Out.Trim,
+          TEncoding.UTF8.GetPreamble + TEncoding.UTF8.GetBytes(Txt));
+      except
+        on E: Exception do
+          Exit(MsgExcepcion(E.ClassName, E.Message));
       end;
       Return := TJSONObject.Create;
       try
@@ -450,7 +460,7 @@ begin
     if Denied <> '' then
       Exit(Denied);
     // se baja SIEMPRE a un temporal nuestro y sin cerrojo (el pull tarda
-    // hasta 60 s); un out= se coloca despues con ColocaCaptura, como preview
+    // hasta 60 s); un out= se coloca despues con ColocaProducto, como preview
     // y delphi_desktop: la puerta en el momento de escribir, la copia sellada
     // de lo que habia y el cerrojo, en un solo sitio (revision de la 1.17.0)
     Destino := Propia;
@@ -477,7 +487,7 @@ begin
     end;
     if Destino <> Propia then
       try
-        ColocaCaptura(Destino, Propia);
+        ColocaProducto(Destino, Propia);
         Destino := Propia;
       except
         on E: Exception do

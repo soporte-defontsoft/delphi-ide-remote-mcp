@@ -129,6 +129,22 @@ the MCP `initialize` response (`serverInfo.version`).
   characters or more on a single line the IDE cannot read. The designer
   does the same now for a literal given to a property whose type it does
   not know as a string. `test_styles`.
+- **A product placed on an `out=` goes through one writer, which asks the
+  gate when it writes.** `delphi_adb logcat` wrote its dump after up to 55 s
+  of adb without asking the gate again, `delphi_package` placed its zip the
+  same way, and the captures (adb, preview, desktop) were moved with a
+  delete and a move, with no retry. `ColocaProducto` / `ColocaContenido`
+  (`Lsp.Patch`) now ask the gate for the folder and the file under the
+  write lock, from the question to the rename; seal what was there (and
+  drop that seal when the replacement fails); replace through a temp beside
+  the destination and `AtomicWrite`'s rename with its retries; and never
+  leave the product, the temp or the folders created for it behind.
+  `logcat` refuses at the entry what that writer would refuse at the end (a
+  folder named like the file, a read-only file, a path too long for its
+  temp), and `package` says a read-only zip before packaging. PKG-002 is
+  retired: the cause comes from the system's rule or from the gate. The zip
+  in progress takes the writer's temp name, so packaging skips any call's
+  intermediate, not only its own. `test_deploy_adb`, `test_escritor_guardado`.
 
 ### Internal
 
@@ -341,6 +357,14 @@ the MCP `initialize` response (`serverInfo.version`).
   property-line regex, binary by the first byte, the edit distance, the
   most similar name, the class chain of the table), and the object-line
   rule now sees a single keyword too.
+- `test_paisaje` looks at the batteries too: the trash folder's name (63
+  places), its day (6) and its "deleted" drawer (7) were written by hand in
+  `tests/*.py`, and a check of ABSENCE with a hand-written name stays green
+  if the server renames it. They come from the server's own namers now
+  (`mc.PAPELERA`, `mc.CAJON_BORRADOS`, `mc.dia_de_papelera`), and three
+  rules with their mutants keep them there. The two binary forms written by
+  the IDE and the RTL reference for the literal composer (T7, T8) watch the
+  form writers.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

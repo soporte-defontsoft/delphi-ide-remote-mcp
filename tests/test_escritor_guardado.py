@@ -202,6 +202,25 @@ import zipfile
 nombres = zipfile.ZipFile(os.path.join(MINE, 'paquete.zip')).namelist() if os.path.exists(os.path.join(MINE, 'paquete.zip')) else []
 check('W package: el zip existe', bool(nombres), out[:200])
 check('W package: NO empaqueta lo de fuera', not any('Secreto' in n for n in nombres), nombres)
+# P4 de la segunda revision de la 1.17.0: el zip lo coloca EL escritor de un
+# producto (ColocaProducto). Un destino con el atributo de solo lectura: la
+# causa (SYS-029), el fichero intacto, ninguna copia sellada de lo que no se
+# sustituye y ningun zip en proceso olvidado. Es una GUARDA, no una medida:
+# la 1.17.0 pasaba igual (medido el 9-oct) porque lo negaba al COLOCAR
+# (GuardaContenidoActual mira el atributo), despues de empaquetar entero;
+# ahora package lo dice a la entrada (SoloLecturaDenegado), antes de
+# empaquetar (revisor de P4). Vigila que colocar no lo rompa
+ZRO = os.path.join(MINE, 'solo.zip')
+open(ZRO, 'wb').write(b'PK-viejo')
+with mc.solo_lectura(ZRO):
+    out = call('delphi_package', {'dir': BUS, 'outfile': ZRO})
+    intacto = open(ZRO, 'rb').read() == b'PK-viejo'
+sellada = [os.path.join(d, f) for d, _, fs in os.walk(os.path.join(MINE, mc.PAPELERA))
+           for f in fs if f.startswith('solo')]
+restos = [f for f in os.listdir(MINE) if f.startswith('solo.zip.') or f.startswith('.solo.zip.')]
+check('P4 package sobre un zip de solo lectura: SYS-029, intacto, sin copia ni restos',
+      mc.rechazado(out) and mc.es(out, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and intacto and not sellada and not restos,
+      (out[:200], sellada, restos))
 
 # ---- M: writers ask the DESTINATION gate (jail + dead folders)
 out = call('delphi_package', {'dir': BUS, 'outfile': os.path.join(MINE, '__delphi-temp', 'p.zip')})
@@ -214,7 +233,7 @@ out = call('delphi_edit', {'path': os.path.join(HIST, 'UVieja.pas'), 'adduses': 
 check('M adduses en __history: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_IDE') and open(os.path.join(HIST, 'UVieja.pas'), 'rb').read() == antes_h, out[:200])
 out = call('delphi_changeset', {'command': 'begin'})
 cid = id_changeset(out)
-out = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(MINE, '__delphi-patch', 'colado.txt'), 'content': 'x'})
+out = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(MINE, mc.PAPELERA, 'colado.txt'), 'content': 'x'})
 check('M changeset create dentro de la papelera: RECHAZADO al preparar', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TRASH'), out[:200])
 call('delphi_changeset', {'command': 'rollback', 'id': cid})
 # R8 (tercera revision): restore confirm lee la copia y escribe la de antes de
@@ -226,15 +245,15 @@ RSV = os.path.join(OUT, 'rest-victima')
 os.makedirs(os.path.join(RSV, '20260101'), exist_ok=True)
 open(os.path.join(RSV, '20260101', 'R.pas'), 'w').write('unit R;\ninterface\nimplementation\nend.\n')
 open(os.path.join(RS, 'R.pas'), 'w').write('unit R;\ninterface\n// hoy\nimplementation\nend.\n')
-subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(RS, '__delphi-patch'), RSV], capture_output=True)
+subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(RS, mc.PAPELERA), RSV], capture_output=True)
 _victima = sorted(os.path.join(r, n) for r, d, fs in os.walk(RSV) for n in fs)
 _rpas = open(os.path.join(RS, 'R.pas'), 'rb').read()
 out = call('delphi_edit', {'path': os.path.join(RS, 'R.pas'), 'restore': True, 'confirm': True})
 check('R8 restore con __delphi-patch enlazado fuera: RECHAZADO, la victima y la unit intactas',
-      os.path.isjunction(os.path.join(RS, '__delphi-patch')) and mc.rechazado(out) and
+      os.path.isjunction(os.path.join(RS, mc.PAPELERA)) and mc.rechazado(out) and
       sorted(os.path.join(r, n) for r, d, fs in os.walk(RSV) for n in fs) == _victima and
       open(os.path.join(RS, 'R.pas'), 'rb').read() == _rpas, out[:200])
-os.rmdir(os.path.join(RS, '__delphi-patch'))  # el ENLACE, nunca su destino
+os.rmdir(os.path.join(RS, mc.PAPELERA))  # el ENLACE, nunca su destino
 srv.cierra()
 
 # ---- D: read-only mode (local stdio with no roots) never rewrites a form

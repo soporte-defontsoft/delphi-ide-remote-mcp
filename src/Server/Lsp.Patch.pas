@@ -386,6 +386,27 @@ function CopiaDiariaDe(const APath: string): string;
 { Escritura atomica de bytes (temporal + MoveFileEx): la usa to-binary del
   disenador para dejar un .dfm binario como lo escribiria el IDE. }
 procedure AtomicWrite(const APath: string; const B: TArray<Byte>); // = TBytes
+{ Coloca un fichero YA HECHO (ALocal: una captura bajada, un zip, un
+  volcado) en ADestino, el out= que eligio el agente: EL escritor de un
+  producto, como AtomicWrite lo es de un contenido. Pregunta a la puerta en
+  el momento de escribir, por la carpeta y por el fichero (la de la entrada
+  pudo quedar atras: un logcat tarda hasta 55 s y un preview 75), sella lo
+  que hubiera alli y lo sustituye de un solo gesto - un temporal junto al
+  destino y el rename de AtomicWrite, con sus reintentos - bajo el cerrojo
+  de escritura. ALocal no se queda nunca, se coloque o no. Lanza con el
+  motivo si no se puede. Eran tres a mano: la captura (borrar y mover, sin
+  reintento), el logcat (sin volver a preguntar a la puerta) y el zip de
+  package (tampoco): P4 de la segunda revision de la 1.17.0. }
+procedure ColocaProducto(const ALocal, ADestino: string);
+// y un CONTENIDO (el texto de un logcat), con las mismas reglas
+procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>);
+{ EL nombre del temporal de una sustitucion junto a APath
+  ('.<nombre>.<8 hex>.delphi-patch-tmp'): el de AtomicWrite, el de
+  ColocaProducto y el del zip en proceso de package, que tenia uno propio
+  (revisor de P4). Su lector, para que un recorrido salte los intermedios
+  de CUALQUIER llamada, no solo el suyo. }
+function TemporalDeSustitucion(const APath: string): string;
+function EsTemporalDeSustitucion(const ANombre: string): Boolean;
 
 { El nombre ORIGINAL de una copia de la papelera, o '' si ese nombre no lleva
   sello. Solo tiene sentido DENTRO de __delphi-patch.
@@ -796,6 +817,75 @@ begin
     Result := MsgFmt(SR_TEXT_EOL_FMT, [AEol]);
 end;
 
+const
+  TEMPORAL_DE_SUSTITUCION_EXT = '.delphi-patch-tmp';
+
+{ El temporal de una sustitucion, junto a APath (el rename es de un solo
+  gesto solo en la misma carpeta). Lleva un fragmento GUID: con nombre fijo,
+  dos escrituras del MISMO fichero por caminos distintos compartian el
+  intermedio - una se llevaba los bytes de la otra al renombrar y la
+  segunda moria con "rename atomico fallido" (medido 2026-09-20). El cerrojo
+  ya las serializa; esto protege ademas a quien escriba sin pasar por el. }
+function TemporalDeSustitucion(const APath: string): string;
+begin
+  Result := TPath.Combine(TPath.GetDirectoryName(APath),
+    '.' + TPath.GetFileName(APath) + '.' +
+    FragmentoUnico + TEMPORAL_DE_SUSTITUCION_EXT);
+end;
+
+function EsTemporalDeSustitucion(const ANombre: string): Boolean;
+begin
+  Result := TRegEx.IsMatch(ANombre, '^\..+\.' + FRAGMENTO_UNICO_PATRON +
+    TRegEx.Escape(TEMPORAL_DE_SUSTITUCION_EXT) + '$', [roIgnoreCase]);
+end;
+
+{ APath sustituido por ATmp de un solo gesto (MoveFileEx con REPLACE); si no
+  se puede, ATmp se borra y se lanza con la causa. El final de AtomicWrite y
+  de ColocaProducto. }
+{ La causa de un rename o un movimiento que Windows nego con ACodigo, por la
+  regla de todas (MotivoDelSistema: ocupado SYS-027, acceso denegado
+  SYS-028); otro codigo, con el texto de Windows. Se decia "otro proceso lo
+  tiene" de CUALQUIER codigo (septima revision). }
+function MotivoDeRenombre(const APath: string; ACodigo: DWORD): string;
+begin
+  Result := MotivoDelSistema(TPath.GetFileName(APath) + ': ' + SysErrorMessage(ACodigo));
+  if Result = '' then
+    Result := MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
+      [TPath.GetFileName(APath), ACodigo, SysErrorMessage(ACodigo).Trim]);
+end;
+
+procedure SustituyePorRenombre(const ATmp, APath: string);
+begin
+  // Un lector de un instante (el preview de un changeset, una busqueda, el
+  // antivirus) tiene el fichero abierto sin compartir el borrado y el rename
+  // rebota: se reintenta unos instantes antes de decir que algo lo tiene
+  // (verificacion de la tercera ronda: cuatro EDIT-106 con varias sesiones,
+  // todos del propio servidor; reintentar funcionaba)
+  var Renombrado := False;
+  var Codigo: DWORD := 0;
+  for var Intento := 1 to 5 do
+  begin
+    Renombrado := MoveFileEx(PChar(ATmp), PChar(APath), MOVEFILE_REPLACE_EXISTING);
+    if Renombrado then
+      Break;
+    // el codigo de Windows ANTES de borrar el temporal (despues salia 0)
+    Codigo := GetLastError;
+    if (Codigo <> ERROR_ACCESS_DENIED) and (Codigo <> ERROR_SHARING_VIOLATION) and
+       (Codigo <> ERROR_LOCK_VIOLATION) then
+      Break;
+    Sleep(100);
+  end;
+  if not Renombrado then
+  begin
+    // un temporal que no se deja borrar no cambia la causa que se dice
+    try
+      TFile.Delete(ATmp);
+    except
+    end;
+    raise Exception.Create(MotivoDeRenombre(APath, Codigo));
+  end;
+end;
+
 procedure AtomicWrite(const APath: string; const B: TBytes);
 var
   Tmp, Motivo: string;
@@ -813,46 +903,111 @@ begin
     Motivo := RutaLargaDenegada(APath);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
-  // El temporal lleva un fragmento GUID: con nombre fijo, dos escrituras del
-  // MISMO fichero por caminos distintos compartian el intermedio - una se
-  // llevaba los bytes de la otra al renombrar y la segunda moria con "rename
-  // atomico fallido" (medido 2026-09-20). El cerrojo de arriba ya las
-  // serializa; esto protege ademas a quien escriba sin pasar por el.
-  Tmp := TPath.Combine(TPath.GetDirectoryName(APath),
-    '.' + TPath.GetFileName(APath) + '.' +
-    FragmentoUnico + '.delphi-patch-tmp');
+  Tmp := TemporalDeSustitucion(APath);
   TFile.WriteAllBytes(Tmp, B);
-  // Un lector de un instante (el preview de un changeset, una busqueda, el
-  // antivirus) tiene el fichero abierto sin compartir el borrado y el rename
-  // rebota: se reintenta unos instantes antes de decir que algo lo tiene
-  // (verificacion de la tercera ronda: cuatro EDIT-106 con varias sesiones,
-  // todos del propio servidor; reintentar funcionaba)
-  var Renombrado := False;
-  var Codigo: DWORD := 0;
-  for var Intento := 1 to 5 do
-  begin
-    Renombrado := MoveFileEx(PChar(Tmp), PChar(APath), MOVEFILE_REPLACE_EXISTING);
-    if Renombrado then
-      Break;
-    // el codigo de Windows ANTES de borrar el temporal (despues salia 0)
-    Codigo := GetLastError;
-    if (Codigo <> ERROR_ACCESS_DENIED) and (Codigo <> ERROR_SHARING_VIOLATION) and
-       (Codigo <> ERROR_LOCK_VIOLATION) then
-      Break;
-    Sleep(100);
-  end;
-  if not Renombrado then
-  begin
-    TFile.Delete(Tmp);
-    // la causa, por la regla de todas (MotivoDelSistema: ocupado SYS-027,
-    // acceso denegado SYS-028); otro codigo, con el texto de Windows. Aqui
-    // se decia "otro proceso lo tiene" de CUALQUIER codigo (septima revision)
-    Motivo := MotivoDelSistema(TPath.GetFileName(APath) + ': ' + SysErrorMessage(Codigo));
+  SustituyePorRenombre(Tmp, APath);
+end;
+
+{ El nucleo de ColocaProducto y ColocaContenido: ALocal <> '' mueve ese
+  fichero; si no, escribe ABytes. }
+procedure Coloca(const ADestino, ALocal: string; const ABytes: TBytes);
+var
+  Motivo, Dir, DirLocal, Tmp, Copia, Ancestro: string;
+  Nuestro, Colocado: Boolean;
+begin
+  Dir := TPath.GetDirectoryName(ADestino);
+  DirLocal := TPath.GetDirectoryName(ALocal);
+  Tmp := '';
+  Ancestro := '';
+  Colocado := False;
+  // el producto se MUEVE y se borra: solo uno nuestro - de la temporal del
+  // servidor, de la carpeta del destino (la que aprueba la puerta) o de una
+  // carpeta de descarga en ella (NuevaCarpetaDescarga, la de delphi_desktop)
+  Nuestro := (ALocal = '') or EnTemporal(ALocal) or SameText(DirLocal, Dir) or
+    (EsCarpetaDescarga(TPath.GetFileName(DirLocal)) and
+     SameText(TPath.GetDirectoryName(DirLocal), Dir));
+  if not Nuestro then
+    raise Exception.Create(MsgFmt(SR_COLOCA_PRODUCTO_AJENO_FMT, [ALocal, ADestino]));
+  // Todo, bajo el cerrojo, de la puerta al rename: un delphi_move (que escribe
+  // con el) no puede cambiar la carpeta del destino por un enlace entre la
+  // pregunta y la escritura (revisor de P4: se preguntaba fuera). Lo que
+  // tarda - empaquetar, bajar, el logcat - queda fuera: aqui solo se coloca.
+  EnterFileEdit;
+  try
+  try
+    Motivo := EscrituraDenegada(Dir);
     if Motivo = '' then
-      Motivo := MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
-        [TPath.GetFileName(APath), Codigo, SysErrorMessage(Codigo).Trim]);
-    raise Exception.Create(Motivo);
+      Motivo := SustitucionDenegada(ADestino);
+    if Motivo = '' then
+      Motivo := RutaLargaDenegada(ADestino);
+    if Motivo <> '' then
+      raise Exception.Create(Motivo);
+    // lo que se cree para colocarlo se quita si al final no se coloca
+    Ancestro := PrimerAncestroQueExiste(Dir);
+    CrearCarpeta(Dir);
+    if SameText(DirLocal, Dir) then
+      Tmp := ALocal // ya junto al destino (el zip en proceso): un solo rename, con sus reintentos
+    else
+    begin
+      Tmp := TemporalDeSustitucion(ADestino);
+      if ALocal = '' then
+        TFile.WriteAllBytes(Tmp, ABytes)
+      // de la temporal: puede ser otro volumen, tambien con la misma letra
+      // (un punto de montaje); MoveFileEx copia cuando hace falta y no lo
+      // decide por el TEXTO de la raiz, como TFile.Move
+      else if not MoveFileEx(PChar(ALocal), PChar(Tmp), MOVEFILE_COPY_ALLOWED) then
+        raise Exception.Create(MotivoDeRenombre(ADestino, GetLastError));
+    end;
+    // la copia sellada de lo que habia y el rename, sin que otro escritor se
+    // cuele entre los dos (dos empaquetados al mismo out= sellaban la misma
+    // copia y el zip de en medio se perdia: sexta revision)
+    Copia := GuardaContenidoActual(ADestino);
+    try
+      SustituyePorRenombre(Tmp, ADestino); // si falla, borra el temporal
+    except
+      // la copia sellada de algo que no se sustituyo no se queda
+      if Copia <> '' then
+      begin
+        try
+          BorraLoNuestro(Copia);
+          if TFile.Exists(MarcaDeDueno(Copia)) then
+            BorraLoNuestro(MarcaDeDueno(Copia));
+        except
+        end;
+      end;
+      raise;
+    end;
+    Tmp := '';
+    Colocado := True;
+  finally
+    // ni el producto ni el intermedio se quedan nunca, ni las carpetas que
+    // se crearon para nada
+    if (ALocal <> '') and TFile.Exists(ALocal) then
+      try
+        TFile.Delete(ALocal);
+      except
+      end;
+    if (Tmp <> '') and TFile.Exists(Tmp) then
+      try
+        TFile.Delete(Tmp);
+      except
+      end;
+    if not Colocado and (Ancestro <> '') then
+      QuitaCarpetasCreadas(Dir, Ancestro);
   end;
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
+procedure ColocaProducto(const ALocal, ADestino: string);
+begin
+  Coloca(ADestino, ALocal, nil);
+end;
+
+procedure ColocaContenido(const ADestino: string; const ABytes: TBytes);
+begin
+  Coloca(ADestino, '', ABytes);
 end;
 
 function DesignersDeUnidad(const AUnidad: string): TArray<string>;

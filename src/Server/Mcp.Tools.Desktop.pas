@@ -114,6 +114,7 @@ uses
   Lsp.Imagen,
   Mcp.Tools.PAServer,
   Lsp.InlineImages, // DeliverCapture: como se entrega una captura, la misma en toda tool
+  Lsp.Patch,        // ColocaProducto: la captura bajada, sobre el out=
   Lsp.RemoteRun,
   Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
   Lsp.Casa;
@@ -501,8 +502,9 @@ begin
           // un out= que ya estaba: su contenido, sellado, y se sustituye, como
           // hace su gemela de adb (sexta revision: aqui fallaba el Move y la
           // captura no se colocaba), con el cerrojo de escritura como todo
-          // escritor. Vive en Lsp.InlineImages: preview lo hace igual (1.17.0)
-          ColocaCaptura(Local, Propia);
+          // escritor: EL escritor de un producto (Lsp.Patch), el de preview,
+          // adb, logcat y package
+          ColocaProducto(Local, Propia);
           Local := Propia;
         except
           // Antes la imagen se quedaba 'donde cayo', dentro de la .tmp-, y la

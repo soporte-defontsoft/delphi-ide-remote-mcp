@@ -1784,6 +1784,11 @@ begin
   // (tercera revision, 27-sep-2026, medido en vivo): el paquete es un .zip
   if not SameText(TPath.GetExtension(OutZip), '.zip') then
     Exit(MsgFmt(SR_PACKAGE_OUTFILE_ZIP_FMT, [OutZip]));
+  // un zip con el atributo de solo lectura no se sustituye: se dice ANTES de
+  // empaquetar, no despues de todo el trabajo (revisor de P4)
+  Result := SoloLecturaDenegado(OutZip);
+  if Result <> '' then
+    Exit;
   // La carpeta del zip se crea, como en toda tool que escribe: una que no
   // existia o un FICHERO en el camino salian INTERNAL (GUARD-019 ahora, desde
   // CrearCarpeta). Y un .zip que ya estaba se copia antes de pisarlo: perder
@@ -1794,8 +1799,7 @@ begin
   // vez sobre la misma carpeta se estorbasen - una borraba el zip que la otra
   // estaba escribiendo y saltaba "el proceso no tiene acceso al archivo"
   // (medido 2026-09-20). Ahora cada una arma el suyo y la ultima gana, entero.
-  EnProceso := OutZip + '.' +
-    FragmentoUnico + '.tmp';
+  EnProceso := TemporalDeSustitucion(OutZip); // EL nombrador del intermedio (Lsp.Patch)
 
   Count := 0;
   TotalBytes := 0;
@@ -1829,8 +1833,9 @@ begin
         Continue;
       if F.ToLower.Contains('\dcu\') then
         Continue;
+      // ni el zip ni ningun intermedio: el suyo y el de otra llamada a la vez
       if SameText(TPath.GetFullPath(F), OutZip) or
-         SameText(TPath.GetFullPath(F), EnProceso) then
+         EsTemporalDeSustitucion(TPath.GetFileName(F)) then
         Continue;
       Rel := F.Substring(Length(IncludeTrailingPathDelimiter(Dir))).Replace('\', '/');
       Zip.Add(F, Rel);
@@ -1869,45 +1874,20 @@ begin
     raise;
   end;
   // Un solo gesto del sistema: nadie ve nunca un zip a medias con el nombre
-  // bueno (packages are disposable artifacts, always fresh). Reintentado unos
-  // instantes: si DOS empaquetados del mismo sitio se cruzan, el destino esta
-  // siendo reemplazado por el otro justo en ese momento y el rename rebota
-  // (medido 2026-09-20 en la bateria de concurrencia).
-  // Se COLOCA con el cerrojo de escritura, como todo escritor: la copia
-  // sellada del .zip que habia y el rename, sin que otro escritor se cuele
-  // entre los dos (sexta revision: dos empaquetados al mismo out= sellaban
-  // la misma copia y el zip de en medio se perdia). Solo la colocacion: el
-  // empaquetado, que tarda, no bloquea a nadie.
-  var Renombrado := False;
-  EnterFileEdit;
+  // bueno (packages are disposable artifacts, always fresh). Lo coloca EL
+  // escritor de un producto (Lsp.Patch): la puerta, que la de la entrada
+  // quedaba atras lo que tardase el empaquetado (P4 de la segunda revision
+  // de la 1.17.0); la copia sellada del .zip que habia y el rename, bajo el
+  // cerrojo, sin que otro escritor se cuele entre los dos (sexta revision:
+  // dos empaquetados al mismo out= sellaban la misma copia y el zip de en
+  // medio se perdia), y los reintentos de un lector de un instante. Solo la
+  // colocacion: el empaquetado, que tarda, no bloquea a nadie. Si no se
+  // puede, el zip en proceso no se queda y la causa se dice.
   try
-    try
-      GuardaContenidoActual(OutZip); // el .zip que habia, sellado (si lo habia)
-    except
-      try
-        TFile.Delete(EnProceso);
-      except
-      end;
-      raise;
-    end;
-    for var Intento := 1 to 5 do
-    begin
-      Renombrado := MoveFileEx(PChar(EnProceso), PChar(OutZip),
-        MOVEFILE_REPLACE_EXISTING);
-      if Renombrado then
-        Break;
-      Sleep(200);
-    end;
-  finally
-    LeaveFileEdit;
-  end;
-  if not Renombrado then
-  begin
-    try
-      TFile.Delete(EnProceso);
-    except
-    end;
-    Exit(MsgFmt(SR_PACKAGE_RENAME_FMT, [OutZip]));
+    ColocaProducto(EnProceso, OutZip);
+  except
+    on E: Exception do
+      Exit(MsgExcepcion(E.ClassName, E.Message)); // con su etiqueta: sin ella cuenta como exito
   end;
 
   Return := TJSONObject.Create;

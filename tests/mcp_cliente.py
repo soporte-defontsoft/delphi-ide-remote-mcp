@@ -96,6 +96,14 @@ def dia_de_papelera(t=None):
     return time.strftime('%Y%m%d', t or time.localtime())
 
 
+# EL nombre de la carpeta de la papelera y el del cajon de lo borrado, leidos
+# de sus nombradores en el servidor: las baterias no los escriben a mano
+# (test_paisaje lo vigila tambien en tests/*.py; 2.3 de la 1.18.0). Con el
+# nombre a mano, una comprobacion de AUSENCIA pasaria en verde si cambiara.
+PAPELERA = _papelera()['BACKUP_SUB']
+CAJON_BORRADOS = _papelera()['CAJON_BORRADOS']
+
+
 def marca_dueno(copia):
     """La marca de dueno de una copia sellada (MarcaDeDueno del servidor)."""
     return copia + _papelera()['MARCA_DUENO_EXT']

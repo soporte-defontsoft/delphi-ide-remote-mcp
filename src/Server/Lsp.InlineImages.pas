@@ -44,14 +44,6 @@ function DeliverCapture(const AToolName, AFile, AInline: string;
   AReturn: TJSONObject; const ANotaEnLineaFmt: string = '';
   const ANotaFrame: string = ''): Boolean;
 
-{ Lleva una captura hecha en un temporal (ALocal) a ADestino, el out= que
-  eligio el agente y ya paso CaptureTarget: lo que hubiera alli, sellado en
-  la papelera, y la captura en su sitio, bajo el cerrojo de escritura como
-  todo escritor. Lanza si no se puede. Lo hacia a mano delphi_desktop (la
-  captura bajada del destino) y lo necesita delphi_designer preview (la del
-  renderizador): la proxima captura con out= llama aqui. }
-procedure ColocaCaptura(const ALocal, ADestino: string);
-
 { EL nombrador del frame y su inversa. Un frame es la geometria de la imagen
   que el agente mira, dentro del token: '<imgW>x<imgH>@<srcW>x<srcH>+<ox>+<oy>'
   = la imagen mide imgW x imgH y cubre srcW x srcH del espacio de tap,
@@ -76,9 +68,8 @@ uses
   System.RegularExpressions,
   Lsp.Base64,   // BytesToBase64: EL codificador de la casa
   Lsp.Imagen,   // EscalaPngBytes: escalar en memoria
-  Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture / EscrituraDenegada
+  Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
-  Lsp.Patch,    // EnterFileEdit / GuardaContenidoActual: ColocaCaptura
   Lsp.Texts;
 
 const
@@ -247,33 +238,6 @@ begin
     AReturn.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
     if IsAgentCapture(AFile) then
       AReturn.AddPair('consumedOnDownload', TJSONBool.Create(True)); // se borra al recogerla
-  end;
-end;
-
-procedure ColocaCaptura(const ALocal, ADestino: string);
-var
-  Veto: string;
-begin
-  // EL escritor pregunta el mismo, en el momento de escribir: la puerta que
-  // paso CaptureTarget pudo quedar atras (un preview tarda hasta 75 s y la
-  // carpeta del out= puede cambiar mientras). Carpeta y fichero, como la
-  // papelera; quien llama ya trata la excepcion como 'no se coloco'.
-  Veto := EscrituraDenegada(TPath.GetDirectoryName(ADestino));
-  if Veto = '' then
-    Veto := EscrituraDenegada(ADestino);
-  if Veto <> '' then
-    raise Exception.Create(Veto);
-  CrearCarpeta(TPath.GetDirectoryName(ADestino));
-  EnterFileEdit;
-  try
-    if TFile.Exists(ADestino) then
-    begin
-      GuardaContenidoActual(ADestino);
-      TFile.Delete(ADestino);
-    end;
-    TFile.Move(ALocal, ADestino);
-  finally
-    LeaveFileEdit;
   end;
 end;
 
