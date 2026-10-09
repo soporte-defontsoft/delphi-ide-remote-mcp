@@ -240,6 +240,7 @@ uses
   MCPServer.Logger,
   Lsp.Texts,
   Lsp.ShaCache, // DiskStamp: one composer of the disk fingerprint
+  Lsp.Patch, // LeeTexto: la puerta de leer
   Lsp.Settings;
 
 type
@@ -963,6 +964,16 @@ var
   Dir, BaseName, C: string;
   Matches: TArray<string>;
   Depth: Integer;
+
+  // un candidato que la puerta no deja leer no es de este workspace y no se
+  // adopta: GetFiles con soAllDirectories cruza junctions, y se leia por
+  // ellas un .dproj de fuera de la jaula
+  function Menciona(const ADproj: string): Boolean;
+  begin
+    Result := (LugarDeLecturaDenegado(ADproj, [ltJaula]) = '') and
+      LeeTexto(ADproj, [ltJaula]).ToLower.Contains(BaseName.ToLower);
+  end;
+
 begin
   Result := '';
   BaseName := TPath.GetFileNameWithoutExtension(AFilePath);
@@ -977,7 +988,7 @@ begin
       if Length(Matches) = 1 then
         Exit(Matches[0]);
       for C in Matches do
-        if TFile.ReadAllText(C).ToLower.Contains(BaseName.ToLower) then
+        if Menciona(C) then
           Exit(C);
       for C in Matches do
         if SameText(TPath.GetFileNameWithoutExtension(C),
@@ -990,7 +1001,7 @@ begin
     // .dproj one level down that REFERENCES it (DCCReference or search path).
     if Depth <= 3 then
       for C in TDirectory.GetFiles(Dir, '*.dproj', TSearchOption.soAllDirectories) do
-        if TFile.ReadAllText(C).ToLower.Contains(BaseName.ToLower) then
+        if Menciona(C) then
           Exit(C);
     var Parent := TPath.GetDirectoryName(Dir);
     if SameText(Parent, Dir) then

@@ -31,6 +31,22 @@ interface
   besides the roots (field round 4, R4-B). }
 function LibraryReadRoots: TArray<string>;
 
+{ LOS LUGARES DEL IDE: donde el Delphi activo guarda lo suyo, medido por
+  Discovery - su instalacion (RootDir: rsvars, sus fuentes, los .targets de
+  MSBuild), su carpeta de datos del usuario (%APPDATA%\Embarcadero\BDS\<ver>:
+  los .profile y los .sdk), la de sus SDK ($(BDSPLATFORMSDKSDIR)) y cada
+  sysroot que su SDK Manager registra aunque viva en otro sitio (los de
+  Android, en el CatalogRepository: Discovery.SysrootsRegistrados, leidos en
+  cada llamada). Los sysroots que nombra un .sdk de la carpeta de perfiles los
+  anade la puerta (Lsp.Patch.SysrootsDeLosSdk): saberlos pide leer, y aqui no
+  se lee nada. Lo que el servidor lee o escribe del IDE FUERA de
+  las raices va solo ahi, por las puertas de Lsp.Patch (David, 9-oct-2026:
+  fuera de esto se niega; decisions/puertas-diseno-2026-10-09). NO las
+  carpetas de Documentos (BdsUserDir, BdsCommonDir): de la de usuario cuelga
+  Projects, donde el IDE crea los proyectos de la gente. En la forma con la
+  que se compara (FormaLarga). Sin Delphi, vacio. }
+function LugaresDelIde: TArray<string>;
+
 { La forma DECLARADA de una ruta que llega RESUELTA. Un programa que el
   servidor lanza contesta con la ruta real (git: la raiz de un repo), y la
   real de un sitio declarado en una letra de red CONECTADA (L:\...) es su
@@ -104,6 +120,10 @@ uses
 var
   GLibLoaded: Boolean = False;
   GLibRoots: TArray<string>;
+  // los lugares del IDE: se miden una vez, como la zona de biblioteca (las
+  // puertas los preguntan por cada fichero, y IdeSdksDir lee el registro)
+  GIdeLoaded: Boolean = False;
+  GIdeLugares: TArray<string>;
 
 { The read-only library zone: RAD Studio installation + IDE Library Search
   Path directories (installed components), canonicalized. Cached. }
@@ -527,6 +547,34 @@ begin
   if not LibraryZoneEnabled then
     Exit(nil); // announced as it is enforced: no zone, nothing to announce
   Result := LibraryRoots;
+end;
+
+function LugaresDelIde: TArray<string>;
+var
+  Info: TRadStudioInfo;
+  Lugares: TArray<string>;
+begin
+  // (no lee ningun fichero por las puertas: las puertas la preguntan a ELLA)
+  Info := DiscoverRadStudio;
+  if not GIdeLoaded then
+  begin
+    Lugares := nil;
+    if Info.Found then
+      for var L in TArray<string>.Create(Info.RootDir, IdeProfilesDir(Info.Version),
+        IdeSdksDir(Info.Version)) do
+        if L.Trim <> '' then
+          Lugares := Lugares + [FormaLarga(L)];
+    GIdeLugares := Lugares;
+    GIdeLoaded := True;
+  end;
+  Result := GIdeLugares;
+  // los sysroots registrados, EN CADA llamada: get-sdk, remove-sdk o el SDK
+  // Manager los cambian con el servidor en marcha. Los que llevan la macro
+  // viven en IdeSdksDir, que ya esta
+  if Info.Found then
+    for var S in SysrootsRegistrados(Info.Version) do
+      if (S.Trim <> '') and not S.Contains('$(') then
+        Result := Result + [FormaLarga(S)];
 end;
 
 end.

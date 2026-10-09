@@ -7099,6 +7099,22 @@ const
     'may move or go to recoverable trash inside the workspace, provided its ' +
     'metadata links stay inside the allowed locations.';
 
+  { LA PUERTA DE LEER/ESCRIBIR (Lsp.Patch, decisions/puertas-diseno-2026-10-09):
+    el fichero no esta en ninguno de los lugares que esa operacion puede tocar.
+    %s = el fichero, %s = los lugares (SF_LUGAR_*, separados por comas). }
+  SR_GUARD_FUERA_DE_LUGARES_FMT =
+    '[GUARD-034 DENIED] %s is outside the places the server may use for ' +
+    'this (%s). Nothing was read or written.';
+  SF_LUGAR_IDE =
+    'the IDE''s own folders: its installation, its BDS data folder, its SDK ' +
+    'folder and the sysroot of every SDK it has registered';
+  SF_LUGAR_CASA =
+    'the server''s own folders: its cache, the agents'' mailboxes and the reports';
+  SF_LUGAR_TEMPORAL =
+    'the server''s temporary folder';
+  SF_LUGAR_VAULT =
+    'the vault';
+
   { El endpoint LFS no es una clave local que el agente tenga que quitar. }
   SR_GIT_LFS_ENDPOINT_FMT =
     '[GIT-061 DENIED] The LFS endpoint for remote "%s" is not allowed. ' +
@@ -9309,6 +9325,12 @@ const
 
   SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT =
     'an <Import> that cannot be read to be checked (%s)';
+  { La puerta de leer (Lsp.Patch.LeeTexto): un Import que no es del IDE y
+    cae FUERA de las raices no se lee para escanearlo - se leia, y limpio, el
+    build lo cargaba de alli (decisions/puertas-diseno-2026-10-09). }
+  SF_CFG_HAZARD_IMPORT_FUERA_FMT =
+    'an <Import> of a file outside the workspace (%s): the build would load ' +
+    'it from there';
 
   SF_CFG_HAZARD_POR_IMPORT_FMT =
     '%s, brought in by <Import> "%s"';

@@ -1147,6 +1147,9 @@ begin
       Result := Dir;
       Head := TPath.Combine(Dir, '.git\HEAD');
       // Lectura interna: conserva la jaula, sin abrir .git a las tools de ficheros.
+      // EXCEPCION DECLARADA de la puerta de leer (LeeTexto): la puerta niega
+      // .git y esta lectura lo admite a proposito (ReadPathDenied con True).
+      // El juez de la rama es git (rev-parse), punto 9.5 de la 1.18.0.
       if (ReadPathDenied(Head, True) = '') and TFile.Exists(Head) then
         try
           ABranch := TFile.ReadAllText(Head).Trim;
@@ -1175,7 +1178,7 @@ var
 begin
   Result := nil;
   try
-    Xml := TFile.ReadAllText(ADproj);
+    Xml := LeeTexto(ADproj, [ltJaula]);
   except
     Exit;
   end;

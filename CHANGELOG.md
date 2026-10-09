@@ -398,8 +398,58 @@ the MCP `initialize` response (`serverInfo.version`).
   starts (DSGN-122) - its parser took it for UTF-16 and failed with a
   syntax error that did not say why. `test_designer_binary`,
   `test_designer_preview` P1u.
+- **An `<Import>` of a file outside the workspace is refused, even a
+  harmless one.** The build's hazard scanner read every file a `.dproj`
+  imported, wherever it was, and when it found no execution task the build
+  went ahead and msbuild loaded that file from outside the roots. A file
+  that is not one of the IDE's own imports is now scanned only inside the
+  roots (or the read-only library zone), and one from anywhere else is
+  refused (`BUILD-017`, "an <Import> of a file outside the workspace").
+  `test_build_imports` (`fuera`), red against the previous binary, which
+  built the project.
+- **A mailbox that is a link to somewhere else is neither delivered nor
+  deleted.** `delphi_messages` read the mailboxes by itself: with
+  `messages\<agent>` a junction to a folder outside the server's home,
+  `check` listed that folder's notes and `read` delivered them and DELETED
+  them - a delete outside the roots through a link (only someone who can
+  write next to the exe could plant it). The mailbox is now read through
+  the read gate, by its real path, and the answer is `GUARD-034`.
+  `test_messages`, red against the previous binary.
+- **The folder of the IDE's SDKs is taken from the SDKs it has registered,
+  as documented.** That step never found anything: each SDK's key was
+  opened with a path that `TRegistry` reads as relative to the key already
+  open, so the server always fell back to the default folder (the right
+  one on a default installation, which is why nothing failed). The SDK
+  Manager's sysroots are read by one reader now.
 
 ### Internal
+
+- **One gate to read files** (the doors block of 1.18.0, first part).
+  `LeeTexto` and `LeeBytes` (`Lsp.Patch`) read a file only if it is in one
+  of the PLACES the caller names - the workspace (the jail's own read
+  rule), the IDE's places, the server's home, its temp folder, the vault -
+  judged by its real path, and decode it with the one detector. 41 reads
+  went their own way (the inventory of 9-oct-2026): the `.dproj` and its
+  imports, the IDE's `.sdk`/`.profile`/`rsvars.bat`, `System.pas`, the
+  designer's tables, the fabricated engine settings, the token `.ini` of
+  `delphi_styles`, the vault's notes and bootstrap, the mailbox, what a
+  test leaves in its container, what a target sends back. The IDE's places
+  are its installation, its user data folder, its SDK folder and the
+  sysroot of every SDK it has registered, in its SDK Manager (Android's
+  live in the catalog repository) or in a `.sdk` of its profiles folder
+  (what msbuild and paclient read); anything else of the IDE is refused,
+  as decided. The sysroot of a `.sdk` is resolved by one reader now (three
+  places resolved it by hand). The
+  server's home as a place is its cache, the mailboxes and the reports -
+  never the exe's folder, where `settings.ini` lives. What still reads on
+  its own is declared, with its reason, in a new `test_paisaje` rule
+  (`settings.ini`, `.git\HEAD`, the bytes `delphi_fetch` serves, and the
+  programs that are not the server), and can only shrink.
+  `LspTests.Rutas` covers the places that do not depend on the machine;
+  links are measured through the server, because inside `delphi_test`'s
+  container `GetFinalPathNameByHandle` refuses a drive-letter answer
+  (access denied; only the NT form answers) and a link cannot be resolved
+  there.
 
 - `Lsp.Guard` is split by families, one family per commit and moves only:
   not a line of logic changes, and the suite runs whole after each one. The

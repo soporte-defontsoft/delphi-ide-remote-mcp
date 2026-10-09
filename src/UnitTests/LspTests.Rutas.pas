@@ -81,13 +81,37 @@ type
     [Test] procedure LaBarraFinalNoCambiaLaClave;
   end;
 
+  { LA PUERTA DE LEER (Lsp.Patch.LugarDeLecturaDenegado, LeeTexto, LeeBytes)
+    en los lugares que no dependen de la maquina: el temporal y la casa del
+    servidor, que son del ejecutor (su carpeta). La jaula y el IDE los mide la
+    bateria a traves del servidor (test_build_imports: un Import de fuera), y
+    el ENLACE tambien (test_mensajes: el buzon por una union): en el
+    contenedor de delphi_test GetFinalPathNameByHandle con letra o GUID da
+    ACCESS_DENIED (solo la forma NT contesta, medido el 9-oct-2026) y RealPath
+    se queda alli con el texto, asi que una union no se mide aqui. }
+  [TestFixture]
+  TPuertaDeLeerTests = class
+  private
+    FDir, FNota: string;
+  public
+    [Setup] procedure Prepara;
+    [TearDown] procedure Limpia;
+    [Test] procedure EnSuLugarSeLeeYEnOtroNo;
+    [Test] procedure SettingsIniNoEsDeLaCasaYElBuzonSi;
+    [Test] procedure UnaCasaRelativaNoEsLugar;
+  end;
+
 implementation
 
 uses
   System.SysUtils,
+  System.IOUtils,
+  Winapi.Windows,
   Lsp.Guard,
   Lsp.Casa,
   Lsp.Lugares,
+  Lsp.Patch,          // la puerta de leer
+  Lsp.Rutas,          // EsRutaAbsoluta
   Lsp.Mascara;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
@@ -482,10 +506,88 @@ begin
     ClaveDeCarpeta('C:\Casa\Servidor\'));
 end;
 
+{ TPuertaDeLeerTests }
+
+procedure TPuertaDeLeerTests.Prepara;
+begin
+  // en el temporal del ejecutor, que es su casa (ServerTempDir: junto al exe)
+  FDir := ServerTempDir('puerta-' + FragmentoUnico);
+  ForceDirectories(FDir);
+  FNota := TPath.Combine(FDir, 'nota.txt');
+  TFile.WriteAllText(FNota, 'hola', TEncoding.UTF8);
+end;
+
+procedure TPuertaDeLeerTests.Limpia;
+begin
+  if TFile.Exists(FNota) then
+    TFile.Delete(FNota);
+  RemoveDir(FDir);
+end;
+
+procedure TPuertaDeLeerTests.EnSuLugarSeLeeYEnOtroNo;
+var
+  R: string;
+begin
+  Assert.AreEqual('', LugarDeLecturaDenegado(FNota, [ltTemporal]));
+  Assert.AreEqual('hola', LeeTexto(FNota, [ltTemporal]));
+  // el mismo fichero, preguntado por otro lugar: GUARD-034, y no se lee
+  R := LugarDeLecturaDenegado(FNota, [ltCasa, ltVault]);
+  Assert.IsTrue(R.StartsWith('[GUARD-034'), R);
+  Assert.WillRaise(
+    procedure
+    begin
+      LeeTexto(FNota, [ltCasa]);
+    end);
+  Assert.WillRaise(
+    procedure
+    begin
+      LeeBytes(FNota, [ltCasa]);
+    end);
+end;
+
+procedure TPuertaDeLeerTests.SettingsIniNoEsDeLaCasaYElBuzonSi;
+var
+  R: string;
+begin
+  // la casa son sus carpetas, no la del exe entera: settings.ini no es lugar
+  // de ninguna puerta (no hace falta que exista: se pregunta el sitio)
+  R := LugarDeLecturaDenegado(ServerDir('settings.ini'), [ltCasa, ltTemporal]);
+  Assert.IsTrue(R.StartsWith('[GUARD-034'), R);
+  Assert.AreEqual('', LugarDeLecturaDenegado(
+    TPath.Combine(TPath.Combine(CarpetaDeMensajes, 'agente'), 'aviso.md'), [ltCasa]));
+  Assert.AreEqual('', LugarDeLecturaDenegado(
+    TPath.Combine(CarpetaDeInformes, 'informe.md'), [ltCasa]));
+end;
+
+procedure TPuertaDeLeerTests.UnaCasaRelativaNoEsLugar;
+var
+  Antes: string;
+begin
+  Antes := GetEnvironmentVariable('LOCALAPPDATA');
+  try
+    // sin LOCALAPPDATA (o relativa) la cache se resolveria contra la carpeta
+    // de trabajo del proceso: no es lugar
+    for var V in TArray<string>.Create('', 'relativa', '\sin-unidad') do
+    begin
+      SetEnvironmentVariable('LOCALAPPDATA', PChar(V));
+      Assert.AreEqual(2, Integer(Length(CarpetasDeLaCasa)), V);
+      for var C in CarpetasDeLaCasa do
+        Assert.IsTrue(EsRutaAbsoluta(C), C);
+    end;
+    // con una absoluta (la carpeta del ejecutor: la del contenedor puede no
+    // traer LOCALAPPDATA), si
+    SetEnvironmentVariable('LOCALAPPDATA', PChar(ExtractFileDir(ParamStr(0))));
+    Assert.AreEqual(3, Integer(Length(CarpetasDeLaCasa)));
+  finally
+    SetEnvironmentVariable('LOCALAPPDATA', PChar(Antes));
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
   TDUnitX.RegisterTestFixture(TBarridoDeUnidadesTests);
   TDUnitX.RegisterTestFixture(TClaveDeCarpetaTests);
+  TDUnitX.RegisterTestFixture(TPuertaDeLeerTests);
 
 end.

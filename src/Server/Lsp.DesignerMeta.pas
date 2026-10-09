@@ -248,6 +248,7 @@ uses
   Lsp.Discovery,       // DiscoverRadStudio: el Delphi activo
   Lsp.DesignerMetaGen, // la tabla de ese Delphi, sacada de su fuente
   Lsp.DesignerBin,
+  Lsp.Patch, // LeeTexto: la puerta de leer
   Lsp.Pascal;
 
 type
@@ -665,7 +666,8 @@ end;
 
 class function TMetaTable.DeFichero(const AFichero: string): TMetaTable;
 begin
-  Result := TMetaTable.Create(TFile.ReadAllLines(AFichero, TEncoding.UTF8));
+  // la tabla la escribe el generador en la casa del servidor (Lsp.DesignerMetaGen)
+  Result := TMetaTable.Create(LineasDelTexto(LeeTexto(AFichero, [ltCasa])));
 end;
 
 function TMetaTable.PublicadaEnDescendiente(const AClase, AProp: string;

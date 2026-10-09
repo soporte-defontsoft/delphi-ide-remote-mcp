@@ -195,7 +195,7 @@ var
     V: string;
   begin
     if Xml = '' then
-      Xml := TFile.ReadAllText(ADproj);
+      Xml := LeeTexto(ADproj, [ltJaula]);
     if not RadVisto then
     begin
       Rad := DiscoverRadStudio;
@@ -334,7 +334,7 @@ begin
       Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
     end;
     if (Sec = 'all') or (Sec = 'searchpaths') then
-      AddSearchPathsView(TFile.ReadAllText(ADproj), Return);
+      AddSearchPathsView(LeeTexto(ADproj, [ltJaula]), Return);
     if (Sec = 'all') or (Sec = 'deploy') then
       AddDeployFilesView(ADproj, Return);
     if (Sec = 'all') or (Sec = 'units') then
@@ -347,7 +347,7 @@ begin
       // done anything with it.
       var Tmp := TJSONObject.Create;
       try
-        AddSearchPathsView(TFile.ReadAllText(ADproj), Tmp);
+        AddSearchPathsView(LeeTexto(ADproj, [ltJaula]), Tmp);
         AddDeployFilesView(ADproj, Tmp);
         AddUnitsView(ADproj, Tmp);
         var Counts := TJSONObject.Create;
@@ -1240,7 +1240,7 @@ begin
     AReturn.AddPair('deployFilesNote', MsgText(SN_CONFIG_NO_DEPLOYPROJ));
     Exit;
   end;
-  Xml := TFile.ReadAllText(DeployProj);
+  Xml := LeeTexto(DeployProj, [ltJaula]);
   Low := LowerCase(Xml);
   Obj := TJSONObject.Create;
   for M in TRegEx.Matches(Xml, '<DeployFile\s+Include="([^"]*)"[^>]*>(.*?)</DeployFile>',

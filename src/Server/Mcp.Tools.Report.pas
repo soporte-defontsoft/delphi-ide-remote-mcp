@@ -66,7 +66,6 @@ uses
   Lsp.Casa;
 
 const
-  REPORTS_DIR = 'reports';
   // delphi_report is the ONE write a read-only (even anonymous) credential may
   // perform, so it is also the only way such a client could grow the server's
   // disk. Generous on purpose - the field audit's longest genuine report was
@@ -138,7 +137,7 @@ begin
   // reports folder, exactly as before the parameter existed.
   Agent := Slug(Params.Agent);
 
-  Dir := ServerDir(REPORTS_DIR);
+  Dir := CarpetaDeInformes;
   if Agent <> '' then
     Dir := TPath.Combine(Dir, Agent);
   CrearCarpeta(Dir);

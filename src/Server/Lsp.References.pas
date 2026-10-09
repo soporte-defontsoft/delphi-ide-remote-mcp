@@ -90,6 +90,7 @@ uses
   Lsp.ProjectUnits,
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
+  Lsp.Patch, // LeeTexto: la puerta de leer
   Lsp.Settings;
 
 type
@@ -142,7 +143,7 @@ begin
         if SkipIdeArtifacts(Dproj) then
           Continue;
         try
-          Xml := TFile.ReadAllText(Dproj);
+          Xml := LeeTexto(Dproj, [ltJaula]);
         except
           Continue;
         end;

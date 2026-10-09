@@ -154,7 +154,7 @@ begin
     Exit;
   for F in TDirectory.GetFiles(Dir, '*.sdk') do
   begin
-    P := TagValue(TFile.ReadAllText(F), 'SDKAdbPath');
+    P := TagValue(LeeTexto(F, [ltIde]), 'SDKAdbPath');
     if (P <> '') and TFile.Exists(P) then
       Exit(P);
   end;

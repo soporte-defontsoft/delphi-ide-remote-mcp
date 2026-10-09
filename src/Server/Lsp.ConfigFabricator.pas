@@ -62,6 +62,7 @@ uses
   Lsp.Texts,
   Lsp.NetDrives,  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
   Lsp.Json,
+  Lsp.Patch,  // LeeTexto: la puerta de leer
   Lsp.Casa;   // EscribeEnCasaDelServidor (entero o nada)
 
 const
@@ -143,7 +144,8 @@ begin
   // un fichero que no es un objeto, o cuyo "settings" no lo es, no nombra
   // proyecto: se fabrica el nuestro (salia SYS-006 INTERNAL en cada tool del
   // motor: ObjetoJson)
-  Root := ObjetoJson(TFile.ReadAllText(ASettingsFile));
+  // el del IDE, junto al proyecto, o el que fabrico el servidor en su casa
+  Root := ObjetoJson(LeeTexto(ASettingsFile, [ltJaula, ltCasa]));
   if Root = nil then
     Exit;
   try
@@ -230,7 +232,7 @@ begin
      (TFile.GetLastWriteTime(CacheFile) > TFile.GetLastWriteTime(ADprojPath)) then
     Exit(CacheFile);
 
-  Xml := TFile.ReadAllText(ADprojPath);
+  Xml := LeeTexto(ADprojPath, [ltJaula]);
 
   Values := AllTagValues(Xml, 'MainSource');
   if Length(Values) > 0 then

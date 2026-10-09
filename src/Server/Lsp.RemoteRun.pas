@@ -398,7 +398,6 @@ function TraeSalida(const APc, AProfile, ADeployRel, AJobId, ATmpDir: string;
   var ATerminado: Boolean): Boolean;
 var
   OutFile, Ops, Output: string;
-  Bytes: TBytes;
 begin
   Result := False;
   OutFile := TPath.Combine(ATmpDir, AJobId + '.out');
@@ -407,14 +406,14 @@ begin
   Ops := Format('"--get=%s/%s.out,%s"', [ADeployRel, AJobId, ATmpDir]);
   if (Paclient(APc, Ops, AProfile, Output) <> 0) or not TFile.Exists(OutFile) then
     Exit;
+  // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
+  // leida en estricto un solo byte suelto mataba el run entero. Por la
+  // puerta de leer, con el temporal como lugar, y EL detector.
   try
-    Bytes := TFile.ReadAllBytes(OutFile);
+    ATexto := LeeTexto(OutFile, [ltTemporal]);
   finally
     TFile.Delete(OutFile);
   end;
-  // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
-  // leida en estricto un solo byte suelto mataba el run entero.
-  ATexto := DecodeSourceBytes(Bytes);
   AEntorno := PartirEntorno(ATexto);
   ATerminado := PartirSalida(ATexto, ASalida, ACodigo);
   Result := True;
@@ -711,7 +710,7 @@ begin
     Exit;
   P := RutaDePerfil(Info.Version, AProfile);
   if TFile.Exists(P) then
-    Result := CamposDePerfil(TFile.ReadAllText(P)).Plataforma;
+    Result := CamposDePerfil(LeeTexto(P, [ltIde])).Plataforma;
 end;
 
 function BundledNodePath(const APlataforma: string): string;
@@ -778,7 +777,7 @@ begin
   RemotoSha := '';
   if FetchFromTarget(AProfile, NODE_PROJECT, 'node.ver', TmpDir, VerFile) = '' then
   try
-    RemotoSha := TFile.ReadAllText(VerFile).Trim;
+    RemotoSha := LeeTexto(VerFile, [ltTemporal]).Trim;
     TFile.Delete(VerFile);
   except
     RemotoSha := '';

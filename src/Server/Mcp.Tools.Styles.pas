@@ -458,11 +458,18 @@ begin
     begin
       if F.ToLower.Contains('rules') or not F.ToLower.Contains('token') then
         Continue;
-      Ini := TMemIniFile.Create(F, TEncoding.UTF8);
+      // como el primer paso: lo que la jaula no deja leer no se mira
+      if LugarDeLecturaDenegado(F, [ltJaula]) <> '' then
+        Continue;
+      Ini := TMemIniFile.Create('');
       Sections := TStringList.Create;
       Keys := TStringList.Create;
       AllKeys := TStringList.Create;
       try
+        // por la puerta de leer y su detector (era el TMemIniFile con el
+        // fichero, en UTF-8 a ciegas); Keys solo presta su lista aqui
+        Keys.Text := LeeTexto(F, [ltJaula]);
+        Ini.SetStrings(Keys);
         AllKeys.Sorted := True;
         AllKeys.Duplicates := dupIgnore;
         Ini.ReadSections(Sections);

@@ -376,9 +376,11 @@ begin
   // guardada en CP1252 por un editor viejo mataba vault_read con "No mapping
   // for the Unicode character" y, peor, vault_search se la saltaba EN
   // SILENCIO - "sin resultados" de algo que estaba ahi (medido 2026-09-21,
-  // test_round51). El lector de la casa: BOM, UTF-8 estricto, y CP1252 solo
-  // cuando algun byte alto no forma secuencia valida.
-  Result := DecodeSourceBytes(TFile.ReadAllBytes(AFull));
+  // test_round51). La puerta de leer con el vault como lugar (por la ruta
+  // REAL: una nota que es un enlace hacia fuera no se lee) y EL detector:
+  // BOM, UTF-8 estricto, y la ANSI de la maquina solo cuando algun byte alto
+  // no forma secuencia valida.
+  Result := LeeTexto(AFull, [ltVault]);
 end;
 
 procedure VaultSave(const AFull, AText: string);

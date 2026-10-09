@@ -57,7 +57,7 @@ uses
   System.IOUtils,
   System.Classes,
   Lsp.Mascara,
-  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
+  Lsp.Patch,   // LeeTexto: la puerta de leer, con el vault como lugar
   Lsp.Texts,
   Mcp.Vault.Seed,
   Lsp.Settings;
@@ -82,7 +82,7 @@ begin
       Body := '';
       if TFile.Exists(Full) then
         try
-          Body := DecodeSourceBytes(TFile.ReadAllBytes(Full)).TrimRight;
+          Body := LeeTexto(Full, [ltVault]).TrimRight;
         except
           // E.Message lleva la ruta real del vault, y prompts/get no pasa
           // por el filtro de salida de las tools: enmascarada aqui (revision
@@ -127,7 +127,7 @@ begin
   if TFile.Exists(Custom) then
   begin
     try
-      Result := DecodeSourceBytes(TFile.ReadAllBytes(Custom)).Trim;
+      Result := LeeTexto(Custom, [ltVault]).Trim;
     except
       Result := '';
     end;

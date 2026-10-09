@@ -63,19 +63,11 @@ uses
   System.StrUtils,
   System.Generics.Collections,
   MCPServer.Registration,
-  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
+  Lsp.Patch,   // LeeTexto: la puerta de leer, con la casa como lugar
   Lsp.Casa,
   Lsp.Identidad;
 
-const
-  MESSAGES_DIR = 'messages';
-
 // Slug: EL normalizador de nombres de cliente vive en Lsp.Casa (uno solo).
-
-function MessagesRoot: string;
-begin
-  Result := ServerDir(MESSAGES_DIR);
-end;
 
 { Pending .md files of one folder, oldest first (by name: the operator's
   files are named by date, and sorting by name is deterministic). }
@@ -108,7 +100,7 @@ begin
   Agent := Slug(CurrentAgent);
   if Agent = '' then
     Exit;
-  N := Length(PendingIn(TPath.Combine(MessagesRoot, Agent)));
+  N := Length(PendingIn(TPath.Combine(CarpetaDeMensajes, Agent)));
   if N > 0 then
     Result := MsgFmt(SN_MESSAGES_PENDING_FMT, [N, Agent]);
 end;
@@ -118,7 +110,7 @@ var
   Root, D: string;
 begin
   Result := 0;
-  Root := MessagesRoot;
+  Root := CarpetaDeMensajes;
   if not TDirectory.Exists(Root) then
     Exit;
   for D in TDirectory.GetDirectories(Root) do
@@ -135,7 +127,7 @@ begin
   Result := '';
   L := TStringList.Create;
   try
-    L.Text := DecodeSourceBytes(TFile.ReadAllBytes(APath));
+    L.Text := LeeTexto(APath, [ltCasa]);
     for I := 0 to L.Count - 1 do
       if L[I].Trim <> '' then
         Exit(L[I].Trim.TrimLeft(['#', ' ']));
@@ -176,7 +168,7 @@ begin
     Exit(MsgText(SN_MESSAGES_NONE_NO_AGENT));
   // UN buzon por agente y ninguno "para todos" (David, 25-sep-2026): un aviso
   // general se deja en la carpeta de cada uno.
-  Files := PendingIn(TPath.Combine(MessagesRoot, Agent));
+  Files := PendingIn(TPath.Combine(CarpetaDeMensajes, Agent));
   if Length(Files) = 0 then
     Exit(MsgFmt(SN_MESSAGES_NONE_FMT, [Agent]));
   Sb := TStringBuilder.Create;
@@ -194,7 +186,7 @@ begin
       Inc(N);
       Sb.AppendLine(MsgFmt(SF_MSGS_CABECERA_FMT, [N, Length(Files),
         TPath.GetFileName(F)]));
-      Sb.AppendLine(DecodeSourceBytes(TFile.ReadAllBytes(F)).TrimRight);
+      Sb.AppendLine(LeeTexto(F, [ltCasa]).TrimRight);
       Sb.AppendLine;
       // Leido = borrado, como una captura entregada (David, 25-sep-2026: "una
       // vez entregado se borra y punto, no acumulamos basura"). Nada se guarda

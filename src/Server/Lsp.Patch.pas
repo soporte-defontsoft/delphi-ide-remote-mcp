@@ -319,9 +319,48 @@ type
 function AplicaTanda(const APath, AEditsJson: string;
   const AAplicaUna: TAplicaUnaEdicion): string;
 
+type
+  { DONDE esta un fichero que pasa por las PUERTAS de leer y escribir texto, y
+    por tanto que se comprueba (David, 9-oct-2026: "todo por la misma puerta
+    con las comprobaciones que convengan"; decisions/puertas-diseno-2026-10-09):
+      ltJaula     las raices del workspace (ReadPathDenied: tambien la zona de
+                  biblioteca, para leer)
+      ltIde       los lugares del IDE: su instalacion, su carpeta de datos del
+                  usuario, la de sus SDK y el sysroot de cada SDK registrado,
+                  en su SDK Manager (Lsp.Lugares.LugaresDelIde) o en un .sdk
+                  de su carpeta de perfiles (lo que leen msbuild y paclient)
+      ltCasa      las carpetas propias del servidor: caches, buzon e informes
+                  (Lsp.Casa.CarpetasDeLaCasa; settings.ini NO)
+      ltTemporal  el temporal propio del servidor (ServerTempDir)
+      ltVault     el vault (VaultPath) }
+  TLugarDeTexto = (ltJaula, ltIde, ltCasa, ltTemporal, ltVault);
+  TLugaresDeTexto = set of TLugarDeTexto;
+
+{ LA PUERTA DE LEER, su pregunta: '' si APath esta en alguno de ALugares,
+  por su ruta REAL (un enlace no saca a nadie de su sitio); si no, la
+  negativa: la de la jaula cuando ltJaula esta entre ellos, y si no GUARD-034.
+  Las lecturas que iban por su cuenta (TFile.ReadAllText: 41 en el inventario
+  del 9-oct) no preguntaban nada: el escaner de peligros leia cualquier Import
+  que nombrase un .dproj. }
+function LugarDeLecturaDenegado(const APath: string; ALugares: TLugaresDeTexto): string;
+{ ...y la lectura: los bytes de APath por EL detector (DetectEnc, el de
+  delphi_read: BOM, UTF-8 estricto, la ANSI de la maquina; un form sin BOM,
+  ANSI) si la puerta lo admite; si no, lanza su negativa (con su etiqueta: un
+  llamador que la deje subir contesta DENIED). AEncName: la codificacion
+  leida, para quien vaya a reescribirlo por PatchSaveText. }
+function LeeTexto(const APath: string; ALugares: TLugaresDeTexto): string; overload;
+function LeeTexto(const APath: string; ALugares: TLugaresDeTexto; out AEncName: string): string; overload;
+{ ...y los BYTES, para quien los necesita enteros antes de decidir si son
+  texto (lo que deja un test en su contenedor) o no lee texto (la version de
+  la glibc de un sysroot): la misma pregunta y la misma negativa. }
+function LeeBytes(const APath: string; ALugares: TLugaresDeTexto): TArray<Byte>;
+
 { Encoding-preserving load/save for other engines (scaffolder): text is
   decoded with the real encoding; save re-encodes with the SAME one, makes
-  the pre-edit backup and writes atomically. AEncName as in delphi_read. }
+  the pre-edit backup and writes atomically. AEncName as in delphi_read.
+  PatchLoadText es la lectura de la JAULA que la tool ya comprobo a la
+  entrada (la ruta llega de un parametro admitido); lo que se lee de OTRO
+  sitio va por LeeTexto con su lugar. }
 function PatchLoadText(const APath: string; out AEncName: string): string;
 { AEnsayo: todo lo que la escritura comprueba (la codificacion, la puerta y el
   +R que pregunta el escritor) sin copiar ni escribir; lanza lo que lanzaria.
@@ -586,6 +625,7 @@ uses
   Lsp.Regex,
   Lsp.Scaffold,
   Lsp.Rutas,
+  Lsp.Lugares, // LugaresDelIde: lo que las puertas admiten del IDE
   Lsp.Casa,
   Lsp.Settings,
   Lsp.Identidad,
@@ -1629,7 +1669,7 @@ begin
   Result := '';
   try
     if TFile.Exists(MarcaDeDueno(APath)) then
-      Result := TFile.ReadAllText(MarcaDeDueno(APath)).Trim([' ', #9, #13, #10, #$FEFF]);
+      Result := LeeTexto(MarcaDeDueno(APath), [ltJaula]).Trim([' ', #9, #13, #10, #$FEFF]);
   except
     Result := '';
   end;
@@ -1699,7 +1739,9 @@ begin
       [TPath.GetFileName(APath), EncName(AK), EncName(KLeida), EncName(AK)]);
 end;
 
-function PatchLoadText(const APath: string; out AEncName: string): string;
+{ Los bytes de APath como texto, por EL detector: lo que leen las dos puertas
+  de lectura (LeeTexto y PatchLoadText), una sola vez escrito. }
+function TextoDeFichero(const APath: string; out AEncName: string): string;
 var
   B: TBytes;
   K: TEncKind;
@@ -1708,6 +1750,124 @@ begin
   K := DetectEnc(B, EsRutaDeDesigner(APath));
   AEncName := EncName(K);
   Result := DecodeBytes(B, K);
+end;
+
+{ AReal (una ruta REAL) esta en alguno de ALugares, cada uno por SU ruta
+  real: la comparacion de todos los lugares de la puerta. }
+function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;
+begin
+  for var L in ALugares do
+    if (L.Trim <> '') and EnLugar(AReal, RealPath(L)) then
+      Exit(True);
+  Result := False;
+end;
+
+{ Los sysroots que nombran los .sdk de la carpeta de perfiles del IDE: los
+  que usan msbuild y paclient, tenga o no el SDK su asiento en el registro
+  (un .sdk sin asiento es un estado que profiles diagnostica; test_sdk).
+  Saberlos pide LEER, asi que no estan en LugaresDelIde, que no lee nada:
+  cada .sdk se lee solo si su ruta REAL cae en esos lugares. Por la puerta
+  entera se preguntaria a si misma, y un .sdk que fuese un enlace hacia fuera
+  la haria girar sin fin. }
+function SysrootsDeLosSdk: TArray<string>;
+var
+  Info: TRadStudioInfo;
+  Enc, S: string;
+begin
+  Result := nil;
+  Info := DiscoverRadStudio;
+  if not Info.Found or not TDirectory.Exists(IdeProfilesDir(Info.Version)) then
+    Exit;
+  for var F in TDirectory.GetFiles(IdeProfilesDir(Info.Version), '*.sdk') do
+    try
+      if not EnAlgunLugar(RealPath(F), LugaresDelIde) then
+        Continue;
+      S := SysrootDeSdk(Info.Version, TextoDeFichero(F, Enc));
+      if (S.Trim <> '') and not S.Contains('$(') then
+        Result := Result + [S];
+    except
+      // un .sdk que no se deja leer no nombra nada
+    end;
+end;
+
+function LugarDeLecturaDenegado(const APath: string; ALugares: TLugaresDeTexto): string;
+var
+  Real, Lugares: string;
+
+  procedure Nombra(ALugar: TLugarDeTexto; const ANombre: string);
+  begin
+    if ALugar in ALugares then
+    begin
+      if Lugares <> '' then
+        Lugares := Lugares + ', ';
+      Lugares := Lugares + ANombre;
+    end;
+  end;
+
+begin
+  Result := '';
+  // la jaula primero: su negativa es la que mejor se explica
+  if ltJaula in ALugares then
+  begin
+    Result := ReadPathDenied(APath);
+    if Result = '' then
+      Exit;
+  end;
+  Real := RealPath(APath);
+  // del IDE: primero lo que se mide sin leer; los sysroots de sus .sdk (que
+  // piden leerlos) solo si no cae ahi
+  if (ltIde in ALugares) and (EnAlgunLugar(Real, LugaresDelIde) or
+     EnAlgunLugar(Real, SysrootsDeLosSdk)) then
+    Exit('');
+  if (ltCasa in ALugares) and EnAlgunLugar(Real, CarpetasDeLaCasa) then
+    Exit('');
+  if (ltTemporal in ALugares) and EnAlgunLugar(Real, [ServerTempDir]) then
+    Exit('');
+  if (ltVault in ALugares) and EnAlgunLugar(Real, [VaultPath]) then
+    Exit('');
+  if Result <> '' then
+    Exit;
+  Lugares := '';
+  Nombra(ltIde, MsgText(SF_LUGAR_IDE));
+  Nombra(ltCasa, MsgText(SF_LUGAR_CASA));
+  Nombra(ltTemporal, MsgText(SF_LUGAR_TEMPORAL));
+  Nombra(ltVault, MsgText(SF_LUGAR_VAULT));
+  Result := MsgFmt(SR_GUARD_FUERA_DE_LUGARES_FMT, [APath, Lugares]);
+end;
+
+{ La negativa de la puerta como excepcion: lo que comparten LeeTexto y
+  LeeBytes. }
+procedure ExigeLugarDeLectura(const APath: string; ALugares: TLugaresDeTexto);
+var
+  Motivo: string;
+begin
+  Motivo := LugarDeLecturaDenegado(APath, ALugares);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+end;
+
+function LeeTexto(const APath: string; ALugares: TLugaresDeTexto; out AEncName: string): string;
+begin
+  ExigeLugarDeLectura(APath, ALugares);
+  Result := TextoDeFichero(APath, AEncName);
+end;
+
+function LeeBytes(const APath: string; ALugares: TLugaresDeTexto): TArray<Byte>;
+begin
+  ExigeLugarDeLectura(APath, ALugares);
+  Result := TFile.ReadAllBytes(APath);
+end;
+
+function LeeTexto(const APath: string; ALugares: TLugaresDeTexto): string;
+var
+  Enc: string;
+begin
+  Result := LeeTexto(APath, ALugares, Enc);
+end;
+
+function PatchLoadText(const APath: string; out AEncName: string): string;
+begin
+  Result := TextoDeFichero(APath, AEncName);
 end;
 
 procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;

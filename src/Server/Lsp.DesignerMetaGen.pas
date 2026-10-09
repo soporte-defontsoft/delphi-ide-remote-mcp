@@ -2427,7 +2427,7 @@ begin
     if FileExists(TPath.Combine(C, 'System.pas')) then
     begin
       try
-        M := TRegEx.Match(CodigoPascal(TFile.ReadAllText(TPath.Combine(C, 'System.pas'))),
+        M := TRegEx.Match(CodigoPascal(LeeTexto(TPath.Combine(C, 'System.pas'), [ltIde, ltJaula])),
           '(?i)\bRTLVersion\s*=\s*([0-9]+(\.[0-9]+)?)\s*;');
         if M.Success then
           Exit(FormatFloat('0.0', StrToFloat(M.Groups[1].Value, TFormatSettings.Invariant),

@@ -75,6 +75,17 @@ function ServerTempDir(const ASub: string = ''): string;
   defecto de la plataforma). Las componian a mano dos sitios. Lee la
   variable en cada llamada: quien la redirige (una prueba) la ve. }
 function ServerCacheDir(const ASub: string = ''): string;
+{ El buzon de los agentes (<casa>\messages, delphi_messages) y la carpeta de
+  los informes (<casa>\reports, delphi_report): eran una constante en cada
+  tool, y las puertas de leer y escribir tienen que saber donde estan. }
+function CarpetaDeMensajes: string;
+function CarpetaDeInformes: string;
+{ LA casa del servidor como LUGAR de las puertas de leer y escribir texto
+  (ltCasa, Lsp.Patch): sus caches, el buzon y los informes. NO la carpeta del
+  exe entera: ahi esta settings.ini, que tiene su propio lector (Lsp.Settings)
+  y no lo lee ninguna puerta. Una casa que no es absoluta (LOCALAPPDATA vacia)
+  no es lugar: se resolveria contra la carpeta de trabajo del proceso. }
+function CarpetasDeLaCasa: TArray<string>;
 { Un fichero de una de las casas del servidor (sus caches: la configuracion
   fabricada para el motor, las tablas del disenador) ENTERO o nada: se
   escribe al lado y se renombra encima, porque otro hilo puede estar
@@ -202,6 +213,23 @@ begin
   Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'DelphiLspMcp');
   if ASub <> '' then
     Result := TPath.Combine(Result, ASub);
+end;
+
+function CarpetaDeMensajes: string;
+begin
+  Result := ServerDir('messages');
+end;
+
+function CarpetaDeInformes: string;
+begin
+  Result := ServerDir('reports');
+end;
+
+function CarpetasDeLaCasa: TArray<string>;
+begin
+  Result := [CarpetaDeMensajes, CarpetaDeInformes];
+  if EsRutaAbsoluta(ServerCacheDir) then
+    Result := Result + [ServerCacheDir];
 end;
 
 procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);

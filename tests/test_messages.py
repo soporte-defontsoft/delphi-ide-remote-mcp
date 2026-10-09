@@ -77,5 +77,27 @@ check('agent se normaliza (sin ..)', 'MESSAGE 1/1' in t and 'hola' in t, t)
 t = call('delphi_messages', {"command": "read", "agent": "dsh"})
 check('tras leer, vacio', mc.abre(t, 'SN_MESSAGES_NONE_FMT'), t)
 
+# Un buzon que es una UNION hacia una carpeta de FUERA (la victima): el buzon
+# se lee por la puerta de leer, con la casa como lugar y por la ruta REAL, asi
+# que lo de detras ni se entrega ni se BORRA. Hasta 22c83e1 se leia por su
+# cuenta: check lo listaba y read lo entregaba y lo borraba - un borrado fuera
+# de las raices por un enlace (bloque de las puertas de la 1.18.0).
+VICTIMA = mc.carpeta('messages-victima')
+SECRETO = os.path.join(VICTIMA, '20260823-0200-secreto.md')
+open(SECRETO, 'w', encoding='utf-8').write('# Secreto de fuera\n\nno sale.\n')
+union = os.path.join(MSG, 'union')
+check('la union del buzon se planta', mc.junction(union, VICTIMA), union)
+try:
+    t = call('delphi_messages', {"command": "check", "agent": "union"})
+    check('check de un buzon que es una union: GUARD-034 y nada de lo de detras',
+          mc.rechazado(t) and mc.es(t, 'SR_GUARD_FUERA_DE_LUGARES_FMT') and 'Secreto' not in t, t[:300])
+    t = call('delphi_messages', {"agent": "union"})
+    check('read de un buzon que es una union: GUARD-034, ni se entrega ni se borra',
+          mc.rechazado(t) and mc.es(t, 'SR_GUARD_FUERA_DE_LUGARES_FMT') and 'no sale' not in t
+          and os.path.exists(SECRETO), t[:300])
+finally:
+    mc.borra(union)  # la union como union: lo de detras no se toca
+    mc.borra(VICTIMA)
+
 srv.cierra()
 mc.fin('messages battery')

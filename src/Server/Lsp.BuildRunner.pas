@@ -770,7 +770,7 @@ begin
     if M.Groups[1].Value.Contains(Cond) and
        M.Groups[2].Value.Contains('ProjectOutput') then
       Exit;
-  DprojXml := TFile.ReadAllText(ADprojPath);
+  DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
   for Cfg in TArray<string>.Create('Debug', 'Release') do
     Entries := Entries + OutputDeployEntry(DprojXml, APlat, Cfg, AName);
@@ -1144,7 +1144,7 @@ begin
     begin
       Xml := '';
       try
-        Xml := TFile.ReadAllText(F);
+        Xml := LeeTexto(F, [ltIde]);
       except
         Continue;
       end;
@@ -1190,7 +1190,7 @@ var
 begin
   Result := '';
   try
-    Xml := TFile.ReadAllText(ADproj);
+    Xml := LeeTexto(ADproj, [ltJaula]);
   except
     Exit;
   end;
@@ -1229,7 +1229,7 @@ begin
   Result := 0;
   ANota := '';
   try
-    Xml := TFile.ReadAllText(RutaDeSdk(AVersion, ASdkFile));
+    Xml := LeeTexto(RutaDeSdk(AVersion, ASdkFile), [ltIde]);
   except
     Exit;
   end;
@@ -1309,16 +1309,13 @@ var
 begin
   Result := '';
   try
-    Xml := TFile.ReadAllText(RutaDeSdk(AVersion, ASdkFile));
+    Xml := LeeTexto(RutaDeSdk(AVersion, ASdkFile), [ltIde]);
   except
     Exit;
   end;
-  Raiz := TagValue(Xml, 'Profile_sysroot');
+  Raiz := SysrootDeSdk(AVersion, Xml);
   if Raiz = '' then
     Exit;
-  if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
-    Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
-      [rfIgnoreCase]);
   if Raiz.Contains('$(') then
     Exit; // con macros sin expandir no se puede mirar el disco
   // DOS libc.so.6, uno en cada arbol: la unica senal fiable de que dos
@@ -1400,7 +1397,7 @@ begin
     // sin leerlo NO se compila: el escaner miraba un texto vacio y daba el
     // .dproj por limpio (fallaba ABIERTO; sexta revision)
     try
-      ProjXml := TFile.ReadAllText(ADprojPath);
+      ProjXml := LeeTexto(ADprojPath, [ltJaula]);
     except
       on E: Exception do
         raise Exception.Create(MsgFmt(SR_BUILD_DPROJ_ILEGIBLE_FMT,

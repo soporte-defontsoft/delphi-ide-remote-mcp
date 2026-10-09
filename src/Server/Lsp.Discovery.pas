@@ -93,6 +93,12 @@ function NombreSinSdk(const ANombreSdk: string): string;
   sysroot ($(BDSPLATFORMSDKSDIR)\<nombre>.sdk), por el MISMO nombrador. }
 function RutaDeSdk(const AVersion, ANombre: string): string;
 function CarpetaDeSdk(const AVersion, ANombre: string): string;
+{ EL sysroot que nombra el texto de un .sdk (Profile_sysroot), con la macro
+  del IDE ($(BDSPLATFORMSDKSDIR)) resuelta para ESA version: '' si no lo
+  nombra; con otra macro, vuelve con ella (quien mire el disco, que lo
+  compruebe). Lo componian a mano el escaner de sysroots mezclados, la ficha
+  de profiles y reseat-sdk, y la puerta de leer iba a por la cuarta. }
+function SysrootDeSdk(const AVersion, AXml: string): string;
 
 { Los campos de CONEXION de un perfil del IDE (Profile_host, Profile_port,
   Profile_platform y Profile_password, esta ya cifrada por paclient), leidos
@@ -131,6 +137,15 @@ function ProfileHostDenied(const AProfName: string): string;
   and only if neither exists, the documented default, whose literal lives HERE
   and nowhere else. }
 function IdeSdksDir(const AVersion: string): string;
+
+{ LOS sysroots que ESA version tiene registrados en su SDK Manager
+  (PlatformSDKs\<sdk>\SystemRoot del registro del usuario), tal cual estan
+  escritos (puede venir la macro $(BDSPLATFORMSDKSDIR): quien la necesite
+  resuelta la expande). EL lector de esos valores: IdeSdksDir saca de aqui la
+  carpeta de los SDK, y los lugares del IDE (Lsp.Lugares) cada sysroot - los de
+  Android viven en el CatalogRepository, fuera de esa carpeta (medido el
+  9-oct-2026 en produccion). }
+function SysrootsRegistrados(const AVersion: string): TArray<string>;
 
 { ALL RAD Studio installations on the machine (a machine may host several
   Delphi versions side by side), newest first. Installs WITHOUT DelphiLSP
@@ -285,6 +300,10 @@ uses
   Lsp.Dproj, // TagValue: EL lector de los tags del .profile
   Winapi.Windows,
   Lsp.NetDrives,
+  // LeeTexto: la puerta de leer. Sus lugares del IDE (Lsp.Lugares.LugaresDelIde)
+  // salen de aqui, por el registro y lo descubierto, sin leer ningun fichero:
+  // si los midiese leyendo por la puerta, se preguntaria a si misma
+  Lsp.Patch,
   Lsp.Settings; // ServerDelphiVersion: la version que fija el settings.ini
 
 function TRadStudioInfo.Found: Boolean;
@@ -581,7 +600,7 @@ begin
   if not AInfo.Found or not FileExists(AInfo.RsVarsBat) then
     Exit;
   try
-    for Line in TFile.ReadAllLines(AInfo.RsVarsBat) do
+    for Line in LineasDelTexto(LeeTexto(AInfo.RsVarsBat, [ltIde])) do
     begin
       var L := Line.Trim.TrimLeft(['@']);
       if StartsText(SETCMD, L) then
@@ -854,6 +873,14 @@ begin
   Result := TPath.Combine(IdeSdksDir(AVersion), NombreDeSdk(ANombre));
 end;
 
+function SysrootDeSdk(const AVersion, AXml: string): string;
+begin
+  Result := TagValue(AXml, 'Profile_sysroot');
+  if Result.Contains('$(BDSPLATFORMSDKSDIR)') then
+    Result := Result.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
+      [rfIgnoreCase]);
+end;
+
 function CamposDePerfil(const AXml: string): TCamposDePerfil;
 begin
   Result.Host := TagValue(AXml, 'Profile_host');
@@ -875,7 +902,7 @@ begin
     Exit;
   end;
   try
-    Xml := TFile.ReadAllText(Ruta);
+    Xml := LeeTexto(Ruta, [ltIde]);
   except
     AMotivo := MsgFmt(SR_PROFILE_NO_LEIDO_FMT, [AName.Trim]);
     Exit;
@@ -906,12 +933,52 @@ begin
   Result := ProbeHostDenied(Host);
 end;
 
-function IdeSdksDir(const AVersion: string): string;
+function SysrootsRegistrados(const AVersion: string): TArray<string>;
 var
-  Vars: TStringList;
   Reg: TRegistry;
   Claves: TStringList;
   K, Raiz: string;
+begin
+  Result := nil;
+  Reg := TRegistry.Create(KEY_READ);
+  Claves := TStringList.Create;
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs',
+      [AVersion])) then
+    begin
+      Reg.GetKeyNames(Claves);
+      // CERRADA antes de abrir cada SDK: una ruta sin '\' delante es RELATIVA
+      // a la clave abierta (TRegistry.GetBaseKey), y con PlatformSDKs abierta
+      // se buscaba PlatformSDKs\SOFTWARE\...: este bucle no encontro nunca
+      // nada y IdeSdksDir caia siempre en su default (medido en la RTL el
+      // 9-oct-2026; en esta maquina el default coincide y no se veia)
+      Reg.CloseKey;
+      for K in Claves do
+        if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs\%s',
+          [AVersion, K])) then
+        try
+          try
+            Raiz := Reg.ReadString('SystemRoot');
+            if Raiz <> '' then
+              Result := Result + [Raiz];
+          except
+            // una entrada sin SystemRoot (o que no es texto) no dice nada
+          end;
+        finally
+          Reg.CloseKey;
+        end;
+    end;
+  finally
+    Claves.Free;
+    Reg.Free;
+  end;
+end;
+
+function IdeSdksDir(const AVersion: string): string;
+var
+  Vars: TStringList;
+  Raiz: string;
 begin
   Result := '';
   // 1. lo que diga ESA version, si el operador lo redefinio
@@ -925,34 +992,13 @@ begin
   if (Result <> '') and not Result.Contains('$(') then
     Exit(SinBarraFinal(Result)); // (la raiz de una unidad, con su barra: se le unen nombres)
   // 2. donde estan los SDK que ESA version ya tiene registrados
-  Reg := TRegistry.Create(KEY_READ);
-  Claves := TStringList.Create;
-  try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs',
-      [AVersion])) then
-    begin
-      Reg.GetKeyNames(Claves);
-      for K in Claves do
-        if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs\%s',
-          [AVersion, K])) then
-        try
-          Raiz := Reg.ReadString('SystemRoot');
-          // solo sirve el que apunte a una carpeta <algo>.sdk: los SDK de
-          // Android viven en el CatalogRepository, que es otra cosa
-          if (Raiz <> '') and not Raiz.Contains('$(') and
-             SameText(NombreDeSdk(TPath.GetFileName(PrefijoSinBarra(Raiz))),
-               TPath.GetFileName(PrefijoSinBarra(Raiz))) then
-            Exit(SinBarraFinal(TPath.GetDirectoryName(
-              PrefijoSinBarra(Raiz))));
-        except
-          // una entrada sin SystemRoot no dice nada
-        end;
-    end;
-  finally
-    Claves.Free;
-    Reg.Free;
-  end;
+  for Raiz in SysrootsRegistrados(AVersion) do
+    // solo sirve el que apunte a una carpeta <algo>.sdk: los SDK de
+    // Android viven en el CatalogRepository, que es otra cosa
+    if not Raiz.Contains('$(') and
+       SameText(NombreDeSdk(TPath.GetFileName(PrefijoSinBarra(Raiz))),
+         TPath.GetFileName(PrefijoSinBarra(Raiz))) then
+      Exit(SinBarraFinal(TPath.GetDirectoryName(PrefijoSinBarra(Raiz))));
   // 3. el default documentado. UNICO literal, y aqui.
   Result := TPath.Combine(TPath.Combine(TPath.Combine(
     TPath.GetDocumentsPath, 'Embarcadero'), 'Studio'), 'SDKs');

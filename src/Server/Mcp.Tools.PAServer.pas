@@ -123,6 +123,7 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.ProcessLaunch, // TrocearArgs / EnComillas
+  Lsp.Patch, // LeeTexto: la puerta de leer (los ficheros del IDE)
   Lsp.Args;
 
 constructor TDelphiPAServerTool.Create;
@@ -317,7 +318,7 @@ begin
       Exit;
     Id := '';
     Ver := '';
-    for L in TFile.ReadAllText(F).Replace(#13#10, #10).Split([#10]) do
+    for L in LeeTexto(F, [ltTemporal]).Replace(#13#10, #10).Split([#10]) do
     begin
       if L.StartsWith('ID=') then
         Id := L.Substring(3).Trim(['"', ' ']);
@@ -350,7 +351,9 @@ begin
     if not TFile.Exists(F) then
       Continue;
     try
-      M := TRegEx.Match(TEncoding.ASCII.GetString(TFile.ReadAllBytes(F)),
+      // por la puerta de leer: el sysroot es un lugar del IDE si su SDK
+      // Manager lo registra (Lsp.Lugares.LugaresDelIde)
+      M := TRegEx.Match(TEncoding.ASCII.GetString(LeeBytes(F, [ltIde])),
         'release version (\d+\.\d+)');
       if M.Success then
         Exit(M.Groups[1].Value);
@@ -392,7 +395,7 @@ begin
   if not TFile.Exists(F) then
     Exit;
   try
-    Result := ObjetoJson(TFile.ReadAllText(F));
+    Result := ObjetoJson(LeeTexto(F, [ltIde]));
   except
     Result := nil;
   end;
@@ -483,7 +486,7 @@ begin
   Result.AddPair('name', NombreSinSdk(TPath.GetFileName(ASdkFile)));
   Xml := '';
   try
-    Xml := TFile.ReadAllText(ASdkFile);
+    Xml := LeeTexto(ASdkFile, [ltIde]);
   except
     Exit;
   end;
@@ -493,9 +496,7 @@ begin
   Result.AddPair('sysroot', Raiz);
   // Los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta, y
   // sin expandirla no se podria decir nada de los SDK del SDK Manager.
-  if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
-    Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
-      [rfIgnoreCase]);
+  Raiz := SysrootDeSdk(AVersion, Xml);
   if Raiz.Contains('$(') or not TDirectory.Exists(Raiz) then
     Exit; // con macros sin expandir (o sin carpeta) no hay nada que mirar
   // La glibc SIEMPRE se lee del propio sysroot: es el dato que decide si un
@@ -613,7 +614,7 @@ begin
   // Heuristic: a platform is "ready" if any .sdk mentions it (the SDK is what
   // a remote build actually needs).
   for F in TDirectory.GetFiles(Dir, '*.sdk') do
-    if LowerCase(TFile.ReadAllText(F)).Contains(LowerCase(APlatform)) then
+    if LowerCase(LeeTexto(F, [ltIde])).Contains(LowerCase(APlatform)) then
       Exit(True);
 end;
 
@@ -746,7 +747,7 @@ begin
     SinBarraFinal(ARootDir), 'bin'), 'Linux64.defaultsdkpaths');
   if not TFile.Exists(Fichero) then
     Exit;
-  Xml := TFile.ReadAllText(Fichero);
+  Xml := LeeTexto(Fichero, [ltIde]);
   R := TRegistry.Create(KEY_WRITE);
   try
     R.RootKey := HKEY_CURRENT_USER;
@@ -842,7 +843,7 @@ begin
   if TDirectory.Exists(IdeProfilesDir(Info.Version)) then
     for F in TDirectory.GetFiles(IdeProfilesDir(Info.Version), '*.profile') do
     try
-      var Campos := CamposDePerfil(TFile.ReadAllText(F));
+      var Campos := CamposDePerfil(LeeTexto(F, [ltIde]));
       if SameText(Campos.Host, Host) and (Campos.Puerto = Port) then
         AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT,
           [NombreDePerfil(F)]);
@@ -858,7 +859,7 @@ begin
     // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient
     RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host,
       StrToIntDef(Port, 64211),
-      CamposDePerfil(TFile.ReadAllText(ProfileFile)).Password);
+      CamposDePerfil(LeeTexto(ProfileFile, [ltIde])).Password);
     Return := TJSONObject.Create;
     try
       Return.AddPair('profile', ProfName);
@@ -1240,7 +1241,7 @@ begin
   Result := ProfileHostDenied(ProfName);
   if Result <> '' then
     Exit;
-  ProfXml := TFile.ReadAllText(ProfileFile);
+  ProfXml := LeeTexto(ProfileFile, [ltIde]);
   Plat := CamposDePerfil(ProfXml).Plataforma;
   if not SameText(Plat, 'Linux64') then
     Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [ProfName, Plat]));
@@ -1497,7 +1498,7 @@ begin
           Continue;
         end;
         try
-          Texto := TFile.ReadAllText(F);
+          Texto := LeeTexto(F, [ltIde]);
         except
           Continue;
         end;
@@ -1565,7 +1566,7 @@ begin
       end;
       Xml := '';
       try
-        Xml := TFile.ReadAllText(Fichero);
+        Xml := LeeTexto(Fichero, [ltIde]);
       except
         Continue;
       end;
@@ -1573,13 +1574,10 @@ begin
       // nuestra
       if not SameText(CamposDePerfil(Xml).Plataforma, 'Linux64') then
         Continue;
-      Raiz := TagValue(Xml, 'Profile_sysroot');
+      // los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta
+      Raiz := SysrootDeSdk(Info.Version, Xml);
       if Raiz = '' then
         Continue;
-      // los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta
-      if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
-        Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)',
-          IdeSdksDir(Info.Version), [rfIgnoreCase]);
       if Raiz.Contains('$(') or not TDirectory.Exists(Raiz) then
         Continue;
       if RegistrarSdkEnIde(Info.Version, Info.RootDir, Raiz,
@@ -1619,7 +1617,7 @@ begin
   if TFile.Exists(Fichero) then
   begin
     try
-      Xml := TFile.ReadAllText(Fichero);
+      Xml := LeeTexto(Fichero, [ltIde]);
       Raiz := TagValue(Xml, 'Profile_sysroot');
     except
       Raiz := '';

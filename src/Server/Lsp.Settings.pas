@@ -792,7 +792,11 @@ begin
            GWorkspaces[J].Name])];
       end;
   end;
-  // 2. la misma clave dos veces en una seccion, o la misma seccion dos veces
+  // 2. la misma clave dos veces en una seccion, o la misma seccion dos veces.
+  // EXCEPCION DECLARADA de la puerta de leer (LeeTexto): settings.ini no es
+  // un lugar de ninguna puerta (no lo lee ninguna tool) y su lector es este
+  // modulo; las lineas crudas se leen aqui solo para ver lo que la API de
+  // Windows (GetPrivateProfile*) calla: lo repetido.
   try
     Lineas := TFile.ReadAllLines(AIniPath);
   except

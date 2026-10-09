@@ -420,8 +420,11 @@ begin
         ARecortado := True;
         Continue;
       end;
+      // por la puerta de leer, con el temporal como lugar: FotoDe no cruza
+      // enlaces, y lo que la puerta no admita tampoco se lee (los bytes
+      // hacen falta enteros para LooksBinaryBytes)
       try
-        B := TFile.ReadAllBytes(TPath.Combine(ADir, N));
+        B := LeeBytes(TPath.Combine(ADir, N), [ltTemporal]);
       except
         O.AddPair('noContent', 'unreadable');
         Continue;

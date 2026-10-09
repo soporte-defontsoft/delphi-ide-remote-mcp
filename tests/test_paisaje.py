@@ -328,6 +328,31 @@ REGLAS = [
      'cuenta recalcula la forma de un sitio en cada llamada (68 llamadas a las formas medidas el '
      '8-oct-2026, ~30 de un sitio), y dos formas de un mismo sitio fueron el workspace borrable del '
      '20-sep-2026'),
+    ('leer texto sin la puerta',
+     # (un TMemIniFile vacio que se llena con SetStrings no lee nada)
+     r"TFile\.(?:ReadAllText|ReadAllLines|OpenText)\b|\.LoadFromFile\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|"
+     r"TIniFile\.Create\s*\(|TStreamReader\.Create\s*\(|DecodeSourceBytes\s*\(\s*TFile\.ReadAllBytes",
+     # excepciones DECLARADAS, cada una con su motivo; solo pueden encoger
+     [# settings.ini: su lector es Lsp.Settings y no es lugar de ninguna puerta (C1)
+      ('Lsp.Settings.pas', 'ComprobarDuplicadosIni'), ('Lsp.Settings.pas', 'LoadSecurity'),
+      ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'),
+      # .git\HEAD: la puerta niega .git y esta lectura lo admite (el juez es git, 9.5)
+      ('Mcp.Tools.Workspace.pas', 'RepoOf'),
+      # BYTES de la jaula que la tool ya comprobo (delphi_fetch; el PNG que se recorta):
+      # la familia de PatchLoadText, que pasa por la puerta en P2 (y RecortaPng, P4)
+      ('Lsp.Files.pas', 'ServeFile'), ('Lsp.Imagen.pas', 'RecortaPng'),
+      # programas que NO son el servidor: los renderizadores y el conversor leen lo que
+      # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
+      ('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'AncestroDeClase'),
+      ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
+      ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Convert'),
+      ('Mld.Sesion.pas', 'SesionGrafica'), ('McpDesktopNode.dpr', 'EjecutarLinux'),
+      ('McpRunJob.dpr', 'LanzarYVigilar')],
+     'LeeTexto y LeeBytes (Lsp.Patch): LA puerta de leer, con el LUGAR por parametro (jaula, IDE, '
+     'casa, temporal, vault), por la ruta REAL y con EL detector. 41 lecturas iban por su cuenta '
+     '(inventario del 9-oct-2026, bloque de las puertas de la 1.18.0): el escaner de peligros leia un '
+     'Import de fuera de las raices y, limpio, el build lo cargaba de alli; un buzon que era una union '
+     'entregaba y BORRABA lo de detras'),
 ]
 
 
@@ -475,6 +500,7 @@ PLANTADO = {
     'una pagina de codigos a mano': "  E := TEncoding.GetEncoding(1252);",
     'fijar la pagina ANSI': "  UsaPaginaAnsi(1251);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
+    'leer texto sin la puerta': "  Xml := TFile.ReadAllText(Dproj);",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -507,6 +533,20 @@ for forma in ("  for E in TArray<string>.Create('*.dfm', '*.fmx') do X := 1;",
     cazados = fuera_de_casa(REGLA_DSG, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                          'CopiaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (REGLA_DSG[0], forma.strip()), len(cazados) == 1, cazados)
+
+# las otras formas de leer texto por su cuenta, y la que NO lo es (un
+# TMemIniFile vacio que se llena con SetStrings desde la puerta)
+REGLA_LEER = next(r for r in REGLAS if r[0] == 'leer texto sin la puerta')
+def leer_plantado(forma):
+    return fuera_de_casa(REGLA_LEER, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                       'LeeAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+for forma in ("  L := TFile.ReadAllLines(F);", "  Ini := TMemIniFile.Create(F, TEncoding.UTF8);",
+              "  Ini := TIniFile.Create(F);", "  Lista.LoadFromFile(F);", "  R := TStreamReader.Create(F);",
+              "  T := DecodeSourceBytes(TFile.ReadAllBytes(F));"):
+    cazados = leer_plantado(forma)
+    check('mutante "%s": tambien %s' % (REGLA_LEER[0], forma.strip()), len(cazados) == 1, cazados)
+NO_CAZADO = leer_plantado("  Ini := TMemIniFile.Create('');")
+check('...y un TMemIniFile vacio (lo llena SetStrings) no es una lectura', not NO_CAZADO, NO_CAZADO)
 
 for regla in REGLAS:
     malos = fuera_de_casa(regla, TEXTOS)

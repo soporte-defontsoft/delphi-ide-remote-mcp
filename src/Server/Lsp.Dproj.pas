@@ -285,6 +285,7 @@ uses
   System.IOUtils,
   System.Generics.Collections,
   Lsp.Texts,
+  Lsp.Patch, // LeeTexto: la puerta de leer (el .dproj y sus Import, en la jaula)
   System.Character;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
@@ -673,7 +674,7 @@ begin
   if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
     Exit;
   try
-    Xml := TFile.ReadAllText(ADprojPath);
+    Xml := LeeTexto(ADprojPath, [ltJaula]);
   except
     Exit;
   end;
@@ -977,7 +978,8 @@ var
     Xml, V, Resolved: string;
   begin
     try
-      Xml := TFile.ReadAllText(AFile);
+      // un Import fuera de las raices no se lee: DprojBuildHazard lo rechaza
+      Xml := LeeTexto(AFile, [ltJaula]);
     except
       Exit;
     end;
@@ -1245,7 +1247,7 @@ begin
     Exit;
   try
     Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
-    Xml := TFile.ReadAllText(ADprojPath);
+    Xml := LeeTexto(ADprojPath, [ltJaula]);
   except
     Exit;
   end;
@@ -1406,9 +1408,13 @@ begin
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT, [V]));
     if not TFile.Exists(Resolved) then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_ESTA_FMT, [V]));
+    // lo que no es del IDE se escanea si esta en las raices (o en la zona de
+    // biblioteca); de fuera, se rechaza: el build lo cargaria de alli
+    if LugarDeLecturaDenegado(Resolved, [ltJaula]) <> '' then
+      Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_FUERA_FMT, [V]));
     Imported := '';
     try
-      Imported := TFile.ReadAllText(Resolved);
+      Imported := LeeTexto(Resolved, [ltJaula]);
     except
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT, [V]));
     end;
