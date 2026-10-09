@@ -154,7 +154,9 @@ function FlotanteFmx(N: Integer): string;
   con acento en un .dfm sin BOM dejaba el proyecto sin compilar (RLINK32), y
   con la unidad en UTF-8 sin BOM el campo salia en la RTTI del exe leido en
   ANSI (otros bytes que su componente); las dos diciendo OK. Devuelve '' o
-  la negativa (DSGN-111) con el fichero que no puede. Las codificaciones,
+  la negativa (DSGN-111) con el fichero que no puede. APasEnc es la
+  codificacion en que se ESCRIBIRA la unidad (Lsp.Patch.EncAlEscribir: una
+  unidad ASCII no tiene ninguna y la elige el nombre). Las codificaciones,
   con los nombres de EncName. }
 function NombreQueElFicheroNoLee(const ANombre, ADfm, ADfmEnc, APas, APasEnc: string): string;
 

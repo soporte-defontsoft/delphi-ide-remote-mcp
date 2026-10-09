@@ -27,10 +27,25 @@ type
     [Test] procedure PreambleLenPorClase;
     [Test] procedure Cp1252RechazaLoQueNoCabe;
     [Test] procedure Cp1252LosDoscientosCincuentaYSeisBytesVuelven;
+    [Test] procedure Utf8EstrictoComoRfc3629;
+    [Test] procedure IdaYVueltaPorCodificacionYSusRotos;
+    [Test] procedure Utf8TolerantePoneFffdSinExcepcion;
+    [Test] procedure CabeEnCp1252YHayByteAlto;
+    [Test] procedure EncAlEscribirLaTablaDeUnFuente;
+    [Test] procedure EncAlEscribirDecidePorLaLlamadaNoPorLaEscritura;
+    [Test] procedure ReescrituraDenegadaPorLaIdaYVuelta;
+    [Test] procedure ColaIncompletaDeUtf16YUtf32SaleFffd;
+    [Test] procedure Utf8MezcladoEsAnsiComoElJuez;
+    [Test] procedure EncAlEscribirConservaLaCodificacionDelOrigen;
+    [Test] procedure LecturaCambiadaDelLadoDeLaEscritura;
+    [Test] procedure EncAlEscribirAnclaDeNuevoSiLaRutaCambiaDeContenido;
     [Test] procedure MeasureCuentaCrlfYAcentosEnUtf16;
     [Test] procedure LooksBinaryNulEsBinario;
     [Test] procedure LooksBinaryUtf16NoEsBinario;
     [Test] procedure LooksBinaryTextoYVacioNoSonBinario;
+    [Test] procedure Utf32PorSuBomYNoComoUtf16;
+    [Test] procedure Utf32FueraDelPlanoBasico;
+    [Test] procedure Utf32NoEsBinarioYSeMide;
   end;
 
   { Los pares que COMPONEN y LEEN un formato, y la inversa de cada uno: la
@@ -184,6 +199,274 @@ begin
     end, Exception, 'U+0080 no se escribe como el euro');
 end;
 
+{ RFC 3629: tras E0, ED, F0 y F4 el segundo byte tiene su propio rango. Un
+  CP1252 con E0 80 80 (forma larga) se tomaba por UTF-8 y su lectura
+  reventaba (medido el 9-oct-2026). }
+procedure TEncodingTests.Utf8EstrictoComoRfc3629;
+begin
+  Assert.IsFalse(ValidUtf8(B([$E0, $80, $80]), 0), 'E0 80 80: forma larga');
+  Assert.IsTrue(ValidUtf8(B([$E0, $A0, $80]), 0), 'E0 A0 80: U+0800');
+  Assert.IsFalse(ValidUtf8(B([$ED, $A0, $80]), 0), 'ED A0 80: un sustituto');
+  Assert.IsTrue(ValidUtf8(B([$ED, $9F, $BF]), 0), 'ED 9F BF: U+D7FF');
+  Assert.IsFalse(ValidUtf8(B([$F0, $80, $80, $80]), 0), 'F0 80 80 80: forma larga');
+  Assert.IsTrue(ValidUtf8(B([$F0, $90, $80, $80]), 0), 'F0 90 80 80: U+10000');
+  Assert.IsFalse(ValidUtf8(B([$F4, $90, $80, $80]), 0), 'F4 90 80 80: mas alla de U+10FFFF');
+  Assert.IsTrue(ValidUtf8(B([$F4, $8F, $BF, $BF]), 0), 'F4 8F BF BF: U+10FFFF');
+  Assert.AreEqual('cp1252', EncName(DetectEnc(B([Ord('x'), $E0, $80, $80]))),
+    'un CP1252 con E0 80 80 es CP1252');
+end;
+
+{ La regla de ida y vuelta de los escritores (David, 9-oct-2026): lo bien
+  formado vuelve igual en cada codificacion; lo roto, no. }
+procedure TEncodingTests.IdaYVueltaPorCodificacionYSusRotos;
+const
+  TEXTO = 'uno ' + Chr(243) + #13#10'dos'#13#10;
+var
+  K: TEncKind;
+begin
+  for K := Low(TEncKind) to High(TEncKind) do
+    Assert.IsTrue(BytesVuelvenIgual(EncodeText(TEXTO, K), K), 'bien formado vuelve en ' + EncName(K));
+  Assert.IsFalse(BytesVuelvenIgual(B([$EF, $BB, $BF, Ord('a'), $F3, Ord('b')]), ekUtf8Bom),
+    'un BOM de UTF-8 con un F3 suelto (el cuerpo en CP1252)');
+  Assert.IsFalse(BytesVuelvenIgual(EncodeText('ab', ekUtf32LE) + B([$41, 0]), ekUtf32LE),
+    'un UTF-32 al que le sobran dos bytes');
+  Assert.IsFalse(BytesVuelvenIgual(EncodeText('ab', ekUtf16LE) + B([$41]), ekUtf16LE),
+    'un UTF-16 de longitud impar');
+  Assert.IsTrue(BytesVuelvenIgual(nil, ekUtf8), 'vacio');
+end;
+
+{ El UTF-8 TOLERANTE: un byte malo es U+FFFD, no una excepcion (la lectura de
+  un BOM de UTF-8 con el cuerpo roto tumbaba delphi_read). }
+procedure TEncodingTests.Utf8TolerantePoneFffdSinExcepcion;
+var
+  S: string;
+begin
+  S := DecodeBytes(B([$EF, $BB, $BF, Ord('a'), $F3, Ord('b')]), ekUtf8Bom);
+  Assert.IsTrue(Pos(#$FFFD, S) > 0, 'el byte malo sale U+FFFD: ' + S);
+  Assert.AreEqual('a', Copy(S, 1, 1), 'y lo bueno, tal cual');
+end;
+
+procedure TEncodingTests.CabeEnCp1252YHayByteAlto;
+begin
+  Assert.IsTrue(CabeEnCp1252('Acci' + Chr(243) + 'n ' + Chr($20AC)), 'una vocal acentuada y el euro caben');
+  Assert.IsFalse(CabeEnCp1252('Omega ' + Chr($03A9)), 'una letra griega no');
+  Assert.IsTrue(CabeEnCp1252(''), 'nada cabe');
+  Assert.IsFalse(HayByteAlto(B([Ord('a'), 13, 10])), 'ASCII');
+  Assert.IsTrue(HayByteAlto(B([$EF, $BB, $BF])), 'un BOM lleva bytes altos');
+  Assert.IsTrue(HayByteAlto(B([0, 0, $FE, $FF])), 'tambien el de UTF-32 BE');
+end;
+
+{ La codificacion en que se ESCRIBE (4.1 de la 1.18.0): un fuente sin
+  ninguna (solo ASCII) la elige con su primer caracter no ASCII; lo demas
+  conserva la suya. Rutas que no existen: la decision no mira el disco. }
+procedure TEncodingTests.EncAlEscribirLaTablaDeUnFuente;
+const
+  ACENTO = 'Acci' + Chr(243) + 'n';
+  OMEGA = 'Omega ' + Chr($03A9);
+var
+  Ascii: TArray<Byte>;
+
+  function Es(const APath: string; AK: TEncKind; const AAntes: TArray<Byte>;
+    AExiste: Boolean; const ATexto: string): string;
+  begin
+    Result := EncName(EncAlEscribir(APath, AK, AAntes, AExiste, ATexto));
+  end;
+
+begin
+  Ascii := B([Ord('u'), Ord('n'), Ord('i'), Ord('t'), 13, 10]);
+  Assert.AreEqual('cp1252', Es('C:\nada\U1.pas', ekUtf8, Ascii, True, ACENTO),
+    'un .pas ASCII y una vocal acentuada: CP1252, aunque el IDE prefiera UTF-8');
+  Assert.AreEqual('utf8-bom', Es('C:\nada\U1.pas', ekCp1252, Ascii, True, OMEGA),
+    'un .pas ASCII y una letra griega: UTF-8 con BOM');
+  Assert.AreEqual('utf8-bom', Es('C:\nada\U1.inc', ekCp1252, Ascii, True, OMEGA),
+    'un .inc tambien es un fuente');
+  Assert.AreEqual(EncName(DetectEnc(Ascii)), Es('C:\nada\U1.pas', ekUtf8Bom, Ascii, True, 'solo ascii'),
+    'un texto ASCII no elige nada: la del origen (para un ASCII, la preferencia del IDE), no la que llega');
+  Assert.AreEqual('utf8-bom', Es('C:\nada\U1.pas', ekUtf8Bom, B([$EF, $BB, $BF, Ord('a')]), True, ACENTO),
+    'un BOM ya es una codificacion: se conserva');
+  Assert.AreEqual('cp1252', Es('C:\nada\U1.pas', ekCp1252, B([Ord('a'), $E9]), True, OMEGA),
+    'un byte alto ya es una codificacion: se conserva (y el escritor niega la Omega)');
+  Assert.AreEqual('utf8', Es('C:\nada\U1.pas', ekUtf8, B([Ord('a'), $C3, $A9]), True, ACENTO),
+    'un UTF-8 sin BOM con acentos tambien la conserva');
+  Assert.AreEqual('utf8-bom', Es('C:\nada\U1.pas', ekCp1252, nil, False, OMEGA),
+    'uno nuevo en CP1252 (la del IDE) donde no cabe: UTF-8 con BOM');
+  Assert.AreEqual('cp1252', Es('C:\nada\U1.pas', ekCp1252, nil, False, ACENTO),
+    'uno nuevo en CP1252 donde cabe: CP1252');
+  Assert.AreEqual('utf8', Es('C:\nada\leeme.md', ekUtf8, Ascii, True, OMEGA),
+    'lo que no es un fuente, tal cual');
+  Assert.AreEqual('cp1252', Es('C:\nada\F1.dfm', ekCp1252, Ascii, True, OMEGA),
+    'un form no es un fuente: se queda en la suya (como fuente, la Omega lo pasaria a UTF-8 con BOM)');
+  // una E acentuada seguida de una comilla tipografica: en CP1252 son C9 94, un
+  // caracter UTF-8 valido; solas en el fichero, el IDE y el detector lo leerian
+  // como UTF-8 (revisor propio de la 4.1)
+  Assert.AreEqual('utf8-bom', Es('C:\nada\U1.pas', ekCp1252, Ascii, True, 'CAF' + Chr($C9) + Chr($201D)),
+    'un .pas ASCII cuyos bytes CP1252 se leerian como UTF-8: UTF-8 con BOM, sin ambiguedad');
+  Assert.AreEqual('cp1252', Es('C:\nada\U1.pas', ekUtf8, Ascii, True,
+    Chr($201C) + 'CAF' + Chr($C9) + Chr($201D)), '...con la comilla de apertura ya no es UTF-8 valido: CP1252');
+  Assert.AreEqual('utf8-bom', Es('C:\nada\U1.pas', ekUtf8, nil, False, ACENTO),
+    'un fuente nuevo nunca va en UTF-8 sin BOM (el IDE no lo guarda asi; dcc lo leeria como ANSI)');
+end;
+
+{ ...y la decide lo que el fichero tenia ANTES DE LA LLAMADA: una tanda con la
+  vocal acentuada y luego la Omega se negaba (la primera escritura fijaba
+  CP1252) y al reves salia en UTF-8 con BOM (medido el 9-oct-2026). Fuera de
+  una llamada (la puerta no paso) se decide escritura a escritura. }
+procedure TEncodingTests.EncAlEscribirDecidePorLaLlamadaNoPorLaEscritura;
+const
+  P = 'C:\nada\UOrden.pas';
+  TEXTO1 = 'A = ''Acci' + Chr(243) + 'n'';';
+var
+  Ascii, Tras1: TArray<Byte>;
+  K1: TEncKind;
+begin
+  Ascii := B([Ord('A'), Ord(' '), Ord('='), Ord(' '), Ord('1'), Ord(';')]);
+  OlvidaOrigenes(True);
+  try
+    K1 := EncAlEscribir(P, ekUtf8, Ascii, True, TEXTO1);
+    Assert.AreEqual('cp1252', EncName(K1), 'la primera escritura: la vocal cabe');
+    Tras1 := EncodeText(TEXTO1, K1);
+    ApuntaEscritoEnLaLlamada(P, Tras1); // lo que hace AtomicWrite tras escribir
+    Assert.AreEqual('utf8-bom', EncName(EncAlEscribir(P, ekCp1252, Tras1, True, TEXTO1 + Chr($03A9))),
+      'la segunda, con la Omega: lo de antes de la llamada era ASCII, UTF-8 con BOM');
+    Assert.AreEqual('cp1252', EncName(EncAlEscribir('C:\nada\UOtra.pas', ekCp1252, Tras1, True,
+      TEXTO1 + Chr($03A9))), 'otra ruta tiene su propio origen (este tiene un byte alto)');
+  finally
+    OlvidaOrigenes(False);
+  end;
+  // fuera de una llamada, escritura a escritura: el byte alto de la primera
+  // manda (otra ruta: si OlvidaOrigenes(False) dejara la llamada abierta, la
+  // primera apuntaria el ASCII y la segunda saldria UTF-8 con BOM)
+  Assert.AreEqual('cp1252', EncName(EncAlEscribir('C:\nada\UFuera.pas', ekUtf8, Ascii, True, TEXTO1)),
+    'sin llamada, la primera');
+  ApuntaEscritoEnLaLlamada('C:\nada\UFuera.pas', Tras1); // fuera de una llamada, nada
+  Assert.AreEqual('cp1252', EncName(EncAlEscribir('C:\nada\UFuera.pas', ekCp1252, Tras1, True,
+    TEXTO1 + Chr($03A9))), 'sin llamada, la segunda ve el CP1252 de la primera');
+end;
+
+{ LA REGLA DE IDA Y VUELTA de los escritores, con EL detector: '' si se
+  puede reescribir; si no, la negativa (EDIT-038). Un U+FFFD que esta de
+  verdad en el fichero (EF BF BD en un UTF-8 valido) vuelve igual. }
+procedure TEncodingTests.ReescrituraDenegadaPorLaIdaYVuelta;
+var
+  K: TEncKind;
+begin
+  Assert.AreEqual('', ReescrituraDenegada('C:\nada\n.md', B([$EF, $BB, $BF, Ord('a'), $C3, $B3]), K),
+    'un UTF-8 con BOM bien formado');
+  Assert.AreEqual('utf8-bom', EncName(K));
+  Assert.IsTrue(Pos('EDIT-038', ReescrituraDenegada('C:\nada\n.md',
+    B([$EF, $BB, $BF, Ord('a'), $F3, Ord('b')]), K)) > 0, 'un BOM de UTF-8 con el cuerpo en CP1252');
+  Assert.AreEqual('', ReescrituraDenegada('C:\nada\n.md', B([Ord('a'), $EF, $BF, $BD, Ord('b')]), K),
+    'un U+FFFD legitimo en un UTF-8 sin BOM vuelve igual');
+  Assert.AreEqual('utf8', EncName(K));
+  Assert.IsTrue(Pos('EDIT-038', ReescrituraDenegada('C:\nada\n.pas',
+    EncodeText('ab', ekUtf16LE) + B([$41]), K)) > 0, 'un UTF-16 con un byte de mas');
+end;
+
+{ Lo que sobra al final de un UTF-16 (un byte) o de un UTF-32 (menos de
+  cuatro) sale U+FFFD, como cualquier byte que no cuadra: la RTL lo dejaba
+  fuera callado y delphi_edit reescribia el fichero sin el (revisor propio de
+  la 4.1, medido). }
+procedure TEncodingTests.ColaIncompletaDeUtf16YUtf32SaleFffd;
+begin
+  Assert.AreEqual('ab'#$FFFD, DecodeBytes(EncodeText('ab', ekUtf16LE) + B([$41]), ekUtf16LE), 'UTF-16 LE');
+  Assert.AreEqual('ab'#$FFFD, DecodeBytes(EncodeText('ab', ekUtf16BE) + B([$41]), ekUtf16BE), 'UTF-16 BE');
+  Assert.AreEqual('ab'#$FFFD, DecodeBytes(EncodeText('ab', ekUtf32LE) + B([$41, 0]), ekUtf32LE), 'UTF-32 LE');
+  Assert.AreEqual('ab', DecodeBytes(EncodeText('ab', ekUtf16LE), ekUtf16LE), 'sin cola, nada de mas');
+end;
+
+{ Secuencias UTF-8 buenas junto a bytes que no lo son NO son UTF-8: el juez
+  de la RTL (IsBufferValid) dice que no, y el IDE y dcc los leen en ANSI. Una
+  regla propia de "UTF-8 danado" se probo y se quito: una E acentuada seguida
+  de una comilla tipografica son, en CP1252, un caracter UTF-8 valido, y un
+  CP1252 legitimo quedaba sin editar (revisor propio de la 4.1; David: "si
+  hay juez lo seguimos"). }
+procedure TEncodingTests.Utf8MezcladoEsAnsiComoElJuez;
+var
+  Cesu, Comillas: TArray<Byte>;
+  K: TEncKind;
+begin
+  // 'a' + o con acento (C3 B3, valido) + un sustituto en CESU-8 (ED A0 BD ED B8 80)
+  Cesu := B([Ord('a'), $C3, $B3, $ED, $A0, $BD, $ED, $B8, $80]);
+  Assert.IsFalse(ValidUtf8(Cesu, 0), 'el juez estricto lo rechaza');
+  Assert.AreEqual('cp1252', EncName(DetectEnc(Cesu)), 'acentos UTF-8 y una secuencia prohibida: ANSI, como el IDE');
+  Comillas := EncodeText(Chr($201C) + 'CAF' + Chr($C9) + Chr($201D) + ' ' + Chr($AB) + 'S' + Chr($CD) +
+    Chr($BB) + ' Acci' + Chr(243) + 'n', ekCp1252);
+  Assert.AreEqual('cp1252', EncName(DetectEnc(Comillas)), 'un CP1252 con comillas tipograficas es CP1252');
+  Assert.AreEqual('', ReescrituraDenegada('C:\nada\n.pas', Comillas, K), '...y se puede reescribir');
+end;
+
+{ La que tenia el fichero antes de la llamada se conserva aunque una entrada
+  anterior le quite su ultimo acento: un CP1252 acababa en UTF-8 sin BOM (la
+  preferencia del IDE para lo que parecia ASCII) segun el orden de la tanda
+  (revisor propio de la 4.1, medido; tambien en la 1.17). }
+procedure TEncodingTests.EncAlEscribirConservaLaCodificacionDelOrigen;
+const
+  P = 'C:\nada\UUnAcento.pas';
+var
+  Antes, SinAcento: TArray<Byte>;
+begin
+  Antes := EncodeText('A = ''' + Chr($E9) + ''';', ekCp1252);
+  SinAcento := EncodeText('A = 1;', ekCp1252);
+  OlvidaOrigenes(True);
+  try
+    Assert.AreEqual('cp1252', EncName(EncAlEscribir(P, ekCp1252, Antes, True, 'A = 1;')),
+      'la entrada 1 quita el unico acento');
+    ApuntaEscritoEnLaLlamada(P, SinAcento);
+    Assert.AreEqual('cp1252', EncName(EncAlEscribir(P, ekUtf8, SinAcento, True,
+      'A = ''Acci' + Chr(243) + 'n'';')), 'la entrada 2 pone otro: la del origen, CP1252, no la del IDE');
+  finally
+    OlvidaOrigenes(False);
+  end;
+end;
+
+{ La ida y vuelta del lado de la ESCRITURA: lo que se escribe tiene que
+  leerse en la codificacion escrita (EDIT-122). En un CP1252, una A con tilde
+  y un superindice tres son los bytes de una o acentuada en UTF-8. }
+procedure TEncodingTests.LecturaCambiadaDelLadoDeLaEscritura;
+begin
+  Assert.IsTrue(Pos('EDIT-122', LecturaCambiada('C:\nada\U.pas',
+    EncodeText('gestor' + Chr($C3) + Chr($B3) + 'n', ekCp1252), ekCp1252)) > 0,
+    'en CP1252 parece UTF-8: se leeria como otra cosa');
+  Assert.AreEqual('', LecturaCambiada('C:\nada\U.pas',
+    EncodeText('gestor' + Chr($C3) + Chr($B3) + 'n ' + Chr($E9), ekCp1252), ekCp1252),
+    'junto a un acento CP1252 suelto ya no es UTF-8 valido: se lee igual, como el IDE');
+  Assert.AreEqual('', LecturaCambiada('C:\nada\U.pas', EncodeText('gesti' + Chr(243) + 'n', ekCp1252), ekCp1252),
+    'un acento CP1252 corriente se lee igual');
+  Assert.AreEqual('', LecturaCambiada('C:\nada\U.pas', EncodeText('gestor' + Chr($C3) + Chr($B3) + 'n', ekUtf8), ekUtf8),
+    'en un UTF-8 el mojibake se lee igual (lo avisa EDIT-083)');
+  Assert.AreEqual('', LecturaCambiada('C:\nada\U.pas', EncodeText('solo ascii', ekCp1252), ekUtf8),
+    'sin byte alto no hay codificacion que leer');
+  Assert.AreEqual('', LecturaCambiada('C:\nada\F.dfm', EncodeText('gestor' + Chr($C3) + Chr($B3) + 'n', ekCp1252), ekCp1252),
+    'un form sin BOM es ANSI para el detector: se lee igual');
+end;
+
+{ Si en la ruta hay OTRO contenido que el que la llamada dejo (un delete y un
+  move del changeset, un deshacer, un proceso de fuera), lo apuntado ya no es
+  el origen de ese fichero: se ancla de nuevo. Un changeset que editaba P, lo
+  borraba y movia a P un fichero en UTF-8 con BOM lo dejaba en CP1252
+  (revisor propio de la 4.1, medido). }
+procedure TEncodingTests.EncAlEscribirAnclaDeNuevoSiLaRutaCambiaDeContenido;
+const
+  P = 'C:\nada\UMovido.pas';
+  ACENTO = 'Acci' + Chr(243) + 'n';
+var
+  Ascii, ConBom: TArray<Byte>;
+begin
+  Ascii := B([Ord('u'), Ord('n'), Ord('i'), Ord('t')]);
+  ConBom := B([$EF, $BB, $BF, Ord('a'), $C3, $B3]);
+  OlvidaOrigenes(True);
+  try
+    Assert.AreEqual(EncName(DetectEnc(Ascii)), EncName(EncAlEscribir(P, ekUtf8, Ascii, True, 'solo ascii')),
+      'la primera escritura apunta el ASCII');
+    ApuntaEscritoEnLaLlamada(P, Ascii);
+    // ...y otro (un move) deja en P un fichero en UTF-8 con BOM
+    Assert.AreEqual('utf8-bom', EncName(EncAlEscribir(P, ekUtf8Bom, ConBom, True, ACENTO)),
+      'lo que hay ya tiene codificacion: se conserva');
+  finally
+    OlvidaOrigenes(False);
+  end;
+end;
+
 procedure TEncodingTests.MeasureCuentaCrlfYAcentosEnUtf16;
 var
   Bytes: TArray<Byte>;
@@ -207,6 +490,45 @@ procedure TEncodingTests.LooksBinaryUtf16NoEsBinario;
 begin
   Assert.IsFalse(LooksBinaryBytes(EncodeText('object Form1: TForm1'#13#10'end'#13#10, ekUtf16LE)), 'UTF-16 LE');
   Assert.IsFalse(LooksBinaryBytes(EncodeText('uno', ekUtf16BE)), 'UTF-16 BE');
+end;
+
+{ UTF-32 (9-oct-2026): el IDE deja guardar un fuente asi y su BOM de LE
+  (FF FE 00 00) empieza como el de UTF-16 LE: se leia como UTF-16, con un NUL
+  entre letra y letra, y el de BE se daba por binario. }
+procedure TEncodingTests.Utf32PorSuBomYNoComoUtf16;
+begin
+  EsClase(Ord(ekUtf32LE), B([$FF, $FE, 0, 0, Ord('a'), 0, 0, 0]));
+  Assert.AreEqual('a', DecodeBytes(B([$FF, $FE, 0, 0, Ord('a'), 0, 0, 0]), ekUtf32LE));
+  EsClase(Ord(ekUtf32BE), B([0, 0, $FE, $FF, 0, 0, 0, Ord('a')]));
+  Assert.AreEqual('a', DecodeBytes(B([0, 0, $FE, $FF, 0, 0, 0, Ord('a')]), ekUtf32BE));
+  Assert.AreEqual(4, PreambleLen(ekUtf32LE));
+  Assert.AreEqual(4, Integer(Length(EncodeText('', ekUtf32BE))), 'el BOM UTF-32 son 4 bytes');
+end;
+
+procedure TEncodingTests.Utf32FueraDelPlanoBasico;
+const
+  CARA = #$D83D#$DE00; // U+1F600, un par de sustitutos en Delphi
+var
+  Bytes: TArray<Byte>;
+begin
+  Bytes := EncodeText('x' + CARA, ekUtf32LE);
+  Assert.AreEqual(12, Integer(Length(Bytes)), 'BOM + dos caracteres, de cuatro bytes cada uno');
+  Assert.AreEqual($01, Integer(Bytes[10]), 'U+1F600 en LE: 00 F6 01 00');
+  Assert.AreEqual('x' + CARA, DecodeBytes(Bytes, ekUtf32LE), 'y de vuelta, el par entero');
+  Assert.AreEqual(#$FFFD, DecodeBytes(B([$FF, $FE, 0, 0, 0, $D8, 0, 0]), ekUtf32LE),
+    'un sustituto suelto no es un caracter: U+FFFD');
+end;
+
+procedure TEncodingTests.Utf32NoEsBinarioYSeMide;
+var
+  Bytes: TArray<Byte>;
+  M: TMetrics;
+begin
+  Bytes := EncodeText('a'#13#10 + Chr(243) + #13#10, ekUtf32BE);
+  Assert.IsFalse(LooksBinaryBytes(Bytes), 'UTF-32 BE con sus NUL no es binario');
+  M := Measure(Bytes);
+  Assert.AreEqual(2, M.CRLF, 'CRLF contados sobre el texto');
+  Assert.AreEqual(2, M.High, 'un acento = 2 bytes altos, como en un fichero utf8');
 end;
 
 procedure TEncodingTests.LooksBinaryTextoYVacioNoSonBinario;

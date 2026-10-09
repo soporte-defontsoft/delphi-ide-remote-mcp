@@ -286,6 +286,79 @@ the MCP `initialize` response (`serverInfo.version`).
   anyway, and with it the block was counted on the file as the batch had
   already changed it - the first block was written, answering APPLIED.
   Now `atline` wins, as it does for one-line anchors. `test_round34` B7d.
+- **The first non-ASCII character of a pure-ASCII Delphi source is written
+  the way the compiler reads it.** Such a file has no encoding to keep,
+  and the server wrote the new character in the IDE's configured encoding
+  - with UTF-8 configured, UTF-8 WITHOUT a BOM, which dcc reads as ANSI
+  (`AcciÃ³n` in the running program). Now it does what the IDE does when
+  it saves (measured by the operator): CP1252 when every new character
+  fits, UTF-8 with a BOM when one does not. For `.pas`, `.dpr`, `.dpk` and
+  `.inc` (dcc reads each include by its own BOM, measured) and every writer
+  - an edit, a block, an insert, a changeset; a file that already has an
+  encoding keeps it. A NEW unit goes in the IDE's encoding, and in UTF-8
+  with a BOM when that is ANSI and its content does not fit (it was
+  refused). What counts is the file as it was
+  before the CALL, so a batch or a changeset gives the same file in any
+  order (one adding an accented vowel and then an Omega was refused, the
+  reverse order was written, and a changeset's commit refused what its
+  preview had accepted). The designer asks the same writer: a component
+  name with an accent in an ASCII unit was refused (DSGN-111) by the IDE's
+  setting, and the name the IDE gives in an insert without one (a class
+  with a non-ASCII letter) was never checked. A file the server wrote
+  earlier in UTF-8 without a BOM, accents
+  included, has an encoding now and keeps it: re-save it from the IDE with
+  a BOM if the compiler shows its accents wrong. `test_delphi_patch`,
+  `test_designer_edit` R17, `LspTests.Encodings`.
+- **A file whose bytes do not come back the same in its encoding is never
+  written back - and is read.** A UTF-8 BOM over a CP1252 body, a damaged
+  UTF-32 or UTF-16. Such a file could not be read or searched (SYS-006),
+  and its writers failed (SYS-006, SYS-009) - except a UTF-16 file with a
+  stray last byte, which `delphi_edit` wrote back without it. Now it is
+  read, its bad bytes as U+FFFD, and `delphi_read` says so (READ-007,
+  naming the first line that does not fit and, in a UTF-8 file, how that
+  line reads in CP1252); and one question every writer asks refuses to
+  write it back (EDIT-038): `delphi_edit`, `delphi_textedit`, the designer
+  commands (`to-binary` too), `delphi_changeset`, `vault_append`,
+  `vault_patch` and the rest. EDIT-038 only guarded `delphi_edit`'s entry,
+  and blocked restoring such a file. A changeset that deletes such a file
+  and creates it again goes through (it failed with SYS-009).
+  `test_delphi_patch`, `test_vault`, `test_designer_binary`,
+  `LspTests.Encodings`.
+- **No writer leaves a file that would be read back in another encoding
+  than it wrote.** Some pairs of characters are, in CP1252, the bytes of
+  one UTF-8 character - `Ã³` is a UTF-8 `ó`, and so is an accented capital
+  followed by a curly quote - and a file whose high bytes all formed such
+  pairs was read back as UTF-8, with other characters, by the server and by
+  the IDE (which detects UTF-8 without a BOM). A source with no encoding yet
+  gets UTF-8 with a BOM in that case; any other file is refused (EDIT-122).
+  The mojibake warning (EDIT-083) stays for the rest. A file that already
+  had an encoding keeps the one it had when the call began, even if an
+  earlier edit of the same batch removed its last accent (it ended in UTF-8
+  without a BOM, by order). `test_delphi_patch`, `LspTests.Encodings`.
+- **A binary form with a non-ASCII component name is read whole.** Its
+  conversion to text kept, inside the text, the UTF-8 BOM the RTL writes
+  for such names, so the designer commands found no root object
+  (`class: ""`). `to-text` writes it with the BOM, as the IDE saves it.
+  `test_designer_binary`.
+- **EDIT-080 no longer calls a UTF-8 file with a BOM "pure ASCII".** The
+  note that a file had no encoding to keep counted high bytes without the
+  BOM, so a BOM over ASCII text got it when its first accent was written.
+  `test_delphi_patch`.
+- **UTF-8 is detected strictly, as RFC 3629 defines it, by the RTL's own
+  check.** The server had a hand copy of it that let overlong forms,
+  surrogates and values past U+10FFFF pass as UTF-8, so a CP1252 file
+  whose only high bytes looked like one (`à€€`) was read as UTF-8 and could
+  not be read at all. It asks `TEncoding.UTF8.IsBufferValid` now, the check
+  `TFile.ReadAllText` uses to choose between UTF-8 and ANSI: valid UTF-8 is
+  UTF-8, anything else is ANSI, as the IDE and the compiler read it - also a
+  UTF-8 file with one bad sequence. `LspTests.Encodings`, `test_delphi_patch`.
+- **A UTF-32 file is read and edited in UTF-32.** The IDE offers it when
+  saving a source (the compiler does not compile it, F2438); its
+  little-endian BOM starts like UTF-16's, so it was read as UTF-16 with a
+  NUL between letters, and the big-endian one as binary. And a settings.ini
+  saved in UTF-32 does not start, like one in UTF-16 big endian: the
+  Windows ini reader sees no section in it (measured). `test_delphi_patch`,
+  `test_un_delphi` U11h.
 
 ### Internal
 

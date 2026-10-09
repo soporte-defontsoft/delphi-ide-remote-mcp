@@ -362,7 +362,7 @@ begin
         if AEnsayo then
         begin
           try
-            PatchSaveText(Op.Path, Op.Content, Enc, True);
+            PatchSaveText(Op.Path, Op.Content, Enc, True, True);
           except
             on E: Exception do
             begin
@@ -378,7 +378,7 @@ begin
           Exit;
         end;
         CrearCarpeta(TPath.GetDirectoryName(Op.Path));
-        PatchSaveText(Op.Path, Op.Content, Enc);
+        PatchSaveText(Op.Path, Op.Content, Enc, False, True);
         Result := True;
       end;
     opDelete:

@@ -225,11 +225,51 @@ REGLAS = [
       ('Lsp.DesignerForma.pas', 'DesignerAFlujo'), ('Lsp.Docs.pas', 'KindDeAyuda')],
      'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
      'escribe): nadie mas mira unos bytes para decidir que son (24-sep-2026: dos detectores; 1.18.0: '
-     'los codecs salen a Lsp.Codificacion y la decision se queda en Patch)'),
-    ('UTF-8 estricto preguntado a mano', r'\bValidUtf8\s*\(',
-     [('Lsp.Patch.pas', 'DetectEnc'), ('Lsp.Patch.pas', 'ExecutePatch')],
-     'ValidUtf8 lo preguntan el detector y la auditoria del cuerpo de un utf8-bom: otro que lo '
-     'pregunte esta decidiendo una codificacion por su cuenta'),
+     'los codecs salen a Lsp.Codificacion y la decision se queda en Patch). KindDeBom es GRAMATICA '
+     'PROPIA declarada (norma 6 del paisaje): el juez de la RTL, TEncoding.GetBufferEncoding, no '
+     'conoce UTF-32, y su BOM de LE empieza como el de UTF-16 LE'),
+    ('UTF-8 estricto preguntado a mano', r'\b(?:ValidUtf8|IsBufferValid)\s*\(',
+     [('Lsp.Patch.pas', 'DetectEnc'),
+      # el juez de la RTL (TEncoding.UTF8.IsBufferValid) en UN sitio
+      ('Lsp.Codificacion.pas', 'ValidUtf8')],
+     'si unos bytes son UTF-8 lo contesta el juez de la RTL, TEncoding.UTF8.IsBufferValid (norma 6: '
+     'habia una copia a mano, la de la 1.17 aceptaba formas largas), y lo pregunta el detector: '
+     'otro que lo pregunte esta decidiendo una codificacion por su cuenta'),
+    ('codificar el texto de un fichero para escribirlo', r'\bEncodeText\s*\(',
+     [('Lsp.Codificacion.pas', '*'),
+      # los DOS escritores (con la regla de ida y vuelta y la del primer caracter no
+      # ASCII), la creacion de una unit nueva y la medida de un cuerpo de varios bytes
+      ('Lsp.Patch.pas', 'DoEdit'), ('Lsp.Patch.pas', 'PatchSaveText'),
+      ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Patch.pas', 'Measure'),
+      # la decision del escritor: como se LEERIAN los bytes CP1252 de un fuente
+      # sin codificacion (LecturaCambiada); no escribe nada
+      ('Lsp.Patch.pas', 'EncAlEscribir')],
+     'quien codifica el texto de un fichero por su cuenta se salta la regla de ida y vuelta y la '
+     'del primer caracter no ASCII (David, 9-oct-2026): se escribe por PatchSaveText o DoEdit'),
+    ('la regla de ida y vuelta preguntada a mano',
+     r'\bBytesVuelvenIgual\s*\(|\bSR_EDIT_BYTES_NO_VUELVEN_FMT\b|\bSR_EDIT_SE_LEERIA_DISTINTO_FMT\b',
+     [('Lsp.Patch.pas', 'ReescrituraDenegada'),
+      # su lado de la escritura: lo que se escribe se lee igual (EDIT-122)
+      ('Lsp.Patch.pas', 'LecturaCambiada'),
+      # delphi_read la pregunta para AVISAR (READ-007), no para escribir
+      ('Lsp.Patch.pas', 'NotaDeIdaYVuelta')],
+     'si unos bytes se pueden reescribir lo dice ReescrituraDenegada, con EL detector, y la '
+     'preguntan los escritores (DoEdit, PatchSaveText, el del vault): esta regla evita una SEGUNDA '
+     'copia de la pregunta; que un escritor se OLVIDE de hacerla (el del vault, revisor propio de la '
+     '4.1) lo caza su bateria, y lo cazara la regla de la puerta de escribir'),
+    ('las extensiones de un fuente a mano',
+     # la lista de los fuentes (lleva .pas y .inc) salvo la declaracion de SOURCE_EXTS, o
+     # el predicado o el recorrido reescritos con ella (4.1 de la 1.18.0)
+     # (una LISTA, con comas: comparar una extension con .pas y con .inc es otra familia,
+     # la de HuellaDeCarpetas del generador de tablas)
+     r"^(?!\s*SOURCE_EXTS\s*:).*(?:'\*?\.pas'\s*,[^;]*'\*?\.inc'|'\*?\.inc'\s*,[^;]*'\*?\.pas')|"
+     r"MatchText\s*\([^;]*\bSOURCE_EXTS\s*\)|\bin\s+SOURCE_EXTS\b",
+     [('Lsp.Patch.pas', 'EsRutaDeFuente'),
+      # deuda declarada (9-oct-2026): delphi_references busca *.pas, *.dpr e *.inc SIN
+      # .dpk; anadirlo cambia lo que encuentra, y eso se decide aparte
+      ('Lsp.References.pas', 'FindDelphiReferences')],
+     'EsRutaDeFuente (Lsp.Patch): la lista estaba escrita a mano en cinco sitios, y el escritor '
+     'necesita saber si un fichero lo lee dcc (4.1 de la 1.18.0)'),
     ('las extensiones de un designer a mano',
      # la lista, como extensiones o como mascaras y en cualquier orden - salvo
      # la declaracion de DESIGNER_EXTS, la UNICA, este donde este -, o el
@@ -414,6 +454,9 @@ PLANTADO = {
     'decidir la codificacion de unos bytes': "  if (B[0] = $FF) and (B[1] = $FE) then K := ekUtf16LE;",
     'UTF-8 estricto preguntado a mano': "  if ValidUtf8(B, 0) then K := ekUtf8;",
     'una cadena ASCII preguntada a mano': "  for C in S do if Ord(C) > 127 then Exit(False);",
+    'codificar el texto de un fichero para escribirlo': "  B := EncodeText(Texto, K);",
+    'la regla de ida y vuelta preguntada a mano': "  if not BytesVuelvenIgual(B, K) then Exit;",
+    'las extensiones de un fuente a mano': "  if MatchText(Ext, ['.pas', '.dpr', '.dpk', '.inc']) then X := 1;",
     'las extensiones de un designer a mano': "  if MatchText(TPath.GetExtension(P), ['.dfm', '.fmx']) then X := 1;",
     'el codec CP1252': "  E := TEncoding.GetEncoding(1252);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",

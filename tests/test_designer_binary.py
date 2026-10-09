@@ -274,5 +274,32 @@ for rel in (r'DUnit\Contrib\XPGen\xpmain.dfm', r'DUnit\examples\embeddable\Embed
           mc.abre(r1, 'SN_DESIGNER_TOTEXT_FMT') and mc.abre(r2, 'SN_DESIGNER_TOBINARY_FMT') and
           open(copia, 'rb').read() == ide, (r1[:120], r2[:120]))
 
+# la regla de ida y vuelta de los escritores tambien en to-binary (revisor
+# propio de la 4.1, 9-oct-2026): un form ROTO -un BOM de UTF-8 con el cuerpo
+# en CP1252- se convertiria, con el lector tolerante, con U+FFFD donde estan
+# sus acentos (la 1.17 reventaba: SYS-006). Se niega (EDIT-038) sin tocar un byte
+ROTO = os.path.join(BASE, 'FRoto.dfm')
+_ROTO = b"\xef\xbb\xbfobject FRoto: TForm\r\n  Caption = 'gesti\xf3n'\r\nend\r\n"
+open(ROTO, 'wb').write(_ROTO)
+r = call('delphi_designer', {'command': 'to-binary', 'path': ROTO})
+check('to-binary de un form roto (BOM de UTF-8 y cuerpo CP1252): EDIT-038 y no toca un byte',
+      mc.es(r, 'SR_EDIT_BYTES_NO_VUELVEN_FMT') and open(ROTO, 'rb').read() == _ROTO, r[:300])
+
+# un BINARIO con un NOMBRE no ASCII (TPF0 a mano: to-binary no los escribe,
+# DSGN-120): ObjectBinaryToText pone delante el BOM de UTF-8, y el conversor lo
+# dejaba en el texto - tree no leia la raiz y to-text se negaba con EDIT-122
+# (revisor propio de la 4.1, medido). to-text lo escribe en UTF-8 CON BOM, como
+# el IDE
+NOMB = os.path.join(BASE, 'FNombre.dfm')
+open(NOMB, 'wb').write(b'TPF0' + b'\x05TForm' + b'\x06Bot\xc3\xb3n' + b'\x00\x00')
+r = call('delphi_designer', {'command': 'tree', 'path': NOMB})
+check('tree de un binario con un nombre no ASCII: lee su raiz (TForm)',
+      'TForm' in r and '"class":""' not in r.replace(' ', ''), r[:300])
+r = call('delphi_designer', {'command': 'to-text', 'path': NOMB})
+_b = open(NOMB, 'rb').read()
+check('to-text de un binario con un nombre no ASCII: UTF-8 CON BOM, como el IDE (era EDIT-122)',
+      mc.abre(r, 'SN_DESIGNER_TOTEXT_FMT') and _b.startswith(b'\xef\xbb\xbfobject Bot\xc3\xb3n: TForm'),
+      (r[:200], _b[:40]))
+
 srv.mata()
 mc.fin('designer-binary battery')

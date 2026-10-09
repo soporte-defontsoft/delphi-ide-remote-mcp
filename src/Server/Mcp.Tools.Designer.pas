@@ -123,6 +123,7 @@ uses
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.Patch,
+  Lsp.Codificacion, // DecodeBytes y TEncKind: el form ya leido, en su codificacion
   Lsp.Styles,
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
@@ -1058,7 +1059,12 @@ begin
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
     // el fichero ENTERO cambia de forma: su contenido actual, sellado
     Copia := MaskDriveText('', GuardaContenidoActual(Ruta));
-    PatchSaveText(Ruta, Texto, 'utf8');
+    // un nombre no ASCII va en UTF-8 CON BOM, como lo guarda el IDE (sin el,
+    // TParser y dcc lo leen en ANSI); lo demas del texto es ASCII (#N)
+    if IsAscii(Texto) then
+      PatchSaveText(Ruta, Texto, EncName(ekUtf8))
+    else
+      PatchSaveText(Ruta, Texto, EncName(ekUtf8Bom));
     Result := MsgFmt(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
       Length(LineasDelTexto(Texto)), Copia]);
   end
@@ -1066,7 +1072,16 @@ begin
   begin
     if Forma <> dsText then
       Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), MsgText(SF_DSGN_BINARIO)]));
-    Texto := PatchLoadText(Ruta, Err); // Err recibe el nombre del encoding
+    // la regla de ida y vuelta de los escritores (ReescrituraDenegada): un
+    // form roto -un BOM de UTF-8 con el cuerpo en CP1252- se convertiria, con
+    // el lector tolerante, con U+FFFD donde estan sus acentos; con el estricto
+    // de la 1.17 reventaba (SYS-006). Revisor propio de la 4.1. Los bytes ya
+    // leidos, sin leer otra vez
+    var K: TEncKind;
+    Err := ReescrituraDenegada(Ruta, B, K);
+    if Err <> '' then
+      Exit(Err);
+    Texto := DecodeBytes(B, K);
     Err := DesignerTextToBinary(Texto, Bin);
     if Err <> '' then
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));

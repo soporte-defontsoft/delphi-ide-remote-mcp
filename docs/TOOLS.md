@@ -147,7 +147,7 @@ Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight v
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM / UTF-16 detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn CP1252 accents into U+FFFD and poison every anchor built from them.
+Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM / UTF-16 / UTF-32 detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn CP1252 accents into U+FFFD and poison every anchor built from them.
 
 *Access: read-only OK.*
 
@@ -265,7 +265,7 @@ No parameters.
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keeping their real encoding and line endings. Modes: EDIT (old = ONE full line from delphi_read + new; fragment + atline for a piece of a LONG line; edits for several at once), DELETE, INSERT (a new routine or method at the legal spot, both halves of a method), CREATE (in the encoding configured in the IDE), RESTORE, ADDUSES and REMOVEUSES - each parameter says which mode it belongs to. Refuses whole-file rewrites and binary designer files (TPF0); backs up, writes atomically and audits the result (encoding, EOLs, mojibake, end. structure, a brace comment with a brace inside - warned, never refused), reporting the REAL lines read back from disk: use them as evidence. Never edit Delphi files with generic tools: CP1252 sources get destroyed.
+SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keeping their real encoding and line endings. Modes: EDIT (old = ONE full line from delphi_read + new; fragment + atline for a piece of a LONG line; edits for several at once), DELETE, INSERT (a new routine or method at the legal spot, both halves of a method), CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM when ANSI cannot hold it), RESTORE, ADDUSES and REMOVEUSES - each parameter says which mode it belongs to. Refuses whole-file rewrites and binary designer files (TPF0); backs up, writes atomically and audits the result (encoding, EOLs, mojibake, end. structure, a brace comment with a brace inside - warned, never refused), reporting the REAL lines read back from disk: use them as evidence. Never edit Delphi files with generic tools: CP1252 sources get destroyed.
 
 *Access: read-write (refused to a read-only credential).*
 
@@ -344,7 +344,7 @@ SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .b
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable .dproj + main form), a runtime PACKAGE (.dpk + .dproj, built to BPL+DCP in its folder, never installed) or a TEST project (a DUnitX console runner with its first fixture, what delphi_test runs) - or a NEW form, frame, data module or unit (.pas, plus its .dfm/.fmx for the visual ones), registered in the project (.dpr uses - with Application.CreateForm for forms and data modules - and the .dproj). IDE-equivalent skeletons, CRLF, the IDE's configured source encoding, never overwrites anything. kind=unit with NO project and an ABSOLUTE dir creates it STANDALONE (no project lists it yet); kind=include creates a .inc with its content. An EXISTING .pas joins a project with delphi_config add-unit. A uses clause split in {$IFDEF} branches (each ending in its own ";") is never rewritten by add-unit, remove-unit or a rename - it would land in the wrong branch: edit the branch with delphi_edit.
+Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable .dproj + main form), a runtime PACKAGE (.dpk + .dproj, built to BPL+DCP in its folder, never installed) or a TEST project (a DUnitX console runner with its first fixture, what delphi_test runs) - or a NEW form, frame, data module or unit (.pas, plus its .dfm/.fmx for the visual ones), registered in the project (.dpr uses - with Application.CreateForm for forms and data modules - and the .dproj). IDE-equivalent skeletons, CRLF, the IDE's configured source encoding (UTF-8 with a BOM when that is ANSI and the content does not fit), never overwrites anything. kind=unit with NO project and an ABSOLUTE dir creates it STANDALONE (no project lists it yet); kind=include creates a .inc with its content. An EXISTING .pas joins a project with delphi_config add-unit. A uses clause split in {$IFDEF} branches (each ending in its own ";") is never rewritten by add-unit, remove-unit or a rename - it would land in the wrong branch: edit the branch with delphi_edit.
 
 *Access: read-write (refused to a read-only credential).*
 

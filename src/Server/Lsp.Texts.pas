@@ -96,16 +96,17 @@ const
     'server would listen on another port and on every network interface). ' +
     'Save the file as UTF-8 without BOM (one BOM at the very start followed ' +
     'by a comment line is harmless).';
-  { Un settings.ini en UTF-16 big endian (FE FF): la API de los ini de Windows
-    lee UTF-16 little endian con su BOM, pero no este; no veia ninguna
-    seccion y se arrancaba sin ellas, callado (9.2 de la 1.18.0). %s = el
-    fichero. }
-  SE_GUARD_INI_UTF16BE_FMT =
-    'This server does not start: its settings.ini (%s) is saved as UTF-16 ' +
-    'big endian (it starts with FE FF), which the Windows ini reader does ' +
-    'not read - every section would be lost (the [Server] port and bind IP, ' +
-    'and each workspace with its roots and token). Save it as UTF-8 without BOM, or as ' +
-    'UTF-16 little endian (what Notepad calls "UTF-16 LE").';
+  { Un settings.ini en UTF-16 big endian (FE FF) o en UTF-32 (LE o BE): la
+    API de los ini de Windows lee UTF-16 little endian con su BOM, pero no
+    estos; no veia ninguna seccion y se arrancaba sin ellas, callado (9.2 de
+    la 1.18.0; UTF-32 medido el 9-oct-2026). %s = el fichero, %s = su
+    codificacion (EncName). }
+  SE_GUARD_INI_CODIFICACION_FMT =
+    'This server does not start: its settings.ini (%s) is saved as %s ' +
+    '(by its BOM), which the Windows ini reader does not read - every ' +
+    'section would be lost (the [Server] port and bind IP, and each ' +
+    'workspace with its roots and token). Save it as UTF-8 without BOM, or ' +
+    'as UTF-16 little endian (what Notepad calls "UTF-16 LE").';
   { Un settings.ini que esta y no se puede leer (abierto en exclusiva por
     otro proceso, sin permiso para la cuenta del servidor): no se lee nada de
     el y se dice al arrancar y en delphi_workspace (David, 9-oct-2026:
@@ -4897,6 +4898,23 @@ const
     'NOT edited this way: delphi_designer command=to-text converts it to ' +
     'text on disk (backup first) and from there it is edited like any ' +
     '.dfm.';
+  { Lo que no vuelve igual por su codificacion se dice al LEERLO (la regla de
+    ida y vuelta de los escritores, David 9-oct-2026): se leia callado, o
+    reventaba con un SYS-006. %s = la codificacion. }
+  SN_READ_BYTES_NO_VUELVEN_FMT =
+    '[READ-007] NOTE: some bytes of this file do not fit its encoding (%s) ' +
+    '- a mixed or damaged file. They are shown as U+FFFD, and delphi_edit, ' +
+    'delphi_textedit and the other writers refuse to write it back ' +
+    '(EDIT-038): fix it in its editor (the IDE for a source), or restore ' +
+    'a good copy.';
+  { ...con la primera linea que no cuadra y, en un UTF-8, como seria leida
+    en la otra codificacion posible: el agente ve las dos (David,
+    9-oct-2026). %s = la linea citada (CitaDeLinea); en la segunda, %s = esa
+    codificacion y %s = la linea. }
+  SF_READ_PRIMERA_NO_CUADRA_FMT =
+    'The first line that does not fit: %s';
+  SF_READ_OTRA_LECTURA_FMT =
+    'Read as %s, that line would be: %s';
 
   SR_DESIGNER_EMPTY =
     '[DSGN-014 DENIED] The file contains no object.';
@@ -6555,9 +6573,17 @@ const
     'same conversion the IDE does) and edit; delphi_read and ' +
     'delphi_designer already READ it on the fly without converting it.';
 
-  SR_EDIT_TIENE_BOM_UTF_PERO_FMT =
-    '[EDIT-038 DENIED] %s has a UTF-8 BOM but its content is not valid ' +
-    'UTF-8 (mixed or damaged file). It is left untouched.';
+  { La regla de ida y vuelta (David, 9-oct-2026), en los escritores
+    (Lsp.Patch.ReescrituraDenegada: los dos de Lsp.Patch y el del vault): los
+    bytes del fichero no vuelven iguales al leerlos y escribirlos en su
+    codificacion. Era "BOM de UTF-8 con el cuerpo roto", y solo en la entrada
+    de delphi_edit. %s = el fichero, %s = su codificacion. }
+  SR_EDIT_BYTES_NO_VUELVEN_FMT =
+    '[EDIT-038 DENIED] %s is read as %s, but some of its bytes do not fit ' +
+    'that encoding (a mixed or damaged file): writing it back would change ' +
+    'bytes nobody touched, so it is left untouched. Reading it shows them ' +
+    'as U+FFFD and names the first line (READ-007); fix the file in its ' +
+    'editor (the IDE for a source), or restore a good copy.';
 
   SR_EDIT_HAY_COPIA_SOLO_PUEDO_FMT =
     '[EDIT-039 NOT_FOUND] There is no copy of %s in %s\. I can only restore ' +
@@ -7528,7 +7554,8 @@ const
 
   SK_EDIT_CREADA_UNIT_FMT =
     '[EDIT-067] CREATED %s (unit %s) - %s, encoding %s (the one ' +
-    'configured in the IDE), %s.'#10 +
+    'configured in the IDE, or UTF-8 with a BOM when that is ANSI and the ' +
+    'content does not fit), %s.'#10 +
     'Verification (re-read from disk): %s'#10 +
     'NEXT STEP - register it with delphi_config command=add-unit (it ' +
     'writes the .dpr uses with its in ''...'' path and the .dproj entry): ' +
@@ -7626,10 +7653,12 @@ const
     'restore:true and STOP. ***';
 
   SN_EDIT_ERA_ASCII_PURO_FMT =
-    '[EDIT-080] (the file was pure ASCII and the new characters were ' +
-    'written in %s, the encoding the IDE has configured for files ' +
-    'without a BOM. If this project uses another one, say so in your ' +
-    'report.)';
+    '[EDIT-080] (the file was pure ASCII, so it had no encoding to keep: ' +
+    'the new characters were written in %s, as the compiler reads them - ' +
+    'a Delphi source goes to CP1252 when they all fit and to UTF-8 with a ' +
+    'BOM when one does not, as the IDE saves it; a form stays CP1252 (the ' +
+    'IDE would write #NNN codes, which the compiler reads the same); any ' +
+    'other file follows the IDE''s setting.)';
 
   SN_EDIT_ACENTOS_FUERA_CUADRO_FMT =
     '[EDIT-081] *** ACCENTS OUT OF BALANCE: expected %d high bytes and ' +
@@ -7639,6 +7668,22 @@ const
     '[EDIT-082] *** FOREIGN LINE ENDINGS: the file is %s and endings of ' +
     'the other style have come in. Restore with restore:true and STOP. ' +
     '***';
+
+  { La ida y vuelta del lado de la ESCRITURA (revisor propio de la 4.1,
+    9-oct-2026): los bytes que se van a escribir, leidos por EL detector,
+    saldrian en otra codificacion que la escrita - casi siempre mojibake (una
+    A con tilde y un superindice tres en CP1252 son los bytes de una o con
+    acento en UTF-8). Escrito asi, el detector y el IDE leerian el fichero
+    con otros caracteres que los escritos. %s = el
+    fichero, %s = la codificacion escrita, %s = la que leeria el detector,
+    %s = la escrita otra vez. }
+  SR_EDIT_SE_LEERIA_DISTINTO_FMT =
+    '[EDIT-122 DENIED] %s, written in %s, would be read back as %s: the ' +
+    'new text has characters whose %s bytes read as another encoding. ' +
+    'Usually that is mojibake - an accent that arrived already broken into ' +
+    'two characters: put the clean one. If the characters are right, in a ' +
+    'Delphi source write them as #$XXXX literals, or convert the file to ' +
+    'UTF-8 in the IDE (it saves it with a BOM). Nothing written.';
 
   SN_EDIT_FIRMA_MOJIBAKE_NUEVO =
     '[EDIT-083] *** MOJIBAKE SIGNATURE IN YOUR NEW TEXT. If you meant to ' +
@@ -8210,7 +8255,7 @@ const
 
   SD_EDIT_READ =
     'Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or ' +
-    'without BOM / UTF-16 detected for real). Returns numbered lines in ' +
+    'without BOM / UTF-16 / UTF-32 detected for real). Returns numbered lines in ' +
     'the format number|content - to build a delphi_edit anchor, copy ' +
     'everything after the bar, exactly. ALWAYS use this instead of a ' +
     'generic read for Delphi files: generic reads turn CP1252 accents ' +
@@ -8222,7 +8267,8 @@ const
     '(old = ONE full line from delphi_read + new; fragment + atline for a ' +
     'piece of a LONG line; edits for several at once), DELETE, INSERT (a ' +
     'new routine or method at the legal spot, both halves of a method), ' +
-    'CREATE (in the encoding configured in the IDE), RESTORE, ADDUSES and ' +
+    'CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM ' +
+    'when ANSI cannot hold it), RESTORE, ADDUSES and ' +
     'REMOVEUSES - each parameter says which mode it belongs to. Refuses ' +
     'whole-file rewrites and binary designer files (TPF0); backs up, ' +
     'writes atomically and audits the result (encoding, EOLs, mojibake, ' +
@@ -8346,7 +8392,8 @@ const
     'NEW form, frame, data module or unit (.pas, plus its .dfm/.fmx for ' +
     'the visual ones), registered in the project (.dpr uses - with ' +
     'Application.CreateForm for forms and data modules - and the .dproj). ' +
-    'IDE-equivalent skeletons, CRLF, the IDE''s configured source encoding, ' +
+    'IDE-equivalent skeletons, CRLF, the IDE''s configured source encoding ' +
+    '(UTF-8 with a BOM when that is ANSI and the content does not fit), ' +
     'never overwrites anything. kind=unit with NO project and an ABSOLUTE ' +
     'dir creates it STANDALONE (no project lists it yet); kind=include ' +
     'creates a .inc with its content. An EXISTING .pas joins a project ' +

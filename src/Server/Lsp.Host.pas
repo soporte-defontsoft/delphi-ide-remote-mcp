@@ -98,6 +98,7 @@ uses
   Lsp.Texts,
   Lsp.Files,
   Lsp.InlineImages, // ClearAttachedImages / WrapWithAttachedImages
+  Lsp.Patch,        // OlvidaOrigenes: los bytes de antes de la llamada
   Mcp.Tools.Messages,
   Mcp.Vault.Session,
   Mcp.Vault.Seed,
@@ -222,6 +223,7 @@ begin
     begin
       ClearAttachedImages; // nada de una llamada anterior en este hilo
       OlvidaSalidaHecha;   // ...ni lo que otra dejo dicho al filtro de salida
+      OlvidaOrigenes(True); // ...ni sus bytes de antes: empieza esta (Lsp.Patch.EncAlEscribir)
       Result := ToolCallDenied(ToolName, Arguments);
       // Una negativa de la PUERTA nunca trae contenido de un fichero: sale
       // enmascarada entera aqui, antes del filtro de salida, que en las tools
@@ -254,6 +256,8 @@ begin
   TMCPToolsManager.ResultFilter :=
     function(const ToolName, AText: string): string
     begin
+      // la llamada acaba: sus bytes de antes no se quedan en el hilo
+      OlvidaOrigenes(False);
       Result := MaskDriveText(ToolName, AText);
       // the operator's mailbox: there is no push in MCP clients, so every
       // tool answer carries the notice while a message waits.

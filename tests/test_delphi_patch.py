@@ -101,12 +101,21 @@ out = call('delphi_edit', {"path": os.path.join(DIR, '__history', 'x.pas'),
                             "old": "a", "new": "b"})
 check('gate: __history vetado', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_IDE'), out)
 
-# --- mojibake warning on new text ---
+# --- mojibake en el texto nuevo ---
+# (en un CP1252 con otros acentos el fichero se sigue leyendo como CP1252 -
+# como lo leen el IDE y dcc -: se escribe, y se avisa)
 out = call('delphi_edit', {"path": PAS, "old": "procedure Otro;",
                             "new": "procedure Otro; // gestorÃ³n"})
 check('aviso: mojibake en texto nuevo', mc.es(out, 'SN_EDIT_FIRMA_MOJIBAKE_NUEVO'), out)
 call('delphi_edit', {"path": PAS,
     "old": "procedure Otro; // gestorÃ³n", "new": "procedure Otro;"})
+# ...y en un UTF-8 tambien
+U8N = os.path.join(DIR, 'MojiNuevo.pas')
+open(U8N, 'wb').write("unit MojiNuevo;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Ca\u00f1a';\r\n\r\n"
+                      "implementation\r\n\r\nend.\r\n".encode('utf-8'))
+out = call('delphi_edit', {"path": U8N, "old": "  A = 'Ca\u00f1a';", "new": "  A = 'gestor\u00c3\u00b3n';"})
+check('aviso: mojibake en texto nuevo (en un UTF-8, que se sigue leyendo igual)',
+      mc.es(out, 'SN_EDIT_FIRMA_MOJIBAKE_NUEVO'), out)
 # ...y el de una lectura Latin-1 (la E acentuada mayuscula leida asi es
 # U+00C3 U+0089): con el byte CP1252 del codificador solo, dejo de verse
 # (revisor propio, 9-oct-2026). En un fichero UTF-8: en uno CP1252 un U+0089
@@ -827,6 +836,338 @@ call('delphi_textedit', {'path': _txt, 'old': '- dos', 'new': '- tres\n- cuatro'
 _t = open(_txt, encoding='utf-8', newline='').read()
 check('sangria: delphi_textedit sigue la misma regla (no duplica, y en todas las lineas)',
       _t == 'lista\r\n    - tres\r\n    - cuatro\r\nfin\r\n', repr(_t))
+
+# 4.1 de la 1.18.0 (David, 9-oct-2026): un fuente SOLO ASCII no tiene
+# codificacion que respetar: el primer caracter no ASCII elige la que dcc lee
+# bien - CP1252 si cabe, si no UTF-8 CON BOM -, como el IDE al guardar
+# (medido por David: 'Accion' acentuado -> 0xF3 sin BOM, sin preguntar;
+# Omega con su letra griega -> pregunta y, con si, EF BB BF + CE A9). Se
+# escribia UTF-8 SIN BOM, y dcc lo compila como ANSI (AcciÃ³n).
+def _ascii(nombre):
+    p = os.path.join(DIR, nombre)
+    b = (b"unit %s;\r\n\r\ninterface\r\n\r\nconst\r\n  Texto = 'Accion';\r\n\r\n"
+         b"implementation\r\n\r\nend.\r\n" % nombre[:-4].encode())
+    open(p, 'wb').write(b)
+    return p, b
+# todo el fichero byte a byte: lo no tocado sigue igual y el BOM, solo si toca
+_a1, _o = _ascii('UAscii1.pas')
+call('delphi_edit', {'path': _a1, 'old': "  Texto = 'Accion';", 'new': "  Texto = 'Acción';"})
+_b = open(_a1, 'rb').read()
+check('ASCII + un acento que cabe en CP1252: CP1252 crudo y sin BOM, como el IDE (0xF3)',
+      _b == _o.replace(b"'Accion'", b"'Acci\xf3n'"), _b[:80])
+_a2, _o = _ascii('UAscii2.pas')
+_out = call('delphi_edit', {'path': _a2, 'old': "  Texto = 'Accion';", 'new': "  Texto = 'OmegaΩ';"})
+_b = open(_a2, 'rb').read()
+check('ASCII + un caracter que NO cabe en CP1252: UTF-8 CON BOM, como el IDE (EF BB BF + CE A9)',
+      _b == b'\xef\xbb\xbf' + _o.replace(b"'Accion'", b"'Omega\xce\xa9'"), _b[:80])
+check('...y lo dice: EDIT-080 nombra la codificacion que ha escrito (utf8-bom)',
+      mc.es(_out, 'SN_EDIT_ERA_ASCII_PURO_FMT') and 'utf8-bom' in _out, _out[-600:])
+# la regla vive en los DOS escritores (DoEdit y PatchSaveText): un bloque va
+# por el segundo, y un insert y un changeset por el primero
+_a3, _o = _ascii('UAscii3.pas')
+call('delphi_edit', {'path': _a3, 'edits': json.dumps([{'old': "const\n  Texto = 'Accion';",
+                                                      'new': "const\n  Texto = 'OmegaΩ';"}])})
+_b = open(_a3, 'rb').read()
+check('...un ancla de BLOQUE (PatchSaveText): UTF-8 con BOM igual',
+      _b == b'\xef\xbb\xbf' + _o.replace(b"'Accion'", b"'Omega\xce\xa9'"), _b[:80])
+_a4, _o = _ascii('UAscii4.pas')
+call('delphi_edit', {'path': _a4, 'insert': 'rutina-global',
+                     'code': "procedure Hola;\nbegin\n  Writeln('Acción');\nend;"})
+_b = open(_a4, 'rb').read()
+check('...un insert con un acento que cabe: CP1252 sin BOM',
+      not _b.startswith(b'\xef\xbb\xbf') and b"Writeln('Acci\xf3n');" in _b and b'\xc3' not in _b, _b[-120:])
+_a5, _o = _ascii('UAscii5.pas')
+_r = call('delphi_changeset', {'command': 'begin'})
+_cid = mc.id_changeset(_r)
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': _a5,
+                          'old': "  Texto = 'Accion';", 'new': "  Texto = 'OmegaΩ';"})
+call('delphi_changeset', {'command': 'preview', 'id': _cid})  # el commit pide un preview limpio
+_r = call('delphi_changeset', {'command': 'commit', 'id': _cid})
+_b = open(_a5, 'rb').read()
+check('...un changeset: UTF-8 con BOM igual',
+      _b == b'\xef\xbb\xbf' + _o.replace(b"'Accion'", b"'Omega\xce\xa9'"), (_r[:200], _b[:80]))
+# un texto cuyos bytes CP1252 se leerian como UTF-8 (una A con tilde y un
+# superindice tres; una E acentuada y una comilla tipografica): el IDE y el
+# detector leerian el fichero como UTF-8, con otros caracteres. Un fuente sin
+# codificacion va entonces en UTF-8 con BOM, que no es ambiguo (revisor propio
+# de la 4.1); antes salia CP1252 y se releia distinto
+for _nom, _txt, _como in (('UAscii6.pas', 'Acci\u00c3\u00b3n', 'mojibake (A tilde + superindice tres)'),
+                          ('UAscii7.pas', 'CAF\u00c9\u201d', 'una E acentuada y una comilla tipografica')):
+    _p, _o = _ascii(_nom)
+    _out = call('delphi_edit', {'path': _p, 'old': "  Texto = 'Accion';", 'new': "  Texto = '%s';" % _txt})
+    check('...un ASCII con %s, cuyos bytes CP1252 se leerian como UTF-8: UTF-8 con BOM' % _como,
+          open(_p, 'rb').read() == b'\xef\xbb\xbf' + _o.replace(b"'Accion'", ("'%s'" % _txt).encode('utf-8')),
+          (_out[:300], open(_p, 'rb').read()[:60]))
+# una tanda que pone una Omega y la quita: el fichero era ASCII al empezar y lo
+# es al acabar; heredaba el BOM de en medio (revisor propio de la 4.1, medido)
+_a9, _o = _ascii('UAscii9.pas')
+_out = call('delphi_edit', {'path': _a9, 'edits': json.dumps([
+    {'old': "  Texto = 'Accion';", 'new': "  Texto = '\u03a9';"}, {'old': "  Texto = '\u03a9';", 'new': "  Texto = 'y';"}])})
+check('...una tanda que pone una Omega y la quita deja el fichero ASCII sin BOM (heredaba el de en medio)',
+      open(_a9, 'rb').read() == _o.replace(b"'Accion'", b"'y'"), (_out[:300], open(_a9, 'rb').read()[:40]))
+_a8, _o = _ascii('UAscii8.pas')
+call('delphi_edit', {'path': _a8, 'old': "  Texto = 'Accion';", 'new': "  Texto = '\u201cCAF\u00c9\u201d';"})
+check('...con la comilla de apertura ya no es UTF-8 valido: CP1252, como el IDE',
+      open(_a8, 'rb').read() == _o.replace(b"'Accion'", b"'\x93CAF\xc9\x94'"), open(_a8, 'rb').read()[:80])
+_u8 = os.path.join(DIR, 'UYaUtf8.pas')
+open(_u8, 'wb').write("unit UYaUtf8;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Ca\u00f1a';\r\n  B = 'x';\r\n\r\n"
+                      "implementation\r\n\r\nend.\r\n".encode('utf-8'))
+call('delphi_edit', {'path': _u8, 'old': "  B = 'x';", 'new': "  B = 'Acci\u00f3n';"})
+_b = open(_u8, 'rb').read()
+check('...uno que YA tiene su codificacion (UTF-8 sin BOM con acentos) la conserva: ni BOM ni CP1252',
+      _b.startswith(b'unit') and "B = 'Acci\u00f3n';".encode('utf-8') in _b, _b[:120])
+_md = os.path.join(DIR, 'leeme_ascii.md')
+open(_md, 'wb').write(b'# titulo\r\nnada\r\n')
+_out = call('delphi_textedit', {'path': _md, 'old': 'nada', 'new': 'Omega\u03a9'})
+# lo que no lee dcc sigue la preferencia del IDE para un ASCII: con UTF-8
+# se escribe UTF-8 SIN BOM; con ANSI la Omega no cabe y se niega - y entonces
+# esto no mide la regla (un fichero sin tocar tampoco tiene BOM)
+_IDE_PREFIERE_UTF8 = not mc.rechazado(_out)
+if mc.rechazado(_out):
+    print('NOTA: la regla del .md no se mide: el IDE de esta maquina prefiere ANSI y la Omega se niega')
+else:
+    check('...y un fichero que no lee dcc (un .md) no entra en la regla: UTF-8 sin BOM, sin ganar uno',
+          open(_md, 'rb').read() == b'# titulo\r\nOmega\xce\xa9\r\n', open(_md, 'rb').read()[:40])
+
+# UTF-32 (4.1 de la 1.18.0): el IDE lo ofrece al guardar un .pas (LE y BE) y
+# el motor lo leia como UTF-16 LE (FF FE 00 00 empieza por FF FE) y el BE como
+# binario. dcc no lo compila (F2438, medido), pero un fichero asi se lee y se
+# edita con SUS bytes: lo no tocado igual byte a byte, y el BOM con el.
+for _be, _nom, _enc, _codec, _bom in ((False, 'U32LE.pas', 'utf32-le', 'utf-32-le', b'\xff\xfe\x00\x00'),
+                                      (True, 'U32BE.pas', 'utf32-be', 'utf-32-be', b'\x00\x00\xfe\xff')):
+    _p = os.path.join(DIR, _nom)
+    _s = ("unit %s;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Caña \U0001F600';\r\n  B = 'x';\r\n\r\n"
+          "implementation\r\n\r\nend.\r\n" % _nom[:-4])
+    open(_p, 'wb').write(_bom + _s.encode(_codec))
+    _out = call('delphi_read', {'path': _p})
+    check('%s: delphi_read la reconoce por su BOM (encoding=%s, eol=CRLF) y la decodifica, fuera del plano basico tambien' % (_enc, _enc),
+          'encoding=%s' % _enc in _out and 'eol=CRLF' in _out and "A = 'Caña \U0001F600';" in _out, _out[:300])
+    _out = call('delphi_search', {'root': _p, 'query': 'Caña'})
+    check('%s: delphi_search la lee (no es binario)' % _enc, '"total":1' in _out, _out[:300])
+    _out = call('delphi_edit', {'path': _p, 'old': "  B = 'x';", 'new': "  B = 'Acción';"})
+    _b = open(_p, 'rb').read()
+    check('%s: delphi_edit escribe con SU codificacion, BOM incluido, y lo no tocado byte a byte' % _enc,
+          _b == _bom + _s.replace("B = 'x'", "B = 'Acción'").encode(_codec), (_out[:300], _b[:40]))
+_t32 = os.path.join(DIR, 'notas32.txt')
+open(_t32, 'wb').write(b'\xff\xfe\x00\x00' + 'uno\r\ndos ñ\r\n'.encode('utf-32-le'))
+_out = call('delphi_textedit', {'path': _t32, 'old': 'uno', 'new': 'tres'})
+check('utf32-le: delphi_textedit tambien (la misma pareja detector/escritor)',
+      open(_t32, 'rb').read() == b'\xff\xfe\x00\x00' + 'tres\r\ndos ñ\r\n'.encode('utf-32-le'), _out[:300])
+
+# ...y un .inc tambien: dcc lee cada uno con SU BOM, aunque lo incluya un .pas
+# sin BOM (medido en Sonda32 el 9-oct-2026)
+_inc = os.path.join(DIR, 'UAscii.inc')
+open(_inc, 'wb').write(b"Texto = 'Accion';\r\n")
+call('delphi_edit', {'path': _inc, 'old': "Texto = 'Accion';", 'new': "Texto = 'OmegaΩ';"})
+check('...un .inc ASCII con un caracter que no cabe en CP1252: UTF-8 con BOM, como un .pas',
+      open(_inc, 'rb').read() == b"\xef\xbb\xbfTexto = 'Omega\xce\xa9';\r\n", open(_inc, 'rb').read())
+
+# LA REGLA DE IDA Y VUELTA (David, 9-oct-2026), en los DOS escritores: lo que no
+# vuelve igual por su codificacion no se reescribe - cambiaria bytes que nadie
+# toco. Se lee (avisando, READ-007) y NINGUN escritor lo toca: delphi_edit,
+# delphi_textedit, delphi_changeset (EDIT-038 era solo de la entrada de
+# delphi_edit, y ninguna bateria lo miraba)
+def _intacto_tras(nombre, ruta, orig, salida, codigo='SR_EDIT_BYTES_NO_VUELVEN_FMT'):
+    check('ida y vuelta: %s se niega (EDIT-038) y no toca un byte' % nombre,
+          mc.es(salida, codigo) and open(ruta, 'rb').read() == orig, (salida[:300], open(ruta, 'rb').read()[:60]))
+# (1) BOM de UTF-8 y el cuerpo en CP1252: la lectura REVENTABA (SYS-006) y la
+# busqueda tambien (medido en produccion)
+_roto = os.path.join(DIR, 'UBomRoto.pas')
+_ROTO = b"\xef\xbb\xbfunit UBomRoto;\r\n\r\ninterface\r\n\r\nconst\r\n  S = 'gesti\xf3n';\r\n  T = 1;\r\n\r\nimplementation\r\n\r\nend.\r\n"
+open(_roto, 'wb').write(_ROTO)
+_out = call('delphi_read', {'path': _roto})
+check('ida y vuelta: un BOM de UTF-8 con el cuerpo roto se LEE (no SYS-006) y lo dice (READ-007)',
+      mc.es(_out, 'SN_READ_BYTES_NO_VUELVEN_FMT') and 'T = 1;' in _out and not mc.fallo(_out), _out[:300])
+_out = call('delphi_search', {'root': _roto, 'query': 'T = 1'})
+check('ida y vuelta: ...y se BUSCA (no SYS-006)', '"total":1' in _out, _out[:300])
+_intacto_tras('delphi_edit en un BOM de UTF-8 con el cuerpo roto', _roto, _ROTO,
+              call('delphi_edit', {'path': _roto, 'old': '  T = 1;', 'new': '  T = 2;'}))
+_rotot = os.path.join(DIR, 'roto.txt')
+_ROTOT = b'\xef\xbb\xbfuno\r\ngesti\xf3n\r\n'
+open(_rotot, 'wb').write(_ROTOT)
+_intacto_tras('delphi_textedit en un BOM de UTF-8 con el cuerpo roto', _rotot, _ROTOT,
+              call('delphi_textedit', {'path': _rotot, 'old': 'uno', 'new': 'dos'}))
+_r = call('delphi_changeset', {'command': 'begin'})
+_cid = mc.id_changeset(_r)
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': _roto,
+                          'old': '  T = 1;', 'new': '  T = 3;'})
+# (el ensayo del preview pasa por el escritor: la negativa sale YA en el
+# preview, y el commit queda bloqueado)
+_intacto_tras('delphi_changeset (su preview) en un BOM de UTF-8 con el cuerpo roto', _roto, _ROTO,
+              call('delphi_changeset', {'command': 'preview', 'id': _cid}))
+_r = call('delphi_changeset', {'command': 'commit', 'id': _cid})
+check('ida y vuelta: ...y su commit se niega sin tocar un byte',
+      mc.rechazado(_r) and open(_roto, 'rb').read() == _ROTO, _r[:300])
+# (2) un UTF-32 mal formado (le sobran dos bytes al final)
+_u32m = os.path.join(DIR, 'U32Mal.pas')
+_U32M = b'\xff\xfe\x00\x00' + "unit U32Mal;\r\n  T = 1;\r\nend.\r\n".encode('utf-32-le') + b'\x41\x00'
+open(_u32m, 'wb').write(_U32M)
+_out = call('delphi_read', {'path': _u32m})
+check('ida y vuelta: un UTF-32 mal formado se lee y lo dice (READ-007)',
+      mc.es(_out, 'SN_READ_BYTES_NO_VUELVEN_FMT') and 'encoding=utf32-le' in _out, _out[:300])
+_intacto_tras('delphi_edit en un UTF-32 mal formado', _u32m, _U32M,
+              call('delphi_edit', {'path': _u32m, 'old': '  T = 1;', 'new': '  T = 2;'}))
+# (3) un CP1252 cuyos UNICOS bytes altos parecen una forma larga de UTF-8 (E0
+# 80 80, prohibida por RFC 3629): se detectaba UTF-8 y su lectura reventaba
+_larga = os.path.join(DIR, 'ULarga.pas')
+_LARGA = b"unit ULarga;\r\n\r\ninterface\r\n\r\nconst\r\n  S = '\xe0\x80\x80';\r\n  T = 1;\r\n\r\nimplementation\r\n\r\nend.\r\n"
+open(_larga, 'wb').write(_LARGA)
+_out = call('delphi_read', {'path': _larga})
+check('UTF-8 estricto: E0 80 80 no es UTF-8 (RFC 3629): se lee como cp1252',
+      'encoding=cp1252' in _out and "S = 'à€€';" in _out, _out[:300])
+call('delphi_edit', {'path': _larga, 'old': '  T = 1;', 'new': '  T = 2;'})
+check('...y se edita con sus mismos bytes',
+      open(_larga, 'rb').read() == _LARGA.replace(b'T = 1;', b'T = 2;'), open(_larga, 'rb').read()[:80])
+# (4) el OTRO escritor (PatchSaveText: un ancla de bloque) sobre el fichero roto
+_intacto_tras('un ancla de BLOQUE en un BOM de UTF-8 con el cuerpo roto', _roto, _ROTO,
+              call('delphi_edit', {'path': _roto, 'edits': json.dumps(
+                  [{'old': '  T = 1;\n\nimplementation', 'new': '  T = 2;\n\nimplementation'}])}))
+# (5) ...y lo que lo cura: restore copia BYTES, y su vista previa lee el
+# fichero roto sin reventar
+_cura = os.path.join(DIR, 'UCura.pas')
+_BUENO = b"unit UCura;\r\n\r\ninterface\r\n\r\nconst\r\n  S = 'gesti\xf3n';\r\n  T = 1;\r\n\r\nimplementation\r\n\r\nend.\r\n"
+open(_cura, 'wb').write(_BUENO)
+call('delphi_edit', {'path': _cura, 'old': '  T = 1;', 'new': '  T = 2;'})  # su copia del dia: la buena
+open(_cura, 'wb').write(b'\xef\xbb\xbf' + _BUENO)  # alguien le pone un BOM de UTF-8: cuerpo roto
+_out = call('delphi_edit', {'path': _cura, 'restore': True})
+_out2 = call('delphi_edit', {'path': _cura, 'restore': True, 'confirm': True})
+check('ida y vuelta: restore, que copia bytes, cura un fichero roto (y su vista previa no revienta)',
+      not mc.fallo(_out) and not mc.fallo(_out2) and open(_cura, 'rb').read() == _BUENO, (_out[:200], _out2[:200]))
+# (6) un U+FFFD que esta DE VERDAD en el fichero (EF BF BD en un UTF-8 valido)
+# no es un byte roto: vuelve igual y se edita
+_fffd = os.path.join(DIR, 'UFffd.pas')
+_FF = (b'\xef\xbb\xbf' + "unit UFffd;\r\n\r\ninterface\r\n\r\nconst\r\n  S = 'a\ufffdb \u00f1';\r\n  T = 1;\r\n\r\n"
+       "implementation\r\n\r\nend.\r\n".encode('utf-8'))
+open(_fffd, 'wb').write(_FF)
+_out = call('delphi_edit', {'path': _fffd, 'old': '  T = 1;', 'new': '  T = 2;'})
+check('ida y vuelta: un U+FFFD legitimo (EF BF BD en un UTF-8 valido) vuelve igual: se edita, byte a byte',
+      open(_fffd, 'rb').read() == _FF.replace(b'T = 1;', b'T = 2;'), (_out[:300], open(_fffd, 'rb').read()[:60]))
+# (7) READ-007 nombra la primera linea que no cuadra y, en un UTF-8, como seria
+# en la otra lectura: el agente ve las dos y lo arregla en el IDE (David)
+_CAT = mc.catalogo()
+_out = call('delphi_read', {'path': _roto})
+check('ida y vuelta: READ-007 nombra la primera linea que no cuadra y como se leeria en cp1252 (gestión)',
+      _CAT['SF_READ_PRIMERA_NO_CUADRA_FMT'].split('%s')[0] in _out and
+      (_CAT['SF_READ_OTRA_LECTURA_FMT'] % ('cp1252', '')).rstrip() in _out and
+      "S = 'gesti\u00f3n';" in _out, _out[:600])
+# (8) acentos UTF-8 validos y una secuencia prohibida (un sustituto en CESU-8)
+# no son UTF-8: el juez de la RTL dice que no, y el IDE y dcc lo leen en ANSI.
+# El servidor tambien (David: "si hay juez lo seguimos"; una regla propia de
+# "UTF-8 danado" dejaba sin editar un CP1252 legitimo con comillas tipograficas)
+_dan = os.path.join(DIR, 'UDanado.pas')
+_DAN = (b"unit UDanado;\r\n\r\ninterface\r\n\r\nconst\r\n  S = 'gesti\xc3\xb3n';\r\n  R = '\xed\xa0\xbd\xed\xb8\x80';\r\n"
+        b"  T = 1;\r\n\r\nimplementation\r\n\r\nend.\r\n")
+open(_dan, 'wb').write(_DAN)
+_out = call('delphi_read', {'path': _dan})
+check('UTF-8 mezclado con una secuencia prohibida: se lee como cp1252, como el IDE y dcc',
+      'encoding=cp1252' in _out and not mc.es(_out, 'SN_READ_BYTES_NO_VUELVEN_FMT'), _out[:400])
+call('delphi_edit', {'path': _dan, 'old': '  T = 1;', 'new': "  T = 'Acci\u00f3n';"})
+check('...y se edita en cp1252, con sus mismos bytes',
+      open(_dan, 'rb').read() == _DAN.replace(b'T = 1;', b"T = 'Acci\xf3n';"), open(_dan, 'rb').read()[:80])
+# (9) un UTF-16 con un byte suelto al final: delphi_edit lo reescribia SIN el
+# byte (la RTL lo dejaba fuera callado). Se lee con U+FFFD y nadie lo reescribe
+_u16 = os.path.join(DIR, 'U16Impar.pas')
+_U16 = b'\xff\xfe' + "unit U16Impar;\r\n  T = 1;\r\nend.\r\n".encode('utf-16-le') + b'\x41'
+open(_u16, 'wb').write(_U16)
+_out = call('delphi_read', {'path': _u16})
+check('UTF-16 con un byte suelto al final: se lee, el byte sale U+FFFD y READ-007 lo dice',
+      mc.es(_out, 'SN_READ_BYTES_NO_VUELVEN_FMT') and '\ufffd' in _out, _out[:300])
+_intacto_tras('delphi_edit en un UTF-16 con un byte suelto (lo reescribia sin el)', _u16, _U16,
+              call('delphi_edit', {'path': _u16, 'old': '  T = 1;', 'new': '  T = 2;'}))
+# (10) un changeset que BORRA un fichero roto y lo CREA de nuevo: el ensayo del
+# create miraba el viejo (EDIT-038 falso en el preview, que bloqueaba el commit)
+_x = os.path.join(DIR, 'URecrea.pas')
+open(_x, 'wb').write(_ROTO.replace(b'UBomRoto', b'URecrea'))
+_cid = mc.id_changeset(call('delphi_changeset', {'command': 'begin'}))
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'delete', 'path': _x})
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'create', 'path': _x,
+                          'content': 'unit URecrea;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'})
+_pv = call('delphi_changeset', {'command': 'preview', 'id': _cid})
+_r = call('delphi_changeset', {'command': 'commit', 'id': _cid})
+_b = open(_x, 'rb').read()
+def _sin_pendientes(pv):
+    try:
+        return json.loads(pv).get('unresolved') == 0
+    except ValueError:
+        return False
+check('ida y vuelta: delete + create de un fichero roto: el preview no niega el create (es NUEVO) y el commit lo deja nuevo',
+      _sin_pendientes(_pv) and b'unit URecrea;' in _b and b'gesti' not in _b, (_pv[:300], _r[:300], _b[:60]))
+
+# el origen de la llamada se ancla de nuevo si la ruta cambia de contenido por
+# otro camino (revisor propio de la 4.1, medido): un changeset que editaba P, lo
+# borraba, movia a P un fichero en UTF-8 con BOM y lo editaba otra vez dejaba P
+# en CP1252 - transcodificaba un fichero que SI tenia codificacion
+_pm, _qm = os.path.join(DIR, 'UMovP.pas'), os.path.join(DIR, 'UMovQ.pas')
+open(_pm, 'wb').write(b"unit UMovP;\r\n\r\ninterface\r\n\r\nconst\r\n  X = 1;\r\n  T = 1;\r\n\r\nimplementation\r\n\r\nend.\r\n")
+_QM = b'\xef\xbb\xbf' + ("unit UMovP;\r\n\r\ninterface\r\n\r\nconst\r\n  S = 'gesti\u00f3n';\r\n  T = 1;\r\n\r\n"
+                         "implementation\r\n\r\nend.\r\n").encode('utf-8')
+open(_qm, 'wb').write(_QM)
+_cid = mc.id_changeset(call('delphi_changeset', {'command': 'begin'}))
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': _pm, 'old': '  X = 1;', 'new': '  X = 2;'})
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'delete', 'path': _pm})
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'move', 'path': _qm, 'dest': _pm})
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': _pm, 'old': '  T = 1;', 'new': '  T = 2;'})
+_pv = call('delphi_changeset', {'command': 'preview', 'id': _cid})
+_r = call('delphi_changeset', {'command': 'commit', 'id': _cid})
+check('origen: edit P / delete P / move Q->P / edit P deja en P la codificacion de Q (UTF-8 con BOM), no CP1252',
+      open(_pm, 'rb').read() == _QM.replace(b'T = 1;', b'T = 2;'), (_pv[:200], _r[:300], open(_pm, 'rb').read()[:60]))
+# ...y conserva CUAL tenia: una tanda que quita el unico acento de un CP1252 y
+# pone otro lo dejaba en UTF-8 sin BOM (la preferencia del IDE para lo que ya
+# parecia ASCII) segun el orden (revisor propio de la 4.1, medido; tambien 1.17)
+_ua = os.path.join(DIR, 'UUnAcento.pas')
+_UA = b"unit UUnAcento;\r\n\r\ninterface\r\n\r\nconst\r\n  A = '\xe9';\r\n  B = 'x';\r\n\r\nimplementation\r\n\r\nend.\r\n"
+open(_ua, 'wb').write(_UA)
+_out = call('delphi_edit', {'path': _ua, 'edits': json.dumps([
+    {'old': "  A = '\u00e9';", 'new': "  A = 'e';"}, {'old': "  B = 'x';", 'new': "  B = 'Descripci\u00f3n';"}])})
+if not _IDE_PREFIERE_UTF8:
+    print('NOTA: el check del unico acento no distingue aqui: con el IDE en ANSI el codigo viejo tambien daba '
+          'CP1252 (lo mide LspTests.Encodings.EncAlEscribirConservaLaCodificacionDelOrigen)')
+check('origen: una tanda que quita el unico acento y pone otro deja el fichero en CP1252 (acababa en UTF-8 sin BOM)',
+      open(_ua, 'rb').read() == _UA.replace(b"'\xe9'", b"'e'").replace(b"'x'", b"'Descripci\xf3n'"),
+      (_out[:300], open(_ua, 'rb').read()[:80]))
+
+# EDIT-080 solo cuando el fichero NO tenia codificacion: un UTF-8 con BOM y
+# solo ASCII ya tiene una (Measure no cuenta el BOM y decia "era ASCII puro")
+_bomasc = os.path.join(DIR, 'UBomAscii.pas')
+_BA = b"\xef\xbb\xbfunit UBomAscii;\r\n\r\ninterface\r\n\r\nconst\r\n  T = 'x';\r\n\r\nimplementation\r\n\r\nend.\r\n"
+open(_bomasc, 'wb').write(_BA)
+_out = call('delphi_edit', {'path': _bomasc, 'old': "  T = 'x';", 'new': "  T = 'Acci\u00f3n';"})
+check('EDIT-080: un UTF-8 con BOM y solo ASCII ya tenia codificacion: la conserva y no dice "era ASCII puro"',
+      not mc.es(_out, 'SN_EDIT_ERA_ASCII_PURO_FMT') and
+      open(_bomasc, 'rb').read() == _BA.replace(b"'x'", "'Acci\u00f3n'".encode('utf-8')), _out[-400:])
+
+# el primer caracter no ASCII lo decide la LLAMADA, no cada escritura (revisor
+# propio de la 4.1, medido el 9-oct-2026): una tanda con la vocal acentuada y
+# luego la Omega se negaba -la primera entrada fijaba CP1252- y al reves salia
+# en UTF-8 con BOM; el preview de un changeset decia que si y su commit que no
+def _ascii2(nombre):
+    p = os.path.join(DIR, nombre)
+    b = (b"unit %s;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Accion';\r\n  B = 'x';\r\n\r\n"
+         b"implementation\r\n\r\nend.\r\n" % nombre[:-4].encode())
+    open(p, 'wb').write(b)
+    return p, b
+_EA = {'old': "  A = 'Accion';", 'new': "  A = 'Acci\u00f3n';"}
+_EO = {'old': "  B = 'x';", 'new': "  B = '\u03a9';"}
+def _final(b0):
+    return b'\xef\xbb\xbf' + b0.replace(b"'Accion'", "'Acci\u00f3n'".encode('utf-8')).replace(
+        b"'x'", "'\u03a9'".encode('utf-8'))
+for _nom, _eds, _como in (('UOrdAO.pas', [_EA, _EO], 'la vocal y luego la Omega'),
+                          ('UOrdOA.pas', [_EO, _EA], 'la Omega y luego la vocal')):
+    _p, _o = _ascii2(_nom)
+    _out = call('delphi_edit', {'path': _p, 'edits': json.dumps(_eds)})
+    check('el primer caracter no ASCII lo decide la LLAMADA: una tanda con %s acaba en UTF-8 con BOM' % _como,
+          open(_p, 'rb').read() == _final(_o), (_out[:300], open(_p, 'rb').read()[:60]))
+    check('...sin la falsa alarma de acentos (EDIT-081) cuando la tanda pasa de CP1252 a UTF-8 con BOM (%s)' % _como,
+          not mc.es(_out, 'SN_EDIT_ACENTOS_FUERA_CUADRO_FMT'), _out[-500:])
+    _p, _o = _ascii2('Cs' + _nom)
+    _cid = mc.id_changeset(call('delphi_changeset', {'command': 'begin'}))
+    for _e in _eds:
+        call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': _p,
+                                  'old': _e['old'], 'new': _e['new']})
+    call('delphi_changeset', {'command': 'preview', 'id': _cid})
+    _r = call('delphi_changeset', {'command': 'commit', 'id': _cid})
+    check('...y un changeset con %s: el commit hace lo que dijo su preview (UTF-8 con BOM)' % _como,
+          open(_p, 'rb').read() == _final(_o), (_r[:300], open(_p, 'rb').read()[:60]))
 
 srv.cierra()
 mc.fin('delphi_edit battery')

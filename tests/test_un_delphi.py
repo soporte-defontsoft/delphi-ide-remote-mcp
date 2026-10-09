@@ -415,11 +415,30 @@ try:
     except subprocess.TimeoutExpired:
         rc = None
     texto = '\n'.join(mensajes(ruta))
-    partes = re.split(r'%[sd]', CAT['SE_GUARD_INI_UTF16BE_FMT'])
+    partes = re.split(r'%[sd]', CAT['SE_GUARD_INI_CODIFICACION_FMT'])
     check('U11d settings.ini en UTF-16 big endian: NO arranca, y dice por que y como guardarlo',
-          c is None and rc == 1 and all(p in texto for p in partes), 'cli=%s rc=%s %s' % (c, rc, texto[-300:]))
+          c is None and rc == 1 and all(p in texto for p in partes) and 'utf16-be' in texto,
+          'cli=%s rc=%s %s' % (c, rc, texto[-300:]))
     check('U11d ...el ini no se toca', ini_de(d11d) == INI11D, ini_de(d11d)[:120])
     para(proc)
+    # U11h (9-oct-2026): ...ni en UTF-32, LE ni BE - medido con
+    # GetPrivateProfileStringW: no ve ninguna seccion. El BOM de UTF-32 LE
+    # empieza como el de UTF-16 LE (FF FE 00 00) y pasaba por bueno
+    for nom32, bom32, codec32, enc32 in (('utf32le', b'\xff\xfe\x00\x00', 'utf-32-le', 'utf32-le'),
+                                         ('utf32be', b'\x00\x00\xfe\xff', 'utf-32-be', 'utf32-be')):
+        INI11H = bom32 + ini_bytes([]).decode('utf-8').encode(codec32)
+        d11h, exe11h = carpeta_servidor(nom32, INI11H)
+        proc, ruta, c = lanza(exe11h, nom32)
+        try:
+            rc = proc.wait(30)
+        except subprocess.TimeoutExpired:
+            rc = None
+        texto = '\n'.join(mensajes(ruta))
+        check('U11h settings.ini en %s: NO arranca, y dice por que (%s) y como guardarlo' % (enc32, enc32),
+              c is None and rc == 1 and all(p in texto for p in partes) and enc32 in texto,
+              'cli=%s rc=%s %s' % (c, rc, texto[-300:]))
+        check('U11h ...el ini en %s no se toca' % enc32, ini_de(d11h) == INI11H, ini_de(d11h)[:120])
+        para(proc)
     # ...y su control (revisor del 9.2): en UTF-16 LITTLE endian con su BOM, lo
     # que el mensaje recomienda, arranca y la clave entra en su [Server], en
     # LE; el resto, byte a byte

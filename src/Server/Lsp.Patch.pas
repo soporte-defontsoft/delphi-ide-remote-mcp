@@ -258,6 +258,11 @@ function DesignersDeUnidad(const AUnidad: string): TArray<string>;
   de texto o binario. EL predicado: estaba escrito a mano con su lista en
   nueve sitios (4.1 de la 1.18.0, al pasarselo al detector). }
 function EsRutaDeDesigner(const APath: string): Boolean;
+{ Si APath es un FUENTE por su extension (SOURCE_EXTS: .pas, .dpr, .dpk,
+  .inc): lo que lee dcc, cada uno con su propio BOM (medido el 9-oct-2026,
+  tambien un .inc incluido desde un .pas sin BOM). EL predicado, como
+  EsRutaDeDesigner: estaba escrito a mano con su lista en cinco sitios. }
+function EsRutaDeFuente(const APath: string): Boolean;
 { Las mascaras de fichero de una de esas listas ('.dfm' -> '*.dfm'), para
   recorrer una carpeta con ellas. Las escribian a mano Mcp.Tools.Workspace
   (las de delphi_search y delphi_list), Lsp.Rename (las de designer) y
@@ -321,8 +326,66 @@ function PatchLoadText(const APath: string; out AEncName: string): string;
 { AEnsayo: todo lo que la escritura comprueba (la codificacion, la puerta y el
   +R que pregunta el escritor) sin copiar ni escribir; lanza lo que lanzaria.
   El preview de un changeset lo pide en vez de copiar las reglas del commit
-  (decima revision). }
-procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False);
+  (decima revision). ANuevo: el texto es un fichero nuevo, y lo que haya en
+  el disco no cuenta (el ensayo de un create tras un delete del mismo lote). }
+procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;
+  ANuevo: Boolean = False);
+{ LA REGLA DE IDA Y VUELTA de todo el que lee un fichero para reescribirlo
+  (David, 9-oct-2026): '' si los bytes B de APath vuelven iguales al leerlos
+  y escribirlos en su codificacion (K, la que dice EL detector); si no, la
+  negativa (EDIT-038): reescribirlo cambiaria bytes que nadie toco. La
+  preguntan los dos escritores de aqui (DoEdit y PatchSaveText) y el del
+  vault: con el decodificador tolerante, sin esta pregunta, una nota con un
+  BOM de UTF-8 y el cuerpo en CP1252 volveria a disco con U+FFFD donde estan
+  sus acentos, diciendo OK (revisor propio de la 4.1, 9-oct-2026). }
+function ReescrituraDenegada(const APath: string; const B: TArray<Byte>;
+  out K: TEncKind): string;
+{ ...y su lado de la ESCRITURA: '' si los bytes que se van a escribir (AB,
+  en AK) se leeran en AK; si no, la negativa EDIT-122. Una A con tilde y un
+  superindice tres en CP1252 son los bytes de una o con acento en UTF-8: un
+  fichero cuyos bytes altos son todos asi lo leen como UTF-8 el detector y el
+  IDE, con otros caracteres que los escritos (revisor propio de la 4.1,
+  medido). Unos bytes sin byte alto no tienen codificacion que leer. La
+  preguntan los dos escritores, la creacion de una unit y EncAlEscribir (que
+  elige entonces UTF-8 con BOM para un fuente sin codificacion). }
+function LecturaCambiada(const APath: string; const AB: TArray<Byte>; AK: TEncKind): string;
+{ La codificacion en que se ESCRIBE un texto (4.1 de la 1.18.0, David
+  9-oct-2026: "un fichero ASCII no tiene codificacion que respetar"). AK es
+  la que se leyo; AAntes, los bytes que hay (AExiste = False: uno nuevo).
+  Lo que ya tiene codificacion la conserva: un BOM o un byte alto la dicen.
+  Un FUENTE (lo que lee dcc) que no tiene ninguna -solo ASCII- la elige con
+  su primer caracter no ASCII, como el IDE al guardar (medido por David: una
+  vocal acentuada va en CP1252 sin BOM, sin preguntar; una letra griega,
+  tras preguntar, en UTF-8 con BOM): CP1252 si cabe todo y se va a leer como
+  CP1252, si no UTF-8 con BOM (una E acentuada y una comilla tipografica
+  juntas son, en CP1252, un caracter UTF-8 valido: el IDE y el detector
+  leerian el fichero como UTF-8). dcc lee un UTF-8 SIN BOM como ANSI:
+  escribirlo asi era el fallo. Uno NUEVO va en la del IDE, y si esa es CP1252
+  y no cabe, en UTF-8 con BOM; nunca en UTF-8 sin BOM (el IDE lo cura al
+  guardar). Lo que ya tenia codificacion conserva la del ORIGEN.
+  Lo que no es un fuente, tal cual. La preguntan los dos escritores (DoEdit,
+  PatchSaveText), la creacion de una unit y el nombre de un componente
+  (DSGN-111: en que codificacion quedara su unidad).
+  Lo que cuenta es lo que el fichero tenia ANTES DE LA LLAMADA, no antes de
+  cada escritura: una tanda con 'Accion' acentuado y luego una Omega se
+  negaba -la primera entrada fijaba CP1252- y al reves salia en UTF-8 con
+  BOM, y el preview de un changeset decia que si y su commit que no (medido
+  el 9-oct-2026). La primera escritura de la llamada apunta si el fichero
+  existia y si tenia codificacion, y AtomicWrite la huella de lo que deja:
+  si otro (un delete o un move del changeset) cambia la ruta entre medias, el
+  origen se ancla de nuevo en lo que hay. OlvidaOrigenes vacia la lista al
+  empezar y al acabar la llamada. }
+function EncAlEscribir(const APath: string; AK: TEncKind;
+  const AAntes: TArray<Byte>; AExiste: Boolean; const ATexto: string): TEncKind;
+{ Nada de una llamada anterior en este hilo: los bytes de antes que apunto
+  EncAlEscribir. AEnLlamada: empieza una (la puerta de cada llamada,
+  Lsp.Host) o acaba (el filtro de salida), como los adjuntos de
+  Lsp.InlineImages; fuera de una llamada no se apunta nada. }
+procedure OlvidaOrigenes(AEnLlamada: Boolean);
+{ Lo que la llamada acaba de dejar en APath: la huella que el origen espera
+  encontrar la proxima vez. La llama AtomicWrite; publica para que la suite
+  DUnitX pruebe la cadena de escrituras de una llamada sin tocar el disco. }
+procedure ApuntaEscritoEnLaLlamada(const APath: string; const B: TArray<Byte>);
 { PatchSaveText para quien EDITA un texto insertando bloques compuestos con
   sLineBreak (los escritores del .dproj): si el fichero en disco no tiene
   ningun CRLF, los CRLF del texto nuevo solo pueden ser los insertados, y
@@ -526,6 +589,7 @@ uses
   Lsp.Identidad,
   Lsp.TodoONada,
   Lsp.Args,
+  Lsp.ShaCache, // Sha256DeBytes: la huella del origen de una llamada
   Lsp.Mascara;
 
 const
@@ -609,11 +673,8 @@ begin
 end;
 
 function DetectEnc(const B: TBytes; AEsDesigner: Boolean): TEncKind;
-var
-  I: Integer;
-  HasHigh: Boolean;
 begin
-  // el BOM de UTF-8 y los de UTF-16, por EL lector de un BOM (Codificacion).
+  // el BOM de UTF-8 y los de UTF-16 y UTF-32, por EL lector de un BOM (Codificacion).
   // UTF-16 solo por BOM: sin el, ningun fuente Delphi es UTF-16 (el IDE lo
   // escribe siempre con marca) y adivinarlo por ceros seria otro detector.
   if KindDeBom(B, Result) then
@@ -623,28 +684,188 @@ begin
   // escribe con los mismos bytes, y un acento nuevo va como dcc lo lee
   if AEsDesigner then
     Exit(ekCp1252);
-  HasHigh := False;
-  for I := 0 to High(B) do
-    if B[I] > 127 then
-    begin
-      HasHigh := True;
-      Break;
-    end;
   // Pure ASCII without BOM is ambiguous: honour the encoding the IDE is
   // configured to use (Tools > Options > Editor). Guessing the other way
   // writes the first new accent in the wrong codec and the IDE shows
-  // mojibake - in BOTH directions (measured).
-  if not HasHigh then
+  // mojibake - in BOTH directions (measured). Para un FUENTE esto es solo
+  // como se lee: en que se ESCRIBE su primer caracter no ASCII lo decide
+  // EncAlEscribir, como el IDE al guardar (4.1 de la 1.18.0)
+  if not HayByteAlto(B) then
   begin
     if IdeWantsUtf8 then
       Exit(ekUtf8);
     Exit(ekCp1252);
   end;
-  // Only UTF-8 when EVERY high byte forms valid sequences (strict).
+  // UTF-8 cuando TODO byte alto forma secuencias validas (estricto: el juez de
+  // la RTL, TEncoding.UTF8.IsBufferValid); si no, ANSI. Asi deciden el IDE
+  // (detecta un UTF-8 sin BOM: medido el 9-oct-2026) y TFile.ReadAllText. Una
+  // regla propia de "UTF-8 danado" contradecia a los dos y dejaba sin editar
+  // un CP1252 legitimo (revisor propio de la 4.1; David: "si hay juez lo
+  // seguimos hasta que se demuestre que el juez es tonto")
   if ValidUtf8(B, 0) then
     Result := ekUtf8
   else
     Result := ekCp1252;
+end;
+
+type
+  { Lo que tenia una ruta antes de la PRIMERA escritura de la llamada, y lo
+    que la llamada cree que hay en ella ahora. }
+  TOrigenDeLlamada = record
+    Ruta: string;
+    Existia: Boolean;
+    // tenia codificacion: un byte alto (un BOM tambien lleva). Solo eso y
+    // cual se preguntan: guardar los bytes enteros de cada fuente tocado los
+    // retenia hasta el final de la llamada (un rename de un arbol grande)
+    TeniaCodificacion: Boolean;
+    // ...y cual: la que leyo EL detector. Con el byte alto como unica marca,
+    // una entrada que quitaba el ultimo acento dejaba el fichero en ASCII y la
+    // siguiente lo leia en la preferencia del IDE: un CP1252 acababa en UTF-8
+    // sin BOM segun el orden (revisor propio de la 4.1, medido)
+    Codificacion: TEncKind;
+    // la huella (HuellaDeOrigen) de lo ultimo que se sabe de la ruta: lo que
+    // habia, o lo que dejo AtomicWrite
+    Esperado: string;
+  end;
+
+threadvar
+  // Por hilo, como los adjuntos de Lsp.InlineImages: las tools son singletons
+  // y el servidor HTTP atiende varias llamadas a la vez. Un hilo que no paso
+  // por la puerta (GEnLlamada en falso) no apunta nada: decide escritura a
+  // escritura, como antes
+  GOrigenes: TArray<TOrigenDeLlamada>;
+  GEnLlamada: Boolean;
+
+procedure OlvidaOrigenes(AEnLlamada: Boolean);
+begin
+  GOrigenes := nil;
+  GEnLlamada := AEnLlamada;
+end;
+
+{ La huella de un contenido para el origen: '' = el fichero no existe (uno
+  vacio tiene la suya). Con el sha de la casa (Lsp.ShaCache.Sha256DeBytes). }
+function HuellaDeOrigen(AExiste: Boolean; const B: TArray<Byte>): string;
+begin
+  if AExiste then
+    Result := Sha256DeBytes(B)
+  else
+    Result := '';
+end;
+
+{ Lo que tenia APath antes de la primera escritura de la llamada en curso:
+  si existia, si tenia codificacion y cual. La primera vez que se pregunta por una
+  ruta se apunta lo que hay AHORA (AAhora, AExisteAhora); las siguientes
+  devuelven lo apuntado MIENTRAS en la ruta siga lo que la llamada dejo
+  (AtomicWrite apunta su huella). Si hay otra cosa -un delete, un move o un
+  deshacer del changeset, o un proceso de fuera, la cambiaron entre dos
+  escrituras- lo apuntado ya no es el origen de ESE fichero, y se ancla de
+  nuevo en lo de ahora: un changeset que editaba P, lo borraba y movia a P un
+  fichero en UTF-8 con BOM lo dejaba en CP1252 (revisor propio de la 4.1,
+  medido). Fuera de una llamada, lo de ahora. }
+procedure OrigenDeLaLlamada(const APath: string; const AAhora: TArray<Byte>;
+  AExisteAhora: Boolean; out AExistia, ATeniaCodificacion: Boolean;
+  out ACodificacion: TEncKind);
+var
+  I: Integer;
+  Ahora: string;
+  Nuevo: TOrigenDeLlamada;
+begin
+  AExistia := AExisteAhora;
+  ATeniaCodificacion := HayByteAlto(AAhora);
+  ACodificacion := DetectEnc(AAhora, EsRutaDeDesigner(APath));
+  if not GEnLlamada then
+    Exit;
+  Ahora := HuellaDeOrigen(AExisteAhora, AAhora);
+  for I := 0 to High(GOrigenes) do
+    if SameText(GOrigenes[I].Ruta, APath) then
+    begin
+      if GOrigenes[I].Esperado <> Ahora then
+      begin
+        GOrigenes[I].Existia := AExisteAhora;
+        GOrigenes[I].TeniaCodificacion := ATeniaCodificacion;
+        GOrigenes[I].Codificacion := ACodificacion;
+        GOrigenes[I].Esperado := Ahora;
+      end;
+      AExistia := GOrigenes[I].Existia;
+      ATeniaCodificacion := GOrigenes[I].TeniaCodificacion;
+      ACodificacion := GOrigenes[I].Codificacion;
+      Exit;
+    end;
+  Nuevo.Ruta := APath;
+  Nuevo.Existia := AExisteAhora;
+  Nuevo.TeniaCodificacion := ATeniaCodificacion;
+  Nuevo.Codificacion := ACodificacion;
+  Nuevo.Esperado := Ahora;
+  GOrigenes := GOrigenes + [Nuevo];
+end;
+
+{ Lo que la llamada acaba de dejar en APath: la huella que el origen espera
+  encontrar la proxima vez. La llama AtomicWrite, por donde pasan todos los
+  escritores de texto; solo cuenta para una ruta ya apuntada. }
+procedure ApuntaEscritoEnLaLlamada(const APath: string; const B: TArray<Byte>);
+var
+  I: Integer;
+begin
+  if not GEnLlamada then
+    Exit;
+  for I := 0 to High(GOrigenes) do
+    if SameText(GOrigenes[I].Ruta, APath) then
+    begin
+      GOrigenes[I].Esperado := HuellaDeOrigen(True, B);
+      Break; // una entrada por ruta
+    end;
+end;
+
+function EncAlEscribir(const APath: string; AK: TEncKind;
+  const AAntes: TArray<Byte>; AExiste: Boolean; const ATexto: string): TEncKind;
+var
+  Existia, TeniaCodificacion: Boolean;
+  Codificacion: TEncKind;
+
+  // CP1252 si cabe Y se va a leer como CP1252 (LecturaCambiada, la ida y
+  // vuelta del lado de la escritura): una E acentuada seguida de una comilla
+  // tipografica son, en CP1252, un caracter UTF-8 valido, y el IDE y el
+  // detector leerian el fichero como UTF-8. Entonces UTF-8 con BOM, que no es
+  // ambiguo para nadie (revisor propio de la 4.1)
+  function Cp1252SinAmbiguedad: Boolean;
+  begin
+    Result := CabeEnCp1252(ATexto) and
+      (LecturaCambiada(APath, EncodeText(ATexto, ekCp1252), ekCp1252) = '');
+  end;
+
+begin
+  Result := AK;
+  if not EsRutaDeFuente(APath) then
+    Exit;
+  // lo de antes de la LLAMADA, apuntado tambien cuando este texto es ASCII:
+  // la entrada siguiente de la tanda puede no serlo
+  OrigenDeLaLlamada(APath, AAntes, AExiste, Existia, TeniaCodificacion, Codificacion);
+  // un texto ASCII no elige nada: el fichero se queda con la del origen (una
+  // tanda que ponia una Omega y luego la quitaba dejaba el BOM de en medio en
+  // un fichero ASCII al empezar y al acabar; revisor propio de la 4.1)
+  if IsAscii(ATexto) then
+  begin
+    if Existia then
+      Result := Codificacion;
+    Exit;
+  end;
+  if Existia then
+  begin
+    // la que tenia: la del ORIGEN, no la que se lee ahora (si una entrada
+    // anterior quito su ultimo acento, ahora parece ASCII)
+    if TeniaCodificacion then
+      Exit(Codificacion);
+    if Cp1252SinAmbiguedad then
+      Result := ekCp1252
+    else
+      Result := ekUtf8Bom;
+  end
+  // uno que nace en esta llamada: la del IDE (AK, la que se leyo de lo que
+  // escribio su creacion) - CP1252 si cabe sin ambiguedad, si no UTF-8 con
+  // BOM; y UTF-8 siempre CON BOM: el IDE no guarda un fuente UTF-8 sin el
+  // (medido el 9-oct-2026: lo cura al guardar), y dcc lo leeria como ANSI
+  else if (AK = ekUtf8) or ((AK = ekCp1252) and not Cp1252SinAmbiguedad) then
+    Result := ekUtf8Bom;
 end;
 
 function Measure(const B: TBytes): TMetrics;
@@ -661,9 +882,9 @@ begin
   K := DetectEnc(B);
   Cuerpo := B;
   Start := PreambleLen(K);
-  if K in [ekUtf16LE, ekUtf16BE] then
+  if K in ENC_ANCHAS then
   begin
-    // En UTF-16 cada caracter son dos bytes: un 0D 00 0A 00 no es un CRLF
+    // En UTF-16 (y UTF-32) cada caracter son dos (cuatro) bytes: un 0D 00 0A 00 no es un CRLF
     // byte a byte. Se mide el cuerpo en UTF-8, las mismas cuentas que un
     // fichero utf8 (un acento = 2 bytes altos); HighCount hace lo mismo.
     Cuerpo := EncodeText(DecodeBytes(B, K), ekUtf8);
@@ -935,6 +1156,7 @@ begin
   Tmp := TemporalDeSustitucion(APath);
   TFile.WriteAllBytes(Tmp, B);
   SustituyePorRenombre(Tmp, APath);
+  ApuntaEscritoEnLaLlamada(APath, B); // lo que el origen espera encontrar
 end;
 
 { El nucleo de ColocaProducto y ColocaContenido: ALocal <> '' mueve ese
@@ -1049,6 +1271,11 @@ end;
 function EsRutaDeDesigner(const APath: string): Boolean;
 begin
   Result := MatchText(TPath.GetExtension(APath), DESIGNER_EXTS);
+end;
+
+function EsRutaDeFuente(const APath: string): Boolean;
+begin
+  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);
 end;
 
 function MascarasDe(const AExts: array of string): TArray<string>;
@@ -1211,8 +1438,7 @@ end;
 
 function EsDelMotorPascal(const APath: string): Boolean;
 begin
-  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS) or
-    EsRutaDeDesigner(APath);
+  Result := EsRutaDeFuente(APath) or EsRutaDeDesigner(APath);
 end;
 
 procedure ZonaDelCambio(const AAntes, ADespues: TArray<string>; out ADesde, ADelta: Integer);
@@ -1324,7 +1550,7 @@ function LooksBinaryBytes(const B: TArray<Byte>): Boolean;
 var
   I: Integer;
 begin
-  if DetectEnc(B) in [ekUtf16LE, ekUtf16BE] then
+  if DetectEnc(B) in ENC_ANCHAS then
     Exit(False);
   for I := 0 to Min(Length(B), 65536) - 1 do
     if B[I] = 0 then
@@ -1448,6 +1674,29 @@ begin
     Result := '';
 end;
 
+function ReescrituraDenegada(const APath: string; const B: TArray<Byte>;
+  out K: TEncKind): string;
+begin
+  K := DetectEnc(B, EsRutaDeDesigner(APath));
+  if BytesVuelvenIgual(B, K) then
+    Result := ''
+  else
+    Result := MsgFmt(SR_EDIT_BYTES_NO_VUELVEN_FMT, [TPath.GetFileName(APath), EncName(K)]);
+end;
+
+function LecturaCambiada(const APath: string; const AB: TArray<Byte>; AK: TEncKind): string;
+var
+  KLeida: TEncKind;
+begin
+  Result := '';
+  if not HayByteAlto(AB) then
+    Exit;
+  KLeida := DetectEnc(AB, EsRutaDeDesigner(APath));
+  if KLeida <> AK then
+    Result := MsgFmt(SR_EDIT_SE_LEERIA_DISTINTO_FMT,
+      [TPath.GetFileName(APath), EncName(AK), EncName(KLeida), EncName(AK)]);
+end;
+
 function PatchLoadText(const APath: string; out AEncName: string): string;
 var
   B: TBytes;
@@ -1459,13 +1708,39 @@ begin
   Result := DecodeBytes(B, K);
 end;
 
-procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False);
+procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;
+  ANuevo: Boolean = False);
 var
   K: TEncKind;
-  B: TBytes;
+  B, Antes: TBytes;
+  Existe: Boolean;
 begin
   K := EncKindOf(AEncName);
+  // ANuevo: el texto es un fichero NUEVO (un create del changeset), y lo que
+  // haya en el disco no cuenta: en el ensayo puede seguir ahi hasta que corra
+  // el delete anterior del mismo lote, y la ida y vuelta y el origen de ESE
+  // fichero negaban o decidian por el viejo (revisor propio de la 4.1)
+  Existe := TFile.Exists(APath) and not ANuevo;
+  Antes := nil;
+  if Existe then
+  begin
+    Antes := TFile.ReadAllBytes(APath);
+    // la regla de ida y vuelta, la de DoEdit, en el otro escritor (David,
+    // 9-oct-2026): el disenador, el changeset, el rename, delphi_textedit...
+    // lo reescribian con U+FFFD donde habia bytes que su codificacion no
+    // guarda. Con su etiqueta, la excepcion es una negativa (DENIED)
+    var KAntes: TEncKind;
+    var NoVuelve := ReescrituraDenegada(APath, Antes, KAntes);
+    if NoVuelve <> '' then
+      raise Exception.Create(NoVuelve);
+  end;
+  // el primer caracter no ASCII de un fuente sin codificacion (4.1)
+  K := EncAlEscribir(APath, K, Antes, Existe, AText);
   B := EncodeText(AText, K); // lanza ECaracterNoCabe: en el ensayo tambien
+  // ...y lo que se escribe tiene que leerse igual (EDIT-122): en el ensayo tambien
+  var Cambia := LecturaCambiada(APath, B, K);
+  if Cambia <> '' then
+    raise Exception.Create(Cambia);
   if AEnsayo then
   begin
     var Motivo := SustitucionDenegada(APath); // lo que preguntara el escritor
@@ -1680,7 +1955,7 @@ end;
 function AvisosDeLlaves(const APath, ANuevo: string; ALineaBase: Integer): TArray<string>;
 begin
   Result := [];
-  if not MatchText(TPath.GetExtension(APath), SOURCE_EXTS) then // (.lpr no llegaba: ExecutePatch lo niega)
+  if not EsRutaDeFuente(APath) then // (.lpr no llegaba: ExecutePatch lo niega)
     Exit;
   for var L in LlavesAnidadas(ANuevo) do
     Result := Result + [MsgFmt(SN_AVISO_LLAVE_ANIDADA_FMT, [ALineaBase + L])];
@@ -2425,7 +2700,7 @@ begin
   if not TFile.Exists(APath) then
     Exit(NoEsFichero(APath, MsgFmt(SR_LSP_NO_FILE_FMT, [APath])));
   Result := '';
-  if not MatchText(TPath.GetExtension(APath), SOURCE_EXTS) then // la lista de la unit
+  if not EsRutaDeFuente(APath) then // la lista de la unit
     Result := MsgFmt(SR_LSP_NOT_SOURCE_FMT, [TPath.GetFileName(APath)]);
 end;
 
@@ -2456,6 +2731,38 @@ begin
       [AChar, ALine, Length(Lines[ALine]), Lines[ALine].Trim]));
 end;
 
+{ READ-007 entero: que unos bytes no cuadran con su codificacion, con la
+  primera linea que no cuadra (la que lleva U+FFFD) y, en un UTF-8, como seria
+  esa linea en la otra lectura posible, para que el agente vea las dos y lo
+  arregle en el IDE (David, 9-oct-2026). '' si los bytes vuelven iguales.
+  ALineas: las del texto leido en K. }
+function NotaDeIdaYVuelta(const B: TArray<Byte>; K: TEncKind;
+  const ALineas: TArray<string>): string;
+var
+  I: Integer;
+  Otras: TArray<string>;
+begin
+  Result := '';
+  if BytesVuelvenIgual(B, K) then
+    Exit;
+  Result := MsgFmt(SN_READ_BYTES_NO_VUELVEN_FMT, [EncName(K)]);
+  for I := 0 to High(ALineas) do
+    if Pos(#$FFFD, ALineas[I]) > 0 then
+    begin
+      Result := Result + #10'  ' + MsgFmt(SF_READ_PRIMERA_NO_CUADRA_FMT,
+        [CitaDeLinea(I + 1, ALineas[I])]);
+      if K in [ekUtf8, ekUtf8Bom] then
+      begin
+        Otras := LineasDelTexto(DecodeBytes(Copy(B, PreambleLen(K), MaxInt), ekCp1252));
+        if I <= High(Otras) then
+          Result := Result + #10'  ' + MsgFmt(SF_READ_OTRA_LECTURA_FMT,
+            [EncName(ekCp1252), CitaDeLinea(I + 1, Otras[I])]);
+      end;
+      Break;
+    end;
+  Result := Result + #10;
+end;
+
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 var
   B: TBytes;
@@ -2466,7 +2773,7 @@ var
   Lines: TArray<string>;
   IniL, FinL, I: Integer;
   Sb: TStringBuilder;
-  Cut, NotaBin: string;
+  Cut, NotaBin, NotaVuelta: string;
 begin
   Denied := ReadPathDenied(APath); // reading may enter the library zone
   if Denied <> '' then
@@ -2513,10 +2820,13 @@ begin
   // El salto final CIERRA la ultima linea, no abre otra: "a\nb\n" son 2
   // lineas, y se ensenaba una tercera vacia que no existe (quinta revision)
   Lines := LineasDelTexto(Text);
+  // lo que los escritores no reescribiran (ReescrituraDenegada) se dice al
+  // leerlo, con la primera linea que no cuadra y su otra lectura (9-oct-2026)
+  NotaVuelta := NotaDeIdaYVuelta(B, K, Lines);
   // Un fichero VACIO se lee: es un exito con cero lineas. Salia EDIT-100
   // INVALID_PARAM ("from=1 is past the end") (quinta revision)
   if (Length(Lines) = 0) and (AFrom <= 1) then
-    Exit(NotaBin + MsgFmt(SK_EDIT_LECTURA_VACIO_FMT,
+    Exit(NotaBin + NotaVuelta + MsgFmt(SK_EDIT_LECTURA_VACIO_FMT,
       [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M)]));
   IniL := AFrom;
   if IniL < 1 then IniL := 1;
@@ -2544,7 +2854,7 @@ begin
   finally
     Sb.Free;
   end;
-  Result := NotaBin + MsgFmt(SK_EDIT_LECTURA_NUMERADA_FMT,
+  Result := NotaBin + NotaVuelta + MsgFmt(SK_EDIT_LECTURA_NUMERADA_FMT,
     [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M), IniL, FinL,
      Length(Lines), Body, Cut]);
 end;
@@ -2602,9 +2912,7 @@ begin
       if Result <> '' then
         Exit;
       Ext := LowerCase(TPath.GetExtension(A.Path));
-      IsSource := False;
-      for var E in SOURCE_EXTS do
-        if E = Ext then IsSource := True;
+      IsSource := EsRutaDeFuente(A.Path);
       IsDesigner := EsRutaDeDesigner(A.Path);
       if not IsSource and not IsDesigner then
         Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
@@ -2701,10 +3009,11 @@ begin
           Note := MsgText(SF_EDIT_ESQUELETO_ESTANDAR_IDE);
         end;
         CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
-        // New files honour the encoding the IDE is configured to use.
-        var NewK := ekCp1252;
-        if IdeWantsUtf8 then
-          NewK := ekUtf8Bom;
+        // New files honour the encoding the IDE is configured to use
+        // (NewFileEncName, la regla de todos: aqui habia otra copia), y si
+        // esa es CP1252 y el contenido no cabe, UTF-8 con BOM, como el IDE
+        // al guardar (EncAlEscribir; 4.1 de la 1.18.0)
+        var NewK := EncAlEscribir(A.Path, EncKindOf(NewFileEncName), nil, False, Skel);
         var CreadoBytes: TArray<Byte> := nil;
         try
           CreadoBytes := EncodeText(Skel, NewK);
@@ -2712,6 +3021,10 @@ begin
           on E: Exception do
             Exit(MsgEnvuelve(SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT, E.Message));
         end;
+        // ...y lo que se escribe tiene que leerse igual (EDIT-122)
+        var Cambia := LecturaCambiada(A.Path, CreadoBytes, NewK);
+        if Cambia <> '' then
+          Exit(Cambia);
         // escribir es otra cosa que codificar: una ruta demasiado larga salia
         // como "no se pudo codificar" (quinta revision)
         try
@@ -2741,10 +3054,10 @@ begin
         Exit(MsgFmt(SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT,
           [TPath.GetFileName(A.Path), Ext]));
 
+      // (un BOM de UTF-8 con el cuerpo roto se negaba AQUI, EDIT-038, solo para
+      // delphi_edit y tambien para restaurarlo; ahora lo pregunta cada
+      // escritor - BytesVuelvenIgual - y restore, que copia bytes, lo cura)
       K := DetectEnc(B, IsDesigner);
-      if (K = ekUtf8Bom) and not ValidUtf8(B, 3) then
-        Exit(MsgFmt(SR_EDIT_TIENE_BOM_UTF_PERO_FMT,
-          [TPath.GetFileName(A.Path)]));
       Text := DecodeBytes(B, K);
 
       // ---------- RESTORE (2 steps) ----------
@@ -3644,8 +3957,8 @@ var
     // fragment as utf8-bom would smuggle 3 phantom high bytes into the
     // accounting (measured false positive: "expected 0, got 3").
     KH := K;
-    if KH in [ekUtf8Bom, ekUtf16LE, ekUtf16BE] then
-      KH := ekUtf8; // sin BOM, y UTF-16 en el mismo cuerpo UTF-8 que mide Measure
+    if (KH = ekUtf8Bom) or (KH in ENC_ANCHAS) then
+      KH := ekUtf8; // sin BOM, y UTF-16/32 en el mismo cuerpo UTF-8 que mide Measure
     try
       for X in EncodeText(S, KH) do
         if X > 127 then
@@ -3657,7 +3970,12 @@ var
 
 begin
   B := TFile.ReadAllBytes(APath);
-  K := DetectEnc(B, EsRutaDeDesigner(APath));
+  // la regla de ida y vuelta, en el escritor (David, 9-oct-2026): lo que no
+  // vuelve igual por su codificacion no se reescribe - cambiaria bytes que
+  // nadie toco (un UTF-32 mal formado, un BOM de UTF-8 con el cuerpo roto)
+  var NoVuelve := ReescrituraDenegada(APath, B, K);
+  if NoVuelve <> '' then
+    Exit(NoVuelve);
   Text := DecodeBytes(B, K);
   M := Measure(B);
   Eol := NombreDelSalto(SaltoDominante(Text)); // la regla de todos
@@ -3792,6 +4110,29 @@ begin
     if Joined = Text then
       Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [HitIdx + 1, TPath.GetFileName(APath)]));
 
+    // el primer caracter no ASCII de un fuente que no tenia codificacion
+    // elige la que dcc lee bien (4.1 de la 1.18.0); el resto, la suya. La K
+    // nueva vale tambien para el recuento de bytes altos y el eco
+    // el origen, ANTES de escribir (despues, la huella ya es la nueva y el
+    // fichero de antes pareceria de otro): para EDIT-080, abajo
+    var Existia, TeniaCodificacion: Boolean;
+    var KOrigen: TEncKind;
+    OrigenDeLaLlamada(APath, B, True, Existia, TeniaCodificacion, KOrigen);
+    var KLeida := K;
+    K := EncAlEscribir(APath, K, B, True, Joined);
+    // si esta escritura CAMBIA la codificacion (una tanda que paso de CP1252 a
+    // UTF-8 con BOM: la decide lo de antes de la llamada), lo de antes se
+    // cuenta en la nueva: un acento de un byte pasaba a dos y EDIT-081 pedia
+    // restaurar un fichero bien escrito (medido el 9-oct-2026). Si lo de antes
+    // no cabe en K (una entrada anterior puso una Omega y esta la quita), lo
+    // que sale tampoco se cuenta en K (HighCount = -1) y EDIT-081 no mira
+    if K <> KLeida then
+      try
+        M := Measure(EncodeText(Text, K));
+      except
+        on ECaracterNoCabe do
+          ;
+      end;
     try
       NewBytes := EncodeText(Joined, K);
     except
@@ -3799,12 +4140,17 @@ begin
       begin
         // la negativa la compone la excepcion; la salida del literal Pascal,
         // solo en un fuente (decima revision)
-        if MatchText(TPath.GetExtension(APath), SOURCE_EXTS) then
+        if EsRutaDeFuente(APath) then
           Exit(E.Message + MsgFmt(SF_EDIT_LITERAL_PASCAL_FMT, [IntToHex(E.Codigo, 4),
             IntToHex(E.Codigo, 4), IntToHex(E.Codigo, 4), IntToHex(E.Codigo, 4)]));
         Exit(E.Message);
       end;
     end;
+
+    // ...y lo que se escribe tiene que leerse igual (EDIT-122): el ensayo tambien
+    var Cambia := LecturaCambiada(APath, NewBytes, K);
+    if Cambia <> '' then
+      Exit(Cambia);
 
     // ENSAYO: hasta aqui todo lo que el motor comprueba; lo que preguntaria el
     // escritor, y nada mas (el preview de un changeset; decima revision)
@@ -3861,7 +4207,11 @@ begin
 
     if D.Corruption > M.Corruption then
       Warnings.Add(MsgText(SN_EDIT_CARACTERES_CORRUPCION));
-    if (M.High = 0) and (D.High > 0) then
+    // EDIT-080 cuando ESTA escritura eligio la codificacion: el fichero no
+    // tenia ninguna antes de la llamada (ni BOM ni byte alto) y esta la fijo
+    // o la cambio. Era M.High = 0, y Measure no cuenta el BOM: un UTF-8 con
+    // BOM y solo ASCII decia "era ASCII puro" (revisor propio de la 4.1)
+    if not TeniaCodificacion and (D.High > 0) and (not HayByteAlto(B) or (K <> KLeida)) then
       Warnings.Add(MsgFmt(SN_EDIT_ERA_ASCII_PURO_FMT, [EncName(K)]));
     var Salen := HighCount(Salido);
     var Entran := HighCount(Replacement);

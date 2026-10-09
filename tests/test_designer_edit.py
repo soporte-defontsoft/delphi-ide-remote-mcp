@@ -969,10 +969,25 @@ try:
     open(ACPAS, 'wb').write(antes_pas[3:])
     r = dsg(command='insert', path=ACDFM, classname='TButton')
     check('R17 ...un nombre ASCII entra igual con la unidad sin BOM', J(r).get('inserted') == 'Button1', r[:300])
-    antes_dfm, antes_pas = bytes_de(ACDFM), bytes_de(ACPAS)
+    # una unidad SOLO ASCII no tiene codificacion que respetar: el nombre la
+    # elige, como el IDE al guardar -CP1252 si cabe, que dcc lee- (4.1 de la
+    # 1.18.0). DSGN-111 la negaba por la preferencia del IDE (revisor propio
+    # de la 4.1, 9-oct-2026: una segunda copia de la regla del escritor)
     r = dsg(command='set', path=ACDFM, component='Button1', prop='Name', value='BtnAcción')
-    check('R17 ...y el renombrado a uno con acento con la unidad en UTF-8 sin BOM: DSGN-111 nombrando la '
-          'unidad, nada escrito', mc.abre(r, 'SR_DESIGNER_NOMBRE_SIN_BOM_FMT') and 'UAcento.pas' in r and
+    pas = bytes_de(ACPAS)
+    check('R17 ...el renombrado a uno con acento con la unidad SOLO ASCII y sin BOM entra: la unidad pasa a '
+          'CP1252 sin BOM, como la guarda el IDE (DSGN-111 lo negaba)',
+          J(r).get('renamed') == 'Button1' and not pas.startswith(BOM) and 'BtnAcción'.encode('cp1252') in pas,
+          (r[:300], pas[:60]))
+    compila_y_cuadra('R17a', RPROJ, ACDFM)
+    # una unidad que YA tiene su codificacion en UTF-8 SIN BOM (acentos ya
+    # escritos asi, que dcc lee en ANSI): un nombre con acento no entra sin
+    # cambiarla
+    open(ACPAS, 'wb').write(pas.decode('cp1252').encode('utf-8'))
+    antes_dfm, antes_pas = bytes_de(ACDFM), bytes_de(ACPAS)
+    r = dsg(command='insert', path=ACDFM, classname='TLabel', component='LblDirección')
+    check('R17 ...con la unidad en UTF-8 sin BOM y ya con acentos: DSGN-111 nombrando la unidad, nada escrito',
+          mc.abre(r, 'SR_DESIGNER_NOMBRE_SIN_BOM_FMT') and 'UAcento.pas' in r and
           bytes_de(ACDFM) == antes_dfm and bytes_de(ACPAS) == antes_pas, r[:300])
     open(ACPAS, 'wb').write(BOM + antes_pas)
     r = dsg(command='insert', path=ACDFM, classname='TLabel', component='LblDirección')

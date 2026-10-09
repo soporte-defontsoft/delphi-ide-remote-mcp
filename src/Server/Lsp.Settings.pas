@@ -1189,10 +1189,11 @@ begin
     LineaBom := LineaConBomAntesDeSeccion(IniBytes);
     if LineaBom > 0 then
       GIniIlegible := MsgFmt(SE_GUARD_INI_BOM_FMT, [IniPath, LineaBom])
-    // ...ni uno en UTF-16 big endian, que esa API no lee: sin ninguna
-    // seccion se arrancaba callado (9.2 de la 1.18.0)
-    else if KindDeBom(IniBytes, IniBom) and (IniBom = ekUtf16BE) then
-      GIniIlegible := MsgFmt(SE_GUARD_INI_UTF16BE_FMT, [IniPath]);
+    // ...ni uno en UTF-16 big endian o en UTF-32, que esa API no lee: sin
+    // ninguna seccion se arrancaba callado (9.2 de la 1.18.0; UTF-32 medido
+    // el 9-oct-2026 con GetPrivateProfileStringW)
+    else if KindDeBom(IniBytes, IniBom) and (IniBom in [ekUtf16BE, ekUtf32LE, ekUtf32BE]) then
+      GIniIlegible := MsgFmt(SE_GUARD_INI_CODIFICACION_FMT, [IniPath, EncName(IniBom)]);
   end;
   if TFile.Exists(IniPath) and (GIniIlegible = '') and (GIniSinLeer = '') then
   begin

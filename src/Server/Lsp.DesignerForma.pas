@@ -166,9 +166,15 @@ begin
     DesignerAFlujo(Entrada, Flujo);
     Flujo.Position := 0;
     ObjectBinaryToText(Flujo, Texto);
-    // el texto de un .dfm es ASCII (lo que no cabe va como #N): UTF-8 lo lee
-    // tal cual y no inventa nada
+    // el texto de un .dfm es ASCII (lo que no cabe va como #N) salvo un NOMBRE
+    // no ASCII, que va en UTF-8: UTF-8 lo lee tal cual
     Result := TEncoding.UTF8.GetString(Texto.Bytes, 0, Texto.Size);
+    // ...y con ese nombre ObjectBinaryToText pone delante el BOM de UTF-8, que
+    // es del FICHERO, no del texto: delante de 'object' la raiz no se leia
+    // (tree: class ''), y to-text lo escribia como un caracter (EDIT-122).
+    // Quien escriba el texto decide su BOM (revisor propio de la 4.1)
+    if Result.StartsWith(#$FEFF) then
+      Delete(Result, 1, 1);
   finally
     Texto.Free;
     Flujo.Free;

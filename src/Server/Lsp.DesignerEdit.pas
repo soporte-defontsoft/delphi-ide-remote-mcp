@@ -117,6 +117,7 @@ uses
   Lsp.Guard,           // WriteTargetDenied
   Lsp.Mascara,         // CitaDeLinea
   Lsp.Patch,           // PatchLoadText/PatchSaveText y los troceadores
+  Lsp.Codificacion,    // EncKindOf/EncName: la codificacion de la unidad
   Lsp.Pascal,          // EL identificador, CodigoPascal, LineaDePosicion
   Lsp.PascalDecl,      // EL lector de clases: campos, rutinas y cuerpos
   Lsp.DesignerBin,     // el literal de cadena, el flotante, las lineas del form
@@ -1096,6 +1097,27 @@ begin
   until NombreOcupado(ADoc, AClase, Result, nil, AHeredados) = '';
 end;
 
+{ Si el form y su unidad pueden llevar el nombre de componente ANombre sin
+  cambiar su codificacion (DSGN-111, NombreQueElFicheroNoLee), con la unidad
+  en la codificacion en que la ESCRIBIRA su escritor (EncAlEscribir), no en
+  la que se leyo: una unidad solo ASCII no tiene ninguna y el nombre la elige
+  -CP1252 o UTF-8 con BOM, las dos las lee dcc-; se negaba por la preferencia
+  del IDE. La preguntan el nombre que se pide (NombreQueNoVale) y el que pone
+  el IDE (un insert sin nombre: una clase con una letra no ASCII da un nombre
+  con ella, y no pasaba por aqui). Revisor propio de la 4.1, 9-oct-2026. }
+function NombreQueLaCodificacionNoLleva(const F: TFormEnEdicion; const ANombre: string): string;
+var
+  PasEnc: string;
+begin
+  // el nombre basta como texto: en una unidad ASCII lo demas cabe en
+  // cualquiera, y una con codificacion la conserva sea cual sea
+  PasEnc := F.PasEnc;
+  if F.HayPas then
+    PasEnc := EncName(EncAlEscribir(F.Pas, EncKindOf(F.PasEnc), TFile.ReadAllBytes(F.Pas),
+      True, ANombre));
+  Result := NombreQueElFicheroNoLee(ANombre, F.Dfm, F.Doc.Encoding, F.Pas, PasEnc);
+end;
+
 { Si un componente puede llamarse ANombre en este form: un identificador,
   no una palabra reservada, y libre (NombreOcupado). Lo preguntan el
   renombrado y el insert con nombre. ALimpio: el nombre sin espacios ni
@@ -1114,7 +1136,7 @@ begin
   Motivo := NombreOcupado(F.Doc, AClase, ALimpio, AYo, NombresHeredados(F, AClase));
   if Motivo <> '' then
     Exit(MsgFmt(SR_DESIGNER_NOMBRE_OCUPADO_FMT, [ALimpio, Motivo]));
-  Result := NombreQueElFicheroNoLee(ALimpio, F.Dfm, F.Doc.Encoding, F.Pas, F.PasEnc);
+  Result := NombreQueLaCodificacionNoLleva(F, ALimpio);
 end;
 
 
@@ -1302,7 +1324,12 @@ begin
           Exit;
       end
       else
+      begin
         Nombre := NombreLibre(F.Doc, Cls, Clase, NombresHeredados(F, Cls));
+        Result := NombreQueLaCodificacionNoLleva(F, Nombre);
+        if Result <> '' then
+          Exit;
+      end;
       PasLineas := SplitToLinesConSalto(F.PasTexto, PasSaltos);
       SitioDelCampo(Cls, PasLineas, Detras, Sangria);
       Insert(Sangria + Nombre + ': ' + Clase + ';', PasLineas, Detras + 1);

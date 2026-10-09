@@ -164,7 +164,8 @@ uses
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,
-  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
+  Lsp.Patch,   // DecodeSourceBytes y ReescrituraDenegada: el lector de la casa y la regla de sus escritores
+  Lsp.Codificacion, // DecodeBytes y TEncKind: los bytes ya leidos, en su codificacion
   Mcp.Vault.Session,
   Lsp.NetDrives,
   Lsp.Regex,
@@ -402,17 +403,29 @@ function EditNoteLocked(const AFull: string; const ATransform: TNoteEdit;
   out ABackup: string): string;
 var
   Text, NewText: string;
+  B: TArray<Byte>;
+  K: TEncKind;
 begin
   ABackup := '';
   NewText := '';
   GVaultWrite.Enter;
   try
     try
-      Text := VaultLoad(AFull);
+      B := TFile.ReadAllBytes(AFull);
     except
       on E: Exception do
         Exit(MsgEnvuelve(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, E.Message));
     end;
+    // la regla de ida y vuelta de los escritores (ReescrituraDenegada): una
+    // nota cuyos bytes no vuelven iguales por su codificacion -un BOM de
+    // UTF-8 con el cuerpo en CP1252- no se reescribe: con el lector tolerante
+    // volveria a disco con U+FFFD donde estan sus acentos, diciendo OK (el
+    // estricto de la 1.17 no la dejaba ni leer; revisor propio de la 4.1). El
+    // vault escribe UTF-8: lo que se lee entero se convierte; lo que no, se niega
+    Result := ReescrituraDenegada(AFull, B, K);
+    if Result <> '' then
+      Exit;
+    Text := DecodeBytes(B, K);
     // el transform trabaja en LF y la nota vuelve a su salto dominante: un
     // old de varias lineas no casaba en una nota CRLF y un new de varias
     // lineas metia LF (decima revision). Una nota mixta sale al dominante,

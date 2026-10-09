@@ -22,16 +22,27 @@ uses
   (Lsp.Patch.DetectEnc) y las leen y escriben sus dos inversas, DecodeBytes y
   EncodeText (aqui abajo). UTF-16 (LE y BE, siempre con BOM: es como lo
   escribe el IDE cuando se elige ese formato al ver un .dfm como texto) entro
-  el 24-sep-2026. }
+  el 24-sep-2026. UTF-32 (LE y BE, con BOM) el 9-oct-2026: el IDE deja
+  guardar un fuente asi (dcc no lo compila: F2438) y su BOM de LE empieza
+  como el de UTF-16 LE - se leia como UTF-16, con un NUL entre letra y
+  letra, y se reescribia en UTF-16 (4.1 de la 1.18.0, David). }
 type
-  TEncKind = (ekUtf8Bom, ekUtf8, ekCp1252, ekUtf16LE, ekUtf16BE);
+  TEncKind = (ekUtf8Bom, ekUtf8, ekCp1252, ekUtf16LE, ekUtf16BE, ekUtf32LE, ekUtf32BE);
+
+const
+  { Las de VARIOS bytes por caracter (siempre con BOM): su cuerpo lleva
+    ceros y no es binario, y sus saltos y acentos se miden sobre el texto, no
+    byte a byte. UNA lista: Measure, LooksBinaryBytes y el recuento de bytes
+    altos de DoEdit la tenian escrita cada uno, sin UTF-32 (4.1 de la 1.18.0). }
+  ENC_ANCHAS = [ekUtf16LE, ekUtf16BE, ekUtf32LE, ekUtf32BE];
 
 { Si hay un BOM de UTF-8 (EF BB BF) en B a partir de AIndice. El de un
   fichero va en el 0 (DetectEnc); Lsp.Settings busca tambien los de mitad de un
   settings.ini, que Windows no ve (LineaConBomAntesDeSeccion). }
 function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
 { El BOM con el que EMPIEZA B, si lleva uno de los que conoce la casa: el de
-  UTF-8 (ekUtf8Bom) o el de UTF-16 little o big endian. Sin BOM, False. Lo
+  UTF-8 (ekUtf8Bom), el de UTF-16 o el de UTF-32, little o big endian. Sin
+  BOM, False. Lo
   preguntan EL detector (Lsp.Patch.DetectEnc) y el lector de settings.ini
   (Lsp.Settings, que no puede usar Patch): la pregunta de FE FF estaba
   escrita a mano en los dos (9.2 de la 1.18.0). }
@@ -40,14 +51,40 @@ function KindDeBom(const B: TArray<Byte>; out AKind: TEncKind): Boolean;
   codificacion de la casa y en el parser de forms de la RTL. Estaba escrito
   en Lsp.TextEdit y en linea en Lsp.DesignerBin (4.1 de la 1.18.0). }
 function IsAscii(const S: string): Boolean;
+{ Si algun byte de B pasa de 127 (un BOM tambien: todos llevan uno). Sin
+  ninguno, el fichero no tiene codificacion que respetar: lo preguntan EL
+  detector (Lsp.Patch.DetectEnc) y el escritor que elige la del primer
+  caracter no ASCII (Lsp.Patch.EncAlEscribir). }
+function HayByteAlto(const B: TArray<Byte>): Boolean;
+{ Si S cabe entero en CP1252 (cada caracter tiene su byte: ByteCp). Lo
+  pregunta el escritor que elige la codificacion de un fuente que no tenia
+  ninguna (Lsp.Patch.EncAlEscribir: el primer caracter no ASCII). }
+function CabeEnCp1252(const S: string): Boolean;
+{ Si los bytes B vuelven IGUALES al leerlos en K y volver a escribirlos en K:
+  lo que ya esta se escribe con los mismos bytes. Un UTF-32 mal formado, un
+  UTF-8 con BOM y el cuerpo roto, un UTF-16 de longitud impar - cualquier
+  byte que su codificacion no guarda - da False: reescribir el fichero
+  cambiaria bytes que nadie toco. La pregunta de los escritores es
+  Lsp.Patch.ReescrituraDenegada, que la compone con EL detector (David,
+  9-oct-2026: la regla de ida y vuelta, en el escritor); delphi_read la
+  pregunta para avisar (READ-007). }
+function BytesVuelvenIgual(const B: TArray<Byte>; K: TEncKind): Boolean;
 function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
 function EncodeText(const S: string; K: TEncKind): TArray<Byte>;
 function EncName(K: TEncKind): string;
 function EncKindOf(const AName: string): TEncKind;
 function PreambleLen(K: TEncKind): Integer;
-{ UTF-8 ESTRICTO desde AOffset: cada byte alto forma una secuencia valida.
-  Lo preguntan EL detector (Lsp.Patch.DetectEnc), para decidir, y el que
-  audita el cuerpo de un utf8-bom antes de escribirlo (ExecutePatch). }
+{ UTF-8 ESTRICTO desde AOffset: cada byte alto forma una secuencia valida,
+  la de RFC 3629 (sin formas largas, sin sustitutos, nada por encima de
+  U+10FFFF). Lo contesta el juez de la RTL, TEncoding.UTF8.IsBufferValid: el
+  mismo con el que TFile.ReadAllText elige entre UTF-8 y ANSI. Lo pregunta
+  EL detector (Lsp.Patch.DetectEnc), para decidir: UTF-8 valido entero es
+  UTF-8, cualquier otra cosa es ANSI - como el IDE, que detecta un UTF-8 sin
+  BOM (medido el 9-oct-2026), y como dcc. Una regla propia ("UTF-8 danado":
+  secuencias buenas junto a bytes que no lo son) contradecia a los dos: una
+  E acentuada seguida de una comilla tipografica son, en CP1252, un caracter
+  UTF-8 valido, y un CP1252 legitimo se leia con U+FFFD y no se editaba
+  (revisor propio de la 4.1; David: "si hay juez lo seguimos"). }
 function ValidUtf8(const B: TArray<Byte>; AOffset: Integer): Boolean;
 { El byte CP1252 de un caracter, -1 si no cabe: el que escribe EncodeText
   (de 80 a 9F, solo lo que da el codec al leer cada byte). Lo pregunta
@@ -74,6 +111,7 @@ uses
 
 var
   GCp1252: TEncoding;
+  GUtf8Laxo: TEncoding; // sin MB_ERR_INVALID_CHARS: lee U+FFFD donde el estricto lanza
   GHighMap: TDictionary<Char, Byte>; // CP1252 0x80-0x9F, derived from the codec
 
 
@@ -84,6 +122,8 @@ begin
     ekUtf8: Result := 'utf8';
     ekUtf16LE: Result := 'utf16-le';
     ekUtf16BE: Result := 'utf16-be';
+    ekUtf32LE: Result := 'utf32-le';
+    ekUtf32BE: Result := 'utf32-be';
   else
     Result := 'cp1252';
   end;
@@ -101,6 +141,10 @@ begin
     Result := ekUtf16LE
   else if AName = 'utf16-be' then
     Result := ekUtf16BE
+  else if AName = 'utf32-le' then
+    Result := ekUtf32LE
+  else if AName = 'utf32-be' then
+    Result := ekUtf32BE
   else
     Result := ekCp1252;
 end;
@@ -111,39 +155,20 @@ begin
   case K of
     ekUtf8Bom: Result := 3;
     ekUtf16LE, ekUtf16BE: Result := 2;
+    ekUtf32LE, ekUtf32BE: Result := 4;
   else
     Result := 0;
   end;
 end;
 
 function ValidUtf8(const B: TBytes; AOffset: Integer): Boolean;
-var
-  I, N, K: Integer;
 begin
-  I := AOffset;
-  while I < Length(B) do
-  begin
-    if B[I] < $80 then
-      Inc(I)
-    else
-    begin
-      if (B[I] >= $C2) and (B[I] <= $DF) then
-        N := 1
-      else if (B[I] >= $E0) and (B[I] <= $EF) then
-        N := 2
-      else if (B[I] >= $F0) and (B[I] <= $F4) then
-        N := 3
-      else
-        Exit(False);
-      if I + N >= Length(B) then
-        Exit(False);
-      for K := 1 to N do
-        if (B[I + K] < $80) or (B[I + K] > $BF) then
-          Exit(False);
-      Inc(I, N + 1);
-    end;
-  end;
-  Result := True;
+  // EL juez de la RTL (el automata de Bjoern Hoehrmann). Aqui habia una copia
+  // a mano, que hasta el 9-oct-2026 aceptaba formas largas y sustitutos: un
+  // CP1252 con E0 80 80 se tomaba por UTF-8 y su lectura reventaba (norma 6
+  // del paisaje, "lo medible no se hardcodea")
+  Result := (AOffset >= Length(B)) or
+    TEncoding.UTF8.IsBufferValid(@B[AOffset], Length(B) - AOffset);
 end;
 
 function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
@@ -157,10 +182,15 @@ begin
   Result := True;
   if BomUtf8En(B, 0) then
     AKind := ekUtf8Bom
+  // el de UTF-32 LE (FF FE 00 00) ANTES que el de UTF-16 LE, que es su principio
+  else if (Length(B) >= 4) and (B[0] = $FF) and (B[1] = $FE) and (B[2] = 0) and (B[3] = 0) then
+    AKind := ekUtf32LE
   else if (Length(B) >= 2) and (B[0] = $FF) and (B[1] = $FE) then
     AKind := ekUtf16LE
   else if (Length(B) >= 2) and (B[0] = $FE) and (B[1] = $FF) then
     AKind := ekUtf16BE
+  else if (Length(B) >= 4) and (B[0] = 0) and (B[1] = 0) and (B[2] = $FE) and (B[3] = $FF) then
+    AKind := ekUtf32BE
   else
     Result := False;
 end;
@@ -175,13 +205,150 @@ begin
   Result := True;
 end;
 
+function HayByteAlto(const B: TArray<Byte>): Boolean;
+var
+  X: Byte;
+begin
+  for X in B do
+    if X > 127 then
+      Exit(True);
+  Result := False;
+end;
+
+function CabeEnCp1252(const S: string): Boolean;
+var
+  C: Char;
+begin
+  for C in S do
+    if ByteCp(C) < 0 then
+      Exit(False);
+  Result := True;
+end;
+
+function BytesVuelvenIgual(const B: TArray<Byte>; K: TEncKind): Boolean;
+var
+  Vuelta: TArray<Byte>;
+  I: Integer;
+begin
+  try
+    Vuelta := EncodeText(DecodeBytes(B, K), K);
+  except
+    // un caracter que no cabe, o un decodificador que se niega: no vuelve
+    on ECaracterNoCabe do
+      Exit(False);
+    on EEncodingError do
+      Exit(False);
+  end;
+  if Length(Vuelta) <> Length(B) then
+    Exit(False);
+  for I := 0 to High(B) do
+    if Vuelta[I] <> B[I] then
+      Exit(False);
+  Result := True;
+end;
+
+{ UTF-32 a mano: la RTL no tiene su codec y Windows no convierte las paginas
+  12000/12001. Desde AInicio, de cuatro en cuatro bytes; un valor que no es
+  un caracter (un sustituto suelto, mas alla de U+10FFFF) y una cola de menos
+  de cuatro bytes salen U+FFFD, como lee un byte malo el decodificador de
+  UTF-8 de la RTL. }
+function DecodeUtf32(const B: TArray<Byte>; AInicio: Integer; ABigEndian: Boolean): string;
+var
+  I: Integer;
+  CP: Cardinal;
+  SB: TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    I := AInicio;
+    while I + 3 <= High(B) do
+    begin
+      if ABigEndian then
+        CP := (Cardinal(B[I]) shl 24) or (Cardinal(B[I + 1]) shl 16) or (Cardinal(B[I + 2]) shl 8) or B[I + 3]
+      else
+        CP := B[I] or (Cardinal(B[I + 1]) shl 8) or (Cardinal(B[I + 2]) shl 16) or (Cardinal(B[I + 3]) shl 24);
+      if (CP > $10FFFF) or ((CP >= $D800) and (CP <= $DFFF)) then
+        SB.Append(#$FFFD)
+      else if CP >= $10000 then
+      begin
+        Dec(CP, $10000);
+        SB.Append(Char($D800 + (CP shr 10))).Append(Char($DC00 + (CP and $3FF)));
+      end
+      else
+        SB.Append(Char(CP));
+      Inc(I, 4);
+    end;
+    // lo que sobra al final (menos de cuatro bytes) no es un caracter: U+FFFD
+    if I <= High(B) then
+      SB.Append(#$FFFD);
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+{ La inversa: cada caracter (un par de sustitutos, uno) en cuatro bytes; un
+  sustituto suelto, U+FFFD. }
+function EncodeUtf32(const S: string; ABigEndian: Boolean): TArray<Byte>;
+var
+  I, N: Integer;
+  CP: Cardinal;
+begin
+  SetLength(Result, Length(S) * 4);
+  N := 0;
+  I := 1;
+  while I <= Length(S) do
+  begin
+    CP := Ord(S[I]);
+    if (CP >= $D800) and (CP <= $DBFF) and (I < Length(S)) and
+       (Ord(S[I + 1]) >= $DC00) and (Ord(S[I + 1]) <= $DFFF) then
+    begin
+      CP := $10000 + ((CP - $D800) shl 10) + (Cardinal(Ord(S[I + 1])) - $DC00);
+      Inc(I);
+    end
+    else if (CP >= $D800) and (CP <= $DFFF) then
+      CP := $FFFD;
+    if ABigEndian then
+    begin
+      Result[N] := Byte(CP shr 24); Result[N + 1] := Byte(CP shr 16);
+      Result[N + 2] := Byte(CP shr 8); Result[N + 3] := Byte(CP);
+    end
+    else
+    begin
+      Result[N] := Byte(CP); Result[N + 1] := Byte(CP shr 8);
+      Result[N + 2] := Byte(CP shr 16); Result[N + 3] := Byte(CP shr 24);
+    end;
+    Inc(N, 4);
+    Inc(I);
+  end;
+  SetLength(Result, N);
+end;
+
 function DecodeBytes(const B: TBytes; K: TEncKind): string;
 begin
   case K of
-    ekUtf8Bom: Result := TEncoding.UTF8.GetString(B, 3, Length(B) - 3);
-    ekUtf8: Result := TEncoding.UTF8.GetString(B);
-    ekUtf16LE: Result := TEncoding.Unicode.GetString(B, 2, Length(B) - 2);
-    ekUtf16BE: Result := TEncoding.BigEndianUnicode.GetString(B, 2, Length(B) - 2);
+    // el UTF-8 TOLERANTE: un byte malo sale U+FFFD, no una excepcion. El
+    // estricto (TEncoding.UTF8) tumbaba delphi_read y delphi_search con un
+    // SYS-006 en un fichero con BOM y el cuerpo roto (medido el 9-oct-2026);
+    // lo estricto es del detector (ValidUtf8) y de los escritores
+    // (BytesVuelvenIgual)
+    ekUtf8Bom: Result := GUtf8Laxo.GetString(B, 3, Length(B) - 3);
+    ekUtf8: Result := GUtf8Laxo.GetString(B);
+    // los pares de bytes, y un byte suelto al final sale U+FFFD, como cualquier
+    // byte que no cuadra: la RTL lo dejaba fuera callado (divide entre dos) y
+    // delphi_edit reescribia el fichero sin el (revisor propio de la 4.1,
+    // medido). La ida y vuelta lo ve: no vuelve igual, nadie lo reescribe
+    ekUtf16LE, ekUtf16BE:
+      begin
+        if K = ekUtf16LE then
+          Result := TEncoding.Unicode.GetString(B, 2, (Length(B) - 2) and not 1)
+        else
+          Result := TEncoding.BigEndianUnicode.GetString(B, 2, (Length(B) - 2) and not 1);
+        if Odd(Length(B)) then
+          Result := Result + #$FFFD;
+      end;
+    ekUtf32LE: Result := DecodeUtf32(B, 4, False);
+    ekUtf32BE: Result := DecodeUtf32(B, 4, True);
   else
     Result := GCp1252.GetString(B);
   end;
@@ -207,6 +374,9 @@ begin
   case K of
     ekUtf16LE: Exit(TEncoding.Unicode.GetPreamble + TEncoding.Unicode.GetBytes(S));
     ekUtf16BE: Exit(TEncoding.BigEndianUnicode.GetPreamble + TEncoding.BigEndianUnicode.GetBytes(S));
+    // el BOM es el caracter U+FEFF, por el mismo codificador
+    ekUtf32LE: Exit(EncodeUtf32(#$FEFF + S, False));
+    ekUtf32BE: Exit(EncodeUtf32(#$FEFF + S, True));
   end;
   if K <> ekCp1252 then
   begin
@@ -269,10 +439,12 @@ end;
 
 initialization
   GCp1252 := TEncoding.GetEncoding(1252);
+  GUtf8Laxo := TMBCSEncoding.Create(CP_UTF8, 0, 0);
   InitHighMap;
 
 finalization
   GHighMap.Free;
+  GUtf8Laxo.Free;
   GCp1252.Free;
 
 end.

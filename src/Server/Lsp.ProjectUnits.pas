@@ -2796,7 +2796,7 @@ var
         on E: Exception do
           Falla(AFichero, E);
       end;
-    if MatchText(Ext, ['.dpr', '.dpk', '.pas', '.inc']) then
+    if EsRutaDeFuente(AFichero) then // EL predicado (era SOURCE_EXTS a mano)
       try
         Anota(AFichero, ReapuntaDirectivas(AFichero, ABase, AMapa), ADirect);
       except

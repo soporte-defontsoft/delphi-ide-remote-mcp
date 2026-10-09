@@ -398,6 +398,31 @@ check('R9: patch que VACIARIA la nota rechazado', mc.rechazado(out) and mc.es(ou
 check('R9: la nota conserva su contenido',
       open(VACIA, encoding='utf-8').read().strip() != '', 'quedo vacia')
 
+# LA REGLA DE IDA Y VUELTA tambien en el escritor del vault (revisor propio de
+# la 4.1, 9-oct-2026): una nota con un BOM de UTF-8 y el cuerpo en CP1252 se
+# lee con U+FFFD donde estan sus acentos, y reescribirla los destruia diciendo
+# OK. Se niega (EDIT-038) sin tocar un byte, en append y en patch; una nota en
+# CP1252 bien formada se convierte entera a UTF-8, como siempre. En su propia
+# carpeta, y fuera al acabar: nada que cuenten las comprobaciones de despues
+IDA = os.path.join(VAULT, 'ida-y-vuelta')
+os.makedirs(IDA)
+ROTA = os.path.join(IDA, 'rota.md')
+_ROTA = b'\xef\xbb\xbf# Rota\n\ngesti\xf3n de notas\n'
+open(ROTA, 'wb').write(_ROTA)
+for _verbo, _args in (('vault_append', {"content": "- x\n"}),
+                      ('vault_patch', {"old_text": "# Rota", "new_text": "# Rota dos"})):
+    out = s.call(_verbo, dict(_args, path='ida-y-vuelta/rota.md'))
+    check('ida y vuelta: %s en una nota con BOM de UTF-8 y el cuerpo en CP1252 se niega (EDIT-038) '
+          'y no toca un byte' % _verbo,
+          mc.es(out, 'SR_EDIT_BYTES_NO_VUELVEN_FMT') and open(ROTA, 'rb').read() == _ROTA,
+          (out[:300], open(ROTA, 'rb').read()[:40]))
+CPN = os.path.join(IDA, 'cp.md')
+open(CPN, 'wb').write(b'# Cp\n\ngesti\xf3n\n')
+out = s.call('vault_append', {"path": "ida-y-vuelta/cp.md", "content": "- acción\n"})
+check('ida y vuelta: ...y una nota en CP1252 bien formada se reescribe entera en UTF-8, con sus acentos',
+      open(CPN, 'rb').read() == '# Cp\n\ngestión\n- acción\n'.encode('utf-8'), (out[:200], open(CPN, 'rb').read()))
+mc.borra(IDA)
+
 # ===========================================================================
 # 10. Read-only vault (VaultReadOnly=1). Desde v0.98 el vault es del
 # workspace ACTIVO, asi que las tools de escritura se registran igualmente
