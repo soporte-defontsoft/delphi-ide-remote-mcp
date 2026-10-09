@@ -286,6 +286,21 @@ check('delete: estilo inexistente rechazado', mc.rechazado(out) and mc.es(out, '
 out = call('delphi_styles', {"path": S, "command": "delete"})
 check('delete: sin style pide style', mc.es(out, 'SR_STYLES_NEED_STYLE') and not mc.abre(out, 'SN_STYLES_DELETED_FMT'), out)
 
+# 2.2 de la 1.18.0: la forma de un .style en disco la dice DesignerShapeOf.
+# IsBinaryStyle miraba solo el $FF: un .style de TEXTO guardado en UTF-16
+# (FF FE) se rechazaba por binario, y un flujo TPF0 a pelo pasaba por texto
+U16 = os.path.join(STY, 'Utf16.style')
+open(U16, 'wb').write(b'\xff\xfe' + STYLE.encode('utf-16-le'))
+out = call('delphi_styles', {"path": U16, "command": "view"})
+check('un .style de texto en UTF-16 (FF FE) se ve: no es binario',
+      not mc.es(out, 'SR_STYLES_BINARY_FMT') and not mc.rechazado(out), out[:200])
+TPF = os.path.join(STY, 'Tpf0.style')
+open(TPF, 'wb').write(b'TPF0' + b'\x00' * 40)
+out = call('delphi_styles', {"path": TPF, "command": "view"})
+check('...y un flujo TPF0 a pelo si es binario', mc.es(out, 'SR_STYLES_BINARY_FMT'), out[:200])
+for f in (U16, TPF):
+    os.remove(f)
+
 srv.cierra()
 
 # (read-only mode is exercised over HTTP in test_http_auth.py)

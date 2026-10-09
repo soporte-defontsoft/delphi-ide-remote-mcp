@@ -29,7 +29,7 @@ type
   TStyleObj = class
     ClassName_: string;   // TLayout, TRectangle...
     ObjName: string;      // the name before ':' when present
-    Clave: string;        // object | inherited | inline (Lsp.DesignerBin.LineaDeObjeto)
+    Clave: string;        // object | inherited | inline (Lsp.DesignerForma.LineaDeObjeto)
     StyleName: string;    // '' when the object has none
     StartLine: Integer;   // 1-based, the 'object' line
     EndLine: Integer;     // 1-based, the matching 'end'
@@ -154,6 +154,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.Pascal, // EL identificador: ValidStyleValue
+  Lsp.DesignerForma, // DesignerShapeOf: la forma en disco de un designer, y de un .style
   Lsp.Texts,
   Lsp.Casa,
   Lsp.Mascara;
@@ -586,7 +587,11 @@ begin
   finally
     S.Free;
   end;
-  Result := (B[0] = $FF) or (TEncoding.ANSI.GetString(B).StartsWith('FMX_STYLE'));
+  // La forma la dice DesignerShapeOf (la cabecera de recurso FF 0A 00, el
+  // flujo TPF0): solo $FF tomaba por binario un .style de TEXTO guardado en
+  // UTF-16 (FF FE), y un TPF0 a pelo por texto (2.2 de la 1.18.0). FMX_STYLE
+  // es la firma propia de un estilo FMX compilado.
+  Result := (DesignerShapeOf(B) <> dsText) or TEncoding.ANSI.GetString(B).StartsWith('FMX_STYLE');
 end;
 
 function TextStylesIn(const ADir: string): TArray<string>;

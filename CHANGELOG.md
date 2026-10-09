@@ -66,6 +66,12 @@ the MCP `initialize` response (`serverInfo.version`).
   in 0.98.0). Each gets a WARNING line in the startup log that says it does
   nothing; a key retired later is one more entry in the same table.
   `test_un_delphi` U2b.
+- **`delphi_styles` asks the designer's shape reader whether a `.style` is
+  binary.** It looked only at a leading `$FF`, so a TEXT style saved in
+  UTF-16 (`FF FE`) was refused as compiled, and a raw `TPF0` stream passed
+  as text. `DesignerShapeOf` (the resource header `FF 0A 00`, the `TPF0`
+  stream) decides now, plus the `FMX_STYLE` signature of a compiled FMX
+  style. `test_styles`.
 
 ### Internal
 
