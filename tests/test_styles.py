@@ -166,6 +166,17 @@ out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader",
 check('set delete: QUITADA', mc.abre(out, 'SN_STYLES_PROP_DELETED_FMT') and 'Opacity' not in rd(S), out[:200])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Fill Color", "value": "x"})
 check('set: prop con espacios rechazada', mc.rechazado(out) and mc.es(out, 'SR_STYLES_PROP_CHARS_FMT'), out)
+# E10 (2.2 de la 1.18.0): una lista o un bloque binario SIN cerrar dejaba el
+# .style sin abrir; cerrados, entran
+_antes_e10 = rd(S)
+_malos = [call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": v})
+          for v in ("('a', 'b'", "{ 0102")]
+check('set: una lista o un bloque sin cerrar se rechaza por la gramatica, sin escribir',
+      all(mc.rechazado(o) and mc.es(o, 'SR_STYLES_VALUE_GRAMMAR_FMT') for o in _malos) and rd(S) == _antes_e10,
+      [o[:120] for o in _malos])
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "('a', 'b')"})
+check('...y cerrada entra', not mc.rechazado(out) and "Tags = ('a', 'b')" in rd(S), out[:200])
+call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Visible"})
 check('set: sin value pide value (y menciona delete)', mc.es(out, 'SR_STYLES_NEED_VALUE') and 'delete=true' in out, out)
 check('set: copia previa en __delphi-patch', os.path.isdir(os.path.join(STY, '__delphi-patch')))

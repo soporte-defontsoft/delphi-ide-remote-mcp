@@ -583,7 +583,9 @@ begin
     TRegEx.IsMatch(V, '^\[.*\]$') or                           // [a, b]
     TRegEx.IsMatch(V, '^<.*>$') or                             // inline collection
     EsLiteralDeForm(V) or                                      // 'text'  #13#10  'a' + 'b'
-    CharInSet(V[1], ['{', '(']));                              // binary / list block
+    // un bloque binario o una lista, CERRADOS: '(a, b' o '{ 0102' dejaban el
+    // .style sin abrir (E10, 2.2 de la 1.18.0)
+    ((V[1] = '{') and V.EndsWith('}')) or ((V[1] = '(') and V.EndsWith(')')));
 end;
 
 function IsBinaryStyle(const APath: string): Boolean;
