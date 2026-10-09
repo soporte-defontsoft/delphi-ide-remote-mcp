@@ -197,5 +197,27 @@ check('delphi_read de un binario danado: RECHAZADO', mc.rechazado(r), r[:200])
 r = call('delphi_designer', {'command': 'to-text', 'path': BAD})
 check('to-text de un binario danado: RECHAZADO, fichero intacto', mc.rechazado(r) and open(BAD, 'rb').read().startswith(b'\xff\x0a\x00TROTO'), r[:200])
 
+# ---- T7 (segunda revision de la 1.17.0): binarios escritos por el IDE, no por
+# nuestro escritor. Todos los de arriba los escribe to-binary, asi que si
+# nuestra cabecera de recurso se desviara de la del IDE nada lo veria. Dos de
+# la instalacion: un form con su recurso (FF 0A 00, banderas 0x1030) y uno
+# heredado (el prefijo de un inherited). to-text y to-binary tienen que
+# devolver los MISMOS bytes. Es una GUARDA (la 1.17.0 ya los devuelve iguales,
+# medido el 9-oct): vigila que nuestro escritor no se aparte del IDE.
+import glob, shutil
+for rel in (r'DUnit\Contrib\XPGen\xpmain.dfm', r'DUnit\examples\embeddable\EmbeddableGUITestRunner.dfm'):
+    orig = sorted(glob.glob(os.path.join(r'C:\Program Files (x86)\Embarcadero\Studio', '*', 'source', rel)))
+    if not orig:
+        print('NOTA: %s no esta en esta instalacion; T7 saltado para el' % rel)
+        continue
+    copia = os.path.join(BASE, 'ide-' + os.path.basename(rel))
+    shutil.copy(orig[-1], copia)
+    ide = open(copia, 'rb').read()
+    r1 = call('delphi_designer', {'command': 'to-text', 'path': copia})
+    r2 = call('delphi_designer', {'command': 'to-binary', 'path': copia})
+    check('T7 %s del IDE: to-text y to-binary devuelven sus mismos bytes' % os.path.basename(rel),
+          mc.abre(r1, 'SN_DESIGNER_TOTEXT_FMT') and mc.abre(r2, 'SN_DESIGNER_TOBINARY_FMT') and
+          open(copia, 'rb').read() == ide, (r1[:120], r2[:120]))
+
 srv.mata()
 mc.fin('designer-binary battery')

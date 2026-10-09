@@ -28,6 +28,7 @@ type
     [Test] procedure PropiedadNoEntraEnColecciones;
     [Test] procedure PropiedadPartidaSeReescribeEntera;
     [Test] procedure LiteralComoElIde;
+    [Test] procedure LiteralContraLaRtl;
     [Test] procedure DesciendeYJuez;
     [Test] procedure LaMasParecida;
     [Test] procedure TextoSigueAlNombreDelFuente;
@@ -65,6 +66,17 @@ uses
   Lsp.DesignerEdit,
   System.IOUtils,
   Lsp.Discovery;
+
+type
+  // un componente con una cadena publicada: lo que la RTL escribe de el
+  // (WriteComponent y ObjectBinaryToText, los escritores del IDE) es la
+  // referencia de TrozosDeLiteral y LineasDePropiedad
+  TConLiteral = class(TComponent)
+  private
+    FTexto: string;
+  published
+    property Texto: string read FTexto write FTexto;
+  end;
 
 const
   CRLF = #13#10;
@@ -473,6 +485,40 @@ begin
   Assert.IsTrue(Era);
   Assert.Contains(Texto, '    Caption = ''x''' + CRLF + '    Left = 8');
   Assert.DoesNotContain(Texto, 'def', 'el trozo de detras se va con el valor');
+end;
+
+(* T8 de la segunda revision de la 1.17.0: los bordes contra la RTL y no
+  contra cadenas deducidas a mano - 64 y 65 caracteres, la comilla, #13, un
+  acento (>127) donde corta un trozo, y 5000. *)
+procedure TDesignerEditTests.LiteralContraLaRtl;
+var
+  C: TConLiteral;
+  Bin: TMemoryStream;
+  Txt: TBytesStream;
+  Lineas: TArray<string>;
+begin
+  for var S in [StringOfChar('x', 64), StringOfChar('x', 65), 'It''s', 'a' + #13 + 'b',
+                'Acci' + #$F3 + 'n', StringOfChar('z', 63) + #$F3 + 'w', StringOfChar('y', 5000)] do
+  begin
+    C := TConLiteral.Create(nil);
+    Bin := TMemoryStream.Create;
+    Txt := TBytesStream.Create;
+    try
+      C.Texto := S;
+      Bin.WriteComponent(C);
+      Bin.Position := 0;
+      ObjectBinaryToText(Bin, Txt);
+      // 'object TConLiteral', las lineas de la propiedad, 'end'
+      Lineas := TEncoding.ASCII.GetString(Txt.Bytes, 0, Txt.Size).TrimRight.Split([CRLF]);
+      Assert.AreEqual(string.Join(CRLF, Copy(Lineas, 1, Length(Lineas) - 2)),
+        string.Join(CRLF, LineasDePropiedad('  ', 'Texto', TrozosDeLiteral(S))),
+        'un texto de ' + IntToStr(Length(S)) + ' caracteres');
+    finally
+      Txt.Free;
+      Bin.Free;
+      C.Free;
+    end;
+  end;
 end;
 
 procedure TDesignerEditTests.LiteralComoElIde;
