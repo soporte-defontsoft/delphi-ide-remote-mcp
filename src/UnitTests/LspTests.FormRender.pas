@@ -163,7 +163,12 @@ begin
   Assert.AreEqual('Font.Size', R.Ignoradas[2].Propiedad);
   Assert.AreEqual('Invalid property value', R.Ignoradas[2].Motivo);
   Assert.AreEqual<NativeInt>(1, Length(R.Avisos));
-  Assert.AreEqual('Timer1:TTimer|ActionList1:TActionList', string.Join('|', R.NoVisuales));
+  // cada item en sus partes: lo lee el lector, no la tool
+  Assert.AreEqual<NativeInt>(2, Length(R.NoVisuales));
+  Assert.AreEqual('Timer1', R.NoVisuales[0].Nombre);
+  Assert.AreEqual('TTimer', R.NoVisuales[0].Clase);
+  Assert.AreEqual('ActionList1', R.NoVisuales[1].Nombre);
+  Assert.AreEqual('TActionList', R.NoVisuales[1].Clase);
   Assert.AreEqual(2, R.NoVisualesDibujados);
   Assert.IsTrue(R.HayRect, 'RECT=');
   Assert.AreEqual(16, R.RectX);

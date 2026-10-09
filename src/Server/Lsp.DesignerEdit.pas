@@ -1076,9 +1076,7 @@ function NombreQueNoVale(const F: TFormEnEdicion; AClase: TTipoPas; const ANombr
 var
   Motivo: string;
 begin
-  ALimpio := ANombre.Trim;
-  if (Length(ALimpio) >= 2) and ALimpio.StartsWith('''') and ALimpio.EndsWith('''') then
-    ALimpio := Copy(ALimpio, 2, Length(ALimpio) - 2);
+  ALimpio := NombreDeValor(ANombre); // 'Bot'#243'n' es Boton con su acento
   if not EsIdentificador(ALimpio, False) or EsPalabraReservada(ALimpio) then
     Exit(MsgFmt(SR_DESIGNER_NOMBRE_INVALIDO_FMT, [ANombre.Trim]));
   Motivo := NombreOcupado(F.Doc, AClase, ALimpio, AYo);
@@ -1658,7 +1656,7 @@ begin
       Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
     end;
     // un valor de una linea: una lista, una coleccion o un bloque binario no
-    if not ValidStyleValue(V) or CharInSet(V[1], ['(', '<', '{']) then
+    if not ValidStyleValue(V) or EsValorDeBloque(V) then
       Exit(MsgFmt(SR_DESIGNER_SET_GRAMATICA_FMT, [V]));
     if Juicio <> '' then
       Exit(MsgFmt(SR_DESIGNER_SET_INVALIDO_FMT, [NombreDe(Obj), Prop, V, Juicio,
@@ -1704,7 +1702,7 @@ begin
     if F.Doc.PropLines(Obj, Prop, Ini, Fin) then
     begin
       Antes := ValorEnteroDe(F.Doc.Lines, LineasDeForm(F.Doc.Lines), Ini);
-      if (Antes <> '') and CharInSet(Antes[1], ['(', '<', '{']) then
+      if EsValorDeBloque(Antes) then
         Exit(MsgFmt(SR_DESIGNER_SET_BLOQUE_FMT, [NombreDe(Obj), Prop, Ini + 1, Fin + 1, F.DfmNombre]));
     end;
     Nombre := NombreDe(Obj);

@@ -121,20 +121,67 @@ REGLAS = [
     ('el juez del nombre de un perfil', r"(?i)(?:IsMatch|CharInSet)\s*\(\s*\w*(?:prof|perfil)\w*\s*,", [],
      'Lsp.Guard.BadProfileName, la regla de la puerta (2.3 de la 1.18.0: set-profile y remove-profile '
      'tenian una regex propia que dejaba pasar el punto)'),
+    # las casas del lector de forms de la revision de la 1.17.0 que no tenian
+    # regla (punto 10 del revisor de las pruebas; 2.3 de la 1.18.0)
+    ('la gramatica de las lineas de un form', r"EndsWith\(\s*'= <'|Contains\(\s*'= \{'|'\(\?i\)\^end\\b", [],
+     'LineasDeForm (Lsp.DesignerBin): la leian cuatro lectores, cada uno con su parte de la gramatica '
+     '(revision de la 1.17.0)'),
+    ('un literal de form leido a mano',
+     r"Trim\(\s*\[\s*''''\s*\]\s*\)|StartsWith\(\s*''''\s*\)\s*and\s*[\w.]+\.EndsWith\(\s*''''\s*\)", [],
+     'LeeLiteralDeForm / NombreDeValor (Lsp.DesignerBin): .Trim([\'\'\'\']) en los estilos y las comillas '
+     'quitadas a mano en el renombrado no leian ni #N ni trozos (revision de la 1.17.0; P5)'),
+    ('la gramatica de un numero de un form', r"\\d\+\(\?:\\\.\\d\+\)\?|\\\$\[0-9A-Fa-f\]\+",
+     [('Lsp.DesignerBin.pas', 'EsNumeroDeForm'), ('Lsp.DesignerBin.pas', 'EsEnteroDeForm')],
+     'EsNumeroDeForm / EsEnteroDeForm: la de ValidStyleValue y la del entero del juez eran copias, y '
+     'las dos aceptaron -$FF, que TParser no lee (segunda revision de la 1.17.0)'),
+    ('una linea de propiedad de un form compuesta a mano',
+     r"'\s+[A-Za-z_][\w.]*\s+=\s+'\s*\+|\b\w*Prop\w*\s*\+\s*' = '\s*\+", [],
+     'LineasDePropiedad (Lsp.DesignerBin): Prop = valor, y sus trozos en las lineas de debajo como el IDE '
+     '(revision de la 1.17.0; la plantilla del frame FMX, 2.3 de la 1.18.0)'),
+    ('un valor de bloque preguntado a mano', r"CharInSet\(\s*\w+\[1\]\s*,\s*\['[(<{]'",
+     [('Lsp.DesignerBin.pas', 'EsValorDeBloque')],
+     'EsValorDeBloque: una lista, un bloque binario o una coleccion (2.3 de la 1.18.0: tres a mano)'),
+    ('la regex de una linea de propiedad', r"PATRON_IDENT_PUNTOS\s*\+\s*'\)\\s\*=",
+     [('Lsp.DesignerBin.pas', 'LineaDePropiedad')],
+     'LineaDePropiedad: PropRaw de layout tenia su copia literal y tomaba un item de una coleccion por '
+     'una propiedad del objeto (P2 de la segunda revision de la 1.17.0)'),
+    ('binario por el primer byte', r"\[\s*0\s*\]\s*=\s*\$FF\b",
+     [('Lsp.DesignerForma.pas', 'DesignerShapeOf'),
+      # el BOM de UTF-16 LE (FF FE): la otra pregunta, la de la codificacion
+      ('Lsp.Patch.pas', 'DetectEnc')],
+     'DesignerShapeOf: solo $FF tambien es el BOM de un texto UTF-16 LE; IsBinaryStyle era la quinta copia '
+     'del fallo del 24-sep (P3 de la segunda revision de la 1.17.0)'),
+    ('la distancia de edicion', r"Min\s*\(\s*Min\s*\(", [('Lsp.Pascal.pas', 'EditDistance')],
+     'EditDistance (Lsp.Pascal): vivia dentro de delphi_help (1.17.0)'),
+    ('el mas parecido', r"\bEditDistance\s*\(",
+     [('Lsp.Pascal.pas', 'ElMasParecido'),
+      # OTRA pregunta: la lista de los nombres a dos letras o menos
+      ('Mcp.Tools.Help.pas', 'OneTool')],
+     'ElMasParecido (Lsp.Pascal): el UNICO a la menor distancia; delphi_help tenia su copia (revision de '
+     'la 1.17.0)'),
+    ('la cadena de clases de la tabla', r"\bPadres\.TryGetValue\s*\(",
+     [('Lsp.DesignerMeta.pas', 'TMetaTable.CadenaDe'),
+      # OTRO Padres: los hijos de cada clase, en el generador
+      ('Lsp.DesignerMetaGen.pas', 'TGenerador.ResuelveAyudantes')],
+     'TMetaTable.CadenaDe: la cadena de una clase hasta su raiz, con su tope (revision de la 1.17.0: '
+     'cada pregunta de la tabla la recorria a mano)'),
     ('el designer de una unidad', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.(?:dfm|fmx)'\)", [],
      'DesignersDeUnidad (Lsp.Patch), la inversa de UnidadDeDesigner (2.2 de la 1.18.0: cinco a mano)'),
     ('el .dproj compuesto a mano', r"\+\s*'\.dproj'", [],
      'DprojDe tambien para el que se crea (revision de la 1.17.0: Scaffold y ResolveProjectPair lo '
      'componian con + \'.dproj\')'),
-    ('la unidad de un form', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.pas'\)",
+    ('la unidad de un form', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.?pas'\s*\)",
      [('Lsp.DesignerForma.pas', 'UnidadDeDesigner')],
      'UnidadDeDesigner (revision de la 1.17.0: cuatro a mano, uno en el renderizador)'),
     ('la forma de un designer', r'\bTestStreamFormat\s*\(', [],
      'DesignerShapeOf / DesignerAFlujo (Lsp.DesignerForma): TestStreamFormat llama binario al texto '
      'UTF-16 y no salta la cabecera del recurso (preview de un .dfm binario, revision de la 1.17.0)'),
-    ('leer la linea de objeto de un form', r'object\|inherited\|inline',
+    ('leer la linea de objeto de un form',
+     r"object\|inherited\|inline|'[^']*\^(?:\\s\*)?\(?(?:\?i\))?(?:object|inherited|inline)\b"
+     r"|StartsWith\(\s*'(?:object|inherited|inline)\b",
      [('Lsp.DesignerForma.pas', 'LineaDeObjeto')],
-     'LineaDeObjeto (1.12.0: seis regex; la septima, la del renderizador, en la revision de la 1.17.0)'),
+     'LineaDeObjeto (1.12.0: seis regex; la septima, la del renderizador, en la revision de la 1.17.0; '
+     'la octava, una sola palabra, en layout: 2.3 de la 1.18.0)'),
     ('el literal de cadena de un form a mano', r"\w = '''\s*\+|SetProp\([^;]*'''", [],
      'TrozosDeLiteral / LineasDePropiedad (revision de la 1.17.0: el StyleName de delphi_styles se '
      'escribia entre comillas a mano, sin #N ni trozos)'),
@@ -313,12 +360,22 @@ PLANTADO = {
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",
     'el .dpr de un .dproj': "  D := TPath.ChangeExtension(P, '.dpr');",
     'el juez del nombre de un perfil': "  if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then",
+    'la gramatica de las lineas de un form': "  if L.Trim.EndsWith('= <') then",
+    'un literal de form leido a mano': "  N := V.Trim(['''']);",
+    'la gramatica de un numero de un form': r"  if TRegEx.IsMatch(V, '^-?\d+(?:\.\d+)?$') then",
+    'una linea de propiedad de un form compuesta a mano': "  T := '  Size.Width = ' + FlotanteFmx(320);",
+    'un valor de bloque preguntado a mano': "  if CharInSet(V[1], ['(', '<', '{']) then",
+    'la regex de una linea de propiedad': r"  M := TRegEx.Match(L, '^(' + PATRON_IDENT_PUNTOS + ')\s*=\s*(.*)$');",
+    'binario por el primer byte': "  if (B[0] = $FF) or EsFirmaFmx(B) then",
+    'la distancia de edicion': "  D[J] := Min(Min(D[J] + 1, D[J - 1] + 1), P + C);",
+    'el mas parecido': "  if EditDistance(A, C) < Mejor then",
+    'la cadena de clases de la tabla': "  while Padres.TryGetValue(C, P) do",
     'la sangria de un nivel de un designer': "  I := StringOfChar(' ', (Obj.Depth + 1) * 2);",
     'de que marco es un designer': "  if APath.EndsWith('.fmx', True) then",
     'el designer de una unidad': "  F := ChangeFileExt(Pas, '.dfm');",
     'la unidad de un form': "  P := ChangeFileExt(Dfm, '.pas');",
     'la forma de un designer': "  if TestStreamFormat(S) = sofBinary then",
-    'leer la linea de objeto de un form': r"  M := TRegEx.Match(L, '^\s*(object|inherited|inline)\s+(\w+)');",
+    'leer la linea de objeto de un form': r"  I := TRegEx.IsMatch(Doc.Lines[N].Trim, '(?i)^inherited\b');",
     'el literal de cadena de un form a mano': "  T := Ind + 'Caption = ''' + Nombre + '''';",
     'el exe de un renderizador de forms': "  E := ServerDir('DelphiFormRenderVcl.exe');",
     'la orden del renderizador de forms': "  O := '\"' + Exe + '\" --path \"' + P + '\"';",

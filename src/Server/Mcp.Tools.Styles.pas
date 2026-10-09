@@ -207,10 +207,9 @@ begin
     // allowed and says what it really did.
     if (not ADelete) and SameText(AProp.Trim, 'StyleName') then
     begin
-      // el nombre como lo lee el arbol (LeeLiteralDeForm): 'Bot'#243'n' es
+      // el nombre como lo lee el arbol (NombreDeValor): 'Bot'#243'n' es
       // Boton con su acento; sin comillas, tal cual
-      if not LeeLiteralDeForm(AValue.Trim, NewName) then
-        NewName := AValue.Trim;
+      NewName := NombreDeValor(AValue);
       if NewName = '' then
         Exit(MsgText(SR_STYLES_RENAME_EMPTY));
       Err := NombreDeEstiloQueNoVale(NewName);
@@ -245,10 +244,15 @@ function CloneStyle(const APath, AStyle, ANew: string): string;
 var
   Doc: TStyleDoc;
   Src: TStyleObj;
+  Nuevo: string;
 begin
-  if ANew.Trim = '' then
+  // el nombre como lo lee set (NombreDeValor): clone lo tomaba tal cual y
+  // negaba por sus comillas el nombre que set aceptaba (P5 de la segunda
+  // revision de la 1.17.0)
+  Nuevo := NombreDeValor(ANew);
+  if Nuevo = '' then
     Exit(MsgText(SR_STYLES_NEED_NAME));
-  Result := NombreDeEstiloQueNoVale(ANew.Trim);
+  Result := NombreDeEstiloQueNoVale(Nuevo);
   if Result <> '' then
     Exit;
   Doc := TStyleDoc.Create(APath);
@@ -257,12 +261,12 @@ begin
     if Src = nil then
       Exit(MsgFmt(SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT,
         [AStyle, TPath.GetFileName(Doc.Path)]));
-    if Doc.FindStyle(ANew.Trim) <> nil then
-      Exit(MsgFmt(SR_STYLES_NAME_TAKEN_FMT, [ANew]));
-    Doc.CloneStyle(Src, ANew.Trim);
+    if Doc.FindStyle(Nuevo) <> nil then
+      Exit(MsgFmt(SR_STYLES_NAME_TAKEN_FMT, [Nuevo]));
+    Doc.CloneStyle(Src, Nuevo);
     Doc.Save;
-    Src := Doc.FindStyle(ANew.Trim);
-    Result := MsgFmt(SN_STYLES_CLONED_FMT, [ANew.Trim, AStyle, Src.StartLine, Src.EndLine,
+    Src := Doc.FindStyle(Nuevo);
+    Result := MsgFmt(SN_STYLES_CLONED_FMT, [Nuevo, AStyle, Src.StartLine, Src.EndLine,
       TPath.GetFileName(Doc.Path)]);
   finally
     Doc.Free;

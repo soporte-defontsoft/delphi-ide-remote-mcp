@@ -97,6 +97,14 @@ the MCP `initialize` response (`serverInfo.version`).
   had the same copy behind the gate. Both ask the gate's one judge now
   (`BadProfileName`), and PAS-031, the message that promised the dot, is
   retired. `test_sdk`; `test_paisaje` keeps the judge in its home.
+- **A name given as a form literal is read the same way everywhere.**
+  `delphi_designer set Name=` (and `insert` with a name) took the quotes off
+  by hand, so `'Btn'#83'i'` - a name the way the IDE writes it - was refused
+  as an invalid identifier; `delphi_styles clone` took the name as it came
+  and refused its quotes, while `delphi_styles set StyleName` read the
+  literal. The three read it with one reader now (`NombreDeValor`: the
+  form's literal reader, or the value as it is). `test_designer_edit` V7,
+  `test_styles`.
 
 ### Internal
 
@@ -296,6 +304,19 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_paisaje` keeps it there. Likewise whether a designer is FMX
   (`EsDesignerFmx` in `Lsp.DesignerForma`, by its extension), asked by hand
   in seven places in three spellings.
+- The rest of the low findings of the second 1.17.0 review: layout asks the
+  object line's reader whether a control is inherited instead of a regex of
+  its own; the FMX frame template writes its size with the property-line
+  composer; "is this value a list, a binary block or a collection?" is
+  `EsValorDeBloque` (three places asked it by hand); the renderer's
+  `NONVISUALS=` items are split by the protocol's reader (`TNoVisual`), not
+  by the tool; `test_designer_binary` checks the resource header `FF 0A 00`,
+  not the first byte. `test_paisaje` gets a rule for each home of the form
+  reader that had none (the line grammar, a literal read by hand, the
+  number grammar, a property line composed by hand, the block value, the
+  property-line regex, binary by the first byte, the edit distance, the
+  most similar name, the class chain of the table), and the object-line
+  rule now sees a single keyword too.
 - `delphi_git` gets a unit of its own, **`Mcp.Tools.Git`**: its parameters
   and tool, the composer of its command line, its one launcher
   (`GitCorre`), the gates on remotes, pushes and the repo's configuration,

@@ -50,6 +50,13 @@ type
     Componente, Propiedad, Motivo: string; // '' si no casa
   end;
 
+  { Un no visual de la raiz (NONVISUALS=<Nombre:Clase,...>): el ayudante lo
+    escribe 'Nombre:Clase' y aqui se lee en sus partes - lo troceaba la tool
+    (segunda revision de la 1.17.0, 2.3 de la 1.18.0). }
+  TNoVisual = record
+    Nombre, Clase: string;
+  end;
+
   TRespuestaRender = record
     Fallo: string;             // '' = hay imagen; si no, el mensaje para el agente
     Error: string;             // ERROR= del ayudante, tal cual
@@ -62,7 +69,7 @@ type
     Componentes: Integer;      // COMPONENTS=
     Sustituidas, Avisos: TArray<string>;
     Ignoradas: TArray<TIgnorada>;
-    NoVisuales: TArray<string>; // NONVISUALS=: 'Nombre:Clase'
+    NoVisuales: TArray<TNoVisual>; // NONVISUALS=
     NoVisualesDibujados: Integer; // NONVISUAL=
     HayRect: Boolean;          // RECT= del componente pedido
     RectX, RectY, RectW, RectH: Integer;
@@ -281,7 +288,19 @@ begin
     else if Es(FR_IGNORED) then
       Result.Ignoradas := Result.Ignoradas + [IgnoradaDeTexto(V)]
     else if Es(FR_NONVISUALS) then
-      Result.NoVisuales := V.Split([','], TStringSplitOptions.ExcludeEmpty)
+      for var Item in V.Split([','], TStringSplitOptions.ExcludeEmpty) do
+      begin
+        var NV: TNoVisual;
+        P := Item.LastIndexOf(':');
+        NV.Nombre := Item;
+        NV.Clase := '';
+        if P >= 0 then
+        begin
+          NV.Nombre := Item.Substring(0, P);
+          NV.Clase := Item.Substring(P + 1);
+        end;
+        Result.NoVisuales := Result.NoVisuales + [NV];
+      end
     else if Es(FR_NONVISUAL) then
       Result.NoVisualesDibujados := StrToIntDef(V, 0)
     else if Es(FR_RECT) then

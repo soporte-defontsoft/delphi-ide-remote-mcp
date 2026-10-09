@@ -695,8 +695,7 @@ var
       // which lives in another .dfm we do not merge. If the child overrides
       // neither Align nor a full size, we cannot know where it lands - so we say
       // so once and do not invent an alNone/zero-height box for it.
-      IsInh := (Kid.StartLine >= 1) and (Kid.StartLine <= Length(Doc.Lines)) and
-        TRegEx.IsMatch(Doc.Lines[Kid.StartLine - 1].Trim, '(?i)^inherited\b');
+      IsInh := SameText(Kid.Clave, 'inherited'); // la palabra de LineaDeObjeto
       InhUnknown := IsInh and
         (PropRaw(Doc, Kid, 'Align', Found) = '') and not (HasW and HasH);
 
@@ -1260,8 +1259,8 @@ begin
     for var NV in R.NoVisuales do
     begin
       var Uno := TJSONObject.Create;
-      Uno.AddPair('name', NV.Substring(0, NV.LastIndexOf(':')));
-      Uno.AddPair('class', NV.Substring(NV.LastIndexOf(':') + 1));
+      Uno.AddPair('name', NV.Nombre);
+      Uno.AddPair('class', NV.Clase);
       NoVis.AddElement(Uno);
     end;
     Return.AddPair('nonVisual', NoVis);

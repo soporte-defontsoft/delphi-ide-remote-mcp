@@ -69,6 +69,13 @@ function SangriaDeNivel(ANivel: Integer): string;
   lo es. }
 function LeeLiteralDeForm(const AValor: string; out ATexto: string): Boolean;
 function EsLiteralDeForm(const AValor: string): Boolean;
+{ Un NOMBRE dado como valor (el Name de un componente, el StyleName de un
+  estilo): si es un literal de form ('BtnOk', 'Bot'#243'n', 'a' + 'b'), su
+  texto; si no, el valor tal cual. Sin espacios alrededor. Lo leian de tres
+  maneras el renombrado y el insert del disenador (quitaban las comillas a
+  mano), styles set y styles clone (tal cual): el mismo nombre valia en uno
+  y no en otro (P5 de la segunda revision de la 1.17.0). }
+function NombreDeValor(const AValor: string): string;
 // UN caracter, lo que ReadChar acepta: 'A', #39, #65
 function EsCaracterDeForm(const AValor: string): Boolean;
 { Un numero como lo lee el cargador (TParser): entero, $hex, o con decimales
@@ -109,6 +116,12 @@ function LineaDePropiedad(const ALinea: string; out AProp, AValor: string): Bool
   ('(', '{', '<'). *)
 function ValorEnteroDe(const ALineas: TArray<string>; const AForm: TArray<TLineaForm>;
   AIni: Integer): string;
+(* Si el valor de una propiedad (lo de detras del '=', o lo que da
+  ValorEnteroDe) es de BLOQUE: una lista '(', un bloque binario '{' o una
+  coleccion '<' - lo que no es un valor de una linea, ni se juzga ni se
+  reescribe como uno. Se preguntaba a mano en tres sitios del disenador y
+  del juez de los forms (2.3 de la 1.18.0). *)
+function EsValorDeBloque(const AValor: string): Boolean;
 
 { Un numero como lo escribe el IDE Win32 en una propiedad de coma flotante de
   un form, VCL o FMX: TWriter.WriteFloat y ObjectBinaryToText lo dejan con
@@ -308,6 +321,15 @@ begin
   Result := LeeLiteralDeForm(AValor, T);
 end;
 
+function NombreDeValor(const AValor: string): string;
+var
+  T: string;
+begin
+  Result := AValor.Trim;
+  if LeeLiteralDeForm(Result, T) then
+    Result := T;
+end;
+
 function EsCaracterDeForm(const AValor: string): Boolean;
 var
   T: string;
@@ -467,6 +489,11 @@ begin
     Exit;
   for var K := AIni + 1 to AForm[AIni].Fin do
     Result := Trim(Result + ' ' + ALineas[K].Trim);
+end;
+
+function EsValorDeBloque(const AValor: string): Boolean;
+begin
+  Result := (AValor <> '') and CharInSet(AValor[1], ['(', '<', '{']);
 end;
 
 { Las cifras EXACTAS de un Double positivo, sin ceros delante ni detras, y

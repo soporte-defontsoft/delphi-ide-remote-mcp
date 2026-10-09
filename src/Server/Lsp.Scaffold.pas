@@ -332,8 +332,8 @@ function FmxFrameFmx(const AFrameName: string): string;
 begin
   Result :=
     ComponeLineaDeObjeto('object', AFrameName, 'T' + AFrameName) + CRLF +
-    '  Size.Width = ' + FlotanteFmx(320) + CRLF +
-    '  Size.Height = ' + FlotanteFmx(240) + CRLF +
+    string.Join(CRLF, LineasDePropiedad('  ', 'Size.Width', [FlotanteFmx(320)])) + CRLF +
+    string.Join(CRLF, LineasDePropiedad('  ', 'Size.Height', [FlotanteFmx(240)])) + CRLF +
     '  Size.PlatformDefault = False' + CRLF +
     'end' + CRLF;
 end;

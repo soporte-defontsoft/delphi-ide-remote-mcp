@@ -1112,7 +1112,7 @@ begin
             Rhs := ValorEnteroDe(ALines, Form, I);
             // una coleccion, una lista o un bloque binario (lo que guarda la
             // clase por codigo, DefineProperties): no se juzgan
-            if (Rhs <> '') and CharInSet(Rhs[1], ['<', '{', '(']) then
+            if EsValorDeBloque(Rhs) then
               Continue;
             if Stack.Count = 0 then
               Continue;

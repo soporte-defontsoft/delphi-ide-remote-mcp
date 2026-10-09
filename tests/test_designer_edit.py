@@ -351,6 +351,15 @@ try:
     check('V7 un nombre ocupado: DSGN-096', mc.abre(r, 'SR_DESIGNER_NOMBRE_OCUPADO_FMT'), r[:300])
     r = dsg(command='set', path=VDFM, component='BtnOk', prop='Name', value='1abc')
     check('V7 un nombre que no vale: DSGN-095', mc.abre(r, 'SR_DESIGNER_NOMBRE_INVALIDO_FMT'), r[:300])
+    # el Name como literal del form (como lo escribe el IDE): su texto, igual
+    # que en delphi_styles; quitaba las comillas a mano y 'Btn'#83'i' quedaba
+    # en Btn'#83'i, negado (P5 de la segunda revision de la 1.17.0)
+    r = dsg(command='set', path=VDFM, component='BtnOk', prop='Name', value="'Btn'#83'i'")
+    j = J(r)
+    literal_ok = j.get('to') == 'BtnSi' and 'object BtnSi: TButton' in mc.lee(VDFM)
+    r2 = dsg(command='set', path=VDFM, component='BtnSi', prop='Name', value='BtnOk')
+    check('V7 set Name con un literal del form: su texto (BtnSi), y de vuelta',
+          literal_ok and J(r2).get('to') == 'BtnOk', r[:300] + ' | ' + r2[:200])
 
     # ------------------------------------------------------------------ V7b
     # insert con nombre: las reglas del renombrado (un solo juez), y su texto
