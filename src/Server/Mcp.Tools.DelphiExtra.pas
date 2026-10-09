@@ -111,6 +111,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Listas,     // AgrupaPorFichero: los usos por carpeta y fichero
   Lsp.Guard,      // ReadPathDenied: la guarda antes que nada (ruta vacia)
+  Lsp.ConfigFabricator, // NotaDeRecorte
   Lsp.Mascara;
 
 const
@@ -196,6 +197,11 @@ begin
       Return.AddPair('warnings', TJSONNumber.Create(WarningsC));
       Return.AddPair('hints', TJSONNumber.Create(Hints));
       Return.AddPair('diagnostics', OutArr);
+      // unos ajustes recortados lo dicen (LSP-037): por eso hay units que el
+      // motor no encuentra aqui y que delphi_build si compila
+      var Recorte := NotaDeRecorte(Settings);
+      if Recorte <> '' then
+        Return.AddPair('note', Recorte.Trim);
       // (sin ajustes de proyecto ya no se llega aqui: LintFile lo dice antes,
       // LSP-035 - el motor sin ellos no publica nunca, medido 2026-10-06)
       Result := Return.ToJSON;

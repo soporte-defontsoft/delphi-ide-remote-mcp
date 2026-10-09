@@ -178,6 +178,13 @@ type
     { Helpers }
     class function PathToUri(const APath: string): string;
     class function UriToPath(const AUri: string): string;
+    { El texto de un fuente tal como se le da al motor y lo leen references y
+      search, por EL detector. Pregunta ELLA a la puerta, con los lugares del
+      motor (Lsp.Patch.LUGARES_DEL_MOTOR: la jaula, el IDE y su biblioteca):
+      cargaba sin preguntar lo que le pasasen, tambien una ruta que daba el
+      MOTOR (references, la definicion de un candidato: medida M1). Fuera de
+      ahi lanza la negativa. Quien recorre carpetas pregunta ADEMAS la de la
+      jaula por cada fichero: lo de detras de una union no es suyo. }
     class function LoadSourceText(const AFilePath: string): string;
   end;
 
@@ -974,7 +981,7 @@ class function TLspClient.LoadSourceText(const AFilePath: string): string;
 var
   Bytes: TBytes;
 begin
-  Bytes := TFile.ReadAllBytes(AFilePath);
+  Bytes := LeeBytes(AFilePath, LUGARES_DEL_MOTOR);
   // Un .dfm BINARIO se sirve como texto (Lsp.DesignerBin): delphi_search no
   // encontraba ni el nombre del form en uno legacy (Hermes, 2026-09-24). Si
   // esta danado, se devuelve vacio: nada que buscar ahi.

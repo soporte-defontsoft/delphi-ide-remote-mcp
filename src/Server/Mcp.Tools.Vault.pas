@@ -415,7 +415,7 @@ begin
   GVaultWrite.Enter;
   try
     try
-      B := TFile.ReadAllBytes(AFull);
+      B := LeeBytes(AFull, [ltVault]);
     except
       on E: Exception do
         Exit(MsgEnvuelve(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, E.Message));

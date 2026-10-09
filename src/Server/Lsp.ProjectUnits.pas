@@ -295,7 +295,9 @@ begin
   Result := False;
   AName := '';
   AClass := '';
-  B := TFile.ReadAllBytes(ADesigner);
+  // por LA puerta de leer, como el texto de abajo (PatchLoadText): el designer
+  // es de la jaula
+  B := LeeBytes(ADesigner, [ltJaula]);
   if Length(B) < 4 then
     Exit;
   // Un designer BINARIO tambien tiene nombre y clase: se lee al vuelo como
@@ -2260,8 +2262,10 @@ begin
       Continue;
     Sitios := Sitios + [D];
     try
+      // una subcarpeta que la jaula no deja leer (un enlace a fuera) no se
+      // mira: se leian sus .dpk de detras (medida M1)
       for var Sub in TDirectory.GetDirectories(D) do
-        if not MatchText(Sub, Dirs) then
+        if not MatchText(Sub, Dirs) and (ReadPathDenied(Sub) = '') then
           Sitios := Sitios + [Sub];
     except
       // una carpeta que no se deja listar no es motivo para no mirar el resto
@@ -2649,6 +2653,15 @@ begin
       var Nuevo := TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(AProyecto), R));
       if not TFile.Exists(Nuevo) then
         Continue;
+      // la ruta la da el .dpr y puede salir de lo movido (..\..\Shared\X.pas):
+      // fuera de las raices ni se lee ni se re-apunta, y se dice (la lectura
+      // escondida de la mudanza: medida M1)
+      var Fuera := ReadPathDenied(Nuevo);
+      if Fuera <> '' then
+      begin
+        AFallos := AFallos + [TPath.GetFileName(AProyecto) + ': ' + Fuera.Split([#10])[0]];
+        Continue;
+      end;
       // La ruta VIEJA de verdad: RenameProjectUnit busca en el .dpr por el
       // nombre que sale de ella, y en un rename no es el nuevo. Se pasaba la
       // nueva dos veces: el rename no encontraba nada y se contaba como hecho

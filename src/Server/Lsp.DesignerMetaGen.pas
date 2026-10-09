@@ -1030,11 +1030,12 @@ begin
 end;
 
 function TGenerador.LeeFuente(const ARuta: string): string;
-var
-  Enc: string;
 begin
   try
-    Result := PatchLoadText(ARuta, Enc);
+    // las fuentes de los componentes viven en la biblioteca del IDE (su
+    // Library Search Path), no en la jaula: por la puerta con los lugares
+    // del motor (medida M1: se leian sin puerta)
+    Result := LeeTexto(ARuta, LUGARES_DEL_MOTOR);
   except
     Result := ''; // un fichero que no se deja leer es como si no estuviera
   end;

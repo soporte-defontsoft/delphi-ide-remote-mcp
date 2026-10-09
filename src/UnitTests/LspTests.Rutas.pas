@@ -101,6 +101,7 @@ type
     [Test] procedure UnEnlaceNoSacaANadieDeSuSitio;
     [Test] procedure SettingsIniNoEsDeLaCasaYElBuzonSi;
     [Test] procedure UnaCasaRelativaNoEsLugar;
+    [Test] procedure LaBibliotecaDelIdeSeLeeYNoSeEscribe;
   end;
 
   { LA PUERTA DE ESCRIBIR (Lsp.Patch.LugarDeEscrituraDenegado, EscribeTexto)
@@ -632,6 +633,40 @@ begin
   finally
     SetEnvironmentVariable('LOCALAPPDATA', PChar(Antes));
   end;
+end;
+
+procedure TPuertaDeLeerTests.LaBibliotecaDelIdeSeLeeYNoSeEscribe;
+var
+  Info: TRadStudioInfo;
+  F, R: string;
+begin
+  // una carpeta de su Library Search Path FUERA de la instalacion (componentes,
+  // GetIt): la instalacion ya es del IDE, y lo que se mide aqui es la biblioteca
+  // como lugar propio (ltBiblioteca: lo que el motor dice de alli se ensena).
+  // GUARDA en el contenedor de delphi_test, que no ve esa parte del registro
+  // (su mutante siguio verde aqui, 9-oct-2026): lo MIDE test_motor_fuera F8b
+  Info := DiscoverRadStudio;
+  Assert.IsTrue(Info.Found, 'el ejecutor ve su Delphi');
+  F := '';
+  for var L in LibraryRoots do
+    if not L.StartsWith(IncludeTrailingPathDelimiter(Info.RootDir), True) then
+    begin
+      F := TPath.Combine(L, 'UnaUnidad.pas');
+      Break;
+    end;
+  if F = '' then
+  begin
+    Assert.Pass('sin carpeta de la Library Search Path fuera de la instalacion: no se mide');
+    Exit;
+  end;
+  Assert.AreEqual('', LugarDeLecturaDenegado(F, [ltBiblioteca]), F);
+  // ...y no por ser del IDE: el lugar IDE no la tiene (cargarla lee rsvars.bat
+  // por la puerta con el IDE como lugar, y la puerta se preguntaba a si misma)
+  R := LugarDeLecturaDenegado(F, [ltIde]);
+  Assert.IsTrue(R.StartsWith('[GUARD-034'), R);
+  // ...y no se escribe
+  R := LugarDeEscrituraDenegado(F, ltBiblioteca);
+  Assert.IsTrue(R.StartsWith('[GUARD-034'), R);
 end;
 
 { TPuertaDeEscribirTests }

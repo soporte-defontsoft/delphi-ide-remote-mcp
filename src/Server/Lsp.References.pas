@@ -73,6 +73,11 @@ type
     procedure Report(AObj: TJSONObject);
   end;
 
+{ El identificador que contiene la columna ACol (0-based, la del LSP) de
+  una linea, con EL identificador de Lsp.Pascal; '' si no hay ninguno ahi.
+  Lo usan references y las negativas de las tools del motor (LSP-038). }
+function IdentifierAt(const ALineText: string; ACol: Integer): string;
+
 implementation
 
 uses
@@ -91,6 +96,7 @@ uses
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
   Lsp.Patch, // LeeTexto: la puerta de leer
+  Lsp.ConfigFabricator, // MotorPuedeEnsenar: EL juez de "fuera" de lo que dice el motor
   Lsp.Settings;
 
 type
@@ -479,9 +485,12 @@ begin
   // jaula y reventaba la llamada entera con un RECHAZADO... que escupia la
   // ruta. Se corta AQUI, que es donde la respuesta del motor entra en
   // nuestro mundo, y el mensaje nombra el identificador y no el sitio.
-  // La zona de biblioteca (RTL/VCL, componentes instalados) NO cae aqui:
-  // ReadPathDenied la da por buena, que es justo lo que se quiere.
-  if ReadPathDenied(TLspClient.UriToPath(TargetUri)) <> '' then
+  // La zona de biblioteca (RTL/VCL, componentes instalados) NO cae aqui, y
+  // tampoco con ella APAGADA: "fuera" es lo que el motor no puede ensenar,
+  // EL juez de LSP-038 (MotorPuedeEnsenar, la jaula + el IDE + su
+  // biblioteca). Con ReadPathDenied, la RTL con la zona apagada daba LSP-014
+  // y sus dos causas, falsas las dos (revisor de P2b, B4; medido, F8d)
+  if not MotorPuedeEnsenar(TLspClient.UriToPath(TargetUri)) then
     raise Exception.CreateFmt(MsgText(SR_REFS_TARGET_OUTSIDE_FMT), [Ident]);
 
   // A Pascal routine has TWO definition lines: the interface (or forward)

@@ -147,7 +147,7 @@ type
     function TakeOut(const AKey: string): TLspClient;
     procedure DoFolderLeaves(const AFolder: string);
     procedure DoFolderLeft(const AFolder: string);
-    function RutaParaAbrir(const AFilePath: string): string;
+    function RutaParaAbrir(const AFilePath: string; ADelMotor: Boolean): string;
     procedure AbreDocumento(AClient: TLspClient; const AFullPath: string);
   public
     constructor Create;
@@ -211,7 +211,9 @@ type
       pregunta: con AcquireFor, una unidad compartida arrancaba el motor de
       OTRO proyecto -el primero cuyo .dproj la nombra- para calentarla, y la
       pregunta iba al de siempre (menor de la ronda 16, medido el
-      4-oct-2026: dos motores donde hacia falta uno). }
+      4-oct-2026: dos motores donde hacia falta uno). Lo que abre lo dio el
+      MOTOR (el destino de la cadena de declaration, un candidato), y se
+      juzga con los lugares del motor, no con la jaula (RutaParaAbrir). }
     procedure AbreEn(AClient: TLspClient; const AFilePath: string);
 
     { Lints AFilePath (disk content) through a warm LINTER client of its
@@ -632,6 +634,17 @@ begin
     // looked at again on the next request
     if (Stamp = D.Stamp) or ((Stamp = STAMP_UNKNOWN) and not Strict) then
       Continue;
+    // uno que ya no se puede leer (las raices cambiaron, o en su camino hay
+    // ahora un enlace a fuera: cambia lo de detras y con ello el sello), se
+    // cierra: se releia sin volver a preguntar (la puerta rancia de M1)
+    var Negativa := LugarDeLecturaDenegado(D.Path, LUGARES_DEL_MOTOR);
+    if Negativa <> '' then
+    begin
+      Close(Key, D);
+      if Strict then
+        raise Exception.Create(Negativa); // el que se pide: se dice por que
+      Continue;
+    end;
     try
       Inc(D.Version);
       D.Stamp := Stamp;
@@ -1029,7 +1042,12 @@ begin
   Stamp := '';
   if Result <> '' then
     Stamp := DiskStamp(Result);
-  if (Result <> '') and not IsSettingsStale(Result, Info) then
+  // los del IDE NO si el proyecto tiene carpetas en su search path que esta
+  // sesion no puede leer: el motor las veria (David, 9-oct-2026: "recortar y
+  // negar"); los fabricados las dejan fuera
+  Dproj := FindDproj(AFilePath);
+  if (Result <> '') and not IsSettingsStale(Result, Info) and
+     ((Dproj = '') or (Length(CarpetasDeFueraDelProyecto(Dproj, Info)) = 0)) then
   begin
     ARootDir := TPath.GetDirectoryName(Result);
     ASource := Result;
@@ -1038,7 +1056,6 @@ begin
   end;
   ARejected := Result; // found, and not taken ('' if there was none)
   ARejectedStamp := Stamp;
-  Dproj := FindDproj(AFilePath);
   if Dproj <> '' then
   begin
     ARootDir := TPath.GetDirectoryName(TPath.GetFullPath(Dproj));
@@ -1342,18 +1359,30 @@ function TLspSession.AcquireFor(const AFilePath: string;
 var
   FullPath, Key, RootDir: string;
 begin
-  FullPath := RutaParaAbrir(AFilePath);
+  FullPath := RutaParaAbrir(AFilePath, False);
   Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
   AbreDocumento(Result, FullPath);
 end;
 
 { LA puerta de abrir un fichero en un motor (AcquireFor y AbreEn): abrir es
   leer (navigating RTL/components is reading), y lo que no existe no se abre.
-  Su ruta completa. Estaba copiada en los dos (revision de la 1.13.0). }
-function TLspSession.RutaParaAbrir(const AFilePath: string): string;
+  Su ruta completa. Estaba copiada en los dos (revision de la 1.13.0).
+  ADelMotor: un fichero al que llevo el MOTOR (AbreEn) se juzga con los
+  lugares del motor (Lsp.Patch.LUGARES_DEL_MOTOR: la jaula, el IDE y su
+  biblioteca), como lo que se le da a leer (LoadSourceText); el del agente
+  (AcquireFor), con la jaula. Con la zona de biblioteca apagada, kind=
+  declaration de una rutina de la RTL contestaba GUARD-002 mientras
+  definition daba esa misma ubicacion (medido el 9-oct-2026, tambien con
+  el binario de antes de P2). }
+function TLspSession.RutaParaAbrir(const AFilePath: string; ADelMotor: Boolean): string;
+var
+  Denied: string;
 begin
   Result := TPath.GetFullPath(AFilePath);
-  var Denied := ReadPathDenied(Result);
+  if ADelMotor then
+    Denied := LugarDeLecturaDenegado(Result, LUGARES_DEL_MOTOR)
+  else
+    Denied := ReadPathDenied(Result);
   if Denied <> '' then
     raise ELspSession.Create(Denied);
   if not FileExists(Result) then
@@ -1405,7 +1434,7 @@ end;
 
 procedure TLspSession.AbreEn(AClient: TLspClient; const AFilePath: string);
 begin
-  AbreDocumento(AClient, RutaParaAbrir(AFilePath));
+  AbreDocumento(AClient, RutaParaAbrir(AFilePath, True));
 end;
 
 function TLspSession.LintFile(const AFilePath: string; ATimeoutMs: Integer;

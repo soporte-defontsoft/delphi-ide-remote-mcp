@@ -253,6 +253,12 @@ check('deploy repetido: el .deployproj existente NO se toca',
       open(DEPLOYPROJ, 'rb').read() == before, DEPLOYPROJ)
 
 # ====================== deploy Android: full staging generation ===========
+# con la zona de biblioteca APAGADA (un workspace con nombre que no la declara):
+# la semilla de ObjRepos es de la instalacion del IDE y se lee por la puerta con
+# el IDE como lugar, no por la jaula; con la zona encendida la jaula ya la dejaba
+# leer y su mutante seguia verde (P2 de la 1.18.0)
+srv.cierra()
+srv = Server(env={'DELPHI_MCP_ADB_DEVICES': 'ZZZ-NO-EXISTE;127.0.0.1', 'DELPHI_MCP_LIBRARY_ZONE': '0'})
 FDIR = os.path.join(BASE, 'DeployFmx')
 out = srv.call('delphi_create', {"kind": "project-fmx", "dir": FDIR,
                                  "name": "DeployFmx"})

@@ -131,6 +131,7 @@ uses
   Lsp.NetDrives,
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases: de quien es cada declaracion
+  Lsp.ConfigFabricator, // NotaDeRecorte, UnitsDeFueraDelProyecto
   Lsp.Mascara;
 
 const
@@ -187,13 +188,16 @@ end;
   at the identifier ourselves. Falls back to the first identifier. }
 function RoutineIdentCol(const APath: string; ALine: Integer): Integer;
 var
-  Enc, L: string;
+  L: string;
   Lines: TArray<string>;
   M: TMatch;
 begin
   Result := 0;
   try
-    L := PatchLoadText(APath, Enc);
+    // el destino que dio el MOTOR, ya juzgado (NegativaDeFuera): con los
+    // lugares del motor, como lo abre AbreEn - la RTL con la zona de
+    // biblioteca apagada no es de la jaula, y la columna salia 0 en silencio
+    L := LeeTexto(APath, LUGARES_DEL_MOTOR);
   except
     Exit;
   end;
@@ -225,7 +229,109 @@ begin
   if ASettings = '' then
     Result := MsgText(SN_LSP_NO_SETTINGS_WARNING)
   else
-    Result := '';
+    // unos ajustes recortados lo dicen (LSP-037): las units de las carpetas
+    // que esta sesion no puede leer no estan para el motor
+    Result := NotaDeRecorte(ASettings);
+end;
+
+{ LO QUE EL MOTOR DICE DE FUERA (David, 9-oct-2026: "recortar y negar",
+  coherente con LSP-014 de references). Los ajustes del motor ya no llevan
+  las carpetas del proyecto que esta sesion no puede leer
+  (Lsp.ConfigFabricator); lo que aun llega - una unit que el .dpr nombra con
+  ruta de fuera - se niega aqui, donde la respuesta del motor entra en
+  nuestro mundo, nombrando el identificador y nunca la ruta. }
+
+{ Alguna ubicacion de una respuesta del motor (uri o targetUri, a cualquier
+  nivel) es de algo que el motor no puede ensenar (MotorPuedeEnsenar: ni de
+  la jaula ni del IDE; la RTL y los componentes instalados salen como
+  siempre, este o no encendida la zona de biblioteca). }
+function UbicacionDeFuera(V: TJSONValue): Boolean;
+begin
+  Result := False;
+  if V is TJSONArray then
+  begin
+    for var Item in TJSONArray(V) do
+      if UbicacionDeFuera(Item) then
+        Exit(True);
+  end
+  else if V is TJSONObject then
+    for var Pair in TJSONObject(V) do
+      if MatchText(Pair.JsonString.Value, ['uri', 'targetUri']) and
+         (Pair.JsonValue is TJSONString) then
+      begin
+        if not MotorPuedeEnsenar(TLspClient.UriToPath(Pair.JsonValue.Value)) then
+          Exit(True);
+      end
+      else if UbicacionDeFuera(Pair.JsonValue) then
+        Exit(True);
+end;
+
+{ El identificador bajo el cursor, para nombrarlo en una negativa. }
+function IdentificadorEn(const APath: string; ALine, AChar: Integer): string;
+var
+  Enc: string;
+  Lines: TArray<string>;
+begin
+  Result := '';
+  try
+    Lines := LineasDelTexto(PatchLoadText(APath, Enc));
+    if (ALine >= 0) and (ALine <= High(Lines)) then
+      Result := IdentifierAt(Lines[ALine], AChar);
+  except
+  end;
+end;
+
+{ EL juez de una respuesta del motor que trae UBICACIONES: la negativa
+  LSP-038 si alguna es de fuera (nombrando el identificador de APath en esa
+  posicion, nunca la ruta), '' si no. Una regla, una salida: la llaman las
+  cuatro respuestas que entran (observacion de Fable, 9-oct-2026). Son cuatro
+  y no una porque son cuatro PETICIONES distintas al motor, cada una juzgada
+  antes de que nadie la lea o la pinte: la definition de la cadena de
+  kind=declaration (ANTES de leer el destino con RoutineIdentCol y de
+  abrirlo en el motor: medida M1), la declaration directa del caso sin
+  definicion, la respuesta plana de definition/implementation, y la
+  definition con la que hover sabe DONDE esta lo que va a ensenar. }
+function NegativaDeFuera(AResp: TJSONObject; const APath: string;
+  ALine, AChar: Integer): string;
+begin
+  Result := '';
+  if (AResp <> nil) and UbicacionDeFuera(AResp.GetValue('result')) then
+    Result := MsgFmt(SR_LSP_DEF_FUERA_FMT, [IdentificadorEn(APath, ALine, AChar)]);
+end;
+
+{ La negativa LSP-038 si la definicion que el motor da en esa posicion cae
+  fuera; '' si no (o si no la da). El juez de DONDE esta un simbolo es su
+  definicion: hover trae su firma y un enlace a su fichero. }
+function DefinicionDeFueraEn(AClient: TLspClient; const APath: string;
+  ALine, AChar: Integer): string;
+var
+  Pending: Boolean;
+  Resp: TJSONObject;
+begin
+  Resp := AClient.DefinitionResolved(TLspClient.PathToUri(APath), ALine, AChar, Pending);
+  try
+    Result := NegativaDeFuera(Resp, APath, ALine, AChar);
+  finally
+    Resp.Free;
+  end;
+end;
+
+{ La negativa LSP-039 si el proyecto de APath nombra en su .dpr units de
+  FUERA: completion y signature contestan nombres sin decir de donde, y no
+  hay a quien preguntar por cada uno (medido el 9-oct-2026: sus elementos
+  traen label, kind, detail y sortText, nada mas). '' si no. }
+function NombresDeFuera(const APath, ATool: string): string;
+var
+  Dproj: string;
+  Units: TArray<string>;
+begin
+  Result := '';
+  Dproj := TLspSession.Instance.FindDproj(APath);
+  if Dproj = '' then
+    Exit;
+  Units := UnitsDeFueraDelProyecto(Dproj);
+  if Length(Units) > 0 then
+    Result := MsgFmt(SR_LSP_NOMBRES_FUERA_FMT, [string.Join(', ', Units), ATool]);
 end;
 
 { Every object carrying a "uri" also gets the path in the format the rest of
@@ -1154,6 +1260,15 @@ begin
     if ParseLoc(DefResp.GetValue('result'), DefLoc) then
     begin
       var TgtPath := TLspClient.UriToPath(DefLoc.Uri);
+      // FUERA de lo que esta sesion puede leer: ni se lee (RoutineIdentCol
+      // lo leia ANTES de que nadie preguntase: medida M1), ni se abre en el
+      // motor, ni se dice donde (LSP-038)
+      Result := NegativaDeFuera(DefResp, Params.Path, Params.Line, Params.Character);
+      if Result <> '' then
+      begin
+        DefResp.Free;
+        Exit;
+      end;
       var Col := RoutineIdentCol(TgtPath, DefLoc.Line);
       // al MISMO motor, que es el que ha llevado hasta ahi (Lsp.Session.AbreEn):
       // con AcquireFor, una unidad de la RTL o de otro proyecto arrancaba su
@@ -1190,6 +1305,12 @@ begin
       // SAY that on a call site this is the enclosing routine's
       DefResp.Free;
       Resp := Client.Declaration(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+      Result := NegativaDeFuera(Resp, Params.Path, Params.Line, Params.Character);
+      if Result <> '' then
+      begin
+        Resp.Free;
+        Exit;
+      end;
       Exit(RenderResult(Resp, MsgText(SN_DEF_DECL_FALLBACK) + NoSettingsNote(Settings)));
     end;
   end
@@ -1204,6 +1325,13 @@ begin
       Resp.Free;
       Exit(MsgText(SR_LSP_WARMING) + NoSettingsNote(Settings));
     end;
+  end;
+  // una ubicacion de FUERA no sale: ni la ruta ni la linea (LSP-038)
+  Result := NegativaDeFuera(Resp, Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+  begin
+    Resp.Free;
+    Exit;
   end;
   Result := RenderResult(Resp, NoSettingsNote(Settings));
 end;
@@ -1232,6 +1360,10 @@ begin
   Result := NotDelphiSource(Params.Path);
   if Result = '' then
     Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+    Exit;
+  // la firma de una rutina de FUERA salia entera (medido el 9-oct-2026)
+  Result := NombresDeFuera(Params.Path, 'delphi_signature');
   if Result <> '' then
     Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
@@ -1266,6 +1398,10 @@ begin
   if Result <> '' then
     Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
+  // la firma y la ruta de un simbolo de FUERA salian (medido el 9-oct-2026)
+  Result := DefinicionDeFueraEn(Client, Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+    Exit;
   Resp := Client.Hover(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
   // Prefer the markdown payload alone: it is what an agent wants to read.
   V := Resp.FindValue('result.contents.value');
@@ -1309,6 +1445,10 @@ begin
   Result := NotDelphiSource(Params.Path);
   if Result = '' then
     Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  // los nombres - y el VALOR de una constante - de una unit de FUERA salian
+  // (medido el 9-oct-2026)
+  if Result = '' then
+    Result := NombresDeFuera(Params.Path, 'delphi_completion');
   if Result <> '' then
     Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);

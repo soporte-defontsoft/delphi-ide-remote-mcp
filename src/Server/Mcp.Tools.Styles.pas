@@ -395,7 +395,10 @@ begin
     Standard := 0;
     Used := 0;
     if TDirectory.Exists(ProjDir) then
-      for F in TDirectory.GetFiles(ProjDir, '*.*', TSearchOption.soAllDirectories) do
+      // por EL recorredor, como el de los .rc de abajo: no baja por un enlace
+      // a lo que no se puede leer y una carpeta ilegible no corta el paseo (la
+      // RTL abortaba al primer fallo; revisor de P2b, B3)
+      for F in WalkFiles(ProjDir, '*.*') do
       begin
         if not (F.EndsWith('.fmx', True) or F.EndsWith('.pas', True)) then
           Continue;
@@ -496,8 +499,9 @@ begin
         Ini.Free;
       end;
     end;
-    // 4) .rc entries pointing at files that do not exist
-    for F in TDirectory.GetFiles(Dir, '*.rc') do
+    // 4) .rc entries pointing at files that do not exist. Por EL recorredor:
+    // un .rc que fuese un enlace a fuera se leia detras (medida M1)
+    for F in WalkFiles(Dir, ['*.rc'], False, False) do
     begin
       Text := PatchLoadText(F, Enc);
       for M in TRegEx.Matches(Text, '^\s*(\w+)\s+RCDATA\s+"([^"]+)"', [roIgnoreCase, roMultiline]) do

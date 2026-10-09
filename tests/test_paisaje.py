@@ -331,31 +331,58 @@ REGLAS = [
      'cuenta recalcula la forma de un sitio en cada llamada (68 llamadas a las formas medidas el '
      '8-oct-2026, ~30 de un sitio), y dos formas de un mismo sitio fueron el workspace borrable del '
      '20-sep-2026'),
-    ('leer texto sin la puerta',
+    ('leer sin la puerta',
      # (un TMemIniFile vacio que se llena con SetStrings no lee nada)
      r"TFile\.(?:ReadAllText|ReadAllLines|OpenText)\b|\.LoadFromFile\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|"
-     r"TIniFile\.Create\s*\(|TStreamReader\.Create\s*\(|DecodeSourceBytes\s*\(\s*TFile\.ReadAllBytes",
+    r"TIniFile\.Create\s*\(|TStreamReader\.Create\s*\(|"
+    # y los BYTES (P2 de la 1.18.0): un flujo que no se abre para escribir es para leer
+    r"TFile\.(?:ReadAllBytes|OpenRead|Open)\b|\bTFileStream\.Create\s*\((?![^;]*\bfm(?:Create|OpenWrite|OpenReadWrite)\b)|"
+    r"\bFileOpen\s*\(|\bCreateFile\w*\s*\([^;]*GENERIC_READ",
      # excepciones DECLARADAS, cada una con su motivo; solo pueden encoger
      [# settings.ini: su lector es Lsp.Settings y no es lugar de ninguna puerta (C1)
       ('Lsp.Settings.pas', 'ComprobarDuplicadosIni'), ('Lsp.Settings.pas', 'LoadSecurity'),
-      ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'),
+      ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'), ('Lsp.Settings.pas', 'BytesDelIni'),
+      # LA puerta (LeeBytes) y el decodificador que usan ella y LeeTexto, tras la puerta
+      ('Lsp.Patch.pas', 'LeeBytes'), ('Lsp.Patch.pas', 'TextoDeFichero'),
       # .git\HEAD: la puerta niega .git y esta lectura lo admite (el juez es git, 9.5)
       ('Mcp.Tools.Workspace.pas', 'RepoOf'),
-      # BYTES de la jaula que la tool ya comprobo (delphi_fetch; el PNG que se recorta):
-      # la familia de PatchLoadText, que pasa por la puerta en P2 (y RecortaPng, P4)
+     # BYTES de la jaula que la tool ya comprobo (delphi_fetch, el zip de delphi_package;
+     # el PNG que se recorta, P4) y la captura que la propia tool acaba de dejar
+     ('Mcp.Tools.Workspace.pas', 'TDelphiFetchTool.ExecuteWithParams'),
+     ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
+     ('Lsp.InlineImages.pas', 'DeliverCapture'),
       ('Lsp.Files.pas', 'ServeFile'), ('Lsp.Imagen.pas', 'RecortaPng'),
       # programas que NO son el servidor: los renderizadores y el conversor leen lo que
       # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
       ('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'AncestroDeClase'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
       ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Convert'),
-      ('Mld.Sesion.pas', 'SesionGrafica'), ('McpDesktopNode.dpr', 'EjecutarLinux'),
-      ('McpRunJob.dpr', 'LanzarYVigilar')],
-     'LeeTexto y LeeBytes (Lsp.Patch): LA puerta de leer, con el LUGAR por parametro (jaula, IDE, '
+     # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (4 bytes de un designer o
+     # de un estilo, el BOM de un form, el tamano de un PNG)
+     ('Lsp.DesignerBin.pas', 'IsBinaryDesignerFile'), ('Lsp.Styles.pas', 'IsBinaryStyle'),
+     ('Mcp.Tools.Designer.pas', 'FormAncho'), ('Lsp.Imagen.pas', 'TamanoPng'),
+     # el MOTOR de edicion de la jaula: lo que la tool ya paso por la puerta de la jaula
+     # (delphi_read, delphi_edit, delphi_textedit, delphi_changeset, el disenador)
+     ('Lsp.Patch.pas', 'RelecturaDe'), ('Lsp.Patch.pas', 'PatchSaveText'),
+     ('Lsp.Patch.pas', 'ReadNumbered'), ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Patch.pas', 'DoEdit'),
+     ('Lsp.TextEdit.pas', 'DoCreate'), ('Lsp.TextEdit.pas', 'DoEditLine'),
+     ('Lsp.Changeset.pas', 'FingerprintBytes'), ('Lsp.DesignerEdit.pas', 'NombreQueLaCodificacionNoLleva'),
+     ('Mcp.Tools.Designer.pas', 'ConvertDesigner'), ('Lsp.DesignerBin.pas', 'DesignerFileToText'),
+     # la foto del todo o nada: los bytes de lo que la operacion va a tocar, ya juzgado
+     ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Toma'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Anota'),
+     ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Vigila'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
+     ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Cambiados'),
+     # su propio log (C5) y los binarios del propio servidor (el hash de lo que sube remote-run)
+     ('Lsp.LogSink.pas', 'LineasDe'), ('Lsp.RemoteRun.pas', 'Sha256DeFichero'),
+     ('Mld.Sesion.pas', 'SesionGrafica'), ('McpDesktopNode.dpr', 'EjecutarLinux'),
+     ('McpRunJob.dpr', 'LanzarYVigilar'), ('McpDesktopNode.dpr', 'TamanoPng'),
+     ('McpRunJob.dpr', 'EsBinarioNativo'), ('McpRunJob.dpr', 'Arrancar')],
+    'LeeTexto y LeeBytes (Lsp.Patch): LA puerta de leer, con el LUGAR por parametro (jaula, IDE, '
      'casa, temporal, vault), por la ruta REAL y con EL detector. 41 lecturas iban por su cuenta '
      '(inventario del 9-oct-2026, bloque de las puertas de la 1.18.0): el escaner de peligros leia un '
      'Import de fuera de las raices y, limpio, el build lo cargaba de alli; un buzon que era una union '
-     'entregaba y BORRABA lo de detras'),
+    'entregaba y BORRABA lo de detras. Y los de BYTES (P2): 36 medidos; el vault y la inspeccion '
+    'de una unidad (la cabecera de su designer) los leian sin la puerta'),
     ('escribir sin la puerta',
      # (revisor de P3: la primera forma solo veia la mitad - ni CreateFile para escribir,
      # ni fmOpenWrite, ni un fmCreate en la linea de abajo, ni un ini, un zip, un
@@ -367,7 +394,8 @@ REGLAS = [
      r"\bCreateFile\w*\s*\([^;]*(?:GENERIC_WRITE|GENERIC_ALL|FILE_WRITE_DATA|FILE_APPEND_DATA|"
      r"FILE_WRITE_ATTRIBUTES|CREATE_ALWAYS|CREATE_NEW|TRUNCATE_EXISTING|OPEN_ALWAYS)|"
      r"\bzm(?:Write|ReadWrite)\b|\.ExtractAll\s*\(|\bFileCreate\s*\(|\bRenameFile\s*\(|"
-     r"TIniFile\.Create\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|\.UpdateFile\b|\bCopiaNuestra\s*\(",
+    r"TIniFile\.Create\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|\.UpdateFile\b|\bCopiaNuestra\s*\(|"
+    r"TFile\.Open\s*\([^;]*\b(?:faWrite|faReadWrite|fmCreateNew|fmOpenOrCreate|fmTruncate|fmAppend)\b",
      [# LA puerta (EscribeBytes) y los escritores de la jaula que ya preguntan la suya:
       # el atomico, el de productos, la copia diaria y la sellada de la papelera
       ('Lsp.Patch.pas', 'EscribeBytes'), ('Lsp.Patch.pas', 'CopiaAntesDePisar'),
@@ -590,7 +618,7 @@ PLANTADO = {
     'una pagina de codigos a mano': "  E := TEncoding.GetEncoding(1252);",
     'fijar la pagina ANSI': "  UsaPaginaAnsi(1251);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
-    'leer texto sin la puerta': "  Xml := TFile.ReadAllText(Dproj);",
+    'leer sin la puerta': "  Xml := TFile.ReadAllText(Dproj);",
     'escribir sin la puerta': "  TFile.WriteAllText(Ruta, Texto, TEncoding.UTF8);",
     'borrar sin la puerta': "  TFile.Delete(Ruta);",
 }
@@ -628,17 +656,25 @@ for forma in ("  for E in TArray<string>.Create('*.dfm', '*.fmx') do X := 1;",
 
 # las otras formas de leer texto por su cuenta, y la que NO lo es (un
 # TMemIniFile vacio que se llena con SetStrings desde la puerta)
-REGLA_LEER = next(r for r in REGLAS if r[0] == 'leer texto sin la puerta')
+REGLA_LEER = next(r for r in REGLAS if r[0] == 'leer sin la puerta')
 def leer_plantado(forma):
     return fuera_de_casa(REGLA_LEER, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                        'LeeAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
 for forma in ("  L := TFile.ReadAllLines(F);", "  Ini := TMemIniFile.Create(F, TEncoding.UTF8);",
               "  Ini := TIniFile.Create(F);", "  Lista.LoadFromFile(F);", "  R := TStreamReader.Create(F);",
-              "  T := DecodeSourceBytes(TFile.ReadAllBytes(F));"):
+              "  T := DecodeSourceBytes(TFile.ReadAllBytes(F));", "  B := TFile.ReadAllBytes(F);",
+              "  S := TFileStream.Create(F, fmOpenRead or fmShareDenyNone);",
+              "  S := TFileStream.Create(F, fmShareDenyWrite);", "  S := TFile.OpenRead(F);",
+              "  S := TFile.Open(F, TFileMode.fmOpen, TFileAccess.faRead);", "  H := FileOpen(F, fmOpenRead);",
+              "  H := CreateFile(PChar(F), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, 0, 0);"):
     cazados = leer_plantado(forma)
     check('mutante "%s": tambien %s' % (REGLA_LEER[0], forma.strip()), len(cazados) == 1, cazados)
 NO_CAZADO = leer_plantado("  Ini := TMemIniFile.Create('');")
 check('...y un TMemIniFile vacio (lo llena SetStrings) no es una lectura', not NO_CAZADO, NO_CAZADO)
+for forma in ("  S := TFileStream.Create(F, fmCreate);", "  S := TFileStream.Create(F, fmOpenReadWrite);"):
+    NO_CAZADO = leer_plantado(forma)
+    check('...y un TFileStream para ESCRIBIR no es una lectura (lo caza la regla de escribir): %s'
+          % forma.strip(), not NO_CAZADO, NO_CAZADO)
 
 # las otras formas de escribir por su cuenta (y una apertura para LEER, que no)
 REGLA_ESCRIBIR = next(r for r in REGLAS if r[0] == 'escribir sin la puerta')
@@ -662,7 +698,8 @@ for forma in ("  H := CreateFile(PChar(R), GENERIC_WRITE, 0, nil, CREATE_ALWAYS,
               "  W := TFile.CreateText(Ruta);", "  TFile.Replace(A, B, C);",
               "  Ini := TIniFile.Create(Ruta); Ini.WriteString('a', 'b', 'c');",
               "  Ini.UpdateFile;", "  Zip.Open(Ruta, zmWrite);", "  Zip.ExtractAll(Dir);",
-              "  H := FileCreate(Ruta);", "  RenameFile(A, B);", "  CopiaNuestra(A, B);"):
+              "  H := FileCreate(Ruta);", "  RenameFile(A, B);", "  CopiaNuestra(A, B);",
+              "  S := TFile.Open(Ruta, TFileMode.fmOpenOrCreate, TFileAccess.faWrite);"):
     cazados = escribir_plantado(forma)
     check('mutante "%s": tambien %s' % (REGLA_ESCRIBIR[0], ' '.join(forma.split())), len(cazados) == 1, cazados)
 NO_CAZADO = escribir_plantado("  H := CreateFile(PChar(R), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, 0, 0);")

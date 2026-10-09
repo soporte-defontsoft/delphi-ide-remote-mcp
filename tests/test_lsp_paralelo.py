@@ -495,8 +495,11 @@ def p8(uno, colgados):
           'agentes que preguntan, y su carpeta se borra debajo',
           por_ronda == [1] * 4 and all(calientes) and all(s > 0 for s in sitios) and len(codigos) == 4
           and all(mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') for r in dichos),
-          'motores %s, calientes %s, respuestas con sitio antes de borrar %s, LSP-033 %s, codigos %s | %s'
-          ' || al empezar P8: %s || rondas sin sitio: %s' % (
+          # el borrado que NO fue a la papelera, DELANTE: run_all recorta la linea
+          # y el 9-oct-2026 se corto justo antes de el (las otras condiciones, bien)
+          'borrados que no fueron a la papelera: %s || motores %s, calientes %s, respuestas con sitio antes '
+          'de borrar %s, LSP-033 %s, codigos %s | %s || al empezar P8: %s || rondas sin sitio: %s' % (
+              [' '.join(r.split())[:300] for r in dichos if not mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT')] or '-',
               por_ronda, calientes, sitios, paradas, [hex(c) for c in codigos],
               ' | '.join(' '.join(r.split())[:70] for r in dichos), foto, muestras or '-'))
     if not all(paradas):

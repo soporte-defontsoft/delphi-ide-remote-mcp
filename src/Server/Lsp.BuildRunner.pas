@@ -878,7 +878,7 @@ begin
     // por el escritor que pregunta a la puerta (AtomicWrite), no TFile.Copy:
     // en una raiz de solo lectura esto escribia igual (quinta revision)
     if (not TFile.Exists(Tpl)) and TFile.Exists(Seed) then
-      AtomicWrite(Tpl, TFile.ReadAllBytes(Seed));
+      AtomicWrite(Tpl, LeeBytes(Seed, [ltIde])); // la plantilla del IDE, por la puerta (M1)
   end;
   // 2) the manifest itself, only when the project has none - BUT an IDE
   //    manifest written before the platform was ever deployed from the IDE
@@ -1066,11 +1066,13 @@ begin
     // the .dproj's unit list: a unit can be pulled in by a search path and
     // still carry a directive, and this check is cheap enough to be broad.
     Base := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+    // por EL recorredor (WalkFiles): solo sigue los enlaces que esta sesion
+    // puede leer (TDirectory con soAllDirectories cruzaba una union y leia
+    // lo de detras: medida M1)
     if TDirectory.Exists(Base) then
-      for var Ext in MascarasDe(SOURCE_EXTS) do
-        for var SF in TDirectory.GetFiles(Base, Ext, TSearchOption.soAllDirectories) do
-          if not Files.Contains(SF) then
-            Files.Add(SF);
+      for var SF in WalkFiles(Base, MascarasDe(SOURCE_EXTS)) do
+        if not Files.Contains(SF) then
+          Files.Add(SF);
     for var F in Files do
     begin
       try

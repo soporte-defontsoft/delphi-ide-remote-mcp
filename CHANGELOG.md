@@ -470,6 +470,66 @@ the MCP `initialize` response (`serverInfo.version`).
   says so (BUILD-047) instead of telling to install the library on the
   target (BUILD-035). `test_sdk` checks the copies of `remove-sdk` and
   `remove-profile` byte for byte, and the purge.
+- **What the engine knows about units outside the roots is not shown.**
+  DelphiLSP reads, through the project's search path, units that no tool
+  lets the session read. Measured against the bare engine: completion gave
+  the name AND THE VALUE of a constant of a unit outside the roots, hover
+  its signature and its path, signature the whole signature, definition the
+  path; and a variable declared inside with a type from outside listed the
+  outside members after `G.` in a file that does not even use that unit
+  (completion items do not say where they come from). Now, as decided
+  ("trim and deny"): the engine settings the server fabricates leave out
+  the project's search-path folders the session may not read, and the
+  answers say so (LSP-037: definition, hover, completion, signature,
+  diagnostics); the IDE's own `.delphilsp.json` is not taken for a project
+  that has such folders (the trimmed one is fabricated instead), and what
+  was trimmed is part of the cached settings' name, so two sessions that
+  see different things never share settings nor an engine; a definition
+  that still lands outside is denied by one judge in definition, in the
+  declaration chain and in hover (LSP-038); completion and signature are
+  denied for a project whose `.dpr` names units outside the roots
+  (LSP-039), each entry judged on its own: one entry whose path cannot be
+  judged no longer hides the others (one guard for the whole list let
+  completion give the value of a constant from outside, F7b), and a `.dpr`
+  that cannot be read right now answers with that instead of with names.
+  The IDE's library - the Library Search Path, GetIt's
+  components included - is a read-only place of the gates, so the engine
+  still talks about installed components with the library zone off. What
+  the engine opens on its own - the target of `kind=declaration`, a
+  candidate of `delphi_references` - is judged by the engine's places too,
+  not by the jail: with the library zone off, `kind=declaration` of an RTL
+  routine answered GUARD-002 while `definition` gave that very location
+  (F8c; it did before this version too), and `delphi_references` of it
+  answered LSP-014, whose causes were both false there: references judges
+  "outside" with the same judge as LSP-038 now (F8d).
+  `delphi_references`' LSP-014 and the new LSP-038 now name both causes (a
+  unit the `.dpr` names outside the roots, or an unconfigured unit); LSP-014
+  sent the agent to `delphi_definition`, which no longer shows where such a
+  definition goes. `test_motor_fuera` (F1-F8d, F7b), red against the previous
+  binary.
+- **What the server read of a file on its own goes through the read gate.**
+  The text and bytes the engine is given, and what `delphi_references` and
+  `delphi_search` read, were loaded from any path they were handed - also a
+  path the ENGINE gave; the jail's text reader trusted the tool to have
+  checked. The build's scan of `{$I}`/`{$R}` walked the project folder with
+  the RTL and crossed a junction: a source behind it with an `{$I}` from
+  outside refused the build naming that source (`test_puerta_leer` L1). The
+  package suggestion for an implicit import (W1033) looked into the sibling
+  folders of the workspace and read - and suggested by name - the `.dpk`
+  behind a junction (L2). `delphi_move` of a project whose `.dpr` names a
+  unit outside the roots read that unit to re-point it: now it is neither
+  read nor re-pointed, and the answer lists it among what could not be
+  done (L3). An open document whose path now leads outside (the roots
+  changed, or a link in its way) is closed instead of read again. The
+  designer's table generator reads the components' sources, and the build
+  the IDE's Android manifest template, through the gate with the IDE's
+  places; `delphi_styles lint` reads its `.rc` files through the one walker.
+  L1-L3 are red with both layers removed (the walker or the move's own
+  question, and the jail's reader asking the gate); each layer holds the
+  three alone. `test_designer_tablas` and the Android part of
+  `test_deploy_adb` now run with the library zone off, where the jail no
+  longer reads the installation and the place each read names is what
+  decides.
 
 ### Internal
 
@@ -521,6 +581,17 @@ the MCP `initialize` response (`serverInfo.version`).
   not the server), and can only shrink; the write rule sees `CreateFile`
   for writing, every write mode of a stream (on its own line too), the
   ini, zip and rename writers and the public copy of the jail.
+- **The read rule sees bytes too** (the doors block, third part).
+  `test_paisaje`'s rule for reading without the gate now also sees the byte
+  readers - `TFile.ReadAllBytes`, `OpenRead` and `Open`, a file stream not
+  opened to write, `FileOpen`, `CreateFile` for reading: 36 measured. The
+  vault's note editor and the unit inspector read through `LeeBytes` now;
+  the rest is declared with its reason (the sniffers that read a header,
+  the jail's edit engine, the whole-or-nothing photo, the log, the server's
+  own binaries, `settings.ini`, the programs that are not the server) and
+  can only shrink. The write rule sees `TFile.Open` for writing. The IDE's
+  library is a place of `Lsp.Lugares` (`LugaresDeLaBiblioteca`), as the
+  IDE's own places are: the gate walked the raw list.
 
 - `Lsp.Guard` is split by families, one family per commit and moves only:
   not a line of logic changes, and the suite runs whole after each one. The

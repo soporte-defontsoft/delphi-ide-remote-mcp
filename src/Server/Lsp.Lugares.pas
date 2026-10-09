@@ -43,12 +43,24 @@ function LibraryReadRoots: TArray<string>;
   las raices va solo ahi, por las puertas de Lsp.Patch (David, 9-oct-2026:
   fuera de esto se niega; decisions/puertas-diseno-2026-10-09). NO las
   carpetas de Documentos (BdsUserDir, BdsCommonDir): de la de usuario cuelga
-  Projects, donde el IDE crea los proyectos de la gente. En la forma con la
-  que se compara (FormaLarga). Sin Delphi, vacio.
+  Projects, donde el IDE crea los proyectos de la gente. NO su zona de
+  biblioteca (LibraryRoots): es otro lugar de las puertas (ltBiblioteca),
+  porque cargarla lee rsvars.bat por la puerta con el IDE como lugar, y
+  dentro de aqui la puerta se preguntaba a si misma sin fin (medido el
+  9-oct-2026: el servidor se caia en la primera llamada al motor). En la
+  forma con la que se compara (FormaLarga). Sin Delphi, vacio.
   AParaEscribir: los que se pueden ESCRIBIR, que son los mismos SIN la
   instalacion (David, 9-oct-2026: solo BDS AppData y los sysroots de los SDK
   que el IDE registra; la instalacion se lee, no se toca). }
 function LugaresDelIde(AParaEscribir: Boolean = False): TArray<string>;
+
+{ LA ZONA DE BIBLIOTECA como lugar de las puertas (ltBiblioteca, Lsp.Patch):
+  la de LibraryRoots, solo para LEER, este o no encendida LibraryZone - lo
+  que el motor lee de la Library Path lo pide el IDE, no el agente (P2 de la
+  1.18.0). Aparte de LugaresDelIde por lo que dice alli (cargarla pasa por la
+  puerta con el IDE como lugar). En la forma con la que se compara
+  (FormaLarga), medida una vez, como LibraryRoots. }
+function LugaresDeLaBiblioteca: TArray<string>;
 
 { La forma DECLARADA de una ruta que llega RESUELTA. Un programa que el
   servidor lanza contesta con la ruta real (git: la raiz de un repo), y la
@@ -128,6 +140,8 @@ var
   GIdeLoaded: Boolean = False;
   GIdeInstalacion: string;      // la instalacion: solo para leer
   GIdeLugares: TArray<string>;  // datos del usuario y SDK: leer y escribir
+  GLibLugaresLoaded: Boolean = False;
+  GLibLugares: TArray<string>;  // la zona de biblioteca, en FormaLarga
 
 { The read-only library zone: RAD Studio installation + IDE Library Search
   Path directories (installed components), canonicalized. Cached. }
@@ -593,6 +607,23 @@ begin
     for var S in SysrootsRegistrados(Info.Version) do
       if EsRutaAbsoluta(S.Trim) and not S.Contains('$(') then
         Result := Result + [FormaLarga(S)];
+end;
+
+function LugaresDeLaBiblioteca: TArray<string>;
+var
+  Lugares: TArray<string>;
+begin
+  if not GLibLugaresLoaded then
+  begin
+    // en locales, y las globales al final, como LugaresDelIde
+    Lugares := nil;
+    for var L in LibraryRoots do
+      if EsRutaAbsoluta(L.Trim) then
+        Lugares := Lugares + [FormaLarga(L)];
+    GLibLugares := Lugares;
+    GLibLugaresLoaded := True;
+  end;
+  Result := GLibLugares;
 end;
 
 end.

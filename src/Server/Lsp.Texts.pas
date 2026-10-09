@@ -725,17 +725,21 @@ const
     anterior; al borrar ese fichero, caia en el de una tercera. La llamada
     entera moria con un RECHAZADO de jaula que ADEMAS escupia la ruta ajena:
     una respuesta imposible y una fuga en el mismo sitio. El %s es el
-    IDENTIFICADOR, nunca la ruta de fuera. }
+    IDENTIFICADOR, nunca la ruta de fuera. Y desde P2 de la 1.18.0 la otra
+    causa, la de un proyecto CONFIGURADO: una unit que su .dpr nombra con
+    ruta fuera de las raices (la misma que niega LSP-038); el texto decia que
+    casi siempre era una unit sin configurar. }
   SR_REFS_TARGET_OUTSIDE_FMT =
     '[LSP-014 DENIED] "%s" resolves to a definition OUTSIDE this ' +
     'workspace, so I do not search for its uses: what I found here would ' +
     'not be uses of that symbol, and telling you nobody uses it would be ' +
-    'worse than not answering. It almost always happens with an ' +
-    'UNCONFIGURED unit (no .delphilsp.json or .dproj nearby): the engine ' +
-    'resolves it against another unit with the same name that it indexed ' +
-    'before. Check with delphi_definition where it really goes; if the ' +
-    'unit belongs to a project, work on the project (with its .dproj ' +
-    'next to it) so that it gets configured.';
+    'worse than not answering. Two things cause it: a unit the project''s ' +
+    '.dpr names with a path outside the roots (bring that unit into the ' +
+    'workspace or take it out of the project), or an UNCONFIGURED unit (no ' +
+    '.delphilsp.json or .dproj nearby), which the engine resolves against ' +
+    'another unit with the same name that it indexed before - then work on ' +
+    'the project, with its .dproj next to it, so that it gets configured. ' +
+    'delphi_definition and delphi_hover deny it the same way (LSP-038).';
 
   SN_REFS_MENTIONS_FMT =
     '[LSP-015] The name also appears %d time(s) in COMMENTS or inside ' +
@@ -7127,6 +7131,9 @@ const
     'the server''s temporary folder';
   SF_LUGAR_VAULT =
     'the vault';
+  SF_LUGAR_BIBLIOTECA =
+    'the IDE''s library: its installation, its GetIt catalogs and its ' +
+    'Library Search Path (read only)';
 
   { El endpoint LFS no es una clave local que el agente tenga que quitar. }
   SR_GIT_LFS_ENDPOINT_FMT =
@@ -7209,6 +7216,35 @@ const
     ' [LSP-021] [warning: no .delphilsp.json project settings found for ' +
     'this file - semantic answers may be null. Generate one in the IDE ' +
     '(Code Insight > Generate LSP config + Reload LSP Server).]';
+
+  { Lo que el proyecto le haria ver al motor FUERA de lo que la sesion puede
+    leer (David, 9-oct-2026: "recortar y negar", coherente con LSP-014): las
+    carpetas de su search path salen de los ajustes del motor (LSP-037, la
+    nota), una definicion que aun cae fuera se niega (LSP-038) y completion y
+    signature, que contestan nombres sin decir de donde, se niegan si el .dpr
+    nombra units de fuera (LSP-039). Medido el 9-oct: completion daba el VALOR
+    de una constante de fuera, hover su firma y su ruta. }
+  SN_LSP_RECORTE_FMT =
+    ' [LSP-037] %d folder(s) of this project''s search path are outside ' +
+    'what this session may read: the engine does not see them, so their ' +
+    'units read here as not found (diagnostics) and their symbols get no ' +
+    'answer. delphi_build compiles the project as it is. To work with those ' +
+    'units, bring them into the workspace or ask the operator for that root.';
+  SR_LSP_DEF_FUERA_FMT =
+    '[LSP-038 DENIED] "%s" resolves to a definition OUTSIDE this workspace ' +
+    '(a unit this session may not read), so I do not show where it is nor ' +
+    'what it declares - the same rule as delphi_references (LSP-014). Two ' +
+    'things cause it: a unit the project''s .dpr names with a path outside ' +
+    'the roots (bring that unit into the workspace or take it out of the ' +
+    'project), or an UNCONFIGURED unit (no .delphilsp.json or .dproj nearby), ' +
+    'which the engine resolves against another unit with the same name that ' +
+    'it indexed before (work on its project, with its .dproj next to it).';
+  SR_LSP_NOMBRES_FUERA_FMT =
+    '[LSP-039 DENIED] This project''s .dpr names units OUTSIDE this workspace ' +
+    '(%s). %s answers names without saying where they come from, so it could ' +
+    'list what those units declare, and I do not answer it for this project - ' +
+    'the same rule as delphi_references (LSP-014). Bring those units into the ' +
+    'workspace or take them out of the project.';
 
   SR_LSP_ERROR_FMT =
     '[LSP-022 INTERNAL] LSP error: %s';

@@ -332,9 +332,24 @@ type
       ltCasa      las carpetas propias del servidor: caches, buzon e informes
                   (Lsp.Casa.CarpetasDeLaCasa; settings.ini NO)
       ltTemporal  el temporal propio del servidor (ServerTempDir)
-      ltVault     el vault (VaultPath) }
-  TLugarDeTexto = (ltJaula, ltIde, ltCasa, ltTemporal, ltVault);
+      ltVault     el vault (VaultPath)
+      ltBiblioteca  la zona de biblioteca del IDE (Lsp.Lugares.LibraryRoots: su
+                  instalacion, sus catalogos de GetIt y su Library Search
+                  Path), este o no encendida para los agentes - eso es la
+                  jaula -. SOLO para leer: lo que el motor dice de un simbolo
+                  de alli se ensena (P2). No es ltIde porque cargarla lee
+                  rsvars.bat por la puerta con el IDE como lugar }
+  TLugarDeTexto = (ltJaula, ltIde, ltCasa, ltTemporal, ltVault, ltBiblioteca);
   TLugaresDeTexto = set of TLugarDeTexto;
+
+const
+  { Lo que el MOTOR (DelphiLSP) puede ver y lo que se puede ensenar de lo que
+    dice: lo que esta sesion puede leer, los lugares del IDE y su biblioteca
+    (David, 9-oct-2026: "recortar y negar"). UNA definicion: la usan el juez
+    de lo que se recorta de sus ajustes y de lo que sus tools niegan
+    (Lsp.ConfigFabricator.MotorPuedeEnsenar) y lo que se le da a leer
+    (Lsp.Client.LoadSourceText). }
+  LUGARES_DEL_MOTOR: TLugaresDeTexto = [ltJaula, ltIde, ltBiblioteca];
 
 { LA PUERTA DE LEER, su pregunta: '' si APath esta en alguno de ALugares,
   por su ruta REAL (un enlace no saca a nadie de su sitio); si no, la
@@ -1915,6 +1930,9 @@ begin
         R := Real;
         Result := (R <> '') and EnAlgunLugar(R, [VaultPath]);
       end;
+    // solo se lee: nada se escribe en la biblioteca del IDE
+    ltBiblioteca:
+      Result := not AParaEscribir and EnAlgunLugar(RealPath(APath), LugaresDeLaBiblioteca);
   end;
 end;
 
@@ -1930,6 +1948,7 @@ begin
     ltCasa: Result := MsgText(SF_LUGAR_CASA);
     ltTemporal: Result := MsgText(SF_LUGAR_TEMPORAL);
     ltVault: Result := MsgText(SF_LUGAR_VAULT);
+    ltBiblioteca: Result := MsgText(SF_LUGAR_BIBLIOTECA);
   else
     Result := '';
   end;
@@ -2120,6 +2139,12 @@ end;
 
 function PatchLoadText(const APath: string; out AEncName: string): string;
 begin
+  // la lectura de la JAULA pregunta ELLA a la jaula (P2 de las puertas): se
+  // fiaba de que la tool hubiese comprobado la ruta a la entrada, y algunas
+  // no la daba la tool sino el motor o el .dpr (medida M1: la cadena de
+  // declaration, la mudanza de delphi_move) o un recorrido que cruzaba una
+  // union. Lo de fuera de la jaula se lee por LeeTexto con su lugar
+  ExigeLugarDeLectura(APath, [ltJaula]);
   Result := TextoDeFichero(APath, AEncName);
 end;
 

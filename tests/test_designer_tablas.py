@@ -41,7 +41,12 @@ EXE = mc.copia_exe(BASE)
 APPDATA = os.path.join(BASE, 'appdata')
 os.makedirs(APPDATA, exist_ok=True)
 CACHE = mc.cache_servidor('designer', APPDATA)
-env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'LOCALAPPDATA': APPDATA})
+# la zona de biblioteca APAGADA, como en un workspace con nombre que no la declara:
+# el generador lee las fuentes de la VCL y la FMX de la instalacion por la puerta
+# con los lugares del MOTOR (el IDE y su biblioteca), no por la jaula. Con la zona
+# encendida la jaula ya las dejaba leer y su mutante (leer por la jaula) seguia
+# verde (P2 de la 1.18.0)
+env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'LOCALAPPDATA': APPDATA, 'DELPHI_MCP_LIBRARY_ZONE': '0'})
 
 
 def J(t):
