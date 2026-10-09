@@ -7232,18 +7232,13 @@ const
     'version belongs to the whole server - [Server] DelphiVersion=. For ' +
     'another version, run another server from its own folder.';
 
-  { Las claves y secciones RETIRADAS del settings.ini: no hacen nada, y el
-    arranque lo dice en vez de callarlo (11.1 de la 1.18.0;
-    Lsp.Settings.CLAVES_RETIRADAS). }
+  { Las claves RETIRADAS de un workspace: no hacen nada, y el arranque lo dice
+    en vez de callarlo (11.1 de la 1.18.0; Lsp.Settings.CLAVES_RETIRADAS). La
+    vieja seccion [Security] NO se nombra: desde la 0.98 "ni autentica, ni
+    avisa, ni existe" (test_round24 A4b). }
   SL_GUARD_CLAVE_RETIRADA_FMT =
     SL_MARCA_AVISO +
     ': [%s] %s= is no longer read (gone in %s): it does nothing - remove it.';
-
-  SL_GUARD_SECCION_SECURITY =
-    SL_MARCA_AVISO +
-    ': the section [Security] is no longer read (gone in 0.98.0, with the ' +
-    'anonymous read-only mode): its keys do nothing. Credentials live in ' +
-    '[Workspace.<name>] Token= / ReadOnlyToken=.';
 
   { [Server] DelphiUpdate= con otra forma que numero.numero: se ignora. }
   SL_GUARD_DELPHIUPDATE_MAL_FMT =

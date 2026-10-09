@@ -267,10 +267,10 @@ try:
 
     # ------------------------------------------------------------------ U2b
     # Las claves RETIRADAS no hacian nada y nadie lo decia (11.1 de la 1.18.0):
-    # AllowDesktopControl (la tool local, 1.0.16), AllowRun (delphi_run, 1.1.1)
-    # y la seccion [Security] entera (0.98.0). El log lo avisa, como U2
-    INI2B = ini_bytes([], ['AllowDesktopControl=1', 'AllowRun=1']) + \
-        b'\r\n[Security]\r\nAnonymousReadOnly=1\r\n'
+    # AllowDesktopControl (la tool local, 1.0.16) y AllowRun (delphi_run,
+    # 1.1.1). El log lo avisa, como U2. (La seccion [Security] no: desde la
+    # 0.98 "ni autentica, ni avisa, ni existe", test_round24 A4b)
+    INI2B = ini_bytes([], ['AllowDesktopControl=1', 'AllowRun=1'])
     d2b, exe2b = carpeta_servidor('ws-retiradas', INI2B)
     proc, ruta, c = lanza(exe2b, 'ws-retiradas')
     log = mensajes(ruta)
@@ -278,8 +278,6 @@ try:
           c is not None
           and CAT['SL_GUARD_CLAVE_RETIRADA_FMT'] % ('Workspace.Op', 'AllowDesktopControl', '1.0.16') in log
           and CAT['SL_GUARD_CLAVE_RETIRADA_FMT'] % ('Workspace.Op', 'AllowRun', '1.1.1') in log, log[-12:])
-    check('U2b ...y la seccion [Security], que no se lee desde la 0.98',
-          CAT['SL_GUARD_SECCION_SECURITY'] in log, log[-12:])
     para(proc)
 
     # ------------------------------------------------------------------ U3

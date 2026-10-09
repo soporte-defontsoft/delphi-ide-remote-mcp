@@ -1251,11 +1251,6 @@ begin
             // anywhere saying why. It gets the loudest note of the three.
             GWorkspaceNotes := GWorkspaceNotes +
               [MsgText(SL_GUARD_WORKSPACE_SIN_PUNTO)]
-          else if SameText(S, 'Security') then
-            // la de las credenciales hasta la 0.98 (AnonymousReadOnly): se
-            // ignoraba entera sin decirlo (11.1 de la 1.18.0)
-            GWorkspaceNotes := GWorkspaceNotes +
-              [MsgText(SL_GUARD_SECCION_SECURITY)]
           else if S.ToLower.StartsWith('work') then
             // [Workopenclaw], [WorkspaceX]... a workspace section spelled
             // wrong used to vanish silently and its token answered 401 with
