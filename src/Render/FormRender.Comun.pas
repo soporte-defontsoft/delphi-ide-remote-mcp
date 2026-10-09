@@ -725,8 +725,15 @@ begin
     var C := ARaiz.Components[I];
     if C.InheritsFrom(AClaseControl) or (C.Owner <> ARaiz) then
       Continue;
-    if C.DesignInfo = 0 then
-      Continue; // sin posicion de diseno (un item de menu, una columna)
+    // sin posicion de diseno Y viviendo DENTRO de otro (un item de menu, una
+    // accion, un campo): lo muestra su contenedor. Solo con DesignInfo = 0
+    // se saltaba tambien un no visual de la raiz sin Left/Top: ni se dibujaba
+    // ni se listaba (3.6 de la 1.18.0, Hermes); va en 0,0, como en el IDE.
+    // La raiz como padre cuenta como ninguno: en FMX un no visual de la form
+    // tiene la form de Parent (TFmxObject.HasParent es Parent <> nil)
+    var Padre := C.GetParentComponent;
+    if (C.DesignInfo = 0) and (Padre <> nil) and (Padre <> ARaiz) then
+      Continue;
     Result := Result + [C];
   end;
 end;

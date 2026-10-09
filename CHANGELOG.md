@@ -156,6 +156,13 @@ the MCP `initialize` response (`serverInfo.version`).
   answered fine and moved nothing (measured by Hermes). `set` refuses it now
   naming `Position.X` / `Position.Y` (DSGN-118), and `lint` warns of such a
   line in a control. `test_designer_edit` F1b.
+- **`preview` lists and draws a non-visual component that has no position.**
+  The renderer skipped every component without a design position, so one
+  with no `Left`/`Top` was neither drawn nor listed, while the answer said
+  `nonVisualDrawn: true` (measured by Hermes). Only what lives inside
+  another component (a menu item, an action, a field) is skipped now; the
+  rest goes to 0,0 as in the IDE, and `nonVisualDrawn` says what was drawn,
+  not what was asked. `test_designer_preview` P7b.
 
 ### Internal
 

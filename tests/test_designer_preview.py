@@ -120,6 +120,27 @@ PRUEBA = escribe('Prueba.dfm', """object FormPrueba: TFormPrueba
 end
 """)
 
+# 3.6 de la 1.18.0 (Hermes, medido): un no visual SIN Left/Top (DesignInfo 0)
+# ni se dibujaba ni se listaba; un item de menu, que vive DENTRO del suyo, no
+# se lista
+SINSITIO = escribe('SinSitio.dfm', """object FormSinSitio: TFormSinSitio
+  Left = 0
+  Top = 0
+  Caption = 'Sin sitio'
+  ClientHeight = 200
+  ClientWidth = 400
+""" + FONT + """  object Timer1: TTimer
+  end
+  object MainMenu1: TMainMenu
+    Left = 300
+    Top = 60
+    object Archivo1: TMenuItem
+      Caption = 'Archivo'
+    end
+  end
+end
+""")
+
 escribe('UBase.pas', """unit UBase;
 interface
 uses Vcl.Forms, Vcl.ExtCtrls, Vcl.StdCtrls, System.Classes, Vcl.Controls;
@@ -627,6 +648,16 @@ end
     r = preview(path=PRUEBA, component='Timer1', nonvisual=True, out=png('p7d.png'), inline='false')
     check('P7 ...con nonvisual=true, el recuadro de su icono en su Left/Top',
           (J(r).get('componentRect') or '').startswith('300,60,'), r[:300])
+    # 3.6: sin Left/Top se lista y se dibuja en 0,0 (como el IDE); un item de
+    # menu (vive DENTRO de su menu) no se lista; nonVisualDrawn dice lo dibujado
+    preview(path=SINSITIO, out=png('p7boff.png'), inline='false')
+    r = preview(path=SINSITIO, nonvisual=True, out=png('p7b.png'), inline='false')
+    j = J(r)
+    nv = sorted((x.get('name'), x.get('class')) for x in j.get('nonVisual') or [])
+    on, off = pixel_de(png('p7b.png'), 12, 12), pixel_de(png('p7boff.png'), 12, 12)
+    check('P7b un no visual SIN Left/Top: listado y dibujado en 0,0; el item de menu no se lista',
+          nv == [('MainMenu1', 'TMainMenu'), ('Timer1', 'TTimer')] and j.get('nonVisualDrawn') is True and
+          on is not None and off is not None and on != off, (nv, j.get('nonVisualDrawn'), on, off))
 
     # ------------------------------------------------------------------ P8
     r = preview(path=INVENTADA, inline='false')

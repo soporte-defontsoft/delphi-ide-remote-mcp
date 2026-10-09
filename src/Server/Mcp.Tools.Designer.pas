@@ -1264,7 +1264,9 @@ begin
       NoVis.AddElement(Uno);
     end;
     Return.AddPair('nonVisual', NoVis);
-    Return.AddPair('nonVisualDrawn', TJSONBool.Create(Params.NonVisual));
+    // lo DIBUJADO (NONVISUAL= del ayudante), no lo pedido: decia true sin
+    // haber dibujado nada (3.6 de la 1.18.0, Hermes)
+    Return.AddPair('nonVisualDrawn', TJSONBool.Create(Params.NonVisual and (R.NoVisualesDibujados > 0)));
     if (Length(R.NoVisuales) > 0) and not Params.NonVisual then
       Return.AddPair('nonVisualNote', MsgText(SN_DESIGNER_NO_VISUALES_OCULTOS));
     if Recortada then
