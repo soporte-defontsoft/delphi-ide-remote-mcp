@@ -215,6 +215,13 @@ the MCP `initialize` response (`serverInfo.version`).
   (`EditLabel.Caption` of a `TLabeledEdit`), is not a reference and is
   written as before. Measured: not one of 4,429 text forms here and in the
   RAD Studio samples has both lines in a block. `test_designer_edit` V10d.
+- **`to-binary` says why a form with a non-ASCII name stays text.** A
+  component, class or property name with letters outside ASCII made the
+  RTL's form parser fail, and the answer was its bare `EParserError:
+  Identifier expected on line 3`. The compiler does read such a name (it
+  stores it as UTF-8, measured), so the refusal (DSGN-120) now names it
+  and its line and says to keep the form as text or rename it.
+  `test_designer_binary`.
 
 ### Internal
 
