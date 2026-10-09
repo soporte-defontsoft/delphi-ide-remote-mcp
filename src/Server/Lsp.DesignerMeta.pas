@@ -966,17 +966,20 @@ begin
       // TAlphaColor se escribia y el form no abria; clRed y xFF00FF00 si
       // cargan (segunda revision de la 1.17.0) -; sin ellas no se sabe que
       // mas lee: se escribe, y con su aviso siempre
+      // ...y lo que su lector tambien toma se ensena SIEMPRE, sea cual sea el
+      // valor: con uno que no era un nombre ('rojo' entre comillas) solo se
+      // daban los nombres (3.9 de la 1.18.0, Hermes)
+      if Abierta and M.FormasAbiertas.TryGetValue(K, Formas) then
+      begin
+        if EsIdentificador(AValor, False) and CargaPorSusFormas(Formas, AValor, Lista) then
+        begin
+          AParecida := '';
+          Exit;
+        end;
+        Exit(MsgFmt(SF_DESIGNER_TOMA_ABIERTA_FMT, [Show, FormasQueSeEnsenan(Formas, Nombres)]));
+      end;
       if Abierta and EsIdentificador(AValor, False) then
       begin
-        if M.FormasAbiertas.TryGetValue(K, Formas) then
-        begin
-          if CargaPorSusFormas(Formas, AValor, Lista) then
-          begin
-            AParecida := '';
-            Exit;
-          end;
-          Exit(MsgFmt(SF_DESIGNER_TOMA_ABIERTA_FMT, [Show, FormasQueSeEnsenan(Formas, Nombres)]));
-        end;
         AAviso := MsgFmt(SN_DESIGNER_CONSTANTE_ABIERTA_FMT, [AValor, AHoja.TypeName, AParecida]);
         AParecida := '';
         Exit;

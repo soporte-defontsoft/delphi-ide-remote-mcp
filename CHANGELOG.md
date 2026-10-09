@@ -168,6 +168,11 @@ the MCP `initialize` response (`serverInfo.version`).
   the renderer set the text through RTTI. A name for an integer type
   (`clRed`, `crHandPoint`, `claRed`) is now resolved by the reader its type
   registers, as `TReader` resolves it in a form. `test_designer_preview` P3.
+- **DSGN-093 shows everything a `TAlphaColor` takes, whatever the value.**
+  For a value that was not a name (`'rojo'` in quotes) it listed only the
+  `cla...` names; for an open list like `TAlphaColor` it now also shows what
+  its reader takes (`xFF00FF00`, the `cl` forms), as it already did for a
+  wrong name (measured by Hermes). `test_designer_edit` F2.
 
 ### Internal
 

@@ -525,6 +525,11 @@ try:
     # ------------------------------------------------------------------ F2
     r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Fill.Color', value="'rojo'")
     check('F2 una cadena en un TAlphaColor: DSGN-093', mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT'), r[:300])
+    # 3.9 de la 1.18.0 (Hermes, medido): el DSGN-093 de un valor que no es un
+    # nombre solo daba los nombres; ahora, lo que su lector tambien toma
+    # (xAARRGGBB y las formas cl)
+    check('F2 ...y ensena lo que el lector de TAlphaColor tambien toma: xFF00FF00',
+          'xFF00FF00' in r, r[:400])
     r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Fill.Color', value='xFF00FF00')
     check('F2 xAARRGGBB en un TAlphaColor: su IdentTo lo acepta (no es una busqueda en el mapa: cualquiera)',
           '    Fill.Color = xFF00FF00' in mc.lee(FFMX), r[:300])
