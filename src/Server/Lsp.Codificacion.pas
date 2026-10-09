@@ -137,13 +137,14 @@ type
   ECaracterNoCabe = class(Exception)
   public
     Codigo: Integer;
-    constructor Crea(ACaracter: Char; AK: TEncKind);
+    constructor Crea(const ACaracter: string; AK: TEncKind);
   end;
 
 implementation
 
 uses
   Winapi.Windows, // GetACP: la pagina ANSI de la maquina
+  System.Character, // los pares de sustitutos, por la RTL
   System.Generics.Collections,
   Lsp.Texts;
 
@@ -263,28 +264,36 @@ begin
   Result := GAnsi.GetString(GAnsi.GetBytes(S)) = S;
 end;
 
-{ El primer caracter de S que la pagina ANSI no devuelve igual (un par de
-  sustitutos va junto); si ninguno suelto falla, el primero no ASCII. }
-function PrimeroQueNoCabe(const S: string): Char;
+{ El caracter ENTERO que empieza en S[I]: uno, o los dos de un par de
+  sustitutos (un emoji), por la RTL. }
+function CaracterEn(const S: string; I: Integer): string;
+begin
+  if S[I].IsHighSurrogate and (I < Length(S)) and S[I + 1].IsLowSurrogate then
+    Result := Copy(S, I, 2)
+  else
+    Result := S[I];
+end;
+
+{ El primer caracter de S que la pagina ANSI no devuelve igual, ENTERO (un
+  par de sustitutos va junto: devolvia solo el alto, y la negativa nombraba
+  U+D83D y proponia ese literal; r5-L1 de la 1.18.0); si ninguno suelto
+  falla, el primero no ASCII. }
+function PrimeroQueNoCabe(const S: string): string;
 var
-  I, N: Integer;
+  I: Integer;
   T: string;
 begin
   I := 1;
   while I <= Length(S) do
   begin
-    N := 1;
-    if (Ord(S[I]) >= $D800) and (Ord(S[I]) <= $DBFF) and (I < Length(S)) and
-       (Ord(S[I + 1]) >= $DC00) and (Ord(S[I + 1]) <= $DFFF) then
-      N := 2;
-    T := Copy(S, I, N);
+    T := CaracterEn(S, I);
     if GAnsi.GetString(GAnsi.GetBytes(T)) <> T then
-      Exit(S[I]);
-    Inc(I, N);
+      Exit(T);
+    Inc(I, Length(T));
   end;
   for I := 1 to Length(S) do
     if Ord(S[I]) > 127 then
-      Exit(S[I]);
+      Exit(CaracterEn(S, I));
   Result := S[1];
 end;
 
@@ -417,11 +426,15 @@ begin
   end;
 end;
 
-constructor ECaracterNoCabe.Crea(ACaracter: Char; AK: TEncKind);
+constructor ECaracterNoCabe.Crea(const ACaracter: string; AK: TEncKind);
 var
   Hex: string;
 begin
-  Codigo := Ord(ACaracter);
+  // su codigo de VERDAD: el de un par de sustitutos, por la RTL
+  if Length(ACaracter) = 2 then
+    Codigo := Integer(Char.ConvertToUtf32(ACaracter[1], ACaracter[2]))
+  else
+    Codigo := Ord(ACaracter[1]);
   Hex := IntToHex(Codigo, 4);
   inherited Create(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT,
     [MsgFmt(SF_EDIT_CARACTER_NO_EXISTE_FMT, [ACaracter, Hex, EncName(AK)]), EncName(AK)]));

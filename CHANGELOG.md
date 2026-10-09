@@ -530,6 +530,23 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_deploy_adb` now run with the library zone off, where the jail no
   longer reads the installation and the place each read names is what
   decides.
+- **A `.deployproj` the server generates is written as the IDE writes
+  one**, UTF-8 with a BOM (measured on the IDE's own): it went out in ASCII,
+  so a project name that is not ASCII came out with `?` in its `Include`.
+  The owner mark of a trash copy goes through the write gate in UTF-8 too:
+  an agent name that is not ASCII came out `?` and no longer matched its
+  owner when the trash was purged. `test_deploy_adb`.
+- **A character outside the Basic Multilingual Plane (an emoji) that does
+  not fit a file's code page is refused by its own name.** The refusal named
+  only its high surrogate (U+D83D) and offered that half as a Pascal
+  literal; it names U+1F600 now and offers its UTF-16 pair
+  (`#$D83D#$DE00`) or `Char.ConvertFromUtf32` - `ChrW` stops at `$FFFF`.
+  `test_resultados` E148b; `LspTests.Encodings` checks with the compiler
+  that the pair it offers IS the character.
+- **READ-008 only when the accents are in the code.** A UTF-8 source
+  without a BOM whose accents were only in comments got the note, though the
+  compiler puts nothing of a comment in the program; the one Pascal lexicon
+  decides now. `test_delphi_patch`.
 
 ### Internal
 
@@ -592,6 +609,10 @@ the MCP `initialize` response (`serverInfo.version`).
   can only shrink. The write rule sees `TFile.Open` for writing. The IDE's
   library is a place of `Lsp.Lugares` (`LugaresDeLaBiblioteca`), as the
   IDE's own places are: the gate walked the raw list.
+- `EscribeBytes` into the workspace takes the jail's write lock, like its
+  other writers (nobody calls it yet), and the binary a target gets from
+  `node\` (`McpRunJob`, `McpDesktopNode`, with or without `.exe`) has one
+  namer instead of three hand-written names.
 
 - `Lsp.Guard` is split by families, one family per commit and moves only:
   not a line of logic changes, and the suite runs whole after each one. The

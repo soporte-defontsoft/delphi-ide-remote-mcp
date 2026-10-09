@@ -282,18 +282,34 @@ begin
     Result := Result + A.Replace(#13, ' ').Replace(#10, ' ') + #10;
 end;
 
+const
+  { El lanzador de remote-run en el target. }
+  RUNJOB_PROJECT = 'McpRunJob';
+
+{ El nombre del binario ABase para el sistema del destino: el ELF (sin
+  extension) a un Linux, el .exe a un Windows. EL nombrador: lo componian a
+  mano el lanzador, el nodo y la negativa de "no esta" (P1-L4 de la 1.18.0). }
+function BinarioDelDestino(const ABase, APlataforma: string): string;
+begin
+  Result := ABase;
+  if APlataforma.StartsWith('Win', True) then
+    Result := ABase + '.exe';
+end;
+
+{ Ese binario tal como viaja con el servidor (node\ junto al exe); '' si la
+  distribucion no lo trae. }
+function EmpaquetadoConElServidor(const ABase, APlataforma: string): string;
+begin
+  Result := TPath.Combine(ServerDir('node'), BinarioDelDestino(ABase, APlataforma));
+  if not TFile.Exists(Result) then
+    Result := '';
+end;
+
 { El lanzador que le toca al destino: el ELF a un Linux, el .exe a un Windows.
   Viaja en node\ junto a los dos nodos de escritorio. }
 function BundledRunJobPath(const APlataforma: string): string;
-var
-  Nombre: string;
 begin
-  Nombre := 'McpRunJob';
-  if APlataforma.StartsWith('Win', True) then
-    Nombre := Nombre + '.exe';
-  Result := TPath.Combine(ServerDir('node'), Nombre);
-  if not TFile.Exists(Result) then
-    Result := '';
+  Result := EmpaquetadoConElServidor(RUNJOB_PROJECT, APlataforma);
 end;
 
 { La primera linea de la salida es la del ENTORNO grafico (___ENV=<1|0>|<lo
@@ -479,7 +495,7 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_RUNJOB_FMT,
-      [IfThen(Plataforma.StartsWith('Win', True), 'McpRunJob.exe', 'McpRunJob')]));
+      [BinarioDelDestino(RUNJOB_PROJECT, Plataforma)]));
     Exit;
   end;
   if Plataforma.StartsWith('Win', True) then
@@ -710,20 +726,13 @@ begin
 end;
 
 function BundledNodePath(const APlataforma: string): string;
-var
-  Nombre: string;
 begin
   { UN nodo por sistema, y al target va el QUE LE CORRESPONDE (David,
     19-sep-2026). La distribucion trae los dos al lado del servidor:
     McpDesktopNode (ELF, para los Linux) y McpDesktopNode.exe (para un
     Windows con PAServer). Sin plataforma conocida se asume Linux, que es
     de donde viene este camino. }
-  Nombre := NODE_PROJECT;
-  if APlataforma.StartsWith('Win', True) then
-    Nombre := NODE_PROJECT + '.exe';
-  Result := TPath.Combine(ServerDir('node'), Nombre);
-  if not TFile.Exists(Result) then
-    Result := '';
+  Result := EmpaquetadoConElServidor(NODE_PROJECT, APlataforma);
 end;
 
 function BundledNodePath: string;

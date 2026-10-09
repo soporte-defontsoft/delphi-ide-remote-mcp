@@ -107,7 +107,8 @@ uses
   Lsp.References, // SkipIdeArtifacts: lo que no es fuente de nadie (papelera, salidas)
   Lsp.Casa,
   Lsp.Settings,
-  Lsp.Lugares;
+  Lsp.Lugares,
+  Lsp.Codificacion;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -894,7 +895,10 @@ begin
   end;
   if APlat.StartsWith('Android', True) then
   begin
-    AtomicWrite(F, TEncoding.ASCII.GetBytes(AndroidDeployXml(N, APlat, ABdsRoot)));
+    // como lo escribe el IDE (el juez: UTF-8 con BOM, medido en sus
+    // .deployproj): en ASCII un nombre de proyecto no ASCII salia con '?' en
+    // el Include (P3-L1 de la 1.18.0)
+    EscribeTexto(F, AndroidDeployXml(N, APlat, ABdsRoot), ltJaula, ekUtf8Bom);
     AGenerated := True;
     Exit;
   end;
@@ -923,7 +927,7 @@ begin
       '        </DeployFile>'#13#10 +
       '    </ItemGroup>'#13#10;
   Xml := Xml + '</Project>'#13#10;
-  AtomicWrite(F, TEncoding.ASCII.GetBytes(Xml));
+  EscribeTexto(F, Xml, ltJaula, ekUtf8Bom); // como el de Android, arriba
   AGenerated := True;
 end;
 

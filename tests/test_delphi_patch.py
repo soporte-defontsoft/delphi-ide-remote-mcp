@@ -1183,11 +1183,14 @@ check('...y escribirlo no le toca la codificacion (sigue UTF-8 sin BOM)',
 _r8 = {'UConBom8.pas': b'\xef\xbb\xbf' + "unit UConBom8;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Ca\u00f1a';\r\n\r\n"
                        "implementation\r\n\r\nend.\r\n".encode('utf-8'),
        'UAsciiR8.pas': b"unit UAsciiR8;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n",
-       'FUtf8Sin.dfm': "object F: TForm\r\n  Caption = 'Ca\u00f1a'\r\nend\r\n".encode('utf-8')}
+       'FUtf8Sin.dfm': "object F: TForm\r\n  Caption = 'Ca\u00f1a'\r\nend\r\n".encode('utf-8'),
+       # los acentos SOLO en comentarios: dcc no los mete en el programa (r5-L8)
+       'UComent8.pas': "unit UComent8;\r\n\r\n// A\u00f1o con e\u00f1e\r\n{ y aqu\u00ed }\r\ninterface\r\n\r\n"
+                       "implementation\r\n\r\nend.\r\n".encode('utf-8')}
 for _nom, _bytes in _r8.items():
     open(os.path.join(DIR, _nom), 'wb').write(_bytes)
     _out = call('delphi_read', {'path': os.path.join(DIR, _nom)})
-    check('...READ-008 no sale en %s (con BOM, solo ASCII o un form)' % _nom,
+    check('...READ-008 no sale en %s (con BOM, solo ASCII, acentos solo en comentarios o un form)' % _nom,
           not mc.rechazado(_out) and not mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT'), _out[:300])
 
 srv.cierra()

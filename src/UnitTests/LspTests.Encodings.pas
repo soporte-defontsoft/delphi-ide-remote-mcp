@@ -54,6 +54,8 @@ type
     [Test] procedure Utf32PorSuBomYNoComoUtf16;
     [Test] procedure Utf32FueraDelPlanoBasico;
     [Test] procedure Utf32NoEsBinarioYSeMide;
+    [Test]
+    procedure UnEmojiQueNoCabeSeNombraEntero;
   end;
 
   { Los pares que COMPONEN y LEEN un formato, y la inversa de cada uno: la
@@ -81,7 +83,8 @@ uses
   Lsp.Guard, // ParametroQueNoVa
   Lsp.Patch,
   Lsp.Codificacion,
-  Lsp.Casa;
+  Lsp.Casa,
+  System.Character;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin
@@ -734,6 +737,26 @@ begin
   // un modo que no esta en la tabla no se mira: lo dice su propia negativa
   Assert.AreEqual('', ParametroQueNoVa('otro', ['set-output', 'output'],
     ['path', 'x', ''], Suyos));
+end;
+
+procedure TEncodingTests.UnEmojiQueNoCabeSeNombraEntero;
+var
+  Emoji: string;
+begin
+  // el juez del literal es el compilador: dcc acepta el par y ES el emoji
+  // (r5-L1 de la 1.18.0: la negativa nombraba U+D83D y proponia su literal)
+  Emoji := #$D83D#$DE00;
+  Assert.AreEqual(Char.ConvertFromUtf32($1F600), Emoji, 'el par que se propone es el emoji');
+  try
+    EncodeText('a' + Emoji + 'b', ekAnsi);
+    Assert.Fail('un emoji se escribia en ANSI');
+  except
+    on E: ECaracterNoCabe do
+    begin
+      Assert.AreEqual($1F600, E.Codigo, 'su codigo de verdad, no el del sustituto alto');
+      Assert.Contains(E.Message, 'U+1F600', 'la negativa lo nombra entero');
+    end;
+  end;
 end;
 
 initialization

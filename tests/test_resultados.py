@@ -1982,6 +1982,17 @@ try:
                 'SR_EDIT_CARACTERES_NO_CABEN_FMT')
     check('E148 ...sin el consejo del literal Pascal (era para los fuentes)', '#$' not in t and 'ChrW' not in t,
           t[:300])
+    # E148b ...y en un FUENTE, un emoji (fuera del BMP): la negativa lo nombra ENTERO
+    # y propone su PAR de sustitutos; nombraba U+D83D y proponia ese literal suelto
+    # (r5-L1 de la 1.18.0)
+    P148 = os.path.join(D147, 'UAnsi148.pas')
+    open(P148, 'wb').write('unit UAnsi148;\r\ninterface\r\nconst C = \'canción\';\r\nimplementation\r\nend.\r\n'.encode('cp1252'))
+    t = rechazo('E148b delphi_edit con un emoji en un fuente CP1252: EDIT-078', 'delphi_edit',
+                {'path': P148, 'old': "const C = 'canción';", 'new': "const C = 'canción \U0001F600';"}, 'DENIED',
+                'SR_EDIT_CARACTERES_NO_CABEN_FMT')
+    check('E148b ...nombra U+1F600 y propone #$D83D#$DE00 (no el sustituto alto suelto)',
+          'U+1F600' in t and '#$D83D#$DE00' in t and 'ConvertFromUtf32($1F600)' in t and 'U+D83D' not in t,
+          t[:500])
 
     # E149 el deshacer de un changeset devuelve el +R: move de un fichero que se
     # pone +R DESPUES del preview (antes lo veia; E169) y edit del destino: el

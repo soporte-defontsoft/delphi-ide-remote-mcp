@@ -424,9 +424,8 @@ REGLAS = [
       # el log rota sus bloques y anade al vivo (C5: su propio fichero, append)
       ('Lsp.LogSink.pas', 'CierraBloque'), ('Lsp.LogSink.pas', 'Anade'),
       # deuda declarada hasta P4 (hallazgos de jaula de la 1.18.0): el PNG recortado en
-      # sitio, la restauracion de la foto no atomica y la marca .by en ASCII
+      # sitio y la restauracion de la foto no atomica (la marca .by ya va por la puerta)
       ('Lsp.Imagen.pas', 'RecortaPng'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
-      ('Lsp.Patch.pas', 'WriteOwnerMarker'),
       # programas que NO son el servidor: escriben donde el servidor les dijo, ya
       # comprobado, o en el destino
       ('Mld.Captura.pas', 'GuardarPNG'), ('McpDesktopNode.dpr', 'RecogerCaptura'),

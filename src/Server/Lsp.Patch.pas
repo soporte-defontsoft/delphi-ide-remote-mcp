@@ -688,7 +688,8 @@ uses
   Lsp.TodoONada,
   Lsp.Args,
   Lsp.ShaCache, // Sha256DeBytes: la huella del origen de una llamada
-  Lsp.Mascara;
+  Lsp.Mascara,
+  System.Character;
 
 const
   MAX_EDITS = 50; // entradas de una tanda
@@ -1741,7 +1742,11 @@ begin
   if Who = '' then
     Exit;
   try
-    TFile.WriteAllText(MarcaDeDueno(ATrash), Who, TEncoding.ASCII);
+    // por LA puerta de escribir, en UTF-8 (un agente ASCII da los mismos
+    // bytes de siempre): en ASCII un nombre no ASCII salia con '?' y no
+    // casaba con su dueno al purgar (P3-L1 de la 1.18.0); TrashOwner lo lee
+    // con el detector
+    EscribeTexto(MarcaDeDueno(ATrash), Who, ltJaula, ekUtf8);
   except
     // a missing marker just means "nobody's": never fatal
   end;
@@ -2086,10 +2091,17 @@ var
 begin
   Result := '';
   // la jaula tiene SU escritor, que pregunta lo mismo y apunta lo escrito
-  // para la codificacion de origen de la llamada (EncAlEscribir)
+  // para la codificacion de origen de la llamada (EncAlEscribir), y SU
+  // cerrojo: el de sus otros escritores, de la pregunta al renombre (iba sin
+  // el: P4-b de la 1.18.0; reentrante, por si quien llama ya lo tiene)
   if ALugar = ltJaula then
   begin
-    AtomicWrite(APath, ABytes);
+    EnterFileEdit;
+    try
+      AtomicWrite(APath, ABytes);
+    finally
+      LeaveFileEdit;
+    end;
     Exit;
   end;
   Motivo := LugarDeEscrituraDenegado(APath, ALugar);
@@ -3210,11 +3222,16 @@ end;
   de r5): una nota de un sitio, no de unos escritores si y otros no. '' si
   no es el caso. K: la que dijo EL detector de B. Un form no: sin BOM se lee
   en ANSI, como dcc. Ni en una maquina cuya ANSI es UTF-8 (la opcion "UTF-8
-  para todo el mundo" de Windows): alli dcc lo lee bien. }
+  para todo el mundo" de Windows): alli dcc lo lee bien. Y solo si los
+  acentos estan en el CODIGO o en sus CADENAS, por EL lexico Pascal
+  (BlankComments: CodigoPascal blanquea tambien las cadenas): en un
+  comentario no llegan al programa, y la nota salia en fuentes que no
+  tenian nada que arreglar (r5-L8 de la 1.18.0). }
 function NotaDeUtf8SinBom(const APath: string; K: TEncKind; const B: TArray<Byte>): string;
 begin
   Result := '';
-  if (K = ekUtf8) and (PaginaAnsi <> CP_UTF8) and EsRutaDeFuente(APath) and HayByteAlto(B) then
+  if (K = ekUtf8) and (PaginaAnsi <> CP_UTF8) and EsRutaDeFuente(APath) and HayByteAlto(B) and
+     not IsAscii(BlankComments(DecodeBytes(B, K))) then
     Result := MsgFmt(SN_READ_UTF8_SIN_BOM_FMT, [EncName(ekAnsi)]);
 end;
 
@@ -4391,6 +4408,23 @@ begin
     'finally', 'except', ')', ');', 'end)', 'end);']);
 end;
 
+{ La salida sin convertir de un caracter que no cabe, en un FUENTE: su
+  literal Pascal. Uno del BMP, #$XXXX o ChrW/WideChar; uno de fuera (un
+  emoji), su PAR de sustitutos o Char.ConvertFromUtf32, por la RTL: ChrW no
+  llega mas alla de $FFFF (r5-L1 de la 1.18.0). }
+function SalidaPascalDe(ACodigo: Integer): string;
+var
+  Par, Alto, Bajo, Hex: string;
+begin
+  Hex := IntToHex(ACodigo, 4);
+  if ACodigo <= $FFFF then
+    Exit(MsgFmt(SF_EDIT_LITERAL_PASCAL_FMT, [Hex, Hex, Hex, Hex]));
+  Par := Char.ConvertFromUtf32(UCS4Char(ACodigo));
+  Alto := IntToHex(Ord(Par[1]), 4);
+  Bajo := IntToHex(Ord(Par[2]), 4);
+  Result := MsgFmt(SF_EDIT_LITERAL_PASCAL_PAR_FMT, [Alto, Bajo, Alto, Bajo, Hex]);
+end;
+
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
   AIsDesigner: Boolean; ADelete: Boolean = False;
   AToLine: Integer = 0; AEnsayo: Boolean = False): string;
@@ -4599,8 +4633,7 @@ begin
         // la negativa la compone la excepcion; la salida del literal Pascal,
         // solo en un fuente (decima revision)
         if EsRutaDeFuente(APath) then
-          Exit(E.Message + MsgFmt(SF_EDIT_LITERAL_PASCAL_FMT, [IntToHex(E.Codigo, 4),
-            IntToHex(E.Codigo, 4), IntToHex(E.Codigo, 4), IntToHex(E.Codigo, 4)]));
+          Exit(E.Message + SalidaPascalDe(E.Codigo));
         Exit(E.Message);
       end;
     end;

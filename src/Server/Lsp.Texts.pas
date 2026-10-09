@@ -7733,6 +7733,14 @@ const
     '#$%s concatenated (''before '' + #$%s + '' after'') or ChrW($%s) / ' +
     'WideChar($%s) - the source stays ASCII and keeps its encoding. ' +
     'Declare it in the report.';
+  { ...y la de un caracter FUERA del BMP (un emoji): en Pascal es un PAR de
+    sustitutos, y ChrW/WideChar no llegan mas alla de $FFFF (r5-L1 de la
+    1.18.0: proponia el literal del sustituto alto solo). }
+  SF_EDIT_LITERAL_PASCAL_PAR_FMT =
+    #10'LEGITIMATE WAY OUT WITHOUT CONVERTING: a native Pascal literal - its ' +
+    'UTF-16 pair #$%s#$%s concatenated (''before '' + #$%s#$%s + '' after'') ' +
+    'or Char.ConvertFromUtf32($%s) - the source stays ASCII and keeps its ' +
+    'encoding. Declare it in the report.';
 
   SN_EDIT_CARACTERES_CORRUPCION =
     '[EDIT-079] *** CORRUPTION CHARACTERS HAVE APPEARED. Restore with ' +
