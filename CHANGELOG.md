@@ -123,6 +123,12 @@ the MCP `initialize` response (`serverInfo.version`).
   `BOTÓN` next to `Botón` as a new style. One key now (`ClaveDeEstilo`) for
   finding a style, its children, the lint's duplicates and lookups, the
   platform's default names and `view`'s filter. `test_styles`.
+- **`delphi_styles set` writes a string value the way the IDE does**, as
+  `delphi_designer set` already did: accents as `#N`, and a long one in
+  pieces of 64 on the lines below - it went in raw, and one of 4,095
+  characters or more on a single line the IDE cannot read. The designer
+  does the same now for a literal given to a property whose type it does
+  not know as a string. `test_styles`.
 
 ### Internal
 

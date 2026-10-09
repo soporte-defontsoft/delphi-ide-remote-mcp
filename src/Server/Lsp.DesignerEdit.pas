@@ -1654,6 +1654,15 @@ begin
       Trozos := TrozosDeLiteral(Texto);
       V := string.Join(' ', Trozos);
       Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
+    end
+    // un literal en una propiedad que por su tipo no es una cadena (un
+    // Variant, o una que la tabla no conoce): escrito como el IDE tambien;
+    // iba en crudo (P6 de la segunda revision de la 1.17.0)
+    else if LeeLiteralDeForm(V, Texto) then
+    begin
+      Trozos := TrozosDeLiteral(Texto);
+      V := string.Join(' ', Trozos);
+      Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
     end;
     // un valor de una linea: una lista, una coleccion o un bloque binario no
     if not ValidStyleValue(V) or EsValorDeBloque(V) then

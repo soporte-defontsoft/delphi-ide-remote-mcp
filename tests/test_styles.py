@@ -180,6 +180,25 @@ call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Visible"})
 check('set: sin value pide value (y menciona delete)', mc.es(out, 'SR_STYLES_NEED_VALUE') and 'delete=true' in out, out)
 check('set: copia previa en __delphi-patch', os.path.isdir(os.path.join(STY, '__delphi-patch')))
+# una cadena se escribe como el IDE, igual que en delphi_designer set: los
+# acentos como #N y una larga en trozos de 64 en las lineas de debajo; iba en
+# crudo, y una de 4.095 caracteres en una linea que el IDE no lee (P6 de la
+# segunda revision de la 1.17.0)
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
+                             "prop": "Text", "value": "'Acción'"})
+check('set de una cadena con acento: como el IDE (#243)',
+      mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and "Text = 'Acci'#243'n'" in rd(S), out[:200])
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
+                             "prop": "Text", "value": "'" + 'x' * 200 + "'"})
+check('set de una cadena de 200 caracteres: en trozos de 64, como el IDE',
+      mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and ("'" + 'x' * 64 + "' +") in rd(S) and
+      ("'" + 'x' * 200 + "'") not in rd(S), out[:200])
+# y de vuelta a una linea: la cadena en trozos se reemplaza entera (lo de
+# abajo mide las lineas de formheader)
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
+                             "prop": "Text", "value": "'cabecera'"})
+check('...y de vuelta a una cadena corta: una linea, sin trozos sueltos',
+      "Text = 'cabecera'" in rd(S) and "'xxxx" not in rd(S), out[:200])
 
 # ---- clone ----
 out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": "cardstyle_alt"})

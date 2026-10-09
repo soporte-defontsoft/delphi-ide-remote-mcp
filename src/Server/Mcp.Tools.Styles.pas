@@ -179,7 +179,7 @@ function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelet
 var
   Doc: TStyleDoc;
   O: TStyleObj;
-  Err, Line, NewName: string;
+  Err, Line, NewName, Texto: string;
   WasThere: Boolean;
 begin
   if AProp.Trim = '' then
@@ -231,7 +231,14 @@ begin
       Exit(MsgFmt(SN_STYLES_PROP_DELETED_FMT, [AProp, AStyle, IfThen(AChild <> '', '/' + AChild, ''),
         TPath.GetFileName(Doc.Path)]));
     end;
-    Line := Doc.SetProp(O, AProp.Trim, AValue.Trim, WasThere);
+    // un literal de cadena, escrito como el IDE (TrozosDeLiteral: los
+    // acentos como #N, en trozos de 64 en las lineas de debajo), como hace
+    // delphi_designer set: iba en crudo, y uno de 4.095 caracteres en una
+    // linea que el IDE no lee (P6 de la segunda revision de la 1.17.0)
+    if LeeLiteralDeForm(AValue.Trim, Texto) then
+      Line := Doc.SetPropTrozos(O, AProp.Trim, TrozosDeLiteral(Texto), WasThere)
+    else
+      Line := Doc.SetProp(O, AProp.Trim, AValue.Trim, WasThere);
     Doc.Save;
     Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, MsgText(SF_STYLE_CAMBIADA), MsgText(SF_STYLE_ANADIDA)), Line.Trim,
       AStyle, IfThen(AChild <> '', '/' + AChild, ''), TPath.GetFileName(Doc.Path)]);
