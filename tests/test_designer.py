@@ -399,6 +399,34 @@ d = mc.como_json(call('delphi_designer', {'command': 'check-binding', 'path': SC
 check('check-binding: una clase sin cuerpo en la cadena no se lleva los campos de la de debajo',
       d.get('inheritanceChain') == 'TFormSc -> TFormBaseSc' and
       'lblAjena' in ' '.join(d.get('componentsWithoutField', [])), str(d)[:400])
+# 7.1 de la 1.18.0 (sin prueba desde la segunda revision de la 1.17.0): el
+# evento de un ITEM de una coleccion (el OnClick de un TButtonItem) es una
+# propiedad mas: sin su manejador se avisa, con el no
+ITP = os.path.join(BASE, 'UItems.pas')
+ITD = os.path.join(BASE, 'UItems.dfm')
+open(ITP, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'unit UItems;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.CategoryButtons, System.Classes;\n\ntype\n'
+    '  TFormItems = class(TForm)\n    Cats: TCategoryButtons;\n    procedure ItemConManejador(Sender: TObject);\n'
+    '  end;\n\nimplementation\n\n{$R *.dfm}\n\nprocedure TFormItems.ItemConManejador(Sender: TObject);\nbegin\nend;\n\nend.\n')
+open(ITD, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    "object FormItems: TFormItems\n  object Cats: TCategoryButtons\n    Categories = <\n      item\n"
+    "        Caption = 'Uno'\n        Items = <\n          item\n            Caption = 'a'\n"
+    "            OnClick = ItemSinManejador\n          end\n          item\n            Caption = 'b'\n"
+    "            OnClick = ItemConManejador\n          end>\n      end>\n  end\nend\n")
+d = mc.como_json(call('delphi_designer', {'command': 'check-binding', 'path': ITD}))
+sin = ' '.join(d.get('eventsWithoutMethod', []))
+check('check-binding: el evento de un item de una coleccion sin su manejador se avisa (y el que lo tiene no)',
+      d.get('clean') is False and 'ItemSinManejador' in sin and 'ItemConManejador' not in sin, str(d)[:500])
+# y un segundo objeto de FUERA (dos raices pegadas): lo de detras no se lee;
+# se reasignaba la raiz y la primera se perdia (segunda revision de la 1.17.0)
+DRD = os.path.join(BASE, 'UDosRaices.dfm')
+open(DRD, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'object FormDos: TFormDos\n  object BtnUno: TButton\n  end\nend\n'
+    'object FormOtra: TFormOtra\n  object BtnDos: TButton\n  end\nend\n')
+raiz = mc.como_json(call('delphi_designer', {'command': 'tree', 'path': DRD})).get('root', {})
+check('tree: con dos raices pegadas manda la primera, con sus hijos, y lo de detras no se lee',
+      raiz.get('name') == 'FormDos' and [h.get('name') for h in raiz.get('children', [])] == ['BtnUno'],
+      str(raiz)[:300])
 r = call('delphi_designer', {'command': 'lint', 'path': COD})
 # (y llega al binding: el aviso del componente sin campo sale tambien sin tabla)
 check('lint: con class of en el .pas NO cae y mira el form contra su clase',

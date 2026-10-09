@@ -34,6 +34,10 @@ sobre textos (el analizador de impacto, los planes) esta en LspTests.DesignerEdi
       que caben (DSGN-107); DataSource1 si; compila
   V10 un frame: su tamano y un control en su .dfm; metido en el form (inline)
       su tamano lo juzga TFrame (su clase es del proyecto); compila
+  V10b delete: el campo con un comentario que sigue debajo niega (DSGN-108) y
+      la declaracion de su manejador asi se queda (handlersKept); compila
+  V10c set Name: su texto en trozos al crecer y leido entero al volver, y la
+      referencia de debajo contada en el form que queda (Delta); compila
   F1  insert en FMX: Position con 18 decimales, Text solo en las clases cuyo
       SetName lo pone, leido del fuente por el generador (TButton y TLabel si;
       TRectangle no; TEditButton no: el suyo lo vacia - el caso medido en 13.1),
@@ -447,6 +451,73 @@ try:
     r = dsg(command='set', path=VDFM, component='Marco1', prop='Width', value='ancho')
     check('V10 ...y un valor que no es un entero se niega igual', mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT'), r[:300])
     compila_y_cuadra('V10', VPROJ, VDFM)
+
+    # ------------------------------------------------------------------ V10b
+    # 7.1 de la 1.18.0 (sin prueba desde la segunda revision de la 1.17.0):
+    # quitar las lineas de un campo o de la declaracion de un manejador no
+    # deja medio comentario detras (LineasLimpias). Uno con su comentario de
+    # bloque que sigue en la linea de debajo: el campo niega el borrado; el
+    # manejador se queda, con su comentario, y el resto se borra
+    dsg(command='insert', path=VDFM, classname='TButton', component='BtnSucio')
+    dsg(command='insert', path=VDFM, classname='TButton', component='BtnSucio2')
+    call('delphi_edit', {'path': VPAS, 'insert': 'metodo', 'inclass': CLASE, 'visibility': 'published',
+                         'code': 'procedure BtnSucio2Click(Sender: TObject);\nbegin\nend;'})
+    escribe(VDFM, re.sub(r'(\r\n(\s+)object BtnSucio2: TButton\r\n)', r'\1\2  OnClick = BtnSucio2Click\r\n',
+                         mc.lee(VDFM)))
+    escribe(VPAS, mc.lee(VPAS).replace('    BtnSucio: TButton;\r\n', '    BtnSucio: TButton; (* nota\r\n      que sigue *)\r\n')
+            .replace('    procedure BtnSucio2Click(Sender: TObject);\r\n',
+                     '    procedure BtnSucio2Click(Sender: TObject); { nota\r\n      que sigue }\r\n'))
+    check('V10b preparado: los dos comentarios que siguen debajo, y compila',
+          '(* nota' in mc.lee(VPAS) and '{ nota' in mc.lee(VPAS) and mc.build_ok(call, VPROJ)[0], mc.lee(VPAS)[-600:])
+    antes_dfm, antes_pas = bytes_de(VDFM), bytes_de(VPAS)
+    r = dsg(command='delete', path=VDFM, component='BtnSucio')
+    check('V10b el campo con un comentario que sigue en la linea de debajo: DSGN-108, nada escrito',
+          mc.abre(r, 'SR_DESIGNER_CAMPO_LINEA_SUCIA_FMT') and bytes_de(VDFM) == antes_dfm and
+          bytes_de(VPAS) == antes_pas, r[:400])
+    r = dsg(command='delete', path=VDFM, component='BtnSucio2')
+    j = J(r)
+    pas = mc.lee(VPAS)
+    check('V10b la declaracion de su manejador con un comentario que sigue debajo: el componente y su campo '
+          'se van, el manejador se queda con su comentario (handlersKept)',
+          j.get('deleted') == 'BtnSucio2' and any(x.get('method') == 'BtnSucio2Click' for x in j.get('handlersKept', []))
+          and not any('BtnSucio2Click' in x for x in j.get('handlersRemoved', [])) and
+          'procedure BtnSucio2Click(Sender: TObject); { nota\r\n      que sigue }' in pas and 'BtnSucio2:' not in pas,
+          r[:600])
+    escribe(VPAS, mc.lee(VPAS).replace('    BtnSucio: TButton; (* nota\r\n      que sigue *)\r\n',
+                                       '    BtnSucio: TButton;\r\n'))
+    compila_y_cuadra('V10b', VPROJ, VDFM)
+
+    # ------------------------------------------------------------------ V10c
+    # 7.1: el texto que es su nombre sigue al nombre tambien en VARIAS lineas
+    # (leido entero), y las referencias de debajo se cuentan en el form que
+    # QUEDA cuando el texto cambia de largo (el Delta de PlanDeRenombre)
+    # (primero el que CRECE desde una linea: asi el Delta se ve aunque fallara
+    # la lectura entera, que mide la vuelta)
+    dsg(command='insert', path=VDFM, classname='TButton', component='BtnLargo')
+    escribe(VDFM, re.sub(r'\r\nend\r\n$', "\r\n  object LblLargo: TLabel\r\n    Left = 10\r\n    Top = 260\r\n"
+                         "    Caption = 'x'\r\n    FocusControl = BtnLargo\r\n  end\r\nend\r\n", mc.lee(VDFM)))
+    escribe(VPAS, mc.lee(VPAS).replace('    BtnLargo: TButton;\r\n', '    BtnLargo: TButton;\r\n    LblLargo: TLabel;\r\n'))
+
+    def linea_de_ref(r, valor):
+        refs = J(r).get('referencesRenamed', [])
+        m = re.match(r'.*:(\d+)$', refs[0]) if len(refs) == 1 else None
+        lineas = mc.lee(VDFM).split('\r\n')
+        return m is not None and lineas[int(m.group(1)) - 1].strip() == 'FocusControl = ' + valor, (refs, valor)
+
+    LARGO = 'Btn' + 'X' * 67
+    r = dsg(command='set', path=VDFM, component='BtnLargo', prop='Name', value=LARGO)
+    dfm = mc.lee(VDFM)
+    ok, det = linea_de_ref(r, LARGO)
+    check('V10c un nombre de 70: su texto en trozos (dos lineas mas) y referencesRenamed senala la linea de '
+          'FocusControl en el form que QUEDA',
+          ok and ("    Caption = \r\n      '" + 'Btn' + 'X' * 61 + "' +\r\n") in dfm, (det, dfm[-400:]))
+    r = dsg(command='set', path=VDFM, component=LARGO, prop='Name', value='BtnCorto')
+    dfm = mc.lee(VDFM)
+    check('V10c ...y de vuelta: su texto en VARIAS lineas se lee entero, sigue al nombre y queda en una',
+          J(r).get('to') == 'BtnCorto' and "    Caption = 'BtnCorto'\r\n" in dfm and 'XXXX' not in dfm, dfm[-500:])
+    ok, det = linea_de_ref(r, 'BtnCorto')
+    check('V10c ...y la referencia de debajo, contada con dos lineas menos', ok, det)
+    compila_y_cuadra('V10c', VPROJ, VDFM)
 
     # ------------------------------------------------------------------ V11
     # 3.8 de la 1.18.0 (Hermes, medido): usesInCode daba las lineas de la

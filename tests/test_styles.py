@@ -170,12 +170,17 @@ check('set: prop con espacios rechazada', mc.rechazado(out) and mc.es(out, 'SR_S
 # .style sin abrir; cerrados, entran
 _antes_e10 = rd(S)
 _malos = [call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": v})
-          for v in ("('a', 'b'", "{ 0102")]
-check('set: una lista o un bloque sin cerrar se rechaza por la gramatica, sin escribir',
+          for v in ("('a', 'b'", "{ 0102", "'abc")]
+# (y una cadena sin cerrar: 7.1 de la 1.18.0, sin prueba desde la segunda
+# revision de la 1.17.0, que paso a LA gramatica de la cadena)
+check('set: una lista, un bloque o una cadena sin cerrar se rechaza por la gramatica, sin escribir',
       all(mc.rechazado(o) and mc.es(o, 'SR_STYLES_VALUE_GRAMMAR_FMT') for o in _malos) and rd(S) == _antes_e10,
       [o[:120] for o in _malos])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "('a', 'b')"})
 check('...y cerrada entra', not mc.rechazado(out) and "Tags = ('a', 'b')" in rd(S), out[:200])
+# 1e3 es un numero de form (LA gramatica del numero, EsNumeroDeForm): no lo era
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "1e3"})
+check('set: un numero con exponente (1e3) entra', not mc.rechazado(out) and 'Tags = 1e3' in rd(S), out[:200])
 call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Visible"})
 check('set: sin value pide value (y menciona delete)', mc.es(out, 'SR_STYLES_NEED_VALUE') and 'delete=true' in out, out)

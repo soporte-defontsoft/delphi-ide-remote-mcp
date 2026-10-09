@@ -453,6 +453,16 @@ the MCP `initialize` response (`serverInfo.version`).
   their notes, default values, classes with methods and properties) and no
   overloads that `DelphiLSP` cannot read outside a project. Base 27.4%,
   ceiling 30%: a red is an alarm to look at the shape of the answer.
+- Fixes of the second 1.17.0 review that no check guarded get
+  their checks, each run first against a build with the fix taken out: the
+  event of a collection item in `check-binding`, a second root object in a
+  form, a field and a handler declaration whose block comment goes on below
+  (`delete`), a multi-line text that follows the name and the reference
+  lines counted after it changes length (`set Name`), `1e3` and an unclosed
+  string in `delphi_styles set`, and a `state=` value that names a
+  component by its path inside a frame. (A write gate asked at the moment of
+  placing a capture and the designer table wait outside the lock still have
+  no deterministic check.)
 
 ## [1.17.0] - 2026-10-07
 

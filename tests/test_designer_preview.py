@@ -214,6 +214,7 @@ uses Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, System.Classes, Vcl.Controls;
 type
   TFrameX = class(TFrame)
     EditFrame: TEdit;
+    LabelFrame: TLabel;
     PanelFrame: TPanel;
     TimerFrame: TTimer;
   end;
@@ -234,6 +235,13 @@ escribe('UFrameX.dfm', """object FrameX: TFrameX
     Height = 23
     TabOrder = 0
     Text = 'texto del frame'
+  end
+  object LabelFrame: TLabel
+    Left = 220
+    Top = 36
+    Width = 8
+    Height = 15
+    Caption = 'L'
   end
   object PanelFrame: TPanel
     Left = 8
@@ -568,6 +576,15 @@ try:
                 inline='false')
     check('P5 un frame suelto, state=FrameX.PanelFrame.Color: con la raiz delante tambien llega',
           cerca(pixel_de(png('p5h.png'), 18, 74), ROJO), (r[:300], pixel_de(png('p5h.png'), 18, 74)))
+    # 7.1 de la 1.18.0 (sin prueba desde la segunda revision de la 1.17.0): el
+    # VALOR de una propiedad de clase tambien se lee por su ruta, como la RTL
+    # lee una referencia (ComponenteDeRuta): el TEdit de dentro del frame
+    r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.EditFrame', inline='false')
+    check('P5 state con una referencia por su ruta (FrameX1.EditFrame): se encuentra y se aplica',
+          not mc.fallo(r) and not mc.rechazado(r) and J(r).get('root'), r[:300])
+    r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.NoHayTal', inline='false')
+    check('P5 ...y una ruta que no nombra nada: RENDER, con el valor',
+          mc.abre(r, 'SR_RENDER_ESTADO_SIN_REFERIDO_FMT') and 'FrameX1.NoHayTal' in r, r[:300])
     # el .dfm BINARIO que escribe el IDE (cabecera de recurso): el ayudante se
     # la saltaba mal ("Invalid stream format", medido en vivo; revision de la
     # 1.17.0). La form y su frame, los dos binarios
