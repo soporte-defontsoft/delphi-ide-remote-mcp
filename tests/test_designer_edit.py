@@ -730,6 +730,16 @@ try:
     r = dsg(command='set', path=HRDFM, component='FormHijaRev', prop='Caption', value='Hija')
     check('R11 la raiz de una form que hereda de una base de OTRA unidad de la carpeta: set entra (era DSGN-082)',
           J(r).get('set') == 'FormHijaRev.Caption' and "  Caption = 'Hija'" in mc.lee(HRDFM), r[:300])
+    # 3.2 de la 1.18.0: un componente de la BASE que la hija no cambia no esta
+    # en el .dfm de la hija ni en su clase, y el nombre se daba por libre: el
+    # form saltaba EComponentError al crearse
+    dsg(command='insert', path=os.path.join(RDIR, 'UBaseRev.dfm'), classname='TButton')
+    r = dsg(command='insert', path=HRDFM, classname='TButton')
+    check('R11b insert en un form heredado: no toma el nombre de un componente de su base (Button1)',
+          J(r).get('inserted') == 'Button2', r[:300])
+    r = dsg(command='set', path=HRDFM, component='Button2', prop='Name', value='Button1')
+    check('R11b ...ni se renombra a el: DSGN-096 dice que lo hereda de TFormBaseRev',
+          mc.abre(r, 'SR_DESIGNER_NOMBRE_OCUPADO_FMT') and 'TFormBaseRev' in r, r[:300])
 
     # ------------------------------------------------------------------ R12
     dsg(command='insert', path=FFMX, classname='TLayout', component='Client')

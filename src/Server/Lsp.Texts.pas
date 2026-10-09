@@ -4659,6 +4659,10 @@ const
     'a method of %s';
   SF_DESIGNER_OCUPA_PROPIEDAD_FMT =
     'a property of %s';
+  // un componente que el form HEREDA (su .dfm no lo repite si no cambia): el
+  // form saltaba EComponentError al crearse (3.2 de la 1.18.0)
+  SF_DESIGNER_OCUPA_HEREDADO_FMT =
+    'a component the form inherits from %s';
 
   SR_DESIGNER_PADRE_CICLO_FMT =
     '[DSGN-097 INVALID_PARAM] %s cannot go inside %s: that is itself or one ' +

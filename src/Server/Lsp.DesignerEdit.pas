@@ -1042,10 +1042,19 @@ begin
     Exit(MsgFmt(SR_DESIGNER_PADRE_VCL_FMT, [NombreDe(P), P.ClassName_]));
 end;
 
+{ Los componentes que el form HEREDA de ancestros del proyecto (los de su
+  carpeta), como pares nombre=clase ancestro: TWriter no escribe en el .dfm
+  del heredado un componente sin cambios, ni la unidad su campo, asi que ni
+  el form ni la clase los nombran. Definida mas abajo, con su buscador. }
+function NombresHeredados(const F: TFormEnEdicion; AClase: TTipoPas): TArray<string>; forward;
+
 // '' si ANombre esta libre en el form y en su clase; si no, quien lo tiene.
-// AYo: el componente que se renombra (su propio nombre y su campo no cuentan)
+// AYo: el componente que se renombra (su propio nombre y su campo no cuentan).
+// AHeredados: NombresHeredados - un nombre del ancestro tambien esta cogido
+// (insert en un TForm2 heredado elegia el Button1 de TForm1, y el form
+// saltaba EComponentError al crearse: 3.2 de la 1.18.0)
 function NombreOcupado(ADoc: TStyleDoc; AClase: TTipoPas; const ANombre: string;
-  AYo: TStyleObj): string;
+  AYo: TStyleObj; const AHeredados: TArray<string>): string;
 begin
   Result := '';
   var O := ObjetoDelForm(ADoc, ANombre);
@@ -1065,10 +1074,14 @@ begin
   for var P in AClase.Propiedades do
     if MismoIdentificador(P.Nombre, ANombre) then
       Exit(MsgFmt(SF_DESIGNER_OCUPA_PROPIEDAD_FMT, [AClase.Nombre]));
+  for var H in AHeredados do
+    if MismoIdentificador(H.Substring(0, H.IndexOf('=')), ANombre) then
+      Exit(MsgFmt(SF_DESIGNER_OCUPA_HEREDADO_FMT, [H.Substring(H.IndexOf('=') + 1)]));
 end;
 
 // el nombre que pone el IDE: la clase sin su T y el primer numero libre
-function NombreLibre(ADoc: TStyleDoc; AClase: TTipoPas; const AClaseComp: string): string;
+function NombreLibre(ADoc: TStyleDoc; AClase: TTipoPas; const AClaseComp: string;
+  const AHeredados: TArray<string>): string;
 var
   Base: string;
   N: Integer;
@@ -1080,7 +1093,7 @@ begin
   repeat
     Result := Base + IntToStr(N);
     Inc(N);
-  until NombreOcupado(ADoc, AClase, Result, nil) = '';
+  until NombreOcupado(ADoc, AClase, Result, nil, AHeredados) = '';
 end;
 
 { Si un componente puede llamarse ANombre en este form: un identificador,
@@ -1098,7 +1111,7 @@ begin
   ALimpio := NombreDeValor(ANombre); // 'Bot'#243'n' es Boton con su acento
   if not EsIdentificador(ALimpio, False) or EsPalabraReservada(ALimpio) then
     Exit(MsgFmt(SR_DESIGNER_NOMBRE_INVALIDO_FMT, [ANombre.Trim]));
-  Motivo := NombreOcupado(F.Doc, AClase, ALimpio, AYo);
+  Motivo := NombreOcupado(F.Doc, AClase, ALimpio, AYo, NombresHeredados(F, AClase));
   if Motivo <> '' then
     Exit(MsgFmt(SR_DESIGNER_NOMBRE_OCUPADO_FMT, [ALimpio, Motivo]));
   Result := NombreQueElFicheroNoLee(ALimpio, F.Dfm, F.Doc.Encoding, F.Pas, F.PasEnc);
@@ -1289,7 +1302,7 @@ begin
           Exit;
       end
       else
-        Nombre := NombreLibre(F.Doc, Cls, Clase);
+        Nombre := NombreLibre(F.Doc, Cls, Clase, NombresHeredados(F, Cls));
       PasLineas := SplitToLinesConSalto(F.PasTexto, PasSaltos);
       SitioDelCampo(Cls, PasLineas, Detras, Sangria);
       Insert(Sangria + Nombre + ': ' + Clase + ';', PasLineas, Detras + 1);
@@ -1384,20 +1397,19 @@ end;
 
 { ---- set ---- }
 
-{ Los ancestros que declara la unidad de ADir (no AYa) donde esta AClase,
-  anadidos a AMapa: la base de un form que es del proyecto (TForm1 =
-  class(TBaseForm), con TBaseForm en uBase.pas). False si ninguna la
-  declara. Solo la carpeta, y cada fichero por la puerta de leer. }
-function AnotaAncestrosDeCarpeta(const ADir, AYa, AClase: string;
-  AMapa: TDictionary<string, string>): Boolean;
+{ Los textos de las unidades de ADir (no AYa) que declaran AClase
+  ('TBaseForm = class...'): solo la carpeta, cada fichero por la puerta de
+  leer, hasta MAX_UNIDADES. EL buscador de una clase del proyecto: lo usan
+  los ancestros de ClaseDeJuez y los componentes heredados de NombreOcupado
+  (estaba dentro del primero). }
+function UnidadesQueDeclaran(const ADir, AYa, AClase: string): TArray<string>;
 const
   MAX_UNIDADES = 300;
 var
   N: Integer;
   Enc, Texto: string;
-  U: TUnidadPas;
 begin
-  Result := False;
+  Result := [];
   if (ADir = '') or (AClase = '') or not TDirectory.Exists(ADir) then
     Exit;
   N := 0;
@@ -1413,9 +1425,24 @@ begin
     except
       Continue;
     end;
-    if not TRegEx.IsMatch(CodigoPascal(Texto), PATRON_NO_IDENT_ANTES + TRegEx.Escape(AClase) +
+    if TRegEx.IsMatch(CodigoPascal(Texto), PATRON_NO_IDENT_ANTES + TRegEx.Escape(AClase) +
        '\s*=\s*class\b', [roIgnoreCase]) then
-      Continue;
+      Result := Result + [Texto];
+  end;
+end;
+
+{ Los ancestros que declara la unidad de ADir (no AYa) donde esta AClase,
+  anadidos a AMapa: la base de un form que es del proyecto (TForm1 =
+  class(TBaseForm), con TBaseForm en uBase.pas). False si ninguna la
+  declara. }
+function AnotaAncestrosDeCarpeta(const ADir, AYa, AClase: string;
+  AMapa: TDictionary<string, string>): Boolean;
+var
+  U: TUnidadPas;
+begin
+  Result := False;
+  for var Texto in UnidadesQueDeclaran(ADir, AYa, AClase) do
+  begin
     U := LeeFuentePascal(Texto);
     try
       AnotaAncestros(U, AMapa);
@@ -1424,6 +1451,44 @@ begin
     end;
     if AMapa.ContainsKey(ClaveDeIdentificador(AClase)) then
       Exit(True);
+  end;
+end;
+
+function NombresHeredados(const F: TFormEnEdicion; AClase: TTipoPas): TArray<string>;
+const
+  MAX_SALTOS = 8;
+var
+  Nombre: string;
+  Hallada: Boolean;
+begin
+  Result := [];
+  if (AClase = nil) or not F.HayPas then
+    Exit;
+  Nombre := UltimoTrozo(AClase.Ancestro);
+  for var Salto := 1 to MAX_SALTOS do
+  begin
+    Hallada := False;
+    for var Texto in UnidadesQueDeclaran(TPath.GetDirectoryName(F.Pas), F.Pas, Nombre) do
+    begin
+      var U := LeeFuentePascal(Texto);
+      try
+        var C := U.Clase(Nombre);
+        if C = nil then
+          Continue;
+        // sus campos publicados: los componentes de su form
+        for var Campo in C.Campos do
+          if not Campo.DeClase and (Campo.Visibilidad in [vpDefecto, vpPublicada]) then
+            Result := Result + [Campo.Nombre + '=' + C.Nombre];
+        Nombre := UltimoTrozo(C.Ancestro);
+        Hallada := True;
+      finally
+        U.Free;
+      end;
+      Break;
+    end;
+    // una clase de fuera del proyecto (TForm) acaba la cadena
+    if not Hallada or (Nombre = '') then
+      Break;
   end;
 end;
 

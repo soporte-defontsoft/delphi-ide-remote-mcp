@@ -179,6 +179,14 @@ the MCP `initialize` response (`serverInfo.version`).
   from loading. It now asks the same judge `set` asks before writing (a
   number, a string, a whole number or one of its named constants), and
   what that judge cannot know goes to the notes. `test_designer_edit` F1c.
+- **`insert` and a rename in an inherited form see the ancestor's
+  components.** A component of the base form that the inherited one does
+  not change is written neither in the inherited `.dfm` nor in its class,
+  so its name looked free: `insert TButton` in a `TForm2 = class(TForm1)`
+  picked `Button1`, and the form raised `EComponentError` when created. The
+  published fields of the project's ancestors (the form's folder, up the
+  chain) count now, and a refusal says which ancestor has the name.
+  `test_designer_edit` R11b.
 
 ### Internal
 
