@@ -162,9 +162,10 @@ the MCP `initialize` response (`serverInfo.version`).
     whole - its writer (`MarcaDeDueno`), its inverse (`CopiaDeLaMarca`),
     what recognises it (`EsMarcaDeDueno`) and the format that binds them
     (`MARCA_DUENO_EXT`), which travel together or not at all. What is done
-    WITH the trash (stamping, keeping, purging) stays in `Lsp.Patch`.
-    `test_paisaje` pins the mark's extension to its one home, and
-    `Lsp.Guard` now uses `Lsp.Patch` for a single thing (`PurgaAlPasar`).
+    WITH the trash (stamping, keeping) stays in `Lsp.Patch`, and
+    `test_paisaje` pins the mark's extension to its one home. (Purging it
+    went later to the jail, and `Lsp.Guard` no longer uses `Lsp.Patch`: see
+    the trash's namers below.)
   - The IDE's macros go to **`Lsp.Discovery`**, which already reads the
     rest of the IDE (`IdeMacroVars`, `ExpandIdeMacros`,
     `IdePlatformLibraryPaths`), and the network gate `ProbeHostDenied` goes
@@ -267,8 +268,9 @@ the MCP `initialize` response (`serverInfo.version`).
   a trash (`PurgaAlPasar`, `PurgeOldBackups`) move to `Lsp.Guard`, where the
   gates and the walker they use live: `Lsp.Guard` no longer uses
   `Lsp.Patch`. `test_paisaje` keeps the day's name and its reader in their
-  homes, and `test_round31` R9 checks that a walk purges an expired day and
-  only that (no battery checked it).
+  homes. The purge on pass already had its checks (`test_round47` P1-P3,
+  through `delphi_list`); `test_round31` R9 adds, through `delphi_search`,
+  that a folder that sorts before the limit but is not a day survives.
 - The inverses of two namers get written once: the forms a unit can have
   (`DesignersDeUnidad` in `Lsp.Patch`, next to the list of designer
   extensions: the `.dfm` and the `.fmx` beside it, in that order) for the

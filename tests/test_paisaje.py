@@ -74,13 +74,14 @@ REGLAS = [
      [('Mcp.Tools.Styles.pas', 'LintStyles')],
      'LineaDePropiedad + LeeLiteralDeForm (2.2 de la 1.18.0: con una regex propia un '
      '\'card\'#115\'tyle\' se leia \'card\', el lint lo daba por estilo que falta)'),
-    ('el nombre de la carpeta de un dia', r"'yyyymmdd'",
+    # (FormatDateTime no distingue mayusculas: 'YYYYMMDD' es el mismo formato)
+    ('el nombre de la carpeta de un dia', r"(?i)'yyyymmdd'",
      [('Lsp.Casa.pas', 'NombreDeDia')],
      'NombreDeDia: la carpeta del dia de la papelera y el limite de su purga (2.1f de la 1.18.0: a mano '
      'en TrashDayDir y en PurgeOldBackups)'),
     ('reconocer la carpeta de un dia', r'\\d\{8\}',
      [('Lsp.Casa.pas', 'EsCarpetaDeDia')],
-     'EsCarpetaDeDia, la inversa de NombreDeDia (2.1f de la 1.18.0: la purga y el restore la '
+     'EsCarpetaDeDia, el lector de NombreDeDia (2.1f de la 1.18.0: la purga y el restore la '
      'reconocian cada uno con su regex)'),
     ('la carpeta del servidor',
      r'\b(?:ExtractFileDir|ExtractFilePath|TPath\.GetDirectoryName)\s*\(\s*ParamStr\s*\(\s*0\s*\)',
@@ -88,7 +89,8 @@ REGLAS = [
       # otro programa: la carpeta del NODO, no la del servidor
       ('McpDesktopNode.dpr', '*')],
      'ServerDir: la casa tiene UN compositor (2.7 de la 1.18.0: LugaresProtegidos la escribia a mano)'),
-    ('la extension de la marca de dueno', r"'\.by'",
+    # (tambien como mascara, '*.by': MascaraDeMarcas; revisor de 9a9c4cc)
+    ('la extension de la marca de dueno', r"'\*?\.by'",
      [('Lsp.Casa.pas', '*')],
      'MARCA_DUENO_EXT: MarcaDeDueno la escribe, CopiaDeLaMarca la deshace y EsMarcaDeDueno la '
      'reconoce, los tres en Lsp.Casa con su formato (David, 8-oct-2026: viajan juntos o ninguno)'),

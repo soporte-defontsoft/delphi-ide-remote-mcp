@@ -2825,9 +2825,9 @@ end;
 procedure PurgaAlPasar(const ATrashDir: string);
 begin
   try
-    if IsReadOnlyNow then
-      Exit;
-    if PathDenied(ATrashDir) <> '' then
+    // LA pregunta de escritura (solo lectura + PathDenied), no rehecha a mano
+    // (revisor de 9a9c4cc: era su cuerpo, a una llamada)
+    if EscrituraDenegada(ATrashDir) <> '' then
       Exit;
     PurgeOldBackups(ATrashDir);
   except

@@ -89,6 +89,13 @@ def _papelera():
     return _PAPELERA
 
 
+def dia_de_papelera(t=None):
+    """El nombre de la carpeta de un dia de la papelera, como NombreDeDia del
+    servidor ('yyyymmdd'; hoy si no se dice otro): las baterias no lo
+    componen a mano (revisor de 9a9c4cc, 9-oct-2026)."""
+    return time.strftime('%Y%m%d', t or time.localtime())
+
+
 def marca_dueno(copia):
     """La marca de dueno de una copia sellada (MarcaDeDueno del servidor)."""
     return copia + _papelera()['MARCA_DUENO_EXT']

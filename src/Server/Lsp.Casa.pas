@@ -140,7 +140,8 @@ function CarpetaDePapelera(const APath: string): string;
 { La carpeta del dia dentro de la papelera de APath. ASub: '' = la raiz del
   dia, un cajon (los CAJON_* de Lsp.Patch) = su carpeta. }
 function TrashDayDir(const APath, ASub: string): string;
-{ El nombre de la carpeta de un dia ('yyyymmdd') y su inversa: la purga y el
+{ El nombre de la carpeta de un dia ('yyyymmdd') y su lector (reconoce ocho
+  cifras: '12345678' cuenta como dia, y se purga si va antes del limite): la purga y el
   restore la reconocian a mano con una regex de ocho cifras, y la purga
   componia el limite con su propio FormatDateTime. }
 function NombreDeDia(AFecha: TDateTime): string;

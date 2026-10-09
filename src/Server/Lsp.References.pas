@@ -181,7 +181,7 @@ end;
   El nombre de la carpeta de temporales lo pone TempFolderName (Lsp.Casa), y
   el de la papelera TrashFolderName (Lsp.Casa); aqui van literales porque un
   array const no puede llamar a una funcion. Que digan lo mismo no se deja a
-  la buena fe: lo comprueba la bateria (test_round44 T6c y T6d). }
+  la buena fe: lo comprueba la bateria (test_round44 T6c y T6f). }
 const
   // __pycache__ es compilado (el de Python): el modo ficheros de delphi_list
   // lo ensenaba entero con pattern=* y solo el modo dirs lo escondia
