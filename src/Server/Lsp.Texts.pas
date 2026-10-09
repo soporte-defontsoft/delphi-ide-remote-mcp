@@ -106,6 +106,17 @@ const
     'not read - every section would be lost (the [Server] port and bind IP, ' +
     'and each workspace with its roots and token). Save it as UTF-8 without BOM, or as ' +
     'UTF-16 little endian (what Notepad calls "UTF-16 LE").';
+  { Un settings.ini que esta y no se puede leer (abierto en exclusiva por
+    otro proceso, sin permiso para la cuenta del servidor): no se lee nada de
+    el y se dice al arrancar y en delphi_workspace (David, 9-oct-2026:
+    cerrado y nunca callado). %s = el fichero, %s = el motivo del sistema. }
+  SL_GUARD_INI_SIN_LEER_FMT =
+    'The settings.ini of this server (%s) could not be read (%s): nothing in ' +
+    'it is in force - no workspace, so every token is refused and a client ' +
+    'started with one admits nothing, and [Server] keeps its defaults (with ' +
+    'no workspace token, HTTP binds only to 127.0.0.1 unless ' +
+    'DELPHI_MCP_BIND_IP says otherwise). Close whatever holds the file, or ' +
+    'give this server''s account read access to it, and restart the server.';
   { Una instalacion que sirve, con su clave, para la negativa. }
   SF_DISC_USABLE_FMT =
     '%s -> [Server] DelphiVersion=%s';
@@ -1388,6 +1399,13 @@ const
     'an entry of DELPHI_MCP_READONLY_ROOTS, DELPHI_MCP_READONLY_PATHS or ' +
     'DELPHI_MCP_VAULT_PATH was not loaded, and what it names could be ' +
     'written';
+
+  { Un proceso lanzado con un token (stdio) cuando su settings.ini no se pudo
+    leer: el workspace de ese token puede estar en el (revisor propio,
+    9-oct-2026). }
+  SF_CIERRE_INI_SIN_LEER =
+    'it was started with a token, and the settings.ini that says whose ' +
+    'workspace it opens could not be read';
 
   SF_CIERRE_WORKSPACE_FMT =
     'the token it was started with is the one of [Workspace.%s], and that ' +

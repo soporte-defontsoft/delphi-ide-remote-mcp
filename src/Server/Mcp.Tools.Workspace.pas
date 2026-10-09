@@ -259,13 +259,19 @@ uses
   Lsp.Mascara;
 
 const
-  DEFAULT_MASKS: array [0 .. 7] of string =
-    ('*.pas', '*.dpr', '*.dpk', '*.inc', '*.dfm', '*.fmx', '*.dproj', '*.groupproj');
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
   // numero (la nota lo llevaba copiado a mano)
   LIST_CAP = 500;
 
 // WalkFiles vive en Lsp.Guard: la misma lectura para todas las tools.
+
+{ Lo que buscan delphi_search y delphi_list sin mascara: LAS listas del motor
+  (Lsp.Patch), fuentes, designers y proyectos. Era una copia a mano de las
+  tres (revisor propio de la 4.1, 9-oct-2026). }
+function MascarasPorDefecto: TArray<string>;
+begin
+  Result := MascarasDe(SOURCE_EXTS) + MascarasDe(DESIGNER_EXTS) + MascarasDe(PROJECT_EXTS);
+end;
 
 { TDelphiSearchTool }
 
@@ -291,7 +297,6 @@ var
   I, P, Len, ScanFrom, FilesScanned: Integer;
   F, Text, Q, LineText, GrupoDe: string;
   Lines: TArray<string>;
-  Mask: string;
   Entry, Grupo: TJSONObject;
 begin
   Result := ReadPathDenied(Params.Root); // searching may enter the library zone
@@ -340,9 +345,7 @@ begin
   Hits := nil;
   FilesScanned := 0;
   try
-    var Masks: TArray<string> := [];
-    for Mask in DEFAULT_MASKS do
-      Masks := Masks + [Mask];
+    var Masks: TArray<string> := MascarasPorDefecto;
     if Params.Pattern.Trim <> '' then
     begin
       // una mascara de nombre de fichero: letras de cualquier alfabeto (hay
@@ -625,9 +628,7 @@ begin
     Masks := Params.Pattern.Split([';'])
   else
   begin
-    SetLength(Masks, Length(DEFAULT_MASKS));
-    for var I := 0 to High(DEFAULT_MASKS) do
-      Masks[I] := DEFAULT_MASKS[I];
+    Masks := MascarasPorDefecto;
   end;
 
   Return := TJSONObject.Create;
@@ -908,6 +909,10 @@ begin
     Srv.AddPair('settingsChangedNote', MsgFmt(SN_SERVER_INI_CHANGED_FMT,
       [FormatDateTime('yyyy-mm-dd hh:nn:ss', IniEn),
        FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque)]));
+  // ...y si el que esta no se pudo leer: nada de el esta en vigor (David,
+  // 9-oct-2026: cerrado y nunca callado; lo decide Lsp.Settings)
+  if IniSinLeer <> '' then
+    Srv.AddPair('settingsUnreadable', IniSinLeer);
   // La maquina y la cuenta, juntas: son lo que distingue dos despliegues del
   // mismo binario (el mismo dato va en serverInfo.host, por Lsp.Host).
   Srv.AddPair('host', NombreDeMaquina);
@@ -1287,7 +1292,7 @@ begin
       // hay nada" cuando la verdad era "hay, y no te los enseno".
       var RaizEnArtefactos := SkipIdeArtifacts(
         IncludeTrailingPathDelimiter(RootDir.Trim));
-      for Mask in TArray<string>.Create('*.dproj', '*.groupproj') do
+      for Mask in MascarasDe(PROJECT_EXTS) do
         for F in WalkFiles(RootDir.Trim, Mask) do
         begin
           if not RaizEnArtefactos and (SkipIdeArtifacts(F) or InVault(F)) then
@@ -1347,7 +1352,7 @@ begin
       AllCount := 0;
       for RootDir in Roots do
         if (RootDir.Trim <> '') and TDirectory.Exists(RootDir.Trim) then
-          for Mask in TArray<string>.Create('*.dproj', '*.groupproj') do
+          for Mask in MascarasDe(PROJECT_EXTS) do
             for F in WalkFiles(RootDir.Trim, Mask) do
               if not (SkipIdeArtifacts(F) or InVault(F)) then
                 Inc(AllCount);
@@ -1602,7 +1607,7 @@ begin
   // TPF0 stream - lint then refused the file it had just written and the build
   // died in RLINK32. Every other writer refuses both binary shapes; this one
   // shipped them.
-  if MatchText(TPath.GetExtension(FullPath), ['.dfm', '.fmx']) and
+  if EsRutaDeDesigner(FullPath) and
      IsBinaryDesignerBytes(Bytes) then // el nombrador de la forma: Lsp.DesignerBin
     Exit(MsgText(SR_UPLOAD_BINARY_DESIGNER));
 

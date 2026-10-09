@@ -107,6 +107,16 @@ out = call('delphi_edit', {"path": PAS, "old": "procedure Otro;",
 check('aviso: mojibake en texto nuevo', mc.es(out, 'SN_EDIT_FIRMA_MOJIBAKE_NUEVO'), out)
 call('delphi_edit', {"path": PAS,
     "old": "procedure Otro; // gestorÃ³n", "new": "procedure Otro;"})
+# ...y el de una lectura Latin-1 (la E acentuada mayuscula leida asi es
+# U+00C3 U+0089): con el byte CP1252 del codificador solo, dejo de verse
+# (revisor propio, 9-oct-2026). En un fichero UTF-8: en uno CP1252 un U+0089
+# ni siquiera se escribe
+U8M = os.path.join(DIR, 'MojiU8.pas')
+open(U8M, 'wb').write("unit MojiU8;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Ca\u00f1a';\r\n\r\n"
+                      "implementation\r\n\r\nend.\r\n".encode('utf-8'))
+out = call('delphi_edit', {"path": U8M, "old": "  A = 'Ca\u00f1a';", "new": "  A = 'CAF\u00c3\u0089';"})
+check('aviso: mojibake de una lectura Latin-1 (U+00C3 U+0089 por la E acentuada mayuscula)',
+      mc.es(out, 'SN_EDIT_FIRMA_MOJIBAKE_NUEVO'), out)
 
 # --- semantic insert ---
 code = "procedure Nueva;\nbegin\n  Writeln('nueva');\nend;"

@@ -73,7 +73,8 @@ var
 begin
   Result := '';
   Ext := LowerCase(TPath.GetExtension(APath));
-  if MatchText(Ext, SOURCE_EXTS) or MatchText(Ext, DESIGNER_EXTS) or MatchText(Ext, PROJECT_EXTS) then
+  // lo del motor de Pascal es EL predicado de delphi_edit (fuentes y designers)
+  if EsDelMotorPascal(APath) or MatchText(Ext, PROJECT_EXTS) then
     Exit(MsgFmt(SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT, [Ext]));
 end;
 

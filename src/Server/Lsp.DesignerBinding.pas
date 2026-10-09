@@ -329,7 +329,7 @@ var
   Pas, Enc, DfmTxt: string;
 begin
   Pas := APas;
-  if not MatchText(TPath.GetExtension(ADfm), ['.dfm', '.fmx']) then
+  if not EsRutaDeDesigner(ADfm) then
     Exit(MsgText(SR_DESIGNER_BINDING_NOT_FORM));
   if not TFile.Exists(ADfm) then
     Exit(MsgFmt(SR_DESIGNER_NO_FORM_FMT, [ADfm]));

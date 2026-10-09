@@ -26,6 +26,7 @@ type
     [Test] procedure EncKindOfEsLaInversaDeEncName;
     [Test] procedure PreambleLenPorClase;
     [Test] procedure Cp1252RechazaLoQueNoCabe;
+    [Test] procedure Cp1252LosDoscientosCincuentaYSeisBytesVuelven;
     [Test] procedure MeasureCuentaCrlfYAcentosEnUtf16;
     [Test] procedure LooksBinaryNulEsBinario;
     [Test] procedure LooksBinaryUtf16NoEsBinario;
@@ -155,6 +156,32 @@ begin
     begin
       EncodeText('ok ' + Chr($2714), ekCp1252);
     end, Exception, 'un caracter fuera de CP1252 no se cuela como mojibake (lanza su ECaracterNoCabe, que declara DENIED)');
+end;
+
+{ Lo que ya esta se escribe con los mismos bytes: los 256 de la pagina, los
+  cinco que no define incluidos (81 8D 8F 90 9D: se leian como U+0081... y
+  EncodeText los negaba; revisor propio, 9-oct-2026). ByteCp, la misma regla. }
+procedure TEncodingTests.Cp1252LosDoscientosCincuentaYSeisBytesVuelven;
+var
+  I: Integer;
+  S: string;
+  Vuelta: TArray<Byte>;
+begin
+  for I := 0 to 255 do
+  begin
+    S := DecodeBytes(B([I]), ekCp1252);
+    Assert.AreEqual(1, Length(S), 'un byte, un caracter: ' + IntToHex(I, 2));
+    Vuelta := EncodeText(S, ekCp1252);
+    Assert.IsTrue((Length(Vuelta) = 1) and (Vuelta[0] = I), 'el byte ' + IntToHex(I, 2) + ' vuelve a si mismo');
+    Assert.AreEqual(I, ByteCp(S[1]), 'ByteCp dice lo mismo que EncodeText: ' + IntToHex(I, 2));
+  end;
+  // y lo que no da ningun byte no cabe, en los dos: el 80 es el euro
+  Assert.AreEqual(-1, ByteCp(Chr($80)), 'U+0080 no lo da ningun byte');
+  Assert.WillRaiseDescendant(
+    procedure
+    begin
+      EncodeText(Chr($80), ekCp1252);
+    end, Exception, 'U+0080 no se escribe como el euro');
 end;
 
 procedure TEncodingTests.MeasureCuentaCrlfYAcentosEnUtf16;

@@ -59,8 +59,13 @@ type
   Lsp.Codificacion desde el 8-oct-2026. UTF-16 (LE y BE, siempre con BOM: es
   como lo escribe el IDE cuando se elige ese formato al ver un .dfm como
   texto) entro el 24-sep-2026; antes lo reconocia SOLO
-  Lsp.Client.LoadSourceText por su cuenta. Un detector, no dos. }
-function DetectEnc(const B: TArray<Byte>): TEncKind;
+  Lsp.Client.LoadSourceText por su cuenta. Un detector, no dos.
+  AEsDesigner (EsRutaDeDesigner de su ruta): un form de TEXTO sin BOM es
+  ANSI, lo sea o no como UTF-8 - asi lo leen dcc, el parser de forms del
+  IDE y el renderizador (medido 9-oct-2026: 'Accion' acentuado en UTF-8 sin
+  BOM se ejecuta como 'AcciÃ³n'); el servidor lo leia como UTF-8 (4.1 de la
+  1.18.0, David: un parametro del detector, no un segundo detector). }
+function DetectEnc(const B: TArray<Byte>; AEsDesigner: Boolean = False): TEncKind;
 { La sangria (espacios y tabuladores) del principio de S. }
 function LeadingWhite(const S: string): string;
 { La sangria de la linea de ATexto en la que esta la posicion APos (1-based):
@@ -84,7 +89,7 @@ function Measure(const B: TArray<Byte>): TMetrics;
   NO forma secuencia valida). Es EL detector: nadie mas decide codificaciones.
   Para quien ya tiene los bytes en la mano y no quiere leer el fichero dos
   veces. }
-function DecodeSourceBytes(const B: TArray<Byte>): string; // = TBytes
+function DecodeSourceBytes(const B: TArray<Byte>; AEsDesigner: Boolean = False): string; // = TBytes
 
 { La regla UNICA de "esto no es texto": un byte NUL en los primeros 64 KB,
   salvo que el detector diga UTF-16, donde los NUL son la mitad de cada
@@ -249,6 +254,15 @@ const
   mano, extension a extension, Mcp.Tools.FileOps (el borrado, el mover y su
   gemelo) y Lsp.ProjectUnits (2.2 de la 1.18.0). }
 function DesignersDeUnidad(const AUnidad: string): TArray<string>;
+{ Si APath es un designer por su extension (DESIGNER_EXTS: .dfm, .fmx), sea
+  de texto o binario. EL predicado: estaba escrito a mano con su lista en
+  nueve sitios (4.1 de la 1.18.0, al pasarselo al detector). }
+function EsRutaDeDesigner(const APath: string): Boolean;
+{ Las mascaras de fichero de una de esas listas ('.dfm' -> '*.dfm'), para
+  recorrer una carpeta con ellas. Las escribian a mano Mcp.Tools.Workspace
+  (las de delphi_search y delphi_list), Lsp.Rename (las de designer) y
+  Lsp.BuildRunner (las de fuente) (revisor propio de la 4.1, 9-oct-2026). }
+function MascarasDe(const AExts: array of string): TArray<string>;
 { Donde cayo un cambio entre AAntes y ADespues, para mover los numeros de
   linea de lo que viene despues: ADesde es la primera linea (1-based) del
   texto de ANTES que queda POR DEBAJO de lo cambiado (prefijo y sufijo
@@ -594,7 +608,7 @@ begin
       Result[I] := Sangria + Result[I];
 end;
 
-function DetectEnc(const B: TBytes): TEncKind;
+function DetectEnc(const B: TBytes; AEsDesigner: Boolean): TEncKind;
 var
   I: Integer;
   HasHigh: Boolean;
@@ -604,6 +618,11 @@ begin
   // escribe siempre con marca) y adivinarlo por ceros seria otro detector.
   if KindDeBom(B, Result) then
     Exit;
+  // un form de texto sin BOM: ANSI, como lo leen dcc y el parser de forms
+  // (medido 9-oct-2026; 4.1 de la 1.18.0). Lo que ya esta se lee y se
+  // escribe con los mismos bytes, y un acento nuevo va como dcc lo lee
+  if AEsDesigner then
+    Exit(ekCp1252);
   HasHigh := False;
   for I := 0 to High(B) do
     if B[I] > 127 then
@@ -715,6 +734,19 @@ var
   L: TList<Integer>;
   Lines: TArray<string>;
   I, J, B1, B2: Integer;
+
+  // De que byte pudo salir C al leer mal UTF-8: su byte CP1252 (la regla
+  // del codificador, ByteCp) y, si no tiene, el de la lectura Latin-1, que
+  // da U+0080..U+009F tal cual (la E acentuada mayuscula es U+00C3 U+0089;
+  // la tipografia E2 80 xx, U+00E2 U+0080 ...). Son dos preguntas: unirlas en ByteCp
+  // dejo de ver ese mojibake (revisor propio, 9-oct-2026)
+  function ByteLeido(C: Char): Integer;
+  begin
+    Result := ByteCp(C);
+    if (Result < 0) and (Ord(C) >= $80) and (Ord(C) <= $9F) then
+      Result := Ord(C);
+  end;
+
 begin
   L := TList<Integer>.Create;
   try
@@ -722,8 +754,8 @@ begin
     for I := 0 to High(Lines) do
       for J := 1 to Length(Lines[I]) - 1 do
       begin
-        B1 := ByteCp(Lines[I][J]);
-        B2 := ByteCp(Lines[I][J + 1]);
+        B1 := ByteLeido(Lines[I][J]);
+        B2 := ByteLeido(Lines[I][J + 1]);
         if (B1 >= $C2) and (B1 <= $F4) and (B2 >= $80) and (B2 <= $BF) then
         begin
           L.Add(I + 1);
@@ -1014,6 +1046,18 @@ begin
     Result := Result + [ChangeFileExt(AUnidad, E)];
 end;
 
+function EsRutaDeDesigner(const APath: string): Boolean;
+begin
+  Result := MatchText(TPath.GetExtension(APath), DESIGNER_EXTS);
+end;
+
+function MascarasDe(const AExts: array of string): TArray<string>;
+begin
+  Result := [];
+  for var E in AExts do
+    Result := Result + ['*' + E];
+end;
+
 function CopiaDiariaDe(const APath: string): string;
 begin
   // Esta copia NO lleva sello a proposito: es una por fichero y dia, la
@@ -1168,7 +1212,7 @@ end;
 function EsDelMotorPascal(const APath: string): Boolean;
 begin
   Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS) or
-    MatchText(TPath.GetExtension(APath), DESIGNER_EXTS);
+    EsRutaDeDesigner(APath);
 end;
 
 procedure ZonaDelCambio(const AAntes, ADespues: TArray<string>; out ADesde, ADelta: Integer);
@@ -1274,9 +1318,9 @@ begin
       Result := Result + [I];
 end;
 
-function DecodeSourceBytes(const B: TArray<Byte>): string;
+function DecodeSourceBytes(const B: TArray<Byte>; AEsDesigner: Boolean): string;
 begin
-  Result := DecodeBytes(B, DetectEnc(B));
+  Result := DecodeBytes(B, DetectEnc(B, AEsDesigner));
 end;
 
 function LooksBinaryBytes(const B: TArray<Byte>): Boolean;
@@ -1413,7 +1457,7 @@ var
   K: TEncKind;
 begin
   B := TFile.ReadAllBytes(APath);
-  K := DetectEnc(B);
+  K := DetectEnc(B, EsRutaDeDesigner(APath));
   AEncName := EncName(K);
   Result := DecodeBytes(B, K);
 end;
@@ -2352,7 +2396,7 @@ begin
   // Lsp.DesignerBin) y se dice: un form legacy dejaba ciego al agente
   // (Hermes, 2026-09-24). Editarlo pide to-text; leerlo, no.
   NotaBin := '';
-  if MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) and IsBinaryDesignerBytes(B) then
+  if EsRutaDeDesigner(APath) and IsBinaryDesignerBytes(B) then
   begin
     NotaBin := DesignerBinaryToText(B, Text);
     if NotaBin <> '' then
@@ -2365,7 +2409,9 @@ begin
   // La regla es LooksBinaryBytes, la misma que delphi_textedit.
   if LooksBinaryBytes(B) then
     Exit(MsgFmt(SR_EDIT_FICHERO_BINARIO_NUL_FMT, [APath]));
-  K := DetectEnc(B);
+  // (un binario leido al vuelo ya es UTF-8 nuestro: el form de texto sin BOM
+  // es el que se lee en ANSI)
+  K := DetectEnc(B, EsRutaDeDesigner(APath) and (NotaBin = ''));
   Text := DecodeBytes(B, K);
   M := Measure(B);
   // el salto por la regla de todos (SaltoDominante): esta decia LF de un
@@ -2466,9 +2512,7 @@ begin
       IsSource := False;
       for var E in SOURCE_EXTS do
         if E = Ext then IsSource := True;
-      IsDesigner := False;
-      for var E in DESIGNER_EXTS do
-        if E = Ext then IsDesigner := True;
+      IsDesigner := EsRutaDeDesigner(A.Path);
       if not IsSource and not IsDesigner then
         Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
       // "esto no es texto" es LooksBinaryBytes, la regla de delphi_read y de
@@ -2604,7 +2648,7 @@ begin
         Exit(MsgFmt(SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT,
           [TPath.GetFileName(A.Path), Ext]));
 
-      K := DetectEnc(B);
+      K := DetectEnc(B, IsDesigner);
       if (K = ekUtf8Bom) and not ValidUtf8(B, 3) then
         Exit(MsgFmt(SR_EDIT_TIENE_BOM_UTF_PERO_FMT,
           [TPath.GetFileName(A.Path)]));
@@ -2644,7 +2688,7 @@ begin
         var BkSet := TDictionary<string, Boolean>.Create;
         var Losses := TStringList.Create;
         try
-          for var L in SplitToLines(DecodeBytes(BkBytes, DetectEnc(BkBytes))) do
+          for var L in SplitToLines(DecodeBytes(BkBytes, DetectEnc(BkBytes, EsRutaDeDesigner(A.Path)))) do
             BkSet.AddOrSetValue(L, True);
           for I := 0 to High(NowLines) do
             if (NowLines[I].Trim <> '') and not BkSet.ContainsKey(NowLines[I]) then
@@ -3221,12 +3265,12 @@ begin
         // el streaming (hermes, 25-sep-2026: cayo en public, build verde,
         // "Invalid property value" al cargar el form en Zorin).
         if Vis = '' then
-          for var ExtD in ['.dfm', '.fmx'] do
-            if DesignerWiresMethodFile(ChangeFileExt(A.Path, ExtD), Nombre) then
+          for var Dsg in DesignersDeUnidad(A.Path) do
+            if DesignerWiresMethodFile(Dsg, Nombre) then
             begin
               Vis := 'published';
               NotaPublished := MsgFmt(SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT,
-                [TPath.GetFileName(ChangeFileExt(A.Path, ExtD)), Nombre]);
+                [TPath.GetFileName(Dsg), Nombre]);
               Break;
             end;
         // las secciones son las de LA clase (Secciones, del lector): su
@@ -3520,7 +3564,7 @@ var
 
 begin
   B := TFile.ReadAllBytes(APath);
-  K := DetectEnc(B);
+  K := DetectEnc(B, EsRutaDeDesigner(APath));
   Text := DecodeBytes(B, K);
   M := Measure(B);
   Eol := NombreDelSalto(SaltoDominante(Text)); // la regla de todos

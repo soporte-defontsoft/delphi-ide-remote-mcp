@@ -222,6 +222,48 @@ the MCP `initialize` response (`serverInfo.version`).
   stores it as UTF-8, measured), so the refusal (DSGN-120) now names it
   and its line and says to keep the form as text or rename it.
   `test_designer_binary`.
+- **A text form with no BOM is read as ANSI, the way the compiler reads
+  it.** dcc, the IDE's form parser and the renderer read a `.dfm`/`.fmx`
+  without a BOM in the ANSI code page (measured in the bytes of a built
+  exe: a caption with an accent saved as UTF-8 without BOM runs as
+  `AcciÃ³n`); the IDE calls that encoding "Text Form" and saves a typed
+  accent as a raw CP1252 byte (measured by the operator). The server
+  detected such a file as UTF-8 whenever its bytes were valid UTF-8, so
+  `delphi_read`, the designer commands, `to-binary` and the search showed
+  and converted another string than the one that runs. The one detector
+  now takes whether the file is a form (one predicate, `EsRutaDeDesigner`,
+  written by hand in nine places before): a form without BOM is CP1252, the
+  bytes already there stay as they are, and a new accent goes in as the IDE
+  writes it. A form with a BOM is read as before. `test_designer_binary`.
+- **A CP1252 file with one of the five bytes the code page leaves undefined
+  can be edited.** Windows reads 81, 8D, 8F, 90 and 9D as U+0081... and
+  writes them back to the same byte, but the encoder refused them: a file
+  holding one refused EVERY edit, on any line, naming a character the agent
+  never typed (EDIT-078). With forms now read as ANSI, that took in any
+  UTF-8 form without BOM with an accented A or I (C3 81, C3 8D), a closing
+  quote (E2 80 9D) or Cyrillic text. The encoder now writes back what the
+  codec gives when it reads each byte. `LspTests.Encodings` (all 256 bytes
+  round-trip), `test_designer_binary`.
+- **`inline` is a boolean in the schema of `delphi_designer`,
+  `delphi_desktop` and `delphi_adb`**, true when it is not sent; it was a
+  string in the same tool as the boolean `nonvisual`, and a client that
+  validates against the schema refused a JSON `false`. The text values
+  `"true"` and `"false"` are still read, for a client with the old schema
+  cached; `"0"` and `"no"` are refused now, like any other boolean
+  (SYS-016). `test_designer_preview` P3b.
+- **A settings.ini that exists and cannot be read is said, and nothing in
+  it is in force.** Held open exclusively by another process, or with no
+  read access for the server's account, it was read silently with whatever
+  the Windows ini reader returned - nothing. The server now reads nothing
+  from it (no workspace, so every token is refused; with no workspace
+  token HTTP binds only to 127.0.0.1 unless `DELPHI_MCP_BIND_IP` says
+  otherwise), says why at startup and in `delphi_workspace`
+  (`server.settingsUnreadable`, with the system's reason), and does not
+  write its `DelphiVersion` into it. A stdio process started with a token
+  admits nothing (GUARD-030): the workspace of that token may be in the
+  file, and it used to fall into the trusted local mode. A file another
+  process holds open with delete access and full sharing is read as
+  before - the Windows ini reader reads it. `test_un_delphi` U11f, U11g.
 
 ### Internal
 

@@ -155,6 +155,14 @@ function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
   no lo lee y no veia ninguna seccion (9.2 de la 1.18.0). }
 procedure ExigeSettingsIniLegible;
 
+{ Por que el settings.ini que esta no se pudo leer ('' si se leyo, o si no
+  hay): abierto en exclusiva por otro proceso, sin permiso de lectura para
+  la cuenta del servidor. Entonces no se lee nada de el - sin workspaces no
+  entra nadie, y [Server] queda en sus valores por defecto -, y lo dicen las
+  notas de arranque (Lsp.Host) y delphi_workspace: cerrado y nunca callado
+  (David, 9-oct-2026). Se leia callado con lo que diera la API de los ini. }
+function IniSinLeer: string;
+
 { The knowledge-vault root (Obsidian notes). Empty when unset.
   Env DELPHI_MCP_VAULT_PATH (solo el workspace por defecto), si no el
   VaultPath= del workspace activo. Canonicalized, no trailing delimiter. The vault_read/vault_search tools register only when
@@ -377,6 +385,7 @@ var
   GDelphiUpdate: string = '';       // [Server] DelphiUpdate: el update que declara el operador
   GIniCargadoEn: TDateTime = 0;     // la fecha del settings.ini que tiene cargado este proceso
   GIniIlegible: string = '';        // por que no se lee el settings.ini (un BOM delante de una seccion, UTF-16 BE): no arranca
+  GIniSinLeer: string = '';         // por que no se pudo leer el que esta (lo dice el sistema): arranca cerrado y lo dice
   GServerIniDoble: Boolean = False; // [Server] dos veces, o su DelphiVersion: la clave no se escribe
   GWorkspaceConDelphiVersion: string = ''; // un workspace con DelphiVersion= de la 1.13: la clave no se escribe
   GAllowTests: Boolean = False;     // running test suites is opt-in too
@@ -1037,25 +1046,48 @@ end;
   la escritura a otro proceso - TFile.ReadAllBytes abre con
   fmShareDenyWrite y, con el fichero abierto por un editor, fallaba donde
   la API de los ini si lo lee (revision del 9.2 de la 1.18.0). Sin poder
-  leerlo, False: no se sabe, y lo lee TIniFile como siempre. }
-function BytesDelIni(const APath: string; out ABytes: TArray<Byte>): Boolean;
+  leerlo, False y AMotivo el del sistema: LoadSecurity no lee nada de el y
+  lo dice (David, 9-oct: cerrado y nunca callado). }
+function BytesDelIni(const APath: string; out ABytes: TArray<Byte>; out AMotivo: string): Boolean;
 var
-  S: TFileStream;
+  H: THandle;
+  S: THandleStream;
 begin
   ABytes := nil;
+  AMotivo := '';
+  // compartido del todo, el borrado incluido: la API de los ini lo lee aunque
+  // otro lo tenga abierto con acceso de borrado, y fmShareDenyNone (lectura y
+  // escritura, sin FILE_SHARE_DELETE) fallaba alli con un error 32 - arrancaba
+  // cerrado por un ini que se podia leer (revisor propio, 9-oct-2026)
+  H := CreateFile(PChar(APath), GENERIC_READ,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil,
+    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  if H = INVALID_HANDLE_VALUE then
+  begin
+    AMotivo := SysErrorMessage(GetLastError);
+    Exit(False);
+  end;
   try
-    S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
     try
-      SetLength(ABytes, S.Size);
-      if Length(ABytes) > 0 then
-        S.ReadBuffer(ABytes[0], Length(ABytes));
-    finally
-      S.Free;
+      S := THandleStream.Create(H);
+      try
+        SetLength(ABytes, S.Size);
+        if Length(ABytes) > 0 then
+          S.ReadBuffer(ABytes[0], Length(ABytes));
+      finally
+        S.Free;
+      end;
+      Result := True;
+    except
+      on E: Exception do
+      begin
+        ABytes := nil;
+        AMotivo := E.Message;
+        Result := False;
+      end;
     end;
-    Result := True;
-  except
-    ABytes := nil;
-    Result := False;
+  finally
+    CloseHandle(H); // THandleStream no lo cierra
   end;
 end;
 
@@ -1081,6 +1113,7 @@ var
   LineaBom: Integer;
   IniBytes: TArray<Byte>;
   IniBom: TEncKind;
+  MotivoIni: string;
 begin
   if GSecLoaded then
     Exit;
@@ -1139,7 +1172,19 @@ begin
   // de lo que se leyera seria lo que escribio el operador. No se lee, y el
   // servidor no arranca (ExigeSettingsIniLegible, desde TMcpHost.Wire)
   LineaBom := 0;
-  if TFile.Exists(IniPath) and BytesDelIni(IniPath, IniBytes) then
+  // uno que esta y no se puede leer (abierto en exclusiva por otro, sin
+  // permiso para la cuenta del servidor): no se lee nada de el - sin
+  // workspaces no entra nadie - y se dice al arrancar y en delphi_workspace
+  // (IniSinLeer). Se leia callado con lo que diera TIniFile: nada (David,
+  // 9-oct-2026: cerrado y nunca callado)
+  // la fecha ANTES de intentarlo, tambien si no se lee: sin ella,
+  // delphi_workspace decia que el ini se habia tocado despues de arrancar
+  // (revisor propio, 9-oct-2026)
+  if TFile.Exists(IniPath) then
+    GIniCargadoEn := TFile.GetLastWriteTime(IniPath);
+  if TFile.Exists(IniPath) and not BytesDelIni(IniPath, IniBytes, MotivoIni) then
+    GIniSinLeer := MsgFmt(SL_GUARD_INI_SIN_LEER_FMT, [IniPath, MotivoIni])
+  else if TFile.Exists(IniPath) then
   begin
     LineaBom := LineaConBomAntesDeSeccion(IniBytes);
     if LineaBom > 0 then
@@ -1149,10 +1194,10 @@ begin
     else if KindDeBom(IniBytes, IniBom) and (IniBom = ekUtf16BE) then
       GIniIlegible := MsgFmt(SE_GUARD_INI_UTF16BE_FMT, [IniPath]);
   end;
-  if TFile.Exists(IniPath) and (GIniIlegible = '') then
+  if TFile.Exists(IniPath) and (GIniIlegible = '') and (GIniSinLeer = '') then
   begin
-    // la fecha ANTES de leerlo: si lo tocan mientras, se avisa de mas, nunca de menos
-    GIniCargadoEn := TFile.GetLastWriteTime(IniPath);
+    // (la fecha, arriba, ANTES de leerlo: si lo tocan mientras, se avisa de
+    // mas, nunca de menos)
     Ini := TIniFile.Create(IniPath);
     try
       // v0.98 (David): el ini NO tiene seccion generica - todo permiso
@@ -1330,6 +1375,13 @@ begin
       GStdioSoloLectura := True;
     Break;
   end;
+  // Un token en el entorno con el ini sin leer: el workspace que lo ataba
+  // puede estar en el, y no se sabe. Cerrado - entraba en el modo local de
+  // confianza, que sin DELPHI_MCP_ROOTS lee toda la maquina, un cliente al
+  // que su operador habia dado una jaula (revisor propio, 9-oct-2026)
+  if (GIniSinLeer <> '') and (GStdioIx1 = 0) and
+     ((GAuthToken <> '') or (GReadOnlyToken <> '')) then
+    GLocalCerrado := MsgText(SF_CIERRE_INI_SIN_LEER);
   // El modo local CERRADO no tiene raices: lo que las recorre sin pasar por
   // la jaula (delphi_projects sin root) no tiene que encontrar nada, igual
   // que con unas Roots invalidas (segunda revision de la 1.9.0). Con un
@@ -1378,7 +1430,7 @@ begin
   AMaxFiles := GIniLogMaxFiles;
   // un ini que no se lee no poda la historia del log: sus [Log] no se han
   // leido y el servidor no va a arrancar (revision del 6-oct-2026)
-  if GIniIlegible <> '' then
+  if (GIniIlegible <> '') or (GIniSinLeer <> '') then
     AMaxFiles := MaxInt;
 end;
 
@@ -1581,6 +1633,12 @@ begin
   Result := AFecha > GIniCargadoEn;
 end;
 
+function IniSinLeer: string;
+begin
+  LoadSecurity;
+  Result := GIniSinLeer;
+end;
+
 procedure ExigeSettingsIniLegible;
 begin
   LoadSecurity;
@@ -1604,6 +1662,11 @@ begin
     AError := GIniIlegible;
     Exit;
   end;
+  // ...ni se dice nada aqui: ni siquiera se sabe si tiene la clave ("has no
+  // DelphiVersion" era falso), y la nota de arranque del ini sin leer ya lo
+  // cuenta entero (revisor propio, 9-oct-2026)
+  if GIniSinLeer <> '' then
+    Exit;
   // [Server] dos veces, o su DelphiVersion dos veces: Windows lee el primero,
   // y la clave que el operador queria puede estar en el otro - escribirla
   // aqui la taparia para siempre (revision del 6-oct-2026)

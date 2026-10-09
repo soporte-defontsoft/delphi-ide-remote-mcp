@@ -304,6 +304,10 @@ begin
   // v0.91: authentication is workspaces or nothing. The old note lied the
   // moment tokens moved into [Workspace.*] sections (measured 2026-09-11:
   // production fully migrated and the log still cried "no token").
+  // Un settings.ini que esta y no se pudo leer: nada de el en vigor, y dicho
+  // (David, 9-oct-2026: cerrado y nunca callado)
+  if IniSinLeer <> '' then
+    Add(NOTE_WARNING_PREFIX + IniSinLeer);
   if WorkspaceTokensConfigured then
     Add(MsgText(SL_SYS_BEARER_AUTH_ENABLED))
   else

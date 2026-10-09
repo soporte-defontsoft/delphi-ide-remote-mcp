@@ -49,8 +49,10 @@ function PreambleLen(K: TEncKind): Integer;
   Lo preguntan EL detector (Lsp.Patch.DetectEnc), para decidir, y el que
   audita el cuerpo de un utf8-bom antes de escribirlo (ExecutePatch). }
 function ValidUtf8(const B: TArray<Byte>; AOffset: Integer): Boolean;
-{ El byte CP1252 de un caracter, -1 si no cabe: lo lee el que busca mojibake
-  en un texto (Lsp.Patch.MojibakeLines). }
+{ El byte CP1252 de un caracter, -1 si no cabe: el que escribe EncodeText
+  (de 80 a 9F, solo lo que da el codec al leer cada byte). Lo pregunta
+  tambien el que busca mojibake (Lsp.Patch.MojibakeLines), que para
+  U+0080..U+009F mira ademas la lectura Latin-1. }
 function ByteCp(C: Char): Integer;
 
 type
@@ -199,7 +201,7 @@ function EncodeText(const S: string; K: TEncKind): TBytes;
 var
   I: Integer;
   C: Char;
-  BB: Byte;
+  BB: Integer; // ByteCp: -1 = no cabe
   Body: TBytes;
 begin
   case K of
@@ -224,12 +226,10 @@ begin
   for I := 1 to Length(S) do
   begin
     C := S[I];
-    if (Ord(C) <= $FF) and not ((Ord(C) >= $80) and (Ord(C) <= $9F)) then
-      Result[I - 1] := Byte(Ord(C))
-    else if GHighMap.TryGetValue(C, BB) then
-      Result[I - 1] := BB
-    else
+    BB := ByteCp(C);
+    if BB < 0 then
       raise ECaracterNoCabe.Crea(C, K);
+    Result[I - 1] := Byte(BB);
   end;
 end;
 
@@ -237,9 +237,13 @@ function ByteCp(C: Char): Integer;
 var
   B: Byte;
 begin
+  // de 0x80 a 0x9F, lo que el codec da al LEER cada byte y nada mas: un
+  // U+0080 no lo da ningun byte (el 80 es el euro) y no cabe. Era otra regla
+  // que la de EncodeText, y ninguna de las dos acertaba con los cinco bytes
+  // que la pagina no define (revisor propio, 9-oct-2026)
   if GHighMap.TryGetValue(C, B) then
     Exit(B);
-  if Ord(C) <= $FF then
+  if (Ord(C) <= $FF) and not ((Ord(C) >= $80) and (Ord(C) <= $9F)) then
     Exit(Ord(C));
   Result := -1;
 end;
@@ -253,7 +257,12 @@ begin
   for B := $80 to $9F do
   begin
     S := GCp1252.GetString(TBytes.Create(B));
-    if (Length(S) = 1) and (S[1] <> #$FFFD) and (Ord(S[1]) <> B) then
+    // tambien los cinco que la pagina no define (81 8D 8F 90 9D): Windows los
+    // lee como U+0081... y los vuelve a escribir en su byte (medido). Fuera
+    // del mapa se leian y no se podian escribir: un fichero con uno de ellos
+    // -un CP1252 raro, o un form UTF-8 sin BOM con una A acentuada (C3 81),
+    // que se lee en ANSI desde la 4.1- no admitia NINGUNA edicion
+    if (Length(S) = 1) and (S[1] <> #$FFFD) then
       GHighMap.AddOrSetValue(S[1], B);
   end;
 end;

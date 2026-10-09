@@ -532,6 +532,23 @@ try:
     r = preview(path=PRUEBA, state='Edit1.NoExisteTal=1')
     check('P3 ...y el de una propiedad que la clase no publica: RENDER-012',
           mc.abre(r, 'SR_RENDER_ESTADO_NO_PUBLICA_FMT') and 'NoExisteTal' in r, r[:300])
+    # 6.5 de la 1.18.0 (David, 9-oct-2026): inline es Boolean en el esquema de
+    # las tres tools que capturan, true si no llega; el texto 'true'/'false'
+    # se sigue leyendo (un cliente con el esquema de antes). Era un string en
+    # la misma tool que nonvisual, y el puente de Hermes valido mal el bool
+    lista = ((srv.request('tools/list') or {}).get('result') or {}).get('tools', [])
+    tipos = {x['name']: x.get('inputSchema', {}).get('properties', {}).get('inline', {}).get('type')
+             for x in lista if x['name'] in ('delphi_designer', 'delphi_desktop', 'delphi_adb')}
+    check('P3b inline es boolean en el esquema de delphi_designer, delphi_desktop y delphi_adb',
+          len(tipos) == 3 and set(tipos.values()) == {'boolean'}, tipos)
+    sin, falso, texto = preview(path=PRUEBA), preview(path=PRUEBA, inline=False), preview(path=PRUEBA, inline='false')
+    check('P3b ...sin inline la imagen viaja en la respuesta; con false, booleano o texto, va a un fichero',
+          'inlineImage' in J(sin) and 'inlineImage' not in J(falso) and 'inlineImage' not in J(texto) and
+          not mc.fallo(falso) and not mc.fallo(texto), (sorted(J(sin))[:8], falso[:160], texto[:160]))
+    # ...y el texto que no es true ni false se niega, no se adivina
+    cero, no = preview(path=PRUEBA, inline='0'), preview(path=PRUEBA, inline='no')
+    check('P3b ...inline="0" o "no" se niega (SYS-016), no se toma por false',
+          mc.es(cero, 'SR_SYS_PARAM_VALUE_FMT') and mc.es(no, 'SR_SYS_PARAM_VALUE_FMT'), (cero[:200], no[:200]))
 
     # ------------------------------------------------------------------ P4
     r = preview(path=HIJA, out=png('p4.png'), inline='false')

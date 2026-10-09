@@ -351,15 +351,12 @@ begin
         Text := PatchLoadText(P, EncName);
         Inc(StringHits, StringLiteralHits(Text, Ident));
         // the sibling designer of each touched unit
-        for var Ext in TArray<string>.Create('.dfm', '.fmx') do
-        begin
-          var D := TPath.ChangeExtension(P, Ext);
+        for var D in DesignersDeUnidad(P) do
           if TFile.Exists(D) and (DsgList.IndexOf(D) < 0) then
             DsgList.Add(D);
-        end;
       end;
       if (Root <> '') and TDirectory.Exists(Root) then
-        for var Ext in TArray<string>.Create('*.dfm', '*.fmx') do
+        for var Ext in MascarasDe(DESIGNER_EXTS) do
           for var D in WalkFiles(Root, Ext) do
             if not SkipIdeArtifacts(D) and (DsgList.IndexOf(D) < 0) then
               DsgList.Add(D);

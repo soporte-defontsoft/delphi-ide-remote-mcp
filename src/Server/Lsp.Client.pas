@@ -978,7 +978,7 @@ begin
   // Un .dfm BINARIO se sirve como texto (Lsp.DesignerBin): delphi_search no
   // encontraba ni el nombre del form en uno legacy (Hermes, 2026-09-24). Si
   // esta danado, se devuelve vacio: nada que buscar ahi.
-  if MatchText(TPath.GetExtension(AFilePath), ['.dfm', '.fmx']) and IsBinaryDesignerBytes(Bytes) then
+  if EsRutaDeDesigner(AFilePath) and IsBinaryDesignerBytes(Bytes) then
   begin
     if DesignerBinaryToText(Bytes, Result) <> '' then
       Result := '';
@@ -993,8 +993,9 @@ begin
   // delphi_read, y SOLO el: el 20-sep se le delego el caso sin BOM y aqui
   // se quedaron tres ramas propias para los BOM (UTF-8 y UTF-16), asi que
   // search leia un .dfm en UTF-16 y delphi_read no (24-sep-2026). Ahora los
-  // BOM los conoce Lsp.Patch.DetectEnc y aqui no se decide nada.
-  Result := DecodeSourceBytes(Bytes);
+  // BOM los conoce Lsp.Patch.DetectEnc y aqui no se decide nada (tampoco
+  // que un form de texto sin BOM es ANSI: se le dice que es un form).
+  Result := DecodeSourceBytes(Bytes, EsRutaDeDesigner(AFilePath));
 end;
 
 { Definition con hover de oraculo. DelphiLSP contesta null a definition

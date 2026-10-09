@@ -896,7 +896,7 @@ begin
     Exit;
   if not TFile.Exists(APath) then
     Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
-  if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
+  if not EsRutaDeDesigner(APath) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   F.Dfm := APath;
   F.DfmNombre := TPath.GetFileName(APath);

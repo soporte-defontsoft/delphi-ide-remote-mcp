@@ -1067,7 +1067,7 @@ begin
     // still carry a directive, and this check is cheap enough to be broad.
     Base := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
     if TDirectory.Exists(Base) then
-      for var Ext in TArray<string>.Create('*.pas', '*.dpr', '*.inc', '*.dpk') do
+      for var Ext in MascarasDe(SOURCE_EXTS) do
         for var SF in TDirectory.GetFiles(Base, Ext, TSearchOption.soAllDirectories) do
           if not Files.Contains(SF) then
             Files.Add(SF);

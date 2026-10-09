@@ -49,10 +49,12 @@ type
     FOut: string;
     FRegion: string;
     FWindow: string;
-    FInline: string;
+    FInline: Boolean;
     FMaxWidth: Integer;
     FFrame: string;
   public
+    // inline: Boolean, true si no llega (el de delphi_designer)
+    constructor Create;
     [SchemaDescription(SP_ADBLINUX_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_ADBLINUX_PROFILE)]
@@ -87,7 +89,7 @@ type
     [SchemaDescription(SP_ADBLINUX_WINDOW)]
     property Window: string read FWindow write FWindow;
     [SchemaDescription(SP_CAPTURE_INLINE)]
-    property Inline_: string read FInline write FInline;
+    property Inline_: Boolean read FInline write FInline;
     [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
     property MaxWidth: Integer read FMaxWidth write FMaxWidth;
     [SchemaDescription(SP_CAPTURE_FRAME)]
@@ -182,6 +184,12 @@ begin
       H := StrToIntDef(T[4], 0);
     end;
   end;
+end;
+
+constructor TDesktopLinuxParams.Create;
+begin
+  inherited Create;
+  FInline := True;
 end;
 
 constructor TDesktopLinuxTool.Create;

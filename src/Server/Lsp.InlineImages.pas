@@ -32,14 +32,15 @@ procedure AttachImage(const ABytes: TArray<Byte>; const AMime: string);
 function WrapWithAttachedImages(const AText: string): TJSONArray;
 
 { Entrega una captura ya en disco (AFile) en AReturn. AInline = el parametro
-  inline de la tool ('false'/'0'/'no' = fichero + enlace), AMaxWidth = el
+  inline de la tool (False = fichero + enlace; Boolean en el esquema desde
+  la 1.18.0, true por defecto en el constructor de sus params), AMaxWidth = el
   maxwidth (0 = el de la casa). True si viajo inline. Nunca modifica AFile:
   si es un temporal del agente (IsAgentCapture) lo consume; un out= se queda.
   ANotaEnLineaFmt (con un %s: la escala) y ANotaFrame son las notas de la
   tool cuando las de la familia de escritorio no le valen: esas hablan de
   pulsar con tap, y lo que mide un agente en un preview del disenador se
   escribe en el .dfm (1.17.0). Vacias = las de siempre. }
-function DeliverCapture(const AToolName, AFile, AInline: string;
+function DeliverCapture(const AToolName, AFile: string; AInline: Boolean;
   AMaxWidth, AOriginX, AOriginY: Integer; ATapScaleX, ATapScaleY: Double;
   AReturn: TJSONObject; const ANotaEnLineaFmt: string = '';
   const ANotaFrame: string = ''): Boolean;
@@ -160,7 +161,7 @@ begin
   AOutY := OY + Round(Y * SH / IH);
 end;
 
-function DeliverCapture(const AToolName, AFile, AInline: string;
+function DeliverCapture(const AToolName, AFile: string; AInline: Boolean;
   AMaxWidth, AOriginX, AOriginY: Integer; ATapScaleX, ATapScaleY: Double;
   AReturn: TJSONObject; const ANotaEnLineaFmt: string;
   const ANotaFrame: string): Boolean;
@@ -192,7 +193,7 @@ begin
   end;
   SrcW := Round(W0 * ATapScaleX);
   SrcH := Round(H0 * ATapScaleY);
-  if not MatchText(AInline.Trim, ['false', '0', 'no']) and TFile.Exists(AFile) then
+  if AInline and TFile.Exists(AFile) then
   begin
     MaxW := AMaxWidth;
     if MaxW <= 0 then

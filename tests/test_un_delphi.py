@@ -46,7 +46,9 @@ nombres y su build los dice el propio servidor (delphi_installs).
       del fichero (un trozo pegado) tampoco arranca, y dice la linea. En
       UTF-16 big endian (FE FF) esa API no ve ninguna seccion: NO arranca
       (U11d); en UTF-16 little endian con su BOM si, y la clave se escribe
-      en LE (U11e, el control)
+      en LE (U11e, el control). Uno que esta y NO se puede leer (abierto en
+      exclusiva por otro proceso): arranca cerrado - nada de el en vigor -
+      y lo dicen el log de arranque y delphi_workspace, sin tocarlo (U11f)
   U12 [Server] dos veces: Windows lee el primero y la version del operador
       puede estar en el otro - arranca, NO escribe la clave y lo dice
   U13 [Server] DelphiVersion=37,0 (la coma decimal de un teclado espanol) y
@@ -60,7 +62,7 @@ recorridos) y que todos pasan por un solo lector, DiscoverRadStudio.
 
 Usage:  python tests/test_un_delphi.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, re, subprocess, winreg
+import ctypes, json, os, re, subprocess, winreg
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -432,6 +434,82 @@ try:
           c is not None and escrito.replace(linea_le, b'', 1) == INI11E and en_server(como_texto, LINEA),
           escrito[:200])
     para(proc)
+    # U11f (David, 9-oct-2026: cerrado y nunca callado): un settings.ini que
+    # esta y no se puede leer - abierto en EXCLUSIVA por otro proceso, sin
+    # compartir ni la lectura - se leia callado con lo que diera la API de los
+    # ini (nada). Ahora no se lee nada de el, y lo dicen el log de arranque y
+    # delphi_workspace (en el modo local, el unico que entra sin sus tokens)
+    INI11F = ini_bytes([])
+    d11f, exe11f = carpeta_servidor('ini-bloqueado', INI11F)
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    k32.CreateFileW.restype = ctypes.c_void_p
+    h = k32.CreateFileW(os.path.join(d11f, 'settings.ini'), 0x80000000, 0, None, 3, 0, None)
+    try:
+        check('U11f preparado: el ini abierto en exclusiva (nadie mas lo lee)',
+              h not in (None, ctypes.c_void_p(-1).value), h)
+        proc, ruta, c = lanza(exe11f, 'ini-bloqueado')
+        texto = '\n'.join(mensajes(ruta))
+        partes = [p for p in re.split(r'%[sd]', CAT['SL_GUARD_INI_SIN_LEER_FMT']) if p.strip()]
+        check('U11f un settings.ini que no se puede leer: arranca y el log de arranque lo dice',
+              c is not None and all(p in texto for p in partes), 'cli=%s %s' % (c, texto[-500:]))
+        para(proc)
+        U11F_PAS = os.path.join(JAIL, 'U11f.pas')
+        open(U11F_PAS, 'wb').write(b'unit U11f;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
+        s = mc.Stdio(exe11f, env=mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='ini-bloqueado', cwd=d11f)
+        try:
+            srv11f = mc.como_json(s.call('delphi_workspace', {})).get('server', {})
+            r11f_sin = s.call('delphi_read', {'path': U11F_PAS})
+        finally:
+            s.cierra()
+        # sin token, el ini sin leer no cierra nada: el modo local es del
+        # entorno de quien lanza (delphi_workspace contesta igual cerrado, asi
+        # que se mide LEYENDO; revisor propio, 9-oct-2026)
+        check('U11f ...un stdio SIN token sigue en su modo local: lee lo de DELPHI_MCP_ROOTS',
+              not mc.rechazado(r11f_sin) and 'unit U11f;' in r11f_sin, r11f_sin[:300])
+        check('U11f ...y delphi_workspace tambien (server.settingsUnreadable, con el motivo del sistema)',
+              all(p in srv11f.get('settingsUnreadable', '') for p in partes), json.dumps(srv11f)[:400])
+        check('U11f ...sin decir que el ini se toco despues de arrancar (no settingsChangedNote: no lo esta)',
+              'settingsChangedNote' not in srv11f, json.dumps(srv11f)[:400])
+        pne = [p for p in re.split(r'%[sd]', CAT.get('SL_DISC_NO_ESCRITA_FMT', '')) if len(p.strip()) > 10]
+        check('U11f ...ni que le falta [Server] DelphiVersion (no se sabe: no se ha leido)',
+              bool(pne) and not any(p in texto for p in pne), texto[-400:])
+        # un cliente stdio lanzado con un token (o token o nada): el workspace
+        # de ese token puede estar en el ini que no se lee - cerrado, y no el
+        # modo local de confianza (revisor propio, 9-oct-2026)
+        s = mc.Stdio(exe11f, env=mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_TOKEN': TOKEN}),
+                     nombre='ini-bloqueado-token', cwd=d11f)
+        try:
+            r11f = s.call('delphi_read', {'path': U11F_PAS})
+        finally:
+            s.cierra()
+        # (con SU motivo: otros cierres dan el mismo GUARD-030)
+        check('U11f ...y un stdio lanzado con un token no entra en el modo local: no admite nada (GUARD-030)',
+              mc.es(r11f, 'SR_LOCAL_CERRADO_FMT') and CAT['SF_CIERRE_INI_SIN_LEER'] in r11f, r11f[:300])
+    finally:
+        if h not in (None, ctypes.c_void_p(-1).value):
+            k32.CloseHandle(ctypes.c_void_p(h))
+    # (una GUARDA: con el ini en exclusiva tampoco se podria escribir)
+    check('U11f ...y el ini no se toca (ni la clave de DelphiVersion)', ini_de(d11f) == INI11F, ini_de(d11f)[:120])
+    # U11g: el ini abierto por OTRO con acceso de borrado y compartiendo todo
+    # (lectura, escritura y borrado): la API de los ini lo lee, y la lectura de
+    # sus bytes tambien - sin FILE_SHARE_DELETE fallaba con un error 32 y el
+    # servidor arrancaba cerrado por un ini legible (revisor propio, 9-oct-2026)
+    d11g, exe11g = carpeta_servidor('ini-compartido', ini_bytes([]))
+    h = k32.CreateFileW(os.path.join(d11g, 'settings.ini'), 0x80000000 | 0x00010000, 7, None, 3, 0, None)
+    try:
+        check('U11g preparado: el ini abierto por otro con acceso de borrado, compartido del todo',
+              h not in (None, ctypes.c_void_p(-1).value), h)
+        proc, ruta, c = lanza(exe11g, 'ini-compartido')
+        texto = '\n'.join(mensajes(ruta))
+        partes11g = [p for p in re.split(r'%[sd]', CAT['SL_GUARD_INI_SIN_LEER_FMT']) if p.strip()]
+        w11g = mc.como_json(c.call('delphi_workspace', {})).get('server', {}) if c else {}
+        check('U11g ...se lee: ni la nota del ini sin leer, y el token del ini entra (delphi_workspace contesta)',
+              c is not None and not any(p in texto for p in partes11g) and bool(w11g) and
+              'settingsUnreadable' not in w11g, 'cli=%s %s %s' % (c, texto[-300:], json.dumps(w11g)[:200]))
+        para(proc)
+    finally:
+        if h not in (None, ctypes.c_void_p(-1).value):
+            k32.CloseHandle(ctypes.c_void_p(h))
 
     # ------------------------------------------------------------------ U12
     # [Server] dos veces: Windows lee el primero, y la version del operador

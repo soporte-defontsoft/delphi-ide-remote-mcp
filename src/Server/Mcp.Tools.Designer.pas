@@ -51,12 +51,16 @@ type
     FState: string;
     FStyle: string;
     FNonVisual: Boolean;
-    FInline: string;
+    FInline: Boolean;
     FMaxWidth: Integer;
     FOut: string;
     FParent: string;
     FValue: string;
   public
+    // inline es Boolean en el esquema y vale true si no llega (6.5 de la
+    // 1.18.0): el serializador crea los params con T.Create, que llama a este
+    // constructor (medido); 'true'/'false' como texto los sigue leyendo
+    constructor Create;
     [SchemaDescription(SP_DESIGNER_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_DESIGNER_PATH)]
@@ -87,7 +91,7 @@ type
     [SchemaDescription(SP_DESIGNER_NONVISUAL)]
     property NonVisual: Boolean read FNonVisual write FNonVisual;
     [SchemaDescription(SP_CAPTURE_INLINE)]
-    property Inline_: string read FInline write FInline;
+    property Inline_: Boolean read FInline write FInline;
     [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
     property MaxWidth: Integer read FMaxWidth write FMaxWidth;
     [SchemaDescription(SP_DESIGNER_OUT)]
@@ -319,7 +323,7 @@ begin
     Exit;
   if not TFile.Exists(APath) then
     Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
-  if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
+  if not EsRutaDeDesigner(APath) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un binario se lee al vuelo (TStyleDoc lo convierte); solo uno danado
   // sigue siendo un rechazo, con el motivo de la RTL.
@@ -958,7 +962,7 @@ begin
     Exit(Denied);
   if not TFile.Exists(APath) then
     Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
-  if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
+  if not EsRutaDeDesigner(APath) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   IsFmx := EsDesignerFmx(APath);
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
@@ -1011,6 +1015,12 @@ end;
 
 { TDelphiDesignerTool }
 
+constructor TDelphiDesignerParams.Create;
+begin
+  inherited Create;
+  FInline := True;
+end;
+
 constructor TDelphiDesignerTool.Create;
 begin
   inherited;
@@ -1033,7 +1043,7 @@ begin
   Ruta := TPath.GetFullPath(APath);
   if not TFile.Exists(Ruta) then
     Exit(NoEsFichero(Ruta, MsgFmt(SR_NO_EXISTE_FMT, [Ruta])));
-  if not MatchText(TPath.GetExtension(Ruta), ['.dfm', '.fmx']) then
+  if not EsRutaDeDesigner(Ruta) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   if EsDesignerFmx(Ruta) then
     Exit(MsgText(SR_DESIGNER_FMX_ALWAYS_TEXT));
@@ -1372,7 +1382,7 @@ begin
      'framework', Params.Framework, '', 'filter', Params.Filter, '',
      'maxdepth', IfThen(Params.MaxDepth <> 0, IntToStr(Params.MaxDepth)), '',
      'state', Params.State, '', 'style', Params.Style, '',
-     'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', Params.Inline_, '',
+     'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
      'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, ''], Suyos);
   if Sobra <> '' then

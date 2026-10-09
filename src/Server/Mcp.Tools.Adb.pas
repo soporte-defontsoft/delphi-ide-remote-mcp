@@ -37,10 +37,12 @@ type
     FKey: string;
     FFilter: string;
     FLines: string;
-    FInline: string;
+    FInline: Boolean;
     FMaxWidth: Integer;
     FFrame: string;
   public
+    // inline: Boolean, true si no llega (el de delphi_designer)
+    constructor Create;
     [SchemaDescription(SP_ADB_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_ADB_ADDRESS)]
@@ -69,7 +71,7 @@ type
     [SchemaDescription(SP_ADB_LINES)]
     property Lines: string read FLines write FLines;
     [SchemaDescription(SP_CAPTURE_INLINE)]
-    property Inline_: string read FInline write FInline;
+    property Inline_: Boolean read FInline write FInline;
     [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
     property MaxWidth: Integer read FMaxWidth write FMaxWidth;
     [SchemaDescription(SP_CAPTURE_FRAME)]
@@ -120,6 +122,12 @@ begin
   P := S.ToLower.Split(['x']);
   Result := (Length(P) = 2) and TryStrToInt(P[0].Trim, W) and
     TryStrToInt(P[1].Trim, H) and (W > 0) and (H > 0);
+end;
+
+constructor TDelphiAdbParams.Create;
+begin
+  inherited Create;
+  FInline := True;
 end;
 
 constructor TDelphiAdbTool.Create;
@@ -228,7 +236,7 @@ begin
       'tap', 'x y frame', 'key', 'key'],
     ['address', Params.Address, '', 'apk', Params.Apk, '', 'app', Params.App, '',
      'out', Params.Out, '', 'x', Params.X, '', 'y', Params.Y, '', 'key', Params.Key, '',
-     'filter', Params.Filter, '', 'lines', Params.Lines, '', 'inline', Params.Inline_, '',
+     'filter', Params.Filter, '', 'lines', Params.Lines, '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
      'frame', Params.Frame, ''], Suyos);
   if Sobra <> '' then

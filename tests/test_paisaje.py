@@ -230,6 +230,17 @@ REGLAS = [
      [('Lsp.Patch.pas', 'DetectEnc'), ('Lsp.Patch.pas', 'ExecutePatch')],
      'ValidUtf8 lo preguntan el detector y la auditoria del cuerpo de un utf8-bom: otro que lo '
      'pregunte esta decidiendo una codificacion por su cuenta'),
+    ('las extensiones de un designer a mano',
+     # la lista, como extensiones o como mascaras y en cualquier orden - salvo
+     # la declaracion de DESIGNER_EXTS, la UNICA, este donde este -, o el
+     # predicado o el recorrido reescritos con ella (revisor propio de la 4.1,
+     # 9-oct-2026: una excepcion por posicion tapaba tambien una copia dentro
+     # de la funcion bajo la que cae la constante)
+     r"^(?!\s*DESIGNER_EXTS\s*:).*'\*?\.(?:dfm|fmx)'\s*,\s*'\*?\.(?:dfm|fmx)'|"
+     r"MatchText\s*\([^;]*\bDESIGNER_EXTS\s*\)|\bin\s+DESIGNER_EXTS\b",
+     [('Lsp.Patch.pas', 'EsRutaDeDesigner'), ('Lsp.Patch.pas', 'DesignersDeUnidad')],
+     'DESIGNER_EXTS, EsRutaDeDesigner y DesignersDeUnidad (Lsp.Patch): la lista estaba escrita a mano en '
+     'nueve sitios, y el detector necesita saber si un fichero es un form (4.1 de la 1.18.0)'),
     ('una cadena ASCII preguntada a mano', r'\bOrd\s*\(\s*\w+\s*\)\s*>\s*127\b',
      [('Lsp.Codificacion.pas', 'IsAscii')],
      'IsAscii (Lsp.Codificacion): estaba en Lsp.TextEdit y en linea en NombreQueElFicheroNoLee, y '
@@ -403,6 +414,7 @@ PLANTADO = {
     'decidir la codificacion de unos bytes': "  if (B[0] = $FF) and (B[1] = $FE) then K := ekUtf16LE;",
     'UTF-8 estricto preguntado a mano': "  if ValidUtf8(B, 0) then K := ekUtf8;",
     'una cadena ASCII preguntada a mano': "  for C in S do if Ord(C) > 127 then Exit(False);",
+    'las extensiones de un designer a mano': "  if MatchText(TPath.GetExtension(P), ['.dfm', '.fmx']) then X := 1;",
     'el codec CP1252': "  E := TEncoding.GetEncoding(1252);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
 }
@@ -424,6 +436,19 @@ OTRA = fuera_de_casa(REGLA_SITIOS, [('Mcp.Tools.Workspace.pas', metodo_plantado(
 check('mutante de la casa con clase: el mismo metodo de OTRA clase se caza', len(OTRA) == 1, OTRA)
 SUYA = fuera_de_casa(REGLA_SITIOS, [('Mcp.Tools.Workspace.pas', metodo_plantado('TDelphiWorkspaceTool'))])
 check('...y el de la clase declarada no', not SUYA, SUYA)
+
+# las otras formas de la lista de designers: las mascaras de Lsp.Rename y de
+# delphi_search, el orden inverso y el predicado reescrito (revisor propio
+# de la 4.1, 9-oct-2026)
+REGLA_DSG = next(r for r in REGLAS if r[0] == 'las extensiones de un designer a mano')
+for forma in ("  for E in TArray<string>.Create('*.dfm', '*.fmx') do X := 1;",
+              "  M := ['*.pas', '*.fmx', '*.dfm'];",
+              "  if MatchText(Ext, DESIGNER_EXTS) then X := 1;",
+              "  for var E in DESIGNER_EXTS do if SameText(E, Ext) then X := 1;",
+              "  OTRA: array [0 .. 1] of string = ('.dfm', '.fmx');"):
+    cazados = fuera_de_casa(REGLA_DSG, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                         'CopiaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_DSG[0], forma.strip()), len(cazados) == 1, cazados)
 
 for regla in REGLAS:
     malos = fuera_de_casa(regla, TEXTOS)
