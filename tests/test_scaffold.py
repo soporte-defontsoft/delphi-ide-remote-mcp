@@ -159,6 +159,20 @@ _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: contains se queda con la otra', "contains\r\n  UPkgDos in 'src\\UPkgDos.pas';" in _k and 'UPkgUno' not in _k, _k)
 ok, err = build_ok(PDPROJ)
 check('package: tras remove-unit COMPILA', ok, err)
+# un form en un paquete dado por su .dproj: el marco sale de su requires (vcl
+# aqui), sin el aviso de consola y sin el CreateForm que un paquete no lleva
+# (P9 de la segunda revision de la 1.17.0: se juzgaba como un programa)
+out = call('delphi_create', {"kind": "form-vcl", "name": "UFormPaq", "project": PDPROJ})
+_k = open(PDPK, 'rb').read().decode('utf-8-sig')
+check('package: form VCL por el .dproj, sin "consola" ni CreateForm',
+      mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT') and not mc.es(out, 'SN_CREATE_CONSOLE_FORM') and
+      not mc.es(out, 'SN_UNIT_CREATEFORM') and not mc.es(out, 'SN_UNIT_NO_RUN_ANCHOR') and
+      'UFormPaq' in _k and 'CreateForm' not in _k, out[:400])
+out = call('delphi_create', {"kind": "form-fmx", "name": "UFormFmxPaq", "project": PDPROJ})
+check('package: un form FMX en un paquete que requiere vcl: RECHAZADO por el marco',
+      mc.rechazado(out) and mc.es(out, 'SR_CREATE_FRAMEWORK_FMT'), out[:300])
+ok, err = build_ok(PDPROJ)
+check('package: con su form COMPILA', ok, err)
 out = call('delphi_create', {"kind": "project-package", "dir": PDIR, "name": "PaqueteUno"})
 check('package: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_CREATE_YA_EXISTE_PROYECTO_FMT'), out)
 

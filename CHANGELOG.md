@@ -105,6 +105,17 @@ the MCP `initialize` response (`serverInfo.version`).
   literal. The three read it with one reader now (`NombreDeValor`: the
   form's literal reader, or the value as it is). `test_designer_edit` V7,
   `test_styles`.
+- **A form in a package is no longer judged as a console program's.**
+  `delphi_create` of a form in a package said "that project is a CONSOLE
+  one" (CREATE-016), and registering it announced an `Application.CreateForm`
+  it did not write, plus a CFG-046 about a `.dpr` the package does not have.
+  A package's framework now comes from its `requires` (`vcl` or `fmx`): an
+  FMX form in a package that requires `vcl` is refused like in a program,
+  and a package gets neither the console note nor a `CreateForm`. The main
+  source of a `.dproj` - its `.dpr`, or the `.dpk` of a package - is
+  `DprDe` for everyone (the build, `delphi_test`, the scaffold and the unit
+  registrar, which was the only one that knew the package), and the
+  `requires` clause has one reader (`ClausulaRequires`). `test_scaffold`.
 
 ### Internal
 

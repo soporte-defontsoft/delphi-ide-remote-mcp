@@ -98,9 +98,14 @@ function ReadDproj(const ADprojPath: string): TDprojInfo;
   rechazaba con BUILD-016 diciendo que no era un proyecto (Hermes, validacion
   de la 1.16.0), y la regla estaba escrita a mano en diez sitios. }
 function DprojDe(const AProject: string): string;
-{ Su inversa: el .dpr de al lado de un .dproj, y cualquier otra cosa tal cual.
-  Estaba escrita a mano en tres sitios (el filtro de directivas del build, el
-  de delphi_test y el lector del scaffold; 2.2 de la 1.18.0). }
+{ Su inversa: la FUENTE PRINCIPAL de un .dproj - el .dpr de al lado, o el
+  .dpk si no hay .dpr y si hay .dpk (un paquete; lo decide el disco) - y
+  cualquier otra cosa tal cual. Estaba escrita a mano en tres sitios (el
+  filtro de directivas del build, el de delphi_test y el lector del
+  scaffold; 2.2 de la 1.18.0), y el paquete solo lo sabia
+  ResolveProjectPair: un form en un paquete dado por su .dproj se juzgaba
+  como el de un programa de consola (P9 de la segunda revision de la
+  1.17.0). }
 function DprDe(const AProject: string): string;
 
 { La negativa de una configuracion que el proyecto no tiene ('' = la tiene,
@@ -601,7 +606,12 @@ function DprDe(const AProject: string): string;
 begin
   Result := AProject;
   if SameText(TPath.GetExtension(Result), '.dproj') then
-    Result := TPath.ChangeExtension(Result, '.dpr');
+  begin
+    Result := TPath.ChangeExtension(AProject, '.dpr');
+    var Dpk := TPath.ChangeExtension(AProject, '.dpk');
+    if not TFile.Exists(Result) and TFile.Exists(Dpk) then
+      Result := Dpk;
+  end;
 end;
 
 function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string): string;

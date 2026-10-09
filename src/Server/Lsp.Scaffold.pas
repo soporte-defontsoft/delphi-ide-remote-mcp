@@ -669,10 +669,15 @@ end;
 
 { Which framework a project belongs to, read from its own source ('vcl',
   'fmx', or '' when it cannot be told). The .dpr says it plainly in its uses
-  clause, and the .dpr is the file a new form gets registered in. }
+  clause, and the .dpr is the file a new form gets registered in. Un paquete
+  lo dice en su requires: fmx o vcl, los paquetes del marco (se juzgaba como
+  un programa y un form en un paquete salia "de consola": P9 de la segunda
+  revision de la 1.17.0). }
 function ProjectFramework(const APath: string): string;
 var
   Dpr, Txt, Enc: string;
+  Requiere: TArray<string>;
+  Ini, Largo: Integer;
 begin
   Result := '';
   Dpr := DprDe(APath);
@@ -686,7 +691,13 @@ begin
   if TRegEx.IsMatch(Txt, '(?i)\bFMX\.Forms\b') then
     Result := 'fmx'
   else if TRegEx.IsMatch(Txt, '(?i)\bVcl\.Forms\b') then
-    Result := 'vcl';
+    Result := 'vcl'
+  else if ClausulaRequires(Txt, Requiere, Ini, Largo) then
+    for var R in Requiere do
+      if SameText(R, 'fmx') then
+        Exit('fmx')
+      else if SameText(R, 'vcl') then
+        Result := 'vcl';
 end;
 
 { DONDE CAE LO QUE SE CREA DENTRO DE UN PROYECTO: la estructura de carpetas la
@@ -762,7 +773,9 @@ begin
     // compiles; it just never shows, because there is no Application to run
     // it. Allowed, because turning a console project into a GUI one is a
     // real thing to do, but never silently.
-    if Have = '' then
+    // (un paquete no tiene Application ni lo necesita: su form lo crea quien
+    // lo usa)
+    if (Have = '') and not SameText(TPath.GetExtension(DprDe(ADprPath)), '.dpk') then
       FrameworkNote := MsgText(SN_CREATE_CONSOLE_FORM);
   end;
   FormName := AFormName.Trim;

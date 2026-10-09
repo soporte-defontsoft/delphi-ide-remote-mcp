@@ -1847,7 +1847,7 @@ begin
             // instalacion. Se sugiere ese paquete y se dice que hay que
             // compilarlo antes; nada mas. Si dos .dpk la contienen, van los dos.
             var Dpks := WorkspacePackagesWithUnit(
-              ChangeFileExt(TPath.GetFullPath(ADprojPath), '.dpk'), MI.Groups[1].Value);
+              DprDe(TPath.GetFullPath(ADprojPath)), MI.Groups[1].Value); // el propio .dpk no cuenta
             if Length(Dpks) = 0 then
               SinPaquete.Add(MI.Groups[1].Value)
             else

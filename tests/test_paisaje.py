@@ -115,9 +115,10 @@ REGLAS = [
     ('la sangria de un nivel de un designer', r"StringOfChar\s*\(\s*' '\s*,.*\*\s*2\s*\)",
      [('Lsp.DesignerBin.pas', 'SangriaDeNivel')],
      'SangriaDeNivel: dos espacios por nivel, como el IDE (2.3 de la 1.18.0: cuatro a mano)'),
-    ('el .dpr de un .dproj', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.dpr'\)",
+    ('el .dpr de un .dproj', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.dp[rk]'\)",
      [('Lsp.Dproj.pas', 'DprDe')],
-     'DprDe, la inversa de DprojDe (2.2 de la 1.18.0: a mano en el build, delphi_test y el scaffold)'),
+     'DprDe, la inversa de DprojDe (2.2 de la 1.18.0: a mano en el build, delphi_test y el scaffold; '
+     'y el .dpk de un paquete, que solo sabia ResolveProjectPair: P9)'),
     ('el juez del nombre de un perfil', r"(?i)(?:IsMatch|CharInSet)\s*\(\s*\w*(?:prof|perfil)\w*\s*,", [],
      'Lsp.Guard.BadProfileName, la regla de la puerta (2.3 de la 1.18.0: set-profile y remove-profile '
      'tenian una regex propia que dejaba pasar el punto)'),

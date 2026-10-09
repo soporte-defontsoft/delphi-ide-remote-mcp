@@ -80,6 +80,12 @@ function FicherosDelRename(const AProject, ANewPasPath: string;
   de contains / end. si no existe). Idempotente: los que ya estan no se
   repiten. Es lo que el IDE ofrece tras un build con W1033. }
 function AddPackageRequires(const AProject, ANames: string): string;
+{ La clausula requires de un paquete, leida sobre el texto con los
+  comentarios en blanco (las posiciones son las del texto): True si la hay,
+  con sus nombres y donde esta (AIni 1-based y ALargo). La leen quien la
+  amplia (AddPackageRequires) y el scaffold (de que marco es un paquete). }
+function ClausulaRequires(const ATexto: string; out ANombres: TArray<string>;
+  out AIni, ALargo: Integer): Boolean;
 
 { The units a project lists (from the .dpr uses, cross-checked with the
   .dproj). Never raises; empty on unreadable input. }
@@ -237,7 +243,7 @@ end;
 
 function ResolveProjectPair(const AProject: string; out ADpr, ADproj: string): string;
 var
-  Ext, Stem: string;
+  Ext: string;
 begin
   Result := '';
   ADpr := '';
@@ -245,21 +251,15 @@ begin
   if AProject.Trim = '' then
     Exit(MsgText(SR_UNIT_NEED_PROJECT));
   Ext := TPath.GetExtension(AProject).ToLower;
-  Stem := TPath.Combine(TPath.GetDirectoryName(TPath.GetFullPath(AProject)),
-    TPath.GetFileNameWithoutExtension(AProject));
   if (Ext <> '.dpr') and (Ext <> '.dpk') and (Ext <> '.dproj') then
     Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [TPath.GetFileName(AProject)]));
   // Un paquete es un proyecto: su fuente principal es el .dpk (con clausula
   // contains en vez de uses) y el .dproj es el mismo. Desde un .dproj se
-  // decide por lo que hay en disco: el .dpr si existe, si no el .dpk.
-  // (Hermes, bateria 1.2 caso 1: sin esto un paquete propio no se podia
-  // trabajar por tools.)
-  if Ext = '.dpk' then
-    ADpr := Stem + '.dpk'
-  else if (Ext = '.dproj') and (not TFile.Exists(Stem + '.dpr')) and TFile.Exists(Stem + '.dpk') then
-    ADpr := Stem + '.dpk'
-  else
-    ADpr := Stem + '.dpr';
+  // decide por lo que hay en disco: el .dpr si existe, si no el .dpk - la
+  // regla de DprDe, que es quien la sabe (P9 de la segunda revision de la
+  // 1.17.0). (Hermes, bateria 1.2 caso 1: sin esto un paquete propio no se
+  // podia trabajar por tools.)
+  ADpr := DprDe(TPath.GetFullPath(AProject));
   ADproj := DprojDe(TPath.GetFullPath(AProject)); // el nombrador de la casa (Lsp.Dproj)
   if not TFile.Exists(ADpr) then
     Exit(NoEsFichero(ADpr, MsgFmt(SR_UNIT_NO_DPR_FMT, [ADpr])));
@@ -1351,7 +1351,7 @@ var
   Info: TUnitInfo;
   U: TUsesClause;
   E: string;
-  Present, Completada, Estrenada: Boolean;
+  Present, Completada, Estrenada, EsPaquete: Boolean;
   Entries: TArray<string>;
   S, L: Integer;
 begin
@@ -1435,7 +1435,10 @@ begin
   end
   else if Completada then
     Text := ReplaceUses(Text, U, Entries);
-  if Info.NeedsCreateForm then
+  // un paquete no lleva CreateForm (no tiene programa principal): se
+  // intentaba, contestaba CFG-046 y el mensaje decia "+ CreateForm" (P9)
+  EsPaquete := SameText(TPath.GetExtension(Dpr), '.dpk');
+  if Info.NeedsCreateForm and not EsPaquete then
   begin
     if not InsertCreateForm(Text, Info) then
       Note := MsgText(SN_UNIT_NO_RUN_ANCHOR);
@@ -1474,7 +1477,7 @@ begin
   else if Info.IsDesigner then
     Result := MsgFmt(SN_UNIT_ADDED_FORM_FMT, [Info.UnitName, Include, Info.FormName,
       Info.ClassName, TPath.GetFileName(Dpr), U.Keyword, TPath.GetFileName(Dpr),
-      IfThen(Info.NeedsCreateForm, MsgText(SN_UNIT_CREATEFORM), '')])
+      IfThen(Info.NeedsCreateForm and not EsPaquete, MsgText(SN_UNIT_CREATEFORM), '')])
   else
     Result := MsgFmt(SN_UNIT_ADDED_FMT, [Info.UnitName, Include, TPath.GetFileName(Dpr),
       U.Keyword, TPath.GetFileName(Dpr)]);
@@ -1824,10 +1827,11 @@ end;
 function AddPackageRequires(const AProject, ANames: string): string;
 var
   Dpr, Dproj, Enc, Text, NL, Clausula, N, E: string;
-  M, MPos: TMatch;
+  MPos: TMatch;
   Nombres, Nuevos: TStringList;
   Existentes: TArray<string>;
-  Ya: Boolean;
+  Ya, Hay: Boolean;
+  Ini, Largo: Integer;
 begin
   Result := ResolveProjectPair(AProject, Dpr, Dproj);
   if Result <> '' then
@@ -1852,12 +1856,7 @@ begin
       NL := SaltoDominante(Text);
       // la clausula se localiza sobre el texto con los comentarios en blanco
       // (mismas posiciones) y se reescribe entera, un nombre por linea
-      M := TRegEx.Match(CodigoPascal(Text), '^[ \t]*requires\b\s*(.*?);', [roIgnoreCase, roMultiline, roSingleline]);
-      Existentes := [];
-      if M.Success then
-        for E in M.Groups[1].Value.Split([',']) do
-          if E.Trim <> '' then
-            Existentes := Existentes + [E.Trim];
+      Hay := ClausulaRequires(Text, Existentes, Ini, Largo);
       for N in Nombres do
       begin
         Ya := False;
@@ -1873,8 +1872,8 @@ begin
       if Nuevos.Count = 0 then
         Exit(MsgFmt(SN_REQUIRES_PRESENT_FMT, [TPath.GetFileName(Dpr)]));
       Clausula := 'requires' + NL + '  ' + string.Join(',' + NL + '  ', Existentes) + ';';
-      if M.Success then
-        Text := Copy(Text, 1, M.Index - 1) + Clausula + Copy(Text, M.Index + M.Length, MaxInt)
+      if Hay then
+        Text := Copy(Text, 1, Ini - 1) + Clausula + Copy(Text, Ini + Largo, MaxInt)
       else
       begin
         MPos := TRegEx.Match(CodigoPascal(Text), '^[ \t]*(contains\b|end\s*\.)', [roIgnoreCase, roMultiline]);
@@ -1892,6 +1891,25 @@ begin
     Nombres.Free;
     Nuevos.Free;
   end;
+end;
+
+function ClausulaRequires(const ATexto: string; out ANombres: TArray<string>;
+  out AIni, ALargo: Integer): Boolean;
+var
+  M: TMatch;
+begin
+  ANombres := [];
+  AIni := 0;
+  ALargo := 0;
+  M := TRegEx.Match(CodigoPascal(ATexto), '^[ \t]*requires\b\s*(.*?);', [roIgnoreCase, roMultiline, roSingleline]);
+  Result := M.Success;
+  if not Result then
+    Exit;
+  AIni := M.Index;
+  ALargo := M.Length;
+  for var E in M.Groups[1].Value.Split([',']) do
+    if E.Trim <> '' then
+      ANombres := ANombres + [E.Trim];
 end;
 
 function ProjectUnits(const AProject: string; ANeedDproj: Boolean): TArray<TProjectUnit>;
