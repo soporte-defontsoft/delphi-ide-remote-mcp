@@ -151,7 +151,8 @@ function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
   y todo se lee: eso pasa. Lo decide LoadSecurity, el lector, antes de leer
   nada (y entonces no lee); esto lo lanza, y lo llama TMcpHost.Wire lo
   primero. Leerlo de otra manera seria un segundo lector, y el del Port ni
-  siquiera es nuestro. }
+  siquiera es nuestro. Lo mismo uno en UTF-16 big endian (FE FF): esa API
+  no lo lee y no veia ninguna seccion (9.2 de la 1.18.0). }
 procedure ExigeSettingsIniLegible;
 
 { The knowledge-vault root (Obsidian notes). Empty when unset.
@@ -301,7 +302,7 @@ uses
   MCPServer.Types,      // BearerToken: UN lector de la cabecera Authorization
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Texts,
-  Lsp.Codificacion,     // BomUtf8En: el BOM delante de una cabecera de seccion
+  Lsp.Codificacion,     // BomUtf8En y KindDeBom: el BOM delante de una seccion, el UTF-16 BE
   Lsp.Rutas,
   Lsp.Casa;             // ServerDir: la casa del settings.ini
 
@@ -375,7 +376,7 @@ var
   GDelphiVersion: string = '';      // [Server] DelphiVersion: el Delphi del servidor
   GDelphiUpdate: string = '';       // [Server] DelphiUpdate: el update que declara el operador
   GIniCargadoEn: TDateTime = 0;     // la fecha del settings.ini que tiene cargado este proceso
-  GIniIlegible: string = '';        // por que no se lee el settings.ini (un BOM delante de una seccion): no arranca
+  GIniIlegible: string = '';        // por que no se lee el settings.ini (un BOM delante de una seccion, UTF-16 BE): no arranca
   GServerIniDoble: Boolean = False; // [Server] dos veces, o su DelphiVersion: la clave no se escribe
   GWorkspaceConDelphiVersion: string = ''; // un workspace con DelphiVersion= de la 1.13: la clave no se escribe
   GAllowTests: Boolean = False;     // running test suites is opt-in too
@@ -998,19 +999,13 @@ end;
   interfaces). Al principio del fichero, que es lo normal, y tambien a mitad
   - un trozo pegado de otro fichero - o dos seguidos. Lo pregunta
   LoadSecurity ANTES de leer nada (revision del 6-oct-2026: estaba en Wire,
-  despues de que el ini se hubiera leido y usado). }
-function LineaConBomAntesDeSeccion(const AIniPath: string): Integer;
+  despues de que el ini se hubiera leido y usado). B: BytesDelIni. }
+function LineaConBomAntesDeSeccion(const B: TArray<Byte>): Integer;
 var
-  B: TArray<Byte>;
   I, J, Linea: Integer;
   ConBom: Boolean;
 begin
   Result := 0;
-  try
-    B := TFile.ReadAllBytes(AIniPath);
-  except
-    Exit; // sin poder leerlo no se sabe: que lo lea TIniFile, como siempre
-  end;
   I := 0;
   Linea := 1;
   while I < Length(B) do
@@ -1037,6 +1032,33 @@ begin
   end;
 end;
 
+{ Los bytes de settings.ini: UNA lectura para las preguntas de antes de
+  leerlo (un BOM delante de una seccion, el UTF-16 big endian), y sin negar
+  la escritura a otro proceso - TFile.ReadAllBytes abre con
+  fmShareDenyWrite y, con el fichero abierto por un editor, fallaba donde
+  la API de los ini si lo lee (revision del 9.2 de la 1.18.0). Sin poder
+  leerlo, False: no se sabe, y lo lee TIniFile como siempre. }
+function BytesDelIni(const APath: string; out ABytes: TArray<Byte>): Boolean;
+var
+  S: TFileStream;
+begin
+  ABytes := nil;
+  try
+    S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+    try
+      SetLength(ABytes, S.Size);
+      if Length(ABytes) > 0 then
+        S.ReadBuffer(ABytes[0], Length(ABytes));
+    finally
+      S.Free;
+    end;
+    Result := True;
+  except
+    ABytes := nil;
+    Result := False;
+  end;
+end;
+
 type
   TClaveRetirada = record
     Clave, Desde: string;
@@ -1057,6 +1079,8 @@ var
   Ini: TIniFile;
   Fuera: TArray<string>;
   LineaBom: Integer;
+  IniBytes: TArray<Byte>;
+  IniBom: TEncKind;
 begin
   if GSecLoaded then
     Exit;
@@ -1115,11 +1139,17 @@ begin
   // de lo que se leyera seria lo que escribio el operador. No se lee, y el
   // servidor no arranca (ExigeSettingsIniLegible, desde TMcpHost.Wire)
   LineaBom := 0;
-  if TFile.Exists(IniPath) then
-    LineaBom := LineaConBomAntesDeSeccion(IniPath);
-  if LineaBom > 0 then
-    GIniIlegible := MsgFmt(SE_GUARD_INI_BOM_FMT, [IniPath, LineaBom]);
-  if TFile.Exists(IniPath) and (LineaBom = 0) then
+  if TFile.Exists(IniPath) and BytesDelIni(IniPath, IniBytes) then
+  begin
+    LineaBom := LineaConBomAntesDeSeccion(IniBytes);
+    if LineaBom > 0 then
+      GIniIlegible := MsgFmt(SE_GUARD_INI_BOM_FMT, [IniPath, LineaBom])
+    // ...ni uno en UTF-16 big endian, que esa API no lee: sin ninguna
+    // seccion se arrancaba callado (9.2 de la 1.18.0)
+    else if KindDeBom(IniBytes, IniBom) and (IniBom = ekUtf16BE) then
+      GIniIlegible := MsgFmt(SE_GUARD_INI_UTF16BE_FMT, [IniPath]);
+  end;
+  if TFile.Exists(IniPath) and (GIniIlegible = '') then
   begin
     // la fecha ANTES de leerlo: si lo tocan mientras, se avisa de mas, nunca de menos
     GIniCargadoEn := TFile.GetLastWriteTime(IniPath);
@@ -1567,6 +1597,13 @@ begin
   AError := '';
   if not TFile.Exists(SettingsIniPath) then
     Exit;
+  // uno que no se lee tampoco se escribe: el escritor lo pregunta el mismo y
+  // no depende de que Wire haya parado antes (revision del 9.2 de la 1.18.0)
+  if GIniIlegible <> '' then
+  begin
+    AError := GIniIlegible;
+    Exit;
+  end;
   // [Server] dos veces, o su DelphiVersion dos veces: Windows lee el primero,
   // y la clave que el operador queria puede estar en el otro - escribirla
   // aqui la taparia para siempre (revision del 6-oct-2026)

@@ -599,14 +599,11 @@ var
   I: Integer;
   HasHigh: Boolean;
 begin
-  if BomUtf8En(B, 0) then
-    Exit(ekUtf8Bom);
+  // el BOM de UTF-8 y los de UTF-16, por EL lector de un BOM (Codificacion).
   // UTF-16 solo por BOM: sin el, ningun fuente Delphi es UTF-16 (el IDE lo
   // escribe siempre con marca) y adivinarlo por ceros seria otro detector.
-  if (Length(B) >= 2) and (B[0] = $FF) and (B[1] = $FE) then
-    Exit(ekUtf16LE);
-  if (Length(B) >= 2) and (B[0] = $FE) and (B[1] = $FF) then
-    Exit(ekUtf16BE);
+  if KindDeBom(B, Result) then
+    Exit;
   HasHigh := False;
   for I := 0 to High(B) do
     if B[I] > 127 then

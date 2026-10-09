@@ -193,6 +193,17 @@ the MCP `initialize` response (`serverInfo.version`).
   was, and a number of two or more digits stays a virtual-key code. (The
   server already refused a digit with DESK-010.) Not measured live: it
   would send keystrokes to the operator's desktop.
+- **A settings.ini saved as UTF-16 big endian stops the server, and says
+  why.** The Windows ini reader does not read that encoding, so no section
+  was seen: the server started without its `[Server]` port and bind IP and
+  without a single workspace, said nothing, and added its `DelphiVersion`
+  line to the file in another encoding. It now refuses to start, like a BOM
+  in front of a section, and the message says to save the file as UTF-8
+  without BOM or as UTF-16 little endian, which is read and written as
+  before. The check reads the file once and no longer fails while an
+  editor holds it open, and the `DelphiVersion` writer refuses an
+  unreadable ini by itself. `test_un_delphi` U11d, with U11e as the
+  little-endian control.
 
 ### Internal
 

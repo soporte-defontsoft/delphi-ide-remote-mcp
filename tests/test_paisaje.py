@@ -149,7 +149,7 @@ REGLAS = [
     ('binario por el primer byte', r"\[\s*0\s*\]\s*=\s*\$FF\b",
      [('Lsp.DesignerForma.pas', 'DesignerShapeOf'),
       # el BOM de UTF-16 LE (FF FE): la otra pregunta, la de la codificacion
-      ('Lsp.Patch.pas', 'DetectEnc')],
+      ('Lsp.Codificacion.pas', 'KindDeBom')],
      'DesignerShapeOf: solo $FF tambien es el BOM de un texto UTF-16 LE; IsBinaryStyle era la quinta copia '
      'del fallo del 24-sep (P3 de la segunda revision de la 1.17.0)'),
     ('la distancia de edicion', r"Min\s*\(\s*Min\s*\(", [('Lsp.Pascal.pas', 'EditDistance')],
@@ -218,7 +218,9 @@ REGLAS = [
     ('decidir la codificacion de unos bytes',
      r'\bGetBufferEncoding\b|\$FF\b[^;]*\$FE\b|\$FE\b[^;]*\$FF\b|\$EF\b[^;]*\$BB\b|\$BB\b[^;]*\$BF\b',
      # (EncodeText escribe el BOM byte a byte, una forma que esta regla no ve: 2.1g)
-     [('Lsp.Patch.pas', 'DetectEnc'), ('Lsp.Codificacion.pas', 'BomUtf8En'),
+     # (EL lector del BOM del principio, KindDeBom, lo preguntan DetectEnc y el
+     # lector de settings.ini, que no puede usar Patch: 9.2 de la 1.18.0)
+     [('Lsp.Codificacion.pas', 'KindDeBom'), ('Lsp.Codificacion.pas', 'BomUtf8En'),
       # deuda declarada (2.1g de la 1.18.0): dos detectores sueltos; solo puede encoger
       ('Lsp.DesignerForma.pas', 'DesignerAFlujo'), ('Lsp.Docs.pas', 'KindDeAyuda')],
      'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '

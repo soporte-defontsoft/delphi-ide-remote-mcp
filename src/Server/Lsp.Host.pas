@@ -169,7 +169,8 @@ var
   ErrorIni: string;
 begin
   // Antes que nada, que su settings.ini se lea entero: con el BOM de UTF-8
-  // delante de la primera seccion, Windows la pierde (Port, BindIP...)
+  // delante de la primera seccion, Windows la pierde (Port, BindIP...), y en
+  // UTF-16 big endian no ve ninguna
   ExigeSettingsIniLegible;
   // Lo primero: el Delphi de este servidor. Sin el no hay servidor - es un
   // servidor MCP para Delphi (David, 5-oct-2026) -, y la excepcion la cuenta

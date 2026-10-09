@@ -96,6 +96,16 @@ const
     'server would listen on another port and on every network interface). ' +
     'Save the file as UTF-8 without BOM (one BOM at the very start followed ' +
     'by a comment line is harmless).';
+  { Un settings.ini en UTF-16 big endian (FE FF): la API de los ini de Windows
+    lee UTF-16 little endian con su BOM, pero no este; no veia ninguna
+    seccion y se arrancaba sin ellas, callado (9.2 de la 1.18.0). %s = el
+    fichero. }
+  SE_GUARD_INI_UTF16BE_FMT =
+    'This server does not start: its settings.ini (%s) is saved as UTF-16 ' +
+    'big endian (it starts with FE FF), which the Windows ini reader does ' +
+    'not read - every section would be lost (the [Server] port and bind IP, ' +
+    'and each workspace with its roots and token). Save it as UTF-8 without BOM, or as ' +
+    'UTF-16 little endian (what Notepad calls "UTF-16 LE").';
   { Una instalacion que sirve, con su clave, para la negativa. }
   SF_DISC_USABLE_FMT =
     '%s -> [Server] DelphiVersion=%s';

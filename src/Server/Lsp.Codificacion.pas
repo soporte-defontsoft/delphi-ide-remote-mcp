@@ -30,6 +30,12 @@ type
   fichero va en el 0 (DetectEnc); Lsp.Settings busca tambien los de mitad de un
   settings.ini, que Windows no ve (LineaConBomAntesDeSeccion). }
 function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
+{ El BOM con el que EMPIEZA B, si lleva uno de los que conoce la casa: el de
+  UTF-8 (ekUtf8Bom) o el de UTF-16 little o big endian. Sin BOM, False. Lo
+  preguntan EL detector (Lsp.Patch.DetectEnc) y el lector de settings.ini
+  (Lsp.Settings, que no puede usar Patch): la pregunta de FE FF estaba
+  escrita a mano en los dos (9.2 de la 1.18.0). }
+function KindDeBom(const B: TArray<Byte>; out AKind: TEncKind): Boolean;
 function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
 function EncodeText(const S: string; K: TEncKind): TArray<Byte>;
 function EncName(K: TEncKind): string;
@@ -138,6 +144,19 @@ function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
 begin
   Result := (AIndice >= 0) and (AIndice + 2 <= High(B)) and (B[AIndice] = $EF) and
     (B[AIndice + 1] = $BB) and (B[AIndice + 2] = $BF);
+end;
+
+function KindDeBom(const B: TArray<Byte>; out AKind: TEncKind): Boolean;
+begin
+  Result := True;
+  if BomUtf8En(B, 0) then
+    AKind := ekUtf8Bom
+  else if (Length(B) >= 2) and (B[0] = $FF) and (B[1] = $FE) then
+    AKind := ekUtf16LE
+  else if (Length(B) >= 2) and (B[0] = $FE) and (B[1] = $FF) then
+    AKind := ekUtf16BE
+  else
+    Result := False;
 end;
 
 function DecodeBytes(const B: TBytes; K: TEncKind): string;

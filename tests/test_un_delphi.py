@@ -43,7 +43,10 @@ nombres y su build los dice el propio servidor (delphi_installs).
       no ve esa cabecera y la seccion se pierde entera (Port, BindIP,
       DelphiVersion): NO arranca y dice por que; con un comentario delante
       el BOM no molesta, arranca y la clave entra en SU [Server]; a MITAD
-      del fichero (un trozo pegado) tampoco arranca, y dice la linea
+      del fichero (un trozo pegado) tampoco arranca, y dice la linea. En
+      UTF-16 big endian (FE FF) esa API no ve ninguna seccion: NO arranca
+      (U11d); en UTF-16 little endian con su BOM si, y la clave se escribe
+      en LE (U11e, el control)
   U12 [Server] dos veces: Windows lee el primero y la version del operador
       puede estar en el otro - arranca, NO escribe la clave y lo dice
   U13 [Server] DelphiVersion=37,0 (la coma decimal de un teclado espanol) y
@@ -398,6 +401,36 @@ try:
           c is None and rc == 1 and (', on line %d, ' % linea) in texto,
           'cli=%s rc=%s %s' % (c, rc, texto[-300:]))
     check('U11c ...el ini no se toca', ini_de(d11c) == INI11C, ini_de(d11c)[:200])
+    para(proc)
+    # 9.2 de la 1.18.0: un settings.ini en UTF-16 BIG endian (FE FF): la API de
+    # los ini de Windows no lo lee, no veia ninguna seccion y se arrancaba sin
+    # ellas, callado. Ahora no arranca y dice por que
+    INI11D = b'\xfe\xff' + ini_bytes([]).decode('utf-8').encode('utf-16-be')
+    d11d, exe11d = carpeta_servidor('utf16be', INI11D)
+    proc, ruta, c = lanza(exe11d, 'utf16be')
+    try:
+        rc = proc.wait(30)
+    except subprocess.TimeoutExpired:
+        rc = None
+    texto = '\n'.join(mensajes(ruta))
+    partes = re.split(r'%[sd]', CAT['SE_GUARD_INI_UTF16BE_FMT'])
+    check('U11d settings.ini en UTF-16 big endian: NO arranca, y dice por que y como guardarlo',
+          c is None and rc == 1 and all(p in texto for p in partes), 'cli=%s rc=%s %s' % (c, rc, texto[-300:]))
+    check('U11d ...el ini no se toca', ini_de(d11d) == INI11D, ini_de(d11d)[:120])
+    para(proc)
+    # ...y su control (revisor del 9.2): en UTF-16 LITTLE endian con su BOM, lo
+    # que el mensaje recomienda, arranca y la clave entra en su [Server], en
+    # LE; el resto, byte a byte
+    INI11E = b'\xff\xfe' + ini_bytes([]).decode('utf-8').encode('utf-16-le')
+    d11e, exe11e = carpeta_servidor('utf16le', INI11E)
+    proc, ruta, c = lanza(exe11e, 'utf16le')
+    escrito = ini_de(d11e)
+    linea_le = LINEA.decode('ascii').encode('utf-16-le')
+    como_texto = escrito[2:].decode('utf-16-le', 'replace').encode('utf-8') if escrito[:2] == b'\xff\xfe' else b''
+    check('U11e en UTF-16 little endian (FF FE): arranca y escribe la clave en LE dentro de su [Server], '
+          'el resto byte a byte',
+          c is not None and escrito.replace(linea_le, b'', 1) == INI11E and en_server(como_texto, LINEA),
+          escrito[:200])
     para(proc)
 
     # ------------------------------------------------------------------ U12
