@@ -146,8 +146,17 @@ function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
   out ACode: Cardinal): string;
 
 { StyleNames of the Windows platform default style, extracted once through the
-  helper and cached under LOCALAPPDATA. Empty when the helper is missing. }
+  helper and cached under LOCALAPPDATA. Empty when the helper is missing.
+  Ya como claves (ClaveDeEstilo). }
 function PlatformDefaultStyleNames: TArray<string>;
+
+{ LA clave del nombre de un estilo, la de FMX: su TStyleIndexer
+  (FMX.Types) indexa StyleName.ToLowerInvariant, asi que 'BOTON' y 'Boton'
+  con su acento son el MISMO estilo para quien lo busca. FindStyle y Child
+  comparaban con SameText (solo pliega ASCII) y el lint con ToLower (el del
+  idioma): con 'Boton' acentuado en el fichero, clone aceptaba la version
+  en mayusculas como nueva (P7 de la segunda revision de la 1.17.0). }
+function ClaveDeEstilo(const ANombre: string): string;
 
 implementation
 
@@ -184,7 +193,8 @@ var
   C: TStyleObj;
 begin
   for C in Children do
-    if SameText(C.StyleName, AName) or (SameText(C.ObjName, AName) and (C.ObjName <> '')) then
+    if (ClaveDeEstilo(C.StyleName) = ClaveDeEstilo(AName)) or
+       ((C.ObjName <> '') and MismoIdentificador(C.ObjName, AName)) then
       Exit(C);
   Result := nil;
 end;
@@ -323,7 +333,7 @@ var
   O: TStyleObj;
 begin
   for O in FRoot.Children do
-    if SameText(O.StyleName, AStyleName) then
+    if ClaveDeEstilo(O.StyleName) = ClaveDeEstilo(AStyleName) then
       Exit(O);
   Result := nil;
 end;
@@ -671,12 +681,17 @@ begin
       var Prop, Valor, Texto: string;
       if LineaDePropiedad(Linea, Prop, Valor) and SameText(Prop, 'StyleName') and
          LeeLiteralDeForm(Valor, Texto) then
-        L.Add(Texto.ToLower);
+        L.Add(ClaveDeEstilo(Texto));
     end;
     Result := L.ToArray;
   finally
     L.Free;
   end;
+end;
+
+function ClaveDeEstilo(const ANombre: string): string;
+begin
+  Result := ANombre.ToLowerInvariant;
 end;
 
 end.

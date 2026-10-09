@@ -119,7 +119,7 @@ begin
       N := 0;
       for O in Doc.Styles do
       begin
-        if (AFilter <> '') and not O.StyleName.ToLower.Contains(AFilter.ToLower) then
+        if (AFilter <> '') and not ClaveDeEstilo(O.StyleName).Contains(ClaveDeEstilo(AFilter)) then
           Continue;
         E := TJSONObject.Create;
         E.AddPair('style', O.StyleName);
@@ -365,7 +365,7 @@ begin
         begin
           if O.StyleName = '' then
             Continue;
-          N := O.StyleName.ToLower;
+          N := ClaveDeEstilo(O.StyleName);
           if Seen.ContainsKey(N) then
           begin
             Issue := TJSONObject.Create;
@@ -429,7 +429,7 @@ begin
               Continue;
           end;
           Inc(Used);
-          N := Lookup.ToLower;
+          N := ClaveDeEstilo(Lookup);
           if Names.ContainsKey(N) then
             Continue;
           if Defaults.ContainsKey(N) then

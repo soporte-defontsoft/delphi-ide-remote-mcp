@@ -160,6 +160,9 @@ REGLAS = [
       ('Mcp.Tools.Help.pas', 'OneTool')],
      'ElMasParecido (Lsp.Pascal): el UNICO a la menor distancia; delphi_help tenia su copia (revision de '
      'la 1.17.0)'),
+    ('la clave del nombre de un estilo', r"\.StyleName\.ToLower|SameText\(\s*[\w.\[\]]*\.StyleName\b", [],
+     'ClaveDeEstilo (Lsp.Styles), la de FMX: ToLowerInvariant (P7 de la segunda revision de la 1.17.0: '
+     'SameText en FindStyle y Child, ToLower en el lint)'),
     ('la cadena de clases de la tabla', r"\bPadres\.TryGetValue\s*\(",
      [('Lsp.DesignerMeta.pas', 'TMetaTable.CadenaDe'),
       # OTRO Padres: los hijos de cada clase, en el generador
@@ -371,6 +374,7 @@ PLANTADO = {
     'la distancia de edicion': "  D[J] := Min(Min(D[J] + 1, D[J - 1] + 1), P + C);",
     'el mas parecido': "  if EditDistance(A, C) < Mejor then",
     'la cadena de clases de la tabla': "  while Padres.TryGetValue(C, P) do",
+    'la clave del nombre de un estilo': "  if SameText(O.StyleName, AStyleName) then",
     'la sangria de un nivel de un designer': "  I := StringOfChar(' ', (Obj.Depth + 1) * 2);",
     'de que marco es un designer': "  if APath.EndsWith('.fmx', True) then",
     'el designer de una unidad': "  F := ChangeFileExt(Pas, '.dfm');",

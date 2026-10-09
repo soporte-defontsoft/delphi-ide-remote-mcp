@@ -116,6 +116,13 @@ the MCP `initialize` response (`serverInfo.version`).
   `DprDe` for everyone (the build, `delphi_test`, the scaffold and the unit
   registrar, which was the only one that knew the package), and the
   `requires` clause has one reader (`ClausulaRequires`). `test_scaffold`.
+- **`delphi_styles` compares style names the way FMX does.** FMX's style
+  indexer keys a `StyleName` by `ToLowerInvariant`, so `BOTÓN` and `Botón`
+  are the same style to whoever looks it up; `clone`, `set` and the child
+  paths compared with `SameText`, which folds only ASCII, and cloned
+  `BOTÓN` next to `Botón` as a new style. One key now (`ClaveDeEstilo`) for
+  finding a style, its children, the lint's duplicates and lookups, the
+  platform's default names and `view`'s filter. `test_styles`.
 
 ### Internal
 

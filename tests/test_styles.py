@@ -223,6 +223,13 @@ d = json.loads(call('delphi_styles', {"path": S}))
 check('clone con el literal del IDE: el nombre es su texto, como en set',
       mc.abre(out, 'SN_STYLES_CLONED_FMT') and "StyleName = 'tarjeta'#243'4'" in rd(S) and
       'tarjetaó4' in [x['style'] for x in d['styles']], out[:200])
+# la clave de un nombre de estilo es la de FMX (TStyleIndexer: ToLowerInvariant):
+# en mayusculas, con la O acentuada tambien, es el MISMO estilo. SameText solo
+# pliega ASCII y clone lo aceptaba como nuevo (P7 de la segunda revision de
+# la 1.17.0)
+out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": "TARJETAÓ4"})
+check('clone con el nombre en mayusculas de uno que existe (con su acento): ocupado, como lo ve FMX',
+      mc.rechazado(out) and mc.es(out, 'SR_STYLES_NAME_TAKEN_FMT'), out[:200])
 # un nombre de mas de 64 caracteres va en trozos, como el IDE: el arbol lo lee
 # entero (ValorEnteroDe), y clonar DESDE el era un AV (revision de la 1.17.0)
 LARGO = 'tarjeta' + 'x' * 63
