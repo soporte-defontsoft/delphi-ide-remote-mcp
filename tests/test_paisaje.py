@@ -221,8 +221,10 @@ REGLAS = [
      # (EL lector del BOM del principio, KindDeBom, lo preguntan DetectEnc y el
      # lector de settings.ini, que no puede usar Patch: 9.2 de la 1.18.0)
      [('Lsp.Codificacion.pas', 'KindDeBom'), ('Lsp.Codificacion.pas', 'BomUtf8En'),
-      # deuda declarada (2.1g de la 1.18.0): dos detectores sueltos; solo puede encoger
-      ('Lsp.DesignerForma.pas', 'DesignerAFlujo'), ('Lsp.Docs.pas', 'KindDeAyuda')],
+      # deuda declarada (2.1g de la 1.18.0): un detector suelto, el de los renderizadores,
+      # que no enlazan la casa (Lsp.Codificacion arrastra Lsp.Texts); solo puede encoger.
+      # (el de la ayuda se fue en r5: pregunta BomUtf8En y CodecDeCharset)
+      ('Lsp.DesignerForma.pas', 'DesignerAFlujo')],
      'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
      'escribe): nadie mas mira unos bytes para decidir que son (24-sep-2026: dos detectores; 1.18.0: '
      'los codecs salen a Lsp.Codificacion y la decision se queda en Patch). KindDeBom es GRAMATICA '
@@ -241,9 +243,12 @@ REGLAS = [
       # ASCII), la creacion de una unit nueva y la medida de un cuerpo de varios bytes
       ('Lsp.Patch.pas', 'DoEdit'), ('Lsp.Patch.pas', 'PatchSaveText'),
       ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Patch.pas', 'Measure'),
-      # la decision del escritor: como se LEERIAN los bytes CP1252 de un fuente
+      # la decision del escritor: como se LEERIAN los bytes ANSI de un fuente
       # sin codificacion (LecturaCambiada); no escribe nada
-      ('Lsp.Patch.pas', 'EncAlEscribir')],
+      ('Lsp.Patch.pas', 'EncAlEscribir'),
+      # el texto de un form, en ANSI, para el parser de forms de la RTL EN MEMORIA:
+      # lo que se escribe es el binario (to-binary, por AtomicWrite), no un texto
+      ('Lsp.DesignerBin.pas', 'DesignerTextToBinary')],
      'quien codifica el texto de un fichero por su cuenta se salta la regla de ida y vuelta y la '
      'del primer caracter no ASCII (David, 9-oct-2026): se escribe por PatchSaveText o DoEdit'),
     ('la regla de ida y vuelta preguntada a mano',
@@ -285,13 +290,22 @@ REGLAS = [
      [('Lsp.Codificacion.pas', 'IsAscii')],
      'IsAscii (Lsp.Codificacion): estaba en Lsp.TextEdit y en linea en NombreQueElFicheroNoLee, y '
      'to-binary iba a por la tercera (4.1 de la 1.18.0)'),
-    ('el codec CP1252', r'GetEncoding\s*\(\s*1252\s*\)',
+    ('una pagina de codigos a mano',
+     r'GetEncoding\s*\(|TEncoding\.(?:ANSI|Default)\b|\bGetACP\b|TMBCSEncoding\.Create\s*\(',
      [('Lsp.Codificacion.pas', '*'),
-      # deuda declarada (2.1g de la 1.18.0): Docs crea el suyo en cada llamada para medir
-      # bytes; se va con un parametro de EncodeText (sustitucion), no con un hermano
-      ('Lsp.Docs.pas', 'BytesMin')],
-     'GCp1252: UN codec compartido (revision de la 1.10.0: crear uno por bloque del indice caia en '
-     'el bucle de la busqueda)'),
+      # la pagina OEM de la CONSOLA (GetConsoleOutputCP, o GetOEMCP sin consola) con
+      # la que escribe un hijo en su tuberia: otro juez y otra pagina, no la ANSI
+      ('Lsp.BuildRunner.pas', 'RunCore')],
+     'LA pagina ANSI es la de la maquina, medida en UN lector (PaginaAnsi: GetACP, la de '
+     'TEncoding.ANSI), y los codecs se crean en la casa (CodecDeCharset para la pagina que declara '
+     'un formato): r5 de la 1.18.0, norma 6 del paisaje - el servidor tenia la 1252 clavada en el '
+     'detector, TEncoding.ANSI en to-binary y en los estilos y TEncoding.Default en el renderizador, '
+     'tres definiciones de ANSI; y la ayuda creaba su 1252 en cada busqueda'),
+    ('fijar la pagina ANSI', r'\bUsaPaginaAnsi\s*\(',
+     [('Lsp.Codificacion.pas', '*')],
+     'la pagina ANSI la fija la initialization de Lsp.Codificacion con la de la maquina; otra la '
+     'piden SOLO las pruebas (DUnitX, para medir 1251, 1253 o 932 en una maquina 1252). Un sitio '
+     'del servidor que la cambie lee y escribe en otra pagina que el IDE y dcc'),
     ('las listas crudas de los sitios',
      r'\b(?:WorkspaceRoots|WorkspaceReadOnlyRoots|WorkspaceReadOnlyPaths|LugaresDeclarados|LibraryRoots|LibraryReadRoots|'
      r'TodosLosVaults|RaicesDeLosWorkspaces|RaicesDelModoLocal|SitiosQueNoSeTocan)\b',
@@ -458,7 +472,8 @@ PLANTADO = {
     'la regla de ida y vuelta preguntada a mano': "  if not BytesVuelvenIgual(B, K) then Exit;",
     'las extensiones de un fuente a mano': "  if MatchText(Ext, ['.pas', '.dpr', '.dpk', '.inc']) then X := 1;",
     'las extensiones de un designer a mano': "  if MatchText(TPath.GetExtension(P), ['.dfm', '.fmx']) then X := 1;",
-    'el codec CP1252': "  E := TEncoding.GetEncoding(1252);",
+    'una pagina de codigos a mano': "  E := TEncoding.GetEncoding(1252);",
+    'fijar la pagina ANSI': "  UsaPaginaAnsi(1251);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
 }
 for regla in REGLAS:

@@ -4915,6 +4915,20 @@ const
     'The first line that does not fit: %s';
   SF_READ_OTRA_LECTURA_FMT =
     'Read as %s, that line would be: %s';
+  { Un FUENTE en UTF-8 sin BOM con acentos (regla 5 de la 1.18.0, David
+    9-oct-2026): se lee y se escribe como UTF-8, que es lo que son sus bytes
+    y lo que ensena el editor del IDE (medido), pero dcc lo compila como ANSI
+    (medido: mojibake en el exe) salvo con DCC_CodePage=65001 (medido). La
+    salida es la del IDE: guardarlo le pone el BOM (medido). %s = la pagina
+    ANSI de la maquina (EncName). }
+  SN_READ_UTF8_SIN_BOM_FMT =
+    '[READ-008] NOTE: this source is UTF-8 WITHOUT a BOM. The IDE shows its ' +
+    'accents right, but the compiler reads a source without BOM as ANSI ' +
+    '(%s) - unless its project sets DCC_CodePage=65001 - so its accented ' +
+    'string literals and names reach the program as mojibake (accents in ' +
+    'comments do no harm). The way out is the IDE''s: open it and save it, ' +
+    'and the IDE writes it as UTF-8 with a BOM, which the compiler reads ' +
+    'right. This server keeps the file as it is (its bytes are UTF-8).';
 
   SR_DESIGNER_EMPTY =
     '[DSGN-014 DENIED] The file contains no object.';
@@ -7655,8 +7669,9 @@ const
   SN_EDIT_ERA_ASCII_PURO_FMT =
     '[EDIT-080] (the file was pure ASCII, so it had no encoding to keep: ' +
     'the new characters were written in %s, as the compiler reads them - ' +
-    'a Delphi source goes to CP1252 when they all fit and to UTF-8 with a ' +
-    'BOM when one does not, as the IDE saves it; a form stays CP1252 (the ' +
+    'a Delphi source goes to the machine''s ANSI code page when they all ' +
+    'fit and to UTF-8 with a BOM when one does not, as the IDE saves it; a ' +
+    'form stays ANSI (the ' +
     'IDE would write #NNN codes, which the compiler reads the same); any ' +
     'other file follows the IDE''s setting.)';
 
@@ -7672,7 +7687,7 @@ const
   { La ida y vuelta del lado de la ESCRITURA (revisor propio de la 4.1,
     9-oct-2026): los bytes que se van a escribir, leidos por EL detector,
     saldrian en otra codificacion que la escrita - casi siempre mojibake (una
-    A con tilde y un superindice tres en CP1252 son los bytes de una o con
+    A con tilde y un superindice tres en ANSI (1252) son los bytes de una o con
     acento en UTF-8). Escrito asi, el detector y el IDE leerian el fichero
     con otros caracteres que los escritos. %s = el
     fichero, %s = la codificacion escrita, %s = la que leeria el detector,
@@ -8254,11 +8269,12 @@ const
     'remove-unit.';
 
   SD_EDIT_READ =
-    'Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or ' +
-    'without BOM / UTF-16 / UTF-32 detected for real). Returns numbered lines in ' +
+    'Read a Delphi source file DECODED CORRECTLY (ANSI - the machine''s ' +
+    'code page, CP1252 on a Western Windows - / UTF-8 with or without BOM / ' +
+    'UTF-16 / UTF-32 detected for real). Returns numbered lines in ' +
     'the format number|content - to build a delphi_edit anchor, copy ' +
     'everything after the bar, exactly. ALWAYS use this instead of a ' +
-    'generic read for Delphi files: generic reads turn CP1252 accents ' +
+    'generic read for Delphi files: generic reads turn ANSI accents ' +
     'into U+FFFD and poison every anchor built from them.';
 
   SD_EDIT_PATCH =
@@ -8274,7 +8290,7 @@ const
     'writes atomically and audits the result (encoding, EOLs, mojibake, ' +
     'end. structure, a brace comment with a brace inside - warned, never ' +
     'refused), reporting the REAL lines read back from disk: use them as ' +
-    'evidence. Never edit Delphi files with generic tools: CP1252 sources ' +
+    'evidence. Never edit Delphi files with generic tools: ANSI sources ' +
     'get destroyed.';
 
   // Descripciones que estaban en linea en Mcp.Tools.FileOps.pas (paso 3d, 27-sep-2026)
@@ -8477,7 +8493,7 @@ const
     'changes just a piece of it), DELETE mode (delete=true + old), ' +
     'several edits on the SAME file in one all-or-nothing call ("edits", ' +
     'where an anchor may be ONE line or a contiguous BLOCK), real ' +
-    'encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), line endings ' +
+    'encoding preserved (UTF-8 +/- BOM / ANSI / UTF-16 / UTF-32), line endings ' +
     'preserved, automatic backup, atomic write - without the Pascal ' +
     'gates. CREATE mode (create=true + content) for new files, never ' +
     'overwrites. Whole-file rewrites are refused. Delphi ' +
@@ -9183,7 +9199,7 @@ const
 
   // Textos que estaban en linea en Lsp.TextEdit.pas (el resto, 27-sep-2026)
   SF_TEXT_ASCII_COMPATIBLES =
-    'ascii (utf8/cp1252 compatible)';
+    'ascii (utf8/ansi compatible)';
 
   // Textos que estaban en linea en Mcp.Tools.TextEdit.pas (el resto, 27-sep-2026)
   SP_TEXT_NEW =
@@ -9461,6 +9477,24 @@ const
     'names. The compiler reads it (the form compiles as text, saved as ' +
     'UTF-8 with BOM), so keep this form as text, or rename it with ASCII ' +
     'letters to convert it. Nothing was written.';
+  { Un form de TEXTO en UTF-16 o UTF-32 (lo deja guardar el selector de
+    codificacion del editor del IDE): dcc no lo compila - RLINK32 toma su
+    FF FE por un recurso de 16 bits, o no lo abre: E2161 con los cuatro
+    (medido el 9-oct-2026, r5 de la 1.18.0) -; si UTF-8 con BOM, ANSI o el
+    binario. El renderizador lee el UTF-16 (lo pasa a UTF-8 para el parser
+    de forms), el UTF-32 no. %s = el fichero, %s = su codificacion. }
+  SN_DSGN_FORM_ANCHO_FMT =
+    '[DSGN-121] NOTE: %s is a text form in %s. The IDE opens it, but the ' +
+    'compiler does not build it (RLINK32 refuses a text form in UTF-16 or ' +
+    'UTF-32: E2161, measured). Save it from the IDE as UTF-8 (the IDE adds ' +
+    'the BOM) or ANSI before building.';
+  SR_DSGN_FORM_UTF32_FMT =
+    '[DSGN-122 DENIED] %s is a text form in %s: the renderer reads forms ' +
+    'the way the IDE''s form parser takes them (ANSI, UTF-8 with a BOM, or ' +
+    'UTF-16, which it converts first), and the compiler does not build a ' +
+    'UTF-32 form either (E2161, measured). Save it from the IDE as UTF-8 or ' +
+    'ANSI; delphi_read, tree and lint read it as it is. Nothing was ' +
+    'rendered.';
 
   // Textos que estaban en linea en Lsp.DesignerBinding.pas (el resto, 27-sep-2026)
   SF_DSGN_REPITE_UN_NOMBRE_FMT =

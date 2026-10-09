@@ -618,8 +618,10 @@ begin
   // La forma la dice DesignerShapeOf (la cabecera de recurso FF 0A 00, el
   // flujo TPF0): solo $FF tomaba por binario un .style de TEXTO guardado en
   // UTF-16 (FF FE), y un TPF0 a pelo por texto (2.2 de la 1.18.0). FMX_STYLE
-  // es la firma propia de un estilo FMX compilado.
-  Result := (DesignerShapeOf(B) <> dsText) or TEncoding.ANSI.GetString(B).StartsWith('FMX_STYLE');
+  // es la firma propia de un estilo FMX compilado: nueve bytes ASCII, que no
+  // piden ninguna pagina ANSI (aqui habia otra definicion, TEncoding.ANSI; r5
+  // de la 1.18.0).
+  Result := (DesignerShapeOf(B) <> dsText) or (TEncoding.ASCII.GetString(B) = 'FMX_STYLE');
 end;
 
 function TextStylesIn(const ADir: string): TArray<string>;

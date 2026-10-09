@@ -128,14 +128,19 @@ begin
       // editor del IDE guardo en UTF-16 (FF FE / FE FF) se le da en UTF-8 con
       // BOM. Solo por el BOM, que lee la RTL; lo demas, como lo lee TParser,
       // el del IDE (segunda revision de la 1.17.0: un frame UTF-16 tumbaba el
-      // preview; el detector de la casa vive en Lsp.Patch, que no se enlaza
-      // aqui: su mudanza a Lsp.Codificacion es de la 1.18.0)
+      // preview; el lector del BOM de la casa vive en Lsp.Codificacion, que
+      // arrastra Lsp.Texts y no se enlaza aqui). Sin BOM los bytes van tal cual
+      // al parser, que los lee en la ANSI de la maquina: la misma de la casa
+      // (Lsp.Codificacion.PaginaAnsi), y aqui no se define ninguna - era
+      // TEncoding.Default, sin uso (r5 de la 1.18.0). Un form en UTF-32 (que
+      // GetBufferEncoding toma por UTF-16) no llega: lo niega el servidor antes
+      // de lanzar el renderizador (DSGN-122), y dcc tampoco lo compila (E2161)
       SetLength(Todo, AEntrada.Size);
       if Length(Todo) > 0 then
         AEntrada.ReadBuffer(Todo[0], Length(Todo));
       AEntrada.Position := 0;
       Cod := nil;
-      Bom := TEncoding.GetBufferEncoding(Todo, Cod, TEncoding.Default);
+      Bom := TEncoding.GetBufferEncoding(Todo, Cod);
       if (Cod = TEncoding.Unicode) or (Cod = TEncoding.BigEndianUnicode) then
       begin
         Utf8 := TBytesStream.Create(TEncoding.UTF8.GetPreamble +

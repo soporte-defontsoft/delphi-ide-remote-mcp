@@ -7,7 +7,7 @@ unit Lsp.Patch;
 
   - Anchor = ONE full existing line (its indentation does not count, the end does);
     never substrings, never multi-line anchors, never whole-file rewrites.
-  - Encoding is detected (UTF-8 BOM / strict UTF-8 / CP1252 / UTF-16 by BOM) and preserved;
+  - Encoding is detected (UTF-8 BOM / strict UTF-8 / the machine's ANSI page / UTF-16 by BOM) and preserved;
     a character that does not fit the file's codepage REJECTS the edit with
     the legitimate native-literal alternative spelled out.
   - Atomic writes (tmp + rename), automatic pre-edit backups under
@@ -85,7 +85,7 @@ function SangraComoLaLinea(const ALinea, AAncla: string;
 function Measure(const B: TArray<Byte>): TMetrics;
 
 { El decodificador de delphi_read, suelto: bytes -> texto con SU encoding real
-  (BOM de UTF-8 o UTF-16, UTF-8 estricto, y CP1252 solo cuando algun byte alto
+  (BOM de UTF-8 o UTF-16, UTF-8 estricto, y la ANSI solo cuando algun byte alto
   NO forma secuencia valida). Es EL detector: nadie mas decide codificaciones.
   Para quien ya tiene los bytes en la mano y no quiere leer el fichero dos
   veces. }
@@ -336,13 +336,13 @@ procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean =
   negativa (EDIT-038): reescribirlo cambiaria bytes que nadie toco. La
   preguntan los dos escritores de aqui (DoEdit y PatchSaveText) y el del
   vault: con el decodificador tolerante, sin esta pregunta, una nota con un
-  BOM de UTF-8 y el cuerpo en CP1252 volveria a disco con U+FFFD donde estan
+  BOM de UTF-8 y el cuerpo en ANSI volveria a disco con U+FFFD donde estan
   sus acentos, diciendo OK (revisor propio de la 4.1, 9-oct-2026). }
 function ReescrituraDenegada(const APath: string; const B: TArray<Byte>;
   out K: TEncKind): string;
 { ...y su lado de la ESCRITURA: '' si los bytes que se van a escribir (AB,
   en AK) se leeran en AK; si no, la negativa EDIT-122. Una A con tilde y un
-  superindice tres en CP1252 son los bytes de una o con acento en UTF-8: un
+  superindice tres en ANSI (1252) son los bytes de una o con acento en UTF-8: un
   fichero cuyos bytes altos son todos asi lo leen como UTF-8 el detector y el
   IDE, con otros caracteres que los escritos (revisor propio de la 4.1,
   medido). Unos bytes sin byte alto no tienen codificacion que leer. La
@@ -355,20 +355,21 @@ function LecturaCambiada(const APath: string; const AB: TArray<Byte>; AK: TEncKi
   Lo que ya tiene codificacion la conserva: un BOM o un byte alto la dicen.
   Un FUENTE (lo que lee dcc) que no tiene ninguna -solo ASCII- la elige con
   su primer caracter no ASCII, como el IDE al guardar (medido por David: una
-  vocal acentuada va en CP1252 sin BOM, sin preguntar; una letra griega,
-  tras preguntar, en UTF-8 con BOM): CP1252 si cabe todo y se va a leer como
-  CP1252, si no UTF-8 con BOM (una E acentuada y una comilla tipografica
-  juntas son, en CP1252, un caracter UTF-8 valido: el IDE y el detector
-  leerian el fichero como UTF-8). dcc lee un UTF-8 SIN BOM como ANSI:
-  escribirlo asi era el fallo. Uno NUEVO va en la del IDE, y si esa es CP1252
-  y no cabe, en UTF-8 con BOM; nunca en UTF-8 sin BOM (el IDE lo cura al
-  guardar). Lo que ya tenia codificacion conserva la del ORIGEN.
+  vocal acentuada va en ANSI -1252 en su maquina- sin BOM, sin preguntar; una
+  letra griega, tras preguntar, en UTF-8 con BOM): ANSI (PaginaAnsi, la de la
+  maquina) si cabe todo y se va a leer como ANSI, si no UTF-8 con BOM (una E
+  acentuada y una comilla tipografica juntas son, en 1252, un caracter UTF-8
+  valido: el IDE y el detector leerian el fichero como UTF-8). dcc lee un
+  UTF-8 SIN BOM como ANSI: escribirlo asi era el fallo. Uno NUEVO va en la
+  del IDE, y si esa es la ANSI y no cabe, en UTF-8 con BOM; nunca en UTF-8
+  sin BOM (el IDE lo cura al guardar). Lo que ya tenia codificacion conserva
+  la del ORIGEN.
   Lo que no es un fuente, tal cual. La preguntan los dos escritores (DoEdit,
   PatchSaveText), la creacion de una unit y el nombre de un componente
   (DSGN-111: en que codificacion quedara su unidad).
   Lo que cuenta es lo que el fichero tenia ANTES DE LA LLAMADA, no antes de
   cada escritura: una tanda con 'Accion' acentuado y luego una Omega se
-  negaba -la primera entrada fijaba CP1252- y al reves salia en UTF-8 con
+  negaba -la primera entrada fijaba la ANSI- y al reves salia en UTF-8 con
   BOM, y el preview de un changeset decia que si y su commit que no (medido
   el 9-oct-2026). La primera escritura de la llamada apunta si el fichero
   existia y si tenia codificacion, y AtomicWrite la huella de lo que deja:
@@ -449,7 +450,8 @@ function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string; ALineaBase: Intege
 
 { Encoding for NEW Delphi files, honouring the IDE's configured default
   (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
-  'cp1252' when ANSI. }
+  the machine's ANSI page (EncName(ekAnsi), 'cp1252' on a Western Windows)
+  when ANSI. }
 function NewFileEncName: string;
 
 { Makes a recoverable copy of a file into __delphi-patch\<date>\ before it is
@@ -633,7 +635,7 @@ begin
   if IdeWantsUtf8 then
     Result := 'utf8-bom'
   else
-    Result := 'cp1252';
+    Result := EncName(ekAnsi);
 end;
 
 function LeadingWhite(const S: string): string;
@@ -679,11 +681,11 @@ begin
   // escribe siempre con marca) y adivinarlo por ceros seria otro detector.
   if KindDeBom(B, Result) then
     Exit;
-  // un form de texto sin BOM: ANSI, como lo leen dcc y el parser de forms
+  // un form de texto sin BOM: ANSI (PaginaAnsi, la de la maquina), como lo leen dcc y el parser de forms
   // (medido 9-oct-2026; 4.1 de la 1.18.0). Lo que ya esta se lee y se
   // escribe con los mismos bytes, y un acento nuevo va como dcc lo lee
   if AEsDesigner then
-    Exit(ekCp1252);
+    Exit(ekAnsi);
   // Pure ASCII without BOM is ambiguous: honour the encoding the IDE is
   // configured to use (Tools > Options > Editor). Guessing the other way
   // writes the first new accent in the wrong codec and the IDE shows
@@ -694,18 +696,18 @@ begin
   begin
     if IdeWantsUtf8 then
       Exit(ekUtf8);
-    Exit(ekCp1252);
+    Exit(ekAnsi);
   end;
   // UTF-8 cuando TODO byte alto forma secuencias validas (estricto: el juez de
   // la RTL, TEncoding.UTF8.IsBufferValid); si no, ANSI. Asi deciden el IDE
   // (detecta un UTF-8 sin BOM: medido el 9-oct-2026) y TFile.ReadAllText. Una
   // regla propia de "UTF-8 danado" contradecia a los dos y dejaba sin editar
-  // un CP1252 legitimo (revisor propio de la 4.1; David: "si hay juez lo
+  // un ANSI legitimo (revisor propio de la 4.1; David: "si hay juez lo
   // seguimos hasta que se demuestre que el juez es tonto")
   if ValidUtf8(B, 0) then
     Result := ekUtf8
   else
-    Result := ekCp1252;
+    Result := ekAnsi;
 end;
 
 type
@@ -720,7 +722,7 @@ type
     TeniaCodificacion: Boolean;
     // ...y cual: la que leyo EL detector. Con el byte alto como unica marca,
     // una entrada que quitaba el ultimo acento dejaba el fichero en ASCII y la
-    // siguiente lo leia en la preferencia del IDE: un CP1252 acababa en UTF-8
+    // siguiente lo leia en la preferencia del IDE: un ANSI acababa en UTF-8
     // sin BOM segun el orden (revisor propio de la 4.1, medido)
     Codificacion: TEncKind;
     // la huella (HuellaDeOrigen) de lo ultimo que se sabe de la ruta: lo que
@@ -760,7 +762,7 @@ end;
   deshacer del changeset, o un proceso de fuera, la cambiaron entre dos
   escrituras- lo apuntado ya no es el origen de ESE fichero, y se ancla de
   nuevo en lo de ahora: un changeset que editaba P, lo borraba y movia a P un
-  fichero en UTF-8 con BOM lo dejaba en CP1252 (revisor propio de la 4.1,
+  fichero en UTF-8 con BOM lo dejaba en ANSI (revisor propio de la 4.1,
   medido). Fuera de una llamada, lo de ahora. }
 procedure OrigenDeLaLlamada(const APath: string; const AAhora: TArray<Byte>;
   AExisteAhora: Boolean; out AExistia, ATeniaCodificacion: Boolean;
@@ -822,15 +824,15 @@ var
   Existia, TeniaCodificacion: Boolean;
   Codificacion: TEncKind;
 
-  // CP1252 si cabe Y se va a leer como CP1252 (LecturaCambiada, la ida y
-  // vuelta del lado de la escritura): una E acentuada seguida de una comilla
-  // tipografica son, en CP1252, un caracter UTF-8 valido, y el IDE y el
+  // ANSI si cabe Y se va a leer como ANSI (LecturaCambiada, la ida y vuelta
+  // del lado de la escritura): una E acentuada seguida de una comilla
+  // tipografica son, en 1252, un caracter UTF-8 valido, y el IDE y el
   // detector leerian el fichero como UTF-8. Entonces UTF-8 con BOM, que no es
   // ambiguo para nadie (revisor propio de la 4.1)
-  function Cp1252SinAmbiguedad: Boolean;
+  function AnsiSinAmbiguedad: Boolean;
   begin
-    Result := CabeEnCp1252(ATexto) and
-      (LecturaCambiada(APath, EncodeText(ATexto, ekCp1252), ekCp1252) = '');
+    Result := CabeEnAnsi(ATexto) and
+      (LecturaCambiada(APath, EncodeText(ATexto, ekAnsi), ekAnsi) = '');
   end;
 
 begin
@@ -855,16 +857,16 @@ begin
     // anterior quito su ultimo acento, ahora parece ASCII)
     if TeniaCodificacion then
       Exit(Codificacion);
-    if Cp1252SinAmbiguedad then
-      Result := ekCp1252
+    if AnsiSinAmbiguedad then
+      Result := ekAnsi
     else
       Result := ekUtf8Bom;
   end
   // uno que nace en esta llamada: la del IDE (AK, la que se leyo de lo que
-  // escribio su creacion) - CP1252 si cabe sin ambiguedad, si no UTF-8 con
+  // escribio su creacion) - la ANSI si cabe sin ambiguedad, si no UTF-8 con
   // BOM; y UTF-8 siempre CON BOM: el IDE no guarda un fuente UTF-8 sin el
   // (medido el 9-oct-2026: lo cura al guardar), y dcc lo leeria como ANSI
-  else if (AK = ekUtf8) or ((AK = ekCp1252) and not Cp1252SinAmbiguedad) then
+  else if (AK = ekUtf8) or ((AK = ekAnsi) and not AnsiSinAmbiguedad) then
     Result := ekUtf8Bom;
 end;
 
@@ -948,7 +950,7 @@ begin
 end;
 
 { Lines (1-based) carrying a mojibake signature: a UTF-8 lead byte followed
-  by a continuation byte, "read" as CP1252 chars (e.g. 'A-tilde+3' for 'o
+  by a continuation byte, "read" as ANSI chars (e.g. 'A-tilde+3' for 'o
   acute'). Measured: models IMITATE corrupt context in their new text. }
 function MojibakeLines(const T: string): TArray<Integer>;
 var
@@ -956,7 +958,7 @@ var
   Lines: TArray<string>;
   I, J, B1, B2: Integer;
 
-  // De que byte pudo salir C al leer mal UTF-8: su byte CP1252 (la regla
+  // De que byte pudo salir C al leer mal UTF-8: su byte ANSI (la regla
   // del codificador, ByteCp) y, si no tiene, el de la lectura Latin-1, que
   // da U+0080..U+009F tal cual (la E acentuada mayuscula es U+00C3 U+0089;
   // la tipografia E2 80 xx, U+00E2 U+0080 ...). Son dos preguntas: unirlas en ByteCp
@@ -2753,14 +2755,29 @@ begin
         [CitaDeLinea(I + 1, ALineas[I])]);
       if K in [ekUtf8, ekUtf8Bom] then
       begin
-        Otras := LineasDelTexto(DecodeBytes(Copy(B, PreambleLen(K), MaxInt), ekCp1252));
+        Otras := LineasDelTexto(DecodeBytes(Copy(B, PreambleLen(K), MaxInt), ekAnsi));
         if I <= High(Otras) then
           Result := Result + #10'  ' + MsgFmt(SF_READ_OTRA_LECTURA_FMT,
-            [EncName(ekCp1252), CitaDeLinea(I + 1, Otras[I])]);
+            [EncName(ekAnsi), CitaDeLinea(I + 1, Otras[I])]);
       end;
       Break;
     end;
   Result := Result + #10;
+end;
+
+{ READ-008 (regla 5 de la 1.18.0, David 9-oct-2026): un FUENTE en UTF-8 sin
+  BOM con acentos lo ensena bien el IDE y lo compila mal dcc (como ANSI); se
+  dice al LEERLO, con la salida del IDE - al escribirlo solo lo decia una
+  edicion suelta y no una tanda, un adduses o un changeset (revisor propio
+  de r5): una nota de un sitio, no de unos escritores si y otros no. '' si
+  no es el caso. K: la que dijo EL detector de B. Un form no: sin BOM se lee
+  en ANSI, como dcc. Ni en una maquina cuya ANSI es UTF-8 (la opcion "UTF-8
+  para todo el mundo" de Windows): alli dcc lo lee bien. }
+function NotaDeUtf8SinBom(const APath: string; K: TEncKind; const B: TArray<Byte>): string;
+begin
+  Result := '';
+  if (K = ekUtf8) and (PaginaAnsi <> CP_UTF8) and EsRutaDeFuente(APath) and HayByteAlto(B) then
+    Result := MsgFmt(SN_READ_UTF8_SIN_BOM_FMT, [EncName(ekAnsi)]);
 end;
 
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
@@ -2773,7 +2790,7 @@ var
   Lines: TArray<string>;
   IniL, FinL, I: Integer;
   Sb: TStringBuilder;
-  Cut, NotaBin, NotaVuelta: string;
+  Cut, NotaBin, NotaVuelta, NotaUtf8: string;
 begin
   Denied := ReadPathDenied(APath); // reading may enter the library zone
   if Denied <> '' then
@@ -2823,6 +2840,9 @@ begin
   // lo que los escritores no reescribiran (ReescrituraDenegada) se dice al
   // leerlo, con la primera linea que no cuadra y su otra lectura (9-oct-2026)
   NotaVuelta := NotaDeIdaYVuelta(B, K, Lines);
+  NotaUtf8 := NotaDeUtf8SinBom(APath, K, B);
+  if NotaUtf8 <> '' then
+    NotaVuelta := NotaVuelta + NotaUtf8 + #10;
   // Un fichero VACIO se lee: es un exito con cero lineas. Salia EDIT-100
   // INVALID_PARAM ("from=1 is past the end") (quinta revision)
   if (Length(Lines) = 0) and (AFrom <= 1) then
@@ -3011,7 +3031,7 @@ begin
         CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
         // New files honour the encoding the IDE is configured to use
         // (NewFileEncName, la regla de todos: aqui habia otra copia), y si
-        // esa es CP1252 y el contenido no cabe, UTF-8 con BOM, como el IDE
+        // esa es la ANSI y el contenido no cabe, UTF-8 con BOM, como el IDE
         // al guardar (EncAlEscribir; 4.1 de la 1.18.0)
         var NewK := EncAlEscribir(A.Path, EncKindOf(NewFileEncName), nil, False, Skel);
         var CreadoBytes: TArray<Byte> := nil;
@@ -4120,7 +4140,7 @@ begin
     OrigenDeLaLlamada(APath, B, True, Existia, TeniaCodificacion, KOrigen);
     var KLeida := K;
     K := EncAlEscribir(APath, K, B, True, Joined);
-    // si esta escritura CAMBIA la codificacion (una tanda que paso de CP1252 a
+    // si esta escritura CAMBIA la codificacion (una tanda que paso de la ANSI a
     // UTF-8 con BOM: la decide lo de antes de la llamada), lo de antes se
     // cuenta en la nueva: un acento de un byte pasaba a dos y EDIT-081 pedia
     // restaurar un fichero bien escrito (medido el 9-oct-2026). Si lo de antes

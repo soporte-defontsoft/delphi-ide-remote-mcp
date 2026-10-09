@@ -498,6 +498,26 @@ try:
           (ancho, alto) == (400, 200), (ancho, alto))
     check('P1 ...y lo PINTADO es la form: el panel con su color (por pixel)',
           cerca(pixel_de(png('p1.png'), 30, 150), CIELO), pixel_de(png('p1.png'), 30, 150))
+    # ------------------------------------------------------------------ P1u
+    # (r5 de la 1.18.0) un form de TEXTO en UTF-16 se dibuja (el renderizador lo
+    # pasa a UTF-8, como lo abre el IDE), con la nota de que dcc no lo compila
+    # (E2161, medido); uno en UTF-32 no lo lee el renderizador: se niega antes
+    _FU = "object FormAncha: TForm\r\n  Caption = 'c\u00f3digo'\r\n  ClientHeight = 50\r\n  ClientWidth = 80\r\nend\r\n"
+    _u16 = os.path.join(JAIL, 'FormU16.dfm')
+    open(_u16, 'wb').write(b'\xff\xfe' + _FU.encode('utf-16-le'))
+    # (variables propias: los checks de P1 que siguen leen r y j de P1)
+    _ru = preview(path=_u16, inline='false')
+    _ju = J(_ru)
+    check('P1u un form UTF-16 se dibuja y dice que dcc no lo compila (DSGN-121)',
+          (_ju.get('root') or {}).get('name') == 'FormAncha' and
+          mc.es(_ju.get('encodingNote', ''), 'SN_DSGN_FORM_ANCHO_FMT'), _ru[:500])
+    _u32 = os.path.join(JAIL, 'FormU32.dfm')
+    open(_u32, 'wb').write(b'\xff\xfe\x00\x00' + _FU.encode('utf-32-le'))
+    _ru = preview(path=_u32, inline='false')
+    check('P1u ...uno UTF-32 se niega antes de lanzar el renderizador (DSGN-122), no con un error de sintaxis',
+          mc.rechazado(_ru) and mc.es(_ru, 'SR_DSGN_FORM_UTF32_FMT'), _ru[:400])
+    check('P1u ...y P1, ANSI, no lleva la nota', 'encodingNote' not in J(preview(path=PRUEBA, inline='false')),
+          'encodingNote en un form ANSI')
     check('P1 el frame de una imagen sin recorte empieza en 0,0',
           j.get('frame') == '400x200@400x200+0+0', j.get('frame'))
 

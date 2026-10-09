@@ -148,7 +148,7 @@ function FlotanteFmx(N: Integer): string;
     del renderizador) lee el fichero en ANSI, y en ANSI ningun byte alto es
     letra de un identificador (System.Classes, TParser.CharType). El IDE le
     pone el BOM al guardar (ObjectBinaryToText);
-  - la unidad con BOM o en CP1252: dcc lee en ANSI un fuente sin BOM, y en
+  - la unidad con BOM o en ANSI: dcc lee en ANSI un fuente sin BOM, y en
     UTF-8 sin BOM el campo queda con otro nombre que su componente.
   Medido el 7-oct-2026 (segunda revision de la 1.17.0): insert con un nombre
   con acento en un .dfm sin BOM dejaba el proyecto sin compilar (RLINK32), y
@@ -781,10 +781,13 @@ begin
     // acento en #195#179 (medido 24-sep-2026). Lo normal en un .dfm de
     // texto es que lo no-ASCII vaya como #NNN, que es como lo escribe el IDE
     // y como lo escribe to-text; una 'o' en crudo se le da en ANSI, y lo que
-    // ANSI no puede representar se rechaza en vez de escribir '?'.
-    Bytes := TEncoding.ANSI.GetBytes(AText);
-    if TEncoding.ANSI.GetString(Bytes) <> AText then
+    // ANSI no puede representar se rechaza en vez de escribir '?'. LA ANSI de
+    // la casa (Lsp.Codificacion.PaginaAnsi), la misma que lee el parser: aqui
+    // habia otra definicion, TEncoding.ANSI (norma 6 del paisaje, r5 de la
+    // 1.18.0)
+    if not CabeEnAnsi(AText) then
       Exit(MsgText(SR_DSGN_CARACTERES_NO_CABEN_ANSI));
+    Bytes := EncodeText(AText, ekAnsi);
     if Length(Bytes) > 0 then
       Entrada.WriteBuffer(Bytes[0], Length(Bytes));
     Entrada.Position := 0;

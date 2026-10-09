@@ -1091,6 +1091,28 @@ begin
   end;
 end;
 
+{ Si un form de TEXTO esta en UTF-16 o UTF-32 (AK), por EL lector del BOM
+  (Lsp.Codificacion.KindDeBom): el IDE lo abre y dcc no lo compila (E2161,
+  medido el 9-oct-2026; r5 de la 1.18.0), y el renderizador no lee el
+  UTF-32 - su parser de forms lo tomaba por UTF-16 y fallaba con un error de
+  sintaxis que no decia por que. }
+function FormAncho(const APath: string; out AK: TEncKind): Boolean;
+var
+  S: TFileStream;
+  Cabeza: TArray<Byte>;
+begin
+  // los cuatro primeros bytes bastan, el BOM mas largo (el de UTF-32): leer el
+  // fichero entero eran dos lecturas completas en lint (revisor propio de r5)
+  S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Cabeza, 4);
+    SetLength(Cabeza, S.Read(Cabeza[0], 4));
+  finally
+    S.Free;
+  end;
+  Result := KindDeBom(Cabeza, AK) and (AK in ENC_ANCHAS);
+end;
+
 { La respuesta de un comando de lectura sobre un .dfm binario lleva la nota:
   lo que ves es fiel, pero en disco es binario. }
 function ConNotaBinario(const AResult: string): string;
@@ -1116,7 +1138,8 @@ var
   Return, Raiz, Ms: TJSONObject;
   NoVis: TJSONArray;
   RX, RY, RW, RH, AnchoOrig, AltoOrig, OX, OY: Integer;
-  Recortada: Boolean;
+  Recortada, Ancho: Boolean;
+  KAncha: TEncKind;
 
   // el temporal es nuestro: si algo falla despues del render, no se queda
   procedure TiraTemporal;
@@ -1148,6 +1171,11 @@ begin
     Exit(Fallo);
   if not TFile.Exists(Ruta) then
     Exit(NoEsFichero(Ruta, MsgFmt(SR_NO_EXISTE_FMT, [Ruta])));
+  // un form de texto en UTF-32 no lo lee el renderizador ni lo compila dcc:
+  // se dice antes de lanzar nada; uno en UTF-16 se dibuja, con la nota
+  Ancho := FormAncho(Ruta, KAncha);
+  if Ancho and (KAncha in [ekUtf32LE, ekUtf32BE]) then
+    Exit(MsgFmt(SR_DSGN_FORM_UTF32_FMT, [TPath.GetFileName(Ruta), EncName(KAncha)]));
 
   // style: none, el NOMBRE de una plataforma del designer (la lista la tiene
   // el renderizador FMX: UNA tabla) o un fichero por ruta completa
@@ -1263,6 +1291,9 @@ begin
     Return.AddPair('fidelity', R.Fidelidad);
     if R.Fidelidad = 'print' then
       Return.AddPair('fidelityNote', MsgText(SN_DESIGNER_FIDELIDAD_PRINT));
+    if Ancho then
+      Return.AddPair('encodingNote', MsgFmt(SN_DSGN_FORM_ANCHO_FMT,
+        [TPath.GetFileName(Ruta), EncName(KAncha)]));
     Return.AddPair('style', R.Estilo);
     Return.AddPair('packages', R.Paquetes);
     Return.AddPair('components', TJSONNumber.Create(R.Componentes));
@@ -1430,7 +1461,14 @@ begin
     else if Cmd = 'tree' then
       Result := TreeOf(Params.Path, Params.MaxDepth) // (un negativo lo niega la capa de parametros, SYS-016)
     else if Cmd = 'lint' then
-      Result := LintForm(Params.Path)
+    begin
+      Result := LintForm(Params.Path);
+      // lo que lint no ve en el texto y dcc si: un form en UTF-16 o UTF-32 no compila
+      var KAncha: TEncKind;
+      if not EsFallo(Result) and FormAncho(TPath.GetFullPath(Params.Path), KAncha) then
+        Result := ConNota(Result, 'encodingNote', MsgFmt(SN_DSGN_FORM_ANCHO_FMT,
+          [TPath.GetFileName(Params.Path), EncName(KAncha)]));
+    end
     else if Params.Component.Trim = '' then
       Result := MsgText(SR_DESIGNER_NEED_COMPONENT)
     else

@@ -159,7 +159,7 @@ handshake.
   goes by hand, and the refusal says how: its block, its published field,
   its unit in the uses, then `check-binding`. A name with letters outside
   ASCII needs the form saved as UTF-8 with BOM, and the unit with a BOM or in
-  CP1252: the IDE and the compiler read a file without BOM as ANSI, so
+  ANSI: the IDE and the compiler read a file without BOM as ANSI, so
   insert and a rename refuse it there (`DSGN-111`) rather than change the
   file's encoding.
 - To CHANGE one property: `set component=Button1 prop=Caption value=OK`. It

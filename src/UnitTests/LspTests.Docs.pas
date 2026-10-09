@@ -66,10 +66,12 @@ type
 implementation
 
 uses
+  Winapi.Windows, // GetACP: la pagina de la maquina vuelve al acabar
   System.SysUtils,
   Lsp.Discovery,
   Lsp.Chm,
   Lsp.Docs,
+  Lsp.Codificacion, // UsaPaginaAnsi: la ayuda no sigue a la ANSI de la maquina
   System.IOUtils;
 
 const
@@ -261,6 +263,29 @@ begin
     '<meta charset="utf-8">' + CAFE)).EndsWith(CAFE), 'UTF-8 con comillas');
   Assert.IsTrue(TextoDeBytes(TEncoding.UTF8.GetBytes(
     '<meta charset = ''UTF-8''>' + CAFE)).EndsWith(CAFE), 'con blancos, en mayusculas');
+  // la pagina la dice el FICHERO, no la maquina: en un Windows 1251 la ayuda
+  // sigue en 1252, con meta y sin el (r5 de la 1.18.0: todo lo que no era
+  // UTF-8 se leia con la ANSI de la casa); y la palabra charset de un titulo
+  // no es un meta
+  UsaPaginaAnsi(1251);
+  try
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=windows-1252>' + CAFE,
+      1252)).EndsWith(CAFE), 'Windows-1252 por su meta, con la maquina en 1251');
+    Assert.IsTrue(TextoDeBytes(BytesEn('<title>Charset property</title>' + CAFE,
+      1252)).EndsWith(CAFE), 'sin meta, Windows-1252, con la maquina en 1251');
+    // la de Indy dice iso-8859-1 y lleva las comillas 93/94 de 1252: se lee como
+    // HTML, en windows-1252 (por su nombre en la tabla de la RTL, 28591, salian
+    // caracteres de control: revisor propio de r5, medido en IdASN1Util_pas.html)
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=iso-8859-1>' + #$201C + 'x' + #$201D,
+      1252)).EndsWith(#$201C + 'x' + #$201D), 'iso-8859-1 de la ayuda de Indy: sus comillas, en 1252');
+    // ...y lo que se BUSCA, en los bytes del mapa: en uno UTF-8 se buscaba en
+    // bytes 1252 y una palabra con acento no se encontraba
+    Assert.AreEqual(1, Integer(Length(EntradasQueCasan(TEncoding.UTF8.GetBytes(
+      '<meta charset=utf-8><OBJECT type="text/sitemap"><param name="Name" value="' + CAFE + '">' +
+      '<param name="Local" value="C.htm"></OBJECT>'), CAFE, []))), 'una palabra con acento en un mapa UTF-8');
+  finally
+    UsaPaginaAnsi(GetACP);
+  end;
 end;
 
 procedure TDocsPurasTests.DelMapaSoloLosBloquesQueCasan;

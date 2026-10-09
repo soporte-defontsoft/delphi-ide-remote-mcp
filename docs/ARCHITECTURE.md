@@ -68,7 +68,7 @@ Result quality is compiler-grade; cost is one `definition` round-trip per candid
 
 ## Encoding rules
 
-Legacy Delphi sources are frequently Windows-1252 while LSP mandates UTF-8 JSON. `didOpen` reads: BOM → honor it; no BOM → configurable fallback codepage (default: system ANSI). The LSP client never writes sources back; the editing tools do, through their own engine.
+Legacy Delphi sources are frequently Windows-1252 while LSP mandates UTF-8 JSON. `didOpen` reads: BOM → honor it; no BOM → UTF-8 when the bytes are valid UTF-8, else the machine's ANSI code page (as the IDE and the compiler read it). The LSP client never writes sources back; the editing tools do, through their own engine.
 
 ## Build tool
 

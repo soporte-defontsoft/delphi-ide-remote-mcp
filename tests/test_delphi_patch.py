@@ -1169,5 +1169,26 @@ for _nom, _eds, _como in (('UOrdAO.pas', [_EA, _EO], 'la vocal y luego la Omega'
     check('...y un changeset con %s: el commit hace lo que dijo su preview (UTF-8 con BOM)' % _como,
           open(_p, 'rb').read() == _final(_o), (_r[:300], open(_p, 'rb').read()[:60]))
 
+# (r5 de la 1.18.0, regla 5 de David) un FUENTE en UTF-8 sin BOM con acentos se
+# lee y se escribe como UTF-8 (sus bytes), y al LEERLO READ-008 dice que dcc lo
+# compilara como ANSI y que la salida es guardarlo en el IDE (le pone el BOM).
+# Con BOM, solo ASCII, o un form (que sin BOM se lee en ANSI, como dcc), no
+_out = call('delphi_read', {'path': _u8})
+check('READ-008: un fuente UTF-8 sin BOM con acentos lo dice al leerlo (dcc lo compila como ANSI)',
+      mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT') and 'encoding=utf8 ' in _out, _out[:500])
+_out = call('delphi_edit', {'path': _u8, 'old': "  A = 'Ca\u00f1a';", 'new': "  A = 'Ca\u00f1as';"})
+check('...y escribirlo no le toca la codificacion (sigue UTF-8 sin BOM)',
+      open(_u8, 'rb').read().startswith(b'unit') and
+      "A = 'Ca\u00f1as';".encode('utf-8') in open(_u8, 'rb').read(), _out[-600:])
+_r8 = {'UConBom8.pas': b'\xef\xbb\xbf' + "unit UConBom8;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Ca\u00f1a';\r\n\r\n"
+                       "implementation\r\n\r\nend.\r\n".encode('utf-8'),
+       'UAsciiR8.pas': b"unit UAsciiR8;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n",
+       'FUtf8Sin.dfm': "object F: TForm\r\n  Caption = 'Ca\u00f1a'\r\nend\r\n".encode('utf-8')}
+for _nom, _bytes in _r8.items():
+    open(os.path.join(DIR, _nom), 'wb').write(_bytes)
+    _out = call('delphi_read', {'path': os.path.join(DIR, _nom)})
+    check('...READ-008 no sale en %s (con BOM, solo ASCII o un form)' % _nom,
+          not mc.rechazado(_out) and not mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT'), _out[:300])
+
 srv.cierra()
 mc.fin('delphi_edit battery')

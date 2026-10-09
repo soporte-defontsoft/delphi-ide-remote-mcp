@@ -4,7 +4,7 @@ unit Lsp.TextEdit;
   web assets, scripts, config: .md .txt .html .js .css .sql .py .bat .ini
   .json .yml .xml - ANY plain text, it is a DENYLIST not a whitelist) with the same
   discipline as Lsp.Patch - one-full-line unique anchor with hints and atline
-  tie-break, real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), dominant EOL
+  tie-break, real encoding preserved (UTF-8 +/- BOM / ANSI / UTF-16 / UTF-32), dominant EOL
   preserved, automatic backup, atomic write - but without the Pascal semantic
   gates. Delphi sources and designer files are refused (delphi_edit is their
   path) and so are project files and binaries. }
@@ -119,7 +119,7 @@ begin
   // New text files are UTF-8 without BOM.
   PatchSaveText(A.Path, Text, 'utf8');
   // Report the encoding as a later delphi_read will DETECT it: pure ASCII
-  // content is indistinguishable from CP1252 (no high bytes to tell them
+  // content is indistinguishable from ANSI (no high bytes to tell them
   // apart), and claiming "utf8" there confused agents in the field test.
   // La ruta va por el ENMASCARADOR a mano. Esta tool esta EXENTA del filtro
   // de salida (MaskDriveText la salta entera, porque su eco es contenido

@@ -359,6 +359,45 @@ the MCP `initialize` response (`serverInfo.version`).
   saved in UTF-32 does not start, like one in UTF-16 big endian: the
   Windows ini reader sees no section in it (measured). `test_delphi_patch`,
   `test_un_delphi` U11h.
+- **ANSI is the machine's code page, not CP1252.** The server read and
+  wrote every source without a BOM that is not UTF-8 in CP1252, hard-coded,
+  while the IDE and the compiler read it in the machine's ANSI code page
+  (measured: `E1 C3 A1` compiles as `áÃ¡` here and as `бГЎ` with page
+  1251), and two other places used the machine's page (`to-binary`, the
+  style check). On this machine both are 1252 and nothing changes; on a
+  Russian, Greek or Polish Windows the accents of every such source were
+  read and written in the wrong page. There is now one ANSI, measured where
+  the server runs (`TEncoding.ANSI`'s, `GetACP`), and whether a text fits in
+  it is asked of its codec: Windows silently writes an Omega as `O` in 1252
+  and an `é` as `e` in 1251, and the round trip catches it, on any page,
+  one byte per character or several. The encoding is reported as
+  `cp<page>` (`cp1252` here). A project's `DCC_CodePage` is not read: the
+  encoding is decided per file (a BOM wins over it, measured), and none of
+  the 3,258 projects on the author's machines sets it; if one set it to
+  another page, the compiler would read that project's ANSI sources in it,
+  unlike the IDE's editor and this server. `LspTests.Encodings`,
+  `test_paisaje`.
+- **The help is read in its own character set, not the machine's ANSI.**
+  A page is UTF-8 when it says so (its BOM or its meta) and Windows-1252
+  otherwise - how HTML reads the `windows-1252` the RTL's 20,034 pages and
+  TeeChart's 69 declare, and the `iso-8859-1` of Indy's 12,407, which carry
+  1252's curly quotes (all measured) - so it reads the same on any Windows;
+  it used the server's ANSI, hard-coded as CP1252. A search of a UTF-8
+  index looked for its words in CP1252 bytes. `LspTests.Docs`.
+- **A source in UTF-8 without a BOM says what the compiler will do with it
+  (READ-008).** The IDE shows its accents right, but the compiler reads a
+  source without a BOM as ANSI unless the project sets
+  `DCC_CodePage=65001` (both measured), so its accented literals and names
+  reach the program as mojibake. `delphi_read` says so, with the IDE's way
+  out: open it and save it, and the IDE writes it as UTF-8 with a BOM. The
+  server keeps its bytes as they are. `test_delphi_patch`.
+- **A text form in UTF-16 or UTF-32 does not compile, and `lint` and
+  `preview` say so (DSGN-121).** The IDE can save a form that way, but the
+  compiler refuses it (RLINK32, E2161, measured with all four). `preview`
+  still draws a UTF-16 form; a UTF-32 one is refused before the renderer
+  starts (DSGN-122) - its parser took it for UTF-16 and failed with a
+  syntax error that did not say why. `test_designer_binary`,
+  `test_designer_preview` P1u.
 
 ### Internal
 

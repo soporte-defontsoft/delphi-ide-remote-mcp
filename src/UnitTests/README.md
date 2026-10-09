@@ -6,7 +6,7 @@ area:
 
 | Fixture | What it pins down |
 |---|---|
-| `LspTests.Encodings` | The ONE encoding detector of `Lsp.Patch` and its inverses (`Lsp.Codificacion`): UTF-8 with and without BOM, CP1252, UTF-16 LE/BE by BOM, the round trip of every kind, `EncKindOf(EncName(k)) = k`, the BOM lengths, what CP1252 refuses, `Measure` on UTF-16, and the "is this text at all" rule (a NUL byte, never for UTF-16). |
+| `LspTests.Encodings` | The ONE encoding detector of `Lsp.Patch` and its inverses (`Lsp.Codificacion`): UTF-8 with and without BOM, ANSI (the fixture pins page 1252; 1251, 1253 and 932 are measured through `UsaPaginaAnsi`), UTF-16 LE/BE by BOM, the round trip of every kind, `EncKindOf(EncName(k)) = k`, the BOM lengths, what ANSI refuses, `Measure` on UTF-16, and the "is this text at all" rule (a NUL byte, never for UTF-16). |
 | `LspTests.DesignerBin` | The shape of a designer file (text, raw TPF0, resource-wrapped binary), the RTL round trip text -> binary -> text, accents as `#NNN`, what falls outside ANSI, a damaged binary. |
 | `LspTests.Dproj` | The build-hazard scan: a clean project, a build event, the same event ignored on request, an empty event, an `Exec` task that stays a hazard whatever is ignored. |
 | `LspTests.GitArgs` | The git argument splitter (`TrocearArgs`, the Windows CRT rules) and its inverse (`EnComillas`): what the gate validates is exactly what git receives. |

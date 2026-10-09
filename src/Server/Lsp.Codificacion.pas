@@ -4,8 +4,9 @@ unit Lsp.Codificacion;
   su nombre y su inversa (EncName / EncKindOf), los bytes de su BOM
   (PreambleLen, BomUtf8En), el UTF-8 estricto (ValidUtf8), el decodificador y
   el codificador (DecodeBytes / EncodeText, con ECaracterNoCabe: el caracter
-  que no cabe en la pagina de codigos del fichero) y el codec CP1252 que
-  comparten (GCp1252, y GHighMap para 0x80-0x9F, que lee ByteCp).
+  que no cabe en la pagina de codigos del fichero) y LA pagina ANSI que
+  comparten (PaginaAnsi: la de la maquina, la que usan el IDE y dcc; su codec,
+  y el mapa de sus caracteres de un byte que lee ByteCp).
 
   Salen de Lsp.Patch el 8-oct-2026 (la 1.18.0, la version de la limpieza),
   movidos sin cambiar una linea. Son PUROS: no saben nada del IDE ni de la
@@ -27,7 +28,7 @@ uses
   como el de UTF-16 LE - se leia como UTF-16, con un NUL entre letra y
   letra, y se reescribia en UTF-16 (4.1 de la 1.18.0, David). }
 type
-  TEncKind = (ekUtf8Bom, ekUtf8, ekCp1252, ekUtf16LE, ekUtf16BE, ekUtf32LE, ekUtf32BE);
+  TEncKind = (ekUtf8Bom, ekUtf8, ekAnsi, ekUtf16LE, ekUtf16BE, ekUtf32LE, ekUtf32BE);
 
 const
   { Las de VARIOS bytes por caracter (siempre con BOM): su cuerpo lleva
@@ -56,10 +57,41 @@ function IsAscii(const S: string): Boolean;
   detector (Lsp.Patch.DetectEnc) y el escritor que elige la del primer
   caracter no ASCII (Lsp.Patch.EncAlEscribir). }
 function HayByteAlto(const B: TArray<Byte>): Boolean;
-{ Si S cabe entero en CP1252 (cada caracter tiene su byte: ByteCp). Lo
-  pregunta el escritor que elige la codificacion de un fuente que no tenia
-  ninguna (Lsp.Patch.EncAlEscribir: el primer caracter no ASCII). }
-function CabeEnCp1252(const S: string): Boolean;
+{ Si S cabe entero en la pagina ANSI: el codec lo escribe y, al leerlo, da
+  el mismo texto (Windows APROXIMA lo que no cabe: una Omega sale 'O' en
+  1252 y una e acentuada 'e' en 1251, medido el 9-oct-2026; la vuelta lo
+  delata). Lo pregunta el escritor que elige la codificacion de un fuente
+  que no tenia ninguna (Lsp.Patch.EncAlEscribir: el primer caracter no
+  ASCII) y el conversor a binario de un form (to-binary). }
+function CabeEnAnsi(const S: string): Boolean;
+{ LA pagina ANSI: la que usan el IDE y dcc para leer un fuente sin BOM que
+  no es UTF-8 (medido el 9-oct-2026, bytes del exe: E1 C3 A1 sale U+00E1
+  U+00C3 U+00A1 con la 1252 de esta maquina), la de TEncoding.ANSI de la
+  RTL: GetACP. UN lector (norma 6 del paisaje, "lo medible no se
+  hardcodea"): hasta el 9-oct-2026 el servidor la tenia clavada en 1252, y
+  otros dos sitios usaban la de la maquina - en un Windows ruso, griego o
+  polaco se leian y escribian mal los acentos de todo fuente ANSI.
+  El DCC_CodePage de un proyecto NO se lee, a proposito: la codificacion la
+  decide cada FICHERO (con BOM manda el BOM, aunque DCC_CodePage diga otra;
+  sin BOM, UTF-8 si lo es y ANSI si no), y la pagina del proyecto solo diria
+  que ANSI usa dcc - el editor del IDE la ignora y lee en la de la maquina
+  (captura de David). Ninguno de los 3.258 .dproj de David la pone (medido el
+  9-oct-2026); si uno la pusiera distinta de la maquina, dcc leeria sus
+  fuentes ANSI en otra pagina que el IDE y el servidor (limite declarado). }
+function PaginaAnsi: Cardinal;
+{ SOLO las pruebas: la casa con OTRA pagina ANSI (1251, 1253, 932...), para
+  medir en esta maquina lo que haria otra - con la 1252 clavada en el codigo
+  y una maquina 1252, ninguna prueba lo distingue. El servidor no la llama:
+  su initialization la fija con la de la maquina. }
+procedure UsaPaginaAnsi(APagina: Cardinal);
+{ Un codec NUEVO (quien lo pide lo libera) de la pagina que DECLARA un
+  formato por su nombre ('windows-1252', 'utf-8', 'shift_jis', 'cp1251'),
+  por la tabla de nombres de la RTL (TEncoding.GetEncoding), y tolerante como
+  los de la casa: un byte que no cuadra sale U+FFFD o el que da Windows,
+  nunca una excepcion. nil si la RTL no conoce el nombre. Para lo que no es
+  un fuente y dice su propio juego de caracteres (la ayuda: el meta de cada
+  pagina, que no es la ANSI de la maquina); un fuente lo decide EL detector. }
+function CodecDeCharset(const ANombre: string): TEncoding;
 { Si los bytes B vuelven IGUALES al leerlos en K y volver a escribirlos en K:
   lo que ya esta se escribe con los mismos bytes. Un UTF-32 mal formado, un
   UTF-8 con BOM y el cuerpo roto, un UTF-16 de longitud impar - cualquier
@@ -82,13 +114,14 @@ function PreambleLen(K: TEncKind): Integer;
   UTF-8, cualquier otra cosa es ANSI - como el IDE, que detecta un UTF-8 sin
   BOM (medido el 9-oct-2026), y como dcc. Una regla propia ("UTF-8 danado":
   secuencias buenas junto a bytes que no lo son) contradecia a los dos: una
-  E acentuada seguida de una comilla tipografica son, en CP1252, un caracter
-  UTF-8 valido, y un CP1252 legitimo se leia con U+FFFD y no se editaba
+  E acentuada seguida de una comilla tipografica son, en 1252, un caracter
+  UTF-8 valido, y un ANSI legitimo se leia con U+FFFD y no se editaba
   (revisor propio de la 4.1; David: "si hay juez lo seguimos"). }
 function ValidUtf8(const B: TArray<Byte>; AOffset: Integer): Boolean;
-{ El byte CP1252 de un caracter, -1 si no cabe: el que escribe EncodeText
-  (de 80 a 9F, solo lo que da el codec al leer cada byte). Lo pregunta
-  tambien el que busca mojibake (Lsp.Patch.MojibakeLines), que para
+{ El byte ANSI de un caracter que la pagina escribe en UN byte, -1 si no lo
+  hay (no cabe, o en una pagina de varios bytes va en dos): el mismo codec
+  que EncodeText, leido y escrito byte a byte al fijar la pagina. Lo
+  pregunta el que busca mojibake (Lsp.Patch.MojibakeLines), que para
   U+0080..U+009F mira ademas la lectura Latin-1. }
 function ByteCp(C: Char): Integer;
 
@@ -106,13 +139,18 @@ type
 implementation
 
 uses
+  Winapi.Windows, // GetACP: la pagina ANSI de la maquina
   System.Generics.Collections,
   Lsp.Texts;
 
 var
-  GCp1252: TEncoding;
+  GPaginaAnsi: Cardinal;
+  GAnsi: TEncoding; // el codec de esa pagina, como TEncoding.ANSI (sin banderas)
   GUtf8Laxo: TEncoding; // sin MB_ERR_INVALID_CHARS: lee U+FFFD donde el estricto lanza
-  GHighMap: TDictionary<Char, Byte>; // CP1252 0x80-0x9F, derived from the codec
+  GHighMap: TDictionary<Char, Byte>; // los caracteres de un byte de 80 a FF, sacados del codec
+  // el codec y el mapa de una pagina que se cambio (solo lo hacen las
+  // pruebas): un hilo puede estar leyendo con ellos, y se liberan al acabar
+  GRetirados: TObjectList<TObject>;
 
 
 function EncName(K: TEncKind): string;
@@ -125,12 +163,13 @@ begin
     ekUtf32LE: Result := 'utf32-le';
     ekUtf32BE: Result := 'utf32-be';
   else
-    Result := 'cp1252';
+    // la forma 'cpNNNN', la que entiende tambien TEncoding.GetEncoding
+    Result := 'cp' + UIntToStr(GPaginaAnsi);
   end;
 end;
 
 { La inversa de EncName: el nombre que sale de una lectura vuelve a entrar
-  como clase al guardar. Un nombre desconocido es cp1252, como siempre. }
+  como clase al guardar. Un nombre desconocido es la ANSI, como siempre. }
 function EncKindOf(const AName: string): TEncKind;
 begin
   if AName = 'utf8-bom' then
@@ -146,7 +185,7 @@ begin
   else if AName = 'utf32-be' then
     Result := ekUtf32BE
   else
-    Result := ekCp1252;
+    Result := ekAnsi;
 end;
 
 { Bytes de BOM que preceden al texto en esa clase. }
@@ -215,14 +254,34 @@ begin
   Result := False;
 end;
 
-function CabeEnCp1252(const S: string): Boolean;
-var
-  C: Char;
+function CabeEnAnsi(const S: string): Boolean;
 begin
-  for C in S do
-    if ByteCp(C) < 0 then
-      Exit(False);
-  Result := True;
+  Result := GAnsi.GetString(GAnsi.GetBytes(S)) = S;
+end;
+
+{ El primer caracter de S que la pagina ANSI no devuelve igual (un par de
+  sustitutos va junto); si ninguno suelto falla, el primero no ASCII. }
+function PrimeroQueNoCabe(const S: string): Char;
+var
+  I, N: Integer;
+  T: string;
+begin
+  I := 1;
+  while I <= Length(S) do
+  begin
+    N := 1;
+    if (Ord(S[I]) >= $D800) and (Ord(S[I]) <= $DBFF) and (I < Length(S)) and
+       (Ord(S[I + 1]) >= $DC00) and (Ord(S[I + 1]) <= $DFFF) then
+      N := 2;
+    T := Copy(S, I, N);
+    if GAnsi.GetString(GAnsi.GetBytes(T)) <> T then
+      Exit(S[I]);
+    Inc(I, N);
+  end;
+  for I := 1 to Length(S) do
+    if Ord(S[I]) > 127 then
+      Exit(S[I]);
+  Result := S[1];
 end;
 
 function BytesVuelvenIgual(const B: TArray<Byte>; K: TEncKind): Boolean;
@@ -350,7 +409,7 @@ begin
     ekUtf32LE: Result := DecodeUtf32(B, 4, False);
     ekUtf32BE: Result := DecodeUtf32(B, 4, True);
   else
-    Result := GCp1252.GetString(B);
+    Result := GAnsi.GetString(B);
   end;
 end;
 
@@ -366,9 +425,6 @@ end;
 
 function EncodeText(const S: string; K: TEncKind): TBytes;
 var
-  I: Integer;
-  C: Char;
-  BB: Integer; // ByteCp: -1 = no cabe
   Body: TBytes;
 begin
   case K of
@@ -378,7 +434,7 @@ begin
     ekUtf32LE: Exit(EncodeUtf32(#$FEFF + S, False));
     ekUtf32BE: Exit(EncodeUtf32(#$FEFF + S, True));
   end;
-  if K <> ekCp1252 then
+  if K <> ekAnsi then
   begin
     Body := TEncoding.UTF8.GetBytes(S);
     if K = ekUtf8Bom then
@@ -392,59 +448,109 @@ begin
       Result := Body;
     Exit;
   end;
-  SetLength(Result, Length(S));
-  for I := 1 to Length(S) do
-  begin
-    C := S[I];
-    BB := ByteCp(C);
-    if BB < 0 then
-      raise ECaracterNoCabe.Crea(C, K);
-    Result[I - 1] := Byte(BB);
-  end;
+  // la ANSI: lo que su codec escribe y, al leerlo, vuelve igual. Windows
+  // APROXIMA lo que no cabe (una Omega sale 'O' en 1252, medido): la vuelta
+  // lo delata, y el primer caracter que no vuelve se niega con su codigo, en
+  // cualquier pagina, de un byte o de varios (una tabla propia de que cabe
+  // era la de 1252)
+  Result := GAnsi.GetBytes(S);
+  if GAnsi.GetString(Result) <> S then
+    raise ECaracterNoCabe.Crea(PrimeroQueNoCabe(S), K);
 end;
 
 function ByteCp(C: Char): Integer;
 var
   B: Byte;
 begin
-  // de 0x80 a 0x9F, lo que el codec da al LEER cada byte y nada mas: un
-  // U+0080 no lo da ningun byte (el 80 es el euro) y no cabe. Era otra regla
-  // que la de EncodeText, y ninguna de las dos acertaba con los cinco bytes
-  // que la pagina no define (revisor propio, 9-oct-2026)
+  // el ASCII es el mismo en toda pagina ANSI de Windows; lo demas, lo que el
+  // codec lee de cada byte y vuelve a escribir en el (UsaPaginaAnsi): un
+  // U+0080 no lo da ningun byte de 1252 (el 80 es el euro) y no cabe
+  if Ord(C) < $80 then
+    Exit(Ord(C));
   if GHighMap.TryGetValue(C, B) then
     Exit(B);
-  if (Ord(C) <= $FF) and not ((Ord(C) >= $80) and (Ord(C) <= $9F)) then
-    Exit(Ord(C));
   Result := -1;
 end;
 
-procedure InitHighMap;
+function PaginaAnsi: Cardinal;
+begin
+  Result := GPaginaAnsi;
+end;
+
+function CodecDeCharset(const ANombre: string): TEncoding;
+var
+  Rtl: TEncoding;
+  Pagina: Integer;
+begin
+  try
+    Rtl := TEncoding.GetEncoding(ANombre);
+  except
+    on EEncodingError do
+      Exit(nil);
+  end;
+  Pagina := Rtl.CodePage;
+  // UTF-16 no lo convierte MultiByteToWideChar: el de la RTL, que no lanza
+  if (Pagina = 1200) or (Pagina = 1201) then
+    Exit(Rtl);
+  Rtl.Free;
+  // sin banderas, como TEncoding.ANSI: el UTF-8 de la RTL lanza con un byte malo
+  Result := TMBCSEncoding.Create(Pagina, 0, 0);
+end;
+
+procedure UsaPaginaAnsi(APagina: Cardinal);
 var
   B: Byte;
   S: string;
+  Uno: TBytes;
+  Nuevo: TEncoding;
+  Mapa: TDictionary<Char, Byte>;
 begin
-  GHighMap := TDictionary<Char, Byte>.Create;
-  for B := $80 to $9F do
-  begin
-    S := GCp1252.GetString(TBytes.Create(B));
-    // tambien los cinco que la pagina no define (81 8D 8F 90 9D): Windows los
-    // lee como U+0081... y los vuelve a escribir en su byte (medido). Fuera
-    // del mapa se leian y no se podian escribir: un fichero con uno de ellos
-    // -un CP1252 raro, o un form UTF-8 sin BOM con una A acentuada (C3 81),
-    // que se lee en ANSI desde la 4.1- no admitia NINGUNA edicion
-    if (Length(S) = 1) and (S[1] <> #$FFFD) then
-      GHighMap.AddOrSetValue(S[1], B);
+  // lo nuevo PRIMERO y el cambio despues: una pagina que no existe lanza aqui
+  // y deja la de antes entera (revisor propio de r5). El codec de
+  // TEncoding.ANSI, sin banderas: lee como la RTL y el IDE
+  Nuevo := TMBCSEncoding.Create(APagina, 0, 0);
+  Mapa := TDictionary<Char, Byte>.Create;
+  try
+    // los caracteres que la pagina escribe en UN byte y que vuelven a el. En
+    // 1252 tambien los cinco que no define (81 8D 8F 90 9D): Windows los lee
+    // como U+0081... y los vuelve a escribir en su byte (medido). En una
+    // pagina de varios bytes, un byte de cabecera solo no vuelve a si mismo
+    // y no entra
+    for B := $80 to $FF do
+    begin
+      S := Nuevo.GetString(TBytes.Create(B));
+      if (Length(S) = 1) and (S[1] <> #$FFFD) then
+      begin
+        Uno := Nuevo.GetBytes(S);
+        if (Length(Uno) = 1) and (Uno[0] = B) then
+          Mapa.AddOrSetValue(S[1], B);
+      end;
+    end;
+  except
+    Mapa.Free;
+    Nuevo.Free;
+    raise;
   end;
+  // lo de antes no se libera aqui: otro hilo puede estar leyendo con ello
+  if GAnsi <> nil then
+    GRetirados.Add(GAnsi);
+  if GHighMap <> nil then
+    GRetirados.Add(GHighMap);
+  GAnsi := Nuevo;
+  GHighMap := Mapa;
+  GPaginaAnsi := APagina;
 end;
 
 initialization
-  GCp1252 := TEncoding.GetEncoding(1252);
   GUtf8Laxo := TMBCSEncoding.Create(CP_UTF8, 0, 0);
-  InitHighMap;
+  GRetirados := TObjectList<TObject>.Create(True);
+  // la de la maquina: la de TEncoding.ANSI, TMBCSEncoding.Create(GetACP, 0, 0)
+  UsaPaginaAnsi(GetACP);
 
 finalization
   GHighMap.Free;
   GUtf8Laxo.Free;
-  GCp1252.Free;
+  GAnsi.Free;
+  GRetirados.Free;
 
 end.

@@ -147,7 +147,7 @@ Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight v
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM / UTF-16 / UTF-32 detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn CP1252 accents into U+FFFD and poison every anchor built from them.
+Read a Delphi source file DECODED CORRECTLY (ANSI - the machine's code page, CP1252 on a Western Windows - / UTF-8 with or without BOM / UTF-16 / UTF-32 detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn ANSI accents into U+FFFD and poison every anchor built from them.
 
 *Access: read-only OK.*
 
@@ -265,7 +265,7 @@ No parameters.
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keeping their real encoding and line endings. Modes: EDIT (old = ONE full line from delphi_read + new; fragment + atline for a piece of a LONG line; edits for several at once), DELETE, INSERT (a new routine or method at the legal spot, both halves of a method), CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM when ANSI cannot hold it), RESTORE, ADDUSES and REMOVEUSES - each parameter says which mode it belongs to. Refuses whole-file rewrites and binary designer files (TPF0); backs up, writes atomically and audits the result (encoding, EOLs, mojibake, end. structure, a brace comment with a brace inside - warned, never refused), reporting the REAL lines read back from disk: use them as evidence. Never edit Delphi files with generic tools: CP1252 sources get destroyed.
+SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keeping their real encoding and line endings. Modes: EDIT (old = ONE full line from delphi_read + new; fragment + atline for a piece of a LONG line; edits for several at once), DELETE, INSERT (a new routine or method at the legal spot, both halves of a method), CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM when ANSI cannot hold it), RESTORE, ADDUSES and REMOVEUSES - each parameter says which mode it belongs to. Refuses whole-file rewrites and binary designer files (TPF0); backs up, writes atomically and audits the result (encoding, EOLs, mojibake, end. structure, a brace comment with a brace inside - warned, never refused), reporting the REAL lines read back from disk: use them as evidence. Never edit Delphi files with generic tools: ANSI sources get destroyed.
 
 *Access: read-write (refused to a read-only credential).*
 
@@ -321,7 +321,7 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, the whole batch 
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break; for a LONG line such as a README paragraph, fragment + atline + new changes just a piece of it), DELETE mode (delete=true + old), several edits on the SAME file in one all-or-nothing call ("edits", where an anchor may be ONE line or a contiguous BLOCK), real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
+SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break; for a LONG line such as a README paragraph, fragment + atline + new changes just a piece of it), DELETE mode (delete=true + old), several edits on the SAME file in one all-or-nothing call ("edits", where an anchor may be ONE line or a contiguous BLOCK), real encoding preserved (UTF-8 +/- BOM / ANSI / UTF-16 / UTF-32), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
 
 *Access: read-write (refused to a read-only credential).*
 

@@ -65,8 +65,9 @@ type
 
 { --- lo puro --- }
 
-{ El texto de un fichero de la ayuda con su juego de caracteres: casi todos
-  Windows-1252 (lo dice su meta), alguno UTF-8. }
+{ El texto de un fichero de la ayuda con el juego de caracteres que DECLARA
+  (su BOM o su meta): casi todos Windows-1252, alguno UTF-8. No la ANSI de la
+  maquina: lo dice el fichero. }
 function TextoDeBytes(const ABytes: TArray<Byte>): string;
 
 { Las entradas de un mapa (.hhk/.hhc, sus bytes) cuyo bloque contiene AAguja
@@ -149,7 +150,7 @@ uses
   System.Generics.Defaults,
   Lsp.Chm,
   Lsp.Discovery,
-  Lsp.Codificacion, // DecodeBytes: EL decodificador
+  Lsp.Codificacion, // BomUtf8En y CodecDeCharset: los codecs son de la casa
   Lsp.Texts,     // SF_DOCS_ANCESTROS_FMT
   System.Character,
   Lsp.Pascal;
@@ -212,30 +213,39 @@ begin
   Result := -1;
 end;
 
-function BytesMin(const S: string): TArray<Byte>;
-var
-  E: TEncoding;
+{ S en minusculas, en los bytes del juego de caracteres de la ayuda (ACodec,
+  el de CodecDeAyuda): lo que se busca en sus bytes. }
+function BytesMin(const S: string; ACodec: TEncoding): TArray<Byte>;
 begin
-  E := TEncoding.GetEncoding(1252);
-  try
-    Result := E.GetBytes(S.ToLower);
-  finally
-    E.Free;
-  end;
+  Result := ACodec.GetBytes(S.ToLower);
 end;
 
-{ CUAL es el juego de caracteres de un fichero de la ayuda, por su senal: el
-  BOM o el meta de su cabecera; si no, Windows-1252. Decodifica EL
-  decodificador (Lsp.Codificacion.DecodeBytes, con su CP1252 compartido:
-  crear uno por bloque del indice caia en el bucle de la busqueda; revision
-  1.10.0). }
-function KindDeAyuda(const ABytes: TArray<Byte>): TEncKind;
+{ El juego de caracteres de la ayuda que no se declara UTF-8: Windows-1252.
+  Medido (revisor propio de r5, 9-oct-2026): las 20.034 paginas de la ayuda
+  de la RTL y las 69 de TeeChart dicen windows-1252 en su meta, las 12.407
+  de Indy dicen iso-8859-1 y llevan comillas tipograficas 93/94 de 1252 -
+  como las lee HTML, que toma iso-8859-1 por windows-1252 -, y alguna UTF-8.
+  Leer cada charset por su nombre en la tabla de la RTL (28591 para
+  iso-8859-1) convertia esas comillas en caracteres de control. Politica de
+  la casa, con nombre. }
+const
+  CHARSET_AYUDA_NO_UTF8 = 'windows-1252';
+
+{ El codec de un fichero de la ayuda: UTF-8 si lleva su BOM (BomUtf8En) o su
+  meta lo dice; si no, CHARSET_AYUDA_NO_UTF8. Los codecs, de la casa
+  (Lsp.Codificacion.CodecDeCharset). NO la ANSI de la maquina: la pagina la
+  dice el FICHERO, y en un Windows ruso la ayuda sigue en 1252 (r5 de la
+  1.18.0: todo lo que no era UTF-8 se leia con el 1252 clavado de la casa,
+  que coincidia). Uno por fichero, no por bloque del indice: crearlo en cada
+  bloque caia en el bucle de la busqueda (revision 1.10.0). Quien lo pide lo
+  libera. }
+function CodecDeAyuda(const ABytes: TArray<Byte>): TEncoding;
 var
   Cabeza: string;
   Fin, P, Q: Integer;
 begin
-  if (Length(ABytes) >= 3) and (ABytes[0] = $EF) and (ABytes[1] = $BB) and (ABytes[2] = $BF) then
-    Exit(ekUtf8Bom);
+  if BomUtf8En(ABytes, 0) then
+    Exit(CodecDeCharset('utf-8'));
   // el meta va en la cabecera: hasta 16 KB, en ASCII (con 1 KB se quedaba
   // fuera el de una cabecera larga)
   Cabeza := TEncoding.ASCII.GetString(ABytes, 0, Min(Length(ABytes), 16384)).ToLower;
@@ -252,15 +262,27 @@ begin
     while (Q < Length(Cabeza)) and CharInSet(Cabeza.Chars[Q], [' ', #9, '=', '"', '''']) do
       Inc(Q);
     if Cabeza.Substring(Q, 5).Equals('utf-8') or Cabeza.Substring(Q, 4).Equals('utf8') then
-      Exit(ekUtf8);
+      Exit(CodecDeCharset('utf-8'));
     P := Cabeza.IndexOf('charset', Q);
   end;
-  Result := ekCp1252;
+  Result := CodecDeCharset(CHARSET_AYUDA_NO_UTF8);
 end;
 
 function TextoDeBytes(const ABytes: TArray<Byte>): string;
+var
+  Codec: TEncoding;
+  Desde: Integer;
 begin
-  Result := DecodeBytes(ABytes, KindDeAyuda(ABytes));
+  Codec := CodecDeAyuda(ABytes);
+  try
+    // el BOM es del fichero, no del texto
+    Desde := 0;
+    if BomUtf8En(ABytes, 0) then
+      Desde := 3;
+    Result := Codec.GetString(ABytes, Desde, Length(ABytes) - Desde);
+  finally
+    Codec.Free;
+  end;
 end;
 
 { ------------------------------------------------------------ entidades }
@@ -395,26 +417,25 @@ var
   E: TEntradaDeMapa;
   Vale, Dentro: Boolean;
   Lista: TList<TEntradaDeMapa>;
-  Kind: TEncKind;
+  Codec: TEncoding;
 begin
   Result := nil;
-  Aguja := BytesMin(AAguja);
-  if Length(Aguja) = 0 then
-    Exit;
   // el juego del MAPA, una vez: un bloque no lleva el meta de la cabecera (se
-  // decodificaba como Windows-1252 aunque el mapa dijera UTF-8), ni el BOM
-  Kind := KindDeAyuda(ABytes);
-  if Kind = ekUtf8Bom then
-    Kind := ekUtf8;
-  Abre := BytesMin('<object');
-  Cierra := BytesMin('</object>');
-  Todas := nil;
-  for var T in ATodas do
-    Todas := Todas + [BytesMin(T)];
-  UltimoFin := -1;
+  // decodificaba como Windows-1252 aunque el mapa dijera UTF-8), ni el BOM; y
+  // lo que se busca, en sus bytes (se buscaba en 1252 tambien en un mapa UTF-8)
+  Codec := CodecDeAyuda(ABytes);
   // una lista, no Result + [E]: una palabra corriente casa miles de bloques
   Lista := TList<TEntradaDeMapa>.Create;
   try
+    Aguja := BytesMin(AAguja, Codec);
+    if Length(Aguja) = 0 then
+      Exit;
+    Abre := BytesMin('<object', Codec);
+    Cierra := BytesMin('</object>', Codec);
+    Todas := nil;
+    for var T in ATodas do
+      Todas := Todas + [BytesMin(T, Codec)];
+    UltimoFin := -1;
     P := BuscaBytes(ABytes, Aguja, 0, Length(ABytes));
     while P >= 0 do
     begin
@@ -436,7 +457,7 @@ begin
         if Vale then
         begin
           Bloque := Copy(ABytes, Ini, Fin + Length(Cierra) - Ini);
-          ParametrosDeBloque(DecodeBytes(Bloque, Kind), Nombres, Locales);
+          ParametrosDeBloque(Codec.GetString(Bloque), Nombres, Locales);
           if (Length(Nombres) > 0) and (Length(Locales) > 0) then
             for var L in Locales do
             begin
@@ -460,6 +481,7 @@ begin
     Result := Lista.ToArray;
   finally
     Lista.Free;
+    Codec.Free;
   end;
 end;
 
