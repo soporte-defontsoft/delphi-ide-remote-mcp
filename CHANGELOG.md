@@ -619,6 +619,15 @@ the MCP `initialize` response (`serverInfo.version`).
   placing a capture and the designer table wait outside the lock still have
   no deterministic check.)
 
+### House rules
+
+- **What can be measured is not hard-coded** - point 6 of "Survey the
+  landscape" in `CLAUDE.md`: what a real judge can answer (the table
+  generated from the source, the class loaded, the IDE's parser, the
+  compiler, git, Windows) is asked of it, never imitated with a list, a
+  regex or a grammar of our own; and before writing a rule of our own, name
+  the judge that would make it unnecessary, or say there is none.
+
 ## [1.17.0] - 2026-10-07
 
 The designer sees and edits. `preview` draws a form as the IDE designer

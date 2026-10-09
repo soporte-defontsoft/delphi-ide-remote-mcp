@@ -16,7 +16,8 @@ it in the first call.
 
 ## Survey the landscape first (David, 2026-09-20)
 
-One act, four questions - and a fifth before any of it turns into code. You
+One act, four questions - and a fifth and a sixth before any of it turns into
+code. You
 look at the landscape once - the one there is today AND the one this code
 will have tomorrow - and while you are there you ask the four:
 
@@ -69,6 +70,36 @@ moving, and released by the wrong folder. And the probe is measured too:
 the first matrix showed an empty column because it compared a short path
 with a long one, and a check that claimed to measure a cleanup passed with
 the cleanup taken out.
+
+**6. What can be measured is not hard-coded** (David, 2026-10-09) - what a
+real judge can answer is asked of that judge, never imitated with a list, a
+regex or a grammar of our own. What the SOURCE says comes from the table
+generated from the source; what an installed class DOES comes from the class
+loaded; what the IDE, the compiler, git or Windows say comes from them -
+their parser, their output, their API, their registry. Only where there is
+no judge (where to insert in a .pas, a house policy) is a grammar of our own
+right, and then it is ONE, named, declared as such and watched by
+`test_paisaje`. A list that imitates the judge is debt: it is declared and
+it can only shrink. It is point 5's sibling: that one says code does not
+change for a cause nobody measured; this one, that no code is written to
+stand in for a measurement that can be made. Measured twice in two days:
+
+- 2026-10-08: a small model put a `//` comment in a `.fmx`. `delphi_edit`
+  wrote it, `delphi_designer lint` answered CLEAN - its checks were text and
+  tables of our own - and only the IDE's parser, which `preview` runs,
+  refused the form ("Identifier expected on line 2", DSGN-061). The server
+  already called that parser to read a form; nobody asked it before writing
+  one.
+- 2026-10-09: the server read and wrote "ANSI" as CP1252, hard-coded, while
+  the compiler and the IDE read a source without a BOM in the machine's ANSI
+  code page (or the project's `DCC_CodePage`) - and two other places in the
+  server already used the machine's page. On this machine both are 1252, so
+  nothing failed; on a Russian, Greek or Polish Windows the accents of every
+  such source would be read and written in the wrong page, the very thing
+  this server exists to prevent.
+
+So, before writing a rule of our own: name the judge that would make it
+unnecessary, or say there is none.
 
 In David's words: *"knowing how to write code is one thing, and knowing
 how to program is another"* - writing code solves today's line; programming leaves
