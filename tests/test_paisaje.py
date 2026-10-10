@@ -113,12 +113,19 @@ REGLAS = [
      'la puerta expande lo que no lleva [Contenido] y el disenador el TEXTO de cada valor: una '
      'expansion en otro sitio es una excepcion sin declarar (era una lista de nombres, '
      'PARAMS_CON_CONTENIDO, y un value entre comillas llegaba como srvX: al .dfm)'),
+    ('la expansion de ida de una llamada con otro predicado', r'\bExpandVirtualDrives\s*\(',
+     [('Lsp.Guard.pas', 'ExpandeUnidadesVirtuales')],
+     'la puerta expande cada llamada UNA vez, preguntando a las marcas [Contenido]: otra llamada con '
+     'otro predicado seria una excepcion sin declarar (revisor de B-9, 10-oct-2026)'),
     ('un paseo del arbol por cada mascara',
      r"for\s+(?:var\s+)?\w+\s+in\s+(?:MascarasDe\(|TArray<string>\.Create\(\s*'\*\.)", [],
      'WalkFiles toma VARIAS mascaras y recorre una vez (cada fichero una vez, una purga de la '
      'papelera al pasar): references paseaba tres veces, rename dos y delphi_projects dos (8.3 de la '
      '1.18.0, 10-oct-2026)'),
-    ('la clave tool|parametro de las marcas', r"'\|'\s*\+\s*TMCPSerializer\.NormalizeKey",
+    # (y la tool en minusculas delante del '|', con la normalizacion que sea: la
+    # deriva probable es otra normalizacion, no la misma; revisor de B-9)
+    ('la clave tool|parametro de las marcas',
+     r"'\|'\s*\+\s*TMCPSerializer\.NormalizeKey|\bLowerCase\([^)]*\)\s*\+\s*'\|'",
      [('Lsp.Guard.pas', 'ClaveDeParam')],
      'ClaveDeParam: la clave de las marcas [RutaDelServidor] y [Contenido], con la normalizacion del '
      'binder; estaba a mano en cuatro sitios de Lsp.Guard (B-9, 10-oct-2026)'),
@@ -656,6 +663,7 @@ PLANTADO = {
     'la expansion de ida de una unidad virtual': "  V := ExpandDriveValue(V);",
     'la clave tool|parametro de las marcas': "  K := LowerCase(T) + '|' + TMCPSerializer.NormalizeKey(P);",
     'un paseo del arbol por cada mascara': "  for var Ext in MascarasDe(SOURCE_EXTS) do Fs := WalkFiles(D, Ext);",
+    'la expansion de ida de una llamada con otro predicado': "  ExpandVirtualDrives(Args, EsNombreDeContenido);",
     'GetTempPath suelto': "  T := TPath.GetTempPath();",
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",

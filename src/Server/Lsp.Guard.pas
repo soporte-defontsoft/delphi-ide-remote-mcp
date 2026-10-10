@@ -1373,6 +1373,15 @@ begin
     end;
     var V := P.JsonValue.Clone as TJSONValue;
     AArguments.RemovePair(P.JsonString.Value).Free;
+    // el nombre real que venia VACIO o null se va: quedaban dos claves con el
+    // mismo nombre detras de DuplicateArgDenied, y ArgStr, el binder y las
+    // reescrituras por nombre leian la primera - la vacia, o la que la puerta
+    // no habia expandido ni alargado (revisor de B-9, 10-oct-2026: GUARD-023
+    // enganoso con srvd:\, una ruta 8.3 que llegaba corta a la tool)
+    for var K := AArguments.Count - 1 downto 0 do
+      if TMCPSerializer.NormalizeKey(AArguments.Pairs[K].JsonString.Value) =
+         TMCPSerializer.NormalizeKey(Aliases[I, 2]) then
+        AArguments.RemovePair(AArguments.Pairs[K].JsonString.Value).Free;
     AArguments.AddPair(Aliases[I, 2], V);
   end;
 end;

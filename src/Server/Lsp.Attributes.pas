@@ -99,7 +99,9 @@ type
     ahi es texto, y un old tiene que casar con el disco que delphi_read,
     designer get y vault_read ensenan TAL CUAL. Lo que no es ruta ni
     contenido se expande, y da igual. Aqui SI vale marcar la exclusion
-    (vease arriba): equivocarse al reescribir es inocuo.
+    (vease arriba): equivocarse al reescribir no abre la jaula - lo marcado
+    [RutaDelServidor] se juzga despues, ya expandido -, aunque si estropea
+    lo escrito (un srvd:\ literal en un .dfm, el fallo que cerro esta marca).
 
     LA EXCEPCION DECLARADA: value, props y state de delphi_designer. El
     disenador expande el TEXTO de cada valor (PonEnMemoria, Lsp.DesignerEdit;

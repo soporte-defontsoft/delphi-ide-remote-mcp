@@ -4395,7 +4395,8 @@ const
     'goes in single quotes as in a form (Edit1.Text=''a;b''; a quote inside ' +
     'is written twice); a quote that does not start the value is just a ' +
     'letter (Label1.Caption=It''s). A property that holds a component takes ' +
-    'the component''s name. No double quotes.';
+    'the component''s name. No double quotes. A value that starts with ' +
+    'srvd:\... is drawn with the real drive.';
 
   SP_DESIGNER_STYLE =
     'preview optional. VCL: a .vsf file (the form is then drawn out of ' +
@@ -4426,7 +4427,9 @@ const
     '[akLeft, akTop], clRed, the Name of another component (PopupMenu1), nil ' +
     'to clear one. A string goes quoted (''OK'', ''Acci''#243''n'') or not ' +
     '(OK): set writes it the way the IDE does, accents as #N and a long one ' +
-    'in pieces; so does a number as typed (0.7).';
+    'in pieces; so does a number as typed (0.7). A string that starts with a ' +
+    'path as this server shows it (srvd:\...) is written with the real ' +
+    'drive, so the form finds it when it runs.';
 
   SP_DESIGNER_PROPS =
     'insert / set optional: SEVERAL properties at once, Prop=value pairs ' +

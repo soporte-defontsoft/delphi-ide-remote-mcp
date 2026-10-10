@@ -10,6 +10,22 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **An alias with the declared name empty leaves one key.** `root: ""`
+  with `path: srvd:\...` (an alias of `delphi_list`), or `path: ""` with
+  `unit:` in `delphi_config`, left two keys with the same name behind the
+  duplicate check, and the tool, the binder and the rewrites by name read
+  the first - the empty one, or the one the gate had not expanded nor
+  lengthened: a misleading GUARD-023 for a `srvd:\` path, and an 8.3 path
+  reaching the tool short (the UPROVE~1.PAS case of the sixth review, by
+  the alias). The empty declared name now goes when the alias takes its
+  place. `test_mascara_contenido` M11/M11b, red before.
+
+- **`vault_search` with nothing found echoes the pattern masked.** Its echo
+  is content and skips the output filter, and its "No results for ..." put
+  the pattern the gate had already expanded: `C:\...` for a `srvc:\...`.
+  It goes through the mask now, and so does the mask note of
+  `delphi_search`. `test_mascara_contenido` M12, red before.
+
 - **`delphi_test run` lists what the test left by folder, like every file
   list.** Its `files` was the one list of files of another shape - flat,
   each entry with its relative name - while every other tool groups by
@@ -45,7 +61,11 @@ the MCP `initialize` response (`serverInfo.version`).
   something to know: `new_text` of the vault is content, so a path copied
   from `delphi_list` stays `srvd:\` in the note. `test_mascara_contenido`
   M7-M10: M8, M9, M10 and M10b red against the build before, M7 and M10c
-  against a mutant without the mark and without the designer's expansion.
+  against a mutant without the mark and without the designer's expansion;
+  from its reviewer, M7b-M7g (the rest of the editing family: a mark taken
+  off one parameter goes red) and M10d (the state of preview, drawn with
+  the real drive). The descriptions of `value` and `state` and the README
+  say it.
 
 - **A local path is never looked for in a network place.** Every write asks
   whether its path falls in a vault - of any workspace - and the place's

@@ -40,7 +40,19 @@ has to work at run time (it was a list of names, PARAMS_CON_CONTENIDO):
 
 M8, M9, M10 and M10b were seen red against 112a311; M7 and M10c against a
 mutant without the mark of textedit's new and without the designer's
-expansion.
+expansion. And from its reviewer (10-oct-2026):
+
+  M7b-M7g  the rest of the editing family, so that a mark taken off one
+       parameter goes red: old/new and fragment of delphi_edit, a changeset
+       edit, vault_append, vault_create and the create of delphi_textedit
+  M10d the state of preview is drawn with the real drive (the PNG of
+       srvX: plus datos is the PNG of X: plus datos; the control with another text
+       is not)
+  M11  an alias with the declared name empty (root='' + path=srvX:...):
+       one key left - there were two behind DuplicateArgDenied and the tool
+       read the empty or unexpanded one (GUARD-023, a short 8.3 path)
+  M12  vault_search with nothing found echoes the pattern masked (it said
+       "No results for C:" and the rest)
 
 Usage:  python tests/test_mascara_contenido.py [path-to-DelphiLspMcp.exe]
 """
@@ -51,7 +63,7 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('mascara_contenido')
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # M10d dibuja
 # un vault, fuera de la jaula como siempre (M8)
 VAULT = mc.carpeta('mascara_contenido_vault')
 open(os.path.join(VAULT, 'AGENTS-VAULT.md'), 'w', encoding='utf-8').write('# Reglas\n')
@@ -180,6 +192,77 @@ r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'Button
                              'value': VIRTUAL + 'tercera.txt'})
 check('M10c ...y sin comillas, como antes (ya no la expande la puerta: la expande el disenador)',
       ("Hint = '" + REAL + "tercera.txt'") in dfm(), r[:300] + ' | ' + dfm())
+
+
+def dibujo(estado, nombre):
+    png = os.path.join(PRJ, nombre)
+    call('delphi_designer', {'command': 'preview', 'path': DFM, 'inline': False, 'out': png,
+                             'state': 'Button1.Caption=' + estado})
+    return open(png, 'rb').read() if os.path.exists(png) else b''
+
+
+_virt, _real, _otra = dibujo(VIRTUAL + 'datos', 'v.png'), dibujo(REAL + 'datos', 'r.png'), dibujo('otra', 'o.png')
+check('M10d el state de preview se dibuja con la letra REAL: srvX:\\datos da el PNG de X:\\datos (y otro texto, otro)',
+      bool(_virt) and _virt == _real and _otra != _real, '%d %d %d bytes' % (len(_virt), len(_real), len(_otra)))
+
+# ---- M7b..M7g: el resto de la familia de edicion (revisor de B-9: quitar una
+# marca no ponia nada en rojo) ----
+UC = os.path.join(PRJ, 'UContenido.pas')
+open(UC, 'w', encoding='utf-8', newline='\r\n').write(
+    'unit UContenido;\n\ninterface\n\nimplementation\n\n{\n' + VIRTUAL + 'vieja\n' + VIRTUAL + 'frag\n}\n\nend.\n')
+r = call('delphi_edit', {'path': UC, 'old': VIRTUAL + 'vieja', 'new': VIRTUAL + 'nueva'})
+t = open(UC, encoding='utf-8').read()
+check('M7b delphi_edit: old y new con la unidad virtual casan y se escriben TAL CUAL',
+      (VIRTUAL + 'nueva') in t and (REAL + 'nueva') not in t, r[:300] + ' | ' + t)
+r = call('delphi_edit', {'path': UC, 'fragment': VIRTUAL + 'frag', 'atline': 9, 'new': VIRTUAL + 'trozo'})
+t = open(UC, encoding='utf-8').read()
+check('M7c delphi_edit fragment: el trozo con la unidad virtual casa y se escribe TAL CUAL',
+      (VIRTUAL + 'trozo') in t and (REAL + 'trozo') not in t, r[:300] + ' | ' + t)
+cs = call('delphi_changeset', {'command': 'begin'})
+cid = re.search(r'CHANGESET (\S+) opened', cs).group(1)
+r = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': TXT,
+                              'old': VIRTUAL + 'datos', 'new': VIRTUAL + 'cambio'})
+call('delphi_changeset', {'command': 'preview', 'id': cid})
+r2 = call('delphi_changeset', {'command': 'commit', 'id': cid})
+t = open(TXT, encoding='utf-8').read()
+check('M7d changeset edit: old y new con la unidad virtual, TAL CUAL',
+      (VIRTUAL + 'cambio') in t and (REAL + 'cambio') not in t, r[:200] + ' | ' + r2[:200] + ' | ' + t)
+r = call('vault_append', {'path': 'nota.md', 'content': VIRTUAL + 'anadida'})
+t = open(NOTA, encoding='utf-8').read()
+check('M7e vault_append: el contenido con la unidad virtual, TAL CUAL',
+      (VIRTUAL + 'anadida') in t and (REAL + 'anadida') not in t, r[:200] + ' | ' + t)
+r = call('vault_create', {'path': 'creada.md', 'content': VIRTUAL + 'creada\n'})
+_cr = os.path.join(VAULT, 'creada.md')
+t = open(_cr, encoding='utf-8').read() if os.path.exists(_cr) else ''
+check('M7f vault_create: el contenido con la unidad virtual, TAL CUAL',
+      t.startswith(VIRTUAL + 'creada'), r[:200] + ' | ' + t)
+_tc = os.path.join(PRJ, 'creado.txt')
+r = call('delphi_textedit', {'path': _tc, 'create': True, 'content': VIRTUAL + 'creado'})
+t = open(_tc, encoding='utf-8-sig').read() if os.path.exists(_tc) else ''
+check('M7g textedit create: el contenido con la unidad virtual, TAL CUAL',
+      t.startswith(VIRTUAL + 'creado'), r[:200] + ' | ' + t)
+
+# ---- M11: un apodo con el nombre declarado VACIO (revisor de B-9) ----
+# (la forma LARGA: con un ~ en la ruta -el %TEMP% de esta maquina lo lleva-
+# la puerta alargaba ese par y el fallo no se veia; sin el, GUARD-023)
+r = call('delphi_list', {'root': '', 'path': mc.virtual(mc.larga(PRJ))})
+check('M11 root="" + path=srvX:... (apodo): una clave, la expandida - lista la carpeta, sin GUARD-023',
+      'P.dpr' in r and not mc.rechazado(r), r[:300])
+LARGA = os.path.join(BASE, 'CarpetaConNombreLargo')
+os.makedirs(LARGA)
+open(os.path.join(LARGA, 'ULarga.pas'), 'w').write('unit ULarga;\ninterface\nimplementation\nend.\n')
+_c = mc.corta(LARGA)
+if _c and _c != LARGA:
+    r = call('delphi_list', {'root': '', 'path': _c})
+    check('M11b ...y una ruta 8.3 por el apodo llega LARGA a la tool (la puerta la alarga)',
+          'CarpetaConNombreLargo' in r and 'ULarga.pas' in r, r[:300])
+else:
+    print('  NOTA M11b: este volumen no da nombres 8.3; no se mide')
+
+# ---- M12: vault_search sin resultados ensena el patron ENMASCARADO ----
+r = call('vault_search', {'pattern': VIRTUAL + 'nadaquebuscar'})
+check('M12 vault_search: el patron de "sin resultados" sale con la unidad virtual, no con la letra real',
+      (REAL + 'nadaquebuscar') not in r and (VIRTUAL + 'nadaquebuscar') in r, r[:300])
 
 srv.cierra()
 mc.fin('mascara-contenido battery')

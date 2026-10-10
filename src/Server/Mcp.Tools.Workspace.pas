@@ -491,7 +491,9 @@ begin
     // mascara estaba bien (septima revision)
     if (FilesScanned = 0) and (Length(Ilegibles) = 0) and
        (Params.Pattern.Trim <> '') and not SingleFile then
-      Return.AddPair('maskNote', MsgFmt(SN_SEARCH_MASK_NO_MATCH_FMT, [Params.Pattern.Trim]));
+      // enmascarada como lo demas que compone esta tool de eco (su vault_search
+      // hermana enseno C:\ con un patron srvd:\, revisor de B-9)
+      Return.AddPair('maskNote', MsgFmt(SN_SEARCH_MASK_NO_MATCH_FMT, [MaskDriveText('', Params.Pattern.Trim)]));
     Ocultos.Report(Return);
     // la lista, detras de los contadores y las notas, como iba
     Lista.Cuelga(Return);

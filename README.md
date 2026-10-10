@@ -921,7 +921,11 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   at the dispatch gate covers every tool's output, compiler/git messages and 8.3 short forms
   included. Exception: file CONTENT is byte-exact by design and travels verbatim
   (`delphi_read`, `delphi_fetch`, search hits, the vault readers, the lines of content of a `delphi_git` diff, the verification echo of
-  the editors - see "Byte fidelity beats the drive mask" below). A path on a drive this
+  the editors - see "Byte fidelity beats the drive mask" below). On the way in it is the same
+  rule: what goes INSIDE a file (the `old`/`new` of an edit, a note's text, a commit message)
+  is content and is written as sent - the parameters carry a mark, `[Contenido]` -, except a
+  value of `delphi_designer` (`value`, `props`, `state`), whose text is expanded when it starts
+  with a virtual unit, because a path in a form has to work when it runs. A path on a drive this
   server does not serve leaves as `srv0:` - it says there is a path and not where - and
   is refused by name if it comes back. The letters served are those of each workspace's own places (until 1.9.0 they were worked out once, with the workspace of the first call). (It was `srvx:` until 1.0.13, which is exactly what
   a genuinely served `X:` drive masks to.)

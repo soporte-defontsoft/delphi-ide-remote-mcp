@@ -638,7 +638,10 @@ begin
     end;
     if Pag.Total = 0 then
       Result := MsgFmt(SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT,
-        [Pat, IfThen(ByContent, MsgText(SF_VAULT_CONTENIDO), MsgText(SF_VAULT_NOMBRES)),
+        // el patron, ya expandido por la puerta, vuelve ENMASCARADO: el eco de
+        // esta tool no pasa por el filtro de salida (TOOLS_ECO) y lo que ella
+        // compone es suyo (revisor de B-9: "No results for C:\...")
+        [MaskDriveText('', Pat), IfThen(ByContent, MsgText(SF_VAULT_CONTENIDO), MsgText(SF_VAULT_NOMBRES)),
          IfThen(ByContent, '', MsgText(SF_VAULT_SOLO_NOMBRES_NOTAS))])
     else
     begin

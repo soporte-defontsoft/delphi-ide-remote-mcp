@@ -38,6 +38,7 @@ type
     [Contenido]
     property Message: string read FMessage write FMessage;
     [SchemaDescription(SP_REPORT_TITLE)]
+    [Contenido] // va dentro del informe, como el mensaje (revisor de B-9)
     property Title: string read FTitle write FTitle;
     [SchemaDescription(SP_REPORT_KIND)]
     property Kind: string read FKind write FKind;
