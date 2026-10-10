@@ -74,9 +74,13 @@ try:
     # 60 s como R6: con el run_all entero 10 no bastaron (P1-L5 de la 1.18.0: R7
     # cayo el 9-oct a las 17:23 y sola paso 9/0); lo que se mide es que arranque
     deadline=time.monotonic()+60
-    while not os.path.isfile(pidfile) and time.monotonic()<deadline:time.sleep(.01)
-    if os.path.isfile(pidfile):
-        with open(pidfile) as f:child_pid=int(f.read())
+    # el .pid existe ANTES de estar escrito: el lanzador lo tiene abierto (Errno 13)
+    # o aun vacio; se reintenta hasta leer un numero (cayo asi el 10-oct en una
+    # tanda de tres baterias a la vez; sola, 9/0)
+    while child_pid is None and time.monotonic()<deadline:
+        try:
+            with open(pidfile) as f:child_pid=int(f.read())
+        except (OSError,ValueError):time.sleep(.01)
     mc.check('R7 fixture: McpRunJob arranca el programa nativo',child_pid is not None)
     if child_pid:
         mc.check('R8 programa remoto no recibe el evento ajeno',not event_in(child_pid,name))
