@@ -104,9 +104,9 @@ check('add fuera de las raices: RECHAZADO', rechazado(out) and mc.es(out, 'SR_JA
 out = wt(args='add', path=os.path.join(REPO, 'dentro'), ref='v1')
 check('add dentro del propio repo: RECHAZADO', rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_INSIDE_FMT')
       and not os.path.exists(os.path.join(REPO, 'dentro')), out)
-out = wt(args='add', path=os.path.join(MINE, '__delphi-temp', 'wt'), ref='v1')
+out = wt(args='add', path=os.path.join(MINE, mc.TEMPORALES, 'wt'), ref='v1')
 check('add en una carpeta muerta: RECHAZADO', rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TEMP')
-      and not os.path.exists(os.path.join(MINE, '__delphi-temp', 'wt')), out)
+      and not os.path.exists(os.path.join(MINE, mc.TEMPORALES, 'wt')), out)
 for ref in ('-x', 'v1;dir', 'v1 --orphan', ''):
     out = wt(args='add', path=os.path.join(MINE, 'r'), ref=ref)
     check('add con ref raro: RECHAZADO (%r)' % ref, rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_REF')

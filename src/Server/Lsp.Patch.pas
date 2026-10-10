@@ -2245,6 +2245,13 @@ var
   Existe: Boolean;
 begin
   K := EncKindOf(AEncName);
+  // LA puerta del escritor ANTES de mirar nada: la ida y vuelta leia los bytes
+  // de una ruta sin juzgar (un llamador que escribe un fichero que encontro en
+  // un .dpr, un UNC) - E/S hacia donde dijera, y EDIT-038 contaba que existia y
+  // en que codificacion (revisor de version de la 1.18.0)
+  var Puerta := SustitucionDenegada(APath);
+  if Puerta <> '' then
+    raise Exception.Create(Puerta);
   // ANuevo: el texto es un fichero NUEVO (un create del changeset), y lo que
   // haya en el disco no cuenta: en el ensayo puede seguir ahi hasta que corra
   // el delete anterior del mismo lote, y la ida y vuelta y el origen de ESE

@@ -80,14 +80,22 @@ def _papelera():
     eso, no por el servidor (28-sep-2026)."""
     if not _PAPELERA:
         for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT',
-                                                  'BUZON_SIN_WORKSPACE', 'BUZON_PREFIJO_WORKSPACE')),
+                                                  'BUZON_SIN_WORKSPACE', 'BUZON_PREFIJO_WORKSPACE',
+                                                  'IDE_COPIAS_SUB')),
                                 ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
-                                                   'CAJON_SUSTITUIDOS'))):
+                                                   'CAJON_SUSTITUIDOS', 'TEMPORAL_DE_SUSTITUCION_EXT'))):
             with open(os.path.join(REPO, 'src', 'Server', unidad),
                       encoding='utf-8-sig', errors='replace') as fh:
                 t = fh.read()
             for n in nombres:
                 _PAPELERA[n] = re.search(r"\b%s\s*=\s*'([^']*)'" % n, t).group(1)
+            # y los nombres que la casa compone en una funcion: la carpeta de los
+            # temporales (TempFolderName) y la de los informes (CarpetaDeInformes)
+            if unidad == 'Lsp.Casa.pas':
+                _PAPELERA['TempFolderName'] = re.search(
+                    r"function TempFolderName: string;\s*begin\s*Result := '([^']*)'", t).group(1)
+                _PAPELERA['CarpetaDeInformes'] = re.search(
+                    r"function CarpetaDeInformes: string;\s*begin\s*Result := ServerDir\('([^']*)'\)", t).group(1)
     return _PAPELERA
 
 
@@ -104,6 +112,13 @@ def dia_de_papelera(t=None):
 # nombre a mano, una comprobacion de AUSENCIA pasaria en verde si cambiara.
 PAPELERA = _papelera()['BACKUP_SUB']
 CAJON_BORRADOS = _papelera()['CAJON_BORRADOS']
+# ...y los de las comprobaciones de AUSENCIA que se escribian a mano (revisor de
+# version de la 1.18.0): el intermedio del escritor atomico, la carpeta de los
+# temporales, la de las copias del IDE y la de los informes
+TEMPORAL_SUSTITUCION_EXT = _papelera()['TEMPORAL_DE_SUSTITUCION_EXT']
+TEMPORALES = _papelera()['TempFolderName']
+IDE_COPIAS = _papelera()['IDE_COPIAS_SUB']
+INFORMES = _papelera()['CarpetaDeInformes']
 
 
 def marca_dueno(copia):

@@ -2526,14 +2526,15 @@ var
 begin
   Result := ALineas;
   ANota := '';
-  if JuezDelOrden(F, F.Doc.TextoDe(ALineas), ANomObj, ANomPadre, Nuestro, Suyo) <> '' then
+  // con el motivo del juez: la nota afirmaba "el renderizador no cargo el form"
+  // tambien cuando el juez nego otra cosa (DSGN-115...; revisor de version de
+  // la 1.18.0)
+  var Motivo := JuezDelOrden(F, F.Doc.TextoDe(ALineas), ANomObj, ANomPadre, Nuestro, Suyo);
+  if Motivo <> '' then
   begin
-    ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre]);
+    ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre, Motivo.Trim]);
     Exit;
   end;
-  var PS := NombreEn(Suyo, ANomObj);
-  if (PS < 0) or (PS = High(Suyo)) then
-    Exit; // el IDE tambien lo deja el ultimo
   // DETRAS del que el IDE escribe justo delante (delante del de detras si es
   // el primero): en un fichero que ya no estaba en el orden del IDE, anclar
   // delante del siguiente lo cambiaba de sitio respecto a los graficos de
@@ -2547,17 +2548,32 @@ begin
       P := Doc.Root
     else
       P := ObjetoPorNombre(Doc, ANomPadre);
-    var NomAncla := Suyo[(if PS > 0 then PS - 1 else 1)];
-    var Ancla: TStyleObj := nil;
-    if P <> nil then
-      for var H in P.Children do
-        if SameText(H.ObjName, NomAncla) then
-          Ancla := H;
-    if Ancla = nil then
+    if P = nil then
     begin
-      ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre]);
+      ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre,
+        MsgFmt(SF_DESIGNER_PADRE_FUERA_DEL_TEXTO_FMT, [ANomPadre])]);
       Exit;
     end;
+    // el orden del IDE con los hijos que ESTAN en el texto: los del ancestro que
+    // la form no toca no se escriben en ella (el juez los ve, el fichero no), y
+    // un ancla de esas daba DSGN-145 con el bloque ya en su sitio (revisor de
+    // version de la 1.18.0)
+    var SuyoP: TArray<string> := [];
+    for var N in Suyo do
+      for var H in P.Children do
+        if SameText(H.ObjName, N) then
+        begin
+          SuyoP := SuyoP + [N];
+          Break;
+        end;
+    var PS := NombreEn(SuyoP, ANomObj);
+    if (PS < 0) or (PS = High(SuyoP)) then
+      Exit; // el IDE tambien lo deja el ultimo de los que estan: donde ya esta
+    var NomAncla := SuyoP[(if PS > 0 then PS - 1 else 1)];
+    var Ancla: TStyleObj := nil;
+    for var H in P.Children do
+      if SameText(H.ObjName, NomAncla) then
+        Ancla := H;
     var Dest := (if PS > 0 then Ancla.EndLine else Ancla.StartLine - 1);
     Result := ConBloqueMovido(ALineas, Copy(ALineas, AIni, ALargo), AIni, ALargo, Dest);
     AIni := Dest;

@@ -9854,11 +9854,14 @@ const
     'this does not change.';
   // insert / set parent= cuando el juez del orden no contesta (3.11): se
   // escribe igual, el ultimo, y se dice
+  // (con el motivo del juez, %s: decia siempre "el renderizador no cargo el form";
+  // revisor de version de la 1.18.0)
   SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT =
     '[DSGN-145] %s went in as the last child of %s: where the IDE''s own ' +
-    'writer keeps it could not be asked (the renderer did not load the form ' +
-    'whole - command=preview says why). The IDE may move it among its ' +
+    'writer keeps it could not be asked - %s The IDE may move it among its ' +
     'siblings when it saves the form.';
+  SF_DESIGNER_PADRE_FUERA_DEL_TEXTO_FMT =
+    '%s is not in the text of the form.';
   SF_DESIGNER_ORDEN_DELANTE_DE_FMT = 'before %s';
   SF_DESIGNER_ORDEN_DETRAS_DE_FMT = 'after %s';
   SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT = 'to position %d';

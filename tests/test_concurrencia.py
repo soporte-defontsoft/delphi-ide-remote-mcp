@@ -137,7 +137,7 @@ try:
     done_a = sum(1 for i in range(N) if ('SLOT-%02d HECHO' % i) in disk_a)
     lost = [i for i in range(N) if ('SLOT-%02d HECHO' % i) not in disk_a]
     renames = sum(1 for r in ra if r and 'rename atomico' in r)
-    tmp_left = glob.glob(os.path.join(JAIL, '.*delphi-patch-tmp'))
+    tmp_left = glob.glob(os.path.join(JAIL, '*' + mc.TEMPORAL_SUSTITUCION_EXT))
 
     check('A mismo fichero: los %d escritores reportan exito' % N, ok_a == N,
           '%d/%d; muestras: %s' % (ok_a, N, [r[:80] for r in ra if bad(r)][:3]))

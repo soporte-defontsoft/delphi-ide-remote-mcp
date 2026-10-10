@@ -559,6 +559,26 @@ REGLAS = [
      'vault, IDE con copia); en la jaula, la papelera. Los temporales de remote-run y de git, el buzon y '
      'las purgas de la cache del disenador borraban con TFile.Delete o DeleteFile por su cuenta: detras '
      'de una union, fuera (revisor de P3, 9-oct-2026)'),
+    # (las tres de abajo, del revisor de version de la 1.18.0: la de escribir no las veia)
+    ('mover o copiar un arbol con la RTL', r"TDirectory\.(?:Move|Copy)\s*\(",
+     [],
+     'TDirectory.Move siguio cada union de dentro, copio lo de detras a la jaula y BORRO los originales '
+     '(25-sep-2026): un arbol se mueve renombrando la carpeta (MueveArbol) y se copia sin cruzar enlaces '
+     '(CopiaArbol); las funciones de arbol de la RTL no pertenecen al servidor (CLAUDE.md)'),
+    ('crear una carpeta sin la puerta',
+     r"\bForceDirectories\s*\(|\bCreateDir\s*\(|TDirectory\.CreateDirectory\s*\(|\bCreateDirectory\w*\s*\(",
+     [('Lsp.Guard.pas', 'CrearCarpeta')],
+     'CrearCarpeta (Lsp.Guard): crear una carpeta tolerando la carrera, detras de la puerta de quien la '
+     'pide; otra que la creara por su cuenta seria otra puerta'),
+    ('atributos o fechas sin la puerta',
+     r"\bSetFileAttributes\w*\s*\(|TFile\.SetAttributes\s*\(|\bSetFileTime\s*\(|"
+     r"TFile\.Set(?:CreationTime|LastWriteTime|LastAccessTime)\w*\s*\(",
+     [('Lsp.Guard.pas', 'QuitaSoloLectura'), ('Lsp.Guard.pas', 'BorraArbolDentro'),
+      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'), ('Mcp.Tools.FileOps.pas', 'ClearReadOnlyTree'),
+      ('Lsp.Patch.pas', 'PonFechaDeCreacion')],
+     'Cambiar un atributo o una fecha ESCRIBE: los de hoy van detras de la puerta de su operacion (el +R '
+     'de lo propio, restaurar una foto, la fecha de creacion de lo que el escritor acaba de sustituir); '
+     'uno nuevo se revisa aqui'),
 ]
 
 
@@ -720,6 +740,9 @@ PLANTADO = {
     'leer sin la puerta': "  Xml := TFile.ReadAllText(Dproj);",
     'escribir sin la puerta': "  TFile.WriteAllText(Ruta, Texto, TEncoding.UTF8);",
     'borrar sin la puerta': "  TFile.Delete(Ruta);",
+    'mover o copiar un arbol con la RTL': "  TDirectory.Move(Origen, Destino);",
+    'crear una carpeta sin la puerta': "  ForceDirectories(Dir);",
+    'atributos o fechas sin la puerta': "  SetFileAttributes(PChar(Ruta), FILE_ATTRIBUTE_NORMAL);",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -921,6 +944,13 @@ REGLAS_PY = [
      'mc.dia_de_papelera, como NombreDeDia del servidor'),
     ('el cajon de lo borrado a mano', r"""os\.path\.join\([^)]*['"]deleted['"]""", [],
      'mc.CAJON_BORRADOS, leido de Lsp.Patch'),
+    # (las dos de abajo, del revisor de version de la 1.18.0; __delphi-temp y reports
+    # tienen sus comprobaciones de ausencia por mc, y el barrido de sus ~45 lineas
+    # restantes va a la 1.19.0)
+    ('el intermedio del escritor atomico a mano', r"delphi-patch-tmp", [],
+     'mc.TEMPORAL_SUSTITUCION_EXT, leido de TEMPORAL_DE_SUSTITUCION_EXT (Lsp.Patch)'),
+    ('la carpeta de las copias del IDE a mano', r"""(['"])ide-copias\1""", [],
+     'mc.IDE_COPIAS, leido de IDE_COPIAS_SUB (Lsp.Casa)'),
 ]
 
 
@@ -962,6 +992,8 @@ PLANTADO_PY = {
     'el nombre de la papelera a mano': "    d = os.path.join(base, '__delphi-patch')",
     'el dia de la papelera a mano': "    hoy = time.strftime('%Y%m%d')",
     'el cajon de lo borrado a mano': "    c = os.path.join(pap, dia, 'deleted', 'x')",
+    'el intermedio del escritor atomico a mano': "    t = glob.glob(os.path.join(d, '*.delphi-patch-tmp'))",
+    'la carpeta de las copias del IDE a mano': "    c = os.path.join(cache, 'ide-copias', '37.0')",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]

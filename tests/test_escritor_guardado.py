@@ -223,8 +223,8 @@ check('P4 package sobre un zip de solo lectura: SYS-029, intacto, sin copia ni r
       (out[:200], sellada, restos))
 
 # ---- M: writers ask the DESTINATION gate (jail + dead folders)
-out = call('delphi_package', {'dir': BUS, 'outfile': os.path.join(MINE, '__delphi-temp', 'p.zip')})
-check('M package con outfile en una carpeta muerta: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TEMP') and not os.path.exists(os.path.join(MINE, '__delphi-temp', 'p.zip')), out[:200])
+out = call('delphi_package', {'dir': BUS, 'outfile': os.path.join(MINE, mc.TEMPORALES, 'p.zip')})
+check('M package con outfile en una carpeta muerta: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TEMP') and not os.path.exists(os.path.join(MINE, mc.TEMPORALES, 'p.zip')), out[:200])
 HIST = os.path.join(MINE, '__history')
 os.makedirs(HIST, exist_ok=True)
 open(os.path.join(HIST, 'UVieja.pas'), 'w').write('unit UVieja;\n\ninterface\n\nimplementation\n\nend.\n')

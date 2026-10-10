@@ -10,6 +10,22 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`DSGN-145` says why the judge of the order could not answer.** The note
+  of an `insert` or `set parent=` that stayed last always blamed the
+  renderer for not loading the form whole, also when the judge refused for
+  another reason (a literal of the form, `DSGN-115`) or when the anchor was a
+  child of the ancestor that the derived form does not write: it now carries
+  the judge's own reason, and the order of the IDE is compared only with the
+  children that are in the text - when the block is already last of those,
+  it is where the IDE keeps it and no note is given.
+
+- **The writer of a text asks its gate before it reads anything.** The
+  round-trip rule of `PatchSaveText` (the designer, the changeset, the
+  rename, `delphi_textedit`) read the bytes of the file before the writer's
+  gate judged the path: a caller writing a file it had found in a `.dpr`, or
+  a UNC, caused I/O wherever that pointed, and `EDIT-038` told that it
+  existed and its encoding. The gate is asked first now.
+
 - **`set parent=` does not carry the `[n]` of a component to its new
   parent.** In an inherited form a new component placed among the
   ancestor's children carries `[n]`, its place among the children of the
@@ -1033,6 +1049,24 @@ the MCP `initialize` response (`serverInfo.version`).
   path of an `{$I}`, which the compiler reads in ANSI too). `test_delphi_patch`.
 
 ### Internal
+
+- **Batteries that could pass for the wrong reason, mended** (version
+  reviewers of 1.18.0). `test_motor_fuera` asked only for the absence of
+  what must not leak, so a timeout or an engine still indexing passed: hover,
+  completion and signature must now answer and say `LSP-037`, as promised, and
+  the battery has a cache of its own (it took the newest engine settings of a
+  folder other batteries share). `test_render_unc_118` reserved its TEST-NET
+  hosts in the machine's temp folder and never freed them - red for good
+  after about 150 runs -: markers older than a day are recycled. The
+  absence checks that wrote the server's names by hand (`.delphi-patch-tmp`,
+  `__delphi-temp`, `ide-copias`, `reports`) read them from its sources
+  through `mcp_cliente`, and `test_paisaje` watches the first and the third
+  in the batteries. And `test_paisaje` gains three rules on the server: a
+  tree moved or copied by the RTL (`TDirectory.Move`/`Copy`, the hole of
+  25-sep), a folder created outside `CrearCarpeta`, an attribute or a date
+  written outside the five places that do it behind their gate, each with
+  its mutant. The frozen copy of `Lsp.Guard` in `tests/fixtures`, which no
+  battery read since `test_round16` generates its unit, is gone.
 
 - **One walk of a tree for several masks.** `delphi_references` walked each
   folder three times (once for `*.pas`, `*.dpr`, `*.inc`), the designer

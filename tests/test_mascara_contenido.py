@@ -161,7 +161,7 @@ check('M8 vault_patch: old_text y new_text con la unidad virtual casan con la no
 
 r = call('delphi_report', {'body': VIRTUAL + 'por el apodo', 'title': 'b9'})
 informes = [open(f, encoding='utf-8', errors='replace').read()
-            for f in glob.glob(os.path.join(os.path.dirname(EXE), 'reports', '**', '*.md'), recursive=True)]
+            for f in glob.glob(os.path.join(os.path.dirname(EXE), mc.INFORMES, '**', '*.md'), recursive=True)]
 check('M9 report: body, el apodo de message, es contenido: su unidad virtual se guarda TAL CUAL',
       any((VIRTUAL + 'por el apodo') in i for i in informes), r[:200] + ' | ' + str(informes)[:300])
 

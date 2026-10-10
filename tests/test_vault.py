@@ -815,7 +815,7 @@ finally:
 # un temporal junto a la nota y el renombrado): despues de todas las escrituras
 # de arriba no queda ninguno de esos temporales en el vault
 _temporales = [os.path.join(r, f) for r, _, fs in os.walk(VAULT) for f in fs
-               if f.endswith('.delphi-patch-tmp')]
+               if f.endswith(mc.TEMPORAL_SUSTITUCION_EXT)]
 check('el vault no se queda con temporales de sustitucion tras sus escrituras', not _temporales, _temporales)
 
 for _d in (VAULT, WORK, SRV):

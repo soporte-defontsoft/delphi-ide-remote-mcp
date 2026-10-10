@@ -2,6 +2,10 @@
 """Literales UNC/dispositivo: decidir por texto antes de cualquier E/S.
 Mutante: retirar RutaSinTocarElDisco de Comprueba -> latencia o rechazo rojo.
 La reserva TEST-NET sobrevive a run_all: Windows recuerda hosts fallidos.
+Pero esa memoria es de minutos: las marcas de mas de un dia se reciclan. Sin
+reciclar, 760 hosts a cinco por pasada se agotaban a las ~152 y la bateria
+quedaba roja para siempre (revisor de version de la 1.18.0); y la carpeta solo
+guarda las del ultimo dia.
 """
 import atexit,json,os,tempfile,time
 import mcp_cliente as mc
@@ -9,6 +13,12 @@ import mcp_cliente as mc
 def host_nuevo():
     carpeta=os.path.join(tempfile.gettempdir(),'delphi-mcp-testnet-reservado')
     os.makedirs(carpeta,exist_ok=True)
+    limite=time.time()-24*3600
+    for f in os.listdir(carpeta):
+        p=os.path.join(carpeta,f)
+        try:
+            if os.path.getmtime(p)<limite:os.remove(p)
+        except OSError:pass
     for red in ('198.51.100.','203.0.113.','192.0.2.'):
         for n in range(1,255):
             ip=red+str(n)

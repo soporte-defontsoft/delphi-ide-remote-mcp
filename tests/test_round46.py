@@ -151,7 +151,7 @@ try:
             dentro = z.namelist()
     check('T6 el zip lleva el trabajo y NO los temporales',
           any('datos.txt' in n for n in dentro) and
-          not any('__delphi-temp' in n for n in dentro),
+          not any(mc.TEMPORALES in n for n in dentro),
           '%s | %s' % (dentro[:6], r[:120]))
 
     # ------------------------------------------------------------------ T3

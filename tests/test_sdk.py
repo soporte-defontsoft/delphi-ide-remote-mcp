@@ -321,7 +321,7 @@ try:
     # puerta de escribir de la 1.18.0; se borraba sin copia, irrecuperable),
     # en ide-copias\<la carpeta del original>: la de perfiles se llama VER
     antes = open(os.path.join(PROFILES_DIR, 'limpio.sdk'), 'rb').read()
-    copias = mc.cache_servidor(os.path.join('ide-copias', VER))
+    copias = mc.cache_servidor(os.path.join(mc.IDE_COPIAS, VER))
     previas = set(os.listdir(copias)) if os.path.isdir(copias) else set()
     out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "limpio"})
     nuevas = [f for f in (os.listdir(copias) if os.path.isdir(copias) else [])

@@ -200,11 +200,11 @@ try:
     # __delphi-temp para decir QUE escondio, y nombrarla no es listarla.
     check('T6 __delphi-temp no aparece en un listado del workspace',
           any(p.endswith('visible-para-t6.png') for p in lista(l1)) and
-          not any('__delphi-temp' in p for p in lista(l1)) and
+          not any(mc.TEMPORALES in p for p in lista(l1)) and
           'plantada-para-t6' not in l1, l1[:240])
     check('T6b ...ni siquiera pidiendo la papelera: no es papelera',
           any(p.endswith('visible-para-t6.png') for p in lista(l2)) and
-          not any('__delphi-temp' in p for p in lista(l2)) and
+          not any(mc.TEMPORALES in p for p in lista(l2)) and
           'plantada-para-t6' not in l2, l2[:240])
 
     def cajones(d):
@@ -237,7 +237,7 @@ try:
     jd = mc.como_json(ld)
     nombres = [f['name'] for f in mc.ficheros(jd, hijos='dirs')]
     check('T6f dirs: cada carpeta en su cajon (temporal, compilacion, herramienta) y el total cuadra',
-          'VisibleT6' in nombres and not {'__delphi-temp', 'Win64', '.vs'} & set(nombres) and
+          'VisibleT6' in nombres and not {mc.TEMPORALES, 'Win64', '.vs'} & set(nombres) and
           jd.get('hiddenServerTemp') == 1 and jd.get('hiddenBuildArtifacts') == 1 and
           jd.get('hiddenToolFolders') == 1 and 'hiddenGitInternals' not in jd and
           jd.get('hidden') == cajones(jd), ld[:300])

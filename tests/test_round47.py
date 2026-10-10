@@ -154,7 +154,7 @@ try:
         check('R1 la captura por defecto cae en la raiz ESCRIBIBLE',
               bool(pngs(os.path.join(RW, '__delphi-temp'))), shot[:240])
         check('R2 ...y en la raiz de solo lectura no se ha creado nada',
-              not os.path.exists(os.path.join(RO, '__delphi-temp')),
+              not os.path.exists(os.path.join(RO, mc.TEMPORALES)),
               os.listdir(RO))
 finally:
     try:

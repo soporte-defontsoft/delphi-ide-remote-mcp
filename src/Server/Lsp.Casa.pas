@@ -219,6 +219,9 @@ const
   // workspace tienen una carpeta que se llame asi
   BUZON_SIN_WORKSPACE = '_local';
   BUZON_PREFIJO_WORKSPACE = 'Workspace.';
+  // la carpeta de las copias de lo que el servidor pisa en el IDE, en su cache
+  // (las baterias la leen de aqui, no a mano: revisor de version de la 1.18.0)
+  IDE_COPIAS_SUB = 'ide-copias';
 
 function TempFolderName: string;
 begin
@@ -295,7 +298,7 @@ begin
   Origen := TPath.GetFileName(SinBarraFinal(TPath.GetDirectoryName(APath)));
   if Origen = '' then
     Origen := '_'; // la raiz de una unidad
-  Result := ServerCacheDir(TPath.Combine('ide-copias', Origen));
+  Result := ServerCacheDir(TPath.Combine(IDE_COPIAS_SUB, Origen));
 end;
 
 function CopiaDelIde(const APath: string): string;

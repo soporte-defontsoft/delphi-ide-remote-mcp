@@ -543,10 +543,40 @@ try:
                            '    Panel1: TPanel;\n    Button1: TButton;\n    Button2: TButton;\n')
     r = srv.call('delphi_designer', {'command': 'insert', 'path': RARO, 'classname': 'TLabel',
                                      'component': 'LabelRaro', 'parent': 'Panel1'}, t=240)
-    check('I4 con un hermano que ningun paquete carga, el juez no contesta: el ultimo, y lo dice (DSGN-145)',
+    check('I4 con un hermano que ningun paquete carga, el juez no contesta: el ultimo, y lo dice (DSGN-145, '
+          'con SU motivo: DSGN-140)',
           hijos_de_panel(RARO) == ['Button1', 'Button2', 'Raro1', 'LabelRaro']
-          and mc.abre(J(r).get('orderNote', ''), 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT'),
+          and mc.abre(J(r).get('orderNote', ''), 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT')
+          and 'DSGN-140' in J(r).get('orderNote', ''),
           (hijos_de_panel(RARO), r[:400]))
+    # I7: en una form heredada cuyo ancestro tiene su TLabel, el juez CONTESTA y el
+    # ancla que da puede ser un hijo del ancestro que la form no escribe: DSGN-145
+    # decia que el renderizador no habia cargado el form, y era falso (revisor de
+    # version de la 1.18.0). Ahora se compara con los hijos que estan en el texto
+    open(os.path.join(JAIL, 'UBaseL.dfm'), 'wb').write(
+        b'object FormBaseL: TFormBaseL\r\n  Left = 0\r\n  Top = 0\r\n  Caption = \'BaseL\'\r\n'
+        b'  ClientHeight = 200\r\n  ClientWidth = 300\r\n'
+        b'  object Label1: TLabel\r\n    Left = 8\r\n    Top = 8\r\n    Caption = \'L1\'\r\n  end\r\n'
+        b'  object Button1: TButton\r\n    Left = 8\r\n    Top = 40\r\n    Caption = \'B1\'\r\n'
+        b'    TabOrder = 0\r\n  end\r\nend\r\n')
+    open(os.path.join(JAIL, 'UBaseL.pas'), 'wb').write(
+        b'unit UBaseL;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, Vcl.StdCtrls;\r\n\r\n'
+        b'type\r\n  TFormBaseL = class(TForm)\r\n    Label1: TLabel;\r\n    Button1: TButton;\r\n  end;\r\n\r\n'
+        b'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
+    HIJAL = os.path.join(JAIL, 'UHijaL.dfm')
+    open(HIJAL, 'wb').write(
+        b'inherited FormHijaL: TFormHijaL\r\n  Caption = \'HijaL\'\r\n'
+        b'  object ButtonX: TButton\r\n    Left = 8\r\n    Top = 80\r\n    Caption = \'BX\'\r\n'
+        b'    TabOrder = 1\r\n  end\r\nend\r\n')
+    open(os.path.join(JAIL, 'UHijaL.pas'), 'wb').write(
+        b'unit UHijaL;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, Vcl.StdCtrls, UBaseL;\r\n\r\n'
+        b'type\r\n  TFormHijaL = class(TFormBaseL)\r\n    ButtonX: TButton;\r\n  end;\r\n\r\n'
+        b'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': HIJAL, 'classname': 'TLabel',
+                                     'component': 'LabelN', 'parent': 'FormHijaL'}, t=240)
+    check('I7 insert en una form heredada con un TLabel en el ancestro: el juez contesta y no hay DSGN-145',
+          'LabelN' in open(HIJAL, 'rb').read().decode('ascii') and 'orderNote' not in J(r)
+          and not mc.fallo(r), r[:400])
 
     # I6: set parent= de un componente que lleva [n] (su sitio entre los hijos del
     # ancestro del padre VIEJO): el [n] no viaja - TReader lo aplicaria en el padre

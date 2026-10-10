@@ -44,6 +44,10 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('motorfuera')
+# su LOCALAPPDATA: la cache de ajustes del motor, solo suya. F6 y F8b toman los
+# que el servidor fabrico para P1 (el ultimo Proy-*) y en la compartida otra
+# bateria con un proyecto Proy podia dejar el suyo (revisor de version de la 1.18.0)
+LOCAL = mc.carpeta('motorfuera-local')
 RAIZ = os.path.join(BASE, 'raiz')
 FUERA = os.path.join(BASE, 'fuera')        # junto a la raiz, NO dentro
 for d in (RAIZ, FUERA):
@@ -140,7 +144,8 @@ P4 = proyecto('Proy4', '11111111-2222-3333-4444-555555555504', '', 'UDentro4', U
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 # la zona de biblioteca APAGADA: la RTL no es de la jaula, y aun asi el motor
 # tiene que poder hablar de ella (F8)
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ, 'DELPHI_MCP_LIBRARY_ZONE': '0'}),
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ, 'DELPHI_MCP_LIBRARY_ZONE': '0',
+                                'LOCALAPPDATA': LOCAL}),
                nombre='motorfuera', t=240)
 call = srv.call
 
@@ -177,6 +182,13 @@ def fugas(r):
     return [f for f in FUGAS if f in (r or '')]
 
 
+# que CONTESTO: un timeout, un error de transporte o un LSP-025 tras el tope no
+# sueltan nada tampoco, y los checks de solo ausencia pasaban con ellos
+# (revisor de version de la 1.18.0)
+def contesta(r):
+    return bool(r) and not mc.sin_respuesta(r) and not mc.tiene(r, 'LSP-025')
+
+
 try:
     U1 = os.path.join(P1, 'UDentro.pas')
     # F8 primero (calienta el motor): lo de dentro y la RTL contestan
@@ -191,15 +203,18 @@ try:
     check('F1 definition de un simbolo de una unit del search path de FUERA: nada de alli, y la nota LSP-037',
           not fugas(r) and mc.tiene(r, 'LSP-037'), (fugas(r), r[:300]))
     r = motor('delphi_hover', {'path': U1, 'line': 8, 'character': 14})
-    check('F2 hover: ni su firma ni su ruta', not fugas(r), (fugas(r), r[:300]))
+    check('F2 hover: ni su firma ni su ruta, y lo dice (LSP-037)',
+          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r), (fugas(r), r[:300]))
     r = motor('delphi_completion', {'path': U1, 'line': 9, 'character': 5})
-    check('F3 completion: ni sus nombres ni el VALOR de su constante',
-          not fugas(r) and 'SECRETO_DE_FUERA' not in r and '"DesdeFuera"' not in r, (fugas(r), r[:400]))
+    check('F3 completion: ni sus nombres ni el VALOR de su constante, y lo dice (LSP-037)',
+          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r) and 'SECRETO_DE_FUERA' not in r
+          and '"DesdeFuera"' not in r, (fugas(r), r[:400]))
     r = motor('delphi_signature', {'path': U1, 'line': 8, 'character': 23})
-    check('F4 signature: ni su firma', not fugas(r), (fugas(r), r[:300]))
+    check('F4 signature: ni su firma, y lo dice (LSP-037)',
+          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r), (fugas(r), r[:300]))
     r = motor('delphi_completion', {'path': UG, 'line': 6, 'character': 4, 'trigger': '.'})
     check('F3b completion de `G.` (G de dentro, tipo de fuera, el fichero no usa la unit): ni un miembro de fuera',
-          not fugas(r), (fugas(r), r[:300]))
+          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r), (fugas(r), r[:300]))
     r = call('delphi_diagnostics', {'path': U1}, t=120) or ''
     for _ in range(20):
         if not mc.tiene(r, 'LSP-024') and 'in progress' not in r:
@@ -213,7 +228,7 @@ try:
     # GetIt), con la zona APAGADA: el motor puede hablar de ella (ltBiblioteca: la
     # instalacion ya es del IDE y no mide esto). Sus carpetas, las de los ajustes
     # que el servidor fabrico para P1; la instalacion, la de sus fuentes
-    cdir = mc.cache_servidor('configs')
+    cdir = mc.cache_servidor('configs', LOCAL)
     fab = sorted((f for f in os.listdir(cdir) if f.startswith('Proy-')),
                  key=lambda f: os.path.getmtime(os.path.join(cdir, f)))
     st = json.load(open(os.path.join(cdir, fab[-1]), encoding='utf-8-sig'))['settings']
@@ -283,7 +298,8 @@ try:
     r1 = motor('delphi_hover', {'path': U3, 'line': 8, 'character': 14})
     r2 = motor('delphi_completion', {'path': U3, 'line': 9, 'character': 5})
     check('F6 con un .delphilsp.json del IDE que nombra la carpeta de fuera: no se toma (ni hover ni completion sueltan nada)',
-          not fugas(r1) and not fugas(r2) and 'SECRETO_DE_FUERA' not in r2, (fugas(r1), fugas(r2), r1[:200]))
+          contesta(r1) and contesta(r2) and not fugas(r1) and not fugas(r2) and 'SECRETO_DE_FUERA' not in r2,
+          (fugas(r1), fugas(r2), r1[:200]))
 
     U2 = os.path.join(P2, 'UDentro2.pas')
     r = motor('delphi_definition', {'path': U2, 'line': 7, 'character': 14})
@@ -307,4 +323,5 @@ finally:
     srv.mata()
 
 mc.borra(BASE)
+mc.borra(LOCAL)
 mc.fin('motor fuera')
