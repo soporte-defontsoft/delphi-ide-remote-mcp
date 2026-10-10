@@ -38,6 +38,13 @@ type
     NoVisuales: Boolean; // --nonvisual on|off (off, como la tool: la imagen es el form como se vera; 3.4)
     TiempoMs: Integer;   // --timeout <ms>
     Verbose: Boolean;    // --verbose: trazas '#'
+    // --writeback on: EL JUEZ de lo que guarda el IDE (3.11 de la 1.18.0) -
+    // la form cargada como la carga el designer y escrita por TWriter, sin
+    // pintar nada (sin --out); --folder <dir>: la carpeta del form de verdad,
+    // cuando --path es una propuesta escrita en otra (sus hermanos - frames,
+    // ancestros - y su .pas salen de ahi)
+    Escribe: Boolean;
+    Carpeta: string;
   end;
 
   { El lector comun de un .dfm/.fmx, texto o binario, sobre una instancia ya
@@ -52,6 +59,7 @@ type
     FSustituidas: TStringList;
     FIgnoradas: TStringList;
     FAvisos: TStringList;
+    FSinLeer: TStringList;
     FEventos: Integer;
     FCarpeta: string;
     FDesconocida: string;
@@ -82,6 +90,9 @@ type
     property Sustituidas: TStringList read FSustituidas;
     property Ignoradas: TStringList read FIgnoradas;
     property Avisos: TStringList read FAvisos;
+    { Lo que Lee NO pudo leer y sin lo que leyo el form: un ancestro sin .pas
+      que lo diga o sin fichero en la carpeta (PARTIAL=) }
+    property SinLeer: TStringList read FSinLeer;
     property Eventos: Integer read FEventos;
   end;
 
@@ -114,6 +125,13 @@ procedure ParaVigia;
 function DeclaraAjenoAlDpi: Integer;
 
 function SesionActual: Cardinal;
+{ El juez de lo que guarda el IDE: ARaiz, ya cargada en modo diseno, escrita
+  por TWriter (WriteComponent + ObjectBinaryToText, lo que hace el IDE al
+  guardar) y devuelta linea a linea en WRITTEN= }
+procedure EscribeComoElIde(ARaiz: TComponent);
+{ Lo que el cargador dice de lo leido, igual en los dos renderizadores:
+  SUBSTITUTED=, IGNORED=, WARNING= y PARTIAL= }
+procedure RespondeLoLeido(ACargador: TCargador);
 { csDesigning en un componente recien creado (y en lo que se le inserte) }
 procedure PonEnDiseno(AComp: TComponent);
 function Cabecera(const AFichero: string): TCabecera;
@@ -285,6 +303,12 @@ begin
         V := Entre(Valor, ['on', 'off', 'true', 'false', '1', '0']);
         GPeticion.NoVisuales := (V = 'on') or (V = 'true') or (V = '1');
       end
+      else if P = '--writeback' then
+      begin
+        V := Entre(Valor, ['on', 'off', 'true', 'false', '1', '0']);
+        GPeticion.Escribe := (V = 'on') or (V = 'true') or (V = '1');
+      end
+      else if P = '--folder' then GPeticion.Carpeta := Valor
       else if P = '--timeout' then GPeticion.TiempoMs := StrToInt(Valor)
       else if P = '--verbose' then GPeticion.Verbose := True
       else
@@ -293,8 +317,11 @@ begin
     end;
     if GPeticion.Path = '' then
       raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--path']));
-    if GPeticion.Salida = '' then
+    // el juez no pinta: sin png
+    if (GPeticion.Salida = '') and not GPeticion.Escribe then
       raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--out']));
+    if (GPeticion.Carpeta <> '') and not TDirectory.Exists(GPeticion.Carpeta) then
+      raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Carpeta]));
     if not TFile.Exists(GPeticion.Path) then
       raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Path]));
     for var E in GPeticion.Estados do
@@ -418,13 +445,23 @@ begin
   end;
 end;
 
+{ El fichero por el que esta AFichero: con --folder, el --path es una
+  propuesta escrita en otra carpeta y esta por el del mismo nombre en esa
+  (el form de verdad, cuyo .pas y cuyos hermanos se leen); si no, el mismo }
+function RutaQueRepresenta(const AFichero: string): string;
+begin
+  Result := AFichero;
+  if (GPeticion.Carpeta <> '') and SameFileName(AFichero, GPeticion.Path) then
+    Result := TPath.Combine(GPeticion.Carpeta, ExtractFileName(AFichero));
+end;
+
 function AncestroDeClase(const AFichero, AClase: string): string;
 var
   Pas: string;
   M: TMatch;
 begin
   Result := '';
-  Pas := UnidadDeDesigner(AFichero);
+  Pas := UnidadDeDesigner(RutaQueRepresenta(AFichero));
   if not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
   // 'TX = class(TY)', tambien 'class abstract(...)' y con la unidad delante
@@ -822,6 +859,7 @@ begin
   FSustituidas.Sorted := True;
   FIgnoradas := TStringList.Create;
   FAvisos := TStringList.Create;
+  FSinLeer := TStringList.Create;
   FPorClase := TDictionary<string, string>.Create;
 end;
 
@@ -829,6 +867,7 @@ destructor TCargador.Destroy;
 begin
   FPorClase.Free;
   FAvisos.Free;
+  FSinLeer.Free;
   FIgnoradas.Free;
   FSustituidas.Free;
   inherited;
@@ -867,7 +906,7 @@ begin
   if ComponentClass <> nil then
     Exit;
   // un frame inline (o una form metida en otra): su fichero esta en la carpeta
-  FFramePendiente := FicheroDeClase(ExtractFilePath(GPeticion.Path), ClassName);
+  FFramePendiente := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(GPeticion.Path)), ClassName);
   if FFramePendiente <> '' then
   begin
     ComponentClass := ClaseFrame;
@@ -918,7 +957,9 @@ end;
 procedure TCargador.AncestorNotFound(Reader: TReader; const ComponentName: string;
   ComponentClass: TPersistentClass; var Component: TComponent);
 begin
-  // un 'inherited X' sin ancestro cargado: se crea como si fuera 'object'
+  // un 'inherited X' sin ancestro cargado: con nil TReader SALTA su bloque (no
+  // lo crea: System.Classes, Recover/SkipComponent) y la form se carga sin el;
+  // el juez del orden lo nota porque falta en lo escrito (DSGN-143)
   Component := nil;
 end;
 
@@ -951,6 +992,41 @@ begin
   end;
 end;
 
+procedure RespondeLoLeido(ACargador: TCargador);
+begin
+  if ACargador.Sustituidas.Count > 0 then
+    Responde(FR_SUBSTITUTED, string.Join(',', ACargador.Sustituidas.ToStringArray));
+  for var S in ACargador.Ignoradas do
+    Responde(FR_IGNORED, S);
+  for var S in ACargador.Avisos do
+    Aviso(S);
+  for var S in ACargador.SinLeer do
+    Responde(FR_PARTIAL, S);
+end;
+
+procedure EscribeComoElIde(ARaiz: TComponent);
+var
+  Bin: TMemoryStream;
+  Bytes: TBytes;
+  Lineas: TStringList;
+begin
+  Bin := TMemoryStream.Create;
+  Lineas := TStringList.Create;
+  try
+    Bin.WriteComponent(ARaiz); // el flujo TPF0, lo que guarda el IDE
+    SetLength(Bytes, Bin.Size);
+    if Bin.Size > 0 then
+      Move(Bin.Memory^, Bytes[0], Bin.Size);
+    // a texto por EL conversor de la casa (Lsp.DesignerForma), el del servidor
+    Lineas.Text := DesignerBinarioATexto(Bytes);
+    for var L in Lineas do
+      Responde(FR_WRITTEN, L);
+  finally
+    Lineas.Free;
+    Bin.Free;
+  end;
+end;
+
 procedure TCargador.Lee(const AFichero: string; AInstancia: TComponent);
 var
   Cab: TCabecera;
@@ -969,14 +1045,18 @@ begin
       if Ancestro = '' then
       begin
         FAvisos.Add(MsgFmt(SN_RENDER_HEREDA_SIN_PAS_FMT, [ExtractFileName(Fichero)]));
+        FSinLeer.Add(ExtractFileName(Fichero));
         Break;
       end;
-      Fichero := FicheroDeClase(ExtractFilePath(AFichero), Ancestro);
+      Fichero := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(AFichero)), Ancestro);
       if Fichero = '' then
       begin
         if not (SameText(Ancestro, 'TForm') or SameText(Ancestro, 'TFrame') or
           SameText(Ancestro, 'TCustomForm') or SameText(Ancestro, 'TDataModule')) then
+        begin
           FAvisos.Add(MsgFmt(SN_RENDER_ANCESTRO_SIN_FICHERO_FMT, [Ancestro]));
+          FSinLeer.Add(Ancestro);
+        end;
         Break;
       end;
       if Cadena.IndexOf(Fichero) >= 0 then
@@ -992,6 +1072,11 @@ begin
 end;
 
 initialization
+  // el protocolo, en UTF-8: con stdout en un pipe la RTL escribia en la ANSI y
+  // el servidor lo leia con otra pagina - un nombre con acento llegaba roto en
+  // WRITTEN=, ROOT=, NONVISUALS= e IGNORED= (revisor 5 de la noche, A1: el
+  // juez del orden perdia al hermano y aceptaba en falso)
+  SetTextCodePage(Output, CP_UTF8);
   GRegistradas := TDictionary<string, Boolean>.Create;
   GModulos := TList<HMODULE>.Create;
   GModulosDatos := TDictionary<string, HMODULE>.Create;

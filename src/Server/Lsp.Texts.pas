@@ -4293,8 +4293,9 @@ const
     'info (every property a class really publishes: kind and type, events ' +
     'apart) | prop (one property in detail, with the legal members of an ' +
     'enum/set) | tree (the component tree: name, class, line) | get (one ' +
-    'component''s block, verbatim) | lint (properties the class does not ' +
-    'publish and enum values that do not exist; objects it could not check ' +
+    'component''s block, verbatim) | lint (first what the IDE''s own form ' +
+    'parser says, then properties the class does not publish and values ' +
+    'their type does not take, as set judges them; objects it could not check ' +
     '- a class not in the table, or ambiguous - go apart as notes) | ' +
     'check-binding (does the .dfm agree with the class in the .pas: ' +
     'components with no published field, events naming a method that is ' +
@@ -4316,7 +4317,8 @@ const
     'field in the form''s class and its unit in the uses; the answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
-    'class BEFORE writing; parent= alone moves the component; prop=Name ' +
+    'class BEFORE writing; parent= alone moves the component; before=, ' +
+    'after= or index= alone reorders it among its siblings; prop=Name ' +
     'renames it, its field and the form lines that name it) | delete (the ' +
     'component and what is inside it, the references to it in the form, its ' +
     'field and its EMPTY handlers; refused while a method of its own has ' +
@@ -4414,6 +4416,20 @@ const
     'the initial properties of the new component; set: instead of ' +
     'prop/value. Each one is judged as set judges one, and it is all or ' +
     'none: one that does not pass and nothing is written. Name goes alone.';
+
+  SP_DESIGNER_BEFORE =
+    'set optional: put the component just BEFORE this sibling (its Name, the ' +
+    'same parent), alone. Before writing, the IDE''s own writer is asked with ' +
+    'the form loaded as the designer loads it: an order it would not keep ' +
+    '(VCL graphic controls go before windowed ones, an inherited form places ' +
+    'by its [n]...) is refused with the order it would save.';
+  SP_DESIGNER_AFTER =
+    'set optional: put the component just AFTER this sibling (its Name), ' +
+    'alone - the same check as before.';
+  SP_DESIGNER_INDEX =
+    'set optional: the component''s position among its siblings in the file, ' +
+    '1 = the first, alone - the same check as before. The file order is the ' +
+    'z-order (a later one is drawn on top); TabOrder is the keyboard order.';
 
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
   SR_DESIGNER_NO_VA_CON_COMANDO_FMT =
@@ -9705,6 +9721,56 @@ const
     'done: close the quote (a quote inside a quoted value is written twice) ' +
     'or write the value without quotes - a quote that does not START the ' +
     'value is just a letter (Caption=Don''t save).';
+
+  // set before=/after=/index= (3.11 de la 1.18.0): el orden entre hermanos,
+  // si el IDE lo guarda ahi (se le pregunta: Lsp.FormRender.ComoLoEscribeElIde)
+  SR_DESIGNER_ORDEN_SOLO =
+    '[DSGN-135 INVALID_PARAM] before, after and index are three ways to say ' +
+    'where: give ONE of them, alone (no prop, value, props or parent - ' +
+    'parent= moves it into another container first). Nothing was written.';
+  SR_DESIGNER_ORDEN_EL_IDE_FMT =
+    '[DSGN-136 INVALID_PARAM] %s cannot go %s: the IDE''s own writer - asked ' +
+    'with the form loaded as the designer loads it - keeps the children of ' +
+    '%s in this order: %s. That is what it would save, so this order would ' +
+    'not hold (VCL writes graphic controls before windowed ones; an ' +
+    'inherited form places a new component by its [n]...). Nothing was ' +
+    'written.';
+  SR_DESIGNER_ORDEN_NO_HERMANO_FMT =
+    '[DSGN-137 INVALID_PARAM] %s is in %s and %s is in %s: before and after ' +
+    'order children of the SAME parent. To take it into another one, set ' +
+    'parent= first. Nothing was written.';
+  SR_DESIGNER_ORDEN_INDICE_FMT =
+    '[DSGN-138 INVALID_PARAM] index=%d: %s has %d sibling(s) in %s (itself ' +
+    'included), so index goes from 1 to %d. Nothing was written.';
+  SR_DESIGNER_ORDEN_SI_MISMO_FMT =
+    '[DSGN-139 INVALID_PARAM] %s cannot go before or after itself. Nothing ' +
+    'was written.';
+  SR_DESIGNER_ORDEN_SIN_CLASE_FMT =
+    '[DSGN-140 INVALID_PARAM] %s cannot be ordered there: the renderer could ' +
+    'not load the class %s (of %s) - no installed package registers it, or ' +
+    'it is a frame whose .dfm is not in the form''s folder -, so where the IDE ' +
+    'would write it cannot be asked. Nothing was written.';
+  SR_DESIGNER_ORDEN_INCOMPLETO_FMT =
+    '[DSGN-143 INVALID_PARAM] %s cannot be ordered there: the renderer loaded ' +
+    'the form without %s (what it said: %s) - an ancestor it did not find ' +
+    'next to the form, or a component its loader skipped -, so the IDE''s ' +
+    'writer cannot say where it would put it. Nothing was written.';
+  SR_DESIGNER_ORDEN_CAMBIO_FMT =
+    '[DSGN-144 INVALID_PARAM] %s changed while the IDE''s writer was being ' +
+    'asked: nothing was written. Repeat the call.';
+  SN_DESIGNER_ORDEN_YA_ESTA_FMT =
+    '[DSGN-141] %s is already at position %d of %d in %s: nothing was changed.';
+  SN_DESIGNER_ORDEN_NOTA =
+    '[DSGN-142] Placed where the IDE''s own writer keeps it (asked before ' +
+    'writing, with the form loaded as the designer loads it). The file order ' +
+    'is the order the IDE keeps for these children - for controls their ' +
+    'z-order, a later one drawn over an earlier one; in a toolbar or a page ' +
+    'control, their place -; the keyboard order is TabOrder, which this does ' +
+    'not change.';
+  SF_DESIGNER_ORDEN_DELANTE_DE_FMT = 'before %s';
+  SF_DESIGNER_ORDEN_DETRAS_DE_FMT = 'after %s';
+  SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT = 'to position %d';
+  SF_DESIGNER_ES_EL_FORM = 'nothing (it is the form itself)';
 
   // Restaura (Lsp.TodoONada): lo creado no se borra si algo no volvio (revisor
   // de la noche del 10-oct, A-1)

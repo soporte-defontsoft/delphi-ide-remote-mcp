@@ -137,6 +137,41 @@ the MCP `initialize` response (`serverInfo.version`).
   literal and the renderer gets its text (it painted the quotes). Only `nil`
   on references that are not there writes nothing (DSGN-112, as `set` of
   one did); `insert` says it in that entry.
+- **`delphi_designer set` orders a component among its siblings.**
+  `before=`, `after=` or `index=` (1 = the first), alone, move its block
+  among its siblings, and only where the IDE keeps it: before writing, the
+  form as proposed is loaded by the renderer the way the designer loads it
+  (its packages, frames and ancestors) and written by the IDE's own writer
+  (`--writeback`, `Lsp.FormRender.ComoLoEscribeElIde`); a place it would
+  not keep is refused with the order it would save (DSGN-136). No list of
+  our own decides what goes before what: the VCL writes graphic controls
+  before windowed ones, a toolbar in the order of its buttons, an inherited
+  form places a new component by its `[n]`, FMX leaves last what is not one
+  of its objects - the first version imitated the writer with a list and
+  went wrong in a toolbar and an inherited form (its own reviewer). A
+  sibling whose class no package loads cannot be asked about (DSGN-140);
+  not siblings, an index out of range (0 included), itself, or two of them
+  at once are said (DSGN-135 to DSGN-141). What the renderer could not load
+  (an ancestor it did not find next to the form - it now says so, `PARTIAL=`
+  -, a parent no package loads) is not judged half-way: DSGN-143 / DSGN-140,
+  nothing written. `before=`/`after=` hold against the sibling named and
+  every sibling jumped; `index=` is a position, held against all. The
+  judge runs outside the global write lock - it takes seconds - and the
+  form is written only if its bytes are still the ones judged (DSGN-144).
+  The renderer now answers in UTF-8: a component name with an accent
+  reached the server mangled, in `preview` too (`ROOT=`, `NONVISUALS=`,
+  `IGNORED=`). The literal gate of the renderer now also looks at the
+  folder it reads siblings from. Asked by Hermes. `test_designer_orden`
+  (red with the judge's verdict ignored, without UTF-8, without the bytes
+  check).
+- **A `delphi_edit` batch judges a block entry as it judges a line.** An
+  entry whose anchor is a block went straight to the block engine and
+  skipped what `delphi_edit` checks: it wrote a `.md` (EDIT-032 refused only
+  the one-line entries) and a form written by a block was never read by the
+  IDE's parser - a `//` in a `.fmx` came back with no DSGN-123. One gate,
+  `FicheroQueNoEditaDelphiEdit`, now answers for an edit and for a whole
+  batch, and a block on a form is judged as a line is. Found using the
+  server. `test_round49` (E5, E6).
 - **A changeset says what the engine warned.** Its commit kept only "done"
   from each edit, so the engine's warnings - a brace inside a brace
   comment, a broken structure - never reached the agent (CHSET-032 now

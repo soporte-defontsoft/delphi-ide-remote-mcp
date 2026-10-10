@@ -177,6 +177,8 @@ EXCLUIDOS = {
     ('delphi_designer', 'inline'): 'idem: la entrega del PNG de preview; la ruta es out, probada arriba',
     ('delphi_designer', 'state'): 'estado de vista Componente.Propiedad=Valor (su "file" es "never written '
         'to the file"); viaja al renderizador como un valor, comillas negadas (DSGN-065)',
+    ('delphi_designer', 'index'): 'entero: la posicion del componente entre sus hermanos (3.11; su '
+        'descripcion habla del orden del FICHERO); lo prueba test_designer_orden',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
     ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',

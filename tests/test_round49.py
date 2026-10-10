@@ -167,6 +167,23 @@ try:
     check('E4 cada gemela sigue vigilando su extension (un .md no es de delphi_edit)',
           mc.rechazado(r) and mc.es(r, 'SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT')
           and 'delphi_textedit' in r, r[:200])
+    # ...tambien en una TANDA cuya entrada es un BLOQUE: la rama de bloque no
+    # pasaba por la puerta de delphi_edit, escribia un .md y un form que el
+    # parser del IDE no lee sin decir nada (medido el 10-oct-2026)
+    nota = os.path.join(JAIL, 'NOTA.md')
+    open(nota, 'wb').write(b'uno\r\ndos\r\ntres\r\n')
+    r = call('delphi_edit', {'path': nota, 'edits': json.dumps([
+        {'old': 'uno\r\ndos', 'new': 'uno\r\nDOS'}])})
+    check('E5 tanda de delphi_edit con una entrada de bloque: un .md se niega igual (EDIT-032)',
+          mc.rechazado(r) and mc.es(r, 'SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT') and
+          open(nota, 'rb').read() == b'uno\r\ndos\r\ntres\r\n', r[:200])
+    fmx = os.path.join(JAIL, 'UTanda.fmx')
+    open(fmx, 'wb').write(b"object Form1: TForm1\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'F'\r\nend\r\n")
+    r = call('delphi_edit', {'path': fmx, 'edits': json.dumps([
+        {'old': "  Top = 0\r\n  Caption = 'F'", 'new': "  Top = 0\r\n  // y\r\n  Caption = 'F'"}])})
+    check('E6 ...y un form escrito por un bloque lo juzga el parser del IDE (DSGN-123), como una linea',
+          mc.es(r, 'SN_PATCH_EDITS_OK_FMT') and mc.es(r, 'SN_DSGN_PARSER_FMT') and
+          b'// y' in open(fmx, 'rb').read(), r[:300])
 
     # ------------------------------------------------------------ changeset
     planta()

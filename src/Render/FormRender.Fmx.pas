@@ -358,14 +358,15 @@ begin
         (if Raiz is TFrame then 'frame' else 'form')]));
       Responde(FR_PACKAGES, Format('%d/%d', [Cargados, Conocidos]));
       Responde(FR_COMPONENTS, IntToStr(Raiz.ComponentCount));
-      if Cargador.Sustituidas.Count > 0 then
-        Responde(FR_SUBSTITUTED, string.Join(',', Cargador.Sustituidas.ToStringArray));
-      for var S in Cargador.Ignoradas do
-        Responde(FR_IGNORED, S);
-      for var S in Cargador.Avisos do
-        Aviso(S);
+      RespondeLoLeido(Cargador);
       // los no visuales, SIEMPRE: se dibujen o no, el agente sabe que estan
       Responde(FR_NONVISUALS, ListaDeNoVisuales(NoVisualesDe(Raiz, TControl)));
+      // el juez de lo que guarda el IDE (3.11): escrito por TWriter, sin pintar
+      if GPeticion.Escribe then
+      begin
+        EscribeComoElIde(Raiz);
+        Exit;
+      end;
       Responde(FR_STYLE, AplicaEstilo(F));
       for var S in GPeticion.Estados do
         AplicaEstado(Raiz, S);

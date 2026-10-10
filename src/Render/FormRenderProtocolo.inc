@@ -20,6 +20,10 @@
   FR_RECT = 'RECT=';             // RECT=<Nombre>=<izq>,<arriba>,<ancho>,<alto> del componente pedido, en pixeles del png
   FR_STYLE = 'STYLE=';           // STYLE=<que estilo se aplico y de donde>
   FR_WARNING = 'WARNING=';       // WARNING=<aviso> (repetible)
+  FR_PARTIAL = 'PARTIAL=';       // PARTIAL=<ancestro o fichero> sin el que se leyo el form (repetible): el
+                                 // juez del orden no juzga un form a medias (revisor 6 del 3.11, A2)
+  FR_WRITTEN = 'WRITTEN=';       // WRITTEN=<una linea del form como lo guarda el IDE> (repetible, con sus
+                                 // blancos; --writeback on: el juez del orden, 3.11 de la 1.18.0)
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos
   FR_ERROR = 'ERROR=';           // ERROR=<motivo>; va con codigo de salida 1 (3 si fue el tiempo limite)
   FR_RC_OK = 0;

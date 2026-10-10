@@ -300,6 +300,15 @@ function NombreDelSalto(const ASalto: string): string;
   (quinta revision). La jaula va antes y la pone quien llama. }
 function NoEsFuenteDelphi(const APath: string): string;
 
+{ LO QUE delphi_edit EDITA, en una puerta: '' si APath es un fuente o un form
+  de texto; si no, la negativa (una carpeta, otra extension, un binario, una
+  copia de la papelera, de __history o de __recovery). La preguntan una
+  edicion (ExecutePatch) y la tanda de delphi_edit A LA ENTRADA, para todas
+  sus entradas: la rama de bloque de la tanda (ApplyBlockEdit) no pasa por
+  ExecutePatch y escribia un .md (medido el 10-oct-2026). La jaula va antes y
+  la pone quien llama. }
+function FicheroQueNoEditaDelphiEdit(const APath: string): string;
+
 { EL motor de tandas, escrito UNA vez.
 
   Aplica un array JSON de ediciones sobre UN fichero, EN ORDEN y TODO O NADA:
@@ -374,6 +383,11 @@ function LugarDeLecturaDenegado(const APath: string; ALugares: TLugaresDeTexto):
   leida, para quien vaya a reescribirlo por PatchSaveText. }
 function LeeTexto(const APath: string; ALugares: TLugaresDeTexto): string; overload;
 function LeeTexto(const APath: string; ALugares: TLugaresDeTexto; out AEncName: string): string; overload;
+{ EL decodificador de la puerta sobre unos BYTES ya leidos (DetectEnc +
+  DecodeBytes, lo que hace la lectura con los del disco): quien compara unos
+  bytes y parsea su texto lo saca de los MISMOS (el juez del orden del
+  disenador, revisor 6 del 3.11, B1). }
+function TextoDeBytes(const B: TArray<Byte>; AEsDesigner: Boolean; out AEncName: string): string;
 { ...y los BYTES, para quien los necesita enteros antes de decidir si son
   texto (lo que deja un test en su contenedor) o no lee texto (la version de
   la glibc de un sysroot): la misma pregunta y la misma negativa. }
@@ -1896,15 +1910,18 @@ end;
 
 { Los bytes de APath como texto, por EL detector: lo que leen las dos puertas
   de lectura (LeeTexto y PatchLoadText), una sola vez escrito. }
-function TextoDeFichero(const APath: string; out AEncName: string): string;
+function TextoDeBytes(const B: TArray<Byte>; AEsDesigner: Boolean; out AEncName: string): string;
 var
-  B: TBytes;
   K: TEncKind;
 begin
-  B := TFile.ReadAllBytes(APath);
-  K := DetectEnc(B, EsRutaDeDesigner(APath));
+  K := DetectEnc(B, AEsDesigner);
   AEncName := EncName(K);
   Result := DecodeBytes(B, K);
+end;
+
+function TextoDeFichero(const APath: string; out AEncName: string): string;
+begin
+  Result := TextoDeBytes(TFile.ReadAllBytes(APath), EsRutaDeDesigner(APath), AEncName);
 end;
 
 // EnAlgunLugar, la comparacion de los lugares, vive en Lsp.Rutas: la jaula
@@ -2499,6 +2516,8 @@ begin
     Result := Result + #10 + Aviso;
 end;
 
+function DesignerLint(const APath, ATexto, AEnc: string): TArray<string>; forward;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer): string;
 var
@@ -2587,6 +2606,15 @@ begin
     Escritas := 0;
   for var Aviso in AvisosDeLlaves(APath, Joined, Hit, Escritas) do
     Result := Result + #10 + Aviso;
+  // un form, juzgado como en la edicion de una linea (DoEdit): el parser del
+  // IDE y las tablas. Un bloque escribia un form que el IDE no abre sin decir
+  // nada (medido el 10-oct-2026: un // en un .fmx)
+  if EsRutaDeDesigner(APath) then
+  begin
+    Result := Result + #10 + MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO);
+    for var LintW in DesignerLint(APath, Joined, Enc) do
+      Result := Result + #10 + LintW;
+  end;
 end;
 
 function FragmentoALinea(const APath, AFrag, ANew: string; AAtLine: Integer;
@@ -3449,10 +3477,51 @@ begin
   Result := Cnt = 1;
 end;
 
+function FicheroQueNoEditaDelphiEdit(const APath: string): string;
+var
+  Ext: string;
+begin
+  // una carpeta decia "extension '' no soportada"
+  Result := CarpetaEnVezDeFichero(APath);
+  if Result <> '' then
+    Exit;
+  Ext := LowerCase(TPath.GetExtension(APath));
+  if not EsRutaDeFuente(APath) and not EsRutaDeDesigner(APath) then
+    Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
+  if TFile.Exists(APath) then
+  begin
+    var B: TArray<Byte>;
+    try
+      B := LeeBytes(APath, [ltJaula]);
+    except
+      // cogido por otro proceso: la negativa de la edicion, no un INTERNAL
+      on E: Exception do
+        Exit(MsgExcepcion(E.ClassName, E.Message));
+    end;
+    // "esto no es texto" es LooksBinaryBytes, la regla de delphi_read y de
+    // delphi_textedit: este motor editaba un .pas con bytes NUL (decima).
+    // Un designer binario tiene su negativa propia, que apunta a to-text.
+    // Two binary shapes exist (measured with the IDE's own convert.exe):
+    // a raw stream starts 'TPF0'; the REAL on-disk binary .dfm/.fmx wraps
+    // that stream in a 16-bit resource header whose first byte is $FF
+    // (FF 0A 00 + UPPERCASED name + the TPF0 stream at ~offset 19). A text
+    // form always begins with object/inherited/inline - never $FF.
+    if EsRutaDeFuente(APath) and LooksBinaryBytes(B) then
+      Exit(MsgFmt(SR_TEXT_PARECE_BINARIO_FMT, [TPath.GetFileName(APath)]));
+    if EsRutaDeDesigner(APath) and IsBinaryDesignerBytes(B) then
+      Exit(MsgFmt(SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT, [TPath.GetFileName(APath), Ext]));
+  end;
+  if EnPapelera(APath) then
+    Exit(MsgFmt(SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT, [TrashFolderName]));
+  var PLower := LongCanonical(APath).ToLower.Replace('/', '\');
+  if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
+    Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
+end;
+
 function ExecutePatch(const A: TPatchArgs): string;
 var
-  Ext, PLower: string;
-  IsDesigner, IsSource: Boolean;
+  Ext: string;
+  IsDesigner: Boolean;
   B: TBytes;
   K: TEncKind;
   Text: string;
@@ -3473,27 +3542,12 @@ begin
       // 2026-09-21: la regla entro en 1 de los 3 guardianes y delphi_edit
       // era el que faltaba).
       // -> ahora dentro de WriteTargetDenied, arriba (25-sep-2026).
-      // una carpeta decia "extension '' no soportada"
-      Result := CarpetaEnVezDeFichero(A.Path);
+      // lo que delphi_edit edita: UNA puerta, la misma de la tanda
+      Result := FicheroQueNoEditaDelphiEdit(A.Path);
       if Result <> '' then
         Exit;
       Ext := LowerCase(TPath.GetExtension(A.Path));
-      IsSource := EsRutaDeFuente(A.Path);
       IsDesigner := EsRutaDeDesigner(A.Path);
-      if not IsSource and not IsDesigner then
-        Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
-      // "esto no es texto" es LooksBinaryBytes, la regla de delphi_read y de
-      // delphi_textedit: este motor editaba un .pas con bytes NUL (decima).
-      // Solo un FUENTE: un designer binario (TPF0) tiene su negativa propia,
-      // que apunta a to-text
-      if IsSource and TFile.Exists(A.Path) and LooksBinaryBytes(TFile.ReadAllBytes(A.Path)) then
-        Exit(MsgFmt(SR_TEXT_PARECE_BINARIO_FMT, [TPath.GetFileName(A.Path)]));
-
-      PLower := LongCanonical(A.Path).ToLower.Replace('/', '\');
-      if EnPapelera(A.Path) then
-        Exit(MsgFmt(SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT, [TrashFolderName]));
-      if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
-        Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
 
       // MODO FRAGMENTO: se resuelve a un ancla de linea completa y sigue
       // por el motor de siempre (ver FragmentoALinea).
@@ -3611,14 +3665,7 @@ begin
         Exit(NoEsFichero(A.Path, MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [A.Path])));
 
       B := TFile.ReadAllBytes(A.Path);
-      // Two binary shapes exist (measured with the IDE's own convert.exe):
-      // a raw stream starts 'TPF0'; the REAL on-disk binary .dfm/.fmx wraps
-      // that stream in a 16-bit resource header whose first byte is $FF
-      // (FF 0A 00 + UPPERCASED name + the TPF0 stream at ~offset 19). A text
-      // form always begins with object/inherited/inline - never $FF.
-      if IsDesigner and IsBinaryDesignerBytes(B) then
-        Exit(MsgFmt(SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT,
-          [TPath.GetFileName(A.Path), Ext]));
+      // (un designer binario ya lo nego la puerta, FicheroQueNoEditaDelphiEdit)
 
       // (un BOM de UTF-8 con el cuerpo roto se negaba AQUI, EDIT-038, solo para
       // delphi_edit y tambien para restaurarlo; ahora lo pregunta cada

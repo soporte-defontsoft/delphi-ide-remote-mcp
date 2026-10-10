@@ -60,7 +60,15 @@ DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
 
 - `--state`: a view state applied through RTTI after the form is built and
   shown, never written to the file: `PageControl1.ActivePage=TabSheet2`,
-  `Edit1.Text=hello`. A class-typed value names a component.
+  `Edit1.Text=hello`. A class-typed value names a component, and an integer
+  with a name (`clRed`, `crHandPoint`, `claRed`) is read by its type's own
+  reader, as the form loader reads it.
+- `--writeback on` (with `--folder <dir>`): the judge of what the IDE saves.
+  No PNG: the form is loaded the same way and written by the IDE's own
+  writer (TWriter), each line as `WRITTEN=`. `--folder` is the folder of the
+  real form when `--path` is a proposal written elsewhere: its siblings
+  (frames, ancestors) and its `.pas` are read from there.
+  `delphi_designer set before=/after=/index=` asks it before writing.
 - `--component`: the renderer answers `RECT=<name>=l,t,w,h` in PNG pixels;
   the server crops with its own cropper (`Lsp.Imagen.RecortaPng`).
 - `--nonvisual on` (like the designer's "Show non-visual components"):
@@ -96,6 +104,11 @@ COMPONENTS=<n>
 SUBSTITUTED=<classes>         not found in any package: pink box with the name
 IGNORED=<reader error>        repeatable
 WARNING=<text>                repeatable
+PARTIAL=<ancestor or file>    repeatable: the form was read WITHOUT it (an
+                              ancestor with no .pas saying which, or with no
+                              form file in the folder)
+WRITTEN=<line>                repeatable, --writeback on: the form as the
+                              IDE's own writer saves it (no CAPTURE)
 NONVISUAL=<n>                 icons drawn (only with --nonvisual on)
 NONVISUALS=<Name:Class,...>   the root's non-visual components, drawn or not
 RECT=<name>=<l>,<t>,<w>,<h>   with --component
@@ -135,8 +148,7 @@ in the same folder (links are skipped), a style file.
 What a hostile file CAN do is feed bad values and binary blobs (pictures, image lists,
 collections) to the loaded classes and crash or stall the renderer. That is why it runs as a
 process of its own, with its watchdog and the server's own time limit, and why the server
-answers with the error instead of dying with it. A deeper adversarial pass is listed for
-1.18.0.
+answers with the error instead of dying with it.
 
 The server checks string literals and requested view-state values before starting the
 helper, using the existing form reader and read-path gate. The requested form and its

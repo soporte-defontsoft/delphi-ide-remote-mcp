@@ -38,6 +38,11 @@ type
     NoVisuales: Boolean;       // dibujar los no visuales
     Bds: string;               // la version del Delphi del servidor (37.0)
     Raiz: string;              // form | frame, por el lector de clases del servidor; '' = que mire el ayudante
+    // el JUEZ de lo que guarda el IDE (3.11 de la 1.18.0): sin png, el form
+    // cargado y escrito por TWriter (WRITTEN=); Carpeta, la del form de verdad
+    // cuando Path es una propuesta escrita en otra (sus hermanos y su .pas)
+    Escribe: Boolean;
+    Carpeta: string;
   end;
 
   { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
@@ -75,6 +80,8 @@ type
     RectX, RectY, RectW, RectH: Integer;
     MsCarga, MsPintado: Integer; // MS=
     MsTotal: Int64;            // lo que tardo de verdad, lanzamiento incluido
+    Escrito: TArray<string>;   // WRITTEN=: el form como lo guarda el IDE, con sus blancos
+    SinLeer: TArray<string>;   // PARTIAL=: sin que ancestro (o fichero) se leyo el form
   end;
 
 { El renderizador de AFramework (vcl|fmx) junto al exe del servidor; '' si
@@ -110,6 +117,25 @@ function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
   cual si ya lleva su etiqueta). Nunca lanza. }
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
 
+{ EL JUEZ de lo que guarda el IDE (3.11 de la 1.18.0; norma 6: lo que dice un
+  juez real se le pregunta): ATexto, un form PROPUESTO para APath (en AEnc),
+  cargado por el renderizador de su framework como lo carga el designer -
+  modo diseno, los paquetes del IDE, sus frames y ancestros desde la carpeta
+  de APath - y escrito por TWriter, lo que hace el IDE al guardar: AEscrito.
+  ASustituidas, las clases que no pudo cargar (su sustituto no sabe como las
+  escribe el IDE); ASinLeer, los ancestros sin los que leyo el form (PARTIAL=:
+  un juicio a medias). '' si bien; si no, el fallo. La propuesta se escribe en
+  una carpeta de descarga del temporal del disenador y se borra siempre. }
+function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
+  out ASustituidas, AAvisos, ASinLeer: TArray<string>): string;
+
+{ LO COMUN de una peticion de render para el form APath (ya por la puerta de
+  lectura): el framework (AFramework, o el del fichero si va vacio), la ruta,
+  el Delphi del servidor y form o frame por EL lector de clases si su .pas se
+  deja leer. Lo componian a mano preview y el juez (revisor 5 de la noche,
+  B3); el resto (salida, estado, estilo...) lo pone cada uno. }
+function PeticionDeRender(const APath, AFramework: string): TPeticionRender;
+
 implementation
 
 uses
@@ -124,7 +150,10 @@ uses
   Lsp.Texts,
   Lsp.Styles,
   Lsp.DesignerBin,
-  Lsp.Casa;         // ServerDir: la carpeta del exe del servidor
+  Lsp.Casa,         // ServerDir: la carpeta del exe del servidor
+  Lsp.Patch,        // EscribeTexto: la puerta de escribir, la propuesta del juez
+  Lsp.Codificacion, // EncKindOf
+  Lsp.Discovery;    // DiscoverRadStudio: el Delphi del servidor
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -194,13 +223,21 @@ begin
   // un valor vacio no se pasa nunca: el lector de Delphi se salta un "" y
   // tomaria el interruptor siguiente como valor
   for var V in TArray<string>.Create(APeticion.Path, APeticion.Salida,
-    APeticion.Componente, APeticion.Estilo, APeticion.Bds) + APeticion.Estados do
+    APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.Carpeta) + APeticion.Estados do
     if not ValorDeArgumento(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
-  AOrden := '"' + AExe + '"' + Arg('--path', APeticion.Path) +
-    Arg('--out', APeticion.Salida) +
-    ' --nonvisual ' + (if APeticion.NoVisuales then 'on' else 'off') +
-    ' --timeout ' + IntToStr(RENDER_TIEMPO_AYUDANTE_MS);
+  AOrden := '"' + AExe + '"' + Arg('--path', APeticion.Path);
+  // el juez no pinta: sin --out (3.11)
+  if APeticion.Escribe then
+  begin
+    AOrden := AOrden + ' --writeback on';
+    if APeticion.Carpeta <> '' then
+      AOrden := AOrden + Arg('--folder', APeticion.Carpeta);
+  end
+  else
+    AOrden := AOrden + Arg('--out', APeticion.Salida) +
+      ' --nonvisual ' + (if APeticion.NoVisuales then 'on' else 'off');
+  AOrden := AOrden + ' --timeout ' + IntToStr(RENDER_TIEMPO_AYUDANTE_MS);
   if APeticion.Bds <> '' then
     AOrden := AOrden + Arg('--bds', APeticion.Bds);
   for var E in APeticion.Estados do
@@ -330,6 +367,10 @@ begin
         Result.MsPintado := StrToIntDef(Trozos[1], 0);
       end;
     end
+    else if Es(FR_WRITTEN) then
+      Result.Escrito := Result.Escrito + [V]
+    else if Es(FR_PARTIAL) then
+      Result.SinLeer := Result.SinLeer + [V]
     else if Es(FR_ERROR) then
       Result.Error := V;
   end;
@@ -368,7 +409,7 @@ var
     end;
   end;
 
-  function CompruebaForm(const ARuta: string): string;
+  function CompruebaForm(const ARuta: string; AEnTemporal: Boolean = False): string;
   begin
     Result := '';
     // 65 MiB de texto costaron 416 MiB en el servidor; la pasada previa
@@ -377,7 +418,12 @@ var
     Inc(BytesLeidos, TFile.GetSize(ARuta));
     if BytesLeidos > TOPE_LITERAL_BYTES then
       Exit(MsgFmt(SR_DESIGNER_LITERAL_TOPE_FMT, [TOPE_LITERAL_BYTES div (1024 * 1024)]));
-    Doc := TStyleDoc.Create(ARuta); // tambien el binario, por el lector existente
+    // la propuesta del juez vive en el temporal del servidor, que la puerta
+    // de la jaula no lee: por su lugar, y es texto (la escribio el servidor)
+    if AEnTemporal then
+      Doc := TStyleDoc.DeTexto(LeeTexto(ARuta, [ltTemporal]))
+    else
+      Doc := TStyleDoc.Create(ARuta); // tambien el binario, por el lector existente
     try
       Form := LineasDeForm(Doc.Lines);
       for var I := 0 to High(Doc.Lines) do
@@ -418,14 +464,28 @@ var
 begin
   Result := '';
   BytesLeidos := 0;
-  Bases := [TPath.GetDirectoryName(APeticion.Path),
-    TPath.GetDirectoryName(APeticion.Salida)];
+  // las carpetas desde las que el ayudante resuelve un relativo y en las que
+  // busca hermanos: la del fichero que lee, la del png (su cwd) y, cuando el
+  // fichero es una propuesta escrita en otra, la del form de verdad (--folder:
+  // de ahi lee frames y ancestros). Una base que no mira es un relativo que
+  // pasa la puerta (revisor 3 de la noche, A-1)
+  var Hermanos := TPath.GetDirectoryName(APeticion.Path);
+  if APeticion.Carpeta <> '' then
+    Hermanos := APeticion.Carpeta;
+  Bases := [TPath.GetDirectoryName(APeticion.Path)];
+  if APeticion.Salida <> '' then
+    Bases := Bases + [TPath.GetDirectoryName(APeticion.Salida)];
+  if APeticion.Carpeta <> '' then
+    Bases := Bases + [APeticion.Carpeta];
   try
-    Result := CompruebaForm(APeticion.Path);
+    // lo que se le da a leer al ayudante, TAMBIEN la propuesta del juez
+    // (Carpeta): el form de verdad se leyo en otro momento y un escritor que
+    // esperaba el cerrojo pudo cambiarlo (revisor 6 del 3.11, M1)
+    Result := CompruebaForm(APeticion.Path, APeticion.Carpeta <> '');
     if Result <> '' then
       Exit;
     // Los frames y ancestros que el ayudante puede resolver son hermanos.
-    for var Hermano in WalkFiles(Bases[0], ['*' + ExtractFileExt(APeticion.Path)], False, False) do
+    for var Hermano in WalkFiles(Hermanos, ['*' + ExtractFileExt(APeticion.Path)], False, False) do
       if not EsEnlace(Hermano) and not SameFileName(Hermano, APeticion.Path) then
       begin
         Result := CompruebaForm(Hermano);
@@ -475,9 +535,16 @@ begin
   end;
   Reloj := TStopwatch.StartNew;
   try
-    // en la carpeta del png: nada relativo del ayudante cae en la del servidor
-    Salida := RunCapturedIn(Orden, TPath.GetDirectoryName(APeticion.Salida),
-      RENDER_TIEMPO_MS, Codigo);
+    // en la carpeta del png, o la del form (el juez que no pinta: la del form
+    // de verdad, no la de su propuesta, que esta en el temporal del
+    // servidor): nada relativo del ayudante cae en la casa del servidor
+    // (revisor 6 del 3.11, B6)
+    var Cwd := TPath.GetDirectoryName(APeticion.Path);
+    if APeticion.Salida <> '' then
+      Cwd := TPath.GetDirectoryName(APeticion.Salida)
+    else if APeticion.Carpeta <> '' then
+      Cwd := APeticion.Carpeta;
+    Salida := RunCapturedIn(Orden, Cwd, RENDER_TIEMPO_MS, Codigo);
   except
     on E: Exception do
     begin
@@ -488,7 +555,8 @@ begin
   Result := LeeRespuestaDeRender(Salida);
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;
-  if (Codigo = FR_RC_OK) and (Result.Error = '') and TFile.Exists(APeticion.Salida) then
+  if (Codigo = FR_RC_OK) and (Result.Error = '') and
+     (if APeticion.Escribe then Length(Result.Escrito) > 0 else TFile.Exists(APeticion.Salida)) then
     Exit;
   if Result.Error <> '' then
     // con etiqueta (un estado que no existe, el vigia) sale tal cual
@@ -502,6 +570,69 @@ begin
   else
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_FALLO_FMT, [TPath.GetFileName(APeticion.Path),
       MsgFmt(SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT, [Codigo, Copy(Salida.Trim, 1, 300)])]);
+end;
+
+function PeticionDeRender(const APath, AFramework: string): TPeticionRender;
+begin
+  Result := Default(TPeticionRender);
+  Result.Framework := AFramework;
+  if Result.Framework = '' then
+    Result.Framework := (if EsDesignerFmx(APath) then 'fmx' else 'vcl');
+  Result.Path := APath;
+  Result.Bds := DiscoverRadStudio.Version;
+  // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
+  // lo adivinaba con su regex. Sin .pas legible, o sin saberlo, que mire el
+  var Pas := UnidadDeDesigner(APath);
+  if TFile.Exists(Pas) and (ReadPathDenied(Pas) = '') then
+    Result.Raiz := RaizParaElRender(APath);
+end;
+
+function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
+  out ASustituidas, AAvisos, ASinLeer: TArray<string>): string;
+var
+  Pet: TPeticionRender;
+  R: TRespuestaRender;
+  Dir, Cand: string;
+begin
+  Result := '';
+  AEscrito := '';
+  ASustituidas := [];
+  AAvisos := [];
+  ASinLeer := [];
+  // una carpeta de descarga de ESTA llamada en el temporal del SERVIDOR (EL
+  // nombrador: el guard del borrado la reconoce), con la propuesta bajo el
+  // nombre del form de verdad: su .pas y sus hermanos los lee el ayudante de
+  // la carpeta de APath (--folder). Es del servidor, no un entregable del
+  // agente: en el __delphi-temp de la raiz la escritura pasaba por la puerta
+  // del agente y el confinamiento la negaba (revisor 5 de la noche, M1)
+  Dir := NuevaCarpetaDescarga(ServerTempDir(CAPTURE_SUB_DESIGNER));
+  try
+    try
+      CrearCarpeta(Dir);
+      Cand := TPath.Combine(Dir, TPath.GetFileName(APath));
+      EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc));
+    except
+      on E: Exception do
+        Exit(MsgExcepcion(E.ClassName, E.Message));
+    end;
+    Pet := PeticionDeRender(APath, '');
+    Pet.Path := Cand;
+    Pet.Carpeta := TPath.GetDirectoryName(APath);
+    Pet.Escribe := True;
+    R := CorreRender(Pet);
+    if R.Fallo <> '' then
+      Exit(R.Fallo);
+    AEscrito := string.Join(#13#10, R.Escrito);
+    ASustituidas := R.Sustituidas;
+    AAvisos := R.Avisos;
+    ASinLeer := R.SinLeer;
+  finally
+    try
+      BorraArbol(Dir); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
+    except
+      // limpiar no puede tumbar la respuesta
+    end;
+  end;
 end;
 
 end.

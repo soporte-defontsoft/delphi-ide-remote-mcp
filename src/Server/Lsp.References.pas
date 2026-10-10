@@ -525,7 +525,14 @@ begin
       begin
         // Same 1-based-Pos-as-character convention the candidate loop uses
         // below: a position one char into the identifier, never its edge.
-        var TwinCol := Pos(Ident.ToLower, TwinLines[TargetLine].ToLower);
+        // El identificador ENTERO (EL patron de Lsp.Pascal): en
+        // 'procedure TFooBar.Bar;' un Pos a secas caia dentro de TFooBar y el
+        // gemelo salia la clase (medido el 10-oct-2026; no cambiaba la
+        // respuesta: ningun candidato de 'Bar' resuelve a la clase)
+        var TwinCol := 0;
+        var MTwin := TRegEx.Match(TwinLines[TargetLine], PatronIdentEntero(Ident), [roIgnoreCase]);
+        if MTwin.Success then
+          TwinCol := MTwin.Index;
         if TwinCol > 0 then
         begin
           Resp := Client.Definition(TargetUri, TargetLine, TwinCol);

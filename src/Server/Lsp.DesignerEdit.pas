@@ -101,8 +101,11 @@ function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
 // insert, o varias de set de una vez; todo o nada, cada una juzgada como set
 function InsertaComponente(const APath, AClase, AComponente, AParent: string;
   const AProps: string = ''): string;
+// ABefore / AAfter / AIndex (3.11 de la 1.18.0): el orden del componente entre
+// sus hermanos, si el IDE lo guarda ahi (AIndex 1 = el primero; -1 = no se pide)
 function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: string;
-  const AProps: string = ''): string;
+  const AProps: string = ''; const ABefore: string = ''; const AAfter: string = '';
+  AIndex: Integer = -1): string;
 function BorraComponente(const APath, AComponente: string): string;
 
 implementation
@@ -130,7 +133,8 @@ uses
   Lsp.DesignerMetaGen, // la unidad de una clase (UnidadDeIdDeTipo)
   Lsp.DesignerBinding, // EL lector de la linea de evento; los avisos del binding
   Lsp.ProjectUnits,    // UsesConUnidades: el uses de la unidad
-  Lsp.TodoONada;       // FicherosTodoONada
+  Lsp.TodoONada,       // FicherosTodoONada
+  Lsp.FormRender;      // ComoLoEscribeElIde: el juez del orden entre hermanos (3.11)
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)
@@ -1011,6 +1015,9 @@ function PonEnMemoria(const F: TFormEnEdicion; const ANombre, AProp, AValor: str
   out AInfo: TValorPuesto): string; forward;
 function ParesDeProps(const AProps: string; out AProps_, AValores: TArray<string>): string; forward;
 procedure PonValorPuesto(AObj: TJSONObject; const ANombre: string; const AInfo: TValorPuesto); forward;
+// EL movimiento de un bloque de form (set parent= y el orden, 3.11)
+function ConBloqueMovido(const ALineas, ABloque: TArray<string>; AIni, ALargo: Integer;
+  var ADest: Integer): TArray<string>; forward;
 
 { P puede recibir un control: el form, o en VCL un control con ventana
   (TWinControl por ascendencia: David, 4-oct-2026) y en FMX un control.
@@ -2172,12 +2179,8 @@ begin
         Insert(LineasDePropiedad(SangriaDeNivel(Padre.Depth + 2), 'TabOrder', [IntToStr(Tab)]),
           Bloque, 1);
     end;
-    Lineas := Copy(F.Doc.Lines);
-    Delete(Lineas, Ini, Largo);
     Dest := Padre.EndLine - 1;
-    if Dest > Fin then
-      Dec(Dest, Largo);
-    Insert(Bloque, Lineas, Dest);
+    Lineas := ConBloqueMovido(F.Doc.Lines, Bloque, Ini, Largo, Dest);
     // los nombres ANTES de guardar: Guarda relee el arbol y estos objetos se van
     NomObj := NombreDe(Obj);
     NomViejo := NombreDe(Viejo);
@@ -2286,11 +2289,309 @@ begin
   end;
 end;
 
+{ ---- el orden entre hermanos (3.11 de la 1.18.0) ---- }
+
+{ Los nombres de los hijos de ANombre en un texto de form, en su orden (la
+  raiz por su nombre tambien): lo que se compara con el juez. El parser de
+  siempre (TStyleDoc.DeTexto), sobre la propuesta y sobre lo que escribio
+  TWriter. }
+function HijosEnTexto(const ATexto, ANombre: string): TArray<string>;
+var
+  Doc: TStyleDoc;
+  P: TStyleObj;
+begin
+  Result := [];
+  Doc := TStyleDoc.DeTexto(ATexto);
+  try
+    if (Doc.Root <> nil) and SameText(Doc.Root.ObjName, ANombre) then
+      P := Doc.Root
+    else
+      P := ObjetoPorNombre(Doc, ANombre);
+    if P = nil then
+      Exit;
+    for var H in P.Children do
+      if H.ObjName <> '' then
+        Result := Result + [H.ObjName];
+  finally
+    Doc.Free;
+  end;
+end;
+
+// la posicion de AN en AL (un Name: sin mayusculas), -1 si no esta
+function NombreEn(const AL: TArray<string>; const AN: string): Integer;
+begin
+  for var I := 0 to High(AL) do
+    if SameText(AL[I], AN) then
+      Exit(I);
+  Result := -1;
+end;
+
+{ El juez guarda a ANombre donde lo pusimos. Con before=/after= (ARef, el
+  hermano que nombra el agente): respecto a ARef queda del lado pedido, y
+  respecto a CADA hermano que la orden le hace SALTAR (el que estaba delante y
+  queda detras, o al reves) del mismo lado en lo escrito; los que no salta no
+  son de esta llamada: un fichero que ya no estaba en el orden del IDE lo
+  guardaria el IDE a su manera de todas formas (revisor 5 de la noche, M3:
+  comparar con todos negaba en falso). Con index= (ARef vacio) la promesa es
+  una POSICION: respecto a todos (revisor 6, A1: sin la referencia, un TLabel
+  'detras de Button1' lo guardaba el IDE delante, y uno 'en la 2' en la 1).
+  Que lo escrito los traiga a todos lo mira quien llama. }
+function MismaPosicion(const ANombre, ARef: string; const AOriginal, ANuestro, ASuyo: TArray<string>): Boolean;
+var
+  PO, PN, PS: Integer;
+begin
+  PO := NombreEn(AOriginal, ANombre);
+  PN := NombreEn(ANuestro, ANombre);
+  PS := NombreEn(ASuyo, ANombre);
+  if (PO < 0) or (PN < 0) or (PS < 0) then
+    Exit(False);
+  for var S in ANuestro do
+    if not SameText(S, ANombre) then
+    begin
+      var Delante := NombreEn(ANuestro, S) < PN;
+      if (ARef = '') or SameText(S, ARef) or (Delante <> (NombreEn(AOriginal, S) < PO)) then
+      begin
+        var SS := NombreEn(ASuyo, S);
+        if (SS < 0) or ((SS < PS) <> Delante) then
+          Exit(False);
+      end;
+    end;
+  Result := True;
+end;
+
+{ ALineas sin el bloque [AIni, AIni + ALargo) y con ABloque en ADest (un
+  indice de ALineas ANTES de quitarlo, fuera del bloque); ADest sale donde
+  quedo. EL movimiento de un bloque de form: el de set parent= y el de
+  before=/after=/index= (revisor 4 de la noche, B4: estaba dos veces) }
+function ConBloqueMovido(const ALineas, ABloque: TArray<string>; AIni, ALargo: Integer;
+  var ADest: Integer): TArray<string>;
+begin
+  Result := Copy(ALineas);
+  Delete(Result, AIni, ALargo);
+  if ADest > AIni + ALargo - 1 then
+    Dec(ADest, ALargo);
+  Insert(ABloque, Result, ADest);
+end;
+
+{ set before= / after= / index=: el bloque del componente, entero, a su sitio
+  nuevo entre sus hermanos, SOLO si el IDE lo guarda ahi - se le pregunta
+  (ComoLoEscribeElIde: la propuesta cargada como la carga el designer y
+  escrita por TWriter). No hay lista propia de que va delante de que: la
+  VCL escribe los graficos antes que las ventanas, un TToolBar en el orden de
+  sus botones, una form heredada coloca por su [n], FMX deja al final lo que
+  no es TFmxObject... y eso lo dice el juez (norma 6; revisor 4 de la noche,
+  M5: la primera version imitaba al juez con una lista y ya se desviaba en
+  tres sitios). La sangria no cambia (mismo padre), el TabOrder tampoco. }
+function OrdenaComponente(const APath, AComponente, ABefore, AAfter: string;
+  AIndex: Integer): string;
+var
+  F: TFormEnEdicion;
+  Obj, Ref, Padre: TStyleObj;
+  Hermanos, Resto: TArray<TStyleObj>;
+  Lineas: TArray<string>;
+  Ini, Largo, Dest, Pos0, Nuevo: Integer;
+  NomObj, NomPadre, NomRef, Donde, Texto, Escrito: string;
+  Sustituidas, Avisos, SinLeer, Original, Nuestro, Suyo, Faltan: TArray<string>;
+  Antes: TArray<Byte>;
+  Ret: TJSONObject;
+begin
+  // los bytes que se juzgan: el juez corre SIN el cerrojo (segundos), y lo
+  // que se escribe al final tiene que salir de lo mismo. Abrir y leer, CON el
+  // cerrojo: entre las dos lecturas no se cuela ningun escritor del servidor
+  F := Default(TFormEnEdicion);
+  EnterFileEdit;
+  try
+    try
+      Result := AbreForm(APath, False, False, F);
+      if Result = '' then
+      begin
+        Antes := LeeBytes(F.Dfm, [ltJaula]);
+        // ...y lo parseado sale de ESOS bytes: un escritor de fuera (el IDE)
+        // entre las dos lecturas haria juzgar unos y escribir otros
+        // (revisor 6 del 3.11, B1)
+        var EncAntes: string;
+        var LineasAntes := SplitToLines(TextoDeBytes(Antes, True, EncAntes));
+        var Iguales := (EncAntes = F.Doc.Encoding) and (Length(LineasAntes) = Length(F.Doc.Lines));
+        for var I := 0 to High(LineasAntes) do
+          if Iguales and (LineasAntes[I] <> F.Doc.Lines[I]) then
+            Iguales := False;
+        if not Iguales then
+          Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]);
+      end;
+    except
+      FreeAndNil(F.Doc);
+      raise;
+    end;
+  finally
+    LeaveFileEdit;
+  end;
+  if Result <> '' then
+  begin
+    FreeAndNil(F.Doc); // nil si AbreForm fallo; abierto si los bytes no eran los leidos
+    Exit;
+  end;
+  try
+    Result := BuscaComponente(F, AComponente, Obj);
+    if Result <> '' then
+      Exit;
+    Result := QueNoSeToca(F, Obj);
+    if Result <> '' then
+      Exit;
+    Padre := Obj.Parent;
+    NomObj := NombreDe(Obj);
+    NomPadre := NombreDe(Padre);
+    Hermanos := [];
+    Original := [];
+    for var H in Padre.Children do
+    begin
+      Hermanos := Hermanos + [H];
+      if H.ObjName <> '' then
+        Original := Original + [H.ObjName];
+    end;
+    Pos0 := -1;
+    Resto := [];
+    for var I := 0 to High(Hermanos) do
+      if Hermanos[I] = Obj then
+        Pos0 := I
+      else
+        Resto := Resto + [Hermanos[I]];
+    // la posicion nueva, contada entre los DEMAS hermanos
+    NomRef := '';
+    if (ABefore.Trim <> '') or (AAfter.Trim <> '') then
+    begin
+      Result := BuscaComponente(F, ABefore.Trim + AAfter.Trim, Ref);
+      if Result <> '' then
+        Exit;
+      NomRef := NombreDe(Ref);
+      if Ref = Obj then
+        Exit(MsgFmt(SR_DESIGNER_ORDEN_SI_MISMO_FMT, [NomObj]));
+      if Ref.Parent <> Padre then
+        Exit(MsgFmt(SR_DESIGNER_ORDEN_NO_HERMANO_FMT, [NomObj, NomPadre, NomRef,
+          (if Ref.Parent = nil then MsgText(SF_DESIGNER_ES_EL_FORM) else NombreDe(Ref.Parent))]));
+      Nuevo := 0;
+      while Resto[Nuevo] <> Ref do
+        Inc(Nuevo);
+      if AAfter.Trim <> '' then
+      begin
+        Inc(Nuevo);
+        Donde := MsgFmt(SF_DESIGNER_ORDEN_DETRAS_DE_FMT, [NomRef]);
+      end
+      else
+        Donde := MsgFmt(SF_DESIGNER_ORDEN_DELANTE_DE_FMT, [NomRef]);
+    end
+    else
+    begin
+      if (AIndex < 1) or (AIndex > Length(Hermanos)) then
+        Exit(MsgFmt(SR_DESIGNER_ORDEN_INDICE_FMT, [AIndex, NomObj, Length(Hermanos), NomPadre,
+          Length(Hermanos)]));
+      Nuevo := AIndex - 1;
+      Donde := MsgFmt(SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT, [AIndex]);
+    end;
+    if Nuevo = Pos0 then
+      Exit(MsgFmt(SN_DESIGNER_ORDEN_YA_ESTA_FMT, [NomObj, Pos0 + 1, Length(Hermanos), NomPadre]));
+    // el bloque, delante del que ocupara su sitio o detras del ultimo hermano
+    Ini := Obj.StartLine - 1;
+    Largo := Obj.EndLine - Obj.StartLine + 1;
+    if Nuevo < Length(Resto) then
+      Dest := Resto[Nuevo].StartLine - 1
+    else
+      Dest := Resto[High(Resto)].EndLine;
+    Lineas := ConBloqueMovido(F.Doc.Lines, Copy(F.Doc.Lines, Ini, Largo), Ini, Largo, Dest);
+    Texto := F.Doc.TextoDe(Lineas);
+    // EL JUEZ: el IDE, cargando la propuesta, la guardaria con el ahi?
+    Result := ComoLoEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer);
+    if Result <> '' then
+      Exit;
+    // un ancestro que el ayudante no encontro (sin .pas que lo diga o sin
+    // fichero en la carpeta): leyo el form SIN el y su orden no es el del IDE,
+    // aunque ningun hermano escrito falte (revisor 6 del 3.11, A2: un [n]
+    // propio se colocaba sobre la lista sin los heredados)
+    if Length(SinLeer) > 0 then
+      Exit(MsgFmt(SR_DESIGNER_ORDEN_INCOMPLETO_FMT, [NomObj, string.Join(', ', SinLeer),
+        (if Length(Avisos) > 0 then string.Join('; ', Avisos) else '-')]));
+    // un hermano - o el PADRE (revisor 5, M2) - que el ayudante no pudo cargar
+    // lo escribe su sustituto, no su clase: donde lo dejaria el IDE no se sabe
+    for var S in Sustituidas do
+    begin
+      if SameText(Padre.ClassName_, S) then
+        Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [NomObj, Padre.ClassName_, NomPadre]));
+      for var H in Hermanos do
+        if SameText(H.ClassName_, S) then
+          Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [NomObj, H.ClassName_, NombreDe(H)]));
+    end;
+    Nuestro := HijosEnTexto(Texto, NomPadre);
+    Suyo := HijosEnTexto(Escrito, NomPadre);
+    // lo que el juez no escribio no lo cargo (un componente que el lector
+    // salto; un ancestro sin leer ya lo dijo PARTIAL= arriba): juzgaria un
+    // form a medias (revisor 5 de la noche, A2 y B6)
+    Faltan := [];
+    for var N in Nuestro do
+      if NombreEn(Suyo, N) < 0 then
+        Faltan := Faltan + [N];
+    if (Length(Nuestro) = 0) or (Length(Faltan) > 0) then
+      Exit(MsgFmt(SR_DESIGNER_ORDEN_INCOMPLETO_FMT, [NomObj,
+        (if Length(Faltan) > 0 then string.Join(', ', Faltan) else NomPadre),
+        (if Length(Avisos) > 0 then string.Join('; ', Avisos) else '-')]));
+    if not MismaPosicion(NomObj, NomRef, Original, Nuestro, Suyo) then
+      Exit(MsgFmt(SR_DESIGNER_ORDEN_EL_IDE_FMT, [NomObj, Donde, NomPadre, string.Join(', ', Suyo)]));
+    // con el cerrojo, solo releer y escribir: el fichero tiene que ser el que
+    // se juzgo (revisor 5 de la noche, A3)
+    EnterFileEdit;
+    try
+      var Ahora: TArray<Byte>;
+      try
+        Ahora := LeeBytes(F.Dfm, [ltJaula]);
+      except
+        // borrado o renombrado mientras juzgaba (revisor 6 del 3.11, B2)
+        Exit(MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]));
+      end;
+      if not BytesIguales(Antes, Ahora) then
+        Exit(MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]));
+      F.Doc.SetLines(Lineas);
+      Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+    finally
+      LeaveFileEdit;
+    end;
+    if Result <> '' then
+      Exit;
+    Ret := TJSONObject.Create;
+    try
+      Ret.AddPair('ordered', NomObj);
+      if ABefore.Trim <> '' then
+        Ret.AddPair('before', NomRef)
+      else if AAfter.Trim <> '' then
+        Ret.AddPair('after', NomRef);
+      Ret.AddPair('parent', NomPadre);
+      Ret.AddPair('index', TJSONNumber.Create(Nuevo + 1));
+      Ret.AddPair('of', TJSONNumber.Create(Length(Hermanos)));
+      Ret.AddPair('file', F.DfmNombre);
+      Ret.AddPair('line', TJSONNumber.Create(Dest + 1));
+      Ret.AddPair('endLine', TJSONNumber.Create(Dest + Largo));
+      Ret.AddPair('note', MsgText(SN_DESIGNER_ORDEN_NOTA));
+      PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
+      Result := Ret.ToJSON;
+    finally
+      Ret.Free;
+    end;
+  finally
+    F.Doc.Free;
+  end;
+end;
+
 function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: string;
-  const AProps: string): string;
+  const AProps: string; const ABefore: string; const AAfter: string;
+  AIndex: Integer): string;
 begin
   if AComponente.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_COMPONENT));
+  // el orden entre hermanos (3.11 de la 1.18.0): UNO de los tres, solo
+  if (ABefore.Trim <> '') or (AAfter.Trim <> '') or (AIndex >= 0) then
+  begin
+    if (Ord(ABefore.Trim <> '') + Ord(AAfter.Trim <> '') + Ord(AIndex >= 0) > 1) or
+       (AProp.Trim <> '') or (AValor.Trim <> '') or (AParent.Trim <> '') or (AProps.Trim <> '') then
+      Exit(MsgText(SR_DESIGNER_ORDEN_SOLO));
+    Exit(OrdenaComponente(APath, AComponente, ABefore, AAfter, AIndex));
+  end;
   // varias de una vez (props, 3.10 de la 1.18.0): sin prop/value ni parent
   if AProps.Trim <> '' then
   begin

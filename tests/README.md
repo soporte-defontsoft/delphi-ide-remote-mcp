@@ -7,7 +7,8 @@ an MCP client would (stdio JSON-RPC or HTTP), plus the release gate:
   batteries that plant a `settings.ini` next to it never pollute the build)
   and prints one summary line: `N baterias | N checks OK | N fallos`.
 - `release_check.py` — the gate: version sources agree, the exe embeds the
-  version, docs are coherent, the regression is green, and it packages the
+  version, docs are coherent, `skills/SKILL.md` ends with the mark of the
+  version whose contract was reviewed, the regression is green, and it packages the
   release zip with its SHA-256. `--skip-regression` when a full run just
   passed.
 - `paclient_stub.py` — a fake `paclient.exe` (via `DELPHI_MCP_PACLIENT`) that

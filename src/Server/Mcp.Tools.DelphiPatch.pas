@@ -177,6 +177,11 @@ begin
   // aplica UNA edicion suelta sobre un fuente Pascal. Eran 132 lineas con un
   // 78% identico a las de delphi_textedit, y esa duplicacion se cobro el bug
   // de "occurrence" DOS veces el mismo dia.
+  // Lo que delphi_edit edita, para TODAS las entradas: las de bloque no pasan
+  // por ExecutePatch (10-oct-2026: una tanda de un bloque escribia un .md)
+  Result := FicheroQueNoEditaDelphiEdit(APath);
+  if Result <> '' then
+    Exit;
   Result := AplicaTanda(APath, AEditsJson,
     function(const AOld, ANew: string; AAtLine, AToLine: Integer;
       ADelete: Boolean): string

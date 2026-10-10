@@ -88,8 +88,10 @@ On top of that:
 - **Strict jail**: relative paths only, no drives, no `..`, `.md` only, and
   `backups/`, `.git/`, `.obsidian/`, `.claude/`, `.trash/` and `*.bak*` are
   excluded from both reads and searches.
-- **UTF-8 in, UTF-8 without BOM out.** A vault is UTF-8; none of the CP1252
-  machinery used for Delphi sources applies here.
+- **UTF-8 in, UTF-8 without BOM out.** A note is read with the same encoding
+  detector as the sources, and one whose bytes do not come back the same is
+  read (its bad bytes as U+FFFD) but never written back by `vault_append` or
+  `vault_patch` (EDIT-038).
 - **Long notes are truncated** at about 70 000 characters, at a line boundary,
   with a note telling the agent to page through with `offset`/`limit`, so one
   huge file cannot eat the context window (a single line longer than that

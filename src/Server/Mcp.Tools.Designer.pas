@@ -57,6 +57,9 @@ type
     FParent: string;
     FValue: string;
     FProps: string;
+    FBefore: string;
+    FAfter: string;
+    FIndex: Integer;
   public
     // inline es Boolean en el esquema y vale true si no llega (6.5 de la
     // 1.18.0): el serializador crea los params con T.Create, que llama a este
@@ -104,6 +107,12 @@ type
     property Value: string read FValue write FValue;
     [SchemaDescription(SP_DESIGNER_PROPS)]
     property Props: string read FProps write FProps;
+    [SchemaDescription(SP_DESIGNER_BEFORE)]
+    property Before: string read FBefore write FBefore;
+    [SchemaDescription(SP_DESIGNER_AFTER)]
+    property After: string read FAfter write FAfter;
+    [SchemaDescription(SP_DESIGNER_INDEX)]
+    property Index: Integer read FIndex write FIndex;
   end;
 
   TDelphiDesignerTool = class(TMCPToolBase<TDelphiDesignerParams>)
@@ -1024,6 +1033,9 @@ constructor TDelphiDesignerParams.Create;
 begin
   inherited Create;
   FInline := True;
+  // index 0 es un valor (que se contesta con su rango), no "no se pidio"
+  // (revisor 4 de la noche, M6: index=0 caia en 'prop is missing')
+  FIndex := -1;
 end;
 
 constructor TDelphiDesignerTool.Create;
@@ -1270,20 +1282,13 @@ begin
   end;
   CrearCarpeta(TPath.GetDirectoryName(Temporal));
 
-  Peticion := Default(TPeticionRender);
-  Peticion.Framework := Fw;
-  Peticion.Path := Ruta;
+  // lo comun - framework, ruta, Delphi, form o frame por EL lector de clases -
+  // en UN sitio, el del juez del orden tambien (Lsp.FormRender.PeticionDeRender)
+  Peticion := PeticionDeRender(Ruta, Fw);
   Peticion.Salida := Temporal;
   Peticion.Componente := Params.Component.Trim;
   Peticion.Estilo := Estilo;
   Peticion.NoVisuales := Params.NonVisual;
-  Peticion.Bds := DiscoverRadStudio.Version;
-  // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
-  // lo adivinaba con su regex y no seguia 'class abstract(TFrame)'. Sin .pas
-  // legible, o sin saberlo, que mire el (revision de la 1.17.0)
-  var Pas := UnidadDeDesigner(Ruta);
-  if TFile.Exists(Pas) and (ReadPathDenied(Pas) = '') then
-    Peticion.Raiz := RaizParaElRender(Ruta);
   Peticion.Estados := Estados;
   R := CorreRender(Peticion);
   if R.Fallo <> '' then
@@ -1475,7 +1480,8 @@ begin
       'get', 'path component',
       'check-binding', 'path unit',
       'preview', 'path component framework state style nonvisual inline maxwidth out',
-      'insert', 'path classname component parent props', 'set', 'path component prop value parent props',
+      'insert', 'path classname component parent props',
+      'set', 'path component prop value parent props before after index',
       'delete', 'path component',
       'to-text', 'path', 'to-binary', 'path'],
     ['path', Params.Path, '', 'classname', Params.ClassName_, '', 'prop', Params.Prop, '',
@@ -1486,7 +1492,8 @@ begin
      'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
      'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, '',
-     'props', Params.Props, ''], Suyos);
+     'props', Params.Props, '', 'before', Params.Before, '', 'after', Params.After, '',
+     'index', IfThen(Params.Index >= 0, IntToStr(Params.Index)), ''], Suyos);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]));
   if MatchText(Cmd, ['info', 'prop']) then
@@ -1543,7 +1550,8 @@ begin
         Params.Component, Params.Parent, Params.Props), Params.Path)
     else if Cmd = 'set' then
       Result := ConFueraDelPadre(CambiaPropiedad(Params.Path, Params.Component,
-        Params.Prop, Params.Value, Params.Parent, Params.Props), Params.Path)
+        Params.Prop, Params.Value, Params.Parent, Params.Props, Params.Before,
+        Params.After, Params.Index), Params.Path)
     else
       Result := BorraComponente(Params.Path, Params.Component);
     // ...y lo mismo que lint tras escribir: el form sigue en UTF-16/32, que dcc
@@ -1570,6 +1578,12 @@ begin
   // entero o nada).
   Cmd := Params.Command.Trim.ToLower;
   if not MatchText(Cmd, ['to-text', 'to-binary', 'totext', 'tobinary', 'insert', 'set', 'delete']) then
+    Exit(GestoDeDisenador(Params));
+  // el orden entre hermanos pregunta al renderizador (segundos con paquetes):
+  // FUERA del cerrojo, que coge el mismo solo para releer y escribir; dentro
+  // paraba todas las ediciones del servidor (revisor 5 de la noche, A3)
+  if (Cmd = 'set') and ((Params.Before.Trim <> '') or (Params.After.Trim <> '') or
+     (Params.Index >= 0)) then
     Exit(GestoDeDisenador(Params));
   // la tabla que piden insert, set (parent= y Name tambien) y delete se
   // espera FUERA del cerrojo, por lo mismo: set parent= la esperaba dentro y

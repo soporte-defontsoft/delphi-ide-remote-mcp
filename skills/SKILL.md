@@ -160,8 +160,10 @@ handshake.
   its unit in the uses, then `check-binding`. A name with letters outside
   ASCII needs the form saved as UTF-8 with BOM, and the unit with a BOM or in
   ANSI: the IDE and the compiler read a file without BOM as ANSI, so
-  insert and a rename refuse it there (`DSGN-111`) rather than change the
-  file's encoding.
+  insert and a rename refuse it in a file that has an encoding to keep
+  (`DSGN-111`) rather than change it; a unit that is still pure ASCII has
+  none, and the name chooses ANSI (or UTF-8 with a BOM when ANSI cannot hold
+  it), as the IDE does when it saves.
 - To CHANGE one property: `set component=Button1 prop=Caption value=OK`. It
   is checked against the class BEFORE writing: a property the class does
   not publish (the answer suggests the close one), an enum value that does
@@ -196,10 +198,15 @@ handshake.
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows, in the same
   answer. The loop is insert/set (or `delphi_edit` for the rest) -> `lint`
-  -> `preview` -> fix.
+  -> `preview` -> fix. Several properties at once go in `props`
+  (`Caption=Save;Left=24`, insert and set, all or none); `set before=`,
+  `after=` or `index=` reorders a component among its siblings, only where
+  the IDE's own writer keeps it (a refusal gives the order it would save;
+  the file order is the z-order, TabOrder the keyboard order).
   To place something, measure on the image and convert with its `frame`
-  (image pixels to form units; `Left`/`Top` in the file are relative to the
-  parent, whose rectangle `component=<parent>` gives as `componentRect`).
+  (image pixels to form units; `Left`/`Top` in the file - `Position.X`/
+  `Position.Y` in FMX - are relative to the parent, whose rectangle
+  `component=<parent>` gives as `componentRect`).
   `state=PageControl1.ActivePage=TabSheet2` shows another page without
   touching the file (inside an inline frame, `Frame1.Edit1.Text=x`); and
   `component=Frame1.Edit1` crops to a frame's child;
