@@ -4334,7 +4334,8 @@ const
     'it was painted) | insert (a NEW visual control: classname; component, ' +
     'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
     'form by default; placed at 10,10 where the IDE keeps it among its ' +
-    'siblings (its own writer is asked), with its published ' +
+    'siblings (its own writer is asked; the last one, with orderNote, when ' +
+    'it cannot be), with its published ' +
     'field in the form''s class and its unit in the uses; the answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
@@ -4429,9 +4430,8 @@ const
     '[akLeft, akTop], clRed, the Name of another component (PopupMenu1), nil ' +
     'to clear one. A string goes quoted (''OK'', ''Acci''#243''n'') or not ' +
     '(OK): set writes it the way the IDE does, accents as #N and a long one ' +
-    'in pieces; so does a number as typed (0.7). A string that starts with a ' +
-    'path as this server shows it (srvd:\...) is written with the real ' +
-    'drive, so the form finds it when it runs.';
+    'in pieces; so does a number as typed (0.7). A path shown as srvd:\... ' +
+    'is written with its real drive.';
 
   SP_DESIGNER_PROPS =
     'insert / set optional: SEVERAL properties at once, Prop=value pairs ' +

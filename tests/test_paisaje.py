@@ -118,7 +118,7 @@ REGLAS = [
      'la puerta expande cada llamada UNA vez, preguntando a las marcas [Contenido]: otra llamada con '
      'otro predicado seria una excepcion sin declarar (revisor de B-9, 10-oct-2026)'),
     ('un paseo del arbol por cada mascara',
-     r"for\s+(?:var\s+)?\w+\s+in\s+(?:MascarasDe\(|TArray<string>\.Create\(\s*'\*\.)", [],
+     r"for\s+(?:var\s+)?\w+\s+in\s+(?:MascarasDe\(|TArray<string>\.Create\(\s*'\*\.|\[\s*'\*\.)", [],
      'WalkFiles toma VARIAS mascaras y recorre una vez (cada fichero una vez, una purga de la '
      'papelera al pasar): references paseaba tres veces, rename dos y delphi_projects dos (8.3 de la '
      '1.18.0, 10-oct-2026)'),

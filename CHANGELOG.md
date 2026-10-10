@@ -16,14 +16,19 @@ the MCP `initialize` response (`serverInfo.version`).
   an inherited form places by its `[n]`..., so the file was not in the
   IDE's order and the IDE moved it the first time it saved. Now they ask
   the same judge as `set before=/after=/index=` (the form loaded as the
-  designer loads it and written by TWriter) and place the block before the
-  sibling the IDE writes right after it. When the judge cannot answer (a
-  sibling no package loads, an ancestor not found) the block goes last as
-  before and `orderNote` says so (DSGN-145): nothing is refused for it.
-  The judge runs without the write lock, so the form - and the unit, for
-  insert - is checked to be the one judged before writing (DSGN-144), as
-  the order already did; the three share one judge (`JuezDelOrden`) and
-  one open/check pair. `test_designer_orden` I1-I4, red before.
+  designer loads it and written by TWriter) and place the block right after
+  the sibling the IDE writes right before it (before the next one when it
+  is the first): in a file that was already out of the IDE's order,
+  anchoring before the next one changed its place among the graphic
+  controls written before it - its z-order. When the judge cannot answer
+  (a sibling no package loads, an ancestor not found) the block goes last
+  as before and `orderNote` says so (DSGN-145): nothing is refused for it.
+  The judge runs without the write lock - the tool's own gate kept insert
+  and `set parent=` inside it until their reviewer measured another edit
+  waiting for them -, so the form, and the unit for insert, is checked to
+  be the one judged before writing (DSGN-144), as the order already did;
+  the three share one judge (`JuezDelOrden`) and one open/check pair.
+  `test_designer_orden` I1-I5, red before.
 
 - **An alias with the declared name empty leaves one key.** `root: ""`
   with `path: srvd:\...` (an alias of `delphi_list`), or `path: ""` with
@@ -943,7 +948,10 @@ the MCP `initialize` response (`serverInfo.version`).
   folder three times (once for `*.pas`, `*.dpr`, `*.inc`), the designer
   check of `delphi_rename_symbol` twice and `delphi_projects` twice, each
   walk with its own purge of the trash on the way, although `WalkFiles`
-  takes several masks and lists each file once. One walk each now; in
+  takes several masks and lists each file once. One walk each now (so
+  `delphi_references` meets the files folder by folder instead of every
+  `.pas` first: when it stops at its cap of candidates, the ones it kept
+  can differ); in
   `delphi_projects` a folder's `.groupproj` now sits next to its `.dproj`
   instead of after every `.dproj` of the tree. `test_paisaje` refuses a
   loop over masks that walks once per mask.

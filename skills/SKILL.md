@@ -148,8 +148,8 @@ handshake.
   when the class shows its Name, so no `set prop=Name` afterwards - without
   it, the first free Button1, Button2... as the IDE; `parent=Panel1` puts it
   inside a container, the form by default). Do not write a visual control's
-  block by hand: insert places it at 10,10 as
-  the last child with the minimum the IDE writes (its Name as text when its
+  block by hand: insert places it at 10,10, among its siblings where the
+  IDE keeps it, with the minimum the IDE writes (its Name as text when its
   class does that, its TabOrder), adds its published field to the form's
   class and its unit to the uses, and answers the numbered block. In VCL a
   parent is the form or a control whose class accepts controls (a TPanel, a

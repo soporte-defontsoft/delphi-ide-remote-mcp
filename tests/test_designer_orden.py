@@ -29,10 +29,12 @@ un TToolBar, en una form heredada con [n]...).
   O20 el form se borra mientras juzga el renderizador: DSGN-144 (revisor 6, B2)
   O21 un ancestro del marco (TForm) no es lectura a medias: lo dice la clase cargada
   O22 ...tampoco TDataModule, aunque el modulo se cargue en la form oculta (revisor 7, M1)
-  I1-I4 insert y set parent= colocan donde lo deja el IDE (el juez para dos
+  I1-I5 insert y set parent= colocan donde lo deja el IDE (el juez para dos
       llamadores mas): un TLabel nuevo delante de los TButton de su panel, un
       TButton el ultimo, un TLabel movido delante de los TButton; con un
-      hermano que ningun paquete carga, el ultimo y DSGN-145
+      hermano que ningun paquete carga, el ultimo y DSGN-145; en un fichero
+      que ya no estaba en el orden del IDE, detras del que el IDE escribe
+      delante (su z-order, revisor del 17f4edd)
   O15 no queda ninguna carpeta __tmp- (B5)
 
 Uso:  python tests/test_designer_orden.py [ruta-a-DelphiLspMcp.exe]
@@ -518,6 +520,22 @@ try:
           hijos_de_panel(INS) == ['LabelNuevo', 'Label9', 'Button1', 'Button2', 'Button3']
           and J(r).get('moved') == 'Label9' and 'orderNote' not in J(r),
           (hijos_de_panel(INS), r[:300]))
+    # I5: un fichero que ya NO estaba en el orden del IDE (un TLabel detras de un
+    # TButton, como lo dejaba el insert de antes): el nuevo TLabel va DETRAS del
+    # TLabel que el IDE escribe justo delante - delante del TButton lo ponia
+    # debajo del otro TLabel, otro z-order (revisor del 17f4edd, M1)
+    DESORDEN = form_con_unidad('UDesorden', 'object FUDesorden: TFUDesorden\n  Left = 0\n  Top = 0\n'
+                               '  Caption = \'D\'\n  ClientHeight = 200\n  ClientWidth = 300\n'
+                               '  object Panel1: TPanel\n    Left = 8\n    Top = 8\n    Width = 200\n'
+                               '    Height = 150\n    TabOrder = 0\n    object Button1: TButton\n      Left = 8\n'
+                               '      Top = 8\n      TabOrder = 0\n    end\n    object LabelA: TLabel\n'
+                               '      Left = 8\n      Top = 60\n      Caption = \'A\'\n    end\n  end\nend\n',
+                               '    Panel1: TPanel;\n    Button1: TButton;\n    LabelA: TLabel;\n')
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': DESORDEN, 'classname': 'TLabel',
+                                     'component': 'LabelB', 'parent': 'Panel1'}, t=240)
+    check('I5 en un fichero fuera del orden del IDE, el TLabel nuevo detras del TLabel que el IDE escribe delante (su z-order)',
+          hijos_de_panel(DESORDEN) == ['Button1', 'LabelA', 'LabelB'] and 'orderNote' not in J(r),
+          (hijos_de_panel(DESORDEN), r[:300]))
     RARO = form_con_unidad('URaro', 'object FURaro: TFURaro\n  Left = 0\n  Top = 0\n  Caption = \'R\'\n'
                            '  ClientHeight = 200\n  ClientWidth = 300\n' + PANEL +
                            '    object Raro1: TClaseQueNingunPaqueteCarga\n      Left = 8\n      Top = 80\n    end\n'

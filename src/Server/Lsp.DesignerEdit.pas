@@ -8,7 +8,7 @@
   pide se controla contra la realidad del proyecto y del Delphi instalado
   ANTES de escribir.
 
-    insert  un control VISUAL nuevo, ultimo hijo de su padre (el form por
+    insert  un control VISUAL nuevo, hijo de su padre donde lo deja el IDE (el form por
             defecto), en 10,10, con su texto (su Name) si la clase lo tiene,
             su TabOrder, su campo publicado en la clase del form y su unidad
             en el uses. Nada del constructor: el IDE y la app lo crean con el
@@ -1410,7 +1410,8 @@ begin
     finally
       UPas.Free;
     end;
-    // el bloque, con lo minimo que escribe el IDE, ultimo hijo de su padre
+    // el bloque, con lo minimo que escribe el IDE, ultimo hijo de su padre (su
+    // sitio entre los hermanos lo dice el juez del orden, abajo)
     Ind := SangriaDeNivel(Padre.Depth + 1);
     // cada linea por sus compositores (Lsp.DesignerBin): la de objeto, la de
     // una propiedad, el literal, el flotante
@@ -2500,7 +2501,7 @@ end;
 
 { ALineas -un form con el bloque de ANomObj, [AIni, AIni + ALargo), como
   ULTIMO hijo de ANomPadre- con ese bloque donde lo deja el IDE entre sus
-  hermanos: delante del que el juez escribe justo detras de el (JuezDelOrden;
+  hermanos: detras del que el juez escribe justo delante de el (JuezDelOrden;
   la VCL escribe los graficos antes que las ventanas, una form heredada
   coloca por su [n]...). AIni sale donde quedo. Si el juez no contesta, el
   bloque se queda el ultimo, como antes, y ANota lo dice: insert y set
@@ -2523,12 +2524,31 @@ begin
   var PS := NombreEn(Suyo, ANomObj);
   if (PS < 0) or (PS = High(Suyo)) then
     Exit; // el IDE tambien lo deja el ultimo
+  // DETRAS del que el IDE escribe justo delante (delante del de detras si es
+  // el primero): en un fichero que ya no estaba en el orden del IDE, anclar
+  // delante del siguiente lo cambiaba de sitio respecto a los graficos de
+  // antes, su z-order (revisor del 17f4edd, M1: LabelB quedaba debajo de
+  // LabelA). El ancla, entre los HIJOS del padre en la propuesta: por nombre
+  // en todo el form podia caer dentro de un frame inline (revisor, B)
   Doc := TStyleDoc.DeTexto(F.Doc.TextoDe(ALineas));
   try
-    var Sig := ObjetoPorNombre(Doc, Suyo[PS + 1]);
-    if Sig = nil then
+    var P: TStyleObj;
+    if (Doc.Root <> nil) and SameText(Doc.Root.ObjName, ANomPadre) then
+      P := Doc.Root
+    else
+      P := ObjetoPorNombre(Doc, ANomPadre);
+    var NomAncla := Suyo[(if PS > 0 then PS - 1 else 1)];
+    var Ancla: TStyleObj := nil;
+    if P <> nil then
+      for var H in P.Children do
+        if SameText(H.ObjName, NomAncla) then
+          Ancla := H;
+    if Ancla = nil then
+    begin
+      ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre]);
       Exit;
-    var Dest := Sig.StartLine - 1;
+    end;
+    var Dest := (if PS > 0 then Ancla.EndLine else Ancla.StartLine - 1);
     Result := ConBloqueMovido(ALineas, Copy(ALineas, AIni, ALargo), AIni, ALargo, Dest);
     AIni := Dest;
   finally
@@ -2582,7 +2602,12 @@ begin
     LeaveFileEdit;
   end;
   if (Result = '') and ANecesitaTabla then
+  try
     Result := PonTabla(F);
+  except
+    FreeAndNil(F.Doc); // quien llama no lo libera si esto lanza
+    raise;
+  end;
   if Result <> '' then
     FreeAndNil(F.Doc); // nil si AbreForm fallo; abierto si los bytes no eran los leidos
 end;
