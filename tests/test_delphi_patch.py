@@ -547,9 +547,9 @@ check('removeuses: quitar la nueva devuelve el ; a su sitio, delante del //',
       _src)
 out = call('delphi_edit', {"path": FIN, "removeuses": "UB"})
 _src = open(FIN, 'rb').read().decode('ascii')
-check('removeuses: quitar la del // final no se lo pega a la que queda',
-      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA;  // de UA\r\n  // de UB\r\n\r\nend.' in _src,
-      _src)
+check('removeuses: quitar la del // final se lo lleva (11.3) y no lo pega a la que queda',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA;  // de UA\r\n\r\nend.' in _src
+      and '// de UB' not in _src, _src)
 # ...y quitar una del MEDIO no mueve el // final de la ultima: su duena se busca
 # por el NOMBRE, porque el texto de una entrada lleva delante el // de la de
 # antes (medido el 2-oct-2026: el '// de UC' bajaba a una linea suya)
@@ -561,11 +561,11 @@ out = call('delphi_edit', {"path": MED, "removeuses": "UB"})
 _src = open(MED, 'rb').read().decode('ascii')
 check('removeuses: quitar una del medio deja el // final con la ultima',
       mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '  UC; // de UC\r\n' in _src, _src)
-# ...y el // de la quitada, que iba detras de SU coma, no se pega a la de
-# antes: se queda en una linea suya (se pegaba a la de antes: 'UA, // de UB',
-# medido el 2-oct-2026 con remove-unit, el mismo escritor)
-check('removeuses: el // de la quitada del medio se queda en una linea suya',
-      'uses\r\n  UA, // de UA\r\n  // de UB\r\n  UC; // de UC\r\n' in _src, _src)
+# ...y el // de la quitada, que iba detras de SU coma, se va con ella (11.3,
+# David 10-oct-2026); antes se quedaba en una linea suya, huerfano dentro del
+# uses, y antes aun se pegaba a la de antes ('UA, // de UB', 2-oct-2026)
+check('removeuses: el // de la quitada del medio se va con ella (11.3)',
+      'uses\r\n  UA, // de UA\r\n  UC; // de UC\r\n' in _src and '// de UB' not in _src, _src)
 # ...y sin comentario en la de antes: ese de arriba pasaba igual con el
 # arreglo quitado (el // de UA se colaba primero y tapaba el caso; lo vio la
 # mutacion de la 1.10.0)
@@ -575,8 +575,29 @@ open(MED2, 'wb').write(CRLF.join([
     '  UA,', '  UB, // de UB', '  UC;', '', 'end.', '']).encode('ascii'))
 out = call('delphi_edit', {"path": MED2, "removeuses": "UB"})
 _src = open(MED2, 'rb').read().decode('ascii')
-check('removeuses: el // de la quitada no se pega a la de antes sin comentario',
-      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA,\r\n  // de UB\r\n  UC;\r\n' in _src, _src)
+check('removeuses: el // de la quitada se va con ella tambien sin comentario en la de antes (11.3)',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA,\r\n  UC;\r\n' in _src
+      and '// de UB' not in _src, _src)
+# (guarda) el de una linea PROPIA encima de la quitada se queda: no es de su linea
+PROP = os.path.join(DIR, 'ConNotaPropia.pas')
+open(PROP, 'wb').write(CRLF.join([
+    'unit ConNotaPropia;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA,', '  // nota propia', '  UB,', '  UC;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": PROP, "removeuses": "UB"})
+_src = open(PROP, 'rb').read().decode('ascii')
+check('removeuses: (guarda) el // de una linea propia encima de la quitada se queda',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '// nota propia' in _src and 'UB' not in _src, _src)
+# y con las dos cosas en la quitada: su nota de linea propia (que viaja pegada a la
+# siguiente, EntriesWithout) se queda y el // de su linea se va
+DOS = os.path.join(DIR, 'ConDosNotas.pas')
+open(DOS, 'wb').write(CRLF.join([
+    'unit ConDosNotas;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA,', '  // nota propia', '  UB, // de UB', '  UC;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DOS, "removeuses": "UB"})
+_src = open(DOS, 'rb').read().decode('ascii')
+check('removeuses: la nota de linea propia de la quitada se queda y el // de su linea se va (11.3)',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '// nota propia' in _src and 'UC;' in _src
+      and '// de UB' not in _src and 'UB,' not in _src, _src)
 # ...pero una DIRECTIVA detras del ; no es de ninguna entrada: se queda detras
 # del ; de la clausula, como estaba
 DIR2 = os.path.join(DIR, 'ConDirectivaFinal.pas')
@@ -747,6 +768,49 @@ out = call('delphi_edit', {"path": PASB, "insert": "rutina-global",
 check('end.: un bloque con un end. a media linea se niega y no escribe',
       mc.rechazado(out) and mc.es(out, 'SR_EDIT_BLOQUE_TRAE_END_SOLO') and
       open(PASB, 'rb').read() == _bloque, out[:200])
+# la auditoria es RELATIVA (revisor 8, M1): lo que ya estaba detras del end. final
+# (notas sin comentar, que el compilador no lee) no avisa mientras no cambie;
+# daba EDIT-086 "Restore ... and STOP" en cada edicion y en una tanda que no
+# escribia nada (y restore devuelve la primera copia del dia)
+PASN = os.path.join(DIR, 'UNotas.pas')
+_notas = CRLF.join(['unit UNotas;', '', 'interface', '', 'implementation', '', 'end.',
+                    'Historial: v1', '']).encode('ascii')
+open(PASN, 'wb').write(_notas)
+out = call('delphi_edit', {"path": PASN, "edits": [{"old": "interface", "new": "interface"}]})
+check('end.: una tanda que no escribe nada en un fichero con notas tras el end. no avisa',
+      not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA') and not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT')
+      and open(PASN, 'rb').read() == _notas, out[:300])
+out = call('delphi_edit', {"path": PASN, "old": "interface", "new": "interface\n// una nota"})
+check('end.: ...ni una edicion de otra parte del fichero',
+      'WRITTEN' in out and not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA'), out[:300])
+out = call('delphi_edit', {"path": PASN, "old": "Historial: v1", "new": "Historial: v1\nprocedure Perdida;"})
+check('end.: (guarda) lo que se escribe DETRAS del end. si avisa (EDIT-086)',
+      mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA'), out[:300])
+# la frontera del insert en una unit con 'begin ... end.' como inicializacion es
+# su begin, por EL lector (TLectorPas: donde acaban las declaraciones); la rutina
+# caia DENTRO del bloque (revisor 8, M2; medido: E2070)
+PASI = os.path.join(DIR, 'UIniBegin.pas')
+open(PASI, 'wb').write(CRLF.join(['unit UIniBegin;', '', 'interface', '', 'implementation', '',
+                                  'var', '  X: Integer;', '', 'begin', '  X := 1;', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": PASI, "insert": "rutina-global", "code": "procedure Nueva;\nbegin\n  X := 2;\nend;"})
+_src = open(PASI, 'rb').read().decode('ascii')
+_p = [_src.find(s) for s in ('X: Integer;', 'procedure Nueva;', 'begin\r\n  X := 1;\r\nend.')]
+check('insert en una unit con begin..end. de inicializacion: delante de su begin',
+      mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT') and -1 not in _p and _p[0] < _p[1] < _p[2],
+      out[:300] + ' | ' + _src)
+# 'unit A . B;' compila y es A.B (medido con dcc): el nombre de la cabecera sin los
+# blancos de alrededor del punto; create lo negaba (CREATE-019) y move no la veia
+PASD = os.path.join(DIR, 'UPunto.Dos.pas')
+out = call('delphi_edit', {"path": PASD, "createunit": True,
+                            "content": "unit UPunto . Dos;\n\ninterface\n\nimplementation\n\nend.\n"})
+check('cabecera "unit UPunto . Dos;": create la toma (es UPunto.Dos, como la lee dcc)',
+      os.path.exists(PASD) and not mc.rechazado(out), out[:300])
+if os.path.exists(PASD):
+    out = call('delphi_move', {"path": PASD, "dest": os.path.join(DIR, 'UTres.pas')})
+    _src = open(os.path.join(DIR, 'UTres.pas'), 'rb').read().decode('utf-8-sig') if os.path.exists(os.path.join(DIR, 'UTres.pas')) else ''
+    check('...y move la reescribe ENTERA, con sus blancos: "unit UTres;"',
+          mc.es(out, 'SN_MOVE_CABECERA_REESCRITA_FMT') and _src.startswith('unit UTres;') and 'Dos' not in _src,
+          out[:300] + ' | ' + _src[:80])
 
 # --- lo que encontro el revisor de codigo de la 1.10.0, cada caso medido
 # antes con una sonda contra el exe de entonces ---

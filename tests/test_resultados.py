@@ -613,18 +613,30 @@ try:
           res.get('isError') is True and sc.get('code') == 'DENIED' and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT'),
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
-    # sin sitio DE VERDAD: una unit sin implementation (el cuerpo va delante
-    # del end., la declaracion no tiene donde ir). Hasta la 1.10.0 se forzaba
-    # con un 'implementation' DENTRO de un comentario, que el lector de
-    # entonces contaba como un segundo; el lexico de la casa ya no lo cuenta
+    # sin sitio DE VERDAD para la declaracion: su sitio es delante de la linea
+    # que es 'implementation', y aqui esa linea lleva tambien su uses (el
+    # cuerpo si entra: la frontera la da el lector, que ve el implementation).
+    # Hasta la 1.10.0 se forzaba con un 'implementation' DENTRO de un
+    # comentario, que el lector de entonces contaba como un segundo; y hasta el
+    # 10-oct-2026 con una unit SIN implementation, donde el cuerpo iba a parar
+    # al interface (alli ya no hay frontera: E44b)
     VIS = os.path.join(JAIL, 'Vis.pas')
-    open(VIS, 'w', newline='\r\n').write('unit Vis;\n\ninterface\n\nend.\n')
+    open(VIS, 'w', newline='\r\n').write('unit Vis;\n\ninterface\n\nimplementation uses System.SysUtils;\n\nend.\n')
     VIS_ANTES = open(VIS, 'rb').read()
     res, sc, t = llama('delphi_edit', {'path': VIS, 'insert': 'rutina-global', 'visible': True,
                                        'code': 'procedure Hola;\nbegin\nend;'})
     check('E44 insert visible=true sin sitio para la declaracion: FALLO y nada escrito',
           res.get('isError') is True and mc.abre(t, 'SR_EDIT_VISIBLE_DESHECHO_FMT') and
           open(VIS, 'rb').read() == VIS_ANTES, '%s | %s' % (json.dumps(sc)[:120], t[:250]))
+    VIS2 = os.path.join(JAIL, 'Vis2.pas')
+    open(VIS2, 'w', newline='\r\n').write('unit Vis2;\n\ninterface\n\nend.\n')
+    VIS2_ANTES = open(VIS2, 'rb').read()
+    res, sc, t = llama('delphi_edit', {'path': VIS2, 'insert': 'rutina-global',
+                                       'code': 'procedure Hola;\nbegin\nend;'})
+    check('E44b insert en una unit SIN implementation: no hay frontera (EDIT-049) y nada escrito '
+          '(el cuerpo caia en el interface)',
+          res.get('isError') is True and mc.abre(t, 'SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT') and
+          open(VIS2, 'rb').read() == VIS2_ANTES, '%s | %s' % (json.dumps(sc)[:120], t[:250]))
 
     NV = os.path.join(JAIL, 'nv1')
     N2 = os.path.join(JAIL, 'nueva2')

@@ -219,14 +219,19 @@ REGLAS = [
     # 10-oct-2026, medida-pascal-copias): las copias de hoy, declaradas; los lectores son
     # Lsp.Pascal (el end. y la cabecera, sobre la vista del codigo) y Lsp.PascalDecl
     # (TLectorPas), y cada copia que pase a ellos sale de la lista
-    ('el end. de una unidad leido a mano', r"end(?:\\s\*)?\\\.",
+    ('el end. de una unidad leido a mano', r"end(?:\\s\*|\[ \\t\]\*)?\\\.|(?:=|SameText\([^)]*,)\s*'end\.'",
      [('Lsp.Pascal.pas', 'EndsConPunto')],
      'EndsConPunto (Lsp.Pascal): eran siete sitios con dos ortografias (laxa "end\\s*\\." y '
      'estricta "end\\." sola en su linea); la estricta daba BROKEN STRUCTURE sobre un '
      '"program P; begin end." que compila (inventario y sonda del 10-oct-2026)'),
     ('la cabecera de una unidad leida a mano',
-     r"\((?:\?:)?(?:unit\|)?program\|library|\^\\s\*unit\\s\+|StartsWith\(\s*'unit '",
-     [('Lsp.Pascal.pas', 'CabeceraDeFuente')],
+     r"\((?:\?:)?(?:unit\|)?(?:program|library)\||\^\\s\*\(?(?:unit|program|library|package)\b|"
+     r"StartsWith\(\s*'(?:unit|program|library|package) '|(?<!Palabra )(?<!Kind )=\s*'(?:program|library|package)'",
+     # (Palabra = '...' es quien consume la respuesta de CabeceraDeFuente; Kind, el tipo de proyecto)
+     [('Lsp.Pascal.pas', 'CabeceraDeFuente'),
+      # el PARSER de declaraciones (la gramatica de la casa, una) lee sus tokens; las
+      # posiciones para escribir son de CabeceraDeFuente (revisor 8, 10-oct-2026)
+      ('Lsp.PascalDecl.pas', 'TLectorPas.Lee')],
      'CabeceraDeFuente (Lsp.Pascal): eran cinco lectores de unit/program/library/package - solo '
      'FindUses veia package, solo CabeceraDeUnit daba posicion, ExecutePatch la queria en una linea '
      '(inventario del 10-oct-2026; una casa desde el mismo dia)'),

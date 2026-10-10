@@ -110,14 +110,15 @@ function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string = ''):
   sin comprobar dcp ni instalacion - compilar el paquete es cosa del agente. }
 function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<string>;
 
-{ La cabecera "unit X;" de un .pas: el nombre tal cual y donde empieza
-  (1-based), fuera de comentarios y con las directivas que admite detras
+{ La cabecera "unit X;" de un .pas: el nombre como lo lee dcc ('unit A . B;'
+  es A.B), donde empieza (1-based) y cuanto mide lo escrito (lo que reescribe
+  quien mueve), fuera de comentarios y con las directivas que admite detras
   (platform, deprecated, library, experimental). False si no la hay. UN
   lector: InspectUnit la leia con una regex que solo casaba "unit X;" y
   delphi_move la reescribia con otra igual - "unit X platform;" ni se
   registraba ni se reescribia, y MOVE-015 decia que si (decima revision). }
 function CabeceraDeUnit(const ASrc: string; out ANombre: string;
-  out AInicio: Integer): Boolean;
+  out AInicio, ALargo: Integer): Boolean;
 
 { adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
   implementation) de un .pas; la clausula la escribe el motor. }
@@ -369,7 +370,7 @@ end;
 function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
 var
   Enc, Src, Stem, DName, DClass, Cab, Ultima: string;
-  Ini: Integer;
+  Ini, Largo: Integer;
   U: TUnidadPas;
   Mapa: TDictionary<string, string>;
 begin
@@ -381,7 +382,7 @@ begin
     Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   AInfo.PasPath := TPath.GetFullPath(APasPath);
   Src := PatchLoadText(AInfo.PasPath, Enc);
-  if not CabeceraDeUnit(Src, Cab, Ini) then
+  if not CabeceraDeUnit(Src, Cab, Ini, Largo) then
     Exit(MsgFmt(SR_UNIT_NO_HEADER_FMT, [TPath.GetFileName(APasPath)]));
   // Hay cabecera, pero su nombre no es un nombre de unit. Decir "no tiene
   // cabecera" era falso y mandaba al agente a buscar un fallo que no existia
@@ -467,12 +468,13 @@ type
   end;
 
 function CabeceraDeUnit(const ASrc: string; out ANombre: string;
-  out AInicio: Integer): Boolean;
+  out AInicio, ALargo: Integer): Boolean;
 var
   Cab: TCabeceraFuente;
 begin
   ANombre := '';
   AInicio := 0;
+  ALargo := 0;
   // EL lector de la cabecera (Lsp.Pascal): aqui habia una regex que no
   // leia 'unit A . B;' (inventario del 10-oct-2026)
   Result := CabeceraDeFuente(CodigoPascal(ASrc), Cab) and (Cab.Palabra = 'unit') and
@@ -480,7 +482,8 @@ begin
   if Result then
   begin
     AInicio := Cab.NombreIni;
-    ANombre := Copy(ASrc, AInicio, Cab.NombreLen);
+    ALargo := Cab.NombreLen;
+    ANombre := Cab.Nombre;
   end;
 end;
 
@@ -980,6 +983,19 @@ var
     Result := False;
   end;
 
+  // AEntrada sin la primera linea que es ALinea (recortada)
+  function SinLinea(const AEntrada, ALinea: string): string;
+  begin
+    var Quedan: TArray<string> := [];
+    var Quitada := False;
+    for var L in ConSalto(AEntrada, #10).Split([#10]) do
+      if not Quitada and (L.Trim = ALinea) then
+        Quitada := True
+      else
+        Quedan := Quedan + [L];
+    Result := string.Join(#10, Quedan);
+  end;
+
   // el hueco que habia en la clausula ORIGINAL entre un separador de ASeps y
   // el comentario //; False si ese comentario no iba detras de uno. Un
   // separador DE CODIGO y un // DE VERDAD, segun el lexico: el mismo texto
@@ -1035,8 +1051,10 @@ begin
   // del comentario y la clausula sin cerrar, y cada reescritura bajaba el
   // comentario a una linea suya (medido 27-sep con removeuses). Y a SU
   // dueno, no a la de antes en la lista nueva: quitada la duena, se pegaba a
-  // la anterior ('UA, // de UB', medido el 2-oct-2026 con remove-unit) y se
-  // queda en una linea suya, como el del ; final de una quitada.
+  // la anterior ('UA, // de UB', medido el 2-oct-2026 con remove-unit). Y si
+  // su duena se QUITA, se va con ella: el comentario en la linea de una
+  // entrada es suyo; el que va en una linea propia se queda (David, 10-oct-2026,
+  // 11.3: regla de la casa, no hay juez; quedaba huerfano dentro del uses).
   var Entradas := Copy(AEntries);
   var Colas: TArray<string>;
   SetLength(Colas, Length(Entradas));
@@ -1056,16 +1074,26 @@ begin
       Entradas[I] := Copy(Texto, P + 2, MaxInt);
     end;
   end;
+  // el // que iba detras de la coma de una entrada QUITADA se va con ella
+  // (11.3): viajaba al principio de la siguiente, detras de lo que la
+  // quitada le deja pegado (EntriesWithout: su prefijo), y se quita ahi
+  for var K := 1 to High(U.Entries) do
+    if (Mapa[K] >= 0) and (Mapa[K - 1] = -1) then
+    begin
+      var Suyo := PrimeraLinea(U.Entries[K]);
+      var HS: string;
+      if Suyo.StartsWith('//') and HuecoTrasSeparador(',', Suyo, HS) then
+        Entradas[Mapa[K]] := SinLinea(Entradas[Mapa[K]], Suyo);
+    end;
   // el comentario que va DETRAS del ; final, en su misma linea, es de la
   // ULTIMA entrada original, y queda fuera de la clausula: con una unit
   // anadida detras se iba a la nueva ('Lsp.NetDrives; // PrefijoSinBarra'
   // salio 'Lsp.Texts; // PrefijoSinBarra', medido el 2-oct-2026 con adduses,
   // y lo mismo add-unit en un .dpr), y quitada su entrada se pegaba a la que
   // quedaba ('// de SysUtils // de Classes'). Se queda con su entrada; si su
-  // entrada se fue, en una linea suya, como el de una quitada de en medio:
-  // un comentario no se borra
+  // entrada se fue, se va con ella, como el de una quitada de en medio (11.3;
+  // hasta el 10-oct-2026 se quedaba en una linea suya)
   var Resto := U.EndPos + 1;   // desde donde sigue el texto de detras
-  var Suelto := '';            // el de una entrada que ya no esta
   var PosCom := U.EndPos + 1;
   while (PosCom <= Length(Dpr)) and CharInSet(Dpr[PosCom], [' ', #9]) do
     Inc(PosCom);
@@ -1084,9 +1112,7 @@ begin
       var Coment := Copy(Dpr, PosCom, LargoCom);
       if Duena >= 0 then
         Colas[Duena] := Colas[Duena] + IfThen(PosCom > U.EndPos + 1,
-          Copy(Dpr, U.EndPos + 1, PosCom - U.EndPos - 1), ' ') + Coment
-      else
-        Suelto := Coment;
+          Copy(Dpr, U.EndPos + 1, PosCom - U.EndPos - 1), ' ') + Coment;
       Resto := PosCom + LargoCom;
     end;
   end;
@@ -1146,8 +1172,7 @@ begin
   end;
   Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(NL, Parts);
   Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
-  Result := Copy(Dpr, 1, U.StartPos - 1) + Body +
-    IfThen(Suelto <> '', NL + Indent + Suelto, '') + Copy(Dpr, Resto, MaxInt);
+  Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, Resto, MaxInt);
 end;
 
 function CreateFormLine(const AInfo: TUnitInfo): string;
@@ -1864,13 +1889,15 @@ begin
         Text := Copy(Text, 1, Ini - 1) + Clausula + Copy(Text, Ini + Largo, MaxInt)
       else
       begin
-        // delante de contains o del end. final (este, por EL lector: Lsp.Pascal)
-        var Vista := CodigoPascal(Text);
+        // delante de contains (EL lector de la clausula: FindUses) o del end.
+        // final (EL suyo: Lsp.Pascal). contains se buscaba al principio de una
+        // linea, y en un .dpk de una linea el requires caia DETRAS de el
+        // (revisor 8, 10-oct-2026)
         var Donde := 0;
-        var MPos := TRegEx.Match(Vista, '^[ \t]*contains\b', [roIgnoreCase, roMultiline]);
-        if MPos.Success then
-          Donde := MPos.Index;
-        var Ends := EndsConPunto(Vista);
+        var Contains := FindUses(Text);
+        if Contains.Found then
+          Donde := Contains.StartPos;
+        var Ends := EndsConPunto(CodigoPascal(Text));
         if (Length(Ends) > 0) and ((Donde = 0) or (Ends[0].Ini < Donde)) then
           Donde := Ends[0].Ini;
         if Donde = 0 then
@@ -2372,27 +2399,33 @@ begin
   // sus lineas son las del texto) y se cambia en el texto, en esa posicion
   var VistaTexto := CodigoPascal(Texto);
   Vistas := SplitToLinesConSalto(VistaTexto, SaltosVista);
-  // la CABECERA no se toca (su nombre lo cambia quien mueve): sus lineas,
-  // por EL lector de la cabecera (Lsp.Pascal), tambien partida en varias;
-  // se miraba si la linea empezaba por 'unit ' (con un tabulador detras, no)
-  var CabIni := -1;
-  var CabFin := -2;
+  // el NOMBRE de la cabecera no se toca (lo cambia quien mueve): su sitio,
+  // por EL lector de la cabecera (Lsp.Pascal), tambien partida en varias; lo
+  // demas de sus lineas, si. Se miraba si la linea empezaba por 'unit ' (con
+  // un tabulador detras, no), y despues se saltaban las lineas enteras: un
+  // uses en la linea de la cabecera se quedaba con el nombre viejo (revisor 8,
+  // 10-oct-2026)
+  var NomIni := 0;
+  var NomFin := 0;
   var Cab: TCabeceraFuente;
   if CabeceraDeFuente(VistaTexto, Cab) and (Cab.Palabra = 'unit') then
   begin
-    CabIni := LineaDePosicion(VistaTexto, Cab.Ini) - 1;
-    CabFin := LineaDePosicion(VistaTexto, Cab.Fin - 1) - 1;
+    NomIni := Cab.NombreIni;
+    NomFin := Cab.NombreIni + Cab.NombreLen;
   end;
+  var IniLinea := 1; // donde empieza la linea I en el texto (1-based)
   for I := 0 to High(Lineas) do
   begin
+    if I > 0 then
+      Inc(IniLinea, Length(Vistas[I - 1]) + Length(SaltosVista[I - 1]));
     Linea := Lineas[I];
-    if (I >= CabIni) and (I <= CabFin) then
-      Continue;
     Partes := TStringBuilder.Create;
     try
       Ultimo := 0; // 0-based: hasta donde se ha copiado ya la linea
       for M in Re.Matches(Vistas[I]) do
       begin
+        if (IniLinea + M.Index - 1 >= NomIni) and (IniLinea + M.Index - 1 < NomFin) then
+          Continue;
         Partes.Append(Linea.Substring(Ultimo, M.Index - 1 - Ultimo));
         Partes.Append(ANuevo);
         Ultimo := M.Index - 1 + M.Length;

@@ -6719,8 +6719,10 @@ const
     'there is no place to put the routine.';
 
   SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT =
-    '[EDIT-049 DENIED] The boundary at the end of the unit was not found ' +
-    '(neither a single ''initialization'' nor a single ''end.'').';
+    '[EDIT-049 DENIED] The boundary at the end of the unit''s implementation ' +
+    'was not found - its initialization, its main begin or its final ''end.'', ' +
+    'starting a line (a unit without an implementation section has none). ' +
+    'Nothing was written: place the routine with an edit.';
 
   SR_EDIT_INSERT_METODO_NECESITA_INCLASS =
     '[EDIT-050 INVALID_PARAM] insert:"metodo" needs "inclass" with the exact ' +
@@ -7886,12 +7888,12 @@ const
     'it. MENTION IT in your report.)';
 
   SN_EDIT_ESTRUCTURA_ROTA_END_FMT =
-    '[EDIT-085] *** BROKEN STRUCTURE: the file had ONE ''end.'' and now ' +
+    '[EDIT-085] *** BROKEN STRUCTURE: the file had its final ''end.'' and now ' +
     'has %d. Restore with restore:true and STOP. ***';
 
   SN_EDIT_ESTRUCTURA_ROTA_ULTIMA =
-    '[EDIT-086] *** BROKEN STRUCTURE: the ''end.'' is no longer the last ' +
-    'line - whatever is left after it drops out of the compilation. ' +
+    '[EDIT-086] *** BROKEN STRUCTURE: what follows the final ''end.'' has ' +
+    'changed - the compiler reads nothing after it, so that code drops out. ' +
     'Restore with restore:true and STOP. ***';
 
   SK_EDIT_ESCRITO_EN_FMT =

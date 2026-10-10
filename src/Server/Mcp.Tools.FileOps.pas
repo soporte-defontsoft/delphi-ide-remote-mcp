@@ -1136,10 +1136,12 @@ begin
   try
     Src := PatchLoadText(Params.Dest, Enc);
     var Cab: string;
-    var Ini: Integer;
-    if CabeceraDeUnit(Src, Cab, Ini) and MismoIdentificador(Cab, OldStem) then
+    var Ini, Largo: Integer;
+    // (lo ESCRITO se cambia entero: Largo, no el nombre, que no lleva los
+    // blancos de 'unit A . B;')
+    if CabeceraDeUnit(Src, Cab, Ini, Largo) and MismoIdentificador(Cab, OldStem) then
     begin
-      Src := Copy(Src, 1, Ini - 1) + NewStem + Copy(Src, Ini + Length(Cab), MaxInt);
+      Src := Copy(Src, 1, Ini - 1) + NewStem + Copy(Src, Ini + Largo, MaxInt);
       CopiaCabecera := CopiaDiariaDe(Params.Dest);
       HabiaCopiaCabecera := TFile.Exists(CopiaCabecera);
       AncestroCabecera := PrimerAncestroQueExiste(TPath.GetDirectoryName(CopiaCabecera));

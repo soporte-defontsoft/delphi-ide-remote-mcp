@@ -10,6 +10,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A removed unit takes the comment on its line with it.** `removeuses`
+  (and `remove-unit`, the same writer) left the `//` written on the line of
+  the entry it removed as a loose line inside the clause (found moving
+  `Lsp.Sandbox`: an orphan `// ServerDir y ClaveDeCarpeta...`). The rule is
+  the house's - there is no judge for it - and it is declared: a comment on
+  the same line as an entry is that entry's and goes with it, the one
+  after a comma and the one after the final `;`; a comment on a line of
+  its own stays, also when it sat right above the removed entry. Until now
+  "a comment is never deleted" (2-oct). `test_delphi_patch` and
+  `test_project_units`, the four checks of the old rule moved to the new
+  one, red against it, and two more cases.
+
 - **The startup log says which roots it cannot reach.** A root or a
   reference the server could not reach when it started was said by
   `delphi_workspace` (`unavailableRoots`) and by the tool that touched it,
@@ -39,8 +51,20 @@ the MCP `initialize` response (`serverInfo.version`).
   middle of a line went in, and the file was left with two). And a batch
   judges the structure of a source at the end even when no one-line entry
   warned: a block entry never asked, so a batch of blocks that took the
-  `end.` away said nothing (measured). `test_delphi_patch`, every case red
-  with the change undone; the `test_paisaje` rule holds one house.
+  `end.` away said nothing (measured). The audit is also relative now, as
+  dcc reads: the first `end.` is the final one, and `EDIT-086` speaks only
+  when what follows it changed - notes left uncommented after the `end.`,
+  which the compiler never reads, answered it on every edit of the file,
+  and on a batch that wrote nothing, with the order to restore (its own
+  reviewer). And `insert` takes the boundary of a unit from the class
+  reader (`TUnidadPas.FinDeclaraciones`: `initialization`, the main
+  `begin` or the final `end`): a unit with `begin ... end.` as its
+  initialization got the routine INSIDE that block (measured: E2070), and
+  one with no implementation section got it in its interface (it answers
+  `EDIT-049` now, nothing written).
+  `test_delphi_patch`, each case red with its part undone - the two
+  refusals kept from before are guards, red only with their guard taken
+  out; the `test_paisaje` rule holds one house.
 
 - **`delphi_edit` and `delphi_textedit` delete a blank line.** `delete`
   asked for `old` with the line, and a blank line has no text to copy: the
@@ -808,15 +832,25 @@ the MCP `initialize` response (`serverInfo.version`).
   `Lsp.ProcessLaunch`. With its planted mutant.
 - **The source header has one reader.** `CabeceraDeFuente` (`Lsp.Pascal`)
   reads the unit/program/library/package header on the code view - its
-  word, its name with where it starts, and where it ends, past its `;` -
-  and the five readers declared above are gone (only one saw `package`,
-  only one gave a position, one wanted the header on a single line). What
-  they found is unchanged but for one place: `delphi_edit insert` into a
-  `.dpr` with no uses clause now puts the routine after a header split
-  over two lines (it answered EDIT-048), and still refuses a one-line
-  program (`program P; begin end.`), where it would land after the `end.`.
-  `test_delphi_patch`, each case red with its half broken; the
-  `test_paisaje` rule holds one house.
+  word, its name as dcc reads it with where what is written starts and
+  how long it is, and where it ends, past its `;` - and the five readers
+  declared above are gone (only one saw `package`, only one gave a
+  position, one wanted the header on a single line). Where that changes
+  what they did: `delphi_edit insert` into a `.dpr` with no uses clause
+  puts the routine after a header split over two lines (it answered
+  EDIT-048), and still refuses a one-line program (`program P; begin
+  end.`), where it would land after the `end.`; `unit A . B;` compiles and
+  is `A.B` (measured), and `create`, `add-unit` and `delphi_move` take it
+  (they said the name did not match, or found no header), the move
+  rewriting all that is written; a unit rename leaves only the header's
+  NAME alone, so a `uses` written on the header's line follows the rename
+  (whole lines were skipped); and `add-requires` on a package with no
+  requires writes it before the `contains` that `FindUses` reads (in a
+  one-line `.dpk` it landed after it). The `test_paisaje` rules of the
+  header and the `end.` look for more spellings, and declare the class
+  reader (`TLectorPas.Lee`) as the parser it is. `test_delphi_patch`,
+  `test_project_units`, `test_scaffold`, each case red with its part
+  undone.
 - **One gate to read files** (the doors block of 1.18.0, first part).
   `LeeTexto` and `LeeBytes` (`Lsp.Patch`) read a file only if it is in one
   of the PLACES the caller names - the workspace (the jail's own read

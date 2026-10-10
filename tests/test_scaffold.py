@@ -144,6 +144,19 @@ _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: requires con rtl, vcl y dbrtl, una por linea', "requires\r\n  rtl,\r\n" in _k and 'vcl' in _k.split('contains')[0] and 'dbrtl' in _k.split('contains')[0], _k)
 out = call('delphi_config', {"project": PDPROJ, "command": "add-requires", "requires": "vcl"})
 check('package: add-requires idempotente', mc.es(out, 'SN_REQUIRES_PRESENT_FMT'), out[:200])
+# un .dpk de UNA linea sin requires: el requires va DELANTE de contains (EL lector de
+# la clausula, FindUses); contains se buscaba al principio de una linea y el requires
+# caia detras de el (revisor 8, B2)
+out = call('delphi_create', {"kind": "project-package", "name": "PUna", "dir": os.path.join(BASE, 'PUna')})
+_pdpk = os.path.join(BASE, 'PUna', 'PUna.dpk')
+check('package de una linea: creado', os.path.exists(_pdpk), out[:200])
+open(os.path.join(BASE, 'PUna', 'UPu.pas'), 'wb').write(b'unit UPu;\r\ninterface\r\nimplementation\r\nend.\r\n')
+open(_pdpk, 'wb').write(b"package PUna; contains UPu in 'UPu.pas'; end.\r\n")
+out = call('delphi_config', {"project": os.path.join(BASE, 'PUna', 'PUna.dproj'), "command": "add-requires", "requires": "rtl"})
+_k = open(_pdpk, 'rb').read().decode('utf-8-sig')
+check('package de una linea: add-requires lo pone DELANTE de contains',
+      mc.abre(out, 'SN_REQUIRES_ADDED_FMT') and 'requires' in _k and _k.index('requires') < _k.index('contains'),
+      out[:200] + ' | ' + _k)
 out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 try:
     d = json.loads(out)

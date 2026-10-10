@@ -1194,14 +1194,14 @@ end;
 function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
 var
   Nombre: string;
-  Ini: Integer;
+  Ini, Largo: Integer;
 begin
   Result := '';
   // la cabecera (EL lector: CabeceraDeUnit) y el end., los del CODIGO: con
   // su regex sobre el texto, un 'unit Vieja;' comentado encima negaba la
   // unit por su nombre y un end. comentado pasaba por el final (revision de
   // la 1.10.0, medido con delphi_create kind=unit content=)
-  if not CabeceraDeUnit(AContent, Nombre, Ini) then
+  if not CabeceraDeUnit(AContent, Nombre, Ini, Largo) then
     Exit(MsgText(SR_CREATE_CONTENT_NOUNIT));
   if not MismoIdentificador(Nombre, AUnitName) then // (Lsp.Pascal: tambien la caja de un acento)
     Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [Nombre, AUnitName]));
@@ -2733,38 +2733,35 @@ begin
   Result := Format('  %d: %s', [N, ConSalto(ATexto, #10 + SANGRIA_FILA)]);
 end;
 
-{ Cuantos 'end.' tiene el CODIGO de un fuente: un end. comentado contaba, la
-  cuenta salia 2 y la auditoria de estructura no miraba nada (censo del
-  lexico, 2-oct-2026). Por EL lector (Lsp.Pascal.EndsConPunto): contaba solo
-  el que iba solo en su linea, y 'program P; begin end.' - que compila -
-  salia con 0 y BROKEN STRUCTURE (sonda del 10-oct-2026). }
-function CountEndDot(const T: string): Integer;
-begin
-  Result := Length(EndsConPunto(CodigoPascal(T)));
-end;
-
 { La ESTRUCTURA de un fuente despues de escribirlo: '' si sigue en pie, o el
-  aviso (EDIT-085: tenia UN end. y ya no; EDIT-086: el end. ya no es la
-  ultima linea de codigo). La pregunta la edicion suelta (DoEdit) sobre lo
-  que acaba de escribir y la tanda (AplicaTanda) sobre el fichero ENTERO al
-  acabar: una entrada que abre un (* y la siguiente que lo cierra dejaban a
-  mitad de tanda un estado roto que el fichero final no tiene, y la tanda
-  avisaba de BROKEN STRUCTURE (2.5 de la 1.18.0). }
+  aviso. EDIT-085: tenia su end. y ya no tiene ninguno. EDIT-086: lo que hay
+  detras del PRIMER end. - el final: el compilador no lee mas alla - ha
+  cambiado y no esta vacio (un end. pegado a media unidad, codigo escrito
+  detras). Los end. son los del CODIGO (un end. comentado contaba, la cuenta
+  salia 2 y no se miraba nada: censo del lexico, 2-oct-2026), por EL lector
+  (Lsp.Pascal.EndsConPunto: el que iba solo en su linea hacia gritar BROKEN
+  STRUCTURE sobre un 'program P; begin end.' que compila, 10-oct-2026). Y
+  RELATIVA: lo que ya estaba detras (notas sin comentar) no avisa mientras no
+  cambie; avisaba en cada edicion de ese fichero y en una tanda que no
+  escribia nada, con la orden de deshacer (revisor 8, 10-oct-2026). La
+  pregunta la edicion suelta (DoEdit) sobre lo que acaba de escribir y la
+  tanda (AplicaTanda) sobre el fichero ENTERO al acabar: una entrada que abre
+  un (* y la siguiente que lo cierra dejaban a mitad de tanda un estado roto
+  que el fichero final no tiene (2.5 de la 1.18.0). }
 function AvisoDeEstructura(const AAntes, ADespues: string): string;
 begin
   Result := '';
-  var EA := CountEndDot(AAntes);
-  var ED := CountEndDot(ADespues);
-  if (EA = 1) and (ED <> 1) then
-    Result := MsgFmt(SN_EDIT_ESTRUCTURA_ROTA_END_FMT, [ED])
-  else if EA = 1 then
-  begin
-    // el end. es lo ULTIMO del codigo (un comentario detras no cuenta; algo
-    // delante en su linea, si: 'begin end.' compila)
-    var DespuesCodigo := CodigoPascal(ADespues);
-    if Copy(DespuesCodigo, EndsConPunto(DespuesCodigo)[0].Fin, MaxInt).Trim <> '' then
-      Result := MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA);
-  end;
+  var VistaAntes := CodigoPascal(AAntes);
+  var VistaDespues := CodigoPascal(ADespues);
+  var EA := EndsConPunto(VistaAntes);
+  var ED := EndsConPunto(VistaDespues);
+  if Length(EA) = 0 then
+    Exit;
+  if Length(ED) = 0 then
+    Exit(MsgFmt(SN_EDIT_ESTRUCTURA_ROTA_END_FMT, [0]));
+  var Detras := Copy(VistaDespues, ED[0].Fin, MaxInt).Trim;
+  if (Detras <> '') and (Detras <> Copy(VistaAntes, EA[0].Fin, MaxInt).Trim) then
+    Result := MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA);
 end;
 
 { La guarda de occurrence (David, 9-oct-2026): con un ancla que TRAE
@@ -4092,26 +4089,34 @@ begin
             [IAfter + 1, AnclaDpr.Trim, RDpr, NotaVis]));
         end;
 
-        var FrontIdx: Integer;
-        var FoundFront := FindUniqueLine(Codigo,
-          function(L: string): Boolean
+        // LA frontera: donde acaban las declaraciones del implementation, por
+        // EL lector (Lsp.PascalDecl: initialization, el begin del bloque
+        // principal o el end final), si lo que la cierra empieza su linea: con
+        // codigo delante en ella ('end; end.') la rutina caeria dentro de lo
+        // de delante, y se niega. Si es el end, tiene que ser EL end. final
+        // (EndsConPunto, y uno solo: dos son ramas de un IFDEF) - un end que el
+        // lector no supo leer no es la frontera. Eran una regex de
+        // 'initialization' y otra del end.: una unidad con 'begin ... end.'
+        // recibia la rutina DENTRO de ese bloque (revisor 8, 10-oct-2026;
+        // medido: E2070)
+        var FrontIdx := -1;
+        var FoundFront := False;
+        var UFront := LeeFuentePascal(Text);
+        try
+          var PosFront := UFront.FinDeclaraciones;
+          if PosFront > 0 then
           begin
-            Result := L.Trim.ToLower = 'initialization';
-          end, FrontIdx);
-        if not FoundFront then
-        begin
-          // la linea del end. final, por EL lector (Lsp.Pascal), si el end la
-          // empieza: con codigo delante en ella ('end; end.') la rutina caeria
-          // dentro de lo de delante, y se niega como antes
-          var EndsF := EndsConPunto(VistaTexto);
-          if Length(EndsF) = 1 then
-          begin
-            FrontIdx := LineaDePosicion(VistaTexto, EndsF[0].Ini) - 1;
-            var Atras := EndsF[0].Ini - 1;
+            var EndsF := EndsConPunto(VistaTexto);
+            var EsEnd := SameText(Copy(VistaTexto, PosFront, 3), 'end');
+            FrontIdx := LineaDePosicion(VistaTexto, PosFront) - 1;
+            var Atras := PosFront - 1;
             while (Atras >= 1) and not CharInSet(VistaTexto[Atras], [#10, #13]) and (VistaTexto[Atras] <= ' ') do
               Dec(Atras);
-            FoundFront := (Atras < 1) or CharInSet(VistaTexto[Atras], [#10, #13]);
+            FoundFront := ((Atras < 1) or CharInSet(VistaTexto[Atras], [#10, #13])) and
+              (not EsEnd or ((Length(EndsF) = 1) and (EndsF[0].Ini = PosFront)));
           end;
+        finally
+          UFront.Free;
         end;
         if not FoundFront then
           Exit(MsgText(SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT));

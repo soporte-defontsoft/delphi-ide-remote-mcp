@@ -160,6 +160,13 @@ type
     Programa: string;
     // las rutinas con cuerpo del implementation, en orden (TCuerpoPas)
     Cuerpos: TArray<TCuerpoPas>;
+    // donde acaban las declaraciones del implementation (las de un programa):
+    // la posicion, en el texto leido, de lo que las cierra - initialization,
+    // el begin del bloque principal o el end final -; 0 si no se llega. La
+    // frontera de lo que se inserta: con una regex de 'initialization' y de
+    // 'end.', una unidad con 'begin ... end.' recibia la rutina DENTRO de ese
+    // bloque (revisor 8, 10-oct-2026; medido: E2070)
+    FinDeclaraciones: Integer;
     constructor Create;
     destructor Destroy; override;
     // LA clase llamada ANombre: por su nombre completo (TOuter.TInner) o por el
@@ -2003,6 +2010,8 @@ begin
     SaltaHastaPuntoYComa;
     FEnImpl := True;
     LeeDeclaraciones(False);
+    if not Fin then
+      FUnidad.FinDeclaraciones := FIni[FI];
     Exit;
   end;
   if Mira <> 'unit' then
@@ -2024,6 +2033,8 @@ begin
     Toma;
     FEnImpl := True;
     LeeDeclaraciones(False);
+    if not Fin then
+      FUnidad.FinDeclaraciones := FIni[FI];
   end;
 end;
 

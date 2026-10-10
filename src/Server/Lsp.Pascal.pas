@@ -209,8 +209,9 @@ function LineaDePosicion(const ATexto: string; APos: Integer): Integer;
 { LA cabecera de un fuente (unit, program, library o package), leida en
   ACodigo - la vista del codigo, CodigoPascal: mismo largo y mismos saltos
   que el texto, sin comentarios ni cadenas -: la palabra en minusculas, el
-  nombre (con puntos, y con blancos alrededor de ellos si los lleva) con
-  donde empieza y cuanto mide, donde empieza la palabra (Ini) y donde acaba
+  nombre como lo lee dcc (con puntos y sin los blancos de alrededor de ellos:
+  'unit A . B;' compila y es A.B, medido el 10-oct-2026), donde empieza y
+  cuanto mide lo ESCRITO, donde empieza la palabra (Ini) y donde acaba
   la cabecera, detras de su ';' (Fin). Si lo escrito no es un nombre ('unit
   U-Mal;'), el nombre es lo escrito hasta el primer blanco, para que quien
   lo use diga por que no vale. False si no hay o no se cierra. Eran
@@ -647,7 +648,7 @@ begin
   // tambien 'A . B'); detras, platform/deprecated/library/experimental
   var Resto := Copy(ACodigo, Tras, P - Tras);
   MN := TRegEx.Match(Resto,
-    '\A\s+(' + PATRON_IDENT + '(?:\s*\.\s*' + PATRON_IDENT + ')*)(?=\s|\z)');
+    '\A\s+(' + PATRON_IDENT + '(?:\s*\.\s*' + PATRON_IDENT + ')*)(?=[\s(]|\z)');
   // lo que no es un nombre, tal cual: cortado en el primer caracter que no
   // es de identificador, 'U-Mal' era 'U' y add-unit decia que no casaba con
   // el fichero en vez de la causa real (CFG-038; test_project_units)
@@ -657,7 +658,9 @@ begin
   begin
     ACab.NombreIni := Tras + MN.Groups[1].Index - 1;
     ACab.NombreLen := MN.Groups[1].Length;
-    ACab.Nombre := MN.Groups[1].Value;
+    // (sin blancos: los de alrededor de un punto no son del nombre; el '(' de
+    // 'program P(Input, Output);' tampoco)
+    ACab.Nombre := TRegEx.Replace(MN.Groups[1].Value, '\s+', '');
   end;
   Result := True;
 end;

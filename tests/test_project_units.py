@@ -325,11 +325,11 @@ out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path":
 check('remove-unit: QUITADA', mc.abre(out, 'SN_UNIT_REMOVED_FMT'), out[:300])
 check('remove-unit: fuera del .dpr', 'UManual' not in rd(DPR), rd(DPR))
 # el '// a mano' iba detras de la coma de UManual: quitada ella, se pegaba a la
-# de antes ('{FormUClientes}, // a mano', medido el 2-oct-2026); se queda en
-# una linea suya (un comentario no se borra)
-_lin = [l for l in rd(DPR).splitlines() if '// a mano' in l]
-check('remove-unit: el // de la quitada se queda en una linea suya, no pegado a otra entrada',
-      len(_lin) == 1 and _lin[0].strip() == '// a mano', rd(DPR))
+# de antes ('{FormUClientes}, // a mano', medido el 2-oct-2026); despues se
+# quedaba en una linea suya, huerfano; ahora se va con ella (11.3, David
+# 10-oct-2026: el comentario de la linea de una entrada es suyo)
+check('remove-unit: el // de la linea de la quitada se va con ella (11.3), no se pega a otra',
+      '// a mano' not in rd(DPR), rd(DPR))
 check('remove-unit: fuera del .dproj', 'UManual' not in rd(DPROJ), '')
 check('remove-unit: el fichero sigue en disco', os.path.exists(hand))
 out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": hand})
@@ -374,6 +374,12 @@ usa = os.path.join(VDIR, 'UUsaVenta.pas')
 open(usa, 'wb').write(b"unit UUsaVenta;\r\n\r\ninterface\r\n\r\nuses\r\n  UVenta;\r\n\r\nfunction HayVenta: string;\r\n\r\nimplementation\r\n\r\nfunction HayVenta: string;\r\nbegin\r\n  { it's } Result := UVenta.FormUVenta.Name; // de UVenta\r\n  if UVenta.FormUVenta <> nil then\r\n    Result := 'UVenta.FormUVenta'\r\n  else\r\n    Result := '';\r\nend;\r\n\r\nend.\r\n")
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": usa})
 check('unit que usa UVenta anadida al proyecto', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
+# y una con la cabecera y su uses en UNA linea: el uses tambien sigue el rename (se
+# saltaban las lineas enteras de la cabecera; ahora solo su NOMBRE: revisor 8, B3)
+cabusa = os.path.join(VDIR, 'UCabUsa.pas')
+open(cabusa, 'wb').write(b"unit UCabUsa; interface uses UVenta; implementation end.\r\n")
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": cabusa})
+check('unit con la cabecera y el uses de UVenta en una linea anadida', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
 # un // detras de la coma de UVenta es suyo y la sigue con su nombre nuevo (la
 # entrada se cambia EN SU SITIO: 1.10.0, la duena del // ya no se busca por el
 # nombre, que el rename cambia)
@@ -400,6 +406,9 @@ check('move rename: DCCReference nuevo, viejo fuera', 'Include="UVentas.pas"' in
 usa_src = rd(usa)
 check('move rename: el uses de OTRA unit sigue el rename', '  UVentas;' in usa_src and '  UVenta;' not in usa_src, usa_src)
 check('move rename: el calificador UVenta.X sigue el rename', 'if UVentas.FormUVenta' in usa_src, usa_src)
+_cab = rd(cabusa)
+check('move rename: el uses de la linea de la cabecera tambien, y su nombre no',
+      _cab.startswith('unit UCabUsa; interface uses UVentas;'), _cab)
 check('move rename: dentro de una cadena NO se toca', "'UVenta.FormUVenta'" in usa_src, usa_src)
 # una referencia detras de un comentario de llave con un apostrofo se quedaba
 # sin renombrar (E2003) y el // que nombra la unit si se renombraba; ahora
