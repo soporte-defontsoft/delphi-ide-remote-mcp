@@ -190,8 +190,19 @@ _t = open(_dpr, 'rb').read()
 open(_dpr, 'wb').write(_t.replace(b'program ProyVcl;', b'program ProyVcl;\r\n\r\n// antes era FMX: FMX.Forms', 1))
 r = A.call('delphi_create', {'kind': 'form-vcl', 'name': 'UTrasComentario',
                               'project': os.path.join(VCLDIR, 'ProyVcl.dproj')})
-check('#4b un FMX.Forms en un COMENTARIO del .dpr no lo hace FMX: el form VCL entra',
-      b'// antes era FMX' in open(_dpr, 'rb').read() and mc.abre(r, 'SK_CREATE_CREADO_FORM_FMT'), r[:200])
+check('#4b un FMX.Forms en un COMENTARIO del .dpr no lo hace FMX: el form VCL entra (y se ve VCL: sin '
+      'la nota de consola)',
+      b'// antes era FMX' in open(_dpr, 'rb').read() and mc.abre(r, 'SK_CREATE_CREADO_FORM_FMT') and
+      not mc.es(r, 'SN_CREATE_CONSOLE_FORM'), r[:300])
+# unit scope names: 'uses Forms' sin prefijo no dice el marco; lo dice el .dproj del IDE (FrameworkType)
+# y no sale una nota de consola falsa (revisor 7, B6)
+_t = open(_dpr, 'rb').read()
+open(_dpr, 'wb').write(_t.replace(b'Vcl.Forms', b'Forms', 1))
+r = A.call('delphi_create', {'kind': 'form-vcl', 'name': 'UConScope',
+                              'project': os.path.join(VCLDIR, 'ProyVcl.dproj')})
+check('#4c con unit scope names (uses Forms) el marco lo dice el .dproj: el form VCL entra sin nota de consola',
+      b'  Forms,' in open(_dpr, 'rb').read() and mc.abre(r, 'SK_CREATE_CREADO_FORM_FMT') and
+      not mc.es(r, 'SN_CREATE_CONSOLE_FORM'), r[:300])
 
 # ------------------------------------------------------------------- #10 --
 r = A.call('delphi_package', {})

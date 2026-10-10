@@ -1034,21 +1034,26 @@ var
   Cadena: TStringList;
 
   // una clase del MARCO (TForm, TCustomForm, TFrame, TDataModule...): la
-  // dice la clase de la raiz que se acaba de crear, su cadena de herencia, y
-  // no una lista (norma 6; habia cuatro nombres a mano). Esas no tienen
-  // fichero ni componentes que leer
+  // dicen las cadenas de herencia de las raices que disena el IDE - la clase
+  // de la raiz que se acaba de crear, el frame de este marco y el modulo de
+  // datos, que se carga en la form oculta (revisor 7, M1: con la raiz sola se
+  // perdia TDataModule) - y no una lista (norma 6; habia cuatro nombres a
+  // mano). Esas no tienen fichero ni componentes que leer
   function DelMarco(const AClase: string): Boolean;
-  var
-    C: TClass;
-  begin
-    C := AInstancia.ClassType;
-    while C <> nil do
+
+    function EnCadena(C: TClass): Boolean;
     begin
-      if SameText(C.ClassName, AClase) then
-        Exit(True);
-      C := C.ClassParent;
+      while C <> nil do
+      begin
+        if SameText(C.ClassName, AClase) then
+          Exit(True);
+        C := C.ClassParent;
+      end;
+      Result := False;
     end;
-    Result := False;
+
+  begin
+    Result := EnCadena(AInstancia.ClassType) or EnCadena(ClaseFrame) or EnCadena(TDataModule);
   end;
 
 begin

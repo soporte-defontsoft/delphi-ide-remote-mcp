@@ -716,6 +716,14 @@ begin
   end;
   if Result <> '' then
     Exit;
+  // ...y si el uses no lo dice (unit scope names: 'uses Forms'), lo que el
+  // IDE guarda en su .dproj, el juez que ya mira el modulo de datos aqui
+  // abajo: daba '' y un CREATE-016 'de consola' falso (revisor 7, B6)
+  var Fw := ReadDproj(DprojDe(Dpr)).FrameworkType;
+  if SameText(Fw, 'FMX') then
+    Exit('fmx');
+  if SameText(Fw, 'VCL') then
+    Exit('vcl');
   if ClausulaRequires(Txt, Requiere, Ini, Largo) then
     for var R in Requiere do
       if SameText(R, 'fmx') then

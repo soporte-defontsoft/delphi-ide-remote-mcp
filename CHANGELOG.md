@@ -174,18 +174,25 @@ the MCP `initialize` response (`serverInfo.version`).
   server. `test_round49` (E5, E6).
 - **A file `delphi_references` cannot read is said, not fatal.** One file
   of its scope held by another process made the whole call fail - and with
-  it `delphi_rename_symbol`. It is now skipped and listed in `unreadable`
-  (LSP-040), since a reference in it would be missed, and a rename is not
-  applicable while any is listed (RENAME-022). `test_rename`.
+  it `delphi_rename_symbol`; so did the unit of the definition, and a form
+  file rename reads. It is now skipped and listed in `unreadable` (LSP-040,
+  once each, up to 25), since a reference in it would be missed, it is not
+  counted in `filesScanned`, and a rename is not applicable while any is
+  listed (RENAME-022). `test_rename`.
 - **The folder digest lists a long `uses` whole, and a comment no longer
   decides a project's framework.** `delphi_symbols` of a folder joined at
   most nine lines of a statement, so a `uses` with one unit per line came
-  back cut (twelve units: eight and a hanging comma); its names now come from
-  the Pascal reader (`Lsp.PascalDecl`). `delphi_create` told VCL from FMX
+  back cut (twelve units: eight and a hanging comma), and so did an enum or
+  a routine with one parameter per line, there and in a file's symbols (a
+  function without its result type); the names of the `uses` now come from
+  the Pascal reader (`Lsp.PascalDecl`) and a statement joins as many lines
+  as it takes, up to a safety cap. `delphi_create` told VCL from FMX
   with a regex over the raw `.dpr`, so a comment naming `FMX.Forms` made a
   VCL project "FMX" and its VCL form was refused (CREATE-017); the units of
-  its `uses` decide now, read the same way. Both measured on the live
-  server. `test_lector_clases` (C14c), `test_round8` (#4b).
+  its `uses` decide now, read the same way, and with unit scope names
+  (`uses Forms`) the IDE's own `FrameworkType` in the `.dproj` (a VCL
+  project was taken for a console one). Measured on the live server.
+  `test_lector_clases` (C14c, C14d), `test_round8` (#4b, #4c).
 - **A changeset says what the engine warned.** Its commit kept only "done"
   from each edit, so the engine's warnings - a brace inside a brace
   comment, a broken structure - never reached the agent (CHSET-032 now
@@ -746,13 +753,16 @@ the MCP `initialize` response (`serverInfo.version`).
   `inherited` form whose ancestor has no form file was read without a
   warning only if that ancestor was one of four names written by hand
   (TForm, TFrame, TCustomForm, TDataModule); now it is any class in the
-  chain of the root the renderer created (rule 6). `test_designer_orden`
-  O21, red with the check broken.
+  chains of the roots the IDE designs - the root the renderer created, the
+  framework's frame and TDataModule, since a data module is loaded into the
+  hidden form (rule 6; its own reviewer caught TDataModule lost in between).
+  `test_designer_orden` O21 and O22, red with the check broken.
 - **The Pascal grammar read by hand, declared.** `test_paisaje` now holds
   three rules for what `Lsp.PascalDecl` already reads and several places
   read again by themselves: the final `end.` (two spellings in seven
   places), a unit/program/library/package header (five readers) and the
-  interface/implementation section (the five copies inside ProjectUnits are
+  interface/implementation section (declared in three places: the insert
+  boundary of ExecutePatch, the digest, and the five copies inside ProjectUnits that are
   one, `FinDeSeccion`; the echo of adduses and removeuses is one,
   `ClausulaReleida`). Today's copies are listed and can only shrink; a new
   one fails the battery, each rule with its planted mutant.

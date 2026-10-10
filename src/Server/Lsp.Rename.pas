@@ -353,6 +353,7 @@ begin
     // 3. what a text rename would silently break
     DesignerHits := 0;
     StringHits := 0;
+    var DsgIlegibles: TArray<string> := [];
     DsgList := TStringList.Create;
     try
       TLspSession.Instance.ResolveSettings(TPath.GetFullPath(AFilePath), Root);
@@ -373,7 +374,14 @@ begin
               DsgList.Add(D);
       for P in DsgList do
       begin
-        Text := PatchLoadText(P, EncName);
+        // un designer cogido por otro proceso tumbaba el rename: no se sabe
+        // si lo nombra, asi que bloquea como el resto (revisor 7, M3)
+        try
+          Text := PatchLoadText(P, EncName);
+        except
+          DsgIlegibles := DsgIlegibles + [P];
+          Continue;
+        end;
         N := TRegEx.Matches(Text, '(?i)' + PatronIdentEntero(Ident)).Count;
         if N > 0 then
         begin
@@ -386,6 +394,18 @@ begin
     end;
     if DesignerHits > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_DESIGNER_FMT, [DesignerHits]));
+    if Length(DsgIlegibles) > 0 then
+    begin
+      Blockers.Add(MsgFmt(SR_RENAME_ILEGIBLES_FMT, [Length(DsgIlegibles)]));
+      var IleArr := Result.GetValue('unreadable') as TJSONArray;
+      if IleArr = nil then
+      begin
+        IleArr := TJSONArray.Create;
+        Result.AddPair('unreadable', IleArr);
+      end;
+      for var D in DsgIlegibles do
+        IleArr.Add(D);
+    end;
     if StringHits > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_STRINGS_FMT, [StringHits]));
 

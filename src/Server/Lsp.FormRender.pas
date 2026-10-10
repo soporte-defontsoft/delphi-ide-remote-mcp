@@ -485,8 +485,15 @@ begin
     if Result <> '' then
       Exit;
     // Los frames y ancestros que el ayudante puede resolver son hermanos.
+    // (con Carpeta, el form de verdad no es un hermano: el ayudante lee su
+    // propuesta, que ya se miro arriba; mirarlo otra vez dependia de que no
+    // lo borrasen mientras - medido con O20)
+    var ElDeVerdad := '';
+    if APeticion.Carpeta <> '' then
+      ElDeVerdad := TPath.Combine(APeticion.Carpeta, TPath.GetFileName(APeticion.Path));
     for var Hermano in WalkFiles(Hermanos, ['*' + ExtractFileExt(APeticion.Path)], False, False) do
-      if not EsEnlace(Hermano) and not SameFileName(Hermano, APeticion.Path) then
+      if not EsEnlace(Hermano) and not SameFileName(Hermano, APeticion.Path) and
+         not SameFileName(Hermano, ElDeVerdad) then
       begin
         Result := CompruebaForm(Hermano);
         if Result <> '' then

@@ -422,6 +422,17 @@ try:
           str(j)[:400])
 finally:
     _k32.CloseHandle(_h)
+# ...y un DESIGNER de la raiz cogido igual: rename lo lee para ver si lo nombra (revisor 7, M3)
+DSGC = os.path.join(COM, 'UDsgCom.dfm')
+open(DSGC, 'wb').write(b'object FormDsg: TFormDsg\r\nend\r\n')
+_h = _k32.CreateFileW(DSGC, 0x80000000, 0, None, 3, 0x80, None)
+try:
+    j = J(call('delphi_rename_symbol', {'path': UCOM, 'line': 4, 'character': 10, 'newname': 'Baz'}))
+    check('rename: un .dfm de la raiz sin leer tampoco tumba la llamada: no aplicable (RENAME-022) y en unreadable',
+          j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_ILEGIBLES_FMT') for b in j.get('blockers', [])) and
+          any(p.lower().endswith('udsgcom.dfm') for p in j.get('unreadable', [])), str(j)[:400])
+finally:
+    _k32.CloseHandle(_h)
 
 srv.mata()
 mc.fin('rename battery')

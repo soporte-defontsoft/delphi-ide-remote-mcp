@@ -420,6 +420,7 @@ var
   OpenedFiles: TDictionary<string, Boolean>;
   Entry: TJSONObject;
   Ilegibles: TArray<string>;      // del alcance, sin leer: se dicen, no se tiran
+  SinLeer: Integer;               // los del barrido que no se leyeron (no se cuentan)
 
   function CandidateJson(const C: TCandidate): TJSONObject;
   begin
@@ -442,6 +443,7 @@ var
 begin
   Session := TLspSession.Instance;
   FullPath := TPath.GetFullPath(AFilePath);
+  SinLeer := 0;
   Client := Session.AcquireFor(FullPath, Settings);
   Session.ResolveSettings(FullPath, RootDir);
 
@@ -518,8 +520,16 @@ begin
     var TwinU: TUnidadPas := nil;
     try
       // la vista del codigo: lo que se busca aqui es estructura (la clase
-      // del metodo) y la columna del identificador en codigo
-      TwinLines.Text := CodigoPascal(TLspClient.LoadSourceText(TargetPath));
+      // del metodo) y la columna del identificador en codigo. La unidad de
+      // la DEFINICION cogida por otro proceso tumbaba la llamada: se dice
+      // como el resto (revisor 7, M2) y el gemelo queda sin buscar
+      var TwinTexto := '';
+      try
+        TwinTexto := TLspClient.LoadSourceText(TargetPath);
+      except
+        Ilegibles := Ilegibles + [TargetPath];
+      end;
+      TwinLines.Text := CodigoPascal(TwinTexto);
       TwinU := LeeFuentePascal(TwinLines.Text);
       ClaseObjetivo := ClaseDeMetodo(TwinLines, TwinU, TargetLine, Ident);
       if (TargetLine >= 0) and (TargetLine < TwinLines.Count) then
@@ -651,6 +661,7 @@ begin
         Text := TLspClient.LoadSourceText(F);
       except
         Ilegibles := Ilegibles + [F];
+        Inc(SinLeer);
         Continue;
       end;
       // lo que es codigo lo dice EL lexico (Lsp.Pascal): la vista del codigo
@@ -758,6 +769,9 @@ begin
               try
                 CandLines.Text := CodigoPascal(TLspClient.LoadSourceText(CandPath));
               except
+                // donde resolvio un candidato, sin leer: el candidato acababa
+                // homonimo sin decir por que (revisor 7, B8)
+                Ilegibles := Ilegibles + [CandPath];
               end;
               Textos.Add(CandPath.ToLower, CandLines);
             end;
@@ -865,14 +879,22 @@ begin
       if Rejected > RejectedArr.Count then
         Result.AddPair('rejectedNote', MsgFmt(SN_REFS_REJECTED_CAP_FMT,
           [RejectedArr.Count, Rejected]));
-      Result.AddPair('filesScanned', TJSONNumber.Create(Scanned));
+      // los leidos de verdad, como delphi_search (revisor 7, B1)
+      Result.AddPair('filesScanned', TJSONNumber.Create(Scanned - SinLeer));
       if Length(Ilegibles) > 0 then
       begin
         var IleArr := TJSONArray.Create;
         Result.AddPair('unreadable', IleArr);
+        // una vez cada uno, y acotada como mentions (revisor 7, B2): la nota
+        // dice cuantos son
+        var Distintos: TArray<string> := [];
         for var Ile in Ilegibles do
-          IleArr.Add(Ile);
-        Result.AddPair('unreadableNote', MsgFmt(SN_REFS_ILEGIBLES_FMT, [Length(Ilegibles)]));
+          if IndexText(Ile, Distintos) < 0 then
+            Distintos := Distintos + [Ile];
+        for var Ile in Distintos do
+          if IleArr.Count < 25 then
+            IleArr.Add(Ile);
+        Result.AddPair('unreadableNote', MsgFmt(SN_REFS_ILEGIBLES_FMT, [Length(Distintos)]));
       end;
       Result.AddPair('candidates', TJSONNumber.Create(Candidates.Count));
       // WHERE we looked. "filesScanned: 4" says how many, never which, and a

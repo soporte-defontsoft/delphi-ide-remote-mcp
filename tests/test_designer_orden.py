@@ -28,6 +28,7 @@ un TToolBar, en una form heredada con [n]...).
       una posicion (A1); un ancestro sin leer niega aunque no falte nadie (A2)
   O20 el form se borra mientras juzga el renderizador: DSGN-144 (revisor 6, B2)
   O21 un ancestro del marco (TForm) no es lectura a medias: lo dice la clase cargada
+  O22 ...tampoco TDataModule, aunque el modulo se cargue en la form oculta (revisor 7, M1)
   O15 no queda ninguna carpeta __tmp- (B5)
 
 Uso:  python tests/test_designer_orden.py [ruta-a-DelphiLspMcp.exe]
@@ -240,6 +241,17 @@ open(os.path.join(JAIL, 'UHijaS.pas'), 'wb').write(
     b'unit UHijaS;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, Vcl.StdCtrls;\r\n\r\n'
     b'type\r\n  TFormHijaS = class(TForm)\r\n    Button1: TButton;\r\n    Button2: TButton;\r\n  end;\r\n\r\n'
     b'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
+# un MODULO de datos 'inherited' de TDataModule: el ayudante lo carga en la form oculta y
+# TDataModule tambien es raiz del marco (revisor 7, M1: con la cadena de la raiz sola se perdia)
+DMHIJA = os.path.join(JAIL, 'UDMHija.dfm')
+open(DMHIJA, 'wb').write(
+    b'inherited DMHija: TDMHija\r\n'
+    b'  object Timer1: TTimer\r\n    Left = 8\r\n    Top = 8\r\n  end\r\n'
+    b'  object Timer2: TTimer\r\n    Left = 40\r\n    Top = 8\r\n  end\r\nend\r\n')
+open(os.path.join(JAIL, 'UDMHija.pas'), 'wb').write(
+    b'unit UDMHija;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes, Vcl.ExtCtrls;\r\n\r\n'
+    b'type\r\n  TDMHija = class(TDataModule)\r\n    Timer1: TTimer;\r\n    Timer2: TTimer;\r\n  end;\r\n\r\n'
+    b'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
 PADRERARO = os.path.join(JAIL, 'UPadreRaro.dfm')
 open(PADRERARO, 'wb').write(
     b'object FormP: TFormP\r\n  Left = 0\r\n  Top = 0\r\n  ClientHeight = 200\r\n  ClientWidth = 300\r\n'
@@ -389,6 +401,10 @@ try:
     check('O21 ...pero un ancestro del MARCO (TForm) no es un form a medias: se ordena (la cadena de la '
           'clase cargada, no una lista)',
           J(r).get('ordered') == 'Button2' and orden(HIJAS) == ['Button2', 'Button1'], r[:400])
+    r = dsg(DMHIJA, {'component': 'Timer2', 'before': 'Timer1'})
+    check('O22 ...ni uno de TDataModule (un modulo de datos, cargado en la form oculta): se ordena '
+          '(revisor 7, M1)', J(r).get('ordered') == 'Timer2' and orden(DMHIJA) == ['Timer2', 'Timer1'],
+          r[:400])
     antes = bytes_de(PADRERARO)
     r = dsg(PADRERARO, {'component': 'Label1', 'after': 'Edit1'})
     check('O13 el PADRE de una clase que ningun paquete carga: DSGN-140 nombrando al padre (M2)',

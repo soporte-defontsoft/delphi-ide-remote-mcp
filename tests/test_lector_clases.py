@@ -555,6 +555,21 @@ du = [u_ for u_ in mc.ficheros(d, 'units') if u_.get('unit') == 'UDigUses']
 check('C14c digest: un uses de doce lineas sale ENTERO (eran nueve como mucho) y lo de detras sigue',
       bool(du) and du[0].get('uses') == ', '.join('U%02d' % i for i in range(1, 13)) and
       any(x.get('decl') == 'procedure Ultima;' for x in du[0].get('declares', [])), str(du)[:500])
+# C14d: ...y el tope de NUEVE lineas de StatementAt, su origen (revisor 7, M4): un enum de doce
+# miembros y una funcion de diez parametros, uno por linea, salen enteros (la funcion con su tipo)
+UDL = os.path.join(DIG, 'UDigLargos.pas')
+escribe(UDL, 'unit UDigLargos;\n\ninterface\n\ntype\n  TColorLargo = (\n' +
+        ''.join('    cl%02d,\n' % i for i in range(1, 12)) + '    cl12);\n\n'
+        'function Muchos(\n' + ''.join('  A%02d: Integer;\n' % i for i in range(1, 10)) +
+        '  A10: Integer): Boolean;\n\nimplementation\n\nfunction Muchos(\n' +
+        ''.join('  A%02d: Integer;\n' % i for i in range(1, 10)) +
+        '  A10: Integer): Boolean;\nbegin\n  Result := True;\nend;\n\nend.\n')
+d = J(call('delphi_symbols', {'path': DIG}))
+dl = [x for u_ in mc.ficheros(d, 'units') if u_.get('unit') == 'UDigLargos' for x in u_.get('declares', [])]
+check('C14d digest: un enum de doce miembros y una funcion de diez parametros, uno por linea, salen enteros',
+      any(x.get('decl', '').startswith('TColorLargo') and 'cl12' in x.get('decl', '') for x in dl) and
+      any(x.get('decl', '').startswith('function Muchos') and x.get('decl', '').endswith('): Boolean;') for x in dl),
+      str(dl)[:600])
 
 # C15: un class var no es el campo de un componente (el streaming busca campos
 # de la instancia): el lector no marcaba los campos de un 'class var'. En la

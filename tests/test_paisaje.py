@@ -233,10 +233,13 @@ REGLAS = [
      'cinco lectores de unit/program/library/package: solo FindUses ve package, solo CabeceraDeUnit da '
      'posicion, ExecutePatch la quiere en una linea (inventario del 10-oct-2026)'),
     ('la seccion interface/implementation buscada a mano',
-     r"'\^\[ \\t\]\*'\s*\+\s*\w*Sec\b|\^(?:interface|implementation)\[ \]\*\$",
-     [('Lsp.ProjectUnits.pas', 'FinDeSeccion'), ('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest')],
+     r"'\^(?:\[ \\t\]\*|\\s\*)'\s*\+\s*\w+\s*\+\s*'\\b'|\^(?:interface|implementation)\[ \]\*\$|"
+     r"\.Trim\.ToLower\s*=\s*'(?:interface|implementation)'",
+     [('Lsp.ProjectUnits.pas', 'FinDeSeccion'), ('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest'),
+      ('Lsp.Patch.pas', 'ExecutePatch')],
      'la primera linea que empieza por la palabra (FinDeSeccion: estaba cinco veces en tres funciones '
-     'de ProjectUnits) o la linea exacta (InterfaceDigest): dos reglas para lo que TLectorPas ya sabe '
+     'de ProjectUnits), la linea exacta (InterfaceDigest) o la linea que es la palabra (ExecutePatch, '
+     'la frontera del insert; la vio el revisor 7): tres reglas para lo que TLectorPas ya sabe '
      '(inventario del 10-oct-2026)'),
     ('decidir la codificacion de unos bytes',
      r'\bGetBufferEncoding\b|\$FF\b[^;]*\$FE\b|\$FE\b[^;]*\$FF\b|\$EF\b[^;]*\$BB\b|\$BB\b[^;]*\$BF\b',

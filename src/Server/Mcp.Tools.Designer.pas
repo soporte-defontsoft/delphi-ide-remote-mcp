@@ -592,8 +592,11 @@ end;
   perfectly can still be a stack of controls on top of each other, a button of
   size zero, or a panel hanging off the edge of the window.
 
-  This resolves Align exactly the way TWinControl.AlignControls does - each
-  aligned child eats its band off the remaining rectangle, in .dfm order - with
+  This resolves Align close to the way TWinControl.AlignControls does - each
+  aligned child eats its band off the remaining rectangle, in .dfm order (the
+  VCL orders children of the same Align by their position: two alTop panels
+  reordered in the file stay where their Top puts them, measured 10-oct-2026;
+  the judge would be the renderer's rectangles, a proposal in the 1.18.0 list) - with
   the one subtlety a probe agent measured on 2026-08-25: alClient does NOT
   shrink the remaining rectangle, so several alClient siblings all get the WHOLE
   space and lie on top of each other (the IDE writes them with identical

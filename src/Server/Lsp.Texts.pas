@@ -3469,7 +3469,8 @@ const
     'applicable, WRITES it through the changeset engine (all files or ' +
     'none, fingerprints, a backup of each in __delphi-patch) and answers ' +
     'with the commit. Strict on purpose, in both modes: one unverified ' +
-    'reference, a hit in a .dfm/.fmx (form bindings break), a hit inside a ' +
+    'reference, a file of the scope it cannot read, a hit in a .dfm/.fmx ' +
+    '(form bindings break), a hit inside a ' +
     'string literal (FindComponent/RTTI/StyleLookup by name), a symbol ' +
     'defined outside the workspace (RTL/components) or a collision with ' +
     'the new name = applicable=false with the reasons, and apply writes ' +
@@ -5305,9 +5306,11 @@ const
     'hides the one below. Fix it before calling the form done.';
 
   SN_DESIGNER_LAYOUT_HOW =
-    '[DSGN-026] How I measure it: I resolve Align like ' +
+    '[DSGN-026] How I measure it: I resolve Align from the text, close to ' +
     'TWinControl.AlignControls (each aligned control takes its band from ' +
-    'the space that is left, in .dfm order), with one key detail: ' +
+    'the space that is left, in .dfm order - the VCL orders controls of ' +
+    'the same Align by their position, so a reordered file can differ: ' +
+    'preview shows the real place), with one key detail: ' +
     'alClient does NOT shrink the rectangle, so two alClient controls ' +
     'get the WHOLE space and cover each other 100%. I apply the class''s ' +
     'default Align when the .dfm does not write it (TStatusBar=alBottom, ' +

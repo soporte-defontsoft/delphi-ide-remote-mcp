@@ -480,6 +480,10 @@ end;
   creer es su forma de escribir una declaracion. }
 function StatementAt(const ALines, AVista: TArray<string>; AUnidad: TUnidadPas;
   ADesde: Integer; out AHasta: Integer): string;
+const
+  // el tope de lineas que une una declaracion: de seguridad (un fuente mal
+  // formado no se une entero), no de forma
+  MAX_LINEAS_SENTENCIA = 400;
 
   // Cuantos '(' quedan abiertos en AText (la vista: sin comentarios), fuera
   // de sus cadenas: el '(' de una cadena no abre nada
@@ -550,9 +554,12 @@ begin
   AHasta := ADesde;
   if (ADesde < 0) or (ADesde > High(ALines)) then
     Exit('');
-  // las lineas que la union puede tocar (ADesde y ocho mas), leidas por EL
-  // lexico con el estado que traen: que linea sigue dentro de un comentario
-  Ventana := Copy(ALines, ADesde, Min(High(ALines), ADesde + 8) - ADesde + 1);
+  // las lineas que la union puede tocar (ADesde y hasta MAX_LINEAS_SENTENCIA
+  // mas), leidas por EL lexico con el estado que traen: que linea sigue
+  // dentro de un comentario. Eran ocho: un enum de doce miembros, una rutina
+  // de diez parametros uno por linea (sin su tipo de retorno) o un uses largo
+  // salian cortados (revisor 7, M4: se arreglo el uses y no el punto)
+  Ventana := Copy(ALines, ADesde, Min(High(ALines), ADesde + MAX_LINEAS_SENTENCIA) - ADesde + 1);
   Clases := ClasesPascal(string.Join(#10, Ventana));
   SetLength(Ini, Length(Ventana));
   SetLength(Incluida, Length(Ventana));
@@ -581,7 +588,7 @@ begin
   // Un ';' DENTRO de la lista de parametros es un separador, no el final de
   // nada: "function Alta(const A, B: string; C: Integer;" parece terminada y
   // no lo esta, asi que se perdian el tipo de retorno y el valor por defecto.
-  while (K < High(ALines)) and (K - ADesde < 8) and
+  while (K < High(ALines)) and (K - ADesde < MAX_LINEAS_SENTENCIA) and
         (not Vista.EndsWith(';') or (Unbalanced(Vista) > 0)) and
         not Vista.EndsWith('=') do
   begin
@@ -1037,12 +1044,18 @@ begin
       // los nombres, de EL lector (Lsp.PascalDecl): unir lineas cortaba un
       // uses de mas de nueve - StatementAt une como mucho nueve - (medido el
       // 10-oct-2026: doce unidades salian ocho y una coma colgando). Las dos
-      // ramas de un {$IFDEF} van, una vez cada nombre
-      var Usos: TArray<string> := [];
-      for var N in U.UsesInterface do
-        if IndexText(N, Usos) < 0 then
-          Usos := Usos + [N];
-      Result.AddPair('uses', string.Join(', ', Usos));
+      // ramas de un {$IFDEF} que comparten clausula van, una vez cada nombre
+      // (las que cierran cada una con su ';' no: el lector para en el
+      // primero). Y una vez la clave: dos clausulas en ramas la repetian
+      // (revisor 7, B4/B5)
+      if Result.GetValue('uses') = nil then
+      begin
+        var Usos: TArray<string> := [];
+        for var N in U.UsesInterface do
+          if IndexText(N, Usos) < 0 then
+            Usos := Usos + [N];
+        Result.AddPair('uses', string.Join(', ', Usos));
+      end;
       // ...y la clausula entera se salta, hasta su ';'
       while (I < High(Lines)) and not Vista[I].TrimRight.EndsWith(';') do
         Inc(I);
