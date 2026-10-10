@@ -63,9 +63,16 @@ the MCP `initialize` response (`serverInfo.version`).
   the half itself - inside the answer's JSON it would be another lone
   surrogate - and without the Pascal-literal way out, which would be half a
   character too. A whole emoji is written as before, and what only measures
-  a text that already exists keeps counting as it did. Version reviewers of
-  1.18.0. `test_resultados` E148c (red before), `LspTests.Encodings` (red
-  with the check taken out).
+  a text that already exists keeps counting as it did. The rule is for the
+  NEW text: a lone surrogate that is already in the file - a UTF-16 source
+  that carries one in a line nobody touches - is written back as it was,
+  one for one, where the encoding keeps it (the codec says so: UTF-16 does,
+  UTF-8 and UTF-32 would write `U+FFFD`); the first cut of this fix refused
+  every edit of such a file, and `delphi_move` moved it without rewriting
+  its header (the version reviewer of 1.18.1). Version reviewers of
+  1.18.0. `test_resultados` E148c (red before), `test_sueltos_disco_1181`
+  (red with the first cut), `LspTests.Encodings` (red with each half of the
+  check taken out).
 
 - **The judge of the order no longer refuses a form whose text names its own
   file, and `DSGN-144` names the file that changed.** To ask the IDE's writer

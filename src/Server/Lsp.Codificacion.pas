@@ -110,10 +110,16 @@ function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
   mitad de un caracter de mas alla de U+FFFF, sin la otra- no es un caracter en
   ninguna codificacion y se niega con ECaracterNoCabe; UTF-8 lo escribia como
   EF BF BD, UTF-32 como U+FFFD y UTF-16 crudo, y solo la ANSI lo negaba
-  (codificacion M1 del revisor de version de la 1.18.0). Laxo, para quien solo
-  MIDE un texto que ya existe (Measure, HighCount, el parser de un form): lo de
-  siempre, sin negar. }
-function EncodeText(const S: string; K: TEncKind; AEstricto: Boolean = True): TArray<Byte>;
+  (codificacion M1 del revisor de version de la 1.18.0). AAntes: el texto que
+  S SUSTITUYE (el del fichero, leido en K), si lo hay. Un suelto que ya estaba
+  en el (uno por uno) y que K escribe tal cual - un UTF-16 que ya lo traia - se
+  escribe como estaba: la regla es para lo NUEVO, y negarlo dejaba sin editar
+  un fichero por una linea que nadie tocaba (revisor de version de la
+  1.18.1). Laxo, para quien solo MIDE un texto que ya existe (Measure,
+  HighCount, el parser de un form) y para el juez de la ida y vuelta
+  (BytesVuelvenIgual, donde juzgan los bytes): lo de siempre, sin negar. }
+function EncodeText(const S: string; K: TEncKind; AEstricto: Boolean = True;
+  const AAntes: string = ''): TArray<Byte>;
 function EncName(K: TEncKind): string;
 function EncKindOf(const AName: string): TEncKind;
 function PreambleLen(K: TEncKind): Integer;
@@ -281,22 +287,81 @@ begin
     Result := S[I];
 end;
 
-{ El primer sustituto de S que esta SIN su pareja ('' si no hay ninguno): la
-  pareja la reconoce la RTL (CaracterEn) y lo que queda suelto no es un
-  caracter. }
-function SustitutoSuelto(const S: string): string;
+{ El siguiente sustituto de S que esta SIN su pareja, desde I (que avanza
+  detras de el); #0 si no quedan. La pareja la reconoce la RTL (CaracterEn) y
+  lo que queda suelto no es un caracter. CaracterEn solo se pregunta donde
+  hay un sustituto: creaba una cadena por caracter y un read de 6,9 MB pasaba
+  de 0,05 a 0,19 s (revisor de version de la 1.18.1). }
+function SiguienteSuelto(const S: string; var I: Integer): Char;
 var
-  I: Integer;
   T: string;
 begin
-  Result := '';
-  I := 1;
   while I <= Length(S) do
   begin
+    if not S[I].IsSurrogate then
+    begin
+      Inc(I);
+      Continue;
+    end;
     T := CaracterEn(S, I);
-    if (Length(T) = 1) and T[1].IsSurrogate then
-      Exit(T);
     Inc(I, Length(T));
+    if Length(T) = 1 then
+      Exit(T[1]);
+  end;
+  Result := #0;
+end;
+
+{ Si K escribe el sustituto suelto C y, al leerlo, vuelve C: lo contesta el
+  codec, no una lista de codificaciones (UTF-16 lo guarda tal cual; UTF-8 y
+  UTF-32 escriben U+FFFD; la ANSI no lo tiene). }
+function SueltoVuelveIgual(C: Char; K: TEncKind): Boolean;
+begin
+  try
+    Result := DecodeBytes(EncodeText(C, K, False), K) = C;
+  except
+    on ECaracterNoCabe do
+      Result := False;
+    on EEncodingError do
+      Result := False;
+  end;
+end;
+
+{ El primer sustituto suelto de S que es NUEVO ('' si no hay ninguno): el que
+  no estaba ya en AAntes, contados uno a uno (dos iguales en S y uno en
+  AAntes: el segundo es nuevo), o el que K no escribiria tal cual. Lo que ya
+  estaba en el fichero se escribe como estaba; medio caracter del agente, no
+  (revisor de version de la 1.18.1: un UTF-16 con un suelto en una linea que
+  nadie tocaba dejo de editarse por ningun escritor). }
+function SustitutoNuevo(const S, AAntes: string; K: TEncKind): string;
+var
+  Ya: TDictionary<Char, Integer>;
+  I, N: Integer;
+  C: Char;
+begin
+  Result := '';
+  Ya := TDictionary<Char, Integer>.Create;
+  try
+    I := 1;
+    C := SiguienteSuelto(AAntes, I);
+    while C <> #0 do
+    begin
+      if Ya.TryGetValue(C, N) then
+        Ya[C] := N + 1
+      else
+        Ya.Add(C, 1);
+      C := SiguienteSuelto(AAntes, I);
+    end;
+    I := 1;
+    C := SiguienteSuelto(S, I);
+    while C <> #0 do
+    begin
+      if not (Ya.TryGetValue(C, N) and (N > 0) and SueltoVuelveIgual(C, K)) then
+        Exit(C);
+      Ya[C] := N - 1;
+      C := SiguienteSuelto(S, I);
+    end;
+  finally
+    Ya.Free;
   end;
 end;
 
@@ -328,7 +393,10 @@ var
   Vuelta: TArray<Byte>;
 begin
   try
-    Vuelta := EncodeText(DecodeBytes(B, K), K);
+    // LAXO: aqui el juez son los BYTES. Un suelto que ya estaba en un UTF-16
+    // vuelve igual y se queda; en estricto, la regla del texto NUEVO negaba
+    // reescribir lo que nadie toco (revisor de version de la 1.18.1)
+    Vuelta := EncodeText(DecodeBytes(B, K), K, False);
   except
     // un caracter que no cabe, o un decodificador que se niega: no vuelve
     on ECaracterNoCabe do
@@ -471,15 +539,16 @@ begin
   inherited Create(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT, [Que, EncName(AK)]));
 end;
 
-function EncodeText(const S: string; K: TEncKind; AEstricto: Boolean): TBytes;
+function EncodeText(const S: string; K: TEncKind; AEstricto: Boolean;
+  const AAntes: string): TBytes;
 var
   Body: TBytes;
 begin
   // el escritor niega aqui, una vez para todas las codificaciones, el
-  // sustituto suelto (la nota de la interface)
+  // sustituto suelto NUEVO (la nota de la interface)
   if AEstricto then
   begin
-    var Suelto := SustitutoSuelto(S);
+    var Suelto := SustitutoNuevo(S, AAntes, K);
     if Suelto <> '' then
       raise ECaracterNoCabe.Crea(Suelto, K);
   end;

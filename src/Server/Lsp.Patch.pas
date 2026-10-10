@@ -2243,6 +2243,7 @@ var
   K: TEncKind;
   B, Antes: TBytes;
   Existe: Boolean;
+  TextoAntes: string;
 begin
   K := EncKindOf(AEncName);
   // LA puerta del escritor ANTES de mirar nada: la ida y vuelta leia los bytes
@@ -2269,10 +2270,13 @@ begin
     var NoVuelve := ReescrituraDenegada(APath, Antes, KAntes);
     if NoVuelve <> '' then
       raise Exception.Create(NoVuelve);
+    // lo que sustituye: un sustituto suelto que ya estaba se escribe como
+    // estaba (EncodeText; revisor de version de la 1.18.1)
+    TextoAntes := DecodeBytes(Antes, KAntes);
   end;
   // el primer caracter no ASCII de un fuente sin codificacion (4.1)
   K := EncAlEscribir(APath, K, Antes, Existe, AText);
-  B := EncodeText(AText, K); // lanza ECaracterNoCabe: en el ensayo tambien
+  B := EncodeText(AText, K, True, TextoAntes); // lanza ECaracterNoCabe: en el ensayo tambien
   // ...y lo que se escribe tiene que leerse igual (EDIT-122): en el ensayo tambien
   var Cambia := LecturaCambiada(APath, B, K);
   if Cambia <> '' then
@@ -4885,7 +4889,9 @@ begin
           ;
       end;
     try
-      NewBytes := EncodeText(Joined, K);
+      // lo que sustituye: un sustituto suelto que ya estaba se escribe como
+      // estaba, si K lo escribe tal cual (EncodeText; revisor de la 1.18.1)
+      NewBytes := EncodeText(Joined, K, True, Text);
     except
       on E: ECaracterNoCabe do
       begin

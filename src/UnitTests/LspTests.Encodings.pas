@@ -60,6 +60,8 @@ type
     procedure UnSustitutoSueltoNoSeEscribeEnNinguna;
     [Test]
     procedure UnFormBinarioNoVuelveComoAnsiEnDobleByte;
+    [Test]
+    procedure UnSustitutoSueltoQueYaEstabaSeEscribeComoEstaba;
   end;
 
   { Los pares que COMPONEN y LEEN un formato, y la inversa de cada uno: la
@@ -811,6 +813,42 @@ begin
   UsaPaginaAnsi(932);
   Assert.IsTrue(Pos('EDIT-038', ReescrituraDenegada('C:\nada\UX.dfm', Bin, K)) > 0,
     'en 932 no vuelven: EDIT-038');
+end;
+
+procedure TEncodingTests.UnSustitutoSueltoQueYaEstabaSeEscribeComoEstaba;
+var
+  Antes: string;
+
+  function Niega(const S: string; K: TEncKind): Boolean;
+  begin
+    Result := False;
+    try
+      EncodeText(S, K, True, Antes);
+    except
+      on ECaracterNoCabe do
+        Result := True;
+    end;
+  end;
+
+begin
+  // revisor de version de la 1.18.1: un UTF-16 con un suelto en una linea que
+  // nadie tocaba dejo de editarse por ningun escritor. Lo que ya estaba se
+  // escribe como estaba; lo nuevo, no
+  Antes := 'uno ' + #$D800 + ' dos';
+  Assert.IsFalse(Niega('uno ' + #$D800 + ' tres', ekUtf16LE), 'el que ya estaba, en UTF-16 LE');
+  Assert.IsFalse(Niega('uno ' + #$D800 + ' tres', ekUtf16BE), 'el que ya estaba, en UTF-16 BE');
+  var Bytes := EncodeText(#$D800, ekUtf16LE, True, Antes);
+  Assert.AreEqual(4, Integer(Length(Bytes)), 'el BOM y una unidad');
+  Assert.AreEqual(Integer($D800), Integer(Bytes[2] or (Bytes[3] shl 8)), 'y se escribe tal cual, el mismo codigo');
+  Assert.IsTrue(Niega(#$D800 + ' y otro ' + #$D800, ekUtf16LE), 'dos donde habia uno: el segundo es nuevo');
+  Assert.IsTrue(Niega('uno ' + #$DC00, ekUtf16LE), 'uno distinto es nuevo');
+  // quien decide si K lo escribe tal cual es el codec: UTF-8 y UTF-32 lo
+  // escribirian U+FFFD, la ANSI no lo tiene
+  Assert.IsTrue(Niega('uno ' + #$D800, ekUtf8), 'en UTF-8 no se escribe aunque estuviera');
+  Assert.IsTrue(Niega('uno ' + #$D800, ekUtf32LE), 'en UTF-32 tampoco');
+  Assert.IsTrue(Niega('uno ' + #$D800, ekAnsi), 'ni en la ANSI');
+  Antes := '';
+  Assert.IsTrue(Niega('uno ' + #$D800, ekUtf16LE), 'sin texto de antes, todo suelto es nuevo');
 end;
 
 initialization
