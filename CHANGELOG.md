@@ -895,6 +895,15 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Internal
 
+- **One walk of a tree for several masks.** `delphi_references` walked each
+  folder three times (once for `*.pas`, `*.dpr`, `*.inc`), the designer
+  check of `delphi_rename_symbol` twice and `delphi_projects` twice, each
+  walk with its own purge of the trash on the way, although `WalkFiles`
+  takes several masks and lists each file once. One walk each now; in
+  `delphi_projects` a folder's `.groupproj` now sits next to its `.dproj`
+  instead of after every `.dproj` of the tree. `test_paisaje` refuses a
+  loop over masks that walks once per mask.
+
 - **One key for the parameter marks, one walk for all of them.** The key
   `tool|parameter` of the marks map was composed by hand in four places of
   `Lsp.Guard`; it is `ClaveDeParam` now, and `MarcasDeParams` reads

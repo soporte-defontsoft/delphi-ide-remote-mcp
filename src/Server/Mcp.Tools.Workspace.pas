@@ -1199,7 +1199,7 @@ var
   Roots: TArray<string>;
   RootDir, F, Filt: string;
   Entry: TJSONObject;
-  Mask, Repo, Branch: string;
+  Repo, Branch: string;
   AllCount: Integer;
 begin
   if Params.Root <> '' then
@@ -1292,8 +1292,9 @@ begin
       // hay nada" cuando la verdad era "hay, y no te los enseno".
       var RaizEnArtefactos := SkipIdeArtifacts(
         IncludeTrailingPathDelimiter(RootDir.Trim));
-      for Mask in MascarasDe(PROJECT_EXTS) do
-        for F in WalkFiles(RootDir.Trim, Mask) do
+      // UN paseo con las dos mascaras (8.3 de la 1.18.0): eran dos, uno por
+      // extension, y los .groupproj de una carpeta salian lejos de sus .dproj
+      for F in WalkFiles(RootDir.Trim, MascarasDe(PROJECT_EXTS)) do
         begin
           if not RaizEnArtefactos and (SkipIdeArtifacts(F) or InVault(F)) then
           begin
@@ -1352,10 +1353,9 @@ begin
       AllCount := 0;
       for RootDir in Roots do
         if (RootDir.Trim <> '') and TDirectory.Exists(RootDir.Trim) then
-          for Mask in MascarasDe(PROJECT_EXTS) do
-            for F in WalkFiles(RootDir.Trim, Mask) do
-              if not (SkipIdeArtifacts(F) or InVault(F)) then
-                Inc(AllCount);
+          for F in WalkFiles(RootDir.Trim, MascarasDe(PROJECT_EXTS)) do
+            if not (SkipIdeArtifacts(F) or InVault(F)) then
+              Inc(AllCount);
       Return.AddPair('note', MsgFmt(SN_PROJECTS_NO_MATCH_FMT,
         [Params.Name.Trim, AllCount]));
     end;

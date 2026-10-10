@@ -55,7 +55,7 @@ type
     6-oct-2026). David: "centralizamos un organizador de respuestas para
     files y siempre lo usamos".
     - Se agrupa por carpeta aunque las entradas lleguen desordenadas
-      (delphi_projects recorre por mascara, delphi_references por extension).
+      (los usos de delphi_references no llegan seguidos).
     - Cada pagina se sostiene sola: se agrupa solo lo que se anade, asi que la
       primera carpeta de una pagina lleva su dir aunque empezara en la
       anterior ("las siguientes paginas deben empezar indicando la ruta otra

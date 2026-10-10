@@ -24,12 +24,13 @@ ruta otra vez".
       se lista (en vivo el 6-oct-2026: pattern=* lo ensenaba entero)
   L6  delphi_search: folders > files > hits; los aciertos sin ruta y con sus
       dos numeraciones; los 60 y en sus ficheros de disco
-  L7  delphi_projects recorre por MASCARA (.dproj y despues .groupproj): una
-      carpeta con los dos le llega DESORDENADA y sale agrupada una vez, sin
-      'project' ni 'dir' por entrada; y el repositorio git UNA vez arriba
-      (repos = [{dir, branch}]), no repo y branch en cada proyecto
-  L8  ...y una pagina que empieza en el .groupproj vuelve a nombrar su
-      carpeta
+  L7  delphi_projects: una carpeta con un .dproj y un .groupproj sale
+      agrupada una vez, sin 'project' ni 'dir' por entrada (recorria por
+      MASCARA y le llegaban desordenados; un paseo desde el 8.3 de la 1.18.0);
+      y el repositorio git UNA vez arriba (repos = [{dir, branch}]), no repo
+      y branch en cada proyecto
+  L8  ...y una pagina que empieza a mitad de una carpeta (en su .groupproj)
+      vuelve a nombrarla
   L9  vault_search por paginas, como su hermana delphi_search: cortaba en el
       maximo con un "(limit reached)" y lo de detras no se alcanzaba; ahora
       dice de cuantos, desde donde y la pagina siguiente, y recorrerla llega
@@ -229,7 +230,8 @@ try:
           len(repos) == 1 and misma(repos[0]['dir'], PROYS) and repos[0].get('branch') == 'rama-l7'
           and bool(gp) and not any({'repo', 'branch'} & set(f) for g in gp for f in g.get('files', [])),
           (repos, gp))
-    jp3 = mc.como_json(llama('delphi_projects', {'root': PROYS, 'maxresults': 1, 'offset': 2}))
+    # (un paseo: Uno.dproj, Grupo.groupproj, Dos.dproj - el .groupproj es el 2o)
+    jp3 = mc.como_json(llama('delphi_projects', {'root': PROYS, 'maxresults': 1, 'offset': 1}))
     g3 = jp3.get('projects') or []
     check('L8 ...la pagina que empieza en el .groupproj vuelve a nombrar su carpeta',
           len(g3) == 1 and misma(g3[0]['dir'], os.path.join(PROYS, 'A'))

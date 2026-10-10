@@ -407,7 +407,7 @@ var
   Candidates: TList<TCandidate>;
   Cand: TCandidate;
   Files: TArray<string>;
-  F, Ext, Text, LineText: string;
+  F, Text, LineText: string;
   AllFiles: TList<string>;
   I, P, ScanCol, FilesOpened: Integer;
   Confirmed, Unverified: TJSONArray;
@@ -641,10 +641,11 @@ begin
       for var D in Dirs do
       begin
         ScopeDirs := ScopeDirs + [D];
-        for Ext in TArray<string>.Create('*.pas', '*.dpr', '*.inc') do
-          for F in WalkFiles(D, Ext) do
-            if not SkipPath(F) and not AllFiles.Contains(F) then
-              AllFiles.Add(F);
+        // UN paseo con las tres mascaras (8.3 de la 1.18.0): eran tres, uno
+        // por extension, cada uno con su purga de la papelera al pasar
+        for F in WalkFiles(D, ['*.pas', '*.dpr', '*.inc']) do
+          if not SkipPath(F) and not AllFiles.Contains(F) then
+            AllFiles.Add(F);
       end;
     finally
       Dirs.Free;

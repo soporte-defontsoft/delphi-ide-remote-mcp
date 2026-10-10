@@ -113,6 +113,11 @@ REGLAS = [
      'la puerta expande lo que no lleva [Contenido] y el disenador el TEXTO de cada valor: una '
      'expansion en otro sitio es una excepcion sin declarar (era una lista de nombres, '
      'PARAMS_CON_CONTENIDO, y un value entre comillas llegaba como srvX: al .dfm)'),
+    ('un paseo del arbol por cada mascara',
+     r"for\s+(?:var\s+)?\w+\s+in\s+(?:MascarasDe\(|TArray<string>\.Create\(\s*'\*\.)", [],
+     'WalkFiles toma VARIAS mascaras y recorre una vez (cada fichero una vez, una purga de la '
+     'papelera al pasar): references paseaba tres veces, rename dos y delphi_projects dos (8.3 de la '
+     '1.18.0, 10-oct-2026)'),
     ('la clave tool|parametro de las marcas', r"'\|'\s*\+\s*TMCPSerializer\.NormalizeKey",
      [('Lsp.Guard.pas', 'ClaveDeParam')],
      'ClaveDeParam: la clave de las marcas [RutaDelServidor] y [Contenido], con la normalizacion del '
@@ -650,6 +655,7 @@ PLANTADO = {
     'el host virtual srvhost': "  H := '\\\\srvhost\\' + Resto;",
     'la expansion de ida de una unidad virtual': "  V := ExpandDriveValue(V);",
     'la clave tool|parametro de las marcas': "  K := LowerCase(T) + '|' + TMCPSerializer.NormalizeKey(P);",
+    'un paseo del arbol por cada mascara': "  for var Ext in MascarasDe(SOURCE_EXTS) do Fs := WalkFiles(D, Ext);",
     'GetTempPath suelto': "  T := TPath.GetTempPath();",
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",
