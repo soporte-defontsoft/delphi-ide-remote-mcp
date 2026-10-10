@@ -624,7 +624,13 @@ begin
     try
       CrearCarpeta(Dir);
       Cand := TPath.Combine(Dir, TPath.GetFileName(APath));
-      EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc));
+      // LAXO: es la copia que se le PREGUNTA al ayudante, no la escritura del
+      // form - como ParserDeForm (Lsp.DesignerBin), "juzgar el parseo, no
+      // escribir". En estricto, un sustituto suelto que ya estaba en un .dfm
+      // UTF-16 tumbaba el juicio con EDIT-078 "nothing written" cuando el
+      // escritor de verdad (PatchSaveText) si escribia (revisor propio de la
+      // 1.18.1); lo NUEVO lo sigue negando ese escritor
+      EscribeBytes(Cand, EncodeText(ATexto, EncKindOf(AEnc), False), ltTemporal);
     except
       on E: Exception do
         Exit(MsgExcepcion(E.ClassName, E.Message));

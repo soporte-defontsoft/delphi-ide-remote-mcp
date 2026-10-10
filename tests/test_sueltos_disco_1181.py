@@ -15,7 +15,10 @@ UTF-16: el lector de los demas nunca da un suelto (lee U+FFFD).
   S2  ...y lo mismo con delphi_textedit, adduses y una tanda (edits)
   S3  el changeset aplica un edit en ese fichero
   S4  delphi_move de la unit: la cabecera se reescribe y el suelto se queda
-  S5  designer set en un .dfm UTF-16 con un suelto en el Caption
+  S5  designer set en un .dfm UTF-16 con un suelto en el Caption; y lo que
+      pregunta al juez del orden (set before=, insert): su copia temporal
+      se codificaba estricta y daba EDIT-078 "nothing written" (revisor
+      propio de la 1.18.1)
   S6  el texto NUEVO sigue negandose: un segundo suelto igual, y uno
       distinto, EDIT-078 sin escribir nada
   S7  control: un UTF-8 con BOM y una secuencia CESU (se lee U+FFFD) sigue
@@ -104,16 +107,29 @@ try:
     # ---- S5 ----
     F = os.path.join(JAIL, 'F16.dfm')
     FORM = ("object Form1: TForm1\n  Left = 0\n  Top = 0\n  Caption = 'ab" + D800 + "cd'\n"
-            "  ClientHeight = 200\n  ClientWidth = 300\nend\n")
+            "  ClientHeight = 200\n  ClientWidth = 300\n"
+            "  object Label0: TLabel\n    Left = 8\n    Top = 8\n    Caption = 'cero'\n  end\n"
+            "  object Label1: TLabel\n    Left = 8\n    Top = 30\n    Caption = 'uno'\n  end\nend\n")
     escribe(F, u16(FORM))
     with open(os.path.join(JAIL, 'F16.pas'), 'w', encoding='utf-8', newline='\r\n') as f:
-        f.write('unit F16;\n\ninterface\n\nuses\n  Vcl.Forms;\n\ntype\n  TForm1 = class(TForm)\n  end;\n\n'
+        f.write('unit F16;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, System.Classes;\n\n'
+                'type\n  TForm1 = class(TForm)\n    Label0: TLabel;\n    Label1: TLabel;\n  end;\n\n'
                 'var\n  Form1: TForm1;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
     r = srv.call('delphi_designer', {'command': 'set', 'path': F, 'component': 'Form1',
                                      'prop': 'Left', 'value': '10'}, t=400)
     t = de16(lee(F))
     check('S5 designer set en un .dfm UTF-16 con un suelto en el Caption: se escribe y el suelto se queda',
           not mc.fallo(r) and 'Left = 10' in t and "Caption = 'ab" + D800 + "cd'" in t, r[:400])
+    r = srv.call('delphi_designer', {'command': 'set', 'path': F, 'component': 'Label1', 'before': 'Label0'}, t=400)
+    t = de16(lee(F))
+    check('S5 ...set before= (pregunta al juez del orden): se reordena, sin EDIT-078, y el suelto se queda',
+          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT')
+          and t.find('object Label1') < t.find('object Label0') and D800 in t, r[:400])
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': F, 'classname': 'TButton'}, t=400)
+    t = de16(lee(F))
+    check('S5 ...insert: se escribe, su nota de orden no lleva EDIT-078, y el suelto se queda',
+          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and 'TButton' in t and D800 in t,
+          r[:400])
 
     # ---- S6 ----
     antes = lee(DOS)
