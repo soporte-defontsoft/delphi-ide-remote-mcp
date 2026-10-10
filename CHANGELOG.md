@@ -10,6 +10,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A local path is never looked for in a network place.** Every write asks
+  whether its path falls in a vault - of any workspace - and the place's
+  real path was resolved on disk each time: a vault on a network drive
+  whose server is down made each first check wait 21 s (measured raw). A
+  path on a local drive cannot be inside a UNC or a drive that is not
+  local, so `EnLugar` and `EnAlgunLugar` (`Lsp.Rutas`) now say no from the
+  session's drive table alone (`LugarDeRedParaRutaLocal`, no network), for
+  every place they compare: vaults, roots, references. Nothing they
+  answered changes. DUnitX `TLugarDeRedTests`: asking for a local path in
+  a UNC place on TEST-NET takes 21 s with the rule taken out and none with
+  it (the suite run outside the test container, where the network is).
+
 - **`adduses` puts a library unit into a `.dpr`.** A unit of the library
   (`FMX.Edit`, `System.SysUtils`) had no tool into a program's uses:
   `adduses` refused every `.dpr` and `add-unit` is for the project's own

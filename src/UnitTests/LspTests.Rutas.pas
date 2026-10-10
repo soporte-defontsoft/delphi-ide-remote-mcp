@@ -126,6 +126,21 @@ type
     [Test] procedure LaJaulaNoSeBorraPorAqui;
   end;
 
+  { Una ruta en una letra LOCAL no esta en un lugar de RED - un UNC, una letra
+    que no es local - y se dice sin mirar ese lugar en el disco (B-10: un
+    vault en una letra de red caida eran 21 s por escritura, medido en bruto).
+    La letra de las rutas locales es la del ejecutable de pruebas; la de red,
+    una que esta maquina no tiene, o el UNC de TEST-NET, que nunca contesta. }
+  [TestFixture]
+  TLugarDeRedTests = class
+  public
+    [Test] procedure UnUncNoContieneUnaRutaLocal;
+    [Test] procedure UnaLetraQueNoEstaNoContieneUnaRutaLocal;
+    [Test] procedure LaMismaLetraSeMiraEnElDisco;
+    [Test] procedure UnaRutaDeRedSeMiraSiempre;
+    [Test] procedure EnAlgunLugarNoPreguntaAlRecursoDeRed;
+  end;
+
 implementation
 
 uses
@@ -845,6 +860,49 @@ begin
   Assert.IsTrue(TFile.Exists(F), 'sigue ahi');
 end;
 
+{ TLugarDeRedTests }
+
+function LetraAusente: Char;
+begin
+  for var C := 'Z' downto 'D' do
+    if GetDriveType(PChar(C + ':\')) = DRIVE_NO_ROOT_DIR then
+      Exit(C);
+  Result := #0;
+end;
+
+procedure TLugarDeRedTests.UnUncNoContieneUnaRutaLocal;
+begin
+  Assert.IsTrue(LugarDeRedParaRutaLocal(Letra + ':\ws\x.pas', '\\192.0.2.1\x'));
+end;
+
+procedure TLugarDeRedTests.UnaLetraQueNoEstaNoContieneUnaRutaLocal;
+begin
+  var L := LetraAusente;
+  if L = #0 then
+    Assert.Pass('esta maquina no tiene ninguna letra libre');
+  Assert.IsTrue(LugarDeRedParaRutaLocal(Letra + ':\ws\x.pas', L + ':\vault'));
+end;
+
+procedure TLugarDeRedTests.LaMismaLetraSeMiraEnElDisco;
+begin
+  Assert.IsFalse(LugarDeRedParaRutaLocal(Letra + ':\ws\x.pas', Letra + ':\otra'));
+end;
+
+procedure TLugarDeRedTests.UnaRutaDeRedSeMiraSiempre;
+begin
+  Assert.IsFalse(LugarDeRedParaRutaLocal('\\192.0.2.1\x\y.pas', '\\192.0.2.1\x'));
+  var L := LetraAusente;
+  if L <> #0 then
+    Assert.IsFalse(LugarDeRedParaRutaLocal(L + ':\y.pas', Letra + ':\ws'));
+end;
+
+procedure TLugarDeRedTests.EnAlgunLugarNoPreguntaAlRecursoDeRed;
+begin
+  var T0 := GetTickCount64;
+  Assert.IsFalse(EnAlgunLugar(Letra + ':\ws\x.pas', TArray<string>.Create('\\192.0.2.1\x\')));
+  Assert.IsTrue(GetTickCount64 - T0 < 2000, 'no sale a la red');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
@@ -852,5 +910,6 @@ initialization
   TDUnitX.RegisterTestFixture(TClaveDeCarpetaTests);
   TDUnitX.RegisterTestFixture(TPuertaDeLeerTests);
   TDUnitX.RegisterTestFixture(TPuertaDeEscribirTests);
+  TDUnitX.RegisterTestFixture(TLugarDeRedTests);
 
 end.

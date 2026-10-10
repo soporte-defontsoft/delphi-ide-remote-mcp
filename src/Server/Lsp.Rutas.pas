@@ -67,6 +67,14 @@ function EnLugar(const APath, ALugar: string;
   alcanza. Mismo aviso que RealPath: para comparar. }
 function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;
 
+{ ARuta, en una letra LOCAL de esta sesion, no puede estar en ALugar si ese
+  lugar es de RED: un UNC, o una letra que no es local (de red o que no
+  esta). Se dice con la tabla de unidades (ClaseDeLetra), sin mirar el lugar
+  en el disco: un recurso de red caido son 21 s por pregunta, y EnLugar y
+  EnAlgunLugar lo preguntaban en cada escritura por cada vault (B-10; David,
+  10-oct-2026: "una ruta local no puede estar en un vault de red"). }
+function LugarDeRedParaRutaLocal(const ARuta, ALugar: string): Boolean;
+
 { LA regla de "ruta completa": <letra>:\ (o :/) o un UNC. "\x", "/x" y "C:x"
   NO lo son, y TPath.IsPathRooted si las da por buenas: se resolvian contra
   la unidad o la carpeta del PROCESO, que el agente no nombro. Toda tool que
@@ -251,10 +259,23 @@ begin
   Result := IncludeTrailingPathDelimiter(LongCanonical(APath));
 end;
 
+function LugarDeRedParaRutaLocal(const ARuta, ALugar: string): Boolean;
+var
+  LR, LL: Char;
+begin
+  LR := LetraDeRuta(ARuta.Trim);
+  if (LR = #0) or (ClaseDeLetra(LR) <> clLocal) then
+    Exit(False);
+  if EsUnc(ALugar.Trim) then
+    Exit(True);
+  LL := LetraDeRuta(ALugar.Trim);
+  Result := (LL <> #0) and (LL <> LR) and (ClaseDeLetra(LL) <> clLocal);
+end;
+
 function EnLugar(const APath, ALugar: string; AResuelveAlias: Boolean): Boolean;
 begin
   Result := False;
-  if (APath.Trim = '') or (ALugar.Trim = '') then
+  if (APath.Trim = '') or (ALugar.Trim = '') or LugarDeRedParaRutaLocal(APath, ALugar) then
     Exit;
   try
     var Ruta := IncludeTrailingPathDelimiter(APath.Trim);
@@ -273,7 +294,7 @@ end;
 function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;
 begin
   for var L in ALugares do
-    if (L.Trim <> '') and EnLugar(AReal, RealPath(L)) then
+    if (L.Trim <> '') and not LugarDeRedParaRutaLocal(AReal, L) and EnLugar(AReal, RealPath(L)) then
       Exit(True);
   Result := False;
 end;
