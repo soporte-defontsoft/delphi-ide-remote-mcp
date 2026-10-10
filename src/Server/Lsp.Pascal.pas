@@ -223,6 +223,21 @@ type
   end;
 function CabeceraDeFuente(const ACodigo: string; out ACab: TCabeceraFuente): Boolean;
 
+{ LOS 'end.' de un fuente, leidos en ACodigo (la vista del codigo, como la
+  cabecera), en orden: donde empieza su 'end' (Ini) y donde acaba, detras de
+  su punto (Fin). El primero es el final: el compilador no lee mas alla.
+  Como los lee dcc: la palabra, blancos (tambien saltos) y el punto -
+  'program P; begin end.' y un 'end' con su '.' en la linea de abajo
+  compilan (medido con delphi_build el 10-oct-2026) -, y no un '&end'. Eran
+  siete lectores con dos ortografias; la de "solo en su linea" hacia que la
+  auditoria de estructura gritase BROKEN STRUCTURE sobre un fuente que
+  compila (inventario y sonda del 10-oct-2026). }
+type
+  TEndPunto = record
+    Ini, Fin: Integer;
+  end;
+function EndsConPunto(const ACodigo: string): TArray<TEndPunto>;
+
 implementation
 
 uses
@@ -645,6 +660,19 @@ begin
     ACab.Nombre := MN.Groups[1].Value;
   end;
   Result := True;
+end;
+
+function EndsConPunto(const ACodigo: string): TArray<TEndPunto>;
+var
+  E: TEndPunto;
+begin
+  Result := [];
+  for var M in TRegEx.Matches(ACodigo, PATRON_NO_IDENT_ANTES + '(?<!&)end\s*\.', [roIgnoreCase]) do
+  begin
+    E.Ini := M.Index;
+    E.Fin := M.Index + M.Length;
+    Result := Result + [E];
+  end;
 end;
 
 function LlavesAnidadas(const ATexto: string; out AFines: TArray<Integer>): TArray<Integer>;

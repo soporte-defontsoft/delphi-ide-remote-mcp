@@ -10,6 +10,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_edit` reads the final `end.` the way dcc does.** Its audit
+  counted an `end.` only alone on its line, so writing a statement before
+  it - `Writeln('x'); end.`, or a program as `program P; begin end.`, both
+  compile - answered `EDIT-085` BROKEN STRUCTURE and told the agent to
+  restore and stop (measured live). One reader now, `EndsConPunto`
+  (`Lsp.Pascal`): the word, blanks (line breaks too) and the dot, as dcc
+  reads it (`end` with its `.` on the next line compiles, measured), and
+  the seven places that read it by hand with two spellings go through it.
+  So `insert` also finds the end of a unit written that way (it answered
+  `EDIT-049`), still refuses one whose `end.` has code before it on its
+  line (`end; end.`: the routine would land inside the line above), and
+  refuses a block with an `end.` anywhere in it (`EDIT-043`; one in the
+  middle of a line went in, and the file was left with two). And a batch
+  judges the structure of a source at the end even when no one-line entry
+  warned: a block entry never asked, so a batch of blocks that took the
+  `end.` away said nothing (measured). `test_delphi_patch`, every case red
+  with the change undone; the `test_paisaje` rule holds one house.
+
 - **`delphi_edit` and `delphi_textedit` delete a blank line.** `delete`
   asked for `old` with the line, and a blank line has no text to copy: the
   way round was a three-line block. Now `delete` with `atline` and no `old`

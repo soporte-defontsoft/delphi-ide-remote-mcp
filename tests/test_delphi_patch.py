@@ -697,6 +697,56 @@ out = call('delphi_edit', {"path": DPRL, "insert": "rutina-global", "code": "pro
 check('insert en un .dpr de una sola linea: se niega y no escribe',
       mc.abre(out, 'SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES') and
       open(DPRL, 'rb').read() == b'program UnaLinea; begin end.\r\n', out[:200])
+# --- EL end. (Lsp.Pascal.EndsConPunto), como lo lee dcc: la palabra, blancos
+# (tambien saltos) y el punto. Contado "solo en su linea", una edicion que dejaba
+# 'begin end.' en una linea - y compila - salia con EDIT-085 BROKEN STRUCTURE y la
+# orden de deshacer (sonda en vivo del 10-oct-2026)
+DPRE = os.path.join(DIR, 'EndJunto.dpr')
+open(DPRE, 'wb').write(b'program EndJunto;\r\n\r\nbegin\r\nend.\r\n')
+out = call('delphi_edit', {"path": DPRE, "old": "end.", "new": "Writeln('x'); end."})
+check('end.: una sentencia delante del end. en su linea no es BROKEN STRUCTURE',
+      not mc.rechazado(out) and not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
+      not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA') and
+      open(DPRE, 'rb').read() == b"program EndJunto;\r\n\r\nbegin\r\nWriteln('x'); end.\r\n", out[:300])
+# y una tanda de BLOQUE que se lleva el end. avisa: el bloque no preguntaba por la
+# estructura y la tanda solo la juzgaba si una entrada de una linea habia avisado
+DPRB = os.path.join(DIR, 'EndBloque.dpr')
+open(DPRB, 'wb').write(b'program EndBloque;\r\n\r\nbegin\r\nend.\r\n')
+out = call('delphi_edit', {"path": DPRB, "edits": [{"old": "begin\nend.", "new": "begin"}]})
+check('end.: una tanda de bloque que quita el end. avisa de BROKEN STRUCTURE',
+      mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT'), out[:300])
+# la frontera del insert en una unit: un 'end' con su '.' en la linea de abajo
+# compila (medido con delphi_build), y la rutina va delante del end; se negaba
+PASE = os.path.join(DIR, 'UEndPartido.pas')
+open(PASE, 'wb').write(CRLF.join(['unit UEndPartido;', '', 'interface', '', 'implementation', '',
+                                  'end', '.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": PASE, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+_src = open(PASE, 'rb').read().decode('ascii')
+check('end.: insert en una unit con el punto del end en la linea de abajo: delante del end',
+      'INSERT rutina-global' in out and mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT') and
+      not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
+      _src.index('implementation') < _src.index('procedure P;') < _src.rindex('end\r\n.'),
+      out[:300] + ' | ' + _src)
+# ...y con codigo delante del end. en su linea ('end; end.') se sigue negando:
+# delante de esa linea la rutina caeria dentro de la de arriba
+PASP = os.path.join(DIR, 'UEndPegado.pas')
+_pegado = CRLF.join(['unit UEndPegado;', '', 'interface', '', 'implementation', '',
+                     'procedure A;', 'begin', 'end; end.', '']).encode('ascii')
+open(PASP, 'wb').write(_pegado)
+out = call('delphi_edit', {"path": PASP, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+check('end.: insert con codigo delante del end. en su linea: se niega y no escribe',
+      mc.es(out, 'SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT') and open(PASP, 'rb').read() == _pegado,
+      out[:200])
+# y un bloque que trae un end. que NO va solo en su linea se niega: pasaba, y el
+# fichero quedaba con dos sin que la auditoria lo viese
+PASB = os.path.join(DIR, 'UBloqueEnd.pas')
+_bloque = CRLF.join(['unit UBloqueEnd;', '', 'interface', '', 'implementation', '', 'end.', '']).encode('ascii')
+open(PASB, 'wb').write(_bloque)
+out = call('delphi_edit', {"path": PASB, "insert": "rutina-global",
+                            "code": "procedure Q;\nbegin\n  if True then Exit; end.\nend;"})
+check('end.: un bloque con un end. a media linea se niega y no escribe',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_BLOQUE_TRAE_END_SOLO') and
+      open(PASB, 'rb').read() == _bloque, out[:200])
 
 # --- lo que encontro el revisor de codigo de la 1.10.0, cada caso medido
 # antes con una sonda contra el exe de entonces ---

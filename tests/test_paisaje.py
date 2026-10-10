@@ -216,15 +216,14 @@ REGLAS = [
      'FlotanteDeForm: el numero de coma flotante como lo escribe el IDE en UN sitio (1.17.0: insert, '
      'set y las plantillas FMX)'),
     # la gramatica PASCAL que se lee a mano (punto D/E de adivinar-vs-medir; inventario del
-    # 10-oct-2026, medida-pascal-copias): las copias de hoy, declaradas; el lector es
-    # Lsp.PascalDecl (TLectorPas) y cada una que pase a el sale de la lista
+    # 10-oct-2026, medida-pascal-copias): las copias de hoy, declaradas; los lectores son
+    # Lsp.Pascal (el end. y la cabecera, sobre la vista del codigo) y Lsp.PascalDecl
+    # (TLectorPas), y cada copia que pase a ellos sale de la lista
     ('el end. de una unidad leido a mano', r"end(?:\\s\*)?\\\.",
-     [('Lsp.Patch.pas', 'ContenidoDeUnitNoValido'), ('Lsp.Patch.pas', 'CountEndDot'),
-      ('Lsp.Patch.pas', 'AvisoDeEstructura'), ('Lsp.Patch.pas', 'ExecutePatch'),
-      ('Lsp.ProjectUnits.pas', 'AddProjectUnitNucleo'), ('Lsp.ProjectUnits.pas', 'AddPackageRequires'),
-      ('Lsp.DesignerMetaGen.pas', 'PropiedadesDefinidasPorCodigo')],
-     'dos ortografias (laxa "end\\s*\\." y estricta "end\\." sola en su linea) en siete sitios; '
-     'TLectorPas lo ve y no lo expone (inventario del 10-oct-2026)'),
+     [('Lsp.Pascal.pas', 'EndsConPunto')],
+     'EndsConPunto (Lsp.Pascal): eran siete sitios con dos ortografias (laxa "end\\s*\\." y '
+     'estricta "end\\." sola en su linea); la estricta daba BROKEN STRUCTURE sobre un '
+     '"program P; begin end." que compila (inventario y sonda del 10-oct-2026)'),
     ('la cabecera de una unidad leida a mano',
      r"\((?:\?:)?(?:unit\|)?program\|library|\^\\s\*unit\\s\+|StartsWith\(\s*'unit '",
      [('Lsp.Pascal.pas', 'CabeceraDeFuente')],

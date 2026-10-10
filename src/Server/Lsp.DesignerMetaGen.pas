@@ -397,7 +397,13 @@ begin
     // el cuerpo de un metodo acaba en la siguiente rutina de la COLUMNA 0: las
     // locales van sangradas (TCustomForm.DefineProperties tiene la suya)
     Fin := TRegEx.Create('(?im)^(?:(?:class\s+)?' + PatronPalabraDeRutina +
-      '\s|initialization\b|finalization\b|end\.)');
+      '\s|initialization\b|finalization\b)');
+    // y el ultimo, en el end. final, por EL lector (Lsp.Pascal; era un end.
+    // en la columna 0 de esta regex)
+    var EndsU := EndsConPunto(CodigoPascal(ATexto));
+    var FinUnidad := Length(ATexto) + 1;
+    if Length(EndsU) > 0 then
+      FinUnidad := EndsU[0].Ini;
     for var Mt in TRegEx.Matches(ATexto,
       '(?im)^\s*(?:class\s+)?procedure\s+(' + PATRON_IDENT_PUNTOS + ')\.DefineProperties\s*\(') do
     begin
@@ -405,9 +411,9 @@ begin
       Ini := Mt.Index + Mt.Length;
       Sig := Fin.Match(ATexto, Ini);
       if Sig.Success then
-        Hasta := Sig.Index
+        Hasta := Min(Sig.Index, FinUnidad)
       else
-        Hasta := Length(ATexto) + 1;
+        Hasta := FinUnidad;
       Cuerpo := Copy(ATexto, Ini, Hasta - Ini);
       Cuerpos.Add(TPair<Integer, Integer>.Create(Ini, Hasta));
       for var C in TRegEx.Matches(Cuerpo, '(?i)' + PATRON_NO_IDENT_ANTES + 'Define(?:Binary)?Property\s*\(\s*') do

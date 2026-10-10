@@ -1205,7 +1205,7 @@ begin
     Exit(MsgText(SR_CREATE_CONTENT_NOUNIT));
   if not MismoIdentificador(Nombre, AUnitName) then // (Lsp.Pascal: tambien la caja de un acento)
     Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [Nombre, AUnitName]));
-  if not TRegEx.IsMatch(CodigoPascal(AContent), '(?im)^\s*end\s*\.') then
+  if Length(EndsConPunto(CodigoPascal(AContent))) = 0 then
     Exit(MsgText(SR_CREATE_CONTENT_NOEND));
 end;
 
@@ -2735,10 +2735,12 @@ end;
 
 { Cuantos 'end.' tiene el CODIGO de un fuente: un end. comentado contaba, la
   cuenta salia 2 y la auditoria de estructura no miraba nada (censo del
-  lexico, 2-oct-2026). }
+  lexico, 2-oct-2026). Por EL lector (Lsp.Pascal.EndsConPunto): contaba solo
+  el que iba solo en su linea, y 'program P; begin end.' - que compila -
+  salia con 0 y BROKEN STRUCTURE (sonda del 10-oct-2026). }
 function CountEndDot(const T: string): Integer;
 begin
-  Result := TRegEx.Matches(CodigoPascal(T), '^[ \t]*end\.[ \t]*$', [roMultiLine]).Count;
+  Result := Length(EndsConPunto(CodigoPascal(T)));
 end;
 
 { La ESTRUCTURA de un fuente despues de escribirlo: '' si sigue en pie, o el
@@ -2757,12 +2759,10 @@ begin
     Result := MsgFmt(SN_EDIT_ESTRUCTURA_ROTA_END_FMT, [ED])
   else if EA = 1 then
   begin
-    // la ultima linea de CODIGO (un comentario detras del end. no la cambia)
-    var AfterCodigo := LineasDelTexto(CodigoPascal(ADespues));
-    var Ult := High(AfterCodigo);
-    while (Ult >= 0) and (AfterCodigo[Ult].Trim = '') do
-      Dec(Ult);
-    if (Ult >= 0) and not TRegEx.IsMatch(AfterCodigo[Ult], '^[ \t]*end\.[ \t]*$') then
+    // el end. es lo ULTIMO del codigo (un comentario detras no cuenta; algo
+    // delante en su linea, si: 'begin end.' compila)
+    var DespuesCodigo := CodigoPascal(ADespues);
+    if Copy(DespuesCodigo, EndsConPunto(DespuesCodigo)[0].Fin, MaxInt).Trim <> '' then
       Result := MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA);
   end;
 end;
@@ -3237,7 +3237,10 @@ begin
       end;
       if (Length(DeEstructura) > 0) and (TextoAntes = '') then
         Avisos := Avisos + DeEstructura
-      else if Length(DeEstructura) > 0 then
+      // y en un fuente, sin aviso de ninguna entrada tambien: una de BLOQUE no
+      // pregunta por la estructura (ApplyBlockEdit) y una tanda de bloques que
+      // dejaba el fichero sin su end. no decia nada (medido el 10-oct-2026)
+      else if (Length(DeEstructura) > 0) or ((TextoAntes <> '') and EsRutaDeFuente(APath)) then
       try
         var EncDespues: string;
         var Final := AvisoDeEstructura(TextoAntes, PatchLoadText(APath, EncDespues));
@@ -3786,7 +3789,7 @@ begin
           Exit(MsgText(SR_EDIT_INSERT_DEBE_SER_RUTINA));
         if A.Code.Trim = '' then
           Exit(MsgText(SR_EDIT_MODO_INSERT_NECESITA_CODE));
-        if TRegEx.IsMatch(CodigoPascal(A.Code), '^[ \t]*end\.[ \t]*$', [roMultiLine]) then
+        if Length(EndsConPunto(CodigoPascal(A.Code))) > 0 then
           Exit(MsgText(SR_EDIT_BLOQUE_TRAE_END_SOLO));
 
         CodeLines := SplitToLines(A.Code.TrimRight);
@@ -4025,7 +4028,8 @@ begin
         // comentario recibia la rutina (INSERT en un .dpr, escrito DENTRO del
         // comentario y contestado como hecho) y un end. comentado negaba la
         // frontera (EDIT-049; sonda del lexico, 2-oct-2026)
-        var Codigo := SplitToLines(CodigoPascal(Text));
+        var VistaTexto := CodigoPascal(Text);
+        var Codigo := SplitToLines(VistaTexto);
 
         // A program/library (.dpr) has no interface/implementation: a routine
         // is legal only BETWEEN the uses clause and the main begin..end.
@@ -4057,11 +4061,10 @@ begin
           begin
             // detras de la CABECERA, por EL lector (Lsp.Pascal): la queria en
             // una sola linea que acabase en ';' (inventario del 10-oct-2026)
-            var VistaDpr := CodigoPascal(Text);
             var Cab: TCabeceraFuente;
-            if CabeceraDeFuente(VistaDpr, Cab) and MatchText(Cab.Palabra, ['program', 'library']) then
+            if CabeceraDeFuente(VistaTexto, Cab) and MatchText(Cab.Palabra, ['program', 'library']) then
             begin
-              IAfter := LineaDePosicion(VistaDpr, Cab.Fin - 1) - 1;
+              IAfter := LineaDePosicion(VistaTexto, Cab.Fin - 1) - 1;
               // y la linea de su ';' acaba en ';': en un 'program P; begin
               // end.' la rutina caeria detras del end. (se negaba y se niega)
               if not Codigo[IAfter].TrimRight.EndsWith(';') then
@@ -4096,11 +4099,20 @@ begin
             Result := L.Trim.ToLower = 'initialization';
           end, FrontIdx);
         if not FoundFront then
-          FoundFront := FindUniqueLine(Codigo,
-            function(L: string): Boolean
-            begin
-              Result := TRegEx.IsMatch(L, '^[ \t]*end\.[ \t]*$');
-            end, FrontIdx);
+        begin
+          // la linea del end. final, por EL lector (Lsp.Pascal), si el end la
+          // empieza: con codigo delante en ella ('end; end.') la rutina caeria
+          // dentro de lo de delante, y se niega como antes
+          var EndsF := EndsConPunto(VistaTexto);
+          if Length(EndsF) = 1 then
+          begin
+            FrontIdx := LineaDePosicion(VistaTexto, EndsF[0].Ini) - 1;
+            var Atras := EndsF[0].Ini - 1;
+            while (Atras >= 1) and not CharInSet(VistaTexto[Atras], [#10, #13]) and (VistaTexto[Atras] <= ' ') do
+              Dec(Atras);
+            FoundFront := (Atras < 1) or CharInSet(VistaTexto[Atras], [#10, #13]);
+          end;
+        end;
         if not FoundFront then
           Exit(MsgText(SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT));
         var FrontLine := Lines[FrontIdx];

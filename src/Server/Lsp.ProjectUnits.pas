@@ -1362,12 +1362,13 @@ begin
     if SameText(U.Keyword, 'contains') then
     begin
       Estrenada := True;
-      var MEnd := TRegEx.Match(CodigoPascal(Text), '(?im)^\s*end\s*\.');
-      if not MEnd.Success then
+      // el end. final, por EL lector (Lsp.Pascal)
+      var Ends := EndsConPunto(CodigoPascal(Text));
+      if Length(Ends) = 0 then
         Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
       var NL := SaltoDominante(Text);
-      Text := Copy(Text, 1, MEnd.Index - 1) + 'contains' + NL + '  ' +
-        BuildEntry(Info, Include) + ';' + NL + NL + Copy(Text, MEnd.Index, MaxInt);
+      Text := Copy(Text, 1, Ends[0].Ini - 1) + 'contains' + NL + '  ' +
+        BuildEntry(Info, Include) + ';' + NL + NL + Copy(Text, Ends[0].Ini, MaxInt);
       PatchSaveText(Dpr, Text, Enc);
       Text := PatchLoadText(Dpr, Enc);
       U := FindUses(Text);
@@ -1815,7 +1816,6 @@ end;
 function AddPackageRequires(const AProject, ANames: string): string;
 var
   Dpr, Dproj, Enc, Text, NL, Clausula, N, E: string;
-  MPos: TMatch;
   Nombres, Nuevos: TStringList;
   Existentes: TArray<string>;
   Ya, Hay: Boolean;
@@ -1864,10 +1864,18 @@ begin
         Text := Copy(Text, 1, Ini - 1) + Clausula + Copy(Text, Ini + Largo, MaxInt)
       else
       begin
-        MPos := TRegEx.Match(CodigoPascal(Text), '^[ \t]*(contains\b|end\s*\.)', [roIgnoreCase, roMultiline]);
-        if not MPos.Success then
+        // delante de contains o del end. final (este, por EL lector: Lsp.Pascal)
+        var Vista := CodigoPascal(Text);
+        var Donde := 0;
+        var MPos := TRegEx.Match(Vista, '^[ \t]*contains\b', [roIgnoreCase, roMultiline]);
+        if MPos.Success then
+          Donde := MPos.Index;
+        var Ends := EndsConPunto(Vista);
+        if (Length(Ends) > 0) and ((Donde = 0) or (Ends[0].Ini < Donde)) then
+          Donde := Ends[0].Ini;
+        if Donde = 0 then
           Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
-        Text := Copy(Text, 1, MPos.Index - 1) + Clausula + NL + NL + Copy(Text, MPos.Index, MaxInt);
+        Text := Copy(Text, 1, Donde - 1) + Clausula + NL + NL + Copy(Text, Donde, MaxInt);
       end;
       PatchSaveText(Dpr, Text, Enc);
     finally
