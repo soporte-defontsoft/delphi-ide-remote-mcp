@@ -100,6 +100,18 @@ the MCP `initialize` response (`serverInfo.version`).
   FORM stays closed BEFORE asking git: a leading `+` (force) and an empty
   source (`:dst`, delete) are refused by shape, because `check-ref-format`
   accepts `+main` as a name ("no remote destruction", David). `test_git_refs`.
+- **Git metadata is judged by git in the write gate, not only by a `.git`
+  path segment** (`9.A`). `git init --separate-git-dir` leaves the real git
+  directory with no `.git` segment, so the shortcut missed it and an agent
+  could plant `sep.gitdir/hooks/pre-commit` - a hook that runs the person's
+  git. The write gate now also asks git (`rev-parse --absolute-git-dir
+  --git-common-dir` from the file's folder, through a hook `Lsp.Guard` lets
+  `Mcp.Tools.Git` fill so the low security unit does not depend on the git
+  tool): a path inside the git dir or the common dir is metadata and is
+  refused. The `.git` segment stays as a cheap shortcut; only writes pay (one
+  git process per folder inside a repo, ~43 ms, cached per folder -
+  `--separate-git-dir` is banned in init/clone, so a folder's git status
+  cannot change under the tools and the cache cannot go stale). `test_git_meta`.
 - **`delphi_edit` and `delphi_textedit` delete a blank line.** `delete`
   asked for `old` with the line, and a blank line has no text to copy: the
   way round was a three-line block. Now `delete` with `atline` and no `old`

@@ -806,6 +806,18 @@ function ToolCallDenied(const AToolName: string;
   un perfil que delphi_build profile= negaba despues (9-oct-2026). }
 function BadProfileName(const V: string): Boolean;
 
+{ INVERSION DE DEPENDENCIA (9.A, metadatos de git). La puerta de ESCRITURA
+  vive aqui -la unidad de seguridad, baja- y no puede llamar a git -alto-.
+  Mcp.Tools.Git le pone este gancho en su initialization. Dada una CARPETA
+  QUE EXISTE, deja en AGitDir/AComun lo que contesta git (rev-parse
+  --absolute-git-dir --git-common-dir), en forma de Windows; False si no es un
+  repo o git no contesta. Cacheado por carpeta en quien lo pone. Sin asignar
+  (una herramienta sin git, un contexto de prueba) el atajo del segmento .git
+  sigue siendo la unica puerta de metadatos. }
+var
+  DameGitDirDeCarpeta: function(const ACarpeta: string;
+    out AGitDir, AComun: string): Boolean;
+
 implementation
 
 uses
@@ -3628,6 +3640,38 @@ begin
   Result := JaulaDenegada(APath, Fuera, APermiteGit);
 end;
 
+{ El gitdir SEPARADO (git init --separate-git-dir) deja los metadatos de git
+  SIN segmento .git, asi que el atajo de MetadatosGitDenegados no los ve y el
+  agente podria plantar un hook que corre el git de la PERSONA. El juez es
+  git (9.A, norma 6): desde la carpeta del fichero -o su primer ancestro que
+  exista, porque el fichero puede no estar aun- se pregunta el gitdir y el
+  comun (DameGitDirDeCarpeta); si el fichero cae dentro de cualquiera de los
+  dos, es metadato. '' = no lo es, o no hay juez de git (el atajo del .git ya
+  decidio). Solo la ESCRITURA lo llama (PathDenied, not APermiteGit). }
+function MetadatosGitSeparadoDenegado(const APath: string): string;
+var
+  Carpeta, GitDir, Comun: string;
+
+  function Dentro(const ADir: string): Boolean;
+  begin
+    Result := (ADir <> '') and
+      (EnLugar(TPath.GetFullPath(APath), ADir, True) or
+       EnLugar(RealPath(APath), ADir, True));
+  end;
+
+begin
+  Result := '';
+  if not Assigned(DameGitDirDeCarpeta) then
+    Exit;
+  Carpeta := PrimerAncestroQueExiste(ExtractFileDir(TPath.GetFullPath(APath)));
+  if (Carpeta = '') or not TDirectory.Exists(Carpeta) then
+    Exit;
+  if not DameGitDirDeCarpeta(Carpeta, GitDir, Comun) then
+    Exit;
+  if Dentro(GitDir) or Dentro(Comun) then
+    Result := MsgFmt(SR_GUARD_GIT_METADATA_FMT, [APath]);
+end;
+
 function PathDenied(const APath: string; APermiteGit: Boolean): string;
 var
   Roots: TArray<string>;
@@ -3637,6 +3681,15 @@ begin
   Result := JaulaDenegada(APath, APermiteGit);
   if Result <> '' then
     Exit;
+  // El gitdir SEPARADO no tiene segmento .git: lo juzga git, y SOLO en la
+  // escritura (not APermiteGit; delphi_git maneja su propio .git). Un proceso
+  // git por escritura dentro de un repo, cacheado por carpeta (9.A).
+  if not APermiteGit then
+  begin
+    Result := MetadatosGitSeparadoDenegado(APath);
+    if Result <> '' then
+      Exit;
+  end;
   Roots := WorkspaceRoots;
   if Length(Roots) = 0 then
     Exit; // no jail configured: tampoco reglas de escritura

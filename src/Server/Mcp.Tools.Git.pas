@@ -67,6 +67,8 @@ uses
   System.SysUtils,
   System.Math,
   System.StrUtils,
+  System.Generics.Collections, // la cache por carpeta del gitdir (9.A)
+  System.SyncObjs,             // su cerrojo
   System.IOUtils,
   System.RegularExpressions,
   Winapi.Windows,
@@ -551,6 +553,58 @@ begin
   AComun := Carpetas[1];
   if Length(Carpetas) = 3 then
     ARaiz := Carpetas[2];
+end;
+
+var
+  { La cache por carpeta del gitdir (9.A): carpeta(lower) -> gitdir#10comun,
+    '' = no es repo. Positivo y negativo, de por vida: el estado git de una
+    carpeta no cambia por las tools (--separate-git-dir esta prohibido en
+    init/clone, Lsp.Args), asi que la cache no se queda rancia. }
+  GCacheGitDir: TDictionary<string, string>;
+  GCacheGitDirLock: TCriticalSection;
+
+{ El gancho que la puerta de ESCRITURA (Lsp.Guard.DameGitDirDeCarpeta) usa
+  para ver si una ruta es metadato de un gitdir SEPARADO (sin segmento .git).
+  Un rev-parse por carpeta (medido: ~43 ms con el spawn de git), CACHEADO por
+  carpeta. Por DondeViveElRepo, el mismo juez que la jaula de git. }
+function GitDirDeCarpeta(const ACarpeta: string; out AGitDir, AComun: string): Boolean;
+var
+  Clave, Guardado, Raiz, Salida: string;
+  Codigo: Cardinal;
+  P: Integer;
+begin
+  AGitDir := '';
+  AComun := '';
+  Clave := LowerCase(ACarpeta);
+  GCacheGitDirLock.Enter;
+  try
+    if GCacheGitDir.TryGetValue(Clave, Guardado) then
+    begin
+      if Guardado = '' then
+        Exit(False);
+      P := Pos(#10, Guardado);
+      AGitDir := Copy(Guardado, 1, P - 1);
+      AComun := Copy(Guardado, P + 1, MaxInt);
+      Exit(True);
+    end;
+  finally
+    GCacheGitDirLock.Leave;
+  end;
+  Result := DondeViveElRepo(ACarpeta, AGitDir, AComun, Raiz, Salida, Codigo);
+  if not Result then
+  begin
+    AGitDir := '';
+    AComun := '';
+  end;
+  GCacheGitDirLock.Enter;
+  try
+    if Result then
+      GCacheGitDir.AddOrSetValue(Clave, AGitDir + #10 + AComun)
+    else
+      GCacheGitDir.AddOrSetValue(Clave, '');
+  finally
+    GCacheGitDirLock.Leave;
+  end;
 end;
 
 { Las opciones que ADMITEN los comandos de red (fetch, pull, push). Una lista
@@ -1687,7 +1741,16 @@ begin
 end;
 
 initialization
+  GCacheGitDirLock := TCriticalSection.Create;
+  GCacheGitDir := TDictionary<string, string>.Create;
+  // la puerta de escritura (baja) pregunta a git por aqui (9.A)
+  Lsp.Guard.DameGitDirDeCarpeta := GitDirDeCarpeta;
   TMCPRegistry.RegisterTool('delphi_git',
     function: IMCPTool begin Result := TDelphiGitTool.Create; end);
+
+finalization
+  Lsp.Guard.DameGitDirDeCarpeta := nil;
+  GCacheGitDir.Free;
+  GCacheGitDirLock.Free;
 
 end.
