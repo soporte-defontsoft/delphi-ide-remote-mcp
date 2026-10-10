@@ -520,6 +520,25 @@ check('J15d ...y su gemelo: la misma forma corta con el host FUERA de GitRemotes
       '(GIT-005 lo nombra), sin llegar a git',
       mc.abre(r, 'SR_GIT_REMOTE_HOST_FMT') and '"maquina-que-no-existe.invalid"' in r, corto(r, 400))
 
+# J15e (1.18.1) - el mismo remoto del repo con GitRemotes VACIA: su negativa es
+# la de un remoto del repo (GIT-063), no GIT-004, que aconsejaba usar el nombre
+# del remoto - justo lo que se habia hecho (medido al publicar la 1.18.0: desde
+# ella toda direccion de un remoto pasa por la lista). J15f, su gemelo: una URL
+# ESCRITA en la llamada sigue siendo GIT-004 (sin el, J15e tambien pasaria con
+# una puerta que diera siempre GIT-063).
+srv15e = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': DENTRO}), nombre='git-jaula-j15e', t=120)
+try:
+    r = srv15e.call('delphi_git', dict(repo=REPO, command='fetch', args='corto'))
+    rf = srv15e.call('delphi_git', dict(repo=REPO, command='fetch',
+                                        args='https://maquina-que-no-existe.invalid/org/repo.git'))
+finally:
+    srv15e.cierra()
+check('J15e ...y con GitRemotes vacia, ese remoto del repo usado por su nombre se niega con GIT-063, que '
+      'nombra el host y no aconseja usar el nombre, sin llegar a git',
+      mc.abre(r, 'SR_GIT_REMOTE_DEL_REPO_OFF_FMT') and '"maquina-que-no-existe.invalid"' in r, corto(r, 400))
+check('J15f ...y una URL escrita en la llamada, con la lista vacia, sigue siendo GIT-004',
+      mc.abre(rf, 'SR_GIT_REMOTE_OFF_FMT'), corto(rf, 400))
+
 # J16 - push sin nombres desde un repo ESPEJO
 ESPEJO = os.path.join(DENTRO, 'espejo.git')
 git('clone', '-q', '--mirror', ENVIO_GIT, ESPEJO, cwd=DENTRO)
@@ -532,6 +551,19 @@ check('J16 push sin nombres desde un repo ESPEJO se niega (GIT-048): lo que envi
       all(mc.abre(r, 'SR_GIT_PUSH_CONFIG_FMT') for r in rs), [corto(r) for r in rs][:3])
 check('J16 ...y en el remoto sigue todo como estaba', refs(ENVIO_GIT) == alli and 'copia' in alli,
       '%s | antes: %s' % (corto(refs(ENVIO_GIT)), corto(alli)))
+
+# J18 (1.18.1) - una ruta con su unidad virtual en args, como en todo argumento de
+# ruta (WS-002): se expande antes de llegar a git. Con args como contenido llegaba
+# tal cual y git no encontraba nada (GIT-060, medido el 10-oct-2026). Solo el
+# commit que toco ese fichero: 'base' si, 'desde la subcarpeta' no. Con espacios
+# y un acento, entre comillas, llega entera
+l18 = g(REPO, command='log', args='-- ' + mc.virtual(os.path.join(REPO, 'raiz.txt')))
+check('J18 log -- <ruta con unidad virtual> da el commit de ese fichero, y solo ese (daba GIT-060)',
+      not mc.fallo(l18) and 'base' in l18 and 'desde la subcarpeta' not in l18, corto(l18, 300))
+l18b = g(RARO, command='log',
+         args='-- "%s"' % mc.virtual(os.path.join(RARO, 'sub carpeta', 'uno.txt')))
+check('J18 ...y entre comillas, con espacios y un acento en la ruta, llega entera',
+      not mc.fallo(l18b) and 'base' in l18b, corto(l18b, 300))
 
 srv.cierra()
 

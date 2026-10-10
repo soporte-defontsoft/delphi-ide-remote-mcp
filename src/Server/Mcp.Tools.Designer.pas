@@ -1082,11 +1082,16 @@ begin
     // el fichero ENTERO cambia de forma: su contenido actual, sellado
     Copia := MaskDriveText('', GuardaContenidoActual(Ruta));
     // un nombre no ASCII va en UTF-8 CON BOM, como lo guarda el IDE (sin el,
-    // TParser y dcc lo leen en ANSI); lo demas del texto es ASCII (#N)
+    // TParser y dcc lo leen en ANSI); lo demas del texto es ASCII (#N).
+    // ANuevo: el fichero ENTERO cambia de forma y lo que hay en el disco -el
+    // binario, ya sellado arriba- no cuenta: la ida y vuelta de los escritores
+    // lo leia como un texto ANSI y en una maquina de doble byte (932/936/949/
+    // 950) o con 65001 no volvia igual y se negaba (codificacion M3 del revisor
+    // de version de la 1.18.0)
     if IsAscii(Texto) then
-      PatchSaveText(Ruta, Texto, EncName(ekUtf8))
+      PatchSaveText(Ruta, Texto, EncName(ekUtf8), False, True)
     else
-      PatchSaveText(Ruta, Texto, EncName(ekUtf8Bom));
+      PatchSaveText(Ruta, Texto, EncName(ekUtf8Bom), False, True);
     Result := MsgFmt(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
       Length(LineasDelTexto(Texto)), Copia]);
   end

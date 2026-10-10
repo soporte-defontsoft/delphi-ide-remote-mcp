@@ -1050,7 +1050,7 @@ begin
     // En UTF-16 (y UTF-32) cada caracter son dos (cuatro) bytes: un 0D 00 0A 00 no es un CRLF
     // byte a byte. Se mide el cuerpo en UTF-8, las mismas cuentas que un
     // fichero utf8 (un acento = 2 bytes altos); HighCount hace lo mismo.
-    Cuerpo := EncodeText(DecodeBytes(B, K), ekUtf8);
+    Cuerpo := EncodeText(DecodeBytes(B, K), ekUtf8, False); // medir, no escribir
     Start := 0;
   end;
   for I := Start to High(Cuerpo) do
@@ -4659,6 +4659,9 @@ function SalidaPascalDe(ACodigo: Integer): string;
 var
   Par, Alto, Bajo, Hex: string;
 begin
+  // un sustituto suelto no tiene literal que valga: es medio caracter
+  if (ACodigo >= $D800) and (ACodigo <= $DFFF) then
+    Exit('');
   Hex := IntToHex(ACodigo, 4);
   if ACodigo <= $FFFF then
     Exit(MsgFmt(SF_EDIT_LITERAL_PASCAL_FMT, [Hex, Hex, Hex, Hex]));
@@ -4695,7 +4698,7 @@ var
     if (KH = ekUtf8Bom) or (KH in ENC_ANCHAS) then
       KH := ekUtf8; // sin BOM, y UTF-16/32 en el mismo cuerpo UTF-8 que mide Measure
     try
-      for X in EncodeText(S, KH) do
+      for X in EncodeText(S, KH, False) do // medir, no escribir
         if X > 127 then
           Inc(Result);
     except

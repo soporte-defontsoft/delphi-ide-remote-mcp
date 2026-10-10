@@ -174,6 +174,12 @@ function EsIdentificador(const S: string; APuntos: Boolean = False): Boolean;
 // puede seguir el identificador. Es el '\b' + Escape + '\b' de antes, que no
 // casaba con un acento al principio o al final del nombre.
 function PatronIdentEntero(const AIdent: string): string;
+// La columna (0-based, la del LSP) del NOMBRE de la rutina en una linea de
+// cabecera de la vista del CODIGO ('procedure TClase.Nombre(...)' -> la de
+// Nombre; tambien 'property Nombre'), -1 si la linea no es una cabecera. La
+// leia a mano delphi_definition (RoutineIdentCol); references es el segundo:
+// el cursor sobre la cabecera de una rutina anidada (1.18.1)
+function ColumnaDelNombreDeRutina(const ALinea: string): Integer;
 // El ultimo trozo de un nombre con puntos (Vcl.Forms.TForm -> TForm): el
 // lector de PATRON_IDENT_PUNTOS. Estaba dos veces con este cuerpo y en linea
 // en otros siete sitios (revision de paisaje del 4-oct-2026)
@@ -274,6 +280,18 @@ end;
 function PatronIdentEntero(const AIdent: string): string;
 begin
   Result := PATRON_NO_IDENT_ANTES + TRegEx.Escape(AIdent) + PATRON_NO_IDENT_DESPUES;
+end;
+
+function ColumnaDelNombreDeRutina(const ALinea: string): Integer;
+var
+  M: TMatch;
+begin
+  M := TRegEx.Match(ALinea, '^\s*(?:' + PatronPalabraDeRutina + '|property)\s+(?:' + PATRON_IDENT +
+    '\.)*(' + PATRON_IDENT + ')', [roIgnoreCase]);
+  if M.Success then
+    Result := M.Groups[1].Index - 1 // TMatch es 1-based; las columnas del LSP, 0-based
+  else
+    Result := -1;
 end;
 
 function UltimoTrozo(const ANombre: string): string;

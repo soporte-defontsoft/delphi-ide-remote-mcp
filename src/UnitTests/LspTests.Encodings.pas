@@ -56,6 +56,10 @@ type
     [Test] procedure Utf32NoEsBinarioYSeMide;
     [Test]
     procedure UnEmojiQueNoCabeSeNombraEntero;
+    [Test]
+    procedure UnSustitutoSueltoNoSeEscribeEnNinguna;
+    [Test]
+    procedure UnFormBinarioNoVuelveComoAnsiEnDobleByte;
   end;
 
   { Los pares que COMPONEN y LEEN un formato, y la inversa de cada uno: la
@@ -84,7 +88,8 @@ uses
   Lsp.Patch,
   Lsp.Codificacion,
   Lsp.Casa,
-  System.Character;
+  System.Character,
+  Lsp.DesignerBin;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin
@@ -757,6 +762,55 @@ begin
       Assert.Contains(E.Message, 'U+1F600', 'la negativa lo nombra entero');
     end;
   end;
+end;
+
+procedure TEncodingTests.UnSustitutoSueltoNoSeEscribeEnNinguna;
+const
+  TODAS: array [0 .. 6] of TEncKind = (ekUtf8, ekUtf8Bom, ekUtf16LE, ekUtf16BE, ekUtf32LE, ekUtf32BE, ekAnsi);
+var
+  K: TEncKind;
+  Suelto: string;
+begin
+  // codificacion M1 del revisor de version de la 1.18.0: UTF-8 lo escribia
+  // EF BF BD, UTF-32 U+FFFD y UTF-16 crudo; solo la ANSI lo negaba
+  for Suelto in TArray<string>.Create(#$D83D, #$DE00) do
+    for K in TODAS do
+      try
+        EncodeText('a' + Suelto + 'b', K);
+        Assert.Fail('un sustituto suelto se escribia en ' + EncName(K));
+      except
+        on E: ECaracterNoCabe do
+        begin
+          Assert.AreEqual(Integer(Ord(Suelto[1])), E.Codigo, 'su codigo, en ' + EncName(K));
+          Assert.IsFalse(E.Message.Contains(Suelto), 'el mensaje no lo lleva crudo, en ' + EncName(K));
+        end;
+      end;
+  // el par entero sigue siendo un caracter, y quien mide lo pide laxo
+  Assert.AreEqual(4, Integer(Length(EncodeText(#$D83D#$DE00, ekUtf8))), 'el emoji en UTF-8, cuatro bytes');
+  Assert.AreEqual(3, Integer(Length(EncodeText(#$D83D, ekUtf8, False))), 'laxo: EF BF BD, como antes');
+end;
+
+procedure TEncodingTests.UnFormBinarioNoVuelveComoAnsiEnDobleByte;
+var
+  Bin: TBytes;
+  K: TEncKind;
+begin
+  // la CAUSA de la codificacion M3 del revisor de version de la 1.18.0: to-text
+  // pasaba los bytes del binario por la ida y vuelta de los escritores, que los
+  // lee como un texto ANSI. En 1252 cada byte vuelve igual (por eso aqui no se
+  // veia); en 932 no, y to-text se negaba. El arreglo (ANuevo en
+  // ConvertDesigner, Mcp.Tools.Designer) no lo alcanza una prueba unitaria: es
+  // una guarda declarada. Left = 129 se guarda como 03 81 00: en 932 el 81
+  // abre un par de dos bytes y el 00 no lo cierra (medido: con un form sin un
+  // byte asi, el binario SI vuelve en 932); una posicion o un tamano entre 129
+  // y 159, o entre 224 y 252, es lo normal en un form de verdad
+  Assert.AreEqual('', DesignerTextToBinary('object FormX: TFormX'#13#10 +
+    '  Left = 129'#13#10'  Caption = ''Hola'''#13#10'end'#13#10, Bin), 'el binario del form');
+  UsaPaginaAnsi(1252);
+  Assert.AreEqual('', ReescrituraDenegada('C:\nada\UX.dfm', Bin, K), 'en 1252 los bytes del binario vuelven');
+  UsaPaginaAnsi(932);
+  Assert.IsTrue(Pos('EDIT-038', ReescrituraDenegada('C:\nada\UX.dfm', Bin, K)) > 0,
+    'en 932 no vuelven: EDIT-038');
 end;
 
 initialization

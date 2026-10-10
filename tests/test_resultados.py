@@ -2008,6 +2008,32 @@ try:
           'U+1F600' in t and '#$D83D#$DE00' in t and 'ConvertFromUtf32($1F600)' in t and 'U+D83D' not in t,
           t[:500])
 
+    # E148c ...y un sustituto SUELTO (medio emoji) no se escribe en ninguna
+    # codificacion: UTF-8 lo escribia como EF BF BD, UTF-32 como U+FFFD y UTF-16
+    # crudo, y solo la ANSI lo negaba (codificacion M1 del revisor de version de
+    # la 1.18.0). La negativa no lo lleva crudo ni propone un literal Pascal; el
+    # emoji ENTERO si entra (el control: se niega la mitad, no el caracter)
+    P148c = os.path.join(D147, 'U148c.pas')
+    open(P148c, 'wb').write('unit U148c;\r\ninterface\r\nconst C = \'ok\';\r\nimplementation\r\nend.\r\n'.encode('utf-8-sig'))
+    T148c16 = os.path.join(D147, 'u16.txt')
+    open(T148c16, 'wb').write('uno\r\n'.encode('utf-16'))
+    T148c32 = os.path.join(D147, 'u32.txt')
+    open(T148c32, 'wb').write('uno\r\n'.encode('utf-32'))
+    antes148c = {f: open(f, 'rb').read() for f in (P148c, T148c16, T148c32)}
+    t = rechazo('E148c delphi_edit con un sustituto suelto en un fuente UTF-8: EDIT-078', 'delphi_edit',
+                {'path': P148c, 'old': "const C = 'ok';", 'new': "const C = 'a\ud83d';"}, 'DENIED',
+                'SR_EDIT_CARACTERES_NO_CABEN_FMT')
+    check('E148c ...nombra U+D83D sin el caracter crudo ni un literal Pascal, y el fichero no cambia',
+          'U+D83D' in t and '\ud83d' not in t and '#$' not in t and
+          open(P148c, 'rb').read() == antes148c[P148c], t[:300])
+    for f, cod in ((T148c16, 'UTF-16'), (T148c32, 'UTF-32')):
+        t = rechazo('E148c textedit con un sustituto suelto en un ' + cod + ': EDIT-078', 'delphi_textedit',
+                    {'path': f, 'old': 'uno', 'new': 'a\ude00'}, 'DENIED', 'SR_EDIT_CARACTERES_NO_CABEN_FMT')
+        check('E148c ...en ' + cod + ' el fichero no cambia', open(f, 'rb').read() == antes148c[f], t[:200])
+    res, sc, t = llama('delphi_edit', {'path': P148c, 'old': "const C = 'ok';", 'new': "const C = 'a\U0001F600';"})
+    check('E148c control: el emoji ENTERO en el fuente UTF-8 entra', res.get('isError') is not True and
+          '\U0001F600'.encode('utf-8') in open(P148c, 'rb').read(), t[:200])
+
     # E149 el deshacer de un changeset devuelve el +R: move de un fichero que se
     # pone +R DESPUES del preview (antes lo veia; E169) y edit del destino: el
     # commit se niega. El deshacer no podia borrar el destino +R ni le devolvia

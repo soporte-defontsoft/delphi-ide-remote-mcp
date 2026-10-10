@@ -117,16 +117,20 @@ function ServedDriveLetters: string;
 function VirtualUnitOf(ALetter: Char; const AServed: string): string;
 
 type
-  // de un argumento de la llamada, por su nombre: lleva contenido o no
-  TEsArgDeContenido = reference to function(const ANombre: string): Boolean;
+  // de un argumento de la llamada, por su nombre, lo que es: se expande entero,
+  // es contenido (no se toca) o es la linea de ordenes de un programa de esta
+  // maquina (se expande trozo a trozo)
+  TClaseDeArg = (caEntero, caContenido, caLineaDeOrdenes);
+  TClaseDeArgDe = reference to function(const ANombre: string): TClaseDeArg;
 
 { La expansion de ida de una llamada, en su sitio: cada argumento de texto
-  que no lleva contenido pasa por ExpandDriveValue. Que lleva contenido lo
-  dicen las marcas [Contenido] de la tool, y lo pregunta quien llama: la
-  puerta de entrada (ReglasDeLaLlamadaDenegadas, Lsp.Guard), que tiene el
-  mapa de las marcas. }
+  pasa por ExpandDriveValue entero, salvo el que lleva contenido, que no se
+  toca, y la linea de ordenes, troceada con TrocearArgs y expandida trozo a
+  trozo. Que es cada uno lo dicen las marcas [Contenido] y [LineaDeOrdenes]
+  de la tool, y lo pregunta quien llama: la puerta de entrada
+  (ReglasDeLaLlamadaDenegadas, Lsp.Guard), que tiene el mapa de las marcas. }
 procedure ExpandVirtualDrives(const AArguments: TJSONObject;
-  const AEsContenido: TEsArgDeContenido);
+  const AClaseDe: TClaseDeArgDe);
 
 implementation
 
@@ -137,7 +141,8 @@ uses
   Lsp.Texts,
   Lsp.Json,
   Lsp.Settings,
-  Lsp.Lugares;
+  Lsp.Lugares,
+  Lsp.ProcessLaunch; // TrocearArgs y EnComillas: EL troceador de una linea de ordenes y su inversa
 
 threadvar
   TSalidaHecha: string; // lo que la tool de ESTA llamada ya enmascaro (EnmascaraSalvoContenido)
@@ -304,14 +309,41 @@ end;
   parameters are never touched: their text belongs to files/messages, not to
   the path namespace. }
 procedure ExpandVirtualDrives(const AArguments: TJSONObject;
-  const AEsContenido: TEsArgDeContenido);
+  const AClaseDe: TClaseDeArgDe);
 begin
   ReescribeCadenas(AArguments,
     function(const ANombre, AValor: string): string
     begin
       Result := AValor;
-      if not AEsContenido(ANombre) then
+      case AClaseDe(ANombre) of
+        caContenido:
+          ;
+        caLineaDeOrdenes:
+          begin
+            // trozo a trozo, con EL troceador y su inversa: los demas trozos
+            // vuelven tal cual, y sin un trozo que sea una unidad virtual
+            // servida la linea no se toca ([LineaDeOrdenes], Lsp.Attributes)
+            var Trozos := TrocearArgs(AValor);
+            var Cambia := False;
+            for var I := 0 to High(Trozos) do
+            begin
+              var Real := ExpandDriveValue(Trozos[I]);
+              if Real <> Trozos[I] then
+              begin
+                Trozos[I] := Real;
+                Cambia := True;
+              end;
+            end;
+            if Cambia then
+            begin
+              for var I := 0 to High(Trozos) do
+                Trozos[I] := EnComillas(Trozos[I]);
+              Result := string.Join(' ', Trozos);
+            end;
+          end;
+      else
         Result := ExpandDriveValue(AValor);
+      end;
     end);
 end;
 

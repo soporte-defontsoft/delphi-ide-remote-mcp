@@ -208,14 +208,13 @@ begin
   if (ALine < 0) or (ALine > High(Lines)) then
     Exit;
   L := Lines[ALine];
-  // los nombres, con EL identificador (Lsp.Pascal): con [A-Za-z_]\w* la
-  // columna de un nombre con enye caia en su primer trozo
-  M := TRegEx.Match(L, '^\s*(?:' + PatronPalabraDeRutina + '|property)\s+(?:' + PATRON_IDENT +
-    '\.)*(' + PATRON_IDENT + ')', [roIgnoreCase]);
-  if M.Success then
-    Result := M.Groups[1].Index - 1 // TMatch is 1-based; LSP columns 0-based
-  else
+  // la cabecera, por SU lector (Lsp.Pascal, con EL identificador: con
+  // [A-Za-z_]\w* la columna de un nombre con enye caia en su primer trozo);
+  // si la linea no es una cabecera, el primer identificador
+  Result := ColumnaDelNombreDeRutina(L);
+  if Result < 0 then
   begin
+    Result := 0;
     M := TRegEx.Match(L, PATRON_IDENT);
     if M.Success then
       Result := M.Groups[0].Index - 1;

@@ -304,6 +304,35 @@ def J(r):
         return {}
 
 
+# O23 (1.18.1): un form cuyo Caption NOMBRA su propio fichero. El juez escribe
+# la propuesta con el nombre del form en una carpeta del temporal del servidor,
+# y la puerta de literales tomaba esa carpeta de base: 'UNom.dfm' resolvia a la
+# propia propuesta, que la jaula no lee, y salia DSGN-115 falso (revisor de
+# version de la 1.18.0, B2)
+UNOM = os.path.join(JAIL, 'UNom.dfm')
+open(UNOM, 'wb').write(b'object FormN: TFormN\r\n'
+                       b'  Left = 0\r\n'
+                       b'  Top = 0\r\n'
+                       b"  Caption = 'UNom.dfm'\r\n"
+                       b'  ClientHeight = 200\r\n'
+                       b'  ClientWidth = 300\r\n'
+                       b'  object Button1: TButton\r\n'
+                       b'    Left = 8\r\n'
+                       b'    Top = 8\r\n'
+                       b'    TabOrder = 0\r\n'
+                       b'  end\r\n'
+                       b'  object Button2: TButton\r\n'
+                       b'    Left = 8\r\n'
+                       b'    Top = 40\r\n'
+                       b'    TabOrder = 1\r\n'
+                       b'  end\r\n'
+                       b'end\r\n')
+open(os.path.join(JAIL, 'UNom.pas'), 'wb').write(
+    b'unit UNom;\r\n\r\ninterface\r\n\r\nuses\r\n'
+    b'  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls;\r\n\r\n'
+    b'type\r\n  TFormN = class(TForm)\r\n    Button1: TButton;\r\n    Button2: TButton;\r\n  end;\r\n\r\n'
+    b'var\r\n  FormN: TFormN;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
+
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # el juez es el renderizador
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='designer-orden', t=300)
 try:
@@ -411,6 +440,10 @@ try:
     check('O22 ...ni uno de TDataModule (un modulo de datos, cargado en la form oculta): se ordena '
           '(revisor 7, M1)', J(r).get('ordered') == 'Timer2' and orden(DMHIJA) == ['Timer2', 'Timer1'],
           r[:400])
+    r = dsg(UNOM, {'component': 'Button2', 'before': 'Button1'})
+    check('O23 un Caption que nombra el fichero del propio form no es un literal de fuera: se ordena (daba '
+          'DSGN-115 por la propuesta del juez en el temporal; revisor de version de la 1.18.0, B2)',
+          J(r).get('ordered') == 'Button2' and orden(UNOM) == ['Button2', 'Button1'], r[:400])
     antes = bytes_de(PADRERARO)
     r = dsg(PADRERARO, {'component': 'Label1', 'after': 'Edit1'})
     check('O13 el PADRE de una clase que ningun paquete carga: DSGN-140 nombrando al padre (M2)',
@@ -483,6 +516,18 @@ try:
                               lambda: os.remove(BORRA))
     check('O20 ...y si lo BORRAN mientras juzga, DSGN-144 y no una excepcion cruda (revisor 6, B2)',
           vista and mc.abre(r, 'SR_DESIGNER_ORDEN_CAMBIO_FMT') and not os.path.exists(BORRA),
+          (vista, r[:300]))
+    # O24 (1.18.1) ...y si lo que cambia es la UNIDAD (un insert la lee para su
+    # campo), DSGN-144 la nombra a ella: nombraba siempre el form (revisor de
+    # version de la 1.18.0, B3)
+    UNOM_PAS = os.path.join(JAIL, 'UNom.pas')
+    antes_dfm, viejo_pas = bytes_de(UNOM), bytes_de(UNOM_PAS)
+    tocado_pas = viejo_pas.replace(b'end.\r\n', b'// cambiado mientras juzga\r\nend.\r\n', 1)
+    vista, r = mientras_juzga(UNOM, {'command': 'insert', 'classname': 'TButton'},
+                              lambda: escribe_aunque_lo_lean(UNOM_PAS, tocado_pas))
+    check('O24 ...y si cambia la UNIDAD mientras juzga un insert, DSGN-144 nombra UNom.pas (no el form) y no se '
+          'escribe nada', vista and tocado_pas != viejo_pas and mc.abre(r, 'SR_DESIGNER_ORDEN_CAMBIO_FMT') and
+          'UNom.pas changed' in r and bytes_de(UNOM) == antes_dfm and bytes_de(UNOM_PAS) == tocado_pas,
           (vista, r[:300]))
     # ---- I1-I4: insert y set parent= donde lo deja el IDE (3.11, dos llamadores mas) ----
     def form_con_unidad(nombre, dfm, campos):

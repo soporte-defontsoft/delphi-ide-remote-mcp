@@ -40,7 +40,7 @@ type
     [Required]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_WS_ARGS)]
-    [Contenido]
+    [LineaDeOrdenes]
     property Args: string read FArgs write FArgs;
     [SchemaDescription(SP_WS_CREATE)]
     property Create: Boolean read FCreate write FCreate;
@@ -261,7 +261,7 @@ end;
   jaula y esconder un filtro. La configuracion del servidor sigue siendo suya. }
 
 function DireccionDeRemotoDenegada(const ACmd, ADireccion, ABase: string;
-  out ACarpeta: string; out ANoEsta: Boolean): string; forward;
+  ADelRepo: Boolean; out ACarpeta: string; out ANoEsta: Boolean): string; forward;
 
 function RemotosDelRepo(const ARepo, AFijado: string;
   out ANombres: TArray<string>): Boolean; forward;
@@ -319,7 +319,7 @@ var
     // El endpoint LFS se juzga con EL MISMO juez que un remoto: la red por
     // los hosts de GitRemotes, la carpeta por la puerta de carpetas del
     // workspace. Su valor nunca se muestra: la negativa nombra el remoto.
-    if DireccionDeRemotoDenegada('lfs', ADireccion, Base, Carpeta, NoEsta) <> '' then
+    if DireccionDeRemotoDenegada('lfs', ADireccion, Base, True, Carpeta, NoEsta) <> '' then
       Result := MsgFmt(SR_GIT_LFS_ENDPOINT_FMT, [ARemoto])
     else
       Result := '';
@@ -871,7 +871,7 @@ begin
 end;
 
 function DireccionDeRemotoDenegada(const ACmd, ADireccion, ABase: string;
-  out ACarpeta: string; out ANoEsta: Boolean): string;
+  ADelRepo: Boolean; out ACarpeta: string; out ANoEsta: Boolean): string;
 begin
   Result := '';
   ACarpeta := '';
@@ -881,7 +881,7 @@ begin
       begin
         if GitUrlHost(ADireccion, True) = '' then
           Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ADireccion]));
-        Result := GitRemoteDenied(EnComillas(ADireccion), True);
+        Result := GitRemoteDenied(EnComillas(ADireccion), True, ADelRepo);
       end;
     drCarpeta:
       begin
@@ -949,9 +949,13 @@ begin
       Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, [ACmd]));
     Direcciones := Direcciones + Lineas;
   end;
-  for Direccion in Direcciones do
+  for var I := 0 to High(Direcciones) do
   begin
-    Result := DireccionDeRemotoDenegada(ACmd, Direccion, ABase, Carpeta, NoEsta);
+    Direccion := Direcciones[I];
+    // la escrita en la llamada va la primera; las demas son del repo, y su
+    // negativa no aconseja usar el nombre del remoto, que ya se uso (GIT-063)
+    Result := DireccionDeRemotoDenegada(ACmd, Direccion, ABase,
+      not (EscritaEnLaLlamada and (I = 0)), Carpeta, NoEsta);
     if NoEsta and EscritaEnLaLlamada then
       Result := MsgFmt(SR_GIT_REMOTO_NO_ESTA_FMT, [Direccion,
         IfThen(Length(Nombres) = 0, '(none)', string.Join(', ', Nombres)),

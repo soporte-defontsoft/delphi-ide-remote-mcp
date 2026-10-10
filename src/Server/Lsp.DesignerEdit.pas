@@ -2648,6 +2648,9 @@ begin
   try
     if not BytesIguales(AAntes, LeeBytes(F.Dfm, [ltJaula])) then
       Exit;
+    // el que cambio es la unidad: se nombra ELLA (nombraba siempre el form;
+    // revisor de version de la 1.18.0, B3)
+    Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [TPath.GetFileName(F.Pas)]);
     if (AAntesPas <> nil) and not BytesIguales(AAntesPas, LeeBytes(F.Pas, [ltJaula])) then
       Exit;
   except

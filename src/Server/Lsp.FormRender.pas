@@ -404,6 +404,13 @@ var
       except
         Continue; // una cadena que no es ruta no nombra un fichero
       end;
+      // la propuesta del juez (Carpeta: la del form de verdad) es el texto del
+      // agente, que el servidor escribio para ESTA llamada en una carpeta suya:
+      // un relativo que la nombra ('UNom.dfm', el nombre del form) no sale de
+      // ningun sitio, y daba DSGN-115 falso (revisor de version de la 1.18.0,
+      // B2). Lo demas de esa base sigue juzgado: un '..\x' saldria del temporal
+      if (APeticion.Carpeta <> '') and SameFileName(Ruta, TPath.GetFullPath(APeticion.Path)) then
+        Continue;
       if TFile.Exists(Ruta) and (ReadPathDenied(Ruta) <> '') then
         Exit(MsgFmt(SR_DESIGNER_LITERAL_FUERA_FMT, [AProp]));
     end;

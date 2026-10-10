@@ -128,10 +128,17 @@ try:
     UUNO = os.path.join(HOMO, 'UUno.pas')
     open(UUNO, 'w', newline='').write(UNIDAD % ('UUno', "'uno'"))
     open(os.path.join(HOMO, 'UDos.pas'), 'w', newline='').write(UNIDAD % ('UDos', "'dos'"))
+    # (R1d) una unidad con una rutina ANIDADA y dos llamadas, en el mismo proyecto
+    UANI = os.path.join(HOMO, 'UAnidada.pas')
+    open(UANI, 'w', newline='').write(
+        'unit UAnidada;\r\n\r\ninterface\r\n\r\nprocedure Externa;\r\n\r\nimplementation\r\n\r\n'
+        'procedure Externa;\r\n\r\n  function Interna(A: Integer): Integer;\r\n  begin\r\n'
+        '    Result := A + 1;\r\n  end;\r\n\r\nbegin\r\n  Writeln(Interna(1));\r\n'
+        '  Writeln(Interna(2));\r\nend;\r\n\r\nend.\r\n')
     open(os.path.join(HOMO, 'Homo.dpr'), 'w', newline='').write(
         "program Homo;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils,\r\n"
-        "  UUno in 'UUno.pas',\r\n  UDos in 'UDos.pas';\r\n\r\nbegin\r\n  UUno.Saluda;\r\n"
-        "  UDos.Saluda;\r\nend.\r\n")
+        "  UUno in 'UUno.pas',\r\n  UDos in 'UDos.pas',\r\n  UAnidada in 'UAnidada.pas';\r\n\r\n"
+        "begin\r\n  UUno.Saluda;\r\n  UDos.Saluda;\r\n  UAnidada.Externa;\r\nend.\r\n")
     _uno = open(UUNO).read().split('\n')
     _decl = [i for i, x in enumerate(_uno) if x.strip() == 'procedure Saluda;'][0]
     hom = mc.como_json(call('delphi_references', {
@@ -162,6 +169,26 @@ try:
           rn.get('applicable') is False and len(look) == 3 and mc.unicos(rn, 'lookalikes')
           and all(x.get('line0') == x.get('line', 0) - 1 and 'character0' in x for x in look),
           json.dumps(rn.get('lookalikes'))[:300])
+    # R1d (1.18.1) preguntando desde la CABECERA de una rutina ANIDADA salen sus
+    # llamadas: el motor contesta ahi la rutina que la contiene (Externa), y las
+    # dos llamadas reales, que resuelven a Interna, salian homonimas (medido el
+    # 10-oct-2026 con Comprueba en Lsp.FormRender). R1e: el rename las renombra.
+    _ani = open(UANI).read().split('\n')
+    _cab = [i for i, x in enumerate(_ani) if 'function Interna(' in x][0]
+    _llamadas = [i for i, x in enumerate(_ani) if 'Writeln(Interna(' in x]
+    ani = mc.como_json(call('delphi_references', {
+        'path': UANI, 'line': _cab, 'character': _ani[_cab].index('Interna') + 1}))
+    conf = sorted(c['line0'] for c in mc.aciertos(ani, 'confirmed'))
+    check('R1d references desde la cabecera de una rutina ANIDADA: la cabecera y sus dos llamadas, sin '
+          'homonimos (la definicion era la rutina de fuera)',
+          conf == sorted([_cab] + _llamadas) and ani.get('rejectedHomonyms') == 0,
+          'confirmed=%s esperadas=%s definition=%s rejected=%s' % (
+              conf, sorted([_cab] + _llamadas), ani.get('definition'), ani.get('rejectedHomonyms')))
+    rn = mc.como_json(call('delphi_rename_symbol', {
+        'path': UANI, 'line': _cab, 'character': _ani[_cab].index('Interna') + 1, 'newname': 'InternaX'}))
+    check('R1e ...y el rename de la anidada cambia las tres (aplicable)',
+          rn.get('applicable') is True and len(mc.aciertos(rn, 'changes')) == 3,
+          json.dumps(rn)[:400])
 
     # ----------------------------------------------------------------- R2
     r = json.loads(call('delphi_search', {

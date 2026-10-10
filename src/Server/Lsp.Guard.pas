@@ -337,7 +337,9 @@ function LugaresProtegidos: TArray<string>;
   ser una unidad o un recurso compartido entero. Se evalua sobre la ruta
   REAL del padre + el nombre: un junction en el camino no hace pasar por
   temporal lo que no lo es, y quitar un enlace (que nunca toca lo de detras)
-  se juzga por donde esta el enlace. }
+  se juzga por donde esta el enlace. Un repositorio ENTERO se borra como se
+  mueve (el arbol con su .git, sin que sus enlaces salgan de la jaula); lo que
+  se BORRA nunca es un .git ni un camino por dentro de el. }
 function BorradoDenegado(const ADir: string): string;
 
 { Vacia una carpeta DESECHABLE (temporal o papelera: CarpetasDesechables) sin
@@ -1531,12 +1533,14 @@ end;
 type
   { Las marcas de los parametros de TODAS las tools, por su clave
     'tool|parametro' (ClaveDeParam): las rutas del servidor (el valor dice si
-    la tool acepta una relativa, [RutaRelativa]) y los que llevan contenido
-    ([Contenido]: la expansion de ida de las unidades virtuales no los toca). }
+    la tool acepta una relativa, [RutaRelativa]), los que llevan contenido
+    ([Contenido]: la expansion de ida de las unidades virtuales no los toca) y
+    las lineas de ordenes ([LineaDeOrdenes]: se expanden trozo a trozo). }
   TMarcasDeParams = class
   public
     Rutas: TDictionary<string, Boolean>;
     DeContenido: TDictionary<string, Boolean>;
+    DeLineaDeOrdenes: TDictionary<string, Boolean>;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -1546,12 +1550,14 @@ begin
   inherited Create;
   Rutas := TDictionary<string, Boolean>.Create;
   DeContenido := TDictionary<string, Boolean>.Create;
+  DeLineaDeOrdenes := TDictionary<string, Boolean>.Create;
 end;
 
 destructor TMarcasDeParams.Destroy;
 begin
   Rutas.Free;
   DeContenido.Free;
+  DeLineaDeOrdenes.Free;
   inherited;
 end;
 
@@ -1603,17 +1609,22 @@ begin
         var EsRuta := False;
         var AceptaRelativa := False;
         var EsContenido := False;
+        var EsLineaDeOrdenes := False;
         for Attr in Prop.GetAttributes do
           if Attr is RutaDelServidorAttribute then
             EsRuta := True
           else if Attr is RutaRelativaAttribute then
             AceptaRelativa := True
           else if Attr is ContenidoAttribute then
-            EsContenido := True;
+            EsContenido := True
+          else if Attr is LineaDeOrdenesAttribute then
+            EsLineaDeOrdenes := True;
         if EsRuta then
           Marcas.Rutas.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), AceptaRelativa);
         if EsContenido then
           Marcas.DeContenido.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
+        if EsLineaDeOrdenes then
+          Marcas.DeLineaDeOrdenes.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
       end;
     end;
   finally
@@ -1632,20 +1643,27 @@ begin
 end;
 
 { La expansion de ida de las unidades virtuales de ESTA llamada
-  (ExpandVirtualDrives, Lsp.Mascara), con la pregunta "lleva contenido?"
-  contestada por las marcas [Contenido] de la tool. }
+  (ExpandVirtualDrives, Lsp.Mascara), con la pregunta "que es este
+  argumento?" contestada por las marcas [Contenido] y [LineaDeOrdenes] de la
+  tool. }
 procedure ExpandeUnidadesVirtuales(const AToolName: string;
   const AArguments: TJSONObject);
 var
-  DeContenido: TDictionary<string, Boolean>;
+  DeContenido, DeLineaDeOrdenes: TDictionary<string, Boolean>;
   Tool: string;
 begin
   DeContenido := MarcasDeParams.DeContenido;
+  DeLineaDeOrdenes := MarcasDeParams.DeLineaDeOrdenes;
   Tool := AToolName;
   ExpandVirtualDrives(AArguments,
-    function(const ANombre: string): Boolean
+    function(const ANombre: string): TClaseDeArg
     begin
-      Result := DeContenido.ContainsKey(ClaveDeParam(Tool, ANombre));
+      if DeContenido.ContainsKey(ClaveDeParam(Tool, ANombre)) then
+        Result := caContenido
+      else if DeLineaDeOrdenes.ContainsKey(ClaveDeParam(Tool, ANombre)) then
+        Result := caLineaDeOrdenes
+      else
+        Result := caEntero;
     end);
 end;
 
@@ -2621,7 +2639,12 @@ begin
   if (Length(Full) <= 3) or (Full.StartsWith('\\') and
      (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_UNIDAD_O_RECURSO_ENTERO)]));
-  Result := MetadatosGitEnArbolDenegados(Full);
+  // un repositorio ENTERO (su .git dentro) se borra como se mueve: el arbol
+  // va entero y un enlace de sus metadatos no abre la jaula (AAdmiteArbolGit);
+  // que ADir SEA un .git, o este dentro de uno, sigue negado. Sin esto un
+  // repo mandado a la papelera no se iba nunca: ni purge=true ni la purga de
+  // 15 dias, que ademas se cortaba ahi (medido el 10-oct-2026, en la 1.18.0)
+  Result := MetadatosGitEnArbolDenegados(Full, True);
   if Result <> '' then
     Exit;
   // la ruta REAL del padre + el nombre (ver la nota de la interface)
@@ -3031,7 +3054,14 @@ begin
     for D in TDirectory.GetDirectories(ADir) do
       if EsCarpetaDeDia(TPath.GetFileName(D)) and
          (TPath.GetFileName(D) < Limit) then
+      try
         BorraArbol(D); // sin cruzar enlaces: el de aqui abajo
+      except
+        // un dia que no se deja borrar (algo abierto dentro, lo que el guard
+        // niegue) no frena a los demas: con un solo try para todo el bucle
+        // el primero cortaba la purga y los dias de detras se quedaban para
+        // siempre (medido el 10-oct-2026 con un repo en la papelera)
+      end;
   except
     // purging must never break an edit
   end;

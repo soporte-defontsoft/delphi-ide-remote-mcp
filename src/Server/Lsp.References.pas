@@ -421,6 +421,28 @@ var
   Entry: TJSONObject;
   Ilegibles: TArray<string>;      // del alcance, sin leer: se dicen, no se tiran
   SinLeer: Integer;               // los del barrido que no se leyeron (no se cuentan)
+  CursorCodigo: string;           // la linea del cursor, en la vista del CODIGO
+
+  { Si la linea ALinea del fichero de AUri nombra AIdent en su codigo. Lo que
+    no se deja leer cuenta como que si: no se corrige lo que dijo el motor. }
+  function LineaNombra(const AUri: string; ALinea: Integer; const AIdent: string): Boolean;
+  var
+    Vista: TStringList;
+  begin
+    Result := True;
+    Vista := TStringList.Create;
+    try
+      try
+        Vista.Text := CodigoPascal(TLspClient.LoadSourceText(TLspClient.UriToPath(AUri)));
+      except
+        Exit;
+      end;
+      if (ALinea >= 0) and (ALinea < Vista.Count) then
+        Result := TRegEx.IsMatch(Vista[ALinea], PatronIdentEntero(AIdent), [roIgnoreCase]);
+    finally
+      Vista.Free;
+    end;
+  end;
 
   function CandidateJson(const C: TCandidate): TJSONObject;
   begin
@@ -454,6 +476,17 @@ begin
     if (ALine < 0) or (ALine >= Lines.Count) then
       raise Exception.Create(MsgFmt(SR_LSP_LINE_OUT_RANGE_FMT, [ALine]));
     Ident := IdentifierAt(Lines[ALine], ACharacter);
+    // y la del cursor en la vista del codigo: si es la cabecera de una rutina
+    // (abajo, la anidada)
+    CursorCodigo := '';
+    var VistaCursor := TStringList.Create;
+    try
+      VistaCursor.Text := CodigoPascal(Lines.Text);
+      if ALine < VistaCursor.Count then
+        CursorCodigo := VistaCursor[ALine];
+    finally
+      VistaCursor.Free;
+    end;
   finally
     Lines.Free;
   end;
@@ -495,6 +528,22 @@ begin
   // y sus dos causas, falsas las dos (revisor de P2b, B4; medido, F8d)
   if not MotorPuedeEnsenar(TLspClient.UriToPath(TargetUri)) then
     raise Exception.CreateFmt(MsgText(SR_REFS_TARGET_OUTSIDE_FMT), [Ident]);
+
+  // Sobre el NOMBRE de una rutina ANIDADA, en su cabecera, el motor contesta la
+  // rutina que la CONTIENE (medido el 10-oct-2026: Comprueba, dentro de
+  // LiteralesDeRenderDenegados en Lsp.FormRender); sobre sus llamadas, la
+  // buena. Con la de fuera de objetivo, las llamadas reales salian homonimas y
+  // rename las dejaba sin renombrar. Si la linea que da el motor no nombra el
+  // identificador y el cursor esta en el nombre de una cabecera de rutina, la
+  // definicion es esa cabecera: la del cursor.
+  var ColCabecera := ColumnaDelNombreDeRutina(CursorCodigo);
+  if (ColCabecera >= 0) and (ACharacter >= ColCabecera) and
+     (ACharacter < ColCabecera + Length(Ident)) and
+     not LineaNombra(TargetUri, TargetLine, Ident) then
+  begin
+    TargetUri := TLspClient.PathToUri(FullPath);
+    TargetLine := ALine;
+  end;
 
   // A Pascal routine has TWO definition lines: the interface (or forward)
   // declaration and the implementation. The engine answers one or the other

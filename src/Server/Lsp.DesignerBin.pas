@@ -228,7 +228,7 @@ begin
   if K in [ekUtf32LE, ekUtf32BE] then
     K := ekUtf16LE;
   try
-    Bytes := EncodeText(ATexto, K);
+    Bytes := EncodeText(ATexto, K, False); // juzgar el parseo, no escribir
   except
     // un texto que no cabe en AEnc (lo dice su escritor), o una codificacion
     // que no es de texto: no se juzga aqui

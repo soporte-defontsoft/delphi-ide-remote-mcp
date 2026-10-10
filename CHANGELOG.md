@@ -6,6 +6,104 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **A whole repository in the trash can be purged, by hand and after 15
+  days, and a trash day that cannot be removed no longer stops the rest.**
+  Since 1.18.0 `.git` is a place only `delphi_git` reaches, with one declared
+  exception: a whole repository may move or go to the recoverable trash. It
+  went in and never came out: `delphi_delete purge=true` answered `FILE-011`
+  with `GUARD-033`, and the 15-day purge, which removes a trash day with the
+  same deleter, stopped there - and, with one guard around the whole loop,
+  the old days behind it stayed too. A whole repository is now deleted as it
+  is moved (the tree with its `.git`, none of its metadata links leading out
+  of the jail), and only inside the server's disposable folders; a loose
+  `.git`, or a path inside one, is still refused; and each trash day is
+  purged on its own. Measured live against 1.18.0 with a repository in the
+  trash and, for the purge, an old day holding a repository and an old clean
+  day behind it: both stayed, and without the first one the clean one went.
+  `test_purga_repo_118`, red before in five checks; each half has its
+  mutant.
+
+- **A repository's own remote outside `GitRemotes` says so, without advice
+  already followed.** Since 1.18.0 every network address a remote points to
+  passes `GitRemotes`, also when the remote is used by its name. With the
+  list empty such a remote got `GIT-004`, written for an address typed in the
+  call: it told the agent to use the remote's name (`push origin main`)
+  instead - which it had just done. It now gets `GIT-063`, which names the
+  host and says that a remote's address passes the list too; an address
+  written in the call still gets `GIT-004`. Seen when publishing 1.18.0.
+  `test_git_jaula` J15e (red before) and J15f.
+
+- **Half a character is never written.** A lone surrogate - half of a
+  character above U+FFFF without the other half (a JSON `\ud83d` alone, an
+  emoji cut in two) - is not a character in any encoding, and only ANSI
+  refused it: UTF-8 wrote `EF BF BD` (`U+FFFD`) in its place, UTF-32 `U+FFFD`
+  too, UTF-16 the raw half, and `delphi_textedit` said nothing. Every writer
+  now refuses it with `EDIT-078`, which names it (`U+D83D`) without carrying
+  the half itself - inside the answer's JSON it would be another lone
+  surrogate - and without the Pascal-literal way out, which would be half a
+  character too. A whole emoji is written as before, and what only measures
+  a text that already exists keeps counting as it did. Version reviewers of
+  1.18.0. `test_resultados` E148c (red before), `LspTests.Encodings` (red
+  with the check taken out).
+
+- **The judge of the order no longer refuses a form whose text names its own
+  file, and `DSGN-144` names the file that changed.** To ask the IDE's writer
+  where a component goes, the server writes the proposal under the form's own
+  name in a folder of its own, and the gate on the literals a form names took
+  that folder as one of its bases: a `Caption = 'UNom.dfm'` - the form's own
+  file name - resolved to the proposal itself, which the jail does not read,
+  and `set before=` was refused with a false `DSGN-115`. The proposal - the
+  agent's own text - no longer counts there, and everything else that base
+  reaches is still judged (a `..\x` would leave the server's temp). And when
+  the unit changed while the judge was being asked, `DSGN-144` named the
+  form. Version reviewers of 1.18.0. `test_designer_orden` O23 and O24 (red
+  before).
+
+- **`to-text` converts a binary form on a machine with a double-byte ANSI
+  page.** The round-trip rule that 1.18.0 gave every writer (a file whose
+  bytes would not read back the same is not rewritten) also judged the bytes
+  of the BINARY form `to-text` replaces, read as ANSI text: on Japanese,
+  Chinese or Korean Windows (pages 932, 936, 949, 950) and with the UTF-8
+  option (65001) a `Left = 129` - stored `03 81 00`, a lead byte with no
+  valid second one - did not come back, and the conversion was refused. The
+  whole file changes form there and its content is kept in the trash first,
+  so the old bytes no longer count. A regression of 1.18.0 that no machine
+  in code page 1252 could see. Version reviewers of 1.18.0; the cause
+  measured in `LspTests.Encodings` with page 932 simulated (the same binary
+  comes back in 1252 and not in 932). The call site is a guard: no test
+  reaches it on this machine.
+
+- **`delphi_references` and `delphi_rename_symbol` from the header of a
+  nested routine find its calls.** On the NAME of a routine declared inside
+  another one, in its own header, the engine answers with the routine that
+  CONTAINS it; on its calls, with the right one. Taken as the target, the
+  enclosing routine turned every real call into a homonym: references
+  confirmed only the header, and a rename would have changed the header
+  alone. When the line the engine gives does not name the identifier and the
+  cursor is on the name of a routine header, that header is the target. The
+  header is read by one reader now (`ColumnaDelNombreDeRutina`, which
+  `delphi_definition` used by hand). Found looking for an `LSP-003` seen on
+  10-oct that did not reproduce; measured live. `test_round31` R1d and R1e
+  (red before).
+
+- **A path in `delphi_git args` takes its virtual unit, as every path
+  argument does.** `delphi_workspace` (`WS-002`) tells the agent to use
+  `srvd:\...` verbatim in every path argument, and `args` took it as
+  content: `log -- srvd:\...\README.md` reached git as written and found
+  nothing (`GIT-060`), with no word of why. `args` is now marked as the
+  command line of a program of this machine: it is split with the one
+  splitter git's arguments go through, the piece that is a served virtual
+  unit becomes the real path, and the line is put back with its inverse, so
+  every other piece reaches git as it came (and a line with no such piece
+  is not touched). It opens nothing: it is what writing the real drive
+  letter does, which was already accepted, and the git filter judges the
+  line after it. What goes to a program of ANOTHER machine (adb, PAServer)
+  is still content. Seen on 10-oct; `test_git_jaula` J18 (red before).
+
 ## [1.18.0] - 2026-10-10
 
 Consolidation. The big units sorted by what they hold, each rule in one

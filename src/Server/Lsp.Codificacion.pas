@@ -106,7 +106,14 @@ function BytesVuelvenIgual(const B: TArray<Byte>; K: TEncKind): Boolean;
   y el de la ida y vuelta: estaba escrito dos veces). }
 function BytesIguales(const A, B: TArray<Byte>): Boolean;
 function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
-function EncodeText(const S: string; K: TEncKind): TArray<Byte>;
+{ S en los bytes de K. AEstricto (el de todo escritor): un sustituto SUELTO -la
+  mitad de un caracter de mas alla de U+FFFF, sin la otra- no es un caracter en
+  ninguna codificacion y se niega con ECaracterNoCabe; UTF-8 lo escribia como
+  EF BF BD, UTF-32 como U+FFFD y UTF-16 crudo, y solo la ANSI lo negaba
+  (codificacion M1 del revisor de version de la 1.18.0). Laxo, para quien solo
+  MIDE un texto que ya existe (Measure, HighCount, el parser de un form): lo de
+  siempre, sin negar. }
+function EncodeText(const S: string; K: TEncKind; AEstricto: Boolean = True): TArray<Byte>;
 function EncName(K: TEncKind): string;
 function EncKindOf(const AName: string): TEncKind;
 function PreambleLen(K: TEncKind): Integer;
@@ -274,6 +281,25 @@ begin
     Result := S[I];
 end;
 
+{ El primer sustituto de S que esta SIN su pareja ('' si no hay ninguno): la
+  pareja la reconoce la RTL (CaracterEn) y lo que queda suelto no es un
+  caracter. }
+function SustitutoSuelto(const S: string): string;
+var
+  I: Integer;
+  T: string;
+begin
+  Result := '';
+  I := 1;
+  while I <= Length(S) do
+  begin
+    T := CaracterEn(S, I);
+    if (Length(T) = 1) and T[1].IsSurrogate then
+      Exit(T);
+    Inc(I, Length(T));
+  end;
+end;
+
 { El primer caracter de S que la pagina ANSI no devuelve igual, ENTERO (un
   par de sustitutos va junto: devolvia solo el alto, y la negativa nombraba
   U+D83D y proponia ese literal; r5-L1 de la 1.18.0); si ninguno suelto
@@ -428,7 +454,7 @@ end;
 
 constructor ECaracterNoCabe.Crea(const ACaracter: string; AK: TEncKind);
 var
-  Hex: string;
+  Hex, Que: string;
 begin
   // su codigo de VERDAD: el de un par de sustitutos, por la RTL
   if Length(ACaracter) = 2 then
@@ -436,14 +462,27 @@ begin
   else
     Codigo := Ord(ACaracter[1]);
   Hex := IntToHex(Codigo, 4);
-  inherited Create(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT,
-    [MsgFmt(SF_EDIT_CARACTER_NO_EXISTE_FMT, [ACaracter, Hex, EncName(AK)]), EncName(AK)]));
+  // un sustituto suelto no se nombra crudo: en el JSON de la respuesta seria
+  // otro sustituto suelto; y no le falta una codificacion, no es un caracter
+  if (Length(ACaracter) = 1) and ACaracter[1].IsSurrogate then
+    Que := MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [Hex])
+  else
+    Que := MsgFmt(SF_EDIT_CARACTER_NO_EXISTE_FMT, [ACaracter, Hex, EncName(AK)]);
+  inherited Create(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT, [Que, EncName(AK)]));
 end;
 
-function EncodeText(const S: string; K: TEncKind): TBytes;
+function EncodeText(const S: string; K: TEncKind; AEstricto: Boolean): TBytes;
 var
   Body: TBytes;
 begin
+  // el escritor niega aqui, una vez para todas las codificaciones, el
+  // sustituto suelto (la nota de la interface)
+  if AEstricto then
+  begin
+    var Suelto := SustitutoSuelto(S);
+    if Suelto <> '' then
+      raise ECaracterNoCabe.Crea(Suelto, K);
+  end;
   case K of
     ekUtf16LE: Exit(TEncoding.Unicode.GetPreamble + TEncoding.Unicode.GetBytes(S));
     ekUtf16BE: Exit(TEncoding.BigEndianUnicode.GetPreamble + TEncoding.BigEndianUnicode.GetBytes(S));

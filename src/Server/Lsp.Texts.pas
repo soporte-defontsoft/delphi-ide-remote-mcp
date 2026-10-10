@@ -5999,6 +5999,18 @@ const
     '[GIT-005 DENIED] "%s" is not among the hosts this server allows ' +
     '(%s). If one more is needed, ask for it with delphi_report: the ' +
     'operator adds it.';
+  { La lista vacia para una direccion que NO se escribio en la llamada: la de
+    un remoto del repo (RemotoDenegado, Mcp.Tools.Git). GIT-004 le aconsejaba
+    usar el nombre del remoto, que es justo lo que se habia hecho: desde la
+    1.18.0 toda direccion de un remoto pasa por la lista (medido al publicar
+    la 1.18.0). }
+  SR_GIT_REMOTE_DEL_REPO_OFF_FMT =
+    '[GIT-063 DENIED] A remote of this repository points to "%s", and this ' +
+    'server does not talk to it: every network address a remote points to ' +
+    'passes the workspace''s GitRemotes, also when the remote is used by its ' +
+    'name, and that list is empty. If it is needed, ask for it with ' +
+    'delphi_report: the operator adds the host to [Workspace.<name>] ' +
+    'GitRemotes of settings.ini.';
 
   { Una direccion cuyo host no se lee sin adivinar (GitUrlHost, Lsp.Args):
     git, ssh y curl no parten igual la autoridad, asi que se niega en vez de
@@ -9109,6 +9121,12 @@ const
   // Excepciones que estaban en linea en Lsp.Patch.pas (paso 3e, 27-sep-2026)
   SF_EDIT_CARACTER_NO_EXISTE_FMT =
     'The character "%s" (U+%s) does not exist in %s';
+  { ...y un sustituto SUELTO, sin el caracter crudo (en el JSON de la
+    respuesta seria otro sustituto suelto): no es un caracter en ninguna
+    codificacion (codificacion M1 del revisor de version de la 1.18.0) }
+  SF_EDIT_SUSTITUTO_SUELTO_FMT =
+    'U+%s is half of a surrogate pair without its other half - not a ' +
+    'character in any encoding (one above U+FFFF cut in two?)';
 
   { Lo que el rename final no pudo con un codigo que no es "ocupado" ni
     "acceso denegado" (esos, SYS-027 / SYS-028): decia "otro proceso lo

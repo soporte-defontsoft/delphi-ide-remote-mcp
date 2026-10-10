@@ -49,8 +49,12 @@ function ShellArgDenied(const AText: string): string;
   Toda direccion de red pasa por GitRemotes= del workspace activo, una
   lista de hosts que declara el operador. Vacia (el valor por defecto),
   niega tanto las direcciones de la llamada como las de un remoto del repo.
-  Solo el operador decide los hosts con los que esta maquina puede hablar. }
-function GitRemoteDenied(const AText: string; AScpCorto: Boolean = False): string;
+  Solo el operador decide los hosts con los que esta maquina puede hablar.
+  ADelRepo: la direccion es la de un remoto del repo, no una escrita en la
+  llamada; con la lista vacia lleva su propio mensaje (GIT-063): el de la
+  llamada (GIT-004) aconseja usar el nombre del remoto, y eso ya se hizo. }
+function GitRemoteDenied(const AText: string; AScpCorto: Boolean = False;
+  ADelRepo: Boolean = False): string;
 
 { El host de una direccion de RED de git; '' si no lo es (un nombre, una
   rama, una carpeta). El lector de GitRemoteDenied, en la interface desde la
@@ -338,7 +342,8 @@ begin
   Result := Host.ToLower;
 end;
 
-function GitRemoteDenied(const AText: string; AScpCorto: Boolean): string;
+function GitRemoteDenied(const AText: string; AScpCorto: Boolean;
+  ADelRepo: Boolean): string;
 var
   Tok, Host, Allowed: string;
   Ok: Boolean;
@@ -353,7 +358,10 @@ begin
       Exit(MsgFmt(SR_GIT_REMOTE_AMBIGUA_FMT, [Tok]));
     Allowed := GitRemoteHosts;
     if Allowed = '' then
-      Exit(MsgFmt(SR_GIT_REMOTE_OFF_FMT, [Host]));
+      if ADelRepo then
+        Exit(MsgFmt(SR_GIT_REMOTE_DEL_REPO_OFF_FMT, [Host]))
+      else
+        Exit(MsgFmt(SR_GIT_REMOTE_OFF_FMT, [Host]));
     Ok := False;
     for var H in HostsDeLista(Allowed) do
       if SameText(H, Host) then

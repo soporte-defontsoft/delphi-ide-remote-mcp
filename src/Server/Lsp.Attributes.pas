@@ -123,6 +123,23 @@ type
 
   Contenido = ContenidoAttribute;
 
+  { Marca un parametro que es la LINEA DE ORDENES de un programa de ESTA
+    maquina (hoy los args de delphi_git): no es contenido ni una ruta entera,
+    son argumentos, y uno de ellos puede ser una ruta. La expansion de ida
+    (ExpandVirtualDrives, Lsp.Mascara) la trocea con EL troceador
+    (TrocearArgs), expande el trozo que es una unidad virtual servida y la
+    recompone con su inversa (EnComillas); sin trozos asi no la toca. Con
+    [Contenido], 'log -- srvd:\x' llegaba a git tal cual y fallaba callado
+    (GIT-060, "nada que ensenar"), y WS-002 promete las unidades virtuales en
+    todo argumento de ruta (1.18.1). No abre nada: es lo mismo que escribir la
+    letra real, que ya se acepta, y el filtro de git juzga lo expandido. Lo
+    que va a un programa de OTRA maquina (adb, PAServer) sigue siendo
+    contenido. }
+  LineaDeOrdenesAttribute = class(TCustomAttribute)
+  end;
+
+  LineaDeOrdenes = LineaDeOrdenesAttribute;
+
 implementation
 
 end.
