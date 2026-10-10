@@ -69,7 +69,9 @@ the MCP `initialize` response (`serverInfo.version`).
   one for one, where the encoding keeps it (the codec says so: UTF-16 does,
   UTF-8 and UTF-32 would write `U+FFFD`); the first cut of this fix refused
   every edit of such a file, and `delphi_move` moved it without rewriting
-  its header (the version reviewer of 1.18.1). Version reviewers of
+  its header (the version reviewer of 1.18.1); the copy a form's judge of
+  the order writes to ask the IDE is encoded like what only measures, so a
+  `set before=` or an `insert` in such a form is judged too. Version reviewers of
   1.18.0. `test_resultados` E148c (red before), `test_sueltos_disco_1181`
   (red with the first cut), `LspTests.Encodings` (red with each half of the
   check taken out).
@@ -101,18 +103,28 @@ the MCP `initialize` response (`serverInfo.version`).
   comes back in 1252 and not in 932). The call site is a guard: no test
   reaches it on this machine.
 
-- **`delphi_references` and `delphi_rename_symbol` from the header of a
-  nested routine find its calls.** On the NAME of a routine declared inside
-  another one, in its own header, the engine answers with the routine that
-  CONTAINS it; on its calls, with the right one. Taken as the target, the
-  enclosing routine turned every real call into a homonym: references
-  confirmed only the header, and a rename would have changed the header
-  alone. When the line the engine gives does not name the identifier and the
-  cursor is on the name of a routine header, that header is the target. The
-  header is read by one reader now (`ColumnaDelNombreDeRutina`, which
-  `delphi_definition` used by hand). Found looking for an `LSP-003` seen on
-  10-oct that did not reproduce; measured live. `test_round31` R1d and R1e
-  (red before).
+- **`delphi_definition`, `delphi_references` and `delphi_rename_symbol` on
+  the header of a nested routine answer that routine.** On the NAME of a
+  routine declared inside another one, in its own header, the engine
+  answers with the routine that CONTAINS it; on its calls, with the right
+  one. Taken as the target, the enclosing routine turned every real call
+  into a homonym: references confirmed only the header, and a rename would
+  have changed the header alone; `delphi_definition` answered the enclosing
+  routine. One correction now sits where that answer comes in
+  (`DefinicionCorregida`): on the name of a routine header, a line from the
+  engine that does not name the identifier is not its definition - the
+  header is. It is applied to the cursor, to the other half of the routine
+  and to every candidate, so a sibling of the same name - the nested
+  `Ayuda` of another method, the other overload - stays a homonym, and a
+  method of that name in the class family is no longer confirmed "via
+  override" (the first cut corrected only the cursor and a rename changed
+  the sibling too; the version reviewer of 1.18.1). What it does not reach:
+  a header split over two lines, and a nested routine with the same name
+  as the routine that contains it (there the engine's line names it). The
+  header is read by one reader (`ColumnaDelNombreDeRutina`). Found looking
+  for an `LSP-003` seen on 10-oct that did not reproduce; measured live.
+  `test_round31` R1d-R1j (red before; each half of the correction measured
+  by taking it out).
 
 - **A path in `delphi_git args` takes its virtual unit, as every path
   argument does.** `delphi_workspace` (`WS-002`) tells the agent to use

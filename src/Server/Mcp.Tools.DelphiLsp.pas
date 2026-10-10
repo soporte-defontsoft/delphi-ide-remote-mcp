@@ -1347,6 +1347,9 @@ begin
       Resp.Free;
       Exit(MsgText(SR_LSP_WARMING) + NoSettingsNote(Settings));
     end;
+    // sobre el nombre de la cabecera de una anidada el motor contesta la rutina
+    // que la contiene: LA correccion de references (Lsp.References)
+    Resp := DefinicionCorregida(Resp, Params.Path, Params.Line, Params.Character, '');
   end;
   // una ubicacion de FUERA no sale: ni la ruta ni la linea (LSP-038)
   Result := NegativaDeFuera(Resp, Params.Path, Params.Line, Params.Character);

@@ -135,9 +135,36 @@ try:
         'procedure Externa;\r\n\r\n  function Interna(A: Integer): Integer;\r\n  begin\r\n'
         '    Result := A + 1;\r\n  end;\r\n\r\nbegin\r\n  Writeln(Interna(1));\r\n'
         '  Writeln(Interna(2));\r\nend;\r\n\r\nend.\r\n')
+    # (R1f-R1i) la homonima HERMANA de una anidada: el Ayuda de Baz, sin llamadas, y
+    # el otro overload de Interna2. El motor lleva la cabecera de cada una a la rutina
+    # que la contiene: corregido solo el cursor, el gemelo salia esa rutina y la
+    # hermana se confirmaba (y rename la renombraba; revisor de version de la 1.18.1)
+    UHER = os.path.join(HOMO, 'UHermanas.pas')
+    open(UHER, 'w', newline='').write(
+        'unit UHermanas;\r\n\r\ninterface\r\n\r\ntype\r\n  TFoo = class\r\n    procedure Bar;\r\n'
+        '    procedure Baz;\r\n  end;\r\n\r\nprocedure Externa2;\r\n\r\nimplementation\r\n\r\n'
+        'procedure TFoo.Bar;\r\n\r\n  procedure Ayuda;\r\n  begin\r\n    Writeln(1);\r\n  end;\r\n\r\n'
+        'begin\r\n  Ayuda;\r\n  Ayuda;\r\nend;\r\n\r\n'
+        'procedure TFoo.Baz;\r\n\r\n  procedure Ayuda;\r\n  begin\r\n    Writeln(2);\r\n  end;\r\n\r\n'
+        'begin\r\nend;\r\n\r\n'
+        'procedure Externa2;\r\n\r\n  function Interna2(A: Integer): Integer; overload;\r\n  begin\r\n'
+        '    Result := A;\r\n  end;\r\n\r\n  function Interna2(const S: string): Integer; overload;\r\n'
+        '  begin\r\n    Result := Length(S);\r\n  end;\r\n\r\nbegin\r\n  Writeln(Interna2(1));\r\nend;\r\n\r\n'
+        'end.\r\n')
+    # (R1j) ...y un METODO de la misma familia con el nombre de la anidada: con el
+    # gemelo en la rutina de fuera, la clase objetivo salia la del metodo que la
+    # contiene, y los Ayuda de TBase y TFoo se confirmaban "via override"
+    UMET = os.path.join(HOMO, 'UMetodo.pas')
+    open(UMET, 'w', newline='').write(
+        'unit UMetodo;\r\n\r\ninterface\r\n\r\ntype\r\n  TBase = class\r\n    procedure Ayuda; virtual;\r\n'
+        '  end;\r\n\r\n  TFoo = class(TBase)\r\n    procedure Bar;\r\n    procedure Ayuda; override;\r\n'
+        '  end;\r\n\r\nimplementation\r\n\r\nprocedure TBase.Ayuda;\r\nbegin\r\nend;\r\n\r\n'
+        'procedure TFoo.Ayuda;\r\nbegin\r\nend;\r\n\r\nprocedure TFoo.Bar;\r\n\r\n  procedure Ayuda;\r\n'
+        '  begin\r\n    Writeln(3);\r\n  end;\r\n\r\nbegin\r\n  Ayuda;\r\nend;\r\n\r\nend.\r\n')
     open(os.path.join(HOMO, 'Homo.dpr'), 'w', newline='').write(
         "program Homo;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils,\r\n"
-        "  UUno in 'UUno.pas',\r\n  UDos in 'UDos.pas',\r\n  UAnidada in 'UAnidada.pas';\r\n\r\n"
+        "  UUno in 'UUno.pas',\r\n  UDos in 'UDos.pas',\r\n  UAnidada in 'UAnidada.pas',\r\n"
+        "  UHermanas in 'UHermanas.pas',\r\n  UMetodo in 'UMetodo.pas';\r\n\r\n"
         "begin\r\n  UUno.Saluda;\r\n  UDos.Saluda;\r\n  UAnidada.Externa;\r\nend.\r\n")
     _uno = open(UUNO).read().split('\n')
     _decl = [i for i, x in enumerate(_uno) if x.strip() == 'procedure Saluda;'][0]
@@ -189,6 +216,50 @@ try:
     check('R1e ...y el rename de la anidada cambia las tres (aplicable)',
           rn.get('applicable') is True and len(mc.aciertos(rn, 'changes')) == 3,
           json.dumps(rn)[:400])
+    def lineas(j, campo, fichero):
+        """Las line0 de un campo de references que son de ESE fichero."""
+        return sorted(c['line0'] for c in mc.aciertos(j, campo) if c.get('path', '').endswith(fichero))
+    _her = open(UHER).read().split('\n')
+    _ayudas = [i for i, x in enumerate(_her) if x.strip() == 'procedure Ayuda;']   # la de Bar, la de Baz
+    _llam = [i for i, x in enumerate(_her) if x.strip() == 'Ayuda;']
+    her = mc.como_json(call('delphi_references', {
+        'path': UHER, 'line': _ayudas[0], 'character': _her[_ayudas[0]].index('Ayuda') + 1}))
+    conf = lineas(her, 'confirmed', 'UHermanas.pas')
+    rej = lineas(her, 'rejected', 'UHermanas.pas')
+    check('R1f references desde el Ayuda anidado de Bar: el y sus dos llamadas; el Ayuda de Baz, homonimo '
+          '(se confirmaba, via la rutina de fuera)',
+          conf == sorted([_ayudas[0]] + _llam) and rej == [_ayudas[1]]
+          and not any(c.get('via') for c in mc.aciertos(her, 'confirmed')),
+          'confirmed=%s rejected=%s esperadas=%s/%s' % (conf, rej, sorted([_ayudas[0]] + _llam), [_ayudas[1]]))
+    rn = mc.como_json(call('delphi_rename_symbol', {
+        'path': UHER, 'line': _ayudas[0], 'character': _her[_ayudas[0]].index('Ayuda') + 1, 'newname': 'AyudaX'}))
+    check('R1g ...y el rename no renombra el de Baz: no aplicable, con el de Baz entre los parecidos',
+          rn.get('applicable') is False and _ayudas[1] not in [c.get('line0') for c in mc.aciertos(rn, 'changes')]
+          and _ayudas[1] in [c.get('line0') for c in mc.aciertos(rn, 'lookalikes')], json.dumps(rn)[:400])
+    _ovl = [i for i, x in enumerate(_her) if 'function Interna2(' in x]
+    _call2 = [i for i, x in enumerate(_her) if 'Writeln(Interna2(1))' in x]
+    ovl = mc.como_json(call('delphi_references', {
+        'path': UHER, 'line': _ovl[0], 'character': _her[_ovl[0]].index('Interna2') + 1}))
+    conf = lineas(ovl, 'confirmed', 'UHermanas.pas')
+    rej = lineas(ovl, 'rejected', 'UHermanas.pas')
+    check('R1h el otro overload anidado es homonimo: references da el primero y su llamada',
+          conf == sorted([_ovl[0]] + _call2) and rej == [_ovl[1]], 'confirmed=%s rejected=%s' % (conf, rej))
+    d = mc.como_json(call('delphi_definition', {
+        'path': UHER, 'line': _ayudas[0], 'character': _her[_ayudas[0]].index('Ayuda') + 1}))
+    dl = d.get('line0', d.get('range', {}).get('start', {}).get('line'))
+    check('R1i delphi_definition sobre la cabecera de una anidada la da a ella, no la rutina de fuera',
+          dl == _ayudas[0], json.dumps(d)[:300])
+    _met = open(UMET).read().split('\n')
+    _anid = [i for i, x in enumerate(_met) if x == '  procedure Ayuda;'][0]
+    _llam = [i for i, x in enumerate(_met) if x.strip() == 'Ayuda;']
+    met = mc.como_json(call('delphi_references', {
+        'path': UMET, 'line': _anid, 'character': _met[_anid].index('Ayuda') + 1}))
+    conf = mc.aciertos(met, 'confirmed')
+    check('R1j ...con un metodo Ayuda en la familia (TBase, TFoo): la anidada y su llamada, y ningun '
+          'metodo "via override"',
+          all(c.get('path', '').endswith('UMetodo.pas') for c in conf)
+          and lineas(met, 'confirmed', 'UMetodo.pas') == sorted([_anid] + _llam) and not any(c.get('via') for c in conf),
+          json.dumps(conf)[:400])
 
     # ----------------------------------------------------------------- R2
     r = json.loads(call('delphi_search', {

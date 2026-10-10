@@ -78,6 +78,22 @@ type
   Lo usan references y las negativas de las tools del motor (LSP-038). }
 function IdentifierAt(const ALineText: string; ACol: Integer): string;
 
+{ LA correccion de lo que contesta el motor sobre la CABECERA de una rutina
+  ANIDADA: sobre su nombre, en su cabecera, DelphiLSP contesta la rutina que
+  la CONTIENE (medido el 10-oct-2026). AResp es su respuesta a una definicion
+  pedida en (APath, ALine, ACharacter), y ALineText esa linea ('' = se lee).
+  Si el caracter cae en el NOMBRE de una cabecera de rutina
+  (ColumnaDelNombreDeRutina, tambien en la vista del codigo) y la linea que
+  contesta el motor no nombra ese identificador, la definicion es esa
+  cabecera: devuelve una respuesta nueva que la dice y libera AResp; si no,
+  AResp tal cual. UNA para todo el que toma esa respuesta como identidad:
+  delphi_definition y, en references (y en rename, que va por references), el
+  cursor, el gemelo y cada candidato. Corregia solo el cursor: el gemelo
+  salia la rutina de fuera, una homonima hermana se confirmaba y rename la
+  renombraba (revisor de version de la 1.18.1). }
+function DefinicionCorregida(AResp: TJSONObject; const APath: string;
+  ALine, ACharacter: Integer; const ALineText: string): TJSONObject;
+
 implementation
 
 uses
@@ -395,6 +411,98 @@ begin
   Result := True;
 end;
 
+{ Si la linea ALinea del fichero de AUri nombra AIdent en su codigo. Lo que
+  no se deja leer cuenta como que si: no se corrige lo que dijo el motor. }
+function LineaNombra(const AUri: string; ALinea: Integer; const AIdent: string): Boolean;
+var
+  Vista: TStringList;
+begin
+  Result := True;
+  Vista := TStringList.Create;
+  try
+    try
+      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(TLspClient.UriToPath(AUri)));
+    except
+      Exit;
+    end;
+    if (ALinea >= 0) and (ALinea < Vista.Count) then
+      Result := TRegEx.IsMatch(Vista[ALinea], PatronIdentEntero(AIdent), [roIgnoreCase]);
+  finally
+    Vista.Free;
+  end;
+end;
+
+function DefinicionCorregida(AResp: TJSONObject; const APath: string;
+  ALine, ACharacter: Integer; const ALineText: string): TJSONObject;
+var
+  Texto, Ident, Uri: string;
+  Col, Linea: Integer;
+  Vista: TStringList;
+
+  function Posicion(ACaracter: Integer): TJSONObject;
+  begin
+    Result := TJSONObject.Create;
+    Result.AddPair('line', TJSONNumber.Create(ALine));
+    Result.AddPair('character', TJSONNumber.Create(ACaracter));
+  end;
+
+begin
+  Result := AResp;
+  if AResp = nil then
+    Exit;
+  Texto := ALineText;
+  if Texto = '' then
+  begin
+    Vista := TStringList.Create;
+    try
+      try
+        Vista.Text := TLspClient.LoadSourceText(APath);
+      except
+        Exit;
+      end;
+      if (ALine < 0) or (ALine >= Vista.Count) then
+        Exit;
+      Texto := Vista[ALine];
+    finally
+      Vista.Free;
+    end;
+  end;
+  // lo barato primero, en cada candidato: que la linea parezca una cabecera y
+  // el caracter caiga en su nombre
+  Ident := IdentifierAt(Texto, ACharacter);
+  Col := ColumnaDelNombreDeRutina(Texto);
+  if (Ident = '') or (Col < 0) or (ACharacter < Col) or (ACharacter >= Col + Length(Ident)) then
+    Exit;
+  // ...que lo sea en la vista del CODIGO (no una linea de un comentario largo)
+  Vista := TStringList.Create;
+  try
+    try
+      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(APath));
+    except
+      Exit;
+    end;
+    if (ALine < 0) or (ALine >= Vista.Count) or (ColumnaDelNombreDeRutina(Vista[ALine]) <> Col) then
+      Exit;
+  finally
+    Vista.Free;
+  end;
+  // ...y que la linea que contesta el motor no lo nombre. Lo que el motor no
+  // puede ensenar no se lee para saberlo (EL juez de LSP-038): se queda como
+  // vino y la negativa de quien llama lo dice
+  if not DefinitionLocation(AResp, Uri, Linea) or
+     not MotorPuedeEnsenar(TLspClient.UriToPath(Uri)) or LineaNombra(Uri, Linea, Ident) then
+    Exit;
+  Result := TJSONObject.Create;
+  var Lugar := TJSONObject.Create;
+  Result.AddPair('result', Lugar);
+  Lugar.AddPair('uri', TLspClient.PathToUri(TPath.GetFullPath(APath)));
+  var Rango := TJSONObject.Create;
+  Lugar.AddPair('range', Rango);
+  Rango.AddPair('start', Posicion(Col));
+  Rango.AddPair('end', Posicion(Col + Length(Ident)));
+  AResp.Free;
+end;
+
 function FindDelphiReferences(const AFilePath: string;
   ALine, ACharacter: Integer; AMaxFiles, AMaxCandidates: Integer): TJSONObject;
 var
@@ -421,28 +529,7 @@ var
   Entry: TJSONObject;
   Ilegibles: TArray<string>;      // del alcance, sin leer: se dicen, no se tiran
   SinLeer: Integer;               // los del barrido que no se leyeron (no se cuentan)
-  CursorCodigo: string;           // la linea del cursor, en la vista del CODIGO
-
-  { Si la linea ALinea del fichero de AUri nombra AIdent en su codigo. Lo que
-    no se deja leer cuenta como que si: no se corrige lo que dijo el motor. }
-  function LineaNombra(const AUri: string; ALinea: Integer; const AIdent: string): Boolean;
-  var
-    Vista: TStringList;
-  begin
-    Result := True;
-    Vista := TStringList.Create;
-    try
-      try
-        Vista.Text := CodigoPascal(TLspClient.LoadSourceText(TLspClient.UriToPath(AUri)));
-      except
-        Exit;
-      end;
-      if (ALinea >= 0) and (ALinea < Vista.Count) then
-        Result := TRegEx.IsMatch(Vista[ALinea], PatronIdentEntero(AIdent), [roIgnoreCase]);
-    finally
-      Vista.Free;
-    end;
-  end;
+  CursorTexto: string;            // la linea del cursor (DefinicionCorregida)
 
   function CandidateJson(const C: TCandidate): TJSONObject;
   begin
@@ -476,17 +563,7 @@ begin
     if (ALine < 0) or (ALine >= Lines.Count) then
       raise Exception.Create(MsgFmt(SR_LSP_LINE_OUT_RANGE_FMT, [ALine]));
     Ident := IdentifierAt(Lines[ALine], ACharacter);
-    // y la del cursor en la vista del codigo: si es la cabecera de una rutina
-    // (abajo, la anidada)
-    CursorCodigo := '';
-    var VistaCursor := TStringList.Create;
-    try
-      VistaCursor.Text := CodigoPascal(Lines.Text);
-      if ALine < VistaCursor.Count then
-        CursorCodigo := VistaCursor[ALine];
-    finally
-      VistaCursor.Free;
-    end;
+    CursorTexto := Lines[ALine];
   finally
     Lines.Free;
   end;
@@ -495,7 +572,9 @@ begin
 
   // Resolve the target location the compiler engine assigns to that symbol.
   var Pending: Boolean;
-  Resp := Client.DefinitionResolved(TLspClient.PathToUri(FullPath), ALine, ACharacter, Pending);
+  // ...con LA correccion de la cabecera de una anidada (DefinicionCorregida)
+  Resp := DefinicionCorregida(Client.DefinitionResolved(TLspClient.PathToUri(FullPath),
+    ALine, ACharacter, Pending), FullPath, ALine, ACharacter, CursorTexto);
   try
     if not DefinitionLocation(Resp, TargetUri, TargetLine) then
     begin
@@ -528,22 +607,6 @@ begin
   // y sus dos causas, falsas las dos (revisor de P2b, B4; medido, F8d)
   if not MotorPuedeEnsenar(TLspClient.UriToPath(TargetUri)) then
     raise Exception.CreateFmt(MsgText(SR_REFS_TARGET_OUTSIDE_FMT), [Ident]);
-
-  // Sobre el NOMBRE de una rutina ANIDADA, en su cabecera, el motor contesta la
-  // rutina que la CONTIENE (medido el 10-oct-2026: Comprueba, dentro de
-  // LiteralesDeRenderDenegados en Lsp.FormRender); sobre sus llamadas, la
-  // buena. Con la de fuera de objetivo, las llamadas reales salian homonimas y
-  // rename las dejaba sin renombrar. Si la linea que da el motor no nombra el
-  // identificador y el cursor esta en el nombre de una cabecera de rutina, la
-  // definicion es esa cabecera: la del cursor.
-  var ColCabecera := ColumnaDelNombreDeRutina(CursorCodigo);
-  if (ColCabecera >= 0) and (ACharacter >= ColCabecera) and
-     (ACharacter < ColCabecera + Length(Ident)) and
-     not LineaNombra(TargetUri, TargetLine, Ident) then
-  begin
-    TargetUri := TLspClient.PathToUri(FullPath);
-    TargetLine := ALine;
-  end;
 
   // A Pascal routine has TWO definition lines: the interface (or forward)
   // declaration and the implementation. The engine answers one or the other
@@ -595,7 +658,10 @@ begin
           TwinCol := MTwin.Index;
         if TwinCol > 0 then
         begin
-          Resp := Client.Definition(TargetUri, TargetLine, TwinCol);
+          // con LA correccion: en la cabecera de una anidada el motor contesta
+          // la de fuera, y salia de gemelo (revisor de version de la 1.18.1)
+          Resp := DefinicionCorregida(Client.Definition(TargetUri, TargetLine, TwinCol),
+            TargetPath, TargetLine, TwinCol, TwinLines[TargetLine]);
           try
             var TwinUri: string;
             var TwinLine: Integer;
@@ -799,8 +865,10 @@ begin
           OpenedFiles.Add(Cand.Path.ToLower, True);
           Inc(FilesOpened);
         end;
-        Resp := Client.Definition(TLspClient.PathToUri(Cand.Path),
-          Cand.Line, Cand.Col + 1);
+        // con LA correccion: la cabecera de una anidada resuelve a si misma, y
+        // una homonima hermana a la suya, no a la rutina que la contiene
+        Resp := DefinicionCorregida(Client.Definition(TLspClient.PathToUri(Cand.Path),
+          Cand.Line, Cand.Col + 1), Cand.Path, Cand.Line, Cand.Col + 1, Cand.Text);
         try
           var Resuelto := DefinitionLocation(Resp, CandUri, CandLine);
           var EsElMismo := Resuelto and SameText(CandUri, TargetUri) and
