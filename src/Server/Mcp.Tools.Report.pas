@@ -246,10 +246,15 @@ begin
   if AName.Trim = '' then
     Exit(MsgText(SR_REPORT_READ_SIN_NAME));
   Ruta := RutaDeInforme(AName);
-  // lo que no tiene la forma, no esta o la puerta no admite (una union hacia
-  // fuera) es lo mismo para quien pregunta: no es un informe de su workspace,
-  // y la negativa no ensena donde vive la casa
-  if (Ruta = '') or not TFile.Exists(Ruta) or
+  // lo que no tiene la FORMA de un informe se dice como tal: habla solo de lo
+  // que tecleo el agente, sin buscar nada (Hermes, 1.18.0: '..' contestaba
+  // "no esta" y no sabia que su nombre no podia ser uno)
+  if Ruta = '' then
+    Exit(MsgFmt(SR_REPORT_NOMBRE_FMT, [AName.Trim]));
+  // lo que no esta o la puerta no admite (una union hacia fuera) es lo mismo
+  // para quien pregunta: no es un informe de su workspace, y la negativa no
+  // ensena donde vive la casa
+  if not TFile.Exists(Ruta) or
      (LugarDeLecturaDenegado(Ruta, [ltCasa]) <> '') then
     Exit(MsgFmt(SR_REPORT_NO_ESTA_FMT, [AName.Trim]));
   Texto := LeeTexto(Ruta, [ltCasa]);

@@ -104,6 +104,27 @@ the MCP `initialize` response (`serverInfo.version`).
   line after it. What goes to a program of ANOTHER machine (adb, PAServer)
   is still content. Seen on 10-oct; `test_git_jaula` J18 (red before).
 
+- **Four answers that cost an agent a call now say what to do next.**
+  From the validation of 1.18.0 on the VM, text only:
+  - `delphi_report command=read` with a name that cannot be a report
+    (`..`, a path, two folders) says so (`REPORT-012`) and gives the shape
+    of one, without looking anything up; it answered `REPORT-008`, "not
+    there", and the agent kept trying names. A name with that shape that is
+    not there, or not of this workspace, is still `REPORT-008`.
+  - `delphi_git init` on a folder that does not exist adds that init does
+    not create it, only `clone` creates its destination, and how to
+    (`GIT-064`).
+  - `removeuses` that finds nothing to remove in its section (`USES-016`,
+    `USES-017`, or `USES-018` for some of the names) says which of them are
+    in the uses of the other section, and `section=` for it (`USES-024`):
+    without `section`, a unit used only in the interface was "not there".
+  - `delphi_test` with an unknown command repeats it and says what each
+    command takes (`TEST-014`); `TEST-015` says that a call with no command
+    is a discover, and how to run.
+
+  `test_ayudas_1181` (red before), and `test_buzon_workspace` W6 now
+  expects `REPORT-012`.
+
 ## [1.18.0] - 2026-10-10
 
 Consolidation. The big units sorted by what they hold, each rule in one

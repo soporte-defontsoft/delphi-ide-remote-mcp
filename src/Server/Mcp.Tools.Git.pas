@@ -1100,7 +1100,13 @@ begin
   var CreadaPorElClone := False;
   var AncestroDelClone := ''; // lo que el clone cree debajo es suyo
   if not SameText(Params.Command.Trim, 'clone') and not TDirectory.Exists(Repo) then
-    Exit(MsgFmt(SR_GIT_DIR_NOT_FOUND_FMT, [Repo]));
+  begin
+    Result := MsgFmt(SR_GIT_DIR_NOT_FOUND_FMT, [Repo]);
+    // init no la crea: se dice como crearla (Hermes, 1.18.0)
+    if SameText(Params.Command.Trim, 'init') then
+      Result := Result + MsgText(SN_GIT_INIT_NO_CREA);
+    Exit;
+  end;
 
   // UNA lista de metacaracteres (Lsp.Args.ShellArgDenied): la tool tenia
   // su copia (novena revision)

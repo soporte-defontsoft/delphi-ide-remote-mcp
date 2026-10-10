@@ -2508,6 +2508,36 @@ var
   U: TUsesClause;
   Names, Entries, Quitadas, NoEstaban: TArray<string>;
   PosSec: Integer;
+
+  // lo de ANombres que esta en la uses de la OTRA seccion, dicho con la
+  // section que lo quita; '' si alli no esta nada (Hermes, 1.18.0). Lee Text
+  // y Blank como estan: se llama antes de reescribir la clausula.
+  function EnLaOtra(const ANombres: TArray<string>): string;
+  var
+    Otra, N, Ent: string;
+    PosOtra: Integer;
+    UO: TUsesClause;
+    Estan: TArray<string>;
+  begin
+    Result := '';
+    if Sec = 'interface' then
+      Otra := 'implementation'
+    else
+      Otra := 'interface';
+    PosOtra := FinDeSeccion(Blank, Otra);
+    if PosOtra = 0 then
+      Exit;
+    UO := FindUses(Text, PosOtra);
+    if not UO.Found then
+      Exit;
+    Estan := [];
+    for N in ANombres do
+      if LocateEntry(UO, N, Ent) then
+        Estan := Estan + [N];
+    if Length(Estan) > 0 then
+      Result := MsgFmt(SN_REMOVEUSES_EN_LA_OTRA_FMT, [string.Join(', ', Estan), Otra, Otra]);
+  end;
+
 begin
   if not SameText(TPath.GetExtension(APasPath), '.pas') then
     Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
@@ -2536,7 +2566,8 @@ begin
       Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
     U := FindUses(Text, PosSec);
     if not U.Found then
-      Exit(MsgFmt(SN_REMOVEUSES_NO_CLAUSE_FMT, [Sec, TPath.GetFileName(APasPath)]));
+      Exit(MsgFmt(SN_REMOVEUSES_NO_CLAUSE_FMT, [Sec, TPath.GetFileName(APasPath)]) +
+        EnLaOtra(Names));
     if U.EnRamas then
       Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
     Entries := U.Entries;
@@ -2552,14 +2583,15 @@ begin
         NoEstaban := NoEstaban + [Nombre];
     if Length(Quitadas) = 0 then
       Exit(MsgFmt(SN_REMOVEUSES_ABSENT_FMT, [string.Join(', ', Names), Sec,
-        TPath.GetFileName(APasPath)]));
+        TPath.GetFileName(APasPath)]) + EnLaOtra(Names));
+    var EnOtra := EnLaOtra(NoEstaban); // antes de reescribir: lee Text
     Text := ReplaceUses(Text, U, Entries); // vacia: la clausula entera fuera
     PatchSaveText(APasPath, Text, Enc);
     // el eco, releido del disco
     Clausula := ClausulaReleida(APasPath, Sec, MsgFmt(SN_REMOVEUSES_GONE_FMT, [Sec]));
     Result := MsgFmt(SN_REMOVEUSES_REMOVED_FMT, [Sec, TPath.GetFileName(APasPath),
       string.Join(', ', Quitadas),
-      IfThen(Length(NoEstaban) > 0, MsgFmt(SN_REMOVEUSES_SOME_ABSENT_FMT, [string.Join(', ', NoEstaban)]), ''),
+      IfThen(Length(NoEstaban) > 0, MsgFmt(SN_REMOVEUSES_SOME_ABSENT_FMT, [string.Join(', ', NoEstaban)]) + EnOtra, ''),
       Clausula]);
   finally
     LeaveFileEdit;

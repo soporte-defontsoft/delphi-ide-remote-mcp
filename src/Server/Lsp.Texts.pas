@@ -3139,6 +3139,11 @@ const
     '[USES-017] Not there: %s in the %s uses of %s. Nothing to write.';
   SN_REMOVEUSES_SOME_ABSENT_FMT =
     ' [USES-018] Not there: %s.';
+  { ...y si lo que no esta vive en la OTRA seccion, se dice cual (Hermes,
+    1.18.0: sin section, con el uses solo en interface, USES-016 costaba un
+    turno; USES-017 y USES-018 son el mismo caso con clausula). }
+  SN_REMOVEUSES_EN_LA_OTRA_FMT =
+    ' [USES-024] %s is in the %s uses: pass section=%s.';
   SN_REMOVEUSES_GONE_FMT =
     '[USES-019] (the %s section is left without a uses clause: it was ' +
     'removed entirely)';
@@ -4173,12 +4178,19 @@ const
     '[TEST-025 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
     'be ignored). Nothing was done: %s takes %s.';
 
-  SR_TEST_CMD =
-    '[TEST-014 INVALID_PARAM] Command must be discover | run';
+  { Dice lo que toma cada comando (Hermes, 1.18.0: TEST-014 y TEST-015
+    seguidos le costaron dos llamadas para ver cual era cual). }
+  SR_TEST_CMD_FMT =
+    '[TEST-014 INVALID_PARAM] "%s" is not a command of delphi_test: it is ' +
+    'discover (with path: the folder or project to search under) or run ' +
+    '(with project: the test .dproj). With no command, a call is a discover ' +
+    'unless it carries only project, which makes it a run.';
 
   SR_TEST_NEED_PATH =
     '[TEST-015 INVALID_PARAM] discover needs "path" (the folder or the project ' +
-    'under which to search).';
+    'under which to search). A call with no command is a discover unless it ' +
+    'carries only "project": to run a test project, command=run ' +
+    'project=<its .dproj>.';
 
   SR_TEST_NEED_PROJECT =
     '[TEST-016 INVALID_PARAM] run needs "project" (the .dproj of the test ' +
@@ -6609,6 +6621,16 @@ const
     '[REPORT-008 NOT_FOUND] No report "%s" in your workspace''s reports. ' +
     'command=list shows their names (each workspace sees only its own).';
 
+  { Un nombre que no tiene la forma de un informe se dice como tal (Hermes,
+    1.18.0: '..\..\etc\passwd' contestaba REPORT-008, "no esta", y quien
+    prueba nombres no sabia que el suyo no podia ser uno). Habla solo de lo
+    que tecleo el agente: no se busca nada ni se dice donde vive la casa. }
+  SR_REPORT_NOMBRE_FMT =
+    '[REPORT-012 INVALID_PARAM] "%s" is not a report name, so nothing was ' +
+    'looked for: a report goes by the name command=list shows, <dir>\<name> ' +
+    'or just <name> (<date>-<time>-<kind>-<title>.md) - no "..", drive or ' +
+    'other path in it.';
+
   SN_REPORT_LISTA_VACIA =
     '[REPORT-009] No reports in your workspace yet (each workspace sees ' +
     'only its own).';
@@ -7202,6 +7224,12 @@ const
 
   SR_GIT_DIR_NOT_FOUND_FMT =
     '[GIT-026 NOT_FOUND] Directory not found: %s';
+
+  { init no crea la carpeta: solo clone crea su destino (Hermes, 1.18.0). }
+  SN_GIT_INIT_NO_CREA =
+    ' [GIT-064] init does not create the folder (only clone creates its ' +
+    'destination): writing a first file there creates it (delphi_create, ' +
+    'delphi_textedit create=true, delphi_upload); then init.';
 
   SR_GIT_SHELL_METACHARS_ARGS =
     '[GIT-027 INVALID_PARAM] Shell metacharacters are not allowed in args';

@@ -199,7 +199,7 @@ check('un proyecto que no es test: rechazado y explicado', mc.es(r, 'SR_TEST_NOT
 r = B.call('delphi_test', {'command': 'run'})
 check('run sin project rechazado con pista', mc.rechazado(r) and mc.es(r, 'SR_TEST_NEED_PROJECT'), r[:200])
 r = B.call('delphi_test', {'command': 'volar', 'path': BASE})
-check('comando invalido', mc.es(r, 'SR_TEST_CMD'), r[:150])
+check('comando invalido', mc.es(r, 'SR_TEST_CMD_FMT'), r[:150])
 r = B.call('delphi_test', {'command': 'run', 'project': 'C:\\Windows\\x.dproj'})
 check('fuera de la jaula rechazado', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:200])
 

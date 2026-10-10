@@ -16,7 +16,8 @@ informes del propio workspace, sin moverlos ni borrarlos.
   W4  read: uno entero, por las dos formas del nombre, y se queda donde estaba
   W5  read de un informe de OTRO workspace: REPORT-008, nada leido
   W6  read con nombres que no son de un informe del buzon (.., absoluto,
-      settings.ini, dos carpetas): REPORT-008, nada leido
+      settings.ini, dos carpetas): REPORT-012 (no es un nombre de informe;
+      008 hasta la 1.18.0), nada leido
   W7  una carpeta de agente que es una union a una victima de fuera: list no
       la ensena y read la niega
   W8  el correo de un workspace no lo ve ni lo consume otro (check, read y la
@@ -138,11 +139,12 @@ try:
         r = c1.call('delphi_report', {'command': 'read', 'name': n})
         # ni el contenido (un informe ajeno, settings.ini) ni, para un nombre
         # relativo, donde vive la casa; el absoluto sale en el eco de lo que
-        # tecleo el agente, enmascarado como todo
-        if not (mc.es(r, 'SR_REPORT_NO_ESTA_FMT') and 'informe de' not in r and 'Token=' not in r
+        # tecleo el agente, enmascarado como todo. Ninguno tiene la forma de
+        # un informe: REPORT-012 lo dice sin buscar nada (1.18.1; antes 008)
+        if not (mc.es(r, 'SR_REPORT_NOMBRE_FMT') and 'informe de' not in r and 'Token=' not in r
                 and (os.path.isabs(n) or 'delphi-mcp-tests' not in r)):
             malas.append((n, r[:200]))
-    check('W6 read con nombres que no son de un informe del buzon: REPORT-008 los %d, nada leido' % len(malos),
+    check('W6 read con nombres que no son de un informe del buzon: REPORT-012 los %d, nada leido' % len(malos),
           not malas, malas)
 
     # W7

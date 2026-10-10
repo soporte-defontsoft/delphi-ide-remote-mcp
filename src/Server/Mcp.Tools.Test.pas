@@ -80,7 +80,7 @@ begin
   // que aplica la puerta de solo lectura (undecima revision)
   Cmd := ComandoDeTest(Params.Command, Params.Project, Params.Path);
   if not MatchText(Cmd, ['discover', 'run']) then
-    Exit(MsgText(SR_TEST_CMD));
+    Exit(MsgFmt(SR_TEST_CMD_FMT, [Params.Command.Trim]));
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): discover
   // con filter o config los ignoraba en silencio (decima revision)
   var Suyos: string;
