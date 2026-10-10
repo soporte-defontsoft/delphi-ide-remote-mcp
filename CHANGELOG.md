@@ -311,6 +311,78 @@ the MCP `initialize` response (`serverInfo.version`).
   (a fresh `clone --no-checkout`, a bare repo) keeps the old examination so a
   clone's checkout still cannot smudge from an unjudged host. A git failure
   while judging is not a "yes". `test_git_lfs_muro`.
+- **Git metadata is for `delphi_git` alone (`GUARD-033`).** The file tools
+  refuse a path inside `.git`, or a folder that holds one, also through a
+  junction or a symbolic link: `.git\config` can carry the credentials of a
+  remote, and a hook planted under `.git\hooks` runs the next time the person
+  uses git. Only `delphi_git` reaches repository metadata. A whole repository
+  folder may still move, or go to the recoverable trash and come back, inside
+  the workspace, as long as its metadata links stay inside the allowed
+  places; a copy of a tree that holds `.git`, and a `.git` that links outward,
+  stay refused. `delphi_projects` still shows a repository's branch: it reads
+  `.git\HEAD` with git's own permission, without opening `.git` to the file
+  tools. `test_git_config_cerrado`, `test_git_repo_entero_118`.
+- **The local configuration of a repository is a whitelist (`GIT-051`).**
+  Before running, `delphi_git` reads the repository's local and worktree
+  configuration, and since 1.11.3 it refused the keys known to load another
+  file or run a program (includes, filters, external diffs, credential
+  helpers, the ssh command...) - a list that could only miss the next one.
+  It is the other way round now: only known keys that neither run nor read
+  anything are admitted - the `core` basics, the identity, the signing
+  switches, a remote's addresses and refspecs, a branch's upstream, a
+  submodule's place - and Git LFS is the one program admitted, with its exact
+  standard commands. Anything else is `GIT-051`, which names the key and
+  never its value (it may hold credentials); a configuration git cannot list
+  is `GIT-052`. `test_git_config_cerrado`.
+- **An agent cannot sign with the person's GPG key.** Every git the server
+  runs gets `commit.gpgsign=false` and `tag.gpgsign=false`, so a repository
+  set to sign does not sign, and a call that asks for it is refused: `-S`,
+  `--gpg-sign` and its abbreviations on `commit`; `-s`, `-u`, `--local-user`
+  and `--sign` on `tag`. A commit's `--signoff` (and `-s`, `--sign`) only
+  adds a `Signed-off-by` line and is allowed. `test_git_config_cerrado`.
+- **git never waits for a password, and does not see the server's
+  settings.** Every git the server launches gets the server's environment
+  without its `DELPHI_MCP_*` variables, plus `GIT_TERMINAL_PROMPT=0` and
+  `GCM_INTERACTIVE=never`: a remote that asks for credentials fails at once
+  instead of waiting, until the time limit, for an answer nobody can give.
+  One reader of a child's environment, the one the `delphi_test` container
+  already used. `test_git_config_cerrado`.
+- **Every network address of a remote passes the operator's host list.**
+  `GitRemotes` judged the address written in the call; the ones already
+  stored in the repository's remotes were taken as good. Now each network
+  address, from the call or from the repository, goes through the same list,
+  and the call's remote is judged before the configuration and LFS gates, so
+  a remote that is not allowed is refused as a remote (a folder outside the
+  roots: `GIT-044`), not by what it would trip later. `test_git_jaula`,
+  `test_git_config_cerrado`.
+- **Git LFS downloads only from where the operator allows (`GIT-061`).**
+  Materializing a tree with LFS files makes git-lfs fetch them from an
+  endpoint derived from the remote, or set in `lfs.url`,
+  `remote.<name>.lfsurl` or a `.lfsconfig` - a second network address nobody
+  judged. The orders that materialize a tree (`clone`, `switch`, `merge`,
+  `pull`, `stash push`/`pop`, `worktree add`) judge the effective endpoint
+  with the judge of a remote - a network address by `GitRemotes`, a folder by
+  the workspace's folder gate - and refuse with `GIT-061`, never showing it.
+  A `clone` checks out only after that judgement, and the judged endpoint is
+  kept for the whole operation, so a `.lfsconfig` arriving with the new tree
+  cannot change it. Commands that only read metadata (`status`, `log`...) do
+  not ask git-lfs, so a system-wide `filter.lfs.*` does not deny them.
+  `test_git_lfs_118`, `test_git_lfs_sistema_118`.
+- **What a form names is judged before it is rendered (`DSGN-115`).**
+  `preview` hands the form to a helper that loads it with the IDE's reader,
+  and a string property naming a file - a picture, a style, whatever a
+  third-party setter opens - was opened by the helper wherever it pointed.
+  Before launching it the server now reads the string literals of the form,
+  of the sibling forms the helper can resolve (frames, ancestors; linked ones
+  are skipped, as the helper skips them) and the `state` values of the call,
+  and asks the read gate about each one that names an existing file: one
+  outside the allowed read locations is `DSGN-115`, naming the property and
+  never its value. A literal that is a UNC or device path (`\\server\...`,
+  `\\?\`, `\\.\`) is decided by its text before any I/O, so a form cannot
+  make the server wait on SMB. A form that cannot be checked is `DSGN-116`,
+  and the form and its siblings share a 16 MiB budget, looked at before
+  decoding (`DSGN-117`: 65 MiB of text cost 416 MiB in the server).
+  `test_render_jaula_118`, `test_render_unc_118`.
 - **`delphi_edit` and `delphi_textedit` delete a blank line.** `delete`
   asked for `old` with the line, and a blank line has no text to copy: the
   way round was a three-line block. Now `delete` with `atline` and no `old`
@@ -726,14 +798,16 @@ the MCP `initialize` response (`serverInfo.version`).
   without a BOM in the ANSI code page (measured in the bytes of a built
   exe: a caption with an accent saved as UTF-8 without BOM runs as
   `AcciÃ³n`); the IDE calls that encoding "Text Form" and saves a typed
-  accent as a raw CP1252 byte (measured by the operator). The server
+  accent as one raw byte of that page (CP1252 there, measured by the
+  operator). The server
   detected such a file as UTF-8 whenever its bytes were valid UTF-8, so
   `delphi_read`, the designer commands, `to-binary` and the search showed
   and converted another string than the one that runs. The one detector
   now takes whether the file is a form (one predicate, `EsRutaDeDesigner`,
-  written by hand in nine places before): a form without BOM is CP1252, the
-  bytes already there stay as they are, and a new accent goes in as the IDE
-  writes it. A form with a BOM is read as before. `test_designer_binary`.
+  written by hand in nine places before): a form without BOM is ANSI - the
+  machine's code page, below -, the bytes already there stay as they are,
+  and a new accent goes in as the IDE writes it. A form with a BOM is read
+  as before. `test_designer_binary`.
 - **A CP1252 file with one of the five bytes the code page leaves undefined
   can be edited.** Windows reads 81, 8D, 8F, 90 and 9D as U+0081... and
   writes them back to the same byte, but the encoder refused them: a file
@@ -790,7 +864,7 @@ the MCP `initialize` response (`serverInfo.version`).
   and the server wrote the new character in the IDE's configured encoding
   - with UTF-8 configured, UTF-8 WITHOUT a BOM, which dcc reads as ANSI
   (`AcciÃ³n` in the running program). Now it does what the IDE does when
-  it saves (measured by the operator): CP1252 when every new character
+  it saves (measured by the operator): ANSI when every new character
   fits, UTF-8 with a BOM when one does not. For `.pas`, `.dpr`, `.dpk` and
   `.inc` (dcc reads each include by its own BOM, measured) and every writer
   - an edit, a block, an insert, a changeset; a file that already has an
@@ -815,7 +889,7 @@ the MCP `initialize` response (`serverInfo.version`).
   stray last byte, which `delphi_edit` wrote back without it. Now it is
   read, its bad bytes as U+FFFD, and `delphi_read` says so (READ-007,
   naming the first line that does not fit and, in a UTF-8 file, how that
-  line reads in CP1252); and one question every writer asks refuses to
+  line reads in ANSI); and one question every writer asks refuses to
   write it back (EDIT-038): `delphi_edit`, `delphi_textedit`, the designer
   commands (`to-binary` too), `delphi_changeset`, `vault_append`,
   `vault_patch` and the rest. EDIT-038 only guarded `delphi_edit`'s entry,
@@ -824,7 +898,7 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_delphi_patch`, `test_vault`, `test_designer_binary`,
   `LspTests.Encodings`.
 - **No writer leaves a file that would be read back in another encoding
-  than it wrote.** Some pairs of characters are, in CP1252, the bytes of
+  than it wrote.** Some pairs of characters are, in ANSI, the bytes of
   one UTF-8 character - `Ã³` is a UTF-8 `ó`, and so is an accented capital
   followed by a curly quote - and a file whose high bytes all formed such
   pairs was read back as UTF-8, with other characters, by the server and by
@@ -1068,6 +1142,22 @@ the MCP `initialize` response (`serverInfo.version`).
   its mutant. The frozen copy of `Lsp.Guard` in `tests/fixtures`, which no
   battery read since `test_round16` generates its unit, is gone.
 
+- **The jail rounds of 8-oct were written by Codex** (the third one and its
+  run_all reds with Claude Opus 4.8): the entries above on Git metadata, the
+  configuration whitelist, signing, git's environment, remote hosts, LFS and
+  the renderer's literals. New batteries `test_git_config_cerrado`,
+  `test_git_lfs_118`, `test_git_lfs_sistema_118`, `test_git_repo_entero_118`,
+  `test_render_jaula_118`, `test_render_unc_118`, and three manual ones that
+  report instead of counting (`test_render_enlaces_118`,
+  `test_render_hijos_118`, `test_render_fmx_diseno_118`), with DUMMY
+  fixtures for the renderer (`src/Render/Pruebas/DUMMY`). Measured with them:
+  with the helper's own watchdog off, the server's 75-second deadline stops
+  the helper and the child it started (`DSGN-062`) and the server keeps
+  answering; without the Job Object the child outlived it. The paths where
+  the job cannot be created or assigned are not measured.
+  `src/Render/README.md` shows the operator how to declare an outbound block
+  rule per helper; the server never installs one.
+
 - **One walk of a tree for several masks.** `delphi_references` walked each
   folder three times (once for `*.pas`, `*.dpr`, `*.inc`), the designer
   check of `delphi_rename_symbol` twice and `delphi_projects` twice, each
@@ -1256,13 +1346,15 @@ the MCP `initialize` response (`serverInfo.version`).
     (`TEncKind`), their names (`EncName` / `EncKindOf`), the BOM bytes
     (`PreambleLen`, `BomUtf8En`), strict UTF-8 (`ValidUtf8`), the decoder
     and the encoder (`DecodeBytes` / `EncodeText`, with `ECaracterNoCabe`)
-    and the one CP1252 codec they share. They are pure: DECIDING what
-    encoding some bytes are stays in `Lsp.Patch` (`DetectEnc`, which asks
-    the IDE about plain ASCII), and `test_paisaje` now pins it there:
-    nobody else reads a BOM or calls `GetBufferEncoding`, only the detector
-    and the utf8-bom audit ask `ValidUtf8`, and the CP1252 codec is created
-    in one place. Two loose detectors and a second CP1252 codec are
-    declared debt that can only shrink. The cycle between `Lsp.Settings`
+    and the one ANSI codec they share (the machine's page, see "ANSI is the
+    machine's code page"). They are pure: DECIDING what encoding some bytes
+    are stays in `Lsp.Patch` (`DetectEnc`, which asks the IDE about plain
+    ASCII), and `test_paisaje` now pins it there: nobody else reads a BOM or
+    calls `GetBufferEncoding`, only the detector asks `ValidUtf8`, and every
+    codec is created in that one unit. One loose detector, the renderers'
+    (`DesignerAFlujo`: they do not link the unit), is declared debt that can
+    only shrink; the help's, with a CP1252 codec of its own, is gone. The
+    cycle between `Lsp.Settings`
     and `Lsp.Patch` is gone, and `Lsp.Docs` and `Lsp.DesignerBin` no longer
     use `Lsp.Patch`.
   - The namers of the trash join the server's home in **`Lsp.Casa`**: the

@@ -43,6 +43,12 @@ handshake.
 
 - `delphi_read` pages at 400 lines per call - read in RANGES.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
+- `READ-007` on a read: some bytes do not fit the file's encoding (a mixed
+  or damaged file). They show as U+FFFD and no writer writes the file back
+  (`EDIT-038`): fix it in its editor, or restore a good copy. `READ-008`: a
+  source in UTF-8 without a BOM, which the compiler reads as ANSI, so its
+  accents reach the program as mojibake - the way out is the IDE's (open and
+  save it: UTF-8 with a BOM). Leave its bytes as they are.
 - **An API you do not know** (what a class or routine is for, how it is
   used, which framework has it): `delphi_docs search query=<it>` and then
   `read id=<a result>` - the RAD Studio help installed on the server, in
@@ -68,7 +74,11 @@ handshake.
 
 - Anchor edits: `old` must be copied EXACTLY from a fresh `delphi_read`,
   as small and unique as possible. An edit error is a diagnosis - re-read
-  and fix the anchor; do not retry blindly.
+  and fix the anchor; do not retry blindly. Indentation does not count in
+  an anchor (the rest of the line does, to its end), and `occurrence`
+  counts the matching lines of the file as it was before the batch; when an
+  anchor that carries indentation picks a line indented otherwise, the
+  batch is refused (`EDIT-121`) with each line as `line N = occurrence K`.
 - **Fragment mode, for a long line**: `fragment` + `atline` (mandatory) +
   `new` changes just that piece of ONE line - no need to paste a
   600-character README paragraph to turn "68" into "69". The fragment must
@@ -141,8 +151,10 @@ handshake.
   events; `prop classname=TPanel prop=Align` gives the legal enum members.
 - `tree path=<form>` shows the component tree; `get component=<Name>` one
   block. After editing a form with `delphi_edit`, run `delphi_designer lint
-  path=<form>`: a property the class does not publish or an enum value that
-  does not exist will not stream, and nobody tells you at build time.
+  path=<form>`: a property the class does not publish, or a value its type
+  does not take (an enum value that does not exist, a `Color = 'hola'`),
+  will not stream, and nobody tells you at build time - lint judges values
+  with the same checks as `set`.
 - To ADD a component: `delphi_designer command=insert path=<form>
   classname=TButton component=BtnOk` (`component` names it, its text too
   when the class shows its Name, so no `set prop=Name` afterwards - without
@@ -163,7 +175,10 @@ handshake.
   insert and a rename refuse it in a file that has an encoding to keep
   (`DSGN-111`) rather than change it; a unit that is still pure ASCII has
   none, and the name chooses ANSI (or UTF-8 with a BOM when ANSI cannot hold
-  it), as the IDE does when it saves.
+  it), as the IDE does when it saves. In an inherited form the names of the
+  ancestors count, although their components are not written in the derived
+  file: insert never picks one, and a name that one of them has is refused,
+  naming the ancestor.
 - To CHANGE one property: `set component=Button1 prop=Caption value=OK`. It
   is checked against the class BEFORE writing: a property the class does
   not publish (the answer suggests the close one), an enum value that does
@@ -181,6 +196,12 @@ handshake.
   own components are edited in the frame's file. The
   form's own size (`component=<the form>
   prop=ClientWidth`) and an inline frame's Width/Height go through set too.
+  A path through a reference to another component (`PopupMenu.AutoPopup` on
+  a button) is refused (`DSGN-119`): the form loader reads it before the
+  reference exists - set it on that component (`component=PopupMenu1
+  prop=AutoPopup`); a sub-component such as `EditLabel.Caption` is written
+  as before. In FMX a control's place is `Position.X`/`Position.Y`, and
+  `Left`/`Top` are refused (`DSGN-118`).
   `set component=X
   parent=Panel1` (alone) moves X with its children; `prop=Name` renames it,
   its field and the form lines that name it (its methods keep their names,
