@@ -239,6 +239,17 @@ REGLAS = [
      'de ProjectUnits), la linea exacta (InterfaceDigest) o la linea que es la palabra (ExecutePatch, '
      'la frontera del insert; la vio el revisor 7): tres reglas para lo que TLectorPas ya sabe '
      '(inventario del 10-oct-2026)'),
+    ('la forma canonica de una ruta preguntada a Windows',
+     r'\bGet(?:LongPathName|FinalPathNameByHandle)\w*\s*\(',
+     [('Lsp.Rutas.pas', 'LongCanonical'), ('Lsp.Rutas.pas', 'NombreFinal'),
+      # el lanzador que viaja al destino compara el binario de un proceso con SU
+      # carpeta; solo enlaza Lsp.ProcessLaunch del servidor (Lsp.Rutas traeria el
+      # log y el catalogo de mensajes): declarado, y solo puede encoger
+      ('McpRunJob.dpr', 'RutaLarga')],
+     'Lsp.Rutas: la forma larga (LongCanonical) y la del final de los enlaces (NombreFinal), en UN '
+     'sitio; dos formas de la misma raiz a la vez rompieron "es la raiz?" y la raiz del workspace '
+     'quedo borrable (20-sep-2026). Regla desde el 10-oct (11.5): el inventario del 8-oct miro solo '
+     'src/Server y no vio la del lanzador'),
     ('decidir la codificacion de unos bytes',
      r'\bGetBufferEncoding\b|\$FF\b[^;]*\$FE\b|\$FE\b[^;]*\$FF\b|\$EF\b[^;]*\$BB\b|\$BB\b[^;]*\$BF\b',
      # (EncodeText escribe el BOM byte a byte, una forma que esta regla no ve: 2.1g)
@@ -648,6 +659,7 @@ PLANTADO = {
     'el end. de una unidad leido a mano': r"  if TRegEx.IsMatch(T, '(?im)^\s*end\s*\.') then",
     'la cabecera de una unidad leida a mano': r"  M := TRegEx.Match(T, '^\s*(program|library)\b');",
     'la seccion interface/implementation buscada a mano': r"  M := TRegEx.Match(T, '^[ \t]*' + ASec + '\b');",
+    'la forma canonica de una ruta preguntada a Windows': "  N := GetLongPathName(PChar(P), @B[0], Length(B));",
     'decidir la codificacion de unos bytes': "  if (B[0] = $FF) and (B[1] = $FE) then K := ekUtf16LE;",
     'UTF-8 estricto preguntado a mano': "  if ValidUtf8(B, 0) then K := ekUtf8;",
     'una cadena ASCII preguntada a mano': "  for C in S do if Ord(C) > 127 then Exit(False);",

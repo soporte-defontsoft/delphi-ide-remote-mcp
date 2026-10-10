@@ -798,6 +798,14 @@ the MCP `initialize` response (`serverInfo.version`).
   one, `FinDeSeccion`; the echo of adduses and removeuses is one,
   `ClausulaReleida`). Today's copies are listed and can only shrink; a new
   one fails the battery, each rule with its planted mutant.
+- **A path's canonical form is asked to Windows in one place.**
+  `test_paisaje` now watches `GetLongPathName` / `GetFinalPathNameByHandle`:
+  only `Lsp.Rutas` asks them (`LongCanonical`, `NombreFinal`) - two forms
+  of the same root at once once made the workspace root deletable. The
+  rule found one more than the inventory of 8-oct, which looked only at
+  `src/Server`: the job launcher's `RutaLarga` (`McpRunJob`), declared, since
+  that program travels to the target and links no server unit but
+  `Lsp.ProcessLaunch`. With its planted mutant.
 - **The source header has one reader.** `CabeceraDeFuente` (`Lsp.Pascal`)
   reads the unit/program/library/package header on the code view - its
   word, its name with where it starts, and where it ends, past its `;` -
