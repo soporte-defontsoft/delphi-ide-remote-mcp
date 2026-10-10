@@ -2,8 +2,11 @@ unit Mcp.Tools.Messages;
 
 { delphi_messages: the operator's mailbox for the agents - the way back of
   delphi_report. The operator (a person, or the assistant working next to
-  them) drops a Markdown file in the agent's own folder, messages\<agent>\,
-  next to the server executable; the agent reads its mail with this tool.
+  them) drops a Markdown file in the agent's own folder,
+  messages\<workspace>\<agent>\, next to the server executable; the agent
+  reads its mail with this tool. La carpeta del workspace la pone el token
+  de la sesion (BuzonDeMensajes, Lsp.Casa): un workspace no ve el correo de
+  otro (David, 10-oct-2026).
   Reading DELETES it, like a delivered capture: nothing is kept aside and
   nothing is purged later, so the box only ever holds what has not been read
   (David, 2026-09-25). There is no box "for everyone": a notice for all goes
@@ -51,8 +54,9 @@ type
   different: it can read it, and reading it turns the line off. }
 function PendingMessagesNote: string;
 
-{ How many messages wait in NAMED agent boxes. For delphi_workspace only:
-  it is server state, not a message for the caller. }
+{ How many messages wait in NAMED agent boxes of the caller's workspace.
+  For delphi_workspace only: it is server state, not a message for the
+  caller. }
 function DirectedMessagesPending: Integer;
 
 implementation
@@ -100,7 +104,7 @@ begin
   Agent := Slug(CurrentAgent);
   if Agent = '' then
     Exit;
-  N := Length(PendingIn(TPath.Combine(CarpetaDeMensajes, Agent)));
+  N := Length(PendingIn(BuzonDeMensajes(Agent)));
   if N > 0 then
     Result := MsgFmt(SN_MESSAGES_PENDING_FMT, [N, Agent]);
 end;
@@ -110,7 +114,7 @@ var
   Root, D: string;
 begin
   Result := 0;
-  Root := CarpetaDeMensajes;
+  Root := BuzonDeMensajes;
   if not TDirectory.Exists(Root) then
     Exit;
   for D in TDirectory.GetDirectories(Root) do
@@ -168,7 +172,7 @@ begin
     Exit(MsgText(SN_MESSAGES_NONE_NO_AGENT));
   // UN buzon por agente y ninguno "para todos" (David, 25-sep-2026): un aviso
   // general se deja en la carpeta de cada uno.
-  Files := PendingIn(TPath.Combine(CarpetaDeMensajes, Agent));
+  Files := PendingIn(BuzonDeMensajes(Agent));
   if Length(Files) = 0 then
     Exit(MsgFmt(SN_MESSAGES_NONE_FMT, [Agent]));
   Sb := TStringBuilder.Create;

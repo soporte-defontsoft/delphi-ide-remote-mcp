@@ -875,17 +875,19 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Report a problem, limitation or suggestion about THIS MCP server to its maintainers - whenever a tool refuses something you believe legitimate, an answer looks wrong, a message is confusing, or you had to work around a missing capability: that feedback is what fixes the server. Each report is its own timestamped markdown file (with the server version and date) in a reports folder next to the server; a stable "agent" id gives your reports their own subfolder. Available at EVERY access level, read-only included. Be concrete: what you tried, what happened, what you expected.
+Report a problem, limitation or suggestion about THIS MCP server to its maintainers - whenever a tool refuses something you believe legitimate, an answer looks wrong, a message is confusing, or you had to work around a missing capability: that feedback is what fixes the server. Each report is its own dated markdown file; a stable "agent" id gives yours a subfolder. Available at EVERY access level, read-only included. Be concrete: what you tried, what happened, what you expected. command=list/read show your workspace's reports (only its own), moving nothing.
 
 *Access: read-only OK (side effect: writes a report file on the server for the operator).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `message` | string | **yes** | The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine |
+| `message` | string | optional | The report itself: what you tried, what happened, what you expected. Markdown welcome |
 | `title` | string | optional | Optional one-line summary (becomes part of the file name) |
 | `kind` | string | optional | Optional: bug \| limitation \| suggestion \| question (default: bug) |
-| `from` | string | optional | Optional: who is reporting (agent/model name, project) - helps us read the history later |
-| `agent` | string | optional | Optional short id of the reporting agent (e.g. "hermes"): its reports go to a folder of that name, apart from other agents. Keep it STABLE. Letters, digits and dashes; anything else is normalized away. |
+| `from` | string | optional | Optional: who reports (agent/model, project) |
+| `agent` | string | optional | Optional short STABLE id (e.g. "hermes"): your reports get a folder of that name. Letters, digits, dashes; the rest is normalized away. |
+| `command` | string | optional | report (default) \| list (newest first) \| read (one, by name) |
+| `name` | string | optional | command=read: \<dir>\\<name> as list shows it |
 <!-- /contract -->
 
 ---
@@ -991,7 +993,7 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message in YOUR box and DELETES it (read once, nothing kept); check only lists what waits. While mail for you waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing. PRIVACY, honestly: the box is indexed by the agent id YOU declare and nothing ties that id to the caller - everyone here shares one token - so anyone can list and consume the mail of an id they guess, and a consumed message is gone. Treat it as a shared noticeboard: read YOUR id, not other people's, and send nothing secret.
+Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message in YOUR box and DELETES it (read once, nothing kept); check only lists what waits. While mail for you waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing. PRIVACY, honestly: your token picks your workspace's boxes, but inside it the box is the agent id YOU declare, unbound to the caller: anyone with your token can list and consume the mail of an id they guess, and a consumed message is gone. Treat it as a shared noticeboard: read YOUR id, not other people's, and send nothing secret.
 
 *Access: read-only OK (side effect: command=read consumes (deletes) the message it delivers).*
 

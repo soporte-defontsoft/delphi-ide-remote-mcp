@@ -489,7 +489,9 @@ question) on the server for the operator - it works at EVERY access
 level and it is the correct move on an `INTERNAL`, when something looks
 broken, when a `DENIED` stops work you need (a feature the operator
 turned off), or when a package you need is missing. One honest report
-beats twenty blind retries.
+beats twenty blind retries. `command=list` shows the reports of your
+workspace (yours and its other agents') and `command=read name=<dir>\<name>`
+one whole - before filing, look whether it was already reported.
 
 ## Access levels
 

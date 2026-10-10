@@ -433,7 +433,7 @@ check('M1 la tanda delete+create se aplica entera (el Uno.pas NUEVO en el disco)
       b'unit Uno;\r\ninterface\r\nimplementation' in open(UNO, 'rb').read(), r[:250])
 
 # --------------------------------------------------------------------- #9 --
-MBOX = os.path.join(BASE, 'messages')
+MBOX = mc.buzon(os.path.join(BASE, 'messages'))  # el del proceso local: sin workspace
 os.makedirs(os.path.join(MBOX, 'otro'), exist_ok=True)
 open(os.path.join(MBOX, 'otro', '20260825-privado.md'), 'w', encoding='utf-8').write(
     '# privado\n\nsolo para otro\n')

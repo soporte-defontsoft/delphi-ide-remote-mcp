@@ -64,7 +64,7 @@ open(os.path.join(BASURA, 'App.dproj'), 'w').write(DPROJ_MIN)
 
 # Correo dirigido a OTRO agente: no es nuestro, no podemos leerlo ni
 # limpiarlo, y no tiene por que salir en nuestras respuestas.
-BUZON = os.path.join(EXEDIR, 'messages', 'otro-agente')
+BUZON = mc.buzon(os.path.join(EXEDIR, 'messages'), 'otro-agente', ws='R26')
 os.makedirs(BUZON)
 open(os.path.join(BUZON, '20260920_000000_algo.md'), 'w').write(
     '# Para otro agente\n\nEsto no es para quien lee.\n')

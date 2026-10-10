@@ -6,7 +6,7 @@ en el camino. Cada caso planta una UNION hacia una victima de FUERA de las
 raices: la victima tiene que salir intacta (CLAUDE.md, "Nothing outside the
 workspace").
 
-R1 un informe de un agente cuya carpeta (reports\\<agente>) es una union:
+R1 un informe de un agente cuya carpeta (reports\\<workspace>\\<agente>) es una union:
    GUARD-034 ANTES de crear nada, y nada en la victima. El lugar MISMO
    (reports\\) puede ser una union - es decision del operador, como mover la
    cache a otro disco -; lo que no, un enlace DENTRO. (Desde este entorno,
@@ -40,11 +40,11 @@ def detras():
 
 
 AGENTE = 'por-union'
-os.makedirs(os.path.join(SRVDIR, 'reports'), exist_ok=True)
-union_r = os.path.join(SRVDIR, 'reports', AGENTE)
+union_r = mc.buzon(os.path.join(SRVDIR, 'reports'), AGENTE)  # el del proceso local
+os.makedirs(os.path.dirname(union_r), exist_ok=True)
 union_d = mc.cache_servidor('designer', LOCAL)
 os.makedirs(os.path.dirname(union_d), exist_ok=True)
-check('R0 la union de reports\\<agente> se planta', mc.junction(union_r, VICTIMA), union_r)
+check('R0 la union de reports\\<workspace>\\<agente> se planta', mc.junction(union_r, VICTIMA), union_r)
 check('C0 la union de la cache del disenador se planta', mc.junction(union_d, VICTIMA), union_d)
 srv = mc.Stdio(EXE, env, nombre='puerta-escribir')
 try:

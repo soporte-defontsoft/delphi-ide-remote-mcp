@@ -14,6 +14,7 @@ No es una bateria (no empieza por test_): run_all no la ejecuta.
 import atexit
 import ctypes
 import glob
+import hashlib
 import json, os, queue, re, shutil, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
 import string, winreg
@@ -78,7 +79,8 @@ def _papelera():
     buscaban la forma de antes de la sexta revision y se pusieron rojos por
     eso, no por el servidor (28-sep-2026)."""
     if not _PAPELERA:
-        for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT')),
+        for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT',
+                                                  'BUZON_SIN_WORKSPACE')),
                                 ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
                                                    'CAJON_SUSTITUIDOS'))):
             with open(os.path.join(REPO, 'src', 'Server', unidad),
@@ -129,6 +131,42 @@ def copias(carpeta, nombre=None, cajon=None, bajo=False):
     sello = re.compile((re.escape(nombre) if nombre else '.+') + r'-\d{9}$', re.I)
     return sorted(f for f in glob.glob(patron, recursive=bajo)
                   if sello.match(os.path.basename(f)))
+
+
+def slug(s):
+    """Slug del servidor (Lsp.Casa): letras y cifras ASCII, lo demas un guion,
+    40 como mucho, sin guiones en los bordes, en minusculas."""
+    r, prev = '', '-'
+    for c in s:
+        if c.isascii() and c.isalnum():
+            r, prev = r + c, c
+        elif prev != '-':
+            r, prev = r + '-', '-'
+        if len(r) >= 40:
+            break
+    return r.strip('-').lower()
+
+
+def carpeta_de_workspace(ws=''):
+    """La carpeta de un workspace dentro de un buzon (CarpetaDeWorkspace del
+    servidor): sin workspace -el proceso local, las baterias en stdio-
+    BUZON_SIN_WORKSPACE; si no, su slug, y si el slug no lo dice entero, ocho
+    del MD5 del nombre en minusculas detras."""
+    if not ws:
+        return _papelera()['BUZON_SIN_WORKSPACE']
+    s = slug(ws)
+    if s != ws.lower():
+        s = (s + '-' if s else '') + hashlib.md5(ws.lower().encode('utf-8')).hexdigest()[:8]
+    return s
+
+
+def buzon(raiz, agente='', ws=''):
+    """<raiz>\\<workspace>[\\<agente>]: el buzon de BuzonDeMensajes /
+    BuzonDeInformes, con raiz la carpeta messages o reports junto al exe. Las
+    baterias no componen el buzon a mano: la estructura cambio el 10-oct-2026
+    (una carpeta por workspace) y seis lo hacian."""
+    b = os.path.join(raiz, carpeta_de_workspace(ws))
+    return os.path.join(b, slug(agente)) if slug(agente) else b
 
 
 def cache_servidor(sub='', appdata=None):

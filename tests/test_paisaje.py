@@ -89,6 +89,13 @@ REGLAS = [
       # otro programa: la carpeta del NODO, no la del servidor
       ('McpDesktopNode.dpr', '*')],
      'ServerDir: la casa tiene UN compositor (2.7 de la 1.18.0: LugaresProtegidos la escribia a mano)'),
+    ('la carpeta de los informes o del correo sin el workspace', r'\bCarpetaDe(?:Informes|Mensajes)\b',
+     [('Lsp.Casa.pas', '*')],
+     'BuzonDeInformes / BuzonDeMensajes: la carpeta del workspace la pone el token (8.5 de la 1.18.0, '
+     'David: "la misma estructura separada por workspace"); quien usa la raiz ve lo de todos'),
+    ('la raiz de los informes o del correo compuesta a mano', r"ServerDir\(\s*'(?:reports|messages)'",
+     [('Lsp.Casa.pas', 'CarpetaDeMensajes'), ('Lsp.Casa.pas', 'CarpetaDeInformes')],
+     'CarpetaDeInformes / CarpetaDeMensajes, y por encima el buzon del workspace'),
     # (tambien como mascara, '*.by': MascaraDeMarcas; revisor de 9a9c4cc)
     ('la extension de la marca de dueno', r"'\*?\.by'",
      [('Lsp.Casa.pas', '*')],
@@ -657,6 +664,8 @@ PLANTADO = {
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",
     'la carpeta del servidor': "  D := ExtractFileDir(ParamStr(0));",
+    'la carpeta de los informes o del correo sin el workspace': "  D := TPath.Combine(CarpetaDeInformes, Agente);",
+    'la raiz de los informes o del correo compuesta a mano': "  D := ServerDir('reports');",
     'la extension de la marca de dueno': "  M := Copia + '.by';",
     "la forma 'srvX:'": "  U := 'srv' + LowerCase(Letra) + ':';",
     'el host virtual srvhost': "  H := '\\\\srvhost\\' + Resto;",

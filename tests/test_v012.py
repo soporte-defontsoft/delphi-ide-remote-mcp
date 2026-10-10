@@ -219,7 +219,7 @@ check('C1-bis: declaracion DESPUES del campo y antes de private (no E2169)',
 
 # ---- delphi_report: works at every level, one .md per report ---------------
 import glob as _glob
-RDIR = os.path.join(os.path.dirname(EXE), 'reports')
+RDIR = mc.buzon(os.path.join(os.path.dirname(EXE), 'reports'))  # el del proceso local: sin workspace
 before = set(_glob.glob(os.path.join(RDIR, '*.md')))
 out = call('delphi_report', {"message": "Al usar delphi_x paso Y, esperaba Z.",
                              "title": "Prueba de la bateria",

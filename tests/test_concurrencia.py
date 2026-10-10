@@ -208,7 +208,7 @@ try:
         "kind": "question", "title": "concurrencia",
         "message": "informe %02d de la rafaga" % i}), NR)
     ok_d = sum(1 for r in rd if not bad(r))
-    files_d = glob.glob(os.path.join(WORK, 'reports', '*.md'))
+    files_d = glob.glob(os.path.join(mc.buzon(os.path.join(WORK, 'reports'), ws='Bateria'), '*.md'))
     check('D informes: los %d se escriben sin pisarse' % NR,
           ok_d == NR and len(files_d) == NR,
           'exitos=%d ficheros=%d; los que no: %s' % (
@@ -218,7 +218,7 @@ try:
     # A notice for everyone is the SAME message dropped in each agent's box:
     # there is no box "for everyone" since 2026-09-25 (David). Two agents ask
     # for their mail; each gets its own copy, and reading it deletes it.
-    MSGS = os.path.join(WORK, 'messages')
+    MSGS = mc.buzon(os.path.join(WORK, 'messages'), ws='Bateria')
     for quien in ('alice', 'bob'):
         os.makedirs(os.path.join(MSGS, quien), exist_ok=True)
         with open(os.path.join(MSGS, quien, '20260920-0900-aviso.md'), 'w',

@@ -10,6 +10,30 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **Each workspace has its own mailbox and its own reports, and
+  `delphi_report` reads them.** `messages\<agent>\` and `reports\<agent>\`
+  were one folder for every token: an agent of one workspace could list and
+  consume the mail of an id it guessed in another, and no tool read the
+  reports at all - the operator copied them by hand. The same structure is
+  now split by workspace, `messages\<workspace>\<agent>\` and
+  `reports\<workspace>\<agent>\`, and the workspace comes from the
+  session's token, never from a parameter (the local process, which enters
+  without a token, uses `_local`). The folder is the workspace's name made
+  safe, in lower case; a name that loses something on the way (an accent, a
+  sign, more than 40 characters) gets eight characters of its MD5 behind, so
+  `Hermes VM` and `Hermes-VM` never share one. `delphi_report command=list`
+  shows the reports of the caller's workspace by agent folder, newest first,
+  and `command=read name=<dir>\<name>` one whole; nothing is moved or
+  deleted, a name that is not a report of that box is `REPORT-008`, and an
+  agent folder that is a junction out of the server's home shows nothing.
+  `message` is no longer `required` in the schema (list and read do not take
+  it); filing a report without it is still `REPORT-002`. **For the
+  operator:** a message for an agent now goes into
+  `messages\<workspace>\<agent>\` (`messages\claude\hermes\` for the agent
+  `hermes` of `[Workspace.Claude]`), and a workspace's reports are in
+  `reports\<workspace>\`; what was left in the old folders is neither
+  delivered nor listed.
+
 - **`insert` and `set parent=` put the component where the IDE keeps it.**
   Both wrote the new or moved block as the LAST child of its parent; the
   IDE writes a VCL graphic control (a `TLabel`) before the windowed ones,

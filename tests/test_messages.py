@@ -14,7 +14,7 @@ from mcp_cliente import check
 
 BASE = mc.carpeta('messages')
 EXE = mc.copia_exe(BASE)
-MSG = os.path.join(BASE, 'messages')
+MSG = mc.buzon(os.path.join(BASE, 'messages'))  # el del proceso local: sin workspace
 os.makedirs(os.path.join(MSG, 'dsh'))
 open(os.path.join(MSG, 'dsh', '20260823-0100-deploy.md'), 'w', encoding='utf-8').write(
     '# Reconecta y sigue con el Deploy\n\nEl server se reinicio. Sigue con target=Deploy.\n')

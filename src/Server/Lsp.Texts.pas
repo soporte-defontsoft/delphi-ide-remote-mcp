@@ -3417,10 +3417,10 @@ const
     'box and DELETES it (read once, nothing kept); check only lists what ' +
     'waits. While mail for you waits, every tool answer ends with a ' +
     'PENDING MESSAGES line - read it then: it may change what you are ' +
-    'doing. PRIVACY, honestly: the box is indexed by the agent id YOU ' +
-    'declare and nothing ties that id to the caller - everyone here shares ' +
-    'one token - so anyone can list and consume the mail of an id they ' +
-    'guess, and a consumed message is gone. Treat it as a shared ' +
+    'doing. PRIVACY, honestly: your token picks your workspace''s boxes, ' +
+    'but inside it the box is the agent id YOU declare, unbound to the ' +
+    'caller: anyone with your token can list and consume the mail of an ' +
+    'id they guess, and a consumed message is gone. Treat it as a shared ' +
     'noticeboard: read YOUR id, not other people''s, and send nothing ' +
     'secret.';
 
@@ -6518,29 +6518,32 @@ const
     'its maintainers - whenever a tool refuses something you believe ' +
     'legitimate, an answer looks wrong, a message is confusing, or you had ' +
     'to work around a missing capability: that feedback is what fixes the ' +
-    'server. Each report is its own timestamped markdown file (with the ' +
-    'server version and date) in a reports folder next to the server; a ' +
-    'stable "agent" id gives your reports their own subfolder. Available ' +
-    'at EVERY access level, read-only included. Be concrete: what you ' +
-    'tried, what happened, what you expected.';
+    'server. Each report is its own dated markdown file; a stable "agent" ' +
+    'id gives yours a subfolder. Available at EVERY access level, ' +
+    'read-only included. ' +
+    'Be concrete: what you tried, what happened, what you expected. ' +
+    'command=list/read show your workspace''s reports (only its own), ' +
+    'moving nothing.';
 
   SP_REPORT_MESSAGE =
     'The report itself: what you tried, what happened, what you expected. ' +
-    'Markdown welcome, several paragraphs are fine';
+    'Markdown welcome';
   SP_REPORT_TITLE =
     'Optional one-line summary (becomes part of the file name)';
   SP_REPORT_KIND =
     'Optional: bug | limitation | suggestion | question (default: bug)';
   SP_REPORT_FROM =
-    'Optional: who is reporting (agent/model name, project) - helps us read ' +
-    'the history later';
+    'Optional: who reports (agent/model, project)';
   // The client still never supplies a path: the value is slugged to ASCII
   // letters/digits/dashes before it becomes a folder name, same normalizer
   // as the title. Also the seed of a wider client identity (future use).
   SP_REPORT_AGENT =
-    'Optional short id of the reporting agent (e.g. "hermes"): its reports ' +
-    'go to a folder of that name, apart from other agents. Keep it STABLE. ' +
-    'Letters, digits and dashes; anything else is normalized away.';
+    'Optional short STABLE id (e.g. "hermes"): your reports get a folder ' +
+    'of that name. Letters, digits, dashes; the rest is normalized away.';
+  SP_REPORT_COMMAND =
+    'report (default) | list (newest first) | read (one, by name)';
+  SP_REPORT_NAME =
+    'command=read: <dir>\<name> as list shows it';
 
   SR_REPORT_EMPTY =
     '[REPORT-002 INVALID_PARAM] delphi_report needs "message" with the ' +
@@ -6563,6 +6566,28 @@ const
   SR_REPORT_NO_NAME =
     '[REPORT-004 INVALID_PARAM] No free name for the report was found in the ' +
     'reports folder. Change the "title" and retry.';
+
+  SR_REPORT_COMMAND =
+    '[REPORT-006 INVALID_PARAM] command must be report | list | read.';
+
+  SR_REPORT_READ_SIN_NAME =
+    '[REPORT-007 INVALID_PARAM] command=read needs "name": the report as ' +
+    'command=list shows it, <dir>\<name>.';
+
+  SR_REPORT_NO_ESTA_FMT =
+    '[REPORT-008 NOT_FOUND] No report "%s" in your workspace''s reports. ' +
+    'command=list shows their names (each workspace sees only its own).';
+
+  SN_REPORT_LISTA_VACIA =
+    '[REPORT-009] No reports in your workspace yet (each workspace sees ' +
+    'only its own).';
+
+  SN_REPORT_LISTA =
+    '[REPORT-011] command=read name=<dir>\<name> reads one whole; nothing ' +
+    'is moved or deleted. Only your workspace''s reports are here.';
+
+  SN_REPORT_LEIDO_FMT =
+    '[REPORT-010] %s, %d characters (it stays where it was):'#10#10'%s';
 
   SN_REPORT_OK_FMT =
     '[REPORT-005] THANKS - report saved as %s (v%s): %d characters of ' +

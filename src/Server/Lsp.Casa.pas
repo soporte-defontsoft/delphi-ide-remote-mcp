@@ -78,9 +78,24 @@ function ServerTempDir(const ASub: string = ''): string;
 function ServerCacheDir(const ASub: string = ''): string;
 { El buzon de los agentes (<casa>\messages, delphi_messages) y la carpeta de
   los informes (<casa>\reports, delphi_report): eran una constante en cada
-  tool, y las puertas de leer y escribir tienen que saber donde estan. }
+  tool, y las puertas de leer y escribir tienen que saber donde estan. Las
+  tools no las usan: piden el buzon de la sesion (abajo). }
 function CarpetaDeMensajes: string;
 function CarpetaDeInformes: string;
+{ EL BUZON de ESTA sesion: la carpeta de su workspace dentro de la de los
+  mensajes o la de los informes y, con AAgente, la de ese agente debajo. La
+  misma estructura de siempre separada por workspace (David, 10-oct-2026):
+  quien entra con el token de un workspace no lista, no lee ni consume lo de
+  otro. El workspace lo pone el token (CurrentWorkspaceName), nunca el
+  cliente; el agente pasa por Slug aqui mismo. }
+function BuzonDeMensajes(const AAgente: string = ''): string;
+function BuzonDeInformes(const AAgente: string = ''): string;
+{ La carpeta de AWorkspace dentro de un buzon: su nombre por Slug cuando
+  Slug lo dice entero y, si no (un acento, un signo, mas de 40), con los
+  ocho primeros de su MD5 detras, para que dos workspaces no compartan nunca
+  carpeta ('Hermes VM' y 'Hermes-VM'). Sin workspace - el proceso local, el
+  unico que entra sin token - '_local', que Slug no puede dar. }
+function CarpetaDeWorkspace(const AWorkspace: string): string;
 { LA casa del servidor como LUGAR de las puertas de leer y escribir texto
   (ltCasa, Lsp.Patch): sus caches, el buzon y los informes. NO la carpeta del
   exe entera: ahi esta settings.ini, que tiene su propio lector (Lsp.Settings)
@@ -183,6 +198,7 @@ uses
   System.Hash,
   Lsp.NetDrives,        // SinBarraFinal
   Lsp.Rutas,            // LongCanonical: la clave de una carpeta, por su forma canonica
+  Lsp.Settings,         // CurrentWorkspaceName: el workspace del buzon lo pone el token
   Lsp.Texts;
 
 const
@@ -193,6 +209,9 @@ const
   { La marca de DUENO de una copia sellada: "<copia>.by", con el agente que la
     dejo (la purga solo deja purgar lo propio). }
   MARCA_DUENO_EXT = '.by';
+  // el buzon de quien entra sin workspace: Slug solo da letras, cifras y
+  // guiones, asi que ningun workspace tiene una carpeta que se llame asi
+  BUZON_SIN_WORKSPACE = '_local';
 
 function TempFolderName: string;
 begin
@@ -228,6 +247,36 @@ end;
 function CarpetaDeInformes: string;
 begin
   Result := ServerDir('reports');
+end;
+
+function CarpetaDeWorkspace(const AWorkspace: string): string;
+begin
+  if AWorkspace = '' then
+    Exit(BUZON_SIN_WORKSPACE);
+  Result := Slug(AWorkspace);
+  // el MD5 del nombre en minusculas: [Workspace.Claude] y [Workspace.claude]
+  // son la misma seccion para el lector del ini
+  if Result <> AnsiLowerCase(AWorkspace) then
+    Result := Result + IfThen(Result <> '', '-') + LowerCase(
+      THashMD5.GetHashString(AnsiLowerCase(AWorkspace))).Substring(0, 8);
+end;
+
+{ <ARaiz>\<la carpeta del workspace de la sesion>[\<Slug(AAgente)>] }
+function Buzon(const ARaiz, AAgente: string): string;
+begin
+  Result := TPath.Combine(ARaiz, CarpetaDeWorkspace(CurrentWorkspaceName));
+  if Slug(AAgente) <> '' then
+    Result := TPath.Combine(Result, Slug(AAgente));
+end;
+
+function BuzonDeMensajes(const AAgente: string): string;
+begin
+  Result := Buzon(CarpetaDeMensajes, AAgente);
+end;
+
+function BuzonDeInformes(const AAgente: string): string;
+begin
+  Result := Buzon(CarpetaDeInformes, AAgente);
 end;
 
 { La carpeta de las copias de APath: ide-copias\<la carpeta del original>. }
