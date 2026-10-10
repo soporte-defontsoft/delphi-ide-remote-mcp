@@ -199,11 +199,6 @@ CONTENT = [
     (os.path.join(REPO, 'CHANGELOG.md'), 'CHANGELOG.md'),
     (os.path.join(REPO, 'LICENSE'), 'LICENSE'),
 ]
-# El CHANGELOG partido (1.18.0): CHANGELOG.md acaba con un indice que enlaza
-# docs/changelog/<linea>.md, y en el zip esos enlaces tienen que llevar a algo.
-CONTENT += [(os.path.join(REPO, 'docs', 'changelog', f), 'docs/changelog/' + f)
-            for f in sorted(os.listdir(os.path.join(REPO, 'docs', 'changelog')))
-            if f.endswith('.md')]
 # 6b) the four node/ binaries are build output (never versioned since
 # 2026-09-24): BuildGroup.bat Release produces them. A release must carry
 # binaries of the code it publishes, so a missing one, or one older than
