@@ -264,6 +264,9 @@ function DireccionDeRemotoDenegada(const ACmd, ADireccion, ABase: string;
 function RemotosDelRepo(const ARepo, AFijado: string;
   out ANombres: TArray<string>): Boolean; forward;
 
+function GitContesta(const ARepo, AFijado, APregunta: string;
+  out ALineas: TArray<string>): Boolean; forward;
+
 { Medido con objetos LFS ausentes: estas ordenes materializan el arbol.
   Los filtros clean de add/commit/status no descargan objetos. }
 function GitMaterializaArbol(const ACmd, AArgs: string): Boolean;
@@ -289,6 +292,7 @@ var
   Codigo: Cardinal;
   HayLfs, HayFuenteLfs: Boolean;
   NombresLfs: TArray<string>;
+  FicherosLfs, FicherosIndice: TArray<string>;
 
   function NombreDelEndpoint(const ALinea: string): string;
   var
@@ -473,6 +477,24 @@ begin
       Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
   end;
   if not HayLfs then Exit;
+  // El juez de "este repo USA LFS" es git (norma 6 del paisaje): ls-files por
+  // TODAS las fuentes de atributos (tambien info/attributes y
+  // core.attributesFile). Que filter.lfs.* este en la config del SISTEMA
+  // (git-lfs instalado) NO es usarlo: GIT-061 negaba switch/merge/stash/pull y
+  // worktree add en CUALQUIER repo con origin en GitHub, sin tocar la red
+  // (falso positivo medido, 2.1h/9.A). Con el arbol materializado y sin
+  // ficheros LFS, el checkout no hara smudge: no hay endpoint que tocar. Un
+  // indice vacio (un clone recien traido --no-checkout, un bare) no sabe aun
+  // de sus ficheros: ahi se mantiene el examen de siempre. Un fallo de git al
+  // juzgar no es un "vale".
+  if not GitContesta(ARepo, AFijado, 'ls-files ' + EnComillas(':(attr:filter=lfs)'), FicherosLfs) then
+    Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+  if Length(FicherosLfs) = 0 then
+  begin
+    if not GitContesta(ARepo, AFijado, 'ls-files', FicherosIndice) then
+      Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+    if Length(FicherosIndice) > 0 then Exit;
+  end;
   // El programa estandar interpreta la precedencia; no hacemos otro lector.
   // Su salida (rutas y posibles credenciales) nunca se devuelve al agente.
   Salida := GitCorre(ARepo, AFijado, 'lfs env', 60000, Codigo);

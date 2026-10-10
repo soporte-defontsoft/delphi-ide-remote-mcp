@@ -112,6 +112,22 @@ the MCP `initialize` response (`serverInfo.version`).
   git process per folder inside a repo, ~43 ms, cached per folder -
   `--separate-git-dir` is banned in init/clone, so a folder's git status
   cannot change under the tools and the cache cannot go stale). `test_git_meta`.
+- **The LFS wall (`GIT-061`) rises only when the repo actually uses LFS**
+  (`9.A`, `2.1h`). The judge of "this repo uses LFS" is git, not that the
+  `filter.lfs.*` program is present in config (it is, on any machine with
+  git-lfs installed): `git ls-files ':(attr:filter=lfs)'`, across every
+  attribute source. Before, `GIT-061` refused `worktree add`, `switch`,
+  `merge`, `pull` and `stash` on ANY repo whose origin was outside
+  `GitRemotes`, LFS or not, without touching the network (a false positive
+  measured on this very repo: the night's `stash` and `worktree` of `1.3` had
+  to go through the console). Now, with the tree materialized and no LFS file,
+  the checkout smudges nothing, so the derived endpoint is not examined and the
+  operation runs; with an LFS file the endpoint is judged as before and the
+  wall stands. An explicit `lfs.url`/`remote.*.lfsurl` and a `.lfsconfig`
+  redirect are judged through the config path regardless, and an empty index
+  (a fresh `clone --no-checkout`, a bare repo) keeps the old examination so a
+  clone's checkout still cannot smudge from an unjudged host. A git failure
+  while judging is not a "yes". `test_git_lfs_muro`.
 - **`delphi_edit` and `delphi_textedit` delete a blank line.** `delete`
   asked for `old` with the line, and a blank line has no text to copy: the
   way round was a three-line block. Now `delete` with `atline` and no `old`
