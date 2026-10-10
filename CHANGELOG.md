@@ -21,9 +21,12 @@ the MCP `initialize` response (`serverInfo.version`).
   bytes, and the inverse of the URI namer reads both forms; and two URIs of
   the same file are compared in one form (`UriCanonica`): the diagnostics
   were waited for by the namer's `%C3%B1` while the engine notified the
-  raw `ñ`, and the declaration came out a homonym of itself. This was there
-  before 1.18.0; found by the version reviewer of 1.18.1. `test_round31`
-  R1k (red before), `LspTests.Encodings` `UriDelMotorYSuInversa`.
+  raw `ñ`, and the declaration came out a homonym of itself. A `%` without
+  two hex digits is a character like any other (it swallowed the two
+  behind it), and a URI that does not decode is compared as it is, never
+  thrown inside the wait for notifications. This was there before 1.18.0;
+  found by the version reviewers of 1.18.1. `test_round31` R1k (red
+  before), `LspTests.Encodings` `UriDelMotorYSuInversa`.
 
 - **A network path in `delphi_git args` no longer makes git open the
   network.** A `\\host\share\...` of no declared place, given as one of
@@ -129,22 +132,28 @@ the MCP `initialize` response (`serverInfo.version`).
   answers with the routine that CONTAINS it; on its calls, with the right
   one. Taken as the target, the enclosing routine turned every real call
   into a homonym: references confirmed only the header, and a rename would
-  have changed the header alone; `delphi_definition` answered the enclosing
-  routine. One correction now sits where that answer comes in
+  have changed the header alone; `delphi_definition` (its default kind,
+  `definition`) answered the enclosing routine. One correction now sits
+  where that answer comes in
   (`DefinicionCorregida`): on the name of a routine header, a line from the
   engine that does not name the identifier is not its definition - the
   header is. It is applied to the cursor, to the other half of the routine
   and to every candidate, so a sibling of the same name - the nested
   `Ayuda` of another method, the other overload - stays a homonym, and a
   method of that name in the class family is no longer confirmed "via
-  override" (the first cut corrected only the cursor and a rename changed
-  the sibling too; the version reviewer of 1.18.1). What it does not reach:
-  a header split over two lines, and a nested routine with the same name
-  as the routine that contains it (there the engine's line names it). The
-  header is read by one reader (`ColumnaDelNombreDeRutina`). Found looking
-  for an `LSP-003` seen on 10-oct that did not reproduce; measured live.
-  `test_round31` R1d-R1j (red before; each half of the correction measured
-  by taking it out).
+  override" - with a name of one letter too (the first cut corrected only
+  the cursor and a rename changed the sibling; the second one missed a
+  one-letter name, asked one character in; the version reviewers of
+  1.18.1). The header is read by one reader (`ColumnaDelNombreDeRutina`),
+  which now crosses a generic's parameters (`TGen<T>.Bar`: it took `TGen`
+  for the name, and the headers of a generic class came out homonyms of
+  themselves) and an escaped name (`TFoo.&Begin`), with the same pattern
+  the class reader uses. What it does not reach: a header split over two
+  lines, a nested routine with the same name as the routine that contains
+  it (there the engine's line names it), and `kind=declaration`. Found
+  looking for an `LSP-003` seen on 10-oct that did not reproduce; measured
+  live. `test_round31` R1d-R1m (red before; each half of the correction
+  measured by taking it out).
 
 - **A path in `delphi_git args` takes its virtual unit, as every path
   argument does.** `delphi_workspace` (`WS-002`) tells the agent to use

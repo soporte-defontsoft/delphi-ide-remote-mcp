@@ -471,7 +471,7 @@ TESTS: the difference between "it compiles" and "it works". discover (path = a f
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | discover (list the test projects under "path") \| run (build and run the one in "project"). Default: discover |
+| `command` | string | optional | discover (list the test projects under "path") \| run (build and run the one in "project"). Default: run when the call carries project and no path, discover otherwise |
 | `path` | string | optional | discover: folder (or project) under which to look for test projects |
 | `project` | string | optional | run: the .dproj (or .dpr) of the test project to run |
 | `config` | string | optional | run: configuration to build and run (Debug by default) |

@@ -662,8 +662,11 @@ begin
         begin
           // con LA correccion: en la cabecera de una anidada el motor contesta
           // la de fuera, y salia de gemelo (revisor de version de la 1.18.1)
+          // (la correccion, con la columna donde EMPIEZA: TwinCol, uno dentro
+          // para el motor, cae DETRAS de un nombre de una letra y no la veia;
+          // revisor de version de la 1.18.1)
           Resp := DefinicionCorregida(Client.Definition(TargetUri, TargetLine, TwinCol),
-            TargetPath, TargetLine, TwinCol, TwinLines[TargetLine]);
+            TargetPath, TargetLine, TwinCol - 1, TwinLines[TargetLine]);
           try
             var TwinUri: string;
             var TwinLine: Integer;
@@ -869,8 +872,9 @@ begin
         end;
         // con LA correccion: la cabecera de una anidada resuelve a si misma, y
         // una homonima hermana a la suya, no a la rutina que la contiene
+        // (la correccion, con la columna donde EMPIEZA, como el gemelo)
         Resp := DefinicionCorregida(Client.Definition(TLspClient.PathToUri(Cand.Path),
-          Cand.Line, Cand.Col + 1), Cand.Path, Cand.Line, Cand.Col + 1, Cand.Text);
+          Cand.Line, Cand.Col + 1), Cand.Path, Cand.Line, Cand.Col, Cand.Text);
         try
           var Resuelto := DefinitionLocation(Resp, CandUri, CandLine);
           var EsElMismo := Resuelto and SameText(CandUri, TargetUri) and

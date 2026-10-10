@@ -127,9 +127,11 @@ try:
           and t.find('object Label1') < t.find('object Label0') and D800 in t, r[:400])
     r = srv.call('delphi_designer', {'command': 'insert', 'path': F, 'classname': 'TButton'}, t=400)
     t = de16(lee(F))
-    check('S5 ...insert: se escribe, su nota de orden no lleva EDIT-078, y el suelto se queda',
-          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and 'TButton' in t and D800 in t,
-          r[:400])
+    # ...y que el juez CONTESTO: sin DSGN-145 ("el juez no contesto, va el ultimo"),
+    # que pasaba tambien sin los renderizadores (segunda ronda de la 1.18.1)
+    check('S5 ...insert: se escribe, el juez del orden contesta (sin DSGN-145 ni EDIT-078) y el suelto se queda',
+          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and '[DSGN-145]' not in r
+          and 'TButton' in t and D800 in t, r[:400])
 
     # ---- S6 ----
     antes = lee(DOS)

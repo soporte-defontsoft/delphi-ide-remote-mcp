@@ -138,6 +138,12 @@ const
   PATRON_IDENT = PATRON_LETRA_IDENT + PATRON_CAR_IDENT + '*';
   // varios unidos por puntos: Vcl.Forms, Font.Name, TForm1.Button1Click
   PATRON_IDENT_PUNTOS = PATRON_IDENT + '(?:\.' + PATRON_IDENT + ')*';
+  // un nivel del nombre cualificado de una CABECERA: su nombre y, si es
+  // generico, sus parametros (en el implementation son nombres: TFoo<K, V>).
+  // UNO para las dos lecturas de una cabecera, ColumnaDelNombreDeRutina y
+  // Lsp.PascalDecl.ClaseDeImplementacion: la primera no cruzaba '<T>.' y en
+  // TGen<T>.Bar tomaba TGen por el nombre (revisor de version de la 1.18.1)
+  PATRON_NIVEL_DE_CABECERA = PATRON_IDENT + '(?:\s*<[^<>()]*>)?';
   // el \b de delante y el de detras de un identificador
   PATRON_NO_IDENT_ANTES = '(?<!' + PATRON_CAR_IDENT + ')';
   PATRON_NO_IDENT_DESPUES = '(?!' + PATRON_CAR_IDENT + ')';
@@ -286,8 +292,10 @@ function ColumnaDelNombreDeRutina(const ALinea: string): Integer;
 var
   M: TMatch;
 begin
-  M := TRegEx.Match(ALinea, '^\s*(?:' + PatronPalabraDeRutina + '|property)\s+(?:' + PATRON_IDENT +
-    '\.)*(' + PATRON_IDENT + ')', [roIgnoreCase]);
+  // los niveles con sus genericos (TGen<T>.Bar) y el nombre con su '&' de
+  // palabra reservada (TFoo.&Begin): la columna es la del nombre
+  M := TRegEx.Match(ALinea, '^\s*(?:' + PatronPalabraDeRutina + '|property)\s+(?:' +
+    PATRON_NIVEL_DE_CABECERA + '\s*\.\s*)*&?(' + PATRON_IDENT + ')', [roIgnoreCase]);
   if M.Success then
     Result := M.Groups[1].Index - 1 // TMatch es 1-based; las columnas del LSP, 0-based
   else

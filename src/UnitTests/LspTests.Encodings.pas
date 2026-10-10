@@ -872,6 +872,13 @@ begin
     TLspClient.UriCanonica('file:///C%3A/a/a' + #$00F1 + 'o/x.pas'), 'la del motor, en la forma del nombrador');
   Assert.AreEqual(TLspClient.PathToUri('C:\a\x.pas'),
     TLspClient.UriCanonica(TLspClient.PathToUri('C:\a\x.pas')), 'la del nombrador no cambia');
+  // un '%' sin dos cifras hexadecimales es un caracter mas: se comia las dos
+  // de detras (revisor de version de la 1.18.1)
+  Assert.AreEqual('C:\a%zzb\x.pas', TLspClient.UriToPath('file:///C%3A/a%zzb/x.pas'), '%zz en medio');
+  Assert.AreEqual('C:\end%', TLspClient.UriToPath('file:///C%3A/end%'), '% al final');
+  // ...y UriCanonica NO lanza con escapes que no son UTF-8: corre bajo el
+  // cerrojo de las notificaciones; devuelve la uri tal cual
+  Assert.AreEqual('file:///C%3A/a%C3', TLspClient.UriCanonica('file:///C%3A/a%C3'), 'escape roto, tal cual');
 end;
 
 initialization

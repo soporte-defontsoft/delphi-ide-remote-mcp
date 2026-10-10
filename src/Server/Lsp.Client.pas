@@ -880,6 +880,10 @@ var
 begin
   Result := nil;
   Deadline := GetTickCount64 + UInt64(ATimeoutMs);
+  // la forma que se compara, una vez y fuera del cerrojo
+  var Filtro := '';
+  if AUriFilter <> '' then
+    Filtro := UriCanonica(AUriFilter);
   repeat
     // a stopped engine notifies nothing: nil here would read as "it took too
     // long", and it is not that
@@ -899,7 +903,7 @@ begin
           if ParamsVal is TJSONObject then
             UriVal := TJSONObject(ParamsVal).GetValue('uri');
           if (UriVal = nil) or
-             not SameText(UriCanonica(UriVal.Value), UriCanonica(AUriFilter)) then
+             not SameText(UriCanonica(UriVal.Value), Filtro) then
             Continue;
         end;
         if ParamsVal <> nil then
@@ -952,7 +956,15 @@ end;
 
 class function TLspClient.UriCanonica(const AUri: string): string;
 begin
-  Result := PathToUri(UriToPath(AUri));
+  // nunca lanza: corre bajo el cerrojo de las notificaciones, y una uri con
+  // escapes que no son UTF-8 (%C3 solo) dejaba la cola atascada en ella
+  // (revisor de version de la 1.18.1); asi, tal cual, no casa con nada
+  try
+    Result := PathToUri(UriToPath(AUri));
+  except
+    on EEncodingError do
+      Result := AUri;
+  end;
 end;
 
 class function TLspClient.UriToPath(const AUri: string): string;
@@ -978,9 +990,13 @@ begin
   I := 1;
   while I <= Length(S) do
   begin
-    if (S[I] = '%') and (I + 2 <= Length(S)) then
+    // %XX solo con DOS cifras hexadecimales: StrToIntDef de '%zz' se comia
+    // los dos caracteres detras del '%' (revisor de version de la 1.18.1)
+    if (S[I] = '%') and (I + 2 <= Length(S)) and
+       CharInSet(S[I + 1], ['0'..'9', 'A'..'F', 'a'..'f']) and
+       CharInSet(S[I + 2], ['0'..'9', 'A'..'F', 'a'..'f']) then
     begin
-      Bytes := Bytes + [Byte(StrToIntDef('$' + Copy(S, I + 1, 2), Ord('%')))];
+      Bytes := Bytes + [Byte(StrToInt('$' + Copy(S, I + 1, 2)))];
       Inc(I, 3);
     end
     else
@@ -989,7 +1005,7 @@ begin
       while (J <= Length(S)) and (S[J] <> '%') do
         Inc(J);
       if J = I then
-        Inc(J); // un '%' sin sus dos cifras, como un caracter mas
+        Inc(J); // un '%' sin sus dos cifras hexadecimales, como un caracter mas
       Bytes := Bytes + TEncoding.UTF8.GetBytes(Copy(S, I, J - I));
       I := J;
     end;

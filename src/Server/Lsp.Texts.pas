@@ -4046,7 +4046,8 @@ const
 
   SP_TEST_COMMAND =
     'discover (list the test projects under "path") | run (build and run ' +
-    'the one in "project"). Default: discover';
+    'the one in "project"). Default: run when the call carries project and ' +
+    'no path, discover otherwise';
 
   SP_TEST_PATH =
     'discover: folder (or project) under which to look for test projects';

@@ -337,23 +337,25 @@ open(os.path.join(JAIL, 'UNom.pas'), 'wb').write(
 # de FUERA, por su ruta entera o relativa a la carpeta del form, sigue siendo DSGN-115
 # por set before= (sin este check, ampliar el salto seguia en verde: DSGN-115 solo se
 # media por preview; revisor de version de la 1.18.1)
-# (en su PROPIA carpeta: el juez lee los forms hermanos por --folder y juzga sus
-# literales, y uno de fuera en JAIL negaba todos los demas checks)
+# (cada uno en su PROPIA carpeta: el juez lee los forms hermanos por --folder y
+# juzga sus literales - uno de fuera en JAIL negaba todos los demas checks, y los
+# dos juntos hacian que el absoluto tapase al relativo: la segunda ronda de
+# revisores de la 1.18.1 lo midio)
 FUERA = os.path.join(BASE, 'fuera')
 os.makedirs(FUERA, exist_ok=True)
 open(os.path.join(FUERA, 'x.txt'), 'w').write('x')
-CONLIT = os.path.join(JAIL, 'conliteral')
-os.makedirs(CONLIT, exist_ok=True)
 
 
 def form_con_caption(nombre, caption):
-    dfm = os.path.join(CONLIT, nombre + '.dfm')
+    carpeta = os.path.join(JAIL, 'conliteral-' + nombre)
+    os.makedirs(carpeta, exist_ok=True)
+    dfm = os.path.join(carpeta, nombre + '.dfm')
     open(dfm, 'wb').write((
         'object Form%s: TForm%s\r\n  Left = 0\r\n  Top = 0\r\n  Caption = %s\r\n'
         '  ClientHeight = 200\r\n  ClientWidth = 300\r\n  object Button1: TButton\r\n    Left = 8\r\n'
         '    Top = 8\r\n    TabOrder = 0\r\n  end\r\n  object Button2: TButton\r\n    Left = 8\r\n'
         '    Top = 40\r\n    TabOrder = 1\r\n  end\r\nend\r\n' % (nombre, nombre, caption)).encode('ascii'))
-    open(os.path.join(CONLIT, nombre + '.pas'), 'wb').write((
+    open(os.path.join(carpeta, nombre + '.pas'), 'wb').write((
         'unit %s;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls;\r\n\r\n'
         'type\r\n  TForm%s = class(TForm)\r\n    Button1: TButton;\r\n    Button2: TButton;\r\n  end;\r\n\r\n'
         'var\r\n  Form%s: TForm%s;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n'

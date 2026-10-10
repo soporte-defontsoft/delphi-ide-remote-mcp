@@ -2066,9 +2066,9 @@ end;
 
 function ClaseDeImplementacion(const ALinea, ARutina: string): string;
 const
-  // un nivel: su nombre y, si es generico, sus parametros (en una cabecera
-  // del implementation son nombres: TFoo<K, V>)
-  NIVEL = PATRON_IDENT + '(?:\s*<[^<>()]*>)?';
+  // un nivel: su nombre y, si es generico, sus parametros (EL patron de
+  // Lsp.Pascal, el mismo que lee ColumnaDelNombreDeRutina)
+  NIVEL = PATRON_NIVEL_DE_CABECERA;
 var
   M: TMatch;
 begin
