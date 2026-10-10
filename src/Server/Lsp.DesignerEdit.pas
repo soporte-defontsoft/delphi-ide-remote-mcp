@@ -97,8 +97,12 @@ function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
 { Los comandos. Cada uno devuelve el JSON de lo hecho, o la negativa sin
   haber escrito nada. La jaula de escritura la piden ellos; el cerrojo de
   escritura (EnterFileEdit) lo coge la tool. }
-function InsertaComponente(const APath, AClase, AComponente, AParent: string): string;
-function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: string): string;
+// AProps (3.10 de la 1.18.0): 'Prop=valor;...' - las propiedades iniciales de
+// insert, o varias de set de una vez; todo o nada, cada una juzgada como set
+function InsertaComponente(const APath, AClase, AComponente, AParent: string;
+  const AProps: string = ''): string;
+function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: string;
+  const AProps: string = ''): string;
 function BorraComponente(const APath, AComponente: string): string;
 
 implementation
@@ -147,6 +151,12 @@ type
     Doc: TStyleDoc;
     PasTexto, PasEnc: string;
     Tabla: TMetaTable;
+  end;
+
+  { Lo que la respuesta dice de UNA propiedad puesta (PonEnMemoria) }
+  TValorPuesto = record
+    Prop, Valor, Antes, Aviso: string;
+    HabiaAntes, Comillas, Quitada, NadaQueQuitar: Boolean;
   end;
 
 { ---- el form ---- }
@@ -996,6 +1006,11 @@ begin
 end;
 
 function ClaseDeJuez(const F: TFormEnEdicion; AObj: TStyleObj; out AClsId: string): string; forward;
+// las piezas de set que insert con propiedades usa (3.10): viven con set
+function PonEnMemoria(const F: TFormEnEdicion; const ANombre, AProp, AValor: string;
+  out AInfo: TValorPuesto): string; forward;
+function ParesDeProps(const AProps: string; out AProps_, AValores: TArray<string>): string; forward;
+procedure PonValorPuesto(AObj: TJSONObject; const ANombre: string; const AInfo: TValorPuesto); forward;
 
 { P puede recibir un control: el form, o en VCL un control con ventana
   (TWinControl por ascendencia: David, 4-oct-2026) y en FMX un control.
@@ -1232,15 +1247,15 @@ end;
 // lo que el lint y el binding dicen del form YA escrito: los avisos que da
 // delphi_edit tras escribir un designer
 function AvisosDespues(const F: TFormEnEdicion; const ATexto: string): TArray<string>;
-var
-  Notas, Lineas: TArray<string>;
-  Falta: TFaltaTabla;
 begin
-  Lineas := LineasDelTexto(ATexto);
-  Result := DesignerMetaLint(F.EsFmx, Lineas, Notas, Falta, 0) +
-    DesignerBindingWarnings(F.Dfm, Lineas);
-  if Falta.Razon <> '' then
-    Result := Result + [MsgFmt(SN_DESIGNER_LINT_SIN_TABLA_FMT, [Falta.Razon])];
+  // EL lint de un form (Lsp.Patch.LintDeForm), sin esperar a una tabla; el
+  // parser del IDE lo primero, con o sin tabla (8.10 de la 1.18.0)
+  var L := LintDeForm(F.Dfm, ATexto, F.Doc.Encoding, True, 0);
+  Result := L.Propiedades + L.Enlace;
+  if L.Parser <> '' then
+    Result := [L.Parser] + Result;
+  if L.Falta.Razon <> '' then
+    Result := Result + [MsgFmt(SN_DESIGNER_LINT_SIN_TABLA_FMT, [L.Falta.Razon])];
 end;
 
 // el form y su unidad, todo o nada
@@ -1258,6 +1273,10 @@ begin
   TxtDfm := ADfm;
   TxtPas := APas;
   ConPas := AConPas;
+  // el form, solo si el parser del IDE lo lee: la pregunta de Guarda (9.B)
+  Result := F.Doc.JuicioDelParser(ADfm);
+  if Result <> '' then
+    Exit;
   Rutas := [Dfm];
   if ConPas then
     Rutas := Rutas + [Pas];
@@ -1273,7 +1292,8 @@ end;
 
 { ---- insert ---- }
 
-function InsertaComponente(const APath, AClase, AComponente, AParent: string): string;
+function InsertaComponente(const APath, AClase, AComponente, AParent: string;
+  const AProps: string): string;
 var
   F: TFormEnEdicion;
   Padre: TStyleObj;
@@ -1281,12 +1301,21 @@ var
   Bloque, DfmLineas, PasLineas, PasSaltos, Faltan, YaEstan, EnOtra: TArray<string>;
   UPas: TUnidadPas;
   Cls: TTipoPas;
-  Detras, Ini, LineaCampo: Integer;
+  Detras, Ini, LineaCampo, FinBloque: Integer;
   Creada: Boolean;
   Ret: TJSONObject;
+  Props, Valores: TArray<string>;
+  Infos: TArray<TValorPuesto>;
 begin
   if AClase.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_CLASS));
+  // las propiedades iniciales, lo que se mira sin abrir nada (3.10)
+  if AProps.Trim <> '' then
+  begin
+    Result := ParesDeProps(AProps, Props, Valores);
+    if Result <> '' then
+      Exit;
+  end;
   Result := AbreForm(APath, True, True, F);
   if Result <> '' then
     Exit;
@@ -1381,6 +1410,28 @@ begin
     DfmLineas := Copy(F.Doc.Lines);
     Ini := Padre.EndLine - 1;
     Insert(Bloque, DfmLineas, Ini);
+    FinBloque := Ini + High(Bloque);
+    // el nombre del padre AHORA: Reparsea (abajo) libera los objetos leidos
+    var NombrePadre := NombreDe(Padre);
+    // las propiedades iniciales sobre el bloque nuevo, EN MEMORIA, cada una
+    // juzgada como la juzga set (PonEnMemoria) y todo o nada con el resto
+    // (3.10 de la 1.18.0: Hermes replicaba un form a golpe de insert + set)
+    if Length(Props) > 0 then
+    begin
+      F.Doc.SetLines(DfmLineas);
+      F.Doc.Reparsea;
+      SetLength(Infos, Length(Props));
+      for var I := 0 to High(Props) do
+      begin
+        Result := PonEnMemoria(F, Nombre, Props[I], Valores[I], Infos[I]);
+        if Result <> '' then
+          Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Props[I], Result]));
+      end;
+      DfmLineas := Copy(F.Doc.Lines);
+      var Nuevo := ObjetoPorNombre(F.Doc, Nombre);
+      if Nuevo <> nil then
+        FinBloque := Nuevo.EndLine - 1;
+    end;
     Result := EscribeFormYUnidad(F, F.Doc.TextoDe(DfmLineas), PasNuevo, True);
     if Result <> '' then
       Exit;
@@ -1400,11 +1451,23 @@ begin
     try
       Ret.AddPair('inserted', Nombre);
       Ret.AddPair('class', Clase);
-      Ret.AddPair('parent', NombreDe(Padre));
+      Ret.AddPair('parent', NombrePadre);
       Ret.AddPair('file', F.DfmNombre);
       Ret.AddPair('line', TJSONNumber.Create(Ini + 1));
-      Ret.AddPair('endLine', TJSONNumber.Create(Ini + Length(Bloque)));
-      PonLista(Ret, 'block', BloqueNumerado(DfmLineas, Ini, Ini + High(Bloque)));
+      Ret.AddPair('endLine', TJSONNumber.Create(FinBloque + 1));
+      PonLista(Ret, 'block', BloqueNumerado(DfmLineas, Ini, FinBloque));
+      if Length(Infos) > 0 then
+      begin
+        var Lista := TJSONArray.Create;
+        Ret.AddPair('props', Lista);
+        for var I := 0 to High(Infos) do
+        begin
+          var Una := TJSONObject.Create;
+          Lista.AddElement(Una);
+          Una.AddPair('prop', Infos[I].Prop);
+          PonValorPuesto(Una, Nombre, Infos[I]);
+        end;
+      end;
       Ret.AddPair('field', Nombre + ': ' + Clase);
       Ret.AddPair('fieldAt', Donde(F.PasNombre, LineaCampo));
       if UsesAnadida <> '' then
@@ -1710,24 +1773,200 @@ begin
     end;
 end;
 
-function PoneValor(const APath, AComponente, AProp, AValor: string): string;
-var
-  F: TFormEnEdicion;
-  Obj: TStyleObj;
-  ClsId, Prop, V, Juicio, Antes, Nombre, Texto, Aviso: string;
-  Trozos: TArray<string>;
-  Hoja: TPropRec;
-  HayHoja, Comillas, WasThere, Quita: Boolean;
-  Ini, Fin, LineaN: Integer;
-  Ret: TJSONObject;
+{ Lo que set mira de una propiedad y su valor antes de abrir nada: el nombre,
+  que haya valor y que sea de una linea. '' si vale. }
+function PropiedadQueNoVa(const AProp, AValor: string): string;
 begin
-  Prop := AProp.Trim;
-  if not EsIdentificador(Prop, True) then
+  Result := '';
+  if not EsIdentificador(AProp.Trim, True) then
     Exit(MsgFmt(SR_DESIGNER_SET_PROP_FMT, [AProp]));
   if AValor.Trim = '' then
     Exit(MsgText(SR_DESIGNER_SET_SIN_VALOR));
   if AValor.Contains(#10) or AValor.Contains(#13) then
     Exit(MsgText(SR_DESIGNER_SET_VALOR_LINEA));
+end;
+
+{ UNA propiedad de ANombre sobre el form ABIERTO, sin guardar: lo que set
+  juzga antes de escribir y como la escribe (el IDE). '' si se puso, con
+  AInfo; si no, la negativa. Despues el arbol se relee (Reparsea): un objeto
+  leido antes no vale. La usan set de una propiedad, set de varias (props) e
+  insert con propiedades (3.10 de la 1.18.0); estaba dentro de PoneValor. }
+function PonEnMemoria(const F: TFormEnEdicion; const ANombre, AProp, AValor: string;
+  out AInfo: TValorPuesto): string;
+var
+  Obj: TStyleObj;
+  ClsId, Prop, V, Juicio, Antes, Texto, Aviso: string;
+  Trozos: TArray<string>;
+  Hoja: TPropRec;
+  HayHoja, Comillas, WasThere, Quita: Boolean;
+  Ini, Fin: Integer;
+begin
+  AInfo := Default(TValorPuesto);
+  Prop := AProp.Trim;
+  AInfo.Prop := Prop;
+  Result := PropiedadQueNoVa(AProp, AValor);
+  if Result <> '' then
+    Exit;
+  Result := BuscaComponente(F, ANombre, Obj);
+  if Result <> '' then
+    Exit;
+  Result := ClaseDeJuez(F, Obj, ClsId);
+  if Result <> '' then
+    Exit;
+  // en FMX Left/Top no colocan un control (son el sitio del icono de un no
+  // visual, TComponent.DefineProperties): se escribian, se contestaba bien
+  // y no se movia nada (3.7, Hermes). Su sitio es Position.X/Y.
+  if F.EsFmx and MatchText(Prop, ['Left', 'Top']) and F.Tabla.Desciende(ClsId, ID_FMX_CONTROL) then
+    Exit(MsgFmt(SR_DESIGNER_FMX_LEFT_TOP_FMT, [NombreDe(Obj), Prop,
+      IfThen(SameText(Prop, 'Left'), 'Position.X', 'Position.Y')]));
+  // una ruta por una propiedad que en su bloque guarda una referencia
+  // (PopupMenu = PopupMenu1): AutoPopup es de PopupMenu1, y el cargador lee
+  // la ruta antes de resolver la referencia (3.3 de la 1.18.0, medido:
+  // PopupMenu.AutoPopup se escribia en el boton y el form no cargaba)
+  var Pre, Ref: string;
+  if Prop.Contains('.') and RutaPorReferencia(F.Tabla, ClsId, Prop,
+     ReferenciasDeObjeto(LineasDeForm(F.Doc.Lines), Obj.StartLine - 1), Pre, Ref) then
+    Exit(MsgFmt(SR_DESIGNER_SET_POR_REFERENCIA_FMT, [NombreDe(Obj), Pre, Ref,
+      Copy(Prop, Length(Pre) + 2, MaxInt), Pre, Ref, Ref, Copy(Prop, Length(Pre) + 2, MaxInt)]));
+  V := AValor.Trim;
+  Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
+  if HayHoja and (Hoja.Kind = 'm') then
+    Exit(MsgFmt(SR_DESIGNER_SET_EVENTO_FMT, [Prop, NombreDe(Obj), Prop]));
+  // una cadena (o un caracter): un literal del form ('Acci'#243'n', 'a' +
+  // 'b') se lee y se vuelve a escribir como el IDE (TrozosDeLiteral: los
+  // acentos como #N, en trozos de 64 en las lineas de debajo); lo que no es
+  // un literal es el texto, y se le ponen las comillas. Que es una cadena lo
+  // dice la base de su tipo, leida del fuente. Un 'Accion' acentuado entre
+  // comillas se escribia en crudo, un #hashtag se negaba diciendo que set
+  // ponia las comillas, y una cadena de 4.095 caracteres iba en una linea
+  // que el IDE no lee (revision de la 1.17.0)
+  Comillas := False;
+  Trozos := [];
+  var Base := '';
+  if HayHoja and (Hoja.Kind = 'o') then
+    F.Tabla.Bases.TryGetValue(ClaveDeIdentificador(Hoja.TypeId), Base);
+  if MatchText(Base, ['string', 'char']) then
+  begin
+    if not LeeLiteralDeForm(V, Texto) then
+    begin
+      Texto := AValor;
+      Comillas := True;
+    end;
+    Trozos := TrozosDeLiteral(Texto);
+    V := string.Join(' ', Trozos);
+    Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
+  end
+  // un literal en una propiedad que por su tipo no es una cadena (un
+  // Variant, o una que la tabla no conoce): escrito como el IDE tambien;
+  // iba en crudo (P6 de la segunda revision de la 1.17.0)
+  else if LeeLiteralDeForm(V, Texto) then
+  begin
+    Trozos := TrozosDeLiteral(Texto);
+    V := string.Join(' ', Trozos);
+    Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
+  end;
+  // un valor de una linea: una lista, una coleccion o un bloque binario no
+  if not ValidStyleValue(V) or EsValorDeBloque(V) then
+    Exit(MsgFmt(SR_DESIGNER_SET_GRAMATICA_FMT, [V]));
+  if Juicio <> '' then
+    Exit(MsgFmt(SR_DESIGNER_SET_INVALIDO_FMT, [NombreDe(Obj), Prop, V, Juicio,
+      ParecidaA(F.Tabla, ClsId, Prop)]));
+  Aviso := '';
+  if HayHoja then
+  begin
+    Result := TipoQueNoCasa(F, Obj, Prop, V, Hoja, Aviso);
+    if Result <> '' then
+      Exit;
+  end;
+  // un numero de coma flotante, escrito como el IDE (FlotanteDeForm): 130
+  // en un Position.X es 130.000000000000000000 - nadie lo reescribe despues,
+  // el form no pasa por el IDE (David, 7-oct-2026)
+  // (y un $hex, que el cargador tambien lee; uno que su tipo no guarda -
+  // una Single de 1E39 - no se escribe)
+  if (Base = 'single') or (Base = 'float') then
+  begin
+    var Num: Extended;
+    var N64: Int64;
+    var EsNum := TryStrToFloat(V, Num, TFormatSettings.Invariant);
+    if not EsNum and TryStrToInt64(V, N64) then
+    begin
+      Num := N64;
+      EsNum := True;
+    end;
+    // la gramatica ya paso (TipoQueNoCasa): uno que no se lee es que no cabe
+    // (1E400 en un Double se escribia tal cual: segunda revision de la 1.17.0)
+    var Tope: Extended := MaxDouble;
+    if Base = 'single' then
+      Tope := MaxSingle;
+    if not EsNum or IsNan(Num) or IsInfinite(Num) or (Abs(Num) > Tope) then
+      Exit(MsgFmt(SR_DESIGNER_SET_TIPO_FMT, [NombreDe(Obj), Prop, Hoja.TypeName,
+        MsgText(SF_DESIGNER_TOMA_NUMERO_QUE_CABE), V, '']));
+    V := FlotanteDeForm(Num, Base = 'single');
+  end;
+  if Length(Trozos) = 0 then
+    Trozos := [V];
+  // nil en una referencia la quita: el IDE no la escribe
+  Quita := HayHoja and (Hoja.Kind = 'c') and SameText(V, 'nil');
+  // lo que habia, entero: un bloque de varias lineas no se reescribe con uno
+  Antes := '';
+  if F.Doc.PropLines(Obj, Prop, Ini, Fin) then
+  begin
+    Antes := ValorEnteroDe(F.Doc.Lines, LineasDeForm(F.Doc.Lines), Ini);
+    if EsValorDeBloque(Antes) then
+      Exit(MsgFmt(SR_DESIGNER_SET_BLOQUE_FMT, [NombreDe(Obj), Prop, Ini + 1, Fin + 1, F.DfmNombre]));
+  end;
+  if Quita then
+  begin
+    WasThere := F.Doc.DeleteProp(Obj, Prop);
+    // no habia linea: nada que quitar ni que guardar (contestaba removed
+    // sin haber quitado nada: segunda revision de la 1.17.0)
+    AInfo.NadaQueQuitar := not WasThere;
+  end
+  else
+    F.Doc.SetPropTrozos(Obj, Prop, Trozos, WasThere);
+  AInfo.Valor := V;
+  AInfo.Antes := Antes;
+  AInfo.HabiaAntes := WasThere;
+  AInfo.Comillas := Comillas;
+  AInfo.Quitada := Quita and WasThere;
+  AInfo.Aviso := Aviso;
+  // las lineas se movieron: el arbol, otra vez (Obj ya no vale)
+  F.Doc.Reparsea;
+end;
+
+{ Lo que la respuesta de set dice de una propiedad puesta, en AObj: un nil
+  sobre una referencia que no estaba, la nota DSGN-112 (insert con props lo
+  daba como value 'nil' sin decir nada: revisor 2 de la noche, B-3) }
+procedure PonValorPuesto(AObj: TJSONObject; const ANombre: string; const AInfo: TValorPuesto);
+begin
+  if AInfo.NadaQueQuitar then
+  begin
+    AObj.AddPair('note', MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [ANombre, AInfo.Prop]));
+    Exit;
+  end;
+  AObj.AddPair('value', AInfo.Valor);
+  if AInfo.HabiaAntes then
+    AObj.AddPair('previous', AInfo.Antes);
+  if AInfo.Comillas then
+    AObj.AddPair('quoted', TJSONBool.Create(True));
+  if AInfo.Quitada then
+    AObj.AddPair('removed', TJSONBool.Create(True));
+  if AInfo.Aviso <> '' then
+    AObj.AddPair('warning', AInfo.Aviso);
+end;
+
+function PoneValor(const APath, AComponente, AProp, AValor: string): string;
+var
+  F: TFormEnEdicion;
+  Obj: TStyleObj;
+  Info: TValorPuesto;
+  Nombre: string;
+  LineaN, Ini, Fin: Integer;
+  Ret: TJSONObject;
+begin
+  Result := PropiedadQueNoVa(AProp, AValor);
+  if Result <> '' then
+    Exit;
   Result := AbreForm(APath, False, True, F);
   if Result <> '' then
     Exit;
@@ -1735,142 +1974,128 @@ begin
     Result := BuscaComponente(F, AComponente, Obj);
     if Result <> '' then
       Exit;
-    Result := ClaseDeJuez(F, Obj, ClsId);
+    Nombre := NombreDe(Obj);
+    Result := PonEnMemoria(F, Nombre, AProp, AValor, Info);
     if Result <> '' then
       Exit;
-    // en FMX Left/Top no colocan un control (son el sitio del icono de un no
-    // visual, TComponent.DefineProperties): se escribian, se contestaba bien
-    // y no se movia nada (3.7, Hermes). Su sitio es Position.X/Y.
-    if F.EsFmx and MatchText(Prop, ['Left', 'Top']) and F.Tabla.Desciende(ClsId, ID_FMX_CONTROL) then
-      Exit(MsgFmt(SR_DESIGNER_FMX_LEFT_TOP_FMT, [NombreDe(Obj), Prop,
-        IfThen(SameText(Prop, 'Left'), 'Position.X', 'Position.Y')]));
-    // una ruta por una propiedad que en su bloque guarda una referencia
-    // (PopupMenu = PopupMenu1): AutoPopup es de PopupMenu1, y el cargador lee
-    // la ruta antes de resolver la referencia (3.3 de la 1.18.0, medido:
-    // PopupMenu.AutoPopup se escribia en el boton y el form no cargaba)
-    var Pre, Ref: string;
-    if Prop.Contains('.') and RutaPorReferencia(F.Tabla, ClsId, Prop,
-       ReferenciasDeObjeto(LineasDeForm(F.Doc.Lines), Obj.StartLine - 1), Pre, Ref) then
-      Exit(MsgFmt(SR_DESIGNER_SET_POR_REFERENCIA_FMT, [NombreDe(Obj), Pre, Ref,
-        Copy(Prop, Length(Pre) + 2, MaxInt), Pre, Ref, Ref, Copy(Prop, Length(Pre) + 2, MaxInt)]));
-    V := AValor.Trim;
-    Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
-    if HayHoja and (Hoja.Kind = 'm') then
-      Exit(MsgFmt(SR_DESIGNER_SET_EVENTO_FMT, [Prop, NombreDe(Obj), Prop]));
-    // una cadena (o un caracter): un literal del form ('Acci'#243'n', 'a' +
-    // 'b') se lee y se vuelve a escribir como el IDE (TrozosDeLiteral: los
-    // acentos como #N, en trozos de 64 en las lineas de debajo); lo que no es
-    // un literal es el texto, y se le ponen las comillas. Que es una cadena lo
-    // dice la base de su tipo, leida del fuente. Un 'Accion' acentuado entre
-    // comillas se escribia en crudo, un #hashtag se negaba diciendo que set
-    // ponia las comillas, y una cadena de 4.095 caracteres iba en una linea
-    // que el IDE no lee (revision de la 1.17.0)
-    Comillas := False;
-    Trozos := [];
-    var Base := '';
-    if HayHoja and (Hoja.Kind = 'o') then
-      F.Tabla.Bases.TryGetValue(ClaveDeIdentificador(Hoja.TypeId), Base);
-    if MatchText(Base, ['string', 'char']) then
-    begin
-      if not LeeLiteralDeForm(V, Texto) then
-      begin
-        Texto := AValor;
-        Comillas := True;
-      end;
-      Trozos := TrozosDeLiteral(Texto);
-      V := string.Join(' ', Trozos);
-      Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
-    end
-    // un literal en una propiedad que por su tipo no es una cadena (un
-    // Variant, o una que la tabla no conoce): escrito como el IDE tambien;
-    // iba en crudo (P6 de la segunda revision de la 1.17.0)
-    else if LeeLiteralDeForm(V, Texto) then
-    begin
-      Trozos := TrozosDeLiteral(Texto);
-      V := string.Join(' ', Trozos);
-      Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
-    end;
-    // un valor de una linea: una lista, una coleccion o un bloque binario no
-    if not ValidStyleValue(V) or EsValorDeBloque(V) then
-      Exit(MsgFmt(SR_DESIGNER_SET_GRAMATICA_FMT, [V]));
-    if Juicio <> '' then
-      Exit(MsgFmt(SR_DESIGNER_SET_INVALIDO_FMT, [NombreDe(Obj), Prop, V, Juicio,
-        ParecidaA(F.Tabla, ClsId, Prop)]));
-    Aviso := '';
-    if HayHoja then
-    begin
-      Result := TipoQueNoCasa(F, Obj, Prop, V, Hoja, Aviso);
-      if Result <> '' then
-        Exit;
-    end;
-    // un numero de coma flotante, escrito como el IDE (FlotanteDeForm): 130
-    // en un Position.X es 130.000000000000000000 - nadie lo reescribe despues,
-    // el form no pasa por el IDE (David, 7-oct-2026)
-    // (y un $hex, que el cargador tambien lee; uno que su tipo no guarda -
-    // una Single de 1E39 - no se escribe)
-    if (Base = 'single') or (Base = 'float') then
-    begin
-      var Num: Extended;
-      var N64: Int64;
-      var EsNum := TryStrToFloat(V, Num, TFormatSettings.Invariant);
-      if not EsNum and TryStrToInt64(V, N64) then
-      begin
-        Num := N64;
-        EsNum := True;
-      end;
-      // la gramatica ya paso (TipoQueNoCasa): uno que no se lee es que no cabe
-      // (1E400 en un Double se escribia tal cual: segunda revision de la 1.17.0)
-      var Tope: Extended := MaxDouble;
-      if Base = 'single' then
-        Tope := MaxSingle;
-      if not EsNum or IsNan(Num) or IsInfinite(Num) or (Abs(Num) > Tope) then
-        Exit(MsgFmt(SR_DESIGNER_SET_TIPO_FMT, [NombreDe(Obj), Prop, Hoja.TypeName,
-          MsgText(SF_DESIGNER_TOMA_NUMERO_QUE_CABE), V, '']));
-      V := FlotanteDeForm(Num, Base = 'single');
-    end;
-    if Length(Trozos) = 0 then
-      Trozos := [V];
-    // nil en una referencia la quita: el IDE no la escribe
-    Quita := HayHoja and (Hoja.Kind = 'c') and SameText(V, 'nil');
-    // lo que habia, entero: un bloque de varias lineas no se reescribe con uno
-    Antes := '';
-    if F.Doc.PropLines(Obj, Prop, Ini, Fin) then
-    begin
-      Antes := ValorEnteroDe(F.Doc.Lines, LineasDeForm(F.Doc.Lines), Ini);
-      if EsValorDeBloque(Antes) then
-        Exit(MsgFmt(SR_DESIGNER_SET_BLOQUE_FMT, [NombreDe(Obj), Prop, Ini + 1, Fin + 1, F.DfmNombre]));
-    end;
-    Nombre := NombreDe(Obj);
-    if Quita then
-    begin
-      WasThere := F.Doc.DeleteProp(Obj, Prop);
-      // no habia linea: nada que quitar ni que guardar (contestaba removed
-      // sin haber quitado nada: segunda revision de la 1.17.0)
-      if not WasThere then
-        Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, Prop]));
-    end
-    else
-      F.Doc.SetPropTrozos(Obj, Prop, Trozos, WasThere);
-    F.Doc.Save;
+    if Info.NadaQueQuitar then
+      Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, Info.Prop]));
+    Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+    if Result <> '' then
+      Exit;
     // el arbol se releyo al guardar: su linea, la de ahora
     LineaN := 0;
     Obj := ObjetoPorNombre(F.Doc, Nombre);
-    if not Quita and (Obj <> nil) and F.Doc.PropLines(Obj, Prop, Ini, Fin) then
+    if not Info.Quitada and (Obj <> nil) and F.Doc.PropLines(Obj, Info.Prop, Ini, Fin) then
       LineaN := Ini + 1;
     Ret := TJSONObject.Create;
     try
-      Ret.AddPair('set', Nombre + '.' + Prop);
-      Ret.AddPair('value', V);
-      if WasThere then
-        Ret.AddPair('previous', Antes);
-      if Comillas then
-        Ret.AddPair('quoted', TJSONBool.Create(True));
-      if Quita then
-        Ret.AddPair('removed', TJSONBool.Create(True));
-      if Aviso <> '' then
-        Ret.AddPair('warning', Aviso);
+      Ret.AddPair('set', Nombre + '.' + Info.Prop);
+      PonValorPuesto(Ret, Nombre, Info);
       Ret.AddPair('file', F.DfmNombre);
       Ret.AddPair('line', TJSONNumber.Create(LineaN));
+      PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
+      Result := Ret.ToJSON;
+    finally
+      Ret.Free;
+    end;
+  finally
+    F.Doc.Free;
+  end;
+end;
+
+{ Los pares 'Prop=valor' de una lista de props (TrozosDeEstado: EL lector de
+  esa sintaxis), cada uno con lo que set mira antes de abrir nada. '' si
+  valen; si no, la negativa con el numero de la entrada. Name no entra (se
+  renombra solo: toca la unidad) ni una propiedad dos veces. }
+function ParesDeProps(const AProps: string; out AProps_, AValores: TArray<string>): string;
+begin
+  Result := '';
+  AProps_ := [];
+  AValores := [];
+  var Trozos: TArray<string>;
+  Result := TrozosDeEstado(AProps, Trozos);
+  if Result <> '' then
+    Exit;
+  if Length(Trozos) = 0 then
+    Exit(MsgText(SR_DESIGNER_PROPS_VACIO));
+  for var I := 0 to High(Trozos) do
+  begin
+    var P := Pos('=', Trozos[I]);
+    if P = 0 then
+      Exit(MsgFmt(SR_DESIGNER_PROPS_PAR_FMT, [I + 1, Trozos[I]]));
+    var Prop := Copy(Trozos[I], 1, P - 1).Trim;
+    var Valor := Copy(Trozos[I], P + 1, MaxInt).Trim;
+    var Mal := PropiedadQueNoVa(Prop, Valor);
+    if Mal <> '' then
+      Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Prop, Mal]));
+    if SameText(Prop, 'Name') then
+      Exit(MsgFmt(SR_DESIGNER_PROPS_NAME_FMT, [I + 1]));
+    for var J := 0 to High(AProps_) do
+      if SameText(AProps_[J], Prop) then
+        Exit(MsgFmt(SR_DESIGNER_PROPS_DOBLE_FMT, [Prop, J + 1, I + 1]));
+    AProps_ := AProps_ + [Prop];
+    AValores := AValores + [Valor];
+  end;
+end;
+
+{ set de VARIAS propiedades de un componente (props, 3.10 de la 1.18.0): cada
+  una juzgada como set juzga una (PonEnMemoria), todas en memoria y una sola
+  escritura - todo o nada: si una no vale, no se escribe ninguna y se dice
+  cual. }
+function PoneValores(const APath, AComponente, AProps: string): string;
+var
+  F: TFormEnEdicion;
+  Obj: TStyleObj;
+  Props, Valores: TArray<string>;
+  Infos: TArray<TValorPuesto>;
+  Nombre: string;
+  Ret, Una: TJSONObject;
+  Lista: TJSONArray;
+begin
+  Result := ParesDeProps(AProps, Props, Valores);
+  if Result <> '' then
+    Exit;
+  Result := AbreForm(APath, False, True, F);
+  if Result <> '' then
+    Exit;
+  try
+    Result := BuscaComponente(F, AComponente, Obj);
+    if Result <> '' then
+      Exit;
+    Nombre := NombreDe(Obj);
+    SetLength(Infos, Length(Props));
+    for var I := 0 to High(Props) do
+    begin
+      Result := PonEnMemoria(F, Nombre, Props[I], Valores[I], Infos[I]);
+      if Result <> '' then
+        Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Props[I], Result]));
+    end;
+    // ninguna cambia nada (solo nil sobre referencias que no estan): no se
+    // escribe, como set de una - reescribia, con copia en la papelera y el EOL
+    // normalizado, y decia OK (revisor 2 de la noche, B-3)
+    var Cambia := False;
+    for var I := 0 to High(Infos) do
+      if not Infos[I].NadaQueQuitar then
+        Cambia := True;
+    if not Cambia then
+      Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, string.Join(', ', Props)]));
+    Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
+    if Result <> '' then
+      Exit;
+    Ret := TJSONObject.Create;
+    try
+      Ret.AddPair('set', Nombre);
+      Lista := TJSONArray.Create;
+      Ret.AddPair('props', Lista);
+      for var I := 0 to High(Infos) do
+      begin
+        Una := TJSONObject.Create;
+        Lista.AddElement(Una);
+        Una.AddPair('prop', Infos[I].Prop);
+        PonValorPuesto(Una, Nombre, Infos[I]);
+      end;
+      Ret.AddPair('file', F.DfmNombre);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally
@@ -1953,12 +2178,14 @@ begin
     if Dest > Fin then
       Dec(Dest, Largo);
     Insert(Bloque, Lineas, Dest);
-    // los nombres ANTES de guardar: Save relee el arbol y estos objetos se van
+    // los nombres ANTES de guardar: Guarda relee el arbol y estos objetos se van
     NomObj := NombreDe(Obj);
     NomViejo := NombreDe(Viejo);
     NomPadre := NombreDe(Padre);
     F.Doc.SetLines(Lineas);
-    F.Doc.Save;
+    Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+    if Result <> '' then
+      Exit;
     Ret := TJSONObject.Create;
     try
       Ret.AddPair('moved', NomObj);
@@ -2059,10 +2286,18 @@ begin
   end;
 end;
 
-function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: string): string;
+function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: string;
+  const AProps: string): string;
 begin
   if AComponente.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_COMPONENT));
+  // varias de una vez (props, 3.10 de la 1.18.0): sin prop/value ni parent
+  if AProps.Trim <> '' then
+  begin
+    if (AProp.Trim <> '') or (AValor.Trim <> '') or (AParent.Trim <> '') then
+      Exit(MsgText(SR_DESIGNER_PROPS_SOLO));
+    Exit(PoneValores(APath, AComponente, AProps));
+  end;
   if AParent.Trim <> '' then
   begin
     if (AProp.Trim <> '') or (AValor.Trim <> '') then

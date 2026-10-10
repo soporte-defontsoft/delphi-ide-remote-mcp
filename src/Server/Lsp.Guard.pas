@@ -1392,6 +1392,17 @@ end;
 function SustitucionDenegada(const APath: string): string;
 begin
   Result := EscrituraDenegada(APath);
+  // ...y por DONDE se escribe: el temporal y el renombre nacen en la carpeta
+  // DADA, y EscrituraDenegada mira la ruta real de APath, que sigue tambien
+  // al ULTIMO enlace - una carpeta de la jaula que fuese una union afuera con
+  // un enlace de vuelta dentro pasaba, y el temporal nacia FUERA (P4-a de la
+  // 1.18.0: la forma del A1 que el revisor de P3 midio en las puertas de los
+  // lugares). La real de la carpeta + el nombre (RutaDelEnlace), como alli,
+  // contra la ruta REAL de cada sitio (EscribibleDeVerdad): pasarla por la
+  // puerta de TEXTO la compararia con las raices declaradas, y una raiz
+  // declarada por una union no casaria nunca (las dos formas de un sitio)
+  if (Result = '') and not EscribibleDeVerdad(RutaDelEnlace(APath)) then
+    Result := MsgFmt(SR_SUSTITUCION_CARPETA_REAL_FMT, [APath]);
   if Result = '' then
     Result := SoloLecturaDenegado(APath);
 end;
@@ -3540,11 +3551,24 @@ begin
   // Fuera de las raices: la zona de biblioteca (RTL/VCL, componentes
   // registrados) se LEE si esta abierta. Solo para quien esta fuera DE
   // VERDAD: un enlace que sale, el vault y las anomalias ya se negaron
-  // arriba y nunca llegan aqui.
+  // arriba y nunca llegan aqui. Como las raices: dentro por el TEXTO, en la
+  // forma larga (LugaresDeLaBiblioteca ya lo esta: una raiz registrada en
+  // 8.3 negaba hasta lo suyo), y DE VERDAD por la ruta real - un enlace YA
+  // plantado en una carpeta de la Library Path que apuntase fuera se leia
+  // (M1 de la 1.18.0, medido el 9-oct-2026 con la HKCU virtual: el secreto
+  // de la victima salio por delphi_read). Primero la raiz que casa por el
+  // texto: un recurso de red de la biblioteca que no contesta no se pregunta
+  // en cada lectura (David, 1-oct: la biblioteca en red se lee).
   if LibraryZoneEnabled then
-    for R in LibraryRoots do
-      if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
-        Exit('');
+    for R in LugaresDeLaBiblioteca do
+      if StartsText(R, FullLargo) then
+      begin
+        var VerdadLib := RealPath(APath);
+        if EnLugar(VerdadLib, RealPath(R)) or
+           EnAlgunLugar(VerdadLib, LugaresDeLaBiblioteca) then
+          Exit('');
+        Exit(MsgFmt(SR_JAIL_LINK_BIBLIOTECA_FMT, [APath]));
+      end;
   AFueraDeJaula := True;
   Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;

@@ -172,5 +172,106 @@ check('rollback descarta', mc.abre(r, 'SN_CHANGESET_DISCARDED'), r[:120])
 r = cs({'command': 'status'})
 check('status responde JSON', r.startswith('{'), r[:120])
 
+# A-1 del revisor de la noche del 10-oct: el deshacer de un move cuyo ORIGEN
+# tiene una ruta de 233 a 259 caracteres - no cabe con el temporal del escritor
+# atomico (GUARD-028) -. Devuelto por el atomico sin mas, el origen no volvia y
+# el destino (lo creado) se borraba sin papelera: el fichero solo quedaba en
+# memoria. Ahora el origen vuelve escrito directo y, si algo no vuelve, lo creado
+# se queda. El commit falla por el +R puesto DESPUES del preview (los bytes no
+# cambian: la huella no salta).
+import stat
+_hondo = BASE
+while len(_hondo) < 200:
+    _hondo = os.path.join(_hondo, 'carpeta_honda_%d' % len(_hondo))
+os.makedirs(_hondo, exist_ok=True)
+_largo = os.path.join(_hondo, 'L' * max(1, 240 - len(_hondo) - 1 - 4) + '.txt')
+open(_largo, 'wb').write(b'contenido unico\r\n')
+_xa1 = os.path.join(BASE, 'x_a1.txt')
+open(_xa1, 'wb').write(b'uno\r\n')
+_ma1 = os.path.join(BASE, 'm_a1.txt')
+cid = begin()
+cs({'command': 'stage', 'id': cid, 'kind': 'move', 'path': _largo, 'dest': _ma1})
+cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': _xa1, 'old': 'uno', 'new': 'dos'})
+r = cs({'command': 'preview', 'id': cid})
+os.chmod(_xa1, stat.S_IREAD)
+try:
+    r = cs({'command': 'commit', 'id': cid})
+    check('A-1 un move de origen largo (%d) y un commit que falla: el origen vuelve y el destino se va, '
+          'sin perder el fichero' % len(_largo),
+          mc.fallo(r) and os.path.exists(_largo) and open(_largo, 'rb').read() == b'contenido unico\r\n' and
+          not os.path.exists(_ma1), (r[:300], os.path.exists(_largo), os.path.exists(_ma1)))
+finally:
+    os.chmod(_xa1, stat.S_IREAD | stat.S_IWRITE)
+
+# M-4 del revisor de la noche: delete-line SIN old borraba cualquier linea (nacio
+# para las lineas en blanco); ahora es la regla de delphi_edit: sin old, solo una
+# en blanco - el preview lo dice (EDIT-123) y el commit no borra nada
+_dl = os.path.join(BASE, 'dl_m4.txt')
+open(_dl, 'wb').write(b'uno\r\ndos\r\n')
+cid = begin()
+cs({'command': 'stage', 'id': cid, 'kind': 'delete-line', 'path': _dl, 'atline': 1})
+r = cs({'command': 'preview', 'id': cid})
+check('M-4 delete-line sin old de una linea CON texto: el preview no sale limpio (EDIT-123)',
+      mc.es(r, 'SR_EDIT_LINEA_NO_EN_BLANCO_FMT') and json.loads(r).get('unresolved') == 1, r[:300])
+r = cs({'command': 'commit', 'id': cid})
+check('...y el commit no la borra', mc.fallo(r) and open(_dl, 'rb').read() == b'uno\r\ndos\r\n', r[:300])
+# ...y el COMMIT (revisor 2 de la noche, B-11: el commit de arriba se niega por el
+# preview, CHSET-016, y no llega a su propia comprobacion). MEDIDO: esa
+# comprobacion no se alcanza por la API - el preview mira el original, una
+# huella cambiada niega el lote y el atline de un delete-line se DESPLAZA con lo
+# que el lote anadio antes -, asi que es una GUARDA. Lo que si se mide: tras una
+# insercion del mismo lote, delete-line sin old borra la linea en blanco en su
+# sitio nuevo, no la insertada
+_dl2 = os.path.join(BASE, 'dl_m4b.txt')
+open(_dl2, 'wb').write(b'uno\r\n\r\ndos\r\n')
+cid = begin()
+cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': _dl2, 'old': 'uno', 'new': 'uno\nmas'})
+cs({'command': 'stage', 'id': cid, 'kind': 'delete-line', 'path': _dl2, 'atline': 2})
+r_prev = cs({'command': 'preview', 'id': cid})
+r = cs({'command': 'commit', 'id': cid})
+check('M-4 ...tras una insercion del mismo lote, delete-line sin old borra la linea en blanco desplazada',
+      mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and open(_dl2, 'rb').read() == b'uno\r\nmas\r\ndos\r\n',
+      (r_prev[:300], r[:300]))
+
+# M-6 del revisor de la noche: los avisos del motor (EDIT-091: una llave dentro
+# de un comentario de llaves) no llegaban desde un changeset: el commit decia
+# COMPLETE y nada mas. Ahora van detras (CHSET-032), con su fichero
+_m6 = os.path.join(BASE, 'UAvisoM6.pas')
+open(_m6, 'wb').write(b'unit UAvisoM6;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\n{ Un comentario\r\n'
+                      b'  la linea del medio\r\n  y su cierre }\r\n\r\nend.\r\n')
+cid = begin()
+cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': _m6, 'old': '  la linea del medio',
+    'new': '  con un {$I x.inc} dentro'})
+cs({'command': 'preview', 'id': cid})
+r = cs({'command': 'commit', 'id': cid})
+check('M-6 el commit dice los avisos del motor (CHSET-032 con el EDIT-091 de la llave)',
+      mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and mc.es(r, 'SN_CHANGESET_AVISOS_FMT') and
+      mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT'), r[-600:])
+# ...y el create de un .pas con una llave anidada (revisor 2, B-11: el create no
+# tenia prueba; antes del arreglo de M-6 no pasaba por ConAvisosDeLlaves)
+_m6c = os.path.join(BASE, 'UAvisoM6c.pas')
+cid = begin()
+cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _m6c,
+    'content': 'unit UAvisoM6c;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\n{ un {$I x.inc} dentro }\r\n\r\nend.\r\n'})
+cs({'command': 'preview', 'id': cid})
+r = cs({'command': 'commit', 'id': cid})
+check('M-6 ...y el create de un .pas con una llave anidada tambien (CHSET-032 con EDIT-091)',
+      mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and mc.es(r, 'SN_CHANGESET_AVISOS_FMT') and
+      mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT') and os.path.exists(_m6c), r[-600:])
+# M-3 del revisor 3: el create de un changeset escribia un form SIN el juez de
+# delphi_create (Lsp.Patch.EncDeFormNuevo): un .fmx que el parser del IDE no
+# lee se escribe y se AVISA, como delphi_edit (DSGN-123 en CHSET-032). La mitad
+# de la codificacion (un nombre acentuado con el IDE en ANSI) no tiene rojo en
+# esta maquina: su IDE ya crea con BOM
+_m3 = os.path.join(BASE, 'UFormM3.fmx')
+cid = begin()
+cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _m3,
+    'content': "object Form1: TForm1\r\n  // un comentario que el parser no lee\r\n  Caption = 'x'\r\nend\r\n"})
+cs({'command': 'preview', 'id': cid})
+r = cs({'command': 'commit', 'id': cid})
+check('M-3 el create de un .fmx que el parser del IDE no lee: se escribe y CHSET-032 lleva el DSGN-123',
+      mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and mc.es(r, 'SN_CHANGESET_AVISOS_FMT') and
+      mc.es(r, 'SN_DSGN_PARSER_FMT') and os.path.exists(_m3), r[-600:])
+
 srv.mata()
 mc.fin('changeset battery')

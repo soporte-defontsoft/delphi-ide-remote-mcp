@@ -546,6 +546,21 @@ try:
     check('P3 state con el nombre de una constante (clRed): se lee como la RTL y pinta el panel en rojo',
           not mc.fallo(r) and cerca(pixel_de(png('p3c.png'), 30, 150), ROJO),
           (r[:200], pixel_de(png('p3c.png'), 30, 150)))
+    # revisor 2 de la noche, M-A: una comilla que no EMPIEZA el valor es una
+    # letra (con el lector que respetaba comillas, It's se tragaba el resto de
+    # la lista y el panel no cambiaba); un valor entre comillas es un literal
+    # del form y llega su texto; uno sin cerrar se dice antes de lanzar nada
+    r = preview(path=PRUEBA, state="Edit1.Text=It's;Panel1.Color=255", out=png('p3a.png'), inline='false')
+    check("P3 state con un apostrofo en un valor sin comillas (It's): el estado de detras tambien llega",
+          not mc.fallo(r) and cerca(pixel_de(png('p3a.png'), 30, 150), ROJO),
+          (r[:200], pixel_de(png('p3a.png'), 30, 150)))
+    r = preview(path=PRUEBA, state="Edit1.Text='a;b';Panel1.Color=255", out=png('p3q.png'), inline='false')
+    check("P3 ...un literal entre comillas con un ';' dentro es UN estado, y el de detras llega",
+          not mc.fallo(r) and cerca(pixel_de(png('p3q.png'), 30, 150), ROJO),
+          (r[:200], pixel_de(png('p3q.png'), 30, 150)))
+    r = preview(path=PRUEBA, state="Edit1.Text='abierta;Panel1.Color=255")
+    check('P3 ...y uno que se abre y no se cierra: DSGN-134, sin lanzar el renderizador',
+          mc.abre(r, 'SR_DESIGNER_COMILLA_SIN_CERRAR_FMT'), r[:300])
     r = preview(path=PRUEBA, state='NoHayTal.Caption=x')
     check('P3 un estado de un componente que no existe: el RENDER-011 del ayudante, tal cual',
           mc.abre(r, 'SR_RENDER_ESTADO_SIN_COMPONENTE_FMT') and mc.outcome(r) == 'NOT_FOUND', r[:300])

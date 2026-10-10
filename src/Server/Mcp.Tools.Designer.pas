@@ -56,6 +56,7 @@ type
     FOut: string;
     FParent: string;
     FValue: string;
+    FProps: string;
   public
     // inline es Boolean en el esquema y vale true si no llega (6.5 de la
     // 1.18.0): el serializador crea los params con T.Create, que llama a este
@@ -101,6 +102,8 @@ type
     property Parent: string read FParent write FParent;
     [SchemaDescription(SP_DESIGNER_VALUE)]
     property Value: string read FValue write FValue;
+    [SchemaDescription(SP_DESIGNER_PROPS)]
+    property Props: string read FProps write FProps;
   end;
 
   TDelphiDesignerTool = class(TMCPToolBase<TDelphiDesignerParams>)
@@ -956,7 +959,6 @@ function LintForm(const APath: string): string;
 var
   Denied, EncName, Text: string;
   Warns: TArray<string>;
-  IsFmx: Boolean;
 begin
   Denied := ReadPathDenied(APath);
   if Denied <> '' then
@@ -965,7 +967,6 @@ begin
     Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
   if not EsRutaDeDesigner(APath) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
-  IsFmx := EsDesignerFmx(APath);
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
   if IsBinaryDesigner(APath) then
   begin
@@ -975,13 +976,16 @@ begin
   end
   else
     Text := PatchLoadText(APath, EncName);
-  // Tablas del framework + el form contra su clase (check-binding), en una
-  // sola pasada: lint = todo lo que el compilador no mira.
-  // las lineas como delphi_read: los avisos citan su numero (septima revision)
-  var Falta: TFaltaTabla;
-  var Notas: TArray<string>;
-  Warns := DesignerMetaLint(IsFmx, LineasDelTexto(Text), Notas, Falta) +
-    DesignerBindingWarnings(APath, LineasDelTexto(Text));
+  // EL lint de un form (Lsp.Patch.LintDeForm): tablas del framework + el
+  // form contra su clase (check-binding) + EL parser del IDE con los bytes
+  // del fichero, lo PRIMERO y con o sin tabla (8.10 de la 1.18.0); un
+  // binario ya paso su conversion. lint = todo lo que el compilador no mira
+  var L := LintDeForm(APath, Text, EncName, not IsBinaryDesigner(APath));
+  var Falta := L.Falta;
+  var Notas := L.Notas;
+  Warns := L.Propiedades + L.Enlace;
+  if L.Parser <> '' then
+    Warns := [L.Parser] + Warns;
   // sin tabla la respuesta es la negativa (DSGN-050/051/053/054), con lo del
   // form contra su clase detras: antes salia "[DSGN-038] 1 designer
   // warnings" con el motivo dentro, un exito (revision de la 1.12.0)
@@ -1113,6 +1117,24 @@ begin
   Result := KindDeBom(Cabeza, AK) and (AK in ENC_ANCHAS);
 end;
 
+{ Lo que lint no ve en el texto y dcc si (DSGN-121): un form de texto en UTF-16
+  o UTF-32 lo abre el IDE y no lo compila dcc. La nota va en la respuesta de
+  lint y en la de cada escritura del disenador (insert, set, delete), que la
+  conservan; una respuesta que es un fallo se queda como esta. }
+function ConNotaDeFormAncho(const AResult, APath: string): string;
+var
+  K: TEncKind;
+begin
+  Result := AResult;
+  try
+    if not EsFallo(Result) and FormAncho(TPath.GetFullPath(APath), K) then
+      Result := ConNota(Result, 'encodingNote', MsgFmt(SN_DSGN_FORM_ANCHO_FMT,
+        [TPath.GetFileName(APath), EncName(K)]));
+  except
+    // una nota no tumba la respuesta de lo que ya se hizo
+  end;
+end;
+
 { La respuesta de un comando de lectura sobre un .dfm binario lleva la nota:
   lo que ves es fiel, pero en disco es binario. }
 function ConNotaBinario(const AResult: string): string;
@@ -1140,6 +1162,7 @@ var
   RX, RY, RW, RH, AnchoOrig, AltoOrig, OX, OY: Integer;
   Recortada, Ancho: Boolean;
   KAncha: TEncKind;
+  Estados: TArray<string>;
 
   // el temporal es nuestro: si algo falla despues del render, no se queda
   procedure TiraTemporal;
@@ -1176,6 +1199,19 @@ begin
   Ancho := FormAncho(Ruta, KAncha);
   if Ancho and (KAncha in [ekUtf32LE, ekUtf32BE]) then
     Exit(MsgFmt(SR_DSGN_FORM_UTF32_FMT, [TPath.GetFileName(Ruta), EncName(KAncha)]));
+  // EL parser del IDE antes de lanzar nada (8.10 de la 1.18.0): un form que no
+  // lee no se dibuja, y se dice la linea que nombra - DSGN-061 decia "the
+  // renderer could not draw" con su "Identifier expected on line 2" y nada
+  // mas, tras gastar un proceso. Un binario lo lee el renderizador entero
+  if not IsBinaryDesigner(Ruta) then
+  begin
+    var EncP: string;
+    var LinP: Integer;
+    var CitaP: string;
+    var ErrP := ParserDeForm(PatchLoadText(Ruta, EncP), EncP, LinP, CitaP);
+    if ErrP <> '' then
+      Exit(MsgFmt(SR_DSGN_PREVIEW_PARSER_FMT, [TPath.GetFileName(Ruta), ErrP, LinP, CitaP]));
+  end;
 
   // style: none, el NOMBRE de una plataforma del designer (la lista la tiene
   // el renderizador FMX: UNA tabla) o un fichero por ruta completa
@@ -1197,6 +1233,27 @@ begin
       Exit(Fallo);
     if not TFile.Exists(Estilo) then
       Exit(NoEsFichero(Estilo, MsgFmt(SR_NO_EXISTE_FMT, [Estilo])));
+  end;
+
+  // state, por EL lector de la lista (TrozosDeEstado: un ';' en un literal no
+  // parte, una comilla que no EMPIEZA el valor es una letra) y antes de
+  // dibujar nada. Un valor entre comillas es un literal del form y se entrega
+  // su texto: SetPropValue pintaba las comillas (revisor 2 de la noche, M-A)
+  var Trozos: TArray<string>;
+  Fallo := TrozosDeEstado(Params.State, Trozos);
+  if Fallo <> '' then
+    Exit(Fallo);
+  Estados := [];
+  for var E in Trozos do
+  begin
+    var P := Pos('=', E);
+    var Texto: string;
+    var Valor := Copy(E, P + 1, MaxInt).Trim;
+    if (P > 0) and (Valor.StartsWith('''') or Valor.StartsWith('#')) and
+       LeeLiteralDeForm(Valor, Texto) then
+      Estados := Estados + [Copy(E, 1, P - 1).Trim + '=' + Texto]
+    else
+      Estados := Estados + [E];
   end;
 
   // donde cae: el out= de toda la familia de capturas (CaptureTarget). Se
@@ -1227,9 +1284,7 @@ begin
   var Pas := UnidadDeDesigner(Ruta);
   if TFile.Exists(Pas) and (ReadPathDenied(Pas) = '') then
     Peticion.Raiz := RaizParaElRender(Ruta);
-  for var E in Params.State.Split([';']) do
-    if E.Trim <> '' then
-      Peticion.Estados := Peticion.Estados + [E.Trim];
+  Peticion.Estados := Estados;
   R := CorreRender(Peticion);
   if R.Fallo <> '' then
   begin
@@ -1420,7 +1475,7 @@ begin
       'get', 'path component',
       'check-binding', 'path unit',
       'preview', 'path component framework state style nonvisual inline maxwidth out',
-      'insert', 'path classname component parent', 'set', 'path component prop value parent',
+      'insert', 'path classname component parent props', 'set', 'path component prop value parent props',
       'delete', 'path component',
       'to-text', 'path', 'to-binary', 'path'],
     ['path', Params.Path, '', 'classname', Params.ClassName_, '', 'prop', Params.Prop, '',
@@ -1430,7 +1485,8 @@ begin
      'state', Params.State, '', 'style', Params.Style, '',
      'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
-     'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, ''], Suyos);
+     'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, '',
+     'props', Params.Props, ''], Suyos);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]));
   if MatchText(Cmd, ['info', 'prop']) then
@@ -1461,14 +1517,7 @@ begin
     else if Cmd = 'tree' then
       Result := TreeOf(Params.Path, Params.MaxDepth) // (un negativo lo niega la capa de parametros, SYS-016)
     else if Cmd = 'lint' then
-    begin
-      Result := LintForm(Params.Path);
-      // lo que lint no ve en el texto y dcc si: un form en UTF-16 o UTF-32 no compila
-      var KAncha: TEncKind;
-      if not EsFallo(Result) and FormAncho(TPath.GetFullPath(Params.Path), KAncha) then
-        Result := ConNota(Result, 'encodingNote', MsgFmt(SN_DSGN_FORM_ANCHO_FMT,
-          [TPath.GetFileName(Params.Path), EncName(KAncha)]));
-    end
+      Result := ConNotaDeFormAncho(LintForm(Params.Path), Params.Path)
     else if Params.Component.Trim = '' then
       Result := MsgText(SR_DESIGNER_NEED_COMPONENT)
     else
@@ -1491,12 +1540,15 @@ begin
       Exit(MsgText(SR_DESIGNER_NEED_PATH));
     if Cmd = 'insert' then
       Result := ConFueraDelPadre(InsertaComponente(Params.Path, Params.ClassName_,
-        Params.Component, Params.Parent), Params.Path)
+        Params.Component, Params.Parent, Params.Props), Params.Path)
     else if Cmd = 'set' then
       Result := ConFueraDelPadre(CambiaPropiedad(Params.Path, Params.Component,
-        Params.Prop, Params.Value, Params.Parent), Params.Path)
+        Params.Prop, Params.Value, Params.Parent, Params.Props), Params.Path)
     else
       Result := BorraComponente(Params.Path, Params.Component);
+    // ...y lo mismo que lint tras escribir: el form sigue en UTF-16/32, que dcc
+    // no compila (r5-L3 de la 1.18.0: solo lo decian lint y preview)
+    Result := ConNotaDeFormAncho(Result, Params.Path);
   end
   else
     Result := MsgText(SR_DESIGNER_CMD);

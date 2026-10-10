@@ -65,8 +65,7 @@ type
 implementation
 
 uses
-  MCPServer.Schema.Generator, // IsRequiredProperty: el lector de [Required]
-  Lsp.Attributes, // [JsonComoTexto]: el texto que acepta un JSON como valor
+  MCPServer.Schema.Generator, // los lectores de [Required] y de [JsonComoTexto]
   Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPSerializer }
@@ -178,15 +177,12 @@ begin
     // [local change 2026-09-27] Un array o un objeto donde va un TEXTO se
     // convertia en su texto JSON y se escribia tal cual (new=["a","b"] quedaba
     // en el .pas contestando OK; quinta revision). Solo lo acepta el
-    // parametro que lo declara ([JsonComoTexto]: "edits").
+    // parametro que lo declara ([JsonComoTexto]: "edits"), con el lector del
+    // esquema, que lo publica como array de objetos (2026-10-09)
     if ((JsonValue is TJSONObject) or (JsonValue is TJSONArray)) and
        (RttiProp.PropertyType.TypeKind in [tkString, tkLString, tkWString, tkUString]) then
     begin
-      var AceptaJson := False;
-      for var Attr in RttiProp.GetAttributes do
-        if Attr is JsonComoTextoAttribute then
-          AceptaJson := True;
-      if not AceptaJson then
+      if not TMCPSchemaGenerator.AceptaJsonComoTexto(RttiProp) then
         raise EArgumentException.Create(MsgFmt(SR_SYS_PARAM_VALUE_FMT,
           [NombreJson, MsgText(SF_SYS_EXPECTED_TEXT)]));
     end;

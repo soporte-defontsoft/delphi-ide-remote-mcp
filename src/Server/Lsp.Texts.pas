@@ -686,6 +686,24 @@ const
     'is the operator who adds its TARGET to Roots= of your ' +
     '[Workspace.<name>].';
 
+  // P4-a de la 1.18.0: la carpeta en la que de verdad se escribiria (por un
+  // enlace del camino) no es de escritura; vale para los cuatro motivos
+  // (fuera de las raices, referencia, solo lectura, un vault: revisor, B-5)
+  SR_SUSTITUCION_CARPETA_REAL_FMT =
+    '[GUARD-037 DENIED] "%s": some part of the path is a LINK, and the ' +
+    'folder this file really sits in is not one this session writes in ' +
+    '(outside the roots, a reference, a read-only folder or a vault). The ' +
+    'temporary file and the replace would be born there. Nothing was ' +
+    'written.';
+
+  // la gemela de GUARD-001 para la zona de biblioteca (M1 de la 1.18.0)
+  SR_JAIL_LINK_BIBLIOTECA_FMT =
+    '[GUARD-036 DENIED] "%s" looks like it is inside the IDE''s library ' +
+    '(the Library Search Path, read-only), but some part of the path is a ' +
+    'LINK (junction or symlink) that leads outside it, and the jail is ' +
+    'measured on the real target, not on the name. What is behind that ' +
+    'link is not read.';
+
   { Un virtual y su override no son dos simbolos: son el mismo metodo a dos
     alturas de la jerarquia. Preguntando por el de la base, las llamadas
     reales -que resuelven SIEMPRE a la hija- se iban a la lista de homonimos
@@ -924,7 +942,8 @@ const
     '"occurrence" does not: it counts on the file as it was BEFORE the ' +
     'batch, so if one entry changes occurrence 1, the next entry asks ' +
     'for 2, not for 1 again; two entries on the same line are refused). ' +
-    '"delete": true removes the line; and with "toline": <number> the ' +
+    '"delete": true removes the line (a BLANK one: "atline" and no ' +
+    '"old"); and with "toline": <number> the ' +
     'anchor stops being ONE line and becomes a RANGE - from the anchor''s ' +
     'line to that one, both included - that is removed whole (delete) or ' +
     'replaced by "new". It is the way to drop a method without pasting ' +
@@ -951,7 +970,8 @@ const
     'array [{"old":"...","new":"...","atline":12}, ...] applied in order. ' +
     'An entry anchors on ONE line or on a BLOCK of consecutive lines; ' +
     '"occurrence": N breaks a tie (counted on the file BEFORE the batch, ' +
-    'so it does not move like atline); "delete": true removes; "toline" ' +
+    'so it does not move like atline); "delete": true removes (a blank ' +
+    'line: atline, no old); "toline" ' +
     'makes the anchor the first line of a range; "fragment" + "atline" ' +
     'changes a piece of a long line. If one entry fails, the file goes ' +
     'back byte for byte and you are told which one. At most 50 entries ' +
@@ -2303,8 +2323,11 @@ const
     'region. When in doubt (a dialog may open elsewhere), capture the ' +
     'whole desktop.';
   // Lsp.InlineImages: la entrega de una captura, la misma en toda tool que capture.
+  // tambien la de un gesto (8.6 de la 1.18.0, Hermes: no sabia que tap la traia)
   SP_CAPTURE_INLINE =
-    'Default true: the screenshot comes back IN this answer as an image ' +
+    'Default true: the capture this answer brings - a screenshot, the one ' +
+    'every gesture returns (tap, type, swipe...), a preview - comes back IN ' +
+    'this answer as an image ' +
     '(scaled to maxwidth), and no file is kept to download later. false = a ' +
     'file and its ' +
     'download link (a client without vision, or one that wants the bytes).';
@@ -4346,8 +4369,11 @@ const
     'preview optional: a VIEW state applied before drawing, never written ' +
     'to the file - Component.Property=Value (inside an inline frame, ' +
     'Frame1.Component.Property=Value), several separated by ; ' +
-    '(PageControl1.ActivePage=TabSheet2;Edit1.Text=hello). A property that ' +
-    'holds a component takes the component''s name. No double quotes.';
+    '(PageControl1.ActivePage=TabSheet2;Edit1.Text=hello). A value with a ; ' +
+    'goes in single quotes as in a form (Edit1.Text=''a;b''; a quote inside ' +
+    'is written twice); a quote that does not start the value is just a ' +
+    'letter (Label1.Caption=It''s). A property that holds a component takes ' +
+    'the component''s name. No double quotes.';
 
   SP_DESIGNER_STYLE =
     'preview optional. VCL: a .vsf file (the form is then drawn out of ' +
@@ -4379,6 +4405,15 @@ const
     'to clear one. A string goes quoted (''OK'', ''Acci''#243''n'') or not ' +
     '(OK): set writes it the way the IDE does, accents as #N and a long one ' +
     'in pieces; so does a number as typed (0.7).';
+
+  SP_DESIGNER_PROPS =
+    'insert / set optional: SEVERAL properties at once, Prop=value pairs ' +
+    'separated by ; (Caption=Save;Left=24;Font.Style=[fsBold]) - each value ' +
+    'as in "value", and a ; inside a quoted value does not split (a quote ' +
+    'that does not start the value is just a letter: Caption=Don''t). insert: ' +
+    'the initial properties of the new component; set: instead of ' +
+    'prop/value. Each one is judged as set judges one, and it is all or ' +
+    'none: one that does not pass and nothing is written. Name goes alone.';
 
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
   SR_DESIGNER_NO_VA_CON_COMANDO_FMT =
@@ -6193,8 +6228,8 @@ const
   SP_CHANGESET_KIND =
     'stage: edit (replace ONE line by anchor) | create (new file, never ' +
     'overwrites) | delete (the WHOLE FILE; the snapshot is the way back) | ' +
-    'delete-line (remove ONE line by atline - the only way to remove a ' +
-    'BLANK line, which has no usable anchor) | move (rename/move; the ' +
+    'delete-line (remove ONE line by atline: a BLANK one, which has no ' +
+    'usable anchor, or with old the line you name) | move (rename/move; the ' +
     'destination must not exist)';
 
   SP_CHANGESET_PATH =
@@ -6206,8 +6241,9 @@ const
   SP_CHANGESET_OLD =
     'stage kind=edit: the anchor - ONE full line copied verbatim from ' +
     'delphi_read, unique in the file (or fragment + atline instead). ' +
-    'kind=delete-line: optional, the line you expect at atline, compared ' +
-    'like an anchor (the preview refuses when it is not that one).';
+    'kind=delete-line: the line you expect at atline, compared like an ' +
+    'anchor (the preview refuses when it is not that one); without it, ' +
+    'that line must be blank (EDIT-123), as in delphi_edit.';
 
   SP_CHANGESET_NEW =
     'stage kind=edit: the replacement text (may span several lines)' +
@@ -6340,6 +6376,11 @@ const
   SN_CHANGESET_SIN_CAMBIOS_FMT =
     '[CHSET-029] UNCHANGED: the %d operations leave every file exactly as ' +
     'it was, so nothing changed. The changeset is closed.';
+
+  // los avisos del motor que dieron los pasos (revisor de la noche, M-6)
+  SN_CHANGESET_AVISOS_FMT =
+    '[CHSET-032] The engine warned while writing (the changes ARE written; ' +
+    'read each one before going on):'#10'%s';
 
   SN_CHANGESET_COMMITTED_FMT =
     '[CHSET-025] COMMIT COMPLETE: %d operations applied to %d files. ' +
@@ -6697,7 +6738,32 @@ const
 
   SR_EDIT_DELETE_TRUE_NECESITA_OLD =
     '[EDIT-056 INVALID_PARAM] delete:true needs "old" with the exact line to ' +
-    'delete (copied from delphi_read).';
+    'delete (copied from delphi_read) - or, for a BLANK line, which has no ' +
+    'text to copy, "atline" with its number and no "old".';
+
+  // borrar una linea EN BLANCO (P3-L9): el ancla es la posicion y la
+  // condicion de que ESA linea este en blanco (Lsp.Patch.LineaEnBlancoDenegada)
+  SR_EDIT_LINEA_NO_EN_BLANCO_FMT =
+    '[EDIT-123 INVALID_PARAM] delete:true without "old" removes the BLANK ' +
+    'line that atline names, and line %d of %s is not blank:'#10'  %s'#10 +
+    'Nothing was written. To delete a line with text, pass it in "old".';
+
+  // un rango sin old (revisor de la noche, M-3): borraba de una linea en blanco
+  // hasta toline lo que hubiera, sin un ancla de texto
+  SR_EDIT_RANGO_SIN_OLD =
+    '[EDIT-125 INVALID_PARAM] toline needs "old": its first line, copied ' +
+    'from delphi_read. Without old, delete removes ONE blank line (atline); ' +
+    'a range is never anchored on a number alone. Nothing was written.';
+
+  SR_PATCH_OCURRENCIA_SIN_TEXTO_FMT =
+    '[EDIT-126 INVALID_PARAM] Entry %d: "occurrence" counts the TEXT of ' +
+    'an anchor, and it has no "old". A blank line has no text to count: ' +
+    'delete it with its number in "atline". Nothing was written.';
+
+  SR_EDIT_LINEA_EN_BLANCO_NO_EXISTE_FMT =
+    '[EDIT-124 INVALID_PARAM] delete:true without "old" removes the BLANK ' +
+    'line that atline names, and %s has %d lines: there is no line %d. ' +
+    'Nothing was written.';
 
   SR_EDIT_DELETE_TRUE_LLEVA_NEW =
     '[EDIT-057 INVALID_PARAM] delete:true takes no "new": it removes the whole ' +
@@ -6747,7 +6813,8 @@ const
     '[TEXT-002 INVALID_PARAM] atline=%d is none of the occurrences (%s).';
 
   SR_TEXT_DELETE_TRUE_NECESITA_OLD =
-    '[TEXT-003 INVALID_PARAM] delete=true needs "old": the line to remove.';
+    '[TEXT-003 INVALID_PARAM] delete=true needs "old": the line to remove - ' +
+    'or, for a BLANK line, "atline" with its number and no "old".';
 
   SR_TEXT_FALTA_ANCLA_OLD_ESTA =
     '[TEXT-004 INVALID_PARAM] The anchor (old) is missing. This tool does not ' +
@@ -8279,7 +8346,9 @@ const
 
   SP_EDIT_DELETE =
     'DELETE mode: true = remove the "old" anchored line ENTIRELY ' +
-    '(old+new="" only blanks it). No "new" here';
+    '(old+new="" only blanks it). A BLANK line has no text to copy: ' +
+    'delete + atline, without old, removes it if that line is blank. ' +
+    'No "new" here';
 
   SP_EDIT_INSERT =
     'INSERT mode (preferred for NEW routines/methods): "rutina-global" ' +
@@ -8552,7 +8621,9 @@ const
 
   SP_TEXT_DELETE =
     'DELETE mode: true = remove the "old" anchored line ENTIRELY (old + ' +
-    'an empty new only blanks it). No "new" here';
+    'an empty new only blanks it). A BLANK line has no text to copy: ' +
+    'delete + atline, without old, removes it if that line is blank. ' +
+    'No "new" here';
 
   SP_TEXT_CREATE_ =
     'CREATE mode: true = create a NEW file (never overwrites). UTF-8, ' +
@@ -9581,6 +9652,77 @@ const
     'UTF-32 form either (E2161, measured). Save it from the IDE as UTF-8 or ' +
     'ANSI; delphi_read, tree and lint read it as it is. Nothing was ' +
     'rendered.';
+
+  // 8.10 y 9.B de la 1.18.0: lo que dice EL parser del IDE
+  // (Lsp.DesignerForma.ErrorDelParserDeForm), no una gramatica propia
+  SN_DSGN_PARSER_FMT =
+    '[DSGN-123] *** The IDE''s form parser does not read this file: "%s". ' +
+    'Line %d: %s - the parser names the line where it NOTICED the ' +
+    'problem, which can be the one after it. As it is, the IDE will not ' +
+    'open the form and the program will not load it.';
+
+  SR_DSGN_PARSER_NO_ESCRIBE_FMT =
+    '[DSGN-124 INVALID_PARAM] Nothing was written: after this change ' +
+    'the IDE''s form parser would not read %s: "%s" (line %d of the ' +
+    'result: %s).';
+
+  SR_DSGN_PREVIEW_PARSER_FMT =
+    '[DSGN-126 INVALID_PARAM] Nothing was rendered: the IDE''s form parser ' +
+    'does not read %s: "%s" (line %d: %s - where it NOTICED the problem, ' +
+    'which can be the line after it). The IDE would not open it either; ' +
+    'lint says the same, and delphi_edit fixes the line.';
+
+  // props de insert y set (3.10 de la 1.18.0): 'Prop=valor;...'
+  SR_DESIGNER_PROPS_VACIO =
+    '[DSGN-127 INVALID_PARAM] props has no entries: it is "Prop=value" ' +
+    'pairs separated by ";" (a ";" inside a quoted value does not split).';
+
+  SR_DESIGNER_PROPS_PAR_FMT =
+    '[DSGN-128 INVALID_PARAM] props, entry %d (%s) has no "=": each entry ' +
+    'is Prop=value. Nothing was written.';
+
+  SR_DESIGNER_PROPS_ENTRADA_FMT =
+    '[DSGN-129 INVALID_PARAM] props, entry %d (%s): nothing was written - ' +
+    'all or none. %s';
+
+  SR_DESIGNER_PROPS_NAME_FMT =
+    '[DSGN-130 INVALID_PARAM] props, entry %d is Name: a rename changes ' +
+    'the unit too, so it goes alone (set prop=Name; or component= in ' +
+    'insert). Nothing was written.';
+
+  SR_DESIGNER_PROPS_DOBLE_FMT =
+    '[DSGN-131 INVALID_PARAM] props names %s twice (entries %d and %d). ' +
+    'Nothing was written.';
+
+  SR_DESIGNER_PROPS_SOLO =
+    '[DSGN-132 INVALID_PARAM] props is the whole set: it does not go with ' +
+    'prop/value (one property) nor with parent (a move).';
+
+  // TrozosDeEstado: un literal que se abre y no se cierra (revisor 2, M-A)
+  SR_DESIGNER_COMILLA_SIN_CERRAR_FMT =
+    '[DSGN-134 INVALID_PARAM] "%s" opens a quoted value and never closes ' +
+    'it, so the rest of the list would be swallowed into it. Nothing was ' +
+    'done: close the quote (a quote inside a quoted value is written twice) ' +
+    'or write the value without quotes - a quote that does not START the ' +
+    'value is just a letter (Caption=Don''t save).';
+
+  // Restaura (Lsp.TodoONada): lo creado no se borra si algo no volvio (revisor
+  // de la noche del 10-oct, A-1)
+  SF_FOTO_LO_CREADO_SE_QUEDA =
+    'left where it is: something that had to go back did not, and this ' +
+    'file may be the only copy of it (the destination of a move whose ' +
+    'origin could not be restored)';
+
+  SF_DSGN_PARSER_FIN_DE_FICHERO =
+    '(the end of the file)';
+  // un error del parser que no nombra linea (un numero que no cabe)
+  SF_DSGN_PARSER_SIN_LINEA =
+    '(the parser names no line: look for the value its message quotes)';
+
+  SR_DSGN_PARSER_YA_ROTO_FMT =
+    '[DSGN-125 INVALID_PARAM] Nothing was written: %s is ALREADY ' +
+    'unreadable by the IDE''s form parser, before this change: "%s" ' +
+    '(line %d: %s). Fix that line first (delphi_edit), then repeat.';
 
   // Textos que estaban en linea en Lsp.DesignerBinding.pas (el resto, 27-sep-2026)
   SF_DSGN_REPITE_UN_NOMBRE_FMT =

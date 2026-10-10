@@ -71,7 +71,9 @@ try:
     out=os.path.join(remote,'1234.out');pidfile=os.path.join(remote,'1234.pid')
     with open(os.path.join(remote,'run-1234.job'),'w',encoding='utf-8') as f:f.write('Probe.exe\n1234.out\n'+script+'\n')
     job=subprocess.Popen([launcher],startupinfo=startup,close_fds=True,creationflags=subprocess.CREATE_NO_WINDOW)
-    deadline=time.monotonic()+10
+    # 60 s como R6: con el run_all entero 10 no bastaron (P1-L5 de la 1.18.0: R7
+    # cayo el 9-oct a las 17:23 y sola paso 9/0); lo que se mide es que arranque
+    deadline=time.monotonic()+60
     while not os.path.isfile(pidfile) and time.monotonic()<deadline:time.sleep(.01)
     if os.path.isfile(pidfile):
         with open(pidfile) as f:child_pid=int(f.read())

@@ -1934,12 +1934,14 @@ try:
 
     # E145 el preview avisa del +R tambien para un delete-line
     P145 = os.path.join(D143, 'ro145.txt')
-    open(P145, 'w').write('a\nb\n')
+    # la linea 2 EN BLANCO: sin old, delete-line solo borra una (M-4 del revisor
+    # de la noche del 10-oct); asi el preview mide solo el +R
+    open(P145, 'w').write('a\n\nb\n')
     with mc.solo_lectura(P145):
         res, sc, t = llama('delphi_changeset', {'command': 'begin'})
         c145 = mc.id_changeset(t)
         llama('delphi_changeset', {'command': 'stage', 'id': c145, 'kind': 'delete-line', 'path': P145,
-                                   'atline': 1})
+                                   'atline': 2})
         res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c145})
         check('E145 preview de un delete-line sobre un +R: no sale limpio (SYS-029)',
               mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])

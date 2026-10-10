@@ -9,7 +9,8 @@ unit Lsp.TodoONada;
   Sale de Lsp.Guard el 8-oct-2026 (la 1.18.0, la version de la limpieza),
   movida sin cambiar una linea. Va ENCIMA de la jaula: para deshacer
   pregunta a las puertas de escritura (EscrituraDenegada) y usa los
-  escritores de Lsp.Guard, y nada de Lsp.Guard la usa a ella. }
+  escritores de Lsp.Guard y, para devolver unos bytes, el atomico de la
+  jaula (Lsp.Patch.EscribeBytes); nada de Lsp.Guard la usa a ella. }
 
 interface
 
@@ -98,6 +99,7 @@ uses
   System.IOUtils,
   Lsp.Texts,
   Lsp.Codificacion,     // BytesIguales, el comparador
+  Lsp.Patch,            // EscribeBytes: el escritor atomico de la jaula, para devolver
   Lsp.Guard;            // las puertas de escritura y los escritores que deshacen
 
 { Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
@@ -221,9 +223,7 @@ function TFotoDeFicheros.Restaura: string;
 
 var
   I: Integer;
-  Ahora: TArray<Byte>;
-  Existe: Boolean;
-  Veto, Ilegible: string;
+  NoVolvio: Boolean;
 
   { Las carpetas que la operacion creo por encima de una ruta que no existia
     (un create en a\b\c.txt): se quitaban el fichero y quedaban a y b vacias.
@@ -240,86 +240,122 @@ var
   begin
     Result := HuellaDeFichero(FRutas[AIx], T, D) and (T = FTam[AIx]) and (D = FFecha[AIx]);
   end;
+
+  { UNA ruta de la foto: '' si esta como en la foto (o volvio); si no, el
+    motivo. Lo que no existia se borra, salvo si algo no volvio (NoVolvio). }
+  function Devuelve(AIx: Integer): string;
+  var
+    Ahora: TArray<Byte>;
+    Existe: Boolean;
+    Veto, Ilegible: string;
+  begin
+    Result := '';
+    Existe := TFile.Exists(FRutas[AIx]);
+    Ahora := nil;
+    Ilegible := '';
+    if Existe then
+      try
+        Ahora := TFile.ReadAllBytes(FRutas[AIx]);
+      except
+        on E: Exception do
+          Ilegible := E.Message;
+      end;
+    // No se puede LEER (otro proceso lo tiene sin compartir): si su tamano
+    // y su fecha son los de la foto, no cambio y no hay nada que devolver.
+    // Se contaba como "no volvio" un fichero intacto (verificacion de la
+    // tercera ronda, medido: 38 de 44). Si cambio, ni se comprueba ni se
+    // escribe: se dice.
+    if Ilegible <> '' then
+    begin
+      if not (FExistian[AIx] and MismaHuella(AIx)) then
+        Result := Ilegible;
+      Exit;
+    end;
+    // lo que no cambio no se toca: un fichero que otro proceso tiene
+    // abierto y nadie modifico no hace fallar el deshacer
+    if (Existe = FExistian[AIx]) and (not Existe or Iguales(Ahora, FBytes[AIx])) then
+    begin
+      if not FExistian[AIx] then
+        QuitaCarpetasNuevas(AIx);
+      Exit;
+    end;
+    // deshacer tambien escribe: por la misma puerta. Un camino que dejo de
+    // ser escribible no se restaura por el, y se DICE (se saltaba callado)
+    Veto := EscrituraDenegada(FRutas[AIx]);
+    if Veto <> '' then
+      Exit(Veto);
+    // otro la cambio ENTRE dos pasos: lleva su trabajo mezclado con el de
+    // la operacion, y deshacer se lo llevaria (Vigila)
+    if FAjeno[AIx] then
+      Exit(MsgText(SF_FOTO_CAMBIADO_DURANTE));
+    // lo que hay NO es lo que dejo la operacion: alguien lo cambio despues
+    // (otro proceso, el IDE guardando). Se queda como esta y se dice; el
+    // deshacer borraba o pisaba su trabajo contestando "todo volvio"
+    // (verificacion de la tercera revision, 27-sep-2026, medido)
+    if FAnotado[AIx] and ((Existe <> FExisteNuestro[AIx]) or
+       (Existe and not Iguales(Ahora, FNuestros[AIx]))) then
+      Exit(MsgText(SF_FOTO_CAMBIADO_POR_OTRO));
+    // lo que la operacion dejo puede traer el +R de un original (un move,
+    // una copia): se quita para borrarlo o reescribirlo, y el fichero
+    // vuelve con el atributo de la foto (decima revision)
+    if not FExistian[AIx] then
+    begin
+      // lo CREADO no se borra si algo que debia volver no volvio: puede ser la
+      // UNICA copia - el destino de un move cuyo origen no se pudo devolver
+      // (revisor de la noche, A-1: se borraba sin papelera y el contenido
+      // solo quedaba en memoria)
+      if NoVolvio then
+        Exit(MsgText(SF_FOTO_LO_CREADO_SE_QUEDA));
+      BorraLoNuestro(FRutas[AIx]);
+      QuitaCarpetasNuevas(AIx);
+      Exit;
+    end;
+    QuitaSoloLectura(FRutas[AIx]);
+    try
+      // entero o nada, por EL escritor de la jaula (el temporal al lado y el
+      // renombre, con su puerta y su cerrojo): WriteAllBytes truncaba y
+      // escribia encima, y un fallo a medias (disco lleno, otro proceso)
+      // dejaba a medias justo el fichero que se queria devolver (P4 de la
+      // 1.18.0). Una ruta que no cabe con su temporal (GUARD-028: anade 27
+      // caracteres) se escribe directa, como antes: la operacion ya se llevo
+      // el original, y no devolverlo es peor (revisor de la noche, A-1 y M-1);
+      // la puerta ya la aprobo arriba (Veto)
+      if RutaLargaDenegada(FRutas[AIx]) <> '' then
+        TFile.WriteAllBytes(FRutas[AIx], FBytes[AIx])
+      else
+        EscribeBytes(FRutas[AIx], FBytes[AIx], ltJaula);
+    finally
+      // el +R de la foto vuelve tambien si la escritura fallo (B-10)
+      var A := GetFileAttributes(PChar(FRutas[AIx]));
+      if (A <> INVALID_FILE_ATTRIBUTES) and (FAtrib[AIx] <> INVALID_FILE_ATTRIBUTES) and
+         ((FAtrib[AIx] and FILE_ATTRIBUTE_READONLY) <> 0) then
+        SetFileAttributes(PChar(FRutas[AIx]), A or FILE_ATTRIBUTE_READONLY);
+    end;
+  end;
+
 begin
   Result := '';
-  for I := 0 to High(FRutas) do
-    try
-      Existe := TFile.Exists(FRutas[I]);
-      Ahora := nil;
-      Ilegible := '';
-      if Existe then
-        try
-          Ahora := TFile.ReadAllBytes(FRutas[I]);
-        except
-          on E: Exception do
-            Ilegible := E.Message;
-        end;
-      // No se puede LEER (otro proceso lo tiene sin compartir): si su tamano
-      // y su fecha son los de la foto, no cambio y no hay nada que devolver.
-      // Se contaba como "no volvio" un fichero intacto (verificacion de la
-      // tercera ronda, medido: 38 de 44). Si cambio, ni se comprueba ni se
-      // escribe: se dice.
-      if Ilegible <> '' then
-      begin
-        if not (FExistian[I] and MismaHuella(I)) then
-          Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Ilegible;
+  NoVolvio := False;
+  // primero lo que EXISTIA (se devuelve), despues lo que la operacion creo (se
+  // borra): asi, si algo no volvio, lo creado se queda (A-1)
+  for var Pasada := 0 to 1 do
+    for I := 0 to High(FRutas) do
+    begin
+      if FExistian[I] <> (Pasada = 0) then
         Continue;
+      var Motivo := '';
+      try
+        Motivo := Devuelve(I);
+      except
+        on E: Exception do
+          Motivo := E.Message;
       end;
-      // lo que no cambio no se toca: un fichero que otro proceso tiene
-      // abierto y nadie modifico no hace fallar el deshacer
-      if (Existe = FExistian[I]) and (not Existe or Iguales(Ahora, FBytes[I])) then
+      if Motivo <> '' then
       begin
-        if not FExistian[I] then
-          QuitaCarpetasNuevas(I);
-        Continue;
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Motivo;
+        if Pasada = 0 then
+          NoVolvio := True;
       end;
-      // deshacer tambien escribe: por la misma puerta. Un camino que dejo de
-      // ser escribible no se restaura por el, y se DICE (se saltaba callado)
-      Veto := EscrituraDenegada(FRutas[I]);
-      if Veto <> '' then
-      begin
-        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Veto;
-        Continue;
-      end;
-      // otro la cambio ENTRE dos pasos: lleva su trabajo mezclado con el de
-      // la operacion, y deshacer se lo llevaria (Vigila)
-      if FAjeno[I] then
-      begin
-        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' +
-          MsgText(SF_FOTO_CAMBIADO_DURANTE);
-        Continue;
-      end;
-      // lo que hay NO es lo que dejo la operacion: alguien lo cambio despues
-      // (otro proceso, el IDE guardando). Se queda como esta y se dice; el
-      // deshacer borraba o pisaba su trabajo contestando "todo volvio"
-      // (verificacion de la tercera revision, 27-sep-2026, medido)
-      if FAnotado[I] and ((Existe <> FExisteNuestro[I]) or
-         (Existe and not Iguales(Ahora, FNuestros[I]))) then
-      begin
-        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' +
-          MsgText(SF_FOTO_CAMBIADO_POR_OTRO);
-        Continue;
-      end;
-      // lo que la operacion dejo puede traer el +R de un original (un move,
-      // una copia): se quita para borrarlo o reescribirlo, y el fichero
-      // vuelve con el atributo de la foto (decima revision)
-      if not FExistian[I] then
-      begin
-        BorraLoNuestro(FRutas[I]);
-        QuitaCarpetasNuevas(I);
-      end
-      else
-      begin
-        QuitaSoloLectura(FRutas[I]);
-        TFile.WriteAllBytes(FRutas[I], FBytes[I]);
-        if (FAtrib[I] <> INVALID_FILE_ATTRIBUTES) and
-           ((FAtrib[I] and FILE_ATTRIBUTE_READONLY) <> 0) then
-          SetFileAttributes(PChar(FRutas[I]),
-            GetFileAttributes(PChar(FRutas[I])) or FILE_ATTRIBUTE_READONLY);
-      end;
-    except
-      on E: Exception do
-        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + E.Message;
     end;
 end;
 

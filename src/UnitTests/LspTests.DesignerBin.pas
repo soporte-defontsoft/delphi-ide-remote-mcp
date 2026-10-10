@@ -26,6 +26,12 @@ type
     procedure LaLineaDeUnObjeto;
     [Test]
     procedure NombreConAcentoSoloConBom;
+    [Test]
+    procedure TrozosDeEstadoRespetaLasComillas;
+    [Test]
+    procedure ElJuezLeeEnLaCodificacionDelFichero;
+    [Test]
+    procedure ElJuezSinLineaYAlFinal;
   end;
 
 implementation
@@ -34,7 +40,9 @@ uses
   System.SysUtils,
   System.Classes,
   Lsp.DesignerBin,
-  Lsp.DesignerForma;
+  Lsp.DesignerForma,
+  Lsp.Codificacion, // EncodeText: lo que cabe en la ANSI de ESTA maquina
+  Lsp.Texts;
 
 const
   FORM_TXT = 'object FormX: TFormX'#13#10 +
@@ -44,6 +52,19 @@ const
     '  ClientHeight = 10'#13#10 +
     '  ClientWidth = 20'#13#10 +
     'end'#13#10;
+
+// la ANSI de la maquina puede escribir ATexto? (EL codificador de la casa).
+// Una prueba en 'cp1252' pide sus letras en la ANSI de ESTA maquina: en un
+// Windows 1251 la o con tilde no cabe (revisor 3 de la noche, B-5)
+function LaAnsiLaEscribe(const ATexto: string): Boolean;
+begin
+  try
+    EncodeText(ATexto, ekAnsi);
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
 
 function B(const A: array of Byte): TBytes;
 begin
@@ -214,14 +235,99 @@ begin
   Assert.AreEqual('', NombreQueElFicheroNoLee('LblCalle', 'U.dfm', 'utf8', 'U.pas', 'utf8'), 'ASCII');
   R := NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8', 'U.pas', 'utf8-bom');
   Assert.IsTrue(R.StartsWith('[DSGN-111') and R.Contains('U.dfm'), 'el form sin BOM: ' + R);
-  R := NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'cp1252', 'U.pas', 'utf8-bom');
-  Assert.IsTrue(R.Contains('U.dfm'), 'en CP1252 TParser tampoco lo lee: ' + R);
+  if LaAnsiLaEscribe(#$F3) then
+  begin
+    R := NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'cp1252', 'U.pas', 'utf8-bom');
+    Assert.IsTrue(R.Contains('U.dfm'), 'en CP1252 TParser tampoco lo lee: ' + R);
+  end;
   R := NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8-bom', 'U.pas', 'utf8');
   Assert.IsTrue(R.Contains('U.pas') and not R.Contains('U.dfm'), 'la unidad en UTF-8 sin BOM: ' + R);
-  Assert.AreEqual('', NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8-bom', 'U.pas', 'cp1252'),
-    'una unidad CP1252 la lee dcc');
+  if LaAnsiLaEscribe(#$F3) then
+    Assert.AreEqual('', NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8-bom', 'U.pas', 'cp1252'),
+      'una unidad CP1252 la lee dcc');
   Assert.AreEqual('', NombreQueElFicheroNoLee('LblDirecci'#$F3'n', 'U.dfm', 'utf8-bom', 'U.pas', 'utf8-bom'),
     'los dos con BOM');
+end;
+
+{ LA sintaxis de una lista de props/state (revisor 2 de la noche, M-A): un ';'
+  dentro de un literal no parte, y una comilla que no EMPIEZA el valor es una
+  letra - se tragaba el resto de la lista sin decirlo. }
+procedure TDesignerBinTests.TrozosDeEstadoRespetaLasComillas;
+var
+  T: TArray<string>;
+  R: string;
+begin
+  Assert.AreEqual('', TrozosDeEstado('Caption=''a;b'';Width=10', T));
+  Assert.AreEqual(2, Integer(Length(T)), 'un ; dentro del literal no parte');
+  Assert.AreEqual('Caption=''a;b''', T[0]);
+  Assert.AreEqual('', TrozosDeEstado('Caption=Don''t save;Width=100', T));
+  Assert.AreEqual(2, Integer(Length(T)), 'una comilla que no empieza el valor es una letra');
+  Assert.AreEqual('Caption=Don''t save', T[0]);
+  Assert.AreEqual('Width=100', T[1]);
+  Assert.AreEqual('', TrozosDeEstado('Label1.Caption=It''s;CheckBox1.IsChecked=True', T));
+  Assert.AreEqual(2, Integer(Length(T)), 'el state de la 1.17.0: dos estados');
+  Assert.AreEqual('', TrozosDeEstado('Caption=  ''it''''s;x'';W=1', T));
+  Assert.AreEqual(2, Integer(Length(T)), 'blancos antes de la comilla y una comilla doblada dentro');
+  Assert.AreEqual('Caption=  ''it''''s;x''', T[0]);
+  Assert.AreEqual('', TrozosDeEstado(' ; ;A=1;', T));
+  Assert.AreEqual(1, Integer(Length(T)), 'sin los vacios');
+  Assert.AreEqual('', TrozosDeEstado('Caption=#39''a;b'';W=1', T));
+  Assert.AreEqual(2, Integer(Length(T)), 'un literal que empieza por #N tampoco parte (B-4)');
+  R := TrozosDeEstado('Caption=''abierta;W=1', T);
+  Assert.IsTrue(R.StartsWith('[DSGN-134'), 'un literal sin cerrar: ' + R);
+  Assert.AreEqual(0, Integer(Length(T)), 'y ningun trozo');
+end;
+
+{ El juez juzga los bytes en la codificacion DEL FICHERO: un identificador no
+  ASCII lo lee TParser solo en UTF-8 con BOM (medido el 7-oct). Con la
+  codificacion ignorada todo pasaba (revisor 2 de la noche, B-11: la parte
+  critica, los acentos, sin una sola prueba). }
+procedure TDesignerBinTests.ElJuezLeeEnLaCodificacionDelFichero;
+const
+  FORM_ACENTO = 'object FormX: TFormX'#13#10 +
+    '  object LblDirecci'#$F3'n: TLabel'#13#10 +
+    '  end'#13#10 +
+    'end'#13#10;
+var
+  Linea: Integer;
+  Cita: string;
+begin
+  Assert.AreEqual('', ParserDeForm(FORM_ACENTO, 'utf8-bom', Linea, Cita), 'con BOM se lee');
+  if LaAnsiLaEscribe(#$F3) then
+  begin
+    Assert.AreNotEqual('', ParserDeForm(FORM_ACENTO, 'cp1252', Linea, Cita), 'en ANSI no');
+    Assert.AreEqual(2, Linea, 'y nombra la linea del objeto');
+  end;
+  Assert.AreNotEqual('', ParserDeForm(FORM_ACENTO, 'utf8', Linea, Cita), 'ni en UTF-8 sin BOM');
+end;
+
+{ Las citas del juez (revisor 2 de la noche, B-1/B-2/B-4) }
+procedure TDesignerBinTests.ElJuezSinLineaYAlFinal;
+var
+  Linea: Integer;
+  Cita, SinEnd, SoloCR: string;
+begin
+  // un numero que no cabe: TokenInt lanza EConvertError, sin linea
+  Assert.AreNotEqual('', ParserDeForm('object FormX: TFormX'#13#10 +
+    '  Tag = 99999999999999999999'#13#10'end'#13#10, 'utf8-bom', Linea, Cita));
+  Assert.AreEqual(MsgText(SF_DSGN_PARSER_SIN_LINEA), Cita, 'sin linea no es el fin del fichero');
+  // le falta el end final: con el salto de la ultima linea, el parser nombra la
+  // de despues (fin del fichero, venga de un texto o de unas lineas unidas: B-2);
+  // sin el salto nombra la ultima, y esa es la cita (medido)
+  SinEnd := 'object FormX: TFormX'#13#10'  Left = 0'#13#10;
+  Assert.AreNotEqual('', ParserDeForm(SinEnd, 'utf8-bom', Linea, Cita));
+  Assert.AreEqual(MsgText(SF_DSGN_PARSER_FIN_DE_FICHERO), Cita, 'con el salto final');
+  Assert.AreNotEqual('', ParserDeForm(SinEnd.TrimRight, 'utf8-bom', Linea, Cita));
+  Assert.AreEqual('Left = 0', Cita, 'sin el salto final: la ultima linea, la que nombra');
+  // los bytes del disco: un form de solo CR es UNA linea para TParser, y de
+  // mas de 4 KB no la lee (SLineTooLong); unido con CRLF pasaba
+  SoloCR := 'object FormX: TFormX'#13;
+  for var I := 1 to 500 do
+    SoloCR := SoloCR + '  Tag = 1'#13;
+  SoloCR := SoloCR + 'end'#13;
+  Assert.AreNotEqual('', ParserDeForm(SoloCR, 'utf8-bom', Linea, Cita), 'solo CR, mas de 4 KB');
+  Assert.AreEqual('', ParserDeForm(SoloCR.Replace(#13, #13#10), 'utf8-bom', Linea, Cita),
+    'el mismo con CRLF se lee');
 end;
 
 initialization

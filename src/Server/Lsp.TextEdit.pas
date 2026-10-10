@@ -167,6 +167,23 @@ begin
   Eol := SaltoDominante(Text); // el de todos (Lsp.Patch)
   EndsWithEol := TieneSaltoFinal(Text); // un CR suelto tambien ("uno\rdos\r" lo perdia)
   Lines := LineasDelTexto(Text); // sin la fantasma del salto final (Lsp.Patch)
+  // Un ancla vacia o de solo blancos: la regla de delphi_edit (EDIT-060). Aqui
+  // casaba con TODAS las lineas en blanco (un old "   " llegaba desde el
+  // changeset) y la gemela la negaba. Solo vale para borrar una linea EN
+  // BLANCO por su numero, sin old (P3-L9): la regla y su negativa son las de
+  // delphi_edit (Lsp.Patch.LineaEnBlancoDenegada)
+  if A.OldLine.Trim = '' then
+  begin
+    // ...y UNA: un rango (toline) sin un ancla de texto no (M-3 del revisor)
+    if A.DeleteLine and (A.ToLine > 0) then
+      Exit(MsgText(SR_EDIT_RANGO_SIN_OLD));
+    if not (A.DeleteLine and (A.AtLine > 0)) then
+      Exit(MsgText(SR_EDIT_ANCLA_ESTA_VACIA_SOLO));
+    Result := LineaEnBlancoDenegada(Lines, Length(Lines), A.AtLine, False,
+      TPath.GetFileName(A.Path));
+    if Result <> '' then
+      Exit;
+  end;
 
   // One-full-line anchor: trimmed comparison, so indentation may be omitted.
   Matches := LineasDondeCasaElAncla(Lines, A.OldLine, False); // la regla del motor
@@ -326,9 +343,10 @@ begin
     end;
     if A.CreateFile_ then
       Exit(DoCreate(A));
-    if A.DeleteLine and not A.HasOld then
+    // sin old, solo una linea EN BLANCO por su numero (P3-L9, DoEditLine)
+    if A.DeleteLine and not A.HasOld and (A.AtLine <= 0) then
       Exit(MsgText(SR_TEXT_DELETE_TRUE_NECESITA_OLD));
-    if not A.HasOld then
+    if not A.HasOld and not A.DeleteLine then
       Exit(MsgText(SR_TEXT_FALTA_ANCLA_OLD_ESTA));
     Result := DoEditLine(A);
   except

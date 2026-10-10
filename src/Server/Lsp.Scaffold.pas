@@ -78,7 +78,18 @@ begin
   else if TPath.GetFileName(APath).ToLower = '.gitignore' then
     Enc := 'utf8'     // git does NOT strip a BOM: it would break the 1st rule
   else
-    Enc := NewFileEncName; // sources honour the IDE's configured default
+  begin
+    // sources honour the IDE's configured default; un form, solo en una
+    // codificacion que EL parser del IDE lea (Lsp.Patch.EncDeFormNuevo): una
+    // plantilla nuestra que no lee es un fallo nuestro y no se escribe
+    var Error: string;
+    var Linea: Integer;
+    var Cita: string;
+    Enc := EncDeFormNuevo(APath, AText, NewFileEncName, Error, Linea, Cita);
+    if Error <> '' then
+      raise Exception.Create(MsgFmt(SR_DSGN_PARSER_NO_ESCRIBE_FMT,
+        [TPath.GetFileName(APath), Error, Linea, Cita]));
+  end;
   PatchSaveText(APath, AText, Enc);
 end;
 

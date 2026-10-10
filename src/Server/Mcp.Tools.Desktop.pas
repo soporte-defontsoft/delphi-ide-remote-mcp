@@ -506,6 +506,32 @@ begin
       end;
       if Fallo = '' then
       begin
+        { La lista de ventanas viaja CON cada captura (David, 24-sep), en los
+          dos sistemas y en pixeles de la imagen: titulo y rectangulo. En
+          Linux son las X11/Xwayland (toda aplicacion FMX; las nativas
+          Wayland no salen) y la nota lo dice. window= recorta por ella. }
+        Ventanas := VentanasDeLaSalida(Salida, Params.Window.Trim, RX, RY, RW, RH, HayVentana);
+        Return.AddPair('windows', Ventanas);
+        Return.AddPair('windowsNote', IfThen(EsWin, MsgText(SN_DESKTOP_WINDOWS_WIN), MsgText(SN_DESKTOP_WINDOWS_LINUX)));
+        { En Linux "windows" abre la vista de actividades y la captura es ESA
+          vista: se dice como leerla (un agente la tomo por el escritorio a
+          secas, 24-sep). }
+        if (Cmd = 'overview') and not EsWin then
+          Return.AddPair('overviewNote', MsgText(SN_DESKTOP_OVERVIEW_LINUX));
+        if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
+        begin
+          if not HayVentana then
+            Fallo := MsgFmt(SR_ADBLINUX_WINDOW_NOMATCH_FMT, [Params.Window.Trim])
+          else
+            ConRecorte := True;
+        end;
+        // el recorte, sobre la captura BAJADA (la carpeta de descarga es de esta
+        // llamada) y ANTES de colocarla: recortaba EN SITIO el out= ya colocado,
+        // una escritura cruda por detras de la puerta y del cerrojo (P4 de la
+        // 1.18.0). Lo que se coloca ya es el recorte, como en el designer
+        if (Fallo = '') and ConRecorte then
+          Fallo := RecortaPng(Local, RX, RY, RW, RH, AnchoOrig, AltoOrig);
+        if Fallo = '' then
         try
           // un out= que ya estaba: su contenido, sellado, y se sustituye, como
           // hace su gemela de adb (sexta revision: aqui fallaba el Move y la
@@ -526,37 +552,16 @@ begin
         except
           // limpiar no puede tumbar la respuesta
         end;
-        { La lista de ventanas viaja CON cada captura (David, 24-sep), en los
-          dos sistemas y en pixeles de la imagen: titulo y rectangulo. En
-          Linux son las X11/Xwayland (toda aplicacion FMX; las nativas
-          Wayland no salen) y la nota lo dice. window= recorta por ella. }
-        Ventanas := VentanasDeLaSalida(Salida, Params.Window.Trim, RX, RY, RW, RH, HayVentana);
-        Return.AddPair('windows', Ventanas);
-        Return.AddPair('windowsNote', IfThen(EsWin, MsgText(SN_DESKTOP_WINDOWS_WIN), MsgText(SN_DESKTOP_WINDOWS_LINUX)));
-        { En Linux "windows" abre la vista de actividades y la captura es ESA
-          vista: se dice como leerla (un agente la tomo por el escritorio a
-          secas, 24-sep). }
-        if (Cmd = 'overview') and not EsWin then
-          Return.AddPair('overviewNote', MsgText(SN_DESKTOP_OVERVIEW_LINUX));
-        if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
-        begin
-          if not HayVentana then
-            Fallo := MsgFmt(SR_ADBLINUX_WINDOW_NOMATCH_FMT, [Params.Window.Trim])
-          else
-            ConRecorte := True;
-        end;
+        // el origen del recorte, solo si el recorte quedo colocado: con el fallo
+        // de colocarlo iban juntos (revisor de la noche, B-9)
         if (Fallo = '') and ConRecorte then
         begin
-          Fallo := RecortaPng(Local, RX, RY, RW, RH, AnchoOrig, AltoOrig);
-          if Fallo = '' then
-          begin
-            var Origen := TJSONObject.Create;
-            Origen.AddPair('x', TJSONNumber.Create(RX));
-            Origen.AddPair('y', TJSONNumber.Create(RY));
-            Return.AddPair('origin', Origen);
-            Return.AddPair('region', Format('%d,%d,%d,%d', [RX, RY, RW, RH]));
-            Return.AddPair('croppedFrom', Format('%dx%d', [AnchoOrig, AltoOrig]));
-          end;
+          var Origen := TJSONObject.Create;
+          Origen.AddPair('x', TJSONNumber.Create(RX));
+          Origen.AddPair('y', TJSONNumber.Create(RY));
+          Return.AddPair('origin', Origen);
+          Return.AddPair('region', Format('%d,%d,%d,%d', [RX, RY, RW, RH]));
+          Return.AddPair('croppedFrom', Format('%dx%d', [AnchoOrig, AltoOrig]));
         end;
         if Fallo <> '' then
           SinCaptura(Fallo)

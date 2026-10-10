@@ -31,6 +31,17 @@ function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
   con su excepcion. }
 procedure DesignerAFlujo(AEntrada, ASalida: TStream);
 
+{ Lo que dice EL parser del IDE (ObjectTextToBinary, por DesignerAFlujo) de un
+  designer de TEXTO, dados sus BYTES como estan (o estaran) en disco - con su
+  codificacion: un nombre no ASCII en un form ANSI no lo lee, y en UTF-8 con
+  BOM si -: '' si lo lee; si no, su mensaje tal cual ("Identifier expected on
+  line 2", como lo da la RTL) y ALinea con la linea que nombra (0 si no nombra
+  ninguna). 8.10 y 9.B de la 1.18.0: lint y los escritores del disenador
+  preguntaban a una gramatica propia y no al parser - un // en un .fmx pasaba
+  hasta que el IDE lo rechazaba al cargarlo -. La linea, por el formato del
+  propio mensaje de la RTL (SParseError), no por un texto escrito aqui. }
+function ErrorDelParserDeForm(const ABytes: TArray<Byte>; out ALinea: Integer): string;
+
 { Un designer BINARIO, con o sin la cabecera de recurso, como el texto que
   escribe el IDE ("Ver como texto": ASCII con CRLF, lo que no cabe como #N).
   Lanza si esta danado; un texto pasa por DesignerAFlujo y sale como lo
@@ -80,6 +91,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.RTLConsts,   // SParseError: el formato del mensaje del parser
   System.RegularExpressions;
 
 function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
@@ -154,6 +166,35 @@ begin
       else
         ObjectTextToBinary(AEntrada, ASalida);
     end;
+  end;
+end;
+
+function ErrorDelParserDeForm(const ABytes: TArray<Byte>; out ALinea: Integer): string;
+var
+  Entrada: TBytesStream;
+  Salida: TMemoryStream;
+begin
+  Result := '';
+  ALinea := 0;
+  Entrada := TBytesStream.Create(ABytes);
+  Salida := TMemoryStream.Create;
+  try
+    try
+      DesignerAFlujo(Entrada, Salida);
+    except
+      on E: Exception do
+      begin
+        Result := E.Message;
+        // SParseError es '%s on line %d': su forma, escapada, con los huecos
+        var Patron := '^' + TRegEx.Escape(SParseError).Replace('%s', '(.*)').Replace('%d', '(\d+)') + '$';
+        var M := TRegEx.Match(E.Message.Trim, Patron);
+        if M.Success and (M.Groups.Count > 2) then
+          ALinea := StrToIntDef(M.Groups[2].Value, 0);
+      end;
+    end;
+  finally
+    Salida.Free;
+    Entrada.Free;
   end;
 end;
 

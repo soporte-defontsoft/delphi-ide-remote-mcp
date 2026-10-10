@@ -1201,5 +1201,124 @@ for _nom, _bytes in _r8.items():
     check('...READ-008 no sale en %s (con BOM, solo ASCII, acentos solo en comentarios o un form)' % _nom,
           not mc.rechazado(_out) and not mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT'), _out[:300])
 
+# --- P3-L9 de la 1.18.0: borrar una linea EN BLANCO. No tiene texto que copiar
+# como ancla (EDIT-056 pedia "old" con la linea, y una vacia no se puede dar: el
+# rodeo era un bloque de tres lineas). delete + atline SIN old la borra si ESA
+# linea esta en blanco - lo que casa con un ancla vacia, la regla del motor -;
+# si tiene texto, EDIT-123 citandola, y EDIT-124 si no existe. Igual en la tanda
+# y en delphi_textedit, la gemela. Contra el binario de antes: EDIT-056/TEXT-003.
+_bl = os.path.join(DIR, 'UBlanca.pas')
+_blsrc = b'unit UBlanca;\r\n\r\ninterface\r\n\r\n \t\r\nimplementation\r\n\r\nend.\r\n'
+open(_bl, 'wb').write(_blsrc)
+_out = call('delphi_edit', {'path': _bl, 'delete': True, 'atline': 5})
+check('P3-L9: delete + atline sin old borra la linea EN BLANCO (blancos y tabuladores cuentan como blanca)',
+      open(_bl, 'rb').read() == b'unit UBlanca;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n', _out[:400])
+_antes = open(_bl, 'rb').read()
+_out = call('delphi_edit', {'path': _bl, 'delete': True, 'atline': 3})
+check('...una linea CON texto no se borra sin old: EDIT-123 la cita y no se escribe nada',
+      mc.abre(_out, 'SR_EDIT_LINEA_NO_EN_BLANCO_FMT') and 'interface' in _out and
+      open(_bl, 'rb').read() == _antes, _out[:400])
+_out = call('delphi_edit', {'path': _bl, 'delete': True, 'atline': 40})
+check('...una linea que no existe: EDIT-124', mc.abre(_out, 'SR_EDIT_LINEA_EN_BLANCO_NO_EXISTE_FMT') and
+      open(_bl, 'rb').read() == _antes, _out[:300])
+_out = call('delphi_edit', {'path': _bl, 'delete': True})
+check('...sin old y sin atline sigue siendo EDIT-056 (que linea, no se adivina)',
+      mc.abre(_out, 'SR_EDIT_DELETE_TRUE_NECESITA_OLD') and open(_bl, 'rb').read() == _antes, _out[:300])
+_out = call('delphi_edit', {'path': _bl, 'edits': json.dumps([{'delete': True, 'atline': 2}])})
+check('...y en una tanda (la entrada sin old con delete y atline)',
+      open(_bl, 'rb').read() == b'unit UBlanca;\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n', _out[:400])
+# 8.11: "edits" se publica como ARRAY de objetos (el cliente que valida contra el
+# esquema rechazaba el array antes de llamar, Hermes 8-oct) y un array REAL se
+# aplica; el texto con el JSON dentro se sigue aceptando (arriba, json.dumps)
+_out = call('delphi_edit', {'path': _bl, 'edits': [{'delete': True, 'atline': 3}]})
+# (GUARDA: el binder acepta un array desde el 25-sep; lo que 8.11 cambia - el
+# esquema - lo miden los dos checks de abajo)
+check('8.11: edits como array JSON real se aplica (guarda)',
+      open(_bl, 'rb').read() == b'unit UBlanca;\r\ninterface\r\nimplementation\r\n\r\nend.\r\n', _out[:400])
+_tl = srv.request('tools/list', {})['result']['tools']
+for _t in ('delphi_edit', 'delphi_textedit'):
+    _props = next(x for x in _tl if x['name'] == _t)['inputSchema']['properties']
+    check('8.11: %s.edits se publica como array de objetos' % _t,
+          _props['edits'].get('type') == 'array' and _props['edits'].get('items', {}).get('type') == 'object',
+          _props['edits'])
+    check('...y su "new" sigue siendo texto (solo lo marcado con [JsonComoTexto])',
+          _props['new'].get('type') == 'string', _props['new'])
+_tx = os.path.join(DIR, 'blanca.txt')
+open(_tx, 'wb').write(b'uno\r\n\r\ndos\r\n')
+_out = call('delphi_textedit', {'path': _tx, 'delete': True, 'atline': 2})
+check('P3-L9 en delphi_textedit: delete + atline sin old borra la linea en blanco',
+      open(_tx, 'rb').read() == b'uno\r\ndos\r\n', _out[:300])
+open(_tx, 'wb').write(b'uno\r\n\r\ndos\r\n')
+_out = call('delphi_textedit', {'path': _tx, 'delete': True, 'atline': 1})
+check('...y una con texto: EDIT-123, la misma negativa que delphi_edit',
+      mc.abre(_out, 'SR_EDIT_LINEA_NO_EN_BLANCO_FMT') and open(_tx, 'rb').read() == b'uno\r\n\r\ndos\r\n', _out[:300])
+_out = call('delphi_textedit', {'path': _tx, 'delete': True})
+check('...sin old ni atline: TEXT-003', mc.abre(_out, 'SR_TEXT_DELETE_TRUE_NECESITA_OLD'), _out[:300])
+_out = call('delphi_textedit', {'path': _tx, 'old': '   ', 'new': 'x'})
+check('...y un ancla de solo blancos es EDIT-060, como en delphi_edit (casaba con la linea en blanco y la reescribia)',
+      mc.abre(_out, 'SR_EDIT_ANCLA_ESTA_VACIA_SOLO') and open(_tx, 'rb').read() == b'uno\r\n\r\ndos\r\n', _out[:300])
+_out = call('delphi_textedit', {'path': _tx, 'edits': json.dumps([{'delete': True, 'atline': 2}])})
+check('...y en una tanda de delphi_textedit', open(_tx, 'rb').read() == b'uno\r\ndos\r\n', _out[:300])
+
+# --- EDIT-091 mira lo que TOCA lo escrito en el fichero que queda, no solo el
+# texto nuevo: una linea escrita en MEDIO de un comentario de llaves de varias
+# lineas con un {$I} citado (o una llave) no avisaba - la llave que lo abre
+# estaba en otra linea (medido el 9-oct-2026 en la suelta y en la tanda; dcc dio
+# E2029). Un comentario anidado LEJOS de lo escrito no avisa (sin ruido).
+def _llaves(nombre):
+    p = os.path.join(DIR, nombre)
+    open(p, 'wb').write(b'unit ' + nombre[:-4].encode() + b';\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\n'
+                        b'{ Un comentario de llaves\r\n  de varias lineas: la linea del medio\r\n'
+                        b'  se edita aparte. }\r\nprocedure P;\r\nbegin\r\nend;\r\n\r\n'
+                        b'{ uno viejo {con otra} lejos }\r\n\r\nend.\r\n')
+    return p
+_p = _llaves('ULlaves1.pas')
+_out = call('delphi_edit', {'path': _p, 'old': '  de varias lineas: la linea del medio',
+                            'new': '  de varias lineas: la ruta de un {$I x.inc} del medio'})
+check('EDIT-091: una linea escrita en medio de un comentario de llaves de varias lineas, con un {$I} dentro',
+      mc.es(_out, 'SN_AVISO_LLAVE_ANIDADA_FMT') and 'line 7 ' in _out and 'line 14 ' not in _out, _out[-700:])
+_p = _llaves('ULlaves2.pas')
+_out = call('delphi_edit', {'path': _p, 'edits': json.dumps([{'old': '  se edita aparte. }',
+                                                             'new': '  se edita {aparte} en tanda. }'}])})
+check('...y en una tanda, con una llave dentro', mc.es(_out, 'SN_AVISO_LLAVE_ANIDADA_FMT') and
+      'line 7 ' in _out and 'line 14 ' not in _out, _out[-700:])
+_p = _llaves('ULlaves3.pas')
+_out = call('delphi_edit', {'path': _p, 'old': '  de varias lineas: la linea del medio',
+                            'new': '  de varias lineas: sin llaves aqui'})
+check('...sin llave nueva no avisa, ni del anidado de lejos', not mc.fallo(_out) and
+      not mc.es(_out, 'SN_AVISO_LLAVE_ANIDADA_FMT'), _out[-500:])
+_p4 = os.path.join(DIR, 'ULlaves4.pas')
+open(_p4, 'wb').write(b'unit ULlaves4;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\n{ primero\r\n  sigue }\r\n'
+                      b'{ segundo }\r\n\r\nend.\r\n')
+_out = call('delphi_edit', {'path': _p4, 'old': '  sigue }', 'delete': True})
+check('...y borrar la linea que cerraba un comentario deja el de debajo DENTRO: lo avisa',
+      mc.es(_out, 'SN_AVISO_LLAVE_ANIDADA_FMT') and 'line 7 ' in _out, _out[-500:])
+
+# lo del revisor de la noche (10-oct): M-3 un rango sin old (delete + atline +
+# toline) borraba desde una linea en blanco lo que hubiera, sin ancla de texto:
+# EDIT-125 en las dos tools; B-3 occurrence sin old en una tanda decia "aparece
+# 0 veces": EDIT-126; B-1 borrar la linea pegada a un comentario anidado VIEJO
+# (que no abarca la juntura) avisaba EDIT-091 de algo que no se toco
+_m3 = os.path.join(DIR, 'URango.pas')
+_m3src = b'unit URango;\r\n\r\ninterface\r\n\r\nconst A = 1;\r\nconst B = 2;\r\n\r\nimplementation\r\n\r\nend.\r\n'
+open(_m3, 'wb').write(_m3src)
+_out = call('delphi_edit', {'path': _m3, 'delete': True, 'atline': 4, 'toline': 6})
+check('M-3: delete + atline + toline sin old es EDIT-125 y no se borra nada',
+      mc.abre(_out, 'SR_EDIT_RANGO_SIN_OLD') and open(_m3, 'rb').read() == _m3src, _out[:300])
+_tx3 = os.path.join(DIR, 'rango.txt')
+open(_tx3, 'wb').write(b'uno\r\n\r\ndos\r\ntres\r\n')
+_out = call('delphi_textedit', {'path': _tx3, 'delete': True, 'atline': 2, 'toline': 4})
+check('...y en delphi_textedit', mc.abre(_out, 'SR_EDIT_RANGO_SIN_OLD') and
+      open(_tx3, 'rb').read() == b'uno\r\n\r\ndos\r\ntres\r\n', _out[:300])
+_out = call('delphi_edit', {'path': _m3, 'edits': json.dumps([{'delete': True, 'occurrence': 1}])})
+check('B-3: occurrence sin old en una tanda es EDIT-126 (no "aparece 0 veces")',
+      mc.es(_out, 'SR_PATCH_OCURRENCIA_SIN_TEXTO_FMT') and open(_m3, 'rb').read() == _m3src, _out[:300])
+_b1 = os.path.join(DIR, 'UJuntura.pas')
+open(_b1, 'wb').write(b'unit UJuntura;\r\n\r\ninterface\r\n\r\n{ ver {enlace }\r\nconst A = 1;\r\nconst B = 2;\r\n'
+                      b'\r\nimplementation\r\n\r\nend.\r\n')
+_out = call('delphi_edit', {'path': _b1, 'old': 'const A = 1;', 'delete': True})
+check('B-1: borrar la linea pegada a un comentario anidado viejo no avisa EDIT-091',
+      not mc.fallo(_out) and not mc.es(_out, 'SN_AVISO_LLAVE_ANIDADA_FMT'), _out[-400:])
+
 srv.cierra()
 mc.fin('delphi_edit battery')

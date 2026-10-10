@@ -21,6 +21,10 @@ type
     // [local change 2026-09-27] publica: el deserializador la usa para
     // HACER CUMPLIR lo que el esquema publica (un solo lector del atributo)
     class function IsRequiredProperty(Prop: TRttiProperty): Boolean;
+    // [local change 2026-10-09] el UNICO lector de [JsonComoTexto]: el
+    // esquema publica "array de objetos" y el deserializador acepta el JSON
+    // en ese texto - la misma pregunta para lo que se promete y lo que se hace
+    class function AceptaJsonComoTexto(Prop: TRttiProperty): Boolean;
     class function GenerateSchema(Cls: TClass): TJSONObject;
     class function GenerateSchemaFromInstance(Instance: TObject): TJSONObject;
   end;
@@ -29,6 +33,7 @@ implementation
 
 uses
   System.Generics.Collections,
+  Lsp.Attributes, // [local change 2026-10-09] [JsonComoTexto]
   MCPServer.Types;
 
 { TMCPSchemaGenerator }
@@ -68,13 +73,24 @@ begin
         Properties.AddPair(JsonName, PropSchema);
 
         JsonType := GetJsonTypeFromRttiType(RttiProp.PropertyType);
+        // [local change 2026-10-09] un texto que lleva un JSON por contrato
+        // ([JsonComoTexto]: "edits") se publica como lo que es, un array de
+        // objetos: el cliente que valida contra el esquema rechazaba el array
+        // antes de llamar y el modelo acababa mandando un texto con el JSON
+        // dentro (Hermes, 8-oct-2026). El texto se sigue aceptando (el
+        // deserializador), por los clientes que tengan el esquema viejo.
+        var ArrayDeObjetos := (JsonType = 'string') and AceptaJsonComoTexto(RttiProp);
+        if ArrayDeObjetos then
+          JsonType := 'array';
         PropSchema.AddPair('type', JsonType);
         // [local change 2026-09-28] el binder rechaza un entero negativo en
         // TODOS los parametros (MotivoEntero): el esquema lo dice (decima)
         if JsonType = 'integer' then
           PropSchema.AddPair('minimum', TJSONNumber.Create(0));
 
-        if JsonType = 'array' then
+        if ArrayDeObjetos then
+          PropSchema.AddPair('items', TJSONObject.Create(TJSONPair.Create('type', 'object')))
+        else if JsonType = 'array' then
           PropSchema.AddPair('items', TJSONObject.Create);
 
         EnumArray := nil;
@@ -180,6 +196,16 @@ begin
   // calls - clients that validate the schema could not call anything.
   for Attr in Prop.GetAttributes do
     if Attr is RequiredAttribute then
+      Exit(True);
+  Result := False;
+end;
+
+class function TMCPSchemaGenerator.AceptaJsonComoTexto(Prop: TRttiProperty): Boolean;
+var
+  Attr: TCustomAttribute;
+begin
+  for Attr in Prop.GetAttributes do
+    if Attr is JsonComoTextoAttribute then
       Exit(True);
   Result := False;
 end;

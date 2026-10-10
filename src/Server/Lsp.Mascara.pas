@@ -141,8 +141,10 @@ threadvar
   por una lista de nombres sino por las marcas [RutaDelServidor] de cada tool
   (RutasNuestras, Lsp.Guard). }
 const
-  PARAMS_CON_CONTENIDO: array [0 .. 6] of string = (
-    'new', 'old', 'content', 'data', 'message', 'code', 'args');
+  // edits y fragment tambien: llevan old/new o un trozo de linea, y como texto
+  // la expansion los reescribia y como array no (revisor de la noche, B-11)
+  PARAMS_CON_CONTENIDO: array [0 .. 8] of string = (
+    'new', 'old', 'content', 'data', 'message', 'code', 'args', 'edits', 'fragment');
   { El host con el que sale enmascarado el de una ruta de red (\\srvhost\...):
     lo escribe MaskDriveText y lo lee de vuelta ExpandDriveValue. UNA
     constante para los dos lados (estaba escrito a mano en los dos). }

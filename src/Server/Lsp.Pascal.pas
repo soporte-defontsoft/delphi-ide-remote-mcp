@@ -112,8 +112,11 @@ function DirectivasPascal(const ATexto: string): TArray<TDirectivaPascal>;
 // lleva otra llave abierta dentro. Pascal no anida llaves: el primer cierre
 // acaba el comentario y lo que sigue es codigo, o una directiva de verdad
 // si citaba una de llave-dolar (la trampa en la que se cayo cuatro veces
-// entre el 25 y el 27-sep-2026). Solo lo mira; quien lo usa decide.
-function LlavesAnidadas(const ATexto: string): TArray<Integer>;
+// entre el 25 y el 27-sep-2026). Solo lo mira; quien lo usa decide. AFines:
+// la linea de cada uno donde lo cierra la primera llave de cierre (la que
+// toma dcc), para saber si TOCA unas lineas dadas: un comentario abierto en
+// otra linea no se ve mirando solo el texto nuevo (medido el 9-oct-2026).
+function LlavesAnidadas(const ATexto: string; out AFines: TArray<Integer>): TArray<Integer>;
 
 // UN IDENTIFICADOR Pascal, como lo lee dcc: una letra ASCII, '_' o CUALQUIER
 // caracter no ASCII del plano basico, y detras tambien los digitos. Medido el
@@ -592,11 +595,12 @@ begin
       Inc(Result);
 end;
 
-function LlavesAnidadas(const ATexto: string): TArray<Integer>;
+function LlavesAnidadas(const ATexto: string; out AFines: TArray<Integer>): TArray<Integer>;
 var
   I, N, Dentro, Linea: Integer;
 begin
   Result := [];
+  AFines := [];
   I := 1;
   while I <= Length(ATexto) do
   begin
@@ -618,6 +622,7 @@ begin
         // solo los LF: un texto en CR daba la linea 1 a todo)
         Linea := LineaDePosicion(ATexto, I);
         Result := Result + [Linea];
+        AFines := AFines + [LineaDePosicion(ATexto, I + N - 1)];
       end;
     end;
     Inc(I, N);

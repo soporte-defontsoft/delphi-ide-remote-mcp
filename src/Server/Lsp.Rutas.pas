@@ -60,6 +60,13 @@ function FormaLarga(const APath: string): string;
 function EnLugar(const APath, ALugar: string;
   AResuelveAlias: Boolean = True): Boolean;
 
+{ AReal (una ruta REAL, RealPath) esta en alguno de ALugares, cada uno por
+  SU ruta real: la comparacion de los lugares de las puertas (Lsp.Patch) y de
+  la zona de biblioteca de la jaula (Lsp.Guard.JaulaDecide, que la juzgaba
+  por el TEXTO: M1 de la 1.18.0). Estaba en Lsp.Patch, donde la jaula no la
+  alcanza. Mismo aviso que RealPath: para comparar. }
+function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;
+
 { LA regla de "ruta completa": <letra>:\ (o :/) o un UNC. "\x", "/x" y "C:x"
   NO lo son, y TPath.IsPathRooted si las da por buenas: se resolvian contra
   la unidad o la carpeta del PROCESO, que el agente no nombro. Toda tool que
@@ -261,6 +268,14 @@ begin
   except
     Result := False; // una ruta que no parsea no esta en ningun sitio
   end;
+end;
+
+function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;
+begin
+  for var L in ALugares do
+    if (L.Trim <> '') and EnLugar(AReal, RealPath(L)) then
+      Exit(True);
+  Result := False;
 end;
 
 { Una ruta ABSOLUTA de verdad: <letra>:<separador> o un UNC. A proposito NO

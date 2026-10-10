@@ -294,13 +294,20 @@ begin
     Result := '';
 end;
 
-function ApplyOne(const Op: TStagedOp; out AError: string; AEnsayo: Boolean = False): Boolean;
+{ ApplyOne y, en AAvisos (uno por linea), los avisos del motor que la edicion
+  dio (los *** de la auditoria: estructura, acentos, una llave dentro de un
+  comentario...) y los de llaves del fuente que crea: el commit los descartaba
+  con el resultado y no llegaban al agente (revisor de la noche del 10-oct,
+  M-6: EDIT-091 desde un changeset salia COMPLETE sin aviso). }
+function ApplyOneConAvisos(const Op: TStagedOp; out AError, AAvisos: string;
+  AEnsayo: Boolean = False): Boolean;
 var
   A: TPatchArgs;
   T: TTextEditArgs;
   R, Enc: string;
 begin
   AError := '';
+  AAvisos := '';
   Result := False;
   // La puerta OTRA VEZ al aplicar, para cada operacion: entre stage y
   // commit pasan hasta 30 minutos, y un camino puede haber cambiado (un
@@ -347,7 +354,11 @@ begin
         end;
         Result := not EsFallo(R);
         if not Result then
-          AError := R;
+          AError := R
+        else
+          // EL lector de los avisos de una respuesta, con lo que llevan debajo
+          for var LA in AvisosDelMotor(R) do
+            AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') + LA;
       end;
     opCreate:
       begin
@@ -355,6 +366,14 @@ begin
           Enc := NewFileEncName
         else
           Enc := 'utf8';
+        // un form nuevo, en una codificacion que EL parser del IDE lea, la
+        // misma regla que delphi_create (Lsp.Patch.EncDeFormNuevo; el create
+        // de un changeset la saltaba: revisor 3 de la noche, M-3); si no lo
+        // lee en ninguna, se escribe y se avisa, como delphi_edit (DSGN-123)
+        var ErrForm: string;
+        var LinForm: Integer;
+        var CitaForm: string;
+        Enc := EncDeFormNuevo(Op.Path, Op.Content, Enc, ErrForm, LinForm, CitaForm);
         // el ENSAYO codifica el contenido y pregunta la puerta sin escribir ni
         // crear carpetas (decima revision). Si el fichero existe lo decide el
         // PLAN (PlanConflict): en el disco puede seguir hasta que corra el
@@ -380,6 +399,11 @@ begin
         CrearCarpeta(TPath.GetDirectoryName(Op.Path));
         PatchSaveText(Op.Path, Op.Content, Enc, False, True);
         Result := True;
+        // un fuente entero: las llaves, como las dice delphi_create (EDIT-091)
+        AAvisos := ConAvisosDeLlaves('', Op.Path, Op.Content).Trim([#10, #13, ' ']);
+        if ErrForm <> '' then
+          AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') +
+            MsgFmt(SN_DSGN_PARSER_FMT, [ErrForm, LinForm, CitaForm]);
       end;
     opDelete:
       begin
@@ -429,6 +453,16 @@ begin
             [Op.AtLine, Ls[Op.AtLine - 1]]);
           Exit;
         end;
+        // sin old, solo una linea EN BLANCO: LA regla de delphi_edit y
+        // delphi_textedit (P3-L9; revisor de la noche, M-4: aqui se borraba
+        // cualquiera, y nacio para las lineas en blanco)
+        if Op.OldLine = '' then
+        begin
+          AError := LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine, EsDelMotorPascal(Op.Path),
+            TPath.GetFileName(Op.Path));
+          if AError <> '' then
+            Exit;
+        end;
         Delete(Ls, Op.AtLine - 1, 1);
         var Nuevo := string.Join(Eol, Ls);
         if SaltoFinal and (Length(Ls) > 0) then
@@ -453,6 +487,13 @@ begin
         Result := True;
       end;
   end;
+end;
+
+function ApplyOne(const Op: TStagedOp; out AError: string; AEnsayo: Boolean = False): Boolean;
+var
+  Avisos: string;
+begin
+  Result := ApplyOneConAvisos(Op, AError, Avisos, AEnsayo);
 end;
 
 { Walks the staged operations in order, keeping the virtual state in mind,
@@ -856,6 +897,14 @@ begin
                 [Op.AtLine, Ls[Op.AtLine - 1]]));
               Inc(N);
             end
+            // sin old, solo una linea en blanco (lo que el commit niega, M-4)
+            else if (Op.OldLine = '') and (LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
+              EsDelMotorPascal(Op.Path), TPath.GetFileName(Op.Path)) <> '') then
+            begin
+              Obj.AddPair('anchor', LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
+                EsDelMotorPascal(Op.Path), TPath.GetFileName(Op.Path)));
+              Inc(N);
+            end
             else
               Obj.AddPair('anchor', 'ok');
           end;
@@ -961,6 +1010,8 @@ begin
         SetLength(Lineas, C.Ops.Count);
         for I := 0 to C.Ops.Count - 1 do
           Lineas[I] := C.Ops[I].AtLine;
+        // los avisos del motor de cada paso, con su fichero (M-6)
+        var AvisosTodos := '';
         begin
           for I := 0 to C.Ops.Count - 1 do
           begin
@@ -979,7 +1030,12 @@ begin
                 Foto.Vigila(Op.Dest);
               var AntesL := LineasDeFichero(Op.Path);
               Before := Length(AntesL);
-              Ok := ApplyOne(Op, Err);
+              var AvisosPaso: string;
+              Ok := ApplyOneConAvisos(Op, Err, AvisosPaso);
+              if Ok and (AvisosPaso <> '') then
+                for var LA in AvisosPaso.Split([#10]) do
+                  AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
+                    Format('  %s: %s', [MaskDriveText('', Op.Path), LA]);
               // contar las lineas de DESPUES tambien lee el fichero, y otro
               // proceso lo puede tener: dentro del mismo try, o la excepcion
               // salia sin deshacer nada (tercera revision, medido)
@@ -1081,8 +1137,10 @@ begin
         // fichero): se dice, sin prometer copias que no hay
         if Foto.Cambiados = 0 then
           Exit(MsgFmt(SN_CHANGESET_SIN_CAMBIOS_FMT, [OpCount]));
-        Exit(MsgFmt(SN_CHANGESET_COMMITTED_FMT,
-          [OpCount, FileCount, AuditText]));
+        Result := MsgFmt(SN_CHANGESET_COMMITTED_FMT, [OpCount, FileCount, AuditText]);
+        if AvisosTodos <> '' then
+          Result := Result + #10 + MsgFmt(SN_CHANGESET_AVISOS_FMT, [AvisosTodos]);
+        Exit;
       finally
         LeaveFileEdit;
         Changed.Free;

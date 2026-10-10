@@ -21,7 +21,8 @@ unit Lsp.Patch;
 interface
 
 uses
-  Lsp.Codificacion;
+  Lsp.Codificacion,
+  Lsp.DesignerMeta; // TFaltaTabla y su espera: el lint de un form (LintDeForm)
 
 type
   TPatchArgs = record
@@ -206,6 +207,14 @@ function LineasDelTexto(const AText: string): TArray<string>;
 function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string;
   APascal: Boolean): TArray<Integer>;
 function CuantasLineasReales(const ALines: TArray<string>): Integer;
+{ Borrar una linea EN BLANCO (P3-L9): no tiene texto que copiar como ancla,
+  asi que el ancla es la posicion (atline, 1-based) y la condicion de que
+  ESA linea este en blanco - lo que casa con un ancla vacia, con la regla
+  del motor que borra (APascal). '' si se puede; si no, la negativa
+  (EDIT-123 con la linea citada, EDIT-124 si no existe). AReales: las
+  lineas sin la fantasma del salto final, como las cuenta cada motor. }
+function LineaEnBlancoDenegada(const ALines: TArray<string>;
+  AReales, AAtLine: Integer; APascal: Boolean; const AFichero: string): string;
 
 { El salto de linea DOMINANTE de un texto (CRLF, LF o CR suelto: el que mas
   aparece; CRLF si no hay ninguno, el de Windows), para quien vuelve a unir
@@ -535,13 +544,13 @@ function ModosQueNoCombinan(const AModos: array of string): string;
 function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
 
 { AMsg y detras, en su linea, el aviso EDIT-091 de cada comentario de llave
-  con otra llave dentro en ANuevo -el texto que el agente acaba de escribir
-  en APath, que empieza en la linea ALineaBase+1-. Para los que escriben un
+  con otra llave dentro en ANuevo -el fuente ENTERO que el agente acaba de
+  escribir en APath-. Para los que escriben un
   fuente ENTERO con el content del agente (delphi_create, delphi_edit
   createunit): solo lo auditaban los motores de edicion, y una unit nueva
   con el ejemplo de un comentario entre llaves no compilaba sin que nadie lo
   dijera (6-oct-2026, Lsp.Listas: E2065 tres veces). }
-function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string; ALineaBase: Integer = 0): string;
+function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string): string;
 
 { Encoding for NEW Delphi files, honouring the IDE's configured default
   (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
@@ -581,6 +590,48 @@ procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>);
   de CUALQUIER llamada, no solo el suyo. }
 function TemporalDeSustitucion(const APath: string): string;
 function EsTemporalDeSustitucion(const ANombre: string): Boolean;
+
+type
+  { EL lint de un form de texto, sus cinco partes; cada llamador lo presenta a
+    su manera (el lint de delphi_designer, lo que sigue a cada escritura del
+    disenador, lo que sigue a delphi_edit). Estaba escrito tres veces y el
+    parser del IDE habia entrado en dos: delphi_edit sobre un .fmx no le
+    preguntaba, la puerta del 8-oct (revisor 2 de la noche, M-B). }
+  TLintDeForm = record
+    Parser: string;              // DSGN-123, o '' si el parser del IDE lo lee
+    Propiedades: TArray<string>; // las propiedades contra la tabla del framework
+    Notas: TArray<string>;       // lo que la tabla no pudo comprobar (terceros)
+    Falta: TFaltaTabla;          // sin tabla: por que
+    Enlace: TArray<string>;      // el form contra su clase (Lsp.DesignerBinding)
+  end;
+
+{ El lint del form ADfm con el TEXTO ATexto (lo que dice o dira el disco, en
+  AEnc): la tabla del Delphi activo (Lsp.DesignerMeta, con su espera), el
+  form contra su clase y EL parser del IDE con esos bytes (AJuzga=False en un
+  binario, que ya paso su conversion). Nunca lanza. }
+function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
+  AEsperaMs: Cardinal = ESPERA_TABLA_MS): TLintDeForm;
+
+{ Los avisos de una respuesta del motor (ExecutePatch, ExecuteTextEdit): las
+  lineas desde el primer aviso marcado *** (la marca va detras de la
+  etiqueta: MsgCuerpo) hasta el final, que es donde el motor los pone
+  (detras del eco), con lo que cada uno lleva debajo - la lista de
+  propiedades de EDIT-076, la del binding. Lo leen la tanda y el changeset,
+  que resumen cada edicion en una linea: los dos se quedaban solo con las
+  lineas *** (revisor 2 de la noche, B-8). }
+function AvisosDelMotor(const ARespuesta: string): TArray<string>;
+
+{ La codificacion en que nace un form NUEVO (APath .dfm/.fmx; otra cosa
+  devuelve AEnc sin mirar): AEnc, la que eligio quien escribe (la del IDE),
+  si EL parser del IDE lee ATexto en ella; si no, UTF-8 con BOM si en esa si
+  lo lee - con el IDE en ANSI un nombre de form acentuado nacia ilegible y
+  desde entonces toda escritura del disenador daba DSGN-125 -; si no lo lee
+  en ninguna, AEnc y AError con lo que dice el parser (ALinea, ACita): quien
+  escribe decide si eso niega o avisa. Los dos escritores de un form nuevo:
+  delphi_create (revisor 2 de la noche, B-7) y el create de un changeset (su
+  gemelo, revisor 3, M-3). }
+function EncDeFormNuevo(const APath, ATexto, AEnc: string; out AError: string;
+  out ALinea: Integer; out ACita: string): string;
 
 { El nombre ORIGINAL de una copia de la papelera, o '' si ese nombre no lleva
   sello. Solo tiene sentido DENTRO de __delphi-patch.
@@ -670,7 +721,6 @@ uses
   Lsp.Discovery,
   Lsp.Texts,
   MCPServer.Serializer, // MotivoEntero / MotivoBooleano: la regla de un parametro, UNA
-  Lsp.DesignerMeta,
   Lsp.DesignerBin,
   Lsp.DesignerForma, // EsDesignerFmx: de que marco es un designer
   Lsp.DesignerBinding,
@@ -1293,7 +1343,12 @@ var
   Nuestro, Colocado: Boolean;
 begin
   Dir := TPath.GetDirectoryName(ADestino);
-  DirLocal := TPath.GetDirectoryName(ALocal);
+  // sin ALocal (ColocaContenido) no hay carpeta de origen: GetDirectoryName('')
+  // LANZA "File name is empty" (System.IOUtils, medido) y ColocaContenido no
+  // colocaba nada desde que nacio - el logcat con out= de delphi_adb
+  DirLocal := '';
+  if ALocal <> '' then
+    DirLocal := TPath.GetDirectoryName(ALocal);
   Tmp := '';
   Ancestro := '';
   Colocado := False;
@@ -1667,6 +1722,18 @@ begin
       Result := Result + [I];
 end;
 
+function LineaEnBlancoDenegada(const ALines: TArray<string>;
+  AReales, AAtLine: Integer; APascal: Boolean; const AFichero: string): string;
+begin
+  Result := '';
+  if (AAtLine < 1) or (AAtLine > AReales) then
+    Exit(MsgFmt(SR_EDIT_LINEA_EN_BLANCO_NO_EXISTE_FMT, [AFichero, AReales, AAtLine]));
+  // la misma pregunta que despues elige la linea: la de la regla del motor
+  if Length(LineasDondeCasaElAncla([ALines[AAtLine - 1]], '', APascal)) = 0 then
+    Exit(MsgFmt(SR_EDIT_LINEA_NO_EN_BLANCO_FMT, [AAtLine, AFichero,
+      CitaDeLinea(AAtLine, Copy(ALines[AAtLine - 1].Trim, 1, 90))]));
+end;
+
 function DecodeSourceBytes(const B: TArray<Byte>; AEsDesigner: Boolean): string;
 begin
   Result := DecodeBytes(B, DetectEnc(B, AEsDesigner));
@@ -1840,15 +1907,8 @@ begin
   Result := DecodeBytes(B, K);
 end;
 
-{ AReal (una ruta REAL) esta en alguno de ALugares, cada uno por SU ruta
-  real: la comparacion de todos los lugares de la puerta. }
-function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;
-begin
-  for var L in ALugares do
-    if (L.Trim <> '') and EnLugar(AReal, RealPath(L)) then
-      Exit(True);
-  Result := False;
-end;
+// EnAlgunLugar, la comparacion de los lugares, vive en Lsp.Rutas: la jaula
+// tambien la pregunta (la zona de biblioteca, M1 de la 1.18.0)
 
 { Los sysroots que nombran los .sdk de la carpeta de perfiles del IDE: los
   que usan msbuild y paclient, tenga o no el SDK su asiento en el registro
@@ -2400,23 +2460,42 @@ begin
     Result := [''];  // '' es una linea vacia, no ninguna
 end;
 
-// El aviso (no bloquea) para un comentario de llave con otra llave dentro en
-// el texto NUEVO de un fuente Pascal. ALineaBase: el indice (0-based) de la
-// primera linea que ocupa ese texto en el fichero. UN sitio para los dos
-// motores de delphi_edit (el de una linea y el de bloque).
-function AvisosDeLlaves(const APath, ANuevo: string; ALineaBase: Integer): TArray<string>;
+// El aviso (no bloquea) para un comentario de llave con otra llave dentro que
+// TOCA lo escrito en un fuente Pascal. ATexto: el fichero RESULTANTE entero;
+// ADesde: el indice (0-based) de la primera linea escrita y ACuantas cuantas
+// (0 = la edicion solo quito: se mira la juntura, la de antes y la de
+// despues). Miraba solo el texto nuevo, y una linea escrita en MEDIO de un
+// comentario de llaves de varias lineas -con un {$I} citado, o una llave- no
+// avisaba: la llave que lo abre estaba en otra linea (medido el 9-oct-2026,
+// en la suelta y en la tanda; dcc dio E2029). UN sitio para los dos motores
+// de delphi_edit (el de una linea y el de bloque) y para los que crean.
+function AvisosDeLlaves(const APath, ATexto: string; ADesde, ACuantas: Integer): TArray<string>;
+var
+  Fines: TArray<Integer>;
 begin
   Result := [];
   if not EsRutaDeFuente(APath) then // (.lpr no llegaba: ExecutePatch lo niega)
     Exit;
-  for var L in LlavesAnidadas(ANuevo) do
-    Result := Result + [MsgFmt(SN_AVISO_LLAVE_ANIDADA_FMT, [ALineaBase + L])];
+  var Desde := ADesde;         // 0-based
+  var Hasta := ADesde + ACuantas - 1;
+  var Inicios := LlavesAnidadas(ATexto, Fines); // 1-based
+  for var K := 0 to High(Inicios) do
+    if ACuantas <= 0 then
+    begin
+      // solo se quito: el que ABARCA la juntura (empieza en la de arriba o
+      // antes y acaba en la de abajo o despues), que es el que el borrado
+      // pudo formar; uno viejo pegado a ella no (revisor de la noche, B-1)
+      if (Inicios[K] - 1 <= ADesde - 1) and (Fines[K] - 1 >= ADesde) then
+        Result := Result + [MsgFmt(SN_AVISO_LLAVE_ANIDADA_FMT, [Inicios[K]])];
+    end
+    else if (Inicios[K] - 1 <= Hasta) and (Fines[K] - 1 >= Desde) then
+      Result := Result + [MsgFmt(SN_AVISO_LLAVE_ANIDADA_FMT, [Inicios[K]])];
 end;
 
-function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string; ALineaBase: Integer): string;
+function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string): string;
 begin
   Result := AMsg;
-  for var Aviso in AvisosDeLlaves(APath, ANuevo, ALineaBase) do
+  for var Aviso in AvisosDeLlaves(APath, ANuevo, 0, MaxInt) do
     Result := Result + #10 + Aviso;
 end;
 
@@ -2501,7 +2580,12 @@ begin
     Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Hit + 1, TPath.GetFileName(APath)]));
   PatchSaveText(APath, Joined, Enc);
   Result := MsgFmt(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
-  for var Aviso in AvisosDeLlaves(APath, string.Join(#10, NewLines), Hit) do
+  // el fichero que queda, y lo escrito en el: las lineas nuevas desde Hit (un
+  // new vacio quita el bloque: solo la juntura)
+  var Escritas := Length(NewLines);
+  if (Escritas = 1) and (NewLines[0] = '') then
+    Escritas := 0;
+  for var Aviso in AvisosDeLlaves(APath, Joined, Hit, Escritas) do
     Result := Result + #10 + Aviso;
 end;
 
@@ -2839,6 +2923,10 @@ begin
           Hasta[N] := EnteroDeEntrada(O2, 'toline');
           var Nth := EnteroDeEntrada(O2, 'occurrence');
           var Anc2 := O2.GetValue<string>('old', '');
+          // occurrence cuenta el TEXTO de un ancla: una linea en blanco no lo
+          // tiene, y "aparece 0 veces" enganaba (revisor de la noche, B-3)
+          if (Nth > 0) and (Anc2.Trim = '') and (O2.GetValue<string>('fragment', '') = '') then
+            Exit(MsgFmt(SR_PATCH_OCURRENCIA_SIN_TEXTO_FMT, [N + 1]));
           if (EnteroDeEntrada(O2, 'atline') = 0) and (Nth > 0) then
           begin
             // Las de BLOQUE tambien: era la tercera puerta del mismo bug y
@@ -3069,15 +3157,15 @@ begin
         end;
         Foto.Anota(APath); // lo que dejo esta entrada: lo unico que el deshacer da por suyo
         // Los avisos del motor (*** ... ***) no se pierden al resumir la
-        // edicion en una linea: en una tanda no llegaban al agente. La marca
-        // va detras de la etiqueta del aviso (MsgCuerpo)
-        for var LA in Una.Split([#10]) do
-          if MsgCuerpo(LA.Trim).StartsWith('***') then
-            if EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
-               EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_ULTIMA) then
-              DeEstructura := DeEstructura + [FilaDeEntrada(N, LA.Trim)]
-            else
-              Avisos := Avisos + [FilaDeEntrada(N, LA.Trim)];
+        // edicion en una linea: en una tanda no llegaban al agente. EL lector
+        // de los avisos de una respuesta (AvisosDelMotor), con lo que cada uno
+        // lleva debajo
+        for var LA in AvisosDelMotor(Una) do
+          if EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
+             EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_ULTIMA) then
+            DeEstructura := DeEstructura + [FilaDeEntrada(N, LA)]
+          else
+            Avisos := Avisos + [FilaDeEntrada(N, LA)];
         // lo PEDIDO: en modo fragmento, el fragmento que tecleo el agente (Anc
         // es ya la linea entera del disco que encontro FragmentoALinea, y la
         // fila la mostraba como si la hubiera pedido; revision del 4-oct-2026)
@@ -4297,7 +4385,8 @@ begin
       // ---------- DELETE LINE ----------
       if A.DeleteLine then
       begin
-        if not A.HasOld or (A.OldLine = '') then
+        // sin old, solo una linea EN BLANCO por su numero (P3-L9, DoEdit)
+        if (not A.HasOld or (A.OldLine = '')) and (A.AtLine <= 0) then
           Exit(MsgText(SR_EDIT_DELETE_TRUE_NECESITA_OLD));
         if A.NewText <> '' then
           Exit(MsgText(SR_EDIT_DELETE_TRUE_LLEVA_NEW));
@@ -4332,8 +4421,66 @@ end;
   .fmx crashed at form-load on the device with no trace - the build only
   checks a form resource's text grammar. Warnings, not refusals; and an edit
   never waits for a table still being generated (it says it did not check). }
-function DesignerLint(const APath: string;
-  const ALines: TArray<string>): TArray<string>;
+function EncDeFormNuevo(const APath, ATexto, AEnc: string; out AError: string;
+  out ALinea: Integer; out ACita: string): string;
+begin
+  Result := AEnc;
+  AError := '';
+  ALinea := 0;
+  ACita := '';
+  if not EsRutaDeDesigner(APath) then
+    Exit;
+  AError := ParserDeForm(ATexto, AEnc, ALinea, ACita);
+  if AError = '' then
+    Exit;
+  var LineaBom: Integer;
+  var CitaBom: string;
+  if ParserDeForm(ATexto, 'utf8-bom', LineaBom, CitaBom) = '' then
+  begin
+    AError := '';
+    ALinea := 0;
+    ACita := '';
+    Result := 'utf8-bom';
+  end;
+end;
+
+function AvisosDelMotor(const ARespuesta: string): TArray<string>;
+begin
+  Result := [];
+  var Dentro := False;
+  for var L in ARespuesta.Split([#10]) do
+  begin
+    var T := L.Trim;
+    if not Dentro and MsgCuerpo(T).StartsWith('***') then
+      Dentro := True;
+    if Dentro and (T <> '') then
+      Result := Result + [T];
+  end;
+end;
+
+function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
+  AEsperaMs: Cardinal): TLintDeForm;
+var
+  Lineas: TArray<string>;
+begin
+  Result := Default(TLintDeForm);
+  // las lineas como delphi_read: los avisos citan su numero (septima revision)
+  Lineas := LineasDelTexto(ATexto);
+  Result.Propiedades := DesignerMetaLint(EsDesignerFmx(ADfm), Lineas, Result.Notas,
+    Result.Falta, AEsperaMs);
+  // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
+  // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
+  Result.Enlace := DesignerBindingWarnings(ADfm, Lineas);
+  // ...y EL parser del IDE con los bytes del disco (8.10 de la 1.18.0): un //
+  // en un .fmx daba CLEAN y solo el IDE lo rechazaba al cargarlo
+  if AJuzga then
+    Result.Parser := AvisoDelParserDeForm(ATexto, AEnc);
+end;
+
+{ Lo que delphi_edit (y el changeset y la tanda, que escriben por el) dice del
+  form que acaba de escribir: LintDeForm con el texto escrito, sin esperar a
+  una tabla, presentado como avisos de una edicion. }
+function DesignerLint(const APath, ATexto, AEnc: string): TArray<string>;
 var
   Raw: TArray<string>;
   Res: TStringList;
@@ -4341,23 +4488,27 @@ var
   ExtName: string;
 begin
   Result := [];
-  var Falta: TFaltaTabla;
-  var Notas: TArray<string>;
-  Raw := DesignerMetaLint(EsDesignerFmx(APath), ALines, Notas, Falta, 0);
-  // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
-  // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
-  var Bind := DesignerBindingWarnings(APath, ALines);
-  if (Length(Raw) = 0) and (Length(Bind) = 0) and (Length(Notas) = 0) and
+  var L := LintDeForm(APath, ATexto, AEnc, True, 0);
+  var Falta := L.Falta;
+  var Notas := L.Notas;
+  Raw := L.Propiedades;
+  var Bind := L.Enlace;
+  if (L.Parser = '') and (Length(Raw) = 0) and (Length(Bind) = 0) and (Length(Notas) = 0) and
      (Falta.Razon = '') then
     Exit;
   Res := TStringList.Create;
   try
+    // lo primero, el parser del IDE: con el, el IDE no abre el form
+    if L.Parser <> '' then
+      Res.Add(L.Parser);
     // sin tabla, su nota sola: no es un aviso de propiedades (iba debajo de
     // la cabecera EDIT-076, "the app CRASHES": revision de la 1.12.0)
     if Falta.Razon <> '' then
       Res.Add(MsgFmt(SN_DESIGNER_LINT_SIN_TABLA_FMT, [Falta.Razon]));
     if Length(Raw) > 0 then
     begin
+    // la cabecera, encima de SUS avisos (no encima del parser)
+    var Inicio := Res.Count;
     for I := 0 to High(Raw) do
     begin
       if I >= 8 then
@@ -4371,7 +4522,7 @@ begin
       ExtName := '.fmx'
     else
       ExtName := '.dfm';
-    Res.Insert(0, MsgFmt(SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT, [ExtName]));
+    Res.Insert(Inicio, MsgFmt(SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT, [ExtName]));
     end;
     // lo que no se pudo comprobar, con su propia linea y fuera de EDIT-076:
     // un objeto de una clase de terceros no hace que la app reviente (un
@@ -4477,12 +4628,25 @@ begin
 
   if TieneSalto(AOld) then
     Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
-  if AOld.Trim = '' then
+  // un ancla vacia solo vale para borrar una linea EN BLANCO por su numero
+  // (P3-L9): no hay texto que copiar; lo comprueba LineaEnBlancoDenegada
+  // ...y UNA: un rango (toline) sin un ancla de texto no (M-3 del revisor)
+  if (AOld.Trim = '') and ADelete and (AToLine > 0) then
+    Exit(MsgText(SR_EDIT_RANGO_SIN_OLD));
+  var EnBlanco := (AOld.Trim = '') and ADelete and (AAtLine > 0);
+  if (AOld.Trim = '') and not EnBlanco then
     Exit(MsgText(SR_EDIT_ANCLA_ESTA_VACIA_SOLO));
   if Pos(#$FFFD, AOld) > 0 then
     Exit(MsgText(SR_EDIT_TU_ANCLA_LLEVA_CARACTER));
 
   Lines := SplitToLines(Text);
+  if EnBlanco then
+  begin
+    var NoBlanca := LineaEnBlancoDenegada(Lines, CuantasLineasReales(Lines), AAtLine,
+      True, TPath.GetFileName(APath));
+    if NoBlanca <> '' then
+      Exit(NoBlanca);
+  end;
   Hits := TList<Integer>.Create;
   Warnings := TStringList.Create;
   try
@@ -4724,12 +4888,17 @@ begin
     var FmNew := MojibakeLines(Replacement);
     if (Length(FmNew) > 0) and (Length(MojibakeLines(AOld)) = 0) then
       Warnings.Add(MsgText(SN_EDIT_FIRMA_MOJIBAKE_NUEVO));
-    for var Aviso in AvisosDeLlaves(APath, Replacement, HitIdx) do
+    // en el fichero ESCRITO (AfterText), lo que toca lo escrito: las lineas de
+    // Replacement desde HitIdx, o la juntura si la edicion solo quito
+    var Escritas := Length(Replacement.Split([#10]));
+    if ADelete then
+      Escritas := 0;
+    for var Aviso in AvisosDeLlaves(APath, AfterText, HitIdx, Escritas) do
       Warnings.Add(Aviso);
     if AIsDesigner then
     begin
       Warnings.Add(MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO));
-      for var LintW in DesignerLint(APath, AfterLines) do
+      for var LintW in DesignerLint(APath, AfterText, EncName(K)) do
         Warnings.Add(LintW);
     end;
 

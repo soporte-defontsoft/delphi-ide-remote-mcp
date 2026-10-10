@@ -160,6 +160,37 @@ function FlotanteFmx(N: Integer): string;
   con los nombres de EncName. }
 function NombreQueElFicheroNoLee(const ANombre, ADfm, ADfmEnc, APas, APasEnc: string): string;
 
+{ Lo que dice EL parser del IDE del TEXTO de un designer tal como quedara en
+  disco - con sus saltos de linea - (Lsp.DesignerForma.ErrorDelParserDeForm),
+  con los bytes que haria en la codificacion AEnc (un nombre de EncName; '' =
+  UTF-8 con BOM): '' si lo lee; si no, su mensaje, ALinea con la linea que
+  nombra (contadas por LF, como TParser; 0 si no nombra ninguna) y ACita con
+  su texto, o el fin del fichero si de ahi en adelante no hay nada. Era una
+  lista de lineas unida con CRLF: un .fmx de solo CR se juzgaba con otros
+  bytes (revisor 2 de la noche, B-2/B-4). Un texto que no cabe en AEnc no se
+  juzga aqui (eso lo dice su escritor). Lo preguntan el lint de un form
+  (Lsp.Patch.LintDeForm: el de delphi_designer, el que sigue a delphi_edit y
+  el que sigue a cada escritura del disenador) y el guardado de un form o un
+  estilo (TStyleDoc.Guarda), que con un resultado que no se lee no escribe. }
+function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;
+  out ACita: string): string;
+{ El aviso del lint con eso (DSGN-123); '' si el parser lo lee. }
+function AvisoDelParserDeForm(const ATexto, AEnc: string): string;
+
+{ LA sintaxis de una lista de propiedades - 'Prop=valor;Prop2=valor' (props de
+  insert y set) o 'Comp.Prop=valor;...' (state de preview) -: los trozos
+  separados por ';' FUERA de un literal entre comillas ('a;b' es un valor, y
+  '' es una comilla dentro), sin blancos alrededor y sin los vacios. Era
+  Split([';']) en preview, que partia en dos un Caption = 'a;b'. Una comilla
+  solo abre un literal si EMPIEZA el valor (tras el primer '=' y los
+  blancos), o lo empieza un #N (#39'a;b'): en un valor sin comillas es una
+  letra mas - Don't save, O'Brien
+  (revisor 2 de la noche, M-A: se tragaba el resto de la lista sin decirlo).
+  '' si bien; si un literal se abre y no se cierra, la negativa (DSGN-134) y
+  ningun trozo. Es la sintaxis de un parametro de la casa, no la de un form:
+  cada valor lo juzgan despues set y el parser del IDE (3.10 de la 1.18.0). }
+function TrozosDeEstado(const AEspec: string; out ATrozos: TArray<string>): string;
+
 implementation
 
 uses
@@ -176,6 +207,132 @@ uses
 function SangriaDeNivel(ANivel: Integer): string;
 begin
   Result := StringOfChar(' ', ANivel * 2);
+end;
+
+function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;
+  out ACita: string): string;
+var
+  Bytes: TArray<Byte>;
+  Lineas: TArray<string>;
+begin
+  Result := '';
+  ACita := '';
+  ALinea := 0;
+  // un form en UTF-32 no lo lee el parser TAL CUAL (lo toma por UTF-16 y da un
+  // error de sintaxis que no dice por que), y el IDE lo abre (DSGN-121): se
+  // juzga su TEXTO en UTF-16, que el parser convierte. No se juzgaba, y los
+  // escritores escribian en uno sin juez (revisor 2 de la noche, B-6)
+  var K := ekUtf8Bom;
+  if AEnc <> '' then
+    K := EncKindOf(AEnc);
+  if K in [ekUtf32LE, ekUtf32BE] then
+    K := ekUtf16LE;
+  try
+    Bytes := EncodeText(ATexto, K);
+  except
+    // un texto que no cabe en AEnc (lo dice su escritor), o una codificacion
+    // que no es de texto: no se juzga aqui
+    Exit;
+  end;
+  Result := ErrorDelParserDeForm(Bytes, ALinea);
+  if Result = '' then
+    Exit;
+  if ALinea <= 0 then
+  begin
+    // un error que no nombra linea (TokenInt y TokenFloat lanzan EConvertError:
+    // Tag = 99999999999999999999) se dice asi, no 'el fin del fichero' (B-1)
+    ACita := MsgText(SF_DSGN_PARSER_SIN_LINEA);
+    Exit;
+  end;
+  // las lineas como las cuenta TParser: por LF (un CR suelto no parte)
+  Lineas := ATexto.Split([#10]);
+  // la que nombra; si de ahi en adelante todo esta en blanco, el parser llego
+  // al FINAL - con o sin el salto de la ultima linea, la misma cita
+  ACita := MsgText(SF_DSGN_PARSER_FIN_DE_FICHERO);
+  for var I := ALinea - 1 to High(Lineas) do
+    if Lineas[I].Trim <> '' then
+    begin
+      ACita := Copy(Lineas[ALinea - 1].Trim, 1, 120);
+      Break;
+    end;
+end;
+
+function AvisoDelParserDeForm(const ATexto, AEnc: string): string;
+var
+  Linea: Integer;
+  Cita: string;
+begin
+  Result := ParserDeForm(ATexto, AEnc, Linea, Cita);
+  if Result <> '' then
+    Result := MsgFmt(SN_DSGN_PARSER_FMT, [Result, Linea, Cita]);
+end;
+
+function TrozosDeEstado(const AEspec: string; out ATrozos: TArray<string>): string;
+type
+  // donde va la entrada: en el nombre, al principio del valor, en un valor
+  // de texto suelto o en uno que empezo con comilla (un literal del form)
+  TTramo = (ttNombre, ttInicio, ttTexto, ttLiteral);
+var
+  Tramo: TTramo;
+  EnCadena: Boolean;
+  Trozo: TStringBuilder;
+
+  procedure Cierra;
+  begin
+    if Trozo.ToString.Trim <> '' then
+      ATrozos := ATrozos + [Trozo.ToString.Trim];
+    Trozo.Clear;
+    Tramo := ttNombre;
+    EnCadena := False;
+  end;
+
+begin
+  Result := '';
+  ATrozos := [];
+  Tramo := ttNombre;
+  EnCadena := False;
+  Trozo := TStringBuilder.Create;
+  try
+    for var C in AEspec do
+    begin
+      case Tramo of
+        ttNombre:
+          if C = '=' then
+            Tramo := ttInicio;
+        ttInicio:
+          if C = '''' then
+          begin
+            Tramo := ttLiteral;
+            EnCadena := True;
+          end
+          // un literal del form tambien empieza por un caracter #N (#39'a;b',
+          // #13#10'x'): el ';' de su cadena no parte (revisor 3, B-4)
+          else if C = '#' then
+            Tramo := ttLiteral
+          else if C > ' ' then
+            Tramo := ttTexto;
+        ttLiteral:
+          // '' dentro de una cadena son dos cambios: sigue dentro
+          if C = '''' then
+            EnCadena := not EnCadena;
+      end;
+      if (C = ';') and not EnCadena then
+      begin
+        Cierra;
+        Continue;
+      end;
+      Trozo.Append(C);
+    end;
+    if EnCadena then
+    begin
+      Result := MsgFmt(SR_DESIGNER_COMILLA_SIN_CERRAR_FMT, [Trozo.ToString.Trim]);
+      ATrozos := [];
+      Exit;
+    end;
+    Cierra;
+  finally
+    Trozo.Free;
+  end;
 end;
 
 function TrozosDeLiteral(const S: string): TArray<string>;

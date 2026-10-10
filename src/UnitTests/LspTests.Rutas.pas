@@ -102,6 +102,7 @@ type
     [Test] procedure SettingsIniNoEsDeLaCasaYElBuzonSi;
     [Test] procedure UnaCasaRelativaNoEsLugar;
     [Test] procedure LaBibliotecaDelIdeSeLeeYNoSeEscribe;
+    [Test] procedure ElComparadorDeLugaresVaPorLaRutaReal;
   end;
 
   { LA PUERTA DE ESCRIBIR (Lsp.Patch.LugarDeEscrituraDenegado, EscribeTexto)
@@ -667,6 +668,53 @@ begin
   // ...y no se escribe
   R := LugarDeEscrituraDenegado(F, ltBiblioteca);
   Assert.IsTrue(R.StartsWith('[GUARD-034'), R);
+end;
+
+procedure TPuertaDeLeerTests.ElComparadorDeLugaresVaPorLaRutaReal;
+var
+  Lib, Vict, Fuga, Normal: string;
+  Buf: array [0 .. MAX_PATH] of Char;
+begin
+  // EL comparador de los lugares (Lsp.Rutas.EnAlgunLugar), el que pregunta
+  // tambien la jaula por su zona de biblioteca (M1 de la 1.18.0: la juzgaba
+  // por el TEXTO y un enlace plantado en una carpeta de la Library Path que
+  // apuntase fuera se leia): lo de detras de un enlace que sale no es del
+  // lugar, lo de al lado si, y el lugar escrito en 8.3 es el mismo lugar
+  Lib := TPath.Combine(FDir, 'lib');
+  Vict := TPath.Combine(FDir, 'vict');
+  Fuga := TPath.Combine(Lib, 'fuga');
+  Normal := TPath.Combine(Lib, 'normal.pas');
+  ForceDirectories(Lib);
+  ForceDirectories(Vict);
+  try
+    TFile.WriteAllText(Normal, 'unit normal;');
+    TFile.WriteAllText(TPath.Combine(Vict, 'secreto.pas'), 'unit secreto;');
+    Assert.IsTrue(CreaUnion(Fuga, Vict), 'la union se crea: ' + SysErrorMessage(GetLastError));
+    Assert.IsTrue(EnAlgunLugar(RealPath(Normal), [Lib]), Normal);
+    // lo de detras de la union, solo donde RealPath resuelve uniones: en el
+    // contenedor de delphi_test se queda con el texto (la nota de la clase);
+    // fuera de el (LspUnitTests a pelo) si se mide, y de extremo a extremo la
+    // sonda de M1 con la HKCU virtual (m1_medir.ps1, scratchpad del 9-oct)
+    if not SameText(RealPath(Fuga), Fuga) then
+      Assert.IsFalse(EnAlgunLugar(RealPath(TPath.Combine(Fuga, 'secreto.pas')), [Lib]),
+        'lo de detras de la union es de la victima');
+    Assert.IsTrue(EnAlgunLugar(RealPath(TPath.Combine(Vict, 'secreto.pas')), [Lib, Vict]),
+      'y lo es de un lugar que la tiene');
+    var N := GetShortPathName(PChar(Lib), @Buf[0], Length(Buf));
+    if (N > 0) and (N < DWORD(Length(Buf))) and not SameText(string(PChar(@Buf[0])), Lib) then
+      Assert.IsTrue(EnAlgunLugar(RealPath(Normal), [string(PChar(@Buf[0]))]),
+        'el lugar en 8.3: ' + string(PChar(@Buf[0])));
+  finally
+    // la union se quita como union (RemoveDir): lo de detras no se toca
+    if TDirectory.Exists(Fuga) then
+      RemoveDir(Fuga);
+    if TFile.Exists(Normal) then
+      TFile.Delete(Normal);
+    if TFile.Exists(TPath.Combine(Vict, 'secreto.pas')) then
+      TFile.Delete(TPath.Combine(Vict, 'secreto.pas'));
+    RemoveDir(Lib);
+    RemoveDir(Vict);
+  end;
 end;
 
 { TPuertaDeEscribirTests }

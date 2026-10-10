@@ -62,6 +62,16 @@ function LugaresDelIde(AParaEscribir: Boolean = False): TArray<string>;
   (FormaLarga), medida una vez, como LibraryRoots. }
 function LugaresDeLaBiblioteca: TArray<string>;
 
+{ AReal (una ruta REAL: RealPath, RutaDelEnlace) cae DE VERDAD donde la
+  jaula deja escribir: en una raiz, y no en una referencia, en una carpeta de
+  solo lectura ni en un vault - cada sitio por SU ruta real (EnAlgunLugar),
+  nunca un texto declarado contra una ruta resuelta (las dos formas de un
+  sitio del CLAUDE.md: una raiz declarada por una union, o bajo el AppData
+  que parte la virtualizacion, no casaria). Sin raices no hay jaula y vale.
+  La pregunta del escritor de la jaula sobre DONDE nacen su temporal y su
+  renombre (Lsp.Guard.SustitucionDenegada, P4-a de la 1.18.0). }
+function EscribibleDeVerdad(const AReal: string): Boolean;
+
 { La forma DECLARADA de una ruta que llega RESUELTA. Un programa que el
   servidor lanza contesta con la ruta real (git: la raiz de un repo), y la
   real de un sitio declarado en una letra de red CONECTADA (L:\...) es su
@@ -624,6 +634,19 @@ begin
     GLibLugaresLoaded := True;
   end;
   Result := GLibLugares;
+end;
+
+function EscribibleDeVerdad(const AReal: string): Boolean;
+begin
+  if Length(WorkspaceRoots) = 0 then
+    Exit(True);
+  // TODOS los vaults, como InVault (Lsp.Guard): el de otro workspace que caiga
+  // en esta raiz tampoco se escribe por aqui (revisor de la noche, M-2: uno
+  // solo eran dos lectores de "el vault")
+  Result := EnAlgunLugar(AReal, WorkspaceRoots) and
+    not EnAlgunLugar(AReal, WorkspaceReadOnlyRoots) and
+    not EnAlgunLugar(AReal, WorkspaceReadOnlyPaths) and
+    not EnAlgunLugar(AReal, TodosLosVaults);
 end;
 
 end.

@@ -28,6 +28,7 @@ type
     [Test] procedure SinAnotarDeshaceComoSiempre;
     [Test] procedure VigilaVeLoQueOtroCambioEntrePasos;
     [Test] procedure VigilaSinCambiosDeshaceComoSiempre;
+    [Test] procedure LoCreadoSeQuedaSiAlgoNoVolvio;
   end;
 
 implementation
@@ -174,6 +175,33 @@ begin
   R := Foto.Restaura;
   Assert.AreEqual('', R, 'todo volvio');
   Assert.AreEqual('antes', Lee('a.txt'));
+end;
+
+{ Lo que NO volvio deja lo creado: el destino de un move cuyo origen no se
+  puede devolver es la UNICA copia (revisor de la noche, A-1; el revisor 2,
+  B-11: ninguna bateria pasaba por esta rama). }
+procedure TFotoTests.LoCreadoSeQuedaSiAlgoNoVolvio;
+var
+  Foto: TFotoDeFicheros;
+  R: string;
+begin
+  Escribe('a.txt', 'la unica copia');
+  Foto.Toma([Ruta('a.txt'), Ruta('b.txt')]);
+  // la operacion: un move de a.txt a b.txt
+  Escribe('b.txt', 'la unica copia');
+  TFile.Delete(Ruta('a.txt'));
+  Foto.Anota(Ruta('a.txt'));
+  Foto.Anota(Ruta('b.txt'));
+  // y algo impide devolver a.txt: una carpeta en su sitio
+  TDirectory.CreateDirectory(Ruta('a.txt'));
+  try
+    R := Foto.Restaura;
+    Assert.IsTrue(TFile.Exists(Ruta('b.txt')), 'lo creado se queda: ' + R);
+    Assert.AreEqual('la unica copia', Lee('b.txt'));
+    Assert.IsTrue(R.Contains(MsgText(SF_FOTO_LO_CREADO_SE_QUEDA)), 'y se dice: ' + R);
+  finally
+    RemoveDir(Ruta('a.txt'));
+  end;
 end;
 
 initialization

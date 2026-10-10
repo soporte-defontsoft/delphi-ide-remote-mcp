@@ -10,6 +10,145 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_edit` and `delphi_textedit` delete a blank line.** `delete`
+  asked for `old` with the line, and a blank line has no text to copy: the
+  way round was a three-line block. Now `delete` with `atline` and no `old`
+  removes that line if it is blank - what an empty anchor matches, by each
+  engine's own rule - and refuses a line with text, quoting it (`EDIT-123`),
+  or one that is not there (`EDIT-124`); a single edit and a batch, in both
+  tools. A range (`toline`) is never anchored on a number alone (`EDIT-125`),
+  and `occurrence`, which counts an anchor's text, says so for a blank line
+  (`EDIT-126`). `delphi_textedit` also refuses an anchor of only blanks
+  (`EDIT-060`, as `delphi_edit` does): it matched every blank line and
+  rewrote one. And `delphi_changeset`'s `delete-line`, born for blank lines,
+  follows the same rule: without `old` it removed ANY line, now only a blank
+  one (the preview says so). `test_delphi_patch`, `test_changeset`.
+- **`edits` is published as an array of objects.** The schema said text, so
+  a client that validates the call against it refused an array before
+  sending it, and the model ended up sending the JSON inside a string
+  (Hermes, measured). The parameter marked as carrying JSON
+  (`[JsonComoTexto]`) is published as an `array` of `object` - one reader of
+  the mark for the schema and for the binder - and a string with the JSON
+  inside is still read. `test_delphi_patch`.
+- **EDIT-091 sees a brace written inside a comment that opens on another
+  line.** The warning for a brace comment with a brace inside looked only at
+  the new text, so a line written in the middle of a `{ }` comment of
+  several lines - with a quoted `{$I}` in it, or a brace - said nothing, and
+  dcc stopped with E2029 (measured, in a single edit and in a batch). It now
+  looks at the file as written, at the comments that touch the lines written
+  (or the seam a deletion leaves: deleting the line that closed a comment
+  can put the next one inside it); a nested comment elsewhere in the file
+  still says nothing. `test_delphi_patch`.
+- **The jail reads the IDE's library zone by its real path.** With the
+  library zone on, a path outside the roots was readable if its TEXT began
+  with a folder of the Library Search Path: a link already planted inside
+  such a folder and pointing elsewhere was followed (measured with a test
+  folder in the Library Search Path of a throwaway registry layer: the file
+  behind the link came out through `delphi_read`), and a folder registered
+  in 8.3 form refused even its own files. The zone is now judged as the
+  roots are: inside by the long form of the text, and inside for real by the
+  real path, with the comparator the read gate already used (it moved to
+  `Lsp.Rutas`); a link that leads out is refused saying so (GUARD-036). A
+  library folder on a network share is still read (only the folder the
+  path names is asked, not every one). `test_paisaje` keeps the raw list
+  out of the jail; DUnitX `ElComparadorDeLugaresVaPorLaRutaReal`; the end to
+  end case needs a library folder in the IDE's registry, so it was measured
+  with a probe (red with the previous binary) and has no battery.
+- **The jail's writer judges where its temporary file is born.** Every
+  write in the workspace replaces the file through a temporary one next to
+  it, in the folder it was GIVEN, while the gate judged the real path of the
+  file, which follows the last link too: a folder of a root that is a link
+  to somewhere else, holding a file link that points back inside, passed,
+  and the temporary file - and then the written one - landed outside (the
+  shape the P3 reviewer measured in the vault and the IDE's places). The
+  writer now also asks whether the real folder plus the name is a place it
+  writes in for real - a root, and no reference, read-only folder or vault,
+  each by its real path (GUARD-037) -, never comparing a real path with a
+  declared text: a root declared through a junction stays writable
+  (`test_puerta_escribir` W2, red against the first version of this fix).
+  W1, the case itself, needs a file link, which this account cannot create:
+  it says it is not measured.
+- **A cropped desktop capture is cropped before it is placed.**
+  `delphi_desktop screenshot window=` placed the capture in `out=` and then
+  rewrote that file in place to crop it, a raw write behind the gate and the
+  lock; the crop now happens on the downloaded copy and what is placed is
+  the crop, as `delphi_designer preview` already did; the crop's origin is
+  reported only when the crop was placed.
+- **Undoing a batch writes whole or not at all, and never deletes the only
+  copy.** When a batch, a changeset or a project change failed half-way,
+  each file went back with a plain overwrite, so a failure during the undo
+  itself (a full disk, another process) left half-written the very file it
+  was restoring; it now goes back through the jail's atomic writer (a path
+  too long for its temporary file, written directly as before). The undo
+  restores what existed BEFORE it removes what the operation created, and
+  keeps a created file when something did not come back: it may be the only
+  copy (the destination of a move). The read-only attribute comes back even
+  when the write fails. `test_changeset` A-1, DUnitX
+  `LoCreadoSeQuedaSiAlgoNoVolvio`.
+- **The IDE's own form parser judges forms and styles before they are
+  written, and lint asks it.** `delphi_designer` and `delphi_styles` checked
+  what they composed with a grammar of our own and wrote it, and `lint`
+  answered CLEAN to a `.fmx` with a `//` comment that only the IDE refused
+  when it loaded it ("Identifier expected on line 2", measured). Now every
+  write of `delphi_designer` (insert, set, delete, rename, move) and of
+  `delphi_styles` passes the result, in the file's own encoding, through the
+  parser the IDE loads forms with (`ObjectTextToBinary`), in memory: a
+  result it does not read is not written (DSGN-124), and a file it already
+  could not read says so (DSGN-125); `lint` puts the parser's message first,
+  with the line it names and that line's text (DSGN-123), table or no table;
+  and `preview` asks it before starting the renderer (DSGN-126 instead of a
+  renderer failure). The line comes from the parser's own message format,
+  not from a text written here. `test_parser_form` (P1-P4 red against the
+  previous binary: lint said CLEAN, set wrote into a broken form, a `{zz}`
+  block went into a style). A list with commas, `('a', 'b')`, which our
+  grammar took for a closed list, is one the parser refuses - a form writes
+  `('a' 'b')` -; `test_styles` asserted the old opinion and was corrected.
+  The writers of the designer also say DSGN-121 after writing a text form
+  in UTF-16 or UTF-32 (the compiler does not build one), as lint did.
+  The three lints of a form are one (`LintDeForm`): the one after
+  `delphi_edit`, a batch or a changeset on a `.dfm`/`.fmx` did not ask the
+  parser - the very door of the 8-oct case - and now puts DSGN-123 first
+  too, marked `***` like the other warnings that stop a form from loading.
+  The parser judges the TEXT as it will be on disk, with its line breaks (a
+  `.fmx` of only CR, one line for the parser, was judged joined by CRLF),
+  counts lines as it does, by LF, says when its message names no line (a
+  number too big: DSGN-123 said "the end of the file"), and judges a UTF-32
+  form by its text in UTF-16, as the IDE opens it (it was not judged at
+  all). `delphi_create` and a changeset's `create` write a new form only in
+  an encoding the parser reads (one rule, `EncDeFormNuevo`): with the IDE
+  set to ANSI, a form name with an accent was born unreadable; a changeset
+  that creates a form the parser reads in no encoding writes it and says
+  DSGN-123, as `delphi_edit` does. DUnitX `ElJuezLeeEnLaCodificacionDelFichero` (the file's
+  encoding, the critical part, had no test) and `ElJuezSinLineaYAlFinal`;
+  `test_parser_form` P7/P8.
+- **`delphi_designer insert` and `set` take several properties at once.**
+  `props` (`Caption=Save;Left=24;Font.Style=[fsBold]`) gives a new
+  component its initial properties or sets several of one: each judged as
+  `set` judges one, all in memory and one write, all or none (DSGN-127 to
+  DSGN-132: the entry that does not pass, Name alone, a property twice). A
+  `;` inside a quoted value does not split, in `props` and in `preview`'s
+  `state` (one reader: it split `Caption = 'a;b'` in two). Asked by Hermes,
+  copying a form one call per property. `test_designer_props`. A quote
+  opens a quoted value only when it STARTS the value (so does a `#N`, as in
+  `#39'a;b'`): in `Caption=Don't
+  save` it is a letter (the first reader swallowed the rest of the list into
+  it without a word - in `state`, a regression), and a quoted value that
+  never closes is refused (DSGN-134). In `state` a quoted value is a form
+  literal and the renderer gets its text (it painted the quotes). Only `nil`
+  on references that are not there writes nothing (DSGN-112, as `set` of
+  one did); `insert` says it in that entry.
+- **A changeset says what the engine warned.** Its commit kept only "done"
+  from each edit, so the engine's warnings - a brace inside a brace
+  comment, a broken structure - never reached the agent (CHSET-032 now
+  lists them with their file); a Delphi source it creates gets the brace
+  check `delphi_create` gives. A warning comes with the lines under it (the
+  list of properties of EDIT-076, the binding's), in a changeset and in a
+  batch (`edits`): one reader of the warnings of an engine answer
+  (`AvisosDelMotor`), where both kept only the `***` lines.
+- **`edits` and `fragment` are content.** Sent as text, `edits` went
+  through the expansion of virtual drives that only paths should get (as an
+  array it did not); now they are left as written, like `old` and `new`.
+
 - **The git remote gate reads a host only where git, ssh and curl all read
   the same one.** It took for the host whatever followed the first `@` of
   the rest of the address, so with a host allowed in `GitRemotes=`, an
@@ -145,6 +284,9 @@ the MCP `initialize` response (`serverInfo.version`).
   retired: the cause comes from the system's rule or from the gate. The zip
   in progress takes the writer's temp name, so packaging skips any call's
   intermediate, not only its own. `test_deploy_adb`, `test_escritor_guardado`.
+  `ColocaContenido` itself threw on every call (`GetDirectoryName('')`
+  raises in the RTL), so `logcat out=` placed nothing; it showed up while
+  giving it a second user, and it is fixed in its core.
 - **`delphi_designer delete` points `usesInCode` at the unit as it is left.**
   The lines came from the unit before the delete, and removing the
   component's field (and its empty handlers) above a use moved it: the

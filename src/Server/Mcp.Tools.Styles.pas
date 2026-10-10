@@ -219,7 +219,9 @@ begin
         Exit(MsgFmt(SR_STYLES_RENAME_DUP_FMT, [NewName]));
       // escrito por el compositor de la casa: #N y trozos como el IDE
       Line := Doc.SetPropTrozos(O, AProp.Trim, TrozosDeLiteral(NewName), WasThere);
-      Doc.Save;
+      Result := Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+      if Result <> '' then
+        Exit;
       Exit(MsgFmt(SN_STYLES_RENAMED_FMT,
         [AStyle, NewName, TPath.GetFileName(Doc.Path)]));
     end;
@@ -227,7 +229,9 @@ begin
     begin
       if not Doc.DeleteProp(O, AProp.Trim) then
         Exit(MsgFmt(SN_STYLES_PROP_ABSENT_FMT, [AProp, AStyle, AChild]));
-      Doc.Save;
+      Result := Doc.Guarda;
+      if Result <> '' then
+        Exit;
       Exit(MsgFmt(SN_STYLES_PROP_DELETED_FMT, [AProp, AStyle, IfThen(AChild <> '', '/' + AChild, ''),
         TPath.GetFileName(Doc.Path)]));
     end;
@@ -239,7 +243,9 @@ begin
       Line := Doc.SetPropTrozos(O, AProp.Trim, TrozosDeLiteral(Texto), WasThere)
     else
       Line := Doc.SetProp(O, AProp.Trim, AValue.Trim, WasThere);
-    Doc.Save;
+    Result := Doc.Guarda;
+    if Result <> '' then
+      Exit;
     Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, MsgText(SF_STYLE_CAMBIADA), MsgText(SF_STYLE_ANADIDA)), Line.Trim,
       AStyle, IfThen(AChild <> '', '/' + AChild, ''), TPath.GetFileName(Doc.Path)]);
   finally
@@ -271,7 +277,9 @@ begin
     if Doc.FindStyle(Nuevo) <> nil then
       Exit(MsgFmt(SR_STYLES_NAME_TAKEN_FMT, [Nuevo]));
     Doc.CloneStyle(Src, Nuevo);
-    Doc.Save;
+    Result := Doc.Guarda;
+    if Result <> '' then
+      Exit;
     Src := Doc.FindStyle(Nuevo);
     Result := MsgFmt(SN_STYLES_CLONED_FMT, [Nuevo, AStyle, Src.StartLine, Src.EndLine,
       TPath.GetFileName(Doc.Path)]);
@@ -302,7 +310,9 @@ begin
     Last := Src.EndLine;
     N := Length(Doc.Styles);
     Doc.DeleteStyle(Src);
-    Doc.Save;
+    Result := Doc.Guarda;
+    if Result <> '' then
+      Exit;
     Result := MsgFmt(SN_STYLES_DELETED_FMT, [AStyle, First, Last,
       TPath.GetFileName(Doc.Path), N - 1]);
   finally

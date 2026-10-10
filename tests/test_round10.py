@@ -155,8 +155,10 @@ r = A.call('delphi_changeset', {'command': 'begin'})
 CID2 = cid_de(r)
 A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'edit',
                              'path': DELTA, 'old': 'a', 'new': 'A'})
+# con su old: sin el, delete-line solo borra una linea EN BLANCO (M-4 del
+# revisor de la noche del 10-oct; la 'c' tiene texto)
 A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'delete-line',
-                             'path': DELTA, 'atline': 3})
+                             'path': DELTA, 'atline': 3, 'old': 'c'})
 NUEVO = os.path.join(CS, 'Nuevo.pas')
 A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'create',
                              'path': NUEVO,

@@ -176,8 +176,16 @@ _malos = [call('delphi_styles', {"path": S, "command": "set", "style": "formhead
 check('set: una lista, un bloque o una cadena sin cerrar se rechaza por la gramatica, sin escribir',
       all(mc.rechazado(o) and mc.es(o, 'SR_STYLES_VALUE_GRAMMAR_FMT') for o in _malos) and rd(S) == _antes_e10,
       [o[:120] for o in _malos])
+# ...y cerrada entra - como la escribe un form: SIN comas. La de comas la daba
+# por buena la gramatica propia ("una lista cerrada") y esta bateria con ella;
+# el parser del IDE la niega ("Invalid property value"), y desde 9.B de la
+# 1.18.0 manda el (DSGN-124, sin escribir)
+_antes_coma = rd(S)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "('a', 'b')"})
-check('...y cerrada entra', not mc.rechazado(out) and "Tags = ('a', 'b')" in rd(S), out[:200])
+check('...una lista con comas la niega el parser del IDE (DSGN-124) y no se escribe',
+      mc.abre(out, 'SR_DSGN_PARSER_NO_ESCRIBE_FMT') and rd(S) == _antes_coma, out[:200])
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "('a' 'b')"})
+check('...y cerrada como la escribe un form entra', not mc.rechazado(out) and "Tags = ('a' 'b')" in rd(S), out[:200])
 # 1e3 es un numero de form (LA gramatica del numero, EsNumeroDeForm): no lo era
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "1e3"})
 check('set: un numero con exponente (1e3) entra', not mc.rechazado(out) and 'Tags = 1e3' in rd(S), out[:200])

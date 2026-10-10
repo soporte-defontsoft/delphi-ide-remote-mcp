@@ -83,7 +83,8 @@ type
     valor: el deserializador se lo pasa como su texto JSON. Sin la marca, un
     array o un objeto donde va un texto es INVALID_PARAM: new=["a","b"] se
     escribia en el .pas tal cual, contestando OK (quinta revision). Lo lleva
-    "edits", que es un array por contrato. }
+    "edits", que es un array por contrato, y el esquema lo publica asi:
+    array de objetos (UN lector: TMCPSchemaGenerator.AceptaJsonComoTexto). }
   JsonComoTextoAttribute = class(TCustomAttribute)
   end;
 

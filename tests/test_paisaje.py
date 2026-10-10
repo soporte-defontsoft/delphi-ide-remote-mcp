@@ -251,7 +251,10 @@ REGLAS = [
       ('Lsp.Patch.pas', 'EncAlEscribir'),
       # el texto de un form, en ANSI, para el parser de forms de la RTL EN MEMORIA:
       # lo que se escribe es el binario (to-binary, por AtomicWrite), no un texto
-      ('Lsp.DesignerBin.pas', 'DesignerTextToBinary')],
+      ('Lsp.DesignerBin.pas', 'DesignerTextToBinary'),
+      # las lineas de un form en los bytes que harian en SU codificacion, para
+      # PREGUNTAR al parser del IDE si las lee (9.B de la 1.18.0); no escribe nada
+      ('Lsp.DesignerBin.pas', 'ParserDeForm')],
      'quien codifica el texto de un fichero por su cuenta se salta la regla de ida y vuelta y la '
      'del primer caracter no ASCII (David, 9-oct-2026): se escribe por PatchSaveText o DoEdit'),
     ('la regla de ida y vuelta preguntada a mano',
@@ -331,6 +334,13 @@ REGLAS = [
      'cuenta recalcula la forma de un sitio en cada llamada (68 llamadas a las formas medidas el '
      '8-oct-2026, ~30 de un sitio), y dos formas de un mismo sitio fueron el workspace borrable del '
      '20-sep-2026'),
+    ('la zona de biblioteca cruda', r'\bLibraryRoots\b',
+     [('Lsp.Lugares.pas', '*'), ('Lsp.Mascara.pas', 'ServedDriveLetters')],
+     'la zona de biblioteca se juzga con LugaresDeLaBiblioteca (en la forma larga) y por la ruta '
+     'real (Lsp.Rutas.EnAlgunLugar): JaulaDecide la juzgaba por el TEXTO de LibraryRoots, y un '
+     'enlace plantado en una carpeta de la Library Path que apuntase fuera se leia, y una raiz en 8.3 '
+     'negaba hasta lo suyo (M1 de la 1.18.0, medido con la HKCU virtual). La lista cruda queda para '
+     'Lsp.Lugares y para las letras que se sirven'),
     ('leer sin la puerta',
      # (un TMemIniFile vacio que se llena con SetStrings no lee nada)
      r"TFile\.(?:ReadAllText|ReadAllLines|OpenText)\b|\.LoadFromFile\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|"
@@ -416,15 +426,19 @@ REGLAS = [
       ('Lsp.Patch.pas', 'BackupFile'), ('Lsp.Patch.pas', 'GuardaContenidoActual'),
       # los recorredores y movimientos de la jaula (no cruzan enlaces; la puerta antes)
       ('Lsp.Guard.pas', 'CopiaNuestra'), ('Lsp.Guard.pas', 'CopiaArbol'),
-      ('Lsp.Guard.pas', 'MueveArbol'), ('Lsp.Changeset.pas', 'ApplyOne'),
+      ('Lsp.Guard.pas', 'MueveArbol'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
       ('Mcp.Tools.FileOps.pas', 'MoveToTrash'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
       # la copia de la regla 11 dentro del vault (DentroDelVault antes) y la subida por
       # trozos de delphi_upload (la puerta de la jaula a la entrada; no atomica)
       ('Mcp.Tools.Vault.pas', 'VaultBackup'), ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
       # el log rota sus bloques y anade al vivo (C5: su propio fichero, append)
       ('Lsp.LogSink.pas', 'CierraBloque'), ('Lsp.LogSink.pas', 'Anade'),
-      # deuda declarada hasta P4 (hallazgos de jaula de la 1.18.0): el PNG recortado en
-      # sitio y la restauracion de la foto no atomica (la marca .by ya va por la puerta)
+      # el PNG se recorta en SU temporal - la descarga de esa llamada o el temporal del
+      # designer - ANTES de colocarlo (P4 de la 1.18.0: recortaba en sitio el out= ya
+      # colocado); la restauracion de la foto va por la puerta (EscribeBytes) salvo
+      # una ruta que no cabe con el temporal del escritor (GUARD-028): directa, ya
+      # aprobada por EscrituraDenegada, porque no devolverla perdia el fichero
+      # (revisor de la noche del 10-oct, A-1)
       ('Lsp.Imagen.pas', 'RecortaPng'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
       # programas que NO son el servidor: escriben donde el servidor les dijo, ya
       # comprobado, o en el destino
@@ -449,7 +463,7 @@ REGLAS = [
       # (no cruzan enlaces; la puerta antes), la papelera y el deshacer
       ('Lsp.Guard.pas', 'BorraLoNuestro'), ('Lsp.Guard.pas', 'ConsumeAgentCapture'),
       ('Lsp.Guard.pas', 'BorraArbolDentro'), ('Lsp.Guard.pas', 'VaciaDesechable'),
-      ('Lsp.Guard.pas', 'QuitaCarpetasCreadas'), ('Lsp.Changeset.pas', 'ApplyOne'),
+      ('Lsp.Guard.pas', 'QuitaCarpetasCreadas'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
       ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
       ('Mcp.Tools.FileOps.pas', 'QuitaMarcaDeDueno'), ('Mcp.Tools.FileOps.pas', 'QuitaCopiaDeSeguridad'),
       ('Mcp.Tools.FileOps.pas', 'BorraDeVerdad'), ('Mcp.Tools.FileOps.pas', 'RecogeVacias'),
@@ -617,6 +631,7 @@ PLANTADO = {
     'una pagina de codigos a mano': "  E := TEncoding.GetEncoding(1252);",
     'fijar la pagina ANSI': "  UsaPaginaAnsi(1251);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
+    'la zona de biblioteca cruda': "  for R in LibraryRoots do",
     'leer sin la puerta': "  Xml := TFile.ReadAllText(Dproj);",
     'escribir sin la puerta': "  TFile.WriteAllText(Ruta, Texto, TEncoding.UTF8);",
     'borrar sin la puerta': "  TFile.Delete(Ruta);",

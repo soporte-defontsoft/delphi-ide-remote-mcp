@@ -54,20 +54,23 @@ type
     // FFormDe es por identidad: cada edicion pone un array nuevo
     FForm: TArray<TLineaForm>;
     FFormDe: TArray<string>;
+    // las lineas como se leyeron (Reload): Guarda dice con ellas si el
+    // fichero ya no se leia ANTES del cambio
+    FLeidas: TArray<string>;
     function Clasificadas: TArray<TLineaForm>;
     procedure Parse;
     constructor CreateVacio;
   public
     constructor Create(const APath: string);
     { A document from a TEXT with no file behind it (the DUnitX tests of
-      Lsp.DesignerEdit): it reads like any other; Save has nowhere to go. }
+      Lsp.DesignerEdit): it reads like any other; Guarda has nowhere to go. }
     class function DeTexto(const AText: string): TStyleDoc;
     destructor Destroy; override;
     property Root: TStyleObj read FRoot;
     property Lines: TArray<string> read FLines;
     property Path: string read FPath;
     { True si el fichero en disco es un .dfm BINARIO leido al vuelo como texto
-      (Lsp.DesignerBin): se lee entero, no se guarda (ver Save). }
+      (Lsp.DesignerBin): se lee entero, no se guarda (ver Guarda). }
     property BinaryOnDisk: Boolean read FBinaryOnDisk;
     { Top-level styles (children of the container) - the ones StyleLookup
       resolves. }
@@ -107,19 +110,39 @@ type
       the same identifier as dcc sees it); nil when there is none. }
     function ObjetoDeNombre(const AName: string): TStyleObj;
     { The file text these lines would make, with the file's own line break:
-      what Save writes. A caller that writes several files at once
+      what Guarda writes. A caller that writes several files at once
       (delphi_designer insert/delete: the form and its unit, all or
       nothing) composes with it and writes with PatchSaveText + Encoding. }
     function TextoDe(const ALines: TArray<string>): string;
-    { Replaces every line (an edit composed outside); Save or TextoDe next. }
+    { Replaces every line (an edit composed outside); Guarda or TextoDe next. }
     procedure SetLines(const ALines: TArray<string>);
     property Encoding: string read FEnc;
     { Removes a whole object, its block object..end: a top-level style, or a
       component of a form with everything inside it. }
     procedure DeleteStyle(AObj: TStyleObj);
-    procedure Save;
+    { Writes the document, ONLY if THE IDE's form parser reads the result
+      (Lsp.DesignerBin.ParserDeForm, with the file's own encoding): '' when
+      written; if not, nothing is written and the refusal says the parser's
+      message and line - DSGN-124 when this change breaks it, DSGN-125 when
+      the file was already unreadable before. Era Save, que escribia lo que
+      una gramatica propia daba por bueno (9.B de la 1.18.0): EL guardado de
+      delphi_designer y de delphi_styles, sin otra puerta. }
+    function Guarda: string;
+    { EL juicio de Guarda sobre el TEXTO que se va a escribir (TextoDe: con el
+      salto de linea del fichero): '' si el parser del IDE lo lee; si no,
+      DSGN-124 o DSGN-125. Lo pregunta tambien quien escribe el form junto a
+      su unidad (Lsp.DesignerEdit, EscribeFormYUnidad: insert, delete,
+      rename), que no pasa por Guarda. }
+    function JuicioDelParser(const ATexto: string): string;
     { Re-parses after an edit (line numbers moved). }
     procedure Reload;
+    { Re-reads the TREE from the lines as they are now, without the disk:
+      SetProp, SetPropTrozos and DeleteProp move lines and do not touch the
+      line numbers of the objects, so a second edit composed in memory on
+      the same document needs this first - and an object read before it is
+      gone: look it up again by name (3.10 de la 1.18.0: set de varias
+      propiedades, insert con propiedades). }
+    procedure Reparsea;
   end;
 
 { Does this look like a value a text DFM (.style, .dfm, .fmx) can hold? The
@@ -220,6 +243,7 @@ begin
   Result.FEnc := 'utf8';
   Result.FEol := SaltoDominante(AText);
   Result.FLines := SplitToLines(AText);
+  Result.FLeidas := Copy(Result.FLines);
   Result.Parse;
 end;
 
@@ -229,13 +253,19 @@ begin
   inherited;
 end;
 
+procedure TStyleDoc.Reparsea;
+begin
+  FreeAndNil(FRoot);
+  Parse;
+end;
+
 procedure TStyleDoc.Reload;
 var
   Text, Err: string;
 begin
   FreeAndNil(FRoot);
   // Un .dfm BINARIO se lee al vuelo como texto (la conversion del IDE) y se
-  // recuerda: Save lo rechaza, que guardar texto sobre un binario sin decirlo
+  // recuerda: Guarda lo rechaza, que guardar texto sobre un binario sin decirlo
   // es cambiarle el formato a escondidas; to-text lo hace a la vista.
   FBinaryOnDisk := IsBinaryDesignerFile(FPath);
   if FBinaryOnDisk then
@@ -249,6 +279,7 @@ begin
     Text := PatchLoadText(FPath, FEnc);
   FEol := SaltoDominante(Text);
   FLines := SplitToLines(Text); // el troceador de todos: un CR suelto es salto
+  FLeidas := Copy(FLines); // copia: un array dinamico se comparte, no se copia al escribir
   Parse;
 end;
 
@@ -570,12 +601,34 @@ begin
   end;
 end;
 
-procedure TStyleDoc.Save;
+function TStyleDoc.Guarda: string;
 begin
   if FBinaryOnDisk then
-    raise Exception.Create(MsgFmt(SR_STYLE_BINARIO_NO_SE_GUARDA_FMT, [TPath.GetFileName(FPath)]));
-  PatchSaveText(FPath, TextoDe(FLines), FEnc);
+    Exit(MsgFmt(SR_STYLE_BINARIO_NO_SE_GUARDA_FMT, [TPath.GetFileName(FPath)]));
+  // los bytes que se juzgan son los que se escriben
+  var Texto := TextoDe(FLines);
+  Result := JuicioDelParser(Texto);
+  if Result <> '' then
+    Exit;
+  PatchSaveText(FPath, Texto, FEnc);
   Reload;
+end;
+
+function TStyleDoc.JuicioDelParser(const ATexto: string): string;
+var
+  Linea, LineaAntes: Integer;
+  Cita, CitaAntes, Error, Antes: string;
+begin
+  Result := '';
+  Error := ParserDeForm(ATexto, FEnc, Linea, Cita);
+  if Error <> '' then
+  begin
+    // como estaba ANTES: si ya no se leia, se dice asi (el arreglo es otro)
+    Antes := ParserDeForm(TextoDe(FLeidas), FEnc, LineaAntes, CitaAntes);
+    if Antes <> '' then
+      Exit(MsgFmt(SR_DSGN_PARSER_YA_ROTO_FMT, [TPath.GetFileName(FPath), Antes, LineaAntes, CitaAntes]));
+    Exit(MsgFmt(SR_DSGN_PARSER_NO_ESCRIBE_FMT, [TPath.GetFileName(FPath), Error, Linea, Cita]));
+  end;
 end;
 
 { ---- files ---- }

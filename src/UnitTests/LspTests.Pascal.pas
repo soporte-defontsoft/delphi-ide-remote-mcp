@@ -98,17 +98,22 @@ end;
 
 procedure TDirectivasTests.LlavesAnidadasSeVen;
 var
-  L: TArray<Integer>;
+  L, Fines: TArray<Integer>;
 begin
   // la trampa: un comentario de llave que cita una directiva de llave-dolar
-  L := LlavesAnidadas('x := 1;'#10'{ cita {$IFDEF X} aqui }'#10'y := 2;');
+  L := LlavesAnidadas('x := 1;'#10'{ cita {$IFDEF X} aqui }'#10'y := 2;', Fines);
   Assert.IsTrue((Length(L) = 1) and (L[0] = 2), 'la linea 2');
+  Assert.IsTrue((Length(Fines) = 1) and (Fines[0] = 2), 'lo cierra la primera llave, en la 2');
+  // abierto en una linea y con la llave en OTRA: empieza en la 1 y lo cierra la
+  // llave del {$I} de la 2 (lo que AvisosDeLlaves cruza con lo escrito)
+  L := LlavesAnidadas('{ uno'#13#10'  la ruta de un {$I x.inc} dos'#13#10'  tres }', Fines);
+  Assert.IsTrue((Length(L) = 1) and (L[0] = 1) and (Fines[0] = 2), 'de la 1 a la 2');
   // y lo que no lo es: //, parentesis-asterisco, una cadena, un comentario normal
-  L := LlavesAnidadas('// {$IFDEF X}'#10'(* { dentro *)'#10'S := ''{ {'';'#10'{ normal }');
+  L := LlavesAnidadas('// {$IFDEF X}'#10'(* { dentro *)'#10'S := ''{ {'';'#10'{ normal }', Fines);
   Assert.IsTrue(Length(L) = 0, 'nada: ' + IntToStr(Length(L)));
   // con los saltos en CR sueltos, la misma linea (contaba solo los LF;
   // revision de la 1.10.0)
-  L := LlavesAnidadas('x := 1;'#13'{ cita {$IFDEF X} aqui }'#13'y := 2;');
+  L := LlavesAnidadas('x := 1;'#13'{ cita {$IFDEF X} aqui }'#13'y := 2;', Fines);
   Assert.IsTrue((Length(L) = 1) and (L[0] = 2), 'la linea 2, en CR');
 end;
 
