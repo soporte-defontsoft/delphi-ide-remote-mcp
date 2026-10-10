@@ -24,6 +24,9 @@ informes del propio workspace, sin moverlos ni borrarlos.
   W9  el token de LECTURA del workspace lista y lee lo suyo
   W10 command desconocido REPORT-006, read sin name REPORT-007, report sin
       message REPORT-002 (message ya no es "required" en el esquema)
+  W11 la carpeta de un agente del formato de ANTES con el nombre de un
+      workspace (reports\\uno\\, de todos los tokens) no es el buzon de 'Uno':
+      list no la ensena y read no la lee (revisor de version de la 1.18.0)
 
 Usage:  python tests/test_buzon_workspace.py [path-to-DelphiLspMcp.exe]
 """
@@ -47,6 +50,10 @@ MESSAGES = os.path.join(BASE, 'messages')
 VICTIMA = mc.carpeta('buzon-workspace-victima')
 SECRETO = '20260101-000000-bug-secreto.md'
 open(os.path.join(VICTIMA, SECRETO), 'w', encoding='utf-8').write('# x\n\nSECRETO-DE-FUERA\n')
+# W11: un informe del formato de antes (reports\<agente>\) de un agente 'uno'
+VIEJO = '20260101-000000-bug-viejo.md'
+os.makedirs(os.path.join(REPORTS, 'uno'))
+open(os.path.join(REPORTS, 'uno', VIEJO), 'w', encoding='utf-8').write('# x\n\nVIEJO-DE-OTRO-TOKEN\n')
 
 PORT = mc.puerto_libre()
 proc = mc.lanza_http(EXE, PORT, mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1'}))
@@ -78,7 +85,7 @@ try:
     B1 = mc.buzon(REPORTS, 'hermes', WS1)
     check('W1 el informe cae en reports\\<workspace>\\<agente> (el workspace, el del token)',
           mc.abre(r, 'SN_REPORT_OK_FMT') and len(md(B1)) == 1
-          and B1.lower().endswith('\\uno\\hermes')
+          and B1.lower().endswith('\\workspace.uno\\hermes')
           and not os.path.exists(os.path.join(REPORTS, 'hermes')), (r[:150], B1, os.listdir(REPORTS)))
 
     # W2
@@ -88,7 +95,7 @@ try:
     check('W2 "Hermes VM" y "Hermes-VM" (el mismo slug) no comparten carpeta',
           mc.abre(r2, 'SN_REPORT_OK_FMT') and mc.abre(r3, 'SN_REPORT_OK_FMT')
           and B2.lower() != B3.lower() and len(md(B2)) == 1 and len(md(B3)) == 1
-          and mc.carpeta_de_workspace(WS3) == 'hermes-vm', (os.listdir(REPORTS), md(B2), md(B3)))
+          and mc.carpeta_de_workspace(WS3) == 'Workspace.hermes-vm', (os.listdir(REPORTS), md(B2), md(B3)))
 
     # W3
     informe(c1, 'sin agente', 'raiz', kind='question')
@@ -179,6 +186,13 @@ try:
     check('W10 command desconocido REPORT-006, read sin name REPORT-007, report sin message REPORT-002',
           mc.es(e1, 'SR_REPORT_COMMAND') and mc.es(e2, 'SR_REPORT_READ_SIN_NAME')
           and mc.es(e3, 'SR_REPORT_EMPTY'), (e1[:120], e2[:120], e3[:120]))
+
+    # W11
+    r = c1.call('delphi_report', {'command': 'list'})
+    rr = c1.call('delphi_report', {'command': 'read', 'name': VIEJO})
+    check('W11 la carpeta vieja reports\\uno\\ (de todos los tokens) no es el buzon del workspace Uno',
+          'viejo' not in r and mc.es(rr, 'SR_REPORT_NO_ESTA_FMT') and 'VIEJO-DE-OTRO' not in rr,
+          (r[:300], rr[:200]))
 finally:
     mc.borra(union)  # la union como union: lo de detras no se toca
     proc.kill()

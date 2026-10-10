@@ -90,11 +90,16 @@ function CarpetaDeInformes: string;
   cliente; el agente pasa por Slug aqui mismo. }
 function BuzonDeMensajes(const AAgente: string = ''): string;
 function BuzonDeInformes(const AAgente: string = ''): string;
-{ La carpeta de AWorkspace dentro de un buzon: su nombre por Slug cuando
-  Slug lo dice entero y, si no (un acento, un signo, mas de 40), con los
-  ocho primeros de su MD5 detras, para que dos workspaces no compartan nunca
-  carpeta ('Hermes VM' y 'Hermes-VM'). Sin workspace - el proceso local, el
-  unico que entra sin token - '_local', que Slug no puede dar. }
+{ La carpeta de AWorkspace dentro de un buzon: 'Workspace.' y su nombre por
+  Slug cuando Slug lo dice entero y, si no (un acento, un signo, mas de 40),
+  con los ocho primeros de su MD5 detras, para que dos workspaces no
+  compartan nunca carpeta ('Hermes VM' y 'Hermes-VM'). Sin workspace - el
+  proceso local, el unico que entra sin token - '_local'. Ninguna de las dos
+  formas la puede dar Slug (el punto, el guion bajo): la carpeta de un agente
+  del formato de antes (reports\<agente>\, todos los tokens juntos) nunca es
+  el buzon de un workspace - un workspace 'hermes' leia como suyos los
+  informes viejos de reports\hermes de todos (revisor de version de la
+  1.18.0). }
 function CarpetaDeWorkspace(const AWorkspace: string): string;
 { LA casa del servidor como LUGAR de las puertas de leer y escribir texto
   (ltCasa, Lsp.Patch): sus caches, el buzon y los informes. NO la carpeta del
@@ -209,9 +214,11 @@ const
   { La marca de DUENO de una copia sellada: "<copia>.by", con el agente que la
     dejo (la purga solo deja purgar lo propio). }
   MARCA_DUENO_EXT = '.by';
-  // el buzon de quien entra sin workspace: Slug solo da letras, cifras y
-  // guiones, asi que ningun workspace tiene una carpeta que se llame asi
+  // el buzon de quien entra sin workspace y el prefijo del de un workspace:
+  // Slug solo da letras, cifras y guiones, asi que ni un agente ni otro
+  // workspace tienen una carpeta que se llame asi
   BUZON_SIN_WORKSPACE = '_local';
+  BUZON_PREFIJO_WORKSPACE = 'Workspace.';
 
 function TempFolderName: string;
 begin
@@ -259,6 +266,7 @@ begin
   if Result <> AnsiLowerCase(AWorkspace) then
     Result := Result + IfThen(Result <> '', '-') + LowerCase(
       THashMD5.GetHashString(AnsiLowerCase(AWorkspace))).Substring(0, 8);
+  Result := BUZON_PREFIJO_WORKSPACE + Result;
 end;
 
 { <ARaiz>\<la carpeta del workspace de la sesion>[\<Slug(AAgente)>] }

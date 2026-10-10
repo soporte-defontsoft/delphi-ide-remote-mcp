@@ -80,7 +80,7 @@ def _papelera():
     eso, no por el servidor (28-sep-2026)."""
     if not _PAPELERA:
         for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT',
-                                                  'BUZON_SIN_WORKSPACE')),
+                                                  'BUZON_SIN_WORKSPACE', 'BUZON_PREFIJO_WORKSPACE')),
                                 ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
                                                    'CAJON_SUSTITUIDOS'))):
             with open(os.path.join(REPO, 'src', 'Server', unidad),
@@ -150,14 +150,14 @@ def slug(s):
 def carpeta_de_workspace(ws=''):
     """La carpeta de un workspace dentro de un buzon (CarpetaDeWorkspace del
     servidor): sin workspace -el proceso local, las baterias en stdio-
-    BUZON_SIN_WORKSPACE; si no, su slug, y si el slug no lo dice entero, ocho
-    del MD5 del nombre en minusculas detras."""
+    BUZON_SIN_WORKSPACE; si no, BUZON_PREFIJO_WORKSPACE y su slug, y si el
+    slug no lo dice entero, ocho del MD5 del nombre en minusculas detras."""
     if not ws:
         return _papelera()['BUZON_SIN_WORKSPACE']
     s = slug(ws)
     if s != ws.lower():
         s = (s + '-' if s else '') + hashlib.md5(ws.lower().encode('utf-8')).hexdigest()[:8]
-    return s
+    return _papelera()['BUZON_PREFIJO_WORKSPACE'] + s
 
 
 def buzon(raiz, agente='', ws=''):
