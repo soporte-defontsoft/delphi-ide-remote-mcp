@@ -44,6 +44,7 @@ type
     [SchemaDescription(SP_STYLE_PROP)]
     property Prop: string read FProp write FProp;
     [SchemaDescription(SP_STYLE_VALUE)]
+    [Contenido]
     property Value: string read FValue write FValue;
     [SchemaDescription(SP_STYLE_NAME)]
     property Name: string read FName write FName;

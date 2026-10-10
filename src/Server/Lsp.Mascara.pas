@@ -115,10 +115,18 @@ function ServedDriveLetters: string;
   sirve), sin los dos puntos: lo usan el enmascarador y la lista de unidades
   validas de PathAnomaly (Lsp.Guard). }
 function VirtualUnitOf(ALetter: Char; const AServed: string): string;
+
+type
+  // de un argumento de la llamada, por su nombre: lleva contenido o no
+  TEsArgDeContenido = reference to function(const ANombre: string): Boolean;
+
 { La expansion de ida de una llamada, en su sitio: cada argumento de texto
-  que no lleva contenido (PARAMS_CON_CONTENIDO) pasa por ExpandDriveValue. La
-  llama la puerta de entrada (ReglasDeLaLlamadaDenegadas, Lsp.Guard). }
-procedure ExpandVirtualDrives(const AArguments: TJSONObject);
+  que no lleva contenido pasa por ExpandDriveValue. Que lleva contenido lo
+  dicen las marcas [Contenido] de la tool, y lo pregunta quien llama: la
+  puerta de entrada (ReglasDeLaLlamadaDenegadas, Lsp.Guard), que tiene el
+  mapa de las marcas. }
+procedure ExpandVirtualDrives(const AArguments: TJSONObject;
+  const AEsContenido: TEsArgDeContenido);
 
 implementation
 
@@ -135,16 +143,7 @@ threadvar
   TSalidaHecha: string; // lo que la tool de ESTA llamada ya enmascaro (EnmascaraSalvoContenido)
   TCitasHechas: string; // las citas (CitaDeLinea) de ESTA llamada, cada una seguida de #0
 
-{ Los parametros que llevan CONTENIDO, no rutas: su texto es de un fichero o
-  de un mensaje y no pertenece al espacio de nombres de rutas. Lo lee solo la
-  expansion de ida (ExpandVirtualDrives): la pasada de la jaula ya no elige
-  por una lista de nombres sino por las marcas [RutaDelServidor] de cada tool
-  (RutasNuestras, Lsp.Guard). }
 const
-  // edits y fragment tambien: llevan old/new o un trozo de linea, y como texto
-  // la expansion los reescribia y como array no (revisor de la noche, B-11)
-  PARAMS_CON_CONTENIDO: array [0 .. 8] of string = (
-    'new', 'old', 'content', 'data', 'message', 'code', 'args', 'edits', 'fragment');
   { El host con el que sale enmascarado el de una ruta de red (\\srvhost\...):
     lo escribe MaskDriveText y lo lee de vuelta ExpandDriveValue. UNA
     constante para los dos lados (estaba escrito a mano en los dos). }
@@ -304,13 +303,14 @@ end;
 { Rewrites the string arguments of a tools/call in place. Content-carrying
   parameters are never touched: their text belongs to files/messages, not to
   the path namespace. }
-procedure ExpandVirtualDrives(const AArguments: TJSONObject);
+procedure ExpandVirtualDrives(const AArguments: TJSONObject;
+  const AEsContenido: TEsArgDeContenido);
 begin
   ReescribeCadenas(AArguments,
     function(const ANombre, AValor: string): string
     begin
       Result := AValor;
-      if not MatchText(ANombre, PARAMS_CON_CONTENIDO) then
+      if not AEsContenido(ANombre) then
         Result := ExpandDriveValue(AValor);
     end);
 end;

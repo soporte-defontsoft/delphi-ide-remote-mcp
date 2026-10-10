@@ -85,6 +85,7 @@ type
     [SchemaDescription(SP_DESIGNER_MAXDEPTH)]
     property MaxDepth: Integer read FMaxDepth write FMaxDepth;
     [SchemaDescription(SP_DESIGNER_STATE)]
+    [Contenido] // el disenador expande cada valor (PonEnMemoria y el state de preview)
     property State: string read FState write FState;
     // un fichero .vsf/.style del servidor, o el NOMBRE de una plataforma del
     // designer (android, none...): la tool explica un valor relativo
@@ -104,8 +105,10 @@ type
     [SchemaDescription(SP_DESIGNER_PARENT)]
     property Parent: string read FParent write FParent;
     [SchemaDescription(SP_DESIGNER_VALUE)]
+    [Contenido]
     property Value: string read FValue write FValue;
     [SchemaDescription(SP_DESIGNER_PROPS)]
+    [Contenido]
     property Props: string read FProps write FProps;
     [SchemaDescription(SP_DESIGNER_BEFORE)]
     property Before: string read FBefore write FBefore;
@@ -1264,9 +1267,13 @@ begin
     var P := Pos('=', E);
     var Texto: string;
     var Valor := Copy(E, P + 1, MaxInt).Trim;
+    // y su texto con la unidad virtual de una ruta expandida: la excepcion
+    // declarada de [Contenido], la de value / props (PonEnMemoria, B-9)
     if (P > 0) and (Valor.StartsWith('''') or Valor.StartsWith('#')) and
        LeeLiteralDeForm(Valor, Texto) then
-      Estados := Estados + [Copy(E, 1, P - 1).Trim + '=' + Texto]
+      Estados := Estados + [Copy(E, 1, P - 1).Trim + '=' + ExpandDriveValue(Texto)]
+    else if (P > 0) and (ExpandDriveValue(Valor) <> Valor) then
+      Estados := Estados + [Copy(E, 1, P - 1).Trim + '=' + ExpandDriveValue(Valor)]
     else
       Estados := Estados + [E];
   end;

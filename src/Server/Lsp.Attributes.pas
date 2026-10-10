@@ -90,6 +90,37 @@ type
 
   JsonComoTexto = JsonComoTextoAttribute;
 
+  { Marca un parametro que lleva CONTENIDO. LA REGLA, escrita una vez: lo que
+    se escribe DENTRO de un fichero (old/new/content/code de las tools que
+    editan, el texto de una nota del vault, los valores del disenador y de
+    los estilos) o en un mensaje (de commit, de un informe), o lo que va a
+    un programa de OTRA maquina, es contenido, y la expansion de ida de las
+    unidades virtuales (ExpandVirtualDrives, Lsp.Mascara) no lo toca: srvd:\
+    ahi es texto, y un old tiene que casar con el disco que delphi_read,
+    designer get y vault_read ensenan TAL CUAL. Lo que no es ruta ni
+    contenido se expande, y da igual. Aqui SI vale marcar la exclusion
+    (vease arriba): equivocarse al reescribir es inocuo.
+
+    LA EXCEPCION DECLARADA: value, props y state de delphi_designer. El
+    disenador expande el TEXTO de cada valor (PonEnMemoria, Lsp.DesignerEdit;
+    el state de preview), porque un literal de ruta en un form tiene que
+    funcionar en ejecucion y el agente ve las rutas como srvd:\ (delphi_list,
+    el eco de set). El coste: un Caption o un Hint que empiece por srvd:\ a
+    proposito se escribe con la letra real.
+
+    Las claves 'tool|parametro' de las marcas son la lista declarada de la
+    regla (MarcasDeParams, Lsp.Guard, el mismo recorrido que
+    [RutaDelServidor]); test_paisaje vigila que la expansion viva en sus
+    casas. Era una lista de NOMBRES (PARAMS_CON_CONTENIDO) para todas las
+    tools a la vez: no alcanzaba a old_text/new_text de vault_patch ni a
+    body/text, los apodos de message en delphi_report, nombraba un 'data'
+    que ya no existia, y un value='srvd:\x' entre comillas o dentro de props
+    llegaba tal cual al .dfm (B-9 del revisor 2, 10-oct-2026). }
+  ContenidoAttribute = class(TCustomAttribute)
+  end;
+
+  Contenido = ContenidoAttribute;
+
 implementation
 
 end.

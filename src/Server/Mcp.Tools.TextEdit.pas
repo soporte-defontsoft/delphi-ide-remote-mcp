@@ -35,8 +35,10 @@ type
     [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_EDIT_OLD)]
+    [Contenido]
     property Old: string read FOld write FOld;
     [SchemaDescription(SP_TEXT_NEW + SP_NEW_SALTO_FINAL)]
+    [Contenido]
     property New: string read FNew write FNew;
     [SchemaDescription(SP_TEXT_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
@@ -51,14 +53,17 @@ type
     // dos descripciones.
     [SchemaDescription(SP_PATCH_EDITS_CORTO)]
     [JsonComoTexto]
+    [Contenido]
     property Edits: string read FEdits write FEdits;
     [SchemaDescription(SP_PATCH_FRAGMENT)]
+    [Contenido]
     property Fragment: string read FFragment write FFragment;
     [SchemaDescription(SP_TEXT_DELETE)]
     property Delete: Boolean read FDelete write FDelete;
     [SchemaDescription(SP_TEXT_CREATE_)]
     property Create_: Boolean read FCreate write FCreate;
     [SchemaDescription(SP_TEXT_CONTENT)]
+    [Contenido]
     property Content: string read FContent write FContent;
     [SchemaDescription(SP_TEXT_EOL)]
     property Eol: string read FEol write FEol;

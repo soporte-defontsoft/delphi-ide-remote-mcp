@@ -23,16 +23,40 @@ the tool composed in THAT call (Lsp.Mascara.CitaDeLinea) pass (the unit test
 LaFilaDeUnaTandaDejaElDiscoComoEsta measures the line that only looks like
 one). Every check was seen red against the 1.12.1 exe.
 
+And the way IN (B-9, 10-oct-2026): what is written INSIDE a file is content
+(the [Contenido] mark) and the entry gate does not expand its virtual unit;
+value / props / state of delphi_designer are the declared exception - the
+designer expands the TEXT of each value, because a path literal in a form
+has to work at run time (it was a list of names, PARAMS_CON_CONTENIDO):
+
+  M7   delphi_textedit: a new that starts with the virtual unit, verbatim
+  M8   vault_patch: old_text / new_text verbatim (expanded: old_text did not
+       match its note)
+  M9   delphi_report: body, the alias of message, verbatim (it was expanded
+       while message was not)
+  M10  delphi_designer set: a quoted value, a value inside props and a bare
+       one land in the .dfm as the REAL path (quoted or in props it landed
+       as srvX:)
+
+M8, M9, M10 and M10b were seen red against 112a311; M7 and M10c against a
+mutant without the mark of textedit's new and without the designer's
+expansion.
+
 Usage:  python tests/test_mascara_contenido.py [path-to-DelphiLspMcp.exe]
 """
 import os
 import re
+import glob
 import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('mascara_contenido')
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='mascara', t=300)
+# un vault, fuera de la jaula como siempre (M8)
+VAULT = mc.carpeta('mascara_contenido_vault')
+open(os.path.join(VAULT, 'AGENTS-VAULT.md'), 'w', encoding='utf-8').write('# Reglas\n')
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_VAULT_PATH': VAULT,
+                                'DELPHI_MCP_VAULT_READONLY': '0'}), nombre='mascara', t=300)
 call = srv.call
 J = mc.como_json
 REAL = BASE[0].upper() + ':\\'           # la letra REAL de la raiz de la bateria
@@ -107,6 +131,55 @@ check('M6 changeset: la linea real de la negativa TAL CUAL y la ruta enmascarada
       mc.rechazado(r) and re.search(r'(?m)^\s+%d\|%s$' % (L_RUTA + 1, re.escape(LINEA_RUTA)), r) is not None and
       BASE not in r, r[:600])
 call('delphi_changeset', {'command': 'rollback', 'id': cid})
+
+# ---- M7..M10: la ENTRADA (B-9) ----
+TXT = os.path.join(PRJ, 'notas.txt')
+open(TXT, 'w', encoding='utf-8', newline='\n').write('uno\n')
+r = call('delphi_textedit', {'path': TXT, 'old': 'uno', 'new': VIRTUAL + 'datos'})
+t = open(TXT, encoding='utf-8').read()
+check('M7 textedit: un new que empieza por la unidad virtual se escribe TAL CUAL (es contenido)',
+      (VIRTUAL + 'datos') in t and (REAL + 'datos') not in t, r[:200] + ' | ' + t)
+
+NOTA = os.path.join(VAULT, 'nota.md')
+open(NOTA, 'w', encoding='utf-8', newline='\n').write('# Nota\n\nruta: ' + VIRTUAL + 'vieja\n')
+r = call('vault_patch', {'path': 'nota.md', 'old_text': VIRTUAL + 'vieja', 'new_text': VIRTUAL + 'nueva'})
+t = open(NOTA, encoding='utf-8').read()
+check('M8 vault_patch: old_text y new_text con la unidad virtual casan con la nota y se escriben TAL CUAL',
+      ('ruta: ' + VIRTUAL + 'nueva') in t, r[:300] + ' | ' + t)
+
+r = call('delphi_report', {'body': VIRTUAL + 'por el apodo', 'title': 'b9'})
+informes = [open(f, encoding='utf-8', errors='replace').read()
+            for f in glob.glob(os.path.join(os.path.dirname(EXE), 'reports', '**', '*.md'), recursive=True)]
+check('M9 report: body, el apodo de message, es contenido: su unidad virtual se guarda TAL CUAL',
+      any((VIRTUAL + 'por el apodo') in i for i in informes), r[:200] + ' | ' + str(informes)[:300])
+
+DFM = os.path.join(PRJ, 'UHint.dfm')
+open(os.path.join(PRJ, 'UHint.pas'), 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'unit UHint;\n\ninterface\n\nuses\n  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls;\n\n'
+    'type\n  TFormHint = class(TForm)\n    Button1: TButton;\n  end;\n\nvar\n  FormHint: TFormHint;\n\n'
+    'implementation\n\n{$R *.dfm}\n\nend.\n')
+open(DFM, 'w', encoding='utf-8', newline='\r\n').write(
+    "object FormHint: TFormHint\n  Left = 0\n  Top = 0\n  Caption = 'Hint'\n  ClientHeight = 120\n"
+    "  ClientWidth = 240\n  TextHeight = 15\n  object Button1: TButton\n    Left = 16\n    Top = 16\n"
+    "    Width = 120\n    Height = 25\n    Caption = 'Button1'\n    TabOrder = 0\n  end\nend\n")
+
+
+def dfm():
+    return open(DFM, encoding='utf-8', errors='replace').read()
+
+
+r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'Button1', 'prop': 'Hint',
+                             'value': "'" + VIRTUAL + "pista.txt'"})
+check("M10 designer set value='srvX:...' entre comillas: el .dfm lleva la ruta REAL (la excepcion declarada)",
+      ("Hint = '" + REAL + "pista.txt'") in dfm(), r[:300] + ' | ' + dfm())
+r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'Button1',
+                             'props': "Hint='" + VIRTUAL + "otra.txt';Caption=Boton"})
+check('M10b ...y dentro de props, valor a valor',
+      ("Hint = '" + REAL + "otra.txt'") in dfm() and "Caption = 'Boton'" in dfm(), r[:300] + ' | ' + dfm())
+r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'Button1', 'prop': 'Hint',
+                             'value': VIRTUAL + 'tercera.txt'})
+check('M10c ...y sin comillas, como antes (ya no la expande la puerta: la expande el disenador)',
+      ("Hint = '" + REAL + "tercera.txt'") in dfm(), r[:300] + ' | ' + dfm())
 
 srv.cierra()
 mc.fin('mascara-contenido battery')

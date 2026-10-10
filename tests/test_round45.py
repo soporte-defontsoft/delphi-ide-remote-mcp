@@ -181,6 +181,8 @@ EXCLUIDOS = {
         'descripcion habla del orden del FICHERO); lo prueba test_designer_orden',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
     ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
+    ('delphi_edit', 'adduses'): 'NOMBRES de unidad (System.SysUtils;UCustomer), no rutas: su descripcion '
+        'dice que en un .dpr van "no path" (11.6 de la 1.18.0, 3822d39); lo prueba test_delphi_patch',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',
     ('delphi_list', 'pattern'): 'mascara de fichero, no una ruta',
     ('delphi_config', 'output'): 'nombre relativo de carpeta de salida; vetado aparte',

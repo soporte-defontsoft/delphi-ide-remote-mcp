@@ -70,6 +70,8 @@ type
     [SchemaDescription(SP_PASERVER_EXE)]
     property Exe: string read FExe write FExe;
     [SchemaDescription(SP_PASERVER_ARGS)]
+    // los argumentos del programa en el TARGET: contenido, no rutas nuestras
+    [Contenido]
     property Args: string read FArgs write FArgs;
     [SchemaDescription(SP_PASERVER_JOB)]
     property Job: string read FJob write FJob;

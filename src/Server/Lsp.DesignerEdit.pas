@@ -1859,6 +1859,15 @@ begin
       Texto := AValor;
       Comillas := True;
     end;
+    // LA EXCEPCION DECLARADA de [Contenido] (Lsp.Attributes): lo que se
+    // escribe dentro de un fichero no se expande, salvo el TEXTO de un valor
+    // de value / props, que si empieza por una unidad virtual pasa a la ruta
+    // real: un literal de ruta en un form tiene que funcionar en ejecucion, y
+    // el agente ve las rutas como srvd:\ (delphi_list, el eco de set). La
+    // puerta solo expandia el valor ENTERO: 'srvd:\x' entre comillas o dentro
+    // de props llegaba tal cual al .dfm (B-9, 10-oct-2026). El coste: un
+    // Caption que empiece por srvd:\ a proposito se escribe con la letra.
+    Texto := ExpandDriveValue(Texto);
     Trozos := TrozosDeLiteral(Texto);
     V := string.Join(' ', Trozos);
     Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
@@ -1868,6 +1877,7 @@ begin
   // iba en crudo (P6 de la segunda revision de la 1.17.0)
   else if LeeLiteralDeForm(V, Texto) then
   begin
+    Texto := ExpandDriveValue(Texto); // la misma excepcion, la de arriba
     Trozos := TrozosDeLiteral(Texto);
     V := string.Join(' ', Trozos);
     Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);

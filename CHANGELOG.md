@@ -10,6 +10,34 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **What is written inside a file is content, by a mark, and a path in a
+  form value works.** The entry gate turns `srvd:\` back into the real
+  drive in every argument except those that carry content - and which ones
+  did was a list of NAMES for all tools at once. It missed `old_text` /
+  `new_text` of `vault_patch` (an `old_text` copied from `vault_read` with
+  a `srvd:\` in it did not match its note) and `body` / `text`, the aliases
+  of `message` in `delphi_report`, and it named a `data` no tool has any
+  more. And the designer only got the expansion of a WHOLE value: a quoted
+  `value='srvd:\x'`, or any value inside `props`, landed in the `.dfm` as
+  `srvd:\x`, a path that does not exist at run time. Now the rule is
+  written once (`[Contenido]`, `Lsp.Attributes`): what is written inside a
+  file, or in a message, or goes to a program on another machine, is
+  content and the gate leaves it alone; `value`, `props` and `state` of
+  `delphi_designer` are the declared exception - the designer expands the
+  TEXT of each value, because a path literal in a form has to work when it
+  runs. The parameters carry the mark, read by the same RTTI walk as
+  `[RutaDelServidor]`, and the gate expands after the aliases, so an alias
+  is judged as its parameter. Changed for whoever relies on it:
+  `old_text` / `new_text` of `vault_patch`, `anchor` of `vault_append`,
+  `body` / `text` of `delphi_report` and `value` of `delphi_styles` are no
+  longer expanded; the key `code` of adb-linux now is (no key code starts
+  with `srvX:`). The cost of the exception: a `Caption` or a `Hint` that
+  starts with `srvd:\` on purpose is written with the real drive. And
+  something to know: `new_text` of the vault is content, so a path copied
+  from `delphi_list` stays `srvd:\` in the note. `test_mascara_contenido`
+  M7-M10: M8, M9, M10 and M10b red against the build before, M7 and M10c
+  against a mutant without the mark and without the designer's expansion.
+
 - **A local path is never looked for in a network place.** Every write asks
   whether its path falls in a vault - of any workspace - and the place's
   real path was resolved on disk each time: a vault on a network drive
@@ -866,6 +894,13 @@ the MCP `initialize` response (`serverInfo.version`).
   path of an `{$I}`, which the compiler reads in ANSI too). `test_delphi_patch`.
 
 ### Internal
+
+- **One key for the parameter marks, one walk for all of them.** The key
+  `tool|parameter` of the marks map was composed by hand in four places of
+  `Lsp.Guard`; it is `ClaveDeParam` now, and `MarcasDeParams` reads
+  `[RutaDelServidor]`, `[RutaRelativa]` and `[Contenido]` in one RTTI walk.
+  `test_paisaje` watches both homes: the key, and where a virtual unit is
+  expanded (the gate, the `/files` route and the designer's exception).
 
 - **The form renderer tells a framework class by the class it loaded.** An
   `inherited` form whose ancestor has no form file was read without a

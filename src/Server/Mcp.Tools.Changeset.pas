@@ -40,14 +40,18 @@ type
     [RutaDelServidor]
     property Dest: string read FDest write FDest;
     [SchemaDescription(SP_CHANGESET_OLD)]
+    [Contenido]
     property Old: string read FOld write FOld;
     [SchemaDescription(SP_CHANGESET_NEW)]
+    [Contenido]
     property New: string read FNew write FNew;
     [SchemaDescription(SP_CHANGESET_CONTENT)]
+    [Contenido]
     property Content: string read FContent write FContent;
     [SchemaDescription(SP_CHANGESET_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
     [SchemaDescription(SP_PATCH_FRAGMENT)]
+    [Contenido]
     property Fragment: string read FFragment write FFragment;
     [SchemaDescription(SP_CHANGESET_N)]
     property N: Integer read FN write FN;

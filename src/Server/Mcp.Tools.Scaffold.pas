@@ -38,6 +38,7 @@ type
     [SchemaDescription(SP_CREATE_FORMNAME)]
     property FormName: string read FFormName write FFormName;
     [SchemaDescription(SP_CREATE_CONTENT)]
+    [Contenido]
     property Content: string read FContent write FContent;
   end;
 

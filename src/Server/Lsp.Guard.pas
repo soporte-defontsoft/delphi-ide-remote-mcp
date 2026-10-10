@@ -1502,16 +1502,56 @@ end;
   ToolCallDenied: en el sitio de las absolutas se adelantaba a la negativa
   propia de cada tool (el profile sucio de delphi_build, el solo lectura de
   adb install, la unidad no servida por su nombre; gate del 28-sep). }
-var
-  GRutasNuestras: TDictionary<string, Boolean> = nil; // 'tool|parametro'
+type
+  { Las marcas de los parametros de TODAS las tools, por su clave
+    'tool|parametro' (ClaveDeParam): las rutas del servidor (el valor dice si
+    la tool acepta una relativa, [RutaRelativa]) y los que llevan contenido
+    ([Contenido]: la expansion de ida de las unidades virtuales no los toca). }
+  TMarcasDeParams = class
+  public
+    Rutas: TDictionary<string, Boolean>;
+    DeContenido: TDictionary<string, Boolean>;
+    constructor Create;
+    destructor Destroy; override;
+  end;
 
-{ El mapa de parametros marcados, montado UNA vez desde el registro real.
-  Sin cerrojo: cada hilo que llegue a la vez monta el suyo y solo uno se
-  publica; los demas tiran el suyo. Instanciar las tools aqui es barato (un
-  constructor que pone nombre y descripcion) y pasa una sola vez. }
-function RutasNuestras: TDictionary<string, Boolean>;
+constructor TMarcasDeParams.Create;
+begin
+  inherited Create;
+  Rutas := TDictionary<string, Boolean>.Create;
+  DeContenido := TDictionary<string, Boolean>.Create;
+end;
+
+destructor TMarcasDeParams.Destroy;
+begin
+  Rutas.Free;
+  DeContenido.Free;
+  inherited;
+end;
+
 var
-  Mapa: TDictionary<string, Boolean>;
+  GMarcas: TMarcasDeParams = nil;
+
+{ LA clave de un parametro de una tool en los mapas de las marcas: la tool en
+  minusculas y el parametro con la MISMA normalizacion con la que el binder
+  casa argumento y propiedad (TMCPSerializer.NormalizeKey). Un solo
+  nombrador, o la puerta miraria un nombre y la tool recibiria otro: estaba
+  escrita a mano en los cuatro sitios que la usaban (B-9, 10-oct-2026). }
+function ClaveDeParam(const ATool, AParametro: string): string;
+begin
+  Result := LowerCase(ATool) + '|' + TMCPSerializer.NormalizeKey(AParametro);
+end;
+
+{ Las marcas de los parametros, montadas UNA vez desde el registro real y en
+  UN recorrido por RTTI para todas: [RutaDelServidor] y [Contenido] se leian
+  en sitios distintos, la segunda como una lista de nombres que imitaba a la
+  marca (PARAMS_CON_CONTENIDO, Lsp.Mascara; B-9, 10-oct-2026). Sin cerrojo:
+  cada hilo que llegue a la vez monta el suyo y solo uno se publica; los
+  demas tiran el suyo. Instanciar las tools aqui es barato (un constructor
+  que pone nombre y descripcion) y pasa una sola vez. }
+function MarcasDeParams: TMarcasDeParams;
+var
+  Marcas: TMarcasDeParams;
   Ctx: TRttiContext;
   Nombre: string;
   Tool: IMCPTool;
@@ -1519,10 +1559,10 @@ var
   Prop: TRttiProperty;
   Attr: TCustomAttribute;
 begin
-  Result := GRutasNuestras;
+  Result := GMarcas;
   if Result <> nil then
     Exit;
-  Mapa := TDictionary<string, Boolean>.Create;
+  Marcas := TMarcasDeParams.Create;
   Ctx := TRttiContext.Create;
   try
     for Nombre in TMCPRegistry.GetToolNames do
@@ -1532,30 +1572,55 @@ begin
         Continue;
       for Prop in Ctx.GetType(Con.ParamsClass).GetProperties do
       begin
-        // el valor del mapa: si la ruta acepta un valor RELATIVO que la tool
-        // resuelve contra una base suya ([RutaRelativa])
+        // el valor del mapa de las rutas: si la ruta acepta un valor RELATIVO
+        // que la tool resuelve contra una base suya ([RutaRelativa])
         var EsRuta := False;
         var AceptaRelativa := False;
+        var EsContenido := False;
         for Attr in Prop.GetAttributes do
           if Attr is RutaDelServidorAttribute then
             EsRuta := True
           else if Attr is RutaRelativaAttribute then
-            AceptaRelativa := True;
+            AceptaRelativa := True
+          else if Attr is ContenidoAttribute then
+            EsContenido := True;
         if EsRuta then
-          // La MISMA normalizacion con la que el binder casa argumento y
-          // propiedad: un solo nombrador, o la puerta miraria un nombre y
-          // la tool recibiria otro.
-          Mapa.AddOrSetValue(LowerCase(Nombre) + '|' +
-            TMCPSerializer.NormalizeKey(Prop.Name), AceptaRelativa);
+          Marcas.Rutas.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), AceptaRelativa);
+        if EsContenido then
+          Marcas.DeContenido.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
       end;
     end;
   finally
     Ctx.Free;
   end;
-  if InterlockedCompareExchangePointer(Pointer(GRutasNuestras),
-       Pointer(Mapa), nil) <> nil then
-    Mapa.Free;
-  Result := GRutasNuestras;
+  if InterlockedCompareExchangePointer(Pointer(GMarcas),
+       Pointer(Marcas), nil) <> nil then
+    Marcas.Free;
+  Result := GMarcas;
+end;
+
+{ Los parametros marcados [RutaDelServidor], por ClaveDeParam. }
+function RutasNuestras: TDictionary<string, Boolean>;
+begin
+  Result := MarcasDeParams.Rutas;
+end;
+
+{ La expansion de ida de las unidades virtuales de ESTA llamada
+  (ExpandVirtualDrives, Lsp.Mascara), con la pregunta "lleva contenido?"
+  contestada por las marcas [Contenido] de la tool. }
+procedure ExpandeUnidadesVirtuales(const AToolName: string;
+  const AArguments: TJSONObject);
+var
+  DeContenido: TDictionary<string, Boolean>;
+  Tool: string;
+begin
+  DeContenido := MarcasDeParams.DeContenido;
+  Tool := AToolName;
+  ExpandVirtualDrives(AArguments,
+    function(const ANombre: string): Boolean
+    begin
+      Result := DeContenido.ContainsKey(ClaveDeParam(Tool, ANombre));
+    end);
 end;
 
 { Cuantos parametros vigila el suelo. Lo publica delphi_workspace y lo mide
@@ -1593,7 +1658,7 @@ begin
     P := AArguments.Pairs[I];
     if not (P.JsonValue is TJSONString) then
       Continue;
-    var Clave := LowerCase(AToolName) + '|' + TMCPSerializer.NormalizeKey(P.JsonString.Value);
+    var Clave := ClaveDeParam(AToolName, P.JsonString.Value);
     if not Mapa.ContainsKey(Clave) then
       Continue;
     V := TJSONString(P.JsonValue).Value;
@@ -1649,13 +1714,13 @@ var
   Tool: string;
 begin
   Mapa := RutasNuestras;
-  Tool := LowerCase(AToolName);
+  Tool := AToolName; // la clave la compone ClaveDeParam
   ReescribeCadenas(AArguments,
     function(const ANombre, AValor: string): string
     begin
       Result := AValor;
       if (AValor.IndexOf('~') < 0) or not EsRutaAbsoluta(AValor) or
-         not Mapa.ContainsKey(Tool + '|' + TMCPSerializer.NormalizeKey(ANombre)) then
+         not Mapa.ContainsKey(ClaveDeParam(Tool, ANombre)) then
         Exit;
       // Alargar NUNCA cambia a que fichero se refiere la llamada. La forma
       // canonica de Windows quita el punto o el espacio final y deshace un
@@ -1708,7 +1773,6 @@ function UncAjenoEnArgumentos(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
   Mapa: TDictionary<string, Boolean>;
-  Tool: string;
   I: Integer;
   P: TJSONPair;
   EsFormaDeRed: Boolean;
@@ -1717,12 +1781,11 @@ begin
   if not Assigned(AArguments) then
     Exit;
   Mapa := RutasNuestras;
-  Tool := LowerCase(AToolName);
   for I := 0 to AArguments.Count - 1 do
   begin
     P := AArguments.Pairs[I];
     if (P.JsonValue is TJSONString) and
-       Mapa.ContainsKey(Tool + '|' + TMCPSerializer.NormalizeKey(P.JsonString.Value)) and
+       Mapa.ContainsKey(ClaveDeParam(AToolName, P.JsonString.Value)) and
        UncFueraDeLugares(TJSONString(P.JsonValue).Value) then
       Exit(NegativaDeUnc(TJSONString(P.JsonValue).Value, EsFormaDeRed));
   end;
@@ -1930,10 +1993,13 @@ begin
   Result := DuplicateArgDenied(AArguments);
   if Result <> '' then
     Exit;
-  // Normalization second, unconditionally: virtual drive units in the
-  // arguments become real server paths before any check or any tool.
-  ExpandVirtualDrives(AArguments);
+  // Normalization second, unconditionally: the aliases become the declared
+  // names, and then the virtual drive units in the arguments become real
+  // server paths before any check or any tool - by the DECLARED name, so a
+  // [Contenido] mark covers its aliases too (body/text of delphi_report were
+  // expanded while message was not; B-9, 10-oct-2026).
   ApplyArgAliases(AToolName, AArguments);
+  ExpandeUnidadesVirtuales(AToolName, AArguments);
   // un UNC que no es de ningun sitio declarado, fuera por TEXTO antes de
   // tocarlo: alargarlo abajo ya era abrir SMB hacia ese host
   Result := UncAjenoEnArgumentos(AToolName, AArguments);

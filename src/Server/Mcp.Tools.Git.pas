@@ -40,10 +40,12 @@ type
     [Required]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_WS_ARGS)]
+    [Contenido]
     property Args: string read FArgs write FArgs;
     [SchemaDescription(SP_WS_CREATE)]
     property Create: Boolean read FCreate write FCreate;
     [SchemaDescription(SP_WS_MESSAGE)]
+    [Contenido]
     property Message: string read FMessage write FMessage;
     [SchemaDescription(SP_WS_PATH)]
     [RutaDelServidor]

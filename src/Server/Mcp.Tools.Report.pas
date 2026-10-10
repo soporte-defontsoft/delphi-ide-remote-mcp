@@ -21,6 +21,7 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
+  Lsp.Attributes, // [Contenido]: el mensaje es texto, no rutas
   Lsp.Texts;
 
 type
@@ -34,6 +35,7 @@ type
   public
     [SchemaDescription(SP_REPORT_MESSAGE)]
     [Required]
+    [Contenido]
     property Message: string read FMessage write FMessage;
     [SchemaDescription(SP_REPORT_TITLE)]
     property Title: string read FTitle write FTitle;

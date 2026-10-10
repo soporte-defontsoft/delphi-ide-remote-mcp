@@ -101,6 +101,22 @@ REGLAS = [
      [('Lsp.Mascara.pas', '*')],
      'HOST_VIRTUAL: MaskDriveText lo escribe y ExpandDriveValue lo lee de vuelta, con la misma '
      'constante (2.10 de la 1.18.0: un literal suelto a cada lado)'),
+    # LA REGLA de la expansion de ida (B-9, 10-oct-2026; escrita una vez en
+    # Lsp.Attributes, ContenidoAttribute): lo que se escribe dentro de un fichero es
+    # contenido y no se expande; value, props y state del disenador son la excepcion
+    # declarada; lo que no es ruta ni contenido se expande y da igual. Sus casas:
+    ('la expansion de ida de una unidad virtual', r'\bExpandDriveValue\s*\(',
+     [('Lsp.Mascara.pas', 'ExpandVirtualDrives'),  # la puerta: todo menos [Contenido]
+      ('Lsp.Files.pas', 'ServeFile'),              # la ruta de /files, que no es un tools/call
+      ('Lsp.DesignerEdit.pas', 'PonEnMemoria'),    # LA EXCEPCION: value y props, valor a valor
+      ('Mcp.Tools.Designer.pas', 'PreviewDeForm')],  # ...y el state de preview
+     'la puerta expande lo que no lleva [Contenido] y el disenador el TEXTO de cada valor: una '
+     'expansion en otro sitio es una excepcion sin declarar (era una lista de nombres, '
+     'PARAMS_CON_CONTENIDO, y un value entre comillas llegaba como srvX: al .dfm)'),
+    ('la clave tool|parametro de las marcas', r"'\|'\s*\+\s*TMCPSerializer\.NormalizeKey",
+     [('Lsp.Guard.pas', 'ClaveDeParam')],
+     'ClaveDeParam: la clave de las marcas [RutaDelServidor] y [Contenido], con la normalizacion del '
+     'binder; estaba a mano en cuatro sitios de Lsp.Guard (B-9, 10-oct-2026)'),
     ('GetTempPath suelto', r'\bGetTempPath\w*\s*\(', [],
      'lo temporal del servidor va en su casa (ServerTempDir), nunca en el %TEMP% del sistema'),
     ('el .dproj de un .dpr', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.dproj'\)",
@@ -632,6 +648,8 @@ PLANTADO = {
     'la extension de la marca de dueno': "  M := Copia + '.by';",
     "la forma 'srvX:'": "  U := 'srv' + LowerCase(Letra) + ':';",
     'el host virtual srvhost': "  H := '\\\\srvhost\\' + Resto;",
+    'la expansion de ida de una unidad virtual': "  V := ExpandDriveValue(V);",
+    'la clave tool|parametro de las marcas': "  K := LowerCase(T) + '|' + TMCPSerializer.NormalizeKey(P);",
     'GetTempPath suelto': "  T := TPath.GetTempPath();",
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",

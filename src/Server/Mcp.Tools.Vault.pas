@@ -31,6 +31,7 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
+  Lsp.Attributes, // [Contenido]: lo que lleva el texto de una nota
   Lsp.Texts;
 
 type
@@ -82,8 +83,10 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_VAULT_CONTENT)]
     [Required]
+    [Contenido]
     property Content: string read FContent write FContent;
     [SchemaDescription(SP_VAULT_ANCHOR)]
+    [Contenido]
     property Anchor: string read FAnchor write FAnchor;
   end;
 
@@ -97,6 +100,7 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_VAULT_CONTENT_2)]
     [Required]
+    [Contenido]
     property Content: string read FContent write FContent;
   end;
 
@@ -111,9 +115,11 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_VAULT_OLD_TEXT)]
     [Required]
+    [Contenido]
     property Old_Text: string read FOldText write FOldText;
     [SchemaDescription(SP_VAULT_NEW_TEXT)]
     [Required]
+    [Contenido]
     property New_Text: string read FNewText write FNewText;
   end;
 
