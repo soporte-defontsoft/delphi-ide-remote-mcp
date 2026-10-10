@@ -20,7 +20,11 @@ the MCP `initialize` response (`serverInfo.version`).
   held until msbuild ends, so nothing changes those files in between. The
   price: while an untrusted build runs, the edits of every session wait for
   it (a trusted project, `AllowBuildScripts=1`, is not scanned and takes no
-  lock). Version reviewers of 1.18.0, the cause confirmed in the code;
+  lock). Version reviewers of 1.18.0, the cause confirmed in the code and
+  then live: `test_build_toctou_118` holds the turn with a long build, queues
+  a clean project behind it and rewrites that project's `.dproj` meanwhile -
+  against the previous binary the planted `<Exec>` ran and the edit did not
+  wait; now it never runs, in either order the lock can give. Also
   `test_build_evaluacion`, `test_build_imports`.
 
 - **`DSGN-145` says why the judge of the order could not answer.** The note
