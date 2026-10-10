@@ -130,7 +130,7 @@ try:
     # ...y que el juez CONTESTO: sin DSGN-145 ("el juez no contesto, va el ultimo"),
     # que pasaba tambien sin los renderizadores (segunda ronda de la 1.18.1)
     check('S5 ...insert: se escribe, el juez del orden contesta (sin DSGN-145 ni EDIT-078) y el suelto se queda',
-          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and '[DSGN-145]' not in r
+          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and not mc.es(r, 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT')
           and 'TButton' in t and D800 in t, r[:400])
 
     # ---- S6 ----

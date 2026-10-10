@@ -2077,7 +2077,7 @@ begin
     '(?:\s*\.\s*' + NIVEL + ')*?)\s*\.\s*' + PatronIdentEntero(ARutina));
   if not M.Success then
     Exit;
-  Result := TRegEx.Replace(M.Groups[1].Value, '\s*<[^<>()]*>', '');
+  Result := TRegEx.Replace(M.Groups[1].Value, PATRON_PARAMS_GENERICOS, '');
   Result := UltimoTrozo(TRegEx.Replace(Result, '\s', ''));
 end;
 

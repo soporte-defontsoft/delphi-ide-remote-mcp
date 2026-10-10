@@ -143,7 +143,8 @@ const
   // UNO para las dos lecturas de una cabecera, ColumnaDelNombreDeRutina y
   // Lsp.PascalDecl.ClaseDeImplementacion: la primera no cruzaba '<T>.' y en
   // TGen<T>.Bar tomaba TGen por el nombre (revisor de version de la 1.18.1)
-  PATRON_NIVEL_DE_CABECERA = PATRON_IDENT + '(?:\s*<[^<>()]*>)?';
+  PATRON_PARAMS_GENERICOS = '\s*<[^<>()]*>'; // ...y el que los QUITA lee este mismo
+  PATRON_NIVEL_DE_CABECERA = PATRON_IDENT + '(?:' + PATRON_PARAMS_GENERICOS + ')?';
   // el \b de delante y el de detras de un identificador
   PATRON_NO_IDENT_ANTES = '(?<!' + PATRON_CAR_IDENT + ')';
   PATRON_NO_IDENT_DESPUES = '(?!' + PATRON_CAR_IDENT + ')';

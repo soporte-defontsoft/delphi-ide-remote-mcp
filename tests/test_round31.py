@@ -167,19 +167,26 @@ try:
     # hermana (revisor de version de la 1.18.1, segunda ronda)
     UUNA = os.path.join(HOMO, 'UUnaLetra.pas')
     open(UUNA, 'w', newline='').write(
+        # ...con un descendiente que tiene un METODO Q: sin la correccion del gemelo, la
+        # clase objetivo salia TQ y sus Q se confirmaban "via override" (revisor acotado)
         'unit UUnaLetra;\r\n\r\ninterface\r\n\r\ntype\r\n  TQ = class\r\n    procedure A1;\r\n    procedure A2;\r\n'
-        '  end;\r\n\r\nimplementation\r\n\r\nprocedure TQ.A1;\r\n\r\n  procedure Q;\r\n  begin\r\n'
+        '  end;\r\n\r\n  TQHija = class(TQ)\r\n    procedure Q;\r\n  end;\r\n\r\nvar\r\n  H: TQHija;\r\n\r\n'
+        'implementation\r\n\r\nprocedure TQ.A1;\r\n\r\n  procedure Q;\r\n  begin\r\n'
         '    Writeln(5);\r\n  end;\r\n\r\nbegin\r\n  Q;\r\nend;\r\n\r\nprocedure TQ.A2;\r\n\r\n'
-        '  procedure Q;\r\n  begin\r\n    Writeln(6);\r\n  end;\r\n\r\nbegin\r\nend;\r\n\r\nend.\r\n')
+        '  procedure Q;\r\n  begin\r\n    Writeln(6);\r\n  end;\r\n\r\nbegin\r\nend;\r\n\r\n'
+        'procedure TQHija.Q;\r\nbegin\r\n  H.Q;\r\nend;\r\n\r\nend.\r\n')
     # (R1m) ...y una clase GENERICA: el lector de cabeceras no cruzaba '<T>.' y en
     # 'function TGen<T>.Bar' tomaba TGen por el nombre: sus cabeceras salian homonimas
     # de si mismas en references de TGen (revisor de version de la 1.18.1)
     UGEN = os.path.join(HOMO, 'UGen.pas')
     open(UGEN, 'w', newline='').write(
         'unit UGen;\r\n\r\ninterface\r\n\r\ntype\r\n  TGen<T> = class\r\n    function Bar: T;\r\n'
-        '    constructor Create;\r\n  end;\r\n\r\nvar\r\n  G: TGen<Integer>;\r\n\r\nimplementation\r\n\r\n'
+        '    constructor Create;\r\n  end;\r\n\r\n  TDic<K, V> = class\r\n    function Get(const AK: K): V;\r\n  end;\r\n\r\n'
+        'var\r\n  G: TGen<Integer>;\r\n  D: TDic<string, Integer>;\r\n\r\nimplementation\r\n\r\n'
         'function TGen<T>.Bar: T;\r\nbegin\r\n  Result := Default(T);\r\nend;\r\n\r\n'
-        'constructor TGen<T>.Create;\r\nbegin\r\nend;\r\n\r\nend.\r\n')
+        'constructor TGen<T>.Create;\r\nbegin\r\nend;\r\n\r\n'
+        # ...y uno de DOS parametros (TDic<K, V>.Get salia homonima de si misma tambien)
+        'function TDic<K, V>.Get(const AK: K): V;\r\nbegin\r\n  Result := Default(V);\r\nend;\r\n\r\nend.\r\n')
     open(os.path.join(HOMO, 'Homo.dpr'), 'w', newline='').write(
         "program Homo;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils,\r\n"
         "  UUno in 'UUno.pas',\r\n  UDos in 'UDos.pas',\r\n  UAnidada in 'UAnidada.pas',\r\n"
@@ -287,10 +294,11 @@ try:
         'path': UUNA, 'line': _qs[0], 'character': _una[_qs[0]].index('Q')}))
     rn = mc.como_json(call('delphi_rename_symbol', {
         'path': UUNA, 'line': _qs[0], 'character': _una[_qs[0]].index('Q'), 'newname': 'QQ'}))
-    check('R1l una anidada de UNA letra: references da ella y su llamada, la Q hermana homonima, y rename no '
-          'la renombra (no aplicable)',
-          lineas(una, 'confirmed', 'UUnaLetra.pas') == sorted([_qs[0]] + _llq)
-          and lineas(una, 'rejected', 'UUnaLetra.pas') == [_qs[1]]
+    _hija = [i for i, x in enumerate(_una) if x in ('    procedure Q;', 'procedure TQHija.Q;', '  H.Q;')]
+    check('R1l una anidada de UNA letra: references da ella y su llamada; la Q hermana y el metodo Q de la '
+          'hija, homonimos (ningun "via override"); y rename no las renombra (no aplicable)',
+          lineas(una, 'confirmed', 'UUnaLetra.pas') == sorted([_qs[0]] + _llq) and len(_hija) == 3
+          and set([_qs[1]] + _hija) <= set(lineas(una, 'rejected', 'UUnaLetra.pas'))
           and not any(c.get('via') for c in mc.aciertos(una, 'confirmed'))
           and rn.get('applicable') is False and _qs[1] not in [c.get('line0') for c in mc.aciertos(rn, 'changes')],
           'confirmed=%s rejected=%s rename=%s' % (lineas(una, 'confirmed', 'UUnaLetra.pas'),
@@ -298,13 +306,19 @@ try:
     _gen = open(UGEN).read().split('\n')
     _uso = [i for i, x in enumerate(_gen) if 'G: TGen<Integer>;' in x][0]
     _cabs = [i for i, x in enumerate(_gen) if x.startswith(('function TGen<T>.', 'constructor TGen<T>.'))]
+    _cabd = [i for i, x in enumerate(_gen) if x.startswith('function TDic<K, V>.')]
+    _usod = [i for i, x in enumerate(_gen) if 'D: TDic<string, Integer>;' in x][0]
+    dic = mc.como_json(call('delphi_references', {
+        'path': UGEN, 'line': _usod, 'character': _gen[_usod].index('TDic') + 1}))
     gen = mc.como_json(call('delphi_references', {
         'path': UGEN, 'line': _uso, 'character': _gen[_uso].index('TGen') + 1}))
     check('R1m references de una clase GENERICA: sus cabeceras TGen<T>.Bar y .Create no salen homonimas de si mismas',
           len(_cabs) == 2 and not set(_cabs) & set(lineas(gen, 'rejected', 'UGen.pas'))
-          and set(_cabs) <= set(lineas(gen, 'confirmed', 'UGen.pas')),
-          'confirmed=%s rejected=%s cabeceras=%s' % (lineas(gen, 'confirmed', 'UGen.pas'),
-                                                     lineas(gen, 'rejected', 'UGen.pas'), _cabs))
+          and set(_cabs) <= set(lineas(gen, 'confirmed', 'UGen.pas'))
+          and len(_cabd) == 1 and not set(_cabd) & set(lineas(dic, 'rejected', 'UGen.pas')),
+          'TGen confirmed=%s rejected=%s cabeceras=%s | TDic rejected=%s cabecera=%s' % (
+              lineas(gen, 'confirmed', 'UGen.pas'), lineas(gen, 'rejected', 'UGen.pas'), _cabs,
+              lineas(dic, 'rejected', 'UGen.pas'), _cabd))
     # R1k (1.18.1) un proyecto bajo una carpeta con una ENYE: DelphiLSP contesta con
     # la enye SIN escapar en la uri y UriToPath la pasaba por la pagina ANSI -
     # SYS-006 'No mapping for the Unicode character' en definition, references y
