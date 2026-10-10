@@ -166,6 +166,17 @@ function ReadOnlyRootOf(const APath: string): string;
   salia listada como si estuviera). }
 function MotivoRaizNoDisponible(const ARaiz: string): string;
 
+{ Las de ASitios a las que el servidor no llega AHORA, cada una una vez y sin
+  su barra final, con su motivo (MotivoRaizNoDisponible); las que estan no
+  salen. Lo que recorria a mano delphi_workspace (unavailableRoots), y lo que
+  dicen las notas de arranque (David, 10-oct-2026: una raiz que no existia y
+  el arranque no lo dijo). }
+type
+  TRaizNoDisponible = record
+    Raiz, Motivo: string;
+  end;
+function RaicesNoDisponibles(const ASitios: TArray<string>): TArray<TRaizNoDisponible>;
+
 { La negativa de una ruta que cae en una raiz o referencia cuya LETRA no esta
   conectada en este proceso (WS-022); '' si no es el caso. Sin disco ni red:
   va en la puerta de cada llamada (ArgPathOutsideDenied). }
@@ -2048,6 +2059,26 @@ begin
           (ClaseDeLetra(LetraDeRuta(ARaiz)) = clLocal) and
           not TDirectory.Exists(SinBarraFinal(ARaiz)) then
     Result := MsgText(SF_WS_CARPETA_RAIZ_NO_EXISTE);
+end;
+
+function RaicesNoDisponibles(const ASitios: TArray<string>): TArray<TRaizNoDisponible>;
+var
+  Una: TRaizNoDisponible;
+begin
+  Result := [];
+  for var R in ASitios do
+  begin
+    Una.Raiz := SinBarraFinal(R);
+    Una.Motivo := MotivoRaizNoDisponible(R);
+    if Una.Motivo = '' then
+      Continue;
+    var Ya := False;
+    for var Dicha in Result do
+      if SameText(Dicha.Raiz, Una.Raiz) then
+        Ya := True;
+    if not Ya then
+      Result := Result + [Una];
+  end;
 end;
 
 { Las raices y referencias a las que SI se llega: donde seguir trabajando. }

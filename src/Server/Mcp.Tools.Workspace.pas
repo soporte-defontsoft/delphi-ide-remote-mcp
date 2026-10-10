@@ -990,11 +990,8 @@ begin
     // sin montar salia aqui como si estuviera, y el agente se estrellaba
     // contra WS-008 en cada tool (Hermes, 5-oct-2026).
     var NoEstan: TJSONArray := nil;
-    for R in Roots + WorkspaceReadOnlyRoots do
+    for var NoEsta in RaicesNoDisponibles(Roots + WorkspaceReadOnlyRoots) do
     begin
-      var Motivo := MotivoRaizNoDisponible(R);
-      if Motivo = '' then
-        Continue;
       if NoEstan = nil then
       begin
         NoEstan := TJSONArray.Create;
@@ -1002,8 +999,8 @@ begin
       end;
       var Una := TJSONObject.Create;
       NoEstan.AddElement(Una);
-      Una.AddPair('root', SinBarraFinal(R));
-      Una.AddPair('reason', Motivo);
+      Una.AddPair('root', NoEsta.Raiz);
+      Una.AddPair('reason', NoEsta.Motivo);
     end;
     if NoEstan <> nil then
       Return.AddPair('unavailableRootsNote', MsgText(SN_WS_RAICES_NO_DISPONIBLES));

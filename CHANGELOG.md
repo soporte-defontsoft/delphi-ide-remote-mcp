@@ -10,6 +10,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The startup log says which roots it cannot reach.** A root or a
+  reference the server could not reach when it started was said by
+  `delphi_workspace` (`unavailableRoots`) and by the tool that touched it,
+  never at startup: in production a declared root did not exist and the
+  log said nothing. Every root and reference declared - the environment's
+  and each workspace's - is now asked to the same judge,
+  `MotivoRaizNoDisponible` (a drive that is not connected, a local folder
+  that does not exist; it never goes to the network), and each one that
+  fails is a startup warning with its reason. It only informs: the jail
+  stays as declared. `RaicesNoDisponibles` (`Lsp.Guard`) is the one walk
+  for that and for `delphi_workspace`, and `SitiosDeclarados`
+  (`Lsp.Settings`) the one list of declared places, which the network
+  drives used to build by hand. `test_paredes_1131` W10, red without it.
+
 - **`delphi_edit` reads the final `end.` the way dcc does.** Its audit
   counted an `end.` only alone on its line, so writing a statement before
   it - `Writeln('x'); end.`, or a program as `program P; begin end.`, both

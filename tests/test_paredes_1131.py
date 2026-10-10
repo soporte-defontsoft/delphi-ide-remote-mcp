@@ -36,6 +36,10 @@ podia hacer el agente. Esta bateria mide cada uno.
       y la descripcion de delphi_references dicen que una cadena SI bloquea el
       rename (RENAME-020); WS-020, delphi_fetch y su maxbytes dicen 1 MB; region
       y window dicen que no se combinan
+  W10 (10-oct-2026, David) las notas de ARRANQUE dicen cada raiz y referencia
+      que no se alcanza, con su motivo (la letra ausente, la carpeta local que no
+      existe); la que esta no. Antes callaban: una raiz de produccion no existia
+      y el arranque no lo dijo
 
 Usage:  python tests/test_paredes_1131.py [path-to-DelphiLspMcp.exe]
 """
@@ -224,6 +228,34 @@ finally:
     proc.kill()
 proc.wait(10)
 salida.close()
+
+# ---------------------------------------------------------------------- W10
+# las raices y la referencia que no se alcanzan, dichas en las notas de ARRANQUE
+# con su motivo (EL juez, MotivoRaizNoDisponible); la que esta, no. Solo informa:
+# la jaula sigue como esta declarada (W1-W5 lo miden con el mismo servidor)
+with open(os.path.join(BASE, 'paredes-normal.txt'), 'rb') as f:
+    ARRANQUE = f.read().decode('utf-8', 'replace')
+PREFIJO = mc.catalogo()['SL_SYS_RAIZ_NO_DISPONIBLE_ARRANQUE_FMT'].split('%s')[0]
+NOTAS = [l for l in ARRANQUE.splitlines() if PREFIJO in l]
+
+
+def dicha(raiz, motivo):
+    return any((raiz in l or mc.virtual(raiz) in l) and motivo in l for l in NOTAS)
+
+
+def letra_motivo(letra):
+    # el motivo con la letra real o con su unidad virtual, segun enmascare el log
+    f = mc.catalogo()['SF_WS_LETRA_NO_CONECTADA_FMT']
+    return [f % letra, f % ('srv' + letra.lower())]
+
+
+check('W10 al arrancar, el log dice la raiz LOCAL cuya carpeta no existe, con su motivo',
+      dicha(LOCAL_NO, mc.catalogo()['SF_WS_CARPETA_RAIZ_NO_EXISTE']), '\n'.join(NOTAS)[:600] or ARRANQUE[-800:])
+check('W10 ...y la raiz y la referencia de las letras ausentes, con el suyo',
+      any(dicha(RAIZ_FALTA, m) for m in letra_motivo(FALTA)) and
+      any(dicha(RAIZ_REF, m) for m in letra_motivo(REF)), '\n'.join(NOTAS)[:600] or ARRANQUE[-800:])
+check('W10 ...y la que esta no sale: tres notas, una por raiz que no se alcanza',
+      len(NOTAS) == 3 and not any(JAIL in l for l in NOTAS), '\n'.join(NOTAS)[:600])
 
 # ---------------------------------------------------------------------- W6
 proc, salida, c = lanza(dict(GIT_AISLADO, GIT_TEST_ASSUME_DIFFERENT_OWNER='1'), 'paredes-dueno')

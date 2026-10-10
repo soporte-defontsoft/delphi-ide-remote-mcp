@@ -329,6 +329,13 @@ begin
   // silently (operator decision 2026-09-11).
   for var WsNote in WorkspaceStartupNotes do
     AddNota(WsNote);
+  // las raices y referencias declaradas a las que no se llega AL ARRANCAR,
+  // con su motivo (EL juez, sin salir a la red). Solo se dice: la jaula
+  // queda como esta declarada (David, 10-oct-2026: una raiz de produccion
+  // no existia y el arranque no lo dijo)
+  for var NoEsta in RaicesNoDisponibles(SitiosDeclarados(False)) do
+    Add(NOTE_WARNING_PREFIX + MsgFmt(SL_SYS_RAIZ_NO_DISPONIBLE_ARRANQUE_FMT,
+      [NoEsta.Raiz, NoEsta.Motivo]));
   // Las instalaciones de Delphi de la maquina, cada una con la clave que el
   // operador copiaria a su settings.ini, y cual usa este servidor (David,
   // 5-oct-2026: un servidor es un Delphi).

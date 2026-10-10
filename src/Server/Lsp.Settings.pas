@@ -82,6 +82,12 @@ function WorkspaceTokensConfigured: Boolean;
   there is nothing to say. }
 function WorkspaceStartupNotes: TArray<string>;
 
+{ Las raices y referencias DECLARADAS: las del entorno y las de cada workspace
+  que no esta cerrado, en ese orden; con AConVaults, tambien sus vaults. Las
+  recorren las letras de red al cargar y las notas de arranque (la lista
+  estaba montada a mano dentro de LoadSecurity). Despues de LoadSecurity. }
+function SitiosDeclarados(AConVaults: Boolean): TArray<string>;
+
 { One-line human summary of the WRITE jail for the startup log (the single
   source of how the jail is described). AWarning is set when the state
   deserves a warning level: no jail at all (unrestricted) or fail-closed
@@ -650,6 +656,21 @@ begin
     if (W.Token <> '') or (W.ReadOnlyToken <> '') then
       Exit(True);
   Result := False;
+end;
+
+function SitiosDeclarados(AConVaults: Boolean): TArray<string>;
+begin
+  Result := GRoots + GRoRoots;
+  if AConVaults and (VaultNormalizado(GVaultPath) <> '') then
+    Result := Result + [IncludeTrailingPathDelimiter(VaultNormalizado(GVaultPath))];
+  for var K := 0 to High(GWorkspaces) do
+    if not GWorkspaces[K].Invalid then
+    begin
+      Result := Result + GWorkspaces[K].Roots + GWorkspaces[K].ReadOnlyRoots;
+      if AConVaults and (VaultNormalizado(GWorkspaces[K].VaultPath) <> '') then
+        Result := Result + [IncludeTrailingPathDelimiter(
+          VaultNormalizado(GWorkspaces[K].VaultPath))];
+    end;
 end;
 
 function WorkspaceStartupNotes: TArray<string>;
@@ -1404,17 +1425,7 @@ begin
   // de que nadie use una raiz; lo que pasa sale con las notas de arranque, y
   // lo que llegue despues (pasado el plazo, o al reintentar), al log. Un
   // workspace cerrado no cuenta: no admite a nadie.
-  var Sitios: TArray<string> := GRoots + GRoRoots;
-  if VaultNormalizado(GVaultPath) <> '' then
-    Sitios := Sitios + [IncludeTrailingPathDelimiter(VaultNormalizado(GVaultPath))];
-  for var K := 0 to High(GWorkspaces) do
-    if not GWorkspaces[K].Invalid then
-    begin
-      Sitios := Sitios + GWorkspaces[K].Roots + GWorkspaces[K].ReadOnlyRoots;
-      if VaultNormalizado(GWorkspaces[K].VaultPath) <> '' then
-        Sitios := Sitios + [IncludeTrailingPathDelimiter(
-          VaultNormalizado(GWorkspaces[K].VaultPath))];
-    end;
+  var Sitios := SitiosDeclarados(True);
   try
     GWorkspaceNotes := GWorkspaceNotes + VigilaLetrasDeRed(Sitios, ManosDeWindows,
       PLAZO_LETRAS_DE_RED_MS, REINTENTO_LETRAS_DE_RED_MS, NotaAlLog);

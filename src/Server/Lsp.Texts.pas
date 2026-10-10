@@ -8107,6 +8107,9 @@ const
   SL_SYS_NO_BINDIP_LOCALHOST_ONLY =
     'And no [Server] BindIP: HTTP listens on 127.0.0.1 ONLY. To expose ' +
     'it to the network, add a [Workspace.<name>] section with Token=.';
+  SL_SYS_RAIZ_NO_DISPONIBLE_ARRANQUE_FMT =
+    'Not available at startup: %s (%s). The jail stays as declared; ' +
+    'delphi_workspace lists it under unavailableRoots while it lasts.';
 
   // Mensajes que estaban en linea en Lsp.LogSink.pas (paso 3c a mano, 27-sep-2026)
   SL_SYS_LOG_EN_DISCO_FMT =
