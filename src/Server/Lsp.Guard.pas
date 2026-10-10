@@ -1810,28 +1810,90 @@ begin
     Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', WorkspaceRoots)]);
 end;
 
+{ Una unidad virtual que la expansion de ida dejo tal cual porque esta sesion
+  no la sirve: negada por su NOMBRE, sin resolverla nunca en el disco (eso
+  filtraba las letras de la maquina). '' si no lo es, o si no hay unidades
+  virtuales. La de PathAnomaly y la de cada trozo de una linea de ordenes. }
+function UnidadNoServidaDenegada(const APath: string): string;
+var
+  Units, List: string;
+  C: Char;
+begin
+  Result := '';
+  Units := ServedDriveLetters;
+  C := VirtualUnitLetter(APath);
+  if (Units = '') or (C = #0) or (Pos(C, Units) > 0) then
+    Exit;
+  for C in Units do
+  begin
+    if List <> '' then
+      List := List + ', ';
+    List := List + VirtualUnitOf(C, Units) + ':';
+  end;
+  Result := MsgFmt(SR_UNIT_UNKNOWN_FMT, [APath, List]);
+end;
+
 { La pasada de los UNC ajenos en la ENTRADA, sobre las rutas marcadas
   [RutaDelServidor]: antes de alargarlas (AlargaRutas las resuelve) y antes de
-  que la tool haga nada con ellas. La negativa, la de NegativaDeUnc. }
+  que la tool haga nada con ellas. La negativa, la de NegativaDeUnc.
+  Y sobre CADA TROZO de una linea de ordenes ([LineaDeOrdenes], los args de
+  git), troceada con EL troceador: el programa abre una ruta que le llegue
+  ahi como la abriria la tool. Un '-- \\host\s\x' en un git log abria SMB
+  hacia ese host con la cuenta del servicio, tambien en solo lectura (21 s
+  medidos; revisor de version de la 1.18.1). En un trozo valen los mismos
+  jueces que en una ruta - el UNC de ningun sitio y el prefijo de dispositivo
+  (RutaSinTocarElDisco), sobre el trozo y sobre el valor de un '--opcion=' -,
+  y la unidad virtual no servida, por su nombre (llegaba a git tal cual y
+  callaba: GIT-060). }
 function UncAjenoEnArgumentos(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
-  Mapa: TDictionary<string, Boolean>;
+  Mapa, Lineas: TDictionary<string, Boolean>;
   I: Integer;
   P: TJSONPair;
   EsFormaDeRed: Boolean;
+  Clave, Valor, Trozo: string;
+
+  function TrozoDenegado(const ATrozo: string): string;
+  var
+    V: string;
+    Valores: TArray<string>;
+  begin
+    Result := UnidadNoServidaDenegada(ATrozo);
+    if Result <> '' then
+      Exit;
+    Valores := [ATrozo];
+    if ATrozo.StartsWith('-') and (Pos('=', ATrozo) > 0) then
+      Valores := Valores + [Copy(ATrozo, Pos('=', ATrozo) + 1, MaxInt)];
+    for V in Valores do
+      if UncFueraDeLugares(V) then
+        Exit(NegativaDeUnc(V, EsFormaDeRed))
+      else if EsPrefijoDeDispositivo(V) then
+        Exit(MsgFmt(SR_GUARD_PREFIJO_DISPOSITIVO_FMT, [V]));
+  end;
+
 begin
   Result := '';
   if not Assigned(AArguments) then
     Exit;
   Mapa := RutasNuestras;
+  Lineas := MarcasDeParams.DeLineaDeOrdenes;
   for I := 0 to AArguments.Count - 1 do
   begin
     P := AArguments.Pairs[I];
-    if (P.JsonValue is TJSONString) and
-       Mapa.ContainsKey(ClaveDeParam(AToolName, P.JsonString.Value)) and
-       UncFueraDeLugares(TJSONString(P.JsonValue).Value) then
-      Exit(NegativaDeUnc(TJSONString(P.JsonValue).Value, EsFormaDeRed));
+    if not (P.JsonValue is TJSONString) then
+      Continue;
+    Clave := ClaveDeParam(AToolName, P.JsonString.Value);
+    Valor := TJSONString(P.JsonValue).Value;
+    if Mapa.ContainsKey(Clave) and UncFueraDeLugares(Valor) then
+      Exit(NegativaDeUnc(Valor, EsFormaDeRed));
+    if Lineas.ContainsKey(Clave) then
+      for Trozo in TrocearArgs(Valor) do
+      begin
+        Result := TrozoDenegado(Trozo);
+        if Result <> '' then
+          Exit;
+      end;
   end;
 end;
 
@@ -2239,7 +2301,7 @@ end;
   is refused outright - it is never a legitimate request. }
 function PathAnomaly(const APath: string): string;
 var
-  Name, Rest, Units, List: string;
+  Name, Rest: string;
   C: Char;
 begin
   Result := '';
@@ -2251,19 +2313,11 @@ begin
   // not serve: it must be refused BY NAME, never resolved against the real
   // filesystem (that is what leaked the host's drive letters). Only when a
   // virtual namespace exists at all - with no served drive there is nothing to
-  // mask and nothing to name.
-  Units := ServedDriveLetters;
-  C := VirtualUnitLetter(APath);
-  if (Units <> '') and (C <> #0) and (Pos(C, Units) = 0) then
-  begin
-    for C in Units do
-    begin
-      if List <> '' then
-        List := List + ', ';
-      List := List + VirtualUnitOf(C, Units) + ':';
-    end;
-    Exit(MsgFmt(SR_UNIT_UNKNOWN_FMT, [APath, List]));
-  end;
+  // mask and nothing to name. (UnidadNoServidaDenegada: tambien la de los
+  // trozos de una linea de ordenes.)
+  Result := UnidadNoServidaDenegada(APath);
+  if Result <> '' then
+    Exit;
   // Un prefijo de dispositivo o de ruta extendida, y una unidad virtual sin
   // su barra, con SU motivo: caian en el de abajo, "alternate data stream"
   // (sexta revision)

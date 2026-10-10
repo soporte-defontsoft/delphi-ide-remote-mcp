@@ -10,6 +10,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A network path in `delphi_git args` no longer makes git open the
+  network.** A `\\host\share\...` of no declared place, given as one of
+  the arguments (`log -- \\host\s\x.txt`), reached git, and git opened SMB
+  towards that host with the service's account - with a read-only
+  credential too: 21 s measured against a host that does not answer, and an
+  authentication towards one that does. The paths of every other parameter
+  were already refused by text, before anything touched the disk; the
+  arguments of git were the door left. Every piece of `args`, split as
+  git receives it, now passes the same judges as a path: a UNC of no
+  declared place (also `//host/...`, quoted with spaces, or after
+  `--option=`) and a device prefix (`\\?\UNC\host\...`, which opened the
+  network the same way) are refused before git runs, and a virtual unit
+  this session does not serve is refused by its name (it reached git as
+  written and found nothing, `GIT-060`). This was there before 1.18.0;
+  found by the version reviewer of 1.18.1. `test_git_jaula` J19 (red
+  before: 21 s).
+
 - **A whole repository in the trash can be purged, by hand and after 15
   days, and a trash day that cannot be removed no longer stops the rest.**
   Since 1.18.0 `.git` is a place only `delphi_git` reaches, with one declared

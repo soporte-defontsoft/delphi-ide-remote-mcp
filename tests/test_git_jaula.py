@@ -74,10 +74,16 @@ main repository's, for a linked worktree) - and git runs PINNED to them
       network drive in the session that runs the battery:
       DELPHI_MCP_TEST_NETDIR names a folder of it to work in; without it the
       battery says so (NOTA) and the rule alone is in LspTests.Rutas
+  J18 a path with its virtual unit in args reaches git expanded (1.18.1)
+  J19 a UNC of no declared place in args - also //host, quoted with spaces,
+      after --option=, or behind a device prefix - is refused by text before git runs:
+      git opened SMB towards that host with the service's account (21 s
+      measured with a TEST-NET host); an unserved virtual unit is refused by
+      its name (1.18.1)
 
 Usage:  python tests/test_git_jaula.py [path-to-DelphiLspMcp.exe]
 """
-import os, re, subprocess
+import os, re, subprocess, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -560,10 +566,38 @@ check('J16 ...y en el remoto sigue todo como estaba', refs(ENVIO_GIT) == alli an
 l18 = g(REPO, command='log', args='-- ' + mc.virtual(os.path.join(REPO, 'raiz.txt')))
 check('J18 log -- <ruta con unidad virtual> da el commit de ese fichero, y solo ese (daba GIT-060)',
       not mc.fallo(l18) and 'base' in l18 and 'desde la subcarpeta' not in l18, corto(l18, 300))
+# un commit que NO toca ese fichero: sin la ruta (tirada o partida), log lo ensenaria
+# (con solo 'base' en el repo, el check pasaba aunque la ruta no llegase; revisor 1.18.1)
+git('commit', '-q', '--allow-empty', '-m', 'solo otro', cwd=RARO)
 l18b = g(RARO, command='log',
          args='-- "%s"' % mc.virtual(os.path.join(RARO, 'sub carpeta', 'uno.txt')))
 check('J18 ...y entre comillas, con espacios y un acento en la ruta, llega entera',
-      not mc.fallo(l18b) and 'base' in l18b, corto(l18b, 300))
+      not mc.fallo(l18b) and 'base' in l18b and 'solo otro' not in l18b, corto(l18b, 300))
+
+# J19 (1.18.1) - un UNC de ningun sitio en args: git abria SMB hacia ese host con la
+# cuenta del servicio, tambien en solo lectura (21 s medidos; revisor de version de la
+# 1.18.1). Cada trozo pasa los jueces de una ruta, por texto y antes de git. El host es
+# de TEST-NET-1: nadie contesta, y si la negativa fallara solo tardaria
+HOST = '192.0.2.1'
+unc = [('-- \\\\%s\\s\\x.txt' % HOST, 'SR_JAIL_FMT'),
+       ('-- //%s/s/x.txt' % HOST, 'SR_JAIL_FMT'),
+       ('-- "\\\\%s\\s x\\y.txt"' % HOST, 'SR_JAIL_FMT'),
+       ('--output=\\\\%s\\s\\x.txt' % HOST, 'SR_JAIL_FMT'),
+       ('-- \\\\?\\UNC\\%s\\s\\x.txt' % HOST, 'SR_GUARD_PREFIJO_DISPOSITIVO_FMT')]
+malas = []
+for a, que in unc:
+    t0 = time.time()
+    r = g(REPO, command='log', args=a)
+    if not (mc.abre(r, que) and time.time() - t0 < 5):
+        malas.append((a, round(time.time() - t0, 1), corto(r, 160)))
+check('J19 un UNC de ningun sitio en args (tambien //host, entre comillas, tras --opcion= y '
+      '\\\\?\\UNC\\) se niega por texto, sin que git abra la red', not malas, malas)
+r = g(REPO, command='log', args='-- srvq:\\x.txt')
+check('J19 ...y una unidad virtual que no se sirve, por su nombre (llegaba a git tal cual: GIT-060)',
+      mc.abre(r, 'SR_UNIT_UNKNOWN_FMT'), corto(r, 200))
+r = g(REPO, command='log', args='--format=%s -- raiz.txt')
+check('J19 control: una opcion con = y una ruta relativa siguen llegando a git',
+      not mc.fallo(r) and 'base' in r, corto(r, 200))
 
 srv.cierra()
 

@@ -131,10 +131,14 @@ type
     recompone con su inversa (EnComillas); sin trozos asi no la toca. Con
     [Contenido], 'log -- srvd:\x' llegaba a git tal cual y fallaba callado
     (GIT-060, "nada que ensenar"), y WS-002 promete las unidades virtuales en
-    todo argumento de ruta (1.18.1). No abre nada: es lo mismo que escribir la
-    letra real, que ya se acepta, y el filtro de git juzga lo expandido. Lo
-    que va a un programa de OTRA maquina (adb, PAServer) sigue siendo
-    contenido. }
+    todo argumento de ruta (1.18.1). La expansion no abre nada: es lo mismo
+    que escribir la letra real, que ya se acepta, y el filtro de git juzga lo
+    expandido. Y cada trozo pasa a la entrada los jueces de una ruta
+    (Lsp.Guard.UncAjenoEnArgumentos): un UNC de ningun sitio o un prefijo de
+    dispositivo se niegan por texto antes de que el programa los abra (un
+    '\\host\s\x' en los args de git abria SMB hacia ese host; revisor de
+    version de la 1.18.1), y una unidad no servida, por su nombre. Lo que va
+    a un programa de OTRA maquina (adb, PAServer) sigue siendo contenido. }
   LineaDeOrdenesAttribute = class(TCustomAttribute)
   end;
 
