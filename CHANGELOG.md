@@ -10,6 +10,15 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_test run` lists what the test left by folder, like every file
+  list.** Its `files` was the one list of files of another shape - flat,
+  each entry with its relative name - while every other tool groups by
+  folder through one organizer (`delphi_test discover` too). Now `files =
+  [{dir, files = [{name, size, content...}]}]`, with `dir` `.` for the
+  test's own folder (it is deleted with the call, so the paths are relative
+  to it) and `.\sub` for what it wrote below. `test_delphi_test_contenedor`
+  K3c.
+
 - **What is written inside a file is content, by a mark, and a path in a
   form value works.** The entry gate turns `srvd:\` back into the real
   drive in every argument except those that carry content - and which ones

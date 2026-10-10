@@ -4017,7 +4017,8 @@ const
     'test here is for LOGIC: what it reads has to travel in its output ' +
     'folder, and a project built with runtime packages (UsePackages) is ' +
     'refused before building: build it whole. What it writes in that ' +
-    'folder comes back in "files" (text files with their content, capped).';
+    'folder comes back in "files", by folder like every file list (dir "." is ' +
+    'that folder; text files with their content, capped).';
 
   SP_TEST_COMMAND =
     'discover (list the test projects under "path") | run (build and run ' +

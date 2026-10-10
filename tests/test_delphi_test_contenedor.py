@@ -12,7 +12,8 @@ of the new description is measured here by name:
   K1  a test runs and passes in its container; sandboxed=true
   K2  it writes in its own folder (the copy), and the agent's output folder
       is untouched: what it wrote is not there, nothing there is relabelled
-  K3  what it wrote comes back in "files", a text file with its content;
+  K3  what it wrote comes back in "files", a text file with its content,
+      by folder like every file list (K3c: dir "." is the test's folder);
       text is decided by the server's one rule (a NUL), not by the extension:
       a binary .txt comes without content, a text .out with it
   K4  it cannot write ABOVE its folder: the server's temp, the server's house
@@ -468,7 +469,14 @@ for _l in (j.get('outputTail') or '').splitlines():
     if _l.startswith('SONDA '):
         _p = _l.split()
         sonda[_p[1]] = ' '.join(_p[2:])
-files = {f.get('name'): f for f in (j.get('files') or [])}
+# "files" va por carpetas, como toda lista de ficheros (11.2 de la 1.18.0): dir "."
+# es la carpeta del test; aqui se aplana por su ruta relativa
+def _relativa(g, f):
+    d = g.get('dir', '')
+    return f.get('name') if d == '.' else d[2:] + '\\' + f.get('name')
+
+
+files = {_relativa(g, f): f for g in (j.get('files') or []) for f in (g.get('files') or [])}
 if j.get('result') != 'pass':
     # lo que dijo el test, para saber POR QUE (el detalle del check lo corta)
     print('SALIDA DEL TEST:', j.get('result'), j.get('exitCode'), j.get('error'), j.get('timedOut'),
@@ -487,6 +495,12 @@ check('K2c ...ni se etiqueta nada suyo (hasta la 1.10 se le bajaba la etiqueta)'
       and not etiqueta_baja(os.path.join(SALIDA, 'CajaTest.exe')), '')
 check('K3 lo que escribio vuelve en "files", con su contenido',
       files.get('resultado.log', {}).get('content') == 'linea de log', str(list(files)))
+_dirs = [g.get('dir') for g in (j.get('files') or [])]
+check('K3c ...por carpetas, como toda lista de ficheros: "." la del test, sus subcarpetas debajo, cada una una vez',
+      '.' in _dirs and len(_dirs) == len(set(_dirs))
+      and all(d == '.' or d.startswith('.\\') for d in _dirs)
+      and not any('path' in f for g in (j.get('files') or []) for f in (g.get('files') or [])),
+      str(_dirs)[:300])
 check('K3b es texto por la regla de la casa, no por la extension: un .txt binario sin contenido, un .out con el',
       'binario.txt' in files and 'content' not in files['binario.txt']
       and files['binario.txt'].get('noContent') == 'binary'

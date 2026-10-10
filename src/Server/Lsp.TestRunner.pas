@@ -404,7 +404,11 @@ begin
         Result := TJSONArray.Create;
       O := TJSONObject.Create;
       Result.AddElement(O);
-      O.AddPair('name', N);
+      // su ruta RELATIVA a la carpeta del test, con '.' delante: la respuesta
+      // la agrupa por carpeta (AgrupaPorCarpeta, el organizador de todas las
+      // listas de ficheros) y '.' es esa carpeta, que se borra con la llamada.
+      // Era una lista plana de otra forma, la unica (11.2 de la 1.18.0)
+      O.AddPair('path', TPath.Combine('.', N));
       Tam := StrToInt64Def(Despues[N].Split(['|'])[0], 0);
       O.AddPair('size', TJSONNumber.Create(Tam));
       // sin contenido, y por que: lo que ya no cabe ni se lee
@@ -747,6 +751,7 @@ begin
   if Ficheros <> nil then
   begin
     Result.AddPair('files', Ficheros);
+    AgrupaPorCarpeta(Result, 'files');
     if Recortado then
       Result.AddPair('filesNote', MsgFmt(SN_TEST_FICHEROS_RECORTE_FMT,
         [TOPE_POR_FICHERO, TOPE_DE_FICHEROS, TOPE_DE_LECTURA div (1024 * 1024)]));
