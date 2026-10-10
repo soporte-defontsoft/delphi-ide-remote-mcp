@@ -47,6 +47,7 @@ uses
   Lsp.Texts,
   Lsp.Guard,
   Lsp.Pascal,
+  Lsp.PascalDecl, // EL lector: las unidades del uses de un .dpr
   Lsp.DesignerBin, // el literal y el flotante: sus compositores
   Lsp.DesignerForma, // la linea de objeto: su compositor
   Lsp.Casa,
@@ -699,11 +700,23 @@ begin
   except
     Exit;
   end;
-  if TRegEx.IsMatch(Txt, '(?i)\bFMX\.Forms\b') then
-    Result := 'fmx'
-  else if TRegEx.IsMatch(Txt, '(?i)\bVcl\.Forms\b') then
-    Result := 'vcl'
-  else if ClausulaRequires(Txt, Requiere, Ini, Largo) then
+  // las UNIDADES del uses, por EL lector (Lsp.PascalDecl): una regex sobre el
+  // texto crudo tomaba un 'FMX.Forms' de un comentario (medido el 10-oct-2026:
+  // un VCL con '// antes era FMX: FMX.Forms...' se tomaba por FMX y
+  // delphi_create negaba su form VCL, CREATE-017)
+  var U := LeeFuentePascal(Txt);
+  try
+    for var N in U.UsesInterface + U.UsesImplementation do
+      if SameText(N, 'FMX.Forms') then
+        Exit('fmx')
+      else if SameText(N, 'Vcl.Forms') then
+        Result := 'vcl';
+  finally
+    U.Free;
+  end;
+  if Result <> '' then
+    Exit;
+  if ClausulaRequires(Txt, Requiere, Ini, Largo) then
     for var R in Requiere do
       if SameText(R, 'fmx') then
         Exit('fmx')

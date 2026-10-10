@@ -172,6 +172,15 @@ the MCP `initialize` response (`serverInfo.version`).
   `FicheroQueNoEditaDelphiEdit`, now answers for an edit and for a whole
   batch, and a block on a form is judged as a line is. Found using the
   server. `test_round49` (E5, E6).
+- **The folder digest lists a long `uses` whole, and a comment no longer
+  decides a project's framework.** `delphi_symbols` of a folder joined at
+  most nine lines of a statement, so a `uses` with one unit per line came
+  back cut (twelve units: eight and a hanging comma); its names now come from
+  the Pascal reader (`Lsp.PascalDecl`). `delphi_create` told VCL from FMX
+  with a regex over the raw `.dpr`, so a comment naming `FMX.Forms` made a
+  VCL project "FMX" and its VCL form was refused (CREATE-017); the units of
+  its `uses` decide now, read the same way. Both measured on the live
+  server. `test_lector_clases` (C14c), `test_round8` (#4b).
 - **A changeset says what the engine warned.** Its commit kept only "done"
   from each edit, so the engine's warnings - a brace inside a brace
   comment, a broken structure - never reached the agent (CHSET-032 now

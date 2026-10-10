@@ -183,6 +183,15 @@ check('#4 ...y no ha dejado el .pas', not os.path.exists(os.path.join(VCLDIR, 'U
 r = A.call('delphi_create', {'kind': 'form-vcl', 'name': 'UBueno',
                               'project': os.path.join(VCLDIR, 'ProyVcl.dproj')})
 check('#4 el form del framework que toca SI entra', mc.abre(r, 'SK_CREATE_CREADO_FORM_FMT'), r[:200])
+# el marco lo dicen las UNIDADES del uses (EL lector), no un comentario: una
+# regex sobre el texto crudo tomaba este proyecto por FMX (medido el 10-oct-2026)
+_dpr = os.path.join(VCLDIR, 'ProyVcl.dpr')
+_t = open(_dpr, 'rb').read()
+open(_dpr, 'wb').write(_t.replace(b'program ProyVcl;', b'program ProyVcl;\r\n\r\n// antes era FMX: FMX.Forms', 1))
+r = A.call('delphi_create', {'kind': 'form-vcl', 'name': 'UTrasComentario',
+                              'project': os.path.join(VCLDIR, 'ProyVcl.dproj')})
+check('#4b un FMX.Forms en un COMENTARIO del .dpr no lo hace FMX: el form VCL entra',
+      b'// antes era FMX' in open(_dpr, 'rb').read() and mc.abre(r, 'SK_CREATE_CREADO_FORM_FMT'), r[:200])
 
 # ------------------------------------------------------------------- #10 --
 r = A.call('delphi_package', {})

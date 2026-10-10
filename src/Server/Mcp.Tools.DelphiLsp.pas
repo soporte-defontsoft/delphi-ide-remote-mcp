@@ -1034,9 +1034,19 @@ begin
     end;
     if TRegEx.IsMatch(L, '(?i)^uses\b') then
     begin
-      J := I;
-      Result.AddPair('uses', WholeStatement(J).Substring(4).Replace(';', '').Trim);
-      I := J + 1;
+      // los nombres, de EL lector (Lsp.PascalDecl): unir lineas cortaba un
+      // uses de mas de nueve - StatementAt une como mucho nueve - (medido el
+      // 10-oct-2026: doce unidades salian ocho y una coma colgando). Las dos
+      // ramas de un {$IFDEF} van, una vez cada nombre
+      var Usos: TArray<string> := [];
+      for var N in U.UsesInterface do
+        if IndexText(N, Usos) < 0 then
+          Usos := Usos + [N];
+      Result.AddPair('uses', string.Join(', ', Usos));
+      // ...y la clausula entera se salta, hasta su ';'
+      while (I < High(Lines)) and not Vista[I].TrimRight.EndsWith(';') do
+        Inc(I);
+      Inc(I);
       Continue;
     end;
     if TRegEx.IsMatch(L, '(?i)^(type|const|var|resourcestring)[ ]*$') then

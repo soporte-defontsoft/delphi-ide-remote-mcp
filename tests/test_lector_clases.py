@@ -544,6 +544,18 @@ f = call('delphi_symbols', {'path': UGEN, 'filter': 'TGen'})
 check('C14b symbols filter: el decl de la generica no lleva pegado su primer campo',
       '"decl":"TGen<T: class, constructor> = class(TObject)"' in f, f[:500])
 
+# C14c: el uses del digest lo da EL lector (Lsp.PascalDecl): unir lineas cortaba
+# uno de mas de nueve (doce unidades salian ocho y una coma colgando; medido el
+# 10-oct-2026 con delphi_symbols de una carpeta)
+UDU = os.path.join(DIG, 'UDigUses.pas')
+escribe(UDU, 'unit UDigUses;\n\ninterface\n\nuses\n' + ''.join('  U%02d,\n' % i for i in range(1, 12)) +
+        '  U12;\n\nprocedure Ultima;\n\nimplementation\n\nprocedure Ultima;\nbegin\nend;\n\nend.\n')
+d = J(call('delphi_symbols', {'path': DIG}))
+du = [u_ for u_ in mc.ficheros(d, 'units') if u_.get('unit') == 'UDigUses']
+check('C14c digest: un uses de doce lineas sale ENTERO (eran nueve como mucho) y lo de detras sigue',
+      bool(du) and du[0].get('uses') == ', '.join('U%02d' % i for i in range(1, 13)) and
+      any(x.get('decl') == 'procedure Ultima;' for x in du[0].get('declares', [])), str(du)[:500])
+
 # C15: un class var no es el campo de un componente (el streaming busca campos
 # de la instancia): el lector no marcaba los campos de un 'class var'. En la
 # seccion published implicita, donde check-binding mira
