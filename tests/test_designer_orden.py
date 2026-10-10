@@ -29,6 +29,10 @@ un TToolBar, en una form heredada con [n]...).
   O20 el form se borra mientras juzga el renderizador: DSGN-144 (revisor 6, B2)
   O21 un ancestro del marco (TForm) no es lectura a medias: lo dice la clase cargada
   O22 ...tampoco TDataModule, aunque el modulo se cargue en la form oculta (revisor 7, M1)
+  I1-I4 insert y set parent= colocan donde lo deja el IDE (el juez para dos
+      llamadores mas): un TLabel nuevo delante de los TButton de su panel, un
+      TButton el ultimo, un TLabel movido delante de los TButton; con un
+      hermano que ningun paquete carga, el ultimo y DSGN-145
   O15 no queda ninguna carpeta __tmp- (B5)
 
 Uso:  python tests/test_designer_orden.py [ruta-a-DelphiLspMcp.exe]
@@ -454,10 +458,22 @@ try:
         hilo.join(300)
         return vista, res.get('r', '')
 
+    def escribe_aunque_lo_lean(ruta, datos):
+        # el ayudante lee la carpeta del form mientras juzga y puede tenerlo abierto
+        # un instante (PermissionError, visto una vez el 10-oct-2026): se reintenta;
+        # si la escritura llegase DESPUES de la del servidor, el check sale rojo
+        for _ in range(100):
+            try:
+                open(ruta, 'wb').write(datos)
+                return
+            except PermissionError:
+                time.sleep(0.01)
+        open(ruta, 'wb').write(datos)
+
     viejo = bytes_de(DFM)
     tocado = viejo.replace(b"Caption = 'L'\r\n", b"Caption = 'LZ'\r\n", 1)
     vista, r = mientras_juzga(DFM, {'component': 'Button1', 'before': 'Button2'},
-                              lambda: open(DFM, 'wb').write(tocado))
+                              lambda: escribe_aunque_lo_lean(DFM, tocado))
     check('O16 el form cambia mientras juzga el renderizador: DSGN-144 y el cambio ajeno sigue ahi (A3)',
           vista and tocado != viejo and mc.abre(r, 'SR_DESIGNER_ORDEN_CAMBIO_FMT') and bytes_de(DFM) == tocado,
           (vista, r[:300]))
@@ -466,6 +482,54 @@ try:
     check('O20 ...y si lo BORRAN mientras juzga, DSGN-144 y no una excepcion cruda (revisor 6, B2)',
           vista and mc.abre(r, 'SR_DESIGNER_ORDEN_CAMBIO_FMT') and not os.path.exists(BORRA),
           (vista, r[:300]))
+    # ---- I1-I4: insert y set parent= donde lo deja el IDE (3.11, dos llamadores mas) ----
+    def form_con_unidad(nombre, dfm, campos):
+        ruta = os.path.join(JAIL, nombre + '.dfm')
+        open(ruta, 'wb').write(dfm.replace('\n', '\r\n').encode('ascii'))
+        pas = ('unit %s;\n\ninterface\n\nuses\n  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, '
+               'Vcl.ExtCtrls;\n\ntype\n  TF%s = class(TForm)\n%s  end;\n\nvar\n  F%s: TF%s;\n\n'
+               'implementation\n\n{$R *.dfm}\n\nend.\n' % (nombre, nombre, campos, nombre, nombre))
+        open(os.path.join(JAIL, nombre + '.pas'), 'wb').write(pas.replace('\n', '\r\n').encode('ascii'))
+        return ruta
+
+    def hijos_de_panel(ruta):
+        # los objetos de segundo nivel (4 espacios): los hijos de Panel1
+        return re.findall(r'(?m)^    object (\w+):', bytes_de(ruta).decode('utf-8'))
+
+    PANEL = ('  object Panel1: TPanel\n    Left = 8\n    Top = 8\n    Width = 200\n    Height = 150\n'
+             '    TabOrder = 0\n    object Button1: TButton\n      Left = 8\n      Top = 8\n      TabOrder = 0\n'
+             '    end\n    object Button2: TButton\n      Left = 8\n      Top = 40\n      TabOrder = 1\n    end\n')
+    INS = form_con_unidad('UIns', 'object FUIns: TFUIns\n  Left = 0\n  Top = 0\n  Caption = \'I\'\n'
+                          '  ClientHeight = 200\n  ClientWidth = 300\n' + PANEL + '  end\n'
+                          '  object Label9: TLabel\n    Left = 220\n    Top = 8\n    Caption = \'mover\'\n  end\nend\n',
+                          '    Panel1: TPanel;\n    Button1: TButton;\n    Button2: TButton;\n    Label9: TLabel;\n')
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': INS, 'classname': 'TLabel',
+                                     'component': 'LabelNuevo', 'parent': 'Panel1'}, t=240)
+    check('I1 insert de un TLabel en un panel con TButton: delante de ellos, donde lo escribe el IDE (era el ultimo)',
+          hijos_de_panel(INS) == ['LabelNuevo', 'Button1', 'Button2'] and 'orderNote' not in J(r),
+          (hijos_de_panel(INS), r[:300]))
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': INS, 'classname': 'TButton',
+                                     'component': 'Button3', 'parent': 'Panel1'}, t=240)
+    check('I2 ...y un TButton, el ultimo: el IDE tambien lo deja ahi (guarda)',
+          hijos_de_panel(INS) == ['LabelNuevo', 'Button1', 'Button2', 'Button3'] and 'orderNote' not in J(r),
+          (hijos_de_panel(INS), r[:300]))
+    r = dsg(INS, {'component': 'Label9', 'parent': 'Panel1'})
+    check('I3 set parent= de un TLabel a ese panel: delante de los TButton, tras el otro TLabel (era el ultimo)',
+          hijos_de_panel(INS) == ['LabelNuevo', 'Label9', 'Button1', 'Button2', 'Button3']
+          and J(r).get('moved') == 'Label9' and 'orderNote' not in J(r),
+          (hijos_de_panel(INS), r[:300]))
+    RARO = form_con_unidad('URaro', 'object FURaro: TFURaro\n  Left = 0\n  Top = 0\n  Caption = \'R\'\n'
+                           '  ClientHeight = 200\n  ClientWidth = 300\n' + PANEL +
+                           '    object Raro1: TClaseQueNingunPaqueteCarga\n      Left = 8\n      Top = 80\n    end\n'
+                           '  end\nend\n',
+                           '    Panel1: TPanel;\n    Button1: TButton;\n    Button2: TButton;\n')
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': RARO, 'classname': 'TLabel',
+                                     'component': 'LabelRaro', 'parent': 'Panel1'}, t=240)
+    check('I4 con un hermano que ningun paquete carga, el juez no contesta: el ultimo, y lo dice (DSGN-145)',
+          hijos_de_panel(RARO) == ['Button1', 'Button2', 'Raro1', 'LabelRaro']
+          and mc.abre(J(r).get('orderNote', ''), 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT'),
+          (hijos_de_panel(RARO), r[:400]))
+
     # B5: la carpeta de cada llamada del juez se borra siempre (en el temporal del SERVIDOR)
     quedan = glob.glob(os.path.join(os.path.dirname(EXE), '__delphi-temp', '**', '__tmp-*'), recursive=True)
     check('O15 no queda ninguna carpeta __tmp- del juez en el temporal del servidor (B5)', not quedan, quedan)

@@ -4333,7 +4333,8 @@ const
     'screen; nonVisual lists the non-visual components, fidelity says how ' +
     'it was painted) | insert (a NEW visual control: classname; component, ' +
     'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
-    'form by default; placed at 10,10 as the last child, with its published ' +
+    'form by default; placed at 10,10 where the IDE keeps it among its ' +
+    'siblings (its own writer is asked), with its published ' +
     'field in the form''s class and its unit in the uses; the answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
@@ -4420,7 +4421,8 @@ const
     'insert: the container that receives the new control, by its Name (the ' +
     'form by default). set: MOVE the component, with its children, into this ' +
     'container - alone, without prop or value; it keeps its Left/Top, now ' +
-    'relative to the new parent, and takes the next TabOrder there.';
+    'relative to the new parent, takes the next TabOrder there and goes ' +
+    'where the IDE keeps it among its new siblings.';
 
   SP_DESIGNER_VALUE =
     'set: the new value, as the form file writes it: 120, True, alClient, ' +
@@ -9801,6 +9803,13 @@ const
     'after the ancestor''s, unless a [n] places it among them); in a toolbar ' +
     'or a page control, their place -; the keyboard order is TabOrder, which ' +
     'this does not change.';
+  // insert / set parent= cuando el juez del orden no contesta (3.11): se
+  // escribe igual, el ultimo, y se dice
+  SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT =
+    '[DSGN-145] %s went in as the last child of %s: where the IDE''s own ' +
+    'writer keeps it could not be asked (the renderer did not load the form ' +
+    'whole - command=preview says why). The IDE may move it among its ' +
+    'siblings when it saves the form.';
   SF_DESIGNER_ORDEN_DELANTE_DE_FMT = 'before %s';
   SF_DESIGNER_ORDEN_DETRAS_DE_FMT = 'after %s';
   SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT = 'to position %d';

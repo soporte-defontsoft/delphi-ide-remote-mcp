@@ -10,6 +10,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`insert` and `set parent=` put the component where the IDE keeps it.**
+  Both wrote the new or moved block as the LAST child of its parent; the
+  IDE writes a VCL graphic control (a `TLabel`) before the windowed ones,
+  an inherited form places by its `[n]`..., so the file was not in the
+  IDE's order and the IDE moved it the first time it saved. Now they ask
+  the same judge as `set before=/after=/index=` (the form loaded as the
+  designer loads it and written by TWriter) and place the block before the
+  sibling the IDE writes right after it. When the judge cannot answer (a
+  sibling no package loads, an ancestor not found) the block goes last as
+  before and `orderNote` says so (DSGN-145): nothing is refused for it.
+  The judge runs without the write lock, so the form - and the unit, for
+  insert - is checked to be the one judged before writing (DSGN-144), as
+  the order already did; the three share one judge (`JuezDelOrden`) and
+  one open/check pair. `test_designer_orden` I1-I4, red before.
+
 - **An alias with the declared name empty leaves one key.** `root: ""`
   with `path: srvd:\...` (an alias of `delphi_list`), or `path: ""` with
   `unit:` in `delphi_config`, left two keys with the same name behind the

@@ -900,10 +900,23 @@ end;
 
 { ---- abrir, comprobar y escribir ---- }
 
+{ La tabla de clases del marco de F (la del Delphi activo): '' y F.Tabla, o
+  la negativa de por que no hay. Aparte de abrir el form: quien abre CON el
+  cerrojo de escritura (AbreFormParaJuzgar) la carga despues, fuera de el -
+  la primera vez se genera y tarda, y bloquearia a todos los escritores. }
+function PonTabla(var F: TFormEnEdicion): string;
+var
+  Falta: TFaltaTabla;
+begin
+  Result := '';
+  F.Tabla := MetaTable(F.EsFmx, Falta);
+  if F.Tabla = nil then
+    Result := Falta.Negativa;
+end;
+
 function AbreFormNucleo(const APath: string; ANecesitaPas, ANecesitaTabla: Boolean;
   var F: TFormEnEdicion): string;
 var
-  Falta: TFaltaTabla;
   Unidad: TUnidadPas;
 begin
   Result := WriteTargetDenied(APath);
@@ -956,11 +969,7 @@ begin
     end;
   end;
   if ANecesitaTabla then
-  begin
-    F.Tabla := MetaTable(F.EsFmx, Falta);
-    if F.Tabla = nil then
-      Exit(Falta.Negativa);
-  end;
+    Result := PonTabla(F);
 end;
 
 function AbreForm(const APath: string; ANecesitaPas, ANecesitaTabla: Boolean;
@@ -1018,6 +1027,14 @@ procedure PonValorPuesto(AObj: TJSONObject; const ANombre: string; const AInfo: 
 // EL movimiento de un bloque de form (set parent= y el orden, 3.11)
 function ConBloqueMovido(const ALineas, ABloque: TArray<string>; AIni, ALargo: Integer;
   var ADest: Integer): TArray<string>; forward;
+// el form abierto para preguntar al juez del orden y escribir despues, y donde
+// deja el IDE un bloque nuevo entre sus hermanos (3.11: insert y set parent=)
+function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: Boolean;
+  out F: TFormEnEdicion; out AAntes, AAntesPas: TArray<Byte>): string; forward;
+function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>): string; forward;
+function DondeLoDejaElIde(const F: TFormEnEdicion; const ALineas: TArray<string>;
+  const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer;
+  out ANota: string): TArray<string>; forward;
 
 { P puede recibir un control: el form, o en VCL un control con ventana
   (TWinControl por ascendencia: David, 4-oct-2026) y en FMX un control.
@@ -1313,6 +1330,8 @@ var
   Ret: TJSONObject;
   Props, Valores: TArray<string>;
   Infos: TArray<TValorPuesto>;
+  Antes, AntesPas: TArray<Byte>;
+  NotaOrden: string;
 begin
   if AClase.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_CLASS));
@@ -1323,7 +1342,8 @@ begin
     if Result <> '' then
       Exit;
   end;
-  Result := AbreForm(APath, True, True, F);
+  // los bytes que se juzgan (el juez del orden, abajo), leidos con el cerrojo
+  Result := AbreFormParaJuzgar(APath, True, True, F, Antes, AntesPas);
   if Result <> '' then
     Exit;
   try
@@ -1439,7 +1459,20 @@ begin
       if Nuevo <> nil then
         FinBloque := Nuevo.EndLine - 1;
     end;
-    Result := EscribeFormYUnidad(F, F.Doc.TextoDe(DfmLineas), PasNuevo, True);
+    // donde lo deja el IDE entre sus hermanos, no siempre el ultimo (3.11: el
+    // juez del orden; la VCL escribe un TLabel delante de los TButton)
+    var Largo := FinBloque - Ini + 1;
+    DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, NotaOrden);
+    FinBloque := Ini + Largo - 1;
+    // con el cerrojo: el form y la unidad son los que se juzgaron
+    EnterFileEdit;
+    try
+      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
+      if Result = '' then
+        Result := EscribeFormYUnidad(F, F.Doc.TextoDe(DfmLineas), PasNuevo, True);
+    finally
+      LeaveFileEdit;
+    end;
     if Result <> '' then
       Exit;
     // la linea del campo, en la unidad como ha quedado
@@ -1483,6 +1516,8 @@ begin
         Ret.AddPair('usesNote', UsesNota);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(DfmLineas)));
       Ret.AddPair('note', MsgText(SN_DESIGNER_INSERT_NOTE));
+      if NotaOrden <> '' then
+        Ret.AddPair('orderNote', NotaOrden);
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -2144,11 +2179,13 @@ var
   Obj, Padre, Viejo: TStyleObj;
   Bloque, Lineas: TArray<string>;
   Delta, I, Ini, Fin, Largo, Dest, Tab, TIni, TFin: Integer;
-  ClsId, NomObj, NomViejo, NomPadre: string;
+  ClsId, NomObj, NomViejo, NomPadre, NotaOrden: string;
   ConTab: Boolean;
   Ret: TJSONObject;
+  Antes, AntesPas: TArray<Byte>;
 begin
-  Result := AbreForm(APath, False, True, F);
+  // los bytes que se juzgan (el juez del orden, abajo), leidos con el cerrojo
+  Result := AbreFormParaJuzgar(APath, False, True, F, Antes, AntesPas);
   if Result <> '' then
     Exit;
   try
@@ -2195,8 +2232,21 @@ begin
     NomObj := NombreDe(Obj);
     NomViejo := NombreDe(Viejo);
     NomPadre := NombreDe(Padre);
-    F.Doc.SetLines(Lineas);
-    Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+    // donde lo deja el IDE entre sus hermanos nuevos, no siempre el ultimo
+    // (3.11: el juez del orden)
+    Lineas := DondeLoDejaElIde(F, Lineas, NomObj, NomPadre, Dest, Length(Bloque), NotaOrden);
+    // con el cerrojo: el form es el que se juzgo
+    EnterFileEdit;
+    try
+      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
+      if Result = '' then
+      begin
+        F.Doc.SetLines(Lineas);
+        Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+      end;
+    finally
+      LeaveFileEdit;
+    end;
     if Result <> '' then
       Exit;
     Ret := TJSONObject.Create;
@@ -2209,6 +2259,8 @@ begin
       Ret.AddPair('endLine', TJSONNumber.Create(Dest + Length(Bloque)));
       if ConTab then
         Ret.AddPair('tabOrder', TJSONNumber.Create(Tab));
+      if NotaOrden <> '' then
+        Ret.AddPair('orderNote', NotaOrden);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally
@@ -2383,6 +2435,176 @@ begin
   Insert(ABloque, Result, ADest);
 end;
 
+{ EL JUEZ DEL ORDEN de los hijos de ANomPadre (3.11 de la 1.18.0): como los
+  escribiria el IDE si cargara ATexto (ComoLoEscribeElIde), en ASuyo, y como
+  van en ATexto, en ANuestro. '' si contesto por TODOS; si no, por que no se
+  sabe, con ANomObj -el que se coloca- en el mensaje: un ancestro sin leer,
+  una clase que el ayudante no cargo (el padre o un hermano: su sustituto no
+  sabe donde lo dejaria el IDE) o un hijo que no escribio. Estaba dentro de
+  set before=/after=/index=, que niega con eso; insert y set parent= dejan el
+  componente donde lo dejaria el IDE, o el ultimo si no se sabe. }
+function JuezDelOrden(const F: TFormEnEdicion; const ATexto, ANomObj, ANomPadre: string;
+  out ANuestro, ASuyo: TArray<string>): string;
+var
+  Escrito: string;
+  Sustituidas, Avisos, SinLeer, Faltan: TArray<string>;
+  Doc: TStyleDoc;
+  P: TStyleObj;
+begin
+  ANuestro := [];
+  ASuyo := [];
+  Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer);
+  if Result <> '' then
+    Exit;
+  // un ancestro que el ayudante no encontro (sin .pas que lo diga o sin
+  // fichero en la carpeta): leyo el form SIN el y su orden no es el del IDE,
+  // aunque ningun hermano escrito falte (revisor 6 del 3.11, A2: un [n]
+  // propio se colocaba sobre la lista sin los heredados)
+  if Length(SinLeer) > 0 then
+    Exit(MsgFmt(SR_DESIGNER_ORDEN_INCOMPLETO_FMT, [ANomObj, string.Join(', ', SinLeer),
+      (if Length(Avisos) > 0 then string.Join('; ', Avisos) else '-')]));
+  // un hermano - o el PADRE (revisor 5, M2) - que el ayudante no pudo cargar
+  // lo escribe su sustituto, no su clase: donde lo dejaria el IDE no se sabe
+  Doc := TStyleDoc.DeTexto(ATexto);
+  try
+    if (Doc.Root <> nil) and SameText(Doc.Root.ObjName, ANomPadre) then
+      P := Doc.Root
+    else
+      P := ObjetoPorNombre(Doc, ANomPadre);
+    if P <> nil then
+      for var S in Sustituidas do
+      begin
+        if SameText(P.ClassName_, S) then
+          Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [ANomObj, P.ClassName_, ANomPadre]));
+        for var H in P.Children do
+          if SameText(H.ClassName_, S) then
+            Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [ANomObj, H.ClassName_, NombreDe(H)]));
+      end;
+  finally
+    Doc.Free;
+  end;
+  ANuestro := HijosEnTexto(ATexto, ANomPadre);
+  ASuyo := HijosEnTexto(Escrito, ANomPadre);
+  // lo que el juez no escribio no lo cargo (un componente que el lector
+  // salto; un ancestro sin leer ya lo dijo PARTIAL= arriba): juzgaria un
+  // form a medias (revisor 5 de la noche, A2 y B6)
+  Faltan := [];
+  for var N in ANuestro do
+    if NombreEn(ASuyo, N) < 0 then
+      Faltan := Faltan + [N];
+  if (Length(ANuestro) = 0) or (Length(Faltan) > 0) then
+    Exit(MsgFmt(SR_DESIGNER_ORDEN_INCOMPLETO_FMT, [ANomObj,
+      (if Length(Faltan) > 0 then string.Join(', ', Faltan) else ANomPadre),
+      (if Length(Avisos) > 0 then string.Join('; ', Avisos) else '-')]));
+end;
+
+{ ALineas -un form con el bloque de ANomObj, [AIni, AIni + ALargo), como
+  ULTIMO hijo de ANomPadre- con ese bloque donde lo deja el IDE entre sus
+  hermanos: delante del que el juez escribe justo detras de el (JuezDelOrden;
+  la VCL escribe los graficos antes que las ventanas, una form heredada
+  coloca por su [n]...). AIni sale donde quedo. Si el juez no contesta, el
+  bloque se queda el ultimo, como antes, y ANota lo dice: insert y set
+  parent= no se niegan por eso. Era siempre el ultimo, y el IDE lo movia al
+  guardar (3.11, el juez para dos llamadores mas). }
+function DondeLoDejaElIde(const F: TFormEnEdicion; const ALineas: TArray<string>;
+  const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer;
+  out ANota: string): TArray<string>;
+var
+  Nuestro, Suyo: TArray<string>;
+  Doc: TStyleDoc;
+begin
+  Result := ALineas;
+  ANota := '';
+  if JuezDelOrden(F, F.Doc.TextoDe(ALineas), ANomObj, ANomPadre, Nuestro, Suyo) <> '' then
+  begin
+    ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre]);
+    Exit;
+  end;
+  var PS := NombreEn(Suyo, ANomObj);
+  if (PS < 0) or (PS = High(Suyo)) then
+    Exit; // el IDE tambien lo deja el ultimo
+  Doc := TStyleDoc.DeTexto(F.Doc.TextoDe(ALineas));
+  try
+    var Sig := ObjetoPorNombre(Doc, Suyo[PS + 1]);
+    if Sig = nil then
+      Exit;
+    var Dest := Sig.StartLine - 1;
+    Result := ConBloqueMovido(ALineas, Copy(ALineas, AIni, ALargo), AIni, ALargo, Dest);
+    AIni := Dest;
+  finally
+    Doc.Free;
+  end;
+end;
+
+{ El form ABIERTO para juzgarlo y escribirlo despues: el juez del orden corre
+  SIN el cerrojo (segundos), y lo que se escribe al final tiene que salir de
+  lo mismo. Abrir y leer los bytes CON el cerrojo, y lo parseado sale de ESOS
+  bytes: un escritor de fuera (el IDE) entre las dos lecturas haria juzgar
+  unos y escribir otros (revisor 6 del 3.11, B1). Con ANecesitaPas, tambien
+  los de la unidad. '' y F abierto (lo libera quien llama), o el fallo y F
+  sin nada. Antes de escribir, CambioDesdeQueSeJuzgo. Estaba al principio de
+  set before=/after=/index=; insert y set parent= preguntan ahora al juez. }
+function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: Boolean;
+  out F: TFormEnEdicion; out AAntes, AAntesPas: TArray<Byte>): string;
+begin
+  F := Default(TFormEnEdicion);
+  AAntes := nil;
+  AAntesPas := nil;
+  EnterFileEdit;
+  try
+    try
+      // la tabla, NO: se carga abajo, fuera del cerrojo (PonTabla)
+      Result := AbreForm(APath, ANecesitaPas, False, F);
+      if Result = '' then
+      begin
+        AAntes := LeeBytes(F.Dfm, [ltJaula]);
+        var EncAntes: string;
+        var LineasAntes := SplitToLines(TextoDeBytes(AAntes, True, EncAntes));
+        var Iguales := (EncAntes = F.Doc.Encoding) and (Length(LineasAntes) = Length(F.Doc.Lines));
+        for var I := 0 to High(LineasAntes) do
+          if Iguales and (LineasAntes[I] <> F.Doc.Lines[I]) then
+            Iguales := False;
+        // la unidad, por el mismo decodificador que la leyo (PatchLoadText)
+        if Iguales and ANecesitaPas then
+        begin
+          AAntesPas := LeeBytes(F.Pas, [ltJaula]);
+          var EncPas: string;
+          Iguales := (TextoDeBytes(AAntesPas, False, EncPas) = F.PasTexto) and (EncPas = F.PasEnc);
+        end;
+        if not Iguales then
+          Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]);
+      end;
+    except
+      FreeAndNil(F.Doc);
+      raise;
+    end;
+  finally
+    LeaveFileEdit;
+  end;
+  if (Result = '') and ANecesitaTabla then
+    Result := PonTabla(F);
+  if Result <> '' then
+    FreeAndNil(F.Doc); // nil si AbreForm fallo; abierto si los bytes no eran los leidos
+end;
+
+{ CON el cerrojo, justo antes de escribir: '' si el form -y la unidad, si se
+  leyo- son los bytes que se juzgaron (AbreFormParaJuzgar); si no, DSGN-144
+  y no se escribe (revisor 5 de la noche, A3; borrado o renombrado mientras
+  se juzgaba: revisor 6 del 3.11, B2). }
+function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>): string;
+begin
+  Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]);
+  try
+    if not BytesIguales(AAntes, LeeBytes(F.Dfm, [ltJaula])) then
+      Exit;
+    if (AAntesPas <> nil) and not BytesIguales(AAntesPas, LeeBytes(F.Pas, [ltJaula])) then
+      Exit;
+  except
+    Exit;
+  end;
+  Result := '';
+end;
+
 { set before= / after= / index=: el bloque del componente, entero, a su sitio
   nuevo entre sus hermanos, SOLO si el IDE lo guarda ahi - se le pregunta
   (ComoLoEscribeElIde: la propuesta cargada como la carga el designer y
@@ -2400,46 +2622,15 @@ var
   Hermanos, Resto: TArray<TStyleObj>;
   Lineas: TArray<string>;
   Ini, Largo, Dest, Pos0, Nuevo: Integer;
-  NomObj, NomPadre, NomRef, Donde, Texto, Escrito: string;
-  Sustituidas, Avisos, SinLeer, Original, Nuestro, Suyo, Faltan: TArray<string>;
-  Antes: TArray<Byte>;
+  NomObj, NomPadre, NomRef, Donde, Texto: string;
+  Original, Nuestro, Suyo: TArray<string>;
+  Antes, AntesPas: TArray<Byte>;
   Ret: TJSONObject;
 begin
-  // los bytes que se juzgan: el juez corre SIN el cerrojo (segundos), y lo
-  // que se escribe al final tiene que salir de lo mismo. Abrir y leer, CON el
-  // cerrojo: entre las dos lecturas no se cuela ningun escritor del servidor
-  F := Default(TFormEnEdicion);
-  EnterFileEdit;
-  try
-    try
-      Result := AbreForm(APath, False, False, F);
-      if Result = '' then
-      begin
-        Antes := LeeBytes(F.Dfm, [ltJaula]);
-        // ...y lo parseado sale de ESOS bytes: un escritor de fuera (el IDE)
-        // entre las dos lecturas haria juzgar unos y escribir otros
-        // (revisor 6 del 3.11, B1)
-        var EncAntes: string;
-        var LineasAntes := SplitToLines(TextoDeBytes(Antes, True, EncAntes));
-        var Iguales := (EncAntes = F.Doc.Encoding) and (Length(LineasAntes) = Length(F.Doc.Lines));
-        for var I := 0 to High(LineasAntes) do
-          if Iguales and (LineasAntes[I] <> F.Doc.Lines[I]) then
-            Iguales := False;
-        if not Iguales then
-          Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]);
-      end;
-    except
-      FreeAndNil(F.Doc);
-      raise;
-    end;
-  finally
-    LeaveFileEdit;
-  end;
+  // los bytes que se juzgan, leidos con el cerrojo (el juez corre sin el)
+  Result := AbreFormParaJuzgar(APath, False, False, F, Antes, AntesPas);
   if Result <> '' then
-  begin
-    FreeAndNil(F.Doc); // nil si AbreForm fallo; abierto si los bytes no eran los leidos
     Exit;
-  end;
   try
     Result := BuscaComponente(F, AComponente, Obj);
     if Result <> '' then
@@ -2509,54 +2700,18 @@ begin
     Lineas := ConBloqueMovido(F.Doc.Lines, Copy(F.Doc.Lines, Ini, Largo), Ini, Largo, Dest);
     Texto := F.Doc.TextoDe(Lineas);
     // EL JUEZ: el IDE, cargando la propuesta, la guardaria con el ahi?
-    Result := ComoLoEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer);
+    Result := JuezDelOrden(F, Texto, NomObj, NomPadre, Nuestro, Suyo);
     if Result <> '' then
       Exit;
-    // un ancestro que el ayudante no encontro (sin .pas que lo diga o sin
-    // fichero en la carpeta): leyo el form SIN el y su orden no es el del IDE,
-    // aunque ningun hermano escrito falte (revisor 6 del 3.11, A2: un [n]
-    // propio se colocaba sobre la lista sin los heredados)
-    if Length(SinLeer) > 0 then
-      Exit(MsgFmt(SR_DESIGNER_ORDEN_INCOMPLETO_FMT, [NomObj, string.Join(', ', SinLeer),
-        (if Length(Avisos) > 0 then string.Join('; ', Avisos) else '-')]));
-    // un hermano - o el PADRE (revisor 5, M2) - que el ayudante no pudo cargar
-    // lo escribe su sustituto, no su clase: donde lo dejaria el IDE no se sabe
-    for var S in Sustituidas do
-    begin
-      if SameText(Padre.ClassName_, S) then
-        Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [NomObj, Padre.ClassName_, NomPadre]));
-      for var H in Hermanos do
-        if SameText(H.ClassName_, S) then
-          Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [NomObj, H.ClassName_, NombreDe(H)]));
-    end;
-    Nuestro := HijosEnTexto(Texto, NomPadre);
-    Suyo := HijosEnTexto(Escrito, NomPadre);
-    // lo que el juez no escribio no lo cargo (un componente que el lector
-    // salto; un ancestro sin leer ya lo dijo PARTIAL= arriba): juzgaria un
-    // form a medias (revisor 5 de la noche, A2 y B6)
-    Faltan := [];
-    for var N in Nuestro do
-      if NombreEn(Suyo, N) < 0 then
-        Faltan := Faltan + [N];
-    if (Length(Nuestro) = 0) or (Length(Faltan) > 0) then
-      Exit(MsgFmt(SR_DESIGNER_ORDEN_INCOMPLETO_FMT, [NomObj,
-        (if Length(Faltan) > 0 then string.Join(', ', Faltan) else NomPadre),
-        (if Length(Avisos) > 0 then string.Join('; ', Avisos) else '-')]));
     if not MismaPosicion(NomObj, NomRef, Original, Nuestro, Suyo) then
       Exit(MsgFmt(SR_DESIGNER_ORDEN_EL_IDE_FMT, [NomObj, Donde, NomPadre, string.Join(', ', Suyo)]));
     // con el cerrojo, solo releer y escribir: el fichero tiene que ser el que
     // se juzgo (revisor 5 de la noche, A3)
     EnterFileEdit;
     try
-      var Ahora: TArray<Byte>;
-      try
-        Ahora := LeeBytes(F.Dfm, [ltJaula]);
-      except
-        // borrado o renombrado mientras juzgaba (revisor 6 del 3.11, B2)
-        Exit(MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]));
-      end;
-      if not BytesIguales(Antes, Ahora) then
-        Exit(MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]));
+      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
+      if Result <> '' then
+        Exit;
       F.Doc.SetLines(Lineas);
       Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
     finally
