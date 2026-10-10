@@ -206,6 +206,23 @@ function ElMasParecido(const A: string; const ACandidatos: array of string;
 // delphi_designer (los usos de un componente en su unidad) es el segundo
 function LineaDePosicion(const ATexto: string; APos: Integer): Integer;
 
+{ LA cabecera de un fuente (unit, program, library o package), leida en
+  ACodigo - la vista del codigo, CodigoPascal: mismo largo y mismos saltos
+  que el texto, sin comentarios ni cadenas -: la palabra en minusculas, el
+  nombre (con puntos, y con blancos alrededor de ellos si los lleva) con
+  donde empieza y cuanto mide, donde empieza la palabra (Ini) y donde acaba
+  la cabecera, detras de su ';' (Fin). Si lo escrito no es un nombre ('unit
+  U-Mal;'), el nombre es lo escrito hasta el primer blanco, para que quien
+  lo use diga por que no vale. False si no hay o no se cierra. Eran
+  cinco lectores (inventario del 10-oct-2026): solo uno veia package, solo
+  uno daba posicion y otro la queria en una sola linea. }
+type
+  TCabeceraFuente = record
+    Palabra, Nombre: string;
+    Ini, NombreIni, NombreLen, Fin: Integer;
+  end;
+function CabeceraDeFuente(const ACodigo: string; out ACab: TCabeceraFuente): Boolean;
+
 implementation
 
 uses
@@ -593,6 +610,41 @@ begin
   for var K := 1 to Min(APos, Length(ATexto) + 1) - 1 do
     if (ATexto[K] = #10) or ((ATexto[K] = #13) and ((K = Length(ATexto)) or (ATexto[K + 1] <> #10))) then
       Inc(Result);
+end;
+
+function CabeceraDeFuente(const ACodigo: string; out ACab: TCabeceraFuente): Boolean;
+var
+  M, MN: TMatch;
+  Tras, P: Integer;
+begin
+  ACab := Default(TCabeceraFuente);
+  M := TRegEx.Match(ACodigo, '^\s*(unit|program|library|package)\b', [roIgnoreCase, roMultiline]);
+  if not M.Success then
+    Exit(False);
+  ACab.Palabra := LowerCase(M.Groups[1].Value);
+  ACab.Ini := M.Groups[1].Index;
+  Tras := M.Index + M.Length;
+  P := Pos(';', ACodigo, Tras);
+  if P = 0 then
+    Exit(False);
+  ACab.Fin := P + 1;
+  // el nombre: un identificador o varios unidos por puntos (Vcl.Forms,
+  // tambien 'A . B'); detras, platform/deprecated/library/experimental
+  var Resto := Copy(ACodigo, Tras, P - Tras);
+  MN := TRegEx.Match(Resto,
+    '\A\s+(' + PATRON_IDENT + '(?:\s*\.\s*' + PATRON_IDENT + ')*)(?=\s|\z)');
+  // lo que no es un nombre, tal cual: cortado en el primer caracter que no
+  // es de identificador, 'U-Mal' era 'U' y add-unit decia que no casaba con
+  // el fichero en vez de la causa real (CFG-038; test_project_units)
+  if not MN.Success then
+    MN := TRegEx.Match(Resto, '\A\s+(\S+)');
+  if MN.Success then
+  begin
+    ACab.NombreIni := Tras + MN.Groups[1].Index - 1;
+    ACab.NombreLen := MN.Groups[1].Length;
+    ACab.Nombre := MN.Groups[1].Value;
+  end;
+  Result := True;
 end;
 
 function LlavesAnidadas(const ATexto: string; out AFines: TArray<Integer>): TArray<Integer>;

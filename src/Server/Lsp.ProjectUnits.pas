@@ -469,18 +469,18 @@ type
 function CabeceraDeUnit(const ASrc: string; out ANombre: string;
   out AInicio: Integer): Boolean;
 var
-  M: TMatch;
+  Cab: TCabeceraFuente;
 begin
   ANombre := '';
   AInicio := 0;
-  M := TRegEx.Match(CodigoPascal(ASrc),
-    '^\s*unit\s+([^\s;]+)(?:\s+(?:platform|deprecated|library|experimental)\b[^;]*)?\s*;',
-    [roIgnoreCase, roMultiline]);
-  Result := M.Success;
+  // EL lector de la cabecera (Lsp.Pascal): aqui habia una regex que no
+  // leia 'unit A . B;' (inventario del 10-oct-2026)
+  Result := CabeceraDeFuente(CodigoPascal(ASrc), Cab) and (Cab.Palabra = 'unit') and
+    (Cab.NombreLen > 0);
   if Result then
   begin
-    AInicio := M.Groups[1].Index;
-    ANombre := Copy(ASrc, AInicio, M.Groups[1].Length);
+    AInicio := Cab.NombreIni;
+    ANombre := Copy(ASrc, AInicio, Cab.NombreLen);
   end;
 end;
 
@@ -571,14 +571,11 @@ end;
 function FindUses(const Dpr: string; AFrom: Integer = 0): TUsesClause;
 var
   I, N, Start, K: Integer;
-  M: TMatch;
-  SeenProgram: Boolean;
   Token: string;
 begin
   Result := Default(TUsesClause);
   Result.Keyword := 'uses';
   I := 1;
-  SeenProgram := True;
   if AFrom > 0 then
     // Una SECCION de un .pas (adduses, 2026-09-23): se busca desde justo
     // despues de interface/implementation, y otro token antes de la clausula
@@ -589,14 +586,14 @@ begin
     // en la vista del codigo: un 'program viejo; uses X;' dentro de un
     // comentario de arriba era la cabecera, y add-unit escribia en el uses
     // COMENTADO diciendo que lo habia hecho (sonda del lexico, 2-oct-2026)
-    M := TRegEx.Match(CodigoPascal(Dpr), '^\s*(program|library|package)\b', [roIgnoreCase, roMultiline]);
-    if M.Success then
+    // EL lector de la cabecera (Lsp.Pascal): desde detras de su ';'
+    var Cab: TCabeceraFuente;
+    if CabeceraDeFuente(CodigoPascal(Dpr), Cab) and (Cab.Palabra <> 'unit') then
     begin
-      I := M.Index + M.Length;
-      if SameText(M.Groups[1].Value, 'package') then
+      I := Cab.Fin;
+      if Cab.Palabra = 'package' then
         Result.Keyword := 'contains';
     end;
-    SeenProgram := not M.Success;
   end;
   K := Length(Result.Keyword);
   Start := 0;
@@ -608,13 +605,6 @@ begin
     if N > 0 then
     begin
       Inc(I, N);
-      Continue;
-    end;
-    if not SeenProgram then
-    begin
-      if Dpr[I] = ';' then
-        SeenProgram := True; // end of `program X;`
-      Inc(I);
       Continue;
     end;
     if Start = 0 then
@@ -1386,12 +1376,12 @@ begin
     begin
       // Un programa al que se le quito su ULTIMA unit tampoco la tiene (se va
       // entera: decima revision): la estrena justo tras la cabecera.
-      var MCab := TRegEx.Match(CodigoPascal(Text), '(?im)^\s*(program|library)\b[^;]*;');
-      if MCab.Success then
+      var Cab: TCabeceraFuente;
+      if CabeceraDeFuente(CodigoPascal(Text), Cab) and MatchText(Cab.Palabra, ['program', 'library']) then
       begin
         Estrenada := True;
         var NL := SaltoDominante(Text);
-        var Tras := MCab.Index + MCab.Length;
+        var Tras := Cab.Fin;
         Text := Copy(Text, 1, Tras - 1) + NL + NL + 'uses' + NL + '  ' +
           BuildEntry(Info, Include) + ';' + Copy(Text, Tras, MaxInt);
         PatchSaveText(Dpr, Text, Enc);
@@ -2372,11 +2362,23 @@ begin
   Lineas := SplitToLinesConSalto(Texto, Saltos);
   // el nombre se busca en la vista del codigo (mismo largo y mismos saltos:
   // sus lineas son las del texto) y se cambia en el texto, en esa posicion
-  Vistas := SplitToLinesConSalto(CodigoPascal(Texto), SaltosVista);
+  var VistaTexto := CodigoPascal(Texto);
+  Vistas := SplitToLinesConSalto(VistaTexto, SaltosVista);
+  // la CABECERA no se toca (su nombre lo cambia quien mueve): sus lineas,
+  // por EL lector de la cabecera (Lsp.Pascal), tambien partida en varias;
+  // se miraba si la linea empezaba por 'unit ' (con un tabulador detras, no)
+  var CabIni := -1;
+  var CabFin := -2;
+  var Cab: TCabeceraFuente;
+  if CabeceraDeFuente(VistaTexto, Cab) and (Cab.Palabra = 'unit') then
+  begin
+    CabIni := LineaDePosicion(VistaTexto, Cab.Ini) - 1;
+    CabFin := LineaDePosicion(VistaTexto, Cab.Fin - 1) - 1;
+  end;
   for I := 0 to High(Lineas) do
   begin
     Linea := Lineas[I];
-    if Vistas[I].TrimLeft.StartsWith('unit ', True) then
+    if (I >= CabIni) and (I <= CabFin) then
       Continue;
     Partes := TStringBuilder.Create;
     try

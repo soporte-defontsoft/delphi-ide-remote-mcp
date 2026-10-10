@@ -4054,13 +4054,20 @@ begin
               end;
           end
           else
-            for I := 0 to High(Lines) do
-              if TRegEx.IsMatch(Codigo[I], '^[ \t]*(program|library)\b', [roIgnoreCase]) and
-                 Codigo[I].TrimRight.EndsWith(';') then
-              begin
-                IAfter := I;
-                Break;
-              end;
+          begin
+            // detras de la CABECERA, por EL lector (Lsp.Pascal): la queria en
+            // una sola linea que acabase en ';' (inventario del 10-oct-2026)
+            var VistaDpr := CodigoPascal(Text);
+            var Cab: TCabeceraFuente;
+            if CabeceraDeFuente(VistaDpr, Cab) and MatchText(Cab.Palabra, ['program', 'library']) then
+            begin
+              IAfter := LineaDePosicion(VistaDpr, Cab.Fin - 1) - 1;
+              // y la linea de su ';' acaba en ';': en un 'program P; begin
+              // end.' la rutina caeria detras del end. (se negaba y se niega)
+              if not Codigo[IAfter].TrimRight.EndsWith(';') then
+                IAfter := -1;
+            end;
+          end;
           if IAfter = -1 then
             Exit(MsgText(SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES));
           // detras de donde ACABA esa linea: un comentario que se abre en ella

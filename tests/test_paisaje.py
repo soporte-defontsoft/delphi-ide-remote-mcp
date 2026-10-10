@@ -226,12 +226,11 @@ REGLAS = [
      'dos ortografias (laxa "end\\s*\\." y estricta "end\\." sola en su linea) en siete sitios; '
      'TLectorPas lo ve y no lo expone (inventario del 10-oct-2026)'),
     ('la cabecera de una unidad leida a mano',
-     r"\((?:\?:)?program\|library|\^\\s\*unit\\s\+|StartsWith\(\s*'unit '",
-     [('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.ProjectUnits.pas', 'FindUses'),
-      ('Lsp.ProjectUnits.pas', 'AddProjectUnitNucleo'), ('Lsp.ProjectUnits.pas', 'CabeceraDeUnit'),
-      ('Lsp.ProjectUnits.pas', 'RenombrarIdentificadorUnit')],
-     'cinco lectores de unit/program/library/package: solo FindUses ve package, solo CabeceraDeUnit da '
-     'posicion, ExecutePatch la quiere en una linea (inventario del 10-oct-2026)'),
+     r"\((?:\?:)?(?:unit\|)?program\|library|\^\\s\*unit\\s\+|StartsWith\(\s*'unit '",
+     [('Lsp.Pascal.pas', 'CabeceraDeFuente')],
+     'CabeceraDeFuente (Lsp.Pascal): eran cinco lectores de unit/program/library/package - solo '
+     'FindUses veia package, solo CabeceraDeUnit daba posicion, ExecutePatch la queria en una linea '
+     '(inventario del 10-oct-2026; una casa desde el mismo dia)'),
     ('la seccion interface/implementation buscada a mano',
      r"'\^(?:\[ \\t\]\*|\\s\*)'\s*\+\s*\w+\s*\+\s*'\\b'|\^(?:interface|implementation)\[ \]\*\$|"
      r"\.Trim\.ToLower\s*=\s*'(?:interface|implementation)'",

@@ -766,6 +766,17 @@ the MCP `initialize` response (`serverInfo.version`).
   one, `FinDeSeccion`; the echo of adduses and removeuses is one,
   `ClausulaReleida`). Today's copies are listed and can only shrink; a new
   one fails the battery, each rule with its planted mutant.
+- **The source header has one reader.** `CabeceraDeFuente` (`Lsp.Pascal`)
+  reads the unit/program/library/package header on the code view - its
+  word, its name with where it starts, and where it ends, past its `;` -
+  and the five readers declared above are gone (only one saw `package`,
+  only one gave a position, one wanted the header on a single line). What
+  they found is unchanged but for one place: `delphi_edit insert` into a
+  `.dpr` with no uses clause now puts the routine after a header split
+  over two lines (it answered EDIT-048), and still refuses a one-line
+  program (`program P; begin end.`), where it would land after the `end.`.
+  `test_delphi_patch`, each case red with its half broken; the
+  `test_paisaje` rule holds one house.
 - **One gate to read files** (the doors block of 1.18.0, first part).
   `LeeTexto` and `LeeBytes` (`Lsp.Patch`) read a file only if it is in one
   of the PLACES the caller names - the workspace (the jail's own read

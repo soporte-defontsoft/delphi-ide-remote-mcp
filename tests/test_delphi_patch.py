@@ -677,6 +677,26 @@ check('insert en un .dpr: detras del uses de verdad, no dentro del comentado',
       mc.abre(out, 'SK_EDIT_INSERT_RUTINA_DPR_FMT') and
       '{\r\nuses antiguos: ninguno;\r\n}\r\n' in _src and
       'uses\r\n  System.SysUtils;\r\n\r\nprocedure P;' in _src, out[:200] + ' | ' + _src)
+# .dpr SIN uses y con la cabecera partida en dos lineas: EL lector de la cabecera
+# (Lsp.Pascal.CabeceraDeFuente) la encuentra; la regla de antes la queria en una
+# sola linea acabada en ';' y negaba (inventario del 10-oct-2026)
+DPRC = os.path.join(DIR, 'CabeceraPartida.dpr')
+open(DPRC, 'wb').write(CRLF.join(['program', '  CabeceraPartida;', '', '{$APPTYPE CONSOLE}', '',
+                                  'begin', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DPRC, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+_src = open(DPRC, 'rb').read().decode('ascii')
+check('insert en un .dpr sin uses y con la cabecera en dos lineas: detras de la cabecera',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_DPR_FMT') and
+      _src.index('  CabeceraPartida;') < _src.index('procedure P;') < _src.index('begin\r\nend.'),
+      out[:200] + ' | ' + _src)
+# y el de UNA linea ('program P; begin end.') se sigue negando: detras de la
+# linea de la cabecera la rutina caeria tras el end. (revision del diff propio)
+DPRL = os.path.join(DIR, 'UnaLinea.dpr')
+open(DPRL, 'wb').write(b'program UnaLinea; begin end.\r\n')
+out = call('delphi_edit', {"path": DPRL, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+check('insert en un .dpr de una sola linea: se niega y no escribe',
+      mc.abre(out, 'SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES') and
+      open(DPRL, 'rb').read() == b'program UnaLinea; begin end.\r\n', out[:200])
 
 # --- lo que encontro el revisor de codigo de la 1.10.0, cada caso medido
 # antes con una sonda contra el exe de entonces ---
