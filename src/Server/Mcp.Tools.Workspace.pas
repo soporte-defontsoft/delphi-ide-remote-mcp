@@ -1811,6 +1811,7 @@ begin
   Count := 0;
   TotalBytes := 0;
   var Elfs := 0; // ejecutables de Linux (cabecera #$7F'ELF') que van dentro
+  var FueraDelPaquete := 0; // lo que la puerta de leer no admite
   // Un zip que se cae a medias (SYS-027: un fichero que otro tiene abierto)
   // no deja su .tmp en el workspace: cada reintento dejaba otro (quinta
   // revision). El paquete es desechable; el temporal, mas.
@@ -1844,6 +1845,16 @@ begin
       if SameText(TPath.GetFullPath(F), OutZip) or
          EsTemporalDeSustitucion(TPath.GetFileName(F)) then
         Continue;
+      // lo que la puerta de leer no admite no va en un paquete: los metadatos
+      // de git (GUARD-033, solo delphi_git los toca) y lo que la jaula niegue
+      // por su ruta real. El zip leia cada fichero por su cuenta y el .git
+      // entero salia en el paquete - .git\config, los hooks - para bajarlo con
+      // delphi_fetch (revisor de version de la 1.18.0, medido)
+      if LugarDeLecturaDenegado(F, [ltJaula]) <> '' then
+      begin
+        Inc(FueraDelPaquete);
+        Continue;
+      end;
       Rel := F.Substring(Length(IncludeTrailingPathDelimiter(Dir))).Replace('\', '/');
       Zip.Add(F, Rel);
       // Un zip hecho en Windows NO guarda permisos Unix: el binario de
@@ -1905,6 +1916,11 @@ begin
     Return.AddPair('zipBytes', TJSONNumber.Create(TFile.GetSize(OutZip)));
     if Elfs > 0 then
       Return.AddPair('linuxNote', MsgFmt(SN_WS_LINUX_EXECUTABLES_FMT, [Elfs]));
+    if FueraDelPaquete > 0 then
+    begin
+      Return.AddPair('leftOut', TJSONNumber.Create(FueraDelPaquete));
+      Return.AddPair('leftOutNote', MsgFmt(SN_WS_FUERA_DEL_PAQUETE_FMT, [FueraDelPaquete]));
+    end;
     // The next step used to be prose and a model had to GUESS the zip
     // name (one invented Win64-Release-deploy.zip - hermes' blind eval).
     // Hand it the exact call instead.

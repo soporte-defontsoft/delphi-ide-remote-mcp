@@ -171,6 +171,20 @@ try:
         check('R7 %s: el rango se arrastra tras una entrada que anade' % tool,
               ls == ['uno', 'EXTRA1', 'EXTRA2', 'dos', 'cinco', 'seis'],
               '%s | %s' % (ls, r[:160]))
+        # R7b ...y con "atline", el rango cuenta como su ancla: las dos en los
+        # numeros que dejo la entrada 1 (tres es la 5 y cuatro la 6). El final
+        # se arrastraba contra un atline tal cual: 6 pasaba a 8 y se llevaba
+        # hasta el final del fichero contestando APPLIED (revisor de version
+        # de la 1.18.0, medido)
+        open(f, 'w', newline='\n').write(SEIS)
+        r = call(tool, {'path': f, 'edits': json.dumps([
+            {'old': 'uno', 'new': 'uno\nEXTRA1\nEXTRA2'},
+            {'old': 'tres', 'atline': 5, 'toline': 6, 'delete': True},
+        ])})
+        ls = [l for l in lineas(f) if l]
+        check('R7b %s: con atline, toline cuenta en los mismos numeros movidos' % tool,
+              ls == ['uno', 'EXTRA1', 'EXTRA2', 'dos', 'cinco', 'seis'],
+              '%s | %s' % (ls, r[:160]))
 
     # ------------------------------------------------------------------ R8
     f = os.path.join(JAIL, 'bloque.md')

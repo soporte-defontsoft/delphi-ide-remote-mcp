@@ -939,8 +939,8 @@ const
     'NOTHING: a JSON array [{"old":"...","new":"...","atline":12}, ...] ' +
     'applied IN ORDER. Each entry accepts two forms of anchor: ONE LINE ' +
     '(the same as a single edit) or a BLOCK of several consecutive lines ' +
-    'in "old", searched for whole and in order - useful for replacing in ' +
-    'one piece the body of a method or a long documentation paragraph. ' +
+    'in "old", searched for whole and in order (a method body in one ' +
+    'piece). ' +
     'If the anchor appears more than once, break the tie with ' +
     '"occurrence": 1, 2... (better than "atline" inside a batch: line ' +
     'numbers MOVE as earlier entries add or remove lines, and ' +
@@ -952,9 +952,9 @@ const
     'anchor stops being ONE line and becomes a RANGE - from the anchor''s ' +
     'line to that one, both included - that is removed whole (delete) or ' +
     'replaced by "new". It is the way to drop a method without pasting ' +
-    'it whole as an anchor. Inside a batch the range shifts too: if an ' +
-    'earlier entry added or removed lines, "toline" is corrected on its ' +
-    'own; with "toline", "old" is ONE line (a block already says what it ' +
+    'it whole as an anchor. Inside a batch "toline" counts as its anchor ' +
+    'does: with "atline", in the moved numbers too; without, it is ' +
+    'corrected on its own; with "toline", "old" is ONE line (a block already says what it ' +
     'replaces: EDIT-020). If an entry fails, the file goes back byte for ' +
     'byte to how it was and you are told which one failed. At most 50 ' +
     'entries per call (EDIT-026). For a LONG line, an entry ' +
@@ -7343,6 +7343,11 @@ const
     'no Unix permissions, so after unzipping on the target they are NOT ' +
     'executable: run chmod +x <file> once (a Deploy through PAServer ' +
     'does not have this problem).';
+
+  SN_WS_FUERA_DEL_PAQUETE_FMT =
+    '[WS-024] %d file(s) left out of the zip: what the file tools cannot ' +
+    'read - Git metadata (.git) above all, which only delphi_git touches - ' +
+    'never goes into a package.';
 
   SN_WS_DOWNLOAD_WITH_FETCH =
     '[WS-020] download it with delphi_fetch, sha256-verified: a zip over ' +

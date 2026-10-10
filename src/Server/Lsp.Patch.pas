@@ -3117,7 +3117,18 @@ begin
           else
           begin
             Borra := BooleanoDeEntrada(Obj, 'delete');
-            Una := AAplicaUna(Anc, Nue, EnLinea, Hasta[N - 1], Borra);
+            // el final del rango cuenta como su principio: con atline las dos
+            // son lineas del fichero tal como lo dejaron las entradas de antes
+            // (atline no se arrastra) y el toline va tal cual lo dio el agente;
+            // sin atline, el principio sale del fichero de antes de la tanda y
+            // el final se arrastro con el. Con el arrastrado contra un atline
+            // tal cual, atline=14 toline=15 tras una insercion de dos lineas
+            // borraba hasta la 17 y contestaba APPLIED (revisor de version de
+            // la 1.18.0, medido)
+            var Fin := Hasta[N - 1];
+            if EnteroDeEntrada(Obj, 'atline') > 0 then
+              Fin := EnteroDeEntrada(Obj, 'toline');
+            Una := AAplicaUna(Anc, Nue, EnLinea, Fin, Borra);
           end;
         except
           on E: Exception do

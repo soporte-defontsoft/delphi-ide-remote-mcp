@@ -10,6 +10,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_package` never puts Git metadata in the zip.** It read every
+  file of the folder on its own, so a folder holding a repository went out
+  with its `.git` whole - `.git\config` with the credentials of a remote,
+  the hooks - ready to download with `delphi_fetch`, while `GUARD-033`
+  promised that no file tool reads it. Each file now goes through the read
+  gate, and what it does not admit is left out and counted (`leftOut`,
+  `WS-024`).
+
+- **A batch range with `atline` ends where it was asked.** Inside `edits`,
+  `atline` counts on the file as the earlier entries left it, and `toline`
+  was always corrected for those entries as if it counted on the file
+  before the batch - so after an entry that added two lines, `atline: 14,
+  toline: 15` removed lines 14 to 17 and answered `APPLIED`. The end of a
+  range now counts as its start does: with `atline`, in the same moved
+  numbers; without it, on the file before the batch, corrected on its own
+  as before. Both `delphi_edit` and `delphi_textedit`.
+
 - **Each workspace has its own mailbox and its own reports, and
   `delphi_report` reads them.** `messages\<agent>\` and `reports\<agent>\`
   were one folder for every token: an agent of one workspace could list and

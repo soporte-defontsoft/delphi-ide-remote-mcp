@@ -3,7 +3,7 @@
 Todas las cobayas y los endpoints son propios del arnes; no hay credenciales.
 La latencia sola es guarda: trace2 mide las DOS variables del hijo.
 """
-import atexit, base64, hashlib, http.server, json, os, subprocess, threading, time
+import atexit, base64, hashlib, http.server, json, os, subprocess, threading, time, zipfile
 import mcp_cliente as mc
 from mcp_cliente import check
 BASE = mc.carpeta('git-config-cerrado')
@@ -140,6 +140,24 @@ try:
             check('delete del padre permitido','[FILE-021]' in out and not os.path.exists(tree),out[:350])
             check('papelera conserva hashes',len(copias)==1 and snap(copias[0])==before,copias)
         mc.borra(tree); mc.borra(desttree)
+    # delphi_package de una carpeta con un .git: lo que la puerta de leer no
+    # admite no va en el paquete (revisor de version de la 1.18.0: el .git
+    # entero salia en el zip, con su config y sus hooks, medido)
+    pk = os.path.join(JAIL, 'paquete')
+    os.makedirs(os.path.join(pk, '.git', 'hooks'))
+    open(os.path.join(pk, '.git', 'config'), 'w').write('[remote "x"]\n url = https://u:' + private + '@192.0.2.1/r\n')
+    open(os.path.join(pk, '.git', 'hooks', 'DUMMY'), 'w').write(private)
+    open(os.path.join(pk, 'App.txt'), 'w').write('contenido')
+    pzip = os.path.join(JAIL, 'paquete.zip')
+    out = srv.call('delphi_package', {'dir': pk, 'outfile': pzip})
+    nombres = []
+    if os.path.isfile(pzip):
+        with zipfile.ZipFile(pzip) as z:
+            nombres = z.namelist()
+    check('package de una carpeta con .git: el zip lleva lo demas y nada del .git (WS-024)',
+          'App.txt' in nombres and not any('.git' in n.lower().split('/') for n in nombres)
+          and mc.tiene(out, 'WS-024'), (nombres, out[:300]))
+    mc.borra(pk); mc.borra(pzip)
     ptr = os.path.join(JAIL, 'ficha')
     os.makedirs(ptr)
     open(os.path.join(ptr,'.git'),'w').write('gitdir: '+META+'\n')
