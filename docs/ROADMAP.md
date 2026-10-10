@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-10 (current release v1.17.0, 1.18.0 being closed; 42 tools).
+Status page as of 2026-10-10 (current release v1.18.0; 42 tools).
 
 ## Delivered
 
@@ -46,9 +46,12 @@ Status page as of 2026-10-10 (current release v1.17.0, 1.18.0 being closed; 42 t
 
 ## Next
 
-- `preview`: the "a tray server paints for real" note measured from the tray, and a screen at a DPI other than 96
-- What the second review of 1.17.0 left without a deterministic test: the capture veto and the `adb` capture (they need a device), the table wait outside the lock (concurrency)
-- The second pass of the description trim (the LSP tools, `delphi_textedit`, `read`, `help`, `package`, `diagnostics`, `installs`, `workspace`, `styles`), with the notes repeated on every call and the `compilesAgainst` paths repeated per project, measured against the small local model as the first pass was
+Stabilizing what is there, not adding to it:
+
+- Working from Linux: what exists, measured end to end on the Linux targets through PAServer (an FMX app deployed without the IDE's deploy files, desktops beyond GNOME)
+- The designer: what it already does, measured where it is not yet (preview at other DPIs and from the tray)
+- Lighter for small models: a second pass over the tool descriptions, measured against a small local model
+- The jail measured, not only declared: the protections that need a privilege measured in the suite, and fewer rules of our own where a real judge can answer
 
 ## Open
 

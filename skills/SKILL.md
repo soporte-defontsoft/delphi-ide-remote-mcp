@@ -531,4 +531,4 @@ hosts, projects, devices, vault). A refusal naming `RemoteHosts`,
 `RemoteRunProjects` or `AdbAllowedDevices` is your workspace's declared
 reach, not a server bug: `delphi_report` it if you need more.
 
-<!-- contract reviewed: v1.17.0 -->
+<!-- contract reviewed: v1.18.0 -->

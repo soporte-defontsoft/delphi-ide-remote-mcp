@@ -6,7 +6,18 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.18.0] - 2026-10-10
+
+Consolidation. The big units sorted by what they hold, each rule in one
+home; ANSI as the machine's code page, the first accent of a source written
+as the IDE writes it, and no writer leaving a file that would not read back
+the same; the Git jail closed - the repository's configuration as a
+whitelist, `.git` a place only `delphi_git` reaches, LFS endpoints and every
+remote host judged, no signing with the person's key; what a form names
+judged before it is rendered; a mailbox and a reports folder per workspace.
+Five version reviewers and one more for the zones of the build and git
+filters before the tag, each finding fixed with its red or moved, by name,
+to the next version.
 
 ### Fixed
 
