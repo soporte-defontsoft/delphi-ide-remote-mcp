@@ -27,6 +27,7 @@ un TToolBar, en una form heredada con [n]...).
   O17-O19 los arreglos del revisor 6: la referencia cuenta siempre y index es
       una posicion (A1); un ancestro sin leer niega aunque no falte nadie (A2)
   O20 el form se borra mientras juzga el renderizador: DSGN-144 (revisor 6, B2)
+  O21 un ancestro del marco (TForm) no es lectura a medias: lo dice la clase cargada
   O15 no queda ninguna carpeta __tmp- (B5)
 
 Uso:  python tests/test_designer_orden.py [ruta-a-DelphiLspMcp.exe]
@@ -228,6 +229,17 @@ open(os.path.join(APP, 'UHijaR.pas'), 'wb').write(
     b'unit UHijaR;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, Vcl.StdCtrls, UBaseQ;\r\n\r\n'
     b'type\r\n  TFormHijaR = class(TFormBaseQ)\r\n    ButtonA: TButton;\r\n    ButtonB: TButton;\r\n  end;\r\n\r\n'
     b'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
+# 'inherited' y su ancestro es del MARCO (TForm): no tiene fichero ni componentes - lo dice la
+# cadena de la clase que crea el ayudante, no una lista (O21)
+HIJAS = os.path.join(JAIL, 'UHijaS.dfm')
+open(HIJAS, 'wb').write(
+    b'inherited FormHijaS: TFormHijaS\r\n  Caption = \'HijaS\'\r\n'
+    b'  object Button1: TButton\r\n    Left = 8\r\n    Top = 8\r\n    TabOrder = 0\r\n  end\r\n'
+    b'  object Button2: TButton\r\n    Left = 8\r\n    Top = 40\r\n    TabOrder = 1\r\n  end\r\nend\r\n')
+open(os.path.join(JAIL, 'UHijaS.pas'), 'wb').write(
+    b'unit UHijaS;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, Vcl.StdCtrls;\r\n\r\n'
+    b'type\r\n  TFormHijaS = class(TForm)\r\n    Button1: TButton;\r\n    Button2: TButton;\r\n  end;\r\n\r\n'
+    b'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
 PADRERARO = os.path.join(JAIL, 'UPadreRaro.dfm')
 open(PADRERARO, 'wb').write(
     b'object FormP: TFormP\r\n  Left = 0\r\n  Top = 0\r\n  ClientHeight = 200\r\n  ClientWidth = 300\r\n'
@@ -373,6 +385,10 @@ try:
           '(PARTIAL=) - DSGN-143 nombrandolo, nada escrito (revisor 6, A2)',
           mc.abre(r, 'SR_DESIGNER_ORDEN_INCOMPLETO_FMT') and 'TFormBaseQ' in r and
           bytes_de(HIJAR) == antes, r[:400])
+    r = dsg(HIJAS, {'component': 'Button2', 'before': 'Button1'})
+    check('O21 ...pero un ancestro del MARCO (TForm) no es un form a medias: se ordena (la cadena de la '
+          'clase cargada, no una lista)',
+          J(r).get('ordered') == 'Button2' and orden(HIJAS) == ['Button2', 'Button1'], r[:400])
     antes = bytes_de(PADRERARO)
     r = dsg(PADRERARO, {'component': 'Label1', 'after': 'Edit1'})
     check('O13 el PADRE de una clase que ningun paquete carga: DSGN-140 nombrando al padre (M2)',

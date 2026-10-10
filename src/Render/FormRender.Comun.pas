@@ -1032,6 +1032,25 @@ var
   Cab: TCabecera;
   Ancestro, Fichero: string;
   Cadena: TStringList;
+
+  // una clase del MARCO (TForm, TCustomForm, TFrame, TDataModule...): la
+  // dice la clase de la raiz que se acaba de crear, su cadena de herencia, y
+  // no una lista (norma 6; habia cuatro nombres a mano). Esas no tienen
+  // fichero ni componentes que leer
+  function DelMarco(const AClase: string): Boolean;
+  var
+    C: TClass;
+  begin
+    C := AInstancia.ClassType;
+    while C <> nil do
+    begin
+      if SameText(C.ClassName, AClase) then
+        Exit(True);
+      C := C.ClassParent;
+    end;
+    Result := False;
+  end;
+
 begin
   // la cadena de ancestros, del mas lejano al propio fichero
   Cadena := TStringList.Create;
@@ -1051,8 +1070,7 @@ begin
       Fichero := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(AFichero)), Ancestro);
       if Fichero = '' then
       begin
-        if not (SameText(Ancestro, 'TForm') or SameText(Ancestro, 'TFrame') or
-          SameText(Ancestro, 'TCustomForm') or SameText(Ancestro, 'TDataModule')) then
+        if not DelMarco(Ancestro) then
         begin
           FAvisos.Add(MsgFmt(SN_RENDER_ANCESTRO_SIN_FICHERO_FMT, [Ancestro]));
           FSinLeer.Add(Ancestro);

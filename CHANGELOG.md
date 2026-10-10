@@ -737,6 +737,12 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Internal
 
+- **The form renderer tells a framework class by the class it loaded.** An
+  `inherited` form whose ancestor has no form file was read without a
+  warning only if that ancestor was one of four names written by hand
+  (TForm, TFrame, TCustomForm, TDataModule); now it is any class in the
+  chain of the root the renderer created (rule 6). `test_designer_orden`
+  O21, red with the check broken.
 - **The Pascal grammar read by hand, declared.** `test_paisaje` now holds
   three rules for what `Lsp.PascalDecl` already reads and several places
   read again by themselves: the final `end.` (two spellings in seven
