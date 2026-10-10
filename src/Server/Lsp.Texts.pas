@@ -759,6 +759,11 @@ const
     'the project, with its .dproj next to it, so that it gets configured. ' +
     'delphi_definition and delphi_hover deny it the same way (LSP-038).';
 
+  SN_REFS_ILEGIBLES_FMT =
+    '[LSP-040] %d file(s) of the scope could not be read (another process ' +
+    'holds them, or the gate refused): they are listed in "unreadable" and ' +
+    'were NOT scanned, so a reference in them is not here. ' +
+    'delphi_rename_symbol refuses while any is listed.';
   SN_REFS_MENTIONS_FMT =
     '[LSP-015] The name also appears %d time(s) in COMMENTS or inside ' +
     'strings (%d are listed in "mentions"). They are not references - ' +
@@ -3552,6 +3557,10 @@ const
     '[RENAME-018 DENIED] %d candidate references NOT semantically ' +
     'confirmed. The rule is strict: a single unconfirmed one = not ' +
     'applicable (a renamed false positive is a homonym broken silently).';
+  SR_RENAME_ILEGIBLES_FMT =
+    '[RENAME-022 DENIED] %d file(s) of the scope could not be read ' +
+    '("unreadable"), so a reference in them would be missed: not applicable ' +
+    'until they can be read.';
 
   SR_RENAME_DESIGNER_FMT =
     '[RENAME-019 DENIED] %d occurrences in designers (.dfm/.fmx): ' +
@@ -8253,7 +8262,7 @@ const
     'is harmless; a string literal blocks delphi_rename_symbol ' +
     '(RENAME-020), because it may be a FindComponent/RTTI by name. ' +
     'Bounded work: leftovers are listed as unverified, never silently ' +
-    'dropped.';
+    'dropped; a file it cannot read, as unreadable.';
 
   SD_BUILD_BUILD =
     'Build a Delphi project for real with MSBuild on this machine - the ' +

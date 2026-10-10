@@ -419,6 +419,7 @@ var
   ScopeDirs: TArray<string>;
   OpenedFiles: TDictionary<string, Boolean>;
   Entry: TJSONObject;
+  Ilegibles: TArray<string>;      // del alcance, sin leer: se dicen, no se tiran
 
   function CandidateJson(const C: TCandidate): TJSONObject;
   begin
@@ -644,7 +645,14 @@ begin
     begin
       if Candidates.Count >= AMaxCandidates then
         Break;
-      Text := TLspClient.LoadSourceText(F);
+      // uno que no se deje leer (cogido por otro proceso) tumbaba la llamada
+      // entera: se salta y se DICE, que una referencia ahi no estaria
+      try
+        Text := TLspClient.LoadSourceText(F);
+      except
+        Ilegibles := Ilegibles + [F];
+        Continue;
+      end;
       // lo que es codigo lo dice EL lexico (Lsp.Pascal): la vista del codigo
       // tiene el mismo largo y los mismos saltos, y un identificador es
       // codigo si su primera letra sigue en ella. Aqui habia una copia del
@@ -858,6 +866,14 @@ begin
         Result.AddPair('rejectedNote', MsgFmt(SN_REFS_REJECTED_CAP_FMT,
           [RejectedArr.Count, Rejected]));
       Result.AddPair('filesScanned', TJSONNumber.Create(Scanned));
+      if Length(Ilegibles) > 0 then
+      begin
+        var IleArr := TJSONArray.Create;
+        Result.AddPair('unreadable', IleArr);
+        for var Ile in Ilegibles do
+          IleArr.Add(Ile);
+        Result.AddPair('unreadableNote', MsgFmt(SN_REFS_ILEGIBLES_FMT, [Length(Ilegibles)]));
+      end;
       Result.AddPair('candidates', TJSONNumber.Create(Candidates.Count));
       // WHERE we looked. "filesScanned: 4" says how many, never which, and a
       // caller cannot tell a complete answer from one that stopped at the

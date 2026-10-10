@@ -399,5 +399,29 @@ check('la descripcion y la nota no prometen renombrar un comentario en ninguna l
       bool(_desc) and 'renamed only on the' not in _desc and 'on ANOTHER line' not in j.get('note', '')
       and mc.abre(j.get('note', ''), 'SN_RENAME_APPLIED_NOTE'), (_desc[-200:], j.get('note')))
 
+# un fichero del alcance que no se deja leer (cogido por otro proceso; aqui,
+# abierto sin compartir): references lo DICE en "unreadable" y rename no se
+# aplica (tumbaba la llamada entera; residual de P1-L2, 10-oct-2026)
+import ctypes
+from ctypes import wintypes
+OTRA = os.path.join(COM, 'UOtraCom.pas')
+open(OTRA, 'w', encoding='utf-8', newline='\r\n').write('unit UOtraCom;\n\ninterface\n\nimplementation\n\nend.\n')
+_k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+_k32.CreateFileW.restype = wintypes.HANDLE
+_k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                             wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+_h = _k32.CreateFileW(OTRA, 0x80000000, 0, None, 3, 0x80, None)  # GENERIC_READ, sin compartir
+try:
+    j = J(call('delphi_references', {'path': UCOM, 'line': 4, 'character': 10}))
+    check('references: un fichero del alcance que no se deja leer se DICE (unreadable, LSP-040) y no '
+          'tumba la llamada', any(p.lower().endswith('uotracom.pas') for p in j.get('unreadable', [])) and
+          mc.es(j.get('unreadableNote', ''), 'SN_REFS_ILEGIBLES_FMT'), str(j)[:400])
+    j = J(call('delphi_rename_symbol', {'path': UCOM, 'line': 4, 'character': 10, 'newname': 'Baz'}))
+    check('rename: con un fichero del alcance sin leer NO es aplicable (RENAME-022)',
+          j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_ILEGIBLES_FMT') for b in j.get('blockers', [])),
+          str(j)[:400])
+finally:
+    _k32.CloseHandle(_h)
+
 srv.mata()
 mc.fin('rename battery')

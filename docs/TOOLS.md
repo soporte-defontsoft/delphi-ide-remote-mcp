@@ -117,7 +117,7 @@ Code completion candidates at a 0-based line:character position (official Delphi
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Find references to the identifier at a 0-based line:character position. Hybrid method (DelphiLSP has no native references): project-wide text scan, then every candidate is validated by asking the compiler engine for its definition - only candidates resolving to the SAME symbol are confirmed, homonyms are rejected. A name written in a COMMENT or inside a string literal is not a reference and does not count as unverified: those go to "mentions". A comment is harmless; a string literal blocks delphi_rename_symbol (RENAME-020), because it may be a FindComponent/RTTI by name. Bounded work: leftovers are listed as unverified, never silently dropped.
+Find references to the identifier at a 0-based line:character position. Hybrid method (DelphiLSP has no native references): project-wide text scan, then every candidate is validated by asking the compiler engine for its definition - only candidates resolving to the SAME symbol are confirmed, homonyms are rejected. A name written in a COMMENT or inside a string literal is not a reference and does not count as unverified: those go to "mentions". A comment is harmless; a string literal blocks delphi_rename_symbol (RENAME-020), because it may be a FindComponent/RTTI by name. Bounded work: leftovers are listed as unverified, never silently dropped; a file it cannot read, as unreadable.
 
 *Access: read-only OK.*
 

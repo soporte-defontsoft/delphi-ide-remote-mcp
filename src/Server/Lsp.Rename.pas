@@ -286,6 +286,17 @@ begin
         Blockers.Add(MsgFmt(SR_RENAME_UNVERIFIED_FMT, [Arr.Count]));
       // la cuenta, aparte; 'unverified' es la LISTA, como en references
       Result.AddPair('unverifiedCount', TJSONNumber.Create(Arr.Count));
+      // un fichero del alcance sin leer es peor que un candidato sin
+      // confirmar: ni se sabe si hay alguno (references, LSP-040)
+      if Refs.GetValue('unreadable') is TJSONArray then
+      begin
+        var Ile := TJSONArray(Refs.GetValue('unreadable'));
+        if Ile.Count > 0 then
+        begin
+          Blockers.Add(MsgFmt(SR_RENAME_ILEGIBLES_FMT, [Ile.Count]));
+          Result.AddPair('unreadable', TJSONArray(Ile.Clone));
+        end;
+      end;
       // A "homonym" the engine resolved somewhere else may be the real thing
       // seen through another project's settings - which is exactly how a
       // rename came back applicable and broke a sibling's build (measured

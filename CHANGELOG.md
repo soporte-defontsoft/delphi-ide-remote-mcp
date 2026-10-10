@@ -172,6 +172,11 @@ the MCP `initialize` response (`serverInfo.version`).
   `FicheroQueNoEditaDelphiEdit`, now answers for an edit and for a whole
   batch, and a block on a form is judged as a line is. Found using the
   server. `test_round49` (E5, E6).
+- **A file `delphi_references` cannot read is said, not fatal.** One file
+  of its scope held by another process made the whole call fail - and with
+  it `delphi_rename_symbol`. It is now skipped and listed in `unreadable`
+  (LSP-040), since a reference in it would be missed, and a rename is not
+  applicable while any is listed (RENAME-022). `test_rename`.
 - **The folder digest lists a long `uses` whole, and a comment no longer
   decides a project's framework.** `delphi_symbols` of a folder joined at
   most nine lines of a statement, so a `uses` with one unit per line came
