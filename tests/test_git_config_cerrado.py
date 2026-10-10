@@ -176,6 +176,18 @@ try:
         out = call('status')
         check('config niega '+key+' sin enseñar valor', '[GIT-051 DENIED]' in out and key in out.lower()
               and private not in out, out[:350])
+    # Claves de repo normales (booleanas/enum, sin programa ni ruta de lectura):
+    # status NO debe romper (revisor 1.18.0, M3 -- longpaths, fscache,
+    # untrackedCache, pull.rebase; aprobadas por David).
+    for key, stanza in (
+        ('core.longpaths', '[core]\n longpaths = true\n'),
+        ('core.fscache', '[core]\n fscache = true\n'),
+        ('core.untrackedcache', '[core]\n untrackedCache = keep\n'),
+        ('pull.rebase', '[pull]\n rebase = false\n'),
+    ):
+        open(CFG,'w').write(normal+'\n'+stanza)
+        out = call('status')
+        check('config admite '+key+' (repo normal, M3)', out.startswith('exit=0'), out[:300])
     open(CFG,'w').write(normal+'\n[extensions]\n worktreeConfig = true\n')
     wt = os.path.join(META,'config.worktree')
     open(wt,'w').write('[dummy]\n unknown = '+private+'\n')
@@ -193,7 +205,7 @@ try:
     # Las dos decisiones de firma: opciones del agente y ajustes del operador.
     for cmd in ('commit','tag'):
         for i,flag in enumerate(('-S','-SDUMMY','--gpg-sign','--gpg-sign=DUMMY','--gpg','--g') +
-                                (('-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si','--sign') if cmd=='tag' else ('-aS',))):
+                                (('-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si','--sign') if cmd=='tag' else ('-aS','-sS','-nS','-asS','-vsS'))):
             args = '--allow-empty '+flag if cmd=='commit' else flag+' dummy-sign-'+str(i)
             out=call(cmd,args,'DUMMY')
             check(cmd+' niega '+flag, '[GIT-' in out and 'DENIED]' in out and
@@ -204,6 +216,12 @@ try:
     for flag in ('--signoff','--sign','-s'):
         out=call('commit','--allow-empty '+flag,'DUMMY signoff')
         check('commit '+flag+' (Signed-off-by, no gpg) se admite',out.startswith('exit=0'),out[:300])
+    # Control positivo (revisor 1.18.0, A1): una S detras de una opcion que TOMA
+    # valor (m t u) es su valor, no la firma -> la puerta de firma NO la para.
+    for flag in ('-mS','-tS','-uS'):
+        out=call('commit','--allow-empty '+flag,'DUMMY')
+        check('commit '+flag+' (S es valor de opcion, no firma) pasa la puerta de firma',
+              not ('[GIT-' in out and 'DENIED]' in out and not mc.es(out,'SR_GIT_EXIT_FMT')), out[:300])
     open(CFG,'w').write(normal+'\n[commit]\n gpgSign = true\n[tag]\n gpgSign = true\n')
     previous = raw('rev-parse','HEAD').strip()
     out=call('commit','--allow-empty','DUMMY sin firma')

@@ -10,6 +10,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A build compiles the bytes its gate scanned.** The compile-only scan of
+  the `.dproj` (an `<Exec>`, a foreign `<Import>`, a redefined property of
+  the IDE's imports, an include from outside) ran before the build waited
+  for its turn, and msbuild read the project again when it started: a
+  `delphi_edit` in between - easy to time behind another, long build - put
+  in an `<Exec>` the scan never saw, and it ran on the server. The scan now
+  runs once the build has its turn, under the write lock every writer takes,
+  held until msbuild ends, so nothing changes those files in between. The
+  price: while an untrusted build runs, the edits of every session wait for
+  it (a trusted project, `AllowBuildScripts=1`, is not scanned and takes no
+  lock). Version reviewers of 1.18.0, the cause confirmed in the code;
+  `test_build_evaluacion`, `test_build_imports`.
+
 - **`DSGN-145` says why the judge of the order could not answer.** The note
   of an `insert` or `set parent=` that stayed last always blamed the
   renderer for not loading the form whole, also when the judge refused for
@@ -328,7 +341,9 @@ the MCP `initialize` response (`serverInfo.version`).
   file or run a program (includes, filters, external diffs, credential
   helpers, the ssh command...) - a list that could only miss the next one.
   It is the other way round now: only known keys that neither run nor read
-  anything are admitted - the `core` basics, the identity, the signing
+  anything are admitted - the `core` basics (`longpaths`, `fscache` and
+  `untrackedCache` too, which an ordinary Windows repository carries),
+  `pull.rebase`, the identity, the signing
   switches, a remote's addresses and refspecs, a branch's upstream, a
   submodule's place - and Git LFS is the one program admitted, with its exact
   standard commands. Anything else is `GIT-051`, which names the key and
@@ -338,8 +353,12 @@ the MCP `initialize` response (`serverInfo.version`).
   runs gets `commit.gpgsign=false` and `tag.gpgsign=false`, so a repository
   set to sign does not sign, and a call that asks for it is refused: `-S`,
   `--gpg-sign` and its abbreviations on `commit`; `-s`, `-u`, `--local-user`
-  and `--sign` on `tag`. A commit's `--signoff` (and `-s`, `--sign`) only
-  adds a `Signed-off-by` line and is allowed. `test_git_config_cerrado`.
+  and `--sign` on `tag`. A group of short options is read to its end: an
+  `S` anywhere in it signs, unless an option that takes a value comes first
+  (`-mS` is the message `S`) - the version reviewers measured `-sS`, `-nS`,
+  `-asS` and `-vsS` reaching gpg. A commit's `--signoff` (and `-s`,
+  `--sign`) only adds a `Signed-off-by` line and is allowed.
+  `test_git_config_cerrado`.
 - **git never waits for a password, and does not see the server's
   settings.** Every git the server launches gets the server's environment
   without its `DELPHI_MCP_*` variables, plus `GIT_TERMINAL_PROMPT=0` and

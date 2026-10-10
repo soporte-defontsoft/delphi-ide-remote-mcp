@@ -169,7 +169,11 @@ begin
             Firma := True;
             Break;
           end;
-          if not CharInSet(Tok[I], ['a', 'f', 'v', 'q', 'e', 'i', 'o', 'd', 'l']) then
+          // Solo una opcion corta que TOMA VALOR corta el barrido: su valor se
+          // come el resto del grupo (la S de -mS es el mensaje, no firma).
+          // Cualquier otra letra -sin valor o desconocida- se salta y se sigue
+          // mirando, para que una S al final del grupo no escape (-sS -nS -asS).
+          if CharInSet(Tok[I], ['m', 'F', 'C', 'c', 't', 'u']) then
             Break;
         end;
       if Firma then

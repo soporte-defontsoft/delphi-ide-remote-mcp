@@ -364,10 +364,12 @@ var
           'core.logallrefupdates', 'core.symlinks', 'core.ignorecase',
           'core.autocrlf', 'core.eol', 'core.safecrlf', 'core.precomposeunicode',
           'core.protectntfs', 'core.protecthfs', 'core.worktree',
+          'core.longpaths', 'core.fscache', 'core.untrackedcache',
           'user.name', 'user.email', 'user.signingkey',
           'commit.gpgsign', 'tag.gpgsign', 'extensions.worktreeconfig',
           'extensions.objectformat', 'fetch.recursesubmodules',
-          'push.recursesubmodules', 'submodule.recurse', 'push.default']);
+          'push.recursesubmodules', 'submodule.recurse', 'push.default',
+          'pull.rebase']);
         var Partes := Clave.Split(['.']);
         if Length(Partes) >= 3 then
         begin

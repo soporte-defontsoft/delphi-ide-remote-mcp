@@ -1361,6 +1361,72 @@ begin
     Result := Raiz;
 end;
 
+{ El escaneo compile-only del .dproj en UN solo sitio (hazard + propiedad de IDE
+  redefinida + directivas/imports), para correrlo BAJO el cerrojo y sobre los
+  MISMOS bytes que compilara msbuild. Devuelve si hay que vaciar los eventos de
+  build; lanza con su motivo si el proyecto no pasa. }
+function EscaneoCompileOnly(const ADprojPath: string; AAllowScripts: Boolean): Boolean;
+begin
+  // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
+  // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
+  // build-event, a foreign <Import>) and refuse unless build scripts were
+  // explicitly enabled. This is the point-of-execution gate, so it holds however
+  // the .dproj got there - upload, edit, or a pre-existing one (field round 7,
+  // CRITICAL). AllowBuildScripts is the trusted-project
+  // opt-in; an inert custom <Target> now builds without it (field round 9 FP).
+  // Los EVENTOS pre/post build (la firma, una copia) ya no cierran la puerta:
+  // se compila con ellos vaciados (/p:PreBuildEvent= ...) y se dice. Sin eso
+  // Galatea no compilaba en el workspace de un agente, y "una cosa es compilar
+  // la version final, otra poder trabajar y ejecutar mientras tanto" (David,
+  // 24-sep-2026). Lo que ejecuta de verdad -un <Exec>/<Target> propio, un
+  // <Import> ajeno- sigue rechazado: el MISMO escaner, primero sin contar los
+  // eventos.
+  Result := False;
+  if not AAllowScripts then
+  begin
+    var ProjXml := '';
+    // sin leerlo NO se compila: el escaner miraba un texto vacio y daba el
+    // .dproj por limpio (fallaba ABIERTO; sexta revision)
+    try
+      ProjXml := LeeTexto(ADprojPath, [ltJaula]);
+    except
+      on E: Exception do
+        raise Exception.Create(MsgFmt(SR_BUILD_DPROJ_ILEGIBLE_FMT,
+          [TPath.GetFileName(ADprojPath), E.Message]));
+    end;
+    var Hazard := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), True);
+    if Hazard <> '' then
+    begin
+      TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
+        [TPath.GetFullPath(ADprojPath), Hazard]));
+      raise Exception.Create(MsgFmt(SR_BUILD_HAZARD_FMT, [Hazard]));
+    end;
+    // Parte 2 del mismo gate: una propiedad de entorno que el IDE reserva,
+    // redefinida por el proyecto o por algo que importa, desvia uno de los
+    // <Import> propios del IDE (que confiamos sin leer, IsStockImport) a un
+    // fichero elegido por el proyecto - codigo cargado en el build sin un
+    // <Import> visible. Mismo opt-in (AllowBuildScripts) que el hazard: un
+    // proyecto de confianza ya puede ejecutar de todos modos.
+    var ResProp := RedefinedIdeImportProperty(TPath.GetFullPath(ADprojPath));
+    if ResProp <> '' then
+    begin
+      TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_REDEFINES_FMT,
+        [TPath.GetFullPath(ADprojPath), ResProp]));
+      raise Exception.Create(MsgFmt(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
+    end;
+    Result := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), False) <> '';
+  end;
+  // Before a single line is compiled: what does this project pull in from
+  // outside, and is it allowed to? Same shape as the hazard check above.
+  var IncBad := IncludeDirectivesDenied(ADprojPath);
+  if IncBad <> '' then
+  begin
+    TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
+      [TPath.GetFullPath(ADprojPath), IncBad]));
+    raise Exception.Create(IncBad);
+  end;
+end;
+
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer;
   const ASdk, AVerbosity: string): TJSONObject;
@@ -1407,64 +1473,9 @@ begin
     raise Exception.Create(Denied);
   if (AVerbosity <> '') and not MatchText(AVerbosity, ['quiet', 'normal', 'verbose']) then
     raise Exception.Create(MsgFmt(SR_BUILD_VERBOSITY_FMT, [AVerbosity]));
-  // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
-  // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
-  // build-event, a foreign <Import>) and refuse unless build scripts were
-  // explicitly enabled. This is the point-of-execution gate, so it holds however
-  // the .dproj got there - upload, edit, or a pre-existing one (field round 7,
-  // CRITICAL). AllowBuildScripts is the trusted-project
-  // opt-in; an inert custom <Target> now builds without it (field round 9 FP).
-  // Los EVENTOS pre/post build (la firma, una copia) ya no cierran la puerta:
-  // se compila con ellos vaciados (/p:PreBuildEvent= ...) y se dice. Sin eso
-  // Galatea no compilaba en el workspace de un agente, y "una cosa es compilar
-  // la version final, otra poder trabajar y ejecutar mientras tanto" (David,
-  // 24-sep-2026). Lo que ejecuta de verdad -un <Exec>/<Target> propio, un
-  // <Import> ajeno- sigue rechazado: el MISMO escaner, primero sin contar los
-  // eventos.
-  EventosSaltados := False;
-  if not AllowBuildScripts then
-  begin
-    var ProjXml := '';
-    // sin leerlo NO se compila: el escaner miraba un texto vacio y daba el
-    // .dproj por limpio (fallaba ABIERTO; sexta revision)
-    try
-      ProjXml := LeeTexto(ADprojPath, [ltJaula]);
-    except
-      on E: Exception do
-        raise Exception.Create(MsgFmt(SR_BUILD_DPROJ_ILEGIBLE_FMT,
-          [TPath.GetFileName(ADprojPath), E.Message]));
-    end;
-    var Hazard := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), True);
-    if Hazard <> '' then
-    begin
-      TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
-        [TPath.GetFullPath(ADprojPath), Hazard]));
-      raise Exception.Create(MsgFmt(SR_BUILD_HAZARD_FMT, [Hazard]));
-    end;
-    // Parte 2 del mismo gate: una propiedad de entorno que el IDE reserva,
-    // redefinida por el proyecto o por algo que importa, desvia uno de los
-    // <Import> propios del IDE (que confiamos sin leer, IsStockImport) a un
-    // fichero elegido por el proyecto - codigo cargado en el build sin un
-    // <Import> visible. Mismo opt-in (AllowBuildScripts) que el hazard: un
-    // proyecto de confianza ya puede ejecutar de todos modos.
-    var ResProp := RedefinedIdeImportProperty(TPath.GetFullPath(ADprojPath));
-    if ResProp <> '' then
-    begin
-      TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_REDEFINES_FMT,
-        [TPath.GetFullPath(ADprojPath), ResProp]));
-      raise Exception.Create(MsgFmt(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
-    end;
-    EventosSaltados := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), False) <> '';
-  end;
-  // Before a single line is compiled: what does this project pull in from
-  // outside, and is it allowed to? Same shape as the hazard check above.
-  var IncBad := IncludeDirectivesDenied(ADprojPath);
-  if IncBad <> '' then
-  begin
-    TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
-      [TPath.GetFullPath(ADprojPath), IncBad]));
-    raise Exception.Create(IncBad);
-  end;
+  // El escaneo compile-only (hazard, propiedad de IDE redefinida, directivas e
+  // imports) se hace mas abajo, BAJO el cerrojo de escritura y pegado a msbuild
+  // (EscaneoCompileOnly): se escanean y se compilan los MISMOS bytes del .dproj.
   Info := DiscoverRadStudio;
   if not Info.Found then
     raise Exception.Create(MsgText(SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED));
@@ -1564,7 +1575,16 @@ begin
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
+  // EscaneoCompileOnly y msbuild, bajo EL cerrojo de escritura (GLock): msbuild
+  // compila los MISMOS bytes que se escanearon. Un delphi_edit del .dproj entre
+  // el escaneo y msbuild colaba un <Exec> (TOCTOU, revisor 1.18.0). El orden es
+  // GBuildLock -> GLock SIEMPRE (EnsureDeployManifest tambien toma GLock): al
+  // reves, dos builds se bloquearian. Solo el camino no confiado escanea.
+  var Confiado := AllowBuildScripts;
+  if not Confiado then
+    EnterFileEdit;
   try
+  EventosSaltados := EscaneoCompileOnly(ADprojPath, Confiado);
   // Un Windows REMOTO (perfil PAServer de Windows) despliega como un Linux:
   // sin manifiesto, msbuild "desplegaba" cero ficheros y decia exito. La
   // plataforma local solo lo es cuando no hay perfil (medido 2026-09-22 con
@@ -1721,6 +1741,8 @@ begin
       Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
   end;
   finally
+    if not Confiado then
+      LeaveFileEdit;
     GBuildLock.Leave;
   end;
 
