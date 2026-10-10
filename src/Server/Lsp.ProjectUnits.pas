@@ -1356,6 +1356,25 @@ begin
   Result := Copy(Xml, 1, At - 1) + AElement + Copy(Xml, At, MaxInt);
 end;
 
+{ Estrena el uses de un programa o una biblioteca justo detras de su
+  cabecera (EL lector: CabeceraDeFuente) con AEntradas ya escritas, sin el
+  ';'. False si AText no es un program/library. La clausula que nace la
+  escriben add-unit (al programa le quitaron su ultima unit: se fue entera)
+  y adduses en un .dpr: un solo escritor de ese uses. }
+function EstrenaUsesTrasCabecera(var AText: string; const AEntradas: string): Boolean;
+var
+  Cab: TCabeceraFuente;
+begin
+  Result := CabeceraDeFuente(CodigoPascal(AText), Cab) and
+    MatchText(Cab.Palabra, ['program', 'library']);
+  if Result then
+  begin
+    var NL := SaltoDominante(AText);
+    AText := Copy(AText, 1, Cab.Fin - 1) + NL + NL + 'uses' + NL + '  ' + AEntradas + ';' +
+      Copy(AText, Cab.Fin, MaxInt);
+  end;
+end;
+
 { ---- public operations ---- }
 
 function AddProjectUnitNucleo(const AProject, APasPath: string): string;
@@ -1402,14 +1421,9 @@ begin
     begin
       // Un programa al que se le quito su ULTIMA unit tampoco la tiene (se va
       // entera: decima revision): la estrena justo tras la cabecera.
-      var Cab: TCabeceraFuente;
-      if CabeceraDeFuente(CodigoPascal(Text), Cab) and MatchText(Cab.Palabra, ['program', 'library']) then
+      if EstrenaUsesTrasCabecera(Text, BuildEntry(Info, Include)) then
       begin
         Estrenada := True;
-        var NL := SaltoDominante(Text);
-        var Tras := Cab.Fin;
-        Text := Copy(Text, 1, Tras - 1) + NL + NL + 'uses' + NL + '  ' +
-          BuildEntry(Info, Include) + ';' + Copy(Text, Tras, MaxInt);
         PatchSaveText(Dpr, Text, Enc);
         Text := PatchLoadText(Dpr, Enc);
         U := FindUses(Text);
@@ -2110,6 +2124,71 @@ begin
   end;
 end;
 
+{ adduses en un .dpr (11.6, David 10-oct-2026: un muro medido moviendo
+  SondaOrdenFmx): unidades de BIBLIOTECA - sin ruta: las encuentra el
+  compilador por su search path - al uses del programa, por el mismo
+  escritor que add-unit (FindUses/ReplaceUses, y EstrenaUsesTrasCabecera si
+  no lo tiene). Una unidad del PROYECTO - su .pas junto al .dpr - va por
+  add-unit, que escribe su in '...' y su DCCReference: se niega y se dice.
+  Idempotente. }
+function AddUsesToProgram(const ADpr: string; const ANames: TArray<string>): string;
+var
+  Text, Enc: string;
+  U: TUsesClause;
+  Faltan, YaEstan: TArray<string>;
+begin
+  for var N in ANames do
+    if TFile.Exists(TPath.Combine(TPath.GetDirectoryName(ADpr), N + '.pas')) then
+      Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT, [N, TPath.GetFileName(ADpr)]));
+  EnterFileEdit;
+  try
+    if not TFile.Exists(ADpr) then
+      Exit(NoEsFichero(ADpr, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [ADpr])));
+    Text := PatchLoadText(ADpr, Enc);
+    U := FindUses(Text);
+    if U.EnRamas then
+      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(ADpr)]));
+    Faltan := [];
+    YaEstan := [];
+    for var N in ANames do
+    begin
+      var Esta := False;
+      for var E in U.Entries do
+        if MismoIdentificador(EntryUnitName(E), N) then
+          Esta := True;
+      for var F in Faltan do
+        if MismoIdentificador(F, N) then
+          Esta := True;
+      if Esta then
+        YaEstan := YaEstan + [N]
+      else
+        Faltan := Faltan + [N];
+    end;
+    if Length(Faltan) = 0 then
+      Exit(MsgFmt(SN_ADDUSES_PRESENT_FMT, [string.Join(', ', ANames), 'program',
+        TPath.GetFileName(ADpr)]));
+    var Creada := not U.Found;
+    if U.Found then
+      Text := ReplaceUses(Text, U, U.Entries + Faltan)
+    else if not EstrenaUsesTrasCabecera(Text, string.Join(', ', Faltan)) then
+      Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(ADpr)]));
+    PatchSaveText(ADpr, Text, Enc);
+    // el eco, releido del disco: la clausula tal y como ha quedado
+    var Clausula := '(?)';
+    Text := PatchLoadText(ADpr, Enc);
+    U := FindUses(Text);
+    if U.Found then
+      Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
+    Result := MsgFmt(SN_ADDUSES_ADDED_FMT, ['program', TPath.GetFileName(ADpr),
+      string.Join(', ', Faltan),
+      IfThen(Length(YaEstan) > 0, MsgFmt(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), ''),
+      IfThen(Creada, MsgText(SN_ADDUSES_CREADA_PROGRAMA), ''),
+      Clausula]);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
 { adduses de delphi_edit (David, 2026-09-23): una unit entra en el uses de
   OTRA unit, en la seccion que se diga, y la clausula la escribe el motor:
   comas, terminador y, si no existia, la clausula entera bajo la palabra de
@@ -2123,7 +2202,7 @@ var
   Names, Faltan, YaEstan, EnOtra: TArray<string>;
   Creada: Boolean;
 begin
-  if not SameText(TPath.GetExtension(APasPath), '.pas') then
+  if not MatchText(TPath.GetExtension(APasPath), ['.pas', '.dpr']) then
     Exit(MsgFmt(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do
@@ -2134,6 +2213,9 @@ begin
   for Nombre in Names do
     if not EsIdentificador(Nombre, True) then
       Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+  // un programa tiene UN uses: section no aplica
+  if SameText(TPath.GetExtension(APasPath), '.dpr') then
+    Exit(AddUsesToProgram(APasPath, Names));
   Sec := LowerCase(ASection.Trim);
   if Sec = '' then
     Sec := 'implementation';

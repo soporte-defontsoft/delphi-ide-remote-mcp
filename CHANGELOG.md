@@ -10,6 +10,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`adduses` puts a library unit into a `.dpr`.** A unit of the library
+  (`FMX.Edit`, `System.SysUtils`) had no tool into a program's uses:
+  `adduses` refused every `.dpr` and `add-unit` is for the project's own
+  units (it writes `in '...'` and the `DCCReference`) - a wall measured
+  moving a form between frameworks. `adduses` now takes library units -
+  no path, the compiler finds them - into a `.dpr`, by the same writer as
+  `add-unit`, and creates the clause after the header when there is none
+  (one writer for that now, `EstrenaUsesTrasCabecera`, which `add-unit`
+  also uses); a unit of the project - its `.pas` next to the `.dpr` - is
+  refused with `add-unit` named (`USES-021`), and a `.dpk` goes on being
+  refused, now pointing to `add-unit` and `add-requires`.
+  `test_delphi_patch`, red before.
+
 - **A removed unit takes the comment on its line with it.** `removeuses`
   (and `remove-unit`, the same writer) left the `//` written on the line of
   the entry it removed as a loose line inside the clause (found moving

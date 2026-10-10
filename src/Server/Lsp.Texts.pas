@@ -3056,10 +3056,19 @@ const
   { adduses de delphi_edit (David, 2026-09-23): la unit entra en el uses de
     OTRA unit y la clausula la escribe el motor. }
   SR_ADDUSES_NOT_PAS_FMT =
-    '[USES-002 INVALID_PARAM] adduses is for units (.pas); %s is a ' +
-    'project. To put a unit into a .dpr/.dpk use delphi_config ' +
-    'command=add-unit, which also registers the DCCReference in the ' +
-    '.dproj.';
+    '[USES-002 INVALID_PARAM] adduses is for units (.pas) and programs ' +
+    '(.dpr, library units); %s is not one of them. A unit of a package ' +
+    'goes into its contains with delphi_config command=add-unit, and ' +
+    'another package''s units with command=add-requires.';
+  { adduses en un .dpr (11.6, David 10-oct-2026): solo unidades de biblioteca }
+  SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT =
+    '[USES-021 INVALID_PARAM] %s is a unit of this project (its .pas is ' +
+    'next to %s): add it with delphi_config command=add-unit, which ' +
+    'writes its in ''...'' path and registers the DCCReference in the ' +
+    '.dproj. adduses in a .dpr is for library units (no path). Nothing ' +
+    'was written.';
+  SN_ADDUSES_CREADA_PROGRAMA =
+    ' [USES-022] The program had no uses: created right after its header.';
   SR_ADDUSES_NEED_NAMES =
     '[USES-003 INVALID_PARAM] Missing "adduses": the unit names to add, ' +
     'separated by ; (System.SysUtils;UCustomer).';
@@ -8436,8 +8445,10 @@ const
     'ADDUSES mode: units to add to a uses clause of this .pas, separated ' +
     'by ; (System.SysUtils;UCustomer). The engine writes the commas and ' +
     'the terminator, creates the clause when there is none, and skips ' +
-    'units already in either section (a unit cannot be in both). For a ' +
-    '.dpr/.dpk: delphi_config add-unit.';
+    'units already in either section (a unit cannot be in both). In a .dpr ' +
+    'it takes LIBRARY units (no path; section does not apply); a unit of ' +
+    'the project goes by delphi_config add-unit, and a .dpk by add-unit / ' +
+    'add-requires.';
 
   SP_EDIT_SECTION =
     'ADDUSES mode: "interface" or "implementation" (default ' +

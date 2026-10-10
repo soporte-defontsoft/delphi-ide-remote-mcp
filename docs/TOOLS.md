@@ -289,7 +289,7 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keepi
 | `eol` | string | optional | CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf" |
 | `restore` | boolean | optional | RESTORE mode: true = restore the file from this tool's backup. First call shows what would be LOST; repeat with confirm=true to execute |
 | `confirm` | boolean | optional | Only with restore: execute after having seen the losses |
-| `adduses` | string | optional | ADDUSES mode: units to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCustomer). The engine writes the commas and the terminator, creates the clause when there is none, and skips units already in either section (a unit cannot be in both). For a .dpr/.dpk: delphi_config add-unit. |
+| `adduses` | string | optional | ADDUSES mode: units to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCustomer). The engine writes the commas and the terminator, creates the clause when there is none, and skips units already in either section (a unit cannot be in both). In a .dpr it takes LIBRARY units (no path; section does not apply); a unit of the project goes by delphi_config add-unit, and a .dpk by add-unit / add-requires. |
 | `section` | string | optional | ADDUSES mode: "interface" or "implementation" (default implementation: a new unit goes there unless one of its types is used in the interface) |
 | `removeuses` | string | optional | REMOVEUSES mode: units to take out of the uses clause of "section", separated by ; - the inverse of adduses. A directive around the entry stays with its neighbour, the clause goes when it empties, and names not there are reported. For a .dpr/.dpk: delphi_config remove-unit. |
 <!-- /contract -->

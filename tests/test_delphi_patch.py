@@ -461,8 +461,29 @@ out = call('delphi_edit', {"path": ADDU, "adduses": "X", "section": "initializat
 check('adduses: seccion invalida rechazada', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_BAD_SECTION_FMT'), out[:200])
 DPRX = os.path.join(DIR, 'Prog.dpr')
 open(DPRX, 'wb').write(b'program Prog;\r\nbegin\r\nend.\r\n')
-out = call('delphi_edit', {"path": DPRX, "adduses": "X"})
-check('adduses: en un .dpr remite a add-unit', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_NOT_PAS_FMT') and 'add-unit' in out, out[:200])
+# en un .dpr, unidades de BIBLIOTECA (11.6, David 10-oct-2026: el muro de
+# SondaOrdenFmx - FMX.Edit al uses de un .dpr no tenia tool)
+out = call('delphi_edit', {"path": DPRX, "adduses": "System.SysUtils"})
+_src = open(DPRX, 'rb').read().decode('ascii')
+check('adduses en un .dpr sin uses: lo estrena tras la cabecera',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and mc.es(out, 'SN_ADDUSES_CREADA_PROGRAMA') and
+      _src == 'program Prog;\r\n\r\nuses\r\n  System.SysUtils;\r\nbegin\r\nend.\r\n', out[:300] + ' | ' + _src)
+out = call('delphi_edit', {"path": DPRX, "adduses": "System.Classes;System.SysUtils"})
+_src = open(DPRX, 'rb').read().decode('ascii')
+check('adduses en un .dpr con uses: entra la que falta y dice la que ya estaba',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and mc.es(out, 'SN_ADDUSES_SOME_PRESENT_FMT') and
+      'uses\r\n  System.SysUtils,\r\n  System.Classes;\r\n' in _src, out[:300] + ' | ' + _src)
+open(os.path.join(DIR, 'UDelProg.pas'), 'wb').write(b'unit UDelProg;\r\ninterface\r\nimplementation\r\nend.\r\n')
+_antes = open(DPRX, 'rb').read()
+out = call('delphi_edit', {"path": DPRX, "adduses": "UDelProg"})
+check('adduses en un .dpr: una unidad DEL PROYECTO (su .pas al lado) remite a add-unit y no escribe',
+      mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT') and 'add-unit' in out
+      and open(DPRX, 'rb').read() == _antes, out[:300])
+DPKX = os.path.join(DIR, 'Paq.dpk')
+open(DPKX, 'wb').write(b'package Paq;\r\nrequires\r\n  rtl;\r\nend.\r\n')
+out = call('delphi_edit', {"path": DPKX, "adduses": "System.SysUtils"})
+check('adduses en un .dpk: remite a add-unit / add-requires', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_NOT_PAS_FMT')
+      and 'add-requires' in out, out[:200])
 check('adduses: cp1252 intacto (sin BOM, CRLF)', not open(ADDU, 'rb').read().startswith(b'\xef\xbb\xbf') and b'\n' not in open(ADDU, 'rb').read().replace(b'\r\n', b''))
 # --- una clausula COMPACTA se edita en su sitio (3.13 de la 1.18.0): adduses y
 # removeuses la rehacian una por linea, un diff de cuarenta lineas por una unit
