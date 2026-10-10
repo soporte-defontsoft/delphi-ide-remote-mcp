@@ -90,7 +90,16 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_delphi_patch`, each case red with its part undone - the two
   refusals kept from before are guards, red only with their guard taken
   out; the `test_paisaje` rule holds one house.
-
+- **Ref and revision names are judged by git, not by a regex** (`9.A`, the
+  landscape rule "what can be measured is not hard-coded"). `check-ref-format
+  --branch` for a NAME the agent writes (a push refspec's destination, a
+  `worktree add` ref) and `rev-parse --verify --quiet --end-of-options` for a
+  REVISION that must exist. git accepts what git accepts - a non-ASCII branch,
+  `x{y}` - which the regex refused, and refuses `-x`, ranges and `x.lock`
+  (which the regex let through to git, that then errored). A push refspec's
+  FORM stays closed BEFORE asking git: a leading `+` (force) and an empty
+  source (`:dst`, delete) are refused by shape, because `check-ref-format`
+  accepts `+main` as a name ("no remote destruction", David). `test_git_refs`.
 - **`delphi_edit` and `delphi_textedit` delete a blank line.** `delete`
   asked for `old` with the line, and a blank line has no text to copy: the
   way round was a three-line block. Now `delete` with `atline` and no `old`

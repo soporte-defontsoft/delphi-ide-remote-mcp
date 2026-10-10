@@ -583,32 +583,47 @@ begin
       Result := Result + [Trozo];
 end;
 
-{ UN NOMBRE de rama, de tag o de commit, y nada mas que un nombre. Con
-  AConRevision vale tambien la forma relativa (HEAD~3, v1^): para NOMBRAR
-  una version que ya esta en el repo. }
-function EsNombreDeRef(const ANombre: string; AConRevision: Boolean): Boolean;
+(* EL juez de un nombre de ref o de una revision es GIT (norma 6 del paisaje:
+  lo medible no se hardcodea; medida refs-git del 9-oct). AConRevision False:
+  un NOMBRE que el agente escribe (una rama, un tag), por
+  check-ref-format --branch, que acepta lo que git acepta -no ASCII, llaves- y
+  niega -x, x.lock, los rangos y los metacaracteres que la regex negaba a
+  mano. AConRevision True: una REVISION que ademas debe EXISTIR, por
+  rev-parse --verify --quiet --end-of-options, que entiende HEAD^, @{1} y
+  x^{commit}. --end-of-options protege un nombre que empieza por '-' sin
+  lista. Un fallo de git al juzgar no es un "vale": Codigo<>0 (timeout, o no
+  hay git -EOSError, que sube-) es "no". Por el lanzador de la casa. *)
+function EsNombreDeRef(const ARepo, AFijado, ANombre: string; AConRevision: Boolean): Boolean;
+var
+  Codigo: Cardinal;
 begin
   if AConRevision then
-    Result := TRegEx.IsMatch(ANombre, '^[A-Za-z0-9][A-Za-z0-9._/~^-]*$')
+    GitCorre(ARepo, AFijado,
+      'rev-parse --verify --quiet --end-of-options ' + EnComillas(ANombre), 60000, Codigo)
   else
-    Result := TRegEx.IsMatch(ANombre, '^[A-Za-z0-9][A-Za-z0-9._/-]*$');
+    GitCorre(ARepo, AFijado, 'check-ref-format --branch ' + EnComillas(ANombre), 60000, Codigo);
+  Result := Codigo = 0;
 end;
 
 { LO QUE push ENVIA: los trozos sin guion de detras del remoto. push ANADE
   al remoto; lo que ya hay alli no se reescribe ni se borra por esta tool
-  (David, 29-sep-2026: "nada de destruccion remota"). Una lista de lo que
-  vale: cada trozo es un nombre (main, v1.7.7) o dos con dos puntos en medio
-  (local:remoto) - a la izquierda una version que ya esta en el repo, a la
-  derecha el nombre que tendra alli. True si hay uno que no (AMalo).
+  (David, 29-sep-2026: "nada de destruccion remota"). La sintaxis del refspec
+  es [+]src[:dst]: un '+' inicial FUERZA y un src vacio (:dst) BORRA; las dos
+  se niegan por la FORMA, ANTES de preguntar a git, porque check-ref-format
+  ACEPTA "+main" como nombre (medido el 9-oct). Lo demas lo juzga git
+  (EsNombreDeRef): el src de un par es una REVISION que ya esta en el repo, el
+  dst el NOMBRE que tendra alli; un trozo suelto vale como nombre O como
+  revision (push origin HEAD). True si hay uno que no (AMalo).
 
-  Medido ese dia por la tool, con --force y --delete ya negados por su
+  Medido el 29-sep-2026 por la tool, con --force y --delete ya negados por su
   nombre: args="origin +main", con las historias divergidas, reescribia la
   rama del remoto, y args="origin :sobra" la borraba. }
-function EnvioQueNoVale(const AArgs: string; out AMalo: string): Boolean;
+function EnvioQueNoVale(const ARepo, AFijado, AArgs: string; out AMalo: string): Boolean;
 var
   Trozos: TArray<string>;
   I, P: Integer;
   Vale: Boolean;
+  Trozo, Src, Dst: string;
 begin
   Result := False;
   AMalo := '';
@@ -616,15 +631,34 @@ begin
   // (el primero es el remoto: lo juzga RemotoDenegado)
   for I := 1 to High(Trozos) do
   begin
-    P := Trozos[I].IndexOf(':');
+    Trozo := Trozos[I];
+    // un '+' inicial es FORZAR: fuera por la forma (check-ref-format lo admite)
+    if Trozo.StartsWith('+') then
+    begin
+      AMalo := Trozo;
+      Exit(True);
+    end;
+    P := Trozo.IndexOf(':');
     if P >= 0 then
-      Vale := EsNombreDeRef(Trozos[I].Substring(0, P), True) and
-        EsNombreDeRef(Trozos[I].Substring(P + 1), False)
+    begin
+      Src := Trozo.Substring(0, P);
+      Dst := Trozo.Substring(P + 1);
+      // un src vacio (:dst) es BORRAR: fuera por la forma
+      if Src = '' then
+      begin
+        AMalo := Trozo;
+        Exit(True);
+      end;
+      Vale := EsNombreDeRef(ARepo, AFijado, Src, True) and
+        EsNombreDeRef(ARepo, AFijado, Dst, False);
+    end
     else
-      Vale := EsNombreDeRef(Trozos[I], False);
+      // un trozo suelto: nombre (main, v1.7.7) o revision (HEAD)
+      Vale := EsNombreDeRef(ARepo, AFijado, Trozo, False) or
+        EsNombreDeRef(ARepo, AFijado, Trozo, True);
     if not Vale then
     begin
-      AMalo := Trozos[I];
+      AMalo := Trozo;
       Exit(True);
     end;
   end;
@@ -886,7 +920,7 @@ begin
     Clave := 'remote.' + Nombre + '.push=';
     for Linea in Todas do
       if Linea.StartsWith(Clave) and
-         EnvioQueNoVale('remoto ' + Linea.Substring(Length(Clave)), Malo) then
+         EnvioQueNoVale(ARepo, AFijado, 'remoto ' + Linea.Substring(Length(Clave)), Malo) then
         Exit(MsgFmt(SR_GIT_PUSH_CONFIG_FMT, [Nombre,
           'push = ' + Linea.Substring(Length(Clave)), Nombre]));
   end;
@@ -1332,7 +1366,7 @@ begin
         Exit(MsgFmt(SR_GIT_RED_OPCION_FMT, [Cmd, Trozo, OPCIONES_DE_PUSH]));
     // ...y lo que se envia, nombres: push anade, no reescribe ni borra
     var Malo: string;
-    if EnvioQueNoVale(Params.Args, Malo) then
+    if EnvioQueNoVale(Repo, Fijado, Params.Args, Malo) then
       Exit(MsgFmt(SR_GIT_PUSH_NOMBRE_FMT, [Malo]));
     GitArgs := 'push ' + ArgvSeguro(Params.Args);
   end
@@ -1379,7 +1413,7 @@ begin
       begin
         if TDirectory.Exists(Destino) or TFile.Exists(Destino) then
           Exit(MsgFmt(SR_GIT_WORKTREE_EXISTS_FMT, [Destino]));
-        if not EsNombreDeRef(Params.Ref.Trim, True) then
+        if not EsNombreDeRef(Repo, Fijado, Params.Ref.Trim, True) then
           Exit(MsgText(SR_GIT_WORKTREE_REF));
         // Nunca DENTRO del propio repo: el arbol principal la veria como una
         // carpeta sin seguimiento, y un add -A se la llevaria.
