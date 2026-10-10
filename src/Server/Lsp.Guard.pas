@@ -600,6 +600,16 @@ function SoloLecturaDenegado(const APath: string): string;
   escritor se niegue (BackupFile): SYS-029 decia "nothing was written" con
   la copia diaria ya hecha (decima revision). '' = se puede. }
 function SustitucionDenegada(const APath: string): string;
+{ "Puedo QUITAR o PONER esta entrada en su carpeta?" (borrarla, moverla de o
+  a ahi): la puerta de escritura sobre la ruta real y la carpeta REAL que la
+  contiene + su nombre (RutaDelEnlace) escribible de verdad. EscrituraDenegada
+  sola sigue tambien al ULTIMO enlace: una carpeta de la jaula que es una
+  union afuera con un enlace de vuelta dentro pasaba, y el borrado o el
+  renombre se hacian en la carpeta de FUERA (revisor 4.8 de la 1.18.0, M2:
+  delete y move de un changeset; delphi_delete y delphi_move tenian la
+  misma forma). Sin el +R: mover o mandar a la papelera un fichero de solo
+  lectura se puede. '' = se puede. }
+function EntradaDenegada(const APath: string): string;
 
 { Quita el atributo de solo lectura a un FICHERO; una carpeta o un enlace
   no se tocan (lo de detras no es de la operacion). Nunca lanza. Estaba a
@@ -1437,6 +1447,13 @@ begin
     Result := MsgFmt(SR_SUSTITUCION_CARPETA_REAL_FMT, [APath]);
   if Result = '' then
     Result := SoloLecturaDenegado(APath);
+end;
+
+function EntradaDenegada(const APath: string): string;
+begin
+  Result := EscrituraDenegada(APath);
+  if (Result = '') and not EscribibleDeVerdad(RutaDelEnlace(APath)) then
+    Result := MsgFmt(SR_ENTRADA_CARPETA_REAL_FMT, [APath]);
 end;
 
 procedure QuitaSoloLectura(const APath: string);

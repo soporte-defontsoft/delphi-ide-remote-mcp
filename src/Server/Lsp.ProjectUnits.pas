@@ -532,16 +532,189 @@ end;
   y `contains` tras `package X;` - en un paquete la `requires` que va antes
   se salta entera. Nunca una dentro de un comentario; cerrada por el primer
   `;` fuera de comillas y comentarios. }
+const
+  // Los condicionales de Pascal: los que ABREN, los que cambian de RAMA y los
+  // que CIERRAN. Una lista para los lectores de un uses de esta unidad: estaba
+  // escrita a mano en CondicionalesAbiertos, EntradasDeOtrasRamas y EsEnvuelta
+  CONDICIONAL_ABRE: array[0..3] of string = ('IF', 'IFDEF', 'IFNDEF', 'IFOPT');
+  CONDICIONAL_RAMA: array[0..1] of string = ('ELSE', 'ELSEIF');
+  CONDICIONAL_CIERRA: array[0..1] of string = ('ENDIF', 'IFEND');
+  // las combinaciones de ramas que ListaEnCadaRama recorre como mucho
+  MAX_COMBINACIONES_DE_RAMAS = 256;
+
 // Los condicionales (IF, IFDEF, IFNDEF e IFOPT abren; ENDIF e IFEND
 // cierran) que quedan ABIERTOS al final de ATexto.
 function CondicionalesAbiertos(const ATexto: string): Integer;
 begin
   Result := 0;
   for var D in DirectivasPascal(ATexto) do
-    if MatchText(D.Nombre, ['IF', 'IFDEF', 'IFNDEF', 'IFOPT']) then
+    if MatchText(D.Nombre, CONDICIONAL_ABRE) then
       Inc(Result)
-    else if MatchText(D.Nombre, ['ENDIF', 'IFEND']) then
+    else if MatchText(D.Nombre, CONDICIONAL_CIERRA) then
       Dec(Result);
+end;
+
+// True si ATexto lleva alguna directiva condicional (abre, cambia de rama o
+// cierra): entre una coma y el nombre de su entrada, las pone en regiones
+// distintas (EntriesWithout)
+function LlevaCondicional(const ATexto: string): Boolean;
+begin
+  for var D in DirectivasPascal(ATexto) do
+    if MatchText(D.Nombre, CONDICIONAL_ABRE) or MatchText(D.Nombre, CONDICIONAL_RAMA) or
+       MatchText(D.Nombre, CONDICIONAL_CIERRA) then
+      Exit(True);
+  Result := False;
+end;
+
+// LA COMPROBACION DE UN USES CON CONDICIONALES, la unica gramatica propia de
+// esta unidad para ellos: no hay juez, dcc solo compila la rama de los
+// simbolos que tiene. En CADA combinacion de ramas, lo activo tiene que ser
+// una lista - entradas separadas por comas, sin coma al principio, al final
+// ni dos seguidas, y al menos una entrada. Dos trozos de entrada seguidos
+// con solo una directiva en medio cuentan como una entrada partida, no como
+// dos. 1 = alguna rama la rompe; 0 = todas bien; -1 = no se puede juzgar (un
+// condicional que abre o cierra fuera de la clausula, o mas de
+// MAX_COMBINACIONES_DE_RAMAS): quien pregunta no niega por eso. ACuerpo, la
+// clausula sin su palabra (uses / contains), con o sin su ';'. Revisor de
+// version de la 1.18.0: removeuses dejaba una coma fuera de su condicional.
+function ListaEnCadaRama(const ACuerpo: string): Integer;
+type
+  TEvento = record
+    Clase: Integer; // 0 un trozo de entrada, 1 una coma, 2 abre, 3 rama, 4 cierra
+    Bloque: Integer;
+  end;
+var
+  Eventos: TArray<TEvento>;
+  Ramas: TArray<Integer>;     // las ramas de cada bloque
+  ConElse: TArray<Boolean>;   // ...y si una de ellas es un ELSE (si no, cabe "ninguna")
+  Pila: TArray<Integer>;
+
+  procedure Anota(AClase, ABloque: Integer);
+  var
+    Ev: TEvento;
+  begin
+    Ev.Clase := AClase;
+    Ev.Bloque := ABloque;
+    Eventos := Eventos + [Ev];
+  end;
+
+begin
+  Eventos := [];
+  Ramas := [];
+  ConElse := [];
+  Pila := [];
+  var Clases := ClasesPascal(ACuerpo);
+  var Ds := DirectivasPascal(ACuerpo);
+  var DI := 0;
+  var EnEntrada := False;
+  var I := 1;
+  while I <= Length(ACuerpo) do
+  begin
+    if (DI <= High(Ds)) and (Ds[DI].Inicio = I) then
+    begin
+      var Nombre := Ds[DI].Nombre;
+      if MatchText(Nombre, CONDICIONAL_ABRE) then
+      begin
+        Ramas := Ramas + [1];
+        ConElse := ConElse + [False];
+        Pila := Pila + [High(Ramas)];
+        Anota(2, High(Ramas));
+      end
+      else if MatchText(Nombre, CONDICIONAL_RAMA) then
+      begin
+        if Length(Pila) = 0 then
+          Exit(-1);
+        Inc(Ramas[Pila[High(Pila)]]);
+        if SameText(Nombre, 'ELSE') then
+          ConElse[Pila[High(Pila)]] := True;
+        Anota(3, Pila[High(Pila)]);
+      end
+      else if MatchText(Nombre, CONDICIONAL_CIERRA) then
+      begin
+        if Length(Pila) = 0 then
+          Exit(-1);
+        Anota(4, Pila[High(Pila)]);
+        SetLength(Pila, Length(Pila) - 1);
+      end;
+      EnEntrada := False;
+      I := Ds[DI].Inicio + Ds[DI].Largo;
+      Inc(DI);
+      Continue;
+    end;
+    if Clases[I] in [cpCodigo, cpCadena] then
+    begin
+      if (Clases[I] = cpCodigo) and (ACuerpo[I] = ';') then
+        Break;
+      if (Clases[I] = cpCodigo) and (ACuerpo[I] = ',') then
+      begin
+        Anota(1, -1);
+        EnEntrada := False;
+      end
+      else if not CharInSet(ACuerpo[I], [' ', #9, #10, #13]) then
+      begin
+        if not EnEntrada then
+          Anota(0, -1);
+        EnEntrada := True;
+      end;
+    end;
+    Inc(I);
+  end;
+  if Length(Pila) > 0 then
+    Exit(-1);
+  // cada bloque elige una de sus ramas, o ninguna si no tiene ELSE
+  var Opciones: TArray<Integer>;
+  SetLength(Opciones, Length(Ramas));
+  var Total := 1;
+  for var B := 0 to High(Ramas) do
+  begin
+    Opciones[B] := Ramas[B] + (if ConElse[B] then 0 else 1);
+    Total := Total * Opciones[B];
+    if Total > MAX_COMBINACIONES_DE_RAMAS then
+      Exit(-1);
+  end;
+  var Elegida, Actual: TArray<Integer>;
+  SetLength(Elegida, Length(Ramas));
+  SetLength(Actual, Length(Ramas));
+  for var Combo := 0 to Total - 1 do
+  begin
+    var R := Combo;
+    for var B := 0 to High(Ramas) do
+    begin
+      Elegida[B] := R mod Opciones[B];
+      R := R div Opciones[B];
+    end;
+    var Abiertos: TArray<Integer> := [];
+    var Estado := 0; // 0 nada todavia, 1 tras una entrada, 2 tras una coma
+    for var Ev in Eventos do
+      case Ev.Clase of
+        2:
+          begin
+            Actual[Ev.Bloque] := 0;
+            Abiertos := Abiertos + [Ev.Bloque];
+          end;
+        3:
+          Inc(Actual[Ev.Bloque]);
+        4:
+          SetLength(Abiertos, Length(Abiertos) - 1);
+      else
+        begin
+          var Activo := True;
+          for var B in Abiertos do
+            if Actual[B] <> Elegida[B] then
+              Activo := False;
+          if Activo then
+            if Ev.Clase = 0 then
+              Estado := 1
+            else if Estado <> 1 then
+              Exit(1) // una coma al principio o dos seguidas
+            else
+              Estado := 2;
+        end;
+      end;
+    if Estado <> 1 then
+      Exit(1); // una coma al final, o ninguna entrada en esta rama
+  end;
+  Result := 0;
 end;
 
 { Las entradas de las OTRAS ramas de una clausula partida: de ADesde (tras el
@@ -555,9 +728,9 @@ begin
   Fin := Length(ATexto) + 1;
   for var D in DirectivasPascal(Copy(ATexto, ADesde, MaxInt)) do
   begin
-    if MatchText(D.Nombre, ['IF', 'IFDEF', 'IFNDEF', 'IFOPT']) then
+    if MatchText(D.Nombre, CONDICIONAL_ABRE) then
       Inc(Prof)
-    else if MatchText(D.Nombre, ['ENDIF', 'IFEND']) then
+    else if MatchText(D.Nombre, CONDICIONAL_CIERRA) then
       Dec(Prof);
     if Prof <= 0 then
     begin
@@ -807,8 +980,8 @@ begin
   for var S in SplitToLines(AEntrada) do
     if S.Trim <> '' then
       L := L + [S.Trim];
-  Result := (Length(L) >= 3) and SoloDirectiva(L[0], ['IFDEF', 'IFNDEF', 'IFOPT', 'IF']) and
-    SoloDirectiva(L[High(L)], ['ENDIF', 'IFEND']);
+  Result := (Length(L) >= 3) and SoloDirectiva(L[0], CONDICIONAL_ABRE) and
+    SoloDirectiva(L[High(L)], CONDICIONAL_CIERRA);
 end;
 
 // Que entrada NUEVA es cada una de la clausula ORIGINAL (-1: se quito). Los
@@ -869,6 +1042,16 @@ begin
       Exit;
   // compacta: alguna linea con dos o mas
   if not TRegEx.IsMatch(Cuerpo, ',[ \t]*[^\s]') then
+    Exit;
+  // un comentario DETRAS del ';', en su linea, es de la ULTIMA entrada
+  // original (11.3): editada en su sitio, la compacta lo dejaba tras la nueva
+  // ('SysUtils, Classes; // para Format') o con otra si quitaba la suya.
+  // ReplaceUses ya sabe de quien es (revisor de version de la 1.18.0, medido)
+  var PC := U.EndPos + 1;
+  while (PC <= Length(Dpr)) and CharInSet(Dpr[PC], [' ', #9]) do
+    Inc(PC);
+  if (CommentLen(Dpr, PC) > 0) and not Copy(Dpr, PC, 2).Equals('{$') and
+     not Copy(Dpr, PC, 3).Equals('(*$') then
     Exit;
   // las que se quedan, en su orden; detras, solo nuevas
   SetLength(Quedan, Length(U.Entries));
@@ -1013,6 +1196,34 @@ var
     Result := False;
   end;
 
+  // si el comentario // AComentario iba, en la clausula ORIGINAL, detras de la
+  // coma de codigo numero ANumero (la que separa la entrada ANumero-1 de la
+  // ANumero), en su misma linea, y con que hueco. HuecoTrasSeparador mira
+  // cualquier coma: un '// TODO' de linea propia se iba con la quitada si otro
+  // '// TODO' iba detras de otra coma (revisor de version de la 1.18.0, medido)
+  function TrasLaComa(ANumero: Integer; const AComentario: string; out AHueco: string): Boolean;
+  var
+    N: Integer;
+  begin
+    AHueco := '';
+    N := 0;
+    for var J := 1 to Length(Clause) do
+      if (ClasesClausula[J] = cpCodigo) and (Clause[J] = ',') then
+      begin
+        Inc(N);
+        if N = ANumero then
+        begin
+          var MC := TRegEx.Match(Copy(Clause, J + 1, MaxInt), '^([ \t]*)' + TRegEx.Escape(AComentario));
+          Result := MC.Success and
+            (ClasesClausula[J + MC.Length - Length(AComentario) + 1] = cpLinea);
+          if Result then
+            AHueco := MC.Groups[1].Value;
+          Exit;
+        end;
+      end;
+    Result := False;
+  end;
+
 begin
   // EL escritor pregunta el mismo, como AtomicWrite: una clausula partida en
   // ramas no se reescribe - la unit caeria en la rama que no toca, o la
@@ -1082,7 +1293,8 @@ begin
     begin
       var Suyo := PrimeraLinea(U.Entries[K]);
       var HS: string;
-      if Suyo.StartsWith('//') and HuecoTrasSeparador(',', Suyo, HS) then
+      // detras de SU coma, la de la quitada (la K), no de cualquiera
+      if Suyo.StartsWith('//') and TrasLaComa(K, Suyo, HS) then
         Entradas[Mapa[K]] := SinLinea(Entradas[Mapa[K]], Suyo);
     end;
   // el comentario que va DETRAS del ; final, en su misma linea, es de la
@@ -1172,6 +1384,14 @@ begin
   end;
   Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(NL, Parts);
   Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
+  // EL escritor pregunta si lo que deja sigue siendo una lista en cada rama de
+  // sus condicionales (ListaEnCadaRama), y solo si la que habia lo era: una
+  // coma fuera de su condicional no compila con unos simbolos (revisor de
+  // version de la 1.18.0, medido con dcc: E2029). Se niega sin escribir
+  var Palabra := IfThen(U.Keyword <> '', U.Keyword, 'uses');
+  if (ListaEnCadaRama(Copy(Clause, Length(Palabra) + 1, MaxInt)) = 0) and
+     (ListaEnCadaRama(Copy(Body, Length(Palabra) + 1, MaxInt)) = 1) then
+    raise Exception.Create(MsgFmt(SR_USES_RAMA_SIN_LISTA_FMT, [Palabra]));
   Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, Resto, MaxInt);
 end;
 
@@ -1581,7 +1801,25 @@ end;
   solo sitio (2026-09-23). }
 function EntriesWithout(const AEntries: TArray<string>; const AUnitName: string): TArray<string>;
 var
-  E, Carry, Prefix, Core: string;
+  E, Carry, Prefix, Core, Detras: string;
+
+  // lo que deja una entrada quitada, al FINAL de la anterior de la lista nueva
+  procedure PegaALaAnterior(const ALoQueDeja: string);
+  begin
+    // un // en la primera linea del prefijo iba detras de la coma de la
+    // anterior: vuelve a SU linea (ReplaceUses pone el ; delante de el)
+    var C := ConSalto(ALoQueDeja, #10); // tambien el CR suelto (decima revision)
+    var P := C.IndexOf(#10);
+    var Primera := IfThen(P >= 0, Copy(C, 1, P), C);
+    if Primera.TrimLeft.StartsWith('//') then
+    begin
+      Result[High(Result)] := Result[High(Result)] + Primera.TrimRight;
+      C := IfThen(P >= 0, Copy(C, P + 2, MaxInt), '');
+    end;
+    if C.Trim <> '' then
+      Result[High(Result)] := Result[High(Result)] + #10 + C;
+  end;
+
 begin
   Result := [];
   Carry := '';
@@ -1597,30 +1835,30 @@ begin
     else
     begin
       SplitEntryPrefix(E, Prefix, Core);
-      Carry := Prefix; // its directive/comment stays, glued to the next entry
       // ...y las directivas que la entrada lleva DETRAS: 'DebugU{$ENDIF}'
       // perdia su ENDIF y el IFDEF de la de antes quedaba abierto (medido en
       // la revision de la 1.10.0; venia de antes). Por el lector UNICO de
       // directivas, cada una en su linea: aqui se escribio un gemelo suyo
       // (DirectivasDe) y lo encontro el censo del lexico, el mismo dia
+      Detras := '';
       for var D in DirectivasPascal(Core) do
-        Carry := IfThen(Carry <> '', Carry + #10, '') + Copy(Core, D.Inicio, D.Largo);
+        Detras := IfThen(Detras <> '', Detras + #10, '') + Copy(Core, D.Inicio, D.Largo);
+      // La coma que se va con la entrada es la de su MISMA region: sin una
+      // directiva condicional entre ella y el nombre. Lo de siempre es la de
+      // DETRAS, y lo que la entrada deja va al principio de la siguiente. Si
+      // un condicional abre DETRAS del nombre ('B {$IFDEF X}, C{$ENDIF}'), la
+      // de detras es de otra region: se va la de DELANTE y lo que deja va al
+      // final de la anterior ('A {$IFDEF X}, C{$ENDIF}'); antes quedaba 'A,
+      // {$IFDEF X} C{$ENDIF}', E2029 sin X (revisor de version de la 1.18.0,
+      // medido con dcc). Si ninguna de las dos, lo niega ReplaceUses (USES-023)
+      if (Length(Result) > 0) and LlevaCondicional(Detras) and not LlevaCondicional(Prefix) then
+        PegaALaAnterior(IfThen(Prefix <> '', Prefix + #10, '') + Detras)
+      else
+        Carry := Prefix + IfThen((Prefix <> '') and (Detras <> ''), #10, '') + Detras;
     end;
+  // la ULTIMA se fue: lo que deja, al final de la anterior
   if (Carry <> '') and (Length(Result) > 0) then
-  begin
-    // un // en la primera linea del prefijo iba detras de la coma de la
-    // anterior: vuelve a SU linea (ReplaceUses pone el ; delante de el)
-    var C := ConSalto(Carry, #10); // tambien el CR suelto (decima revision)
-    var P := C.IndexOf(#10);
-    var Primera := IfThen(P >= 0, Copy(C, 1, P), C);
-    if Primera.TrimLeft.StartsWith('//') then
-    begin
-      Result[High(Result)] := Result[High(Result)] + Primera.TrimRight;
-      C := IfThen(P >= 0, Copy(C, P + 2, MaxInt), '');
-    end;
-    if C.Trim <> '' then
-      Result[High(Result)] := Result[High(Result)] + #10 + C;
-  end;
+    PegaALaAnterior(Carry);
 end;
 
 function RemoveProjectUnitNucleo(const AProject, APasPath: string;
@@ -1934,17 +2172,27 @@ function ClausulaRequires(const ATexto: string; out ANombres: TArray<string>;
   out AIni, ALargo: Integer): Boolean;
 var
   M: TMatch;
+  Cab: TCabeceraFuente;
 begin
   ANombres := [];
   AIni := 0;
   ALargo := 0;
-  M := TRegEx.Match(CodigoPascal(ATexto), '^[ \t]*requires\b\s*(.*?);', [roIgnoreCase, roMultiline, roSingleline]);
+  // donde la lee FindUses: lo PRIMERO detras de la cabecera del paquete (EL
+  // lector de la cabecera, Lsp.Pascal). Se buscaba a principio de LINEA, y en
+  // 'package P; requires rtl; end.' no habia ninguna: add-requires estrenaba
+  // otra detras ('requires rtl; requires vcl;', E2029) y decia que la
+  // clausula era solo la nueva (revisor de version de la 1.18.0, medido)
+  var Codigo := CodigoPascal(ATexto);
+  if not CabeceraDeFuente(Codigo, Cab) or (Cab.Palabra <> 'package') then
+    Exit(False);
+  M := TRegEx.Match(Copy(Codigo, Cab.Fin, MaxInt), '^(\s*)(requires\b\s*(.*?);)',
+    [roIgnoreCase, roSingleline]);
   Result := M.Success;
   if not Result then
     Exit;
-  AIni := M.Index;
-  ALargo := M.Length;
-  for var E in M.Groups[1].Value.Split([',']) do
+  AIni := Cab.Fin - 1 + M.Groups[2].Index;
+  ALargo := M.Groups[2].Length;
+  for var E in M.Groups[3].Value.Split([',']) do
     if E.Trim <> '' then
       ANombres := ANombres + [E.Trim];
 end;

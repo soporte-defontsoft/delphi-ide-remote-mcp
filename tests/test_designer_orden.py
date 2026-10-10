@@ -548,6 +548,28 @@ try:
           and mc.abre(J(r).get('orderNote', ''), 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT'),
           (hijos_de_panel(RARO), r[:400]))
 
+    # I6: set parent= de un componente que lleva [n] (su sitio entre los hijos del
+    # ancestro del padre VIEJO): el [n] no viaja - TReader lo aplicaria en el padre
+    # nuevo y lo ponia el PRIMERO -, y el juez lo deja donde lo guarda el IDE, el
+    # ultimo de dos TWinControl (revisor de version de la 1.18.0, medido)
+    HIJAN = os.path.join(JAIL, 'UHijaN.dfm')
+    open(HIJAN, 'wb').write(
+        b'inherited FormHijaN: TFormHijaN\r\n  Caption = \'HijaN\'\r\n'
+        b'  object ButtonX: TButton [0]\r\n    Left = 8\r\n    Top = 40\r\n    Caption = \'ButtonX\'\r\n'
+        b'    TabOrder = 1\r\n  end\r\n'
+        b'  object PanelN: TPanel\r\n    Left = 100\r\n    Top = 8\r\n    Width = 150\r\n    Height = 150\r\n'
+        b'    TabOrder = 2\r\n    object EditN: TEdit\r\n      Left = 8\r\n      Top = 8\r\n      TabOrder = 0\r\n'
+        b'    end\r\n  end\r\nend\r\n')
+    open(os.path.join(JAIL, 'UHijaN.pas'), 'wb').write(
+        b'unit UHijaN;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, UBaseO;\r\n\r\n'
+        b'type\r\n  TFormHijaN = class(TFormBaseO)\r\n    ButtonX: TButton;\r\n    PanelN: TPanel;\r\n'
+        b'    EditN: TEdit;\r\n  end;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
+    r = dsg(HIJAN, {'component': 'ButtonX', 'parent': 'PanelN'})
+    _t = open(HIJAN, 'rb').read().decode('ascii')
+    check('I6 set parent= de un componente con [0]: el [n] no viaja y queda el ultimo de su padre nuevo',
+          J(r).get('moved') == 'ButtonX' and '[0]' not in _t and 'object ButtonX: TButton\r\n' in _t
+          and _t.index('object EditN') < _t.index('object ButtonX'), (r[:300], _t))
+
     # B5: la carpeta de cada llamada del juez se borra siempre (en el temporal del SERVIDOR)
     quedan = glob.glob(os.path.join(os.path.dirname(EXE), '__delphi-temp', '**', '__tmp-*'), recursive=True)
     check('O15 no queda ninguna carpeta __tmp- del juez en el temporal del servidor (B5)', not quedan, quedan)

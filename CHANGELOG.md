@@ -10,6 +10,53 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`set parent=` does not carry the `[n]` of a component to its new
+  parent.** In an inherited form a new component placed among the
+  ancestor's children carries `[n]`, its place among the children of the
+  ancestor of its OLD parent; moved whole, the reader of the form applied it
+  in the new one and the component went first among its new siblings. The
+  header is written again without it, and the judge of the order places the
+  block where the IDE keeps it.
+
+- **The comments of a uses clause stay with their own entry (11.3).** A
+  comment behind the `;` of a compact clause (`uses UA, UB; // de UB`)
+  followed the clause edited in place - behind the new unit after an
+  `adduses`, or with the unit left after a `removeuses` of its own; that
+  clause is now rewritten by the writer that knows whose it is. And an
+  own-line comment that repeats the text of another one behind a comma
+  (`// TODO`) no longer goes away with the removed entry above it: the
+  comment that goes is the one behind the comma of the removed entry, not
+  any comma with that text behind it.
+
+- **Deleting or moving an entry is judged by the folder it really sits in.**
+  `delphi_delete`, `delphi_move` and the `delete`/`move` of a changeset asked
+  the write gate about the real path of the file, which follows the last
+  link too: a folder of the jail that is a junction out of it, holding a
+  file link back inside, passed - and the delete or the rename happened in
+  the folder outside. The folder the entry really sits in (its real parent
+  plus its name) must now be one the session writes in, or `GUARD-038`. The
+  same check the writers make about where their temporary file is born
+  (`GUARD-037`), without the read-only attribute: a read-only file can still
+  be moved or trashed. Measuring it takes the privilege to create a file
+  link; without it `test_puerta_escribir` says so (NOTA W2).
+
+- **`removeuses` keeps each comma inside its conditional, or says it
+  cannot.** Removing an entry followed by a conditional that opens behind its
+  name (`A, B {$IFDEF X}, C{$ENDIF};`) left `A, {$IFDEF X} C{$ENDIF};`, which
+  does not compile without `X` (`E2029`). The comma that goes with an entry
+  is now the one in its own region: the one behind it as before, or the one
+  in front when a conditional opens behind the name (`A {$IFDEF X}, C
+  {$ENDIF};`, compiled with and without `X`). And the writer of a uses clause
+  checks that what it leaves is still a list in every combination of
+  branches, when the clause it found was one: where no comma can go safely it
+  refuses with `USES-023` and writes nothing. `remove-unit` too.
+
+- **`add-requires` extends the `requires` of a one-line package.** In
+  `package P; requires rtl; end.` the clause was looked for at the start of a
+  line, a second one was opened behind it (`E2029`) and the answer said the
+  clause was only the new name. It is read now where the reader of the
+  clause reads it: first thing after the package header.
+
 - **`delphi_package` never puts Git metadata in the zip.** It read every
   file of the folder on its own, so a folder holding a repository went out
   with its `.git` whole - `.git\config` with the credentials of a remote,

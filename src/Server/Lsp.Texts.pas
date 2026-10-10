@@ -351,6 +351,17 @@ const
     'project.';
   // Un uses partido en ramas IFDEF (cada rama acaba en su ;): error: y no
   // RECHAZADO, no es politica; es una forma que un escritor no sabe tocar.
+  // La clausula reescrita dejaria una coma fuera de su condicional: con unos
+  // simbolos no compilaria (removeuses de 'A, B {$IFDEF X}, C{$ENDIF};'
+  // dejaba 'A, {$IFDEF X} C{$ENDIF};', E2029 sin X; revisor de version de la
+  // 1.18.0). %s = uses / contains.
+  SR_USES_RAMA_SIN_LISTA_FMT =
+    '[USES-023 DENIED] Rewritten that way, the %s clause would leave a ' +
+    'comma outside the conditional ({$IFDEF}...) of the entry it ' +
+    'separates, and with some defines it would not compile. Nothing was ' +
+    'written. Edit those lines with delphi_edit, keeping each comma inside ' +
+    'the conditional of its entry.';
+
   SR_USES_EN_RAMAS_FMT =
     '[USES-001 DENIED] The %s clause of %s is split into {$IFDEF} ' +
     'branches (each branch ends with its own ";") and I do not know ' +
@@ -695,6 +706,14 @@ const
     '(outside the roots, a reference, a read-only folder or a vault). The ' +
     'temporary file and the replace would be born there. Nothing was ' +
     'written.';
+
+  // la hermana de GUARD-037 para quien QUITA o PONE una entrada (borrar,
+  // mover): la carpeta real que la contiene (revisor 4.8 de la 1.18.0, M2)
+  SR_ENTRADA_CARPETA_REAL_FMT =
+    '[GUARD-038 DENIED] "%s": some part of the path is a LINK, and the ' +
+    'folder this entry really sits in is not one this session writes in ' +
+    '(outside the roots, a reference, a read-only folder or a vault): ' +
+    'removing, moving or creating it would happen there. Nothing was done.';
 
   // la gemela de GUARD-001 para la zona de biblioteca (M1 de la 1.18.0)
   SR_JAIL_LINK_BIBLIOTECA_FMT =

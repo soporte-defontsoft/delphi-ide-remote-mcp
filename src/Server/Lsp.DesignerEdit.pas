@@ -2215,6 +2215,16 @@ begin
     Bloque := Copy(F.Doc.Lines, Ini, Largo);
     for I := 0 to High(Bloque) do
       Bloque[I] := Resangra(Bloque[I], Delta);
+    // la cabecera SIN su [n]: es la posicion entre los hijos del ancestro del
+    // padre VIEJO, y TReader la aplica igual en el nuevo - un 'ButtonX: TButton
+    // [0]' llevado a otro padre quedaba el primero de sus hermanos nuevos. El
+    // sitio lo decide el juez del orden, abajo (revisor de version de la
+    // 1.18.0, medido)
+    var ClaveC, NomC, ClaseC, RestoC: string;
+    if LineaDeObjeto(Bloque[0], ClaveC, NomC, ClaseC, RestoC) and RestoC.TrimLeft.StartsWith('[') and
+       (RestoC.IndexOf(']') >= 0) then
+      Bloque[0] := LeadingWhite(Bloque[0]) + ComponeLineaDeObjeto(ClaveC, NomC, ClaseC) +
+        Copy(RestoC, RestoC.IndexOf(']') + 2, MaxInt);
     // y el TabOrder que sigue en el padre nuevo
     Tab := 0;
     ConTab := (ClaseDeJuez(F, Obj, ClsId) = '') and Publica(F.Tabla, ClsId, 'TabOrder');

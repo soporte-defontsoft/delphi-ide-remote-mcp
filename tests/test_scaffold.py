@@ -157,6 +157,18 @@ _k = open(_pdpk, 'rb').read().decode('utf-8-sig')
 check('package de una linea: add-requires lo pone DELANTE de contains',
       mc.abre(out, 'SN_REQUIRES_ADDED_FMT') and 'requires' in _k and _k.index('requires') < _k.index('contains'),
       out[:200] + ' | ' + _k)
+# ...y un .dpk de una linea que YA tiene requires: se amplia ESE (lo primero tras la
+# cabecera, donde lo lee FindUses); se buscaba a principio de linea, se estrenaba
+# otro detras ('requires rtl; requires vcl;', E2029) y la respuesta decia que la
+# clausula era solo vcl (revisor de version de la 1.18.0, medido con dcc)
+open(_pdpk, 'wb').write(b"package PUna; requires rtl; contains UPu in 'UPu.pas'; end.\r\n")
+out = call('delphi_config', {"project": os.path.join(BASE, 'PUna', 'PUna.dproj'), "command": "add-requires", "requires": "vcl"})
+_k = open(_pdpk, 'rb').read().decode('utf-8-sig')
+check('package de una linea con requires: se amplia el suyo (rtl y vcl, un solo requires)',
+      mc.abre(out, 'SN_REQUIRES_ADDED_FMT') and _k.lower().count('requires') == 1
+      and 'rtl' in _k and 'vcl' in _k and 'rtl' in out, out[:200] + ' | ' + _k)
+out = call('delphi_build', {"project": os.path.join(BASE, 'PUna', 'PUna.dproj'), "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
+check('package de una linea con requires ampliado: COMPILA', '"success":true' in out.replace(' ', ''), out[:300])
 out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 try:
     d = json.loads(out)

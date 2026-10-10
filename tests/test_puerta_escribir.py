@@ -93,6 +93,39 @@ try:
         if os.path.lexists(_f):
             os.remove(_f)  # el enlace, no lo de detras
 
+    # W2 (revisor 4.8 de la 1.18.0, M2): borrar y mover QUITAN una entrada de su
+    # carpeta. La forma de W1 - la carpeta j es una union a la victima con un
+    # ENLACE DE FICHERO de vuelta a la raiz -: la ruta real del fichero esta
+    # dentro y pasaba, y delete, move y el delete de un changeset quitaban el
+    # enlace de la carpeta de FUERA. Ahora GUARD-038 y la victima sigue con su
+    # enlace. Sin el privilegio de crear el enlace, no se mide (NOTA)
+    _e = os.path.join(_real, 'E.txt')
+    open(_e, 'w').write('dentro')
+    _ve = os.path.join(_v, 'E.txt')
+    try:
+        os.symlink(_e, _ve)
+        _hay_e = True
+    except OSError:
+        _hay_e = False
+    if _hay_e and mc.junction(_j, _v):
+        _por = os.path.join(_j, 'E.txt')
+        r1 = srv.call('delphi_delete', {'path': _por})
+        r2 = srv.call('delphi_move', {'path': _por, 'dest': os.path.join(RAIZ_SRV, 'movido.txt')})
+        _cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+        rs = srv.call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'delete', 'path': _por})
+        check('W2 delete, move y el delete de un changeset por una union afuera con un enlace de vuelta: '
+              'GUARD-038 y la victima sigue con su enlace',
+              mc.tiene(r1, 'GUARD-038') and mc.tiene(r2, 'GUARD-038') and mc.tiene(rs, 'GUARD-038')
+              and os.path.islink(_ve) and os.path.exists(_e), (r1[:200], r2[:200], rs[:200]))
+        mc.borra(_j)
+    elif not _hay_e:
+        print('NOTA W2 (M2 de 4.8) no se mide: esta cuenta no puede crear un enlace de FICHERO (privilegio o '
+              'modo desarrollador); lo cierra Lsp.Guard.EntradaDenegada con RutaDelEnlace')
+    else:
+        check('W2 la union de la prueba se planta', False, _j)
+    if os.path.lexists(_ve):
+        os.remove(_ve)  # el enlace, no lo de detras
+
     # el control: la misma escritura sin la union
     mc.borra(union_r)
     r = srv.call('delphi_report', {'message': 'sin union: acentuación', 'kind': 'bug', 'title': 'control',

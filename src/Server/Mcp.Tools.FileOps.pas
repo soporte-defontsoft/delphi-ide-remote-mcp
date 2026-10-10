@@ -495,6 +495,14 @@ begin
     if Denied <> '' then
       Exit(Denied);
   end;
+  // borrar QUITA una entrada de su carpeta: la carpeta REAL que la contiene
+  // tambien (EntradaDenegada). La ruta real sola dejaba pasar un enlace de
+  // vuelta dentro en una carpeta que es una union afuera, y la papelera se lo
+  // llevaba de la de fuera (revisor 4.8 de la 1.18.0, M2, la forma del
+  // changeset)
+  Denied := EntradaDenegada(Params.Path);
+  if Denied <> '' then
+    Exit(Denied);
   // An empty folder needs no copy: retrying a half-finished delete used to
   // dump the (empty) tree into the trash again on every attempt.
   if TDirectory.Exists(Params.Path) and
@@ -890,6 +898,14 @@ begin
     if Denied <> '' then
       Exit(Denied);
   end;
+  // mover QUITA una entrada de su carpeta y la PONE en otra: las dos carpetas
+  // REALES (EntradaDenegada; revisor 4.8 de la 1.18.0, M2). Copiar solo pone
+  if not Params.Copy then
+    Denied := EntradaDenegada(Params.Path);
+  if Denied = '' then
+    Denied := EntradaDenegada(Params.Dest);
+  if Denied <> '' then
+    Exit(Denied);
   // Una copia de la papelera se llama "UFicha.pas-215825250": su extension
   // REAL esta detras del sello de hora. Sin esto, restaurar un formulario
   // dejaba el .dfm dentro de la papelera y la unit fuera, sin designer.

@@ -313,9 +313,16 @@ begin
   // commit pasan hasta 30 minutos, y un camino puede haber cambiado (un
   // junction nuevo, las raices). Solo las ediciones lo volvian a mirar
   // (auditoria 25-sep-2026). La misma pregunta que los escritores.
-  AError := EscrituraDenegada(Op.Path);
+  // borrar y mover quitan o ponen una ENTRADA: la carpeta real que la contiene
+  // (EntradaDenegada); la ruta real del fichero sola dejaba pasar un enlace de
+  // vuelta dentro en una carpeta que es una union afuera, y TFile.Delete/Move
+  // operaban en la de fuera (revisor 4.8 de la 1.18.0, M2)
+  if Op.Kind in [opDelete, opMove] then
+    AError := EntradaDenegada(Op.Path)
+  else
+    AError := EscrituraDenegada(Op.Path);
   if (AError = '') and (Op.Kind = opMove) then
-    AError := EscrituraDenegada(Op.Dest);
+    AError := EntradaDenegada(Op.Dest);
   if AError <> '' then
     Exit;
   // ENSAYO (el preview): solo edit y create tienen un motor que ensayar
@@ -696,6 +703,10 @@ begin
         Denied := PathDenied(APath)
       else
         Denied := WriteTargetDenied(APath);
+      // ...y lo que se QUITA o se mueve, por la carpeta real que lo contiene,
+      // como lo juzgara el commit (EntradaDenegada; revisor 4.8 de la 1.18.0)
+      if (Denied = '') and (Op.Kind in [opDelete, opMove]) then
+        Denied := EntradaDenegada(APath);
       if Denied <> '' then
         Exit(Denied);
       // un fichero con separador final nombra una CARPETA (GUARD-025), y una

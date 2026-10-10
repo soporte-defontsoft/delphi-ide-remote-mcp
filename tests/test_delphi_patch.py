@@ -619,6 +619,36 @@ _src = open(DOS, 'rb').read().decode('ascii')
 check('removeuses: la nota de linea propia de la quitada se queda y el // de su linea se va (11.3)',
       mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '// nota propia' in _src and 'UC;' in _src
       and '// de UB' not in _src and 'UB,' not in _src, _src)
+# una nota de linea PROPIA con el mismo texto que el // que va detras de OTRA
+# coma: se queda. El 11.3 miraba si ese texto iba detras de CUALQUIER coma, y el
+# '// TODO' de debajo de UB se iba con ella (revisor de version de la 1.18.0)
+TODO = os.path.join(DIR, 'ConTodoRepetido.pas')
+open(TODO, 'wb').write(CRLF.join([
+    'unit ConTodoRepetido;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA, // TODO', '  UB,', '  // TODO', '  UC;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": TODO, "removeuses": "UB"})
+_src = open(TODO, 'rb').read().decode('ascii')
+check('removeuses: la nota de linea propia con el texto de otro // se queda (11.3, por SU coma)',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and _src.count('// TODO') == 2 and 'UB' not in _src, _src)
+# una clausula COMPACTA con un // detras del ;: es de la ULTIMA entrada (11.3).
+# Editada en su sitio, el // quedaba tras la nueva ('UB, UC; // de UB') o con la
+# que quedaba si se quitaba la suya (revisor de version de la 1.18.0, medido)
+COMP = os.path.join(DIR, 'ConCompactaComentada.pas')
+open(COMP, 'wb').write(CRLF.join([
+    'unit ConCompactaComentada;', '', 'interface', '', 'implementation', '',
+    'uses UA, UB; // de UB', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": COMP, "adduses": "UC"})
+_src = open(COMP, 'rb').read().decode('ascii')
+check('adduses: en una compacta el // del ; se queda con SU entrada, no tras la nueva (11.3)',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'UB, // de UB' in _src and 'UC;' in _src
+      and 'UC; // de UB' not in _src, _src)
+open(COMP, 'wb').write(CRLF.join([
+    'unit ConCompactaComentada;', '', 'interface', '', 'implementation', '',
+    'uses UA, UB; // de UB', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": COMP, "removeuses": "UB"})
+_src = open(COMP, 'rb').read().decode('ascii')
+check('removeuses: en una compacta el // del ; se va con SU entrada (11.3)',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '// de UB' not in _src and 'UA;' in _src, _src)
 # ...pero una DIRECTIVA detras del ; no es de ninguna entrada: se queda detras
 # del ; de la clausula, como estaba
 DIR2 = os.path.join(DIR, 'ConDirectivaFinal.pas')
@@ -662,6 +692,31 @@ _src = open(DIR4, 'rb').read().decode('ascii')
 check('removeuses: quitar la ultima tras una envuelta deja la coma dentro del condicional',
       mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT')
       and 'uses\r\n  A\r\n  {$IFDEF DEBUG}\r\n  , DebugU\r\n  {$ENDIF};\r\n' in _src, _src)
+# un condicional que ABRE detras de la entrada quitada, con la coma de detras
+# dentro: se va la coma de DELANTE y el {$IFDEF} se queda con la anterior. Se
+# quedaba 'System.SysUtils,' fuera y sin NOEXISTE no compilaba: E2029 (revisor de
+# version de la 1.18.0, medido con dcc)
+DIR5 = os.path.join(DIR, 'ConAperturaDetras.pas')
+open(DIR5, 'wb').write(CRLF.join([
+    'unit ConAperturaDetras;', '', 'interface', '', 'implementation', '', 'uses',
+    '  System.SysUtils, System.Classes {$IFDEF NOEXISTE}, Foo{$ENDIF};', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DIR5, "removeuses": "System.Classes"})
+_src = open(DIR5, 'rb').read().decode('ascii')
+check('removeuses: la apertura de detras se queda con la anterior y la coma dentro (USES-020)',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT')
+      and 'uses\r\n  System.SysUtils\r\n  {$IFDEF NOEXISTE},\r\n  Foo{$ENDIF};\r\n' in _src, (out[:200], _src))
+# ...y cuando NINGUNA coma vecina es de la region de la entrada (la de delante
+# dentro de un condicional y ninguna detras), no hay forma segura: USES-023 y
+# nada escrito, en vez de 'System.SysUtils, {$IFDEF NOEXISTE} Foo{$ENDIF};'
+DIR6 = os.path.join(DIR, 'ConComaDentroDelante.pas')
+open(DIR6, 'wb').write(CRLF.join([
+    'unit ConComaDentroDelante;', '', 'interface', '', 'implementation', '', 'uses',
+    '  System.SysUtils, {$IFDEF NOEXISTE} Foo, {$ENDIF}', '  System.Classes;', '', 'end.', '']).encode('ascii'))
+_antes6 = open(DIR6, 'rb').read()
+out = call('delphi_edit', {"path": DIR6, "removeuses": "System.Classes"})
+check('removeuses: una coma que quedaria fuera de su condicional se niega (USES-023), nada escrito',
+      mc.rechazado(out) and mc.es(out, 'SR_USES_RAMA_SIN_LISTA_FMT') and open(DIR6, 'rb').read() == _antes6,
+      out[:300])
 
 # --- EL lexico (Lsp.Pascal, 1.10.0): cada caso, medido antes con la sonda del
 # lexico el 2-oct-2026 contra el exe de entonces ---
