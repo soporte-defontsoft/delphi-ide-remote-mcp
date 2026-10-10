@@ -4429,7 +4429,8 @@ const
   SP_DESIGNER_INDEX =
     'set optional: the component''s position among its siblings in the file, ' +
     '1 = the first, alone - the same check as before. The file order is the ' +
-    'z-order (a later one is drawn on top); TabOrder is the keyboard order.';
+    'z-order (a later one is drawn on top; an inherited form counts only what ' +
+    'its own file writes); TabOrder is the keyboard order.';
 
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
   SR_DESIGNER_NO_VA_CON_COMANDO_FMT =
@@ -9764,9 +9765,10 @@ const
     '[DSGN-142] Placed where the IDE''s own writer keeps it (asked before ' +
     'writing, with the form loaded as the designer loads it). The file order ' +
     'is the order the IDE keeps for these children - for controls their ' +
-    'z-order, a later one drawn over an earlier one; in a toolbar or a page ' +
-    'control, their place -; the keyboard order is TabOrder, which this does ' +
-    'not change.';
+    'z-order, a later one drawn over an earlier one (in an inherited form, ' +
+    'after the ancestor''s, unless a [n] places it among them); in a toolbar ' +
+    'or a page control, their place -; the keyboard order is TabOrder, which ' +
+    'this does not change.';
   SF_DESIGNER_ORDEN_DELANTE_DE_FMT = 'before %s';
   SF_DESIGNER_ORDEN_DETRAS_DE_FMT = 'after %s';
   SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT = 'to position %d';

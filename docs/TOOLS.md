@@ -717,7 +717,7 @@ FORMS AND COMPONENTS, structured - never guess what a class publishes or what a 
 | `props` | string | optional | insert / set optional: SEVERAL properties at once, Prop=value pairs separated by ; (Caption=Save;Left=24;Font.Style=[fsBold]) - each value as in "value", and a ; inside a quoted value does not split (a quote that does not start the value is just a letter: Caption=Don't). insert: the initial properties of the new component; set: instead of prop/value. Each one is judged as set judges one, and it is all or none: one that does not pass and nothing is written. Name goes alone. |
 | `before` | string | optional | set optional: put the component just BEFORE this sibling (its Name, the same parent), alone. Before writing, the IDE's own writer is asked with the form loaded as the designer loads it: an order it would not keep (VCL graphic controls go before windowed ones, an inherited form places by its [n]...) is refused with the order it would save. |
 | `after` | string | optional | set optional: put the component just AFTER this sibling (its Name), alone - the same check as before. |
-| `index` | integer | optional | set optional: the component's position among its siblings in the file, 1 = the first, alone - the same check as before. The file order is the z-order (a later one is drawn on top); TabOrder is the keyboard order. |
+| `index` | integer | optional | set optional: the component's position among its siblings in the file, 1 = the first, alone - the same check as before. The file order is the z-order (a later one is drawn on top; an inherited form counts only what its own file writes); TabOrder is the keyboard order. |
 <!-- /contract -->
 
 `preview` (1.17.0) is drawn by two renderers that ship next to the server,
