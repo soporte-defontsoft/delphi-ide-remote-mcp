@@ -2645,22 +2645,28 @@ begin
     Visita :=
       procedure(const P: string)
       begin
-        if Motivo = '' then
+        if Motivo <> '' then
+          Exit;
+        if AAdmiteArbolGit then
         begin
-          var Meta := MetadatosGitDenegados(P);
-          if (Meta <> '') and AAdmiteArbolGit then
+          // El arbol viaja entero; un enlace de sus metadatos no abre la jaula.
+          // Solo un ENLACE puede, y solo de el se pregunta: MetadatosGitDenegados
+          // hace RealPath, y de cada entrada un dia de la papelera con un .git
+          // de 20.000 ficheros costaba 3,8 s en cada pasada de la purga (revisor
+          // de version de la 1.18.1)
+          if EsEnlace(P) then
           begin
-            // El arbol viaja entero; un enlace de sus metadatos no abre la jaula.
-            if EsEnlace(P) then
+            var Meta := MetadatosGitDenegados(P);
+            if Meta <> '' then
               try
                 if PathDenied(P, True) <> '' then Motivo := Meta;
               except
                 Motivo := Meta; // lo que no se puede juzgar tampoco se mueve
               end;
-          end
-          else
-            Motivo := Meta;
-        end;
+          end;
+        end
+        else
+          Motivo := MetadatosGitDenegados(P);
       end;
     try
       RecorreSinEnlaces(APath, Visita, Visita,

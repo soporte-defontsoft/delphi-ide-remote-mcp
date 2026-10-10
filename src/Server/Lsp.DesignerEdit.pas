@@ -2610,15 +2610,21 @@ begin
         for var I := 0 to High(LineasAntes) do
           if Iguales and (LineasAntes[I] <> F.Doc.Lines[I]) then
             Iguales := False;
-        // la unidad, por el mismo decodificador que la leyo (PatchLoadText)
-        if Iguales and ANecesitaPas then
+        // la unidad, por el mismo decodificador que la leyo (PatchLoadText); y
+        // el que cambio se NOMBRA, como en CambioDesdeQueSeJuzgo (nombraba
+        // siempre el form; revisor de version de la 1.18.1, el gemelo de B3)
+        var Cambiado := '';
+        if not Iguales then
+          Cambiado := F.DfmNombre
+        else if ANecesitaPas then
         begin
           AAntesPas := LeeBytes(F.Pas, [ltJaula]);
           var EncPas: string;
-          Iguales := (TextoDeBytes(AAntesPas, False, EncPas) = F.PasTexto) and (EncPas = F.PasEnc);
+          if (TextoDeBytes(AAntesPas, False, EncPas) <> F.PasTexto) or (EncPas <> F.PasEnc) then
+            Cambiado := TPath.GetFileName(F.Pas);
         end;
-        if not Iguales then
-          Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]);
+        if Cambiado <> '' then
+          Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [Cambiado]);
       end;
     except
       FreeAndNil(F.Doc);

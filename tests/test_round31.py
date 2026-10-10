@@ -29,6 +29,7 @@ Usage:  python tests/test_round31.py [path-to-DelphiLspMcp.exe]
 """
 import json
 import os
+import time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -260,6 +261,39 @@ try:
           all(c.get('path', '').endswith('UMetodo.pas') for c in conf)
           and lineas(met, 'confirmed', 'UMetodo.pas') == sorted([_anid] + _llam) and not any(c.get('via') for c in conf),
           json.dumps(conf)[:400])
+    # R1k (1.18.1) un proyecto bajo una carpeta con una ENYE: DelphiLSP contesta con
+    # la enye SIN escapar en la uri y UriToPath la pasaba por la pagina ANSI -
+    # SYS-006 'No mapping for the Unicode character' en definition, references y
+    # hover (revisor de version de la 1.18.1; medido el 10-oct-2026)
+    ENYE = os.path.join(JAIL, 'año', 'prb')
+    call('delphi_create', {'kind': 'project-console', 'name': 'Prb', 'dir': ENYE})
+    UPRB = os.path.join(ENYE, 'UPrb.pas')
+    open(UPRB, 'w', newline='').write(
+        'unit UPrb;\r\n\r\ninterface\r\n\r\nprocedure Externa;\r\n\r\nimplementation\r\n\r\n'
+        'procedure Uno;\r\nbegin\r\nend;\r\n\r\nprocedure Externa;\r\nbegin\r\n  Uno;\r\n  Uno;\r\nend;\r\n\r\nend.\r\n')
+    open(os.path.join(ENYE, 'Prb.dpr'), 'w', newline='').write(
+        "program Prb;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  UPrb in 'UPrb.pas';\r\n\r\nbegin\r\n  Externa;\r\nend.\r\n")
+    # ...y los diagnosticos: se esperaban por la uri escrita por PathToUri y el motor
+    # la notifica con la enye tal cual: no llegaban nunca (41 s y in-progress)
+    dg = call('delphi_diagnostics', {'path': UPRB}, t=300)
+    check('R1k los diagnosticos de una unit bajo una carpeta con enye llegan (se esperaban sin fin)',
+          mc.como_json(dg).get('errors') == 0 and 'in-progress' not in dg, dg[:300])
+    respuestas = []
+    for tool in ('delphi_definition', 'delphi_references', 'delphi_hover'):
+        for _ in range(10):
+            r = call(tool, {'path': UPRB, 'line': 14, 'character': 3})
+            if 'LSP-002' in r[:40] or 'warming' in r[:200].lower():
+                time.sleep(4)
+                continue
+            break
+        respuestas.append(r)
+    d, rf, h = respuestas
+    check('R1k un proyecto bajo una carpeta con enye: definition, references y hover contestan (daban SYS-006)',
+          mc.como_json(d).get('line0') == 8 and len(mc.aciertos(mc.como_json(rf), 'confirmed')) == 3
+          and 'Uno' in h and not mc.fallo(h) and not any('SYS-006' in x for x in respuestas),
+          'definition line0=%s | references confirmed=%s rejected=%s unverified=%s | hover=%s' % (
+              mc.como_json(d).get('line0'), [c.get('line0') for c in mc.aciertos(mc.como_json(rf), 'confirmed')],
+              mc.como_json(rf).get('rejectedHomonyms'), len(mc.aciertos(mc.como_json(rf), 'unverified')), h[:200]))
 
     # ----------------------------------------------------------------- R2
     r = json.loads(call('delphi_search', {

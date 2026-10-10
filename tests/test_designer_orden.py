@@ -333,6 +333,37 @@ open(os.path.join(JAIL, 'UNom.pas'), 'wb').write(
     b'type\r\n  TFormN = class(TForm)\r\n    Button1: TButton;\r\n    Button2: TButton;\r\n  end;\r\n\r\n'
     b'var\r\n  FormN: TFormN;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
 
+# O23b (1.18.1) ...y ese salto es SOLO la propuesta: un Caption que nombra un fichero
+# de FUERA, por su ruta entera o relativa a la carpeta del form, sigue siendo DSGN-115
+# por set before= (sin este check, ampliar el salto seguia en verde: DSGN-115 solo se
+# media por preview; revisor de version de la 1.18.1)
+# (en su PROPIA carpeta: el juez lee los forms hermanos por --folder y juzga sus
+# literales, y uno de fuera en JAIL negaba todos los demas checks)
+FUERA = os.path.join(BASE, 'fuera')
+os.makedirs(FUERA, exist_ok=True)
+open(os.path.join(FUERA, 'x.txt'), 'w').write('x')
+CONLIT = os.path.join(JAIL, 'conliteral')
+os.makedirs(CONLIT, exist_ok=True)
+
+
+def form_con_caption(nombre, caption):
+    dfm = os.path.join(CONLIT, nombre + '.dfm')
+    open(dfm, 'wb').write((
+        'object Form%s: TForm%s\r\n  Left = 0\r\n  Top = 0\r\n  Caption = %s\r\n'
+        '  ClientHeight = 200\r\n  ClientWidth = 300\r\n  object Button1: TButton\r\n    Left = 8\r\n'
+        '    Top = 8\r\n    TabOrder = 0\r\n  end\r\n  object Button2: TButton\r\n    Left = 8\r\n'
+        '    Top = 40\r\n    TabOrder = 1\r\n  end\r\nend\r\n' % (nombre, nombre, caption)).encode('ascii'))
+    open(os.path.join(CONLIT, nombre + '.pas'), 'wb').write((
+        'unit %s;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls;\r\n\r\n'
+        'type\r\n  TForm%s = class(TForm)\r\n    Button1: TButton;\r\n    Button2: TButton;\r\n  end;\r\n\r\n'
+        'var\r\n  Form%s: TForm%s;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n'
+        % (nombre, nombre, nombre, nombre)).encode('ascii'))
+    return dfm
+
+
+UFUERA = [form_con_caption('UFueraAbs', "'%s'" % os.path.join(FUERA, 'x.txt')),
+          form_con_caption('UFueraRel', "'..\\..\\fuera\\x.txt'")]
+
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # el juez es el renderizador
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='designer-orden', t=300)
 try:
@@ -444,6 +475,14 @@ try:
     check('O23 un Caption que nombra el fichero del propio form no es un literal de fuera: se ordena (daba '
           'DSGN-115 por la propuesta del juez en el temporal; revisor de version de la 1.18.0, B2)',
           J(r).get('ordered') == 'Button2' and orden(UNOM) == ['Button2', 'Button1'], r[:400])
+    malas = []
+    for f in UFUERA:
+        antes = bytes_de(f)
+        r = dsg(f, {'component': 'Button2', 'before': 'Button1'})
+        if not (mc.abre(r, 'SR_DESIGNER_LITERAL_FUERA_FMT') and bytes_de(f) == antes):
+            malas.append((os.path.basename(f), r[:200]))
+    check('O23b ...pero un Caption que nombra un fichero de FUERA (por su ruta entera o relativa al form) '
+          'sigue siendo DSGN-115 por set before=, y el form no cambia', not malas, malas)
     antes = bytes_de(PADRERARO)
     r = dsg(PADRERARO, {'component': 'Label1', 'after': 'Edit1'})
     check('O13 el PADRE de una clase que ningun paquete carga: DSGN-140 nombrando al padre (M2)',

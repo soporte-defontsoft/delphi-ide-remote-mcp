@@ -178,6 +178,13 @@ type
     { Helpers }
     class function PathToUri(const APath: string): string;
     class function UriToPath(const AUri: string): string;
+    { Una uri en la forma de EL nombrador (PathToUri de su inversa): la que
+      se compara. DelphiLSP escribe TAL CUAL lo que no es ASCII (a<enye>o) y
+      PathToUri lo escapa (%C3%B1): comparadas como texto, el mismo fichero
+      eran dos - los diagnosticos de un proyecto bajo una carpeta con enye no
+      llegaban nunca y su declaracion salia homonima de si misma (revisor de
+      version de la 1.18.1, medido). }
+    class function UriCanonica(const AUri: string): string;
     { El texto de un fuente tal como se le da al motor y lo leen references y
       search, por EL detector. Pregunta ELLA a la puerta, con los lugares del
       motor (Lsp.Patch.LUGARES_DEL_MOTOR: la jaula, el IDE y su biblioteca):
@@ -891,7 +898,8 @@ begin
           UriVal := nil;
           if ParamsVal is TJSONObject then
             UriVal := TJSONObject(ParamsVal).GetValue('uri');
-          if (UriVal = nil) or not SameText(UriVal.Value, AUriFilter) then
+          if (UriVal = nil) or
+             not SameText(UriCanonica(UriVal.Value), UriCanonica(AUriFilter)) then
             Continue;
         end;
         if ParamsVal <> nil then
@@ -942,12 +950,16 @@ begin
   end;
 end;
 
+class function TLspClient.UriCanonica(const AUri: string): string;
+begin
+  Result := PathToUri(UriToPath(AUri));
+end;
+
 class function TLspClient.UriToPath(const AUri: string): string;
 var
   S: string;
-  I: Integer;
+  I, J: Integer;
   Bytes: TBytes;
-  N: Integer;
 begin
   S := AUri;
   if S.ToLower.StartsWith('file:///') then
@@ -955,25 +967,33 @@ begin
   else if S.ToLower.StartsWith('file://') then
     S := S.Substring(7);
 
-  // Percent-decode into UTF-8 bytes, then decode.
-  SetLength(Bytes, Length(S));
-  N := 0;
+  // Percent-decode into UTF-8 bytes, then decode. Lo que NO viene escapado,
+  // en sus bytes UTF-8, por tramos (un par de sustitutos va junto): DelphiLSP
+  // manda los caracteres que no son ASCII TAL CUAL (file:///.../a<enye>o/...;
+  // los ASCII reservados si los escapa, %28 %20 - medido el 10-oct-2026), y
+  // Byte(AnsiChar(S[I])) los pasaba por la pagina ANSI: un $F1 suelto que el
+  // UTF-8 estricto no lee, SYS-006 en definition, references y hover de todo
+  // proyecto bajo una carpeta con una enye (revisor de version de la 1.18.1)
+  Bytes := nil;
   I := 1;
   while I <= Length(S) do
   begin
     if (S[I] = '%') and (I + 2 <= Length(S)) then
     begin
-      Bytes[N] := StrToIntDef('$' + Copy(S, I + 1, 2), Ord('%'));
+      Bytes := Bytes + [Byte(StrToIntDef('$' + Copy(S, I + 1, 2), Ord('%')))];
       Inc(I, 3);
     end
     else
     begin
-      Bytes[N] := Byte(AnsiChar(S[I])); // URI is ASCII outside escapes
-      Inc(I);
+      J := I;
+      while (J <= Length(S)) and (S[J] <> '%') do
+        Inc(J);
+      if J = I then
+        Inc(J); // un '%' sin sus dos cifras, como un caracter mas
+      Bytes := Bytes + TEncoding.UTF8.GetBytes(Copy(S, I, J - I));
+      I := J;
     end;
-    Inc(N);
   end;
-  SetLength(Bytes, N);
   Result := TEncoding.UTF8.GetString(Bytes).Replace('/', '\');
 end;
 

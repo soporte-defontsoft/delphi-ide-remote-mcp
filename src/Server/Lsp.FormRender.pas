@@ -630,7 +630,7 @@ begin
       // UTF-16 tumbaba el juicio con EDIT-078 "nothing written" cuando el
       // escritor de verdad (PatchSaveText) si escribia (revisor propio de la
       // 1.18.1); lo NUEVO lo sigue negando ese escritor
-      EscribeBytes(Cand, EncodeText(ATexto, EncKindOf(AEnc), False), ltTemporal);
+      EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc), False);
     except
       on E: Exception do
         Exit(MsgExcepcion(E.ClassName, E.Message));

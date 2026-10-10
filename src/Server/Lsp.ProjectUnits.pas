@@ -2311,6 +2311,22 @@ begin
   end;
 end;
 
+{ La OTRA seccion de ASec (interface <-> implementation) y su clausula uses
+  (Found = False si no la tiene); ABlank, AText en la vista del codigo. UNA
+  para adduses (una unit no va en las dos) y removeuses (lo que no esta en la
+  suya y si en la otra, USES-024): estaba escrita dos veces (revisor de
+  version de la 1.18.1). }
+function UsesDeLaOtraSeccion(const AText, ABlank, ASec: string; out AOtra: string): TUsesClause;
+var
+  PosOtra: Integer;
+begin
+  AOtra := IfThen(SameText(ASec, 'interface'), 'implementation', 'interface');
+  Result := Default(TUsesClause);
+  PosOtra := FinDeSeccion(ABlank, AOtra);
+  if PosOtra > 0 then
+    Result := FindUses(AText, PosOtra);
+end;
+
 { El nucleo de adduses sobre un TEXTO (ver AddUsesToUnit): estaba dentro de
   ella, y el insert de delphi_designer escribe la unidad JUNTO con su form,
   todo o nada (1.17.0). }
@@ -2321,7 +2337,7 @@ var
   Blank, OtraSec, NL, Nombre, E: string;
   U, UOtra: TUsesClause;
   Entries: TArray<string>;
-  PosSec, PosOtra, FinLinea: Integer;
+  PosSec, FinLinea: Integer;
 begin
   Result := '';
   AFaltan := [];
@@ -2340,11 +2356,7 @@ begin
   // La OTRA seccion tambien cuenta: una unit no puede ir en interface e
   // implementation a la vez (E2004 Identifier redeclared; Hermes lo midio
   // el 2026-09-23 con UPkgA en las dos).
-  OtraSec := IfThen(ASec = 'interface', 'implementation', 'interface');
-  UOtra := Default(TUsesClause);
-  PosOtra := FinDeSeccion(Blank, OtraSec);
-  if PosOtra > 0 then
-    UOtra := FindUses(AText, PosOtra);
+  UOtra := UsesDeLaOtraSeccion(AText, Blank, ASec, OtraSec);
   for Nombre in ANames do
     if U.Found and LocateEntry(U, Nombre, E) then
       AYaEstan := AYaEstan + [Nombre]
@@ -2515,19 +2527,11 @@ var
   function EnLaOtra(const ANombres: TArray<string>): string;
   var
     Otra, N, Ent: string;
-    PosOtra: Integer;
     UO: TUsesClause;
     Estan: TArray<string>;
   begin
     Result := '';
-    if Sec = 'interface' then
-      Otra := 'implementation'
-    else
-      Otra := 'interface';
-    PosOtra := FinDeSeccion(Blank, Otra);
-    if PosOtra = 0 then
-      Exit;
-    UO := FindUses(Text, PosOtra);
+    UO := UsesDeLaOtraSeccion(Text, Blank, Sec, Otra);
     if not UO.Found then
       Exit;
     Estan := [];

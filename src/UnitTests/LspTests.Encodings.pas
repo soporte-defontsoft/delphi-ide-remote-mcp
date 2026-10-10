@@ -79,6 +79,7 @@ type
     [Test] procedure ConSaltoNormalizaLosTres;
     [Test] procedure MotorPascalPorExtension;
     [Test] procedure ZonaDelCambioMueveLoDeDebajo;
+    [Test] procedure UriDelMotorYSuInversa;
   end;
 
 implementation
@@ -91,7 +92,8 @@ uses
   Lsp.Codificacion,
   Lsp.Casa,
   System.Character,
-  Lsp.DesignerBin;
+  Lsp.DesignerBin,
+  Lsp.Client;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin
@@ -849,6 +851,27 @@ begin
   Assert.IsTrue(Niega('uno ' + #$D800, ekAnsi), 'ni en la ANSI');
   Antes := '';
   Assert.IsTrue(Niega('uno ' + #$D800, ekUtf16LE), 'sin texto de antes, todo suelto es nuevo');
+end;
+
+procedure TNombradorTests.UriDelMotorYSuInversa;
+var
+  P: string;
+begin
+  // el lector es la inversa del que compone, tambien con lo que no es ASCII
+  for P in TArray<string>.Create('C:\a\a' + #$00F1 + 'o\x.pas', 'C:\(x) & y+1\u.pas',
+    'D:\con espacios\' + #$00F1 + 'and' + #$00FA + ' ' + #$D83D#$DE00 + '\x.pas', 'C:\100%\x.pas') do
+    Assert.AreEqual(P, TLspClient.UriToPath(TLspClient.PathToUri(P)), 'ida y vuelta de ' + P);
+  // ...y lee la forma en que CONTESTA el motor: lo que no es ASCII, sin
+  // escapar (medido el 10-oct-2026; daba SYS-006 con una carpeta con enye)
+  Assert.AreEqual('C:\a\a' + #$00F1 + 'o\x.pas',
+    TLspClient.UriToPath('file:///C%3A/a/a' + #$00F1 + 'o/x.pas'), 'la enye sin escapar');
+  Assert.AreEqual('C:\' + #$D83D#$DE00 + '\x.pas',
+    TLspClient.UriToPath('file:///C%3A/' + #$D83D#$DE00 + '/x.pas'), 'un par de sustitutos sin escapar');
+  // ...y las dos formas de la misma uri son UNA al compararlas (UriCanonica)
+  Assert.AreEqual(TLspClient.PathToUri('C:\a\a' + #$00F1 + 'o\x.pas'),
+    TLspClient.UriCanonica('file:///C%3A/a/a' + #$00F1 + 'o/x.pas'), 'la del motor, en la forma del nombrador');
+  Assert.AreEqual(TLspClient.PathToUri('C:\a\x.pas'),
+    TLspClient.UriCanonica(TLspClient.PathToUri('C:\a\x.pas')), 'la del nombrador no cambia');
 end;
 
 initialization

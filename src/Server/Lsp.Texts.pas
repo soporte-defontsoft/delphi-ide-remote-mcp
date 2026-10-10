@@ -4183,13 +4183,13 @@ const
   SR_TEST_CMD_FMT =
     '[TEST-014 INVALID_PARAM] "%s" is not a command of delphi_test: it is ' +
     'discover (with path: the folder or project to search under) or run ' +
-    '(with project: the test .dproj). With no command, a call is a discover ' +
-    'unless it carries only project, which makes it a run.';
+    '(with project: the test .dproj). With no command, a call with project ' +
+    'and no path is a run, and any other is a discover.';
 
   SR_TEST_NEED_PATH =
     '[TEST-015 INVALID_PARAM] discover needs "path" (the folder or the project ' +
     'under which to search). A call with no command is a discover unless it ' +
-    'carries only "project": to run a test project, command=run ' +
+    'carries "project" and no "path": to run a test project, command=run ' +
     'project=<its .dproj>.';
 
   SR_TEST_NEED_PROJECT =
@@ -7227,8 +7227,8 @@ const
 
   { init no crea la carpeta: solo clone crea su destino (Hermes, 1.18.0). }
   SN_GIT_INIT_NO_CREA =
-    ' [GIT-064] init does not create the folder (only clone creates its ' +
-    'destination): writing a first file there creates it (delphi_create, ' +
+    ' [GIT-064] init does not create the folder (clone and worktree add ' +
+    'create theirs): writing a first file there creates it (delphi_create, ' +
     'delphi_textedit create=true, delphi_upload); then init.';
 
   SR_GIT_SHELL_METACHARS_ARGS =

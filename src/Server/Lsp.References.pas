@@ -406,7 +406,9 @@ begin
   Obj := TJSONObject(V);
   if Obj.GetValue('uri') = nil then
     Exit;
-  AUri := Obj.GetValue('uri').Value;
+  // en la forma que se compara (UriCanonica): la declaracion de un proyecto
+  // bajo una carpeta con enye salia homonima de si misma (1.18.1)
+  AUri := TLspClient.UriCanonica(Obj.GetValue('uri').Value);
   ALine := Obj.GetValue<Integer>('range.start.line');
   Result := True;
 end;

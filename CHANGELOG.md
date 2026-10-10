@@ -10,6 +10,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A project under a folder with an accent works with the engine.** Under
+  `...\año\...`, `delphi_definition`, `delphi_references` and `delphi_hover`
+  answered `SYS-006` ("No mapping for the Unicode character") and
+  `delphi_diagnostics` never got its answer (41 s, then `in-progress`).
+  Measured: DelphiLSP writes what is not ASCII as it is in its file URIs
+  (`.../año/...`, while it escapes `%28`, `%20`), and the reader of a URI
+  passed each unescaped character through the ANSI code page - a lone byte
+  the UTF-8 decoder refused. It now takes those characters in their UTF-8
+  bytes, and the inverse of the URI namer reads both forms; and two URIs of
+  the same file are compared in one form (`UriCanonica`): the diagnostics
+  were waited for by the namer's `%C3%B1` while the engine notified the
+  raw `ñ`, and the declaration came out a homonym of itself. This was there
+  before 1.18.0; found by the version reviewer of 1.18.1. `test_round31`
+  R1k (red before), `LspTests.Encodings` `UriDelMotorYSuInversa`.
+
 - **A network path in `delphi_git args` no longer makes git open the
   network.** A `\\host\share\...` of no declared place, given as one of
   the arguments (`log -- \\host\s\x.txt`), reached git, and git opened SMB
@@ -41,8 +56,11 @@ the MCP `initialize` response (`serverInfo.version`).
   purged on its own. Measured live against 1.18.0 with a repository in the
   trash and, for the purge, an old day holding a repository and an old clean
   day behind it: both stayed, and without the first one the clean one went.
-  `test_purga_repo_118`, red before in five checks; each half has its
-  mutant.
+  A day that is refused (a link of its `.git` leading out) stays, and is
+  walked again on every pass: only its links are judged now, not every
+  entry by its real path (3.2 s down to 1.1 s on the first edit of a day,
+  with 20,000 files in that `.git`). `test_purga_repo_118`, red before in
+  five checks; each half has its mutant.
 
 - **A repository's own remote outside `GitRemotes` says so, without advice
   already followed.** Since 1.18.0 every network address a remote points to
@@ -84,10 +102,12 @@ the MCP `initialize` response (`serverInfo.version`).
   file name - resolved to the proposal itself, which the jail does not read,
   and `set before=` was refused with a false `DSGN-115`. The proposal - the
   agent's own text - no longer counts there, and everything else that base
-  reaches is still judged (a `..\x` would leave the server's temp). And when
-  the unit changed while the judge was being asked, `DSGN-144` named the
-  form. Version reviewers of 1.18.0. `test_designer_orden` O23 and O24 (red
-  before).
+  reaches is still judged (a `..\x` would leave the server's temp) - a
+  `Caption` naming a file outside, by its full path or relative to the
+  form, is still `DSGN-115`. And when the unit changed while the judge was
+  being asked, `DSGN-144` named the form, in both places it is checked.
+  Version reviewers of 1.18.0 and 1.18.1. `test_designer_orden` O23 and O24
+  (red before), O23b (red with the skip widened).
 
 - **`to-text` converts a binary form on a machine with a double-byte ANSI
   page.** The round-trip rule that 1.18.0 gave every writer (a file whose
@@ -148,7 +168,7 @@ the MCP `initialize` response (`serverInfo.version`).
     there", and the agent kept trying names. A name with that shape that is
     not there, or not of this workspace, is still `REPORT-008`.
   - `delphi_git init` on a folder that does not exist adds that init does
-    not create it, only `clone` creates its destination, and how to
+    not create it (`clone` and `worktree add` create theirs), and how to
     (`GIT-064`).
   - `removeuses` that finds nothing to remove in its section (`USES-016`,
     `USES-017`, or `USES-018` for some of the names) says which of them are
@@ -156,7 +176,7 @@ the MCP `initialize` response (`serverInfo.version`).
     without `section`, a unit used only in the interface was "not there".
   - `delphi_test` with an unknown command repeats it and says what each
     command takes (`TEST-014`); `TEST-015` says that a call with no command
-    is a discover, and how to run.
+    is a discover unless it carries `project` and no `path`, and how to run.
 
   `test_ayudas_1181` (red before), and `test_buzon_workspace` W6 now
   expects `REPORT-012`.

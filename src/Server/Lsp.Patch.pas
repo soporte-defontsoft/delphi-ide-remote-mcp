@@ -416,9 +416,13 @@ function EscribeBytes(const APath: string; const ABytes: TArray<Byte>;
   ALugar: TLugarDeTexto): string;
 { ...y un TEXTO que compone el servidor - no el de un fichero que se edita
   conservando su codificacion: ese es PatchSaveText -, en AK por EL
-  codificador (EncodeText, con su ida y vuelta). }
+  codificador (EncodeText, con su ida y vuelta). AEstricto = False para una
+  COPIA que solo se le pregunta a alguien (la propuesta que juzga el
+  ayudante del disenador, como ParserDeForm): un sustituto suelto que ya
+  estaba en el form no tumba la pregunta; lo nuevo lo niega el escritor de
+  verdad (revisor propio de la 1.18.1). }
 function EscribeTexto(const APath, ATexto: string; ALugar: TLugarDeTexto;
-  AK: TEncKind): string;
+  AK: TEncKind; AEstricto: Boolean = True): string;
 { ...y BORRAR un fichero de un lugar FUERA de la jaula (en la jaula se borra
   a su papelera, y ltJaula se niega: GUARD-035): la misma pregunta, y en el
   IDE la copia antes en la casa (las mas viejas de ese fichero se purgan) -
@@ -2199,9 +2203,9 @@ begin
 end;
 
 function EscribeTexto(const APath, ATexto: string; ALugar: TLugarDeTexto;
-  AK: TEncKind): string;
+  AK: TEncKind; AEstricto: Boolean): string;
 begin
-  Result := EscribeBytes(APath, EncodeText(ATexto, AK), ALugar);
+  Result := EscribeBytes(APath, EncodeText(ATexto, AK, AEstricto), ALugar);
 end;
 
 procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
