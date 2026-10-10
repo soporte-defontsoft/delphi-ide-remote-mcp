@@ -215,6 +215,29 @@ REGLAS = [
      [('Lsp.DesignerBin.pas', 'FlotanteDeForm')],
      'FlotanteDeForm: el numero de coma flotante como lo escribe el IDE en UN sitio (1.17.0: insert, '
      'set y las plantillas FMX)'),
+    # la gramatica PASCAL que se lee a mano (punto D/E de adivinar-vs-medir; inventario del
+    # 10-oct-2026, medida-pascal-copias): las copias de hoy, declaradas; el lector es
+    # Lsp.PascalDecl (TLectorPas) y cada una que pase a el sale de la lista
+    ('el end. de una unidad leido a mano', r"end(?:\\s\*)?\\\.",
+     [('Lsp.Patch.pas', 'ContenidoDeUnitNoValido'), ('Lsp.Patch.pas', 'CountEndDot'),
+      ('Lsp.Patch.pas', 'AvisoDeEstructura'), ('Lsp.Patch.pas', 'ExecutePatch'),
+      ('Lsp.ProjectUnits.pas', 'AddProjectUnitNucleo'), ('Lsp.ProjectUnits.pas', 'AddPackageRequires'),
+      ('Lsp.DesignerMetaGen.pas', 'PropiedadesDefinidasPorCodigo')],
+     'dos ortografias (laxa "end\\s*\\." y estricta "end\\." sola en su linea) en siete sitios; '
+     'TLectorPas lo ve y no lo expone (inventario del 10-oct-2026)'),
+    ('la cabecera de una unidad leida a mano',
+     r"\((?:\?:)?program\|library|\^\\s\*unit\\s\+|StartsWith\(\s*'unit '",
+     [('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.ProjectUnits.pas', 'FindUses'),
+      ('Lsp.ProjectUnits.pas', 'AddProjectUnitNucleo'), ('Lsp.ProjectUnits.pas', 'CabeceraDeUnit'),
+      ('Lsp.ProjectUnits.pas', 'RenombrarIdentificadorUnit')],
+     'cinco lectores de unit/program/library/package: solo FindUses ve package, solo CabeceraDeUnit da '
+     'posicion, ExecutePatch la quiere en una linea (inventario del 10-oct-2026)'),
+    ('la seccion interface/implementation buscada a mano',
+     r"'\^\[ \\t\]\*'\s*\+\s*\w*Sec\b|\^(?:interface|implementation)\[ \]\*\$",
+     [('Lsp.ProjectUnits.pas', 'FinDeSeccion'), ('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest')],
+     'la primera linea que empieza por la palabra (FinDeSeccion: estaba cinco veces en tres funciones '
+     'de ProjectUnits) o la linea exacta (InterfaceDigest): dos reglas para lo que TLectorPas ya sabe '
+     '(inventario del 10-oct-2026)'),
     ('decidir la codificacion de unos bytes',
      r'\bGetBufferEncoding\b|\$FF\b[^;]*\$FE\b|\$FE\b[^;]*\$FF\b|\$EF\b[^;]*\$BB\b|\$BB\b[^;]*\$BF\b',
      # (EncodeText escribe el BOM byte a byte, una forma que esta regla no ve: 2.1g)
@@ -621,6 +644,9 @@ PLANTADO = {
     'la linea de objeto de un form': "  L := 'object ' + Nombre + ': ' + Clase;",
     'un componente por su ruta en el renderizador': "  C := FindNestedComponent(ARaiz, ANombre);",
     'un flotante de un form': "  V := IntToStr(N) + '.000000000000000000';",
+    'el end. de una unidad leido a mano': r"  if TRegEx.IsMatch(T, '(?im)^\s*end\s*\.') then",
+    'la cabecera de una unidad leida a mano': r"  M := TRegEx.Match(T, '^\s*(program|library)\b');",
+    'la seccion interface/implementation buscada a mano': r"  M := TRegEx.Match(T, '^[ \t]*' + ASec + '\b');",
     'decidir la codificacion de unos bytes': "  if (B[0] = $FF) and (B[1] = $FE) then K := ekUtf16LE;",
     'UTF-8 estricto preguntado a mano': "  if ValidUtf8(B, 0) then K := ekUtf8;",
     'una cadena ASCII preguntada a mano': "  for C in S do if Ord(C) > 127 then Exit(False);",

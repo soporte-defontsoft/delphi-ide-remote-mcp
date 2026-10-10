@@ -1989,6 +1989,41 @@ begin
   AReturn.AddPair('units', Arr);
 end;
 
+{ DONDE acaba la palabra de la seccion ASec (interface|implementation) en
+  ACodigo (la vista CodigoPascal): la posicion 1-based detras de ella, 0 si
+  no esta. LA regla de la seccion de un uses: estaba cinco veces en tres
+  funciones (inventario del 10-oct-2026, test_paisaje la fija aqui) }
+function FinDeSeccion(const ACodigo, ASec: string): Integer;
+var
+  M: TMatch;
+begin
+  M := TRegEx.Match(ACodigo, '^[ \t]*' + ASec + '\b', [roIgnoreCase, roMultiline]);
+  if M.Success then
+    Result := M.Index + M.Length
+  else
+    Result := 0;
+end;
+
+{ El eco de adduses y removeuses: la clausula de ASec de APasPath tal y como
+  quedo, releida del disco; ASinElla si no hay seccion o clausula. Estaba
+  dos veces, una en cada una }
+function ClausulaReleida(const APasPath, ASec, ASinElla: string): string;
+var
+  Text, Enc: string;
+  PosSec: Integer;
+  U: TUsesClause;
+begin
+  Result := ASinElla;
+  Text := PatchLoadText(APasPath, Enc);
+  PosSec := FinDeSeccion(CodigoPascal(Text), ASec);
+  if PosSec > 0 then
+  begin
+    U := FindUses(Text, PosSec);
+    if U.Found then
+      Result := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
+  end;
+end;
+
 { El nucleo de adduses sobre un TEXTO (ver AddUsesToUnit): estaba dentro de
   ella, y el insert de delphi_designer escribe la unidad JUNTO con su form,
   todo o nada (1.17.0). }
@@ -1997,10 +2032,9 @@ function UsesConUnidades(var AText: string; const ANames: TArray<string>;
   out ACreada: Boolean): string;
 var
   Blank, OtraSec, NL, Nombre, E: string;
-  M, MO: TMatch;
   U, UOtra: TUsesClause;
   Entries: TArray<string>;
-  PosSec, FinLinea: Integer;
+  PosSec, PosOtra, FinLinea: Integer;
 begin
   Result := '';
   AFaltan := [];
@@ -2008,10 +2042,9 @@ begin
   AEnOtra := [];
   ACreada := False;
   Blank := CodigoPascal(AText);
-  M := TRegEx.Match(Blank, '^[ \t]*' + ASec + '\b', [roIgnoreCase, roMultiline]);
-  if not M.Success then
+  PosSec := FinDeSeccion(Blank, ASec);
+  if PosSec = 0 then
     Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [ASec, AFichero]));
-  PosSec := M.Index + M.Length;
   NL := SaltoDominante(AText);
   U := FindUses(AText, PosSec);
   if U.Found and U.EnRamas then
@@ -2022,9 +2055,9 @@ begin
   // el 2026-09-23 con UPkgA en las dos).
   OtraSec := IfThen(ASec = 'interface', 'implementation', 'interface');
   UOtra := Default(TUsesClause);
-  MO := TRegEx.Match(Blank, '^[ \t]*' + OtraSec + '\b', [roIgnoreCase, roMultiline]);
-  if MO.Success then
-    UOtra := FindUses(AText, MO.Index + MO.Length);
+  PosOtra := FinDeSeccion(Blank, OtraSec);
+  if PosOtra > 0 then
+    UOtra := FindUses(AText, PosOtra);
   for Nombre in ANames do
     if U.Found and LocateEntry(U, Nombre, E) then
       AYaEstan := AYaEstan + [Nombre]
@@ -2061,9 +2094,7 @@ end;
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
 var
-  Text, Enc, Sec, OtraSec, Nombre, Clausula, Blank: string;
-  M: TMatch;
-  U: TUsesClause;
+  Text, Enc, Sec, OtraSec, Nombre, Clausula: string;
   Names, Faltan, YaEstan, EnOtra: TArray<string>;
   Creada: Boolean;
 begin
@@ -2101,16 +2132,7 @@ begin
         TPath.GetFileName(APasPath)]));
     PatchSaveText(APasPath, Text, Enc);
     // el eco, releido del disco: la clausula tal y como ha quedado
-    Text := PatchLoadText(APasPath, Enc);
-    Blank := CodigoPascal(Text);
-    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
-    Clausula := '(?)';
-    if M.Success then
-    begin
-      U := FindUses(Text, M.Index + M.Length);
-      if U.Found then
-        Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
-    end;
+    Clausula := ClausulaReleida(APasPath, Sec, '(?)');
     Result := MsgFmt(SN_ADDUSES_ADDED_FMT, [Sec, TPath.GetFileName(APasPath),
       string.Join(', ', Faltan),
       IfThen(Length(YaEstan) > 0, MsgFmt(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), '') +
@@ -2128,7 +2150,6 @@ function RemoveUsesFromUnit(const APasPath: string; const ANames: TArray<string>
   const ASection: string): string;
 var
   Text, Enc, Sec, Nombre, E, Clausula, Blank: string;
-  M: TMatch;
   U: TUsesClause;
   Names, Entries, Quitadas, NoEstaban: TArray<string>;
   PosSec: Integer;
@@ -2155,10 +2176,9 @@ begin
       Exit(NoEsFichero(APasPath, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath])));
     Text := PatchLoadText(APasPath, Enc);
     Blank := CodigoPascal(Text);
-    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
-    if not M.Success then
+    PosSec := FinDeSeccion(Blank, Sec);
+    if PosSec = 0 then
       Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
-    PosSec := M.Index + M.Length;
     U := FindUses(Text, PosSec);
     if not U.Found then
       Exit(MsgFmt(SN_REMOVEUSES_NO_CLAUSE_FMT, [Sec, TPath.GetFileName(APasPath)]));
@@ -2181,16 +2201,7 @@ begin
     Text := ReplaceUses(Text, U, Entries); // vacia: la clausula entera fuera
     PatchSaveText(APasPath, Text, Enc);
     // el eco, releido del disco
-    Text := PatchLoadText(APasPath, Enc);
-    Blank := CodigoPascal(Text);
-    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
-    Clausula := MsgFmt(SN_REMOVEUSES_GONE_FMT, [Sec]);
-    if M.Success then
-    begin
-      U := FindUses(Text, M.Index + M.Length);
-      if U.Found then
-        Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
-    end;
+    Clausula := ClausulaReleida(APasPath, Sec, MsgFmt(SN_REMOVEUSES_GONE_FMT, [Sec]));
     Result := MsgFmt(SN_REMOVEUSES_REMOVED_FMT, [Sec, TPath.GetFileName(APasPath),
       string.Join(', ', Quitadas),
       IfThen(Length(NoEstaban) > 0, MsgFmt(SN_REMOVEUSES_SOME_ABSENT_FMT, [string.Join(', ', NoEstaban)]), ''),

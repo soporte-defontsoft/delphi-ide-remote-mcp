@@ -737,6 +737,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Internal
 
+- **The Pascal grammar read by hand, declared.** `test_paisaje` now holds
+  three rules for what `Lsp.PascalDecl` already reads and several places
+  read again by themselves: the final `end.` (two spellings in seven
+  places), a unit/program/library/package header (five readers) and the
+  interface/implementation section (the five copies inside ProjectUnits are
+  one, `FinDeSeccion`; the echo of adduses and removeuses is one,
+  `ClausulaReleida`). Today's copies are listed and can only shrink; a new
+  one fails the battery, each rule with its planted mutant.
 - **One gate to read files** (the doors block of 1.18.0, first part).
   `LeeTexto` and `LeeBytes` (`Lsp.Patch`) read a file only if it is in one
   of the PLACES the caller names - the workspace (the jail's own read
