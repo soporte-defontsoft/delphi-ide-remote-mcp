@@ -140,6 +140,20 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   interface part", E2004 "Identifier redeclared"). The engine resolves symbols across the include
   (definition, references and completion see them) but does not re-check the included text against
   the section it lands in. A green `diagnostics` on a unit with includes is not a green build.
+- **File URIs carry what is not ASCII as it is** (measured 2026-10-10, engine 37.0): under a
+  folder `año`, `definition` and `publishDiagnostics` wrote `.../año/...` raw in their URIs, while
+  the same engine escapes `(` as `%28` and a space as `%20`. A client that decodes such a URI byte
+  by byte through ANSI, or compares it as text with the URI it sent (`%C3%B1`), loses the file:
+  here, until 1.18.1, every position request under such a folder failed (`SYS-006`) and its
+  diagnostics were never matched. Read both forms as UTF-8, and compare two URIs in one canonical
+  form. Under a folder named with an emoji the engine answered `file:///UEmo.pas`, without the
+  folder (measured by a 1.18.1 reviewer; open).
+- **On the name in a nested routine's own header, `definition` answers the routine that contains
+  it** (measured 2026-10-10): asked on `Ayuda` in `procedure Ayuda;` inside `procedure Uno;`, the
+  engine returns `Uno`'s header; asked on a call to `Ayuda`, it returns `Ayuda`'s header. A client
+  that takes the answer at the header as the target turns every real call into a homonym. This
+  server corrects it where the answer comes in: on a routine header, a line that does not name the
+  identifier is not its definition - the header is.
 
 ## Complete capability inventory (measured on 37.0, 2026-08)
 
