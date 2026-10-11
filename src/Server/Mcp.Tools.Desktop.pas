@@ -116,7 +116,7 @@ uses
   Lsp.Imagen,
   Mcp.Tools.PAServer,
   Lsp.InlineImages, // DeliverCapture: como se entrega una captura, la misma en toda tool
-  Lsp.Patch,        // ColocaProducto: la captura bajada, sobre el out=
+  Lsp.Patch,        // ColocaProducto / ColocaContenido: la captura bajada o su recorte, sobre el out=
   Lsp.RemoteRun,
   Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
   Lsp.Casa;
@@ -266,6 +266,7 @@ var
   Return: TJSONObject;
   EsWin, HayVentana, ConRecorte: Boolean;
   RX, RY, RW, RH, AnchoOrig, AltoOrig, PX, PY: Integer;
+  Recorte: TArray<Byte>;
   Ventanas: TJSONArray;
 
   { Sin captura: en screenshot/overview la llamada FALLO y va en "error"
@@ -528,9 +529,17 @@ begin
         // el recorte, sobre la captura BAJADA (la carpeta de descarga es de esta
         // llamada) y ANTES de colocarla: recortaba EN SITIO el out= ya colocado,
         // una escritura cruda por detras de la puerta y del cerrojo (P4 de la
-        // 1.18.0). Lo que se coloca ya es el recorte, como en el designer
+        // 1.18.0). Lo que se coloca ya es el recorte, como en el designer: EN
+        // MEMORIA, leido por la puerta y colocado desde ella - la bajada ya no
+        // se reescribe en sitio, sin ninguna (1.18.2, 2b)
         if (Fallo = '') and ConRecorte then
-          Fallo := RecortaPng(Local, RX, RY, RW, RH, AnchoOrig, AltoOrig);
+          try
+            Fallo := RecortaPngBytes(LeeBytes(Local, LUGARES_DE_UNA_CAPTURA), RX, RY, RW, RH,
+              AnchoOrig, AltoOrig, Recorte);
+          except
+            on E: Exception do
+              Fallo := E.Message;
+          end;
         if Fallo = '' then
         try
           // un out= que ya estaba: su contenido, sellado, y se sustituye, como
@@ -538,7 +547,10 @@ begin
           // captura no se colocaba), con el cerrojo de escritura como todo
           // escritor: EL escritor de un producto (Lsp.Patch), el de preview,
           // adb, logcat y package
-          ColocaProducto(Local, Propia);
+          if ConRecorte then
+            ColocaContenido(Propia, Recorte) // la bajada entera se va con su carpeta
+          else
+            ColocaProducto(Local, Propia);
           Local := Propia;
         except
           // Antes la imagen se quedaba 'donde cayo', dentro de la .tmp-, y la

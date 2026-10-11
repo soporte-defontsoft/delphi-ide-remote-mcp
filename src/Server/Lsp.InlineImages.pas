@@ -68,7 +68,8 @@ uses
   System.StrUtils,
   System.RegularExpressions,
   Lsp.Base64,   // BytesToBase64: EL codificador de la casa
-  Lsp.Imagen,   // EscalaPngBytes: escalar en memoria
+  Lsp.Imagen,   // TamanoPngBytes / EscalaPngBytes: medir y escalar en memoria
+  Lsp.Patch,    // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
   Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
   Lsp.Texts;
@@ -166,10 +167,10 @@ function DeliverCapture(const AToolName, AFile: string; AInline: Boolean;
   AReturn: TJSONObject; const ANotaEnLineaFmt: string;
   const ANotaFrame: string): Boolean;
 var
-  Bytes: TArray<Byte>;
+  Leidos, Bytes: TArray<Byte>;
   Escala: Double;
   MaxW, W, H, W0, H0, SrcW, SrcH: Integer;
-  Fallo, Enlace: string;
+  Fallo, FalloLectura, Enlace: string;
 
   // El frame de la imagen que el agente va a mirar (IW x IH): cubre la
   // region del fichero en el espacio de tap, desde el origen.
@@ -186,7 +187,18 @@ var
 
 begin
   Result := False;
-  if not TamanoPng(AFile, W0, H0) then
+  // los bytes UNA vez, por la puerta de leer (el out= del agente o su casa de
+  // entregables): el tamano y la imagen en linea salen de ellos. Se leian
+  // dos veces y sin puerta (1.18.2, 2b)
+  Leidos := nil;
+  FalloLectura := '';
+  try
+    Leidos := LeeBytes(AFile, LUGARES_DE_UNA_CAPTURA);
+  except
+    on E: Exception do
+      FalloLectura := E.Message;
+  end;
+  if not TamanoPngBytes(Leidos, W0, H0) then
   begin
     W0 := 0;
     H0 := 0;
@@ -198,7 +210,10 @@ begin
     MaxW := AMaxWidth;
     if MaxW <= 0 then
       MaxW := INLINE_MAXWIDTH;
-    Fallo := EscalaPngBytes(TFile.ReadAllBytes(AFile), MaxW, Bytes, Escala, W, H);
+    // lo que no se dejo leer no se escala: se dice como cualquier fallo
+    Fallo := FalloLectura;
+    if Fallo = '' then
+      Fallo := EscalaPngBytes(Leidos, MaxW, Bytes, Escala, W, H);
     if Fallo = '' then
     begin
       AttachImage(Bytes, 'image/png');

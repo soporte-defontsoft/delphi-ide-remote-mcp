@@ -225,6 +225,17 @@ function AgentTempDir(const ASub: string = ''): string;
   temporal de la casa del servidor. }
 function CasasDeEntregables: TArray<string>;
 function CasaDeEntregables(out AEnElServidor: Boolean): string;
+{ ...y la pregunta de las PUERTAS sobre ellas (el lugar ltEntregables de
+  Lsp.Patch, y CaptureTarget antes de que nadie dibuje, baje o recorte alli):
+  APath cae en una casa de entregables - las de este workspace o la temporal
+  del servidor - SIN enlaces en el camino: en una raiz, ni su __delphi-temp
+  mismo; la temporal del servidor, como su lugar ltTemporal. Hasta la
+  1.18.1 nadie lo miraba: un enlace en la carpeta de capturas llevaba el
+  renderizador y el recorte FUERA de las raices (1.18.2, punto 2b). La juzga
+  el nombrador y no la jaula: a un agente confinado la jaula le niega
+  __delphi-temp, y sus capturas viven alli. Lo preguntan tambien quien
+  consume una captura (CapturaConsumible: consumir es borrar). }
+function EnCasaDeEntregables(const APath: string): Boolean;
 
 { Una CAPTURA (escritorio o Android) en una carpeta temporal del servidor (un
   .png bajo <...>\__delphi-temp\...\desktop|android\) se CONSUME al recogerla: quien la
@@ -2403,24 +2414,19 @@ begin
 end;
 
 function CapturaConsumible(const APath: string): Boolean;
-var
-  Real, Casa: string;
 begin
-  Result := False;
-  if not IsAgentCapture(APath) then
-    Exit;
   // Nuestra por el NOMBRADOR, no por la puerta: bajo el __delphi-temp de una
   // raiz ESCRIBIBLE de este workspace (el escritor elige la primera; el lector
   // acepta cualquiera: un workspace con las raices en otro orden dejo la suya
-  // en la segunda) o bajo la temporal de la casa del servidor, por la ruta
-  // real. Una referencia no lo es (solo raices escribibles), un enlace tampoco
-  // (RealPath), y el confinamiento no pinta nada: es la carpeta que el propio
-  // nombrador dio a los agentes de esta jaula.
+  // en la segunda) o bajo la temporal de la casa del servidor. Una referencia
+  // no lo es (solo raices escribibles), y el confinamiento no pinta nada: es
+  // la carpeta que el propio nombrador dio a los agentes de esta jaula. Por EL
+  // lector de la casa (EnCasaDeEntregables), SIN enlaces en el camino: iba por
+  // la ruta real, y con __delphi-temp como enlace a la carpeta de otro agente
+  // (o a una de solo lectura) un png de alli contaba como nuestro y leerlo lo
+  // BORRABA (K6 de test_captura_puertas_1182, revisor del 2b de la 1.18.2)
   try
-    Real := IncludeTrailingPathDelimiter(RealPath(APath));
-    for Casa in CasasDeEntregables + [ServerTempDir('')] do
-      if StartsText(IncludeTrailingPathDelimiter(RealPath(Casa)), Real) then
-        Exit(True);
+    Result := IsAgentCapture(APath) and EnCasaDeEntregables(APath);
   except
     Result := False;
   end;
@@ -2474,6 +2480,20 @@ begin
     Result := ServerTempDir('')
   else
     Result := Casas[0];
+end;
+
+function EnCasaDeEntregables(const APath: string): Boolean;
+begin
+  // la temporal del servidor, como su lugar (ltTemporal): sin enlaces por
+  // debajo de ella
+  if EnLugarSinEnlaces(APath, ServerTempDir('')) then
+    Exit(True);
+  // las del workspace, ni la casa misma: la raiz la declara el operador, su
+  // __delphi-temp no (K3 de test_captura_puertas_1182)
+  for var Casa in CasasDeEntregables do
+    if not EsEnlace(Casa) and EnLugarSinEnlaces(APath, Casa) then
+      Exit(True);
+  Result := False;
 end;
 
 { El workspace de quien llama. Con varias raices manda la PRIMERA
@@ -2535,6 +2555,11 @@ begin
     // capturas del mismo segundo compartian nombre y la segunda pisaba a la
     // primera - las dos llamadas se llevaban la misma imagen.
     AFile := TPath.Combine(Carpeta, Format('%s-%s%s', [APrefix, SelloUnico, AExt]));
+  // la carpeta NUESTRA, por su nombrador y sin enlaces en el camino, ANTES de
+  // que el renderizador dibuje, el nodo baje o adb deje nada alli: un enlace
+  // plantado en ella llevaba la captura fuera de las raices (1.18.2, 2b)
+  if (O = '') and not EnCasaDeEntregables(AFile) then
+    Exit(MsgFmt(SR_CAPTURE_CASA_ENLACE_FMT, [Carpeta]));
   if O <> '' then
   begin
     // la puerta de ESCRIBIR, la de todas (solo lectura incluida): una sesion

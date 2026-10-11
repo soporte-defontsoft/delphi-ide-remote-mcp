@@ -376,8 +376,13 @@ type
                   Path), este o no encendida para los agentes - eso es la
                   jaula -. SOLO para leer: lo que el motor dice de un simbolo
                   de alli se ensena (P2). No es ltIde porque cargarla lee
-                  rsvars.bat por la puerta con el IDE como lugar }
-  TLugarDeTexto = (ltJaula, ltIde, ltCasa, ltTemporal, ltVault, ltBiblioteca);
+                  rsvars.bat por la puerta con el IDE como lugar
+      ltEntregables  las casas donde el servidor deja las capturas de un agente
+                  (Lsp.Guard.EnCasaDeEntregables: el __delphi-temp de una raiz
+                  escribible o el temporal del servidor), sin enlaces en el
+                  camino. Las juzga su nombrador y no la jaula: a un agente
+                  confinado la jaula le niega __delphi-temp (1.18.2, 2b) }
+  TLugarDeTexto = (ltJaula, ltIde, ltCasa, ltTemporal, ltVault, ltBiblioteca, ltEntregables);
   TLugaresDeTexto = set of TLugarDeTexto;
 
 const
@@ -388,6 +393,11 @@ const
     (Lsp.ConfigFabricator.MotorPuedeEnsenar) y lo que se le da a leer
     (Lsp.Client.LoadSourceText). }
   LUGARES_DEL_MOTOR: TLugaresDeTexto = [ltJaula, ltIde, ltBiblioteca];
+  { Donde se lee una CAPTURA: el out= que eligio el agente (la jaula) o la
+    casa de los entregables, donde la deja el servidor sin out=. UNA lista
+    para toda tool que capture (delphi_designer, delphi_desktop, delphi_adb)
+    y para su entrega (Lsp.InlineImages.DeliverCapture). }
+  LUGARES_DE_UNA_CAPTURA: TLugaresDeTexto = [ltJaula, ltEntregables];
 
 { LA PUERTA DE LEER, su pregunta: '' si APath esta en alguno de ALugares,
   por su ruta REAL (un enlace no saca a nadie de su sitio); si no, la
@@ -418,7 +428,8 @@ function LeeBytes(const APath: string; ALugares: TLugaresDeTexto): TArray<Byte>;
   (AtomicWrite: la puerta sobre la ruta real, el modo de solo lectura y el
   +R); el vault y el IDE, dentro por la ruta real de la CARPETA (alli nacen
   el temporal y el renombre) y sin que APath sea el mismo un enlace; la casa
-  y el temporal del servidor, dentro sin enlaces en el camino; solo rutas
+  y el temporal del servidor, dentro sin enlaces en el camino; las casas de
+  los entregables, las de su nombrador y sin enlaces tampoco; solo rutas
   absolutas. Del IDE, su carpeta de datos del
   usuario, la de sus SDK y los sysroots que registra su SDK Manager - nunca
   su instalacion (David, 9-oct-2026), ni lo que solo nombra un .sdk -. Fuera
@@ -2166,6 +2177,10 @@ begin
     // solo se lee: nada se escribe en la biblioteca del IDE
     ltBiblioteca:
       Result := not AParaEscribir and EnAlgunLugar(RealPath(APath), LugaresDeLaBiblioteca);
+    // las capturas de un agente: lo dice su nombrador, sin enlaces en el
+    // camino, para leer y para escribir
+    ltEntregables:
+      Result := EnCasaDeEntregables(APath);
   end;
 end;
 
@@ -2182,6 +2197,7 @@ begin
     ltTemporal: Result := MsgText(SF_LUGAR_TEMPORAL);
     ltVault: Result := MsgText(SF_LUGAR_VAULT);
     ltBiblioteca: Result := MsgText(SF_LUGAR_BIBLIOTECA);
+    ltEntregables: Result := MsgText(SF_LUGAR_ENTREGABLES);
   else
     Result := '';
   end;

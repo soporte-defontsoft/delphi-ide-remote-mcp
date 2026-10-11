@@ -431,21 +431,20 @@ REGLAS = [
       ('Lsp.Patch.pas', 'LeeBytes'), ('Lsp.Patch.pas', 'TextoDeFichero'),
       # .git\HEAD: la puerta niega .git y esta lectura lo admite (el juez es git, 9.5)
       ('Mcp.Tools.Workspace.pas', 'RepoOf'),
-     # BYTES de la jaula que la tool ya comprobo (delphi_fetch, el zip de delphi_package;
-     # el PNG que se recorta, P4) y la captura que la propia tool acaba de dejar
+     # BYTES de la jaula que la tool ya comprobo (delphi_fetch, el zip de delphi_package,
+     # la descarga). La captura y su recorte ya van por la puerta (1.18.2, 2b)
      ('Mcp.Tools.Workspace.pas', 'TDelphiFetchTool.ExecuteWithParams'),
      ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
-     ('Lsp.InlineImages.pas', 'DeliverCapture'),
-      ('Lsp.Files.pas', 'ServeFile'), ('Lsp.Imagen.pas', 'RecortaPng'),
+      ('Lsp.Files.pas', 'ServeFile'),
       # programas que NO son el servidor: los renderizadores y el conversor leen lo que
       # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
       ('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'AncestroDeClase'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
       ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Convert'),
      # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (4 bytes de un designer o
-     # de un estilo, el BOM de un form, el tamano de un PNG)
+     # de un estilo, el BOM de un form; el tamano de un PNG ya sale de sus bytes, 2b)
      ('Lsp.DesignerBin.pas', 'IsBinaryDesignerFile'), ('Lsp.Styles.pas', 'IsBinaryStyle'),
-     ('Mcp.Tools.Designer.pas', 'FormAncho'), ('Lsp.Imagen.pas', 'TamanoPng'),
+     ('Mcp.Tools.Designer.pas', 'FormAncho'),
      # el MOTOR de edicion de la jaula: lo que la tool ya paso por la puerta de la jaula
      # (delphi_read, delphi_edit, delphi_textedit, delphi_changeset, el disenador)
      ('Lsp.Patch.pas', 'RelecturaDe'), ('Lsp.Patch.pas', 'PatchSaveText'),
@@ -508,13 +507,11 @@ REGLAS = [
       ('Mcp.Tools.Vault.pas', 'VaultBackup'), ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
       # el log rota sus bloques y anade al vivo (C5: su propio fichero, append)
       ('Lsp.LogSink.pas', 'CierraBloque'), ('Lsp.LogSink.pas', 'Anade'),
-      # el PNG se recorta en SU temporal - la descarga de esa llamada o el temporal del
-      # designer - ANTES de colocarlo (P4 de la 1.18.0: recortaba en sitio el out= ya
-      # colocado); la restauracion de la foto va por la puerta (EscribeBytes) salvo
+      # la restauracion de la foto va por la puerta (EscribeBytes) salvo
       # una ruta que no cabe con el temporal del escritor (GUARD-028): directa, ya
       # aprobada por EscrituraDenegada, porque no devolverla perdia el fichero
       # (revisor de la noche del 10-oct, A-1)
-      ('Lsp.Imagen.pas', 'RecortaPng'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
+      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
       # programas que NO son el servidor: escriben donde el servidor les dijo, ya
       # comprobado, o en el destino
       ('Mld.Captura.pas', 'GuardarPNG'), ('McpDesktopNode.dpr', 'RecogerCaptura'),

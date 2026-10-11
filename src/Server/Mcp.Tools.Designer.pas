@@ -148,7 +148,7 @@ uses
   Lsp.Pascal,
   Lsp.Discovery,     // DiscoverRadStudio: la version del Delphi del servidor
   Lsp.FormRender,    // preview: el renderizador y su protocolo
-  Lsp.Imagen,        // RecortaPng: el recorte al componente, en el servidor
+  Lsp.Imagen,        // RecortaPngBytes: el recorte al componente, en el servidor
   Lsp.InlineImages,  // DeliverCapture: como se entrega una captura
   Lsp.DesignerEdit,  // insert / set / delete: el form y su unidad, como el IDE
   Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
@@ -1172,8 +1172,9 @@ end;
 { preview: un PNG de lo que ensena el designer del IDE, por el renderizador
   de su framework (Lsp.FormRender, src\Render). Lee el fichero: no coge el
   cerrojo de escritura salvo para colocar un out= (ColocaProducto). El PNG se
-  dibuja SIEMPRE en un temporal nuestro y se recorta ahi (RecortaPng con el
-  RECT= del componente); con out= se lleva despues a su sitio: el
+  dibuja SIEMPRE en un temporal nuestro y se recorta ahi (RecortaPngBytes con
+  el RECT= del componente, leido y escrito por las puertas de su casa de
+  entregables); con out= se lleva despues a su sitio: el
   renderizador nunca escribe en la jaula por su cuenta. }
 function PreviewDeForm(const Params: TDelphiDesignerParams): string;
 var
@@ -1186,6 +1187,7 @@ var
   Recortada, Ancho: Boolean;
   KAncha: TEncKind;
   Estados: TArray<string>;
+  Recorte: TArray<Byte>;
 
   // el temporal es nuestro: si algo falla despues del render, no se queda
   procedure TiraTemporal;
@@ -1330,7 +1332,19 @@ begin
     RY := R.RectY;
     RW := R.RectW;
     RH := R.RectH;
-    Fallo := RecortaPng(Temporal, RX, RY, RW, RH, AnchoOrig, AltoOrig);
+    // en memoria, leido y escrito por las puertas: el temporal vive en la casa
+    // de los entregables (ltEntregables), que juzga su nombrador - la jaula le
+    // negaria __delphi-temp a un agente confinado. Se releia y se reescribia
+    // en sitio sin ninguna (1.18.2, 2b)
+    try
+      Fallo := RecortaPngBytes(LeeBytes(Temporal, LUGARES_DE_UNA_CAPTURA), RX, RY, RW, RH,
+        AnchoOrig, AltoOrig, Recorte);
+      if Fallo = '' then
+        EscribeBytes(Temporal, Recorte, ltEntregables);
+    except
+      on E: Exception do
+        Fallo := E.Message;
+    end;
     if Fallo <> '' then
     begin
       TiraTemporal;

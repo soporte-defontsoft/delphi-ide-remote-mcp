@@ -9,21 +9,26 @@
   El recorte es una VISTA de ese mismo fotograma: se hace aqui, sobre la
   imagen que ya bajo, con un solo trozo de codigo para todos los destinos, y
   el que llama recibe el origen del recorte para seguir pulsando en
-  coordenadas del escritorio. Decision de David, 22-sep-2026. }
+  coordenadas del escritorio. Decision de David, 22-sep-2026.
+
+  Todo EN MEMORIA: aqui no se abre ningun fichero. Los bytes los lee y los
+  escribe quien llama, por las puertas de Lsp.Patch (LeeBytes, EscribeBytes,
+  ColocaContenido) - el recorte se releia y se reescribia en sitio sin
+  ninguna (1.18.2, punto 2b). }
 
 interface
 
-{ Recorta el PNG en sitio. X, Y, W, H entran en coordenadas de la imagen y
-  salen AJUSTADOS al lienzo (un recorte que se sale se recorta el). Devuelve
-  '' si todo fue bien, y el motivo si no; AAnchoOrig/AAltoOrig dicen de que
-  tamano era la captura entera. }
-function RecortaPng(const AFichero: string; var X, Y, W, H: Integer;
-  out AAnchoOrig, AAltoOrig: Integer): string;
+{ Recorta un PNG: X, Y, W, H entran en coordenadas de la imagen y salen
+  AJUSTADOS al lienzo (un recorte que se sale se recorta el); ASalida, el PNG
+  del recorte. Devuelve '' si todo fue bien, y el motivo si no (ASalida
+  vacia); AAnchoOrig/AAltoOrig dicen de que tamano era la captura entera. }
+function RecortaPngBytes(const AEntrada: TArray<Byte>; var X, Y, W, H: Integer;
+  out AAnchoOrig, AAltoOrig: Integer; out ASalida: TArray<Byte>): string;
 
-{ Ancho y alto de un PNG leyendo solo su cabecera IHDR (los 24 primeros
-  bytes): sin decodificar la imagen, que para saber su tamano sobra. False
-  si el fichero no es un PNG. }
-function TamanoPng(const AFichero: string; out W, H: Integer): Boolean;
+{ Ancho y alto de un PNG por su cabecera IHDR (los 24 primeros bytes): sin
+  decodificar la imagen, que para saber su tamano sobra. False si no es un
+  PNG. }
+function TamanoPngBytes(const ABytes: TArray<Byte>; out W, H: Integer): Boolean;
 
 { Escala un PNG EN MEMORIA a un ancho maximo (proporcion intacta, HALFTONE)
   sin tocar ningun fichero: una captura pedida con out= es del agente y no
@@ -46,50 +51,42 @@ uses
   Vcl.Imaging.pngimage,
   Lsp.Texts;
 
-function TamanoPng(const AFichero: string; out W, H: Integer): Boolean;
+function TamanoPngBytes(const ABytes: TArray<Byte>; out W, H: Integer): Boolean;
 const
   FIRMA: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0A);
 var
-  F: TFileStream;
-  Cab: array[0..23] of Byte;
   I: Integer;
 begin
   Result := False;
   W := 0;
   H := 0;
-  try
-    F := TFileStream.Create(AFichero, fmOpenRead or fmShareDenyWrite);
-    try
-      if F.Read(Cab, SizeOf(Cab)) <> SizeOf(Cab) then
-        Exit;
-    finally
-      F.Free;
-    end;
-  except
+  if Length(ABytes) < 24 then
     Exit;
-  end;
   for I := 0 to 7 do
-    if Cab[I] <> FIRMA[I] then
+    if ABytes[I] <> FIRMA[I] then
       Exit;
   { bytes 16..23: ancho y alto, big-endian, dentro del trozo IHDR }
-  W := (Cab[16] shl 24) or (Cab[17] shl 16) or (Cab[18] shl 8) or Cab[19];
-  H := (Cab[20] shl 24) or (Cab[21] shl 16) or (Cab[22] shl 8) or Cab[23];
+  W := (ABytes[16] shl 24) or (ABytes[17] shl 16) or (ABytes[18] shl 8) or ABytes[19];
+  H := (ABytes[20] shl 24) or (ABytes[21] shl 16) or (ABytes[22] shl 8) or ABytes[23];
   Result := (W > 0) and (H > 0);
 end;
 
-function RecortaPng(const AFichero: string; var X, Y, W, H: Integer;
-  out AAnchoOrig, AAltoOrig: Integer): string;
+function RecortaPngBytes(const AEntrada: TArray<Byte>; var X, Y, W, H: Integer;
+  out AAnchoOrig, AAltoOrig: Integer; out ASalida: TArray<Byte>): string;
 var
   Png, Nuevo: TPngImage;
   Entera, Trozo: TBitmap;
+  Ent, Sal: TBytesStream;
 begin
   Result := '';
   AAnchoOrig := 0;
   AAltoOrig := 0;
+  ASalida := nil;
   try
+    Ent := TBytesStream.Create(AEntrada);
     Png := TPngImage.Create;
     try
-      Png.LoadFromFile(AFichero);
+      Png.LoadFromStream(Ent);
       AAnchoOrig := Png.Width;
       AAltoOrig := Png.Height;
       // al lienzo: lo que se sale por un lado se pierde, no se inventa
@@ -113,6 +110,7 @@ begin
       Entera := TBitmap.Create;
       Trozo := TBitmap.Create;
       Nuevo := TPngImage.Create;
+      Sal := TBytesStream.Create;
       try
         Entera.Assign(Png);
         Trozo.PixelFormat := pf24bit;
@@ -121,18 +119,24 @@ begin
           Rect(X, Y, X + W, Y + H));
         Nuevo.Assign(Trozo);
         Nuevo.CompressionLevel := 6; // el recorte pesaba mas que la captura entera
-        Nuevo.SaveToFile(AFichero);
+        Nuevo.SaveToStream(Sal);
+        ASalida := Copy(Sal.Bytes, 0, Sal.Size);
       finally
+        Sal.Free;
         Nuevo.Free;
         Trozo.Free;
         Entera.Free;
       end;
     finally
       Png.Free;
+      Ent.Free;
     end;
   except
     on E: Exception do
+    begin
+      ASalida := nil;
       Result := MsgFmt(SN_CAPT_NO_PUDE_RECORTAR_FMT, [E.Message]);
+    end;
   end;
 end;
 

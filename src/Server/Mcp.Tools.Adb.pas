@@ -528,7 +528,14 @@ begin
           Densidad := ValorWm(SalidaDen, 'Physical density');
       end;
       var ImgW, ImgH, DW, DH: Integer;
-      var HayImagen := TamanoPng(Destino, ImgW, ImgH);
+      // el tamano, de los bytes leidos por la puerta (el out= del agente o su
+      // casa de entregables): una captura que no se deja leer no se mide
+      var HayImagen: Boolean;
+      try
+        HayImagen := TamanoPngBytes(LeeBytes(Destino, LUGARES_DE_UNA_CAPTURA), ImgW, ImgH);
+      except
+        HayImagen := False;
+      end;
       if HayImagen then
         Return.AddPair('image', Format('%dx%d', [ImgW, ImgH]));
       var Nota := MsgText(SN_ADB_SCREENSHOT);

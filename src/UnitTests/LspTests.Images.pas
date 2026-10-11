@@ -2,7 +2,9 @@
 
 { Captura en UN SOLO PASO (25-sep-2026): el escalado en memoria, el adjunto
   que viaja como item image y se lleva una sola vez, y el reconocedor de
-  capturas del agente con sus dos subcarpetas (desktop y android). }
+  capturas del agente con sus dos subcarpetas (desktop y android). Y el
+  tamano y el recorte EN MEMORIA, que leen y escriben por las puertas quienes
+  los llaman (1.18.2, 2b). }
 
 interface
 
@@ -28,6 +30,9 @@ type
     [Test] procedure BorradoNuncaUnidadNiSistema;
     [Test] procedure DescargaTemporalNombradorYLector;
     [Test] procedure SinCapturaDiceElMotivo;
+    [Test] procedure TamanoSaleDeLaCabecera;
+    [Test] procedure RecorteEnMemoriaSeAjustaAlLienzo;
+    [Test] procedure CasaDeEntregablesReconoceASuNombrador;
   end;
 
 implementation
@@ -267,6 +272,79 @@ begin
   R := MotivoSinCaptura('nodo listo', '');
   Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_NINGUNO), 'sin motivo: ' + R);
   Assert.IsTrue(EsMsg(R, SR_DESKTOP_SIN_CAPTURA_FMT), 'el motivo va en su mensaje: ' + R);
+end;
+
+procedure TImageTests.TamanoSaleDeLaCabecera;
+var
+  W, H: Integer;
+  B: TArray<Byte>;
+begin
+  Assert.IsTrue(TamanoPngBytes(PngDe(37, 11), W, H), 'un PNG');
+  Assert.AreEqual(37, W);
+  Assert.AreEqual(11, H);
+  Assert.IsFalse(TamanoPngBytes(TEncoding.ASCII.GetBytes('esto no es un png, aunque mida mas de 24'), W, H),
+    'sin la firma no es un PNG');
+  Assert.AreEqual(0, W, 'lo que no es un PNG no mide nada');
+  B := Copy(PngDe(37, 11), 0, 23);
+  Assert.IsFalse(TamanoPngBytes(B, W, H), 'una cabecera cortada (23 bytes) no se lee fuera de su sitio');
+  Assert.IsFalse(TamanoPngBytes(nil, W, H), 'nada no es un PNG');
+end;
+
+procedure TImageTests.RecorteEnMemoriaSeAjustaAlLienzo;
+var
+  X, Y, W, H, AO, HO, SW, SH: Integer;
+  Sal: TArray<Byte>;
+begin
+  // se sale por la derecha y por abajo: se recorta el recorte
+  X := 90;
+  Y := 40;
+  W := 30;
+  H := 30;
+  Assert.AreEqual('', RecortaPngBytes(PngDe(100, 50), X, Y, W, H, AO, HO, Sal));
+  Assert.AreEqual(10, W, 'ancho ajustado al lienzo');
+  Assert.AreEqual(10, H, 'alto ajustado al lienzo');
+  Assert.AreEqual(100, AO);
+  Assert.AreEqual(50, HO);
+  Assert.IsTrue(TamanoPngBytes(Sal, SW, SH), 'la salida es un PNG');
+  Assert.AreEqual(10, SW);
+  Assert.AreEqual(10, SH);
+  // y por la izquierda: el origen pasa a 0 y el ancho pierde lo de fuera
+  X := -5;
+  Y := 0;
+  W := 20;
+  H := 5;
+  Assert.AreEqual('', RecortaPngBytes(PngDe(100, 50), X, Y, W, H, AO, HO, Sal));
+  Assert.AreEqual(0, X);
+  Assert.AreEqual(15, W);
+  // entero fuera de la imagen: el motivo, y ninguna salida
+  X := 200;
+  Y := 0;
+  W := 10;
+  H := 10;
+  Assert.IsTrue(HasMsg(RecortaPngBytes(PngDe(100, 50), X, Y, W, H, AO, HO, Sal),
+    SN_CAPT_RECORTE_FUERA_CAPTURA_FMT), 'fuera de la captura');
+  Assert.AreEqual(0, Integer(Length(Sal)), 'un recorte que no se hizo no deja bytes');
+  // lo que no es un PNG: el motivo, y ninguna salida
+  X := 0;
+  Y := 0;
+  W := 10;
+  H := 10;
+  Assert.IsTrue(HasMsg(RecortaPngBytes(TEncoding.ASCII.GetBytes('no es un png'), X, Y, W, H, AO, HO, Sal),
+    SN_CAPT_NO_PUDE_RECORTAR_FMT), 'no es un PNG');
+  Assert.AreEqual(0, Integer(Length(Sal)), 'un recorte que fallo no deja bytes');
+end;
+
+procedure TImageTests.CasaDeEntregablesReconoceASuNombrador;
+begin
+  // el lector reconoce lo que compone el nombrador (AgentTempDir); una carpeta
+  // cualquiera no. Lanzado a mano, el ejecutor tiene por raiz su carpeta y su
+  // casa ES su temporal (medido con una sonda): que la temporal del servidor
+  // cuente SIN ser la casa de ninguna raiz, y los enlaces, los mide
+  // test_captura_puertas_1182 (S1-S2, K1-K3), que monta las raices y planta
+  // los enlaces de verdad
+  Assert.IsTrue(EnCasaDeEntregables(AgentTempDir(CAPTURE_SUB_DESIGNER) + '\designer-x.png'),
+    'lo que compone el nombrador');
+  Assert.IsFalse(EnCasaDeEntregables('C:\w\capturas\designer\designer-x.png'), 'una carpeta cualquiera');
 end;
 
 initialization

@@ -47,6 +47,31 @@ the MCP `initialize` response (`serverInfo.version`).
   operator can remove it by hand. `test_purga_repo_118` P3c and P7 (red
   before; the once-only half has its mutant).
 
+- **A capture never goes through a link in the folder where the server
+  leaves it.** A capture asked for without `out=` lands in the server's own
+  capture folder - the `__delphi-temp` of the first writable root, with the
+  agent's folder, or the server's temporary folder when there is none - and
+  nobody checked that path for links: with a junction planted there,
+  `delphi_designer preview` drew its PNG outside the roots and cropped it
+  there (measured: the victim folder got the image; with the link on
+  `__delphi-temp` itself the call ended in `INTERNAL`). `delphi_desktop` and
+  `delphi_adb` compose the same folder. Its namer now judges it before
+  anything is drawn, downloaded or pulled into it - no link on the way,
+  wherever it points, and in a root not even on its `__delphi-temp` - and
+  refuses with `CAPT-010`. Consuming a capture asks the same question:
+  reading one with `delphi_fetch` or the download deletes it, and with
+  `__delphi-temp` as a link to another agent's folder a confined agent
+  deleted a PNG there (measured). And the crop no longer rereads and
+  rewrites the file in place without a gate: the image is cropped in memory
+  and read through the read gate; `delphi_designer` writes it through the
+  write gate, in a new place of those gates, the capture folders, judged by
+  their namer and not by the jail (the jail refuses `__delphi-temp` to a
+  confined agent, and its captures live there), and `delphi_desktop`
+  places it straight from memory with its usual writer.
+  `test_captura_puertas_1182` (K1-K3, K5, K6 and S3 red before; the
+  confined agent, the server's temporary folder and a root declared through
+  a junction have their checks), `LspTests.Images`.
+
 ## [1.18.1] - 2026-10-11
 
 Patch: what 1.18.0 shipped wrong, and what its validation on the VM and

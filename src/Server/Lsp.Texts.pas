@@ -2605,6 +2605,16 @@ const
     'Name the file %0:s, or pass a FOLDER (one that already exists, or ' +
     'ending in \) and I pick the name. I do not write an image with the ' +
     'extension of another format.';
+  { La carpeta donde el servidor deja una captura sin out= (su casa de
+    entregables) con un enlace en el camino: se niega en CaptureTarget, antes
+    de que el renderizador dibuje, el nodo baje o adb deje nada (1.18.2, 2b:
+    el renderizador dibujaba fuera de las raices a traves de el). }
+  SR_CAPTURE_CASA_ENLACE_FMT =
+    '[CAPT-010 DENIED] The folder where I leave captures (%s) has a link (a ' +
+    'junction or a symlink) on its way, and I do not draw, download or crop a ' +
+    'capture through a link, wherever it points. Nothing was written. The ' +
+    'link is the operator''s to remove; until then this tool cannot capture ' +
+    'here.';
 
   SR_ADB_NEED_XY =
     '[ADB-002 INVALID_PARAM] tap needs "x" and "y" (screen pixels; measure them ' +
@@ -4530,7 +4540,7 @@ const
     'the rest was drawn. The form will fail to open until they are fixed (the ' +
     'program cannot create it, and the IDE asks to ignore each one): set them ' +
     'with delphi_designer set, or remove them - line says where each one is.';
-  { El recorte lo hace el SERVIDOR (RecortaPng), con la imagen ya pintada:
+  { El recorte lo hace el SERVIDOR (RecortaPngBytes), con la imagen ya pintada:
     decir que el renderizador no pudo dibujar era falso (segunda revision de
     la 1.17.0) }
   SR_DESIGNER_RECORTE_FALLO_FMT =
@@ -7343,6 +7353,9 @@ const
   SF_LUGAR_BIBLIOTECA =
     'the IDE''s library: its installation, its GetIt catalogs and its ' +
     'Library Search Path (read only)';
+  SF_LUGAR_ENTREGABLES =
+    'the folders where the server leaves captures (the __delphi-temp of a ' +
+    'writable root, or its own temporary folder), with no link on the way';
 
   { El endpoint LFS no es una clave local que el agente tenga que quitar. }
   SR_GIT_LFS_ENDPOINT_FMT =
