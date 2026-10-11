@@ -10,7 +10,12 @@ viejo limpio detras sobrevivian LOS DOS, y sin el del repo el limpio se iba.
 
 Lo que no cambia, medido igual: un .git suelto (en la papelera o vivo) sigue
 negado, y un enlace dentro del repo nunca borra lo de detras (la victima de
-fuera de las raices sale intacta)."""
+fuera de las raices sale intacta).
+
+1.18.2 (David, 11-oct-2026: el juicio de los enlaces del .git se QUEDA tambien al
+borrar; la papelera la vacia el operador): un dia que la purga de 15 dias no
+puede quitar lo DICE en el log, una vez por dia mientras viva el servidor
+(P3c, P7). Se reintentaba callado en cada purga."""
 import os, subprocess, time
 import mcp_cliente as mc
 from mcp_cliente import check
@@ -65,7 +70,14 @@ def victima_intacta():
 
 
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': MINE}), nombre='purga-repo-118')
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': MINE}), nombre='purga-repo-118', lee_stderr=True)
+
+
+def avisos(nombre_dia):
+    """Cuantas veces dijo el log que el dia NOMBRE_DIA de la papelera se queda."""
+    time.sleep(0.3)  # el hilo que lee el log
+    return sum(1 for l in srv.errores if 'trash: the day' in l and nombre_dia in l)
+
 try:
     # P1 - un repo ENTERO va a la papelera (ya iba) y de ahi se purga a mano
     git_init(os.path.join(MINE, 'repo1'))
@@ -108,6 +120,8 @@ try:
     check('P3 fixture: el dia con el fichero tomado se queda (no se dejaba borrar)', os.path.exists(TOMADO))
     check('P3 ...y el dia viejo de detras se purga igual (el primero que fallaba cortaba la purga)',
           not os.path.exists(dia(D)), sorted(os.listdir(os.path.join(MINE, mc.PAPELERA))))
+    check('P3c el dia que se queda lo DICE en el log (se reintentaba callado)', avisos(C) == 1,
+          [l for l in srv.errores if 'trash' in l][-3:])
 
     # P4 - controles: un .git SUELTO sigue negado, en la papelera y vivo
     git_init(os.path.join(MINE, 'repo4'))
@@ -165,6 +179,22 @@ try:
               open(VIVO_HEAD, 'rb').read() == vivo_antes, r[:300])
     else:
         check('P6 fixture: carpeta6 en la papelera y el repo vivo de P4b', False, (copia6, vivo_antes))
+
+    # P7 - un dia viejo con un repo cuyo .git tiene un enlace hacia FUERA: la purga
+    # de 15 dias lo deja (el juicio se queda, David 11-oct) y lo DICE una vez,
+    # aunque purgue dos veces (dos ficheros en su primera edicion del dia)
+    E7 = dia_viejo(18)
+    git_init(os.path.join(cajon(E7), 'repo7'))
+    check('P7 fixture: enlace en el .git de un repo de un dia viejo hacia la victima',
+          enlace(os.path.join(cajon(E7), 'repo7', '.git', 'enlace'), OUT))
+    for n in ('w7.txt', 'x7.txt'):
+        open(os.path.join(MINE, n), 'wb').write(b'uno\r\n')
+        srv.call('delphi_textedit', {'path': os.path.join(MINE, n), 'old': 'uno', 'new': 'dos'})
+    check('P7 el dia con el repo del enlace hacia fuera se QUEDA y la victima sigue',
+          os.path.isfile(os.path.join(cajon(E7), 'repo7', '.git', 'HEAD')) and victima_intacta())
+    check('P7b ...y lo dice en el log UNA vez, con su motivo, aunque la purga pase dos',
+          avisos(E7) == 1 and any(E7 in l and 'GUARD-033' in l for l in srv.errores),
+          [l for l in srv.errores if 'trash' in l][-3:])
 finally:
     srv.cierra()
     for L in ENLACES:

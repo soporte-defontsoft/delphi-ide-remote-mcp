@@ -856,7 +856,13 @@ uses
   Lsp.ProcessLaunch, // TrocearArgs y EnComillas: la linea de una orden
   Lsp.Args,
   Lsp.Lugares,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  MCPServer.Logger; // el aviso de un dia de la papelera que se queda
+
+var
+  // los dias de la papelera que ya dijeron en el log que se quedan: UNA vez
+  // por dia mientras viva el servidor (la purga corre en cada copia)
+  GDiasQueSeQuedan: TDictionary<string, Boolean>;
 
 function RutaLargaDenegada(const APath: string): string;
 begin
@@ -3109,6 +3115,27 @@ begin
   end;
 end;
 
+{ Un dia de la papelera que la purga no pudo quitar lo DICE en el log, una
+  vez (David, 11-oct-2026: el juicio que lo retiene se queda; la papelera la
+  vacia el operador, y tiene que saber cual y por que). Se reintentaba callado
+  en cada purga (revisor propio del punto 2 de la 1.18.1). }
+procedure AvisaDiaQueSeQueda(const ADia, AMotivo: string);
+begin
+  TMonitor.Enter(GDiasQueSeQuedan);
+  try
+    if GDiasQueSeQuedan.ContainsKey(ADia) then
+      Exit;
+    GDiasQueSeQuedan.Add(ADia, True);
+  finally
+    TMonitor.Exit(GDiasQueSeQuedan);
+  end;
+  try
+    TLogger.Warning(MsgFmt(SL_PAPELERA_DIA_SE_QUEDA_FMT, [ADia, AMotivo]));
+  except
+    // el aviso nunca rompe la purga, que nunca rompe una edicion
+  end;
+end;
+
 procedure PurgeOldBackups(const ADir: string);
 const
   RETENTION_DAYS = 15;
@@ -3126,7 +3153,10 @@ begin
         // un dia que no se deja borrar (algo abierto dentro, lo que el guard
         // niegue) no frena a los demas: con un solo try para todo el bucle
         // el primero cortaba la purga y los dias de detras se quedaban para
-        // siempre (medido el 10-oct-2026 con un repo en la papelera)
+        // siempre (medido el 10-oct-2026 con un repo en la papelera). Y se
+        // queda DICIENDOLO, una vez
+        on E: Exception do
+          AvisaDiaQueSeQueda(D, E.Message);
       end;
   except
     // purging must never break an edit
@@ -4112,5 +4142,9 @@ end;
 
 initialization
   ConstruyeAccesos; // la tabla de accesos, antes de la primera llamada
+  GDiasQueSeQuedan := TDictionary<string, Boolean>.Create;
+
+finalization
+  GDiasQueSeQuedan.Free;
 
 end.

@@ -38,6 +38,15 @@ the MCP `initialize` response (`serverInfo.version`).
   each branch of the composer has its mutant, and a blanked line is now
   checked by its bytes, not only by the answer that says `BLANKED`.
 
+- **A trash day the purge cannot remove says so in the log.** The 15-day
+  purge leaves a day of the trash it may not delete - a repository whose
+  `.git` holds a link leading out of the jail stays, by decision: the
+  deleter never crosses a link, and the check stays as a second barrier -
+  and it tried that day again on every pass, in silence. The log now says,
+  once per day while the server runs, which day stays and why, so that an
+  operator can remove it by hand. `test_purga_repo_118` P3c and P7 (red
+  before; the once-only half has its mutant).
+
 ## [1.18.1] - 2026-10-11
 
 Patch: what 1.18.0 shipped wrong, and what its validation on the VM and

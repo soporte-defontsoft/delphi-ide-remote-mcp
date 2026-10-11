@@ -4308,6 +4308,15 @@ const
     'delphi_test: the copy %s was not deleted (%s); the next start of this ' +
     'server purges it';
 
+  // La purga de 15 dias: un dia de la papelera que no se deja quitar (lo que
+  // el guard niega, algo abierto dentro) se queda y se reintenta en cada
+  // purga. Se DICE una vez por dia mientras viva el servidor: el juicio que lo
+  // retiene se queda y la papelera la vacia el operador (David, 11-oct-2026)
+  SL_PAPELERA_DIA_SE_QUEDA_FMT =
+    'trash: the day %s stays (%s). Every purge tries it again; if it is ' +
+    'not needed, an operator removes it by hand (said once while this ' +
+    'server runs)';
+
   // EsperaJobVacio: el job del test no se pudo matar o consultar. No corta la
   // limpieza (va acotada por plazo), pero queda en el log (revision Opus 4.8)
   SL_TEST_JOB_TERMINAR_FMT =
