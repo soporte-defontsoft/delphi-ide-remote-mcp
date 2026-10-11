@@ -170,6 +170,31 @@ hold for every path the operation TOUCHES, not the one it was GIVEN.
 - Every tool that writes a folder gets a battery that plants a junction to
   a victim outside the roots; the victim must come out untouched.
 
+## What the agent attempts is not what the server does inside (David, 2026-10-11)
+
+In his words: *"what the agent attempts has to be kept apart from our own
+internal process"*. The jail judges what the AGENT names - a `path`, a
+`dest`, an `out=`. What the server does on its own to serve the call - a
+capture on its way to the answer, a temporary, a cache, a download folder -
+is the server's work: it lives in the server's own house (`ServerTempDir`,
+the home folders) and is judged by its namer, never by the jail and never
+inside the workspace. The agent does not care which folders we use inside.
+
+**The proof that it needs saying.** Since 1.0.12 (2026-09-21, when
+`delphi_fetch` could only read through the jail) the captures an agent did
+not ask to keep lived in `<root>\__delphi-temp\<agent>`, inside the jail.
+Since 2026-09-25 they travel inline and are consumed, so the agent never
+needed that folder - and it kept costing fixes: links planted in it (2b of
+1.18.2), `DESK-019` for a confined agent or with no writable root (2i), a
+PNG drawn INSIDE a read-only root because that folder had its own reader of
+`ReadOnlyPaths` (2i, measured), entries declared inside `__delphi-temp`.
+Patches to protect with the jail a folder that never belonged in it.
+
+The question, before leaving anything of ours in a root or asking the jail
+about it: did the agent NAME it, or is it our process? The trash
+(`__delphi-patch`) is the agent's - it restores from it - and stays where
+it is.
+
 ## One namer (David, 2026-09-20)
 
 The strong form of the rule, and his own words: *"if they always go through
