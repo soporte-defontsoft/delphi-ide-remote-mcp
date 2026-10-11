@@ -152,7 +152,8 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E101 //?/ con barras normales: GUARD-022
   E103 initialize con clientInfo que no es objeto
   ...y los de los arreglos de la OCTAVA (rojos contra la septima):
-  E102 un bloque en un fichero mixto: el salto dominante, como una linea
+  E102 un bloque en un fichero mixto: lo nuevo con el salto dominante, como una
+      linea; lo que no toca, con el suyo (1.18.2)
   E104 mover una junction: el enlace, sin copia de lo de detras
   E105-E107 la regla de parametros en styles, git y changeset
   E108 un nombre de mas de 255: GUARD-026; E109 GUARD-010 de "..."
@@ -1348,8 +1349,10 @@ try:
     rechazo('E101 //?/ con barras normales: GUARD-022', 'delphi_read',
             {'path': '//?/' + NOTES.replace('\\', '/')}, 'INVALID_PARAM', 'SR_GUARD_PREFIJO_DISPOSITIVO_FMT')
 
-    # E102 el salto DOMINANTE en un bloque: un fichero LF con un CRLF queda en
-    # LF (el bloque unia con CRLF si habia alguno; una edicion de linea, con LF)
+    # E102 el salto DOMINANTE en un bloque: en un fichero LF con un CRLF lo
+    # nuevo va en LF (el bloque unia con CRLF si habia alguno; una edicion de
+    # linea, con LF). Desde la 1.18.2 la linea que no toca conserva su CRLF:
+    # antes salia todo en LF (el compositor de todos, test_eol_mixto_1182)
     D102 = os.path.join(JAIL, 'e102')
     os.makedirs(D102)
     MX = os.path.join(D102, 'mx.txt')
@@ -1357,8 +1360,8 @@ try:
     res, sc, t = llama('delphi_textedit', {'path': MX, 'edits': json.dumps(
         [{'old': 'tres\ncuatro', 'new': 'TRES\nCUATRO'}])})
     b102 = open(MX, 'rb').read()
-    check('E102 un bloque en un fichero LF con un CRLF: todo en LF, como una edicion de linea',
-          not res.get('isError') and b102 == b'uno\ndos\nTRES\nCUATRO\ncinco\n', '%s | %r' % (t[:160], b102))
+    check('E102 un bloque en un fichero LF con un CRLF: lo nuevo en LF y la CRLF que no toca, intacta',
+          not res.get('isError') and b102 == b'uno\ndos\r\nTRES\nCUATRO\ncinco\n', '%s | %r' % (t[:160], b102))
 
     # E103 un clientInfo que no es un objeto no rompe el initialize
     code, h, b = cli.post({'jsonrpc': '2.0', 'id': 21, 'method': 'initialize', 'params': {

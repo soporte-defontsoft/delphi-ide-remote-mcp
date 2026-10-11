@@ -1322,7 +1322,7 @@ var
   F: TFormEnEdicion;
   Padre: TStyleObj;
   ClsId, Clase, Unidad, Nombre, Ind, Texto, PasNuevo, Sangria, UsesAnadida, UsesNota: string;
-  Bloque, DfmLineas, PasLineas, PasSaltos, Faltan, YaEstan, EnOtra: TArray<string>;
+  Bloque, DfmLineas, PasLineas, Faltan, YaEstan, EnOtra: TArray<string>;
   UPas: TUnidadPas;
   Cls: TTipoPas;
   Detras, Ini, LineaCampo, FinBloque: Integer;
@@ -1386,11 +1386,12 @@ begin
         if Result <> '' then
           Exit;
       end;
-      PasLineas := SplitToLinesConSalto(F.PasTexto, PasSaltos);
+      PasLineas := SplitToLines(F.PasTexto);
       SitioDelCampo(Cls, PasLineas, Detras, Sangria);
-      Insert(Sangria + Nombre + ': ' + Clase + ';', PasLineas, Detras + 1);
-      Insert(SaltoDominante(F.PasTexto), PasSaltos, Detras + 1);
-      PasNuevo := UneConSusSaltos(PasLineas, PasSaltos);
+      // la linea del campo, por el compositor de todos (era su gemelo a mano):
+      // las demas con su salto, la nueva con el dominante
+      PasNuevo := CambiaLineasEnSuTexto(F.PasTexto, Detras + 1, 0,
+        [Sangria + Nombre + ': ' + Clase + ';'], SaltoDominante(F.PasTexto));
       Unidad := '';
       if EsIdDeTipo(ClsId) then
         Unidad := UnidadDeIdDeTipo(F.Tabla.IdEscrito[ClsId]);

@@ -80,6 +80,7 @@ type
     [Test] procedure MotorPascalPorExtension;
     [Test] procedure ZonaDelCambioMueveLoDeDebajo;
     [Test] procedure UriDelMotorYSuInversa;
+    [Test] procedure CompositorConservaLosSaltosDeFuera;
   end;
 
 implementation
@@ -879,6 +880,64 @@ begin
   // ...y UriCanonica NO lanza con escapes que no son UTF-8: corre bajo el
   // cerrojo de las notificaciones; devuelve la uri tal cual
   Assert.AreEqual('file:///C%3A/a%C3', TLspClient.UriCanonica('file:///C%3A/a%C3'), 'escape roto, tal cual');
+end;
+
+procedure TNombradorTests.CompositorConservaLosSaltosDeFuera;
+const
+  MIXTO = 'a'#13#10'b'#10'c'#13#10;
+begin
+  // CambiaLineasEnSuTexto (1.18.2): lo de fuera byte a byte, cada rama
+  Assert.AreEqual('a'#13#10'b'#10'C'#13#10, CambiaLineasEnSuTexto(MIXTO, 2, 1, ['C'], #13#10),
+    'otra linea cambiada: la LF de "b" sigue LF');
+  Assert.AreEqual('a'#13#10'B'#10'c'#13#10, CambiaLineasEnSuTexto(MIXTO, 1, 1, ['B'], #13#10),
+    'la linea cambiada conserva su salto');
+  Assert.AreEqual('a'#13#10'b1'#13#10'b2'#10'c'#13#10,
+    CambiaLineasEnSuTexto(MIXTO, 1, 1, ['b1', 'b2'], #13#10),
+    'dentro de lo nuevo el dominante, al final el salto de lo que se va');
+  Assert.AreEqual('a'#13#10'c'#13#10, CambiaLineasEnSuTexto(MIXTO, 1, 1, nil, #13#10),
+    'borrar: la linea se va con su salto');
+  Assert.AreEqual('a'#10'b', CambiaLineasEnSuTexto('a'#10'b'#13#10'c', 2, 1, nil, #13#10),
+    'borrar la ultima de un texto sin salto final: sigue sin el');
+  Assert.AreEqual('', CambiaLineasEnSuTexto('a', 0, 1, nil, #13#10), 'borrar todo');
+  Assert.AreEqual('a'#13#10'x'#13#10'b'#10, CambiaLineasEnSuTexto('a'#13#10'b'#10, 1, 0, ['x'], #13#10),
+    'insertar delante de una linea: lo nuevo con el dominante');
+  Assert.AreEqual('a'#10'b'#13#10'x', CambiaLineasEnSuTexto('a'#10'b', 2, 0, ['x'], #13#10),
+    'insertar detras de la ultima de un texto sin salto final: sigue sin el');
+  Assert.AreEqual('a'#13'b'#13#10'C', CambiaLineasEnSuTexto('a'#13'b'#13#10'c', 2, 1, ['C'], #13#10),
+    'un CR suelto tambien es un salto que se conserva');
+  // EmpalmaEnSuTexto: un tramo de la vista en LF
+  Assert.AreEqual('# T'#13#10'uno'#10'DOS'#13#10,
+    EmpalmaEnSuTexto('# T'#13#10'uno'#10'dos'#13#10, 8, 3, 'DOS', #13#10), 'un trozo de una linea');
+  Assert.AreEqual('a'#13#10#10'c', EmpalmaEnSuTexto('a'#13#10'b'#10'c', 2, 1, '', #13#10),
+    'un trozo vacio deja la linea EN BLANCO, no la borra');
+  Assert.AreEqual('a'#10'x'#13#10, EmpalmaEnSuTexto('a'#10, 2, 0, 'x'#10, #13#10),
+    'anadir al final de un texto con salto final');
+  Assert.AreEqual('aZc', EmpalmaEnSuTexto('a'#13#10'b'#10'c', 1, 3, 'Z', #13#10),
+    'un tramo que cruza saltos se los lleva');
+  // del revisor propio: lo que la edicion junta no se funde, lo igual de los
+  // bordes no se toca, la nota vacia y un tramo fuera del texto
+  Assert.AreEqual('a'#13#10#10'b'#10, CambiaLineasEnSuTexto('a'#13'X'#10#10'b'#10, 1, 1, nil, #10),
+    'un CR suelto no se funde con el LF de la linea vacia de debajo');
+  Assert.AreEqual('a'#13#10#10, UneConSusSaltos(['a', '', ''], [#13, #10, '']),
+    'la inversa del troceador vuelve a trocearse igual');
+  Assert.AreEqual(MIXTO, CambiaLineasEnSuTexto(MIXTO, 0, 2, ['a', 'b'], #13#10),
+    'old == new no reescribe nada');
+  Assert.AreEqual('a'#13#10'b'#10'x'#13#10'c'#13#10, CambiaLineasEnSuTexto(MIXTO, 1, 1, ['b', 'x'], #13#10),
+    'anadir detras de una linea le deja su salto');
+  Assert.AreEqual('A'#13#10'b'#10'c'#13#10, CambiaLineasEnSuTexto(MIXTO, 0, 3, ['A', 'b', 'c'], #13#10),
+    'lo igual del FINAL del tramo tampoco se toca');
+  Assert.AreEqual(#13#10'hola'#13#10, EmpalmaEnSuTexto('', 0, 0, #10'hola'#10, #13#10),
+    'un texto vacio tiene una linea');
+  Assert.WillRaise(
+    procedure
+    begin
+      CambiaLineasEnSuTexto('a', 2, 0, ['x'], #13#10);
+    end, EArgumentOutOfRangeException, 'un tramo fuera del texto');
+  Assert.WillRaise(
+    procedure
+    begin
+      CambiaLineasEnSuTexto('a'#10, 2, 0, ['x'], #13#10);
+    end, EArgumentOutOfRangeException, 'detras de la fantasma no es un sitio');
 end;
 
 initialization

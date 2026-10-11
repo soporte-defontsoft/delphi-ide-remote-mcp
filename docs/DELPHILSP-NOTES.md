@@ -194,7 +194,12 @@ Troubleshooting facts (docwiki "Troubleshooting: Delphi LSP"):
 - definition/Ctrl+Click requires symbol reference info (`$Y`) on, and the
   declaring source reachable via search/browsing path when DCUs shadow it.
 - DelphiLSP only works inside **active** IFDEF branches.
-- Files need **consistent line endings** (mixed EOLs break it).
+- Files need **consistent line endings** (mixed EOLs break it). Not
+  reproduced on 37.0 (measured 2026-10-11): five LF lines, and then five
+  lone CRs, in the middle of a CRLF unit - `definition` from a call below
+  them answered the right line and `references` confirmed all three uses.
+  The editors keep each line's ending since 1.18.2, so a mixed file stays
+  mixed.
 - Server-side logging: registry `HKCU\Software\Embarcadero\BDS\<ver>\LSP`,
   DWORD `DelphiLSPLog` = 255 → logs in `%LOCALAPPDATA%\Temp\DelphiLSP`
   (log files may include source code).

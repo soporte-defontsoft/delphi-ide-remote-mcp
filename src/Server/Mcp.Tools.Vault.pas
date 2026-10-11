@@ -398,11 +398,14 @@ begin
 end;
 
 type
-  { Turns the CURRENT text of a note into its new text. Returns '' on success
-    (ANewText set) or a ready-to-return error message. It runs INSIDE the write
-    lock, so the text it receives is the text that will be saved - no other
-    writer can slip in between. }
-  TNoteEdit = reference to function(const ACurrent: string; out ANewText: string): string;
+  { Says what changes in the CURRENT text of a note (in LF): the piece from
+    ADesde (0-based) of ALargo characters becomes ANuevo. Returns '' on success
+    or a ready-to-return error message. It runs INSIDE the write lock, so the
+    text it receives is the text that will be saved - no other writer can slip
+    in between. Un tramo y no el texto entero: lo de fuera se queda byte a
+    byte, cada linea con su salto (EmpalmaEnSuTexto, 1.18.2). }
+  TNoteEdit = reference to function(const ACurrent: string; out ADesde, ALargo: Integer;
+    out ANuevo: string): string;
 
 { The one serialized read->transform->backup->write for an existing note, shared
   by vault_append and vault_patch so the locking, the rule-11 backup and the
@@ -436,14 +439,18 @@ begin
     if Result <> '' then
       Exit;
     Text := DecodeBytes(B, K);
-    // el transform trabaja en LF y la nota vuelve a su salto dominante: un
-    // old de varias lineas no casaba en una nota CRLF y un new de varias
-    // lineas metia LF (decima revision). Una nota mixta sale al dominante,
-    // como en los demas editores
+    // el transform trabaja en LF (un old de varias lineas no casaba en una
+    // nota CRLF: decima revision) y dice el tramo que cambia; lo nuevo lleva
+    // el salto dominante (un new de varias lineas metia LF) y lo de fuera, el
+    // suyo: una nota mixta salia entera al dominante (1.18.2, el compositor
+    // de los editores)
     var Eol := SaltoDominante(Text);
-    Result := ATransform(ConSalto(Text, #10), NewText);
+    var Desde, Largo: Integer;
+    var Nuevo: string;
+    Result := ATransform(ConSalto(Text, #10), Desde, Largo, Nuevo);
     if Result <> '' then
       Exit;
+    NewText := EmpalmaEnSuTexto(Text, Desde, Largo, Nuevo, Eol);
     // A replacement that leaves nothing behind is a disguised delete, and
     // deleting knowledge is not on offer here (field round 9). Uniform for both
     // verbs: append only ever grows, so this never fires for it.
@@ -455,7 +462,7 @@ begin
     if Result <> '' then
       Exit;
     ABackup := VaultBackup(AFull); // rule 11, inside the lock: no same-second race
-    VaultSave(AFull, ConSalto(NewText, Eol));
+    VaultSave(AFull, NewText);
     Result := '';
   finally
     GVaultWrite.Leave;
@@ -751,7 +758,7 @@ begin
   if not TFile.Exists(Full) then
     Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_VAULT_APPEND_FMT,
       [Params.Path.Trim]));
-  Add := Params.Content;
+  Add := ConSalto(Params.Content, #10); // el transform trabaja en LF (EditNoteLocked)
   if Add.Trim = '' then
     Exit(MsgText(SR_VAULT_FALTA_CONTENT_APPEND));
   Anchor := Params.Anchor;
@@ -759,29 +766,29 @@ begin
   // The read, the anchor search and the write happen as one atomic step under
   // the lock: the base this append reads is the base it writes back.
   Result := EditNoteLocked(Full,
-    function(const ACurrent: string; out ANewText: string): string
+    function(const ACurrent: string; out ADesde, ALargo: Integer; out ANuevo: string): string
     var
-      Text: string;
       P: Integer;
     begin
       Result := '';
-      Text := ACurrent;
+      ALargo := 0; // anadir no quita nada: el tramo es un punto
       if Anchor.Trim <> '' then
       begin
-        P := Pos(Anchor, Text);
+        P := Pos(Anchor, ACurrent);
         if P = 0 then
           Exit(MsgText(SR_VAULT_ANCHOR_APARECE_NOTA_LEE));
-        if Pos(Anchor, Text, P + Length(Anchor)) > 0 then
+        if Pos(Anchor, ACurrent, P + Length(Anchor)) > 0 then
           Exit(MsgText(SR_VAULT_ANCHOR_APARECE_VARIAS_VECES));
-        Insert(#10 + Add.TrimRight + #10, Text, P + Length(Anchor));
+        ADesde := P - 1 + Length(Anchor);
+        ANuevo := #10 + Add.TrimRight + #10;
       end
       else
       begin
-        if not Text.EndsWith(#10) then
-          Text := Text + #10;
-        Text := Text + Add.TrimRight + #10;
+        ADesde := Length(ACurrent);
+        ANuevo := Add.TrimRight + #10;
+        if not ACurrent.EndsWith(#10) then
+          ANuevo := #10 + ANuevo;
       end;
-      ANewText := Text;
     end,
     Backup);
   if Result <> '' then
@@ -866,7 +873,7 @@ begin
   // find-once + replace + empty-note guard all run atomically under the lock;
   // the empty-note guard lives in EditNoteLocked so both verbs share it.
   Result := EditNoteLocked(Full,
-    function(const ACurrent: string; out ANewText: string): string
+    function(const ACurrent: string; out ADesde, ALargo: Integer; out ANuevo: string): string
     var
       P: Integer;
     begin
@@ -878,8 +885,9 @@ begin
         Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_NOTA));
       if Pos(Viejo, ACurrent, P + Length(Viejo)) > 0 then
         Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_VARIAS));
-      ANewText := Copy(ACurrent, 1, P - 1) + ConSalto(Params.New_Text, #10) +
-        Copy(ACurrent, P + Length(Viejo), MaxInt);
+      ADesde := P - 1;
+      ALargo := Length(Viejo);
+      ANuevo := ConSalto(Params.New_Text, #10);
     end,
     Backup);
   if Result <> '' then

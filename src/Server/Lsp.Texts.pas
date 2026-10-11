@@ -3952,7 +3952,9 @@ const
     'first: that is the safety net. When you no longer need a copy, ' +
     'delphi_delete with purge=true really deletes it, but ONLY inside ' +
     'the trash and only YOURS (see rule 12).'#10#10 +
-    '5. ENCODING AND LINE ENDINGS are kept as they are. Do not convert a ' +
+    '5. ENCODING AND LINE ENDINGS are kept as they are, each line its ' +
+    'own (a form or a style that delphi_designer or delphi_styles writes ' +
+    'comes out with one line ending, as the IDE writes it). Do not convert a ' +
     'file in passing; if you need a character that does not fit in its ' +
     'codepage, use the Pascal literal (#$2714) OUTSIDE the quotes, ' +
     'concatenated.'#10#10 +

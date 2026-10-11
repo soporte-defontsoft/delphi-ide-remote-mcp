@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **An edit keeps the line ending of every line it does not touch.**
+  Measured on 10-oct: `delphi_textedit` on a file of CRLF lines with one in
+  LF, editing another line, wrote the LF line back as CRLF - while every
+  editor promises the line endings are kept. Seven writers joined all the
+  lines of a file with its dominant ending: `delphi_edit` and
+  `delphi_textedit` (a line, a range, a block, a batch), the changeset's
+  `delete-line`, the `CreateForm` line that `delphi_create` and
+  `remove-unit` write in a `.dpr`, and `vault_patch` / `vault_append`. They
+  now share one composer (`CambiaLineasEnSuTexto`): what lies outside the
+  edit stays byte for byte, the edited line keeps the ending it had, the
+  breaks inside a new text of several lines are the file's dominant one,
+  and a file without a final line ending keeps none. The lines a range
+  leaves equal at its start or its end keep theirs (a line added after
+  another leaves that one alone), and a lone CR the edit puts in front of
+  an empty LF line is written as CRLF: read back, the two would be one
+  break and that line would be gone (measured by the change's own
+  reviewer). An edit that changes
+  nothing in a mixed file is `UNCHANGED` again (it rewrote the whole file
+  in one ending). A form or a style that `delphi_designer` or
+  `delphi_styles` writes still comes out with one line ending, as the
+  IDE's form writer writes it (`ObjectBinaryToText` puts `sLineBreak` on
+  every line), and the conventions of `delphi_help` now say so. A mixed
+  file staying mixed does not trouble the engine: measured on DelphiLSP
+  37.0 with LF lines, and lone CRs, in a CRLF unit. `test_eol_mixto_1182`
+  (20 red before), `LspTests.Encodings` `CompositorConservaLosSaltosDeFuera`;
+  each branch of the composer has its mutant, and a blanked line is now
+  checked by its bytes, not only by the answer that says `BLANKED`.
+
 ## [1.18.1] - 2026-10-11
 
 Patch: what 1.18.0 shipped wrong, and what its validation on the VM and

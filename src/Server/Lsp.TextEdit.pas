@@ -142,8 +142,6 @@ var
   Lines, NewLines: TArray<string>;
   Matches: TArray<Integer>;
   I, Target: Integer;
-  Sb: TStringBuilder;
-  EndsWithEol: Boolean;
 begin
   // una carpeta decia "no existe; creala con create=true" - y el agente que
   // obedecia recibia un INTERNAL
@@ -165,7 +163,6 @@ begin
   Text := PatchLoadText(A.Path, EncNm);
   var Antes := Text; // para saber si la edicion cambia algo
   Eol := SaltoDominante(Text); // el de todos (Lsp.Patch)
-  EndsWithEol := TieneSaltoFinal(Text); // un CR suelto tambien ("uno\rdos\r" lo perdia)
   Lines := LineasDelTexto(Text); // sin la fantasma del salto final (Lsp.Patch)
   // Un ancla vacia o de solo blancos: la regla de delphi_edit (EDIT-060). Aqui
   // casaba con TODAS las lineas en blanco (un old "   " llegaba desde el
@@ -242,32 +239,10 @@ begin
     NewLines := SangraComoLaLinea(Lines[Target], A.OldLine,
       LineasDeNew(A.NewText)); // la regla del salto final, una
 
-  Sb := TStringBuilder.Create;
-  try
-    for I := 0 to High(Lines) do
-    begin
-      if (I > Target) and (I <= Fin) then
-        Continue; // resto del rango: se lo lleva la edicion
-      if I = Target then
-      begin
-        for S in NewLines do
-        begin
-          Sb.Append(S);
-          Sb.Append(Eol);
-        end;
-      end
-      else
-      begin
-        Sb.Append(Lines[I]);
-        Sb.Append(Eol);
-      end;
-    end;
-    Text := Sb.ToString;
-  finally
-    Sb.Free;
-  end;
-  if not EndsWithEol then
-    SetLength(Text, Length(Text) - Length(Eol));
+  // las lineas del rango por las nuevas, y cada linea de fuera con SU salto:
+  // unidas todas con el dominante, un fichero mixto salia entero a ese salto
+  // (1.18.2). El salto final, el que tenia: lo guarda el compositor
+  Text := CambiaLineasEnSuTexto(Text, Target, Cuantas, NewLines, Eol);
   // Nada cambia: ni se escribe ni se copia (la gemela de delphi_edit, UN texto)
   if Text = Antes then
     Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Target + 1, TPath.GetFileName(A.Path)]));

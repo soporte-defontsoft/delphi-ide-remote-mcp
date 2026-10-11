@@ -234,6 +234,26 @@ function SplitToLines(const T: string): TArray<string>;
   fichero de CR sueltos era UNA linea y no se reescribia (novena revision). }
 function SplitToLinesConSalto(const T: string; out ASaltos: TArray<string>): TArray<string>;
 function UneConSusSaltos(const ALineas, ASaltos: TArray<string>): string;
+{ ATexto con ACuantas lineas desde ALinea (0-based, las de SplitToLines)
+  cambiadas por ANuevas, y cada linea de fuera BYTE A BYTE, con su salto: una
+  edicion no reescribe lo que no toca (1.18.2; medido el 10-oct-2026: textedit
+  dejaba en CRLF una linea LF que no habia tocado, y asi los siete que unian
+  todas las lineas con el salto dominante). Los saltos de ANuevas son ASalto
+  (el dominante: es texto que se escribe), y la ultima se queda el salto con
+  que acababa la ultima que se va. ANuevas vacio: las lineas se van con su
+  salto (las ultimas de un texto sin salto final, con el de delante: sigue sin
+  el). ACuantas = 0: ANuevas entran delante de ALinea. Lo que el tramo deja
+  IGUAL al principio y al final no se toca. UN compositor para
+  todo el que cambia lineas de un texto que ya existe. }
+function CambiaLineasEnSuTexto(const ATexto: string; ALinea, ACuantas: Integer;
+  const ANuevas: TArray<string>; const ASalto: string): string;
+{ Lo mismo para un TRAMO de la vista en LF de ATexto (la de ConSalto(ATexto,
+  #10): un salto, CRLF, LF o CR suelto, es un caracter): desde ADesde (0-based)
+  ALargo caracteres cambiados por ANuevo (en LF). Las lineas que toca el tramo
+  se reescriben enteras por CambiaLineasEnSuTexto; las demas, byte a byte. Para
+  quien cambia un trozo y no lineas (vault_patch, vault_append). }
+function EmpalmaEnSuTexto(const ATexto: string; ADesde, ALargo: Integer;
+  const ANuevo, ASalto: string): string;
 { El texto con TODOS sus saltos (CRLF, LF o CR suelto) como ASalto: UN
   normalizador para quien crea o inserta texto. Estaba escrito seis veces,
   y el create del changeset solo miraba CRLF y LF: "uno\rdos\r" salia
@@ -1608,6 +1628,7 @@ function UneConSusSaltos(const ALineas, ASaltos: TArray<string>): string;
 var
   Sb: TStringBuilder;
   I: Integer;
+  Salto: string;
 begin
   Sb := TStringBuilder.Create;
   try
@@ -1615,12 +1636,138 @@ begin
     begin
       Sb.Append(ALineas[I]);
       if I <= High(ASaltos) then
-        Sb.Append(ASaltos[I]);
+      begin
+        Salto := ASaltos[I];
+        // Un CR suelto delante de una linea VACIA que acaba en LF se leeria
+        // como UN CRLF, y esa linea desapareceria: sale como CRLF. Un texto
+        // troceado no tiene esa vecindad; la crea quien cambia lineas, y la
+        // inversa tiene que volver a trocearse igual (revisor propio de la
+        // 1.18.2, medido: "a\rX\n\nb" sin X perdia la linea en blanco)
+        if (Salto = #13) and (I < High(ALineas)) and (ALineas[I + 1] = '') and
+           (I + 1 <= High(ASaltos)) and (ASaltos[I + 1] = #10) then
+          Salto := #13#10;
+        Sb.Append(Salto);
+      end;
     end;
     Result := Sb.ToString;
   finally
     Sb.Free;
   end;
+end;
+
+function CambiaLineasEnSuTexto(const ATexto: string; ALinea, ACuantas: Integer;
+  const ANuevas: TArray<string>; const ASalto: string): string;
+var
+  L, S, NL, NS: TArray<string>;
+  I, Ultima: Integer;
+  Cierre: string;
+begin
+  // con la fantasma del salto final: la ultima, '' y sin salto
+  L := SplitToLinesConSalto(ATexto, S);
+  // un tramo fuera del texto es un fallo de quien llama, no algo que leer
+  // fuera del array en silencio (el servidor no compila con range checking);
+  // insertar detras de la fantasma tampoco es un sitio
+  if (ALinea < 0) or (ACuantas < 0) or (ALinea + ACuantas > Length(L)) or
+     ((ACuantas = 0) and (ALinea = Length(L)) and (L[High(L)] = '')) then
+    raise EArgumentOutOfRangeException.CreateFmt('CambiaLineasEnSuTexto(%d, %d)',
+      [ALinea, ACuantas]);
+  // Lo que el tramo deja IGUAL al principio y al final no se toca: un bloque
+  // con old == new no reescribe nada, e insertar detras de un ancla no le
+  // cambia su salto (revisor propio de la 1.18.2). La ultima linea del texto
+  // (salto '') no entra: es la que decide el salto final
+  var Nuevas := ANuevas;
+  while (ACuantas > 0) and (Length(Nuevas) > 0) and (S[ALinea] <> '') and
+        (Nuevas[0] = L[ALinea]) do
+  begin
+    Inc(ALinea);
+    Dec(ACuantas);
+    Delete(Nuevas, 0, 1);
+  end;
+  while (ACuantas > 0) and (Length(Nuevas) > 0) and (S[ALinea + ACuantas - 1] <> '') and
+        (Nuevas[High(Nuevas)] = L[ALinea + ACuantas - 1]) do
+  begin
+    Dec(ACuantas);
+    SetLength(Nuevas, Length(Nuevas) - 1);
+  end;
+  if (ACuantas = 0) and (Length(Nuevas) = 0) then
+    Exit(ATexto); // nada cambia
+  Ultima := ALinea + ACuantas - 1;
+  NL := Copy(L, 0, ALinea);
+  NS := Copy(S, 0, ALinea);
+  if Length(Nuevas) > 0 then
+  begin
+    // el salto con que acaba el tramo: el de la ultima que se va; si no se va
+    // ninguna, las nuevas entran delante de ALinea con el dominante
+    if ACuantas > 0 then
+      Cierre := S[Ultima]
+    else
+      Cierre := ASalto;
+    // detras de la ultima linea de un texto sin salto final: esa lo gana y
+    // las nuevas acaban sin el (sigue sin salto final)
+    if (ACuantas = 0) and (ALinea > 0) and (NS[ALinea - 1] = '') then
+    begin
+      NS[ALinea - 1] := ASalto;
+      Cierre := '';
+    end;
+    for I := 0 to High(Nuevas) do
+    begin
+      NL := NL + [Nuevas[I]];
+      if I < High(Nuevas) then
+        NS := NS + [ASalto]
+      else
+        NS := NS + [Cierre];
+    end;
+  end
+  else if (ACuantas > 0) and (S[Ultima] = '') and (ALinea > 0) then
+    // se van las ultimas de un texto sin salto final: la de delante pierde el
+    // suyo y el texto sigue sin salto final
+    NS[ALinea - 1] := '';
+  NL := NL + Copy(L, Ultima + 1, MaxInt);
+  NS := NS + Copy(S, Ultima + 1, MaxInt);
+  Result := UneConSusSaltos(NL, NS);
+end;
+
+function EmpalmaEnSuTexto(const ATexto: string; ADesde, ALargo: Integer;
+  const ANuevo, ASalto: string): string;
+var
+  L, S, Nuevas: TArray<string>;
+  I, Off, Ini, Fin, ColIni, ColFin: Integer;
+  Trozo: string;
+begin
+  // las lineas de la vista en LF (los cortes de SplitToLines); este troceador
+  // da UNA linea para un texto vacio, y SplitToLines ninguna: un vault_append
+  // a una nota vacia daba SYS-009 (revisor propio de la 1.18.2)
+  L := SplitToLinesConSalto(ATexto, S);
+  // la linea y la columna de cada punta del tramo: la posicion de un salto es
+  // el final de su linea (el salto se queda si el tramo no lo cruza)
+  Off := 0;
+  Ini := -1;
+  Fin := -1;
+  ColIni := 0;
+  ColFin := 0;
+  for I := 0 to High(L) do
+  begin
+    if (Ini < 0) and (ADesde <= Off + Length(L[I])) then
+    begin
+      Ini := I;
+      ColIni := ADesde - Off;
+    end;
+    if (Fin < 0) and (ADesde + ALargo <= Off + Length(L[I])) then
+    begin
+      Fin := I;
+      ColFin := ADesde + ALargo - Off;
+    end;
+    Inc(Off, Length(L[I]) + 1);
+  end;
+  if (Ini < 0) or (Fin < Ini) then
+    raise EArgumentOutOfRangeException.CreateFmt('EmpalmaEnSuTexto(%d, %d)', [ADesde, ALargo]);
+  Trozo := Copy(L[Ini], 1, ColIni) + ANuevo + Copy(L[Fin], ColFin + 1, MaxInt);
+  // un trozo vacio es UNA linea en blanco, no ninguna (eso seria borrarla)
+  if Trozo = '' then
+    Nuevas := ['']
+  else
+    Nuevas := SplitToLines(Trozo);
+  Result := CambiaLineasEnSuTexto(ATexto, Ini, Fin - Ini + 1, Nuevas, ASalto);
 end;
 
 function TieneSalto(const AText: string): Boolean;
@@ -2598,15 +2745,16 @@ begin
   if Count > 1 then
     Exit(MsgFmt(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
   NewLines := LineasDeNew(ANew);
-  // El empalme de DoEdit: las lineas nuevas sobre las del bloque y la union
-  // con la fantasma reproduce el salto final TAL CUAL. Montado a mano, un
-  // bloque que llegaba a la ultima linea de un fichero sin salto final se lo
-  // anadia (decima revision: un fichero de tres lineas sin salto final salia con uno)
-  var Nuevas := Copy(Lines, 0, Hit);
-  if not ((Length(NewLines) = 1) and (NewLines[0] = '')) then
-    Nuevas := Nuevas + NewLines;
-  Nuevas := Nuevas + Copy(Lines, Hit + Length(OldLines), MaxInt);
-  var Joined := string.Join(Eol, Nuevas);
+  // El compositor de todos (CambiaLineasEnSuTexto): las lineas nuevas sobre
+  // las del bloque, cada linea de fuera con SU salto y el salto final tal
+  // cual. Montado a mano, un bloque que llegaba a la ultima linea de un
+  // fichero sin salto final se lo anadia (decima revision), y unido con el
+  // dominante un fichero mixto salia entero a ese salto (1.18.2). Un new
+  // vacio quita el bloque: no deja una linea en blanco
+  var Nuevas := NewLines;
+  if (Length(NewLines) = 1) and (NewLines[0] = '') then
+    Nuevas := nil;
+  var Joined := CambiaLineasEnSuTexto(Text, Hit, Length(OldLines), Nuevas, Eol);
   // Nada cambia (el bloque ya dice eso): no se escribe ni se copia, y se
   // dice, como la edicion de una linea. Reescribia el fichero identico y
   // la tanda contestaba APPLIED (septima revision: la tercera puerta)
@@ -4814,11 +4962,10 @@ begin
     // Access Violation in the field test) - PrimerTrozo, Lsp.Args. Line
     // DELETION is delete:true.
     var NewFirst := PrimerTrozo(Replacement, [#10]);
-    var Quita := 0;      // cuantas lineas desaparecen del array
-    var Desde := HitIdx; // desde donde se cierra el hueco
-    if ADelete then
-      Quita := Cuantas   // el tramo entero se va (sin rango, Cuantas = 1)
-    else
+    // las que ocupan el sitio del tramo; ninguna con delete: se va entero
+    // (sin rango, Cuantas = 1)
+    var Nuevas: TArray<string> := nil;
+    if not ADelete then
     begin
       // An insert that repeats the line above or below is almost always the
       // anchor line sent twice by mistake: it compiles, it is invisible, and
@@ -4845,24 +4992,22 @@ begin
           Warnings.Add(MsgFmt(SN_EDIT_DUP_BELOW_FMT,
             [HitIdx + Length(Replacement.Split([#10])) + 1, LastNew.Trim]));
       end;
-      Lines[HitIdx] := Replacement;
-      Quita := Cuantas - 1; // la del ancla se queda, con el texto nuevo
-      Desde := HitIdx + 1;
-    end;
-    if Quita > 0 then
-    begin
-      for I := Desde to High(Lines) - Quita do
-        Lines[I] := Lines[I + Quita];
-      SetLength(Lines, Length(Lines) - Quita);
+      // un Replacement vacio deja la linea EN BLANCO (borrarla es delete);
+      // ''.Split da un array vacio, que el compositor tomaria por borrar
+      if Replacement = '' then
+        Nuevas := ['']
+      else
+        Nuevas := Replacement.Split([#10]);
     end;
 
     var Joined: string;
     var EolSep := SaltoDominante(Text); // el mismo salto que dice la cabecera
-    // unidas con LF y TODO LF al salto del fichero: la linea editada lleva
-    // dentro los saltos de un new de varias lineas (Replacement, en LF), y
-    // unir con EolSep los dejaba en LF - un fichero CRLF acababa mezclado
-    // (regresion de la octava revision, cazada en la novena por EDIT-082)
-    Joined := string.Join(#10, Lines).Replace(#10, EolSep);
+    // El compositor de todos (CambiaLineasEnSuTexto): el tramo por las
+    // nuevas, con EolSep entre ellas - un new de varias lineas no deja LF en
+    // un CRLF (regresion de la octava revision, cazada en la novena por
+    // EDIT-082) - y cada linea de fuera con SU salto: unidas todas al
+    // dominante, un fichero mixto salia entero a ese salto (1.18.2)
+    Joined := CambiaLineasEnSuTexto(Text, HitIdx, Cuantas, Nuevas, EolSep);
     // Nada cambia (old == new): no se escribe ni se copia, y se dice.
     // Contestaba WRITTEN con una copia de un fichero identico (quinta
     // revision). La gemela, en Lsp.TextEdit.DoEditLine.

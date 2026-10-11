@@ -447,7 +447,6 @@ begin
         var Txt := PatchLoadText(Op.Path, Enc);
         var Eol := SaltoDominante(Txt);
         var Ls := LineasDelTexto(Txt);
-        var SaltoFinal := TieneSaltoFinal(Txt);
         if (Op.AtLine < 1) or (Op.AtLine > Length(Ls)) then
         begin
           AError := MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
@@ -470,10 +469,10 @@ begin
           if AError <> '' then
             Exit;
         end;
-        Delete(Ls, Op.AtLine - 1, 1);
-        var Nuevo := string.Join(Eol, Ls);
-        if SaltoFinal and (Length(Ls) > 0) then
-          Nuevo := Nuevo + Eol;
+        // la linea se va con su salto y las demas con el suyo (el compositor
+        // de todos, CambiaLineasEnSuTexto; unidas al dominante, un fichero
+        // mixto salia entero a ese salto: 1.18.2). El salto final, el que tenia
+        var Nuevo := CambiaLineasEnSuTexto(Txt, Op.AtLine - 1, 1, nil, Eol);
         PatchSaveText(Op.Path, Nuevo, Enc);
         Result := True;
       end;

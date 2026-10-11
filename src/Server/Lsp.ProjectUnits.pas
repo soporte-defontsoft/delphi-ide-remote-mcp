@@ -1411,7 +1411,6 @@ var
   Lines, Vista: TArray<string>;
   I, Last, RunAt: Integer;
   NL, Indent: string;
-  L: TStringList;
 begin
   Result := False;
   if TRegEx.IsMatch(CodigoPascal(Dpr), PATRON_NO_IDENT_ANTES + 'CreateForm\s*\(\s*' + PatronIdentEntero(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
@@ -1430,27 +1429,23 @@ begin
   end;
   if (Last = -1) and (RunAt = -1) then
     Exit;
-  L := TStringList.Create;
-  try
-    L.AddStrings(Lines);
-    // right before Application.Run, like the IDE: a CreateForm placed after
-    // the last one could land inside that one's conditional block
-    if RunAt <> -1 then
-    begin
-      // la sangria, con el lector de la casa (Lsp.Patch.LeadingWhite):
-      // habia cinco copias a mano con TrimLeft, que se lleva tambien los
-      // caracteres de control (#0..#31) a la linea nueva (1.15.0)
-      Indent := LeadingWhite(Lines[RunAt]);
-      L.Insert(RunAt, Indent + CreateFormLine(AInfo));
-    end
-    else
-    begin
-      Indent := LeadingWhite(Lines[Last]);
-      L.Insert(Last + 1, Indent + CreateFormLine(AInfo));
-    end;
-    Dpr := string.Join(NL, L.ToStringArray);
-  finally
-    L.Free;
+  // La linea entra con el compositor de todos (CambiaLineasEnSuTexto): las
+  // demas, con SU salto. Unidas todas al dominante, un .dpr mixto salia
+  // entero a ese salto (1.18.2)
+  // right before Application.Run, like the IDE: a CreateForm placed after
+  // the last one could land inside that one's conditional block
+  if RunAt <> -1 then
+  begin
+    // la sangria, con el lector de la casa (Lsp.Patch.LeadingWhite):
+    // habia cinco copias a mano con TrimLeft, que se lleva tambien los
+    // caracteres de control (#0..#31) a la linea nueva (1.15.0)
+    Indent := LeadingWhite(Lines[RunAt]);
+    Dpr := CambiaLineasEnSuTexto(Dpr, RunAt, 0, [Indent + CreateFormLine(AInfo)], NL);
+  end
+  else
+  begin
+    Indent := LeadingWhite(Lines[Last]);
+    Dpr := CambiaLineasEnSuTexto(Dpr, Last + 1, 0, [Indent + CreateFormLine(AInfo)], NL);
   end;
   Result := True;
 end;
@@ -1467,7 +1462,6 @@ var
   M: TMatch;
   I: Integer;
   NL: string;
-  L: TStringList;
   Pat: string;
 begin
   Result := 0;
@@ -1480,29 +1474,25 @@ begin
     Pat := '^\s*(Application\.CreateForm\s*\(\s*' + PATRON_IDENT + '\s*,\s*' + TRegEx.Escape(AFormName) + '\s*\)\s*;?)'
   else
     Exit;
-  L := TStringList.Create;
-  try
-    for I := 0 to High(Lines) do
-    begin
-      M := TRegEx.Match(Vista[I], Pat, [roIgnoreCase]);
-      if not M.Success then
-      begin
-        L.Add(Lines[I]);
-        Continue;
-      end;
-      Inc(Result);
-      // la sentencia sola (el grupo): lo de delante en la vista son blancos,
-      // y entre ellos puede ir el cierre del comentario de encima (medido:
-      // con el match entero se iba la llave)
-      var G := M.Groups[1];
-      var Resto := Copy(Lines[I], 1, G.Index - 1) + Copy(Lines[I], G.Index + G.Length, MaxInt);
-      if Resto.Trim <> '' then
-        L.Add(Resto.TrimRight);
-    end;
-    if Result > 0 then
-      Dpr := string.Join(NL, L.ToStringArray);
-  finally
-    L.Free;
+  // De abajo arriba: cambiar una linea no mueve las de encima, que son las
+  // que quedan por mirar. Cada una con el compositor de todos
+  // (CambiaLineasEnSuTexto): las demas, con SU salto. Unidas todas al
+  // dominante, un .dpr mixto salia entero a ese salto (1.18.2)
+  for I := High(Lines) downto 0 do
+  begin
+    M := TRegEx.Match(Vista[I], Pat, [roIgnoreCase]);
+    if not M.Success then
+      Continue;
+    Inc(Result);
+    // la sentencia sola (el grupo): lo de delante en la vista son blancos,
+    // y entre ellos puede ir el cierre del comentario de encima (medido:
+    // con el match entero se iba la llave)
+    var G := M.Groups[1];
+    var Resto := Copy(Lines[I], 1, G.Index - 1) + Copy(Lines[I], G.Index + G.Length, MaxInt);
+    if Resto.Trim <> '' then
+      Dpr := CambiaLineasEnSuTexto(Dpr, I, 1, [Resto.TrimRight], NL)
+    else
+      Dpr := CambiaLineasEnSuTexto(Dpr, I, 1, nil, NL);
   end;
 end;
 
