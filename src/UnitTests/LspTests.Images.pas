@@ -35,6 +35,7 @@ type
     [Test] procedure EscritorDelNodoLoLeeElDecodificador;
     [Test] procedure RecorteEnMemoriaSeAjustaAlLienzo;
     [Test] procedure CasaDeEntregablesReconoceASuNombrador;
+    [Test] procedure ColocarEnLaCasaLoJuzgaSuNombrador;
   end;
 
 implementation
@@ -55,6 +56,7 @@ uses
   Lsp.Guard,
   Lsp.RemoteRun, // MotivoSinCaptura
   Lsp.Texts,
+  Lsp.Patch,     // ColocaContenido con su lugar (2i)
   Lsp.Casa;
 
 function PngDe(W, H: Integer): TArray<Byte>;
@@ -407,6 +409,34 @@ begin
   Assert.IsTrue(EnCasaDeEntregables(AgentTempDir(CAPTURE_SUB_DESIGNER) + '\designer-x.png'),
     'lo que compone el nombrador');
   Assert.IsFalse(EnCasaDeEntregables('C:\w\capturas\designer\designer-x.png'), 'una carpeta cualquiera');
+end;
+
+procedure TImageTests.ColocarEnLaCasaLoJuzgaSuNombrador;
+var
+  Dentro, Fuera, Motivo: string;
+begin
+  // con ltEntregables, Coloca pregunta la puerta de la casa (EscribeBytes) y
+  // no la de la jaula (1.18.2, 2i): lo que compone el nombrador se coloca; una
+  // ruta de la raiz del ejecutor fuera de su casa, que la jaula SI admitiria,
+  // se niega antes de crear nada. La segunda barrera: por la tool, CaptureTarget
+  // ya niega antes (CAPT-010) y esto no se ve
+  Dentro := AgentTempDir(CAPTURE_SUB_DESKTOP) + '\desktop-dunit-casa.png';
+  ColocaContenido(Dentro, PngDe(4, 4), ltEntregables);
+  try
+    Assert.IsTrue(TFile.Exists(Dentro), 'en la casa se coloca');
+  finally
+    TFile.Delete(Dentro);
+  end;
+  Fuera := ExtractFilePath(ParamStr(0)) + 'fuera-de-la-casa-dunit\x.png';
+  Motivo := '';
+  try
+    ColocaContenido(Fuera, PngDe(4, 4), ltEntregables);
+  except
+    on E: Exception do
+      Motivo := E.Message;
+  end;
+  Assert.IsTrue(HasMsg(Motivo, SR_GUARD_FUERA_DE_LUGARES_FMT), 'fuera de la casa: ' + Motivo);
+  Assert.IsFalse(TDirectory.Exists(ExtractFileDir(Fuera)), 'y sin crear su carpeta');
 end;
 
 initialization

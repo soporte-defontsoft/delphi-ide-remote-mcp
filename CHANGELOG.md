@@ -97,6 +97,34 @@ the MCP `initialize` response (`serverInfo.version`).
   destination still works, F4 a destination reached through a junction;
   each with its mutant). The `delphi_move` description says it.
 
+- **`delphi_desktop` without `out=` captures for a confined agent, and
+  without a writable root.** Without `out=` the capture goes to the agent's
+  capture folder, and the writer that places it there asked the jail, which
+  refuses `__delphi-temp` to a confined agent and, with no writable root,
+  the server's temporary folder where those captures live: both answered
+  `DESK-019`, measured against a Linux desktop. The writer that places a
+  product now takes the place it writes to, like the write gate does, and a
+  capture without `out=` is judged by the namer of the capture folders, as
+  `delphi_designer` captures have been since the previous fix; an `out=` is
+  still the jail's. `test_desktop_casa_1182` (D1 and D2 red before; it needs
+  the Linux desktop on, and says so when it is not), `LspTests.Images`.
+
+- **A capture without `out=` never lands inside a read-only root.** The
+  folder for captures is the first writable root's, and whether a root was
+  read-only was decided by comparing the `ReadOnlyPaths` entries with the
+  root as raw text, while the jail compares them by their long form and
+  their real path. A root written in its 8.3 form with its entry in long
+  form, or the other way round, counted as writable: a `delphi_designer`
+  preview without `out=` drew its PNG inside the read-only root (measured),
+  and an entry inside a root's `__delphi-temp` was not looked at at all.
+  There is now one reader of `ReadOnlyPaths` for every write, which the
+  jail, the choice of the capture folder and the capture folder's own check
+  all ask; a capture whose folder falls in a read-only entry is refused
+  saying so (`GUARD-012`). Where a capture lands without `out=` is now
+  decided in one place for the three tools that capture.
+  `test_captura_puertas_1182` (S4-S7 red before), `test_desktop_casa_1182`
+  (D5).
+
 ### Internal
 
 - **One PNG header, for the server and the desktop node.** The signature

@@ -30,6 +30,18 @@ viven alli.
       temporal del servidor, y el recorte se lee y se escribe alli
   S2  ...y en linea: viaja recortada y se consume
   S3  un enlace DENTRO del temporal del servidor: CAPT-010, la victima vacia
+  S4  la raiz en 8.3 y su entrada de ReadOnlyPaths en largo: sigue sin ser
+      escribible y la captura cae en el temporal del servidor, no DENTRO de
+      ella (la casa comparaba ReadOnlyPaths por su texto crudo; revisor del
+      2i, medido: el PNG caia en solo\__delphi-temp)
+  S5  ...y al reves: la raiz en largo y la entrada en 8.3
+  S6  una entrada de ReadOnlyPaths DENTRO de la casa (la carpeta del agente
+      en __delphi-temp): se niega diciendolo (GUARD-012, no un enlace) y nada
+      se dibuja alli
+  S7  ...y una que cubre el __delphi-temp entero: la casa no es esa, la
+      captura cae en el temporal del servidor
+  S8  una REFERENCIA (ReadOnlyRoots) dentro de la casa (la carpeta del agente):
+      se niega diciendolo (GUARD-016) y nada se dibuja alli (revisor del 2i)
   R1  una raiz declarada a traves de un junction: el recorte funciona (la
       raiz la declara el operador; su __delphi-temp, no). Una raiz en 8.3 la
       cubren todas: la jaula de la bateria cuelga de %TEMP%, que es 8.3
@@ -255,6 +267,52 @@ try:
     quita_enlace(CARP2)
 finally:
     srv2.cierra()
+
+# ------------- servidor B': la raiz y su entrada de solo lectura en dos formas (S4-S5)
+LARGA_SOLO = mc.larga(SOLO)
+check('S4a la carpeta de solo lectura tiene dos formas (8.3 y larga)', LARGA_SOLO.lower() != SOLO.lower(),
+      (SOLO, LARGA_SOLO))
+for nombre, raiz, entrada in (('S4 la raiz en 8.3 y su entrada en largo', SOLO, LARGA_SOLO),
+                              ('S5 la raiz en largo y su entrada en 8.3', LARGA_SOLO, SOLO)):
+    srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': raiz, 'DELPHI_MCP_READONLY_PATHS': entrada}),
+                    nombre='ana', t=180)
+    try:
+        antes = set(glob.glob(CAPS2, recursive=True))
+        r = preview(srv2, path=PRUEBA_SOLO, component='Panel1', inline='false')
+        nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
+        check(nombre + ': la captura en el temporal del servidor, NO dentro de la raiz de solo lectura',
+              len(nuevos) == 1 and not os.path.exists(os.path.join(SOLO, '__delphi-temp')),
+              (r[:400], nuevos, os.path.exists(os.path.join(SOLO, '__delphi-temp'))))
+    finally:
+        srv2.cierra()
+        shutil.rmtree(os.path.join(SOLO, '__delphi-temp'), ignore_errors=True)
+
+# ------------- servidor B'': solo lectura DENTRO de la casa (S6-S7)
+RAIZ3 = os.path.join(BASE, 'raiz3')
+os.makedirs(RAIZ3)
+PRUEBA3 = escribe(RAIZ3, 'Prueba.dfm', FORM)
+TEMP3 = os.path.join(RAIZ3, '__delphi-temp')
+for nombre, entrada in (('S6', os.path.join(TEMP3, 'ana')), ('S7', TEMP3), ('S8', os.path.join(TEMP3, 'ana'))):
+    clave = 'DELPHI_MCP_READONLY_ROOTS' if nombre == 'S8' else 'DELPHI_MCP_READONLY_PATHS'
+    srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ3, clave: entrada}),
+                    nombre='ana', t=180)
+    try:
+        antes = set(glob.glob(CAPS2, recursive=True))
+        r = preview(srv2, path=PRUEBA3, component='Panel1', inline='false')
+        nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
+        dentro = glob.glob(os.path.join(TEMP3, '**', '*.png'), recursive=True)
+        if nombre == 'S6':
+            check('S6 solo lectura DENTRO de la casa (su carpeta del agente): GUARD-012, y nada dibujado alli',
+                  mc.rechazado(r) and mc.es(r, 'SR_READONLY_PATH_FMT') and not dentro, (r[:400], dentro))
+        elif nombre == 'S7':
+            check('S7 solo lectura en todo su __delphi-temp: la captura en el temporal del servidor',
+                  len(nuevos) == 1 and not dentro, (r[:400], nuevos, dentro))
+        else:
+            check('S8 una referencia DENTRO de la casa (su carpeta del agente): GUARD-016, y nada dibujado alli',
+                  mc.rechazado(r) and mc.es(r, 'SR_REFERENCE_ROOT_FMT') and not dentro, (r[:400], dentro))
+    finally:
+        srv2.cierra()
+        shutil.rmtree(TEMP3, ignore_errors=True)
 
 # ------------------------- servidor C: la raiz declarada por un junction (R1)
 REAL = os.path.join(BASE, 'real')

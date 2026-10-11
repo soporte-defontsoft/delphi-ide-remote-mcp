@@ -463,8 +463,9 @@ begin
     // preguntarle a nadie.
     const DevPng = '/sdcard/delphi_mcp_screen.png';
     var Destino, Propia: string;
+    var EnLaCasa: Boolean;
     Denied := CaptureTarget(Params.Out, CAPTURE_SUB_ANDROID, 'android',
-      TPath.GetExtension(DevPng), Propia);
+      TPath.GetExtension(DevPng), Propia, EnLaCasa);
     if Denied <> '' then
       Exit(Denied);
     // se baja SIEMPRE a un temporal nuestro y sin cerrojo (el pull tarda
@@ -472,7 +473,7 @@ begin
     // y delphi_desktop: la puerta en el momento de escribir, la copia sellada
     // de lo que habia y el cerrojo, en un solo sitio (revision de la 1.17.0)
     Destino := Propia;
-    if Params.Out.Trim <> '' then
+    if not EnLaCasa then // un out=: lo dice EL que lo decide (CaptureTarget)
     begin
       Denied := CaptureTarget('', CAPTURE_SUB_ANDROID, 'android',
         TPath.GetExtension(DevPng), Destino);

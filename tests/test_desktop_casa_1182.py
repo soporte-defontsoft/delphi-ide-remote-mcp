@@ -1,0 +1,166 @@
+# -*- coding: utf-8 -*-
+"""La captura de delphi_desktop sin out=, en la casa de los entregables
+(1.18.2, punto 2i).
+
+Sin out=, la captura cae en la casa de los entregables del agente (el
+__delphi-temp de la primera raiz escribible con su carpeta, o el temporal del
+servidor si no hay ninguna). Se baja a una carpeta de descarga de esa casa y
+se coloca con el escritor de productos (Lsp.Patch.Coloca), que preguntaba
+SIEMPRE a la jaula: a un agente confinado la jaula le niega __delphi-temp y,
+sin raiz escribible, la temporal del servidor esta fuera de las raices.
+Medido contra el Zorin el 11-oct-2026: DESK-019 en los dos ("could not place
+the downloaded capture", con GUARD-015 y GUARD-002 dentro). La casa la juzga
+su nombrador, como al diseñador desde el 2b.
+
+Necesita el Zorin encendido (perfil zorin-desktop, 192.168.1.177) con una
+sesion grafica: si no contesta, la bateria lo dice (NOTA) y no mide nada.
+Solo captura: nunca pulsa ni teclea en su escritorio.
+
+  D0  control: raiz escribible, sin out=: la captura en su casa
+  D1  agente confinado, sin out=: la captura en SU casa (antes DESK-019)
+  D2  sin raiz escribible, sin out=: en la temporal del servidor (antes DESK-019)
+  D3  confinado y con window= (el recorte, que se coloca desde memoria):
+      en su casa, con el tamano de la ventana; si el Zorin no tiene ninguna
+      ventana con rectangulo, NOTA
+  D4  control de la jaula: un out= fuera de las raices se sigue negando
+  D4b confinado y con out= en SU carpeta: se coloca alli (el out= es del
+      agente y lo juzga la jaula, no la casa: colocarlo con el lugar de la
+      casa lo negaria)
+  D5  la raiz en 8.3 y su entrada de ReadOnlyPaths en largo: la captura en la
+      temporal del servidor, NO dentro de la raiz de solo lectura (la casa
+      comparaba ReadOnlyPaths por su texto crudo; revisor del 2i, medido)
+  En cada una, ninguna carpeta de descarga (__tmp-) se queda en la casa.
+
+Uso:  python tests/test_desktop_casa_1182.py [ruta-a-DelphiLspMcp.exe]
+"""
+import atexit, glob, json, os, shutil
+import mcp_cliente as mc
+from mcp_cliente import check
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PERFIL, HOST = 'zorin-desktop', '192.168.1.177'
+BASE = mc.carpeta('desktop_casa_1182')
+atexit.register(mc.borra, BASE)
+JAIL = os.path.join(BASE, 'jail')
+SOLO = os.path.join(BASE, 'solo')
+for d in (JAIL, SOLO):
+    os.makedirs(d, exist_ok=True)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+# el nodo viaja con el servidor (Lsp.RemoteRun: ServerDir('node'))
+shutil.copytree(os.path.join(REPO, 'node'), os.path.join(BASE, 'srv', 'node'))
+COMUN = {'DELPHI_MCP_REMOTE_HOSTS': HOST, 'DELPHI_MCP_ALLOW_REMOTE_RUN': '1',
+         'DELPHI_MCP_REMOTE_RUN_PROJECTS': 'all'}
+
+
+def entorno(extra):
+    e = dict(COMUN)
+    e.update(extra)
+    return mc.entorno(e)
+
+
+def J(t):
+    try:
+        return json.loads(t)
+    except Exception:
+        return {}
+
+
+def captura(srv, **kw):
+    a = {'command': 'screenshot', 'profile': PERFIL, 'inline': False}
+    a.update(kw)
+    return srv.call('delphi_desktop', a, t=240)
+
+
+def nuevas(patron, antes):
+    return sorted(set(glob.glob(patron, recursive=True)) - antes)
+
+
+CASA_JAIL = os.path.join(JAIL, '__delphi-temp', '**', 'desktop', '*.png')
+CASA_SRV = os.path.join(BASE, 'srv', '__delphi-temp', '**', 'desktop', '*.png')
+
+
+def bajadas():
+    # las carpetas de descarga (Lsp.Casa: '__tmp-' + 8 hex) que se hubieran quedado
+    return [p for base in (JAIL, os.path.join(BASE, 'srv'), SOLO)
+            for p in glob.glob(os.path.join(base, '**', '__tmp-*'), recursive=True)]
+
+# ------------------------------------------- servidor A: raiz escribible
+srv = mc.Stdio(EXE, entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='ana', t=240)
+try:
+    st = srv.call('delphi_desktop', {'command': 'status', 'profile': PERFIL}, t=120)
+    vivo = not mc.fallo(st)
+    if vivo:
+        antes = set(glob.glob(CASA_JAIL, recursive=True))
+        r = captura(srv)
+        n = nuevas(CASA_JAIL, antes)
+        check('D0 control: raiz escribible, sin out=: la captura en su casa, sin bajada que se quede',
+              not mc.fallo(r) and len(n) == 1 and not bajadas(), (r[:300], n, bajadas()))
+        ventanas = [v for v in (J(r).get('windows') or []) if isinstance(v, dict) and
+                    v.get('title') and (v.get('w') or v.get('width'))]
+        # D4: el out= es del agente y lo juzga la jaula, como siempre
+        r = captura(srv, out=os.path.join(SOLO, 'x.png'))
+        check('D4 control de la jaula: un out= fuera de las raices se sigue negando, sin dejar nada',
+              mc.rechazado(r) and not os.path.exists(os.path.join(SOLO, 'x.png')), r[:300])
+finally:
+    srv.cierra()
+
+if not vivo:
+    print('NOTA el Zorin (%s, %s) no contesta: la bateria no mide nada. %s' % (PERFIL, HOST, st[:200]))
+    mc.fin('desktop casa 1182', sin_checks='el Zorin no contesta (perfil %s)' % PERFIL)
+
+# ------------------------------------------- servidor B: agente confinado
+srv = mc.Stdio(EXE, entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_AGENT_CONFINEMENT': '1'}),
+               nombre='ana', t=240)
+try:
+    antes = set(glob.glob(CASA_JAIL, recursive=True))
+    r = captura(srv)
+    n = nuevas(CASA_JAIL, antes)
+    check('D1 agente confinado, sin out=: la captura en SU casa (antes DESK-019)',
+          not mc.fallo(r) and len(n) == 1 and os.sep + 'ana' + os.sep in n[0] and not bajadas(),
+          (r[:400], n, bajadas()))
+    SUYA = os.path.join(JAIL, 'ana', 'caps')
+    r = captura(srv, out=SUYA + os.sep)
+    n = glob.glob(os.path.join(SUYA, '*.png'))
+    check('D4b confinado y con out= en SU carpeta: se coloca alli (lo juzga la jaula)',
+          not mc.fallo(r) and len(n) == 1 and not bajadas(), (r[:400], n, bajadas()))
+    if ventanas:
+        titulo = ventanas[0]['title']
+        antes = set(glob.glob(CASA_JAIL, recursive=True))
+        r = captura(srv, window=titulo)
+        n = nuevas(CASA_JAIL, antes)
+        j = J(r)
+        check('D3 confinado y con window=: el recorte en su casa',
+              not mc.fallo(r) and len(n) == 1 and j.get('croppedFrom') and j.get('origin') is not None,
+              (titulo, r[:400], n))
+    else:
+        print('NOTA D3 sin medir: el Zorin no lista ninguna ventana con rectangulo (window= necesita una)')
+finally:
+    srv.cierra()
+
+# ------------------------------------------- servidor C: sin raiz escribible
+srv = mc.Stdio(EXE, entorno({'DELPHI_MCP_ROOTS': SOLO, 'DELPHI_MCP_READONLY_PATHS': SOLO}),
+               nombre='ana', t=240)
+try:
+    antes = set(glob.glob(CASA_SRV, recursive=True))
+    r = captura(srv)
+    n = nuevas(CASA_SRV, antes)
+    check('D2 sin raiz escribible, sin out=: la captura en la temporal del servidor (antes DESK-019)',
+          not mc.fallo(r) and len(n) == 1 and not bajadas(), (r[:400], n, bajadas()))
+finally:
+    srv.cierra()
+
+# ------------- servidor D: la raiz en 8.3 y su entrada de solo lectura en largo
+srv = mc.Stdio(EXE, entorno({'DELPHI_MCP_ROOTS': SOLO, 'DELPHI_MCP_READONLY_PATHS': mc.larga(SOLO)}),
+               nombre='ana', t=240)
+try:
+    antes = set(glob.glob(CASA_SRV, recursive=True))
+    r = captura(srv)
+    n = nuevas(CASA_SRV, antes)
+    check('D5 la raiz en 8.3 y su entrada en largo: en la temporal del servidor, NO dentro de la raiz',
+          SOLO.lower() != mc.larga(SOLO).lower() and not mc.fallo(r) and len(n) == 1 and
+          not os.path.exists(os.path.join(SOLO, '__delphi-temp')),
+          (r[:400], n, os.path.exists(os.path.join(SOLO, '__delphi-temp'))))
+finally:
+    srv.cierra()
+
+mc.fin('desktop casa 1182')

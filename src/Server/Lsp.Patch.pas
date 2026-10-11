@@ -628,10 +628,16 @@ procedure AtomicWrite(const APath: string; const B: TArray<Byte>); // = TBytes
   de escritura. ALocal no se queda nunca, se coloque o no. Lanza con el
   motivo si no se puede. Eran tres a mano: la captura (borrar y mover, sin
   reintento), el logcat (sin volver a preguntar a la puerta) y el zip de
-  package (tampoco): P4 de la segunda revision de la 1.17.0. }
-procedure ColocaProducto(const ALocal, ADestino: string);
-// y un CONTENIDO (el texto de un logcat), con las mismas reglas
-procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>);
+  package (tampoco): P4 de la segunda revision de la 1.17.0.
+  ALugar: donde cae. La jaula (el out= del agente) por defecto; una captura
+  sin out= cae en la casa de los entregables (ltEntregables), que juzga su
+  nombrador y no la jaula, con la pregunta de EscribeBytes: la jaula se la
+  niega a un agente confinado, y sin raiz escribible la casa es la temporal
+  del servidor (1.18.2, 2i). }
+procedure ColocaProducto(const ALocal, ADestino: string; ALugar: TLugarDeTexto = ltJaula);
+// y un CONTENIDO (el texto de un logcat, un recorte), con las mismas reglas
+procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>;
+  ALugar: TLugarDeTexto = ltJaula);
 { EL nombre del temporal de una sustitucion junto a APath
   ('.<nombre>.<8 hex>.delphi-patch-tmp'): el de AtomicWrite, el de
   ColocaProducto y el del zip en proceso de package, que tenia uno propio
@@ -1386,7 +1392,8 @@ end;
 
 { El nucleo de ColocaProducto y ColocaContenido: ALocal <> '' mueve ese
   fichero; si no, escribe ABytes. }
-procedure Coloca(const ADestino, ALocal: string; const ABytes: TBytes);
+procedure Coloca(const ADestino, ALocal: string; const ABytes: TBytes;
+  ALugar: TLugarDeTexto);
 var
   Motivo, Dir, DirLocal, Tmp, Copia, Ancestro: string;
   Nuestro, Colocado: Boolean;
@@ -1416,11 +1423,18 @@ begin
   EnterFileEdit;
   try
   try
-    Motivo := EscrituraDenegada(Dir);
-    if Motivo = '' then
-      Motivo := SustitucionDenegada(ADestino);
-    if Motivo = '' then
-      Motivo := RutaLargaDenegada(ADestino);
+    // la jaula: la carpeta y el fichero. Otro lugar (la casa de los
+    // entregables), la pregunta de SU puerta, la de EscribeBytes (2i)
+    if ALugar = ltJaula then
+    begin
+      Motivo := EscrituraDenegada(Dir);
+      if Motivo = '' then
+        Motivo := SustitucionDenegada(ADestino);
+      if Motivo = '' then
+        Motivo := RutaLargaDenegada(ADestino);
+    end
+    else
+      Motivo := LugarDeEscrituraDenegado(ADestino, ALugar);
     if Motivo <> '' then
       raise Exception.Create(Motivo);
     // lo que se cree para colocarlo se quita si al final no se coloca
@@ -1481,14 +1495,15 @@ begin
   end;
 end;
 
-procedure ColocaProducto(const ALocal, ADestino: string);
+procedure ColocaProducto(const ALocal, ADestino: string; ALugar: TLugarDeTexto);
 begin
-  Coloca(ADestino, ALocal, nil);
+  Coloca(ADestino, ALocal, nil, ALugar);
 end;
 
-procedure ColocaContenido(const ADestino: string; const ABytes: TBytes);
+procedure ColocaContenido(const ADestino: string; const ABytes: TBytes;
+  ALugar: TLugarDeTexto);
 begin
-  Coloca(ADestino, '', ABytes);
+  Coloca(ADestino, '', ABytes, ALugar);
 end;
 
 function DesignersDeUnidad(const AUnidad: string): TArray<string>;
@@ -2242,6 +2257,15 @@ begin
     Exit(SustitucionDenegada(APath));
   if not EnLugarDeTexto(APath, ALugar, True) then
     Exit(MsgFmt(SR_GUARD_FUERA_DE_LUGARES_FMT, [APath, NombreDeLugar(ALugar, True)]));
+  // lo que el servidor deja PARA el agente: tambien el modo de solo lectura de
+  // la sesion, como la jaula (la segunda barrera: hoy la entrada ya niega las
+  // tools que capturan a una sesion de solo lectura; revisor del 2i)
+  if ALugar = ltEntregables then
+  begin
+    Result := SesionSoloLecturaDenegada(APath);
+    if Result <> '' then
+      Exit;
+  end;
   Result := SoloLecturaDenegado(APath);
 end;
 

@@ -486,9 +486,10 @@ begin
       // la captura y como se llama lo decide CaptureTarget (Lsp.Guard), con
       // el formato que trae la captura remota. Se resuelve ANTES de bajar
       // nada: un "out" con la extension equivocada no merece el viaje.
+      var EnLaCasa: Boolean;
       Fallo := CaptureTarget(Params.Out_, CAPTURE_SUB_DESKTOP,
         'desktop-' + NombreSeguro(Params.Profile.Trim),
-        TPath.GetExtension(Remota), Propia);
+        TPath.GetExtension(Remota), Propia, EnLaCasa);
       { Con un "out" rechazado Propia viene VACIA, y calcular su carpeta
         reventaba con "File name is empty" en vez de dar la negativa - lo
         cazo la primera prueba en vivo contra el Fedora (2026-09-21); en
@@ -547,10 +548,17 @@ begin
           // captura no se colocaba), con el cerrojo de escritura como todo
           // escritor: EL escritor de un producto (Lsp.Patch), el de preview,
           // adb, logcat y package
+          // sin out=, Propia es de la casa de los entregables (lo dice
+          // CaptureTarget), que juzga su nombrador: la jaula se la negaba a un
+          // agente confinado y, sin raiz escribible, la casa es la temporal
+          // del servidor - DESK-019 en los dos (1.18.2, 2i, medido en el Zorin)
+          var Lugar := ltJaula;
+          if EnLaCasa then
+            Lugar := ltEntregables;
           if ConRecorte then
-            ColocaContenido(Propia, Recorte) // la bajada entera se va con su carpeta
+            ColocaContenido(Propia, Recorte, Lugar) // la bajada entera se va con su carpeta
           else
-            ColocaProducto(Local, Propia);
+            ColocaProducto(Local, Propia, Lugar);
           Local := Propia;
         except
           // Antes la imagen se quedaba 'donde cayo', dentro de la .tmp-, y la

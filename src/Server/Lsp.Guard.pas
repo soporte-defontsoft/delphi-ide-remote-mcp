@@ -286,7 +286,13 @@ function ConsumeAgentCapture(const APath: string): Boolean; // nunca lanza; True
   Un destino que elige quien llama pasa por PathDenied; el nuestro no, que
   ya sale de AgentTempDir. No crea nada: crear la carpeta es de quien la use. }
 function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
-  out AFile: string): string;
+  out AFile: string): string; overload;
+{ ...y AEnLaCasa: si la dejo en la casa de los entregables (sin out=). EL que
+  lo decide, para quien tiene que saber donde dibuja, baja o coloca: la casa
+  la juzga su nombrador, un out= la jaula. Lo decidian a mano adb, el
+  disenador y el escritorio, cada uno con su "out vacio" (revisor del 2i). }
+function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
+  out AFile: string; out AEnLaCasa: Boolean): string; overload;
 
 { Borra un arbol entero SIN CRUZAR ENLACES: un junction/symlink que haya
   dentro se elimina como ENTRADA (cae el enlace, jamas su destino). El
@@ -557,6 +563,11 @@ function ProtegidoDenegado(const ADir: string; AComoDestino: Boolean = False): s
   25-sep-2026). Un llamador que se olvide de preguntar ya no abre
   nada: el escritor lanza. }
 function EscrituraDenegada(const APath: string): string;
+{ Su mitad que no es la jaula: '' salvo que la sesion sea de SOLO LECTURA, y
+  entonces su negativa. Para quien escribe FUERA de la jaula algo que es del
+  agente (la casa de los entregables, Lsp.Patch): un lector de esa negativa,
+  la segunda barrera (revisor del 2i). }
+function SesionSoloLecturaDenegada(const APath: string): string;
 
 { Una CARPETA donde la tool pide un FICHERO: '' si no lo es; si lo es, "es
   una CARPETA, no un fichero" (INVALID_PARAM), el mismo texto que ya daba
@@ -1062,11 +1073,18 @@ begin
   Result := MsgFmt(SR_READ_ONLY_FMT, [AWhat]);
 end;
 
+function SesionSoloLecturaDenegada(const APath: string): string;
+begin
+  Result := '';
+  if IsReadOnlyNow then
+    Result := WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(SinBarraFinal(APath))]));
+end;
+
 function EscrituraDenegada(const APath: string): string;
 begin
-  if IsReadOnlyNow then
-    Exit(WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(SinBarraFinal(APath))])));
-  Result := PathDenied(APath);
+  Result := SesionSoloLecturaDenegada(APath);
+  if Result = '' then
+    Result := PathDenied(APath);
 end;
 
 function CarpetaEnVezDeFichero(const APath: string): string;
@@ -2463,20 +2481,18 @@ end;
 
 function CasasDeEntregables: TArray<string>;
 var
-  R, Ro: string;
-  SoloLectura: Boolean;
+  R, Casa: string;
 begin
   Result := [];
   for R in WorkspaceRoots do
   begin
-    SoloLectura := False;
-    for Ro in WorkspaceReadOnlyPaths do
-      if StartsText(Ro, IncludeTrailingPathDelimiter(R)) then
-        SoloLectura := True;
-    if ReadOnlyRootOf(R) <> '' then // raiz dentro de una referencia: manda la referencia
-      SoloLectura := True;
-    if not SoloLectura then
-      Result := Result + [TPath.Combine(SinBarraFinal(R), TempFolderName)];
+    Casa := TPath.Combine(SinBarraFinal(R), TempFolderName);
+    // la CASA, no solo la raiz, por los lectores de la jaula: el de
+    // ReadOnlyPaths (Lsp.Lugares.SoloLecturaDeclaradaEn: una entrada que cubra
+    // la raiz o su __delphi-temp; revisor del 2i) y el de ReadOnlyRoots (una
+    // raiz dentro de una referencia: manda la referencia)
+    if (SoloLecturaDeclaradaEn(Casa) = '') and (ReadOnlyRootOf(Casa) = '') then
+      Result := Result + [Casa];
   end;
 end;
 
@@ -2500,9 +2516,12 @@ begin
     Exit(True);
   // las del workspace, ni la casa misma: la raiz la declara el operador, su
   // __delphi-temp no (K3 de test_captura_puertas_1182)
+  // ...y nada de lo que caiga dentro en solo lectura - una entrada de
+  // ReadOnlyPaths o una referencia mas honda que la casa: su carpeta de un
+  // agente -, por los mismos lectores que la jaula (revisor del 2i)
   for var Casa in CasasDeEntregables do
     if not EsEnlace(Casa) and EnLugarSinEnlaces(APath, Casa) then
-      Exit(True);
+      Exit((SoloLecturaDeclaradaEn(APath) = '') and (ReadOnlyRootOf(APath) = ''));
   Result := False;
 end;
 
@@ -2540,11 +2559,20 @@ end;
 function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
   out AFile: string): string;
 var
+  EnLaCasa: Boolean;
+begin
+  Result := CaptureTarget(AOut, ASub, APrefix, AExt, AFile, EnLaCasa);
+end;
+
+function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
+  out AFile: string; out AEnLaCasa: Boolean): string;
+var
   O, Carpeta, Ext: string;
 begin
   Result := '';
   AFile := '';
   O := AOut.Trim;
+  AEnLaCasa := O = '';
   Carpeta := '';
   if O = '' then
     Carpeta := AgentTempDir(ASub)
@@ -2569,7 +2597,17 @@ begin
   // que el renderizador dibuje, el nodo baje o adb deje nada alli: un enlace
   // plantado en ella llevaba la captura fuera de las raices (1.18.2, 2b)
   if (O = '') and not EnCasaDeEntregables(AFile) then
+  begin
+    // ...o una entrada de solo lectura DENTRO de la casa (su __delphi-temp
+    // o la carpeta de un agente): se dice eso, no un enlace (revisor del 2i)
+    var Ro := SoloLecturaDeclaradaEn(AFile);
+    if Ro <> '' then
+      Exit(MsgFmt(SR_READONLY_PATH_FMT, [AFile, Ro]));
+    var Ref := ReadOnlyRootOf(AFile);
+    if Ref <> '' then
+      Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [AFile, Ref]));
     Exit(MsgFmt(SR_CAPTURE_CASA_ENLACE_FMT, [Carpeta]));
+  end;
   if O <> '' then
   begin
     // la puerta de ESCRIBIR, la de todas (solo lectura incluida): una sesion
@@ -3971,17 +4009,14 @@ begin
     if StartsText(R, IncludeTrailingPathDelimiter(Full)) or
        StartsText(FormaLarga(R), FullLargo) then
     begin
-      var Verdad := IncludeTrailingPathDelimiter(RealPath(APath));
       // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
       // LECTURA: un vendor/, un submodulo, un clon de referencia con su
       // propio git. Se comprueba AQUI y no en el lector, y esa es justo la
-      // distincion que se quiere: se lee, no se escribe.
-      // Por el texto Y por la ruta REAL (Verdad): un junction de la raiz que
-      // apunte a una carpeta de solo lectura no la vuelve escribible.
-      for var Ro in WorkspaceReadOnlyPaths do
-        if EnLugar(Full, Ro) or
-           EnLugar(Verdad, RealPath(SinBarraFinal(Ro))) then
-          Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, SinBarraFinal(Ro)]));
+      // distincion que se quiere: se lee, no se escribe. EL lector de
+      // ReadOnlyPaths, por el texto y por la ruta real (su nota)
+      var Ro := SoloLecturaDeclaradaEn(APath);
+      if Ro <> '' then
+        Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, Ro]));
       // las dos en la forma larga: el tramo del agente se cuenta desde la raiz
       Exit(AgentConfineDenied(SinBarraFinal(FullLargo), FormaLarga(R)));
     end;
