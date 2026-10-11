@@ -43,20 +43,14 @@ handshake.
 
 - `delphi_read` pages at 400 lines per call - read in RANGES.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
-- `READ-007` on a read: some bytes do not fit the file's encoding (a mixed
-  or damaged file). They show as U+FFFD and no writer writes the file back
-  (`EDIT-038`): fix it in its editor, or restore a good copy. `READ-008`: a
-  source in UTF-8 without a BOM, which the compiler reads as ANSI, so its
-  accents reach the program as mojibake - the way out is the IDE's (open and
-  save it: UTF-8 with a BOM). Leave its bytes as they are.
+- A `READ-007` or `READ-008` note on a read (bytes that do not fit the
+  file's encoding; a UTF-8 source without a BOM, which the compiler reads
+  as ANSI) says what to do: follow it, and never write U+FFFD back.
 - **An API you do not know** (what a class or routine is for, how it is
-  used, which framework has it): `delphi_docs search query=<it>` and then
-  `read id=<a result>` - the RAD Studio help installed on the server, in
-  small pieces: a long page gives its introduction and sections first, a
-  class its member lists in `related`. Do not guess and do not read a whole
-  RTL unit for it. For the exact signature, the installed sources win:
-  `delphi_hover` / `delphi_definition`. It works in any workspace: it
-  opens only the help files the IDE registers.
+  used): `delphi_docs search query=<it>` and then `read id=<a result>` -
+  the RAD Studio help installed on the server, in small pieces. Do not
+  guess and do not read a whole RTL unit for it; for the exact signature,
+  the installed sources win: `delphi_hover` / `delphi_definition`.
 - Big dumps (logcat, long outputs) have a file mode (`out=`): use it,
   then read the file in ranges or download it.
 - **Getting a file onto YOUR machine** (an installer, an .apk, a
@@ -75,19 +69,11 @@ handshake.
 - Anchor edits: `old` must be copied EXACTLY from a fresh `delphi_read`,
   as small and unique as possible. An edit error is a diagnosis - re-read
   and fix the anchor; do not retry blindly. Indentation does not count in
-  an anchor (the rest of the line does, to its end), and `occurrence`
-  counts the matching lines of the file as it was before the batch; when an
-  anchor that carries indentation picks a line indented otherwise, the
-  batch is refused (`EDIT-121`) with each line as `line N = occurrence K`.
-- **Fragment mode, for a long line**: `fragment` + `atline` (mandatory) +
-  `new` changes just that piece of ONE line - no need to paste a
-  600-character README paragraph to turn "68" into "69". The fragment must
-  appear EXACTLY ONCE in that line, case-sensitive; zero or several is a
-  refusal that shows you the real line. No line breaks, and it does not
-  combine with `old`, `delete`, `toline` or another mode (`insert`,
-  `createunit`, `restore`, `create`). Same
-  rule in `delphi_edit`, `delphi_textedit`, batches (`edits`, key
-  `fragment`) and `delphi_changeset` stage (resolved when you stage).
+  an anchor (the rest of the line does, to its end).
+- **Fragment mode, for a long line**: `fragment` + `atline` + `new`
+  changes just that piece of ONE line - no need to paste a 600-character
+  README paragraph to turn "68" into "69". The same in `delphi_edit`,
+  `delphi_textedit`, batches (`edits`) and `delphi_changeset` stage.
 - Pascal traps: a method signature exists TWICE (interface +
   implementation); there are TWO uses clauses; one single `end.` at the
   file end. Half an edit is not an edit.
@@ -95,7 +81,7 @@ handshake.
   grammar - a wrong property name or enum value compiles fine and then
   **crashes the form at load time on the target, silently**. The server
   lints designer edits against tables generated from the framework's own
-  metadata: an `DESIGNER WARNING` warning in the edit result is measured
+  metadata: a `DESIGNER WARNING` in the edit result is measured
   truth - fix it before building. FMX property spelling is not VCL:
   `Size.Width` (not `Size.X`), `TextSettings.Font.Size` (not
   `Font.Size`), `TextSettings.HorzAlign = Center` (not `taCenter`).
@@ -149,100 +135,28 @@ handshake.
 - Never guess what a class publishes: `delphi_designer info classname=TButton`
   (add `framework=fmx` for FMX) lists the REAL published properties and
   events; `prop classname=TPanel prop=Align` gives the legal enum members.
-- `tree path=<form>` shows the component tree; `get component=<Name>` one
-  block. After editing a form with `delphi_edit`, run `delphi_designer lint
+  `tree path=<form>` shows the component tree; `get component=<Name>` one
+  block.
+- Edit a form with the designer commands, not by hand: `insert` adds a
+  visual control (its block, its published field and its unit in the uses,
+  where the IDE keeps it), `set` changes a property (several with `props`,
+  all or none) after checking it against the class, `delete` removes one
+  with its empty handlers. Each writes the form and its unit together, all
+  or nothing, and a refusal says exactly what to do instead - including how
+  to add by hand what insert cannot place (a non-visual component such as
+  a TTimer: its block, its published field, its unit in the uses, then
+  `check-binding`).
+- After a form edit made with `delphi_edit`, run `delphi_designer lint
   path=<form>`: a property the class does not publish, or a value its type
-  does not take (an enum value that does not exist, a `Color = 'hola'`),
-  will not stream, and nobody tells you at build time - lint judges values
-  with the same checks as `set`.
-- To ADD a component: `delphi_designer command=insert path=<form>
-  classname=TButton component=BtnOk` (`component` names it, its text too
-  when the class shows its Name, so no `set prop=Name` afterwards - without
-  it, the first free Button1, Button2... as the IDE; `parent=Panel1` puts it
-  inside a container, the form by default). Do not write a visual control's
-  block by hand: insert places it at 10,10, among its siblings where the
-  IDE keeps it, with the minimum the IDE writes (its Name as text when its
-  class does that, its TabOrder), adds its published field to the form's
-  class and its unit to the uses, and answers the numbered block. In VCL a
-  parent is the form or a control whose class accepts controls (a TPanel, a
-  TGroupBox, a TTabSheet - not its TPageControl, not a TButton; never a data
-  module); in FMX any control. What insert cannot place - a non-visual
-  component such as a TTimer, a class or a parent the tables do not have -
-  goes by hand, and the refusal says how: its block, its published field,
-  its unit in the uses, then `check-binding`. A name with letters outside
-  ASCII needs the form saved as UTF-8 with BOM, and the unit with a BOM or in
-  ANSI: the IDE and the compiler read a file without BOM as ANSI, so
-  insert and a rename refuse it in a file that has an encoding to keep
-  (`DSGN-111`) rather than change it; a unit that is still pure ASCII has
-  none, and the name chooses ANSI (or UTF-8 with a BOM when ANSI cannot hold
-  it), as the IDE does when it saves. In an inherited form the names of the
-  ancestors count, although their components are not written in the derived
-  file: insert never picks one, and a name that one of them has is refused,
-  naming the ancestor.
-- To CHANGE one property: `set component=Button1 prop=Caption value=OK`. It
-  is checked against the class BEFORE writing: a property the class does
-  not publish (the answer suggests the close one), an enum value that does
-  not exist (the answer lists the legal ones), a value its type does not
-  take (read from the Delphi source: a whole number or one of its named
-  constants such as clRed, a number, a character, a string), a component
-  of another class (a DBGrid's DataSource takes a TDataSource: the answer
-  lists the ones that fit), a list such as Memo1.Lines (edit it with
-  `delphi_edit`) - nothing is written. `value=nil` clears a reference. A
-  string may go without quotes, and a number as you would type it (130,
-  0.7): set writes it the way the IDE does (an accent as #243, a long string
-  in pieces). A reference to a component inside an inline frame is written
-  `Frame1.Name` (one of another form, `Form2.Name`) and goes as given: the
-  form loader resolves it, set does not read the other file; the frame's
-  own components are edited in the frame's file. The
-  form's own size (`component=<the form>
-  prop=ClientWidth`) and an inline frame's Width/Height go through set too.
-  A path through a reference to another component (`PopupMenu.AutoPopup` on
-  a button) is refused (`DSGN-119`): the form loader reads it before the
-  reference exists - set it on that component (`component=PopupMenu1
-  prop=AutoPopup`); a sub-component such as `EditLabel.Caption` is written
-  as before. In FMX a control's place is `Position.X`/`Position.Y`, and
-  `Left`/`Top` are refused (`DSGN-118`).
-  `set component=X
-  parent=Panel1` (alone) moves X with its children; `prop=Name` renames it,
-  its field and the form lines that name it (its methods keep their names,
-  and `usesInCode` lists the code that still says the old one).
-- To REMOVE one: `delete component=X`. It is REFUSED while a method of its
-  own - a handler it is bound to, or one named after it - has code, and the
-  answer lists each with its line: clean them first (move what they do, or
-  empty them) and repeat. Empty handlers, its field and the references to
-  it in the form go with it; a method something else also uses stays.
-  `usesInCode` lists the lines of the unit that still name it: the compiler
-  stops there. insert, delete and a rename write the form and its unit
-  together, all or nothing.
-- A binary `.dfm` reads (and previews) on the fly; editing it needs `to-text` first (see
-  above). `.fmx` is always text.
+  does not take, will not stream, and nobody tells you at build time.
 - SEE the form instead of imagining it: `delphi_designer command=preview
-  path=<form>` returns a PNG of what the IDE designer shows, in the same
-  answer. The loop is insert/set (or `delphi_edit` for the rest) -> `lint`
-  -> `preview` -> fix. Several properties at once go in `props`
-  (`Caption=Save;Left=24`, insert and set, all or none); `set before=`,
-  `after=` or `index=` reorders a component among its siblings, only where
-  the IDE's own writer keeps it (a refusal gives the order it would save;
-  the file order is the z-order, TabOrder the keyboard order).
-  To place something, measure on the image and convert with its `frame`
-  (image pixels to form units; `Left`/`Top` in the file - `Position.X`/
-  `Position.Y` in FMX - are relative to the parent, whose rectangle
-  `component=<parent>` gives as `componentRect`).
-  `state=PageControl1.ActivePage=TabSheet2` shows another page without
-  touching the file (inside an inline frame, `Frame1.Edit1.Text=x`); and
-  `component=Frame1.Edit1` crops to a frame's child;
-  `nonVisual` lists the non-visual components even when
-  they are not drawn (`nonvisual=true` draws them). `ignored` lists each
-  property the form loader could not read - component, property, reason
-  and its line in the file -: the rest is drawn, but the form will not open
-  until you fix them with `set`. From a service the
-  answer says `fidelity=print`: controls that paint their own way come out
-  native-looking, the layout is the real one.
-  `style=` draws it with another look, never written to the file: in FMX the
-  form's own StyleBook by default, `none` for the Windows default, a `.style`
-  file, or a platform of the designer's Style list (`android`, `ios`,
-  `win11`...); in VCL a `.vsf` file (then out of design mode: VCL styles
-  never apply to designed controls) or `none`, the default.
+  path=<form>` returns a PNG of what the IDE designer shows. The loop is
+  insert/set -> `lint` -> `preview` -> fix. To place something, measure on
+  the image and convert with its `frame` (image pixels to form units;
+  `Left`/`Top` - `Position.X`/`Position.Y` in FMX - are relative to the
+  parent, whose rectangle `component=<parent>` gives as `componentRect`).
+  `ignored` in the answer lists each property the form loader could not
+  read: the rest is drawn, but the form will not open until you fix them.
 
 ## FMX styles
 
@@ -270,13 +184,11 @@ handshake.
 ## Mail from the operator
 
 - Any tool answer may end with `PENDING MESSAGES: N`. When it does, call
-  `delphi_messages command=read agent=<your id>` before going on: the
-  operator answered a report of yours or changed the plan. Messages are
-  delivered once; act on them and, when an answer is due, reply with
-  `delphi_report`. Use the same `agent` id in both tools. If your client
-  cannot set `clientInfo.name` to your id (it introduces itself as `mcp` or
-  some generic name), `agent=` is not optional: without it the mailbox looks
-  empty while mail waits under your name.
+  `delphi_messages command=read` before going on (with `agent=<your id>`
+  if your client cannot set its name - see First contact): the operator
+  answered a report of yours or changed the plan. Messages are delivered
+  once; act on them and, when an answer is due, reply with
+  `delphi_report`.
 
 ## Running on the target (not on this server)
 
@@ -288,7 +200,7 @@ handshake.
   You never give a remote path: the server runs what THAT project deployed
   and nothing else on that machine (a script in the same folder is refused
   too - only native binaries).
-- Nothing has to be installed on the target (v0.98): PAServer itself runs
+- Nothing has to be installed on the target: PAServer itself runs
   what this server sends. If the program has not finished when the timeout
   expires it is NOT killed - you get `stillRunning: true` and its partial
   output; a GUI app stays up, ready to be driven with delphi_desktop. If a
@@ -304,72 +216,42 @@ handshake.
 
 The same idea as adb, for the machine behind a PAServer profile: a Linux
 (**GNOME only today**, Zorin and Fedora measured), a Windows with PAServer,
-or this very server when a PAServer runs in its user session. ALWAYS through
-a PAServer listening on that machine, Windows included: without one there
-is no desktop to reach, whatever the network says. The machine is
-the `profile` parameter, never a different tool. No `project` needed: the
-node bundled with the server deploys and UPDATES itself on the target on
-first use (a `node.ver` stamp), the right binary for that system - nothing
-is compiled or installed by hand.
+or this very server when a PAServer runs in its user session. ALWAYS
+through a PAServer listening on that machine, Windows included: without one
+there is no desktop to reach, whatever the network says. The machine is the
+`profile` parameter; leave `project` empty - the node bundled with the
+server deploys and updates itself on the target, nothing is compiled or
+installed by hand.
 
-**One step, no arithmetic (1.3.1):** a `screenshot` comes back IN the
-same answer as an image (scaled to `maxwidth`, 1280 by default) together
-with a `frame` token; nothing to download, and its temp file is gone.
-To press what you see, measure x,y ON THAT IMAGE and call `tap` (or
-`type`) with those x,y and `frame=<the token, copied as it is>`: the
-server converts scale, crop origin and (Android) display for you. Never
-divide by a scale or add an origin yourself. `inline=false` gives the
-old file + `download` link (still with a `frame`).
+**One step, no arithmetic:** `screenshot` comes back IN the answer as an
+image with a `frame` token. Measure x,y ON THAT IMAGE and call `tap` (or
+`type`, which presses there first: one trip) with those x,y and
+`frame=<the token, copied as it is>`: the server converts scale and crop
+origin for you - never divide by a scale or add an origin yourself. Every
+capture lists `windows` (title + rectangle); `overview` brings a covered
+one into view (Linux: the Super overview); `screenshot region="x,y,w,h"`
+or `window="<title>"` brings a piece at full resolution to read a small
+dialog - go back to the whole desktop whenever something may have opened
+elsewhere. `key` takes an evdev code on Linux and a key NAME on Windows
+(the tool reads the profile's platform); `modifiers=ctrl` holds keys while
+it goes down. `type` on Linux uses the desktop's own keymap, accents
+included; the text is typed, never run.
 
-Flow: `screenshot` brings the WHOLE desktop here as a PNG -> LOOK at it and
-measure the pixel -> `tap x= y=` presses exactly there (the node converts
-the screen scale itself; always measure ON the screenshot it returned) ->
-`type text=` writes (with `x`,`y` it presses there first: one trip). On
-Linux it types with the DESKTOP'S OWN keymap, so accents, `@`, capitals and
-punctuation arrive whatever the layout is, and the echo names the keyboard
-it used; a character that layout has no key for is a refusal, not a silent
-drop. On Windows it types Unicode. The text is typed, never run: shell
-metacharacters are just characters ->
-`key code=` presses one key: on a Linux target by evdev code (Escape 1,
-Tab 15, Enter 28), on a Windows target by NAME (escape, enter, tab, super,
-f1..f12) - the tool reads the profile's platform and refuses the other
-kind, because a number on Windows is a different key; `modifiers=ctrl`
-(or shift, alt, super, comma separated) holds them while the key goes down:
-Ctrl+K on Linux is `code=37 modifiers=ctrl`, Alt+Tab `code=15
-modifiers=alt`. `type` on Linux composes accented letters through the
-layout's dead keys ("í" = dead acute + i), so Spanish text arrives whole ->
-every capture comes with a `windows` list (title + rectangle in capture
-pixels; on Linux the X11/Xwayland windows, i.e. every FMX app - native
-Wayland windows are not listed); `overview` brings them all into view to
-reach a covered one (Linux: the Super overview - tap one or Escape) ->
-`screenshot region="x,y,w,h"` (or `window="<title>"`) brings back just that
-piece of the same capture at full resolution, with an `origin` (pass its `frame` to tap and the server adds it; without frame, ADD it to
-what you measure on it) - use it to read a small dialog, and go back to the
-whole desktop whenever something may have opened elsewhere -> `status` says whether
-the desktop is reachable and what to ask for. Every answer carries
-`graphicalEnv`: the session the node ran in.
-
-It runs under the SAME workspace switches as remote-run: `AllowRemoteRun`,
-`McpDesktopNode` (or the wildcard `all`) in `RemoteRunProjects`, and the
-profile's host inside `RemoteHosts` (the server's own desktop is the
-profile whose host is 127.0.0.1). The target needs a graphical session open
-for the user PAServer runs as. On Linux, PAServer may run as a service: the
-server completes DISPLAY and friends from the session. On Windows, PAServer
-must run INSIDE the user's session (a Windows service lives in session 0,
-which has no desktop) and the session must be unlocked - a locked Windows
-answers "Access denied" to any capture, and the tool says so in `hint`. (An
-unlocked one may refuse the screen copy now and then; the node then composes
-the desktop from the windows themselves and `nodeOutput` carries a
-`FALLBACK:` line: same coordinates, no cursor, no taskbar.) On
-GNOME the screen-capture permission must have been granted once - a mute
-screenshot timeout means exactly that permission.
+It runs under the SAME workspace switches as remote-run (`AllowRemoteRun`,
+`McpDesktopNode` or `all` in `RemoteRunProjects`, the profile's host in
+`RemoteHosts`; the server's own desktop is the profile whose host is
+127.0.0.1). The target needs a graphical session open for the user PAServer
+runs as: on Linux PAServer may run as a service (the server completes
+DISPLAY from the session); on Windows PAServer must run INSIDE the user's
+session - a service lives in session 0, which has no desktop - and the
+session must be unlocked. On GNOME the screen-capture permission must have
+been granted once: a mute screenshot timeout means exactly that.
 
 Coordinates are REAL pixels on both systems and the Windows node is
-DPI-aware: measure on the screenshot or on `windows`, and never mix in
-coordinates from a tool that is not DPI-aware (on a 125% display the same
-window sits 250 px away). **When the profile is someone's own machine, its
-screen and mouse are theirs**: whatever they have open is in frame. Do the
-gesture you came for and nothing else.
+DPI-aware: never mix in coordinates from a tool that is not (on a 125%
+display the same window sits 250 px away). **When the profile is someone's
+own machine, its screen and mouse are theirs**: whatever they have open is
+in frame. Do the gesture you came for and nothing else.
 
 ## Projects and builds
 
@@ -391,7 +273,9 @@ gesture you came for and nothing else.
   not), `remove-unit` drops it from the project and keeps the file,
   `delphi_delete` on a unit trashes its designer pair and updates the
   projects that list it, `delphi_move` renames/moves a unit with its pair,
-  header and project entries; with `copy=true` it copies instead (header and pair too, no project re-pointed: `add-unit` when you want it in one). `view` lists the project's `units`.
+  header and project entries; with `copy=true` it copies instead (header
+  and pair too, no project re-pointed: `add-unit` when you want it in
+  one). `view` lists the project's `units`.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).
@@ -465,7 +349,7 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
 `screenshot` -> `tap`/`key`.
 
 - Devices are allowlisted PER WORKSPACE (`AdbAllowedDevices`; absent =
-  NONE since v0.98): always name your `device=` explicitly.
+  none): always name your `device=` explicitly.
 - `logcat`: default 300 lines, inline answers carry the newest 400.
   For the full dump pass `out=srvd:\...\dump.txt`, then read it in
   ranges or download it. Validate app behaviour by logging from your app
@@ -516,18 +400,24 @@ one whole - before filing, look whether it was already reported.
 
 ## Access levels
 
-A workspace may also declare `ReadOnlyRoots`: reference projects outside your roots that you can read, search and navigate to learn how things are done in this house, never write (bring a unit or a folder in with `delphi_move copy=true`; a whole project stays where it is) - `delphi_workspace` lists them and `delphi_projects` flags them `readOnly`. A read-only credential can read, search, navigate, diagnose, list
-components, fetch files and file reports (a screenshot writes a capture
-file, so `delphi_adb screenshot` and `delphi_desktop` are refused too) -
-`tools/list` announces what each tool allows in this mode
-(`annotations.readOnlyHint`, `_meta.access`, `readOnlyCommands`) - but every
-mutating tool (edit/create/build/run/install/tap...) is refused at the
-gate. If you are read-only and need a change, report it; do not fish
+A read-only credential can read, search, navigate, diagnose, list
+components, fetch files and file reports (a capture writes a file, so
+`delphi_adb screenshot`, `delphi_desktop` and `delphi_designer preview`
+are refused too) - `tools/list` announces what each tool allows in this
+mode (`annotations.readOnlyHint`, `_meta.access`, `readOnlyCommands`) - but
+every mutating tool (edit/create/build/run/install/tap...) is refused at
+the gate. If you are read-only and need a change, report it; do not fish
 for bypasses (there are none).
 
-Since v0.98 you always work inside ONE workspace: what its declaration
-grants is ALL there is (an absent switch is off, an absent list is empty -
-hosts, projects, devices, vault). A refusal naming `RemoteHosts`,
+A workspace may also declare `ReadOnlyRoots`: reference projects outside
+your roots that you can read, search and navigate to learn how things are
+done in this house, never write (bring a unit or a folder in with
+`delphi_move copy=true`; a whole project stays where it is) -
+`delphi_workspace` lists them and `delphi_projects` flags them `readOnly`.
+
+You always work inside ONE workspace: what its declaration grants is ALL
+there is (an absent switch is off, an absent list is empty - hosts,
+projects, devices, vault). A refusal naming `RemoteHosts`,
 `RemoteRunProjects` or `AdbAllowedDevices` is your workspace's declared
 reach, not a server bug: `delphi_report` it if you need more.
 
