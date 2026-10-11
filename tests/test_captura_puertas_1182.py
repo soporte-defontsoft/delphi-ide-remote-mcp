@@ -265,10 +265,14 @@ check('R1a la raiz por junction quedo plantada', mc.junction(POR_ENLACE, mc.larg
 EXE3 = mc.copia_exe(os.path.join(BASE, 'srv3'), con_render=True)
 srv3 = mc.Stdio(EXE3, mc.entorno({'DELPHI_MCP_ROOTS': POR_ENLACE}), nombre='ana', t=180)
 try:
-    # la carpeta de capturas, ya hecha: CrearCarpeta NO crea nada bajo una raiz
-    # declarada por un junction (SYS-006 "ya existe", medido tambien en la
-    # 1.18.1; hallazgo aparte, en pendientes-1-18-x). Aqui se mide el juicio
-    # de la casa y la escritura del recorte, no ese fallo
+    # la carpeta de capturas, ya hecha: AQUI no se puede crear una carpeta a
+    # traves de un junction (SYS-006 "ya existe"), y no es del servidor. Medido
+    # el 11-oct-2026 (2j) sin nuestro codigo: os.makedirs por un junction falla
+    # bajo AppData (Local, Local\Temp, Roaming) y va bien en D:\ y en C:\Users\<yo>
+    # fuera de AppData; produccion (servicio) crea por un junction sin problema.
+    # Es la virtualizacion de AppData de la app MSIX que lanza las baterias, y
+    # esta bateria vive en %TEMP%. Aqui se mide el juicio de la casa y la
+    # escritura del recorte
     os.makedirs(os.path.join(REAL, '__delphi-temp', 'ana', 'designer'), exist_ok=True)
     CAPS3 = os.path.join(REAL, '__delphi-temp', '**', 'designer', '*.png')
     antes = set(glob.glob(CAPS3, recursive=True))
