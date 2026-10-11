@@ -72,6 +72,19 @@ the MCP `initialize` response (`serverInfo.version`).
   confined agent, the server's temporary folder and a root declared through
   a junction have their checks), `LspTests.Images`.
 
+### Internal
+
+- **One PNG header, for the server and the desktop node.** The signature
+  and the IHDR of a PNG were written by hand three times: in the node's PNG
+  writer and in two readers of a capture's size - the server's, which
+  checked the whole signature, and the node's, which checked only its three
+  letters. `Lsp.Png` now holds the signature, the IHDR data the node writes
+  and the reader that is its inverse, and both programs use it (the node
+  also runs on Linux, so it depends on nothing but `System`). `test_paisaje`
+  watches the format, and `LspTests.Images` checks that the reader reads what
+  the writer composes, and that the RTL's PNG decoder loads what the node
+  writes, pixel by pixel.
+
 ## [1.18.1] - 2026-10-11
 
 Patch: what 1.18.0 shipped wrong, and what its validation on the VM and

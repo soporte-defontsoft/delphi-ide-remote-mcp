@@ -26,7 +26,9 @@ uses
   FormRender.Comun in '..\Render\FormRender.Comun.pas',
   FormRender.Textos in '..\Render\FormRender.Textos.pas',
   LspTests.DesignerEdit in 'LspTests.DesignerEdit.pas',
-  Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas';
+  Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas',
+  Mld.Textos in '..\DesktopNode\Mld.Textos.pas',
+  Mld.Captura in '..\DesktopNode\Mld.Captura.pas';
 
 var
   Runner: ITestRunner;

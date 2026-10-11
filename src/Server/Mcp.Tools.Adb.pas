@@ -97,7 +97,7 @@ uses
   Lsp.Dproj,
   Lsp.Guard,
   Lsp.Patch,     // ColocaProducto / ColocaContenido: un out= se coloca con la puerta, sellando lo que habia
-  Lsp.Imagen,
+  Lsp.Png,       // TamanoPngBytes: LA cabecera de un PNG
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner;
 

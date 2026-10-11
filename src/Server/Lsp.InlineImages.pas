@@ -68,7 +68,8 @@ uses
   System.StrUtils,
   System.RegularExpressions,
   Lsp.Base64,   // BytesToBase64: EL codificador de la casa
-  Lsp.Imagen,   // TamanoPngBytes / EscalaPngBytes: medir y escalar en memoria
+  Lsp.Imagen,   // EscalaPngBytes: escalar en memoria
+  Lsp.Png,      // TamanoPngBytes: LA cabecera de un PNG, la del nodo tambien
   Lsp.Patch,    // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
   Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch

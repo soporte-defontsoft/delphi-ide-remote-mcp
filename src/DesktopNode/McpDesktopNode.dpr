@@ -15,6 +15,7 @@ uses
   System.StrUtils,
   System.Classes,
   Mld.Textos in 'Mld.Textos.pas', // EL catalogo de mensajes del nodo
+  Lsp.Png in '..\Server\Lsp.Png.pas', // LA cabecera de un PNG: la del servidor, la misma
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
   Mld.Captura in 'Mld.Captura.pas',
@@ -241,8 +242,9 @@ begin
   end;
 end;
 
-{ Ancho y alto de un PNG, de su IHDR (bytes 16..23, big-endian): lo que
-  mide la captura, para convertir a sus pixeles lo que X11 cuenta. }
+{ Ancho y alto de un PNG: lo que mide la captura, para convertir a sus
+  pixeles lo que X11 cuenta. La cabecera la lee Lsp.Png, la misma que el
+  servidor (11-oct-2026: aqui solo se miraban las letras de la firma). }
 function TamanoPng(const ARuta: string; out AAncho, AAlto: Integer): Boolean;
 var
   B: TBytes;
@@ -255,11 +257,7 @@ begin
   except
     Exit;
   end;
-  if (Length(B) < 24) or (B[1] <> Ord('P')) or (B[2] <> Ord('N')) or (B[3] <> Ord('G')) then
-    Exit;
-  AAncho := (B[16] shl 24) or (B[17] shl 16) or (B[18] shl 8) or B[19];
-  AAlto := (B[20] shl 24) or (B[21] shl 16) or (B[22] shl 8) or B[23];
-  Result := (AAncho > 0) and (AAlto > 0);
+  Result := TamanoPngBytes(B, AAncho, AAlto);
 end;
 
 { Sonda: abre una libreria del sistema y resuelve una muestra de simbolos.

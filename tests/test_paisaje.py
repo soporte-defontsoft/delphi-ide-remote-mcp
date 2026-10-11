@@ -576,6 +576,14 @@ REGLAS = [
      'Cambiar un atributo o una fecha ESCRIBE: los de hoy van detras de la puerta de su operacion (el +R '
      'de lo propio, restaurar una foto, la fecha de creacion de lo que el escritor acaba de sustituir); '
      'uno nuevo se revisa aqui'),
+    # la firma (en literal o byte a byte, entera o sus letras) y el ancho y alto del IHDR
+    # leidos de sus bytes 16..23
+    ('la cabecera de un PNG',
+     r"\$89\s*[,;]|Ord\('P'\)[^;\n]*Ord\('N'\)|\[\s*(?:1[6-9]|2[0-3])\s*\]\s*shl\s*(?:24|16|8)\b",
+     [('Lsp.Png.pas', '*')],
+     'Lsp.Png: la firma, los datos del IHDR y su lector, uno inverso del otro, para el servidor y el '
+     'nodo (David, 11-oct-2026: "leer un png no lo vamos a desperdigar"; eran el escritor del nodo y '
+     'dos lectores, uno con la firma entera y otro con sus tres letras)'),
 ]
 
 
@@ -740,6 +748,7 @@ PLANTADO = {
     'mover o copiar un arbol con la RTL': "  TDirectory.Move(Origen, Destino);",
     'crear una carpeta sin la puerta': "  ForceDirectories(Dir);",
     'atributos o fechas sin la puerta': "  SetFileAttributes(PChar(Ruta), FILE_ATTRIBUTE_NORMAL);",
+    'la cabecera de un PNG': "  W := (B[16] shl 24) or (B[17] shl 16) or (B[18] shl 8) or B[19];",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -748,6 +757,16 @@ for regla in REGLAS:
     cazados = fuera_de_casa(regla, [('Plantado.pas', planta)])
     check('mutante "%s": la copia plantada se caza (y el comentario no)' % nombre,
           len(cazados) == 1 and ':6 ' in cazados[0], cazados)
+
+# las otras formas de la cabecera de un PNG: la firma en literal y byte a byte (el
+# escritor del nodo) y por sus letras (su lector)
+REGLA_PNG = next(r for r in REGLAS if r[0] == 'la cabecera de un PNG')
+for forma in ("  F: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0A);",
+              "  Cab[0] := $89; Cab[1] := $50; Cab[2] := $4E; Cab[3] := $47;",
+              "  if (B[1] <> Ord('P')) or (B[2] <> Ord('N')) or (B[3] <> Ord('G')) then Exit;"):
+    cazados = fuera_de_casa(REGLA_PNG, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                         'LeeAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_PNG[0], forma.strip()), len(cazados) == 1, cazados)
 
 # una casa con su clase delante es ESE metodo y no otro del mismo nombre: la
 # excepcion de una tool no tapa a sus hermanas de la unidad

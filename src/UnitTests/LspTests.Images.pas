@@ -31,6 +31,8 @@ type
     [Test] procedure DescargaTemporalNombradorYLector;
     [Test] procedure SinCapturaDiceElMotivo;
     [Test] procedure TamanoSaleDeLaCabecera;
+    [Test] procedure CabeceraPngLectorInversoDelEscritor;
+    [Test] procedure EscritorDelNodoLoLeeElDecodificador;
     [Test] procedure RecorteEnMemoriaSeAjustaAlLienzo;
     [Test] procedure CasaDeEntregablesReconoceASuNombrador;
   end;
@@ -39,12 +41,15 @@ implementation
 
 uses
   System.SysUtils,
+  System.IOUtils,
   System.Classes,
   System.Types,
   System.JSON,
   Vcl.Graphics,
   Vcl.Imaging.pngimage,
   Lsp.Imagen,
+  Lsp.Png,
+  Mld.Captura,   // GuardarPNG: el escritor de PNG del nodo de escritorio
   Lsp.InlineImages,
   Lsp.Base64,
   Lsp.Guard,
@@ -288,6 +293,63 @@ begin
   B := Copy(PngDe(37, 11), 0, 23);
   Assert.IsFalse(TamanoPngBytes(B, W, H), 'una cabecera cortada (23 bytes) no se lee fuera de su sitio');
   Assert.IsFalse(TamanoPngBytes(nil, W, H), 'nada no es un PNG');
+end;
+
+procedure TImageTests.CabeceraPngLectorInversoDelEscritor;
+var
+  B, D: TArray<Byte>;
+  W, H: Integer;
+begin
+  // lo que escribe el nodo (Mld.Captura): la firma y un trozo IHDR con
+  // DatosIhdr - su longitud, su tipo y sus datos; el CRC no lo mira el lector
+  D := DatosIhdr(3440, 1440);
+  SetLength(B, Length(FIRMA_PNG));
+  Move(FIRMA_PNG[0], B[0], Length(FIRMA_PNG));
+  B := B + [0, 0, 0, Byte(Length(D))] + TEncoding.ASCII.GetBytes(TROZO_IHDR) + D + [0, 0, 0, 0];
+  Assert.IsTrue(TamanoPngBytes(B, W, H), 'el lector lee lo que compone el escritor');
+  Assert.AreEqual(3440, W);
+  Assert.AreEqual(1440, H);
+  Assert.AreEqual(13, Integer(Length(D)), 'los datos del IHDR son 13 bytes');
+  // otro trozo en el sitio del IHDR no es una cabecera
+  B[12] := Ord('X');
+  Assert.IsFalse(TamanoPngBytes(B, W, H), 'sin IHDR en su sitio no es un PNG');
+  Assert.AreEqual(0, W);
+end;
+
+procedure TImageTests.EscritorDelNodoLoLeeElDecodificador;
+var
+  Pix: TArray<Byte>;
+  F: string;
+  Png: TPngImage;
+  W, H: Integer;
+begin
+  // 3 x 2 en BGRA de 32 bits, como el DIB que captura el nodo: azul en (0,0)
+  // y rojo en (2,1). El juez es el decodificador de la RTL, que comprueba los
+  // CRC al cargar: la firma y el IHDR salen de Lsp.Png desde el 11-oct-2026
+  SetLength(Pix, 3 * 2 * 4);
+  FillChar(Pix[0], Length(Pix), 0);
+  Pix[0] := 255;
+  Pix[(1 * 3 + 2) * 4 + 2] := 255;
+  F := TPath.Combine(ExtractFilePath(ParamStr(0)), 'nodo-escritor-prueba.png');
+  try
+    Assert.IsTrue(GuardarPNG(F, @Pix[0], 3, 2, 3 * 4, 32), 'el escritor del nodo');
+    Assert.IsTrue(TamanoPngBytes(TFile.ReadAllBytes(F), W, H), 'el lector de la casa lo lee');
+    Assert.AreEqual(3, W);
+    Assert.AreEqual(2, H);
+    Png := TPngImage.Create;
+    try
+      Png.LoadFromFile(F);
+      Assert.AreEqual(3, Png.Width);
+      Assert.AreEqual(2, Png.Height);
+      Assert.AreEqual(Integer(clBlue), Integer(Png.Pixels[0, 0]), 'azul en (0,0)');
+      Assert.AreEqual(Integer(clRed), Integer(Png.Pixels[2, 1]), 'rojo en (2,1)');
+      Assert.AreEqual(Integer(clBlack), Integer(Png.Pixels[1, 0]), 'negro en (1,0)');
+    finally
+      Png.Free;
+    end;
+  finally
+    System.SysUtils.DeleteFile(F);
+  end;
 end;
 
 procedure TImageTests.RecorteEnMemoriaSeAjustaAlLienzo;

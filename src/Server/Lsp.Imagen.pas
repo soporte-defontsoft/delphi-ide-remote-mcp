@@ -25,10 +25,8 @@ interface
 function RecortaPngBytes(const AEntrada: TArray<Byte>; var X, Y, W, H: Integer;
   out AAnchoOrig, AAltoOrig: Integer; out ASalida: TArray<Byte>): string;
 
-{ Ancho y alto de un PNG por su cabecera IHDR (los 24 primeros bytes): sin
-  decodificar la imagen, que para saber su tamano sobra. False si no es un
-  PNG. }
-function TamanoPngBytes(const ABytes: TArray<Byte>; out W, H: Integer): Boolean;
+{ (El tamano de un PNG por su cabecera es de Lsp.Png, TamanoPngBytes: el
+  mismo lector para el servidor y el nodo.) }
 
 { Escala un PNG EN MEMORIA a un ancho maximo (proporcion intacta, HALFTONE)
   sin tocar ningun fichero: una captura pedida con out= es del agente y no
@@ -50,26 +48,6 @@ uses
   Vcl.Graphics,
   Vcl.Imaging.pngimage,
   Lsp.Texts;
-
-function TamanoPngBytes(const ABytes: TArray<Byte>; out W, H: Integer): Boolean;
-const
-  FIRMA: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0A);
-var
-  I: Integer;
-begin
-  Result := False;
-  W := 0;
-  H := 0;
-  if Length(ABytes) < 24 then
-    Exit;
-  for I := 0 to 7 do
-    if ABytes[I] <> FIRMA[I] then
-      Exit;
-  { bytes 16..23: ancho y alto, big-endian, dentro del trozo IHDR }
-  W := (ABytes[16] shl 24) or (ABytes[17] shl 16) or (ABytes[18] shl 8) or ABytes[19];
-  H := (ABytes[20] shl 24) or (ABytes[21] shl 16) or (ABytes[22] shl 8) or ABytes[23];
-  Result := (W > 0) and (H > 0);
-end;
 
 function RecortaPngBytes(const AEntrada: TArray<Byte>; var X, Y, W, H: Integer;
   out AAnchoOrig, AAltoOrig: Integer; out ASalida: TArray<Byte>): string;

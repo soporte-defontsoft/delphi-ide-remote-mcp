@@ -146,7 +146,8 @@ uses
   Lsp.Codificacion in 'Lsp.Codificacion.pas',
   Mcp.Tools.Git in 'Mcp.Tools.Git.pas',
   Lsp.Lugares in 'Lsp.Lugares.pas',
-  Lsp.Mascara in 'Lsp.Mascara.pas';
+  Lsp.Mascara in 'Lsp.Mascara.pas',
+  Lsp.Png in 'Lsp.Png.pas';
 
 {$R *.res}
 

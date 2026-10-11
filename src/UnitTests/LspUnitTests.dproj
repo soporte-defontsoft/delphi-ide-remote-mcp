@@ -188,6 +188,8 @@
         <DCCReference Include="..\Render\FormRender.Textos.pas"/>
         <DCCReference Include="LspTests.DesignerEdit.pas"/>
         <DCCReference Include="..\Server\Lsp.DesignerForma.pas"/>
+        <DCCReference Include="..\DesktopNode\Mld.Textos.pas"/>
+        <DCCReference Include="..\DesktopNode\Mld.Captura.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

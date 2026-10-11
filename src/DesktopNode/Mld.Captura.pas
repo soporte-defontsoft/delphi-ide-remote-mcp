@@ -4,7 +4,9 @@
 
   El PNG se escribe a mano (firma + IHDR + IDAT + IEND) porque es un formato
   sencillo y la RTL ya trae el deflate que necesita (System.ZLib). Asi el
-  binario sigue sin depender de nada instalado en la maquina destino.
+  binario sigue sin depender de nada instalado en la maquina destino. La
+  firma y los datos del IHDR son los de Lsp.Png, los mismos que lee el
+  servidor (11-oct-2026: se componian aqui a mano).
 
   Aqui vivia tambien TCamara, la captura por XGetImage de una ventana de X11:
   nadie la llamaba desde que la captura de Linux va por el portal del
@@ -25,6 +27,7 @@ uses
   System.SysUtils,
   System.Classes,
   System.ZLib,
+  Lsp.Png,      // FIRMA_PNG, TROZO_IHDR, DatosIhdr: LA cabecera de un PNG
   Mld.Textos;
 
 { ------------------------------------------------------------------ CRC32 }
@@ -146,22 +149,8 @@ begin
 
   Fich := TFileStream.Create(ARuta, fmCreate);
   try
-    SetLength(Cab, 8);
-    Cab[0] := $89; Cab[1] := $50; Cab[2] := $4E; Cab[3] := $47;
-    Cab[4] := $0D; Cab[5] := $0A; Cab[6] := $1A; Cab[7] := $0A;
-    Fich.WriteBuffer(Cab[0], 8);
-
-    SetLength(Cab, 13);
-    Cab[0] := Byte(AAncho shr 24); Cab[1] := Byte(AAncho shr 16);
-    Cab[2] := Byte(AAncho shr 8);  Cab[3] := Byte(AAncho);
-    Cab[4] := Byte(AAlto shr 24);  Cab[5] := Byte(AAlto shr 16);
-    Cab[6] := Byte(AAlto shr 8);   Cab[7] := Byte(AAlto);
-    Cab[8] := 8;   // 8 bits por canal
-    Cab[9] := 2;   // color verdadero RGB
-    Cab[10] := 0;  // compresion deflate
-    Cab[11] := 0;  // filtrado estandar
-    Cab[12] := 0;  // sin entrelazado
-    EscribirTrozo(Fich, 'IHDR', Cab);
+    Fich.WriteBuffer(FIRMA_PNG[0], Length(FIRMA_PNG));
+    EscribirTrozo(Fich, TROZO_IHDR, DatosIhdr(AAncho, AAlto));
     EscribirTrozo(Fich, 'IDAT', Comprimido);
     SetLength(Cab, 0);
     EscribirTrozo(Fich, 'IEND', Cab);
