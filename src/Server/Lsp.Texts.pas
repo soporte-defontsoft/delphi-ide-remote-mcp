@@ -2384,6 +2384,17 @@ const
     'sending it to the trash takes EVERYTHING inside it. Move or delete ' +
     'separately what is inside that IS yours.';
 
+  { El reves de MOVE-001: el DESTINO de una carpeta que se mueve o se copia
+    contendria un lugar protegido (una entrada de ReadOnlyPaths que nombra
+    lo que llegaria). 1.18.2, 2r. }
+  SR_MUDANZA_DESTINO_PROTEGIDO_FMT =
+    '[MOVE-020 DENIED] "%s" cannot be the destination: it is or would ' +
+    'contain %s, which this workspace cannot write. What is moved or ' +
+    'copied there lands in that place whole - a folder with EVERYTHING ' +
+    'inside it. Nothing was changed: ' +
+    'choose another destination, or move separately what would not land ' +
+    'on it.';
+
   SN_LUGAR_PROTEGIDO =
     '[MOVE-008] a protected place (a workspace root, a reference ' +
     'project, a read-only folder or a system folder)';
@@ -8651,7 +8662,9 @@ const
     'mode. A FOLDER moves only as a rename on the same drive, whole or not ' +
     'at all (links inside travel as links); to another drive, copy=true ' +
     'and then delphi_delete. A folder that is or holds a root, a reference ' +
-    'or a read-only folder is refused. Moving or renaming a unit (.pas) ' +
+    'or a read-only folder is refused, and so is a destination that would ' +
+    'hold one (a folder lands there with everything inside it, MOVE-020). ' +
+    'Moving or renaming a unit (.pas) ' +
     'takes its .dfm/.fmx along, rewrites its "unit X;" header on a rename ' +
     'and re-points every project that lists it (the .dpr uses and ' +
     'DCCReference, the uses of the project''s other units and their ' +

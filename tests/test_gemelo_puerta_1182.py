@@ -21,6 +21,21 @@ entrada de ReadOnlyPaths que lo nombra a el solo.
   ("todo queda": ni el original movido, ni copia en la papelera, ni la
   carpeta de destino creada: los destinos son carpetas que aun no existen)
 
+Y su segundo emisor, una CARPETA entera (2r, revisor del 2c): lo que lleva
+dentro llega al destino sin que nadie pregunte por ello, y la puerta solo
+miraba si el ORIGEN contenia un lugar protegido.
+
+  F1  mover una carpeta adonde algo de dentro caeria en solo lectura: se
+      niega (MOVE-020) y nada se mueve
+  F2  COPIAR una carpeta igual: se niega y no queda nada
+  F2b ...y se niega ANTES de copiar nada (CopiaDenegada): con un fichero del
+      origen cogido por otro proceso, el rechazo es MOVE-020 y no el fallo
+      de la copia. Sin esa pregunta lo para igual el mudador al final (la
+      red: F2 sigue verde), pero despues de copiarlo todo a la bajada
+  F3  control: a un destino sin nada protegido dentro, si
+  F4  el destino por un junction (J6 -> real6) y la entrada por su ruta real:
+      se compara por donde ESTA el destino (RutaDelEnlace), no por su texto
+
 Uso:  python tests/test_gemelo_puerta_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import atexit, glob, os
@@ -88,8 +103,20 @@ Z_DFM = escribe(os.path.join(JAIL, 'otra', 'Z.dfm'), DFM.format('Z'))
 ANTES = {p: bytes_de(p) for p in (U_PAS, U_DFM, D_PAS, D_DFM, C_PAS, C_DFM, W_PAS, W_DFM, Z_PAS, Z_DFM)}
 # destinos en carpetas que NO existen: un move que no se hace no las crea
 NUEVO1, NUEVO4, NUEVO5 = (os.path.join(JAIL, n) for n in ('nuevo1', 'nuevo4', 'nuevo5'))
+NUEVOF, NUEVOG, NUEVOK = (os.path.join(JAIL, n) for n in ('nuevoF', 'nuevoG', 'nuevoK'))
+REAL6, J6 = os.path.join(JAIL, 'real6'), os.path.join(JAIL, 'J6')
+os.makedirs(REAL6)
+assert mc.junction(J6, REAL6), 'no se pudo crear el junction J6'
 # solo lectura: los .dfm de U, D y C, y los .dfm que tendria W en nuevo4\ y nuevo5\
-SOLO = ';'.join([U_DFM, D_DFM, C_DFM, os.path.join(NUEVO4, 'X.dfm'), os.path.join(NUEVO5, 'Y.dfm')])
+SOLO = ';'.join([U_DFM, D_DFM, C_DFM, os.path.join(NUEVO4, 'X.dfm'), os.path.join(NUEVO5, 'Y.dfm'),
+                 # y lo que llegaria con una carpeta (F1, F2)
+                 os.path.join(NUEVOF, 'F', 'U.dfm'), os.path.join(NUEVOG, 'G', 'U.dfm'),
+                 os.path.join(NUEVOK, 'K', 'U.dfm'), os.path.join(REAL6, 'A', 'U.dfm')])
+SRC = os.path.join(JAIL, 'src')
+for _n in ('F', 'G', 'H', 'K', 'M'):
+    os.makedirs(os.path.join(SRC, _n))
+    escribe(os.path.join(SRC, _n, 'nota.txt'), 'hola ' + _n)
+    escribe(os.path.join(SRC, _n, 'U.dfm'), DFM.format('U'))
 
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_READONLY_PATHS': SOLO}),
@@ -147,6 +174,30 @@ try:
           mc.abre(r, 'SR_GEMELO_DENEGADO_FMT') and 'designer Z.dfm goes along' in r and 'Y.dfm' in r, r[:400])
     check('G5b ...y no queda ni la copia ni su carpeta, y el original intacto',
           intacto(Z_PAS, Z_DFM) and not os.path.exists(NUEVO5), os.path.exists(NUEVO5))
+
+    # ------------------------------------------------------------- F (2r)
+    # (el estado primero: contra la 1.18.1 la clave nueva no esta en el catalogo)
+    r = srv.call('delphi_move', {'path': os.path.join(SRC, 'F'), 'dest': os.path.join(NUEVOF, 'F')})
+    check('F1 mover una CARPETA adonde algo de dentro caeria en solo lectura: se niega y nada se mueve',
+          os.path.isfile(os.path.join(SRC, 'F', 'U.dfm')) and not os.path.exists(NUEVOF) and
+          not en_papelera('F-') and mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT'), r[:400])
+    r = srv.call('delphi_move', {'path': os.path.join(SRC, 'G'), 'dest': os.path.join(NUEVOG, 'G'), 'copy': True})
+    check('F2 COPIAR una carpeta adonde algo de dentro caeria en solo lectura: se niega y no queda nada',
+          os.path.isfile(os.path.join(SRC, 'G', 'U.dfm')) and not os.path.exists(NUEVOG) and
+          mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT'), r[:400])
+    with mc.bloqueado(os.path.join(SRC, 'K', 'nota.txt')):
+        r = srv.call('delphi_move', {'path': os.path.join(SRC, 'K'), 'dest': os.path.join(NUEVOK, 'K'), 'copy': True})
+    check('F2b ...y ANTES de copiar nada: con un fichero del origen cogido, MOVE-020 y no el fallo de la copia',
+          mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT') and not os.path.exists(NUEVOK) and
+          os.path.isfile(os.path.join(SRC, 'K', 'U.dfm')), r[:400])
+    r = srv.call('delphi_move', {'path': os.path.join(SRC, 'H'), 'dest': os.path.join(JAIL, 'libre', 'H')})
+    check('F3 control: a un destino sin nada protegido dentro, la carpeta se mueve con lo suyo',
+          not mc.fallo(r) and os.path.isfile(os.path.join(JAIL, 'libre', 'H', 'U.dfm')) and
+          not os.path.exists(os.path.join(SRC, 'H')), r[:400])
+    r = srv.call('delphi_move', {'path': os.path.join(SRC, 'M'), 'dest': os.path.join(J6, 'A')})
+    check('F4 el destino por un junction, la entrada por su ruta real: se niega y nada se mueve',
+          os.path.isfile(os.path.join(SRC, 'M', 'U.dfm')) and not os.path.exists(os.path.join(REAL6, 'A')) and
+          mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT'), r[:400])
     check('el servidor sigue vivo', not mc.fallo(srv.call('delphi_list', {'root': JAIL})))
 finally:
     srv.cierra()

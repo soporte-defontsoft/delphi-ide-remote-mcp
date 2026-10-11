@@ -85,6 +85,18 @@ the MCP `initialize` response (`serverInfo.version`).
   anything. `test_gemelo_puerta_1182` (G1, G2, G4 and G5 red before; each
   check has its mutant, the writer's own question too).
 
+- **A folder does not land on a protected place either.** Moving or copying
+  a folder takes everything inside it to the destination, and the gate
+  asked only whether the SOURCE was or contained a protected place. Measured
+  with a file of the destination named in `ReadOnlyPaths`: `delphi_move` of
+  a folder there answered `MOVED`, and with `copy=true` `COPIED`, writing
+  that file. The destination is now asked the same question, by the folder
+  mover itself and, for a copy, before anything is copied, and is refused
+  with `MOVE-020`. `test_gemelo_puerta_1182` (F1 and F2 red before; F2b
+  checks that a copy is refused before it starts, F3 that a free
+  destination still works, F4 a destination reached through a junction;
+  each with its mutant). The `delphi_move` description says it.
+
 ### Internal
 
 - **One PNG header, for the server and the desktop node.** The signature

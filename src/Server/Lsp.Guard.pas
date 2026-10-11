@@ -403,7 +403,9 @@ procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
   nunca vive en dos sitios (David, 24-sep-2026). Se mira lo que la copia VA
   a copiar: los enlaces con la misma regla que CopiaArbol (EnlaceLegible),
   sin la papelera, y un fichero suelto tambien (un .dproj copiado solo se
-  colaba; el .dpr ni se contaba - auditoria 25-sep-2026). }
+  colaba; el .dpr ni se contaba - auditoria 25-sep-2026). Y ADestino no
+  puede SER ni CONTENER un lugar protegido (ProtegidoDenegado con
+  AComoDestino): lo copiado llega alli entero (1.18.2, 2r). }
 function CopiaDenegada(const AOrigen, ADestino: string): string;
 
 { P es un enlace (junction o symlink, de carpeta o de fichero). LA
@@ -522,7 +524,8 @@ function CaeDentro(const AOrigenResuelto, ADestinoResuelto: string): Boolean;
 
 { La decision de MueveArbol, sola: '' = se puede. Las dos rutas pasan la
   puerta de escritura (PathDenied), el origen ni ES ni CONTIENE un lugar
-  protegido (ProtegidoDenegado) y las dos estan en la misma unidad: entre
+  protegido (ProtegidoDenegado), el destino tampoco (lo de dentro llega
+  alli: ProtegidoDenegado con AComoDestino) y las dos estan en la misma unidad: entre
   unidades no hay renombrado, y copiar y borrar es justo lo prohibido.
   Quien quiera rechazar ANTES de preparar nada (la copia de seguridad de
   delphi_move) la llama primero; MueveArbol la repite igualmente. }
@@ -535,8 +538,15 @@ function MovidoDenegado(const AOrigen, ADestino: string): string;
   otro workspace, se iban con su padre (David, 25-sep-2026: 'ese agujero
   es grave'). El lugar se NOMBRA solo si la sesion ya lo puede leer: la
   raiz de otro workspace, el vault o la carpeta del servidor no se
-  revelan, se dice un sitio protegido. }
-function ProtegidoDenegado(const ADir: string): string;
+  revelan, se dice un sitio protegido.
+
+  Con AComoDestino, ADir es adonde VA una carpeta (mover o copiar), y la
+  misma pregunta vale al reves: lo que lleva dentro llega alli sin que
+  nadie pregunte por ello, y una entrada de ReadOnlyPaths que nombre lo que
+  llegaria se escribia (1.18.2, 2r: el segundo emisor del gemelo .dfm). Que
+  el destino ESTE dentro de un lugar protegido ya lo dice la puerta de
+  escritura; esto es que lo CONTENGA. Solo cambia el mensaje (MOVE-020). }
+function ProtegidoDenegado(const ADir: string; AComoDestino: Boolean = False): string;
 
 { LA pregunta de todo escritor: '' = esta sesion puede escribir APath;
   si no, el motivo. Es la puerta de escritura (PathDenied, sobre la ruta
@@ -3104,6 +3114,11 @@ begin
   Result := MetadatosGitDenegados(AOrigen);
   if Result <> '' then
     Exit;
+  // ...y adonde va: lo copiado llega alli entero, como al mover (2r). Antes
+  // de recorrer el origen: un arbol grande se niega sin recorrerlo
+  Result := ProtegidoDenegado(ADestino, True);
+  if Result <> '' then
+    Exit;
   Hallado := '';
   if TFile.Exists(AOrigen) then
   begin
@@ -3208,7 +3223,7 @@ begin
   end;
 end;
 
-function ProtegidoDenegado(const ADir: string): string;
+function ProtegidoDenegado(const ADir: string; AComoDestino: Boolean): string;
 var
   Full, P: string;
 begin
@@ -3229,7 +3244,10 @@ begin
     P := '"' + P + '"'
   else
     P := MsgText(SN_LUGAR_PROTEGIDO);
-  Result := MsgFmt(SR_MUDANZA_PROTEGIDA_FMT, [ADir, P]);
+  if AComoDestino then
+    Result := MsgFmt(SR_MUDANZA_DESTINO_PROTEGIDO_FMT, [ADir, P])
+  else
+    Result := MsgFmt(SR_MUDANZA_PROTEGIDA_FMT, [ADir, P]);
 end;
 
 function MovidoDenegado(const AOrigen, ADestino: string): string;
@@ -3243,6 +3261,10 @@ begin
   if Result <> '' then
     Exit;
   Result := ProtegidoDenegado(AOrigen);
+  if Result <> '' then
+    Exit;
+  // ...y adonde va: lo de dentro llega alli entero (2r)
+  Result := ProtegidoDenegado(ADestino, True);
   if Result <> '' then
     Exit;
   if DentroDeSiMismo(AOrigen, ADestino, True) then
