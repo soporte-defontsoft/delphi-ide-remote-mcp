@@ -1237,11 +1237,11 @@ begin
     for C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
         Exit(MsgFmt(SR_BUILD_SDK_NAME_FMT, [V]));
+  // el nombre de la config, con la regla de su casa (Lsp.Dproj), la misma que
+  // aplica el fondo (ConfigDesconocida)
   V := ArgStr(AArguments, 'config');
-  if V <> '' then
-    for C in V do
-      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ']) then
-        Exit(MsgFmt(SR_BUILD_CONFIG_FMT, [V]));
+  if NombreDeConfigNoValido(V) then
+    Exit(MsgFmt(SR_BUILD_CONFIG_FMT, [V]));
 end;
 
 { delphi_paserver's add-profile/test-connection compose a paclient.exe command
@@ -2157,7 +2157,13 @@ begin
   // Universal build-argument filter (BOTH access levels): platform, config and
   // target land in a cmd.exe line, so a metacharacter there is arbitrary
   // execution - and it would sail past the jail, the sandbox and the
-  // .dproj hazard scanner in a single call.
+  // .dproj hazard scanner in a single call. delphi_test compila por el MISMO
+  // RunMsBuild y no pasa por aqui: su config la juzga el FONDO, donde vive la
+  // regla del nombre (Lsp.Dproj.ConfigDesconocida, por la que pasan los dos
+  // antes de la linea; 4.8, revision de la 1.18.1), y su platform la lista
+  // exacta con su propio mensaje (TEST-001: lo que se puede EJECUTAR aqui).
+  // Con delphi_test tambien aqui, una plataforma inventada recibia el
+  // BUILD-003 generico en vez de ese (test_round10 P8, medido).
   if SameText(AToolName, 'delphi_build') then
   begin
     Result := BuildArgDenied(AArguments);

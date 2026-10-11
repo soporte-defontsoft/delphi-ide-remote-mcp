@@ -169,6 +169,27 @@ the MCP `initialize` response (`serverInfo.version`).
   line after it. What goes to a program of ANOTHER machine (adb, PAServer)
   is still content. Seen on 10-oct; `test_git_jaula` J18 (red before).
 
+- **`delphi_test` judges its configuration as `delphi_build` does.** The name
+  of a configuration reaches the build's command line (`/p:Config=`), and only
+  `delphi_build` went through the gate that keeps it a plain name
+  (`BUILD-015`). `delphi_test` compiles through the same msbuild and only
+  checked that the project declares the configuration - which says nothing
+  when the project declares none, or declares that very name. Measured on
+  the server before the fix: `config=Debug;Release` reached msbuild from `delphi_test`,
+  with a project without configurations and with one that declares it. Now
+  the name is judged where the rule lives: ONE rule (`Lsp.Dproj.NombreDeConfigNoValido`),
+  in `ConfigDesconocida`, before the project's list - the bottom both tools
+  pass before the command line is composed - and in `delphi_build`'s gate, as
+  before (a gate for `delphi_test` too answered an invented platform with the
+  generic `BUILD-003` instead of its own `TEST-001`). And the configuration
+  travels quoted: a declared name with a space (`Release Plus`) reached
+  msbuild in two pieces (`MSB1008`) and now builds. Found by the reviewer of
+  the jail of 1.18.1. `test_config_1181` (red before in C1, C2 and C4b, and
+  again with the bottom taken out) and `test_build_test_config_118` (4.8's:
+  a metacharacter in the configuration is refused and runs nothing),
+  `LspTests.Dproj` `ConfigConCaracteresDeShellSeNiegaSiempre` (red with the
+  bottom taken out).
+
 - **Four answers that cost an agent a call now say what to do next.**
   From the validation of 1.18.0 on the VM, text only:
   - `delphi_report command=read` with a name that cannot be a report

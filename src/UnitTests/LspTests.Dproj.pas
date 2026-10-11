@@ -24,6 +24,7 @@ type
     [Test] procedure ImportConEntidadesSeComprueba;
     [Test] procedure DeployprojLocalSeComprueba;
     [Test] procedure NombreParecidoAUserToolsSeComprueba;
+    [Test] procedure ConfigConCaracteresDeShellSeNiegaSiempre;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -200,6 +201,39 @@ end;
 procedure TDprojHazardTests.NombreParecidoAUserToolsSeComprueba;
 begin
   CompruebaImport('<Import Project="%s"/>', 'fixture-usertools.proj.targets');
+end;
+
+procedure TDprojHazardTests.ConfigConCaracteresDeShellSeNiegaSiempre;
+var
+  Carpeta, Proyecto: string;
+begin
+  // El nombre de la config va a la linea de cmd.exe del build: el fondo lo
+  // juzga antes que la lista del proyecto - con la lista vacia se aceptaba
+  // todo, y un nombre declarado no es por eso limpio (4.8, revision de la
+  // 1.18.1). Solo se lee XML de una fixture propia; no se compila nada.
+  Assert.IsTrue(NombreDeConfigNoValido('Debug;Release'), ';');
+  Assert.IsTrue(NombreDeConfigNoValido('Debug&x'), '&');
+  Assert.IsFalse(NombreDeConfigNoValido('Release Plus'), 'un espacio vale');
+  Assert.IsFalse(NombreDeConfigNoValido(''), 'vacio = la de por defecto');
+  Carpeta := TPath.Combine(ExtractFilePath(ParamStr(0)),
+    'config-' + TGUID.NewGuid.ToString);
+  Proyecto := TPath.Combine(Carpeta, 'App.dproj');
+  TDirectory.CreateDirectory(Carpeta);
+  try
+    TFile.WriteAllText(Proyecto, CABECERA + PIE);
+    Assert.IsTrue(ConfigDesconocida(Proyecto, 'Debug;Release').Contains('BUILD-015'),
+      'sin configuraciones declaradas');
+    Assert.AreEqual('', ConfigDesconocida(Proyecto, 'Debug'),
+      'sin configuraciones declaradas, un nombre limpio vale');
+    TFile.WriteAllText(Proyecto, CABECERA +
+      '  <ItemGroup><BuildConfiguration Include="Debug;Release"><Key>Cfg_1</Key>' +
+      '</BuildConfiguration></ItemGroup>'#13#10 + PIE);
+    Assert.IsTrue(ConfigDesconocida(Proyecto, 'Debug;Release').Contains('BUILD-015'),
+      'declarado por el proyecto');
+  finally
+    if TFile.Exists(Proyecto) then TFile.Delete(Proyecto);
+    TDirectory.Delete(Carpeta);
+  end;
 end;
 
 initialization

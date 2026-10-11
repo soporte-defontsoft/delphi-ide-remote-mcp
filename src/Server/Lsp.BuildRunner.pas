@@ -1706,8 +1706,11 @@ begin
   var EventArg := '';
   if EventosSaltados then
     EventArg := ' /p:PreBuildEvent= /p:PostBuildEvent= /p:PreLinkEvent= /p:PostLinkEvent=';
+  // Config entre comillas: su nombre puede llevar un espacio ("Release Plus")
+  // y msbuild lo partia en dos argumentos (MSB1008); las comillas no las
+  // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDesconocida)
   var Orden := Format(
-    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s%s%s%s %s"',
+    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s %s"',
     [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg,
      ProfileArg, DeviceArg, EventArg, Verb]);
   Output := RunCaptured(Orden, ATimeoutMs, ExitCode);

@@ -111,8 +111,17 @@ function DprDe(const AProject: string): string;
 { La negativa de una configuracion que el proyecto no tiene ('' = la tiene,
   o el proyecto no declara ninguna). UNA regla para delphi_test y
   delphi_build: aceptarla en silencio compilaba en Win64\<Inventada>\ con
-  los ajustes de Base (medido el 2026-08-25 en test y el 27-sep en build). }
+  los ajustes de Base (medido el 2026-08-25 en test y el 27-sep en build).
+  Antes que la lista, el NOMBRE (NombreDeConfigNoValido): el valor va a la
+  linea de cmd.exe del build, y ni un proyecto sin configuraciones ni uno que
+  declara un nombre raro lo hacen seguro (4.8, revision de la 1.18.1). }
 function ConfigDesconocida(const ADproj, AConfig: string): string;
+
+{ El nombre de una configuracion que puede llegar a la linea de cmd.exe del
+  build (/p:Config=): letras, digitos, espacio, ".", "_" y "-". UNA
+  definicion para la puerta (Lsp.Guard.BuildArgDenied) y el fondo
+  (ConfigDesconocida); '' no es un nombre malo (es "la de por defecto"). }
+function NombreDeConfigNoValido(const AConfig: string): Boolean;
 
 { La negativa de una plataforma que el proyecto no declara o tiene
   desactivada ('' = la declara activa). Lo que compila un agente lo tiene que
@@ -651,10 +660,24 @@ begin
   Result := string.Join(', ', PACLIENT_PLATFORMS);
 end;
 
+function NombreDeConfigNoValido(const AConfig: string): Boolean;
+var
+  C: Char;
+begin
+  for C in AConfig do
+    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ']) then
+      Exit(True);
+  Result := False;
+end;
+
 function ConfigDesconocida(const ADproj, AConfig: string): string;
 var
   Info: TDprojInfo;
 begin
+  // el nombre antes que la lista: con la lista vacia se aceptaba todo, y un
+  // nombre que el proyecto declara no es por eso un nombre limpio
+  if NombreDeConfigNoValido(AConfig) then
+    Exit(MsgFmt(SR_BUILD_CONFIG_FMT, [AConfig]));
   Result := '';
   Info := ReadDproj(ADproj);
   if (Length(Info.Configs) > 0) and not Info.HasConfig(AConfig) then
