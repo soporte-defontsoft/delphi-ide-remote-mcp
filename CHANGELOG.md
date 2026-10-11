@@ -6,7 +6,19 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.18.1] - 2026-10-11
+
+Patch: what 1.18.0 shipped wrong, and what its validation on the VM and
+three rounds of version reviewers found. A network path in `delphi_git
+args` made git open the network with the service's account, and a virtual
+unit there reached git as written; a whole repository never left the
+trash; half a character was written as `U+FFFD`; `to-text` was refused on
+a machine with a double-byte ANSI page; the engine failed under a folder
+with an accent; the header of a nested routine was taken for the routine
+around it; `delphi_test` let through a configuration name that
+`delphi_build` refuses. Four answers that cost an agent a call now say
+what to do next. The jail reviewed apart before the tag; each finding
+fixed with its red, or moved, by name, to 1.18.2.
 
 ### Fixed
 
