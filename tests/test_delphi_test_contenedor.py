@@ -119,6 +119,14 @@ def copias():
     return [d for d in os.listdir(TEMP_SRV) if d.startswith('test-')] if os.path.isdir(TEMP_SRV) else []
 
 
+def log_de_la_copia(s):
+    """Lo que el servidor apunto al no poder borrar una copia o matar el job
+    (SL_TEST_COPIA_NO_BORRADA_FMT, SL_TEST_JOB_*): un K19/K12b rojo dice POR
+    QUE. El release_check de la 1.18.1 (11-oct-2026) salio rojo una vez en
+    los dos, la copia se quedo y sin el log no se pudo saber el motivo."""
+    return [l for l in s.errores if 'was not deleted' in l or 'Job Object' in l]
+
+
 junction = mc.junction  # EL de mcp_cliente (vivia aqui)
 
 
@@ -140,7 +148,7 @@ AJENO = 'DelphiLspMcp.Test.00000000.' + uuid.uuid4().hex   # la marca de OTRA ca
 
 
 def spawn(exe=EXE_CORTO):
-    s = mc.Stdio(exe, ENTORNO, nombre='caja', t=600)
+    s = mc.Stdio(exe, ENTORNO, nombre='caja', t=600, lee_stderr=True)  # log_de_la_copia
     VIVOS.append(s)
     return s
 
@@ -654,10 +662,11 @@ vivo19 = pid19 not in ('0', '') and pid19 in subprocess.run(
     ['tasklist', '/fi', 'PID eq ' + pid19], capture_output=True, text=True).stdout
 check('K19 un hijo persistente del test acaba muerto y su copia borrada (job + EsperaJobVacio)',
       j19.get('result') == 'pass' and not vivo19 and not copias(),
-      'pid=%s vivo=%s copias=%s' % (pid19, vivo19, copias()))
+      'pid=%s vivo=%s copias=%s log=%s' % (pid19, vivo19, copias(), log_de_la_copia(srv)))
 
 check('K12 no queda ningun contenedor', not (contenedores() - antes), str(contenedores() - antes))
-check('K12b ...ni copias en la temporal del servidor', not copias(), str(copias()))
+check('K12b ...ni copias en la temporal del servidor', not copias(),
+      '%s log=%s' % (copias(), log_de_la_copia(srv)))
 
 # K13: el servidor muere con un test dentro; su contenedor queda huerfano
 LENTO = os.path.join(JAIL, 'LentoTest')
