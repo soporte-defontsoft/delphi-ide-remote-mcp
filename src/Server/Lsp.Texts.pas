@@ -910,7 +910,7 @@ const
     '"profiles" comes back empty and get-sdk lands in the SYSTEM ' +
     'profile. Ask the operator to make the service log on as that user ' +
     '(services.msc, or sc config ... obj=) - see "The service must log ' +
-    'on as the user who owns the IDE" in the README.';
+    'on as the user who owns the IDE" in docs/CONFIGURATION.md.';
 
   SP_PATCH_FRAGMENT =
     'FRAGMENT mode for a LONG line: "fragment" = the exact piece to change ' +

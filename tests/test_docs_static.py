@@ -76,11 +76,13 @@ check('CHANGELOG mas reciente == SERVER_VERSION (%s)' % (mv and mv.group(1)),
       bool(mv and mc) and mv.group(1) == mc.group(1),
       (mv and mv.group(1), mc and mc.group(1)))
 
-# ---- settings.example.ini vs README ------------------------------------
-# Operator rule (2026-09-01): updating the README is PART of every repo
-# update - and it gets forgotten. So it is a gate: every section and every
-# ACTIVE key of settings.example.ini must be mentioned in the README. A new
-# config key without its README mention turns this red.
+# ---- settings.example.ini vs docs/CONFIGURATION.md --------------------
+# Operator rule (2026-09-01): the docs are PART of every repo update - and
+# they get forgotten. So it is a gate: every section and every ACTIVE key of
+# settings.example.ini must be mentioned in the configuration reference. It
+# lived in the README until 2026-10-11, when the reference moved to its own
+# file (David: thin the README and link to docs); the rule moved with it.
+config_md = open(os.path.join(REPO, 'docs', 'CONFIGURATION.md'), encoding='utf-8').read()
 ini_text = open(os.path.join(REPO, 'settings.example.ini'), encoding='utf-8').read()
 need = set()
 for ln in ini_text.splitlines():
@@ -92,9 +94,9 @@ for ln in ini_text.splitlines():
     m = re.match(r'([A-Za-z][A-Za-z0-9_]*)=', s)
     if m:
         need.add(m.group(1))
-missing_cfg = sorted(k for k in need if k not in readme)
-check('README menciona TODA seccion y clave activa de settings.example.ini '
-      '(regla: el README forma parte de cada actualizacion)',
+missing_cfg = sorted(k for k in need if k not in config_md)
+check('docs/CONFIGURATION.md menciona TODA seccion y clave activa de settings.example.ini '
+      '(regla: la documentacion forma parte de cada actualizacion)',
       not missing_cfg, missing_cfg)
 
 # ---- Python escape hygiene ---------------------------------------------

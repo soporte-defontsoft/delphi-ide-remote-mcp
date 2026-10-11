@@ -9,7 +9,7 @@ MCP-capable agent can use this server. Two transports:
   connect from anywhere (Linux included) with the Bearer token.
 
 For remote use, configure a `[Workspace.<name>]` section in `settings.ini`
-next to the exe (see README): its `Token=` is the credential and its `Roots=`
+next to the exe (see [CONFIGURATION.md](CONFIGURATION.md)): its `Token=` is the credential and its `Roots=`
 the jail - nothing is global since v0.98. The listen
 port is `[Server] Port` in the same file (default 3000; a `--http <port>`
 argument overrides it for that run) — the `3000` in the examples below is
@@ -17,7 +17,7 @@ whatever you configured.
 
 Reviewer agents (read but never modify) can be given the workspace's
 `ReadOnlyToken=` instead of its full token — same configuration snippets,
-different Bearer value. See the README's Configuration section.
+different Bearer value. See [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Claude Code
 
@@ -94,7 +94,7 @@ in `output`) → `delphi_package` (zip, compressed, dcu excluded) →
 
 ## Several Delphi servers: one entry per server
 
-A server works with ONE RAD Studio (README: *One server, one Delphi*). Two
+A server works with ONE RAD Studio ([CONFIGURATION.md](CONFIGURATION.md#one-server-one-delphi---several-versions-on-one-machine)). Two
 versions on one Windows machine are two servers, each one on its own port with
 its own tokens - and the same version can also run on SEVERAL machines (13.1 on
 the workstation, 13.2 on a VM, 13.2 again on a second VM). The client gets one

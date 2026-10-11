@@ -53,7 +53,7 @@ Roots=D:\Projects
   it into this file (`DelphiVersion=37.0` under `[Server]`); from then on the
   key rules. The first lines of its log list every installation, each with the
   line that pins it (`[Server] DelphiVersion=23.0`). Two versions = two
-  servers, each in its own folder with its own port: README, *One server, one
+  servers, each in its own folder with its own port: docs/CONFIGURATION.md, *One server, one
   Delphi*.
 
 ## 3. Run it
@@ -66,7 +66,7 @@ A tray icon appears; double-click it for the live log. It listens on the port
 above. Run it **as the Windows user who owns RAD Studio**: the IDE keeps its
 library paths, packages and SDKs per user, and another account sees none of
 them. When you want it permanent, make it a Windows Service (`-install`, see
-the README's Quickstart): same `settings.ini`, same port, so it is the service
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md)): same `settings.ini`, same port, so it is the service
 *or* the tray, never both.
 
 The tray's **Copy server URL** copies `http://localhost:3000/mcp`. That URL

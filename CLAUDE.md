@@ -226,7 +226,7 @@ not a reason to go around it: write it down or send it with `delphi_report`.
 - **Deploying the exe** to `C:\Delphi-mcp-Server\`. Since 2026-09-20 the
   agent does the whole thing: production is a **Windows Service**, and
   `sc.exe stop` / `sc.exe start DelphiLspMcp` work unelevated because that one
-  account was granted start/stop rights on that one service (see the README).
+  account was granted start/stop rights on that one service (see docs/CONFIGURATION.md).
   The MSIX constraint that used to make this David's job no longer applies -
   the SCM launches the service, so it never inherits the package's private
   registry hive.

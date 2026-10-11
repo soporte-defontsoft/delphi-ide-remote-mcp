@@ -67,7 +67,7 @@ The table below says which engine each one uses and why it matters:
 | **The desktop of a PAServer target** - Linux, Windows, or this server itself (a small Delphi node this server deploys there) | `delphi_desktop` | Bring the whole desktop here as a PNG, measure the pixel, press it, type into it. Nothing installed on the target beyond the node itself; the machine is the `profile` parameter. |
 | **Its own `.style` parser and `DelphiStyleConvert.exe`** | `delphi_styles` | **FMX styles by StyleName**: `view`/`get` a text `.style`, `set` one property of a style or of a part, `clone` a variant, `delete` one, `lint` (duplicated StyleNames, `StyleLookup` values of the project's `.fmx`/`.pas` that no style defines, design tokens missing in a theme, `.rc` entries without file) and `build` (text `.style` → `.bin.style` the app embeds, `.rc` → `.res`). Ships `DelphiStyleConvert.exe` next to the server |
 | **The IDE's registry** (Known Packages — what the palette loads) | `delphi_components` | The design packages installed in the server's RAD Studio, whatever the install channel — what the agent has available to program with. List only; installing stays a human decision. |
-| **The RAD Studio help** (the `.chm` files the IDE registers - the ones F1 opens - read in place with Windows' own help storage) | `delphi_docs` | The documentation of the Delphi installed here, as a wiki the agent pages through: `search` gives a short list (id + title, the best first; `framework=vcl\|fmx` for a class both have), `read` gives one page as text in chunks - a long one starts with its introduction and its sections, a class with its ancestors and its member lists in `related`. It asks for no switch, in any workspace: it opens only the help files the IDE itself registers, an id never leaves its file, and what comes back is the product's documentation (`LibraryZone=0` keeps the component SOURCES out of reach; the help is not them). Nothing is extracted to disk and nothing is cached: a search reads the indexes again (0.4-0.7 s measured over real queries; a lone word found almost everywhere, such as `e` or `object`, takes 3-4 s). Each page says which help file and date it comes from; for an exact signature the installed sources win (`delphi_hover`, `delphi_definition`). |
+| **The RAD Studio help** (the `.chm` files the IDE registers - the ones F1 opens - read in place with Windows' own help storage) | `delphi_docs` | The documentation of the Delphi installed here, as a wiki the agent pages through: `search` gives a short list (id + title, the best first; `framework=vcl\|fmx` for a class both have), `read` gives one page as text in chunks. It asks for no switch, in any workspace: it opens only the help files the IDE itself registers. For an exact signature the installed sources win (`delphi_hover`, `delphi_definition`). |
 | **Your Markdown vault** | `vault_read`, `vault_search`, `vault_append`, `vault_create`, `vault_patch` | Persistent memory, isolated from the code tools (see below). |
 | **A folder the server owns** | `delphi_messages` | The operator's **mailbox** (the way back of `delphi_report`): `.md` files left in `messages\<workspace>\<agent>\` are delivered once by `read`, which deletes them; while one waits every tool answer ends with a `PENDING MESSAGES` line. The workspace folder is `Workspace.` and its name in lower case (`messages\Workspace.claude\hermes\`), plus `-` and eight characters of its MD5 when the name has spaces, accents or signs (`[Workspace.Hermes VM]` is `Workspace.hermes-vm-xxxxxxxx`), taken from the token: one workspace never sees another's mail |
 | **The same folder** (`reports\`) | `delphi_report` | The feedback channel back to us; the one write a read-only client may perform. Reports land in `reports\<workspace>\<agent>\`, and `command=list` / `read` show them to that workspace only, moving nothing |
@@ -217,45 +217,45 @@ switch and its own allowlist; it will not arrive by accident.
 
 | Tool | What it does |
 |---|---|
-| `delphi_help` | **The map** (right after `delphi_workspace`, the first call). `command=tasks` gives a task -> tool table ("I need to change a form", "the build failed"), `command=tool name=<x>` explains one tool and every parameter it really takes, and `command=conventions` is the house rules: how to read the `[AREA-NNN OUTCOME]` tag every refusal or failure starts with, how the recoverable trash and `purge` work, how agents identify themselves and share the mailbox |
-| `delphi_docs` | **The RAD Studio documentation** installed with Delphi — the help F1 opens: RTL, VCL, FMX, FireDAC, Indy, the language and the IDE, plus the help of installed components that register one. `search` a concept or a class (`FormatDateTime`, `TStringList.Sort`, `"class helpers"`) and get a short list; `read` one page by its id, as text, in chunks (`offset`): a long page first gives its introduction and its sections (`<id>#<section>` reads one, named by its anchor or by its title), a class its ancestors and `related` (its unit, its methods, properties and events), a topic its parent index. Read-only, in any workspace: it opens only the help files the IDE registers (`LibraryZone` is about the component sources, not the help). The list of help files is the IDE's own |
-| `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections). Since v1.0.7 every symbol carries the declaration **as written in the source**: DelphiLSP's own `name` is a rendered signature that drops default values (`B: Integer = 0` → `B: Integer`) and array bounds (`array [0..7] of Byte` → `Byte`). A folder answers with the interface digest of every unit inside |
-| `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` jumps to the interface declaration of the target symbol (on call sites the tool chains definition→declaration, so you get the callee) |
-| `delphi_signature` | Signature help for the call under the cursor (parameter names/types) — the IDE's Ctrl+Shift+Space |
-| `delphi_hover` | Type/signature of an identifier usage |
-| `delphi_completion` | Code completion candidates |
-| `delphi_references` | Find references (hybrid: text scan + per-candidate `definition` validation — homonyms rejected by the compiler engine; names in comments/strings listed apart as `mentions`; a comment never blocks `delphi_rename_symbol`, a string literal does - `RENAME-020`, it may be a `FindComponent`/RTTI by name) |
-| `delphi_diagnostics` | Error Insight on demand: real compiler codes (E/W/H) with exact positions, no build |
-| `delphi_read` | Encoding-correct numbered reads (ANSI - the machine's code page - / UTF-8±BOM / UTF-16 / UTF-32 detected for real); a binary `.dfm` is shown as text, the IDE's own conversion, and the answer says so |
-| `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, ADDUSES / REMOVEUSES (`adduses`/`removeuses` put a unit into, or take it out of, the `uses` of a section: commas and terminator by the engine, the clause created when missing and dropped when it empties, idempotent; the mirror of `delphi_config add-unit`/`remove-unit` for a unit instead of a project; in a `.dpr`, `adduses` takes library units - no path - and a unit of the project still goes by `add-unit`), semantic INSERT (global routine / method with both halves — also inside a `.dpr`, and into the implicit published section of forms; since v0.94 it checks each half first: a declaration the class already has is not duplicated, and a method that fully exists is refused with both line numbers; since v0.95 the signature is read whole however many lines it spans, and a doc comment above it travels with the implementation), line DELETE mode, **range** delete/replace since v1.0.6 (`toline`: the anchor is the first line, `toline` the last — a whole method goes without pasting it as the anchor), TPF0 hard-reject, post-write audit; new units use the encoding configured in the IDE, or UTF-8 with a BOM when ANSI cannot hold them; the first accent of a pure-ASCII source goes in as the IDE would write it (ANSI, or UTF-8 with a BOM when ANSI cannot hold it), and a file that would not read back the same is never written (`EDIT-038`, `EDIT-122`); an anchor's indentation does not count, and a batch whose `occurrence` picks a line indented otherwise than its anchor is refused, naming the lines (`EDIT-121`) |
-| `delphi_changeset` | **Multi-file transactions**: stage edit/create/delete/move, `preview` resolves every anchor and fingerprints every file, `commit` applies all or nothing — a file changed since preview refuses the batch, any failure restores every file byte-exact |
-| `delphi_designer` | **Forms and components, structured**: `info`/`prop` answer what a class REALLY publishes (tables read from the active Delphi's own source, installed components included), `tree`/`get` walk a `.dfm`/`.fmx` (a binary `.dfm` is read on the fly; `to-text`/`to-binary` convert it on disk, backup first), `lint` catches non-published properties and values their type does not take (the checks of `set`) before the IDE ever opens the form and, when the `.pas` is next to it, runs `check-binding` too (so does every write to a designer, and `delphi_edit insert=metodo` lands a handler the designer already wires in `published` by itself), and two checks the compiler never makes: `check-binding` (does the `.dfm` agree with the class - a component with no published field, an event naming a method that is not declared **or not published**, a duplicate name; all of which build fine and throw when the form is created) and `layout` (**where things actually end up**: resolves `Align` (approximately: bands in `.dfm` order, while the VCL orders same-aligned controls by position - `preview` shows the real place), returns the resolved rectangle of every control in `boxes`, and reports controls that overlap, controls with a side of zero and controls that fall outside their container - a form can bind perfectly and still be unusable), and `preview`: **a PNG of what the IDE designer shows**, drawn by a renderer of its own (`DelphiFormRenderVcl.exe` / `DelphiFormRenderFmx.exe`, next to the server) in design mode with the IDE's installed packages - no code runs and nothing reaches any screen; it comes back in the same answer with its `frame` (image pixels to form units), `nonVisual` lists the non-visual components even when they are not drawn, `component` crops to one (inside an inline frame, `Frame1.Name`), `state` sets a view state (`PageControl1.ActivePage=TabSheet2`) and `style` a `.vsf`, a `.style` or a platform of the designer; `fidelity` says how it was painted (`print` from a service: controls that paint their own way come out native-looking), and `ignored` lists each property the form loader skipped, with its line, to fix with `set`; and three commands that **edit the form and its unit the way the IDE does**: `insert` (a new visual control at 10,10, among its parent's children where the IDE's own writer keeps it, with the minimum the IDE writes, its published field and its unit in the uses; named by `component`, or like the IDE the first free `Button1`, `Button2`...; what it cannot place, its refusal says how to write by hand), `set` (one property, checked *before* writing against the class and against what its type takes, read from the Delphi source - a `TColor` takes a number or one of its named constants, a DBGrid's `DataSource` a `TDataSource`; a string written as the IDE writes it, `#243` and pieces of 64 included; `nil` clears a reference; `parent=` moves a component with its children, `before=`/`after=`/`index=` reorder it among its siblings only where the IDE's own writer keeps it, `prop=Name` renames it and its field; it refuses `Left`/`Top` of an FMX control, naming `Position.X`/`Y` (`DSGN-118`), and a path through a reference to another component, such as `PopupMenu.AutoPopup`, saying where it belongs (`DSGN-119`)) and `delete` (the component and what is inside it, its field, its empty handlers and the references to it - **refused while a method of its own still has code**, so it never leaves orphan code behind as the IDE does); the form and its unit are written all or nothing |
-| `delphi_rename_symbol` | **Semantic rename**: every occurrence re-confirmed against the same definition; one unverified reference, a file of its scope it could not read, a designer or string-literal hit, an RTL symbol or a collision = not applicable, with the reasons. `mode=apply` writes it through the changeset engine (all files or none, a backup of each) when - and only when - it is applicable |
-| `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too. `edits` applies several changes to one file all-or-nothing, `delete` removes a line, `toline` turns the anchor into a **range**, and `fragment` + `atline` changes just a piece of one LONG line (it must appear exactly once in it) without retyping the line |
-| `delphi_create` | Scaffold NEW projects (console/VCL/FMX, and runtime packages: `.dpk` + `.dproj`, built to BPL+DCP in their own folder, never installed in the IDE; and DUnitX test projects: a console runner with its first fixture, green at birth, what `delphi_test` runs) and NEW forms, frames, data modules and plain units (VCL/FMX) with IDE-equivalent skeletons, registered in the `.dpr` uses or the `.dpk` contains **and** the `.dproj` on creation — buildable immediately |
-| `delphi_build` | Real MSBuild builds with structured errors/warnings; on success it declares the artifact it produced (`output`). It builds what the IDE would build: a platform the project declares and has enabled (another is refused with `BUILD-046`; `delphi_config add-platform` declares it), and without `platform` the project's own default. `target=Deploy` compiles **and ships**: to the PAServer of its profile on Linux/macOS (the `profile` param, else the one the project declares; its host has to be in `RemoteHosts`), or assembling the **Android `.apk`** — the deployment manifest, manifest template and version fallbacks are generated when the project has none (the IDE's own files always win). For a `.dpk` it also gives `implicitImports` and `requiresSuggested` (units of other packages it compiled into itself, W1033), the list `delphi_config add-requires` takes |
-| `delphi_fetch` | Download files from the server — "get the deploy" to run GUI apps on the client machine. Every answer carries a **`download` link** (`GET /files?path=...` on the same host, same Bearer, `X-File-SHA256` header): bytes travel as HTTP — a 70 MB installer is one `curl`. Base64 chunks inline remain for small files and clients without a shell; files over 1 MB answer with the link only unless `maxbytes<=1048576` is passed explicitly |
-| `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
-| `delphi_search` | Recursive search, literal or a regular expression (`regex=true`: PCRE, line by line, with a recursion limit - `SEARCH-005` says how to write it with no depth), IDE artifacts skipped; hits grouped by folder and file |
-| `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style; IDE artifacts are filtered relative to the root and the result says how many entries it hid; paged like `delphi_search` (500 per page, `offset`/`nextOffset`), and a listing that does not fit says where its entries are (`byFolder`). Like every list of files of this server it writes each folder once, complete, with its files by name under it (`folders = [{dir, files = [{name, ...}]}]`): the path repeated on every entry was 42% of a page |
-| `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace.<name>] Roots=D:\Projects;E:\More`). Paged (`maxresults`/`offset`): a work machine holds thousands of them. Backup copies (`__delphi-patch`, `__history`) are never declared as projects, but the answer says how many it hid — and naming one of those folders as `root` lists them. A configured root the server cannot reach right now (a drive not connected) is skipped and named (`PROJ-005`) instead of failing the whole list |
-| `delphi_installs` | List every RAD Studio/Delphi installation discovered on the machine (side-by-side versions), flagging which one is active for the LSP engine |
-| `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe), the access level, the `[Workspace.<name>]` section the token belongs to (`workspace`), and the active Delphi - plus the roots it cannot reach right now (`unavailableRoots`, with the reason: a drive letter not connected on the server, a local root folder that does not exist; a call on a root whose letter is not connected is refused with `WS-022`, which says it is the operator's to fix). It also says **who is answering** — version, how the process was started (tray / service / console), transport, pid, uptime, the MACHINE it runs on (`host`, also in `serverInfo`: two servers of the same name and version answer with nothing else that tells them apart) and the Windows ACCOUNT it runs as (with a warning when that is LocalSystem, which cannot see the IDE's configuration) — so checking a deployment does not mean looking at the machine from outside. Server paths travel with **virtual drive units** (`srvd:`, `srvc:` — they only exist inside this MCP, never on your local disk). Call it first |
-| `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/switch/merge (always `--ff-only`, and so is `pull`)/stash (push, pop, list)/add/restore (always `--staged`: undo an add, the working tree untouched)/commit/init/push/tag/config/fetch, and **`worktree`**: another version of the repo next to it (`add` with `path` = a new folder inside your roots and `ref` = a tag, branch or commit, detached), to build and test it and compare - how a remote agent checks an old release without leaving the MCP; `list` shows them, `remove` takes away only those, never with changes or with a link inside. Options that write files or read outside the repo (`--output`, `--no-index`, `-c`…) are refused at the gate, and so is a repository that lives outside your roots (`GIT-041`): git works on the whole repository it finds by climbing from the folder you name, so its root and its `.git` have to be yours. The remote of `fetch`, `pull` and `push` is a network address the operator allows, or a folder inside your roots (`GIT-044`) - by its path or by the name it has in the repository, it is the same folder, and it is looked at whole, with the repository that lives there; as `file://`, only `file:///<drive>:/<path>` with nothing percent-encoded (`GIT-045`) - and of the options they take a short list (`GIT-042`, `GIT-043`): no `--force`, no `--rebase`. What `push` sends is names (`origin main`, `origin HEAD:refs/heads/copy`): it adds to the remote and never overwrites or deletes what is there (`GIT-046`; with no names in the call, what the repository is configured to send is judged too, `GIT-048`). A path inside `args` takes its virtual unit like any path argument, and a share or a device path there is refused before git runs |
-| `delphi_report` | **Feedback channel**: the agent reports a bug, limitation or suggestion and the server files it as its own dated markdown in `reports\<workspace>\` next to the executable; `command=list` and `read` show the reports of the caller's workspace, nothing moved. Works at **every** access level, read-only included |
-| `delphi_config` | See and manage a project's build **configurations, target platforms, output folder and search paths**: `view` reports framework/configs/platforms with status, the default platform (`defaultPlatform`, what `delphi_build` builds without `platform`) and the search paths per platform, and for every remote platform the SDK and the PAServer profile it builds and deploys with and where each comes from (`sdkSource`/`profileSource`: project, IDE default or none); `add-platform`/`remove-platform` enable/disable a platform in the `.dproj` (curated edit), refusing platforms the framework can't target (VCL is Windows-only); `set-output` puts every binary under one folder (e.g. `Compiled`); `set-version` writes the project version in the four places that have to agree (the Windows VERSIONINFO numbers and the `FileVersion`/`ProductVersion` keys), leaving Android and iOS numbering alone; `add-searchpath`/`remove-searchpath` manage a platform's unit search path - the IDE's Project Options > Search path - creating the platform's property groups as the IDE would (the usual fix for "unit not found" on a newly added platform: its third-party components' folders are registered for the other platforms only); `add-deployfile`/`remove-deployfile` ship an extra file with the build on one platform - the IDE's Deployment Manager - for the native library a component loads at runtime; `add-unit`/`remove-unit` are the IDE's Add to project / Remove from project for an existing `.pas` (uses of a `.dpr` or contains of a `.dpk`, CreateForm, DCCReference; the file stays on disk); `add-requires` adds packages to a `.dpk`'s requires clause, the list `delphi_build` gives back as `requiresSuggested` when a package compiles other packages' units into itself (the IDE's "add to requires?" prompt) |
-| `delphi_paserver` (incl. `remote-run`: execute on the target through PAServer itself - nothing installed there - `kill` for a job it left running, and `output` to read what that job wrote after the answer came back - the error on closing, its exit code) | The bridge for building on **Linux/macOS** via the Platform Assistant. **PAServer is the channel, and lighting the first one needs hands ON the target — a person's or a local AI agent's** (an agent running on the machine, e.g. OpenCode, bootstraps it autonomously through this same MCP: `packages` → `delphi_fetch` the installer → start it inside the graphical session); with nothing listening there is no way in, the same bootstrap adb has until USB debugging is enabled on the phone itself. **Exactly two things happen on the machine, once** — start PAServer inside the graphical session and grant the screen-capture permission — and everything else is this server's job, execution included (v0.98: the on-target Python runner is gone; PAServer itself launches what this server sends); the table in [TOOLS.md](docs/TOOLS.md#setting-up-a-new-linux-target-what-happens-on-the-machine-and-what-this-server-does) says why each one cannot come from here. Commands: `platforms` (what the server can target + profile status), `packages` (the PAServer installers to download and run on the target), `profiles` (registered connection profiles/SDKs), `add-profile` (register a connection profile against a live PAServer - the password is stored encrypted by `paclient` itself), `test-connection` (full handshake against a profile, or a raw TCP reachability probe with `host`+`port` and no profile; one machine can run one PAServer per Delphi, each on its own port, and another Delphi's PAServer refuses this one's paclient - the answer says so, `PAS-056`), `get-sdk` (pull the platform SDK/sysroot from the live PAServer and register it - after this, `delphi_build` links for the platform; distro-aware since v0.92: it tries every known GCC triplet - Debian/Ubuntu `x86_64-linux-gnu`, Fedora/RHEL `x86_64-redhat-linux` + `/usr/lib64` - and requires that ONE of each group lands, instead of failing hard on the Debian path. **One SDK = one folder**, named after the target's distribution and registered in the IDE's SDK Manager, exactly like the Android SDKs: pulling one distribution on top of another is refused, and each sysroot reports its glibc so you can build everything with the oldest one in your fleet - a binary linked against an old glibc runs on the newer distributions, never the other way round) |
-| `delphi_adb` | **Android devices for remote development** — the phones/tablets hang off the *server*, you program from anywhere: `discover` (devices announcing wireless debugging on the server's network, via mDNS, each with its `ip:port`), `devices` (what adb has attached — the IDE's deploy-target list), `connect`/`disconnect` (attach one over the network), `install` (put a built `.apk` on a device), `run` (launch the installed app — the IDE's "Deploy and Run"), `logcat` (bounded dump of the device log, optional filter), `screenshot` (the device screen, in the same answer — your remote **eyes**) and `tap`/`key` (touch and navigation keys — your remote **hands**): enough to deploy, drive and debug the app end to end. Uses the IDE's own Android SDK `adb`, discovered per install |
-| `delphi_desktop` | **The desktop of the machine behind a PAServer profile** - a Linux target, a Windows target, or this server itself when a PAServer runs in its user session (`windows-local`) - the way `delphi_adb` gives you an Android one. The machine hangs off a PAServer profile and runs a small Delphi node **this server deploys and updates there by itself**, the right binary for that system - leave `project` empty and the bundled node (`node\McpDesktopNode`, `node\McpDesktopNode.exe`) is pushed on first use, then refreshed whenever its version stamp (`node.ver`, the binary's SHA-256) stops matching; nothing is compiled and nothing else is installed on the target. The flow is the whole trick: `screenshot` brings the **whole desktop** here as a PNG, you look at it, measure the pixel you want, `tap` presses exactly there and `type` writes text with the keyboard layout the target desktop REALLY has (on Linux it asks the desktop for its keymap; on Windows it types Unicode), typed, never run as shell (with x, y it presses there first - one trip). `key` presses one key - by its Linux code on a Linux target, by NAME on a Windows one (the tool reads the profile's platform and refuses the other kind); `screenshot region=x,y,w,h` (or `window=<title>`: on Linux the X11/Xwayland windows the node can see) brings back just that piece of the same capture at full resolution, with the `origin` to add when you press; every capture carries a `windows` list (title and rectangle of each window; on Linux the X11/Xwayland ones, which is every FMX application); `overview` brings them all into view when one covers another; `status` says whether the desktop is reachable; every answer carries `graphicalEnv`, the session the node ran in. The target needs a graphical session open for the user PAServer runs as: on Linux the launcher completes `DISPLAY` and friends when PAServer runs as a service, on Windows PAServer itself must run inside the user's session (a service lives in session 0, which has no desktop) - and on GNOME the **screen-capture permission granted once**. Refused to a read-only credential. Seeing and typing on a desktop is a permission of its own: besides `AllowRemoteRun` and the profile's host in `RemoteHosts`, the workspace declares `McpDesktopNode` (or `all`) in `RemoteRunProjects`, and without it the answer is `RUN-020`. It was `delphi_adb_linux` until 1.0.15 |
-| `delphi_components` | **What the server has installed to program with**: every design package registered in the IDE (the list the palette loads), whatever the install channel — GetIt, vendor installers, manual. Description + `.bpl` per entry, disabled ones marked, optional `filter`. Read-only by design — no install (that stays a human decision); a missing library is reported with `delphi_report`. `platform=Linux64` shows instead the IDE's Library Search Path of that platform and the components registered only elsewhere — the porting matrix |
-| `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in a Windows container of its own on a copy of its output folder - besides what Windows gives every container (its own temp, the system files) it sees nothing else, and has no network, a project with runtime packages is refused, and what it writes comes back in `files` - and answers structured — total/passed/failed, the failing lines, `exitCode`, duration. A runner whose output cannot be counted is still reported FAILED when its exit code says so. `nobuild`, `timeoutms`, `platform`; `discover` reports the `countsFormat` of a hand-rolled runner. Own opt-in (`AllowTests`); builds the project's own default platform unless `platform` names another one the project declares |
-| `delphi_delete` | Delete a file or folder — into a **recoverable trash** next to it (`__delphi-patch\<date>\deleted\`), not a hard delete; it also drops the unit from the projects that list it. `purge=true` is the one hard delete, allowed only INSIDE that trash, and only for what you put there: every trashed item records who trashed it, and a folder holding somebody else's copies is refused, naming them |
-| `delphi_move` | Move or rename a file or folder inside the workspace — and, for a unit, rename it everywhere it is referenced (`.dpr`, `.dproj`, the uses clauses of every unit of the project, qualified `UnitOld.X` references, its `.dfm`). Moving an item OUT of the trash is how you restore it. `copy=true` is the same door with a different last step: the source stays, the copied unit gets its header and designer, and no project is re-pointed |
-| `delphi_package` | Zip a build output folder for download (recursive; `.dcu`, intermediates and the server's `__delphi-temp` excluded) — the last step of "build on the server, run it here" |
-| `delphi_styles` | **FMX styles by `StyleName`**: view/get/set/clone a style member, `lint` it, and `build` a `.style` into the binary the app loads. The `.rc` include chain is walked so a style cannot pull in a file from outside the jail |
-| `delphi_messages` | The agents' mailbox: `check` lists what is pending for you, `read` delivers it. Notes from the operator to one agent (a restart, a new tool, a convention); reading one deletes it, and a notice for everyone goes into each agent's box; your identity comes from the handshake, so you do not type it, and each workspace has its own boxes |
-| `vault_read` · `vault_search` | **Optional persistent memory** (off unless configured): read and search a vault of Markdown notes — your decisions, conventions and project context — so a remote agent starts with more than the source tree. Lazy loading: it bootstraps with the vault's own rules + index and pulls only the notes it needs |
-| `vault_append` · `vault_create` · `vault_patch` | Let the agent **record what it learned** (opt-in, read-write credential only): append a log entry, create a note, replace an anchored fragment. New notes are linked from the project's own notes, never from the root index: `MEMORY.md` and the vault rules are **governance files**, refused on every write - the agent asks for their update in its reply (or a `delphi_report`) and a person applies it. No rewrites, no deletes, and the server always backs the original up first. See **[docs/VAULT.md](docs/VAULT.md)** |
+| [`delphi_help`](docs/TOOLS.md#delphi_help) | **The map** - the first call after `delphi_workspace`: a task -> tool table, one tool with every parameter it takes, and the house rules (how to read the `[AREA-NNN OUTCOME]` tag, the trash, identity, the mailbox) |
+| [`delphi_docs`](docs/TOOLS.md#delphi_docs) | **The RAD Studio help** installed with Delphi - RTL, VCL, FMX, FireDAC, the language, the IDE, and the components that register one: `search`, then `read` a page in chunks |
+| [`delphi_symbols`](docs/TOOLS.md#delphi_symbols) | Symbol tree of a unit, each declaration as written in the source; a folder answers with the interface digest of every unit inside |
+| [`delphi_definition`](docs/TOOLS.md#delphi_definition) | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` for the interface half |
+| [`delphi_signature`](docs/TOOLS.md#delphi_signature) | Signature help for the call under the cursor - the IDE's Ctrl+Shift+Space |
+| [`delphi_hover`](docs/TOOLS.md#delphi_hover) | Type/signature of an identifier usage |
+| [`delphi_completion`](docs/TOOLS.md#delphi_completion) | Code completion candidates |
+| [`delphi_references`](docs/TOOLS.md#delphi_references) | Find references: a text scan, then every candidate validated by the compiler engine - homonyms rejected, names in comments and strings listed apart as `mentions` |
+| [`delphi_diagnostics`](docs/TOOLS.md#delphi_diagnostics) | Error Insight on demand: real compiler codes (E/W/H) with exact positions, no build |
+| [`delphi_read`](docs/TOOLS.md#delphi_read) | Encoding-correct numbered reads (ANSI - the machine's code page - / UTF-8 ± BOM / UTF-16 / UTF-32, detected for real); a binary `.dfm` is shown as text |
+| [`delphi_edit`](docs/TOOLS.md#delphi_edit) | **Safe editing of Delphi sources**: anchors copied from a read, encoding and line endings kept byte for byte, atomic writes, automatic backups; batches and ranges, `adduses`/`removeuses`, semantic INSERT of a routine or of both halves of a method - and nothing is written that would not read back the same |
+| [`delphi_changeset`](docs/TOOLS.md#delphi_changeset) | **Multi-file transactions**: stage, `preview`, `commit` all or nothing |
+| [`delphi_designer`](docs/TOOLS.md#delphi_designer) | **Forms and components, structured**: what a class REALLY publishes (read from the active Delphi's own source), the form tree, `lint`, `check-binding`, `layout`, a `preview` PNG of what the IDE designer shows, and `insert`/`set`/`delete`, which edit the form and its unit the way the IDE does |
+| [`delphi_rename_symbol`](docs/TOOLS.md#delphi_rename_symbol) | **Semantic rename**: every occurrence re-confirmed; anything unverified, a designer or string hit, an RTL symbol or a collision makes it not applicable, with the reasons; `mode=apply` writes all files or none |
+| [`delphi_textedit`](docs/TOOLS.md#delphi_textedit) | The same safe editing for **non-Delphi text files**: docs, tests, scripts, web assets, config |
+| [`delphi_create`](docs/TOOLS.md#delphi_create) | Scaffold projects (console/VCL/FMX, runtime packages, DUnitX test projects) and forms, frames, data modules and units - registered and buildable at birth |
+| [`delphi_build`](docs/TOOLS.md#delphi_build) | Real MSBuild with structured errors and the artifact it produced; it builds what the IDE would build, and `target=Deploy` ships to a PAServer target or assembles the Android `.apk` |
+| [`delphi_fetch`](docs/TOOLS.md#delphi_fetch) | Download files from the server: a `download` link (HTTP GET, same Bearer, SHA-256 header) for any size, base64 chunks for clients without a shell |
+| [`delphi_upload`](docs/TOOLS.md#delphi_upload) | The mirror of fetch: send files TO the server in chunks, SHA-256 verified |
+| [`delphi_search`](docs/TOOLS.md#delphi_search) | Recursive search, literal or a regular expression, each file decoded with its real encoding; hits grouped by folder and file |
+| [`delphi_list`](docs/TOOLS.md#delphi_list) | Recursive file listing, or the subfolders explorer-style; IDE artifacts filtered and counted, paged |
+| [`delphi_projects`](docs/TOOLS.md#delphi_projects) | Locate projects (.dproj/.groupproj) by name under a root or under the workspace roots, paged |
+| [`delphi_installs`](docs/TOOLS.md#delphi_installs) | Every RAD Studio installation on the machine, and which one this server works with |
+| [`delphi_workspace`](docs/TOOLS.md#delphi_workspace) | **The first call**: your roots, access level and workspace, the active Delphi, and who is answering (version, mode, machine, account) |
+| [`delphi_git`](docs/TOOLS.md#delphi_git) | Whitelisted git - `clone`/`pull`/`fetch`/`push`, status/diff/log/show, branch/switch/merge (`--ff-only`), stash, add/restore/commit, tag, `worktree` - on repositories inside the roots and towards remotes the operator allows; never a shell |
+| [`delphi_report`](docs/TOOLS.md#delphi_report) | **Feedback channel**: the agent files a bug, limitation or suggestion for the operator; it works at every access level |
+| [`delphi_config`](docs/TOOLS.md#delphi_config) | A project's configurations, platforms, output folder, version, search paths, deployment files and units - the IDE's Project Options and Add/Remove from project |
+| [`delphi_paserver`](docs/TOOLS.md#delphi_paserver) | The bridge to **Linux, macOS and Windows targets** through PAServer: installers, profiles, connection tests, the SDK sysroot, and `remote-run` / `kill` / `output` of the binary a project deployed - nothing installed on the target |
+| [`delphi_adb`](docs/TOOLS.md#delphi_adb) | **Android devices** hanging off the server: discover, connect, install, run, logcat, screenshot, tap, key - with the IDE's own adb |
+| [`delphi_desktop`](docs/TOOLS.md#delphi_desktop) | **The desktop of a PAServer target** - Linux (GNOME), Windows, or this server's own: screenshot, tap, type, key and the window list, through a node the server deploys and updates by itself |
+| [`delphi_components`](docs/TOOLS.md#delphi_components) | What the server's RAD Studio has installed to program with (design packages, any install channel); per platform, the porting matrix |
+| [`delphi_test`](docs/TOOLS.md#delphi_test) | **Does it WORK, not just compile**: discover the test projects, build and run one in a Windows container of its own, answer total/passed/failed with the failing lines; its own opt-in (`AllowTests`) |
+| [`delphi_delete`](docs/TOOLS.md#delphi_delete) | Delete into a **recoverable trash** next to the file, dropping a unit from its projects; `purge=true` deletes for real, only inside the trash and only your own copies |
+| [`delphi_move`](docs/TOOLS.md#delphi_move) | Move or rename inside the workspace - a unit renamed everywhere it is referenced; out of the trash is a restore; `copy=true` copies |
+| [`delphi_package`](docs/TOOLS.md#delphi_package) | Zip a build output folder for download |
+| [`delphi_styles`](docs/TOOLS.md#delphi_styles) | **FMX styles by `StyleName`**: view/get/set/clone/delete, `lint`, and `build` the binary the app loads |
+| [`delphi_messages`](docs/TOOLS.md#delphi_messages) | The agents' mailbox: notes from the operator, delivered once |
+| [`vault_read`](docs/TOOLS.md#vault_read) · [`vault_search`](docs/TOOLS.md#vault_search) | **Optional persistent memory**: read and search a vault of Markdown notes, lazy-loaded from its own rules and index |
+| [`vault_append`](docs/TOOLS.md#vault_append) · [`vault_create`](docs/TOOLS.md#vault_create) · [`vault_patch`](docs/TOOLS.md#vault_patch) | Let the agent record what it learned (opt-in): append, create, anchored replace; the governance files are refused and the original is always backed up. See [docs/VAULT.md](docs/VAULT.md) |
 
 **→ Full parameter-by-parameter reference with types, defaults and worked workflows: [docs/TOOLS.md](docs/TOOLS.md)** (the contract of every tool - description, access line and parameter table - is generated from the live `tools/list` by `scripts/tools_md.py` and checked by the batteries; the notes around it are written by hand; the authority is always `delphi_help command=tool name=<tool>`). `tools/list` also announces what a read-only credential may call, per tool: `annotations.readOnlyHint` (MCP) and `_meta.access` (`read-only` | `read-write` | `mixed` with `readOnlyCommands` and `readOnlyWhen`). What those descriptions cost an agent, the budget that keeps them in check and how they are trimmed without losing a concept (measured against a small model): [docs/TOOL-DESCRIPTIONS.md](docs/TOOL-DESCRIPTIONS.md).
 
@@ -263,78 +263,40 @@ switch and its own allowlist; it will not arrive by accident.
 
 ## The desktop node (`src/DesktopNode/`)
 
-**Every desktop an agent drives - Linux or Windows, a remote machine or this
-server's own - is reached through a PAServer listening on that machine.** There
-is no other channel: the node travels through PAServer and is started by it,
-so a Windows without PAServer is as unreachable as a Linux without one, whatever
-the network says. On Windows that means the PAServer that ships with RAD Studio
-(`C:\Program Files (x86)\Embarcadero\PAServer\37.0\paserver.exe`, or its
-installer from `delphi_paserver command=packages`), started **inside the user's
-session** (a Windows service lives in session 0, which has no desktop), with its
-port open in that machine's firewall - Windows' own or the antivirus suite's
-(measured 2026-09-22: the port was closed by ESET's firewall, not by Windows) -
-and then `add-profile platform=Win64`. Measured the same day against a second
-Windows on the LAN: first gesture deploys the node, capture, window list, crop
-and tap, nothing else installed there.
+**Every desktop an agent drives - Linux or Windows, a remote machine or this server's own - is
+reached through a PAServer listening on that machine**; there is no other channel. On Windows that
+is the PAServer that ships with RAD Studio, started **inside the user's session** (a service lives
+in session 0, which has no desktop) with its port open in that machine's firewall - Windows' own
+or the antivirus suite's - and then `add-profile platform=Win64`.
 
-`delphi_desktop` works through a tiny Delphi console program - the **node** -
-that lives on the target and is the server's eyes and hands there: on Linux it
-captures the desktop through the XDG portal and injects through libei, on
-Windows through GDI and SendInput; on both it converts the screen scale. This
-repository carries BOTH halves:
+`delphi_desktop` works through a tiny Delphi program, the **node**, which the server pushes to each
+target on first use and keeps current by itself: its compiled binaries ship in `node/`, and its
+sources - exactly what runs on your machine, and how - are in [`src/DesktopNode/`](src/DesktopNode/README.md).
+**On Linux it speaks GNOME only today** (measured live on Zorin 18 and Fedora; KDE and other
+desktops are not supported yet), and it needs nothing installed there.
 
-- **`node/McpDesktopNode`** and **`node/McpDesktopNode.exe`** - the compiled Linux and Windows binaries, shipped inside every
-  release zip. Nothing to build and nothing to install: the server pushes it to
-  each target on first use and keeps it current BY ITSELF (a `node.ver` stamp
-  with the binary's SHA-256, checked once per profile and session - upgrade the
-  server and every provisioned target heals on its next gesture; measured:
-  3.0 s for a gesture that also updated the node, 1.4 s warm).
-- **`src/DesktopNode/`** - its Delphi sources (seven units and the
-  project), for whoever wants to read exactly what runs on their machine, or
-  extend it. Build with `delphi_build platform=Linux64` (the tool passes the
-  SDK by itself) or by hand with msbuild plus `/p:PlatformSDK=Linux64.sdk`.
-
-**What a desktop profile gives.** `delphi_desktop` drives the target's desktop
-as the user PAServer runs as: everything a person sitting at that keyboard can
-do, opening a terminal and typing in it included. That is by design - a filter
-on what gets typed into which window would be a guess, not a guarantee. Give an
-agent a desktop profile the way you would give it a seat at that machine.
-
-**Today the node speaks GNOME only** (measured live on Zorin 18 and Fedora):
-the capture goes through the XDG desktop portal, the window list that comes
-with every capture is read from X11 (Xwayland: every FMX application; native
-Wayland windows are not listed, and the answer says so), the window overview
-uses GNOME's Super gesture and the screen scale comes from Mutter. KDE and other
-desktops are not supported yet - the portal half would travel, the rest would
-not. On a GNOME target it leans only on libraries the desktop already ships
-(libdbus, libei): nothing to install, ever.
+**What a desktop profile gives.** `delphi_desktop` drives the target's desktop as the user PAServer
+runs as: everything a person sitting at that keyboard can do, opening a terminal and typing in it
+included. That is by design - a filter on what gets typed into which window would be a guess, not a
+guarantee. Give an agent a desktop profile the way you would give it a seat at that machine.
 
 ## One repo, one project group, seven projects
 
-Open [`MCP-delphi.groupproj`](MCP-delphi.groupproj) and the IDE loads the
-whole family:
-
-| Project | Folder | What it is |
-|---|---|---|
-| **`DelphiLspMcp`** | [`src/Server/`](src/Server) | **The server itself** — the 42-tool MCP server this repo exists for. What ships in every release. |
-| `DelphiStyleConvert` | [`src/StyleConvert/`](src/StyleConvert) | Companion CLI that converts VCL⇄FMX style files; `delphi_styles` drives it. Ships next to the server. |
-| `DelphiFormRenderVcl` / `DelphiFormRenderFmx` | [`src/Render/`](src/Render) | The two **form renderers** behind `delphi_designer preview`: a `.dfm`/`.fmx` to a PNG of what the designer shows, in a process of their own (the IDE's design packages load into them, never into the server). Win32, against the 32-bit IDE's packages. Ship next to the server. |
-| `LspUnitTests` | [`src/UnitTests/`](src/UnitTests) | The engine's **DUnitX suite**: unit tests of the encoding detector, the designer binary shape, the build-hazard scan, the git argument splitter and its inverse, the captures, the message catalog (tags and outcomes), the Pascal lexer and the form renderers' protocol - the step below the black-box Python batteries. Born with `delphi_create kind=project-test`, run through `delphi_test` by `tests/test_engine_dunitx.py`, so it is part of the regression. |
-| `McpDesktopNode` | [`src/DesktopNode/`](src/DesktopNode) | The **desktop node** — the server's eyes and hands on a Linux (GNOME) or Windows target. Its compiled binaries travel as [`node/McpDesktopNode`](node) and `node/McpDesktopNode.exe` and self-deploy; the Linux build needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
-| `McpRunJob` | [`src/RunJob/`](src/RunJob) | The **run-job launcher** — what PAServer starts for every remote execution and every desktop gesture: it reads a job file and starts the native binary unattended, no shell anywhere. Travels as `node/McpRunJob` (Linux) and `node/McpRunJob.exe` (Windows). |
-
-[`src/README.md`](src/README.md) maps the seven projects (what each is for, whether it ships, when it runs) and each folder carries its own README with the detail. Build everything with one
-command: **`BuildGroup.bat`** (`BuildGroup.bat quiet build Release` compiles
-the nine legs — the node and the launcher against the Linux64 sysroot and for
-Win64 — and refreshes the four binaries in `node/` so the release payload and
-the self-updating targets stay in step).
+Open [`MCP-delphi.groupproj`](MCP-delphi.groupproj) and the IDE loads the whole family: the
+server itself (`src/Server/`, what every release ships), the style converter and the two form
+renderers that ship next to it, the desktop node and the run-job launcher that travel to the
+targets (`node/`), and the engine's DUnitX suite. [`src/README.md`](src/README.md) maps the seven
+projects - what each is for, whether it ships, when it runs - and each folder carries its own
+README. Build everything with one command: **`BuildGroup.bat quiet build Release`** (it also builds
+the node and the launcher for Linux64 and refreshes the four binaries in `node/`, so the release
+payload and the self-updating targets stay in step).
 
 ## Quickstart
 
 **In a hurry? [QUICKSTART.md](QUICKSTART.md)**: one Windows machine with
 Delphi, download the release, a five-line `settings.ini`, `-gui`, connect a client,
-first call. Five steps and nothing else. The rest of this section is the full picture:
-the three ways to run it, the service account, and letting an agent restart it.
+first call. Five steps and nothing else. The rest of this section is how a client connects;
+running it as a service and configuring it are in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 **No Delphi installed, or don't want to compile?** Download the ready-made
 Windows binary from **[Releases](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)** —
@@ -364,592 +326,15 @@ claude mcp add delphi -e DELPHI_MCP_TOKEN=YOUR_TOKEN -- C:/path/to/DelphiLspMcp.
 claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Authorization: Bearer YOUR_TOKEN"
 ```
 
-`YOUR_TOKEN` is the `Token=` of a `[Workspace.<name>]` section in the `settings.ini` next to the exe (see [Configuration](#configuration-settingsini-next-to-the-exe-or-environment-variables)). Every HTTP request needs that header, so the bare URL - pasted in a browser, or copied from the tray's *Copy server URL* - answers **401**, with a JSON `hint` that says exactly this.
+`YOUR_TOKEN` is the `Token=` of a `[Workspace.<name>]` section in the `settings.ini` next to the exe (see [docs/CONFIGURATION.md](docs/CONFIGURATION.md#configuration-settingsini-next-to-the-exe-or-environment-variables)). Every HTTP request needs that header, so the bare URL - pasted in a browser, or copied from the tray's *Copy server URL* - answers **401**, with a JSON `hint` that says exactly this.
 
-### One executable, three ways to run it
+### Running it as a service, and configuring it
 
-| You want | Run | Notes |
-|---|---|---|
-| A local client to spawn it | `DelphiLspMcp.exe` | No switch: MCP over stdio. |
-| The remote server, in a terminal | `DelphiLspMcp.exe --http 3000` | Ctrl+C stops it. Good for trying things out. |
-| The remote server, permanently | `DelphiLspMcp.exe -install` | **How you should actually deploy it**: a Windows Service. Needs an elevated prompt; `-uninstall` removes it. It must then be told to **log on as the user who installed and uses RAD Studio** — see right below, this one is not optional. |
-| An eye on it while you work | `DelphiLspMcp.exe -gui` | Tray app: starts iconized, double-click for the live log. |
-
-Each switch is accepted as `/x`, `-x` or `--x`. The service reads the same `settings.ini` next to the executable as every other mode — including its port, so the service and the tray cannot both run: it is one or the other.
-
-#### The service must log on as the user who owns the IDE
-
-Not `LocalSystem`, and not a freshly created administrator either. RAD Studio keeps its configuration under **`HKEY_CURRENT_USER`**: the Library Search Path, the registered design packages, the platform SDKs, the PAServer profiles, the `$(BDS)` macro table. That is per user, by Embarcadero's design, and there is no way around it — even if this server read someone else's hive, the `msbuild` and `DelphiLSP.exe` processes it spawns are its children and would read their own.
-
-Measured 2026-09-20 on one machine, same binary, only the service account changing:
-
-| The service logs on as | Library roots it sees | Registered design packages |
-|---|---|---|
-| `LocalSystem` | 1 | 0 |
-| a brand-new admin account | 2 | 0 |
-| **the IDE's own user** | **11** | **all of them** |
-
-What makes this worth a table is that the failure is *quiet*. The server starts, answers, reports `activeDelphi: 37.0` — the installation itself lives in `HKEY_LOCAL_MACHINE`, so it is found — and compiles anything that needs only the RTL. It breaks the first time a project uses an installed component, with `F2613 unit not found` and nothing anywhere pointing at the real cause.
-
-So after `-install`: `services.msc` → the service → **Log On** → *This account*, and give it the IDE's user. Do it there rather than with `sc config`: that dialog also grants the account the "Log on as a service" right, and the password never travels on a command line. The SCM stores it, so changing that Windows password later stops the service from starting until you re-enter it.
-
-#### Letting an agent restart it by itself
-
-Starting and stopping a service normally needs elevation, which an agent does not have. Grant one account start/stop rights on this one service, once, from an elevated prompt:
-
-```
-sc.exe sdshow DelphiLspMcp
-sc.exe sdset  DelphiLspMcp "<what sdshow printed>(A;;CCLCSWRPWPDTLOCRRC;;;<your SID>)"
-```
-
-`whoami /user` gives the SID. After that `sc.exe stop` and `sc.exe start` work unelevated, so an agent can deploy a new build and bring the server back without anyone at the keyboard. It is a permission on one service, not a general privilege. One detail for a deploy script: `sc.exe query` reports STOPPED before the process has exited and released the exe - wait for the `DelphiLspMcp` process to be gone, not for the SCM state, before copying. (Up to 1.7.10 that gap was 30 s: the process never left by itself and the system ended it; since 1.7.11 it leaves as soon as it has stopped.)
-
-And set the start type, or a reboot leaves you with no server:
-
-```
-sc.exe config DelphiLspMcp start= auto
-```
-
-Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom agents): see [docs/CLIENTS.md](docs/CLIENTS.md).
-
-**Getting the best out of the server from an AI agent** — the manual is [skills/SKILL.md](skills/SKILL.md); [docs/AGENT.md](docs/AGENT.md) is a short pointer to it.
-
-### One server, one Delphi - several versions on one machine
-
-A server works with **one** RAD Studio installation and nothing else: the build
-(rsvars/msbuild), the DelphiLSP engine, the installed components, the designer tables, the
-PAServer profiles and SDKs, `paclient`, `adb` and the readable library zone all come from it,
-and no tool reaches into another installation. **Without its Delphi the server does not
-start** - it is a Delphi MCP server.
-
-**Which one**, at every start:
-
-1. `[Server] DelphiVersion` in its `settings.ini` says it - and nothing else does.
-2. The key is there and that version is installed (with DelphiLSP): that is the server's Delphi.
-3. The key is there but that version is not installed (a typo, a Delphi uninstalled since): the
-   server **does not start**. It says why and which keys would work on this machine - in its
-   log, with exit code 1 in a terminal, in the Windows event log as a service, on the tray's
-   icon - and it never falls back to another version.
-4. There is no key: the server takes the newest installation that ships DelphiLSP and **writes
-   it into its `settings.ini`** (`DelphiVersion=37.0`, one new line under `[Server]`; nothing
-   else in the file changes, accents and line endings included). From then on the key rules:
-   installing a newer RAD Studio later does not switch the server by itself, editing the key
-   does. With no `settings.ini` at all (a client launching the exe over stdio) it is the newest,
-   and no file is created. Two cases start with the newest but do NOT write it, and the log
-   says why: `[Server]` written twice (or `DelphiVersion` twice in it - Windows reads only the
-   first, and the version meant may be in the other), and a `[Workspace.<name>]` that still
-   carries the `DelphiVersion=` of 1.13 (that workspace wanted a version: move it to `[Server]`).
-
-A machine holds at most ONE installation per BDS version - its folders and registry keys are
-named after the version, so a second one would land on the first - and that is why the number
-alone picks it. The same version on several servers only happens on several machines.
-
-**Which versions does this machine have?** The first lines of the server's log (the tray
-window, `logs\actual.log` next to the exe, or the terminal) list them, each with the exact key
-to copy into `settings.ini`:
-
-```
-RAD Studio on this machine: RAD Studio 13 37.0.59082.6021, Delphi 13 and C++Builder 13 Update 1  ->  [Server] DelphiVersion=37.0   <- this server
-RAD Studio on this machine: RAD Studio 12 23.0.xxxxx.xxxx  ->  [Server] DelphiVersion=23.0
-This server uses DelphiVersion=37.0 (RAD Studio 13, Delphi 13 and C++Builder 13 Update 1), pinned by [Server] DelphiVersion in settings.ini. One server, one Delphi: ...
-Update declared in settings.ini: [Server] DelphiUpdate=13.1.
-```
-
-An agent sees the same list with `delphi_installs`, and its server's Delphi in
-`delphi_workspace` (`activeDelphiName`, `activeDelphiBuild`, and `delphiUpdate` when one is
-declared).
-
-**Two versions = two servers.** To serve RAD Studio 12 and 13 from the same machine:
-
-1. Copy the server folder (the exe with its `node\` folder, `DelphiStyleConvert.exe` and the two
-   `DelphiFormRender*.exe` - what
-   the release zip unpacks) to a second folder, e.g. `C:\Delphi-mcp-Server-12\`.
-2. Give that copy its own `settings.ini`:
-
-   ```ini
-   [Server]
-   Port=3132
-   DelphiVersion=23.0
-
-   [Workspace.Legacy]
-   Token=another-long-random-secret
-   Roots=D:\Projects\Delphi12
-   ```
-
-   - its own **port**;
-   - its own **roots** - never the same roots as the other server: each process locks the
-     files it writes only against its own threads, so two servers on one project would write
-     the same files blind to each other. A project lives in one place;
-   - its own workspaces and tokens.
-3. Run it however you like. `-install` registers the one service called `DelphiLspMcp`, so it
-   is for ONE server per machine; run the others with `-gui` (tray), with `--http` in a
-   terminal, or under whatever keeps a program running for you. How you run it is yours to
-   decide: the server only has to know which Delphi it is.
-4. Open the firewall for the new port: `scripts\firewall-allow.ps1 -Port 3132` as
-   Administrator. The rule is named after its port, so the first server's rule stays.
-5. In the client, one MCP entry per server, named after its machine AND its version
-   (`delphi-pc-13.1` on `:3131`, `delphi-pc-12` on `:3132`; see
-   [docs/CLIENTS.md](docs/CLIENTS.md)). The name is only a label - the same version can
-   also run on several machines (13.1 here, 13.2 on a VM, 13.2 on another VM). What a server
-   IS comes from `delphi_workspace` on it: `activeDelphiName`, `activeDelphiBuild`,
-   `delphiUpdate` - the update its operator declares, since 13.1 and 13.2 are both "RAD Studio
-   13" and BDS 37.0 - and `server.host`, the machine.
-
-Everything else is already separate per folder: settings, logs, `__delphi-temp`, mailbox,
-reports, and the presence mark that decides the startup purges. What two servers share is the
-cache under `%LOCALAPPDATA%\DelphiLspMcp`: the engine configurations and the designer tables
-carry the Delphi version in their file names, every cache file is written whole, and the
-designer tables are generated under a lock shared by every process - so each server finds its
-own version's files. One tool shares its converter on purpose: `delphi_styles` converts styles
-with the one shipped with the server (`DelphiStyleConvert.exe`, built with RAD Studio 13's
-FireMonkey), whatever the server's Delphi. The renderers of `delphi_designer preview` are built
-with RAD Studio 13 too: they load its runtime packages (`rtl370.bpl`...) and the design
-packages of the server's Delphi, and they are only tested against BDS 37.0.
-
-RAD Studio 13.1 and 13.2 are both BDS 37.0: one replaces the other, they never sit side by
-side. For that, one machine (or VM) per version, each with its own server - the same model,
-only further apart. The key stays `DelphiVersion=37.0`: the BDS number is what gives the
-folders and registry keys of that Delphi, and on one machine it can only be one of them.
-Which update it is, the operator may declare in `[Server] DelphiUpdate=13.1` (or `13.2`, and
-tomorrow `14.1`). Today the server works the same with 13.1 and 13.2 - both are 37.0 - and
-nothing reads that key to decide anything: it is there so that what a given update may need
-one day has one place to hang from, and the server shows it in its startup log,
-`delphi_installs` (`requestedUpdate`) and `delphi_workspace` (`delphiUpdate`). It is declared,
-never deduced: the startup log and `delphi_installs` (`installedUpdate`) show the update each
-installer recorded, the text the IDE's About box lists ("Delphi 13 and C++Builder 13 Update 1"
-is 13.1, "... Update 2" is 13.2), as a hint for the operator, and the code never compares that
-text. A value that is not `number.number` is ignored, with a warning in the log; GetIt patches
-and hotfixes are something else and are not part of it.
-
-Until 1.13 each workspace could pin its own version (`[Workspace.<name>] DelphiVersion`) and one
-process kept engines and paths of several versions at once. That key is no longer read, and
-the startup log says so.
-
-### Configuration (`settings.ini` next to the exe, or environment variables)
-
-The file is read **once, when the process starts**, and never reloaded live -
-on purpose: the jail of a running agent must not change under it. After editing
-it, restart the service (`sc.exe stop DelphiLspMcp` / `sc.exe start DelphiLspMcp`).
-`delphi_workspace` says so (`settingsChangedNote`) whenever the file on disk is
-newer than the running process.
-
-The configuration is **four layers**, safest-by-default at every one:
-
-**One principle above the layers (v0.98): NOTHING IS GLOBAL.** Every
-permission, whitelist and capability belongs to ONE workspace, and a
-workspace has exactly what its section declares — an absent switch is OFF,
-an absent list is EMPTY. There is no `[Security]` section any more — and no generic `[Workspace]`
-section either: only `[Workspace.<name>]` sections exist, because **an agent
-either has a workspace token or has nothing**. A stale ini with either old
-section is completely inert.
-
-1. **The door** — credentials: **workspace or nothing** (v0.91, completed
-   in v0.98). A caller authenticates *only* through a `[Workspace.<name>]`
-   section — its own `Token`, optional `ReadOnlyToken`, its `Roots` and its
-   configs. Tokenless HTTP is always **401**; a tokenless *local* stdio
-   process may look, never touch (read-only) - unless it declares its
-   own jail with `DELPHI_MCP_ROOTS` (see 2).
-2. **The jail** — where each credential may touch disk: a world of its own
-   per workspace token. (A locally launched process may declare a private
-   jail with `DELPHI_MCP_ROOTS` and the other `DELPHI_MCP_*` variables —
-   the harness/dev launch mode; they never touch a named workspace.)
-3. **Capabilities** — what each workspace may *do* beyond compiling (run,
-   test, remote-run, build scripts, reach git hosts or PAServer machines).
-   All off until that workspace declares them.
-4. **Surface** — what `tools/list` *advertises* (`[Tools]` profiles). Helps
-   small models; never a permission.
-
-```ini
-; Comments go on their OWN line: Windows keeps a trailing "; ..." as part of
-; the value, so "Port=3000 ; my port" is not port 3000 (measured 2026-10-05).
-; Save the file as UTF-8 WITHOUT BOM (or ANSI): Windows does not see a section
-; header with a BOM in front, so a BOM right before [Server] loses Port and
-; BindIP - the server refuses to start and says so (a comment line first is fine).
-; UTF-16 little endian is read too; UTF-16 big endian or UTF-32 stops the server at
-; startup, and a file that exists but cannot be read puts nothing in force (said at startup).
-[Server]
-; HTTP port for --http and the tray (-gui)
-Port=3000
-; idle HTTP sessions expire after this (0 = never)
-SessionTimeoutMinutes=720
-; an LSP engine nobody uses for this long is stopped (0 = never)
-EngineIdleMinutes=30
-; at most this many LSP engines alive; past it, the least recently used one stops (0 = no cap)
-MaxEngines=0
-; the ONE RAD Studio this server uses; absent = the newest with DelphiLSP,
-; which the server then writes here at its first start
-DelphiVersion=37.0
-; optional: which update of it you run (13.1, 13.2...); absent = none declared
-DelphiUpdate=13.1
-
-; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
-; workspaces' roots are not even readable. Overlap is allowed and never
-; subtracts (note Audit's root is a subfolder of Galatea's). EACH SECTION IS
-; COMPLETE IN ITSELF: absent switch = off, absent list = empty.
-[Workspace.Galatea]
-; read-write, but only inside THESE roots
-Token=galatea-secret
-; optional read-only twin, same roots
-ReadOnlyToken=galatea-reviewer-secret
-Roots=D:\Projects\Galatea;D:\Projects\Shared
-; INSIDE the jail: read, never write
-ReadOnlyPaths=vendor;third-party\libx
-; OUTSIDE the jail: reference projects, read only, win over Roots
-ReadOnlyRoots=D:\Projects\ReferenceERP
-; Declare each place by a path with its DRIVE LETTER. An entry written as a network path (\\server\share\x)
-; is NOT loaded, and the startup log says so: map the share to a letter with "reconnect at sign-in" - at
-; startup the server tries to connect that letter for itself.
-; ITS declaration - nothing is inherited
-LibraryZone=1
-; may build+run ITS test suites
-AllowTests=1
-; ITS persistent memory (vault_* tools)
-VaultPath=D:\Vaults\TeamMemory
-; ITS Android devices (absent = NONE)
-AdbAllowedDevices=192.168.1.163
-; optional: trims tools/list for this token
-Profile=coder
-
-[Workspace.Audit]
-Token=audit-secret
-; a SUBFOLDER of Galatea - deliberate
-Roots=D:\Projects\Galatea\src\Forms
-; navigation tools only in its listing (declares nothing else: it HAS nothing else)
-Profile=reader
-
-[Tools]
-; global surface: full | coder | reader
-Profile=full
-
-[Log]
-; log on disk (every mode): a block every N lines
-LinesPerFile=2000
-; rotation: keep the newest N block files
-MaxFiles=10
-```
-
-Every key is documented in depth in [`settings.example.ini`](settings.example.ini).
-
-- **Port**: used by the service, the terminal `--http` mode and the tray app alike. A port given on the
-  command line (`DelphiLspMcp --http 3900`) overrides the ini for that run.
-- **BindIP** (`[Server] BindIP` or `DELPHI_MCP_BIND_IP`): listen on a single interface (e.g.
-  your LAN/VPN address) instead of all of them — which also stops the firewall prompting
-  twice (IPv4 + IPv6).
-- **Firewall prompts every start?** Windows keys its prompts to the exe binary, so each
-  rebuild looks new. Run `scripts/firewall-allow.ps1` **once as Administrator** to install a
-  single durable rule keyed to the *port* (covers every rebuild) and clear the accumulated
-  per-binary duplicates: `powershell -ExecutionPolicy Bypass -File scripts\firewall-allow.ps1 -Port 3000`.
-- **Tokens (workspace or nothing, v0.91)**: every HTTP request must carry
-  `Authorization: Bearer <token>` where the token is some workspace's `Token=` (read-write
-  inside its roots) or `ReadOnlyToken=` (read-only inside the same roots: it can read,
-  search, navigate symbols, get diagnostics, download, run query git commands and file
-  reports — but `delphi_edit`, `delphi_create`, `delphi_build`,
-  `delphi_package`, `delphi_upload` and git write commands are refused; `tools/list` does
-  not even announce it the tools that only write, and `delphi_help` tells it so).
-  Tokenless HTTP is **always 401** — the anonymous mode is gone in v0.98. A secret that appears in two sections (or a `Token=` equal to its `ReadOnlyToken=`), a key repeated inside a section, or a section written twice is a copy-paste the ini parser would swallow silently, so the server **closes the workspaces involved** (fail closed) and says which in the startup log.
-  The whole classification is enforced at a **single gate** in front of every
-  `tools/call` — including the git argument filter, so no option can turn a "read" command
-  into a write. **With NO workspace token configured at all, the server binds to
-  `127.0.0.1` only** — an unconfigured server is never silently open to the network.
-- **BREAKING — migrating from ≤ v0.97**: the `[Security]` section is GONE and completely
-  inert — the server neither reads it, nor warns about it, nor knows it existed. Move every
-  key you had there into each `[Workspace.<name>]` that deserves it — same names, same
-  values, one decision per workspace. The generic `[Workspace]` section, the anonymous
-  mode (`AnonymousReadOnly`) and the global `[Vault]`/`[Adb]` sections fell the same day:
-  the vault is now each workspace's `VaultPath=`/`VaultReadOnly=`, the adb allowlist its
-  `AdbAllowedDevices=` (absent = NO devices — the last fail-open default is gone). Old
-  `AuthToken`/`ReadOnlyToken` values become a workspace's `Token=`/`ReadOnlyToken=` (true
-  since v0.91). Fail safe is preserved the blunt way: a stale config authenticates
-  nothing and earns a `127.0.0.1`-only bind.
-- `--readonly` on the command line makes the entire process read-only, whatever the
-  transport (useful for a stdio-registered reviewer).
-- **`[Workspace.<name>]` token-scoped sandboxes**: each section defines its own credential(s)
-  and its own jail. Whoever presents that `Token` works read-write inside *its* `Roots` and
-  nowhere else — other workspaces' roots are not even **readable** (the library read zone
-  below stays available to everyone). Workspaces may **overlap**: one can hold a whole tree
-  and another just a subfolder of it; each token's jail is the union of its *own* roots and
-  nothing is subtracted for belonging to another workspace too. A workspace whose `Roots`
-  fail to parse admits nobody (fail closed). Inside a
-  workspace section the credential key is `Token=`, and `AuthToken=` is accepted as an
-  alias; the startup log lists every workspace it loaded and **warns** about misspelled
-  sections (`[Workopenclaw]`…), tokenless workspaces, unparseable roots and retired keys that do nothing, so a config
-  mistake never fails silently. And a workspace carries **everything else** too:
-  `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`,
-  `LibraryZone`,
-  `AgentConfinement`, `SharedFolders`, `ReadOnlyPaths`, `ReadOnlyRoots`, `Profile` — and the reach lists `GitRemotes`,
-  `RemoteHosts`, `RemoteRunProjects`. Nothing is inherited from anywhere: an absent switch
-  is off, an absent list is empty — one workspace can be a CI space that executes and dials
-  its build machine while every other space stays compile-only and offline.
-- **Network shares are opt-in.** A share becomes part of the Delphi environment only when the
-  operator maps it to a drive letter on the RAD Studio machine, with "reconnect at sign-in",
-  and declares a place on that letter in a workspace; a share nobody mapped stays outside the
-  boundary, on purpose. Windows decides which shares belong to the machine, and each workspace
-  decides which folders of them its agents get - the rule of everything else here: what the
-  operator did not declare does not exist.
-  The server is not a client of the network at large: all it does there is connect, for its own
-  session and passing no credentials, the letters the account already mapped. A path that names
-  a share (`\\host\share\...`) is outside to every tool (`GUARD-002`), and the server answers
-  without going to that host: measured 2026-10-01 with eight tools (list, read, search,
-  textedit, delete, move, git, build) and a host that does not route, each answered in 0.02 s
-  or less. Until 1.18.1 the pieces of `delphi_git args` were the door left: a share written
-  there reached git, which opened SMB towards that host with the service's account (21 s
-  against one that does not answer); each piece is now judged as a path before git runs.
-  The network path of a declared place is refused too (`GUARD-029`): a place is taken
-  in the form it was declared in. One exception, by decision and for reading only: with
-  `LibraryZone=1`, a folder of the IDE's Library Path that the IDE's owner wrote as a network
-  path is read like the rest of that zone - the host is one the IDE already uses, not one an
-  agent names. That one is read in the code, not measured.
-- **Roots on a network drive.** Measured 2026-09-30 between two virtual machines of one local network:
-  the server on one (RAD Studio 13.2, tray mode), its roots on a drive letter mapped to a share of
-  the other. A call that reads a file answers in 3 ms from the server's own disk and in 9 ms from
-  the share; on a copy of this server's own project in the share, the engine's first answer comes
-  2.4 s after the request and 19 ms once warm; the 118 unit tests, built and run there, pass. What
-  the machine that hosts the share writes in it is seen at the first read - new content (20 of 20),
-  a new file in a listing (5 of 5) - with one exception: a file the server was just told does not
-  exist, created then on the other machine, takes about 5 s to appear to a read (5 of 5). That
-  matches the five seconds Windows documents for its share client's memory of a "not found"
-  (`FileNotFoundCacheLifetime`); the cause itself was not measured. **git on such roots**: on
-  that machine git refused a repository of the share ("detected dubious ownership") until the
-  server's user told it to trust the share - `git config --global --add safe.directory
-  '%(prefix)///host/share/*'`, run there, was enough for the repository measured - and
-  `delphi_git` cannot do that for you (on a machine's own share git did not ask for it); since 1.13.1 its answer says so (`GIT-057`), also when the refusal comes before the command. Until
-  1.8.2 `delphi_git` then answered `GIT-041` to every command that works on an existing
-  repository, because git names it by its UNC; since 1.8.2 that answer is read in the form the
-  root was declared in, and the paths git prints of those places (`init`, `worktree list`) leave
-  with their virtual unit, which the agent can send back. **A Windows Service does not see the letters connected in the user's
-  desktop session** (measured 2026-10-01: a program run by the service, under the same account,
-  got "not connected" for such a letter and saw the local drives alone). Until 1.9.0 a root on
-  such a letter did not work there - a write under it answered "the drive cannot be found" - and
-  the startup log said nothing. **Since 1.9.0 the server connects those letters for itself.** At
-  startup, for each drive letter of a root, a reference or a vault that its process does not
-  see, it looks up the account's persistent mapping of that letter (`HKCU\Network\<letter>`:
-  what Windows records for a drive mapped with "reconnect at sign-in"), connects the letter for
-  its own session, passing no credentials, and checks that each declared place on it is a
-  folder that opens. Each step is a line of the log; what does not work is a warning there: a
-  letter with no persistent mapping, a connection Windows refused (with its error number), a
-  place that does not open. A letter that has a mapping and did not connect because the network
-  or the share was not there - a service started before the network, a NAS that was off - is
-  tried again every 30 s in the background, and the log says when it connects; an error of
-  credentials or of permission is said once and not retried (insisting would be two failed
-  logons a minute against the share). Nothing of this goes in `settings.ini`. Measured 2026-10-01
-  on this project's own production service, with a root on a letter of a NAS share whose
-  credentials are not the account's: the log says the letter was connected in 16 ms and the
-  root is reachable, and the write that failed went through. The startup waits 15 s at most for
-  this check and then goes on, saying so; what the check finds afterwards goes to the log.
-  Measured with a simulated share only (unit tests): a share that is down, the 15 s limit and
-  the retry. Not measured: a connection Windows refuses, the tray mode started at sign-in
-  before the network is up, a share that stalls later (an engine waiting on it could look like
-  a hung one). The cleaning of the temporary folders of a root on a network drive, which walks its tree (2.6 ms per folder measured on that service), runs apart from the startup, and leaves what was written there in the last hour: a server on another machine may be using it.
-- **A place is declared by a path with its drive letter** (`D:\...`), since 1.9.0. An entry of
-  `Roots`, `ReadOnlyRoots`, `ReadOnlyPaths` or `VaultPath` - or of their `DELPHI_MCP_*`
-  variables - that is not one (a network path `\\host\share\...`, a device path `\\?\...`) is
-  not loaded, and the startup log names the key and the entry; until 1.8.2 a root written as a
-  network path was accepted. Nor is an entry with a wildcard, one that starts with a single slash (`\vendor`: to Windows, the root of the drive the server runs from), a relative entry of `Roots`, `ReadOnlyRoots` or `VaultPath` (it would be relative to the folder of the process), or one relative to the current
-  folder of a drive (`N:folder`); a bare drive (`N:`) is its root. The agent sees drive letters
-  as virtual units (`srvd:`), and a place with no letter has none. A workspace left with no
-  root admits nobody. An entry of
-  `ReadOnlyRoots`, `ReadOnlyPaths` or `VaultPath` that is not loaded - also one that does not
-  parse (a wildcard, a character Windows does not allow), which used to be dropped in silence -
-  closes its workspace too: those keys say what must not be written, and with the entry left out
-  it could be. In the local launch mode that closes the process (`GUARD-030`: no root, no vault, and the refusal comes before anything is looked up on disk), and so does
-  starting it with the token of a workspace that is closed: it used to fall back to the trusted
-  local mode, which reads the whole machine.
-- **A root is a folder, and a whole drive is one more** (`Roots=N:\`), since 1.9.0. Until then
-  it was not: the server took the final backslash off its places to compare and to show them,
-  and `N:\` without it is `N:`, which to Windows is the CURRENT folder of the drive, not its
-  root. It worked only while the server ran from another drive, and `delphi_workspace` showed
-  such a root as `srvn:`, which sent back was refused (`GUARD-021`); it now shows `srvn:\`.
-  Measured with test drives made with `subst` and the server running from the drive that is
-  its root: list, read, write, move, delete, a reference and a vault that are whole drives, a
-  project built there. Not measured there: git (to git a `subst` drive is the folder under
-  it: `GIT-041`, as for any `subst` letter) and the root of a real volume.
-- **ReadOnlyPaths**: folders INSIDE the jail that may be read but never written — a `vendor/`, a submodule, a reference clone. Semicolon-separated; a relative entry resolves against each root, an absolute one is a path with its drive letter; absent means none. An entry that is not loaded closes the workspace (see above). It is not the jail and the server says so differently: the jail is "you don't go in there", this is "you look, you don't touch". Third-party code often has to live inside the project — that is where whoever clones it will look for it — and when that folder is *another git repository*, a careless write does not even show up in the main repo's `git status`, so it can go a whole session unnoticed. This turns that into a rule the server enforces instead of one the agent has to remember. It opens nothing outside the roots: for an entry outside every root of its workspace and of its references (absolute, or relative with `..`), its agents get nothing - neither reading nor protection; to let them read a folder outside their roots without writing it, that is `ReadOnlyRoots`, below. An entry that contains a root is not outside (it makes the whole root read-only). Protection compares both the declared path and the real path through the same 8.3-aware location rule. An entry that contains a root by its declared path protects the whole root, even when that root is a junction to another folder; short and long names give the same result. On a local drive the startup checks both forms and gives no outside warning for that protection. On a network drive it is on the text, so that the startup never waits on a share. Such an entry is still loaded (no workspace may delete it), and since 1.9.1 the startup log says so, with the key and the entry: measured 2026-10-02 on a second machine, two workspaces declared `ReadOnlyPaths=L:\...` so that their agents could read our code, neither could, and the startup said nothing.
-- **ReadOnlyRoots**: **reference projects** — folders OUTSIDE the jail that the workspace may read as if they were its own (read, search, symbols, definition, git query, fetch) and never write: no edit, no build (a build writes dcu and exe), no move, no temp files. To bring a unit or a folder in from one, `delphi_move copy=true`: the copy is yours, the original stays untouched, and a folder holding a whole project is refused (a project never lives in two places). Same syntax as `Roots`, absolute. The idea: an agent works in its roots and can also *see other projects of the house to learn how things are done here*. Deliberately separate from `Roots`, so the write jail never sees them, and it **wins over `Roots`**: a folder in both lists, or a root inside a reference, is read-only. `delphi_workspace` lists them as `readOnlyRoots` and `delphi_projects` flags their projects with `readOnly:true`.
-- **AgentConfinement**: *cooperative* subdivision inside one credential's
-  jail — each agent (by its self-declared `clientInfo.name`) writes only under
-  `<root>\<name>\`, plus any `SharedFolders`. Useful for teams sharing one token; for a
-  boundary an agent cannot cross, use a workspace token instead (the name is self-declared,
-  the secret is not).
-- **AllowTests**: lets `delphi_test` build and run a workspace test project here — the only
-  thing that ever executes on the server, and without it an agent can write code but never
-  learn whether it works. The test runs in a Windows container (an AppContainer) of its
-  own, created for that run and deleted with its answer, on a COPY of its output folder in
-  the server's own temp: it reads and writes that copy and, besides it, only what Windows
-  gives every container (its own temp folder, deleted with it, and the system files under
-  Windows and Program Files) — no other file of the machine, no network, no network drive —
-  and it is cut off at its timeout. It is a
-  cage for tests of LOGIC: what a test reads must travel in its output folder, and a test
-  project built with runtime packages is refused before building. Until 1.10 the run
-  was confined by Windows' low-integrity label, which only holds on local disks: on a
-  network folder a test wrote wherever the account reached (measured 2026-10-02).
-  (`AllowRun` and `delphi_run`, arbitrary binaries on the server, were retired on
-  2026-09-23: one execution path, `remote-run`; a left-over `AllowRun=1` in the ini does
-  nothing, and the startup log names it as a retired key.)
-- **AllowRemoteRun**: lets `delphi_paserver remote-run` execute, on a PAServer target, the
-  binary *that project deployed there* — never anything else on that machine: the server
-  derives the remote path itself and its launch script verifies the file's signature
-  (ELF/Mach-O/PE), so only a native binary ever runs. The one execution path of the product (running on
-  the target is not running here). It takes TWO declarations: this switch and
-  `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98).
-  `delphi_desktop` runs the server's own desktop node on the target, and seeing and
-  typing on a desktop is a permission of its own: `McpDesktopNode` (or `all`) in
-  `RemoteRunProjects` (`RUN-020` when it is missing).
-- **Reach lists (per workspace)**: `GitRemotes` limits which hosts git may reach - the URL
-  written in a call and the network addresses of the repository's own remotes alike
-  (clone/fetch/pull/push/ls-remote; a remote used by its name whose address is not listed gets `GIT-063`, naming the host), and the LFS endpoint of a tree a command materializes
-  (`GIT-061`) — measured to close an SSRF/exfiltration primitive. The host is read from the
-  address's authority alone, as every program reads it: an address that does not show its
-  host plainly is refused (`GIT-062`), and `clone`'s address is judged whole, as git
-  receives it. Profiles and SDKs created through the MCP appear in the
-  IDE too: `add-profile`/`get-sdk` write the registry seats its managers actually read (they
-  ignore the `.profile` folder), and the IDE loads that list **at startup** — so a profile
-  created while it is running shows up at its next start. If one is on disk but missing from
-  the list, `delphi_paserver command=reseat` writes the seats that are absent, reading each
-  encrypted password from its own file: no PAServer, no password anyone has to know. An
-  existing profile name is never overwritten, and duplicates by host get a warning. `RemoteHosts` does the same for every PAServer dial —
-  hand-named hosts AND connection profiles: since v0.98 having a profile in the IDE is not
-  permission (the profile says HOW to connect; the workspace says WHETHER) — measured to
-  close a port-scanning primitive. `*` (or `0.0.0.0`) declares "any host" on purpose, and
-  `RemoteRunProjects=all` (or `*`) is the same explicit wildcard for projects. Where each
-  workspace may talk to is its own declaration, like everything else.
-- **`[Tools]` profiles**: `full` / `coder` / `reader` (or an explicit `Only=` allowlist) trim
-  what `tools/list` advertises — ~15k tokens of schemas drown a small model. Listing only:
-  hidden tools stay callable, permissions live in the layers above. A workspace can carry its
-  own `Profile=`.
-- **`VaultPath=` / `VaultReadOnly=` (per workspace)**: optional persistent memory for
-  agents (a folder of Markdown notes) — each workspace declares its own, and two workspaces
-  may remember in *different* vaults. Read-only by default; writes, when enabled, are
-  append/create/anchored-replace only, always backed up first. `tools/list` announces a
-  workspace only the vault tools its vault allows (none without one, no write tools while
-  it is read-only). See `docs/VAULT.md`.
-- **AllowBuildScripts**: `delphi_build` refuses a project whose `.dproj` (or an imported
-  `.targets`) carries a task that *executes a program or plants/deletes files* at build
-  time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a
-  planted `<Exec>`; an `<Import>` of a file outside the workspace, other than the IDE's own,
-  is refused even when harmless (`BUILD-017`). An **inert** custom `<Target>` (a
-  `<Message>`, a property) always
-  builds. The project's **pre/post build events** (signing, copies, EurekaLog) are not
-  refused either: the build runs with them emptied and says so (`buildEventsSkipped`) -
-  the binary is for working and testing in the agent's workspace; the final, signed one is
-  the operator's build, outside this server, where those events run. For a
-  **trusted** project that must really execute its tasks, set `AllowBuildScripts=1` — this
-  permits its build scripts and nothing else. Off by default.
-- **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
-  `AdbAllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers whatever
-  port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the
-  workspace's list are refused at **both** access levels, every device-addressing command
-  must name its `device` explicitly (an implicit target could be an unlisted device that
-  happens to be the only one attached) — and, like every list since v0.98, **absent means
-  NO devices**, never unrestricted.
-- **`[Server] DelphiVersion`**: the ONE RAD Studio this server uses - the BDS version number
-  (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria), and only from here.
-  Absent = the newest with DelphiLSP, which the server then writes here at its first start. A
-  version that is not installed stops the server from starting - it never uses another one.
-  The startup list of installations with the key to copy, several versions on one machine
-  (several servers) and what they share:
-  [One server, one Delphi](#one-server-one-delphi---several-versions-on-one-machine).
-- **`[Server] DelphiUpdate`** (optional): which update of that RAD Studio the server runs, as
-  its operator declares it (`13.1`, `13.2`). Both are `37.0`, and today the server works the
-  same with both: nothing reads the key to decide anything yet - it is there for what a given
-  update may need one day. Declared, never deduced (the startup log shows the update each
-  installer recorded, as a hint). A value that is not `number.number` is ignored with a
-  warning; absent = none declared.
-- **`[Server] SessionTimeoutMinutes`** (or `DELPHI_MCP_SESSION_TIMEOUT_MINUTES`): an HTTP
-  session that sits idle longer than this (default 720 minutes; 0 = never) expires, and the
-  next request on it answers 404 with the reason so the client re-initializes - the
-  streamable-HTTP contract, and the same answer an id this process never issued gets
-  (a server restart). Generous on purpose: every re-initialize costs an agent a whole
-  `tools/list`. `delphi_workspace` reports the live `sessions` and the timeout in force.
-- **`[Server] EngineIdleMinutes`** (or `DELPHI_MCP_ENGINE_IDLE_MINUTES`): an LSP engine
-  (`DelphiLSP.exe`) nobody has used for this long (default 30 minutes; 0 = never) is stopped,
-  and the next request of its project starts another. Measured: an engine at rest keeps
-  about 125 MB (a 60-unit project), and the first answer of the one that replaces it came
-  2.1 s after the request (a small project). The same time closes a document an engine
-  has open and nobody asks about. Apart from this, and with no setting: an engine with a
-  request in flight that shows no sign of life for 20 s - no message, no CPU, no I/O -
-  and does not answer when the server asks it is taken for hung and stopped; whoever
-  waited gets `LSP-033` ("repeat"), and the repeat starts another engine.
-- **`[Server] MaxEngines`** (or `DELPHI_MCP_MAX_ENGINES`): how many LSP engines may be alive at
-  once. An engine that would pass the cap stops the least recently used one that is not
-  working - never one with a request in flight; if every engine is busy the cap is passed
-  rather than throwing an answer away - and the log says which one and why. Its project's
-  next request starts it again (a few seconds). Default 0: no cap, only `EngineIdleMinutes`
-  stops engines. Worth setting on a machine with little memory or many projects at once.
-- **`[Log]`** — the server's log on disk, the **same in every mode** (service, terminal and
-  tray), in `logs\` next to the exe. `logs\actual.log` is the live tail, appended every half
-  second, so a process killed from outside loses half a second, not hours. Every
-  `LinesPerFile` lines it is *renamed* to `logs\yyyymmdd-hhnnss.log` (a block) and rotation
-  keeps the newest `MaxFiles` blocks; a `.log` of another name is never touched. A clean
-  stop logs `stopped` and flushes the tail. Several processes with the same exe (a local stdio
-  client next to the service) share the file safely, and nothing is ever written or pruned
-  through a link planted at `logs\`. Passwords and tokens in a request are masked before
-  they reach it, and a base64 run (an inline capture inside a response, an upload, a
-  `delphi_fetch` chunk) is not kept: a mark with its size stays, the rest of the line whole.
-  The tray's window shows the latest `LinesPerFile` lines on top. Memory is
-  bounded end to end: the buffers cap at 5000 lines (beyond that, lines are counted and
-  reported as dropped, never accumulated). Until 1.5.0 only the tray wrote this log: the
-  service and the terminal had none.
-- **Roots** are both discovery (`delphi_projects`) and a **jail**: with roots configured, every
-  disk-touching tool (read/edit/create/build/lint/search/list/git/LSP) refuses paths outside
-  them — including `..\` escapes and prefix cousins. Paths with spaces need no quoting (the
-  separator is `;`); quotes around a root are tolerated and stripped. If Roots is configured
-  but no root parses valid, the server **fails closed** (everything refused) rather than
-  silently running unrestricted. No roots = unrestricted (local trusted mode). For remote
-  exposure configure BOTH, and expose over VPN/LAN only.
-- **`__delphi-temp`: the server's temporaries, and they are disposable.** Two homes, one
-  criterion. What the agent never touches (a git message file, an SDK probe, the script sent to
-  a target) goes next to the executable, like `reports\`. What the agent must FETCH - a desktop
-  capture - goes to `<root>\__delphi-temp\<agent>\`, inside the workspace, because `delphi_fetch`
-  checks the jail and a deliverable outside it cannot be delivered. **The folder is emptied whole
-  every time the server starts** - the server's own and the one in every workspace declared in
-  `settings.ini` - and only by the FIRST live instance of that exe (a stdio launch of the
-  service's own binary shares the folder, and purging it would delete files in flight):
-  nothing there survives a restart, so
-  never leave anything of your own in it - writing inside is refused. Skipped by every listing
-  and search, `includetrash` included: it is not trash, nothing is restored from it. Before
-  1.0.12 these files went to the MACHINE's `%TEMP%`, outside every jail - 56.4 MB measured,
-  forgotten there for two days.
-- **A destination you choose is checked too - twice.** The jail applies to `out`, `dest`,
-  `outfile` and friends exactly as it does to `path`. Every parameter that names a path ON
-  THIS SERVER declares it in the tool's own source (`[RutaDelServidor]`), and since 1.0.14 the
-  gate in front of every `tools/call` READS that declaration: an absolute path in a marked
-  argument must fall inside what the workspace may read, before the tool even starts. It is a
-  floor, not a replacement - each tool still makes its own, stricter check (reading versus
-  writing is something only the tool knows) - and `delphi_workspace` reports how many
-  parameters the floor watches (`jailedParams`), so an empty floor can be seen. The two
-  exceptions are paths on the TARGET machine - `delphi_paserver`'s `exe` and `delphi_config`'s
-  `remotedir` - where this server's jail has nothing to say.
-- **A root is also where project discovery STOPS.** Looking for a unit's `.delphilsp.json` or
-  `.dproj`, the server walks up from the file — but never past the edge of what this workspace
-  may read. A project file sitting ABOVE the root is not adopted (since 1.0.11): if your layout
-  puts the root at `src\` and the `.dproj` one level up, point the root at the project folder.
-  Measured on 2026-09-21: without that stop, a stray 10-byte `.dproj` left in `%TEMP%` became
-  the "project" of every unit below it, which made `delphi_references` scan **168 sources
-  across other workspaces** and publish their paths in the refusal.
-- **Virtual drive units**: the server's real drive letters never travel to the client — paths
-  leave as `srvd:\...`, `srvc:\...` and are accepted back in the same form (real paths still
-  work), so an agent can never mistake server paths for its own local disks. One generic rule
-  at the dispatch gate covers every tool's output, compiler/git messages and 8.3 short forms
-  included. Exception: file CONTENT is byte-exact by design and travels verbatim
-  (`delphi_read`, `delphi_fetch`, search hits, the vault readers, the lines of content of a `delphi_git` diff, the verification echo of
-  the editors - see "Byte fidelity beats the drive mask" below). On the way in it is the same
-  rule: what goes INSIDE a file (the `old`/`new` of an edit, a note's text, a commit message)
-  is content and is written as sent - the parameters carry a mark, `[Contenido]` -, except a
-  value of `delphi_designer` (`value`, `props`, `state`), whose text is expanded when it starts
-  with a virtual unit, because a path in a form has to work when it runs. A path on a drive this
-  server does not serve leaves as `srv0:` - it says there is a path and not where - and
-  is refused by name if it comes back. The letters served are those of each workspace's own places (until 1.9.0 they were worked out once, with the workspace of the first call). (It was `srvx:` until 1.0.13, which is exactly what
-  a genuinely served `X:` drive masks to.)
-- **Library read zone** (off unless the workspace declares `LibraryZone=1`; absent, reads are confined to the roots exactly
-  like writes): READING tools (read/search/list/fetch/LSP navigation) additionally
-  accept, for **every installed Delphi**, its installation directory, the Library Search Path
-  of **every registered platform** (Win, Linux64, macOS, Android, iOS…) and the **GetIt
-  catalog repositories** — so an agent can follow a definition into `System.SysUtils.pas`,
-  read the source of an installed component (FMXLinux, LockBox…) or inspect the Android SDK.
-  Macros like `$(BDSCatalogRepositoryAllUsers)` are expanded from the IDE's own registry
-  table, never hardcoded. Writing tools can never touch that zone, and `delphi_workspace`
-  reports it as `readableExtra`. The Config Fabricator also merges the IDE Library Search
-  Path, so symbols of installed (third-party) components resolve.
+The three ways to run the same exe (Windows Service, terminal, tray), why the service **must log on
+as the user who owns RAD Studio**, letting an agent restart it by itself, several Delphi versions on
+one machine, and every section and key of `settings.ini` - workspaces, roots, tokens, access levels,
+switches and reach lists: **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**. Per-client snippets
+(Claude Code, Claude Desktop, OpenCode, custom agents): [docs/CLIENTS.md](docs/CLIENTS.md).
 
 ## Tests
 
@@ -959,18 +344,20 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 
 ## Key design points
 
-- **Zero hardcoded paths** — RAD Studio installation (11/12/13+) is discovered via the Windows registry.
-- **Project config made automatic** — uses the IDE-generated `.delphilsp.json` when fresh, and can **fabricate one from the `.dproj`** when absent or stale (validated experimentally).
-- **Warm processes** — one `DelphiLSP` (controller + agents; DelphiLSP replaces its own dead/hung children) per workspace, kept alive between agent sessions and refreshed against disk on each use. An engine nobody uses for `[Server] EngineIdleMinutes` (30 by default) is stopped, and the next request of its project starts another; one that hangs is stopped too — whoever was waiting on it gets `LSP-033` — and replaced the same way (1.8.0). How many engines stay warm at once can be capped with `[Server] MaxEngines`: past it, the least recently used one stops (1.13.0).
-- **Correct source encoding** — BOM detection, strict UTF-8, and otherwise the machine's ANSI code page, as the IDE and the compiler read a file without BOM; legacy ANSI sources are not corrupted. On a Windows set to "Beta: Use Unicode UTF-8 for worldwide language support" the ANSI page IS UTF-8 (65001): an old ANSI source without BOM is read there with U+FFFD where its accents are (READ-007) and is not edited, which is how `dcc` would read it on that machine too - save it once in its real page, or with a BOM, on a machine that reads it right.
-- **One executable, three modes** — Windows Service, terminal (`--http`/stdio) and VCL tray app (live log) are the same binary and the same 42 tools. They cannot drift: one project, one unit list, and the server itself is built once in `Lsp.Host` for all three.
-- **What a tool answers is what the agent sees** — tools reply in prose or in JSON, and both travel in the MCP `content`. `structuredContent` is published only when the answer IS a JSON object, or when a prose call FAILED (there it carries `ok`, a machine-readable `code` — `DENIED`, `NOT_FOUND`, `INVALID_PARAM`, `INTERNAL` — and the refusal text). A prose success publishes none: a client that understands the field shows it *instead of* `content`, so a status placeholder there made the real answer invisible (measured against production and fixed in v1.0.1-beta). A refusal carried INSIDE a JSON object gets the same treatment since v1.0.4-beta: the object's `error` field decides, so `ok` is never `true` on a refusal, whatever the tool put there.
-- **Every message says what it is and how it ended** (v1.7.0). Every refusal, failure and note of the server STARTS with a tag: `[CFG-058]` for a success message or a note, `[EDIT-093 NOT_FOUND]` for a refusal (a listing or a file's content carries none; a JSON answer carries it in its `error` field). The outcome — `INVALID_PARAM` (the call itself is malformed: fix it and repeat), `NOT_FOUND` (the call is right but what it names is not there), `DENIED` (a rule refuses it or something stands in the way: the same call will fail again, do what the reason says), `INTERNAL` (the server broke or misses a piece: report it) — is the same `code` that `structuredContent` carries, and it is DECLARED by the code that writes the message: the server never guesses it by reading the text, so rewording a message cannot change a result. The id stays when the wording changes, so an agent or a test recognizes a message by its id, not by its phrase. Every text lives in one catalog (`src/Server/Lsp.Texts.pas`, and `src/DesktopNode/Mld.Textos.pas` for the programs that run on the target) and goes out through one helper; the product speaks English.
-- **"It isn't there" and "it isn't that kind of thing" are different answers** (v1.0.4-beta). A folder handed to `delphi_read`, a file handed to `delphi_list`, a markdown file handed to `delphi_build`: each says what the path actually is and which tool handles it, instead of reporting it missing. And the outcome follows rule 11 — a path that is simply not there is `NOT_FOUND` ("correct it and repeat"), never `DENIED` (a rule refuses it: the same call fails again); and a path of the wrong kind is `INVALID_PARAM`.
-- **Byte fidelity beats the drive mask** (v1.0.4-beta). Server drive letters leave as virtual units (`D:\` → `srvd:\`) in every textual result, EXCEPT where the text is file content an agent will copy as an edit anchor: `delphi_read`, `delphi_search` hits, the vault readers, and the verification echo of `delphi_edit` / `delphi_textedit`. Those tools mask their own paths instead (since 1.15.0 the folder of a list, `dir`, is masked by the one organizer of file lists). A mask that rewrites the line you are about to anchor on guarantees the anchor cannot match. Since 1.9.0 the same goes for the lines of content of `delphi_git` `diff` / `show` / `log` (those that start with `+`, `-` or a space): a `'Z:\x'` in a string literal came out `'srv0:\x'`. The lines that are git's are masked as before. `delphi_docs` (1.10.0) is exempt for another reason: its text is the installed help, whose examples cite paths that are not this server's (`TPath.Combine('E:\somewhere', ...)` came out `'srv0:\somewhere'`, and the documentation of what Combine does with each path made no sense). What it composes itself carries no path, and the query and section it echoes are masked.
-- **Pascal text is read by one lexicon** (1.10.0). What is code, a string, a comment or a directive is decided in one unit, `Lsp.Pascal`, and every tool that reads Pascal asks it - the `uses` writer, `insert`, the rename of a unit, `delphi_references`, the `delphi_symbols` digest, the designer's binding report, test discovery - in a view of the text with the same length and line breaks, so what is found in the view is in the same place in the file. Until then about a dozen readers each knew a piece of the rule, and a probe measured nine faults in four tools; two of them wrote INSIDE a comment and said the job was done. Two reviewers before the tag found the places that census had missed - the `CreateForm` of a `.dpr`, a directive behind a `uses` entry that a rename dropped, a line that ends inside a comment, the digest, the rename of a symbol - and they ask the same lexicon now. A symbol rename, like a unit rename, rewrites code only, never a comment.
-- **The jail is measured on where a path really goes** (v1.0.5-beta). Not on what it is called: a junction or a symlink inside a root used to escape it for reading *and* for writing, because the check validated the path as text while the file system followed the link. A `git clone` with `core.symlinks` was enough to plant one without leaving the MCP. Boundaries are now decided on the resolved destination. Two corners of the same rule fell in v1.0.13-beta, both found by audit and both measured with real junctions: the ReadOnlyPaths pardon re-checked the path as TEXT and forgave the very refusal the link check had just produced (pardons went by the refusal's *reason* from then on; since 1.7.4 there is no pardon to get right: reading is one question, `JaulaDenegada`, and the write rules - a reference, `ReadOnlyPaths`, the confinement - are added after it in `PathDenied`), and every recursive delete - the startup purge included - followed a junction and deleted on the other side, because the RTL's recursive delete never looks at the reparse bit. There is one tree deleter now, and a link falls as an entry: its target is never looked at.
-- **A batch of edits answers with what happened, not with what you asked for** (v1.0.5-beta). Every entry comes back with the resulting line re-read from disk, the same evidence a single edit has always returned — and `occurrence` inside a batch is resolved once against the ORIGINAL file and then dragged as earlier entries add or remove lines, which is what its description always promised and did not do.
+Each one is told with its measurements and its history in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#design-points).
+
+- **Zero hardcoded paths** — the RAD Studio installation (11/12/13+) is discovered via the Windows registry.
+- **Project config made automatic** — the IDE's `.delphilsp.json` when fresh, one fabricated from the `.dproj` when absent or stale.
+- **Warm engines** — one `DelphiLSP` per workspace, kept alive between agent sessions, stopped when idle or hung and started again on the next request.
+- **Correct source encoding** — BOM, strict UTF-8, and otherwise the machine's ANSI code page, as the IDE and the compiler read a file without BOM.
+- **One executable, three modes** — service, terminal and tray are the same binary and the same 42 tools.
+- **What a tool answers is what the agent sees** — prose or JSON in `content`; `structuredContent` only when the answer is a JSON object or a call failed.
+- **Every message says what it is and how it ended** — a tag and an outcome (`INVALID_PARAM`, `NOT_FOUND`, `DENIED`, `INTERNAL`) declared by the code that writes it, from one catalog.
+- **"It isn't there" and "it isn't that kind of thing" are different answers.**
+- **Byte fidelity beats the drive mask** — what an agent copies as an edit anchor keeps its bytes.
+- **Pascal text is read by one lexicon** — `Lsp.Pascal` decides what is code, a string, a comment or a directive, for every tool.
+- **The jail is measured on where a path really goes** — junctions and symlinks included; one tree deleter that never crosses a link.
+- **A batch of edits answers with what happened** — every entry re-read from disk.
 
 ## Requirements
 

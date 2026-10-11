@@ -267,12 +267,12 @@ try:
 
     # D9 git NO se mide aqui: para git una unidad de subst es la carpeta de
     # debajo, la nombra por ella y la jaula, que juzga por lo declarado, la
-    # niega (GIT-041; es lo que el README dice de una letra de subst desde la
+    # niega (GIT-041; es lo que docs/CONFIGURATION.md dice de una letra de subst desde la
     # 1.8.2). Con una letra de RED que es la raiz entera, la regla que traduce
     # lo que contesta git la miden las unitarias (LspTests.Rutas,
     # LaRaizDeLaUnidadLlevaSuBarra)
     print('NOTA D9: git sobre una raiz-unidad no se mide con una unidad de subst (git la nombra '
-          'por la carpeta de debajo: GIT-041, como dice el README de una letra de subst)')
+          'por la carpeta de debajo: GIT-041, como dice docs/CONFIGURATION.md de una letra de subst)')
 
     # D10 un proyecto
     PROY = VQ + 'proyecto'
