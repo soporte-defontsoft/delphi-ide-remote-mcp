@@ -156,6 +156,36 @@ begin
   Result := Mejor;
 end;
 
+{ LA PUERTA de un movimiento: la que pasa la unit y la que pasa cada designer
+  que viaja con ella (se movia y se copiaba sin preguntar nada: 1.18.2, 2c).
+  El ORIGEN, por la de escribir si se mueve (se quita de su sitio) o por la de
+  leer si se copia; el DESTINO, por la de un destino que elige quien llama; y
+  las carpetas REALES de lo que se quita y de lo que se pone (EntradaDenegada,
+  revisor 4.8 de la 1.18.0, M2; copiar solo pone). '' si pasa. }
+function PuertaDelMovimiento(const AOrigen, ADestino: string; ACopia: Boolean): string;
+begin
+  if ACopia then
+    Result := ReadPathDenied(AOrigen)
+  else
+    Result := PathDenied(AOrigen);
+  if Result = '' then
+    Result := WriteTargetDenied(ADestino);
+  if (Result = '') and not ACopia then
+    Result := EntradaDenegada(AOrigen);
+  if Result = '' then
+    Result := EntradaDenegada(ADestino);
+end;
+
+{ ...y LA PUERTA de un borrado, la de la unit y la de su designer: la de
+  escribir y la carpeta REAL de la que se quita (EntradaDenegada). La
+  pregunta tambien el escritor de la papelera (MoveToTrash). '' si pasa. }
+function PuertaDelBorrado(const APath: string): string;
+begin
+  Result := PathDenied(APath);
+  if Result = '' then
+    Result := EntradaDenegada(APath);
+end;
+
 { La copia en la papelera de algo que al final no se hizo (un move que
   fallo, el form de un borrado de unit que se deshizo), fuera: es nuestra y
   recien hecha, y dejarla sumaba una copia por reintento; con su marca de
@@ -195,7 +225,12 @@ var
 begin
   // un FICHERO de solo lectura no se borra, como no se edita ni se pisa
   // (SYS-029: puede ser deliberado); el changeset delete ya lo decia y
-  // delphi_delete lo borraba: UNA regla (septima revision)
+  // delphi_delete lo borraba: UNA regla (septima revision). Y la puerta,
+  // preguntada por el escritor mismo, como AtomicWrite: quien llama la
+  // pregunta antes, y un llamador que se olvide no quita nada (1.18.2, 2c)
+  var Denegado := PuertaDelBorrado(APath);
+  if Denegado <> '' then
+    raise Exception.Create(Denegado);
   if TFile.Exists(APath) then
   begin
     var Motivo := SoloLecturaDenegado(APath);
@@ -500,7 +535,7 @@ begin
   // vuelta dentro en una carpeta que es una union afuera, y la papelera se lo
   // llevaba de la de fuera (revisor 4.8 de la 1.18.0, M2, la forma del
   // changeset)
-  Denied := EntradaDenegada(Params.Path);
+  Denied := PuertaDelBorrado(Params.Path);
   if Denied <> '' then
     Exit(Denied);
   // An empty folder needs no copy: retrying a half-finished delete used to
@@ -535,6 +570,15 @@ begin
     // a unit: take it out of the projects that list it (while the .pas is
     // still readable, so the form class/variable are known), then trash the
     // designer pair with it.
+    // Su designer, por la MISMA puerta que la unit (PuertaDelBorrado) y
+    // antes de tocar nada: iba a la papelera sin preguntar (1.18.2, 2c)
+    for var Form in DesignersDeUnidad(Params.Path) do
+      if TFile.Exists(Form) then
+      begin
+        Denied := PuertaDelBorrado(Form);
+        if Denied <> '' then
+          Exit(MsgFmt(SR_GEMELO_DENEGADO_FMT, [TPath.GetFileName(Form), Denied]));
+      end;
     Projects := ProjectsUsingUnit(Params.Path);
     // TODO O NADA (quinta revision): un .dproj que otro proceso tenia abierto
     // dejaba el .dpr cambiado y la unit borrada, con un exito que escondia el
@@ -776,6 +820,8 @@ var
   // los designers ya movidos (de, a) y la foto de lo que se reescribe: mover
   // una UNIT es todo o nada, como borrarla
   DisenosDe, DisenosA: TArray<string>;
+  // los designers que la puerta APROBO (de, a): los que viajan, y solo esos
+  GemelosDe, GemelosA: TArray<string>;
   FotoUnit: TFotoDeFicheros;
   // la copia diaria que deja la reescritura de la cabecera: si el move se
   // deshace, se va con el (un move que no se hizo no deja copias; la
@@ -899,11 +945,10 @@ begin
       Exit(Denied);
   end;
   // mover QUITA una entrada de su carpeta y la PONE en otra: las dos carpetas
-  // REALES (EntradaDenegada; revisor 4.8 de la 1.18.0, M2). Copiar solo pone
-  if not Params.Copy then
-    Denied := EntradaDenegada(Params.Path);
-  if Denied = '' then
-    Denied := EntradaDenegada(Params.Dest);
+  // REALES (EntradaDenegada; revisor 4.8 de la 1.18.0, M2). Copiar solo pone.
+  // La puerta entera, la que pasan tambien sus designers (PuertaDelMovimiento):
+  // la jaula y el destino ya se preguntaron arriba, ANTES de mirar si existe
+  Denied := PuertaDelMovimiento(Params.Path, Params.Dest, Params.Copy);
   if Denied <> '' then
     Exit(Denied);
   // Una copia de la papelera se llama "UFicha.pas-215825250": su extension
@@ -935,6 +980,22 @@ begin
     for var Form in DesignersDeUnidad(Params.Dest) do
       if TFile.Exists(Form) then
         Exit(MsgFmt(SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT, [Form]));
+    // ...y cada designer que viaja con ella, por la MISMA puerta y antes de
+    // tocar nada: comparten carpeta, no nombre (una entrada de ReadOnlyPaths
+    // puede nombrar el .dfm solo; se movia sin preguntar, 1.18.2, 2c)
+    var DisenosOrigen := DesignersDeUnidad(Params.Path);
+    var DisenosDestino := DesignersDeUnidad(Params.Dest);
+    for var K := 0 to High(DisenosOrigen) do
+    begin
+      var Suyo := DesignerJunto(DisenosOrigen[K], OldStem, DesdePapelera);
+      if Suyo = '' then
+        Continue;
+      Denied := PuertaDelMovimiento(Suyo, DisenosDestino[K], Params.Copy);
+      if Denied <> '' then
+        Exit(MsgFmt(SR_GEMELO_DENEGADO_FMT, [TPath.GetFileName(Suyo), Denied]));
+      GemelosDe := GemelosDe + [Suyo];
+      GemelosA := GemelosA + [DisenosDestino[K]];
+    end;
     // renombrarla es reescribir su cabecera (unit X;): con el atributo +R no
     // se puede, y se movia igual - MOVED con "unit UOld;" en UNew.pas y el
     // proyecto roto. Se dice ANTES de mover (novena revision)
@@ -1110,24 +1171,22 @@ begin
   PairNote := '';
   // los designers ya movidos (de, a): si falla el siguiente vuelven (con
   // .dfm y .fmx, el .dfm se quedaba en el destino; novena revision)
-  // los de la unidad y los del destino, en el mismo orden (DesignersDeUnidad)
-  var FormsDe := DesignersDeUnidad(Params.Path);
-  var FormsA := DesignersDeUnidad(Params.Dest);
-  for var K := 0 to High(FormsDe) do
+  // los que la puerta APROBO arriba, en su orden (GemelosDe/GemelosA): se
+  // buscaban otra vez, y uno que apareciese en medio viajaba sin que nadie
+  // lo mirase (revisor del 2c de la 1.18.2)
+  for var K := 0 to High(GemelosDe) do
   begin
-    var Gemelo := DesignerJunto(FormsDe[K], OldStem, DesdePapelera);
-    if Gemelo = '' then
-      Continue;
+    var Gemelo := GemelosDe[K];
     try
       if Params.Copy then
-        CopiaNuestra(Gemelo, FormsA[K])
+        CopiaNuestra(Gemelo, GemelosA[K])
       else
-        TFile.Move(Gemelo, FormsA[K]);
+        TFile.Move(Gemelo, GemelosA[K]);
       DisenosDe := DisenosDe + [Gemelo];
-      DisenosA := DisenosA + [FormsA[K]];
+      DisenosA := DisenosA + [GemelosA[K]];
       // una nota por designer: con .dfm Y .fmx solo se nombraba el ultimo (decima)
       PairNote := PairNote + IfThen(PairNote <> '', #10) + MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-        [TPath.GetFileName(FormsA[K]),
+        [TPath.GetFileName(GemelosA[K]),
          IfThen(Params.Copy, MsgText(SF_MOVE_COPIADO_CON_UNIT), MsgText(SF_MOVE_MOVIDO_CON_UNIT))]);
     except
       on E: Exception do

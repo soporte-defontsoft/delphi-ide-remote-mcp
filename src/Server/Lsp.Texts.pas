@@ -3270,6 +3270,13 @@ const
 
   SN_FILE_DESIGNER_TOO_FMT =
     '  [FILE-006] designer %s: %s';
+  { El designer de una unit viaja con ella (delphi_move, delphi_delete) y
+    pasa la MISMA puerta que la unit, por su nombre: una entrada de
+    ReadOnlyPaths puede nombrarlo a el solo. Se movia y se borraba sin
+    preguntar (1.18.2, punto 2c). }
+  SR_GEMELO_DENEGADO_FMT =
+    '[FILE-043 DENIED] The unit''s designer %s goes along with it, and the ' +
+    'gate refuses that: %s Nothing was changed.';
 
   // ---- delphi_diagnostics ----
 

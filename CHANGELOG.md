@@ -72,6 +72,19 @@ the MCP `initialize` response (`serverInfo.version`).
   confined agent, the server's temporary folder and a root declared through
   a junction have their checks), `LspTests.Images`.
 
+- **A unit's designer goes through the gate with it.** `delphi_move` and
+  `delphi_delete` of a unit take its `.dfm`/`.fmx` along, and the gate
+  judged only the unit: the designer was moved, copied or sent to the trash
+  without being asked about. Measured with the `.dfm` alone in
+  `ReadOnlyPaths`: moving its unit moved it, deleting the unit trashed it,
+  and a unit moved or copied next to a read-only name wrote its designer
+  there. The designer now passes the same gate as its unit, by its own name,
+  before anything is touched, and is refused with `FILE-043`; only the
+  designers the gate approved travel; and the writer that sends a file to
+  the trash asks the gate itself, so a caller that forgets cannot remove
+  anything. `test_gemelo_puerta_1182` (G1, G2, G4 and G5 red before; each
+  check has its mutant, the writer's own question too).
+
 ### Internal
 
 - **One PNG header, for the server and the desktop node.** The signature
