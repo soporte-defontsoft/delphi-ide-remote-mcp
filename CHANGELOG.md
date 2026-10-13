@@ -74,6 +74,14 @@ the MCP `initialize` response (`serverInfo.version`).
   a mutant). 2aa and 2ai-B cannot be provoked from outside and were checked
   by reading.
 
+- **`delphi_delete purge=true` removes a dangling link from the trash.** A
+  link whose target was deleted exists only as a name; the existence check
+  followed the link, answered `SYS-012` "does not exist", and the link stayed
+  in the trash for good (2y, measured in production). The judge is now the
+  attribute of the name itself. `test_purga_enlace_colgante_1182` (red
+  against production; a mutant; the control purges a live link and leaves
+  what is behind it untouched).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

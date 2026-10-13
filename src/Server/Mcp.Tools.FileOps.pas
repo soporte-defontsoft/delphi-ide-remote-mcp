@@ -443,7 +443,12 @@ begin
     end;
     if IsBackupRoot(Params.Path) then
       Exit(MsgText(SR_FILE_PURGE_NOT_ROOT));
-    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
+    // un enlace COLGANTE (su destino se borro) existe como NOMBRE: la
+    // existencia se preguntaba siguiendo el enlace, contestaba SYS-012 y el
+    // enlace se quedaba en la papelera para siempre (2y de la 1.18.2, medido
+    // en produccion). El juez es el atributo del propio nombre (EsEnlace)
+    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path) or
+            EsEnlace(SinBarraFinal(TPath.GetFullPath(Params.Path)))) then
       Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
     var CanonPurge := LongCanonical(Params.Path);
     if EsMarcaDeDueno(CanonPurge) then
