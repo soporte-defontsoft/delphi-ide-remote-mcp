@@ -57,7 +57,8 @@ uses
   Lsp.RemoteRun, // MotivoSinCaptura
   Lsp.Texts,
   Lsp.Patch,     // ColocaContenido con su lugar (2i)
-  Lsp.Casa;
+  Lsp.Casa,
+  System.StrUtils;
 
 function PngDe(W, H: Integer): TArray<Byte>;
 var
@@ -401,13 +402,16 @@ end;
 procedure TImageTests.CasaDeEntregablesReconoceASuNombrador;
 begin
   // el lector reconoce lo que compone el nombrador (AgentTempDir); una carpeta
-  // cualquiera no. Lanzado a mano, el ejecutor tiene por raiz su carpeta y su
-  // casa ES su temporal (medido con una sonda): que la temporal del servidor
-  // cuente SIN ser la casa de ninguna raiz, y los enlaces, los mide
-  // test_captura_puertas_1182 (S1-S2, K1-K3), que monta las raices y planta
-  // los enlaces de verdad
+  // cualquiera no. La casa es NUESTRA: en la temporal del servidor, nunca en
+  // un workspace (1.18.2, 2af), y el resto de esa temporal (el mensaje de un
+  // commit, un contenedor de test) no es una captura que se entregue. Los
+  // enlaces y los workspaces los mide test_captura_puertas_1182 (S3, E1-E4)
   Assert.IsTrue(EnCasaDeEntregables(AgentTempDir(CAPTURE_SUB_DESIGNER) + '\designer-x.png'),
     'lo que compone el nombrador');
+  Assert.IsTrue(StartsText(IncludeTrailingPathDelimiter(ServerTempDir('')), AgentTempDir(CAPTURE_SUB_DESIGNER)),
+    'la casa, en la temporal del servidor: ' + AgentTempDir(CAPTURE_SUB_DESIGNER));
+  Assert.IsFalse(EnCasaDeEntregables(ServerTempDir('git') + '\designer\designer-x.png'),
+    'el resto de la temporal del servidor no es la casa de capturas');
   Assert.IsFalse(EnCasaDeEntregables('C:\w\capturas\designer\designer-x.png'), 'una carpeta cualquiera');
 end;
 

@@ -378,7 +378,8 @@ end;
 
 { La forma del VALOR decide, nunca una lista de propiedades.
   Se pregunta al unico juez de lectura por cada fichero existente.
-  El ayudante interpreta relativos desde la form o desde su cwd (el PNG). }
+  El ayudante interpreta relativos desde la form o desde su cwd (la carpeta
+  del form desde la 1.18.2; antes, la del PNG). }
 function LiteralesDeRenderDenegados(const APeticion: TPeticionRender): string;
 var
   Bases: TArray<string>;
@@ -472,10 +473,11 @@ begin
   Result := '';
   BytesLeidos := 0;
   // las carpetas desde las que el ayudante resuelve un relativo y en las que
-  // busca hermanos: la del fichero que lee, la del png (su cwd) y, cuando el
-  // fichero es una propuesta escrita en otra, la del form de verdad (--folder:
-  // de ahi lee frames y ancestros). Una base que no mira es un relativo que
-  // pasa la puerta (revisor 3 de la noche, A-1)
+  // busca hermanos: la del fichero que lee y, cuando el fichero es una
+  // propuesta escrita en otra, la del form de verdad (--folder: de ahi lee
+  // frames y ancestros, y es su cwd). La del png fue su cwd hasta la 1.18.2 y
+  // se sigue mirando: una base de mas no abre nada. Una base que no mira es
+  // un relativo que pasa la puerta (revisor 3 de la noche, A-1)
   var Hermanos := TPath.GetDirectoryName(APeticion.Path);
   if APeticion.Carpeta <> '' then
     Hermanos := APeticion.Carpeta;
@@ -527,11 +529,12 @@ end;
 
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
 var
-  Exe, Nombre, Orden, Salida, Fallo: string;
+  Exe, Nombre, Orden, Salida, Fallo, CwdPropio: string;
   Codigo: Cardinal;
   Reloj: TStopwatch;
 begin
   Result := Default(TRespuestaRender);
+  CwdPropio := '';
   Result.Fallo := LiteralesDeRenderDenegados(APeticion);
   if Result.Fallo <> '' then
     Exit;
@@ -549,23 +552,40 @@ begin
   end;
   Reloj := TStopwatch.StartNew;
   try
-    // en la carpeta del png, o la del form (el juez que no pinta: la del form
-    // de verdad, no la de su propuesta, que esta en el temporal del
-    // servidor): nada relativo del ayudante cae en la casa del servidor
-    // (revisor 6 del 3.11, B6)
+    // en la carpeta del form de verdad (la del juez que no pinta es Carpeta:
+    // su propuesta esta en el temporal del servidor): el ayudante carga el
+    // form DEL AGENTE y nada relativo suyo cae en la casa del servidor
+    // (revisor 6 del 3.11, B6). Era la carpeta del png, que desde la 1.18.2
+    // esta en nuestra casa de capturas (revisor del 2af)
     var Cwd := TPath.GetDirectoryName(APeticion.Path);
-    if APeticion.Salida <> '' then
-      Cwd := TPath.GetDirectoryName(APeticion.Salida)
-    else if APeticion.Carpeta <> '' then
+    if APeticion.Carpeta <> '' then
       Cwd := APeticion.Carpeta;
+    // ...si la sesion puede ESCRIBIR alli: el codigo de diseno de los paquetes
+    // escribe RELATIVO al cwd (lo miden URenderReachDummy y su gemelo FMX), y
+    // un form de una referencia o de un ReadOnlyPaths lo llevaria a escribir
+    // donde nadie puede (revisor de la 2a mitad del 2af, M3). Ahi, una carpeta
+    // nuestra nueva y vacia, que se va al acabar
+    if EscrituraDenegada(Cwd) <> '' then
+    begin
+      CwdPropio := NuevaCarpetaDescarga(ServerTempDir(CAPTURE_SUB_DESIGNER));
+      CrearCarpeta(CwdPropio);
+      Cwd := CwdPropio;
+    end;
     Salida := RunCapturedIn(Orden, Cwd, RENDER_TIEMPO_MS, Codigo);
   except
     on E: Exception do
     begin
       Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_NO_ARRANCA_FMT, [Nombre, E.Message]);
-      Exit;
     end;
   end;
+  if CwdPropio <> '' then
+    try
+      BorraArbol(CwdPropio); // sin cruzar enlaces: ver Lsp.Guard
+    except
+      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
+    end;
+  if Result.Fallo <> '' then
+    Exit;
   Result := LeeRespuestaDeRender(Salida);
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;

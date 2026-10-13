@@ -42,26 +42,28 @@ interface
   "proyecto" de las units de otras tres. Un temporal repartido no se purga
   nunca.
 
-  DOS CASAS, y el criterio es el mismo que separa a __delphi-temp de
-  __delphi-patch:
+  UNA CASA para lo nuestro: ServerTempDir, JUNTO AL EJECUTABLE, como
+  reports\ y settings.ini - el fichero del mensaje de git, la descarga de un
+  SDK, el guion que se manda a un target y las CAPTURAS que hacemos para
+  devolverlas (CasaDeCapturas). Se puede borrar en cualquier momento: nada
+  de lo que hay ahi sobrevive a la llamada que lo creo, o a su entrega. No
+  pasa por la jaula porque no es una ruta que elija nadie de fuera: la jaula
+  juzga lo que el AGENTE intenta, y esto es trabajo nuestro (David,
+  12-oct-2026: "lo que intenta el agente pasa filtros; devolver una captura
+  no"; CLAUDE.md, "What the agent attempts is not what the server does
+  inside").
 
-    ServerTempDir  lo que es del SERVIDOR y el agente no toca nunca (el
-                   fichero del mensaje de git, la descarga de un SDK, el
-                   guion que se manda a un target). Va JUNTO AL EJECUTABLE,
-                   como reports\ y settings.ini, y se puede borrar en
-                   cualquier momento: nada de lo que hay ahi sobrevive a la
-                   llamada que lo creo. No pasa por la jaula porque no es
-                   una ruta que elija nadie de fuera.
-
-    AgentTempDir   lo que el agente tiene que ALCANZAR: una captura que se
-                   baja con delphi_fetch, una salida que se lee. Va DENTRO
-                   del workspace, porque delphi_fetch comprueba la jaula y
-                   un entregable fuera de ella es un entregable que no se
-                   puede entregar (medido: el flujo documentado de
-                   delphi_desktop estaba roto de punta a punta). Y con la
-                   carpeta del agente, porque una jaula puede estar
-                   compartida por varios: la captura de uno no se le pone
-                   delante a otro.
+  Hasta la 1.18.2 habia una SEGUNDA casa, dentro del workspace (AgentTempDir:
+  <raiz>\__delphi-temp\<agente>), con un criterio equivocado: "lo que el
+  agente tiene que alcanzar va dentro, porque delphi_fetch comprueba la
+  jaula" (21-sep-2026). La forma de ENTREGAR decidio donde vivia un trabajo
+  nuestro, y desde el 25-sep la captura viaja en la respuesta y se consume.
+  Costo el 2b y el 2i de la 1.18.2 y una captura dibujada DENTRO de una raiz
+  de solo lectura. Hoy la captura viaja en la respuesta o por un enlace que
+  la pide por su NOMBRE y resuelve su nombrador (Lsp.Guard.CapturaPorNombre):
+  el agente no ve nuestra casa, y delphi_fetch es para sus ficheros (David,
+  12-oct-2026: "nuestros procesos internos y nuestro temp, los agentes no
+  deben ni olerlo").
 
   Componen la ruta y ya: crear la carpeta es de quien la use. }
 function TempFolderName: string;
@@ -71,6 +73,13 @@ function TempFolderName: string;
   el 26-sep lo componian a mano ocho sitios. Sin ASub, la carpeta. }
 function ServerDir(const ASub: string = ''): string;
 function ServerTempDir(const ASub: string = ''): string;
+{ LA CASA DE LAS CAPTURAS que el servidor hace para devolverlas (sin out=):
+  en su temporal, por workspace y por agente, con el compositor del buzon -
+  <temporal>\captures\<carpeta del workspace>[\<agente>] -. Por workspace
+  porque varios comparten el servidor: a cada uno se le entregan las suyas.
+  Sin AAgente, la del workspace entera: la que reconoce quien entrega o
+  consume una captura (Lsp.Guard.EnCasaDeEntregables). }
+function CasaDeCapturas(const AAgente: string = ''): string;
 { <LOCALAPPDATA>\DelphiLspMcp\ASub: las caches del servidor que no van junto
   al exe (las configuraciones que se fabrican para el motor, los estilos por
   defecto de la plataforma). Las componian a mano dos sitios. Lee la
@@ -222,6 +231,8 @@ const
   // la carpeta de las copias de lo que el servidor pisa en el IDE, en su cache
   // (las baterias la leen de aqui, no a mano: revisor de version de la 1.18.0)
   IDE_COPIAS_SUB = 'ide-copias';
+  // la carpeta de las capturas en la temporal del servidor (CasaDeCapturas)
+  CAPTURAS_SUB = 'captures';
 
 function TempFolderName: string;
 begin
@@ -283,6 +294,11 @@ end;
 function BuzonDeMensajes(const AAgente: string): string;
 begin
   Result := Buzon(CarpetaDeMensajes, AAgente);
+end;
+
+function CasaDeCapturas(const AAgente: string): string;
+begin
+  Result := Buzon(ServerTempDir(CAPTURAS_SUB), AAgente);
 end;
 
 function BuzonDeInformes(const AAgente: string): string;

@@ -87,17 +87,20 @@ try:
     r = a.call('delphi_read', {'path': os.path.join(base, 'bob', 'b.pas')})
     # el contenido de verdad, en el formato numero|linea del read
     check('C5 ON: leer NO esta confinado (lee el arbol entero)', '1|unit b;' in r, r)
-    # una captura NUESTRA en la carpeta del agente confinado se consume al
-    # recogerla: hasta la 1.7.3 el consumo preguntaba a PathDenied, el
-    # confinamiento negaba __delphi-temp y las capturas de un agente confinado
-    # no se borraban nunca, con la respuesta diciendo 'consumida' (duodecima
-    # revision). La captura es nuestra por el NOMBRADOR (CasaDeEntregables).
+    # Las capturas son NUESTRAS y viven en la casa del servidor, no en el
+    # workspace (2af de la 1.18.2: hasta la 1.18.1 vivian en el __delphi-temp
+    # de la raiz, y aqui se media que el confinamiento no impidiera
+    # consumirlas). Un png con su forma plantado en el workspace NO es nuestro:
+    # el agente lo lee como cualquier fichero de su jaula y no se borra. La
+    # entrega y el consumo de las nuestras, con un agente confinado tambien,
+    # los mide test_captura_puertas_1182 (C1-C2, F1, E3-E4)
     CAP = os.path.join(base, '__delphi-temp', 'alice', 'desktop', 'cap.png')
     os.makedirs(os.path.dirname(CAP), exist_ok=True)
     open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
     r = a.call('delphi_fetch', {'path': CAP, 'offset': 0})
-    check('C7 ON: la captura del agente confinado se consume al recogerla',
-          mc.como_json(r).get('consumedOnServer') is True and not os.path.exists(CAP), r[:300])
+    check('C7 ON: un png con forma de captura en el workspace se lee, pero no es nuestro y no se borra',
+          mc.como_json(r).get('bytes', 0) > 0 and mc.como_json(r).get('consumedOnServer') is not True and
+          os.path.exists(CAP), r[:300])
 finally:
     proc.kill()
 

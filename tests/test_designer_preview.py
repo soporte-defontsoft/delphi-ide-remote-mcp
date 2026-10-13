@@ -766,7 +766,8 @@ end
     # ------------------------------------------------------------------ P9
     # P8 dejo el suyo a proposito (inline=false sin out=: se consume al
     # descargarlo): lo que se mide es que ESTA llamada no deje ninguno
-    capturas = os.path.join(JAIL, '__delphi-temp', '**', 'designer', '*.png')
+    # NUESTRA casa de capturas: la temporal del servidor (2af de la 1.18.2)
+    capturas = os.path.join(mc.casa_de_capturas(os.path.join(BASE, 'srv')), '**', 'designer', '*.png')
     antes = set(glob.glob(capturas, recursive=True))
     r = preview(path=PRUEBA)
     j = J(r)

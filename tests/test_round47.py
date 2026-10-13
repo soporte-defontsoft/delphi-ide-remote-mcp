@@ -12,21 +12,19 @@ voz alta. Aqui se pagan dos:
      delphi_git. Antes del arreglo eso mataba la llamada con "No mapping for
      the Unicode character..."; ahora cae a la red y el ASCII llega entero.
 
-  R  AgentTempDir con la PRIMERA raiz declarada de solo lectura: el
-     entregable tiene que caer en la primera raiz ESCRIBIBLE. Necesita el
-     nodo del escritorio y una sesion que pueda capturar; si no, se DICE.
+  R  (AgentTempDir con la PRIMERA raiz declarada de solo lectura) ya no se
+     mide aqui: desde la 1.18.2 (2af) las capturas viven en la casa del
+     servidor y no en una raiz, y desde la 1.0.16 el escritorio pide un
+     perfil, asi que R1/R2 no median nada. Lo mide test_desktop_casa_1182
+     (D2, D5) contra el Zorin, y sin escritorio test_captura_puertas_1182.
 
 La tercera (la clave de cache entre workspaces solapados) se paga en
 test_round48: un servidor, dos tokens, y el exe de la 1.0.12 de control.
 """
 import os
-import shutil
 import time
 import mcp_cliente as mc
 from mcp_cliente import check
-
-REPO = mc.REPO
-NODO = os.path.join(REPO, 'node', 'McpDesktopNode.exe')
 
 BASE = mc.carpeta('round47')
 EXEDIR = os.path.join(BASE, 'srv')
@@ -36,9 +34,6 @@ os.makedirs(os.path.join(EXEDIR, 'node'))
 os.makedirs(RO)
 os.makedirs(RW)
 EXE = mc.copia_exe(EXEDIR)
-HAY_NODO = os.path.exists(NODO)
-if HAY_NODO:
-    shutil.copy(NODO, os.path.join(EXEDIR, 'node', 'McpDesktopNode.exe'))
 
 TOK = 'r47'
 PORT = mc.puerto_libre()
@@ -52,13 +47,6 @@ proc = mc.lanza_http(EXE, PORT, mc.entorno())
 cli = mc.Http(PORT, TOK, respaldo_json=True)
 cli.session('r47')
 call = cli.call
-
-
-def pngs(d):
-    if not os.path.isdir(d):
-        return []
-    return [os.path.join(r, f)
-            for r, _, fs in os.walk(d) for f in fs if f.lower().endswith('.png')]
 
 
 try:
@@ -137,25 +125,6 @@ try:
           isinstance(mc.como_json(lro).get('folders'), list) and
           os.path.exists(os.path.join(intocable, 'Ajena.pas')), (intocable, lro[:160]))
 
-    # ------------------------------------------------------------------- R
-    # Roots=referencia;trabajo con ReadOnlyPaths=referencia. El entregable
-    # por defecto caia en Roots[0] a pelo: justo donde la jaula prohibe
-    # escribir (y donde la misma ruta pasada en "out" se rechaza).
-    shot = call('delphi_desktop', {'command': 'screenshot'}) if HAY_NODO else ''
-    if not HAY_NODO:
-        print('NOTA: no hay node/McpDesktopNode.exe; R1/R2 no se miden.')
-    elif 'Could not capture' in shot or '"screenshot"' not in shot:
-        # Desde 1.0.16 el escritorio solo se alcanza por PAServer y un perfil
-        # (ni hay perfil aqui ni remote-run encendido): se dice el motivo REAL
-        # que da el servidor, no se supone una sesion bloqueada.
-        print('NOTA: R1/R2 no se miden: delphi_desktop no capturo: %s'
-              % ' '.join(shot.split())[:160])
-    else:
-        check('R1 la captura por defecto cae en la raiz ESCRIBIBLE',
-              bool(pngs(os.path.join(RW, '__delphi-temp'))), shot[:240])
-        check('R2 ...y en la raiz de solo lectura no se ha creado nada',
-              not os.path.exists(os.path.join(RO, mc.TEMPORALES)),
-              os.listdir(RO))
 finally:
     try:
         proc.kill()

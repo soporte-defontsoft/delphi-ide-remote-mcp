@@ -35,7 +35,9 @@ function WrapWithAttachedImages(const AText: string): TJSONArray;
   inline de la tool (False = fichero + enlace; Boolean en el esquema desde
   la 1.18.0, true por defecto en el constructor de sus params), AMaxWidth = el
   maxwidth (0 = el de la casa). True si viajo inline. Nunca modifica AFile:
-  si es un temporal del agente (IsAgentCapture) lo consume; un out= se queda.
+  si es una captura NUESTRA (CapturaConsumible) la consume y su ruta no sale
+  en la respuesta - ni en 'screenshot' ni en el enlace, que la pide por su
+  nombre (2af de la 1.18.2) -; un out= es del agente y se queda.
   ANotaEnLineaFmt (con un %s: la escala) y ANotaFrame son las notas de la
   tool cuando las de la familia de escritorio no le valen: esas hablan de
   pulsar con tap, y lo que mide un agente en un preview del disenador se
@@ -71,7 +73,7 @@ uses
   Lsp.Imagen,   // EscalaPngBytes: escalar en memoria
   Lsp.Png,      // TamanoPngBytes: LA cabecera de un PNG, la del nodo tambien
   Lsp.Patch,    // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
-  Lsp.Guard,    // IsAgentCapture / ConsumeAgentCapture
+  Lsp.Guard,    // CapturaConsumible / IsAgentCapture / ConsumeAgentCapture
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
   Lsp.Texts;
 
@@ -172,6 +174,7 @@ var
   Escala: Double;
   MaxW, W, H, W0, H0, SrcW, SrcH: Integer;
   Fallo, FalloLectura, Enlace: string;
+  Nuestra: Boolean;
 
   // El frame de la imagen que el agente va a mirar (IW x IH): cubre la
   // region del fichero en el espacio de tap, desde el origen.
@@ -188,6 +191,14 @@ var
 
 begin
   Result := False;
+  // La ruta de una captura NUESTRA no se ensena nunca: es de nuestra casa
+  // (David, 12-oct-2026: "nuestros procesos internos y nuestro temp, los
+  // agentes no deben ni olerlo"). Toda tool de captura la anuncia como
+  // 'screenshot'; se quitaba solo al consumirla en linea, y con inline=false
+  // se quedaba (2af de la 1.18.2)
+  Nuestra := CapturaConsumible(AFile);
+  if Nuestra then
+    AReturn.RemovePair('screenshot').Free;
   // los bytes UNA vez, por la puerta de leer (el out= del agente o su casa de
   // entregables): el tamano y la imagen en linea salen de ellos. Se leian
   // dos veces y sin puerta (1.18.2, 2b)
@@ -225,14 +236,8 @@ begin
       AReturn.AddPair('inlineScale', TJSONNumber.Create(Escala));
       AReturn.AddPair('inlineBytes', TJSONNumber.Create(Length(Bytes)));
       // consumida = borrada de verdad: lo dice quien borra (duodecima revision)
-      if ConsumeAgentCapture(AFile) then
-      begin
-        AReturn.AddPair('consumed', TJSONBool.Create(True));
-        // La ruta de un fichero que ya no existe es una invitacion a pedirlo
-        // (hermes recompuso una esta manana): fuera. Toda tool de captura la
-        // anuncia como 'screenshot'.
-        AReturn.RemovePair('screenshot').Free;
-      end
+      if Nuestra then
+        AReturn.AddPair('consumed', TJSONBool.Create(ConsumeAgentCapture(AFile)))
       else if IsAgentCapture(AFile) then
         AReturn.AddPair('consumed', TJSONBool.Create(False)); // no era nuestra: se queda
       var EscalaTexto := FormatFloat('0.000', Escala, TFormatSettings.Invariant);
@@ -253,8 +258,15 @@ begin
   begin
     AReturn.AddPair('download', Enlace);
     AReturn.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
-    if IsAgentCapture(AFile) then
+    if Nuestra then
       AReturn.AddPair('consumedOnDownload', TJSONBool.Create(True)); // se borra al recogerla
+  end
+  else if Nuestra then
+  begin
+    // sin la ruta /files (stdio) una captura nuestra no tiene por donde
+    // salir y su ruta no se ensena: se dice como pedirla. Se queda en la casa
+    // hasta que la purga del arranque se la lleve, como una que nadie baja
+    AReturn.AddPair('downloadNote', MsgText(SN_CAPTURE_SIN_ENLACE));
   end;
 end;
 

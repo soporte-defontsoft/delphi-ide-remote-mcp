@@ -534,21 +534,26 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   but no root parses valid, the server **fails closed** (everything refused) rather than
   silently running unrestricted. No roots = unrestricted (local trusted mode). For remote
   exposure configure BOTH, and expose over VPN/LAN only.
-- **`__delphi-temp`: the server's temporaries, and they are disposable.** Two homes, one
-  criterion. What the agent never touches (a git message file, an SDK probe, the script sent to
-  a target) goes next to the executable, like `reports\`. What the agent must FETCH - a desktop
-  capture - goes to `<root>\__delphi-temp\<agent>\`, inside the workspace, because `delphi_fetch`
-  checks the jail and a deliverable outside it cannot be delivered. **The folder is emptied whole
-  every time the server starts** - the server's own and the one in every workspace declared in
-  `settings.ini` - and only by the FIRST live instance of that exe (a stdio launch of the
-  service's own binary shares the folder, and purging it would delete files in flight):
-  nothing there survives a restart, so
-  never leave anything of your own in it - writing inside is refused. Skipped by every listing
-  and search, `includetrash` included: it is not trash, nothing is restored from it. Before
-  1.0.12 these files went to the MACHINE's `%TEMP%`, outside every jail - 56.4 MB measured,
-  forgotten there for two days.
-- **A destination you choose is checked too - twice.** The jail applies to `out`, `dest`,
-  `outfile` and friends exactly as it does to `path`. Every parameter that names a path ON
+- **`__delphi-temp`: the server's temporaries, and they are disposable.** One home, next to
+  the executable, like `reports\`: a git message file, an SDK probe, the script sent to a
+  target, and the captures the server makes to hand back (`delphi_desktop`, `delphi_adb`,
+  `delphi_designer preview` without `out=`), in `__delphi-temp\captures\<workspace>\<agent>\`.
+  A capture is the server's own work: it travels in the answer, or with `inline=false` as a
+  download link that asks for it by name (`/files?capture=<name>`), and is deleted once
+  delivered; a workspace is only ever handed its own. No answer names this folder, and
+  `delphi_fetch` is for the agent's own files (over stdio there is no link: `out=` keeps one).
+  None of it goes through the jail and none of it lands in a workspace - the jail judges what
+  the agent names (`out=` included), not what the server does to serve it. **The folder is
+  emptied whole every time the server starts**, and only by the FIRST live instance of that
+  exe (a stdio launch of the service's own binary shares the folder, and purging it would
+  delete files in flight): nothing there survives a restart, so never leave anything of your
+  own in it - writing inside is refused. Skipped by every listing and search, `includetrash`
+  included: it is not trash, nothing is restored from it. Before 1.0.12 these files went to
+  the MACHINE's `%TEMP%` (56.4 MB measured, forgotten there for two days); from 1.0.12 to
+  1.18.1 the captures went to `<root>\__delphi-temp\<agent>\`, inside the workspace, because
+  `delphi_fetch` checked the jail - and the jail then judged the server's own work. The
+  server still empties the `__delphi-temp` it finds in the workspace roots at startup, to
+  take away what those versions left.
   THIS SERVER declares it in the tool's own source (`[RutaDelServidor]`), and since 1.0.14 the
   gate in front of every `tools/call` READS that declaration: an absolute path in a marked
   argument must fall inside what the workspace may read, before the tool even starts. It is a

@@ -81,7 +81,7 @@ def _papelera():
     if not _PAPELERA:
         for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT',
                                                   'BUZON_SIN_WORKSPACE', 'BUZON_PREFIJO_WORKSPACE',
-                                                  'IDE_COPIAS_SUB')),
+                                                  'IDE_COPIAS_SUB', 'CAPTURAS_SUB')),
                                 ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
                                                    'CAJON_SUSTITUIDOS', 'TEMPORAL_DE_SUSTITUCION_EXT'))):
             with open(os.path.join(REPO, 'src', 'Server', unidad),
@@ -182,6 +182,16 @@ def buzon(raiz, agente='', ws=''):
     (una carpeta por workspace) y seis lo hacian."""
     b = os.path.join(raiz, carpeta_de_workspace(ws))
     return os.path.join(b, slug(agente)) if slug(agente) else b
+
+
+def casa_de_capturas(srv_dir, agente='', ws=None):
+    """La casa de capturas del servidor de srv_dir (CasaDeCapturas):
+    <srv_dir>\\<temporales>\\<capturas>\\<workspace>[\\<agente>], con el buzon de
+    siempre. ws=None: la carpeta de capturas ENTERA, la de todos los
+    workspaces (para un glob con '**'). Las baterias no la componen a mano:
+    seis lo hacian (revisor del 2af de la 1.18.2)."""
+    raiz = os.path.join(srv_dir, TEMPORALES, _papelera()['CAPTURAS_SUB'])
+    return raiz if ws is None else buzon(raiz, agente, ws)
 
 
 def cache_servidor(sub='', appdata=None):

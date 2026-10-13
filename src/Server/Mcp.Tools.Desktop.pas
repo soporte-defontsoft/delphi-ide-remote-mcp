@@ -498,6 +498,22 @@ begin
       if Fallo = '' then
       begin
       Destino := TPath.GetDirectoryName(Propia);
+      // se baja SIEMPRE a nuestra casa de capturas: bajar es trabajo nuestro,
+      // y con out= se bajaba a un __tmp- DENTRO de la carpeta que nombro el
+      // agente (2z/2af de la 1.18.2); el out= se coloca despues (Coloca), como
+      // en adb y el disenador
+      if not EnLaCasa then
+      begin
+        var EnCasa: string;
+        Fallo := CaptureTarget('', CAPTURE_SUB_DESKTOP,
+          'desktop-' + NombreSeguro(Params.Profile.Trim),
+          TPath.GetExtension(Remota), EnCasa);
+        if Fallo = '' then // (vacia, GetDirectoryName lanza: la nota de arriba)
+          Destino := TPath.GetDirectoryName(EnCasa);
+      end;
+      end;
+      if Fallo = '' then
+      begin
       { La captura baja con SU nombre remoto (captura.png), igual para todos
         los perfiles: con un destino comun, dos maquinas a la vez se pisaban la
         imagen y una llamada acababa con la pantalla de la otra. Baja a una

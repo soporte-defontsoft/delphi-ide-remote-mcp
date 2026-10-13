@@ -643,9 +643,10 @@ try:
         js = json.loads(json.loads(body)['result']['content'][0]['text'])
         check('fetch: maxbytes<=1MB explicito SI trae chunk del fichero grande (opt-in)',
               'chunkBase64' in js and js.get('bytes') == 1048576, body[:200])
-        # a desktop capture in the server's temp folder is CONSUMED by the
-        # download route too (David, 2026-09-25): one GET serves it whole from
-        # memory and deletes it; the next GET is an honest 404.
+        # Captures are the SERVER's own work and live in its temp folder (2af of
+        # 1.18.2); the download route consumes THOSE (test_captura_puertas_1182
+        # E3). A png shaped like a capture planted in the WORKSPACE is not
+        # ours: /files serves it like any file of the jail and leaves it.
         capdir = os.path.join(jail4, '__delphi-temp', 'desktop')
         os.makedirs(capdir, exist_ok=True)
         cap = os.path.join(capdir, 'desktop-bateria-20260925-000000000-cafe02.png')
@@ -653,11 +654,9 @@ try:
         with open(cap, 'wb') as f:
             f.write(cappayload)
         code, hdr, data = get(vjail + '\\__delphi-temp\\desktop\\desktop-bateria-20260925-000000000-cafe02.png', TOKEN)
-        check('files: una captura del agente se sirve entera desde memoria',
+        check('files: un png con forma de captura en el workspace se sirve entero',
               code == 200 and data == cappayload, '%s %d bytes' % (code, len(data)))
-        check('files: ...y se borra al servirla', not os.path.exists(cap), cap)
-        code, hdr, data = get(vjail + '\\__delphi-temp\\desktop\\desktop-bateria-20260925-000000000-cafe02.png', TOKEN)
-        check('files: la segunda peticion de la captura es 404', code == 404, code)
+        check('files: ...pero no es nuestro y no se borra', os.path.exists(cap), cap)
     finally:
         proc4.kill()
         proc4.wait()

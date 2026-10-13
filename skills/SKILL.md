@@ -355,7 +355,8 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
   ranges or download it. Validate app behaviour by logging from your app
   and filtering on your own tag: `filter=MyTag`.
 - `screenshot` returns the device screen **in the same answer** (with
-  `inline=false`, a file on the server and its download link). If you
+  `inline=false`, a download link that works once; over stdio there is
+  none - pass `out=` to keep the file). If you
   cannot view images,
   do not guess from pixel heuristics - a nearly-empty FMX form is a
   uniform (238,238,238) gray that looks like a launcher. Prefer logcat

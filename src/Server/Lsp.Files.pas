@@ -12,6 +12,10 @@ unit Lsp.Files;
   with its same token and nothing enters its context. Still "MCP only": same
   exe, same port, same credential, same jail - no SMB, no SSH, no side door.
 
+  A capture of OURS (one a tool hands back without out=) is asked for by
+  name, GET /files?capture=<name>: the agent never sees the server's own
+  folders, and the jail does not judge our work handed back (2af of 1.18.2).
+
   The vendor host only routes here; every decision (path expansion, jail,
   existence, streaming) is ours. }
 
@@ -38,7 +42,10 @@ procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   URL-encoded - ninguna letra de unidad real sale, codificada o no. Vacio
   cuando la ruta /files no esta servida (stdio). Un agente pequeno que
   recompone la ruta a mano se equivoca (hermes, 25-sep-2026: metio su
-  carpeta en medio y pidio un fichero que nunca existio); un enlace se copia. }
+  carpeta en medio y pidio un fichero que nunca existio); un enlace se copia.
+  Una captura NUESTRA (Lsp.Guard.CapturaConsumible) sale por su NOMBRE
+  (?capture=), que resuelve su nombrador (CapturaPorNombre): la ruta de
+  nuestra casa no la ve el agente (2af de la 1.18.2). }
 function DownloadLinkFor(const AFullPath: string): string;
 
 implementation
@@ -54,15 +61,27 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   Lsp.ShaCache,
+  Lsp.Patch,    // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
   Lsp.Mascara;
+
+const
+  // los dos parametros de la ruta: los escribe DownloadLinkFor y los lee
+  // ServeFile, de aqui los dos
+  PARAM_RUTA = 'path';
+  PARAM_CAPTURA = 'capture';
 
 function DownloadLinkFor(const AFullPath: string): string;
 begin
   if not GFilesServed then
     Exit('');
+  // una captura nuestra, por su nombre: ni la ruta de nuestra casa ni la
+  // jaula, que no juzga nuestro trabajo devuelto (2af de la 1.18.2)
+  if CapturaConsumible(AFullPath) then
+    Exit(FILES_ROUTE + '?' + PARAM_CAPTURA + '=' +
+      TNetEncoding.URL.Encode(TPath.GetFileName(AFullPath)));
   // un trozo, con '' (MaskDriveText con nombre de tool es el filtro de salida
   // y gasta lo que la llamada dejo anotado: las citas del disco)
-  Result := FILES_ROUTE + '?path=' +
+  Result := FILES_ROUTE + '?' + PARAM_RUTA + '=' +
     TNetEncoding.URL.Encode(MaskDriveText('', AFullPath));
 end;
 
@@ -129,13 +148,72 @@ end;
 procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo);
 var
-  P, Full, Denied, Sha: string;
-  Stream: TStream;
+  P, Full, Denied, Sha, Reclamada: string;
+  Bytes: TArray<Byte>;
+
+  // la respuesta de un fichero, la misma para las dos formas de pedirlo
+  procedure Sirve(const AFull, ASha: string; AStream: TStream);
+  begin
+    ResponseInfo.ResponseNo := 200;
+    ResponseInfo.ContentType := 'application/octet-stream';
+    ResponseInfo.ContentDisposition := DisposicionDeDescarga(TPath.GetFileName(AFull));
+    ResponseInfo.CustomHeaders.Values['X-File-SHA256'] := ASha;
+    ResponseInfo.ContentLength := AStream.Size;
+    ResponseInfo.ContentStream := AStream; // streamed (a capture, from memory)
+    ResponseInfo.FreeContentStream := True;
+    // The server log is the operator's own: the real path is fine here.
+    TLogger.Info(MsgFmt(SL_FILES_GET_FMT, [AFull, AStream.Size]));
+  end;
+
 begin
   try
+    // una captura NUESTRA, por el nombre que llevaba su enlace: la resuelve
+    // su nombrador en la casa de capturas del workspace de quien la pide. No
+    // la juzga la jaula - no es algo que el agente intente leer, es nuestro
+    // trabajo devuelto - y se consume al recogerla (David, 25-sep-2026):
+    // RECLAMADA primero (una sola peticion se la lleva), entera en memoria
+    // (unos MB), fuera del disco, y se sirve desde memoria; una segunda
+    // peticion es un 404 honesto, y ningun fallo dice donde estaba (2af de la
+    // 1.18.2; revisor: diez GET a la vez daban dos 200 y la ruta de la casa)
+    if RequestInfo.Params.IndexOfName(PARAM_CAPTURA) >= 0 then
+    begin
+      Denied := CapturaPorNombre(RequestInfo.Params.Values[PARAM_CAPTURA], Full);
+      Reclamada := '';
+      if Denied = '' then
+      begin
+        Reclamada := ReclamaCaptura(Full);
+        if Reclamada = '' then
+          Denied := MsgText(SR_FILES_CAPTURA_NO_ESTA);
+      end;
+      if Reclamada <> '' then
+      begin
+        try
+          Bytes := LeeBytes(Reclamada, LUGARES_DE_UNA_CAPTURA);
+        except
+          on E: Exception do
+          begin
+            // la razon, con la ruta, al log del operador; al agente, sin ella
+            TLogger.Warning(MsgFmt(SL_FILES_CAPTURA_ILEGIBLE_FMT, [Reclamada, E.Message]));
+            Denied := MsgText(SR_FILES_CAPTURA_ILEGIBLE);
+          end;
+        end;
+        try
+          BorraFichero(Reclamada, ltEntregables); // LA puerta de borrar, con su lugar
+        except
+          // recoger no puede fallar por no poder borrar: la purga se la lleva
+        end;
+      end;
+      if Denied <> '' then
+      begin
+        Answer(ResponseInfo, CodigoHttp(Denied), Denied);
+        Exit;
+      end;
+      Sirve(Full, Sha256DeBytes(Bytes), TBytesStream.Create(Bytes));
+      Exit;
+    end;
     // la ruta TAL CUAL a las reglas, como la de una tool: "a b.txt " servia
     // "a b.txt" y las tools daban GUARD-010 (octava revision)
-    P := RequestInfo.Params.Values['path'];
+    P := RequestInfo.Params.Values[PARAM_RUTA];
     if P.Trim = '' then
     begin
       Answer(ResponseInfo, CodigoHttp(MsgText(SR_FILES_NEED_PATH)), MsgText(SR_FILES_NEED_PATH));
@@ -190,27 +268,7 @@ begin
     // Whole-file hash in a header: the client verifies with sha256sum, the
     // same contract delphi_fetch offers on its offset=0 answer.
     Sha := CachedFileSha256(Full); // shared with delphi_fetch: hashed once per (path, mtime, size)
-    if IsAgentCapture(Full) then
-    begin
-      // Una captura del escritorio se consume al recogerla (David,
-      // 25-sep-2026): entera en memoria (unos MB), fuera del disco, y se
-      // sirve desde memoria. Una segunda peticion es un 404 honesto.
-      Stream := TMemoryStream.Create;
-      TMemoryStream(Stream).LoadFromFile(Full);
-      Stream.Position := 0;
-      ConsumeAgentCapture(Full);
-    end
-    else
-      Stream := TFileStream.Create(Full, fmOpenRead or fmShareDenyWrite);
-    ResponseInfo.ResponseNo := 200;
-    ResponseInfo.ContentType := 'application/octet-stream';
-    ResponseInfo.ContentDisposition := DisposicionDeDescarga(TPath.GetFileName(Full));
-    ResponseInfo.CustomHeaders.Values['X-File-SHA256'] := Sha;
-    ResponseInfo.ContentLength := Stream.Size;
-    ResponseInfo.ContentStream := Stream; // streamed, never loaded whole
-    ResponseInfo.FreeContentStream := True;
-    // The server log is the operator's own: the real path is fine here.
-    TLogger.Info(MsgFmt(SL_FILES_GET_FMT, [Full, Stream.Size]));
+    Sirve(Full, Sha, TFileStream.Create(Full, fmOpenRead or fmShareDenyWrite));
   except
     on E: Exception do
     begin

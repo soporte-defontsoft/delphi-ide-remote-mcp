@@ -182,64 +182,57 @@ function RaicesNoDisponibles(const ASitios: TArray<string>): TArray<TRaizNoDispo
   va en la puerta de cada llamada (ArgPathOutsideDenied). }
 function RaizEnLetraNoConectada(const APath: string): string;
 
-{ La casa de los ENTREGABLES del agente, dentro del workspace: el porque, con
-  su hermana ServerTempDir, junto a su nombrador (TempFolderName, Lsp.Casa). }
+{ Donde deja el servidor las capturas de quien llama para devolverselas:
+  SU casa de capturas (Lsp.Casa.CasaDeCapturas: su temporal, por workspace y
+  agente) + ASub. Trabajo nuestro, fuera del workspace y de la jaula: el
+  porque, junto a su nombrador (Lsp.Casa). }
 function AgentTempDir(const ASub: string = ''): string;
 
 { TRES CLASES DE ESCRITURA, y lo que las separa es QUIEN COMPONE LA RUTA
   (David, 28-sep-2026):
   1. LA CASA DEL SERVIDOR (ServerDir: reports, el buzon, los logs, los jobs
-     de remote-run, el mensaje de un commit, node.ver) y las otras casas que
+     de remote-run, el mensaje de un commit, node.ver, las capturas que
+     devolvemos) y las otras casas que
      no son del workspace (los perfiles y las fichas de SDK del IDE, las
      caches de %LOCALAPPDATA%, el vault con su propia puerta VaultWritable).
      La ruta la compone el servidor con su nombrador y el agente nunca la
      nombra: lo que aporta (un titulo, un nombre de agente o de perfil, el
      nombre de un proyecto para su cache) pasa por Slug, una regex o queda
      acotado a UN tramo sin separadores. A la puerta de escritura NO se le
-     pregunta, y no hay un lector de "es la casa?": nadie lo necesita. La
-     puerta responde "puede ESTA SESION escribir aqui?", y la casa no es de
-     la sesion ni del workspace.
+     pregunta: responde "puede ESTA SESION escribir aqui?", y la casa no es
+     de la sesion ni del workspace. El unico lector de "es la casa?" es el
+     de las capturas (EnCasaDeEntregables), porque una se ENTREGA y se
+     CONSUME a peticion: hay que saber que es nuestra.
   2. LO QUE NOMBRA EL AGENTE, y lo que el servidor deriva de ello (el .dproj
      de la unit, los gemelos, la copia recuperable): la puerta a la entrada
      (PathDenied y sus dos sumas, WriteTargetDenied y EscrituraDenegada).
      Los escritores atomicos vuelven a preguntar por su cuenta (AtomicWrite,
      BackupFile); un primitivo crudo corre solo sobre la ruta que la puerta
      acaba de aprobar.
-  3. LOS ARTEFACTOS NUESTROS DENTRO DEL WORKSPACE, que son de dos clases:
-     - los ENTREGABLES (las capturas): los coloca el nombrador
-       (CasasDeEntregables / AgentTempDir: solo el __delphi-temp de una
-       raiz ESCRIBIBLE) y los reconoce el MISMO nombrador al consumirlos
-       (CapturaConsumible): sin puerta, ni al escribir ni al borrar. Por eso
-       una referencia nunca recibe capturas ni pierde las suyas al leerlas
-       (auditoria 25-sep-2026), y por eso un agente confinado consume las
-       suyas: hasta la 1.7.3 el consumo preguntaba a PathDenied, el
-       confinamiento negaba __delphi-temp y las capturas de un agente
-       confinado no se borraban nunca (duodecima revision).
-     - la PAPELERA y las marcas de dueno: pasan por la puerta del escritor
-       como cualquier escritura (una referencia no recibe papelera).
+  3. LA PAPELERA y las marcas de dueno, lo unico nuestro DENTRO del
+     workspace: es del agente (restaura desde ella) y pasan por la puerta
+     del escritor como cualquier escritura (una referencia no recibe
+     papelera). Las CAPTURAS que hacemos para devolverlas fueron de esta
+     clase hasta la 1.18.2 (el __delphi-temp de la primera raiz escribible)
+     y son de la 1: viven en la casa del servidor (Lsp.Casa.CasaDeCapturas)
+     y las juzga su nombrador al escribirlas, entregarlas y consumirlas.
   El error a no repetir: un solo if que mezcle la pregunta del agente (la
-  puerta) con la del servidor (su nombrador). Cada pregunta, a su lector. }
-{ Donde viven los ENTREGABLES: el __delphi-temp de cada raiz ESCRIBIBLE (una
-  referencia o un ReadOnlyPaths nunca). El escritor (AgentTempDir) usa la
-  PRIMERA; el lector (CapturaConsumible) acepta cualquiera. Sin ninguna, la
-  temporal de la casa del servidor. }
-function CasasDeEntregables: TArray<string>;
-function CasaDeEntregables(out AEnElServidor: Boolean): string;
-{ ...y la pregunta de las PUERTAS sobre ellas (el lugar ltEntregables de
-  Lsp.Patch, y CaptureTarget antes de que nadie dibuje, baje o recorte alli):
-  APath cae en una casa de entregables - las de este workspace o la temporal
-  del servidor - SIN enlaces en el camino: en una raiz, ni su __delphi-temp
-  mismo; la temporal del servidor, como su lugar ltTemporal. Hasta la
-  1.18.1 nadie lo miraba: un enlace en la carpeta de capturas llevaba el
-  renderizador y el recorte FUERA de las raices (1.18.2, punto 2b). La juzga
-  el nombrador y no la jaula: a un agente confinado la jaula le niega
-  __delphi-temp, y sus capturas viven alli. Lo preguntan tambien quien
-  consume una captura (CapturaConsumible: consumir es borrar). }
+  puerta) con la del servidor (su nombrador). Cada pregunta, a su lector:
+  lo que el agente INTENTA pasa los filtros; lo que el servidor hace para
+  servirlo, no (David, 12-oct-2026). }
+{ La pregunta de las PUERTAS sobre las capturas (el lugar ltEntregables de
+  Lsp.Patch, CaptureTarget antes de que nadie dibuje, baje o recorte alli, y
+  quien entrega o consume una): APath cae en la casa de capturas del
+  workspace de quien llama (cualquier agente suyo) SIN enlaces en el camino.
+  La juzga el nombrador y no la jaula. Hasta la 1.18.1 nadie lo miraba: un
+  enlace en la carpeta de capturas llevaba el renderizador y el recorte
+  FUERA de las raices (1.18.2, punto 2b). }
 function EnCasaDeEntregables(const APath: string): Boolean;
 
 { Una CAPTURA (escritorio o Android) en una carpeta temporal del servidor (un
-  .png bajo <...>\__delphi-temp\...\desktop|android\) se CONSUME al recogerla: quien la
-  baja - delphi_fetch al servir el ultimo trozo, GET /files - la borra.
+  .png bajo <...>\__delphi-temp\...\desktop|android\) se CONSUME al recogerla: la
+  imagen en linea, o GET /files?capture= (ReclamaCaptura), la borran; desde
+  la 1.18.2 (2af) delphi_fetch es para los ficheros del agente y no consume.
   David, 25-sep-2026: 'lo mas sensato es borrar la captura una vez la ha
   recogido el agente, asi de simple; nada de caches ni rotaciones ni guardar
   nada; quiere otra, que la pida'. Medido el mismo dia: 10 gestos = 41 MB en
@@ -255,14 +248,32 @@ const
   CAPTURE_SUB_DESIGNER = 'designer'; // delphi_designer preview (1.17.0)
 
 function IsAgentCapture(const APath: string): Boolean;
-{ Una captura es NUESTRA si esta donde nuestro nombrador la deja: bajo la
-  casa de entregables de este workspace, por la ruta real (una referencia o
-  un enlace nunca lo son). EL decisor del consumo: quien borra
-  (ConsumeAgentCapture) y quien lo anuncia (delphi_fetch, la imagen en linea)
-  preguntan aqui; hasta la 1.7.3 el anuncio lo calculaba por su cuenta y decia
-  "consumida" de una captura que seguia en disco (duodecima revision). }
+{ Una captura es NUESTRA si esta donde nuestro nombrador la deja: en la casa
+  de capturas del workspace de quien llama, sin enlaces en el camino. EL
+  decisor del consumo: quien borra (ConsumeAgentCapture) y quien lo anuncia
+  (la descarga por su enlace, la imagen en linea) preguntan aqui; hasta la
+  1.7.3 el anuncio lo calculaba por su cuenta y decia "consumida" de una
+  captura que seguia en disco (duodecima revision). }
 function CapturaConsumible(const APath: string): Boolean;
+{ La inversa del enlace de una captura nuestra (Lsp.Files.DownloadLinkFor):
+  del NOMBRE que lleva el enlace, el fichero, buscado por la casa de
+  capturas del workspace de quien la pide sin cruzar enlaces y aceptado solo
+  si es nuestro (CapturaConsumible). '' y AFile, o la negativa: un nombre
+  que no es un nombre de captura, o una que ya no esta. El agente nunca ve
+  la ruta de nuestra casa (David, 12-oct-2026: "nuestros procesos internos
+  y nuestro temp, los agentes no deben ni olerlo"), y la jaula no juzga
+  nuestro trabajo devuelto: delphi_fetch es para los ficheros del agente. }
+function CapturaPorNombre(const ANombre: string; out AFile: string): string;
 function ConsumeAgentCapture(const APath: string): Boolean; // nunca lanza; True = borrada
+{ RECOGER una captura nuestra para entregarla por su enlace (GET
+  /files?capture=): se RECLAMA renombrandola, en su misma carpeta, a un nombre
+  que ya no es de captura - un rename lo gana UNA peticion: la otra ya no la
+  encuentra -, y quien la reclamo la lee y la borra. La ruta reclamada, o ''
+  si ya no estaba o no es nuestra. Nunca lanza. Dos GET a la vez la cargaban
+  los dos (dos 200: "una sola descarga" no se cumplia) o uno caia en el
+  except general con la ruta de nuestra casa (revisor del 2af, medido con 10
+  a la vez). }
+function ReclamaCaptura(const AFile: string): string;
 
 { DONDE CAE UNA CAPTURA: el "out" de toda la familia (delphi_desktop,
   delphi_adb_linux, delphi_adb), resuelto en UN sitio. Hasta la v1.0.13 era
@@ -563,11 +574,6 @@ function ProtegidoDenegado(const ADir: string; AComoDestino: Boolean = False): s
   25-sep-2026). Un llamador que se olvide de preguntar ya no abre
   nada: el escritor lanza. }
 function EscrituraDenegada(const APath: string): string;
-{ Su mitad que no es la jaula: '' salvo que la sesion sea de SOLO LECTURA, y
-  entonces su negativa. Para quien escribe FUERA de la jaula algo que es del
-  agente (la casa de los entregables, Lsp.Patch): un lector de esa negativa,
-  la segunda barrera (revisor del 2i). }
-function SesionSoloLecturaDenegada(const APath: string): string;
 
 { Una CARPETA donde la tool pide un FICHERO: '' si no lo es; si lo es, "es
   una CARPETA, no un fichero" (INVALID_PARAM), el mismo texto que ya daba
@@ -981,9 +987,9 @@ begin
     Exit(MsgText(SR_GUARD_DEAD_TRASH));
   // La carpeta de temporales del servidor, por el mismo motivo y uno propio:
   // se puede borrar entera en cualquier momento, asi que escribir ahi es
-  // escribir en algo que no tiene por que seguir estando. Leerla si se puede
-  // (de ahi se baja una captura con delphi_fetch): esta es la puerta de
-  // ESCRIBIR.
+  // escribir en algo que no tiene por que seguir estando. Esta es la puerta
+  // de ESCRIBIR (lo que hay en la de una raiz es de versiones viejas: las
+  // capturas viven en la casa del servidor desde la 1.18.2).
   if EnTemporal(APath) then
     Exit(MsgText(SR_GUARD_DEAD_TEMP));
   if P.Contains('\__history\') or P.Contains('\__recovery\') then
@@ -1073,18 +1079,11 @@ begin
   Result := MsgFmt(SR_READ_ONLY_FMT, [AWhat]);
 end;
 
-function SesionSoloLecturaDenegada(const APath: string): string;
-begin
-  Result := '';
-  if IsReadOnlyNow then
-    Result := WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(SinBarraFinal(APath))]));
-end;
-
 function EscrituraDenegada(const APath: string): string;
 begin
-  Result := SesionSoloLecturaDenegada(APath);
-  if Result = '' then
-    Result := PathDenied(APath);
+  if IsReadOnlyNow then
+    Exit(WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(SinBarraFinal(APath))])));
+  Result := PathDenied(APath);
 end;
 
 function CarpetaEnVezDeFichero(const APath: string): string;
@@ -1993,8 +1992,9 @@ begin
   // test-connection marca al destino con su credencial guardada
   AnadeAcceso('delphi_paserver', atMixta, ['platforms', 'packages', 'profiles']);
   // to-text / to-binary reescriben el .dfm/.fmx; el resto mira. preview NO
-  // es lectura: deja su PNG en la jaula (la casa de entregables, que no
-  // mira el modo de la credencial), como el screenshot de adb (r11a H5)
+  // es lectura: deja un PNG (en la casa de capturas del servidor desde la
+  // 1.18.2; si eso basta para darselo a una credencial de solo lectura lo
+  // decide David, 2ab), como el screenshot de adb (r11a H5)
   AnadeAcceso('delphi_designer', atMixta, ['info', 'prop', 'tree', 'get', 'lint',
     'check-binding', 'binding', 'layout']);
   // mirar el dispositivo (lista, log) no cambia nada; screenshot y logcat
@@ -2443,16 +2443,12 @@ end;
 
 function CapturaConsumible(const APath: string): Boolean;
 begin
-  // Nuestra por el NOMBRADOR, no por la puerta: bajo el __delphi-temp de una
-  // raiz ESCRIBIBLE de este workspace (el escritor elige la primera; el lector
-  // acepta cualquiera: un workspace con las raices en otro orden dejo la suya
-  // en la segunda) o bajo la temporal de la casa del servidor. Una referencia
-  // no lo es (solo raices escribibles), y el confinamiento no pinta nada: es
-  // la carpeta que el propio nombrador dio a los agentes de esta jaula. Por EL
-  // lector de la casa (EnCasaDeEntregables), SIN enlaces en el camino: iba por
-  // la ruta real, y con __delphi-temp como enlace a la carpeta de otro agente
-  // (o a una de solo lectura) un png de alli contaba como nuestro y leerlo lo
-  // BORRABA (K6 de test_captura_puertas_1182, revisor del 2b de la 1.18.2)
+  // Nuestra por el NOMBRADOR, no por la puerta: en la casa de capturas del
+  // workspace de quien llama, y el confinamiento no pinta nada (es trabajo
+  // nuestro). Por EL lector de la casa (EnCasaDeEntregables), SIN enlaces en
+  // el camino: con un enlace a la carpeta de otro un png de alli contaba como
+  // nuestro y leerlo lo BORRABA (K6 de test_captura_puertas_1182, revisor del
+  // 2b de la 1.18.2)
   try
     Result := IsAgentCapture(APath) and EnCasaDeEntregables(APath);
   except
@@ -2479,79 +2475,74 @@ begin
   end;
 end;
 
-function CasasDeEntregables: TArray<string>;
+function ReclamaCaptura(const AFile: string): string;
 var
-  R, Casa: string;
+  Reclamada: string;
 begin
-  Result := [];
-  for R in WorkspaceRoots do
-  begin
-    Casa := TPath.Combine(SinBarraFinal(R), TempFolderName);
-    // la CASA, no solo la raiz, por los lectores de la jaula: el de
-    // ReadOnlyPaths (Lsp.Lugares.SoloLecturaDeclaradaEn: una entrada que cubra
-    // la raiz o su __delphi-temp; revisor del 2i) y el de ReadOnlyRoots (una
-    // raiz dentro de una referencia: manda la referencia)
-    if (SoloLecturaDeclaradaEn(Casa) = '') and (ReadOnlyRootOf(Casa) = '') then
-      Result := Result + [Casa];
+  Result := '';
+  try
+    if not CapturaConsumible(AFile) then
+      Exit;
+    // ni .png ni nombre de captura: IsAgentCapture ya no la ve, y la purga del
+    // arranque se lleva la que se quede
+    Reclamada := AFile + '.' + FragmentoUnico + '.recogida';
+    if MoveFile(PChar(AFile), PChar(Reclamada)) then
+      Result := Reclamada;
+  except
+    Result := '';
   end;
 end;
 
-function CasaDeEntregables(out AEnElServidor: Boolean): string;
+function CapturaPorNombre(const ANombre: string; out AFile: string): string;
 var
-  Casas: TArray<string>;
+  Nombre, Hallada: string;
 begin
-  Casas := CasasDeEntregables;
-  AEnElServidor := Length(Casas) = 0;
-  if AEnElServidor then
-    Result := ServerTempDir('')
-  else
-    Result := Casas[0];
+  AFile := '';
+  Nombre := ANombre;
+  // un NOMBRE y nada mas: ni carpeta, ni unidad, ni stream; y el de una captura
+  try
+    if (Nombre = '') or (Nombre.IndexOfAny(['\', '/', ':']) >= 0) or
+       (TPath.GetFileName(Nombre) <> Nombre) or
+       not SameText(TPath.GetExtension(Nombre), '.png') then
+      Exit(MsgText(SR_FILES_CAPTURA_NOMBRE));
+  except
+    Exit(MsgText(SR_FILES_CAPTURA_NOMBRE));
+  end;
+  Hallada := '';
+  RecorreSinEnlaces(CasaDeCapturas,
+    procedure(const P: string)
+    begin
+      if (Hallada = '') and SameText(TPath.GetFileName(P), Nombre) and
+         TFile.Exists(P) and CapturaConsumible(P) then
+        Hallada := P;
+    end);
+  if Hallada = '' then
+    Exit(MsgText(SR_FILES_CAPTURA_NO_ESTA));
+  AFile := Hallada;
+  Result := '';
 end;
 
 function EnCasaDeEntregables(const APath: string): Boolean;
 begin
-  // la temporal del servidor, como su lugar (ltTemporal): sin enlaces por
-  // debajo de ella
-  if EnLugarSinEnlaces(APath, ServerTempDir('')) then
-    Exit(True);
-  // las del workspace, ni la casa misma: la raiz la declara el operador, su
-  // __delphi-temp no (K3 de test_captura_puertas_1182)
-  // ...y nada de lo que caiga dentro en solo lectura - una entrada de
-  // ReadOnlyPaths o una referencia mas honda que la casa: su carpeta de un
-  // agente -, por los mismos lectores que la jaula (revisor del 2i)
-  for var Casa in CasasDeEntregables do
-    if not EsEnlace(Casa) and EnLugarSinEnlaces(APath, Casa) then
-      Exit((SoloLecturaDeclaradaEn(APath) = '') and (ReadOnlyRootOf(APath) = ''));
-  Result := False;
+  // la casa de capturas del workspace de quien llama, sin enlaces por debajo
+  // de la temporal del servidor: un enlace plantado alli no saca nada de ella
+  // (S3 de test_captura_puertas_1182). Ningun agente escribe en la temporal
+  // del servidor: plantarlo pide estar ya en la maquina
+  Result := EnLugarSinEnlaces(APath, ServerTempDir('')) and
+    EnLugarSinEnlaces(APath, CasaDeCapturas);
 end;
 
-{ El workspace de quien llama. Con varias raices manda la PRIMERA
-  ESCRIBIBLE - una raiz declarada entera en ReadOnlyPaths (el clon de
-  referencia) no recibe entregables: seria escribir justo donde nuestra
-  propia jaula lo prohibe, y la misma ruta pasada a mano en "out" se
-  rechaza (auditoria 2026-09-21). Sin ninguna raiz configurada, o ninguna
-  escribible, no hay workspace donde dejar nada y se cae a la casa del
-  servidor, que siempre existe. La subcarpeta del agente sale de la misma
-  identidad que usa el modo confinado, asi que dos agentes en la misma
-  jaula no se pisan - y cuando no hay identidad (stdio, la consola del
-  operador) no se inventa una. }
+{ La casa de capturas de quien llama (Lsp.Casa.CasaDeCapturas: su workspace
+  y su agente) + ASub. La subcarpeta del agente sale de la misma identidad
+  que usa el modo confinado, asi que dos agentes no se pisan - y cuando no
+  hay identidad (stdio, la consola del operador) no se inventa una. Hasta la
+  1.18.2 iba DENTRO del workspace, en el __delphi-temp de la primera raiz
+  escribible (la nota, en Lsp.Casa). El vaciado NO se hace aqui: lo hace la
+  purga del arranque (PurgeServerTemp); a mitad de sesion se llevaria por
+  delante la captura que otro agente acaba de pedir y aun no se ha bajado. }
 function AgentTempDir(const ASub: string): string;
-var
-  Me: string;
-  EnElServidor: Boolean;
 begin
-  Result := CasaDeEntregables(EnElServidor);
-  if EnElServidor then
-    Exit(ServerTempDir(ASub)); // en la casa del servidor no hay carpeta por agente
-  // El vaciado NO se hace aqui: se hace entero en el arranque, para todos
-  // los workspaces del settings.ini (PurgeServerTemp). Hacerlo en el primer
-  // uso se probo y no cumplia lo prometido - si nadie pedia un entregable,
-  // nadie limpiaba. Y ademas seria peligroso a mitad de sesion: se llevaria
-  // por delante la captura que otro agente acaba de pedir y aun no se ha
-  // bajado.
-  Me := CurrentAgent;
-  if Me <> '' then
-    Result := TPath.Combine(Result, Me);
+  Result := CasaDeCapturas(CurrentAgent);
   if ASub <> '' then
     Result := TPath.Combine(Result, ASub);
 end;
@@ -2598,15 +2589,10 @@ begin
   // plantado en ella llevaba la captura fuera de las raices (1.18.2, 2b)
   if (O = '') and not EnCasaDeEntregables(AFile) then
   begin
-    // ...o una entrada de solo lectura DENTRO de la casa (su __delphi-temp
-    // o la carpeta de un agente): se dice eso, no un enlace (revisor del 2i)
-    var Ro := SoloLecturaDeclaradaEn(AFile);
-    if Ro <> '' then
-      Exit(MsgFmt(SR_READONLY_PATH_FMT, [AFile, Ro]));
-    var Ref := ReadOnlyRootOf(AFile);
-    if Ref <> '' then
-      Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [AFile, Ref]));
-    Exit(MsgFmt(SR_CAPTURE_CASA_ENLACE_FMT, [Carpeta]));
+    // la carpeta, al log del operador (es quien quita el enlace); al agente
+    // no se le ensena nuestra casa (2af de la 1.18.2)
+    TLogger.Warning(MsgFmt(SL_CAPTURE_CASA_ENLACE_FMT, [Carpeta]));
+    Exit(MsgText(SR_CAPTURE_CASA_ENLACE));
   end;
   if O <> '' then
   begin
@@ -3690,7 +3676,11 @@ begin
   // Aqui y no antes del if: un arranque stdio del mismo exe no borra los del
   // servicio en marcha, como no borra sus temporales.
   PurgaContenedoresHuerfanos;
-  // ...Y LA DE CADA WORKSPACE. Primer intento: se vaciaba en el primer uso
+  // ...Y LA DE CADA WORKSPACE, que desde la 1.18.2 (2af) ya no recibe nada
+  // nuestro - las capturas viven en la casa del servidor (Lsp.Casa) -: se
+  // queda para llevarse las que dejaron las versiones anteriores, y las que
+  // deje un servidor mas viejo con una raiz compartida (la VM de Hermes en
+  // N:). Retirarla en la 1.19. Primer intento: se vaciaba en el primer uso
   // de AgentTempDir, porque "al arrancar no hay workspace activo" - los
   // roots los elige el token de quien llama. Falso: los workspaces ESTAN
   // declarados en el settings.ini y LoadSecurity los tiene desde el

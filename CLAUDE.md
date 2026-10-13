@@ -178,7 +178,11 @@ internal process"*. The jail judges what the AGENT names - a `path`, a
 capture on its way to the answer, a temporary, a cache, a download folder -
 is the server's work: it lives in the server's own house (`ServerTempDir`,
 the home folders) and is judged by its namer, never by the jail and never
-inside the workspace. The agent does not care which folders we use inside.
+inside the workspace. The agent does not care which folders we use inside -
+and it must not even see them (David, 2026-10-12: *"our internal processes
+and our temp: the agents must not even smell them or know they exist"*). No
+answer names the server's house; what we hand back travels in the answer or
+through an opaque link, and `delphi_fetch` is for the agent's own files.
 
 **The proof that it needs saying.** Since 1.0.12 (2026-09-21, when
 `delphi_fetch` could only read through the jail) the captures an agent did

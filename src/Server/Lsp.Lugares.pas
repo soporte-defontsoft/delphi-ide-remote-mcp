@@ -73,15 +73,14 @@ function LugaresDeLaBiblioteca: TArray<string>;
 function EscribibleDeVerdad(const AReal: string): Boolean;
 
 { La entrada de ReadOnlyPaths (tal como esta declarada) que cubre APath;
-  '' si ninguna. EL lector de ReadOnlyPaths de las escrituras: lo preguntan
-  la jaula (Lsp.Guard.PathDenied) y la casa de los entregables
-  (CasasDeEntregables, EnCasaDeEntregables, CaptureTarget). Por el texto Y
-  por la ruta REAL: un junction de la raiz que apunte a una carpeta de solo
-  lectura no la vuelve escribible. La casa las comparaba por su texto crudo,
-  aparte: una raiz declarada en 8.3 y su entrada en largo, o al reves, se
-  colaban, y la captura caia DENTRO de la raiz de solo lectura (revisor del
-  2i de la 1.18.2, medido con el escritorio y el disenador). Lanza con una
-  ruta que no parsea: quien llama ya la tiene comprobada. }
+  '' si ninguna. EL lector de ReadOnlyPaths de las escrituras, el de la jaula
+  (Lsp.Guard.PathDenied). Por el texto Y por la ruta REAL: un junction de la
+  raiz que apunte a una carpeta de solo lectura no la vuelve escribible.
+  Hasta la 1.18.2 habia otro, el de la casa de las capturas dentro del
+  workspace, que las comparaba por su texto crudo: una raiz en 8.3 y su
+  entrada en largo, o al reves, se colaban, y la captura caia DENTRO de la
+  raiz de solo lectura (revisor del 2i, medido). Lanza con una ruta que no
+  parsea: quien llama ya la tiene comprobada. }
 function SoloLecturaDeclaradaEn(const APath: string): string;
 
 { La forma DECLARADA de una ruta que llega RESUELTA. Un programa que el

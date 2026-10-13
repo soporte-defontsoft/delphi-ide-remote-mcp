@@ -1,54 +1,58 @@
 # -*- coding: utf-8 -*-
-"""La captura por las puertas (1.18.2, punto 2b).
+"""La captura es trabajo nuestro (1.18.2, puntos 2b y 2af).
 
-Una captura que el servidor deja en SU carpeta (sin out=) vive en la casa de
-los entregables: el __delphi-temp de la primera raiz escribible, con la
-carpeta del agente, o el temporal del servidor si no hay ninguna (Lsp.Guard,
-AgentTempDir). Hasta la 1.18.1 nadie miraba si en ese camino habia un enlace:
-el renderizador dibujaba alli y RecortaPng releia y reescribia EN SITIO, sin
-puerta, asi que un enlace plantado en la carpeta de capturas llevaba las dos
-escrituras FUERA de las raices. Y el recorte no podia ir por la puerta de la
-jaula: a un agente confinado la jaula le niega __delphi-temp, y sus capturas
-viven alli.
+Una captura que el servidor hace para devolverla (sin out=) vive en SU casa
+de capturas: la temporal del servidor, por workspace y por agente
+(Lsp.Casa.CasaDeCapturas). Nunca en el workspace ni por la jaula: lo que
+INTENTA el agente pasa los filtros (que pueda leer el .dfm, el out= que
+nombre); hacer la captura, guardarla y devolverla es nuestro proceso (David,
+12-oct-2026). Hasta la 1.18.2 vivia en el __delphi-temp de la primera raiz
+escribible, con un criterio equivocado (delphi_fetch pasaba por la jaula), y
+costo: enlaces plantados alli que sacaban el dibujo de las raices (2b),
+DESK-019 con un agente confinado o sin raiz escribible (2i), un PNG dibujado
+DENTRO de una raiz de solo lectura (revisor del 2i) y un enlace de descarga
+que la jaula negaba cuando la captura caia en la temporal (medido el 12-oct).
+Y el agente no ve nuestra casa (David, 12-oct-2026: "nuestros procesos
+internos y nuestro temp, los agentes no deben ni olerlo"): ninguna respuesta
+nombra su ruta, el enlace pide la captura por su NOMBRE y delphi_fetch es
+para los ficheros del agente.
 
   C0  el agente de la bateria esta confinado (lo que sigue mide su caso)
-  C1  component= sin out=: el recorte, con el tamano del componente, en SU
-      carpeta de capturas (la puerta de los entregables: la de la jaula se lo
-      negaria)
+  C1  component= sin out=: el recorte (344x41) en NUESTRA casa de capturas,
+      con su carpeta de agente, y nada en la raiz
   C2  ...en linea: la imagen viaja recortada y su temporal se consume
-  C3  ...con out= en su carpeta: alli el recorte, y ninguno suelto
-  K1  un enlace en la carpeta de capturas del agente que apunta fuera: se
-      niega ANTES de dibujar (CAPT-010) y la victima queda vacia
-  K2  ...tambien sin recorte y en linea
-  K5  ...y un enlace que apunta DENTRO de la jaula tambien: ningun enlace, vaya
-      adonde vaya (lo promete CAPT-010; revisor del 2b)
-  K3  el enlace en el propio __delphi-temp de la raiz: igual
-  K6  consumir una captura es BORRARLA: con __delphi-temp como enlace a la
-      carpeta de OTRO agente, delphi_fetch de un png de alli lo lee pero no lo
-      borra (el lector de la casa iba por la ruta real; revisor del 2b)
-  S1  sin raiz escribible (la unica es de solo lectura) la captura cae en el
-      temporal del servidor, y el recorte se lee y se escribe alli
+  C3  ...con out= en su carpeta: alli el recorte, y ninguno suelto en la casa
+  K1  un junction plantado en el __delphi-temp de la raiz hacia una victima de
+      fuera: no cambia nada, ahi ya no escribimos (la victima, vacia)
+  K6  un png con forma de captura en el workspace (a traves de un enlace a la
+      carpeta de otro agente): se lee, pero no es nuestro y no se borra
+  K7  un enlace DENTRO de nuestra casa: con out= tambien se niega (CAPT-010
+      lo dice), el out= no se escribe y la victima queda vacia
+  S1  sin raiz escribible: la captura en nuestra casa, recortada, nada en la raiz
   S2  ...y en linea: viaja recortada y se consume
-  S3  un enlace DENTRO del temporal del servidor: CAPT-010, la victima vacia
-  S4  la raiz en 8.3 y su entrada de ReadOnlyPaths en largo: sigue sin ser
-      escribible y la captura cae en el temporal del servidor, no DENTRO de
-      ella (la casa comparaba ReadOnlyPaths por su texto crudo; revisor del
-      2i, medido: el PNG caia en solo\__delphi-temp)
-  S5  ...y al reves: la raiz en largo y la entrada en 8.3
-  S6  una entrada de ReadOnlyPaths DENTRO de la casa (la carpeta del agente
-      en __delphi-temp): se niega diciendolo (GUARD-012, no un enlace) y nada
-      se dibuja alli
-  S7  ...y una que cubre el __delphi-temp entero: la casa no es esa, la
-      captura cae en el temporal del servidor
-  S8  una REFERENCIA (ReadOnlyRoots) dentro de la casa (la carpeta del agente):
-      se niega diciendolo (GUARD-016) y nada se dibuja alli (revisor del 2i)
-  R1  una raiz declarada a traves de un junction: el recorte funciona (la
-      raiz la declara el operador; su __delphi-temp, no). Una raiz en 8.3 la
-      cubren todas: la jaula de la bateria cuelga de %TEMP%, que es 8.3
+  S3  un enlace DENTRO de nuestra casa de capturas: CAPT-010, la victima vacia
+  S4  la raiz en 8.3 y su entrada de solo lectura en largo (y S5 al reves):
+      nada en la raiz (el PNG caia DENTRO de ella; revisor del 2i)
+  S6  entradas de solo lectura y referencias DENTRO del __delphi-temp de una
+      raiz: la captura en nuestra casa y nada alli
+  F1  inline=false por stdio (sin la ruta /files): la respuesta no nombra
+      nuestra casa (ni screenshot) y dice que use out=; la captura se queda
+  F2  delphi_fetch de la ruta de nuestra casa: negado, y no consume nada
+  E0  servidor HTTP con dos workspaces: el enlace pide la captura por su
+      NOMBRE (/files?capture=), sin screenshot ni nada de nuestra casa
+  E1  delphi_fetch de la ruta de la casa: negado al otro workspace Y al dueño
+      (E4), y no se consume nada
+  E2  el enlace con el token del otro workspace: 404 (no es suya), y se queda
+  E3  su dueño la baja por el enlace (200, el PNG), y la segunda vez 404
+  E5  capture= con carpeta o unidad: 400 FILE-044; ?path= de la casa: 403, y se queda
+  E6  diez GET a la vez del mismo enlace: UNA la baja (200), las demas 404
+      FILE-045 sin nombrar la casa, y no queda nada (revisor del 2af: daba
+      dos 200 y un 500 con la ruta de la casa)
+  R1  una raiz declarada a traves de un junction: el recorte en nuestra casa
 
 Uso:  python tests/test_captura_puertas_1182.py [ruta-a-DelphiLspMcp.exe]
 """
-import atexit, glob, json, os, shutil
+import atexit, concurrent.futures, glob, json, os, shutil, urllib.error, urllib.request
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -122,14 +126,34 @@ def quita_enlace(ruta):
         os.rmdir(ruta)
 
 
+def casa(srv_dir):
+    """Las capturas de designer en la casa de un servidor (su temporal), de
+    todos sus workspaces y agentes: por el nombrador de las baterias."""
+    return os.path.join(mc.casa_de_capturas(srv_dir), '**', 'designer', '*.png')
+
+
+def sin_casa(t):
+    """La respuesta no nombra nuestra casa: ni su carpeta de temporales ni la
+    de capturas, ni un 'screenshot' (lo era siempre, sin out=)."""
+    b = t.lower()
+    return (mc.TEMPORALES.lower() not in b and
+            os.path.basename(mc.casa_de_capturas('')).lower() not in b and
+            'screenshot"' not in b)
+
+
+def pngs_en(raiz):
+    return glob.glob(os.path.join(raiz, '**', '*.png'), recursive=True)
+
+
 PRUEBA = escribe(JAIL, 'Prueba.dfm', FORM)
 PRUEBA_SOLO = escribe(SOLO, 'Prueba.dfm', FORM)
 TEMP_JAULA = os.path.join(JAIL, '__delphi-temp')
-CAPS = os.path.join(TEMP_JAULA, '**', 'designer', '*.png')
 RECT = '16,140,344,41'
 
 # ---------------------------------------------------- servidor A: confinado
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
+SRV1 = os.path.join(BASE, 'srv')
+EXE = mc.copia_exe(SRV1, con_render=True)
+CAPS = casa(SRV1)
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_AGENT_CONFINEMENT': '1'}),
                nombre='ana', t=180)
 
@@ -151,9 +175,10 @@ try:
     j = J(r)
     nuevos = sorted(set(glob.glob(CAPS, recursive=True)) - antes)
     uno = nuevos[0] if len(nuevos) == 1 else ''
-    check('C1 confinado, component= sin out=: el recorte (344x41) en SU carpeta de capturas',
+    check('C1 confinado, component= sin out=: el recorte (344x41) en NUESTRA casa, con su carpeta, y nada en la raiz',
           j.get('componentRect') == RECT and tamano(uno) == (344, 41) and
-          (os.sep + 'ana' + os.sep) in uno, (r[:400], nuevos, tamano(uno)))
+          (os.sep + 'ana' + os.sep) in uno and not os.path.exists(TEMP_JAULA),
+          (r[:400], nuevos, tamano(uno), os.path.exists(TEMP_JAULA)))
     for n in nuevos:
         os.remove(n)
 
@@ -173,69 +198,57 @@ try:
     antes = set(glob.glob(CAPS, recursive=True))
     r = preview(srv, path=PRUEBA, component='Panel1', out=OUT3, inline='false')
     sueltos = sorted(set(glob.glob(CAPS, recursive=True)) - antes)
-    check('C3 ...con out= en su carpeta: alli el recorte (344x41), y ninguno suelto en la de capturas',
+    check('C3 ...con out= en su carpeta: alli el recorte (344x41), y ninguno suelto en la casa',
           tamano(OUT3) == (344, 41) and not sueltos, (r[:400], tamano(OUT3), sueltos))
 
-    # ------------------------------------------------------------------ K1-K2
-    CARP = os.path.join(TEMP_JAULA, 'ana', 'designer')
+    # ------------------------------------------------------------------ K1
     V1 = os.path.join(FUERA, 'v1')
     os.makedirs(V1)
-    shutil.rmtree(CARP, ignore_errors=True)
+    CARP = os.path.join(TEMP_JAULA, 'ana', 'designer')
     os.makedirs(os.path.dirname(CARP), exist_ok=True)
-    check('K0 el enlace de la carpeta de capturas del agente a una victima de fuera quedo plantado',
+    check('K1a el enlace en el __delphi-temp de la raiz hacia una victima de fuera quedo plantado',
           mc.junction(CARP, V1), CARP)
+    antes = set(glob.glob(CAPS, recursive=True))
     r = preview(srv, path=PRUEBA, component='Panel1', inline='false')
-    check('K1 un enlace en la carpeta de capturas que sale de las raices: se niega (CAPT-010) y la victima queda vacia',
-          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE_FMT') and not contenido(V1),
-          (r[:400], contenido(V1)))
-    r = preview(srv, path=PRUEBA)
-    check('K2 ...tambien sin recorte y en linea: el renderizador no llega a dibujar alli',
-          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE_FMT') and not contenido(V1),
-          (r[:400], contenido(V1)))
+    nuevos = sorted(set(glob.glob(CAPS, recursive=True)) - antes)
+    check('K1 un enlace en el __delphi-temp de la raiz no cambia nada: la captura en nuestra casa y la victima vacia',
+          not mc.fallo(r) and len(nuevos) == 1 and not contenido(V1), (r[:400], nuevos, contenido(V1)))
     quita_enlace(CARP)
-
-    # ------------------------------------------------------------------ K5
-    DENTRO = os.path.join(JAIL, 'dentro')
-    os.makedirs(DENTRO)
-    check('K5a el enlace de la carpeta de capturas a una carpeta DE LA JAULA quedo plantado',
-          mc.junction(CARP, DENTRO), CARP)
-    r = preview(srv, path=PRUEBA, component='Panel1', inline='false')
-    check('K5 ...un enlace que apunta dentro tambien se niega (CAPT-010), y alli no cae nada',
-          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE_FMT') and not contenido(DENTRO),
-          (r[:400], contenido(DENTRO)))
-    quita_enlace(CARP)
-
-    # ------------------------------------------------------------------ K3
-    V3 = os.path.join(FUERA, 'v3')
-    os.makedirs(V3)
     shutil.rmtree(TEMP_JAULA, ignore_errors=True)
-    check('K3a el enlace en el propio __delphi-temp de la raiz quedo plantado',
-          not os.path.exists(TEMP_JAULA) and mc.junction(TEMP_JAULA, V3), TEMP_JAULA)
-    r = preview(srv, path=PRUEBA, component='Panel1', inline='false')
-    check('K3 el enlace en el __delphi-temp de la raiz: se niega (CAPT-010) y la victima queda vacia',
-          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE_FMT') and not contenido(V3),
-          (r[:400], contenido(V3)))
-    quita_enlace(TEMP_JAULA)
 
     # ------------------------------------------------------------------ K6
     BOB = os.path.join(JAIL, 'bob')
     os.makedirs(os.path.join(BOB, 'designer'))
     AJENA = os.path.join(BOB, 'designer', 'v.png')
     open(AJENA, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
-    check('K6a __delphi-temp como enlace a la carpeta de otro agente quedo plantado',
+    check('K6a __delphi-temp de la raiz como enlace a la carpeta de otro agente quedo plantado',
           mc.junction(TEMP_JAULA, BOB), TEMP_JAULA)
     r = srv.call('delphi_fetch', {'path': os.path.join(TEMP_JAULA, 'designer', 'v.png'), 'offset': 0})
-    check('K6 consumir es borrar: el png de OTRO agente detras del enlace se lee pero no se borra',
+    check('K6 un png con forma de captura en el workspace se lee, pero no es nuestro y no se borra',
           os.path.isfile(AJENA) and mc.como_json(r).get('consumedOnServer') is not True,
           (r[:300], os.path.isfile(AJENA)))
     quita_enlace(TEMP_JAULA)
+    # ------------------------------------------------------------------ K7
+    V7 = os.path.join(FUERA, 'v7')
+    os.makedirs(V7)
+    CARP1 = os.path.join(mc.casa_de_capturas(SRV1, 'ana', ''), 'designer')
+    shutil.rmtree(CARP1, ignore_errors=True)
+    os.makedirs(os.path.dirname(CARP1), exist_ok=True)
+    check('K7a el enlace dentro de nuestra casa de capturas quedo plantado', mc.junction(CARP1, V7), CARP1)
+    OUT7 = os.path.join(PROPIA, 'k7.png')
+    r = preview(srv, path=PRUEBA, component='Panel1', out=OUT7, inline='false')
+    check('K7 con un enlace en nuestra casa, out= tambien se niega (CAPT-010 lo dice), sin escribir el out= ni la victima',
+          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE') and 'with or without out=' in r and sin_casa(r)
+          and not os.path.exists(OUT7) and not contenido(V7), (r[:400], os.path.exists(OUT7), contenido(V7)))
+    quita_enlace(CARP1)
     check('K4 el servidor sigue vivo', not mc.fallo(srv.call('delphi_list', {'root': JAIL})))
 finally:
     srv.cierra()
 
-# ------------------------------------- servidor B: sin raiz escribible (S1-S2)
-EXE2 = mc.copia_exe(os.path.join(BASE, 'srv2'), con_render=True)
-CAPS2 = os.path.join(BASE, 'srv2', '__delphi-temp', '**', '*.png')
+# ------------------------------------- servidor B: sin raiz escribible (S1-S3, F1)
+SRV2 = os.path.join(BASE, 'srv2')
+EXE2 = mc.copia_exe(SRV2, con_render=True)
+CAPS2 = casa(SRV2)
 srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': SOLO, 'DELPHI_MCP_READONLY_PATHS': SOLO}),
                 nombre='ana', t=180)
 try:
@@ -244,9 +257,17 @@ try:
     j = J(r)
     nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
     uno = nuevos[0] if len(nuevos) == 1 else ''
-    check('S1 sin raiz escribible: la captura cae en el temporal del servidor, recortada (344x41)',
-          j.get('componentRect') == RECT and tamano(uno) == (344, 41) and
-          not os.path.exists(os.path.join(SOLO, '__delphi-temp')), (r[:400], nuevos, tamano(uno)))
+    check('S1 sin raiz escribible: la captura en nuestra casa, recortada (344x41), nada en la raiz',
+          j.get('componentRect') == RECT and tamano(uno) == (344, 41) and not pngs_en(SOLO),
+          (r[:400], nuevos, tamano(uno), pngs_en(SOLO)))
+    # ------------------------------------------------------------------ F1
+    check('F1 inline=false por stdio: la respuesta no nombra nuestra casa y dice que use out=; la captura se queda',
+          sin_casa(r) and mc.es(r, 'SN_CAPTURE_SIN_ENLACE') and 'download' not in j and os.path.isfile(uno),
+          (r[:400], os.path.isfile(uno)))
+    # ------------------------------------------------------------------ F2
+    f = srv2.call('delphi_fetch', {'path': uno, 'maxbytes': 65536})
+    check('F2 delphi_fetch es para los ficheros del agente: la ruta de nuestra casa se niega y no se consume',
+          mc.rechazado(f) and os.path.isfile(uno), (f[:300], os.path.isfile(uno)))
     antes = set(glob.glob(CAPS2, recursive=True))
     r = preview(srv2, path=PRUEBA_SOLO, component='Panel1')
     j = J(r)
@@ -255,14 +276,15 @@ try:
           j.get('inlineImage') is True and j.get('inlineWidth') == 344 and
           j.get('consumed') is True and not sueltos, (r[:400], sueltos))
     # ------------------------------------------------------------------ S3
-    CARP2 = os.path.join(BASE, 'srv2', '__delphi-temp', 'designer')
+    CARP2 = os.path.join(mc.casa_de_capturas(SRV2, 'ana', ''), 'designer')
     V4 = os.path.join(FUERA, 'v4')
     os.makedirs(V4)
     shutil.rmtree(CARP2, ignore_errors=True)
-    check('S3a el enlace dentro del temporal del servidor quedo plantado', mc.junction(CARP2, V4), CARP2)
+    os.makedirs(os.path.dirname(CARP2), exist_ok=True)
+    check('S3a el enlace dentro de nuestra casa de capturas quedo plantado', mc.junction(CARP2, V4), CARP2)
     r = preview(srv2, path=PRUEBA_SOLO, component='Panel1', inline='false')
-    check('S3 un enlace DENTRO del temporal del servidor: se niega (CAPT-010) y la victima queda vacia',
-          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE_FMT') and not contenido(V4),
+    check('S3 un enlace DENTRO de nuestra casa de capturas: se niega (CAPT-010, sin nombrar la casa) y la victima queda vacia',
+          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE') and sin_casa(r) and not contenido(V4),
           (r[:400], contenido(V4)))
     quita_enlace(CARP2)
 finally:
@@ -280,39 +302,108 @@ for nombre, raiz, entrada in (('S4 la raiz en 8.3 y su entrada en largo', SOLO, 
         antes = set(glob.glob(CAPS2, recursive=True))
         r = preview(srv2, path=PRUEBA_SOLO, component='Panel1', inline='false')
         nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
-        check(nombre + ': la captura en el temporal del servidor, NO dentro de la raiz de solo lectura',
-              len(nuevos) == 1 and not os.path.exists(os.path.join(SOLO, '__delphi-temp')),
-              (r[:400], nuevos, os.path.exists(os.path.join(SOLO, '__delphi-temp'))))
+        check(nombre + ': la captura en nuestra casa, nada dentro de la raiz de solo lectura',
+              len(nuevos) == 1 and not pngs_en(SOLO), (r[:400], nuevos, pngs_en(SOLO)))
     finally:
         srv2.cierra()
-        shutil.rmtree(os.path.join(SOLO, '__delphi-temp'), ignore_errors=True)
 
-# ------------- servidor B'': solo lectura DENTRO de la casa (S6-S7)
+# ------------- servidor B'': solo lectura y referencias DENTRO del __delphi-temp de una raiz (S6)
 RAIZ3 = os.path.join(BASE, 'raiz3')
 os.makedirs(RAIZ3)
 PRUEBA3 = escribe(RAIZ3, 'Prueba.dfm', FORM)
 TEMP3 = os.path.join(RAIZ3, '__delphi-temp')
-for nombre, entrada in (('S6', os.path.join(TEMP3, 'ana')), ('S7', TEMP3), ('S8', os.path.join(TEMP3, 'ana'))):
-    clave = 'DELPHI_MCP_READONLY_ROOTS' if nombre == 'S8' else 'DELPHI_MCP_READONLY_PATHS'
-    srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ3, clave: entrada}),
-                    nombre='ana', t=180)
+for clave, entrada in (('DELPHI_MCP_READONLY_PATHS', os.path.join(TEMP3, 'ana')),
+                       ('DELPHI_MCP_READONLY_PATHS', TEMP3),
+                       ('DELPHI_MCP_READONLY_ROOTS', os.path.join(TEMP3, 'ana'))):
+    srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ3, clave: entrada}), nombre='ana', t=180)
     try:
         antes = set(glob.glob(CAPS2, recursive=True))
         r = preview(srv2, path=PRUEBA3, component='Panel1', inline='false')
         nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
-        dentro = glob.glob(os.path.join(TEMP3, '**', '*.png'), recursive=True)
-        if nombre == 'S6':
-            check('S6 solo lectura DENTRO de la casa (su carpeta del agente): GUARD-012, y nada dibujado alli',
-                  mc.rechazado(r) and mc.es(r, 'SR_READONLY_PATH_FMT') and not dentro, (r[:400], dentro))
-        elif nombre == 'S7':
-            check('S7 solo lectura en todo su __delphi-temp: la captura en el temporal del servidor',
-                  len(nuevos) == 1 and not dentro, (r[:400], nuevos, dentro))
-        else:
-            check('S8 una referencia DENTRO de la casa (su carpeta del agente): GUARD-016, y nada dibujado alli',
-                  mc.rechazado(r) and mc.es(r, 'SR_REFERENCE_ROOT_FMT') and not dentro, (r[:400], dentro))
+        check('S6 %s=%s: la captura en nuestra casa y nada en la raiz' % (clave[11:], os.path.relpath(entrada, RAIZ3)),
+              len(nuevos) == 1 and not pngs_en(RAIZ3), (r[:400], nuevos, pngs_en(RAIZ3)))
     finally:
         srv2.cierra()
-        shutil.rmtree(TEMP3, ignore_errors=True)
+
+# ------------- servidor D: HTTP con dos workspaces, la ENTREGA a su dueño (E1-E4)
+SRV4 = os.path.join(BASE, 'srv4')
+EXE4 = mc.copia_exe(SRV4, con_render=True)
+RAIZ_OP, RAIZ_OTRO = os.path.join(BASE, 'op'), os.path.join(BASE, 'otro')
+for d in (RAIZ_OP, RAIZ_OTRO):
+    os.makedirs(d)
+PRUEBA_OP = escribe(RAIZ_OP, 'Prueba.dfm', FORM)
+T_OP, T_OTRO = 'captura1182-op-0123456789', 'captura1182-otro-0123456789'
+PUERTO = mc.puerto_libre()
+with open(os.path.join(SRV4, 'settings.ini'), 'w') as f:
+    f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n[Workspace.Op]\nToken=%s\nRoots=%s\n\n'
+            '[Workspace.Otro]\nToken=%s\nRoots=%s\n' % (PUERTO, T_OP, RAIZ_OP, T_OTRO, RAIZ_OTRO))
+
+
+def get(dl, token):
+    req = urllib.request.Request('http://127.0.0.1:%d%s' % (PUERTO, dl))
+    req.add_header('Authorization', 'Bearer ' + token)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+CAPS4 = os.path.join(mc.casa_de_capturas(SRV4, 'ana', 'Op'), 'designer', '*.png')
+proc4 = mc.lanza_http(EXE4, None, mc.entorno(), espera_en=PUERTO)
+try:
+    op = mc.Http(PUERTO, T_OP, t=180)
+    op.session('ana')
+    otro = mc.Http(PUERTO, T_OTRO, t=180)
+    otro.session('bob')
+    antes = set(glob.glob(CAPS4))
+    r = op.call('delphi_designer', {'command': 'preview', 'path': PRUEBA_OP, 'inline': False}, t=180)
+    j = J(r)
+    dl = j.get('download', '')
+    nuevos = sorted(set(glob.glob(CAPS4)) - antes)
+    cap = nuevos[0] if len(nuevos) == 1 else ''
+    check('E0 el enlace pide la captura por su NOMBRE (?capture=), sin screenshot ni nada de nuestra casa; nada en su raiz',
+          bool(cap) and dl == '/files?capture=' + os.path.basename(cap) and sin_casa(r) and
+          j.get('consumedOnDownload') is True and not pngs_en(RAIZ_OP),
+          (r[:400], nuevos, pngs_en(RAIZ_OP)))
+    f = otro.call('delphi_fetch', {'path': cap, 'maxbytes': 65536})
+    check('E1 delphi_fetch de la ruta de la casa: el OTRO workspace no se la lleva, y se queda',
+          mc.rechazado(f) and os.path.isfile(cap), (f[:300], os.path.isfile(cap)))
+    codigo, cuerpo = get(dl, T_OTRO)
+    check('E2 ...ni por el enlace (404: no es de su workspace), y se queda',
+          codigo == 404 and os.path.isfile(cap), (codigo, cuerpo[:200]))
+    f = op.call('delphi_fetch', {'path': cap, 'maxbytes': 65536})
+    check('E4 delphi_fetch es para los ficheros del agente: al DUEÑO tambien se le niega, y se queda',
+          mc.rechazado(f) and os.path.isfile(cap), (f[:300], os.path.isfile(cap)))
+    codigo, cuerpo = get('/files?path=' + urllib.request.quote(cap), T_OP)
+    check('E5a ?path= de la ruta de la casa: la jaula lo niega (403) y no se consume',
+          codigo == 403 and os.path.isfile(cap), (codigo, cuerpo[:200]))
+    for malo in ('..\\..\\settings.ini', 'designer/x.png', 'C:x.png', ''):
+        codigo, cuerpo = get('/files?capture=' + urllib.request.quote(malo), T_OP)
+        check('E5 capture=%r no es un nombre de captura: 400 FILE-044 sin nombrar la casa' % malo,
+              codigo == 400 and mc.es(cuerpo.decode('utf-8', 'replace'), 'SR_FILES_CAPTURA_NOMBRE') and
+              sin_casa(cuerpo.decode('utf-8', 'replace')), (codigo, cuerpo[:200]))
+    codigo, cuerpo = get(dl, T_OP)
+    codigo2, _ = get(dl, T_OP)
+    check('E3 su dueño la baja por el enlace (200, el PNG entero), y la segunda vez 404 (consumida)',
+          codigo == 200 and cuerpo[:8] == b'\x89PNG\r\n\x1a\n' and codigo2 == 404 and not os.path.isfile(cap),
+          (codigo, codigo2, cuerpo[:16]))
+    # ------------------------------------------------------------------ E6
+    r = op.call('delphi_designer', {'command': 'preview', 'path': PRUEBA_OP, 'inline': False}, t=180)
+    dl6 = J(r).get('download', '')
+    with concurrent.futures.ThreadPoolExecutor(10) as ex:
+        res6 = list(ex.map(lambda _: get(dl6, T_OP), range(10)))
+    codigos = sorted(c for c, _ in res6)
+    textos = [(c, b.decode('utf-8', 'replace')) for c, b in res6 if c != 200]
+    restos = glob.glob(os.path.join(mc.casa_de_capturas(SRV4, 'ana', 'Op'), '**', '*'), recursive=True)
+    check('E6 diez GET a la vez del mismo enlace: UNA la baja (200), las demas 404 FILE-045 sin nombrar la casa, y no queda nada',
+          bool(dl6) and codigos.count(200) == 1 and codigos.count(404) == 9 and
+          all(mc.es(t, 'SR_FILES_CAPTURA_NO_ESTA') and sin_casa(t) for c, t in textos) and
+          not [p for p in restos if os.path.isfile(p)],
+          (codigos, [t[:120] for _, t in textos if not mc.es(t, 'SR_FILES_CAPTURA_NO_ESTA')], restos))
+finally:
+    proc4.kill()
+    proc4.wait()
 
 # ------------------------- servidor C: la raiz declarada por un junction (R1)
 REAL = os.path.join(BASE, 'real')
@@ -320,31 +411,24 @@ os.makedirs(REAL)
 PRUEBA_REAL = escribe(REAL, 'Prueba.dfm', FORM)
 POR_ENLACE = os.path.join(BASE, 'por_enlace')
 check('R1a la raiz por junction quedo plantada', mc.junction(POR_ENLACE, mc.larga(REAL)), POR_ENLACE)
-EXE3 = mc.copia_exe(os.path.join(BASE, 'srv3'), con_render=True)
+SRV3 = os.path.join(BASE, 'srv3')
+EXE3 = mc.copia_exe(SRV3, con_render=True)
+CAPS3 = casa(SRV3)
 srv3 = mc.Stdio(EXE3, mc.entorno({'DELPHI_MCP_ROOTS': POR_ENLACE}), nombre='ana', t=180)
 try:
-    # la carpeta de capturas, ya hecha: AQUI no se puede crear una carpeta a
-    # traves de un junction (SYS-006 "ya existe"), y no es del servidor. Medido
-    # el 11-oct-2026 (2j) sin nuestro codigo: os.makedirs por un junction falla
-    # bajo AppData (Local, Local\Temp, Roaming) y va bien en D:\ y en C:\Users\<yo>
-    # fuera de AppData; produccion (servicio) crea por un junction sin problema.
-    # Es la virtualizacion de AppData de la app MSIX que lanza las baterias, y
-    # esta bateria vive en %TEMP%. Aqui se mide el juicio de la casa y la
-    # escritura del recorte
-    os.makedirs(os.path.join(REAL, '__delphi-temp', 'ana', 'designer'), exist_ok=True)
-    CAPS3 = os.path.join(REAL, '__delphi-temp', '**', 'designer', '*.png')
     antes = set(glob.glob(CAPS3, recursive=True))
     r = preview(srv3, path=os.path.join(POR_ENLACE, 'Prueba.dfm'), component='Panel1', inline='false')
     j = J(r)
     nuevos = sorted(set(glob.glob(CAPS3, recursive=True)) - antes)
     uno = nuevos[0] if len(nuevos) == 1 else ''
-    check('R1 una raiz declarada a traves de un junction: el recorte (344x41) en su carpeta de capturas',
-          j.get('componentRect') == RECT and tamano(uno) == (344, 41), (r[:400], nuevos, tamano(uno)))
+    check('R1 una raiz declarada a traves de un junction: el recorte (344x41) en nuestra casa, nada en la raiz',
+          j.get('componentRect') == RECT and tamano(uno) == (344, 41) and not pngs_en(REAL),
+          (r[:400], nuevos, tamano(uno), pngs_en(REAL)))
 finally:
     srv3.cierra()
     quita_enlace(POR_ENLACE)
 
 check('las victimas de fuera, intactas al acabar', not contenido(FUERA) or
-      all(os.path.isdir(p) and p in [os.path.join(FUERA, v) for v in ('v1', 'v3', 'v4')]
+      all(os.path.isdir(p) and p in [os.path.join(FUERA, v) for v in ('v1', 'v4', 'v7')]
           for p in contenido(FUERA)), contenido(FUERA))
 mc.fin('captura por las puertas 1182')

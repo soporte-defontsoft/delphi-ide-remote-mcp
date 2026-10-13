@@ -394,7 +394,7 @@ REGLAS = [
       # deuda declarada (2.1c de la 1.18.0): quien recorre los sitios por su cuenta
       # recalcula sus formas en cada llamada; se va con el cache de formas y el
       # comparador unico de Lsp.Lugares. Por (fichero, funcion): solo puede encoger
-      ('Lsp.Guard.pas', 'ArgPathOutsideDenied'), ('Lsp.Guard.pas', 'CasasDeEntregables'),
+      ('Lsp.Guard.pas', 'ArgPathOutsideDenied'),
       ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'), ('Lsp.Guard.pas', 'NegativaDeUnc'),
       ('Lsp.Guard.pas', 'LugaresProtegidos'), ('Lsp.Guard.pas', 'PurgeServerTemp'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
@@ -512,6 +512,10 @@ REGLAS = [
       # aprobada por EscrituraDenegada, porque no devolverla perdia el fichero
       # (revisor de la noche del 10-oct, A-1)
       ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
+      # el RECLAMO de una captura nuestra antes de entregarla por su enlace: un rename
+      # dentro de su casa, ya juzgada por su nombrador (CapturaConsumible), hermano
+      # de ConsumeAgentCapture (revisor del 2af de la 1.18.2: diez GET a la vez)
+      ('Lsp.Guard.pas', 'ReclamaCaptura'),
       # programas que NO son el servidor: escriben donde el servidor les dijo, ya
       # comprobado, o en el destino
       ('Mld.Captura.pas', 'GuardarPNG'), ('McpDesktopNode.dpr', 'RecogerCaptura'),
@@ -967,6 +971,9 @@ REGLAS_PY = [
      'mc.TEMPORAL_SUSTITUCION_EXT, leido de TEMPORAL_DE_SUSTITUCION_EXT (Lsp.Patch)'),
     ('la carpeta de las copias del IDE a mano', r"""(['"])ide-copias\1""", [],
      'mc.IDE_COPIAS, leido de IDE_COPIAS_SUB (Lsp.Casa)'),
+    # (revisor del 2af de la 1.18.2: seis baterias componian la casa de capturas)
+    ('la casa de capturas a mano', r"""(['"])captures\1""", [],
+     'mc.casa_de_capturas, leido de CAPTURAS_SUB (Lsp.Casa)'),
 ]
 
 
@@ -1010,6 +1017,7 @@ PLANTADO_PY = {
     'el cajon de lo borrado a mano': "    c = os.path.join(pap, dia, 'deleted', 'x')",
     'el intermedio del escritor atomico a mano': "    t = glob.glob(os.path.join(d, '*.delphi-patch-tmp'))",
     'la carpeta de las copias del IDE a mano': "    c = os.path.join(cache, 'ide-copias', '37.0')",
+    'la casa de capturas a mano': "    c = os.path.join(srv, '__delphi-temp', 'captures', '_local')",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]

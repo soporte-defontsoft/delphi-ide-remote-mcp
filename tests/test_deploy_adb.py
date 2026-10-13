@@ -94,7 +94,7 @@ check('adb run sin app: rechazo con el nombre de paquete como camino',
 
 out = srv.call('delphi_adb', {"command": "screenshot", "device": "ZZZ-NO-EXISTE"})
 # v1.0.14: "out" es opcional en toda la familia de capturas (CaptureTarget);
-# sin el, la captura cae en __delphi-temp del workspace. Lo que falle aqui
+# sin el, la captura la guarda el servidor y la devuelve. Lo que falle aqui
 # sera el dispositivo, que no existe - nunca la falta de "out".
 check('adb screenshot sin out: ya no se rechaza por faltar "out"',
       not (mc.rechazado(out) and '"out"' in out) and paso_por_adb(out), out[:250])

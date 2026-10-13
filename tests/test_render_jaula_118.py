@@ -34,6 +34,11 @@ try:
     template=open(os.path.join(FIX,'DUMMY-path.dfm'),encoding='utf-8-sig').read()
     write(template.replace('DUMMY.avi',inside))
     mc.check('control AVI propio funciona',ok(preview('inside')))
+    # el AVI RELATIVO junto al form: solo se carga si el cwd del ayudante es la
+    # carpeta del form (2af de la 1.18.2: era la del png, en nuestra casa)
+    write(template)
+    r=preview('relativo-propio')
+    mc.check('control AVI relativo junto al form: se dibuja (el cwd del ayudante es la carpeta del form)',ok(r),r[:400])
     write(template.replace('DUMMY.avi',avi))
     denied('AVI exterior',preview('outside'),'FileName')
     for n,v in [('absoluto',literal(avi)),
@@ -50,10 +55,17 @@ try:
     denied('state',preview('state','Dummy.Caption='+avi),'Dummy.Caption')
     write(form(" Caption = 'Texto ordinario'"))
     mc.check('control texto no ruta funciona',ok(preview('normal')))
-    cwd=os.path.join(JAIL,'__delphi-temp','render-jaula','designer')
-    mc.check('fixture cwd del ayudante existe',os.path.isdir(cwd))
+    # el cwd del ayudante es la carpeta del form que carga, la del agente (2af
+    # de la 1.18.2: era la del png, que vive en NUESTRA casa de capturas)
+    cwd=os.path.dirname(f)
     write(form(' Caption = '+literal(os.path.relpath(avi,cwd))))
     denied('relativo desde cwd',preview('cwd'),'Caption')
+    # ...y la carpeta del png (nuestra casa) se sigue mirando como base: una
+    # base de mas no abre nada
+    casa=os.path.join(mc.casa_de_capturas(os.path.join(BASE,'srv'),'render-jaula',''),'designer')
+    mc.check('fixture la carpeta del png (nuestra casa) existe',os.path.isdir(casa))
+    write(form(' Caption = '+literal(os.path.relpath(avi,casa))))
+    denied('relativo desde la carpeta del png',preview('casa'),'Caption')
     # El mismo literal en un hermano inline, no solo en la form pedida.
     child=os.path.join(JAIL,'DUMMY-child.dfm')
     with open(child,'w',encoding='ascii') as file:
@@ -81,6 +93,23 @@ try:
     write(form(" Caption = 'DUMMY control'"))
     mc.check('control pequeno despues de rechazos',ok(preview('budget-after')))
     mc.check('servidor vivo',not mc.fallo(srv.call('delphi_list',{'root':JAIL})))
+    # ...pero NO en una carpeta donde la sesion no puede escribir (una
+    # referencia, un ReadOnlyPaths): el codigo de diseno de los paquetes
+    # escribe RELATIVO al cwd (revisor del 2af, M3). Medido con el mismo AVI
+    # relativo: alli no se carga (el ayudante corre en una carpeta nuestra), y
+    # la carpeta queda como estaba
+    RO=os.path.join(JAIL,'solo');os.makedirs(RO)
+    shutil.copyfile(avi,os.path.join(RO,'DUMMY.avi'))
+    fro=os.path.join(RO,'DUMMY.dfm')
+    with open(fro,'w',encoding='ascii') as file:file.write(template)
+    antes_ro=sorted(os.listdir(RO))
+    srv2=mc.Stdio(exe,mc.entorno({'DELPHI_MCP_ROOTS':JAIL,'DELPHI_MCP_READONLY_PATHS':RO}),nombre='render-jaula',t=110)
+    try:
+        r=srv2.call('delphi_designer',dict(command='preview',path=fro,inline='false'))
+        mc.check('en una carpeta de solo lectura el ayudante no corre alli: el AVI relativo de alli no se carga, y nada cambia',
+                 'Cannot open AVI' in r and sorted(os.listdir(RO))==antes_ro,(r[:300],os.listdir(RO)))
+    finally:
+        srv2.cierra()
 finally:
     srv.cierra();mc.borra(BASE)
 mc.check('BASE borrada con el exe',not os.path.exists(BASE))

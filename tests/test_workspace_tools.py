@@ -272,27 +272,26 @@ check('fetch: reensamblado identico byte a byte', blob == local, '%d vs %d' % (l
 check('fetch: sha256 cuadra', sha and sha.lower() == hashlib.sha256(local).hexdigest(), sha)
 check('fetch: fue en varios chunks', len(local) > 400, len(local))
 
-# --- a desktop capture in the server's temp folder is CONSUMED on retrieval
-# (David, 2026-09-25: delete it once the agent has fetched it; no cache, no
-# rotation, nothing kept). Retrieved = last chunk served. A normal file stays.
-# In the battery's own root, never in the repo: REPO\__delphi-temp is where a
-# server whose first writable root is this repo leaves its deliverables.
-capdir = os.path.join(BASE, '__delphi-temp', 'desktop')
+# --- delphi_fetch is for the AGENT's files and never consumes anything (2af
+# of 1.18.2). Captures are the server's own work, live in ITS house
+# (Lsp.Casa.CasaDeCapturas) and travel in the answer or through their link,
+# which asks for them by name (test_captura_puertas_1182 F1-F2, E0-E5). Here
+# the battery's exe sits inside a root (BASE), the case the operator owns
+# (a root that contains the server): a png in our house is read like any
+# file of the jail, whole, and stays.
+capdir = os.path.join(mc.casa_de_capturas(os.path.dirname(os.path.abspath(EXE)), 'ws-battery', ''),
+                      'desktop')
 os.makedirs(capdir, exist_ok=True)
 cap = os.path.join(capdir, 'desktop-bateria-20260925-000000000-cafe01.png')
 payload = b'\x89PNG' + os.urandom(3000)
 open(cap, 'wb').write(payload)
 try:
     d1 = json.loads(call('delphi_fetch', {"path": cap, "offset": 0, "maxbytes": 2000}))
-    check('captura: el primer trozo NO la borra (aun no esta recogida)',
-          d1.get('consumedOnServer') is False and os.path.exists(cap), json.dumps(d1)[:200])
     d2 = json.loads(call('delphi_fetch', {"path": cap, "offset": d1['bytes'], "maxbytes": 2000}))
     got = base64.b64decode(d1['chunkBase64']) + base64.b64decode(d2['chunkBase64'])
-    check('captura: el ultimo trozo la entrega entera y la borra del servidor',
-          d2.get('eof') is True and d2.get('consumedOnServer') is True and got == payload and not os.path.exists(cap),
-          json.dumps(d2)[:200])
-    out = call('delphi_fetch', {"path": cap, "offset": 0})
-    check('captura: pedirla otra vez es "no existe" (nada cacheado)', mc.resultado(out) == 'NOT_FOUND' and mc.es(out, 'SR_WS_NO_EXISTE_FMT'), out[:120])
+    check('fetch: servir un png entero no lo consume ni habla de consumo',
+          d2.get('eof') is True and got == payload and os.path.exists(cap) and
+          'consumedOnServer' not in d1 and 'consumedOnServer' not in d2, json.dumps(d2)[:200])
     d3 = json.loads(call('delphi_fetch', {"path": LIC, "offset": 0, "maxbytes": 400}))
     check('un fichero normal no se consume', 'consumedOnServer' not in d3 and os.path.exists(LIC), json.dumps(d3)[:120])
 finally:

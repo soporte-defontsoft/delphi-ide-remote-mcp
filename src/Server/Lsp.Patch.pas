@@ -377,11 +377,11 @@ type
                   jaula -. SOLO para leer: lo que el motor dice de un simbolo
                   de alli se ensena (P2). No es ltIde porque cargarla lee
                   rsvars.bat por la puerta con el IDE como lugar
-      ltEntregables  las casas donde el servidor deja las capturas de un agente
-                  (Lsp.Guard.EnCasaDeEntregables: el __delphi-temp de una raiz
-                  escribible o el temporal del servidor), sin enlaces en el
-                  camino. Las juzga su nombrador y no la jaula: a un agente
-                  confinado la jaula le niega __delphi-temp (1.18.2, 2b) }
+      ltEntregables  la casa donde el servidor deja las capturas que hace para
+                  devolverlas (Lsp.Guard.EnCasaDeEntregables: su temporal, la
+                  carpeta del workspace de quien llama), sin enlaces en el
+                  camino. La juzga su nombrador y no la jaula: es trabajo
+                  nuestro, no algo que el agente intente (1.18.2, 2b y 2af) }
   TLugarDeTexto = (ltJaula, ltIde, ltCasa, ltTemporal, ltVault, ltBiblioteca, ltEntregables);
   TLugaresDeTexto = set of TLugarDeTexto;
 
@@ -630,10 +630,10 @@ procedure AtomicWrite(const APath: string; const B: TArray<Byte>); // = TBytes
   reintento), el logcat (sin volver a preguntar a la puerta) y el zip de
   package (tampoco): P4 de la segunda revision de la 1.17.0.
   ALugar: donde cae. La jaula (el out= del agente) por defecto; una captura
-  sin out= cae en la casa de los entregables (ltEntregables), que juzga su
-  nombrador y no la jaula, con la pregunta de EscribeBytes: la jaula se la
-  niega a un agente confinado, y sin raiz escribible la casa es la temporal
-  del servidor (1.18.2, 2i). }
+  sin out= cae en la casa de las capturas (ltEntregables), trabajo nuestro
+  que juzga su nombrador y no la jaula, con la pregunta de EscribeBytes
+  (1.18.2, 2i: con la jaula, un agente confinado o sin raiz escribible
+  recibia DESK-019). }
 procedure ColocaProducto(const ALocal, ADestino: string; ALugar: TLugarDeTexto = ltJaula);
 // y un CONTENIDO (el texto de un logcat, un recorte), con las mismas reglas
 procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>;
@@ -1409,11 +1409,10 @@ begin
   Ancestro := '';
   Colocado := False;
   // el producto se MUEVE y se borra: solo uno nuestro - de la temporal del
-  // servidor, de la carpeta del destino (la que aprueba la puerta) o de una
-  // carpeta de descarga en ella (NuevaCarpetaDescarga, la de delphi_desktop)
-  Nuestro := (ALocal = '') or EnTemporal(ALocal) or SameText(DirLocal, Dir) or
-    (EsCarpetaDescarga(TPath.GetFileName(DirLocal)) and
-     SameText(TPath.GetDirectoryName(DirLocal), Dir));
+  // servidor o de la carpeta del destino (la que aprueba la puerta). Una
+  // carpeta de descarga DENTRO del destino ya no: delphi_desktop baja
+  // siempre a la casa de capturas desde la 1.18.2 (2z/2af)
+  Nuestro := (ALocal = '') or EnTemporal(ALocal) or SameText(DirLocal, Dir);
   if not Nuestro then
     raise Exception.Create(MsgFmt(SR_COLOCA_PRODUCTO_AJENO_FMT, [ALocal, ADestino]));
   // Todo, bajo el cerrojo, de la puerta al rename: un delphi_move (que escribe
@@ -2257,15 +2256,6 @@ begin
     Exit(SustitucionDenegada(APath));
   if not EnLugarDeTexto(APath, ALugar, True) then
     Exit(MsgFmt(SR_GUARD_FUERA_DE_LUGARES_FMT, [APath, NombreDeLugar(ALugar, True)]));
-  // lo que el servidor deja PARA el agente: tambien el modo de solo lectura de
-  // la sesion, como la jaula (la segunda barrera: hoy la entrada ya niega las
-  // tools que capturan a una sesion de solo lectura; revisor del 2i)
-  if ALugar = ltEntregables then
-  begin
-    Result := SesionSoloLecturaDenegada(APath);
-    if Result <> '' then
-      Exit;
-  end;
   Result := SoloLecturaDenegado(APath);
 end;
 

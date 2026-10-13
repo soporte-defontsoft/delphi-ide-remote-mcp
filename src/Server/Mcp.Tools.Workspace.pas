@@ -1427,6 +1427,9 @@ var
 begin
   // la guarda PRIMERO: con path vacio, GetFullPath lanzaba el texto de la
   // RTL ("Invalid characters in path"); la guarda dice que falta la ruta
+  // descargar es leer, y delphi_fetch es para los ficheros del agente: una
+  // captura nuestra sale en la respuesta o por su enlace, que la pide por su
+  // nombre (Lsp.Files; 2af de la 1.18.2)
   Result := ReadPathDenied(Params.Path); // downloading is reading
   if Result <> '' then
     Exit;
@@ -1487,20 +1490,6 @@ begin
       end;
       if LinkOnly then
         Return.AddPair('inline', TJSONBool.Create(False));
-      // Una captura del escritorio se consume al recogerla ENTERA (David,
-      // 25-sep-2026): recogida = ultimo trozo servido. Se dice en la
-      // respuesta; una segunda peticion encontrara 'no existe'.
-      if IsAgentCapture(FullPath) then
-      begin
-        // lo anuncia el MISMO decisor que borra (CapturaConsumible): una
-        // captura de una referencia decia "consumida" y seguia en disco
-        // (duodecima revision)
-        var Consumida := (not LinkOnly) and (Params.Offset + ChunkLen >= Size) and
-          CapturaConsumible(FullPath);
-        Return.AddPair('consumedOnServer', TJSONBool.Create(Consumida));
-        if Consumida then
-          Return.AddPair('consumedNote', MsgText(SN_FETCH_CAPTURE_CONSUMED));
-      end;
       if LinkOnly then
         Return.AddPair('note', MsgFmt(SN_FETCH_BIG_FMT,
           [FormatFloat('0.0', Size / (1024 * 1024), TFormatSettings.Invariant) + ' MB']))
@@ -1513,8 +1502,6 @@ begin
   finally
     Stream.Free;
   end;
-  if (not LinkOnly) and (Params.Offset + ChunkLen >= Size) then
-    ConsumeAgentCapture(FullPath); // ya servida entera: fuera del servidor
 end;
 
 { TDelphiUploadTool }

@@ -2332,10 +2332,10 @@ const
     se declara antes de su primer uso. }
   SP_CAPTURE_OUT_RULE =
     ': a FOLDER (existing, or ending in \ - the server names the file) ' +
-    'or a FILE whose extension matches the capture''s real format. Empty ' +
-    '= __delphi-temp\<agent>, wiped on server restart. On THIS server, jailed like any ' +
-    'path. With inline=false the capture stays there and the answer ' +
-    'carries its download link.';
+    'or a FILE whose extension matches the capture''s real format, on THIS ' +
+    'server and jailed like any path. Empty = the capture comes back to ' +
+    'you in the answer or, with inline=false, as a download link that works ' +
+    'once (over stdio there is no link: pass out= to keep the file).';
   SP_ADBLINUX_OUT =
     'screenshot: where the capture lands' + SP_CAPTURE_OUT_RULE;
   SP_ADBLINUX_REGION =
@@ -2617,15 +2617,26 @@ const
     'ending in \) and I pick the name. I do not write an image with the ' +
     'extension of another format.';
   { La carpeta donde el servidor deja una captura sin out= (su casa de
-    entregables) con un enlace en el camino: se niega en CaptureTarget, antes
-    de que el renderizador dibuje, el nodo baje o adb deje nada (1.18.2, 2b:
-    el renderizador dibujaba fuera de las raices a traves de el). }
-  SR_CAPTURE_CASA_ENLACE_FMT =
-    '[CAPT-010 DENIED] The folder where I leave captures (%s) has a link (a ' +
+    capturas, en su temporal) con un enlace en el camino: se niega en
+    CaptureTarget, antes de que el renderizador dibuje, el nodo baje o adb
+    deje nada (1.18.2, 2b: el renderizador dibujaba fuera de las raices a
+    traves de el, cuando la casa estaba en el workspace). Sin la carpeta: es
+    de nuestra casa, y la lleva el log del operador (2af de la 1.18.2). }
+  SR_CAPTURE_CASA_ENLACE =
+    '[CAPT-010 DENIED] The server''s own capture folder has a link (a ' +
     'junction or a symlink) on its way, and I do not draw, download or crop a ' +
     'capture through a link, wherever it points. Nothing was written. The ' +
-    'link is the operator''s to remove; until then this tool cannot capture ' +
-    'here.';
+    'link is the operator''s to remove (the server log says where); until ' +
+    'then this tool cannot capture, with or without out=.';
+  SL_CAPTURE_CASA_ENLACE_FMT =
+    'CAPT-010: the capture folder %s has a link on its way; no capture is ' +
+    'taken, with or without out=, until the operator removes it.';
+  { Una captura nuestra sin la ruta /files (stdio) e inline=false: no tiene
+    por donde salir y su ruta no se ensena (2af de la 1.18.2). }
+  SN_CAPTURE_SIN_ENLACE =
+    '[CAPT-011] This transport (stdio) has no download link, so a capture ' +
+    'without out= only travels inline: ask again with inline=true, or pass ' +
+    'out=<folder> to keep the file.';
 
   SR_ADB_NEED_XY =
     '[ADB-002 INVALID_PARAM] tap needs "x" and "y" (screen pixels; measure them ' +
@@ -2755,13 +2766,6 @@ const
     'forces inline chunks instead. Jailed to the workspace roots and the ' +
     'read-only library zone.';
 
-  SN_FETCH_CAPTURE_CONSUMED =
-    '[FETCH-002] Desktop capture: it is deleted from the server the ' +
-    'moment it has been fetched whole (last chunk served, or one GET on ' +
-    'the download link). Nothing is cached or kept: if you need it ' +
-    'again, take a new screenshot; a capture requested with out= is ' +
-    'yours and stays.';
-
   SN_FETCH_DOWNLOAD =
     '[FETCH-006] Direct download: GET this path on the SAME host:port ' +
     'you use for /mcp, with the SAME Authorization: Bearer header, e.g. ' +
@@ -2784,6 +2788,21 @@ const
 
   SR_FILES_MISSING =
     '[FILE-034 NOT_FOUND] The requested file does not exist.';
+
+  { El enlace de una captura nuestra lleva su NOMBRE (?capture=), no la ruta
+    de nuestra casa (2af de la 1.18.2). }
+  SR_FILES_CAPTURA_NOMBRE =
+    '[FILE-044 INVALID_PARAM] capture= takes the name of a capture exactly ' +
+    'as its download link gave it - no folder, no drive.';
+  SR_FILES_CAPTURA_NO_ESTA =
+    '[FILE-045 NOT_FOUND] That capture is not here: a capture is handed back ' +
+    'once (it is deleted the moment it is downloaded) and only to its own ' +
+    'workspace. Ask for a new one.';
+  SR_FILES_CAPTURA_ILEGIBLE =
+    '[FILE-046 INTERNAL] That capture could not be read, and it is gone ' +
+    '(the server log says why). Ask for a new one.';
+  SL_FILES_CAPTURA_ILEGIBLE_FMT =
+    'files: capture %s could not be read: %s';
 
   // Appended to a READ refusal outside the jail: the library zone exists,
   // but only the folders the IDE registers (and their subfolders) - not their
@@ -4377,8 +4396,8 @@ const
     'table does not have, is - the refusal says how), to change one ' +
     'property set, to remove one delete; then preview to see it. ' +
     'to-text/to-binary convert a .dfm. A ' +
-    'read-only credential gets the reading commands (preview leaves its PNG ' +
-    'in the workspace temp, so it is not one of them).';
+    'read-only credential gets the reading commands (preview is not one of ' +
+    'them).';
 
   SP_DESIGNER_COMMAND =
     'info (every property a class really publishes: kind and type, events ' +
@@ -5892,16 +5911,16 @@ const
     'copies. They are not written into; the live file is in the project ' +
     'folder.';
 
-  { Ni papelera ni copia muerta: la carpeta donde el servidor deja LO SUYO.
-    Se lee -de ahi te bajas una captura con delphi_fetch- y se puede borrar
-    entera en cualquier momento, que es justo por lo que no se escribe codigo
-    dentro: lo que pongas ahi no tiene por que seguir estando. }
+  { Ni papelera ni copia muerta: la carpeta donde el servidor dejaba LO SUYO
+    dentro de una raiz (hasta la 1.18.2: hoy lo suyo vive en su casa, y lo
+    que quede se purga al arrancar). Se puede borrar entera en cualquier
+    momento, que es justo por lo que no se escribe codigo dentro: lo que
+    pongas ahi no tiene por que seguir estando. }
   SR_GUARD_DEAD_TEMP =
     '[GUARD-006 DENIED] __delphi-temp\ is the server''s temporary folder, ' +
     'not a place to work. What is there is put there by the server and ' +
     'can be wiped entirely at any moment, so a file of yours in there is ' +
-    'a file you are going to lose. You can read it (download a capture ' +
-    'with delphi_fetch); write your work in the workspace.';
+    'a file you are going to lose. Write your work in the workspace.';
 
   SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT =
     '[FILE-008 DENIED] Inside that folder there are %d copy(ies) that ' +
@@ -7372,8 +7391,7 @@ const
     'the IDE''s library: its installation, its GetIt catalogs and its ' +
     'Library Search Path (read only)';
   SF_LUGAR_ENTREGABLES =
-    'the folders where the server leaves captures (the __delphi-temp of a ' +
-    'writable root, or its own temporary folder), with no link on the way';
+    'the server''s own capture folder, with no link on the way';
 
   { El endpoint LFS no es una clave local que el agente tenga que quitar. }
   SR_GIT_LFS_ENDPOINT_FMT =
@@ -7638,9 +7656,10 @@ const
 
   SN_DESK_MIDE_PIXEL_SOBRE_IMAGEN =
     '[DESK-020] measure the pixel ON this image and pass it to ' +
-    'command=tap; fetch it with download or delphi_fetch. Once it is ' +
-    'fetched WHOLE it is deleted from the server: if you need it again, ' +
-    'ask for another capture (one requested with out= is not deleted)';
+    'command=tap. A capture without out= is collected with its download ' +
+    'link, once: it is deleted from the server when downloaded (ask for ' +
+    'another if you need it again); one saved with out= is yours and ' +
+    'delphi_fetch reads it';
 
   // Mensajes que estaban en linea en Lsp.Imagen.pas (paso 3c a mano, 27-sep-2026)
   SN_CAPT_RECORTE_FUERA_CAPTURA_FMT =

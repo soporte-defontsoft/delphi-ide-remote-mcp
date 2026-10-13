@@ -15,10 +15,11 @@ temporales en el zip, el centinela 'srvx' chocaba con una unidad X: servida
 vivo (ahora: solo purga la PRIMERA instancia del exe).
 
 Lo que esta bateria NO mide, y se dice en voz alta para no mentir en verde:
-la decodificacion CESU-8 (necesita un hijo que emita esos bytes), el
-AgentTempDir con la primera raiz en ReadOnlyPaths (necesita el nodo del
-escritorio) y la clave de cache de sesion entre workspaces solapados
-(necesita dos tokens y un arbol LSP vivo). Apuntados en el CHANGELOG.
+la decodificacion CESU-8 (necesita un hijo que emita esos bytes) y la clave
+de cache de sesion entre workspaces solapados (necesita dos tokens y un
+arbol LSP vivo). Apuntados en el CHANGELOG. (El AgentTempDir con la primera
+raiz en ReadOnlyPaths ya no aplica: desde la 1.18.2 las capturas viven en la
+casa del servidor; lo mide test_desktop_casa_1182.)
 """
 import os
 import re
@@ -227,9 +228,8 @@ try:
           'quedo __delphi-temp\\normal')
 
     print('NOTA: sin medir aqui y apuntado en el CHANGELOG: la caida CESU-8 '
-          'del decodificador (necesita un hijo que emita esos bytes), el '
-          'AgentTempDir con Roots[0] en ReadOnlyPaths (necesita el nodo del '
-          'escritorio) y la clave de cache entre workspaces solapados.')
+          'del decodificador (necesita un hijo que emita esos bytes) y la '
+          'clave de cache entre workspaces solapados.')
 finally:
     try:
         proc.kill()

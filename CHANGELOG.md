@@ -47,30 +47,50 @@ the MCP `initialize` response (`serverInfo.version`).
   operator can remove it by hand. `test_purga_repo_118` P3c and P7 (red
   before; the once-only half has its mutant).
 
-- **A capture never goes through a link in the folder where the server
-  leaves it.** A capture asked for without `out=` lands in the server's own
-  capture folder - the `__delphi-temp` of the first writable root, with the
-  agent's folder, or the server's temporary folder when there is none - and
-  nobody checked that path for links: with a junction planted there,
-  `delphi_designer preview` drew its PNG outside the roots and cropped it
-  there (measured: the victim folder got the image; with the link on
-  `__delphi-temp` itself the call ended in `INTERNAL`). `delphi_desktop` and
-  `delphi_adb` compose the same folder. Its namer now judges it before
-  anything is drawn, downloaded or pulled into it - no link on the way,
-  wherever it points, and in a root not even on its `__delphi-temp` - and
-  refuses with `CAPT-010`. Consuming a capture asks the same question:
-  reading one with `delphi_fetch` or the download deletes it, and with
-  `__delphi-temp` as a link to another agent's folder a confined agent
-  deleted a PNG there (measured). And the crop no longer rereads and
-  rewrites the file in place without a gate: the image is cropped in memory
-  and read through the read gate; `delphi_designer` writes it through the
-  write gate, in a new place of those gates, the capture folders, judged by
-  their namer and not by the jail (the jail refuses `__delphi-temp` to a
-  confined agent, and its captures live there), and `delphi_desktop`
-  places it straight from memory with its usual writer.
-  `test_captura_puertas_1182` (K1-K3, K5, K6 and S3 red before; the
-  confined agent, the server's temporary folder and a root declared through
-  a junction have their checks), `LspTests.Images`.
+- **Captures are the server's own work: they live in its house, not in the
+  workspace.** A capture asked for without `out=` - `delphi_desktop`,
+  `delphi_adb`, `delphi_designer preview` - is something the server makes
+  to hand back. Since 1.0.12 it landed in the `__delphi-temp` of the first
+  writable root, inside the workspace (then `delphi_fetch` could only read
+  through the jail), so the jail ended up judging the server's own work,
+  and it showed, measured: a junction planted in that folder let the
+  designer draw and crop its PNG outside the roots; consuming a capture
+  through a link to another agent's folder deleted a PNG there;
+  `delphi_desktop` answered `DESK-019` to a confined agent and with no
+  writable root; a root written in its 8.3 form with its `ReadOnlyPaths`
+  entry in long form (or the other way round) counted as writable and the
+  PNG was drawn INSIDE the read-only root; and with no writable root, the
+  download link of an `inline=false` capture was refused by the jail
+  (`GUARD-002`). Captures now live in the server's temporary folder, in a
+  folder per workspace and per agent, judged by their namer and never by the jail,
+  and the agent does not even see that folder: a capture travels in the
+  answer or, with `inline=false`, as a download link that asks for it by
+  NAME (`/files?capture=<name>`), good for ONE download even when several
+  ask at once, and only for its
+  own workspace. No answer carries the path of a capture the server keeps
+  (the `screenshot` field goes, as it already did when the image travelled
+  inline), and `delphi_fetch` is again for the agent's own files: it no
+  longer hands out or deletes captures (`consumedOnServer` and `FETCH-002`
+  are gone). Over stdio there is no download route, so an `inline=false`
+  capture without `out=` says to pass `inline=true` or `out=` (`CAPT-011`).
+  What the agent names still goes through the jail - an `out=`, anything it
+  reads or writes - and the capture folder is still checked for links
+  before anything is drawn, downloaded or pulled into it (`CAPT-010`, which
+  no longer names that folder: the server log does). The designer's helper
+  runs in the form's own folder instead of the capture's - or, where the
+  session cannot write (a reference, a read-only entry), in a fresh folder
+  of the server's, since design-time code may write relative to it. The crop no
+  longer rereads and rewrites the file in place without a gate: it is done
+  in memory, and `delphi_desktop` downloads to
+  the server's folder even with `out=` and then places the result. The
+  `out` description of the three tools says where an empty `out` goes, and
+  the server still empties, at startup, the `__delphi-temp` that earlier
+  versions left in the workspace roots. `test_captura_puertas_1182` (red
+  before, among them the confined agent, the read-only root in two forms,
+  the delivery with no writable root, another workspace that must not get
+  the capture, `delphi_fetch` and `?path=` refused on the server's folder,
+  and no answer naming it), `test_desktop_casa_1182` (it needs the Linux
+  desktop on, and says so when it is not), `LspTests.Images`.
 
 - **A unit's designer goes through the gate with it.** `delphi_move` and
   `delphi_delete` of a unit take its `.dfm`/`.fmx` along, and the gate
@@ -97,34 +117,6 @@ the MCP `initialize` response (`serverInfo.version`).
   destination still works, F4 a destination reached through a junction;
   each with its mutant). The `delphi_move` description says it.
 
-- **`delphi_desktop` without `out=` captures for a confined agent, and
-  without a writable root.** Without `out=` the capture goes to the agent's
-  capture folder, and the writer that places it there asked the jail, which
-  refuses `__delphi-temp` to a confined agent and, with no writable root,
-  the server's temporary folder where those captures live: both answered
-  `DESK-019`, measured against a Linux desktop. The writer that places a
-  product now takes the place it writes to, like the write gate does, and a
-  capture without `out=` is judged by the namer of the capture folders, as
-  `delphi_designer` captures have been since the previous fix; an `out=` is
-  still the jail's. `test_desktop_casa_1182` (D1 and D2 red before; it needs
-  the Linux desktop on, and says so when it is not), `LspTests.Images`.
-
-- **A capture without `out=` never lands inside a read-only root.** The
-  folder for captures is the first writable root's, and whether a root was
-  read-only was decided by comparing the `ReadOnlyPaths` entries with the
-  root as raw text, while the jail compares them by their long form and
-  their real path. A root written in its 8.3 form with its entry in long
-  form, or the other way round, counted as writable: a `delphi_designer`
-  preview without `out=` drew its PNG inside the read-only root (measured),
-  and an entry inside a root's `__delphi-temp` was not looked at at all.
-  There is now one reader of `ReadOnlyPaths` for every write, which the
-  jail, the choice of the capture folder and the capture folder's own check
-  all ask; a capture whose folder falls in a read-only entry is refused
-  saying so (`GUARD-012`). Where a capture lands without `out=` is now
-  decided in one place for the three tools that capture.
-  `test_captura_puertas_1182` (S4-S7 red before), `test_desktop_casa_1182`
-  (D5).
-
 ### Internal
 
 - **One PNG header, for the server and the desktop node.** The signature
@@ -137,6 +129,15 @@ the MCP `initialize` response (`serverInfo.version`).
   watches the format, and `LspTests.Images` checks that the reader reads what
   the writer composes, and that the RTL's PNG decoder loads what the node
   writes, pixel by pixel.
+
+- **What the agent attempts is not what the server does inside.** A house
+  rule in `CLAUDE.md`: the jail judges what the agent names; the server's
+  own work to serve it (a capture on its way to the answer, temporaries,
+  caches) lives in the server's house and is judged by its namer. The
+  capture folder inside the workspace was the case that cost the fixes
+  above. And the jail's reader of `ReadOnlyPaths` (by text and by real
+  path) is one function in `Lsp.Lugares`, where the site lists are walked,
+  instead of a loop inside the jail's gate.
 
 ## [1.18.1] - 2026-10-11
 

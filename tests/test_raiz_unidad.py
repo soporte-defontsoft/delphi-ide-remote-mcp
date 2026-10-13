@@ -30,10 +30,11 @@ volumen de verdad no se mide aqui.
       codigo no entran
   D9  (no se mide: git nombra una unidad de subst por la carpeta de debajo)
   D10 un proyecto en la raiz-unidad: se crea, el motor contesta y compila
-  D11 la carpeta temporal del servidor es la de la raiz, no la de la carpeta
-      actual: una captura dejada en <unidad>:\\__delphi-temp se consume al
-      recogerla; y delphi_package de la raiz sin outfile dice que hace falta
-      (una unidad no tiene "al lado")
+  D11 la carpeta temporal no cae en la carpeta actual; un png con forma de
+      captura en <unidad>:\\__delphi-temp no es nuestro (las capturas viven en
+      la casa del servidor desde la 1.18.2): se lee y no se borra; y
+      delphi_package de la raiz sin outfile dice que hace falta (una unidad
+      no tiene "al lado")
   D12 una raiz escrita como la unidad a secas (Roots=Q:) es la raiz de la
       unidad, no la carpeta desde la que corre el servidor; y un ReadOnlyPaths
       escrito igual protege la unidad, no esa carpeta
@@ -307,15 +308,17 @@ try:
           bien(res, t) and os.path.isfile(os.path.join(UNIDAD, 'sub.zip'))
           and sorted(os.listdir(os.path.join(SRV, 'aqui'))) == [],
           '%s | aqui=%s' % (t[:200], os.listdir(os.path.join(SRV, 'aqui'))))
-    # la casa de los entregables (CasasDeEntregables) es <unidad>:\__delphi-temp:
-    # una captura de alli es NUESTRA y se consume al recogerla. Con "Q:" a
-    # secas la casa era la __delphi-temp de la carpeta actual
+    # Las capturas viven en la casa del SERVIDOR, no en una raiz (2af de la
+    # 1.18.2: hasta la 1.18.1 la casa era <unidad>:\__delphi-temp, y con "Q:" a
+    # secas habia sido la __delphi-temp de la carpeta actual). Un png con forma
+    # de captura plantado en la raiz-unidad NO es nuestro: se lee y no se borra
     CAP = os.path.join(RQ, '__delphi-temp', 'desktop', 'cap.png')
     os.makedirs(os.path.dirname(CAP), exist_ok=True)
     open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
     res, sc, t = llama('delphi_fetch', {'path': VQ + '__delphi-temp\\desktop\\cap.png', 'offset': 0})
-    check('D11 ...y la casa de los entregables es la __delphi-temp de la raiz-unidad: su captura se consume al recogerla',
-          mc.como_json(t).get('consumedOnServer') is True and not os.path.exists(CAP), t[:300])
+    check('D11 ...y un png con forma de captura en la raiz-unidad se lee, pero no es nuestro y no se borra',
+          mc.como_json(t).get('bytes', 0) > 0 and mc.como_json(t).get('consumedOnServer') is not True and
+          os.path.exists(CAP), t[:300])
     # D14 la papelera de una raiz, vacia otra vez: no quedan sus carpetas
     f0 = os.path.join(FUERA, 'd14.txt')
     c0.call_msg('delphi_textedit', {'path': f0, 'create': True, 'content': 'x\n'}, 120)
