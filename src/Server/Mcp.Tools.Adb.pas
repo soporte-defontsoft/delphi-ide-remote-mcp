@@ -312,16 +312,13 @@ begin
       // (sexta revision: se podia escribir dentro de __delphi-patch)
       if (Denied = '') and not EnTemporal(Params.Out) then
         Denied := DeadCopyWriteDenied(Params.Out);
-      // ...y lo que EL escritor (ColocaContenido) negaria al colocar, dicho
-      // aqui y no tras el logcat: una ruta que con su temporal no cabe, una
-      // CARPETA donde va el fichero, el atributo de solo lectura (revisor de
-      // P4)
+      // ...y lo que EL escritor (ColocaContenido) negaria al colocar, por SU
+      // pregunta y no tras el logcat: una CARPETA donde va el fichero, la
+      // carpeta, el atributo de solo lectura, una ruta que con su temporal no
+      // cabe (revisor de P4; era una copia a mano y sin la carpeta: 2s de la
+      // 1.18.2)
       if Denied = '' then
-        Denied := RutaLargaDenegada(Params.Out.Trim);
-      if Denied = '' then
-        Denied := CarpetaEnVezDeFichero(Params.Out.Trim);
-      if Denied = '' then
-        Denied := SoloLecturaDenegado(Params.Out.Trim);
+        Denied := ColocacionDenegada(Params.Out.Trim);
       if Denied <> '' then
         Exit(Denied);
       if not (Params.Out.Trim.ToLower.EndsWith('.txt') or

@@ -179,6 +179,30 @@ the MCP `initialize` response (`serverInfo.version`).
   destination still works, F4 a destination reached through a junction;
   each with its mutant). The `delphi_move` description says it.
 
+- **`delphi_styles build` places what it derives through the gate.** The
+  style converter and `brcc32` opened their output themselves - the
+  `<name>.bin.style` of each text style and the folder's `.res` - and the
+  gate judged only the folder. Measured: a `.bin.style` or `.res` named in
+  `ReadOnlyPaths` was overwritten; one that was a hard link of a file
+  outside every root rewrote THAT file; one with the read-only attribute
+  came back as a converter error. Both now write into a folder of the
+  server's own, and each result is placed by the writer of a product (the
+  one of a capture's `out=`): the gate at the moment of writing, a stamped
+  copy of what was there in the trash, and a rename that replaces a hard
+  link instead of writing through it. Every destination, every style the
+  converter reads, the files the `.rc` names and `brcc32` itself are asked
+  about before the first process starts, so a refusal leaves nothing
+  half-built: a refused `.rc` used to come after the styles were already
+  converted and placed, and a folder sitting where a `.bin.style` goes ended
+  in `SYS-028` after five retries. The same question now says `LSP-016` for
+  that folder, also for `delphi_adb logcat out=`, which asks it before the
+  logcat (it had its own copy of it, without the folder). The server's own
+  folder uses short names, so a style whose name fits its destination still
+  converts with the server installed deeper than the workspace.
+  `test_estilos_derivados_1182` (red before; the question asked first, each
+  of its parts, the placement, the short names and the cleanup each have
+  their mutant).
+
 ### Internal
 
 - **One PNG header, for the server and the desktop node.** The signature

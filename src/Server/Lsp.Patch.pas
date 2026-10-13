@@ -638,6 +638,14 @@ procedure ColocaProducto(const ALocal, ADestino: string; ALugar: TLugarDeTexto =
 // y un CONTENIDO (el texto de un logcat, un recorte), con las mismas reglas
 procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>;
   ALugar: TLugarDeTexto = ltJaula);
+{ LA pregunta de esos dos escritores, para quien la tiene que hacer ANTES de
+  lo que tarda o de lanzar a otro: '' = se colocaria en ADestino; si no, la
+  negativa que daria al colocar, y una CARPETA donde va el fichero (el
+  renombre la tomaba por "otro proceso lo tiene" tras cinco reintentos). La
+  hacia a mano delphi_adb antes del logcat (media: sin la carpeta) y
+  delphi_styles build no la hacia: el conversor y brcc32 escribian el
+  derivado ellos mismos (1.18.2, 2s). }
+function ColocacionDenegada(const ADestino: string; ALugar: TLugarDeTexto = ltJaula): string;
 { EL nombre del temporal de una sustitucion junto a APath
   ('.<nombre>.<8 hex>.delphi-patch-tmp'): el de AtomicWrite, el de
   ColocaProducto y el del zip en proceso de package, que tenia uno propio
@@ -1390,6 +1398,25 @@ begin
   ApuntaEscritoEnLaLlamada(APath, B); // lo que el origen espera encontrar
 end;
 
+function ColocacionDenegada(const ADestino: string; ALugar: TLugarDeTexto): string;
+begin
+  Result := CarpetaEnVezDeFichero(ADestino);
+  if Result <> '' then
+    Exit;
+  // la jaula: la carpeta y el fichero. Otro lugar (la casa de los
+  // entregables), la pregunta de SU puerta, la de EscribeBytes (2i)
+  if ALugar = ltJaula then
+  begin
+    Result := EscrituraDenegada(TPath.GetDirectoryName(ADestino));
+    if Result = '' then
+      Result := SustitucionDenegada(ADestino);
+    if Result = '' then
+      Result := RutaLargaDenegada(ADestino);
+  end
+  else
+    Result := LugarDeEscrituraDenegado(ADestino, ALugar);
+end;
+
 { El nucleo de ColocaProducto y ColocaContenido: ALocal <> '' mueve ese
   fichero; si no, escribe ABytes. }
 procedure Coloca(const ADestino, ALocal: string; const ABytes: TBytes;
@@ -1422,18 +1449,7 @@ begin
   EnterFileEdit;
   try
   try
-    // la jaula: la carpeta y el fichero. Otro lugar (la casa de los
-    // entregables), la pregunta de SU puerta, la de EscribeBytes (2i)
-    if ALugar = ltJaula then
-    begin
-      Motivo := EscrituraDenegada(Dir);
-      if Motivo = '' then
-        Motivo := SustitucionDenegada(ADestino);
-      if Motivo = '' then
-        Motivo := RutaLargaDenegada(ADestino);
-    end
-    else
-      Motivo := LugarDeEscrituraDenegado(ADestino, ALugar);
+    Motivo := ColocacionDenegada(ADestino, ALugar);
     if Motivo <> '' then
       raise Exception.Create(Motivo);
     // lo que se cree para colocarlo se quita si al final no se coloca

@@ -82,7 +82,8 @@ uses
   Lsp.Styles,
   Lsp.DesignerBin,  // el literal de cadena: su lector y su compositor
   Lsp.Pascal,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Casa;
 
 constructor TDelphiStylesTool.Create;
 begin
@@ -558,15 +559,77 @@ end;
 
 function RcPathsDenied(const ARc: string): string; forward;
 
+const
+  { la temporal del servidor donde el conversor y brcc32 dejan lo que hacen:
+    el derivado lo coloca despues ColocaDerivado (2s de la 1.18.2) }
+  ESTILOS_SUB = 'styles';
+
+{ EL nombre del binario de un .style de texto: <carpeta>\<nombre>.bin.style
+  (lo preguntan la puerta de antes y el que lo coloca). }
+function BinDeEstilo(const ADir, AFuente: string): string;
+begin
+  Result := TPath.Combine(ADir, TPath.GetFileNameWithoutExtension(AFuente) + '.bin.style');
+end;
+
+{ El derivado que un proceso dejo en ALocal (nuestra temporal), en ADestino
+  por EL escritor de un producto (Lsp.Patch.ColocaProducto): la puerta en el
+  momento de escribir, la copia sellada de lo que habia y el renombre, que
+  rompe un hardlink en vez de escribir a traves de el. El conversor
+  (TFileStream fmCreate) y brcc32 (-fo) abrian el destino ellos mismos: lo
+  que nombraba ReadOnlyPaths se pisaba y un hardlink de un fichero de fuera
+  de las raices se reescribia (1.18.2, 2s, medido). '' = colocado; si no, el
+  motivo. }
+function ColocaDerivado(const ALocal, ADestino: string): string;
+begin
+  Result := '';
+  try
+    ColocaProducto(ALocal, ADestino);
+  except
+    on E: Exception do
+      Result := E.Message;
+  end;
+end;
+
+{ Lo que build va a leer y a escribir, preguntado ANTES de lanzar ningun
+  proceso: cada .style que lee el conversor (la puerta de leer: el conversor
+  tampoco sabe donde puede mirar, como brcc32 con su .rc en RcPathsDenied),
+  cada derivado que se colocara (la pregunta de ColocaProducto) y, si hay
+  .rc (ARc), que brcc32 este y lo que el .rc nombra. Una negativa no deja
+  nada a medias: el .rc y brcc32 se preguntaban DESPUES de convertir, y una
+  carpeta en el sitio de un derivado acababa en SYS-028 con los otros ya
+  colocados (revisor del 2s, medido). '' = todo se puede. }
+function DerivadosDenegados(const AFiles: TArray<string>;
+  const ADir, ARc, ARes, ABrcc: string): string;
+var
+  F: string;
+begin
+  Result := '';
+  for F in AFiles do
+  begin
+    Result := ReadPathDenied(F);
+    if Result = '' then
+      Result := ColocacionDenegada(BinDeEstilo(ADir, F));
+    if Result <> '' then
+      Exit;
+  end;
+  if ARc = '' then
+    Exit;
+  if not TFile.Exists(ABrcc) then
+    Exit(MsgFmt(SR_STYLE_BRCC_NO_ENCONTRADO_FMT, [ABrcc]));
+  Result := RcPathsDenied(ARc);
+  if Result = '' then
+    Result := ColocacionDenegada(ARes);
+end;
+
 function BuildStyles(const APath: string): string;
 var
-  Dir, Exe, F, Bin, Out, Rc, Res, Brcc, RcDenied: string;
+  Dir, Exe, F, Bin, Out, Rc, Res, Brcc, RcDenied, Tmp, Hecho, Motivo: string;
   Files: TArray<string>;
   Ret, E: TJSONObject;
   Arr: TJSONArray;
   Code: Cardinal;
   AllOk: Boolean;
-  Info: TRadStudioInfo;
+  N: Integer;
 begin
   Dir := StylesDirOf(APath);
   Exe := StyleConverterExe;
@@ -577,14 +640,48 @@ begin
     Files := [TPath.GetFullPath(APath)];
   if Length(Files) = 0 then
     Exit(MsgFmt(SR_STYLES_NO_TEXT_FMT, [Dir]));
+  Rc := '';
+  for var R in TDirectory.GetFiles(Dir, '*.rc') do
+  begin
+    Rc := R;
+    Break; // one manifest per styles folder
+  end;
+  Res := '';
+  Brcc := '';
+  if Rc <> '' then
+  begin
+    Res := TPath.ChangeExtension(Rc, '.res');
+    Brcc := TPath.Combine(DiscoverRadStudio.RootDir, 'bin\brcc32.exe');
+  end;
+  Motivo := DerivadosDenegados(Files, Dir, Rc, Res, Brcc);
+  if Motivo <> '' then
+    Exit(Motivo);
+  // los procesos escriben en una carpeta NUESTRA de esta llamada, y lo que
+  // dejan lo coloca ColocaDerivado (2s de la 1.18.2)
+  Tmp := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_SUB));
   Ret := TJSONObject.Create;
   Arr := TJSONArray.Create;
   try
+    CrearCarpeta(Tmp);
     AllOk := True;
+    N := 0;
     for F in Files do
     begin
-      Bin := TPath.Combine(Dir, TPath.GetFileNameWithoutExtension(F) + '.bin.style');
-      Out := CorreStyleConvert(Exe, 'tobin "' + F + '" "' + Bin + '"', Dir, 120000, Code);
+      Bin := BinDeEstilo(Dir, F);
+      // en la temporal, un nombre CORTO: con el del estilo, uno que su
+      // destino admite no cabia con el servidor mas hondo que la jaula, y el
+      // error del conversor ensenaba la casa por dentro (revisor del 2s); lo
+      // que diga de el, con el nombre del destino
+      Inc(N);
+      Hecho := TPath.Combine(Tmp, IntToStr(N) + '.bin.style');
+      Out := CorreStyleConvert(Exe, 'tobin "' + F + '" "' + Hecho + '"', Dir, 120000, Code);
+      Out := Out.Replace(Hecho, Bin, [rfReplaceAll, rfIgnoreCase]);
+      if Code = 0 then
+      begin
+        Out := ColocaDerivado(Hecho, Bin);
+        if Out <> '' then
+          Code := 1;
+      end;
       E := TJSONObject.Create;
       E.AddPair('source', TPath.GetFileName(F));
       E.AddPair('binary', TPath.GetFileName(Bin));
@@ -614,19 +711,12 @@ begin
       Exit(Ret.ToJSON);
     end;
     // the .rc -> .res, with the product's resource compiler
-    for Rc in TDirectory.GetFiles(Dir, '*.rc') do
-    begin
-      Info := DiscoverRadStudio;
-      Brcc := TPath.Combine(Info.RootDir, 'bin\brcc32.exe');
-      if not TFile.Exists(Brcc) then
-      begin
-        Ret.AddPair('rc', TPath.GetFileName(Rc));
-        Ret.AddPair('error', MsgFmt(SR_STYLE_BRCC_NO_ENCONTRADO_FMT, [Brcc]));
-        AllOk := False;
-        Break;
-      end;
+    if Rc <> '' then
+    repeat
       // Every file this .rc pulls in, checked against the same jail that
-      // delphi_read applies. brcc32 has no idea where it may look.
+      // delphi_read applies. brcc32 has no idea where it may look. Asked
+      // before converting too (DerivadosDenegados); again here, right before
+      // brcc32 reads it
       RcDenied := RcPathsDenied(Rc);
       if RcDenied <> '' then
       begin
@@ -635,20 +725,24 @@ begin
         AllOk := False;
         Break;
       end;
-      Res := TPath.ChangeExtension(Rc, '.res');
-      Out := RunCapturedIn('"' + Brcc + '" -fo"' + Res + '" "' + Rc + '"', Dir, 120000, Code);
+      Hecho := TPath.Combine(Tmp, 'r.res');
+      Out := RunCapturedIn('"' + Brcc + '" -fo"' + Hecho + '" "' + Rc + '"', Dir, 120000, Code);
+      Out := Out.Replace(Hecho, Res, [rfReplaceAll, rfIgnoreCase]);
       Ret.AddPair('rc', TPath.GetFileName(Rc));
       Ret.AddPair('res', TPath.GetFileName(Res));
-      Ret.AddPair('rcOk', TJSONBool.Create((Code = 0) and TFile.Exists(Res)));
       if Code = 0 then
+        Motivo := ColocaDerivado(Hecho, Res)
+      else
+        Motivo := MsgFmt(SR_STYLES_BUILD_RC_FMT, [TPath.GetFileName(Rc), Out.Trim]);
+      Ret.AddPair('rcOk', TJSONBool.Create(Motivo = ''));
+      if Motivo = '' then
         Ret.AddPair('resBytes', TJSONNumber.Create(TFile.GetSize(Res)))
       else
       begin
-        Ret.AddPair('error', MsgFmt(SR_STYLES_BUILD_RC_FMT, [TPath.GetFileName(Rc), Out.Trim]));
+        Ret.AddPair('error', Motivo);
         AllOk := False;
       end;
-      Break; // one manifest per styles folder
-    end;
+    until True;
     Ret.AddPair('ok', TJSONBool.Create(AllOk));
     // "recompila el proyecto" solo cuando hay un .res nuevo que meter
     if AllOk then
@@ -656,6 +750,11 @@ begin
     Result := Ret.ToJSON;
   finally
     Ret.Free;
+    try
+      BorraArbol(Tmp); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
+    except
+      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
+    end;
   end;
 end;
 
