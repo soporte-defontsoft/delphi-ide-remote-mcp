@@ -1486,10 +1486,10 @@ begin
   // says trigger='.', snap the position to just past the nearest dot and say so.
   EffChar := Params.Character;
   AdjNote := '';
+  var Enc: string;
+  var Lines := LineasDelTexto(PatchLoadText(Params.Path, Enc));
   if Params.Trigger = '.' then
   begin
-    var Enc: string;
-    var Lines := LineasDelTexto(PatchLoadText(Params.Path, Enc));
     if (Params.Line >= 0) and (Params.Line <= High(Lines)) then
     begin
       var LineTxt := Lines[Params.Line];
@@ -1510,6 +1510,25 @@ begin
         end;
       end;
     end;
+  end;
+
+  // EL PREFIJO que se esta escribiendo: las letras de identificador justo
+  // antes del cursor (EsCaracterDeIdent, la regla de la casa). El motor
+  // contesta el ambito ENTERO y filtra el cliente, como el IDE al teclear: sin
+  // filtrar, con el cursor dentro de Writeln salian 1164 candidatos y Writeln
+  // no estaba en los 50 primeros (Hermes, punto 9 de la 1.18.2)
+  var Prefijo := '';
+  if (Params.Line >= 0) and (Params.Line <= High(Lines)) then
+  begin
+    var T := Lines[Params.Line];
+    var Hasta := Min(EffChar, Length(T));
+    var K := Hasta;
+    while (K >= 1) and EsCaracterDeIdent(T[K]) do
+      Dec(K);
+    Prefijo := Copy(T, K + 1, Hasta - K);
+    // un numero no es un nombre a medias
+    if (Prefijo <> '') and not EsLetraDeIdent(Prefijo[1]) then
+      Prefijo := '';
   end;
 
   Resp := Client.Completion(TLspClient.PathToUri(Params.Path), Params.Line,
@@ -1543,12 +1562,15 @@ begin
       Return.AddPair('total', TJSONNumber.Create(Items.Count));
       if AdjNote <> '' then
         Return.AddPair('positionNote', AdjNote);
+      if Prefijo <> '' then
+        Return.AddPair('prefix', Prefijo);
       OutItems := TJSONArray.Create;
       Return.AddPair('items', OutItems);
+      // el tope cuenta lo que SE DEVUELVE: contaba indices de la lista cruda,
+      // los <error> saltados incluidos, y salian menos sin decir por que
+      var Casan := 0;
       for I := 0 to Items.Count - 1 do
       begin
-        if I >= MAX_COMPLETION_ITEMS then
-          Break;
         var Src := Items.Items[Order[I]] as TJSONObject;
         // El motor devuelve el TOKEN que se esta escribiendo como candidato,
         // con tipo "<error>" porque aun no resuelve ({label:'C', kind:6,
@@ -1557,6 +1579,18 @@ begin
         var DetErr := Src.GetValue('detail');
         if (DetErr <> nil) and DetErr.Value.Contains('<error>') then
           Continue;
+        // por su filterText (lo que el LSP dice que se compara), o su label
+        if Prefijo <> '' then
+        begin
+          var Filtro := Src.GetValue('filterText');
+          if Filtro = nil then
+            Filtro := Src.GetValue('label');
+          if (Filtro = nil) or not StartsText(Prefijo, Filtro.Value) then
+            Continue;
+        end;
+        Inc(Casan);
+        if Casan > MAX_COMPLETION_ITEMS then
+          Continue; // se cuentan todos: matching dice cuantos casan
         ItemObj := TJSONObject.Create;
         OutItems.Add(ItemObj);
         ItemObj.AddPair('label', Src.GetValue('label').Value);
@@ -1566,6 +1600,17 @@ begin
         var Detail := Src.GetValue('detail');
         if (Detail <> nil) and (Detail.Value <> '') then
           ItemObj.AddPair('detail', Detail.Value);
+      end;
+      Return.AddPair('matching', TJSONNumber.Create(Casan));
+      if Casan > MAX_COMPLETION_ITEMS then
+      begin
+        Return.AddPair('truncated', TJSONBool.Create(True));
+        if Prefijo <> '' then
+          Return.AddPair('truncatedNote', MsgFmt(SN_COMPLETION_RECORTE_PREFIJO_FMT,
+            [Casan, Prefijo, MAX_COMPLETION_ITEMS]))
+        else
+          Return.AddPair('truncatedNote', MsgFmt(SN_COMPLETION_RECORTE_FMT,
+            [Casan, MAX_COMPLETION_ITEMS]));
       end;
       Result := EnmascaraJsonSalvo(Return.ToJSON, CONTENIDO_DEL_MOTOR, NoSettingsNote(Settings));
     finally

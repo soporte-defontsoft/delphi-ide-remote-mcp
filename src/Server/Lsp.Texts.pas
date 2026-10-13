@@ -5456,6 +5456,17 @@ const
     'area as its Width/Height, and Anchors (which govern RESIZING) is ' +
     'not what I measure.';
 
+  { delphi_completion con mas candidatos de los que contesta (Hermes, punto 9
+    de la 1.18.2): cuantos casan y como acotarlos. }
+  SN_COMPLETION_RECORTE_PREFIJO_FMT =
+    '[LSP-041] %d candidates start with "%s"; the first %d are shown, in ' +
+    'the engine''s order. Type more of the name (or move the cursor after ' +
+    'more of it) to narrow them.';
+  SN_COMPLETION_RECORTE_FMT =
+    '[LSP-042] %d candidates; the first %d are shown, in the engine''s ' +
+    'order. Put the cursor after the first letters of the name you want, ' +
+    'and only those that start with them come back.';
+
   SN_COMPLETION_SNAPPED_FMT =
     '[LSP-027] I moved the position from column %d to column %d: you ' +
     'asked for member completion (trigger ".") but the column fell on ' +

@@ -82,6 +82,19 @@ the MCP `initialize` response (`serverInfo.version`).
   against production; a mutant; the control purges a live link and leaves
   what is behind it untouched).
 
+- **`delphi_completion` filters by what is being typed.** The engine answers
+  the whole scope and leaves the filtering to the client, as the IDE does
+  while you type; we passed it on unfiltered, so with the cursor after `Writ`
+  1,164 candidates came back and `Writeln` was not among the first 50
+  (Hermes, point 9). Now the identifier letters right before the cursor are
+  the prefix (`prefix`), only the candidates whose `filterText` - or label -
+  start with it come back, `matching` says how many matched, and past the cap
+  of 50 `truncated` and a note say how to narrow them (`LSP-041`,
+  `LSP-042`). The cap counted indexes of the raw list, skipped entries
+  included, so fewer than 50 could come back without a word; it counts what
+  is returned now. `test_completion_prefijo_1182` (red against production; a
+  mutant).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole
