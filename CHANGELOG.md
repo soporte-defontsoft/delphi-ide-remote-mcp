@@ -38,6 +38,13 @@ the MCP `initialize` response (`serverInfo.version`).
   anything; the server may run what it needs, as long as nothing the agent
   controls decides what runs).
 
+- **The designer's lists of names say when they are cut.** `DSGN-078` (no
+  such component) and the list of components that fit a reference stopped at
+  40 names without a word, so in a form of 161 the list looked whole
+  (Hermes; measured in production on a form of 47). Both now end with "...
+  and N more (command=tree lists them all)", through one composer.
+  `test_designer_nombres_1182`. H4 of point 9 of 1.18.2.
+
 - **`delphi_test`'s timeout note no longer states an exit code.** `TEST-008`
   said "That is why exitCode comes as 1" while the field next to it said 0
   (Hermes, with `timeoutms=1`; measured in production): a killed process

@@ -4956,6 +4956,10 @@ const
     'descendant of it (%s). Nothing was written.';
   SF_DESIGNER_CABEN_FMT =
     'in this form: %s';
+  { ...y lo que una lista de nombres del disenador no ensena (H4 de Hermes,
+    1.18.2: se cortaba a 40 sin decirlo) }
+  SF_DESIGNER_Y_MAS_NOMBRES_FMT =
+    ' ... and %d more (command=tree lists them all)';
   SF_DESIGNER_NO_CABE_NINGUNO =
     'none in this form';
 

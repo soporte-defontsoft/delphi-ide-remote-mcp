@@ -984,6 +984,23 @@ begin
     FreeAndNil(F.Doc);
 end;
 
+{ Los nombres de AL separados por comas, hasta MAX_NOMBRES; si hay mas, lo
+  dice: cuantos faltan y donde verlos (command=tree). Sin topes callados (H4
+  de Hermes, 1.18.2: en un form de 161 componentes la lista de 40 parecia la
+  entera). LA forma de las dos listas de nombres del disenador (los del form,
+  los que caben en una referencia). }
+function NombresConTope(AL: TStringList): string;
+var
+  N: Integer;
+begin
+  N := AL.Count;
+  while AL.Count > MAX_NOMBRES do
+    AL.Delete(AL.Count - 1);
+  Result := string.Join(', ', AL.ToStringArray);
+  if N > MAX_NOMBRES then
+    Result := Result + MsgFmt(SF_DESIGNER_Y_MAS_NOMBRES_FMT, [N - MAX_NOMBRES]);
+end;
+
 function NombresDelForm(ADoc: TStyleDoc): string;
 var
   L: TStringList;
@@ -991,9 +1008,7 @@ begin
   L := TStringList.Create;
   try
     RecogeNombres(ADoc.Root, L);
-    while L.Count > MAX_NOMBRES do
-      L.Delete(L.Count - 1);
-    Result := string.Join(', ', L.ToStringArray);
+    Result := NombresConTope(L);
   finally
     L.Free;
   end;
@@ -1730,9 +1745,7 @@ begin
     Mira(F.Doc.Root);
     if L.Count = 0 then
       Exit(MsgText(SF_DESIGNER_NO_CABE_NINGUNO));
-    while L.Count > MAX_NOMBRES do
-      L.Delete(L.Count - 1);
-    Result := MsgFmt(SF_DESIGNER_CABEN_FMT, [string.Join(', ', L.ToStringArray)]);
+    Result := MsgFmt(SF_DESIGNER_CABEN_FMT, [NombresConTope(L)]);
   finally
     L.Free;
   end;
