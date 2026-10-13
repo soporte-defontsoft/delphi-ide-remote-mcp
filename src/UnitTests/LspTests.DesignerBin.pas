@@ -19,7 +19,8 @@ type
     [Test] procedure CabeceraDeRecursoEsElBinarioDeDisco;
     [Test] procedure IdaYVueltaPorLaRtl;
     [Test] procedure ElAcentoSaleComoNumeral;
-    [Test] procedure FueraDeAnsiSeRechaza;
+    [Test] procedure FueraDeAnsiConBomEntraComoEnDcc;
+    [Test] procedure SinBomSeLeeEnAnsiComoEnDcc;
     [Test] procedure BinarioDanadoDaMotivo;
     [Test] procedure CadaFormaLlegaATReader;
     [Test]
@@ -37,6 +38,7 @@ type
 implementation
 
 uses
+  Winapi.Windows, // GetACP: la ANSI con la que lee el parser de la RTL
   System.SysUtils,
   System.Classes,
   Lsp.DesignerBin,
@@ -103,7 +105,7 @@ var
   Bin: TBytes;
   Txt: string;
 begin
-  Assert.AreEqual('', DesignerTextToBinary(FORM_TXT, Bin), 'texto -> binario sin error');
+  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes(FORM_TXT), Bin), 'texto -> binario sin error');
   Assert.IsTrue(DesignerShapeOf(Bin) = dsResource, 'lo que escribe to-binary es la forma de disco del IDE');
   Assert.AreEqual('', DesignerBinaryToText(Bin, Txt), 'binario -> texto sin error');
   Assert.AreEqual(FORM_TXT, Txt, 'la ida y vuelta devuelve el mismo texto');
@@ -115,21 +117,51 @@ var
   Txt: string;
   I: Integer;
 begin
-  Assert.AreEqual('', DesignerTextToBinary(
-    'object FormA: TFormA'#13#10'  Caption = ''Configuraci''#243''n'''#13#10'end'#13#10, Bin));
+  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes(
+    'object FormA: TFormA'#13#10'  Caption = ''Configuraci''#243''n'''#13#10'end'#13#10), Bin));
   Assert.AreEqual('', DesignerBinaryToText(Bin, Txt));
   Assert.IsTrue(Pos('''Configuraci''#243''n''', Txt) > 0, 'el acento vuelve como #243: ' + Txt);
   for I := 1 to Length(Txt) do
     Assert.IsTrue(Ord(Txt[I]) < 128, 'el texto convertido es ASCII puro');
 end;
 
-procedure TDesignerBinTests.FueraDeAnsiSeRechaza;
+procedure TDesignerBinTests.FueraDeAnsiConBomEntraComoEnDcc;
 var
   Bin: TBytes;
+  Txt: string;
 begin
-  Assert.AreNotEqual('', DesignerTextToBinary(
-    'object FormA: TFormA'#13#10'  Caption = ''ok ' + Chr($2714) + ''''#13#10'end'#13#10, Bin),
-    'un caracter fuera de ANSI en crudo no entra en el binario');
+  // M2 (punto 4 de la 1.18.2): un form en UTF-8 con BOM con caracteres fuera
+  // de la ANSI en crudo. dcc lo compila entero (medido el 13-oct: el exe lleva
+  // 'ok ✔ Ж' como vaUTF8String) y lint lo da por limpio; to-binary lo negaba
+  // (DSGN-045) porque lo recodificaba a ANSI. Ahora entra, y vuelve como lo
+  // escribe el IDE: #10004 y #1046
+  Assert.AreEqual('', DesignerTextToBinary(TEncoding.UTF8.GetPreamble + TEncoding.UTF8.GetBytes(
+    'object FormA: TFormA'#13#10'  Caption = ''ok ' + Chr($2714) + ' ' + Chr($0416) + ''''#13#10'end'#13#10), Bin),
+    'un UTF-8 con BOM fuera de la ANSI entra en el binario, como en dcc');
+  Assert.AreEqual('', DesignerBinaryToText(Bin, Txt));
+  Assert.IsTrue(Pos('''ok ''#10004'' ''#1046', Txt) > 0, 'el texto entero, como #N: ' + Txt);
+end;
+
+procedure TDesignerBinTests.SinBomSeLeeEnAnsiComoEnDcc;
+var
+  Bin: TBytes;
+  Txt: string;
+begin
+  // ...y uno en UTF-8 SIN BOM: dcc lo lee en la ANSI de la maquina (medido el
+  // 13-oct: 'Configuración' -C3 B3- sale con la ó partida en dos letras en el
+  // exe). Por el servidor ya salia asi (el llamador lo decodificaba en ANSI);
+  // ahora lo decide el parser y no como decodifique quien llama: una guarda.
+  // Solo se mide en 1252: en otra ANSI las dos letras son otras, y en 65001 la
+  // ANSI es UTF-8
+  if GetACP <> 1252 then
+  begin
+    Assert.Pass('la ANSI de esta maquina no es 1252');
+    Exit;
+  end;
+  Assert.AreEqual('', DesignerTextToBinary(TEncoding.UTF8.GetBytes(
+    'object FormA: TFormA'#13#10'  Caption = ''Configuraci' + Chr($F3) + 'n'''#13#10'end'#13#10), Bin));
+  Assert.AreEqual('', DesignerBinaryToText(Bin, Txt));
+  Assert.IsTrue(Pos('''Configuraci''#195#179''n''', Txt) > 0, 'los dos bytes, como ANSI (como dcc): ' + Txt);
 end;
 
 procedure TDesignerBinTests.BinarioDanadoDaMotivo;
@@ -174,7 +206,7 @@ begin
   // El renderizador le daba a TReader el binario del IDE tal cual:
   // TestStreamFormat lo llama binario y nadie se saltaba la cabecera del
   // recurso ("Invalid stream format" en preview, 7-oct-2026)
-  Assert.AreEqual('', DesignerTextToBinary(FORM_TXT, Bin));
+  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes(FORM_TXT), Bin));
   S := TMemoryStream.Create;
   try
     S.WriteBuffer(Bin[0], Length(Bin));

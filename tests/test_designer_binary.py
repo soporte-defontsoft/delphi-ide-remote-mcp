@@ -178,24 +178,44 @@ r = call('delphi_edit', {'path': HUECO_ANSI, 'old': "  Hint = 'nada'", 'new': " 
 check('un .dfm CP1252 con un byte 81 (de los que la pagina no define): editar OTRA linea escribe, byte a byte',
       open(HUECO_ANSI, 'rb').read() == HUECO_ANSI_B.replace(b"'nada'", b"'otra'"), (r[:200], open(HUECO_ANSI, 'rb').read()[:80]))
 # (CON BOM: sin el, un form es ANSI - 4.1 de la 1.18.0 - y esos mismos bytes
-# son 'ok âœ”', que si cabe y es lo que compila dcc)
+# son 'ok âœ”', que si cabe y es lo que compila dcc). M2 (punto 4 de la 1.18.2,
+# medido contra dcc el 13-oct): CON BOM dcc lo compila ENTERO (vaUTF8String) y
+# lint lo da limpio; to-binary lo negaba porque recodificaba a ANSI. Ahora el
+# parser lee los bytes de disco, como dcc: convierte y el texto va entero
 FUERA = os.path.join(BASE, 'FueraAnsi.dfm')
 FUERA_B = "object FormF: TFormF\r\n  Caption = 'ok ✔'\r\n  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n".encode('utf-8-sig')
 open(FUERA, 'wb').write(FUERA_B)
 r = call('delphi_designer', {'command': 'to-binary', 'path': FUERA})
-check('caracter fuera de ANSI en crudo: to-binary RECHAZADO con #NNNN', mc.rechazado(r) and '#NNNN' in r, r[:200])
-check('...y el fichero no se toco', open(FUERA, 'rb').read() == FUERA_B, '')
-# un NOMBRE no ASCII (4.1 de la 1.18.0, medido): el parser de la RTL no lo
-# lee (salia su EParserError 'Identifier expected on line 3') y dcc si, en
-# UTF-8: se dice cual, en que linea y que hacer, y no se escribe
-NOASCII = os.path.join(BASE, 'NombreNoAscii.dfm')
-NOASCII_B = ("object FormN: TFormN\r\n  ClientHeight = 10\r\n  object Bot\u00f3n\u00d1: TButton\r\n    Left = 8\r\n"
-             "  end\r\nend\r\n").encode('utf-8-sig')
-open(NOASCII, 'wb').write(NOASCII_B)
-r = call('delphi_designer', {'command': 'to-binary', 'path': NOASCII})
-check('un nombre de componente no ASCII: to-binary DSGN-120 con el nombre y su linea, sin escribir',
-      mc.abre(r, 'SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT') and 'Bot\u00f3n\u00d1 (line 3)' in r and
-      open(NOASCII, 'rb').read() == NOASCII_B, r[:300])
+bin_f = open(FUERA, 'rb').read()
+check('UTF-8 con BOM con un caracter fuera de ANSI: to-binary convierte, como dcc, con el texto entero',
+      not mc.rechazado(r) and bin_f[:3] == b'\xff\x0a\x00' and 'ok ✔'.encode('utf-8') in bin_f, (r[:200], bin_f[:40]))
+# un NOMBRE no ASCII (4.1 de la 1.18.0, medido) en un form ANSI: el parser de
+# la RTL no lo lee (su EParserError 'Identifier expected on line 3') y dcc si,
+# en UTF-8: se dice cual, en que linea y que hacer, y no se escribe. Solo en
+# una maquina 1252 (la letra tiene que caber en la ANSI)
+import ctypes
+if ctypes.windll.kernel32.GetACP() == 1252:
+    NOASCII = os.path.join(BASE, 'NombreNoAscii.dfm')
+    NOASCII_B = ("object FormN: TFormN\r\n  ClientHeight = 10\r\n  object BotónÑ: TButton\r\n    Left = 8\r\n"
+                 "  end\r\nend\r\n").encode('cp1252')
+    open(NOASCII, 'wb').write(NOASCII_B)
+    r = call('delphi_designer', {'command': 'to-binary', 'path': NOASCII})
+    check('un nombre de componente no ASCII en un form ANSI: to-binary DSGN-120 con el nombre y su linea, sin escribir',
+          mc.abre(r, 'SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT') and 'BotónÑ (line 3)' in r and
+          open(NOASCII, 'rb').read() == NOASCII_B, r[:300])
+else:
+    print('NOTA: la ANSI de esta maquina no es 1252: el nombre no ASCII en un form ANSI no se mide')
+# ...y el mismo nombre CON BOM: el parser si lo lee, y dcc lo compila con el
+# nombre en UTF-8 (medido el 13-oct: el TPF0 de to-binary es el de dcc byte a
+# byte). Lo negaba el camino propio de to-binary (M2)
+NOASCII_U = os.path.join(BASE, 'NombreNoAsciiBom.dfm')
+NOASCII_U_B = ("object FormN: TFormN\r\n  ClientHeight = 10\r\n  object BotónÑ: TButton\r\n    Left = 8\r\n"
+               "  end\r\nend\r\n").encode('utf-8-sig')
+open(NOASCII_U, 'wb').write(NOASCII_U_B)
+r = call('delphi_designer', {'command': 'to-binary', 'path': NOASCII_U})
+bin_n = open(NOASCII_U, 'rb').read()
+check('el mismo nombre no ASCII CON BOM: to-binary convierte, con el nombre en UTF-8 como dcc',
+      not mc.rechazado(r) and bin_n[:3] == b'\xff\x0a\x00' and 'BotónÑ'.encode('utf-8') in bin_n, (r[:200], bin_n[:40]))
 
 # ---- the IDE can save a TEXT form in UTF-16 (editor encoding menu): it
 # starts with FF FE, and "starts with $FF" used to mean binary. The real

@@ -94,7 +94,9 @@ handshake.
   back. Editing the binary directly is refused. `.fmx` is always text.
   Accents in a text `.dfm` go as `#NNN` outside the quotes
   (`'Configuraci'#243'n'`), the way the IDE and `to-text` write them; a raw
-  one is read through ANSI, and a character ANSI cannot hold is refused.
+  one is read the way the IDE's parser reads the file: through the machine's
+  ANSI code page when it has no BOM (there, a character ANSI cannot hold is
+  refused when written), as Unicode when it has one - `to-binary` included.
 - Prefer `Align`/anchors over absolute Position/Size in forms: absolute
   coordinates designed on a desktop form overflow phone screens.
 

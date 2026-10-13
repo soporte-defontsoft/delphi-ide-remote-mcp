@@ -31,6 +31,18 @@ function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
   con su excepcion. }
 procedure DesignerAFlujo(AEntrada, ASalida: TStream);
 
+{ LOS BYTES de un designer de TEXTO como los lee el parser del IDE (TParser):
+  un UTF-16 (FF FE / FE FF), en UTF-8 con BOM - TParser no lee otro BOM -; lo
+  demas, tal cual (sin BOM, en la ANSI de la maquina; con el de UTF-8, en
+  UTF-8). EL alimentador del parser: DesignerAFlujo (lint, los escritores, el
+  renderizador) y to-binary (Lsp.DesignerBin). to-binary tenia su camino
+  propio - recodificaba a ANSI lo que el agente le daba ya decodificado - y
+  negaba (DSGN-045) un form en UTF-8 con BOM que lint daba por limpio (M2,
+  punto 4 de la 1.18.2; medido en produccion el 13-oct). Un UTF-32 NO: la RTL
+  (GetBufferEncoding) toma FF FE 00 00 por UTF-16 y no conoce 00 00 FE FF;
+  el servidor lo da antes en UTF-16 (Lsp.DesignerBin.KindParaElParser). }
+function FormParaElParser(const ABytes: TArray<Byte>): TArray<Byte>;
+
 { Lo que dice EL parser del IDE (ObjectTextToBinary, por DesignerAFlujo) de un
   designer de TEXTO, dados sus BYTES como estan (o estaran) en disco - con su
   codificacion: un nombre no ASCII en un form ANSI no lo lee, y en UTF-8 con
@@ -41,6 +53,10 @@ procedure DesignerAFlujo(AEntrada, ASalida: TStream);
   hasta que el IDE lo rechazaba al cargarlo -. La linea, por el formato del
   propio mensaje de la RTL (SParseError), no por un texto escrito aqui. }
 function ErrorDelParserDeForm(const ABytes: TArray<Byte>; out ALinea: Integer): string;
+{ La linea que nombra un mensaje del parser ('... on line 3', SParseError de
+  la RTL); 0 si no nombra ninguna. EL lector de ese formato: lo leian este y
+  to-binary (R2 del revisor propio del punto 4 de la 1.18.2). }
+function LineaDeErrorDelParser(const AMensaje: string): Integer;
 
 { Un designer BINARIO, con o sin la cabecera de recurso, como el texto que
   escribe el IDE ("Ver como texto": ASCII con CRLF, lo que no cabe como #N).
@@ -110,13 +126,25 @@ begin
     Exit(dsTpf0);
 end;
 
+function FormParaElParser(const ABytes: TArray<Byte>): TArray<Byte>;
+var
+  Cod: TEncoding;
+  Bom: Integer;
+begin
+  Cod := nil;
+  Bom := TEncoding.GetBufferEncoding(ABytes, Cod);
+  if (Cod = TEncoding.Unicode) or (Cod = TEncoding.BigEndianUnicode) then
+    Result := TEncoding.UTF8.GetPreamble +
+      TEncoding.UTF8.GetBytes(Cod.GetString(ABytes, Bom, Length(ABytes) - Bom))
+  else
+    Result := ABytes;
+end;
+
 procedure DesignerAFlujo(AEntrada, ASalida: TStream);
 var
   Cabeza, Todo: TArray<Byte>;
   Resto: Int64;
-  Cod: TEncoding;
-  Bom: Integer;
-  Utf8: TBytesStream;
+  Texto: TBytesStream;
 begin
   SetLength(Cabeza, 4);
   AEntrada.Position := 0;
@@ -145,26 +173,19 @@ begin
       // al parser, que los lee en la ANSI de la maquina: la misma de la casa
       // (Lsp.Codificacion.PaginaAnsi), y aqui no se define ninguna - era
       // TEncoding.Default, sin uso (r5 de la 1.18.0). Un form en UTF-32 (que
-      // GetBufferEncoding toma por UTF-16) no llega: lo niega el servidor antes
-      // de lanzar el renderizador (DSGN-122), y dcc tampoco lo compila (E2161)
+      // GetBufferEncoding toma por UTF-16) no llega asi: el servidor lo da en
+      // UTF-16 (KindParaElParser, en lint y to-binary) o lo niega antes de
+      // lanzar el renderizador (DSGN-122), y dcc no lo compila (E2161)
       SetLength(Todo, AEntrada.Size);
       if Length(Todo) > 0 then
         AEntrada.ReadBuffer(Todo[0], Length(Todo));
       AEntrada.Position := 0;
-      Cod := nil;
-      Bom := TEncoding.GetBufferEncoding(Todo, Cod);
-      if (Cod = TEncoding.Unicode) or (Cod = TEncoding.BigEndianUnicode) then
-      begin
-        Utf8 := TBytesStream.Create(TEncoding.UTF8.GetPreamble +
-          TEncoding.UTF8.GetBytes(Cod.GetString(Todo, Bom, Length(Todo) - Bom)));
-        try
-          ObjectTextToBinary(Utf8, ASalida);
-        finally
-          Utf8.Free;
-        end;
-      end
-      else
-        ObjectTextToBinary(AEntrada, ASalida);
+      Texto := TBytesStream.Create(FormParaElParser(Todo));
+      try
+        ObjectTextToBinary(Texto, ASalida);
+      finally
+        Texto.Free;
+      end;
     end;
   end;
 end;
@@ -185,17 +206,23 @@ begin
       on E: Exception do
       begin
         Result := E.Message;
-        // SParseError es '%s on line %d': su forma, escapada, con los huecos
-        var Patron := '^' + TRegEx.Escape(SParseError).Replace('%s', '(.*)').Replace('%d', '(\d+)') + '$';
-        var M := TRegEx.Match(E.Message.Trim, Patron);
-        if M.Success and (M.Groups.Count > 2) then
-          ALinea := StrToIntDef(M.Groups[2].Value, 0);
+        ALinea := LineaDeErrorDelParser(E.Message);
       end;
     end;
   finally
     Salida.Free;
     Entrada.Free;
   end;
+end;
+
+function LineaDeErrorDelParser(const AMensaje: string): Integer;
+begin
+  Result := 0;
+  // SParseError es '%s on line %d': su forma, escapada, con los huecos
+  var Patron := '^' + TRegEx.Escape(SParseError).Replace('%s', '(.*)').Replace('%d', '(\d+)') + '$';
+  var M := TRegEx.Match(AMensaje.Trim, Patron);
+  if M.Success and (M.Groups.Count > 2) then
+    Result := StrToIntDef(M.Groups[2].Value, 0);
 end;
 
 function DesignerBinarioATexto(const ABytes: TArray<Byte>): string;

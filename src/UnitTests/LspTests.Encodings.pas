@@ -197,6 +197,9 @@ begin
     C.Free;
   end;
   Assert.IsTrue(CodecDeCharset('property') = nil, 'un nombre que la RTL no conoce: nil');
+  // una etiqueta que la base MIME de Windows lleva a una pagina sin codec
+  // (x-user-defined, 50000): nil, no una excepcion (R3, revisor del punto 4)
+  Assert.IsTrue(CodecDeCharset('x-user-defined') = nil, 'una pagina que Windows no tiene: nil');
 end;
 
 procedure TEncodingTests.Utf8ConBom;
@@ -809,8 +812,8 @@ begin
   // abre un par de dos bytes y el 00 no lo cierra (medido: con un form sin un
   // byte asi, el binario SI vuelve en 932); una posicion o un tamano entre 129
   // y 159, o entre 224 y 252, es lo normal en un form de verdad
-  Assert.AreEqual('', DesignerTextToBinary('object FormX: TFormX'#13#10 +
-    '  Left = 129'#13#10'  Caption = ''Hola'''#13#10'end'#13#10, Bin), 'el binario del form');
+  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes('object FormX: TFormX'#13#10 +
+    '  Left = 129'#13#10'  Caption = ''Hola'''#13#10'end'#13#10), Bin), 'el binario del form');
   UsaPaginaAnsi(1252);
   Assert.AreEqual('', ReescrituraDenegada('C:\nada\UX.dfm', Bin, K), 'en 1252 los bytes del binario vuelven');
   UsaPaginaAnsi(932);

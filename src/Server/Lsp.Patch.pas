@@ -3406,7 +3406,11 @@ begin
         // de los avisos de una respuesta (AvisosDelMotor), con lo que cada uno
         // lleva debajo
         for var LA in AvisosDelMotor(Una) do
-          if EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
+          // la nota del form ancho es del FICHERO: va una vez, al final (salia
+          // una por entrada con avisos ***: R5 del revisor propio del punto 4)
+          if EsMsg(LA, SN_DSGN_FORM_ANCHO_FMT) then
+            Continue
+          else if EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
              EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_ULTIMA) then
             DeEstructura := DeEstructura + [FilaDeEntrada(N, LA)]
           else
@@ -3465,6 +3469,16 @@ begin
           Avisos := Avisos + [Final];
       except
         Avisos := Avisos + DeEstructura;
+      end;
+      // un form de texto en UTF-16/32 (DSGN-121) es del FICHERO, no de una
+      // entrada: una vez, al final. Los avisos de cada entrada solo traen lo
+      // que va tras una cabecera *** (AvisosDelMotor), y la nota se perdia (B1
+      // de la 1.18.2). Su compositor es uno, y la de las entradas se salta
+      if EsRutaDeDesigner(APath) then
+      begin
+        var KA: TEncKind;
+        if FormAncho(APath, KA) then
+          Avisos := Avisos + [NotaDeFormAncho(ExtractFileName(APath), EncName(KA))];
       end;
       if SinCambios = Arr.Count then
         Result := MsgFmt(SN_PATCH_EDITS_SIN_CAMBIOS_FMT,
@@ -4784,8 +4798,12 @@ begin
   var Notas := L.Notas;
   Raw := L.Propiedades;
   var Bind := L.Enlace;
+  // lo que el texto no dice y dcc si: un form de texto en UTF-16/32 no se
+  // compila (DSGN-121). Lo decian lint y el disenador; delphi_edit, la tanda
+  // y el changeset escriben el mismo form y lo callaban (B1 de la 1.18.2)
+  var Ancho := NotaDeFormAncho(ExtractFileName(APath), AEnc);
   if (L.Parser = '') and (Length(Raw) = 0) and (Length(Bind) = 0) and (Length(Notas) = 0) and
-     (Falta.Razon = '') then
+     (Falta.Razon = '') and (Ancho = '') then
     Exit;
   Res := TStringList.Create;
   try
@@ -4837,6 +4855,8 @@ begin
       Res.Add(MsgText(SN_DESIGNER_BINDING_LINT_HEADER));
       Res.AddStrings(Bind);
     end;
+    if Ancho <> '' then
+      Res.Add(Ancho);
     Result := Res.ToStringArray;
   finally
     Res.Free;

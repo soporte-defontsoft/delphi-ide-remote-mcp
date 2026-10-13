@@ -368,7 +368,7 @@ begin
   C := Cabecera(F);
   Assert.AreEqual('TFichaDirecci'#$F3'n', C.Clase, 'el nombre entero, con su acento');
   // el binario que escribe el IDE en disco: el recurso, con su cabecera
-  Assert.AreEqual('', DesignerTextToBinary('object FormB: TFormB'#13#10'end'#13#10, Bin));
+  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes('object FormB: TFormB'#13#10'end'#13#10), Bin));
   F := TPath.Combine(FDir, 'Binario.dfm');
   TFile.WriteAllBytes(F, Bin);
   C := Cabecera(F);

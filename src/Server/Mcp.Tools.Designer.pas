@@ -1108,36 +1108,15 @@ begin
     Err := ReescrituraDenegada(Ruta, B, K);
     if Err <> '' then
       Exit(Err);
-    Texto := DecodeBytes(B, K);
-    Err := DesignerTextToBinary(Texto, Bin);
+    // los BYTES de disco, no el texto decodificado: el parser los lee como
+    // el IDE y dcc (M2, punto 4 de la 1.18.2)
+    Err := DesignerTextToBinary(B, Bin);
     if Err <> '' then
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
     Copia := MaskDriveText('', GuardaContenidoActual(Ruta));
     AtomicWrite(Ruta, Bin);
     Result := MsgFmt(SN_DESIGNER_TOBINARY_FMT, [TPath.GetFileName(Ruta), Length(Bin), Copia]);
   end;
-end;
-
-{ Si un form de TEXTO esta en UTF-16 o UTF-32 (AK), por EL lector del BOM
-  (Lsp.Codificacion.KindDeBom): el IDE lo abre y dcc no lo compila (E2161,
-  medido el 9-oct-2026; r5 de la 1.18.0), y el renderizador no lee el
-  UTF-32 - su parser de forms lo tomaba por UTF-16 y fallaba con un error de
-  sintaxis que no decia por que. }
-function FormAncho(const APath: string; out AK: TEncKind): Boolean;
-var
-  S: TFileStream;
-  Cabeza: TArray<Byte>;
-begin
-  // los cuatro primeros bytes bastan, el BOM mas largo (el de UTF-32): leer el
-  // fichero entero eran dos lecturas completas en lint (revisor propio de r5)
-  S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Cabeza, 4);
-    SetLength(Cabeza, S.Read(Cabeza[0], 4));
-  finally
-    S.Free;
-  end;
-  Result := KindDeBom(Cabeza, AK) and (AK in ENC_ANCHAS);
 end;
 
 { Lo que lint no ve en el texto y dcc si (DSGN-121): un form de texto en UTF-16
@@ -1151,8 +1130,7 @@ begin
   Result := AResult;
   try
     if not EsFallo(Result) and FormAncho(TPath.GetFullPath(APath), K) then
-      Result := ConNota(Result, 'encodingNote', MsgFmt(SN_DSGN_FORM_ANCHO_FMT,
-        [TPath.GetFileName(APath), EncName(K)]));
+      Result := ConNota(Result, 'encodingNote', NotaDeFormAncho(TPath.GetFileName(APath), EncName(K)));
   except
     // una nota no tumba la respuesta de lo que ya se hizo
   end;
@@ -1387,8 +1365,7 @@ begin
     if R.Fidelidad = 'print' then
       Return.AddPair('fidelityNote', MsgText(SN_DESIGNER_FIDELIDAD_PRINT));
     if Ancho then
-      Return.AddPair('encodingNote', MsgFmt(SN_DSGN_FORM_ANCHO_FMT,
-        [TPath.GetFileName(Ruta), EncName(KAncha)]));
+      Return.AddPair('encodingNote', NotaDeFormAncho(TPath.GetFileName(Ruta), EncName(KAncha)));
     Return.AddPair('style', R.Estilo);
     Return.AddPair('packages', R.Paquetes);
     Return.AddPair('components', TJSONNumber.Create(R.Componentes));

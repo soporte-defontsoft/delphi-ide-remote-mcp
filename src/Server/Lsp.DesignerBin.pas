@@ -24,7 +24,8 @@
 interface
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  Lsp.Codificacion;
 
 // La forma de un designer (TDesignerShape, DesignerShapeOf) vive en
 // Lsp.DesignerForma: los renderizadores de src\Render la leen igual.
@@ -37,8 +38,30 @@ function IsBinaryDesignerFile(const APath: string): Boolean;
 function DesignerBinaryToText(const ABytes: TBytes; out AText: string): string;
 function DesignerFileToText(const APath: string; out AText: string): string;
 { Texto -> binario CON envoltorio de recurso (la forma en disco del IDE).
-  Devuelve '' si bien; si no, el error del parser con su linea. }
-function DesignerTextToBinary(const AText: string; out ABytes: TBytes): string;
+  ATexto son los BYTES del form de texto tal como estan en disco: el parser
+  los lee como los lee el IDE (FormParaElParser), con su codificacion, y el
+  binario sale como el que compila dcc de ese mismo fichero (medido el
+  13-oct: un UTF-8 con BOM con caracteres fuera de la ANSI entra entero; uno
+  SIN BOM lo lee en la ANSI de la maquina, tambien dcc). Devuelve '' si bien;
+  si no, el error del parser con su linea. }
+function DesignerTextToBinary(const ATexto: TBytes; out ABytes: TBytes): string;
+
+{ LA nota de un form de TEXTO guardado en UTF-16 o UTF-32 (AEnc, el nombre de
+  su codificacion, EncName): el IDE lo abre y dcc no lo compila (RLINK32,
+  E2161, medido el 9-oct-2026; r5 de la 1.18.0) - DSGN-121 -; '' en otra
+  codificacion. La componian a mano lint y los escritores del disenador
+  (ConNotaDeFormAncho) y preview, y la callaban delphi_edit, la tanda y el
+  changeset, que escriben el form igual (B1, punto 4 de la 1.18.2, medido
+  en produccion el 13-oct). }
+function NotaDeFormAncho(const ANombre, AEnc: string): string;
+
+{ Si un form de TEXTO en disco esta en UTF-16 o UTF-32 (AK), por EL lector
+  del BOM (Lsp.Codificacion.KindDeBom), leyendo solo sus cuatro primeros
+  bytes: el IDE lo abre y dcc no lo compila (DSGN-121), y el renderizador no
+  lee el UTF-32 (DSGN-122). False tambien si no se puede leer: es una nota,
+  no una puerta. Vivia en Mcp.Tools.Designer; la necesitan tambien la tanda y
+  el changeset (B1, punto 4 de la 1.18.2). }
+function FormAncho(const APath: string; out AK: TEncKind): Boolean;
 
 // La linea de objeto (LineaDeObjeto y su inversa ComponeLineaDeObjeto) vive
 // en Lsp.DesignerForma, con la forma del fichero: la leen tambien los
@@ -54,6 +77,14 @@ function DesignerTextToBinary(const AText: string; out ABytes: TBytes): string;
   En una sola linea no: una de 4.095 caracteres o mas no la lee el IDE
   (TParser, "Line too long"; revision de la 1.17.0). }
 function TrozosDeLiteral(const S: string): TArray<string>;
+{ Si el TEXTO de un valor que va a ser literal de un form (TrozosDeLiteral)
+  lleva medio caracter - un sustituto suelto, por EL lector de la casa
+  (Lsp.Codificacion.SiguienteSuelto) -, su negativa (DSGN-146); '' si no. El
+  literal es ASCII (#55296) y el codificador, que niega el suelto en un texto
+  (EDIT-078), ya no lo ve: designer set y styles set lo escribian (medido en
+  produccion el 13-oct, punto 4 de la 1.18.2). La preguntan las puertas que
+  reciben el valor del agente, antes de componer. }
+function SueltoEnLiteral(const ATexto: string): string;
 { Las lineas de una propiedad como las escribe el IDE: 'Prop = valor' con un
   trozo; con varios, 'Prop = ' y cada trozo una sangria (dos espacios) mas
   adentro. ASangria, la de la linea de la propiedad. }
@@ -201,12 +232,34 @@ uses
   System.Generics.Collections,
   Lsp.Pascal, // EL identificador: la linea de una propiedad
   Lsp.DesignerForma, // la forma del fichero: texto, TPF0 o recurso
-  Lsp.Codificacion, // EncName / EncKindOf: los nombres de las codificaciones
   Lsp.Texts;
 
 function SangriaDeNivel(ANivel: Integer): string;
 begin
   Result := StringOfChar(' ', ANivel * 2);
+end;
+
+{ La codificacion en la que un designer de texto en AK va al parser: la suya,
+  salvo UTF-32, que el parser no lee TAL CUAL (FormParaElParser decide por
+  GetBufferEncoding, que lo toma por UTF-16 o por ANSI y da un error de
+  sintaxis que no dice por que) y el IDE abre (DSGN-121): en UTF-16. LA regla,
+  de lint (ParserDeForm) y de to-binary, que se la saltaba (R1 del revisor
+  propio del punto 4 de la 1.18.2). }
+function KindParaElParser(AK: TEncKind): TEncKind;
+begin
+  Result := AK;
+  if AK in [ekUtf32LE, ekUtf32BE] then
+    Result := ekUtf16LE;
+end;
+
+{ El TEXTO de un designer en AK como los bytes que se le dan al parser
+  (KindParaElParser), sin escribir nada: laxo, porque se PREGUNTA al parser y
+  lo que no quepa lo dice el escritor. Lanza si no se puede codificar. LA casa
+  de esa conversion: la hacian lint (ParserDeForm) y to-binary, cada uno con
+  su EncodeText (test_paisaje lo cazo, run_all de la 1.18.2). }
+function TextoParaElParser(const ATexto: string; AK: TEncKind): TArray<Byte>;
+begin
+  Result := EncodeText(ATexto, KindParaElParser(AK), False);
 end;
 
 function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;
@@ -218,17 +271,13 @@ begin
   Result := '';
   ACita := '';
   ALinea := 0;
-  // un form en UTF-32 no lo lee el parser TAL CUAL (lo toma por UTF-16 y da un
-  // error de sintaxis que no dice por que), y el IDE lo abre (DSGN-121): se
-  // juzga su TEXTO en UTF-16, que el parser convierte. No se juzgaba, y los
-  // escritores escribian en uno sin juez (revisor 2 de la noche, B-6)
+  // un form en UTF-32 se juzga en UTF-16 (KindParaElParser). No se juzgaba, y
+  // los escritores escribian en uno sin juez (revisor 2 de la noche, B-6)
   var K := ekUtf8Bom;
   if AEnc <> '' then
     K := EncKindOf(AEnc);
-  if K in [ekUtf32LE, ekUtf32BE] then
-    K := ekUtf16LE;
   try
-    Bytes := EncodeText(ATexto, K, False); // juzgar el parseo, no escribir
+    Bytes := TextoParaElParser(ATexto, K); // juzgar el parseo, no escribir
   except
     // un texto que no cabe en AEnc (lo dice su escritor), o una codificacion
     // que no es de texto: no se juzga aqui
@@ -381,6 +430,19 @@ begin
     end;
   until I > L;
   Result := Result + [Trozo];
+end;
+
+function SueltoEnLiteral(const ATexto: string): string;
+var
+  I: Integer;
+  C: Char;
+begin
+  Result := '';
+  I := 1;
+  C := SiguienteSuelto(ATexto, I);
+  if C <> #0 then
+    Result := MsgFmt(SR_DSGN_LITERAL_SUELTO_FMT,
+      [MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [IntToHex(Ord(C), 4)])]);
 end;
 
 function LineasDePropiedad(const ASangria, AProp: string; const ATrozos: TArray<string>): TArray<string>;
@@ -899,60 +961,127 @@ begin
   Result := DesignerBinaryToText(TFile.ReadAllBytes(APath), AText);
 end;
 
-function DesignerTextToBinary(const AText: string; out ABytes: TBytes): string;
+function FormAncho(const APath: string; out AK: TEncKind): Boolean;
 var
-  Entrada, Salida: TMemoryStream;
-  Bytes: TBytes;
+  S: TFileStream;
+  Cabeza: TArray<Byte>;
+begin
+  Result := False;
+  AK := ekAnsi;
+  try
+    // los cuatro primeros bytes bastan, el BOM mas largo (el de UTF-32): leer
+    // el fichero entero eran dos lecturas completas en lint (revisor propio de r5)
+    S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+    try
+      SetLength(Cabeza, 4);
+      SetLength(Cabeza, S.Read(Cabeza[0], 4));
+    finally
+      S.Free;
+    end;
+    Result := KindDeBom(Cabeza, AK) and (AK in ENC_ANCHAS);
+  except
+    Result := False;
+  end;
+end;
+
+function NotaDeFormAncho(const ANombre, AEnc: string): string;
+begin
+  Result := '';
+  if EncKindOf(AEnc) in ENC_ANCHAS then
+    Result := MsgFmt(SN_DSGN_FORM_ANCHO_FMT, [ANombre, AEnc]);
+end;
+
+function DesignerTextToBinary(const ATexto: TBytes; out ABytes: TBytes): string;
+var
+  Entrada: TBytesStream;
+  Salida: TMemoryStream;
   Lineas: TStringList;
+  K: TEncKind;
+  Texto: TBytes;
 begin
   Result := '';
   ABytes := nil;
-  Entrada := TMemoryStream.Create;
+  // Un form ancho (UTF-16 / UTF-32) se mira por su TEXTO antes de dar nada al
+  // parser (revisor propio del punto 4 de la 1.18.2): medio caracter (R7) el
+  // parser lo leia en UTF-8 como U+FFFD y el binario llevaba otro caracter sin
+  // decirlo; y un UTF-32 va en UTF-16, como lo juzga lint (KindParaElParser,
+  // R1: la RTL lo toma por UTF-16 o por ANSI y no lo convertia)
+  Texto := ATexto;
+  if KindDeBom(ATexto, K) and (K in ENC_ANCHAS) then
+  begin
+    var Decodificado := '';
+    try
+      Decodificado := DecodeBytes(ATexto, K);
+    except
+      on E: Exception do
+        Exit(MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
+    end;
+    var I := 1;
+    var Suelto := SiguienteSuelto(Decodificado, I);
+    if Suelto <> #0 then
+      Exit(MsgFmt(SR_DSGN_FORM_SUELTO_BINARIO_FMT,
+        [MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [IntToHex(Ord(Suelto), 4)]),
+         LineaDePosicion(Decodificado, I - 1)]));
+    if KindParaElParser(K) <> K then
+      Texto := TextoParaElParser(Decodificado, K);
+  end;
+  // Los BYTES de disco por EL alimentador del parser (FormParaElParser), el
+  // mismo de lint y del renderizador: el parser del IDE decide (norma 6). Aqui
+  // habia un camino propio - el texto ya decodificado, recodificado a ANSI -
+  // que negaba (DSGN-045) un UTF-8 o un UTF-16 con BOM que dcc compila
+  // entero, y que dependia de como decodificara quien llama (M2, punto 4 de
+  // la 1.18.2, medido el 13-oct contra el exe de dcc: 'ok ✔ Ж' entra entero
+  // con BOM; 'Configuración' SIN BOM sale con la ó partida en dos letras -C3
+  // B3 leidos como ANSI-, como ya salia por el servidor, cuyo llamador lo
+  // decodificaba en ANSI; el 24-sep ya se vio con el parser)
+  Entrada := TBytesStream.Create(FormParaElParser(Texto));
   Salida := TMemoryStream.Create;
   try
-    // un NOMBRE con letras fuera de ASCII (BotonÑ, de un objeto, de su
-    // clase o de una propiedad): el parser de la RTL no lo lee - salia su
-    // EParserError 'Identifier expected' - y dcc si, guardandolo en UTF-8
-    // (medido 9-oct, 4.1 de la 1.18.0): se dice cual, donde y por que
-    Lineas := TStringList.Create;
-    try
-      Lineas.Text := AText;
-      var Fm := LineasDeForm(Lineas.ToStringArray);
-      for var I := 0 to High(Fm) do
-      begin
-        var Nombre := '';
-        if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].Nombre) then
-          Nombre := Fm[I].Nombre
-        else if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].ClaseObj) then
-          Nombre := Fm[I].ClaseObj
-        else if (Fm[I].Clase = clfPropiedad) and not IsAscii(Fm[I].Prop) then
-          Nombre := Fm[I].Prop;
-        if Nombre <> '' then
-          Exit(MsgFmt(SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT, [Nombre, I + 1]));
-      end;
-    finally
-      Lineas.Free;
-    end;
-    // El parser de la RTL (el mismo que usa el IDE al cargar un .dfm de
-    // texto) lee los bytes como ANSI: darle UTF-8 convertia una 'o' con
-    // acento en #195#179 (medido 24-sep-2026). Lo normal en un .dfm de
-    // texto es que lo no-ASCII vaya como #NNN, que es como lo escribe el IDE
-    // y como lo escribe to-text; una 'o' en crudo se le da en ANSI, y lo que
-    // ANSI no puede representar se rechaza en vez de escribir '?'. LA ANSI de
-    // la casa (Lsp.Codificacion.PaginaAnsi), la misma que lee el parser: aqui
-    // habia otra definicion, TEncoding.ANSI (norma 6 del paisaje, r5 de la
-    // 1.18.0)
-    if not CabeEnAnsi(AText) then
-      Exit(MsgText(SR_DSGN_CARACTERES_NO_CABEN_ANSI));
-    Bytes := EncodeText(AText, ekAnsi);
-    if Length(Bytes) > 0 then
-      Entrada.WriteBuffer(Bytes[0], Length(Bytes));
-    Entrada.Position := 0;
     try
       ObjectTextToResource(Entrada, Salida);
     except
       on E: Exception do
+      begin
+        // si no lo lee y es por un NOMBRE con letras fuera de ASCII (BotonÑ,
+        // de un objeto, de su clase o de una propiedad) en un form que el
+        // parser lee en ANSI - salia su 'Identifier expected', y dcc si lo
+        // lee guardandolo en UTF-8 (medido 9-oct, 4.1 de la 1.18.0) -, se
+        // dice cual, donde y por que. Solo cuando el parser ya dijo que no:
+        // antes se miraba primero y se negaba lo que el parser si lee (un
+        // UTF-8 con BOM). Y solo SIN BOM y con el nombre en la linea que el
+        // parser nombra: con BOM el parser lee esos nombres (TParser en
+        // UTF-8), y un error de otra linea (una cadena sin cerrar) quedaba
+        // tapado por DSGN-120 (R2 del revisor propio del punto 4 de la
+        // 1.18.2). Decodificado como lo lee el parser: la ANSI de la maquina
+        var LineaDelError := LineaDeErrorDelParser(E.Message);
+        if KindDeBom(ATexto, K) or (LineaDelError <= 0) then
+          Exit(MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
+        Lineas := TStringList.Create;
+        try
+          try
+            Lineas.Text := DecodeBytes(ATexto, ekAnsi);
+          except
+            Lineas.Clear; // lo que no se decodifica no nombra nada: el mensaje del parser
+          end;
+          var Fm := LineasDeForm(Lineas.ToStringArray);
+          var I := LineaDelError - 1;
+          if I <= High(Fm) then
+          begin
+            var Nombre := '';
+            if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].Nombre) then
+              Nombre := Fm[I].Nombre
+            else if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].ClaseObj) then
+              Nombre := Fm[I].ClaseObj
+            else if (Fm[I].Clase = clfPropiedad) and not IsAscii(Fm[I].Prop) then
+              Nombre := Fm[I].Prop;
+            if Nombre <> '' then
+              Exit(MsgFmt(SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT, [Nombre, I + 1]));
+          end;
+        finally
+          Lineas.Free;
+        end;
         Exit(MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
+      end;
     end;
     SetLength(ABytes, Salida.Size);
     if Salida.Size > 0 then

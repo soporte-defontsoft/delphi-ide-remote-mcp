@@ -302,7 +302,9 @@ REGLAS = [
       # deuda declarada (2.1g de la 1.18.0): un detector suelto, el de los renderizadores,
       # que no enlazan la casa (Lsp.Codificacion arrastra Lsp.Texts); solo puede encoger.
       # (el de la ayuda se fue en r5: pregunta BomUtf8En y CodecDeCharset)
-      ('Lsp.DesignerForma.pas', 'DesignerAFlujo')],
+      # Desde M2 (punto 4 de la 1.18.2) es EL alimentador del parser de forms,
+      # FormParaElParser, que usan DesignerAFlujo y to-binary: la misma deuda
+      ('Lsp.DesignerForma.pas', 'FormParaElParser')],
      'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
      'escribe): nadie mas mira unos bytes para decidir que son (24-sep-2026: dos detectores; 1.18.0: '
      'los codecs salen a Lsp.Codificacion y la decision se queda en Patch). KindDeBom es GRAMATICA '
@@ -327,12 +329,11 @@ REGLAS = [
       # la decision del escritor: como se LEERIAN los bytes ANSI de un fuente
       # sin codificacion (LecturaCambiada); no escribe nada
       ('Lsp.Patch.pas', 'EncAlEscribir'),
-      # el texto de un form, en ANSI, para el parser de forms de la RTL EN MEMORIA:
-      # lo que se escribe es el binario (to-binary, por AtomicWrite), no un texto
-      ('Lsp.DesignerBin.pas', 'DesignerTextToBinary'),
-      # las lineas de un form en los bytes que harian en SU codificacion, para
-      # PREGUNTAR al parser del IDE si las lee (9.B de la 1.18.0); no escribe nada
-      ('Lsp.DesignerBin.pas', 'ParserDeForm')],
+      # el texto de un form en los bytes que se le dan al parser del IDE, para
+      # PREGUNTARLE si lo lee (9.B de la 1.18.0) o para convertir un UTF-32 a
+      # binario (R1 del punto 4 de la 1.18.2); no escribe nada. Una casa: lint y
+      # to-binary la tenian cada uno (run_all de la 1.18.2 lo cazo)
+      ('Lsp.DesignerBin.pas', 'TextoParaElParser')],
      'quien codifica el texto de un fichero por su cuenta se salta la regla de ida y vuelta y la '
      'del primer caracter no ASCII (David, 9-oct-2026): se escribe por PatchSaveText o DoEdit'),
     ('la regla de ida y vuelta preguntada a mano',
@@ -452,7 +453,9 @@ REGLAS = [
      # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (4 bytes de un designer o
      # de un estilo, el BOM de un form; el tamano de un PNG ya sale de sus bytes, 2b)
      ('Lsp.DesignerBin.pas', 'IsBinaryDesignerFile'), ('Lsp.Styles.pas', 'IsBinaryStyle'),
-     ('Mcp.Tools.Designer.pas', 'FormAncho'),
+     # (FormAncho bajo a Lsp.DesignerBin en B1 de la 1.18.2: la usan tambien la tanda y
+     # el changeset, sobre forms que ya pasaron su puerta; la misma, no una mas)
+     ('Lsp.DesignerBin.pas', 'FormAncho'),
      # el MOTOR de edicion de la jaula: lo que la tool ya paso por la puerta de la jaula
      # (delphi_read, delphi_edit, delphi_textedit, delphi_changeset, el disenador)
      ('Lsp.Patch.pas', 'RelecturaDe'), ('Lsp.Patch.pas', 'PatchSaveText'),

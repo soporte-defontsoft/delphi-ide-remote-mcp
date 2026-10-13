@@ -64,7 +64,9 @@ uses
   Lsp.TextEdit,
   Lsp.Texts,
   Lsp.TodoONada,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.DesignerBin,
+  Lsp.Codificacion;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -365,7 +367,10 @@ begin
         else
           // EL lector de los avisos de una respuesta, con lo que llevan debajo
           for var LA in AvisosDelMotor(R) do
-            AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') + LA;
+            // la nota del form ancho va una vez por FICHERO, con el resumen
+            // (R5 del revisor propio del punto 4 de la 1.18.2)
+            if not EsMsg(LA, SN_DSGN_FORM_ANCHO_FMT) then
+              AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') + LA;
       end;
     opCreate:
       begin
@@ -1124,6 +1129,17 @@ begin
                IfThen(D = 0, MsgText(SF_CHSET_MISMO_NUMERO_LINEAS),
                  MsgFmt(SF_CHSET_LINEAS_EN_TOTAL_FMT,
                    [IfThen(D > 0, '+', ''), D]))]));
+            // un form de texto en UTF-16/32 que el lote escribio: dcc no lo
+            // compila (DSGN-121). Del FICHERO, una vez: los avisos de cada paso
+            // solo traen lo que va tras una cabecera *** y la callaban (B1 de
+            // la 1.18.2); la de los pasos se salta. Con la ruta, como la linea
+            // de arriba: por el nombre, dos Unit1.dfm de dos carpetas eran una
+            // nota (R6 del revisor propio del punto 4)
+            var KA: TEncKind;
+            if EsRutaDeDesigner(FPath) and FormAncho(FPath, KA) then
+              // cualificada: aqui EncName es tambien una variable local
+              AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
+                NotaDeFormAncho(MaskDriveText('', FPath), Lsp.Codificacion.EncName(KA));
           end;
           AuditText := Audit.ToString.TrimRight;
         finally

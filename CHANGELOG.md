@@ -285,6 +285,73 @@ the MCP `initialize` response (`serverInfo.version`).
   each piece, and the git-that-does-not-answer refusal declared a guard).
   Point 2x of 1.18.2.
 
+- **`delphi_designer to-binary` reads the form as the IDE and dcc do.** It had
+  a path of its own: the text already decoded, encoded again to ANSI. So a
+  text form saved in UTF-8 or UTF-16 WITH a BOM holding a character outside
+  the machine's ANSI page was refused (`DSGN-045`) although `lint` called it
+  clean and dcc compiles it whole - and a component named outside ASCII in
+  such a form was refused with `DSGN-120`, which dcc also compiles (the name in
+  UTF-8). Now the form's bytes, as they are on disk, go to the IDE's own
+  parser through the one feeder `lint`, the writers and the renderer already
+  use, and the binary IS what dcc compiles from that file: measured against an
+  exe built by dcc from the same form, the TPF0 stream is identical byte for
+  byte (a `vaUTF8String` caption `ok ✔ Ж`, a `TButton` named `BotónÑ`). A form
+  WITHOUT a BOM is read in the machine's ANSI page, as dcc reads it; that is
+  how it already came out through the server. A UTF-32 form goes to the parser
+  in UTF-16, as `lint` judges it (the RTL takes its BOM for UTF-16's, or for
+  none). Half a character in a UTF-16 form is refused (`DSGN-147`): the parser
+  would have written U+FFFD, a different character, without a word.
+  `DSGN-120` stays for what the parser cannot read - a non-ASCII name in a
+  form WITHOUT a BOM, on the line the parser names - with the name and its
+  line; with a BOM, or with the error on another line, it hid the parser's own
+  message. `DSGN-045` is gone. `test_to_binary_1182` (red against production:
+  the BOM forms; UTF-32 LE and BE; the rule that `lint` clean means
+  `to-binary` converts; a mutant for each piece), and `test_designer_binary`
+  follows what dcc does. Point 4 (M2) of 1.18.2, and its own reviewer.
+
+- **Every writer of a form says that dcc will not build a text form in
+  UTF-16 or UTF-32.** The IDE opens such a form and RLINK32 refuses it
+  (`E2161`, measured); `lint`, `delphi_designer insert/set/delete` and
+  `preview` said so (`DSGN-121`), but `delphi_edit`, its `edits` batch and
+  `delphi_changeset` wrote the same form and kept quiet (measured in
+  production). Now the note has one composer, and `delphi_edit` adds it with
+  its own judgement of the form, a batch and a changeset once per form at the
+  end (the warnings of each step only carry what follows a `***` header, so it
+  was lost there; a step's own note is left out), the changeset's naming the
+  form's path - two `Unit1.dfm` in two folders are two notes. The reader of a
+  form's BOM on disk moved next to it, the
+  same one the designer used. `test_form_ancho_1182` (red against
+  production: `delphi_edit`, the batch, the changeset and a UTF-32 form; once,
+  not per step; a mutant for each piece). Point 4 (B1) of 1.18.2.
+
+- **`delphi_docs` reads a help page in the character set the page declares.**
+  It told only UTF-8 apart: a page declaring `windows-1251` or `shift_jis`
+  was read as Windows-1252. Now the label in its meta goes to the judge of a
+  label, Windows' own MIME database (MLang's, which the help viewer reads with: it reads
+  `iso-8859-1` and its alias `latin1` as 1252, which the RTL's name table
+  sends to 28591), then the RTL's table; a page with no meta, or a label
+  nobody knows, stays in 1252 - and so does a label Windows maps to a code page
+  it has no codec for (`_autodetect`, `x-user-defined`: it threw, and took the
+  whole search down), or one that says UTF-16 in a meta that was read as ASCII
+  (it cannot be). Measured: the MIME database is readable from
+  the sandbox `delphi_test` runs the unit tests in. Unit tests for 1251,
+  Shift-JIS, `latin1` and an unknown label (red before), a mutant for the
+  judge and one for the label. Point 4 (B4) of 1.18.2.
+
+- **Half a character no longer goes into a form's string value.** A lone
+  surrogate (`\ud800` in the JSON of a call, or `#55296` inside a quoted
+  value) is not a character in any encoding; the text writers already refused
+  it (`EDIT-078`), but `delphi_designer set` and `delphi_styles set` turn a
+  string value into the form's literal - each such character as `#N`, in
+  ASCII - and the encoder never saw it: measured in production, `Caption =
+  'a'#55296'b'` in a `.dfm` and in a `.style`. Now the gate that takes the
+  value asks the house's reader of a lone surrogate before composing it, and
+  refuses (`DSGN-146`); a valid pair (an emoji) is still written as the IDE
+  writes it, `#55357#56832`, and names were already refused by their own
+  check. `test_literal_suelto_1182` (red against production on the two value
+  gates; a mutant for each). Point 4 of 1.18.2 (the lone surrogate that comes
+  through the JSON of a call; the one in a commit message is git's, parked).
+
 ### Internal
 
 - **A read-only refusal reads right whether the entry is a folder or a file.**

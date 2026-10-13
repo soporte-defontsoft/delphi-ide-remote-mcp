@@ -278,6 +278,35 @@ begin
     // caracteres de control: revisor propio de r5, medido en IdASN1Util_pas.html)
     Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=iso-8859-1>' + #$201C + 'x' + #$201D,
       1252)).EndsWith(#$201C + 'x' + #$201D), 'iso-8859-1 de la ayuda de Indy: sus comillas, en 1252');
+    // B4 (punto 4 de la 1.18.2): la pagina la dice el FICHERO, tambien cuando
+    // no es 1252 ni UTF-8 - todo lo demas se leia en 1252 -. La etiqueta la
+    // resuelve el juez de Windows (su base MIME, la de MLang, con la que lee hh.exe):
+    // iso-8859-1 y su alias latin1 son 1252, shift_jis es 932
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=windows-1251>' + #$041A#$043E#$0434, 1251)).EndsWith(
+      #$041A#$043E#$0434), 'windows-1251: cirilico');
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta content="text/html; charset=shift_jis">' + #$65E5#$672C, 932)).EndsWith(
+      #$65E5#$672C), 'shift_jis: japones');
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=latin1>' + #$201C + 'x' + #$201D,
+      1252)).EndsWith(#$201C + 'x' + #$201D), 'latin1, alias de iso-8859-1: 1252, como hh.exe');
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=x-no-existe>' + CAFE, 1252)).EndsWith(CAFE),
+      'una etiqueta que nadie conoce: 1252, lo de la ayuda');
+    // R3 del revisor propio: etiquetas que la base de Windows lleva a paginas
+    // que Windows no tiene (GetCPInfo dice que no): el codec LANZABA y caia la
+    // busqueda entera; son una etiqueta que no se puede usar, 1252
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=_autodetect>' + CAFE, 1252)).EndsWith(CAFE),
+      '_autodetect (50932, sin codec): 1252, sin excepcion');
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=x-user-defined>' + CAFE, 1252)).EndsWith(CAFE),
+      'x-user-defined (50000, sin codec): 1252, sin excepcion');
+    // R4: un meta que se lee en ASCII no esta en UTF-16; leida en UTF-16, la
+    // pagina era basura
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=utf-16>' + CAFE, 1252)).EndsWith(CAFE),
+      'utf-16 en el meta de una pagina de 8 bits: 1252');
+    Assert.IsTrue(TextoDeBytes(BytesEn('<meta charset=unicode>' + CAFE, 1252)).EndsWith(CAFE),
+      'unicode (1200 en la base de Windows) en el meta: 1252');
+    // utf8, sin guion: la base de Windows no la conoce y la tabla de la RTL si
+    // (medido con su mutante: sin regla propia, se lee igual); ya se aceptaba
+    Assert.IsTrue(TextoDeBytes(TEncoding.UTF8.GetBytes('<meta charset=utf8>' + CAFE)).EndsWith(CAFE),
+      'utf8 sin guion: UTF-8');
     // ...y lo que se BUSCA, en los bytes del mapa: en uno UTF-8 se buscaba en
     // bytes 1252 y una palabra con acento no se encontraba
     Assert.AreEqual(1, Integer(Length(EntradasQueCasan(TEncoding.UTF8.GetBytes(

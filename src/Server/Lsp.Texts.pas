@@ -9257,6 +9257,23 @@ const
     'U+%s is half of a surrogate pair without its other half - not a ' +
     'character in any encoding (one above U+FFFF cut in two?)';
 
+  { ...y en el VALOR de cadena de un form (designer set, styles set): se
+    escribe como #N, en ASCII, y el codificador, que niega el suelto en un
+    texto (EDIT-078), ya no lo ve. %s = SF_EDIT_SUSTITUTO_SUELTO_FMT. }
+  SR_DSGN_LITERAL_SUELTO_FMT =
+    '[DSGN-146 DENIED] %s. A form writes each such character of a string ' +
+    'as #N, so it would be saved as that half and loaded back as that half, ' +
+    'which no encoding can write or show. Nothing was written.';
+
+  { ...y el que YA trae un form UTF-16 que se pasa a binario (to-binary): el
+    parser lo lee en UTF-8 y lo escribia como U+FFFD, otro caracter, sin
+    decirlo (R7 del revisor propio del punto 4 de la 1.18.2). %s =
+    SF_EDIT_SUSTITUTO_SUELTO_FMT, %d = la linea. }
+  SR_DSGN_FORM_SUELTO_BINARIO_FMT =
+    '[DSGN-147 DENIED] %s, on line %d of the form. In binary it would become ' +
+    'U+FFFD, a different character, so nothing was converted: put the whole ' +
+    'character back, or remove the half, first.';
+
   { Lo que el rename final no pudo con un codigo que no es "ocupado" ni
     "acceso denegado" (esos, SYS-027 / SYS-028): decia "otro proceso lo
     tiene" de cualquier codigo (septima revision). }
@@ -9862,25 +9879,24 @@ const
     'copies are in the __delphi-patch trash next to it (delphi_list ' +
     'includetrash=true shows them).';
 
-  SR_DSGN_CARACTERES_NO_CABEN_ANSI =
-    '[DSGN-045 DENIED] The text has characters that do not fit in the ' +
-    'ANSI code page of this machine: in a text .dfm they are written as ' +
-    '#NNNN (the decimal code of the character, outside the quotes), as ' +
-    'the IDE does. Fix them and repeat.';
 
   SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT =
     '[DSGN-046 DENIED] Could not convert the text to a binary designer ' +
     '(%s: %s).';
   { to-binary con un NOMBRE no ASCII (de un objeto, su clase o una
-    propiedad): el parser de forms de la RTL no lo lee - salia su
-    EParserError 'Identifier expected' - y dcc si, guardandolo en UTF-8
-    (medido 9-oct, 4.1 de la 1.18.0). %s = el nombre, %d = su linea. }
+    propiedad) en un form SIN BOM: el parser de forms de la RTL lo lee en
+    ANSI y no lo lee - salia su EParserError 'Identifier expected' - y dcc
+    si, guardandolo en UTF-8 (medido 9-oct, 4.1 de la 1.18.0). Con BOM el
+    parser lo lee (TParser en UTF-8): solo sin el, y si el nombre esta en la
+    linea que el parser nombra (R2 del revisor propio del punto 4 de la
+    1.18.2). %s = el nombre, %d = su linea. }
   SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT =
-    '[DSGN-120 DENIED] %s (line %d) is a name with letters outside ASCII: ' +
-    'the RTL''s form parser, the one to-binary uses, reads only ASCII ' +
-    'names. The compiler reads it (the form compiles as text, saved as ' +
-    'UTF-8 with BOM), so keep this form as text, or rename it with ASCII ' +
-    'letters to convert it. Nothing was written.';
+    '[DSGN-120 DENIED] %s (line %d) is a name with letters outside ASCII ' +
+    'in a form saved in ANSI: the IDE''s form parser, the one to-binary ' +
+    'uses, reads such a name only from a form saved as UTF-8 with a BOM ' +
+    '(and the compiler then builds it, the name in UTF-8). Save the form ' +
+    'as UTF-8 from the IDE, or rename it with ASCII letters, to convert ' +
+    'it. Nothing was written.';
   { Un form de TEXTO en UTF-16 o UTF-32 (lo deja guardar el selector de
     codificacion del editor del IDE): dcc no lo compila - RLINK32 toma su
     FF FE por un recurso de 16 bits, o no lo abre: E2161 con los cuatro

@@ -231,18 +231,23 @@ end;
 const
   CHARSET_AYUDA_NO_UTF8 = 'windows-1252';
 
-{ El codec de un fichero de la ayuda: UTF-8 si lleva su BOM (BomUtf8En) o su
-  meta lo dice; si no, CHARSET_AYUDA_NO_UTF8. Los codecs, de la casa
-  (Lsp.Codificacion.CodecDeCharset). NO la ANSI de la maquina: la pagina la
+{ El codec de un fichero de la ayuda: UTF-8 si lleva su BOM (BomUtf8En); si
+  no, el juego de caracteres que DECLARA su meta, por EL juez de una etiqueta
+  (Lsp.Codificacion.CodecDeCharset: la base MIME de Windows, la de MLang,
+  con la que lee hh.exe, que lee iso-8859-1 como 1252); sin meta, con una
+  etiqueta que nadie conoce o con una de UTF-16 (un meta legible en ASCII no
+  esta en UTF-16), CHARSET_AYUDA_NO_UTF8. NO la ANSI de la maquina: la pagina la
   dice el FICHERO, y en un Windows ruso la ayuda sigue en 1252 (r5 de la
   1.18.0: todo lo que no era UTF-8 se leia con el 1252 clavado de la casa,
-  que coincidia). Uno por fichero, no por bloque del indice: crearlo en cada
-  bloque caia en el bucle de la busqueda (revision 1.10.0). Quien lo pide lo
-  libera. }
+  que coincidia). Y hasta B4 de la 1.18.2 solo se distinguia utf-8: una
+  pagina que declaraba windows-1251 o shift_jis se leia en 1252. Uno por
+  fichero, no por bloque del indice: crearlo en cada bloque caia en el bucle
+  de la busqueda (revision 1.10.0). Quien lo pide lo libera. }
 function CodecDeAyuda(const ABytes: TArray<Byte>): TEncoding;
 var
-  Cabeza: string;
-  Fin, P, Q: Integer;
+  Cabeza, Etiqueta: string;
+  Fin, P, Q, R: Integer;
+  ConIgual: Boolean;
 begin
   if BomUtf8En(ABytes, 0) then
     Exit(CodecDeCharset('utf-8'));
@@ -252,17 +257,38 @@ begin
   Fin := Cabeza.IndexOf('</head');
   if Fin >= 0 then
     Cabeza := Cabeza.Substring(0, Fin);
-  // charset=utf-8 con comillas o sin ellas, y con blancos: el meta de HTML5
-  // es <meta charset="utf-8">, y solo se reconocia sin comillas (revision
-  // de la 1.10.0)
+  // charset=<etiqueta> con comillas o sin ellas, y con blancos: el meta de
+  // HTML5 es <meta charset="utf-8">, y solo se reconocia sin comillas
+  // (revision de la 1.10.0). Con su '=': la palabra charset de un titulo no
+  // es un meta
   P := Cabeza.IndexOf('charset');
   while P >= 0 do
   begin
     Q := P + Length('charset');
+    ConIgual := False;
     while (Q < Length(Cabeza)) and CharInSet(Cabeza.Chars[Q], [' ', #9, '=', '"', '''']) do
+    begin
+      if Cabeza.Chars[Q] = '=' then
+        ConIgual := True;
       Inc(Q);
-    if Cabeza.Substring(Q, 5).Equals('utf-8') or Cabeza.Substring(Q, 4).Equals('utf8') then
-      Exit(CodecDeCharset('utf-8'));
+    end;
+    // la etiqueta, hasta su comilla, un blanco, el ; o el cierre
+    R := Q;
+    while (R < Length(Cabeza)) and not CharInSet(Cabeza.Chars[R], [' ', #9, '"', '''', ';', '>', '/']) do
+      Inc(R);
+    Etiqueta := Cabeza.Substring(Q, R - Q);
+    if ConIgual and (Etiqueta <> '') then
+    begin
+      Result := CodecDeCharset(Etiqueta);
+      // un meta que se ha podido leer en ASCII esta en una pagina de 8 bits: si
+      // dice utf-16 (o unicode), miente, y leida asi la pagina era basura; se
+      // toma como una etiqueta que nadie conoce (R4 del revisor propio del
+      // punto 4 de la 1.18.2)
+      if (Result <> nil) and ((Result.CodePage = 1200) or (Result.CodePage = 1201)) then
+        FreeAndNil(Result);
+      if Result <> nil then
+        Exit;
+    end;
     P := Cabeza.IndexOf('charset', Q);
   end;
   Result := CodecDeCharset(CHARSET_AYUDA_NO_UTF8);

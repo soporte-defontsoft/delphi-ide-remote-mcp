@@ -243,7 +243,13 @@ begin
     // delphi_designer set: iba en crudo, y uno de 4.095 caracteres en una
     // linea que el IDE no lee (P6 de la segunda revision de la 1.17.0)
     if LeeLiteralDeForm(AValue.Trim, Texto) then
-      Line := Doc.SetPropTrozos(O, AProp.Trim, TrozosDeLiteral(Texto), WasThere)
+    begin
+      // medio caracter: el literal lo escribe #N y el codificador no lo ve
+      Err := SueltoEnLiteral(Texto);
+      if Err <> '' then
+        Exit(Err);
+      Line := Doc.SetPropTrozos(O, AProp.Trim, TrozosDeLiteral(Texto), WasThere);
+    end
     else
       Line := Doc.SetProp(O, AProp.Trim, AValue.Trim, WasThere);
     Result := Doc.Guarda;

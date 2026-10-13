@@ -1905,6 +1905,10 @@ begin
     // de props llegaba tal cual al .dfm (B-9, 10-oct-2026). El coste: un
     // Caption que empiece por srvd:\ a proposito se escribe con la letra.
     Texto := ExpandDriveValue(Texto);
+    // medio caracter: el literal lo escribe #N y el codificador no lo ve
+    var Suelto := SueltoEnLiteral(Texto);
+    if Suelto <> '' then
+      Exit(Suelto);
     Trozos := TrozosDeLiteral(Texto);
     V := string.Join(' ', Trozos);
     Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
@@ -1915,6 +1919,9 @@ begin
   else if LeeLiteralDeForm(V, Texto) then
   begin
     Texto := ExpandDriveValue(Texto); // la misma excepcion, la de arriba
+    var Suelto := SueltoEnLiteral(Texto);
+    if Suelto <> '' then
+      Exit(Suelto);
     Trozos := TrozosDeLiteral(Texto);
     V := string.Join(' ', Trozos);
     Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);

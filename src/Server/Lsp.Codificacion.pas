@@ -62,8 +62,15 @@ function HayByteAlto(const B: TArray<Byte>): Boolean;
   1252 y una e acentuada 'e' en 1251, medido el 9-oct-2026; la vuelta lo
   delata). Lo pregunta el escritor que elige la codificacion de un fuente
   que no tenia ninguna (Lsp.Patch.EncAlEscribir: el primer caracter no
-  ASCII) y el conversor a binario de un form (to-binary). }
+  ASCII). to-binary ya no: da los bytes de disco al parser del IDE
+  (FormParaElParser, M2 del punto 4 de la 1.18.2). }
 function CabeEnAnsi(const S: string): Boolean;
+{ El siguiente sustituto de S que esta SIN su pareja, desde I (que avanza
+  detras de el); #0 si no quedan. La pareja la reconoce la RTL. EL lector del
+  sustituto suelto: lo usan el codificador (SustitutoNuevo) y lo que compone
+  un literal de form (Lsp.DesignerBin.SueltoEnLiteral), que escribe ASCII y
+  el codificador ya no ve (punto 4 de la 1.18.2). }
+function SiguienteSuelto(const S: string; var I: Integer): Char;
 { LA pagina ANSI: la que usan el IDE y dcc para leer un fuente sin BOM que
   no es UTF-8 (medido el 9-oct-2026, bytes del exe: E1 C3 A1 sale U+00E1
   U+00C3 U+00A1 con la 1252 de esta maquina), la de TEncoding.ANSI de la
@@ -92,6 +99,15 @@ procedure UsaPaginaAnsi(APagina: Cardinal);
   un fuente y dice su propio juego de caracteres (la ayuda: el meta de cada
   pagina, que no es la ANSI de la maquina); un fuente lo decide EL detector. }
 function CodecDeCharset(const ANombre: string): TEncoding;
+{ La pagina que WINDOWS da a una etiqueta de juego de caracteres de HTML o
+  MIME ('iso-8859-1', 'shift_jis', 'latin1'...): su base de datos MIME
+  (HKCR\MIME\Database\Charset: InternetEncoding, siguiendo AliasForCharset),
+  la de MLang y los navegadores. EL juez de una etiqueta (norma 6): la tabla
+  de la RTL manda iso-8859-1 a la 28591, y la pagina de la ayuda que lo
+  declara lleva las comillas 93/94 de 1252 (revisor propio de r5, medido);
+  Windows la manda a 1252 (medido el 13-oct, B4 de la 1.18.2). 0 si Windows
+  no la conoce. Cacheada por etiqueta: la ayuda la pregunta por pagina. }
+function PaginaDeCharset(const AEtiqueta: string): Integer;
 { Si los bytes B vuelven IGUALES al leerlos en K y volver a escribirlos en K:
   lo que ya esta se escribe con los mismos bytes. Un UTF-32 mal formado, un
   UTF-8 con BOM y el cuerpo roto, un UTF-16 de longitud impar - cualquier
@@ -159,7 +175,8 @@ uses
   Winapi.Windows, // GetACP: la pagina ANSI de la maquina
   System.Character, // los pares de sustitutos, por la RTL
   System.Generics.Collections,
-  Lsp.Texts;
+  Lsp.Texts,
+  System.Win.Registry;
 
 var
   GPaginaAnsi: Cardinal;
@@ -169,6 +186,7 @@ var
   // el codec y el mapa de una pagina que se cambio (solo lo hacen las
   // pruebas): un hilo puede estar leyendo con ellos, y se liberan al acabar
   GRetirados: TObjectList<TObject>;
+  GCharsets: TDictionary<string, Integer>; // PaginaDeCharset: etiqueta en minusculas -> pagina (0 = no la conoce)
 
 
 function EncName(K: TEncKind): string;
@@ -602,24 +620,102 @@ begin
   Result := GPaginaAnsi;
 end;
 
+function PaginaDeCharset(const AEtiqueta: string): Integer;
+var
+  Etiqueta, Actual: string;
+  Reg: TRegistry;
+begin
+  Result := 0;
+  Etiqueta := AEtiqueta.Trim.ToLower;
+  // una etiqueta es un nombre corto, sin separadores: lo que viene del
+  // fichero no navega por el registro
+  if (Etiqueta = '') or (Length(Etiqueta) > 64) or (Etiqueta.IndexOfAny(['\', '/']) >= 0) then
+    Exit;
+  TMonitor.Enter(GCharsets);
+  try
+    if GCharsets.TryGetValue(Etiqueta, Result) then
+      Exit;
+  finally
+    TMonitor.Exit(GCharsets);
+  end;
+  Reg := TRegistry.Create(KEY_READ);
+  try
+    try
+      Reg.RootKey := HKEY_CLASSES_ROOT;
+      Actual := Etiqueta;
+      // un alias apunta a otra etiqueta (latin1 -> iso-8859-1): pocos saltos
+      for var Salto := 1 to 4 do
+      begin
+        if (Actual = '') or (Actual.IndexOfAny(['\', '/']) >= 0) or
+           not Reg.OpenKeyReadOnly('MIME\Database\Charset\' + Actual) then
+          Break;
+        try
+          if Reg.ValueExists('InternetEncoding') then
+          begin
+            Result := Reg.ReadInteger('InternetEncoding');
+            Break;
+          end;
+          if not Reg.ValueExists('AliasForCharset') then
+            Break;
+          Actual := Reg.ReadString('AliasForCharset').Trim.ToLower;
+        finally
+          Reg.CloseKey;
+        end;
+      end;
+    except
+      // un registro que no se lee: la tabla de la RTL, en quien llama; y no se
+      // guarda, que un fallo pasajero no valga para toda la vida del proceso
+      // (R9 del revisor propio del punto 4)
+      Exit(0);
+    end;
+  finally
+    Reg.Free;
+  end;
+  TMonitor.Enter(GCharsets);
+  try
+    GCharsets.AddOrSetValue(Etiqueta, Result);
+  finally
+    TMonitor.Exit(GCharsets);
+  end;
+end;
+
 function CodecDeCharset(const ANombre: string): TEncoding;
 var
   Rtl: TEncoding;
   Pagina: Integer;
 begin
+  // primero EL juez de una etiqueta, el de Windows; si no la conoce, la tabla
+  // de nombres de la RTL
+  Pagina := PaginaDeCharset(ANombre);
+  if Pagina = 1200 then
+    Exit(TUnicodeEncoding.Create)
+  else if Pagina = 1201 then
+    Exit(TBigEndianUnicodeEncoding.Create)
+  else if Pagina = 0 then
+  begin
+    try
+      Rtl := TEncoding.GetEncoding(ANombre);
+    except
+      on EEncodingError do
+        Exit(nil);
+    end;
+    Pagina := Rtl.CodePage;
+    // UTF-16 no lo convierte MultiByteToWideChar: el de la RTL, que no lanza
+    if (Pagina = 1200) or (Pagina = 1201) then
+      Exit(Rtl);
+    Rtl.Free;
+  end;
+  // sin banderas, como TEncoding.ANSI: el UTF-8 de la RTL lanza con un byte malo.
+  // Una pagina que la base MIME nombra y Windows no tiene (x-user-defined es
+  // 50000, _autodetect 50932: GetCPInfo dice que no, medido) lanzaba aqui y
+  // tumbaba la busqueda entera de delphi_docs: nil, como una que no conoce
+  // (R3 del revisor propio del punto 4 de la 1.18.2)
   try
-    Rtl := TEncoding.GetEncoding(ANombre);
+    Result := TMBCSEncoding.Create(Pagina, 0, 0);
   except
     on EEncodingError do
-      Exit(nil);
+      Result := nil;
   end;
-  Pagina := Rtl.CodePage;
-  // UTF-16 no lo convierte MultiByteToWideChar: el de la RTL, que no lanza
-  if (Pagina = 1200) or (Pagina = 1201) then
-    Exit(Rtl);
-  Rtl.Free;
-  // sin banderas, como TEncoding.ANSI: el UTF-8 de la RTL lanza con un byte malo
-  Result := TMBCSEncoding.Create(Pagina, 0, 0);
 end;
 
 procedure UsaPaginaAnsi(APagina: Cardinal);
@@ -669,6 +765,7 @@ end;
 initialization
   GUtf8Laxo := TMBCSEncoding.Create(CP_UTF8, 0, 0);
   GRetirados := TObjectList<TObject>.Create(True);
+  GCharsets := TDictionary<string, Integer>.Create;
   // la de la maquina: la de TEncoding.ANSI, TMBCSEncoding.Create(GetACP, 0, 0)
   UsaPaginaAnsi(GetACP);
 
@@ -677,5 +774,6 @@ finalization
   GUtf8Laxo.Free;
   GAnsi.Free;
   GRetirados.Free;
+  GCharsets.Free;
 
 end.
