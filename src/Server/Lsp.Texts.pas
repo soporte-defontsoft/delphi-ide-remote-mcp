@@ -1316,10 +1316,10 @@ const
     '"_" do not make it different). Send each parameter ONCE, with the ' +
     'exact name tools/list gives in "inputSchema".';
 
-  // delphi_build composes a cmd.exe line (rsvars.bat && msbuild ...) and
-  // platform/config/target travel through it UNQUOTED: a metacharacter there
-  // IS a shell, and it would sail past the jail, the test container
-  // and the .dproj hazard scanner in a single call. delphi_config
+  // delphi_build composed a cmd.exe line (rsvars.bat && msbuild ...) until
+  // 2an of 1.18.2 and platform/config/target travelled through it UNQUOTED:
+  // a metacharacter there WAS a shell. msbuild runs with no shell now; this
+  // refusal stays as the second barrier. delphi_config
   // already armoured the same token for the XML sink; this is its twin mouth.
   SR_BUILD_PLATFORM_FMT =
     '[BUILD-003 INVALID_PARAM] "%s" is not a valid Delphi platform. See the ' +
@@ -9246,6 +9246,13 @@ const
 
   SE_BUILD_RSVARS_BAT_FOUND_FMT =
     'rsvars.bat not found: %s';
+
+  { msbuild se lanza sin cmd.exe, por su RUTA, buscada solo en el PATH que
+    pone rsvars.bat (2an de la 1.18.2): si alli no esta, o rsvars.bat no se
+    lee, no se compila. %s = rsvars.bat. }
+  SR_BUILD_MSBUILD_NO_ENCONTRADO_FMT =
+    '[BUILD-048 NOT_FOUND] msbuild.exe was not found in the PATH that %s sets, ' +
+    'so nothing was built. The RAD Studio installation needs repairing.';
 
   // Excepciones que estaban en linea en Lsp.Patch.pas (paso 3e, 27-sep-2026)
   SF_EDIT_CARACTER_NO_EXISTE_FMT =

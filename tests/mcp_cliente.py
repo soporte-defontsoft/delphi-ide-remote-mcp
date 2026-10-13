@@ -694,6 +694,12 @@ def entorno(extra=None):
     heredados cambiaban lo que se mide sin que la bateria lo supiera-, mas lo
     que la bateria ponga en extra."""
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('DELPHI_MCP_')}
+    # ...ni lo que el arnes de Claude pone y el servicio NO tiene (medido el
+    # 13-oct-2026, ni de usuario ni de maquina): NoDefaultCurrentDirectoryInExePath
+    # le quita a cmd la busqueda en su carpeta actual, y con ella heredada la
+    # sonda del msbuild.bat plantado (2an de la 1.18.2) salio NEGATIVA contra
+    # una produccion que si lo ejecutaba
+    env = {k: v for k, v in env.items() if k.upper() != 'NODEFAULTCURRENTDIRECTORYINEXEPATH'}
     # La cache del servidor (ServerCacheDir: tablas del disenador, configs del
     # LSP, el estilo de Windows) es la de las BATERIAS, no la de produccion:
     # con la del usuario, un servidor de prueba (otra huella, otra generacion)

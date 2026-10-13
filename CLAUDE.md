@@ -199,6 +199,58 @@ about it: did the agent NAME it, or is it our process? The trash
 (`__delphi-patch`) is the agent's - it restores from it - and stays where
 it is.
 
+## An agent asks for an operation; it never runs anything (David, 2026-10-13)
+
+**Hard rule, key to this project.** In his words: *"we control the server;
+there is no reason at all for an agent to execute ANYTHING directly"* and
+*"whatever an agent wants to run, it has to ask us for it - that way we can
+measure and filter what it asks"*. An agent asks for an OPERATION ("build
+this project, Release, Win64"), never a command line. The server names the
+program and composes every argument by CHOOSING among what it knows - the
+platforms, the configurations the .dproj declares, the IDE's profiles and
+SDKs, the branches git reports. What the agent types only chooses; it never
+travels as text to a program. And "names the program" means its FULL PATH,
+found where the agent cannot write - never a bare name that something
+searches for in a folder the agent writes.
+
+The rule is about the AGENT, not about what the server may run. In his
+words: *"internally we can run whatever suits us; it is the agent that must
+not be able to, directly"*. The server's own work runs what it needs - a
+shell included - as long as nothing the agent controls (its text, its files,
+its folders, the environment it could reach) decides what runs or how. A
+shell is where that is hardest to guarantee (it searches its current folder,
+expands variables, reads metacharacters), so a launch of one in the server
+has a declared house in `test_paisaje`, with its reason.
+
+**Why.** An operation can be judged by its own rule, measured and logged by
+its intent, and its "how" can change without touching the contract. A command
+line can only be guessed at. Free text on a command line is where the jail
+keeps losing, measured on 2026-10-13: `delphi_git` takes free `args` behind a
+block list, and the new judge of 2x (1.18.2) was bypassed by `switch -`,
+`switch --detach <b>`, `switch -f <b>` and `switch -c <n> <start>`; and the
+build ran `cmd.exe /c "rsvars.bat && msbuild ..."` with the agent's
+configuration, profile and device on that line, inheriting the server's whole
+environment - and since that line ran in the project's folder, cmd looked for
+`msbuild` THERE first: a `msbuild.bat` the agent left in its project ran with
+the service's account, outside any container (measured against production the
+same night, with an inert probe; the first probe came out negative only
+because the Claude harness sets `NoDefaultCurrentDirectoryInExePath`, which
+the service does not have). The tool's contract named "build"; the shell
+underneath chose the program.
+
+**The one declared exception.** `delphi_test` runs, on this server, code the
+agent compiled - jailed in the AppContainer (no capabilities, a Job Object,
+fail-closed). That is what the tool is for, and the container is what makes
+it acceptable.
+
+**How it is kept.** Every new tool is born with operation parameters, never
+free arguments. What does not comply yet is declared debt that can only
+shrink (measured 2026-10-13): msbuild through cmd.exe (removed by 2an of
+1.18.2: msbuild.exe by its path, the environment of rsvars.bat read by the
+server), `delphi_git`'s free `args` (18 call sites), the app name in adb's
+`shell am start`, the profile on paclient's line. The judges that exist today
+stay, as a second barrier.
+
 ## One namer (David, 2026-09-20)
 
 The strong form of the rule, and his own words: *"if they always go through

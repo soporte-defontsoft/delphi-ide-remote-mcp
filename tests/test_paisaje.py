@@ -595,6 +595,17 @@ REGLAS = [
      'Lsp.Png: la firma, los datos del IHDR y su lector, uno inverso del otro, para el servidor y el '
      'nodo (David, 11-oct-2026: "leer un png no lo vamos a desperdigar"; eran el escritor del nodo y '
      'dos lectores, uno con la firma entera y otro con sus tres letras)'),
+    # 2an de la 1.18.2: el build iba por cmd.exe /c "rsvars.bat && msbuild ..." en la carpeta
+    # del proyecto, y cmd busca 'msbuild' PRIMERO ahi: un msbuild.bat del agente corria con la
+    # cuenta del servicio (medido el 13-oct contra produccion). No es una prohibicion: el
+    # servidor ejecuta lo que necesite (David: "internamente podemos ejecutar lo que nos
+    # convenga, es el agente el que no debe poder"), pero un shell nuevo se declara aqui con su
+    # porque: que nada del agente decida que corre ni como
+    ('lanzar un shell', r"\bcmd(?:\.exe)?\s+/[cCkK]\b|\bcmd\.exe\b|\bComSpec\b",
+     [],
+     'Ningun shell en el servidor sin casa declarada: un shell busca en su carpeta actual, expande '
+     'variables y lee metacaracteres, y es donde mas cuesta que nada del agente decida que se ejecuta. '
+     'msbuild va por su ruta (Lsp.ProcessLaunch.ProgramaEnPath), sin cmd (2an de la 1.18.2)'),
 ]
 
 
@@ -760,6 +771,8 @@ PLANTADO = {
     'crear una carpeta sin la puerta': "  ForceDirectories(Dir);",
     'atributos o fechas sin la puerta': "  SetFileAttributes(PChar(Ruta), FILE_ATTRIBUTE_NORMAL);",
     'la cabecera de un PNG': "  W := (B[16] shl 24) or (B[17] shl 16) or (B[18] shl 8) or B[19];",
+    # la linea del build de hasta la 1.18.1
+    'lanzar un shell': "  Orden := Format('cmd.exe /c \"\"%s\" && msbuild \"%s\"', [Rs, P]);",
 }
 for regla in REGLAS:
     nombre = regla[0]

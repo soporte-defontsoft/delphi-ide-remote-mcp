@@ -238,8 +238,12 @@ begin
     finally
       FreeEnvironmentStrings(P);
     end;
+    // una fija vacia ('NOMBRE=') QUITA la variable, como SET NOMBRE= en cmd:
+    // rsvars.bat vacia asi PLATFORM y PlatformSDK, y el build ya no lo lee
+    // cmd sino EL lector (Lsp.Discovery.VariablesDeRsVars; 2an de la 1.18.2)
     for var Fija in AFijas do
-      Lineas.Add(Fija);
+      if Pos('=', Fija) < Length(Fija) then
+        Lineas.Add(Fija);
     for Linea in Lineas do
       Result := Result + Linea + #0;
     if Result = '' then

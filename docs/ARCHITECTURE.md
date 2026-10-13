@@ -72,7 +72,7 @@ Legacy Delphi sources are frequently Windows-1252 while LSP mandates UTF-8 JSON.
 
 ## Build tool
 
-`delphi_build` shells out to MSBuild (`rsvars.bat` located via the same registry discovery) and returns structured compiler output. Compilation is intentionally **not** attempted through the LSP: the protocol has no build operation.
+`delphi_build` launches `msbuild.exe` by its full path, with no shell in between, in the environment `rsvars.bat` declares (located via the same registry discovery, and read by the server rather than run), and returns structured compiler output. The agent asks for the operation - project, platform, configuration - and the server composes the command line from what the project and the machine declare. Compilation is intentionally **not** attempted through the LSP: the protocol has no build operation.
 
 ## Design points
 

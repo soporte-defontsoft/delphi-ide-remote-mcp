@@ -1254,10 +1254,11 @@ begin
     Exit(MsgText(SR_ADB_ALLOWLIST_DEVICE));
 end;
 
-{ delphi_build's platform/config/target reach a cmd.exe line UNQUOTED
-  (rsvars.bat && msbuild ...), so a metacharacter there is arbitrary execution
-  that sails past the jail, the test container and the .dproj
-  hazard scanner at once. platform reuses the whitelist that ALREADY exists for
+{ delphi_build's platform/config/target reach msbuild's command line. Until
+  2an of 1.18.2 that line went through cmd.exe UNQUOTED (rsvars.bat &&
+  msbuild ...), where a metacharacter was arbitrary execution; msbuild now
+  runs with no shell, and these judges stay as the second barrier (David,
+  11-oct). platform reuses the whitelist that ALREADY exists for
   the .dproj XML sink (Lsp.Dproj.CanonicalPlatform) instead of a second, weaker
   charset test; target is a fixed trio; config is NOT a fixed list - a project
   may declare its own configurations (parity with the IDE), so it is bounded by
@@ -1291,7 +1292,7 @@ begin
   V := ArgStr(AArguments, 'deviceid').Trim;
   if (V <> '') and BadDeviceToken(V) then
     Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
-  // "sdk" reaches the cmd.exe line (/p:PlatformSDK=): a file NAME, never a
+  // "sdk" reaches msbuild's line (/p:PlatformSDK=): a file NAME, never a
   // path and never a metacharacter (audit 2026-09-25). The build also
   // checks it against the SDKs of the platform, like set-sdk does.
   V := ArgStr(AArguments, 'sdk').Trim;
@@ -2278,9 +2279,9 @@ begin
       Exit;
   end;
   // Universal build-argument filter (BOTH access levels): platform, config and
-  // target land in a cmd.exe line, so a metacharacter there is arbitrary
-  // execution - and it would sail past the jail, the sandbox and the
-  // .dproj hazard scanner in a single call. delphi_test compila por el MISMO
+  // target land in msbuild's line - through cmd.exe until 2an of 1.18.2, where
+  // a metacharacter was arbitrary execution; with no shell now, this stays as
+  // the second barrier. delphi_test compila por el MISMO
   // RunMsBuild y no pasa por aqui: su config la juzga el FONDO, donde vive la
   // regla del nombre (Lsp.Dproj.ConfigDesconocida, por la que pasan los dos
   // antes de la linea; 4.8, revision de la 1.18.1), y su platform la lista

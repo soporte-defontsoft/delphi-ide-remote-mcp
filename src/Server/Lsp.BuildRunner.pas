@@ -2,7 +2,8 @@ unit Lsp.BuildRunner;
 
 { Real builds through MSBuild - the LSP has no build operation, so this runs
   on the machine that owns the compiler: rsvars.bat (located via registry
-  discovery, never hardcoded) + msbuild in one cmd.exe process, output
+  discovery, never hardcoded) read for its environment, and msbuild.exe
+  launched by its full path with no shell in between (2an of 1.18.2), output
   captured and distilled into errors/warnings for a remote agent. }
 
 interface
@@ -1481,6 +1482,25 @@ begin
     raise Exception.Create(MsgText(SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED));
   if not FileExists(Info.RsVarsBat) then
     raise Exception.Create(MsgFmt(SE_BUILD_RSVARS_BAT_FOUND_FMT, [Info.RsVarsBat]));
+  // msbuild SIN cmd.exe (2an de la 1.18.2; David 13-oct: "un agente pide una
+  // operacion, nunca ejecuta nada"). Era cmd.exe /c "rsvars.bat && msbuild
+  // ...": heredaba el entorno ENTERO del servidor (su configuracion incluida)
+  // y cmd buscaba 'msbuild' PRIMERO en su cwd, la carpeta del proyecto: un
+  // msbuild.bat plantado alli lo ejecutaba el servidor (medido el 13-oct
+  // contra produccion). Ahora el entorno de rsvars.bat lo pone EL lector
+  // (VariablesDeRsVars) sin las DELPHI_MCP_* (EntornoSinConfiguracion, el de
+  // delphi_test y git), y msbuild.exe va por su RUTA, buscada solo en el PATH
+  // de ese entorno (ProgramaEnPath). Antes del cerrojo: si falta, no se lanza
+  // nada.
+  var VarsRs := VariablesDeRsVars(Info);
+  var PathRs := '';
+  for var V in VarsRs do
+    if StartsText('PATH=', V) then
+      PathRs := V.Substring(Length('PATH='));
+  var MsBuildExe := ProgramaEnPath('msbuild.exe', PathRs);
+  if MsBuildExe = '' then
+    raise Exception.Create(MsgFmt(SR_BUILD_MSBUILD_NO_ENCONTRADO_FMT, [Info.RsVarsBat]));
+  var EntornoMsBuild := EntornoSinConfiguracion(VarsRs);
 
   // La plataforma con SU nombre (un nombrador: CanonicalPlatform). La puerta
   // la valida sin mirar mayusculas y aqui llegaba tal cual: platform=win64
@@ -1509,6 +1529,12 @@ begin
   Cfg := AConfig;
   if Cfg = '' then
     Cfg := 'Debug';
+  // la configuracion con SU nombre, el que declara el .dproj: lo que teclea el
+  // agente solo elige (2an). Sin configuraciones declaradas, el nombre que ya
+  // juzgo NombreDeConfigNoValido (ConfigDesconocida, arriba)
+  for var C in Proyecto.Configs do
+    if SameText(C, Cfg.Trim) then
+      Cfg := C;
   Target := ATarget;
   if Target = '' then
     Target := 'Build';
@@ -1623,9 +1649,13 @@ begin
       Pedido := NombreDeSdk(Pedido);
       // No basta con que exista un fichero con ese nombre: la lista de SDKs
       // de la plataforma, la MISMA que usa set-sdk (auditoria 25-sep-2026).
-      if not MatchText(Pedido, SdksDePlataforma(Info.Version, Plat)) then
+      var SdksMaquina := SdksDePlataforma(Info.Version, Plat);
+      var IdxSdk := IndexText(Pedido, SdksMaquina);
+      if IdxSdk < 0 then
         raise Exception.Create(MsgFmt(SR_BUILD_SDK_NOEXISTE_FMT,
-          [Pedido, string.Join(', ', SdksDePlataforma(Info.Version, Plat))]));
+          [Pedido, string.Join(', ', SdksMaquina)]));
+      // con SU nombre, el de la lista de la maquina: el agente solo elige (2an)
+      Pedido := SdksMaquina[IdxSdk];
       SdkArg := ' /p:PlatformSDK=' + Pedido;
       SdkUsado := Pedido;
     end
@@ -1708,18 +1738,21 @@ begin
     EventArg := ' /p:PreBuildEvent= /p:PostBuildEvent= /p:PreLinkEvent= /p:PostLinkEvent=';
   // Config entre comillas: su nombre puede llevar un espacio ("Release Plus")
   // y msbuild lo partia en dos argumentos (MSB1008); las comillas no las
-  // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDesconocida)
-  var Orden := Format(
-    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s %s"',
-    [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg,
-     ProfileArg, DeviceArg, EventArg, Verb]);
+  // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDesconocida).
+  // msbuild.exe por su ruta y sin shell (2an, arriba): un metacaracter en un
+  // valor es solo un caracter, y los jueces de cada valor siguen como segunda
+  // barrera (David, 11-oct)
+  var Orden := Format('%s %s /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s %s',
+    [EnComillas(MsBuildExe), EnComillas(TPath.GetFullPath(ADprojPath)), Target, Cfg,
+     Plat, SdkArg, ProfileArg, DeviceArg, EventArg, Verb]);
   // la carpeta del proyecto como cwd: sin ella, msbuild hereda la del proceso
   // (el servicio: la casa del servidor) y lo que una tarea escribe RELATIVO -el
   // .vrc/.res de la info de version- cae FUERA de la jaula (2ak de la 1.18.2,
   // medido: Incl.res/Incl.vrc en la raiz del repo). La carpeta del .dproj ya
-  // esta en las raices y la aprobo la puerta de salida.
+  // esta en las raices y la aprobo la puerta de salida. Ya no se busca nada en
+  // ella: msbuild va por su ruta (con cmd, un msbuild.bat de ahi ganaba)
   var Cwd := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
-  Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode);
+  Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode, EntornoMsBuild);
   // F2039 = el .exe que este build va a escribir esta ABIERTO, casi siempre
   // porque delphi_test lo esta ejecutando ahora mismo: el
   // cerrojo serializa msbuild contra msbuild, pero se suelta antes de que el
@@ -1737,7 +1770,7 @@ begin
     Inc(ReintentosBloqueo);
     Sleep(EsperaBloqueo);
     EsperaBloqueo := EsperaBloqueo * 2;
-    Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode);
+    Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode, EntornoMsBuild);
   end;
   // "cannot find -lX" con un sysroot nuestro: el nombre -dev que falta se
   // completa en el SDK (ver CompletaEnlacesDev) y el build se repite UNA vez.
@@ -1747,7 +1780,7 @@ begin
   begin
     EnlacesDev := CompletaEnlacesDev(Info.Version, SdkUsado, Output, EnlacesNota);
     if EnlacesDev > 0 then
-      Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode);
+      Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode, EntornoMsBuild);
   end;
   finally
     if not Confiado then

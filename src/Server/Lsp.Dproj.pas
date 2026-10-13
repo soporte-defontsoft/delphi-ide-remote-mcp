@@ -113,11 +113,12 @@ function DprDe(const AProject: string): string;
   delphi_build: aceptarla en silencio compilaba en Win64\<Inventada>\ con
   los ajustes de Base (medido el 2026-08-25 en test y el 27-sep en build).
   Antes que la lista, el NOMBRE (NombreDeConfigNoValido): el valor va a la
-  linea de cmd.exe del build, y ni un proyecto sin configuraciones ni uno que
+  linea de msbuild (por cmd.exe hasta 2an de la 1.18.2; sin shell ahora, el
+  juez queda de segunda barrera), y ni un proyecto sin configuraciones ni uno que
   declara un nombre raro lo hacen seguro (4.8, revision de la 1.18.1). }
 function ConfigDesconocida(const ADproj, AConfig: string): string;
 
-{ El nombre de una configuracion que puede llegar a la linea de cmd.exe del
+{ El nombre de una configuracion que puede llegar a la linea de msbuild del
   build (/p:Config=): letras, digitos, espacio, ".", "_" y "-". UNA
   definicion para la puerta (Lsp.Guard.BuildArgDenied) y el fondo
   (ConfigDesconocida); '' no es un nombre malo (es "la de por defecto"). }

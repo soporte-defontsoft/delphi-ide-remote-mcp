@@ -238,6 +238,18 @@ type
   Nunca una carpeta compuesta a mano: la lista es la del IDE. }
 function IdeHelpFiles(const AVersion: string): TArray<TIdeAyuda>;
 
+{ Las variables que deja puestas rsvars.bat, 'NOMBRE=valor', en el orden en
+  que las pone y con sus %VAR% expandidas: con lo ya puesto en el propio
+  fichero, si no del entorno de este proceso, y vacia si no esta (lo que hace
+  cmd en un .bat); %% es un %. EL lector de rsvars.bat: BdsCommonDir y el
+  build, que lanza msbuild con este entorno y SIN cmd.exe (2an de la 1.18.2:
+  con cmd, un msbuild.bat del agente en la carpeta del proyecto ganaba; David
+  13-oct, "es el agente el que no debe poder" decidir que se ejecuta).
+  GRAMATICA PROPIA, declarada: el juez seria cmd.exe y el build ya no lo
+  lanza; rsvars.bat lo escribe el instalador y solo lleva lineas SET, y
+  aqui se lee solo eso (una linea que no es SET se salta). nil si no se lee. }
+function VariablesDeRsVars(const AInfo: TRadStudioInfo): TArray<string>;
+
 { $(BDSCOMMONDIR) as written by the installer in rsvars.bat - the
   AUTHORITATIVE value (no branding names composed by hand: Embarcadero
   renames its Documents folder between eras, e.g. "RAD Studio" ->
@@ -590,25 +602,91 @@ begin
     Result := Result + [MsgText(SL_DISC_UPDATE_SIN_DECLARAR)];
 end;
 
-function BdsCommonDir(const AInfo: TRadStudioInfo): string;
+function VariablesDeRsVars(const AInfo: TRadStudioInfo): TArray<string>;
 var
-  Line: string;
-const
-  SETCMD = 'SET BDSCOMMONDIR=';
+  Puestas: TStringList; // NOMBRE=valor, en orden; la ultima de un nombre manda
+  L, Nombre: string;
+  P: Integer;
+
+  // %VAR% como cmd en un .bat: lo puesto antes en el fichero, si no el
+  // entorno del proceso, si no vacio; %% es un %
+  function Expande(const S: string): string;
+  var
+    I, J, K: Integer;
+    N: string;
+  begin
+    Result := '';
+    I := 1;
+    while I <= Length(S) do
+    begin
+      if S[I] <> '%' then
+      begin
+        Result := Result + S[I];
+        Inc(I);
+        Continue;
+      end;
+      J := PosEx('%', S, I + 1);
+      if J = 0 then
+      begin
+        Result := Result + Copy(S, I, MaxInt);
+        Break;
+      end;
+      N := Copy(S, I + 1, J - I - 1);
+      if N = '' then
+        Result := Result + '%'
+      else
+      begin
+        K := Puestas.IndexOfName(N);
+        if K >= 0 then
+          Result := Result + Puestas.ValueFromIndex[K]
+        else
+          Result := Result + GetEnvironmentVariable(N);
+      end;
+      I := J + 1;
+    end;
+  end;
+
 begin
-  Result := '';
+  Result := nil;
   if not AInfo.Found or not FileExists(AInfo.RsVarsBat) then
     Exit;
+  Puestas := TStringList.Create;
   try
-    for Line in LineasDelTexto(LeeTexto(AInfo.RsVarsBat, [ltIde])) do
-    begin
-      var L := Line.Trim.TrimLeft(['@']);
-      if StartsText(SETCMD, L) then
-        Exit(L.Substring(Length(SETCMD)).Trim);
+    try
+      for var Linea in LineasDelTexto(LeeTexto(AInfo.RsVarsBat, [ltIde])) do
+      begin
+        L := Linea.Trim.TrimLeft(['@']).Trim;
+        if not StartsText('SET ', L) then
+          Continue;
+        L := L.Substring(4).Trim;
+        P := L.IndexOf('=');
+        if P <= 0 then
+          Continue;
+        Nombre := L.Substring(0, P).Trim;
+        var Valor := Expande(L.Substring(P + 1));
+        var K := Puestas.IndexOfName(Nombre);
+        if K >= 0 then
+          Puestas.Delete(K);
+        Puestas.Add(Nombre + '=' + Valor);
+      end;
+    except
+      Exit(nil); // un rsvars que no se lee: quien llama lo dice
     end;
-  except
-    // unreadable rsvars: return '' and let callers drop the entry
+    Result := Puestas.ToStringArray;
+  finally
+    Puestas.Free;
   end;
+end;
+
+function BdsCommonDir(const AInfo: TRadStudioInfo): string;
+const
+  NOMBRE = 'BDSCOMMONDIR=';
+begin
+  // de EL lector de rsvars.bat; '' si no se lee: quien llama quita la entrada
+  Result := '';
+  for var V in VariablesDeRsVars(AInfo) do
+    if StartsText(NOMBRE, V) then
+      Result := V.Substring(Length(NOMBRE)).Trim;
 end;
 
 function BdsUserDir(const AInfo: TRadStudioInfo): string;

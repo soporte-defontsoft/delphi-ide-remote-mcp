@@ -10,6 +10,34 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_build` and `delphi_test` compile with no shell in between.** The
+  build ran `cmd.exe /c "rsvars.bat && msbuild ..."` in the project's folder.
+  cmd looks for a bare `msbuild` in its current folder FIRST, so a
+  `msbuild.bat` that an agent left in its own project ran with the service's
+  account, outside any container - measured against production with an inert
+  probe (it wrote a marker and exited with 1; the build answered that exit
+  code). It came with 2ak of this same version, which moved the build into the
+  project's folder: no released version had it. The line also inherited the
+  server's whole environment, its own
+  configuration included: a `.dproj` could print `$(DELPHI_MCP_ROOTS)`. Now
+  the server reads the environment `rsvars.bat` declares, leaves out its own
+  `DELPHI_MCP_*` settings (the same composer `delphi_test` and `delphi_git`
+  use), asks Windows (`SearchPath`) for `msbuild.exe` in that PATH only, never
+  in the current folder, and launches it by its full path. A value can no
+  longer be a shell metacharacter, and the judges of each value stay as a
+  second barrier. The configuration and the SDK go to msbuild with the name
+  the project and the machine declare, whatever case the agent typed.
+  `BUILD-048` if `msbuild.exe` is not in that PATH; nothing else changes in
+  the contract. `test_build_sin_cmd_1182` (red against production: the
+  planted `msbuild.bat` runs, msbuild sees the server's roots and settings; a
+  mutant for each piece); in `test_paisaje` a launch of a shell in the server
+  now needs a declared house with its reason, and the batteries no longer
+  inherit the harness's `NoDefaultCurrentDirectoryInExePath`, which the
+  service does not have (with it, the first probe came out negative). Point
+  2an of 1.18.2 (David: an agent asks for an operation and never runs
+  anything; the server may run what it needs, as long as nothing the agent
+  controls decides what runs).
+
 - **An edit keeps the line ending of every line it does not touch.**
   Measured on 10-oct: `delphi_textedit` on a file of CRLF lines with one in
   LF, editing another line, wrote the LF line back as CRLF - while every

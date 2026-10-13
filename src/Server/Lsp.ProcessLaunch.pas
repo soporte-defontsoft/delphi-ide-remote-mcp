@@ -40,6 +40,17 @@ function TrocearArgs(const AArgs: string): TArray<string>;
   Mcp.Tools.Workspace y volvio a Lsp.Guard, con su inversa, el 26-sep-2026. }
 function EnComillas(const AValor: string): string;
 
+{ La ruta completa de APrograma, con su extension ('msbuild.exe'), en las
+  carpetas de APath (una lista con ';', la de un entorno) como la resuelve
+  Windows (SearchPath, el juez) y SOLO en ellas: sin la carpeta actual ni la
+  del servidor, que SearchPath mira cuando no se le da lista, y sin entradas
+  relativas. '' si no esta. Quien lanza un programa por su NOMBRE lo resuelve
+  aqui y lo lanza por su RUTA: cmd.exe buscaba 'msbuild' PRIMERO en su cwd -la
+  carpeta del proyecto, que escribe el agente- y un msbuild.bat plantado alli
+  lo ejecutaba el servidor con la cuenta del servicio, sin contenedor (2an de
+  la 1.18.2, medido el 13-oct contra produccion). }
+function ProgramaEnPath(const APrograma, APath: string): string;
+
 implementation
 
 const
@@ -288,6 +299,39 @@ begin
     end;
   end;
   Result := Result + '"';
+end;
+
+function ProgramaEnPath(const APrograma, APath: string): string;
+var
+  Lista: string;
+  Parte: PChar;
+  N: DWORD;
+begin
+  Result := '';
+  // un NOMBRE, no una ruta: una ruta no se busca
+  if (APrograma = '') or (APrograma.IndexOfAny(['\', '/', ':']) >= 0) then
+    Exit;
+  // solo carpetas ABSOLUTAS (con unidad o \\servidor\recurso): una relativa
+  // ('.', una entrada vacia) se resolveria contra la carpeta actual
+  Lista := '';
+  for var Dir in APath.Split([';']) do
+  begin
+    var D := Dir.Trim([' ', #9, '"']);
+    if (D <> '') and (ExtractFileDrive(D) <> '') and (D.Length > Length(ExtractFileDrive(D))) and
+       CharInSet(D[Length(ExtractFileDrive(D)) + 1], ['\', '/']) then
+    begin
+      if Lista <> '' then
+        Lista := Lista + ';';
+      Lista := Lista + D;
+    end;
+  end;
+  if Lista = '' then
+    Exit;
+  SetLength(Result, 32767);
+  N := SearchPath(PChar(Lista), PChar(APrograma), nil, DWORD(Length(Result)), PChar(Result), Parte);
+  if (N = 0) or (N >= DWORD(Length(Result))) then
+    Exit('');
+  SetLength(Result, N);
 end;
 
 end.
