@@ -92,6 +92,32 @@ the MCP `initialize` response (`serverInfo.version`).
   and no answer naming it), `test_desktop_casa_1182` (it needs the Linux
   desktop on, and says so when it is not), `LspTests.Images`.
 
+- **A read-only credential looks, and only looks.** The access table
+  refused a capture to a read-only credential because the server writes a
+  PNG to hand it back - `delphi_designer preview`, `delphi_adb screenshot`
+  and all of `delphi_desktop`, `status` included - and that PNG is the
+  server's own work (above). A capture without `out=` is now a read, judged
+  by what it really needs: the form readable for a preview; remote control
+  (`AllowRemoteRun`, the profile, `RemoteRunProjects`) for the desktop; the
+  allowed devices for adb. What writes or acts is still refused at the
+  entry (`READ-002`): any call with `out=` - one rule for every tool, where
+  only `logcat` had it -; the desktop's `tap`, `type` and `key`, and
+  `overview`, which changes what is on the screen; `project=` on the
+  desktop, which runs that project on the target - what `remote-run`
+  already refused (measured by the change's own reviewer); and `state=` on
+  a preview, which sets properties of the live components with the design
+  packages loaded. The access table names those parameters per command,
+  and the gate and `tools/list` read them from there: `delphi_desktop` is
+  announced as mixed (`screenshot` and `status` read), `readOnlyWhen` says
+  which parameters each capture must go without, and `READ-002` no longer
+  says that the operation "modifies the server machine": a gesture acts on
+  a target. The `out` and `inline` descriptions of the three capture tools
+  no longer say the same thing twice, which keeps `tools/list` under its
+  budget. `test_http_auth` (13 red before; the preview is drawn with the
+  read-only credential and leaves nothing behind), `test_remoterun` (a
+  read-only credential does not run the deployed project through the
+  desktop), `test_deploy_adb`.
+
 - **A unit's designer goes through the gate with it.** `delphi_move` and
   `delphi_delete` of a unit take its `.dfm`/`.fmx` along, and the gate
   judged only the unit: the designer was moved, copied or sent to the trash

@@ -351,5 +351,25 @@ check('PAServer que no contesta: DENIED y que mirar (era INTERNAL)',
       j.get('error', '').startswith('[RUN-010 DENIED]') and 'E0003' in j.get('error', ''),
       r[:300])
 
+# ---- 2ab de la 1.18.2 (revisor, R1): una credencial de SOLO LECTURA no
+# ejecuta. delphi_desktop screenshot/status con project= corre ESE proyecto en
+# el destino (RemoteRun): el revisor lo midio con este montaje - Saluda.exe
+# corrio con --readonly y la respuesta traia su salida. project= no es
+# lectura: READ-002 a la entrada. El control: remote-run de paserver, negado
+# igual con la misma credencial ----
+srv_ro = mc.Stdio(EXE, dict(env), nombre='ro', args=('--readonly',))
+try:
+    r = srv_ro.call('delphi_paserver', {'command': 'remote-run', 'profile': PROFILE, 'project': DPROJ})
+    check('ro: control - remote-run de paserver negado a la entrada (READ-002)',
+          mc.es(r, 'SR_READ_ONLY_FMT'), r[:200])
+    for args in ({'command': 'screenshot'}, {'command': 'status'}, {}):
+        args.update({'profile': PROFILE, 'project': DPROJ})
+        r = srv_ro.call('delphi_desktop', args, t=180)
+        check('ro: desktop %s con project= NO ejecuta el proyecto: READ-002 a la entrada (2ab, R1)'
+              % (args.get('command') or 'sin command'),
+              mc.es(r, 'SR_READ_ONLY_FMT') and 'project=' in r and 'nodeOutput' not in r, r[:250])
+finally:
+    srv_ro.mata()
+
 srv.mata()
 mc.fin('remote-run')

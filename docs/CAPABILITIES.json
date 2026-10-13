@@ -66,7 +66,7 @@
     "delphi_definition": "read-only",
     "delphi_delete": "read-write",
     "delphi_designer": "mixed",
-    "delphi_desktop": "read-write",
+    "delphi_desktop": "mixed",
     "delphi_diagnostics": "read-only",
     "delphi_docs": "read-only",
     "delphi_edit": "read-write",

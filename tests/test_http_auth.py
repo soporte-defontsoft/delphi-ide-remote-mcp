@@ -3,7 +3,7 @@
 Usage:  python tests/test_http_auth.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green.
 """
-import hashlib, json, os, shutil, subprocess, time, urllib.error, urllib.parse, urllib.request
+import glob, hashlib, json, os, shutil, subprocess, time, urllib.error, urllib.parse, urllib.request
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -226,7 +226,9 @@ open(os.path.join(REPO, 'a.txt'), 'w').write('uno\n')
 subprocess.run(['git', '-C', REPO, 'add', 'a.txt'], capture_output=True)
 subprocess.run(['git', '-C', REPO, 'commit', '-q', '-m', 'uno'], capture_output=True)
 try:
-    exe3 = mc.copia_exe(tmpdir3)
+    # con los renderizadores: el preview de una credencial de solo lectura se
+    # mide DIBUJANDO, no solo pasando la puerta (2ab de la 1.18.2)
+    exe3 = mc.copia_exe(tmpdir3, con_render=True)
     paspath = os.path.join(tmpdir3, 'Sample.pas')
     with open(paspath, 'w') as f:
         f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
@@ -350,9 +352,16 @@ try:
         check('anuncio: toda tool de tools/list lleva _meta.access', not sin_meta, sin_meta)
         check('anuncio: readOnlyHint == (access read-only sin sideEffect)', not mal_hint, mal_hint)
         cuando = {t['name']: (t.get('_meta') or {}).get('readOnlyWhen') for t in anunciadas}
-        check('anuncio: git y adb anuncian sus lecturas CONDICIONADAS (readOnlyWhen)',
+        # las capturas, lecturas SIN los parametros que escriben o actuan (2ab
+        # de la 1.18.2): adb screenshot y logcat sin out=, el preview sin out=
+        # ni state=, el escritorio sin out= ni project= (status, sin project=)
+        check('anuncio: git, adb, designer y desktop anuncian sus lecturas CONDICIONADAS (readOnlyWhen)',
               set((cuando.get('delphi_git') or {})) == {'branch', 'tag', 'worktree', 'stash'} and
-              set((cuando.get('delphi_adb') or {})) == {'logcat'}, cuando)
+              set((cuando.get('delphi_adb') or {})) == {'logcat', 'screenshot'} and
+              set((cuando.get('delphi_designer') or {})) == {'preview'} and
+              set((cuando.get('delphi_desktop') or {})) == {'screenshot', 'status'} and
+              'state=' in (cuando.get('delphi_designer') or {}).get('preview', '') and
+              'project=' in (cuando.get('delphi_desktop') or {}).get('status', ''), cuando)
         efectos = {t['name']: (t.get('_meta') or {}).get('sideEffect') for t in anunciadas}
         check('anuncio: report y messages dicen su efecto y readOnlyHint false',
               bool(efectos.get('delphi_report')) and bool(efectos.get('delphi_messages')), efectos)
@@ -390,6 +399,84 @@ try:
         code, body = call('delphi_adb', {'command': 'logcat', 'out': tmpdir3 + '\\log.txt'}, RO_TOKEN)
         check('ro: adb logcat con out= (escribe el log) RECHAZADO en RO a la entrada',
               mc.es(body, 'SR_READ_ONLY_FMT') and 'logcat out=' in body, '%s %s' % (code, body[:160]))
+        # 2ab de la 1.18.2 (David, 12-oct): una credencial de solo lectura MIRA
+        # y no actua. Capturar sin out= es lectura (la juzgan su control remoto,
+        # AdbAllowedDevices y la lectura del form); con out= escribe un fichero
+        # de la jaula; los gestos y overview actuan. El preview, de verdad: la
+        # imagen viaja en la respuesta y no se queda en nuestra casa
+        dfm_ro = os.path.join(tmpdir3, 'FormRo.dfm')
+        with open(os.path.join(tmpdir3, 'FormRo.pas'), 'w', newline='\r\n') as f:
+            f.write('unit FormRo;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.ExtCtrls, System.Classes;\n\n'
+                    'type\n  TFormRo = class(TForm)\n    Panel1: TPanel;\n  end;\n\nimplementation\n\n'
+                    '{$R *.dfm}\n\nend.\n')
+        with open(dfm_ro, 'w', newline='\r\n') as f:
+            f.write("object FormRo: TFormRo\n  Left = 0\n  Top = 0\n  Caption = 'Ro'\n  ClientHeight = 120\n"
+                    "  ClientWidth = 200\n  object Panel1: TPanel\n    Left = 8\n    Top = 8\n    Width = 100\n"
+                    "    Height = 40\n  end\nend\n")
+        capturas_ro = os.path.join(mc.casa_de_capturas(tmpdir3), '**', '*.png')
+        code, body = call('delphi_designer', {'command': 'preview', 'path': dfm_ro}, RO_TOKEN)
+        jp = mc.como_json(mc.texto(json.loads(body)))
+        check('ro: designer preview sin out= es LECTURA: dibuja y la imagen viaja en la respuesta (2ab)',
+              not mc.es(body, 'SR_READ_ONLY_FMT') and jp.get('inlineImage') is True and
+              jp.get('consumed') is True, '%s %s' % (code, body[:300]))
+        # la carpeta existe (se dibujo ahi): con la ruta mal, un glob vacio
+        # pasaria igual (la leccion de P9 de test_designer_preview)
+        check('ro: ...y no deja PNG en la casa de capturas (que existe: se dibujo en ella)',
+              os.path.isdir(mc.casa_de_capturas(tmpdir3)) and not glob.glob(capturas_ro, recursive=True),
+              (mc.casa_de_capturas(tmpdir3), glob.glob(capturas_ro, recursive=True)))
+        png_ro = os.path.join(tmpdir3, 'ro.png')
+        code, body = call('delphi_designer', {'command': 'preview', 'path': dfm_ro, 'out': png_ro}, RO_TOKEN)
+        check('ro: designer preview CON out= (escribe en la jaula) RECHAZADO a la entrada, sin fichero',
+              mc.es(body, 'SR_READ_ONLY_FMT') and 'preview out=' in body and not os.path.exists(png_ro),
+              '%s %s' % (code, body[:200]))
+        # state= pone propiedades de los componentes VIVOS con los paquetes de
+        # diseno cargados (un dataset con CommandText y Active ejecutaria su
+        # SQL): no es mirar el form guardado (revisor del 2ab, R2; David)
+        code, body = call('delphi_designer', {'command': 'preview', 'path': dfm_ro,
+                                              'state': 'Panel1.Caption=hola'}, RO_TOKEN)
+        check('ro: designer preview CON state= (actua sobre los componentes) RECHAZADO a la entrada',
+              mc.es(body, 'SR_READ_ONLY_FMT') and 'preview state=' in body, '%s %s' % (code, body[:200]))
+        # el escritorio: mirar pasa la tabla y lo juzga el CONTROL REMOTO (este
+        # workspace no tiene AllowRemoteRun: su negativa, no READ-002 - y nada
+        # se captura ni se teclea en ninguna maquina). profile es obligatorio
+        # (sin el contesta el binder, SYS-019) y es uno que NO existe: si la
+        # tabla fallara, el gesto lo pararia la misma puerta, sin destino
+        for args in ({'command': 'screenshot'}, {'command': 'status'}, {}):
+            args['profile'] = 'zz-no-existe'
+            code, body = call('delphi_desktop', args, RO_TOKEN)
+            check('ro: desktop %s sin out= pasa la tabla y lo niega el control remoto (2ab)'
+                  % (args.get('command') or 'sin command (= screenshot)'),
+                  not mc.es(body, 'SR_READ_ONLY_FMT') and mc.es(body, 'SR_PASERVER_RUN_DISABLED'),
+                  '%s %s' % (code, body[:200]))
+        # project= ejecuta ESE proyecto en el destino (RemoteRun): medido por el
+        # revisor con el stub de test_remoterun, donde va su prueba de punta a
+        # punta; aqui, la puerta
+        for args in ({'command': 'tap', 'x': '1', 'y': '1'}, {'command': 'type', 'text': 'x'},
+                     {'command': 'key', 'code': 'Enter'}, {'command': 'overview'}, {'command': 'windows'},
+                     {'command': 'screenshot', 'out': tmpdir3},
+                     {'command': 'screenshot', 'project': paspath}, {'command': 'status', 'project': paspath}):
+            args['profile'] = 'zz-no-existe'
+            extra = [p for p in ('out', 'project') if p in args]
+            code, body = call('delphi_desktop', args, RO_TOKEN)
+            check('ro: desktop %s%s ACTUA o escribe: RECHAZADO a la entrada (2ab)'
+                  % (args['command'], ''.join(' %s=' % p for p in extra)),
+                  mc.es(body, 'SR_READ_ONLY_FMT') and all('%s=' % p in body for p in extra),
+                  '%s %s' % (code, body[:200]))
+        # sin out=, lo para SU puerta: la lista de dispositivos del workspace
+        # (ADB-006), no un rechazo cualquiera (revisor del 2ab)
+        code, body = call('delphi_adb', {'command': 'screenshot'}, RO_TOKEN)
+        check('ro: adb screenshot sin out= pasa la tabla y lo juzgan sus dispositivos (ADB-006) (2ab)',
+              not mc.es(body, 'SR_READ_ONLY_FMT') and mc.es(body, 'SR_ADB_ALLOWLIST_DEVICE'),
+              '%s %s' % (code, body[:200]))
+        code, body = call('delphi_adb', {'command': 'screenshot', 'out': png_ro}, RO_TOKEN)
+        check('ro: adb screenshot CON out= RECHAZADO a la entrada, sin fichero (2ab)',
+              mc.es(body, 'SR_READ_ONLY_FMT') and 'screenshot out=' in body and not os.path.exists(png_ro),
+              '%s %s' % (code, body[:200]))
+        # la regla es UNA (out= escribe, sea cual sea el comando), y lee el
+        # argumento como el binder: "Out" tambien cuenta
+        code, body = call('delphi_adb', {'command': 'screenshot', 'Out': png_ro}, RO_TOKEN)
+        check('ro: ...y "Out" (otra grafia) tambien: RECHAZADO a la entrada',
+              mc.es(body, 'SR_READ_ONLY_FMT') and not os.path.exists(png_ro), '%s %s' % (code, body[:200]))
         # rename_symbol: apply se niega A LA ENTRADA (antes lo negaba el escritor
         # al llegar a escribir, con otro texto)
         code, body = call('delphi_rename_symbol', {'path': paspath, 'line': 0, 'character': 5,

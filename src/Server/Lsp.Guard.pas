@@ -814,13 +814,20 @@ type
     Parametro: string;        // atMixta: el parametro que lleva el comando
     // atMixta: comandos que leen SOLO con una condicion (pares comando,
     // condicion en texto): se anuncian como readOnlyWhen; quien decide es la
-    // puerta (git por GitCommandIsQuery, adb logcat por out=)
+    // puerta (git por GitCommandIsQuery)
     Condiciones: TArray<string>;
     // atLectura con un efecto fuera del workspace (un reporte que se
     // escribe, un mensaje que se consume): la credencial de solo lectura
     // puede llamarla, pero readOnlyHint (MCP: "no modifica su entorno") es
     // falso y _meta.sideEffect lo dice (undecima revision)
     Efecto: string;
+    // atMixta: pares comando, parametros (separados por espacio) que, con
+    // valor, hacen que ESE comando no lea: out= escribe un fichero de la
+    // jaula, el project= del escritorio ejecuta ese proyecto en el destino y
+    // el state= del preview pone propiedades de los componentes vivos. Se
+    // anuncian en readOnlyWhen y la puerta niega cualquiera de ellos, y out=,
+    // con el comando que sea (ParametrosQueNoLeen; 2ab de la 1.18.2)
+    SinParametros: TArray<string>;
   end;
 
 { La fila de la tabla para una tool; lo que no esta en ella LEE. }
@@ -1946,7 +1953,8 @@ var
 
 procedure AnadeAcceso(const ATool: string; AAcceso: TAccesoTool;
   const ALecturas: TArray<string>; const AParametro: string = 'command';
-  const ACondiciones: TArray<string> = nil; const AEfecto: string = '');
+  const ACondiciones: TArray<string> = nil; const AEfecto: string = '';
+  const ASinParametros: TArray<string> = nil);
 var
   F: TAccesoDeTool;
 begin
@@ -1956,6 +1964,7 @@ begin
   F.Parametro := AParametro;
   F.Condiciones := ACondiciones;
   F.Efecto := AEfecto;
+  F.SinParametros := ASinParametros;
   GAccesos := GAccesos + [F];
 end;
 
@@ -1976,9 +1985,14 @@ begin
   AnadeAcceso('delphi_upload', atEscritura, []);
   AnadeAcceso('delphi_delete', atEscritura, []);
   AnadeAcceso('delphi_move', atEscritura, []);
-  // tap, type y key actuan sobre el escritorio del destino; screenshot y
-  // status leen en espiritu pero viajan por el mismo camino
-  AnadeAcceso('delphi_desktop', atEscritura, []);
+  // mirar el escritorio del destino (screenshot, status) es lectura y lo
+  // juzga el permiso de control remoto (EjecucionRemotaDenegada); tap, type y
+  // key actuan, y overview abre la vista de actividades: cambia lo que hay en
+  // pantalla (2ab de la 1.18.2, David: "una credencial de solo lectura no
+  // deberia permitir acciones"). out= escribe, y project= EJECUTA ese proyecto
+  // en el destino, lo que remote-run le niega (revisor del 2ab, R1, medido)
+  AnadeAcceso('delphi_desktop', atMixta, ['screenshot', 'status'], 'command', nil, '',
+    ['screenshot', 'out project', 'status', 'out project']);
   // el vault: leerlo vale en solo lectura, escribirlo nunca
   AnadeAcceso('vault_append', atEscritura, []);
   AnadeAcceso('vault_create', atEscritura, []);
@@ -1991,18 +2005,23 @@ begin
   // los listados leen; add-profile escribe un perfil en el servidor y
   // test-connection marca al destino con su credencial guardada
   AnadeAcceso('delphi_paserver', atMixta, ['platforms', 'packages', 'profiles']);
-  // to-text / to-binary reescriben el .dfm/.fmx; el resto mira. preview NO
-  // es lectura: deja un PNG (en la casa de capturas del servidor desde la
-  // 1.18.2; si eso basta para darselo a una credencial de solo lectura lo
-  // decide David, 2ab), como el screenshot de adb (r11a H5)
+  // to-text / to-binary, insert, set y delete reescriben el .dfm/.fmx; el
+  // resto mira. preview tambien MIRA: el PNG es trabajo nuestro, en la casa
+  // de capturas del servidor, y lo juzga la lectura del form (2ab de la
+  // 1.18.2, David: "un preview depende de que tengas permiso de lectura en la
+  // carpeta del form"); out= escribe un fichero de la jaula, y state= pone
+  // propiedades de los componentes VIVOS con los paquetes de diseno cargados
+  // (un dataset con CommandText y Active ejecutaria su SQL; revisor, R2)
   AnadeAcceso('delphi_designer', atMixta, ['info', 'prop', 'tree', 'get', 'lint',
-    'check-binding', 'binding', 'layout']);
-  // mirar el dispositivo (lista, log) no cambia nada; screenshot y logcat
-  // con out= ESCRIBEN una captura/un fichero en la jaula (CaptureTarget):
-  // no son lecturas para una credencial de solo lectura (r11a H5);
+    'check-binding', 'binding', 'layout', 'preview'], 'command', nil, '',
+    ['preview', 'out state']);
+  // mirar el dispositivo (lista, log, pantalla) no cambia nada y lo juzga
+  // AdbAllowedDevices; screenshot y logcat con out= ESCRIBEN un fichero en la
+  // jaula (LlamadaLee). El screenshot sin out= contaba como escritura por el
+  // PNG, que es trabajo nuestro (r11a H5; 2ab de la 1.18.2).
   // connect/disconnect/install/run/tap/key mutan o ejecutan
-  AnadeAcceso('delphi_adb', atMixta, ['discover', 'devices', 'logcat'], 'command',
-    ['logcat', 'without out= (out= writes the log to a file)']);
+  AnadeAcceso('delphi_adb', atMixta, ['discover', 'devices', 'logcat', 'screenshot'], 'command', nil, '',
+    ['logcat', 'out', 'screenshot', 'out']);
   // git decide por ARGUMENTOS (GitCommandIsQuery): se anuncia lo
   // INCONDICIONAL como lectura y lo condicionado con su condicion (branch y
   // tag listan solo sin args ni message; worktree y stash solo args=list). Se
@@ -2037,6 +2056,37 @@ begin
   Result.Parametro := '';
   Result.Condiciones := nil;
   Result.Efecto := '';
+  Result.SinParametros := nil;
+end;
+
+{ Los parametros que, con valor, hacen que una llamada de una mixta no lea:
+  out= siempre (escribe un fichero de la jaula en la tool que lo tome) y los
+  que la tabla nombra para sus comandos (SinParametros). }
+function ParametrosQueNoLeen(const F: TAccesoDeTool): TArray<string>;
+var
+  K: Integer;
+begin
+  Result := ['out'];
+  K := 1;
+  while K <= High(F.SinParametros) do
+  begin
+    for var P in F.SinParametros[K].Split([' '], TStringSplitOptions.ExcludeEmpty) do
+      if not MatchText(P, Result) then
+        Result := Result + [P];
+    Inc(K, 2);
+  end;
+end;
+
+{ La condicion de readOnlyWhen de un comando de SinParametros ("without out=
+  or project="), del mismo par que lee la puerta. }
+function CondicionSinParametros(const AParams: string): string;
+var
+  Ps: TArray<string>;
+begin
+  Ps := AParams.Split([' '], TStringSplitOptions.ExcludeEmpty);
+  for var I := 0 to High(Ps) do
+    Ps[I] := Ps[I] + '=';
+  Result := MsgFmt(SF_ACCESO_SIN_FMT, [string.Join(' or ', Ps)]);
 end;
 
 function LlamadaLee(const AToolName: string; const AArguments: TJSONObject;
@@ -2058,13 +2108,17 @@ begin
   // (ComandoDeTest); '' se perdonaba y llegaba al constructor (r11c H2)
   if SameText(AToolName, 'delphi_test') then
     Cmd := ComandoDeTest(Cmd, ArgStr(AArguments, 'project'), ArgStr(AArguments, 'path'));
-  // delphi_adb logcat con out= escribe el log en un fichero: no lee
-  if SameText(AToolName, 'delphi_adb') and SameText(Cmd, 'logcat') and
-     (Trim(ArgStr(AArguments, 'out')) <> '') then
-  begin
-    AQue := AToolName + ' logcat out=';
-    Exit(False);
-  end;
+  // Lo que hace que una lectura escriba o actue es un PARAMETRO: out= nombra
+  // un fichero de la jaula donde escribir en toda mixta que lo tome, y la
+  // tabla nombra los demas (SinParametros: project=, state=). Se niegan con
+  // el comando que sea, cerrado (2ab de la 1.18.2: era un caso suelto de
+  // logcat, y el project= del escritorio ejecutaba con solo lectura, R1)
+  for var P in ParametrosQueNoLeen(F) do
+    if Trim(ArgStr(AArguments, P)) <> '' then
+    begin
+      AQue := Trim(AToolName + ' ' + Cmd) + ' ' + P + '=';
+      Exit(False);
+    end;
   if SameText(AToolName, 'delphi_git') then
   begin
     // la mitad de consulta de git depende de los argumentos: la MISMA
@@ -2114,13 +2168,21 @@ begin
         for S in F.Lecturas do
           Arr.Add(S);
         Meta.AddPair('readOnlyCommands', Arr);
-        if Length(F.Condiciones) > 0 then
+        if (Length(F.Condiciones) > 0) or (Length(F.SinParametros) > 0) then
         begin
           var Cuando := TJSONObject.Create;
           var K := 0;
           while K + 1 <= High(F.Condiciones) do
           begin
             Cuando.AddPair(F.Condiciones[K], F.Condiciones[K + 1]);
+            Inc(K, 2);
+          end;
+          // ...y los de SinParametros, con el texto del mismo par que lee la
+          // puerta (ParametrosQueNoLeen)
+          K := 0;
+          while K + 1 <= High(F.SinParametros) do
+          begin
+            Cuando.AddPair(F.SinParametros[K], CondicionSinParametros(F.SinParametros[K + 1]));
             Inc(K, 2);
           end;
           Meta.AddPair('readOnlyWhen', Cuando);

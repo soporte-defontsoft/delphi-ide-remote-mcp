@@ -1291,11 +1291,17 @@ const
   // Access control
   // ---------------------------------------------------------------------
   SR_READ_ONLY_FMT =
-    '[READ-002 DENIED] READ-ONLY access. The operation "%s" modifies the ' +
-    'server machine and this credential does not allow it. What each tool ' +
+    '[READ-002 DENIED] READ-ONLY access: this credential only looks. The ' +
+    'operation "%s" writes or acts (a file, a form, a gesture on a ' +
+    'target) and it does not allow that. What each tool ' +
     'allows in this mode is announced by tools/list: annotations.readOnlyHint, ' +
     'and _meta.access with readOnlyCommands (and readOnlyWhen) for the mixed ' +
     'ones. delphi_report is available to tell us about any problem.';
+  // la condicion de un comando que solo lee sin ciertos parametros, en el
+  // anuncio de la tabla de accesos (readOnlyWhen): %s = 'out= or project='
+  // (Lsp.Guard.CondicionSinParametros; 2ab de la 1.18.2)
+  SF_ACCESO_SIN_FMT =
+    'without %s';
 
   SR_GIT_OPTION_FMT =
     '[GIT-003 DENIED] The git option "%s" is not allowed (it can write ' +
@@ -2332,10 +2338,8 @@ const
     se declara antes de su primer uso. }
   SP_CAPTURE_OUT_RULE =
     ': a FOLDER (existing, or ending in \ - the server names the file) ' +
-    'or a FILE whose extension matches the capture''s real format, on THIS ' +
-    'server and jailed like any path. Empty = the capture comes back to ' +
-    'you in the answer or, with inline=false, as a download link that works ' +
-    'once (over stdio there is no link: pass out= to keep the file).';
+    'or a FILE with the capture''s real extension, on THIS server and ' +
+    'jailed. Empty = it travels as "inline" says.';
   SP_ADBLINUX_OUT =
     'screenshot: where the capture lands' + SP_CAPTURE_OUT_RULE;
   SP_ADBLINUX_REGION =
@@ -2351,10 +2355,9 @@ const
   SP_CAPTURE_INLINE =
     'Default true: the capture this answer brings - a screenshot, the one ' +
     'every gesture returns (tap, type, swipe...), a preview - comes back IN ' +
-    'this answer as an image ' +
-    '(scaled to maxwidth), and no file is kept to download later. false = a ' +
-    'file and its ' +
-    'download link (a client without vision, or one that wants the bytes).';
+    'it as an image scaled to maxwidth, and no file is kept. false = a ' +
+    'download link that works once (a client without vision, or one that ' +
+    'wants the bytes); over stdio there is no link: use out=.';
 
   SP_CAPTURE_MAXWIDTH =
     'Inline only: the width the image is scaled to before it travels (0 = ' +
@@ -4396,8 +4399,8 @@ const
     'table does not have, is - the refusal says how), to change one ' +
     'property set, to remove one delete; then preview to see it. ' +
     'to-text/to-binary convert a .dfm. A ' +
-    'read-only credential gets the reading commands (preview is not one of ' +
-    'them).';
+    'read-only credential gets the reading commands, preview included ' +
+    '(without out=).';
 
   SP_DESIGNER_COMMAND =
     'info (every property a class really publishes: kind and type, events ' +

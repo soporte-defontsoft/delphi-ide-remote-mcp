@@ -335,13 +335,18 @@ out = ro.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X",
                              "device": "127.0.0.1"})
 check('readonly: run rechazado (ejecutar en el dispositivo es write)',
       mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'), out[:250])
-# screenshot ESCRIBE la captura en la jaula: con un dispositivo real el escritor
-# lo negaba (EscrituraDenegada en RO) y este check pasaba solo porque sin
-# dispositivo adb contestaba antes. La puerta lo dice a la entrada y el anuncio
-# de tools/list ya no lo lista como lectura (undecima revision, r11a H5)
+# screenshot sin out= MIRA: la captura es trabajo nuestro, en la casa del
+# servidor y no en la jaula (2af), y la juzgan los dispositivos permitidos;
+# con out= escribe un fichero de la jaula y se niega a la entrada (2ab de la
+# 1.18.2; antes se negaba entero por "escribe la captura", r11a H5)
 out = ro.call('delphi_adb', {"command": "screenshot", "device": "127.0.0.1"})
-check('readonly: screenshot rechazado a la entrada (escribe la captura; lo negaba el escritor)',
-      mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'), out[:250])
+check('readonly: screenshot sin out= pasa la puerta y llega a adb (mirar es lectura, 2ab)',
+      not mc.es(out, 'SR_READ_ONLY_FMT') and paso_por_adb(out), out[:250])
+out = ro.call('delphi_adb', {"command": "screenshot", "device": "127.0.0.1",
+                             "out": os.path.join(BASE, 'ro.png')})
+check('readonly: screenshot con out= rechazado a la entrada (escribe en la jaula, 2ab)',
+      mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT') and 'screenshot out=' in out and
+      not os.path.exists(os.path.join(BASE, 'ro.png')), out[:250])
 out = ro.call('delphi_adb', {"command": "tap", "x": "1", "y": "1",
                              "device": "127.0.0.1"})
 check('readonly: tap rechazado', mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'),
