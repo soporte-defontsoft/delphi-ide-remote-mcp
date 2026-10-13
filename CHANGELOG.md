@@ -38,6 +38,13 @@ the MCP `initialize` response (`serverInfo.version`).
   anything; the server may run what it needs, as long as nothing the agent
   controls decides what runs).
 
+- **`delphi_test`'s timeout note no longer states an exit code.** `TEST-008`
+  said "That is why exitCode comes as 1" while the field next to it said 0
+  (Hermes, with `timeoutms=1`; measured in production): a killed process
+  ends with whatever code the kill gives it. The note now says the code is
+  that of a killed process, not a verdict. `test_test_timeout_1182`. H3 of
+  point 9 of 1.18.2.
+
 - **`delphi_designer set` asks the IDE's form reader about a value the table
   cannot judge.** A property the class stores by code (`DefineProperties`) has
   no type in the table, so set accepted any value: Hermes wrote `FontColor =

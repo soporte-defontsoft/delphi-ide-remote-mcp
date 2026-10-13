@@ -4167,8 +4167,8 @@ const
 
   SN_TEST_TIMEOUT_NOTE =
     '[TEST-008] TIME RAN OUT and I KILLED the process: it is not that ' +
-    'the tests fail, it is that they did not finish. That is why ' +
-    'exitCode comes as 1. The numbers you see are from what it managed ' +
+    'the tests fail, it is that they did not finish, so exitCode is the ' +
+    'one of a killed process, not a verdict. The numbers you see are from what it managed ' +
     'to print BEFORE dying, so they are incomplete even if they look ' +
     'good: do not take them as the result. And if "outputTail" comes ' +
     'empty, it is because the output of a console program is kept in a ' +
