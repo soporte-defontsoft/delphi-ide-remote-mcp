@@ -38,6 +38,21 @@ the MCP `initialize` response (`serverInfo.version`).
   anything; the server may run what it needs, as long as nothing the agent
   controls decides what runs).
 
+- **A batch and a changeset judge a form once, on what they wrote.** The
+  form's own judgement - the IDE's parser, the properties, the binding with
+  its class, the wide-form note - ran after EVERY entry, on the half-done
+  file: a batch that took Panel1's block out and put it back lower down, or a
+  changeset that renamed Panel1 in the `.dfm` and then in the `.pas` (the way
+  we recommend), answered `DSGN-021` "Fix it before deploying" about a form
+  that ended clean (Hermes; measured in production). Now, like the structure
+  check, the entries do not judge the form: the batch judges it once at the
+  end, and the commit of a changeset judges every form it touched - by
+  itself or through its unit, since removing a field from a `.pas` breaks the
+  binding too, and that was not judged at all. One composer
+  (`JuicioDeForm`), the same a single edit uses. `test_juicio_final_1182`
+  (red against production on the batch, the rename and the unit-only
+  change; a mutant for each piece). H6 of point 9 of 1.18.2.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

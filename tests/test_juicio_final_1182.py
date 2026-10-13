@@ -1,0 +1,101 @@
+# -*- coding: utf-8 -*-
+"""H6 de Hermes (1.18.2, punto 9; informe 20261013-123547, medido el 13-oct con
+las sondas sonda_tanda_dsgn021 y sonda_changeset_dsgn021): el juicio del FORM
+(el parser del IDE, las propiedades, el enlace con su clase) salia del estado
+INTERMEDIO de una tanda y de un changeset. Un bloque quitado y puesto mas abajo,
+o un renombre .dfm + .pas por changeset (la forma que recomendamos), daban
+DSGN-021 "Fix it before deploying" de un form que acababa limpio. Ahora el
+juicio es del fichero entero, como el de la estructura: las entradas no lo
+hacen y quien agrupa lo hace UNA vez sobre lo escrito; el changeset juzga cada
+form que toco, por si mismo o por su unidad.
+
+  J1 tanda que quita el bloque de Panel1 y lo pone tras Label1: sin DSGN-021
+     (ROJO en produccion)
+  J2 changeset que renombra Panel1 -> Panel2 en el .dfm y en el .pas: sin
+     DSGN-021 (ROJO en produccion)
+  J3 changeset que solo toca el .pas y le quita el campo a Panel1: DSGN-021
+     (el enlace se rompe desde la unidad; ROJO en produccion: no se juzgaba)
+  J4 control: una tanda que deja el form roto (quita el bloque y nada mas)
+     sigue diciendo DSGN-021, UNA vez
+  J5 control: un delphi_edit suelto sobre el .dfm sigue juzgandolo
+
+Uso:  python tests/test_juicio_final_1182.py [ruta-a-DelphiLspMcp.exe]
+"""
+import os
+import mcp_cliente as mc
+from mcp_cliente import check
+
+BASE = mc.carpeta('juicio_final_1182')
+JAIL = os.path.join(BASE, 'jail')
+os.makedirs(JAIL)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+
+BLOQUE_P = '  object Panel1: TPanel\n    Left = 8\n    Top = 8\n  end'
+BLOQUE_L = '  object Label1: TLabel\n    Left = 8\n    Top = 40\n  end'
+
+
+def par(nombre):
+    d = os.path.join(JAIL, nombre)
+    os.makedirs(d)
+    pas = os.path.join(d, 'Unit1.pas')
+    dfm = os.path.join(d, 'Unit1.dfm')
+    with open(pas, 'w', encoding='utf-8', newline='\r\n') as f:
+        f.write('unit Unit1;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.Controls, Vcl.ExtCtrls, Vcl.StdCtrls,'
+                ' System.Classes;\n\ntype\n  TForm1 = class(TForm)\n    Panel1: TPanel;\n    Label1: TLabel;\n'
+                '  end;\n\nvar\n  Form1: TForm1;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
+    with open(dfm, 'w', encoding='utf-8', newline='\r\n') as f:
+        f.write('object Form1: TForm1\n  Left = 0\n  Top = 0\n  Caption = \'Form1\'\n' + BLOQUE_P + '\n' +
+                BLOQUE_L + '\nend\n')
+    return pas, dfm
+
+
+def dsgn021(r):
+    return r.count(mc.catalogo()['SN_DESIGNER_BINDING_LINT_HEADER'][:40])
+
+
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='juicio-final', t=240)
+try:
+    pas, dfm = par('j1')
+    r = srv.call('delphi_edit', {'path': dfm, 'edits': [
+        {'old': BLOQUE_P, 'new': ''},
+        {'old': BLOQUE_L, 'new': BLOQUE_L + '\n' + BLOQUE_P}]}, t=240)
+    check('J1 tanda que mueve el bloque de Panel1: sin DSGN-021 (el form final esta limpio)',
+          not mc.rechazado(r) and dsgn021(r) == 0, r[:500])
+
+    pas, dfm = par('j2')
+    cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': dfm,
+                                  'old': '  object Panel1: TPanel', 'new': '  object Panel2: TPanel'})
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': pas,
+                                  'old': '    Panel1: TPanel;', 'new': '    Panel2: TPanel;'})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
+    check('J2 changeset que renombra Panel1 -> Panel2 en .dfm y .pas: sin DSGN-021',
+          not mc.rechazado(r) and dsgn021(r) == 0, r[:600])
+
+    pas, dfm = par('j3')
+    cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': pas,
+                                  'old': '    Panel1: TPanel;', 'new': '    // sin campo'})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
+    check('J3 changeset que solo le quita el campo al .pas: DSGN-021 (el enlace roto desde la unidad)',
+          not mc.rechazado(r) and dsgn021(r) == 1, r[:600])
+
+    pas, dfm = par('j4')
+    r = srv.call('delphi_edit', {'path': dfm, 'edits': [
+        {'old': BLOQUE_P, 'new': ''},
+        {'old': "  Caption = 'Form1'", 'new': "  Caption = 'Form1b'"}]}, t=240)
+    check('J4 control: una tanda que deja el form roto dice DSGN-021, una vez',
+          not mc.rechazado(r) and dsgn021(r) == 1, r[:500])
+
+    pas, dfm = par('j5')
+    r = srv.call('delphi_edit', {'path': dfm, 'old': '  object Panel1: TPanel', 'new': '  object Panel9: TPanel'},
+                 t=240)
+    check('J5 control: un delphi_edit suelto del .dfm lo sigue juzgando (DSGN-021)',
+          not mc.rechazado(r) and dsgn021(r) == 1, r[:500])
+finally:
+    srv.cierra()
+
+mc.borra(BASE)
+mc.fin('juicio del form al final de la tanda y del changeset 1182 (H6)')

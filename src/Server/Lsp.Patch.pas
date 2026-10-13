@@ -684,6 +684,20 @@ function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
   lineas *** (revisor 2 de la noche, B-8). }
 function AvisosDelMotor(const ARespuesta: string): TArray<string>;
 
+{ El juicio de un form de texto ESCRITO (ATexto, en AEnc), como avisos de una
+  edicion: la nota EDIT-084 y lo que dice DesignerLint (el parser del IDE, las
+  propiedades, el enlace con su clase, la nota de form ancho). Vacio si APath
+  no es un designer. Lo hacen los escritores en cada edicion suelta, y la
+  tanda y el changeset UNA vez al final (AplazaJuicioDeForm). }
+function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
+{ Mientras dure (True ... False, anidable, de ESTE hilo: las llamadas HTTP van
+  a la vez), los escritores no juzgan el form en cada edicion: el juicio es
+  del fichero ENTERO, como la estructura, y lo hace quien agrupa sobre lo que
+  quedo escrito (H6 de Hermes, 1.18.2: cada entrada juzgaba su estado
+  intermedio, y un renombre .dfm + .pas por changeset daba DSGN-021 "Fix it
+  before deploying" de un form que acababa limpio). }
+procedure AplazaJuicioDeForm(AAplaza: Boolean);
+
 { La codificacion en que nace un form NUEVO (APath .dfm/.fmx; otra cosa
   devuelve AEnc sin mirar): AEnc, la que eligio quien escribe (la del IDE),
   si EL parser del IDE lee ATexto en ella; si no, UTF-8 con BOM si en esa si
@@ -2726,6 +2740,27 @@ end;
 
 function DesignerLint(const APath, ATexto, AEnc: string): TArray<string>; forward;
 
+threadvar
+  // >0 dentro de una tanda o un changeset sobre un form: ver
+  // AplazaJuicioDeForm (interface). Por hilo, como GOrigenes
+  GJuicioDeFormAplazado: Integer;
+
+procedure AplazaJuicioDeForm(AAplaza: Boolean);
+begin
+  if AAplaza then
+    Inc(GJuicioDeFormAplazado)
+  else if GJuicioDeFormAplazado > 0 then
+    Dec(GJuicioDeFormAplazado);
+end;
+
+function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
+begin
+  Result := [];
+  if not EsRutaDeDesigner(APath) then
+    Exit;
+  Result := [MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO)] + DesignerLint(APath, ATexto, AEnc);
+end;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer): string;
 var
@@ -2818,12 +2853,10 @@ begin
   // un form, juzgado como en la edicion de una linea (DoEdit): el parser del
   // IDE y las tablas. Un bloque escribia un form que el IDE no abre sin decir
   // nada (medido el 10-oct-2026: un // en un .fmx)
-  if EsRutaDeDesigner(APath) then
-  begin
-    Result := Result + #10 + MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO);
-    for var LintW in DesignerLint(APath, Joined, Enc) do
+  // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6)
+  if GJuicioDeFormAplazado = 0 then
+    for var LintW in JuicioDeForm(APath, Joined, Enc) do
       Result := Result + #10 + LintW;
-  end;
 end;
 
 function FragmentoALinea(const APath, AFrag, ANew: string; AAtLine: Integer;
@@ -3058,8 +3091,9 @@ var
   Sb: TStringBuilder;
   Una, Anc, Nue: string;
   N, Fallo, EnLinea: Integer;
-  Borra: Boolean;
+  Borra, Aplazado: Boolean;
 begin
+  Aplazado := False;
   V := TJSONObject.ParseJSONValue(AEditsJson);
   // Un cliente que codifica dos veces manda el array como CADENA JSON
   // (hermes, 25-sep-2026): se desenvuelve UNA vez. Lo que siga sin ser un
@@ -3235,6 +3269,11 @@ begin
       except
         TextoAntes := '';
       end;
+      // el juicio del FORM, como el de la estructura, del fichero entero: las
+      // entradas no lo hacen, y se hace UNA vez al acabar (H6, abajo)
+      Aplazado := EsRutaDeDesigner(APath);
+      if Aplazado then
+        AplazaJuicioDeForm(True);
       for V in Arr do
       begin
         Inc(N);
@@ -3405,12 +3444,10 @@ begin
         // edicion en una linea: en una tanda no llegaban al agente. EL lector
         // de los avisos de una respuesta (AvisosDelMotor), con lo que cada uno
         // lleva debajo
+        // (el juicio del form, y su nota de form ancho, no van aqui: se hacen
+        // una vez al final, H6)
         for var LA in AvisosDelMotor(Una) do
-          // la nota del form ancho es del FICHERO: va una vez, al final (salia
-          // una por entrada con avisos ***: R5 del revisor propio del punto 4)
-          if EsMsg(LA, SN_DSGN_FORM_ANCHO_FMT) then
-            Continue
-          else if EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
+          if EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_END_FMT) or
              EsMsg(LA, SN_EDIT_ESTRUCTURA_ROTA_ULTIMA) then
             DeEstructura := DeEstructura + [FilaDeEntrada(N, LA)]
           else
@@ -3470,15 +3507,18 @@ begin
       except
         Avisos := Avisos + DeEstructura;
       end;
-      // un form de texto en UTF-16/32 (DSGN-121) es del FICHERO, no de una
-      // entrada: una vez, al final. Los avisos de cada entrada solo traen lo
-      // que va tras una cabecera *** (AvisosDelMotor), y la nota se perdia (B1
-      // de la 1.18.2). Su compositor es uno, y la de las entradas se salta
-      if EsRutaDeDesigner(APath) then
-      begin
-        var KA: TEncKind;
-        if FormAncho(APath, KA) then
-          Avisos := Avisos + [NotaDeFormAncho(ExtractFileName(APath), EncName(KA))];
+      // el juicio del FORM (DesignerLint: el parser del IDE, las propiedades, el
+      // enlace con su clase y la nota de form ancho, DSGN-121) es del fichero
+      // ENTERO: UNA vez, sobre lo que quedo escrito. Cada entrada juzgaba su
+      // estado intermedio y un bloque movido en dos pasos daba DSGN-021 de un
+      // form que acababa limpio (H6 de Hermes, 1.18.2); la nota de form ancho
+      // se perdia en los avisos de las entradas (B1) y va con el
+      if Aplazado then
+      try
+        var EncF: string;
+        Avisos := Avisos + JuicioDeForm(APath, PatchLoadText(APath, EncF), EncF);
+      except
+        // un form que no se relee no tumba una tanda ya escrita
       end;
       if SinCambios = Arr.Count then
         Result := MsgFmt(SN_PATCH_EDITS_SIN_CAMBIOS_FMT,
@@ -3492,6 +3532,8 @@ begin
       Sb.Free;
     end;
   finally
+    if Aplazado then
+      AplazaJuicioDeForm(False);
     LeaveFileEdit;
     Arr.Free;
   end;
@@ -5208,12 +5250,10 @@ begin
       Escritas := 0;
     for var Aviso in AvisosDeLlaves(APath, AfterText, HitIdx, Escritas) do
       Warnings.Add(Aviso);
-    if AIsDesigner then
-    begin
-      Warnings.Add(MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO));
-      for var LintW in DesignerLint(APath, AfterText, EncName(K)) do
+    // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6)
+    if AIsDesigner and (GJuicioDeFormAplazado = 0) then
+      for var LintW in JuicioDeForm(APath, AfterText, EncName(K)) do
         Warnings.Add(LintW);
-    end;
 
     if not AIsDesigner then
     begin

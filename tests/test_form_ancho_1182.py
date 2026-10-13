@@ -16,12 +16,13 @@ escritores genericos (Lsp.Patch.DesignerLint).
   W6 designer set la sigue diciendo (el compositor de antes, ahora el helper)
 
 Y lo del revisor propio del punto 4 (13-oct):
-  W7 una tanda cuyas entradas traen avisos *** (el parser: una cadena sin
-     cerrar) dice la nota UNA vez: cada entrada la traia tras su *** (R5)
+  W7 una tanda que deja el parser quejandose (una cadena sin cerrar) dice la
+     nota UNA vez: cada entrada la traia tras su *** (R5). Desde H6 (el juicio
+     del form, una vez al final) el aviso del parser sale una vez tambien
   W8 un changeset que edita dos Unit1.dfm de dos carpetas da DOS notas, cada
-     una con su ruta: se deduplicaba por el nombre del fichero (R6)
-  W9 el gemelo de W7 en el changeset: dos pasos sobre un UTF-16 con avisos ***,
-     la nota UNA vez (R5, su lado del changeset)
+     una en la linea de su ruta: se deduplicaba por el nombre (R6)
+  W9 el gemelo de W7 en el changeset: dos pasos sobre un UTF-16, la nota UNA
+     vez (R5, su lado del changeset; con H6, el juicio tambien)
 
 Uso:  python tests/test_form_ancho_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -101,7 +102,7 @@ try:
                                                      {'old': '  Left = 0', 'new': '  Left = 4'},
                                                      {'old': '  Top = 0', 'new': '  Top = 4'}]})
     check('W7 una tanda de 3 entradas con avisos *** (el parser) sobre un .dfm UTF-16: la nota UNA vez',
-          not mc.rechazado(r) and "'Ancho7" in lee(p, 'utf16') and r.count('***') >= 3 and
+          not mc.rechazado(r) and "'Ancho7" in lee(p, 'utf16') and r.count('***') >= 1 and
           r.count('UW7.dfm is a text form') == 1, (r.count('***'), r.count('UW7.dfm is a text form'), r[:600]))
 
     # W8 dos forms con el mismo nombre en dos carpetas, en un changeset: dos notas
@@ -121,7 +122,8 @@ try:
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid})
     check('W8 un changeset con a\\Unit1.dfm y b\\Unit1.dfm (UTF-16): DOS notas, una por carpeta',
           not mc.rechazado(r) and r.count('Unit1.dfm is a text form') == 2 and
-          ('a\\Unit1.dfm is a text form' in r) and ('b\\Unit1.dfm is a text form' in r), r[:800])
+          all(any((sub + '\\Unit1.dfm: ') in L and 'is a text form' in L for L in r.split('\n'))
+              for sub in ('a', 'b')), r[:800])
 
     # W9 el changeset con avisos *** en sus pasos: la nota una vez
     p = par('UW9', 'utf16')
@@ -133,7 +135,7 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid})
     check('W9 un changeset de 2 pasos con avisos *** (el parser) sobre un .dfm UTF-16: la nota UNA vez',
-          not mc.rechazado(r) and "'Ancho9" in lee(p, 'utf16') and r.count('***') >= 2 and
+          not mc.rechazado(r) and "'Ancho9" in lee(p, 'utf16') and r.count('***') >= 1 and
           r.count('UW9.dfm is a text form') == 1, (r.count('***'), r.count('UW9.dfm is a text form'), r[:800]))
 finally:
     srv.cierra()

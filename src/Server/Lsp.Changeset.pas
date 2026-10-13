@@ -64,9 +64,7 @@ uses
   Lsp.TextEdit,
   Lsp.Texts,
   Lsp.TodoONada,
-  Lsp.Mascara,
-  Lsp.DesignerBin,
-  Lsp.Codificacion;
+  Lsp.Mascara;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -366,11 +364,10 @@ begin
           AError := R
         else
           // EL lector de los avisos de una respuesta, con lo que llevan debajo
+          // (el juicio de un form no va aqui: lo hace el commit una vez por
+          // form, al final, H6)
           for var LA in AvisosDelMotor(R) do
-            // la nota del form ancho va una vez por FICHERO, con el resumen
-            // (R5 del revisor propio del punto 4 de la 1.18.2)
-            if not EsMsg(LA, SN_DSGN_FORM_ANCHO_FMT) then
-              AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') + LA;
+            AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') + LA;
       end;
     opCreate:
       begin
@@ -1027,7 +1024,10 @@ begin
           Lineas[I] := C.Ops[I].AtLine;
         // los avisos del motor de cada paso, con su fichero (M-6)
         var AvisosTodos := '';
-        begin
+        // el juicio de los forms es del lote entero: los pasos no lo hacen, y
+        // se hace una vez al final (H6, abajo)
+        AplazaJuicioDeForm(True);
+        try
           for I := 0 to C.Ops.Count - 1 do
           begin
             Op := C.Ops[I];
@@ -1091,6 +1091,8 @@ begin
               Break;
             end;
           end;
+        finally
+          AplazaJuicioDeForm(False);
         end;
         // Counts BEFORE dropping the changeset: GSets owns it, so Remove
         // FREES C and reading C.Ops.Count afterwards returned 0 - the
@@ -1109,8 +1111,10 @@ begin
         // are the file's.
         Audit := TStringBuilder.Create;
         Seen := TStringList.Create;
+        var Juzgados := TStringList.Create; // los forms ya juzgados (H6)
         try
           Seen.CaseSensitive := False;
+          Juzgados.CaseSensitive := False;
           for Op in C.Ops do
           begin
             if Seen.IndexOf(Op.Path) < 0 then
@@ -1129,21 +1133,41 @@ begin
                IfThen(D = 0, MsgText(SF_CHSET_MISMO_NUMERO_LINEAS),
                  MsgFmt(SF_CHSET_LINEAS_EN_TOTAL_FMT,
                    [IfThen(D > 0, '+', ''), D]))]));
-            // un form de texto en UTF-16/32 que el lote escribio: dcc no lo
-            // compila (DSGN-121). Del FICHERO, una vez: los avisos de cada paso
-            // solo traen lo que va tras una cabecera *** y la callaban (B1 de
-            // la 1.18.2); la de los pasos se salta. Con la ruta, como la linea
-            // de arriba: por el nombre, dos Unit1.dfm de dos carpetas eran una
-            // nota (R6 del revisor propio del punto 4)
-            var KA: TEncKind;
-            if EsRutaDeDesigner(FPath) and FormAncho(FPath, KA) then
-              // cualificada: aqui EncName es tambien una variable local
-              AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
-                NotaDeFormAncho(MaskDriveText('', FPath), Lsp.Codificacion.EncName(KA));
+            // el juicio de cada FORM que el lote toco - el suyo, o su unidad:
+            // el enlace del form con su clase se rompe tambien desde el .pas -,
+            // UNA vez y sobre lo que quedo escrito, con su ruta delante como
+            // la linea de arriba (dos Unit1.dfm de dos carpetas: R6). Cada paso
+            // juzgaba su estado intermedio: un renombre .dfm + .pas daba
+            // DSGN-021 "Fix it before deploying" de un form que acababa limpio
+            // (H6 de Hermes, 1.18.2). Lleva la nota de form ancho (DSGN-121)
+            if Applied then
+            begin
+              var Forms: TArray<string> := [];
+              if EsRutaDeDesigner(FPath) then
+                Forms := [FPath]
+              else if SameText(ExtractFileExt(FPath), '.pas') then
+                for var Df in DesignersDeUnidad(FPath) do
+                  if TFile.Exists(Df) then
+                    Forms := Forms + [Df];
+              for var Fm in Forms do
+                if Juzgados.IndexOf(Fm) < 0 then
+                begin
+                  Juzgados.Add(Fm);
+                  try
+                    var EncF: string;
+                    for var LJ in JuicioDeForm(Fm, PatchLoadText(Fm, EncF), EncF) do
+                      AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
+                        Format('  %s: %s', [MaskDriveText('', Fm), LJ]);
+                  except
+                    // un form que no se relee no tumba un lote ya escrito
+                  end;
+                end;
+            end;
           end;
           AuditText := Audit.ToString.TrimRight;
         finally
           Seen.Free;
+          Juzgados.Free;
           Audit.Free;
         end;
         if not Applied then
