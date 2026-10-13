@@ -38,6 +38,20 @@ the MCP `initialize` response (`serverInfo.version`).
   anything; the server may run what it needs, as long as nothing the agent
   controls decides what runs).
 
+- **`delphi_designer set` asks the IDE's form reader about a value the table
+  cannot judge.** A property the class stores by code (`DefineProperties`) has
+  no type in the table, so set accepted any value: Hermes wrote `FontColor =
+  -65536` and `HorzTextAlign = taRightJustify` into an FMX `TEdit`, set said
+  ok, and the form no longer opened (measured in production: `EReadError`,
+  "Invalid property value"). Now, when a value went unjudged, the form as it
+  would be is loaded first by the same reader the designer uses (the judge of
+  the sibling order already asks it), and set, `props` and insert with props
+  refuse (`DSGN-149`, with what the reader said) when THAT property of THAT
+  component does not load - a form that already failed on another component
+  is not held against the set. `test_designer_carga_1182` (red against
+  production on `value` and `props`; a mutant for the "that component"
+  rule). H2 of point 9 of 1.18.2.
+
 - **`delphi_designer set` no longer writes `nil` as text.** An unquoted `nil`
   only clears a reference to another component (the IDE leaves the line
   out), and the parameter said "nil to clear one", which reads as "remove the

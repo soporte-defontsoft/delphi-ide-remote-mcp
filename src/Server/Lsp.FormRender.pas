@@ -108,6 +108,11 @@ function RaizParaElRender(const ARuta: string): string;
   TReader. Componente es el Name del objeto (o su clase, el de un item de una
   coleccion: lo que pone TReader) y Propiedad su ruta (Font.Size). }
 function IgnoradaDeTexto(const ATexto: string): TIgnorada;
+{ El ERROR= de un ayudante que no pudo LEER el form ('EReadError: Error
+  reading Edit1.FontColor: Invalid property value': la clase de la excepcion,
+  ': ' y su mensaje, como lo escriben FormRender.Vcl y FormRender.Fmx) -> sus
+  partes, por IgnoradaDeTexto. Componente vacio si no es eso. }
+function ErrorDeLecturaDe(const AError: string): TIgnorada;
 
 { La salida del renderizador -> sus campos (las lineas '#' son traza). }
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
@@ -124,10 +129,11 @@ function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
   de APath - y escrito por TWriter, lo que hace el IDE al guardar: AEscrito.
   ASustituidas, las clases que no pudo cargar (su sustituto no sabe como las
   escribe el IDE); ASinLeer, los ancestros sin los que leyo el form (PARTIAL=:
-  un juicio a medias). '' si bien; si no, el fallo. La propuesta se escribe en
+  un juicio a medias). '' si bien; si no, el fallo, y en AError el ERROR= del
+  ayudante tal cual (ErrorDeLecturaDe lo lee). La propuesta se escribe en
   una carpeta de descarga del temporal del disenador y se borra siempre. }
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
-  out ASustituidas, AAvisos, ASinLeer: TArray<string>): string;
+  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out AError: string): string;
 
 { LO COMUN de una peticion de render para el form APath (ya por la puerta de
   lectura): el framework (AFramework, o el del fichero si va vacio), la ruta,
@@ -265,6 +271,20 @@ begin
     Result.Componente := M.Groups[1].Value;
     Result.Propiedad := M.Groups[2].Value;
     Result.Motivo := M.Groups[3].Value;
+  end;
+end;
+
+function ErrorDeLecturaDe(const AError: string): TIgnorada;
+var
+  P: Integer;
+begin
+  Result := Default(TIgnorada);
+  Result.Texto := AError;
+  P := Pos(': ', AError);
+  if (P > 1) and TRegEx.IsMatch(Copy(AError, 1, P - 1), '\AE\w+\z') then
+  begin
+    Result := IgnoradaDeTexto(Copy(AError, P + 2, MaxInt));
+    Result.Texto := AError;
   end;
 end;
 
@@ -622,7 +642,7 @@ begin
 end;
 
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
-  out ASustituidas, AAvisos, ASinLeer: TArray<string>): string;
+  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out AError: string): string;
 var
   Pet: TPeticionRender;
   R: TRespuestaRender;
@@ -630,6 +650,7 @@ var
 begin
   Result := '';
   AEscrito := '';
+  AError := '';
   ASustituidas := [];
   AAvisos := [];
   ASinLeer := [];
@@ -660,6 +681,7 @@ begin
     Pet.Carpeta := TPath.GetDirectoryName(APath);
     Pet.Escribe := True;
     R := CorreRender(Pet);
+    AError := R.Error;
     if R.Fallo <> '' then
       Exit(R.Fallo);
     AEscrito := string.Join(#13#10, R.Escrito);

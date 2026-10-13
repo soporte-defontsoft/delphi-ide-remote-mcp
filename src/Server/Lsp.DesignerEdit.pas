@@ -161,6 +161,9 @@ type
   TValorPuesto = record
     Prop, Valor, Antes, Aviso: string;
     HabiaAntes, Comillas, Quitada, NadaQueQuitar: Boolean;
+    // la tabla la acepto SIN hoja de tipo (la guarda la clase por codigo):
+    // su valor lo juzga el cargador (CargaLoPuesto, H2 de Hermes, 1.18.2)
+    SinJuez: Boolean;
   end;
 
 { ---- el form ---- }
@@ -1024,6 +1027,8 @@ function PonEnMemoria(const F: TFormEnEdicion; const ANombre, AProp, AValor: str
   out AInfo: TValorPuesto): string; forward;
 function ParesDeProps(const AProps: string; out AProps_, AValores: TArray<string>): string; forward;
 procedure PonValorPuesto(AObj: TJSONObject; const ANombre: string; const AInfo: TValorPuesto); forward;
+function CargaLoPuesto(const F: TFormEnEdicion; const ANombre: string;
+  const AInfos: array of TValorPuesto): string; forward;
 // EL movimiento de un bloque de form (set parent= y el orden, 3.11)
 function ConBloqueMovido(const ALineas, ABloque: TArray<string>; AIni, ALargo: Integer;
   var ADest: Integer): TArray<string>; forward;
@@ -1457,6 +1462,9 @@ begin
           Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Props[I], Result]));
       end;
       DfmLineas := Copy(F.Doc.Lines);
+      Result := CargaLoPuesto(F, Nombre, Infos);
+      if Result <> '' then
+        Exit;
       var Nuevo := ObjetoPorNombre(F.Doc, Nombre);
       if Nuevo <> nil then
         FinBloque := Nuevo.EndLine - 1;
@@ -2001,6 +2009,7 @@ begin
   else
     F.Doc.SetPropTrozos(Obj, Prop, Trozos, WasThere);
   AInfo.Valor := V;
+  AInfo.SinJuez := not HayHoja;
   AInfo.Antes := Antes;
   AInfo.HabiaAntes := WasThere;
   AInfo.Comillas := Comillas;
@@ -2056,6 +2065,9 @@ begin
       Exit;
     if Info.NadaQueQuitar then
       Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, Info.Prop]));
+    Result := CargaLoPuesto(F, Nombre, [Info]);
+    if Result <> '' then
+      Exit;
     Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
     if Result <> '' then
       Exit;
@@ -2156,6 +2168,9 @@ begin
         Cambia := True;
     if not Cambia then
       Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, string.Join(', ', Props)]));
+    Result := CargaLoPuesto(F, Nombre, Infos);
+    if Result <> '' then
+      Exit;
     Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
     if Result <> '' then
       Exit;
@@ -2480,14 +2495,15 @@ end;
 function JuezDelOrden(const F: TFormEnEdicion; const ATexto, ANomObj, ANomPadre: string;
   out ANuestro, ASuyo: TArray<string>): string;
 var
-  Escrito: string;
+  Escrito, ErrorAyudante: string;
   Sustituidas, Avisos, SinLeer, Faltan: TArray<string>;
   Doc: TStyleDoc;
   P: TStyleObj;
 begin
   ANuestro := [];
   ASuyo := [];
-  Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer);
+  Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer,
+    ErrorAyudante);
   if Result <> '' then
     Exit;
   // un ancestro que el ayudante no encontro (sin .pas que lo diga o sin
@@ -2945,6 +2961,40 @@ begin
   finally
     F.Doc.Free;
   end;
+end;
+
+{ EL CARGADOR de verdad (norma 6) para lo que la tabla no juzga: una propiedad
+  que la clase guarda POR CODIGO (DefineProperties) se acepta sin hoja de tipo,
+  y set la escribia sin saber si se leia (H2 de Hermes, 1.18.2, medido en
+  produccion: FontColor = -65536 en un TEdit FMX -> "ok", y el form ya no
+  cargaba: EReadError "Invalid property value"). Solo si alguna de AInfos va
+  SinJuez: el form tal como quedaria, cargado como lo carga el designer
+  (ComoLoEscribeElIde). '' si carga, o si lo que falla no es UNA de esas
+  propiedades de ANombre (un form que ya no cargaba por otra cosa no niega
+  este set); si no, la negativa con lo que dijo el lector. }
+function CargaLoPuesto(const F: TFormEnEdicion; const ANombre: string;
+  const AInfos: array of TValorPuesto): string;
+var
+  Escrito, ErrorAyudante: string;
+  Sustituidas, Avisos, SinLeer: TArray<string>;
+begin
+  Result := '';
+  var Hay := False;
+  for var I := 0 to High(AInfos) do
+    if AInfos[I].SinJuez then
+      Hay := True;
+  if not Hay then
+    Exit;
+  if ComoLoEscribeElIde(F.Dfm, F.Doc.TextoDe(F.Doc.Lines), F.Doc.Encoding, Escrito, Sustituidas,
+     Avisos, SinLeer, ErrorAyudante) = '' then
+    Exit;
+  var Lectura := ErrorDeLecturaDe(ErrorAyudante);
+  if not SameText(Lectura.Componente, ANombre) then
+    Exit;
+  for var I := 0 to High(AInfos) do
+    if AInfos[I].SinJuez and SameText(AInfos[I].Prop, Lectura.Propiedad) then
+      Exit(MsgFmt(SR_DESIGNER_SET_NO_CARGA_FMT, [ANombre, AInfos[I].Prop, AInfos[I].Valor,
+        Lectura.Motivo]));
 end;
 
 end.

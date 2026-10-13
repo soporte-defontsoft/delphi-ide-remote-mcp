@@ -4832,6 +4832,15 @@ const
     'text nil, quote it: ''nil''. To take the property out of the form (back ' +
     'to its default), delete its line with delphi_edit. Nothing was written.';
 
+  { Una propiedad que la clase guarda POR CODIGO (sin hoja de tipo en la
+    tabla): set pregunta al cargador del designer, y no la carga (H2 de
+    Hermes, 1.18.2). %s.%s = %s, y lo que dijo el lector. }
+  SR_DESIGNER_SET_NO_CARGA_FMT =
+    '[DSGN-149 INVALID_PARAM] %s.%s = %s: the IDE''s own form reader does ' +
+    'not load that value (%s), so the form would not open. The class stores ' +
+    'this property by code, and only the reader can judge its value: write it ' +
+    'as the IDE writes it for this class, or leave it out. Nothing was written.';
+
   SR_DESIGNER_SET_BLOQUE_FMT =
     '[DSGN-089 INVALID_PARAM] %s.%s holds a list, a collection or a binary ' +
     'block (lines %d-%d of %s): set writes one-line values. Edit that block ' +
@@ -5138,7 +5147,8 @@ const
     '[DSGN-018] Published properties read from the source of the active ' +
     'Delphi (inherited included), and in definedByCode what the class streams ' +
     'by code (its DefineProperties: written to the form without being ' +
-    'published). A property absent from both does NOT stream in a .dfm/.fmx: ' +
+    'published; set writes one only if the IDE''s form reader loads the ' +
+    'value). A property absent from both does NOT stream in a .dfm/.fmx: ' +
     'do not write it - unless definedByCode has "*" (names built at run ' +
     'time, which the source does not tell).';
 
