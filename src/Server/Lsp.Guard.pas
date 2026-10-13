@@ -266,14 +266,17 @@ function CapturaConsumible(const APath: string): Boolean;
 function CapturaPorNombre(const ANombre: string; out AFile: string): string;
 function ConsumeAgentCapture(const APath: string): Boolean; // nunca lanza; True = borrada
 { RECOGER una captura nuestra para entregarla por su enlace (GET
-  /files?capture=): se RECLAMA renombrandola, en su misma carpeta, a un nombre
-  que ya no es de captura - un rename lo gana UNA peticion: la otra ya no la
-  encuentra -, y quien la reclamo la lee y la borra. La ruta reclamada, o ''
-  si ya no estaba o no es nuestra. Nunca lanza. Dos GET a la vez la cargaban
-  los dos (dos 200: "una sola descarga" no se cumplia) o uno caia en el
-  except general con la ruta de nuestra casa (revisor del 2af, medido con 10
-  a la vez). }
-function ReclamaCaptura(const AFile: string): string;
+  /files?capture=): se reclama abriendola en EXCLUSIVA (sin compartir) con
+  borrado al cerrar, se leen sus bytes y se cierra - el fichero se va con el
+  handle, sin dejar nombre para un segundo GET -. La apertura exclusiva ES el
+  reclamo: el que la abre gana, otro GET del mismo enlace choca con una
+  violacion de comparticion y es un 404 honesto. True y ABytes si se recogio;
+  False si no estaba, no es nuestra, o la tiene otro. Nunca lanza. MoveFile no
+  servia de reclamo: devolvia TRUE a VARIOS GET a la vez (medido: hasta 8 de
+  10, y el destino de casi todos no existia), y cada TRUE-fantasma era un 500
+  FILE-046 "no se pudo leer, ya no esta" (2am de la 1.18.2; antes, revisor del
+  2af: dos 200 con el rename). }
+function ReclamaCaptura(const AFile: string; out ABytes: TArray<Byte>): Boolean;
 
 { DONDE CAE UNA CAPTURA: el "out" de toda la familia (delphi_desktop,
   delphi_adb_linux, delphi_adb), resuelto en UN sitio. Hasta la v1.0.13 era
@@ -564,6 +567,14 @@ function MovidoDenegado(const AOrigen, ADestino: string): string;
   el destino ESTE dentro de un lugar protegido ya lo dice la puerta de
   escritura; esto es que lo CONTENGA. Solo cambia el mensaje (MOVE-020). }
 function ProtegidoDenegado(const ADir: string; AComoDestino: Boolean = False): string;
+
+{ El lugar protegido que hay DENTRO de ADir, sin contar ADir mismo, ya
+  nombrado como lo nombra ProtegidoDenegado (solo si la sesion lo puede
+  leer); '' si ninguno. Sin recorrer el arbol: compara con la lista de los
+  lugares (LugarProtegidoEn) y no busca .git. La pregunta "hay algo que
+  proteger aqui dentro?" de quien reescribe un arbol entero sin decir que
+  ficheros: el juez de delphi_git (GitReescribeProtegido, 2x de la 1.18.2). }
+function ProtegidoDentroDe(const ADir: string): string;
 
 { LA pregunta de todo escritor: '' = esta sesion puede escribir APath;
   si no, el motivo. Es la puerta de escritura (PathDenied, sobre la ruta
@@ -2542,21 +2553,44 @@ begin
   end;
 end;
 
-function ReclamaCaptura(const AFile: string): string;
+function ReclamaCaptura(const AFile: string; out ABytes: TArray<Byte>): Boolean;
+const
+  TOPE = Int64(512) * 1024 * 1024; // una captura es de unos MB; tope defensivo
+  ACCESO_BORRAR = $00010000; // DELETE: Winapi no lo declara y Delete es la RTL
 var
-  Reclamada: string;
+  H: THandle;
+  Tam: Int64;
+  Leido: DWORD;
 begin
-  Result := '';
+  Result := False;
+  ABytes := nil;
   try
     if not CapturaConsumible(AFile) then
       Exit;
-    // ni .png ni nombre de captura: IsAgentCapture ya no la ve, y la purga del
-    // arranque se lleva la que se quede
-    Reclamada := AFile + '.' + FragmentoUnico + '.recogida';
-    if MoveFile(PChar(AFile), PChar(Reclamada)) then
-      Result := Reclamada;
+    // EXCLUSIVA (ShareMode 0) y borrado al cerrar: el reclamo es la apertura
+    // -uno gana, el resto choca con ERROR_SHARING_VIOLATION (404)- y el
+    // fichero se va con el handle. MoveFile daba TRUE a varios a la vez (2am).
+    H := CreateFile(PChar(AFile), GENERIC_READ or ACCESO_BORRAR, 0, nil,
+      OPEN_EXISTING, FILE_FLAG_DELETE_ON_CLOSE, 0);
+    if H = INVALID_HANDLE_VALUE then
+      Exit;
+    try
+      Tam := 0;
+      if (not GetFileSizeEx(H, Tam)) or (Tam <= 0) or (Tam > TOPE) then
+        Exit; // se cierra y se borra igual (DELETE_ON_CLOSE)
+      SetLength(ABytes, Tam);
+      if (not ReadFile(H, ABytes[0], DWORD(Tam), Leido, nil)) or (Leido <> Tam) then
+      begin
+        ABytes := nil;
+        Exit;
+      end;
+      Result := True;
+    finally
+      CloseHandle(H); // borra el fichero (FILE_FLAG_DELETE_ON_CLOSE)
+    end;
   except
-    Result := '';
+    ABytes := nil;
+    Result := False;
   end;
 end;
 
@@ -2741,8 +2775,11 @@ begin
 end;
 
 { El lugar protegido (tal como esta declarado) que AReal ES o CONTIENE; ''
-  si ninguno. EL comparador: BorradoDenegado y ProtegidoDenegado. }
-function LugarProtegidoEn(const AReal: string): string;
+  si ninguno. EL comparador: BorradoDenegado, ProtegidoDenegado y
+  ProtegidoDentroDe. ASoloDentro: no cuenta el lugar que ES AReal, solo los
+  de dentro (un repo que es la raiz del workspace no tiene nada que proteger
+  por serlo; 2x de la 1.18.2). }
+function LugarProtegidoEn(const AReal: string; ASoloDentro: Boolean = False): string;
 var
   P, PReal: string;
 begin
@@ -2752,6 +2789,8 @@ begin
     if P.Trim = '' then
       Continue;
     PReal := SinBarraFinal(RealPath(P.Trim));
+    if ASoloDentro and SameText(SinBarraFinal(AReal), PReal) then
+      Continue;
     if StartsText(IncludeTrailingPathDelimiter(AReal), IncludeTrailingPathDelimiter(PReal)) then
       Exit(SinBarraFinal(P.Trim));
   end;
@@ -3314,6 +3353,17 @@ begin
   end;
 end;
 
+{ Un lugar protegido en una negativa: se nombra solo lo que esta sesion ya
+  puede leer (la nota, en la interface de ProtegidoDenegado); si no, "un
+  sitio protegido". Lo usan ProtegidoDenegado y ProtegidoDentroDe. }
+function NombreDeLugarProtegido(const AP: string): string;
+begin
+  if ReadPathDenied(AP) = '' then
+    Result := '"' + AP + '"'
+  else
+    Result := MsgText(SN_LUGAR_PROTEGIDO);
+end;
+
 function ProtegidoDenegado(const ADir: string; AComoDestino: Boolean): string;
 var
   Full, P: string;
@@ -3330,15 +3380,26 @@ begin
   P := LugarProtegidoEn(RutaDelEnlace(Full));
   if P = '' then
     Exit;
-  // se nombra solo lo que esta sesion ya puede leer (la nota, en la interface)
-  if ReadPathDenied(P) = '' then
-    P := '"' + P + '"'
-  else
-    P := MsgText(SN_LUGAR_PROTEGIDO);
+  P := NombreDeLugarProtegido(P);
   if AComoDestino then
     Result := MsgFmt(SR_MUDANZA_DESTINO_PROTEGIDO_FMT, [ADir, P])
   else
     Result := MsgFmt(SR_MUDANZA_PROTEGIDA_FMT, [ADir, P]);
+end;
+
+function ProtegidoDentroDe(const ADir: string): string;
+var
+  Full: string;
+begin
+  Result := '';
+  try
+    Full := SinBarraFinal(TPath.GetFullPath(ADir.Trim));
+  except
+    Exit; // una ruta que no parsea es cosa de PathDenied
+  end;
+  Result := LugarProtegidoEn(RutaDelEnlace(Full), True);
+  if Result <> '' then
+    Result := NombreDeLugarProtegido(Result);
 end;
 
 function MovidoDenegado(const AOrigen, ADestino: string): string;

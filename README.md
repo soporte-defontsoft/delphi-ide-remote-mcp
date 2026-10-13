@@ -357,6 +357,7 @@ Each one is told with its measurements and its history in [docs/ARCHITECTURE.md]
 - **Byte fidelity beats the drive mask** — what an agent copies as an edit anchor keeps its bytes.
 - **Pascal text is read by one lexicon** — `Lsp.Pascal` decides what is code, a string, a comment or a directive, for every tool.
 - **The jail is measured on where a path really goes** — junctions and symlinks included; one tree deleter that never crosses a link.
+- **`delphi_styles build` compiles the `.rc` in a no-capability sandbox** — the resource compiler cannot reach the server's own files, the user profile, the workspace roots or the network. Known limit, declared: a file Windows grants to *all application packages* (under `C:\Windows`, `Program Files`) it can still read, so such a public system file could be embedded in the `.res`; the sensitive paths are confined.
 - **A batch of edits answers with what happened** — every entry re-read from disk.
 
 ## Requirements

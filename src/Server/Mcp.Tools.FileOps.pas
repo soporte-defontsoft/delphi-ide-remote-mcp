@@ -99,28 +99,6 @@ begin
   Result := EnPapelera(APath, EsLaCarpeta) and EsLaCarpeta;
 end;
 
-{ Clear the read-only bit on a whole tree. Git marks every object file
-  read-only, and Windows refuses to delete one - which is why deleting a
-  folder holding a .git left an empty shell behind that no retry could ever
-  remove, while every attempt copied the tree to the trash again (measured
-  2026-08-25: five copies of the same folder). }
-procedure ClearReadOnlyTree(const ADir: string);
-var
-  F: string;
-begin
-  try
-    for F in TDirectory.GetFiles(ADir, '*', TSearchOption.soAllDirectories) do
-      try
-        if (TFile.GetAttributes(F) * [TFileAttribute.faReadOnly]) <> [] then
-          TFile.SetAttributes(F, TFile.GetAttributes(F) - [TFileAttribute.faReadOnly]);
-      except
-        // one stubborn file must not stop the rest
-      end;
-  except
-    // an unreadable tree is handled by the caller, which checks the result
-  end;
-end;
-
 { El gemelo designer de una unit: al lado, si es un fichero vivo; y buscando
   por el nombre ORIGINAL si venimos de la papelera, donde cada copia lleva SU
   propio sello de hora - el del .dfm no es el del .pas, se guardaron con
@@ -548,7 +526,9 @@ begin
     // dentro era un cascaron que no se dejaba quitar (29-sep-2026)
     SueltaLoNuestroBajo(Params.Path);
     try
-      ClearReadOnlyTree(Params.Path);
+      // la carpeta esta VACIA (se comprobo arriba): no hay +R de ficheros que
+      // quitar, y un recorrido soAllDirectories aqui solo cruzaba junctions sin
+      // nada que hacer (2e de la 1.18.2). El +R de una carpeta no impide borrarla.
       try
         TDirectory.Delete(Params.Path, False);
       except

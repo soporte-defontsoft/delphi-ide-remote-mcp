@@ -1713,7 +1713,13 @@ begin
     'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s %s"',
     [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg,
      ProfileArg, DeviceArg, EventArg, Verb]);
-  Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
+  // la carpeta del proyecto como cwd: sin ella, msbuild hereda la del proceso
+  // (el servicio: la casa del servidor) y lo que una tarea escribe RELATIVO -el
+  // .vrc/.res de la info de version- cae FUERA de la jaula (2ak de la 1.18.2,
+  // medido: Incl.res/Incl.vrc en la raiz del repo). La carpeta del .dproj ya
+  // esta en las raices y la aprobo la puerta de salida.
+  var Cwd := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+  Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode);
   // F2039 = el .exe que este build va a escribir esta ABIERTO, casi siempre
   // porque delphi_test lo esta ejecutando ahora mismo: el
   // cerrojo serializa msbuild contra msbuild, pero se suelta antes de que el
@@ -1731,7 +1737,7 @@ begin
     Inc(ReintentosBloqueo);
     Sleep(EsperaBloqueo);
     EsperaBloqueo := EsperaBloqueo * 2;
-    Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
+    Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode);
   end;
   // "cannot find -lX" con un sysroot nuestro: el nombre -dev que falta se
   // completa en el SDK (ver CompletaEnlacesDev) y el build se repite UNA vez.
@@ -1741,7 +1747,7 @@ begin
   begin
     EnlacesDev := CompletaEnlacesDev(Info.Version, SdkUsado, Output, EnlacesNota);
     if EnlacesDev > 0 then
-      Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
+      Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode);
   end;
   finally
     if not Confiado then

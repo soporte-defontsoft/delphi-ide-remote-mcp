@@ -45,7 +45,10 @@ REGLAS = [
      [('Lsp.BuildRunner.pas', 'RunCaptured'),
       ('Lsp.BuildRunner.pas', 'RunMsBuild'), ('Lsp.BuildRunner.pas', 'RunDetached'),
       ('Lsp.ProcessLaunch.pas', '*'), ('Lsp.RemoteRun.pas', 'Paclient'),
-      ('Lsp.Styles.pas', 'CorreStyleConvert'), ('Mcp.Tools.Styles.pas', 'BuildStyles'),
+      ('Lsp.Styles.pas', 'CorreStyleConvert'),
+      # brcc32 del build de estilos, DENTRO del AppContainer (2al de la 1.18.2):
+      # el lanzado se movio aqui desde BuildStyles (antes compilaba el .rc directo)
+      ('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor'),
       ('Lsp.TestRunner.pas', 'CorreEnContenedor'), ('Mcp.Tools.Adb.pas', 'RunAdb'),
       ('Mcp.Tools.Git.pas', 'GitCorre'), ('Lsp.FormRender.pas', 'CorreRender')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
@@ -436,6 +439,11 @@ REGLAS = [
      ('Mcp.Tools.Workspace.pas', 'TDelphiFetchTool.ExecuteWithParams'),
      ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
       ('Lsp.Files.pas', 'ServeFile'),
+      # el RECLAMO de una captura nuestra antes de entregarla por su enlace: apertura
+      # EXCLUSIVA (CreateFile GENERIC_READ, sin compartir, borrado al cerrar) y lectura
+      # por el handle de lo que su nombrador ya juzgo (CapturaConsumible); hermano de
+      # ConsumeAgentCapture (2am de la 1.18.2: MoveFile daba TRUE a varios GET a la vez)
+      ('Lsp.Guard.pas', 'ReclamaCaptura'),
       # programas que NO son el servidor: los renderizadores y el conversor leen lo que
       # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
       ('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'AncestroDeClase'),
@@ -512,10 +520,6 @@ REGLAS = [
       # aprobada por EscrituraDenegada, porque no devolverla perdia el fichero
       # (revisor de la noche del 10-oct, A-1)
       ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
-      # el RECLAMO de una captura nuestra antes de entregarla por su enlace: un rename
-      # dentro de su casa, ya juzgada por su nombrador (CapturaConsumible), hermano
-      # de ConsumeAgentCapture (revisor del 2af de la 1.18.2: diez GET a la vez)
-      ('Lsp.Guard.pas', 'ReclamaCaptura'),
       # programas que NO son el servidor: escriben donde el servidor les dijo, ya
       # comprobado, o en el destino
       ('Mld.Captura.pas', 'GuardarPNG'), ('McpDesktopNode.dpr', 'RecogerCaptura'),
@@ -575,7 +579,7 @@ REGLAS = [
      r"\bSetFileAttributes\w*\s*\(|TFile\.SetAttributes\s*\(|\bSetFileTime\s*\(|"
      r"TFile\.Set(?:CreationTime|LastWriteTime|LastAccessTime)\w*\s*\(",
      [('Lsp.Guard.pas', 'QuitaSoloLectura'), ('Lsp.Guard.pas', 'BorraArbolDentro'),
-      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'), ('Mcp.Tools.FileOps.pas', 'ClearReadOnlyTree'),
+      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
       ('Lsp.Patch.pas', 'PonFechaDeCreacion')],
      'Cambiar un atributo o una fecha ESCRIBE: los de hoy van detras de la puerta de su operacion (el +R '
      'de lo propio, restaurar una foto, la fecha de creacion de lo que el escritor acaba de sustituir); '

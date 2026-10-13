@@ -61,7 +61,6 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   Lsp.ShaCache,
-  Lsp.Patch,    // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
   Lsp.Mascara;
 
 const
@@ -148,7 +147,7 @@ end;
 procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo);
 var
-  P, Full, Denied, Sha, Reclamada: string;
+  P, Full, Denied, Sha: string;
   Bytes: TArray<Byte>;
 
   // la respuesta de un fichero, la misma para las dos formas de pedirlo
@@ -178,31 +177,11 @@ begin
     if RequestInfo.Params.IndexOfName(PARAM_CAPTURA) >= 0 then
     begin
       Denied := CapturaPorNombre(RequestInfo.Params.Values[PARAM_CAPTURA], Full);
-      Reclamada := '';
-      if Denied = '' then
-      begin
-        Reclamada := ReclamaCaptura(Full);
-        if Reclamada = '' then
-          Denied := MsgText(SR_FILES_CAPTURA_NO_ESTA);
-      end;
-      if Reclamada <> '' then
-      begin
-        try
-          Bytes := LeeBytes(Reclamada, LUGARES_DE_UNA_CAPTURA);
-        except
-          on E: Exception do
-          begin
-            // la razon, con la ruta, al log del operador; al agente, sin ella
-            TLogger.Warning(MsgFmt(SL_FILES_CAPTURA_ILEGIBLE_FMT, [Reclamada, E.Message]));
-            Denied := MsgText(SR_FILES_CAPTURA_ILEGIBLE);
-          end;
-        end;
-        try
-          BorraFichero(Reclamada, ltEntregables); // LA puerta de borrar, con su lugar
-        except
-          // recoger no puede fallar por no poder borrar: la purga se la lleva
-        end;
-      end;
+      // reclamo, lectura y borrado en UN dueno (apertura exclusiva + borrado al
+      // cerrar): el que gana se la lleva en memoria, el resto es un 404 honesto
+      // (2am: MoveFile daba TRUE a varios y los perdedores veian un 500)
+      if (Denied = '') and not ReclamaCaptura(Full, Bytes) then
+        Denied := MsgText(SR_FILES_CAPTURA_NO_ESTA);
       if Denied <> '' then
       begin
         Answer(ResponseInfo, CodigoHttp(Denied), Denied);

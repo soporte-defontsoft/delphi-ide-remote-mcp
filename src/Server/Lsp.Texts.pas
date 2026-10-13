@@ -795,13 +795,13 @@ const
     'too, change them by hand with delphi_edit.';
 
   SR_READONLY_PATH_FMT =
-    '[GUARD-012 DENIED] "%s" is inside a folder declared READ-ONLY in ' +
-    'this workspace (%s). It is not the jail: you CAN read there ' +
+    '[GUARD-012 DENIED] "%s" falls under a READ-ONLY entry of this ' +
+    'workspace (%s). It is not the jail: you CAN read there ' +
     '(delphi_read, delphi_search, delphi_symbols...), what you cannot do ' +
     'is write. It is usually third-party code - a vendor, a submodule, a ' +
-    'reference clone - that is consulted but not touched. If it really ' +
-    'has to change, it is the operator who removes it from ' +
-    'ReadOnlyPaths= in their [Workspace.<name>]: ask for it with ' +
+    'reference clone, or a single file - that is consulted but not ' +
+    'touched. If it really has to change, it is the operator who removes ' +
+    'it from ReadOnlyPaths= in their [Workspace.<name>]: ask for it with ' +
     'delphi_report and say what for.';
 
   SN_PROJECTS_HIDDEN_FMT =
@@ -2806,11 +2806,6 @@ const
     '[FILE-045 NOT_FOUND] That capture is not here: a capture is handed back ' +
     'once (it is deleted the moment it is downloaded) and only to its own ' +
     'workspace. Ask for a new one.';
-  SR_FILES_CAPTURA_ILEGIBLE =
-    '[FILE-046 INTERNAL] That capture could not be read, and it is gone ' +
-    '(the server log says why). Ask for a new one.';
-  SL_FILES_CAPTURA_ILEGIBLE_FMT =
-    'files: capture %s could not be read: %s';
 
   // Appended to a READ refusal outside the jail: the library zone exists,
   // but only the folders the IDE registers (and their subfolders) - not their
@@ -6293,6 +6288,21 @@ const
     '(delphi_workspace lists them): command=init makes one in a folder ' +
     'of yours, and command=clone brings one. Nothing was done.';
 
+  SR_GIT_REESCRIBE_PROTEGIDO_FMT =
+    '[GIT-065 DENIED] %s would rewrite files that are declared READ-ONLY in ' +
+    'this workspace (ReadOnlyPaths / ReadOnlyRoots): %s. git rewrites the ' +
+    'whole working tree, and these are consulted but not touched - a vendor, ' +
+    'a submodule, a reference. Nothing was done. If they really have to ' +
+    'change, it is the operator who removes them from their ' +
+    '[Workspace.<name>]: ask with delphi_report and say what for.';
+
+  SR_GIT_REESCRIBE_SIN_JUEZ_FMT =
+    '[GIT-066 DENIED] %s cannot be checked file by file here: this repo has ' +
+    'a read-only place inside (%s), and git could not say which files this ' +
+    'form would rewrite. Only these forms are checked: switch <branch>, ' +
+    'switch -, switch -c <new> [<start>], merge <branch>, pull without ' +
+    'options, stash pop. Nothing was done: use one of them.';
+
   // ---- delphi_git worktree (1.4.0) ----
 
   SR_GIT_WORKTREE_ARGS =
@@ -7551,6 +7561,16 @@ const
     '[STYLE-040 DENIED] %s did not compile, so there is no new .res to ' +
     'embed. brcc32 said:'#10 +
     '%s';
+
+  SR_STYLES_RC_CONTENEDOR_FMT =
+    '[STYLE-044 INTERNAL] I could not prepare the Windows container the ' +
+    'resource compiler runs in (code %s: %s), so the .rc was NOT ' +
+    'compiled: brcc32 never runs outside one. It is a problem of this ' +
+    'server, not of your styles; tell the operator with delphi_report.';
+
+  SR_STYLES_RC_TIEMPO =
+    '[STYLE-045 INTERNAL] The resource compiler took too long and was ' +
+    'stopped, so there is no new .res. If it happens again, tell the operator.';
 
   SR_STYLE_COMMAND_DEBE_SER =
     '[STYLE-029 INVALID_PARAM] Command must be view | get | set | clone ' +

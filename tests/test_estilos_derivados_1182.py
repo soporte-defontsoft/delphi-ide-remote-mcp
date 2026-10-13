@@ -33,6 +33,11 @@ convertiria antes de la negativa es el otro.
       destino admite: convierte (la temporal con el nombre del estilo no lo
       cabia, y el error ensenaba la casa por dentro; revisor del 2s)
   S12 un estilo que no convierte: tampoco queda nada en la temporal
+  S13 una linea DISCARDABLE a la CASA del servidor que la gramatica no ve:
+      brcc32 en el AppContainer no la alcanza, el .res no la lleva (2al)
+  S14 ...y una macro #define a la casa del servidor, igual
+      (NOTA H1: un fichero world-readable del SO - C:/Windows - SI entra; el
+       AppContainer lo concede. Residuo del 2al, a decidir David)
 
 Uso:  python tests/test_estilos_derivados_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -166,6 +171,37 @@ try:
     check('S10 un .rc que nombra un fichero de fuera: STYLE-023 antes de convertir, y ningun derivado nace',
           mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not [p for p in (BIN, RES, OTRO_BIN) if os.path.exists(p)],
           r[:300])
+    open(RC, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
+
+    # ---------- S13/S14: el .rc que SE SALTA la gramatica (2al): brcc32 en el
+    # AppContainer no alcanza lo SENSIBLE. La victima, en la CASA del servidor
+    # (SRVDIR, donde vive settings.ini con el token): el contenedor no la lee
+    SECRETO = os.path.join(SRVDIR, 'secreto_casa.txt')
+    open(SECRETO, 'w').write('SECRETO-2AL ' + 'x' * 40)
+    for clave, linea in (('S13 una linea DISCARDABLE', 'X RCDATA DISCARDABLE "%s"' % SECRETO),
+                         ('S14 una macro #define', '#define F "%s"\nX RCDATA F' % SECRETO)):
+        limpia()
+        open(RC, 'w', encoding='utf-8').write(linea + '\n')
+        r = build(srv)
+        fuga = os.path.exists(RES) and b'SECRETO-2AL' in open(RES, 'rb').read()
+        check('%s a la CASA que la gramatica no ve: el .res NO la lleva (brcc32 confinado no alcanza la casa del servidor)'
+              % clave, mc.como_json(r).get('ok') is False and not fuga, (r[:200], fuga))
+    os.remove(SECRETO)
+    # RESIDUO H1 (revisor del 2al, a decidir David): un fichero que el SO concede
+    # a TODOS LOS PAQUETES DE APLICACIONES (C:\Windows) el AppContainer SI lo lee
+    # -> por un absoluto entra en el .res. No es un check (David no ha decidido):
+    # se MIDE y se dice, para que no pase inadvertido.
+    PUBLICO = os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'System32', 'drivers', 'etc', 'hosts')
+    if os.path.exists(PUBLICO) and os.path.getsize(PUBLICO) > 40:
+        marca = open(PUBLICO, 'rb').read()
+        limpia()
+        open(RC, 'w', encoding='utf-8').write('X RCDATA DISCARDABLE "%s"\n' % PUBLICO)
+        r = build(srv)
+        entra = os.path.exists(RES) and marca in open(RES, 'rb').read()  # su contenido REAL en el .res
+        print('NOTA H1 (residuo 2al, a decidir David): un fichero world-readable del SO (etc\\hosts) %s en el .res '
+              '(ok=%s). Lo SENSIBLE -casa, perfil, raices- no (S13/S14). Cerrarlo: token LPAC o preprocesar el .rc.'
+              % ('SI entra' if entra else 'no entra', mc.como_json(r).get('ok')))
+    open(RC, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
     open(RC, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
 
     # --------------------------- control y S7

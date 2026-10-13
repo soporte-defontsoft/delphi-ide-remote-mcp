@@ -1054,6 +1054,107 @@ begin
     Result := Result + MsgFmt(SN_GIT_PAGINA_FMT, [ADesde + 1, K, Length(Lineas), K]);
 end;
 
+{ Lo que una operacion que REESCRIBE el arbol tocaria, por el juez que lo sabe
+  -git- y no por una lista nuestra (regla 6; 2x de la 1.18.2): se le piden los
+  ficheros que cambiaria (diff --name-only HEAD <destino>, o stash show para un
+  pop) y cada uno pasa por la puerta de siempre (PathDenied, fichero a fichero).
+  Si alguno es un lugar protegido -ReadOnlyPaths / ReadOnlyRoots dentro del
+  repo-, la negativa los NOMBRA (GIT-065) y no se hace nada: switch, merge,
+  pull y stash pop reescribian un .dfm o un vendor de solo lectura al cambiar
+  de rama (medido). '' = nada protegido que tocar, o no reescribe el arbol.
+  Se juzga solo donde hace falta: sin un lugar protegido DENTRO del arbol
+  (ProtegidoDentroDe) git no puede reescribir nada protegido, y no se lanza
+  ni git ni la puerta por fichero. Donde lo hay, FALLA CERRADO (GIT-066): una
+  forma cuyo destino el juez no lee (switch con opciones; pull sin el fetch de
+  arriba hecho, porque entonces FETCH_HEAD no es el destino o es viejo) o un
+  git que no contesta es un "no", como en EsNombreDeRef. La primera version
+  solo miraba "switch <un trozo>" y salia sin negar: switch -, switch --detach
+  b2, switch -f b2 y switch -c nb b2 reescribian el protegido (revision 5.5,
+  medido). merge --abort no se juzga: deshace, y negarlo dejaria el repo a
+  medio merge sin salida por esta tool. ARaiz vacia (bare) no tiene arbol. }
+function GitReescribeProtegido(const ARepo, AFijado, ARaiz, ACmd, AArgs: string;
+  ACrear, AFetchHecho: Boolean): string;
+var
+  Objetivo, Pregunta, Rel, Abs, Dentro: string;
+  Reescribe, Legible, EsStashPop: Boolean;
+  Trozos, Ficheros, Malos: TArray<string>;
+begin
+  Result := '';
+  if ARaiz = '' then
+    Exit;
+  Objetivo := '';
+  Reescribe := False;
+  EsStashPop := False;
+  Trozos := TrocearArgs(AArgs);
+  if SameText(ACmd, 'switch') then
+  begin
+    if ACrear then
+    begin
+      // "switch -c <nueva>" deja el arbol como esta; con un punto de partida
+      // ("switch -c <nueva> <inicio>") lo lleva a <inicio>
+      Reescribe := not ((Length(Trozos) = 1) and not Trozos[0].StartsWith('-'));
+      if (Length(Trozos) = 2) and not Trozos[0].StartsWith('-') and
+         not Trozos[1].StartsWith('-') then
+        Objetivo := Trozos[1];
+    end
+    else
+    begin
+      Reescribe := True;
+      if Length(Trozos) = 1 then
+        if Trozos[0] = '-' then
+          Objetivo := '@{-1}' // la rama anterior: "diff HEAD -" no lo entiende (rc=129, medido)
+        else if not Trozos[0].StartsWith('-') then
+          Objetivo := Trozos[0];
+    end;
+  end
+  else if SameText(ACmd, 'merge') then
+  begin
+    Reescribe := not SameText(AArgs.Trim, '--abort');
+    if Reescribe and (Length(Trozos) = 1) and not Trozos[0].StartsWith('-') then
+      Objetivo := Trozos[0];
+  end
+  else if SameText(ACmd, 'pull') then
+  begin
+    Reescribe := True;
+    if AFetchHecho then
+      Objetivo := 'FETCH_HEAD';
+  end
+  else if SameText(ACmd, 'stash') and (Length(Trozos) = 1) and SameText(Trozos[0], 'pop') then
+  begin
+    Reescribe := True;
+    EsStashPop := True;
+  end;
+  Legible := EsStashPop or (Objetivo <> '');
+  if not Reescribe then
+    Exit;
+  Dentro := ProtegidoDentroDe(ARaiz);
+  if Dentro = '' then
+    Exit;
+  if not Legible then
+    Exit(MsgFmt(SR_GIT_REESCRIBE_SIN_JUEZ_FMT, [ACmd, Dentro]));
+  if EsStashPop then
+    Pregunta := 'stash show --name-only'
+  else
+    // el -- final: Objetivo es una REVISION. Sin el, una rama que se llama
+    // como un fichero del arbol (U.dfm) es ambigua y git no contesta (medido)
+    Pregunta := 'diff --name-only HEAD ' + EnComillas(Objetivo) + ' --';
+  if not GitContesta(ARepo, AFijado, Pregunta, Ficheros) then
+    Exit(MsgFmt(SR_GIT_REESCRIBE_SIN_JUEZ_FMT, [ACmd, Dentro]));
+  for Rel in Ficheros do
+  begin
+    if Rel.Trim = '' then
+      Continue;
+    Abs := TPath.Combine(ARaiz, Rel.Trim.Replace('/', '\'));
+    // la puerta de siempre, fichero a fichero: '' si se puede escribir. Con el
+    // permiso de git (APermiteGit): un fichero versionado nunca esta en los
+    // metadatos, y sin el cada carpeta lanzaba un git (el gitdir separado)
+    if PathDenied(Abs, True) <> '' then
+      Malos := Malos + [Rel.Trim];
+  end;
+  if Length(Malos) > 0 then
+    Result := MsgFmt(SR_GIT_REESCRIBE_PROTEGIDO_FMT, [ACmd, string.Join(', ', Malos)]);
+end;
+
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
 var
   Cmd, GitArgs, Repo, Output, MsgFile: string;
@@ -1084,7 +1185,14 @@ begin
   // escritura (jaula + carpetas muertas), como su gemela worktree add. Se
   // clonaba dentro de __delphi-temp, __delphi-patch o __history (septima)
   else if SameText(Params.Command.Trim, 'clone') then
-    Result := WriteTargetDenied(Repo)
+  begin
+    Result := WriteTargetDenied(Repo);
+    // el checkout --force del clone escribe el arbol en el destino: que no
+    // CONTENGA un lugar protegido (ReadOnlyPaths/raices), como worktree add
+    // (2v de la 1.18.2; 4.o emisor de la regla del 2r)
+    if Result = '' then
+      Result := ProtegidoDenegado(Repo, True);
+  end
   else
     Result := PathDenied(Repo, True);
   if Result <> '' then
@@ -1497,6 +1605,12 @@ begin
       Result := EscrituraDenegada(Destino);
       if Result = '' then
         Result := WriteTargetDenied(Destino);
+      // ...y que el destino no CONTENGA un lugar protegido: worktree add hace
+      // un checkout que escribe el arbol dentro, y un ReadOnlyPaths que nombre
+      // un fichero de ahi se escribia (2v de la 1.18.2, medido; el 3.er emisor
+      // de la regla del 2r: el destino por la misma pregunta, MOVE-020)
+      if (Result = '') and (Sub = 'add') then
+        Result := ProtegidoDenegado(Destino, True);
       if Result <> '' then
         Exit;
       if Sub = 'add' then
@@ -1595,6 +1709,9 @@ begin
   // soltaba y se quitaba la marca antes de empezar: el motor que arrancaba
   // durante la red volvia a retener su carpeta.) Solo el pull sin opciones:
   // con ellas (--depth, --tags...) el fetch previo bajaria otra cosa.
+  // el juez de abajo solo lee el destino de un pull si este fetch corrio Y
+  // acabo bien: sin el, FETCH_HEAD no es el destino o es de un fetch viejo
+  var FetchHecho := False;
   if SameText(Cmd, 'pull') and (Raiz <> '') then
   begin
     // por los trozos que lee la puerta (TrocearArgs), no por el texto
@@ -1606,8 +1723,21 @@ begin
     begin
       var Previo: Cardinal;
       GitCorre(Repo, Fijado, 'fetch ' + ArgvSeguro(Params.Args), 600000, Previo);
+      FetchHecho := Previo = 0;
       // si falla, el pull lo dira con sus palabras
     end;
+  end;
+  // Lo que git REESCRIBIRIA del arbol, preguntado a git (el juez) antes de
+  // tocar nada: un fichero de solo lectura dentro del repo (ReadOnlyPaths /
+  // ReadOnlyRoots) se reescribia al cambiar de rama (2x de la 1.18.2, medido).
+  // Para pull va DESPUES del fetch de arriba, con FETCH_HEAD ya bajado; sin
+  // el (con opciones, o si fallo), en un repo con algo protegido se niega.
+  Result := GitReescribeProtegido(Repo, Fijado, Raiz, Cmd, Params.Args, Params.Create,
+    FetchHecho);
+  if Result <> '' then
+  begin
+    ExitCode := 1;
+    Exit;
   end;
   // (el try de fuera no sangra lo de dentro, como el de RunCore: es solo la
   // regla del clone que no ocurrio, abajo)

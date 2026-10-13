@@ -203,7 +203,100 @@ the MCP `initialize` response (`serverInfo.version`).
   of its parts, the placement, the short names and the cleanup each have
   their mutant).
 
+- **`delphi_styles build` compiles the `.rc` inside a sandbox, not with a
+  grammar for a gate.** `brcc32` has a preprocessor and resolves paths
+  itself, so the server's own check of what a `.rc` pulls in could never be
+  the gate: measured, a `X RCDATA DISCARDABLE "<file>"` line and a `#define`
+  macro both slipped a file from outside the roots into the `.res` the agent
+  downloads - the hole from 2026-08-25, reopened. `brcc32` now runs in a
+  Windows AppContainer with no capabilities (the one `delphi_test` uses) over
+  a copy of the styles folder in the server's house. The sensitive targets -
+  the server's house with the token, the user profile, the other roots, the
+  network - grant no read to application packages, so a `.rc` that names one
+  of them (absolute, through `..`, or via a macro) now fails closed; measured.
+  Compiling the copy also closes the race the reviewer measured (the `.rc`
+  read again after the check): the agent cannot touch what is already staged.
+  The server's own grammar stays as a second barrier for the honest case
+  (David: a redundant check is not removed because another covers it), with
+  its clear `STYLE-023`. Residue, pending a decision: a file the OS grants to
+  ALL APPLICATION PACKAGES (`C:\Windows`, `Program Files`) an AppContainer can
+  still read, so such a public system file can be embedded; closing that needs
+  a more restricted token (LPAC) or preprocessing the `.rc` ourselves.
+  `test_estilos_derivados_1182` (S13 a `DISCARDABLE` line, S14 a `#define`
+  macro at the server's house, both red before - the `.res` carried the
+  file; the mutant compiles outside the container).
+
+- **A capture's download link is claimed by one request, exactly.** Ten
+  concurrent `GET /files?capture=` of the same link handed the capture back
+  once and failed the rest with a clear 404 - but 1 run in 8 answered a 200
+  AND a 500 (`FILE-046` "could not be read, it is gone"). Measured: the claim
+  renamed the file with `MoveFile`, trusting "one rename wins"; `MoveFile` of
+  the same source to different targets, concurrently, returns TRUE to SEVERAL
+  callers at once (up to 8 of 10 in a 200-round probe) and the target of
+  almost all of them does not exist afterwards - each ghost-TRUE was a 500.
+  The claim is now an EXCLUSIVE open (no sharing) with delete-on-close: the
+  one that opens wins and reads the bytes from the handle, the file leaves
+  with the handle, and any other request hits a sharing violation and is an
+  honest 404. No rename, no `.recogida` left behind, nothing read back from
+  disk. `test_captura_puertas_1182` E6 (red 1-in-8 before; the mutant restores
+  the share mode and the double-200 comes back). Point 2am of 1.18.2.
+
+- **`delphi_git worktree add` and `clone` do not land on a protected place.**
+  Both write a tree into a new folder - the worktree's checkout, the clone's
+  `checkout --force` - and the gate asked only whether that folder itself was
+  writable. Measured: with `ReadOnlyPaths` naming a file inside the new
+  folder, `worktree add` wrote it (exit 0). The destination is now asked the
+  same question `delphi_move` asks (it must not BE or CONTAIN a protected
+  place, `MOVE-020`), the third and fourth emitters of that rule.
+  `test_git_destino_1182` (worktree add refused and nothing written; the
+  mutant drops the check and the file is written). Point 2v of 1.18.2.
+
+- **A build runs with the project's folder as its working directory.**
+  `delphi_build` launched MSBuild with no working directory, so it inherited
+  the server's own folder (the service's). A target that writes a relative
+  path - the version-info `.vrc`/`.res` - then landed there, outside the
+  jail: measured, `Incl.res`/`Incl.vrc` appeared in a folder that was not the
+  project's. MSBuild now runs with the `.dproj`'s folder as cwd, which is in
+  the roots and already gate-approved, so a stray relative write stays inside
+  it. Point 2ak of 1.18.2.
+
+- **git does not rewrite a read-only file inside the repo.** `switch`,
+  `merge`, `pull` and `stash pop` rewrite the whole working tree, and the
+  gate judged only the repo's root/`.git`/common folders - not the files
+  inside. Measured: with `ReadOnlyPaths` or `ReadOnlyRoots` naming a file the
+  target branch changes, `switch` overwrote it (exit 0). Now the operation is
+  asked of the judge that knows - git itself: `diff --name-only HEAD <target>`
+  (or `stash show` for a pop) lists the files it would change, and each goes
+  through the usual write gate, file by file; if any is a protected place the
+  refusal NAMES them (`GIT-065`) and nothing is done. No grammar of our own
+  (rule 6); no remote needed, the repo's own history is enough. For `pull` the
+  fetch runs first so `FETCH_HEAD` is the target. The judge only runs where
+  there is something to protect - a read-only place INSIDE the working tree -
+  and there it fails CLOSED: a form whose target it cannot read (`switch` with
+  options, `pull` with options or after a failed fetch) or a git that does not
+  answer is refused (`GIT-066`), naming the forms that are checked. `switch -`
+  is read as the previous branch, `switch -c <new> <start>` as the move it is,
+  and the question ends in `--`, so a branch named like a file is a branch.
+  Repos with nothing read-only inside are not judged at all, so nothing
+  changes for them.
+  `test_git_reescribe_1182` (12 checks: the forms above refused and intact, a
+  branch that changes only `src/` still allowed, the same `--detach` allowed
+  where nothing is protected - also with the repo as the root; a mutant for
+  each piece, and the git-that-does-not-answer refusal declared a guard).
+  Point 2x of 1.18.2.
+
 ### Internal
+
+- **A read-only refusal reads right whether the entry is a folder or a file.**
+  `GUARD-012` said a path was "inside a folder declared READ-ONLY" even when
+  the `ReadOnlyPaths` entry was the file itself; it now says the path "falls
+  under a READ-ONLY entry", true for both. Point 2u of 1.18.2.
+
+- **An empty folder's delete drops a dead read-only sweep.** Deleting an
+  empty folder called a helper that walked the tree clearing read-only bits
+  with `soAllDirectories` - which follows junctions - on a folder already
+  known to be empty, so it did nothing but cross links. Removed (its only
+  caller). Point 2e of 1.18.2.
 
 - **One PNG header, for the server and the desktop node.** The signature
   and the IHDR of a PNG were written by hand three times: in the node's PNG

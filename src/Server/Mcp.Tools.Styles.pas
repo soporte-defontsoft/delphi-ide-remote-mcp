@@ -83,7 +83,8 @@ uses
   Lsp.DesignerBin,  // el literal de cadena: su lector y su compositor
   Lsp.Pascal,
   Lsp.Mascara,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Sandbox;
 
 constructor TDelphiStylesTool.Create;
 begin
@@ -621,6 +622,79 @@ begin
     Result := ColocacionDenegada(ARes);
 end;
 
+{ El .rc -> .res con brcc32, pero DENTRO de un AppContainer sin capacidades
+  (Lsp.Sandbox, como delphi_test) sobre una COPIA de la carpeta de estilos en
+  la casa del servidor. brcc32 tiene PREPROCESADOR y resuelve rutas el mismo:
+  ninguna gramatica propia puede ser la puerta (regla 6; 2al de la 1.18.2,
+  medido - una linea DISCARDABLE o un #define metian un fichero de FUERA en el
+  .res descargable, el agujero del 25-ago). El juez es el SO: brcc32 confinado
+  no alcanza lo SENSIBLE que el .rc nombre fuera de la etapa - la casa con el
+  token, el perfil, las raices, la red: ninguna concede lectura a los paquetes
+  de aplicacion, asi que falla cerrado (medido). RESIDUO (H1, revisor del 2al,
+  a decidir David): un fichero que el SO concede a TODOS LOS PAQUETES DE
+  APLICACIONES - C:\Windows, Program Files - el AppContainer SI lo lee, como
+  cualquiera, y por un absoluto o un .. en el .rc entra en el .res; cerrarlo
+  pide un token mas restringido (LPAC) o preprocesar el .rc nosotros (regla 6).
+  Y cierra la carrera: compila la COPIA, que el agente no puede cambiar entre
+  la puerta y brcc32. El .res se coloca con ColocaProducto.
+  '' = compilado y colocado; si no, el motivo (ya con su etiqueta). }
+function CompilaRcEnContenedor(const ADir, ARc, ARes, ABrcc: string): string;
+var
+  AC: TContenedor;
+  Etapa, ResEtapa, Out: string;
+  NoSeg: TArray<string>;
+  Err, Code: Cardinal;
+  TimedOut: Boolean;
+begin
+  Err := CreaContenedor(AC);
+  if Err <> 0 then
+    Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(Err, 8), SysErrorMessage(Err)]));
+  Etapa := ServerTempDir('styles-rc-' + FragmentoUnico);
+  try
+    CrearCarpeta(Etapa);
+    Err := PreparaCarpetaDelContenedor(AC, Etapa);
+    if Err <> 0 then
+      Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(Err, 8), SysErrorMessage(Err)]));
+    // la carpeta de estilos entera en la etapa, SIN seguir enlaces (uno de
+    // dentro no saca nada de fuera) y sin el .res viejo: las referencias
+    // relativas del .rc resuelven aqui; lo de fuera, el contenedor no lo ve
+    CopiaArbol(ADir, Etapa, False, NoSeg, False,
+      function(const P: string): Boolean
+      begin
+        Result := SameText(TPath.GetExtension(P), '.res');
+      end);
+    ResEtapa := TPath.Combine(Etapa, 'r.res');
+    try
+      // rutas RELATIVAS a la etapa (el cwd del proceso): brcc32 solo ve la
+      // etapa, nombrar la casa en la orden no serviria
+      Out := RunCapturedEnContenedor('"' + ABrcc + '" -fo"r.res" "' +
+        TPath.GetFileName(ARc) + '"', Etapa, AC, 120000, Code, TimedOut);
+    except
+      on E: EOSError do
+        Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(E.ErrorCode, 8), E.Message]));
+      on E: Exception do
+        Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, ['-', E.Message]));
+    end;
+    if TimedOut then
+      Exit(MsgText(SR_STYLES_RC_TIEMPO));
+    if (Code <> 0) or not TFile.Exists(ResEtapa) then
+      Exit(MsgFmt(SR_STYLES_BUILD_RC_FMT, [TPath.GetFileName(ARc), Out.Trim]));
+    Result := '';
+    try
+      ColocaProducto(ResEtapa, ARes);
+    except
+      on E: Exception do
+        Result := E.Message;
+    end;
+  finally
+    BorraContenedor(AC);
+    try
+      BorraArbol(Etapa); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
+    except
+    end;
+  end;
+end;
+
 function BuildStyles(const APath: string): string;
 var
   Dir, Exe, F, Bin, Out, Rc, Res, Brcc, RcDenied, Tmp, Hecho, Motivo: string;
@@ -713,10 +787,10 @@ begin
     // the .rc -> .res, with the product's resource compiler
     if Rc <> '' then
     repeat
-      // Every file this .rc pulls in, checked against the same jail that
-      // delphi_read applies. brcc32 has no idea where it may look. Asked
-      // before converting too (DerivadosDenegados); again here, right before
-      // brcc32 reads it
+      // La SEGUNDA barrera (David: la segunda barrera se queda): la gramatica
+      // de RcPathsDenied, con su mensaje claro para el caso honesto. NO es la
+      // puerta - brcc32 tiene preprocesador y resuelve rutas el mismo -: la
+      // puerta es el contenedor de CompilaRcEnContenedor (2al de la 1.18.2)
       RcDenied := RcPathsDenied(Rc);
       if RcDenied <> '' then
       begin
@@ -725,15 +799,9 @@ begin
         AllOk := False;
         Break;
       end;
-      Hecho := TPath.Combine(Tmp, 'r.res');
-      Out := RunCapturedIn('"' + Brcc + '" -fo"' + Hecho + '" "' + Rc + '"', Dir, 120000, Code);
-      Out := Out.Replace(Hecho, Res, [rfReplaceAll, rfIgnoreCase]);
       Ret.AddPair('rc', TPath.GetFileName(Rc));
       Ret.AddPair('res', TPath.GetFileName(Res));
-      if Code = 0 then
-        Motivo := ColocaDerivado(Hecho, Res)
-      else
-        Motivo := MsgFmt(SR_STYLES_BUILD_RC_FMT, [TPath.GetFileName(Rc), Out.Trim]);
+      Motivo := CompilaRcEnContenedor(Dir, Rc, Res, Brcc);
       Ret.AddPair('rcOk', TJSONBool.Create(Motivo = ''));
       if Motivo = '' then
         Ret.AddPair('resBytes', TJSONNumber.Create(TFile.GetSize(Res)))
