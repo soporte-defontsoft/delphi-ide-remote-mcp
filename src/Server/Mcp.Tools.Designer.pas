@@ -1354,6 +1354,10 @@ begin
 
   Return := TJSONObject.Create;
   try
+    // (una excepcion de aqui a la entrega -IgnoradasConLinea, el tamano- dejaba
+    // la captura NUESTRA en la casa: se consume y se relanza; 2ai-B b de la
+    // 1.18.2. El cuerpo, sin reindentar)
+    try
     Return.AddPair('path', Ruta);
     Return.AddPair('framework', Fw);
     Raiz := TJSONObject.Create;
@@ -1417,6 +1421,11 @@ begin
       OX, OY, 1.0, 1.0, Return, MsgText(SN_DESIGNER_INLINE_NOTE_FMT),
       MsgText(SN_DESIGNER_FRAME_NOTE));
     Result := Return.ToJSON;
+    except
+      if CapturaConsumible(Propia) then
+        ConsumeAgentCapture(Propia);
+      raise;
+    end;
   finally
     Return.Free;
   end;

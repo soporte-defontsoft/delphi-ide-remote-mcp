@@ -612,7 +612,9 @@ begin
         if Fallo <> '' then
           SinCaptura(Fallo)
         else
-        begin
+        // (una excepcion de aqui a la entrega -el tamano- dejaba la captura
+        // NUESTRA en la casa: se consume y se relanza; 2ai-B b de la 1.18.2)
+        try
           Return.AddPair('screenshot', Local);
           Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
           // UN SOLO PASO (David, 25-sep-2026): la imagen viaja en esta misma
@@ -634,10 +636,25 @@ begin
           // un gesto por stdio, sin enlace, se consume: consumed; 2ai)
           else if not EnLinea and (Return.GetValue('consumed') = nil) then
             Return.AddPair('note', MsgText(SN_DESK_MIDE_PIXEL_SOBRE_IMAGEN));
+        except
+          if CapturaConsumible(Local) then
+            ConsumeAgentCapture(Local);
+          raise;
         end;
       end
       else
+      begin
+        // una bajada que fallo deja su carpeta (FetchFromTarget la crea antes
+        // de lanzar paclient): se quita tambien, sin cruzar enlaces (2ai-B a
+        // de la 1.18.2: solo la rama buena la quitaba)
+        if Bajada <> '' then
+          try
+            BorraArbol(Bajada);
+          except
+            // limpiar no puede tumbar la respuesta
+          end;
         SinCaptura(Fallo);
+      end;
     end
     else if (Cmd <> 'status') and (Remota = '') then
     begin

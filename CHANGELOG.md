@@ -53,6 +53,27 @@ the MCP `initialize` response (`serverInfo.version`).
   (red against production on the batch, the rename and the unit-only
   change; a mutant for each piece). H6 of point 9 of 1.18.2.
 
+- **Captures waiting for their link no longer pile up, and a failed one
+  leaves nothing behind.** With `inline=false` over HTTP a capture of ours
+  waited in the server's house until somebody downloaded it or the server
+  restarted: any credential, a read-only one too, could fill the server's
+  disk by capturing and never downloading (2ab-R3, reviewer of 2ab,
+  measured). Now, when one is left waiting, the ones in that folder older
+  than an hour and those beyond the 50 newest are deleted, by the same
+  function that consumes a capture. It walks the server's house with the
+  walker that never crosses a link: the agent's walker asks the jail, which
+  has no say over our own house, and returned nothing (the battery's first
+  run measured it). From the same reviewers' list: a placement that failed
+  in the capture house removed the folders it had created by asking the
+  JAIL, which says no outside the roots, so empty folders stayed until a
+  restart; it now asks the gate of the place it was writing to (2aa). A
+  download from a remote desktop that failed left its temporary folder
+  (2ai-B a), and an exception between a capture and its delivery - in
+  `delphi_desktop` or `designer preview` - left the capture (2ai-B b): both
+  are removed now. `test_capturas_en_espera_1182` (red against production;
+  a mutant). 2aa and 2ai-B cannot be provoked from outside and were checked
+  by reading.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

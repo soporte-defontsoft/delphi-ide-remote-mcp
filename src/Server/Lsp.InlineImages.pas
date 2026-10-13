@@ -87,6 +87,10 @@ uses
 
 const
   INLINE_MAXWIDTH = 1280; // legible y ligero: ~300 KB de un escritorio de 3440
+  // las capturas nuestras que esperan su descarga por enlace, por carpeta: las
+  // mas nuevas que se guardan, y la edad tras la que ya no se espera (2ab-R3)
+  CAPTURAS_EN_ESPERA_MAX = 50;
+  CAPTURAS_EN_ESPERA_MIN = 60;
 
 type
   TAdjunto = record
@@ -272,7 +276,12 @@ begin
     AReturn.AddPair('download', Enlace);
     AReturn.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
     if Nuestra then
+    begin
       AReturn.AddPair('consumedOnDownload', TJSONBool.Create(True)); // se borra al recogerla
+      // las que esperan su descarga no se acumulan: una credencial (tambien
+      // de solo lectura) llenaba el disco capturando sin descargar (2ab-R3)
+      PurgaCapturasEnEspera(AFile, CAPTURAS_EN_ESPERA_MAX, CAPTURAS_EN_ESPERA_MIN);
+    end;
   end
   else if Nuestra then
   begin

@@ -265,6 +265,14 @@ function CapturaConsumible(const APath: string): Boolean;
   nuestro trabajo devuelto: delphi_fetch es para los ficheros del agente. }
 function CapturaPorNombre(const ANombre: string; out AFile: string): string;
 function ConsumeAgentCapture(const APath: string): Boolean; // nunca lanza; True = borrada
+{ Las capturas NUESTRAS que esperan su descarga en la carpeta de AFile (sin
+  contar AFile): las de mas de AMinutos y las que pasen de las ACuantas mas
+  nuevas se borran, por ConsumeAgentCapture. Con inline=false por HTTP una
+  captura se quedaba en nuestra casa hasta que alguien la recogia o hasta la
+  purga del arranque: una credencial, tambien de solo lectura, llenaba el
+  disco del servidor capturando sin descargar (2ab-R3 de la 1.18.2). Nunca
+  lanza. }
+procedure PurgaCapturasEnEspera(const AFile: string; ACuantas, AMinutos: Integer);
 { RECOGER una captura nuestra para entregarla por su enlace (GET
   /files?capture=): se reclama abriendola en EXCLUSIVA (sin compartir) con
   borrado al cerrar, se leen sus bytes y se cierra - el fichero se va con el
@@ -621,9 +629,17 @@ function RutaSinTocarElDisco(const APath: string): Boolean;
   queda vacio. UNA regla para la foto (un create en a\b\c.txt) y para el
   clone (que en n1\n2\n3 fallido dejaba n1\n2; septima revision). }
 function PrimerAncestroQueExiste(const ARuta: string): string;
+type
+  { El juez de "puedo quitar esta carpeta": '' = si. }
+  TJuezDeCarpeta = reference to function(const ARuta: string): string;
+
 { Quita ADesde y sus padres, hasta AAncestro (sin el), mientras esten VACIOS,
-  por la puerta de escritura. Nunca lanza: lo que no se puede, se queda. }
-procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string);
+  por la puerta de escritura - la de la JAULA, o la de AJuez: quien creo las
+  carpetas en otro lugar (la casa de capturas, fuera de la jaula desde el 2af)
+  las quita con la puerta de ESE lugar; con la de la jaula se quedaban (2aa de
+  la 1.18.2). Nunca lanza: lo que no se puede, se queda. }
+procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string;
+  const AJuez: TJuezDeCarpeta = nil);
 
 { El PARAMETRO que no va con un modo (el comando de delphi_config, el kind
   de delphi_create, el modo de delphi_edit...), '' si todos van. ATabla:
@@ -2554,6 +2570,48 @@ begin
   end;
 end;
 
+procedure PurgaCapturasEnEspera(const AFile: string; ACuantas, AMinutos: Integer);
+var
+  L: TStringList;
+  Limite: TDateTime;
+begin
+  L := TStringList.Create;
+  try
+    try
+      Limite := Now - AMinutos / (24 * 60);
+      // las de esa carpeta, por el recorredor de NUESTRA casa (sin cruzar
+      // enlaces), no por WalkFiles: ese es el de lo que el agente lee y
+      // pregunta a la jaula, que no es de lo interno - devolvia nada y no se
+      // purgaba ninguna (medido, Q1/Q2 de test_capturas_en_espera_1182)
+      RecorreSinEnlaces(ExtractFileDir(AFile),
+        procedure(const F: string)
+        begin
+          try
+            if not SameText(F, AFile) and TFile.Exists(F) and CapturaConsumible(F) then
+            begin
+              var T := TFile.GetLastWriteTime(F);
+              if T < Limite then
+                ConsumeAgentCapture(F)
+              else
+                // por su marca de tiempo: ordenadas, de la mas vieja a la mas nueva
+                L.Add(FormatDateTime('yyyymmddhhnnsszzz', T) + '|' + F);
+            end;
+          except
+            // una que no se deja mirar se queda; las demas, no
+          end;
+        end);
+      L.Sort;
+      // AFile es una de las ACuantas: quedan ACuantas - 1 de las demas
+      for var I := 0 to L.Count - ACuantas do
+        ConsumeAgentCapture(Copy(L[I], Pos('|', L[I]) + 1, MaxInt));
+    except
+      // recoger no puede tumbar la entrega
+    end;
+  finally
+    L.Free;
+  end;
+end;
+
 function ReclamaCaptura(const AFile: string; out ABytes: TArray<Byte>): Boolean;
 const
   TOPE = Int64(512) * 1024 * 1024; // una captura es de unos MB; tope defensivo
@@ -4196,14 +4254,24 @@ begin
     Result := ExtractFileDir(Result);
 end;
 
-procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string);
+procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string;
+  const AJuez: TJuezDeCarpeta);
 var
   D: string;
+
+  function Denegado(const ARuta: string): string;
+  begin
+    if Assigned(AJuez) then
+      Result := AJuez(ARuta)
+    else
+      Result := EscrituraDenegada(ARuta);
+  end;
+
 begin
   D := SinBarraFinal(ADesde);
   try
     while (AAncestro <> '') and (Length(D) > Length(SinBarraFinal(AAncestro))) and
-          (EscrituraDenegada(D) = '') do
+          (Denegado(D) = '') do
     begin
       // un enlace no lo creo nadie aqui: nunca se quita (decima revision)
       if EsEnlace(D) or not RemoveDir(D) then

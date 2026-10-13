@@ -1516,8 +1516,14 @@ begin
         TFile.Delete(Tmp);
       except
       end;
+    // con la puerta del LUGAR de la colocacion: la casa de capturas esta
+    // fuera de la jaula y con la de la jaula se quedaban (2aa de la 1.18.2)
     if not Colocado and (Ancestro <> '') then
-      QuitaCarpetasCreadas(Dir, Ancestro);
+      QuitaCarpetasCreadas(Dir, Ancestro,
+        function(const ARuta: string): string
+        begin
+          Result := LugarDeEscrituraDenegado(ARuta, ALugar);
+        end);
   end;
   finally
     LeaveFileEdit;
