@@ -1535,8 +1535,13 @@ end;
 function RutaRelativaDenegada(const APath: string): string;
 begin
   Result := '';
-  if (APath.Trim <> '') and not EsRutaAbsoluta(APath.Trim) then
-    Result := MsgFmt(SR_GUARD_RUTA_RELATIVA_FMT, [APath, string.Join(' | ', WorkspaceRoots)]);
+  if (APath.Trim = '') or EsRutaAbsoluta(APath.Trim) then
+    Exit;
+  // el nombre de la casa del servidor que pone el filtro de salida, vuelto
+  // como ruta: se dice lo que es (2ag de la 1.18.2, revisor)
+  if StartsText(NOMBRE_CASA_SERVIDOR, APath.Trim) or StartsText(NOMBRE_CASA_CACHE, APath.Trim) then
+    Exit(MsgFmt(SR_GUARD_CASA_DEL_SERVIDOR_FMT, [APath, string.Join(' | ', WorkspaceRoots)]));
+  Result := MsgFmt(SR_GUARD_RUTA_RELATIVA_FMT, [APath, string.Join(' | ', WorkspaceRoots)]);
 end;
 
 { EL SUELO DE LA JAULA, en la puerta y para TODAS las tools.

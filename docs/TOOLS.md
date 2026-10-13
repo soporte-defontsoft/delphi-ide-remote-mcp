@@ -182,7 +182,7 @@ The help files are the IDE's own list (`Help\HtmlHelp1Files` of the active Delph
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Search Delphi sources recursively for a text (case-insensitive; literal, or a regular expression with regex=true), skipping IDE artifacts BELOW the root (__history, Win32/Win64, dcu, .git, the server's __delphi-temp...) - naming such a folder as root searches inside it, and skipped files are counted with why ("hidden" + "note"). Files are decoded with their real encoding, so accented text matches. Hits come grouped by folder and file: folders = [{dir, files = [{name, hits = [{line (1-based, as delphi_read numbers it), line0 and character0 (0-based, what the LSP tools take), text}]}]}]; total and shown count hits. A file over 8 MB is not read: the result names it.
+Search Delphi sources recursively for a text (case-insensitive; literal, or a regular expression with regex=true), skipping IDE artifacts BELOW the root (__history, Win32/Win64, dcu, .git, __delphi-temp...) - naming such a folder as root searches inside it, and skipped files are counted with why ("hidden" + "note"). Files are decoded with their real encoding, so accented text matches. Hits come grouped by folder and file: folders = [{dir, files = [{name, hits = [{line (1-based, as delphi_read numbers it), line0 and character0 (0-based, what the LSP tools take), text}]}]}]; total and shown count hits. A file over 8 MB is not read: the result names it.
 
 *Access: read-only OK.*
 
@@ -364,7 +364,7 @@ Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable .dproj + main fo
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Delete a file or folder inside the workspace - NOT a hard delete: it goes to a recoverable trash (__delphi-patch\\<date>\deleted\ next to it), so a mistake can be undone. The exception is the server's __delphi-temp: nothing is restored from a temp, so a delete there is for good (the temp folder itself is refused: it is every agent's). Jailed to the workspace roots, refused in read-only mode; a folder that is or holds a workspace root, a reference project or a read-only folder is refused (it would go along). Use it to clean up stray files and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and takes it out of every project that lists it (uses, CreateForm, DCCReference), looked for from its folder up to the edge of the workspace. To keep the file but drop it from a project: delphi_config remove-unit.
+Delete a file or folder inside the workspace - NOT a hard delete: it goes to a recoverable trash (__delphi-patch\\<date>\deleted\ next to it), so a mistake can be undone. The exception is a __delphi-temp: nothing is restored from a temp, so a delete there is for good (the temp folder itself is refused). Jailed to the workspace roots, refused in read-only mode; a folder that is or holds a workspace root, a reference project or a read-only folder is refused (it would go along). Use it to clean up stray files and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and takes it out of every project that lists it (uses, CreateForm, DCCReference), looked for from its folder up to the edge of the workspace. To keep the file but drop it from a project: delphi_config remove-unit.
 
 *Access: read-write (refused to a read-only credential).*
 

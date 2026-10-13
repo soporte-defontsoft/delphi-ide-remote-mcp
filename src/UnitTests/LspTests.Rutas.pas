@@ -44,6 +44,9 @@ type
     [Test] procedure LaRaizDeLaUnidadLlevaSuBarra;
     [Test] procedure TrasUnSaltoDeLineaDeJson;
     [Test] procedure SinSitiosDeRedElTextoEsElMismo;
+    [Test] procedure UnaCasaConLetraPorSuNombre;
+    [Test] procedure LaCasaSoloComoRutaEntera;
+    [Test] procedure UnaRaizQueEmpiezaComoLaCasaSeQueda;
   end;
 
   { El barrido del enmascarador de salida sobre un texto que ya es JSON: alli
@@ -58,6 +61,8 @@ type
   TBarridoDeUnidadesTests = class
   public
     [Test] procedure LaRutaQueAbreLineaEnUnJsonSeEnmascara;
+    [Test] procedure LaCacheDelServidorEnSusFormas;
+    [Test] procedure LaCasaDentroDeSuRaizNoSeToca;
     [Test] procedure ElUncQueAbreLineaEnUnJsonSeEnmascara;
     [Test] procedure UnaCarpetaDeUnaLetraNoEsUnSaltoDeLinea;
     [Test] procedure ElUncDeUnaListaDeRutasSeEnmascara;
@@ -385,6 +390,52 @@ begin
     TArray<string>.Create('C:\ws\'), TArray<string>.Create('C:\ws')));
 end;
 
+// la casa de un servidor de mentira en las tres escrituras que compone
+// Lsp.Mascara (AgujasDeCasa), por su nombre: el mismo cambio que las rutas de
+// red, con agujas que empiezan por una letra (2ag de la 1.18.2)
+function EnCasa(const ATexto: string): string;
+begin
+  Result := CambiaPrefijosEnTexto(ATexto,
+    TArray<string>.Create('C:\\Srv\\Mcp', 'C:/Srv/Mcp', 'C:\Srv\Mcp'),
+    TArray<string>.Create('<server>', '<server>', '<server>'),
+    TArray<string>.Create('', '', ''));
+end;
+
+procedure TFormaDeclaradaEnTextoTests.UnaCasaConLetraPorSuNombre;
+begin
+  // el prefijo por su nombre y lo de debajo tal cual, en las tres escrituras
+  // y sin distinguir mayusculas
+  Assert.AreEqual('exe <server>\DelphiLspMcp.exe', EnCasa('exe C:\Srv\Mcp\DelphiLspMcp.exe'));
+  Assert.AreEqual('{"exe":"<server>\\a.exe"}', EnCasa('{"exe":"C:\\Srv\\Mcp\\a.exe"}'), 'dentro de un JSON');
+  Assert.AreEqual('in <server>/x', EnCasa('in C:/Srv/Mcp/x'), 'con las barras de git');
+  Assert.AreEqual('(<server>\x)', EnCasa('(c:\srv\MCP\x)'), 'sin distinguir mayusculas');
+  Assert.AreEqual('<server>', EnCasa('C:\Srv\Mcp'), 'la casa entera');
+  // abriendo una linea de un JSON (el \n escrito no es una letra pegada)
+  Assert.AreEqual('a\n<server>\b', EnCasa('a\nC:\Srv\Mcp\b'), 'tras un salto de linea de JSON');
+  // una con letra no es una url: detras de dos puntos tambien es ella
+  Assert.AreEqual('exe:<server>\x', EnCasa('exe:C:\Srv\Mcp\x'), 'detras de dos puntos');
+end;
+
+procedure TFormaDeclaradaEnTextoTests.LaCasaSoloComoRutaEntera;
+begin
+  Assert.AreEqual('C:\Srv\McpOtra\x', EnCasa('C:\Srv\McpOtra\x'), 'una vecina que empieza igual');
+  Assert.AreEqual('XC:\Srv\Mcp\x', EnCasa('XC:\Srv\Mcp\x'), 'pegada a una palabra');
+  Assert.AreEqual('D:\Srv\Mcp\x', EnCasa('D:\Srv\Mcp\x'), 'en otra unidad');
+  Assert.AreEqual('C:\Srv\Mc', EnCasa('C:\Srv\Mc'), 'un trozo de ella');
+end;
+
+procedure TFormaDeclaradaEnTextoTests.UnaRaizQueEmpiezaComoLaCasaSeQueda;
+begin
+  // una raiz del agente que empieza como la casa (una vecina con un espacio)
+  // es una aguja de si misma, con el cambio vacio: gana por mas larga y se
+  // queda como venia, y la casa de al lado si cambia (revisor del 2ag:
+  // salia "<server> x", que el agente no podia devolver)
+  Assert.AreEqual('c:\srv\mcp x\a y <server>\b',
+    CambiaPrefijosEnTexto('c:\srv\mcp x\a y C:\Srv\Mcp\b',
+      TArray<string>.Create('C:\Srv\Mcp', 'C:\Srv\Mcp x'),
+      TArray<string>.Create('<server>', ''), TArray<string>.Create('', '')));
+end;
+
 { TBarridoDeUnidadesTests }
 
 function Letra: string;
@@ -404,6 +455,33 @@ begin
   // (control) la misma, pegada a una palabra, no es una unidad
   Assert.AreEqual('{"t":"uno' + Letra + ':\\dir"}',
     MaskDriveText('', '{"t":"uno' + Letra + ':\\dir"}'));
+end;
+
+procedure TBarridoDeUnidadesTests.LaCacheDelServidorEnSusFormas;
+var
+  Cache, Larga, Corta: string;
+begin
+  // la cache del servidor (LOCALAPPDATA\DelphiLspMcp) sale por su nombre en
+  // su forma larga y en la 8.3 (revisor del 2ag: la 8.3 no la media nadie;
+  // las baterias alargan las rutas a la entrada)
+  Cache := ServerCacheDir;
+  ForceDirectories(Cache);
+  Larga := ExcludeTrailingPathDelimiter(FormaLarga(Cache));
+  Assert.AreEqual('<server-cache>\x.txt', MaskDriveText('', Larga + '\x.txt'), 'la larga');
+  Corta := ExtractShortPathName(Cache);
+  if (Corta = '') or SameText(Corta, Larga) then
+    Assert.Pass('esta maquina no da forma 8.3 de ' + Cache + ': la corta no se mide')
+  else
+    Assert.AreEqual('<server-cache>\x.txt', MaskDriveText('', Corta + '\x.txt'), 'la 8.3: ' + Corta);
+end;
+
+procedure TBarridoDeUnidadesTests.LaCasaDentroDeSuRaizNoSeToca;
+begin
+  // la carpeta de este ejecutor ES su raiz (DELPHI_MCP_ROOTS, LspUnitTests.dpr):
+  // la casa que el operador pone dentro de una raiz es del agente, y sale
+  // con su unidad virtual, que puede devolver
+  Assert.AreEqual(Virtual + Copy(ServerDir, 3, MaxInt) + '\x.txt',
+    MaskDriveText('', ServerDir + '\x.txt'));
 end;
 
 procedure TBarridoDeUnidadesTests.ElUncQueAbreLineaEnUnJsonSeEnmascara;

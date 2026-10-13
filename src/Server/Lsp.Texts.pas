@@ -1244,8 +1244,7 @@ const
   SN_HIDDEN_TEMP_FMT =
     '[LIST-004] %d are server temporaries (__delphi-temp): they never ' +
     'show, not even with includetrash, because nothing is restored from ' +
-    'there; if a tool gave you a path inside it, delphi_fetch downloads ' +
-    'it';
+    'there';
   SN_HIDDEN_GIT_FMT =
     '[LIST-005] %d are git plumbing (.git): look at the repository with ' +
     'delphi_git';
@@ -7875,6 +7874,15 @@ const
     '[GUARD-021 INVALID_PARAM] "%s" is a RELATIVE path: this server ' +
     'takes absolute paths, inside its roots (%s). Repeat with the full ' +
     'path.';
+  { Lo que el filtro de salida pone en lugar de la casa del servidor
+    (<server>, <server-cache>; Lsp.Mascara.CasaEnTexto), vuelto como ruta: es
+    un nombre, no una ruta, y la casa no es del agente. Salia GUARD-021 "ruta
+    relativa", que invitaba a buscarla en sus raices (revisor del 2ag). }
+  SR_GUARD_CASA_DEL_SERVIDOR_FMT =
+    '[GUARD-039 DENIED] "%s": <server> and <server-cache> are how answers ' +
+    'show the server''s own folders - a name, not a path. They are the ' +
+    'server''s, not yours, and no tool reaches them. Your work goes in ' +
+    'your roots (%s).';
 
   { De 233 a 259 caracteres una escritura moria como SYS-009 INTERNAL con las
     carpetas ya creadas (novena revision, R9): la medida, a la entrada. }
@@ -8669,9 +8677,9 @@ const
   SD_FILE_DELETE =
     'Delete a file or folder inside the workspace - NOT a hard delete: it ' +
     'goes to a recoverable trash (__delphi-patch\<date>\deleted\ next to ' +
-    'it), so a mistake can be undone. The exception is the server''s ' +
+    'it), so a mistake can be undone. The exception is a ' +
     '__delphi-temp: nothing is restored from a temp, so a delete there is ' +
-    'for good (the temp folder itself is refused: it is every agent''s). ' +
+    'for good (the temp folder itself is refused). ' +
     'Jailed to the workspace roots, refused in read-only mode; a folder ' +
     'that is or holds a workspace root, a reference project or a read-only ' +
     'folder is refused (it would go along). Use it to clean up stray files ' +
@@ -9117,8 +9125,8 @@ const
   SD_WS_SEARCH =
     'Search Delphi sources recursively for a text (case-insensitive; ' +
     'literal, or a regular expression with regex=true), skipping IDE ' +
-    'artifacts BELOW the root (__history, Win32/Win64, dcu, .git, the ' +
-    'server''s __delphi-temp...) - naming such a folder as root searches ' +
+    'artifacts BELOW the root (__history, Win32/Win64, dcu, .git, ' +
+    '__delphi-temp...) - naming such a folder as root searches ' +
     'inside it, and skipped files are counted with why ("hidden" + ' +
     '"note"). Files are decoded with their real encoding, so accented text ' +
     'matches. Hits come grouped by folder and file: folders = [{dir, files ' +

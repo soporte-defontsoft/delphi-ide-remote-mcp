@@ -131,6 +131,29 @@ the MCP `initialize` response (`serverInfo.version`).
   stdio batteries that kept a capture to see where it was drawn now measure
   it in the answer.
 
+- **No answer names the server's own folders.** The folder of the server
+  (its exe, settings, temporaries, logs and mailboxes) and its cache
+  (`LOCALAPPDATA\DelphiLspMcp`, where the copies of the IDE files it
+  overwrites are kept) came back in answers: `delphi_workspace` (the exe),
+  `DSGN-060`, the copies `delphi_paserver` keeps (`previousSdkCopy`...), the
+  raw output of what runs in its temporaries, and any refusal that echoed
+  such a path. The outbound filter - the same one that turns drive letters
+  into `srvX:` - now replaces the prefix of those two folders with
+  `<server>` and `<server-cache>`, in their long and 8.3 forms, with any
+  separator, in a `file:///` URI and as the JSON encoder writes them (a
+  letter beyond ASCII travels as `\u00F1` there), and leaves the rest, so
+  raw output still says which file failed. A server folder the operator put
+  inside a workspace root is the agent's and is left as it was, with its
+  virtual drive, and so is a root whose name starts like the server's folder
+  (`D:\Delphi Projects` next to a server in `D:\Delphi`, or a root inside
+  it): the agent can still pass it back. The content of a file is never
+  touched. `<server>\...` passed back as a path is refused for what it is
+  (`GUARD-039`), not as a relative path. `LIST-004` no longer says that
+  `delphi_fetch` downloads from a `__delphi-temp`. `test_mascara_casa_1182`
+  (red before, and each case of the change's own reviewer: a neighbouring
+  root, a root inside, a folder with an accent, the name passed back),
+  `LspTests.Rutas`.
+
 - **A unit's designer goes through the gate with it.** `delphi_move` and
   `delphi_delete` of a unit take its `.dfm`/`.fmx` along, and the gate
   judged only the unit: the designer was moved, copied or sent to the trash

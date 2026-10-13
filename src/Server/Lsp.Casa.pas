@@ -66,6 +66,14 @@ interface
   deben ni olerlo").
 
   Componen la ruta y ya: crear la carpeta es de quien la use. }
+const
+  { Como ve el agente la casa del servidor en una respuesta (2ag de la
+    1.18.2): el prefijo de su carpeta cambiado por su nombre, y lo de debajo
+    tal cual (Lsp.Mascara.CasaEnTexto, en el filtro de salida). La carpeta
+    del exe (ServerDir) y la cache (ServerCacheDir). }
+  NOMBRE_CASA_SERVIDOR = '<server>';
+  NOMBRE_CASA_CACHE = '<server-cache>';
+
 function TempFolderName: string;
 { <carpeta del exe>\ASub: LA casa del servidor. Todo lo que el servidor
   guarda o busca junto a si mismo (settings.ini, __delphi-temp, logs,

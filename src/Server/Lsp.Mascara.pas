@@ -141,7 +141,11 @@ uses
   Lsp.Texts,
   Lsp.Json,
   Lsp.Settings,
-  Lsp.Lugares,
+  Lsp.Lugares,      // CambiaPrefijosEnTexto: el cambio de una ruta dentro de un texto
+  Lsp.Casa,         // la casa del servidor y sus nombres (2ag)
+  Lsp.Rutas,
+  Lsp.NetDrives,
+  System.Generics.Collections,
   Lsp.ProcessLaunch; // TrocearArgs y EnComillas: EL troceador de una linea de ordenes y su inversa
 
 threadvar
@@ -385,6 +389,117 @@ begin
   TCitasHechas := TCitasHechas + Result + #0;
 end;
 
+{ LA CASA DEL SERVIDOR en la salida (2ag de la 1.18.2; David, 12-oct-2026:
+  "nuestros procesos internos y nuestro temp, los agentes no deben ni
+  olerlo"). Ninguna respuesta nombra la carpeta del exe ni la cache: su
+  prefijo se cambia por su nombre (NOMBRE_CASA_*, Lsp.Casa) y lo de debajo se
+  queda - la salida cruda sigue diciendo que fichero fallo -, en la forma del
+  proceso, la larga y la 8.3, y en sus escrituras: las barras de Windows, las
+  de git, la de una URI (file:///C%3A/...) y la de un JSON, que se le pide a
+  SU codificador (escribe lo que no es ASCII como \u00F1, y una casa con
+  acentos se escapaba; revisor del 2ag, medido). La que el operador puso
+  DENTRO de una raiz de la sesion no se toca: es del agente ("si le das
+  acceso, tu sabras") y con su unidad virtual la puede devolver. Y una raiz
+  de la sesion que EMPIEZA como la casa - una vecina con un espacio (D:\Delphi
+  Projects junto a D:\Delphi) o una de dentro (D:\Delphi\Proyectos) - va como
+  aguja de si misma: gana por mas larga, se queda como venia y el barrido le
+  pone su unidad virtual (salian "<server> Projects", que el agente no podia
+  devolver; revisor del 2ag, medido). Las agujas se calculan una vez por
+  juego de raices: el filtro de salida pasa por aqui por cada linea de una
+  respuesta. }
+type
+  TAgujasDeCasa = record
+    Agujas, Cambios, Barras: TArray<string>;
+  end;
+
+var
+  GCasas: TDictionary<string, TAgujasDeCasa>;
+  GCasasLock: TCriticalSection;
+
+function AgujasDeCasa: TAgujasDeCasa;
+var
+  Clave: string;
+
+  // las escrituras de AForma, cada una con ACambio ('' = se queda como venia)
+  procedure Anade(const AForma, ACambio: string);
+  var
+    Escrituras: TArray<string>;
+    J: TJSONString;
+    S: string;
+  begin
+    Escrituras := [AForma, AForma.Replace('\', '/'),
+      AForma.Replace('\', '/').Replace(':', '%3A')];
+    for var K := 0 to 1 do
+    begin
+      if K = 0 then
+        J := TJSONString.Create(AForma)
+      else
+        J := TJSONString.Create(AForma.Replace('\', '/'));
+      try
+        S := J.ToJSON;
+        Escrituras := Escrituras + [Copy(S, 2, Length(S) - 2)];
+      finally
+        J.Free;
+      end;
+    end;
+    for var E in Escrituras do
+      if (E <> '') and not MatchStr(E, Result.Agujas) then
+      begin
+        Result.Agujas := Result.Agujas + [E];
+        Result.Cambios := Result.Cambios + [ACambio];
+        Result.Barras := Result.Barras + [''];
+      end;
+  end;
+
+begin
+  // la clave lleva tambien las dos casas: la cache lee LOCALAPPDATA en cada
+  // llamada, y quien la redirige (una prueba) no debe recibir las de antes
+  Clave := ServerDir + #0 + ServerCacheDir + #0 + FirmaDeLasRaices;
+  GCasasLock.Enter;
+  try
+    if GCasas.TryGetValue(Clave, Result) then
+      Exit;
+  finally
+    GCasasLock.Leave;
+  end;
+  Result := Default(TAgujasDeCasa);
+  for var K := 0 to 1 do
+  begin
+    var Raiz := ServerDir;
+    var Nombre := NOMBRE_CASA_SERVIDOR;
+    if K = 1 then
+    begin
+      Raiz := ServerCacheDir;
+      Nombre := NOMBRE_CASA_CACHE;
+    end;
+    if not EsRutaAbsoluta(Raiz) then
+      Continue;
+    // la casa DENTRO de una raiz es del agente; las raices que empiezan como
+    // ella, agujas de si mismas (las recorre Lsp.Lugares, su casa)
+    var DeSiMismas: TArray<string>;
+    if CasaDentroDeUnaRaiz(Raiz, DeSiMismas) then
+      Continue;
+    for var F in FormasDeUnaRuta(Raiz) do
+      Anade(F, Nombre);
+    for var FR in DeSiMismas do
+      Anade(FR, '');
+  end;
+  GCasasLock.Enter;
+  try
+    GCasas.AddOrSetValue(Clave, Result);
+  finally
+    GCasasLock.Leave;
+  end;
+end;
+
+function CasaEnTexto(const ATexto: string): string;
+var
+  A: TAgujasDeCasa;
+begin
+  A := AgujasDeCasa;
+  Result := CambiaPrefijosEnTexto(ATexto, A.Agujas, A.Cambios, A.Barras);
+end;
+
 function MaskDriveText(const AToolName, AText: string): string;
 const
   // las tools cuyo ECO es contenido del disco (la nota de abajo dice por que)
@@ -484,6 +599,12 @@ begin
     TCitasHechas := '';
     Exit;
   end;
+  // LA CASA del servidor, antes del barrido (que le pondria su unidad
+  // virtual): su prefijo por su nombre. Lo cambiado vuelve a entrar para el
+  // barrido de siempre, como la ruta de red de abajo (2ag)
+  var SinCasa := CasaEnTexto(AText);
+  if SinCasa <> AText then
+    Exit(MaskDriveText('', SinCasa));
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then
     Exit(AText);
@@ -752,6 +873,9 @@ end;
 
 initialization
   GDrvLock := TCriticalSection.Create;
+  // (las agujas de la casa, por juego de raices: tampoco se liberan)
+  GCasasLock := TCriticalSection.Create;
+  GCasas := TDictionary<string, TAgujasDeCasa>.Create;
 
 finalization
 

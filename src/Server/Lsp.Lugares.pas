@@ -117,6 +117,34 @@ function FormaDeclaradaDe(const ARuta: string;
   comentarios de Pascal de un diff. }
 function FormaDeclaradaEnTexto(const ATexto: string;
   const ADeclaradas, AReales: TArray<string>): string;
+{ EL cambio de una ruta por otro texto DENTRO de un texto de salida: donde
+  una de AAgujas (sin distinguir mayusculas) aparece como ruta - EMPIEZA ahi,
+  no pegada a una palabra (y la que empieza por barra, tampoco detras de otra
+  barra ni de dos puntos), y ACABA ahi o sigue por un separador -, se pone su
+  ACambios (uno vacio la deja como venia: una ruta que tiene que ganar a una
+  aguja mas corta y quedarse); ABarras (por indice; '' si no) se anade
+  cuando la ruta acaba justo ahi. Las agujas mas largas primero. Sin ningun
+  sitio en el texto, el mismo texto, sin copiarlo. Lo usan FormaDeclaradaEnTexto
+  (las rutas de red de los sitios declarados) y el enmascarador de la casa
+  del servidor (Lsp.Mascara, 2ag de la 1.18.2): eran el mismo bucle. }
+function CambiaPrefijosEnTexto(const ATexto: string;
+  AAgujas, ACambios, ABarras: TArray<string>): string;
+{ La forma del proceso, la larga y la 8.3 de una ruta, sin la barra final y
+  sin repetir; la que no se deja calcular no cuenta (nunca lanza). Una casa
+  del servidor o una raiz puede salir en cualquiera de las tres. }
+function FormasDeUnaRuta(const ARuta: string): TArray<string>;
+{ La firma del juego de raices de la sesion (las de escribir y las de solo
+  lectura): cambia cuando cambia alguna. Para quien guarda algo calculado
+  de ellas sin recorrerlas (la cache de las agujas de la casa). }
+function FirmaDeLasRaices: string;
+{ Las raices de la sesion (las de escribir y las de solo lectura) frente a
+  una casa del servidor, ACasa (2ag de la 1.18.2): True si esta DENTRO de
+  una - es del agente, "si le das acceso, tu sabras", y no se enmascara -;
+  si no, ADeSiMismas son las formas de las raices que EMPIEZAN como alguna
+  forma de la casa (una vecina con un espacio, D:\Delphi Projects junto a
+  D:\Delphi, o una de dentro), que el enmascarador deja como venian. Las
+  recorria Lsp.Mascara.AgujasDeCasa por su cuenta (test_paisaje). }
+function CasaDentroDeUnaRaiz(const ACasa: string; out ADeSiMismas: TArray<string>): Boolean;
 
 { La zona de biblioteca (la instalacion de este Delphi, sus catalogos de
   GetIt y el Library Search Path de todas sus plataformas), canonica y
@@ -151,7 +179,8 @@ uses
   Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Rutas,
   Lsp.Settings,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  System.StrUtils;
 
 var
   GLibLoaded: Boolean = False;
@@ -488,10 +517,8 @@ function FormaDeclaradaEnTexto(const ATexto: string;
   const ADeclaradas, AReales: TArray<string>): string;
 var
   Agujas, Cambios, Barras: TArray<string>;
-  Decl, Real, Tmp: string;
-  Sb: TStringBuilder;
-  I, J, K, L, N: Integer;
-  Hecho: Boolean;
+  Decl, Real: string;
+  K: Integer;
 
   // ABarra: con que se separa en esa escritura. Solo se guarda para la raiz de
   // la unidad ("L:"), que la necesita cuando la ruta acaba ahi
@@ -506,7 +533,6 @@ var
   end;
 
 begin
-  Result := ATexto;
   Agujas := nil;
   Cambios := nil;
   Barras := nil;
@@ -524,8 +550,56 @@ begin
     Anade(Real.Replace('\', '/'), Decl.Replace('\', '/'), '/');
     Anade(Real, Decl, '\');
   end;
-  if Length(Agujas) = 0 then
+  Result := CambiaPrefijosEnTexto(ATexto, Agujas, Cambios, Barras);
+end;
+
+function CambiaPrefijosEnTexto(const ATexto: string;
+  AAgujas, ACambios, ABarras: TArray<string>): string;
+var
+  Agujas, Cambios, Barras: TArray<string>;
+  Tmp, Primeras: string;
+  Sb: TStringBuilder;
+  I, J, K, L: Integer;
+
+  // la aguja que casa en AI como ruta, o -1. Una ruta EMPIEZA ahi: no pegada
+  // a una palabra; la de red (empieza por barra) tampoco detras de otra barra
+  // (la mitad de una doblada, o el %(prefix)///host que git propone al
+  // operador) ni de dos puntos (https://host); la de una letra (la casa) pide
+  // solo eso, como el barrido de las letras del enmascarador. Y ACABA ahi o
+  // sigue por un separador: \\h\r\ab no es \\h\r\a
+  function CasaEn(AI: Integer): Integer;
+  var
+    M, N: Integer;
+    Previo: Char;
+  begin
+    Result := -1;
+    if Pos(UpCase(ATexto[AI]), Primeras) = 0 then
+      Exit;
+    Previo := CaracterPrevio(ATexto, AI);
+    if CharInSet(Previo, ['A' .. 'Z', 'a' .. 'z', '0' .. '9']) then
+      Exit;
+    for M := 0 to High(Agujas) do
+    begin
+      N := Length(Agujas[M]);
+      if (N = 0) or (CharInSet(Agujas[M][1], ['\', '/']) and CharInSet(Previo, ['\', '/', ':'])) then
+        Continue;
+      if (AI + N - 1 <= L) and
+         (StrLIComp(PChar(ATexto) + AI - 1, PChar(Agujas[M]), N) = 0) and
+         ((AI + N > L) or CharInSet(ATexto[AI + N],
+            ['\', '/', '"', '''', ' ', #9, #10, #13, ')', ',', ';', '<', '>', '|'])) then
+        Exit(M);
+    end;
+  end;
+
+begin
+  Result := ATexto;
+  if Length(AAgujas) = 0 then
     Exit;
+  // copias: se ordenan aqui, y las de quien llama pueden ser compartidas
+  // (las de la casa se guardan una vez para todos los hilos)
+  Agujas := Copy(AAgujas);
+  Cambios := Copy(ACambios);
+  Barras := Copy(ABarras);
   // la mas larga primero: de dos sitios anidados, el mas hondo
   for I := 1 to High(Agujas) do
     for J := I downto 1 do
@@ -535,50 +609,98 @@ begin
         Tmp := Cambios[J]; Cambios[J] := Cambios[J - 1]; Cambios[J - 1] := Tmp;
         Tmp := Barras[J]; Barras[J] := Barras[J - 1]; Barras[J - 1] := Tmp;
       end;
+  // con que puede empezar una: lo demas no se mira
+  Primeras := '';
+  for K := 0 to High(Agujas) do
+    if Agujas[K] <> '' then
+      Primeras := Primeras + UpCase(Agujas[K][1]);
   L := Length(ATexto);
+  // sin ningun sitio en el texto, el texto, sin copiarlo: el filtro de salida
+  // pasa por aqui con cada respuesta, y un delphi_fetch de 6 MB pagaba medio
+  // segundo por una copia que salia igual (revisor del 2ag)
+  I := 1;
+  while (I <= L) and (CasaEn(I) < 0) do
+    Inc(I);
+  if I > L then
+    Exit;
   Sb := TStringBuilder.Create(L + 16);
   try
-    I := 1;
+    Sb.Append(ATexto, 0, I - 1);
     while I <= L do
     begin
-      Hecho := False;
-      // una ruta EMPIEZA ahi: no detras de otra barra (la mitad de una
-      // doblada, o el %(prefix)///host que git propone al operador), ni de
-      // dos puntos (https://host), ni pegada a una palabra
-      if CharInSet(ATexto[I], ['\', '/']) and
-         not CharInSet(CaracterPrevio(ATexto, I), ['\', '/', ':', 'A' .. 'Z', 'a' .. 'z', '0' .. '9']) then
-        for K := 0 to High(Agujas) do
-        begin
-          N := Length(Agujas[K]);
-          // ...y ACABA ahi o sigue por una barra: \\h\r\ab no es \\h\r\a
-          if (I + N - 1 <= L) and
-             (StrLIComp(PChar(ATexto) + I - 1, PChar(Agujas[K]), N) = 0) and
-             ((I + N > L) or CharInSet(ATexto[I + N],
-                ['\', '/', '"', '''', ' ', #9, #10, #13, ')', ',', ';', '<', '>', '|'])) then
-          begin
-            Sb.Append(Cambios[K]);
-            // la raiz de la unidad, cuando la ruta acaba ahi: "L:" a secas no
-            // es una ruta, y el barrido la dejaba con su letra de verdad.
-            // Acaba ahi si NO sigue por la barra de su escritura: detras de
-            // //h/r, el \n de un JSON no es un separador (tercer revisor)
-            if (Barras[K] <> '') and
-               (StrLComp(PChar(ATexto) + I + N - 1, PChar(Barras[K]), Length(Barras[K])) <> 0) then
-              Sb.Append(Barras[K]);
-            Inc(I, N);
-            Hecho := True;
-            Break;
-          end;
-        end;
-      if not Hecho then
+      K := CasaEn(I);
+      if K < 0 then
       begin
         Sb.Append(ATexto[I]);
         Inc(I);
+        Continue;
       end;
+      // un cambio vacio deja la ruta como venia: una raiz del agente que
+      // empieza como la casa del servidor (Lsp.Mascara.AgujasDeCasa) gana a
+      // la casa por ser mas larga, y se queda
+      if Cambios[K] = '' then
+        Sb.Append(ATexto, I - 1, Length(Agujas[K]))
+      else
+        Sb.Append(Cambios[K]);
+      // la raiz de la unidad, cuando la ruta acaba ahi: "L:" a secas no
+      // es una ruta, y el barrido la dejaba con su letra de verdad.
+      // Acaba ahi si NO sigue por la barra de su escritura: detras de
+      // //h/r, el \n de un JSON no es un separador (tercer revisor)
+      if (Barras[K] <> '') and
+         (StrLComp(PChar(ATexto) + I + Length(Agujas[K]) - 1, PChar(Barras[K]), Length(Barras[K])) <> 0) then
+        Sb.Append(Barras[K]);
+      Inc(I, Length(Agujas[K]));
     end;
     Result := Sb.ToString;
   finally
     Sb.Free;
   end;
+end;
+
+function FormasDeUnaRuta(const ARuta: string): TArray<string>;
+var
+  F: string;
+begin
+  Result := [SinBarraFinal(ARuta)];
+  for var K := 0 to 1 do
+  begin
+    try
+      if K = 0 then
+        F := SinBarraFinal(FormaLarga(ARuta))
+      else
+        F := SinBarraFinal(ExtractShortPathName(ARuta));
+    except
+      F := '';
+    end;
+    if (F <> '') and not MatchText(F, Result) then
+      Result := Result + [F];
+  end;
+end;
+
+function FirmaDeLasRaices: string;
+begin
+  Result := string.Join(#0, WorkspaceRoots + WorkspaceReadOnlyRoots);
+end;
+
+function CasaDentroDeUnaRaiz(const ACasa: string; out ADeSiMismas: TArray<string>): Boolean;
+var
+  Raices, Casa: TArray<string>;
+begin
+  ADeSiMismas := nil;
+  Raices := WorkspaceRoots + WorkspaceReadOnlyRoots;
+  for var R in Raices do
+    if EnLugar(ACasa, R) then
+      Exit(True);
+  Casa := FormasDeUnaRuta(ACasa);
+  for var R in Raices do
+    for var FR in FormasDeUnaRuta(R) do
+      for var F in Casa do
+        if (Length(FR) > Length(F)) and StartsText(F, FR) then
+        begin
+          ADeSiMismas := ADeSiMismas + [FR];
+          Break;
+        end;
+  Result := False;
 end;
 
 function LibraryReadRoots: TArray<string>;
