@@ -557,8 +557,8 @@ begin
       Dir := ProfilesDir(Info.Version);
     if (Dir <> '') and TDirectory.Exists(Dir) then
     begin
-      for F in TDirectory.GetFiles(Dir, '*.profile') do
-        Profs.Add(NombreDePerfil(F));
+      for var Nombre in PerfilesDelIde(Info.Version) do // EL lector de la lista
+        Profs.Add(Nombre);
       { Cada SDK con SU ficha: de que distro salio y con que glibc. Es lo
         que permite elegir el generico con criterio - se compila con la
         glibc MAS VIEJA del parque - en vez de por el nombre. }
@@ -812,7 +812,7 @@ function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
   PaClient, ProfName, Host, Port, Plat, P, Output, ProfileFile: string;
-  AvisoDup, F: string;
+  AvisoDup: string;
   ExitCode: Cardinal;
   Return: TJSONObject;
 begin
@@ -847,13 +847,11 @@ begin
     Exit(MsgFmt(SR_PASERVER_PROFILE_EXISTS_FMT,
       [ProfName, HostDePerfil(Info.Version, ProfName)]));
   AvisoDup := '';
-  if TDirectory.Exists(IdeProfilesDir(Info.Version)) then
-    for F in TDirectory.GetFiles(IdeProfilesDir(Info.Version), '*.profile') do
+  for var Otro in PerfilesDelIde(Info.Version) do // EL lector de la lista
     try
-      var Campos := CamposDePerfil(LeeTexto(F, [ltIde]));
+      var Campos := CamposDePerfil(LeeTexto(RutaDePerfil(Info.Version, Otro), [ltIde]));
       if SameText(Campos.Host, Host) and (Campos.Puerto = Port) then
-        AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT,
-          [NombreDePerfil(F)]);
+        AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT, [Otro]);
     except
       // un perfil ilegible no impide crear el nuevo
     end;
@@ -1478,7 +1476,7 @@ end;
 function ReseatProfiles: string;
 var
   Info: TRadStudioInfo;
-  Dir, F, Nombre, Plat, Host, Pwd: string;
+  Nombre, Plat, Host, Pwd: string;
   Puerto: Integer;
   Texto: string;
   Reg: TRegistry;
@@ -1492,16 +1490,13 @@ begin
   Return.AddPair('seated', Sembrados);
   Return.AddPair('alreadyThere', Intactos);
   try
-    // los perfiles del Delphi de ESTE servidor (5-oct-2026)
+    // los perfiles del Delphi de ESTE servidor (5-oct-2026), por EL lector de
+    // la lista (Lsp.Discovery.PerfilesDelIde)
     Info := DiscoverRadStudio;
-    Dir := '';
     if Info.Found then
-      Dir := ProfilesDir(Info.Version);
-    if (Dir <> '') and TDirectory.Exists(Dir) then
     begin
-      for F in TDirectory.GetFiles(Dir, '*.profile') do
+      for Nombre in PerfilesDelIde(Info.Version) do
       begin
-        Nombre := NombreDePerfil(F);
         Reg := TRegistry.Create(KEY_READ);
         try
           Reg.RootKey := HKEY_CURRENT_USER;
@@ -1516,7 +1511,7 @@ begin
           Continue;
         end;
         try
-          Texto := LeeTexto(F, [ltIde]);
+          Texto := LeeTexto(RutaDePerfil(Info.Version, Nombre), [ltIde]);
         except
           Continue;
         end;

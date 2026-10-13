@@ -382,6 +382,12 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Internal
 
+- **One reader of the IDE's connection profiles.** `delphi_config
+  set-profile` and `delphi_paserver profiles`, `add-profile` and `reseat` each
+  listed the `.profile` files by hand; now they ask `PerfilesDelIde`, and
+  `set-profile` writes the profile under the name the list gives, whatever
+  case was typed. `test_paisaje` watches the listing. Part of 2an of 1.18.2.
+
 - **A read-only refusal reads right whether the entry is a folder or a file.**
   `GUARD-012` said a path was "inside a folder declared READ-ONLY" even when
   the `ReadOnlyPaths` entry was the file itself; it now says the path "falls

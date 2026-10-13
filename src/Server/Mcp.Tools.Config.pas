@@ -1472,8 +1472,6 @@ function SetProfile(const ADproj, ARawPlatform, ARawProfile: string): string;
 var
   APlatform, Perfil, Enc, Xml, Antes, Disponibles: string;
   Info: TRadStudioInfo;
-  Dir, F: string;
-  L: TStringList;
   O, I, C, TagIni, TagFin: Integer;
   Quitar: Boolean;
 begin
@@ -1485,16 +1483,8 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
-  Dir := IdeProfilesDir(Info.Version);
-  L := TStringList.Create;
-  try
-    if TDirectory.Exists(Dir) then
-      for F in TDirectory.GetFiles(Dir, '*.profile') do
-        L.Add(NombreDePerfil(F));
-    Disponibles := ONinguno(string.Join(', ', L.ToStringArray)); // nunca "Registered: ."
-  finally
-    L.Free;
-  end;
+  // EL lector de la lista de perfiles (Lsp.Discovery.PerfilesDelIde)
+  Disponibles := ONinguno(string.Join(', ', PerfilesDelIde(Info.Version))); // nunca "Registered: ."
 
   Perfil := ARawProfile.Trim;
   if Perfil = '' then
@@ -1504,8 +1494,11 @@ begin
   begin
     if BadProfileName(Perfil) then // la regla de la puerta de build y paserver
       Exit(MsgFmt(SR_PASERVER_NAME_FMT, [Perfil]));
-    if not TFile.Exists(RutaDePerfil(Info.Version, Perfil)) then
+    // uno de la lista, con SU nombre: es el que se escribe en el .dproj (2an)
+    var Elegido := PerfilDelIde(Info.Version, Perfil);
+    if Elegido = '' then
       Exit(MsgFmt(SR_CONFIG_PROFILE_NOEXISTE_FMT, [Perfil, Disponibles]));
+    Perfil := Elegido;
   end;
 
   Xml := PatchLoadText(ADproj, Enc);

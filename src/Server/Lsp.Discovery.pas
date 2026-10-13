@@ -80,6 +80,17 @@ function IdeProfilesDir(const AVersion: string): string;
   inversa, para quien lista con GetFiles('*.profile'). }
 function RutaDePerfil(const AVersion, AName: string): string;
 function NombreDePerfil(const APath: string): string;
+{ Los perfiles de conexion del IDE de AVersion, por su NOMBRE (NombreDePerfil
+  de cada .profile de IdeProfilesDir), ordenados; vacio si no hay carpeta. EL
+  lector de la lista: la componian a mano set-profile (Mcp.Tools.Config) y
+  profiles, add-profile y reseat (Mcp.Tools.PAServer), cada uno con su
+  GetFiles('*.profile') (2an de la 1.18.2). }
+function PerfilesDelIde(const AVersion: string): TArray<string>;
+{ El perfil de esa lista que es APedido (sin mirar mayusculas), con SU nombre;
+  '' si no esta. Lo que teclea el agente solo ELIGE uno de los que hay (2an de
+  la 1.18.2: "el agente pide una operacion"): el build lo pasa asi a msbuild,
+  sea el de la llamada o el que declara el proyecto. }
+function PerfilDelIde(const AVersion, APedido: string): string;
 
 { EL nombre de un SDK del IDE: '<nombre>.sdk'. Es UNO para todo: el fichero
   junto a los .profile, su clave en PlatformSDKs, los valores SDKName y
@@ -925,6 +936,36 @@ end;
 function NombreDePerfil(const APath: string): string;
 begin
   Result := TPath.GetFileNameWithoutExtension(APath);
+end;
+
+function PerfilesDelIde(const AVersion: string): TArray<string>;
+var
+  Dir: string;
+  L: TStringList;
+begin
+  Result := nil;
+  Dir := IdeProfilesDir(AVersion);
+  if not TDirectory.Exists(Dir) then
+    Exit;
+  L := TStringList.Create;
+  try
+    L.Sorted := True;
+    L.Duplicates := dupIgnore;
+    L.CaseSensitive := False;
+    for var F in TDirectory.GetFiles(Dir, '*.profile') do
+      L.Add(NombreDePerfil(F));
+    Result := L.ToStringArray;
+  finally
+    L.Free;
+  end;
+end;
+
+function PerfilDelIde(const AVersion, APedido: string): string;
+begin
+  Result := '';
+  for var P in PerfilesDelIde(AVersion) do
+    if SameText(P, APedido.Trim) then
+      Exit(P);
 end;
 
 function NombreDeSdk(const ANombre: string): string;
