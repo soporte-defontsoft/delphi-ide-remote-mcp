@@ -506,17 +506,17 @@ try:
     _u16 = os.path.join(JAIL, 'FormU16.dfm')
     open(_u16, 'wb').write(b'\xff\xfe' + _FU.encode('utf-16-le'))
     # (variables propias: los checks de P1 que siguen leen r y j de P1)
-    _ru = preview(path=_u16, inline='false')
+    _ru = preview(path=_u16)
     _ju = J(_ru)
     check('P1u un form UTF-16 se dibuja y dice que dcc no lo compila (DSGN-121)',
           (_ju.get('root') or {}).get('name') == 'FormAncha' and
           mc.es(_ju.get('encodingNote', ''), 'SN_DSGN_FORM_ANCHO_FMT'), _ru[:500])
     _u32 = os.path.join(JAIL, 'FormU32.dfm')
     open(_u32, 'wb').write(b'\xff\xfe\x00\x00' + _FU.encode('utf-32-le'))
-    _ru = preview(path=_u32, inline='false')
+    _ru = preview(path=_u32)
     check('P1u ...uno UTF-32 se niega antes de lanzar el renderizador (DSGN-122), no con un error de sintaxis',
           mc.rechazado(_ru) and mc.es(_ru, 'SR_DSGN_FORM_UTF32_FMT'), _ru[:400])
-    check('P1u ...y P1, ANSI, no lleva la nota', 'encodingNote' not in J(preview(path=PRUEBA, inline='false')),
+    check('P1u ...y P1, ANSI, no lleva la nota', 'encodingNote' not in J(preview(path=PRUEBA)),
           'encodingNote en un form ANSI')
     check('P1 el frame de una imagen sin recorte empieza en 0,0',
           j.get('frame') == '400x200@400x200+0+0', j.get('frame'))
@@ -577,9 +577,14 @@ try:
     check('P3b inline es boolean en el esquema de delphi_designer, delphi_desktop y delphi_adb',
           len(tipos) == 3 and set(tipos.values()) == {'boolean'}, tipos)
     sin, falso, texto = preview(path=PRUEBA), preview(path=PRUEBA, inline=False), preview(path=PRUEBA, inline='false')
+    # por stdio no hay enlace de descarga: false (booleano o texto) se LEE como
+    # false y, sin out=, se niega antes de dibujar (CAPT-012, 2ai de la
+    # 1.18.2); con out=, la imagen va a ese fichero y no a la respuesta
+    fichero = preview(path=PRUEBA, inline='false', out=png('p3b.png'))
     check('P3b ...sin inline la imagen viaja en la respuesta; con false, booleano o texto, va a un fichero',
-          'inlineImage' in J(sin) and 'inlineImage' not in J(falso) and 'inlineImage' not in J(texto) and
-          not mc.fallo(falso) and not mc.fallo(texto), (sorted(J(sin))[:8], falso[:160], texto[:160]))
+          'inlineImage' in J(sin) and mc.es(falso, 'SR_CAPTURE_SIN_SALIDA') and
+          mc.es(texto, 'SR_CAPTURE_SIN_SALIDA') and 'inlineImage' not in J(fichero) and
+          os.path.exists(png('p3b.png')), (sorted(J(sin))[:8], falso[:160], texto[:160], fichero[:160]))
     # ...y el texto que no es true ni false se niega, no se adivina
     cero, no = preview(path=PRUEBA, inline='0'), preview(path=PRUEBA, inline='no')
     check('P3b ...inline="0" o "no" se niega (SYS-016), no se toma por false',
@@ -631,10 +636,10 @@ try:
     # 7.1 de la 1.18.0 (sin prueba desde la segunda revision de la 1.17.0): el
     # VALOR de una propiedad de clase tambien se lee por su ruta, como la RTL
     # lee una referencia (ComponenteDeRuta): el TEdit de dentro del frame
-    r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.EditFrame', inline='false')
+    r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.EditFrame')
     check('P5 state con una referencia por su ruta (FrameX1.EditFrame): se encuentra y se aplica',
           not mc.fallo(r) and not mc.rechazado(r) and J(r).get('root'), r[:300])
-    r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.NoHayTal', inline='false')
+    r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.NoHayTal')
     check('P5 ...y una ruta que no nombra nada: RENDER, con el valor',
           mc.abre(r, 'SR_RENDER_ESTADO_SIN_REFERIDO_FMT') and 'FrameX1.NoHayTal' in r, r[:300])
     # el .dfm BINARIO que escribe el IDE (cabecera de recurso): el ayudante se
@@ -695,13 +700,13 @@ end
     r = preview(path=CONFRAMEF, component='FrameF2.RectF', out=png('p6r.png'), inline='false')
     check('P6 FMX component= de un hijo de frame (FrameF2.RectF): su rect en coordenadas de la form',
           J(r).get('componentRect') == '24,232,280,40', r[:400])
-    r = preview(path=os.path.join(JAIL, 'FrameF.fmx'), inline='false')
+    r = preview(path=os.path.join(JAIL, 'FrameF.fmx'))
     check('P6 un frame FMX suelto: frame por su .pas',
           (J(r).get('root') or {}).get('kind') == 'frame', r[:300])
     r = preview(path=CONFRAMEF, style='android', out=png('p6a.png'), inline='false')
     check('P6 style con una plataforma del designer (android): STYLE lo dice',
           'ANDROIDSTYLE' in str(J(r).get('style', '')), r[:300])
-    r = preview(path=CONFRAMEF, style='none', inline='false')
+    r = preview(path=CONFRAMEF, style='none')
     check('P6 style none: el estilo por defecto de Windows, como el designer',
           str(J(r).get('style', '')).startswith('none'), r[:300])
     r = preview(path=CONFRAMEF, style='plataformainventada')
@@ -735,7 +740,7 @@ end
           on is not None and off is not None and on != off, (nv, j.get('nonVisualDrawn'), on, off))
 
     # ------------------------------------------------------------------ P8
-    r = preview(path=INVENTADA, inline='false')
+    r = preview(path=INVENTADA)
     j = J(r)
     check('P8 una clase que ningun paquete registra: substituted y su nota',
           j.get('substituted') == ['TClaseQueNoExisteEnNingunPaquete'] and
@@ -747,7 +752,7 @@ end
     # lo que el lector se salta, como objetos que guian: componente,
     # propiedad, motivo de TReader y su LINEA (la pone el servidor), y la nota
     # de que el form no abre hasta arreglarlas (David, 7-oct-2026)
-    r = preview(path=MALA, inline='false')
+    r = preview(path=MALA)
     j = J(r)
     ig = sorted((x.get('component'), x.get('property'), x.get('line'), x.get('reason'))
                 for x in j.get('ignored') or [])
@@ -756,7 +761,7 @@ end
                  ('Panel1', 'Color', linea_de(MALA, 'Color = Rojo'), 'Invalid property value')], (ig, r[:500]))
     check('P13 ...con la nota DSGN-114 (no abrira hasta arreglarlas: set), y el resto dibujado',
           mc.es(j.get('ignoredNote', ''), 'SN_DESIGNER_PREVIEW_IGNORADAS') and j.get('components') == 2, r[:500])
-    r = preview(path=MALAF, inline='false')
+    r = preview(path=MALAF)
     j = J(r)
     ig = [(x.get('component'), x.get('property'), x.get('line')) for x in j.get('ignored') or []]
     check('P13 FMX: un TAlphaColor que su IdentTo no carga (Fill.Color = Rojo), con su linea, y la nota',
@@ -764,9 +769,8 @@ end
           mc.es(j.get('ignoredNote', ''), 'SN_DESIGNER_PREVIEW_IGNORADAS'), (ig, r[:500]))
 
     # ------------------------------------------------------------------ P9
-    # P8 dejo el suyo a proposito (inline=false sin out=: se consume al
-    # descargarlo): lo que se mide es que ESTA llamada no deje ninguno
-    # NUESTRA casa de capturas: la temporal del servidor (2af de la 1.18.2)
+    # lo que se mide es que ESTA llamada no deje ninguno en NUESTRA casa de
+    # capturas: la temporal del servidor (2af de la 1.18.2)
     capturas = os.path.join(mc.casa_de_capturas(os.path.join(BASE, 'srv')), '**', 'designer', '*.png')
     antes = set(glob.glob(capturas, recursive=True))
     r = preview(path=PRUEBA)
@@ -778,8 +782,13 @@ end
           mc.es(j.get('frameNote', ''), 'SN_DESIGNER_FRAME_NOTE'), r[:600])
     # 'antes' no vacio: el glob ve la carpeta de capturas (el de P8 esta ahi);
     # con la ruta mal, los dos conjuntos vacios pasaban (revision de la 1.17.0)
-    check('P9 ...y no deja PNG en la carpeta de capturas del diseñador (que el glob ve: la de P8 esta)',
-          bool(antes) and not sueltos, (sorted(antes), sueltos))
+    # la carpeta de capturas del disenador existe (se dibujo en ella): con la
+    # ruta mal, un glob vacio pasaria igual. Antes lo probaba la captura que P8
+    # dejaba con inline=false; por stdio ya no queda ninguna (2ai)
+    carpetas = glob.glob(os.path.join(mc.casa_de_capturas(os.path.join(BASE, 'srv')), '**', 'designer'),
+                         recursive=True)
+    check('P9 ...y no deja PNG en la carpeta de capturas del diseñador (que el glob ve: existe)',
+          bool(carpetas) and not sueltos, (carpetas, sueltos))
     escribe('existente.png', 'contenido de antes', OUT)
     r = preview(path=PRUEBA, out=png('existente.png'), inline='false')
     sellada = glob.glob(os.path.join(JAIL, '**', mc.PAPELERA, '**', 'existente.png*'), recursive=True)
@@ -842,6 +851,12 @@ try:
     r = srv2.call('delphi_designer', {'command': 'preview', 'path': PRUEBA})
     check('P11 sin los renderizadores junto al exe: DSGN-060 con el nombre del que falta',
           mc.abre(r, 'SR_DESIGNER_SIN_RENDER_FMT') and 'DelphiFormRenderVcl.exe' in r, r[:300])
+    # el ANTES del 2ai (revisor): por stdio, inline=false sin out= se niega
+    # antes de intentar dibujar - aqui, antes de echar en falta el
+    # renderizador (CAPT-012 y no DSGN-060)
+    r = srv2.call('delphi_designer', {'command': 'preview', 'path': PRUEBA, 'inline': False})
+    check('P11b ...e inline=false sin out= por stdio: CAPT-012 ANTES de intentar dibujar (2ai)',
+          mc.abre(r, 'SR_CAPTURE_SIN_SALIDA') and not mc.es(r, 'SR_DESIGNER_SIN_RENDER_FMT'), r[:300])
 finally:
     try:
         srv2.mata()

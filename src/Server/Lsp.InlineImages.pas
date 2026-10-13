@@ -47,6 +47,14 @@ function DeliverCapture(const AToolName, AFile: string; AInline: Boolean;
   AReturn: TJSONObject; const ANotaEnLineaFmt: string = '';
   const ANotaFrame: string = ''): Boolean;
 
+{ '' si una captura pedida con AInline y AOut tiene por donde salir; si no,
+  la negativa CAPT-012, para darla ANTES de capturar. Por stdio no hay enlace
+  de descarga (DownloadLinkFor), y con inline=false sin out= la captura se
+  quedaba en nuestra casa sin nadie que la recogiera (2ai de la 1.18.2,
+  David: negar antes de capturar). La llama cada tool que captura antes de
+  su CaptureTarget; la captura de un gesto la consume DeliverCapture. }
+function CapturaSinSalidaDenegada(AInline: Boolean; const AOut: string): string;
+
 { EL nombrador del frame y su inversa. Un frame es la geometria de la imagen
   que el agente mira, dentro del token: '<imgW>x<imgH>@<srcW>x<srcH>+<ox>+<oy>'
   = la imagen mide imgW x imgH y cubre srcW x srcH del espacio de tap,
@@ -247,13 +255,18 @@ begin
         AReturn.AddPair('inlineNote', MsgFmt(SN_CAPTURE_INLINE_NOTE_FMT, [EscalaTexto]));
       Exit(True);
     end;
-    // no se pudo escalar: se dice y se entrega como fichero, que nada se pierde
+    // no se pudo escalar: se dice y se entrega como fichero (por stdio, sin
+    // enlace, se consume: la rama de abajo)
     AReturn.AddPair('inlineWarning', Fallo);
   end;
   // fichero + enlace listo para copiar: un agente que recompone la ruta a
   // mano se inventa carpetas (hermes, 25-sep-2026)
-  PonFrame(W0, H0);
   Enlace := DownloadLinkFor(AFile);
+  // el frame mide una imagen que el agente va a TENER (por el enlace, o la
+  // suya de out=); la nuestra sin enlace se consume abajo y no hay que medir
+  // (revisor del 2ai)
+  if (Enlace <> '') or not Nuestra then
+    PonFrame(W0, H0);
   if Enlace <> '' then
   begin
     AReturn.AddPair('download', Enlace);
@@ -264,10 +277,21 @@ begin
   else if Nuestra then
   begin
     // sin la ruta /files (stdio) una captura nuestra no tiene por donde
-    // salir y su ruta no se ensena: se dice como pedirla. Se queda en la casa
-    // hasta que la purga del arranque se la lleve, como una que nadie baja
+    // salir y su ruta no se ensena. Las que se piden asi se niegan antes de
+    // capturar (CapturaSinSalidaDenegada); la que llega aqui - la de un
+    // gesto, o una en linea que no se pudo escalar - se consume, que no se
+    // quede en nuestra casa sin nadie que la recoja, y se dice (2ai)
+    AReturn.AddPair('consumed', TJSONBool.Create(ConsumeAgentCapture(AFile)));
     AReturn.AddPair('downloadNote', MsgText(SN_CAPTURE_SIN_ENLACE));
   end;
+end;
+
+function CapturaSinSalidaDenegada(AInline: Boolean; const AOut: string): string;
+begin
+  Result := '';
+  if AInline or (AOut.Trim <> '') or GFilesServed then
+    Exit;
+  Result := MsgText(SR_CAPTURE_SIN_SALIDA);
 end;
 
 end.

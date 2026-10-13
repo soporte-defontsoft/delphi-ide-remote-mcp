@@ -36,6 +36,7 @@ type
     [Test] procedure RecorteEnMemoriaSeAjustaAlLienzo;
     [Test] procedure CasaDeEntregablesReconoceASuNombrador;
     [Test] procedure ColocarEnLaCasaLoJuzgaSuNombrador;
+    [Test] procedure CapturaSinSalidaSeConsumeYLoDice;
   end;
 
 implementation
@@ -441,6 +442,39 @@ begin
   end;
   Assert.IsTrue(HasMsg(Motivo, SR_GUARD_FUERA_DE_LUGARES_FMT), 'fuera de la casa: ' + Motivo);
   Assert.IsFalse(TDirectory.Exists(ExtractFileDir(Fuera)), 'y sin crear su carpeta');
+end;
+
+procedure TImageTests.CapturaSinSalidaSeConsumeYLoDice;
+var
+  F: string;
+  Ret: TJSONObject;
+begin
+  // 2ai de la 1.18.2: sin la ruta /files (stdio; el ejecutor de pruebas no la
+  // sirve) una captura NUESTRA con inline=false no tiene por donde salir. Las
+  // que se piden asi se niegan antes de capturar; la que llega a
+  // DeliverCapture (la de un gesto, que ya se hizo) se consume - no se queda
+  // en nuestra casa sin nadie que la recoja - y se dice (CAPT-011)
+  F := AgentTempDir(CAPTURE_SUB_DESKTOP) + '\desktop-dunit-sinsalida.png';
+  ColocaContenido(F, PngDe(4, 4), ltEntregables);
+  Ret := TJSONObject.Create;
+  try
+    DeliverCapture('delphi_desktop', F, False, 0, 0, 0, 1, 1, Ret);
+    Assert.IsFalse(TFile.Exists(F), 'consumida: no se queda en nuestra casa');
+    Assert.IsTrue(Ret.GetValue<Boolean>('consumed', False), 'y la respuesta lo dice (consumed)');
+    Assert.IsTrue(HasMsg(Ret.GetValue<string>('downloadNote', ''), SN_CAPTURE_SIN_ENLACE),
+      'con CAPT-011: ' + Ret.ToJSON);
+    Assert.IsNull(Ret.GetValue('download'), 'sin enlace');
+    Assert.IsNull(Ret.GetValue('frame'), 'ni frame: no queda imagen que medir (revisor del 2ai)');
+  finally
+    Ret.Free;
+    if TFile.Exists(F) then
+      TFile.Delete(F);
+  end;
+  // ...y la regla que la niega ANTES de capturar, la misma para las tres tools
+  Assert.IsTrue(HasMsg(CapturaSinSalidaDenegada(False, ''), SR_CAPTURE_SIN_SALIDA),
+    'inline=false sin out= y sin enlace: CAPT-012');
+  Assert.AreEqual('', CapturaSinSalidaDenegada(True, ''), 'en linea sale por la respuesta');
+  Assert.AreEqual('', CapturaSinSalidaDenegada(False, 'C:\x\y.png'), 'con out= es un fichero suyo');
 end;
 
 initialization

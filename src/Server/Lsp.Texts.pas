@@ -2354,7 +2354,7 @@ const
   // tambien la de un gesto (8.6 de la 1.18.0, Hermes: no sabia que tap la traia)
   SP_CAPTURE_INLINE =
     'Default true: the capture this answer brings - a screenshot, the one ' +
-    'every gesture returns (tap, type, swipe...), a preview - comes back IN ' +
+    'a desktop gesture returns (tap, type, key), a preview - comes back IN ' +
     'it as an image scaled to maxwidth, and no file is kept. false = a ' +
     'download link that works once (a client without vision, or one that ' +
     'wants the bytes); over stdio there is no link: use out=.';
@@ -2371,7 +2371,8 @@ const
     'To press what you see, measure x,y ON THIS IMAGE and pass them to ' +
     'tap/type with frame (below): the server converts - never divide or ' +
     'add yourself. Its temp file was consumed: need it again, take ' +
-    'another screenshot; inline=false gives file + download instead; a ' +
+    'another screenshot; inline=false gives a download link instead (over ' +
+    'stdio, out=); a ' +
     'capture with out= is yours and stays.';
 
   SR_BORRADO_DENEGADO_FMT =
@@ -2494,8 +2495,7 @@ const
     '[DESK-009] CROP of the desktop: pass to tap the x,y measured on ' +
     'THIS image with its frame and the server adds the origin; without ' +
     'frame, tap x=(%d + your x) y=(%d + your y). When in doubt (a dialog ' +
-    'that opened outside it), capture the whole desktop. Download it ' +
-    'with delphi_fetch';
+    'that opened outside it), capture the whole desktop.';
   { Dos textos que sobrevivieron a delphi_desktop LOCAL (retirada en 1.0.16):
     los usa la tool por perfil cuando el destino es un Windows. }
   SN_DESKTOP_LOCKED =
@@ -2635,11 +2635,18 @@ const
     'CAPT-010: the capture folder %s has a link on its way; no capture is ' +
     'taken, with or without out=, until the operator removes it.';
   { Una captura nuestra sin la ruta /files (stdio) e inline=false: no tiene
-    por donde salir y su ruta no se ensena (2af de la 1.18.2). }
+    por donde salir y su ruta no se ensena (2af de la 1.18.2). La que se pide
+    asi se niega ANTES de capturar (CAPT-012); la que llega a la entrega - la
+    de un gesto, que ya se hizo - se consume y se dice (2ai). }
   SN_CAPTURE_SIN_ENLACE =
-    '[CAPT-011] This transport (stdio) has no download link, so a capture ' +
-    'without out= only travels inline: ask again with inline=true, or pass ' +
-    'out=<folder> to keep the file.';
+    '[CAPT-011] This transport (stdio) has no download link: this capture ' +
+    'was discarded and nothing stays on the server. Leave inline=true to ' +
+    'see it in this answer, or pass out= to keep it as a file.';
+  SR_CAPTURE_SIN_SALIDA =
+    '[CAPT-012 INVALID_PARAM] This transport (stdio) has no download ' +
+    'link, so a capture with inline=false would have nowhere to go. Leave ' +
+    'inline=true (the image comes in this answer) or pass out= (a file of ' +
+    'yours where it lands). Nothing was captured.';
 
   SR_ADB_NEED_XY =
     '[ADB-002 INVALID_PARAM] tap needs "x" and "y" (screen pixels; measure them ' +
@@ -2695,13 +2702,12 @@ const
 
   SN_ADB_SCREENSHOT =
     '[ADB-011] The device screen comes in this answer (with ' +
-    'inline=false, as a file and its download link). Coordinates ' +
+    'inline=false, as a download link; over stdio, pass out=). Coordinates ' +
     'measured on it are exactly what command=tap takes: the image is the ' +
     'size of the display in force ("display": physical, override and ' +
     'density from wm size / wm density).';
   SN_ADB_TAP_SCALE_FMT =
-    '[ADB-012] The device screen is in this PNG on the server - download ' +
-    'it with delphi_fetch. CAREFUL: the image is %dx%d but the display ' +
+    '[ADB-012] CAREFUL: the image is %dx%d but the display ' +
     'in force is %dx%d, and command=tap takes DISPLAY pixels: multiply ' +
     'what you measure on the image by tapScale (x by %s, y by %s) before ' +
     'tapping - or simply pass frame with x,y measured on the image and ' +
@@ -4694,8 +4700,8 @@ const
   SN_DESIGNER_INLINE_NOTE_FMT =
     '[DSGN-071] The image is IN this answer (scaled %s of the render). ' +
     'Measure on it and convert with frame (below). Its temp file was ' +
-    'consumed: preview again for a new one; inline=false gives file + ' +
-    'download instead; a preview with out= is yours and stays.';
+    'consumed: preview again for a new one; inline=false gives a download ' +
+    'link instead (over stdio, out=); a preview with out= is yours and stays.';
 
   SR_DESIGNER_STYLE_VCL_FMT =
     '[DSGN-072 INVALID_PARAM] A VCL form takes a .vsf file as style (by ' +

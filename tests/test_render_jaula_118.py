@@ -105,7 +105,7 @@ try:
     antes_ro=sorted(os.listdir(RO))
     srv2=mc.Stdio(exe,mc.entorno({'DELPHI_MCP_ROOTS':JAIL,'DELPHI_MCP_READONLY_PATHS':RO}),nombre='render-jaula',t=110)
     try:
-        r=srv2.call('delphi_designer',dict(command='preview',path=fro,inline='false'))
+        r=srv2.call('delphi_designer',dict(command='preview',path=fro))
         mc.check('en una carpeta de solo lectura el ayudante no corre alli: el AVI relativo de alli no se carga, y nada cambia',
                  'Cannot open AVI' in r and sorted(os.listdir(RO))==antes_ro,(r[:300],os.listdir(RO)))
     finally:

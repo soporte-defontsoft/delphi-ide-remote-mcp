@@ -71,9 +71,8 @@ the MCP `initialize` response (`serverInfo.version`).
   (the `screenshot` field goes, as it already did when the image travelled
   inline), and `delphi_fetch` is again for the agent's own files: it no
   longer hands out or deletes captures (`consumedOnServer` and `FETCH-002`
-  are gone). Over stdio there is no download route, so an `inline=false`
-  capture without `out=` says to pass `inline=true` or `out=` (`CAPT-011`).
-  What the agent names still goes through the jail - an `out=`, anything it
+  are gone). Over stdio there is no download route (what an `inline=false`
+  capture does there, below). What the agent names still goes through the jail - an `out=`, anything it
   reads or writes - and the capture folder is still checked for links
   before anything is drawn, downloaded or pulled into it (`CAPT-010`, which
   no longer names that folder: the server log does). The designer's helper
@@ -117,6 +116,20 @@ the MCP `initialize` response (`serverInfo.version`).
   read-only credential and leaves nothing behind), `test_remoterun` (a
   read-only credential does not run the deployed project through the
   desktop), `test_deploy_adb`.
+
+- **Over stdio, a capture with nowhere to go is refused before it is
+  taken.** Over stdio there is no download route, and a capture asked for
+  with `inline=false` and no `out=` was drawn anyway, answered `CAPT-011`
+  and stayed in the server's folder with nobody to collect it until a purge
+  at startup. `delphi_designer preview`, `delphi_adb screenshot` and
+  `delphi_desktop screenshot`/`overview` now refuse it before capturing
+  (`CAPT-012`: leave `inline=true`, or pass `out=` to keep a file), and the
+  capture a desktop gesture brings back, which has no way out either, is
+  discarded and the answer says so (`CAPT-011`). `test_captura_puertas_1182`
+  F1, `test_deploy_adb`, `test_desktop_casa_1182` D0b, `test_designer_preview`
+  P3b and `LspTests.Images` (red before; each call site has its mutant); the
+  stdio batteries that kept a capture to see where it was drawn now measure
+  it in the answer.
 
 - **A unit's designer goes through the gate with it.** `delphi_move` and
   `delphi_delete` of a unit take its `.dfm`/`.fmx` along, and the gate

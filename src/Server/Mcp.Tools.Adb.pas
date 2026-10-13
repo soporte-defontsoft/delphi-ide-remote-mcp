@@ -464,6 +464,11 @@ begin
     const DevPng = '/sdcard/delphi_mcp_screen.png';
     var Destino, Propia: string;
     var EnLaCasa: Boolean;
+    // por stdio, inline=false sin out= no tendria por donde salir: se niega
+    // antes de tocar el dispositivo (2ai de la 1.18.2)
+    Denied := CapturaSinSalidaDenegada(Params.Inline_, Params.Out);
+    if Denied <> '' then
+      Exit(Denied);
     Denied := CaptureTarget(Params.Out, CAPTURE_SUB_ANDROID, 'android',
       TPath.GetExtension(DevPng), Propia, EnLaCasa);
     if Denied <> '' then

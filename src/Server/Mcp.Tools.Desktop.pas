@@ -307,6 +307,16 @@ begin
     if Result <> '' then
       Exit;
   end;
+  // por stdio, inline=false sin out= no tendria por donde salir: screenshot
+  // y overview, cuya respuesta ES la captura, se niegan antes de ir al
+  // destino; la de un gesto es un anadido a lo que ya se hizo y la consume
+  // DeliverCapture (2ai de la 1.18.2)
+  if (Cmd = 'screenshot') or (Cmd = 'overview') then
+  begin
+    Result := CapturaSinSalidaDenegada(Params.Inline_, Params.Out_);
+    if Result <> '' then
+      Exit;
+  end;
 
   { La region/window y los argumentos del gesto son PROPIOS de la llamada (sin
     red ni disco): se validan ANTES de la puerta, para que un error de la
@@ -620,7 +630,9 @@ begin
             Params.MaxWidth, OX, OY, 1.0, 1.0, Return);
           if ConRecorte then
             Return.AddPair('note', MsgFmt(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
-          else if not EnLinea then
+          // "mide sobre esta imagen": solo si el agente la va a tener (la de
+          // un gesto por stdio, sin enlace, se consume: consumed; 2ai)
+          else if not EnLinea and (Return.GetValue('consumed') = nil) then
             Return.AddPair('note', MsgText(SN_DESK_MIDE_PIXEL_SOBRE_IMAGEN));
         end;
       end

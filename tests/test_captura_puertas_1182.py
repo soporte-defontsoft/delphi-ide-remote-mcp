@@ -35,8 +35,8 @@ para los ficheros del agente.
       nada en la raiz (el PNG caia DENTRO de ella; revisor del 2i)
   S6  entradas de solo lectura y referencias DENTRO del __delphi-temp de una
       raiz: la captura en nuestra casa y nada alli
-  F1  inline=false por stdio (sin la ruta /files): la respuesta no nombra
-      nuestra casa (ni screenshot) y dice que use out=; la captura se queda
+  F1  inline=false sin out= por stdio (sin la ruta /files): se niega ANTES
+      de dibujar (CAPT-012, 2ai), sin nombrar la casa ni dejar nada en ella
   F2  delphi_fetch de la ruta de nuestra casa: negado, y no consume nada
   E0  servidor HTTP con dos workspaces: el enlace pide la captura por su
       NOMBRE (/files?capture=), sin screenshot ni nada de nuestra casa
@@ -170,17 +170,16 @@ try:
           mc.rechazado(r) and mc.es(r, 'SR_AGENT_CONFINED_FMT'), r[:300])
 
     # ------------------------------------------------------------------ C1
-    antes = set(glob.glob(CAPS, recursive=True))
-    r = preview(srv, path=PRUEBA, component='Panel1', inline='false')
+    # por stdio la captura sin out= solo sale EN LINEA (2ai de la 1.18.2): se
+    # mide por la respuesta - el recorte sin escalar, consumida (solo se
+    # consume una NUESTRA) - y por la carpeta del agente en nuestra casa
+    CASA_ANA = os.path.join(mc.casa_de_capturas(SRV1, 'ana', ''), 'designer')
+    r = preview(srv, path=PRUEBA, component='Panel1')
     j = J(r)
-    nuevos = sorted(set(glob.glob(CAPS, recursive=True)) - antes)
-    uno = nuevos[0] if len(nuevos) == 1 else ''
     check('C1 confinado, component= sin out=: el recorte (344x41) en NUESTRA casa, con su carpeta, y nada en la raiz',
-          j.get('componentRect') == RECT and tamano(uno) == (344, 41) and
-          (os.sep + 'ana' + os.sep) in uno and not os.path.exists(TEMP_JAULA),
-          (r[:400], nuevos, tamano(uno), os.path.exists(TEMP_JAULA)))
-    for n in nuevos:
-        os.remove(n)
+          j.get('componentRect') == RECT and (j.get('inlineWidth'), j.get('inlineHeight')) == (344, 41) and
+          j.get('consumed') is True and os.path.isdir(CASA_ANA) and not os.path.exists(TEMP_JAULA),
+          (r[:400], os.path.isdir(CASA_ANA), os.path.exists(TEMP_JAULA)))
 
     # ------------------------------------------------------------------ C2
     antes = set(glob.glob(CAPS, recursive=True))
@@ -208,11 +207,9 @@ try:
     os.makedirs(os.path.dirname(CARP), exist_ok=True)
     check('K1a el enlace en el __delphi-temp de la raiz hacia una victima de fuera quedo plantado',
           mc.junction(CARP, V1), CARP)
-    antes = set(glob.glob(CAPS, recursive=True))
-    r = preview(srv, path=PRUEBA, component='Panel1', inline='false')
-    nuevos = sorted(set(glob.glob(CAPS, recursive=True)) - antes)
+    r = preview(srv, path=PRUEBA, component='Panel1')
     check('K1 un enlace en el __delphi-temp de la raiz no cambia nada: la captura en nuestra casa y la victima vacia',
-          not mc.fallo(r) and len(nuevos) == 1 and not contenido(V1), (r[:400], nuevos, contenido(V1)))
+          not mc.fallo(r) and J(r).get('consumed') is True and not contenido(V1), (r[:400], contenido(V1)))
     quita_enlace(CARP)
     shutil.rmtree(TEMP_JAULA, ignore_errors=True)
 
@@ -252,22 +249,32 @@ CAPS2 = casa(SRV2)
 srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': SOLO, 'DELPHI_MCP_READONLY_PATHS': SOLO}),
                 nombre='ana', t=180)
 try:
+    r = preview(srv2, path=PRUEBA_SOLO, component='Panel1')
+    j = J(r)
+    check('S1 sin raiz escribible: la captura en nuestra casa, recortada (344x41), nada en la raiz',
+          j.get('componentRect') == RECT and (j.get('inlineWidth'), j.get('inlineHeight')) == (344, 41) and
+          j.get('consumed') is True and not pngs_en(SOLO), (r[:400], pngs_en(SOLO)))
+    # ------------------------------------------------------------------ F1
+    # 2ai de la 1.18.2 (David, 13-oct): por stdio no hay enlace de descarga, y
+    # una captura con inline=false sin out= se quedaba en nuestra casa sin
+    # nadie que la recogiera (CAPT-011). Se niega ANTES de dibujar (CAPT-012)
     antes = set(glob.glob(CAPS2, recursive=True))
     r = preview(srv2, path=PRUEBA_SOLO, component='Panel1', inline='false')
-    j = J(r)
     nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
-    uno = nuevos[0] if len(nuevos) == 1 else ''
-    check('S1 sin raiz escribible: la captura en nuestra casa, recortada (344x41), nada en la raiz',
-          j.get('componentRect') == RECT and tamano(uno) == (344, 41) and not pngs_en(SOLO),
-          (r[:400], nuevos, tamano(uno), pngs_en(SOLO)))
-    # ------------------------------------------------------------------ F1
-    check('F1 inline=false por stdio: la respuesta no nombra nuestra casa y dice que use out=; la captura se queda',
-          sin_casa(r) and mc.es(r, 'SN_CAPTURE_SIN_ENLACE') and 'download' not in j and os.path.isfile(uno),
-          (r[:400], os.path.isfile(uno)))
+    check('F1 inline=false sin out= por stdio: se niega ANTES de dibujar (CAPT-012), sin nombrar la casa ni dejar nada',
+          mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_SIN_SALIDA') and sin_casa(r) and not nuevos and
+          not pngs_en(SOLO), (r[:400], nuevos))
     # ------------------------------------------------------------------ F2
+    # una captura de nuestra casa, plantada a mano (por stdio ya no queda
+    # ninguna): delphi_fetch es para los ficheros del agente
+    CASA_ANA2 = os.path.join(mc.casa_de_capturas(SRV2, 'ana', ''), 'designer')
+    os.makedirs(CASA_ANA2, exist_ok=True)
+    uno = os.path.join(CASA_ANA2, 'designer-20261013-000000000-f2f2f2f2.png')
+    open(uno, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
     f = srv2.call('delphi_fetch', {'path': uno, 'maxbytes': 65536})
     check('F2 delphi_fetch es para los ficheros del agente: la ruta de nuestra casa se niega y no se consume',
           mc.rechazado(f) and os.path.isfile(uno), (f[:300], os.path.isfile(uno)))
+    os.remove(uno)
     antes = set(glob.glob(CAPS2, recursive=True))
     r = preview(srv2, path=PRUEBA_SOLO, component='Panel1')
     j = J(r)
@@ -282,7 +289,7 @@ try:
     shutil.rmtree(CARP2, ignore_errors=True)
     os.makedirs(os.path.dirname(CARP2), exist_ok=True)
     check('S3a el enlace dentro de nuestra casa de capturas quedo plantado', mc.junction(CARP2, V4), CARP2)
-    r = preview(srv2, path=PRUEBA_SOLO, component='Panel1', inline='false')
+    r = preview(srv2, path=PRUEBA_SOLO, component='Panel1')
     check('S3 un enlace DENTRO de nuestra casa de capturas: se niega (CAPT-010, sin nombrar la casa) y la victima queda vacia',
           mc.rechazado(r) and mc.es(r, 'SR_CAPTURE_CASA_ENLACE') and sin_casa(r) and not contenido(V4),
           (r[:400], contenido(V4)))
@@ -299,11 +306,9 @@ for nombre, raiz, entrada in (('S4 la raiz en 8.3 y su entrada en largo', SOLO, 
     srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': raiz, 'DELPHI_MCP_READONLY_PATHS': entrada}),
                     nombre='ana', t=180)
     try:
-        antes = set(glob.glob(CAPS2, recursive=True))
-        r = preview(srv2, path=PRUEBA_SOLO, component='Panel1', inline='false')
-        nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
+        r = preview(srv2, path=PRUEBA_SOLO, component='Panel1')
         check(nombre + ': la captura en nuestra casa, nada dentro de la raiz de solo lectura',
-              len(nuevos) == 1 and not pngs_en(SOLO), (r[:400], nuevos, pngs_en(SOLO)))
+              J(r).get('consumed') is True and not pngs_en(SOLO), (r[:400], pngs_en(SOLO)))
     finally:
         srv2.cierra()
 
@@ -317,11 +322,9 @@ for clave, entrada in (('DELPHI_MCP_READONLY_PATHS', os.path.join(TEMP3, 'ana'))
                        ('DELPHI_MCP_READONLY_ROOTS', os.path.join(TEMP3, 'ana'))):
     srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ3, clave: entrada}), nombre='ana', t=180)
     try:
-        antes = set(glob.glob(CAPS2, recursive=True))
-        r = preview(srv2, path=PRUEBA3, component='Panel1', inline='false')
-        nuevos = sorted(set(glob.glob(CAPS2, recursive=True)) - antes)
+        r = preview(srv2, path=PRUEBA3, component='Panel1')
         check('S6 %s=%s: la captura en nuestra casa y nada en la raiz' % (clave[11:], os.path.relpath(entrada, RAIZ3)),
-              len(nuevos) == 1 and not pngs_en(RAIZ3), (r[:400], nuevos, pngs_en(RAIZ3)))
+              J(r).get('consumed') is True and not pngs_en(RAIZ3), (r[:400], pngs_en(RAIZ3)))
     finally:
         srv2.cierra()
 
@@ -416,14 +419,11 @@ EXE3 = mc.copia_exe(SRV3, con_render=True)
 CAPS3 = casa(SRV3)
 srv3 = mc.Stdio(EXE3, mc.entorno({'DELPHI_MCP_ROOTS': POR_ENLACE}), nombre='ana', t=180)
 try:
-    antes = set(glob.glob(CAPS3, recursive=True))
-    r = preview(srv3, path=os.path.join(POR_ENLACE, 'Prueba.dfm'), component='Panel1', inline='false')
+    r = preview(srv3, path=os.path.join(POR_ENLACE, 'Prueba.dfm'), component='Panel1')
     j = J(r)
-    nuevos = sorted(set(glob.glob(CAPS3, recursive=True)) - antes)
-    uno = nuevos[0] if len(nuevos) == 1 else ''
     check('R1 una raiz declarada a traves de un junction: el recorte (344x41) en nuestra casa, nada en la raiz',
-          j.get('componentRect') == RECT and tamano(uno) == (344, 41) and not pngs_en(REAL),
-          (r[:400], nuevos, tamano(uno), pngs_en(REAL)))
+          j.get('componentRect') == RECT and (j.get('inlineWidth'), j.get('inlineHeight')) == (344, 41) and
+          j.get('consumed') is True and not pngs_en(REAL), (r[:400], pngs_en(REAL)))
 finally:
     srv3.cierra()
     quita_enlace(POR_ENLACE)

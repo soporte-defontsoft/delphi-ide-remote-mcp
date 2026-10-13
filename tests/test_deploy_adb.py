@@ -310,6 +310,13 @@ try:
 except Exception:
     check('deploy Android: resultado parsea', False, out[:300])
 
+# 2ai de la 1.18.2: por stdio no hay enlace de descarga, y una captura con
+# inline=false sin out= se quedaba en nuestra casa sin nadie que la recogiera.
+# Se niega ANTES de tocar el dispositivo (CAPT-012): sin dispositivo vale
+out = srv.call('delphi_adb', {"command": "screenshot", "device": "127.0.0.1", "inline": False})
+check('screenshot inline=false sin out= por stdio: CAPT-012 antes de llegar a adb (2ai)',
+      mc.rechazado(out) and mc.es(out, 'SR_CAPTURE_SIN_SALIDA') and not paso_por_adb(out), out[:250])
+
 srv.cierra()
 
 # ====================== read-only split ===================================

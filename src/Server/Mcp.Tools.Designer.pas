@@ -1285,6 +1285,11 @@ begin
       Estados := Estados + [E];
   end;
 
+  // por stdio, inline=false sin out= no tendria por donde salir: se niega
+  // antes de dibujar (2ai de la 1.18.2)
+  Fallo := CapturaSinSalidaDenegada(Params.Inline_, Params.Out_);
+  if Fallo <> '' then
+    Exit(Fallo);
   // donde cae: el out= de toda la familia de capturas (CaptureTarget). Se
   // dibuja en un temporal nuestro aunque haya out=
   var EnLaCasa: Boolean;
