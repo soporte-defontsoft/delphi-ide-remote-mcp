@@ -1791,6 +1791,19 @@ end;
   ella, borrar un Client se llevaba el Align = Client de otro (un enumerado),
   y mientras se genera la respuesta dice que se espere (DSGN-051). Sin tabla
   - ningun llamador hoy -, todo nombre seria referencia. }
+{ Si la propiedad de AHoja guarda una REFERENCIA a otro componente: un
+  componente ('c'), o un tipo 'o' sin base conocida - una interfaz que guarda
+  un componente (el Reader de un TFDBatchMove, el Provider de REST) se escribe
+  como su nombre y TReader la resuelve igual (segunda revision de la 1.17.0:
+  se quedaba al renombrar). LA regla: la usan el juez de las referencias
+  (renombrar, borrar) y set, que solo deja vaciar con nil una de estas (H1 de
+  Hermes, 1.18.2). }
+function HojaDeReferencia(const ATabla: TMetaTable; const AHoja: TPropRec): Boolean;
+begin
+  Result := (AHoja.Kind = 'c') or
+    ((AHoja.Kind = 'o') and not ATabla.Bases.ContainsKey(ClaveDeIdentificador(AHoja.TypeId)));
+end;
+
 function JuezDeReferencias(const F: TFormEnEdicion): TJuezDeReferencia;
 var
   Fm: TFormEnEdicion;
@@ -1808,12 +1821,7 @@ begin
         Exit;
       JuzgaPropiedad(Fm.Tabla, Id, AProp, '', Hoja, Hay);
       if Hay and (Hoja.Kind <> '?') then
-        // un componente ('c'), o un tipo 'o' sin base conocida: una interfaz
-        // que guarda un componente (el Reader de un TFDBatchMove, el
-        // Provider de REST) se escribe como su nombre y TReader la resuelve
-        // igual (segunda revision de la 1.17.0: se quedaba al renombrar)
-        Result := (Hoja.Kind = 'c') or
-          ((Hoja.Kind = 'o') and not Fm.Tabla.Bases.ContainsKey(ClaveDeIdentificador(Hoja.TypeId)));
+        Result := HojaDeReferencia(Fm.Tabla, Hoja);
     end;
 end;
 
@@ -1876,6 +1884,13 @@ begin
   Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
   if HayHoja and (Hoja.Kind = 'm') then
     Exit(MsgFmt(SR_DESIGNER_SET_EVENTO_FMT, [Prop, NombreDe(Obj), Prop]));
+  // nil, sin comillas, solo vacia una REFERENCIA a otro componente (la quita:
+  // el IDE no la escribe). En una propiedad que no lo es se escribia como el
+  // texto 'nil' (StyleLookup = 'nil': H1 de Hermes, 1.18.2); se dice como se
+  // escribe ese texto y como se quita la propiedad. Lo que la tabla no conoce
+  // ('?') no se juzga
+  if SameText(V, 'nil') and HayHoja and (Hoja.Kind <> '?') and not HojaDeReferencia(F.Tabla, Hoja) then
+    Exit(MsgFmt(SR_DESIGNER_SET_NIL_FMT, [NombreDe(Obj), Prop]));
   // una cadena (o un caracter): un literal del form ('Acci'#243'n', 'a' +
   // 'b') se lee y se vuelve a escribir como el IDE (TrozosDeLiteral: los
   // acentos como #N, en trozos de 64 en las lineas de debajo); lo que no es

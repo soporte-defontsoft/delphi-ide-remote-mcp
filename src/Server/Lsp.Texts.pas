@@ -4521,7 +4521,7 @@ const
   SP_DESIGNER_VALUE =
     'set: the new value, as the form file writes it: 120, True, alClient, ' +
     '[akLeft, akTop], clRed, the Name of another component (PopupMenu1), nil ' +
-    'to clear one. A string goes quoted (''OK'', ''Acci''#243''n'') or not ' +
+    'to clear such a reference. A string goes quoted (''OK'', ''Acci''#243''n'') or not ' +
     '(OK): set writes it the way the IDE does, accents as #N and a long one ' +
     'in pieces; so does a number as typed (0.7). A path shown as srvd:\... ' +
     'is written with its real drive.';
@@ -4822,6 +4822,15 @@ const
     'events. To handle it: delphi_edit insert=metodo visibility=published in ' +
     'the form''s class, then the line %s = <method> in the component''s ' +
     'block (check-binding verifies the pair).';
+
+  { nil, sin comillas, en una propiedad que no guarda una referencia a otro
+    componente: set lo escribia como el texto 'nil' (StyleLookup = 'nil', H1
+    de Hermes, 1.18.2). %s.%s = componente y propiedad. }
+  SR_DESIGNER_SET_NIL_FMT =
+    '[DSGN-148 INVALID_PARAM] %s.%s does not hold a reference to another ' +
+    'component, and an unquoted nil only clears one of those. To write the ' +
+    'text nil, quote it: ''nil''. To take the property out of the form (back ' +
+    'to its default), delete its line with delphi_edit. Nothing was written.';
 
   SR_DESIGNER_SET_BLOQUE_FMT =
     '[DSGN-089 INVALID_PARAM] %s.%s holds a list, a collection or a binary ' +

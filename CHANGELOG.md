@@ -38,6 +38,19 @@ the MCP `initialize` response (`serverInfo.version`).
   anything; the server may run what it needs, as long as nothing the agent
   controls decides what runs).
 
+- **`delphi_designer set` no longer writes `nil` as text.** An unquoted `nil`
+  only clears a reference to another component (the IDE leaves the line
+  out), and the parameter said "nil to clear one", which reads as "remove the
+  property": on a text property set wrote the literal `'nil'` (`StyleLookup =
+  'nil'` in an FMX form, reported by Hermes; `Caption = 'nil'` measured in
+  production, by `value` and by `props`). Now it is refused there (`DSGN-148`)
+  with both ways out: `'nil'` quoted writes that text, and deleting the line
+  with `delphi_edit` takes the property back to its default. The rule "does
+  this property hold a reference" is one (`HojaDeReferencia`), shared with
+  the judge that renames and deletes. `test_designer_nil_1182` (red against
+  production on `value` and `props`; a mutant for the rule). H1 of point 9 of
+  1.18.2.
+
 - **An edit keeps the line ending of every line it does not touch.**
   Measured on 10-oct: `delphi_textedit` on a file of CRLF lines with one in
   LF, editing another line, wrote the LF line back as CRLF - while every
