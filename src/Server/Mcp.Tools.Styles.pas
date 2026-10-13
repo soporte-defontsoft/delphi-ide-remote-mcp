@@ -129,6 +129,9 @@ begin
         E.AddPair('class', O.ClassName_);
         E.AddPair('lines', Format('%d-%d', [O.StartLine, O.EndLine]));
         E.AddPair('parts', TJSONNumber.Create(O.Children.Count));
+        // sin StyleName FMX no lo encuentra: se dice (callaba; Hermes, 1.18.2)
+        if O.StyleName = '' then
+          E.AddPair('styleNote', MsgText(SN_STYLES_SIN_STYLENAME));
         Arr.AddElement(E);
         Inc(N);
       end;
@@ -340,7 +343,7 @@ var
   Names, Defaults: TDictionary<string, string>;
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre: TJSONArray;
   M: TMatch;
   Lines: TArray<string>;
   I: Integer;
@@ -380,6 +383,7 @@ begin
   Missing := TJSONArray.Create;
   Tokens := TJSONArray.Create;
   Rc := TJSONArray.Create;
+  SinNombre := TJSONArray.Create;
   try
     // 1) style names per file + duplicates
     for F in Files do
@@ -389,8 +393,17 @@ begin
         Seen.Clear;
         for O in Doc.Styles do
         begin
+          // sin StyleName FMX no lo encuentra nunca: se apunta (se saltaba en
+          // silencio; Hermes, punto 9 de la 1.18.2)
           if O.StyleName = '' then
+          begin
+            Issue := TJSONObject.Create;
+            Issue.AddPair('file', TPath.GetFileName(F));
+            Issue.AddPair('class', O.ClassName_);
+            Issue.AddPair('lines', Format('%d-%d', [O.StartLine, O.EndLine]));
+            SinNombre.AddElement(Issue);
             Continue;
+          end;
           N := ClaveDeEstilo(O.StyleName);
           if Seen.ContainsKey(N) then
           begin
@@ -543,9 +556,12 @@ begin
     Ret.AddPair('lookupsWithoutStyle', Missing);
     Ret.AddPair('tokensMissing', Tokens);
     Ret.AddPair('rcMissingFiles', Rc);
+    Ret.AddPair('withoutStyleName', SinNombre);
+    if SinNombre.Count > 0 then
+      Ret.AddPair('withoutStyleNameNote', MsgText(SN_STYLES_SIN_STYLENAME));
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
-      (Tokens.Count = 0) and (Rc.Count = 0)));
+      (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0)));
     if Length(PlatformDefaultStyleNames) = 0 then
       Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
     else

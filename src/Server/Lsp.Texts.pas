@@ -3465,6 +3465,13 @@ const
     'with build; a StyleLookup that used it is left without a style ' +
     '(command=lint will say so).';
 
+  { Un estilo sin StyleName (Hermes, punto 9 de la 1.18.2: view y lint
+    callaban): FMX encuentra un estilo SOLO por su StyleName. }
+  SN_STYLES_SIN_STYLENAME =
+    '[STYLE-046] An object with no StyleName: FMX finds a style only by its ' +
+    'StyleName (a control''s StyleLookup names it), so this one is never ' +
+    'used. Give it one (set prop=StyleName) or delete it.';
+
   SN_STYLES_LINT_NOTE =
     '[STYLE-016] lookupsWithoutStyle: a control with that StyleLookup ' +
     'will render with the default look (no error at runtime) - define ' +

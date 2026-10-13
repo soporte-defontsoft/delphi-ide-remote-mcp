@@ -95,6 +95,14 @@ the MCP `initialize` response (`serverInfo.version`).
   is returned now. `test_completion_prefijo_1182` (red against production; a
   mutant).
 
+- **`delphi_styles` names a style with no StyleName.** FMX finds a style only
+  by its StyleName, so an object without one is never used, and `view` and
+  `lint` passed over it in silence (Hermes, point 9). `view` adds a
+  `styleNote`; `lint` lists it in `withoutStyleName` (file, class, lines) with
+  `STYLE-046`, and `clean` is false. Measured: none of the 50 text styles RAD
+  Studio ships lacks one. `test_estilo_sin_nombre_1182` (red against
+  production; a mutant).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole
