@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.19.0] - 2026-10-15
 
 `delphi_git` asks for operations, not command lines: the free `args` is
 gone and every command takes its own fields (`paths`, `ref`, `branch`,

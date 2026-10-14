@@ -253,8 +253,11 @@ It runs under the SAME workspace switches as remote-run (`AllowRemoteRun`,
 runs as: on Linux PAServer may run as a service (the server completes
 DISPLAY from the session); on Windows PAServer must run INSIDE the user's
 session - a service lives in session 0, which has no desktop - and the
-session must be unlocked. On GNOME the screen-capture permission must have
-been granted once: a mute screenshot timeout means exactly that.
+session must be unlocked. On Linux the node names a locked session, or a
+desktop with no monitor (a remote desktop that disconnected), instead of
+failing in the portal; `command=status` says what to ask the operator for.
+On GNOME the screen-capture permission must have been granted once: a
+mute screenshot timeout means exactly that.
 
 Coordinates are REAL pixels on both systems and the Windows node is
 DPI-aware: never mix in coordinates from a tool that is not (on a 125%
@@ -433,4 +436,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.18.3 -->
+<!-- contract reviewed: v1.19.0 -->

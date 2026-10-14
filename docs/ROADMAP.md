@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-14 (current release v1.18.3; 42 tools).
+Status page as of 2026-10-15 (current release v1.19.0; 42 tools).
 
 ## Delivered
 
@@ -43,6 +43,8 @@ Status page as of 2026-10-14 (current release v1.18.3; 42 tools).
 - A build is what the IDE would build (only a declared platform, `BUILD-046`; without `platform`, the project's default); a deploy through the `RemoteHosts` gate and a profile gate that fails closed (`PAS-052` to `PAS-055`); one helper for every paclient call, which says what to do against another Delphi's PAServer (`PAS-056`, `PAS-057`); a recursion limit for the agent's regular expressions; a battery that watches each format has one home (`test_paisaje`) (1.16.0)
 - The designer sees and edits: `preview`, a PNG of what the IDE designer shows, drawn by a renderer of its own in design mode with the IDE's packages; `insert` (a visual control with the IDE's minimum, its published field and its unit, named by `component` or the IDE's first free name), `set` (one property checked against the tables before it is written; `parent=` moves, `prop=Name` renames) and `delete` (refused while a method of the component still has code); the form, and its unit when the edit touches it, all or nothing (1.17.0)
 - Consolidation: the big units sorted by what they hold (`Lsp.Guard` split into `Lsp.Rutas`, `Lsp.Casa`, `Lsp.Settings`, `Lsp.Identidad`, `Lsp.TodoONada`, `Lsp.Args`, `Lsp.Lugares` and `Lsp.Mascara`, the codecs in `Lsp.Codificacion`, `delphi_git` in `Mcp.Tools.Git`); `lint` judging values as `set` does; `insert` and a rename on an inherited form seeing the ancestor's names; ANSI as the machine's code page, the first accent of a source written as the IDE writes it, and no writer leaving what would not read back the same; the Git jail closed (the repository's configuration as a whitelist, `.git` a protected place, LFS endpoints and every remote host judged, no signing); what a form names judged before it is rendered; a `delphi_edit` batch audited as a whole; one mailbox and one reports folder per workspace, which `delphi_report` lists and reads (1.18.0)
+
+- An agent asks for operations: `delphi_git` without free `args`, each command with its own fields judged by git itself; the program the server launches by its name found only where the agent cannot write; a link inside a repository no longer lets git read or rewrite what is behind it; `delphi_build` choosing the profile and the target from what the IDE knows (1.19.0)
 
 ## Next
 
