@@ -118,6 +118,11 @@ the MCP `initialize` response (`serverInfo.version`).
   (`UbicacionDeLspLeeLasFormasDelMotor`, the URI round trip) with mutants.
   Points 5, 6 and 8.
 
+- **`delphi_adb logcat out=` writes through the house's encoder.** It
+  composed its UTF-8 with a BOM by hand; now `EncodeText`, lax, because the
+  text is the device's and half a character in a log must not stop the dump.
+  `test_paisaje` declares it as a house of the encoder. Point 4.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

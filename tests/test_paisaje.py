@@ -338,7 +338,11 @@ REGLAS = [
       # PREGUNTARLE si lo lee (9.B de la 1.18.0) o para convertir un UTF-32 a
       # binario (R1 del punto 4 de la 1.18.2); no escribe nada. Una casa: lint y
       # to-binary la tenian cada uno (run_all de la 1.18.2 lo cazo)
-      ('Lsp.DesignerBin.pas', 'TextoParaElParser')],
+      ('Lsp.DesignerBin.pas', 'TextoParaElParser'),
+      # el volcado de logcat a un out= del agente: texto del DISPOSITIVO, laxo, en
+      # UTF-8 con BOM, antes de colocarlo con ColocaContenido (la puerta del
+      # producto); lo componia a mano con TEncoding (punto 4 de la 1.18.2)
+      ('Mcp.Tools.Adb.pas', 'TDelphiAdbTool.ExecuteWithParams')],
      'quien codifica el texto de un fichero por su cuenta se salta la regla de ida y vuelta y la '
      'del primer caracter no ASCII (David, 9-oct-2026): se escribe por PatchSaveText o DoEdit'),
     ('la regla de ida y vuelta preguntada a mano',

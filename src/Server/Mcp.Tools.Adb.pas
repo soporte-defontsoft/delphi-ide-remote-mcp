@@ -99,7 +99,8 @@ uses
   Lsp.Patch,     // ColocaProducto / ColocaContenido: un out= se coloca con la puerta, sellando lo que habia
   Lsp.Png,       // TamanoPngBytes: LA cabecera de un PNG
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
-  Lsp.BuildRunner;
+  Lsp.BuildRunner,
+  Lsp.Codificacion;
 
 { El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
   density` ("Physical size: 1080x1920", "Override density: 320"); '' si no
@@ -373,10 +374,12 @@ begin
       // logcat (P4 de la segunda revision de la 1.17.0): EL escritor de un
       // producto, que la pregunta al escribir, sella lo que habia y sustituye
       // de un solo gesto bajo el cerrojo, como su gemela la captura. El
-      // UTF-8 con su BOM, como lo escribia TFile.WriteAllText.
+      // UTF-8 con su BOM, como lo escribia TFile.WriteAllText, por EL
+      // codificador de la casa (lo componia aqui a mano; punto 4 de la
+      // 1.18.2): laxo, porque el texto es del DISPOSITIVO, no del agente, y
+      // medio caracter en su logcat no puede tumbar el volcado
       try
-        ColocaContenido(Params.Out.Trim,
-          TEncoding.UTF8.GetPreamble + TEncoding.UTF8.GetBytes(Txt));
+        ColocaContenido(Params.Out.Trim, EncodeText(Txt, ekUtf8Bom, False));
       except
         on E: Exception do
           Exit(MsgExcepcion(E.ClassName, E.Message));
