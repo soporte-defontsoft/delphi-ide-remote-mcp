@@ -8,6 +8,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [1.18.2] - 2026-10-14
 
+Patch: the rest of what 1.18.0 and 1.18.1 left open, closed with three
+closing reviewers before the tag and every finding measured first. The
+jail now judges what an operation TOUCHES, not only what it was given: a
+build runs with no shell in between (`msbuild.exe` by its path, the
+environment read from `rsvars.bat`); git does not rewrite a read-only file
+inside a repository; captures live in the server's own house and travel
+inline or through a one-shot link; the trash follows dangling links as far
+as Windows does and never over the network; a folder called `Release`
+above a project no longer hides it. The designer's judge reads what the IDE
+gives a new control, a form is judged once and on what was written, and a
+file without a BOM is shown in both readings instead of asserted. What
+DelphiLSP cannot do under a folder with an emoji or half a character is
+said (`LSP-043`, `LSP-044`, `LSP-045`) instead of answering about another
+path or "0 errors"; a right token of a closed workspace gets `403 SYS-034`
+(it was a `401`); `delphi_completion` filters by what is being typed. And
+the deletion gate's black list judged a folder by one of its two forms,
+which failed open inside the test container: either form denies now.
+
 ### Fixed
 
 - **`delphi_build` and `delphi_test` compile with no shell in between.** The
