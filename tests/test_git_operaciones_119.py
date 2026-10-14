@@ -28,7 +28,7 @@ encuentra, un nombre que admite, un remoto del repo, una ruta del repo.
 
 Uso:  python tests/test_git_operaciones_119.py [ruta-a-DelphiLspMcp.exe]
 """
-import os, subprocess
+import json, os, subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -169,6 +169,13 @@ try:
     r = g(command='add', paths=[mc.virtual(os.path.join(REPO, 'v.txt'))])
     check('O18 una ruta de paths en su unidad virtual llega traducida',
           'exit=0' in r and 'v.txt' in git('diff', '--cached', '--name-only'), r[:200])
+    # ...y tambien cuando el cliente manda la lista como su TEXTO JSON (el
+    # esquema viejo en cache): la entrada la deja en una forma (NormalizaListas)
+    # antes de traducir; llegaba sin traducir y caia en GUARD-023 (medido en vivo)
+    open(os.path.join(REPO, 'w.txt'), 'w').write('we\n')
+    r = g(command='add', paths=json.dumps([mc.virtual(os.path.join(REPO, 'w.txt'))]))
+    check('O18b la lista como texto JSON con una ruta virtual, igual que el array',
+          'exit=0' in r and 'w.txt' in git('diff', '--cached', '--name-only'), r[:200])
 
     r = g(command='config', name='user.name', message='Otro Nombre')
     check('O19 config name=user.name', 'exit=0' in r and git('config', 'user.name').strip() == 'Otro Nombre', r[:200])

@@ -1637,13 +1637,17 @@ type
   { Las marcas de los parametros de TODAS las tools, por su clave
     'tool|parametro' (ClaveDeParam): las rutas del servidor (el valor dice si
     la tool acepta una relativa, [RutaRelativa]) y los que llevan contenido
-    ([Contenido]: la expansion de ida de las unidades virtuales no los toca).
-    Las lineas de ordenes ([LineaDeOrdenes]) se fueron con los args de git en
-    la 1.19.0: ningun parametro lo es ya, y ninguno nace asi (CLAUDE.md). }
+    ([Contenido]: la expansion de ida de las unidades virtuales no los toca)
+    y las LISTAS de textos ([JsonComoTexto('string')]: "paths" de delphi_git,
+    que un cliente puede mandar como array o como su texto JSON, y la entrada
+    deja en UNA forma: NormalizaListas). Las lineas de ordenes
+    ([LineaDeOrdenes]) se fueron con los args de git en la 1.19.0: ningun
+    parametro lo es ya, y ninguno nace asi (CLAUDE.md). }
   TMarcasDeParams = class
   public
     Rutas: TDictionary<string, Boolean>;
     DeContenido: TDictionary<string, Boolean>;
+    DeLista: TDictionary<string, Boolean>;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -1653,12 +1657,14 @@ begin
   inherited Create;
   Rutas := TDictionary<string, Boolean>.Create;
   DeContenido := TDictionary<string, Boolean>.Create;
+  DeLista := TDictionary<string, Boolean>.Create;
 end;
 
 destructor TMarcasDeParams.Destroy;
 begin
   Rutas.Free;
   DeContenido.Free;
+  DeLista.Free;
   inherited;
 end;
 
@@ -1710,17 +1716,23 @@ begin
         var EsRuta := False;
         var AceptaRelativa := False;
         var EsContenido := False;
+        var EsLista := False;
         for Attr in Prop.GetAttributes do
           if Attr is RutaDelServidorAttribute then
             EsRuta := True
           else if Attr is RutaRelativaAttribute then
             AceptaRelativa := True
           else if Attr is ContenidoAttribute then
-            EsContenido := True;
+            EsContenido := True
+          else if (Attr is JsonComoTextoAttribute) and
+                  SameText(JsonComoTextoAttribute(Attr).Items, 'string') then
+            EsLista := True;
         if EsRuta then
           Marcas.Rutas.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), AceptaRelativa);
         if EsContenido then
           Marcas.DeContenido.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
+        if EsLista then
+          Marcas.DeLista.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
       end;
     end;
   finally
@@ -1736,6 +1748,46 @@ end;
 function RutasNuestras: TDictionary<string, Boolean>;
 begin
   Result := MarcasDeParams.Rutas;
+end;
+
+{ UNA forma para una lista de textos ([JsonComoTexto('string')]) antes de
+  que nadie la mire: la que llega como su TEXTO JSON (un cliente con el
+  esquema viejo, que el deserializador acepta a proposito) pasa a ser el
+  array. Sin esto, la traduccion de las unidades virtuales, el suelo y la
+  pasada de UNC veian un texto y no las rutas de dentro: 'srvd:\x' en un
+  paths de texto llegaba sin traducir y caia en GUARD-023 (medido en vivo el
+  14-oct-2026, con el esquema en cache del cliente). Un texto que no es una
+  lista se queda como esta: el handler lo dice (GIT-069). }
+procedure NormalizaListas(const AToolName: string; const AArguments: TJSONObject);
+var
+  DeLista: TDictionary<string, Boolean>;
+  I: Integer;
+  P: TJSONPair;
+  Nombres: TArray<string>;
+begin
+  if not Assigned(AArguments) then
+    Exit;
+  DeLista := MarcasDeParams.DeLista;
+  Nombres := nil;
+  for I := 0 to AArguments.Count - 1 do
+  begin
+    P := AArguments.Pairs[I];
+    if (P.JsonValue is TJSONString) and not (P.JsonValue is TJSONNumber) and
+       DeLista.ContainsKey(ClaveDeParam(AToolName, P.JsonString.Value)) then
+      Nombres := Nombres + [P.JsonString.Value];
+  end;
+  for var Nombre in Nombres do
+  begin
+    var Lista: TArray<string>;
+    var Texto := TJSONString(AArguments.GetValue(Nombre)).Value;
+    if (Texto.Trim = '') or not ListaDeTextos(Texto, Lista) then
+      Continue;
+    var Nueva := TJSONArray.Create;
+    for var S in Lista do
+      Nueva.Add(S);
+    AArguments.RemovePair(Nombre).Free;
+    AArguments.AddPair(Nombre, Nueva);
+  end;
 end;
 
 { La expansion de ida de las unidades virtuales de ESTA llamada
@@ -2225,6 +2277,9 @@ begin
   // [Contenido] mark covers its aliases too (body/text of delphi_report were
   // expanded while message was not; B-9, 10-oct-2026).
   ApplyArgAliases(AToolName, AArguments);
+  // una lista de textos, en UNA forma (el array) antes de que la traduccion,
+  // el suelo y la pasada de UNC miren sus rutas (1.19.0)
+  NormalizaListas(AToolName, AArguments);
   ExpandeUnidadesVirtuales(AToolName, AArguments);
   // un UNC que no es de ningun sitio declarado, fuera por TEXTO antes de
   // tocarlo: alargarlo abajo ya era abrir SMB hacia ese host

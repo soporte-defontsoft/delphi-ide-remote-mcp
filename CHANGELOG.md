@@ -35,7 +35,11 @@ the MCP `initialize` response (`serverInfo.version`).
   which names the fields. The deny list of options went with `args`; as a
   second barrier, no value that goes alone on the line may start with `-`
   (`GIT-075`). `paths` goes through the virtual-drive translation and the
-  jail's entry floor like any path parameter: a list does not skip them.
+  jail's entry floor like any path parameter: a list does not skip them,
+  and a list a client sends as its JSON text (an old schema in its cache)
+  is turned into the array at the entry, before anything reads it
+  (measured live: a `srvd:` path inside such a text reached git
+  untranslated).
   Gone with the free arguments: the network options (`--tags`, `--prune`,
   `--depth`, `-u`, `--dry-run`...), a remote written as a URL or a folder
   in the call, the refspec forms, `diff --quiet`, and `branch` creating or
