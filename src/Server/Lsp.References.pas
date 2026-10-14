@@ -865,10 +865,15 @@ begin
             P := Pos(Ident.ToLower, LineText.ToLower, ScanCol);
             if P = 0 then
               Break;
-            // word boundaries
+            // word boundaries; y si el identificador es una palabra reservada
+            // (&Begin), sin su & - ni un punto delante - es la PALABRA: cada
+            // begin del proyecto salia candidato sin verificar (medido el
+            // 14-oct, punto 6 de la 1.18.2). EL lexico (EsPalabraReservada)
             if ((P = 1) or not EsCaracterDeIdent(LineText[P - 1])) and
                ((P + Length(Ident) > Length(LineText)) or
-                not EsCaracterDeIdent(LineText[P + Length(Ident)])) then
+                not EsCaracterDeIdent(LineText[P + Length(Ident)])) and
+               not (EsPalabraReservada(Ident) and
+                    ((P = 1) or not CharInSet(LineText[P - 1], ['&', '.']))) then
             begin
               Cand.Path := F;
               Cand.Line := I;
@@ -971,6 +976,12 @@ begin
             // 0-based y en los rechazados la 0-based y resolvedLine1)
             PObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine + 1));
             PObj.AddPair('resolvedLine0', TJSONNumber.Create(CandLine));
+            // la CABECERA de ese pariente (su declaracion o su implementacion,
+            // por EL lector de cabeceras), no una llamada: la nota las contaba
+            // a todas como usos (medido: procedure Q; override; y
+            // procedure TDer.Q; salian igual que D.Q)
+            if ColumnaDelNombreDeRutina(CodigoPascal(Cand.Text)) = Cand.Col then
+              PObj.AddPair('header', TJSONBool.Create(True));
             Confirmed.Add(PObj);
             Familia := True;
           end

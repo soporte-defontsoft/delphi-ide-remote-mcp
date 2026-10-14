@@ -732,7 +732,9 @@ const
     '[LSP-012] Among the confirmed ones, some are marked with ' +
     'via:"override": they do not resolve to THIS method but to one of ' +
     'its inheritance family (the virtual one and whoever overrides it, ' +
-    'or the other way round). They are counted as its uses on purpose: a ' +
+    'or the other way round). Those with header:true are that relative''s ' +
+    'own declaration or implementation, not a call. The others are calls, ' +
+    'counted as its uses on purpose: a ' +
     'call through a variable of the child class always resolves to the ' +
     'child, so asking about the virtual of the base class the answer ' +
     'would have been "nobody calls it" for a method that has calls. If ' +

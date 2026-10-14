@@ -290,6 +290,21 @@ the MCP `initialize` response (`serverInfo.version`).
   launcher, the node's capture, and adb's `/sdcard/delphi_mcp_screen.png`
   (2ab-R4).
 
+- **`delphi_references` tells a relative's header from a call, and a
+  reserved word from the method named after it.** Asked about `TBase.Q`,
+  it marks with `via:"override"` what resolves to another member of the
+  family - and that included `TDer.Q`'s own declaration and implementation,
+  which `LSP-012` then described as calls through the child class (measured).
+  A relative's header now carries `header:true` and the note tells the two
+  apart. And for a method named with a reserved word (`&Begin`), every
+  `begin` of the project came back as an unverified candidate; written
+  without its `&` (or a dot in front) it is the reserved word, and it is no
+  longer a candidate - by the house's own list of reserved words. Measured
+  at the same time: references of a method of a generic class are right,
+  and the engine does not resolve a call written `C.&Begin` (its header,
+  yes), so that one stays unverified, which is the honest answer.
+  `test_familia_cabeceras_1182` (F1 and G1 red against production). Point 6.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole
