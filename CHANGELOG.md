@@ -189,6 +189,13 @@ the MCP `initialize` response (`serverInfo.version`).
   of an `{$IFDEF}`. Now the ones after the final one count only when a
   directive could make them final - the classifier of the house says where
   directives are - and two `end.` in IFDEF branches are still refused.
+  And a boundary INSIDE a conditional - an `initialization` wrapped in
+  `{$IFDEF DEBUG}...{$ENDIF}` - got the routine (or a method's body) inside
+  the conditional block, answered as placed at the legal boundary: without
+  the symbol it did not exist, and a method's declaration did (E2065). It
+  now goes before the outermost conditional still open there, by the one
+  reader of directives (W1 of the closing reviewers, measured; I4 and I5 red
+  against production).
   `test_insert_tras_end_1182` (red against production; the IFDEF control
   red with a mutant). B1 of the 8th reviewer, point 7.
 

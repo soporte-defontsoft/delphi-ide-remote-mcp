@@ -4527,6 +4527,24 @@ begin
             end;
             FoundFront := ((Atras < 1) or CharInSet(VistaTexto[Atras], [#10, #13])) and
               (not EsEnd or SoloSuEnd);
+            // ...y FUERA de todo condicional: una frontera dentro de un {$IFDEF}
+            // (un initialization solo de DEBUG) metia la rutina DENTRO del
+            // bloque - sin el simbolo, E2065 o una rutina que no existe - y se
+            // contestaba que estaba en su sitio (W1 del revisor de cierre de la
+            // 1.18.2, medido). Delante del condicional abierto mas externo, si
+            // empieza su linea; si no, se niega como cualquier frontera rara
+            if FoundFront then
+            begin
+              var PosIf := PrimerCondicionalAbierto(Copy(Text, 1, PosFront - 1));
+              if PosIf > 0 then
+              begin
+                var AtrasIf := PosIf - 1;
+                while (AtrasIf >= 1) and not CharInSet(Text[AtrasIf], [#10, #13]) and (Text[AtrasIf] <= ' ') do
+                  Dec(AtrasIf);
+                FoundFront := (AtrasIf < 1) or CharInSet(Text[AtrasIf], [#10, #13]);
+                FrontIdx := LineaDePosicion(Text, PosIf) - 1;
+              end;
+            end;
           end;
         finally
           UFront.Free;

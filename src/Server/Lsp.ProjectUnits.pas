@@ -160,6 +160,13 @@ type
   lector: la jaula del build (Lsp.BuildRunner) y la mudanza lo comparten. }
 function DirectivasDeFichero(const ATexto: string): TArray<TDirectivaFichero>;
 
+{ Donde empieza (1-based) el condicional ABIERTO mas externo al final de
+  ATexto - el primer IF, IFDEF, IFNDEF o IFOPT sin su ENDIF/IFEND -; 0 si no
+  queda ninguno abierto. Por EL lector de directivas. La frontera de un
+  insert lo pregunta: un initialization dentro de un IFDEF DEBUG metia la
+  rutina DENTRO del bloque (W1 del revisor de cierre de la 1.18.2). }
+function PrimerCondicionalAbierto(const ATexto: string): Integer;
+
 { ---- grupos de proyectos (.groupproj) ---- }
 
 { El Include de cada <Projects> de un grupo, en orden. }
@@ -542,16 +549,46 @@ const
   // las combinaciones de ramas que ListaEnCadaRama recorre como mucho
   MAX_COMBINACIONES_DE_RAMAS = 256;
 
-// Los condicionales (IF, IFDEF, IFNDEF e IFOPT abren; ENDIF e IFEND
-// cierran) que quedan ABIERTOS al final de ATexto.
-function CondicionalesAbiertos(const ATexto: string): Integer;
+// EL paseo por los condicionales de ATexto (IF, IFDEF, IFNDEF e IFOPT abren;
+// ENDIF e IFEND cierran), por EL lector de directivas: AAbiertos, los que
+// quedan abiertos al final (negativo con un cierre de mas), y APrimero, donde
+// empieza el abierto mas EXTERNO (0 si no queda ninguno)
+procedure RecorreCondicionales(const ATexto: string; out AAbiertos, APrimero: Integer);
+var
+  Pila: TArray<Integer>;
 begin
-  Result := 0;
+  AAbiertos := 0;
+  Pila := [];
   for var D in DirectivasPascal(ATexto) do
     if MatchText(D.Nombre, CONDICIONAL_ABRE) then
-      Inc(Result)
+    begin
+      Inc(AAbiertos);
+      Pila := Pila + [D.Inicio];
+    end
     else if MatchText(D.Nombre, CONDICIONAL_CIERRA) then
-      Dec(Result);
+    begin
+      Dec(AAbiertos);
+      if Length(Pila) > 0 then
+        SetLength(Pila, Length(Pila) - 1);
+    end;
+  APrimero := 0;
+  if Length(Pila) > 0 then
+    APrimero := Pila[0];
+end;
+
+// Los condicionales que quedan ABIERTOS al final de ATexto.
+function CondicionalesAbiertos(const ATexto: string): Integer;
+var
+  Primero: Integer;
+begin
+  RecorreCondicionales(ATexto, Result, Primero);
+end;
+
+function PrimerCondicionalAbierto(const ATexto: string): Integer;
+var
+  Abiertos: Integer;
+begin
+  RecorreCondicionales(ATexto, Abiertos, Result);
 end;
 
 // True si ATexto lleva alguna directiva condicional (abre, cambia de rama o
