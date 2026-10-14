@@ -183,16 +183,18 @@ check('accents=0 en unit nueva sin acentos (BOM fuera de la cuenta)',
 # ---- B1: git commit con comillas ------------------------------------------
 GITDIR = os.path.join(INSIDE, 'repo')
 os.makedirs(GITDIR, exist_ok=True)
-out = call('delphi_git', {"repo": GITDIR, "command": "init", "args": ""})
+# 1.19.0: sin args; config por name, add por paths y el cuerpo entero del
+# ultimo commit con log format=full count=1
+out = call('delphi_git', {"repo": GITDIR, "command": "init"})
 if 'exit=0' in out:
-    call('delphi_git', {"repo": GITDIR, "command": "config", "args": "user.name", "message": "Test Bot"})
-    call('delphi_git', {"repo": GITDIR, "command": "config", "args": "user.email", "message": "bot@test.local"})
+    call('delphi_git', {"repo": GITDIR, "command": "config", "name": "user.name", "message": "Test Bot"})
+    call('delphi_git', {"repo": GITDIR, "command": "config", "name": "user.email", "message": "bot@test.local"})
     call('delphi_textedit', {"path": os.path.join(GITDIR, 'a.txt'), "create": True, "content": "hola\n"})
-    call('delphi_git', {"repo": GITDIR, "command": "add", "args": "-A"})
+    call('delphi_git', {"repo": GITDIR, "command": "add", "paths": ["."]})
     MSG = 'fix: "comillas dobles" y \'simples\' con acentos (ó)'
-    out = call('delphi_git', {"repo": GITDIR, "command": "commit", "args": "", "message": MSG})
+    out = call('delphi_git', {"repo": GITDIR, "command": "commit", "message": MSG})
     check('commit con comillas: exit=0', 'exit=0' in out, out)
-    out = call('delphi_git', {"repo": GITDIR, "command": "log", "args": "--format=%B -1"})
+    out = call('delphi_git', {"repo": GITDIR, "command": "log", "format": "full", "count": 1})
     check('commit con comillas: el mensaje sobrevive byte a byte',
           '"comillas dobles"' in out and '(ó)' in out, out)
 else:
@@ -265,12 +267,20 @@ check('report sin agent: sigue en la raiz de reports',
       mc.abre(out, 'SN_REPORT_OK_FMT') and saved_name is not None and '/' not in saved_name and '\\' not in saved_name, out[:150])
 
 # ---- git dangerous options refused at the GATE (both access levels) --------
+# 1.19.0: sin args; una opcion de git ni se puede escribir. Al cliente con el
+# esquema viejo el gate le contesta GIT-068 y nada se hace; y el campo donde
+# una revision viaja suelta (ref) lo juzga git (rev-parse: GIT-070), con la
+# segunda barrera detras (empieza por '-': GIT-075)
 PWN = os.path.join(INSIDE, 'PWNED.txt')
 out = call('delphi_git', {"repo": INSIDE, "command": "diff", "args": "--output=" + PWN})
-check('git: --output rechazado en el gate (aun con token RW)',
-      mc.rechazado(out) and mc.es(out, 'SR_GIT_OPTION_FMT') and 'git' in out, out[:150])
+check('git: args retirado en el gate (GIT-068, aun con token RW)',
+      mc.rechazado(out) and mc.es(out, 'SR_GIT_ARGS_RETIRADO') and 'exit=' not in out, out[:150])
 check('git: --output no escribio nada', not os.path.exists(PWN), PWN)
-out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -3"})
+out = call('delphi_git', {"repo": GITDIR, "command": "diff", "ref": "--output=" + PWN})
+check('git: una opcion en ref no es una revision: la para el juez (GIT-070), no la segunda barrera',
+      mc.rechazado(out) and mc.es(out, 'SR_GIT_REF_NO_VALE_FMT') and 'exit=' not in out, out[:150])
+check('git: la opcion en ref no escribio nada', not os.path.exists(PWN), PWN)
+out = call('delphi_git', {"repo": INSIDE, "command": "log", "count": 3})
 check('git: log normal sigue funcionando (sin falso positivo)',
       mc.llego_a_git(out), out[:120])
 

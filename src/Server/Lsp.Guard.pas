@@ -2257,7 +2257,10 @@ begin
   // su codigo, antes del SYS-015 generico del deserializador.
   if SameText(AToolName, 'delphi_git') and Assigned(AArguments) then
   begin
-    if AArguments.GetValue('args') <> nil then
+    // leido como lo resuelve el binder (ArgStr: sin mayusculas ni '_'), no
+    // con GetValue: "Args" se saltaba una puerta que leia la clave exacta
+    // (test_guard, auditoria de campo). Uno vacio cae en el SYS-015 del binder
+    if ArgStr(AArguments, 'args') <> '' then
       Exit(MsgText(SR_GIT_ARGS_RETIRADO));
     // An explicit URL in a git call is an outbound connection this machine
     // is about to make: the clone's, which travels in message. It goes

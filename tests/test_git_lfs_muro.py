@@ -109,16 +109,16 @@ def git(repo, cmd, **kw):
 try:
     # ===== el falso positivo que se cierra (ROJO contra 4d6c63d) =====
     WTS = os.path.join(MINE, 'wt-sinlfs')
-    r = git(SINLFS, 'worktree', args='add', path=WTS, ref='main')
+    r = git(SINLFS, 'worktree', action='add', path=WTS, ref='main')
     check('sin LFS: worktree add FUNCIONA (GIT-061 era un falso positivo)',
           r.startswith('exit=0') and os.path.isfile(os.path.join(WTS, 'DUMMY.txt')), r[:300])
-    r = git(SINLFS, 'switch', args='otra')
+    r = git(SINLFS, 'switch', branch='otra')
     check('sin LFS: switch FUNCIONA (no hay objeto LFS que bajar, no se toca la red)',
           r.startswith('exit=0'), r[:300])
 
     # ===== la guarda: el muro SIGUE en pie (no se abrio un agujero) =====
     WTC = os.path.join(MINE, 'wt-conlfs')
-    r = git(CONLFS, 'worktree', args='add', path=WTC, ref='main')
+    r = git(CONLFS, 'worktree', action='add', path=WTC, ref='main')
     check('con LFS: worktree add NEGADO por su endpoint LFS (origin fuera de GitRemotes)',
           mc.es(r, 'SR_GIT_LFS_ENDPOINT_FMT') and 'GitRemotes' in r
           and not os.path.exists(WTC), r[:300])
@@ -126,7 +126,7 @@ try:
           '192.0.2.1' not in r, r[:300])
 
     # ===== control FUERA de las raices + victima intacta =====
-    r = git(SINLFS, 'worktree', args='add', path=os.path.join(OUT, 'wt'), ref='main')
+    r = git(SINLFS, 'worktree', action='add', path=os.path.join(OUT, 'wt'), ref='main')
     check('worktree add FUERA de las raices: negado (control)',
           mc.rechazado(r) and not os.path.exists(os.path.join(OUT, 'wt')), r[:300])
     check('la victima de fuera sigue intacta', os.listdir(VIC) == ['v.txt'], os.listdir(VIC))

@@ -853,18 +853,29 @@ Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for w
 
 Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work - the rules of each are in "command". clone is the fast way to get a whole repo onto the server (far better than recreating files one by one). worktree puts ANOTHER version of the repo next to it to build and compare, without touching anybody's working tree (yours to clean up). Commit/tag messages, config values and the clone URL travel in "message"; push/pull use the credentials and remotes stored on the server. The repository - root folder and .git - has to be inside your roots: git works on the whole repository it finds from "repo" upwards, so one that starts above your roots is refused (GIT-041). No arbitrary git commands, no shell.
 
-*Access: mixed (`command` status / diff / log / show / ls-remote read-only; branch only without args or message (then it lists); tag only without args or message (then it lists); worktree only with args=list; stash only with args=list; every other command read-write, refused to a read-only credential).*
+*Access: mixed (`command` status / diff / log / show / ls-remote / branch read-only; tag only without name or message (then it lists); worktree only with action=list; stash only with action=list; every other command read-write, refused to a read-only credential).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `repo` | string | **yes** | Path of the repository (or any path inside it). The repository ITSELF - root folder and .git - has to be inside your roots: git works on the whole tree. clone: the DESTINATION folder (created if needed, inside your roots). |
-| `command` | string | **yes** | status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| restore \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch \| ls-remote \| worktree. switch: args=\<branch> (create=true for a new one). merge: args=\<branch>, always --ff-only (one needing a commit is refused, never left half-done). pull: args=\<remote> \<branch>, always --ff-only; options: only the download ones (--tags, --no-tags, --prune, --depth=\<n>, --unshallow). fetch: those and --all. push: --tags, -u, --set-upstream, --dry-run, and after the remote the NAMES to send (main, v1.3.2, local:remote): it adds to the remote, never overwrites or deletes. ls-remote: args=\<remote> [refs], read-only, same remote policy (--heads, --tags, --refs, --symref, --exit-code). The remote of these is a network address the operator allows or a folder inside your roots. stash: args=push\|pop\|list (never drop); push -- \<paths> parks ONLY those paths and sets them back to HEAD - how you discard one file's changes without losing them (pop brings them back); its label goes in message. config: args=user.name\|user.email, the value in message. clone: URL in message, destination in repo. worktree: args=list \| add (path = a NEW folder inside your roots, ref = tag\|branch\|commit, detached) \| remove (path = one that list shows; refused with changes or a link inside). restore: args=\<paths> (. = all), always --staged: they leave the index and the working tree is never touched - how you undo an add (to discard changes: stash push -- \<paths>). |
-| `args` | string | optional | Optional extra arguments (paths, --staged, a commit hash...), SPLIT ON SPACES: a path with spaces goes in double quotes (args="my notes.txt"). No shell, and shell metacharacters (; \| & ` $ < >) are refused anyway - if a legitimate option needs one (--pretty=format:...), ask for it with delphi_report. |
+| `command` | string | **yes** | status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| restore \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch \| ls-remote \| worktree. Each takes ITS fields, never free arguments. merge and pull: always --ff-only (one needing a commit is refused). push adds to the remote, never overwrites or deletes. stash never drops: push with paths parks ONLY those and sets them back to HEAD - how you discard a file's changes without losing them. restore: always --staged (undoes an add). branch lists. |
+| `paths` | array | optional | Files or folders of this repo, a LIST (relative to it or absolute): status, diff, log, show, add, restore, stash push. |
+| `to` | string | optional | diff, log: the other end of the range that starts at ref. |
+| `staged` | boolean | optional | diff: what is staged for the next commit. |
+| `format` | string | optional | diff: stat \| shortstat \| words. log: oneline (default) \| dated (hash, date, subject) \| full. |
+| `context` | integer | optional | diff: lines of context around each change. |
+| `count` | integer | optional | log: how many commits (default 20). |
+| `search` | string | optional | log: only the commits that add or remove this text. |
+| `patch` | boolean | optional | show: the whole diff, not only the stat. |
+| `branch` | string | optional | switch (create=true: a new name), merge, pull. |
+| `remote` | string | optional | The name of a remote of this repo: pull, fetch, push, ls-remote. |
+| `action` | string | optional | stash: push (default) \| pop \| list. worktree: add \| list \| remove. merge: abort. |
+| `name` | string | optional | tag: the new tag (none = list them). config: user.name \| user.email. |
 | `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Refused with any other command (GIT-038). |
-| `message` | string | optional | commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL |
-| `path` | string | optional | worktree add: a NEW folder inside your roots for the second working copy (like the destination of a clone). worktree remove: a folder that command=worktree args=list shows |
-| `ref` | string | optional | worktree add: the tag, branch or commit to put there, detached - a version to build and compare, not a place to work (v1.3.2, main, HEAD~3, a commit hash) |
-| `offset` | integer | optional | status/diff/log/show, branch/tag without arguments, stash list, worktree list: lines to skip when the answer did not fit in one page - pass the offset its note gives. |
+| `message` | string | optional | commit: the message. tag: makes it annotated. stash push: its label. config: the value. clone: the repository URL. |
+| `path` | string | optional | worktree add: a NEW folder inside your roots. worktree remove: one that action=list shows. |
+| `ref` | string | optional | A commit, tag or branch (v1.3.2, main, HEAD~3, a hash). diff, log: where it starts (to = the other end). show: this one. push: the name to send. tag: what it marks. worktree add: the version to put there, detached. |
+| `offset` | integer | optional | Lines to skip when a listing did not fit in one page - pass the offset its note gives. |
 <!-- /contract -->
 
 **What the answer carries (hand-written).** A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0` (`diff --quiet` / `--exit-code` with differences answers `exit=1`, and that is a success too: `[GIT-037]`).

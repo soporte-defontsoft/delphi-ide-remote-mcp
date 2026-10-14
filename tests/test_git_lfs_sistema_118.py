@@ -37,35 +37,36 @@ server_env=mc.entorno(dict(DELPHI_MCP_ROOTS=JAIL,DELPHI_MCP_GIT_REMOTES='github.
     GIT_CONFIG_GLOBAL=GLOBAL,GIT_TRACE2_EVENT=TRACE))
 server_env.pop('GIT_CONFIG_NOSYSTEM',None);server_env.pop('GIT_LFS_SKIP_SMUDGE',None)
 srv=mc.Stdio(mc.copia_exe(os.path.join(BASE,'srv')),server_env,nombre='lfs-system',t=60)
-def call(repo,cmd,args='',message=''):
-    return srv.call('delphi_git',dict(repo=repo,command=cmd,args=args,message=message))
+# 1.19.0: sin args; cada comando con sus campos (los de la llamada, en kw)
+def call(repo,cmd,**kw):
+    return srv.call('delphi_git',dict(repo=repo,command=cmd,**kw))
 try:
     for repo in repos:
-        for cmd,args,msg in [('status','',''),('log','',''),('diff','',''),('show','HEAD',''),
-                             ('branch','',''),('tag','',''),('stash','list',''),
-                             ('config','user.name','DUMMY')]:
-            out=call(repo,cmd,args,msg)
+        for cmd,kw in [('status',{}),('log',{}),('diff',{}),('show',dict(ref='HEAD')),
+                       ('branch',{}),('tag',{}),('stash',dict(action='list')),
+                       ('config',dict(name='user.name',message='DUMMY'))]:
+            out=call(repo,cmd,**kw)
             mc.check(os.path.basename(repo)+' '+cmd+' sin endpoint',out.startswith('exit=0'),out[:250])
         open(os.path.join(repo,'DUMMY.txt'),'a').write('DUMMY cambio\n')
-        mc.check('add funciona',call(repo,'add','DUMMY.txt').startswith('exit=0'))
+        mc.check('add funciona',call(repo,'add',paths=['DUMMY.txt']).startswith('exit=0'))
         out=call(repo,'commit',message='DUMMY second')
         mc.check(os.path.basename(repo)+' commit sin endpoint',out.startswith('exit=0'),out[:250])
     events=[json.loads(l) for l in open(TRACE,encoding='utf-8') if l.strip()]
     mc.check('se midieron procesos git',any(e.get('event')=='start' for e in events))
     mc.check('ninguna orden de metadatos lanza lfs env',
         not any('lfs' in e.get('argv',[]) and 'env' in e.get('argv',[]) for e in events))
-    out=call(repos[1],'switch','main')
+    out=call(repos[1],'switch',branch='main')
     mc.check('endpoint de carpeta usa puerta de carpeta',out.startswith('exit=0'),out[:250])
     url='http://127.0.0.1:%d/DUMMY.git'%http.server_port
     raw('remote','set-url','origin',url,cwd=repos[0])
     for cmd in ('ls-remote','fetch'):
-        out=call(repos[0],cmd,'origin')
+        out=call(repos[0],cmd,remote='origin')
         mc.check(cmd+' sigue negando host fuera de GitRemotes',mc.rechazado(out),out[:250])
         mc.check(cmd+' no contacta endpoint excluido',not hits,hits)
     raw('remote','set-url','origin','https://github.com/example/DUMMY.git',cwd=repos[0])
     raw('config','lfs.url',url,cwd=repos[0])
     mc.check('status ignora endpoint local que no usa',call(repos[0],'status').startswith('exit=0'))
-    out=call(repos[0],'switch','main')
+    out=call(repos[0],'switch',branch='main')
     mc.check('materializar niega endpoint LFS con mensaje propio',
         mc.es(out,'SR_GIT_LFS_ENDPOINT_FMT') and 'origin' in out and 'GitRemotes' in out,out[:350])
     mc.check('endpoint rechazado no muestra valor',url not in out and '127.0.0.1' not in out,out[:350])

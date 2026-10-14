@@ -311,7 +311,7 @@ check('git: branch', out.startswith('exit=0') and 'main' in out, out[:150])
 # being edited while the battery runs, the commit is fixed. And it has to be
 # the SAME stat git gives here - until 2026-09-26 any "exit=" passed, a
 # fatal "exit=128" included.
-out = call('delphi_git', {"repo": GIT_REPO, "command": "diff", "args": "--stat HEAD~1 HEAD"})
+out = call('delphi_git', {"repo": GIT_REPO, "command": "diff", "ref": "HEAD~1", "to": "HEAD", "format": "stat"})
 _git = subprocess.run(['git', '-C', GIT_REPO, 'diff', '--stat', 'HEAD~1', 'HEAD'],
                       capture_output=True, text=True, encoding='utf-8', errors='replace')
 _stat = lambda t: [l.strip() for l in t.splitlines() if l.strip()]
@@ -320,8 +320,15 @@ check('git: diff --stat', out.startswith('exit=0') and bool(_stat(_git.stdout))
       (out[:120], _git.stdout[-120:]))
 out = call('delphi_git', {"repo": GIT_REPO, "command": "rebase"})
 check('git: comando fuera de whitelist rechaza', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_UNKNOWN_COMMAND_FMT'), out[:120])
+# 1.19.0: sin args, no hay linea donde colar metacaracteres: el cliente con
+# el esquema viejo recibe GIT-068 y nada se hace; y lo que si viaja suelto
+# (una ruta de paths) lo juzgan los jueces de cualquier ruta (el comodin)
 out = call('delphi_git', {"repo": GIT_REPO, "command": "log", "args": "; del *"})
-check('git: metacaracteres rechazados', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_SHELL_METACHARS_ARGS'), out[:120])
+check('git: args retirado (GIT-068), nada ejecutado',
+      mc.resultado(out) == 'INVALID_PARAM' and mc.es(out, 'SR_GIT_ARGS_RETIRADO') and 'exit=' not in out, out[:120])
+out = call('delphi_git', {"repo": GIT_REPO, "command": "log", "paths": ["; del *"]})
+check('git: una ruta de paths con metacaracteres la para el juez de rutas (GUARD-024, el comodin)',
+      mc.rechazado(out) and mc.tiene(out, 'GUARD-024') and 'exit=' not in out, out[:120])
 
 # --- delphi_signature + definition kind variants (real LSP semantics) ---
 GUARD = os.path.join(SRC, 'Lsp.Guard.pas')
@@ -437,18 +444,18 @@ try:
 
     # identity via whitelisted config + commit with normal punctuation
     out = call('delphi_git', {"repo": tmpgit, "command": "config",
-                              "args": "user.name", "message": "Agente Remoto"})
+                              "name": "user.name", "message": "Agente Remoto"})
     check('git: config user.name', out.startswith('exit=0'), out[:150])
     out = call('delphi_git', {"repo": tmpgit, "command": "config",
-                              "args": "user.email", "message": "agente@test.local"})
+                              "name": "user.email", "message": "agente@test.local"})
     check('git: config user.email', out.startswith('exit=0'), out[:150])
     out = call('delphi_git', {"repo": tmpgit, "command": "config",
-                              "args": "core.sshCommand", "message": "evil"})
+                              "name": "core.sshCommand", "message": "evil"})
     check('git: config fuera de user.name/email rechazado',
           mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_CONFIG_ONLY_ACCEPTS_USER'), out[:150])
     with open(os.path.join(tmpgit, 'nota.txt'), 'w') as f:
         f.write('hola\n')
-    call('delphi_git', {"repo": tmpgit, "command": "add", "args": "."})
+    call('delphi_git', {"repo": tmpgit, "command": "add", "paths": ["."]})
     out = call('delphi_git', {"repo": tmpgit, "command": "commit",
         "message": "Commit de prueba (con parentesis), 'comillas' y ¡signos!"})
     check('git: commit con puntuacion normal en message', out.startswith('exit=0'),
@@ -482,7 +489,7 @@ try:
     out3 = call('delphi_git', {"repo": tmpgit, "command": "diff", "offset": 99999})
     check('git diff offset pasado del final: se dice cuantas lineas tiene (GIT-054)',
           mc.tiene(out3, 'GIT-054'), out3[:200])
-    out4 = call('delphi_git', {"repo": tmpgit, "command": "add", "args": ".", "offset": 5})
+    out4 = call('delphi_git', {"repo": tmpgit, "command": "add", "paths": ["."], "offset": 5})
     check('git offset con una orden que escribe: no va con ella (repetirla la volveria a ejecutar)',
           mc.rechazado(out4) and mc.es(out4, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out4[:200])
     # (revision de la 1.13.0) una linea mas larga que la pagina sale cortada y
@@ -502,7 +509,7 @@ try:
     out6 = call('delphi_git', {"repo": tmpgit, "command": "branch", "offset": 5})
     check('git branch (consulta) admite offset: pasado del final, GIT-054',
           mc.tiene(out6, 'GIT-054') and not mc.es(out6, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out6[:200])
-    out7 = call('delphi_git', {"repo": tmpgit, "command": "tag", "args": "v9.9",
+    out7 = call('delphi_git', {"repo": tmpgit, "command": "tag", "name": "v9.9",
                                "message": "x", "offset": 5})
     out8 = call('delphi_git', {"repo": tmpgit, "command": "tag"})
     check('git tag que escribe con offset: GIT-056 y la etiqueta NO se crea',

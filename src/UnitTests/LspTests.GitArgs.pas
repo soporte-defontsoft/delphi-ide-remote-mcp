@@ -61,7 +61,8 @@ uses
   System.JSON,
   Lsp.Casa,
   Lsp.ProcessLaunch,
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Texts;
 
 procedure TTrocearArgsTests.EspaciosSimples;
 var
@@ -271,15 +272,19 @@ end;
 
 procedure TTrocearArgsTests.ConfiguracionEnPrefijosYGruposNoPasa;
 begin
+  // 1.19.0: delphi_git no tiene args; la puerta los niega todos con SU
+  // negativa (GIT-068), sin trocearlos ni juzgar opcion por opcion
   for var Args in ['--conf core.sshCommand=x', '-nc core.sshCommand=x',
     '-vqnc core.sshCommand=x', '-c core.sshCommand=x'] do
-    Assert.AreNotEqual('', DenegacionDeArgumentosGit(Args), Args);
+    Assert.IsTrue(EsMsg(DenegacionDeArgumentosGit(Args), SR_GIT_ARGS_RETIRADO), Args);
 end;
 
 procedure TTrocearArgsTests.ValorDeUnaOpcionCortaNoEsUnGrupo;
 begin
+  // ...tambien lo que la lista negra dejaba pasar (el valor de -b no era un
+  // grupo de opciones): sin args no hay nada que distinguir (1.19.0)
   for var Args in ['-bfeaturec', '-nbfeaturec', '-j4', '--branch=featurec'] do
-    Assert.AreEqual('', DenegacionDeArgumentosGit(Args), Args);
+    Assert.IsTrue(EsMsg(DenegacionDeArgumentosGit(Args), SR_GIT_ARGS_RETIRADO), Args);
 end;
 
 initialization

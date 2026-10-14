@@ -432,8 +432,25 @@ else:
 
 # --- git args: file-writing / path-reading options rejected on read commands
 #     (a jail escape usable even read-only; found in the field audit) ---
+# 1.19.0: delphi_git no tiene args. La llamada vieja la niega la puerta con
+# GIT-068 sin que nada llegue a git; y la misma opcion escrita en el campo
+# que hoy la llevaria la niega el juez de ESE campo (una revision que git no
+# encuentra, una ruta que no es un nombre). Lo que se mide es lo de siempre:
+# que no se escribe ni se lee nada
 def gitclean(out):
-    return mc.rechazado(out) and mc.es(out, 'SR_GIT_OPTION_FMT')
+    return mc.rechazado(out) and mc.es(out, 'SR_GIT_ARGS_RETIRADO') and not mc.llego_a_git(out)
+
+# los jueces de los campos (una revision, una ruta) se preguntan DENTRO de un
+# repo: en una carpeta que no lo es git contesta 128 antes que ellos. Un repo
+# de verdad para las formas escritas en ref y en paths
+import subprocess as _sp
+REPO_G = os.path.join(INSIDE, 'repo_g')
+os.makedirs(REPO_G, exist_ok=True)
+_sp.run(['git', 'init', '-q', REPO_G], capture_output=True)
+open(os.path.join(REPO_G, 'g.txt'), 'w').write('g\n')
+_sp.run(['git', '-C', REPO_G, 'add', 'g.txt'], capture_output=True)
+_sp.run(['git', '-C', REPO_G, '-c', 'user.name=g', '-c', 'user.email=g@g', 'commit', '-q', '-m', 'g'],
+        capture_output=True)
 
 # --output writes a file: even a "read" command (diff/show) must refuse it,
 # whether the target is inside the jail or an absolute path outside it.
@@ -442,6 +459,14 @@ for tgt, label in ((os.path.join(INSIDE, 'PWNED.txt'), 'dentro jaula'),
     out = call('delphi_git', {"repo": INSIDE, "command": "diff",
                               "args": "--output=" + tgt})
     check('git escape: diff --output %s rechazado' % label, gitclean(out), out[:150])
+    # en ref: no es una revision del repo (GIT-070); en paths: el ':' de su
+    # unidad fuera de la unidad (GUARD-009). Ninguna llega a la orden
+    out2 = call('delphi_git', {"repo": REPO_G, "command": "diff", "ref": "--output=" + tgt})
+    out3 = call('delphi_git', {"repo": REPO_G, "command": "diff", "paths": ["--output=" + tgt]})
+    check('git escape: --output %s en ref y en paths, rechazado por su juez' % label,
+          mc.rechazado(out2) and mc.es(out2, 'SR_GIT_REF_NO_VALE_FMT') and
+          mc.rechazado(out3) and mc.es(out3, 'SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT'),
+          (out2[:120], out3[:120]))
     check('git escape: %s no se escribio' % label, not os.path.exists(tgt), tgt)
 out = call('delphi_git', {"repo": INSIDE, "command": "show",
                           "args": "--output=" + os.path.join(INSIDE, 'PWNED2.txt')})
@@ -452,9 +477,17 @@ check('git escape: show output no escrito',
 out = call('delphi_git', {"repo": INSIDE, "command": "diff",
                           "args": "--no-index " + OUT_PAS + " " + IN_PAS})
 check('git escape: diff --no-index rechazado', gitclean(out), out[:150])
+# ...y la ruta de FUERA en paths la para el suelo de la jaula (GUARD-002),
+# antes que el repo: una lista de rutas no se lo salta
+out = call('delphi_git', {"repo": REPO_G, "command": "diff", "paths": [OUT_PAS]})
+check('git escape: una ruta de fuera en paths la para el suelo (GUARD-002) sin llegar a git',
+      mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT') and not mc.llego_a_git(out), out[:150])
 # -c arbitrary config (core.pager/sshCommand -> RCE) stays refused
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "-c core.pager=calc"})
 check('git escape: -c config rechazado', gitclean(out), out[:150])
+out = call('delphi_git', {"repo": REPO_G, "command": "log", "ref": "-c"})
+check('git escape: "-c" en ref no es una revision ni una opcion (GIT-070)',
+      mc.rechazado(out) and mc.es(out, 'SR_GIT_REF_NO_VALE_FMT'), out[:150])
 # --config is -c's long form on clone: must be refused too (third-party review)
 out = call('delphi_git', {"repo": INSIDE, "command": "clone",
                           "message": "https://example.com/x.git",
@@ -467,16 +500,18 @@ for opt in ('--separate-git-dir=C:\\evil', '--template=C:\\evil',
                               "message": "https://example.com/x.git", "args": opt})
     check('git escape: %s rechazado' % opt.split('=')[0], gitclean(out), out[:120])
 # a legitimate read still works (no false positive)
-out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -5"})
+out = call('delphi_git', {"repo": INSIDE, "command": "log", "count": 5})
 # permitido = la orden LLEGO a git (su exit=, aqui 128: INSIDE no es un repo)
-check('git: log --oneline sigue permitido (sin falso positivo)',
+check('git: log count=5 sigue permitido (sin falso positivo)',
       not gitclean(out) and mc.llego_a_git(out), out[:120])
 
 # --- the gate must read an argument the way the BINDER resolves it ----------
 # The gate used TJSONObject.TryGetValue (case-SENSITIVE) while the RTTI binder
 # normalizes (lower-case, '_' ignored): sending "Args" made the gate inspect
 # nothing and the handler receive the real value. Every gate decision was
-# bypassable by spelling the parameter differently.
+# bypassable by spelling the parameter differently. (1.19.0: la puerta que
+# retira args lee la clave igual que el binder; "Args" es GIT-068, no un
+# parametro desconocido del binder)
 for spelling in ('Args', 'ARGS', 'a_rgs'):
     _p = os.path.join(INSIDE, 'PWNED_case_%s.txt' % spelling)
     out = call('delphi_git', {"repo": INSIDE, "command": "diff",
