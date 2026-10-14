@@ -305,6 +305,14 @@ the MCP `initialize` response (`serverInfo.version`).
   yes), so that one stays unverified, which is the honest answer.
   `test_familia_cabeceras_1182` (F1 and G1 red against production). Point 6.
 
+- **A path the engine cannot be told is said so.** Windows lets a folder be
+  named with half of a surrogate pair, but a file URI is UTF-8 and cannot
+  carry it, so the engine was asked about another path and every answer
+  was false: definition and hover "null - the position is not inside an
+  identifier", references `LSP-003`, diagnostics "0 errors" (measured). The
+  rule all the engine's tools ask first now says it: `LSP-044`.
+  `test_ruta_sin_uri_1182` (S1 and S2 red against production). Point 4.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

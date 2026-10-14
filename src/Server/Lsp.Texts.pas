@@ -842,6 +842,15 @@ const
   SR_LSP_NOT_SOURCE_FMT =
     '[LSP-017 INVALID_PARAM] %s is not a Delphi source: the language ' +
     'tools work on .pas, .dpr, .dpk and .inc files.';
+  { ...y la ruta no se le puede NOMBRAR al motor: su uri es UTF-8 y medio
+    caracter en el nombre de una carpeta no cabe; el motor contestaba de otra
+    ruta (null, LSP-003, "0 errores"; medido el 14-oct, 1.18.2). %s = el
+    fichero, el sustituto (SF_EDIT_SUSTITUTO_SUELTO_FMT). }
+  SR_LSP_RUTA_SIN_URI_FMT =
+    '[LSP-044 INVALID_PARAM] The engine cannot be told the path of %s: a ' +
+    'folder or file name in it holds what is not a character: %s. A file URI is UTF-8 and cannot ' +
+    'carry it, so DelphiLSP would answer about another path. Rename that ' +
+    'folder or file.';
 
   { La descripcion del parametro, compartida por delphi_edit y
     delphi_textedit: lo que hace no depende de si el fichero es Pascal. }

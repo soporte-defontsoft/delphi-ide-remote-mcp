@@ -3595,7 +3595,17 @@ begin
     Exit(NoEsFichero(APath, MsgFmt(SR_LSP_NO_FILE_FMT, [APath])));
   Result := '';
   if not EsRutaDeFuente(APath) then // la lista de la unit
-    Result := MsgFmt(SR_LSP_NOT_SOURCE_FMT, [TPath.GetFileName(APath)]);
+    Exit(MsgFmt(SR_LSP_NOT_SOURCE_FMT, [TPath.GetFileName(APath)]));
+  // ...y que se le pueda NOMBRAR al motor: su uri es UTF-8 y medio caracter
+  // (un sustituto suelto, por EL lector) no cabe en ella. Con uno en el
+  // nombre de una carpeta el motor contestaba de otra ruta: null en definition
+  // y hover, LSP-003 en references, "0 errores" en diagnostics (medido el
+  // 14-oct, punto 4 de la 1.18.2)
+  var I := 1;
+  var Suelto := SiguienteSuelto(TPath.GetFullPath(APath), I);
+  if Suelto <> #0 then
+    Result := MsgFmt(SR_LSP_RUTA_SIN_URI_FMT, [TPath.GetFileName(APath),
+      MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [IntToHex(Ord(Suelto), 4)])]);
 end;
 
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
