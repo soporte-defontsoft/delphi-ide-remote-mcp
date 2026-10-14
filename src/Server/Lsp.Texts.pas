@@ -1787,7 +1787,8 @@ const
     'MEMORY.md are the GOVERNANCE files of the vault (its rules and its ' +
     'index) and are only touched under human supervision. You can read ' +
     'them (vault_read without path). If a new note needs indexing, say ' +
-    'so in your answer or send it in a delphi_report so a person does ' +
+    'so in your answer or file it with delphi_report (command=report) so ' +
+    'a person does ' +
     'it; the note you created is valid anyway even if it is not in the ' +
     'index yet.';
 
@@ -2324,7 +2325,7 @@ const
     'graphicalEnv. The target needs a graphical session open for the user ' +
     'PAServer runs as: a headless box, a locked session (Linux or Windows) ' +
     'or a Windows service (session 0) has nothing to show (command=status ' +
-    'says what to ask the operator for, and so does any capture). It is a ' +
+    'says what to ask the operator for). It is a ' +
     'permission of its own: ' +
     'AllowRemoteRun=1, the profile''s host in RemoteHosts and ' +
     'McpDesktopNode (or all) in RemoteRunProjects - only the operator sets ' +
@@ -2884,7 +2885,8 @@ const
     'set-version: 2 to 4 numbers (1.2, 1.2.3, 1.2.3.4; a suffix like -beta ' +
     'is ignored - VERSIONINFO is numeric). Written to the Windows VerInfo ' +
     'numbers AND the FileVersion/ProductVersion keys at once, which is ' +
-    'what drifts by hand. Android and iOS versions are NOT touched.';
+    'what drifts by hand. Android and iOS versions are NOT touched. Needs ' +
+    'the project''s VERSIONINFO block (Version Info page), else CFG-003.';
 
   SP_CONFIG_SDK =
     'set-sdk: the SDK this PROJECT builds that platform with, by name ' +
@@ -5483,7 +5485,8 @@ const
   SR_PASERVER_SDK_NOGROUP_FMT =
     '[PAS-030 DENIED] The target sysroot of "%s" does not match any ' +
     'distribution I know. I tried the gcc trees (%s) and the library ' +
-    'folders (%s) and no variant delivered files. Send a delphi_report ' +
+    'folders (%s) and no variant delivered files. File a delphi_report ' +
+    '(command=report) ' +
     'with your distro''s triplet (ls /usr/lib/gcc/) and we will add it.';
 
   SN_BUILD_QUEUED =

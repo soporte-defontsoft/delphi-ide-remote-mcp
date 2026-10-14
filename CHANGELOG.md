@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+`delphi_git` asks for operations, not command lines: the free `args` is
+gone and every command takes its own fields (`paths`, `ref`, `branch`,
+`remote`, `action`...), with git itself as the judge of each value - the
+minor change of this version. Around it, the fixes of 14-oct: git launched
+by its full path from the server's PATH; `delphi_build` choosing the
+profile and the target instead of copying them onto msbuild's line; the
+tree copier failing closed on a folder it cannot list, and a folder the
+server cannot list no longer taken for an empty one; the upload quarantine
+kept inside the write gate; `get-sdk` / `reseat-sdk` / `remove-sdk` kept to
+their own SDKs; a file that already says the same not rewritten; and
+`delphi_desktop` on Linux naming a locked session or a desktop without a
+monitor instead of "the portal refused the screenshot (code 2)". Nothing
+here is a new capability: those go to 1.20.
+
 ### Changed (contract: `delphi_git`)
 
 - **`delphi_git` has no `args` any more: each command takes its own
@@ -101,6 +115,13 @@ the MCP `initialize` response (`serverInfo.version`).
   barrier: all of them come from a list or a character judge). `BUILD-015`
   no longer mentions a build shell that is gone since 1.18.2.
   `test_build_perfil_119` (red against the previous build).
+- **Three documentation gaps Hermes hit (13-oct).** `delphi_config
+  set-version` says, in its `version` text, that the project
+  needs its VERSIONINFO block (the IDE's Version Info page) and answers
+  `CFG-003` without it. Two messages said "send a delphi_report" and an
+  agent called `command=send`; they say `command=report` now. The worked
+  example of `delphi_git` in `docs/TOOLS.md` used the free `args` that
+  1.19.0 retires; it shows `paths`, `name`, `remote` and `ref`.
 
 - **`delphi_desktop` on a Linux target says what is wrong with the user's
   session, instead of "the portal refused the screenshot (code 2)".** Hermes
