@@ -1515,7 +1515,8 @@ begin
   for var V in VarsRs do
     if StartsText('PATH=', V) then
       PathRs := V.Substring(Length('PATH='));
-  var MsBuildExe := ProgramaEnPath('msbuild.exe', PathRs);
+  // ...y en una carpeta donde el agente no escribe (ProgramaDelOperador, B1)
+  var MsBuildExe := ProgramaDelOperador('msbuild.exe', PathRs);
   if MsBuildExe = '' then
     raise Exception.Create(MsgFmt(SR_BUILD_MSBUILD_NO_ENCONTRADO_FMT, [Info.RsVarsBat]));
   var EntornoMsBuild := EntornoSinConfiguracion(VarsRs);

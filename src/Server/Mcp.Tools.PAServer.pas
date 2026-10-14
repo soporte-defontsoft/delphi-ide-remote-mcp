@@ -1309,8 +1309,8 @@ begin
   if Assigned(Ficha) then
     try
       Otra := '';
-      if Ficha.GetValue('distro') <> nil then
-        Otra := Ficha.GetValue<string>('distro');
+      // EL lector de un campo de texto: un "distro": {} lanzaba (C6 del cierre)
+      Otra := CampoDeTexto(Ficha, 'distro');
       if (Otra <> '') and (Etiqueta <> '') and not SameText(Otra, Etiqueta) then
         Exit(MsgFmt(SR_PASERVER_SDK_OTRA_FMT,
           [NombreDeSdk(SdkName), Otra, Etiqueta, Etiqueta]));
@@ -1391,7 +1391,11 @@ begin
       // lo bajado hasta aqui se queda (gigas) y sin .sdk nadie lo lista: se
       // dice donde, como hace remove-sdk (B de la 1.18.4)
       Return.AddPair('sysrootLeftBehind', SysRoot);
-      Return.AddPair('note', MsgFmt(SN_PASERVER_SDK_RESTOS_FMT, [SysRoot]));
+      // ...salvo que la carpeta YA fuera un SDK registrado (un get-sdk repetido
+      // que falla a medias): entonces es suyo, y "borrala" seria mentira y
+      // peligroso (C3 del cierre de la 1.19.0)
+      if not TFile.Exists(RutaDeSdk(Info.Version, SdkName)) then
+        Return.AddPair('note', MsgFmt(SN_PASERVER_SDK_RESTOS_FMT, [SysRoot]));
       Exit(Return.ToJSON);
     end;
 
@@ -1487,8 +1491,7 @@ begin
       var Previa := FichaDeSysroot(SysRoot);
       if Assigned(Previa) then
         try
-          if Previa.GetValue('pulled') <> nil then
-            Pulled := Previa.GetValue<string>('pulled');
+          Pulled := CampoDeTexto(Previa, 'pulled'); // un "pulled": {} lanzaba (C6)
         finally
           Previa.Free;
         end;
@@ -1737,8 +1740,11 @@ begin
   else
   begin
     Plat := PlataformaDelAsiento(Info.Version, Nombre);
-    if (Plat <> '') and not SameText(Plat, 'Linux64') then
-      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT, [NombreDeSdk(Nombre), Plat]));
+    // sin plataforma legible no se quita nada: la puerta cierra, no abre
+    // (C5 del cierre de la 1.19.0; los .sdk y asientos reales si la traen)
+    if not SameText(Plat, 'Linux64') then
+      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT,
+        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown')]));
   end;
   R := TRegistry.Create(KEY_WRITE);
   try

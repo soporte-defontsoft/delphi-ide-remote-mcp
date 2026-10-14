@@ -184,7 +184,7 @@ directory when it loads the project's settings, and Windows will not rename or d
 current directory of a live process, so before a folder is deleted, moved, purged or removed as
 a git worktree - or a `delphi_git` switch, merge, stash or pull rewrites the tree - the engines
 of the projects inside it are stopped (what rewrites nothing stops nobody: `stash list`, `switch`
-with `create`; and `stash push -- <paths>` stops the ones of those folders only). They start
+with `create`; and `stash` with `paths` stops the ones of those folders only). They start
 again on the next request; a request of
 another agent that was in flight on one of them is told at once (`LSP-033`: repeat it), and no
 engine is started under a folder while it is being taken away (`LSP-032`). Until then a single

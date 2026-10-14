@@ -863,7 +863,7 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | `to` | string | optional | diff, log: the other end of the range that starts at ref. |
 | `staged` | boolean | optional | diff: what is staged for the next commit. |
 | `format` | string | optional | diff: stat \| shortstat \| words. log: oneline (default) \| dated (hash, date, subject) \| full. |
-| `context` | integer | optional | diff: lines of context around each change. |
+| `context` | integer | optional | diff: lines of context around each change (1 or more). |
 | `count` | integer | optional | log: how many commits (default 20). |
 | `search` | string | optional | log: only the commits that add or remove this text. |
 | `patch` | boolean | optional | show: the whole diff, not only the stat. |
@@ -874,11 +874,11 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Refused with any other command (GIT-038). |
 | `message` | string | optional | commit: the message. tag: makes it annotated. stash push: its label. config: the value. clone: the repository URL. |
 | `path` | string | optional | worktree add: a NEW folder inside your roots. worktree remove: one that action=list shows. |
-| `ref` | string | optional | A commit, tag or branch (v1.3.2, main, HEAD~3, a hash). diff, log: where it starts (to = the other end). show: this one. push: the name to send. tag: what it marks. worktree add: the version to put there, detached. |
+| `ref` | string | optional | A commit, tag or branch (v1.3.2, main, HEAD~3). diff: the base (to: the other end). log: the newest commit (to: ref..to). show: this one. push: the name to send. tag: what it marks. worktree add: the version. |
 | `offset` | integer | optional | Lines to skip when a listing did not fit in one page - pass the offset its note gives. |
 <!-- /contract -->
 
-**What the answer carries (hand-written).** A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0` (`diff --quiet` / `--exit-code` with differences answers `exit=1`, and that is a success too: `[GIT-037]`).
+**What the answer carries (hand-written).** A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0`.
 
 ## Feedback
 

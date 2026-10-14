@@ -83,6 +83,19 @@ REGLAS = [
      'WalkThroughDirectory no dice nada): la puerta de los metadatos la pasaba, la copia la copiaba vacia '
      'contestando COPIED y la purga borraba a medias (2g de la 1.18.x). El nodo de Linux, aparte: alli no '
      'hay FindFirstFile y sus dos usos toleran el vacio'),
+    ('listar ficheros o carpetas sin saber si se dejo', r"TDirectory\.(?:GetFiles|GetDirectories)\s*\(",
+     [(u, '*') for u in ('Lsp.BuildRunner.pas', 'Lsp.Casa.pas', 'Lsp.DesignerEdit.pas', 'Lsp.DesignerMetaGen.pas',
+                         'Lsp.Discovery.pas', 'Lsp.Guard.pas', 'Lsp.LogSink.pas', 'Lsp.PackageMap.pas',
+                         'Lsp.Patch.pas', 'Lsp.ProjectUnits.pas', 'Lsp.Session.pas', 'Lsp.Styles.pas',
+                         'Mcp.Tools.FileOps.pas', 'Mcp.Tools.Messages.pas', 'Mcp.Tools.PAServer.pas',
+                         'Mcp.Tools.Report.pas', 'Mcp.Tools.Styles.pas', 'Mcp.Tools.Vault.pas',
+                         'Mcp.Tools.Workspace.pas', 'Mcp.Vault.Seed.pas', 'Mld.Sesion.pas', 'Mld.X11.pas',
+                         'FormRender.Comun.pas', 'McpRunJob.dpr')],
+     'GetFiles y GetDirectories pasan por el MISMO WalkThroughDirectory que GetFileSystemEntries (VACIO si '
+     'Windows no deja listar): unos 50 sitios en 24 unidades el 14-oct-2026, todos detras del recorrido '
+     'cerrado de la puerta o fuera de la jaula (B2 del cierre de la 1.19.0, medido por el revisor). La lista '
+     'SOLO ENCOGE: un sitio nuevo lista por EntradasDeCarpeta o recorre con el guard (RecorreSinEnlaces, '
+     'WalkFiles)'),
     ('nombre de un .sdk', r"\+\s*'\.sdk'",
      [('Lsp.Discovery.pas', 'NombreDeSdk')],
      'NombreDeSdk (fichero, clave del IDE, SDKName, sysroot: el mismo nombre; 1.16.0: 16 a mano)'),
@@ -754,6 +767,7 @@ PLANTADO = {
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
     'listar una carpeta sin saber si se dejo': "  for E in TDirectory.GetFileSystemEntries(Dir) do",
+    'listar ficheros o carpetas sin saber si se dejo': "  for F in TDirectory.GetFiles(Dir, '*.pas') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",
     'leer un designer binario a mano': "  Err := DesignerFileToText(APath, Texto);",
     'la nota de codificacion de un form a mano': "  N := NotaDeFormAncho(Nombre, Enc);",

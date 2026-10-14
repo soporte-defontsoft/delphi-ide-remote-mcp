@@ -231,7 +231,8 @@ end;
   llamada (SearchPath, microsegundos) y sin estado compartido entre hilos. }
 function RutaDeGit: string;
 begin
-  Result := ProgramaEnPath('git.exe', GetEnvironmentVariable('PATH'));
+  // ...y donde el agente no escribe (ProgramaDelOperador, B1 del cierre)
+  Result := ProgramaDelOperador('git.exe', GetEnvironmentVariable('PATH'));
   if Result = '' then
     raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT, [MsgText(SF_GIT_SIN_GIT_EN_PATH)]));
 end;
@@ -1523,7 +1524,7 @@ begin
     MsgFile := NombreDeMensajeGit;
     // por la puerta de escribir, con el temporal como lugar: UTF-8 sin BOM
     EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
-    GitArgs := Format('commit -F "%s"', [MsgFile]);
+    GitArgs := 'commit -F ' + EnComillas(MsgFile);
   end
   else if Cmd = 'clone' then
   begin
@@ -1713,7 +1714,7 @@ begin
         CrearCarpeta(ServerTempDir('git'));
         MsgFile := NombreDeMensajeGit;
         EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
-        GitArgs := Format('tag -F "%s"', [MsgFile]);
+        GitArgs := 'tag -F ' + EnComillas(MsgFile);
       end;
       GitArgs := GitArgs + ' ' + EnComillas(Params.Name.Trim);
       if Desde <> '' then
@@ -1766,7 +1767,9 @@ begin
            (SameText(DestinoReal, RaizReal) or
             StartsText(IncludeTrailingPathDelimiter(RaizReal), DestinoReal)) then
           Exit(MsgFmt(SR_GIT_WORKTREE_INSIDE_FMT, [Raiz]));
-        GitArgs := Format('worktree add --detach "%s" %s', [Destino, Params.Ref.Trim]);
+        // por el compositor de la casa, los dos: una revision con un blanco
+        // que rev-parse admite se partia en dos argumentos (A2 del cierre)
+        GitArgs := 'worktree add --detach ' + EnComillas(Destino) + ' ' + EnComillas(Params.Ref.Trim);
       end
       else
       begin
@@ -1808,7 +1811,7 @@ begin
         // abajo, junto al git y con el cerrojo de escritura ya cogido.
         SeQuitan := [Destino];
         // Sin --force: con cambios, git se niega y lo dice.
-        GitArgs := Format('worktree remove "%s"', [Destino]);
+        GitArgs := 'worktree remove ' + EnComillas(Destino);
       end;
     end
     else
@@ -1824,16 +1827,19 @@ begin
   // un juez cambia, esto no: se mira aqui, con la orden ya compuesta y antes
   // de todo git que lleve esos valores (el juez de lo protegido, el fetch
   // de un pull, la orden)
-  for var Campo in TArray<string>.Create('ref', 'to', 'branch', 'remote', 'name') do
+  // (y el valor de config, que va suelto detras del nombre; el message de
+  // commit y tag va por -F y el de stash detras de -m: nunca sueltos)
+  for var Campo in TArray<string>.Create('ref', 'to', 'branch', 'remote', 'name', 'message') do
   begin
     var Valor := '';
     if Campo = 'ref' then Valor := Params.Ref
     else if Campo = 'to' then Valor := Params.&To
     else if Campo = 'branch' then Valor := Params.Branch
     else if Campo = 'remote' then Valor := Params.Remote
-    else Valor := Params.Name;
+    else if Campo = 'name' then Valor := Params.Name
+    else if Cmd = 'config' then Valor := Params.Message;
     if Valor.Trim.StartsWith('-') then
-      Exit(MsgFmt(SR_GIT_CAMPO_OPCION_FMT, [Campo]));
+      Exit(MsgFmt(SR_GIT_CAMPO_OPCION_FMT, [Campo, Valor.Trim]));
   end;
   if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push', 'ls-remote']) then
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,

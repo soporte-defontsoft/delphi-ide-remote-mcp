@@ -89,7 +89,40 @@ desktop without a monitor instead of "the portal refused the screenshot
   `commit`, `tag`, `config`, `restore --staged`, `switch create=true`,
   `fetch`, `push`) keep working with the link there. One rule, in the guard
   (`EnlaceAjenoEn`), next to the link rule of the readers; the git tool
-  says which commands touch the tree (`GitTocaArbol`).
+  says which commands touch the tree (`GitTocaArbol`). Measured the same
+  day, with no hole: a junction whose target is written as a volume by its
+  GUID (`\??\Volume{...}\...`) is followed by Windows and judged by the
+  real path Windows gives, so `delphi_read`, `delphi_list` and `delphi_move
+  copy=true` through it refuse or skip it (`test_union_volumen_119`).
+- **The small things of the closing review of 1.19.0.** The program the
+  server launches by its name (git for `delphi_git`, msbuild for
+  `delphi_build`) has to live where this session cannot write: a `git.exe`
+  found in a PATH folder inside the roots is the agent's, not the
+  operator's, and the call answers `GIT-050` (one helper in the guard,
+  `ProgramaDelOperador`; `test_git_por_ruta_119` R4, red against the build
+  before). `worktree add` composes its two values with the house quoter, as
+  `commit -F`, `tag -F` and `worktree remove` now do (a revision with a
+  blank that `rev-parse` admits was split in two). The value of `config`
+  joins the second barrier against a value that starts with `-`, and
+  `GIT-075` shows the field and its value. `GIT-045` says that `remote` is
+  a name and that the address judged is the one that name has in the
+  repository; `GIT-056` no longer speaks of arguments; the description of
+  `ref` says what `log` does with it alone (the newest commit shown), and
+  `context` says it takes 1 or more (0 is the default, not "no context").
+  `delphi_delete` of a folder lists the units that go with it without
+  crossing a link, as the deleter does (a unit behind a junction was taken
+  out of its project and then not deleted). The Linux desktop node no
+  longer asserts why there is no monitor ("typically" a remote session that
+  disconnected). Docs: the hand note of `delphi_git` in TOOLS.md dropped
+  `GIT-037` / `diff --quiet`, the README says `stash` with `paths`,
+  CONFIGURATION.md says `args` is gone, and the 1.19.0 entries name the R1
+  witness and `test_union_volumen_119`. `delphi_paserver`: `remove-sdk`
+  refuses a seat whose platform it cannot read instead of removing it
+  (`PAS-059` with "unknown"); a `get-sdk` that fails half way no longer
+  tells the agent to delete a folder that was already a registered SDK;
+  the `distro` and `pulled` fields of the SDK record go through the house's
+  text-field reader (a `{}` there ended in an internal error). The Linux
+  node reads the monitors once for its two questions.
 
 - **`delphi_git` launches git by its full path, found only in the PATH the
   server started with.** It launched `git.exe` by name, and Windows looks a
@@ -103,7 +136,11 @@ desktop without a monitor instead of "the portal refused the screenshot
   the current folder nor the exe's) and launched quoted, by that path; with
   no git in that PATH the call answers `GIT-050` before launching anything,
   and the message says where git is looked for. `test_git_por_ruta_119` (red
-  against the previous build).
+  against the previous build; its R1 is the witness: a bare `git.exe`
+  launched with the parent's current folder there runs the planted probe,
+  because CreateProcess searches the PARENT's current folder, not the
+  child's, and the harness's `NoDefaultCurrentDirectoryInExePath` - which
+  the service does not have - is what hid it the first time).
 - **`BUILD-029` no longer sends the agent to `delphi_config set-output` for
   an output that command does not set.** The refusal for a `BRCC_OutputDir`
   (or any other output property) outside the workspace said that

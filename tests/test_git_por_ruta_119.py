@@ -22,6 +22,9 @@ plantado ahi que es whoami.exe; si el servidor lo ejecuta, no es git de verdad.
      repo sano; la sonda no corre)
   R3 un PATH sin git y la misma carpeta: GIT-050 y NADA lanzado (la plantada
      tampoco)
+  R4 un git.exe que SI esta en el PATH pero en una carpeta donde el agente
+     escribe (dentro de las raices): no es el git del operador -> GIT-050 y la
+     sonda no corre (B1 del cierre de la 1.19.0; rojo contra 45dd5a8)
 
   Por que contra el BUILD ANTERIOR (el que lanzaba git por nombre) status salia
   con exit=1 pero SIN marca en el cuerpo -medido el 14-oct-2026 (4.8), leido el
@@ -105,6 +108,20 @@ try:
     r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('R3 un PATH sin git con la sonda en la carpeta actual: GIT-050, y la sonda no corre',
           'GIT-050' in r and MARCA not in r, ('marca' if MARCA in r else 'sin marca', r[:200]))
+finally:
+    s.cierra()
+
+# R4 (B1): el programa del operador vive donde el agente NO escribe. Un git.exe
+# en una carpeta del PATH que esta dentro de las raices es del agente
+# (ProgramaDelOperador, Lsp.Guard): GIT-050, sin lanzar nada
+BIN = os.path.join(JAIL, 'bin')
+os.makedirs(BIN)
+shutil.copy(WHOAMI, os.path.join(BIN, 'git.exe'))
+s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'PATH': BIN + ';' + SIN_GIT}), nombre='git-por-ruta-raiz', cwd=PLANTA)
+try:
+    r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
+    check('R4 un git.exe del PATH en una carpeta donde el agente escribe: GIT-050, y la sonda no corre',
+          'GIT-050' in r and 'exit=' not in r and MARCA not in r, r[:200])
 finally:
     s.cierra()
 

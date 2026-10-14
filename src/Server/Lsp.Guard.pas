@@ -630,6 +630,17 @@ function ProtegidoDentroDe(const ADir: string): string;
   nada: el escritor lanza. }
 function EscrituraDenegada(const APath: string): string;
 
+{ EL programa que el servidor lanza por su NOMBRE: su ruta completa en las
+  carpetas de APath (ProgramaEnPath: el PATH de un entorno, nunca la carpeta
+  actual ni la del exe) Y en una carpeta donde esta sesion NO escribe (la
+  puerta del escritor sobre su carpeta: fuera de las raices, una referencia,
+  un sitio de solo lectura). '' si no esta, o si esta donde el agente
+  escribe: un git.exe o un msbuild.exe que el agente pueda dejar en una
+  carpeta del PATH es el suyo, no el del operador (la regla del 13-oct: el
+  programa por su ruta, encontrada donde el agente no escribe; B1 del cierre
+  de la 1.19.0). Lo llaman delphi_git (RutaDeGit) y el build (msbuild). }
+function ProgramaDelOperador(const APrograma, APath: string): string;
+
 { Una CARPETA donde la tool pide un FICHERO: '' si no lo es; si lo es, "es
   una CARPETA, no un fichero" (INVALID_PARAM), el mismo texto que ya daba
   delphi_read. Un sitio para las tools que piden un fichero: siete
@@ -1154,6 +1165,19 @@ begin
   if IsReadOnlyNow then
     Exit(WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(SinBarraFinal(APath))])));
   Result := PathDenied(APath);
+end;
+
+function ProgramaDelOperador(const APrograma, APath: string): string;
+begin
+  Result := ProgramaEnPath(APrograma, APath);
+  // Donde el agente escribe no esta el programa del operador. La pregunta es
+  // la jaula de ESCRITURA (PathDenied) sin el juez de los metadatos de git
+  // (APermiteGit): ese juez lanza git para contestar, y git se resuelve
+  // AQUI (medido el 14-oct-2026: la bateria de git por ruta se quedo
+  // colgada en la recursion). El modo de solo lectura no cuenta: el
+  // programa del operador lo es con la sesion abierta o cerrada.
+  if (Result <> '') and (PathDenied(ExtractFileDir(Result), True) = '') then
+    Result := '';
 end;
 
 function CarpetaEnVezDeFichero(const APath: string): string;

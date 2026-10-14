@@ -331,7 +331,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   textedit, delete, move, git, build) and a host that does not route, each answered in 0.02 s
   or less. Until 1.18.1 the pieces of `delphi_git args` were the door left: a share written
   there reached git, which opened SMB towards that host with the service's account (21 s
-  against one that does not answer); each piece is now judged as a path before git runs.
+  against one that does not answer); since 1.19.0 `args` is gone, `remote` is the name of a
+  remote of the repository, and its address is judged before git runs.
   The network path of a declared place is refused too (`GUARD-029`): a place is taken
   in the form it was declared in. One exception, by decision and for reading only: with
   `LibraryZone=1`, a folder of the IDE's Library Path that the IDE's owner wrote as a network

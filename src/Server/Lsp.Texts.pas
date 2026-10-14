@@ -6299,15 +6299,15 @@ const
     file:// y aqui se leian tal cual, y un remoto del repo con su direccion
     en file://C:/... (dos barras) pasaba por direccion de red. }
   SR_GIT_REMOTO_ILEGIBLE_FMT =
-    '[GIT-045 DENIED] The remote of this %s, "%s", is not in a form this ' +
-    'tool takes (if you gave a name, that is the address the name has in ' +
-    'the repository). A remote is the NAME it has in the repository ' +
-    '(remote=origin); a network address the operator allows, written ' +
+    '[GIT-045 DENIED] The remote of this %s has an address, "%s", that is ' +
+    'not in a form this tool takes (remote is the NAME of a remote of the ' +
+    'repository, remote=origin, and this is the address that name has ' +
+    'there). An address is a network one the operator allows, written ' +
     'with its scheme (https://, http://, ssh://, git://) or as ' +
     'user@host:path; or a FOLDER that is there, inside your roots, by ' +
     'its path - the folder itself, with its whole name - or as ' +
-    'file:///<drive>:/<path> with nothing percent-encoded. Nothing was ' +
-    'done.';
+    'file:///<drive>:/<path> with nothing percent-encoded. Change it in ' +
+    'the repository. Nothing was done.';
 
   { Lo que se escribe en la llamada y no es NI un remoto del repo NI una
     carpeta que este. Lo mas corriente: un repo recien hecho con init, sin
@@ -6359,7 +6359,7 @@ const
   { la segunda barrera de delphi_git sin args: un campo que va suelto en la
     linea y empieza por '-' (lo niegan antes sus jueces; esto, si uno falla) }
   SR_GIT_CAMPO_OPCION_FMT =
-    '[GIT-075 INVALID_PARAM] "%s" starts with "-": a value of this tool ' +
+    '[GIT-075 INVALID_PARAM] %s="%s" starts with "-": a value of this tool ' +
     'is never a git option. Nothing was done.';
 
   { lo que toma tag cuando se le da otra cosa sin nombre (GIT-038) }
@@ -7548,7 +7548,8 @@ const
     'works as usual.';
 
   SF_GIT_SIN_GIT_EN_PATH =
-    'git.exe is not in the PATH the server process started with';
+    'git.exe is not in the PATH the server process started with (a copy in ' +
+    'a folder this session can write does not count)';
 
   // lo que esta sesion no puede hacer con lo de detras de un enlace (GIT-076)
   SF_GIT_ENLACE_LEER = 'read';
@@ -9255,7 +9256,7 @@ const
     '(hash, date, subject) | full.';
 
   SP_GIT_CONTEXT =
-    'diff: lines of context around each change.';
+    'diff: lines of context around each change (1 or more).';
 
   SP_GIT_COUNT =
     'log: how many commits (default 20).';
@@ -9292,10 +9293,10 @@ const
     'that action=list shows.';
 
   SP_WS_REF =
-    'A commit, tag or branch (v1.3.2, main, HEAD~3, a hash). diff, log: ' +
-    'where it starts (to = the other end). show: this one. push: the ' +
-    'name to send. tag: what it marks. worktree add: the version to put ' +
-    'there, detached.';
+    'A commit, tag or branch (v1.3.2, main, HEAD~3). diff: the base ' +
+    '(to: the other end). log: the newest commit (to: ref..to). show: ' +
+    'this one. push: the name to send. tag: what it marks. worktree ' +
+    'add: the version.';
 
   { la salida de git por paginas (muro de la lista del 4-oct-2026: un diff
     de mas de 30000 caracteres salia cortado y no habia forma de ver el resto) }
@@ -9333,8 +9334,9 @@ const
     offset la volveria a ejecutar. %s: el comando. }
   SR_GIT_OFFSET_SOLO_CONSULTA_FMT =
     '[GIT-056 INVALID_PARAM] offset pages the answer of a query, and this ' +
-    '%s writes (with arguments or a message it creates, not lists). Call ' +
-    'it without offset. Nothing was done.';
+    '%s writes (with the fields it carries it creates or changes ' +
+    'something; it does not list). Call it without offset. Nothing was ' +
+    'done.';
 
   SP_WS_PATH_2 =
     'Absolute path of the file to download from the server';
@@ -9483,8 +9485,9 @@ const
     pone rsvars.bat (2an de la 1.18.2): si alli no esta, o rsvars.bat no se
     lee, no se compila. %s = rsvars.bat. }
   SR_BUILD_MSBUILD_NO_ENCONTRADO_FMT =
-    '[BUILD-048 NOT_FOUND] msbuild.exe was not found in the PATH that %s sets, ' +
-    'so nothing was built. The RAD Studio installation needs repairing.';
+    '[BUILD-048 NOT_FOUND] msbuild.exe was not found in the PATH that %s sets ' +
+    '(a copy in a folder this session can write does not count), so nothing ' +
+    'was built. The RAD Studio installation needs repairing.';
 
   // Excepciones que estaban en linea en Lsp.Patch.pas (paso 3e, 27-sep-2026)
   SF_EDIT_CARACTER_NO_EXISTE_FMT =

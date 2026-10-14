@@ -631,12 +631,17 @@ begin
     // un fallo en cualquiera lo deshace todo.
     var ProyPares, UnitPares: TArray<string>;
     var UnitsDentro: TArray<string> := [];
-    try
-      UnitsDentro := TDirectory.GetFiles(Params.Path, '*.pas',
-        TSearchOption.soAllDirectories);
-    except
-      // una subcarpeta ilegible no impide borrar: se miran las que se ven
-    end;
+    // las units que SE VAN: las del arbol SIN cruzar enlaces, las mismas que
+    // quita BorraArbol (GetFiles soAllDirectories cruzaba un junction y sacaba
+    // de su proyecto una unit de detras que no se borraba; B3 del cierre de
+    // la 1.19.0). Una subcarpeta ilegible no impide borrar: se miran las que
+    // se ven
+    RecorreSinEnlaces(Params.Path,
+      procedure(const APath: string)
+      begin
+        if SameText(TPath.GetExtension(APath), '.pas') then
+          UnitsDentro := UnitsDentro + [APath];
+      end);
     var Fotos := TStringList.Create;
     try
       try

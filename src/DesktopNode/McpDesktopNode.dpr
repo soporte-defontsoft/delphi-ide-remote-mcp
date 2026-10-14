@@ -435,13 +435,14 @@ begin
         portal contesta "code 2" a secas y no hay donde pulsar. Medido en el
         Zorin el 14-oct-2026 tras desconectar la RDP, con la sesion bloqueada
         o no. Se dice que pedir, en vez de dejar que el portal se niegue. }
-      if Bus.LeerPantallas(Pantallas) and (Length(Pantallas) = 0) then
+      // UNA lectura de los monitores para las dos preguntas (C7 del cierre)
+      if Bus.LeerPantallas(Pantallas) then
       begin
-        Writeln('  ', NODO_NO_PUDE, ' ', MsgFmt(SF_NODE_SIN_MONITOR_FMT, [Sesion.Usuario]));
-        Exit;
-      end;
-      if Bus.LeerPantallas(Pantallas) and (Length(Pantallas) > 0) then
-      begin
+        if Length(Pantallas) = 0 then
+        begin
+          Writeln('  ', NODO_NO_PUDE, ' ', MsgFmt(SF_NODE_SIN_MONITOR_FMT, [Sesion.Usuario]));
+          Exit;
+        end;
         Escala := Pantallas[0].Escala;
         Writeln(MsgFmt(SN_NODE_ESCRITORIO_DICE_ESCALA_FMT, [FormatFloat('0.00', Escala)]));
       end

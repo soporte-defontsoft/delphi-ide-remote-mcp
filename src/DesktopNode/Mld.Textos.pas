@@ -487,11 +487,11 @@ const
   { Lo dice el nodo cuando Mutter no tiene ningun monitor: la pantalla de
     una sesion remota es su cliente, y se ha ido (medido 14-oct-2026). }
   SF_NODE_SIN_MONITOR_FMT =
-    'The desktop of user %s on this machine has NO monitor right now: its ' +
-    'screen was the remote session that disconnected, so there is nothing ' +
-    'to capture and nowhere to click. Ask the operator to reconnect their ' +
-    'remote desktop (and unlock it) and try again; retrying before that ' +
-    'changes nothing.';
+    'The desktop of user %s on this machine has NO monitor right now ' +
+    '(typically its screen was a remote session that disconnected), so ' +
+    'there is nothing to capture and nowhere to click. Ask the operator ' +
+    'to reconnect their remote desktop (and unlock it) and try again; ' +
+    'retrying before that changes nothing.';
 
   // Textos que estaban en linea en Mld.Dyn.pas (el resto, 27-sep-2026)
   SF_NODE_LIBRERIA_NO_ABIERTA =
