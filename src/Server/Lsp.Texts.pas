@@ -10115,8 +10115,9 @@ const
     'with the form loaded as the designer loads it - keeps the children of ' +
     '%s in this order: %s. That is what it would save, so this order would ' +
     'not hold (VCL writes graphic controls before windowed ones; an ' +
-    'inherited form places a new component by its [n]...). Nothing was ' +
-    'written.';
+    'inherited form places a new component by its [n]...). An ''(unnamed X ' +
+    '#n)'' entry is a child without a Name: index= counts it, before= and ' +
+    'after= cannot name it. Nothing was written.';
   SR_DESIGNER_ORDEN_NO_HERMANO_FMT =
     '[DSGN-137 INVALID_PARAM] %s is in %s and %s is in %s: before and after ' +
     'order children of the SAME parent. To take it into another one, set ' +
@@ -10177,6 +10178,16 @@ const
     'children by its name. Nothing was written. Name the parent on its ' +
     'object line (delphi_edit, and its field in the class), or move the ' +
     'block with delphi_edit.';
+  { ...y una REFERENCIA de before/after que es una de esas claves: no es un
+    Name, y DSGN-078 mandaba a la lista de nombres (D5 de los revisores de
+    cierre). %s = la clave, el componente que se ordena. }
+  SR_DESIGNER_ORDEN_REF_SIN_NOMBRE_FMT =
+    '[DSGN-151 INVALID_PARAM] %s is how the order lists name a child WITHOUT ' +
+    'a Name (its class and its number among the unnamed of that class): it ' +
+    'is not a Name, so before= and after= cannot point at it. To place %s ' +
+    'next to it, use index= (the position among ALL the siblings, the ' +
+    'unnamed ones counted), or give that component a Name first (delphi_edit ' +
+    'on its object line, and its field in the class). Nothing was written.';
   SF_DESIGNER_ORDEN_DELANTE_DE_FMT = 'before %s';
   SF_DESIGNER_ORDEN_DETRAS_DE_FMT = 'after %s';
   SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT = 'to position %d';

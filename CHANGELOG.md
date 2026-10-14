@@ -374,6 +374,24 @@ the MCP `initialize` response (`serverInfo.version`).
   (`MotorPierdeLaRuta`) holds what the engine loses. E4 (red against
   production) and E5, the control. M3 of the closing reviewers.
 
+- **One note about a form's encoding, for every door.** `encodingNote` had
+  three composers: `lint` and the designer's writers said both things (a
+  form in UTF-16/32, `DSGN-121`; one without a BOM whose bytes are UTF-8,
+  `READ-009`), while `preview` and the lint that `delphi_edit`, a batch and
+  a changeset run after writing a form only said the first. Now there is one
+  (`NotaDeCodificacionDeForm`) and `test_paisaje` keeps it one.
+  `test_form_utf8_sin_bom_1182` F7 (preview) and F8 (`delphi_edit`), red
+  against production. W9 of the closing reviewers.
+
+- **An `(unnamed X #n)` entry cannot be a `before=`/`after=`.** `DSGN-136`
+  and `DSGN-143` list a child without a Name as `(unnamed TTimer #2)`; given
+  back as `before=`, the answer was `DSGN-078` "there is no component" with
+  the list of names. Now `DSGN-151` says what that entry is (the reader of
+  the key is the inverse of its composer) and how to place next to it
+  (`index=`, or a Name first), and `DSGN-136` says so when it lists one.
+  `test_designer_orden` O24 (red against production). D5 of the closing
+  reviewers.
+
 - **One list of the IDE's SDKs, and "ready" asks the SDK's own platform.**
   Six places walked the IDE's `*.sdk` files by hand (the build, adb's
   search for its `adb`, `profiles`, `seat-sdk`, the read gate's sysroots and

@@ -1120,17 +1120,15 @@ end;
   lint y en la de cada escritura del disenador (insert, set, delete), que la
   conservan; una respuesta que es un fallo se queda como esta. }
 function ConNotaDeFormAncho(const AResult, APath: string): string;
-var
-  K: TEncKind;
 begin
   Result := AResult;
   try
-    if not EsFallo(Result) and FormAncho(TPath.GetFullPath(APath), K) then
-      Result := ConNota(Result, 'encodingNote', NotaDeFormAncho(TPath.GetFileName(APath), EncName(K)))
-    // ...y uno SIN BOM cuyos bytes son UTF-8: el IDE y dcc lo leen en ANSI
-    // (READ-009; lint daba CLEAN, medido con dcc el 13-oct)
-    else if not EsFallo(Result) then
-      Result := ConNota(Result, 'encodingNote', NotaDeUtf8SinBomDe(TPath.GetFullPath(APath)));
+    // LA nota (Lsp.Patch.NotaDeCodificacionDeForm): la del form ancho o, si
+    // no, la de uno SIN BOM cuyos bytes son UTF-8 (READ-009; lint daba CLEAN,
+    // medido con dcc el 13-oct); preview y el lint de delphi_edit la
+    // componian por su cuenta (W9 del revisor de cierre)
+    if not EsFallo(Result) then
+      Result := ConNota(Result, 'encodingNote', NotaDeCodificacionDeForm(TPath.GetFullPath(APath)));
   except
     // una nota no tumba la respuesta de lo que ya se hizo
   end;
@@ -1368,8 +1366,11 @@ begin
     Return.AddPair('fidelity', R.Fidelidad);
     if R.Fidelidad = 'print' then
       Return.AddPair('fidelityNote', MsgText(SN_DESIGNER_FIDELIDAD_PRINT));
-    if Ancho then
-      Return.AddPair('encodingNote', NotaDeFormAncho(TPath.GetFileName(Ruta), EncName(KAncha)));
+    // LA nota de codificacion, por su casa (W9 del revisor de cierre: preview
+    // la componia a mano y sin READ-009)
+    var NotaEnc := NotaDeCodificacionDeForm(Ruta);
+    if NotaEnc <> '' then
+      Return.AddPair('encodingNote', NotaEnc);
     Return.AddPair('style', R.Estilo);
     Return.AddPair('packages', R.Paquetes);
     Return.AddPair('components', TJSONNumber.Create(R.Componentes));

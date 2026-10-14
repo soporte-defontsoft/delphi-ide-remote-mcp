@@ -490,6 +490,12 @@ try:
     check('O13 el PADRE de una clase que ningun paquete carga: DSGN-140 nombrando al padre (M2)',
           mc.abre(r, 'SR_DESIGNER_ORDEN_SIN_CLASE_FMT') and 'TBarraQueNoExisteEnNingunPaquete' in r and
           bytes_de(PADRERARO) == antes, r[:400])
+    # '(unnamed X #n)' es la clave de un hijo SIN Name en las listas de DSGN-136/143,
+    # no un Name: before=/after= no pueden senalarlo, y nadie lo decia (D5 de los
+    # revisores de cierre; DSGN-078 "no component" con la lista de nombres)
+    r = dsg(DFM, {'component': 'Button2', 'before': '(unnamed TTimer #1)'})
+    check('O24 before= con la clave de un hijo sin nombre: DSGN-151 (no es un Name; index= o ponerle Name), '
+          'nada escrito', 'DSGN-151' in r and 'DSGN-078' not in r and 'index=' in r, r[:300])
     r = dsg(DFM, {'component': 'Panel1', 'after': 'Button1'})
     t = bytes_de(DFM).decode('utf-8')
     check('O14 un bloque con hijos se mueve entero (Panel1 con Button3 dentro, tras Button1) (B4)',

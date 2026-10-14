@@ -72,6 +72,11 @@ REGLAS = [
      'TextoDeDesigner: EL texto de un designer, binario o de texto, por la puerta de leer (W4 del '
      'revisor de cierre de la 1.18.2: cinco sitios lo hacian a mano y el juicio de lo escrito leia un '
      'binario como texto y no juzgaba nada)'),
+    ('la nota de codificacion de un form a mano', r"(?<!function )\b(?:NotaDeFormAncho|NotaDeUtf8SinBomDe)\s*\(",
+     [('Lsp.Patch.pas', 'NotaDeCodificacionDeForm')],
+     'NotaDeCodificacionDeForm: LA nota de codificacion de un form (ancho, DSGN-121, o UTF-8 sin BOM, '
+     'READ-009) para lint, los escritores del disenador, preview y el lint de delphi_edit/tanda/changeset '
+     '(W9 del revisor de cierre de la 1.18.2: tres emisores, dos sin READ-009)'),
     ('nombre de un .sdk', r"\+\s*'\.sdk'",
      [('Lsp.Discovery.pas', 'NombreDeSdk')],
      'NombreDeSdk (fichero, clave del IDE, SDKName, sysroot: el mismo nombre; 1.16.0: 16 a mano)'),
@@ -727,6 +732,7 @@ PLANTADO = {
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",
     'leer un designer binario a mano': "  Err := DesignerFileToText(APath, Texto);",
+    'la nota de codificacion de un form a mano': "  N := NotaDeFormAncho(Nombre, Enc);",
     'un campo de conexion de un perfil': "  H := TagValue(Xml, 'Profile_host');",
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
     '__delphi-temp': "  D := TPath.Combine(Raiz, '__delphi-temp');",

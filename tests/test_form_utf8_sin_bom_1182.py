@@ -69,6 +69,16 @@ try:
     r = srv.call('delphi_read', {'path': p})
     check('F6 ...y en el UTF-8 sin BOM de verdad tambien las dos: la ANSI partida (ConfiguraciÃ³n)',
           'READ-009' in r and 'ConfiguraciÃ³n' in r.split('READ-009', 1)[1], r[:900])
+    # W9 del revisor de cierre: la nota de codificacion (encodingNote) tenia tres
+    # emisores y dos sin READ-009: preview componia la suya (solo el form ancho) y el
+    # lint de delphi_edit/tanda/changeset (DesignerLint) igual. Ahora UNA casa
+    # (NotaDeCodificacionDeForm) y los tres la llevan
+    r = srv.call('delphi_designer', {'command': 'preview', 'path': p, 'maxwidth': 120}, t=240)
+    check('F7 preview del form UTF-8 sin BOM: encodingNote con READ-009',
+          'READ-009' in r and 'encodingNote' in r, r[:500])
+    # (el ancla, una linea sin letras altas: el servidor lee el form sin BOM en ANSI)
+    r = srv.call('delphi_edit', {'path': p, 'old': "  Left = 0", 'new': "  Left = 1"}, t=240)
+    check('F8 delphi_edit del mismo form: su lint lleva READ-009', 'READ-009' in r, r[:600])
 finally:
     srv.cierra()
 

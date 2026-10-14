@@ -715,6 +715,13 @@ function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
   detector: la de delphi_read, para quien no lo lee entero (designer lint).
   '' si no es el caso o no se puede leer. }
 function NotaDeUtf8SinBomDe(const APath: string): string;
+{ LA nota de codificacion de un form en disco (encodingNote): la de uno ANCHO
+  (UTF-16/32, DSGN-121: el IDE lo abre y dcc no lo compila) o, si no, la de
+  uno SIN BOM cuyos bytes son UTF-8 (READ-009: el IDE y dcc lo leen en ANSI);
+  '' si nada que decir o no se puede leer. La componian tres emisores (lint y
+  los escritores del disenador, preview y el lint de delphi_edit/tanda/
+  changeset) y dos sin READ-009 (W9 del revisor de cierre de la 1.18.2). }
+function NotaDeCodificacionDeForm(const APath: string): string;
 { Mientras dure (True ... False, anidable, de ESTE hilo: las llamadas HTTP van
   a la vez), los escritores no juzgan el form en cada edicion: el juicio es
   del fichero ENTERO, como la estructura, y lo hace quien agrupa sobre lo que
@@ -3751,6 +3758,21 @@ begin
   end;
 end;
 
+function NotaDeCodificacionDeForm(const APath: string): string;
+var
+  K: TEncKind;
+begin
+  Result := '';
+  try
+    if FormAncho(APath, K) then
+      Result := NotaDeFormAncho(ExtractFileName(APath), EncName(K));
+    if Result = '' then
+      Result := NotaDeUtf8SinBomDe(APath);
+  except
+    Result := ''; // una nota no tumba nada
+  end;
+end;
+
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 var
   B: TBytes;
@@ -4996,11 +5018,14 @@ begin
   Raw := L.Propiedades;
   var Bind := L.Enlace;
   // lo que el texto no dice y dcc si: un form de texto en UTF-16/32 no se
-  // compila (DSGN-121). Lo decian lint y el disenador; delphi_edit, la tanda
-  // y el changeset escriben el mismo form y lo callaban (B1 de la 1.18.2)
-  var Ancho := NotaDeFormAncho(ExtractFileName(APath), AEnc);
+  // compila (DSGN-121), y uno sin BOM cuyos bytes son UTF-8 lo lee en ANSI
+  // (READ-009). Lo decian lint y el disenador; delphi_edit, la tanda y el
+  // changeset escriben el mismo form y lo callaban (B1 de la 1.18.2), y luego
+  // solo lo ancho (W9 del revisor de cierre): LA nota, por su casa, del
+  // fichero que acaba de escribirse
+  var NotaEnc := NotaDeCodificacionDeForm(APath);
   if (L.Parser = '') and (Length(Raw) = 0) and (Length(Bind) = 0) and (Length(Notas) = 0) and
-     (Falta.Razon = '') and (Ancho = '') then
+     (Falta.Razon = '') and (NotaEnc = '') then
     Exit;
   Res := TStringList.Create;
   try
@@ -5052,8 +5077,8 @@ begin
       Res.Add(MsgText(SN_DESIGNER_BINDING_LINT_HEADER));
       Res.AddStrings(Bind);
     end;
-    if Ancho <> '' then
-      Res.Add(Ancho);
+    if NotaEnc <> '' then
+      Res.Add(NotaEnc);
     Result := Res.ToStringArray;
   finally
     Res.Free;

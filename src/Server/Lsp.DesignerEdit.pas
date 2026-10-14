@@ -2514,6 +2514,17 @@ begin
   Result := MsgFmt(SF_DESIGNER_SIN_NOMBRE_FMT, [AClase, N]);
 end;
 
+// ...y su inversa: si un texto ES una de esas claves (y no un Name), leido de
+// la MISMA plantilla que la compone: su prefijo hasta el primer %s y su cierre
+function EsClaveSinNombre(const S: string): Boolean;
+var
+  Fmt, Pre: string;
+begin
+  Fmt := MsgText(SF_DESIGNER_SIN_NOMBRE_FMT);
+  Pre := Copy(Fmt, 1, Pos('%s', Fmt) - 1);
+  Result := (Pre <> '') and S.Trim.StartsWith(Pre) and S.Trim.EndsWith(Fmt[Length(Fmt)]);
+end;
+
 function ClaveDeHijo(APadre, AHijo: TStyleObj): string;
 var
   N: Integer;
@@ -2962,6 +2973,11 @@ begin
     NomRef := '';
     if (ABefore.Trim <> '') or (AAfter.Trim <> '') then
     begin
+      // '(unnamed X #n)' es la clave de un hijo SIN Name en las listas del
+      // juez (DSGN-136/143), no un Name: before/after no pueden senalarlo, y
+      // DSGN-078 lo mandaba a la lista de nombres (D5 de los revisores de cierre)
+      if EsClaveSinNombre(ABefore.Trim + AAfter.Trim) then
+        Exit(MsgFmt(SR_DESIGNER_ORDEN_REF_SIN_NOMBRE_FMT, [(ABefore + AAfter).Trim, NomObj]));
       Result := BuscaComponente(F, ABefore.Trim + AAfter.Trim, Ref);
       if Result <> '' then
         Exit;
