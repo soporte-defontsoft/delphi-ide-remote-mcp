@@ -10080,6 +10080,19 @@ const
     'siblings when it saves the form.';
   SF_DESIGNER_PADRE_FUERA_DEL_TEXTO_FMT =
     '%s is not in the text of the form.';
+  { Un hijo SIN nombre en las listas del juez del orden (Lsp.DesignerEdit
+    ClaveDeHijo): su clase y su numero entre los de esa clase sin nombre. No
+    contaba, y un orden que el IDE no guarda respecto a el se escribia (B3 rev6
+    de la 1.18.2). }
+  SF_DESIGNER_SIN_NOMBRE_FMT = '(unnamed %s #%d)';
+  { ...y un PADRE sin nombre: el juez pregunta por los hijos de un padre por su
+    nombre; se buscaba por su clase y salia DSGN-143 "without TPanel". }
+  SR_DESIGNER_ORDEN_PADRE_SIN_NOMBRE_FMT =
+    '[DSGN-150 INVALID_PARAM] %s cannot be ordered: its parent (the %s at ' +
+    'line %d) has no Name, and the IDE''s writer is asked about a parent''s ' +
+    'children by its name. Nothing was written. Name the parent on its ' +
+    'object line (delphi_edit, and its field in the class), or move the ' +
+    'block with delphi_edit.';
   SF_DESIGNER_ORDEN_DELANTE_DE_FMT = 'before %s';
   SF_DESIGNER_ORDEN_DETRAS_DE_FMT = 'after %s';
   SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT = 'to position %d';

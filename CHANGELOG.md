@@ -170,6 +170,24 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_insert_tras_end_1182` (red against production; the IFDEF control
   red with a mutant). B1 of the 8th reviewer, point 7.
 
+- **The designer's order judge counts components with no Name, and gives the
+  TabOrder the IDE gives.** `set index=`/`before=`/`after=` compared only
+  the children with a Name: an order the IDE would not keep with respect to
+  an unnamed one (`object TTimer`) was written and answered `DSGN-142`
+  "Placed where the IDE's own writer keeps it". Unnamed children now count,
+  as `(unnamed TTimer #1)`, and that order is refused with the IDE's own
+  (`DSGN-136`). A parent with no Name was looked up by its class and
+  answered `DSGN-143` "loaded the form without TPanel"; it says what is
+  going on now (`DSGN-150`). And `insert`/`set parent=` gave a new control
+  the next TabOrder among the children IN THE FILE: in a panel inherited
+  with two buttons it got 0, and the IDE puts it first in the keyboard
+  order. The TabOrder is now the one the IDE's writer writes with the form
+  loaded as the designer loads it, ancestors included - the last one, as
+  when it is dropped in the designer; the own count only when the judge
+  cannot answer. `test_designer_sin_nombre_1182` and
+  `test_taborder_heredado_1182` (red against production; a mutant each).
+  B3 of the 6th reviewer and the inherited TabOrder, point 7.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

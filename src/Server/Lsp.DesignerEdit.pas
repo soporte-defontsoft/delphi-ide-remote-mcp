@@ -1054,7 +1054,7 @@ function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: B
 function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>): string; forward;
 function DondeLoDejaElIde(const F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer;
-  out ANota: string): TArray<string>; forward;
+  out ANota: string; out ATabOrder: Integer): TArray<string>; forward;
 
 { P puede recibir un control: el form, o en VCL un control con ventana
   (TWinControl por ascendencia: David, 4-oct-2026) y en FMX un control.
@@ -1226,17 +1226,47 @@ begin
     Result := ['Text'];
 end;
 
-// el TabOrder que sigue entre los hijos de APadre
-function SiguienteTabOrder(ADoc: TStyleDoc; APadre: TStyleObj): Integer;
+const
+  // el TabOrder de un bloque nuevo o movido mientras se pregunta al juez: el
+  // ultimo del tabulador de su padre, como al soltarlo en el disenador (el
+  // lector lo ordena el ultimo y el escritor escribe su indice). TTabOrder
+  // llega a 32767
+  TABORDER_AL_FINAL = 32767;
+
+// el TabOrder que lleva AObj en ADoc; -1 si no lleva (o no es un numero)
+function TabOrderDe(ADoc: TStyleDoc; AObj: TStyleObj): Integer;
 var
-  Ini, Fin, N: Integer;
+  Ini, Fin: Integer;
   P, V: string;
+begin
+  if not (ADoc.PropLines(AObj, 'TabOrder', Ini, Fin) and LineaDePropiedad(ADoc.Lines[Ini], P, V) and
+     TryStrToInt(V, Result)) then
+    Result := -1;
+end;
+
+// el TabOrder que sigue entre los hijos de APadre QUE ESTAN EN EL TEXTO: el
+// de cuando el juez no contesta (los de un ancestro no estan aqui: en un panel
+// heredado salia 0; el juez, DondeLoDejaElIde, si los cuenta - punto 7)
+function SiguienteTabOrder(ADoc: TStyleDoc; APadre: TStyleObj): Integer;
 begin
   Result := 0;
   for var K in APadre.Children do
-    if ADoc.PropLines(K, 'TabOrder', Ini, Fin) and LineaDePropiedad(ADoc.Lines[Ini], P, V) and
-       TryStrToInt(V, N) then
-      Result := Max(Result, N + 1);
+    Result := Max(Result, TabOrderDe(ADoc, K) + 1);
+end;
+
+// el TabOrder del bloque recien puesto en ALineas [AIni, AIni + ALargo): el
+// centinela TABORDER_AL_FINAL pasa a AValor (lo que diga el juez, o el propio)
+procedure PonTabOrderDelBloque(var ALineas: TArray<string>; AIni, ALargo, AValor: Integer);
+var
+  P, V: string;
+begin
+  for var I := AIni to Min(AIni + ALargo, Length(ALineas)) - 1 do
+    if LineaDePropiedad(ALineas[I], P, V) and SameText(P, 'TabOrder') and
+       (V = IntToStr(TABORDER_AL_FINAL)) then
+    begin
+      ALineas[I] := LineasDePropiedad(LeadingWhite(ALineas[I]), 'TabOrder', [IntToStr(AValor)])[0];
+      Exit;
+    end;
 end;
 
 { Donde va el campo de un componente nuevo: detras del ultimo campo de la
@@ -1451,8 +1481,11 @@ begin
       Texto := Textos[0];
     if not F.EsFmx and (Texto <> '') then
       Bloque := Bloque + LineasDePropiedad(Ind + '  ', Texto, TrozosDeLiteral(Nombre));
+    // el TabOrder: el ultimo del tabulador de su padre, el que diga el juez
+    // (abajo, DondeLoDejaElIde); el propio, si no contesta
+    var TabPropio := SiguienteTabOrder(F.Doc, Padre);
     if Publica(F.Tabla, ClsId, 'TabOrder') then
-      Bloque := Bloque + LineasDePropiedad(Ind + '  ', 'TabOrder', [IntToStr(SiguienteTabOrder(F.Doc, Padre))]);
+      Bloque := Bloque + LineasDePropiedad(Ind + '  ', 'TabOrder', [IntToStr(TABORDER_AL_FINAL)]);
     if F.EsFmx and (Texto <> '') then
       Bloque := Bloque + LineasDePropiedad(Ind + '  ', Texto, TrozosDeLiteral(Nombre));
     Bloque := Bloque + [Ind + 'end'];
@@ -1487,8 +1520,10 @@ begin
     // donde lo deja el IDE entre sus hermanos, no siempre el ultimo (3.11: el
     // juez del orden; la VCL escribe un TLabel delante de los TButton)
     var Largo := FinBloque - Ini + 1;
-    DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, NotaOrden);
+    var TabDelIde: Integer;
+    DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, NotaOrden, TabDelIde);
     FinBloque := Ini + Largo - 1;
+    PonTabOrderDelBloque(DfmLineas, Ini, Largo, (if TabDelIde >= 0 then TabDelIde else TabPropio));
     // con el cerrojo: el form y la unidad son los que se juzgaron
     EnterFileEdit;
     try
@@ -2276,16 +2311,18 @@ begin
        (RestoC.IndexOf(']') >= 0) then
       Bloque[0] := LeadingWhite(Bloque[0]) + ComponeLineaDeObjeto(ClaveC, NomC, ClaseC) +
         Copy(RestoC, RestoC.IndexOf(']') + 2, MaxInt);
-    // y el TabOrder que sigue en el padre nuevo
+    // y el TabOrder en el padre nuevo: el ultimo de su tabulador, el que diga
+    // el juez (abajo); el propio, si no contesta
     Tab := 0;
     ConTab := (ClaseDeJuez(F, Obj, ClsId) = '') and Publica(F.Tabla, ClsId, 'TabOrder');
     if ConTab then
     begin
       Tab := SiguienteTabOrder(F.Doc, Padre);
       if F.Doc.PropLines(Obj, 'TabOrder', TIni, TFin) then
-        Bloque[TIni - Ini] := LineasDePropiedad(LeadingWhite(Bloque[TIni - Ini]), 'TabOrder', [IntToStr(Tab)])[0]
+        Bloque[TIni - Ini] := LineasDePropiedad(LeadingWhite(Bloque[TIni - Ini]), 'TabOrder',
+          [IntToStr(TABORDER_AL_FINAL)])[0]
       else
-        Insert(LineasDePropiedad(SangriaDeNivel(Padre.Depth + 2), 'TabOrder', [IntToStr(Tab)]),
+        Insert(LineasDePropiedad(SangriaDeNivel(Padre.Depth + 2), 'TabOrder', [IntToStr(TABORDER_AL_FINAL)]),
           Bloque, 1);
     end;
     Dest := Padre.EndLine - 1;
@@ -2296,7 +2333,14 @@ begin
     NomPadre := NombreDe(Padre);
     // donde lo deja el IDE entre sus hermanos nuevos, no siempre el ultimo
     // (3.11: el juez del orden)
-    Lineas := DondeLoDejaElIde(F, Lineas, NomObj, NomPadre, Dest, Length(Bloque), NotaOrden);
+    var TabDelIde: Integer;
+    Lineas := DondeLoDejaElIde(F, Lineas, NomObj, NomPadre, Dest, Length(Bloque), NotaOrden, TabDelIde);
+    if ConTab then
+    begin
+      if TabDelIde >= 0 then
+        Tab := TabDelIde;
+      PonTabOrderDelBloque(Lineas, Dest, Length(Bloque), Tab);
+    end;
     // con el cerrojo: el form es el que se juzgo
     EnterFileEdit;
     try
@@ -2419,6 +2463,29 @@ end;
   raiz por su nombre tambien): lo que se compara con el juez. El parser de
   siempre (TStyleDoc.DeTexto), sobre la propuesta y sobre lo que escribio
   TWriter. }
+{ LA clave de un hijo de APadre en las listas del juez del orden: su Name, o
+  -sin nombre- '(unnamed <clase> #n)', n su numero entre los hermanos sin
+  nombre de esa clase (SF_DESIGNER_SIN_NOMBRE_FMT; los parentesis no caben en
+  un Name). Solo contaban los que tienen nombre, y un orden que el IDE no
+  guarda respecto a uno sin nombre se escribia diciendo DSGN-142 (B3 rev6 de
+  la 1.18.2). }
+function ClaveDeHijo(APadre, AHijo: TStyleObj): string;
+var
+  N: Integer;
+begin
+  if AHijo.ObjName <> '' then
+    Exit(AHijo.ObjName);
+  N := 0;
+  for var H in APadre.Children do
+  begin
+    if (H.ObjName = '') and SameText(H.ClassName_, AHijo.ClassName_) then
+      Inc(N);
+    if H = AHijo then
+      Break;
+  end;
+  Result := MsgFmt(SF_DESIGNER_SIN_NOMBRE_FMT, [AHijo.ClassName_, N]);
+end;
+
 function HijosEnTexto(const ATexto, ANombre: string): TArray<string>;
 var
   Doc: TStyleDoc;
@@ -2433,9 +2500,9 @@ begin
       P := ObjetoPorNombre(Doc, ANombre);
     if P = nil then
       Exit;
+    // TODOS, por su clave: uno sin nombre tambien es un hermano (B3 rev6)
     for var H in P.Children do
-      if H.ObjName <> '' then
-        Result := Result + [H.ObjName];
+      Result := Result + [ClaveDeHijo(P, H)];
   finally
     Doc.Free;
   end;
@@ -2506,7 +2573,7 @@ end;
   set before=/after=/index=, que niega con eso; insert y set parent= dejan el
   componente donde lo dejaria el IDE, o el ultimo si no se sabe. }
 function JuezDelOrden(const F: TFormEnEdicion; const ATexto, ANomObj, ANomPadre: string;
-  out ANuestro, ASuyo: TArray<string>): string;
+  out ANuestro, ASuyo: TArray<string>; out AEscrito: string): string;
 var
   Escrito, ErrorAyudante: string;
   Sustituidas, Avisos, SinLeer, Faltan: TArray<string>;
@@ -2515,10 +2582,13 @@ var
 begin
   ANuestro := [];
   ASuyo := [];
+  AEscrito := '';
   Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer,
     ErrorAyudante);
   if Result <> '' then
     Exit;
+  // lo que escribio el IDE: de ahi sale tambien el TabOrder que le da
+  AEscrito := Escrito;
   // un ancestro que el ayudante no encontro (sin .pas que lo diga o sin
   // fichero en la carpeta): leyo el form SIN el y su orden no es el del IDE,
   // aunque ningun hermano escrito falte (revisor 6 del 3.11, A2: un [n]
@@ -2571,21 +2641,34 @@ end;
   guardar (3.11, el juez para dos llamadores mas). }
 function DondeLoDejaElIde(const F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer;
-  out ANota: string): TArray<string>;
+  out ANota: string; out ATabOrder: Integer): TArray<string>;
 var
   Nuestro, Suyo: TArray<string>;
   Doc: TStyleDoc;
+  Escrito: string;
 begin
   Result := ALineas;
   ANota := '';
+  ATabOrder := -1;
   // con el motivo del juez: la nota afirmaba "el renderizador no cargo el form"
   // tambien cuando el juez nego otra cosa (DSGN-115...; revisor de version de
   // la 1.18.0)
-  var Motivo := JuezDelOrden(F, F.Doc.TextoDe(ALineas), ANomObj, ANomPadre, Nuestro, Suyo);
+  var Motivo := JuezDelOrden(F, F.Doc.TextoDe(ALineas), ANomObj, ANomPadre, Nuestro, Suyo, Escrito);
   if Motivo <> '' then
   begin
     ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre, Motivo.Trim]);
     Exit;
+  end;
+  // el TabOrder que el IDE le da: el que escribe su escritor con el form
+  // cargado como el disenador, ancestros incluidos (SiguienteTabOrder solo
+  // cuenta los del texto: en un panel heredado salia 0; punto 7 de la 1.18.2)
+  Doc := TStyleDoc.DeTexto(Escrito);
+  try
+    var OE := ObjetoPorNombre(Doc, ANomObj);
+    if OE <> nil then
+      ATabOrder := TabOrderDe(Doc, OE);
+  finally
+    Doc.Free;
   end;
   // DETRAS del que el IDE escribe justo delante (delante del de detras si es
   // el primero): en un fichero que ya no estaba en el orden del IDE, anclar
@@ -2613,7 +2696,7 @@ begin
     var SuyoP: TArray<string> := [];
     for var N in Suyo do
       for var H in P.Children do
-        if SameText(H.ObjName, N) then
+        if SameText(ClaveDeHijo(P, H), N) then
         begin
           SuyoP := SuyoP + [N];
           Break;
@@ -2624,7 +2707,7 @@ begin
     var NomAncla := SuyoP[(if PS > 0 then PS - 1 else 1)];
     var Ancla: TStyleObj := nil;
     for var H in P.Children do
-      if SameText(H.ObjName, NomAncla) then
+      if SameText(ClaveDeHijo(P, H), NomAncla) then
         Ancla := H;
     var Dest := (if PS > 0 then Ancla.EndLine else Ancla.StartLine - 1);
     Result := ConBloqueMovido(ALineas, Copy(ALineas, AIni, ALargo), AIni, ALargo, Dest);
@@ -2753,13 +2836,16 @@ begin
     Padre := Obj.Parent;
     NomObj := NombreDe(Obj);
     NomPadre := NombreDe(Padre);
+    // el juez pregunta por los hijos de un padre por su NOMBRE: uno sin
+    // nombre se buscaba por su clase y salia DSGN-143 "without TPanel" (B3 rev6)
+    if Padre.ObjName = '' then
+      Exit(MsgFmt(SR_DESIGNER_ORDEN_PADRE_SIN_NOMBRE_FMT, [NomObj, Padre.ClassName_, Padre.StartLine]));
     Hermanos := [];
     Original := [];
     for var H in Padre.Children do
     begin
       Hermanos := Hermanos + [H];
-      if H.ObjName <> '' then
-        Original := Original + [H.ObjName];
+      Original := Original + [ClaveDeHijo(Padre, H)];
     end;
     Pos0 := -1;
     Resto := [];
@@ -2812,7 +2898,8 @@ begin
     Lineas := ConBloqueMovido(F.Doc.Lines, Copy(F.Doc.Lines, Ini, Largo), Ini, Largo, Dest);
     Texto := F.Doc.TextoDe(Lineas);
     // EL JUEZ: el IDE, cargando la propuesta, la guardaria con el ahi?
-    Result := JuezDelOrden(F, Texto, NomObj, NomPadre, Nuestro, Suyo);
+    var Escrito: string;
+    Result := JuezDelOrden(F, Texto, NomObj, NomPadre, Nuestro, Suyo, Escrito);
     if Result <> '' then
       Exit;
     if not MismaPosicion(NomObj, NomRef, Original, Nuestro, Suyo) then
