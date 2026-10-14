@@ -638,6 +638,21 @@ REGLAS = [
      'Ningun shell en el servidor sin casa declarada: un shell busca en su carpeta actual, expande '
      'variables y lee metacaracteres, y es donde mas cuesta que nada del agente decida que se ejecuta. '
      'msbuild va por su ruta (Lsp.ProcessLaunch.ProgramaEnPath), sin cmd (2an de la 1.18.2)'),
+    # git por su RUTA (1.19.0): se lanzaba 'git.exe ...' por su nombre, y a un nombre sin
+    # carpeta CreateProcess lo busca PRIMERO en la carpeta del exe y en la ACTUAL del
+    # proceso (por stdio, la de quien lanza el servidor: el repo del agente); medido el
+    # 14-oct con una sonda inerte (test_git_por_ruta_119). Todo programa, por su ruta
+    ('lanzar un programa por su nombre a secas', LANZA + r"\s*'[A-Za-z][\w.-]*(?:\.exe)?[ ']",
+     [],
+     'Ningun programa por su nombre: su ruta completa, encontrada donde el agente no escribe '
+     '(ProgramaEnPath en el PATH del servidor, o la del IDE), y entre comillas (git.exe a secas '
+     'hasta la 1.19.0, medido con una sonda inerte el 14-oct)'),
+    # ...y tampoco COMPUESTA en una cadena que luego se lanza (GitLinea devolvia 'git.exe -c ...')
+    ('una orden que empieza por un programa a secas',
+     r"'(?:git|msbuild|cmd|paclient|adb|dcc\w*|brcc\w*|rsvars)(?:\.exe|\.bat)?\s+[-/\w\"]",
+     [],
+     'Una orden se compone con la RUTA del programa entre comillas (EnComillas(RutaDeGit) + ...), '
+     'nunca con su nombre a secas al principio: quien la lance la buscaria en su carpeta actual'),
 ]
 
 
@@ -732,6 +747,8 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 PLANTADO = {
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
+    'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
+    'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",
     'lanzar el conversor de estilos': "  Out := RunCapturedIn('\"' + Exe + '\" tobin', Dir, 1000, C);",
     'nombre de un .profile': "  F := TPath.Combine(Dir, Nombre + '.profile');",
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",

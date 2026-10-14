@@ -341,7 +341,7 @@ call = srv.call
 r = git({'command': 'status'})
 check('sin git en el servidor: status lo DICE, con su etiqueta (no un "CreateProcess failed")',
       mc.abre(r, 'SR_GIT_NO_HAY_GIT_FMT') and mc.resultado(r) == 'INTERNAL' and 'CreateProcess' not in r
-      and '(error 2)' in r,
+      and 'not in the PATH' in r,  # 1.19.0: git por su ruta, buscada SOLO en el PATH (antes "(error 2)" de CreateProcess)
       r[:300])
 SIN_GIT = os.path.join(BASE, 'sin-git')
 os.makedirs(SIN_GIT)

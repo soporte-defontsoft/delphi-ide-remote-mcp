@@ -5397,7 +5397,10 @@ const
     'writes the binary, the .dcu files and the rest into the output ' +
     'folders of the project (and a Clean deletes there): they have to ' +
     'stay inside the workspace. delphi_config set-output places the ' +
-    'binary and .dcu ones inside.';
+    'binary and .dcu ones (DCC_ExeOutput, DCC_DcuOutput) inside; any ' +
+    'other output property (BRCC_OutputDir, DCC_BplOutput, DCC_DcpOutput, ' +
+    'DCC_HppOutput, DCC_ObjOutput, DCC_BpiOutput) is set in the project ' +
+    'itself, by the operator in the IDE''s Project Options.';
 
   SR_BUILD_OUTPUT_UNDECLARED_FMT =
     '[BUILD-030 DENIED] I will not build this. The project does not ' +
@@ -7514,22 +7517,30 @@ const
     'git status before repeating it.'#10 +
     '%s';
 
-  { Un servidor SIN git: CreateProcess no encuentra git.exe y la llamada
-    acababa en SYS-006 "CreateProcess failed (2)", que no dice ni que falta
-    ni de quien es el arreglo (medido el 30-sep-2026 en una maquina sin git
-    instalado: init y status). INTERNAL: al servidor le falta una pieza.
-    NO dice que la llamada este bien: sale en la primera pregunta a git,
-    antes de las reglas de cada comando (un commit sin mensaje lo recibe
-    igual). Ni que baste reiniciar: solo que un proceso no ve un PATH
-    posterior a su arranque (revision de la 1.8.1). }
+  { Un servidor SIN git: git.exe no esta en el PATH con el que arranco el
+    proceso (RutaDeGit, el UNICO sitio donde se busca desde la 1.19.0; antes
+    CreateProcess lo buscaba por su nombre y la llamada acababa en SYS-006
+    "CreateProcess failed (2)", que no decia ni que falta ni de quien es el
+    arreglo: medido el 30-sep-2026 en una maquina sin git, init y status).
+    INTERNAL: al servidor le falta una pieza. NO dice que la llamada este
+    bien: sale en la primera pregunta a git, antes de las reglas de cada
+    comando (un commit sin mensaje lo recibe igual). Ni que baste reiniciar:
+    solo que un proceso no ve un PATH posterior a su arranque (revision de la
+    1.8.1). El %s es el detalle: no esta en el PATH, o estaba y no arranco. }
   SR_GIT_NO_HAY_GIT_FMT =
-    '[GIT-050 INTERNAL] This server has no git: Windows did not find ' +
-    'git.exe when the server tried to launch it (error %d), so no ' +
-    'delphi_git command can run here. It does not depend on your call, ' +
-    'and repeating it will not help: git has to be installed on the ' +
-    'server machine, in the PATH the server process starts with (a ' +
-    'running process keeps the PATH it was started with). Everything ' +
-    'that is not delphi_git works as usual.';
+    '[GIT-050 INTERNAL] This server has no git: %s, so no delphi_git ' +
+    'command can run here. It does not depend on your call, and repeating ' +
+    'it will not help: git has to be installed on the server machine, in ' +
+    'the PATH the server process starts with - the only place it is looked ' +
+    'for, never the folder the server happens to run in (a running process ' +
+    'keeps the PATH it was started with). Everything that is not delphi_git ' +
+    'works as usual.';
+
+  SR_GIT_SIN_GIT_EN_PATH =
+    'git.exe is not in the PATH the server process started with';
+
+  SR_GIT_GIT_NO_ARRANCA_FMT =
+    'Windows could not launch the git.exe found in that PATH (error %d)';
 
   { El repo no puede activar programas ni esconderlos en includes locales. }
   SR_GIT_CONFIG_PROGRAMA_FMT =

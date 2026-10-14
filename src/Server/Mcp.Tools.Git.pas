@@ -218,13 +218,31 @@ begin
   end;
 end;
 
-{ LA LINEA de git, por UN compositor: git.exe, -C con la carpeta de la
-  llamada - por el compositor de la casa (EnComillas), como todo argumento -,
-  lo que lo fija (AFijado: --git-dir...) y el comando. Se componia a mano en
-  cada sitio, con -C "%s": una carpeta acabada en barra invertida se comia
-  la comilla de cierre y el resto de la linea entraba en el argumento de -C
-  (medido en la 1.7.6: GIT-036, "cannot change to ..."; cuarta revision de
-  la 1.7.7). }
+{ EL git del servidor, por su RUTA COMPLETA: git.exe en el PATH con el que
+  arranco el proceso del servidor (el del operador) y SOLO ahi
+  (ProgramaEnPath: ni la carpeta actual ni la del exe). Se lanzaba por su
+  nombre a secas, y a un nombre sin carpeta CreateProcess lo busca PRIMERO en
+  la carpeta del exe y en la CARPETA ACTUAL del proceso: en el servicio es la
+  del servidor, pero por stdio es la de quien lo lanza -el repo del agente- y
+  un git.exe plantado ahi corria con la cuenta del servidor (medido el
+  14-oct-2026 con una sonda inerte: test_git_por_ruta_119). La regla del
+  13-oct: el programa por su ruta completa, encontrada donde el agente no
+  escribe. Sin git, GIT-050 aqui, antes de lanzar nada. Se resuelve en cada
+  llamada (SearchPath, microsegundos) y sin estado compartido entre hilos. }
+function RutaDeGit: string;
+begin
+  Result := ProgramaEnPath('git.exe', GetEnvironmentVariable('PATH'));
+  if Result = '' then
+    raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT, [MsgText(SR_GIT_SIN_GIT_EN_PATH)]));
+end;
+
+{ LA LINEA de git, por UN compositor: git por su ruta (RutaDeGit), -C con la
+  carpeta de la llamada - por el compositor de la casa (EnComillas), como
+  todo argumento -, lo que lo fija (AFijado: --git-dir...) y el comando. Se
+  componia a mano en cada sitio, con -C "%s": una carpeta acabada en barra
+  invertida se comia la comilla de cierre y el resto de la linea entraba en
+  el argumento de -C (medido en la 1.7.6: GIT-036, "cannot change to ...";
+  cuarta revision de la 1.7.7). }
 function GitLinea(const ARepo, AFijado, AResto: string): string;
 begin
   // La orden de red no hereda una recursion a remotos de submodulos sin juzgar.
@@ -235,21 +253,20 @@ begin
   // Nunca ejecutar los hooks ni el monitor de un repo del workspace.
   // El directorio del servidor no admite escrituras de los clientes.
   // La regla general tambien manda en switch/restore y en los hijos de Git.
-  Result := 'git.exe -c submodule.recurse=false -c core.fsmonitor=false ' +
+  Result := EnComillas(RutaDeGit) + ' -c submodule.recurse=false -c core.fsmonitor=false ' +
     '-c commit.gpgsign=false -c tag.gpgsign=false -c core.hooksPath=' +
     EnComillas(ServerTempDir('git-hooks-off')) + ' -C ' +
     EnComillas(ARepo) + AFijado + ' ' + Resto;
 end;
 
 { git, LANZADO por un solo sitio: la linea del compositor por el lanzador de
-  la casa. Y el servidor SIN git lo dice aqui. CreateProcess no encuentra
-  git.exe (error 2) y la llamada acababa en "[SYS-006 INTERNAL]
-  ... CreateProcess failed (2)", que no dice ni que falta ni de quien es el
-  arreglo (medido el 30-sep-2026 en una maquina sin git: init y status). Se
-  decide con el fallo del lanzamiento DE VERDAD y no preguntando antes si
-  git esta: quien lo busca por su cuenta no lo busca como CreateProcess.
-  Sigue siendo una excepcion - quien pregunta para juzgar no toma un fallo
-  por un "no hay" -, con el mensaje ya etiquetado. }
+  la casa. El servidor SIN git lo dice RutaDeGit (GIT-050) antes de lanzar
+  nada; aqui queda la segunda barrera: un git que estaba al resolver y no al
+  lanzar (error 2) recibe el mismo GIT-050 con su error, en vez de "[SYS-006
+  INTERNAL] ... CreateProcess failed (2)", que no decia ni que falta ni de
+  quien es el arreglo (medido el 30-sep-2026 en una maquina sin git: init y
+  status). Sigue siendo una excepcion - quien pregunta para juzgar no toma un
+  fallo por un "no hay" -, con el mensaje ya etiquetado. }
 function GitCorre(const ARepo, AFijado, AResto: string; ATimeoutMs: Integer;
   out ACodigo: Cardinal): string;
 begin
@@ -259,11 +276,11 @@ begin
   except
     on E: EOSError do
     begin
-      // solo el 2, que es el medido: git se lanza por su nombre a secas y
-      // un 3 no tiene de donde salir. Un git que ESTA y no arranca (5,
-      // 193) no es "no hay git": sigue con el mensaje de siempre
+      // solo el 2: un git que ESTA y no arranca (5, 193) no es "no hay
+      // git": sigue con el mensaje de siempre
       if E.ErrorCode = ERROR_FILE_NOT_FOUND then
-        raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT, [E.ErrorCode]));
+        raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT,
+          [MsgFmt(SR_GIT_GIT_NO_ARRANCA_FMT, [E.ErrorCode])]));
       raise;
     end;
   end;

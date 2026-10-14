@@ -50,6 +50,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_git` launches git by its full path, found only in the PATH the
+  server started with.** It launched `git.exe` by name, and Windows looks a
+  bare name up FIRST in the folder of the exe and in the CURRENT folder of
+  the server process: a service runs in its own folder, but over stdio that
+  folder is whoever launched the server - the agent's repository - and a
+  `git.exe` left there ran with the server's account (measured on 14-oct
+  with an inert probe: a copy of `whoami.exe` planted as `git.exe` in the
+  server's current folder answered `delphi_git status`). Now git is resolved
+  as msbuild is since 1.18.2 (`ProgramaEnPath`: the PATH entries only, never
+  the current folder nor the exe's) and launched quoted, by that path; with
+  no git in that PATH the call answers `GIT-050` before launching anything,
+  and the message says where git is looked for. `test_git_por_ruta_119` (red
+  against the previous build).
+- **`BUILD-029` no longer sends the agent to `delphi_config set-output` for
+  an output that command does not set.** The refusal for a `BRCC_OutputDir`
+  (or any other output property) outside the workspace said that
+  `set-output` places the outputs inside; it only sets `DCC_ExeOutput` and
+  `DCC_DcuOutput`. The message now names what `set-output` covers and says
+  the other properties are set in the project by the operator.
+
 - **`delphi_desktop` on a Linux target says what is wrong with the user's
   session, instead of "the portal refused the screenshot (code 2)".** Hermes
   got that answer and retried believing the node broken (13-oct); measured
