@@ -68,6 +68,20 @@ the MCP `initialize` response (`serverInfo.version`).
   date, so the record is unchanged too. The description of `get-sdk` now
   says the last 10 copies per file are kept. `LspTests.Rutas`
   (`EscribirLoMismoNoReescribe`).
+- **`delphi_paserver remove-sdk` only removes PAServer SDKs; `reseat-sdk`
+  only seats a sysroot that lives in the IDE's SDK folder; `get-sdk` says
+  what it could not write and what it left behind.** `remove-sdk` deleted
+  the SDK Manager seat of ANY SDK by its name, the Android ones GetIt
+  installs included (`reseat-sdk` already skipped them); it now refuses an
+  SDK whose file, or whose seat, says another platform (`PAS-059`), by
+  reading, since measuring it meant destroying a real SDK. `reseat-sdk`
+  registered as sysroot whatever the `.sdk` file said, wherever it was,
+  which made that folder a place of the IDE's for the server's writers;
+  one outside the IDE's SDK folder is skipped and named (`PAS-060`). A
+  `get-sdk` whose SDK record could not be written swallowed the error and
+  the next call had no distro guard: the answer says it (`PAS-061`); and
+  one that fails after pulling names the folder it left behind, like
+  `remove-sdk` does (`PAS-062`). `test_sdk` (6b, 6c).
 - **`delphi_upload`'s quarantine no longer deletes or overwrites a
   read-only `<name>.corrupt`.** An upload whose final sha256 does not match
   is set aside as `<name>.corrupt`, and a previous quarantine there goes to

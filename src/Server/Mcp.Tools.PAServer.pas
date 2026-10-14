@@ -407,11 +407,12 @@ end;
 { La ficha del sysroot (mcp-sdk.json); devuelve donde quedo la copia de la
   que pisa ('' si no habia o si no se pudo escribir: sin ficha se sigue). }
 function EscribirFicha(const ASysRoot, ASdk, ADistro, AGlibc, AGcc,
-  AProfile, APulled: string): string;
+  AProfile, APulled: string; out AMotivo: string): string;
 var
   O: TJSONObject;
 begin
   Result := '';
+  AMotivo := '';
   O := TJSONObject.Create;
   try
     O.AddPair('sdk', ASdk);
@@ -431,7 +432,10 @@ begin
       // registrado, y la ficha anterior copiada antes en la casa
       Result := EscribeTexto(TPath.Combine(ASysRoot, SDK_FICHA), O.ToJSON, ltIde, ekUtf8Bom);
     except
-      // sin ficha se sigue: solo se pierde el aviso de mezcla
+      // sin ficha se sigue, pero se DICE (AMotivo): se tragaba, y la siguiente
+      // llamada se quedaba sin la guarda de distro (B de la 1.18.4)
+      on E: Exception do
+        AMotivo := E.Message;
     end;
   finally
     O.Free;
@@ -484,6 +488,30 @@ begin
     if SameText(S, NombreDeSdk(ANombre)) then
       Exit(True);
   Result := False;
+end;
+
+{ La plataforma que dice el ASIENTO de un SDK en el SDK Manager (PlatformName);
+  '' si no hay asiento o no la dice. Para remove-sdk sin fichero: el asiento
+  de un SDK que no es de PAServer no se toca. }
+function PlataformaDelAsiento(const AVersion, ANombre: string): string;
+var
+  R: TRegistry;
+begin
+  Result := '';
+  R := TRegistry.Create(KEY_READ);
+  try
+    R.RootKey := HKEY_CURRENT_USER;
+    if R.OpenKeyReadOnly('\Software\Embarcadero\BDS\' + AVersion +
+         '\PlatformSDKs\' + NombreDeSdk(ANombre)) then
+    try
+      if R.ValueExists('PlatformName') then
+        Result := R.ReadString('PlatformName');
+    finally
+      R.CloseKey;
+    end;
+  finally
+    R.Free;
+  end;
 end;
 
 { Un SDK registrado, con lo que se sabe de el: nombre, sysroot, y -si lo
@@ -1359,6 +1387,10 @@ begin
         [ProfName,
          '/usr/lib/gcc/x86_64-linux-gnu | /usr/lib/gcc/x86_64-redhat-linux',
          '/usr/lib/x86_64-linux-gnu | /usr/lib64']));
+      // lo bajado hasta aqui se queda (gigas) y sin .sdk nadie lo lista: se
+      // dice donde, como hace remove-sdk (B de la 1.18.4)
+      Return.AddPair('sysrootLeftBehind', SysRoot);
+      Return.AddPair('note', MsgFmt(SN_PASERVER_SDK_RESTOS_FMT, [SysRoot]));
       Exit(Return.ToJSON);
     end;
 
@@ -1460,9 +1492,12 @@ begin
           Previa.Free;
         end;
     end;
-    var CopiaFicha := EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName, Pulled);
+    var MotivoFicha: string;
+    var CopiaFicha := EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName, Pulled, MotivoFicha);
     if CopiaFicha <> '' then
       Return.AddPair('previousSdkRecordCopy', CopiaFicha);
+    if MotivoFicha <> '' then
+      Return.AddPair('recordNotWritten', MsgFmt(SN_PASERVER_SDK_FICHA_NO_ESCRITA_FMT, [MotivoFicha]));
 
     Return.AddPair('sdk', NombreDeSdk(SdkName));
     Return.AddPair('sdkFile', SdkFile);
@@ -1575,8 +1610,9 @@ var
   Nombre, Fichero, Xml, Raiz: string;
   Return: TJSONObject;
   Hechos: TJSONArray;
-  Ficheros: TArray<string>;
+  Ficheros, Saltados: TArray<string>;
 begin
+  Saltados := nil;
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_PASERVER_NO_PACLIENT));
@@ -1618,10 +1654,22 @@ begin
         Continue;
       if Raiz.Contains('$(') or not TDirectory.Exists(Raiz) then
         Continue;
+      // solo lo que vive bajo la carpeta de SDKs del IDE: un .sdk que apunte
+      // a cualquier otra carpeta la convertia en un lugar del IDE (escribible
+      // por sus escritores) con solo registrarla (B de la 1.18.4)
+      if not StartsText(IncludeTrailingPathDelimiter(IdeSdksDir(Info.Version)),
+           IncludeTrailingPathDelimiter(Raiz)) then
+      begin
+        Saltados := Saltados + [MsgFmt(SN_PASERVER_SDK_RESEAT_FUERA_FMT,
+          [TPath.GetFileName(Fichero), Raiz])];
+        Continue;
+      end;
       if RegistrarSdkEnIde(Info.Version, Info.RootDir, Raiz,
            NombreSinSdk(TPath.GetFileName(Fichero)), False) then
         Hechos.Add(NombreSinSdk(TPath.GetFileName(Fichero)));
     end;
+    if Length(Saltados) > 0 then
+      Return.AddPair('skipped', string.Join(#10, Saltados));
     Return.AddPair('note', MsgText(SN_PASERVER_SDK_RESEAT));
     Result := Return.ToJSON;
   finally
@@ -1653,10 +1701,16 @@ begin
   // asiento, entonces si se protesta.
   Raiz := '';
   CopiaSdk := '';
+  // Solo los de PAServer (Linux64), como reseat-sdk: por el fichero si lo hay
+  // y, si no, por su asiento. Quitaba el asiento de CUALQUIER SDK por su
+  // nombre, los de Android de GetIt incluidos (B de la 1.18.4, por lectura:
+  // no se mide destruyendo el SDK real del operador)
+  var Plat := '';
   if TFile.Exists(Fichero) then
   begin
     try
       Xml := LeeTexto(Fichero, [ltIde]);
+      Plat := CamposDePerfil(Xml).Plataforma;
       // EL lector del sysroot (SysrootDeSdk, con la macro del IDE resuelta):
       // el crudo dejaba '$(BDSPLATFORMSDKSDIR)\...' como carpeta que queda
       // (M9 de los revisores de cierre)
@@ -1664,6 +1718,8 @@ begin
     except
       Raiz := '';
     end;
+    if (Plat <> '') and not SameText(Plat, 'Linux64') then
+      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT, [NombreDeSdk(Nombre), Plat]));
     // por la puerta, con el IDE como lugar: se copia antes en la casa
     try
       CopiaSdk := BorraFichero(Fichero, ltIde);
@@ -1674,7 +1730,13 @@ begin
     end;
   end
   else if not AsientoDeSdkExiste(Info.Version, Nombre) then
-    Exit(MsgFmt(SR_PASERVER_SDK_NOFILE_FMT, [Nombre]));
+    Exit(MsgFmt(SR_PASERVER_SDK_NOFILE_FMT, [Nombre]))
+  else
+  begin
+    Plat := PlataformaDelAsiento(Info.Version, Nombre);
+    if (Plat <> '') and not SameText(Plat, 'Linux64') then
+      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT, [NombreDeSdk(Nombre), Plat]));
+  end;
   R := TRegistry.Create(KEY_WRITE);
   try
     R.RootKey := HKEY_CURRENT_USER;

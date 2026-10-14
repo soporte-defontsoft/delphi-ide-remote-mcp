@@ -2143,6 +2143,31 @@ const
     'command=profiles lists them). They are brought in with ' +
     'command=get-sdk.';
 
+  { B del bloque de la 1.18.4 (14-oct-2026): remove-sdk quitaba el asiento de
+    CUALQUIER SDK por su nombre, tambien los de Android que pone GetIt;
+    reseat-sdk ya los saltaba. Solo los de PAServer son cosa de esta tool. }
+  SR_PASERVER_SDK_NO_ES_NUESTRO_FMT =
+    '[PAS-059 DENIED] "%s" is a %s SDK, not a PAServer one: this tool only ' +
+    'removes the Linux64 SDKs that get-sdk brings. The IDE (GetIt, the SDK ' +
+    'Manager) owns the others. Nothing was done.';
+
+  { reseat-sdk registraba como sysroot lo que dijera el .sdk, estuviera
+    donde estuviera; solo bajo la carpeta de SDKs del IDE. %s = SDK, %s = ruta }
+  SN_PASERVER_SDK_RESEAT_FUERA_FMT =
+    '[PAS-060] %s not seated: its sysroot (%s) is not under the IDE''s SDK ' +
+    'folder, and this tool only registers what lives there.';
+
+  { la ficha del sysroot que no se pudo escribir: se tragaba, y la siguiente
+    llamada se quedaba sin la guarda de distro }
+  SN_PASERVER_SDK_FICHA_NO_ESCRITA_FMT =
+    '[PAS-061] The SDK record (mcp-sdk.json) could not be written (%s): the ' +
+    'next get-sdk into this folder cannot check it is the same distro.';
+
+  { un get-sdk que falla a medias deja lo bajado (gigas) donde nadie lo ve }
+  SN_PASERVER_SDK_RESTOS_FMT =
+    '[PAS-062] What was pulled before failing stays on disk at %s (no .sdk ' +
+    'was written): delete that folder yourself if you will not retry.';
+
   SN_PASERVER_SDK_REMOVED =
     '[PAS-009] Taken out of the way: its .sdk file and its SDK Manager ' +
     'seat (the IDE stops listing it on its next start). The SYSROOT ' +

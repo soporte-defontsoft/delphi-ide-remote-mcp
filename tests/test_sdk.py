@@ -336,6 +336,26 @@ try:
     out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "limpio"})
     check('remove-sdk de uno que no existe: RECHAZADO',
           mc.rechazado(out) and mc.es(out, 'SR_PASERVER_SDK_NOFILE_FMT'), out[:200])
+    # --- 6b) solo los de PAServer: un SDK de otra plataforma (los de Android
+    # los pone GetIt) no se quita, ni su fichero ni su asiento (B de la 1.18.4:
+    # remove-sdk quitaba el asiento de CUALQUIER SDK por su nombre)
+    sdk_file(os.path.join(PROFILES_DIR, 'zzandroid.sdk'), platform='Android')
+    out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "zzandroid"})
+    check('remove-sdk de un SDK que no es de PAServer (Android): RECHAZADO (PAS-059) y el .sdk sigue',
+          mc.rechazado(out) and mc.es(out, 'SR_PASERVER_SDK_NO_ES_NUESTRO_FMT') and
+          os.path.exists(os.path.join(PROFILES_DIR, 'zzandroid.sdk')), out[:200])
+    os.remove(os.path.join(PROFILES_DIR, 'zzandroid.sdk'))
+    # --- 6c) reseat-sdk solo registra un sysroot que viva bajo la carpeta de
+    # SDKs del IDE: el de este .sdk esta en la carpeta de la bateria, y
+    # registrarlo lo convertia en un lugar del IDE (escribible por sus
+    # escritores) con solo decirlo en el fichero
+    raiz_fuera = os.path.join(BASE, 'sysroot-fuera')
+    os.makedirs(raiz_fuera, exist_ok=True)
+    sdk_file(os.path.join(PROFILES_DIR, 'zzfuera.sdk'), sysroot=raiz_fuera)
+    out = srv.call('delphi_paserver', {"command": "reseat-sdk", "sdk": "zzfuera"})
+    check('reseat-sdk de un .sdk cuyo sysroot no esta bajo la carpeta de SDKs del IDE: no se asienta y lo dice (PAS-060)',
+          'PAS-060' in out and '"seated":[]' in out.replace(' ', ''), out[:300])
+    os.remove(os.path.join(PROFILES_DIR, 'zzfuera.sdk'))
 
     # --- 7) las copias del IDE no crecen sin limite: las 10 ultimas de CADA
     # fichero (revisor de P3: repetir get-sdk copiaba el .sdk cada vez). Un
