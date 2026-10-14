@@ -244,6 +244,18 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_sitio_virtual_1182` (V1 and V2 red against production; V3, the same
   entry with its letter, protects and the workspace works).
 
+- **The jail follows a dangling link to where it points.** The real path of
+  a link is asked of Windows by opening it, and a link whose target does not
+  exist yet cannot be opened, so the jail kept its TEXT. With
+  `ReadOnlyPaths=jail\J7\U.dfm` and `J7` a junction to a folder not created
+  yet, a `delphi_move` into that folder created it and `U.dfm` appeared right
+  inside what was declared read-only (measured in production); through a
+  dangling link that leaves the roots, a create ended in an internal error
+  instead of the jail's refusal. The real path now reads what the link
+  itself holds - its reparse point, as Windows keeps it - with a limit on
+  chains of them. `test_enlace_colgante_1182` (K1 and K3 red against
+  production). 2w of the 2r reviewer.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole
