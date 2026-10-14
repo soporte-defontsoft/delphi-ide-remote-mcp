@@ -371,7 +371,7 @@ begin
         // UN paseo con las dos mascaras (8.3 de la 1.18.0): eran dos, uno por
         // extension, cada uno con su purga de la papelera al pasar
         for var D in WalkFiles(Root, MascarasDe(DESIGNER_EXTS)) do
-          if not SkipIdeArtifacts(D) and (DsgList.IndexOf(D) < 0) then
+          if not SkipBajoLaRaiz(D, Root) and (DsgList.IndexOf(D) < 0) then
             DsgList.Add(D);
       for P in DsgList do
       begin

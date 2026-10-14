@@ -137,6 +137,19 @@ the MCP `initialize` response (`serverInfo.version`).
   it answers `CFG-112` now. `test_delphi_patch` and `test_project_units`
   (a mutant each). Point 8.
 
+- **A folder called Release (or Debug, Win32...) ABOVE a project no longer
+  hides it.** Every walk judged "is this an IDE artifact?" on the absolute
+  path, so a folder above with one of those names turned everything below it
+  into build output: `adduses` in a `.dpr` under `jail\Debug\` sent the unit
+  next to it in as a library unit, `delphi_symbols` of a folder and
+  `references` under `...\Release\` walked nothing, and `delphi_upload` into
+  such a workspace was refused - and an upload that got past that check
+  overwrote without its copy. Each walk now judges what hangs BELOW the folder
+  it walks (SkipBajoLaRaiz; naming an artifact folder as the root still means
+  looking inside it, as `delphi_list` did), and upload what hangs below its
+  workspace root. `test_artefacto_encima_1182` (red against production). M1
+  of the closing reviewers.
+
 - **What a write reaches is judged, and only that.** A `.pas` reaches the
   forms of its unit: a single `delphi_edit` that took a component's field out
   of the class said nothing, and the form then failed when it was created

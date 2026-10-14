@@ -444,7 +444,7 @@ begin
         // El filtro COMPARTIDO, no una lista propia: esta era el tercer
         // emisor de "que carpetas se saltan" y no conocia __delphi-temp ni
         // las carpetas de compilacion (auditoria 2026-09-21).
-        if SkipIdeArtifacts(F) then
+        if SkipBajoLaRaiz(F, ProjDir) then
           Continue;
         if ReadPathDenied(F) <> '' then
           Continue;

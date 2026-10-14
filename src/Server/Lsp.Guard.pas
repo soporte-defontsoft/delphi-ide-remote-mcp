@@ -156,6 +156,7 @@ function ReadPathDenied(const APath: string; APermiteGit: Boolean = False): stri
   delphi_projects. }
 function ReadOnlyRootOf(const APath: string): string;
 
+
 { Por que el servidor no llega AHORA a una raiz o referencia del workspace,
   sin salir a la red: '' si llega - o si saberlo pediria salir -; si no, el
   motivo. Dos casos: su LETRA no esta conectada en este proceso (la tabla de

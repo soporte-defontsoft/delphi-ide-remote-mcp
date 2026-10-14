@@ -1125,7 +1125,7 @@ begin
       var Peso := 0;
       for var F in WalkFiles(Folder, '*.pas') do
       begin
-        if SkipIdeArtifacts(F) then
+        if SkipBajoLaRaiz(F, Folder) then
           Continue;
         Inc(N);
         // en orden y hasta el tope (la primera entra siempre); a partir de la

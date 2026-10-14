@@ -2401,7 +2401,7 @@ begin
   var Dir := TPath.GetDirectoryName(ADpr);
   for var N in ANames do
     for var F in WalkFiles(Dir, N + '.pas') do
-      if not SkipIdeArtifacts(F) then
+      if not SkipBajoLaRaiz(F, Dir) then
         Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT,
           [N, ExtractRelativePath(IncludeTrailingPathDelimiter(Dir), F)]));
   EnterFileEdit;

@@ -282,7 +282,7 @@ begin
   FDescription := SD_WS_SEARCH;
 end;
 
-function RelToRoot(const AFull, ARoot: string): string; forward;
+
 
 const
   // lo que una busqueda lee de un fichero: uno mayor (un volcado, un log
@@ -514,22 +514,13 @@ begin
   FDescription := SD_WS_LIST;
 end;
 
-{ Path relative to the listing root, in the '\seg\' shape SkipIdeArtifacts
-  expects. Artifact filtering for delphi_list happens on THIS, not on the
-  absolute path: naming a build-output folder as root is explicit consent to
-  see inside it (field: an agent chased a freshly built exe for 20 calls
-  because Compiled\Win32\Release answered empty), while listings from above
-  still hide build output - and now say how much they hid. }
-function RelToRoot(const AFull, ARoot: string): string;
-var
-  R: string;
-begin
-  R := IncludeTrailingPathDelimiter(ARoot);
-  if AFull.ToLower.StartsWith(R.ToLower) then
-    Result := '\' + Copy(AFull, Length(R) + 1, MaxInt)
-  else
-    Result := AFull;
-end;
+{ (RelToRoot, la ruta relativa a la raiz del listado en la forma '\seg\' que
+  mira SkipIdeArtifacts, vive ahora en Lsp.References con SkipBajoLaRaiz: el
+  filtro de artefactos de delphi_list va sobre ESO, no sobre la ruta absoluta -
+  nombrar una carpeta de compilacion como raiz es pedir ver dentro (un agente
+  persiguio un exe recien compilado 20 llamadas porque Compiled\Win32\Release
+  contestaba vacio) -, y los demas recorridos lo usan tambien: M1 del revisor
+  de cierre de la 1.18.2.) }
 
 function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): string;
 var
@@ -1298,7 +1289,7 @@ begin
       // extension, y los .groupproj de una carpeta salian lejos de sus .dproj
       for F in WalkFiles(RootDir.Trim, MascarasDe(PROJECT_EXTS)) do
         begin
-          if not RaizEnArtefactos and (SkipIdeArtifacts(F) or InVault(F)) then
+          if not RaizEnArtefactos and (SkipBajoLaRaiz(F, RootDir.Trim) or InVault(F)) then
           begin
             // Contados, no tragados: un cero sin explicacion es la mentira
             // que llevamos todo el dia quitando de este servidor.
@@ -1356,7 +1347,7 @@ begin
       for RootDir in Roots do
         if (RootDir.Trim <> '') and TDirectory.Exists(RootDir.Trim) then
           for F in WalkFiles(RootDir.Trim, MascarasDe(PROJECT_EXTS)) do
-            if not (SkipIdeArtifacts(F) or InVault(F)) then
+            if not (SkipBajoLaRaiz(F, RootDir.Trim) or InVault(F)) then
               Inc(AllCount);
       Return.AddPair('note', MsgFmt(SN_PROJECTS_NO_MATCH_FMT,
         [Params.Name.Trim, AllCount]));
@@ -1551,7 +1542,10 @@ begin
     Exit;
   if Params.Offset < 0 then
     Exit(MsgText(SR_WS_OFFSET_NEGATIVO));
-  if SkipIdeArtifacts(LongCanonical(FullPath)) then
+  // lo que hay DEBAJO de su raiz: una carpeta de encima llamada Release no es
+  // un artefacto, y se negaba subir a todo un proyecto bajo ella (M1b del
+  // revisor de cierre de la 1.18.2)
+  if SkipBajoLaRaiz(LongCanonical(FullPath), RaizQueContiene(FullPath)) then
     Exit(MsgText(SR_WS_RUTA_ARTEFACTOS_IDE_HISTORY));
   // (las carpetas muertas: WriteTargetDenied, arriba)
   // An upload with no bytes is not an upload: the schema only demanded "path",
@@ -1625,7 +1619,9 @@ begin
     // Sin la copia de antes NO se escribe: se sustituia el fichero igual,
     // contestando exito con "backup FAILED" en un campo (quinta revision,
     // medido; sus gemelas se niegan). Perder es peor que no subir.
-    if not SkipIdeArtifacts(FullPath, False) then
+    // (debajo de su raiz: por la ruta absoluta, en un proyecto bajo una
+    // carpeta llamada Release se sobrescribia SIN copia; M1b)
+    if not SkipBajoLaRaiz(LongCanonical(FullPath), RaizQueContiene(FullPath)) then
       try
         // la copia del contenido ACTUAL, sellada: la diaria (BackupFile) es
         // la de la primera version del dia y lo de despues se perdia (sexta revision)

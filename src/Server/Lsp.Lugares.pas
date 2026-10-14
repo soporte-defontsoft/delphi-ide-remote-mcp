@@ -83,6 +83,13 @@ function EscribibleDeVerdad(const AReal: string): Boolean;
   parsea: quien llama ya la tiene comprobada. }
 function SoloLecturaDeclaradaEn(const APath: string): string;
 
+{ La raiz de ESCRITURA del workspace que contiene APath por su texto, en la
+  forma con la que se compara (FormaLarga) y sin separador final; la mas
+  larga si casan varias, '' si ninguna. Para juzgar lo que hay DEBAJO de ella
+  (Lsp.References.SkipBajoLaRaiz): una carpeta de encima que se llame Release
+  no es un artefacto (M1b del revisor de cierre de la 1.18.2). Nunca lanza. }
+function RaizQueContiene(const APath: string): string;
+
 { La forma DECLARADA de una ruta que llega RESUELTA. Un programa que el
   servidor lanza contesta con la ruta real (git: la raiz de un repo), y la
   real de un sitio declarado en una letra de red CONECTADA (L:\...) es su
@@ -793,6 +800,24 @@ begin
     if EnLugar(Full, Ro) or
        EnLugar(Verdad, RealPath(SinBarraFinal(Ro))) then
       Exit(SinBarraFinal(Ro));
+end;
+
+function RaizQueContiene(const APath: string): string;
+var
+  Full: string;
+begin
+  Result := '';
+  try
+    Full := FormaLarga(APath);
+  except
+    Exit;
+  end;
+  for var R in WorkspaceRoots do
+  begin
+    var Larga := FormaLarga(R);
+    if StartsText(Larga, Full) and (Length(Larga) > Length(Result) + 1) then
+      Result := SinBarraFinal(Larga);
+  end;
 end;
 
 end.

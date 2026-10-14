@@ -47,6 +47,19 @@ function SkipReason(const APath: string; AAllowTrash: Boolean): string;
   Every other artifact (__history, Win32/Win64, .git...) is still skipped. }
 function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean; overload;
 
+{ AFull relativo a ARoot en la forma '\seg\...' que mira SkipReason (AFull tal
+  cual si no cuelga de ARoot). Estaba dentro de Mcp.Tools.Workspace, solo para
+  delphi_list. }
+function RelToRoot(const AFull, ARoot: string): string;
+
+{ SkipIdeArtifacts juzgado en lo que hay DEBAJO de ARaiz, la carpeta que se
+  recorre: una de ENCIMA que se llame Debug, Release, Win32... no es un
+  artefacto. Por la ruta absoluta, un proyecto en ...\Release\ no recorria
+  nada y adduses en un .dpr de jail\Debug\ metia su unidad como de biblioteca
+  (M1 del revisor de cierre de la 1.18.2, medido). Nombrar una carpeta de
+  artefactos como raiz es pedir ver dentro, como en delphi_list. }
+function SkipBajoLaRaiz(const APath, ARaiz: string; AAllowTrash: Boolean = False): Boolean;
+
 const
   SKIP_ARTIFACTS = 'artifacts';
   SKIP_TEMP = 'temp';
@@ -180,7 +193,7 @@ begin
         Continue;
       for var Dproj in WalkFiles(Root.Trim, '*.dproj') do
       begin
-        if SkipIdeArtifacts(Dproj) then
+        if SkipBajoLaRaiz(Dproj, Root.Trim) then
           Continue;
         try
           Xml := LeeTexto(Dproj, [ltJaula]);
@@ -243,6 +256,22 @@ end;
 function SkipIdeArtifacts(const APath: string): Boolean;
 begin
   Result := SkipIdeArtifacts(APath, False);
+end;
+
+function RelToRoot(const AFull, ARoot: string): string;
+var
+  R: string;
+begin
+  R := IncludeTrailingPathDelimiter(ARoot);
+  if (ARoot <> '') and AFull.ToLower.StartsWith(R.ToLower) then
+    Result := '\' + Copy(AFull, Length(R) + 1, MaxInt)
+  else
+    Result := AFull;
+end;
+
+function SkipBajoLaRaiz(const APath, ARaiz: string; AAllowTrash: Boolean): Boolean;
+begin
+  Result := SkipIdeArtifacts(RelToRoot(APath, ARaiz), AAllowTrash);
 end;
 
 function SkipReason(const APath: string; AAllowTrash: Boolean): string;
@@ -314,10 +343,6 @@ begin
     string.Join('; ', Partes) + '.');
 end;
 
-function SkipPath(const APath: string): Boolean;
-begin
-  Result := SkipIdeArtifacts(APath);
-end;
 
 { ------------------------------------------------- codigo, o solo prosa - }
 
@@ -816,7 +841,7 @@ begin
         // mano no llevaba .dpk, y el contains de un paquete no se veia (punto 8
         // de la 1.18.2)
         for F in WalkFiles(D, MascarasDe(SOURCE_EXTS)) do
-          if not SkipPath(F) and not AllFiles.Contains(F) then
+          if not SkipBajoLaRaiz(F, D) and not AllFiles.Contains(F) then
             AllFiles.Add(F);
       end;
     finally
