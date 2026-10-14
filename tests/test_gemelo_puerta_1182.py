@@ -36,6 +36,16 @@ miraba si el ORIGEN contenia un lugar protegido.
   F4  el destino por un junction (J6 -> real6) y la entrada por su ruta real:
       se compara por donde ESTA el destino (RutaDelEnlace), no por su texto
 
+Y restaurar desde la papelera (1.18.3; la bateria que faltaba): la unit y su
+designer vuelven con delphi_move desde sus copias de __delphi-patch, y el sitio
+de vuelta del designer es de solo lectura.
+
+  R1  restaurar la unit y su .dfm adonde el .dfm es de solo lectura: el .dfm
+      NO se escribe alli - la unit se lleva su designer de la papelera y la
+      puerta lo frena (FILE-043); el .dfm solo, GUARD-012 - y su copia sigue en
+      la papelera para otro intento. Es una GUARDA (verde ya en la 1.18.2: la
+      puerta del gemelo, 2c, y la de destino lo cubren); vigila que siga asi
+
 Uso:  python tests/test_gemelo_puerta_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import atexit, glob, os
@@ -111,7 +121,13 @@ assert mc.junction(J6, REAL6), 'no se pudo crear el junction J6'
 SOLO = ';'.join([U_DFM, D_DFM, C_DFM, os.path.join(NUEVO4, 'X.dfm'), os.path.join(NUEVO5, 'Y.dfm'),
                  # y lo que llegaria con una carpeta (F1, F2)
                  os.path.join(NUEVOF, 'F', 'U.dfm'), os.path.join(NUEVOG, 'G', 'U.dfm'),
-                 os.path.join(NUEVOK, 'K', 'U.dfm'), os.path.join(REAL6, 'A', 'U.dfm')])
+                 os.path.join(NUEVOK, 'K', 'U.dfm'), os.path.join(REAL6, 'A', 'U.dfm'),
+                 # y el sitio de vuelta del designer de R (R1)
+                 os.path.join(JAIL, 'vuelta', 'R.dfm')])
+os.makedirs(os.path.join(JAIL, 'rest'))
+R_PAS = escribe(os.path.join(JAIL, 'rest', 'R.pas'),
+                PAS.format('R'))
+R_DFM = escribe(os.path.join(JAIL, 'rest', 'R.dfm'), DFM.format('R'))
 SRC = os.path.join(JAIL, 'src')
 for _n in ('F', 'G', 'H', 'K', 'M'):
     os.makedirs(os.path.join(SRC, _n))
@@ -198,6 +214,20 @@ try:
     check('F4 el destino por un junction, la entrada por su ruta real: se niega y nada se mueve',
           os.path.isfile(os.path.join(SRC, 'M', 'U.dfm')) and not os.path.exists(os.path.join(REAL6, 'A')) and
           mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT'), r[:400])
+    # ------------------------------------------------------------- R (1.18.3)
+    r = srv.call('delphi_delete', {'path': R_PAS})
+    cp_pas = [c for c in en_papelera('R.pas') if os.path.isfile(c)]
+    cp_dfm = [c for c in en_papelera('R.dfm') if os.path.isfile(c)]
+    check('R0 control: borrar R.pas manda la unit y su .dfm a la papelera',
+          not mc.fallo(r) and cp_pas and cp_dfm and not os.path.exists(R_PAS), (r[:300], cp_pas, cp_dfm))
+    VUELTA = os.path.join(JAIL, 'vuelta')
+    r1 = srv.call('delphi_move', {'path': cp_pas[0], 'dest': os.path.join(VUELTA, 'R.pas')}) if cp_pas else ''
+    r2 = srv.call('delphi_move', {'path': cp_dfm[0], 'dest': os.path.join(VUELTA, 'R.dfm')}) if cp_dfm else ''
+    check('R1 restaurar la unit y su .dfm adonde el .dfm es de solo lectura: el .dfm no se escribe alli y su '
+          'copia sigue en la papelera',
+          not os.path.exists(os.path.join(VUELTA, 'R.dfm')) and cp_dfm and os.path.isfile(cp_dfm[0]) and
+          mc.abre(r1, 'SR_GEMELO_DENEGADO_FMT') and 'R.dfm' in r1 and mc.abre(r2, 'SR_READONLY_PATH_FMT'),
+          (r1[:300], r2[:300]))
     check('el servidor sigue vivo', not mc.fallo(srv.call('delphi_list', {'root': JAIL})))
 finally:
     srv.cierra()
