@@ -143,43 +143,12 @@ type
     Line, Ch: Integer;
   end;
 
-{ Pulls the first Location (or LocationLink) out of a textDocument/* result,
-  which DelphiLSP returns either as a single object OR as a one-item array
-  (measured: definition answers a bare object). False = nothing usable. }
+{ The first Location (or LocationLink) of a textDocument/* result, by THE
+  reader (Lsp.References.UbicacionDeLsp: its twin here did not canonicalise
+  the uri; point 6 of 1.18.2). False = nothing usable. }
 function ParseLoc(AResult: TJSONValue; out ALoc: TLoc): Boolean;
-var
-  Obj, Rng, St: TJSONValue;
 begin
-  ALoc.Uri := '';
-  ALoc.Line := -1;
-  ALoc.Ch := 0;
-  Result := False;
-  Obj := AResult;
-  if Obj is TJSONArray then
-  begin
-    if TJSONArray(Obj).Count = 0 then
-      Exit;
-    Obj := TJSONArray(Obj).Items[0];
-  end;
-  if not (Obj is TJSONObject) then
-    Exit;
-  if not TJSONObject(Obj).TryGetValue<string>('uri', ALoc.Uri) then
-    TJSONObject(Obj).TryGetValue<string>('targetUri', ALoc.Uri);
-  Rng := TJSONObject(Obj).GetValue('range');
-  if Rng = nil then
-    Rng := TJSONObject(Obj).GetValue('targetSelectionRange');
-  if Rng = nil then
-    Rng := TJSONObject(Obj).GetValue('targetRange');
-  if Rng is TJSONObject then
-  begin
-    St := TJSONObject(Rng).GetValue('start');
-    if St is TJSONObject then
-    begin
-      TJSONObject(St).TryGetValue<Integer>('line', ALoc.Line);
-      TJSONObject(St).TryGetValue<Integer>('character', ALoc.Ch);
-    end;
-  end;
-  Result := (ALoc.Uri <> '') and (ALoc.Line >= 0);
+  Result := UbicacionDeLsp(AResult, ALoc.Uri, ALoc.Line, ALoc.Ch);
 end;
 
 { 0-based column of the routine name on a header line ("procedure

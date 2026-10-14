@@ -178,6 +178,10 @@ type
     { Helpers }
     class function PathToUri(const APath: string): string;
     class function UriToPath(const AUri: string): string;
+    { Los bytes de la ruta de una uri file:// (sin el esquema): los %XX, el
+      byte; lo demas, en UTF-8. Los decodifica UriToPath (laxa) y los juzga
+      UriCanonica (la ida y vuelta): un solo lector de la forma. }
+    class function UriABytes(const AUri: string): TArray<Byte>;
     { Una uri en la forma de EL nombrador (PathToUri de su inversa): la que
       se compara. DelphiLSP escribe TAL CUAL lo que no es ASCII (a<enye>o) y
       PathToUri lo escapa (%C3%B1): comparadas como texto, el mismo fichero
@@ -203,7 +207,8 @@ uses
   System.StrUtils,
   MCPServer.Logger,
   Lsp.Texts, // DecodeSourceBytes: el detector de encoding de delphi_read
-  Lsp.Json;  // ObjetoJson: EL lector de un JSON que tiene que ser un objeto
+  Lsp.Json,  // ObjetoJson: EL lector de un JSON que tiene que ser un objeto
+  Lsp.Codificacion;
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
@@ -958,7 +963,12 @@ class function TLspClient.UriCanonica(const AUri: string): string;
 begin
   // nunca lanza: corre bajo el cerrojo de las notificaciones, y una uri con
   // escapes que no son UTF-8 (%C3 solo) dejaba la cola atascada en ella
-  // (revisor de version de la 1.18.1); asi, tal cual, no casa con nada
+  // (revisor de version de la 1.18.1); asi, tal cual, no casa con nada.
+  // UriToPath es LAXA (el byte malo, U+FFFD): dos uris rotas distintas serian
+  // la MISMA al compararlas, y la de un fichero con U+FFFD en su nombre. Lo
+  // dice EL juez de la ida y vuelta (BytesVuelvenIgual), no una lista
+  if not BytesVuelvenIgual(UriABytes(AUri), ekUtf8) then
+    Exit(AUri);
   try
     Result := PathToUri(UriToPath(AUri));
   except
@@ -968,6 +978,16 @@ begin
 end;
 
 class function TLspClient.UriToPath(const AUri: string): string;
+begin
+  // LAXO, por EL decodificador de la casa (DecodeBytes, ekUtf8): una uri rota
+  // (%FF, medio caracter) LANZABA EEncodingError - el UTF-8 de la RTL es
+  // estricto - y salia un SYS-006 que no decia nada (punto 5 de la 1.18.2);
+  // ahora el byte malo es U+FFFD en una ruta que se ve, y lo de despues dice
+  // que no existe
+  Result := DecodeBytes(UriABytes(AUri), ekUtf8).Replace('/', '\');
+end;
+
+class function TLspClient.UriABytes(const AUri: string): TArray<Byte>;
 var
   S: string;
   I, J: Integer;
@@ -1010,7 +1030,7 @@ begin
       I := J;
     end;
   end;
-  Result := TEncoding.UTF8.GetString(Bytes).Replace('/', '\');
+  Result := Bytes;
 end;
 
 class function TLspClient.LoadSourceText(const AFilePath: string): string;

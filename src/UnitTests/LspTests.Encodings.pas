@@ -62,6 +62,8 @@ type
     procedure UnFormBinarioNoVuelveComoAnsiEnDobleByte;
     [Test]
     procedure UnSustitutoSueltoQueYaEstabaSeEscribeComoEstaba;
+    [Test]
+    procedure UbicacionDeLspLeeLasFormasDelMotor;
   end;
 
   { Los pares que COMPONEN y LEEN un formato, y la inversa de cada uno: la
@@ -94,7 +96,9 @@ uses
   Lsp.Casa,
   System.Character,
   Lsp.DesignerBin,
-  Lsp.Client;
+  Lsp.Client,
+  System.JSON,
+  Lsp.References;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin
@@ -880,6 +884,10 @@ begin
   // de detras (revisor de version de la 1.18.1)
   Assert.AreEqual('C:\a%zzb\x.pas', TLspClient.UriToPath('file:///C%3A/a%zzb/x.pas'), '%zz en medio');
   Assert.AreEqual('C:\end%', TLspClient.UriToPath('file:///C%3A/end%'), '% al final');
+  // ...y un escape que no es UTF-8 no LANZA (EEncodingError, salia SYS-006): el
+  // byte malo es U+FFFD, en una ruta que se ve (punto 5 de la 1.18.2)
+  Assert.AreEqual('C:\a' + #$FFFD + 'b\x.pas', TLspClient.UriToPath('file:///C%3A/a%FFb/x.pas'),
+    'escape que no es UTF-8: U+FFFD, sin excepcion');
   // ...y UriCanonica NO lanza con escapes que no son UTF-8: corre bajo el
   // cerrojo de las notificaciones; devuelve la uri tal cual
   Assert.AreEqual('file:///C%3A/a%C3', TLspClient.UriCanonica('file:///C%3A/a%C3'), 'escape roto, tal cual');
@@ -941,6 +949,46 @@ begin
     begin
       CambiaLineasEnSuTexto('a'#10, 2, 0, ['x'], #13#10);
     end, EArgumentOutOfRangeException, 'detras de la fantasma no es un sitio');
+end;
+
+procedure TEncodingTests.UbicacionDeLspLeeLasFormasDelMotor;
+begin
+  // EL lector de la primera ubicacion (Lsp.References.UbicacionDeLsp, punto
+  // 6 de la 1.18.2): un objeto suelto, un array, un LocationLink, y la uri
+  // canonica; sus dos gemelos leian cada uno la mitad
+  var Uri: string;
+  var Linea, Col: Integer;
+  var V := TJSONObject.ParseJSONValue(
+    '{"uri":"file:///C%3A/a/x.pas","range":{"start":{"line":4,"character":2}}}');
+  try
+    Assert.IsTrue(UbicacionDeLsp(V, Uri, Linea, Col), 'objeto suelto');
+    Assert.AreEqual(4, Linea);
+    Assert.AreEqual(2, Col);
+    Assert.AreEqual(TLspClient.PathToUri('C:\a\x.pas'), Uri, 'la uri, canonica');
+  finally
+    V.Free;
+  end;
+  V := TJSONObject.ParseJSONValue(
+    '[{"targetUri":"file:///C%3A/a/y.pas","targetSelectionRange":{"start":{"line":7,"character":0}}}]');
+  try
+    Assert.IsTrue(UbicacionDeLsp(V, Uri, Linea, Col), 'LocationLink en un array');
+    Assert.AreEqual(7, Linea);
+    Assert.AreEqual(TLspClient.PathToUri('C:\a\y.pas'), Uri);
+  finally
+    V.Free;
+  end;
+  V := TJSONObject.ParseJSONValue('{"uri":"file:///C%3A/a/z.pas"}');
+  try
+    Assert.IsFalse(UbicacionDeLsp(V, Uri, Linea, Col), 'sin linea: nada usable (lanzaba)');
+  finally
+    V.Free;
+  end;
+  V := TJSONObject.ParseJSONValue('[]');
+  try
+    Assert.IsFalse(UbicacionDeLsp(V, Uri, Linea, Col), 'array vacio');
+  finally
+    V.Free;
+  end;
 end;
 
 initialization

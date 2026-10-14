@@ -347,7 +347,10 @@ REGLAS = [
       # su lado de la escritura: lo que se escribe se lee igual (EDIT-122)
       ('Lsp.Patch.pas', 'LecturaCambiada'),
       # delphi_read la pregunta para AVISAR (READ-007), no para escribir
-      ('Lsp.Patch.pas', 'NotaDeIdaYVuelta')],
+      ('Lsp.Patch.pas', 'NotaDeIdaYVuelta'),
+      # una URI del motor: si sus bytes se leen SIN perdida; la lectura laxa daria
+      # la misma forma a dos uris rotas distintas al compararlas (1.18.2). No escribe
+      ('Lsp.Client.pas', 'TLspClient.UriCanonica')],
      'si unos bytes se pueden reescribir lo dice ReescrituraDenegada, con EL detector, y la '
      'preguntan los escritores (DoEdit, PatchSaveText, el del vault): esta regla evita una SEGUNDA '
      'copia de la pregunta; que un escritor se OLVIDE de hacerla (el del vault, revisor propio de la '
@@ -359,10 +362,9 @@ REGLAS = [
      # la de HuellaDeCarpetas del generador de tablas)
      r"^(?!\s*SOURCE_EXTS\s*:).*(?:'\*?\.pas'\s*,[^;]*'\*?\.inc'|'\*?\.inc'\s*,[^;]*'\*?\.pas')|"
      r"MatchText\s*\([^;]*\bSOURCE_EXTS\s*\)|\bin\s+SOURCE_EXTS\b",
-     [('Lsp.Patch.pas', 'EsRutaDeFuente'),
-      # deuda declarada (9-oct-2026): delphi_references busca *.pas, *.dpr e *.inc SIN
-      # .dpk; anadirlo cambia lo que encuentra, y eso se decide aparte
-      ('Lsp.References.pas', 'FindDelphiReferences')],
+     # (la deuda de delphi_references -*.pas, *.dpr e *.inc SIN .dpk- se pago en el punto 8
+     # de la 1.18.2: recorre MascarasDe(SOURCE_EXTS))
+     [('Lsp.Patch.pas', 'EsRutaDeFuente')],
      'EsRutaDeFuente (Lsp.Patch): la lista estaba escrita a mano en cinco sitios, y el escritor '
      'necesita saber si un fichero lo lee dcc (4.1 de la 1.18.0)'),
     ('las extensiones de un designer a mano',

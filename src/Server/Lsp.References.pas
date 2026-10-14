@@ -94,6 +94,18 @@ function IdentifierAt(const ALineText: string; ACol: Integer): string;
 function DefinicionCorregida(AResp: TJSONObject; const APath: string;
   ALine, ACharacter: Integer; const ALineText: string): TJSONObject;
 
+{ LA primera ubicacion del result de una respuesta textDocument/* del motor:
+  un Location o un LocationLink (targetUri, targetSelectionRange o
+  targetRange), suelto o el primero de un array (DelphiLSP contesta las dos
+  formas: definition, un objeto suelto), con la uri en la forma que se compara
+  (UriCanonica). False = nada usable (sin uri o sin linea). La leian dos
+  gemelos: DefinitionLocation (sin LocationLink, y lanzaba sin
+  range.start.line) y ParseLoc de Mcp.Tools.DelphiLsp (sin canonizar la uri:
+  la declaracion bajo una carpeta con enye salia homonima de si misma) -
+  punto 6 de la 1.18.2. }
+function UbicacionDeLsp(AResult: TJSONValue; out AUri: string;
+  out ALinea, ACol: Integer): Boolean;
+
 implementation
 
 uses
@@ -383,34 +395,55 @@ begin
     (Desciende(A, B) or Desciende(B, A));
 end;
 
-function DefinitionLocation(AResp: TJSONObject; out AUri: string;
-  out ALine: Integer): Boolean;
+function UbicacionDeLsp(AResult: TJSONValue; out AUri: string;
+  out ALinea, ACol: Integer): Boolean;
 var
-  V: TJSONValue;
-  Obj: TJSONObject;
+  Obj, Rng, St: TJSONValue;
 begin
-  Result := False;
   AUri := '';
-  ALine := -1;
-  V := AResp.GetValue('result');
-  if (V = nil) or (V is TJSONNull) then
-    Exit;
-  if V is TJSONArray then
+  ALinea := -1;
+  ACol := 0;
+  Result := False;
+  Obj := AResult;
+  if Obj is TJSONArray then
   begin
-    if TJSONArray(V).Count = 0 then
+    if TJSONArray(Obj).Count = 0 then
       Exit;
-    V := TJSONArray(V).Items[0];
+    Obj := TJSONArray(Obj).Items[0];
   end;
-  if not (V is TJSONObject) then
+  if not (Obj is TJSONObject) then
     Exit;
-  Obj := TJSONObject(V);
-  if Obj.GetValue('uri') = nil then
+  if not TJSONObject(Obj).TryGetValue<string>('uri', AUri) then
+    TJSONObject(Obj).TryGetValue<string>('targetUri', AUri);
+  Rng := TJSONObject(Obj).GetValue('range');
+  if Rng = nil then
+    Rng := TJSONObject(Obj).GetValue('targetSelectionRange');
+  if Rng = nil then
+    Rng := TJSONObject(Obj).GetValue('targetRange');
+  if Rng is TJSONObject then
+  begin
+    St := TJSONObject(Rng).GetValue('start');
+    if St is TJSONObject then
+    begin
+      TJSONObject(St).TryGetValue<Integer>('line', ALinea);
+      TJSONObject(St).TryGetValue<Integer>('character', ACol);
+    end;
+  end;
+  if (AUri = '') or (ALinea < 0) then
     Exit;
   // en la forma que se compara (UriCanonica): la declaracion de un proyecto
   // bajo una carpeta con enye salia homonima de si misma (1.18.1)
-  AUri := TLspClient.UriCanonica(Obj.GetValue('uri').Value);
-  ALine := Obj.GetValue<Integer>('range.start.line');
+  AUri := TLspClient.UriCanonica(AUri);
   Result := True;
+end;
+
+// la respuesta entera: su result, por EL lector (UbicacionDeLsp)
+function DefinitionLocation(AResp: TJSONObject; out AUri: string;
+  out ALine: Integer): Boolean;
+var
+  Col: Integer;
+begin
+  Result := UbicacionDeLsp(AResp.GetValue('result'), AUri, ALine, Col);
 end;
 
 { Si la linea ALinea del fichero de AUri nombra AIdent en su codigo. Lo que
@@ -761,9 +794,12 @@ begin
       for var D in Dirs do
       begin
         ScopeDirs := ScopeDirs + [D];
-        // UN paseo con las tres mascaras (8.3 de la 1.18.0): eran tres, uno
-        // por extension, cada uno con su purga de la papelera al pasar
-        for F in WalkFiles(D, ['*.pas', '*.dpr', '*.inc']) do
+        // UN paseo con las mascaras de los FUENTES (8.3 de la 1.18.0): eran
+        // tres, uno por extension, cada uno con su purga de la papelera al
+        // pasar. Las de LA lista de la casa (SOURCE_EXTS): la escrita aqui a
+        // mano no llevaba .dpk, y el contains de un paquete no se veia (punto 8
+        // de la 1.18.2)
+        for F in WalkFiles(D, MascarasDe(SOURCE_EXTS)) do
           if not SkipPath(F) and not AllFiles.Contains(F) then
             AllFiles.Add(F);
       end;

@@ -103,6 +103,21 @@ the MCP `initialize` response (`serverInfo.version`).
   Studio ships lacks one. `test_estilo_sin_nombre_1182` (red against
   production; a mutant).
 
+- **One reader of the engine's locations, and of the bytes of its URIs.**
+  Two twins read the first location of an engine answer: `DefinitionLocation`
+  (no LocationLink, and it raised without `range.start.line`) and `ParseLoc`
+  of the LSP tools (it did not canonicalise the URI - the 1.18.1 fix for a
+  folder with an `ñ`). Now there is one, `UbicacionDeLsp`. A URI with an
+  escape that is not UTF-8 (`%FF`, half a character) raised `EEncodingError`
+  and the tool answered a `SYS-006` that said nothing; it now reads as U+FFFD
+  in a path that shows, while the comparison of two URIs keeps a broken one
+  as it is - judged by the round-trip rule - so two different broken URIs
+  never compare equal (a lax comparison made them one; the unit test caught
+  it). `delphi_references` walked `*.pas`, `*.dpr` and `*.inc` written by
+  hand, without `.dpk`; it walks the house's list of sources now. Unit tests
+  (`UbicacionDeLspLeeLasFormasDelMotor`, the URI round trip) with mutants.
+  Points 5, 6 and 8.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole
