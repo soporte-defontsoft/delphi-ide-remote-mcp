@@ -3249,6 +3249,16 @@ const
     '[CFG-112] REMOVED unit %s from project %s (%s%s%s). There is no file %s: ' +
     'the unit was found by its name. Backups in __delphi-patch.';
 
+  { ...y el proyecto la listaba por OTRA ruta que SI existe: CFG-112 negaba un
+    fichero que estaba en disco y no decia cual se quito (M5 de los revisores
+    de cierre). %s = unidad, .dpr, donde, CreateForm, DCCReference, la ruta
+    dada, la que listaba el proyecto. }
+  SN_UNIT_REMOVED_OTRA_RUTA_FMT =
+    '[CFG-113] REMOVED unit %s from project %s (%s%s%s). There is no file %s, ' +
+    'but the project listed the unit as %s, and THAT file is still on disk; ' +
+    'delete it with delphi_delete if you no longer want it. Backups in ' +
+    '__delphi-patch.';
+
   SN_UNIT_REMOVED_GONE_FMT =
     '[CFG-055] REMOVED unit %s from project %s (%s%s%s). The file %s ' +
     'goes to the trash with this same delete. Backups in __delphi-patch.';

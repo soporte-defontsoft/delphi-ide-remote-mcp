@@ -340,7 +340,23 @@ check('remove-unit: ausente informa', mc.es(out, 'SN_UNIT_ABSENT_FMT'), out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": hand})
 out = call('delphi_config', {"project": DPROJ, "command": "remove-unit",
                              "path": os.path.join(VDIR, 'NoSuch', 'UManual.pas')})
-check('remove-unit con una ruta inventada: quitada por su nombre, CFG-112 (no "still on disk")',
+# ...pero el fichero que el proyecto LISTABA (App\UManual.pas) si esta: se dice
+# cual se quito y que sigue en disco, con la ruta inventada entera al lado.
+# CFG-112 negaba un fichero que existia (M5 de los revisores de cierre)
+check('remove-unit con una ruta inventada y la listada en disco: CFG-113 nombra la listada (sigue en disco) '
+      'y la inventada entera; no CFG-112',
+      mc.abre(out, 'SN_UNIT_REMOVED_OTRA_RUTA_FMT') and 'App\\UManual.pas' in out and 'NoSuch\\UManual.pas' in out
+      and 'UManual' not in rd(DPR) and 'UManual' not in rd(DPROJ) and os.path.exists(hand), out[:400])
+# ...y sin la listada en disco tampoco, CFG-112: no hay fichero que nombrar
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": hand})
+os.rename(hand, hand + '.fuera')
+try:
+    out = call('delphi_config', {"project": DPROJ, "command": "remove-unit",
+                                 "path": os.path.join(VDIR, 'NoSuch', 'UManual.pas')})
+finally:
+    os.rename(hand + '.fuera', hand)
+check('remove-unit con una ruta inventada y la listada FUERA de disco: quitada por su nombre, CFG-112 '
+      '(no "still on disk")',
       mc.abre(out, 'SN_UNIT_REMOVED_SIN_FICHERO_FMT') and 'UManual' not in rd(DPR)
       and 'UManual' not in rd(DPROJ), out[:300])
 # remove a form: CreateForm goes too

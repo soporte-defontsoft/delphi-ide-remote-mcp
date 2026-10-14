@@ -144,6 +144,10 @@ function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Intege
   nombrador de rutas relativas: las units de un proyecto, los proyectos de
   un grupo, los search paths y las directivas que re-apunta una mudanza. }
 function IncludeFor(const ADpr, APas: string): string;
+{ La inversa: la ruta COMPLETA de lo que un .dpr lista como AInclude (Sub\X.pas,
+  ..\shared\X.pas, o absoluta), vista desde su carpeta. EL lector de lo que
+  escribe IncludeFor. }
+function RutaDeInclude(const ADpr, AInclude: string): string;
 
 type
   { Una directiva que mete un FICHERO en el build, con la posicion (1-based)
@@ -290,6 +294,11 @@ begin
     Result := ExtractRelativePath(Base, Full) // ..\..\shared\X.pas, the IDE's form
   else
     Result := Full; // another drive: no relative form exists
+end;
+
+function RutaDeInclude(const ADpr, AInclude: string): string;
+begin
+  Result := TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(TPath.GetFullPath(ADpr)), AInclude));
 end;
 
 { ---- unit inspection ---- }
@@ -1958,13 +1967,29 @@ begin
   // (con una ruta que no existe, la unidad se encontro por su nombre: decia
   // "still on disk" de un fichero que no estaba; punto 8 de la 1.18.2)
   var Plantilla := MsgText(SN_UNIT_REMOVED_FMT);
+  var Dado := TPath.GetFileName(APasPath);
+  var Listado := '';
   if AFileGoesToo then
     Plantilla := MsgText(SN_UNIT_REMOVED_GONE_FMT)
   else if not TFile.Exists(APasPath) then
-    Plantilla := MsgText(SN_UNIT_REMOVED_SIN_FICHERO_FMT);
+  begin
+    // ...y si el proyecto la listaba por OTRA ruta que SI existe, es esa la
+    // que sigue en disco y se nombra, con la dada entera al lado: CFG-112
+    // negaba un fichero que estaba (M5 de los revisores de cierre). Include
+    // es lo que listaba la entrada (o la ruta dada, si no la listaba nadie)
+    Listado := RutaDeInclude(Dpr, Include);
+    if TFile.Exists(Listado) then
+    begin
+      Plantilla := MsgText(SN_UNIT_REMOVED_OTRA_RUTA_FMT);
+      Dado := TPath.GetFullPath(APasPath);
+    end
+    else
+      Plantilla := MsgText(SN_UNIT_REMOVED_SIN_FICHERO_FMT);
+  end;
+  // (Format ignora el septimo argumento en las plantillas de seis)
   Result := Format(Plantilla, [UnitName, TPath.GetFileName(Dpr),
     IfThen(InDpr, U.Keyword, '-'), IfThen(N > 0, ' + CreateForm', ''),
-    IfThen(InDproj, MsgText(SF_USES_DCCREFERENCE_DEL_DPROJ), ''), TPath.GetFileName(APasPath)]);
+    IfThen(InDproj, MsgText(SF_USES_DCCREFERENCE_DEL_DPROJ), ''), Dado, Listado]);
 end;
 
 function RemoveProjectUnit(const AProject, APasPath: string;
@@ -2076,7 +2101,7 @@ begin
   Todos := [Dpr];
   for var PU in ProjectUnits(AProject, False) do
     if PU.Include <> '' then
-      Todos := Todos + [TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(Dpr), PU.Include))];
+      Todos := Todos + [RutaDeInclude(Dpr, PU.Include)];
   // la unit en su sitio nuevo: el .dpr todavia la lista por el viejo (que ya
   // no existe y no entra)
   Todos := Todos + [TPath.GetFullPath(ANewPasPath)];

@@ -135,7 +135,14 @@ the MCP `initialize` response (`serverInfo.version`).
   `remove-unit` given an invented path removed the unit by its name and
   answered "The file ... is still on disk" about a file that was not there;
   it answers `CFG-112` now. `test_delphi_patch` and `test_project_units`
-  (a mutant each). Point 8.
+  (a mutant each). Point 8. And when the file the PROJECT listed is on disk
+  (`App\UManual.pas`) while the path given is not (`NoSuch\UManual.pas`),
+  `CFG-112` denied a file that existed and did not say which one was
+  removed: now `CFG-113` names the listed file, still on disk, with the given
+  path whole next to it; `CFG-112` stays for a listed file that is gone too.
+  One reader of what a `.dpr` lists (`RutaDeInclude`, the inverse of
+  `IncludeFor`). `test_project_units` (red against production). M5 of the
+  closing reviewers.
 
 - **A folder called Release (or Debug, Win32...) ABOVE a project no longer
   hides it.** Every walk judged "is this an IDE artifact?" on the absolute
