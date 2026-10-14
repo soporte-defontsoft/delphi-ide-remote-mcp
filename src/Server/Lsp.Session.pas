@@ -1013,7 +1013,10 @@ begin
     // next to codigofuente, the usual shared-units layout) belongs to the
     // .dproj one level down that REFERENCES it (DCCReference or search path).
     if Depth <= 3 then
-      for C in TDirectory.GetFiles(Dir, '*.dproj', TSearchOption.soAllDirectories) do
+      // por EL recorredor (WalkFiles): solo sigue los enlaces que esta sesion
+      // puede leer (GetFiles con soAllDirectories cruzaba cualquier union y
+      // cada candidato tenia que negarse uno a uno; 2h de la 1.18.4)
+      for C in WalkFiles(Dir, ['*.dproj']) do
         if Menciona(C) then
           Exit(C);
     var Parent := TPath.GetDirectoryName(Dir);

@@ -1002,7 +1002,10 @@ function UnitSourceFolders(const AUnit: string): TArray<string>;
       for Root in ARaices do
       begin
         try
-          Files := TDirectory.GetFiles(Root, AUnit + '.pas', TSearchOption.soAllDirectories);
+          // por EL recorredor (WalkFiles): solo sigue los enlaces que esta
+          // sesion puede leer y tolera una rama ilegible; GetFiles con
+          // soAllDirectories cruzaba cualquier union (2h de la 1.18.4)
+          Files := WalkFiles(Root, [AUnit + '.pas']);
         except
           Continue; // an unreadable root is not the agent's problem
         end;

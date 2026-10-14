@@ -69,6 +69,24 @@ the MCP `initialize` response (`serverInfo.version`).
   `set-output` places the outputs inside; it only sets `DCC_ExeOutput` and
   `DCC_DcuOutput`. The message now names what `set-output` covers and says
   the other properties are set in the project by the operator.
+- **The tree copier fails closed on a folder it cannot list, and the two
+  searches that still crossed any junction go through the guard's walker.**
+  `CopiaArbol` (the safety copy of a move, `copy=true`, the copy into the
+  test container, the styles build) listed each level with the RTL, which
+  answers an empty list when Windows refuses the listing (the finding of
+  "a folder the server cannot list is no longer taken for an empty one"):
+  such a branch was copied empty, in silence. It now lists with the reader
+  that tells the two apart and the copy stops there, with the reason; the
+  move's gate already refused earlier, so for it this is the second
+  barrier. The build's search for a unit's folder and the discovery of a
+  unit's `.dproj` in sibling folders used `TDirectory.GetFiles` across
+  subfolders, which follows every junction (each candidate was then refused
+  one by one); both go through `WalkFiles`, which follows only the links the
+  session may read. The filter of `delphi_test` (`--run:`) travels quoted,
+  so a filter with a space reaches the runner whole. Measured and not
+  changed: deleting a folder that holds a junction to a sibling folder with
+  a unit does not take that unit out of its project (the theory said it
+  would); `test_borrar_carpeta_union_119` guards it.
 
 - **`delphi_desktop` on a Linux target says what is wrong with the user's
   session, instead of "the portal refused the screenshot (code 2)".** Hermes

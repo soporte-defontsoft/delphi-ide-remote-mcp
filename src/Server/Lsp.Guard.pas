@@ -3313,32 +3313,40 @@ var
       Exit;
     Vistos.Add(LowerCase(RealPath(O)));
     CrearCarpeta(D);
-    for E in TDirectory.GetFiles(O) do
-      if (not EsEnlace(E) or SeSigue(E)) and
-         (not Assigned(AOmite) or not AOmite(E)) then
-        // la copia CON papelera es la de seguridad de un move (conserva los
-        // atributos); la otra es la del agente (copy=true): sin el +R heredado
-        if AConPapelera then
-          TFile.Copy(E, TPath.Combine(D, TPath.GetFileName(E)), False)
-        else
-          CopiaNuestra(E, TPath.Combine(D, TPath.GetFileName(E)));
-    for E in TDirectory.GetDirectories(O) do
-    begin
-      Nombre := TPath.GetFileName(E);
-      if not AConPapelera and SameText(Nombre, TrashFolderName) then
-        Continue; // la papelera del origen no es contenido
-      // un VAULT (de cualquier workspace) es de las tools vault_*: no se
-      // copia, y se dice con lo no seguido (el de OTRO workspace salia
-      // entero en la copia; octava revision)
-      if InVault(E) then
+    // por EL lector que distingue "vacia" de "no se deja listar"
+    // (EntradasDeCarpeta, 2g de la 1.18.4): GetFiles/GetDirectories daban
+    // VACIA una carpeta que Windows no deja listar y la copia la dejaba vacia
+    // sin decirlo (medido en System.IOUtils:1525). Aqui falla cerrado: lo que
+    // no se puede mirar no se copia, y quien llama lo dice
+    for E in EntradasDeCarpeta(O) do
+      if not TDirectory.Exists(E) then
       begin
-        NoSeg.Add(E);
-        Continue;
+        if (not EsEnlace(E) or SeSigue(E)) and
+           (not Assigned(AOmite) or not AOmite(E)) then
+          // la copia CON papelera es la de seguridad de un move (conserva los
+          // atributos); la otra es la del agente (copy=true): sin el +R heredado
+          if AConPapelera then
+            TFile.Copy(E, TPath.Combine(D, TPath.GetFileName(E)), False)
+          else
+            CopiaNuestra(E, TPath.Combine(D, TPath.GetFileName(E)));
+      end
+      else
+      begin
+        Nombre := TPath.GetFileName(E);
+        if not AConPapelera and SameText(Nombre, TrashFolderName) then
+          Continue; // la papelera del origen no es contenido
+        // un VAULT (de cualquier workspace) es de las tools vault_*: no se
+        // copia, y se dice con lo no seguido (el de OTRO workspace salia
+        // entero en la copia; octava revision)
+        if InVault(E) then
+        begin
+          NoSeg.Add(E);
+          Continue;
+        end;
+        if (not EsEnlace(E) or SeSigue(E)) and
+           (not Assigned(AOmite) or not AOmite(E)) then
+          Copia(E, TPath.Combine(D, Nombre));
       end;
-      if (not EsEnlace(E) or SeSigue(E)) and
-         (not Assigned(AOmite) or not AOmite(E)) then
-        Copia(E, TPath.Combine(D, Nombre));
-    end;
   end;
 
 begin

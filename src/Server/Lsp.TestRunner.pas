@@ -66,7 +66,8 @@ uses
   MCPServer.Logger,
   Lsp.Rutas,
   Lsp.Casa,
-  Lsp.TodoONada;
+  Lsp.TodoONada,
+  Lsp.ProcessLaunch;
 
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);
@@ -739,7 +740,9 @@ begin
   //    (Lsp.Sandbox). Falla cerrado: sin contenedor no corre.
   Args := '';
   if AFilter <> '' then
-    Args := ' --run:' + AFilter; // DUnitX honours it; a plain runner ignores it
+    // por el compositor de argumentos de la casa (EnComillas): un filtro con
+    // un espacio llegaba troceado al runner (2h de la 1.18.4)
+    Args := ' ' + EnComillas('--run:' + AFilter); // DUnitX honours it; a plain runner ignores it
   if not CorreEnContenedor(Exe, Args, ATimeoutMs, Result, Output, ExitCode,
     TimedOut, Ficheros, Recortado, Fuera, DuracionMs) then
     Exit;
