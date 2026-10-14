@@ -137,7 +137,11 @@ begin
       end;
       Ret.AddPair('count', TJSONNumber.Create(N));
       Ret.AddPair('styles', Arr);
-      Ret.AddPair('note', MsgText(SN_STYLES_VIEW_NOTE));
+      // sin ninguno, "resuelve a uno de estos" con la lista vacia (Hermes)
+      if N = 0 then
+        Ret.AddPair('note', MsgText(SN_STYLES_VIEW_VACIO))
+      else
+        Ret.AddPair('note', MsgText(SN_STYLES_VIEW_NOTE));
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -282,10 +286,12 @@ begin
     Exit;
   Doc := TStyleDoc.Create(APath);
   try
-    Src := Doc.FindStyle(AStyle);
+    // por EL lector de un estilo por su StyleName (Resolve): clone y delete
+    // tenian su propio "no hay" (STYLE-027), gemelo del de get y set
+    var Err: string;
+    Src := Doc.Resolve(AStyle, '', Err);
     if Src = nil then
-      Exit(MsgFmt(SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT,
-        [AStyle, TPath.GetFileName(Doc.Path)]));
+      Exit(Err);
     if Doc.FindStyle(Nuevo) <> nil then
       Exit(MsgFmt(SR_STYLES_NAME_TAKEN_FMT, [Nuevo]));
     Doc.CloneStyle(Src, Nuevo);
@@ -314,10 +320,10 @@ var
 begin
   Doc := TStyleDoc.Create(APath);
   try
-    Src := Doc.FindStyle(AStyle);
+    var Err: string;
+    Src := Doc.Resolve(AStyle, '', Err);
     if Src = nil then
-      Exit(MsgFmt(SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT,
-        [AStyle, TPath.GetFileName(Doc.Path)]));
+      Exit(Err);
     First := Src.StartLine;
     Last := Src.EndLine;
     N := Length(Doc.Styles);

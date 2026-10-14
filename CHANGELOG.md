@@ -188,6 +188,25 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_taborder_heredado_1182` (red against production; a mutant each).
   B3 of the 6th reviewer and the inherited TabOrder, point 7.
 
+- **`delphi_styles` says why a name finds nothing, and one "no such style"
+  for every command.** Hermes's `.style` had entries like
+  `inherited cardstyle: TLayout` with no `StyleName`. Measured in FMX's own
+  source: the style reader drops the object's name when it loads a style
+  (`TStyleReader.SetName`) and its index looks only at `StyleName`
+  (`TStyleIndexer`), so nothing finds such an entry. `get`, `set`, `clone`
+  and `delete` by that name now answer `STYLE-047` - it is the name of the
+  object at those lines, with no `StyleName`, and how to give it one - and
+  `view` of a container with nothing in it answers `STYLE-048` instead of
+  "resolves to one of these StyleNames" over an empty list. `clone` and
+  `delete` had their own "no such style" (`STYLE-027`), a twin of `get`'s;
+  there is one reader now. `STYLE-046` no longer suggests `set
+  prop=StyleName`, which cannot find an object with no `StyleName`.
+  `test_estilo_sin_nombre_1182` S4-S7 (S4-S6 red against production; a
+  mutant each). And `DSGN-140` / `DSGN-143` - an order the IDE's writer
+  cannot be asked about - keep refusing, and now say the way out: move the
+  block with `delphi_edit` (decided at night: a "file only" mode would be a
+  parameter and the tools list has no room; the edit is the agent's own act).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

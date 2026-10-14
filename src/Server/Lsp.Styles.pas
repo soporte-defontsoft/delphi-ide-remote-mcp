@@ -377,6 +377,17 @@ begin
   Result := FindStyle(AStyleName);
   if Result = nil then
   begin
+    // un objeto con ESE nombre y sin StyleName: FMX tira el nombre al cargar
+    // un estilo (TStyleReader.SetName, medido en su fuente) y su indice solo
+    // mira StyleName, asi que nadie lo encuentra; se dice, en vez de "no hay"
+    // (informe de Hermes, 1.18.2: entradas 'inherited cardstyle: TLayout')
+    for var O in FRoot.Children do
+      if (O.StyleName = '') and (O.ObjName <> '') and SameText(O.ObjName, AStyleName) then
+      begin
+        AErr := MsgFmt(SR_STYLE_SOLO_NOMBRE_FMT, [AStyleName, TPath.GetFileName(FPath), O.ObjName,
+          O.StartLine, O.EndLine, O.ObjName]);
+        Exit;
+      end;
     AErr := MsgFmt(SR_STYLE_NINGUN_ESTILO_STYLENAME_FMT, [AStyleName, TPath.GetFileName(FPath)]);
     Exit;
   end;

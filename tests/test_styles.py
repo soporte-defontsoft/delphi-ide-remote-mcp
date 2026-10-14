@@ -343,7 +343,7 @@ names = [x['style'] for x in d['styles']]
 check('delete: el estilo ya no esta y el origen sigue', 'cardstyle_alt' not in names and 'cardstyle' in names, names)
 check('delete: el resto del fichero intacto (formheader 7-29)', [x for x in d['styles'] if x['style'] == 'formheader'][0]['lines'] == '7-29', d['styles'])
 out = call('delphi_styles', {"path": S, "command": "delete", "style": "noexiste"})
-check('delete: estilo inexistente rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT'), out)
+check('delete: estilo inexistente rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLE_NINGUN_ESTILO_STYLENAME_FMT'), out)
 out = call('delphi_styles', {"path": S, "command": "delete"})
 check('delete: sin style pide style', mc.es(out, 'SR_STYLES_NEED_STYLE') and not mc.abre(out, 'SN_STYLES_DELETED_FMT'), out)
 

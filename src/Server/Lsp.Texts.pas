@@ -3476,8 +3476,15 @@ const
     callaban): FMX encuentra un estilo SOLO por su StyleName. }
   SN_STYLES_SIN_STYLENAME =
     '[STYLE-046] An object with no StyleName: FMX finds a style only by its ' +
-    'StyleName (a control''s StyleLookup names it), so this one is never ' +
-    'used. Give it one (set prop=StyleName) or delete it.';
+    'StyleName (a control''s StyleLookup names it) and drops the object''s ' +
+    'name when it loads a style, so this one is never used. Give it one - ' +
+    'the line StyleName = ''<name>'' in its block, with delphi_textedit (set ' +
+    'and delete find a style by its StyleName) - or take the block out.';
+  { ...y la vista sin ninguno: "resuelve a uno de estos" con la lista vacia
+    (informe de Hermes, 1.18.2). }
+  SN_STYLES_VIEW_VACIO =
+    '[STYLE-048] No style here: the container has no object, or none whose ' +
+    'StyleName contains the filter.';
 
   SN_STYLES_LINT_NOTE =
     '[STYLE-016] lookupsWithoutStyle: a control with that StyleLookup ' +
@@ -7162,9 +7169,6 @@ const
     'them.';
 
   // Mensajes que estaban en linea en Mcp.Tools.Styles.pas (paso 3c, 27-sep-2026)
-  SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT =
-    '[STYLE-027 NOT_FOUND] There is no style ''%s'' in %s (command=view lists ' +
-    'them).';
 
   // Mensajes que estaban en linea en Mcp.Tools.Vault.pas (paso 3c, 27-sep-2026)
   SR_VAULT_FALTA_PATH_RUTA_RELATIVA =
@@ -10051,12 +10055,16 @@ const
     '[DSGN-140 INVALID_PARAM] %s cannot be ordered there: the renderer could ' +
     'not load the class %s (of %s) - no installed package registers it, or ' +
     'it is a frame whose .dfm is not in the form''s folder -, so where the IDE ' +
-    'would write it cannot be asked. Nothing was written.';
+    'would write it cannot be asked. Nothing was written. To place it anyway, ' +
+    'move its block with delphi_edit: the file order is the order, and the ' +
+    'IDE may keep it or change it when it saves the form.';
   SR_DESIGNER_ORDEN_INCOMPLETO_FMT =
     '[DSGN-143 INVALID_PARAM] %s cannot be ordered there: the renderer loaded ' +
     'the form without %s (what it said: %s) - an ancestor it did not find ' +
     'next to the form, or a component its loader skipped -, so the IDE''s ' +
-    'writer cannot say where it would put it. Nothing was written.';
+    'writer cannot say where it would put it. Nothing was written. To place ' +
+    'it anyway, move its block with delphi_edit: the file order is the ' +
+    'order, and the IDE may keep it or change it when it saves the form.';
   SR_DESIGNER_ORDEN_CAMBIO_FMT =
     '[DSGN-144 INVALID_PARAM] %s changed while the IDE''s writer was being ' +
     'asked: nothing was written. Repeat the call.';
@@ -10144,6 +10152,15 @@ const
   SR_STYLE_NINGUN_ESTILO_STYLENAME_FMT =
     '[STYLE-036 NOT_FOUND] There is no style with StyleName ''%s'' in %s. ' +
     'See the names with command=view.';
+  { ...y el nombre es el de un objeto SIN StyleName: FMX tira ese nombre al
+    cargar un estilo (TStyleReader.SetName), nadie lo encuentra (informe de
+    Hermes, 1.18.2: 'inherited cardstyle: TLayout'). }
+  SR_STYLE_SOLO_NOMBRE_FMT =
+    '[STYLE-047 NOT_FOUND] There is no style with StyleName ''%s'' in %s: ' +
+    '''%s'' is the name of the object at lines %d-%d, which has no ' +
+    'StyleName, and FMX drops that name when it loads a style - nothing ' +
+    'finds it. Give it the line StyleName = ''%s'' with delphi_textedit, and ' +
+    'this command finds it.';
 
   SR_STYLE_NO_TIENE_UNA_PARTE_FMT =
     '[STYLE-037 NOT_FOUND] The style ''%s'' has no part ''%s'' (child=%s). ' +
