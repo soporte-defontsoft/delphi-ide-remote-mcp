@@ -246,6 +246,10 @@ const
   CAPTURE_SUB_DESKTOP = 'desktop';
   CAPTURE_SUB_ANDROID = 'android';
   CAPTURE_SUB_DESIGNER = 'designer'; // delphi_designer preview (1.17.0)
+  // LO que viaja desde nuestra casa - en la respuesta o por su enlace - y lo
+  // que se consume: un PNG. Estaba escrito a mano en cuatro sitios (2ai-B c
+  // de la 1.18.2)
+  CAPTURE_EXT = '.png';
 
 function IsAgentCapture(const APath: string): Boolean;
 { Una captura es NUESTRA si esta donde nuestro nombrador la deja: en la casa
@@ -2530,7 +2534,7 @@ begin
   except
     Exit;
   end;
-  Result := SameText(TPath.GetExtension(Full), '.png') and
+  Result := SameText(TPath.GetExtension(Full), CAPTURE_EXT) and
     EnTemporal(Full) and
     MatchText(TPath.GetFileName(TPath.GetDirectoryName(Full)),
       [CAPTURE_SUB_DESKTOP, CAPTURE_SUB_ANDROID, CAPTURE_SUB_DESIGNER]);
@@ -2663,7 +2667,7 @@ begin
   try
     if (Nombre = '') or (Nombre.IndexOfAny(['\', '/', ':']) >= 0) or
        (TPath.GetFileName(Nombre) <> Nombre) or
-       not SameText(TPath.GetExtension(Nombre), '.png') then
+       not SameText(TPath.GetExtension(Nombre), CAPTURE_EXT) then
       Exit(MsgText(SR_FILES_CAPTURA_NOMBRE));
   except
     Exit(MsgText(SR_FILES_CAPTURA_NOMBRE));
@@ -2724,6 +2728,12 @@ begin
   AFile := '';
   O := AOut.Trim;
   AEnLaCasa := O = '';
+  // en nuestra casa, solo lo que viaja (CAPTURE_EXT): otro formato - el de un
+  // nodo propio con project= - no se consumia ni tenia enlace, y su ruta, la
+  // de nuestra casa, salia en la respuesta (2ai-B c de la 1.18.2). Con out=,
+  // es del agente y se queda alli
+  if (O = '') and not SameText(AExt, CAPTURE_EXT) then
+    Exit(MsgFmt(SR_CAPTURE_SOLO_PNG_FMT, [AExt, CAPTURE_EXT]));
   Carpeta := '';
   if O = '' then
     Carpeta := AgentTempDir(ASub)

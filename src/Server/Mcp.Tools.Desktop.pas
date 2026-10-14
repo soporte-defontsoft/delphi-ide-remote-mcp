@@ -256,6 +256,20 @@ begin
     ((ACode[Low(ACode)] < '0') or (ACode[Low(ACode)] > '9'));
 end;
 
+{ El gesto que se pide: vacio es screenshot, y "windows" se leia como el
+  sistema operativo, y desde el 24-sep ademas es el nombre de la LISTA que trae
+  cada captura: el gesto pasa a llamarse overview (David, 24-sep-2026) y
+  "windows" sigue aceptado sin anunciarse, que un agente puede tenerlo
+  apuntado. Lo leen el gesto y lo que se decide antes del cerrojo. }
+function ComandoDeEscritorio(const ACommand: string): string;
+begin
+  Result := ACommand.Trim.ToLower;
+  if Result = '' then
+    Result := 'screenshot';
+  if Result = 'windows' then
+    Result := 'overview';
+end;
+
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de SU maquina. }
 function GestoEnElTarget(const Params: TDesktopLinuxParams): string;
 var
@@ -281,15 +295,7 @@ var
       Return.AddPair('screenshotError', AMotivo);
   end;
 begin
-  Cmd := Params.Command.Trim.ToLower;
-  if Cmd = '' then
-    Cmd := 'screenshot';
-  { "windows" se leia como el sistema operativo, y desde el 24-sep ademas
-    es el nombre de la LISTA que trae cada captura: el gesto pasa a llamarse
-    overview (David, 24-sep-2026) y "windows" sigue aceptado sin anunciarse,
-    que un agente puede tenerlo apuntado. }
-  if Cmd = 'windows' then
-    Cmd := 'overview';
+  Cmd := ComandoDeEscritorio(Params.Command);
   if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'overview', 'status']) then
     Exit(MsgText(SR_ADBLINUX_CMD));
 
@@ -307,16 +313,9 @@ begin
     if Result <> '' then
       Exit;
   end;
-  // por stdio, inline=false sin out= no tendria por donde salir: screenshot
-  // y overview, cuya respuesta ES la captura, se niegan antes de ir al
-  // destino; la de un gesto es un anadido a lo que ya se hizo y la consume
-  // DeliverCapture (2ai de la 1.18.2)
-  if (Cmd = 'screenshot') or (Cmd = 'overview') then
-  begin
-    Result := CapturaSinSalidaDenegada(Params.Inline_, Params.Out_);
-    if Result <> '' then
-      Exit;
-  end;
+  // (por stdio, inline=false sin out= no tendria por donde salir: screenshot
+  // y overview se niegan en ExecuteWithParams, ANTES del cerrojo - 2ai y 2ai-B
+  // e de la 1.18.2; la de un gesto no se baja: abajo)
 
   { La region/window y los argumentos del gesto son PROPIOS de la llamada (sin
     red ni disco): se validan ANTES de la puerta, para que un error de la
@@ -490,7 +489,13 @@ begin
     { La captura vive en la carpeta que el nodo desplego; se trae aqui por el
       mismo transporte que lo llevo alli. }
     Remota := RutaDeCaptura(Salida);
-    if (Cmd <> 'status') and (Remota <> '') then
+    if (Cmd <> 'status') and (Remota <> '') and
+       (CapturaSinSalidaDenegada(Params.Inline_, Params.Out_) <> '') then
+      // la de un gesto sin por donde salir (inline=false por stdio, sin out=)
+      // no se baja: se bajaba a nuestra casa solo para borrarla, y su ruta
+      // salia en screenshot (2ai-B d de la 1.18.2); se dice lo de siempre
+      Return.AddPair('downloadNote', MsgText(SN_CAPTURE_SIN_ENLACE))
+    else if (Cmd <> 'status') and (Remota <> '') then
     begin
       // Lo mismo que su gemela de Windows, y por la MISMA funcion: donde cae
       // la captura y como se llama lo decide CaptureTarget (Lsp.Guard), con
@@ -515,9 +520,11 @@ begin
       if not EnLaCasa then
       begin
         var EnCasa: string;
+        // (solo su CARPETA, la de la bajada: lo que se queda es el out= del
+        // agente, con su formato; aqui el de lo que viaja, CAPTURE_EXT)
         Fallo := CaptureTarget('', CAPTURE_SUB_DESKTOP,
           'desktop-' + NombreSeguro(Params.Profile.Trim),
-          TPath.GetExtension(Remota), EnCasa);
+          CAPTURE_EXT, EnCasa);
         if Fallo = '' then // (vacia, GetDirectoryName lanza: la nota de arriba)
           Destino := TPath.GetDirectoryName(EnCasa);
       end;
@@ -680,6 +687,16 @@ function TDesktopLinuxTool.ExecuteWithParams(const Params: TDesktopLinuxParams):
 var
   Cerrojo: TCriticalSection;
 begin
+  // por stdio, inline=false sin out= no tendria por donde salir: screenshot
+  // y overview, cuya respuesta ES la captura, se niegan antes de ir al
+  // destino (2ai de la 1.18.2) y antes del cerrojo de SU maquina: CAPT-012
+  // esperaba a que acabase el gesto de otro (2ai-B e)
+  if MatchStr(ComandoDeEscritorio(Params.Command), ['screenshot', 'overview']) then
+  begin
+    Result := CapturaSinSalidaDenegada(Params.Inline_, Params.Out_);
+    if Result <> '' then
+      Exit;
+  end;
   Cerrojo := CerrojoDePerfil(Params.Profile);
   Cerrojo.Enter;
   try

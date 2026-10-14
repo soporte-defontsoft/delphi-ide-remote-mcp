@@ -94,6 +94,9 @@ type
   public
     [Test] procedure CadaSelloVaDetrasDelAnterior;
     [Test] procedure ElTextoEsElQueLeeSuPatron;
+    { EL nombrador de capturas: en nuestra casa (sin out=), solo un PNG - lo
+      que viaja y se consume (2ai-B c de la 1.18.2) }
+    [Test] procedure EnLaCasaSoloLoQueViaja;
   end;
 
   { LA PUERTA DE LEER (Lsp.Patch.LugarDeLecturaDenegado, LeeTexto, LeeBytes)
@@ -659,6 +662,18 @@ end;
 procedure TSelloUnicoTests.ElTextoEsElQueLeeSuPatron;
 begin
   Assert.IsTrue(TRegEx.IsMatch(SelloUnico, '\A' + SELLO_UNICO_PATRON + '\z'), SelloUnico);
+end;
+
+procedure TSelloUnicoTests.EnLaCasaSoloLoQueViaja;
+var
+  F: string;
+  EnCasa: Boolean;
+begin
+  var R := CaptureTarget('', CAPTURE_SUB_DESKTOP, 'x', '.bmp', F, EnCasa);
+  Assert.IsTrue(R.Contains('CAPT-013') and (F = ''), R);
+  // con out= es del agente: su formato, si su fichero lo dice
+  R := CaptureTarget(TPath.Combine(ServerTempDir(''), 'mia.bmp'), CAPTURE_SUB_DESKTOP, 'x', '.bmp', F, EnCasa);
+  Assert.IsFalse(R.Contains('CAPT-013'), R);
 end;
 
 { TPuertaDeLeerTests }

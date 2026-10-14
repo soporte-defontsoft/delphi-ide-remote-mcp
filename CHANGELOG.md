@@ -216,6 +216,21 @@ the MCP `initialize` response (`serverInfo.version`).
   as it was, a new one is refused. `test_literal_suelto_1182` R1-R3 (R1 and
   R3 red against production; a mutant). R8 of the point-4 reviewer.
 
+- **A capture never stays behind in the server's house.** Three leftovers of
+  the capture reviewers (2ai-B). A desktop node of the agent's own
+  (`project=`) that returns a capture which is not a PNG left it in the
+  server's house, not consumed and with no link, and the answer carried its
+  path: without `out=` such a capture is refused now (`CAPT-013`; with
+  `out=` it is the agent's file and stays there) - in the capture namer, so
+  every tool that captures gets it, and `.png`, written by hand in four
+  places, is one constant. A gesture with `inline=false` over stdio, which
+  has no link, downloaded its capture only to delete it: it is not
+  downloaded now, and the answer says so as before. And a screenshot that
+  is refused for having no way out (`CAPT-012`) waited for the lock of its
+  machine while another gesture ran there: it is refused before it. Checked
+  by reading and by the capture batteries (none of the three can be
+  provoked without a desktop node of one's own); a unit test for the namer.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

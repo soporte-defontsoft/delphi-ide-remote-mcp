@@ -1271,13 +1271,13 @@ begin
   // donde cae: el out= de toda la familia de capturas (CaptureTarget). Se
   // dibuja en un temporal nuestro aunque haya out=
   var EnLaCasa: Boolean;
-  Fallo := CaptureTarget(Params.Out_, CAPTURE_SUB_DESIGNER, 'designer', '.png', Propia, EnLaCasa);
+  Fallo := CaptureTarget(Params.Out_, CAPTURE_SUB_DESIGNER, 'designer', CAPTURE_EXT, Propia, EnLaCasa);
   if Fallo <> '' then
     Exit(Fallo);
   Temporal := Propia;
   if not EnLaCasa then // un out=: lo dice EL que lo decide (CaptureTarget)
   begin
-    Fallo := CaptureTarget('', CAPTURE_SUB_DESIGNER, 'designer', '.png', Temporal);
+    Fallo := CaptureTarget('', CAPTURE_SUB_DESIGNER, 'designer', CAPTURE_EXT, Temporal);
     if Fallo <> '' then
       Exit(Fallo);
   end;

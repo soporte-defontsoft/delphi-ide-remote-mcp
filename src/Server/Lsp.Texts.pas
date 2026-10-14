@@ -2613,6 +2613,13 @@ const
     delphi_adb): una regla y un texto, en CaptureTarget (Lsp.Guard). El
     formato lo dice la CAPTURA, no una constante: el dia que un nodo devuelva
     otra cosa que PNG, esto sigue siendo verdad sin tocarlo. }
+  { Una captura que no es un PNG, sin out=: en la casa del servidor solo vive
+    lo que viaja en la respuesta o por su enlace (2ai-B c de la 1.18.2: la de
+    un nodo propio con project= se quedaba sin consumir y su ruta salia). }
+  SR_CAPTURE_SOLO_PNG_FMT =
+    '[CAPT-013 INVALID_PARAM] The capture is %s, and only a %s travels in ' +
+    'the answer or by its link. Give "out" a file of that type, or a ' +
+    'folder: the capture is then yours and stays there.';
   SR_CAPTURE_EXT_FMT =
     '[CAPT-006 INVALID_PARAM] The capture is %0:s and "out" names a %1:s file. ' +
     'Name the file %0:s, or pass a FOLDER (one that already exists, or ' +
