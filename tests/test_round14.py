@@ -56,7 +56,7 @@ failure and never for its own (review of 1.7.7).
   D17  pull of a commit that removes the project's folder
   D18  what rewrites nothing stops nobody: stash list and switch create=true
        leave every engine of the repository running (they stopped them all)
-  D19  stash push -- <path> stops the engines of THAT folder and no other
+  D19  stash push with paths stops the engines of THAT folder and no other
   D20  an engine that ENDS BY ITSELF (here: killed from outside) is replaced
        at the next request of its project. It stayed in the session's table,
        and every request of the project answered the transport's error until
@@ -193,21 +193,22 @@ check('D6 purgar un proyecto de la papelera con NUESTRO motor dentro: se va ente
 repo = os.path.join(BASE, 'repo')
 pasos = [call('delphi_create', {'kind': 'project-vcl', 'name': 'Wt', 'dir': repo}, t=120),
          call('delphi_git', {'repo': repo, 'command': 'init'}, t=60),
-         call('delphi_git', {'repo': repo, 'command': 'config', 'args': 'user.name',
+         # 1.19.0: sin args; cada comando con sus campos
+         call('delphi_git', {'repo': repo, 'command': 'config', 'name': 'user.name',
                              'message': 'round14'}, t=60),
-         call('delphi_git', {'repo': repo, 'command': 'config', 'args': 'user.email',
+         call('delphi_git', {'repo': repo, 'command': 'config', 'name': 'user.email',
                              'message': 'round14@example.com'}, t=60),
-         call('delphi_git', {'repo': repo, 'command': 'add', 'args': '.'}, t=60),
+         call('delphi_git', {'repo': repo, 'command': 'add', 'paths': ['.']}, t=60),
          call('delphi_git', {'repo': repo, 'command': 'commit', 'message': 'uno'}, t=60)]
 wt = os.path.join(BASE, 'wt')
-pasos.append(call('delphi_git', {'repo': repo, 'command': 'worktree', 'args': 'add',
+pasos.append(call('delphi_git', {'repo': repo, 'command': 'worktree', 'action': 'add',
                                  'path': wt, 'ref': 'HEAD'}, t=120))
 h = hover(os.path.join(wt, 'Wt.dpr'))
 n0 = len(motores())
 check('D7 (preparacion) el worktree existe y su motor esta caliente',
       not any(mc.fallo(p) for p in pasos) and os.path.exists(os.path.join(wt, 'Wt.dpr'))
       and caliente(h), corto(*pasos, h))
-r = call('delphi_git', {'repo': repo, 'command': 'worktree', 'args': 'remove', 'path': wt}, t=120)
+r = call('delphi_git', {'repo': repo, 'command': 'worktree', 'action': 'remove', 'path': wt}, t=120)
 check('D7 git worktree remove con NUESTRO motor dentro: git la quita entera, y su motor se paro',
       not mc.fallo(r) and not os.path.exists(wt) and len(motores()) == n0 - 1,
       'motores %s -> %s | %s' % (n0, len(motores()), r))
@@ -295,19 +296,19 @@ def g(**kw):
 
 
 pasos = [g(command='init'),
-         g(command='config', args='user.name', message='round14'),
-         g(command='config', args='user.email', message='round14@example.com'),
-         g(command='add', args='.'),
+         g(command='config', name='user.name', message='round14'),
+         g(command='config', name='user.email', message='round14@example.com'),
+         g(command='add', paths=['.']),
          g(command='commit', message='base'),
-         g(command='switch', args='con-proyecto', create=True)]
+         g(command='switch', branch='con-proyecto', create=True)]
 dr, dprr, cr = proyecto('Rama', rg)
-pasos += [cr, g(command='add', args='.'), g(command='commit', message='proyecto')]
+pasos += [cr, g(command='add', paths=['.']), g(command='commit', message='proyecto')]
 h = hover(dprr)
 principal = otra_rama(g(command='branch'))
 n0 = len(motores())
 check('D14 (preparacion) el repo tiene dos ramas, el proyecto solo en una, y su motor esta caliente',
       not any(mc.fallo(p) for p in pasos) and os.path.exists(dprr) and caliente(h), corto(*pasos, h))
-r = g(command='switch', args=principal)
+r = g(command='switch', branch=principal)
 check('D14 git switch a una rama SIN la carpeta del proyecto: no deja el cascaron, y su motor se paro',
       not mc.fallo(r) and not os.path.exists(dr) and len(motores()) == n0 - 1,
       'queda la carpeta: %s | motores %s -> %s | %s' % (os.path.exists(dr), n0, len(motores()), r))
@@ -323,9 +324,9 @@ def repo_nuevo(nombre):
     def git(**kw):
         return call('delphi_git', dict(repo=d, **kw), t=120)
     p = [git(command='init'),
-         git(command='config', args='user.name', message='round14'),
-         git(command='config', args='user.email', message='round14@example.com'),
-         git(command='add', args='.'),
+         git(command='config', name='user.name', message='round14'),
+         git(command='config', name='user.email', message='round14@example.com'),
+         git(command='add', paths=['.']),
          git(command='commit', message='base')]
     return d, git, p
 
@@ -352,17 +353,17 @@ def git_fuera(*a, cwd):
 # D15 - merge (fast-forward) de una rama que QUITA la carpeta del proyecto
 rm_, gm, pasos = repo_nuevo('funde')
 df, dprf, cf = proyecto('Funde', rm_)
-pasos += [cf, gm(command='add', args='.'), gm(command='commit', message='proyecto'),
-          gm(command='switch', args='quita', create=True)]
+pasos += [cf, gm(command='add', paths=['.']), gm(command='commit', message='proyecto'),
+          gm(command='switch', branch='quita', create=True)]
 mc.borra(df)
-pasos += [gm(command='add', args='.'), gm(command='commit', message='sin el proyecto')]
-pasos.append(gm(command='switch', args=otra_rama(gm(command='branch'))))
+pasos += [gm(command='add', paths=['.']), gm(command='commit', message='sin el proyecto')]
+pasos.append(gm(command='switch', branch=otra_rama(gm(command='branch'))))
 h = hover(dprf)
 de_f = retienen(df)
 check('D15 (preparacion) la rama de destino quita la carpeta, y en esta su motor la retiene',
       not any(mc.fallo(p) for p in pasos) and caliente(h) and len(de_f) == 1,
       'retienen=%s | %s' % (de_f, corto(*pasos, h)))
-r = gm(command='merge', args='quita')
+r = gm(command='merge', branch='quita')
 check('D15 git merge de una rama SIN la carpeta del proyecto: no deja el cascaron, y su motor se paro',
       not mc.fallo(r) and not os.path.exists(df) and not vivos(de_f),
       'queda la carpeta: %s | su motor %s, vivos %s | %s' % (os.path.exists(df), de_f, vivos(de_f), r))
@@ -370,7 +371,7 @@ check('D15 git merge de una rama SIN la carpeta del proyecto: no deja el cascaro
 # D16 - stash push de un proyecto que solo esta en el indice, y pop
 ra, ga, pasos = repo_nuevo('aparca')
 da, dpra, ca = proyecto('Aparca', ra)
-pasos += [ca, ga(command='add', args='.')]
+pasos += [ca, ga(command='add', paths=['.'])]
 h = hover(dpra)
 de_a = retienen(da)
 check('D16 (preparacion) el proyecto esta en el indice y su motor retiene la carpeta',
@@ -380,7 +381,7 @@ r = ga(command='stash')
 check('D16 git stash de un proyecto recien anadido: se lleva la carpeta entera, y su motor se paro',
       not mc.fallo(r) and not os.path.exists(da) and not vivos(de_a),
       'queda la carpeta: %s | su motor %s, vivos %s | %s' % (os.path.exists(da), de_a, vivos(de_a), r))
-r = ga(command='stash', args='pop')
+r = ga(command='stash', action='pop')
 h = hover(dpra)
 check('D16 ...y stash pop la devuelve, y el LSP contesta en ella',
       not mc.fallo(r) and os.path.exists(dpra) and caliente(h), corto(r, h))
@@ -389,12 +390,12 @@ check('D16 ...y stash pop la devuelve, y el LSP contesta en ella',
 # (iba sobre el motor de D16: rojo por el fallo de otro)
 rq, gq, pasos = repo_nuevo('quieto')
 dq, dprq, cq = proyecto('Quieto', rq)
-pasos += [cq, gq(command='add', args='.')]
+pasos += [cq, gq(command='add', paths=['.'])]
 h = hover(dprq)
 de_q = retienen(dq)
 antes = motores()
-r1 = gq(command='stash', args='list')
-r2 = gq(command='switch', args='nueva', create=True)
+r1 = gq(command='stash', action='list')
+r2 = gq(command='switch', branch='nueva', create=True)
 check('D18 stash list y switch create=true no paran ningun motor (paraban los del repo entero)',
       not any(mc.fallo(p) for p in pasos) and caliente(h) and len(de_q) == 1
       and not mc.fallo(r1) and not mc.fallo(r2) and vivos(de_q) == de_q and motores() == antes,
@@ -404,15 +405,15 @@ check('D18 stash list y switch create=true no paran ningun motor (paraban los de
 rd, gd, pasos = repo_nuevo('pareja')   # ('dos' es la carpeta del proyecto Dos, de D3)
 dx, dprx, cx = proyecto('Equis', rd)
 dy, dpry, cy = proyecto('Ye', rd)
-pasos += [cx, cy, gd(command='add', args='.'), gd(command='commit', message='dos proyectos')]
+pasos += [cx, cy, gd(command='add', paths=['.']), gd(command='commit', message='dos proyectos')]
 open(os.path.join(dx, 'UMain.pas'), 'a').write('\n// un cambio\n')
 hx, hy = hover(dprx), hover(dpry)
 de_x, de_y = retienen(dx), retienen(dy)
 check('D19 (preparacion) dos proyectos del mismo repo, cada uno con su motor',
       not any(mc.fallo(p) for p in pasos) and caliente(hx) and caliente(hy)
       and len(de_x) == 1 and len(de_y) == 1 and de_x != de_y, corto(*pasos, hx, hy))
-r = gd(command='stash', args='push -- Equis/UMain.pas')
-check('D19 stash push -- <ruta>: para el motor de ESA carpeta y el del otro proyecto sigue',
+r = gd(command='stash', paths=['Equis/UMain.pas'])
+check('D19 stash push con paths: para el motor de ESA carpeta y el del otro proyecto sigue',
       not mc.fallo(r) and not vivos(de_x) and vivos(de_y) == de_y,
       'Equis %s, vivos %s | Ye %s, vivos %s | %s' % (de_x, vivos(de_x), de_y, vivos(de_y), r))
 
@@ -430,11 +431,12 @@ def gc(**kw):
 
 
 dt, dprt, ct = proyecto('Trae', clon)
-pasos = [ct, gc(command='config', args='user.name', message='round14'),
-         gc(command='config', args='user.email', message='round14@example.com'),
-         gc(command='add', args='.'), gc(command='commit', message='con el proyecto'),
-         gc(command='push', args='origin HEAD')]
+pasos = [ct, gc(command='config', name='user.name', message='round14'),
+         gc(command='config', name='user.email', message='round14@example.com'),
+         gc(command='add', paths=['.']), gc(command='commit', message='con el proyecto')]
 rama = git_fuera('branch', '--show-current', cwd=clon).strip()
+# 1.19.0: push envia UN nombre de rama (HEAD no es un nombre)
+pasos.append(gc(command='push', remote='origin', ref=rama))
 andamio += [git_fuera('clone', origen, otro, cwd=BASE)]
 mc.borra(os.path.join(otro, 'Trae'))
 open(os.path.join(otro, 'LEEME.txt'), 'w').write('sin el proyecto')
@@ -445,7 +447,7 @@ de_t = retienen(dt)
 check('D17 (preparacion) el remoto ya no tiene la carpeta, y aqui su motor la retiene',
       not any(mc.fallo(p) for p in pasos) and rama != '' and caliente(h) and len(de_t) == 1,
       'rama=%r retienen=%s | %s | %s' % (rama, de_t, corto(*pasos, h), corto(*andamio)))
-r = gc(command='pull', args='origin ' + rama)
+r = gc(command='pull', remote='origin', branch=rama)
 check('D17 git pull de un commit SIN la carpeta del proyecto: no deja el cascaron, y su motor se paro',
       not mc.fallo(r) and not os.path.exists(dt) and not vivos(de_t),
       'queda la carpeta: %s | su motor %s, vivos %s | %s' % (os.path.exists(dt), de_t, vivos(de_t), r))

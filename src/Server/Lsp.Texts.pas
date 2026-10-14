@@ -466,10 +466,6 @@ const
     'compared. The command went fine; git prints nothing when there are ' +
     'no changes.)';
 
-  SN_GIT_DIFF_HAY_CAMBIOS =
-    '[GIT-037] exit=1 from diff means there ARE differences (--quiet and ' +
-    '--exit-code answer that way): it is not a failure.';
-
   SN_GIT_SILENT_OK_FMT =
     '[GIT-002] (git %s finished fine, and it prints nothing when it ' +
     'succeeds. It is not a lost answer: it is this command''s success.)';
@@ -482,9 +478,9 @@ const
     distinguen mayusculas y -i las iguala (medido el 7-oct-2026: -Srelease
     126 commits, con -i 185). }
   SN_GIT_PICKAXE_VACIO =
-    '[GIT-058] -S and -G look for exactly that text, capitals included, in ' +
-    'what each commit adds or removes: no commit does. -i ignores capitals; ' +
-    'delphi_search shows where a text is today.';
+    '[GIT-058] search looks for exactly that text, capitals included, in ' +
+    'what each commit adds or removes: no commit does. delphi_search ' +
+    'shows where a text is today.';
 
   SP_LSP_FILE_PATH =
     'A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a ' +
@@ -1336,10 +1332,6 @@ const
   // (Lsp.Guard.CondicionSinParametros; 2ab de la 1.18.2)
   SF_ACCESO_SIN_FMT =
     'without %s';
-
-  SR_GIT_OPTION_FMT =
-    '[GIT-003 DENIED] The git option "%s" is not allowed (it can write ' +
-    'files, read outside the repository or run a command).';
 
   // The gate used to read an argument with an exact, case-SENSITIVE name while
   // the RTTI binder resolves it ignoring case and "_". Two keys that differ
@@ -6202,7 +6194,7 @@ const
     'who it opens it with is not up to you: the operator writes the ' +
     'allowed hosts in [Workspace.<name>] GitRemotes of settings.ini. The ' +
     'remotes the operator has already configured in the repository DO ' +
-    'work: use the remote''s name (push origin main), not the URL.';
+    'work: use the remote''s name (remote=origin), not the URL.';
 
   SR_GIT_REMOTE_HOST_FMT =
     '[GIT-005 DENIED] "%s" is not among the hosts this server allows ' +
@@ -6236,15 +6228,14 @@ const
     'me, and some recommend exactly what this tool does not allow ' +
     '(--no-ff, rebase, giving the URL on the command line). Here the way ' +
     'out of a diverged merge is to leave it and tell a human, or merge ' +
-    'args=--abort if you were left halfway; and for a remote, its NAME, ' +
+    'action=abort if you were left halfway; and for a remote, its NAME, ' +
     'not its URL.';
 
   SR_GIT_MERGE_ARGS =
-    '[GIT-007 DENIED] merge only accepts the NAME of a branch, or ' +
-    '"--abort" to get out of a half-done merge. No options: --no-ff (and ' +
-    'any other that cancels the --ff-only it is run with) leaves the ' +
-    'repository in MERGING with half-resolved conflicts, which is ' +
-    'exactly what this command promises cannot happen.';
+    '[GIT-007 INVALID_PARAM] merge takes a branch (branch=<name>), or ' +
+    'action=abort to get out of a half-done merge; nothing else. It is ' +
+    'always --ff-only: what would need a merge commit is refused, never ' +
+    'left half-done.';
 
   { pull es bajar e INTEGRAR, y lo segundo lo hacia como git quisiera: con
     las historias divergidas y sin ninguna opcion dejaba un commit de mezcla
@@ -6252,21 +6243,9 @@ const
     la historia y con --squash dejaba el arbol a medias (medido el
     29-sep-2026). Se corre SIEMPRE con --ff-only, como merge, y de las
     opciones admite las de la bajada. }
-  SR_GIT_PULL_ARGS_FMT =
-    '[GIT-042 DENIED] pull does not take "%s". It integrates by ' +
-    'fast-forward and nothing else (it is run with --ff-only, like ' +
-    'merge): what would need a merge commit or a rebase is refused, not ' +
-    'left half-done. It takes a remote and a branch (args="origin ' +
-    'main") and, of the options, those of the download: --tags, ' +
-    '--no-tags, --prune, --depth=<n>, --unshallow (and --ff-only, which ' +
-    'it has anyway). Nothing was done.';
 
   { Las opciones de fetch y de push: una lista de las que valen (la de pull
     es la de fetch mas --ff-only, y tiene su texto). }
-  SR_GIT_RED_OPCION_FMT =
-    '[GIT-043 DENIED] %s does not take "%s". Of the options it takes ' +
-    'these and no other: %s. The rest of "args" is the remote and what ' +
-    'to bring or send (args="origin main"). Nothing was done.';
 
   { EL REMOTO es adonde git va a leer o a escribir. Era de la jaula y no lo
     miraba nadie cuando era una CARPETA: la lista de hosts solo entiende
@@ -6290,7 +6269,7 @@ const
     '[GIT-045 DENIED] The remote of this %s, "%s", is not in a form this ' +
     'tool takes (if you gave a name, that is the address the name has in ' +
     'the repository). A remote is the NAME it has in the repository ' +
-    '(args="origin"); a network address the operator allows, written ' +
+    '(remote=origin); a network address the operator allows, written ' +
     'with its scheme (https://, http://, ssh://, git://) or as ' +
     'user@host:path; or a FOLDER that is there, inside your roots, by ' +
     'its path - the folder itself, with its whole name - or as ' +
@@ -6304,12 +6283,55 @@ const
     carpeta que esta, se dice aqui, con los remotos que el repo SI tiene. }
   SR_GIT_REMOTO_NO_ESTA_FMT =
     '[GIT-049 NOT_FOUND] "%s" is not a remote of this repository (its ' +
-    'remotes: %s), and it is not a folder that is there either ("%s"). A ' +
-    'remote is given by the name it has in the repository, as a network ' +
-    'address the operator allows, or as a folder inside your roots - the ' +
-    'folder itself, with its whole name. This tool does not add remotes: ' +
-    'a clone brings its own, and the operator configures the others. ' +
-    'Nothing was done.';
+    'remotes: %s). remote takes the NAME a remote has in the ' +
+    'repository. This tool does not add remotes: a clone brings its own, ' +
+    'and the operator configures the others. Nothing was done.';
+
+  { delphi_git sin args (1.19.0): cada comando con sus campos. Un cliente
+    con el esquema viejo los manda: se le dice cuales son }
+  SR_GIT_ARGS_RETIRADO =
+    '[GIT-068 INVALID_PARAM] delphi_git has no "args" since 1.19.0: each ' +
+    'command takes its own fields, never free arguments - paths (a list ' +
+    'of files or folders), ref and to (revisions), branch, remote, ' +
+    'action, name, format, count, context, search, staged, patch, path, ' +
+    'message, create. tools/list describes them. Nothing was done.';
+
+  SR_GIT_PATHS_NO_ES_LISTA =
+    '[GIT-069 INVALID_PARAM] "paths" is a LIST of files or folders of the ' +
+    'repository: ["a.pas", "src"]. Nothing was done.';
+
+  { una revision que git no encuentra (rev-parse --verify) }
+  SR_GIT_REF_NO_VALE_FMT =
+    '[GIT-070 NOT_FOUND] %s="%s" is not a revision of this repository: a ' +
+    'commit, a tag or a branch that exists. Nothing was done.';
+
+  { un nombre nuevo que git no admite (check-ref-format --branch) }
+  SR_GIT_NOMBRE_NO_VALE_FMT =
+    '[GIT-071 INVALID_PARAM] %s="%s" is not a name git accepts for a ' +
+    'branch or a tag. Nothing was done.';
+
+  SR_GIT_FORMATO_FMT =
+    '[GIT-072 INVALID_PARAM] format="%s" does not go with %s: it takes ' +
+    '%s. Nothing was done.';
+
+  SR_GIT_TO_SIN_REF =
+    '[GIT-073 INVALID_PARAM] "to" is the other end of a range: it goes ' +
+    'with "ref". Nothing was done.';
+
+  { pull branch=x sin remote: git tomaria la rama por un remoto }
+  SR_GIT_SIN_REMOTO_FMT =
+    '[GIT-074 INVALID_PARAM] %s with "%s" needs "remote" too: the remote ' +
+    'it comes from or goes to. Nothing was done.';
+
+  { la segunda barrera de delphi_git sin args: un campo que va suelto en la
+    linea y empieza por '-' (lo niegan antes sus jueces; esto, si uno falla) }
+  SR_GIT_CAMPO_OPCION_FMT =
+    '[GIT-075 INVALID_PARAM] "%s" starts with "-": a value of this tool ' +
+    'is never a git option. Nothing was done.';
+
+  { lo que toma tag cuando se le da otra cosa sin nombre (GIT-038) }
+  SF_GIT_TAG_SUYOS =
+    'name (and, with it, ref and message)';
 
   { Si git no contesta a lo que se le pregunta para JUZGAR el remoto (sus
     remotos, la direccion de uno, su configuracion), el remoto no se usa: un
@@ -6329,8 +6351,8 @@ const
     '[GIT-048 DENIED] With no names in the call, what goes to the remote ' +
     '"%s" is what this repository is configured to send (%s), and that ' +
     'overwrites or deletes what is there. push ADDS to the remote ' +
-    'through this tool: say what to send by its name (args="%s main"). ' +
-    'Nothing was done.';
+    'through this tool: say what to send by its name (remote=%s ' +
+    'ref=main). Nothing was done.';
 
   { Lo que push ENVIA, detras del remoto: nombres. push anade al remoto; lo
     que ya hay alli no se reescribe ni se borra por esta tool (David,
@@ -6338,15 +6360,12 @@ const
     nombre: args="origin +main" reescribia la rama del remoto y
     args="origin :sobra" la borraba. }
   SR_GIT_PUSH_NOMBRE_FMT =
-    '[GIT-046 DENIED] push does not take "%s". After the remote come the ' +
-    'names of what to send: a branch or a tag (args="origin main"), or ' +
-    'local:remote with a name on each side (args="origin ' +
-    'HEAD:refs/heads/copy"). A name starts with a letter or a digit and ' +
-    'goes on with letters, digits and . _ / - ; what is on the left of ' +
-    'local:remote may be a version of the repository too (HEAD~1). ' +
-    'push ADDS to the remote: what is already there is ' +
-    'never overwritten or deleted through this tool - if the remote has ' +
-    'moved on, bring it first (command=pull). Nothing was done.';
+    '[GIT-046 DENIED] push does not send "%s": ref takes the NAME of a ' +
+    'branch or a tag of this repository (ref=main, ref=v1.3.2), and it ' +
+    'goes to the remote under that same name. push ADDS to the remote: ' +
+    'what is already there is never overwritten or deleted through this ' +
+    'tool - if the remote has moved on, bring it first (command=pull). ' +
+    'Nothing was done.';
 
   SN_GIT_MERGE_DIVERGED =
     '[GIT-008] MERGE REFUSED BY GIT: the two branches have diverged and ' +
@@ -6363,50 +6382,45 @@ const
     'write subject, blank line and body.';
 
   SR_GIT_SWITCH_NEEDS =
-    '[GIT-010 INVALID_PARAM] switch needs "args" with the branch name. To ' +
-    'create a new one and jump to it: args=<branch> create=true. ' +
+    '[GIT-010 INVALID_PARAM] switch needs "branch" with the branch name. ' +
+    'To create a new one and jump to it: branch=<name> create=true. ' +
     'Uncommitted changes travel with you; if git complains, save them ' +
-    'first with command=stash args=push.';
+    'first with command=stash.';
 
   SR_GIT_MERGE_NEEDS =
-    '[GIT-011 INVALID_PARAM] merge needs "args" with the branch to integrate. ' +
+    '[GIT-011 INVALID_PARAM] merge needs "branch" with the branch to integrate. ' +
     'It is always done --ff-only: if a merge commit were needed (or ' +
     'there were conflicts), it is refused instead of being left halfway. ' +
     'That is a job for a person, not for an agent guessing.';
 
   { Dice lo que RECIBIO: contestaba "drop no esta" a un push con rutas que
     nadie habia pedido tirar (26-sep-2026). }
+  { la ruta de "paths" que no es del repo, de cualquier comando: era
+    GIT-012 de stash y GIT-040 de restore, uno por comando (1.19.0) }
   SR_GIT_STASH_RUTA_FMT =
-    '[GIT-012 DENIED] stash push -- "%s": that is not a path of this ' +
-    'repository (%s). It takes files or folders INSIDE the repo, ' +
-    'relative to "repo" or absolute, with their name as is: no ' +
-    'wildcards. Nothing was saved.';
+    '[GIT-012 DENIED] %s: "%s" is not a path of this repository (%s). ' +
+    'paths takes files or folders INSIDE the repo, relative to "repo" or ' +
+    'absolute, with their name as is: no wildcards. Nothing was done.';
 
   SR_GIT_STASH_ARGS_FMT =
-    '[GIT-013 INVALID_PARAM] stash does not understand args="%s". It ' +
-    'accepts: push (saves EVERYTHING, the default); push -- <paths> ' +
-    '(saves ONLY those: they go back to how they are in HEAD and what ' +
-    'was there before stays in the stash, which is how you discard a ' +
-    'file''s changes without losing them; no options, and the label goes ' +
-    'in "message"); pop (restores the last one) and list. drop does not ' +
-    'exist: it destroys work with no way back.';
+    '[GIT-013 INVALID_PARAM] stash does not understand action="%s". It ' +
+    'takes: push (the default: saves EVERYTHING; with paths, ONLY those: ' +
+    'they go back to how they are in HEAD and what was there stays in ' +
+    'the stash, which is how you discard a file''s changes without ' +
+    'losing them; the label goes in "message"), pop (restores the last ' +
+    'one) and list. drop does not exist: it destroys work with no way ' +
+    'back.';
 
   { restore: SIEMPRE --staged. Hermes (28-sep-2026): tras un add no habia forma
     de deshacer el staging por el MCP (ni rm ni reset en la lista) y borro el
     .git para volver a empezar. El arbol de trabajo no se toca nunca: para
     descartar cambios esta stash push -- <rutas>. }
-  SR_GIT_RESTORE_ARGS_FMT =
-    '[GIT-039 INVALID_PARAM] restore does not understand args="%s". It ' +
-    'takes ONLY paths, one or more (. = everything): args="a.txt src". ' +
-    'It is always --staged: those paths leave the index (the add is ' +
-    'undone) and the working tree is never touched; no options. To ' +
-    'discard a file''s changes, stash push -- <paths>. Nothing was done.';
-
-  SR_GIT_RESTORE_RUTA_FMT =
-    '[GIT-040 DENIED] restore -- "%s": that is not a path of this ' +
-    'repository (%s). It takes files or folders INSIDE the repo, ' +
-    'relative to "repo" or absolute, with their name as is: no ' +
-    'wildcards. Nothing was done.';
+  SR_GIT_RESTORE_NEEDS_PATHS =
+    '[GIT-039 INVALID_PARAM] restore needs "paths": one or more files or ' +
+    'folders (["."] = everything). It is always --staged: they leave the ' +
+    'index (the add is undone) and the working tree is never touched. To ' +
+    'discard a file''s changes: command=stash with those paths. Nothing ' +
+    'was done.';
 
   { git no trabaja sobre la carpeta que se le da: sube desde ella hasta dar
     con el repo, y lee y reescribe ESE arbol entero. Con la raiz del repo por
@@ -6433,25 +6447,17 @@ const
 
   SR_GIT_REESCRIBE_SIN_JUEZ_FMT =
     '[GIT-066 DENIED] %s cannot be checked file by file here: this repo has ' +
-    'a read-only place inside (%s), and git could not say which files this ' +
-    'form would rewrite. Only these forms are checked: switch <branch>, ' +
-    'switch -, switch -c <new> [<start>], merge <branch>, pull without ' +
-    'options, stash pop. Nothing was done: use one of them.';
+    'a read-only place inside (%s), and git could not say which files it ' +
+    'would rewrite (for a pull: the download before it failed). Nothing ' +
+    'was done.';
 
   // ---- delphi_git worktree (1.4.0) ----
 
   SR_GIT_WORKTREE_ARGS =
-    '[GIT-014 INVALID_PARAM] worktree accepts args=list (the working copies of ' +
-    'this repo), args=add with the PARAMETERS path (a NEW folder inside your ' +
-    'roots) and ref (a tag, branch or commit), or args=remove with the ' +
-    'parameter path (one that list shows). path and ref are parameters of ' +
-    'the call, never inside args.';
-
-  SR_GIT_MENSAJE_EN_ARGS =
-    '[GIT-059 INVALID_PARAM] The message of a commit or a tag goes in the ' +
-    'parameter "message", not in args (-m, --message): it reaches git byte ' +
-    'for byte from there. args keeps the rest (the tag name, its options). ' +
-    'Nothing was done.';
+    '[GIT-014 INVALID_PARAM] worktree takes action=list (the working ' +
+    'copies of this repo), action=add with path (a NEW folder inside your ' +
+    'roots) and ref (a tag, branch or commit), or action=remove with path ' +
+    '(one that list shows).';
 
   SR_GIT_WORKTREE_PATH =
     '[GIT-015 INVALID_PARAM] worktree add/remove need "path": the folder of the ' +
@@ -6463,9 +6469,9 @@ const
     'folder: choose another name, or remove the existing one first.';
 
   SR_GIT_WORKTREE_REF =
-    '[GIT-017 DENIED] "ref" must be a tag, a branch or a commit ' +
-    '(letters, digits and . _ / ~ ^ -, not starting with a dash): for ' +
-    'example v1.3.2, main, HEAD~3 or a hash.';
+    '[GIT-017 DENIED] "ref" must be a tag, a branch or a commit that ' +
+    'this repository has (git finds it): for example v1.3.2, main, HEAD~3 ' +
+    'or a hash.';
 
   SR_GIT_WORKTREE_INSIDE_FMT =
     '[GIT-018 DENIED] The worktree cannot go inside the repository ' +
@@ -6474,7 +6480,7 @@ const
 
   SR_GIT_WORKTREE_NOT_LISTED_FMT =
     '[GIT-019 NOT_FOUND] %s is not a worktree of this repository ' +
-    '(command=worktree args=list shows the ones there are). remove only ' +
+    '(command=worktree action=list shows the ones there are). remove only ' +
     'removes those, and never the main copy.';
 
   SR_GIT_WORKTREE_LINK_FMT =
@@ -6486,8 +6492,8 @@ const
     '[GIT-021] Worktree ready at %s, with that version checked out on ' +
     'its own (detached): build and test there (delphi_build, ' +
     'delphi_test) to compare. It is yours to clean up: remove it with ' +
-    'command=worktree args=remove and the same path when you are done; ' +
-    'args=list shows it while it remains.';
+    'command=worktree action=remove and the same path when you are done; ' +
+    'action=list shows it while it remains.';
 
   // ---- delphi_changeset ----
 
@@ -7328,16 +7334,17 @@ const
     'expansion). Use ONE mask (*.pas) or several separated by ";" ' +
     '(*.pas;*.dfm).';
 
-  SR_GIT_ADD_NEEDS_ARGS_PATHS =
-    '[GIT-022 INVALID_PARAM] Add needs args (paths, or -A for everything)';
+  SR_GIT_ADD_NEEDS_PATHS =
+    '[GIT-022 INVALID_PARAM] add needs "paths": the files or folders to ' +
+    'stage (["."] = everything).';
 
   SR_GIT_CLONE_NEEDS_REPOSITORY_URL =
     '[GIT-023 INVALID_PARAM] Clone needs the repository URL in the ' +
     '"message" parameter (the destination directory is "repo")';
 
   SR_GIT_CONFIG_ONLY_ACCEPTS_USER =
-    '[GIT-024 INVALID_PARAM] Config only accepts user.name or user.email ' +
-    'in args (the value goes in the "message" parameter)';
+    '[GIT-024 INVALID_PARAM] config only accepts name=user.name or ' +
+    'name=user.email (the value goes in "message")';
 
   SR_WS_RUTA_ARTEFACTOS_IDE_HISTORY =
     '[WS-007 DENIED] Path of IDE artifacts (__history, ' +
@@ -7440,9 +7447,6 @@ const
     'create theirs): writing a first file there creates it (delphi_create, ' +
     'delphi_textedit create=true, delphi_upload); then init.';
 
-  SR_GIT_SHELL_METACHARS_ARGS =
-    '[GIT-027 INVALID_PARAM] Shell metacharacters are not allowed in args';
-
   SR_GIT_COMMIT_NEEDS_MESSAGE =
     '[GIT-028 INVALID_PARAM] Commit needs the "message" parameter';
 
@@ -7469,7 +7473,7 @@ const
     TODO el indice, no de ese fichero (octava revision). }
   SR_GIT_NO_VA_CON_COMANDO_FMT =
     '[GIT-038 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
-    'be ignored). Nothing was done: %s takes %s (and args).';
+    'be ignored). Nothing was done: %s takes %s.';
 
   SR_GIT_UNKNOWN_COMMAND_FMT =
     '[GIT-034 INVALID_PARAM] Unknown command "%s". Allowed: status | ' +
@@ -7570,8 +7574,8 @@ const
 
   SN_GIT_PISTA_CONFIGURA_IDENTIDAD =
     '[GIT-035] Hint: set the repo identity and repeat: delphi_git ' +
-    'command=config args=user.name message=<name> and then ' +
-    'command=config args=user.email message=<email>.';
+    'command=config name=user.name message=<name> and then ' +
+    'command=config name=user.email message=<email>.';
   { git que no se fia del dueno de la carpeta ("detected dubious ownership",
     tipico de un recurso de red o un NAS): su propio consejo es un git config
     --global que ninguna tool puede ejecutar, y el agente se quedaba ahi
@@ -9173,64 +9177,83 @@ const
   SP_WS_COMMAND =
     'status | diff | log | show | branch | switch | merge | stash | add | ' +
     'restore | commit | init | push | tag | config | clone | pull | fetch ' +
-    '| ls-remote | worktree. switch: args=<branch> (create=true for a new ' +
-    'one). merge: args=<branch>, always --ff-only (one needing a commit is ' +
-    'refused, never left half-done). pull: args=<remote> <branch>, always ' +
-    '--ff-only; options: only the download ones (--tags, --no-tags, ' +
-    '--prune, --depth=<n>, --unshallow). fetch: those and --all. push: ' +
-    '--tags, -u, --set-upstream, --dry-run, and after the remote the NAMES ' +
-    'to send (main, v1.3.2, local:remote): it adds to the remote, never ' +
-    'overwrites or deletes. ls-remote: args=<remote> [refs], read-only, ' +
-    'same remote policy (--heads, --tags, --refs, --symref, --exit-code). ' +
-    'The remote of these is a network address the operator allows or a ' +
-    'folder inside your roots. stash: args=push|pop|list (never drop); ' +
-    'push -- <paths> parks ONLY those paths and sets them back to HEAD - ' +
-    'how you discard one file''s changes without losing them (pop brings ' +
-    'them back); its label goes in message. config: ' +
-    'args=user.name|user.email, the value in message. clone: URL in ' +
-    'message, destination in repo. worktree: args=list | add (path = a NEW ' +
-    'folder inside your roots, ref = tag|branch|commit, detached) | remove ' +
-    '(path = one that list shows; refused with changes or a link inside). ' +
-    'restore: args=<paths> (. = all), always --staged: they leave the ' +
-    'index and the working tree is never touched - how you undo an add (to ' +
-    'discard changes: stash push -- <paths>).';
+    '| ls-remote | worktree. Each takes ITS fields, never free arguments. ' +
+    'merge and pull: always --ff-only (one needing a commit is refused). ' +
+    'push adds to the remote, never overwrites or deletes. stash never ' +
+    'drops: push with paths parks ONLY those and sets them back to HEAD - ' +
+    'how you discard a file''s changes without losing them. restore: ' +
+    'always --staged (undoes an add). branch lists.';
 
-  SP_WS_ARGS =
-    'Optional extra arguments (paths, --staged, a commit hash...), SPLIT ' +
-    'ON SPACES: a path with spaces goes in double quotes (args="my ' +
-    'notes.txt"). No shell, and shell metacharacters (; | & ` $ < >) are ' +
-    'refused anyway - if a legitimate option needs one ' +
-    '(--pretty=format:...), ask for it with delphi_report.';
+  { los campos de delphi_git sin args (1.19.0): lo que USAMOS (David,
+    14-oct-2026: "por defecto lo nuestro"; lo que haga falta despues se
+    anade con su caso) }
+  SP_GIT_PATHS =
+    'Files or folders of this repo, a LIST (relative to it or absolute): ' +
+    'status, diff, log, show, add, restore, stash push.';
+
+  SP_GIT_TO =
+    'diff, log: the other end of the range that starts at ref.';
+
+  SP_GIT_STAGED =
+    'diff: what is staged for the next commit.';
+
+  SP_GIT_FORMAT =
+    'diff: stat | shortstat | words. log: oneline (default) | dated ' +
+    '(hash, date, subject) | full.';
+
+  SP_GIT_CONTEXT =
+    'diff: lines of context around each change.';
+
+  SP_GIT_COUNT =
+    'log: how many commits (default 20).';
+
+  SP_GIT_SEARCH =
+    'log: only the commits that add or remove this text.';
+
+  SP_GIT_PATCH =
+    'show: the whole diff, not only the stat.';
+
+  SP_GIT_BRANCH =
+    'switch (create=true: a new name), merge, pull.';
+
+  SP_GIT_REMOTE =
+    'The name of a remote of this repo: pull, fetch, push, ls-remote.';
+
+  SP_GIT_ACTION =
+    'stash: push (default) | pop | list. worktree: add | list | remove. ' +
+    'merge: abort.';
+
+  SP_GIT_NAME =
+    'tag: the new tag (none = list them). config: user.name | user.email.';
 
   SP_WS_CREATE =
     'switch: true = create the branch and move to it (git switch -c). ' +
     'Refused with any other command (GIT-038).';
 
   SP_WS_MESSAGE =
-    'commit: the commit message. tag: makes the tag annotated. config: ' +
-    'the value. clone: the repository URL';
+    'commit: the message. tag: makes it annotated. stash push: its label. ' +
+    'config: the value. clone: the repository URL.';
 
   SP_WS_PATH =
-    'worktree add: a NEW folder inside your roots for the second working ' +
-    'copy (like the destination of a clone). worktree remove: a folder ' +
-    'that command=worktree args=list shows';
+    'worktree add: a NEW folder inside your roots. worktree remove: one ' +
+    'that action=list shows.';
 
   SP_WS_REF =
-    'worktree add: the tag, branch or commit to put there, detached - a ' +
-    'version to build and compare, not a place to work (v1.3.2, main, ' +
-    'HEAD~3, a commit hash)';
+    'A commit, tag or branch (v1.3.2, main, HEAD~3, a hash). diff, log: ' +
+    'where it starts (to = the other end). show: this one. push: the ' +
+    'name to send. tag: what it marks. worktree add: the version to put ' +
+    'there, detached.';
 
   { la salida de git por paginas (muro de la lista del 4-oct-2026: un diff
     de mas de 30000 caracteres salia cortado y no habia forma de ver el resto) }
   SP_WS_OFFSET_GIT =
-    'status/diff/log/show, branch/tag without arguments, stash list, ' +
-    'worktree list: lines to skip when the answer did not fit in one page ' +
-    '- pass the offset its note gives.';
+    'Lines to skip when a listing did not fit in one page - pass the ' +
+    'offset its note gives.';
 
   SN_GIT_PAGINA_FMT =
     '[GIT-053] Lines %d-%d of %d: the answer is longer than one page. The ' +
-    'rest: the same call with offset=%d - or narrow it (args="-- <path>", ' +
-    '--stat, -n <count>).';
+    'rest: the same call with offset=%d - or narrow it (paths, ' +
+    'format=stat, count).';
 
   SN_GIT_OFFSET_FUERA_FMT =
     '[GIT-054] offset=%d is past the end: the answer has %d lines.';
@@ -9239,9 +9262,9 @@ const
     30 commits, y offset=20 daba GIT-054 (D7 de los revisores de cierre de la
     1.18.2). Que hay mas lo dice git: la misma orden con un commit mas. }
   SN_GIT_LOG_HAY_MAS_FMT =
-    '[GIT-067] log shows %d commits when you give no -n, and there are more: ' +
-    'pass -n <count> (or a narrower range, A..B) to see them. offset pages ' +
-    'the lines of this answer, not the history.';
+    '[GIT-067] log shows %d commits when you give no count, and there are ' +
+    'more: pass count (or a narrower range: ref and to) to see them. ' +
+    'offset pages the lines of this answer, not the history.';
 
   { Una linea mas larga que la pagina sale cortada y la pagina siguiente
     empieza en la otra: su cola no se veia nunca, sin aviso (revision de la
@@ -9249,7 +9272,7 @@ const
   SN_GIT_LINEA_CORTADA_FMT =
     '[GIT-055] Line(s) %s are longer than a page: only their first %d ' +
     'characters are shown, and offset does not reach the rest. Narrow it ' +
-    '(args="-- <path>", --stat) or read the file.';
+    '(paths, format=stat) or read the file.';
 
   { offset pagina la respuesta de una CONSULTA: branch y tag sin argumentos
     lo son, y su nota GIT-053 lo ofrecia mientras el parametro se rechazaba

@@ -77,32 +77,52 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': MINE,
     'GIT_ALLOW_PROTOCOL': 'file', 'GIT_TRACE': TRACE,
     'GIT_CONFIG_GLOBAL': GLOBAL}), nombre='git-jaula-113', t=180)
 try:
-    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'args': 'origin'})
+    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'remote': 'origin'})
     check('ls-remote local autorizado contesta las refs', out.startswith('exit=0') and 'refs/heads/main' in out, out)
     check('ls-remote no escribe FETCH_HEAD', not os.path.exists(os.path.join(REPO, '.git', 'FETCH_HEAD')))
-    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'args': LINK})
-    check('ls-remote hacia victima rechazado sin nombrar sus ficheros',
-          mc.es(out, 'SR_GIT_REMOTO_FUERA_FMT') and 'no_tocar' not in out, out)
-    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'args': 'https://no-permitido.invalid/r.git'})
-    check('ls-remote conserva la lista de hosts', mc.es(out, 'SR_GIT_REMOTE_OFF_FMT'), out)
+    # 1.19.0: remote es el NOMBRE de un remoto del repo: la ruta del enlace
+    # escrita ahi no lo es (GIT-049); un remoto del repo que llega a la
+    # victima por el enlace sigue negado por la jaula (GIT-044)
+    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'remote': LINK})
+    git('remote', 'add', 'victima', LINK)
+    out2 = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'remote': 'victima'})
+    git('remote', 'remove', 'victima')
+    check('ls-remote hacia victima rechazado sin nombrar sus ficheros: su ruta no es un remoto (GIT-049) '
+          'y el remoto del repo que llega alli por el enlace, GIT-044',
+          mc.abre(out, 'SR_GIT_REMOTO_NO_ESTA_FMT') and mc.es(out2, 'SR_GIT_REMOTO_FUERA_FMT')
+          and 'no_tocar' not in out + out2, out + ' | ' + out2)
+    # 1.19.0: una URL en remote tampoco es un remoto (GIT-049); la lista de
+    # hosts sigue juzgando la direccion de un remoto del repo (GIT-063)
+    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'remote': 'https://no-permitido.invalid/r.git'})
+    git('remote', 'add', 'lejos', 'https://no-permitido.invalid/r.git')
+    out2 = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'remote': 'lejos'})
+    git('remote', 'remove', 'lejos')
+    check('ls-remote conserva la lista de hosts: una URL no es un remoto (GIT-049) y la direccion de un '
+          'remoto del repo pasa la lista (GIT-063)',
+          mc.abre(out, 'SR_GIT_REMOTO_NO_ESTA_FMT') and mc.abre(out2, 'SR_GIT_REMOTE_DEL_REPO_OFF_FMT'),
+          out + ' | ' + out2)
     lst = srv.request('tools/list')['result']['tools']
     meta = next(x for x in lst if x['name'] == 'delphi_git')['_meta']
     check('ls-remote anunciado como consulta', 'ls-remote' in meta['readOnlyCommands'], meta)
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('status control dentro de la jaula', out.startswith('exit=0'), out)
     for rama in ('antes', 'main'):
-        out = srv.call('delphi_git', {'repo': REPO, 'command': 'switch', 'args': rama})
+        out = srv.call('delphi_git', {'repo': REPO, 'command': 'switch', 'branch': rama})
         check('switch ' + rama + ' no cambia el HEAD del submodulo',
               out.startswith('exit=0') and git('rev-parse', 'HEAD', cwd=MOD).strip() == NUEVO_SUB, out)
     # GIT_TRACE no conserva las opciones -c/-C del compositor: se mide el
     # HEAD del hijo, que con la config recursiva cambiaba al cambiar de rama.
-    out = srv.call('delphi_git', {'repo': SUB, 'command': 'fetch', 'args': '../../remote.git'})
+    # 1.19.0: la ruta ya no se escribe en la llamada (remote es un nombre): la
+    # misma ruta relativa es la direccion de un remoto del bare, y desde la
+    # subcarpeta se resuelve como la resuelve git
+    git('remote', 'add', 'relativo', '../../remote.git', cwd=BARE)
+    out = srv.call('delphi_git', {'repo': SUB, 'command': 'fetch', 'remote': 'relativo'})
     check('bare desde subcarpeta resuelve el remoto como Git', out.startswith('exit=0'), out)
-    for cmd, args in (('fetch', 'origin'), ('pull', 'origin main')):
+    for cmd, campos in (('fetch', {'remote': 'origin'}), ('pull', {'remote': 'origin', 'branch': 'main'})):
         if os.path.exists(FETCH_MOD):
             os.remove(FETCH_MOD)
         open(TRACE, 'w').close()
-        out = srv.call('delphi_git', {'repo': REPO, 'command': cmd, 'args': args})
+        out = srv.call('delphi_git', dict({'repo': REPO, 'command': cmd}, **campos))
         trace = mc.lee(TRACE)
         check(cmd + ': no consulta el submodulo fuera', out.startswith('exit=0') and
               'Fetching submodule' not in out and not os.path.exists(FETCH_MOD), out)
@@ -113,7 +133,9 @@ try:
                                     '--recurse-submodules=no' in s for s in network), network)
         if cmd == 'pull':
             check('pull mide tambien su fetch previo', any(' fetch ' in s for s in network), network)
-    out = srv.call('delphi_git', {'repo': REPO, 'command': 'fetch', 'args': 'origin inexistente'})
+    # 1.19.0: fetch solo toma remote; la rama que el remoto no tiene, por pull
+    # (su fetch previo y el pull los contesta git)
+    out = srv.call('delphi_git', {'repo': REPO, 'command': 'pull', 'remote': 'origin', 'branch': 'inexistente'})
     check('fallo de Git real se distingue del rechazo previo', mc.es(out, 'SR_GIT_EXIT_FMT') and
           'couldn' in out, out)
     CFG = os.path.join(REPO, '.git', 'config')
@@ -124,7 +146,7 @@ try:
     # El operador del arnes planta la config para medir TAMBIEN el compositor.
     git('config', 'push.recurseSubmodules', 'on-demand')
     open(TRACE, 'w').close()
-    out = srv.call('delphi_git', {'repo': REPO, 'command': 'push', 'args': 'origin main'})
+    out = srv.call('delphi_git', {'repo': REPO, 'command': 'push', 'remote': 'origin', 'ref': 'main'})
     trace = mc.lee(TRACE)
     check('push del padre si llega al remoto permitido', out.startswith('exit=0') and
           git('rev-parse', 'main', cwd=REMOTE).strip() == git('rev-parse', 'HEAD').strip(), out)
@@ -133,10 +155,12 @@ try:
     check('push manda sin recursion aunque la config la pida',
           any(' push ' in s and '--no-recurse-submodules' in s
               for s in trace.splitlines() if 'built-in: git ' in s), trace[-800:])
-    for cmd, args in (('status', ''), ('add', 'dato.txt'), ('commit', ''),
-                      ('config', 'user.name'), ('fetch', ''), ('push', ''),
-                      ('init', '--shared=group')):
-        out = srv.call('delphi_git', {'repo': FICHA, 'command': cmd, 'args': args})
+    # 1.19.0: cada comando con sus campos (init ya no toma opciones: el
+    # --shared=group de antes ni se puede escribir)
+    for cmd, campos in (('status', {}), ('add', {'paths': ['dato.txt']}), ('commit', {'message': 'x'}),
+                        ('config', {'name': 'user.name', 'message': 'x'}), ('fetch', {}), ('push', {}),
+                        ('init', {})):
+        out = srv.call('delphi_git', dict({'repo': FICHA, 'command': cmd}, **campos))
         check('.git fichero externo: ' + cmd + ' lo para GIT-041',
               mc.es(out, 'SR_GIT_REPO_FUERA_FMT'), out)
     check('victima intacta', snapshot(OUT) == before)
@@ -176,7 +200,7 @@ try:
     srv.session('git-jaula-113-ro')
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'init'})
     check('control: la credencial RO deniega una escritura', mc.rechazado(out), out)
-    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'args': 'origin'})
+    out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'remote': 'origin'})
     check('ls-remote funciona con credencial de solo lectura', out.startswith('exit=0') and 'refs/heads/main' in out, out)
 finally:
     proc.terminate()

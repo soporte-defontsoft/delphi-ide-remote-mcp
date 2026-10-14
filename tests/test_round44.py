@@ -93,12 +93,13 @@ try:
     repo = os.path.join(JAIL, 'r')
     os.makedirs(repo, exist_ok=True)
     call('delphi_git', {'repo': repo, 'command': 'init'})
+    # 1.19.0: sin args; cada comando con sus campos
     call('delphi_git', {'repo': repo, 'command': 'config',
-                        'args': 'user.email', 'message': 'r44@test'})
+                        'name': 'user.email', 'message': 'r44@test'})
     call('delphi_git', {'repo': repo, 'command': 'config',
-                        'args': 'user.name', 'message': 'R44'})
+                        'name': 'user.name', 'message': 'R44'})
     open(os.path.join(repo, 'a.txt'), 'w').write('uno\n')
-    call('delphi_git', {'repo': repo, 'command': 'add', 'args': '-A'})
+    call('delphi_git', {'repo': repo, 'command': 'add', 'paths': ['.']})
     c = call('delphi_git', {'repo': repo, 'command': 'commit',
                             'message': 'mensaje\n\ncon cuerpo'})
     check('T2 un commit con mensaje sigue funcionando',

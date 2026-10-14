@@ -3,6 +3,13 @@
 and never move to it, so it could not work the way a programmer does (branch
 per task, commit, back to main).
 
+1.19.0 (delphi_git sin "args"): cada llamada lleva SUS campos (branch, action,
+paths, ref/to, remote, name, count). Los checks de una opcion colada (stash
+push -u, restore --worktree, pull --rebase...) miran ahora el campo donde se
+intentaria colar: un nombre que empieza por '-' lo niega git (GIT-071), una
+accion que no es de la lista GIT-013, una ruta detras de "--" es un nombre;
+las opciones de red (pull --tags) ya no existen (GIT-068, nada hecho).
+
 Usage:  python tests/test_git_branches.py [path-to-DelphiLspMcp.exe]
 """
 import os, subprocess
@@ -26,43 +33,43 @@ def git(args): return call('delphi_git', dict({'repo': REPO_T}, **args))
 
 # ---- repo con un commit ----
 git({'command': 'init'})
-git({'command': 'config', 'args': 'user.name', 'message': 'Probe Bot'})
-git({'command': 'config', 'args': 'user.email', 'message': 'probe@example.com'})
+git({'command': 'config', 'name': 'user.name', 'message': 'Probe Bot'})
+git({'command': 'config', 'name': 'user.email', 'message': 'probe@example.com'})
 open(os.path.join(REPO_T, 'a.txt'), 'w').write('uno\n')
-git({'command': 'add', 'args': '.'})
+git({'command': 'add', 'paths': ['.']})
 r = git({'command': 'commit', 'message': 'inicial'})
 check('commit inicial', 'exit=0' in r, r[:150])
 
 # ---- switch -c: crear rama y MOVERSE (el hueco que cerramos) ----
-r = git({'command': 'switch', 'args': 'tarea-1', 'create': True})
+r = git({'command': 'switch', 'branch': 'tarea-1', 'create': True})
 check('switch -c crea y cambia', 'exit=0' in r, r[:200])
 r = git({'command': 'status'})
 check('estamos EN la rama nueva', 'tarea-1' in r, r[:200])
 
 # trabajo en la rama
 open(os.path.join(REPO_T, 'b.txt'), 'w').write('trabajo\n')
-git({'command': 'add', 'args': '.'})
+git({'command': 'add', 'paths': ['.']})
 git({'command': 'commit', 'message': 'trabajo de la tarea 1'})
 
 # ---- volver a la rama base y fusionar ----
-r = git({'command': 'switch', 'args': 'master'})
+r = git({'command': 'switch', 'branch': 'master'})
 if 'exit=0' not in r:
-    r = git({'command': 'switch', 'args': 'main'})
+    r = git({'command': 'switch', 'branch': 'main'})
 check('switch de vuelta a la rama base', 'exit=0' in r, r[:200])
 check('el fichero de la otra rama NO esta aqui', not os.path.exists(os.path.join(REPO_T, 'b.txt')))
-r = git({'command': 'merge', 'args': 'tarea-1'})
+r = git({'command': 'merge', 'branch': 'tarea-1'})
 check('merge --ff-only integra', 'exit=0' in r, r[:200])
 check('y ahora si esta el fichero', os.path.exists(os.path.join(REPO_T, 'b.txt')))
 
 # ---- merge que NECESITARIA commit: rechazado, no a medias ----
-git({'command': 'switch', 'args': 'divergente', 'create': True})
+git({'command': 'switch', 'branch': 'divergente', 'create': True})
 open(os.path.join(REPO_T, 'c.txt'), 'w').write('rama\n')
-git({'command': 'add', 'args': '.'}); git({'command': 'commit', 'message': 'en divergente'})
-r = git({'command': 'switch', 'args': 'master'})
-if 'exit=0' not in r: git({'command': 'switch', 'args': 'main'})
+git({'command': 'add', 'paths': ['.']}); git({'command': 'commit', 'message': 'en divergente'})
+r = git({'command': 'switch', 'branch': 'master'})
+if 'exit=0' not in r: git({'command': 'switch', 'branch': 'main'})
 open(os.path.join(REPO_T, 'd.txt'), 'w').write('tronco\n')
-git({'command': 'add', 'args': '.'}); git({'command': 'commit', 'message': 'en tronco'})
-r = git({'command': 'merge', 'args': 'divergente'})
+git({'command': 'add', 'paths': ['.']}); git({'command': 'commit', 'message': 'en tronco'})
+r = git({'command': 'merge', 'branch': 'divergente'})
 check('merge no fast-forward RECHAZADO (no lo deja a medias)', mc.abre(r, 'SR_GIT_EXIT_FMT'), r[:250])
 
 # ---- stash: aparcar para poder cambiar de rama ----
@@ -70,13 +77,13 @@ open(os.path.join(REPO_T, 'a.txt'), 'a').write('cambio sin commitear\n')
 r = git({'command': 'stash'})
 check('stash push aparca', 'exit=0' in r, r[:200])
 check('el cambio desaparecio del arbol', 'sin commitear' not in open(os.path.join(REPO_T, 'a.txt')).read())
-r = git({'command': 'stash', 'args': 'pop'})
+r = git({'command': 'stash', 'action': 'pop'})
 check('stash pop lo recupera', 'exit=0' in r and 'sin commitear' in open(os.path.join(REPO_T, 'a.txt')).read(), r[:200])
-r = git({'command': 'stash', 'args': 'drop'})
+r = git({'command': 'stash', 'action': 'drop'})
 # ...y el rechazo dice lo que RECIBIO: contestaba "drop no esta" a un push con
-# rutas que nadie habia pedido tirar (1.5.1)
+# rutas que nadie habia pedido tirar (1.5.1). 1.19.0: lo recibido es la accion
 check('stash drop NO existe (destruye)',
-      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_ARGS_FMT') and 'args="drop"' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_ARGS_FMT') and 'action="drop"' in r, r[:200])
 
 # ---- stash push con RUTAS: descartar unos ficheros sin perderlos (1.5.1) ----
 # Hasta la 1.5.0 no habia forma de devolver UN fichero a HEAD por el MCP (ni
@@ -85,33 +92,37 @@ def leer(n):
     return open(os.path.join(REPO_T, n), encoding='utf-8').read()
 # el pop de arriba dejo a.txt con cambios: se commitean, para que "a HEAD"
 # sea exactamente a0
-git({'command': 'add', 'args': '.'})
+git({'command': 'add', 'paths': ['.']})
 git({'command': 'commit', 'message': 'antes del stash con rutas'})
 a0 = leer('a.txt')
 open(os.path.join(REPO_T, 'a.txt'), 'a').write('descartable\n')
 open(os.path.join(REPO_T, 'd.txt'), 'a').write('se queda\n')
-r = git({'command': 'stash', 'args': 'push -- a.txt', 'message': 'solo a'})
+r = git({'command': 'stash', 'paths': ['a.txt'], 'message': 'solo a'})
 check('stash push -- <ruta>: SOLO esa vuelve a HEAD',
       'exit=0' in r and leer('a.txt') == a0 and 'se queda' in leer('d.txt'), r[:200])
-r = git({'command': 'stash', 'args': 'list'})
+r = git({'command': 'stash', 'action': 'list'})
 check('...con su etiqueta (message) en la lista', 'solo a' in r, r[:200])
-r = git({'command': 'stash', 'args': 'pop'})
+r = git({'command': 'stash', 'action': 'pop'})
 check('...y pop devuelve lo descartado',
       'exit=0' in r and 'descartable' in leer('a.txt'), r[:200])
-antes = git({'command': 'stash', 'args': 'list'})
-r = git({'command': 'stash', 'args': 'push -u'})
-check('stash push con una OPCION rechazado, diciendo lo que recibio',
-      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_ARGS_FMT') and 'args="push -u"' in r, r[:200])
-r = git({'command': 'stash', 'args': 'push -- ../fuera.txt'})
+antes = git({'command': 'stash', 'action': 'list'})
+# 1.19.0: sin args; la opcion solo cabe en "action", y alli no es una accion
+r = git({'command': 'stash', 'action': 'push -u'})
+check('stash push con una OPCION (en action) rechazado, diciendo lo que recibio, y no guarda nada',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_ARGS_FMT') and 'action="push -u"' in r and
+      git({'command': 'stash', 'action': 'list'}) == antes, r[:200])
+r = git({'command': 'stash', 'paths': ['../fuera.txt']})
 check('stash push -- <ruta FUERA del repo> rechazado, y no guarda nada',
       mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_RUTA_FMT') and
-      git({'command': 'stash', 'args': 'list'}) == antes and
+      git({'command': 'stash', 'action': 'list'}) == antes and
       'descartable' in leer('a.txt'), r[:200])
-r = git({'command': 'stash', 'args': 'push -- "*.txt"'})
+r = git({'command': 'stash', 'paths': ['*.txt']})
+# 1.19.0: una ruta de paths pasa los jueces de toda ruta (PathAnomaly): el
+# comodin lo dice su negativa, GUARD-024, antes que la de fuera del repo
 check('stash push -- <comodin> rechazado: un comodin no es un nombre',
-      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_RUTA_FMT') and
+      mc.rechazado(r) and mc.es(r, 'SR_GUARD_COMODIN_FMT') and
       'descartable' in leer('a.txt') and 'se queda' in leer('d.txt'), r[:200])
-git({'command': 'add', 'args': '.'})
+git({'command': 'add', 'paths': ['.']})
 git({'command': 'commit', 'message': 'lo de antes del stash con rutas'})
 
 # ---- restore: deshacer un add sin tocar el arbol (1.7.6) ----
@@ -119,26 +130,31 @@ git({'command': 'commit', 'message': 'lo de antes del stash con rutas'})
 # deshacer el staging por el MCP y borro el .git para volver a empezar.
 open(os.path.join(REPO_T, 'e.txt'), 'w').write('nuevo\n')
 open(os.path.join(REPO_T, 'a.txt'), 'a').write('cambio en a\n')
-git({'command': 'add', 'args': '.'})
-r = git({'command': 'restore', 'args': 'e.txt'})
-st = git({'command': 'status', 'args': '--porcelain'})
+git({'command': 'add', 'paths': ['.']})
+r = git({'command': 'restore', 'paths': ['e.txt']})
+# 1.19.0: status ya sale en --porcelain (con la rama en la primera linea)
+st = git({'command': 'status'})
 check('restore <ruta>: sale del indice y el fichero sigue en el arbol',
       'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'e.txt')) and '?? e.txt' in st and 'M  a.txt' in st,
       r[:120] + ' | ' + st[:120])
-r = git({'command': 'restore', 'args': '.'})
-st = git({'command': 'status', 'args': '--porcelain'})
+r = git({'command': 'restore', 'paths': ['.']})
+st = git({'command': 'status'})
 check('restore .: nada staged y los cambios siguen en el arbol',
       'exit=0' in r and ' M a.txt' in st and 'cambio en a' in leer('a.txt'), r[:120] + ' | ' + st[:120])
 r = git({'command': 'restore'})
-check('restore sin rutas: rechazado (no adivina)', mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_ARGS_FMT'), r[:200])
-r = git({'command': 'restore', 'args': '--worktree a.txt'})
-check('restore con una opcion: rechazado (nunca toca el arbol)',
-      mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_ARGS_FMT') and 'cambio en a' in leer('a.txt'), r[:200])
-r = git({'command': 'restore', 'args': '../fuera.txt'})
-check('restore <ruta fuera del repo>: rechazado', mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_RUTA_FMT'), r[:200])
-r = git({'command': 'restore', 'args': '*.txt'})
-check('restore <comodin>: rechazado (un comodin no es un nombre)', mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_RUTA_FMT'), r[:200])
-git({'command': 'add', 'args': '.'})
+check('restore sin rutas: rechazado (no adivina)', mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_NEEDS_PATHS'), r[:200])
+# 1.19.0: sin args; una opcion en paths va detras de "--" como un NOMBRE, y git
+# no encuentra ese fichero: no se hace nada (y el arbol, nunca)
+r = git({'command': 'restore', 'paths': ['--worktree', 'a.txt']})
+st = git({'command': 'status'})
+check('restore con una opcion (en paths): es un nombre, no una opcion; nunca toca el arbol',
+      mc.abre(r, 'SR_GIT_EXIT_FMT') and ':(literal)--worktree' in r and
+      'cambio en a' in leer('a.txt') and ' M a.txt' in st, r[:200] + ' | ' + st[:120])
+r = git({'command': 'restore', 'paths': ['../fuera.txt']})
+check('restore <ruta fuera del repo>: rechazado', mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_RUTA_FMT'), r[:200])
+r = git({'command': 'restore', 'paths': ['*.txt']})
+check('restore <comodin>: rechazado (un comodin no es un nombre)', mc.rechazado(r) and mc.es(r, 'SR_GUARD_COMODIN_FMT'), r[:200])
+git({'command': 'add', 'paths': ['.']})
 git({'command': 'commit', 'message': 'tras el restore'})
 
 # ---- contratos ----
@@ -147,9 +163,13 @@ check('switch sin rama rechazado con pista',
       mc.rechazado(r) and mc.es(r, 'SR_GIT_SWITCH_NEEDS') and 'stash' in r, r[:250])
 r = git({'command': 'merge'})
 check('merge sin rama rechazado', mc.rechazado(r) and mc.es(r, 'SR_GIT_MERGE_NEEDS'), r[:200])
-r = git({'command': 'switch', 'args': 'tarea-1; rm -rf /'})
-check('metacaracteres rechazados',
-      mc.fallo(r) and mc.es(r, 'SR_GIT_SHELL_METACHARS_ARGS'), r[:200])
+# 1.19.0: sin args ni shell; la rama es un nombre y lo juzga git
+# (check-ref-format): con un blanco no lo es
+ramas_antes = git({'command': 'branch'})
+r = git({'command': 'switch', 'branch': 'tarea-1; rm -rf /'})
+check('metacaracteres en la rama: no es un nombre (GIT-071) y no se cambia de rama',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_NOMBRE_NO_VALE_FMT') and
+      git({'command': 'branch'}) == ramas_antes, r[:200])
 
 # ---- pull: siempre por fast-forward, como merge (1.7.7) ----
 # pull es bajar e INTEGRAR, y lo segundo lo hacia como git quisiera: con las
@@ -186,37 +206,53 @@ def llega_al_remoto(nombre, etiqueta=None):
 
 
 llega_al_remoto('r1.txt')
-r = git({'command': 'pull', 'args': 'origin ' + rama})
+r = git({'command': 'pull', 'remote': 'origin', 'branch': rama})
 check('pull de lo que va por delante (fast-forward): integra',
       'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'r1.txt')), r[:250])
 llega_al_remoto('r2.txt', 'v-remoto')
+# 1.19.0: las opciones de la bajada (--tags...) no existen: la llamada vieja
+# con args no hace nada; el pull de siempre integra, y la etiqueta la trae
+# fetch del remoto (git sigue las etiquetas de lo que baja a sus ramas de
+# seguimiento; un pull con la rama solo llena FETCH_HEAD y no la trae, medido)
 r = git({'command': 'pull', 'args': '--tags origin ' + rama})
-check('pull con una opcion de la BAJADA (--tags): integra y trae la etiqueta',
-      'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'r2.txt'))
-      and 'v-remoto' in git({'command': 'tag'}), r[:250])
+check('pull con una opcion de la BAJADA en args (--tags): GIT-068 y nada hecho',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_ARGS_RETIRADO') and not mc.llego_a_git(r)
+      and not os.path.exists(os.path.join(REPO_T, 'r2.txt')), r[:250])
+r = git({'command': 'pull', 'remote': 'origin', 'branch': rama})
+check('...y el pull sin opciones integra',
+      'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'r2.txt')), r[:250])
+r = git({'command': 'fetch', 'remote': 'origin'})
+check('...y fetch del remoto trae su etiqueta (sin --tags)',
+      'exit=0' in r and 'v-remoto' in git({'command': 'tag'}), r[:250])
 # ahora DIVERGEN: el remoto avanza por un lado y el repo por otro
 llega_al_remoto('r3.txt')
 open(os.path.join(REPO_T, 'local.txt'), 'w').write('local\n')
-git({'command': 'add', 'args': '.'})
+git({'command': 'add', 'paths': ['.']})
 git({'command': 'commit', 'message': 'local, por su lado'})
 partida = cabeza()
-r = git({'command': 'pull', 'args': 'origin ' + rama})
+r = git({'command': 'pull', 'remote': 'origin', 'branch': rama})
 check('pull con las historias DIVERGIDAS: rechazado, sin commit de mezcla y sin dejarlo a medias',
       mc.abre(r, 'SR_GIT_EXIT_FMT') and mc.es(r, 'SN_GIT_MERGE_DIVERGED') and cabeza() == partida
       and not os.path.exists(os.path.join(REPO_T, '.git', 'MERGE_HEAD'))
       and not os.path.exists(os.path.join(REPO_T, 'r3.txt')), r[:300])
+# 1.19.0: sin args; la opcion solo cabe en un campo, y alli no es lo que el
+# campo toma: en branch no es un nombre (GIT-071), en remote no es un remoto
+# del repo (GIT-049)
 mal = []
 for opcion in ('--rebase', '-r', '--no-rebase', '--no-ff', '--squash', '--no-commit', '--autostash'):
-    r = git({'command': 'pull', 'args': '%s origin %s' % (opcion, rama)})
-    limpio = git({'command': 'status', 'args': '--porcelain'})
-    if not (mc.rechazado(r) and mc.es(r, 'SR_GIT_PULL_ARGS_FMT') and cabeza() == partida
-            and 'r3.txt' not in limpio):
-        mal.append('%s: %s | %s' % (opcion, ' '.join(r.split())[:120], ' '.join(limpio.split())[:60]))
-        fuera('rebase', '--abort', cwd=REPO_T)
-        fuera('merge', '--abort', cwd=REPO_T)
-        fuera('reset', '-q', '--hard', partida, cwd=REPO_T)
-check('pull con una opcion que cambia COMO se integra (rebase, mezcla, squash...): rechazado, y '
-      'la historia y el arbol como estaban', not mal, mal[:3])
+    for campos, msg in (({'remote': 'origin', 'branch': opcion}, 'SR_GIT_NOMBRE_NO_VALE_FMT'),
+                        ({'remote': opcion, 'branch': rama}, 'SR_GIT_REMOTO_NO_ESTA_FMT')):
+        r = git(dict({'command': 'pull'}, **campos))
+        limpio = git({'command': 'status'})
+        if not (mc.rechazado(r) and mc.es(r, msg) and cabeza() == partida
+                and 'r3.txt' not in limpio):
+            mal.append('%s %s: %s | %s' % (opcion, sorted(campos), ' '.join(r.split())[:120],
+                                           ' '.join(limpio.split())[:60]))
+            fuera('rebase', '--abort', cwd=REPO_T)
+            fuera('merge', '--abort', cwd=REPO_T)
+            fuera('reset', '-q', '--hard', partida, cwd=REPO_T)
+check('pull con una opcion que cambia COMO se integra (rebase, mezcla, squash...) en branch o en '
+      'remote: rechazado, y la historia y el arbol como estaban', not mal, mal[:3])
 
 srv.mata()
 
@@ -227,7 +263,7 @@ os.makedirs(os.path.join(REPO_T, 'ro'), exist_ok=True)
 open(os.path.join(REPO_T, 'ro', 'x.txt'), 'w').write('referencia\n')
 srv = mc.Stdio(EXE, env, nombre='gb2')
 call = srv.call
-git({'command': 'add', 'args': '.'})
+git({'command': 'add', 'paths': ['.']})
 git({'command': 'commit', 'message': 'carpeta ro'})
 srv.mata()
 env_ro = mc.entorno({'DELPHI_MCP_ROOTS': BASE,
@@ -236,13 +272,13 @@ srv = mc.Stdio(EXE, env_ro, nombre='gb3')
 call = srv.call
 open(os.path.join(REPO_T, 'ro', 'x.txt'), 'a').write('tocado\n')
 open(os.path.join(REPO_T, 'a.txt'), 'a').write('otra vez\n')
-r = git({'command': 'stash', 'args': 'push -- ro/x.txt'})
+r = git({'command': 'stash', 'paths': ['ro/x.txt']})
 # el rechazo de la PUERTA (referencia de solo lectura), no el de la gramatica:
 # un servidor que lo rechazase todo pasaba este check
 check('stash push -- <ruta de SOLO LECTURA> rechazado por la puerta de escritura',
       mc.rechazado(r) and mc.es(r, 'SR_REFERENCE_ROOT_FMT') and
       'tocado' in leer('ro/x.txt'), r[:200])
-r = git({'command': 'stash', 'args': 'push -- a.txt'})
+r = git({'command': 'stash', 'paths': ['a.txt']})
 check('...y una ruta escribible del mismo repo si se descarta',
       'exit=0' in r and 'otra vez' not in leer('a.txt'), r[:200])
 srv.mata()
@@ -267,21 +303,21 @@ check('TESTIGO: con el PATH de la maquina, status llega a git',
 # (las que empiezan por +, - o espacio) no se tocan; las de git, si.
 CONT = "S := Format('%s: %d', [A, B]); P := '\\\\equipo\\f.txt'; Q := 'Z:\\x';"
 open(os.path.join(REPO_T, 'cont.pas'), 'w').write('uno\n')
-git({'command': 'add', 'args': 'cont.pas'}); git({'command': 'commit', 'message': 'cont'})
+git({'command': 'add', 'paths': ['cont.pas']}); git({'command': 'commit', 'message': 'cont'})
 open(os.path.join(REPO_T, 'cont.pas'), 'w').write(CONT + '\n')
-r = git({'command': 'diff', 'args': 'cont.pas'})
+r = git({'command': 'diff', 'paths': ['cont.pas']})
 check('diff: las lineas de contenido salen como estan en el disco (ni %srv0: ni \\\\srvhost)',
       'exit=0' in r and ('+' + CONT) in r, r[-300:])
-git({'command': 'add', 'args': 'cont.pas'}); git({'command': 'commit', 'message': 'cont 2'})
-r = git({'command': 'diff', 'args': 'HEAD~1 HEAD'})
+git({'command': 'add', 'paths': ['cont.pas']}); git({'command': 'commit', 'message': 'cont 2'})
+r = git({'command': 'diff', 'ref': 'HEAD~1', 'to': 'HEAD'})
 check('...y entre dos commits, lo mismo', 'exit=0' in r and ('+' + CONT) in r, r[-300:])
 # ...y el otro lado de la regla: una linea que NO empieza como el contenido
 # es de git y se enmascara. El log de la tool pone el mensaje detras del
 # hash: esa linea no es contenido
 RUTA = BASE[0].upper() + ':\\carpeta\\de\\nadie'
 open(os.path.join(REPO_T, 'cont.pas'), 'a').write('otra\n')
-git({'command': 'add', 'args': 'cont.pas'}); git({'command': 'commit', 'message': 'mirar ' + RUTA})
-r = git({'command': 'log', 'args': '-1'})
+git({'command': 'add', 'paths': ['cont.pas']}); git({'command': 'commit', 'message': 'mirar ' + RUTA})
+r = git({'command': 'log', 'count': 1})
 check('log: la linea que no empieza como el contenido (hash + mensaje) sigue enmascarada',
       'exit=0' in r and RUTA not in r and ('mirar srv%s:' % BASE[0].lower()) in r, r[:200])
 NUEVO = os.path.join(BASE, 'repo-nuevo')

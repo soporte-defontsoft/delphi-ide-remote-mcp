@@ -279,13 +279,14 @@ def p6(uno, colgados):
     p6 = os.path.join(rp, 'Seis')
     pas6 = os.path.join(p6, 'UMain.pas')
     uno.call('delphi_create', {'kind': 'project-vcl', 'name': 'Seis', 'dir': p6})
-    for a_ in ({'command': 'init'}, {'command': 'config', 'args': 'user.name', 'message': 'p6'},
-               {'command': 'config', 'args': 'user.email', 'message': 'p6@example.com'},
-               {'command': 'add', 'args': '.'}, {'command': 'commit', 'message': 'base'}):
+    # 1.19.0: sin args; cada comando con sus campos
+    for a_ in ({'command': 'init'}, {'command': 'config', 'name': 'user.name', 'message': 'p6'},
+               {'command': 'config', 'name': 'user.email', 'message': 'p6@example.com'},
+               {'command': 'add', 'paths': ['.']}, {'command': 'commit', 'message': 'base'}):
         uno.call('delphi_git', dict(repo=rp, **a_))
     ramas = uno.call('delphi_git', {'repo': rp, 'command': 'branch'})
     esta = ([l.split()[1] for l in ramas.splitlines() if l.startswith('*')] + [''])[0]
-    uno.call('delphi_git', {'repo': rp, 'command': 'switch', 'args': 'gemela', 'create': True})
+    uno.call('delphi_git', {'repo': rp, 'command': 'switch', 'branch': 'gemela', 'create': True})
     d1 = uno.call('delphi_diagnostics', {'path': pas6})
     cazado = repetido = ''
     dt = 0.0
@@ -298,7 +299,7 @@ def p6(uno, colgados):
         h.start()
         time.sleep(retraso)
         otro.call('delphi_git', {'repo': rp, 'command': 'switch',
-                                 'args': 'gemela' if intento % 2 == 0 else esta})
+                                 'branch': 'gemela' if intento % 2 == 0 else esta})
         h.join()
         if mc.es(res.get('d', ''), 'SR_LSP_ENGINE_STOPPED'):
             cazado = res['d']

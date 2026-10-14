@@ -88,19 +88,20 @@ try:
     repo = os.path.join(JAIL, 'r')
     os.makedirs(repo)
     call('delphi_git', {'repo': repo, 'command': 'init'})
+    # 1.19.0: sin args; cada comando con sus campos
     call('delphi_git', {'repo': repo, 'command': 'config',
-                        'args': 'user.email', 'message': 'r39@test'})
+                        'name': 'user.email', 'message': 'r39@test'})
     call('delphi_git', {'repo': repo, 'command': 'config',
-                        'args': 'user.name', 'message': 'R39'})
+                        'name': 'user.name', 'message': 'R39'})
     open(os.path.join(repo, 'a.txt'), 'w').write('uno\n')
-    call('delphi_git', {'repo': repo, 'command': 'add', 'args': '-A'})
+    call('delphi_git', {'repo': repo, 'command': 'add', 'paths': ['.']})
     call('delphi_git', {'repo': repo, 'command': 'commit', 'message': 'uno'})
     d = call('delphi_git', {'repo': repo, 'command': 'diff'})
     check('D3 git diff en arbol limpio dice que no hay diferencias',
           mc.es(d, 'SN_GIT_DIFF_CLEAN') and len(d.strip()) > len('exit=0') + 5, d[:200])
 
     # ------------------------------------------------------------------ D4
-    a = call('delphi_git', {'repo': repo, 'command': 'add', 'args': '-A'})
+    a = call('delphi_git', {'repo': repo, 'command': 'add', 'paths': ['.']})
     check('D4 una orden muda dice que su silencio ES el exito',
           'exit=0' in a and mc.es(a, 'SN_GIT_SILENT_OK_FMT'), a[:200])
 

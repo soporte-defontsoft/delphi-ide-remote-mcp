@@ -5,8 +5,10 @@ Three more agents worked the 0.60 server through nothing but MCP on
 with another forty. This battery is the ones that became code.
 
   R1  git refuses an explicit remote URL unless the operator allowed the host
+      (since 1.19.0 a remote goes by its NAME: a URL in the call is GIT-049,
+      and the URL a named remote has still needs the operator's host)
   R3  a delete that did not delete says so instead of claiming success
-  B1  git merge takes a branch name (or --abort), never options
+  B1  git merge takes a branch name (or action=abort), never options
   B2  a test killed by the timeout is told apart from one that fails
   B3  diagnostics on a non-Delphi file refuses instead of looping forever
   B4  a read range that runs backwards is refused, not answered empty
@@ -60,11 +62,11 @@ A = spawn()
 REPOD = os.path.join(BASE, 'repo')
 os.makedirs(REPOD)
 A.call('delphi_git', {'repo': REPOD, 'command': 'init'})
-r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'http://127.0.0.1:3131/mcp'})
-check('R1 una URL explicita a localhost: RECHAZADA sin conectar',
-      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT') and 'GitRemotes' in r, r[:250])
-r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://198.51.100.7/evil.git'})
-check('R1 ...y a un host cualquiera tambien', mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT'), r[:200])
+# 1.19.0: el remoto va por su NOMBRE; una URL escrita en la llamada no es un
+# remoto del repo (GIT-049) y no se conecta a ella
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'http://127.0.0.1:3131/mcp'})
+check('R1 una URL escrita en la llamada: no es un remoto del repo (GIT-049), sin conectar',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTO_NO_ESTA_FMT') and '(none)' in r, r[:250])
 r = A.call('delphi_git', {'repo': os.path.join(BASE, 'clon'), 'command': 'clone',
                           'message': 'https://198.51.100.7/evil.git'})
 check('R1 clone con URL no permitida: RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT'), r[:200])
@@ -72,32 +74,52 @@ check('R1 clone con URL no permitida: RECHAZADO', mc.rechazado(r) and mc.es(r, '
 # ninguno - ya no llega a git, que decia que "origin" no parecia un
 # repositorio: se dice aqui, con los remotos que hay. El remoto de verdad
 # lo monta el git de la maquina (la tool no anade remotos): es andamio
-r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'args': 'origin main'})
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'remote': 'origin', 'ref': 'main'})
 check('R1 un nombre que no es un remoto del repo: lo dice, con los que tiene (GIT-049)',
       mc.es(r, 'SR_GIT_REMOTO_NO_ESTA_FMT') and '(none)' in r, r[:250])
 ORIGEN = os.path.join(BASE, 'origen.git')
+# 1.19.0: las URLs, como remotos del repo con su nombre (andamio, por el git de la maquina)
 for orden, donde in ((['git', 'init', '-q', '--bare', ORIGEN], BASE),
-                     (['git', 'remote', 'add', 'origin', ORIGEN], REPOD)):
+                     (['git', 'remote', 'add', 'origin', ORIGEN], REPOD),
+                     (['git', 'remote', 'add', 'local', 'http://127.0.0.1:3131/mcp'], REPOD),
+                     (['git', 'remote', 'add', 'evil', 'https://198.51.100.7/evil.git'], REPOD),
+                     (['git', 'remote', 'add', 'otro', 'https://otro.example.org/x.git'], REPOD),
+                     (['git', 'remote', 'add', 'permitido', 'https://example.com/x.git'], REPOD)):
     subprocess.run(orden, cwd=donde, capture_output=True)
-r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'args': 'origin main'})
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'local'})
+check('R1 un remoto con una URL a localhost: RECHAZADO sin conectar',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_DEL_REPO_OFF_FMT') and 'GitRemotes' in r, r[:250])
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'evil'})
+check('R1 ...y a un host cualquiera tambien', mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_DEL_REPO_OFF_FMT'), r[:200])
+# 1.19.0: sin ref (en un repo vacio main no es una revision: GIT-046)
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'remote': 'origin'})
 check('R1 un remoto POR NOMBRE sigue permitido (no es una URL): llega a git, que no tiene que enviar',
-      mc.llego_a_git(r) and 'refspec' in r, r[:300])
+      mc.llego_a_git(r), r[:300])
 
 B = spawn({'DELPHI_MCP_GIT_REMOTES': 'example.com'})
-r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://otro.example.org/x.git'})
+r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'otro'})
 check('R1 host fuera de la lista del operador: RECHAZADO nombrando la lista',
       mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_HOST_FMT') and 'example.com' in r, r[:250])
-r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://example.com/x.git'})
+r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'permitido'})
 check('R1 el host permitido SI pasa la puerta (falle luego lo que falle)',
       mc.llego_a_git(r), r[:200])
 B.mata()
+# 1.19.0: los remotos de red de R1, fuera: lo que reescribe el arbol (merge)
+# juzga los endpoints LFS de TODOS los remotos del repo (GIT-061)
+for nombre in ('local', 'evil', 'otro', 'permitido'):
+    subprocess.run(['git', 'remote', 'remove', nombre], cwd=REPOD, capture_output=True)
 
 # --------------------------------------------------------------- B1: merge --
-r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'args': '--no-ff otra'})
+# 1.19.0: sin args; la opcion solo cabe en action (GIT-007) o en branch,
+# donde no es una revision (GIT-070)
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'action': 'no-ff'})
 check('B1 merge con opciones: RECHAZADO (rompia el --ff-only)',
       mc.rechazado(r) and mc.es(r, 'SR_GIT_MERGE_ARGS') and 'ff-only' in r, r[:250])
-r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'args': '--abort'})
-check('B1 merge --abort SI se acepta (la salida del merge a medias)',
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'branch': '--no-ff'})
+check('B1 merge branch=--no-ff: no es una revision (GIT-070), no llega a git',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_REF_NO_VALE_FMT') and not mc.llego_a_git(r), r[:250])
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'action': 'abort'})
+check('B1 merge action=abort SI se acepta (la salida del merge a medias)',
       mc.llego_a_git(r), r[:200])
 
 # ------------------------------------------------------------- P4: comandos --

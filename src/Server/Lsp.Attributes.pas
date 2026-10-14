@@ -84,8 +84,16 @@ type
     array o un objeto donde va un texto es INVALID_PARAM: new=["a","b"] se
     escribia en el .pas tal cual, contestando OK (quinta revision). Lo lleva
     "edits", que es un array por contrato, y el esquema lo publica asi:
-    array de objetos (UN lector: TMCPSchemaGenerator.AceptaJsonComoTexto). }
+    array de objetos (UN lector: TMCPSchemaGenerator.AceptaJsonComoTexto).
+    Con un tipo, el de sus elementos: [JsonComoTexto('string')] es una lista
+    de textos ("paths" de delphi_git, 1.19.0); sin el, objetos. }
   JsonComoTextoAttribute = class(TCustomAttribute)
+  private
+    FItems: string;
+  public
+    constructor Create; overload;
+    constructor Create(const AItems: string); overload;
+    property Items: string read FItems;
   end;
 
   JsonComoTexto = JsonComoTextoAttribute;
@@ -123,27 +131,18 @@ type
 
   Contenido = ContenidoAttribute;
 
-  { Marca un parametro que es la LINEA DE ORDENES de un programa de ESTA
-    maquina (hoy los args de delphi_git): no es contenido ni una ruta entera,
-    son argumentos, y uno de ellos puede ser una ruta. La expansion de ida
-    (ExpandVirtualDrives, Lsp.Mascara) la trocea con EL troceador
-    (TrocearArgs), expande el trozo que es una unidad virtual servida y la
-    recompone con su inversa (EnComillas); sin trozos asi no la toca. Con
-    [Contenido], 'log -- srvd:\x' llegaba a git tal cual y fallaba callado
-    (GIT-060, "nada que ensenar"), y WS-002 promete las unidades virtuales en
-    todo argumento de ruta (1.18.1). La expansion no abre nada: es lo mismo
-    que escribir la letra real, que ya se acepta, y el filtro de git juzga lo
-    expandido. Y cada trozo pasa a la entrada los jueces de una ruta
-    (Lsp.Guard.UncAjenoEnArgumentos): un UNC de ningun sitio o un prefijo de
-    dispositivo se niegan por texto antes de que el programa los abra (un
-    '\\host\s\x' en los args de git abria SMB hacia ese host; revisor de
-    version de la 1.18.1), y una unidad no servida, por su nombre. Lo que va
-    a un programa de OTRA maquina (adb, PAServer) sigue siendo contenido. }
-  LineaDeOrdenesAttribute = class(TCustomAttribute)
-  end;
-
-  LineaDeOrdenes = LineaDeOrdenesAttribute;
-
 implementation
+
+constructor JsonComoTextoAttribute.Create;
+begin
+  inherited Create;
+  FItems := 'object';
+end;
+
+constructor JsonComoTextoAttribute.Create(const AItems: string);
+begin
+  inherited Create;
+  FItems := AItems;
+end;
 
 end.

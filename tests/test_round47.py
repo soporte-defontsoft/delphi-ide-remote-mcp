@@ -6,7 +6,8 @@ voz alta. Aqui se pagan dos:
 
   C  La caida CESU-8 del decodificador de hijos. Hacia falta "un hijo que
      emita esos bytes", y lo hay sin inventar nada: `git show HEAD:fichero`
-     escupe el contenido CRUDO de un fichero. Se versiona uno con un par
+     escupe el contenido CRUDO de un fichero (desde la 1.19.0, show con
+     ref=HEAD:fichero). Se versiona uno con un par
      suplente en CESU-8 (ED A0 BD ED B8 80: bien FORMADO, que es lo que mira
      LooksUtf8, e INVALIDO para el decodificador estricto) y se pide por
      delphi_git. Antes del arreglo eso mataba la llamada con "No mapping for
@@ -59,16 +60,17 @@ try:
         b' MARCA-DESPUES\n'
     open(os.path.join(repo, 'cesu.txt'), 'wb').write(veneno)
     call('delphi_git', {'repo': repo, 'command': 'init'})
+    # 1.19.0: sin args; cada comando con sus campos
     call('delphi_git', {'repo': repo, 'command': 'config',
-                        'args': 'user.name', 'message': 'r47'})
+                        'name': 'user.name', 'message': 'r47'})
     call('delphi_git', {'repo': repo, 'command': 'config',
-                        'args': 'user.email', 'message': 'r47@example.invalid'})
-    call('delphi_git', {'repo': repo, 'command': 'add', 'args': 'cesu.txt'})
+                        'name': 'user.email', 'message': 'r47@example.invalid'})
+    call('delphi_git', {'repo': repo, 'command': 'add', 'paths': ['cesu.txt']})
     c = call('delphi_git', {'repo': repo, 'command': 'commit',
                             'message': 'fichero con un par suplente CESU-8'})
     check('C0 el fichero venenoso queda versionado', c.startswith('exit=0'), c[:200])
     s = call('delphi_git', {'repo': repo, 'command': 'show',
-                            'args': 'HEAD:cesu.txt'})
+                            'ref': 'HEAD:cesu.txt'})
     # la llamada VIVA: git contesto (exit=0) y su salida llego; no basta con
     # que no diga "No mapping" (un timeout tampoco lo dice)
     check('C1 un hijo que emite CESU-8 ya no mata la llamada',

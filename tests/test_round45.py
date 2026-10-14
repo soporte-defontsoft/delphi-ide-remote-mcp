@@ -139,7 +139,9 @@ PROBAR = [
     ('delphi_designer', 'out', {'command': 'preview', 'path': PROPIO_DFM, 'out': AJENO_PNG}),
     ('delphi_designer', 'style', {'command': 'preview', 'path': PROPIO_DFM, 'style': AJENO_STYLE}),
     ('delphi_git', 'repo', {'repo': FUERA, 'command': 'status'}),
-    ('delphi_git', 'path', {'repo': JAIL, 'command': 'worktree', 'args': 'add',
+    # 1.19.0: una LISTA de rutas; el suelo mira cada una (CadenasDeValor)
+    ('delphi_git', 'paths', {'repo': JAIL, 'command': 'add', 'paths': [AJENO_TXT]}),
+    ('delphi_git', 'path', {'repo': JAIL, 'command': 'worktree', 'action': 'add',
                             'path': os.path.join(FUERA, 'wt'), 'ref': 'v1'}),
     ('delphi_test', 'path', {'command': 'discover', 'path': FUERA}),
     ('delphi_test', 'project', {'command': 'run', 'project': AJENO_DPROJ}),
@@ -180,7 +182,6 @@ EXCLUIDOS = {
     ('delphi_designer', 'index'): 'entero: la posicion del componente entre sus hermanos (3.11; su '
         'descripcion habla del orden del FICHERO); lo prueba test_designer_orden',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
-    ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
     ('delphi_edit', 'adduses'): 'NOMBRES de unidad (System.SysUtils;UCustomer), no rutas: su descripcion '
         'dice que en un .dpr van "no path" (11.6 de la 1.18.0, 3822d39); lo prueba test_delphi_patch',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',
@@ -313,13 +314,14 @@ try:
     # 23-sep: 41 -> 39, al retirar delphi_run (path y workdir).
     # 26-sep: 39 -> 40, delphi_git gana path (worktree, 1.4.0).
     # 7-oct: 40 -> 42, delphi_designer gana out y style (preview, 1.17.0).
+    # 14-oct: 42 -> 43, delphi_git gana paths (sin args, 1.19.0).
     w = call('delphi_workspace', {})
     try:
         vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
     except Exception:
         vigilados = -1
-    check('G4 el suelo de la puerta vigila los 42 parametros marcados',
-          vigilados == 42, 'jailedParams=%s' % vigilados)
+    check('G4 el suelo de la puerta vigila los 43 parametros marcados',
+          vigilados == 43, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar

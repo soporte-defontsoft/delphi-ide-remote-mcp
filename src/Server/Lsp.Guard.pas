@@ -1636,14 +1636,14 @@ end;
 type
   { Las marcas de los parametros de TODAS las tools, por su clave
     'tool|parametro' (ClaveDeParam): las rutas del servidor (el valor dice si
-    la tool acepta una relativa, [RutaRelativa]), los que llevan contenido
-    ([Contenido]: la expansion de ida de las unidades virtuales no los toca) y
-    las lineas de ordenes ([LineaDeOrdenes]: se expanden trozo a trozo). }
+    la tool acepta una relativa, [RutaRelativa]) y los que llevan contenido
+    ([Contenido]: la expansion de ida de las unidades virtuales no los toca).
+    Las lineas de ordenes ([LineaDeOrdenes]) se fueron con los args de git en
+    la 1.19.0: ningun parametro lo es ya, y ninguno nace asi (CLAUDE.md). }
   TMarcasDeParams = class
   public
     Rutas: TDictionary<string, Boolean>;
     DeContenido: TDictionary<string, Boolean>;
-    DeLineaDeOrdenes: TDictionary<string, Boolean>;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -1653,14 +1653,12 @@ begin
   inherited Create;
   Rutas := TDictionary<string, Boolean>.Create;
   DeContenido := TDictionary<string, Boolean>.Create;
-  DeLineaDeOrdenes := TDictionary<string, Boolean>.Create;
 end;
 
 destructor TMarcasDeParams.Destroy;
 begin
   Rutas.Free;
   DeContenido.Free;
-  DeLineaDeOrdenes.Free;
   inherited;
 end;
 
@@ -1712,22 +1710,17 @@ begin
         var EsRuta := False;
         var AceptaRelativa := False;
         var EsContenido := False;
-        var EsLineaDeOrdenes := False;
         for Attr in Prop.GetAttributes do
           if Attr is RutaDelServidorAttribute then
             EsRuta := True
           else if Attr is RutaRelativaAttribute then
             AceptaRelativa := True
           else if Attr is ContenidoAttribute then
-            EsContenido := True
-          else if Attr is LineaDeOrdenesAttribute then
-            EsLineaDeOrdenes := True;
+            EsContenido := True;
         if EsRuta then
           Marcas.Rutas.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), AceptaRelativa);
         if EsContenido then
           Marcas.DeContenido.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
-        if EsLineaDeOrdenes then
-          Marcas.DeLineaDeOrdenes.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
       end;
     end;
   finally
@@ -1747,24 +1740,20 @@ end;
 
 { La expansion de ida de las unidades virtuales de ESTA llamada
   (ExpandVirtualDrives, Lsp.Mascara), con la pregunta "que es este
-  argumento?" contestada por las marcas [Contenido] y [LineaDeOrdenes] de la
-  tool. }
+  argumento?" contestada por la marca [Contenido] de la tool. }
 procedure ExpandeUnidadesVirtuales(const AToolName: string;
   const AArguments: TJSONObject);
 var
-  DeContenido, DeLineaDeOrdenes: TDictionary<string, Boolean>;
+  DeContenido: TDictionary<string, Boolean>;
   Tool: string;
 begin
   DeContenido := MarcasDeParams.DeContenido;
-  DeLineaDeOrdenes := MarcasDeParams.DeLineaDeOrdenes;
   Tool := AToolName;
   ExpandVirtualDrives(AArguments,
     function(const ANombre: string): TClaseDeArg
     begin
       if DeContenido.ContainsKey(ClaveDeParam(Tool, ANombre)) then
         Result := caContenido
-      else if DeLineaDeOrdenes.ContainsKey(ClaveDeParam(Tool, ANombre)) then
-        Result := caLineaDeOrdenes
       else
         Result := caEntero;
     end);
@@ -1803,12 +1792,14 @@ begin
   for I := 0 to AArguments.Count - 1 do
   begin
     P := AArguments.Pairs[I];
-    if not (P.JsonValue is TJSONString) then
-      Continue;
     var Clave := ClaveDeParam(AToolName, P.JsonString.Value);
     if not Mapa.ContainsKey(Clave) then
       Continue;
-    V := TJSONString(P.JsonValue).Value;
+    // cada texto del valor: el suyo, o cada uno de una lista de rutas
+    // ("paths" de delphi_git, 1.19.0): una ruta en una lista no se salta el
+    // suelo
+    for V in CadenasDeValor(P.JsonValue) do
+    begin
     // un parametro opcional vacio no es una ruta: si falta, lo dice la tool
     if V.Trim = '' then
       Continue;
@@ -1841,6 +1832,7 @@ begin
       Result := RaizEnLetraNoConectada(V);
       if Result <> '' then
         Exit;
+    end;
     end;
   end;
 end;
@@ -1916,7 +1908,8 @@ end;
 { Una unidad virtual que la expansion de ida dejo tal cual porque esta sesion
   no la sirve: negada por su NOMBRE, sin resolverla nunca en el disco (eso
   filtraba las letras de la maquina). '' si no lo es, o si no hay unidades
-  virtuales. La de PathAnomaly y la de cada trozo de una linea de ordenes. }
+  virtuales. La de PathAnomaly (las lineas de ordenes, que la pedian por
+  trozo, se fueron con los args de git en la 1.19.0). }
 function UnidadNoServidaDenegada(const APath: string): string;
 var
   Units, List: string;
@@ -1937,66 +1930,34 @@ begin
 end;
 
 { La pasada de los UNC ajenos en la ENTRADA, sobre las rutas marcadas
-  [RutaDelServidor]: antes de alargarlas (AlargaRutas las resuelve) y antes de
-  que la tool haga nada con ellas. La negativa, la de NegativaDeUnc.
-  Y sobre CADA TROZO de una linea de ordenes ([LineaDeOrdenes], los args de
-  git), troceada con EL troceador: el programa abre una ruta que le llegue
-  ahi como la abriria la tool. Un '-- \\host\s\x' en un git log abria SMB
-  hacia ese host con la cuenta del servicio, tambien en solo lectura (21 s
-  medidos; revisor de version de la 1.18.1). En un trozo valen los mismos
-  jueces que en una ruta - el UNC de ningun sitio y el prefijo de dispositivo
-  (RutaSinTocarElDisco), sobre el trozo y sobre el valor de un '--opcion=' -,
-  y la unidad virtual no servida, por su nombre (llegaba a git tal cual y
-  callaba: GIT-060). }
+  [RutaDelServidor] - cada texto de su valor, tambien los de una lista de
+  rutas ("paths" de delphi_git): antes de alargarlas (AlargaRutas las
+  resuelve) y antes de que la tool haga nada con ellas. La negativa, la de
+  NegativaDeUnc. Pasaba tambien por cada trozo de una linea de ordenes (los
+  args de git: un '-- \\host\s\x' en un git log abria SMB hacia ese host;
+  revisor de version de la 1.18.1): desde la 1.19.0 no hay lineas de
+  ordenes, y una ruta de "paths" es una ruta. }
 function UncAjenoEnArgumentos(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
-  Mapa, Lineas: TDictionary<string, Boolean>;
+  Mapa: TDictionary<string, Boolean>;
   I: Integer;
   P: TJSONPair;
   EsFormaDeRed: Boolean;
-  Clave, Valor, Trozo: string;
-
-  function TrozoDenegado(const ATrozo: string): string;
-  var
-    V: string;
-    Valores: TArray<string>;
-  begin
-    Result := UnidadNoServidaDenegada(ATrozo);
-    if Result <> '' then
-      Exit;
-    Valores := [ATrozo];
-    if ATrozo.StartsWith('-') and (Pos('=', ATrozo) > 0) then
-      Valores := Valores + [Copy(ATrozo, Pos('=', ATrozo) + 1, MaxInt)];
-    for V in Valores do
-      if UncFueraDeLugares(V) then
-        Exit(NegativaDeUnc(V, EsFormaDeRed))
-      else if EsPrefijoDeDispositivo(V) then
-        Exit(MsgFmt(SR_GUARD_PREFIJO_DISPOSITIVO_FMT, [V]));
-  end;
-
+  Valor: string;
 begin
   Result := '';
   if not Assigned(AArguments) then
     Exit;
   Mapa := RutasNuestras;
-  Lineas := MarcasDeParams.DeLineaDeOrdenes;
   for I := 0 to AArguments.Count - 1 do
   begin
     P := AArguments.Pairs[I];
-    if not (P.JsonValue is TJSONString) then
+    if not Mapa.ContainsKey(ClaveDeParam(AToolName, P.JsonString.Value)) then
       Continue;
-    Clave := ClaveDeParam(AToolName, P.JsonString.Value);
-    Valor := TJSONString(P.JsonValue).Value;
-    if Mapa.ContainsKey(Clave) and UncFueraDeLugares(Valor) then
-      Exit(NegativaDeUnc(Valor, EsFormaDeRed));
-    if Lineas.ContainsKey(Clave) then
-      for Trozo in TrocearArgs(Valor) do
-      begin
-        Result := TrozoDenegado(Trozo);
-        if Result <> '' then
-          Exit;
-      end;
+    for Valor in CadenasDeValor(P.JsonValue) do
+      if UncFueraDeLugares(Valor) then
+        Exit(NegativaDeUnc(Valor, EsFormaDeRed));
   end;
 end;
 
@@ -2074,16 +2035,15 @@ begin
   // connect/disconnect/install/run/tap/key mutan o ejecutan
   AnadeAcceso('delphi_adb', atMixta, ['discover', 'devices', 'logcat', 'screenshot'], 'command', nil, '',
     ['logcat', 'out', 'screenshot', 'out']);
-  // git decide por ARGUMENTOS (GitCommandIsQuery): se anuncia lo
-  // INCONDICIONAL como lectura y lo condicionado con su condicion (branch y
-  // tag listan solo sin args ni message; worktree y stash solo args=list). Se
-  // anunciaban branch/tag como lecturas y la puerta los negaba con args
-  // (r11b H1, r11c H3)
-  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show', 'ls-remote'], 'command',
-    ['branch', 'without args or message (then it lists)',
-     'tag', 'without args or message (then it lists)',
-     'worktree', 'with args=list',
-     'stash', 'with args=list']);
+  // git decide por sus CAMPOS (GitCommandIsQuery): se anuncia lo
+  // INCONDICIONAL como lectura y lo condicionado con su condicion (tag lista
+  // sin name ni message; worktree y stash solo action=list). Se anunciaban
+  // branch/tag como lecturas y la puerta los negaba con args (r11b H1, r11c
+  // H3); branch solo lista desde la 1.19.0
+  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show', 'ls-remote', 'branch'], 'command',
+    ['tag', 'without name or message (then it lists)',
+     'worktree', 'with action=list',
+     'stash', 'with action=list']);
   // lecturas para la puerta, con un EFECTO fuera del workspace: el hint MCP
   // "no modifica su entorno" es falso y se dice (r11e H6)
   AnadeAcceso('delphi_report', atLectura, [], 'command', nil,
@@ -2176,7 +2136,8 @@ begin
     // la mitad de consulta de git depende de los argumentos: la MISMA
     // clasificacion que usa la propia tool (GitCommandIsQuery)
     AQue := Trim(AToolName + ' ' + Cmd);
-    Exit(GitCommandIsQuery(Cmd, ArgStr(AArguments, 'args'), ArgStr(AArguments, 'message')));
+    Exit(GitCommandIsQuery(Cmd, ArgStr(AArguments, 'action'), ArgStr(AArguments, 'name'),
+      ArgStr(AArguments, 'message')));
   end;
   AQue := AToolName + ' ' + Cmd;
   Result := (Cmd = '') or MatchText(Cmd, F.Lecturas);
@@ -2290,25 +2251,21 @@ begin
   Result := ArgPathOutsideDenied(AToolName, AArguments, False);
   if Result <> '' then
     Exit;
-  // Universal git-argument filter (BOTH access levels): a dangerous option
-  // would let even a read-write client escape the jail. The single place git
-  // freeform args are vetted.
+  // delphi_git no tiene args desde la 1.19.0 (David, 14-oct-2026: el agente
+  // pide una operacion): la lista negra de sus opciones se fue con ellos. Un
+  // cliente con el esquema viejo los manda: se le dice que campos usar, con
+  // su codigo, antes del SYS-015 generico del deserializador.
   if SameText(AToolName, 'delphi_git') and Assigned(AArguments) then
   begin
-    GitArgs := ArgStr(AArguments, 'args');
-    Result := GitArgDenied(GitArgs, LowerCase(ArgStr(AArguments, 'command').Trim));
-    if Result <> '' then
-      Exit;
-    // An explicit URL anywhere in a git call is an outbound connection this
-    // machine is about to make. It goes through the operator's allowlist -
-    // args AND, for clone, message, which carries the URL. git receives that
-    // message WHOLE, as one argument: it is judged as one piece (split, the
-    // two halves of 'ssh://allowed:22 @other/x' had no host each and git went
-    // to the other; review of addc44e). In the other commands message is
-    // text - a commit's goes through -F - and a link in it was refused
-    // (GIT-004, measured 9-oct-2026).
-    Result := GitRemoteDenied(GitArgs);
-    if (Result = '') and SameText(ArgStr(AArguments, 'command').Trim, 'clone') then
+    if AArguments.GetValue('args') <> nil then
+      Exit(MsgText(SR_GIT_ARGS_RETIRADO));
+    // An explicit URL in a git call is an outbound connection this machine
+    // is about to make: the clone's, which travels in message. It goes
+    // through the operator's allowlist WHOLE, as one argument (split, the
+    // two halves of 'ssh://allowed:22 @other/x' had no host each and git
+    // went to the other; review of addc44e). In the other commands message
+    // is text - a commit's goes through -F.
+    if SameText(ArgStr(AArguments, 'command').Trim, 'clone') then
       Result := GitRemoteDenied(EnComillas(ArgStr(AArguments, 'message')));
     if Result <> '' then
       Exit;
@@ -2478,8 +2435,8 @@ begin
   // not serve: it must be refused BY NAME, never resolved against the real
   // filesystem (that is what leaked the host's drive letters). Only when a
   // virtual namespace exists at all - with no served drive there is nothing to
-  // mask and nothing to name. (UnidadNoServidaDenegada: tambien la de los
-  // trozos de una linea de ordenes.)
+  // mask and nothing to name. (UnidadNoServidaDenegada; tambien la pide, por
+  // aqui, cada ruta de "paths" de delphi_git.)
   Result := UnidadNoServidaDenegada(APath);
   if Result <> '' then
     Exit;

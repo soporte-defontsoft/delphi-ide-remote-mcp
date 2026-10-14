@@ -55,7 +55,8 @@ WT1 = os.path.join(JAIL, 'wt1')
 RO = os.path.join(WT1, 'U.dfm')
 srv = arranca(RO)
 try:
-    r = srv.call('delphi_git', {'repo': REPO, 'command': 'worktree', 'args': 'add', 'path': WT1, 'ref': 'otra'})
+    # 1.19.0: sin args; el subcomando va en action
+    r = srv.call('delphi_git', {'repo': REPO, 'command': 'worktree', 'action': 'add', 'path': WT1, 'ref': 'otra'})
     check('V1 worktree add cuyo destino CONTIENE un ReadOnlyPaths: MOVE-020 y no escribe el fichero',
           mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT') and not os.path.exists(RO), (r[:260], os.path.exists(RO)))
 finally:
@@ -65,7 +66,7 @@ finally:
 WT2 = os.path.join(JAIL, 'wt2')
 srv = arranca()
 try:
-    r = srv.call('delphi_git', {'repo': REPO, 'command': 'worktree', 'args': 'add', 'path': WT2, 'ref': 'otra'})
+    r = srv.call('delphi_git', {'repo': REPO, 'command': 'worktree', 'action': 'add', 'path': WT2, 'ref': 'otra'})
     check('V2 el control: sin ReadOnlyPaths, worktree add escribe el arbol',
           not mc.fallo(r) and os.path.isfile(os.path.join(WT2, 'U.dfm')), r[:260])
 finally:

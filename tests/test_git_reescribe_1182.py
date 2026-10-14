@@ -17,18 +17,23 @@ se le pregunta a git (el juez) que ficheros tocaria (diff --name-only HEAD
 
 Las formas que el juez no leia (revision 5.5, medido: las tres reescribian U.dfm
 con el juez de la primera version, que solo miraba "switch <un trozo>" y salia
-sin negar si git no contestaba):
-  X6 switch - (la rama anterior, b2): GIT-065, U.dfm intacto
-  X7 switch --detach b2: una forma que el juez no lee, en un repo con un lugar
-     protegido dentro -> se NIEGA (GIT-066), U.dfm intacto
-  X8 switch -c nb b2 (create con punto de partida: SI mueve el arbol): GIT-065
+sin negar si git no contestaba). Desde la 1.19.0 no hay args: la rama llega
+con tipo (branch=) y git la juzga como nombre (check-ref-format) antes que nada:
+  X6 switch - ya no se escribe (branch="-": GIT-071); la rama anterior por el
+     nombre que git le da (branch="@{-1}", b2): GIT-065, U.dfm intacto
+  X7 switch --detach b2 ya no se escribe (GIT-071), U.dfm intacto; y el juez
+     sigue fallando CERRADO: un pull cuyo fetch previo falla (una rama que el
+     remoto no tiene) deja el destino sin leer y, en un repo con un lugar
+     protegido dentro, se NIEGA (GIT-066), U.dfm intacto
+  X8 switch -c nb b2 (create con punto de partida) ya no se escribe:
+     branch="nb b2" create=true -> GIT-071, U.dfm intacto
   X9 el control de X8: switch -c nb2 (sin punto de partida) no mueve el arbol y
      se permite
-  X10 el control de X7: el mismo switch --detach b2 en un repo SIN nada
-     protegido dentro no se juzga y se hace (el fallo cerrado es solo donde
-     hay algo que proteger)
+  X10 el control de X7: el mismo pull en un repo SIN nada protegido dentro no
+     se juzga y llega a git, que dice que no encuentra la rama (el fallo
+     cerrado es solo donde hay algo que proteger)
   X11 lo mismo con el repo SIENDO la raiz del workspace: la raiz no es "algo
-     protegido dentro" (ASoloDentro); se hace
+     protegido dentro" (ASoloDentro); llega a git
   X12 una rama que se llama como el fichero protegido (U.dfm): el juez pregunta
      "diff HEAD U.dfm --" (sin el -- git no sabe si es rama o ruta y no
      contesta) -> GIT-065 nombrando U.dfm
@@ -37,9 +42,9 @@ No medible aqui, y por eso una GUARDA (sigue verde con su mutante): que un git
 que no contesta sea un "no". Con el -- de X12, todo destino que git no sabe
 leer tambien hace fallar la operacion misma; queda para un git que se cuelga.
 
-No hace falta remoto: basta la historia del repo. pull con opciones (sin el
-fetch previo el juez no sabe el destino: se niega igual que X7) pide un remoto
-y no se mide aqui.
+El remoto de X7, X10 y X11 es un repo bare de la jaula, sin red (el de X11,
+dentro del propio repo: la raiz es el repo). Lo demas no lo necesita: basta
+la historia del repo.
 
 Uso:  python tests/test_git_reescribe_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -77,6 +82,13 @@ def nuevo_repo(nombre):
     return repo, git
 
 
+def con_remoto(repo, bare):
+    """origin = un clon bare del repo en la carpeta bare (dentro de la raiz):
+    el pull de X7/X10/X11 sin red."""
+    subprocess.run(['git', 'clone', '-q', '--bare', repo, bare], capture_output=True, text=True)
+    subprocess.run(['git', 'remote', 'add', 'origin', bare], cwd=repo, capture_output=True, text=True)
+
+
 def arranca(ro_paths='', ro_roots='', raiz=JAIL):
     env = {'DELPHI_MCP_ROOTS': raiz}
     if ro_paths:
@@ -95,12 +107,12 @@ def lee(repo, rel):
 repo, _ = nuevo_repo('r1')
 srv = arranca(ro_paths=os.path.join(repo, 'U.dfm'))
 try:
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': 'b2'})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b2'})
     check('X1 switch a una rama que cambia un ReadOnlyPaths: GIT-065 nombrando U.dfm, y U.dfm intacto',
           mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'U.dfm' in r and lee(repo, 'U.dfm') == 'EN_MAIN',
           (r[:260], lee(repo, 'U.dfm')))
     # X3 el control, sobre el MISMO servidor: una rama que cambia solo src/ pasa
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': 'solosrc'})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'solosrc'})
     check('X3 el control: switch a una rama que cambia solo src/ (nada protegido) se permite y cambia src',
           not mc.rechazado(r) and lee(repo, 'src/S.txt') == 'SRC_SOLO', (r[:200], lee(repo, 'src/S.txt')))
 finally:
@@ -110,7 +122,7 @@ finally:
 repo, _ = nuevo_repo('r2')
 srv = arranca(ro_roots=os.path.join(repo, 'vendor'))
 try:
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': 'b2'})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b2'})
     check('X2 switch a una rama que cambia un fichero de ReadOnlyRoots: GIT-065 nombrando vendor/V.txt, y V.txt intacto',
           mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'vendor' in r.replace('\\\\', '/').replace('\\', '/') and
           lee(repo, 'vendor/V.txt') == 'VENDOR_MAIN', (r[:260], lee(repo, 'vendor/V.txt')))
@@ -121,7 +133,7 @@ finally:
 repo, _ = nuevo_repo('r4')
 srv = arranca(ro_paths=os.path.join(repo, 'U.dfm'))
 try:
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'merge', 'args': 'b2'})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'merge', 'branch': 'b2'})
     check('X4 merge --ff-only de una rama que cambia un ReadOnlyPaths: GIT-065, U.dfm intacto',
           mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and lee(repo, 'U.dfm') == 'EN_MAIN', (r[:260], lee(repo, 'U.dfm')))
 finally:
@@ -134,7 +146,7 @@ open(os.path.join(repo, 'U.dfm'), 'w').write('CAMBIO_LOCAL\n')
 g('stash', 'push', '-q')
 srv = arranca(ro_paths=os.path.join(repo, 'U.dfm'))
 try:
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'stash', 'args': 'pop'})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'stash', 'action': 'pop'})
     check('X5 stash pop que devolveria un ReadOnlyPaths: GIT-065, U.dfm intacto (sigue en HEAD)',
           mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and lee(repo, 'U.dfm') == 'EN_MAIN', (r[:260], lee(repo, 'U.dfm')))
 finally:
@@ -142,28 +154,45 @@ finally:
 
 # --------- X6-X9: las formas que el juez no leia, con U.dfm protegido
 repo, g = nuevo_repo('r6')
+con_remoto(repo, os.path.join(JAIL, 'r6.git'))
 srv = arranca(ro_paths=os.path.join(repo, 'U.dfm'))
 try:
     # cada check desde main limpio: el rojo de uno no arrastra a los demas
     # (con su mutante, X7 reescribe U.dfm y X8/X9 lo leian ya cambiado)
     # la rama anterior (@{-1}) tiene que ser b2
     g('switch', '-q', '-f', 'b2'); g('switch', '-q', '-f', 'main')
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': '-'})
-    check('X6 switch - (la rama anterior cambia un ReadOnlyPaths): GIT-065 nombrando U.dfm, y U.dfm intacto',
-          mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'U.dfm' in r and lee(repo, 'U.dfm') == 'EN_MAIN',
+    # 1.19.0: "switch -" ya no se escribe ("-" no es un nombre de rama: GIT-071);
+    # la rama anterior es @{-1}, que git admite como nombre, y el juez la lee
+    r0 = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': '-'})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': '@{-1}'})
+    check('X6 switch - ya no se escribe (GIT-071); la rama anterior como @{-1} cambia un ReadOnlyPaths: '
+          'GIT-065 nombrando U.dfm, y U.dfm intacto',
+          mc.abre(r0, 'SR_GIT_NOMBRE_NO_VALE_FMT') and mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT')
+          and 'U.dfm' in r and lee(repo, 'U.dfm') == 'EN_MAIN',
+          (r0[:160], r[:260], lee(repo, 'U.dfm')))
+    g('switch', '-q', '-f', 'main')
+    # 1.19.0: sin args; --detach ni se puede escribir (no es un nombre: GIT-071)
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': '--detach b2'})
+    check('X7 switch --detach b2 ya no se escribe: GIT-071, U.dfm intacto',
+          mc.abre(r, 'SR_GIT_NOMBRE_NO_VALE_FMT') and lee(repo, 'U.dfm') == 'EN_MAIN',
           (r[:260], lee(repo, 'U.dfm')))
     g('switch', '-q', '-f', 'main')
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': '--detach b2'})
-    check('X7 switch --detach b2 (forma que el juez no lee) en un repo con algo protegido dentro: GIT-066, U.dfm intacto',
+    # el fallo CERRADO del juez (GIT-066), con lo que queda sin leer en 1.19.0:
+    # el fetch previo de un pull de una rama que el remoto no tiene falla, y
+    # el destino (FETCH_HEAD) no es el del pull
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'pull', 'remote': 'origin', 'branch': 'noexiste'})
+    check('X7 ...y el juez falla CERRADO: un pull cuyo destino no lee (su fetch previo fallo) en un repo con '
+          'algo protegido dentro: GIT-066, U.dfm intacto',
           mc.abre(r, 'SR_GIT_REESCRIBE_SIN_JUEZ_FMT') and lee(repo, 'U.dfm') == 'EN_MAIN',
           (r[:260], lee(repo, 'U.dfm')))
     g('switch', '-q', '-f', 'main')
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': 'nb b2', 'create': True})
-    check('X8 switch -c nb b2 (create con punto de partida mueve el arbol): GIT-065, U.dfm intacto',
-          mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and lee(repo, 'U.dfm') == 'EN_MAIN',
+    # 1.19.0: create con punto de partida ya no se escribe ("nb b2" no es un nombre)
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'nb b2', 'create': True})
+    check('X8 switch -c nb b2 (create con punto de partida) ya no se escribe: GIT-071, U.dfm intacto',
+          mc.abre(r, 'SR_GIT_NOMBRE_NO_VALE_FMT') and lee(repo, 'U.dfm') == 'EN_MAIN',
           (r[:260], lee(repo, 'U.dfm')))
     g('switch', '-q', '-f', 'main')
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': 'nb2', 'create': True})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'nb2', 'create': True})
     check('X9 el control: switch -c nb2 (sin punto de partida, el arbol no se mueve) se permite',
           not mc.rechazado(r) and lee(repo, 'U.dfm') == 'EN_MAIN', (r[:260], lee(repo, 'U.dfm')))
 finally:
@@ -171,21 +200,28 @@ finally:
 
 # --------- X10: el control de X7, en un repo SIN nada protegido dentro
 repo, _ = nuevo_repo('r10')
+con_remoto(repo, os.path.join(JAIL, 'r10.git'))
 srv = arranca()
 try:
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': '--detach b2'})
-    check('X10 el control: switch --detach b2 en un repo sin nada protegido dentro no se juzga y se hace',
-          not mc.rechazado(r) and lee(repo, 'U.dfm') == 'DE_B2', (r[:260], lee(repo, 'U.dfm')))
+    # 1.19.0: el control del fallo cerrado es el pull de X7 (--detach ya no se escribe)
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'pull', 'remote': 'origin', 'branch': 'noexiste'})
+    check('X10 el control: el pull de X7 en un repo sin nada protegido dentro no se juzga y llega a git, '
+          'que dice que no encuentra la rama',
+          mc.abre(r, 'SR_GIT_EXIT_FMT') and 'noexiste' in r and lee(repo, 'U.dfm') == 'EN_MAIN',
+          (r[:260], lee(repo, 'U.dfm')))
 finally:
     srv.cierra()
 
 # --------- X11: el repo ES la raiz, sin nada protegido dentro
 repo, _ = nuevo_repo('r11')
+# el remoto, dentro del propio repo: la raiz de la sesion es el repo
+con_remoto(repo, os.path.join(repo, 'remoto.git'))
 srv = arranca(raiz=repo)
 try:
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': '--detach b2'})
-    check('X11 el control: el repo ES la raiz y no hay nada protegido dentro: switch --detach b2 se hace',
-          not mc.rechazado(r) and lee(repo, 'U.dfm') == 'DE_B2', (r[:260], lee(repo, 'U.dfm')))
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'pull', 'remote': 'origin', 'branch': 'noexiste'})
+    check('X11 el control: el repo ES la raiz y no hay nada protegido dentro: el pull de X7 llega a git',
+          mc.abre(r, 'SR_GIT_EXIT_FMT') and 'noexiste' in r and lee(repo, 'U.dfm') == 'EN_MAIN',
+          (r[:260], lee(repo, 'U.dfm')))
 finally:
     srv.cierra()
 
@@ -194,7 +230,7 @@ repo, g = nuevo_repo('r12')
 g('branch', 'U.dfm', 'b2')
 srv = arranca(ro_paths=os.path.join(repo, 'U.dfm'))
 try:
-    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'args': 'U.dfm'})
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'U.dfm'})
     check('X12 una rama llamada U.dfm (como el protegido): el juez la lee como rama (--) -> GIT-065 nombrando U.dfm',
           mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'U.dfm' in r and lee(repo, 'U.dfm') == 'EN_MAIN',
           (r[:260], lee(repo, 'U.dfm')))

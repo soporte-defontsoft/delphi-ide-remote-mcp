@@ -8,14 +8,18 @@ podemos ayudar nosotros desde el server").
   H2  control: un fichero que no es un proyecto sigue siendo BUILD-016.
   H3  delphi_config view dice defaultPlatform, la MISMA que compila
       delphi_build sin platform= (summary y platforms).
-  H4  un log -S/-G vacio dice lo que recibio git y como comprobar el texto
-      (GIT-058); el texto "Oben" del fichero de Hermes, buscado como "Open".
-  H5  control: -S con el texto bien escrito encuentra su commit; otra consulta
-      vacia repite lo que recibio git SIN la pista de -S/-G; una orden que
-      escribe y calla no repite sus argumentos.
-  H6  el mensaje de un commit o un tag en args (-m, -am) -> GIT-059, nada
-      hecho; control: el tag anotado con message= funciona.
-  H7  GIT-014 dice que path y ref son PARAMETROS, no args.
+  H4  un log search= vacio dice lo que recibio git (-S<texto>) y como
+      comprobar el texto (GIT-058); el texto "Oben" del fichero de Hermes,
+      buscado como "Open".
+  H5  control: search= con el texto bien escrito encuentra su commit; otra
+      consulta vacia (el rango ref=HEAD to=HEAD) repite lo que recibio git SIN
+      la pista de search; una orden que escribe y calla no repite sus
+      argumentos.
+  H6  1.19.0: delphi_git no tiene args. El mensaje de un commit o un tag en
+      args (-m, -am) -> GIT-068 (era GIT-059), nada hecho; control: el tag
+      anotado con message= funciona.
+  H7  worktree con args -> GIT-068, nada hecho; una accion que no tiene ->
+      GIT-014, que dice que path y ref van con action=add.
   H8  REPORT-005 dice cuantos caracteres guardo y como acaba (el informe
       final de Hermes llego cortado a 4.000 por su lado).
   H9  delphi_help tasks dice que faltan las vault_* y por que: sin vault (lo
@@ -84,22 +88,24 @@ try:
     R = os.path.join(JAIL, 'repo')
     os.makedirs(R)
     srv.call('delphi_git', {'repo': R, 'command': 'init'})
-    srv.call('delphi_git', {'repo': R, 'command': 'config', 'args': 'user.name', 'message': 'Bateria'})
-    srv.call('delphi_git', {'repo': R, 'command': 'config', 'args': 'user.email', 'message': 'b@x.local'})
+    srv.call('delphi_git', {'repo': R, 'command': 'config', 'name': 'user.name', 'message': 'Bateria'})
+    srv.call('delphi_git', {'repo': R, 'command': 'config', 'name': 'user.email', 'message': 'b@x.local'})
     open(os.path.join(R, 'open.txt'), 'w').write('Oben test 1.17.0\n')   # la errata de Hermes
-    srv.call('delphi_git', {'repo': R, 'command': 'add', 'args': 'open.txt'})
+    srv.call('delphi_git', {'repo': R, 'command': 'add', 'paths': ['open.txt']})
     srv.call('delphi_git', {'repo': R, 'command': 'commit', 'message': 'add open.txt'})
 
-    out = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '-SOpen'})
-    check('H4 log -S vacio: dice lo que recibio git (-SOpen) y como comprobar el texto (GIT-058)',
+    # 1.19.0: el texto va en search= y el servidor compone -S<texto>
+    out = srv.call('delphi_git', {'repo': R, 'command': 'log', 'search': 'Open'})
+    check('H4 log search vacio: dice lo que recibio git (-SOpen) y como comprobar el texto (GIT-058)',
           mc.es(out, 'SN_GIT_CONSULTA_VACIA_FMT') and '-SOpen' in out and mc.es(out, 'SN_GIT_PICKAXE_VACIO'), out[:300])
 
-    out = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '-SOben'})
-    vacia = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '--author=nadie'})
-    tag = srv.call('delphi_git', {'repo': R, 'command': 'tag', 'args': 'ligero1170'})
-    check('H5 control: -S bien escrito encuentra su commit; otra consulta vacia repite lo recibido sin la '
-          'pista de -S/-G; una orden que escribe y calla no repite sus argumentos',
-          'add open.txt' in out and '--author=nadie' in vacia and not mc.es(vacia, 'SN_GIT_PICKAXE_VACIO')
+    out = srv.call('delphi_git', {'repo': R, 'command': 'log', 'search': 'Oben'})
+    # 1.19.0: sin --author; otra consulta vacia es el rango HEAD..HEAD
+    vacia = srv.call('delphi_git', {'repo': R, 'command': 'log', 'ref': 'HEAD', 'to': 'HEAD'})
+    tag = srv.call('delphi_git', {'repo': R, 'command': 'tag', 'name': 'ligero1170'})
+    check('H5 control: search bien escrito encuentra su commit; otra consulta vacia repite lo recibido sin la '
+          'pista de search; una orden que escribe y calla no repite sus argumentos',
+          'add open.txt' in out and 'HEAD..HEAD' in vacia and not mc.es(vacia, 'SN_GIT_PICKAXE_VACIO')
           and mc.es(vacia, 'SN_GIT_CONSULTA_VACIA_FMT') and not mc.es(tag, 'SN_GIT_CONSULTA_VACIA_FMT')
           and mc.es(tag, 'SN_GIT_SILENT_OK_FMT') and 'ligero1170' not in tag,
           '%s | %s | %s' % (out[:120], vacia[:200], tag[:160]))
@@ -109,26 +115,35 @@ try:
     # el commit de control de abajo prueba que habia algo que commitear
     open(os.path.join(R, 'open.txt'), 'a').write('cambio\n')
     open(os.path.join(R, 'nuevo.txt'), 'w').write('nuevo\n')
-    srv.call('delphi_git', {'repo': R, 'command': 'add', 'args': 'nuevo.txt'})
-    antes = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '--format=%s'})
+    srv.call('delphi_git', {'repo': R, 'command': 'add', 'paths': ['nuevo.txt']})
+    # (log en su formato de siempre, hash y asunto: antes == despues sigue midiendo)
+    antes = srv.call('delphi_git', {'repo': R, 'command': 'log'})
+    # 1.19.0: sin args; la llamada vieja recibe GIT-068 en la puerta y no hace nada
     c1 = srv.call('delphi_git', {'repo': R, 'command': 'commit', 'args': '-m hola', 'message': 'x'})
     c2 = srv.call('delphi_git', {'repo': R, 'command': 'commit', 'args': '-am hola', 'message': 'x'})
     t1 = srv.call('delphi_git', {'repo': R, 'command': 'tag', 'args': '-m anotado v2'})
-    despues = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '--format=%s'})
+    despues = srv.call('delphi_git', {'repo': R, 'command': 'log'})
     tags = srv.call('delphi_git', {'repo': R, 'command': 'tag'})
-    t2 = srv.call('delphi_git', {'repo': R, 'command': 'tag', 'args': 'v3', 'message': 'anotado'})
+    t2 = srv.call('delphi_git', {'repo': R, 'command': 'tag', 'name': 'v3', 'message': 'anotado'})
     tags2 = srv.call('delphi_git', {'repo': R, 'command': 'tag'})
     srv.call('delphi_git', {'repo': R, 'command': 'commit', 'message': 'control 1170'})
-    control = srv.call('delphi_git', {'repo': R, 'command': 'log', 'args': '--format=%s'})
-    check('H6 el mensaje en args (-m, -am) de commit y tag -> GIT-059 sin hacer nada; control: tag con message=',
-          all(mc.es(x, 'SR_GIT_MENSAJE_EN_ARGS') for x in (c1, c2, t1)) and antes == despues
-          and 'v2' not in tags and 'v3' in tags2 and not mc.es(t2, 'SR_GIT_MENSAJE_EN_ARGS')
+    control = srv.call('delphi_git', {'repo': R, 'command': 'log'})
+    check('H6 el mensaje en args (-m, -am) de commit y tag -> GIT-068 sin hacer nada; control: tag con message=',
+          all(mc.abre(x, 'SR_GIT_ARGS_RETIRADO') for x in (c1, c2, t1)) and antes == despues
+          and 'v2' not in tags and 'v3' in tags2 and not mc.fallo(t2)
           and 'control 1170' in control and 'control 1170' not in despues,
           '%s | %s | %s | %s' % (c1[:120], c2[:120], t1[:120], tags2[:120]))
 
-    out = srv.call('delphi_git', {'repo': R, 'command': 'worktree', 'args': 'add path=otra'})
-    check('H7 GIT-014 dice que path y ref son PARAMETROS, nunca dentro de args',
-          mc.es(out, 'SR_GIT_WORKTREE_ARGS') and 'never inside args' in out, out[:300])
+    # 1.19.0: con args, GIT-068 y nada hecho (ni la carpeta "otra"); una
+    # accion que worktree no tiene, GIT-014 con lo que si toma
+    viejo = srv.call('delphi_git', {'repo': R, 'command': 'worktree', 'args': 'add path=otra'})
+    out = srv.call('delphi_git', {'repo': R, 'command': 'worktree', 'action': 'otra'})
+    check('H7 worktree con args -> GIT-068 sin hacer nada; una accion que no tiene -> GIT-014, que dice '
+          'que path y ref van con action=add',
+          mc.abre(viejo, 'SR_GIT_ARGS_RETIRADO') and not os.path.exists(os.path.join(JAIL, 'otra'))
+          and not os.path.exists(os.path.join(R, 'otra'))
+          and mc.abre(out, 'SR_GIT_WORKTREE_ARGS') and 'action=add with path' in out and 'ref' in out,
+          '%s | %s' % (viejo[:150], out[:300]))
 
     # ---- H8: lo que guardo un informe ----
     msg = 'A' * 100 + ' final FIN-1170'

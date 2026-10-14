@@ -6,13 +6,15 @@ rango de 30 commits devolvio 20, sin aviso, y offset=20 contestaba GIT-054
 respuesta, no la historia). Ahora, si hay MAS, lo dice git: la misma orden con
 un commit mas de tope; con un -n del agente, git usa el suyo en las dos y
 salen iguales, asi que no se imita la gramatica de git (norma 6).
+Desde la 1.19.0 sin args: el rango va en ref/to y el tope en count (con un
+count del agente, lo que pidio es lo que hay).
 
-  L1 log de un rango de 29 commits sin -n: 20 lineas y GIT-067 (ROJO en
+  L1 log de un rango de 29 commits sin count: 20 lineas y GIT-067 (ROJO en
      produccion: ni una palabra)
-  L2 el mismo rango con -n 40: los 29, sin GIT-067
+  L2 el mismo rango con count=40: los 29, sin GIT-067
   L3 control: un rango de 5: los 5, sin GIT-067
-  L4 -n 20 explicito con 29 detras: 20 lineas y SIN GIT-067 (pidio 20)
-  L5 con --stat (varias lineas por commit) y sin -n: GIT-067 igual
+  L4 count=20 explicito con 29 detras: 20 lineas y SIN GIT-067 (pidio 20)
+  L5 con format=full (varias lineas por commit) y sin count: GIT-067 igual
 
 Uso:  python tests/test_git_log_tope_1183.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -48,23 +50,25 @@ def lineas(r):
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='git-log-tope', t=120)
 try:
-    def log(args):
-        return srv.call('delphi_git', {'repo': REPO, 'command': 'log', 'args': args})
+    # 1.19.0: sin args; el rango, ref/to; el tope, count
+    def log(**campos):
+        return srv.call('delphi_git', dict({'repo': REPO, 'command': 'log'}, **campos))
 
-    r = log('%s..HEAD' % PRIMERO)
-    check('L1 un rango de 29 commits sin -n: 20 lineas y GIT-067 (hay mas, y como verlos)',
+    r = log(ref=PRIMERO, to='HEAD')
+    check('L1 un rango de 29 commits sin count: 20 lineas y GIT-067 (hay mas, y como verlos)',
           len(lineas(r)) == 20 and 'GIT-067' in r, (len(lineas(r)), r[-300:]))
-    r = log('-n 40 %s..HEAD' % PRIMERO)
-    check('L2 el mismo rango con -n 40: los 29, sin GIT-067', len(lineas(r)) == 29 and 'GIT-067' not in r,
+    r = log(count=40, ref=PRIMERO, to='HEAD')
+    check('L2 el mismo rango con count=40: los 29, sin GIT-067', len(lineas(r)) == 29 and 'GIT-067' not in r,
           (len(lineas(r)), r[-200:]))
-    r = log('HEAD~5..HEAD')
+    r = log(ref='HEAD~5', to='HEAD')
     check('L3 control: un rango de 5: los 5, sin GIT-067', len(lineas(r)) == 5 and 'GIT-067' not in r,
           (len(lineas(r)), r[-200:]))
-    r = log('-n 20 %s..HEAD' % PRIMERO)
-    check('L4 -n 20 explicito con 29 detras: 20 y SIN GIT-067 (pidio 20)',
+    r = log(count=20, ref=PRIMERO, to='HEAD')
+    check('L4 count=20 explicito con 29 detras: 20 y SIN GIT-067 (pidio 20)',
           len(lineas(r)) == 20 and 'GIT-067' not in r, (len(lineas(r)), r[-200:]))
-    r = log('--stat %s..HEAD' % PRIMERO)
-    check('L5 con --stat (varias lineas por commit) y sin -n: GIT-067 igual', 'GIT-067' in r, r[-300:])
+    # 1.19.0: log no tiene --stat; format=full tambien da varias lineas por commit
+    r = log(format='full', ref=PRIMERO, to='HEAD')
+    check('L5 con format=full (varias lineas por commit) y sin count: GIT-067 igual', 'GIT-067' in r, r[-300:])
 finally:
     srv.cierra()
 

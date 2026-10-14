@@ -25,6 +25,7 @@ type
     // esquema publica "array de objetos" y el deserializador acepta el JSON
     // en ese texto - la misma pregunta para lo que se promete y lo que se hace
     class function AceptaJsonComoTexto(Prop: TRttiProperty): Boolean;
+    class function ElementosDeJsonComoTexto(Prop: TRttiProperty): string;
     class function GenerateSchema(Cls: TClass): TJSONObject;
     class function GenerateSchemaFromInstance(Instance: TObject): TJSONObject;
   end;
@@ -88,8 +89,11 @@ begin
         if JsonType = 'integer' then
           PropSchema.AddPair('minimum', TJSONNumber.Create(0));
 
+        // [local change 2026-10-14] el tipo de sus elementos, el que diga la
+        // marca ([JsonComoTexto('string')]: "paths" de delphi_git, 1.19.0)
         if ArrayDeObjetos then
-          PropSchema.AddPair('items', TJSONObject.Create(TJSONPair.Create('type', 'object')))
+          PropSchema.AddPair('items', TJSONObject.Create(TJSONPair.Create('type',
+            ElementosDeJsonComoTexto(RttiProp))))
         else if JsonType = 'array' then
           PropSchema.AddPair('items', TJSONObject.Create);
 
@@ -208,6 +212,16 @@ begin
     if Attr is JsonComoTextoAttribute then
       Exit(True);
   Result := False;
+end;
+
+class function TMCPSchemaGenerator.ElementosDeJsonComoTexto(Prop: TRttiProperty): string;
+var
+  Attr: TCustomAttribute;
+begin
+  for Attr in Prop.GetAttributes do
+    if Attr is JsonComoTextoAttribute then
+      Exit(JsonComoTextoAttribute(Attr).Items);
+  Result := 'object';
 end;
 
 class function TMCPSchemaGenerator.CreateEnumValuesArray(RttiType: TRttiType): TJSONArray;

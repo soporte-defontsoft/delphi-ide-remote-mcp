@@ -181,10 +181,12 @@ out = call('delphi_git', {'repo': REF_GIT, 'command': 'status'})
 check('git status en la referencia: consulta OK', out.startswith('exit=0') and not mc.fallo(out), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'log'})
 check('git log en la referencia: consulta OK', out.startswith('exit=0') and out.rstrip().endswith(' ref'), out[:200])
-out = call('delphi_git', {'repo': REF_GIT, 'command': 'add', 'args': '-A'})
+# 1.19.0: sin args; add toma paths
+out = call('delphi_git', {'repo': REF_GIT, 'command': 'add', 'paths': ['.']})
 check('git add en la referencia: RECHAZADO como referencia', refused_as_reference(out), out[:200])
-out = call('delphi_git', {'repo': REF_GIT, 'command': 'branch', 'args': 'rama-nueva'})
-check('git branch con args en la referencia: RECHAZADO (crea)', refused_as_reference(out), out[:200])
+# 1.19.0: branch solo lista; una rama nueva se crea con switch create=true
+out = call('delphi_git', {'repo': REF_GIT, 'command': 'switch', 'branch': 'rama-nueva', 'create': True})
+check('git switch create=true en la referencia: RECHAZADO (crea)', refused_as_reference(out), out[:200])
 
 # config: view reads, everything else writes
 out = call('delphi_config', {'project': REF_DPROJ, 'command': 'view'})

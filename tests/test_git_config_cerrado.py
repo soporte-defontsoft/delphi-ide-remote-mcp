@@ -2,6 +2,10 @@
 """Git en cerrado: metadatos, config, remotos, entorno y firma.
 Todas las cobayas y los endpoints son propios del arnes; no hay credenciales.
 La latencia sola es guarda: trace2 mide las DOS variables del hijo.
+Desde la 1.19.0 delphi_git no tiene args: las opciones de firma (y de
+Signed-off-by) ni se pueden escribir - la forma vieja contesta GIT-068 sin
+llegar a git, y un nombre de tag con '-' delante es GIT-071 -; el remoto va
+por su NOMBRE (una URL en la llamada es GIT-049).
 """
 import atexit, base64, hashlib, http.server, json, os, subprocess, threading, time, zipfile
 import mcp_cliente as mc
@@ -62,8 +66,12 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL,
     'GIT_TERMINAL_PROMPT': '1', 'GCM_INTERACTIVE': 'always',
     'GNUPGHOME': os.path.join(BASE, 'gpg'), 'GIT_LFS_SKIP_SMUDGE': '1'}),
     nombre='git-config-cerrado', t=90)
-def call(cmd, args='', message='', repo=REPO):
-    return srv.call('delphi_git', {'repo': repo, 'command': cmd, 'args': args, 'message': message})
+def call(cmd, args=None, message='', repo=REPO, **campos):
+    # 1.19.0: sin args; solo viaja cuando se pasa (para ver que se rechaza)
+    llamada = dict({'repo': repo, 'command': cmd, 'message': message}, **campos)
+    if args is not None:
+        llamada['args'] = args
+    return srv.call('delphi_git', llamada)
 def snap(folder):
     return {os.path.relpath(os.path.join(d,n),folder):
             hashlib.sha256(open(os.path.join(d,n),'rb').read()).hexdigest()
@@ -196,46 +204,74 @@ try:
           'dummy.unknown' in out and private not in out, out)
     os.remove(wt)
     open(CFG,'w').write(normal+'\n[remote "no"]\n url = http://localhost:%d/DUMMY\n'%http.server_port)
-    for cmd,args in (('ls-remote','no'), ('fetch','no'), ('push','--dry-run no main'),
-                     ('fetch',''), ('push','--dry-run')):
-        n = len(hits); out=call(cmd,args)
-        check('remoto plantado '+cmd+' '+args+' pasa por hosts',
+    # 1.19.0: el remoto, por su NOMBRE (remote=); --dry-run ya no existe: si la
+    # puerta fallara, el push llegaria al 401 propio y hits lo contaria
+    for cmd,campos in (('ls-remote',{'remote':'no'}), ('fetch',{'remote':'no'}),
+                       ('push',{'remote':'no','ref':'main'}), ('fetch',{}), ('push',{})):
+        n = len(hits); out=call(cmd,**campos)
+        check('remoto plantado '+cmd+' '+' '.join('%s=%s' % kv for kv in campos.items())+' pasa por hosts',
               mc.es(out,'SR_GIT_REMOTE_HOST_FMT') and len(hits)==n, out[:350])
     open(CFG,'w').write(normal)
     # Las dos decisiones de firma: opciones del agente y ajustes del operador.
+    # 1.19.0: sin args la opcion de firma ni se puede escribir: la forma vieja
+    # contesta GIT-068 sin llegar a git, y en tag la opcion como nombre no es
+    # un nombre (GIT-071). Ni commit ni tag nuevos.
+    antes_firma = raw('rev-parse','HEAD').strip()
     for cmd in ('commit','tag'):
         for i,flag in enumerate(('-S','-SDUMMY','--gpg-sign','--gpg-sign=DUMMY','--gpg','--g') +
                                 (('-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si','--sign') if cmd=='tag' else ('-aS','-sS','-nS','-asS','-vsS'))):
             args = '--allow-empty '+flag if cmd=='commit' else flag+' dummy-sign-'+str(i)
             out=call(cmd,args,'DUMMY')
-            check(cmd+' niega '+flag, '[GIT-' in out and 'DENIED]' in out and
-                  not mc.es(out,'SR_GIT_EXIT_FMT'), out[:350])
+            check(cmd+' args '+flag+': GIT-068, no llega a git', 'GIT-068' in out and
+                  not mc.llego_a_git(out), out[:350])
+            if cmd=='tag':
+                out=call('tag',name=flag,message='DUMMY')
+                check('tag name='+flag+': GIT-071, no es un nombre', 'GIT-071' in out and
+                      not mc.llego_a_git(out), out[:350])
+    check('la firma pedida no hizo nada: HEAD igual y sin tags dummy-sign',
+          raw('rev-parse','HEAD').strip()==antes_firma and 'dummy-sign' not in raw('tag'))
     # --signoff (y -s, y --sign en commit, su abreviatura) NO firman: solo ponen
-    # "Signed-off-by" -> se admiten. En tag --sign SI es gpg (queda arriba). La
-    # firma REAL del agente (-S / --gpg-sign y abreviaturas) se sigue negando.
+    # "Signed-off-by" y se admitian. 1.19.0: sin args no hay opciones, ni de
+    # firma ni de Signed-off-by: la forma vieja contesta GIT-068 y no hace nada.
     for flag in ('--signoff','--sign','-s'):
         out=call('commit','--allow-empty '+flag,'DUMMY signoff')
-        check('commit '+flag+' (Signed-off-by, no gpg) se admite',out.startswith('exit=0'),out[:300])
-    # Control positivo (revisor 1.18.0, A1): una S detras de una opcion que TOMA
-    # valor (m t u) es su valor, no la firma -> la puerta de firma NO la para.
-    for flag in ('-mS','-tS','-uS'):
-        out=call('commit','--allow-empty '+flag,'DUMMY')
-        check('commit '+flag+' (S es valor de opcion, no firma) pasa la puerta de firma',
-              not ('[GIT-' in out and 'DENIED]' in out and not mc.es(out,'SR_GIT_EXIT_FMT')), out[:300])
+        check('commit args '+flag+': GIT-068, nada hecho','GIT-068' in out and
+              not mc.llego_a_git(out),out[:300])
+    # Control positivo (revisor 1.18.0, A1): una S que es un VALOR no es la
+    # firma. 1.19.0: sin args, el valor que queda es el mensaje: "-S" en
+    # message va por -F y es el texto del commit, sin firma.
+    open(os.path.join(REPO,'firma-valor.txt'),'w').write('DUMMY\n')
+    call('add',paths=['firma-valor.txt'])
+    out=call('commit',message='-S DUMMY')
+    check('commit message="-S DUMMY" (es el texto, no la firma) se hace sin firma',
+          out.startswith('exit=0') and raw('log','-1','--format=%s').strip()=='-S DUMMY' and
+          'gpgsig' not in raw('cat-file','-p','HEAD'), out[:300])
     open(CFG,'w').write(normal+'\n[commit]\n gpgSign = true\n[tag]\n gpgSign = true\n')
     previous = raw('rev-parse','HEAD').strip()
-    out=call('commit','--allow-empty','DUMMY sin firma')
+    # 1.19.0: sin --allow-empty, el commit lleva un cambio
+    open(os.path.join(REPO,'sin-firma.txt'),'w').write('DUMMY\n')
+    call('add',paths=['sin-firma.txt'])
+    out=call('commit',message='DUMMY sin firma')
     check('commit desactiva la firma del operador',out.startswith('exit=0'),out)
-    out=call('tag','dummy-unsigned','DUMMY sin firma')
+    out=call('tag',name='dummy-unsigned',message='DUMMY sin firma')
     check('tag desactiva la firma del operador',out.startswith('exit=0'),out)
     current = raw('rev-parse','HEAD').strip()
     check('el NUEVO commit no lleva gpgsig',current!=previous and 'gpgsig' not in raw('cat-file','-p',current))
     tagged = out.startswith('exit=0')
     check('el NUEVO tag no lleva firma',tagged and 'BEGIN PGP SIGNATURE' not in raw('cat-file','-p','refs/tags/dummy-unsigned'))
     open(CFG,'w').write(normal)
+    # 1.19.0: el remoto va por su NOMBRE; una direccion escrita en la llamada
+    # no es un remoto del repo (GIT-049) y no sale nada hacia ella
+    n = len(hits)
+    out=call('ls-remote',remote='http://127.0.0.1:%d/DUMMY'%http.server_port)
+    check('ls-remote remote=<URL>: GIT-049, no es un remoto del repo',
+          'GIT-049' in out and len(hits)==n, out[:350])
+    # ...y el 401 propio, por un remoto del repo con esa direccion
+    open(CFG,'w').write(normal+'\n[remote "dummy"]\n url = http://127.0.0.1:%d/DUMMY\n'%http.server_port)
     start=time.monotonic()
-    out=call('ls-remote','http://127.0.0.1:%d/DUMMY'%http.server_port)
+    out=call('ls-remote',remote='dummy')
     elapsed=time.monotonic()-start
+    open(CFG,'w').write(normal)
     check('401 propio contesta en menos de 10 segundos', elapsed<10 and
           mc.es(out,'SR_GIT_EXIT_FMT') and bool(hits), '%.3fs %s'%(elapsed,out[:350]))
     events=[json.loads(l) for l in open(TRACE,encoding='utf-8') if l.strip()]
@@ -249,7 +285,7 @@ try:
     check('control config LFS estándar se admite',call('status').startswith('exit=0'))
     open(os.path.join(REPO,'.gitattributes'),'w').write('DUMMY.bin filter=lfs diff=lfs merge=lfs -text\n')
     open(os.path.join(REPO,'DUMMY.bin'),'wb').write(b'DUMMY LFS\n')
-    out=call('add','.gitattributes DUMMY.bin')
+    out=call('add',paths=['.gitattributes','DUMMY.bin'])
     check('control add ejecuta el filtro LFS estandar',out.startswith('exit=0') and
           raw('show',':DUMMY.bin').startswith('version https://git-lfs.github.com/spec/v1'),out)
     # El origen se prepara por el arnes aunque el exe de linea base niegue LFS.

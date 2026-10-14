@@ -247,9 +247,13 @@ it acceptable.
 free arguments. What does not comply yet is declared debt that can only
 shrink (measured 2026-10-13): msbuild through cmd.exe (removed by 2an of
 1.18.2: msbuild.exe by its path, the environment of rsvars.bat read by the
-server), `delphi_git`'s free `args` (18 call sites), the app name in adb's
+server), `delphi_git`'s free `args` (removed in 1.19.0: each command takes
+its own fields - paths, ref, branch, remote, action... - and the server
+composes the line choosing from what git reports), the app name in adb's
 `shell am start`, the profile on paclient's line. The judges that exist today
-stay, as a second barrier.
+stay, as a second barrier; where a judge lost its input (the option deny list
+of git, with `args` gone), the new shape keeps one of its own (no value of
+`delphi_git` that goes alone on the line may start with `-`).
 
 ## One namer (David, 2026-09-20)
 

@@ -17,8 +17,7 @@ regla busca su formato FUERA de su casa (fichero y funcion). Cada regla lleva
 su MUTANTE dentro: una copia plantada en un fragmento de Pascal que el
 mismo buscador tiene que cazar (si no la caza, la regla no mide nada).
 
-Deuda declarada (listas negras): GitArgDenied (opciones libres),
-ShellArgDenied (metacaracteres), HazardScan (DANGER_TASKS de MSBuild) y
+Deuda declarada (listas negras): ShellArgDenied (metacaracteres), HazardScan (DANGER_TASKS de MSBuild) y
 BorradoDenegado (lugares protegidos tras su lista blanca de desechables).
 La config local/worktree de Git y los hosts de todos sus remotos son listas blancas.
 
@@ -986,7 +985,6 @@ check('ninguna unidad tiene dos sobrecargas de igual aridad que solo difieran en
 # Toda puerta de este censo dice LISTA NEGRA en su cabecera. Este control
 # mide la declaracion, NO que una lista negra sea completa.
 LISTAS_NEGRAS = [
-    ('Lsp.Args.pas','GitArgDenied'),
     ('Lsp.Args.pas','ShellArgDenied'),
     ('Lsp.Guard.pas','BorradoDenegado'),
     ('Lsp.Dproj.pas','HazardScan'),

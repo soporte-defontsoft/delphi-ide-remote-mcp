@@ -48,7 +48,8 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E23 delphi_create con un "project" que no es un proyecto no escribe nada
   Tercera revision:
   E24 delphi_package con un outfile que no es .zip (lo sustituia por el zip)
-  E25 git diff --quiet con diferencias no es un fallo (exit=1 es su respuesta)
+  E25 git diff con diferencias no es un fallo (1.19.0: sin --quiet, que se fue
+      con los args; format=shortstat dice cuantas, y args contesta GIT-068)
   E26 crear DENTRO de un fichero es INVALID_PARAM (salia INTERNAL)
   E27 changeset: crear donde hay una CARPETA se niega en el preview
   E28 changeset sin id es INVALID_PARAM
@@ -71,7 +72,8 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E39 delphi_search con una mascara que no casa con nada lo dice
   E40 delphi_help no anuncia vault_* en un workspace sin vault
   E41 createunit eol=lf sin content escribe LF (decia LF y escribia CRLF)
-  E42 git diff --exit-code con cambios no hereda las pistas de fallo
+  E42 git diff con cambios no hereda las pistas de fallo (1.19.0: sin
+      --exit-code, el diff a secas)
   E43 un fichero que otro proceso tiene abierto es DENIED (era INTERNAL)
   E44 insert rutina-global visible=true: si la declaracion no se puede,
       no se escribe nada (salia exito con la rutina privada)
@@ -417,15 +419,22 @@ try:
     GREPO = os.path.join(JAIL, 'grepo')
     os.makedirs(GREPO)
     llama('delphi_git', {'repo': GREPO, 'command': 'init'})
-    llama('delphi_git', {'repo': GREPO, 'command': 'config', 'args': 'user.name', 'message': 'Probe Bot'})
-    llama('delphi_git', {'repo': GREPO, 'command': 'config', 'args': 'user.email', 'message': 'probe@example.com'})
+    # 1.19.0: sin args; cada comando con sus campos
+    llama('delphi_git', {'repo': GREPO, 'command': 'config', 'name': 'user.name', 'message': 'Probe Bot'})
+    llama('delphi_git', {'repo': GREPO, 'command': 'config', 'name': 'user.email', 'message': 'probe@example.com'})
     open(os.path.join(GREPO, 'a.txt'), 'w').write('uno\n')
-    llama('delphi_git', {'repo': GREPO, 'command': 'add', 'args': 'a.txt'})
+    llama('delphi_git', {'repo': GREPO, 'command': 'add', 'paths': ['a.txt']})
     res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'commit', 'message': 'uno'})
     open(os.path.join(GREPO, 'a.txt'), 'w').write('dos\n')
+    # 1.19.0: --quiet (exit=1 con diferencias, GIT-037) se fue con los args:
+    # el diff con diferencias es un exito que dice cuantas
+    res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'diff', 'format': 'shortstat'})
+    check('E25 git diff con diferencias es un exito que lo dice (format=shortstat)',
+          not res.get('isError') and t.startswith('exit=0') and '1 file changed' in t,
+          '%s | %s' % (json.dumps(sc)[:120], t[:200]))
     res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'diff', 'args': '--quiet'})
-    check('E25 git diff --quiet con diferencias es un exito que lo dice (exit=1)',
-          not res.get('isError') and t.startswith('exit=1') and mc.es(t, 'SN_GIT_DIFF_HAY_CAMBIOS'),
+    check('E25b la forma vieja (args=--quiet) es GIT-068 y no llega a git',
+          res.get('isError') is True and 'GIT-068' in t and not mc.llego_a_git(t),
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
     rechazo('E26 crear DENTRO de un fichero es INVALID_PARAM (salia INTERNAL)', 'delphi_textedit',
@@ -601,9 +610,11 @@ try:
           not res.get('isError') and os.path.exists(LFU) and b'\r' not in open(LFU, 'rb').read(), t[:200])
 
     open(os.path.join(GREPO, 'a.txt'), 'w').write('rebase\n')
-    res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'diff', 'args': '--exit-code'})
-    check('E42 git diff --exit-code con cambios: exito, sin las pistas de un fallo',
-          not res.get('isError') and t.startswith('exit=1') and not mc.es(t, 'SN_GIT_HINT_OVERRIDE'), t[:300])
+    # 1.19.0: sin --exit-code; el diff a secas con cambios
+    res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'diff'})
+    check('E42 git diff con cambios: exito, sin las pistas de un fallo',
+          not res.get('isError') and t.startswith('exit=0') and '+rebase' in t
+          and not mc.es(t, 'SN_GIT_HINT_OVERRIDE'), t[:300])
 
     # (el bloqueo por otro proceso es mc.bloqueado: aqui habia CreateFileW a mano)
     OCUP = os.path.join(JAIL, 'ocupado.txt')
@@ -2508,10 +2519,10 @@ try:
     # E176 git: las tablas de "lo que no va" por SUBcomando (stash list con
     # message, worktree list con path): eran por comando
     rechazo('E176 git stash list con message: no va con el subcomando', 'delphi_git',
-            {'command': 'stash', 'args': 'list', 'repo': NOREPO, 'message': 'x'},
+            {'command': 'stash', 'action': 'list', 'repo': NOREPO, 'message': 'x'},
             'INVALID_PARAM', 'SR_GIT_NO_VA_CON_COMANDO_FMT')
     rechazo('E176 git worktree list con path: no va con el subcomando', 'delphi_git',
-            {'command': 'worktree', 'args': 'list', 'repo': NOREPO, 'path': NOTES},
+            {'command': 'worktree', 'action': 'list', 'repo': NOREPO, 'path': NOTES},
             'INVALID_PARAM', 'SR_GIT_NO_VA_CON_COMANDO_FMT')
 
     # E174b la regla de la ruta larga NO abre la jaula: una ruta larga FUERA de

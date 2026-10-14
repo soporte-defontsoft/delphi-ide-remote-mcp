@@ -8,6 +8,42 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Changed (contract: `delphi_git`)
+
+- **`delphi_git` has no `args` any more: each command takes its own
+  fields, and the server composes the git command line.** An agent asks
+  for an OPERATION, never a command line (the rule of 13-oct). Free `args`
+  sat behind a deny list of options that kept losing: `switch -`,
+  `--detach`, `-f`, `-c <new> <start>` and `--discard-changes` went
+  through it (measured on 13-oct). Now nothing the agent types reaches git
+  as an option. Revisions (`ref`, `to`, the branch of a merge) are judged
+  by `git rev-parse`; new names (a branch, a tag) by `git
+  check-ref-format`; `remote` is the NAME of a remote of the repository;
+  `paths` is a LIST of files or folders of the repository, each one after
+  `--` as a literal pathspec. The fields, per command: `status` (paths),
+  `diff` (paths, ref, to, staged, format = stat / shortstat / words,
+  context), `log` (paths, ref, to, format = oneline / dated / full, count,
+  search), `show` (ref, paths, patch), `add` and `restore` (paths),
+  `commit` (message), `stash` (action = push / pop / list, paths,
+  message), `switch` (branch, create), `merge` (branch, or action=abort),
+  `tag` (name, ref, message; no name lists), `config` (name =
+  user.name / user.email, message), `pull` (remote, branch), `fetch` and
+  `ls-remote` (remote), `push` (remote, ref), `worktree` (action, path,
+  ref); `branch` and `init` take nothing. They are the ones in use
+  (measured in the production logs); what is needed later is added as a
+  field, with its case. A call that still sends `args` gets `GIT-068`,
+  which names the fields. The deny list of options went with `args`; as a
+  second barrier, no value that goes alone on the line may start with `-`
+  (`GIT-075`). `paths` goes through the virtual-drive translation and the
+  jail's entry floor like any path parameter: a list does not skip them.
+  Gone with the free arguments: the network options (`--tags`, `--prune`,
+  `--depth`, `-u`, `--dry-run`...), a remote written as a URL or a folder
+  in the call, the refspec forms, `diff --quiet`, and `branch` creating or
+  deleting (create with `switch create=true`). New messages: `GIT-068` to
+  `GIT-075`; retired: `GIT-003`, `GIT-027`, `GIT-037`, `GIT-040` (now
+  `GIT-012` for every command), `GIT-042`, `GIT-043`, `GIT-059`.
+  `test_git_operaciones_119`; the git batteries moved to the fields.
+
 ### Fixed
 
 - **`delphi_upload`'s quarantine no longer deletes or overwrites a

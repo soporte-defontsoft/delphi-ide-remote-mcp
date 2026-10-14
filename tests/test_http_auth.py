@@ -298,9 +298,10 @@ try:
         check('ro: git commit RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
-        code, body = call('delphi_git', {'repo': REPO, 'command': 'branch',
-                                         'args': 'nueva-rama'}, RO_TOKEN)
-        check('ro: git branch con args RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
+        # 1.19.0: branch solo lista; una rama nueva se crea con switch create=true
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'switch',
+                                         'branch': 'nueva-rama', 'create': True}, RO_TOKEN)
+        check('ro: git switch create=true (crea una rama) RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_textedit', {'path': tmpdir3 + '\\x.md',
@@ -356,7 +357,10 @@ try:
         # de la 1.18.2): adb screenshot y logcat sin out=, el preview sin out=
         # ni state=, el escritorio sin out= ni project= (status, sin project=)
         check('anuncio: git, adb, designer y desktop anuncian sus lecturas CONDICIONADAS (readOnlyWhen)',
-              set((cuando.get('delphi_git') or {})) == {'branch', 'tag', 'worktree', 'stash'} and
+              # 1.19.0: branch solo lista, y es una lectura sin condicion
+              set((cuando.get('delphi_git') or {})) == {'tag', 'worktree', 'stash'} and
+              'branch' in next((t.get('_meta') or {}).get('readOnlyCommands') or []
+                               for t in anunciadas if t['name'] == 'delphi_git') and
               set((cuando.get('delphi_adb') or {})) == {'logcat', 'screenshot'} and
               set((cuando.get('delphi_designer') or {})) == {'preview'} and
               set((cuando.get('delphi_desktop') or {})) == {'screenshot', 'status'} and
@@ -486,13 +490,13 @@ try:
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag'},
                           RO_TOKEN)
-        check('ro: git tag sin args (listar) permitido en RO (git contesta)',
+        check('ro: git tag sin name (listar) permitido en RO (git contesta)',
               code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT') and
               mc.texto(json.loads(body)).startswith('exit=0'),
               '%s %s' % (code, body[:120]))
 
         # tag with a message = annotated tag = a WRITE. The gate must catch it
-        # even with empty args (it only looked at args before — field audit).
+        # even without a name (it only looked at args before — field audit).
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag',
                                          'message': 'v1'}, RO_TOKEN)
         check('ro: git tag con message (anotado) RECHAZADO en RO',
@@ -500,11 +504,13 @@ try:
 
         # jail/file-write escape: diff --output must be refused (would let a
         # read-only client write a file anywhere on disk).
+        # 1.19.0: sin args la opcion ni se puede escribir: GIT-068 y nada hecho
         code, body = call('delphi_git', {'repo': REPO, 'command': 'diff',
                                          'args': '--output=' + tmpdir3 + '\\PWN.txt'},
                           RO_TOKEN)
-        check('ro: git diff --output RECHAZADO en RO (por la puerta, no por la jaula)',
-              mc.rechazado(mc.texto(json.loads(body))) and not mc.llego_a_git(mc.texto(json.loads(body)))
+        check('ro: git diff con args --output: GIT-068, no llega a git (ni a la jaula)',
+              'GIT-068' in body and mc.rechazado(mc.texto(json.loads(body)))
+              and not mc.llego_a_git(mc.texto(json.loads(body)))
               and not mc.es(body, 'SR_JAIL_FMT'), '%s %s' % (code, body[:120]))
         check('ro: git diff --output no escribio el fichero',
               not os.path.exists(tmpdir3 + '\\PWN.txt'), tmpdir3)

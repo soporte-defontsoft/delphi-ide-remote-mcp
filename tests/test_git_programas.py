@@ -1,7 +1,10 @@
 """Contrato: git no ejecuta programas declarados por un repo no confiable.
 Los programas testigo solo escriben una marca en otra carpeta del arnes.
+Desde la 1.19.0 delphi_git no tiene args: los remotos van por su NOMBRE (el
+arnes los declara en la config del repo) y el clone con -c de la llamada ni se
+puede escribir (GIT-068, el clone no se hace).
 """
-import os, http.server, threading
+import os, http.server, threading, subprocess
 import mcp_cliente as mc
 BASE=mc.carpeta('git-programas')
 REPO=os.path.join(BASE,'repo');FUERA=os.path.join(BASE,'testigos')
@@ -15,20 +18,30 @@ class Desafio(http.server.BaseHTTPRequestHandler):
     def log_message(self,*args):pass
 http=http.server.ThreadingHTTPServer(('127.0.0.1',0),Desafio)
 threading.Thread(target=http.serve_forever,daemon=True).start()
-def git(cmd,args='',message=''):
-    return srv.call('delphi_git',{'repo':REPO,'command':cmd,'args':args,'message':message})
+def git(cmd,args=None,message='',**campos):
+    # 1.19.0: sin args; solo viaja cuando se pasa (para ver que se rechaza)
+    llamada=dict({'repo':REPO,'command':cmd,'message':message},**campos)
+    if args is not None:llamada['args']=args
+    return srv.call('delphi_git',llamada)
 def script(path,marker,extra=''):
     with open(path,'w',encoding='utf-8',newline='\n') as f:
         f.write("#!/bin/sh\nprintf 'fixture\\n' > '"+marker.replace('\\','/')+"'\n"+extra)
 try:
     mc.check('fixture: init','exit=0' in git('init'))
-    git('config','user.name','Fixture');git('config','user.email','fixture@example.com')
+    git('config',name='user.name',message='Fixture');git('config',name='user.email',message='fixture@example.com')
     config=os.path.join(REPO,'.git','config')
     with open(config,encoding='utf-8') as f:normal=f.read()
     archivo=os.path.join(REPO,'a.txt')
     with open(archivo,'w') as f:f.write('fixture\n')
-    git('add','a.txt')
+    git('add',paths=['a.txt'])
     mc.check('fixture: commit ordinario','exit=0' in git('commit',message='fixture'))
+    # 1.19.0: push envia UN nombre de rama de aqui (la del arnes)
+    RAMA=subprocess.run(['git','-C',REPO,'branch','--show-current'],capture_output=True,text=True).stdout.strip()
+    # 1.19.0: el remoto va por su NOMBRE; el de ssh, http y git:// se declara
+    # en la config del repo, con el programa del caso
+    remotos={'ssh':'ssh://fixture@127.0.0.1:9/fixture',
+             'credencial':'http://127.0.0.1:'+str(http.server_port)+'/fixture',
+             'gitproxy':'git://127.0.0.1:9/fixture'}
     for case in ('fsmonitor','hook','filter','filter-importado','diff-externo','diff-driver','textconv','firma','ssh','credencial','gitproxy','uploadpack','receivepack','clone-config','clone-config-grupo','clone-config-prefijo'):
         marker=os.path.join(FUERA,case+'.txt')
         program=os.path.join(REPO,'.git','hooks','pre-commit' if case=='hook' else 'fixture-'+case)
@@ -45,6 +58,7 @@ try:
             if case in ('uploadpack','receivepack'):f.write('\n[remote "fixture"]\nurl = "'+os.path.join(REPO,'fixture-remoto').replace('\\','/')+'"\n'+case+' = "'+program.replace('\\','/')+'"\n')
             # El valor vacio borra los helpers heredados; solo queda el testigo.
             if case=='credencial':f.write('\n[credential]\nhelper = \nhelper = "'+program.replace('\\','/')+'"\n')
+            if case in remotos:f.write('\n[remote "fixture"]\nurl = '+remotos[case]+'\n')
             if case=='filter-importado':
                 included=os.path.join(REPO,'.git','fixture.cfg')
                 with open(included,'w') as inc:inc.write('[filter "fixture"]\n\tclean = "'+program.replace('\\','/')+'"\n')
@@ -55,19 +69,21 @@ try:
             with open(os.path.join(REPO,'.gitattributes'),'w') as f:f.write('*.txt diff=fixture\n')
         with open(archivo,'a') as f:f.write(case+'\n')
         if case in ('hook','firma'):
-            git('add','a.txt');r=git('commit',message='fixture-hook')
-        elif case.startswith('filter'):r=git('add','a.txt')
+            git('add',paths=['a.txt']);r=git('commit',message='fixture-hook')
+        elif case.startswith('filter'):r=git('add',paths=['a.txt'])
         elif case in ('diff-externo','diff-driver','textconv'):r=git('diff')
-        elif case=='ssh':r=git('fetch','ssh://fixture@127.0.0.1:9/fixture')
-        elif case=='credencial':r=git('fetch','http://127.0.0.1:'+str(http.server_port)+'/fixture')
-        elif case=='gitproxy':r=git('fetch','git://127.0.0.1:9/fixture')
+        elif case in remotos:r=git('fetch',remote='fixture')
         elif case in ('uploadpack','receivepack'):
             remote=os.path.join(REPO,'fixture-remoto');os.makedirs(remote,exist_ok=True)
-            srv.call('delphi_git',{'repo':remote,'command':'init','args':'--bare'})
-            r=git('fetch','fixture') if case=='uploadpack' else git('push','fixture HEAD:refs/heads/fixture')
+            # 1.19.0: init no tiene opciones (ni --bare): un repo normal sirve de remoto
+            srv.call('delphi_git',{'repo':remote,'command':'init'})
+            r=git('fetch',remote='fixture') if case=='uploadpack' else git('push',remote='fixture',ref=RAMA)
         elif case.startswith('clone-config'):
             flag={'clone-config':'-nc','clone-config-grupo':'-vqnc','clone-config-prefijo':'--conf'}[case]
             r=srv.call('delphi_git',{'repo':os.path.join(REPO,case),'command':'clone','args':flag+' core.sshCommand='+program.replace('\\','/'),'message':'ssh://fixture@127.0.0.1:9/fixture'})
+            # 1.19.0: el -c de la llamada ni se puede escribir: GIT-068 y el clone no se hace
+            mc.check(case+': args GIT-068, el clone no se hace','GIT-068' in r and not mc.llego_a_git(r)
+                     and not os.path.exists(os.path.join(REPO,case)),r[:400])
         else:r=git('status')
         mc.check(case+': el programa del repo no se activa',not os.path.exists(marker),r[:400])
         if os.path.isfile(program):os.remove(program)
@@ -87,7 +103,7 @@ try:
     with open(wtconfig,'w',encoding='utf-8') as f:f.write('[filter "fixture"]\nclean = "'+program.replace('\\','/')+'"\n')
     with open(os.path.join(REPO,'.gitattributes'),'w') as f:f.write('*.txt filter=fixture\n')
     with open(archivo,'a') as f:f.write('worktree\n')
-    r=git('add','a.txt')
+    r=git('add',paths=['a.txt'])
     mc.check('worktree: el filtro local no se activa',not os.path.exists(marker) and '[GIT-051 DENIED]' in r,r[:400])
 finally:
     http.shutdown();http.server_close();srv.cierra();mc.borra(BASE)

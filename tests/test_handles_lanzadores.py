@@ -43,7 +43,8 @@ try:
         with open(os.path.join(repo,'fixture-%05d.txt'%i),'w') as f:f.write('fixture\n')
     tables=[]
     for attempt in range(3):
-        r,tables=observes(cli,'delphi_git',{'repo':repo,'command':'status','args':'--untracked-files=all'},'git.exe')
+        # 1.19.0: sin args; los ficheros estan en la raiz, asi que status ya los lista uno a uno
+        r,tables=observes(cli,'delphi_git',{'repo':repo,'command':'status'},'git.exe')
         if tables:break
     mc.check('R4 git positivo: status correcto y proceso medido',not mc.rechazado(r) and 'fixture-' in r and bool(tables),r[:400])
     mc.check('R5 git no recibe sockets HTTP',bool(tables) and all(not any(x.get('socket_port')==port for x in t['inheritable']) for t in tables),json.dumps(tables))

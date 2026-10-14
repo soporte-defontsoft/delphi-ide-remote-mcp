@@ -1,10 +1,12 @@
 unit Lsp.Args;
 
 { LOS ARGUMENTOS DE UNA ORDEN: las puertas de lo que llega a
-  la linea de git y de los lanzadores (GitArgDenied, GitRemoteDenied con su
-  lector de host GitUrlHost, ShellArgDenied), la clasificacion de una orden
-  de git en consulta o escritura (GitCommandIsQuery) y el nombre del fichero
-  del mensaje de un commit (NombreDeMensajeGit).
+  la linea de git y de los lanzadores (GitRemoteDenied con su lector de host
+  GitUrlHost, ShellArgDenied), la clasificacion de una orden de git en
+  consulta o escritura (GitCommandIsQuery) y el nombre del fichero del
+  mensaje de un commit (NombreDeMensajeGit). La lista negra de los args
+  libres de git (GitArgDenied) se fue con los args en la 1.19.0: delphi_git
+  compone cada orden con campos que elige.
 
   Salen de Lsp.Guard el 8-oct-2026 (la 1.18.0, la version de la limpieza),
   movidos sin cambiar una linea, con PrimerTrozo, el unico trozo de la jaula
@@ -28,8 +30,9 @@ function NombreDeMensajeGit: string;
 
 { La mitad de CONSULTA de delphi_git: lo que una credencial de solo lectura
   y un proyecto de REFERENCIA (ReadOnlyRoots) pueden ejecutar. UNA lista:
-  la consulta ToolCallDenied y la consulta la propia tool. }
-function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
+  la consulta ToolCallDenied y la consulta la propia tool. Por los campos
+  de la llamada (1.19.0): la accion de stash y worktree, el nombre de tag. }
+function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Boolean;
 
 { '' when AText carries none of the shell metacharacters that would break a
   command line ( ; | & ` $ < > and newlines ), otherwise a refusal. For tool
@@ -63,11 +66,6 @@ function GitRemoteDenied(const AText: string; AScpCorto: Boolean = False;
   direccion de red". }
 function GitUrlHost(const AToken: string; AScpCorto: Boolean = False): string;
 
-{ La puerta de los argumentos libres de git (que niega y por que, en su nota
-  de la implementacion): la pregunta la puerta de entrada de Lsp.Guard
-  (ReglasDeLaLlamadaDenegadas). }
-function GitArgDenied(const AArgs, ACmd: string): string;
-
 implementation
 
 uses
@@ -85,116 +83,6 @@ function NombreDeMensajeGit: string;
 begin
   Result := TPath.Combine(ServerTempDir('git'),
     'msg-' + FragmentoUnico + '.txt');
-end;
-
-{ Las opciones que traen ficheros o configuracion ajena al filtro. Git admite
-  prefijos largos y grupos cortos (-aF, -qF, -nc): se juzgan las dos formas. }
-function OpcionDeFicheroGit(const ATok: string): Boolean;
-var
-  Opcion: string;
-  P, I: Integer;
-begin
-  Result := False;
-  if ATok.StartsWith('--') then
-  begin
-    Opcion := LowerCase(ATok);
-    P := Pos('=', Opcion);
-    if P > 0 then
-      Opcion := Copy(Opcion, 1, P - 1);
-    if Length(Opcion) > 2 then
-      Result := '--file'.StartsWith(Opcion) or
-        '--pathspec-from-file'.StartsWith(Opcion) or
-        '--config'.StartsWith(Opcion);
-  end
-  else if ATok.StartsWith('-') then
-  begin
-    // -S<texto> y -G<texto> (el pickaxe de git log/diff, SOLO LECTURA): el
-    // resto del token es el VALOR de busqueda, no un grupo de opciones cortas.
-    // No se analiza: un valor con 'F'/'O'/'c' no es -F/-O/-c (medido 2026-10-06:
-    // `git log -SOpen` caia por la 'O' del valor). El valor no abre nada -no es
-    // ruta, ni fichero, ni comando- y los metacaracteres de shell ya los corta
-    // TrocearArgs. -S y -G siempre llevan valor; no se agrupan con otras.
-    if (Length(ATok) > 2) and CharInSet(ATok[2], ['S', 'G']) then
-      Exit(False);
-    // Mayusculas: -f no es -F, y -o no es -O.
-    Result := (Pos('F', ATok) > 0) or (Pos('O', ATok) > 0);
-    if Result then
-      Exit;
-    Opcion := LowerCase(ATok);
-    for I := 2 to Length(Opcion) do
-    begin
-      if Opcion[I] = 'c' then
-        Exit(True);
-      // Opciones sin valor de clone; -b/-u/-o/-j consumen lo que sigue.
-      // No tratar la c de -bfeaturec como otra opcion del grupo.
-      if not CharInSet(Opcion[I], ['n', 'v', 'q', 'l', 's']) then
-        Break;
-    end;
-  end;
-end;
-
-{ Filtro de opciones peligrosas de git en la UNICA puerta: git tiene opciones
-  que escriben ficheros, leen rutas FUERA del repo o ejecutan un programa - una
-  fuga de la jaula usable hasta por un cliente de solo lectura (medido: `diff
-  --output=<ruta abs>` escribio un fichero en cualquier sitio del disco, y
-  --o"utput"= se colaba cuando la puerta troceaba solo por espacios mientras el
-  CRT de git quitaba las comillas y la ejecutaba). Trocea con TrocearArgs - el
-  mismo lector cuya inversa usa el ejecutor para componer la linea -, asi que
-  cada token se juzga TAL COMO lo recibira git. Lo pregunta la puerta, para que
-  valga en AMBOS niveles de acceso (el -C <repo> no frena un --output absoluto).
-  '' = limpio. }
-{ LISTA NEGRA: argumentos libres de git, con opciones peligrosas conocidas.
-  La config y los remotos tienen sus puertas cerradas independientes. }
-function GitArgDenied(const AArgs, ACmd: string): string;
-var
-  Tok, T: string;
-begin
-  Result := '';
-  for Tok in TrocearArgs(AArgs) do
-  begin
-    T := Tok.ToLower;
-    if MatchText(ACmd, ['commit', 'tag']) then
-    begin
-      // Git admite abreviaciones largas y grupos cortos: --gpg, -aS, -fs.
-      // Una opcion que consume texto corta el grupo; la S de -mMENSAJE no firma.
-      var Opcion := PrimerTrozo(T, ['=']);
-      // Firma REAL (gpg): se niega. --signoff / -s / --sign en commit solo
-      // ponen "Signed-off-by" y NO firman -> se admiten; en tag, --sign SI es
-      // -s (gpg), por eso su prefijo se niega solo ahi.
-      var Firma := (Length(Opcion) >= 3) and
-        ('--gpg-sign'.StartsWith(Opcion) or
-         ((ACmd = 'tag') and '--sign'.StartsWith(Opcion)) or
-         ((ACmd = 'tag') and '--local-user'.StartsWith(Opcion)));
-      if Tok.StartsWith('-') and not Tok.StartsWith('--') then
-        for var I := 2 to Length(Tok) do
-        begin
-          if (Tok[I] = 'S') or ((ACmd = 'tag') and CharInSet(Tok[I], ['s', 'u'])) then
-          begin
-            Firma := True;
-            Break;
-          end;
-          // Solo una opcion corta que TOMA VALOR corta el barrido: su valor se
-          // come el resto del grupo (la S de -mS es el mensaje, no firma).
-          // Cualquier otra letra -sin valor o desconocida- se salta y se sigue
-          // mirando, para que una S al final del grupo no escape (-sS -nS -asS).
-          if CharInSet(Tok[I], ['m', 'F', 'C', 'c', 't', 'u']) then
-            Break;
-        end;
-      if Firma then
-        Exit(MsgFmt(SR_GIT_OPTION_FMT, [Tok]));
-    end;
-    if OpcionDeFicheroGit(Tok) or
-       T.StartsWith('--output') or          // writes a file (diff/show)
-       T.StartsWith('--no-index') or        // reads arbitrary paths, any dir
-       T.StartsWith('--upload-pack') or T.StartsWith('--receive-pack') or
-       T.StartsWith('--exec') or            // runs a remote/local command
-       T.StartsWith('--ext-diff') or T.StartsWith('--textconv') or // ext program
-       // Configuracion: tambien prefijos y grupos, en OpcionDeFicheroGit.
-       T.StartsWith('--separate-git-dir') or T.StartsWith('--template') or // write/read outside the dest
-       T.StartsWith('--git-dir') or T.StartsWith('--work-tree') or // redirect where git operates -> jail escape
-       (T = '-o') or T.StartsWith('-o=') or T.StartsWith('-o/') or T.StartsWith('-o\') then
-      Exit(MsgFmt(SR_GIT_OPTION_FMT, [Tok]));
-  end;
 end;
 
 const
@@ -388,15 +276,17 @@ begin
       Exit(MsgFmt(SR_SHELL_META_FMT, [B]));
 end;
 
-function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
+function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Boolean;
 begin
-  Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show', 'ls-remote']) or
-    (MatchText(Trim(ACmd), ['branch', 'tag']) and (Trim(AArgs) = '') and (Trim(AMessage) = '')) or
+  // branch solo lista desde la 1.19.0 (crear es switch create=true)
+  Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show', 'ls-remote', 'branch']) or
+    // tag sin nombre lista los que hay
+    (SameText(Trim(ACmd), 'tag') and (Trim(ANombre) = '') and (Trim(AMessage) = '')) or
     // worktree list solo ENSENA las copias de trabajo (1.4.0)
-    (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AArgs), 'list')) or
+    (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AAccion), 'list')) or
     // ...y stash list, lo aparcado: pasaba por escritura, con el cerrojo
     // de los escritores y parando los motores del repo (1.7.7)
-    (SameText(Trim(ACmd), 'stash') and SameText(Trim(AArgs), 'list'));
+    (SameText(Trim(ACmd), 'stash') and SameText(Trim(AAccion), 'list'));
 end;
 
 function PrimerTrozo(const S: string; const ASeps: array of Char): string;
