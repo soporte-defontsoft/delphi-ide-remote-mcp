@@ -19,6 +19,18 @@ form que toco, por si mismo o por su unidad.
      sigue diciendo DSGN-021, UNA vez
   J5 control: un delphi_edit suelto sobre el .dfm sigue juzgandolo
 
+Y el juicio de lo que una escritura ALCANZA (JuicioDeLoEscrito, punto 7 y lo
+visto en vivo tras H6):
+  J6 el changeset de J3 (solo el .pas) no dice EDIT-084 "edited" del .dfm, que
+     no toco (ROJO en produccion tras H6, medido en vivo)
+  J7 un delphi_edit SUELTO del .pas que quita el campo: DSGN-021 del form de la
+     unidad (ROJO en produccion: no decia nada)
+  J8 una tanda del .pas que quita el campo y lo vuelve a poner: sin DSGN-021 (el
+     juicio, al final y una vez, tambien en un .pas). GUARDA: con la tanda sin
+     aplazar (mutante) sigue verde, porque el aviso de cada entrada lleva la
+     ruta del form delante y AvisosDelMotor solo recoge lo que empieza por ***
+  J9 control: un delphi_edit del .pas que no toca el enlace: sin DSGN-021
+
 Uso:  python tests/test_juicio_final_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -81,6 +93,26 @@ try:
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
     check('J3 changeset que solo le quita el campo al .pas: DSGN-021 (el enlace roto desde la unidad)',
           not mc.rechazado(r) and dsgn021(r) == 1, r[:600])
+    check('J6 ...y no dice EDIT-084 ("edited") del .dfm, que el lote no toco',
+          not mc.rechazado(r) and 'EDIT-084' not in r, r[:600])
+
+    pas, dfm = par('j7')
+    r = srv.call('delphi_edit', {'path': pas, 'old': '    Panel1: TPanel;', 'new': '    // sin campo'}, t=240)
+    check('J7 un delphi_edit SUELTO del .pas que quita el campo: DSGN-021 del form de su unidad',
+          not mc.rechazado(r) and dsgn021(r) == 1 and 'Unit1.dfm' in r, r[:600])
+
+    pas, dfm = par('j8')
+    r = srv.call('delphi_edit', {'path': pas, 'edits': [
+        {'old': '    Panel1: TPanel;', 'new': '    // sin campo'},
+        {'old': '    Label1: TLabel;', 'new': '    Label1: TLabel;\n    Panel1: TPanel;'}]}, t=240)
+    check('J8 una tanda del .pas que quita el campo y lo vuelve a poner: sin DSGN-021',
+          not mc.rechazado(r) and dsgn021(r) == 0, r[:600])
+
+    pas, dfm = par('j9')
+    r = srv.call('delphi_edit', {'path': pas, 'old': "  Form1: TForm1;", 'new': "  Form1: TForm1; // la form"},
+                 t=240)
+    check('J9 control: un delphi_edit del .pas que no toca el enlace: sin DSGN-021',
+          not mc.rechazado(r) and dsgn021(r) == 0, r[:600])
 
     pas, dfm = par('j4')
     r = srv.call('delphi_edit', {'path': dfm, 'edits': [

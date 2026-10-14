@@ -134,6 +134,21 @@ the MCP `initialize` response (`serverInfo.version`).
   it answers `CFG-112` now. `test_delphi_patch` and `test_project_units`
   (a mutant each). Point 8.
 
+- **What a write reaches is judged, and only that.** A `.pas` reaches the
+  forms of its unit: a single `delphi_edit` that took a component's field out
+  of the class said nothing, and the form then failed when it was created
+  (point 7). Now an edit of a `.pas` - single, a batch or a changeset - judges
+  the forms of its unit by their binding with the class (`DSGN-021`, with the
+  form's path in front); their text, their parser and their properties did
+  not change, so they are not asked again. And a changeset that touched only
+  the `.pas` said `EDIT-084` "edited" about the `.dfm`, which it never wrote
+  (seen live after H6). One composer, `JuicioDeLoEscrito`, for the single
+  writers, the batch and the changeset; a batch of a `.pas` judges once, at
+  the end, as a batch of a form already did. `test_juicio_final_1182` J6-J9
+  (J6 and J7 red against production; J8 is a guard: with the batch judging
+  every entry, its warnings carry the form's path in front and the batch's
+  reader of `***` warnings does not pick them up).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

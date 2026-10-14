@@ -690,6 +690,17 @@ function AvisosDelMotor(const ARespuesta: string): TArray<string>;
   no es un designer. Lo hacen los escritores en cada edicion suelta, y la
   tanda y el changeset UNA vez al final (AplazaJuicioDeForm). }
 function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
+{ El juicio de lo que escribir APath ALCANZA: el de su form si es un designer
+  (JuicioDeForm), o el de los forms de su UNIDAD si es un .pas: solo su enlace
+  con la clase - el .pas lo rompe tambien; el texto del form, su parser y sus
+  propiedades no cambiaron - y sin la nota EDIT-084, que decia "edited" de un
+  form que nadie toco (en vivo tras el H6 de la 1.18.2). Cada linea de un form
+  de la unidad lleva su ruta delante. AOmite: los forms que no se juzgan aqui
+  (el changeset juzga por si mismo el que tambien escribio). Un delphi_edit
+  suelto de un .pas que rompia el enlace no decia nada (punto 7). EL juicio
+  de los escritores sueltos, de la tanda y del changeset. }
+function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
+  const AOmite: TArray<string> = nil): TArray<string>;
 { Mientras dure (True ... False, anidable, de ESTE hilo: las llamadas HTTP van
   a la vez), los escritores no juzgan el form en cada edicion: el juicio es
   del fichero ENTERO, como la estructura, y lo hace quien agrupa sobre lo que
@@ -2767,6 +2778,32 @@ begin
   Result := [MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO)] + DesignerLint(APath, ATexto, AEnc);
 end;
 
+function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
+  const AOmite: TArray<string>): TArray<string>;
+begin
+  Result := JuicioDeForm(APath, ATexto, AEnc);
+  if not SameText(ExtractFileExt(APath), '.pas') then
+    Exit;
+  for var Df in DesignersDeUnidad(APath) do
+  begin
+    var Omitido := False;
+    for var O in AOmite do
+      if SameText(O, Df) then
+        Omitido := True;
+    if Omitido or not TFile.Exists(Df) then
+      Continue;
+    try
+      var EncF: string;
+      var Enlace := DesignerBindingWarnings(Df, LineasDelTexto(PatchLoadText(Df, EncF)));
+      if Length(Enlace) > 0 then
+        for var L in [MsgText(SN_DESIGNER_BINDING_LINT_HEADER)] + Enlace do
+          Result := Result + [MaskDriveText('', Df) + ': ' + L];
+    except
+      // un form que no se relee no tumba lo ya escrito
+    end;
+  end;
+end;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer): string;
 var
@@ -2861,7 +2898,7 @@ begin
   // nada (medido el 10-oct-2026: un // en un .fmx)
   // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6)
   if GJuicioDeFormAplazado = 0 then
-    for var LintW in JuicioDeForm(APath, Joined, Enc) do
+    for var LintW in JuicioDeLoEscrito(APath, Joined, Enc) do
       Result := Result + #10 + LintW;
 end;
 
@@ -3276,8 +3313,10 @@ begin
         TextoAntes := '';
       end;
       // el juicio del FORM, como el de la estructura, del fichero entero: las
-      // entradas no lo hacen, y se hace UNA vez al acabar (H6, abajo)
-      Aplazado := EsRutaDeDesigner(APath);
+      // entradas no lo hacen, y se hace UNA vez al acabar (H6, abajo). Siempre:
+      // un .pas alcanza los forms de su unidad, y a que alcanza lo sabe
+      // JuicioDeLoEscrito (una tanda de un .pas juzgaba cada entrada)
+      Aplazado := True;
       if Aplazado then
         AplazaJuicioDeForm(True);
       for V in Arr do
@@ -3522,7 +3561,7 @@ begin
       if Aplazado then
       try
         var EncF: string;
-        Avisos := Avisos + JuicioDeForm(APath, PatchLoadText(APath, EncF), EncF);
+        Avisos := Avisos + JuicioDeLoEscrito(APath, PatchLoadText(APath, EncF), EncF);
       except
         // un form que no se relee no tumba una tanda ya escrita
       end;
@@ -5256,9 +5295,10 @@ begin
       Escritas := 0;
     for var Aviso in AvisosDeLlaves(APath, AfterText, HitIdx, Escritas) do
       Warnings.Add(Aviso);
-    // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6)
-    if AIsDesigner and (GJuicioDeFormAplazado = 0) then
-      for var LintW in JuicioDeForm(APath, AfterText, EncName(K)) do
+    // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6).
+    // Tambien de un .pas: los forms de su unidad, por su enlace (punto 7)
+    if GJuicioDeFormAplazado = 0 then
+      for var LintW in JuicioDeLoEscrito(APath, AfterText, EncName(K)) do
         Warnings.Add(LintW);
 
     if not AIsDesigner then

@@ -1111,10 +1111,8 @@ begin
         // are the file's.
         Audit := TStringBuilder.Create;
         Seen := TStringList.Create;
-        var Juzgados := TStringList.Create; // los forms ya juzgados (H6)
         try
           Seen.CaseSensitive := False;
-          Juzgados.CaseSensitive := False;
           for Op in C.Ops do
           begin
             if Seen.IndexOf(Op.Path) < 0 then
@@ -1140,34 +1138,27 @@ begin
             // juzgaba su estado intermedio: un renombre .dfm + .pas daba
             // DSGN-021 "Fix it before deploying" de un form que acababa limpio
             // (H6 de Hermes, 1.18.2). Lleva la nota de form ancho (DSGN-121)
+            // Por EL juicio de lo escrito (JuicioDeLoEscrito): un form que el
+            // lote no escribio, alcanzado por su unidad, solo por su enlace y
+            // sin la nota EDIT-084 (decia "edited" de el; en vivo tras H6); el
+            // que tambien escribio lo juzga su propia vuelta (AOmite)
             if Applied then
-            begin
-              var Forms: TArray<string> := [];
-              if EsRutaDeDesigner(FPath) then
-                Forms := [FPath]
-              else if SameText(ExtractFileExt(FPath), '.pas') then
-                for var Df in DesignersDeUnidad(FPath) do
-                  if TFile.Exists(Df) then
-                    Forms := Forms + [Df];
-              for var Fm in Forms do
-                if Juzgados.IndexOf(Fm) < 0 then
-                begin
-                  Juzgados.Add(Fm);
-                  try
-                    var EncF: string;
-                    for var LJ in JuicioDeForm(Fm, PatchLoadText(Fm, EncF), EncF) do
-                      AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
-                        Format('  %s: %s', [MaskDriveText('', Fm), LJ]);
-                  except
-                    // un form que no se relee no tumba un lote ya escrito
-                  end;
-                end;
+            try
+              var EncF := '';
+              var TextoF := '';
+              var EsForm := EsRutaDeDesigner(FPath);
+              if EsForm then
+                TextoF := PatchLoadText(FPath, EncF);
+              for var LJ in JuicioDeLoEscrito(FPath, TextoF, EncF, Seen.ToStringArray) do
+                AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') + '  ' +
+                  IfThen(EsForm, MaskDriveText('', FPath) + ': ', '') + LJ;
+            except
+              // un form que no se relee no tumba un lote ya escrito
             end;
           end;
           AuditText := Audit.ToString.TrimRight;
         finally
           Seen.Free;
-          Juzgados.Free;
           Audit.Free;
         end;
         if not Applied then
