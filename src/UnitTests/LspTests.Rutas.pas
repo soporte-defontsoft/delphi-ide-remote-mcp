@@ -141,6 +141,7 @@ type
     [Test] procedure SettingsIniNoSeEscribe;
     [Test] procedure LaInstalacionDelIdeSeLeePeroNoSeEscribe;
     [Test] procedure SustituirConservaLaFechaDeCreacion;
+    [Test] procedure EscribirLoMismoNoReescribe;
     [Test] procedure LaJaulaNoSeBorraPorAqui;
   end;
 
@@ -965,6 +966,23 @@ begin
   Assert.AreEqual('dos', TEncoding.ASCII.GetString(TFile.ReadAllBytes(F)));
   Assert.IsTrue(TFile.GetCreationTime(F) < EncodeDate(2002, 1, 1),
     DateTimeToStr(TFile.GetCreationTime(F)));
+end;
+
+procedure TPuertaDeEscribirTests.EscribirLoMismoNoReescribe;
+var
+  F: string;
+begin
+  // los mismos bytes no se escriben (ni, en el IDE, se copian): repetir
+  // get-sdk dejaba un .sdk identico y una copia en la casa en cada llamada
+  // (A4 de la 1.18.4). La fecha de escritura es el testigo
+  F := TPath.Combine(FDir, 'mismo.md');
+  EscribeTexto(F, 'uno', ltTemporal, ekUtf8);
+  TFile.SetLastWriteTime(F, EncodeDate(2001, 1, 1));
+  EscribeTexto(F, 'uno', ltTemporal, ekUtf8);
+  Assert.IsTrue(TFile.GetLastWriteTime(F) < EncodeDate(2002, 1, 1), 'lo mismo no se reescribe');
+  EscribeTexto(F, 'dos', ltTemporal, ekUtf8);
+  Assert.IsTrue(TFile.GetLastWriteTime(F) > EncodeDate(2002, 1, 1), 'lo distinto si');
+  Assert.AreEqual('dos', TEncoding.ASCII.GetString(TFile.ReadAllBytes(F)));
 end;
 
 procedure TPuertaDeEscribirTests.LaJaulaNoSeBorraPorAqui;

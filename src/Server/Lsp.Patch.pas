@@ -2411,6 +2411,21 @@ begin
   TFile.Delete(APath);
 end;
 
+{ El fichero esta y dice EXACTAMENTE esos bytes (por el lector de su lugar;
+  lo que no se puede leer no es igual). }
+function MismosBytes(const APath: string; const ABytes: TArray<Byte>;
+  ALugar: TLugarDeTexto): Boolean;
+begin
+  Result := False;
+  if not TFile.Exists(APath) then
+    Exit;
+  try
+    Result := BytesIguales(LeeBytes(APath, [ALugar]), ABytes);
+  except
+    Result := False;
+  end;
+end;
+
 function EscribeBytes(const APath: string; const ABytes: TArray<Byte>;
   ALugar: TLugarDeTexto): string;
 var
@@ -2434,6 +2449,14 @@ begin
   Motivo := LugarDeEscrituraDenegado(APath, ALugar);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
+  // Lo que ya dice ESO no se reescribe ni se copia: la regla de las
+  // ediciones (SN_EDIT_SIN_CAMBIOS), aqui para los ficheros que se escriben
+  // enteros. Repetir get-sdk escribia el mismo .sdk y dejaba una copia en la
+  // casa en CADA llamada (Hermes 13-oct, informe 105226; A4 de la 1.18.4).
+  // Y la casa ya tenia su gemela a medias (EscribeEnCasaDelServidor: "si el
+  // que esta dice lo mismo, vale"), solo como salida de un fallo
+  if MismosBytes(APath, ABytes, ALugar) then
+    Exit;
   // en el IDE, lo que se pisa se copia ANTES en la casa; sin copia no se pisa
   if (ALugar = ltIde) and TFile.Exists(APath) then
     Result := CopiaAntesDePisar(APath);
@@ -2456,24 +2479,12 @@ end;
 
 procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
 begin
-  try
-    EscribeTexto(AFichero, ATexto, ltCasa, ekUtf8Bom);
-  except
-    // una cache: si no se pudo (otro hilo la esta leyendo) y la que esta ya
-    // dice eso mismo, vale la que esta. Una cache VIEJA no vale (antes se
-    // toleraba cualquier fallo con el fichero presente: un disco lleno daba
-    // una configuracion antigua sin decir nada; revisor de P3), ni un sitio
-    // que la puerta niega
-    var Igual := False;
-    if EnLugarDeTexto(AFichero, ltCasa, True) then
-      try
-        Igual := LeeTexto(AFichero, [ltCasa]) = ATexto;
-      except
-        Igual := False;
-      end;
-    if not Igual then
-      raise;
-  end;
+  // una cache que ya dice eso mismo no se toca: lo decide el escritor
+  // (EscribeBytes, para todos los lugares), que antes solo lo miraba aqui y
+  // como salida de un fallo. Una cache VIEJA no vale: lo que no se pudo
+  // escribir lanza (un disco lleno daba una configuracion antigua sin decir
+  // nada; revisor de P3)
+  EscribeTexto(AFichero, ATexto, ltCasa, ekUtf8Bom);
 end;
 
 function PatchLoadText(const APath: string; out AEncName: string): string;

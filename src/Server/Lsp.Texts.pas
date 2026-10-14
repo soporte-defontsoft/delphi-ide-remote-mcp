@@ -1832,7 +1832,8 @@ const
     'a folder of its own named after the target distro, registered for ' +
     'delphi_build AND the IDE SDK Manager; minutes. An .sdk file or SDK ' +
     'record it replaces is copied first and the answer says where: ' +
-    'previousSdkCopy, previousSdkRecordCopy) | reseat-sdk (rewrite ' +
+    'previousSdkCopy, previousSdkRecordCopy; the last 10 per file are kept; ' +
+    'one that says the same is not rewritten) | reseat-sdk (rewrite ' +
     'the IDE seat of an SDK already on disk, no network; "sdk" names one, ' +
     'none = all) | remove-sdk (its .sdk file - copied first: removedCopy - and IDE seat; the sysroot ' +
     'stays on disk and the answer says where) | remote-run (run what THAT ' +

@@ -50,6 +50,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A file written whole that already says the same is not rewritten, and
+  not copied first.** `delphi_paserver get-sdk` composes the `.sdk` from
+  the same inputs every time, so a re-run (what its description asks for
+  after an OS upgrade on the target) wrote identical bytes and still left a
+  copy of the previous file in the server's house, and the same for the
+  SDK record, whose `pulled` date changed on every call. Hermes saw the
+  copies pile up (13-oct); measured on 14-oct against 1.18.3: a second
+  `get-sdk` that pulled zero files answered `previousSdkCopy` and
+  `previousSdkRecordCopy` with the `.sdk` byte-identical. The rule the
+  edits already had ("nothing changes: nothing is written, nothing is
+  copied") now lives in the one writer of the IDE's, the house's and the
+  temporary places (`EscribeBytes`), so profiles, `.sdk` files, records
+  and caches get it at once; the house writer's own half of it (a fallback
+  on failure) goes. `get-sdk` says `sdkFileUnchanged` when the `.sdk` was
+  already that, and a pull that brought nothing keeps the record's `pulled`
+  date, so the record is unchanged too. The description of `get-sdk` now
+  says the last 10 copies per file are kept. `LspTests.Rutas`
+  (`EscribirLoMismoNoReescribe`).
 - **`delphi_upload`'s quarantine no longer deletes or overwrites a
   read-only `<name>.corrupt`.** An upload whose final sha256 does not match
   is set aside as `<name>.corrupt`, and a previous quarantine there goes to

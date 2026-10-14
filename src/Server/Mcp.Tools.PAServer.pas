@@ -407,7 +407,7 @@ end;
 { La ficha del sysroot (mcp-sdk.json); devuelve donde quedo la copia de la
   que pisa ('' si no habia o si no se pudo escribir: sin ficha se sigue). }
 function EscribirFicha(const ASysRoot, ASdk, ADistro, AGlibc, AGcc,
-  AProfile: string): string;
+  AProfile, APulled: string): string;
 var
   O: TJSONObject;
 begin
@@ -419,7 +419,13 @@ begin
     O.AddPair('glibc', AGlibc);
     O.AddPair('gcc', AGcc);
     O.AddPair('profile', AProfile);
-    O.AddPair('pulled', FormatDateTime('yyyy-mm-dd hh:nn', Now));
+    // la fecha del pull: la de hoy, o la que ya tenia la ficha cuando no se
+    // trajo nada (APulled): asi una repeticion sin cambios escribe la MISMA
+    // ficha y el escritor no la pisa ni la copia (A4 de la 1.18.4)
+    if APulled <> '' then
+      O.AddPair('pulled', APulled)
+    else
+      O.AddPair('pulled', FormatDateTime('yyyy-mm-dd hh:nn', Now));
     try
       // por la puerta de escribir, con el IDE como lugar: el sysroot de un SDK
       // registrado, y la ficha anterior copiada antes en la casa
@@ -1420,10 +1426,14 @@ begin
 
       SdkFile := RutaDeSdk(Info.Version, SdkName);
       // por la puerta de escribir, con el IDE como lugar: un .sdk que ya
-      // estaba se copia ANTES en la casa del servidor (se pisaba sin copia)
+      // estaba se copia ANTES en la casa del servidor (se pisaba sin copia);
+      // uno que ya dice lo mismo ni se pisa ni se copia, y se dice (A4)
+      var HabiaSdk := TFile.Exists(SdkFile);
       var CopiaSdk := EscribeTexto(SdkFile, Sb.ToString, ltIde, ekUtf8Bom);
       if CopiaSdk <> '' then
-        Return.AddPair('previousSdkCopy', CopiaSdk);
+        Return.AddPair('previousSdkCopy', CopiaSdk)
+      else if HabiaSdk then
+        Return.AddPair('sdkFileUnchanged', TJSONBool.Create(True));
       // y el asiento del SDK Manager del IDE, leyendo la tabla del
       // defaultsdkpaths de ESTA instalacion (nada clavado)
       if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot, SdkName,
@@ -1436,7 +1446,21 @@ begin
 
     // La glibc del sysroot recien traido: ES el dato con el que se elige.
     Glibc := VersionDeGlibc(SysRoot);
-    var CopiaFicha := EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName);
+    // sin ficheros traidos no hubo pull: la ficha conserva su fecha, y si
+    // dice lo mismo que antes no se reescribe (A4)
+    var Pulled := '';
+    if TotalFiles = 0 then
+    begin
+      var Previa := FichaDeSysroot(SysRoot);
+      if Assigned(Previa) then
+        try
+          if Previa.GetValue('pulled') <> nil then
+            Pulled := Previa.GetValue<string>('pulled');
+        finally
+          Previa.Free;
+        end;
+    end;
+    var CopiaFicha := EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName, Pulled);
     if CopiaFicha <> '' then
       Return.AddPair('previousSdkRecordCopy', CopiaFicha);
 
