@@ -193,7 +193,68 @@ end;
   resuelve el ANTECESOR existente mas cercano y se le vuelve a pegar el resto:
   lo que importa es que ningun tramo del camino salte fuera. Si no existe
   nada del camino, se queda la normalizacion textual, que es lo que habia. }
-function RealPath(const APath: string): string;
+{ El DESTINO de un enlace (junction o symlink) por lo que guarda el propio
+  enlace - lo que contesta Windows de su punto de reanalisis
+  (FSCTL_GET_REPARSE_POINT) -, exista o no ese destino: NombreFinal tiene
+  que abrirlo, y con un enlace COLGANTE no puede (TFile.GetSymLinkTarget
+  tampoco: busca el destino con FindFirst). Una ruta completa, o '' si no es
+  un enlace que se sepa leer (2w de la 1.18.2). }
+function DestinoDeEnlace(const AEnlace: string): string;
+const
+  FSCTL_GET_REPARSE_POINT = $000900A8;
+  IO_REPARSE_TAG_MOUNT_POINT = $A0000003;
+  IO_REPARSE_TAG_SYMLINK = $A000000C;
+  SYMLINK_FLAG_RELATIVE = 1;
+var
+  H: THandle;
+  Buf: TBytes;
+  Devuelto, Tag: Cardinal;
+  Base, SubOff, SubLen: Integer;
+  S: string;
+begin
+  Result := '';
+  H := CreateFile(PChar(AEnlace), 0, FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil,
+    OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT or FILE_FLAG_BACKUP_SEMANTICS, 0);
+  if H = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    SetLength(Buf, 16 * 1024); // MAXIMUM_REPARSE_DATA_BUFFER_SIZE
+    Devuelto := 0;
+    if not DeviceIoControl(H, FSCTL_GET_REPARSE_POINT, nil, 0, @Buf[0], Length(Buf), Devuelto, nil) or
+       (Devuelto < 16) then
+      Exit;
+    // REPARSE_DATA_BUFFER: etiqueta (4), largo (2), reservado (2), y luego
+    // SubstituteName offset/largo y PrintName offset/largo (2 cada uno); el
+    // de un symlink lleva ademas sus Flags (4) antes del texto
+    Tag := PCardinal(@Buf[0])^;
+    if Tag = IO_REPARSE_TAG_MOUNT_POINT then
+      Base := 16
+    else if Tag = IO_REPARSE_TAG_SYMLINK then
+      Base := 20
+    else
+      Exit;
+    SubOff := PWord(@Buf[8])^;
+    SubLen := PWord(@Buf[10])^;
+    if Base + SubOff + SubLen > Integer(Devuelto) then
+      Exit;
+    SetString(S, PChar(@Buf[Base + SubOff]), SubLen div SizeOf(Char));
+    if (Tag = IO_REPARSE_TAG_SYMLINK) and ((PCardinal(@Buf[16])^ and SYMLINK_FLAG_RELATIVE) <> 0) then
+      Exit(TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(SinBarraFinal(AEnlace)), S)));
+    // la forma NT: \??\C:\... o \??\UNC\host\...
+    if S.StartsWith('\??\UNC\') then
+      S := '\\' + S.Substring(8)
+    else if S.StartsWith('\??\') then
+      S := S.Substring(4);
+    if EsRutaAbsoluta(S) then
+      Result := S;
+  finally
+    CloseHandle(H);
+  end;
+end;
+
+{ RealPath con ANivel enlaces colgantes por seguir como mucho: una cadena
+  de ellos (o un ciclo, que Windows no abre) no da vueltas para siempre. }
+function RealPathHasta(const APath: string; ANivel: Integer): string;
 var
   Base: string;
 begin
@@ -230,8 +291,26 @@ begin
       end;
       Result := NombreFinal(ADir, ASalida);
       if Result then
-        ASalida := SinBarraFinal(ASalida);
+        ASalida := SinBarraFinal(ASalida)
+      else if (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) and
+         (ANivel > 0) then
+      begin
+        // un enlace COLGANTE (su destino no existe todavia): donde apunta, por
+        // lo que guarda el propio enlace, y la ruta real de eso - que puede
+        // pasar por otro enlace. Se quedaba el texto del enlace, y un move que
+        // creaba el destino escribia DENTRO de un ReadOnlyPaths declarado a
+        // traves de el (2w de la 1.18.2, medido en produccion)
+        var Destino := DestinoDeEnlace(ADir);
+        Result := Destino <> '';
+        if Result then
+          ASalida := SinBarraFinal(RealPathHasta(Destino, ANivel - 1));
+      end;
     end);
+end;
+
+function RealPath(const APath: string): string;
+begin
+  Result := RealPathHasta(APath, 8);
 end;
 
 function LongCanonical(const APath: string): string;
