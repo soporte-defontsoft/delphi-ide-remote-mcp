@@ -500,6 +500,23 @@ function CarpetaVacia(const ADir: string): Boolean;
   se empaqueta es lo que se podia leer. }
 function EnlaceLegible(const P: string): Boolean;
 
+{ EL enlace del arbol de ADir que esta sesion no puede seguir, o '' si no
+  hay ninguno: para LEER, uno cuyo destino no pasa la puerta de lectura
+  (EnlaceLegible, la regla de arriba); con AEscribe, uno cuyo destino REAL
+  no pasa la puerta del escritor (EscrituraDenegada). Mira a cualquier
+  profundidad y tambien DETRAS de cada enlace admitido -un enlace a una
+  carpeta de las raices que a su vez tiene uno hacia fuera-, con los ciclos
+  cortados por la ruta real; una carpeta que no se deja listar lanza
+  (GUARD-040: lo que no se revisa no se da por revisado). AOmite salta lo
+  que no es del arbol (los metadatos de git). Para quien va a dejar que
+  OTRO programa recorra o reescriba el arbol entero: git atraviesa un
+  junction como una carpeta -add mete lo de detras en el indice; switch,
+  merge, pull y stash lo reescriben o lo borran- y la puerta del repo solo
+  mira sus tres carpetas (medido el 14-oct-2026 contra la 1.18.3+, revision
+  A del cierre de la 1.19.0). }
+function EnlaceAjenoEn(const ADir: string; AEscribe: Boolean;
+  const AOmite: TOmiteAlCopiar = nil): string;
+
 { Recorrido de lectura compartido: solo enlaces legibles, ciclos cortados y
   carpetas ilegibles toleradas. Las tools deciden sus filtros de artefactos. }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
@@ -3144,6 +3161,79 @@ end;
 function EnlaceLegible(const P: string): Boolean;
 begin
   Result := (ReadPathDenied(RealPath(P)) = '') or (ReadPathDenied(P) = '');
+end;
+
+function EnlaceAjenoEn(const ADir: string; AEscribe: Boolean;
+  const AOmite: TOmiteAlCopiar): string;
+var
+  Vistos: TStringList; // rutas REALES ya recorridas: corta los ciclos de enlaces
+  Ajeno, Fallo: string;
+  // una variable, no una rutina anidada: la captura el aviso de enlace del
+  // recorredor (E2555) y por ella se llama a si misma detras de un enlace
+  Recorre: TProc<string>;
+begin
+  Ajeno := '';
+  Fallo := '';
+  Vistos := TStringList.Create;
+  try
+    Vistos.Sorted := True;
+    Vistos.Add(LowerCase(SinBarraFinal(RealPath(ADir))));
+    Recorre :=
+      procedure(D: string)
+      begin
+        RecorreSinEnlaces(D,
+          procedure(const APath: string)
+          begin
+          end,
+          procedure(const APath: string)
+          var
+            Real: string;
+            Sigue: Boolean;
+          begin
+            if (Ajeno <> '') or (Fallo <> '') then
+              Exit;
+            // lo de detras del enlace, por la puerta que toca: la del
+            // escritor sobre su ruta real, o la regla de lectura del copiador.
+            // Lo que no se deja juzgar (una ruta que no parsea) NO se sigue:
+            // el recorredor se traga lo que lance este aviso, y tragado
+            // seria admitido
+            try
+              if AEscribe then
+                Sigue := EscrituraDenegada(RealPath(APath)) = ''
+              else
+                Sigue := EnlaceLegible(APath);
+            except
+              Sigue := False;
+            end;
+            if not Sigue then
+            begin
+              Ajeno := APath;
+              Exit;
+            end;
+            // detras de un enlace admitido puede haber otro: se mira tambien.
+            // El recorredor se traga lo que lance este aviso: un GUARD-040 de
+            // ahi dentro se guarda y se relanza al final
+            Real := LowerCase(SinBarraFinal(RealPath(APath)));
+            if TDirectory.Exists(Real) and (Vistos.IndexOf(Real) < 0) then
+            begin
+              Vistos.Add(Real);
+              try
+                Recorre(Real);
+              except
+                on E: Exception do
+                  Fallo := E.Message;
+              end;
+            end;
+          end,
+          AOmite, True);
+      end;
+    Recorre(ADir);
+  finally
+    Vistos.Free;
+  end;
+  if Fallo <> '' then
+    raise EInOutError.Create(Fallo);
+  Result := Ajeno;
 end;
 
 { Recursive file walk that TOLERATES unreadable subdirectories. Delphi's

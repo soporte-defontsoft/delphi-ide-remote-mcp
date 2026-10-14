@@ -11,16 +11,18 @@ the MCP `initialize` response (`serverInfo.version`).
 `delphi_git` asks for operations, not command lines: the free `args` is
 gone and every command takes its own fields (`paths`, `ref`, `branch`,
 `remote`, `action`...), with git itself as the judge of each value - the
-minor change of this version. Around it, the fixes of 14-oct: git launched
-by its full path from the server's PATH; `delphi_build` choosing the
-profile and the target instead of copying them onto msbuild's line; the
-tree copier failing closed on a folder it cannot list, and a folder the
-server cannot list no longer taken for an empty one; the upload quarantine
-kept inside the write gate; `get-sdk` / `reseat-sdk` / `remove-sdk` kept to
-their own SDKs; a file that already says the same not rewritten; and
-`delphi_desktop` on Linux naming a locked session or a desktop without a
-monitor instead of "the portal refused the screenshot (code 2)". Nothing
-here is a new capability: those go to 1.20.
+minor change of this version. Around it, the fixes of 14-oct: a link
+inside a repository no longer lets git read or rewrite what is behind it
+outside the roots (the jail hole the closing review measured); git
+launched by its full path from the server's PATH; `delphi_build` choosing
+the profile and the target instead of copying them onto msbuild's line;
+the tree copier failing closed on a folder it cannot list, and a folder
+the server cannot list no longer taken for an empty one; the upload
+quarantine kept inside the write gate; `get-sdk` / `reseat-sdk` /
+`remove-sdk` kept to their own SDKs; a file that already says the same not
+rewritten; and `delphi_desktop` on Linux naming a locked session or a
+desktop without a monitor instead of "the portal refused the screenshot
+(code 2)". Nothing here is a new capability: those go to 1.20.
 
 ### Changed (contract: `delphi_git`)
 
@@ -63,6 +65,31 @@ here is a new capability: those go to 1.20.
   `test_git_operaciones_119`; the git batteries moved to the fields.
 
 ### Fixed
+
+- **A link inside a repository no longer lets git read or rewrite what is
+  behind it, outside the roots (JAIL, since 1.7.6).** git goes through a
+  junction as if it were a folder, and the repository gate judged the three
+  folders of the repository (root, `.git`, common), not the tree: with a
+  junction inside the repo pointing at a folder outside every root, `add
+  paths=["."]` put the files behind it in the index (a read outside the
+  jail), `switch` to a branch without them deleted them, and `stash` push
+  rewrote them; `merge`, `pull` and `stash pop` reached git and failed
+  inside it, already writing through the link (measured against 1.18.3+ on
+  14-oct, `test_git_enlace_arbol_119`; found by the closing review). Now,
+  before every command that walks the tree (`status`, `diff`, `add`) or
+  rewrites it (`switch` to a branch, `merge` - `abort` included -, `pull`,
+  `stash` push and pop), the server walks the working tree itself with the
+  guard's walker (`.git` aside): a link whose real target this session
+  cannot read (the walking commands) or write (the rewriting ones) refuses
+  the command with `GIT-076` before git runs and before any network; a
+  link to a place inside the roots is admitted, and what is behind it is
+  walked too (a link behind a link counts); a folder of the tree the server
+  cannot list refuses the command (`GUARD-040`) instead of being taken for
+  checked. The commands that do not touch the tree (`log`, `branch`,
+  `commit`, `tag`, `config`, `restore --staged`, `switch create=true`,
+  `fetch`, `push`) keep working with the link there. One rule, in the guard
+  (`EnlaceAjenoEn`), next to the link rule of the readers; the git tool
+  says which commands touch the tree (`GitTocaArbol`).
 
 - **`delphi_git` launches git by its full path, found only in the PATH the
   server started with.** It launched `git.exe` by name, and Windows looks a

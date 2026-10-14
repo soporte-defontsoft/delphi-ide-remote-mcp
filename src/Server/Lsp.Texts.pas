@@ -6484,6 +6484,14 @@ const
     'would rewrite (for a pull: the download before it failed). Nothing ' +
     'was done.';
 
+  SR_GIT_ENLACE_AJENO_FMT =
+    '[GIT-076 DENIED] %s does not run: the working tree contains a link ' +
+    '(%s) to a place this session cannot %s, and git goes through a link ' +
+    'as if it were a folder - it would read, rewrite or delete what is ' +
+    'behind it. Nothing was done. Remove the link first and repeat; the ' +
+    'commands that do not touch the tree (log, branch, commit, tag) still ' +
+    'work.';
+
   // ---- delphi_git worktree (1.4.0) ----
 
   SR_GIT_WORKTREE_ARGS =
@@ -7541,6 +7549,10 @@ const
 
   SF_GIT_SIN_GIT_EN_PATH =
     'git.exe is not in the PATH the server process started with';
+
+  // lo que esta sesion no puede hacer con lo de detras de un enlace (GIT-076)
+  SF_GIT_ENLACE_LEER = 'read';
+  SF_GIT_ENLACE_ESCRIBIR = 'write';
 
   SF_GIT_GIT_NO_ARRANCA_FMT =
     'Windows could not launch the git.exe found in that PATH (error %d)';

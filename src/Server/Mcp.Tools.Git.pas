@@ -310,6 +310,37 @@ begin
     Result := SameText(AAccion.Trim, 'add');
 end;
 
+{ Lo que git hace con el ARBOL DE TRABAJO en cada orden, para quien tiene
+  que mirarlo ENTERO antes de dejarselo (EnlaceAjenoEn): True si lo RECORRE
+  -status, diff y add lo leen fichero a fichero, y un junction como si
+  fuera una carpeta- o lo REESCRIBE (AEscribe: switch de rama, merge -abort
+  incluido: deshace escribiendo-, pull, stash push y pop: unpack_trees
+  escribe y borra a traves del junction). Lo demas no lo toca: log, show,
+  branch, tag, config, fetch, push, ls-remote, init, commit (el indice),
+  restore --staged (el indice), switch -c (sale de HEAD), clone y worktree
+  add (una carpeta nueva; remove tiene su GIT-020). Hermano de
+  GitMaterializaArbol (que ordenes bajan objetos LFS) y del juez de
+  GitReescribeProtegido (que ficheros cambiaria, preguntado a git): tres
+  preguntas distintas sobre las mismas ordenes. Medido el 14-oct-2026
+  contra la 1.18.3+: add paths=["."] metia lo de detras de un junction en
+  el indice y switch, merge, pull y stash lo borraban o reescribian
+  (revision A del cierre de la 1.19.0; test_git_enlace_arbol_119). }
+function GitTocaArbol(const ACmd, AAccion: string; ACrear: Boolean;
+  out AEscribe: Boolean): Boolean;
+begin
+  AEscribe := (SameText(ACmd, 'switch') and not ACrear) or
+    MatchText(ACmd, ['merge', 'pull']) or
+    (SameText(ACmd, 'stash') and MatchText(AAccion.Trim, ['', 'push', 'pop']));
+  Result := AEscribe or MatchText(ACmd, ['status', 'diff', 'add']);
+end;
+
+{ Los metadatos de git no son del arbol: el recorredor los salta (la puerta
+  del repo ya los juzgo por su sitio real: DondeViveElRepo + PathDenied). }
+function EsCarpetaGit(const APath: string): Boolean;
+begin
+  Result := SameText(TPath.GetFileName(SinBarraFinal(APath)), '.git');
+end;
+
 function ConfiguracionGitDenegada(const ARepo, ARaiz: string;
   AExaminarLfs: Boolean; var AFijado: string): string;
 var
@@ -1363,6 +1394,27 @@ begin
     Result := ConfiguracionGitDenegada(Repo, Raiz, GitMaterializaArbol(Cmd, Params.Action), Fijado);
     if Result <> '' then
       Exit;
+    // EL ARBOL ENTERO antes de dejarselo a git (GIT-076): un enlace de
+    // dentro hacia donde esta sesion no lee (status, diff, add lo recorren)
+    // o no escribe (switch, merge, pull, stash push/pop lo reescriben) para
+    // la orden aqui, antes de la red y de git. Por el recorredor del guard,
+    // .git aparte; una carpeta que no se deja listar, GUARD-040. La puerta
+    // de arriba mira las tres carpetas del repo; git atraviesa un junction
+    // como una carpeta (medido el 14-oct-2026: una victima de fuera borrada
+    // por switch y stash, metida en el indice por add)
+    var Escribe := False;
+    if (Raiz <> '') and GitTocaArbol(Cmd, Params.Action, Params.Create, Escribe) then
+    begin
+      try
+        Enlace := EnlaceAjenoEn(Raiz, Escribe, EsCarpetaGit);
+      except
+        on E: EInOutError do
+          Exit(E.Message);
+      end;
+      if Enlace <> '' then
+        Exit(MsgFmt(SR_GIT_ENLACE_AJENO_FMT, [Cmd, Enlace,
+          MsgText(IfThen(Escribe, SF_GIT_ENLACE_ESCRIBIR, SF_GIT_ENLACE_LEER))]));
+    end;
   end;
   // LAS RUTAS de "paths", por su lector (RutasDeGit): " -- :(literal)...",
   // al final de la orden; sin rutas, " --" solo, para que una revision que
