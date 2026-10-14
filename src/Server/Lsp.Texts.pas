@@ -5182,14 +5182,21 @@ const
     leen en ANSI (medido con dcc el 13-oct, testsserver\mide-dfm: la o de
     Configuracion partida en dos letras en el exe), y lint daba CLEAN. Aqui
     el IDE no lo arregla al guardar - lo lee ya partido -: convertirlo es
-    cambiar la codificacion, del usuario. %s = la pagina ANSI. }
+    cambiar la codificacion, del usuario. Pero un ANSI de verdad puede casar
+    con UTF-8 por azar (CAFE con E acentuada y puntos suspensivos, C9 85) y
+    ningun juez lo distingue: la nota no lo afirma, ensena las dos lecturas
+    (NotaDeUtf8SinBom) y dice que hacer en cada caso (W3 del revisor de
+    cierre de la 1.18.2: afirmaba y recomendaba convertir, y en ese ANSI
+    convertir perdia el acento). %s = la pagina ANSI. }
   SN_READ_FORM_UTF8_SIN_BOM_FMT =
-    '[READ-009] NOTE: this form has no BOM and its bytes are UTF-8, but the ' +
-    'IDE, the compiler and this server read a form without BOM as ANSI ' +
-    '(%s): each letter above ASCII comes out as two letters (mojibake), and ' +
-    'that is what you see here and what the program gets. Converting it ' +
-    'to UTF-8 with a BOM fixes it - a change of encoding, so the user''s ' +
-    'call. This server keeps the file as it is.';
+    '[READ-009] NOTE: this form has no BOM and its bytes would also read as ' +
+    'UTF-8. The IDE, the compiler and this server read a form without BOM ' +
+    'as ANSI (%s). Compare the two readings below: if the ANSI one shows ' +
+    'each letter above ASCII as two (mojibake), the form was written as ' +
+    'UTF-8 without a BOM and that is what the program gets - converting it ' +
+    'to UTF-8 with a BOM fixes it, a change of encoding, so the user''s ' +
+    'call; if the ANSI one reads right, the form is ANSI and there is ' +
+    'nothing to do. This server keeps the file as it is.';
 
   SR_DESIGNER_EMPTY =
     '[DSGN-014 DENIED] The file contains no object.';

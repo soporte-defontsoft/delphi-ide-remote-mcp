@@ -476,6 +476,15 @@ procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
   entrada (la ruta llega de un parametro admitido); lo que se lee de OTRO
   sitio va por LeeTexto con su lugar. }
 function PatchLoadText(const APath: string; out AEncName: string): string;
+{ EL texto de un DESIGNER, binario o de texto, por la puerta de leer de la
+  jaula (como PatchLoadText): el binario por su conversor
+  (Lsp.DesignerBin.DesignerFileToText; AEncName vacio), el de texto con su
+  codificacion. '' si bien; si no, el motivo (un binario danado). Lo hacian a
+  mano cinco sitios, y el juicio de lo que alcanza una escritura
+  (JuicioDeLoEscrito) leia un binario como texto y no juzgaba nada (W4 del
+  revisor de cierre de la 1.18.2, medido: tras to-binary, quitar el campo del
+  .pas no avisaba). }
+function TextoDeDesigner(const APath: string; out ATexto, AEncName: string): string;
 { AEnsayo: todo lo que la escritura comprueba (la codificacion, la puerta y el
   +R que pregunta el escritor) sin copiar ni escribir; lanza lo que lanzaria.
   El preview de un changeset lo pide en vez de copiar las reglas del commit
@@ -2470,6 +2479,18 @@ begin
   Result := TextoDeFichero(APath, AEncName);
 end;
 
+function TextoDeDesigner(const APath: string; out ATexto, AEncName: string): string;
+begin
+  ATexto := '';
+  AEncName := '';
+  // la puerta tambien para el binario: su conversor lee el disco a secas
+  ExigeLugarDeLectura(APath, [ltJaula]);
+  if IsBinaryDesignerFile(APath) then
+    Exit(DesignerFileToText(APath, ATexto));
+  Result := '';
+  ATexto := PatchLoadText(APath, AEncName);
+end;
+
 procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;
   ANuevo: Boolean = False);
 var
@@ -2798,8 +2819,12 @@ begin
     if Omitido or not TFile.Exists(Df) then
       Continue;
     try
-      var EncF: string;
-      var Enlace := DesignerBindingWarnings(Df, LineasDelTexto(PatchLoadText(Df, EncF)));
+      // por EL lector de designers: un binario se leia como texto y no se
+      // juzgaba (W4 del revisor de cierre de la 1.18.2)
+      var EncF, TextoDf: string;
+      if TextoDeDesigner(Df, TextoDf, EncF) <> '' then
+        Continue; // un binario danado: lo dice quien lo lea, no esta escritura
+      var Enlace := DesignerBindingWarnings(Df, LineasDelTexto(TextoDf));
       if Length(Enlace) > 0 then
         for var L in [MsgText(SN_DESIGNER_BINDING_LINT_HEADER)] + Enlace do
           Result := Result + [MaskDriveText('', Df) + ': ' + L];
@@ -3563,7 +3588,11 @@ begin
       // estado intermedio y un bloque movido en dos pasos daba DSGN-021 de un
       // form que acababa limpio (H6 de Hermes, 1.18.2); la nota de form ancho
       // se perdia en los avisos de las entradas (B1) y va con el
-      if Aplazado then
+      // ...y solo si se ESCRIBIO: una tanda sin cambios decia EDIT-114 y
+      // despues EDIT-084 "edited" o el DSGN-021 de un form que ya estaba roto
+      // (W2 del revisor de cierre de la 1.18.2, medido; DoEdit no juzga un
+      // EDIT-113)
+      if Aplazado and (SinCambios < Arr.Count) then
       try
         var EncF: string;
         Avisos := Avisos + JuicioDeLoEscrito(APath, PatchLoadText(APath, EncF), EncF);
@@ -3694,7 +3723,22 @@ begin
   // CLEAN (medido con dcc el 13-oct, testsserver\mide-dfm)
   else if (K = ekAnsi) and (PaginaAnsi <> CP_UTF8) and EsRutaDeDesigner(APath) and HayByteAlto(B) and
      (DetectEnc(B, False) = ekUtf8) then
+  begin
     Result := MsgFmt(SN_READ_FORM_UTF8_SIN_BOM_FMT, [EncName(ekAnsi)]);
+    // ...con las DOS lecturas de su primera linea con letras de mas alla de
+    // ASCII: un ANSI de verdad puede casar con UTF-8 por azar y el detector no
+    // lo separa; quien lee si (W3 del revisor de cierre de la 1.18.2)
+    var Ansi := LineasDelTexto(DecodeBytes(B, ekAnsi));
+    var Utf8 := LineasDelTexto(DecodeBytes(B, ekUtf8));
+    for var I := 0 to Min(High(Ansi), High(Utf8)) do
+      if not IsAscii(Ansi[I]) then
+      begin
+        Result := Result +
+          #10'  ' + MsgFmt(SF_READ_OTRA_LECTURA_FMT, [EncName(ekAnsi), CitaDeLinea(I + 1, Ansi[I])]) +
+          #10'  ' + MsgFmt(SF_READ_OTRA_LECTURA_FMT, [EncName(ekUtf8), CitaDeLinea(I + 1, Utf8[I])]);
+        Break;
+      end;
+  end;
 end;
 
 function NotaDeUtf8SinBomDe(const APath: string): string;

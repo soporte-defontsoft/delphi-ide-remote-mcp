@@ -31,6 +31,16 @@ visto en vivo tras H6):
      ruta del form delante y AvisosDelMotor solo recoge lo que empieza por ***
   J9 control: un delphi_edit del .pas que no toca el enlace: sin DSGN-021
 
+Y solo lo que se ESCRIBIO (W2 del revisor de cierre, medido), sobre un form que
+YA estaba roto (el .pas sin el campo de Panel1):
+  J10 una tanda del .dfm sin ningun cambio: dice que no cambio nada y no juzga
+      (ROJO en produccion: EDIT-114 y despues EDIT-084 'edited' y DSGN-021)
+  J11 un changeset con un paso real en otro fichero y uno sin cambio en ese
+      .pas: no juzga el form de una unidad que no se toco
+  J12 el form en BINARIO (designer to-binary) y un delphi_edit del .pas que le
+      quita el campo: DSGN-021 (W4 del revisor de cierre, medido; ROJO en
+      produccion: el juicio leia el binario como texto y no decia nada)
+
 Uso:  python tests/test_juicio_final_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -58,6 +68,15 @@ def par(nombre):
     with open(dfm, 'w', encoding='utf-8', newline='\r\n') as f:
         f.write('object Form1: TForm1\n  Left = 0\n  Top = 0\n  Caption = \'Form1\'\n' + BLOQUE_P + '\n' +
                 BLOQUE_L + '\nend\n')
+    return pas, dfm
+
+
+def par_roto(nombre):
+    """El par de par(), con el .pas SIN el campo de Panel1: el form ya roto."""
+    pas, dfm = par(nombre)
+    t = open(pas, encoding='utf-8').read().replace('    Panel1: TPanel;\n', '')
+    with open(pas, 'w', encoding='utf-8', newline='\r\n') as f:
+        f.write(t)
     return pas, dfm
 
 
@@ -113,6 +132,35 @@ try:
                  t=240)
     check('J9 control: un delphi_edit del .pas que no toca el enlace: sin DSGN-021',
           not mc.rechazado(r) and dsgn021(r) == 0, r[:600])
+
+    pas, dfm = par_roto('j10')
+    antes = open(dfm, 'rb').read()
+    r = srv.call('delphi_edit', {'path': dfm, 'edits': [
+        {'old': "  Caption = 'Form1'", 'new': "  Caption = 'Form1'"},
+        {'old': '    Top = 40', 'new': '    Top = 40'}]}, t=240)
+    check('J10 una tanda SIN cambios sobre un form ya roto: dice que no cambio nada y no lo juzga',
+          'EDIT-114' in r and 'EDIT-084' not in r and dsgn021(r) == 0 and open(dfm, 'rb').read() == antes,
+          r[:600])
+
+    pas, dfm = par_roto('j11')
+    nota = os.path.join(os.path.dirname(pas), 'notas.txt')
+    open(nota, 'w').write('uno\n')
+    cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': nota,
+                                  'old': 'uno', 'new': 'dos'})
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': pas,
+                                  'old': '    Label1: TLabel;', 'new': '    Label1: TLabel;'})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
+    check('J11 un changeset con un paso sin cambio en el .pas: no juzga el form de esa unidad',
+          not mc.rechazado(r) and dsgn021(r) == 0 and open(nota).read() == 'dos\n', r[:600])
+
+    pas, dfm = par('j12')
+    rb = srv.call('delphi_designer', {'command': 'to-binary', 'path': dfm}, t=240)
+    r = srv.call('delphi_edit', {'path': pas, 'old': '    Panel1: TPanel;', 'new': '    // sin campo'}, t=240)
+    check('J12 con el form en BINARIO, quitarle el campo en el .pas: DSGN-021 del form',
+          not mc.rechazado(rb) and open(dfm, 'rb').read()[:1] == b'\xff' and not mc.rechazado(r) and
+          dsgn021(r) == 1, (rb[:200], r[:600]))
 
     pas, dfm = par('j4')
     r = srv.call('delphi_edit', {'path': dfm, 'edits': [

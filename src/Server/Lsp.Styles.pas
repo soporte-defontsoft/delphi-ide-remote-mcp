@@ -272,15 +272,12 @@ begin
   // recuerda: Guarda lo rechaza, que guardar texto sobre un binario sin decirlo
   // es cambiarle el formato a escondidas; to-text lo hace a la vista.
   FBinaryOnDisk := IsBinaryDesignerFile(FPath);
+  // por EL lector de designers (Lsp.Patch.TextoDeDesigner): binario o texto
+  Err := TextoDeDesigner(FPath, Text, FEnc);
+  if Err <> '' then
+    raise Exception.Create(Err);
   if FBinaryOnDisk then
-  begin
-    Err := DesignerFileToText(FPath, Text);
-    if Err <> '' then
-      raise Exception.Create(Err);
     FEnc := 'binario';
-  end
-  else
-    Text := PatchLoadText(FPath, FEnc);
   FEol := SaltoDominante(Text);
   FLines := SplitToLines(Text); // el troceador de todos: un CR suelto es salto
   FLeidas := Copy(FLines); // copia: un array dinamico se comparte, no se copia al escribir

@@ -983,14 +983,10 @@ begin
   if not EsRutaDeDesigner(APath) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
-  if IsBinaryDesigner(APath) then
-  begin
-    EncName := DesignerFileToText(APath, Text);
-    if EncName <> '' then
-      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, EncName));
-  end
-  else
-    Text := PatchLoadText(APath, EncName);
+  // (por EL lector de designers, Lsp.Patch.TextoDeDesigner)
+  var Motivo := TextoDeDesigner(APath, Text, EncName);
+  if Motivo <> '' then
+    Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Motivo));
   // EL lint de un form (Lsp.Patch.LintDeForm): tablas del framework + el
   // form contra su clase (check-binding) + EL parser del IDE con los bytes
   // del fichero, lo PRIMERO y con o sin tabla (8.10 de la 1.18.0); un

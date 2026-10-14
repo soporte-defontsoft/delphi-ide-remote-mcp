@@ -337,20 +337,14 @@ begin
   // un form ilegible manda a buscar un fichero que nunca fue el problema.
   // (el motivo es lo que DEVUELVE DesignerFileToText; Enc es el texto, y
   // cuando falla queda vacio: el rechazo salia sin motivo desde el 25-sep)
-  if IsBinaryDesignerFile(ADfm) then
-  begin
-    var MotivoBin := DesignerFileToText(ADfm, Enc);
-    if MotivoBin <> '' then
-      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, MotivoBin));
-  end;
+  // (por EL lector de designers, Lsp.Patch.TextoDeDesigner: binario o texto)
+  var MotivoBin := TextoDeDesigner(ADfm, DfmTxt, Enc);
+  if MotivoBin <> '' then
+    Exit(MsgEnvuelve(SR_RECHAZADO_FMT, MotivoBin));
   if Pas = '' then
     Pas := UnidadDeDesigner(ADfm);
   if not TFile.Exists(Pas) then
     Exit(MsgFmt(SR_DESIGNER_NO_UNIT_FMT, [Pas]));
-  if IsBinaryDesignerFile(ADfm) then
-    DesignerFileToText(ADfm, DfmTxt) // sano: comprobado arriba
-  else
-    DfmTxt := PatchLoadText(ADfm, Enc);
   // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto); la
   // unit, entera: sus clases las lee EL lector (LeeFuentePascal, sobre su
   // codigo: un bloque comentado no declara componentes)
@@ -401,13 +395,8 @@ begin
   Result := False;
   if not TFile.Exists(ADfm) then
     Exit;
-  if IsBinaryDesignerFile(ADfm) then
-  begin
-    if DesignerFileToText(ADfm, Txt) <> '' then
-      Exit;
-  end
-  else
-    Txt := PatchLoadText(ADfm, Enc);
+  if TextoDeDesigner(ADfm, Txt, Enc) <> '' then
+    Exit;
   // La misma expresion que el informe, y como la aplica el informe: sobre
   // cada linea RECORTADA (empieza por ^On, sin sangria).
   for var Linea in SplitToLines(Txt) do

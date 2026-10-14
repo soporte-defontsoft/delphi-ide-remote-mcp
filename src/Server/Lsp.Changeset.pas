@@ -1118,6 +1118,13 @@ begin
             if Seen.IndexOf(Op.Path) < 0 then
               Seen.Add(Op.Path);
           end;
+          // lo que el lote ESCRIBIO de verdad: solo eso se juzga, y solo eso
+          // ya lo juzga su propia vuelta (un paso EDIT-113 juzgaba el form de
+          // una unidad que no se toco; W2 del revisor de cierre de la 1.18.2)
+          var Escritos: TArray<string> := [];
+          for var FPath in Seen do
+            if Foto.Cambio(FPath) then
+              Escritos := Escritos + [FPath];
           for var FPath in Seen do
           begin
             var Kinds := '';
@@ -1142,14 +1149,14 @@ begin
             // lote no escribio, alcanzado por su unidad, solo por su enlace y
             // sin la nota EDIT-084 (decia "edited" de el; en vivo tras H6); el
             // que tambien escribio lo juzga su propia vuelta (AOmite)
-            if Applied then
+            if Applied and Foto.Cambio(FPath) then
             try
               var EncF := '';
               var TextoF := '';
               var EsForm := EsRutaDeDesigner(FPath);
               if EsForm then
                 TextoF := PatchLoadText(FPath, EncF);
-              for var LJ in JuicioDeLoEscrito(FPath, TextoF, EncF, Seen.ToStringArray) do
+              for var LJ in JuicioDeLoEscrito(FPath, TextoF, EncF, Escritos) do
                 AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') + '  ' +
                   IfThen(EsForm, MaskDriveText('', FPath) + ': ', '') + LJ;
             except

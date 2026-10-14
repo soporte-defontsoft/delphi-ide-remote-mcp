@@ -13,6 +13,14 @@ del usuario.
   F3 control: el mismo form CON BOM: sin nota
   F4 control: el form en ANSI de verdad (la o en un byte): sin nota
 
+Y el ANSI que casa con UTF-8 por azar (W3 del revisor de cierre, medido): 'CAFE'
+con E acentuada y puntos suspensivos son en CP1252 los bytes C9 85, un UTF-8
+valido. Ningun juez lo separa de un UTF-8 sin BOM, asi que la nota no puede
+afirmar ni recomendar convertir (convertirlo perderia el acento):
+  F5 la nota no afirma 'its bytes are UTF-8' y ensena las dos lecturas: la ANSI,
+     con el acento bien (ROJO en produccion: afirmaba y recomendaba convertir)
+  F6 ...y en el UTF-8 sin BOM de verdad (F1) tambien las dos: la ANSI partida
+
 Uso:  python tests/test_form_utf8_sin_bom_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -51,6 +59,16 @@ try:
     r1 = srv.call('delphi_read', {'path': p})
     r2 = srv.call('delphi_designer', {'command': 'lint', 'path': p}, t=240)
     check('F4 control: ANSI de verdad, sin nota', 'READ-009' not in r1 and 'READ-009' not in r2, (r1[:200], r2[:200]))
+    p = form('D', "object Form1: TForm1\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'CAFÉ…'\r\nend\r\n"
+             .encode('cp1252'))
+    r = srv.call('delphi_read', {'path': p})
+    check('F5 un ANSI que casa con UTF-8 por azar: la nota no lo afirma y ensena las dos lecturas',
+          'READ-009' in r and 'its bytes are UTF-8' not in r and "CAFÉ…" in r.split('READ-009', 1)[1],
+          r[:900])
+    p = os.path.join(JAIL, 'UA.dfm')
+    r = srv.call('delphi_read', {'path': p})
+    check('F6 ...y en el UTF-8 sin BOM de verdad tambien las dos: la ANSI partida (ConfiguraciÃ³n)',
+          'READ-009' in r and 'ConfiguraciÃ³n' in r.split('READ-009', 1)[1], r[:900])
 finally:
     srv.cierra()
 

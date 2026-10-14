@@ -67,6 +67,11 @@ REGLAS = [
      'SdksDelIde: LA lista de los .sdk del IDE (punto 4 de la 1.18.2: seis GetFiles a mano en el '
      'build, adb, profiles, seat-sdk, HasProfileFor y los sysroots de la puerta; HasProfileFor '
      'buscaba el nombre de la plataforma en todo el texto en vez de su Profile_platform)'),
+    ('leer un designer binario a mano', r"(?<!function )DesignerFileToText\s*\(",
+     [('Lsp.Patch.pas', 'TextoDeDesigner')],
+     'TextoDeDesigner: EL texto de un designer, binario o de texto, por la puerta de leer (W4 del '
+     'revisor de cierre de la 1.18.2: cinco sitios lo hacian a mano y el juicio de lo escrito leia un '
+     'binario como texto y no juzgaba nada)'),
     ('nombre de un .sdk', r"\+\s*'\.sdk'",
      [('Lsp.Discovery.pas', 'NombreDeSdk')],
      'NombreDeSdk (fichero, clave del IDE, SDKName, sysroot: el mismo nombre; 1.16.0: 16 a mano)'),
@@ -482,7 +487,7 @@ REGLAS = [
      # la foto del todo o nada: los bytes de lo que la operacion va a tocar, ya juzgado
      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Toma'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Anota'),
      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Vigila'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
-     ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Cambiados'),
+     ('Lsp.TodoONada.pas', 'TFotoDeFicheros.CambioEn'),  # la de Cambiados, movida (W2 de la 1.18.2)
      # su propio log (C5) y los binarios del propio servidor (el hash de lo que sube remote-run)
      ('Lsp.LogSink.pas', 'LineasDe'), ('Lsp.RemoteRun.pas', 'Sha256DeFichero'),
      ('Mld.Sesion.pas', 'SesionGrafica'), ('McpDesktopNode.dpr', 'EjecutarLinux'),
@@ -721,6 +726,7 @@ PLANTADO = {
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",
+    'leer un designer binario a mano': "  Err := DesignerFileToText(APath, Texto);",
     'un campo de conexion de un perfil': "  H := TagValue(Xml, 'Profile_host');",
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
     '__delphi-temp': "  D := TPath.Combine(Raiz, '__delphi-temp');",

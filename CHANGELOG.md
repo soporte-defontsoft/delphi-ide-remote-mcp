@@ -163,7 +163,13 @@ the MCP `initialize` response (`serverInfo.version`).
   the end, as a batch of a form already did. `test_juicio_final_1182` J6-J9
   (J6 and J7 red against production; J8 is a guard: with the batch judging
   every entry, its warnings carry the form's path in front and the batch's
-  reader of `***` warnings does not pick them up).
+  reader of `***` warnings does not pick them up). Only what was WRITTEN is
+  judged: a batch with no change answered "unchanged" and then `EDIT-084`
+  "edited" and the `DSGN-021` of a form already broken, and a changeset
+  judged the form of a unit it did not change (W2). A BINARY form is read by
+  its converter: the judgement read it as text and said nothing (W4) - one
+  reader of a designer's text, `TextoDeDesigner`, where five places did it
+  by hand. J10-J12 red against production.
 
 - **The server's stamps sort as they were born, also within one clock tick.**
   The stamp of an operation (a copy of an IDE file the server is about to
@@ -310,10 +316,14 @@ the MCP `initialize` response (`serverInfo.version`).
   said so: `designer lint` answered `CLEAN`. `delphi_read` and `designer
   lint` (and the designer's writers, with the wide-form note) now say it
   (`READ-009`) when the house detector, without the forms' rule, would read
-  the bytes as UTF-8. Converting the file is a change of encoding, so it is
-  left to the user. `test_form_utf8_sin_bom_1182` (F1 and F2 red against
-  production; the controls - with a BOM, and a real ANSI form - stay
-  quiet).
+  the bytes as UTF-8. A real ANSI form can match UTF-8 by chance (`CAFÉ…`
+  is `C9 85` in CP1252, valid UTF-8) and no judge tells the two apart, so the
+  note does not claim it: it shows the first such line read both ways and
+  says what to do in each case - converting a real ANSI form would lose its
+  accents (W3 of the closing reviewers, measured). Converting the file is a
+  change of encoding, so it is left to the user. `test_form_utf8_sin_bom_1182`
+  (F1, F2 and F5 red against production; the controls - with a BOM, and a
+  real ANSI form - stay quiet).
 
 - **When the engine loses a folder, the answer says so.** Under a folder
   with a character beyond U+FFFF (an emoji), DelphiLSP answers a definition

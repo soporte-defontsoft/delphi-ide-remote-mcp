@@ -76,6 +76,14 @@ type
       o no, o sus bytes). Una que no se puede leer cuenta como distinta.
       Para decir UNCHANGED cuando una operacion no cambio nada. }
     function Cambiados: Integer;
+    { Si ARuta, una de la foto, es HOY distinta de como estaba (la misma
+      pregunta que cuenta Cambiados); False si no es de la foto. Para juzgar
+      solo lo que una operacion escribio (W2 del revisor de cierre de la
+      1.18.2: un paso sin cambios hacia juzgar el form de una unidad que el
+      lote no toco). }
+    function Cambio(const ARuta: string): Boolean;
+  private
+    function CambioEn(I: Integer): Boolean;
   end;
 
 type
@@ -364,21 +372,33 @@ begin
   Result := Length(FRutas);
 end;
 
+function TFotoDeFicheros.CambioEn(I: Integer): Boolean;
+begin
+  if FExistian[I] <> TFile.Exists(FRutas[I]) then
+    Exit(True);
+  if not FExistian[I] then
+    Exit(False);
+  try
+    Result := not BytesIguales(TFile.ReadAllBytes(FRutas[I]), FBytes[I]);
+  except
+    Result := True; // no se puede leer: no se da por igual
+  end;
+end;
+
 function TFotoDeFicheros.Cambiados: Integer;
-var
-  I: Integer;
 begin
   Result := 0;
-  for I := 0 to High(FRutas) do
-    if FExistian[I] <> TFile.Exists(FRutas[I]) then
-      Inc(Result)
-    else if FExistian[I] then
-      try
-        if not BytesIguales(TFile.ReadAllBytes(FRutas[I]), FBytes[I]) then
-          Inc(Result);
-      except
-        Inc(Result); // no se puede leer: no se da por igual
-      end;
+  for var I := 0 to High(FRutas) do
+    if CambioEn(I) then
+      Inc(Result);
+end;
+
+function TFotoDeFicheros.Cambio(const ARuta: string): Boolean;
+begin
+  for var I := 0 to High(FRutas) do
+    if SameFileName(FRutas[I], ARuta) then
+      Exit(CambioEn(I));
+  Result := False;
 end;
 
 function FicherosTodoONada(const ARutas: array of string;
