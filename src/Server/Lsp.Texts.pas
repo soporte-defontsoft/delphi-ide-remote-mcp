@@ -5345,7 +5345,7 @@ const
 
   SN_DESIGNER_LINT_BAD_FMT =
     '[DSGN-038] %d designer warnings in %s (unpublished ' +
-    'property or nonexistent enum value, or the .dfm does not match its ' +
+    'property or nonexistent enum value, or the form file does not match its ' +
     'class: event to a nonexistent or NOT published method, object ' +
     'without a field, repeated name):';
 
@@ -5599,8 +5599,8 @@ const
     '("object <Name>: <TClass>"), so it is not a form I can compare.';
 
   SN_DESIGNER_BINDING_NOCLASS_FMT =
-    '[DSGN-032] NOTE: the .dfm says this form is of class %s, but that ' +
-    'class is NOT declared in %s. Either the .dfm points to another ' +
+    '[DSGN-032] NOTE: the form file says this form is of class %s, but that ' +
+    'class is NOT declared in %s. Either the form file points to another ' +
     'unit, or the class was renamed in only one place. I compare nothing ' +
     'else until that matches: it would mean making up the result.';
 
@@ -5613,14 +5613,14 @@ const
     'parent form too.';
 
   SN_DESIGNER_BINDING_OK =
-    '[DSGN-034] The form and its class MATCH: every object in the .dfm ' +
+    '[DSGN-034] The form and its class MATCH: every object in the form file ' +
     'has its published field, every event points to a method that ' +
     'exists, and there is no extra field. That is what the compiler does ' +
     'NOT check: a mismatch here compiles just the same and blows up when ' +
     'the window is created.';
 
   SN_DESIGNER_BINDING_BAD =
-    '[DSGN-035] NOTE: the .dfm and the class do NOT match. This compiles ' +
+    '[DSGN-035] NOTE: the form file and the class do NOT match. This compiles ' +
     'anyway and fails when the form is CREATED, at run time, with a ' +
     'message that does not point here. An object without a published ' +
     'field ends up nil; an event whose method does not exist makes the ' +
@@ -10213,25 +10213,27 @@ const
     '(line %d: %s). Fix that line first (delphi_edit), then repeat.';
 
   // Textos que estaban en linea en Lsp.DesignerBinding.pas (el resto, 27-sep-2026)
+  // ("of the form file": decian ".dfm" tambien de un .fmx - medido el 14-oct
+  // en un DSGN-021 de un form FMX, 1.18.3)
   SF_DSGN_REPITE_UN_NOMBRE_FMT =
-    '%s (line %d of the .dfm) repeats a name already used in this form: ' +
+    '%s (line %d of the form file) repeats a name already used in this form: ' +
     'loading it raises EComponentError';
 
   SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT =
-    '%s: %s (line %d of the .dfm) has no published field in the class';
+    '%s: %s (line %d of the form file) has no published field in the class';
 
   SF_DSGN_QUEDADO_SIN_VALOR_FMT =
-    '"%s" (line %d of the .dfm) has been left without a value: the .dfm ' +
-    'is not valid and the linker rejects it without telling you which ' +
+    '"%s" (line %d of the form file) has been left without a value: the form ' +
+    'file is not valid and the linker rejects it without telling you which ' +
     'line';
 
   SF_DSGN_NO_ESTA_EN_PUBLISHED_FMT =
-    '%s = %s (line %d of the .dfm): %s exists but is NOT in published; ' +
+    '%s = %s (line %d of the form file): %s exists but is NOT in published; ' +
     'the form loader only sees published methods, so this blows up with ' +
     'EReadError when the window is created';
 
   SF_DSGN_METODO_NO_DECLARADO_FMT =
-    '%s = %s (line %d of the .dfm): the method %s is not declared';
+    '%s = %s (line %d of the form file): the method %s is not declared';
 
   SF_DSGN_CAMPO_SIN_OBJETO_FMT =
     '  published field with no object in the designer: %s';

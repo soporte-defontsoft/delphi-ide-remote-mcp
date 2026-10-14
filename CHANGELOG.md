@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **The form-class binding warnings name the form file, not ".dfm".**
+  `check-binding`, `lint` and the `DSGN-021` an edit adds said "line 27 of
+  the .dfm" and "the .dfm and the class do NOT match" about a `.fmx` too;
+  they say "the form file" now (`DSGN-032`, `DSGN-034`, `DSGN-035`,
+  `DSGN-038` and the per-line warnings). `test_designer` (red against
+  production). Measured on the way, nothing to fix: a `TextSettings.HorzAlign`
+  that the preview "ignores" is FMX's own rule - while `StyledSettings`
+  holds `Other`, the style decides the alignment, at design time and at run
+  time alike (`DefaultStyledSettings` does not hold it, so a control with no
+  `StyledSettings` line honours `HorzAlign`); the preview draws what the app
+  will show.
+
 ## [1.18.2] - 2026-10-14
 
 Patch: the rest of what 1.18.0 and 1.18.1 left open, closed with three
