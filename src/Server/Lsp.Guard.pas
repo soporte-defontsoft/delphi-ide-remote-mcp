@@ -269,9 +269,10 @@ function CapturaConsumible(const APath: string): Boolean;
   nuestro trabajo devuelto: delphi_fetch es para los ficheros del agente. }
 function CapturaPorNombre(const ANombre: string; out AFile: string): string;
 function ConsumeAgentCapture(const APath: string): Boolean; // nunca lanza; True = borrada
-{ Las capturas NUESTRAS que esperan su descarga en la carpeta de AFile (sin
-  contar AFile): las de mas de AMinutos y las que pasen de las ACuantas mas
-  nuevas se borran, por ConsumeAgentCapture. Con inline=false por HTTP una
+{ Las capturas NUESTRAS que esperan su descarga en la casa de capturas del
+  workspace de quien llama, la de AFile, con todos sus agentes (sin contar
+  AFile): las de mas de AMinutos y las que pasen de las ACuantas mas nuevas
+  se borran, por ConsumeAgentCapture. Con inline=false por HTTP una
   captura se quedaba en nuestra casa hasta que alguien la recogia o hasta la
   purga del arranque: una credencial, tambien de solo lectura, llenaba el
   disco del servidor capturando sin descargar (2ab-R3 de la 1.18.2). Nunca
@@ -2583,11 +2584,15 @@ begin
   try
     try
       Limite := Now - AMinutos / (24 * 60);
-      // las de esa carpeta, por el recorredor de NUESTRA casa (sin cruzar
-      // enlaces), no por WalkFiles: ese es el de lo que el agente lee y
-      // pregunta a la jaula, que no es de lo interno - devolvia nada y no se
-      // purgaba ninguna (medido, Q1/Q2 de test_capturas_en_espera_1182)
-      RecorreSinEnlaces(ExtractFileDir(AFile),
+      // las de TODO el workspace, no solo la carpeta de AFile: la de cada
+      // agente sale del nombre que elige su cliente, y una credencial que
+      // cambiaba de nombre en cada sesion dejaba en cada carpeta sus capturas
+      // sin purgar hasta reiniciar (J5 del revisor de cierre de la 1.18.2,
+      // medido). Por el recorredor de NUESTRA casa (sin cruzar enlaces), no
+      // por WalkFiles: ese es el de lo que el agente lee y pregunta a la
+      // jaula, que no es de lo interno - devolvia nada y no se purgaba
+      // ninguna (medido, Q1/Q2 de test_capturas_en_espera_1182)
+      RecorreSinEnlaces(CasaDeCapturas,
         procedure(const F: string)
         begin
           try

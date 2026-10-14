@@ -1106,6 +1106,36 @@ def junction(link, target):
     return r.returncode == 0 and os.path.isdir(link)
 
 
+def junction_nt(link, destino_nt):
+    """Un junction con su destino escrito en forma NT tal cual
+    (\\??\\UNC\\host\\share\\..., que mklink /J no deja escribir: pide un volumen
+    local), por FSCTL_SET_REPARSE_POINT: el plantado de un enlace que Windows
+    no seguiria. True si el enlace quedo. Lo escribia a mano una sonda del
+    revisor de cierre de la 1.18.2 (J2)."""
+    import struct
+    from ctypes import wintypes as wt
+    k = ctypes.WinDLL('kernel32', use_last_error=True)
+    k.CreateFileW.restype = wt.HANDLE
+    k.CreateFileW.argtypes = [wt.LPCWSTR, wt.DWORD, wt.DWORD, ctypes.c_void_p, wt.DWORD, wt.DWORD, wt.HANDLE]
+    k.DeviceIoControl.argtypes = [wt.HANDLE, wt.DWORD, ctypes.c_void_p, wt.DWORD, ctypes.c_void_p, wt.DWORD,
+                                  ctypes.POINTER(wt.DWORD), ctypes.c_void_p]
+    k.CloseHandle.argtypes = [wt.HANDLE]
+    os.makedirs(link)
+    # GENERIC_WRITE, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS
+    h = k.CreateFileW(link, 0x40000000, 0, None, 3, 0x00200000 | 0x02000000, None)
+    if h is None or h == wt.HANDLE(-1).value:
+        return False
+    try:
+        s = destino_nt.encode('utf-16-le')
+        datos = struct.pack('<HHHH', 0, len(s), len(s) + 2, 0) + s + b'\0\0' + b'\0\0'
+        buf = struct.pack('<IHH', 0xA0000003, len(datos), 0) + datos  # IO_REPARSE_TAG_MOUNT_POINT
+        ret = wt.DWORD(0)
+        ok = k.DeviceIoControl(h, 0x000900A4, buf, len(buf), None, 0, ctypes.byref(ret), None)
+    finally:
+        k.CloseHandle(h)
+    return bool(ok) and os.path.lexists(link)
+
+
 def junta(carpeta, nombre):
     """La ruta de un nombre en su carpeta, como la compondria un agente.
     Una carpeta que acaba en ':' (una unidad sin su barra: para Windows es
@@ -1411,10 +1441,16 @@ class Http:
         o = {"jsonrpc": "2.0", "id": rid, "method": method}
         if params is not None:
             o['params'] = params
-        msgs, _ = self.rpc(o, sid=sid, t=t)
-        for m in msgs:
+        st, _, raw = self.post(o, sid=sid, t=t)
+        for m in self.mensajes(raw):
             if m.get('id') == rid:
                 return m
+        # un 4xx/5xx sin respuesta JSON-RPC (el 401 de un token que no vale, o
+        # el de un workspace CERRADO) no es un timeout: se dice lo que contesto.
+        # Salia '(timeout)' al instante y una bateria pasaba apoyada en eso (V1
+        # de test_sitio_virtual_1182; J7 del revisor de cierre de la 1.18.2)
+        if isinstance(st, int) and st >= 400:
+            return {'error': {'httpStatus': st, 'body': raw[:300]}}
         return None
 
     def call_msg(self, name, args, t=None, sid=PROPIA):

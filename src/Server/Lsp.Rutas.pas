@@ -197,8 +197,15 @@ end;
   enlace - lo que contesta Windows de su punto de reanalisis
   (FSCTL_GET_REPARSE_POINT) -, exista o no ese destino: NombreFinal tiene
   que abrirlo, y con un enlace COLGANTE no puede (TFile.GetSymLinkTarget
-  tampoco: busca el destino con FindFirst). Una ruta completa, o '' si no es
-  un enlace que se sepa leer (2w de la 1.18.2). }
+  tampoco: busca el destino con FindFirst). Una ruta completa con letra o
+  UNC; un destino escrito de otra forma (un volumen por su GUID...) sale con
+  prefijo de dispositivo (\\?\...): fuera de toda raiz, y RealPathHasta no lo
+  pregunta al disco - con '' volvia el TEXTO del enlace. '' solo si no es un
+  enlace que se sepa leer. Un symlink RELATIVO, contra la carpeta REAL del
+  enlace, como Windows - contra la textual, con una junction de por medio,
+  caia en otro sitio -, y uno que empieza por '\' contra la unidad del enlace,
+  no la del proceso (2w de la 1.18.2; J3 y J4 del revisor de cierre: nunca
+  lanza). }
 function DestinoDeEnlace(const AEnlace: string): string;
 const
   FSCTL_GET_REPARSE_POINT = $000900A8;
@@ -217,6 +224,7 @@ begin
     OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT or FILE_FLAG_BACKUP_SEMANTICS, 0);
   if H = INVALID_HANDLE_VALUE then
     Exit;
+  try
   try
     SetLength(Buf, 16 * 1024); // MAXIMUM_REPARSE_DATA_BUFFER_SIZE
     Devuelto := 0;
@@ -239,18 +247,40 @@ begin
       Exit;
     SetString(S, PChar(@Buf[Base + SubOff]), SubLen div SizeOf(Char));
     if (Tag = IO_REPARSE_TAG_SYMLINK) and ((PCardinal(@Buf[16])^ and SYMLINK_FLAG_RELATIVE) <> 0) then
-      Exit(TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(SinBarraFinal(AEnlace)), S)));
+    begin
+      var Carpeta := TPath.GetDirectoryName(SinBarraFinal(AEnlace));
+      var CarpetaReal: string;
+      if NombreFinal(Carpeta, CarpetaReal) then
+        Carpeta := CarpetaReal;
+      if S.StartsWith('\') then
+        Exit(TPath.GetFullPath(ExtractFileDrive(Carpeta) + S));
+      Exit(TPath.GetFullPath(TPath.Combine(Carpeta, S)));
+    end;
     // la forma NT: \??\C:\... o \??\UNC\host\...
     if S.StartsWith('\??\UNC\') then
       S := '\\' + S.Substring(8)
     else if S.StartsWith('\??\') then
       S := S.Substring(4);
     if EsRutaAbsoluta(S) then
-      Result := S;
+      Result := S
+    else
+      Result := '\\?\' + S.TrimLeft(['\']);
+  except
+    Result := ''; // un relativo que no se deja componer: Windows tampoco lo sigue
+  end;
   finally
     CloseHandle(H);
   end;
 end;
+
+const
+  // los puntos de reanalisis que Windows sigue al abrir una ruta: MEDIDO el
+  // 14-oct-2026 con una cadena de junctions vivas (sonda_tope_reparse.py del
+  // scratchpad), 63 se abren y la de 64 no. Con un tope MENOR (habia 8) una
+  // cadena de 9 colgantes que Windows si recorre se quedaba en su texto, y un
+  // ReadOnlyPaths declarado a traves de ella no protegia nada (J1 del revisor
+  // de cierre de la 1.18.2, medido); mas alla de este, Windows tampoco llega
+  ENLACES_QUE_SIGUE_WINDOWS = 63;
 
 { RealPath con ANivel enlaces colgantes por seguir como mucho: una cadena
   de ellos (o un ciclo, que Windows no abre) no da vueltas para siempre. }
@@ -302,7 +332,13 @@ begin
         // traves de el (2w de la 1.18.2, medido en produccion)
         var Destino := DestinoDeEnlace(ADir);
         Result := Destino <> '';
-        if Result then
+        // un UNC o un prefijo de dispositivo se queda en su TEXTO: fuera de
+        // toda raiz con letra, y preguntarlo en el disco era ir a la red con la
+        // cuenta del servicio al host que escribe el enlace (J2 del revisor de
+        // cierre: 21 s por una junction a \\192.0.2.1, que Windows ni sigue)
+        if Result and (EsUnc(Destino) or EsPrefijoDeDispositivo(Destino)) then
+          ASalida := SinBarraFinal(Destino)
+        else if Result then
           ASalida := SinBarraFinal(RealPathHasta(Destino, ANivel - 1));
       end;
     end);
@@ -310,7 +346,7 @@ end;
 
 function RealPath(const APath: string): string;
 begin
-  Result := RealPathHasta(APath, 8);
+  Result := RealPathHasta(APath, ENLACES_QUE_SIGUE_WINDOWS);
 end;
 
 function LongCanonical(const APath: string): string;

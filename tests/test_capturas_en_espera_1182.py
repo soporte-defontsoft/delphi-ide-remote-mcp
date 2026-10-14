@@ -14,6 +14,14 @@ un preview inline=false por HTTP deja la suya esperando.
   Q2 quedan 50 en total, la nueva incluida (ROJO en produccion: 59)
   Q3 control: la nueva se descarga por su enlace (sigue esperando)
 
+Y por WORKSPACE, no por agente (J5 del revisor de cierre, medido: el agente es
+el nombre que elige el cliente, y uno que cambiaba de nombre dejaba una carpeta
+sin purgar en cada sesion). Se siembran ademas en la casa de 'bob' (el mismo
+workspace) 2 de hace dos horas y 10 recientes, mas viejas que las de ana:
+  Q4 las de hace dos horas de bob se van (ROJO en produccion)
+  Q5 el tope es del workspace: las 10 de bob, las mas viejas, se van y quedan
+     50 entre los dos (ROJO en produccion: 60)
+
 Uso:  python tests/test_capturas_en_espera_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import glob
@@ -64,6 +72,19 @@ try:
         open(p, 'wb').write(PNG)
         t = time.time() - 600 + i   # de hace diez minutos a ahora, en orden
         os.utime(p, (t, t))
+    CASA_BOB = os.path.join(mc.casa_de_capturas(SRV, 'bob', 'Op'), 'designer')
+    os.makedirs(CASA_BOB, exist_ok=True)
+    viejas_bob = []
+    for i in range(2):
+        p = os.path.join(CASA_BOB, 'vieja%d.png' % i)
+        open(p, 'wb').write(PNG)
+        os.utime(p, (hace_dos_horas, hace_dos_horas))
+        viejas_bob.append(p)
+    for i in range(10):
+        p = os.path.join(CASA_BOB, 'reciente%02d.png' % i)
+        open(p, 'wb').write(PNG)
+        t = time.time() - 1200 + i  # hace veinte minutos: mas viejas que las de ana
+        os.utime(p, (t, t))
 
 
     op = mc.Http(PUERTO, TOKEN, t=180)
@@ -74,6 +95,11 @@ try:
     check('Q1 las capturas en espera de hace dos horas se van',
           not any(os.path.exists(v) for v in viejas), [os.path.basename(v) for v in viejas if os.path.exists(v)])
     check('Q2 quedan 50 en total, la nueva incluida', len(quedan) == 50, len(quedan))
+    check('Q4 las de hace dos horas en la carpeta de OTRO agente del workspace (bob) se van',
+          not any(os.path.exists(v) for v in viejas_bob), [os.path.basename(v) for v in viejas_bob if os.path.exists(v)])
+    de_bob = glob.glob(os.path.join(CASA_BOB, '*.png'))
+    check('Q5 el tope es del workspace: las de bob, las mas viejas, se van; 50 entre los dos',
+          de_bob == [] and len(quedan) + len(de_bob) == 50, (len(quedan), len(de_bob)))
     dl = j.get('download', '')
     req = urllib.request.Request('http://127.0.0.1:%d%s' % (PUERTO, dl))
     req.add_header('Authorization', 'Bearer ' + TOKEN)

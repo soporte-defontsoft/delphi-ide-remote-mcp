@@ -10,7 +10,9 @@ workspace no admite a nadie hasta que se arregle (fail closed); el aviso lo
 dice.
 
   V1 ReadOnlyPaths=srvc:\\...\\prot: escribir en prot NO pasa (ROJO en
-     produccion: se escribia)
+     produccion: se escribia), y es el CIERRE del workspace: tampoco fuera de
+     prot, y lo que contesta es el 401 de SYS-017 (miraba solo que a.txt no
+     estuviera, y pasaba con la sesion caida: J7 del revisor de cierre)
   V2 el aviso del arranque dice que es la forma virtual
   V3 control: la misma entrada con su letra protege prot y el workspace
      funciona (se escribe fuera de prot, no dentro)
@@ -60,8 +62,10 @@ def log_de(srv):
 srv, jail, prot, token, puerto, proc = servidor('v1', lambda p: 'srv' + p[0].lower() + ':' + p[2:])
 try:
     r = intenta(puerto, token, os.path.join(prot, 'a.txt'))
-    check('V1 ReadOnlyPaths con la unidad virtual: escribir en prot no pasa',
-          not os.path.exists(os.path.join(prot, 'a.txt')), r[:300])
+    fuera = intenta(puerto, token, os.path.join(jail, 'b.txt'))
+    check('V1 ReadOnlyPaths con la unidad virtual: el workspace se CIERRA (401 SYS-017), ni en prot ni fuera',
+          not os.path.exists(os.path.join(prot, 'a.txt')) and not os.path.exists(os.path.join(jail, 'b.txt')) and
+          all('401' in x and 'SYS-017' in x for x in (r, fuera)), (r[:300], fuera[:300]))
 finally:
     proc.kill()
 check('V2 el aviso del arranque dice que es la forma virtual de los agentes',

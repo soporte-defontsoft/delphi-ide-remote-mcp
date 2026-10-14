@@ -70,9 +70,12 @@ the MCP `initialize` response (`serverInfo.version`).
   download from a remote desktop that failed left its temporary folder
   (2ai-B a), and an exception between a capture and its delivery - in
   `delphi_desktop` or `designer preview` - left the capture (2ai-B b): both
-  are removed now. `test_capturas_en_espera_1182` (red against production;
-  a mutant). 2aa and 2ai-B cannot be provoked from outside and were checked
-  by reading.
+  are removed now. The purge looks at the whole workspace's captures, not
+  only the calling agent's folder: the agent is the name its client gives,
+  and one that changed it every session left a folder of captures behind
+  each time (J5 of the closing reviewers, measured). `test_capturas_en_espera_1182`
+  (red against production; a mutant). 2aa and 2ai-B cannot be provoked from
+  outside and were checked by reading.
 
 - **`delphi_delete purge=true` removes a dangling link from the trash.** A
   link whose target was deleted exists only as a name; the existence check
@@ -274,9 +277,18 @@ the MCP `initialize` response (`serverInfo.version`).
   inside what was declared read-only (measured in production); through a
   dangling link that leaves the roots, a create ended in an internal error
   instead of the jail's refusal. The real path now reads what the link
-  itself holds - its reparse point, as Windows keeps it - with a limit on
-  chains of them. `test_enlace_colgante_1182` (K1 and K3 red against
-  production). 2w of the 2r reviewer.
+  itself holds - its reparse point, as Windows keeps it - and follows chains
+  of them as far as Windows does: 63, measured (a first limit of 8 left a
+  chain of 9 at its text, and the read-only file appeared again). A relative
+  symlink is resolved against the link's REAL folder and a target starting
+  with `\` against the link's drive, as Windows does. A target that is a
+  network path is never asked over the network - it is outside every root,
+  which is declared by its drive letter, and is refused at once (a junction
+  to `\\192.0.2.1` cost 21 s of SMB under the service's account) - and one
+  written in a form the server does not read (a volume by its GUID) is
+  outside every root too. `test_enlace_colgante_1182` (K1, K3, K5 and K6 red
+  against production; a mutant each for K5 and K6). 2w of the 2r reviewer,
+  with J1-J4 of the closing reviewers.
 
 - **A form without BOM whose bytes are UTF-8 is named, not called clean.**
   The IDE, the compiler and this server read a form without BOM in the
