@@ -1012,6 +1012,16 @@ end;
 
 const
   TOPE_SALIDA_GIT = 30000; // caracteres de una pagina de la respuesta de git
+  // los commits que log ensena cuando el agente no da su -n
+  LOG_POR_DEFECTO = 20;
+
+{ EL compositor de la orden log: el formato corto y el tope, DELANTE de lo del
+  agente - git se queda con el ULTIMO -n, asi que el suyo manda -. Lo usan la
+  orden y la pregunta de si hay mas (D7 de los revisores de cierre). }
+function OrdenDeLog(ATope: Integer; const AArgs: string): string;
+begin
+  Result := Format('log --oneline -%d ', [ATope]) + ArgvSeguro(AArgs);
+end;
 
 { Las lineas de AOutput desde la ADesde (0-based) que caben en una pagina, y
   si queda algo, la nota que dice cuales son y como pedir el resto. Corta
@@ -1357,7 +1367,7 @@ begin
   end
   else if Cmd = 'log' then
   begin
-    GitArgs := 'log --oneline -20 ' + ArgvSeguro(Params.Args);
+    GitArgs := OrdenDeLog(LOG_POR_DEFECTO, Params.Args);
   end
   else if Cmd = 'show' then
     GitArgs := 'show --stat --format=medium ' + ArgvSeguro(Params.Args)
@@ -1742,6 +1752,7 @@ begin
   // (el try de fuera no sangra lo de dentro, como el de RunCore: es solo la
   // regla del clone que no ocurrio, abajo)
   var GitCorrio := False;
+  var HayMasEnElLog := False;
   try
   if ConCerrojo then
     EnterFileEdit;
@@ -1755,6 +1766,19 @@ begin
           IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch', 'ls-remote']), 600000, 60000),
           ExitCode);
         GitCorrio := True;
+        // log sin el -n del agente se queda en LOG_POR_DEFECTO commits y no se
+        // decia: 20 de 30, y offset=20 daba GIT-054 (D7 de los revisores de
+        // cierre de la 1.18.2). Si hay MAS lo dice git: la misma orden con un
+        // commit mas de tope contesta otra cosa. Con un -n del agente git usa el
+        // suyo en las dos y salen iguales: no se imita su gramatica (norma 6).
+        // Con menos lineas que el tope no puede haberlo alcanzado
+        if (Cmd = 'log') and (ExitCode = 0) and
+           (Length(Output.Split([#10], TStringSplitOptions.ExcludeEmpty)) >= LOG_POR_DEFECTO) then
+        begin
+          var CodigoMas: Cardinal;
+          var ConUnoMas := GitCorre(Repo, Fijado, OrdenDeLog(LOG_POR_DEFECTO + 1, Params.Args), 60000, CodigoMas);
+          HayMasEnElLog := (CodigoMas = 0) and (ConUnoMas <> Output);
+        end;
         if (Cmd = 'clone') and (ExitCode = 0) then
         begin
           // El repo ya existe, pero su arbol todavia no se ha materializado.
@@ -1866,6 +1890,8 @@ begin
   // Un merge que no puede ir en fast-forward muere con exit 128 y "Not
   // possible to fast-forward": git no sugiere nada y la respuesta era el
   // codigo a pelo (abierto menor del 22-sep). Se dice que significa.
+  if HayMasEnElLog then
+    Result := Result + #10 + MsgFmt(SN_GIT_LOG_HAY_MAS_FMT, [LOG_POR_DEFECTO]);
   if (ExitCode <> 0) and MatchText(Cmd, ['merge', 'pull']) and Output.Contains('fast-forward') then
     Result := Result + #10 + MsgText(SN_GIT_MERGE_DIVERGED);
   if (ExitCode <> 0) and not DiffConCambios and (Output.Contains('--no-ff') or Output.Contains('rebase') or

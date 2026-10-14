@@ -9216,6 +9216,14 @@ const
   SN_GIT_OFFSET_FUERA_FMT =
     '[GIT-054] offset=%d is past the end: the answer has %d lines.';
 
+  { log sin -n: el servidor le pone un tope (%d commits) y no se decia: 20 de
+    30 commits, y offset=20 daba GIT-054 (D7 de los revisores de cierre de la
+    1.18.2). Que hay mas lo dice git: la misma orden con un commit mas. }
+  SN_GIT_LOG_HAY_MAS_FMT =
+    '[GIT-067] log shows %d commits when you give no -n, and there are more: ' +
+    'pass -n <count> (or a narrower range, A..B) to see them. offset pages ' +
+    'the lines of this answer, not the history.';
+
   { Una linea mas larga que la pagina sale cortada y la pagina siguiente
     empieza en la otra: su cola no se veia nunca, sin aviso (revision de la
     1.13.0). %s: sus numeros (1-based); %d: lo que se ensena de cada una. }

@@ -22,6 +22,17 @@ the MCP `initialize` response (`serverInfo.version`).
   `StyledSettings` line honours `HorzAlign`); the preview draws what the app
   will show.
 
+- **`delphi_git log` says when there are more commits than it shows.** With
+  no `-n` from the agent the server caps `log` at 20 commits, and nothing
+  said so: a range of 30 came back as 20, and `offset=20` answered `GIT-054`
+  "past the end" (offset pages the lines of an answer, not the history). Now
+  git itself is asked - the same command with one more commit of cap answers
+  something else - and `GIT-067` says how to see the rest; with the agent's
+  own `-n`, git uses it in both runs and nothing is added (no grammar of
+  git's options of our own). `test_git_log_tope_1183` (L1 and L5 red against
+  production; a mutant without the comparison turns L2 and L4 red). D7 of
+  the 1.18.2 closing reviewers.
+
 ## [1.18.2] - 2026-10-14
 
 Patch: the rest of what 1.18.0 and 1.18.1 left open, closed with three
