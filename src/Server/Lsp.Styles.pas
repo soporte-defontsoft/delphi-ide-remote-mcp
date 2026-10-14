@@ -106,6 +106,10 @@ type
       propiedad: Mcp.Tools.Designer (PropRaw) lo leia con su propia regex
       (2.2 de la 1.18.0). }
     function ValorDe(AObj: TStyleObj; const AProp: string; out AFound: Boolean): string;
+    { ...y el TEXTO del literal que es ese valor ('' si no esta o no es un
+      literal): lo que ya habia, para la cuenta por valor de los sustitutos
+      sueltos (Lsp.DesignerBin.SueltoEnLiteral) de designer set y styles set. }
+    function LiteralDe(AObj: TStyleObj; const AProp: string): string;
     { The object named AName at any depth (a form's component, by its Name;
       the same identifier as dcc sees it); nil when there is none. }
     function ObjetoDeNombre(const AName: string): TStyleObj;
@@ -596,6 +600,14 @@ begin
   AFound := PropLines(AObj, AProp, Ini, Fin);
   if AFound then
     Result := ValorEnteroDe(FLines, Clasificadas, Ini);
+end;
+
+function TStyleDoc.LiteralDe(AObj: TStyleObj; const AProp: string): string;
+var
+  Hay: Boolean;
+begin
+  if not LeeLiteralDeForm(ValorDe(AObj, AProp, Hay), Result) then
+    Result := '';
 end;
 
 procedure TStyleDoc.DeleteStyle(AObj: TStyleObj);

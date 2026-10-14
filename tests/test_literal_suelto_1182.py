@@ -16,6 +16,14 @@ suelto de la casa, SiguienteSuelto) antes de componer: DSGN-146.
   N1-N4 los NOMBRES (designer set Name, insert, styles StyleName, styles
      clone) con el suelto: no se escriben (los niega su validacion de nombre)
 
+R8 del revisor del punto 4: un suelto que YA estaba en el valor se negaba igual
+que uno nuevo; los escritores cuentan por valor (SustitutoNuevo) y el literal
+tambien:
+  R1 designer set de un Caption que ya era 'a'#55296'b' a 'a'#55296'bc': se
+     escribe, con el suelto como estaba (ROJO en produccion: DSGN-146)
+  R2 ...y con DOS (uno ya estaba, otro nuevo): DSGN-146 (se cuentan)
+  R3 styles set del mismo caso: se escribe (ROJO en produccion)
+
 Uso:  python tests/test_literal_suelto_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -100,6 +108,25 @@ try:
                                    'value': "'card" + S + "'"})
     check('N3 styles set StyleName con medio caracter: negado y el estilo intacto',
           mc.rechazado(r) and open(p, 'rb').read() == antes, r[:300])
+
+    con_suelto = DFM.replace(b"Caption = 'x'", b"Caption = 'a'#55296'b'")
+    d = form('UR1')
+    open(d, 'wb').write(con_suelto)
+    r = srv.call('delphi_designer', {'path': d, 'command': 'set', 'component': 'Label1', 'prop': 'Caption',
+                                     'value': "'a'#55296'bc'"})
+    check('R1 designer set de un valor que YA tenia el suelto, cambiando otra letra: se escribe',
+          not mc.rechazado(r) and b"'a'#55296'bc'" in open(d, 'rb').read(), (r[:300], open(d, 'rb').read()))
+    open(d, 'wb').write(con_suelto)
+    r = srv.call('delphi_designer', {'path': d, 'command': 'set', 'component': 'Label1', 'prop': 'Caption',
+                                     'value': "'a'#55296#55296'b'"})
+    check('R2 ...con uno que estaba y otro NUEVO: DSGN-146 y el form intacto',
+          mc.abre(r, 'SR_DSGN_LITERAL_SUELTO_FMT') and open(d, 'rb').read() == con_suelto, r[:300])
+    p = estilo('R3')
+    open(p, 'wb').write(STYLE.replace(b"Hint = 'x'", b"Hint = 'a'#55296'b'"))
+    r = srv.call('delphi_styles', {'path': p, 'command': 'set', 'style': 'cardstyle', 'prop': 'Hint',
+                                   'value': "'a'#55296'bc'"})
+    check('R3 styles set de un valor que YA tenia el suelto: se escribe',
+          not mc.rechazado(r) and b"'a'#55296'bc'" in open(p, 'rb').read(), (r[:300], open(p, 'rb').read()))
 
     p = estilo('N4')
     antes = open(p, 'rb').read()

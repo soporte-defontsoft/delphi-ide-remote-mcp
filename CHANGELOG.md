@@ -207,6 +207,15 @@ the MCP `initialize` response (`serverInfo.version`).
   block with `delphi_edit` (decided at night: a "file only" mode would be a
   parameter and the tools list has no room; the edit is the agent's own act).
 
+- **A half character already in a form value is written as it was.** A
+  value that already held half of a surrogate pair (`'a'#55296'b'`) could
+  not be set again with another letter changed: `designer set` and `styles
+  set` refused it as if it were new (`DSGN-146`), while the text writers
+  count such characters by value and keep the ones that were there. The
+  literal now counts the same way - the one already in the value goes back
+  as it was, a new one is refused. `test_literal_suelto_1182` R1-R3 (R1 and
+  R3 red against production; a mutant). R8 of the point-4 reviewer.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

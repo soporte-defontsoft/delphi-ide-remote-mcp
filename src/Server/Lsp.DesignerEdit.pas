@@ -1960,6 +1960,10 @@ begin
   var Base := '';
   if HayHoja and (Hoja.Kind = 'o') then
     F.Tabla.Bases.TryGetValue(ClaveDeIdentificador(Hoja.TypeId), Base);
+  // el texto que la propiedad YA tenia: un sustituto suelto que ya estaba se
+  // escribe como estaba (la cuenta por valor de los escritores); se negaba
+  // igual que uno nuevo (R8 del revisor del punto 4 de la 1.18.2)
+  var TextoAntes := F.Doc.LiteralDe(Obj, Prop);
   if MatchText(Base, ['string', 'char']) then
   begin
     if not LeeLiteralDeForm(V, Texto) then
@@ -1977,7 +1981,7 @@ begin
     // Caption que empiece por srvd:\ a proposito se escribe con la letra.
     Texto := ExpandDriveValue(Texto);
     // medio caracter: el literal lo escribe #N y el codificador no lo ve
-    var Suelto := SueltoEnLiteral(Texto);
+    var Suelto := SueltoEnLiteral(Texto, TextoAntes);
     if Suelto <> '' then
       Exit(Suelto);
     Trozos := TrozosDeLiteral(Texto);
@@ -1990,7 +1994,7 @@ begin
   else if LeeLiteralDeForm(V, Texto) then
   begin
     Texto := ExpandDriveValue(Texto); // la misma excepcion, la de arriba
-    var Suelto := SueltoEnLiteral(Texto);
+    var Suelto := SueltoEnLiteral(Texto, TextoAntes);
     if Suelto <> '' then
       Exit(Suelto);
     Trozos := TrozosDeLiteral(Texto);

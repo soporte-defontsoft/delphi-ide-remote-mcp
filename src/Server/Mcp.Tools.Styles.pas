@@ -251,8 +251,9 @@ begin
     // linea que el IDE no lee (P6 de la segunda revision de la 1.17.0)
     if LeeLiteralDeForm(AValue.Trim, Texto) then
     begin
-      // medio caracter: el literal lo escribe #N y el codificador no lo ve
-      Err := SueltoEnLiteral(Texto);
+      // medio caracter: el literal lo escribe #N y el codificador no lo ve; el
+      // que ya estaba en el valor se escribe como estaba (R8, 1.18.2)
+      Err := SueltoEnLiteral(Texto, Doc.LiteralDe(O, AProp.Trim));
       if Err <> '' then
         Exit(Err);
       Line := Doc.SetPropTrozos(O, AProp.Trim, TrozosDeLiteral(Texto), WasThere);

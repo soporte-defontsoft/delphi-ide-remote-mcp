@@ -83,8 +83,11 @@ function TrozosDeLiteral(const S: string): TArray<string>;
   literal es ASCII (#55296) y el codificador, que niega el suelto en un texto
   (EDIT-078), ya no lo ve: designer set y styles set lo escribian (medido en
   produccion el 13-oct, punto 4 de la 1.18.2). La preguntan las puertas que
-  reciben el valor del agente, antes de componer. }
-function SueltoEnLiteral(const ATexto: string): string;
+  reciben el valor del agente, antes de componer. AAntes, el texto que la
+  propiedad ya tenia: un suelto que YA estaba se escribe como estaba, contados
+  por valor como en los escritores (SustitutoNuevo; R8 del revisor del punto
+  4: se negaba igual que uno nuevo). }
+function SueltoEnLiteral(const ATexto: string; const AAntes: string = ''): string;
 { Las lineas de una propiedad como las escribe el IDE: 'Prop = valor' con un
   trozo; con varios, 'Prop = ' y cada trozo una sangria (dos espacios) mas
   adentro. ASangria, la de la linea de la propiedad. }
@@ -432,17 +435,17 @@ begin
   Result := Result + [Trozo];
 end;
 
-function SueltoEnLiteral(const ATexto: string): string;
+function SueltoEnLiteral(const ATexto: string; const AAntes: string): string;
 var
-  I: Integer;
-  C: Char;
+  Nuevo: string;
 begin
   Result := '';
-  I := 1;
-  C := SiguienteSuelto(ATexto, I);
-  if C <> #0 then
+  // el literal lo escribe #N en cualquier fichero: el suelto vuelve igual, y
+  // se cuenta como en UTF-16, que lo guarda tal cual (solo cuenta por valor)
+  Nuevo := SustitutoNuevo(ATexto, AAntes, ekUtf16LE);
+  if Nuevo <> '' then
     Result := MsgFmt(SR_DSGN_LITERAL_SUELTO_FMT,
-      [MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [IntToHex(Ord(C), 4)])]);
+      [MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [IntToHex(Ord(Nuevo[1]), 4)])]);
 end;
 
 function LineasDePropiedad(const ASangria, AProp: string; const ATrozos: TArray<string>): TArray<string>;

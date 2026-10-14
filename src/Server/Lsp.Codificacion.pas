@@ -71,6 +71,10 @@ function CabeEnAnsi(const S: string): Boolean;
   un literal de form (Lsp.DesignerBin.SueltoEnLiteral), que escribe ASCII y
   el codificador ya no ve (punto 4 de la 1.18.2). }
 function SiguienteSuelto(const S: string; var I: Integer): Char;
+{ El primer sustituto suelto de S que es NUEVO respecto a AAntes, contados por
+  valor, o que K no escribiria tal cual ('' si ninguno): la regla de los
+  escritores, y la de un literal de form (SueltoEnLiteral, R8 de la 1.18.2). }
+function SustitutoNuevo(const S, AAntes: string; K: TEncKind): string;
 { LA pagina ANSI: la que usan el IDE y dcc para leer un fuente sin BOM que
   no es UTF-8 (medido el 9-oct-2026, bytes del exe: E1 C3 A1 sale U+00E1
   U+00C3 U+00A1 con la 1252 de esta maquina), la de TEncoding.ANSI de la
