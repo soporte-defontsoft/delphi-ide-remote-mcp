@@ -1459,6 +1459,11 @@ begin
   // (o su fichero o una excepcion), asi que '' es que no se encontro nada.
   if ResolveSettings(FullPath, RootDir) = '' then
     raise ELspSession.Create(MsgFmt(SR_LSP_LINT_SIN_AJUSTES_FMT, [AFilePath]));
+  // Bajo una ruta con un caracter mas alla de U+FFFF el motor publica una
+  // lista VACIA (medido el 14-oct con el motor solo): un "0 errors" falso. Se
+  // dice tambien antes de arrancarlo (M3 de los revisores de cierre).
+  if TLspClient.MotorPierdeLaRuta(FullPath) then
+    raise ELspSession.Create(MsgFmt(SR_LSP_LINT_MOTOR_PIERDE_FMT, [AFilePath]));
 
   Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
   Uri := TLspClient.PathToUri(FullPath);

@@ -358,7 +358,14 @@ the MCP `initialize` response (`serverInfo.version`).
   a definition OUTSIDE this workspace", about a unit right next to it.
   Definition, hover and references now say what is going on (`LSP-043`).
   `test_motor_sin_carpeta_1182` (E1 and E2 red against production; E3, the
-  same project in a plain folder, answers). Point 5.
+  same project in a plain folder, answers). Point 5. And `delphi_diagnostics`
+  under such a folder answered `0 errors` about a file with an `E2003` in it:
+  the engine publishes an EMPTY list there (measured with the engine alone,
+  the 32-bit one this server launches; a plain folder and one with an `ñ`
+  publish the `E2003`). Now it says so (`LSP-045`) before an engine is
+  started for nothing, as `LSP-035` does, and one question in the client
+  (`MotorPierdeLaRuta`) holds what the engine loses. E4 (red against
+  production) and E5, the control. M3 of the closing reviewers.
 
 - **One list of the IDE's SDKs, and "ready" asks the SDK's own platform.**
   Six places walked the IDE's `*.sdk` files by hand (the build, adb's

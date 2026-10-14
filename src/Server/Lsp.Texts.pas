@@ -759,6 +759,18 @@ const
     'workspace. To use definition, hover and references there, take that ' +
     'character out of the folder''s name.';
 
+  { ...y el lint de un fichero bajo esa ruta sale VACIO: delphi_diagnostics
+    decia "0 errors" de un E2003 que estaba en el fichero (M3 de los revisores
+    de cierre; medido el 14-oct con el motor solo, el de bin\ que lanza este
+    servidor: en una carpeta llana y en una con enye publica el E2003). Se
+    dice ANTES de arrancar un motor para nada, como LSP-035. %s = el fichero. }
+  SR_LSP_LINT_MOTOR_PIERDE_FMT =
+    '[LSP-045 NOT_FOUND] %s cannot be linted: DelphiLSP publishes an EMPTY ' +
+    'list for a file under a path that has a character beyond U+FFFF (an ' +
+    'emoji, for one) - measured - so "0 errors" there would be false. The ' +
+    'unit is not outside this workspace. To lint it, take that character ' +
+    'out of the folder''s name (delphi_move renames a folder).';
+
   { "No lo se" y "se que no" no son lo mismo, y acababan en el mismo saco.
     Un nombre escrito en un comentario o dentro de una cadena no lo resuelve
     el motor -ahi no hay simbolo- igual que no resuelve lo que se quedo sin

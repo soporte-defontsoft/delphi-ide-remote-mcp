@@ -189,6 +189,14 @@ type
       llegaban nunca y su declaracion salia homonima de si misma (revisor de
       version de la 1.18.1, medido). }
     class function UriCanonica(const AUri: string): string;
+    { True si la ruta lleva un caracter mas alla de U+FFFF (un par de
+      sustitutos: un emoji). DelphiLSP la PIERDE: contesta la definicion SIN
+      carpeta (LSP-043) y publica un lint VACIO (LSP-045) - medido en crudo
+      el 14-oct con el motor solo, el de bin\ que lanza este servidor; con
+      una enye hace las dos cosas bien. Lo que puede saberse ANTES de
+      arrancar un motor para nada se pregunta aqui; la respuesta sin carpeta
+      la sigue juzgando quien la recibe (UriSinCarpeta). }
+    class function MotorPierdeLaRuta(const APath: string): Boolean;
     { El texto de un fuente tal como se le da al motor y lo leen references y
       search, por EL detector. Pregunta ELLA a la puerta, con los lugares del
       motor (Lsp.Patch.LUGARES_DEL_MOTOR: la jaula, el IDE y su biblioteca):
@@ -208,7 +216,8 @@ uses
   MCPServer.Logger,
   Lsp.Texts, // DecodeSourceBytes: el detector de encoding de delphi_read
   Lsp.Json,  // ObjetoJson: EL lector de un JSON que tiene que ser un objeto
-  Lsp.Codificacion;
+  Lsp.Codificacion,
+  System.Character;
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
@@ -975,6 +984,15 @@ begin
     on EEncodingError do
       Result := AUri;
   end;
+end;
+
+class function TLspClient.MotorPierdeLaRuta(const APath: string): Boolean;
+begin
+  // un par de sustitutos lo reconoce la RTL: ni lista de emojis ni rangos
+  for var I := 1 to Length(APath) - 1 do
+    if APath[I].IsHighSurrogate and APath[I + 1].IsLowSurrogate then
+      Exit(True);
+  Result := False;
 end;
 
 class function TLspClient.UriToPath(const AUri: string): string;
