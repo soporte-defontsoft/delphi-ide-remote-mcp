@@ -185,10 +185,13 @@ const
   { Las propiedades con las que dcc decide DONDE deja lo que produce:
     -E exe/dll, -NU dcu, -LE bpl, -LN dcp, -NH hpp, -NO obj, -NB bpi. UNA
     lista: la puerta del build (BuildOutputDirs) y la mudanza, que las
-    re-apunta (estaba repetida en Lsp.ProjectUnits, revision 26-sep). }
-  BUILD_OUTPUT_TAGS: array [0 .. 6] of string = (
+    re-apunta (estaba repetida en Lsp.ProjectUnits, revision 26-sep). Y
+    BRCC_OutputDir, donde los targets dejan el .res de version y el de cada
+    .rc: no estaba, y un .dproj que la apuntaba fuera de las raices escribia
+    alli su P.res (medido el 14-oct-2026, 1.18.3). }
+  BUILD_OUTPUT_TAGS: array [0 .. 7] of string = (
     'DCC_ExeOutput', 'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput',
-    'DCC_HppOutput', 'DCC_ObjOutput', 'DCC_BpiOutput');
+    'DCC_HppOutput', 'DCC_ObjOutput', 'DCC_BpiOutput', 'BRCC_OutputDir');
 
 { Value of <ATag>...</ATag> in a small TRUSTED XML (our own .profile/.sdk
   files, written by paclient or by this server). Not a general parser on
@@ -262,6 +265,13 @@ function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): strin
   escape): quien pregunta decide, y la puerta de build lo rechaza. Una
   etiqueta ausente o vacia no sale: es la del IDE por defecto. }
 function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<TBuildOutputDir>;
+
+{ Los ficheros de recursos que los targets escriben JUNTO al .dproj cuando no
+  hay BRCC_OutputDir ($(BRCC_OutputDir)<nombre>.res, CodeGear.Common.Targets):
+  el de version del proyecto (<proyecto>.res y su .vrc) y el de cada .rc que
+  compila (RcCompile). Siempre los de la carpeta del proyecto: con la carpeta
+  declarada, uno de mas es prudencia. Rutas completas. }
+function BuildResourceFiles(const ADprojPath: string): TArray<string>;
 
 { La carpeta de salida que este proyecto NO declara y que el IDE pondria
   fuera de el, o '' si declara todas las que usa: sin DCC_DcuOutput los .dcu
@@ -1096,6 +1106,22 @@ begin
   finally
     List.Free;
   end;
+end;
+
+function BuildResourceFiles(const ADprojPath: string): TArray<string>;
+var
+  Dir, Base: string;
+begin
+  Result := nil;
+  if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
+    Exit;
+  Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
+  Base := TPath.GetFileNameWithoutExtension(ADprojPath);
+  Result := [TPath.Combine(Dir, Base + '.res'), TPath.Combine(Dir, Base + '.vrc')];
+  for var Xml in ProjectXmlChain(ADprojPath) do
+    for var R in AllTagAttr(Xml, 'RcCompile', 'Include') do
+      if R.Trim <> '' then
+        Result := Result + [TPath.Combine(Dir, TPath.GetFileNameWithoutExtension(R.Trim) + '.res')];
 end;
 
 { La clave (Cfg_N) con la que el .dproj nombra una configuracion:

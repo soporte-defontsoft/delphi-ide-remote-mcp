@@ -10,6 +10,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_build` no longer writes outside the workspace through
+  `BRCC_OutputDir`, nor over a read-only file inside its output.** The
+  build's gate judged each `DCC_*Output` folder as a whole and nothing
+  else. Measured on 14-oct, against 1.18.2: a `.dproj` whose
+  `BRCC_OutputDir` pointed outside the roots, with version information on,
+  got its `P.res` written THERE - outside the workspace (the targets put
+  `$(BRCC_OutputDir)<project>.res` and the `.res` of every `.rc` in that
+  folder); a `P.exe` that `ReadOnlyPaths` named inside the output folder was
+  rewritten (its name comes from the project, which the agent writes); and
+  the version `.res` next to the `.dproj`, read-only, was rewritten too. Now
+  `BRCC_OutputDir` is one more output folder of the one list (the gate and
+  `delphi_move`, which re-points it), an output folder that CONTAINS a
+  protected place is refused like a move's destination (`BUILD-029`), and
+  the resource files the targets write next to the `.dproj` go through the
+  write gate. An output declared as the project folder itself (`.\`) with a
+  protected folder inside it is refused as well: give the output a folder of
+  its own (`delphi_config set-output`). `test_build_salida_protegida_1183` (B1, B2 and B3 red against
+  production; B4, the control, builds). The theory of the 2s reviewer of
+  1.18.2, measured.
+
 - **The form-class binding warnings name the form file, not ".dfm".**
   `check-binding`, `lint` and the `DSGN-021` an edit adds said "line 27 of
   the .dfm" and "the .dfm and the class do NOT match" about a `.fmx` too;

@@ -1129,6 +1129,22 @@ begin
     var Motivo := EscrituraDenegada(S.Dir);
     if Motivo <> '' then
       Exit(MsgFmt(SR_BUILD_OUTPUT_DENIED_FMT, [S.Tag, S.Value, Motivo]));
+    // ...y lo protegido que CONTIENE: dcc escribe alli ficheros con el nombre
+    // que pone el PROYECTO, y un P.exe que ReadOnlyPaths nombraba dentro se
+    // reescribia (medido el 14-oct, teoria del revisor del 2s; la regla del
+    // 2r: un destino que contiene un lugar protegido, como MOVE-020)
+    var Dentro := ProtegidoDentroDe(S.Dir);
+    if Dentro <> '' then
+      Exit(MsgFmt(SR_BUILD_OUTPUT_DENIED_FMT, [S.Tag, S.Value,
+        MsgFmt(SF_GUARD_CONTIENE_LUGAR_PROTEGIDO_FMT, [Dentro])]));
+  end;
+  // los recursos que los targets compilan junto al .dproj (BuildResourceFiles):
+  // el .res de version se reescribe en cada build que la lleva
+  for var F in BuildResourceFiles(ADprojPath) do
+  begin
+    var Motivo := EscrituraDenegada(F);
+    if Motivo <> '' then
+      Exit(MsgFmt(SR_BUILD_OUTPUT_DENIED_FMT, ['BRCC_OutputDir', TPath.GetFileName(F), Motivo]));
   end;
 end;
 
