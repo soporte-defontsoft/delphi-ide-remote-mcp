@@ -233,7 +233,7 @@ function RutaDeGit: string;
 begin
   Result := ProgramaEnPath('git.exe', GetEnvironmentVariable('PATH'));
   if Result = '' then
-    raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT, [MsgText(SR_GIT_SIN_GIT_EN_PATH)]));
+    raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT, [MsgText(SF_GIT_SIN_GIT_EN_PATH)]));
 end;
 
 { LA LINEA de git, por UN compositor: git por su ruta (RutaDeGit), -C con la
@@ -280,7 +280,7 @@ begin
       // git": sigue con el mensaje de siempre
       if E.ErrorCode = ERROR_FILE_NOT_FOUND then
         raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT,
-          [MsgFmt(SR_GIT_GIT_NO_ARRANCA_FMT, [E.ErrorCode])]));
+          [MsgFmt(SF_GIT_GIT_NO_ARRANCA_FMT, [E.ErrorCode])]));
       raise;
     end;
   end;

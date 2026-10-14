@@ -1308,7 +1308,7 @@ begin
   if (V <> '') and (CanonicalPlatform(V) = '') then
     Exit(MsgFmt(SR_BUILD_PLATFORM_FMT, [V]));
   V := ArgStr(AArguments, 'target').Trim;
-  if (V <> '') and not MatchText(V, ['Build', 'Make', 'Clean', 'Deploy']) then
+  if (V <> '') and not MatchText(V, TARGETS_DE_BUILD) then
   begin
     Result := MsgFmt(SR_BUILD_TARGET_FMT, [V]);
     // una plataforma en target ("target platform"): donde va

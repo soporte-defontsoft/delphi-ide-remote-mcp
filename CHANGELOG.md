@@ -87,6 +87,20 @@ the MCP `initialize` response (`serverInfo.version`).
   changed: deleting a folder that holds a junction to a sibling folder with
   a unit does not take that unit out of its project (the theory said it
   would); `test_borrar_carpeta_union_119` guards it.
+- **`delphi_build` chooses the profile and the target; it no longer copies
+  them onto msbuild's line.** The profile - the call's `profile`, or the
+  `.dproj`'s own `Profile` property on a Deploy - reached `/p:Profile=` as
+  written: the gate only looked at its characters, and the project's one
+  had no judge at all. Both now have to be one of the profiles the IDE
+  declares (the judge `delphi_config set-profile` uses), with the IDE's
+  spelling, or the build answers `PAS-053` (the refusal the deploy already
+  gave for a missing profile) before anything runs; the host rule stays
+  behind it. The target goes to `/t:` with its own name from the fixed four, and
+  that list lives in one place for the gate and the build. The profile, the
+  SDK and the device id travel quoted like the configuration (a second
+  barrier: all of them come from a list or a character judge). `BUILD-015`
+  no longer mentions a build shell that is gone since 1.18.2.
+  `test_build_perfil_119` (red against the previous build).
 
 - **`delphi_desktop` on a Linux target says what is wrong with the user's
   session, instead of "the portal refused the screenshot (code 2)".** Hermes

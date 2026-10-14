@@ -122,6 +122,12 @@ function ConfigDesconocida(const ADproj, AConfig: string): string;
   build (/p:Config=): letras, digitos, espacio, ".", "_" y "-". UNA
   definicion para la puerta (Lsp.Guard.BuildArgDenied) y el fondo
   (ConfigDesconocida); '' no es un nombre malo (es "la de por defecto"). }
+{ Los cuatro targets de delphi_build, con SU nombre: la puerta los admite
+  (BuildArgDenied) y el build elige entre ellos el que va a /t: (UNA lista,
+  dos lectores; punto 3 del build, 1.19.0). }
+const
+  TARGETS_DE_BUILD: array[0..3] of string = ('Build', 'Make', 'Clean', 'Deploy');
+
 function NombreDeConfigNoValido(const AConfig: string): Boolean;
 
 { La negativa de una plataforma que el proyecto no declara o tiene

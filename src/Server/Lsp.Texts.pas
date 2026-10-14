@@ -1445,8 +1445,8 @@ const
     'with delphi_config add-deployfile.';
 
   SR_BUILD_CONFIG_FMT =
-    '[BUILD-015 INVALID_PARAM] The configuration "%s" has characters the build ' +
-    'shell would interpret. A configuration is a simple name (letters, ' +
+    '[BUILD-015 INVALID_PARAM] The configuration "%s" has characters a ' +
+    'configuration name cannot have. A configuration is a simple name (letters, ' +
     'digits, space, ".", "_" and "-"): Debug, Release, or whatever your ' +
     'project declares. See the declared ones with delphi_config ' +
     'command=view.';
@@ -7536,10 +7536,10 @@ const
     'keeps the PATH it was started with). Everything that is not delphi_git ' +
     'works as usual.';
 
-  SR_GIT_SIN_GIT_EN_PATH =
+  SF_GIT_SIN_GIT_EN_PATH =
     'git.exe is not in the PATH the server process started with';
 
-  SR_GIT_GIT_NO_ARRANCA_FMT =
+  SF_GIT_GIT_NO_ARRANCA_FMT =
     'Windows could not launch the git.exe found in that PATH (error %d)';
 
   { El repo no puede activar programas ni esconderlos en includes locales. }

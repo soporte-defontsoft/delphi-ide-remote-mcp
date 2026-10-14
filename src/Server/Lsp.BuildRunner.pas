@@ -1553,9 +1553,15 @@ begin
   for var C in Proyecto.Configs do
     if SameText(C, Cfg.Trim) then
       Cfg := C;
-  Target := ATarget;
+  Target := ATarget.Trim;
   if Target = '' then
     Target := 'Build';
+  // el target con SU nombre, uno del cuarteto que admite la puerta (lo que
+  // teclea el agente solo elige; a /t: iba tal cual, con sus mayusculas)
+  var IdxTarget := IndexText(Target, TARGETS_DE_BUILD);
+  if IdxTarget < 0 then
+    raise Exception.Create(MsgFmt(SR_BUILD_TARGET_FMT, [Target]));
+  Target := TARGETS_DE_BUILD[IdxTarget];
   // Donde deja la salida, con la plataforma y la config de ESTE build.
   var SalidaMala := SalidaDenegada(ADprojPath, Plat, Cfg);
   if SalidaMala <> '' then
@@ -1588,6 +1594,19 @@ begin
   var Perfil := AProfile.Trim;
   if Target.Contains('Deploy') and (Perfil = '') then
     Perfil := PropiedadDelProyecto(ADprojPath, Plat, 'Profile');
+  // El perfil, venga de la llamada o del .dproj, es UNO de los que el IDE
+  // declara (PerfilDelIde, el juez de set-profile), con su nombre, el de la
+  // lista. El del .dproj llegaba a /p:Profile= sin juez; lo que teclea el
+  // agente solo elige (punto 3 del build, 1.19.0)
+  if Perfil <> '' then
+  begin
+    var PerfilIde := PerfilDelIde(Info.Version, Perfil);
+    if PerfilIde = '' then
+      // con el texto de la casa del deploy (PAS-053, el de ProfileHostDenied):
+      // un hecho, un texto
+      raise Exception.Create(MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [Perfil]));
+    Perfil := PerfilIde;
+  end;
   if Target.Contains('Deploy') and (Perfil <> '') then
   begin
     var HostDenegado := ProfileHostDenied(Perfil);
@@ -1599,7 +1618,7 @@ begin
   // like every argument that lands on this command line.
   var ProfileArg := '';
   if Target.Contains('Deploy') or (Perfil <> '') then
-    ProfileArg := ' /p:Profile=' + Perfil;
+    ProfileArg := ' /p:Profile="' + Perfil + '"'; // entre comillas, como Config: segunda barrera
   // Remote platforms get a deployment manifest when the project has none:
   // minimal (the project output) for PAServer targets, the full measured
   // apk staging map for Android. An IDE-written .deployproj is used as-is.
@@ -1645,7 +1664,7 @@ begin
   // job with the built .apk. The param stays for the iOS day.
   var DeviceArg := '';
   if ADeviceId.Trim <> '' then
-    DeviceArg := ' /p:DeviceId=' + ADeviceId.Trim;
+    DeviceArg := ' /p:DeviceId="' + ADeviceId.Trim + '"'; // la puerta ya lo juzgo (BadDeviceToken)
 
   // Remote platforms (Linux64...) link against a locally provisioned
   // SDK/sysroot, y desde 2026-09-20 puede haber VARIOS: un SDK = una carpeta,
@@ -1674,7 +1693,7 @@ begin
           [Pedido, string.Join(', ', SdksMaquina)]));
       // con SU nombre, el de la lista de la maquina: el agente solo elige (2an)
       Pedido := SdksMaquina[IdxSdk];
-      SdkArg := ' /p:PlatformSDK=' + Pedido;
+      SdkArg := ' /p:PlatformSDK="' + Pedido + '"';
       SdkUsado := Pedido;
     end
     else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), Plat, SdkUsado) then
@@ -1707,7 +1726,7 @@ begin
           [Plat, string.Join(', ', Cand)]));
       if SdkUsado <> '' then
       begin
-        SdkArg := ' /p:PlatformSDK=' + SdkUsado;
+        SdkArg := ' /p:PlatformSDK="' + SdkUsado + '"';
         // Solo si nadie ha explicado ya POR QUE es ese: la rama del default
         // del IDE deja su propia nota, y pisarla convertia "lo eligio tu SDK
         // Manager" en un "hay varios, mira a ver" que no decia nada.
