@@ -62,6 +62,11 @@ REGLAS = [
      'PerfilesDelIde: LA lista de perfiles del IDE, y PerfilDelIde elige de ella (2an de la 1.18.2: '
      'cuatro listados a mano en set-profile, profiles, add-profile y reseat; el build pasaba a msbuild '
      'el perfil del .dproj sin juez)'),
+    ('listar los SDK a mano', r"GetFiles\s*\([^)]*'\*\.sdk'",
+     [('Lsp.Discovery.pas', 'SdksDelIde')],
+     'SdksDelIde: LA lista de los .sdk del IDE (punto 4 de la 1.18.2: seis GetFiles a mano en el '
+     'build, adb, profiles, seat-sdk, HasProfileFor y los sysroots de la puerta; HasProfileFor '
+     'buscaba el nombre de la plataforma en todo el texto en vez de su Profile_platform)'),
     ('nombre de un .sdk', r"\+\s*'\.sdk'",
      [('Lsp.Discovery.pas', 'NombreDeSdk')],
      'NombreDeSdk (fichero, clave del IDE, SDKName, sysroot: el mismo nombre; 1.16.0: 16 a mano)'),
@@ -714,6 +719,7 @@ PLANTADO = {
     'lanzar el conversor de estilos': "  Out := RunCapturedIn('\"' + Exe + '\" tobin', Dir, 1000, C);",
     'nombre de un .profile': "  F := TPath.Combine(Dir, Nombre + '.profile');",
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
+    'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",
     'un campo de conexion de un perfil': "  H := TagValue(Xml, 'Profile_host');",
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",

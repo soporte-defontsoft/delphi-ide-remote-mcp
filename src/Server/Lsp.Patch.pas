@@ -2169,9 +2169,9 @@ var
 begin
   Result := nil;
   Info := DiscoverRadStudio;
-  if not Info.Found or not TDirectory.Exists(IdeProfilesDir(Info.Version)) then
+  if not Info.Found then
     Exit;
-  for var F in TDirectory.GetFiles(IdeProfilesDir(Info.Version), '*.sdk') do
+  for var F in SdksDelIde(Info.Version) do // EL lector de la lista
     try
       if not EnAlgunLugar(RealPath(F), LugaresDelIde) then
         Continue;

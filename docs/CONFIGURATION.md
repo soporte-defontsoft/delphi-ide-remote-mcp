@@ -431,7 +431,9 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98).
   `delphi_desktop` runs the server's own desktop node on the target, and seeing and
   typing on a desktop is a permission of its own: `McpDesktopNode` (or `all`) in
-  `RemoteRunProjects` (`RUN-020` when it is missing).
+  `RemoteRunProjects` (`RUN-020` when it is missing). Looking leaves traces of the server on
+  the target: it deploys or updates the node there, uploads and deletes a job file and its
+  launcher, and the node writes the capture it hands back.
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts git may reach - the URL
   written in a call and the network addresses of the repository's own remotes alike
   (clone/fetch/pull/push/ls-remote; a remote used by its name whose address is not listed gets `GIT-063`, naming the host), and the LFS endpoint of a tree a command materializes
@@ -478,7 +480,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   workspace's list are refused at **both** access levels, every device-addressing command
   must name its `device` explicitly (an implicit target could be an unlisted device that
   happens to be the only one attached) — and, like every list since v0.98, **absent means
-  NO devices**, never unrestricted.
+  NO devices**, never unrestricted. A screenshot writes `/sdcard/delphi_mcp_screen.png` on
+  the device and deletes it (a file of that name there would be overwritten).
 - **`[Server] DelphiVersion`**: the ONE RAD Studio this server uses - the BDS version number
   (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria), and only from here.
   Absent = the newest with DelphiLSP, which the server then writes here at its first start. A

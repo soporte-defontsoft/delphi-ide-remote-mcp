@@ -1137,17 +1137,16 @@ end;
   decide con cual se compila - la misma idea que los SDK de Android. }
 function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
 var
-  F, Xml, Dir: string;
+  F, Xml: string;
   L: TStringList;
 begin
   Result := nil;
-  Dir := IdeProfilesDir(AVersion);
-  if not TDirectory.Exists(Dir) then
-    Exit;
   L := TStringList.Create;
   try
     L.Sorted := True;
-    for F in TDirectory.GetFiles(Dir, '*.sdk') do
+    // por LOS lectores: la lista de los .sdk del IDE (SdksDelIde) y su
+    // plataforma (CamposDePerfil); eran un GetFiles y una regex propios
+    for F in SdksDelIde(AVersion) do
     begin
       Xml := '';
       try
@@ -1155,7 +1154,7 @@ begin
       except
         Continue;
       end;
-      if TRegEx.IsMatch(Xml, '(?i)<Profile_platform>\s*' + APlat + '\s*<') then
+      if SameText(CamposDePerfil(Xml).Plataforma.Trim, APlat.Trim) then
         L.Add(TPath.GetFileName(F));
     end;
     Result := L.ToStringArray;

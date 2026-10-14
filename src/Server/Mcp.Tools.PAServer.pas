@@ -562,7 +562,7 @@ begin
       { Cada SDK con SU ficha: de que distro salio y con que glibc. Es lo
         que permite elegir el generico con criterio - se compila con la
         glibc MAS VIEJA del parque - en vez de por el nombre. }
-      for F in TDirectory.GetFiles(Dir, '*.sdk') do
+      for F in SdksDelIde(Info.Version) do // EL lector de la lista
         Sdks.AddElement(FichaDeSdk(Info.Version, F));
     end;
     { Lo que el IDE guarda POR SU CUENTA: la clave RemoteProfiles. Se
@@ -611,18 +611,12 @@ begin
 end;
 
 function HasProfileFor(const AVersion, APlatform: string): Boolean;
-var
-  Dir, F: string;
 begin
-  Result := False;
-  Dir := ProfilesDir(AVersion);
-  if not TDirectory.Exists(Dir) then Exit;
-  // an SDK file is named after the platform's SDK; a profile is user-named.
-  // Heuristic: a platform is "ready" if any .sdk mentions it (the SDK is what
-  // a remote build actually needs).
-  for F in TDirectory.GetFiles(Dir, '*.sdk') do
-    if LowerCase(LeeTexto(F, [ltIde])).Contains(LowerCase(APlatform)) then
-      Exit(True);
+  // una plataforma esta "lista" si algun .sdk del IDE es DE ella (el SDK es
+  // lo que necesita un build remoto): lo dice su Profile_platform, como lo
+  // lee el build (SdksDePlataforma). Era una heuristica - el nombre de la
+  // plataforma en cualquier parte del texto - que imitaba al juez (norma 6)
+  Result := Length(SdksDePlataforma(AVersion, APlatform)) > 0;
 end;
 
 function ListPlatforms: string;
@@ -1563,7 +1557,7 @@ begin
   else
     // sin nombre: todos los que haya, que es lo que hace falta despues de un
     // despliegue ("registra lo que tengas")
-    Ficheros := TDirectory.GetFiles(ProfilesDir(Info.Version), '*.sdk');
+    Ficheros := SdksDelIde(Info.Version); // EL lector de la lista
 
   Return := TJSONObject.Create;
   Hechos := TJSONArray.Create;

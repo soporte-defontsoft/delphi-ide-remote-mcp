@@ -144,16 +144,13 @@ end;
 function FindAdb: string;
 var
   Info: TRadStudioInfo;
-  Dir, F, P: string;
+  F, P: string;
 begin
   Result := '';
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit;
-  Dir := IdeProfilesDir(Info.Version);
-  if not TDirectory.Exists(Dir) then
-    Exit;
-  for F in TDirectory.GetFiles(Dir, '*.sdk') do
+  for F in SdksDelIde(Info.Version) do // EL lector de la lista
   begin
     P := TagValue(LeeTexto(F, [ltIde]), 'SDKAdbPath');
     if (P <> '') and TFile.Exists(P) then

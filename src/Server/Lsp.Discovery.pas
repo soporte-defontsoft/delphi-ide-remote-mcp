@@ -91,6 +91,12 @@ function PerfilesDelIde(const AVersion: string): TArray<string>;
   la 1.18.2: "el agente pide una operacion"): el build lo pasa asi a msbuild,
   sea el de la llamada o el que declara el proyecto. }
 function PerfilDelIde(const AVersion, APedido: string): string;
+{ Los ficheros .sdk del IDE de AVersion (junto a sus perfiles: RutaDeSdk es
+  su nombrador), ordenados; vacio si no hay carpeta. EL lector de la lista:
+  la recorrian a mano el build (SdksDePlataforma), adb (su adb), profiles,
+  seat-sdk, HasProfileFor y los sysroots de la puerta - seis GetFiles('*.sdk')
+  (punto 4 de la 1.18.2). }
+function SdksDelIde(const AVersion: string): TArray<string>;
 
 { EL nombre de un SDK del IDE: '<nombre>.sdk'. Es UNO para todo: el fichero
   junto a los .profile, su clave en PlatformSDKs, los valores SDKName y
@@ -966,6 +972,28 @@ begin
   for var P in PerfilesDelIde(AVersion) do
     if SameText(P, APedido.Trim) then
       Exit(P);
+end;
+
+function SdksDelIde(const AVersion: string): TArray<string>;
+var
+  Dir: string;
+  L: TStringList;
+begin
+  Result := nil;
+  Dir := IdeProfilesDir(AVersion);
+  if not TDirectory.Exists(Dir) then
+    Exit;
+  L := TStringList.Create;
+  try
+    L.Sorted := True;
+    L.Duplicates := dupIgnore;
+    L.CaseSensitive := False;
+    for var F in TDirectory.GetFiles(Dir, '*.sdk') do
+      L.Add(F);
+    Result := L.ToStringArray;
+  finally
+    L.Free;
+  end;
 end;
 
 function NombreDeSdk(const ANombre: string): string;

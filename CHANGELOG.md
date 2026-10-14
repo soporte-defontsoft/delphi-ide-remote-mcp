@@ -278,6 +278,18 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_motor_sin_carpeta_1182` (E1 and E2 red against production; E3, the
   same project in a plain folder, answers). Point 5.
 
+- **One list of the IDE's SDKs, and "ready" asks the SDK's own platform.**
+  Six places walked the IDE's `*.sdk` files by hand (the build, adb's
+  search for its `adb`, `profiles`, `seat-sdk`, the read gate's sysroots and
+  the platform listing); now there is one reader, and `test_paisaje` keeps
+  it one. The platform listing called a platform ready when ANY `.sdk`
+  mentioned its name anywhere in its text; it now asks what the build asks,
+  the SDK's `Profile_platform`, read by the one reader of a profile's fields
+  (the build had a regex of its own for it). And `docs/CONFIGURATION.md` now
+  says what looking at a target leaves there: the node, a job file and its
+  launcher, the node's capture, and adb's `/sdcard/delphi_mcp_screen.png`
+  (2ab-R4).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole
