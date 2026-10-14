@@ -754,10 +754,11 @@ const
     estaba al lado (punto 5 de la 1.18.2). %s = el identificador, el fichero. }
   SR_LSP_MOTOR_SIN_CARPETA_FMT =
     '[LSP-043 NOT_FOUND] The engine answered "%s" in %s WITHOUT its folder: ' +
-    'DelphiLSP loses the folder of a path that has a character beyond ' +
-    'U+FFFF (an emoji, for one) - measured. The unit is not outside this ' +
-    'workspace. To use definition, hover and references there, take that ' +
-    'character out of the folder''s name.';
+    'DelphiLSP loses the folder when a path in the project''s tree has a ' +
+    'character beyond U+FFFF (an emoji, for one) or half a character - ' +
+    'measured, also for the neighbours of such a folder. The unit is not ' +
+    'outside this workspace. To use definition, hover and references there, ' +
+    'take that character out of the folder''s name.';
 
   { ...y el lint de un fichero bajo esa ruta sale VACIO: delphi_diagnostics
     decia "0 errors" de un E2003 que estaba en el fichero (M3 de los revisores

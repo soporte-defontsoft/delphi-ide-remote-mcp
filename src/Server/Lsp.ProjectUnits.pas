@@ -2461,9 +2461,13 @@ begin
   // se miraba la de al lado: una en Domain\ entraba como unidad de
   // biblioteca, sin su ruta (punto 8 de la 1.18.2)
   var Dir := TPath.GetDirectoryName(ADpr);
+  // UN paseo del arbol, no uno por nombre (M10 del revisor de cierre; que
+  // siga los enlaces legibles es la regla del recorredor, la del copiador:
+  // dcc los sigue igual)
+  var Pas := WalkFiles(Dir, '*.pas');
   for var N in ANames do
-    for var F in WalkFiles(Dir, N + '.pas') do
-      if not SkipBajoLaRaiz(F, Dir) then
+    for var F in Pas do
+      if SameText(TPath.GetFileNameWithoutExtension(F), N) and not SkipBajoLaRaiz(F, Dir) then
         Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT,
           [N, ExtractRelativePath(IncludeTrailingPathDelimiter(Dir), F)]));
   EnterFileEdit;

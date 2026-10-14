@@ -169,6 +169,56 @@ try:
     check('J4 control: una tanda que deja el form roto dice DSGN-021, una vez',
           not mc.rechazado(r) and dsgn021(r) == 1, r[:500])
 
+    # W12 del revisor de cierre: el caso .dfm + .pas que DEJA el enlace roto (el
+    # .pas se escribe, pero no su campo): el form lo juzga su propia vuelta y el
+    # .pas omite ese form (AOmite): DSGN-021 UNA vez, no dos (guarda)
+    pas, dfm = par('j13')
+    cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': dfm,
+                                  'old': '  object Panel1: TPanel', 'new': '  object Panel2: TPanel'})
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': pas,
+                                  'old': '  Form1: TForm1;', 'new': '  Form1: TForm1; // la unidad cambia, el campo no'})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
+    check('J13 changeset que renombra Panel1 solo en el .dfm y toca otra cosa del .pas: DSGN-021 UNA vez',
+          not mc.rechazado(r) and dsgn021(r) == 1, r[:700])
+    # W7 del revisor de cierre: insert=metodo y rutina-global visible=true hacen
+    # DOS DoEdit en el .pas, y con el form ya roto cada uno juzgaba: DSGN-021 x2
+    pas, dfm = par_roto('j14')
+    r = srv.call('delphi_edit', {'path': pas, 'insert': 'metodo', 'inclass': 'TForm1',
+                                 'code': 'procedure Hola;\nbegin\nend;'}, t=240)
+    check('J14 insert=metodo (dos mitades) en una unidad con el form ya roto: DSGN-021 UNA vez',
+          not mc.rechazado(r) and dsgn021(r) == 1, r[:700])
+    pas, dfm = par_roto('j15')
+    r = srv.call('delphi_edit', {'path': pas, 'insert': 'rutina-global', 'visible': True,
+                                 'code': 'procedure Fuera;\nbegin\nend;'}, t=240)
+    check('J15 insert=rutina-global visible=true (cuerpo + declaracion) con el form ya roto: DSGN-021 UNA vez',
+          not mc.rechazado(r) and dsgn021(r) == 1, r[:700])
+    # W6 del revisor de cierre: un changeset que CREA un form que el parser del
+    # IDE no lee decia DSGN-123 en el paso y otra vez en el juicio final
+    d16 = os.path.join(JAIL, 'j16')
+    os.makedirs(d16)
+    cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create',
+                                  'path': os.path.join(d16, 'UMal.dfm'),
+                                  'content': 'object Form1: TForm1\n  // esto no lo lee el IDE\nend\n'})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
+    check('J16 changeset que crea un form ilegible: DSGN-123 UNA vez (el juicio final, no el paso)',
+          not mc.rechazado(r) and r.count('DSGN-123') == 1, r[:700])
+    # W10 del revisor de cierre: en un changeset con move, el form que queda en
+    # disco es el DESTINO, y no se juzgaba (Seen guardaba el origen)
+    pas, dfm = par('j17')
+    with open(dfm, 'w', encoding='utf-8', newline='\r\n') as f:
+        f.write('object Form1: TForm1\n  // esto no lo lee el IDE\nend\n')
+    otro = os.path.join(os.path.dirname(dfm), 'Otro.dfm')
+    cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'move', 'path': dfm, 'dest': otro})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
+    check('J17 changeset que MUEVE un form ilegible: el juicio final nombra el DESTINO (Otro.dfm, DSGN-123)',
+          not mc.rechazado(r) and 'DSGN-123' in r and 'Otro.dfm' in r.split('DSGN-123', 1)[0][-200:] + r.split('DSGN-123', 1)[1][:60],
+          r[:700])
     pas, dfm = par('j5')
     r = srv.call('delphi_edit', {'path': dfm, 'old': '  object Panel1: TPanel', 'new': '  object Panel9: TPanel'},
                  t=240)

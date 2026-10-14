@@ -641,14 +641,21 @@ begin
       Return.AddPair('delphiVersion', Info.Version);
       for Plat in IdeLibraryPlatforms(Info.Version) do
       begin
+        // por su nombre CANONICO (el del .dproj, delphi_build y los .sdk): la
+        // clave Library "Android32" es la plataforma "Android", y preguntada
+        // por el nombre de la clave salia "needs a PAServer profile + SDK"
+        // con su .sdk puesto (M4 del revisor de cierre)
+        var Nombre := PlataformaDeClaveLibrary(Plat);
+        if Nombre = '' then
+          Nombre := Plat; // una clave que no es una plataforma conocida, tal cual
         Obj := TJSONObject.Create;
         Arr.AddElement(Obj);
-        Obj.AddPair('platform', Plat);
-        Local := IsLocalPlatform(Plat); // la lista de Lsp.Dproj, no una copia
+        Obj.AddPair('platform', Nombre);
+        Local := IsLocalPlatform(Nombre); // la lista de Lsp.Dproj, no una copia
         Obj.AddPair('buildsLocally', TJSONBool.Create(Local));
         if Local then
           Obj.AddPair('status', MsgText(SF_PAS_STATUS_READY_NATIVE))
-        else if HasProfileFor(Info.Version, Plat) then
+        else if HasProfileFor(Info.Version, Nombre) then
           Obj.AddPair('status', MsgText(SF_PAS_STATUS_READY_SDK))
         else
           Obj.AddPair('status', MsgText(SF_PAS_STATUS_NEEDS_PROFILE_SDK));
@@ -1626,7 +1633,10 @@ begin
   begin
     try
       Xml := LeeTexto(Fichero, [ltIde]);
-      Raiz := TagValue(Xml, 'Profile_sysroot');
+      // EL lector del sysroot (SysrootDeSdk, con la macro del IDE resuelta):
+      // el crudo dejaba '$(BDSPLATFORMSDKSDIR)\...' como carpeta que queda
+      // (M9 de los revisores de cierre)
+      Raiz := SysrootDeSdk(Info.Version, Xml);
     except
       Raiz := '';
     end;

@@ -848,7 +848,8 @@ uses
   Lsp.Args,
   Lsp.ShaCache, // Sha256DeBytes: la huella del origen de una llamada
   Lsp.Mascara,
-  System.Character;
+  System.Character,
+  Lsp.Client;
 
 const
   MAX_EDITS = 50; // entradas de una tanda
@@ -2930,13 +2931,9 @@ begin
     Escritas := 0;
   for var Aviso in AvisosDeLlaves(APath, Joined, Hit, Escritas) do
     Result := Result + #10 + Aviso;
-  // un form, juzgado como en la edicion de una linea (DoEdit): el parser del
-  // IDE y las tablas. Un bloque escribia un form que el IDE no abre sin decir
-  // nada (medido el 10-oct-2026: un // en un .fmx)
-  // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6)
-  if GJuicioDeFormAplazado = 0 then
-    for var LintW in JuicioDeLoEscrito(APath, Joined, Enc) do
-      Result := Result + #10 + LintW;
+  // (el form lo juzga quien agrupa, una vez, sobre lo que quedo escrito: su
+  // unico llamador es AplicaTanda, que siempre aplaza - H6; el juicio que
+  // habia aqui era codigo muerto, W11 del revisor de cierre)
 end;
 
 function FragmentoALinea(const APath, AFrag, ANew: string; AAtLine: Integer;
@@ -3636,12 +3633,9 @@ begin
   // (un sustituto suelto, por EL lector) no cabe en ella. Con uno en el
   // nombre de una carpeta el motor contestaba de otra ruta: null en definition
   // y hover, LSP-003 en references, "0 errores" en diagnostics (medido el
-  // 14-oct, punto 4 de la 1.18.2)
-  var I := 1;
-  var Suelto := SiguienteSuelto(TPath.GetFullPath(APath), I);
-  if Suelto <> #0 then
-    Result := MsgFmt(SR_LSP_RUTA_SIN_URI_FMT, [TPath.GetFileName(APath),
-      MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [IntToHex(Ord(Suelto), 4)])]);
+  // 14-oct, punto 4 de la 1.18.2). LA negativa, la del nombrador (que ademas
+  // la lanza a quien le pida esa uri: W5 del revisor de cierre)
+  Result := TLspClient.RutaSinUri(TPath.GetFullPath(APath));
 end;
 
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
@@ -4622,7 +4616,16 @@ begin
                 if not Decl.EndsWith(';') then Decl := Decl + ';';
                 if Directivas <> '' then
                   Decl := Decl + ' ' + Directivas;
-                var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
+                // la declaracion, con el juicio del form aplazado: ya lo dijo
+                // el cuerpo, y una rutina en el interface no toca el enlace
+                // (W7 del revisor de cierre: DSGN-021 dos veces)
+                var R2: string;
+                AplazaJuicioDeForm(True);
+                try
+                  R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
+                finally
+                  AplazaJuicioDeForm(False);
+                end;
                 if EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
                   Extra := #10 + MsgFmt(SF_EDIT_VISIBLE_DECLARACION_ANADIDA_FMT, [Decl]) + #10 + R2
                 else
@@ -4830,7 +4833,16 @@ begin
         if Directivas <> '' then
           DeclLinea := DeclLinea + ' ' + Directivas;
         var AnclaDecl := Lines[IDecl - 1];
-        R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
+        // la declaracion se escribe con el juicio del form APLAZADO: lo dice
+        // la implementacion, que viene siempre detras (y si falla, esta mitad
+        // se deshace); con un form ya roto salia DSGN-021 dos veces (W7 del
+        // revisor de cierre)
+        AplazaJuicioDeForm(True);
+        try
+          R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
+        finally
+          AplazaJuicioDeForm(False);
+        end;
         if not EsMsg(R1, SK_EDIT_ESCRITO_EN_FMT) then
           Exit(MsgConCausa(SR_EDIT_INSERT_FALLO_MITAD1_FMT, R1, [A.ClassName_, R1]));
         end;

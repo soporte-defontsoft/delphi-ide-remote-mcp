@@ -410,9 +410,9 @@ begin
         Result := True;
         // un fuente entero: las llaves, como las dice delphi_create (EDIT-091)
         AAvisos := ConAvisosDeLlaves('', Op.Path, Op.Content).Trim([#10, #13, ' ']);
-        if ErrForm <> '' then
-          AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') +
-            MsgFmt(SN_DSGN_PARSER_FMT, [ErrForm, LinForm, CitaForm]);
+        // (lo que diga el parser del IDE del form creado lo dice el commit al
+        // juzgar lo escrito, una vez por form - H6; aqui salia DSGN-123 y luego
+        // otra vez, W6 del revisor de cierre. ErrForm solo decide la codificacion)
       end;
     opDelete:
       begin
@@ -1117,6 +1117,10 @@ begin
           begin
             if Seen.IndexOf(Op.Path) < 0 then
               Seen.Add(Op.Path);
+            // ...y el DESTINO de un move: el form que queda en disco es ese,
+            // y no se juzgaba (W10 del revisor de cierre)
+            if (Op.Kind = opMove) and (Seen.IndexOf(Op.Dest) < 0) then
+              Seen.Add(Op.Dest);
           end;
           // lo que el lote ESCRIBIO de verdad: solo eso se juzga, y solo eso
           // ya lo juzga su propia vuelta (un paso EDIT-113 juzgaba el form de
@@ -1129,7 +1133,7 @@ begin
           begin
             var Kinds := '';
             for Op in C.Ops do
-              if SameText(Op.Path, FPath) then
+              if SameText(Op.Path, FPath) or ((Op.Kind = opMove) and SameText(Op.Dest, FPath)) then
                 Kinds := Kinds + IfThen(Kinds <> '', ' + ', '') + KindName(Op.Kind);
             var D := 0;
             Deltas2.TryGetValue(FPath.ToLower, D);

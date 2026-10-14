@@ -62,6 +62,12 @@ try:
         # primeros no llegaban a Free; aqui, que contesta miembros sin prefijo)
         check('P3 control: tras un punto (miembros) no hay prefijo y contesta miembros',
               'prefix' not in j and len(j.get('items', [])) > 0 and j.get('total', 0) > 0, r[:300])
+        # M8 del revisor de cierre: el tope nunca se ejercitaba. Los miembros de
+        # un TStringList (los suyos, TStrings, TPersistent, TObject) pasan de el:
+        # truncated y su nota (LSP-042), y total cuenta lo que no se ensena
+        check('P4 los miembros de TStringList pasan del tope: truncated, total > items y la nota LSP-042',
+              j.get('truncated') is True and j.get('total', 0) > len(j.get('items', [])) and 'LSP-042' in r,
+              (j.get('truncated'), j.get('total'), len(j.get('items', []))))
 finally:
     srv.cierra()
 

@@ -176,6 +176,14 @@ type
       const AUriFilter: string = ''): TJSONObject;
 
     { Helpers }
+    { LA negativa de una ruta que no se le puede NOMBRAR al motor (LSP-044):
+      medio caracter -un sustituto suelto, por EL lector- no cabe en una uri
+      UTF-8, y GetBytes lo escribia como U+FFFD en silencio: el motor
+      contestaba de otra ruta. '' si se puede. La lanza PathToUri a todo el
+      que le pida esa uri y la dicen antes, con su texto, la regla de las
+      tools del motor (NoEsFuenteDelphi) y references por cada candidato
+      (W5 del revisor de cierre: solo el borde la decia). }
+    class function RutaSinUri(const APath: string): string;
     class function PathToUri(const APath: string): string;
     class function UriToPath(const AUri: string): string;
     { Los bytes de la ruta de una uri file:// (sin el esquema): los %XX, el
@@ -953,6 +961,13 @@ var
   B: Byte;
   Sb: TStringBuilder;
 begin
+  // lo que no se puede nombrar no se escribe a medias (W5 del revisor de
+  // cierre: el nombrador lo escribia como U+FFFD en silencio para los
+  // candidatos de references, el proyecto y los search paths de los ajustes,
+  // la raiz del Initialize y didChange/didClose)
+  var Negativa := RutaSinUri(APath);
+  if Negativa <> '' then
+    raise ELspClient.Create(Negativa);
   Normalized := APath.Replace('\', '/');
   Utf8 := TEncoding.UTF8.GetBytes(Normalized);
   Sb := TStringBuilder.Create('file:///');
@@ -976,6 +991,12 @@ begin
   // UriToPath es LAXA (el byte malo, U+FFFD): dos uris rotas distintas serian
   // la MISMA al compararlas, y la de un fichero con U+FFFD en su nombre. Lo
   // dice EL juez de la ida y vuelta (BytesVuelvenIgual), no una lista
+  // ...y medio caracter suelto en la uri tampoco: UriABytes lo volvia U+FFFD
+  // ANTES del juez, y dos uris rotas distintas (o la de un fichero real con
+  // U+FFFD) eran la misma (M6 de los revisores de cierre); tal cual, no casa
+  var I := 1;
+  if SiguienteSuelto(AUri, I) <> #0 then
+    Exit(AUri);
   if not BytesVuelvenIgual(UriABytes(AUri), ekUtf8) then
     Exit(AUri);
   try
@@ -984,6 +1005,18 @@ begin
     on EEncodingError do
       Result := AUri;
   end;
+end;
+
+class function TLspClient.RutaSinUri(const APath: string): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  I := 1;
+  var Suelto := SiguienteSuelto(APath, I);
+  if Suelto <> #0 then
+    Result := MsgFmt(SR_LSP_RUTA_SIN_URI_FMT, [ExtractFileName(APath),
+      MsgFmt(SF_EDIT_SUSTITUTO_SUELTO_FMT, [IntToHex(Ord(Suelto), 4)])]);
 end;
 
 class function TLspClient.MotorPierdeLaRuta(const APath: string): Boolean;

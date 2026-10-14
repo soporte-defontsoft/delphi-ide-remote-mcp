@@ -51,6 +51,35 @@ try:
     dpr, col = proyecto(srv, 'Normal')
     r = srv.call('delphi_definition', {'path': dpr, 'line': 10, 'character': col}, t=240)
     check('S3 control: en una carpeta normal la definicion sale', 'UA.pas' in r and 'LSP-04' not in r, r[:300])
+    # W12 del revisor de cierre: el control de un par VALIDO (un emoji entero):
+    # el nombrador lo escribe (no LSP-044); lo que el motor haga con el es otra
+    # cosa (LSP-043, el motor pierde la carpeta)
+    dpr, col = proyecto(srv, 'Par' + '\U0001F600')
+    r = srv.call('delphi_definition', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    check('S4 control: un par de sustitutos ENTERO no es medio caracter: nada de LSP-044',
+          'LSP-044' not in r, ascii(r[:300]))
+    # W5 del revisor de cierre: LSP-044 vivia en un borde (NoEsFuenteDelphi) y el
+    # NOMBRADOR seguia escribiendo U+FFFD en silencio: un candidato de references
+    # bajo una carpeta con medio caracter se abria en el motor por otra ruta y
+    # acababa sin verificar sin decir por que. (Un search path asi no puede
+    # existir: el escritor del .dproj lo rechaza, EDIT-078.) Ahora lo dice el
+    # nombrador a quien se lo pida, y references lo cuenta por candidato
+    sub = os.path.join(JAIL, 'Normal', 'P', 'sub' + chr(0xDC00))
+    os.makedirs(sub)
+    open(os.path.join(sub, 'UB.pas'), 'w', encoding='utf-8-sig', newline='').write(
+        'unit UB;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nuses UA;\r\n\r\nfunction Cuatro: Integer;\r\n'
+        'begin\r\n  Result := Doble(2);\r\nend;\r\n\r\nend.\r\n')
+    r = srv.call('delphi_references', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    # MEDIDO (14-oct, con el motor solo y con el servidor): con esa carpeta en el
+    # arbol del proyecto el MOTOR pierde la carpeta tambien de sus vecinas (la
+    # definicion de Doble sale file:///UA.pas), asi que la respuesta es LSP-043
+    # antes de llegar a los candidatos; el candidato sin uri queda como guarda
+    # declarada (unit tests del nombrador). Lo que no puede pasar: U+FFFD en la
+    # respuesta, ni una ruta que no es la del fichero
+    check('S5 una unidad bajo una carpeta con medio caracter en el arbol: el motor pierde la carpeta '
+          '(LSP-043, medido) o el candidato queda sin verificar con su motivo (LSP-044); nunca U+FFFD',
+          ('LSP-043' in r or ('LSP-044' in r and 'UB.pas' in r)) and '�' not in r and 'FFFD' not in r,
+          ascii(r[:500]))
 finally:
     srv.cierra()
 

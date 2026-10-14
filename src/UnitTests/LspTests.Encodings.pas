@@ -891,6 +891,22 @@ begin
   // ...y UriCanonica NO lanza con escapes que no son UTF-8: corre bajo el
   // cerrojo de las notificaciones; devuelve la uri tal cual
   Assert.AreEqual('file:///C%3A/a%C3', TLspClient.UriCanonica('file:///C%3A/a%C3'), 'escape roto, tal cual');
+  // ...ni con medio caracter suelto: se volvia U+FFFD antes del juez, y la
+  // uri de un fichero real con U+FFFD era la misma (M6 del revisor de cierre)
+  Assert.AreEqual('file:///C%3A/a' + #$D800 + '/x.pas', TLspClient.UriCanonica('file:///C%3A/a' + #$D800 + '/x.pas'),
+    'medio caracter suelto: tal cual');
+  Assert.AreNotEqual(TLspClient.UriCanonica('file:///C%3A/a' + #$FFFD + '/x.pas'),
+    TLspClient.UriCanonica('file:///C%3A/a' + #$D800 + '/x.pas'), 'y no es la del fichero con U+FFFD');
+  // ...y el NOMBRADOR no escribe medio caracter como U+FFFD en silencio: lo
+  // dice (LSP-044) a todo el que le pida la uri de esa ruta (W5 del revisor
+  // de cierre; antes solo un borde, NoEsFuenteDelphi)
+  Assert.WillRaise(
+    procedure
+    begin
+      TLspClient.PathToUri('C:\a' + #$D800 + 'b\x.pas');
+    end, ELspClient, 'medio caracter en la ruta: el nombrador no la escribe');
+  Assert.AreEqual('file:///C%3A/' + '%F0%9F%98%80' + '/x.pas', TLspClient.PathToUri('C:\' + #$D83D#$DE00 + '\x.pas'),
+    'un par de sustitutos entero si: el emoji en UTF-8');
 end;
 
 procedure TNombradorTests.CompositorConservaLosSaltosDeFuera;

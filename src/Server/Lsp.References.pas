@@ -938,6 +938,18 @@ begin
     try
       for Cand in Candidates do
       begin
+        // un candidato cuya ruta no se le puede NOMBRAR al motor (medio
+        // caracter: LSP-044) se queda sin verificar, con su motivo, y los
+        // demas siguen; el nombrador escribia U+FFFD y el motor contestaba de
+        // otra ruta (W5 del revisor de cierre)
+        var SinUri := TLspClient.RutaSinUri(Cand.Path);
+        if SinUri <> '' then
+        begin
+          var UObj := CandidateJson(Cand);
+          UObj.AddPair('note', SinUri);
+          Unverified.Add(UObj);
+          Continue;
+        end;
         if not OpenedFiles.ContainsKey(Cand.Path.ToLower) then
         begin
           if FilesOpened >= AMaxFiles then

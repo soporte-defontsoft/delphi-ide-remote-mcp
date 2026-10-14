@@ -248,7 +248,10 @@ begin
   Assert.IsTrue(EsMsg(BorradoDenegado('C:\'), SR_BORRADO_DENEGADO_FMT), 'unidad');
   Assert.IsTrue(EsMsg(BorradoDenegado('\\servidor\recurso'), SR_BORRADO_DENEGADO_FMT), 'recurso compartido');
   Assert.IsTrue(EsMsg(BorradoDenegado(GetEnvironmentVariable('WINDIR')), SR_BORRADO_DENEGADO_FMT), 'Windows');
-  Assert.IsTrue(EsMsg(BorradoDenegado(ExtractFileDir(ParamStr(0))), SR_BORRADO_DENEGADO_FMT), 'la carpeta del ejecutable');
+  // (en el contenedor de delphi_test el padre de esta carpeta no se deja abrir
+  // y la carpeta misma si: las dos formas tienen que negar; medido el 14-oct)
+  Assert.IsTrue(EsMsg(BorradoDenegado(ExtractFileDir(ParamStr(0))), SR_BORRADO_DENEGADO_FMT),
+    'la carpeta del ejecutable: ' + ExtractFileDir(ParamStr(0)));
 end;
 
 procedure TImageTests.DescargaTemporalNombradorYLector;

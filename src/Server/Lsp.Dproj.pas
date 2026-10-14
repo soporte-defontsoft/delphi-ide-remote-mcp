@@ -148,6 +148,15 @@ function IsLocalPlatform(const APlatform: string): Boolean;
   Returns the correctly-cased canonical name, or '' if unknown. }
 function CanonicalPlatform(const AName: string): string;
 
+{ La plataforma -nombre canonico, el del .dproj, delphi_build y los .sdk
+  (Profile_platform)- de una clave Library del registro del IDE. Iguales
+  salvo UNA: el IDE llama Android32 a la clave Library de la plataforma que
+  el proyecto, los .sdk y la carpeta lib\android llaman Android (medido en el
+  registro el 14-oct-2026). '' si la clave no es una plataforma conocida.
+  (M4 del revisor de cierre: platforms la preguntaba por el nombre de la clave
+  y decia "needs a PAServer profile + SDK" con su .sdk puesto.) }
+function PlataformaDeClaveLibrary(const AClave: string): string;
+
 { La lista de plataformas validas, para los mensajes que la ensenan: la
   misma que valida CanonicalPlatform (estaba copiada a mano en tres textos
   con 11 nombres mientras el validador aceptaba 13). }
@@ -822,6 +831,13 @@ begin
   for P in KNOWN_PLATFORMS do
     if SameText(P, AName.Trim) then
       Exit(P); // canonical casing, and proven metachar-free
+end;
+
+function PlataformaDeClaveLibrary(const AClave: string): string;
+begin
+  if SameText(AClave.Trim, 'Android32') then
+    Exit(CanonicalPlatform('Android'));
+  Result := CanonicalPlatform(AClave);
 end;
 
 function PlatformProperty(const AXml, APlatform, ATag: string): string;

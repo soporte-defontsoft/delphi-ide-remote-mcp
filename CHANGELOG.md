@@ -392,6 +392,55 @@ the MCP `initialize` response (`serverInfo.version`).
   `test_designer_orden` O24 (red against production). D5 of the closing
   reviewers.
 
+- **Half a character in a path is refused by the namer itself.** `LSP-044`
+  lived at one edge (the check in front of the engine tools) while
+  `PathToUri` kept writing a lone surrogate as U+FFFD in silence for the
+  candidates of `references`, the project and the search paths of the
+  fabricated settings, the root the engine is initialised with and
+  `didChange`/`didClose` - the engine then looked at another folder. Now the
+  namer says `LSP-044` to whoever asks for that path's URI (the edge stays as
+  the first barrier), and `UriCanonica` leaves such a URI as it is instead
+  of turning it into the URI of a real file with U+FFFD in its name.
+  `test_ruta_sin_uri_1182` S4 (a whole pair is not half a character) and S5
+  (a unit under a folder with half a character inside the project's tree:
+  measured, the engine then loses the folder of its NEIGHBOURS too, and the
+  answer is `LSP-043` - its text now says so - never a path with U+FFFD);
+  unit tests of the namer. W5 and M6 of the closing reviewers.
+
+- **A form is judged once, and the one that is on disk.** `insert=metodo`
+  and `insert=rutina-global visible=true` write a unit twice (declaration
+  and body) and, with its form already broken, said `DSGN-021` twice; a
+  changeset that creates a form the IDE's parser does not read said
+  `DSGN-123` in the step and again in the final judgement; a changeset that
+  moves a form judged the source path, which no longer exists, and never
+  the destination; and the judgement inside the block editor was dead code
+  (its only caller, the batch, always defers it). `test_juicio_final_1182`
+  J13 (the `.dfm` + `.pas` case that leaves the binding broken: once), J14,
+  J15, J16 and J17 (red against production). W6, W7, W10, W11 and W12 of
+  the closing reviewers.
+
+- **Four readers that had a twin.** `remove-sdk` read `Profile_sysroot` raw
+  (the IDE's macro unexpanded) next to the one reader `SysrootDeSdk`;
+  `platforms` asked for the SDK of `Android32` - the IDE's Library key - and
+  said "needs a PAServer profile + SDK" with `AndroidAPI36.1_32bit.sdk`
+  installed, because the project, the `.sdk` files and `lib\android` call
+  that platform `Android`: now one mapper (`PlataformaDeClaveLibrary`) and
+  the listing names the platform as `delphi_build` takes it; a
+  `LocationLink` (`targetUri`) would have come out raw from the engine's
+  answers; and `adduses` walked the project's tree once per name. M4, M7, M9
+  and M10 of the closing reviewers. `test_completion_prefijo_1182` P4 now
+  exercises the cap (`LSP-042`) and `test_artefacto_encima_1182` A1b writes
+  with `delphi_edit` under a folder called Release (M8).
+
+- **The deletion gate's black list judges the folder by both of its forms.**
+  Inside the AppContainer of `delphi_test` the parent of the staging folder
+  cannot be opened, so the "where the link is" form kept its text
+  (`DFONTA~1`) while the protected place resolved whole (`dfontanet`): two
+  forms of the same folder, and the black list failed OPEN for a folder
+  inside a disposable one (measured on 14-oct with the engine's own DUnitX
+  suite run through `delphi_test`; `BorradoNuncaUnidadNiSistema` had been
+  green the night before). Now either form denies.
+
 - **One list of the IDE's SDKs, and "ready" asks the SDK's own platform.**
   Six places walked the IDE's `*.sdk` files by hand (the build, adb's
   search for its `adb`, `profiles`, `seat-sdk`, the read gate's sysroots and

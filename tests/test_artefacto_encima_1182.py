@@ -44,6 +44,11 @@ try:
     r = srv.call('delphi_edit', {'path': os.path.join(pa, 'PA.dpr'), 'adduses': 'UFoo'}, t=120)
     check('A1 adduses de la unidad de al lado del .dpr, bajo una carpeta Release de encima: USES-021',
           'USES-021' in r, r[:300])
+    # (M8 del revisor de cierre: el escritor de delphi_edit bajo ese antepasado)
+    r = srv.call('delphi_edit', {'path': os.path.join(pa, 'UFoo.pas'), 'old': 'interface',
+                                 'new': 'interface\n\nconst\n  Uno = 1;'}, t=120)
+    check('A1b delphi_edit de esa unidad bajo la carpeta Release de encima: escribe (EDIT-087)',
+          'EDIT-087' in r and 'Uno = 1' in open(os.path.join(pa, 'UFoo.pas')).read(), r[:300])
 
     ps = os.path.join(JAIL, 'PS')
     os.makedirs(ps)

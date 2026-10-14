@@ -2983,6 +2983,14 @@ begin
       [string.Join(', ', CarpetasDesechables)])]));
   // (2) lista negra: ni ser ni contener un lugar protegido
   P := LugarProtegidoEn(Real);
+  // ...y por la ruta real de la carpeta MISMA cuando no es un enlace: en el
+  // AppContainer de delphi_test el padre no se deja abrir y RutaDelEnlace se
+  // queda con su texto (DFONTA~1) mientras el lugar protegido se resuelve
+  // entero (dfontanet): dos formas de la misma carpeta, y la lista negra
+  // fallaba ABIERTA (medido el 14-oct con la suite de unidad en el
+  // contenedor). Cualquiera de las dos formas niega
+  if (P = '') and not EsEnlace(Full) then
+    P := LugarProtegidoEn(SinBarraFinal(RealPath(Full)));
   if P <> '' then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgFmt(SF_GUARD_CONTIENE_LUGAR_PROTEGIDO_FMT, [P])]));
 end;

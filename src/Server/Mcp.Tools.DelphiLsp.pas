@@ -339,10 +339,20 @@ begin
   if not (V is TJSONObject) then
     Exit;
   Obj := TJSONObject(V);
-  if (Obj.GetValue('uri') <> nil) and (Obj.GetValue('path') = nil) then
+  // un LocationLink (targetUri + targetSelectionRange) como un Location (uri
+  // + range): DelphiLSP no lo manda en lo medido, y habria salido crudo (M7
+  // de los revisores de cierre)
+  var KUri := 'uri';
+  var KRng := 'range';
+  if (Obj.GetValue(KUri) = nil) and (Obj.GetValue('targetUri') <> nil) then
   begin
-    Obj.AddPair('path', TLspClient.UriToPath(Obj.GetValue('uri').Value));
-    Rng := Obj.GetValue('range') as TJSONObject;
+    KUri := 'targetUri';
+    KRng := 'targetSelectionRange';
+  end;
+  if (Obj.GetValue(KUri) <> nil) and (Obj.GetValue('path') = nil) then
+  begin
+    Obj.AddPair('path', TLspClient.UriToPath(Obj.GetValue(KUri).Value));
+    Rng := Obj.GetValue(KRng) as TJSONObject;
     if Rng <> nil then
     begin
       Start := Rng.GetValue('start') as TJSONObject;
@@ -366,7 +376,7 @@ begin
     end;
     // ...y el uri se va: es la MISMA ruta (file:///srvd%3A/...), que ninguna
     // tool acepta como argumento; iba dos veces en cada ubicacion (1.15.0)
-    Obj.RemovePair('uri').Free;
+    Obj.RemovePair(KUri).Free;
   end;
   for Pair in Obj do
     DecorateLocations(Pair.JsonValue);
