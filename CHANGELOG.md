@@ -122,7 +122,12 @@ desktop without a monitor instead of "the portal refused the screenshot
   tells the agent to delete a folder that was already a registered SDK;
   the `distro` and `pulled` fields of the SDK record go through the house's
   text-field reader (a `{}` there ended in an internal error). The Linux
-  node reads the monitors once for its two questions.
+  node reads the monitors once for its two questions. Repository: the two
+  `.res` of the desktop node and the job runner are no longer tracked; they
+  hold only msbuild's `PLATFORMTARGETS` marker (4 bytes, the platform
+  linked last), every build rewrites them and a build creates them when
+  they are missing (measured), so they showed as modified after every
+  build for nothing.
 
 - **`delphi_git` launches git by its full path, found only in the PATH the
   server started with.** It launched `git.exe` by name, and Windows looks a
