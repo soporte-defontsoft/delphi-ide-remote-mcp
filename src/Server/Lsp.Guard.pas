@@ -1175,8 +1175,13 @@ begin
   // (APermiteGit): ese juez lanza git para contestar, y git se resuelve
   // AQUI (medido el 14-oct-2026: la bateria de git por ruta se quedo
   // colgada en la recursion). El modo de solo lectura no cuenta: el
-  // programa del operador lo es con la sesion abierta o cerrada.
-  if (Result <> '') and (PathDenied(ExtractFileDir(Result), True) = '') then
+  // programa del operador lo es con la sesion abierta o cerrada. SIN raices
+  // no hay carpeta del agente: PathDenied contesta '' ("sin jaula, sin
+  // reglas de escritura") y eso negaba el git de verdad a un stdio de solo
+  // lectura (medido el 14-oct-2026 por el release_check: test_git_worktree,
+  // "solo lectura: list" con GIT-050)
+  if (Result <> '') and HayJaula and
+     (PathDenied(ExtractFileDir(Result), True) = '') then
     Result := '';
 end;
 

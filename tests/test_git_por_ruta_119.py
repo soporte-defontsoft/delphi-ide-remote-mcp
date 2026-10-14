@@ -25,6 +25,9 @@ plantado ahi que es whoami.exe; si el servidor lo ejecuta, no es git de verdad.
   R4 un git.exe que SI esta en el PATH pero en una carpeta donde el agente
      escribe (dentro de las raices): no es el git del operador -> GIT-050 y la
      sonda no corre (B1 del cierre de la 1.19.0; rojo contra 45dd5a8)
+  R5 un servidor SIN raices (stdio de solo lectura) usa el git del PATH: sin
+     jaula no hay carpeta del agente (la primera version de B1 le negaba git:
+     lo cazo el release_check de la 1.19.0 en test_git_worktree)
 
   Por que contra el BUILD ANTERIOR (el que lanzaba git por nombre) status salia
   con exit=1 pero SIN marca en el cuerpo -medido el 14-oct-2026 (4.8), leido el
@@ -122,6 +125,15 @@ try:
     r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('R4 un git.exe del PATH en una carpeta donde el agente escribe: GIT-050, y la sonda no corre',
           'GIT-050' in r and 'exit=' not in r and MARCA not in r, r[:200])
+finally:
+    s.cierra()
+
+# R5: sin raices no hay carpeta del agente; el git del PATH es el del operador
+s = mc.Stdio(EXE, mc.entorno({}), nombre='git-por-ruta-sin-raices', cwd=PLANTA)
+try:
+    r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
+    check('R5 un servidor sin raices (solo lectura) usa el git del PATH: status contesta',
+          r.startswith('exit=0') and 'GIT-050' not in r, r[:200])
 finally:
     s.cierra()
 

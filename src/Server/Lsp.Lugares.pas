@@ -165,6 +165,13 @@ function LugaresDeclarados: TArray<string>;
 { El host UNC de los lugares declarados si es UNO solo: lo que \\srvhost\
   significa al volver del agente (ExpandDriveValue, Lsp.Mascara). }
 function HostUncDeclarado: string;
+{ HAY JAULA: el servidor tiene raices de escritura (las del workspace de la
+  peticion o las del modo local). Sin ellas no hay reglas de escritura ni
+  carpeta del agente: es el modo local de confianza, que es de solo lectura
+  (IsReadOnlyNow). LA pregunta: se escribia a mano como
+  Length(WorkspaceRoots) = 0 en seis sitios (14-oct-2026; la usa
+  ProgramaDelOperador, y los otros cinco se migran a ella). }
+function HayJaula: Boolean;
 { Las raices y referencias de una letra de red, con su ruta de red (por
   indice): las leen FormaDeclarada y el enmascarador (MaskDriveText). }
 procedure SitiosEnLetraDeRed(out ADeclaradas, AReales: TArray<string>);
@@ -306,6 +313,11 @@ begin
     Result := Result + [VaultPath];
   if LibraryZoneEnabled then
     Result := Result + LibraryRoots;
+end;
+
+function HayJaula: Boolean;
+begin
+  Result := Length(WorkspaceRoots) > 0;
 end;
 
 { El host UNC de los lugares declarados, si es UNO solo ('' si ninguno o
