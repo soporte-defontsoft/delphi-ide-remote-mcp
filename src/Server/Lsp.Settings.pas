@@ -55,6 +55,13 @@ function WorkspaceReadOnlyRoots: TArray<string>;
 function AuthorizeBearer(const AAuth: string; out AReadOnly: Boolean;
   out AWorkspaceIx: Integer): Boolean;
 
+{ El workspace CERRADO (sin jaula valida: una proteccion que no se cargo, o
+  sin raices) cuyo token - de escritura o de lectura - es el de AAuth; '' si
+  ninguno. AuthorizeBearer lo niega como a un token que no existe, y el 401
+  decia "token invalido" de uno bueno: quien contesta la negativa pregunta
+  aqui y dice la verdad (J9 del revisor de cierre de la 1.18.2, medido). }
+function WorkspaceCerradoDeToken(const AAuth: string): string;
+
 { Scopes THIS worker thread to a workspace (-1 = none: operator/stdio).
   Worker threads are reused, so the host calls this on EVERY request. }
 procedure SetRequestWorkspace(AIx: Integer);
@@ -696,6 +703,26 @@ begin
   Result := Result + GWorkspaceNotes;
 end;
 
+// UN workspace cerrado: sin jaula valida no admite a nadie (fail closed). La
+// pregunta estaba escrita en AuthorizeBearer y en la atadura del token de
+// stdio, y WorkspaceCerradoDeToken era la tercera
+function WorkspaceCerrado(const W: TWorkspaceDef): Boolean;
+begin
+  Result := W.Invalid or (Length(W.Roots) = 0);
+end;
+
+function WorkspaceCerradoDeToken(const AAuth: string): string;
+begin
+  Result := '';
+  var T := BearerToken(AAuth);
+  if T = '' then
+    Exit;
+  for var W in GWorkspaces do
+    if WorkspaceCerrado(W) and (((W.Token <> '') and (T = W.Token)) or
+       ((W.ReadOnlyToken <> '') and (T = W.ReadOnlyToken))) then
+      Exit(W.Name);
+end;
+
 function AuthorizeBearer(const AAuth: string; out AReadOnly: Boolean;
   out AWorkspaceIx: Integer): Boolean;
 var
@@ -711,7 +738,7 @@ begin
   for I := 0 to High(GWorkspaces) do
   begin
     // fail closed: a workspace without a valid jail admits nobody
-    if GWorkspaces[I].Invalid or (Length(GWorkspaces[I].Roots) = 0) then
+    if WorkspaceCerrado(GWorkspaces[I]) then
       Continue;
     // el esquema sin distinguir mayusculas y el token si (BearerToken):
     // "bearer <token>" daba 401 (decima revision)
@@ -1397,7 +1424,7 @@ begin
       ((GWorkspaces[K].Token <> '') and (GReadOnlyToken = GWorkspaces[K].Token));
     if not (EsSuToken or EsSuLector) then
       Continue;
-    if GWorkspaces[K].Invalid or (Length(GWorkspaces[K].Roots) = 0) then
+    if WorkspaceCerrado(GWorkspaces[K]) then
     begin
       GLocalCerrado := MsgFmt(SF_CIERRE_WORKSPACE_FMT, [GWorkspaces[K].Name]);
       Continue;

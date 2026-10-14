@@ -11,8 +11,11 @@ dice.
 
   V1 ReadOnlyPaths=srvc:\\...\\prot: escribir en prot NO pasa (ROJO en
      produccion: se escribia), y es el CIERRE del workspace: tampoco fuera de
-     prot, y lo que contesta es el 401 de SYS-017 (miraba solo que a.txt no
-     estuviera, y pasaba con la sesion caida: J7 del revisor de cierre)
+     prot (miraba solo que a.txt no estuviera, y pasaba con la sesion caida:
+     J7 del revisor de cierre); y lo que contesta lo dice: 403 SYS-034, el
+     token es bueno y su workspace esta cerrado - era el 401 de SYS-017,
+     "token invalido" (J9 del revisor de cierre, ROJO en produccion)
+  V4 control: un token que no es de nadie sigue siendo 401 SYS-017
   V2 el aviso del arranque dice que es la forma virtual
   V3 control: la misma entrada con su letra protege prot y el workspace
      funciona (se escribe fuera de prot, no dentro)
@@ -63,9 +66,13 @@ srv, jail, prot, token, puerto, proc = servidor('v1', lambda p: 'srv' + p[0].low
 try:
     r = intenta(puerto, token, os.path.join(prot, 'a.txt'))
     fuera = intenta(puerto, token, os.path.join(jail, 'b.txt'))
-    check('V1 ReadOnlyPaths con la unidad virtual: el workspace se CIERRA (401 SYS-017), ni en prot ni fuera',
-          not os.path.exists(os.path.join(prot, 'a.txt')) and not os.path.exists(os.path.join(jail, 'b.txt')) and
-          all('401' in x and 'SYS-017' in x for x in (r, fuera)), (r[:300], fuera[:300]))
+    check('V1 ReadOnlyPaths con la unidad virtual: el workspace se CIERRA (403 SYS-034, que lo dice), ni en prot '
+          'ni fuera', not os.path.exists(os.path.join(prot, 'a.txt')) and
+          not os.path.exists(os.path.join(jail, 'b.txt')) and
+          all('403' in x and 'SYS-034' in x and '[Workspace.W]' in x for x in (r, fuera)), (r[:300], fuera[:300]))
+    otro = intenta(puerto, 'no-es-de-nadie-0123456789', os.path.join(jail, 'c.txt'))
+    check('V4 control: un token que no es de nadie sigue siendo 401 SYS-017',
+          '401' in otro and 'SYS-017' in otro and 'SYS-034' not in otro, otro[:300])
 finally:
     proc.kill()
 check('V2 el aviso del arranque dice que es la forma virtual de los agentes',

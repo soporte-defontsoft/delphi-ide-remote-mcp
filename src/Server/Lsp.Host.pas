@@ -399,6 +399,15 @@ begin
         SetRequestWorkspace(WsIx);
       end;
     end;
+  // ...y por que, cuando el token es bueno y su workspace esta cerrado: el 401
+  // decia "token invalido" (J9 del revisor de cierre de la 1.18.2)
+  Result.OnDenyReason :=
+    function(const AAuth: string): string
+    begin
+      Result := WorkspaceCerradoDeToken(AAuth);
+      if Result <> '' then
+        Result := MsgFmt(SR_SYS_WORKSPACE_CERRADO_FMT, [Result]);
+    end;
   // Direct download route on the same host, behind the same gate: big
   // binaries travel as HTTP bytes, never as base64 through a model's context
   // (field 2026-08-21: the 72 MB PAServer installer through delphi_fetch).

@@ -332,6 +332,16 @@ the MCP `initialize` response (`serverInfo.version`).
   (F1, F2 and F5 red against production; the controls - with a BOM, and a
   real ANSI form - stay quiet).
 
+- **A right token of a closed workspace is told so.** A workspace whose
+  protection does not load (or whose roots do not parse) admits nobody, and
+  its own token was answered with the 401 of a token that does not exist,
+  "Missing or invalid bearer token", sending the agent - or its operator -
+  to check a token that was right. It is answered `403` `SYS-034` now,
+  naming the workspace and the startup log; any other token still gets the
+  401. One question for "is this workspace closed?", where three places
+  wrote it. `test_sitio_virtual_1182` V1 (red against production) and V4.
+  J9 of the closing reviewers.
+
 - **A class method's headers are headers too.** The reader of a routine's
   header (`ColumnaDelNombreDeRutina`) did not take `class` in front, so the
   headers of `class procedure TDer.Q` came out of `references` as calls

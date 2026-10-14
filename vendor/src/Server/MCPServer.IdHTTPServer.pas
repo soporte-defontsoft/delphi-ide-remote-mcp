@@ -41,6 +41,10 @@ type
   // per-workspace tokens. When assigned it REPLACES the built-in two-tier
   // check; the host sets its own per-thread scope flags inside the callback.
   TAuthorizeFunc = reference to function(const AAuth: string): Boolean;
+  // [local change 2026-10-14] why a credential the host refused is refused,
+  // when it is not "no such token": '' = the plain 401; otherwise a 403 with
+  // that text (a right token whose workspace is closed got "invalid token")
+  TDenyReasonFunc = reference to function(const AAuth: string): string;
   // [local change] a second route next to the MCP endpoint (direct file
   // download): the host serves it; this class only authenticates and routes.
   TRouteEvent = reference to procedure(RequestInfo: TIdHTTPRequestInfo;
@@ -64,6 +68,7 @@ type
     FAnonymousReadOnly: Boolean; // [local change] no token = read-only access
     FOnAccessLevel: TAccessLevelEvent; // [local change] per-request RO/RW flag
     FOnAuthorize: TAuthorizeFunc; // [local change] full bearer check by the host
+    FOnDenyReason: TDenyReasonFunc; // [local change] see TDenyReasonFunc
     FBindIP: string; // [local change] bind to ONE interface ('' = all)
     FFilesRoute: string;        // [local change] '' = no download route
     FOnFileRequest: TRouteEvent; // [local change] GET handler for FFilesRoute
@@ -104,6 +109,8 @@ type
     property OnAccessLevel: TAccessLevelEvent read FOnAccessLevel write FOnAccessLevel;
     // [local change] see TAuthorizeFunc
     property OnAuthorize: TAuthorizeFunc read FOnAuthorize write FOnAuthorize;
+    // [local change] see TDenyReasonFunc
+    property OnDenyReason: TDenyReasonFunc read FOnDenyReason write FOnDenyReason;
     // [local change] bind to a SINGLE interface (settings.ini [Server] BindIP).
     // Empty = listen on all interfaces (the default; also the source of the
     // duplicate IPv4+IPv6 firewall prompt). Set e.g. to a LAN/VPN address.
@@ -457,6 +464,24 @@ begin
         // [local change] host-side authorization (global + workspace tokens);
         // the host already scoped this worker thread inside the callback.
         Allowed := FOnAuthorize(Auth);
+        if not Allowed and Assigned(FOnDenyReason) then
+        begin
+          var Motivo := FOnDenyReason(Auth);
+          if Motivo <> '' then
+          begin
+            ResponseInfo.ResponseNo := 403;
+            ResponseInfo.ResponseText := 'Forbidden';
+            ResponseInfo.ContentType := 'application/json';
+            var O := TJSONObject.Create;
+            try
+              O.AddPair('error', Motivo);
+              ResponseInfo.ContentText := O.ToJSON;
+            finally
+              O.Free;
+            end;
+            Exit;
+          end;
+        end;
         if not Allowed then
         begin
           ResponseInfo.ResponseNo := 401;

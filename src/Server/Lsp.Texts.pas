@@ -10565,6 +10565,16 @@ const
 
   SR_SYS_UNAUTHORIZED =
     '[SYS-017 DENIED] Missing or invalid bearer token.';
+  { El token es BUENO y su workspace esta cerrado (una proteccion que no se
+    cargo, o sin raices): el 401 de SYS-017 mandaba a revisar un token que
+    no estaba mal (J9 del revisor de cierre de la 1.18.2). %s = el nombre
+    del workspace, que quien trae su token ya conoce. }
+  SR_SYS_WORKSPACE_CERRADO_FMT =
+    '[SYS-034 DENIED] The token is right: it is the one of [Workspace.%s], ' +
+    'and that workspace is closed - one of its settings (a protection, its ' +
+    'roots) did not load, and a workspace that cannot hold its protection ' +
+    'admits nobody. It does not depend on your call: it is the operator''s ' +
+    'to fix, and the startup log of the server names what.';
   SL_MSG_FORMAT_FMT =
     'Message %s: the arguments do not match its format (%s): "%s"';
 
