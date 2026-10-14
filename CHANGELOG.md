@@ -127,7 +127,12 @@ desktop without a monitor instead of "the portal refused the screenshot
   hold only msbuild's `PLATFORMTARGETS` marker (4 bytes, the platform
   linked last), every build rewrites them and a build creates them when
   they are missing (measured), so they showed as modified after every
-  build for nothing.
+  build for nothing. Docs: the renderer's README and CONFIGURATION say what
+  a preview runs and with which account - the operator's installed
+  components, as the IDE does - what the server judges first (the form's
+  values with the shape of a path) and how a component that waits ends
+  (`RENDER-007`; measured with a `TFDConnection` that had nothing to
+  open: 60 s, nothing written, no process left).
 
 - **`delphi_git` launches git by its full path, found only in the PATH the
   server started with.** It launched `git.exe` by name, and Windows looks a

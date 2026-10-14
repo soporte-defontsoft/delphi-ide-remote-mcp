@@ -192,9 +192,20 @@ with the operator-controlled rule removed. This round does not install rules or 
 that those enforcement tests passed.
 
 Third-party components remain available. Design mode avoids application event
-handlers, but loaded components still run their constructors and property setters.
-A process budget and program firewall rules do not by themselves restrict all of
-a component's filesystem access. Report any broader confinement requirement separately.
+handlers, but loaded components still run their constructors and property setters,
+with the server's account - exactly as the IDE runs them when it opens a form. The
+components are the ones the operator installed and trusts; what the agent controls
+is the form's text, so the server judges that first: every value with the shape of
+a path goes through the jail, and one outside the roots is refused before the
+helper starts. A component that waits - a design-time connection with nothing to
+open, a package that hangs while loading - ends at the helper's budget with
+`RENDER-007` (measured 2026-10-14 with a `TFDConnection` set to `Connected = True`
+and no database to open: 60 s, nothing written, no process left). A process budget
+and program firewall rules do not by themselves restrict all of a component's
+filesystem access or its network: agents of low trust get a sandbox workspace. A
+tighter confinement of the helper (a low-integrity token, measured on 2026-10-09 to
+paint identically but refused by the service's window station in session 0) is a
+decision for a later version, not a requirement of this one.
 
 ## Tests, in three layers
 

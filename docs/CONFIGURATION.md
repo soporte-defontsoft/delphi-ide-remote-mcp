@@ -142,7 +142,14 @@ own version's files. One tool shares its converter on purpose: `delphi_styles` c
 with the one shipped with the server (`DelphiStyleConvert.exe`, built with RAD Studio 13's
 FireMonkey), whatever the server's Delphi. The renderers of `delphi_designer preview` are built
 with RAD Studio 13 too: they load its runtime packages (`rtl370.bpl`...) and the design
-packages of the server's Delphi, and they are only tested against BDS 37.0.
+packages of the server's Delphi, and they are only tested against BDS 37.0. A preview runs
+the constructors and property setters of the installed components with the service's
+account, as the IDE does when it opens a form: the components are the ones the operator
+installed and trusts; what the agent writes - the form - is judged first (a value with the
+shape of a path outside the roots is refused before the renderer starts), and a component
+that waits (a design-time connection with nothing to open) ends at the renderer's budget
+(`RENDER-007`, 60 s, nothing left behind). Agents of low trust get a sandbox workspace; the
+rest is in `src/Render/README.md`.
 
 RAD Studio 13.1 and 13.2 are both BDS 37.0: one replaces the other, they never sit side by
 side. For that, one machine (or VM) per version, each with its own server - the same model,
