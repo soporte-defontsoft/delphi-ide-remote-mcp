@@ -1130,7 +1130,11 @@ begin
   Result := AResult;
   try
     if not EsFallo(Result) and FormAncho(TPath.GetFullPath(APath), K) then
-      Result := ConNota(Result, 'encodingNote', NotaDeFormAncho(TPath.GetFileName(APath), EncName(K)));
+      Result := ConNota(Result, 'encodingNote', NotaDeFormAncho(TPath.GetFileName(APath), EncName(K)))
+    // ...y uno SIN BOM cuyos bytes son UTF-8: el IDE y dcc lo leen en ANSI
+    // (READ-009; lint daba CLEAN, medido con dcc el 13-oct)
+    else if not EsFallo(Result) then
+      Result := ConNota(Result, 'encodingNote', NotaDeUtf8SinBomDe(TPath.GetFullPath(APath)));
   except
     // una nota no tumba la respuesta de lo que ya se hizo
   end;

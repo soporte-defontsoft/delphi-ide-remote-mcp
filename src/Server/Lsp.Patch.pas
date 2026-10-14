@@ -701,6 +701,11 @@ function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
   de los escritores sueltos, de la tanda y del changeset. }
 function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
   const AOmite: TArray<string> = nil): TArray<string>;
+{ La nota de un fichero EN DISCO que es UTF-8 sin BOM y que dcc lee en ANSI
+  (READ-008 de un fuente, READ-009 de un form), por la puerta de leer y EL
+  detector: la de delphi_read, para quien no lo lee entero (designer lint).
+  '' si no es el caso o no se puede leer. }
+function NotaDeUtf8SinBomDe(const APath: string): string;
 { Mientras dure (True ... False, anidable, de ESTE hilo: las llamadas HTTP van
   a la vez), los escritores no juzgan el form en cada edicion: el juicio es
   del fichero ENTERO, como la estructura, y lo hace quien agrupa sobre lo que
@@ -3672,7 +3677,24 @@ begin
   Result := '';
   if (K = ekUtf8) and (PaginaAnsi <> CP_UTF8) and EsRutaDeFuente(APath) and HayByteAlto(B) and
      not IsAscii(VistaPascal(DecodeBytes(B, K), [cpCodigo, cpCadena, cpDirectiva])) then
-    Result := MsgFmt(SN_READ_UTF8_SIN_BOM_FMT, [EncName(ekAnsi)]);
+    Result := MsgFmt(SN_READ_UTF8_SIN_BOM_FMT, [EncName(ekAnsi)])
+  // ...y un FORM sin BOM se lee en ANSI, como el IDE y dcc: si sus bytes son
+  // UTF-8 - lo dice EL detector sin la regla de los forms -, lo que se ve
+  // (la o partida en dos letras) es lo que tendra el programa, y lint daba
+  // CLEAN (medido con dcc el 13-oct, testsserver\mide-dfm)
+  else if (K = ekAnsi) and (PaginaAnsi <> CP_UTF8) and EsRutaDeDesigner(APath) and HayByteAlto(B) and
+     (DetectEnc(B, False) = ekUtf8) then
+    Result := MsgFmt(SN_READ_FORM_UTF8_SIN_BOM_FMT, [EncName(ekAnsi)]);
+end;
+
+function NotaDeUtf8SinBomDe(const APath: string): string;
+begin
+  try
+    var B := LeeBytes(APath, [ltJaula]);
+    Result := NotaDeUtf8SinBom(APath, DetectEnc(B, EsRutaDeDesigner(APath)), B);
+  except
+    Result := ''; // una nota no tumba nada
+  end;
 end;
 
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;

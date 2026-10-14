@@ -5156,6 +5156,18 @@ const
     'comments do no harm). The way out is the IDE''s: open it and save it, ' +
     'and the IDE writes it as UTF-8 with a BOM, which the compiler reads ' +
     'right. This server keeps the file as it is (its bytes are UTF-8).';
+  { ...y un FORM sin BOM cuyos bytes son UTF-8: el IDE, dcc y este servidor lo
+    leen en ANSI (medido con dcc el 13-oct, testsserver\mide-dfm: la o de
+    Configuracion partida en dos letras en el exe), y lint daba CLEAN. Aqui
+    el IDE no lo arregla al guardar - lo lee ya partido -: convertirlo es
+    cambiar la codificacion, del usuario. %s = la pagina ANSI. }
+  SN_READ_FORM_UTF8_SIN_BOM_FMT =
+    '[READ-009] NOTE: this form has no BOM and its bytes are UTF-8, but the ' +
+    'IDE, the compiler and this server read a form without BOM as ANSI ' +
+    '(%s): each letter above ASCII comes out as two letters (mojibake), and ' +
+    'that is what you see here and what the program gets. Converting it ' +
+    'to UTF-8 with a BOM fixes it - a change of encoding, so the user''s ' +
+    'call. This server keeps the file as it is.';
 
   SR_DESIGNER_EMPTY =
     '[DSGN-014 DENIED] The file contains no object.';

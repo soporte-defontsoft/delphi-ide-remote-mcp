@@ -256,6 +256,18 @@ the MCP `initialize` response (`serverInfo.version`).
   chains of them. `test_enlace_colgante_1182` (K1 and K3 red against
   production). 2w of the 2r reviewer.
 
+- **A form without BOM whose bytes are UTF-8 is named, not called clean.**
+  The IDE, the compiler and this server read a form without BOM in the
+  machine's ANSI page, so a `.dfm` written as UTF-8 by some other tool shows
+  - and compiles - each accented letter as two (measured with dcc). Nothing
+  said so: `designer lint` answered `CLEAN`. `delphi_read` and `designer
+  lint` (and the designer's writers, with the wide-form note) now say it
+  (`READ-009`) when the house detector, without the forms' rule, would read
+  the bytes as UTF-8. Converting the file is a change of encoding, so it is
+  left to the user. `test_form_utf8_sin_bom_1182` (F1 and F2 red against
+  production; the controls - with a BOM, and a real ANSI form - stay
+  quiet).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole
