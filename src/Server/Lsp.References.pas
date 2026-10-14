@@ -105,6 +105,11 @@ function DefinicionCorregida(AResp: TJSONObject; const APath: string;
   punto 6 de la 1.18.2. }
 function UbicacionDeLsp(AResult: TJSONValue; out AUri: string;
   out ALinea, ACol: Integer): Boolean;
+{ Si la uri que contesta el motor viene SIN carpeta (file:///UEmo.pas):
+  DelphiLSP pierde la de una ruta con un caracter mas alla de U+FFFF - un
+  emoji -, medido en crudo el 14-oct (punto 5 de la 1.18.2). Se pregunta
+  ANTES que "de fuera": la unidad no esta fuera, es el motor (LSP-043). }
+function UriSinCarpeta(const AUri: string): Boolean;
 
 implementation
 
@@ -125,7 +130,8 @@ uses
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
   Lsp.Patch, // LeeTexto: la puerta de leer
   Lsp.ConfigFabricator, // MotorPuedeEnsenar: EL juez de "fuera" de lo que dice el motor
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Rutas;            // EsRutaAbsoluta: LA regla de ruta completa
 
 type
   TCandidate = record
@@ -437,6 +443,11 @@ begin
   Result := True;
 end;
 
+function UriSinCarpeta(const AUri: string): Boolean;
+begin
+  Result := (AUri <> '') and not EsRutaAbsoluta(TLspClient.UriToPath(AUri));
+end;
+
 // la respuesta entera: su result, por EL lector (UbicacionDeLsp)
 function DefinitionLocation(AResp: TJSONObject; out AUri: string;
   out ALine: Integer): Boolean;
@@ -640,6 +651,11 @@ begin
   // EL juez de LSP-038 (MotorPuedeEnsenar, la jaula + el IDE + su
   // biblioteca). Con ReadPathDenied, la RTL con la zona apagada daba LSP-014
   // y sus dos causas, falsas las dos (revisor de P2b, B4; medido, F8d)
+  // ...y antes, una uri SIN carpeta: el motor la pierde con un emoji en la
+  // ruta, y daba LSP-014 "de fuera" de una unidad que estaba al lado (LSP-043)
+  if UriSinCarpeta(TargetUri) then
+    raise Exception.CreateFmt(MsgText(SR_LSP_MOTOR_SIN_CARPETA_FMT),
+      [Ident, TLspClient.UriToPath(TargetUri)]);
   if not MotorPuedeEnsenar(TLspClient.UriToPath(TargetUri)) then
     raise Exception.CreateFmt(MsgText(SR_REFS_TARGET_OUTSIDE_FMT), [Ident]);
 

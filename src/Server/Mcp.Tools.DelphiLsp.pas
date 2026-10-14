@@ -213,25 +213,31 @@ end;
   nivel) es de algo que el motor no puede ensenar (MotorPuedeEnsenar: ni de
   la jaula ni del IDE; la RTL y los componentes instalados salen como
   siempre, este o no encendida la zona de biblioteca). }
-function UbicacionDeFuera(V: TJSONValue): Boolean;
+// las uri / targetUri de una respuesta del motor, a cualquier profundidad:
+// EL recorrido de quien juzga sus ubicaciones (de fuera, sin carpeta)
+function UrisDeLaRespuesta(V: TJSONValue): TArray<string>;
 begin
-  Result := False;
+  Result := [];
   if V is TJSONArray then
   begin
     for var Item in TJSONArray(V) do
-      if UbicacionDeFuera(Item) then
-        Exit(True);
+      Result := Result + UrisDeLaRespuesta(Item);
   end
   else if V is TJSONObject then
     for var Pair in TJSONObject(V) do
       if MatchText(Pair.JsonString.Value, ['uri', 'targetUri']) and
          (Pair.JsonValue is TJSONString) then
-      begin
-        if not MotorPuedeEnsenar(TLspClient.UriToPath(Pair.JsonValue.Value)) then
-          Exit(True);
-      end
-      else if UbicacionDeFuera(Pair.JsonValue) then
-        Exit(True);
+        Result := Result + [Pair.JsonValue.Value]
+      else
+        Result := Result + UrisDeLaRespuesta(Pair.JsonValue);
+end;
+
+function UbicacionDeFuera(V: TJSONValue): Boolean;
+begin
+  Result := False;
+  for var U in UrisDeLaRespuesta(V) do
+    if not MotorPuedeEnsenar(TLspClient.UriToPath(U)) then
+      Exit(True);
 end;
 
 { El identificador bajo el cursor, para nombrarlo en una negativa. }
@@ -263,7 +269,15 @@ function NegativaDeFuera(AResp: TJSONObject; const APath: string;
   ALine, AChar: Integer): string;
 begin
   Result := '';
-  if (AResp <> nil) and UbicacionDeFuera(AResp.GetValue('result')) then
+  if AResp = nil then
+    Exit;
+  // ...y antes, una uri SIN carpeta: el motor la pierde con un emoji en la
+  // ruta, y LSP-038 decia "de fuera" de una unidad que estaba al lado
+  for var U in UrisDeLaRespuesta(AResp.GetValue('result')) do
+    if UriSinCarpeta(U) then
+      Exit(MsgFmt(SR_LSP_MOTOR_SIN_CARPETA_FMT, [IdentificadorEn(APath, ALine, AChar),
+        TLspClient.UriToPath(U)]));
+  if UbicacionDeFuera(AResp.GetValue('result')) then
     Result := MsgFmt(SR_LSP_DEF_FUERA_FMT, [IdentificadorEn(APath, ALine, AChar)]);
 end;
 

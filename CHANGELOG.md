@@ -268,6 +268,16 @@ the MCP `initialize` response (`serverInfo.version`).
   production; the controls - with a BOM, and a real ANSI form - stay
   quiet).
 
+- **When the engine loses a folder, the answer says so.** Under a folder
+  with a character beyond U+FFFF (an emoji), DelphiLSP answers a definition
+  with a URI that has no folder - `file:///UEmo.pas`, the line right
+  (measured talking to DelphiLSP directly). This server took it for a path
+  outside the workspace and refused with `LSP-038` / `LSP-014`, "resolves to
+  a definition OUTSIDE this workspace", about a unit right next to it.
+  Definition, hover and references now say what is going on (`LSP-043`).
+  `test_motor_sin_carpeta_1182` (E1 and E2 red against production; E3, the
+  same project in a plain folder, answers). Point 5.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

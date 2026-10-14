@@ -746,6 +746,17 @@ const
     'ask about a smaller scope (a specific file as path) or use ' +
     'delphi_search wholeword=true, which pages.';
 
+  { El motor contesta una ubicacion SIN carpeta (file:///UEmo.pas): DelphiLSP
+    la pierde con un caracter mas alla de U+FFFF en la ruta (un emoji), medido
+    en crudo el 14-oct. LSP-038 y LSP-014 decian "de fuera" de una unidad que
+    estaba al lado (punto 5 de la 1.18.2). %s = el identificador, el fichero. }
+  SR_LSP_MOTOR_SIN_CARPETA_FMT =
+    '[LSP-043 NOT_FOUND] The engine answered "%s" in %s WITHOUT its folder: ' +
+    'DelphiLSP loses the folder of a path that has a character beyond ' +
+    'U+FFFF (an emoji, for one) - measured. The unit is not outside this ' +
+    'workspace. To use definition, hover and references there, take that ' +
+    'character out of the folder''s name.';
+
   { "No lo se" y "se que no" no son lo mismo, y acababan en el mismo saco.
     Un nombre escrito en un comentario o dentro de una cadena no lo resuelve
     el motor -ahi no hay simbolo- igual que no resuelve lo que se quedo sin
