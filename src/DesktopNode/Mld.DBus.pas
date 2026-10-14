@@ -31,9 +31,9 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    { Abre libdbus y se engancha al bus de sesion. False deja el motivo
-      en Error. }
-    function Conectar: Boolean;
+    { Abre libdbus y se engancha al bus de sesion, o al de SISTEMA con
+      ADeSistema (ahi vive login1). False deja el motivo en Error. }
+    function Conectar(ADeSistema: Boolean = False): Boolean;
     { El nombre unico que el bus asigna a esta conexion (p.ej. ':1.123'):
       la prueba de que la conexion es real y esta viva. }
     function NombreUnico: string;
@@ -56,6 +56,14 @@ type
       dar en Xwayland rootless. Deja en AFichero la ruta del PNG que escribe
       el escritorio. }
     function CapturarEscritorio(out AFichero: string; AMs: Integer): Boolean;
+    { El PRIMER valor de la respuesta como booleano, suelto o dentro de un
+      variant (las propiedades de D-Bus llegan asi): el gemelo de
+      PrimeraCadena. }
+    function PrimerBooleano(AResp: Pointer; out AValor: Boolean): Boolean;
+    { Si la sesion de logind AId esta bloqueada, segun login1 (bus de
+      SISTEMA: Conectar(True)). False si login1 no contesta, con el motivo
+      en Error: quien llama decide entonces seguir sin saberlo. }
+    function SesionBloqueada(const AId: string; out ABloqueada: Boolean): Boolean;
   end;
 
 implementation
@@ -69,9 +77,10 @@ uses
 function DesdeUri(const AUri: string): string; forward;
 
 const
-  { dbus-shared.h: el enumerado empieza en SESSION. Poner 1 aqui conecta al
-    bus del SISTEMA y todo parece funcionar - medido 18-sep. }
+  { dbus-shared.h: el enumerado empieza en SESSION; 1 es el bus del SISTEMA
+    (medido 18-sep), donde vive login1. }
   DBUS_BUS_SESSION = 0;
+  DBUS_BUS_SYSTEM = 1;
   DBUS_TYPE_STRING = Ord('s');
   DBUS_TYPE_ARRAY = Ord('a');
   DBUS_TYPE_STRUCT = Ord('r');
@@ -212,7 +221,7 @@ begin
     Uno('dbus_message_get_member', Pointer(@DbusMsgMiembro));
 end;
 
-function TConexionBus.Conectar: Boolean;
+function TConexionBus.Conectar(ADeSistema: Boolean): Boolean;
 var
   Err: TDBusError;
 begin
@@ -229,7 +238,10 @@ begin
   FillChar(Err, SizeOf(Err), 0);
   DbusErrorInit(@Err);
   try
-    FConn := DbusBusGet(DBUS_BUS_SESSION, @Err);
+    if ADeSistema then
+      FConn := DbusBusGet(DBUS_BUS_SYSTEM, @Err)
+    else
+      FConn := DbusBusGet(DBUS_BUS_SESSION, @Err);
     if DbusErrorIsSet(@Err) then
     begin
       FError := Format('%s: %s', [Texto(Err.Nombre), Texto(Err.Mensaje)]);
@@ -557,6 +569,71 @@ begin
   if Llamar(RD, ARuta, RD + '.Session', 'Stop', [], Resp) then
     DbusMsgUnref(Resp);
   Result := True;
+end;
+
+function TConexionBus.PrimerBooleano(AResp: Pointer; out AValor: Boolean): Boolean;
+var
+  It, Sub: array[0..TAM_ITER - 1] of Byte;
+  Bool32: LongBool;
+begin
+  AValor := False;
+  Result := False;
+  Bool32 := False;
+  FillChar(It, SizeOf(It), 0);
+  if not DbusIterInit(AResp, @It) then
+    Exit;
+  if DbusIterTipo(@It) = DBUS_TYPE_VARIANT then
+  begin
+    FillChar(Sub, SizeOf(Sub), 0);
+    DbusIterEntrar(@It, @Sub);
+    if DbusIterTipo(@Sub) <> DBUS_TYPE_BOOLEAN then
+      Exit;
+    DbusIterLeer(@Sub, @Bool32);
+  end
+  else
+  begin
+    if DbusIterTipo(@It) <> DBUS_TYPE_BOOLEAN then
+      Exit;
+    DbusIterLeer(@It, @Bool32);
+  end;
+  AValor := Bool32;
+  Result := True;
+end;
+
+{ login1 da el objeto de la sesion por su id (GetSession) y ese objeto dice
+  LockedHint. Es lo que loginctl show-session -p LockedHint pregunta; el
+  fichero de /run/systemd/sessions no lo trae (medido 14-oct-2026). }
+function TConexionBus.SesionBloqueada(const AId: string; out ABloqueada: Boolean): Boolean;
+const
+  LOGIN1 = 'org.freedesktop.login1';
+var
+  Resp: Pointer;
+  Ruta: string;
+begin
+  ABloqueada := False;
+  Result := False;
+  if not Llamar(LOGIN1, '/org/freedesktop/login1', LOGIN1 + '.Manager', 'GetSession',
+    [AId], Resp) then
+    Exit;
+  try
+    if not PrimeraCadena(Resp, Ruta) then
+    begin
+      FError := MsgText(SF_NODE_LOGIN1_SIN_RUTA_SESION);
+      Exit;
+    end;
+  finally
+    DbusMsgUnref(Resp);
+  end;
+  if not Llamar(LOGIN1, Ruta, 'org.freedesktop.DBus.Properties', 'Get',
+    [LOGIN1 + '.Session', 'LockedHint'], Resp) then
+    Exit;
+  try
+    Result := PrimerBooleano(Resp, ABloqueada);
+    if not Result then
+      FError := MsgText(SF_NODE_LOGIN1_SIN_LOCKEDHINT);
+  finally
+    DbusMsgUnref(Resp);
+  end;
 end;
 
 function TConexionBus.AdmiteDescriptores: Boolean;

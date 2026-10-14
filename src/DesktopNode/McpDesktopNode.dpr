@@ -308,6 +308,7 @@ var
   Hizo: Boolean;
   Ojos: TOjos;
   SinOjos: Boolean;
+  Bloqueada: Boolean;
 
   { La lista de ventanas que viaja CON la captura (David, 24-sep): detras de
     cada CAPTURE=, en el mismo formato que el nodo Windows y en pixeles de
@@ -400,6 +401,25 @@ begin
       Writeln('  ', NODO_NO_PUDE, ' ', Sesion.Motivo);
       Exit;
     end;
+    { Con la sesion BLOQUEADA el portal contesta "code 2" a secas y el
+      agente reintentaba creyendo roto el nodo (Hermes, 13-oct-2026). El
+      juez es login1 (bus de SISTEMA): el LockedHint de ESA sesion. Se le
+      pregunta antes de pedir nada y se dice que pedir; si login1 no
+      contesta (sin systemd, sin bus de sistema) se prueba el portal igual,
+      como hace Mld.Sesion cuando no puede mirar. }
+    if Sesion.Id <> '' then
+    begin
+      Bus := TConexionBus.Create;
+      try
+        if Bus.Conectar(True) and Bus.SesionBloqueada(Sesion.Id, Bloqueada) and Bloqueada then
+        begin
+          Writeln('  ', NODO_NO_PUDE, ' ', MsgFmt(SF_NODE_SESION_BLOQUEADA_FMT, [Sesion.Usuario]));
+          Exit;
+        end;
+      finally
+        Bus.Free;
+      end;
+    end;
     Bus := TConexionBus.Create;
     try
       if not Bus.Conectar then
@@ -410,6 +430,16 @@ begin
 
       Writeln(MsgText(SN_NODE_PANTALLA_ESCALA_CAPTURA));
       Escala := 1.0;
+      { CERO monitores es el escritorio de una sesion remota cuyo cliente se
+        ha ido (GNOME Remote Desktop: la pantalla ERA ese cliente): el
+        portal contesta "code 2" a secas y no hay donde pulsar. Medido en el
+        Zorin el 14-oct-2026 tras desconectar la RDP, con la sesion bloqueada
+        o no. Se dice que pedir, en vez de dejar que el portal se niegue. }
+      if Bus.LeerPantallas(Pantallas) and (Length(Pantallas) = 0) then
+      begin
+        Writeln('  ', NODO_NO_PUDE, ' ', MsgFmt(SF_NODE_SIN_MONITOR_FMT, [Sesion.Usuario]));
+        Exit;
+      end;
       if Bus.LeerPantallas(Pantallas) and (Length(Pantallas) > 0) then
       begin
         Escala := Pantallas[0].Escala;

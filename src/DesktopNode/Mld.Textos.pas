@@ -468,6 +468,31 @@ const
     'that user and try again: without a desktop there is nothing to see ' +
     'or to click.';
 
+  { Lo dice el nodo (McpDesktopNode.dpr) tras preguntar a login1: con la
+    sesion bloqueada el portal contestaba "code 2" a secas y el agente
+    reintentaba creyendo roto el nodo (Hermes, 13-oct-2026). }
+  SF_NODE_SESION_BLOQUEADA_FMT =
+    'The graphical session of user %s on this machine is LOCKED (logind ' +
+    'LockedHint): the desktop will neither be captured nor take input ' +
+    'until it is unlocked there. Ask the operator to unlock it (or to ' +
+    'reconnect their remote session) and try again; retrying before that ' +
+    'changes nothing.';
+
+  SF_NODE_LOGIN1_SIN_RUTA_SESION =
+    'login1 returned no session object for that session id';
+
+  SF_NODE_LOGIN1_SIN_LOCKEDHINT =
+    'login1 did not answer LockedHint with a boolean';
+
+  { Lo dice el nodo cuando Mutter no tiene ningun monitor: la pantalla de
+    una sesion remota es su cliente, y se ha ido (medido 14-oct-2026). }
+  SF_NODE_SIN_MONITOR_FMT =
+    'The desktop of user %s on this machine has NO monitor right now: its ' +
+    'screen was the remote session that disconnected, so there is nothing ' +
+    'to capture and nowhere to click. Ask the operator to reconnect their ' +
+    'remote desktop (and unlock it) and try again; retrying before that ' +
+    'changes nothing.';
+
   // Textos que estaban en linea en Mld.Dyn.pas (el resto, 27-sep-2026)
   SF_NODE_LIBRERIA_NO_ABIERTA =
     'the library is not open';

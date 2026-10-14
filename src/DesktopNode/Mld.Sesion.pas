@@ -17,7 +17,9 @@
   ninguno trae UID= se vuelve a los sockets. Sin logind, los sockets de ESTE
   usuario: wayland-N en su XDG_RUNTIME_DIR y X<n> de /tmp/.X11-unix que sean
   suyos. Si no se puede mirar, se da por buena: mas vale probar el portal
-  que negar una sesion que existe. }
+  que negar una sesion que existe. El Id (el nombre del fichero) es lo que
+  login1 pide por GetSession para decir si ESA sesion esta bloqueada: el
+  fichero no trae el bloqueo (medido en Zorin 18 el 14-oct-2026). }
 
 interface
 
@@ -28,6 +30,8 @@ type
     Display: string;         // el X de ESTE usuario: ':0', ':10'... ('' si no hay)
     WaylandDisplay: string;  // 'wayland-0'... ('' si no hay)
     Motivo: string;          // si no hay: por que, en palabras para el operador
+    Id: string;              // el id de logind de la sesion ('3'); '' si no la dio logind
+    Usuario: string;         // el nombre de ESTE usuario, para los motivos
   end;
 
 { La carpeta de ejecucion de ESTE usuario: XDG_RUNTIME_DIR, o la de su uid si
@@ -86,6 +90,7 @@ var
   ConUid: Boolean;
 begin
   Result := Default(TSesionGrafica);
+  Result.Usuario := NombreDelUsuario;
   MiUid := IntToStr(getuid);
   try
     // los sockets de ESTE usuario dan el WAYLAND_DISPLAY y el DISPLAY que
@@ -124,6 +129,7 @@ begin
             Mejor := Estado;
             Result.Hay := True;
             Result.Tipo := Tipo;
+            Result.Id := TPath.GetFileName(F);
             if (Tipo = 'x11') and (L.Values['DISPLAY'] <> '') then
               Result.Display := L.Values['DISPLAY'];
           end;
@@ -141,7 +147,7 @@ begin
     Exit;
   end;
   if not Result.Hay then
-    Result.Motivo := MsgFmt(SF_NODE_SIN_SESION_GRAFICA_FMT, [NombreDelUsuario]);
+    Result.Motivo := MsgFmt(SF_NODE_SIN_SESION_GRAFICA_FMT, [Result.Usuario]);
 end;
 
 end.

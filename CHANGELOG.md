@@ -50,6 +50,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_desktop` on a Linux target says what is wrong with the user's
+  session, instead of "the portal refused the screenshot (code 2)".** Hermes
+  got that answer and retried believing the node broken (13-oct); measured
+  on the Zorin on 14-oct, step by step: with the session merely LOCKED the
+  portal still captures (the lock screen, with the window list), so that was
+  not it; when the remote desktop that opened the session DISCONNECTS, the
+  desktop is left without a monitor (the client was the screen), the portal
+  answers code 2, and about twenty seconds later GNOME Remote Desktop ends
+  the whole session, taking every program inside with it - which is how the
+  deployed application "died during the lock". The node now asks login1 for
+  the `LockedHint` of its session (over the system bus, the judge `loginctl`
+  uses) and refuses a locked desktop by name (nothing to act on, and no
+  typing into an unlock prompt); asks Mutter how many monitors there are
+  and, with none, says the remote session is gone and what to ask for; and
+  the existing "no open graphical session" covers the session once it has
+  ended. `status` carries the same line. Where login1 or Mutter do not
+  answer, the portal is tried as before. The node's bus connection takes
+  which bus to join; the session detector also reports the session's logind
+  id and its user. The tool's description now names a locked session of
+  either system.
+
 - **A file written whole that already says the same is not rewritten, and
   not copied first.** `delphi_paserver get-sdk` composes the `.sdk` from
   the same inputs every time, so a re-run (what its description asks for

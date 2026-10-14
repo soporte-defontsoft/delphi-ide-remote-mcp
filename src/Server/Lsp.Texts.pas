@@ -2322,9 +2322,10 @@ const
     'on Linux the X11/Xwayland ones, which is every FMX application - ' +
     'native Wayland windows show in the image but are not listed) and ' +
     'graphicalEnv. The target needs a graphical session open for the user ' +
-    'PAServer runs as: a headless box, a locked Windows or a Windows ' +
-    'service (session 0) has nothing to show (command=status says what to ' +
-    'ask the operator for). It is a permission of its own: ' +
+    'PAServer runs as: a headless box, a locked session (Linux or Windows) ' +
+    'or a Windows service (session 0) has nothing to show (command=status ' +
+    'says what to ask the operator for, and so does any capture). It is a ' +
+    'permission of its own: ' +
     'AllowRemoteRun=1, the profile''s host in RemoteHosts and ' +
     'McpDesktopNode (or all) in RemoteRunProjects - only the operator sets ' +
     'them, and a refusal names the missing one.';
