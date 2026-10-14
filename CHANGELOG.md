@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **`delphi_upload`'s quarantine no longer deletes or overwrites a
+  read-only `<name>.corrupt`.** An upload whose final sha256 does not match
+  is set aside as `<name>.corrupt`, and a previous quarantine there goes to
+  the trash first. The upload's gate judged `<name>` only, and the move and
+  the delete ran on the derived name with no gate of their own. Measured
+  on 14-oct, against 1.18.3: a `<name>.corrupt` that `ReadOnlyPaths` named
+  was deleted and replaced by the bad upload. The derived name now goes
+  through the same gate as the upload's own destination before anything
+  touches it; when the quarantine is refused (or the previous one cannot be
+  copied), the bad file stays under its name and the error says so and why
+  (`UPLOAD-012`). Until now that error said "I set it aside in `<name>`"
+  even when it had not. `test_cuarentena_puerta_1184` (red against
+  production).
+
 ## [1.18.3] - 2026-10-14
 
 Security patch. `delphi_build` could WRITE OUTSIDE THE WORKSPACE: a

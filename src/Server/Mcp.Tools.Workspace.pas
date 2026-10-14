@@ -1691,6 +1691,13 @@ begin
         // its real name means the next reader takes corruption for content:
         // park it aside and say where (field round 8).
         Quarantine := FullPath + '.corrupt';
+        // el destino DERIVADO, por la puerta de un destino como el de arriba:
+        // esa juzgo <nombre>, no <nombre>.corrupt, y un .corrupt que
+        // ReadOnlyPaths declara se borraba y se pisaba con la subida mala
+        // (2t de la 1.18.x, medido 14-oct). Las primitivas de abajo, solo
+        // sobre lo que la puerta acaba de aprobar
+        var SinCuarentena := WriteTargetDenied(Quarantine);
+        if SinCuarentena = '' then
         try
           // A second failed upload used to overwrite the first quarantine
           // with no copy at all - the one write path that did not respect
@@ -1706,11 +1713,21 @@ begin
           TFile.Move(FullPath, Quarantine);
           Return.AddPair('quarantined', Quarantine);
         except
-          Quarantine := '';
+          on E: Exception do
+          begin
+            // nunca vacio: vacio es "apartado"
+            SinCuarentena := E.Message.Trim;
+            if SinCuarentena = '' then
+              SinCuarentena := E.ClassName;
+          end;
         end;
-        if Quarantine = '' then
-          Quarantine := FullPath;
-        Return.AddPair('error', MsgFmt(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]));
+        // sin apartar, el error lo dice: decia "lo aparte en" con la ruta
+        // de siempre
+        if SinCuarentena = '' then
+          Return.AddPair('error', MsgFmt(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]))
+        else
+          Return.AddPair('error', MsgFmt(SR_UPLOAD_SHA_MISMATCH_SIN_CUARENTENA_FMT,
+            [SinCuarentena, FullPath]));
       end;
     end;
     Result := Return.ToJSON;

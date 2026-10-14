@@ -6003,6 +6003,15 @@ const
     'assembled differs from the source, so I do NOT leave it published ' +
     'under its name. I set it aside in %s. Resend from offset=0.';
 
+  { ...y cuando no se pudo apartar (la puerta niega el <nombre>.corrupt, o
+    el de antes no se deja copiar): decia "lo aparte en" con la ruta de
+    siempre, y seguia con su nombre (2t de la 1.18.x) }
+  SR_UPLOAD_SHA_MISMATCH_SIN_CUARENTENA_FMT =
+    '[UPLOAD-012 INVALID_PARAM] The sha256 does NOT match: what was ' +
+    'assembled differs from the source, and I could NOT set it aside (%s). ' +
+    'It is still under its name %s with WRONG content: do not use it. ' +
+    'Resend from offset=0.';
+
   { Decia "una por dia, la de esta manana" y backup es la copia SELLADA de
     lo que habia justo antes (sexta revision; el texto se quedo atras,
     septima). }
