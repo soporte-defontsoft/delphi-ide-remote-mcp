@@ -43,9 +43,16 @@ handshake.
 
 - `delphi_read` pages at 400 lines per call - read in RANGES.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
-- A `READ-007` or `READ-008` note on a read (bytes that do not fit the
-  file's encoding; a UTF-8 source without a BOM, which the compiler reads
-  as ANSI) says what to do: follow it, and never write U+FFFD back.
+- A `READ-007`, `READ-008` or `READ-009` note on a read (bytes that do not
+  fit the file's encoding; a UTF-8 source - or a text form - without a BOM,
+  which the compiler and the IDE read as ANSI: the note shows both readings)
+  says what to do: follow it, and never write U+FFFD back. Converting a
+  file's encoding is the operator's decision, never a side effect of an edit.
+- A folder name the engine cannot carry in a URI - a character beyond
+  U+FFFF (an emoji) or half a character, anywhere in a project's tree -
+  makes DelphiLSP lose folders or lint nothing: the answer says so
+  (`LSP-043`, `LSP-044`, `LSP-045`) and the fix is the folder's name
+  (`delphi_move`), not another call.
 - **An API you do not know** (what a class or routine is for, how it is
   used): `delphi_docs search query=<it>` and then `read id=<a result>` -
   the RAD Studio help installed on the server, in small pieces. Do not
@@ -422,6 +429,8 @@ You always work inside ONE workspace: what its declaration grants is ALL
 there is (an absent switch is off, an absent list is empty - hosts,
 projects, devices, vault). A refusal naming `RemoteHosts`,
 `RemoteRunProjects` or `AdbAllowedDevices` is your workspace's declared
-reach, not a server bug: `delphi_report` it if you need more.
+reach, not a server bug: `delphi_report` it if you need more. A `403` with
+`SYS-034` on the handshake means your token is right and its workspace is
+closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.18.1 -->
+<!-- contract reviewed: v1.18.2 -->

@@ -32,7 +32,7 @@ Y la otra mitad (David, 1-oct-2026): una entrada que no sea una ruta con
 letra - una ruta de red, un prefijo de dispositivo - no se carga, y el arranque
 lo dice. El host de estas pruebas no existe: nada de esto sale a la red.
 
-  U1  un workspace cuya unica raiz es una ruta de red queda CERRADO (401), en
+  U1  un workspace cuya unica raiz es una ruta de red queda CERRADO (403 SYS-034 con su token; 401 hasta la 1.18.2), en
       todas sus escrituras: \\\\host\\..., //host/..., \\\\?\\UNC\\..., \\\\.\\UNC\\...,
       \\\\?\\GLOBALROOT\\... y \\\\?\\C:\\...; y la que empieza por UNA barra
       (\\carpeta: la raiz de la unidad actual del proceso)
@@ -42,7 +42,7 @@ lo dice. El host de estas pruebas no existe: nada de esto sale a la red.
   U5  ...y la ruta de red que NO se cargo esta fuera para su agente (GUARD-002)
   U4  una PROTECCION (ReadOnlyRoots, ReadOnlyPaths, VaultPath) que no se carga
       - una ruta de red, o una entrada que no parsea - CIERRA el workspace
-      (401): sin ella, lo que nombra podria escribirse. El aviso lo dice.
+      (403 SYS-034): sin ella, lo que nombra podria escribirse. El aviso lo dice.
       Tambien la que empieza por una barra (ReadOnlyPaths=\\dentro se cargaba
       contra la unidad del proceso y "dentro" se escribia: medido)
   U6  las del entorno (modo local, por stdio): una raiz en ruta de red no se
@@ -277,12 +277,13 @@ def init(tok):
 try:
     check('L1 (guarda) el servidor atiende al workspace cuya raiz esta en una letra que no existe',
           init('falta-lr') == 200)
-    check('L4a (control) el workspace de los dos tokens iguales esta cerrado: 401',
-          init('cerrado-lr') == 401)
+    # un workspace CERRADO con su token bueno: 403 SYS-034 (J9 de la 1.18.2; era 401)
+    check('L4a (control) el workspace de los dos tokens iguales esta cerrado: 403 (SYS-034)',
+          init('cerrado-lr') == 403)
 
     sts = {n: init('%s-lr' % n.lower()) for n in SIN_LETRA}
-    check('U1 un workspace cuya unica raiz no es una ruta con letra queda CERRADO: 401 en sus %d escrituras' % len(SIN_LETRA),
-          all(st == 401 for st in sts.values()), sts)
+    check('U1 un workspace cuya unica raiz no es una ruta con letra queda CERRADO: 403 en sus %d escrituras' % len(SIN_LETRA),
+          all(st == 403 for st in sts.values()), sts)
     cm = mc.Http(PORT, 'mixto-lr', t=120, respaldo_json=True)
     cm.session('letras-red-mixto')
     r = cm.call_msg('delphi_workspace', {}, 120)
@@ -297,8 +298,8 @@ try:
     check('U9 con el token de LECTURA de otro workspace en el entorno del servidor, quien entra por HTTP con su token de escritura ESCRIBE',
           os.path.isfile(f9) and not mc.fallo(t), t[:200])
     sts = {n: init('%s-lr' % n.lower()) for n in PROTEGEN}
-    check('U4 una proteccion que no se carga CIERRA el workspace: 401 (referencia, solo lectura, vault, y sus comodines)',
-          all(st == 401 for st in sts.values()), sts)
+    check('U4 una proteccion que no se carga CIERRA el workspace: 403 (referencia, solo lectura, vault, y sus comodines)',
+          all(st == 403 for st in sts.values()), sts)
     sts = {n: init('%s-lr' % n.lower()) for n in SOLO}
     check('R1 (guarda) una entrada de ReadOnlyPaths fuera de las raices se carga: los %d workspaces atienden' % len(SOLO),
           all(st == 200 for st in sts.values()), sts)

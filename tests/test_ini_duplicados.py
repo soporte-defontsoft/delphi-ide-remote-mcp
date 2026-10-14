@@ -2,12 +2,14 @@
 """Duplicados en settings.ini (David, 2026-09-23): un copia-pega futuro puede
 dejar el mismo token en dos workspaces, la misma clave dos veces en una
 seccion o la misma seccion dos veces. TIniFile lee lo primero y calla; el
-servidor CIERRA los workspaces afectados (401) y lo dice al arrancar.
+servidor CIERRA los workspaces afectados (403 SYS-034 con su token: era 401
+hasta J9 de la 1.18.2) y lo dice al arrancar.
 
-  D1  dos workspaces con el mismo Token=: los dos 401
-  D2  Token= igual a ReadOnlyToken= en uno: 401 (con cualquiera de los dos)
-  D3  clave repetida dentro de la seccion (Roots= dos veces): 401
-  D4  seccion escrita dos veces: 401 con el token de cualquiera de las dos
+  D1  dos workspaces con el mismo Token=: los dos cerrados (403)
+  D2  Token= igual a ReadOnlyToken= en uno: 403 (con cualquiera de los dos)
+  D3  clave repetida dentro de la seccion (Roots= dos veces): 403
+  D4  seccion escrita dos veces: 403 con el token de la primera, 401 con el de
+      la segunda (que no es el de ningun workspace cargado)
   D5  el workspace limpio de al lado sigue entrando, y se llama como se llama
   D6  el arranque nombra cada caso (AVISO ...)
 
@@ -62,10 +64,11 @@ def workspace_name(tok, sid):
 
 
 try:
-    check('D1 token compartido: el primero 401', init('t-uno')[0] == 401, init('t-uno'))
-    check('D2 Token = ReadOnlyToken: 401', init('t-tres')[0] == 401, init('t-tres'))
-    check('D3 clave repetida en la seccion: 401', init('t-cuatro')[0] == 401, init('t-cuatro'))
-    check('D4 seccion repetida: 401 con el primer token', init('t-cinco')[0] == 401, init('t-cinco'))
+    # el token bueno de un workspace CERRADO: 403 SYS-034 (J9 de la 1.18.2; era 401)
+    check('D1 token compartido: el primero 403 (cerrado)', init('t-uno')[0] == 403, init('t-uno'))
+    check('D2 Token = ReadOnlyToken: 403 (cerrado)', init('t-tres')[0] == 403, init('t-tres'))
+    check('D3 clave repetida en la seccion: 403 (cerrado)', init('t-cuatro')[0] == 403, init('t-cuatro'))
+    check('D4 seccion repetida: 403 (cerrado) con el primer token', init('t-cinco')[0] == 403, init('t-cinco'))
     check('D4 seccion repetida: 401 con el segundo token', init('t-cinco-bis')[0] == 401, init('t-cinco-bis'))
     code, sid = init('t-limpio')
     check('D5 el workspace limpio entra', code == 200 and sid, (code, sid))

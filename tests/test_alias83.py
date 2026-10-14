@@ -29,7 +29,7 @@ A11 las tools vault_* por el alias 8.3: el fichero de gobierno y la
 A12 copy=true y delphi_package de una carpeta con el vault de OTRO
     workspace: el vault no va (los otros recorredores ya lo saltaban)
 A13 una raiz declarada por su ruta de red (UNC) NO se carga, aunque el recurso
-    exista y responda: su token da 401 (desde la 1.9.0 un sitio se declara con
+    exista y responda: su token da 403 SYS-034, cerrado (desde la 1.9.0 un sitio se declara con
     su letra; antes se leia por su forma larga y por la corta, y \\\\srvhost\\
     volvia a su host); y el UNC de una carpeta de MI raiz sigue fuera
 A5 y A10 llevan su control: una temporal normal SI se purgo (sin el, un
@@ -278,8 +278,9 @@ try:
         "clientInfo": {"name": "alias83-unc", "version": "1"}}})
     if HAYUNC:
         # (con el recurso contestando: que no se carga no es porque no este)
-        check('A13 una raiz declarada por su ruta de red (%s) no se carga: su token da 401' % UNC_DECL,
-              st == 401, st)
+        # (403 SYS-034 desde J9 de la 1.18.2: el token es el bueno y su workspace esta cerrado; era 401)
+        check('A13 una raiz declarada por su ruta de red (%s) no se carga: su token da 403 (SYS-034, cerrado)' % UNC_DECL,
+              st == 403, st)
         r = cli.call_msg('delphi_read', {'path': unc(CONOTRO) + '\\propio.txt'}, 120)
         check('A13 ...y el UNC de una carpeta de mi raiz sigue fuera (GUARD-002)',
               mc.abre(mc.texto(r, True), 'SR_JAIL_FMT'), mc.texto(r, True)[:200])

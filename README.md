@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: latest 1.18.1 (published today, validated by its batteries); stable 1.16.0 (a week in production and Hermes's nightly validation behind it).** Covered by 153 end-to-end batteries — 5,166 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: latest 1.18.2 (published today, validated by its batteries); stable 1.16.0 (a week in production and Hermes's nightly validation behind it).** Covered by 185 end-to-end batteries — 5,510 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -223,7 +223,7 @@ switch and its own allowlist; it will not arrive by accident.
 | [`delphi_definition`](docs/TOOLS.md#delphi_definition) | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` for the interface half |
 | [`delphi_signature`](docs/TOOLS.md#delphi_signature) | Signature help for the call under the cursor - the IDE's Ctrl+Shift+Space |
 | [`delphi_hover`](docs/TOOLS.md#delphi_hover) | Type/signature of an identifier usage |
-| [`delphi_completion`](docs/TOOLS.md#delphi_completion) | Code completion candidates |
+| [`delphi_completion`](docs/TOOLS.md#delphi_completion) | Code completion candidates, filtered by the identifier under the cursor (`prefix`, `matching`) and capped with a note that says how many there are |
 | [`delphi_references`](docs/TOOLS.md#delphi_references) | Find references: a text scan, then every candidate validated by the compiler engine - homonyms rejected, names in comments and strings listed apart as `mentions` |
 | [`delphi_diagnostics`](docs/TOOLS.md#delphi_diagnostics) | Error Insight on demand: real compiler codes (E/W/H) with exact positions, no build |
 | [`delphi_read`](docs/TOOLS.md#delphi_read) | Encoding-correct numbered reads (ANSI - the machine's code page - / UTF-8 ± BOM / UTF-16 / UTF-32, detected for real); a binary `.dfm` is shown as text |
