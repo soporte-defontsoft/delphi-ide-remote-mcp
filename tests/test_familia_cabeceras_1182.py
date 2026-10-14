@@ -22,6 +22,13 @@ si): eso es honrado y se queda.
   G2 sus dos cabeceras, confirmadas
   G3 control: el metodo de la clase generica, 4 confirmadas
 
+Y un metodo DE CLASE (M2 del revisor de cierre, medido): el lector de cabeceras
+(ColumnaDelNombreDeRutina) no admitia 'class' delante, y las cabeceras de
+TDer.Q salian como llamadas:
+  H1 references de TBase.Q (class procedure): las cabeceras de TDer.Q con
+     header:true (ROJO en produccion)
+  H2 la llamada TDer.Q: via override sin header
+
 Uso:  python tests/test_familia_cabeceras_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import json
@@ -46,6 +53,13 @@ ESCAPADOS = ('unit UEscapados;\n\ninterface\n\ntype\n  TCosa = class\n  public\n
              'begin\nend;\n\nprocedure Usa;\nvar\n  C: TCosa;\n  L: TLista<Integer>;\nbegin\n  C := TCosa.Create;\n'
              '  C.&Begin;\n  L := TLista<Integer>.Create;\n  L.Agrega(1);\n  L.Agrega(2);\n  C.Free;\n  L.Free;\n'
              'end;\n\nend.\n')
+
+
+CLASE = ('unit UClase;\n\ninterface\n\ntype\n  TBaseC = class\n  public\n    class procedure Q; virtual;\n  end;\n\n'
+         '  TDerC = class(TBaseC)\n  public\n    class procedure Q; override;\n  end;\n\nprocedure UsaC;\n\n'
+         'implementation\n\nclass procedure TBaseC.Q;\nbegin\nend;\n\nclass procedure TDerC.Q;\nbegin\n  inherited;\nend;\n\n'
+         'procedure UsaC;\nbegin\n  TBaseC.Q;\n  TDerC.Q;\nend;\n\nend.\n')
+LC = CLASE.split('\n')
 
 
 def hits(r):
@@ -97,6 +111,20 @@ try:
     check('G2 las dos cabeceras de &Begin, confirmadas', 7 in h and 19 in h, sorted(h))
     r = srv.call('delphi_references', {'path': pas, 'line': 12, 'character': 15}, t=240)
     check('G3 control: el metodo de la clase generica, 4 confirmadas', len(hits(r)) == 4, sorted(hits(r)))
+
+    srv.call('delphi_create', {'kind': 'unit', 'name': 'UClase', 'project': os.path.join(d, 'P.dpr'),
+                               'content': CLASE}, t=120)
+    pas = os.path.join(d, 'UClase.pas')
+    decl = LC.index('    class procedure Q; virtual;')
+    r = srv.call('delphi_references', {'path': pas, 'line': decl, 'character': LC[decl].index('Q')}, t=240)
+    h = hits(r)
+    cabeceras = [LC.index('    class procedure Q; override;'), LC.index('class procedure TDerC.Q;')]
+    check('H1 las cabeceras de un metodo de CLASE del hijo: via override y header:true',
+          all(h.get(n, {}).get('via') == 'override' and h.get(n, {}).get('header') is True for n in cabeceras),
+          r[:700])
+    llamada = LC.index('  TDerC.Q;')
+    check('H2 la llamada TDerC.Q: via override sin header',
+          h.get(llamada, {}).get('via') == 'override' and 'header' not in h.get(llamada, {}), h.get(llamada))
 finally:
     srv.cierra()
 

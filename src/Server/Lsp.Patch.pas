@@ -5408,7 +5408,7 @@ begin
       begin
         if (Idx < 0) or (Idx + J > High(AfterVista)) then
           Break;
-        if not TRegEx.IsMatch(AfterVista[Idx + J], '^' + PatronPalabraDeRutina + '\b', [roIgnoreCase]) then
+        if not TRegEx.IsMatch(AfterVista[Idx + J], '^(?:class\s+)?' + PatronPalabraDeRutina + '\b', [roIgnoreCase]) then
           Continue;
         var Encima := '';
         if Idx + J > 0 then

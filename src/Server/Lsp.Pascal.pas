@@ -294,8 +294,11 @@ var
   M: TMatch;
 begin
   // los niveles con sus genericos (TGen<T>.Bar) y el nombre con su '&' de
-  // palabra reservada (TFoo.&Begin): la columna es la del nombre
-  M := TRegEx.Match(ALinea, '^\s*(?:' + PatronPalabraDeRutina + '|property)\s+(?:' +
+  // palabra reservada (TFoo.&Begin): la columna es la del nombre. Con su
+  // 'class' delante (class procedure, class operator, class property): sin
+  // el, las cabeceras de un metodo de clase no eran cabeceras y references
+  // las contaba como llamadas (M2 del revisor de cierre de la 1.18.2, medido)
+  M := TRegEx.Match(ALinea, '^\s*(?:class\s+)?(?:' + PatronPalabraDeRutina + '|property)\s+(?:' +
     PATRON_NIVEL_DE_CABECERA + '\s*\.\s*)*&?(' + PATRON_IDENT + ')', [roIgnoreCase]);
   if M.Success then
     Result := M.Groups[1].Index - 1 // TMatch es 1-based; las columnas del LSP, 0-based

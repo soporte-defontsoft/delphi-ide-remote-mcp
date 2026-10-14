@@ -325,6 +325,14 @@ the MCP `initialize` response (`serverInfo.version`).
   (F1, F2 and F5 red against production; the controls - with a BOM, and a
   real ANSI form - stay quiet).
 
+- **A class method's headers are headers too.** The reader of a routine's
+  header (`ColumnaDelNombreDeRutina`) did not take `class` in front, so the
+  headers of `class procedure TDer.Q` came out of `references` as calls
+  (`via: override` without `header`) and `delphi_definition` did not see them
+  as headers either; every other header pattern of the server already took
+  it. `test_familia_cabeceras_1182` H1 (red against production). M2 of the
+  closing reviewers.
+
 - **When the engine loses a folder, the answer says so.** Under a folder
   with a character beyond U+FFFF (an emoji), DelphiLSP answers a definition
   with a URI that has no folder - `file:///UEmo.pas`, the line right
