@@ -86,6 +86,16 @@ type
     [Test] procedure LaBarraFinalNoCambiaLaClave;
   end;
 
+  { EL sello de una operacion (Lsp.Casa.SelloUnico): su texto se ordena como
+    nacio, tambien dentro de un tick del reloj (la purga de las copias del IDE
+    se queda con las mas nuevas por el nombre; test_sdk fallaba "por azar"). }
+  [TestFixture]
+  TSelloUnicoTests = class
+  public
+    [Test] procedure CadaSelloVaDetrasDelAnterior;
+    [Test] procedure ElTextoEsElQueLeeSuPatron;
+  end;
+
   { LA PUERTA DE LEER (Lsp.Patch.LugarDeLecturaDenegado, LeeTexto, LeeBytes)
     en los lugares que no dependen de la maquina: el temporal y la casa del
     servidor, que son del ejecutor (su carpeta). La jaula y el IDE los mide la
@@ -160,7 +170,8 @@ uses
   Lsp.Discovery,      // la instalacion del IDE
   Lsp.Rutas,          // EsRutaAbsoluta
   LspTests.FormRender, // CreaUnion
-  Lsp.Mascara;
+  Lsp.Mascara,
+  System.RegularExpressions;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -627,6 +638,29 @@ begin
     ClaveDeCarpeta('C:\Casa\Servidor\'));
 end;
 
+{ TSelloUnicoTests }
+
+procedure TSelloUnicoTests.CadaSelloVaDetrasDelAnterior;
+var
+  Antes, Ahora: string;
+begin
+  // dos mil seguidos caben en pocos ticks: con la hora sola, muchos salian
+  // iguales hasta el trozo aleatorio, y este los ordenaba al azar
+  Antes := SelloUnico;
+  for var I := 1 to 2000 do
+  begin
+    Ahora := SelloUnico;
+    if CompareStr(Antes, Ahora) >= 0 then
+      Assert.Fail(Format('sello %d: %s no va detras de %s', [I, Ahora, Antes]));
+    Antes := Ahora;
+  end;
+end;
+
+procedure TSelloUnicoTests.ElTextoEsElQueLeeSuPatron;
+begin
+  Assert.IsTrue(TRegEx.IsMatch(SelloUnico, '\A' + SELLO_UNICO_PATRON + '\z'), SelloUnico);
+end;
+
 { TPuertaDeLeerTests }
 
 procedure TPuertaDeLeerTests.Prepara;
@@ -986,6 +1020,7 @@ initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
   TDUnitX.RegisterTestFixture(TBarridoDeUnidadesTests);
   TDUnitX.RegisterTestFixture(TClaveDeCarpetaTests);
+  TDUnitX.RegisterTestFixture(TSelloUnicoTests);
   TDUnitX.RegisterTestFixture(TPuertaDeLeerTests);
   TDUnitX.RegisterTestFixture(TPuertaDeEscribirTests);
   TDUnitX.RegisterTestFixture(TLugarDeRedTests);

@@ -149,6 +149,17 @@ the MCP `initialize` response (`serverInfo.version`).
   every entry, its warnings carry the form's path in front and the batch's
   reader of `***` warnings does not pick them up).
 
+- **The server's stamps sort as they were born, also within one clock tick.**
+  The stamp of an operation (a copy of an IDE file the server is about to
+  overwrite or remove, a capture, a remote-run job) is the time to the
+  millisecond plus a random piece; Windows' clock moves in ticks of about
+  15 ms, so two stamps of the same tick had the same time and the random
+  piece ordered them. The purge that keeps the 10 newest copies of an IDE
+  file by their name could then delete the NEWEST one (`test_sdk` failed
+  "by chance": it was this). Within the process the stamp is now strictly
+  increasing; its text is the same, so its reader did not change. A unit
+  test generates 2,000 in a row (red with the old stamp).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

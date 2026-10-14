@@ -218,6 +218,7 @@ uses
   System.RegularExpressions,
   System.Generics.Collections,
   System.Hash,
+  System.SyncObjs, // TInterlocked: el sello estrictamente creciente
   Lsp.NetDrives,        // SinBarraFinal
   Lsp.Rutas,            // LongCanonical: la clave de una carpeta, por su forma canonica
   Lsp.Settings,         // CurrentWorkspaceName: el workspace del buzon lo pone el token
@@ -359,9 +360,35 @@ begin
   Result := LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
 end;
 
+var
+  // el ultimo milisegundo sellado (el de TTimeStamp, desde el 1-1-1)
+  GUltimoSello: Int64 = 0;
+
 function SelloUnico: string;
+var
+  Visto, Ms: Int64;
+  TS: TTimeStamp;
+  A, M, D: Word;
 begin
-  Result := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now) + '-' + FragmentoUnico;
+  // La hora de Windows avanza a saltos del tick (unos 15,6 ms): dos sellos del
+  // mismo tick salian con la MISMA hora y los ordenaba el trozo aleatorio. La
+  // purga de las copias del IDE se queda con las 10 mas nuevas POR EL NOMBRE
+  // (CopiasDelIde) y podia borrar la ultima (test_sdk "por azar", 1.18.2). En
+  // el proceso, estrictamente creciente: uno del mismo milisegundo que el
+  // ultimo, o de antes, es el ultimo + 1. El texto, el de siempre
+  // (SELLO_UNICO_PATRON lo sigue leyendo).
+  repeat
+    Visto := TInterlocked.Read(GUltimoSello);
+    TS := DateTimeToTimeStamp(Now);
+    Ms := Int64(TS.Date) * MSecsPerDay + TS.Time;
+    if Ms <= Visto then
+      Ms := Visto + 1;
+  until TInterlocked.CompareExchange(GUltimoSello, Ms, Visto) = Visto;
+  TS.Date := Ms div MSecsPerDay;
+  TS.Time := Ms mod MSecsPerDay;
+  DecodeDate(TimeStampToDateTime(TS), A, M, D);
+  Result := Format('%.4d%.2d%.2d-%.2d%.2d%.2d%.3d-%s', [A, M, D, TS.Time div 3600000,
+    TS.Time div 60000 mod 60, TS.Time div 1000 mod 60, TS.Time mod 1000, FragmentoUnico]);
 end;
 
 const
