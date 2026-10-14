@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-14 (current release v1.18.2; 42 tools).
+Status page as of 2026-10-14 (current release v1.18.3; 42 tools).
 
 ## Delivered
 

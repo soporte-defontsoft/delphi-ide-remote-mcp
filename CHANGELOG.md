@@ -6,7 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.18.3] - 2026-10-14
+
+Security patch. `delphi_build` could WRITE OUTSIDE THE WORKSPACE: a
+`.dproj` whose `BRCC_OutputDir` pointed outside the roots, with version
+information on, got its `.res` written there - and an agent can bring such
+a `.dproj` in with `delphi_upload` or `delphi_git clone`. A build could
+also rewrite a `ReadOnlyPaths` file inside its output folder, or the
+project's own version `.res` when it was read-only. Every version up to
+1.18.2 has it; operators should update. The build's gate now judges
+`BRCC_OutputDir` like the other output folders, refuses an output folder
+that holds a protected place, and puts the `.res` files the build writes
+next to the `.dproj` through the write gate (`BUILD-029`). Also: `delphi_git
+log` says when there are more commits than the 20 it shows (`GIT-067`), and
+the form-class binding warnings name the form file instead of ".dfm" for a
+`.fmx`.
 
 ### Fixed
 
