@@ -7848,6 +7848,12 @@ const
     'map it to a letter with "reconnect at sign-in" and declare the place ' +
     'by that letter: at startup the server tries to connect it for itself.';
 
+  { ...y la entrada esta escrita en la forma VIRTUAL que ven los agentes
+    (srvc:\...): el operador copia lo que le ensena un agente (2ae de la
+    1.18.2: en ReadOnlyPaths pasaba por relativa y no protegia nada). }
+  SF_GUARD_SITIO_VIRTUAL =
+    'It is written in the VIRTUAL form the agents see (srvc:\ is the C:\ ' +
+    'of this machine): the settings name a place by its real drive letter.';
   SL_GUARD_PROTECCION_NO_CARGADA_FMT =
     SL_MARCA_AVISO +
     ': %s has an entry that is NOT loaded, %s: it does not parse, or it ' +

@@ -231,6 +231,19 @@ the MCP `initialize` response (`serverInfo.version`).
   by reading and by the capture batteries (none of the three can be
   provoked without a desktop node of one's own); a unit test for the namer.
 
+- **A place in the settings written in the agents' virtual form is not
+  loaded, and the warning says why.** An operator who copies a path from
+  what an agent sees writes `srvc:\...`. In `ReadOnlyPaths` that passed for
+  a relative entry, was glued to every root (`<root>\srvc:\...`), loaded,
+  and protected nothing - the agent wrote right where it was meant to be
+  read-only - while the startup warning talked about an entry "outside
+  every root" (2ae, measured). The reader of a settings entry now leaves
+  the virtual form out, through the one recognizer of that form; like every
+  protection that does not load, its workspace admits nobody until it is
+  fixed, and the warning says it is the virtual form the agents see.
+  `test_sitio_virtual_1182` (V1 and V2 red against production; V3, the same
+  entry with its letter, protects and the workspace works).
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

@@ -318,7 +318,8 @@ uses
   Lsp.Texts,
   Lsp.Codificacion,     // BomUtf8En y KindDeBom: el BOM delante de una seccion, el UTF-16 BE
   Lsp.Rutas,
-  Lsp.Casa;             // ServerDir: la casa del settings.ini
+  Lsp.Casa,             // ServerDir: la casa del settings.ini
+  Lsp.Mascara;          // EmpiezaPorUnidadVirtual: la forma que ven los agentes
 
 type
   { A token-scoped sandbox from a [Workspace.<name>] section. }
@@ -512,7 +513,11 @@ end;
   esta escrita con su letra, y no es un sitio (medido, tercera revision). }
 function EntradaDeSitio(const V: string; ARelativaVale: Boolean): Boolean;
 begin
-  Result := (V <> '') and (V.IndexOfAny(['*', '?']) < 0) and
+  // ...ni la forma VIRTUAL que ven los agentes (srvc:\...): en ReadOnlyPaths
+  // pasaba por relativa, se pegaba a cada raiz ('<raiz>\srvc:\...') y no
+  // protegia nada, con un aviso que hablaba de otra cosa (2ae de la 1.18.2,
+  // medido). Por EL reconocedor de esa forma (Lsp.Mascara)
+  Result := (V <> '') and not EmpiezaPorUnidadVirtual(V) and (V.IndexOfAny(['*', '?']) < 0) and
     not CharInSet(V[1], ['\', '/']) and
     (ARelativaVale or (LetraDeRuta(V) <> #0)) and
     not ((LetraDeRuta(V) <> #0) and (Length(V) > 2) and
@@ -905,7 +910,8 @@ begin
   else
     Msg := SL_GUARD_SITIO_NO_CARGADO_FMT;
   for S in AFuera do
-    GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(Msg, [ADonde, S])];
+    GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(Msg, [ADonde, S]) +
+      IfThen(EmpiezaPorUnidadVirtual(S), ' ' + MsgText(SF_GUARD_SITIO_VIRTUAL), '')];
   AFuera := nil;
 end;
 
