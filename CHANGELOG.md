@@ -160,6 +160,16 @@ the MCP `initialize` response (`serverInfo.version`).
   increasing; its text is the same, so its reader did not change. A unit
   test generates 2,000 in a row (red with the old stamp).
 
+- **`insert` reaches the end of a unit with prose after its final `end.`**
+  The compiler reads nothing after the final `end.`, but a note there that
+  said "end." again made `insert` refuse with `EDIT-049`: the boundary
+  wanted exactly one `end.` in the whole text, because two can be branches
+  of an `{$IFDEF}`. Now the ones after the final one count only when a
+  directive could make them final - the classifier of the house says where
+  directives are - and two `end.` in IFDEF branches are still refused.
+  `test_insert_tras_end_1182` (red against production; the IFDEF control
+  red with a mutant). B1 of the 8th reviewer, point 7.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

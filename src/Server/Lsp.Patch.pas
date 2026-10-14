@@ -4433,8 +4433,24 @@ begin
             var Atras := PosFront - 1;
             while (Atras >= 1) and not CharInSet(VistaTexto[Atras], [#10, #13]) and (VistaTexto[Atras] <= ' ') do
               Dec(Atras);
+            // ...y los 'end.' de DETRAS del final solo cuentan si una directiva
+            // puede hacerlos finales (ramas de un IFDEF): dcc no lee nada tras
+            // el end. final, y una prosa que decia "end." otra vez negaba el
+            // insert (B1 rev8 de la 1.18.2). La directiva, por EL clasificador
+            // (ClasesPascal), no por una busqueda de '{$'
+            var SoloSuEnd := (Length(EndsF) >= 1) and (EndsF[0].Ini = PosFront);
+            if SoloSuEnd and (Length(EndsF) > 1) then
+            begin
+              var Clases := ClasesPascal(Text);
+              for var PosD := PosFront to Length(Text) do
+                if Clases[PosD] = cpDirectiva then
+                begin
+                  SoloSuEnd := False;
+                  Break;
+                end;
+            end;
             FoundFront := ((Atras < 1) or CharInSet(VistaTexto[Atras], [#10, #13])) and
-              (not EsEnd or ((Length(EndsF) = 1) and (EndsF[0].Ini = PosFront)));
+              (not EsEnd or SoloSuEnd);
           end;
         finally
           UFront.Free;
