@@ -7513,6 +7513,16 @@ const
     'may move or go to recoverable trash inside the workspace, provided its ' +
     'metadata links stay inside the allowed locations.';
 
+  { Una carpeta que Windows no deja listar (EntradasDeCarpeta, Lsp.Guard): la
+    RTL la daba por VACIA, y la puerta de los metadatos la pasaba; luego la
+    copia la copiaba vacia y la purga borraba a medias (2g de la 1.18.x).
+    %s = la carpeta, %s = lo que dijo Windows. }
+  SR_GUARD_CARPETA_ILEGIBLE_FMT =
+    '[GUARD-040 DENIED] The folder "%s" cannot be listed (%s), so what it ' +
+    'holds cannot be checked: an operation on a tree that contains it is ' +
+    'refused rather than done blind, and nothing was changed. Its ' +
+    'permissions are the operator''s to fix.';
+
   { LA PUERTA DE LEER/ESCRIBIR (Lsp.Patch, decisions/puertas-diseno-2026-10-09):
     el fichero no esta en ninguno de los lugares que esa operacion puede tocar.
     %s = el fichero, %s = los lugares (SF_LUGAR_*, separados por comas). }

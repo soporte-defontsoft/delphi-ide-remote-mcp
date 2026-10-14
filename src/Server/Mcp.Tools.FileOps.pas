@@ -523,8 +523,8 @@ begin
     Exit(Denied);
   // An empty folder needs no copy: retrying a half-finished delete used to
   // dump the (empty) tree into the trash again on every attempt.
-  if TDirectory.Exists(Params.Path) and
-     (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
+  // (vacia DE VERDAD: una que no se deja listar no lo es; 2g de la 1.18.x)
+  if CarpetaVacia(Params.Path) then
   begin
     // la carpeta VACIA no pasa por el mudador: lo NUESTRO se suelta aqui. Una
     // carpeta que algo de fuera vacio (git, al cambiar de rama) con el motor
@@ -747,8 +747,7 @@ begin
     // "the original could NOT be taken away" read as "nothing happened",
     // while in fact the whole content had already moved out and only the
     // empty shell was left (measured 2026-08-25). Say which of the two it is.
-    if TDirectory.Exists(Params.Path) and
-       (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
+    if CarpetaVacia(Params.Path) then
       Result := MsgFmt(SN_FILE_DELETE_EMPTY_SHELL_FMT,
         [TPath.GetFileName(SinBarraFinal(Params.Path)), Trash])
     else

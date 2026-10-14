@@ -724,7 +724,7 @@ begin
       // mas bonita seria pagar dos veces el paseo justo en el caso malo.
       var Cuantas := 0;
       try
-        Cuantas := Length(TDirectory.GetFileSystemEntries(Root));
+        Cuantas := Length(EntradasDeCarpeta(Root));
       except
         Cuantas := 0;
       end;

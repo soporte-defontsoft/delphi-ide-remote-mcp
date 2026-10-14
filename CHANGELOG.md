@@ -23,6 +23,29 @@ the MCP `initialize` response (`serverInfo.version`).
   (`UPLOAD-012`). Until now that error said "I set it aside in `<name>`"
   even when it had not. `test_cuarentena_puerta_1184` (red against
   production).
+- **A folder the server cannot list is no longer taken for an empty one.**
+  The RTL's `TDirectory.GetFileSystemEntries` returns an empty list when
+  Windows refuses the listing (`FindFirst` fails, and `System.IOUtils` says
+  nothing). The gate that walks a tree before it is copied, moved, deleted
+  or purged ("what cannot be checked is not moved") therefore passed a
+  branch it had never seen. Measured on 14-oct, against 1.18.3, with a
+  subfolder whose listing was denied: `delphi_move copy=true` answered
+  `COPIED` with that subfolder copied EMPTY, and `purge=true` deleted half
+  the copy and advised to "retry in a moment". One lister now asks Windows
+  whether an empty answer is really empty (`EntradasDeCarpeta`, the error
+  of `FindFirstFile`): the walk fails closed with `GUARD-040`, which names
+  the folder and what Windows said, instead of `GUARD-033` ("is Git
+  metadata"), which it used to give when a walk failed. The temp purge's
+  "when in doubt, keep it" and `delphi_delete`'s "empty folder" check use
+  the same lister. `test_arbol_ilegible_1184` (red against production);
+  `test_paisaje` keeps `TDirectory.GetFileSystemEntries` in that one place.
+  On the way, the hard-delete gate checks its allow and deny lists before
+  it walks the tree for Git metadata: a delete those lists refuse no longer
+  pays for the walk (refusing `C:\Windows` used to walk all of it).
+  `test_purga_bordes_1184` guards three purge edges that had no battery (a
+  `.git` FILE whose `gitdir:` points outside the roots, a repository inside
+  a `__delphi-temp`, and the same with a link in its `.git`), and a unit
+  test now measures the gate's own refusal of a `.git` inside the trash.
 
 ## [1.18.3] - 2026-10-14
 

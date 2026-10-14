@@ -77,6 +77,13 @@ REGLAS = [
      'NotaDeCodificacionDeForm: LA nota de codificacion de un form (ancho, DSGN-121, o UTF-8 sin BOM, '
      'READ-009) para lint, los escritores del disenador, preview y el lint de delphi_edit/tanda/changeset '
      '(W9 del revisor de cierre de la 1.18.2: tres emisores, dos sin READ-009)'),
+    ('listar una carpeta sin saber si se dejo', r"TDirectory\.GetFileSystemEntries\s*\(",
+     [('Lsp.Guard.pas', 'EntradasDeCarpeta'),
+      ('Mld.Sesion.pas', 'PrimerSocketPropio'), ('Mld.X11.pas', 'TOjos.Diagnostico')],
+     'EntradasDeCarpeta: la RTL da por VACIA una carpeta que Windows no deja listar (FindFirst falla y '
+     'WalkThroughDirectory no dice nada): la puerta de los metadatos la pasaba, la copia la copiaba vacia '
+     'contestando COPIED y la purga borraba a medias (2g de la 1.18.x). El nodo de Linux, aparte: alli no '
+     'hay FindFirstFile y sus dos usos toleran el vacio'),
     ('nombre de un .sdk', r"\+\s*'\.sdk'",
      [('Lsp.Discovery.pas', 'NombreDeSdk')],
      'NombreDeSdk (fichero, clave del IDE, SDKName, sysroot: el mismo nombre; 1.16.0: 16 a mano)'),
@@ -730,6 +737,7 @@ PLANTADO = {
     'nombre de un .profile': "  F := TPath.Combine(Dir, Nombre + '.profile');",
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
+    'listar una carpeta sin saber si se dejo': "  for E in TDirectory.GetFileSystemEntries(Dir) do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",
     'leer un designer binario a mano': "  Err := DesignerFileToText(APath, Texto);",
     'la nota de codificacion de un form a mano': "  N := NotaDeFormAncho(Nombre, Enc);",

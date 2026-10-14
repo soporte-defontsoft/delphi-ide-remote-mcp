@@ -239,6 +239,13 @@ begin
   Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\capturas\__tmp-zz'), SR_BORRADO_DENEGADO_FMT), 'un __tmp- que no es del nombrador, no');
   Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\capturas\.tmp-abcd1234'), SR_BORRADO_DENEGADO_FMT), 'el prefijo viejo, sin __, no');
   Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\delphi-temp\x'), SR_BORRADO_DENEGADO_FMT), 'una carpeta que se llama casi igual pero sin __, no');
+  // la negativa PROPIA ante los metadatos git, dentro de lo desechable: P4 de
+  // test_purga_repo_118 la pide por la tool y la para antes la puerta de
+  // entrada, asi que esta no la media nadie (2g de la 1.18.x)
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\proyecto\__delphi-patch\20260918\repo\.git'),
+    SR_GUARD_GIT_METADATA_FMT), 'el .git de un repo de la papelera, no');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\proyecto\__delphi-temp\repo\.git\objects'),
+    SR_GUARD_GIT_METADATA_FMT), 'dentro de un .git de la temporal, no');
 end;
 
 procedure TImageTests.BorradoNuncaUnidadNiSistema;

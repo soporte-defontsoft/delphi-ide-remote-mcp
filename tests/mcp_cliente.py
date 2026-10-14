@@ -369,10 +369,15 @@ def borra(ruta):
     # unas pasadas: un proceso que acaba de morir (el servidor, un
     # renderizador suyo) suelta sus ficheros un poco despues, y una sola
     # pasada dejaba el arbol a medias en %TEMP% (segunda revision de la 1.17.0)
-    for _ in range(20):
+    for i in range(20):
         shutil.rmtree(ruta, onexc=quita_ro)
         if not os.path.exists(ruta):
             return
+        if i == 0:
+            # un deny de ilegible() que viajo con su carpeta (la operacion la
+            # movio): fuera en todo el arbol, o rmtree no entra nunca
+            subprocess.run(['icacls', ruta, '/remove:d', os.environ.get('USERNAME', ''), '/t', '/c', '/q'],
+                           capture_output=True)
         time.sleep(0.5)
 
 
@@ -392,6 +397,21 @@ def solo_lectura(ruta):
         yield ruta
     finally:
         solo_lectura_quita(ruta)
+
+
+@contextlib.contextmanager
+def ilegible(ruta):
+    """La CARPETA no se deja listar mientras dura el bloque: un deny de
+    "leer datos / listar" (RD) para el usuario que corre la bateria, que es el
+    del servidor que lanza, sin herencia. Al salir se quita el deny; si la
+    operacion la movio, lo quita borra() en el arbol que la contenga."""
+    yo = os.environ.get('USERNAME', '')
+    subprocess.run(['icacls', ruta, '/deny', yo + ':(RD)'], capture_output=True, check=True)
+    try:
+        yield ruta
+    finally:
+        if os.path.exists(ruta):
+            subprocess.run(['icacls', ruta, '/remove:d', yo], capture_output=True)
 
 
 def solo_lectura_quita(*rutas):

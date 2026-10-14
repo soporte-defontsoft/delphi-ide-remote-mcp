@@ -470,7 +470,8 @@ type
   ni copiar (esos son BorraArbol y CopiaArbol): el etiquetado de integridad
   de delphi_test cruzaba un junction con soAllDirectories y bajaba la
   etiqueta de un fichero de FUERA de la jaula (medido en vivo, 25-sep-2026).
-  Nunca lanza: una rama ilegible se salta.
+  Una rama ilegible se salta; con AFallaSiIlegible, lanza (GUARD-040: lo
+  que no se puede revisar no se da por revisado).
 
   AAlEnlace (opcional) recibe cada enlace que se encuentra, sin entrar
   en el: para quien necesita SABER que hay uno antes de hacer algo que
@@ -479,6 +480,18 @@ type
 procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
   const AAlEnlace: TVisitaRuta = nil; const AOmite: TOmiteAlCopiar = nil;
   AFallaSiIlegible: Boolean = False);
+
+{ LAS entradas de una carpeta (un nivel), o la negativa si Windows no deja
+  listarla (GUARD-040, lanzada). TDirectory.GetFileSystemEntries devuelve
+  VACIO cuando FindFirst falla (System.IOUtils, WalkThroughDirectory): una
+  carpeta sin permiso de listar parecia vacia, la puerta de los metadatos la
+  pasaba sin mirar, la copia la copiaba vacia contestando COPIED y la purga
+  borraba a medias (2g de la 1.18.x, medido el 14-oct). El juez es Windows:
+  el error de FindFirstFile. }
+function EntradasDeCarpeta(const ADir: string): TArray<string>;
+{ La carpeta existe y no tiene nada. False si no se deja listar: lo que no
+  se sabe vacio no se trata como vacio. }
+function CarpetaVacia(const ADir: string): Boolean;
 
 { LA regla de enlaces de quien RECORRE un arbol: se sigue solo si lo de
   detras se puede LEER en esta sesion. La usan el copiador, la decision de
@@ -2927,7 +2940,13 @@ begin
           Result := Motivo <> '';
         end, True);
     except
-      Motivo := MsgFmt(SR_GUARD_GIT_METADATA_FMT, [APath]);
+      // la carpeta que no se deja listar, con SU negativa (GUARD-040): esta
+      // decia "es metadato de git" y mandaba a buscar un .git que no habia
+      on E: Exception do
+        if EsFallo(E.Message) then
+          Motivo := E.Message
+        else
+          Motivo := MsgFmt(SR_GUARD_GIT_METADATA_FMT, [APath]);
     end;
   end;
   Result := Motivo;
@@ -2951,14 +2970,6 @@ begin
   if (Length(Full) <= 3) or (Full.StartsWith('\\') and
      (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_UNIDAD_O_RECURSO_ENTERO)]));
-  // un repositorio ENTERO (su .git dentro) se borra como se mueve: el arbol
-  // va entero y un enlace de sus metadatos no abre la jaula (AAdmiteArbolGit);
-  // que ADir SEA un .git, o este dentro de uno, sigue negado. Sin esto un
-  // repo mandado a la papelera no se iba nunca: ni purge=true ni la purga de
-  // 15 dias, que ademas se cortaba ahi (medido el 10-oct-2026, en la 1.18.0)
-  Result := MetadatosGitEnArbolDenegados(Full, True);
-  if Result <> '' then
-    Exit;
   // la ruta REAL del padre + el nombre (ver la nota de la interface)
   Real := RutaDelEnlace(Full);
   // (1) lista blanca
@@ -2993,6 +3004,15 @@ begin
     P := LugarProtegidoEn(SinBarraFinal(RealPath(Full)));
   if P <> '' then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgFmt(SF_GUARD_CONTIENE_LUGAR_PROTEGIDO_FMT, [P])]));
+  // (3) los metadatos git, lo ULTIMO: es lo unico que recorre el arbol, y
+  // un borrado que las listas ya niegan no lo paga (negar C:\Windows lo
+  // recorria entero; 2g de la 1.18.x). Un repositorio ENTERO (su .git
+  // dentro) se borra como se mueve: el arbol va entero y un enlace de sus
+  // metadatos no abre la jaula (AAdmiteArbolGit); que ADir SEA un .git, o
+  // este dentro de uno, sigue negado. Sin esto un repo mandado a la papelera
+  // no se iba nunca: ni purge=true ni la purga de 15 dias, que ademas se
+  // cortaba ahi (medido el 10-oct-2026, en la 1.18.0)
+  Result := MetadatosGitEnArbolDenegados(Full, True);
 end;
 
 { P es un enlace (junction o symlink, de carpeta o de fichero). }
@@ -3029,6 +3049,39 @@ begin
   end;
 end;
 
+function EntradasDeCarpeta(const ADir: string): TArray<string>;
+var
+  FD: TWin32FindData;
+  H: THandle;
+  Err: Cardinal;
+begin
+  Result := TDirectory.GetFileSystemEntries(ADir);
+  if Length(Result) > 0 then
+    Exit;
+  // vacio de la RTL = vacia DE VERDAD o FindFirst fallo: lo dice Windows
+  // (una carpeta vacia que no es raiz da '.' y '..')
+  // (el MISMO patron que FindFirst en WalkThroughDirectory)
+  H := FindFirstFile(PChar(IncludeTrailingPathDelimiter(ADir) + '*'), FD);
+  if H <> INVALID_HANDLE_VALUE then
+  begin
+    Winapi.Windows.FindClose(H);
+    Exit;
+  end;
+  Err := GetLastError;
+  if (Err <> ERROR_FILE_NOT_FOUND) and (Err <> ERROR_NO_MORE_FILES) then
+    raise EInOutError.Create(MsgFmt(SR_GUARD_CARPETA_ILEGIBLE_FMT,
+      [ADir, SysErrorMessage(Err).Trim]));
+end;
+
+function CarpetaVacia(const ADir: string): Boolean;
+begin
+  try
+    Result := TDirectory.Exists(ADir) and (Length(EntradasDeCarpeta(ADir)) = 0);
+  except
+    Result := False;
+  end;
+end;
+
 procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
   const AAlEnlace: TVisitaRuta; const AOmite: TOmiteAlCopiar;
   AFallaSiIlegible: Boolean);
@@ -3037,7 +3090,7 @@ var
   E: string;
 begin
   try
-    Entradas := TDirectory.GetFileSystemEntries(ADir);
+    Entradas := EntradasDeCarpeta(ADir);
   except
     if AFallaSiIlegible then
       raise;
@@ -3607,7 +3660,9 @@ begin
     Exit(False); // un fichero, o un enlace: lo de detras no se mira
   Result := False;
   try
-    for E in TDirectory.GetFileSystemEntries(AEntrada) do
+    // la que no se deja listar lanza, y en la duda, True (2g de la 1.18.x:
+    // la RTL la daba por vacia, "nada nuevo")
+    for E in EntradasDeCarpeta(AEntrada) do
       if TieneAlgoDesde(E, ACorte) then
         Exit(True);
   except
