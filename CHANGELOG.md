@@ -123,6 +123,17 @@ the MCP `initialize` response (`serverInfo.version`).
   text is the device's and half a character in a log must not stop the dump.
   `test_paisaje` declares it as a house of the encoder. Point 4.
 
+- **`adduses` in a `.dpr` finds a unit of the project anywhere in its tree,
+  and `remove-unit` with a path that does not exist says so.** `adduses` sent
+  a unit of the project to `add-unit` only when its `.pas` sat next to the
+  `.dpr`; one in `Domain\` went in as a library unit, without its path. It
+  now looks through the project's tree (the shared walker: readable links, no
+  IDE artifacts, no trash) and `USES-021` names the `.pas` it found.
+  `remove-unit` given an invented path removed the unit by its name and
+  answered "The file ... is still on disk" about a file that was not there;
+  it answers `CFG-112` now. `test_delphi_patch` and `test_project_units`
+  (a mutant each). Point 8.
+
 - **The designer's lists of names say when they are cut.** `DSGN-078` (no
   such component) and the list of components that fit a reference stopped at
   40 names without a word, so in a form of 161 the list looked whole

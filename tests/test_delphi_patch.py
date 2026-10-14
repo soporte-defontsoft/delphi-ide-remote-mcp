@@ -479,6 +479,14 @@ out = call('delphi_edit', {"path": DPRX, "adduses": "UDelProg"})
 check('adduses en un .dpr: una unidad DEL PROYECTO (su .pas al lado) remite a add-unit y no escribe',
       mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT') and 'add-unit' in out
       and open(DPRX, 'rb').read() == _antes, out[:300])
+# ...y una en una SUBCARPETA del proyecto tambien (solo se miraba la de al lado:
+# entraba como unidad de biblioteca, sin su ruta; punto 8 de la 1.18.2)
+os.makedirs(os.path.join(DIR, 'Dom'), exist_ok=True)
+open(os.path.join(DIR, 'Dom', 'UDomProg.pas'), 'wb').write(b'unit UDomProg;\r\ninterface\r\nimplementation\r\nend.\r\n')
+out = call('delphi_edit', {"path": DPRX, "adduses": "UDomProg"})
+check('adduses en un .dpr: una unidad del proyecto en una SUBCARPETA remite a add-unit, dice donde, y no escribe',
+      mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT') and 'Dom\\UDomProg.pas' in out
+      and open(DPRX, 'rb').read() == _antes, out[:300])
 DPKX = os.path.join(DIR, 'Paq.dpk')
 open(DPKX, 'wb').write(b'package Paq;\r\nrequires\r\n  rtl;\r\nend.\r\n')
 out = call('delphi_edit', {"path": DPKX, "adduses": "System.SysUtils"})

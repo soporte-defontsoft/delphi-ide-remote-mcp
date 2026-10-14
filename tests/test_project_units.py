@@ -334,6 +334,15 @@ check('remove-unit: fuera del .dproj', 'UManual' not in rd(DPROJ), '')
 check('remove-unit: el fichero sigue en disco', os.path.exists(hand))
 out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": hand})
 check('remove-unit: ausente informa', mc.es(out, 'SN_UNIT_ABSENT_FMT'), out)
+# ...con una ruta que NO existe, la unidad se encuentra por su nombre y la
+# respuesta no dice "still on disk" de un fichero que no esta (punto 8 de la
+# 1.18.2: removeuses en un .dpr remite a remove-unit, y la ruta la pone el agente)
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": hand})
+out = call('delphi_config', {"project": DPROJ, "command": "remove-unit",
+                             "path": os.path.join(VDIR, 'NoSuch', 'UManual.pas')})
+check('remove-unit con una ruta inventada: quitada por su nombre, CFG-112 (no "still on disk")',
+      mc.abre(out, 'SN_UNIT_REMOVED_SIN_FICHERO_FMT') and 'UManual' not in rd(DPR)
+      and 'UManual' not in rd(DPROJ), out[:300])
 # remove a form: CreateForm goes too
 out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": os.path.join(VDIR, 'UClientes.pas')})
 check('remove-unit form: QUITADA + CreateForm', mc.abre(out, 'SN_UNIT_REMOVED_FMT') and 'CreateForm' in out, out[:300])

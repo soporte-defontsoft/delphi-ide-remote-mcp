@@ -3125,7 +3125,7 @@ const
   { adduses en un .dpr (11.6, David 10-oct-2026): solo unidades de biblioteca }
   SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT =
     '[USES-021 INVALID_PARAM] %s is a unit of this project (its .pas is ' +
-    'next to %s): add it with delphi_config command=add-unit, which ' +
+    '%s, in the project''s folder): add it with delphi_config command=add-unit, which ' +
     'writes its in ''...'' path and registers the DCCReference in the ' +
     '.dproj. adduses in a .dpr is for library units (no path). Nothing ' +
     'was written.';
@@ -3200,6 +3200,13 @@ const
     '[CFG-054] REMOVED unit %s from project %s (%s%s%s). The file %s is ' +
     'still on disk; delete it with delphi_delete if you no longer want ' +
     'it. Backups in __delphi-patch.';
+
+  { ...y la ruta que se dio no existe: la unidad se encontro por su NOMBRE; la
+    de arriba decia "still on disk" de un fichero que no estaba (punto 8 de
+    la 1.18.2: removeuses en un .dpr remite aqui, y el agente pone la ruta) }
+  SN_UNIT_REMOVED_SIN_FICHERO_FMT =
+    '[CFG-112] REMOVED unit %s from project %s (%s%s%s). There is no file %s: ' +
+    'the unit was found by its name. Backups in __delphi-patch.';
 
   SN_UNIT_REMOVED_GONE_FMT =
     '[CFG-055] REMOVED unit %s from project %s (%s%s%s). The file %s ' +

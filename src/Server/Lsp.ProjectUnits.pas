@@ -1918,8 +1918,14 @@ begin
   // belongs to command=remove-unit. It was also landing inside delphi_delete's
   // own answer, three lines under "BORRADO ... moved to the trash", and made
   // the reader doubt what had happened (measured 2026-08-25).
-  Result := Format(IfThen(AFileGoesToo, MsgText(SN_UNIT_REMOVED_GONE_FMT),
-    MsgText(SN_UNIT_REMOVED_FMT)), [UnitName, TPath.GetFileName(Dpr),
+  // (con una ruta que no existe, la unidad se encontro por su nombre: decia
+  // "still on disk" de un fichero que no estaba; punto 8 de la 1.18.2)
+  var Plantilla := MsgText(SN_UNIT_REMOVED_FMT);
+  if AFileGoesToo then
+    Plantilla := MsgText(SN_UNIT_REMOVED_GONE_FMT)
+  else if not TFile.Exists(APasPath) then
+    Plantilla := MsgText(SN_UNIT_REMOVED_SIN_FICHERO_FMT);
+  Result := Format(Plantilla, [UnitName, TPath.GetFileName(Dpr),
     IfThen(InDpr, U.Keyword, '-'), IfThen(N > 0, ' + CreateForm', ''),
     IfThen(InDproj, MsgText(SF_USES_DCCREFERENCE_DEL_DPROJ), ''), TPath.GetFileName(APasPath)]);
 end;
@@ -2387,9 +2393,17 @@ var
   U: TUsesClause;
   Faltan, YaEstan: TArray<string>;
 begin
+  // una unidad del PROYECTO va por add-unit, con su ruta: la .pas de ese
+  // nombre al lado del .dpr o en cualquier carpeta de su arbol (EL
+  // recorredor: enlaces legibles; sin artefactos del IDE ni la papelera). Solo
+  // se miraba la de al lado: una en Domain\ entraba como unidad de
+  // biblioteca, sin su ruta (punto 8 de la 1.18.2)
+  var Dir := TPath.GetDirectoryName(ADpr);
   for var N in ANames do
-    if TFile.Exists(TPath.Combine(TPath.GetDirectoryName(ADpr), N + '.pas')) then
-      Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT, [N, TPath.GetFileName(ADpr)]));
+    for var F in WalkFiles(Dir, N + '.pas') do
+      if not SkipIdeArtifacts(F) then
+        Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT,
+          [N, ExtractRelativePath(IncludeTrailingPathDelimiter(Dir), F)]));
   EnterFileEdit;
   try
     if not TFile.Exists(ADpr) then
