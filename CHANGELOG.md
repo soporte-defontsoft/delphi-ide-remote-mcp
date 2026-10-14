@@ -176,17 +176,39 @@ the MCP `initialize` response (`serverInfo.version`).
   an unnamed one (`object TTimer`) was written and answered `DSGN-142`
   "Placed where the IDE's own writer keeps it". Unnamed children now count,
   as `(unnamed TTimer #1)`, and that order is refused with the IDE's own
-  (`DSGN-136`). A parent with no Name was looked up by its class and
+  (`DSGN-136`). They are matched with the IDE's list by class: the ones of
+  an ancestor (written first) are not the form's, and one the IDE writes
+  under another parent (a `TTimer` nested by hand in a `TPanel` goes to the
+  root) is not a sibling to judge. A parent with no Name was looked up by its class and
   answered `DSGN-143` "loaded the form without TPanel"; it says what is
   going on now (`DSGN-150`). And `insert`/`set parent=` gave a new control
   the next TabOrder among the children IN THE FILE: in a panel inherited
   with two buttons it got 0, and the IDE puts it first in the keyboard
   order. The TabOrder is now the one the IDE's writer writes with the form
-  loaded as the designer loads it, ancestors included - the last one, as
-  when it is dropped in the designer; the own count only when the judge
-  cannot answer. `test_designer_sin_nombre_1182` and
-  `test_taborder_heredado_1182` (red against production; a mutant each).
-  B3 of the 6th reviewer and the inherited TabOrder, point 7.
+  loaded as the designer loads it, ancestors included, asked with the
+  control's own TabOrder line left out - the last one, as when it is
+  dropped in the designer, in VCL and in FMX; the own count when the judge
+  cannot answer or its writer gives none (FMX, a control in a panel), and
+  a TabOrder the agent passes in `props` is kept. `test_designer_sin_nombre_1182`
+  and `test_taborder_heredado_1182` (red against production; a mutant
+  each). B3 of the 6th reviewer and the inherited TabOrder, point 7, with
+  D1-D4 of the closing reviewers.
+
+- **An ancestor that changes while the designer's judge works stops the
+  write.** The judge (`set index=`/`before=`/`after=`/`parent=`, `insert`,
+  and `set` of a property the class stores by code) runs without the file
+  lock, loading the form with its ancestors and frames from its folder;
+  before writing, only the form and its unit were looked at again
+  (`DSGN-144`). An ancestor `.dfm`, a frame or the `.pas` that decides the
+  chain edited in the meantime let an order judged on the old one be
+  written. The renderer now says what it read and the sha256 of the bytes
+  it used (`READ=` in its protocol), and the server looks at every one of
+  them again under the lock: one that changed, or is gone, is `DSGN-144`
+  naming it, and nothing is written. The race itself cannot be timed from
+  outside (the renderer reads and exits in milliseconds): the comparison is
+  measured by unit tests, and `test_render_leido_1182` runs the real
+  renderer as the judge does (red against production). B5 of the 6th
+  reviewer, point 7.
 
 - **`delphi_styles` says why a name finds nothing, and one "no such style"
   for every command.** Hermes's `.style` had entries like

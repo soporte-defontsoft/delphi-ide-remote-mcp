@@ -22,6 +22,9 @@
   FR_WARNING = 'WARNING=';       // WARNING=<aviso> (repetible)
   FR_PARTIAL = 'PARTIAL=';       // PARTIAL=<ancestro o fichero> sin el que se leyo el form (repetible): el
                                  // juez del orden no juzga un form a medias (revisor 6 del 3.11, A2)
+  FR_READ = 'READ=';             // READ=<sha256>|<ruta> de un fichero que leyo para cargar el form - un
+                                 // ancestro, un frame, el .pas de la cadena - (repetible): el servidor lo
+                                 // vuelve a mirar antes de escribir lo juzgado (B5 rev6, 1.18.2)
   FR_WRITTEN = 'WRITTEN=';       // WRITTEN=<una linea del form como lo guarda el IDE> (repetible, con sus
                                  // blancos; --writeback on: el juez del orden, 3.11 de la 1.18.0)
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos

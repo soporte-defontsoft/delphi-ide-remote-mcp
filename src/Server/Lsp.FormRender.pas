@@ -62,6 +62,13 @@ type
     Nombre, Clase: string;
   end;
 
+  { Un fichero que el ayudante leyo para cargar el form (READ=<sha256>|<ruta>):
+    un ancestro, un frame, el .pas de la cadena, con la huella de los bytes
+    que uso (B5 rev6 de la 1.18.2). }
+  TLeidoPorElJuez = record
+    Huella, Ruta: string;
+  end;
+
   TRespuestaRender = record
     Fallo: string;             // '' = hay imagen; si no, el mensaje para el agente
     Error: string;             // ERROR= del ayudante, tal cual
@@ -82,6 +89,7 @@ type
     MsTotal: Int64;            // lo que tardo de verdad, lanzamiento incluido
     Escrito: TArray<string>;   // WRITTEN=: el form como lo guarda el IDE, con sus blancos
     SinLeer: TArray<string>;   // PARTIAL=: sin que ancestro (o fichero) se leyo el form
+    Leidos: TArray<TLeidoPorElJuez>; // READ=: lo que leyo para cargarlo, con su huella
   end;
 
 { El renderizador de AFramework (vcl|fmx) junto al exe del servidor; '' si
@@ -129,11 +137,21 @@ function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
   de APath - y escrito por TWriter, lo que hace el IDE al guardar: AEscrito.
   ASustituidas, las clases que no pudo cargar (su sustituto no sabe como las
   escribe el IDE); ASinLeer, los ancestros sin los que leyo el form (PARTIAL=:
-  un juicio a medias). '' si bien; si no, el fallo, y en AError el ERROR= del
-  ayudante tal cual (ErrorDeLecturaDe lo lee). La propuesta se escribe en
-  una carpeta de descarga del temporal del disenador y se borra siempre. }
+  un juicio a medias); ALeidos, los ficheros que leyo para cargarlo (READ=:
+  quien escribe lo juzgado los vuelve a mirar, CambioEnLoLeido). '' si bien;
+  si no, el fallo, y en AError el ERROR= del ayudante tal cual
+  (ErrorDeLecturaDe lo lee). La propuesta se escribe en una carpeta de
+  descarga del temporal del disenador y se borra siempre. }
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
-  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out AError: string): string;
+  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
+  out AError: string): string;
+
+{ CON el cerrojo, justo antes de escribir lo que juzgo el ayudante: '' si
+  cada fichero que leyo para cargar el form (ALeidos) sigue con los bytes de
+  su huella; si no, el nombre del primero que cambio (o que ya no se deja
+  leer). La huella, por EL hash de la casa (Sha256DeBytes), el mismo con el
+  que la compone el ayudante; los bytes, por la puerta de leer. }
+function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;
 
 { LO COMUN de una peticion de render para el form APath (ya por la puerta de
   lectura): el framework (AFramework, o el del fichero si va vacio), la ruta,
@@ -159,7 +177,8 @@ uses
   Lsp.Casa,         // ServerDir: la carpeta del exe del servidor
   Lsp.Patch,        // EscribeTexto: la puerta de escribir, la propuesta del juez
   Lsp.Codificacion, // EncKindOf
-  Lsp.Discovery;    // DiscoverRadStudio: el Delphi del servidor
+  Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
+  Lsp.ShaCache;     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -391,6 +410,18 @@ begin
       Result.Escrito := Result.Escrito + [V]
     else if Es(FR_PARTIAL) then
       Result.SinLeer := Result.SinLeer + [V]
+    else if Es(FR_READ) then
+    begin
+      // <sha256>|<ruta>: la huella es hexadecimal, y una ruta no lleva '|'
+      P := V.IndexOf('|');
+      if P > 0 then
+      begin
+        var Leido: TLeidoPorElJuez;
+        Leido.Huella := V.Substring(0, P);
+        Leido.Ruta := V.Substring(P + 1);
+        Result.Leidos := Result.Leidos + [Leido];
+      end;
+    end
     else if Es(FR_ERROR) then
       Result.Error := V;
   end;
@@ -642,7 +673,8 @@ begin
 end;
 
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
-  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out AError: string): string;
+  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
+  out AError: string): string;
 var
   Pet: TPeticionRender;
   R: TRespuestaRender;
@@ -654,6 +686,7 @@ begin
   ASustituidas := [];
   AAvisos := [];
   ASinLeer := [];
+  ALeidos := [];
   // una carpeta de descarga de ESTA llamada en el temporal del SERVIDOR (EL
   // nombrador: el guard del borrado la reconoce), con la propuesta bajo el
   // nombre del form de verdad: su .pas y sus hermanos los lee el ayudante de
@@ -688,12 +721,29 @@ begin
     ASustituidas := R.Sustituidas;
     AAvisos := R.Avisos;
     ASinLeer := R.SinLeer;
+    ALeidos := R.Leidos;
   finally
     try
       BorraArbol(Dir); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
     except
       // limpiar no puede tumbar la respuesta
     end;
+  end;
+end;
+
+function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;
+begin
+  Result := '';
+  for var L in ALeidos do
+  begin
+    var Igual := False;
+    try
+      Igual := SameText(Sha256DeBytes(LeeBytes(L.Ruta, [ltJaula])), L.Huella);
+    except
+      // borrado, renombrado o negado mientras se juzgaba: cambio
+    end;
+    if not Igual then
+      Exit(TPath.GetFileName(L.Ruta));
   end;
 end;
 

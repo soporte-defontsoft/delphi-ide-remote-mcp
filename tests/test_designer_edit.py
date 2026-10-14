@@ -584,9 +584,11 @@ try:
     check('F1 insert en FMX: Button1, FMX.StdCtrls en el uses', j.get('inserted') == 'Button1' and
           j.get('usesAdded') == 'FMX.StdCtrls', r[:500])
     fmx = mc.lee(FFMX)
-    check('F1 ...Position con los 18 decimales del IDE, TabOrder y su Text (un TPresentedTextControl)',
+    # TabOrder 0, el primero del form vacio: con '\d+' pasaban el 32767 y el 32768
+    # que FMX guardaba del centinela (D1 del revisor de cierre de la 1.18.2)
+    check('F1 ...Position con los 18 decimales del IDE, TabOrder 0 y su Text (un TPresentedTextControl)',
           re.search(r"\r\n  object Button1: TButton\r\n    Position\.X = 10\.000000000000000000\r\n"
-                    r"    Position\.Y = 10\.000000000000000000\r\n    TabOrder = \d+\r\n    Text = 'Button1'\r\n  end",
+                    r"    Position\.Y = 10\.000000000000000000\r\n    TabOrder = 0\r\n    Text = 'Button1'\r\n  end",
                     fmx) is not None, fmx[-400:])
     r = dsg(command='insert', path=FFMX, classname='TRectangle')
     check('F1 un TRectangle no lleva Text (su SetName no lo pone)', J(r).get('inserted') == 'Rectangle1' and

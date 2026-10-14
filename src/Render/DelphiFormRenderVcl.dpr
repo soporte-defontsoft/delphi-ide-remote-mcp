@@ -16,7 +16,8 @@ uses
   FormRender.Vcl in 'FormRender.Vcl.pas',
   FormRender.Textos in 'FormRender.Textos.pas',
   Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas',
-  Lsp.Pascal in '..\Server\Lsp.Pascal.pas';
+  Lsp.Pascal in '..\Server\Lsp.Pascal.pas',
+  Lsp.ShaCache in '..\Server\Lsp.ShaCache.pas';
 
 begin
   ExitCode := Main;

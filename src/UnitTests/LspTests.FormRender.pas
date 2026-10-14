@@ -31,6 +31,9 @@ type
     [Test] procedure LectorNoConfundeNonvisualConNonvisuals;
     [Test] procedure LectorIgnoraTrazasYLineasAjenas;
     [Test] procedure LectorSinRespuestaNoInventa;
+    [Test] procedure LectorLeeLoLeidoConSuHuella;
+    [Test] procedure LoLeidoSeVuelveAMirarPorSusBytes;
+    [Test] procedure AncestroAnotaSuPasConLaHuella;
     [Test] procedure OrdenUnInterruptorPorValor;
     [Test] procedure OrdenNoPasaValoresVacios;
     [Test] procedure OrdenRechazaComillasYControles;
@@ -62,6 +65,7 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   FormRender.Comun, // del ayudante (src\Render): el escritor del protocolo y lo que no crea ventanas
+  Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=
   Lsp.Casa;
 
 type
@@ -245,6 +249,67 @@ begin
   Assert.AreEqual('', R.Error);
   Assert.IsFalse(R.HayRect);
   Assert.AreEqual<NativeInt>(0, Length(R.NoVisuales));
+end;
+
+procedure TFormRenderTests.LectorLeeLoLeidoConSuHuella;
+var
+  R: TRespuestaRender;
+begin
+  // READ=<sha256>|<ruta>, repetible; la ruta entera, con espacios y acentos;
+  // una linea sin la barra no es una lectura (B5 rev6 de la 1.18.2)
+  R := LeeRespuestaDeRender(FR_READ + 'AB12|C:\w\Base Comun'#$F3'n.dfm'#13#10 +
+    FR_READ + 'sin barra'#13#10 + FR_READ + 'CD34|C:\w\UHija.pas'#13#10);
+  Assert.AreEqual<NativeInt>(2, Length(R.Leidos));
+  Assert.AreEqual('AB12', R.Leidos[0].Huella);
+  Assert.AreEqual('C:\w\Base Comun'#$F3'n.dfm', R.Leidos[0].Ruta);
+  Assert.AreEqual('CD34', R.Leidos[1].Huella);
+  Assert.AreEqual('C:\w\UHija.pas', R.Leidos[1].Ruta);
+end;
+
+procedure TFormRenderTests.LoLeidoSeVuelveAMirarPorSusBytes;
+var
+  Leido: TLeidoPorElJuez;
+begin
+  // lo que leyo el juez, con la huella que compone el ayudante (AnotaLeido,
+  // por Sha256DeBytes): igual, nada; cambiado o borrado, su nombre, y quien
+  // iba a escribir lo juzgado no escribe (B5 rev6 de la 1.18.2)
+  Leido.Ruta := Escribe('UBase.dfm', 'object FormBase: TFormBase'#13#10'end'#13#10);
+  Leido.Huella := Sha256DeBytes(TFile.ReadAllBytes(Leido.Ruta));
+  Assert.AreEqual('', CambioEnLoLeido([Leido]), 'los mismos bytes');
+  Assert.AreEqual('', CambioEnLoLeido([]), 'nada leido, nada cambiado');
+  Escribe('UBase.dfm', 'object FormBase: TFormBase'#13#10'  Caption = ''X'''#13#10'end'#13#10);
+  Assert.AreEqual('UBase.dfm', CambioEnLoLeido([Leido]), 'cambiado: su nombre');
+  TFile.Delete(Leido.Ruta);
+  Assert.AreEqual('UBase.dfm', CambioEnLoLeido([Leido]), 'borrado: su nombre, sin lanzar');
+end;
+
+procedure TFormRenderTests.AncestroAnotaSuPasConLaHuella;
+var
+  Leidos: TStringList;
+  Dfm, Pas, Pedido: string;
+begin
+  // el .pas que decide la cadena se anota con la huella de sus bytes (READ=);
+  // y el fichero PEDIDO no se anota nunca: con --folder es la propuesta del
+  // servidor (B5 rev6 de la 1.18.2)
+  Pas := Escribe('UHija.pas', 'unit UHija;'#13#10'interface'#13#10'type'#13#10 +
+    '  TFormHija = class(TFormBase)'#13#10'  end;'#13#10'implementation'#13#10'end.'#13#10);
+  Dfm := Escribe('UHija.dfm', 'inherited FormHija: TFormHija'#13#10'end'#13#10);
+  Leidos := TStringList.Create;
+  try
+    Assert.AreEqual('TFormBase', AncestroDeClase(Dfm, 'TFormHija', Leidos));
+    Assert.AreEqual(Sha256DeBytes(TFile.ReadAllBytes(Pas)) + '|' + Pas, Leidos.Text.Trim);
+    Pedido := GPeticion.Path;
+    GPeticion.Path := Pas;
+    try
+      Leidos.Clear;
+      AncestroDeClase(Dfm, 'TFormHija', Leidos);
+      Assert.AreEqual(0, Leidos.Count, 'el pedido no se anota');
+    finally
+      GPeticion.Path := Pedido;
+    end;
+  finally
+    Leidos.Free;
+  end;
 end;
 
 procedure TFormRenderTests.OrdenUnInterruptorPorValor;

@@ -60,6 +60,7 @@ type
     FIgnoradas: TStringList;
     FAvisos: TStringList;
     FSinLeer: TStringList;
+    FLeidos: TStringList;
     FEventos: Integer;
     FCarpeta: string;
     FDesconocida: string;
@@ -93,6 +94,10 @@ type
     { Lo que Lee NO pudo leer y sin lo que leyo el form: un ancestro sin .pas
       que lo diga o sin fichero en la carpeta (PARTIAL=) }
     property SinLeer: TStringList read FSinLeer;
+    { Lo que Lee leyo para cargar el form - ancestros, frames, el .pas de la
+      cadena -, 'sha256|ruta' (READ=): lo de ESTE cargador, que con
+      --packages auto el form se vuelve a leer con otro }
+    property Leidos: TStringList read FLeidos;
     property Eventos: Integer read FEventos;
   end;
 
@@ -130,7 +135,7 @@ function SesionActual: Cardinal;
   guardar) y devuelta linea a linea en WRITTEN= }
 procedure EscribeComoElIde(ARaiz: TComponent);
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
-  SUBSTITUTED=, IGNORED=, WARNING= y PARTIAL= }
+  SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
 { csDesigning en un componente recien creado (y en lo que se le inserte) }
 procedure PonEnDiseno(AComp: TComponent);
@@ -142,8 +147,9 @@ function Cabecera(const AFichero: string): TCabecera;
   (revision de Fable, 7-oct-2026). El mismo criterio que Lsp.Guard.EsEnlace:
   el ayudante no enlaza el guard del servidor. }
 function EsEnlace(const AFichero: string): Boolean;
-{ 'TX = class(TY' en el .pas hermano de AFichero: TY ('' si no hay) }
-function AncestroDeClase(const AFichero, AClase: string): string;
+{ 'TX = class(TY' en el .pas hermano de AFichero: TY ('' si no hay). Con
+  ALeidos, el .pas leido se anota ahi con su huella (READ=) }
+function AncestroDeClase(const AFichero, AClase: string; ALeidos: TStrings = nil): string;
 { Es un frame segun el .pas: ancestro TFrame/TCustomFrame, o lo dice --root }
 function EsFrame(const AFichero, AClase: string): Boolean;
 
@@ -197,7 +203,8 @@ uses
   System.Actions, System.Variants, System.SyncObjs, System.Diagnostics,
   FormRender.Textos,
   Lsp.DesignerForma, // la forma del fichero, la misma que lee el servidor
-  Lsp.Pascal;        // EL lexico Pascal: que es codigo y que comentario
+  Lsp.Pascal,        // EL lexico Pascal: que es codigo y que comentario
+  Lsp.ShaCache;      // Sha256DeBytes: la huella de READ=, la misma con la que compara el servidor
 
 type
   TComponentCrack = class(TComponent);
@@ -415,6 +422,18 @@ end;
 
 { ---- cabecera, ancestros, frames ---- }
 
+{ Un fichero leido para cargar el form, con la huella de los bytes que se
+  usaron, en ALeidos (READ=; B5 rev6 de la 1.18.2): el servidor juzga sin
+  el cerrojo y, antes de escribir lo juzgado, vuelve a mirar cada uno - un
+  ancestro que otro escritor cambie mientras tanto dejaria un juicio viejo.
+  El pedido no se anota: con --folder es la propuesta del servidor, y el
+  form de verdad ya lo compara el servidor por sus bytes. Sin ALeidos, nada. }
+procedure AnotaLeido(ALeidos: TStrings; const AFichero: string; const ABytes: TBytes);
+begin
+  if (ALeidos <> nil) and not SameFileName(AFichero, GPeticion.Path) then
+    ALeidos.Add(Sha256DeBytes(ABytes) + '|' + AFichero);
+end;
+
 function Cabecera(const AFichero: string): TCabecera;
 var
   Bytes: TBytes;
@@ -455,7 +474,7 @@ begin
     Result := TPath.Combine(GPeticion.Carpeta, ExtractFileName(AFichero));
 end;
 
-function AncestroDeClase(const AFichero, AClase: string): string;
+function AncestroDeClase(const AFichero, AClase: string; ALeidos: TStrings): string;
 var
   Pas: string;
   M: TMatch;
@@ -464,6 +483,11 @@ begin
   Pas := UnidadDeDesigner(RutaQueRepresenta(AFichero));
   if not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
+  // la huella ANTES que el texto (que lo decodifica la RTL, sin imitarla):
+  // si cambia entre las dos lecturas, la huella es la vieja y el servidor da
+  // DSGN-144 de mas; al reves, aceptaria un juicio de un .pas que ya no esta
+  if ALeidos <> nil then
+    AnotaLeido(ALeidos, Pas, TFile.ReadAllBytes(Pas));
   // 'TX = class(TY)', tambien 'class abstract(...)' y con la unidad delante
   // (Unidad.TY); el nombre por lo que lo rodea, no por \w (ASCII). El lector
   // de clases del servidor (Lsp.PascalDecl) no se enlaza aqui; la raiz, form
@@ -860,12 +884,16 @@ begin
   FIgnoradas := TStringList.Create;
   FAvisos := TStringList.Create;
   FSinLeer := TStringList.Create;
+  FLeidos := TStringList.Create;
+  FLeidos.Sorted := True; // un frame dos veces en el form es UN fichero leido
+  FLeidos.Duplicates := dupIgnore;
   FPorClase := TDictionary<string, string>.Create;
 end;
 
 destructor TCargador.Destroy;
 begin
   FPorClase.Free;
+  FLeidos.Free;
   FAvisos.Free;
   FSinLeer.Free;
   FIgnoradas.Free;
@@ -972,6 +1000,12 @@ begin
   Bin := TMemoryStream.Create;
   try
     Texto.LoadFromFile(AFichero);
+    // la huella de ESTOS bytes, los que se cargan (READ=)
+    var Bytes: TBytes;
+    SetLength(Bytes, Texto.Size);
+    if Texto.Size > 0 then
+      Move(Texto.Memory^, Bytes[0], Texto.Size);
+    AnotaLeido(FLeidos, AFichero, Bytes);
     // texto, flujo TPF0 o el recurso del IDE: el flujo que lee TReader
     DesignerAFlujo(Texto, Bin);
     Bin.Position := 0;
@@ -1002,6 +1036,8 @@ begin
     Aviso(S);
   for var S in ACargador.SinLeer do
     Responde(FR_PARTIAL, S);
+  for var S in ACargador.Leidos do
+    Responde(FR_READ, S);
 end;
 
 procedure EscribeComoElIde(ARaiz: TComponent);
@@ -1065,7 +1101,7 @@ begin
     Fichero := AFichero;
     while SameText(Cab.Palabra, 'inherited') do
     begin
-      Ancestro := AncestroDeClase(Fichero, Cab.Clase);
+      Ancestro := AncestroDeClase(Fichero, Cab.Clase, FLeidos);
       if Ancestro = '' then
       begin
         FAvisos.Add(MsgFmt(SN_RENDER_HEREDA_SIN_PAS_FMT, [ExtractFileName(Fichero)]));
