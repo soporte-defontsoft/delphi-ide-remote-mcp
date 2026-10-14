@@ -485,6 +485,23 @@ begin
       (PrintWindow) y su linea RESPALDO cita el mismo error con captura hecha. }
     if (RutaDeCaptura(Salida) = '') and CapturaDenegada(Salida) then
       Return.AddPair('hint', MsgText(SN_DESKTOP_LOCKED));
+    { status promete "is the desktop reachable, and what to ask for if not":
+      el motivo del nodo Linux (Could not capture: ...) no lleva etiqueta y se
+      quedaba enterrado en nodeOutput mientras el gemelo Windows lo ponia en
+      hint (revisor C de la 1.19.0). Sin captura en un status: reachable=false
+      y el mismo motivo que ensenan los gestos, como pista. }
+    if Cmd = 'status' then
+    begin
+      Return.AddPair('reachable', TJSONBool.Create(RutaDeCaptura(Salida) <> ''));
+      if (RutaDeCaptura(Salida) = '') and (Return.GetValue('hint') = nil) and
+         (Return.GetValue('error') = nil) then
+      begin
+        var Env := '';
+        if Res.GetValue('graphicalEnv') <> nil then
+          Env := Res.GetValue<string>('graphicalEnv');
+        Return.AddPair('hint', MotivoDelNodo(Salida, Env));
+      end;
+    end;
 
     { La captura vive en la carpeta que el nodo desplego; se trae aqui por el
       mismo transporte que lo llevo alli. }

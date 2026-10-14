@@ -127,7 +127,8 @@ uses
   Lsp.ProcessLaunch, // TrocearArgs / EnComillas
   Lsp.Patch, // LeeTexto/EscribeTexto: las puertas, con el IDE como lugar
   Lsp.Codificacion, // ekUtf8Bom
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Rutas;
 
 constructor TDelphiPAServerTool.Create;
 begin
@@ -1657,8 +1658,10 @@ begin
       // solo lo que vive bajo la carpeta de SDKs del IDE: un .sdk que apunte
       // a cualquier otra carpeta la convertia en un lugar del IDE (escribible
       // por sus escritores) con solo registrarla (B de la 1.18.4)
-      if not StartsText(IncludeTrailingPathDelimiter(IdeSdksDir(Info.Version)),
-           IncludeTrailingPathDelimiter(Raiz)) then
+      // por EL comparador de "esta en ese sitio" (EnLugar: resuelve ..\ y
+      // alias 8.3); un StartsText de texto dejaba pasar <SDKs>\..\victima
+      // (revisor C de la 1.19.0)
+      if not EnLugar(Raiz, IdeSdksDir(Info.Version)) then
       begin
         Saltados := Saltados + [MsgFmt(SN_PASERVER_SDK_RESEAT_FUERA_FMT,
           [TPath.GetFileName(Fichero), Raiz])];

@@ -138,7 +138,9 @@ here is a new capability: those go to 1.20.
   typing into an unlock prompt); asks Mutter how many monitors there are
   and, with none, says the remote session is gone and what to ask for; and
   the existing "no open graphical session" covers the session once it has
-  ended. `status` carries the same line. Where login1 or Mutter do not
+  ended. `status` answers `reachable` and, when the desktop is not, that
+  line as `hint` (it travelled only inside `nodeOutput`, while the Windows
+  node's reason went to `hint`). Where login1 or Mutter do not
   answer, the portal is tried as before. The node's bus connection takes
   which bus to join; the session detector also reports the session's logind
   id and its user. The tool's description now names a locked session of
@@ -163,7 +165,9 @@ here is a new capability: those go to 1.20.
   says the last 10 copies per file are kept. `LspTests.Rutas`
   (`EscribirLoMismoNoReescribe`).
 - **`delphi_paserver remove-sdk` only removes PAServer SDKs; `reseat-sdk`
-  only seats a sysroot that lives in the IDE's SDK folder; `get-sdk` says
+  only seats a sysroot that lives in the IDE's SDK folder (judged with the
+  path comparator of the house, so `<SDKs>\..\elsewhere` does not pass);
+  `get-sdk` says
   what it could not write and what it left behind.** `remove-sdk` deleted
   the SDK Manager seat of ANY SDK by its name, the Android ones GetIt
   installs included (`reseat-sdk` already skipped them); it now refuses an

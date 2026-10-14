@@ -129,6 +129,11 @@ function CapturaDenegada(const ASalida: string): Boolean;
   (TrocearArgs). }
 function MotivoSinCaptura(const ASalida, AEntorno: string): string;
 
+{ El MOTIVO solo (lo que dijo el nodo, o lo que midio el lanzador), sin la
+  envoltura de "sin captura": para quien lo ensena como pista (status).
+  MotivoSinCaptura es ese motivo envuelto; UN lector de la linea del nodo. }
+function MotivoDelNodo(const ASalida, AEntorno: string): string;
+
 { Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
   target. ARelPath es relativo a esa carpeta ('captura.png'), nunca una ruta
   del sistema: igual que la ejecucion remota, esto solo alcanza lo que ESE
@@ -245,26 +250,30 @@ begin
     ASalida.Contains('Access is denied');
 end;
 
-function MotivoSinCaptura(const ASalida, AEntorno: string): string;
+function MotivoDelNodo(const ASalida, AEntorno: string): string;
 var
-  L, Motivo: string;
+  L: string;
 begin
-  Motivo := '';
+  Result := '';
   // Lo que dijo el NODO primero: es quien ha mirado, con el mismo detector
   // de sesion que el lanzador (Mld.Sesion). El entorno del lanzador tapaba
   // el motivo real del nodo (revision del 26-sep-2026).
   for L in ASalida.Split([#10]) do
-    if (Motivo = '') and L.Trim.StartsWith(NODO_NO_PUDE) then
-      Motivo := MsgFmt(SN_DESKTOP_MOTIVO_NODO_FMT,
+    if (Result = '') and L.Trim.StartsWith(NODO_NO_PUDE) then
+      Result := MsgFmt(SN_DESKTOP_MOTIVO_NODO_FMT,
         [L.Trim.Substring(Length(NODO_NO_PUDE)).Trim]);
-  if Motivo = '' then
+  if Result = '' then
     if AEntorno = MsgText(SN_REMOTERUN_ENV_NONE) then
-      Motivo := MsgText(SN_DESKTOP_MOTIVO_SIN_SESION)
+      Result := MsgText(SN_DESKTOP_MOTIVO_SIN_SESION)
     else if CapturaDenegada(ASalida) then
-      Motivo := MsgText(SN_DESKTOP_MOTIVO_DENEGADA);
-  if Motivo = '' then
-    Motivo := MsgText(SN_DESKTOP_MOTIVO_NINGUNO);
-  Result := MsgFmt(SR_DESKTOP_SIN_CAPTURA_FMT, [Motivo]);
+      Result := MsgText(SN_DESKTOP_MOTIVO_DENEGADA);
+  if Result = '' then
+    Result := MsgText(SN_DESKTOP_MOTIVO_NINGUNO);
+end;
+
+function MotivoSinCaptura(const ASalida, AEntorno: string): string;
+begin
+  Result := MsgFmt(SR_DESKTOP_SIN_CAPTURA_FMT, [MotivoDelNodo(ASalida, AEntorno)]);
 end;
 
 { EL FICHERO DE TRABAJO, el mismo para Linux y Windows: el binario, el fichero
