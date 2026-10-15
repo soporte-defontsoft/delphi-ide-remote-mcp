@@ -6,6 +6,62 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **`delphi_git` no longer puts the server's own folders into the agent's
+  repository.** The trash (`__delphi-patch`, with a copy of every edited
+  file and its owner marks) and the temporary folder of older versions
+  (`__delphi-temp`) live inside the roots, next to what is edited. The
+  `.gitignore` that `delphi_create` writes covers them in the project's
+  folder, but not at the root of a repository above it nor in a folder of
+  loose units: `add paths=["."]` put the trash into the index (and so into
+  the next commit and push), and `status` listed it as untracked (measured
+  on 15-oct against 1.19.0, reported by Hermes). `status` and `add` now
+  leave both out with git's own mechanism - an exclude pathspec built from
+  their namers - without touching the agent's `.gitignore`; named on
+  purpose, the trash does not go in either. `test_git_papelera_1191`.
+- **`remove-sdk` and `reseat-sdk` find the SDK `profiles` lists, by its
+  name.** They passed the name through the composer of a NEW SDK's folder,
+  which keeps only letters and digits, so `AndroidAPI36.1_64bit` became
+  `androidapi36164bit` and was never found (`PAS-008` echoing the mangled
+  name; `PAS-059` unreachable for every real Android SDK). The name of an
+  existing SDK is now chosen, case-insensitively, from the two lists
+  `profiles` shows (the `.sdk` files and the IDE's seats); `PAS-008` echoes
+  the name as written. And `remove-sdk` closes when it cannot read an SDK
+  file's platform: the seat branch did since 1.19.0, the file branch still
+  removed such a `.sdk` (measured: a `.sdk` without `Profile_platform` was
+  removed). `test_sdk` 6d-6f, on the throwaway APPDATA.
+- **`delphi_changeset preview` sees an operation that anchors on a line an
+  earlier one writes.** Every anchor resolves against the file as it was
+  before the changeset, and the tool's description says an edit cannot
+  anchor on a line an earlier edit writes; the preview did not check it:
+  an edit and a `delete-line` of the same line got a clean preview
+  (`CHSET-023`, `unresolved: 0`) and the commit failed and rolled back
+  (`CHSET-026`; reported by Hermes). The preview now names the line and the
+  earlier operation and counts it as unresolved. `test_changeset_solape_1191`;
+  the rollback battery of `test_changeset` used that very overlap as its
+  trap and now uses a file another process holds at commit time.
+- **`delphi_designer set` and `lint` judge `ModalResult` as the integer it
+  is.** `TModalResult` is `Low(Integer)..High(Integer)`; the designer tables
+  took a subrange for an integer only when its low bound started with a
+  digit (`TColor`, `TCursor`), so this one had no base and anything went:
+  `set ModalResult=mrOK` was written, `lint` said CLEAN, and the loader
+  refused it (the preview ignored it with `DSGN-114`: the form would not
+  open; reported by Hermes). A `Low(T)` / `High(T)` bound now takes the base
+  of `T`, asked of the same classifier; `set` answers `DSGN-093` (a whole
+  number, as the IDE writes it) and `lint` names it. The tables regenerate
+  on their own (generation 13). `test_designer_modalresult_1191`.
+- **A `restore` after a copy or a rename gives back the new `unit` header.**
+  `delphi_move` rewrites the header to the new name (`MOVE-015`) with the
+  usual writer, which kept the file with the OLD header as the first copy of
+  the day; after the agent's next change, `restore` went back to it -
+  `unit UOrig;` inside `UCopia.pas`, with `audit=clean` (reported by Hermes;
+  the rename by `move` had the same twin, measured). That copy is a step of
+  the server's own work, not a state the agent ever had: it is dropped, and
+  the first copy is the one of the agent's next change. `test_restore_cabecera_1191`.
+
 ## [1.19.0] - 2026-10-15
 
 `delphi_git` asks for operations, not command lines: the free `args` is

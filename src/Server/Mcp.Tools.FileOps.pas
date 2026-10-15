@@ -1211,6 +1211,15 @@ begin
       AncestroCabecera := PrimerAncestroQueExiste(TPath.GetDirectoryName(CopiaCabecera));
       PatchSaveText(Params.Dest, Src, Enc);
       FotoUnit.Anota(Params.Dest); // lo que dejo el move: el deshacer lo devuelve
+      // El respaldo que acaba de hacer el escritor guarda la cabecera VIEJA: es
+      // un paso nuestro de la copia o la mudanza, no un estado que el agente
+      // tuviera nunca. Si no habia copia del dia, se quita: la primera sera la
+      // de su siguiente cambio, con la cabecera nueva. Con ella, un restore
+      // devolvia "unit UOrig;" dentro de UCopia.pas y el audit decia clean
+      // (Hermes, 15-oct-2026). Lo de antes de una mudanza sigue en la papelera
+      // con el nombre viejo
+      if not HabiaCopiaCabecera then
+        QuitaCopiaDeSeguridad(CopiaCabecera, AncestroCabecera);
       Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]);
     end
     else
