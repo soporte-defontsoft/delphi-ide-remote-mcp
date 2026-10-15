@@ -159,10 +159,12 @@ end;
   (GIT-012, con AComando). Era el bucle de stash push y restore, cada uno
   con su texto (1.7.6); desde la 1.19.0, el de todos. ACarpetas: la carpeta
   de cada ruta (ella misma si es una carpeta), para quien tiene que soltar
-  lo nuestro de ahi antes de que git la reescriba. }
+  lo nuestro de ahi antes de que git la reescriba. ARelativas: las mismas
+  rutas sin magia, para la orden de git que no la admite (check-ignore, de
+  IgnoradosDeGit; 1.19.3). }
 function RutasDeGit(const ARepo: string; const ALista: TArray<string>;
   AEscribeFicheros, ASinMayusculas: Boolean; const AComando: string;
-  out ARutas: string; out ACarpetas: TArray<string>): string;
+  out ARutas: string; out ACarpetas, ARelativas: TArray<string>): string;
 var
   Base, Ruta, Rel: string;
   I: Integer;
@@ -170,6 +172,7 @@ begin
   Result := '';
   ARutas := '';
   ACarpetas := nil;
+  ARelativas := nil;
   Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(ARepo));
   for I := 0 to High(ALista) do
   begin
@@ -211,6 +214,7 @@ begin
     if ARutas = '' then
       ARutas := ' --';
     ARutas := ARutas + ' ' + EnComillas(IfThen(ASinMayusculas, ':(literal,icase)', ':(literal)') + Rel);
+    ARelativas := ARelativas + [Rel];
     // la carpeta de la ruta, UNA vez cada una (dos ficheros de la misma
     // carpeta eran dos avisos, uno detras de otro)
     if not TDirectory.Exists(Ruta) then
@@ -864,6 +868,134 @@ begin
     (Length(Lineas) > 0) and SameText(Lineas[0], 'true');
 end;
 
+{ EL LECTOR de una ruta que git escribe entrecomillada (quote_c_style de git):
+  entre comillas van \\ \" \t \n... y los bytes que no son ASCII en octal
+  (\303\261 es una n con tilde, en UTF-8); sin comillas, va tal cual. Git
+  entrecomilla una ruta con acentos (core.quotePath, por defecto) o con
+  barras invertidas: la fuente de una regla de check-ignore bajo el --git-dir
+  absoluto que fija el servidor sale "C:\\...\\.git/info/exclude" (medido el
+  15-oct-2026; -z, que lo evitaria, en check-ignore solo va con --stdin). Es
+  la inversa del escritor de git, no una regla nuestra. No lanza: unos bytes
+  que no son UTF-8 dejan la ruta como llego. }
+function LeeRutaDeGit(const ARuta: string): string;
+var
+  Bytes: TBytes;
+  Tramo: string;
+  I, N: Integer;
+  C: Char;
+begin
+  N := Length(ARuta);
+  if (N < 2) or (ARuta[1] <> '"') or (ARuta[N] <> '"') then
+    Exit(ARuta);
+  Bytes := nil;
+  Tramo := '';
+  I := 2;
+  while I < N do
+  begin
+    C := ARuta[I];
+    if (C <> '\') or (I + 1 >= N) then
+      Tramo := Tramo + C
+    else
+    begin
+      // lo que va sin escapar, de una vez: un par suplente no se parte
+      Bytes := Bytes + TEncoding.UTF8.GetBytes(Tramo);
+      Tramo := '';
+      Inc(I);
+      C := ARuta[I];
+      case C of
+        'a': Bytes := Bytes + [7];
+        'b': Bytes := Bytes + [8];
+        't': Bytes := Bytes + [9];
+        'n': Bytes := Bytes + [10];
+        'v': Bytes := Bytes + [11];
+        'f': Bytes := Bytes + [12];
+        'r': Bytes := Bytes + [13];
+        '0'..'3':
+          if (I + 2 < N) and CharInSet(ARuta[I + 1], ['0'..'7']) and
+             CharInSet(ARuta[I + 2], ['0'..'7']) then
+          begin
+            Bytes := Bytes + [Byte((Ord(C) - Ord('0')) * 64 +
+              (Ord(ARuta[I + 1]) - Ord('0')) * 8 + Ord(ARuta[I + 2]) - Ord('0'))];
+            Inc(I, 2);
+          end
+          else
+            Tramo := C;
+      else
+        Tramo := C; // \" y \\: el caracter mismo
+      end;
+    end;
+    Inc(I);
+  end;
+  Bytes := Bytes + TEncoding.UTF8.GetBytes(Tramo);
+  try
+    Result := TEncoding.UTF8.GetString(Bytes);
+  except
+    Result := ARuta;
+  end;
+end;
+
+{ Lo que git IGNORA de las rutas de un add que fallo, con su regla (GIT-078).
+  Con :(literal,icase) (H10 de la 1.19.2) git no dice "The following paths
+  are ignored" de un ignorado: dice "pathspec ... did not match any files" y
+  no anade nada, y el agente creia que el fichero no existia (medido el
+  15-oct-2026 con git 2.53; con :(literal) si lo decia). El juez es git
+  check-ignore, que respeta core.ignorecase y nombra la regla. No admite
+  magia ("pathspec magic not supported"): van las relativas de RutasDeGit, y
+  --non-matching da una linea por ruta y en su orden, asi que no hace falta
+  leer el nombre que git devuelve. Un rastreado no esta ignorado, como para
+  add. La fuente de la regla se lee con LeeRutaDeGit: la de dentro del arbol
+  (ARaiz) se dice relativa a el (.gitignore, .git/info/exclude); la de fuera
+  (core.excludesFile, el info/exclude del repo principal de un worktree) es
+  de la casa del servidor o de otro arbol: se dice que es de fuera, sin su
+  ruta. Nada de TPath sobre texto de git: una comilla en la fuente lanzaba
+  "Invalid characters in path" y se llevaba la respuesta entera del add
+  (medido en la bateria, 15-oct-2026). '' si ninguna lo esta o git no
+  contesta (GitContesta: el 1 de check-ignore es "ninguna"). }
+function IgnoradosDeGit(const ARepo, AFijado, ARaiz: string;
+  const ARelativas: TArray<string>): string;
+var
+  Lineas: TArray<string>;
+  Orden, Rel, Fuente, Ignorados: string;
+  Regla: TMatch;
+  I: Integer;
+begin
+  Result := '';
+  if (Length(ARelativas) = 0) or (ARaiz = '') then
+    Exit;
+  Orden := 'check-ignore --verbose --non-matching --';
+  for Rel in ARelativas do
+    Orden := Orden + ' ' + EnComillas(Rel);
+  if not GitContesta(ARepo, AFijado, Orden, Lineas) or (Length(Lineas) <> Length(ARelativas)) then
+    Exit;
+  Ignorados := '';
+  for I := 0 to High(Lineas) do
+  begin
+    // <fuente>:<linea>:<patron><TAB><ruta>; la que no casa, "::<TAB><ruta>"
+    Regla := TRegEx.Match(PrimerTrozo(Lineas[I], [#9]), '^(.+?):(\d+):(.*)$');
+    if not Regla.Success then
+      Continue;
+    if Ignorados <> '' then
+      Ignorados := Ignorados + ', ';
+    Fuente := LeeRutaDeGit(Regla.Groups[1].Value).Replace('/', '\');
+    // con raiz (C:\..., \\servidor, \...) es de dentro solo si cuelga del arbol
+    if ((Length(Fuente) >= 2) and (Fuente[2] = ':')) or Fuente.StartsWith('\') then
+    begin
+      if StartsText(IncludeTrailingPathDelimiter(ARaiz), Fuente) then
+        Fuente := Fuente.Substring(Length(IncludeTrailingPathDelimiter(ARaiz)))
+      else
+        Fuente := '';
+    end;
+    if Fuente = '' then
+      Ignorados := Ignorados + MsgFmt(SF_GIT_IGNORADO_FUERA_FMT,
+        [ARelativas[I], Regla.Groups[3].Value])
+    else
+      Ignorados := Ignorados + MsgFmt(SF_GIT_IGNORADO_POR_FMT,
+        [ARelativas[I], Regla.Groups[3].Value, Fuente.Replace('\', '/'), Regla.Groups[2].Value]);
+  end;
+  if Ignorados <> '' then
+    Result := #10 + MsgFmt(SN_GIT_ADD_IGNORADO_FMT, [Ignorados]);
+end;
+
 { Una direccion de RED con su esquema. La lista es la de clone. }
 function EsUrlDeRed(const ADireccion: string): Boolean;
 begin
@@ -1463,10 +1595,11 @@ begin
   // la puerta del escritor, una a una
   var Rutas := '';
   var Carpetas: TArray<string> := nil;
+  var Relativas: TArray<string> := nil;
   if Length(Lista) > 0 then
   begin
     Result := RutasDeGit(Repo, Lista, Cmd = 'stash', RepoSinMayusculas(Repo, Fijado), Cmd, Rutas,
-      Carpetas);
+      Carpetas, Relativas);
     if Result <> '' then
       Exit;
   end;
@@ -2055,6 +2188,9 @@ begin
   // restore no toca el arbol: se dice, con la via que si descarta (GIT-077)
   if (ExitCode = 0) and (Cmd = 'restore') then
     Result := Result + #10 + MsgText(SN_GIT_RESTORE_SOLO_INDICE);
+  // add que no pudo por un ignorado: cual y por que regla (GIT-078)
+  if (ExitCode <> 0) and (Cmd = 'add') then
+    Result := Result + IgnoradosDeGit(Repo, Fijado, Raiz, Relativas);
   // git's own hints recommend exactly what this tool refuses (--no-ff,
   // rebase, "specify the URL from the command-line"): say so, or the reader
   // follows the advice printed last (field round 10). Desde la 1.19.3 git

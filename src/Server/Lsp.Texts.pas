@@ -479,6 +479,18 @@ const
     'undone): the working tree keeps its changes. To discard a file''s ' +
     'changes: command=stash with its paths - they go back to HEAD and the ' +
     'change stays in the stash.';
+  { add de un IGNORADO: con :(literal,icase) (H10 de la 1.19.2) git dice
+    "pathspec ... did not match any files" y no "paths are ignored", y el
+    agente creia que el fichero no existia (medido el 15-oct-2026). Lo dice
+    git check-ignore, con su regla; la de fuera del arbol, sin su ruta. }
+  SN_GIT_ADD_IGNORADO_FMT =
+    '[GIT-078] git ignores %s: add does not stage an ignored path, and this ' +
+    'tool has no option to force it. If it belongs in the repository, change ' +
+    'that rule; if not, leave it out of "paths". command=status shows what ' +
+    'did get staged.';
+  SF_GIT_IGNORADO_POR_FMT = '%s (rule "%s", %s line %s)';
+  SF_GIT_IGNORADO_FUERA_FMT =
+    '%s (rule "%s", from an exclude file of git outside this working tree)';
   { Una CONSULTA vacia (log, tag, branch, stash list...) no es un exito sin
     mas: no hay nada que mostrar (revision de la 1.17.0). }
   SN_GIT_CONSULTA_VACIA_FMT =

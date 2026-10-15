@@ -30,6 +30,24 @@ the MCP `initialize` response (`serverInfo.version`).
   succeeds in silence, now says what it did and how to discard a change
   (`GIT-077`). Battery `test_git_consejos_1193` (red against 1.19.2 on all
   four, the control green).
+- **`delphi_git add` of an ignored file says it is ignored, and by which
+  rule.** Since 1.19.2 a path goes to git with `:(literal,icase)` in a repo
+  that does not tell case apart (H10), and with that magic git stops saying
+  `The following paths are ignored by one of your .gitignore files`: it
+  says `pathspec ':(literal,icase)x.log' did not match any files` and adds
+  nothing, so the agent was told, in effect, that a file it can see does
+  not exist (found on 2026-10-15 while measuring the hints above; with
+  `:(literal)` git said it). When `add` fails, the server now asks git
+  itself - `check-ignore`, which honours `core.ignorecase` and names the
+  rule - and says which paths are ignored, by which pattern and where
+  (`GIT-078`): `x.log (rule "x.log", .gitignore line 1)`. A rule from
+  outside the working tree (`core.excludesFile`) is named without its path.
+  git quotes the source of a rule C-style when it has backslashes or
+  accents (`"C:\\...\\.git/info/exclude"`, `"caf\303\251/.gitignore"`), so
+  the server reads it with one reader, the inverse of git's own quoting
+  (`LeeRutaDeGit`). Battery `test_git_ignorado_1193` (red against 1.19.2 on
+  all seven, both controls green; one mutant per piece, the reader and the
+  note).
 
 ## [1.19.2] - 2026-10-15
 
