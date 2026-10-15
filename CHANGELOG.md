@@ -6,7 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.19.3] - 2026-10-15
+
+Five fixes, all in what an agent reads back, from Hermes' validation of
+1.19.2 and from measuring it. `delphi_git` no longer passes on git's own
+advice (`GIT_ADVICE=0`), which mostly names what the tool does not offer,
+and `restore` says it only touched the index (`GIT-077`); `add` of an
+ignored file says so, with its rule (`GIT-078`), instead of the "did not
+match any files" that the case-insensitive paths of 1.19.2 brought; and
+names with accents come out as they are (`core.quotePath=false`), which
+also ends a `SYS-011` that stopped `switch`, `merge`, `pull` and `stash
+pop` in a repo with something read-only inside. Two more were texts that
+said something false: `CFG-043` claimed an `Application.CreateForm` that a
+console project never gets, and `CHSET-024` blamed every unresolved
+operation of a changeset on its anchor. No contract is taken away; git's
+hint lines and its octal-quoted names no longer reach the agent.
 
 ### Fixed
 
