@@ -113,6 +113,10 @@ handshake.
   `command=run project=<the test .dproj>` builds and runs one and answers
   `total`/`passed`/`failed` with the failing lines. That is your red-green
   loop: edit -> diagnostics -> build -> **test** -> commit.
+- `delphi_diagnostics` is the quick check and `delphi_build` the real one.
+  The answer names the project it linted with (`project`); of a unit in a
+  folder BELOW that project's folder the engine gives the errors only,
+  never warnings or hints (`LSP-046` says so) - the build gives them.
 - It needs `AllowTests=1` declared in YOUR workspace on the server. Without
   it `discover` works and `run` says so - that is a switch, not a bug.
 - The test runs in a Windows container on a COPY of its output folder: it
@@ -436,4 +440,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.19.0 -->
+<!-- contract reviewed: v1.19.1 -->

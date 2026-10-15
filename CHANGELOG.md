@@ -6,7 +6,19 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.19.1] - 2026-10-15
+
+Six fixes from Hermes' validation of 1.19.0, each one reproduced against
+it before anything was touched: `delphi_git` keeps the server's trash out
+of the agent's repository (`add paths=["."]` put it into the index);
+`remove-sdk` and `reseat-sdk` find the SDK `profiles` lists, by its name;
+`delphi_changeset preview` sees an operation that anchors on a line an
+earlier one writes; the designer judges `ModalResult` as the integer it
+is; a `restore` after a copy or a rename gives back the new `unit` header;
+and `delphi_diagnostics` names the project it linted with and says when
+its "0 warnings, 0 hints" says nothing - DelphiLSP gives neither for a
+unit below its project's folder. No contract is taken away: one answer
+gains a field (`project`) and a note (`LSP-046`).
 
 ### Fixed
 
