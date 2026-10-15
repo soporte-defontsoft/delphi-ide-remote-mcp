@@ -151,8 +151,9 @@ end;
 { LAS RUTAS de "paths", de todos los comandos que las llevan (status, diff,
   log, show, add, restore, stash push): cada una es un fichero o carpeta DE
   ESTE repo, con su nombre tal cual (sin comodines), y sale como "--" y
-  :(literal)<relativa> entre comillas, lista para el final de la linea de
-  git: detras de "--" nada es una opcion. Con AEscribeFicheros cada ruta
+  :(literal)<relativa> entre comillas - :(literal,icase) si ASinMayusculas,
+  lo que git dice del repo (RepoSinMayusculas) -, lista para el final de la
+  linea de git: detras de "--" nada es una opcion. Con AEscribeFicheros cada ruta
   pasa por la puerta del escritor (stash push reescribe el fichero; los
   demas solo leen o tocan el indice). '' = bien; si no, la negativa
   (GIT-012, con AComando). Era el bucle de stash push y restore, cada uno
@@ -160,7 +161,7 @@ end;
   de cada ruta (ella misma si es una carpeta), para quien tiene que soltar
   lo nuestro de ahi antes de que git la reescriba. }
 function RutasDeGit(const ARepo: string; const ALista: TArray<string>;
-  AEscribeFicheros: Boolean; const AComando: string;
+  AEscribeFicheros, ASinMayusculas: Boolean; const AComando: string;
   out ARutas: string; out ACarpetas: TArray<string>): string;
 var
   Base, Ruta, Rel: string;
@@ -205,10 +206,11 @@ begin
     Rel := Ruta.Substring(Length(Base)).Replace('\', '/');
     if Rel = '' then
       Rel := '.'; // la carpeta del propio repo
-    // :(literal): el nombre es el nombre, sin comodines ni magia.
+    // :(literal): el nombre es el nombre, sin comodines ni magia; y en un
+    // repo que git dice que no distingue mayusculas, icase (RepoSinMayusculas)
     if ARutas = '' then
       ARutas := ' --';
-    ARutas := ARutas + ' ' + EnComillas(':(literal)' + Rel);
+    ARutas := ARutas + ' ' + EnComillas(IfThen(ASinMayusculas, ':(literal,icase)', ':(literal)') + Rel);
     // la carpeta de la ruta, UNA vez cada una (dos ficheros de la misma
     // carpeta eran dos avisos, uno detras de otro)
     if not TDirectory.Exists(Ruta) then
@@ -834,8 +836,23 @@ begin
   Result := Codigo = 0;
   if Result then
     for Linea in Salida.Split([#10]) do
-      if Linea.Trim <> '' then
+    if Linea.Trim <> '' then
         ALineas := ALineas + [Linea.Trim];
+end;
+
+{ Si GIT dice que este repo no distingue mayusculas (core.ignorecase, que git
+  init y clone ponen MIDIENDO el disco: en Windows, true). Entonces una ruta
+  de "paths" con otra mayuscula es el mismo fichero, y su magia lleva icase:
+  con :(literal) solo, status decia limpio y diff "NOTHING has changed" de un
+  fichero modificado (H4-01 de Hermes; H10 de la 1.19.2). El juez es git,
+  no una regla nuestra de "Windows no distingue". La clave sin poner (git
+  sale con 1) es "si distingue", el valor por defecto de git. }
+function RepoSinMayusculas(const ARepo, AFijado: string): Boolean;
+var
+  Lineas: TArray<string>;
+begin
+  Result := GitContesta(ARepo, AFijado, 'config --get --type=bool core.ignorecase', Lineas) and
+    (Length(Lineas) > 0) and SameText(Lineas[0], 'true');
 end;
 
 { Una direccion de RED con su esquema. La lista es la de clone. }
@@ -1439,7 +1456,8 @@ begin
   var Carpetas: TArray<string> := nil;
   if Length(Lista) > 0 then
   begin
-    Result := RutasDeGit(Repo, Lista, Cmd = 'stash', Cmd, Rutas, Carpetas);
+    Result := RutasDeGit(Repo, Lista, Cmd = 'stash', RepoSinMayusculas(Repo, Fijado), Cmd, Rutas,
+      Carpetas);
     if Result <> '' then
       Exit;
   end;

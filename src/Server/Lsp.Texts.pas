@@ -3562,9 +3562,10 @@ const
   SN_STYLES_LINT_NOTE =
     '[STYLE-016] lookupsWithoutStyle: a control with that StyleLookup ' +
     'will render with the default look (no error at runtime) - define ' +
-    'the style (clone) or fix the name. duplicatedStyleNames: the last ' +
-    'one wins silently. lookupsStandard are names the platform default ' +
-    'style provides.';
+    'the style (clone) or fix the name. duplicatedStyleNames: the same ' +
+    'StyleName twice in ONE file, where the last one wins silently (two ' +
+    'files - two themes - sharing names is how themes work). ' +
+    'lookupsStandard are names the platform default style provides.';
 
   SN_STYLES_NO_DEFAULTS =
     '[STYLE-017] The platform default style names could not be extracted ' +

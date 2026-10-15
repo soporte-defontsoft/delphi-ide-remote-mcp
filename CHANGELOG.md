@@ -61,6 +61,23 @@ the MCP `initialize` response (`serverInfo.version`).
   name and `UPLOAD-012` says so. `test_upload_corrupt_1192`; the batteries
   that pinned the old place (`round8`, `round9`, `resultados`,
   `cuarentena_puerta_1184`) now pin this one.
+- **`delphi_git` finds a path written in another case.** With `c01.txt`
+  modified, `status paths=["C01.TXT"]` answered a clean `## master`, `diff`
+  said `GIT-001` "NOTHING has changed", `log` found nothing and `add`
+  "finished fine" having staged nothing: every path went to git as
+  `:(literal)<path>`, which matches case, in a repository whose
+  `core.ignorecase` is true on a disk that does not tell case apart
+  (measured from Hermes' H4-01 on 1.19.1; the cache he suspected does not
+  exist, and a network drive did not reproduce it). When git says the
+  repository ignores case, the paths now go as `:(literal,icase)` - git's
+  own rule, measured with git 2.53 on `status`, `diff`, `log`, `add`,
+  `restore` and `stash`, files and folders. `test_git_mayusculas_1192`.
+
+### Changed
+
+- The `STYLE-016` note of `delphi_styles lint` says that
+  `duplicatedStyleNames` is the same name twice in ONE file: two theme
+  files sharing names is how themes work (asked by Hermes).
 
 ## [1.19.1] - 2026-10-15
 

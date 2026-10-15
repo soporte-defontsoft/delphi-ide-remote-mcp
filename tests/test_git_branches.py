@@ -12,7 +12,7 @@ las opciones de red (pull --tags) ya no existen (GIT-068, nada hecho).
 
 Usage:  python tests/test_git_branches.py [path-to-DelphiLspMcp.exe]
 """
-import os, subprocess
+import os, re, subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -148,7 +148,8 @@ check('restore sin rutas: rechazado (no adivina)', mc.rechazado(r) and mc.es(r, 
 r = git({'command': 'restore', 'paths': ['--worktree', 'a.txt']})
 st = git({'command': 'status'})
 check('restore con una opcion (en paths): es un nombre, no una opcion; nunca toca el arbol',
-      mc.abre(r, 'SR_GIT_EXIT_FMT') and ':(literal)--worktree' in r and
+      # (con icase desde la H10 de la 1.19.2: el repo no distingue mayusculas)
+      mc.abre(r, 'SR_GIT_EXIT_FMT') and re.search(r':\(literal(,icase)?\)--worktree', r) and
       'cambio en a' in leer('a.txt') and ' M a.txt' in st, r[:200] + ' | ' + st[:120])
 r = git({'command': 'restore', 'paths': ['../fuera.txt']})
 check('restore <ruta fuera del repo>: rechazado', mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_RUTA_FMT'), r[:200])
