@@ -356,6 +356,33 @@ try:
     check('reseat-sdk de un .sdk cuyo sysroot no esta bajo la carpeta de SDKs del IDE: no se asienta y lo dice (PAS-060)',
           'PAS-060' in out and '"seated":[]' in out.replace(' ', ''), out[:300])
     os.remove(os.path.join(PROFILES_DIR, 'zzfuera.sdk'))
+    # --- 6d/6e/6f) el SDK que YA existe se nombra como lo lista profiles (1.19.1,
+    # Hermes 15-oct): remove-sdk y reseat-sdk pasaban el nombre por el formador
+    # de un nombre NUEVO (SoloAlfanumerico), y AndroidAPI36.1_64bit llegaba como
+    # androidapi36164bit, que no existe (PAS-008). Nombres que ningun IDE tiene,
+    # en el APPDATA de mentira
+    sdk_file(os.path.join(PROFILES_DIR, 'ZzAndroidAPI36.1_64bit.sdk'), platform='Android64')
+    out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "ZzAndroidAPI36.1_64bit"})
+    check('6d remove-sdk de un SDK de Android con punto y guion bajo, como lo lista profiles: PAS-059 '
+          '(no PAS-008) y el .sdk sigue',
+          mc.rechazado(out) and mc.es(out, 'SR_PASERVER_SDK_NO_ES_NUESTRO_FMT') and
+          os.path.exists(os.path.join(PROFILES_DIR, 'ZzAndroidAPI36.1_64bit.sdk')), out[:200])
+    os.remove(os.path.join(PROFILES_DIR, 'ZzAndroidAPI36.1_64bit.sdk'))
+    sdk_file(os.path.join(PROFILES_DIR, 'zz.lin_64.sdk'))
+    out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "ZZ.LIN_64"})
+    check('6e remove-sdk de un Linux64 con punto y guion bajo, escrito con otras mayusculas: se quita',
+          not mc.fallo(out) and '"removed"' in out and
+          not os.path.exists(os.path.join(PROFILES_DIR, 'zz.lin_64.sdk')), out[:200])
+    # el gemelo de C5 en la rama del FICHERO: un .sdk cuya plataforma no se lee
+    # no se quita (se quitaba: la condicion era "hay plataforma y no es Linux64")
+    with open(os.path.join(PROFILES_DIR, 'zzsinplat.sdk'), 'w', encoding='utf-8') as f:
+        f.write('<Project><PropertyGroup></PropertyGroup></Project>')
+    out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "zzsinplat"})
+    check('6f remove-sdk de un .sdk sin plataforma legible: PAS-059 (unknown) y el .sdk sigue',
+          mc.rechazado(out) and mc.es(out, 'SR_PASERVER_SDK_NO_ES_NUESTRO_FMT') and 'unknown' in out and
+          os.path.exists(os.path.join(PROFILES_DIR, 'zzsinplat.sdk')), out[:200])
+    if os.path.exists(os.path.join(PROFILES_DIR, 'zzsinplat.sdk')):
+        os.remove(os.path.join(PROFILES_DIR, 'zzsinplat.sdk'))
 
     # --- 7) las copias del IDE no crecen sin limite: las 10 ultimas de CADA
     # fichero (revisor de P3: repetir get-sdk copiaba el .sdk cada vez). Un

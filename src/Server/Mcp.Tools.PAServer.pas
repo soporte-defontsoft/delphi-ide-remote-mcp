@@ -491,6 +491,31 @@ begin
   Result := False;
 end;
 
+{ El NOMBRE de un SDK que YA existe, tal como lo tiene el IDE: elegido, sin
+  mirar mayusculas y con o sin ".sdk", de las dos listas que ensena profiles
+  - los .sdk de la carpeta (SdksDelIde) y los asientos del SDK Manager
+  (AsientosDeSdk) -; '' si no esta en ninguna. Lo que el agente escribe solo
+  ELIGE: el nombre que sigue (y la ruta que se compone con el) es el de la
+  lista. remove-sdk y reseat-sdk lo pasaban por SoloAlfanumerico, el formador
+  de un nombre NUEVO (la carpeta de get-sdk), y "AndroidAPI36.1_64bit"
+  llegaba como "androidapi36164bit", que no esta (Hermes, 15-oct-2026,
+  PAS-008 con el nombre deformado). }
+function SdkExistente(const AVersion, ASdk: string): string;
+var
+  Pedido: string;
+begin
+  Result := '';
+  Pedido := NombreSinSdk(ASdk.Trim);
+  if Pedido = '' then
+    Exit;
+  for var F in SdksDelIde(AVersion) do
+    if SameText(NombreSinSdk(TPath.GetFileName(F)), Pedido) then
+      Exit(NombreSinSdk(TPath.GetFileName(F)));
+  for var A in AsientosDeSdk(AVersion) do
+    if SameText(NombreSinSdk(A), Pedido) then
+      Exit(NombreSinSdk(A));
+end;
+
 { La plataforma que dice el ASIENTO de un SDK en el SDK Manager (PlatformName);
   '' si no hay asiento o no la dice. Para remove-sdk sin fichero: el asiento
   de un SDK que no es de PAServer no se toca. }
@@ -1622,9 +1647,14 @@ begin
     Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   // el SDK lo nombra "sdk", como dice su descripcion: "name" valia de
   // reserva y, llamado "profile" (1.17.0), nombraria un SDK con un perfil
-  Nombre := SoloAlfanumerico(Params.Sdk);
-  if Nombre <> '' then
-    Ficheros := [RutaDeSdk(Info.Version, Nombre)]
+  if Params.Sdk.Trim <> '' then
+  begin
+    // el que YA existe, elegido de la lista (SdkExistente), nunca deformado
+    Nombre := SdkExistente(Info.Version, Params.Sdk);
+    if Nombre = '' then
+      Exit(MsgFmt(SR_PASERVER_SDK_NOFILE_FMT, [Params.Sdk.Trim]));
+    Ficheros := [RutaDeSdk(Info.Version, Nombre)];
+  end
   else
     // sin nombre: todos los que haya, que es lo que hace falta despues de un
     // despliegue ("registra lo que tengas")
@@ -1694,12 +1724,18 @@ var
   R: TRegistry;
   Return: TJSONObject;
 begin
-  Nombre := SoloAlfanumerico(Params.Sdk); // el SDK lo nombra "sdk" (ver reseat-sdk)
-  if Nombre = '' then
+  // el SDK lo nombra "sdk" (ver reseat-sdk)
+  if Params.Sdk.Trim = '' then
     Exit(MsgText(SR_PASERVER_NEED_SDK));
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
+  // el que YA existe, elegido de las listas de profiles (SdkExistente): se
+  // deformaba con el formador de un nombre nuevo y no se encontraba nunca uno
+  // con punto o guion bajo; el eco, el nombre tal como lo escribio el agente
+  Nombre := SdkExistente(Info.Version, Params.Sdk);
+  if Nombre = '' then
+    Exit(MsgFmt(SR_PASERVER_SDK_NOFILE_FMT, [Params.Sdk.Trim]));
   Fichero := RutaDeSdk(Info.Version, Nombre);
   // El fichero puede no estar y el ASIENTO seguir ahi - pasa en cuanto alguien
   // borra el .sdk a mano, y entonces el IDE sigue ofreciendo un SDK que ya no
@@ -1724,8 +1760,12 @@ begin
     except
       Raiz := '';
     end;
-    if (Plat <> '') and not SameText(Plat, 'Linux64') then
-      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT, [NombreDeSdk(Nombre), Plat]));
+    // una plataforma que no se lee CIERRA, como en la rama del asiento (C5):
+    // aqui la condicion era "hay plataforma y no es Linux64", y un .sdk sin
+    // ella se borraba (gemelo de C5, triaje de Hermes del 15-oct-2026)
+    if not SameText(Plat, 'Linux64') then
+      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT,
+        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown')]));
     // por la puerta, con el IDE como lugar: se copia antes en la casa
     try
       CopiaSdk := BorraFichero(Fichero, ltIde);
