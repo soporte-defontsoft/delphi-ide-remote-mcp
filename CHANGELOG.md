@@ -61,6 +61,21 @@ the MCP `initialize` response (`serverInfo.version`).
   the rename by `move` had the same twin, measured). That copy is a step of
   the server's own work, not a state the agent ever had: it is dropped, and
   the first copy is the one of the agent's next change. `test_restore_cabecera_1191`.
+- **`delphi_diagnostics` says when its "0 warnings, 0 hints" says nothing,
+  and with which project it linted.** Of a unit in a folder BELOW the one of
+  its project (`Sub\`, `Domain\Models\`), listed in it or not, DelphiLSP
+  publishes the errors and never the warnings or hints; in the project's
+  folder and in a sibling folder it publishes everything. Measured on
+  15-oct with the engine alone and our settings, on this machine and on the
+  13.2 VM, after Hermes saw an `H2077` from `delphi_build` that diagnostics
+  never showed; ruled out by name: `projectFiles` in the IDE's own shape,
+  the folder in the search path, the `.dpr` opened first, an absolute `in`
+  path and the shape of the uri. The answer now carries `project` (the
+  `.dproj` whose settings linted the file - a unit no project lists takes
+  the nearest one above it, which was Hermes' case) and, below its folder,
+  the note `LSP-046`; `delphi_build` reports the rest. The description
+  says it too, rewritten to fit: `tools/list` stays under its budget.
+  `test_diagnostics_debajo_1191`.
 
 ## [1.19.0] - 2026-10-15
 

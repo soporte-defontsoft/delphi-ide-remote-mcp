@@ -111,7 +111,8 @@ uses
   Lsp.BuildRunner,
   Lsp.Listas,     // AgrupaPorFichero: los usos por carpeta y fichero
   Lsp.Guard,      // ReadPathDenied: la guarda antes que nada (ruta vacia)
-  Lsp.ConfigFabricator, // NotaDeRecorte
+  Lsp.ConfigFabricator, // NotaDeRecorte, NotaDeDebajoDelProyecto, ProjectOfSettings
+  Lsp.Dproj,      // DprojDe: el proyecto, como lo nombran las demas tools
   Lsp.Mascara;
 
 const
@@ -197,11 +198,23 @@ begin
       Return.AddPair('warnings', TJSONNumber.Create(WarningsC));
       Return.AddPair('hints', TJSONNumber.Create(Hints));
       Return.AddPair('diagnostics', OutArr);
+      // CON QUE proyecto se linteo: una unidad que no lista nadie toma el de
+      // mas arriba (FindDproj), y lo que el motor dice de ella depende de
+      // donde cuelga de el (H7 de la 1.19.1: Hermes no podia saberlo)
+      var Proyecto := ProjectOfSettings(Settings);
+      if Proyecto <> '' then
+      begin
+        if FileExists(DprojDe(Proyecto)) then
+          Proyecto := DprojDe(Proyecto);
+        Return.AddPair('project', Proyecto);
+      end;
       // unos ajustes recortados lo dicen (LSP-037): por eso hay units que el
-      // motor no encuentra aqui y que delphi_build si compila
-      var Recorte := NotaDeRecorte(Settings);
-      if Recorte <> '' then
-        Return.AddPair('note', Recorte.Trim);
+      // motor no encuentra aqui y que delphi_build si compila; y una unidad
+      // DEBAJO de la carpeta del proyecto, que se queda sin warnings ni hints
+      // (LSP-046): ahi un 0 no dice nada
+      var Nota := NotaDeRecorte(Settings) + NotaDeDebajoDelProyecto(Settings, Params.Path);
+      if Nota <> '' then
+        Return.AddPair('note', Nota.Trim);
       // (sin ajustes de proyecto ya no se llega aqui: LintFile lo dice antes,
       // LSP-035 - el motor sin ellos no publica nunca, medido 2026-10-06)
       Result := Return.ToJSON;

@@ -7711,6 +7711,17 @@ const
     'units read here as not found (diagnostics) and their symbols get no ' +
     'answer. delphi_build compiles the project as it is. To work with those ' +
     'units, bring them into the workspace or ask the operator for that root.';
+  { H7 de la 1.19.1 (Hermes; medido el 15-oct-2026 con el motor solo, en
+    produccion y en la VM 13.2): de una unidad que cuelga por DEBAJO de la
+    carpeta de su proyecto (Sub1\, Domain\Models\), listada en el o no,
+    DelphiLSP publica los errores y nunca los warnings ni los hints; en la
+    carpeta del proyecto y en una HERMANA, todo. Un "0 warnings, 0 hints"
+    ahi no dice nada: se dice, como LSP-045. }
+  SN_LSP_DEBAJO_DEL_PROYECTO =
+    ' [LSP-046] This unit is in a folder BELOW the one of the project it ' +
+    'was linted with ("project"): of such a unit the engine reports the ' +
+    'errors and never the warnings or hints, so 0 warnings and 0 hints ' +
+    'here say nothing. delphi_build reports them.';
   SR_LSP_DEF_FUERA_FMT =
     '[LSP-038 DENIED] "%s" resolves to a definition OUTSIDE this workspace ' +
     '(a unit this session may not read), so I do not show where it is nor ' +
@@ -8657,16 +8668,16 @@ const
 
   SD_BUILD_DIAGNOSTICS =
     'Compiler-grade errors/warnings/hints for one Delphi source file ' +
-    '(Error Insight via the official DelphiLSP linter), WITHOUT ' +
-    'building. Real compiler codes (E2003, W1000, H2164...) with exact ' +
-    '0-based positions (range) and line, the 1-based line delphi_read ' +
-    'shows. Severity is the LSP scale: 1=error, 2=warning, ' +
-    '3=information, 4=hint. The "hints" counter groups 3 and 4 together; ' +
-    'the per-diagnostic severity tells them apart. Lints the CURRENT ' +
-    'on-disk content. A big unit can take over a minute the first time: ' +
-    'the answer then says the lint is in progress - call again with the ' +
-    'same file and the result is returned (the lint is not restarted ' +
-    'while the file is unchanged).';
+    '(Error Insight, the official DelphiLSP linter), WITHOUT building. ' +
+    'Real compiler codes (E2003, W1000, H2164...) with the exact 0-based ' +
+    'range and the 1-based line delphi_read shows. Severity is the LSP ' +
+    'scale: 1=error, 2=warning, 3=information, 4=hint; the "hints" ' +
+    'counter groups 3 and 4. Lints the CURRENT on-disk content with the ' +
+    'settings of "project". For a unit BELOW its folder the engine gives ' +
+    'errors only (LSP-046); delphi_build gives the rest. A big unit can ' +
+    'take over a minute the first time: the answer then says the lint is ' +
+    'in progress - call again (it is not restarted while the file is ' +
+    'unchanged).';
 
   SD_BUILD_REFERENCES =
     'Find references to the identifier at a 0-based line:character ' +

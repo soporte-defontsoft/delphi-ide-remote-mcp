@@ -71,6 +71,12 @@ function UnitsDeFueraDelProyecto(const ADprojPath: string): TArray<string>;
 { La nota de unos ajustes del motor recortados (LSP-037), leida del NOMBRE
   que les pone FabricateSettings (su inversa); '' si no se recorto nada. }
 function NotaDeRecorte(const ASettingsFile: string): string;
+{ La nota de AFile si cuelga por DEBAJO de la carpeta del proyecto de
+  ASettingsFile (LSP-046): de esa unidad el motor publica los errores y nunca
+  los warnings ni los hints (medido el 15-oct-2026 con el motor solo; en la
+  carpeta del proyecto y en una hermana publica todo). '' en otro caso, y
+  nunca lanza: es una nota, no puede costar la respuesta. }
+function NotaDeDebajoDelProyecto(const ASettingsFile, AFile: string): string;
 
 implementation
 
@@ -269,6 +275,25 @@ begin
   M := TRegEx.Match(TPath.GetFileName(ASettingsFile), RECORTE_PATRON, [roIgnoreCase]);
   if M.Success then
     Result := MsgFmt(SN_LSP_RECORTE_FMT, [StrToIntDef(M.Groups[1].Value, 0)]);
+end;
+
+function NotaDeDebajoDelProyecto(const ASettingsFile, AFile: string): string;
+begin
+  Result := '';
+  try
+    // la carpeta del proyecto es la que el motor hace suya al cargar los
+    // ajustes (ProjectOfSettings); DEBAJO es dentro y no la misma, y la misma
+    // es la que cae dentro en los dos sentidos (un lector: DentroDeSiMismo)
+    var Proyecto := ProjectOfSettings(ASettingsFile);
+    if Proyecto = '' then
+      Exit;
+    var DeProyecto := TPath.GetDirectoryName(Proyecto);
+    var DeUnidad := TPath.GetDirectoryName(TPath.GetFullPath(AFile));
+    if DentroDeSiMismo(DeProyecto, DeUnidad) and not DentroDeSiMismo(DeUnidad, DeProyecto) then
+      Result := MsgText(SN_LSP_DEBAJO_DEL_PROYECTO);
+  except
+    Result := '';
+  end;
 end;
 
 var

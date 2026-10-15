@@ -154,6 +154,15 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   that takes the answer at the header as the target turns every real call into a homonym. This
   server corrects it where the answer comes in: on a routine header, a line that does not name the
   identifier is not its definition - the header is.
+- **No warnings or hints for a unit below its project's folder** (measured 2026-10-15, engine
+  37.0 alone with this server's settings; the 13.2 VM answers the same): of a unit in `Sub1\` or
+  `Domain\Models\` under the folder of the project's `.dpr`, listed in the project or not, the
+  linter publishes the errors (`E2010`) and never the warnings or hints dcc gives for the same
+  text (`W1036`, `H2077`); in the project's folder (listed or not) and in a sibling folder
+  (`..\Shared`) it publishes everything. Nothing on our side changed it: `projectFiles` in the
+  IDE's own `{name, file}` shape, the folder in `-U`, the `.dpr` opened first, an absolute `in`
+  path, the uri with backslashes or a lowercase drive. `delphi_diagnostics` says so (`LSP-046`)
+  and names the project it linted with; `delphi_build` is the full check.
 
 ## Complete capability inventory (measured on 37.0, 2026-08)
 
