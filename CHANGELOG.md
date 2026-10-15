@@ -119,6 +119,27 @@ the MCP `initialize` response (`serverInfo.version`).
   base may now live in any folder of the project; without project settings
   there is no engine and the root stays unjudged, as before.
   `test_juez_raiz_motor_1192`.
+- **`delphi_designer set` writes a property published by a base class of
+  the user's own.** With `TFormMain = class(TBaseForm)` and a `TBaseForm`
+  publishing `Modo: Integer`, `set Modo=2` on the root was refused with
+  `DSGN-087` "`Modo` does not exist in TForm according to the framework"
+  - false: the real form reads it - while `lint` already kept quiet about
+  it (the fix of `lint` above left `set` judging the root against the
+  framework only, and the point was declared for 1.20). The value is now
+  judged by the type the user's class declares, with the same judges the
+  framework's properties get: a type of the compiler (`Integer`, `string`,
+  `Boolean`, `Double`...), a type the table knows by its name (`TAlign`,
+  `TColor`, `TFont`), or an enumeration or set declared in that unit, with
+  its members read from the source (`TTono = (toClaro, toOscuro)`); the
+  rest of the judgement (a whole number that fits, a string written as the
+  IDE writes it, a colour constant) follows as for any property. What
+  nobody can judge - a class of the user's own, a type of another unit, a
+  type two framework units declare - is refused saying so, and so is a
+  path into such a property (`Modo.X`): write the line with `delphi_edit`.
+  `preview` cannot load the user's classes, so it skips those properties as
+  the IDE would without them: `ignoredUserNote` (`DSGN-152`) now names
+  them and says it is not an error of the form.
+  `test_set_propiedad_usuario_1192`.
 
 ### Changed
 

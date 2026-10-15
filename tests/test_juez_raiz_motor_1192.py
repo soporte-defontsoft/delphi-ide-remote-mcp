@@ -85,14 +85,13 @@ try:
     r = lint(DFM)
     check('R1 lint con la homonima (UA_Base) delante en la carpeta: CLEAN (Modo lo publica la base real)',
           limpio(r), r[:400])
-    # (set juzga la raiz contra el framework y lo que publica la base del usuario lo sigue
-    # negando, a proposito: es el punto declarado para la 1.20 -set/preview y la nota
-    # DSGN-114-; aqui, el control de que set sigue llegando al juez por el motor)
-    r = s.call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'FormMain', 'prop': 'Caption',
-                                   'value': "'Hola'"}, t=300)
-    check('R2 control: set Caption en esa raiz (heredada por el motor): escrito',
-          not mc.fallo(r) and "Caption = 'Hola'" in mc.lee(DFM), r[:400])
-    s.call('delphi_edit', {'path': DFM, 'old': '  Modo = 1', 'new': '  Modo = 1\n  ModalResult = mrOK'})
+    # (set juzga Modo por el tipo que declara la base del usuario, HojaDelUsuario:
+    # test_set_propiedad_usuario_1192 mide cada tipo; aqui, que llega a la base real)
+    r = s.call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'FormMain', 'prop': 'Modo',
+                                   'value': '2'}, t=300)
+    check('R2 set Modo=2 en la raiz (publicada por la base real): escrito',
+          not mc.fallo(r) and 'Modo = 2' in mc.lee(DFM), r[:400])
+    s.call('delphi_edit', {'path': DFM, 'old': '  Modo = 2', 'new': '  Modo = 2\n  ModalResult = mrOK'})
     r = lint(DFM)
     check('R3 ModalResult = mrOK en esa raiz: lint lo nombra (el juez llega a TForm por la base real)',
           'ModalResult' in r and not limpio(r) and 'Modo' not in r.replace('ModalResult', ''), r[:500])

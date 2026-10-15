@@ -4677,6 +4677,12 @@ const
     'the rest was drawn. The form will fail to open until they are fixed (the ' +
     'program cannot create it, and the IDE asks to ignore each one): set them ' +
     'with delphi_designer set, or remove them - line says where each one is.';
+  { ...salvo lo que publica una clase del USUARIO en la raiz: el renderizador
+    no carga sus clases, la forma real si las lee (1.19.2) }
+  SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT =
+    '[DSGN-152] Published by your own classes, which the renderer cannot ' +
+    'load: %s. The real form reads them, and the IDE would skip them the ' +
+    'same way without those classes: not an error of the form.';
   { El recorte lo hace el SERVIDOR (RecortaPngBytes), con la imagen ya pintada:
     decir que el renderizador no pudo dibujar era falso (segunda revision de
     la 1.17.0) }
@@ -4913,6 +4919,20 @@ const
     '[DSGN-087 INVALID_PARAM] %s.%s = %s was NOT written: %s%s';
   SF_DESIGNER_QUIZAS_FMT =
     ' Did you mean %s?';
+  { Una propiedad que publica una clase del USUARIO en la raiz (TBaseForm.Modo):
+    set la juzga por su tipo escrito (HojaDelUsuario); lo que no puede juzgar
+    lo dice, en vez de "no existe en TForm" (1.19.2) }
+  SF_DESIGNER_TIPO_DEL_USUARIO_FMT =
+    '"%s" is published by your %s (%s) with the type %s, which set cannot ' +
+    'judge - not a type of the framework, nor an enumeration or set ' +
+    'declared in that unit: write the line with delphi_edit.';
+  SF_DESIGNER_TIPO_DEL_USUARIO_AMBIGUO_FMT =
+    '"%s" is published by your %s (%s) with the type %s, which more than ' +
+    'one unit of the framework declares: set cannot tell which one; write ' +
+    'the line with delphi_edit.';
+  SF_DESIGNER_RUTA_DEL_USUARIO_FMT =
+    '"%s" is published by your %s (%s): set does not follow a path into ' +
+    'it; write the line with delphi_edit.';
 
   SR_DESIGNER_SET_EVENTO_FMT =
     '[DSGN-088 INVALID_PARAM] %s is an event of %s: set does not bind ' +

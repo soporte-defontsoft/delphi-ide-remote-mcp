@@ -40,6 +40,16 @@ type
     Name: string;
   end;
 
+  // una propiedad que publica una clase del USUARIO en la cadena de la raiz
+  // de un form (ClaseDeJuezDeRaiz): la tabla no la conoce; su tipo, tal como
+  // va escrito, lo juzga HojaDelUsuario (set, 1.19.2)
+  TPropiedadDelUsuario = record
+    Nombre: string;
+    Tipo: string;    // '' = redeclarada sin tipo (property Caption;): el del ancestro
+    Clase: string;   // la clase que la publica
+    Fichero: string; // la unidad de esa clase
+  end;
+
   TMetaTable = class
   public
     // las clases por su IDENTIDAD, con su unidad ('vcl.graphics:tfont' ->
@@ -238,7 +248,34 @@ function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   property Foo): la clase real las lee y la tabla no las conoce. La juzgan
   set y el lint (H8 de la 1.19.2). Nunca lanza. }
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
-  out APropias: TArray<string>): string;
+  out APropias: TArray<TPropiedadDelUsuario>): string;
+
+{ Entre las que publica el usuario (ClaseDeJuezDeRaiz), la llamada ANombre. }
+function PropiedadDelUsuarioLlamada(const APropias: TArray<TPropiedadDelUsuario>;
+  const ANombre: string; out AProp: TPropiedadDelUsuario): Boolean;
+function PublicaElUsuario(const APropias: TArray<TPropiedadDelUsuario>; const ANombre: string): Boolean;
+
+{ La hoja con la que set juzga el VALOR de una propiedad que publica una clase
+  del USUARIO (AProp): su tipo escrito, resuelto por los mismos jueces que
+  los de la tabla - un tipo del compilador (TipoIntrinseco: Integer, string,
+  Boolean...), uno que la tabla conoce por su nombre (TAlign, TColor, TFont;
+  si lo declaran varias unidades no se sabe cual), o un enumerado o conjunto
+  declarado en la unidad de esa clase (sus miembros, por el lector). '' con
+  AHoja lista para el resto del juicio de set (su base, su clase); AJuzgado =
+  el valor ya se juzgo aqui (un enumerado del usuario: la tabla no lo tiene)
+  y AHoja.Kind queda en '?' para que nadie lo vuelva a juzgar. Si no, lo que
+  se dice: el valor no es de ese tipo, o el tipo no lo puede juzgar nadie
+  (una clase del usuario: delphi_edit). Se negaba todo como "no existe en
+  TForm" (1.19.2). Nunca lanza. }
+function HojaDelUsuario(M: TMetaTable; const AProp: TPropiedadDelUsuario; const AValor: string;
+  out AHoja: TPropRec; out AJuzgado: Boolean): string;
+
+{ Las propiedades que publican las clases del USUARIO en la cadena de la raiz
+  del form ADesigner (.dfm/.fmx): su .pas por el nombrador (UnidadDeDesigner)
+  y el juez de la raiz. Para que preview diga de una 'ignored' de la raiz que
+  es suya, no un error. Vacio sin .pas, sin tabla o sin cadena. Nunca lanza. }
+function PublicadasPorElUsuario(const ADesigner, AClaseRaiz: string;
+  AIsFmx: Boolean): TArray<TPropiedadDelUsuario>;
 
 { Por que una clase no esta en la tabla M: no existe para ella (DSGN-015),
   o dos unidades la declaran con otras publicadas (DSGN-056). Lo dicen info,
@@ -269,7 +306,8 @@ uses
   Lsp.Guard, // ReadPathDenied: la puerta de leer el .pas del form
   Lsp.PascalDecl, // EL lector de clases: la raiz y sus bases
   Lsp.Pascal,
-  Lsp.Herencia; // LA cadena de ancestros por el motor (la base de la raiz)
+  Lsp.Herencia, // LA cadena de ancestros por el motor (la base de la raiz)
+  Lsp.DesignerForma; // UnidadDeDesigner: el .pas de un designer (PublicadasPorElUsuario)
 
 type
   TJubilada = record
@@ -761,11 +799,55 @@ begin
   end;
 end;
 
+{ EL juicio del VALOR de una hoja (la propiedad final, por su TPropRec) con lo
+  que la tabla sabe: un enumerado es UN identificador (ReadIdent) - su valor,
+  o Tipo.valor con el nombre del tipo, que GetEnumValue tambien lee; un
+  numero, una cadena o Vcl.Controls.TAlign.alClient no los lee -, y un
+  conjunto va entre corchetes y de nombres sueltos (ReadSet): un numero, una
+  cadena o [fsBold,] no los lee (revision de la 1.17.0). '' si vale o si no
+  se puede saber. Vivia dentro de JuzgaPropiedad; una propiedad que publica
+  una clase del USUARIO con un tipo de la tabla se juzga con el mismo
+  (HojaDelUsuario, 1.19.2). }
+function JuzgaHoja(M: TMetaTable; const AHoja: TPropRec; const ARhs: string): string;
+var
+  V, Have, Members: string;
+begin
+  Result := '';
+  if AHoja.Kind = 'e' then
+  begin
+    V := ARhs;
+    if (Pos('.', V) > 0) and SameText(Copy(V, 1, Pos('.', V) - 1), AHoja.TypeName) then
+      V := Copy(V, Pos('.', V) + 1, MaxInt);
+    if not M.EnumShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
+      Have := '?';
+    if not EsIdentificador(V, False) or
+       (M.Enums.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Members) and
+        not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
+      Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [ARhs, AHoja.TypeName, Have]));
+  end
+  else if AHoja.Kind = 's' then
+  begin
+    if not (ARhs.StartsWith('[') and ARhs.EndsWith(']')) then
+    begin
+      V := ARhs;
+      if not EsIdentificador(V, False) and M.SetShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
+        V := Have.Split([','])[0].Trim;
+      Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [AHoja.TypeName, V]));
+    end;
+    if ARhs.Substring(1, Length(ARhs) - 2).Trim <> '' then
+      for V in ARhs.Substring(1, Length(ARhs) - 2).Split([',']) do
+        if not EsIdentificador(V.Trim, False) or
+           (M.Sets.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Members) and
+            not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
+          Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', ARhs, V.Trim), AHoja.TypeName]));
+  end;
+end;
+
 function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
   out AHoja: TPropRec; out AHayHoja: Boolean): string;
 var
   SIdx: Integer;
-  Cur, CurShow, Seg, Key, Have, Members, V, Desc: string;
+  Cur, CurShow, Seg, Key, Have, Desc: string;
   Segs: TArray<string>;
   R: TPropRec;
 begin
@@ -844,41 +926,9 @@ begin
     begin
       AHoja := R;
       AHayHoja := True;
-      // leaf value checks, only where the table can KNOW
-      // Un enumerado es UN identificador (ReadIdent): su valor, o Tipo.valor
-      // con el nombre del tipo, que GetEnumValue tambien lee. Un numero, una
-      // cadena o Vcl.Controls.TAlign.alClient no los lee: se escribian y el
-      // form no cargaba (revision de la 1.17.0)
-      if R.Kind = 'e' then
-      begin
-        V := ARhs;
-        if (Pos('.', V) > 0) and SameText(Copy(V, 1, Pos('.', V) - 1), R.TypeName) then
-          V := Copy(V, Pos('.', V) + 1, MaxInt);
-        if not M.EnumShow.TryGetValue(ClaveDeIdentificador(R.TypeId), Have) then
-          Have := '?';
-        if not EsIdentificador(V, False) or
-           (M.Enums.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
-            not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
-          Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [ARhs, R.TypeName, Have]));
-      end
-      // un conjunto, entre corchetes y de nombres sueltos (ReadSet): un
-      // numero, una cadena o [fsBold,] no los lee
-      else if R.Kind = 's' then
-      begin
-        if not (ARhs.StartsWith('[') and ARhs.EndsWith(']')) then
-        begin
-          V := ARhs;
-          if not EsIdentificador(V, False) and M.SetShow.TryGetValue(ClaveDeIdentificador(R.TypeId), Have) then
-            V := Have.Split([','])[0].Trim;
-          Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, V]));
-        end;
-        if ARhs.Substring(1, Length(ARhs) - 2).Trim <> '' then
-          for V in ARhs.Substring(1, Length(ARhs) - 2).Split([',']) do
-            if not EsIdentificador(V.Trim, False) or
-               (M.Sets.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
-                not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
-              Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', ARhs, V.Trim), R.TypeName]));
-      end;
+      // leaf value checks, only where the table can KNOW (EL juicio de una
+      // hoja: JuzgaHoja, que juzga tambien las del usuario)
+      Result := JuzgaHoja(M, R, ARhs);
     end;
   end;
 end;
@@ -1076,8 +1126,13 @@ begin
   end;
 end;
 
+// una propiedad publicada por una clase del usuario, con su clase y su unidad
+// (definida mas abajo, con los demas lectores de esas propiedades)
+function PropiedadDelUsuario(const AProp: TPropiedadPas; ATipo: TTipoPas;
+  const AFichero: string): TPropiedadDelUsuario; forward;
+
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
-  out APropias: TArray<string>): string;
+  out APropias: TArray<TPropiedadDelUsuario>): string;
 const
   MAX_SALTOS = 8;
 var
@@ -1117,7 +1172,7 @@ begin
         // lee y la tabla no lo conoce
         for var P in T.Propiedades do
           if (P.Visibilidad in [vpDefecto, vpPublicada]) and not P.DeClase and not P.ConIndices then
-            APropias := APropias + [P.Nombre];
+            APropias := APropias + [PropiedadDelUsuario(P, T, Fichero)];
         Nombre := UltimoTrozo(T.Ancestro);
         if Nombre = '' then
           Break; // desciende de TObject: ninguna de la tabla
@@ -1149,11 +1204,191 @@ begin
   end;
 end;
 
+function PropiedadDelUsuario(const AProp: TPropiedadPas; ATipo: TTipoPas;
+  const AFichero: string): TPropiedadDelUsuario;
+begin
+  Result.Nombre := AProp.Nombre;
+  Result.Tipo := AProp.Tipo;
+  Result.Clase := ATipo.Nombre;
+  Result.Fichero := AFichero;
+end;
+
+function PropiedadDelUsuarioLlamada(const APropias: TArray<TPropiedadDelUsuario>;
+  const ANombre: string; out AProp: TPropiedadDelUsuario): Boolean;
+begin
+  for var P in APropias do
+    if MismoIdentificador(P.Nombre, ANombre) then
+    begin
+      AProp := P;
+      Exit(True);
+    end;
+  AProp := Default(TPropiedadDelUsuario);
+  Result := False;
+end;
+
+function PublicaElUsuario(const APropias: TArray<TPropiedadDelUsuario>; const ANombre: string): Boolean;
+var
+  P: TPropiedadDelUsuario;
+begin
+  Result := PropiedadDelUsuarioLlamada(APropias, ANombre, P);
+end;
+
+function HojaDelUsuario(M: TMetaTable; const AProp: TPropiedadDelUsuario; const AValor: string;
+  out AHoja: TPropRec; out AJuzgado: Boolean): string;
+var
+  Kind: Char;
+  Id, Base, Enc, Texto, Nombre, Clave, V: string;
+  Miembros, Hallados: TArray<string>;
+  U: TUnidadPas;
+  T: TTipoPas;
+
+  function EnLista(const AV: string): Boolean;
+  begin
+    for var Mi in Miembros do
+      if MismoIdentificador(Mi, AV) then
+        Exit(True);
+    Result := False;
+  end;
+
+  // Tipo.valor, con el nombre del tipo (GetEnumValue tambien lo lee)
+  function SinElTipo(const AV: string): string;
+  begin
+    Result := AV;
+    if (Pos('.', AV) > 0) and MismoIdentificador(Copy(AV, 1, Pos('.', AV) - 1), Nombre) then
+      Result := Copy(AV, Pos('.', AV) + 1, MaxInt);
+  end;
+
+  function NoSeJuzga: string;
+  begin
+    Result := MsgFmt(SF_DESIGNER_TIPO_DEL_USUARIO_FMT, [AProp.Nombre, AProp.Clase,
+      TPath.GetFileName(AProp.Fichero), AProp.Tipo]);
+  end;
+
+begin
+  Result := '';
+  AJuzgado := False;
+  AHoja := Default(TPropRec);
+  AHoja.Kind := '?';
+  AHoja.Name := AProp.Nombre;
+  AHoja.TypeName := AProp.Tipo;
+  Nombre := UltimoTrozo(AProp.Tipo);
+  if Nombre = '' then
+    Exit(NoSeJuzga);
+  // un tipo del compilador: la misma identidad que le da el generador
+  if TipoIntrinseco(Nombre, Kind, Id, Base, Miembros) then
+  begin
+    AHoja.Kind := Kind;
+    AHoja.TypeId := Id;
+    if Kind = 'e' then
+    begin
+      V := SinElTipo(AValor);
+      if not EsIdentificador(V, False) or not EnLista(V) then
+        Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [AValor, AProp.Tipo, string.Join(', ', Miembros)]));
+      AJuzgado := True;
+      AHoja.Kind := '?';
+    end;
+    Exit;
+  end;
+  // uno que la tabla conoce por su nombre (su identidad lleva la unidad): un
+  // enumerado, un conjunto, un tipo con base o una clase; sus valores los
+  // juzga EL juez de una hoja, como en un componente
+  Clave := ClaveDeIdentificador(Nombre);
+  Hallados := [];
+  for var K in M.Enums.Keys do
+    if K.EndsWith(':' + Clave) or (K = Clave) then
+      Hallados := Hallados + ['e' + K];
+  for var K in M.Sets.Keys do
+    if K.EndsWith(':' + Clave) or (K = Clave) then
+      Hallados := Hallados + ['s' + K];
+  for var K in M.Bases.Keys do
+    if K.EndsWith(':' + Clave) or (K = Clave) then
+      Hallados := Hallados + ['o' + K];
+  for var K in M.Classes.Keys do
+    if K.EndsWith(':' + Clave) then
+      Hallados := Hallados + ['c' + K];
+  if Length(Hallados) = 1 then
+  begin
+    AHoja.Kind := Hallados[0][1];
+    AHoja.TypeId := Hallados[0].Substring(1);
+    Exit(JuzgaHoja(M, AHoja, AValor));
+  end;
+  if Length(Hallados) > 1 then
+    Exit(MsgFmt(SF_DESIGNER_TIPO_DEL_USUARIO_AMBIGUO_FMT, [AProp.Nombre, AProp.Clase,
+      TPath.GetFileName(AProp.Fichero), AProp.Tipo]));
+  // un enumerado o un conjunto declarado en la unidad de esa clase: sus
+  // miembros, por EL lector (un conjunto 'set of TTono', los de su base)
+  U := nil;
+  try
+    try
+      Texto := PatchLoadText(AProp.Fichero, Enc);
+      U := LeeFuentePascal(Texto);
+    except
+      U := nil;
+    end;
+    T := nil;
+    if U <> nil then
+      for var X in U.Tipos do
+        if (X.Clase in [ctEnumerado, ctConjunto]) and MismoIdentificador(X.Nombre, Nombre) then
+        begin
+          T := X;
+          Break;
+        end;
+    if T = nil then
+      Exit(NoSeJuzga);
+    Miembros := T.Miembros;
+    if (T.Clase = ctConjunto) and (Length(Miembros) = 0) and (T.Base <> '') then
+      for var X in U.Tipos do
+        if (X.Clase = ctEnumerado) and MismoIdentificador(X.Nombre, UltimoTrozo(T.Base)) then
+          Miembros := X.Miembros;
+    if Length(Miembros) = 0 then
+      Exit(NoSeJuzga);
+    AJuzgado := True;
+    if T.Clase = ctEnumerado then
+    begin
+      V := SinElTipo(AValor);
+      if not EsIdentificador(V, False) or not EnLista(V) then
+        Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [AValor, AProp.Tipo, string.Join(', ', Miembros)]));
+    end
+    else
+    begin
+      if not (AValor.StartsWith('[') and AValor.EndsWith(']')) then
+        Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [AProp.Tipo, Miembros[0]]));
+      if AValor.Substring(1, Length(AValor) - 2).Trim <> '' then
+        for V in AValor.Substring(1, Length(AValor) - 2).Split([',']) do
+          if not EsIdentificador(V.Trim, False) or not EnLista(V.Trim) then
+            Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', AValor, V.Trim), AProp.Tipo]));
+    end;
+  finally
+    U.Free;
+  end;
+end;
+
+function PublicadasPorElUsuario(const ADesigner, AClaseRaiz: string;
+  AIsFmx: Boolean): TArray<TPropiedadDelUsuario>;
+var
+  Pas: string;
+  M: TMetaTable;
+  Falta: TFaltaTabla;
+begin
+  Result := [];
+  try
+    Pas := UnidadDeDesigner(ADesigner);
+    if (Pas = '') or not TFile.Exists(Pas) then
+      Exit;
+    M := MetaTable(AIsFmx, Falta, 0); // sin esperar: sin tabla no se dice nada
+    if M = nil then
+      Exit;
+    ClaseDeJuezDeRaiz(M, Pas, '', AClaseRaiz, Result);
+  except
+    Result := [];
+  end;
+end;
+
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   const ALines: TArray<string>; out ANotas: TArray<string>;
   const APas: string): TArray<string>;
 var
-  Propias: TArray<string>;  // las que publica el usuario en la cadena de la raiz
+  Propias: TArray<TPropiedadDelUsuario>;  // las que publica el usuario en la cadena de la raiz
   Stack: TStack<string>;    // owner class per nesting level ('' = unknown)
   Heads: TStack<Integer>;   // ...y la linea de la cabecera de ese objeto
   RefsDe: TDictionary<Integer, TArray<string>>; // ReferenciasDeObjeto, por cabecera
@@ -1279,7 +1514,7 @@ begin
               Continue;
             // en la raiz, lo que publica una clase del usuario de su cadena
             // (TBaseForm.Foo): la clase real lo lee y la tabla no lo conoce
-            if (Stack.Count = 1) and (IndexText(Lhs.Split(['.'])[0], Propias) >= 0) then
+            if (Stack.Count = 1) and PublicaElUsuario(Propias, Lhs.Split(['.'])[0]) then
               Continue;
             // en FMX Left/Top no colocan un control: los guarda TComponent, el
             // sitio del icono de un no visual (3.7 de la 1.18.0, Hermes)

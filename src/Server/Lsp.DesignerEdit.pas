@@ -1677,12 +1677,12 @@ end;
   el 7-oct-2026: su tamano en el form se negaba con DSGN-082; la del form,
   por la primera de su cadena que la tabla conoce (TForm, TFrame...): la suya
   propia no, que un TForm1 de una demo se llama igual. }
-function ClaseDeJuez(const F: TFormEnEdicion; AObj: TStyleObj; out AClsId: string): string;
-var
-  Propias: TArray<string>;
+function ClaseDeJuezYPropias(const F: TFormEnEdicion; AObj: TStyleObj; out AClsId: string;
+  out APropias: TArray<TPropiedadDelUsuario>): string;
 begin
   Result := '';
   AClsId := '';
+  APropias := [];
   if AObj <> F.Doc.Root then
   begin
     if F.Tabla.ClaseDeNombre(AObj.ClassName_, AClsId) then
@@ -1694,16 +1694,23 @@ begin
       F.Marco, MsgText(SF_DESIGNER_QUE_PROPIEDADES), MsgText(SF_DESIGNER_VIA_LINEA)]));
   end;
   // la raiz, por su cadena de ancestros: EL recorredor que juzga tambien el
-  // lint (Lsp.DesignerMeta; lo que publica una clase del usuario de esa
-  // cadena, Propias, set lo sigue juzgando contra la del framework)
+  // lint (Lsp.DesignerMeta); lo que publica una clase del usuario de esa
+  // cadena, APropias, lo juzga set por su tipo escrito (HojaDelUsuario)
   if F.HayPas then
   begin
-    AClsId := ClaseDeJuezDeRaiz(F.Tabla, F.Pas, F.PasTexto, AObj.ClassName_, Propias);
+    AClsId := ClaseDeJuezDeRaiz(F.Tabla, F.Pas, F.PasTexto, AObj.ClassName_, APropias);
     if AClsId <> '' then
       Exit;
   end;
   Result := MsgFmt(SR_DESIGNER_CLASE_SIN_TABLA_FMT, [NombreDe(AObj), AObj.ClassName_,
     F.Marco, MsgText(SF_DESIGNER_QUE_PROPIEDADES), MsgText(SF_DESIGNER_VIA_LINEA)]);
+end;
+
+function ClaseDeJuez(const F: TFormEnEdicion; AObj: TStyleObj; out AClsId: string): string;
+var
+  Propias: TArray<TPropiedadDelUsuario>;
+begin
+  Result := ClaseDeJuezYPropias(F, AObj, AClsId, Propias);
 end;
 
 // la propiedad casi bien escrita: la mas parecida del primer trozo, si es una
@@ -1877,6 +1884,9 @@ var
   Trozos: TArray<string>;
   Hoja: TPropRec;
   HayHoja, Comillas, WasThere, Quita: Boolean;
+  Propias: TArray<TPropiedadDelUsuario>; // las que publica el usuario en la raiz
+  Propia: TPropiedadDelUsuario;
+  DelUsuario, Juzgado: Boolean;
   Ini, Fin: Integer;
 begin
   AInfo := Default(TValorPuesto);
@@ -1888,7 +1898,7 @@ begin
   Result := BuscaComponente(F, ANombre, Obj);
   if Result <> '' then
     Exit;
-  Result := ClaseDeJuez(F, Obj, ClsId);
+  Result := ClaseDeJuezYPropias(F, Obj, ClsId, Propias);
   if Result <> '' then
     Exit;
   // en FMX Left/Top no colocan un control (son el sitio del icono de un no
@@ -1907,7 +1917,28 @@ begin
     Exit(MsgFmt(SR_DESIGNER_SET_POR_REFERENCIA_FMT, [NombreDe(Obj), Pre, Ref,
       Copy(Prop, Length(Pre) + 2, MaxInt), Pre, Ref, Ref, Copy(Prop, Length(Pre) + 2, MaxInt)]));
   V := AValor.Trim;
-  Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
+  // una propiedad que publica una clase del USUARIO en la raiz (TBaseForm.Modo):
+  // la tabla no la conoce y se negaba "no existe en TForm"; se juzga por su
+  // tipo escrito (HojaDelUsuario) y el resto del juicio sigue con su hoja. Una
+  // redeclarada sin tipo (property Caption;) es la del ancestro: la tabla la juzga
+  DelUsuario := False;
+  Juzgado := False;
+  Juicio := '';
+  if (Obj = F.Doc.Root) and PropiedadDelUsuarioLlamada(Propias, Prop.Split(['.'])[0], Propia) and
+     (Propia.Tipo <> '') then
+  begin
+    if Prop.Contains('.') then
+      Exit(MsgFmt(SR_DESIGNER_SET_INVALIDO_FMT, [NombreDe(Obj), Prop, V,
+        MsgFmt(SF_DESIGNER_RUTA_DEL_USUARIO_FMT, [Prop.Split(['.'])[0], Propia.Clase,
+        TPath.GetFileName(Propia.Fichero)]), '']));
+    Juicio := HojaDelUsuario(F.Tabla, Propia, V, Hoja, Juzgado);
+    if Juicio <> '' then
+      Exit(MsgFmt(SR_DESIGNER_SET_INVALIDO_FMT, [NombreDe(Obj), Prop, V, Juicio, '']));
+    HayHoja := True;
+    DelUsuario := True;
+  end
+  else
+    Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
   if HayHoja and (Hoja.Kind = 'm') then
     Exit(MsgFmt(SR_DESIGNER_SET_EVENTO_FMT, [Prop, NombreDe(Obj), Prop]));
   // nil, sin comillas, solo vacia una REFERENCIA a otro componente (la quita:
@@ -1956,7 +1987,8 @@ begin
       Exit(Suelto);
     Trozos := TrozosDeLiteral(Texto);
     V := string.Join(' ', Trozos);
-    Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
+    if not DelUsuario then
+      Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
   end
   // un literal en una propiedad que por su tipo no es una cadena (un
   // Variant, o una que la tabla no conoce): escrito como el IDE tambien;
@@ -1969,7 +2001,8 @@ begin
       Exit(Suelto);
     Trozos := TrozosDeLiteral(Texto);
     V := string.Join(' ', Trozos);
-    Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
+    if not DelUsuario then
+      Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
   end;
   // un valor de una linea: una lista, una coleccion o un bloque binario no
   if not ValidStyleValue(V) or EsValorDeBloque(V) then

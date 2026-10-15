@@ -1383,6 +1383,21 @@ begin
     begin
       Return.AddPair('ignored', IgnoradasConLinea(Ruta, R.Ignoradas));
       Return.AddPair('ignoredNote', MsgText(SN_DESIGNER_PREVIEW_IGNORADAS));
+      // lo que publica una clase del USUARIO en la raiz no lo lee el
+      // renderizador (no carga sus clases): se dice cual es, que no es un
+      // error del form (1.19.2)
+      var Suyas := '';
+      var Publicadas := PublicadasPorElUsuario(Ruta, R.RaizClase, Fw = 'fmx');
+      for var Ig in R.Ignoradas do
+        if SameText(Ig.Componente, R.RaizNombre) then
+        begin
+          var Suya: TPropiedadDelUsuario;
+          if PropiedadDelUsuarioLlamada(Publicadas, Ig.Propiedad, Suya) then
+            Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
+              TPath.GetFileName(Suya.Fichero) + ')';
+        end;
+      if Suyas <> '' then
+        Return.AddPair('ignoredUserNote', MsgFmt(SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT, [Suyas]));
     end;
     if Length(R.Avisos) > 0 then
       Return.AddPair('warnings', Textos(R.Avisos));

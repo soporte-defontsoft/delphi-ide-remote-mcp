@@ -106,6 +106,16 @@ function NombreDeIdDeTipo(const AId: string): string;
 function EsIdDeTipo(const AId: string): Boolean;
 function UnidadDeIdDeTipo(const AId: string): string;
 
+{ Un tipo que pone el compilador, por su nombre (Integer, string, Boolean,
+  Double...): su clase para el juez ('o', 'e'), su identidad en la tabla (la
+  que le da el generador: el nombre, sin unidad), su base ('integer',
+  'string'...) y sus miembros (Boolean: False, True). False si no lo es -
+  NativeInt y NativeUInt tambien: su tamano es de la plataforma y la tabla no
+  la guarda. Para una propiedad que publica una clase del USUARIO (set,
+  1.19.2): su tipo escrito se juzga con lo mismo que juzgo los de la tabla. }
+function TipoIntrinseco(const ANombre: string; out AKind: Char; out AId, ABase: string;
+  out AMiembros: TArray<string>): Boolean;
+
 { Lo que una clase guarda en el form POR CODIGO, sin publicarlo: los
   nombres de Filer.DefineProperty / DefineBinaryProperty de cada
   'procedure TClase.DefineProperties' de ATexto (con las cadenas: TextoActivo
@@ -1628,6 +1638,26 @@ begin
     AInfo := Info('e', 'LongBool', ['False', 'True'])
   else
     Result := False;
+end;
+
+function TipoIntrinseco(const ANombre: string; out AKind: Char; out AId, ABase: string;
+  out AMiembros: TArray<string>): Boolean;
+var
+  L: string;
+  I: TInfoTipo;
+begin
+  AKind := '?';
+  AId := '';
+  ABase := '';
+  AMiembros := nil;
+  L := ClaveDeIdentificador(ANombre);
+  Result := (L <> 'nativeint') and (L <> 'nativeuint') and Intrinseco(L, '', I);
+  if not Result then
+    Exit;
+  AKind := I.Kind;
+  AId := I.Nombre;
+  ABase := I.Base;
+  AMiembros := I.Miembros;
 end;
 
 { Los miembros del enumerado de la base de un conjunto (o de un subrango
