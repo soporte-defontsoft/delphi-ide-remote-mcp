@@ -12,11 +12,14 @@ servidor: se dice de donde es, sin su ruta.
   I1 add ["x.log"]: GIT-078 con la regla y su sitio (.gitignore line 1) (ROJO)
   I2 add ["X.LOG"] (otra mayuscula): GIT-078 lo nombra igual (ROJO)
   I3 add ["logs/y.txt"] (carpeta ignorada): GIT-078 con la regla "logs/" (ROJO)
-  I4 add ["w.tmp"] (regla en .git/info/exclude): GIT-078 la nombra (ROJO)
+  I4 add ["w.tmp"] (regla en .git/info/exclude): GIT-078 la nombra, relativa; git
+     da su fuente ABSOLUTA y entrecomillada (barras invertidas del --git-dir),
+     y la lee LeeRutaDeGit (ROJO)
   I5 add ["g.glob"] (regla en core.excludesFile, fuera): GIT-078 sin la ruta (ROJO)
   I6 add ["c01.txt", "x.log"]: GIT-078 nombra x.log y no c01.txt (ROJO)
-  I7 add ["café/z.tmp2"] (regla en café/.gitignore: git la da entrecomillada,
-     "caf\\303\\251/.gitignore"): GIT-078 la nombra leida (ROJO)
+  I7 add ["café/z.tmp2"] (regla en café/.gitignore): GIT-078 la nombra con su
+     acento. Antes de core.quotePath=false (test_git_acentos_1193) git la daba
+     "caf\\303\\251/.gitignore" y la leia LeeRutaDeGit; ahora llega tal cual (ROJO)
   C1 control: add de uno que no existe: fallo, sin GIT-078
   C2 control: add de un rastreado que casa con un patron: bien, sin GIT-078
 
@@ -114,7 +117,7 @@ try:
 
     r = git(command='add', paths=['café/z.tmp2'])
     n = nota(r)
-    check('I7 add ["café/z.tmp2"] (regla en café/.gitignore, entrecomillada por git): GIT-078 la nombra leida',
+    check('I7 add ["café/z.tmp2"] (regla en café/.gitignore): GIT-078 la nombra con su acento',
           mc.rechazado(r) and 'café/z.tmp2' in n and 'café/.gitignore line 1' in n, r[:600])
 
     r = git(command='add', paths=['noexiste.txt'])

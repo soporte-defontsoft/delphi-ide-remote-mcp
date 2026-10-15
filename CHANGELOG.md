@@ -48,6 +48,26 @@ the MCP `initialize` response (`serverInfo.version`).
   (`LeeRutaDeGit`). Battery `test_git_ignorado_1193` (red against 1.19.2 on
   all seven, both controls green; one mutant per piece, the reader and the
   note).
+- **`delphi_git` gives names with accents as they are, and no longer dies
+  on them where something read-only lives inside the repo.** git quotes
+  every name that is not ASCII, in octal (`core.quotePath`, on by default):
+  `status` answered `?? "Caf\303\251.txt"`, and `diff` and `show` the same -
+  a name the agent cannot use as a path. Worse, the judge that keeps
+  `switch`, `merge`, `pull` and `stash pop` from rewriting a read-only file
+  inside the repo (2x of 1.18.2) reads the files a change touches from
+  `diff --name-only` / `stash show --name-only`, and made a path out of the
+  quoted name: in a repo with a `ReadOnlyPaths` or `ReadOnlyRoots` place
+  inside, any change touching ANY file with an accent died with `SYS-011
+  Invalid characters in path` (measured against 1.19.2 with a probe; it
+  failed closed - the protected file was left alone - but the operation
+  never ran, and the message said nothing useful). Git's own switch: the
+  server now runs it with `core.quotePath=false` - on Windows a valid file
+  name has no quote, backslash or control character, so git quotes none -
+  and the judge reads each name with the reader of git's quoting above
+  (`LeeRutaDeGit`), as the second barrier. Battery `test_git_acentos_1193`
+  (red against 1.19.2 on all six, the control green); the mutant without
+  the switch turns the three that read red and leaves the judge green on
+  the reader alone, and the one without both turns the judge red too.
 
 ## [1.19.2] - 2026-10-15
 

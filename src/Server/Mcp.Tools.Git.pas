@@ -274,7 +274,16 @@ begin
   // Nunca ejecutar los hooks ni el monitor de un repo del workspace.
   // El directorio del servidor no admite escrituras de los clientes.
   // La regla general tambien manda en switch/restore y en los hijos de Git.
+  // core.quotePath=false: git entrecomillaba en octal todo nombre con acento
+  // ("Caf\303\251.txt"): el agente lo leia en status, diff y show sin poder
+  // usarlo de ruta, y el juez de protegidos moria con SYS-011 al hacer una
+  // ruta de eso (medido el 15-oct-2026). Es el interruptor del propio git; en
+  // Windows un nombre valido no lleva comilla, barra invertida ni controles,
+  // asi que con el git no entrecomilla ninguno. Lo que aun llegue con
+  // comillas (la ruta de un fichero de git bajo el --git-dir) lo lee
+  // LeeRutaDeGit.
   Result := EnComillas(RutaDeGit) + ' -c submodule.recurse=false -c core.fsmonitor=false ' +
+    '-c core.quotePath=false ' +
     '-c commit.gpgsign=false -c tag.gpgsign=false -c core.hooksPath=' +
     EnComillas(ServerTempDir('git-hooks-off')) + ' -C ' +
     EnComillas(ARepo) + AFijado + ' ' + Resto;
@@ -1308,7 +1317,7 @@ end;
 function GitReescribeProtegido(const ARepo, AFijado, ARaiz, ACmd, AAccion, ARama: string;
   ACrear, AFetchHecho: Boolean): string;
 var
-  Objetivo, Pregunta, Rel, Abs, Dentro: string;
+  Objetivo, Pregunta, Rel, Nombre, Abs, Dentro: string;
   Reescribe, Legible, EsStashPop: Boolean;
   Ficheros, Malos: TArray<string>;
 begin
@@ -1360,12 +1369,18 @@ begin
   begin
     if Rel.Trim = '' then
       Continue;
-    Abs := TPath.Combine(ARaiz, Rel.Trim.Replace('/', '\'));
+    // por el lector de las comillas de git, de segunda barrera de
+    // core.quotePath=false (GitLinea): con la comilla, TPath.Combine lanzaba
+    // "Invalid characters in path" y switch/merge/pull/stash pop morian con
+    // SYS-011 si el cambio tocaba un fichero con acento (medido el
+    // 15-oct-2026, 1.19.3)
+    Nombre := LeeRutaDeGit(Rel.Trim);
+    Abs := TPath.Combine(ARaiz, Nombre.Replace('/', '\'));
     // la puerta de siempre, fichero a fichero: '' si se puede escribir. Con el
     // permiso de git (APermiteGit): un fichero versionado nunca esta en los
     // metadatos, y sin el cada carpeta lanzaba un git (el gitdir separado)
     if PathDenied(Abs, True) <> '' then
-      Malos := Malos + [Rel.Trim];
+      Malos := Malos + [Nombre];
   end;
   if Length(Malos) > 0 then
     Result := MsgFmt(SR_GIT_REESCRIBE_PROTEGIDO_FMT, [ACmd, string.Join(', ', Malos)]);
