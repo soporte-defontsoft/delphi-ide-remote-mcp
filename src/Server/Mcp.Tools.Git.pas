@@ -218,6 +218,20 @@ begin
   end;
 end;
 
+{ LO NUESTRO, fuera de lo que git recorre del arbol del agente: la papelera
+  (TrashFolderName) y la temporal de versiones viejas (TempFolderName), a
+  cualquier profundidad, como pathspec de EXCLUSION (el mecanismo de git, sin
+  tocar el .gitignore del agente). Va detras del "--" de status y de add: sin
+  rutas positivas, git entiende "todo menos esto"; nombrada a proposito,
+  tampoco entra. El .gitignore que escribe delphi_create solo cubre la
+  carpeta del proyecto: medido el 15-oct-2026 (Hermes), add "." metia en el
+  indice app/__delphi-patch/<dia>/U.pas, el before-restore y su marca .by. }
+function LoNuestroFuera: string;
+begin
+  Result := ' ' + EnComillas(':(exclude,glob)**/' + TrashFolderName + '/**') +
+    ' ' + EnComillas(':(exclude,glob)**/' + TempFolderName + '/**');
+end;
+
 { EL git del servidor, por su RUTA COMPLETA: git.exe en el PATH con el que
   arranco el proceso del servidor (el del operador) y SOLO ahi
   (ProgramaEnPath: ni la carpeta actual ni la del exe). Se lanzaba por su
@@ -1449,7 +1463,7 @@ begin
       Exit;
   end;
   if Cmd = 'status' then
-    GitArgs := 'status --porcelain=v1 -b' + Cola
+    GitArgs := 'status --porcelain=v1 -b' + Cola + LoNuestroFuera
   else if Cmd = 'diff' then
   begin
     var Forma := '';
@@ -1508,7 +1522,7 @@ begin
   begin
     if Length(Lista) = 0 then
       Exit(MsgText(SR_GIT_ADD_NEEDS_PATHS));
-    GitArgs := 'add' + Rutas;
+    GitArgs := 'add' + Rutas + LoNuestroFuera;
   end
   else if Cmd = 'commit' then
   begin
