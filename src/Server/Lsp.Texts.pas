@@ -6026,11 +6026,17 @@ const
   SR_UPLOAD_SHA_MISMATCH_FMT =
     '[UPLOAD-011 INVALID_PARAM] The sha256 does NOT match: what was ' +
     'assembled differs from the source, so I do NOT leave it published ' +
-    'under its name. I set it aside in %s. Resend from offset=0.';
+    'under its name: it is in the recoverable trash, %s. Resend from ' +
+    'offset=0.';
+  { el motivo de UPLOAD-012 cuando la subida mala es de un temporal: alli no
+    hay papelera (A de la 1.19.2) }
+  SF_UPLOAD_SIN_PAPELERA =
+    'a temporary folder has no trash';
 
-  { ...y cuando no se pudo apartar (la puerta niega el <nombre>.corrupt, o
-    el de antes no se deja copiar): decia "lo aparte en" con la ruta de
-    siempre, y seguia con su nombre (2t de la 1.18.x) }
+  { ...y cuando no se pudo apartar (la puerta niega su papelera, no se deja
+    copiar o quitar, o es de un temporal, que no tiene papelera): decia "lo
+    aparte en" con la ruta de siempre, y seguia con su nombre (2t de la
+    1.18.x; desde la A de la 1.19.2 se aparta a la papelera) }
   SR_UPLOAD_SHA_MISMATCH_SIN_CUARENTENA_FMT =
     '[UPLOAD-012 INVALID_PARAM] The sha256 does NOT match: what was ' +
     'assembled differs from the source, and I could NOT set it aside (%s). ' +
@@ -6573,10 +6579,10 @@ const
 
   SP_CHANGESET_KIND =
     'stage: edit (replace ONE line by anchor) | create (new file, never ' +
-    'overwrites) | delete (the WHOLE FILE; the snapshot is the way back) | ' +
+    'overwrites) | delete (a WHOLE file; a Delphi one: delphi_delete) | ' +
     'delete-line (remove ONE line by atline: a BLANK one, which has no ' +
-    'usable anchor, or with old the line you name) | move (rename/move; the ' +
-    'destination must not exist)';
+    'usable anchor, or with old the line you name) | move (to a free name; ' +
+    'a Delphi file: delphi_move)';
 
   SP_CHANGESET_PATH =
     'stage: the file the operation touches (inside the workspace roots)';
@@ -6669,6 +6675,22 @@ const
     'the commit would have refused it anyway, and it would have thrown ' +
     'away your whole batch. To touch the project use delphi_config ' +
     '(add-unit, remove-unit, add-platform, add-searchpath, set-output).';
+
+  { B de la 1.19.2 (Hermes, medido el 15-oct): el changeset movia y borraba
+    una unidad como un fichero suelto - COMMIT COMPLETE con la cabecera vieja,
+    el .dfm huerfano y el .dpr apuntando a lo que ya no existe. Se dice al
+    apilar (el move) o en el preview (el delete que nada vuelve a crear), como
+    CHSET-018. El texto, UNO: el fragmento va en el anchor del preview, y el
+    rechazo del apilado lo envuelve con su etiqueta. %s = el fichero; %s = la
+    tool que lo hace entero }
+  SF_CHSET_FICHERO_DELPHI_FMT =
+    '%s is a Delphi file: a changeset moves and deletes files alone, and a ' +
+    'unit, a form or a project goes whole - its .dfm/.fmx, its unit header, ' +
+    'the projects that list it, the relative paths that cross -, which is ' +
+    'what %s does, all or nothing. Use it before or after this changeset; ' +
+    'the edits stay here';
+  SR_CHANGESET_FICHERO_DELPHI_FMT =
+    '[CHSET-033 DENIED] %s.';
 
   SN_CHANGESET_STATUS_NOTE =
     '[CHSET-019] The ids are shown cut short on purpose: changesets can ' +
@@ -9370,7 +9392,7 @@ const
 
   SP_WS_SHA256 =
     'Optional, on the LAST chunk: the whole-file SHA-256; a mismatch FAILS ' +
-    'the call and the file is set aside as <name>.corrupt instead of being ' +
+    'the call and the file goes to the recoverable trash instead of being ' +
     'published.';
 
   SP_WS_CHUNKSHA256 =

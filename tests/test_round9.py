@@ -146,13 +146,12 @@ A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'AAA').de
 A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'BBB').decode(),
                          'offset': 0, 'sha256': '0' * 64})
 import glob
-# la de antes, sellada con su contenido ACTUAL en el cajon de lo sustituido
-# (sexta revision; la copia diaria solo guardaba la primera del dia)
-q_backups = [f for f in mc.copias(U, os.path.basename(BAD) + '.corrupt', 'CAJON_SUSTITUIDOS')
-             if open(f, 'rb').read() == b'AAA']
+# cada subida mala, su copia sellada en el cajon de lo corrupto: la segunda no
+# pisa a la primera (sexta revision; desde la A de la 1.19.2 en la papelera, no
+# como <nombre>.corrupt al lado)
+q_copias = sorted(open(f, 'rb').read() for f in mc.copias(U, os.path.basename(BAD), 'CAJON_CORRUPTOS'))
 check('F3 la segunda cuarentena no pisa a la primera sin copia',
-      open(BAD + '.corrupt', 'rb').read() == b'BBB' and len(q_backups) >= 1,
-      (open(BAD + '.corrupt', 'rb').read(), q_backups))
+      q_copias == [b'AAA', b'BBB'] and not os.path.exists(BAD + '.corrupt'), q_copias)
 
 # ----------------------------------------------------------------- R3: rm ---
 D = os.path.join(BASE, 'paraborrar')

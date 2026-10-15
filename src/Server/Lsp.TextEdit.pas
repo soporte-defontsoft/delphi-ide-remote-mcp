@@ -73,8 +73,9 @@ var
 begin
   Result := '';
   Ext := LowerCase(TPath.GetExtension(APath));
-  // lo del motor de Pascal es EL predicado de delphi_edit (fuentes y designers)
-  if EsDelMotorPascal(APath) or MatchText(Ext, PROJECT_EXTS) then
+  // lo del motor de Pascal (EL predicado de delphi_edit: fuentes y designers)
+  // y los proyectos del IDE: EsFicheroDeDelphi
+  if EsFicheroDeDelphi(APath) then
     Exit(MsgFmt(SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT, [Ext]));
 end;
 

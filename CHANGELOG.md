@@ -35,6 +35,32 @@ the MCP `initialize` response (`serverInfo.version`).
   corpus that made 1.12.0 leave the root out: no answer changed, and an
   error planted on the root of a VCL and an FMX copy was named.
   `test_lint_raiz_1192`.
+- **`delphi_changeset` no longer breaks a project by moving or deleting a
+  Delphi file as a loose one.** A `move` of a unit with its form said
+  `COMMIT COMPLETE` and left the old `unit` header, the `.dfm` behind and
+  the `.dpr` pointing at a `.pas` that no longer existed; a `delete` left
+  the form orphaned and the project listing the unit (reported by Hermes
+  on 1.19.1; measured with a form unit). `delphi_move` and `delphi_delete`
+  do it whole - the `.dfm`/`.fmx`, the header, the projects, the relative
+  paths that cross. A changeset `move` whose source or destination is a
+  Delphi file (a source, a form, a project) is now refused when it is
+  staged (`CHSET-033`, naming `delphi_move`); a `delete` of one leaves the
+  preview unresolved, naming `delphi_delete`, unless a later `create` of the
+  batch writes the same file again - deleting and creating a unit is
+  rewriting it in place, and stays valid. The `kind` description says it.
+  `test_changeset_unidad_1192`.
+- **A `delphi_upload` whose sha256 does not match goes to the recoverable
+  trash, not next to the file.** It was set aside as `<name>.corrupt` in
+  the live folder, a name composed by hand, and stayed there for good -
+  also after the file was uploaded right - where `delphi_list` showed it
+  as one more file and `git add .` took it (reported by Hermes on 1.19.1).
+  It now goes to a drawer of its own in the trash (`corrupt`), sealed by
+  the namer of every copy and through its write gate, one copy per failed
+  upload; `UPLOAD-011` says where and the description of `sha256` too. A
+  file in a temporary folder, where there is no trash, stays under its
+  name and `UPLOAD-012` says so. `test_upload_corrupt_1192`; the batteries
+  that pinned the old place (`round8`, `round9`, `resultados`,
+  `cuarentena_puerta_1184`) now pin this one.
 
 ## [1.19.1] - 2026-10-15
 

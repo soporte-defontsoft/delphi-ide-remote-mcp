@@ -737,6 +737,17 @@ begin
       if MatchText(TPath.GetExtension(Op.Path), ['.dproj', '.groupproj', '.dpk']) and
          (Op.Kind in [opEdit, opDeleteLine]) then
         Exit(MsgFmt(SR_CHANGESET_PROJECT_FILE_FMT, [TPath.GetFileName(Op.Path)]));
+      // ...y un fichero de Delphi se mueve o se borra ENTERO (su .dfm/.fmx, su
+      // cabecera, los proyectos que lo listan, las rutas relativas que
+      // cruzan): eso lo hacen delphi_move y delphi_delete. Aqui era una
+      // operacion de fichero suelto, COMMIT COMPLETE y el proyecto roto
+      // (Hermes, 15-oct-2026; B de la 1.19.2). Un move tambien por su destino:
+      // restaurar UFicha.pas de la papelera es de delphi_move, que trae su form.
+      // (El delete, en el preview: borrar y volver a crear el MISMO fichero es
+      // un plan que vale, y aqui no se ve lo que se apile despues)
+      if (Op.Kind = opMove) and (EsFicheroDeDelphi(Op.Path) or EsFicheroDeDelphi(ADest)) then
+        Exit(MsgFmt(SR_CHANGESET_FICHERO_DELPHI_FMT, [MsgFmt(SF_CHSET_FICHERO_DELPHI_FMT,
+          [TPath.GetFileName(Op.Path), 'delphi_move'])]));
       case Op.Kind of
         opEdit:
           begin
@@ -904,6 +915,25 @@ begin
             Obj.AddPair('anchor', SoloLecturaDenegado(Op.Path));
             Inc(N);
             Continue;
+          end;
+          // un fichero de Delphi que se BORRA y ninguna operacion posterior del
+          // lote vuelve a crear: eso es delphi_delete (su .dfm/.fmx, los
+          // proyectos que lo listan); aqui dejaba el form huerfano y el .dpr
+          // roto con COMMIT COMPLETE (B de la 1.19.2). Borrarlo y crearlo otra
+          // vez es reescribirlo entero en su sitio, y vale (test_round8 M1)
+          if (Op.Kind = opDelete) and EsFicheroDeDelphi(Op.Path) then
+          begin
+            var Vuelve := False;
+            for var J := I + 1 to C.Ops.Count - 1 do
+              if (C.Ops[J].Kind = opCreate) and SameText(C.Ops[J].Path, Op.Path) then
+                Vuelve := True;
+            if not Vuelve then
+            begin
+              Obj.AddPair('anchor', MsgFmt(SF_CHSET_FICHERO_DELPHI_FMT,
+                [TPath.GetFileName(Op.Path), 'delphi_delete']));
+              Inc(N);
+              Continue;
+            end;
           end;
           // delete-line: el preview dice lo que el commit va a rechazar (una
           // linea que no existe, o que no es la de old); decia "clean" y el

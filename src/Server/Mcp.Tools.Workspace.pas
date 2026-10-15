@@ -1690,28 +1690,24 @@ begin
         // The file on disk is now KNOWN to be wrong. Leaving it in place under
         // its real name means the next reader takes corruption for content:
         // park it aside and say where (field round 8).
-        Quarantine := FullPath + '.corrupt';
-        // el destino DERIVADO, por la puerta de un destino como el de arriba:
-        // esa juzgo <nombre>, no <nombre>.corrupt, y un .corrupt que
-        // ReadOnlyPaths declara se borraba y se pisaba con la subida mala
-        // (2t de la 1.18.x, medido 14-oct). Las primitivas de abajo, solo
-        // sobre lo que la puerta acaba de aprobar
-        var SinCuarentena := WriteTargetDenied(Quarantine);
-        if SinCuarentena = '' then
+        // A LA PAPELERA, sellada en su cajon (CAJON_CORRUPTOS) por el
+        // nombrador de las copias - que pasa la puerta de escribir sobre la
+        // ruta REAL (TrashPathFor) -, y fuera de la carpeta viva: el
+        // "<nombre>.corrupt" de al lado, compuesto a mano, se quedaba para
+        // siempre, salia en delphi_list como un fichero mas y git add . se lo
+        // llevaba (Hermes, 15-oct-2026; A de la 1.19.2). Cada subida mala, su
+        // copia: la de antes ya no hay que apartarla
+        var SinCuarentena := '';
         try
-          // A second failed upload used to overwrite the first quarantine
-          // with no copy at all - the one write path that did not respect
-          // the trash (2026-08-25). Park the older one properly first.
-          if TFile.Exists(Quarantine) then
+          Quarantine := GuardaContenidoActual(FullPath, CAJON_CORRUPTOS);
+          // '' = un temporal, donde no hay papelera: se queda con su nombre
+          if Quarantine = '' then
+            SinCuarentena := MsgText(SF_UPLOAD_SIN_PAPELERA)
+          else
           begin
-            // sin su copia, la cuarentena de antes NO se borra: se perdia
-            // (quinta revision). Si la copia falla, el fichero malo se queda
-            // con su nombre y el error lo dice.
-            GuardaContenidoActual(Quarantine); // la actual, sellada
-            TFile.Delete(Quarantine);
+            TFile.Delete(FullPath); // la ruta que la puerta del upload aprobo
+            Return.AddPair('quarantined', Quarantine);
           end;
-          TFile.Move(FullPath, Quarantine);
-          Return.AddPair('quarantined', Quarantine);
         except
           on E: Exception do
           begin

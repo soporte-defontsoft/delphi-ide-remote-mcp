@@ -359,7 +359,8 @@ try:
                                          'offset': 0, 'sha256': '0' * 64})
     check('E12 una subida cuya sha no cuadra es un fallo (y queda apartada)',
           res.get('isError') is True and mc.abre(t, 'SR_UPLOAD_SHA_MISMATCH_FMT') and
-          not os.path.exists(BAD) and os.path.exists(BAD + '.corrupt'),
+          not os.path.exists(BAD) and not os.path.exists(BAD + '.corrupt') and
+          len(mc.copias(JAIL, 'subida.bin', 'CAJON_CORRUPTOS')) == 1,
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
     res, sc, t = llama('delphi_read', {'path': ETIQUETADO})

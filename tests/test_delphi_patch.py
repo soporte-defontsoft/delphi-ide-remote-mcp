@@ -1314,11 +1314,14 @@ check('ida y vuelta: delete + create de un fichero roto: el preview no niega el 
 # el origen de la llamada se ancla de nuevo si la ruta cambia de contenido por
 # otro camino (revisor propio de la 4.1, medido): un changeset que editaba P, lo
 # borraba, movia a P un fichero en UTF-8 con BOM y lo editaba otra vez dejaba P
-# en CP1252 - transcodificaba un fichero que SI tenia codificacion
-_pm, _qm = os.path.join(DIR, 'UMovP.pas'), os.path.join(DIR, 'UMovQ.pas')
-open(_pm, 'wb').write(b"unit UMovP;\r\n\r\ninterface\r\n\r\nconst\r\n  X = 1;\r\n  T = 1;\r\n\r\nimplementation\r\n\r\nend.\r\n")
-_QM = b'\xef\xbb\xbf' + ("unit UMovP;\r\n\r\ninterface\r\n\r\nconst\r\n  S = 'gesti\u00f3n';\r\n  T = 1;\r\n\r\n"
-                         "implementation\r\n\r\nend.\r\n").encode('utf-8')
+# en CP1252 - transcodificaba un fichero que SI tenia codificacion. Desde la B de
+# la 1.19.2 una unidad no se mueve por changeset (CHSET-033: el move suelto le
+# dejaba la cabecera, el form y los proyectos mal), asi que el camino del move es
+# el de un fichero de TEXTO: el origen es el mismo (OrigenDeLaLlamada, en el
+# escritor de todos, PatchSaveText)
+_pm, _qm = os.path.join(DIR, 'movp.txt'), os.path.join(DIR, 'movq.txt')
+open(_pm, 'wb').write(b"P\r\n  X = 1;\r\n  T = 1;\r\n")
+_QM = b'\xef\xbb\xbf' + ("Q\r\n  S = 'gestión';\r\n  T = 1;\r\n").encode('utf-8')
 open(_qm, 'wb').write(_QM)
 _cid = mc.id_changeset(call('delphi_changeset', {'command': 'begin'}))
 call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': _pm, 'old': '  X = 1;', 'new': '  X = 2;'})

@@ -83,7 +83,8 @@ def _papelera():
                                                   'BUZON_SIN_WORKSPACE', 'BUZON_PREFIJO_WORKSPACE',
                                                   'IDE_COPIAS_SUB', 'CAPTURAS_SUB')),
                                 ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
-                                                   'CAJON_SUSTITUIDOS', 'TEMPORAL_DE_SUSTITUCION_EXT'))):
+                                                   'CAJON_SUSTITUIDOS', 'CAJON_CORRUPTOS',
+                                                   'TEMPORAL_DE_SUSTITUCION_EXT'))):
             with open(os.path.join(REPO, 'src', 'Server', unidad),
                       encoding='utf-8-sig', errors='replace') as fh:
                 t = fh.read()
@@ -112,6 +113,7 @@ def dia_de_papelera(t=None):
 # nombre a mano, una comprobacion de AUSENCIA pasaria en verde si cambiara.
 PAPELERA = _papelera()['BACKUP_SUB']
 CAJON_BORRADOS = _papelera()['CAJON_BORRADOS']
+CAJON_CORRUPTOS = _papelera()['CAJON_CORRUPTOS']
 # ...y los de las comprobaciones de AUSENCIA que se escribian a mano (revisor de
 # version de la 1.18.0): el intermedio del escritor atomico, la carpeta de los
 # temporales, la de las copias del IDE y la de los informes
@@ -136,7 +138,8 @@ def copias(carpeta, nombre=None, cajon=None, bajo=False):
     dias, sin sus marcas: el lector de lo que compone TrashPathFor
     (<carpeta>\\__delphi-patch\\<dia>\\<cajon>\\<nombre>-<hhnnsszzz>). cajon
     es el NOMBRE de la constante de Lsp.Patch (CAJON_BORRADOS,
-    CAJON_SUSTITUIDOS, CAJON_ANTES_DE_RESTAURAR); None, todos. nombre None:
+    CAJON_SUSTITUIDOS, CAJON_ANTES_DE_RESTAURAR, CAJON_CORRUPTOS); None,
+    todos. nombre None:
     las de cualquier fichero. bajo=True: en TODAS las papeleras bajo carpeta
     (hay una junto a cada carpeta de lo que se tiro)."""
     p = _papelera()

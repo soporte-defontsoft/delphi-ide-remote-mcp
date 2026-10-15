@@ -292,6 +292,12 @@ function EsRutaDeDesigner(const APath: string): Boolean;
   tambien un .inc incluido desde un .pas sin BOM). EL predicado, como
   EsRutaDeDesigner: estaba escrito a mano con su lista en cinco sitios. }
 function EsRutaDeFuente(const APath: string): Boolean;
+{ Si APath es un fichero de DELPHI: lo del motor de Pascal (EsDelMotorPascal:
+  fuentes y designers) o un proyecto del IDE (PROJECT_EXTS). Lo que
+  delphi_textedit no edita y lo que el changeset no mueve ni borra suelto -
+  eso lo hacen delphi_move y delphi_delete enteros (B de la 1.19.2) -. Estaba
+  escrito en ExtGate (Lsp.TextEdit); a la segunda, aqui. }
+function EsFicheroDeDelphi(const APath: string): Boolean;
 { Las mascaras de fichero de una de esas listas ('.dfm' -> '*.dfm'), para
   recorrer una carpeta con ellas. Las escribian a mano Mcp.Tools.Workspace
   (las de delphi_search y delphi_list), Lsp.Rename (las de designer) y
@@ -789,6 +795,7 @@ const
   CAJON_BORRADOS = 'deleted';                  // delete, changeset delete, la copia previa de move
   CAJON_ANTES_DE_RESTAURAR = 'before-restore'; // lo que habia antes de un restore
   CAJON_SUSTITUIDOS = 'replaced';              // lo que habia antes de pisar un fichero ENTERO
+  CAJON_CORRUPTOS = 'corrupt';                 // la subida que no casa con su sha256 (UPLOAD-011)
 
 { La ruta de una copia SELLADA de APath en el cajon ACajon de su papelera,
   por la puerta de escribir sobre la ruta REAL (lanza la negativa): un
@@ -1589,6 +1596,11 @@ end;
 function EsRutaDeFuente(const APath: string): Boolean;
 begin
   Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);
+end;
+
+function EsFicheroDeDelphi(const APath: string): Boolean;
+begin
+  Result := EsDelMotorPascal(APath) or MatchText(TPath.GetExtension(APath), PROJECT_EXTS);
 end;
 
 function MascarasDe(const AExts: array of string): TArray<string>;

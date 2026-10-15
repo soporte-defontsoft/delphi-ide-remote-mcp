@@ -113,8 +113,13 @@ j = J(A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'ab
                                 'offset': 0, 'sha256': '0' * 64}))
 check('#26 sha que no cuadra: NO queda publicado con su nombre',
       j.get('verified') is False and not os.path.exists(BAD), str(j)[:300])
-check('#26 ...y se dice donde ha quedado apartado',
-      str(j.get('quarantined', '')).endswith('.corrupt') and os.path.exists(BAD + '.corrupt'),
+# ...en la papelera, en su cajon (A de la 1.19.2: era <nombre>.corrupt al lado,
+# en la carpeta viva, y se quedaba para siempre)
+_q = mc.real(j.get('quarantined', ''))
+check('#26 ...y se dice donde ha quedado apartado: en su cajon de la papelera, con sus bytes',
+      bool(_q) and os.path.normcase(mc.larga(_q)) in [os.path.normcase(mc.larga(c)) for c in
+                                                     mc.copias(UP, 'corrupto.bin', 'CAJON_CORRUPTOS')]
+      and open(_q, 'rb').read() == b'abc' and not os.path.exists(BAD + '.corrupt'),
       str(j)[:300])
 
 # -------------------------------------------------------------------- #7 --

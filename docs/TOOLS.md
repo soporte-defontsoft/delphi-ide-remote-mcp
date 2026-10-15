@@ -306,7 +306,7 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, the whole batch 
 |---|---|---|---|
 | `command` | string | optional | begin (new changeset -> id) \| stage (add ONE operation) \| unstage (take operation "n" back out; n=0 = the last one) \| preview (resolve anchors, rehearse, fingerprint; required before commit) \| commit (all or nothing) \| rollback (discard) \| status (the open ones) |
 | `id` | string | optional | The changeset id returned by begin (every command except begin and status) |
-| `kind` | string | optional | stage: edit (replace ONE line by anchor) \| create (new file, never overwrites) \| delete (the WHOLE FILE; the snapshot is the way back) \| delete-line (remove ONE line by atline: a BLANK one, which has no usable anchor, or with old the line you name) \| move (rename/move; the destination must not exist) |
+| `kind` | string | optional | stage: edit (replace ONE line by anchor) \| create (new file, never overwrites) \| delete (a WHOLE file; a Delphi one: delphi_delete) \| delete-line (remove ONE line by atline: a BLANK one, which has no usable anchor, or with old the line you name) \| move (to a free name; a Delphi file: delphi_move) |
 | `path` | string | optional | stage: the file the operation touches (inside the workspace roots) |
 | `dest` | string | optional | stage kind=move: the destination path |
 | `old` | string | optional | stage kind=edit: the anchor - ONE full line copied verbatim from delphi_read, unique in the file (or fragment + atline instead). kind=delete-line: the line you expect at atline, compared like an anchor (the preview refuses when it is not that one); without it, that line must be blank (EDIT-123), as in delphi_edit. |
@@ -841,7 +841,7 @@ Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for w
 | `path` | string | **yes** | Absolute path of the file to write ON the server (inside the workspace roots) |
 | `chunkbase64` | string | **yes** | One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append |
 | `offset` | integer | optional | Byte offset this chunk starts at (0 = beginning). Send chunks in order, increasing offset by the bytes written |
-| `sha256` | string | optional | Optional, on the LAST chunk: the whole-file SHA-256; a mismatch FAILS the call and the file is set aside as \<name>.corrupt instead of being published. |
+| `sha256` | string | optional | Optional, on the LAST chunk: the whole-file SHA-256; a mismatch FAILS the call and the file goes to the recoverable trash instead of being published. |
 | `chunksha256` | string | optional | Optional: the SHA-256 of THIS chunk (of its decoded bytes), verified BEFORE it is written - a slip in transit is caught at the chunk that carried it, with nothing on disk. |
 <!-- /contract -->
 
