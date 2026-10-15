@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **`delphi_git` no longer passes on git's advice, which mostly names what
+  the tool does not offer.** After a `stash pop`, git printed `(use "git
+  restore <file>..." to discard changes in working directory)`; Hermes,
+  validating 1.19.2, followed it, and the tree stayed dirty: `restore` here
+  is always `--staged` (it undoes an `add`), and discarding a change is
+  `command=stash` with its paths. It was not the only one: `commit` with
+  nothing staged advised `git commit -a`, `add` of an ignored file `Use -f`,
+  a merge that cannot go fast-forward `git merge --no-ff` or `git rebase`,
+  a rejected push `git pull`, and every hint ended with `git config set
+  advice.X false` - all written for someone typing git, and most of them
+  not operations of this tool at all. Git has its own
+  switch: the server now runs it with `GIT_ADVICE=0` (git 2.46 and later),
+  which drops the hints and keeps the facts (`rejected (non-fast-forward)`,
+  `Not possible to fast-forward`), measured with git 2.53 on `stash pop`,
+  `commit`, `add`, `merge`, `pull` and `push`. The server's own notes stay
+  (`GIT-008` for a merge that diverged), and so does `GIT-006` as the second
+  barrier for an older git, which ignores the variable. And `restore`, which
+  succeeds in silence, now says what it did and how to discard a change
+  (`GIT-077`). Battery `test_git_consejos_1193` (red against 1.19.2 on all
+  four, the control green).
+
 ## [1.19.2] - 2026-10-15
 
 Nine fixes. Six come from Hermes' validation of 1.19.1 and the general

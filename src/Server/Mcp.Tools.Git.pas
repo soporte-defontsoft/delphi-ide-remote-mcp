@@ -288,8 +288,17 @@ function GitCorre(const ARepo, AFijado, AResto: string; ATimeoutMs: Integer;
   out ACodigo: Cardinal): string;
 begin
   try
+    // GIT_ADVICE=0: sin los consejos de git ("hint:", "(use git ...)"). Son
+    // para quien teclea git, y por esta tool casi ninguno se puede seguir:
+    // restore es --staged, no hay -f, ni rebase, ni config de advice, que
+    // todos nombran. Hermes (15-oct-2026, sobre la 1.19.2) siguio el "use git
+    // restore to discard" de un stash pop y el arbol siguio sucio. Es el
+    // interruptor del propio git (2.46 en adelante): quita los consejos y deja
+    // los hechos (medido con git 2.53 en stash pop, commit, add, merge, pull y
+    // push); un git anterior lo ignora y sigue GIT-006 de segunda barrera.
     Result := RunCapturedIn(GitLinea(ARepo, AFijado, AResto), '', ATimeoutMs,
-      ACodigo, EntornoSinConfiguracion(['GIT_TERMINAL_PROMPT=0', 'GCM_INTERACTIVE=never']));
+      ACodigo, EntornoSinConfiguracion(['GIT_TERMINAL_PROMPT=0', 'GCM_INTERACTIVE=never',
+      'GIT_ADVICE=0']));
   except
     on E: EOSError do
     begin
@@ -2043,9 +2052,15 @@ begin
   // Un worktree nuevo es de quien lo pidio: se lo dice, con como quitarlo.
   if (ExitCode = 0) and (Cmd = 'worktree') and SameText(Params.Action.Trim, 'add') then
     Result := Result + #10 + MsgFmt(SN_GIT_WORKTREE_ADDED_FMT, [Destino]);
+  // restore no toca el arbol: se dice, con la via que si descarta (GIT-077)
+  if (ExitCode = 0) and (Cmd = 'restore') then
+    Result := Result + #10 + MsgText(SN_GIT_RESTORE_SOLO_INDICE);
   // git's own hints recommend exactly what this tool refuses (--no-ff,
   // rebase, "specify the URL from the command-line"): say so, or the reader
-  // follows the advice printed last (field round 10).
+  // follows the advice printed last (field round 10). Desde la 1.19.3 git
+  // no escribe sus consejos (GIT_ADVICE=0, en GitCorre); esto se queda de
+  // segunda barrera para un git anterior a la 2.46 y para "specify the
+  // URL", que es su error y no un consejo.
   // Un merge que no puede ir en fast-forward muere con exit 128 y "Not
   // possible to fast-forward": git no sugiere nada y la respuesta era el
   // codigo a pelo (abierto menor del 22-sep). Se dice que significa.

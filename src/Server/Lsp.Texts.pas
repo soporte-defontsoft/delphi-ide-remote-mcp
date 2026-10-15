@@ -470,6 +470,15 @@ const
   SN_GIT_SILENT_OK_FMT =
     '[GIT-002] (git %s finished fine, and it prints nothing when it ' +
     'succeeds. It is not a lost answer: it is this command''s success.)';
+  { restore acaba en silencio y es SIEMPRE --staged: Hermes (15-oct-2026, sobre
+    la 1.19.2) leyo en un stash pop el consejo de git "use git restore to
+    discard", llamo a restore y el arbol siguio sucio. Se dice que hizo y como
+    se descarta de verdad. }
+  SN_GIT_RESTORE_SOLO_INDICE =
+    '[GIT-077] restore only took those paths out of the index (the add is ' +
+    'undone): the working tree keeps its changes. To discard a file''s ' +
+    'changes: command=stash with its paths - they go back to HEAD and the ' +
+    'change stays in the stash.';
   { Una CONSULTA vacia (log, tag, branch, stash list...) no es un exito sin
     mas: no hay nada que mostrar (revision de la 1.17.0). }
   SN_GIT_CONSULTA_VACIA_FMT =
