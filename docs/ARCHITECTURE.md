@@ -62,7 +62,7 @@ DelphiLSP does **not** implement `textDocument/references` nor `workspace/symbol
 
 1. Text-scan the workspace for candidate identifier occurrences (respecting Delphi case-insensitivity, skipping IDE artifacts like `__history/`).
 2. For each candidate, ask DelphiLSP `definition` at that exact position.
-3. Keep only candidates whose definition resolves to the target symbol's location — homonyms are eliminated by the compiler engine itself.
+3. Keep only candidates whose definition resolves to the target symbol's location — homonyms are eliminated by the compiler engine itself. A candidate that resolves to a method of the same name in a RELATED class (a virtual and its overrides) is kept, marked `via: "override"`; that kinship is the engine's too — the definition of each ancestor written in `class(...)`, hop by hop — never the class names, which took a namesake in another unit, or an overload, for family until 1.19.2.
 
 Result quality is compiler-grade; cost is one `definition` round-trip per candidate (batched, cached). A future LSIF-based path (RAD Studio 13 added LSIF generation to the LSP engine) may replace the scan.
 

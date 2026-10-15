@@ -136,7 +136,10 @@ handshake.
   re-confirmed, and `applicable` tells you if it is safe. NEVER rename by
   search-and-replace: the preview exists precisely because designers,
   string literals (FindComponent/RTTI/StyleLookup) and homonyms break
-  silently.
+  silently. A namesake in another unit (a second `TFoo`) or an overload is
+  never taken for yours: `via: "override"` in `delphi_references` is the
+  inheritance family as the engine resolves it, and a namesake leaves the
+  rename not applicable (`RENAME-017`) instead of being renamed with it.
 - If `applicable=true`, repeat the same call with `mode=apply`: the tool
   writes it through the changeset engine (all files or none, a backup of
   each) and answers with the commit. Then `delphi_build`. If false, the
@@ -153,7 +156,9 @@ handshake.
 - Edit a form with the designer commands, not by hand: `insert` adds a
   visual control (its block, its published field and its unit in the uses,
   where the IDE keeps it), `set` changes a property (several with `props`,
-  all or none) after checking it against the class, `delete` removes one
+  all or none) after checking it against the class (on the form itself, a
+  property your own base class publishes is judged by the type it
+  declares), `delete` removes one
   with its empty handlers. Each writes the form and its unit together, all
   or nothing, and a refusal says exactly what to do instead - including how
   to add by hand what insert cannot place (a non-visual component such as
@@ -169,7 +174,9 @@ handshake.
   `Left`/`Top` - `Position.X`/`Position.Y` in FMX - are relative to the
   parent, whose rectangle `component=<parent>` gives as `componentRect`).
   `ignored` in the answer lists each property the form loader could not
-  read: the rest is drawn, but the form will not open until you fix them.
+  read: the rest is drawn, but the form will not open until you fix them -
+  except those your own classes publish, which the renderer cannot load and
+  the real form reads (`ignoredUserNote` names them).
 
 ## FMX styles
 
@@ -291,7 +298,9 @@ in frame. Do the gesture you came for and nothing else.
   projects that list it, `delphi_move` renames/moves a unit with its pair,
   header and project entries; with `copy=true` it copies instead (header
   and pair too, no project re-pointed: `add-unit` when you want it in
-  one). `view` lists the project's `units`.
+  one). `view` lists the project's `units`. A Delphi file never moves or
+  goes away as a loose file of a `delphi_changeset` (`CHSET-033`): those
+  two tools do it whole.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).
@@ -440,4 +449,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.19.1 -->
+<!-- contract reviewed: v1.19.2 -->

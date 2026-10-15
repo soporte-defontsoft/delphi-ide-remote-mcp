@@ -6,7 +6,26 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.19.2] - 2026-10-15
+
+Nine fixes. Six come from Hermes' validation of 1.19.1 and the general
+test of the edges that followed it, each one reproduced against 1.19.1
+before anything was touched: `delphi_designer preview` names the root of a
+form in `ignored`, and `lint` judges that root; `delphi_changeset` no
+longer breaks a project by moving or deleting a Delphi file as a loose
+one; a `delphi_upload` with a bad sha256 goes to the trash; `delphi_git`
+finds a path written in another case; and `delphi_delete` takes a unit out
+of a project in a sibling folder. Three more turned up while measuring
+them. `delphi_references` and `delphi_rename_symbol` took a namesake in
+another unit, or an overload, for an override, and the designer took the
+first unit of the form's folder declaring a base class for the one the
+`uses` names: both decided by a class's NAME what only the compiler knows,
+and the engine answers both now (`Lsp.Herencia`). And `set`, which refused
+a property a base class of the user's own publishes, judges it by the type
+that class declares. No contract is taken away: `preview` gains a note
+(`ignoredUserNote`), `rename_symbol` refuses a namesake it used to rename
+(`RENAME-017`), and the changeset refuses what broke the project
+(`CHSET-033`).
 
 ### Fixed
 
