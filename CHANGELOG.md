@@ -99,6 +99,26 @@ the MCP `initialize` response (`serverInfo.version`).
   looked. A `move` was already re-pointing such a `.dpr` through the
   relative-path fixer (`MOVE-005`) while noting `FILE-002`: it names the
   project now. `test_delete_proyecto_lateral_1192`.
+- **The root judge of the designer and the inherited components ask the
+  engine which class a base is.** `ClaseDeJuezDeRaiz` (the root judge of
+  `lint`, `set` and the form warning of `delphi_edit`, from the fix above)
+  and `NombresHeredados` (the names `insert` and `set` keep free for the
+  components a form inherits) located a user's base class - `TFormMain =
+  class(TBaseForm)` - by scanning the form's FOLDER for a unit declaring
+  that name, and took the first one in file order, not the one the `uses`
+  names. With two `TBaseForm` in the folder (measured on 15-oct, right
+  after that fix: one publishing `Modo`, a namesake without it sorted
+  first), `lint` refused `Modo = 1` with `DSGN-038` and `insert` named a
+  new button `Button1`, the base's own field - an
+  `EComponentError` when the form is created; sorted after, everything
+  passed. Which `TBaseForm` a unit means is the compiler's call (its `uses`,
+  the last one wins, a qualified name), so it is asked of the engine: the
+  ancestor chain by DelphiLSP (`Lsp.Herencia`, the walk `delphi_references`
+  uses since the entry above - one home for the three), hop by hop, and only
+  when the chain leaves the unit: a form on `TForm` starts no engine. The
+  base may now live in any folder of the project; without project settings
+  there is no engine and the root stays unjudged, as before.
+  `test_juez_raiz_motor_1192`.
 
 ### Changed
 

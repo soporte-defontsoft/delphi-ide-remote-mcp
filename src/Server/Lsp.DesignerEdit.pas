@@ -130,6 +130,7 @@ uses
   Lsp.DesignerBin,     // el literal de cadena, el flotante, las lineas del form
   Lsp.DesignerForma,   // la linea de objeto y su compositor
   Lsp.DesignerMeta,    // la tabla del framework y su juez (JuzgaPropiedad)
+  Lsp.Herencia,        // LA cadena de ancestros por el motor (los componentes heredados)
   Lsp.DesignerMetaGen, // la unidad de una clase (UnidadDeIdDeTipo)
   Lsp.DesignerBinding, // EL lector de la linea de evento; los avisos del binding
   Lsp.ProjectUnits,    // UsesConUnidades: el uses de la unidad
@@ -1106,10 +1107,11 @@ begin
     Exit(MsgFmt(SR_DESIGNER_PADRE_VCL_FMT, [NombreDe(P), P.ClassName_]));
 end;
 
-{ Los componentes que el form HEREDA de ancestros del proyecto (los de su
-  carpeta), como pares nombre=clase ancestro: TWriter no escribe en el .dfm
-  del heredado un componente sin cambios, ni la unidad su campo, asi que ni
-  el form ni la clase los nombran. Definida mas abajo, con su buscador. }
+{ Los componentes que el form HEREDA de ancestros del proyecto (donde esten:
+  los localiza el motor, Lsp.Herencia), como pares nombre=clase ancestro:
+  TWriter no escribe en el .dfm del heredado un componente sin cambios, ni la
+  unidad su campo, asi que ni el form ni la clase los nombran. Definida mas
+  abajo. }
 function NombresHeredados(const F: TFormEnEdicion; AClase: TTipoPas): TArray<string>; forward;
 
 // '' si ANombre esta libre en el form y en su clase; si no, quien lo tiene.
@@ -1627,37 +1629,46 @@ function NombresHeredados(const F: TFormEnEdicion; AClase: TTipoPas): TArray<str
 const
   MAX_SALTOS = 8;
 var
-  Nombre: string;
-  Hallada: Boolean;
+  Cadena: TCadenaPorElMotor;
+  Fichero, Fichero2, Id: string;
+  Linea2: Integer;
+  T: TTipoPas;
 begin
   Result := [];
   if (AClase = nil) or not F.HayPas then
     Exit;
-  Nombre := UltimoTrozo(AClase.Ancestro);
-  for var Salto := 1 to MAX_SALTOS do
-  begin
-    Hallada := False;
-    for var Texto in UnidadesQueDeclaran(TPath.GetDirectoryName(F.Pas), F.Pas, Nombre) do
+  Cadena := nil;
+  try
+    T := AClase;
+    Fichero := F.Pas;
+    for var Salto := 1 to MAX_SALTOS do
     begin
-      var U := LeeFuentePascal(Texto);
-      try
-        var C := U.Clase(Nombre);
-        if C = nil then
-          Continue;
-        // sus campos publicados: los componentes de su form
-        for var Campo in C.Campos do
-          if not Campo.DeClase and (Campo.Visibilidad in [vpDefecto, vpPublicada]) then
-            Result := Result + [Campo.Nombre + '=' + C.Nombre];
-        Nombre := UltimoTrozo(C.Ancestro);
-        Hallada := True;
-      finally
-        U.Free;
+      // una clase de la tabla (TForm, un componente instalado) acaba la
+      // cadena: sus campos no son componentes del form
+      if (UltimoTrozo(T.Ancestro) = '') or F.Tabla.ClaseDeNombre(UltimoTrozo(T.Ancestro), Id) then
+        Break;
+      // una base del USUARIO: donde esta la dice el MOTOR, no la carpeta del
+      // form (dos TBaseForm en la carpeta: elegia el orden de ficheros, y
+      // insert daba el Button1 de la base real a un boton nuevo; 15-oct-2026)
+      if Cadena = nil then
+      begin
+        Cadena := CadenaPara(F.Pas);
+        if Cadena = nil then
+          Break; // sin ajustes de proyecto no hay motor
       end;
-      Break;
+      if not Cadena.AncestroDe(Fichero, T.Linea, Fichero2, Linea2) then
+        Break;
+      T := Cadena.TipoEn(Fichero2, Linea2);
+      if T = nil then
+        Break;
+      Fichero := Fichero2;
+      // sus campos publicados: los componentes de su form
+      for var Campo in T.Campos do
+        if not Campo.DeClase and (Campo.Visibilidad in [vpDefecto, vpPublicada]) then
+          Result := Result + [Campo.Nombre + '=' + T.Nombre];
     end;
-    // una clase de fuera del proyecto (TForm) acaba la cadena
-    if not Hallada or (Nombre = '') then
-      Break;
+  finally
+    Cadena.Free;
   end;
 end;
 

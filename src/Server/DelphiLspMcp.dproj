@@ -250,6 +250,7 @@
         <DCCReference Include="Lsp.Lugares.pas"/>
         <DCCReference Include="Lsp.Mascara.pas"/>
         <DCCReference Include="Lsp.Png.pas"/>
+        <DCCReference Include="Lsp.Herencia.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

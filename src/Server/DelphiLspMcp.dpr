@@ -147,7 +147,8 @@ uses
   Mcp.Tools.Git in 'Mcp.Tools.Git.pas',
   Lsp.Lugares in 'Lsp.Lugares.pas',
   Lsp.Mascara in 'Lsp.Mascara.pas',
-  Lsp.Png in 'Lsp.Png.pas';
+  Lsp.Png in 'Lsp.Png.pas',
+  Lsp.Herencia in 'Lsp.Herencia.pas';
 
 {$R *.res}
 

@@ -225,22 +225,18 @@ function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   const ALines: TArray<string>; out ANotas: TArray<string>;
   const APas: string = ''): TArray<string>;
 
-{ Los textos de las unidades de ADir (no AYa) que declaran AClase
-  ('TBaseForm = class...'): solo la carpeta, cada fichero por la puerta de
-  leer, hasta MAX_UNIDADES. EL buscador de una clase del proyecto: lo usan
-  los ancestros de la raiz (ClaseDeJuezDeRaiz) y los componentes heredados
-  de NombreOcupado (vivia en Lsp.DesignerEdit hasta la 1.19.2). }
-function UnidadesQueDeclaran(const ADir, AYa, AClase: string): TArray<string>;
-
 { La clase contra la que se juzga la RAIZ de un form (su identidad en M): la
-  primera de su cadena de ancestros (CadenaDeAncestros) que M conoce - TForm,
-  TFrame, TDataModule... -, leida de APas (su texto, APasTexto, si ya se
-  tiene) y de las unidades de su carpeta; la suya propia no, que un TForm1 de
-  una demo se llama igual. '' si no se llega: no se juzga. APropias, las
-  propiedades que publican las clases del USUARIO de esa cadena (la raiz
-  incluida: un TBaseForm con su property Foo): la clase real las lee y la
-  tabla no las conoce. La juzgan set y el lint (H8 de la 1.19.2). Nunca
-  lanza. }
+  primera de su cadena de ancestros que M conoce - TForm, TFrame,
+  TDataModule... -, leida de APas (su texto, APasTexto, si ya se tiene); la
+  suya propia no, que un TForm1 de una demo se llama igual. Una base del
+  USUARIO (TBaseForm) la localiza EL MOTOR (Lsp.Herencia), nunca un barrido
+  de la carpeta por nombre: con dos TBaseForm en la carpeta elegia el orden
+  de ficheros, no el uses (medido el 15-oct-2026); y asi la base puede vivir
+  en otra carpeta del proyecto. '' si no se llega (sin ajustes de proyecto
+  no hay motor): no se juzga. APropias, las propiedades que publican las
+  clases del USUARIO de esa cadena (la raiz incluida: un TBaseForm con su
+  property Foo): la clase real las lee y la tabla no las conoce. La juzgan
+  set y el lint (H8 de la 1.19.2). Nunca lanza. }
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
   out APropias: TArray<string>): string;
 
@@ -270,9 +266,10 @@ uses
   Lsp.DesignerMetaGen, // la tabla de ese Delphi, sacada de su fuente
   Lsp.DesignerBin,
   Lsp.Patch, // LeeTexto: la puerta de leer
-  Lsp.Guard, // ReadPathDenied: la de las unidades de la carpeta
-  Lsp.PascalDecl, // la cadena de ancestros de la raiz (CadenaDeAncestros)
-  Lsp.Pascal;
+  Lsp.Guard, // ReadPathDenied: la puerta de leer el .pas del form
+  Lsp.PascalDecl, // EL lector de clases: la raiz y sus bases
+  Lsp.Pascal,
+  Lsp.Herencia; // LA cadena de ancestros por el motor (la base de la raiz)
 
 type
   TJubilada = record
@@ -1079,73 +1076,16 @@ begin
   end;
 end;
 
-{ Los ancestros que declara la unidad de ADir (no AYa) donde esta AClase,
-  anadidos a AMapa: la base de un form que es del proyecto (TForm1 =
-  class(TBaseForm), con TBaseForm en uBase.pas); cada unidad leida va a
-  AUnidades, que se queda con ella (alli se buscan las propiedades de esas
-  clases). False si ninguna la declara. }
-function AnotaAncestrosDeCarpeta(const ADir, AYa, AClase: string;
-  AMapa: TDictionary<string, string>; AUnidades: TObjectList<TUnidadPas>): Boolean;
-begin
-  Result := False;
-  for var Texto in UnidadesQueDeclaran(ADir, AYa, AClase) do
-  begin
-    var U := LeeFuentePascal(Texto);
-    AUnidades.Add(U);
-    AnotaAncestros(U, AMapa);
-    if AMapa.ContainsKey(ClaveDeIdentificador(AClase)) then
-      Exit(True);
-  end;
-end;
-
-function UnidadesQueDeclaran(const ADir, AYa, AClase: string): TArray<string>;
-const
-  MAX_UNIDADES = 300;
-var
-  N: Integer;
-  Enc, Texto: string;
-  Entradas: TArray<string>;
-begin
-  Result := [];
-  if (ADir = '') or (AClase = '') or not TDirectory.Exists(ADir) then
-    Exit;
-  // LAS entradas de la carpeta (Lsp.Guard): GetFiles daba por vacia una
-  // carpeta que Windows no deja listar; aqui, lo que no se deja listar no se
-  // busca (al mudarse de Lsp.DesignerEdit, 1.19.2)
-  try
-    Entradas := EntradasDeCarpeta(ADir);
-  except
-    Exit;
-  end;
-  N := 0;
-  for var P in Entradas do
-  begin
-    if not SameText(TPath.GetExtension(P), '.pas') or not TFile.Exists(P) then
-      Continue;
-    Inc(N);
-    if N > MAX_UNIDADES then
-      Break;
-    if SameText(P, AYa) or (ReadPathDenied(P) <> '') then
-      Continue;
-    try
-      Texto := PatchLoadText(P, Enc);
-    except
-      Continue;
-    end;
-    if TRegEx.IsMatch(CodigoPascal(Texto), PATRON_NO_IDENT_ANTES + TRegEx.Escape(AClase) +
-       '\s*=\s*class\b', [roIgnoreCase]) then
-      Result := Result + [Texto];
-  end;
-end;
-
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
   out APropias: TArray<string>): string;
+const
+  MAX_SALTOS = 8;
 var
-  Texto, Enc: string;
-  Unidades: TObjectList<TUnidadPas>;
-  Mapa: TDictionary<string, string>;
-  Cadena: TArray<string>;
-  Sale: Boolean;
+  Texto, Enc, Fichero, Fichero2, Nombre, Id: string;
+  U: TUnidadPas;
+  T: TTipoPas;
+  Cadena: TCadenaPorElMotor;
+  Linea2: Integer;
 begin
   Result := '';
   APropias := [];
@@ -1154,52 +1094,58 @@ begin
   Texto := APasTexto;
   if Texto = '' then
   try
-    // por la puerta de leer, como las de su carpeta (UnidadesQueDeclaran)
+    // por la puerta de leer
     if (ReadPathDenied(APas) <> '') or not TFile.Exists(APas) then
       Exit;
     Texto := PatchLoadText(APas, Enc);
   except
     Exit;
   end;
-  Unidades := TObjectList<TUnidadPas>.Create;
-  Mapa := TDictionary<string, string>.Create;
+  U := nil;
+  Cadena := nil;
   try
     try
-      Unidades.Add(LeeFuentePascal(Texto));
-      AnotaAncestros(Unidades[0], Mapa);
-      for var Salto := 0 to 4 do
+      U := LeeFuentePascal(Texto);
+      T := U.Clase(AClase);
+      Fichero := APas;
+      for var Salto := 0 to MAX_SALTOS do
       begin
-        Cadena := CadenaDeAncestros(Mapa, AClase, Sale);
-        for var K := 1 to High(Cadena) do
-          if M.ClaseDeNombre(UltimoTrozo(Cadena[K]), Result) then
-          begin
-            // lo que publican las del usuario hasta ahi, la raiz incluida (lo
-            // que no lleva seccion, en un form, tambien es published)
-            for var J := 0 to K - 1 do
-              for var U in Unidades do
-              begin
-                var C := U.Clase(UltimoTrozo(Cadena[J]));
-                if C <> nil then
-                  for var P in C.Propiedades do
-                    if (P.Visibilidad in [vpDefecto, vpPublicada]) and not P.DeClase and not P.ConIndices then
-                      APropias := APropias + [P.Nombre];
-              end;
-            Exit;
-          end;
-        // la cadena sale de la unidad por una base del proyecto: su unidad,
-        // en la carpeta del form (se negaba con DSGN-082: revision de la
-        // 1.17.0)
-        if not Sale or (Length(Cadena) = 0) or not AnotaAncestrosDeCarpeta(TPath.GetDirectoryName(APas),
-           APas, UltimoTrozo(Cadena[High(Cadena)]), Mapa, Unidades) then
+        if T = nil then
           Break;
+        // lo que publica esta clase del USUARIO (la raiz incluida: lo que no
+        // lleva seccion, en un form, tambien es published): la clase real lo
+        // lee y la tabla no lo conoce
+        for var P in T.Propiedades do
+          if (P.Visibilidad in [vpDefecto, vpPublicada]) and not P.DeClase and not P.ConIndices then
+            APropias := APropias + [P.Nombre];
+        Nombre := UltimoTrozo(T.Ancestro);
+        if Nombre = '' then
+          Break; // desciende de TObject: ninguna de la tabla
+        // la suya propia nunca (un TForm1 de una demo se llama igual): la
+        // primera de su cadena que la tabla conoce es el juez
+        if M.ClaseDeNombre(Nombre, Id) then
+          Exit(Id);
+        // una base del USUARIO: donde esta la dice el MOTOR, no la carpeta
+        // del form (dos TBaseForm en la carpeta: elegia el orden de
+        // ficheros, no el uses; medido el 15-oct-2026)
+        if Cadena = nil then
+        begin
+          Cadena := CadenaPara(APas);
+          if Cadena = nil then
+            Break; // sin ajustes de proyecto no hay motor: la raiz, sin juzgar
+        end;
+        if not Cadena.AncestroDe(Fichero, T.Linea, Fichero2, Linea2) then
+          Break;
+        Fichero := Fichero2;
+        T := Cadena.TipoEn(Fichero, Linea2);
       end;
     except
-      // un fuente que no se deja leer: la raiz, sin juzgar
+      // un fuente que no se deja leer, un motor que no contesta: la raiz,
+      // sin juzgar
     end;
-    Result := '';
   finally
-    Mapa.Free;
-    Unidades.Free;
+    Cadena.Free;
+    U.Free;
   end;
 end;
 
