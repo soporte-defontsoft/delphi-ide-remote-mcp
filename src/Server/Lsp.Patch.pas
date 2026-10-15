@@ -5013,8 +5013,9 @@ begin
   Result := Default(TLintDeForm);
   // las lineas como delphi_read: los avisos citan su numero (septima revision)
   Lineas := LineasDelTexto(ATexto);
+  // ...y su raiz, por la cadena de ancestros de su .pas (H8 de la 1.19.2)
   Result.Propiedades := DesignerMetaLint(EsDesignerFmx(ADfm), Lineas, Result.Notas,
-    Result.Falta, AEsperaMs);
+    Result.Falta, AEsperaMs, UnidadDeDesigner(ADfm));
   // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
   // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
   Result.Enlace := DesignerBindingWarnings(ADfm, Lineas);

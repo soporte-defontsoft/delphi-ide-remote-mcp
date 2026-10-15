@@ -20,6 +20,21 @@ the MCP `initialize` response (`serverInfo.version`).
   reading, so the error carried the class of an unnamed component. The
   renderer now names the root from the file's header before reading it
   (`LeeRaiz`, shared by the VCL and FMX renderers). `test_preview_raiz_1192`.
+- **`delphi_designer lint`, and the warning of `delphi_edit` on a form,
+  judge the ROOT of the form.** `ModalResult = mrOK` (a `TForm` does not
+  publish it) or a colour that does not exist on the root of a form said
+  `LINT CLEAN`, and the edit that wrote it said nothing, while the loader
+  skips them and the form does not open (reported by Hermes on 1.19.1).
+  The root had been left unjudged since 1.12.0, because judging it BY ITS
+  NAME took a user's `TForm1` for a demo's. `set` already judged it by the
+  first class of its ancestor chain the tables know, read from its `.pas`;
+  that walk now lives in one place (`ClaseDeJuezDeRaiz`) and lint asks it
+  too. What a class of the user's own chain publishes (a `TBaseForm` with
+  a `property Foo`) is not judged: the real class reads it and the tables
+  do not know it. Measured on the 669 forms of the RAD Studio demos, the
+  corpus that made 1.12.0 leave the root out: no answer changed, and an
+  error planted on the root of a VCL and an FMX copy was named.
+  `test_lint_raiz_1192`.
 
 ## [1.19.1] - 2026-10-15
 

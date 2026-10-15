@@ -84,7 +84,7 @@ REGLAS = [
      'contestando COPIED y la purga borraba a medias (2g de la 1.18.x). El nodo de Linux, aparte: alli no '
      'hay FindFirstFile y sus dos usos toleran el vacio'),
     ('listar ficheros o carpetas sin saber si se dejo', r"TDirectory\.(?:GetFiles|GetDirectories)\s*\(",
-     [(u, '*') for u in ('Lsp.BuildRunner.pas', 'Lsp.Casa.pas', 'Lsp.DesignerEdit.pas', 'Lsp.DesignerMetaGen.pas',
+     [(u, '*') for u in ('Lsp.BuildRunner.pas', 'Lsp.Casa.pas', 'Lsp.DesignerMetaGen.pas',
                          'Lsp.Discovery.pas', 'Lsp.Guard.pas', 'Lsp.LogSink.pas', 'Lsp.PackageMap.pas',
                          'Lsp.Patch.pas', 'Lsp.ProjectUnits.pas', 'Lsp.Session.pas', 'Lsp.Styles.pas',
                          'Mcp.Tools.FileOps.pas', 'Mcp.Tools.Messages.pas', 'Mcp.Tools.PAServer.pas',

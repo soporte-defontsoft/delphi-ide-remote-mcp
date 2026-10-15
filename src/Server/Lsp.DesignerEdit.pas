@@ -1623,63 +1623,6 @@ end;
 
 { ---- set ---- }
 
-{ Los textos de las unidades de ADir (no AYa) que declaran AClase
-  ('TBaseForm = class...'): solo la carpeta, cada fichero por la puerta de
-  leer, hasta MAX_UNIDADES. EL buscador de una clase del proyecto: lo usan
-  los ancestros de ClaseDeJuez y los componentes heredados de NombreOcupado
-  (estaba dentro del primero). }
-function UnidadesQueDeclaran(const ADir, AYa, AClase: string): TArray<string>;
-const
-  MAX_UNIDADES = 300;
-var
-  N: Integer;
-  Enc, Texto: string;
-begin
-  Result := [];
-  if (ADir = '') or (AClase = '') or not TDirectory.Exists(ADir) then
-    Exit;
-  N := 0;
-  for var P in TDirectory.GetFiles(ADir, '*.pas') do
-  begin
-    Inc(N);
-    if N > MAX_UNIDADES then
-      Break;
-    if SameText(P, AYa) or (ReadPathDenied(P) <> '') then
-      Continue;
-    try
-      Texto := PatchLoadText(P, Enc);
-    except
-      Continue;
-    end;
-    if TRegEx.IsMatch(CodigoPascal(Texto), PATRON_NO_IDENT_ANTES + TRegEx.Escape(AClase) +
-       '\s*=\s*class\b', [roIgnoreCase]) then
-      Result := Result + [Texto];
-  end;
-end;
-
-{ Los ancestros que declara la unidad de ADir (no AYa) donde esta AClase,
-  anadidos a AMapa: la base de un form que es del proyecto (TForm1 =
-  class(TBaseForm), con TBaseForm en uBase.pas). False si ninguna la
-  declara. }
-function AnotaAncestrosDeCarpeta(const ADir, AYa, AClase: string;
-  AMapa: TDictionary<string, string>): Boolean;
-var
-  U: TUnidadPas;
-begin
-  Result := False;
-  for var Texto in UnidadesQueDeclaran(ADir, AYa, AClase) do
-  begin
-    U := LeeFuentePascal(Texto);
-    try
-      AnotaAncestros(U, AMapa);
-    finally
-      U.Free;
-    end;
-    if AMapa.ContainsKey(ClaveDeIdentificador(AClase)) then
-      Exit(True);
-  end;
-end;
-
 function NombresHeredados(const F: TFormEnEdicion; AClase: TTipoPas): TArray<string>;
 const
   MAX_SALTOS = 8;
@@ -1725,10 +1668,7 @@ end;
   propia no, que un TForm1 de una demo se llama igual. }
 function ClaseDeJuez(const F: TFormEnEdicion; AObj: TStyleObj; out AClsId: string): string;
 var
-  U: TUnidadPas;
-  Mapa: TDictionary<string, string>;
-  Cadena: TArray<string>;
-  Sale: Boolean;
+  Propias: TArray<string>;
 begin
   Result := '';
   AClsId := '';
@@ -1742,29 +1682,14 @@ begin
     Exit(MsgFmt(SR_DESIGNER_CLASE_SIN_TABLA_FMT, [NombreDe(AObj), AObj.ClassName_,
       F.Marco, MsgText(SF_DESIGNER_QUE_PROPIEDADES), MsgText(SF_DESIGNER_VIA_LINEA)]));
   end;
+  // la raiz, por su cadena de ancestros: EL recorredor que juzga tambien el
+  // lint (Lsp.DesignerMeta; lo que publica una clase del usuario de esa
+  // cadena, Propias, set lo sigue juzgando contra la del framework)
   if F.HayPas then
   begin
-    U := LeeFuentePascal(F.PasTexto);
-    Mapa := TDictionary<string, string>.Create;
-    try
-      AnotaAncestros(U, Mapa);
-      for var Salto := 0 to 4 do
-      begin
-        Cadena := CadenaDeAncestros(Mapa, AObj.ClassName_, Sale);
-        for var K := 1 to High(Cadena) do
-          if F.Tabla.ClaseDeNombre(UltimoTrozo(Cadena[K]), AClsId) then
-            Exit;
-        // la cadena sale de la unidad por una base del proyecto: su unidad,
-        // en la carpeta del form (se negaba con DSGN-082: revision de la
-        // 1.17.0)
-        if not Sale or (Length(Cadena) = 0) or not AnotaAncestrosDeCarpeta(TPath.GetDirectoryName(F.Pas),
-           F.Pas, UltimoTrozo(Cadena[High(Cadena)]), Mapa) then
-          Break;
-      end;
-    finally
-      Mapa.Free;
-      U.Free;
-    end;
+    AClsId := ClaseDeJuezDeRaiz(F.Tabla, F.Pas, F.PasTexto, AObj.ClassName_, Propias);
+    if AClsId <> '' then
+      Exit;
   end;
   Result := MsgFmt(SR_DESIGNER_CLASE_SIN_TABLA_FMT, [NombreDe(AObj), AObj.ClassName_,
     F.Marco, MsgText(SF_DESIGNER_QUE_PROPIEDADES), MsgText(SF_DESIGNER_VIA_LINEA)]);

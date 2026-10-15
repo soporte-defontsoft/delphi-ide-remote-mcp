@@ -186,7 +186,7 @@ type
   revision de la 1.12.0). }
 function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
   out ANotas: TArray<string>; out AFalta: TFaltaTabla;
-  AEsperaMs: Cardinal = ESPERA_TABLA_MS): TArray<string>;
+  AEsperaMs: Cardinal = ESPERA_TABLA_MS; const APas: string = ''): TArray<string>;
 
 { EL juez de una linea de propiedad de un form, ALhs = ARhs en un objeto de
   la clase AClase (su identidad): si la clase publica (o guarda por codigo)
@@ -219,9 +219,30 @@ function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: strin
   out AAviso: string;
   out AParecida: string): string;
 
-// El mismo lint contra una tabla dada (las pruebas le dan la suya)
+// El mismo lint contra una tabla dada (las pruebas le dan la suya). APas, el
+// .pas del form: con el se juzga tambien su raiz (ClaseDeJuezDeRaiz)
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
-  const ALines: TArray<string>; out ANotas: TArray<string>): TArray<string>;
+  const ALines: TArray<string>; out ANotas: TArray<string>;
+  const APas: string = ''): TArray<string>;
+
+{ Los textos de las unidades de ADir (no AYa) que declaran AClase
+  ('TBaseForm = class...'): solo la carpeta, cada fichero por la puerta de
+  leer, hasta MAX_UNIDADES. EL buscador de una clase del proyecto: lo usan
+  los ancestros de la raiz (ClaseDeJuezDeRaiz) y los componentes heredados
+  de NombreOcupado (vivia en Lsp.DesignerEdit hasta la 1.19.2). }
+function UnidadesQueDeclaran(const ADir, AYa, AClase: string): TArray<string>;
+
+{ La clase contra la que se juzga la RAIZ de un form (su identidad en M): la
+  primera de su cadena de ancestros (CadenaDeAncestros) que M conoce - TForm,
+  TFrame, TDataModule... -, leida de APas (su texto, APasTexto, si ya se
+  tiene) y de las unidades de su carpeta; la suya propia no, que un TForm1 de
+  una demo se llama igual. '' si no se llega: no se juzga. APropias, las
+  propiedades que publican las clases del USUARIO de esa cadena (la raiz
+  incluida: un TBaseForm con su property Foo): la clase real las lee y la
+  tabla no las conoce. La juzgan set y el lint (H8 de la 1.19.2). Nunca
+  lanza. }
+function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
+  out APropias: TArray<string>): string;
 
 { Por que una clase no esta en la tabla M: no existe para ella (DSGN-015),
   o dos unidades la declaran con otras publicadas (DSGN-056). Lo dicen info,
@@ -249,6 +270,8 @@ uses
   Lsp.DesignerMetaGen, // la tabla de ese Delphi, sacada de su fuente
   Lsp.DesignerBin,
   Lsp.Patch, // LeeTexto: la puerta de leer
+  Lsp.Guard, // ReadPathDenied: la de las unidades de la carpeta
+  Lsp.PascalDecl, // la cadena de ancestros de la raiz (CadenaDeAncestros)
   Lsp.Pascal;
 
 type
@@ -718,7 +741,8 @@ begin
 end;
 
 function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
-  out ANotas: TArray<string>; out AFalta: TFaltaTabla; AEsperaMs: Cardinal): TArray<string>;
+  out ANotas: TArray<string>; out AFalta: TFaltaTabla; AEsperaMs: Cardinal;
+  const APas: string): TArray<string>;
 var
   M: TMetaTable;
 begin
@@ -728,7 +752,7 @@ begin
   if M = nil then
     Exit;
   try
-    Result := LintConTabla(M, AIsFmx, ALines, ANotas);
+    Result := LintConTabla(M, AIsFmx, ALines, ANotas, APas);
   except
     on E: Exception do
     begin
@@ -1055,9 +1079,135 @@ begin
   end;
 end;
 
-function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
-  const ALines: TArray<string>; out ANotas: TArray<string>): TArray<string>;
+{ Los ancestros que declara la unidad de ADir (no AYa) donde esta AClase,
+  anadidos a AMapa: la base de un form que es del proyecto (TForm1 =
+  class(TBaseForm), con TBaseForm en uBase.pas); cada unidad leida va a
+  AUnidades, que se queda con ella (alli se buscan las propiedades de esas
+  clases). False si ninguna la declara. }
+function AnotaAncestrosDeCarpeta(const ADir, AYa, AClase: string;
+  AMapa: TDictionary<string, string>; AUnidades: TObjectList<TUnidadPas>): Boolean;
+begin
+  Result := False;
+  for var Texto in UnidadesQueDeclaran(ADir, AYa, AClase) do
+  begin
+    var U := LeeFuentePascal(Texto);
+    AUnidades.Add(U);
+    AnotaAncestros(U, AMapa);
+    if AMapa.ContainsKey(ClaveDeIdentificador(AClase)) then
+      Exit(True);
+  end;
+end;
+
+function UnidadesQueDeclaran(const ADir, AYa, AClase: string): TArray<string>;
+const
+  MAX_UNIDADES = 300;
 var
+  N: Integer;
+  Enc, Texto: string;
+  Entradas: TArray<string>;
+begin
+  Result := [];
+  if (ADir = '') or (AClase = '') or not TDirectory.Exists(ADir) then
+    Exit;
+  // LAS entradas de la carpeta (Lsp.Guard): GetFiles daba por vacia una
+  // carpeta que Windows no deja listar; aqui, lo que no se deja listar no se
+  // busca (al mudarse de Lsp.DesignerEdit, 1.19.2)
+  try
+    Entradas := EntradasDeCarpeta(ADir);
+  except
+    Exit;
+  end;
+  N := 0;
+  for var P in Entradas do
+  begin
+    if not SameText(TPath.GetExtension(P), '.pas') or not TFile.Exists(P) then
+      Continue;
+    Inc(N);
+    if N > MAX_UNIDADES then
+      Break;
+    if SameText(P, AYa) or (ReadPathDenied(P) <> '') then
+      Continue;
+    try
+      Texto := PatchLoadText(P, Enc);
+    except
+      Continue;
+    end;
+    if TRegEx.IsMatch(CodigoPascal(Texto), PATRON_NO_IDENT_ANTES + TRegEx.Escape(AClase) +
+       '\s*=\s*class\b', [roIgnoreCase]) then
+      Result := Result + [Texto];
+  end;
+end;
+
+function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
+  out APropias: TArray<string>): string;
+var
+  Texto, Enc: string;
+  Unidades: TObjectList<TUnidadPas>;
+  Mapa: TDictionary<string, string>;
+  Cadena: TArray<string>;
+  Sale: Boolean;
+begin
+  Result := '';
+  APropias := [];
+  if (M = nil) or (APas = '') or (AClase = '') then
+    Exit;
+  Texto := APasTexto;
+  if Texto = '' then
+  try
+    // por la puerta de leer, como las de su carpeta (UnidadesQueDeclaran)
+    if (ReadPathDenied(APas) <> '') or not TFile.Exists(APas) then
+      Exit;
+    Texto := PatchLoadText(APas, Enc);
+  except
+    Exit;
+  end;
+  Unidades := TObjectList<TUnidadPas>.Create;
+  Mapa := TDictionary<string, string>.Create;
+  try
+    try
+      Unidades.Add(LeeFuentePascal(Texto));
+      AnotaAncestros(Unidades[0], Mapa);
+      for var Salto := 0 to 4 do
+      begin
+        Cadena := CadenaDeAncestros(Mapa, AClase, Sale);
+        for var K := 1 to High(Cadena) do
+          if M.ClaseDeNombre(UltimoTrozo(Cadena[K]), Result) then
+          begin
+            // lo que publican las del usuario hasta ahi, la raiz incluida (lo
+            // que no lleva seccion, en un form, tambien es published)
+            for var J := 0 to K - 1 do
+              for var U in Unidades do
+              begin
+                var C := U.Clase(UltimoTrozo(Cadena[J]));
+                if C <> nil then
+                  for var P in C.Propiedades do
+                    if (P.Visibilidad in [vpDefecto, vpPublicada]) and not P.DeClase and not P.ConIndices then
+                      APropias := APropias + [P.Nombre];
+              end;
+            Exit;
+          end;
+        // la cadena sale de la unidad por una base del proyecto: su unidad,
+        // en la carpeta del form (se negaba con DSGN-082: revision de la
+        // 1.17.0)
+        if not Sale or (Length(Cadena) = 0) or not AnotaAncestrosDeCarpeta(TPath.GetDirectoryName(APas),
+           APas, UltimoTrozo(Cadena[High(Cadena)]), Mapa, Unidades) then
+          Break;
+      end;
+    except
+      // un fuente que no se deja leer: la raiz, sin juzgar
+    end;
+    Result := '';
+  finally
+    Mapa.Free;
+    Unidades.Free;
+  end;
+end;
+
+function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
+  const ALines: TArray<string>; out ANotas: TArray<string>;
+  const APas: string): TArray<string>;
+var
+  Propias: TArray<string>;  // las que publica el usuario en la cadena de la raiz
   Stack: TStack<string>;    // owner class per nesting level ('' = unknown)
   Heads: TStack<Integer>;   // ...y la linea de la cabecera de ese objeto
   RefsDe: TDictionary<Integer, TArray<string>>; // ReferenciasDeObjeto, por cabecera
@@ -1087,6 +1237,7 @@ var
 
 begin
   ANotas := nil;
+  Propias := [];
   Stack := TStack<string>.Create;
   Heads := TStack<Integer>.Create;
   RefsDe := TDictionary<Integer, TArray<string>>.Create;
@@ -1111,14 +1262,21 @@ begin
             // (Lsp.DesignerBin), shared with binding, tree and the rename
             Cur := ClaveDeIdentificador(OClase);
             // The ROOT object and an inline frame are user classes by definition
-            // (a form, a frame, a data module): never judged. With the tables
-            // read from the library paths a user's TForm1 can share its name
-            // with a demo's (202 form classes there: TForm1, TAboutBox...), and
-            // judging it said TextHeight/PixelsPerInch did not exist (1.12.0
-            // review: 33 Samples forms).
+            // (a form, a frame, a data module): never judged BY THEIR NAME. With
+            // the tables read from the library paths a user's TForm1 can share
+            // its name with a demo's (202 form classes there: TForm1,
+            // TAboutBox...), and judging it said TextHeight/PixelsPerInch did
+            // not exist (1.12.0 review: 33 Samples forms). The root IS judged by
+            // the first class of its chain the table knows, read from its .pas
+            // (ClaseDeJuezDeRaiz, the judge of set): a ModalResult on a TForm or
+            // a colour that does not exist said CLEAN and the form did not open
+            // (H8 of 1.19.2). No .pas, or no way there: not judged, as before
             if (Stack.Count = 0) or (OClave = 'inline') then
             begin
-              Stack.Push('');
+              Cur := '';
+              if (Stack.Count = 0) and (APas <> '') then
+                Cur := ClaseDeJuezDeRaiz(M, APas, '', OClase, Propias);
+              Stack.Push(Cur);
               Heads.Push(I);
               Continue;
             end;
@@ -1172,6 +1330,10 @@ begin
               Continue;
             Cur := Stack.Peek;
             if Cur = '' then
+              Continue;
+            // en la raiz, lo que publica una clase del usuario de su cadena
+            // (TBaseForm.Foo): la clase real lo lee y la tabla no lo conoce
+            if (Stack.Count = 1) and (IndexText(Lhs.Split(['.'])[0], Propias) >= 0) then
               Continue;
             // en FMX Left/Top no colocan un control: los guarda TComponent, el
             // sitio del icono de un no visual (3.7 de la 1.18.0, Hermes)
