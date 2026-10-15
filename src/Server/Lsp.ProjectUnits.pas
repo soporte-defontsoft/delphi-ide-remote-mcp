@@ -1639,7 +1639,7 @@ var
   Info: TUnitInfo;
   U: TUsesClause;
   E: string;
-  Present, Completada, Estrenada, EsPaquete: Boolean;
+  Present, Completada, Estrenada, EsPaquete, ConCreateForm: Boolean;
   Entries: TArray<string>;
   S, L: Integer;
 begin
@@ -1722,9 +1722,15 @@ begin
   // un paquete no lleva CreateForm (no tiene programa principal): se
   // intentaba, contestaba CFG-046 y el mensaje decia "+ CreateForm" (P9)
   EsPaquete := SameText(TPath.GetExtension(Dpr), '.dpk');
+  // ...ni el de un programa sin Application.Run ni otro CreateForm (una
+  // consola): el mensaje dice lo que QUEDO en el .dpr, no lo que el form
+  // pediria. Anunciaba "+ Application.CreateForm" y CFG-046 lo desmentia en
+  // la linea siguiente (Hermes, 15-oct-2026, informe 1938c; gemelo de P9)
+  ConCreateForm := False;
   if Info.NeedsCreateForm and not EsPaquete then
   begin
-    if not InsertCreateForm(Text, Info) then
+    ConCreateForm := InsertCreateForm(Text, Info);
+    if not ConCreateForm then
       Note := MsgText(SN_UNIT_NO_RUN_ANCHOR);
   end;
   PatchSaveText(Dpr, Text, Enc);
@@ -1761,7 +1767,7 @@ begin
   else if Info.IsDesigner then
     Result := MsgFmt(SN_UNIT_ADDED_FORM_FMT, [Info.UnitName, Include, Info.FormName,
       Info.ClassName, TPath.GetFileName(Dpr), U.Keyword, TPath.GetFileName(Dpr),
-      IfThen(Info.NeedsCreateForm and not EsPaquete, MsgText(SN_UNIT_CREATEFORM), '')])
+      IfThen(ConCreateForm, MsgText(SN_UNIT_CREATEFORM), '')])
   else
     Result := MsgFmt(SN_UNIT_ADDED_FMT, [Info.UnitName, Include, TPath.GetFileName(Dpr),
       U.Keyword, TPath.GetFileName(Dpr)]);

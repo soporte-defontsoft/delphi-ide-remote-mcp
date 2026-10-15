@@ -6762,12 +6762,20 @@ const
     'all or nothing; if a file changes before the commit, the whole ' +
     'commit is refused.';
 
+  { El resumen culpaba siempre al ancla, y una entrada sin resolver tiene
+    mas causas: un delete de un fichero de Delphi (es de delphi_delete, y se
+    juzga aqui a proposito: borrar y volver a crear el mismo fichero vale) o
+    una linea de delete-line que no existe o no es la nombrada. Hermes
+    (15-oct-2026, informe 1938b) leyo "stage it again with atline" para un
+    delete. Cada entrada dice la suya en su "anchor". }
   SN_CHANGESET_PREVIEW_BAD =
-    '[CHSET-024] There are unresolved operations (anchor NOT FOUND or ' +
-    'AMBIGUOUS). Remove the failing one with command=unstage n=<the ' +
-    'number you see above> and stage it again correctly (with atline if ' +
-    'the anchor appears more than once): there is NO need to throw away ' +
-    'the whole batch. commit stays blocked until a clean preview.';
+    '[CHSET-024] There are operations the preview cannot resolve, and ' +
+    'each one says why in its "anchor" above: an anchor NOT FOUND or ' +
+    'AMBIGUOUS (stage it again correctly; atline pins one that appears ' +
+    'more than once), a line that is not there or not the one you named, ' +
+    'or a job of another tool (it names it). Take the failing one out with ' +
+    'command=unstage n=<its number>: there is NO need to throw away the ' +
+    'whole batch. commit stays blocked until a clean preview.';
 
   { Un parametro que no es de ese kind: se ignoraba en silencio (kind=create
     con old/new, kind=edit con content; sexta revision). }

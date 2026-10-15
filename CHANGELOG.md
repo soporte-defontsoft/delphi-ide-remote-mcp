@@ -68,6 +68,27 @@ the MCP `initialize` response (`serverInfo.version`).
   (red against 1.19.2 on all six, the control green); the mutant without
   the switch turns the three that read red and leaves the judge green on
   the reader alone, and the one without both turns the judge red too.
+- **Adding a form to a project no longer claims an `Application.CreateForm`
+  it did not write.** In a console project there is no `Application.Run`
+  nor any other `CreateForm` to put it next to: the form went into the
+  `uses` and the `.dproj`, and `CFG-042` still said `[CFG-043] +
+  Application.CreateForm` - with `CFG-046` saying the opposite on the next
+  line (reported by Hermes on 1.19.2). The message asked whether the form
+  NEEDS one, not whether it was written; an earlier fix covered the same for
+  packages only. It now says what is in the `.dpr`, for `delphi_create`
+  and `delphi_config add-unit` alike. Battery `test_createform_consola_1193`
+  (red against 1.19.2 on both, the VCL control green; the mutant that asks
+  the old question turns both red again).
+- **The preview of a changeset says why each operation is unresolved, not
+  always "anchor".** Its summary (`CHSET-024`) blamed every unresolved
+  operation on an anchor NOT FOUND or AMBIGUOUS and prescribed `atline`,
+  also for a `delete` of a Delphi file - refused in the preview on purpose,
+  since deleting a file and creating it again in the same batch is a valid
+  plan - whose entry names `delphi_delete`, and for a `delete-line` whose
+  line is not there (reported by Hermes on 1.19.2). It now points to the
+  reason each entry gives and names the three kinds. Battery
+  `test_changeset_resumen_1193` (red against 1.19.2 on both, the anchor
+  control green).
 
 ## [1.19.2] - 2026-10-15
 
