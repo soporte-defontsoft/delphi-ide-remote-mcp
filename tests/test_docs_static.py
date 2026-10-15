@@ -11,6 +11,8 @@ the manifest, and it runs anywhere Python runs:
   - every "N tools" / "N core tools" / "the other N" figure in README.md;
   - every manifest tool has its section in docs/TOOLS.md, and none extra;
   - CHANGELOG's newest entry matches src/Lsp.Texts.pas SERVER_VERSION;
+  - CHANGELOG.md holds only the minor line in course, and its index links
+    every docs/changelog/*.md (and nothing that does not exist);
   - tests/ compiles without SyntaxWarnings (Python 3.12+ escape hygiene).
 
 Usage:  python tests/test_docs_static.py
@@ -75,6 +77,27 @@ mc = re.search(r'^## \[([^\]]+)\] - ', ch, re.M)
 check('CHANGELOG mas reciente == SERVER_VERSION (%s)' % (mv and mv.group(1)),
       bool(mv and mc) and mv.group(1) == mc.group(1),
       (mv and mv.group(1), mc and mc.group(1)))
+
+# ---- CHANGELOG por linea menor ------------------------------------------
+# CHANGELOG.md lleva SOLO la linea menor en curso; cada linea anterior vive
+# entera en docs/changelog/<linea>.md y el indice del final la enlaza (David,
+# 9-oct-2026: "No recortes entradas solo separa en ficheros historicos"). Se
+# hizo en el ritual de la 1.18.0 como tarea de aquel ritual, no como paso
+# fijo, y en la 1.19.0 la linea 1.18 entera se quedo dentro: ninguna puerta
+# lo miraba (David lo vio el 15-oct). [Unreleased] no lleva fecha y no cuenta.
+if mv:
+    linea = '.'.join(mv.group(1).split('.')[:2])
+    ajenas = [v for v in re.findall(r'^## \[([^\]]+)\] - ', ch, re.M)
+              if '.'.join(v.split('.')[:2]) != linea]
+    check('CHANGELOG.md solo lleva la linea en curso (%s); las anteriores, en docs/changelog' % linea,
+          not ajenas, ajenas)
+indice = re.findall(r'^- \[[^\]]+\]\((docs/changelog/[^)]+)\)', ch, re.M)
+faltan = [f for f in indice if not os.path.exists(os.path.join(REPO, f))]
+sin_indice = sorted('docs/changelog/' + os.path.basename(f)
+                    for f in glob.glob(os.path.join(REPO, 'docs', 'changelog', '*.md'))
+                    if 'docs/changelog/' + os.path.basename(f) not in indice)
+check('el indice del CHANGELOG enlaza cada docs/changelog/*.md y cada enlace existe',
+      bool(indice) and not faltan and not sin_indice, {'faltan': faltan, 'sin indice': sin_indice})
 
 # ---- settings.example.ini vs docs/CONFIGURATION.md --------------------
 # Operator rule (2026-09-01): the docs are PART of every repo update - and
