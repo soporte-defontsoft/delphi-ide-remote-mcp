@@ -70,20 +70,18 @@ for i in range(10):
 before = {p: sha(p) for p in files}
 cid = begin()
 for i in range(10):
-    if i == 6:
-        # two edits on the same file: the second's anchor is the line the
-        # first one REMOVES -> resolves at preview, fails at apply
-        cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': files[i],
-            'old': 'ancla %d' % i, 'new': 'ancla cambiada'})
-        cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': files[i],
-            'old': 'ancla %d' % i, 'new': 'no llegara'})
-    else:
-        cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': files[i],
-            'old': 'valor %d' % i, 'new': 'valor %d cambiado' % i})
+    cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': files[i],
+        'old': 'valor %d' % i, 'new': 'valor %d cambiado' % i})
 r = cs({'command': 'preview', 'id': cid})
 j = json.loads(r)
 check('preview del lote resuelve (la trampa es en apply)', j.get('unresolved') == 0, r[:300])
-r = cs({'command': 'commit', 'id': cid})
+# la trampa: en el commit, el fichero de la operacion 7 lo tiene abierto OTRO
+# proceso, que deja leerlo (la huella pasa) pero no reemplazarlo -> las 6
+# primeras ya escritas, la 7 falla. Hasta la 1.19.0 la trampa eran dos edits
+# que anclaban en la misma linea, y eso ya lo ve el preview (1.19.1,
+# test_changeset_solape_1191)
+with mc.bloqueado(files[6], lectura=True):
+    r = cs({'command': 'commit', 'id': cid})
 check('commit falla y hace ROLLBACK COMPLETO', mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT'), r[:250])
 after = {p: sha(p) for p in files}
 check('CERO cambios netos tras el rollback (byte a byte)', before == after,

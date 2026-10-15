@@ -227,6 +227,15 @@ begin
   Result := Length(LineasDondeCasaElAncla([ALinea], AOld, EsDelMotorPascal(APath))) > 0;
 end;
 
+{ La clave de "la linea L de ESE fichero" para el registro del preview de lo que
+  cada operacion escribe (Escritas): la linea de antes del lote y la ruta sin
+  mirar mayusculas ("17@d:\x\u.pas"; la forma "a|b" es la de las marcas de
+  parametros, ClaveDeParam, y test_paisaje la vigila). }
+function ClaveDeLineaEscrita(const APath: string; ALinea: Integer): string;
+begin
+  Result := IntToStr(ALinea) + '@' + LowerCase(APath);
+end;
+
 function ResuelveAncla(const AText, APath, ALine: string; AAtLine: Integer;
   out ALinea: Integer): Integer;
 var
@@ -850,6 +859,12 @@ begin
       if Err <> '' then
         Exit(Err);
       Ret := TJSONObject.Create;
+      // las lineas (de ANTES del lote) que escribe cada edit y cada delete-line,
+      // por fichero: una operacion posterior que ancle en una de ellas caeria
+      // sobre lo que la otra dejo, y solo el commit lo veia (Hermes, 15-oct-
+      // 2026: preview CHSET-023 limpio, commit CHSET-026 con rollback). La
+      // misma regla que la descripcion de la tool promete
+      var Escritas := TDictionary<string, Integer>.Create;
       try
         Ret.AddPair('id', Id);
         Arr := TJSONArray.Create;
@@ -917,8 +932,17 @@ begin
                 EsDelMotorPascal(Op.Path), TPath.GetFileName(Op.Path)));
               Inc(N);
             end
+            else if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, Op.AtLine)) then
+            begin
+              Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_YA_ESCRITA_FMT,
+                [Op.AtLine, Escritas[ClaveDeLineaEscrita(Op.Path, Op.AtLine)]]));
+              Inc(N);
+            end
             else
+            begin
               Obj.AddPair('anchor', 'ok');
+              Escritas.AddOrSetValue(ClaveDeLineaEscrita(Op.Path, Op.AtLine), I + 1);
+            end;
           end;
           if Op.Kind = opEdit then
           begin
@@ -936,8 +960,17 @@ begin
                  // (codificacion, binario, la puerta, el +R) sin escribir; el
                  // preview copiaba tres reglas del commit y le faltaban las
                  // demas (decima revision)
-                 if ApplyOne(Op, Err, True) then
-                   Obj.AddPair('anchor', 'ok')
+                 if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, LineaAncla)) then
+                 begin
+                   Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_YA_ESCRITA_FMT,
+                     [LineaAncla, Escritas[ClaveDeLineaEscrita(Op.Path, LineaAncla)]]));
+                   Inc(N);
+                 end
+                 else if ApplyOne(Op, Err, True) then
+                 begin
+                   Obj.AddPair('anchor', 'ok');
+                   Escritas.AddOrSetValue(ClaveDeLineaEscrita(Op.Path, LineaAncla), I + 1);
+                 end
                  else
                  begin
                    Obj.AddPair('anchor', Err);
@@ -974,6 +1007,7 @@ begin
           Ret.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_BAD));
         Exit(Ret.ToJSON);
       finally
+        Escritas.Free;
         Ret.Free;
       end;
     end;

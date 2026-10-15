@@ -9882,6 +9882,15 @@ const
   SF_CHSET_LINEA_NO_ESPERADA_FMT =
     'line %d is not the expected one (it is "%s")';
 
+  { una operacion que ancla en la linea que escribe otra anterior del mismo
+    fichero (Hermes, 15-oct-2026: el preview decia limpio y el commit
+    deshacia la tanda). %d: la linea (antes del lote), %d: la otra operacion }
+  SF_CHSET_LINEA_YA_ESCRITA_FMT =
+    'line %d is the one operation %d of this changeset writes: every anchor ' +
+    'resolves against the file as it was before the changeset, so this one ' +
+    'would land on what that operation left. Fold both into one operation, ' +
+    'or use delphi_edit edits= for several edits of one file';
+
   SF_CHSET_DESTINO_YA_EXISTE_FMT =
     'the destination already exists: %s';
 
