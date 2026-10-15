@@ -373,57 +373,47 @@ end;
   la jerarquia: el mismo desenlace que el bug de la v1.0.4, un nivel mas
   arriba.
 
-  Se resuelve con lo que ya esta en la mano -los fuentes que el escaneo lee de
-  todas formas- y con una condicion estricta: mismo identificador Y clases
-  emparentadas por herencia. Sin parentesco no se junta nada. }
+  Se resuelve con una condicion estricta: mismo identificador Y clases
+  emparentadas por herencia. El parentesco lo dice EL MOTOR, salto a salto:
+  la definicion del ancestro escrito en class(...) de cada clase (la posicion
+  la anota el lector de clases, AncestroLinea/AncestroColumna). Iba por la
+  CADENA DE NOMBRES de lo escaneado (CadenaDeAncestros), y una clase contaba
+  como pariente de si misma: dos TFoo de dos unidades sin relacion, dos
+  jerarquias TBase/TDer copiadas y una SOBRECARGA salian "via override", y
+  rename las escribia (R1 de la 1.19.2, medido el 15-oct-2026). }
 
-{ La clase a la que pertenece un metodo en ALine. '' cuando es una rutina
-  global. Dos formas: "procedure TBase.Pinta;" lo dice en su propia linea, y
-  "procedure Pinta; virtual;" vive DENTRO de la clase: el tipo que contiene
-  esa linea, de EL lector de clases (AUnidad, leida de ALines; un record no
-  tiene familia). Se subia linea a linea hasta un "X = class" y se paraba en
-  un "end;" de cuatro espacios: un record anidado o una clase de una linea lo
+{ La clase a la que pertenece el METODO llamado AIdent cuya cabecera esta en
+  ALine; nil cuando ALine no es la cabecera de una rutina llamada asi (una
+  clase, un campo o una rutina global no tienen familia: la de una clase daba
+  la propia clase, y dos clases del mismo nombre salian parientes). Dos
+  formas: "procedure TBase.Pinta;" lo dice en su propia linea, y "procedure
+  Pinta; virtual;" vive DENTRO de la clase: el tipo que contiene esa linea,
+  de EL lector de clases (AUnidad, leida de ALines; un record no tiene
+  familia). Se subia linea a linea hasta un "X = class" y se paraba en un
+  "end;" de cuatro espacios: un record anidado o una clase de una linea lo
   enganaban (censo del 4-oct-2026). }
 function ClaseDeMetodo(const ALines: TStringList; AUnidad: TUnidadPas; ALine: Integer;
-  const AIdent: string): string;
+  const AIdent: string): TTipoPas;
 var
-  T: TTipoPas;
+  Col: Integer;
+  Nombre: string;
 begin
-  Result := '';
+  Result := nil;
   if (ALine < 0) or (ALine >= ALines.Count) or (AIdent = '') then
+    Exit;
+  Col := ColumnaDelNombreDeRutina(ALines[ALine]);
+  if (Col < 0) or not MismoIdentificador(IdentifierAt(ALines[ALine], Col), AIdent) then
     Exit;
   // la cabecera cualificada, por SU lector (Lsp.PascalDecl): con un solo
   // identificador delante del punto, la de un metodo de una generica
   // (THija<T>.Pinta) o de una anidada no casaba, y la llamada a un override
   // suyo salia rechazada como homonimo (medido el 4-oct-2026)
-  Result := ClaseDeImplementacion(ALines[ALine], AIdent);
-  if Result <> '' then
-    Exit;
-  T := AUnidad.TipoEnLinea(ALine, [ctClase, ctInterfaz, ctRegistro, ctAyudante]);
-  if (T <> nil) and (T.Clase <> ctRegistro) then
-    Result := T.Nombre;
-end;
-
-{ true si una de las dos clases desciende de la otra, por LA cadena de
-  ancestros (Lsp.PascalDecl) sobre lo que el escaneo leyo (AnotaAncestros de
-  cada fuente). El tope de 20 saltos es contra una jerarquia circular en
-  fuentes a medio escribir. }
-function MismaFamilia(const AMapa: TDictionary<string, string>;
-  const A, B: string): Boolean;
-
-  function Desciende(const AHijo, AAbuelo: string): Boolean;
-  var
-    Sale: Boolean;
-  begin
-    for var C in CadenaDeAncestros(AMapa, AHijo, Sale, 21) do
-      if MismoIdentificador(UltimoTrozo(C), AAbuelo) then
-        Exit(True);
-    Result := False;
-  end;
-
-begin
-  Result := (A <> '') and (B <> '') and
-    (Desciende(A, B) or Desciende(B, A));
+  Nombre := ClaseDeImplementacion(ALines[ALine], AIdent);
+  if Nombre <> '' then
+    Exit(AUnidad.Clase(Nombre));
+  Result := AUnidad.TipoEnLinea(ALine, [ctClase, ctInterfaz, ctRegistro, ctAyudante]);
+  if (Result <> nil) and (Result.Clase = ctRegistro) then
+    Result := nil;
 end;
 
 function UbicacionDeLsp(AResult: TJSONValue; out AUri: string;
@@ -601,6 +591,13 @@ var
   Ilegibles: TArray<string>;      // del alcance, sin leer: se dicen, no se tiran
   SinLeer: Integer;               // los del barrido que no se leyeron (no se cuentan)
   CursorTexto: string;            // la linea del cursor (DefinicionCorregida)
+  TargetPath: string;
+  TargetTwin: Integer;
+  ClaseObjetivoLinea: Integer;    // la declaracion, en TargetPath, de la clase del metodo objetivo; -1 = no es un metodo
+  Familia: Boolean;
+  Textos: TObjectDictionary<string, TStringList>;   // la vista del codigo de cada fichero, leida una vez
+  Unidades: TObjectDictionary<string, TUnidadPas>;  // y sus clases (EL lector, Lsp.PascalDecl)
+  Saltos: TDictionary<string, string>;              // (fichero|linea) de una clase -> la de su ancestro, por el motor
 
   function CandidateJson(const C: TCandidate): TJSONObject;
   begin
@@ -618,6 +615,132 @@ var
     // Iba dos veces, recortada en text y entera en anchor; como en
     // delphi_search, una (1.15.0).
     Result.AddPair('text', C.Text.TrimRight([#13, #10]));
+  end;
+
+  // la vista del codigo de un fichero (Lsp.Pascal) y sus clases (EL lector,
+  // Lsp.PascalDecl), leidas UNA vez: las pide el parentesco por cada
+  // candidato y por cada salto de la cadena. Uno que no se deja leer queda
+  // vacio y se dice (Ilegibles): el candidato acababa homonimo sin decir por
+  // que (revisor 7, B8)
+  function LineasDe(const APath: string): TStringList;
+  begin
+    if not Textos.TryGetValue(APath.ToLower, Result) then
+    begin
+      Result := TStringList.Create;
+      try
+        Result.Text := CodigoPascal(TLspClient.LoadSourceText(APath));
+      except
+        Ilegibles := Ilegibles + [APath];
+      end;
+      Textos.Add(APath.ToLower, Result);
+    end;
+  end;
+
+  function UnidadDe(const APath: string): TUnidadPas;
+  begin
+    if not Unidades.TryGetValue(APath.ToLower, Result) then
+    begin
+      Result := LeeFuentePascal(LineasDe(APath).Text);
+      Unidades.Add(APath.ToLower, Result);
+    end;
+  end;
+
+  { La declaracion del ancestro ESCRITO de la clase declarada en (AFile,
+    ALinea), por EL MOTOR: la definicion del identificador que hay en su
+    class(...), donde lo anoto el lector (AncestroLinea/AncestroColumna).
+    False sin ancestro escrito (desciende de TObject), sin posicion (una
+    cabecera partida en lineas: la cadena sale por ahi), si el motor no
+    contesta o contesta un fichero que no puede ensenar, o uno de fuera del
+    barrido (la RTL: un parentesco de aqui nunca pasa por ella, y leer
+    System.pas para saberlo cuesta segundos). Cada clase se pregunta UNA vez
+    (Saltos), y el fichero de un abuelo que el barrido no abrio se abre sin
+    contar en el presupuesto de candidatos: acotado por clases. }
+  function AncestroDe(const AFile: string; ALinea: Integer; out AFile2: string;
+    out ALinea2: Integer): Boolean;
+  var
+    Clave, Guardado, Uri: string;
+    T: TTipoPas;
+    R: TJSONObject;
+    EnElBarrido: Boolean;
+  begin
+    Result := False;
+    AFile2 := '';
+    ALinea2 := -1;
+    Clave := AFile.ToLower + '|' + ALinea.ToString;
+    if Saltos.TryGetValue(Clave, Guardado) then
+    begin
+      if Guardado = '' then
+        Exit;
+      AFile2 := Guardado.Substring(0, Guardado.LastIndexOf('|'));
+      ALinea2 := StrToInt(Guardado.Substring(Guardado.LastIndexOf('|') + 1));
+      Exit(True);
+    end;
+    Saltos.Add(Clave, '');
+    T := UnidadDe(AFile).TipoQueEmpiezaEn(ALinea);
+    if (T = nil) or (T.Clase <> ctClase) or (T.AncestroLinea < 0) then
+      Exit;
+    if not OpenedFiles.ContainsKey(AFile.ToLower) then
+    begin
+      Session.AbreEn(Client, AFile);
+      OpenedFiles.Add(AFile.ToLower, True);
+    end;
+    // (uno dentro del identificador, como con los candidatos)
+    R := Client.Definition(TLspClient.PathToUri(AFile), T.AncestroLinea, T.AncestroColumna + 1);
+    try
+      if not DefinitionLocation(R, Uri, ALinea2) or
+         not MotorPuedeEnsenar(TLspClient.UriToPath(Uri)) then
+        Exit;
+    finally
+      R.Free;
+    end;
+    AFile2 := TLspClient.UriToPath(Uri);
+    EnElBarrido := False;
+    for var A in AllFiles do
+      if SameText(A, AFile2) then
+      begin
+        EnElBarrido := True;
+        Break;
+      end;
+    if not EnElBarrido then
+    begin
+      AFile2 := '';
+      Exit;
+    end;
+    Saltos[Clave] := AFile2 + '|' + ALinea2.ToString;
+    Result := True;
+  end;
+
+  { true si una de las dos clases desciende de la otra, subiendo por los
+    ancestros que contesta el motor (AncestroDe), hasta 20 saltos (una
+    jerarquia circular en fuentes a medio escribir). Una clase NO es pariente
+    de si misma (una sobrecarga no es un override), y dos clases son la misma
+    por su fichero y su linea, nunca por su nombre. }
+  function EsPariente(const AFile1: string; ALinea1: Integer; const AFile2: string;
+    ALinea2: Integer): Boolean;
+
+    function Desciende(const AHijo: string; ALinea: Integer; const AAbuelo: string;
+      ALineaAbuelo: Integer): Boolean;
+    var
+      F, F2: string;
+      L, L2, Salto: Integer;
+    begin
+      F := AHijo;
+      L := ALinea;
+      for Salto := 1 to 20 do
+      begin
+        if not AncestroDe(F, L, F2, L2) then
+          Exit(False);
+        if SameText(F2, AAbuelo) and (L2 = ALineaAbuelo) then
+          Exit(True);
+        F := F2;
+        L := L2;
+      end;
+      Result := False;
+    end;
+
+  begin
+    Result := Desciende(AFile1, ALinea1, AFile2, ALinea2) or
+      Desciende(AFile2, ALinea2, AFile1, ALinea1);
   end;
 
 begin
@@ -694,14 +817,15 @@ begin
   // lands exactly on the bad side and reads "nobody uses this" about a
   // routine with two callers - a wrong answer, not a missing one.
   // So resolve the counterpart ONCE, here, and accept both as one symbol.
-  var TargetTwin: Integer := -1;
-  var ClaseObjetivo := '';
-  var Familia := False;
-  var Herencia := TDictionary<string, string>.Create;
-  var Textos := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
+  TargetTwin := -1;
+  ClaseObjetivoLinea := -1;
+  Familia := False;
+  Textos := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
   // y sus clases, leidas una vez por fichero (EL lector, Lsp.PascalDecl)
-  var Unidades := TObjectDictionary<string, TUnidadPas>.Create([doOwnsValues]);
-  var TargetPath := TLspClient.UriToPath(TargetUri);
+  Unidades := TObjectDictionary<string, TUnidadPas>.Create([doOwnsValues]);
+  // el ancestro de cada clase, preguntado al motor UNA vez (AncestroDe)
+  Saltos := TDictionary<string, string>.Create;
+  TargetPath := TLspClient.UriToPath(TargetUri);
   if TFile.Exists(TargetPath) then
   begin
     var TwinLines := TStringList.Create;
@@ -719,7 +843,10 @@ begin
       end;
       TwinLines.Text := CodigoPascal(TwinTexto);
       TwinU := LeeFuentePascal(TwinLines.Text);
-      ClaseObjetivo := ClaseDeMetodo(TwinLines, TwinU, TargetLine, Ident);
+      // la clase del metodo objetivo: su declaracion (la linea, en TargetPath)
+      var ClaseDecl := ClaseDeMetodo(TwinLines, TwinU, TargetLine, Ident);
+      if ClaseDecl <> nil then
+        ClaseObjetivoLinea := ClaseDecl.Linea;
       if (TargetLine >= 0) and (TargetLine < TwinLines.Count) then
       begin
         // Same 1-based-Pos-as-character convention the candidate loop uses
@@ -750,8 +877,12 @@ begin
               TargetTwin := TwinLine;
               // La mitad declarada dentro de la clase no siempre dice de
               // quien es; la implementacion SIEMPRE lo dice, cualificada.
-              if ClaseObjetivo = '' then
-                ClaseObjetivo := ClaseDeMetodo(TwinLines, TwinU, TwinLine, Ident);
+              if ClaseObjetivoLinea < 0 then
+              begin
+                var ClaseImpl := ClaseDeMetodo(TwinLines, TwinU, TwinLine, Ident);
+                if ClaseImpl <> nil then
+                  ClaseObjetivoLinea := ClaseImpl.Linea;
+              end;
             end;
           finally
             Resp.Free;
@@ -867,15 +998,6 @@ begin
       // codigo si su primera letra sigue en ella. Aqui habia una copia del
       // lexico (MarcaCodigo, 2026-09-21); el censo del 2-oct-2026 las junto
       var Vista := CodigoPascal(Text);
-      // La jerarquia se apunta AQUI, del fuente que ya se ha leido para
-      // buscar candidatos: el parentesco entre clases sale gratis. Sus
-      // clases, de EL lector (tenia su propia regex)
-      var UVista := LeeFuentePascal(Vista);
-      try
-        AnotaAncestros(UVista, Herencia);
-      finally
-        UVista.Free;
-      end;
       Lines := TStringList.Create;
       VistaLines := TStringList.Create;
       try
@@ -973,34 +1095,28 @@ begin
           var Resuelto := DefinitionLocation(Resp, CandUri, CandLine);
           var EsElMismo := Resuelto and SameText(CandUri, TargetUri) and
             ((CandLine = TargetLine) or (CandLine = TargetTwin));
+          // ...o a un MIEMBRO de la propia clase objetivo: en la cabecera
+          // 'procedure TFoo.Pinta;' el motor resuelve el TFoo al metodo
+          // Pinta (medido el 15-oct-2026), y ese TFoo es la clase misma, no
+          // un pariente (salia "via override", y sin parentesco se quedaba
+          // fuera del rename de la clase)
+          if Resuelto and not EsElMismo and SameText(CandUri, TargetUri) then
+          begin
+            var Propia := UnidadDe(TargetPath).TipoQueEmpiezaEn(TargetLine);
+            EsElMismo := (Propia <> nil) and Propia.Contiene(CandLine);
+          end;
           // El parentesco: el candidato resolvio a OTRA linea, pero a un
           // metodo del mismo nombre en una clase de la misma familia. Eso no
           // es un homonimo: es el mismo metodo a otra altura de la jerarquia.
+          // La familia la dice el motor (EsPariente), entre la declaracion de
+          // la clase del objetivo y la de la clase del candidato
           var Pariente := False;
-          if Resuelto and not EsElMismo and (ClaseObjetivo <> '') then
+          if Resuelto and not EsElMismo and (ClaseObjetivoLinea >= 0) then
           begin
             var CandPath := TLspClient.UriToPath(CandUri);
-            var CandLines: TStringList;
-            if not Textos.TryGetValue(CandPath.ToLower, CandLines) then
-            begin
-              CandLines := TStringList.Create;
-              try
-                CandLines.Text := CodigoPascal(TLspClient.LoadSourceText(CandPath));
-              except
-                // donde resolvio un candidato, sin leer: el candidato acababa
-                // homonimo sin decir por que (revisor 7, B8)
-                Ilegibles := Ilegibles + [CandPath];
-              end;
-              Textos.Add(CandPath.ToLower, CandLines);
-            end;
-            var CandU: TUnidadPas;
-            if not Unidades.TryGetValue(CandPath.ToLower, CandU) then
-            begin
-              CandU := LeeFuentePascal(CandLines.Text);
-              Unidades.Add(CandPath.ToLower, CandU);
-            end;
-            Pariente := MismaFamilia(Herencia, ClaseObjetivo,
-              ClaseDeMetodo(CandLines, CandU, CandLine, Ident));
+            var ClaseCand := ClaseDeMetodo(LineasDe(CandPath), UnidadDe(CandPath), CandLine, Ident);
+            Pariente := (ClaseCand <> nil) and
+              EsPariente(TargetPath, ClaseObjetivoLinea, CandPath, ClaseCand.Linea);
           end;
           if EsElMismo then
             Confirmed.Add(CandidateJson(Cand))
@@ -1135,7 +1251,7 @@ begin
     Candidates.Free;
     Menciones.Free;
     AllFiles.Free;
-    Herencia.Free;
+    Saltos.Free;
     Unidades.Free;
     Textos.Free;
   end;

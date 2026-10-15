@@ -408,10 +408,11 @@ const
     'almost always because you are pointing at text that is not a ' +
     'symbol: inside a string, in a comment, on a reserved word, or at an ' +
     'identifier of another unit that this project does not compile. ' +
-    'Point INSIDE the identifier on a real line of code (delphi_read ' +
-    'gives you line and column). It can also happen if the project has ' +
-    'no usable configuration: delphi_config command=view tells you ' +
-    'whether it has one.';
+    'Point INSIDE the identifier on a real line of code: lines and ' +
+    'columns are 0-BASED here and 1-based in delphi_read, so line N of a ' +
+    'read is N-1 here (delphi_symbols filter=<name> gives both). It can ' +
+    'also happen if the project has no usable configuration: ' +
+    'delphi_config command=view tells you whether it has one.';
 
   SR_LSP_LINE_RANGE_FMT =
     '[LSP-004 INVALID_PARAM] Line %d does not exist in %s, which has %d ' +
@@ -3310,8 +3311,9 @@ const
   SN_FILE_PROJECTS_NONE =
     '  [FILE-002] (no .dpr or .dpk listed it, looking from its folder - ' +
     'and in a move, also from the destination one - upward to the edge ' +
-    'of the workspace; if another project uses it, remove it with ' +
-    'delphi_config command=remove-unit)';
+    'of the workspace, and in the folders right under each level on the ' +
+    'way; a project nested deeper than that still lists it: take it out ' +
+    'with delphi_config command=remove-unit)';
 
   SN_FILE_COPY_NO_PROJECT =
     '  [FILE-003] (a COPY is a new unit that no project lists yet: ' +

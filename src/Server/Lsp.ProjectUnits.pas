@@ -2715,6 +2715,35 @@ begin
   end;
 end;
 
+{ Los sitios donde buscar un proyecto que liste una unidad: cada carpeta de la
+  subida (SubeCarpetas) y sus subcarpetas inmediatas que esta sesion puede
+  leer. Dos trabajos viven en carpetas HERMANAS (app\ y scratch\, pkgA\ y
+  pkgB\), no una encima de otra. Un listado por carpeta, sin recursion. Lo
+  miraban solo los paquetes: delete y move solo subian, y el .dpr de la
+  carpeta de al lado se quedaba listando la unidad borrada (H5-02 de Hermes,
+  1.19.2). Un recorredor para los dos, no dos. }
+function SitiosDeProyectos(const ADirs: TArray<string>): TArray<string>;
+var
+  D: string;
+begin
+  Result := [];
+  for D in ADirs do
+  begin
+    if not TDirectory.Exists(D) then
+      Continue;
+    Result := Result + [D];
+    try
+      // una subcarpeta que la jaula no deja leer (un enlace a fuera) no se
+      // mira: se leian sus .dpk de detras (medida M1)
+      for var Sub in TDirectory.GetDirectories(D) do
+        if not MatchText(Sub, ADirs) and (ReadPathDenied(Sub) = '') then
+          Result := Result + [Sub];
+    except
+      // una carpeta que no se deja listar no es motivo para no mirar el resto
+    end;
+  end;
+end;
+
 function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<string>;
 var
   Dirs: TArray<string>;
@@ -2724,26 +2753,7 @@ begin
   Result := [];
   Dirs := [];
   SubeCarpetas(TPath.GetDirectoryName(TPath.GetFullPath(ADpkPath)), Dirs);
-  // Dos paquetes de un mismo trabajo viven en carpetas HERMANAS (pkgA\ y
-  // pkgB\), no una encima de otra: a cada nivel de la subida se miran
-  // tambien sus subcarpetas inmediatas. Un listado por carpeta, sin recursion.
-  var Sitios: TArray<string> := [];
-  for D in Dirs do
-  begin
-    if not TDirectory.Exists(D) then
-      Continue;
-    Sitios := Sitios + [D];
-    try
-      // una subcarpeta que la jaula no deja leer (un enlace a fuera) no se
-      // mira: se leian sus .dpk de detras (medida M1)
-      for var Sub in TDirectory.GetDirectories(D) do
-        if not MatchText(Sub, Dirs) and (ReadPathDenied(Sub) = '') then
-          Sitios := Sitios + [Sub];
-    except
-      // una carpeta que no se deja listar no es motivo para no mirar el resto
-    end;
-  end;
-  for D in Sitios do
+  for D in SitiosDeProyectos(Dirs) do
   begin
     for F in TDirectory.GetFiles(D, '*.dpk') do
     begin
@@ -2787,10 +2797,10 @@ begin
   SubeCarpetas(Dir, Dirs);
   if AAlsoDir <> '' then
     SubeCarpetas(TPath.GetFullPath(AAlsoDir), Dirs);
-  for D in Dirs do
+  // ...y las carpetas de al lado de cada nivel (SitiosDeProyectos): el .dpr
+  // de app\ que lista ..\scratch\U.pas no esta en la subida desde scratch\
+  for D in SitiosDeProyectos(Dirs) do
   begin
-    if not TDirectory.Exists(D) then
-      Continue;
     for F in TDirectory.GetFiles(D, '*.dp?') do // .dpr y .dpk, no .dproj
       if MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) then
       for P in UnitsParaBuscar(F, Stem) do // the .dpr decides; no .dproj read

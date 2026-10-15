@@ -72,12 +72,45 @@ the MCP `initialize` response (`serverInfo.version`).
   repository ignores case, the paths now go as `:(literal,icase)` - git's
   own rule, measured with git 2.53 on `status`, `diff`, `log`, `add`,
   `restore` and `stash`, files and folders. `test_git_mayusculas_1192`.
+- **`delphi_references` and `delphi_rename_symbol` no longer take a
+  namesake for family.** A class `TFoo` declared in two unrelated units,
+  two copied `TBase`/`TDer` hierarchies, or an overload `Sobre(string)`
+  next to `Sobre(Integer)` came out confirmed, marked `via: "override"`,
+  and `rename_symbol` was applicable across both units (measured while
+  reproducing Hermes' H5-01 on 1.19.1, which was not this). The kinship
+  between two classes was decided by the simple class name over the
+  scanned sources, and a class counted as its own relative. The engine
+  decides it now, hop by hop: the definition of the ancestor written in
+  `class(...)` - the class reader notes where it is -, a class is not its
+  own relative, and two classes are the same by file and line, never by
+  name. The `TFoo` of a qualified header `procedure TFoo.Pinta;`, which
+  the engine resolves to the method, is the class itself: it was a
+  "relative", it is confirmed plain now, so a rename of the class keeps
+  its headers. Namesakes are listed in `rejected`, and `rename_symbol`
+  refuses them with `RENAME-017` instead of writing into the other unit.
+  `test_referencias_familia_1192`.
+- **`delphi_delete` takes a unit out of a project in a sibling folder.**
+  With `app\P.dpr` listing `..\scratch\UDef.pas`, deleting the unit said
+  `FILE-002` "no .dpr listed it" and left the `.dpr` pointing at a file
+  that was gone (reported by Hermes on 1.19.1). The search for the
+  projects that list a unit climbed from its folder only; the one for
+  packages already looked into the folders right under each level. One
+  walker for both now (`SitiosDeProyectos`), and `FILE-002` says where it
+  looked. A `move` was already re-pointing such a `.dpr` through the
+  relative-path fixer (`MOVE-005`) while noting `FILE-002`: it names the
+  project now. `test_delete_proyecto_lateral_1192`.
 
 ### Changed
 
 - The `STYLE-016` note of `delphi_styles lint` says that
   `duplicatedStyleNames` is the same name twice in ONE file: two theme
   files sharing names is how themes work (asked by Hermes).
+- `LSP-003`, the answer of `delphi_references` and `delphi_rename_symbol`
+  when the position is not a symbol, sent the reader to `delphi_read` for
+  line and column - whose lines are 1-based, the very slip that produces
+  it (Hermes' H5-01: the line of a read in the 0-based parameter). It says
+  so now, as `LSP-029` does, and points at `delphi_symbols filter=<name>`,
+  which gives both.
 
 ## [1.19.1] - 2026-10-15
 

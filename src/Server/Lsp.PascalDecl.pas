@@ -128,6 +128,13 @@ type
     // (REST.Backend.BindSource: el generico desciende del que no lo es)
     Aridad: Integer;
     AncestroAridad: Integer;
+    // donde esta ESCRITO el ancestro (su ultimo trozo: el TForm de
+    // Vcl.Forms.TForm), linea y columna 0-based en el texto leido; -1 sin
+    // ancestro. Para preguntarle al MOTOR que clase es: references juzgaba
+    // el parentesco por el nombre simple y juntaba dos TFoo de dos unidades
+    // (R1 de la 1.19.2)
+    AncestroLinea: Integer;
+    AncestroColumna: Integer;
     EnImplementation: Boolean;
     // donde esta, en lineas del texto leido (0-based): la de su nombre y la de
     // su 'end' (clase, record, interfaz, object con cuerpo; -1 si su bloque no
@@ -214,7 +221,8 @@ procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, s
   cualificado (Vcl.Forms.TForm) se busca por su ultimo trozo y va en la cadena
   como esta escrito; si su nombre es el de una ya vista, es otra clase (la de
   fuera de una interpuesta) y la cadena sale por ella. Habia tres recorridos,
-  cada uno con sus topes y sus raices (check-binding, add-unit, references). }
+  cada uno con sus topes y sus raices (check-binding, add-unit, references;
+  este ultimo pregunta al motor desde la 1.19.2: AncestroLinea/AncestroColumna). }
 function CadenaDeAncestros(const AMapa: TDictionary<string, string>;
   const AClase: string; out ASale: Boolean; ATope: Integer = 32): TArray<string>;
 
@@ -248,6 +256,7 @@ type
     FUnidad: TUnidadPas;
     FEnImpl: Boolean;
     FUltimaAridad: Integer; // la de los <...> del ultimo LeeNombreDeTipo
+    FUltimoIdent: Integer;  // el indice del ultimo identificador que tomo
     // donde empieza cada linea de FTxt (1-based): la linea de un token
     FLineas: TArray<Integer>;
     // las rutinas con cuerpo del implementation (LeeRutinaConCuerpo)
@@ -858,6 +867,7 @@ begin
   Result := '';
   if not EsIdent then
     Exit;
+  FUltimoIdent := FI;
   Result := Toma;
   FUltimaAridad := 0;
   if Mira = '<' then
@@ -865,6 +875,7 @@ begin
   while (Mira = '.') and EsIdent(1) do
   begin
     Toma;
+    FUltimoIdent := FI;
     Result := Result + '.' + Toma;
     FUltimaAridad := 0;
     if Mira = '<' then
@@ -1222,6 +1233,8 @@ var
 begin
   FinLeido := False; // la linea de su 'end' (los de bloque); si no, la de su ';'
   T := TTipoPas.Create;
+  T.AncestroLinea := -1;
+  T.AncestroColumna := -1;
   T.Nombre := ANombre;
   T.Linea := ALinea;
   T.LineaFin := ALinea;
@@ -1279,6 +1292,13 @@ begin
           Toma;
           T.Ancestro := LeeNombreDeTipo;
           T.AncestroAridad := FUltimaAridad;
+          // donde esta escrito, por el lexico (FIni y FLineas son 1-based en
+          // FTxt: la resta es la columna 0-based)
+          if T.Ancestro <> '' then // (sin ancestro, FUltimoIdent es de otro nombre)
+          begin
+            T.AncestroLinea := LineaDeTok(FUltimoIdent);
+            T.AncestroColumna := FIni[FUltimoIdent] - FLineas[T.AncestroLinea];
+          end;
           // las interfaces de la lista, hasta el ')'
           Prof := 1;
           while not Fin do
