@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **`delphi_designer preview` names the root of the form in `ignored`, with
+  its line.** A property the loader skips on the ROOT (a `ModalResult` on a
+  VCL form, an unknown one on an FMX form or a frame) came out with a name
+  of the renderer's own - `TFormOculta`, `form_02BCC9C0`, `TFrame` - and no
+  `line`, while the note says `line` tells where each one is (reported by
+  Hermes on 1.19.1; a child came out right). In design mode `TReader` reads
+  the root's name and drops it, and the renderer named the root only after
+  reading, so the error carried the class of an unnamed component. The
+  renderer now names the root from the file's header before reading it
+  (`LeeRaiz`, shared by the VCL and FMX renderers). `test_preview_raiz_1192`.
+
 ## [1.19.1] - 2026-10-15
 
 Six fixes from Hermes' validation of 1.19.0, each one reproduced against

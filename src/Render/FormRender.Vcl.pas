@@ -420,9 +420,7 @@ begin
     if ADesigning then
       PonEnDiseno(Frame);
     ARaiz := Frame;
-    ACargador.Lee(GPeticion.Path, Frame);
-    if Cab.Nombre <> '' then
-      Frame.Name := Cab.Nombre;
+    ACargador.LeeRaiz(GPeticion.Path, Cab.Nombre, Frame);
     Result.ClientWidth := Frame.Width;
     Result.ClientHeight := Frame.Height;
     Frame.Parent := Result;
@@ -432,9 +430,7 @@ begin
   else
   begin
     ARaiz := Result;
-    ACargador.Lee(GPeticion.Path, Result);
-    if Cab.Nombre <> '' then
-      Result.Name := Cab.Nombre;
+    ACargador.LeeRaiz(GPeticion.Path, Cab.Nombre, Result);
   end;
 end;
 

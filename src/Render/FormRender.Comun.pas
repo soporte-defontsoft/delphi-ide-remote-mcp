@@ -99,6 +99,9 @@ type
       --packages auto el form se vuelve a leer con otro }
     property Leidos: TStringList read FLeidos;
     property Eventos: Integer read FEventos;
+    { Lee (ancestros incluidos) la RAIZ de la peticion con ANombre, el de la
+      cabecera del fichero: el que dicen sus errores y el que se le queda }
+    procedure LeeRaiz(const AFichero, ANombre: string; ARaiz: TComponent);
   end;
 
   { La primera linea de un .dfm/.fmx de texto (o la cabecera de uno binario):
@@ -1128,6 +1131,20 @@ begin
   finally
     Cadena.Free;
   end;
+end;
+
+procedure TCargador.LeeRaiz(const AFichero, ANombre: string; ARaiz: TComponent);
+begin
+  // el nombre de la cabecera ANTES de leer: en modo diseno TReader lee el de
+  // la raiz y lo descarta (ReadRootComponent), y el error de una propiedad de
+  // un componente sin nombre lleva su ClassName - "ignored" decia nuestra
+  // clase (TFormOculta, form_XXXX, TFrame) y sin linea (H9 de la 1.19.2).
+  // Fuera de diseno lo pone el propio lector, unico entre los globales
+  if (ANombre <> '') and (csDesigning in ARaiz.ComponentState) then
+    ARaiz.Name := ANombre;
+  Lee(AFichero, ARaiz);
+  if ANombre <> '' then
+    ARaiz.Name := ANombre;
 end;
 
 initialization
