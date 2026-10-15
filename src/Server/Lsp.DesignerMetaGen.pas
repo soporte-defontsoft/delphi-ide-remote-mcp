@@ -75,7 +75,7 @@ type
 const
   { Sube cuando cambian las reglas del generador: una tabla de otra
     generacion no se reutiliza aunque el fuente sea el mismo. }
-  GENERACION_TABLAS = 12; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+  GENERACION_TABLAS = 13; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
   // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
   // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
@@ -1728,7 +1728,19 @@ begin
           if TRegEx.IsMatch(Bajo, '^[-+]?\s*(?:\$[0-9A-Fa-f]|\d)') then
             Result.Base := 'integer'
           else if (Bajo = '') or Bajo.StartsWith('#') or Bajo.StartsWith('''') then
-            Result.Base := 'char';
+            Result.Base := 'char'
+          else
+          begin
+            // Low(T)..High(T) (TModalResult = Low(Integer)..High(Integer),
+            // System.UITypes): la base la dice T, preguntada al MISMO
+            // clasificador. Sin ella el tipo quedaba sin base y set y lint
+            // dejaban pasar "mrOK", que el cargador rechaza (Hermes,
+            // 15-oct-2026: DSGN-114 en el preview, el form no abre)
+            var Limite := TRegEx.Match(Bajo, '^(?i:low|high)\s*\(\s*(' + PATRON_IDENT + ')\s*\)\s*$');
+            if Limite.Success and (Clasifica(Limite.Groups[1].Value, UT, ContenedorDe(T),
+                 T.EnImplementation, AProf + 1).Base = 'integer') then
+              Result.Base := 'integer';
+          end;
         end;
       end;
     ctAlias:
