@@ -77,6 +77,14 @@ mc = re.search(r'^## \[([^\]]+)\] - ', ch, re.M)
 check('CHANGELOG mas reciente == SERVER_VERSION (%s)' % (mv and mv.group(1)),
       bool(mv and mc) and mv.group(1) == mc.group(1),
       (mv and mv.group(1), mc and mc.group(1)))
+# el badge de descarga del README es ESTATICO desde la 1.20.0: el dinamico de
+# shields.io preguntaba a la API de GitHub en cada visita y pintaba "Unable to
+# select next GitHub token from pool" cuando se le agotaban (David, 16-oct). La
+# version escrita es una copia: este check la ata a SERVER_VERSION en el ritual
+mb = re.search(r'img\.shields\.io/badge/download-v([0-9.]+)-', readme)
+check('el badge de descarga del README == SERVER_VERSION (%s)' % (mv and mv.group(1)),
+      bool(mv and mb) and mv.group(1) == mb.group(1),
+      (mv and mv.group(1), mb and mb.group(1)))
 
 # ---- CHANGELOG por linea menor ------------------------------------------
 # CHANGELOG.md lleva SOLO la linea menor en curso; cada linea anterior vive
