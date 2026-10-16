@@ -2613,7 +2613,7 @@ const
   SN_DESKTOP_MOTIVO_NODO_FMT =
     '[DESK-017] the target could not take it (%s)';
   SN_DESKTOP_MOTIVO_NINGUNO =
-    '[DESK-018] the node did not say why; its whole output is in ' +
+    '[DESK-018] the node did not say why; what it printed is in ' +
     'nodeOutput';
 
   SD_ADB =
@@ -7983,6 +7983,14 @@ const
 
   SN_CAPT_NO_PUDE_ESCALAR_FMT =
     '[CAPT-009] could not scale the capture: %s';
+
+  // (1.20) una imagen en linea que no cabe en una respuesta ni en JPEG
+  SN_CAPT_NO_CABE_EN_LINEA_FMT =
+    '[CAPT-014] the image does not fit in one answer even as JPEG (%d bytes; ' +
+    'a client reads at most %d at once): it comes as a file instead';
+
+  SN_CAPT_NO_PUDE_RECODIFICAR_FMT =
+    '[CAPT-015] could not re-encode the capture to fit in one answer: %s';
 
   // Mensajes que estaban en linea en Lsp.Guard.pas (paso 3c a mano, 27-sep-2026)
   SL_GUARD_MISMO_VALOR_TOKEN_FMT =

@@ -134,6 +134,17 @@ function MotivoSinCaptura(const ASalida, AEntorno: string): string;
   MotivoSinCaptura es ese motivo envuelto; UN lector de la linea del nodo. }
 function MotivoDelNodo(const ASalida, AEntorno: string): string;
 
+{ Lo que el agente ve de la salida del nodo (nodeOutput). Nunca el protocolo
+  (NODO_CAPTURA es una ruta NUESTRA del destino: un agente la uso de out=; la
+  lista de ventanas ya va en "windows") ni el uso de consola del nodo
+  (NODO_USO: un agente lo tomo por comandos de la tool). Con AGestoBien -un
+  gesto o una captura que salio, sin error- solo lo que el nodo dijo de ESTA
+  llamada: la accion y los avisos; el arranque de cada vez (NODO_RUTINA) y las
+  lineas sin etiqueta se quedan fuera (~1.300 caracteres en cada tap; los tres
+  casos, medidos en Hermes el 16-oct-2026). Sin AGestoBien (status, un fallo)
+  va el resto entero: es el diagnostico. '' si no queda nada que decir. }
+function SalidaParaElAgente(const ASalida: string; AGestoBien: Boolean): string;
+
 { Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
   target. ARelPath es relativo a esa carpeta ('captura.png'), nunca una ruta
   del sistema: igual que la ejecucion remota, esto solo alcanza lo que ESE
@@ -274,6 +285,60 @@ end;
 function MotivoSinCaptura(const ASalida, AEntorno: string): string;
 begin
   Result := MsgFmt(SR_DESKTOP_SIN_CAPTURA_FMT, [MotivoDelNodo(ASalida, AEntorno)]);
+end;
+
+function SalidaParaElAgente(const ASalida: string; AGestoBien: Boolean): string;
+var
+  Quedan: TStringList;
+  EnUso: Boolean;
+
+  // el id de la etiqueta que ABRE la linea (el lector del catalogo, MsgTag);
+  // '' en una linea sin etiqueta
+  function IdDe(const L: string): string;
+  begin
+    Result := '';
+    if L.TrimLeft.StartsWith('[') then
+      Result := MsgTag(L);
+  end;
+
+  function EnLista(const AId, ALista: string): Boolean;
+  begin
+    Result := (AId <> '') and (' ' + ALista + ' ').Contains(' ' + AId + ' ');
+  end;
+
+begin
+  Quedan := TStringList.Create;
+  try
+    EnUso := False;
+    for var L in ASalida.Replace(#13, '').Split([#10]) do
+    begin
+      var T := L.Trim;
+      var Id := IdDe(L);
+      // el uso de consola sigue en sus lineas de continuacion (sin etiqueta)
+      // hasta una linea en blanco o el siguiente mensaje
+      if EnUso then
+        if (T = '') or (Id <> '') then
+          EnUso := False
+        else
+          Continue;
+      if EnLista(Id, NODO_USO) then
+      begin
+        EnUso := True;
+        Continue;
+      end;
+      if T.StartsWith(NODO_CAPTURA) or T.EndsWith(NODO_VENTANAS) or T.StartsWith(NODO_VENTANA) then
+        Continue;
+      if AGestoBien and ((Id = '') or EnLista(Id, NODO_RUTINA)) then
+        Continue;
+      // sin dos lineas en blanco seguidas donde se quito algo
+      if (T = '') and ((Quedan.Count = 0) or (Quedan[Quedan.Count - 1] = '')) then
+        Continue;
+      Quedan.Add(IfThen(AGestoBien, T, L.TrimRight));
+    end;
+    Result := Quedan.Text.Replace(#13, '').Trim;
+  finally
+    Quedan.Free;
+  end;
 end;
 
 { EL FICHERO DE TRABAJO, el mismo para Linux y Windows: el binario, el fichero

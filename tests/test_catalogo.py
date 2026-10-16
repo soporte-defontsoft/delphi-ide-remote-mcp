@@ -191,4 +191,36 @@ for f, fuente in LIMPIAS.items():
                     % m.group(1), l):
                 directas.append('%s: %s' % (os.path.basename(f), l.strip()[:120]))
 check('C9 todo mensaje sale por su helper (MsgText/MsgFmt/...)', not directas, directas[:10])
+
+# C10 (1.20): lo que el servidor quita de la salida del nodo se nombra por los
+# ids de SU catalogo (NodeProtocolo.inc: NODO_RUTINA, el arranque de cada vez;
+# NODO_USO, el uso de consola). Cada id tiene que existir en Mld.Textos y ser
+# una nota (SN_): una accion (SK_) o un fallo (SR_) en esas listas se le
+# esconderia al agente.
+PROTO = open(os.path.join(mc.REPO, 'src', 'DesktopNode', 'NodeProtocolo.inc'), encoding='utf-8-sig').read()
+
+
+def ids_de_lista(nombre):
+    m = re.search(r'\b%s\s*=\s*((?:\s*\'[^\']*\'\s*\+?)+);' % nombre, PROTO)
+    return ''.join(re.findall(r"'([^']*)'", m.group(1))).split() if m else None
+
+
+ID_A_CONST = {}
+for n, t in CN.items():
+    e = mc.ETIQUETA.search(t)
+    if e:
+        ID_A_CONST[e.group(1)] = n
+
+
+def malas_de(ids):
+    return [i for i in ids if not ID_A_CONST.get(i, '').startswith('SN_')]
+
+
+for lista in ('NODO_RUTINA', 'NODO_USO'):
+    ids = ids_de_lista(lista)
+    check('C10 %s se lee de NodeProtocolo.inc' % lista, bool(ids), ids)
+    check('C10 cada id de %s es una nota (SN_) del catalogo del nodo' % lista, ids and not malas_de(ids),
+          [(i, ID_A_CONST.get(i)) for i in malas_de(ids or [])])
+check('C10 ...y el comprobador sabe fallar (un id que no existe, una accion SK_)',
+      malas_de(['NODE-999', 'NODE-014']) == ['NODE-999', 'NODE-014'], malas_de(['NODE-999', 'NODE-014']))
 fin('catalogo')

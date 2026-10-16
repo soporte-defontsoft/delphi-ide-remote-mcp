@@ -28,6 +28,42 @@ the MCP `initialize` response (`serverInfo.version`).
   sees one more field, `ok`. (A refusal whose JSON carried its own `ok`
   keeps its text as it was: it travels with `isError`, and a client then
   takes the text.)
+- **`delphi_desktop`: what a gesture answers is what that gesture did.**
+  Every `tap`, `key`, `type`, `screenshot` and `overview` carried the
+  node's whole startup in `nodeOutput` - its libraries, the session's
+  cgroup, the scale, the window list twice (it already travels in
+  `windows`), the node's own console usage, and a `CAPTURE=` line with the
+  node's folder on the target: about 1,300 characters on every gesture,
+  measured on 2026-10-16 in Hermes' history (228 gestures and captures, 215 with that
+  path). Two of those cost it steps: it called the tool with
+  `command=tecla` and `escribe`, words of the node's console usage, and it
+  passed the node's capture folder as `out=`. Now a gesture or a capture
+  that worked keeps only what the node said about it - the action
+  (`CLICK at pixel ...`, `KEY ... sent`, `WRITTEN ... (the focus is NOT
+  verified ...)`) and any warning (`FALLBACK:`, a channel that never got
+  ready) - and with nothing to say `nodeOutput` is left out. `status` and
+  a failure keep the node's diagnostics; no answer carries the capture
+  path, the window protocol lines or the console usage. The startup lines
+  are named by their ids in the node's own catalog
+  (`NodeProtocolo.inc`), and `test_catalogo` checks every one is a note,
+  never an action or a failure.
+
+### Fixed
+
+- **An inline image always fits in one answer.** Over HTTP the whole
+  answer of a tool travels as ONE server-sent event, and the MCP Python SDK
+  2.x reads events with `httpx2`, which drops one over 1 MiB: the call
+  ended in `SSE stream ended without a response`. A 3440-wide desktop with
+  a photo as wallpaper, scaled to 1280, is a 972 KB PNG - 1.3 MB in base64
+  - and Hermes lost three screenshots of its Zorin that way on 2026-10-16
+  (another client without that limit got the same image). An inline image
+  now weighs at most 737,280 bytes: the PNG when it fits, otherwise the
+  SAME image - same width and height, so `frame`, `inlineScale` and every
+  tap measured on it are unchanged - as JPEG at quality 85, 70 or 55; if
+  not even that fits, it comes as a file with its link (`CAPT-014`). A
+  model counts an image by its pixels, so this saves no tokens: it makes
+  the image arrive. One place for every tool that captures (`delphi_desktop`,
+  `delphi_adb`, `delphi_designer preview`).
 
 ## [1.19.3] - 2026-10-15
 

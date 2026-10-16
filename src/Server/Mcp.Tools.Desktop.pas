@@ -478,7 +478,13 @@ begin
     // aqui es lo primero que explica una captura negra o denegada
     if Res.GetValue('graphicalEnv') <> nil then
       Return.AddPair('graphicalEnv', Res.GetValue<string>('graphicalEnv'));
-    Return.AddPair('nodeOutput', Salida.Trim);
+    // lo que el agente ve del nodo (Lsp.RemoteRun.SalidaParaElAgente): nunca el
+    // protocolo ni el uso de consola; de un gesto o captura que salio, solo lo
+    // de ESTA llamada (el arranque del nodo iba entero en cada tap; 1.20)
+    var ParaElAgente := SalidaParaElAgente(Salida, (Cmd <> 'status') and
+      (Return.GetValue('error') = nil) and (RutaDeCaptura(Salida) <> ''));
+    if ParaElAgente <> '' then
+      Return.AddPair('nodeOutput', ParaElAgente);
     { Un Windows con la sesion bloqueada, desconectada o sin escritorio
       contesta "Acceso denegado" a cualquier captura: se nombra, que despista.
       Solo cuando NO hubo captura: desde 1.0.16 el nodo tiene un respaldo

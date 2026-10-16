@@ -19,6 +19,15 @@ interface
 uses
   System.JSON;
 
+const
+  // Lo que pesa como mucho una imagen en linea. Con SSE la respuesta entera
+  // viaja en UN evento, y el cliente MCP de Python 2.x (httpx2) corta uno de
+  // mas de 1 MiB contando los bytes de sus lineas (medido en el de Hermes,
+  // 16-oct-2026: "SSE stream ended without a response"). El base64 mide
+  // 4/3 y no lleva escapes (la RTL no escapa '/'): 1 MiB menos 64 KiB para el
+  // texto y el sobre = 983.040 de base64 = 737.280 bytes de imagen.
+  INLINE_MAX_BYTES = 737280;
+
 { Descarta lo adjuntado en este hilo: el host lo llama al empezar cada
   llamada (los hilos del servidor HTTP se reutilizan). }
 procedure ClearAttachedImages;
@@ -78,7 +87,7 @@ uses
   System.StrUtils,
   System.RegularExpressions,
   Lsp.Base64,   // BytesToBase64: EL codificador de la casa
-  Lsp.Imagen,   // EscalaPngBytes: escalar en memoria
+  Lsp.Imagen,   // EscalaPngBytes y CabeEnLineaBytes: escalar y caber, en memoria
   Lsp.Png,      // TamanoPngBytes: LA cabecera de un PNG, la del nodo tambien
   Lsp.Patch,    // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
   Lsp.Guard,    // CapturaConsumible / IsAgentCapture / ConsumeAgentCapture
@@ -86,7 +95,9 @@ uses
   Lsp.Texts;
 
 const
-  INLINE_MAXWIDTH = 1280; // legible y ligero: ~300 KB de un escritorio de 3440
+  // legible: el ancho; el PESO no lo da el ancho (medido el 16-oct-2026: un
+  // escritorio de 3440 con un fondo de foto, 972 KB en PNG a 1280)
+  INLINE_MAXWIDTH = 1280; // y su peso, INLINE_MAX_BYTES (interface)
   // las capturas nuestras que esperan su descarga por enlace, por carpeta: las
   // mas nuevas que se guardan, y la edad tras la que ya no se espera (2ab-R3)
   CAPTURAS_EN_ESPERA_MAX = 50;
@@ -238,9 +249,16 @@ begin
     Fallo := FalloLectura;
     if Fallo = '' then
       Fallo := EscalaPngBytes(Leidos, MaxW, Bytes, Escala, W, H);
+    // y que quepa en UNA respuesta (Lsp.Imagen.CabeEnLineaBytes): mismo ancho
+    // y alto, asi que el frame y los toques de abajo no cambian
+    var Cabe: TArray<Byte> := nil;
+    var Mime := '';
+    if Fallo = '' then
+      Fallo := CabeEnLineaBytes(Bytes, INLINE_MAX_BYTES, Cabe, Mime);
     if Fallo = '' then
     begin
-      AttachImage(Bytes, 'image/png');
+      Bytes := Cabe;
+      AttachImage(Bytes, Mime);
       PonFrame(W, H);
       AReturn.AddPair('inlineImage', TJSONBool.Create(True));
       AReturn.AddPair('inlineWidth', TJSONNumber.Create(W));

@@ -37,6 +37,18 @@ function RecortaPngBytes(const AEntrada: TArray<Byte>; var X, Y, W, H: Integer;
 function EscalaPngBytes(const AEntrada: TArray<Byte>; AMaxAncho: Integer;
   out ASalida: TArray<Byte>; out AEscala: Double; out AW, AH: Integer): string;
 
+{ Que una imagen en linea quepa en UNA respuesta: un cliente lee cada evento
+  entero de una vez y alguno le pone tope (medido el 16-oct-2026: el cliente
+  MCP de Python 2.x lee con httpx2, 1 MiB por evento SSE; la captura del
+  Zorin a 1280 en PNG pesaba 972 KB, en base64 1,3 MB, y llegaba "SSE stream
+  ended without a response"). Si el PNG cabe en AMaxBytes sale tal cual; si
+  no, la MISMA imagen -mismo ancho y alto: el frame y los toques no cambian-
+  en JPEG, bajando la calidad de 85 a 55. Un modelo cobra la imagen por
+  pixeles, no por bytes: esto no ahorra tokens, la hace llegar. '' si cabe
+  (AMime, su tipo); el motivo si ni asi (ASalida vacia). }
+function CabeEnLineaBytes(const APng: TArray<Byte>; AMaxBytes: Integer;
+  out ASalida: TArray<Byte>; out AMime: string): string;
+
 implementation
 
 uses
@@ -47,6 +59,7 @@ uses
   // SetStretchBltMode(HALFTONE): escalar sin dientes de sierra
   Vcl.Graphics,
   Vcl.Imaging.pngimage,
+  Vcl.Imaging.jpeg, // CabeEnLineaBytes: la misma imagen en JPEG
   Lsp.Texts;
 
 function RecortaPngBytes(const AEntrada: TArray<Byte>; var X, Y, W, H: Integer;
@@ -173,6 +186,65 @@ begin
     begin
       ASalida := nil;
       Result := MsgFmt(SN_CAPT_NO_PUDE_ESCALAR_FMT, [E.Message]);
+    end;
+  end;
+end;
+
+function CabeEnLineaBytes(const APng: TArray<Byte>; AMaxBytes: Integer;
+  out ASalida: TArray<Byte>; out AMime: string): string;
+const
+  CALIDADES: array[0..2] of Integer = (85, 70, 55);
+var
+  Png: TPngImage;
+  Bmp: TBitmap;
+  Jpg: TJPEGImage;
+  Ent, Sal: TBytesStream;
+begin
+  Result := '';
+  ASalida := APng;
+  AMime := 'image/png';
+  if Length(APng) <= AMaxBytes then
+    Exit; // cabe: sale tal cual, sin perder nada
+  try
+    Ent := TBytesStream.Create(APng);
+    Png := TPngImage.Create;
+    Bmp := TBitmap.Create;
+    try
+      Png.LoadFromStream(Ent);
+      Bmp.Assign(Png);
+      Bmp.PixelFormat := pf24bit; // un JPEG no lleva alfa; una captura no la usa
+      for var Calidad in CALIDADES do
+      begin
+        Jpg := TJPEGImage.Create;
+        Sal := TBytesStream.Create;
+        try
+          Jpg.Assign(Bmp);
+          Jpg.CompressionQuality := Calidad;
+          Jpg.Compress;
+          Jpg.SaveToStream(Sal);
+          if Sal.Size <= AMaxBytes then
+          begin
+            ASalida := Copy(Sal.Bytes, 0, Sal.Size);
+            AMime := 'image/jpeg';
+            Exit;
+          end;
+        finally
+          Sal.Free;
+          Jpg.Free;
+        end;
+      end;
+    finally
+      Bmp.Free;
+      Png.Free;
+      Ent.Free;
+    end;
+    ASalida := nil;
+    Result := MsgFmt(SN_CAPT_NO_CABE_EN_LINEA_FMT, [Length(APng), AMaxBytes]);
+  except
+    on E: Exception do
+    begin
+      ASalida := nil;
+      Result := MsgFmt(SN_CAPT_NO_PUDE_RECODIFICAR_FMT, [E.Message]);
     end;
   end;
 end;

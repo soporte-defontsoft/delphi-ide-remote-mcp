@@ -37,6 +37,14 @@ type
     [Test] procedure CasaDeEntregablesReconoceASuNombrador;
     [Test] procedure ColocarEnLaCasaLoJuzgaSuNombrador;
     [Test] procedure CapturaSinSalidaSeConsumeYLoDice;
+    [Test] procedure EnLineaLoQueCabeSaleTalCual;
+    [Test] procedure EnLineaLoQueNoCabePasaAJpegDelMismoTamano;
+    [Test] procedure EnLineaLoQueNiAsiCabeLoDice;
+    [Test] procedure EntregaEnLineaGrandeCabeConElMismoFrame;
+    [Test] procedure GestoBienDejaSoloLaAccion;
+    [Test] procedure GestoConAvisoLoConserva;
+    [Test] procedure StatusYFalloSonDiagnosticoSinProtocoloNiUso;
+    [Test] procedure NodoWindowsGestoBienDejaSoloLaAccion;
   end;
 
 implementation
@@ -52,6 +60,7 @@ uses
   Lsp.Imagen,
   Lsp.Png,
   Mld.Captura,   // GuardarPNG: el escritor de PNG del nodo de escritorio
+  Mld.Textos,    // el catalogo del nodo (ANTES de Lsp.Texts: su MsgFmt no tapa al de la casa)
   Lsp.InlineImages,
   Lsp.Base64,
   Lsp.Guard,
@@ -59,7 +68,9 @@ uses
   Lsp.Texts,
   Lsp.Patch,     // ColocaContenido con su lugar (2i)
   Lsp.Casa,
-  System.StrUtils;
+  Vcl.Imaging.jpeg, // las imagenes en linea que no caben en PNG
+  System.StrUtils,
+  System.Math;
 
 function PngDe(W, H: Integer): TArray<Byte>;
 var
@@ -82,6 +93,70 @@ begin
     S.Free;
     Png.Free;
     Bmp.Free;
+  end;
+end;
+
+{ Un PNG que pesa como una captura de verdad: un degradado con ruido (el
+  ruido es lo que no comprime en PNG - el fondo de foto del Zorin, 972 KB a
+  1280, 16-oct-2026 - y un JPEG si lo aguanta). Determinista: su propio
+  generador, no Random. }
+function PngRuidoso(W, H: Integer): TArray<Byte>;
+var
+  Bmp: TBitmap;
+  Png: TPngImage;
+  S: TBytesStream;
+  Fila: PByte;
+  Semilla: Cardinal;
+
+  function Canal(Base: Integer): Byte;
+  begin
+    Semilla := Semilla * 1103515245 + 12345;
+    Result := Byte(Max(0, Min(255, Base + Integer((Semilla shr 16) mod 49) - 24)));
+  end;
+
+begin
+  Bmp := TBitmap.Create;
+  Png := TPngImage.Create;
+  S := TBytesStream.Create;
+  Semilla := 20261016;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(W, H);
+    for var Y := 0 to H - 1 do
+    begin
+      Fila := Bmp.ScanLine[Y];
+      for var X := 0 to W - 1 do
+      begin
+        Fila[X * 3] := Canal(X * 255 div W);
+        Fila[X * 3 + 1] := Canal(Y * 255 div H);
+        Fila[X * 3 + 2] := Canal(128);
+      end;
+    end;
+    Png.Assign(Bmp);
+    Png.SaveToStream(S);
+    Result := Copy(S.Bytes, 0, S.Size);
+  finally
+    S.Free;
+    Png.Free;
+    Bmp.Free;
+  end;
+end;
+
+{ El ancho y el alto de un JPEG, por el decodificador de la RTL. }
+procedure TamanoJpeg(const B: TArray<Byte>; out W, H: Integer);
+var
+  Jpg: TJPEGImage;
+  S: TBytesStream;
+begin
+  Jpg := TJPEGImage.Create;
+  S := TBytesStream.Create(B);
+  try
+    Jpg.LoadFromStream(S);
+    W := Jpg.Width;
+    H := Jpg.Height;
+  finally
+    S.Free;
+    Jpg.Free;
   end;
 end;
 
@@ -485,6 +560,191 @@ begin
     'inline=false sin out= y sin enlace: CAPT-012');
   Assert.AreEqual('', CapturaSinSalidaDenegada(True, ''), 'en linea sale por la respuesta');
   Assert.AreEqual('', CapturaSinSalidaDenegada(False, 'C:\x\y.png'), 'con out= es un fichero suyo');
+end;
+
+const
+  // Salidas REALES del nodo Linux (el Zorin, 16-oct-2026), tal como las guardo
+  // Hermes: un tap, y el arranque de un status con su uso de consola
+  CAPTURA_ZORIN = 'CAPTURE=/home/dfontanet/PAServer-132/scratch-dir/dfontanet-zorin/McpDesktopNode/captura.png';
+  ARRANQUE_ZORIN =
+    '[NODE-026] McpDesktop - Linux desktop control node'#10#10 +
+    '[NODE-027] -- 1. system libraries (nothing to install) --'#10 +
+    '  [NODE-020] libdbus-1.so.3   open, symbols 6/6'#10 +
+    '  [NODE-020] libei.so.1       open, symbols 6/6'#10 +
+    '  cgroup: 0::/user.slice/user-1000.slice/user@1000.service/app.slice/paserver-132.service'#10#10 +
+    '[NODE-029] -- 2. the screen: scale and screenshot --'#10 +
+    '  [NODE-030] The desktop says its scale is 1,25'#10 +
+    CAPTURA_ZORIN + #10 +
+    '  1 visible windows:'#10 +
+    '  [NODE-024] (X11/Xwayland windows: native Wayland windows do not appear in the list)'#10 +
+    '  WINDOW 0 0 3440 1390 Galatea'#10#10 +
+    '[NODE-032] -- 3. the hands --'#10 +
+    '  [NODE-036] ready. logical screen 2752x1152, scale 1,25'#10;
+  DESPUES_ZORIN =
+    CAPTURA_ZORIN + #10 +
+    '  1 visible windows:'#10 +
+    '  [NODE-024] (X11/Xwayland windows: native Wayland windows do not appear in the list)'#10 +
+    '  WINDOW 0 0 3440 1390 Galatea'#10#10 +
+    '[NODE-017] node ready';
+
+procedure TImageTests.GestoBienDejaSoloLaAccion;
+var
+  Tap, Escrito: string;
+begin
+  Tap := ARRANQUE_ZORIN + '  [NODE-014] CLICK at pixel (2733,239) of the screenshot'#10 + DESPUES_ZORIN;
+  Assert.AreEqual('[NODE-014] CLICK at pixel (2733,239) of the screenshot', SalidaParaElAgente(Tap, True),
+    'de un tap que salio queda la accion y nada mas');
+  Escrito := '  [NODE-039] WRITTEN "tiquet" at pixel (3104,137)  [keyboard: the desktop''s own (Spanish, ' +
+    '159 characters)] (typed; the focus is NOT verified: check it on the screenshot)';
+  Assert.AreEqual(Escrito.Trim, SalidaParaElAgente(ARRANQUE_ZORIN + Escrito + #10 + DESPUES_ZORIN, True),
+    'el aviso de que el foco no se comprueba va con la accion');
+  // una captura que salio no tiene nada que decir: sin nodeOutput
+  Assert.AreEqual('', SalidaParaElAgente(ARRANQUE_ZORIN + DESPUES_ZORIN, True));
+  // y la salida en CRLF (un nodo Windows) se lee igual
+  Assert.AreEqual('[NODE-014] CLICK at pixel (2733,239) of the screenshot',
+    SalidaParaElAgente(Tap.Replace(#10, #13#10), True));
+end;
+
+procedure TImageTests.GestoConAvisoLoConserva;
+var
+  R: string;
+begin
+  // el canal de entrada no llego a estar listo: sale con captura y SIN error
+  // (no lleva etiqueta de fallo), y es justo lo que dice que el gesto puede no
+  // haberse hecho: se queda
+  R := SalidaParaElAgente(ARRANQUE_ZORIN + '  [NODE-035] The channel never became ready: timeout'#10 +
+    DESPUES_ZORIN, True);
+  Assert.IsTrue(R.Contains('[NODE-035]'), 'el aviso se queda: ' + R);
+  Assert.IsFalse(R.Contains('NODE-026') or R.Contains('cgroup') or R.Contains('CAPTURE='), 'el arranque no: ' + R);
+end;
+
+procedure TImageTests.StatusYFalloSonDiagnosticoSinProtocoloNiUso;
+var
+  Status, R: string;
+begin
+  Status := ARRANQUE_ZORIN +
+    '  [NODE-041] usage: <x> <y>   click that pixel of the screenshot'#10 +
+    '                  altab     switch window with the keyboard'#10 +
+    '                  tecla <n> press a key (evdev: Escape 1, Enter 28)'#10 +
+    '                  texto <t> type that text wherever the focus is'#10 +
+    '                  escribe <x> <y> <t>  click there AND type: a single trip'#10 +
+    '                  ventanas  show ALL the windows (Super key),'#10 +
+    '                            for when they cover each other'#10 +
+    '  (to give a window the focus, click its title bar)'#10#10 +
+    '[NODE-017] node ready';
+  R := SalidaParaElAgente(Status, False);
+  Assert.IsTrue(R.Contains('[NODE-026]') and R.Contains('cgroup') and R.Contains('[NODE-036]') and
+    R.Contains('[NODE-017]'), 'status es el diagnostico: el arranque se queda: ' + R);
+  Assert.IsFalse(R.Contains('CAPTURE=') or R.Contains('/home/'), 'nunca la ruta nuestra del destino: ' + R);
+  Assert.IsFalse(R.Contains('WINDOW ') or R.Contains('visible windows:'), 'ni el protocolo de ventanas: ' + R);
+  Assert.IsFalse(R.Contains('usage') or R.Contains('tecla') or R.Contains('escribe') or R.Contains('title bar'),
+    'ni el uso de consola con sus lineas: ' + R);
+  // un fallo: va el diagnostico con el motivo del nodo
+  R := SalidaParaElAgente('[NODE-026] McpDesktop - Linux desktop control node'#10 +
+    '  ' + NODO_NO_PUDE + ' no graphical session open for the operator user'#10 + '[NODE-017] node ready', False);
+  Assert.IsTrue(R.Contains(NODO_NO_PUDE) and R.Contains('[NODE-026]'), 'el fallo lleva su motivo: ' + R);
+end;
+
+procedure TImageTests.NodoWindowsGestoBienDejaSoloLaAccion;
+var
+  Salida, Clic: string;
+begin
+  // el arranque del nodo Windows compuesto con SU catalogo: si el nodo cambia
+  // un texto, esta prueba lo sigue
+  Clic := Format(Mld.Textos.SK_NODE_CLIC_EN_PIXEL_FMT, [10, 20]);
+  Salida := Mld.Textos.SN_NODE_CONTROL_ESCRITORIO_WINDOWS + #13#10 +
+    'Windows 11 (Version 24H2, OS Build 26100.4351, 64-bit Edition)'#13#10 +
+    Format(Mld.Textos.SN_NODE_ESCRITORIO_PIXELES_ESCALA_FMT, [1920, 1080, '1.00']) + #13#10 +
+    Format(Mld.Textos.SF_NODE_ESTADO_FMT, ['active']) + #13#10 +
+    Clic + #13#10 +
+    'CAPTURE=C:\Users\op\PAServer\scratch-dir\op-win\McpDesktopNode\captura.png'#13#10 +
+    '  1 visible windows:'#13#10 +
+    '  WINDOW 0 0 800 600 Proyecto1'#13#10 +
+    Mld.Textos.SN_NODE_NODO_LISTO;
+  Assert.AreEqual(Clic.Trim, SalidaParaElAgente(Salida, True), 'Windows: la accion y nada mas');
+end;
+
+procedure TImageTests.EnLineaLoQueCabeSaleTalCual;
+var
+  Ent, Sal: TArray<Byte>;
+  Mime: string;
+begin
+  Ent := PngDe(500, 40);
+  Assert.AreEqual('', CabeEnLineaBytes(Ent, INLINE_MAX_BYTES, Sal, Mime));
+  Assert.AreEqual('image/png', Mime);
+  Assert.IsTrue(Iguales(Sal, Ent), 'lo que cabe sale tal cual, sin perder nada');
+end;
+
+procedure TImageTests.EnLineaLoQueNoCabePasaAJpegDelMismoTamano;
+var
+  Ent, Sal: TArray<Byte>;
+  Mime: string;
+  W, H: Integer;
+begin
+  Ent := PngRuidoso(400, 300);
+  // la premisa, medida: si el PNG cupiera, esto pasaria sin probar nada
+  Assert.IsTrue(Length(Ent) > 60000, 'el PNG de prueba tiene que pasarse del tope: ' + IntToStr(Length(Ent)));
+  Assert.AreEqual('', CabeEnLineaBytes(Ent, 60000, Sal, Mime));
+  Assert.AreEqual('image/jpeg', Mime);
+  Assert.IsTrue((Length(Sal) > 0) and (Length(Sal) <= 60000), 'cabe: ' + IntToStr(Length(Sal)));
+  TamanoJpeg(Sal, W, H);
+  Assert.AreEqual(400, W, 'el MISMO ancho: el frame no cambia');
+  Assert.AreEqual(300, H, 'el MISMO alto');
+end;
+
+procedure TImageTests.EnLineaLoQueNiAsiCabeLoDice;
+var
+  Sal: TArray<Byte>;
+  Mime: string;
+begin
+  Assert.IsTrue(HasMsg(CabeEnLineaBytes(PngRuidoso(400, 300), 100, Sal, Mime), SN_CAPT_NO_CABE_EN_LINEA_FMT),
+    'ni en JPEG cabe: lo dice (CAPT-014)');
+  Assert.AreEqual(0, Integer(Length(Sal)), 'y no entrega nada a medias');
+end;
+
+procedure TImageTests.EntregaEnLineaGrandeCabeConElMismoFrame;
+var
+  F: string;
+  Png, Dec: TArray<Byte>;
+  Ret: TJSONObject;
+  Arr: TJSONArray;
+  W, H, X, Y: Integer;
+begin
+  // el caso del Zorin por la entrega de verdad: una captura nuestra que en PNG
+  // no cabe en una respuesta llega en JPEG, del MISMO tamano, con el MISMO
+  // frame, y un toque medido sobre ella cae donde caia
+  Png := PngRuidoso(1200, 700);
+  Assert.IsTrue(Length(Png) > INLINE_MAX_BYTES, 'la premisa: el PNG no cabe: ' + IntToStr(Length(Png)));
+  F := AgentTempDir(CAPTURE_SUB_DESKTOP) + '\desktop-dunit-grande.png';
+  ColocaContenido(F, Png, ltEntregables);
+  ClearAttachedImages;
+  Ret := TJSONObject.Create;
+  try
+    Assert.IsTrue(DeliverCapture('delphi_desktop', F, True, 0, 0, 0, 1, 1, Ret), 'viajo en linea: ' + Ret.ToJSON);
+    Assert.AreEqual(1200, Ret.GetValue<Integer>('inlineWidth'));
+    Assert.AreEqual(700, Ret.GetValue<Integer>('inlineHeight'));
+    Assert.AreEqual('1200x700@1200x700+0+0', Ret.GetValue<string>('frame'), 'el frame de siempre');
+    Assert.IsTrue(Ret.GetValue<Integer>('inlineBytes') <= INLINE_MAX_BYTES, 'cabe: ' + Ret.ToJSON);
+    Assert.AreEqual('', FramePoint(Ret.GetValue<string>('frame'), '600', '350', X, Y));
+    Assert.AreEqual(600, X, 'un toque cae donde caia');
+    Assert.AreEqual(350, Y);
+    Arr := WrapWithAttachedImages('x');
+    try
+      Assert.IsNotNull(Arr, 'la imagen va adjunta');
+      Assert.AreEqual('image/jpeg', (Arr.Items[1] as TJSONObject).GetValue<string>('mimeType'));
+      Assert.AreEqual('', Base64ToBytes((Arr.Items[1] as TJSONObject).GetValue<string>('data'), 'data', Dec));
+      TamanoJpeg(Dec, W, H);
+      Assert.AreEqual(1200, W);
+      Assert.AreEqual(700, H);
+    finally
+      Arr.Free;
+    end;
+  finally
+    Ret.Free;
+    ClearAttachedImages;
+    if TFile.Exists(F) then
+      TFile.Delete(F);
+  end;
 end;
 
 initialization
