@@ -64,38 +64,6 @@ uses
   Lsp.Pascal,
   Lsp.Json;
 
-{ Occurrences of AIdent as a whole word INSIDE string literals of AText.
-  LINEAR scan, never a regex over the whole text: the obvious '(...|'')*'
-  pattern backtracks catastrophically on big files - measured 2026-08-24,
-  a 1 MB RTL unit blew the stack. }
-function StringLiteralHits(const AText, AIdent: string): Integer;
-var
-  Clases: TArray<TClasePascal>;
-  I, Ini: Integer;
-begin
-  // las cadenas las dice EL lexico (Lsp.Pascal): una comilla dentro de un
-  // comentario ('// don''t') no abre ninguna, y la cadena de varias lineas
-  // es una. Un literal es una tira seguida de caracteres de cadena; cuenta
-  // si el nombre esta dentro. Aqui se buscaban las comillas a mano, sin
-  // mirar comentarios (censo del lexico, 2-oct-2026)
-  Result := 0;
-  Clases := ClasesPascal(AText);
-  I := 1;
-  while I <= Length(AText) do
-  begin
-    if Clases[I] <> cpCadena then
-    begin
-      Inc(I);
-      Continue;
-    end;
-    Ini := I;
-    while (I <= Length(AText)) and (Clases[I] = cpCadena) do
-      Inc(I);
-    if TRegEx.IsMatch(Copy(AText, Ini, I - Ini), '(?i)' + PatronIdentEntero(AIdent)) then
-      Inc(Result);
-  end;
-end;
-
 function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
   const ANewName: string; ATodas: Boolean): TJSONObject;
 var
@@ -143,6 +111,7 @@ begin
     end;
 
     // 2. the references engine does the semantic work
+    StringHits := 0;
     Refs := FindDelphiReferences(AFilePath, ALine, ACharacter);
     try
       Ident := Refs.GetValue('identifier').Value;
@@ -279,6 +248,12 @@ begin
         if Menciones > 0 then
           Warnings.Add(MsgFmt(SN_RENAME_MENTIONS_FMT, [Menciones]));
       end;
+      // ...y las que caen en una CADENA (FindComponent, RTTI por nombre), de
+      // TODO el alcance: las cuenta references por el lexico. Aqui se
+      // miraban solo los ficheros tocados, y una cadena en otra unidad
+      // pasaba como prosa con applicable=true (Hermes, 1.20)
+      if Refs.GetValue('stringMentionsCount') <> nil then
+        StringHits := Refs.GetValue('stringMentionsCount').GetValue<Integer>;
 
       // one unverified candidate = not applicable, the adopted rule
       Arr := Refs.GetValue('unverified') as TJSONArray;
@@ -352,16 +327,12 @@ begin
 
     // 3. what a text rename would silently break
     DesignerHits := 0;
-    StringHits := 0;
     var DsgIlegibles: TArray<string> := [];
     DsgList := TStringList.Create;
     try
       TLspSession.Instance.ResolveSettings(TPath.GetFullPath(AFilePath), Root);
       for P in Touched do
       begin
-        // string literals in the code files themselves
-        Text := PatchLoadText(P, EncName);
-        Inc(StringHits, StringLiteralHits(Text, Ident));
         // the sibling designer of each touched unit
         for var D in DesignersDeUnidad(P) do
           if TFile.Exists(D) and (DsgList.IndexOf(D) < 0) then

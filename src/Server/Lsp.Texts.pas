@@ -8811,7 +8811,8 @@ const
     'range and the 1-based line delphi_read shows. Severity is the LSP ' +
     'scale: 1=error, 2=warning, 3=information, 4=hint; the "hints" ' +
     'counter groups 3 and 4. Lints the CURRENT on-disk content with the ' +
-    'settings of "project". For a unit BELOW its folder the engine gives ' +
+    'settings of its project, which the answer names in "project". For a ' +
+    'unit BELOW its folder the engine gives ' +
     'errors only (LSP-046); delphi_build gives the rest. A big unit can ' +
     'take over a minute the first time: the answer then says the lint is ' +
     'in progress - call again (it is not restarted while the file is ' +
@@ -8862,8 +8863,7 @@ const
 
   SP_LSP_KIND =
     'Optional: definition (default) | declaration (jump to the interface ' +
-    'declaration) | implementation (accepted, but DelphiLSP answers it ' +
-    'like declaration - measured)';
+    'declaration) | implementation (= definition, the body)';
 
   SD_LSP_SYMBOLS =
     'Document symbol tree of a Delphi unit (classes, methods, properties, ' +
@@ -8885,9 +8885,8 @@ const
     'THE TARGET SYMBOL (on a call site the tool chains ' +
     'definition->declaration, so you get the callee; when definition ' +
     'does not resolve, the answer is the direct declaration and a note ' +
-    'says so). (kind=implementation is accepted but DelphiLSP answers it ' +
-    'like declaration - measured.) Requires project settings for full ' +
-    'answers.';
+    'says so); kind=implementation = definition. Requires project ' +
+    'settings for full answers.';
 
   SD_LSP_SIGNATURE =
     'Signature help (parameter completion) for the call under a 0-based ' +
@@ -8900,7 +8899,7 @@ const
     'Type/signature information for the identifier at a 0-based ' +
     'line:character position (official DelphiLSP engine). IMPORTANT: ' +
     'hover answers on identifier USAGES (call sites, type references); ' +
-    'hovering a declaration itself returns null. Requires project ' +
+    'on a declaration it may return null. Requires project ' +
     'settings for full answers.';
 
   SD_LSP_COMPLETION =

@@ -582,6 +582,9 @@ var
   I, P, ScanCol, FilesOpened: Integer;
   Confirmed, Unverified: TJSONArray;
   Menciones: TList<TCandidate>;   // el nombre aparece, pero en prosa
+  // ...y de ellas, las que caen dentro de una CADENA (FindComponent('X'), RTTI
+  // por nombre): para un rename no son prosa (stringMentionsCount, 1.20)
+  MencionesEnCadena: Integer;
   VistaLines: TStringList;        // las lineas de su CODIGO (Lsp.Pascal)
   VistaLine: string;
   Rejected, Scanned: Integer;
@@ -824,6 +827,7 @@ begin
   // Text scan for candidates.
   Candidates := TList<TCandidate>.Create;
   Menciones := TList<TCandidate>.Create;
+  MencionesEnCadena := 0;
   AllFiles := TList<string>.Create;
   try
     // The project folder is not the whole project: units living in sibling
@@ -924,6 +928,8 @@ begin
       // codigo si su primera letra sigue en ella. Aqui habia una copia del
       // lexico (MarcaCodigo, 2026-09-21); el censo del 2-oct-2026 las junto
       var Vista := CodigoPascal(Text);
+      // la vista de sus CADENAS, solo si el fichero trae una mencion
+      var Cadenas: TStringList := nil;
       Lines := TStringList.Create;
       VistaLines := TStringList.Create;
       try
@@ -963,7 +969,19 @@ begin
                   Break;
               end
               else
+              begin
                 Menciones.Add(Cand);
+                // en una cadena lo dice EL lexico (VistaPascal de cpCadena):
+                // rename solo miraba las cadenas de los ficheros que tocaba, y
+                // una en OTRA unidad pasaba como prosa (Hermes, 1.20)
+                if Cadenas = nil then
+                begin
+                  Cadenas := TStringList.Create;
+                  Cadenas.Text := VistaPascal(Text, [cpCadena]);
+                end;
+                if (I < Cadenas.Count) and (P <= Length(Cadenas[I])) and (Cadenas[I][P] <> ' ') then
+                  Inc(MencionesEnCadena);
+              end;
             end;
             ScanCol := P + Length(Ident);
           until False;
@@ -973,6 +991,7 @@ begin
       finally
         Lines.Free;
         VistaLines.Free;
+        Cadenas.Free;
       end;
     end;
 
@@ -1125,6 +1144,8 @@ begin
       // quien renombra suele querer repasar los comentarios a mano, y el
       // "nunca se tiran en silencio" que promete la tool vale tambien aqui.
       Result.AddPair('mentionsCount', TJSONNumber.Create(Menciones.Count));
+      if MencionesEnCadena > 0 then
+        Result.AddPair('stringMentionsCount', TJSONNumber.Create(MencionesEnCadena));
       if Menciones.Count > 0 then
       begin
         var MenArr := TJSONArray.Create;

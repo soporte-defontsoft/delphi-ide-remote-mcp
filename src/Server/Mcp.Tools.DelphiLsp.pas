@@ -1329,10 +1329,13 @@ begin
       Exit(RenderResult(Resp, MsgText(SN_DEF_DECL_FALLBACK) + NoSettingsNote(Settings)));
     end;
   end
-  else if Kind = 'implementation' then
-    Resp := Client.Implementation_(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character)
   else
   begin
+    // kind=implementation es definition: la implementacion de un simbolo es su
+    // CUERPO. textDocument/implementation de DelphiLSP contesta, sobre una
+    // llamada, la declaracion del metodo que la CONTIENE (medido en 13.1 y,
+    // por Hermes, en 13.2: ShowMessage -> TFormMain.Greet), y la descripcion
+    // decia "como declaration" desde que declaration se encadena (1.20)
     var Pending: Boolean;
     Resp := Client.DefinitionResolved(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character, Pending);
     if Pending then

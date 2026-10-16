@@ -146,6 +146,32 @@ the MCP `initialize` response (`serverInfo.version`).
   it, or the chunk carries `sha256`; it judged none before. What the reader
   skips from a class that is not installed is not a warning: that is
   `DSGN-039`'s note.
+- **`delphi_rename_symbol` blocks on a string with the name in ANY unit of
+  its scope.** Its description promises that a hit inside a string literal
+  (`FindComponent`, RTTI or `StyleLookup` by name) makes it not applicable,
+  but only the strings of the files it was going to edit were looked at: a
+  `'Saluda'` in another unit was a mere warning (`RENAME-007`) and the rename
+  was applicable - leaving that lookup pointing to a name that no longer
+  exists, with the compiler silent. Hermes found it in the pre-release
+  validation of 2026-10-16. `delphi_references` now counts apart the
+  mentions that fall inside a string, by the lexer, in its whole scan
+  (`stringMentionsCount`), and the rename blocks on that count
+  (`RENAME-020`); its own scan of the edited files is gone.
+- **`delphi_definition kind=implementation` is `definition`.** It sent
+  DelphiLSP's `textDocument/implementation`, which on a call site answers the
+  declaration of the method that CONTAINS the call (`ShowMessage` inside
+  `TFormMain.Greet` -> `Greet`), measured on 13.1 and, by Hermes, on 13.2;
+  the description said it answered "like declaration", which stopped being
+  true when `declaration` started chaining through `definition`. The
+  implementation of a symbol is its body, which is what `definition` gives.
+- **Three descriptions said what the tools do not do.** `delphi_diagnostics`
+  spoke of the settings of `"project"` - a field of its answer - and Hermes
+  read it as a parameter (`SYS-015`); `delphi_hover` promised `null` on a
+  declaration, while the implementation header answers on 13.1 and both do
+  on 13.2; and `delphi_help`'s refusals `HELP-007` and `HELP-002` listed the
+  whole registry as "the ones there are" - `vault_*` included in a
+  workspace whose `tools/list` has no vault. They now list what `tools/list`
+  announces to that session.
 - **`delphi_upload` of a form the IDE's parser cannot read says so.** A
   text form uploaded without `sha256` is judged only when the parser reads it
   whole, because a first chunk is not a form yet - and when it did not, the

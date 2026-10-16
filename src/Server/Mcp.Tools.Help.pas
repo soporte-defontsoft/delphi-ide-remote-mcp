@@ -69,6 +69,18 @@ function OneTool(const AName: string): string; forward;
 // (EditDistance, Levenshtein: vive en Lsp.Pascal desde la 1.17.0, cuando
 // delphi_designer set la necesito para la propiedad casi bien escrita)
 
+{ Las tools que tools/list anuncia a ESTA sesion (el mismo filtro,
+  ToolHiddenFromList): las negativas de command=tool listaban el registro
+  entero, y en un workspace sin vault ofrecian vault_* como "las que hay"
+  (Hermes, validacion previa de la 1.20). }
+function NombresVisibles: TArray<string>;
+begin
+  Result := [];
+  for var T in TMCPRegistry.GetToolNames do
+    if not ToolHiddenFromList(T) then
+      Result := Result + [T];
+end;
+
 { One tool in full: what tools/list would say about it, alone. }
 function OneTool(const AName: string): string;
 var
@@ -86,7 +98,7 @@ begin
     // Say which ones DO exist rather than just "no": a wrong guess about a
     // tool name should cost one call, not three.
     Close := '';
-    Names := TMCPRegistry.GetToolNames;
+    Names := NombresVisibles;
     for var Cand in Names do
       if (N <> '') and (Cand.Contains(N) or N.Contains(Cand)) then
         Close := Close + IfThen(Close <> '', ', ', '') + Cand;
@@ -174,7 +186,7 @@ begin
   begin
     if Params.Name.Trim = '' then
       Exit(MsgText(SR_HELP_NEED_NAME) + #10#10 +
-        string.Join(', ', TMCPRegistry.GetToolNames));
+        string.Join(', ', NombresVisibles));
     Result := OneTool(Params.Name);
   end
   else

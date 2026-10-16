@@ -193,7 +193,11 @@ Navigation semantics (measured on 37.0):
 
 - `definition` = the **body** in the implementation section.
 - `declaration` = the **interface declaration**.
-- `implementation` answers **like declaration** (redundant in this engine).
+- `implementation` answers **like declaration** (redundant in this engine) -
+  and on a call site that is the declaration of the method that CONTAINS the
+  call, not the callee's (measured on 13.1 and 13.2: `ShowMessage` inside
+  `TFormMain.Greet` answers `Greet`). `delphi_definition` therefore never sends
+  it: since 1.20 `kind=implementation` is answered as `definition`, the body.
 - For **global routines**, `declaration` also returns the interface entry
   and only `definition` reaches the body — the decl/def pair is how you
   jump between the two halves for globals and methods alike.
