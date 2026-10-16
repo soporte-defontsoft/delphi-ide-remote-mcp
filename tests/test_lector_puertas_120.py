@@ -20,13 +20,17 @@ lector y su linea, y cuando la tabla calla se le pregunta al lector en el lint
   L5 un changeset que escribe FontColor = -65536: EDIT-127 en sus avisos (ROJO)
   L6 upload de un form entero con FontColor = -65536: "designer" con EDIT-127
      (ROJO: ok y nada mas)
-  L7 upload a trozos: el primero (a medias, sin sha256) no se juzga; el
-     ultimo, con sha256, si
+  L7 upload a trozos: el primero (a medias, sin sha256) no se juzga, pero lo
+     DICE (designerNote, UPLOAD-013, con lo que dijo el parser); el ultimo,
+     con sha256, si
   L8 el control: un form sano con lineas que la clase guarda por codigo
      (DesignerMasterStyle, la raiz juzgada por su .pas): lint CLEAN y
      delphi_edit sin EDIT-127
   L9 una clase de terceros que no esta (el ayudante la sustituye): lo que el
      lector se salta de ELLA no es un aviso del lector (es la nota DSGN-039)
+  L10 upload ENTERO sin sha256 de un form con el BOM mal transcrito (Hermes,
+     hermes-120 de la 1.20: ok:true y nada mas): designerNote con UPLOAD-013
+     y lo que dijo el parser (ROJO en 708ed8b)
 
 Uso:  python tests/test_lector_puertas_120.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -122,8 +126,9 @@ try:
     p = os.path.join(JAIL, 'UL6.fmx')
     r = srv.call('delphi_upload', {'path': p, 'offset': 0, 'chunkbase64': base64.b64encode(malo).decode()}, t=240)
     j = mc.como_json(r)
-    check('L6 upload de un form entero con FontColor = -65536: "designer" con EDIT-127',
-          not mc.fallo(r) and mc.es(' '.join(j.get('designer') or []), 'SN_EDIT_AVISO_LECTOR_FMT'), r[:600])
+    check('L6 upload de un form entero con FontColor = -65536: "designer" con EDIT-127, sin designerNote',
+          not mc.fallo(r) and mc.es(' '.join(j.get('designer') or []), 'SN_EDIT_AVISO_LECTOR_FMT')
+          and 'designerNote' not in j, r[:600])
 
     open(os.path.join(JAIL, 'UL7.pas'), 'wb').write(PAS.replace('{u}', 'UL7').encode('utf-8'))
     p = os.path.join(JAIL, 'UL7.fmx')
@@ -134,9 +139,20 @@ try:
                                     'chunkbase64': base64.b64encode(malo[mitad:]).decode(),
                                     'sha256': hashlib.sha256(malo).hexdigest()}, t=240)
     j1, j2 = mc.como_json(r1), mc.como_json(r2)
-    check('L7 a trozos: el primero (a medias, sin sha256) no se juzga; el ultimo, con sha256, si',
-          not mc.fallo(r1) and 'designer' not in j1 and j2.get('verified') is True
+    check('L7 a trozos: el primero (a medias, sin sha256) no se juzga pero lo dice; el ultimo, con sha256, si',
+          not mc.fallo(r1) and 'designer' not in j1 and mc.tiene(j1.get('designerNote') or '', 'UPLOAD-013')
+          and j2.get('verified') is True and 'designerNote' not in j2
           and mc.es(' '.join(j2.get('designer') or []), 'SN_EDIT_AVISO_LECTOR_FMT'), (r1[:300], r2[:500]))
+
+    roto = b'\xef\xcb\xe8' + texto().encode('utf-8')
+    open(os.path.join(JAIL, 'UL10.pas'), 'wb').write(PAS.replace('{u}', 'UL10').encode('utf-8'))
+    p = os.path.join(JAIL, 'UL10.fmx')
+    r = srv.call('delphi_upload', {'path': p, 'offset': 0, 'chunkbase64': base64.b64encode(roto).decode()}, t=240)
+    j = mc.como_json(r)
+    nota = j.get('designerNote') or ''
+    check('L10 upload entero sin sha256 con el BOM mal transcrito: designerNote con UPLOAD-013 y el parser',
+          not mc.fallo(r) and mc.tiene(nota, 'UPLOAD-013') and mc.tiene(nota, 'DSGN-123')
+          and 'OBJECT expected' in nota, r[:700])
 
     p = form('UL8')
     r = srv.call('delphi_designer', {'path': p, 'command': 'lint'}, t=240)

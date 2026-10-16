@@ -84,6 +84,15 @@ the MCP `initialize` response (`serverInfo.version`).
   exists. The first time the other framework's table is needed it is read:
   about 0.9 s and 78 MB for the VCL one, once per process. 300 such lines
   add 11 ms and 19 KB to a `lint`.
+- **A whole number that does not fit says how the same 32 bits do.**
+  `TextSettings.FontColor = $FF00A152` - an ARGB colour written by hand - is
+  more than the form loader's signed 32 bits, and `DSGN-093` (and the `lint`
+  line) said only the limit: Hermes took six calls to get out of it on
+  2026-10-16 and ended up writing `-16735918`. Now the answer computes the
+  way out: the same 32 bits as a signed number, and - when the type's own
+  reader also takes `x` and a hexadecimal, as `TAlphaColor`'s does, read from
+  its source - that form first (`xFF00A152`, the way the IDE's own forms
+  write it).
 
 ### Fixed
 
@@ -137,6 +146,14 @@ the MCP `initialize` response (`serverInfo.version`).
   it, or the chunk carries `sha256`; it judged none before. What the reader
   skips from a class that is not installed is not a warning: that is
   `DSGN-039`'s note.
+- **`delphi_upload` of a form the IDE's parser cannot read says so.** A
+  text form uploaded without `sha256` is judged only when the parser reads it
+  whole, because a first chunk is not a form yet - and when it did not, the
+  answer was `ok: true` and nothing else. Hermes uploaded a whole form with
+  its BOM mistyped and found out two calls later with `read` and `lint`. Now
+  such an upload carries `designerNote` (`UPLOAD-013`): not judged yet, what
+  the parser said and on which line, and that it is expected only if more
+  chunks follow.
 - **`delphi_upload` no longer invites what it refuses.** Its description
   listed "binary designer files" among what to upload, and the tool refuses
   them (`UPLOAD-002`) - whose text said this server does not read binary

@@ -5022,6 +5022,12 @@ const
   SF_DESIGNER_TOMA_ENTERO32 =
     'a whole number that fits in 32 bits, -2147483648 to 2147483647 (in hex, ' +
     'up to $7FFFFFFF): the form loader reads no more here';
+  // los mismos 32 bits, con su signo, o en la forma x+hexadecimal que su
+  // lector toma (BaseQueNoCasa; A5 de hermes-120, 1.20)
+  SF_DESIGNER_MISMOS_32_BITS_FMT =
+    '; the same 32 bits go as %d';
+  SF_DESIGNER_MISMOS_32_BITS_HEX_FMT =
+    '; the same 32 bits go as %s, which its reader takes, or as %d';
   SF_DESIGNER_TOMA_ENTERO64 =
     'a whole number that fits in 64 bits';
   SF_DESIGNER_TOMA_VARIANTE =
@@ -6127,6 +6133,16 @@ const
     'the file: one stamped copy per replacement). If you wanted to ' +
     'append at the end and not replace, use offset=<the current size>, ' +
     'not offset=0.';
+
+  { Un form subido que el parser del IDE no lee y sin sha256: no se juzga (no
+    se distingue de un primer trozo), pero se DICE, con lo que dijo el parser.
+    Hermes subio uno entero con el BOM mal transcrito: ok:true y nada mas, y
+    lo encontro dos llamadas despues con read y lint (hermes-120, 1.20). }
+  SN_UPLOAD_FORM_SIN_JUZGAR =
+    '[UPLOAD-013] NOTE: not judged yet - as it is, the IDE''s form parser ' +
+    'does not read this form. If more chunks follow, that is expected: the ' +
+    'last one, sent with sha256, gets it judged. If this was the whole file, ' +
+    'it is broken. The parser said:';
 
   SP_DELETE_PURGE =
     'true = DELETE FOR REAL, with no way back - only INSIDE the trash ' +

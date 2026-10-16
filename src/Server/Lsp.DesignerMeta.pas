@@ -1117,7 +1117,27 @@ begin
       if TryStrToInt64(AValor, N) and
          ((Base = 'int64') or ((N >= Low(Integer)) and (N <= High(Integer)))) then
         Exit;
-      Exit(MsgText(IfThen(Base = 'int64', SF_DESIGNER_TOMA_ENTERO64, SF_DESIGNER_TOMA_ENTERO32)));
+      if Base = 'int64' then
+        Exit(MsgText(SF_DESIGNER_TOMA_ENTERO64));
+      Result := MsgText(SF_DESIGNER_TOMA_ENTERO32);
+      // los mismos 32 bits que no caben con signo ($FF00A152 en un TAlphaColor:
+      // el ARGB escrito a mano) caben de otra forma, CALCULADA: con su signo, y
+      // si su IdentTo toma x y un hexadecimal (FormasAbiertas; la forma que
+      // escriben los forms del IDE: xFF414141), asi. Decia solo el tope y
+      // Hermes tardo 6 llamadas en salir (A5 de hermes-120, 16-oct-2026)
+      if TryStrToInt64(AValor, N) and (N > High(Integer)) and (N <= $FFFFFFFF) then
+      begin
+        var Hex := '';
+        if M.FormasAbiertas.TryGetValue(K, Formas) then
+          for var F in Formas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
+            if F.StartsWith('hex=') and (Length(F) = 5) then
+              Hex := F[5] + IntToHex(N, 8);
+        if Hex <> '' then
+          Result := Result + MsgFmt(SF_DESIGNER_MISMOS_32_BITS_HEX_FMT, [Hex, N - $100000000])
+        else
+          Result := Result + MsgFmt(SF_DESIGNER_MISMOS_32_BITS_FMT, [N - $100000000]);
+      end;
+      Exit;
     end;
     // un identificador solo si el tipo registra constantes, y entonces una
     // de las suyas (ReadPropValue le pregunta a su IdentToInt); un Int64 no

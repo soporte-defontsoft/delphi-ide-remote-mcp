@@ -1537,7 +1537,14 @@ begin
       var LinP: Integer;
       var CitaP: string;
       if (Params.Sha256.Trim = '') and (ParserDeForm(Texto, Enc, LinP, CitaP) <> '') then
-        Exit;
+      begin
+        // a medias no se juzga, pero se DICE, con lo que dijo el parser: uno
+        // entero con el BOM mal transcrito contestaba ok:true y nada mas
+        // (Hermes, hermes-120 de la 1.20)
+        J.AddPair('designerNote', MsgText(SN_UPLOAD_FORM_SIN_JUZGAR) + ' ' +
+          AvisoDelParserDeForm(Texto, Enc));
+        Exit(J.ToJSON);
+      end;
       var Juicio := JuicioDeForm(Ruta, Texto, Enc) + AvisosDelLector(Ruta);
       if Length(Juicio) = 0 then
         Exit;
