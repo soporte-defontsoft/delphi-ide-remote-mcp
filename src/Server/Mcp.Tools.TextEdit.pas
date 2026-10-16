@@ -112,16 +112,16 @@ begin
   if Params.Edits.Trim <> '' then Modo := 'edits'
   else if Params.Create_ then Modo := 'create'
   else Modo := 'old/new';
-  var Suyos: string;
+  var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Modo, [
       'edits', 'edits',
       'create', 'create content eol',
       'old/new', 'old new fragment delete atline toline'],
     ['atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
      'toline', IfThen(Params.ToLine <> 0, IntToStr(Params.ToLine)), '',
-     'content', Params.Content, '', 'eol', Params.Eol, ''], Suyos);
+     'content', Params.Content, '', 'eol', Params.Eol, ''], Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_EDIT_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]));
+    Exit(MsgFmt(SR_EDIT_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]) + VaCon);
   if Params.Edits.Trim <> '' then
     Exit(ExecuteTextEdits(Params.Path, Params.Edits));
   // un ancla de VARIAS lineas es un BLOQUE: la tanda de una entrada, como en

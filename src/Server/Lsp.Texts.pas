@@ -1908,6 +1908,12 @@ const
   // lo que toma un modo sin parametros propios (Lsp.Guard.ParametroQueNoVa)
   SF_MODO_SIN_PARAMETROS =
     'no parameters';
+  // con que modos SI va lo que sobraba, de la misma tabla (ParametroQueNoVa;
+  // DSGN-047 de la 1.20): el parametro, o todo lo enviado si un modo lo lleva
+  SF_PARAMETRO_VA_CON_FMT =
+    ' "%s" goes with: %s.';
+  SF_LO_ENVIADO_VA_CON_FMT =
+    ' What you sent (%s) goes with: %s.';
   SF_PASERVER_NAME_ES_PROFILE =
     ' ("name" is the old spelling of "profile" here and is read as it; ' +
     'an SDK goes in "sdk".)';
@@ -10639,6 +10645,15 @@ const
   SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT =
     '"%s" does not exist in %s nor in any class that descends from it, ' +
     'according to the framework (between them they publish: %s)';
+
+  { La propiedad de la OTRA plataforma (Lsp.DesignerMeta.PistaDelOtroMarco):
+    la clase del mismo nombre del otro marco la publica. Va detras de los
+    dos de arriba (set, insert, el lint); medido en Hermes, DSGN-087 de la
+    1.20: Alignment en un TLabel FMX, Caption en un TButton FMX, Position.X
+    en un TLabel VCL. Corta: va en cada linea del lint (medido: 300 lineas,
+    +19 KB y +11 ms). }
+  SF_DSGN_EN_EL_OTRO_MARCO_FMT =
+    '. "%s" is what the %s %s publishes; this form is %s';
 
   SF_DSGN_NO_ES_VALOR_FMT =
     '"%s" is not a value of %s; valid: %s';

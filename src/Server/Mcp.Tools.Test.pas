@@ -83,7 +83,7 @@ begin
     Exit(MsgFmt(SR_TEST_CMD_FMT, [Params.Command.Trim]));
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): discover
   // con filter o config los ignoraba en silencio (decima revision)
-  var Suyos: string;
+  var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Cmd, [
       'discover', 'path',
       'run', 'project config filter platform timeoutms nobuild'],
@@ -91,9 +91,9 @@ begin
      'config', Params.Config, 'Debug', 'filter', Params.Filter, '',
      'platform', Params.Platform, 'Win64',
      'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), '',
-     'nobuild', IfThen(Params.NoBuild, 'true'), ''], Suyos);
+     'nobuild', IfThen(Params.NoBuild, 'true'), ''], Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_TEST_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, Suyos]));
+    Exit(MsgFmt(SR_TEST_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, Suyos]) + VaCon);
   try
     if Cmd = 'discover' then
     begin

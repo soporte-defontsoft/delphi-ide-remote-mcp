@@ -91,7 +91,7 @@ const
     'unit', 'project content dir',
     'include', 'project content dir');
 var
-  K, Familia, Suyos, Sobra: string;
+  K, Familia, Suyos, Sobra, VaCon: string;
 begin
   K := Params.Kind.Trim.ToLower;
   // lo que no es de este kind se dice (Lsp.Guard.ParametroQueNoVa): content
@@ -108,10 +108,10 @@ begin
     Familia := K;
   Sobra := ParametroQueNoVa(Familia, FAMILIAS,
     ['dir', Params.Dir, '', 'project', Params.Project, '',
-     'formname', Params.FormName, '', 'content', Params.Content, ''], Suyos);
+     'formname', Params.FormName, '', 'content', Params.Content, ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CREATE_NO_VA_CON_KIND_FMT, [Sobra, Params.Kind.Trim,
-      Params.Kind.Trim, 'name ' + Suyos]));
+      Params.Kind.Trim, 'name ' + Suyos]) + VaCon);
   if K.StartsWith('project-') then
     Result := CreateDelphiProject(Params.Dir, Params.Name, K.Substring(8))
   else if K.StartsWith('form-') then

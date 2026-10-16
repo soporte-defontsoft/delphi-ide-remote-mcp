@@ -94,6 +94,10 @@ type
     // clase lower -> el ControlStyle de su constructor (K): 'AS', A de
     // csAcceptsControls y S de csSetCaption, '+', '-', '?' o '.'
     Estilos: TDictionary<string, string>;
+    // el marco de una tabla de la instalacion ('VCL' o 'FMX': lo pone
+    // MetaTable); '' en una hecha a mano (las pruebas), que no tiene otro
+    // marco al que preguntar (PistaDelOtroMarco)
+    Marco: string;
     constructor Create(const AFacts: array of string);
     // AClase y sus ancestros por Padres, de ella hacia arriba (claves, 64
     // eslabones a lo sumo): EL recorrido de la herencia de los de abajo, que
@@ -207,6 +211,20 @@ function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
   ANTES de escribir (1.17.0). }
 function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
   out AHoja: TPropRec; out AHayHoja: Boolean): string;
+{ Si se llega a la hoja de ARuta (Font.Color) en un objeto de AClase (su
+  identidad en M): una ruta publicada entera. Lo que la clase guarda por
+  codigo, o un tipo que el fuente no deja leer, no llega. }
+function LlegaALaHoja(M: TMetaTable; const AClase, ARuta: string): Boolean;
+{ La pista de que ARuta es de la OTRA plataforma: la clase del MISMO nombre
+  que AClase (su identidad en M), en la tabla del otro marco de la misma
+  instalacion (VCL para un form FMX y al reves), la publica - Alignment en un
+  TLabel FMX, Position.X en un TLabel VCL, Caption en un TButton FMX. Medido
+  en Hermes (DSGN-087 de la 1.20): de los "no existe" de verdad, la mayoria
+  eran de la otra plataforma, y la parecida por distancia decia Action por
+  Caption y Hint.Color por Font.Color. La tabla del otro marco, sin esperar:
+  si no esta, nada. '' si no. La dice el juez (JuzgaPropiedad: set, insert,
+  el lint) y la mira la parecida de set. }
+function PistaDelOtroMarco(M: TMetaTable; const AClase, ARuta: string): string;
 { Si la ruta ALhs (PopupMenu.AutoPopup) pasa por una propiedad de clase que
   en el bloque de su objeto guarda una REFERENCIA a otro componente (ARefs:
   Lsp.DesignerBin.ReferenciasDeObjeto): esa propiedad (APrefijo) y el
@@ -411,6 +429,7 @@ begin
       if not GTablas.TryGetValue(AnsiLowerCase(Fichero), Result) then
       begin
         Result := TMetaTable.DeFichero(Fichero);
+        Result.Marco := IfThen(AIsFmx, 'FMX', 'VCL');
         GTablas.Add(AnsiLowerCase(Fichero), Result);
         JubilaLocked(AnsiLowerCase(Fichero));
       end;
@@ -854,13 +873,26 @@ begin
   end;
 end;
 
-function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
-  out AHoja: TPropRec; out AHayHoja: Boolean): string;
+{ EL juez de JuzgaPropiedad; AConPista, si lo que no existe lleva la pista
+  del otro marco (la pista pregunta a la otra tabla por aqui, sin ella: si
+  no, cada una preguntaria a la otra) }
+function JuzgaRuta(M: TMetaTable; const AClase, ALhs, ARhs: string;
+  out AHoja: TPropRec; out AHayHoja: Boolean; AConPista: Boolean): string;
 var
   SIdx: Integer;
   Cur, CurShow, Seg, Key, Have, Desc: string;
   Segs: TArray<string>;
   R: TPropRec;
+
+  // lo que queda de la ruta desde el trozo AIdx, que no existe, en la otra
+  // tabla (el indice por parametro: el del for no se lee desde aqui)
+  function Pista(AIdx: Integer): string;
+  begin
+    Result := '';
+    if AConPista then
+      Result := PistaDelOtroMarco(M, Cur, string.Join('.', Segs, AIdx, Length(Segs) - AIdx));
+  end;
+
 begin
   Result := '';
   AHayHoja := False;
@@ -905,7 +937,7 @@ begin
         Have := M.PublicadasDeLaFamilia(Cur);
         if Have <> '' then
           Result := MsgFmt(SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT,
-            [Segs[SIdx], CurShow, Have]);
+            [Segs[SIdx], CurShow, Have]) + Pista(SIdx);
         Exit;
       end;
       if not M.PropNames.TryGetValue(Cur, Have) then
@@ -917,7 +949,7 @@ begin
       // own DefineProperties, and the table now reads those names from
       // the source: DefinidaPorCodigo, at the top of this branch.)
       Exit(MsgFmt(SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT,
-        [Segs[SIdx], CurShow, Have]));
+        [Segs[SIdx], CurShow, Have]) + Pista(SIdx));
     end;
     if SIdx < High(Segs) then
     begin
@@ -942,6 +974,36 @@ begin
       Result := JuzgaHoja(M, R, ARhs);
     end;
   end;
+end;
+
+function JuzgaPropiedad(M: TMetaTable; const AClase, ALhs, ARhs: string;
+  out AHoja: TPropRec; out AHayHoja: Boolean): string;
+begin
+  Result := JuzgaRuta(M, AClase, ALhs, ARhs, AHoja, AHayHoja, True);
+end;
+
+function LlegaALaHoja(M: TMetaTable; const AClase, ARuta: string): Boolean;
+var
+  Hoja: TPropRec;
+begin
+  JuzgaRuta(M, AClase, ARuta, '', Hoja, Result, False);
+end;
+
+function PistaDelOtroMarco(M: TMetaTable; const AClase, ARuta: string): string;
+var
+  Falta: TFaltaTabla;
+  Otra: TMetaTable;
+  Nombre, Id: string;
+begin
+  Result := '';
+  if (M = nil) or (M.Marco = '') or (ARuta = '') or not M.Classes.TryGetValue(AClase, Nombre) then
+    Exit;
+  // la del otro marco de la misma instalacion, sin esperar a que se genere
+  Otra := MetaTable(SameText(M.Marco, 'VCL'), Falta, 0);
+  if (Otra = nil) or (Otra = M) or not Otra.ClaseDeNombre(Nombre, Id) or
+     not LlegaALaHoja(Otra, Id, ARuta) then
+    Exit;
+  Result := MsgFmt(SF_DSGN_EN_EL_OTRO_MARCO_FMT, [ARuta, Otra.Marco, Nombre, M.Marco]);
 end;
 
 function RutaPorReferencia(M: TMetaTable; const AClase, ALhs: string;

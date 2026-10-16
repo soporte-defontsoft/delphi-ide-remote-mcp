@@ -943,7 +943,7 @@ begin
   // lo que no va con el comando se dice (Lsp.Guard.ParametroQueNoVa): delete
   // con child/prop borraba el estilo ENTERO pidiendo una parte, y delete es a
   // la vez un comando y un booleano de set (octava revision)
-  var Suyos: string;
+  var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Cmd, [
       'view', 'filter',
       'get', 'style child',
@@ -955,9 +955,9 @@ begin
     ['project', Params.Project, '', 'style', Params.Style, '',
      'child', Params.Child, '', 'prop', Params.Prop, '', 'value', Params.Value, '',
      'name', Params.Name, '', 'filter', Params.Filter, '',
-     'delete', IfThen(Params.Delete, 'true'), ''], Suyos);
+     'delete', IfThen(Params.Delete, 'true'), ''], Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_STYLES_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, ONinguno(Suyos)]));
+    Exit(MsgFmt(SR_STYLES_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, ONinguno(Suyos)]) + VaCon);
   if MatchText(Cmd, ['set', 'clone', 'delete', 'build']) then
     Denied := WriteTargetDenied(Params.Path)
   else

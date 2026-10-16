@@ -1513,7 +1513,7 @@ begin
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): aqui se
   // ignoraba en silencio (decima revision)
   var Modo := IfThen(Cmd = 'binding', 'check-binding', Cmd);
-  var Suyos: string;
+  var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Modo, [
       // el parametro se llama classname: la tabla decia class y DSGN-047 lo
       // ensenaba con ese nombre (Hermes, 28-sep-2026, F2)
@@ -1536,9 +1536,9 @@ begin
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
      'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, '',
      'props', Params.Props, '', 'before', Params.Before, '', 'after', Params.After, '',
-     'index', IfThen(Params.Index >= 0, IntToStr(Params.Index)), ''], Suyos);
+     'index', IfThen(Params.Index >= 0, IntToStr(Params.Index)), ''], Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]));
+    Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]) + VaCon);
   if MatchText(Cmd, ['info', 'prop']) then
   begin
     Fw := ResolveFramework(Params.Framework, Params.Path);

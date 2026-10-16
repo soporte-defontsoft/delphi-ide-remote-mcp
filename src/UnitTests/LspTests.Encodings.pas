@@ -743,17 +743,29 @@ end;
 
 procedure TNombradorTests.ParametroQueNoVaConSuDefecto;
 var
-  Suyos: string;
+  Suyos, VaCon: string;
+const
+  TABLA: array [0 .. 5] of string = ('info', 'classname', 'tree', 'path maxdepth', 'lint', 'path');
 begin
   Assert.AreEqual('path', ParametroQueNoVa('set-output', ['set-output', 'output'],
-    ['output', 'bin', '', 'path', '.\bin', ''], Suyos));
+    ['output', 'bin', '', 'path', '.\bin', ''], Suyos, VaCon));
   Assert.AreEqual('output', Suyos);
+  Assert.AreEqual('', VaCon, 'path no va con ningun modo de esa tabla');
   // el valor por defecto que publica el esquema no cuenta como enviado
   Assert.AreEqual('', ParametroQueNoVa('set-output', ['set-output', 'output'],
-    ['section', 'summary', 'summary'], Suyos));
+    ['section', 'summary', 'summary'], Suyos, VaCon));
   // un modo que no esta en la tabla no se mira: lo dice su propia negativa
   Assert.AreEqual('', ParametroQueNoVa('otro', ['set-output', 'output'],
-    ['path', 'x', ''], Suyos));
+    ['path', 'x', ''], Suyos, VaCon));
+  // con que modos SI va, de la misma tabla (DSGN-047 de la 1.20): todo lo
+  // enviado si un modo lo lleva entero (el command olvidado: tree)...
+  Assert.AreEqual('path', ParametroQueNoVa('info', TABLA,
+    ['path', 'U.fmx', '', 'maxdepth', '3', ''], Suyos, VaCon));
+  Assert.AreEqual(' What you sent (path, maxdepth) goes with: tree.', VaCon);
+  // ...y si no, los que llevan el que sobra
+  Assert.AreEqual('path', ParametroQueNoVa('info', TABLA,
+    ['path', 'U.fmx', ''], Suyos, VaCon));
+  Assert.AreEqual(' "path" goes with: tree, lint.', VaCon);
 end;
 
 procedure TEncodingTests.UnEmojiQueNoCabeSeNombraEntero;

@@ -1818,7 +1818,7 @@ begin
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en
   // config, create, edit, textedit, styles, git y changeset; aqui se ignoraba
   // en silencio (decima revision). Solo se nombra el PARAMETRO, nunca su valor
-  var Suyos: string;
+  var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(IfThen(Cmd = '', 'platforms', Cmd), [
       'platforms', '', 'packages', '', 'profiles', '', 'reseat', '',
       'add-profile', 'profile host port password platform',
@@ -1834,7 +1834,7 @@ begin
      'password', Params.Password, '', 'platform', Params.Platform, '',
      'project', Params.Project, '', 'exe', Params.Exe, '', 'args', Params.Args, '',
      'job', Params.Job, '', 'sdk', Params.Sdk, '', 'active', Params.Active, '',
-     'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), ''], Suyos);
+     'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), ''], Suyos, VaCon);
   if Sobra <> '' then
   begin
     // la nota de "name" solo donde nombraba un SDK (reseat-sdk, remove-sdk):
@@ -1843,7 +1843,7 @@ begin
     if (Sobra = 'profile') and MatchText(Cmd, ['reseat-sdk', 'remove-sdk']) then
       Nota := MsgText(SF_PASERVER_NAME_ES_PROFILE);
     Exit(MsgFmt(SR_PASERVER_NO_VA_CON_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'platforms', Cmd),
-      IfThen(Cmd = '', 'platforms', Cmd), Suyos, Nota]));
+      IfThen(Cmd = '', 'platforms', Cmd), Suyos, Nota]) + VaCon);
   end;
   if (Cmd = '') or (Cmd = 'platforms') then
     Result := ListPlatforms

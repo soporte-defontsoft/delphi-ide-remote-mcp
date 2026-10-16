@@ -1714,6 +1714,9 @@ begin
 end;
 
 // la propiedad casi bien escrita: la mas parecida del primer trozo, si es una
+// y la ruta entera existe con ella (Hint.Color por Font.Color decia, y Hint es
+// una cadena); y ninguna si es de la otra plataforma, que ya lo dice el juez
+// (PistaDelOtroMarco: Action por Caption en un TButton FMX). DSGN-087 de la 1.20
 function ParecidaA(M: TMetaTable; const AClsId, AProp: string): string;
 var
   Segs, Nombres: TArray<string>;
@@ -1721,7 +1724,8 @@ var
 begin
   Result := '';
   Segs := AProp.Split(['.']);
-  if (Length(Segs) = 0) or Publica(M, AClsId, Segs[0]) then
+  if (Length(Segs) = 0) or Publica(M, AClsId, Segs[0]) or
+     (PistaDelOtroMarco(M, AClsId, AProp) <> '') then
     Exit;
   Nombres := [];
   for var Par in M.Props do
@@ -1731,6 +1735,8 @@ begin
   if Cand = '' then
     Exit;
   Segs[0] := Cand;
+  if not LlegaALaHoja(M, AClsId, string.Join('.', Segs)) then
+    Exit;
   Result := MsgFmt(SF_DESIGNER_QUIZAS_FMT, [string.Join('.', Segs)]);
 end;
 

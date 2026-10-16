@@ -86,7 +86,7 @@ begin
   // lo que no va con el COMANDO se dice (Lsp.Guard.ParametroQueNoVa): commit
   // o preview con kind / path / old / n se ignoraban (octava revision). Lo
   // de cada kind lo mira stage (CHSET-030)
-  var Suyos: string;
+  var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Params.Command.Trim.ToLower, [
       'begin', '',
       'status', '', // status lista TODOS: su tabla decia id y SP_CHANGESET_ID no (novena)
@@ -97,10 +97,10 @@ begin
      'dest', Params.Dest, '', 'old', Params.Old, '', 'new', Params.New, '',
      'content', Params.Content, '', 'fragment', Params.Fragment, '',
      'atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
-     'n', IfThen(Params.N <> 0, IntToStr(Params.N)), ''], Suyos);
+     'n', IfThen(Params.N <> 0, IntToStr(Params.N)), ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, Params.Command.Trim.ToLower,
-      Params.Command.Trim.ToLower, ONinguno(Suyos)]));
+      Params.Command.Trim.ToLower, ONinguno(Suyos)]) + VaCon);
   var Forms: TArray<string>;
   Result := ChangesetExecuteYForms(Params.Command, Params.Id, Params.Kind.Trim.ToLower,
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,

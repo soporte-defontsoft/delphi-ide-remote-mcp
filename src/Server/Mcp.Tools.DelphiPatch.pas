@@ -235,7 +235,7 @@ begin
   else if Params.CreateUnit then Modo := 'createunit'
   else if Params.Restore then Modo := 'restore'
   else Modo := 'old/new';
-  var Suyos: string;
+  var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Modo, [
       'edits', 'edits',
       'adduses', 'adduses section',
@@ -251,9 +251,9 @@ begin
      'visibility', Params.Visibility, '', 'visible', IfThen(Params.Visible, 'true'), '',
      'content', Params.Content, '', 'eol', Params.Eol, '',
      'confirm', IfThen(Params.Confirm, 'true'), '', 'section', Params.Section, ''],
-    Suyos);
+    Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_EDIT_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]));
+    Exit(MsgFmt(SR_EDIT_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]) + VaCon);
   if Params.Edits.Trim <> '' then
   begin
     Result := WriteTargetDenied(Params.Path);

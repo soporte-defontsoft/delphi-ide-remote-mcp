@@ -712,7 +712,7 @@ begin
       // todas las tools de varios modos (Lsp.Guard.ParametroQueNoVa): era
       // una copia propia que no decia lo que el kind toma (octava revision).
       // delete-line toma old: lo compara con su linea
-      var SuyosK: string;
+      var SuyosK, VaConK: string;
       var SobraK := ParametroQueNoVa(KindName(Op.Kind), [
           'edit', 'old new fragment atline',
           'create', 'content',
@@ -721,10 +721,10 @@ begin
           'move', 'dest'],
         ['content', AContent, '', 'old', AOldLine, '', 'new', ANewText, '',
          'fragment', AFragment, '', 'dest', ADest, '',
-         'atline', IfThen(AAtLine > 0, IntToStr(AAtLine)), ''], SuyosK);
+         'atline', IfThen(AAtLine > 0, IntToStr(AAtLine)), ''], SuyosK, VaConK);
       if SobraK <> '' then
         Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, [SobraK, AKind, AKind,
-          ONinguno('path ' + SuyosK)]));
+          ONinguno('path ' + SuyosK)]) + VaConK);
       if APath.Trim = '' then
         Exit(MsgText(SR_CHANGESET_NEED_PATH));
       // Lo que se escribe o se borra, por la puerta de DESTINO (jaula +

@@ -696,9 +696,14 @@ procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string;
   defaults no tropieza (CFG-110 rechazaba section=summary). ASuyos, los del
   modo, para el mensaje. Un modo que no esta en la tabla no se mira: lo
   dice su propia negativa. UNA regla para las tools de varios modos: cada
-  una escribia la suya o ignoraba en silencio (septima revision). }
+  una escribia la suya o ignoraba en silencio (septima revision). AVaCon,
+  con que modos SI va, de la MISMA tabla, para detras del mensaje: todo lo
+  enviado, si algun modo lo toma entero (path y maxdepth sin command: tree);
+  si no, el parametro que sobra; '' si no va con ninguno. Un modelo pequeno
+  olvidaba el command y leia "path no va con info" (DSGN-047 de la 1.20,
+  medido en Hermes: 4 de 10). }
 function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of string;
-  out ASuyos: string): string;
+  out ASuyos, AVaCon: string): string;
 
 { '' salvo que APath sea un FICHERO con el atributo de solo lectura: su
   negativa (SYS-029). Para quien SUSTITUYE el contenido de un fichero
@@ -4424,14 +4429,22 @@ begin
 end;
 
 function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of string;
-  out ASuyos: string): string;
+  out ASuyos, AVaCon: string): string;
 var
   I: Integer;
   Hay: Boolean;
   Suyos: string;
+  Enviados, ConTodo, ConEse: TArray<string>;
+
+  function Lleva(const ALista, AParam: string): Boolean;
+  begin
+    Result := (' ' + LowerCase(ALista) + ' ').Contains(' ' + LowerCase(AParam) + ' ');
+  end;
+
 begin
   Result := '';
   ASuyos := '';
+  AVaCon := '';
   Hay := False;
   I := 0;
   while I + 1 <= High(ATabla) do
@@ -4446,22 +4459,54 @@ begin
   end;
   if not Hay then
     Exit;
-  Suyos := ' ' + LowerCase(ASuyos) + ' ';
+  Suyos := ASuyos;
+  // lo enviado, en el orden de la terna; el que sobra es el primero que el
+  // modo no lleva
+  Enviados := [];
   I := 0;
   while I + 2 <= High(AEnviados) do
   begin
     if (AEnviados[I + 1].Trim <> '') and
-       not SameText(AEnviados[I + 1].Trim, AEnviados[I + 2]) and
-       not Suyos.Contains(' ' + LowerCase(AEnviados[I]) + ' ') then
+       not SameText(AEnviados[I + 1].Trim, AEnviados[I + 2]) then
     begin
-      // un modo que no toma ninguno: "takes no parameters", no "takes ."
-      // (segunda revision de la 1.17.0, PAS-051 de platforms)
-      if ASuyos.Trim = '' then
-        ASuyos := MsgText(SF_MODO_SIN_PARAMETROS);
-      Exit(AEnviados[I]);
+      Enviados := Enviados + [AEnviados[I]];
+      if (Result = '') and not Lleva(Suyos, AEnviados[I]) then
+        Result := AEnviados[I];
     end;
     Inc(I, 3);
   end;
+  if Result = '' then
+    Exit;
+  // un modo que no toma ninguno: "takes no parameters", no "takes ."
+  // (segunda revision de la 1.17.0, PAS-051 de platforms)
+  if ASuyos.Trim = '' then
+    ASuyos := MsgText(SF_MODO_SIN_PARAMETROS);
+  // con que modos SI va, de la misma tabla: los que lo llevan todo, y los
+  // que llevan el que sobra
+  ConTodo := [];
+  ConEse := [];
+  I := 0;
+  while I + 1 <= High(ATabla) do
+  begin
+    if Lleva(ATabla[I + 1], Result) then
+    begin
+      ConEse := ConEse + [ATabla[I]];
+      Hay := True;
+      for var E in Enviados do
+        if not Lleva(ATabla[I + 1], E) then
+        begin
+          Hay := False;
+          Break;
+        end;
+      if Hay then
+        ConTodo := ConTodo + [ATabla[I]];
+    end;
+    Inc(I, 2);
+  end;
+  if (Length(Enviados) > 1) and (Length(ConTodo) > 0) then
+    AVaCon := MsgFmt(SF_LO_ENVIADO_VA_CON_FMT, [string.Join(', ', Enviados), string.Join(', ', ConTodo)])
+  else if Length(ConEse) > 0 then
+    AVaCon := MsgFmt(SF_PARAMETRO_VA_CON_FMT, [Result, string.Join(', ', ConEse)]);
 end;
 
 function PrimerAncestroQueExiste(const ARuta: string): string;

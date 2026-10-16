@@ -1547,7 +1547,7 @@ end;
   es la de todas las tools de varios modos (Lsp.Guard.ParametroQueNoVa); el
   section por defecto no cuenta como enviado (septima revision). }
 function ParametroQueSobra(const ACmd: string; const P: TDelphiConfigParams;
-  out ASuyos: string): string;
+  out ASuyos, AVaCon: string): string;
 const
   COMANDOS: array [0 .. 33] of string = (
     'view', 'section',
@@ -1572,7 +1572,7 @@ begin
     ['platform', P.Platform, '', 'sdk', P.Sdk, '', 'profile', P.Profile, '',
      'path', P.Path, '', 'section', P.Section, CFG_SECTION_POR_DEFECTO,
      'remotedir', P.RemoteDir, '', 'version', P.Version, '',
-     'output', P.Output, '', 'requires', P.Requires, ''], ASuyos);
+     'output', P.Output, '', 'requires', P.Requires, ''], ASuyos, AVaCon);
 end;
 
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
@@ -1583,11 +1583,11 @@ begin
     Exit(MsgText(SR_CFG_DELPHI_CONFIG_NECESITA_PROJECT));
   Cmd := Params.Command.Trim.ToLower;
   // un parametro que no es de este comando se dice, no se ignora
-  var Suyos: string;
-  var Sobra := ParametroQueSobra(Cmd, Params, Suyos);
+  var Suyos, VaCon: string;
+  var Sobra := ParametroQueSobra(Cmd, Params, Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'view', Cmd),
-      IfThen(Cmd = '', 'view', Cmd), ONinguno(Suyos)]));
+      IfThen(Cmd = '', 'view', Cmd), ONinguno(Suyos)]) + VaCon);
   // view solo LEE el .dproj (y vale en un proyecto de REFERENCIA); todo lo
   // demas lo escribe y pasa por la puerta de escritura.
   if (Cmd = '') or (Cmd = 'view') then
@@ -1617,12 +1617,12 @@ begin
     begin
       // view de un GRUPO no tiene secciones: section se ignoraba (septima
       // revision). La misma regla, con la fila del grupo
-      var SuyosG: string;
+      var SuyosG, VaConG: string;
       var SobraG := ParametroQueNoVa('view', ['view', ''],
-        ['section', Params.Section, CFG_SECTION_POR_DEFECTO], SuyosG);
+        ['section', Params.Section, CFG_SECTION_POR_DEFECTO], SuyosG, VaConG);
       if SobraG <> '' then
         Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [SobraG, 'view (.groupproj)',
-          'view (.groupproj)', MsgText(SF_NINGUNO)]));
+          'view (.groupproj)', MsgText(SF_NINGUNO)]) + VaConG);
       Exit(ViewGroup(Proj));
     end;
     // Las de un grupo (1.6.0): add-project y remove-project escriben lo que

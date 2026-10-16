@@ -1478,7 +1478,7 @@ begin
   end
   else if Cmd = 'worktree' then
     ModoGit := 'worktree ' + LowerCase(Params.Action.Trim);
-  var SuyosGit: string;
+  var SuyosGit, VaConGit: string;
   var SobraGit := ParametroQueNoVa(ModoGit, [
       'status', 'paths offset',
       'diff', 'paths ref to staged format context offset',
@@ -1503,7 +1503,7 @@ begin
      'action', Params.Action, '', 'name', Params.Name, '',
      'message', Params.Message, '', 'path', Params.Path, '',
      'create', IfThen(Params.Create, 'true'), '',
-     'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), ''], SuyosGit);
+     'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), ''], SuyosGit, VaConGit);
   if SobraGit <> '' then
   begin
     // como viaja en el cable: command=stash action=pop, no "command=stash
@@ -1511,7 +1511,7 @@ begin
     var Muestra := Cmd;
     if ModoGit <> Cmd then
       Muestra := Cmd + ' action=' + Copy(ModoGit, Length(Cmd) + 2, MaxInt);
-    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Muestra, Muestra, ONinguno(SuyosGit)]));
+    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Muestra, Muestra, ONinguno(SuyosGit)]) + VaConGit);
   end;
   // offset, solo con una CONSULTA: branch y tag listan (su nota GIT-053 lo
   // ofrece); tag con nombre escribe

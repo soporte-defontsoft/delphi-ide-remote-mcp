@@ -58,6 +58,32 @@ the MCP `initialize` response (`serverInfo.version`).
   empty `new`, removes it), `atline` is the line where it starts when it
   appears more than once, and `toline` with a block is refused as in `edits`
   (`EDIT-020`). An anchor of ONE line works as always.
+- **A parameter that does not go with the command says where it does go.**
+  The eleven tools with several modes refuse a parameter their mode does not
+  take (`DSGN-047`, `EDIT-115`, `CFG-110`, `GIT-038`...) and listed what that
+  mode takes. A small model that FORGOT the command read "`path` does not go
+  with command=info" - info being only the default: 4 of the 10 such
+  refusals in Hermes' history (measured on 2026-10-16). The answer now adds,
+  from the same table, the modes that do take it: everything that was sent,
+  when one mode takes all of it (`What you sent (path, maxdepth) goes with:
+  tree.`), or else the parameter itself (`"code" goes with:
+  insert=rutina-global, insert=metodo.`). Parameter names only, never a value.
+- **`delphi_designer`: a property of the other framework is said as such,
+  and "Did you mean" only proposes what exists.** Of the property refusals
+  in Hermes' history that were not its own border tests, half were the
+  other platform's property - `Alignment` on an FMX `TLabel` (21 warnings
+  over two edits), `Caption` on an FMX `TButton`,
+  `Position.X` on a VCL `TLabel` - and the near-name guess got two of three
+  wrong: "Did you mean Action?" for `Caption`, `Hint.Color` for `Font.Color`
+  (`Hint` is a string). The judge of a property - `set`, `insert`, `lint` and
+  the warnings after an edit - now asks the table of the OTHER framework of
+  the same install whether the class of the same name publishes it (`"Alignment"
+  is what the VCL TLabel publishes; this form is FMX`), from the segment that
+  fails (`TextSettings.Font.Color`: the VCL `TFont`'s). When that applies
+  there is no near-name guess, and a guess is made only when the whole path
+  exists. The first time the other framework's table is needed it is read:
+  about 0.9 s and 78 MB for the VCL one, once per process. 300 such lines
+  add 11 ms and 19 KB to a `lint`.
 
 ### Fixed
 
