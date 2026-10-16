@@ -76,7 +76,8 @@ handshake.
 - Anchor edits: `old` must be copied EXACTLY from a fresh `delphi_read`,
   as small and unique as possible. An edit error is a diagnosis - re-read
   and fix the anchor; do not retry blindly. Indentation does not count in
-  an anchor (the rest of the line does, to its end).
+  an anchor (the rest of the line does, to its end). `old` may be one line
+  or several consecutive ones, in a single edit as in an `edits` entry.
 - **Fragment mode, for a long line**: `fragment` + `atline` + `new`
   changes just that piece of ONE line - no need to paste a 600-character
   README paragraph to turn "68" into "69". The same in `delphi_edit`,
@@ -136,7 +137,9 @@ handshake.
   re-confirmed, and `applicable` tells you if it is safe. NEVER rename by
   search-and-replace: the preview exists precisely because designers,
   string literals (FindComponent/RTTI/StyleLookup) and homonyms break
-  silently. A namesake in another unit (a second `TFoo`) or an overload is
+  silently: a name inside a string, in ANY unit of the scope, leaves it
+  not applicable (`RENAME-020`). A namesake in another unit (a second
+  `TFoo`) or an overload is
   never taken for yours: `via: "override"` in `delphi_references` is the
   inheritance family as the engine resolves it, and a namesake leaves the
   rename not applicable (`RENAME-017`) instead of being renamed with it.
@@ -150,7 +153,11 @@ handshake.
 
 - Never guess what a class publishes: `delphi_designer info classname=TButton`
   (add `framework=fmx` for FMX) lists the REAL published properties and
-  events; `prop classname=TPanel prop=Align` gives the legal enum members.
+  events; `prop classname=TPanel prop=Align` gives the legal enum members,
+  and takes a dotted path as `set` does (`TextSettings.HorzAlign`). A
+  property of kind class whose type is not a component is an object: `info
+  classname=<its type>` lists its own, and `filter=` on `info` looks one
+  level inside them.
   `tree path=<form>` shows the component tree; `get component=<Name>` one
   block.
 - Edit a form with the designer commands, not by hand: `insert` adds a
@@ -449,4 +456,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.19.3 -->
+<!-- contract reviewed: v1.20.0 -->

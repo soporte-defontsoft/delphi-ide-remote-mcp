@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: latest 1.19.3 (published today, validated by its batteries); stable 1.16.0 (a week in production and Hermes's nightly validation behind it).** Covered by 215 end-to-end batteries — 5,765 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: latest 1.20.0 (published today, validated by its batteries); stable 1.16.0 (a week in production and Hermes's nightly validation behind it).** Covered by 225 end-to-end batteries — 5,875 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -382,9 +382,12 @@ commit names the AI that co-wrote it, in its co-author tag or its message. Codex
 1.11.3 hardening of the launch, test-container, `delphi_git` and build jails, which Claude
 Opus 4.8 then reviewed independently.
 
-**Hermes**, our field agent, running the **Qwen3.8 27B** model locally, uses the server the
-way any MCP client would - nothing but the tools and what their descriptions say - and spends
-its nights running test rounds against it, now also on a second machine with Delphi 13.2. Its
+**Hermes**, our field agent, uses the server the way any MCP client would - nothing but the
+tools and what their descriptions say - and spends its nights running test rounds against it,
+now also on a second machine with Delphi 13.2. Since 1.20 it runs **Qwen3.8 Flash Next**
+locally; up to 1.19 it ran a dense **Qwen3.8 27B**, which now repeats the targeted rounds
+before each release: knowing less, the smaller model trusts what the tools say, and finds
+where they mislead. Its
 `delphi_report` findings are behind dozens of the fixes in the [CHANGELOG](CHANGELOG.md),
 each credited where it landed.
 

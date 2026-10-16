@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-15 (current release v1.19.3; 42 tools).
+Status page as of 2026-10-16 (current release v1.20.0; 42 tools).
 
 ## Delivered
 
@@ -45,6 +45,8 @@ Status page as of 2026-10-15 (current release v1.19.3; 42 tools).
 - Consolidation: the big units sorted by what they hold (`Lsp.Guard` split into `Lsp.Rutas`, `Lsp.Casa`, `Lsp.Settings`, `Lsp.Identidad`, `Lsp.TodoONada`, `Lsp.Args`, `Lsp.Lugares` and `Lsp.Mascara`, the codecs in `Lsp.Codificacion`, `delphi_git` in `Mcp.Tools.Git`); `lint` judging values as `set` does; `insert` and a rename on an inherited form seeing the ancestor's names; ANSI as the machine's code page, the first accent of a source written as the IDE writes it, and no writer leaving what would not read back the same; the Git jail closed (the repository's configuration as a whitelist, `.git` a protected place, LFS endpoints and every remote host judged, no signing); what a form names judged before it is rendered; a `delphi_edit` batch audited as a whole; one mailbox and one reports folder per workspace, which `delphi_report` lists and reads (1.18.0)
 
 - An agent asks for operations: `delphi_git` without free `args`, each command with its own fields judged by git itself; the program the server launches by its name found only where the agent cannot write; a link inside a repository no longer lets git read or rewrite what is behind it; `delphi_build` choosing the profile and the target from what the IDE knows (1.19.0)
+
+- What an agent reads back, measured with an independent agent and two models before publishing: answers sent once; desktop gestures that say only what they did; the IDE's own form reader asked at every door that writes or shows a form; a block as the anchor of a single edit; refusals that say where a parameter goes and which framework a property belongs to; `prop` and `info` that follow a class-typed property into its class (1.20.0)
 
 ## Next
 

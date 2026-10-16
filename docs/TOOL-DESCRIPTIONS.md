@@ -37,7 +37,7 @@ cut by judgement alone: every change is measured against a small model, the
 consumer that suffers most from a long list.
 
 1. **The judge.** A small local model behind an OpenAI-compatible API (Qwen3.8
-   27B on llama.cpp, the model a real agent of this project uses), spoken to the
+   27B on llama.cpp, the second validator of this project's field agent), spoken to the
    way its usual client speaks to it: the same reasoning effort, the same output
    limit, streaming (without streaming, a request the client abandons keeps
    generating and blocks the next ones), and one request at a time when the
