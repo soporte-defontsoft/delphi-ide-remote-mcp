@@ -181,6 +181,16 @@ the MCP `initialize` response (`serverInfo.version`).
   equivalence between frameworks. And the list of what a class publishes in
   a "does not exist" (`DSGN-087`, the lint), which comes cut from the table,
   ends with the way to the whole one: `info classname=... framework=...`.
+  `info` with `filter` now also looks one level inside the object properties
+  (`filter=Horz` on an FMX `TLabel` finds `TextSettings.HorzAlign`, dotted as
+  `set` writes it): it said "the class simply has no such member" (`DSGN-048`),
+  and a hand-written coda ("an FMX text control keeps its font in
+  TextSettings") stood in for the table in one case - it is gone. A property
+  that holds a REFERENCE to a component (`PopupMenu`) is not opened and gets no
+  `DSGN-155`: whether a class-typed property is an object of its own or a
+  reference is one rule (`EsObjetoPropio`), the one `set` already used, now
+  asked by `prop` and the filter too - and `test_paisaje` watches that it is
+  not written again by hand.
 - **Three descriptions said what the tools do not do.** `delphi_diagnostics`
   spoke of the settings of `"project"` - a field of its answer - and Hermes
   read it as a parameter (`SYS-015`); `delphi_hover` promised `null` on a

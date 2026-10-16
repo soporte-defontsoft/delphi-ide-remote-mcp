@@ -666,6 +666,21 @@ REGLAS = [
      [],
      'Una orden se compone con la RUTA del programa entre comillas (EnComillas(RutaDeGit) + ...), '
      'nunca con su nombre a secas al principio: quien la lance la buscaria en su carpeta actual'),
+    # que guarda una propiedad de clase: un objeto suyo (TFont, sus sub-propiedades con
+    # punto) o una REFERENCIA a un componente (PopupMenu, un Name). Vivia dentro de
+    # TipoQueNoCasa (set); prop no la llamo y decia de un PopupMenu "set writes them
+    # dotted" (1.20). Esta regla caza la COPIA; el olvido lo caza test_prop_ruta_120
+    ('objeto propio o referencia a mano', r"Desciende\s*\([^)]*ID_COMPONENTE",
+     [('Lsp.DesignerMeta.pas', 'TMetaTable.EsObjetoPropio')],
+     'EsObjetoPropio: si una propiedad de clase guarda un objeto suyo o una referencia a un '
+     'componente; la piden set, prop y el filtro de info (1.20)'),
+    # el recorrido de una clase y sus descendientes: dos copias del mismo BFS sobre Hijas
+    # (PublicadaEnDescendiente, PublicadasDeLaFamilia) y el filtro de info iba a ser la
+    # tercera (1.20; propuesta de la auditoria de duplicados). La tabla lo llena al leerse
+    ('recorrer la familia a mano', r"\bHijas\.TryGetValue\s*\(",
+     [('Lsp.DesignerMeta.pas', 'TMetaTable.RecorreFamilia'), ('Lsp.DesignerMeta.pas', 'TMetaTable.Create')],
+     'RecorreFamilia: AClase y sus descendientes por generaciones, con un visitante; la '
+     'tabla solo llena Hijas al leerse (1.20)'),
 ]
 
 
@@ -841,6 +856,10 @@ PLANTADO = {
     'la cabecera de un PNG': "  W := (B[16] shl 24) or (B[17] shl 16) or (B[18] shl 8) or B[19];",
     # la linea del build de hasta la 1.18.1
     'lanzar un shell': "  Orden := Format('cmd.exe /c \"\"%s\" && msbuild \"%s\"', [Rs, P]);",
+    # la de TipoQueNoCasa hasta la 1.19
+    'objeto propio o referencia a mano': "  if not F.Tabla.Desciende(AHoja.TypeId, ID_COMPONENTE) then",
+    # la de PublicadaEnDescendiente hasta la 1.19
+    'recorrer la familia a mano': "  if not Hijas.TryGetValue(Cola.Dequeue, Hs) then",
 }
 for regla in REGLAS:
     nombre = regla[0]

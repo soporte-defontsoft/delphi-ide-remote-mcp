@@ -31,6 +31,13 @@ es un objeto dice que su clase se pregunta con info, y la lista cortada de
   P9  el enlace lleva a algo: info TLabel fmx trae TextSettings kind=class, y
       su nota explica el enlace
   P10 lo que prop dice que existe, set lo escribe: TextSettings.HorzAlign
+  P11 prop TButton vcl PopupMenu: una REFERENCIA a un componente, sin DSGN-155
+      (0c0dfcd le decia "set writes them dotted": EsObjetoPropio, la regla de set)
+  P12 info TLabel fmx filter=Horz: TextSettings.HorzAlign un nivel por dentro
+      (decia "no such member": en el 27B acabo en HorzTextAlign, la vieja)
+  P13 info TButton vcl filter=AutoPopup: una referencia no se abre (DSGN-048)
+  P14 info TLabel vcl filter=Size: Font.Size, tambien en VCL
+  P15 control: info TLabel fmx sin filtro, solo el primer nivel
 
 Uso:  python tests/test_prop_ruta_120.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -118,15 +125,43 @@ try:
     r = plano(srv.call('delphi_designer', {'command': 'info', 'classname': 'TLabel', 'framework': 'fmx'}))
     check('P9 el enlace lleva a algo: info TLabel fmx trae TextSettings como clase, y la nota lo explica',
           '{"name":"TextSettings","kind":"class","type":"TTextSettings"}' in r
-          and 'A property of kind class is an object' in r, r[-700:])
+          and 'A property of kind class whose type is not a component is an object' in r, r[-700:])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Label1',
                                            'prop': 'TextSettings.HorzAlign', 'value': 'Trailing'}))
     check('P10 lo que prop dice que existe, set lo escribe',
           not mc.fallo(r) and 'TextSettings.HorzAlign = Trailing' in open(pf, 'rb').read().decode('utf-8-sig'),
           r[:500])
+
+    r = prop('TButton', 'vcl', 'PopupMenu')
+    check('P11 prop TButton vcl PopupMenu: una referencia, sin el enlace de los objetos (DSGN-155)',
+          not mc.fallo(r) and '"kind":"class"' in r and not mc.tiene(r, 'DSGN-155') and 'dotted' not in r,
+          r[:500])
+
+    def info(clase, fw, filtro=None):
+        a = {'command': 'info', 'classname': clase, 'framework': fw}
+        if filtro:
+            a['filter'] = filtro
+        return plano(srv.call('delphi_designer', a))
+
+    r = info('TLabel', 'fmx', 'Horz')
+    check('P12 info TLabel fmx filter=Horz: TextSettings.HorzAlign por dentro, sin DSGN-048',
+          '{"name":"TextSettings.HorzAlign","kind":"enum","type":"TTextAlign"}' in r
+          and not mc.tiene(r, 'DSGN-048'), r[:700])
+
+    r = info('TButton', 'vcl', 'AutoPopup')
+    check('P13 info TButton vcl filter=AutoPopup: PopupMenu es una referencia y no se abre',
+          'PopupMenu.AutoPopup' not in r and mc.tiene(r, 'DSGN-048'), r[:700])
+
+    r = info('TLabel', 'vcl', 'Size')
+    check('P14 info TLabel vcl filter=Size: Font.Size, tambien en VCL',
+          '"name":"Font.Size"' in r, r[:700])
+
+    r = info('TLabel', 'fmx')
+    check('P15 control: info sin filtro, solo el primer nivel (nada con punto)',
+          '"name":"TextSettings"' in r and '"name":"TextSettings.' not in r, r[:300])
 finally:
     srv.cierra()
 
 mc.borra(BASE)
-mc.fin('prop con una ruta con punto y el enlace a la clase 120 (DSGN-016, DSGN-155)')
+mc.fin('prop con una ruta con punto, el enlace a la clase y el filtro por dentro 120 (DSGN-016, DSGN-155, DSGN-048)')

@@ -25,6 +25,9 @@ uses
   System.Generics.Collections;
 
 type
+  // lo que RecorreFamilia hace con cada clase (su identidad); True = parar
+  TVisitaClase = reference to function(const AClase: string): Boolean;
+
   TPropRec = record
     Kind: Char;         // c=class e=enum s=set m=method r=record o=other
     TypeName: string;   // el que se ensena: 'TButtonLayout'
@@ -113,6 +116,17 @@ type
     // Lo que publican AClase y todos sus descendientes, sin repetir, para el
     // aviso de lo que no publica nadie de la familia (cortado como PropNames)
     function PublicadasDeLaFamilia(const AClase: string): string;
+    { AClase y sus descendientes por generaciones, ella la primera: EL
+      recorrido de la familia, que AVisita corta devolviendo True. Eran dos
+      bucles iguales (los dos de arriba) y el filtro de info iba a ser el
+      tercero (1.20). }
+    procedure RecorreFamilia(const AClase: string; const AVisita: TVisitaClase);
+    { Una propiedad de tipo ATipo guarda un OBJETO suyo (TFont, TTextSettings,
+      TStrings), que el form escribe por sus sub-propiedades con punto, y no
+      una REFERENCIA a un componente (PopupMenu, que toma un Name). LA regla:
+      vivia dentro de TipoQueNoCasa (set), y prop decia de un PopupMenu "set
+      writes them dotted" (1.20). }
+    function EsObjetoPropio(const ATipo: string): Boolean;
     { AClase o un ancestro suyo guarda ANombre por codigo (DefineProperties:
       Left/Top de TComponent, los Explicit* de TControl...), o guarda nombres
       que no se pueden leer ('*'): el form lo escribe sin publicarlo. }
@@ -153,6 +167,8 @@ type
   listaba lo de TCellItem; revision de la 1.12.0). ClaveProp(AClase, '') es
   el prefijo de todas las de una clase. }
 function ClaveProp(const AClase, ANombre: string): string;
+{ La inversa de ClaveProp: la identidad de la clase de una clave de Props. }
+function ClaseDeClaveProp(const AClave: string): string;
 
 const
   { Lo que espera una llamada del disenador (info, prop, lint) a una tabla
@@ -455,6 +471,16 @@ begin
   Result := ClaveDeIdentificador(AClase) + SEP_CLAVE_PROP + ClaveDeIdentificador(ANombre);
 end;
 
+function ClaseDeClaveProp(const AClave: string): string;
+var
+  P: Integer;
+begin
+  P := Pos(SEP_CLAVE_PROP, AClave);
+  if P = 0 then
+    Exit('');
+  Result := Copy(AClave, 1, P - 1);
+end;
+
 constructor TMetaTable.Create(const AFacts: array of string);
 var
   F, Names, Formas: string;
@@ -598,37 +624,61 @@ end;
 
 function TMetaTable.PublicadasDeLaFamilia(const AClase: string): string;
 var
-  Cola: TQueue<string>;
-  Vistas, Nombres: TDictionary<string, Boolean>;
-  Hs: TList<string>;
-  C, Lista: string;
+  Nombres: TDictionary<string, Boolean>;
+  Lista: string;
 begin
-  Result := '';
-  Cola := TQueue<string>.Create;
-  Vistas := TDictionary<string, Boolean>.Create;
+  Lista := '';
   Nombres := TDictionary<string, Boolean>.Create;
   try
-    Cola.Enqueue(ClaveDeIdentificador(AClase));
-    Vistas.Add(ClaveDeIdentificador(AClase), True);
-    while (Cola.Count > 0) and (Length(Result) < 200) do
+    RecorreFamilia(AClase,
+      function(const C: string): Boolean
+      var
+        L: string;
+      begin
+        if PropNames.TryGetValue(C, L) then
+          for var X in L.Split([', ']) do
+          begin
+            // PropNames va cortada con '...' PEGADO al ultimo nombre ('Foo...')
+            var N := X;
+            if N.EndsWith('...') then
+              N := N.Substring(0, N.Length - 3);
+            if (N <> '') and not Nombres.ContainsKey(ClaveDeIdentificador(N)) then
+            begin
+              Nombres.Add(ClaveDeIdentificador(N), True);
+              if Lista = '' then
+                Lista := N
+              else
+                Lista := Lista + ', ' + N;
+            end;
+          end;
+        Result := Length(Lista) >= 200;
+      end);
+    Result := Lista;
+    if Length(Result) >= 200 then
+      Result := Result + '...';
+  finally
+    Nombres.Free;
+  end;
+end;
+
+procedure TMetaTable.RecorreFamilia(const AClase: string; const AVisita: TVisitaClase);
+var
+  Cola: TQueue<string>;
+  Vistas: TDictionary<string, Boolean>;
+  Hs: TList<string>;
+  C: string;
+begin
+  Cola := TQueue<string>.Create;
+  Vistas := TDictionary<string, Boolean>.Create;
+  try
+    C := ClaveDeIdentificador(AClase);
+    Cola.Enqueue(C);
+    Vistas.Add(C, True);
+    while Cola.Count > 0 do
     begin
       C := Cola.Dequeue;
-      if PropNames.TryGetValue(C, Lista) then
-        for var X in Lista.Split([', ']) do
-        begin
-          // PropNames va cortada con '...' PEGADO al ultimo nombre ('Foo...')
-          var N := X;
-          if N.EndsWith('...') then
-            N := N.Substring(0, N.Length - 3);
-          if (N <> '') and not Nombres.ContainsKey(ClaveDeIdentificador(N)) then
-          begin
-            Nombres.Add(ClaveDeIdentificador(N), True);
-            if Result = '' then
-              Result := N
-            else
-              Result := Result + ', ' + N;
-          end;
-        end;
+      if AVisita(C) then
+        Exit;
       if Hijas.TryGetValue(C, Hs) then
         for var H in Hs do
           if not Vistas.ContainsKey(H) then
@@ -637,13 +687,15 @@ begin
             Cola.Enqueue(H);
           end;
     end;
-    if Length(Result) >= 200 then
-      Result := Result + '...';
   finally
-    Nombres.Free;
     Vistas.Free;
     Cola.Free;
   end;
+end;
+
+function TMetaTable.EsObjetoPropio(const ATipo: string): Boolean;
+begin
+  Result := Classes.ContainsKey(ClaveDeIdentificador(ATipo)) and not Desciende(ATipo, ID_COMPONENTE);
 end;
 
 function TMetaTable.ClaseDeNombre(const ANombre: string; out AId: string): Boolean;
@@ -759,37 +811,22 @@ end;
 function TMetaTable.PublicadaEnDescendiente(const AClase, AProp: string;
   out ADescendiente: string): Boolean;
 var
-  Cola: TQueue<string>;
-  Vistas: TDictionary<string, Boolean>;
-  Hs: TList<string>;
+  Raiz, Prop, Hallada: string;
 begin
-  Result := False;
-  ADescendiente := '';
-  Cola := TQueue<string>.Create;
-  Vistas := TDictionary<string, Boolean>.Create;
-  try
-    Cola.Enqueue(ClaveDeIdentificador(AClase));
-    while Cola.Count > 0 do
+  // la primera por generaciones, sin contar a AClase (la de la clave, para
+  // el cierre: un parametro const no se captura)
+  Raiz := ClaveDeIdentificador(AClase);
+  Prop := AProp;
+  Hallada := '';
+  RecorreFamilia(AClase,
+    function(const C: string): Boolean
     begin
-      if not Hijas.TryGetValue(Cola.Dequeue, Hs) then
-        Continue;
-      for var H in Hs do
-      begin
-        if Vistas.ContainsKey(H) then
-          Continue;
-        Vistas.Add(H, True);
-        if Props.ContainsKey(ClaveProp(H, AProp)) then
-        begin
-          ADescendiente := H;
-          Exit(True);
-        end;
-        Cola.Enqueue(H);
-      end;
-    end;
-  finally
-    Vistas.Free;
-    Cola.Free;
-  end;
+      Result := (C <> Raiz) and Props.ContainsKey(ClaveProp(C, Prop));
+      if Result then
+        Hallada := C;
+    end);
+  ADescendiente := Hallada;
+  Result := Hallada <> '';
 end;
 
 function ClaseQueNoEsta(M: TMetaTable; const AClass, AFramework: string): string;

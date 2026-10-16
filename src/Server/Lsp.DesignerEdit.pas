@@ -1788,9 +1788,8 @@ begin
     AAviso := '';
     // un objeto suyo (Font, Lines), no un componente: no toma un valor, sino
     // sus sub-propiedades, o una lista que set no escribe (la guia era la de
-    // una referencia: revision de la 1.17.0)
-    if F.Tabla.Classes.ContainsKey(ClaveDeIdentificador(AHoja.TypeId)) and
-       not F.Tabla.Desciende(AHoja.TypeId, ID_COMPONENTE) then
+    // una referencia: revision de la 1.17.0). LA regla, en la tabla (1.20)
+    if F.Tabla.EsObjetoPropio(AHoja.TypeId) then
     begin
       if F.Tabla.Desciende(AHoja.TypeId, ID_CADENAS) then
         Exit(MsgFmt(SR_DESIGNER_SET_LISTA_FMT, [NombreDe(AObj), AProp, AHoja.TypeName, AProp]));

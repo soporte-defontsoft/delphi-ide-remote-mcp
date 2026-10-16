@@ -190,16 +190,92 @@ end;
 // (ClaseQueNoEsta vive en Lsp.DesignerMeta desde la 1.17.0: el insert de
 // Lsp.DesignerEdit dice lo mismo de una clase que no esta)
 
+{ Con filtro, las sub-propiedades que casan un nivel por dentro de las
+  propiedades OBJETO de la clase (TextSettings, Font; nunca una referencia
+  como PopupMenu: EsObjetoPropio), con punto como las escribe set, y en ARecs
+  su registro. La instancia de una propiedad objeto puede ser de una
+  descendiente del tipo declarado (TLabelTextSettings): cuenta su familia,
+  como en el juez. Ordenadas por nombre. }
+function PorDentroQueCasan(M: TMetaTable; APropias: TStringList; const AFilter: string;
+  ARecs: TDictionary<string, TPropRec>): TStringList;
+var
+  Duenas: TDictionary<string, string>;
+  R: TPropRec;
+  Duena, Ya: string;
+begin
+  Result := TStringList.Create;
+  Duenas := TDictionary<string, string>.Create;
+  try
+    // cada clase de la familia del tipo -> las propiedades que la guardan,
+    // separadas por #9 (Margins y Padding son las dos un TBounds)
+    for var Key in APropias do
+    begin
+      R := M.Props[Key];
+      if (R.Kind <> 'c') or not M.EsObjetoPropio(R.TypeId) then
+        Continue;
+      Duena := R.Name;
+      M.RecorreFamilia(R.TypeId,
+        function(const C: string): Boolean
+        begin
+          if Duenas.TryGetValue(C, Ya) then
+            Duenas[C] := Ya + #9 + Duena
+          else
+            Duenas.Add(C, Duena);
+          Result := False;
+        end);
+    end;
+    if Duenas.Count = 0 then
+      Exit;
+    for var Key in M.Props.Keys do
+    begin
+      if not Duenas.TryGetValue(ClaseDeClaveProp(Key), Ya) then
+        Continue;
+      R := M.Props[Key];
+      if (R.Kind = 'm') or not ContainsText(R.Name, AFilter) then
+        Continue;
+      for var D in Ya.Split([#9]) do
+        if not ARecs.ContainsKey(D + '.' + R.Name) then
+        begin
+          ARecs.Add(D + '.' + R.Name, R);
+          Result.Add(D + '.' + R.Name);
+        end;
+    end;
+    Result.Sort;
+  finally
+    Duenas.Free;
+  end;
+end;
+
 function MetaClassInfo(const AFramework, AClass, AFilter: string): string;
 var
   M: TMetaTable;
-  Ret, PObj: TJSONObject;
+  Ret: TJSONObject;
   PArr, EArr: TJSONArray;
   Key, Cls, ClsId, PName: string;
   Falta: TFaltaTabla;
   R: TPropRec;
   Names: TStringList;
   N, Shown: Integer;
+
+  // una en la lista, con su tipo: las de la clase y las de por dentro
+  procedure Pon(const ANombre: string; const AR: TPropRec);
+  begin
+    Inc(N);
+    if Shown >= MAX_PROPS then
+      Exit;
+    Inc(Shown);
+    if AR.Kind = 'm' then
+      EArr.Add(ANombre + ': ' + AR.TypeName)
+    else
+    begin
+      var O := TJSONObject.Create;
+      PArr.AddElement(O);
+      O.AddPair('name', ANombre);
+      O.AddPair('kind', KindWord(AR.Kind));
+      O.AddPair('type', AR.TypeName);
+    end;
+  end;
+
 begin
   M := MetaTable(AFramework = 'fmx', Falta);
   if M = nil then
@@ -229,22 +305,24 @@ begin
     for Key in Names do
     begin
       R := M.Props[Key];
-      PName := R.Name;
-      if (AFilter <> '') and not ContainsText(PName, AFilter) then
+      if (AFilter <> '') and not ContainsText(R.Name, AFilter) then
         Continue;
-      Inc(N);
-      if Shown >= MAX_PROPS then
-        Continue;
-      Inc(Shown);
-      if R.Kind = 'm' then
-        EArr.Add(PName + ': ' + R.TypeName)
-      else
-      begin
-        PObj := TJSONObject.Create;
-        PArr.AddElement(PObj);
-        PObj.AddPair('name', PName);
-        PObj.AddPair('kind', KindWord(R.Kind));
-        PObj.AddPair('type', R.TypeName);
+      Pon(R.Name, R);
+    end;
+    // con filtro, tambien un nivel por dentro de las propiedades objeto, con
+    // punto: filter=Horz decia "no such member" de un TLabel FMX cuyo
+    // TextSettings.HorzAlign existe (el 27B de Hermes, 1.20), y una pista a
+    // mano ("FMX lleva la fuente en TextSettings") lo suplia en un caso
+    if AFilter <> '' then
+    begin
+      var Recs := TDictionary<string, TPropRec>.Create;
+      var Dentro := PorDentroQueCasan(M, Names, AFilter, Recs);
+      try
+        for PName in Dentro do
+          Pon(PName, Recs[PName]);
+      finally
+        Dentro.Free;
+        Recs.Free;
       end;
     end;
     Ret.AddPair('total', TJSONNumber.Create(N));
@@ -271,10 +349,7 @@ begin
     // como un fallo de RTTI (Hermes, 28-sep-2026)
     if (AFilter <> '') and (N = 0) then
     begin
-      var Pista := MsgFmt(SN_DESIGNER_INFO_FILTRO_VACIO_FMT, [Cls, AFilter, Names.Count]);
-      if (AFramework = 'fmx') and ContainsText(AFilter, 'font') then
-        Pista := Pista + MsgText(SF_DESIGNER_FUENTE_FMX);
-      Ret.AddPair('hint', Pista);
+      Ret.AddPair('hint', MsgFmt(SN_DESIGNER_INFO_FILTRO_VACIO_FMT, [Cls, AFilter, Names.Count]));
     end;
     if N > Shown then
     begin
@@ -334,8 +409,9 @@ begin
     if R.Kind = 's' then
       Ret.AddPair('membersNote', MsgText(SN_DESIGNER_SET_NOTE));
     // una propiedad objeto: lo suyo lo publica SU clase, y se pregunta a ella
-    // (el enlace de la ayuda de Delphi; David, 1.20). Sin equivalencias
-    if R.Kind = 'c' then
+    // (el enlace de la ayuda de Delphi; David, 1.20). Sin equivalencias. Una
+    // REFERENCIA a un componente (PopupMenu) no: toma un Name, no lleva punto
+    if (R.Kind = 'c') and M.EsObjetoPropio(R.TypeId) then
       Ret.AddPair('note', MsgFmt(SN_DESIGNER_PROP_CLASE_FMT, [R.TypeName, AFramework, AProp.Trim]));
     Result := Ret.ToJSON;
   finally

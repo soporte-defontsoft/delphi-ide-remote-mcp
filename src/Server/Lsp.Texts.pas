@@ -4593,7 +4593,8 @@ const
     'vcl, .fmx = fmx); if given, it must agree';
 
   SP_DESIGNER_FILTER =
-    'info optional: only properties whose name contains this text';
+    'info optional: only properties whose name contains this text - also ' +
+    'one level inside its object properties (TextSettings.HorzAlign)';
 
   { tree con tope de niveles (nota de Hermes: un form grande daba un arbol
     enorme y no habia forma de pedir solo lo de arriba; 4-oct-2026) }
@@ -5341,8 +5342,10 @@ const
     'published; set writes one only if the IDE''s form reader loads the ' +
     'value). A property absent from both does NOT stream in a .dfm/.fmx: ' +
     'do not write it - unless definedByCode has "*" (names built at run ' +
-    'time, which the source does not tell). A property of kind class is an ' +
-    'object: classname=<its type> lists its own, written dotted (Font.Size).';
+    'time, which the source does not tell). A property of kind class whose ' +
+    'type is not a component is an object: classname=<its type> lists its ' +
+    'own, written dotted (Font.Size); one whose type is a component ' +
+    '(PopupMenu) takes a component''s Name.';
 
   { Una clase que no publica nada y tiene descendientes: la de una propiedad
     cuya instancia elige el codigo (revision de la 1.12.0). }
@@ -5409,16 +5412,14 @@ const
 
   { Un filtro que no casa con nada devolvia properties:[] y total:0 sin mas,
     y un agente pequeno lo leia como un fallo de RTTI (Hermes, 28-sep-2026:
-    TLabel FMX con filter=Font; la fuente va en TextSettings). }
+    TLabel FMX con filter=Font; la fuente va en TextSettings). Desde la 1.20
+    el filtro mira tambien dentro de las propiedades objeto, y la coda a mano
+    de FMX ("la fuente va en TextSettings") sobra: lo encuentra la tabla. }
   SN_DESIGNER_INFO_FILTRO_VACIO_FMT =
-    '[DSGN-048] No published property or event of %s contains "%s" (it ' +
-    'publishes %d; the filter is a substring of the name, case-insensitive). ' +
-    'Not an RTTI failure: the class simply has no such member.';
-
-  { La coda solo cuando toca: FMX y un filtro que busca la fuente (salia en
-    cualquier clase y framework; undecima revision, r11b) }
-  SF_DESIGNER_FUENTE_FMX =
-    ' An FMX text control keeps its font in TextSettings, not in Font.';
+    '[DSGN-048] No published property or event of %s contains "%s", nor ' +
+    'one of its object properties one level down (it publishes %d; the ' +
+    'filter is a substring of the name, case-insensitive). Not an RTTI ' +
+    'failure: the class simply has no such member.';
 
   SN_DESIGNER_INFO_TRUNCATED =
     '[DSGN-042] The list is truncated: filter=<text> narrows it to the ' +

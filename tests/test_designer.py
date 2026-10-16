@@ -81,11 +81,13 @@ check('info TButton (VCL): Caption y TabOrder publicados', 'Caption' in props an
 check('info: eventos aparte (OnClick)', any('OnClick' in e for e in j.get('events', [])), str(j.get('events'))[:200])
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TButton', 'framework': 'vcl', 'filter': 'Cap'}))
 check('info con filter acota', j.get('total', 99) <= 3 and any(p['name'] == 'Caption' for p in j.get('properties', [])), str(j)[:200])
-# un filtro que no casa con nada lo DICE (DSGN-048): total:0 a secas se leia como
-# un fallo de RTTI (Hermes, 28-sep-2026: TLabel FMX con filter=Font)
+# TLabel FMX con filter=Font salia vacio y un agente lo leia como un fallo de RTTI
+# (Hermes, 28-sep-2026); la coda a mano "FMX lleva la fuente en TextSettings" lo
+# suplia. Desde la 1.20 el filtro mira un nivel por dentro de las propiedades
+# objeto, y lo encuentra la tabla
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TLabel', 'framework': 'fmx', 'filter': 'Font'}))
-check('info con filter sin resultado: total 0 y la pista DSGN-048 (no es un fallo de RTTI)',
-      j.get('total') == 0 and mc.es(j.get('hint', ''), 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT') and 'TextSettings' in j.get('hint', ''),
+check('info TLabel FMX filter=Font: TextSettings.Font por dentro, sin pista (la coda a mano sobra)',
+      any(p['name'] == 'TextSettings.Font' for p in j.get('properties', [])) and 'hint' not in j,
       str(j)[:250])
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TButton', 'framework': 'vcl', 'filter': 'Colour'}))
 check('info VCL con filter sin resultado: DSGN-048 sin la coda FMX de TextSettings (salia siempre)',
