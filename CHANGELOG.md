@@ -47,6 +47,17 @@ the MCP `initialize` response (`serverInfo.version`).
   are named by their ids in the node's own catalog
   (`NodeProtocolo.inc`), and `test_catalogo` checks every one is a note,
   never an action or a failure.
+- **A single `delphi_edit` / `delphi_textedit` takes a block as its anchor.**
+  An `old` of several consecutive lines was refused (`EDIT-001`: "the anchor
+  of a SINGLE edit is ONE line... send it in `edits`") while the engine
+  already applied exactly that as an `edits` entry. Measured in Hermes'
+  history on 2026-10-16: 14 refusals (10 with the 27B, 4 with Flash Next),
+  12 of them fixed on the very next call - one call lost every time - and
+  Claude hit it twice the same day. Now such an edit IS the one-entry batch:
+  the block is found whole and in order and replaced (`delete:true`, or an
+  empty `new`, removes it), `atline` is the line where it starts when it
+  appears more than once, and `toline` with a block is refused as in `edits`
+  (`EDIT-020`). An anchor of ONE line works as always.
 
 ### Fixed
 

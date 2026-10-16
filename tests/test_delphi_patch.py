@@ -72,13 +72,15 @@ check('edit: bytes cp1252 intactos', b'gestor\xeda moderna' in nb, nb[:60])
 check('edit: sin BOM, CRLF', not nb.startswith(b'\xef') and b'\r\n' in nb[:20])
 
 # --- rejection gates ---
+# Se afirma el CONTRATO, no la redaccion. Desde la 1.20 (EDIT-001) un ancla
+# de VARIAS lineas en un edit suelto es un BLOQUE, como en edits; este aparece
+# DOS veces (Saludar y Otro): se niega como bloque repetido, sin escribir, y
+# dice como desempatar. El que se aplica lo mide test_ancla_bloque_120.
+antes = open(PAS, 'rb').read()
 out = call('delphi_edit', {"path": PAS, "old": "begin\n  X := 1;", "new": "x"})
-# Se afirma el CONTRATO, no la redaccion: que rechace y que diga por donde SI
-# se puede. La negativa antigua mandaba a "una llamada por linea", consejo que
-# caduco dos veces -cuando "edits" acepto bloques y cuando llego "toline"- y
-# una bateria pegada a sus palabras habria defendido el consejo caducado.
-check('gate: ancla multilinea', mc.rechazado(out) and mc.es(out, 'SR_PATCH_ANCHOR_MULTILINE') and 'edits' in out and
-      'toline' in out, out)
+check('gate: ancla multilinea repetida = bloque repetido, nada escrito',
+      mc.rechazado(out) and not mc.es(out, 'SR_PATCH_ANCHOR_MULTILINE') and
+      open(PAS, 'rb').read() == antes and ('occurrence' in out or 'atline' in out), out)
 out = call('delphi_edit', {"path": PAS, "old": "  Writeln('inventada');", "new": "x"})
 check('gate: ancla inexistente', mc.rechazado(out) and mc.es(out, 'SR_ANCLA_NO_ESTA_FMT'), out)
 out = call('delphi_edit', {"path": PAS, "old": "  X := 1;", "new": "  X := 2;"})

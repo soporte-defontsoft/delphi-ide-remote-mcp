@@ -739,6 +739,17 @@ function AvisosDelLector(const APath: string): TArray<string>;
 { ARespuesta (la de una escritura de APath) con AvisosDelLector detras, si
   APath es un form y no fue un fallo. }
 function ConAvisosDelLector(const ARespuesta, APath: string): string;
+{ Una edicion SUELTA cuyo ancla trae VARIAS lineas es un BLOQUE: la tanda de
+  UNA entrada, la que el propio EDIT-001 mandaba escribir. Hermes tropezo con
+  esa negativa 14 veces (12 salieron en la llamada siguiente) y Claude dos el
+  16-oct: una llamada perdida cada vez, para algo que el motor ya sabia hacer
+  (EDIT-001 de la 1.20). Devuelve la tanda en JSON con lo que trae la suelta:
+  new (delete = un new vacio: el bloque se quita, como en edits) y atline
+  (donde empieza). '' si no es eso - una linea, un fragmento, delete con new -
+  y la suelta sigue su camino. Con toline no hay bloque que valga: EDIT-020 en
+  ANegativa. Lo usan las dos gemelas, delphi_edit y delphi_textedit. }
+function TandaDeUnBloque(const AOld, ANew, AFragment: string; AAtLine, AToLine: Integer;
+  ADelete: Boolean; out ANegativa: string): string;
 { La nota de un fichero EN DISCO que es UTF-8 sin BOM y que dcc lee en ANSI
   (READ-008 de un fuente, READ-009 de un form), por la puerta de leer y EL
   detector: la de delphi_read, para quien no lo lee entero (designer lint).
@@ -5098,6 +5109,34 @@ begin
   var Avisos := AvisosDelLector(TPath.GetFullPath(APath));
   if Length(Avisos) > 0 then
     Result := Result + #13#10 + string.Join(#13#10, Avisos);
+end;
+
+function TandaDeUnBloque(const AOld, ANew, AFragment: string; AAtLine, AToLine: Integer;
+  ADelete: Boolean; out ANegativa: string): string;
+begin
+  Result := '';
+  ANegativa := '';
+  if not TieneSalto(AOld) or (AFragment <> '') or (ADelete and (ANew <> '')) then
+    Exit;
+  // el bloque dice lo que se cambia, o lo dice el rango: los dos no (como en
+  // una entrada de edits)
+  if AToLine > 0 then
+  begin
+    ANegativa := MsgText(SR_RANGE_WITH_BLOCK);
+    Exit;
+  end;
+  var Tanda := TJSONArray.Create;
+  try
+    var Entrada := TJSONObject.Create;
+    Tanda.AddElement(Entrada);
+    Entrada.AddPair('old', AOld);
+    Entrada.AddPair('new', IfThen(ADelete, '', ANew));
+    if AAtLine > 0 then
+      Entrada.AddPair('atline', TJSONNumber.Create(AAtLine));
+    Result := Tanda.ToJSON;
+  finally
+    Tanda.Free;
+  end;
 end;
 
 function DesignerLint(const APath, ATexto, AEnc: string): TArray<string>;

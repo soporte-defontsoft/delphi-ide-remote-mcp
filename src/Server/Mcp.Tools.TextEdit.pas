@@ -124,6 +124,15 @@ begin
     Exit(MsgFmt(SR_EDIT_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]));
   if Params.Edits.Trim <> '' then
     Exit(ExecuteTextEdits(Params.Path, Params.Edits));
+  // un ancla de VARIAS lineas es un BLOQUE: la tanda de una entrada, como en
+  // edits (Lsp.Patch.TandaDeUnBloque, EDIT-001 de la 1.20); la gemela igual
+  var Negativa: string;
+  var Tanda := TandaDeUnBloque(Params.Old, Params.New, Params.Fragment, Params.AtLine,
+    Params.ToLine, Params.Delete, Negativa);
+  if Negativa <> '' then
+    Exit(Negativa);
+  if Tanda <> '' then
+    Exit(ExecuteTextEdits(Params.Path, Tanda));
   A := Default(TTextEditArgs);
   A.Path := Params.Path;
   A.OldLine := Params.Old;

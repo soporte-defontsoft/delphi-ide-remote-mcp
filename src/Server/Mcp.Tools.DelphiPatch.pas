@@ -281,6 +281,20 @@ begin
     Exit(RemoveUsesFromUnit(TPath.GetFullPath(Params.Path),
       Params.RemoveUses.Split([';', ','], TStringSplitOptions.ExcludeEmpty), Params.Section));
   end;
+  // un ancla de VARIAS lineas es un BLOQUE: la tanda de una entrada, como en
+  // edits (Lsp.Patch.TandaDeUnBloque, EDIT-001 de la 1.20)
+  var Negativa: string;
+  var Tanda := TandaDeUnBloque(Params.Old, Params.New, Params.Fragment, Params.AtLine,
+    Params.ToLine, Params.Delete, Negativa);
+  if Negativa <> '' then
+    Exit(Negativa);
+  if Tanda <> '' then
+  begin
+    Result := WriteTargetDenied(Params.Path);
+    if Result <> '' then
+      Exit;
+    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Tanda), Params.Path));
+  end;
   A := Default(TPatchArgs);
   A.Path := Params.Path;
   A.OldLine := Params.Old;

@@ -250,16 +250,19 @@ try:
     # ----------------------------------------------------------------- S10
     r = call('delphi_textedit', {'path': os.path.join(JAIL, 'u', 'x.md'),
                                  'create': True, 'content': 'a\nb\nc\n'})
-    r = call('delphi_textedit', {'path': os.path.join(JAIL, 'u', 'x.md'),
-                                 'old': 'a\nb', 'new': 'z'})
-    check('S10 el rechazo del ancla multilinea manda a edits y a toline',
-          mc.es(r, 'SR_PATCH_ANCHOR_MULTILINE') and 'edits' in r and 'toline' in r
-          and 'one call per line' not in r.lower(),
+    # (EDIT-001 de la 1.20) un ancla de VARIAS lineas en un edit suelto es un
+    # BLOQUE, la tanda de una entrada: antes se negaba mandando a edits, y los
+    # agentes perdian una llamada cada vez (Hermes 14, Claude 2)
+    MD = os.path.join(JAIL, 'u', 'x.md')
+    r = call('delphi_textedit', {'path': MD, 'old': 'a\nb', 'new': 'z'})
+    check('S10 un ancla de varias lineas es un bloque: se aplica',
+          not mc.rechazado(r) and open(MD, 'rb').read().replace(b'\r\n', b'\n') == b'z\nc\n',
           r[:240])
+    antes = open(PAS, 'rb').read()
     r2 = call('delphi_edit', {'path': PAS, 'old': 'begin\nend;', 'new': 'x'})
-    check('S10b ...y el gemelo Pascal dice lo MISMO',
-          mc.es(r2, 'SR_PATCH_ANCHOR_MULTILINE') and 'edits' in r2
-          and 'toline' in r2, r2[:240])
+    check('S10b ...y el gemelo Pascal igual: un bloque (este no esta: negado, nada escrito)',
+          mc.rechazado(r2) and not mc.es(r2, 'SR_PATCH_ANCHOR_MULTILINE')
+          and open(PAS, 'rb').read() == antes, r2[:240])
 finally:
     try:
         proc.kill()

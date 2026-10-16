@@ -8903,11 +8903,13 @@ const
   { Que el ancla sea UNICA y que la sangria no cuente, dicho asi: con "la
     sangria puede omitirse" Qwen3.8 desempataba por sangria dos lineas
     iguales (medido el 5-oct-2026; el motor las da por la misma, EDIT-077). }
+  { ...y un bloque de lineas seguidas vale como en edits (TandaDeUnBloque,
+    EDIT-001 de la 1.20): dicho en lo que cabia del presupuesto de tools/list }
   SP_EDIT_OLD =
     'EDIT mode: the line to replace - ONE full line copied from ' +
-    'delphi_read (everything after the | bar). It must be UNIQUE in the ' +
-    'whole file, and indentation does not count: if the same text is on ' +
-    'another line too, add atline (occurrence inside edits).';
+    'delphi_read (everything after the | bar), or a block of consecutive ' +
+    'ones. UNIQUE in the file; indentation does not count: if the same ' +
+    'text is on another line too, add atline (occurrence inside edits).';
 
   SP_EDIT_ATLINE =
     'EDIT mode tie-break when the anchor appears on several lines: ' +
@@ -9001,7 +9003,7 @@ const
   SD_EDIT_PATCH =
     'SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text ' +
     '.dfm/.fmx), keeping their real encoding and line endings. Modes: EDIT ' +
-    '(old = ONE full line from delphi_read + new; fragment + atline for a ' +
+    '(old = full line(s) from delphi_read + new; fragment + atline for a ' +
     'piece of a LONG line; edits for several at once), DELETE, INSERT (a ' +
     'new routine or method at the legal spot, both halves of a method), ' +
     'CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM ' +
@@ -9213,7 +9215,7 @@ const
     'SAFE editing of plain-text NON-Delphi files (.md .txt .html .js ' +
     '.css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, ' +
     'web assets, tests, scripts, config. Same discipline as delphi_edit ' +
-    '- one-full-line unique anchor (old/new, atline tie-break; for a ' +
+    '- a unique anchor of full line(s) (old/new, atline tie-break; for a ' +
     'LONG line such as a README paragraph, fragment + atline + new ' +
     'changes just a piece of it), DELETE mode (delete=true + old), ' +
     'several edits on the SAME file in one all-or-nothing call ("edits", ' +
