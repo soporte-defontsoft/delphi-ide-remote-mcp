@@ -294,8 +294,9 @@ var
   M: TMetaTable;
   R: TPropRec;
   Ret: TJSONObject;
-  Cls, ClsId, Members: string;
+  Cls, ClsId, Members, Juicio: string;
   Falta: TFaltaTabla;
+  HayHoja: Boolean;
 begin
   M := MetaTable(AFramework = 'fmx', Falta);
   if M = nil then
@@ -303,8 +304,21 @@ begin
   if not M.ClaseDeNombre(AClass, ClsId) then
     Exit(ClaseQueNoEsta(M, AClass, AFramework));
   Cls := M.Classes[ClsId];
-  if not M.Props.TryGetValue(ClaveProp(ClsId, AProp.Trim), R) then
-    Exit(MsgFmt(SR_DESIGNER_PROP_FMT, [AProp, Cls]));
+  // la ruta la recorre EL juez de set (JuzgaPropiedad): con punto
+  // (TextSettings.HorzAlign, Font.Size) baja por la propiedad objeto, y por
+  // la descendiente que guarda la instancia. Aqui se miraba solo el primer
+  // nivel y prop negaba lo que set escribe: el agente que preguntaba antes
+  // de escribir salia peor parado que el que no (el 27B de Hermes, 1.20)
+  Juicio := JuzgaPropiedad(M, ClsId, AProp.Trim, '', R, HayHoja);
+  if not HayHoja then
+  begin
+    // lo que no existe, con las palabras del juez (y la pista del otro
+    // marco); lo que el juez calla - lo guardado por codigo, una clase sin
+    // datos -, como antes
+    if Juicio <> '' then
+      Juicio := ': ' + Juicio;
+    Exit(MsgFmt(SR_DESIGNER_PROP_FMT, [AProp.Trim, Cls, Juicio]));
+  end;
   Ret := TJSONObject.Create;
   try
     Ret.AddPair('class', Cls);
@@ -319,6 +333,10 @@ begin
       Ret.AddPair('members', Members);
     if R.Kind = 's' then
       Ret.AddPair('membersNote', MsgText(SN_DESIGNER_SET_NOTE));
+    // una propiedad objeto: lo suyo lo publica SU clase, y se pregunta a ella
+    // (el enlace de la ayuda de Delphi; David, 1.20). Sin equivalencias
+    if R.Kind = 'c' then
+      Ret.AddPair('note', MsgFmt(SN_DESIGNER_PROP_CLASE_FMT, [R.TypeName, AFramework, AProp.Trim]));
     Result := Ret.ToJSON;
   finally
     Ret.Free;

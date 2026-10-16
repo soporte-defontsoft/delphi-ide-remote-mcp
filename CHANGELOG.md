@@ -164,6 +164,23 @@ the MCP `initialize` response (`serverInfo.version`).
   the description said it answered "like declaration", which stopped being
   true when `declaration` started chaining through `definition`. The
   implementation of a symbol is its body, which is what `definition` gives.
+- **`delphi_designer prop` follows a dotted path, as `set` does.** It looked
+  the property up on the first level of the class only, so
+  `prop TLabel fmx TextSettings.HorzAlign` and `prop TLabel vcl Font.Size`
+  answered "is not a published property" (`DSGN-016`) for what `set` writes
+  without complaint. Measured in the pre-release rounds of 2026-10-16: the
+  27B model guessed `TextSettings.HorzAlign` right, checked it with `prop`
+  BEFORE writing - what the tool's description asks for - and was sent
+  looking for a class that does not exist; the model that wrote without
+  asking got there in one call. `prop` now asks the same judge as `set`: down
+  a class-typed property and into the descendant its instance holds, with
+  the enum's members at the leaf; what does not exist comes back in the
+  judge's words, with the other framework's hint. A class-typed property
+  points to its class (`DSGN-155`: `command=info classname=TTextSettings`
+  lists its own), as Delphi's help links a property to its type - never an
+  equivalence between frameworks. And the list of what a class publishes in
+  a "does not exist" (`DSGN-087`, the lint), which comes cut from the table,
+  ends with the way to the whole one: `info classname=... framework=...`.
 - **Three descriptions said what the tools do not do.** `delphi_diagnostics`
   spoke of the settings of `"project"` - a field of its answer - and Hermes
   read it as a parameter (`SYS-015`); `delphi_hover` promised `null` on a

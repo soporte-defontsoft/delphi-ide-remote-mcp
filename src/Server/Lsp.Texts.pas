@@ -4576,9 +4576,8 @@ const
     'the class of the new control';
 
   SP_DESIGNER_PROP =
-    'prop: the property name, e.g. Align, Caption, TextSettings. set: the ' +
-    'property to write, dotted for a sub-property (Font.Size, Position.X); ' +
-    'Name renames the component';
+    'prop and set: the property, dotted for a sub-property (Font.Size, ' +
+    'TextSettings.HorzAlign); set with Name renames the component';
 
   SP_DESIGNER_COMPONENT =
     'get: the component Name as it appears in the form (object <Name>: ' +
@@ -5318,9 +5317,18 @@ const
     'component whose source is not installed). delphi_components lists the ' +
     'installed packages.';
 
+  { El tercero, ': ' y lo que dice EL juez de set (JuzgaPropiedad) - el
+    porque, con la pista del otro marco (1.20) -, o '' cuando el juez calla. }
   SR_DESIGNER_PROP_FMT =
-    '[DSGN-016 NOT_FOUND] %s is not a published property of %s. ' +
+    '[DSGN-016 NOT_FOUND] %s is not a published property of %s%s. ' +
     'command=info lists them all.';
+
+  { Una propiedad objeto: lo suyo se pregunta a SU clase, como el enlace de
+    la ayuda de Delphi (David, 1.20); nunca una equivalencia entre marcos. }
+  SN_DESIGNER_PROP_CLASE_FMT =
+    '[DSGN-155] An object of class %0:s: command=info classname=%0:s ' +
+    'framework=%1:s lists its own properties, and set writes them dotted ' +
+    '(%2:s.<property>).';
 
   SR_DESIGNER_COMPONENT_FMT =
     '[DSGN-017 NOT_FOUND] There is no component "%s" in that form ' +
@@ -5333,7 +5341,8 @@ const
     'published; set writes one only if the IDE''s form reader loads the ' +
     'value). A property absent from both does NOT stream in a .dfm/.fmx: ' +
     'do not write it - unless definedByCode has "*" (names built at run ' +
-    'time, which the source does not tell).';
+    'time, which the source does not tell). A property of kind class is an ' +
+    'object: classname=<its type> lists its own, written dotted (Font.Size).';
 
   { Una clase que no publica nada y tiene descendientes: la de una propiedad
     cuya instancia elige el codigo (revision de la 1.12.0). }
@@ -10652,6 +10661,12 @@ const
 
   SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT =
     '"%s" does not exist in %s according to the framework (it publishes: %s)';
+
+  { La lista de arriba llega cortada de la tabla ('...'): el enlace a la
+    entera, con sus tipos (lo que no cabia era justo lo que buscaba el 27B
+    de Hermes: TextSettings en un TLabel FMX, 1.20). }
+  SF_DSGN_LISTA_ENTERA_FMT =
+    ' - all, with their types: info classname=%s framework=%s';
 
   { Bajando por una propiedad objeto la instancia puede ser de un
     descendiente del tipo declarado (TLabel.TextSettings declara

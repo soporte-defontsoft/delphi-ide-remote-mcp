@@ -948,6 +948,10 @@ begin
       // reports of 2026-08-24 and round 8. It is streamed by the class's
       // own DefineProperties, and the table now reads those names from
       // the source: DefinidaPorCodigo, at the top of this branch.)
+      // La lista llega cortada de la tabla ('...'): el enlace a la entera,
+      // la que da info con sus tipos (1.20)
+      if Have.EndsWith('...') then
+        Have := Have + MsgFmt(SF_DSGN_LISTA_ENTERA_FMT, [CurShow, LowerCase(M.Marco)]);
       Exit(MsgFmt(SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT,
         [Segs[SIdx], CurShow, Have]) + Pista(SIdx));
     end;
