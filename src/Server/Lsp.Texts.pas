@@ -4687,10 +4687,20 @@ const
 
   SR_DESIGNER_RENDER_FALLO_FMT =
     '[DSGN-061 INTERNAL] The renderer could not draw %s: %s. The usual ' +
-    'causes: the file is not a form it can read, a design package the form ' +
-    'needs failed while loading, or a component failed while painting ' +
-    '(that takes the renderer down, never the server). tree, lint and ' +
-    'layout read the file without loading anything.';
+    'causes: a design package the form needs failed while loading, or a ' +
+    'component failed while painting (that takes the renderer down, never ' +
+    'the server). tree and layout read the file without loading anything.';
+  { El LECTOR del IDE no carga el form (NOTLOADED= del ayudante): es el
+    fichero, no el renderizador - antes salia como DSGN-061 INTERNAL, y con un
+    valor que el Ignore se saltaba, solo "Stream read error" (DSGN-061 de la
+    1.20, Hermes). %s = el form; %s = lo que dijo el lector, una linea por
+    error (SF_DSGN_LINEA_AVISO_FMT / SF_DSGN_LECTOR_SIN_LINEA_FMT). }
+  SR_DESIGNER_NO_CARGA_FMT =
+    '[DSGN-153 INVALID_PARAM] Nothing was rendered: the IDE''s own form ' +
+    'reader does not load %s - the IDE would not open it either, and the ' +
+    'program dies creating it. It is the file, not the renderer. What the ' +
+    'reader said:%s'#10'Fix that line (delphi_designer set, or delphi_edit) ' +
+    'and preview again.';
   { preview con propiedades que el lector se salto (el Ignore del IDE): que
     guie al modelo, no solo que lo cuente (David, 7-oct-2026) }
   SN_DESIGNER_PREVIEW_IGNORADAS =
@@ -5404,13 +5414,15 @@ const
 
   SN_DESIGNER_LINT_OK_FMT =
     '[DSGN-020] LINT CLEAN: %s has no unknown classes, unpublished ' +
-    'properties or invalid enum values, and if it has a paired .pas it ' +
+    'properties or invalid enum values, the IDE''s own form reader loads ' +
+    'what the tables cannot judge, and if it has a paired .pas it ' +
     'matches its class (check-binding: every event points to a declared, ' +
     'published method).';
 
   SN_DESIGNER_LINT_BAD_FMT =
     '[DSGN-038] %d designer warnings in %s (unpublished ' +
-    'property or nonexistent enum value, or the form file does not match its ' +
+    'property or nonexistent enum value, a value the IDE''s own form reader ' +
+    'does not load, or the form file does not match its ' +
     'class: event to a nonexistent or NOT published method, object ' +
     'without a field, repeated name):';
 
@@ -5551,6 +5563,15 @@ const
     '[DSGN-058] Not checked in %s: %d object(s) whose class is not in ' +
     'this server''s table or is ambiguous - not an error in itself, but ' +
     'nothing inside them was checked; everything else was:';
+
+  { lint (b) sin el lector: la tabla no encontro nada, pero hay lineas que
+    la clase guarda por codigo y el lector del IDE no se pudo preguntar (sin
+    renderizador, el tiempo...). %d: cuantas; %s: por que. Va como nota: el
+    lint no dice CLEAN de lo que no sabe (DSGN-061 de la 1.20). }
+  SN_DESIGNER_LINT_SIN_LECTOR_FMT =
+    '[DSGN-154] Not confirmed: %d line(s) hold a property the class ' +
+    'stores by code, whose value only the IDE''s own form reader can judge, ' +
+    'and it could not be asked: %s. preview loads the form.';
 
   SN_LINT_UNKNOWN_CLASS_FMT =
     '[DSGN-039] "%s" is not in this server''s %s table (it comes from a ' +
@@ -6023,13 +6044,16 @@ const
     'the current END: use offset=%d. To replace the whole file, offset=0 ' +
     '(that one does leave a copy).';
 
+  { El motivo de verdad (16-oct-2026, David): decia que el servidor no lee
+    binarios, y desde la 1.1.2 el disenador los lee al vuelo y to-text los
+    convierte; lo que sigue siendo cierto es que se editan en TEXTO. }
   SR_UPLOAD_BINARY_DESIGNER =
     '[UPLOAD-002 DENIED] That is a BINARY .dfm/.fmx (TPF0 signature or ' +
-    '$FF resource wrapper) and this server does not interpret binary ' +
-    'designers: if you upload it, no tool here will be able to read or ' +
-    'fix it again, and if it also overwrites a live text designer you ' +
-    'lose the readable original. Upload the designer as TEXT (it starts ' +
-    'with "object <Name>: <TClass>").';
+    '$FF resource wrapper): upload writes designers as TEXT, the shape ' +
+    'delphi_edit and delphi_designer insert/set/delete edit. Convert it ' +
+    'first (delphi_designer command=to-text works on a binary already in ' +
+    'the workspace), or upload the text form (it starts with "object ' +
+    '<Name>: <TClass>").';
 
   SR_UPLOAD_BAD_SHA_FMT =
     '[UPLOAD-003 INVALID_PARAM] "%s" does not have the shape of a sha256 ' +
@@ -8314,6 +8338,16 @@ const
     'itself). The build packs them anyway (it only validates grammar) ' +
     'and the app CRASHES when it loads the form at runtime - on Android ' +
     'it dies with no message. Fix them before deploying: ***';
+  { Lo que el LECTOR del IDE no carga de un form escrito, cuando las tablas
+    callan (una propiedad que la clase guarda por codigo): lo mismo que
+    DSGN-149 de set, como aviso de una escritura (DSGN-061 de la 1.20). %s =
+    el form; debajo, lo que dijo el lector con su linea. }
+  SN_EDIT_AVISO_LECTOR_FMT =
+    '[EDIT-127] *** DESIGNER WARNING: the IDE''s own form reader does NOT ' +
+    'load %s (it was asked because the tables cannot judge a property the ' +
+    'class stores by code). The build packs it anyway, the IDE will not ' +
+    'open it and the app dies creating the form - on Android with no ' +
+    'message. What the reader said: ***';
 
   SR_EDIT_ANCLA_NO_UNICA_FMT =
     '[EDIT-077 INVALID_PARAM] The anchor appears %d times (lines %s), it is ' +
@@ -9536,7 +9570,7 @@ const
   SD_WS_UPLOAD =
     'Upload a file TO the server in base64 chunks - the mirror of ' +
     'delphi_fetch, for what you cannot recreate by editing: binaries ' +
-    '(.res, icons, images), binary designer files, archives, reference ' +
+    '(.res, icons, images), archives, reference ' +
     'material. Chunks in order: offset=0 creates/truncates, later offsets ' +
     'append and must match the current size. sha256 on the LAST chunk has ' +
     'the server verify the assembled file; chunkSha256 on ANY chunk checks ' +
@@ -10618,6 +10652,10 @@ const
 
   SF_DSGN_LINEA_AVISO_FMT =
     '  line %d: %s  ->  %s';
+  // lo que dijo el lector del IDE sin una linea de ESTE fichero (de un
+  // ancestro, de un frame, o sin componente: "Stream read error")
+  SF_DSGN_LECTOR_SIN_LINEA_FMT =
+    '  %s';
 
   SF_DSGN_SIN_SUBPROPIEDADES_FMT =
     '"%s" (%s) has no subproperties';

@@ -1506,6 +1506,55 @@ end;
 
 function SubirNucleo(const Params: TDelphiUploadParams): string; forward;
 
+{ La respuesta de una subida (ARespuesta, el JSON de SubirNucleo) con el
+  juicio del form de texto subido en "designer": el de delphi_edit al
+  escribirlo - el parser del IDE, las tablas, el enlace (JuicioDeForm) - y el
+  del LECTOR del IDE (AvisosDelLector). Subido, entraba sin mirar (DSGN-061 de
+  la 1.20, medido: TextSettings.FontColor = $FF00A152 con ok y nada mas). Solo
+  cuando ya esta ENTERO: lo lee el parser del IDE, o el trozo trae sha256 (el
+  ultimo); uno a medias no es un form. FUERA del cerrojo: el lector es un
+  proceso de segundos y dentro paraba las escrituras de todos. Una negativa o
+  un fallo salen tal cual. }
+function ConJuicioDeFormSubido(const Params: TDelphiUploadParams; const ARespuesta: string): string;
+var
+  J: TJSONObject;
+begin
+  Result := ARespuesta;
+  J := nil;
+  try
+    try
+      if not ARespuesta.TrimLeft.StartsWith('{') then
+        Exit;
+      J := TJSONObject.ParseJSONValue(ARespuesta) as TJSONObject;
+      if (J = nil) or (J.GetValue('error') <> nil) or (J.GetValue('path') = nil) then
+        Exit;
+      var Ruta := J.GetValue('path').Value;
+      if not EsRutaDeDesigner(Ruta) or not TFile.Exists(Ruta) then
+        Exit;
+      var Texto, Enc: string;
+      if TextoDeDesigner(Ruta, Texto, Enc) <> '' then
+        Exit;
+      var LinP: Integer;
+      var CitaP: string;
+      if (Params.Sha256.Trim = '') and (ParserDeForm(Texto, Enc, LinP, CitaP) <> '') then
+        Exit;
+      var Juicio := JuicioDeForm(Ruta, Texto, Enc) + AvisosDelLector(Ruta);
+      if Length(Juicio) = 0 then
+        Exit;
+      var Avisos := TJSONArray.Create;
+      for var A in Juicio do
+        Avisos.Add(A);
+      J.AddPair('designer', Avisos);
+      Result := J.ToJSON;
+    except
+      // un juicio que no se pudo hacer no tumba una subida ya hecha
+      Result := ARespuesta;
+    end;
+  finally
+    J.Free;
+  end;
+end;
+
 function TDelphiUploadTool.ExecuteWithParams(const Params: TDelphiUploadParams): string;
 begin
   // El cerrojo de escritura, como toda tool que escribe: un commit de
@@ -1519,6 +1568,8 @@ begin
   finally
     LeaveFileEdit;
   end;
+  // el form subido se juzga ya FUERA del cerrojo (DSGN-061 de la 1.20)
+  Result := ConJuicioDeFormSubido(Params, Result);
 end;
 
 function SubirNucleo(const Params: TDelphiUploadParams): string;

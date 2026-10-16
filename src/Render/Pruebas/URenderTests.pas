@@ -49,6 +49,8 @@ type
     [Test] procedure Vcl_no_visuales_on_off;
     [Test] procedure Vcl_timeout_rc3;
     [Test] procedure Vcl_uso_rc2;
+    [Test] procedure Vcl_valor_que_no_carga;
+    [Test] procedure Fmx_guardada_por_codigo_no_carga;
     [Test] procedure Fmx_frames_inline_con_cambios;
   end;
 
@@ -327,10 +329,41 @@ begin
   Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc);
   Assert.IsTrue(R.Valor(FR_ERROR).StartsWith('[RENDER-012 NOT_FOUND]'), 'el rechazo del catalogo, sin la clase delante: ' + R.Valor(FR_ERROR));
   Assert.IsTrue(R.Valor(FR_ERROR).Contains('NoExiste'), R.Valor(FR_ERROR));
+  // un rechazo NUESTRO (el estado, no el fichero) no es del lector
+  Assert.IsFalse(R.Tiene(FR_NOT_LOADED), 'un estado que no existe no es un form que no carga');
   R := Vcl(Format('--path "%s" --out "%s" --state Nadie.Text=1', [Pruebas + 'Prueba.dfm', Salida('prueba_bad2')]));
   Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc);
   Assert.IsTrue(R.Valor(FR_ERROR).StartsWith('[RENDER-011 NOT_FOUND]'), R.Valor(FR_ERROR));
   Assert.IsTrue(R.Valor(FR_ERROR).Contains('Nadie'), R.Valor(FR_ERROR));
+end;
+
+{ Un valor que el lector no carga (DSGN-061 de la 1.20). VCL: un entero que
+  no cabe en el Integer de Left - el Ignore se lo salta SIN consumirlo, y lo
+  siguiente que lee es basura: "Stream read error" -. Lo que se salto sale
+  TAMBIEN cuando falla (IGNORED=, con la propiedad), y NOTLOADED= dice que es
+  el fichero. Antes salia solo el "Stream read error" (medido el 16-oct). }
+procedure TRenderTests.Vcl_valor_que_no_carga;
+var
+  R: TRespuesta;
+begin
+  R := Vcl(Format('--path "%s" --out "%s"', [Pruebas + 'NoCarga.dfm', Salida('nocarga')]));
+  Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc, string.Join(' | ', R.Lineas));
+  Assert.AreEqual('EReadError', R.Valor(FR_NOT_LOADED), 'lo que fallo fue el lector');
+  Assert.IsTrue(string.Join(' | ', R.Todas(FR_IGNORED)).Contains('Error reading Edit1.Left'),
+    'la causa, que el Ignore se salto: ' + string.Join(' | ', R.Todas(FR_IGNORED)));
+end;
+
+{ FMX: una propiedad que la clase guarda POR CODIGO (FontColor de un TEdit,
+  DefineProperties): el lector no deja ignorarla, y el error es el suyo tal
+  cual, con NOTLOADED= (DSGN-061 de la 1.20, Hermes). }
+procedure TRenderTests.Fmx_guardada_por_codigo_no_carga;
+var
+  R: TRespuesta;
+begin
+  R := Fmx(Format('--path "%s" --out "%s"', [Pruebas + 'NoCargaPorCodigo.fmx', Salida('nocarga_fmx')]));
+  Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc, string.Join(' | ', R.Lineas));
+  Assert.AreEqual('EReadError', R.Valor(FR_NOT_LOADED), 'lo que fallo fue el lector');
+  Assert.IsTrue(R.Valor(FR_ERROR).Contains('Error reading EditRight.FontColor'), R.Valor(FR_ERROR));
 end;
 
 procedure TRenderTests.Vcl_rect_del_componente;

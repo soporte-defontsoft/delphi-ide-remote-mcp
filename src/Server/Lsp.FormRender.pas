@@ -27,6 +27,10 @@
 
 interface
 
+uses
+  Lsp.Styles,       // TStyleDoc: la linea de lo que dijo el lector (LineaDeLoLeido)
+  Lsp.DesignerMeta; // TPropiedadDelUsuario: lo que publica una clase del usuario
+
 type
   TPeticionRender = record
     Framework: string;         // vcl | fmx
@@ -72,6 +76,9 @@ type
   TRespuestaRender = record
     Fallo: string;             // '' = hay imagen; si no, el mensaje para el agente
     Error: string;             // ERROR= del ayudante, tal cual
+    // NOTLOADED=: lo que fallo fue el LECTOR mientras cargaba el form - el
+    // fichero, no el ayudante (DSGN-061 de la 1.20)
+    NoCarga: Boolean;
     Codigo: Cardinal;          // su codigo de salida
     Captura: string;           // CAPTURE=
     Ancho, Alto: Integer;      // SIZE=
@@ -122,6 +129,28 @@ function IgnoradaDeTexto(const ATexto: string): TIgnorada;
   partes, por IgnoradaDeTexto. Componente vacio si no es eso. }
 function ErrorDeLecturaDe(const AError: string): TIgnorada;
 
+{ La linea (1-based) de ADoc que nombra lo que dijo el lector en AI - su
+  componente y su propiedad -, o 0 si no esta en ESTE fichero (de un
+  ancestro, de un frame) o no nombra ninguna. EL localizador: lo hacia a mano
+  el preview para sus ignored, y ahora lo piden tambien LoQueNoCargo. }
+function LineaDeLoLeido(ADoc: TStyleDoc; const AI: TIgnorada): Integer;
+
+{ Si lo que el lector se salto (AI) es una propiedad de la RAIZ (ARaizNombre)
+  que publica una clase del USUARIO (APublicadas: PublicadasPorElUsuario): el
+  renderizador no carga las clases del usuario y no la conoce, asi que no es
+  un error del form (DSGN-152); ASuya, cual. EL juicio de preview, que dice
+  cuales son, y de LoQueNoCargo, que no las da por lo que no carga. }
+function IgnoradaDelUsuario(const ARaizNombre: string; const AI: TIgnorada;
+  const APublicadas: TArray<TPropiedadDelUsuario>; out ASuya: TPropiedadDelUsuario): Boolean;
+
+{ Lo que el LECTOR del IDE no cargo de un form (R: lo que se salto y, si fue
+  suyo - NoCarga -, el error que lo paro), uno por linea, lo que dijo TAL
+  CUAL con la linea de ADoc que nombra (SF_DSGN_LINEA_AVISO_FMT, la forma de
+  los avisos del lint); sin linea, solo lo que dijo. Sin repetir: el error
+  que lo paro suele ser el ultimo que se salto. ADoc nil: todo sin linea.
+  AForm, el form de verdad (su .pas dice lo que publica el usuario). }
+function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: string): TArray<string>;
+
 { La salida del renderizador -> sus campos (las lineas '#' son traza). }
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
 
@@ -153,6 +182,18 @@ function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: str
   que la compone el ayudante; los bytes, por la puerta de leer. }
 function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;
 
+{ EL JUEZ de un form ENTERO por el lector del IDE (DSGN-061 de la 1.20):
+  ATexto cargado como lo carga el designer - el mismo ayudante y la misma
+  carpeta de ComoLoEscribeElIde - y lo que no cargo, con las lineas de ATexto
+  (LoQueNoCargo). Lo piden el lint y el juicio de lo escrito cuando las
+  tablas callan: el valor de una propiedad que la clase guarda por codigo no
+  tiene tipo en la tabla, y solo lo juzga el lector (FontColor = -65536 en un
+  TEdit FMX: delphi_edit lo escribia sin avisar y el lint decia CLEAN de un
+  form que no abria). ANoPregunto: por que no se le pudo preguntar (sin
+  renderizador, el tiempo, un paquete que revento al cargar): entonces no hay
+  lineas y no se sabe. Nunca lanza. }
+function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: string): TArray<string>;
+
 { LO COMUN de una peticion de render para el form APath (ya por la puerta de
   lectura): el framework (AFramework, o el del fichero si va vacio), la ruta,
   el Delphi del servidor y form o frame por EL lector de clases si su .pas se
@@ -172,7 +213,6 @@ uses
   Lsp.ProjectUnits, // InspectUnit: la clase de la unidad y a que raiz llega
   Lsp.DesignerForma, // UnidadDeDesigner
   Lsp.Texts,
-  Lsp.Styles,
   Lsp.DesignerBin,
   Lsp.Casa,         // ServerDir: la carpeta del exe del servidor
   Lsp.Patch,        // EscribeTexto: la puerta de escribir, la propuesta del juez
@@ -423,8 +463,99 @@ begin
       end;
     end
     else if Es(FR_ERROR) then
-      Result.Error := V;
+      Result.Error := V
+    else if Es(FR_NOT_LOADED) then
+      Result.NoCarga := True;
   end;
+end;
+
+function LineaDeLoLeido(ADoc: TStyleDoc; const AI: TIgnorada): Integer;
+var
+  Ini, Fin: Integer;
+begin
+  Result := 0;
+  if (ADoc = nil) or (AI.Componente = '') then
+    Exit;
+  var Obj := ADoc.ObjetoDeNombre(AI.Componente);
+  if (Obj <> nil) and ADoc.PropLines(Obj, AI.Propiedad, Ini, Fin) then
+    Result := Ini + 1;
+end;
+
+function IgnoradaDelUsuario(const ARaizNombre: string; const AI: TIgnorada;
+  const APublicadas: TArray<TPropiedadDelUsuario>; out ASuya: TPropiedadDelUsuario): Boolean;
+begin
+  ASuya := Default(TPropiedadDelUsuario);
+  Result := (ARaizNombre <> '') and SameText(AI.Componente, ARaizNombre) and
+    PropiedadDelUsuarioLlamada(APublicadas, AI.Propiedad, ASuya);
+end;
+
+function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: string): TArray<string>;
+var
+  Vistos: TArray<string>;
+  Lineas: TArray<string>;
+  RaizNombre, RaizClase: string;
+  Publicadas: TArray<TPropiedadDelUsuario>;
+
+  procedure Pon(const AI: TIgnorada);
+  begin
+    for var V in Vistos do
+      if V = AI.Texto then
+        Exit;
+    Vistos := Vistos + [AI.Texto];
+    var N := LineaDeLoLeido(ADoc, AI);
+    if N > 0 then
+      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [N, ADoc.Lines[N - 1].Trim, AI.Texto])]
+    else
+      Lineas := Lineas + [MsgFmt(SF_DSGN_LECTOR_SIN_LINEA_FMT, [AI.Texto])];
+  end;
+
+  // lo que se salto de un objeto cuya clase el ayudante SUSTITUYO (no esta
+  // instalada: el sustituto no publica sus propiedades) no es un valor malo:
+  // es la nota de una clase de terceros (DSGN-039), no un aviso por edicion
+  function DeSustituida(const AI: TIgnorada): Boolean;
+  begin
+    Result := False;
+    if (ADoc = nil) or (AI.Componente = '') then
+      Exit;
+    var Obj := ADoc.ObjetoDeNombre(AI.Componente);
+    if Obj <> nil then
+      for var S in R.Sustituidas do
+        if SameText(S, Obj.ClassName_) then
+          Exit(True);
+  end;
+
+begin
+  Vistos := [];
+  Lineas := [];
+  // la raiz: la que dijo el ayudante, o (si fallo antes de decirla) la del
+  // fichero; lo que publica su cadena del usuario no lo conoce el lector
+  RaizNombre := R.RaizNombre;
+  RaizClase := R.RaizClase;
+  if (RaizNombre = '') and (ADoc <> nil) and (ADoc.Root <> nil) then
+  begin
+    RaizNombre := ADoc.Root.ObjName;
+    RaizClase := ADoc.Root.ClassName_;
+  end;
+  Publicadas := [];
+  if (AForm <> '') and (RaizClase <> '') then
+    Publicadas := PublicadasPorElUsuario(AForm, RaizClase, EsDesignerFmx(AForm));
+  for var I in R.Ignoradas do
+  begin
+    var Suya: TPropiedadDelUsuario;
+    if not DeSustituida(I) and not IgnoradaDelUsuario(RaizNombre, I, Publicadas, Suya) then
+      Pon(I);
+  end;
+  if R.NoCarga then
+  begin
+    // el error que lo paro, sin la clase delante ('EReadError: '): como lo
+    // dice el lector, y como lo dicen las que se salto
+    var E := ErrorDeLecturaDe(R.Error);
+    var P := Pos(': ', R.Error);
+    if P > 1 then
+      E.Texto := Copy(R.Error, P + 2, MaxInt);
+    Pon(E);
+  end;
+  Result := Lineas;
 end;
 
 { La forma del VALOR decide, nunca una lista de propiedades.
@@ -643,7 +774,30 @@ begin
   if (Codigo = FR_RC_OK) and (Result.Error = '') and
      (if APeticion.Escribe then Length(Result.Escrito) > 0 else TFile.Exists(APeticion.Salida)) then
     Exit;
-  if Result.Error <> '' then
+  // el LECTOR no cargo el form (NOTLOADED=): es el fichero, y se dice con lo
+  // que dijo y su linea. Salia como DSGN-061 INTERNAL, y con un valor que el
+  // Ignore se saltaba, solo "Stream read error" (DSGN-061 de la 1.20, Hermes)
+  if Result.NoCarga then
+  begin
+    var Doc: TStyleDoc := nil;
+    try
+      try
+        Doc := TStyleDoc.Create(APeticion.Path);
+      except
+        Doc := nil; // sin lineas: lo que dijo el lector, tal cual
+      end;
+      // el form de verdad: el del juez es una propuesta escrita en otra
+      // carpeta, y su .pas (lo que publica el usuario) esta en Carpeta
+      var Form := APeticion.Path;
+      if APeticion.Carpeta <> '' then
+        Form := TPath.Combine(APeticion.Carpeta, TPath.GetFileName(APeticion.Path));
+      Result.Fallo := MsgFmt(SR_DESIGNER_NO_CARGA_FMT, [TPath.GetFileName(APeticion.Path),
+        #10 + string.Join(#10, LoQueNoCargo(Result, Doc, Form))]);
+    finally
+      Doc.Free;
+    end;
+  end
+  else if Result.Error <> '' then
     // con etiqueta (un estado que no existe, el vigia) sale tal cual
     Result.Fallo := MsgEnvuelve(SR_DESIGNER_RENDER_FALLO_FMT, Result.Error,
       [TPath.GetFileName(APeticion.Path), Result.Error])
@@ -672,21 +826,17 @@ begin
     Result.Raiz := RaizParaElRender(APath);
 end;
 
-function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
-  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
-  out AError: string): string;
+{ La propuesta ATexto para APath, escrita en una carpeta de descarga de ESTA
+  llamada y cargada por el ayudante de su framework en modo juez (--writeback:
+  el form como lo carga el designer, sin pintar): lo que contesto, con Fallo
+  si ni se pudo escribir. La carpeta se borra siempre. EL juez de
+  ComoLoEscribeElIde y de LoQueNoCargaElIde. }
+function JuezDelIde(const APath, ATexto, AEnc: string): TRespuestaRender;
 var
   Pet: TPeticionRender;
-  R: TRespuestaRender;
   Dir, Cand: string;
 begin
-  Result := '';
-  AEscrito := '';
-  AError := '';
-  ASustituidas := [];
-  AAvisos := [];
-  ASinLeer := [];
-  ALeidos := [];
+  Result := Default(TRespuestaRender);
   // una carpeta de descarga de ESTA llamada en el temporal del SERVIDOR (EL
   // nombrador: el guard del borrado la reconoce), con la propuesta bajo el
   // nombre del form de verdad: su .pas y sus hermanos los lee el ayudante de
@@ -707,21 +857,16 @@ begin
       EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc), False);
     except
       on E: Exception do
-        Exit(MsgExcepcion(E.ClassName, E.Message));
+      begin
+        Result.Fallo := MsgExcepcion(E.ClassName, E.Message);
+        Exit;
+      end;
     end;
     Pet := PeticionDeRender(APath, '');
     Pet.Path := Cand;
     Pet.Carpeta := TPath.GetDirectoryName(APath);
     Pet.Escribe := True;
-    R := CorreRender(Pet);
-    AError := R.Error;
-    if R.Fallo <> '' then
-      Exit(R.Fallo);
-    AEscrito := string.Join(#13#10, R.Escrito);
-    ASustituidas := R.Sustituidas;
-    AAvisos := R.Avisos;
-    ASinLeer := R.SinLeer;
-    ALeidos := R.Leidos;
+    Result := CorreRender(Pet);
   finally
     try
       BorraArbol(Dir); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
@@ -729,6 +874,27 @@ begin
       // limpiar no puede tumbar la respuesta
     end;
   end;
+end;
+
+function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
+  out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
+  out AError: string): string;
+begin
+  AEscrito := '';
+  ASustituidas := [];
+  AAvisos := [];
+  ASinLeer := [];
+  ALeidos := [];
+  var R := JuezDelIde(APath, ATexto, AEnc);
+  AError := R.Error;
+  Result := R.Fallo;
+  if Result <> '' then
+    Exit;
+  AEscrito := string.Join(#13#10, R.Escrito);
+  ASustituidas := R.Sustituidas;
+  AAvisos := R.Avisos;
+  ASinLeer := R.SinLeer;
+  ALeidos := R.Leidos;
 end;
 
 function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;
@@ -744,6 +910,41 @@ begin
     end;
     if not Igual then
       Exit(TPath.GetFileName(L.Ruta));
+  end;
+end;
+
+function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: string): TArray<string>;
+var
+  Doc: TStyleDoc;
+begin
+  Result := [];
+  ANoPregunto := '';
+  try
+    var R := JuezDelIde(APath, ATexto, AEnc);
+    // lo cargo, o fallo por otra cosa (sin renderizador, el tiempo, un
+    // paquete): de lo suyo el lector no dijo nada
+    if not R.NoCarga and (Length(R.Ignoradas) = 0) then
+    begin
+      ANoPregunto := R.Fallo;
+      Exit;
+    end;
+    Doc := nil;
+    try
+      try
+        Doc := TStyleDoc.DeTexto(ATexto);
+      except
+        Doc := nil; // sin lineas: lo que dijo el lector, tal cual
+      end;
+      Result := LoQueNoCargo(R, Doc, APath);
+    finally
+      Doc.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      Result := [];
+      ANoPregunto := MsgExcepcion(E.ClassName, E.Message);
+    end;
   end;
 end;
 

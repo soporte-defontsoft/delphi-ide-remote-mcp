@@ -681,14 +681,25 @@ type
     Notas: TArray<string>;       // lo que la tabla no pudo comprobar (terceros)
     Falta: TFaltaTabla;          // sin tabla: por que
     Enlace: TArray<string>;      // el form contra su clase (Lsp.DesignerBinding)
+    // las lineas que la tabla dejo SIN juicio (sin hoja de tipo: lo que la
+    // clase guarda por codigo), lo que el LECTOR del IDE dijo de ellas al
+    // cargar el form (con ALector) y por que no se le pudo preguntar
+    // (DSGN-061 de la 1.20)
+    SinJuez: Integer;
+    Lector: TArray<string>;
+    SinLector: string;
   end;
 
 { El lint del form ADfm con el TEXTO ATexto (lo que dice o dira el disco, en
   AEnc): la tabla del Delphi activo (Lsp.DesignerMeta, con su espera), el
   form contra su clase y EL parser del IDE con esos bytes (AJuzga=False en un
-  binario, que ya paso su conversion). Nunca lanza. }
+  binario, que ya paso su conversion). Con ALector, si la tabla no encontro
+  nada y dejo lineas sin juicio, el form entero al LECTOR del IDE
+  (Lsp.FormRender.LoQueNoCargaElIde, el juez de set): lo piden el lint y el
+  juicio de lo escrito; designer set/insert/delete tienen el suyo. Nunca
+  lanza. }
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal = ESPERA_TABLA_MS): TLintDeForm;
+  AEsperaMs: Cardinal = ESPERA_TABLA_MS; ALector: Boolean = False): TLintDeForm;
 
 { Los avisos de una respuesta del motor (ExecutePatch, ExecuteTextEdit): las
   lineas desde el primer aviso marcado *** (la marca va detras de la
@@ -716,6 +727,18 @@ function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
   de los escritores sueltos, de la tanda y del changeset. }
 function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
   const AOmite: TArray<string> = nil): TArray<string>;
+{ Lo que el LECTOR del IDE dice del form APath tal como quedo en disco,
+  cuando la tabla calla (LintDeForm con ALector): la cabecera EDIT-127 y sus
+  lineas, o nada. Se pide FUERA del cerrojo de escritura (EnterFileEdit): el
+  lector es un proceso que tarda segundos, y dentro paraba las escrituras de
+  todos - como el juez del orden del disenador (revisor 5 de la noche, A3).
+  Por eso no va en JuicioDeLoEscrito, que corre dentro: lo piden las tools
+  que escriben forms al acabar (delphi_edit, el changeset, upload).
+  DSGN-061 de la 1.20. Nunca lanza. }
+function AvisosDelLector(const APath: string): TArray<string>;
+{ ARespuesta (la de una escritura de APath) con AvisosDelLector detras, si
+  APath es un form y no fue un fallo. }
+function ConAvisosDelLector(const ARespuesta, APath: string): string;
 { La nota de un fichero EN DISCO que es UTF-8 sin BOM y que dcc lee en ANSI
   (READ-008 de un fuente, READ-009 de un form), por la puerta de leer y EL
   detector: la de delphi_read, para quien no lo lee entero (designer lint).
@@ -856,7 +879,8 @@ uses
   Lsp.ShaCache, // Sha256DeBytes: la huella del origen de una llamada
   Lsp.Mascara,
   System.Character,
-  Lsp.Client;
+  Lsp.Client,
+  Lsp.FormRender; // LoQueNoCargaElIde: el lector del IDE juzga lo que la tabla no (LintDeForm)
 
 const
   MAX_EDITS = 50; // entradas de una tanda
@@ -5018,7 +5042,7 @@ begin
 end;
 
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal): TLintDeForm;
+  AEsperaMs: Cardinal; ALector: Boolean): TLintDeForm;
 var
   Lineas: TArray<string>;
 begin
@@ -5027,7 +5051,7 @@ begin
   Lineas := LineasDelTexto(ATexto);
   // ...y su raiz, por la cadena de ancestros de su .pas (H8 de la 1.19.2)
   Result.Propiedades := DesignerMetaLint(EsDesignerFmx(ADfm), Lineas, Result.Notas,
-    Result.Falta, AEsperaMs, UnidadDeDesigner(ADfm));
+    Result.Falta, Result.SinJuez, AEsperaMs, UnidadDeDesigner(ADfm));
   // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
   // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
   Result.Enlace := DesignerBindingWarnings(ADfm, Lineas);
@@ -5035,11 +5059,47 @@ begin
   // en un .fmx daba CLEAN y solo el IDE lo rechazaba al cargarlo
   if AJuzga then
     Result.Parser := AvisoDelParserDeForm(ATexto, AEnc);
+  // EL juez de verdad de lo que la tabla no juzga (DSGN-061 de la 1.20): una
+  // propiedad que la clase guarda por codigo no tiene tipo en la tabla, y
+  // FontColor = -65536 en un TEdit FMX pasaba delphi_edit sin aviso y el lint
+  // con CLEAN de un form que no abria. Solo si la tabla no encontro nada: con
+  // un aviso suyo el form ya no carga, y el lector no diria mas
+  if ALector and (Result.SinJuez > 0) and (Result.Parser = '') and
+     (Length(Result.Propiedades) = 0) and (Result.Falta.Razon = '') then
+    Result.Lector := LoQueNoCargaElIde(ADfm, ATexto, AEnc, Result.SinLector);
 end;
 
 { Lo que delphi_edit (y el changeset y la tanda, que escriben por el) dice del
   form que acaba de escribir: LintDeForm con el texto escrito, sin esperar a
   una tabla, presentado como avisos de una edicion. }
+function AvisosDelLector(const APath: string): TArray<string>;
+var
+  Texto, Enc: string;
+begin
+  Result := [];
+  try
+    if not EsRutaDeDesigner(APath) or (TextoDeDesigner(APath, Texto, Enc) <> '') then
+      Exit;
+    // la tabla sin esperarla, como tras cada edicion; y el lector
+    var L := LintDeForm(APath, Texto, Enc, True, 0, True);
+    if Length(L.Lector) > 0 then
+      Result := [MsgFmt(SN_EDIT_AVISO_LECTOR_FMT, [ExtractFileName(APath)])] + L.Lector;
+  except
+    // un juicio que no se pudo hacer no tumba una escritura ya hecha
+    Result := [];
+  end;
+end;
+
+function ConAvisosDelLector(const ARespuesta, APath: string): string;
+begin
+  Result := ARespuesta;
+  if EsFallo(ARespuesta) or not EsRutaDeDesigner(APath) then
+    Exit;
+  var Avisos := AvisosDelLector(TPath.GetFullPath(APath));
+  if Length(Avisos) > 0 then
+    Result := Result + #13#10 + string.Join(#13#10, Avisos);
+end;
+
 function DesignerLint(const APath, ATexto, AEnc: string): TArray<string>;
 var
   Raw: TArray<string>;
@@ -5048,6 +5108,7 @@ var
   ExtName: string;
 begin
   Result := [];
+  // (sin el lector: esto corre DENTRO del cerrojo; AvisosDelLector, fuera)
   var L := LintDeForm(APath, ATexto, AEnc, True, 0);
   var Falta := L.Falta;
   var Notas := L.Notas;

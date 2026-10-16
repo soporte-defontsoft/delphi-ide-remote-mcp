@@ -70,6 +70,8 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
+  Lsp.Mascara, // MaskDriveText: la ruta delante de cada aviso, como el commit
+  Lsp.Patch,   // AvisosDelLector: el lector del IDE, fuera del cerrojo
   Lsp.Changeset;
 
 constructor TDelphiChangesetTool.Create;
@@ -99,9 +101,19 @@ begin
   if Sobra <> '' then
     Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, Params.Command.Trim.ToLower,
       Params.Command.Trim.ToLower, ONinguno(Suyos)]));
-  Result := ChangesetExecute(Params.Command, Params.Id, Params.Kind.Trim.ToLower,
+  var Forms: TArray<string>;
+  Result := ChangesetExecuteYForms(Params.Command, Params.Id, Params.Kind.Trim.ToLower,
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
-    Params.AtLine, Params.N, Params.Fragment);
+    Params.AtLine, Forms, Params.N, Params.Fragment);
+  // los forms que el commit escribio, al LECTOR del IDE ya fuera de los
+  // cerrojos, con su ruta delante como los avisos del lote (DSGN-061 de la 1.20)
+  var Avisos := '';
+  for var F in Forms do
+    for var L in AvisosDelLector(F) do
+      Avisos := Avisos + IfThen(Avisos <> '', #10, '') + Format('  %s: %s', [MaskDriveText('', F), L]);
+  if Avisos <> '' then
+    Result := Result + #10 + IfThen(HasMsg(Result, SN_CHANGESET_AVISOS_FMT), Avisos,
+      MsgFmt(SN_CHANGESET_AVISOS_FMT, [Avisos]));
   // (lo enmascara el filtro de salida, Lsp.Host: aqui se enmascaraba otra vez
   // con el nombre de la tool, que gasta las citas del disco de la llamada - la
   // linea real de una negativa salia enmascarada; revision del 4-oct-2026)

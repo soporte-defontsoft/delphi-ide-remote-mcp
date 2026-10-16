@@ -195,7 +195,7 @@ type
   CRASHES" (un form con el TSslContext de ICS lo decia en cada edicion:
   revision de la 1.12.0). }
 function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
-  out ANotas: TArray<string>; out AFalta: TFaltaTabla;
+  out ANotas: TArray<string>; out AFalta: TFaltaTabla; out ASinJuez: Integer;
   AEsperaMs: Cardinal = ESPERA_TABLA_MS; const APas: string = ''): TArray<string>;
 
 { EL juez de una linea de propiedad de un form, ALhs = ARhs en un objeto de
@@ -233,6 +233,15 @@ function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: strin
 // .pas del form: con el se juzga tambien su raiz (ClaseDeJuezDeRaiz)
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   const ALines: TArray<string>; out ANotas: TArray<string>;
+  const APas: string = ''): TArray<string>;
+{ ...y cuantas lineas dejo SIN juicio (ASinJuez): sin aviso y sin hoja de
+  tipo - lo que la clase guarda POR CODIGO (DefineProperties) o un tipo que el
+  fuente no deja leer -. Su valor solo lo juzga el lector del IDE: con alguna,
+  LintDeForm le pregunta (DSGN-061 de la 1.20; medido el 16-oct: en 4.938
+  forms reales casi todos tienen alguna, y todas son de las guardadas por
+  codigo). }
+function LintConTablaYSinJuez(M: TMetaTable; const AIsFmx: Boolean;
+  const ALines: TArray<string>; out ANotas: TArray<string>; out ASinJuez: Integer;
   const APas: string = ''): TArray<string>;
 
 { La clase contra la que se juzga la RAIZ de un form (su identidad en M): la
@@ -776,23 +785,25 @@ begin
 end;
 
 function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
-  out ANotas: TArray<string>; out AFalta: TFaltaTabla; AEsperaMs: Cardinal;
-  const APas: string): TArray<string>;
+  out ANotas: TArray<string>; out AFalta: TFaltaTabla; out ASinJuez: Integer;
+  AEsperaMs: Cardinal; const APas: string): TArray<string>;
 var
   M: TMetaTable;
 begin
   Result := nil;
   ANotas := nil;
+  ASinJuez := 0;
   M := MetaTable(AIsFmx, AFalta, AEsperaMs);
   if M = nil then
     Exit;
   try
-    Result := LintConTabla(M, AIsFmx, ALines, ANotas, APas);
+    Result := LintConTablaYSinJuez(M, AIsFmx, ALines, ANotas, ASinJuez, APas);
   except
     on E: Exception do
     begin
       Result := nil;
       ANotas := nil;
+      ASinJuez := 0;
       AFalta.Negativa := MsgFmt(SR_DESIGNER_TABLA_ERROR_FMT, [E.Message]);
       AFalta.Razon := MsgFmt(SF_DSGN_RAZON_ERROR_FMT, [E.Message]);
     end;
@@ -1388,6 +1399,15 @@ function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
   const ALines: TArray<string>; out ANotas: TArray<string>;
   const APas: string): TArray<string>;
 var
+  SinJuez: Integer;
+begin
+  Result := LintConTablaYSinJuez(M, AIsFmx, ALines, ANotas, SinJuez, APas);
+end;
+
+function LintConTablaYSinJuez(M: TMetaTable; const AIsFmx: Boolean;
+  const ALines: TArray<string>; out ANotas: TArray<string>; out ASinJuez: Integer;
+  const APas: string): TArray<string>;
+var
   Propias: TArray<TPropiedadDelUsuario>;  // las que publica el usuario en la cadena de la raiz
   Stack: TStack<string>;    // owner class per nesting level ('' = unknown)
   Heads: TStack<Integer>;   // ...y la linea de la cabecera de ese objeto
@@ -1418,6 +1438,7 @@ var
 
 begin
   ANotas := nil;
+  ASinJuez := 0;
   Propias := [];
   Stack := TStack<string>.Create;
   Heads := TStack<Integer>.Create;
@@ -1557,7 +1578,11 @@ begin
                 Warn(MsgFmt(SF_DSGN_LINT_TIPO_FMT, [Lhs, R.TypeName, Toma, Rhs, Parecida]))
               else if Aviso <> '' then
                 Nota(Aviso);
-            end;
+            end
+            // ...sin aviso y sin hoja: la tabla no sabe su tipo (la clase lo
+            // guarda por codigo); lo juzga el lector del IDE (LintDeForm)
+            else
+              Inc(ASinJuez);
           end;
       end;
     Result := Warns.ToStringArray;

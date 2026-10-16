@@ -360,8 +360,6 @@ end;
 function IgnoradasConLinea(const ARuta: string; const AIgnoradas: TArray<TIgnorada>): TJSONArray;
 var
   Doc: TStyleDoc;
-  Obj: TStyleObj;
-  Ini, Fin: Integer;
 begin
   Result := TJSONArray.Create;
   if LoadDoc(ARuta, Doc) <> '' then
@@ -379,11 +377,10 @@ begin
       Uno.AddPair('component', I.Componente);
       Uno.AddPair('property', I.Propiedad);
       Uno.AddPair('reason', I.Motivo);
-      if Doc = nil then
-        Continue;
-      Obj := Doc.ObjetoDeNombre(I.Componente);
-      if (Obj <> nil) and Doc.PropLines(Obj, I.Propiedad, Ini, Fin) then
-        Uno.AddPair('line', TJSONNumber.Create(Ini + 1));
+      // EL localizador (Lsp.FormRender), el de lo que no carga
+      var Linea := LineaDeLoLeido(Doc, I);
+      if Linea > 0 then
+        Uno.AddPair('line', TJSONNumber.Create(Linea));
     end;
   finally
     Doc.Free;
@@ -991,10 +988,12 @@ begin
   // form contra su clase (check-binding) + EL parser del IDE con los bytes
   // del fichero, lo PRIMERO y con o sin tabla (8.10 de la 1.18.0); un
   // binario ya paso su conversion. lint = todo lo que el compilador no mira
-  var L := LintDeForm(APath, Text, EncName, not IsBinaryDesigner(APath));
+  // ...y lo que la tabla no sabe juzgar (lo que la clase guarda por codigo),
+  // el lector del IDE: CLEAN solo si carga (DSGN-061 de la 1.20)
+  var L := LintDeForm(APath, Text, EncName, not IsBinaryDesigner(APath), ESPERA_TABLA_MS, True);
   var Falta := L.Falta;
   var Notas := L.Notas;
-  Warns := L.Propiedades + L.Enlace;
+  Warns := L.Propiedades + L.Lector + L.Enlace;
   if L.Parser <> '' then
     Warns := [L.Parser] + Warns;
   // sin tabla la respuesta es la negativa (DSGN-050/051/053/054), con lo del
@@ -1009,7 +1008,7 @@ begin
   end;
   // lo que no se pudo comprobar va aparte y no cuenta como aviso: una clase
   // de terceros no es un error (revision de la 1.12.0)
-  if (Length(Warns) = 0) and (Length(Notas) = 0) then
+  if (Length(Warns) = 0) and (Length(Notas) = 0) and (L.SinLector = '') then
     Result := MsgFmt(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
   else
   begin
@@ -1025,6 +1024,13 @@ begin
       Result := Result + MsgFmt(SN_DESIGNER_LINT_NOTAS_FMT,
         [TPath.GetFileName(APath), Length(Notas)]) + #13#10 +
         string.Join(#13#10, Notas);
+    end;
+    // sin el lector no se dice CLEAN de lo que solo el sabe juzgar
+    if L.SinLector <> '' then
+    begin
+      if Result <> '' then
+        Result := Result + #13#10;
+      Result := Result + MsgFmt(SN_DESIGNER_LINT_SIN_LECTOR_FMT, [L.SinJuez, L.SinLector]);
     end;
   end;
 end;
@@ -1388,14 +1394,14 @@ begin
       // error del form (1.19.2)
       var Suyas := '';
       var Publicadas := PublicadasPorElUsuario(Ruta, R.RaizClase, Fw = 'fmx');
+      // (EL juicio, Lsp.FormRender.IgnoradaDelUsuario: el de lo que no carga)
       for var Ig in R.Ignoradas do
-        if SameText(Ig.Componente, R.RaizNombre) then
-        begin
-          var Suya: TPropiedadDelUsuario;
-          if PropiedadDelUsuarioLlamada(Publicadas, Ig.Propiedad, Suya) then
-            Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
-              TPath.GetFileName(Suya.Fichero) + ')';
-        end;
+      begin
+        var Suya: TPropiedadDelUsuario;
+        if IgnoradaDelUsuario(R.RaizNombre, Ig, Publicadas, Suya) then
+          Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
+            TPath.GetFileName(Suya.Fichero) + ')';
+      end;
       if Suyas <> '' then
         Return.AddPair('ignoredUserNote', MsgFmt(SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT, [Suyas]));
     end;

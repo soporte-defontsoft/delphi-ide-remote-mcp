@@ -37,6 +37,15 @@ uses
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer = 0;
   const AFragment: string = ''): string;
+{ Lo mismo, y en AFormsEscritos los forms que un commit aplicado escribio:
+  quien llama les pide el juicio del LECTOR del IDE al volver, ya FUERA de
+  los cerrojos (Lsp.Patch.AvisosDelLector: un proceso de segundos que dentro
+  paraba las escrituras de todos; DSGN-061 de la 1.20). La tool lo usa; el
+  rename, que no escribe valores de un form, va por ChangesetExecute. }
+function ChangesetExecuteYForms(const ACommand, AId, AKind, APath, ADest,
+  AOldLine, ANewText, AContent: string; AAtLine: Integer;
+  out AFormsEscritos: TArray<string>; AN: Integer = 0;
+  const AFragment: string = ''): string;
 
 { Abre un changeset y devuelve su id ('' = ya hay demasiados abiertos). Es lo
   que hace command=begin, expuesto para que otro motor del servidor (el
@@ -608,6 +617,17 @@ function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer;
   const AFragment: string): string;
 var
+  Forms: TArray<string>;
+begin
+  Result := ChangesetExecuteYForms(ACommand, AId, AKind, APath, ADest, AOldLine, ANewText,
+    AContent, AAtLine, Forms, AN, AFragment);
+end;
+
+function ChangesetExecuteYForms(const ACommand, AId, AKind, APath, ADest,
+  AOldLine, ANewText, AContent: string; AAtLine: Integer;
+  out AFormsEscritos: TArray<string>; AN: Integer;
+  const AFragment: string): string;
+var
   Cmd, Id, Denied, EncName, Text, Err: string;
   C: TChangeset;
   Op: TStagedOp;
@@ -624,6 +644,7 @@ var
   Seen: TStringList;
   AuditText: string;
 begin
+  AFormsEscritos := [];
   Cmd := ACommand.Trim.ToLower;
   GLock.Enter;
   try
@@ -1193,6 +1214,11 @@ begin
           for var FPath in Seen do
             if Foto.Cambio(FPath) then
               Escritos := Escritos + [FPath];
+          // ...y de ellos, los forms: el lector los juzga al volver, fuera
+          if Applied then
+            for var FPath in Escritos do
+              if EsRutaDeDesigner(FPath) then
+                AFormsEscritos := AFormsEscritos + [FPath];
           for var FPath in Seen do
           begin
             var Kinds := '';

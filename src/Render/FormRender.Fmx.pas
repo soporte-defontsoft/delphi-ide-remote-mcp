@@ -312,7 +312,12 @@ var
   Reloj: TStopwatch;
   MsCarga, MsPintado, Cargados, Conocidos: Integer;
   R: TRect;
+  // mientras lee el form (lo que falle ahi y sea del lector es el fichero:
+  // NOTLOADED=) y si lo leido ya se dijo (RespondeFallo, DSGN-061 de la 1.20)
+  Cargando, YaLeido: Boolean;
 begin
+  Cargando := False;
+  YaLeido := False;
   Error := ParseaArgumentos(Uso);
   if Error <> '' then
   begin
@@ -339,6 +344,7 @@ begin
       if GPeticion.Paquetes = 'all' then
         CargaPaquetesDelIde(GPeticion.Bds, Cargados, Conocidos);
       Reloj := TStopwatch.StartNew;
+      Cargando := True;
       F := CreaYLee(Cargador, Raiz);
       if (GPeticion.Paquetes = 'auto') and (Cargador.Sustituidas.Count > 0) then
       begin
@@ -349,12 +355,14 @@ begin
         CargaPaquetesDelIde(GPeticion.Bds, Cargados, Conocidos);
         F := CreaYLee(Cargador, Raiz);
       end;
+      Cargando := False;
       MsCarga := Reloj.ElapsedMilliseconds;
       Responde(FR_ROOT, Format('%s:%s:%s', [Raiz.Name, Cabecera(GPeticion.Path).Clase,
         (if Raiz is TFrame then 'frame' else 'form')]));
       Responde(FR_PACKAGES, Format('%d/%d', [Cargados, Conocidos]));
       Responde(FR_COMPONENTS, IntToStr(Raiz.ComponentCount));
       RespondeLoLeido(Cargador);
+      YaLeido := True;
       // los no visuales, SIEMPRE: se dibujen o no, el agente sabe que estan
       Responde(FR_NONVISUALS, ListaDeNoVisuales(NoVisualesDe(Raiz, TControl)));
       // el juez de lo que guarda el IDE (3.11): escrito por TWriter, sin pintar
@@ -391,16 +399,8 @@ begin
       Responde(FR_CAPTURE, GPeticion.Salida);
       Responde(FR_MS, Format('%d,%d', [MsCarga, MsPintado]));
     except
-      on E: ERender do
-      begin
-        Responde(FR_ERROR, E.Message); // ya lleva su etiqueta
-        Result := FR_RC_ERROR;
-      end;
       on E: Exception do
-      begin
-        Responde(FR_ERROR, E.ClassName + ': ' + E.Message);
-        Result := FR_RC_ERROR;
-      end;
+        Result := RespondeFallo(E, Cargador, Cargando, YaLeido);
     end;
   finally
     Bmp.Free;

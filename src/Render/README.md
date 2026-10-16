@@ -102,7 +102,10 @@ ROOT=<Name>:<Class>:<form|frame>
 PACKAGES=<loaded>/<known>     0/0 = the palette was enough
 COMPONENTS=<n>
 SUBSTITUTED=<classes>         not found in any package: pink box with the name
-IGNORED=<reader error>        repeatable
+IGNORED=<reader error>        repeatable; also before a failure: what the
+                              reader skipped is usually WHY it failed (a value
+                              skipped without being consumed leaves the reader
+                              lost, and the failure says only "Stream read error")
 WARNING=<text>                repeatable
 PARTIAL=<ancestor or file>    repeatable: the form was read WITHOUT it (an
                               ancestor with no .pas saying which, or with no
@@ -119,6 +122,10 @@ FIDELITY=window|print|canvas  VCL: real painting (needs DWM, an interactive
 SIZE=<w>x<h>
 CAPTURE=<png>
 MS=<load>,<paint>
+NOTLOADED=<exception class>   before ERROR=: what failed was the form READER
+                              while loading (EFilerError or EParserError) - the
+                              file, not the renderer; the server answers DSGN-153
+                              with the reader's words and the line, not DSGN-061
 ERROR=<text>                  with exit code 1 (3 = timeout, 2 = usage)
 ```
 

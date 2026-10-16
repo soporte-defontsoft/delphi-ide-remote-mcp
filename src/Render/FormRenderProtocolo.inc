@@ -29,6 +29,10 @@
                                  // blancos; --writeback on: el juez del orden, 3.11 de la 1.18.0)
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos
   FR_ERROR = 'ERROR=';           // ERROR=<motivo>; va con codigo de salida 1 (3 si fue el tiempo limite)
+  FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>, antes del ERROR=: lo que fallo fue el
+                                 // LECTOR mientras cargaba el form (EFilerError o EParserError, lo dice la
+                                 // jerarquia de la RTL): es el contenido del fichero, no el ayudante ni un
+                                 // paquete al pintar (DSGN-061 de la 1.20)
   FR_RC_OK = 0;
   FR_RC_ERROR = 1;
   FR_RC_USAGE = 2;

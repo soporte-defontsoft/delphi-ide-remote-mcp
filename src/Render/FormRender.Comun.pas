@@ -140,6 +140,15 @@ procedure EscribeComoElIde(ARaiz: TComponent);
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
   SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
+{ El fallo de un render, igual en los dos renderizadores: lo que el cargador
+  ya habia apuntado (lo que se salto, lo que leyo) sale TAMBIEN cuando falla,
+  si no lo dijo ya (AYaLeido); NOTLOADED= si lo que fallo fue el LECTOR
+  mientras se cargaba el form (ACargando, y la excepcion un EFilerError o un
+  EParserError: la jerarquia de la RTL); y ERROR=. Devuelve el codigo de
+  salida. Un valor que el Ignore se saltaba sin consumirlo dejaba al lector a
+  mitad del flujo, y lo unico que salia era "Stream read error", sin la
+  propiedad que lo habia causado (DSGN-061 de la 1.20, medido). }
+function RespondeFallo(E: Exception; ACargador: TCargador; ACargando, AYaLeido: Boolean): Integer;
 { csDesigning en un componente recien creado (y en lo que se le inserte) }
 procedure PonEnDiseno(AComp: TComponent);
 function Cabecera(const AFichero: string): TCabecera;
@@ -1041,6 +1050,19 @@ begin
     Responde(FR_PARTIAL, S);
   for var S in ACargador.Leidos do
     Responde(FR_READ, S);
+end;
+
+function RespondeFallo(E: Exception; ACargador: TCargador; ACargando, AYaLeido: Boolean): Integer;
+begin
+  if not AYaLeido and (ACargador <> nil) then
+    RespondeLoLeido(ACargador);
+  if ACargando and ((E is EFilerError) or (E is EParserError)) then
+    Responde(FR_NOT_LOADED, E.ClassName);
+  if E is ERender then
+    Responde(FR_ERROR, E.Message) // ya lleva su etiqueta
+  else
+    Responde(FR_ERROR, E.ClassName + ': ' + E.Message);
+  Result := FR_RC_ERROR;
 end;
 
 procedure EscribeComoElIde(ARaiz: TComponent);

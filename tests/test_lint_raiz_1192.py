@@ -28,7 +28,9 @@ from mcp_cliente import check
 BASE = mc.carpeta('lint_raiz_1192')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+# con sus renderizadores, como en el zip: desde la 1.20 el lint dice CLEAN solo
+# si el lector del IDE carga lo que la tabla no juzga (DSGN-061, DSGN-154)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
 
 s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='lint-raiz', t=300)
 

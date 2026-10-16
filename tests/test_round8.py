@@ -34,7 +34,9 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('round8')
-EXE = mc.copia_exe(BASE)
+# con sus renderizadores, como en el zip: desde la 1.20 el lint dice CLEAN solo
+# si el lector del IDE carga lo que la tabla no juzga (DSGN-061, DSGN-154)
+EXE = mc.copia_exe(BASE, con_render=True)
 VAULT = os.path.join(BASE, 'vault')
 os.makedirs(os.path.join(VAULT, 'projects'))
 open(os.path.join(VAULT, 'projects', 'nota.md'), 'w', encoding='utf-8').write(

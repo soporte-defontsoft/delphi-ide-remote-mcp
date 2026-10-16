@@ -1,0 +1,17 @@
+object FormNoCargaPorCodigo: TFormNoCargaPorCodigo
+  Left = 0
+  Top = 0
+  Caption = 'No carga'
+  ClientHeight = 200
+  ClientWidth = 400
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object EditRight: TEdit
+    TabOrder = 0
+    FontColor = -65536
+    Position.X = 16.000000000000000000
+    Position.Y = 16.000000000000000000
+  end
+end

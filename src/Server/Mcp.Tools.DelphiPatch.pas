@@ -259,7 +259,9 @@ begin
     Result := WriteTargetDenied(Params.Path);
     if Result <> '' then
       Exit;
-    Exit(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits));
+    // lo que el lector del IDE dice del form escrito, ya FUERA del cerrojo
+    // (AvisosDelLector: DSGN-061 de la 1.20)
+    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits), Params.Path));
   end;
   // ADDUSES: la clausula la escribe el motor de clausulas (Lsp.ProjectUnits),
   // el mismo del .dpr y el .dpk; aqui solo la jaula y el reparto de nombres.
@@ -301,7 +303,8 @@ begin
   A.Eol := Params.Eol;
   A.Restore := Params.Restore;
   A.Confirm := Params.Confirm;
-  Result := ExecutePatch(A);
+  // ExecutePatch suelta el cerrojo al volver: el lector, despues
+  Result := ConAvisosDelLector(ExecutePatch(A), Params.Path);
 end;
 
 initialization

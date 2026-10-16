@@ -56,6 +56,7 @@ type
     [Test] procedure LasClasesPorSuIdentidad;
     [Test] procedure LoQueSeGuardaPorCodigo;
     [Test] procedure ElLintConUnaTabla;
+    [Test] procedure LoQueElLintNoJuzgaSeCuenta;
     [Test] procedure LosAncestrosRaros;
     [Test] procedure LosNombresConAcentos;
     [Test] procedure LosAyudantesDeUnDefineProperties;
@@ -1095,6 +1096,40 @@ begin
   Assert.Contains(N[0], 'DSGN-055');
   Assert.DoesNotContain(Todo, 'TextHeight', 'la raiz no se juzga');
   Assert.DoesNotContain(Todo, 'blCenter', 'el enumerado de su unidad, no el homonimo');
+end;
+
+{ Lo que el lint deja SIN juicio (LintConTablaYSinJuez): una linea que la
+  clase guarda por codigo no tiene tipo en la tabla, y la cuenta dice cuantas
+  hay para que LintDeForm se las pregunte al lector del IDE (DSGN-061 de la
+  1.20: FontColor = -65536 en un TEdit FMX daba CLEAN de un form que no
+  abria). Lo publicado, lo que se avisa y la raiz sin .pas no cuentan. }
+procedure TDesignerMetaGenTests.LoQueElLintNoJuzgaSeCuenta;
+var
+  M: TMetaTable;
+  W, N: TArray<string>;
+  SinJuez: Integer;
+begin
+  M := TMetaTable.Create([
+    'C System.Classes:TComponent',
+    'C FMX.Controls:TControl', 'H FMX.Controls:TControl System.Classes:TComponent',
+    'C FMX.Edit:TEdit', 'H FMX.Edit:TEdit FMX.Controls:TControl',
+    'P FMX.Edit:TEdit Text o string', 'D FMX.Edit:TEdit FontColor']);
+  try
+    W := LintConTablaYSinJuez(M, True, [
+      'object Form1: TForm1',     // la raiz sin .pas: no se juzga
+      '  TextHeight = 13',
+      '  object Edit1: TEdit',
+      '    Text = ''hola''',       // publicada: con su hoja
+      '    FontColor = -65536',    // guardada por codigo: sin juicio
+      '    Textt = ''x''',         // no existe: un aviso, no cuenta
+      '  end',
+      'end'], N, SinJuez);
+  finally
+    M.Free;
+  end;
+  Assert.AreEqual<Integer>(1, Length(W), string.Join(#10, W));
+  Assert.Contains(W[0], 'Textt', 'lo que no existe sigue siendo un aviso');
+  Assert.AreEqual<Integer>(1, SinJuez, 'solo FontColor: la tabla no sabe su tipo');
 end;
 
 { Ancestros que la cadena no seguia: un alias de clase (JVCL:

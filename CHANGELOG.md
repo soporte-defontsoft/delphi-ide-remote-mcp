@@ -64,6 +64,49 @@ the MCP `initialize` response (`serverInfo.version`).
   model counts an image by its pixels, so this saves no tokens: it makes
   the image arrive. One place for every tool that captures (`delphi_desktop`,
   `delphi_adb`, `delphi_designer preview`).
+- **`preview` of a form the IDE cannot load says so, with the reader's own
+  words and the line.** It answered `DSGN-061 INTERNAL` - "the renderer
+  could not draw" - for a file the agent had written wrong, eight times in
+  Hermes' history. Now the renderer tells the server when the failure came
+  from the form reader itself (the RTL's `EFilerError`/`EParserError` while
+  loading) and the answer is `DSGN-153`: the file, not the renderer, with
+  each thing the reader said and the line it names (`line 15: FontColor =
+  -65536  ->  Error reading Edit1.FontColor: Invalid property value`). And
+  the real cause no longer gets lost: a number that does not fit a published
+  property (`TextSettings.FontColor = $FF00A152`) was skipped by the
+  renderer's Ignore without being consumed, the reader lost its place, and
+  all that came out was `Stream read error`. What the reader skipped now
+  comes out on a failure too, and the first line of the answer is the
+  property that broke it. `DSGN-061` stays for what is really ours: a design
+  package or a component that fails while painting.
+- **A value only the IDE's reader can judge is judged by it - in `lint`,
+  after `delphi_edit` and the changeset, and in `delphi_upload`.** A
+  property a class stores by code (`DefineProperties`: `FontColor` or
+  `HorzTextAlign` on an FMX `TEdit`) has no type in the tables, so its value
+  went unjudged: `designer set` already asked the IDE's reader (`DSGN-149`),
+  but `delphi_edit` wrote `FontColor = -65536` without a word and `lint`
+  answered `CLEAN` for a form the IDE would not open (measured in production
+  on 2026-10-16). Now, when the tables find nothing wrong and leave a line
+  unjudged, the form goes whole to the same reader: `lint` says `CLEAN` only
+  if it loads (`DSGN-154` when it could not be asked), and a write that
+  leaves a form the reader does not load gets `EDIT-127` with the reader's
+  words and the line. Counted over 4,938 real forms (the IDE's samples and
+  ours): nearly every form has such a line - `Explicit*`, `Left`/`Top` of a
+  non-visual, `DesignerMasterStyle` - so a form write costs one load of the
+  form (0.3 s on a plain form, about 1 s with 112 design packages, 5 s the
+  first time), done after the server's write lock is released, never under
+  it. `delphi_upload` now judges a text form like `delphi_edit` does
+  (`designer` in its answer) once the file is whole - the IDE's parser reads
+  it, or the chunk carries `sha256`; it judged none before. What the reader
+  skips from a class that is not installed is not a warning: that is
+  `DSGN-039`'s note.
+- **`delphi_upload` no longer invites what it refuses.** Its description
+  listed "binary designer files" among what to upload, and the tool refuses
+  them (`UPLOAD-002`) - whose text said this server does not read binary
+  designers, which stopped being true in 1.1.2. The description no longer
+  lists them, and the refusal gives the real reason: upload writes designers
+  as text, the shape `delphi_edit` and `delphi_designer` edit; convert first
+  (`delphi_designer to-text`) or upload the text form.
 
 ## [1.19.3] - 2026-10-15
 

@@ -720,6 +720,17 @@ FORMS AND COMPONENTS, structured - never guess what a class publishes or what a 
 | `index` | integer | optional | set optional: the component's position among its siblings in the file, 1 = the first, alone - the same check as before. The file order is the z-order (a later one is drawn on top; an inherited form counts only what its own file writes); TabOrder is the keyboard order. |
 <!-- /contract -->
 
+A value the framework tables cannot judge - a property a class stores by code
+(`DefineProperties`: `FontColor` on an FMX `TEdit`, the `Explicit*` of a VCL
+control) - is judged by the IDE's own form reader, the renderer loading the form
+as the designer does (1.20): `set` asks it before writing (`DSGN-149`), `lint`
+says `CLEAN` only if it loads (`DSGN-154` when it could not be asked), and a
+write by `delphi_edit`, the changeset or `delphi_upload` that leaves a form it
+does not load gets `EDIT-127`. A `preview` the reader cannot load answers
+`DSGN-153` - the file, not the renderer - with what the reader said and the line
+it names; `DSGN-061` is left for a package or a component that fails while
+painting.
+
 `preview` (1.17.0) is drawn by two renderers that ship next to the server,
 `DelphiFormRenderVcl.exe` and `DelphiFormRenderFmx.exe` (`src/Render`): the form
 is built in design mode with the IDE's installed packages loaded into the
@@ -832,7 +843,7 @@ curl -H "Authorization: Bearer $TOKEN" -o LinuxPAServer37.0.tar.gz \
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for what you cannot recreate by editing: binaries (.res, icons, images), binary designer files, archives, reference material. Chunks in order: offset=0 creates/truncates, later offsets append and must match the current size. sha256 on the LAST chunk has the server verify the assembled file; chunkSha256 on ANY chunk checks that chunk BEFORE it is written. Jailed to the workspace roots; parent folders are created; a fresh upload over an existing file backs the old one up to the recoverable trash first. For SOURCE CODE prefer delphi_edit / delphi_textedit (they audit encoding and keep backups).
+Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for what you cannot recreate by editing: binaries (.res, icons, images), archives, reference material. Chunks in order: offset=0 creates/truncates, later offsets append and must match the current size. sha256 on the LAST chunk has the server verify the assembled file; chunkSha256 on ANY chunk checks that chunk BEFORE it is written. Jailed to the workspace roots; parent folders are created; a fresh upload over an existing file backs the old one up to the recoverable trash first. For SOURCE CODE prefer delphi_edit / delphi_textedit (they audit encoding and keep backups).
 
 *Access: read-write (refused to a read-only credential).*
 
@@ -844,6 +855,8 @@ Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for w
 | `sha256` | string | optional | Optional, on the LAST chunk: the whole-file SHA-256; a mismatch FAILS the call and the file goes to the recoverable trash instead of being published. |
 | `chunksha256` | string | optional | Optional: the SHA-256 of THIS chunk (of its decoded bytes), verified BEFORE it is written - a slip in transit is caught at the chunk that carried it, with nothing on disk. |
 <!-- /contract -->
+
+A text form (`.dfm`/`.fmx`) is judged as `delphi_edit` judges what it writes - the IDE's form parser, the framework tables, the form against its class, and the IDE's own form reader for a value the tables cannot judge (`EDIT-127`) - once the file is whole: the parser reads it, or the chunk carries `sha256`. What it found comes back in `designer`. A chunk that leaves the form half-written is not judged (1.20). A BINARY form is refused (`UPLOAD-002`): upload it as text, or convert one already in the workspace with `delphi_designer command=to-text`.
 
 ## Version control
 
