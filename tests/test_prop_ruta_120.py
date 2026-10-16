@@ -38,6 +38,9 @@ es un objeto dice que su clase se pregunta con info, y la lista cortada de
   P13 info TButton vcl filter=AutoPopup: una referencia no se abre (DSGN-048)
   P14 info TLabel vcl filter=Size: Font.Size, tambien en VCL
   P15 control: info TLabel fmx sin filtro, solo el primer nivel
+  P16 info TTextSettings fmx filter=color: la clase no publica nada y su familia
+      si, y el filtro lo encuentra (decia "no such member" junto a un
+      descendantsPublish con FontColor; DSGN-155 manda ahi: Flash, 16-oct)
 
 Uso:  python tests/test_prop_ruta_120.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -160,6 +163,10 @@ try:
     r = info('TLabel', 'fmx')
     check('P15 control: info sin filtro, solo el primer nivel (nada con punto)',
           '"name":"TextSettings"' in r and '"name":"TextSettings.' not in r, r[:300])
+
+    r = info('TTextSettings', 'fmx', 'color')
+    check('P16 info TTextSettings fmx filter=color: FontColor de su familia, sin DSGN-048',
+          '"name":"FontColor"' in r and not mc.tiene(r, 'DSGN-048') and 'descendantsPublish' in r, r[:700])
 finally:
     srv.cierra()
 

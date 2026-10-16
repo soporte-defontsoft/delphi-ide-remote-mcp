@@ -195,9 +195,11 @@ end;
   como PopupMenu: EsObjetoPropio), con punto como las escribe set, y en ARecs
   su registro. La instancia de una propiedad objeto puede ser de una
   descendiente del tipo declarado (TLabelTextSettings): cuenta su familia,
-  como en el juez. Ordenadas por nombre. }
-function PorDentroQueCasan(M: TMetaTable; APropias: TStringList; const AFilter: string;
-  ARecs: TDictionary<string, TPropRec>): TStringList;
+  como en el juez. Y de AClase, si no publica nada pero tiene descendientes
+  (TTextSettings), lo que publica su familia, sin punto, como
+  descendantsPublish. Ordenadas por nombre. }
+function PorDentroQueCasan(M: TMetaTable; const AClase: string; APropias: TStringList;
+  const AFilter: string; ARecs: TDictionary<string, TPropRec>): TStringList;
 var
   Duenas: TDictionary<string, string>;
   R: TPropRec;
@@ -224,6 +226,18 @@ begin
           Result := False;
         end);
     end;
+    // la clase que no publica nada: su familia, con duena '' (sin punto). El
+    // filtro decia "the class simply has no such member" junto a un
+    // descendantsPublish que lo traia, y DSGN-155 manda ahi (Flash, la
+    // validacion previa de la 1.20)
+    if APropias.Count = 0 then
+      M.RecorreFamilia(AClase,
+        function(const C: string): Boolean
+        begin
+          if not Duenas.ContainsKey(C) then
+            Duenas.Add(C, '');
+          Result := False;
+        end);
     if Duenas.Count = 0 then
       Exit;
     for var Key in M.Props.Keys do
@@ -233,12 +247,18 @@ begin
       R := M.Props[Key];
       if (R.Kind = 'm') or not ContainsText(R.Name, AFilter) then
         Continue;
-      for var D in Ya.Split([#9]) do
-        if not ARecs.ContainsKey(D + '.' + R.Name) then
+      var Duenos := Ya.Split([#9]);
+      if Length(Duenos) = 0 then
+        Duenos := [''];
+      for var D in Duenos do
+      begin
+        var Nombre := IfThen(D = '', R.Name, D + '.' + R.Name);
+        if not ARecs.ContainsKey(Nombre) then
         begin
-          ARecs.Add(D + '.' + R.Name, R);
-          Result.Add(D + '.' + R.Name);
+          ARecs.Add(Nombre, R);
+          Result.Add(Nombre);
         end;
+      end;
     end;
     Result.Sort;
   finally
@@ -316,7 +336,7 @@ begin
     if AFilter <> '' then
     begin
       var Recs := TDictionary<string, TPropRec>.Create;
-      var Dentro := PorDentroQueCasan(M, Names, AFilter, Recs);
+      var Dentro := PorDentroQueCasan(M, ClsId, Names, AFilter, Recs);
       try
         for PName in Dentro do
           Pon(PName, Recs[PName]);
