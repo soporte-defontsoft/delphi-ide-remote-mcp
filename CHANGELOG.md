@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- **A JSON answer no longer reaches the agent twice.** Every answer that is
+  a JSON object travels as text AND as `structuredContent`, and the MCP spec
+  asks the text to be the serialized `structuredContent` - the backwards-
+  compatible copy - so that a client can drop one of the two. Ours never
+  were equal: the server added `"ok": true` (and `code` on a refusal) to
+  `structuredContent` only. Hermes 0.22.2 drops the duplicate exactly when
+  the text parses to the same JSON, so it kept both, and EVERY JSON answer
+  reached its model twice - measured on 2026-10-16 by running our answers
+  through its own renderer: `delphi_workspace` 4,807 characters, the
+  `delphi_help` page of `delphi_designer` 20,105. The text now carries what
+  is added, at the end of the object, and nothing else changes: the tool's
+  own text keeps its form (it is not re-serialized), prose answers still
+  publish no `structuredContent`, and a refusal keeps `isError` and its
+  `{text, ok, code}`. Through the same renderer: 2,502 and 10,121, half of
+  every JSON answer of every tool. A client that reads the text as JSON
+  sees one more field, `ok`. (A refusal whose JSON carried its own `ok`
+  keeps its text as it was: it travels with `isError`, and a client then
+  takes the text.)
+
 ## [1.19.3] - 2026-10-15
 
 Five fixes, all in what an agent reads back, from Hermes' validation of

@@ -345,6 +345,9 @@ begin
     var Structured: TJSONObject := nil;
     if TextValue.TrimLeft.StartsWith('{') then
       Structured := TJSONObject.ParseJSONValue(TextValue) as TJSONObject;
+    // el objeto ES el texto de la tool (no el envoltorio de una negativa en
+    // prosa de abajo): lo que se le anada, se le anade tambien al texto
+    var EsElTexto := Assigned(Structured);
     if (Structured = nil) and (OutcomeCode <> '') then
     begin
       Structured := TJSONObject.Create;
@@ -360,15 +363,49 @@ begin
     // delphi_test (proyecto que no existe) y delphi_build (build fallido).
     // El campo "error" del objeto manda sobre lo que el objeto diga de si
     // mismo: si hay error, no hay ok.
+    var Quitado := False;
     if Assigned(Structured) and (OutcomeCode <> '') and (ErrorDelObjeto(Structured) <> '') then
-      Structured.RemovePair('ok').Free; // el suyo mentia; abajo se pone el bueno
+    begin
+      var Suyo := Structured.RemovePair('ok'); // el suyo mentia; abajo se pone el bueno
+      Quitado := Assigned(Suyo);
+      Suyo.Free;
+    end;
     if Assigned(Structured) then
     begin
       Result.AddPair('structuredContent', Structured);
+      var Vacio := Structured.Count = 0;
+      var Anadido := '';
       if Structured.GetValue('ok') = nil then
-        Structured.AddPair('ok', TJSONBool.Create(OutcomeCode = ''));
+      begin
+        var Par := TJSONPair.Create('ok', TJSONBool.Create(OutcomeCode = ''));
+        Structured.AddPair(Par);
+        Anadido := Anadido + ',' + Par.ToJSON;
+      end;
       if (OutcomeCode <> '') and (Structured.GetValue('code') = nil) then
-        Structured.AddPair('code', OutcomeCode);
+      begin
+        var Par := TJSONPair.Create('code', OutcomeCode);
+        Structured.AddPair(Par);
+        Anadido := Anadido + ',' + Par.ToJSON;
+      end;
+      // [local change 2026-10-16] Y el TEXTO lleva lo mismo. La especificacion
+      // pide que el texto sea el structuredContent serializado (la copia de
+      // compatibilidad), y un cliente que la sigue tira una de las dos: el
+      // puente de Hermes 0.22.2 compara las dos como JSON y, si son iguales,
+      // pasa solo el texto. Con el ok anadido SOLO aqui nunca lo eran, y TODAS
+      // las respuestas JSON le llegaban dos veces (medido el 16-oct: struct =
+      // texto + ',"ok":true'; workspace 2 x ~2.200 caracteres). Se anade al
+      // final del objeto, sin reserializar el texto de la tool: su forma se
+      // queda como la escribio. Cuando el objeto traia su propio ok (una
+      // negativa con "error", arriba) el texto no se toca: va con isError y el
+      // cliente se queda con el texto.
+      if EsElTexto and not Quitado and (Anadido <> '') then
+      begin
+        if Vacio then
+          Anadido := Anadido.Substring(1);
+        var Cierre := TextValue.LastIndexOf('}');
+        ContentItem.RemovePair('text').Free;
+        ContentItem.AddPair('text', TextValue.Substring(0, Cierre) + Anadido + TextValue.Substring(Cierre));
+      end;
     end;
     if OutcomeCode <> '' then
       HasError := True;

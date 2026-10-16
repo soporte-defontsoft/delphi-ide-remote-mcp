@@ -19,6 +19,10 @@ of 4-oct-2026: ~27K fixed per session, tools/list 26.9K of it).
       out (LSP-034); a small folder has no notShown.
   T9  delphi_symbols mode=full: no selectionRange equal to its range, no
       empty children, no empty detail.
+  T10 tools/list is the same, byte for byte, after the other calls and in a
+      second process with another client: it is the head of the prompt of a
+      client that loads it whole, and a prompt cache reads it all again from
+      the first character that changes (measured on 16-oct against Strata).
 
 Usage:  python tests/test_docs_tokens.py [path-to-DelphiLspMcp.exe]
 """
@@ -167,6 +171,18 @@ check('T9 ...y lo que no esta vacio se queda: los children de la clase, el detai
       '"children":[{"name":"Hola"' in r and '"detail":"declaration"' in r, r[:600])
 print('NOTA: T9 no mide que un selectionRange DISTINTO del range se quede: DelphiLSP '
       'los da iguales en todos los simbolos (medido el 4-oct-2026, tambien los declaration)')
+
+# T10: nada vivo en tools/list (ni version, ni fecha, ni rutas, ni el orden):
+# medido el 16-oct-2026 contra Strata, un caracter cambiado en la primera tool
+# = 0 % reutilizado, y la misma lista = 100 %
+TOOLS_DESPUES = srv.request('tools/list', {})['result']['tools']
+otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='tokens-otro-cliente', t=180)
+TOOLS_OTRO = otro.request('tools/list', {})['result']['tools']
+otro.cierra()
+UNA = json.dumps(TOOLS, ensure_ascii=False)
+check('T10 tools/list identico tras las demas llamadas y en otro proceso con otro cliente',
+      UNA == json.dumps(TOOLS_DESPUES, ensure_ascii=False) == json.dumps(TOOLS_OTRO, ensure_ascii=False),
+      '%d / %d / %d' % (len(UNA), len(json.dumps(TOOLS_DESPUES)), len(json.dumps(TOOLS_OTRO))))
 
 srv.cierra()
 mc.borra(BASE)

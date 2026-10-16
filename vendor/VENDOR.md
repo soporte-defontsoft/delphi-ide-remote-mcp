@@ -26,8 +26,10 @@ Local changes (each marked "[local change]" in the code, most with its date):
   content array), ListFilter (hides tools from tools/list; they stay
   callable), ToolDecorator (annotations, _meta); one outcome reader (the
   label that opens a message, or a JSON object's "error"); structuredContent
-  with {ok, code} (a JSON result becomes it; prose publishes none except on
-  failure; jail answers are always DENIED); malformed or non-object
+  with {ok, code} (a JSON result becomes it, and its text gets the same
+  additions at the end of the object, so the two are equal - the spec's
+  backwards-compatible copy, which a client may drop; prose publishes none
+  except on failure; jail answers are always DENIED); malformed or non-object
   "arguments" refused naming what arrived; a caller's EArgumentException
   returned as a refusal, other exceptions wrapped keeping their own outcome;
   messages from the catalog.
