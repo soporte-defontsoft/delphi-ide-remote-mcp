@@ -34,28 +34,30 @@ def proyecto(srv, carpeta):
     dpr = os.path.join(d, 'P.dpr')
     srv.call('delphi_edit', {'path': dpr, 'old': "    Writeln('P running');",
                              'new': "    Writeln('P running', Doble(21));"}, t=120)
-    linea = open(dpr, encoding='utf-8-sig').read().splitlines()[10]
-    return dpr, linea.index('Doble') + 2
+    # la linea se busca: el esqueleto de consola cambia (1.20.1, {$R *.res})
+    lineas = open(dpr, encoding='utf-8-sig').read().splitlines()
+    lin = next(i for i, l in enumerate(lineas) if 'Doble(21)' in l)
+    return dpr, lin, lineas[lin].index('Doble') + 2
 
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='ruta-sin-uri', t=300)
 try:
-    dpr, col = proyecto(srv, 'Suelto' + chr(0xD800) + 'X')
-    pos = {'path': dpr, 'line': 10, 'character': col}
+    dpr, lin, col = proyecto(srv, 'Suelto' + chr(0xD800) + 'X')
+    pos = {'path': dpr, 'line': lin, 'character': col}
     r = srv.call('delphi_definition', pos, t=240)
     check('S1 definition bajo una carpeta con medio caracter: LSP-044', 'LSP-044' in r, ascii(r[:300]))
     otros = [srv.call('delphi_hover', pos, t=240), srv.call('delphi_references', pos, t=240),
              srv.call('delphi_diagnostics', {'path': dpr}, t=240)]
     check('S2 hover, references y diagnostics: LSP-044', all('LSP-044' in x for x in otros),
           [ascii(x[:120]) for x in otros])
-    dpr, col = proyecto(srv, 'Normal')
-    r = srv.call('delphi_definition', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    dpr, lin, col = proyecto(srv, 'Normal')
+    r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('S3 control: en una carpeta normal la definicion sale', 'UA.pas' in r and 'LSP-04' not in r, r[:300])
     # W12 del revisor de cierre: el control de un par VALIDO (un emoji entero):
     # el nombrador lo escribe (no LSP-044); lo que el motor haga con el es otra
     # cosa (LSP-043, el motor pierde la carpeta)
-    dpr, col = proyecto(srv, 'Par' + '\U0001F600')
-    r = srv.call('delphi_definition', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    dpr, lin, col = proyecto(srv, 'Par' + '\U0001F600')
+    r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('S4 control: un par de sustitutos ENTERO no es medio caracter: nada de LSP-044',
           'LSP-044' not in r, ascii(r[:300]))
     # W5 del revisor de cierre: LSP-044 vivia en un borde (NoEsFuenteDelphi) y el
@@ -69,7 +71,7 @@ try:
     open(os.path.join(sub, 'UB.pas'), 'w', encoding='utf-8-sig', newline='').write(
         'unit UB;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nuses UA;\r\n\r\nfunction Cuatro: Integer;\r\n'
         'begin\r\n  Result := Doble(2);\r\nend;\r\n\r\nend.\r\n')
-    r = srv.call('delphi_references', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    r = srv.call('delphi_references', {'path': dpr, 'line': lin, 'character': col}, t=240)
     # MEDIDO (14-oct, con el motor solo y con el servidor): con esa carpeta en el
     # arbol del proyecto el MOTOR pierde la carpeta tambien de sus vecinas (la
     # definicion de Doble sale file:///UA.pas), asi que la respuesta es LSP-043

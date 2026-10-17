@@ -46,8 +46,10 @@ def proyecto(srv, carpeta):
     dpr = os.path.join(d, 'P.dpr')
     srv.call('delphi_edit', {'path': dpr, 'old': "    Writeln('P running');",
                              'new': "    Writeln('P running', Doble(21));"}, t=120)
-    linea = open(dpr, encoding='utf-8-sig').read().splitlines()[10]
-    return dpr, linea.index('Doble') + 2
+    # la linea se busca: el esqueleto de consola cambia (1.20.1, {$R *.res})
+    lineas = open(dpr, encoding='utf-8-sig').read().splitlines()
+    lin = next(i for i, l in enumerate(lineas) if 'Doble(21)' in l)
+    return dpr, lin, lineas[lin].index('Doble') + 2
 
 
 def diagnostics_con_error(srv, dpr):
@@ -64,17 +66,17 @@ def diagnostics_con_error(srv, dpr):
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='motor-sin-carpeta', t=300)
 try:
-    dpr, col = proyecto(srv, 'Emo\U0001F600')
-    r = srv.call('delphi_definition', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    dpr, lin, col = proyecto(srv, 'Emo\U0001F600')
+    r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('E1 definition bajo una carpeta con emoji: LSP-043 (el motor pierde la carpeta), no LSP-038',
           'LSP-043' in r and 'LSP-038' not in r, r[:300])
-    r = srv.call('delphi_references', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    r = srv.call('delphi_references', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('E2 references del mismo: LSP-043', 'LSP-043' in r, r[:300])
     r = diagnostics_con_error(srv, dpr)
     check('E4 diagnostics de un E2003 bajo la carpeta con emoji: LSP-045, no "0 errors"',
           'LSP-045' in r and '"errors":0' not in r, r[:300])
-    dpr, col = proyecto(srv, 'SinEmo')
-    r = srv.call('delphi_definition', {'path': dpr, 'line': 10, 'character': col}, t=240)
+    dpr, lin, col = proyecto(srv, 'SinEmo')
+    r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('E3 control: sin emoji la definicion sale (UEmo.pas, linea 9)',
           not mc.rechazado(r) and 'UEmo.pas' in r and 'LSP-04' not in r, r[:300])
     r = diagnostics_con_error(srv, dpr)

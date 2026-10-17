@@ -1205,6 +1205,7 @@ var
   N: array [0 .. 3] of Integer;
   I: Integer;
   Previo: string;
+  SinNumeros: Boolean;
 
   { Cuantos caracteres del valor de AClave son su numero (los digitos y
     puntos del principio): lo que cambiaba FileVersion=[\d.]*. }
@@ -1214,6 +1215,24 @@ var
     while (AClave.Ini + Result < AClave.Fin) and
           CharInSet(AXml[AClave.Ini + Result], ['0'..'9', '.']) do
       Inc(Result);
+  end;
+
+  { Si alguna de AClaves es una FileVersion que empieza en [ADesde, AHasta). }
+  function ConFileVersion(const AClaves: TArray<TClaveDeVersion>; ADesde, AHasta: Integer): Boolean;
+  begin
+    for var C in AClaves do
+      if SameText(C.Nombre, 'FileVersion') and (C.Ini >= ADesde) and (C.Ini < AHasta) then
+        Exit(True);
+    Result := False;
+  end;
+
+  { Si el proyecto mete la version en sus binarios en alguna configuracion. }
+  function IncluyeVersion(const AXml: string): Boolean;
+  begin
+    for var T in TramosDeEtiqueta(AXml, 'VerInfo_IncludeVerInfo') do
+      if SameText(ValorDeTramo(AXml, T).Trim, 'true') then
+        Exit(True);
+    Result := False;
   end;
 
 begin
@@ -1240,8 +1259,16 @@ begin
   Xml := PatchLoadText(ADproj, Enc);
   // por EL analisis del .dproj (los numeros, sus tramos; las claves,
   // ClavesDeVersion): eran siete regex, y las de las claves buscaban
-  // FileVersion= en TODO el texto, un evento de build incluido
-  if Length(TramosDeEtiqueta(Xml, 'VerInfo_MajorVer')) = 0 then
+  // FileVersion= en TODO el texto, un evento de build incluido.
+  // La version del binario la saca el build de la clave FileVersion (la
+  // tarea CreateRcFile; medido el 17-oct-2026: con los numeros a 2.3.4.5 y la
+  // clave a 9.8.7.6 el exe sale 9.8.7.6), y los numeros VerInfo_MajorVer...
+  // el IDE solo los escribe cuando dejan de ser 1.0.0.0: exigirlos dejaba
+  // fuera todo proyecto nuevo del IDE y 284 de los 296 .dproj de los Samples
+  // de la 37.0 con la version incluida (Hermes, dirigido de la 1.20.1).
+  SinNumeros := Length(TramosDeEtiqueta(Xml, 'VerInfo_MajorVer')) = 0;
+  var Claves0 := ClavesDeVersion(Xml);
+  if SinNumeros and not ConFileVersion(Claves0, 1, MaxInt) then
     Exit(MsgText(SR_CONFIG_VERSION_SIN_VERINFO));
   Eol := SaltoDominante(Xml); // el salto del fichero, la regla de todos
 
@@ -1259,12 +1286,36 @@ begin
       AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + '0';
   end;
   AntesKey := MsgText(SF_NINGUNO);
-  for var C in ClavesDeVersion(Xml) do
+  for var C in Claves0 do
     if SameText(C.Nombre, 'FileVersion') and (Numerico(Xml, C) > 0) then
     begin
       AntesKey := Copy(Xml, C.Ini, Numerico(Xml, C));
       Break;
     end;
+
+  // Sin numeros (un proyecto que nadie subio de 1.0.0.0) lo que tenia es lo
+  // que decia la clave, y los cuatro entran en cada grupo que la lleva,
+  // delante de su VerInfo_Keys: juntos, como los deja el IDE al subir la
+  // version (el .dproj de este servidor, en Base) y como escribe su propia
+  // tarea de autoincremento (VerInfo_Build y VerInfo_Keys en un grupo). Del
+  // ultimo grupo al primero, para que los de delante no se muevan.
+  if SinNumeros then
+  begin
+    AntesNum := AntesKey;
+    var Grupos := GruposDePropiedades(Xml);
+    for var G := High(Grupos) downto 0 do
+      for var T in TramosEnGrupo(Xml, 'VerInfo_Keys', Grupos[G]) do
+        if ConFileVersion(Claves0, T.Ini, T.Fin) then
+        begin
+          var Nuevos := '';
+          for I := 0 to 3 do
+            if Length(TramosEnGrupo(Xml, Tags[I], Grupos[G])) = 0 then
+              Nuevos := Nuevos + XmlElemento(Tags[I], N[I].ToString) + Eol +
+                SangriaDeLaLineaEn(Xml, T.Abre);
+          Xml := Copy(Xml, 1, T.Abre - 1) + Nuevos + Copy(Xml, T.Abre, MaxInt);
+          Break;
+        end;
+  end;
 
   // Los numeros: se sustituyen donde ya estan (en TODOS los grupos que los
   // lleven) y el que falte entra justo detras del anterior de la serie, que
@@ -1300,6 +1351,8 @@ begin
   Nota := '';
   if Sufijo <> '' then
     Nota := Eol + MsgFmt(SF_CFG_SUFIJO_NO_VA_DPROJ_FMT, [Sufijo]);
+  if not IncluyeVersion(Xml) then
+    Nota := Nota + Eol + MsgText(SF_CFG_VERSION_NO_INCLUIDA);
   Result := MsgFmt(SN_CONFIG_VERSION_OK_FMT,
     [Cuatro, IfThen(AntesNum = AntesKey, AntesNum,
      MsgFmt(SF_CFG_EN_NUMEROS_Y_CLAVES_FMT, [AntesNum, AntesKey])), Nota]);

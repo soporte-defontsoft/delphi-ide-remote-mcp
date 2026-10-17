@@ -160,6 +160,19 @@ out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader",
 check('set: CAMBIADA', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and tras_etiqueta(out).startswith(mc.catalogo()['SF_STYLE_CAMBIADA']), out[:200])
 txt = rd(S)
 check('set: valor en disco con la indentacion original', '      Fill.Color = xFF112233' in txt and 'xFFF6ECDB' not in txt, txt)
+# lo que FMX ignoraria al cargar el estilo se niega, con SU mensaje: pasaba el
+# parser del IDE y salia del .bin.style sin ello, con ok:true (Hermes,
+# completo de la 1.20.1). El juez es su lector (el conversor, check)
+_antes_fmx = rd(S)
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Fill.Color", "value": "xFF00AA55"})
+check('set: Fill.Color en un TLayout (no lo publica): STYLE-050 con el mensaje de FMX, sin escribir',
+      mc.rechazado(out) and mc.abre(out, 'SR_STYLES_FMX_LO_IGNORARIA_FMT') and 'TLayout.Fill.Color' in out
+      and rd(S) == _antes_fmx, out[:300])
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "background",
+                             "prop": "Fill.Color", "value": "red"})
+check('set: un valor que FMX no lee (Fill.Color = red): STYLE-050, sin escribir',
+      mc.rechazado(out) and mc.abre(out, 'SR_STYLES_FMX_LO_IGNORARIA_FMT') and 'Invalid property value' in out
+      and rd(S) == _antes_fmx, out[:300])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "0.500000000000000000"})
 check('set: ANADIDA tras StyleName', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and tras_etiqueta(out).startswith(mc.catalogo()['SF_STYLE_ANADIDA']), out[:200])
 txt = rd(S)
@@ -189,12 +202,16 @@ _antes_coma = rd(S)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "('a', 'b')"})
 check('...una lista con comas la niega el parser del IDE (DSGN-124) y no se escribe',
       mc.abre(out, 'SR_DSGN_PARSER_NO_ESCRIBE_FMT') and rd(S) == _antes_coma, out[:200])
+# ...y cerrada como la escribe un form pasa la gramatica y el parser del IDE;
+# entraba, y un TLayout no publica Tags: FMX la ignoraria (desde la 1.20.1,
+# STYLE-050 sin escribir)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "('a' 'b')"})
-check('...y cerrada como la escribe un form entra', not mc.rechazado(out) and "Tags = ('a' 'b')" in rd(S), out[:200])
+check('...y cerrada como la escribe un form pasa el parser, y FMX la ignoraria (TLayout no publica Tags): STYLE-050',
+      mc.abre(out, 'SR_STYLES_FMX_LO_IGNORARIA_FMT') and 'Tags' in out and "Tags = ('a' 'b')" not in rd(S), out[:300])
 # 1e3 es un numero de form (LA gramatica del numero, EsNumeroDeForm): no lo era
-out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "value": "1e3"})
-check('set: un numero con exponente (1e3) entra', not mc.rechazado(out) and 'Tags = 1e3' in rd(S), out[:200])
-call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Tags", "delete": True})
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "1e3"})
+check('set: un numero con exponente (1e3) entra', not mc.rechazado(out) and 'Opacity = 1e3' in rd(S), out[:200])
+call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Visible"})
 check('set: sin value pide value (y menciona delete)', mc.es(out, 'SR_STYLES_NEED_VALUE') and 'delete=true' in out, out)
 check('set: copia previa en __delphi-patch', os.path.isdir(os.path.join(STY, mc.PAPELERA)))
@@ -300,6 +317,7 @@ check('lint: un componente con el StyleName de un estilo, aparte y con su nota (
       nombrados == ['cardstyle'] and mc.es(d.get('componentsNamedLikeAStyleNote', ''), 'SN_STYLES_STYLENAME_DE_UN_ESTILO'),
       (nombrados, out[:400]))
 check('lint: rutas enmascaradas', 'srv' in d['stylesDir'] and ':' in d['stylesDir'], d['stylesDir'])
+check('lint: el estilo de la bateria no tiene nada que FMX ignore', d.get('ignoredByFmx') == [], d.get('ignoredByFmx'))
 
 # ---- build ----
 os.remove(os.path.join(STY, 'Battery.bin.style'))
@@ -310,6 +328,7 @@ check('build: conversion OK', d['converted'][0]['ok'] is True and d['converted']
 check('build: .bin.style creado con firma FMX', open(os.path.join(STY, 'Battery.bin.style'), 'rb').read(9) == b'FMX_STYLE', '')
 check('build: .rc -> .res', d.get('rcOk') is True and os.path.exists(os.path.join(STY, 'Battery.Estilos.res')), out[:300])
 check('build: ok', d['ok'] is True, d)
+check('build: y nada que FMX ignore', 'ignored' not in d['converted'][0] and 'ignoredNote' not in d, out[:300])
 # un .rc que brcc32 no compila es un FALLO (salia exito con rcError y la nota
 # de recompilar el proyecto; tercera revision)
 _RC = os.path.join(STY, 'Battery.Estilos.rc')
@@ -326,6 +345,44 @@ check('binario rechazado para editar/ver', mc.rechazado(out) and mc.es(out, 'SR_
 out = call('delphi_styles', {"path": STY, "command": "lint", "project": PRJ})
 d = json.loads(out)
 check('lint tras build: rc limpio', d['rcMissingFiles'] == [], d['rcMissingFiles'])
+
+# ---- lo que FMX ignora: lint y build lo nombran (1.20.1, Hermes) ----
+# un .style escrito a mano con las tres cosas que su lector se traga: una
+# propiedad que la clase no publica, un valor que no lee, una clase que no
+# conoce (con lo de dentro). El binario sale fiel a FMX: sin ellas
+MALO = """object TStyleContainer
+  object TLayout
+    StyleName = 'capa'
+    Fill.Color = xFF00AA55
+  end
+  object TRectangle
+    StyleName = 'rect'
+    Fill.Color = red
+  end
+  object TBorder
+    StyleName = 'borde'
+    object TText
+      Text = 'dentro'
+    end
+  end
+end
+"""
+STY2 = os.path.join(BASE, 'Styles2')
+os.makedirs(STY2)
+open(os.path.join(STY2, 'Malo.style'), 'w', encoding='utf-8', newline='\n').write(MALO)
+out = call('delphi_styles', {"path": STY2, "command": "lint", "project": PRJ})
+d = json.loads(out)
+_ign = [i for x in d.get('ignoredByFmx', []) for i in x['ignored']]
+check('lint: lo que FMX ignora, por fichero y con su mensaje (propiedad, valor, clase)',
+      len(_ign) == 3 and any('TLayout.Fill.Color' in i for i in _ign) and
+      any('Invalid property value' in i for i in _ign) and any('TBorder' in i for i in _ign), _ign)
+check('lint: ...deja de estar clean, con su nota (STYLE-051)',
+      d['clean'] is False and mc.es(d.get('ignoredByFmxNote', ''), 'SN_STYLES_FMX_IGNORA_FMT'), out[:300])
+out = call('delphi_styles', {"path": STY2, "command": "build"})
+d = json.loads(out)
+check('build: convierte (el binario es fiel a FMX) y nombra lo que no lleva, con su nota',
+      d['ok'] is True and len(d['converted'][0].get('ignored', [])) == 3 and
+      mc.es(d.get('ignoredNote', ''), 'SN_STYLES_FMX_IGNORA_FMT'), out[:400])
 
 # ---- refusals ----
 out = call('delphi_styles', {"path": STY, "command": "get", "style": "x"})

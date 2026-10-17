@@ -172,6 +172,22 @@ function StyleConverterExe: string;
 function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
   out ACode: Cardinal): string;
 
+{ Lo que el cargador de estilos de FMX IGNORA de un .style de texto: su
+  lector se traga cada error - una propiedad que la clase no publica, un valor
+  que no lee, una clase que no conoce con todo lo de dentro - y el estilo carga
+  sin ello, en la app y en el .bin.style de build (medido el 17-oct-2026: un
+  Fill.Color en un TLayout salia del binario con ok:true; Hermes, completo de
+  la 1.20.1). Lo dice el conversor (check: la misma lectura, apuntando), con
+  el mensaje del RTL - "Error reading TLayout.Fill.Color: Property Fill.Color
+  does not exist" -, en el orden en que FMX los encuentra. AFichero: el .style
+  tal cual esta. False si no hay conversor o no contesto: no se sabe, y
+  AIgnorado viene vacio. }
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>): Boolean;
+{ ...de un texto que aun no esta en disco (lo que set va a escribir), con la
+  codificacion AEnc de su fichero: la copia que se pregunta va a la temporal
+  del servidor, no a la jaula. }
+function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>): Boolean;
+
 { StyleNames of the Windows platform default style, extracted once through the
   helper and cached under LOCALAPPDATA. Empty when the helper is missing.
   Ya como claves (ClaveDeEstilo). }
@@ -199,7 +215,8 @@ uses
   Lsp.DesignerForma, // DesignerShapeOf: la forma en disco de un designer, y de un .style
   Lsp.Texts,
   Lsp.Casa,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Codificacion;
 
 { TStyleObj }
 
@@ -719,6 +736,64 @@ function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
   out ACode: Cardinal): string;
 begin
   Result := RunCapturedIn('"' + AExe + '" ' + AArgs, ADir, ATimeoutMs, ACode);
+end;
+
+const
+  { la temporal del servidor donde se le pregunta al conversor por un texto }
+  ESTILOS_CHECK_SUB = 'styles-check';
+
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>): Boolean;
+var
+  Exe, Salida: string;
+  Code: Cardinal;
+  L: TList<string>;
+begin
+  AIgnorado := [];
+  Exe := StyleConverterExe;
+  if Exe = '' then
+    Exit(False);
+  Salida := CorreStyleConvert(Exe, 'check "' + AFichero + '"', '', 60000, Code);
+  if Code <> 0 then
+    Exit(False);
+  L := TList<string>.Create;
+  try
+    for var Linea in SplitToLines(Salida) do
+      if Linea.StartsWith('IGNORED'#9) then
+        L.Add(Linea.Substring(Length('IGNORED'#9)).Trim);
+    AIgnorado := L.ToArray;
+  finally
+    L.Free;
+  end;
+  Result := True;
+end;
+
+function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>): Boolean;
+var
+  Dir: string;
+begin
+  AIgnorado := [];
+  if StyleConverterExe = '' then
+    Exit(False);
+  // la copia que se le PREGUNTA, en una carpeta de ESTA llamada del temporal
+  // del servidor, como la propuesta del renderizador (Lsp.FormRender): no es
+  // un entregable del agente ni se escribe en la jaula
+  Dir := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_CHECK_SUB));
+  try
+    try
+      CrearCarpeta(Dir);
+      var Cand := TPath.Combine(Dir, 'c.style');
+      EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc), False);
+      Result := IgnoradoPorFmx(Cand, AIgnorado);
+    except
+      Result := False; // sin la pregunta no se sabe: quien llama sigue como antes
+    end;
+  finally
+    try
+      BorraArbol(Dir); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
+    except
+      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
+    end;
+  end;
 end;
 
 function StyleConverterExe: string;

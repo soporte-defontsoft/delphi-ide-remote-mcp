@@ -494,7 +494,7 @@ REGLAS = [
       # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
       ('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'AncestroDeClase'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
-      ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Convert'),
+      ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Entrada'),
      # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (4 bytes de un designer o
      # de un estilo, el BOM de un form; el tamano de un PNG ya sale de sus bytes, 2b)
      ('Lsp.DesignerBin.pas', 'IsBinaryDesignerFile'), ('Lsp.Styles.pas', 'IsBinaryStyle'),

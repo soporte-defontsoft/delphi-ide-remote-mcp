@@ -97,7 +97,7 @@ end;
 function DprojTemplate(const AName, AGuid, AAppType, AFramework,
   AFormUnit, AFormName, AFormType: string): string;
 var
-  FormRef, MainExt, ProjectType, PkgProps, Ambitos: string;
+  FormRef, MainExt, ProjectType, PkgProps, Ambitos, VerInfoWin: string;
 begin
   // Los ambitos de unidad como los reparte el IDE (medido en los Samples de
   // la 37.0 y en GalateaFMX.dproj, 17-oct-2026): en Base los de todas las
@@ -109,6 +109,23 @@ begin
   Ambitos := 'System;Xml;Data;Datasnap;Web;Soap;';
   if not SameText(AFramework, 'FMX') then
     Ambitos := Ambitos + 'Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;';
+  // La informacion de version de Windows, como la escribe el IDE en un
+  // proyecto nuevo (medido el 17-oct-2026 con proyectos que el IDE de la 37.0
+  // acababa de crear, uno de cada tipo: estas claves en cada grupo de una
+  // plataforma Windows, y VerInfo_IncludeVerInfo en todos menos en consola y
+  // DUnitX, donde el binario no lleva la version hasta que se marca). Sin
+  // ella set-version no tenia nada que mantener: CFG-003 a todo proyecto
+  // recien creado (Hermes, dirigido de la 1.20.1). La version del binario es
+  // la clave FileVersion.
+  VerInfoWin := '';
+  if not SameText(AAppType, 'Console') then
+    VerInfoWin := '        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>' + CRLF;
+  VerInfoWin := VerInfoWin +
+    '        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);' +
+    'FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;' +
+    'OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);' +
+    'ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=' +
+    '</VerInfo_Keys>' + CRLF;
   // Un paquete se diferencia en cuatro cosas, medidas contra un .dproj de
   // paquete del IDE (FMXDefontsoft, 2026-09-23): el fuente principal es el
   // .dpk, AppType/ProjectType = Package, GenDll+GenPackage+AppFileExt=bpl,
@@ -192,9 +209,11 @@ begin
     '    </PropertyGroup>' + CRLF +
     '    <PropertyGroup Condition="''$(Base_Win32)''!=''''">' + CRLF +
     '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+    VerInfoWin +
     '    </PropertyGroup>' + CRLF +
     '    <PropertyGroup Condition="''$(Base_Win64)''!=''''">' + CRLF +
     '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+    VerInfoWin +
     '    </PropertyGroup>' + CRLF +
     '    <ItemGroup>' + CRLF +
     '        <DelphiCompile Include="$(MainSource)">' + CRLF +
@@ -527,9 +546,13 @@ begin
     end
     else if Kind = 'console' then
     begin
+      // {$R *.res} como en la plantilla de consola del IDE (la que lleva
+      // delphicoreide370.bpl, medido el 17-oct-2026): sin el, el recurso que
+      // genera el build (la version, el icono) no entraba en el exe.
       WriteNewFile(Dpr,
         'program ' + AName + ';' + CRLF + CRLF +
         '{$APPTYPE CONSOLE}' + CRLF + CRLF +
+        '{$R *.res}' + CRLF + CRLF +
         'uses' + CRLF +
         '  System.SysUtils;' + CRLF + CRLF +
         'begin' + CRLF +

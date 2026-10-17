@@ -185,12 +185,43 @@ begin
     Result := MsgFmt(SR_STYLES_NAME_CHARS_FMT, [ANombre]);
 end;
 
-function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelete: Boolean): string;
+{ ASoloJuicioFmx: la pasada que solo JUZGA, sin escribir nada: compone el
+  cambio y dice si FMX ignoraria algo nuevo (su negativa, o ''). La hace
+  ExecuteWithParams ANTES del cerrojo, porque lanza el conversor externo. }
+function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelete: Boolean;
+  ASoloJuicioFmx: Boolean = False): string;
 var
   Doc: TStyleDoc;
   O: TStyleObj;
   Err, Line, NewName, Texto: string;
   WasThere: Boolean;
+
+  { Lo que FMX ignoraria del texto que se va a escribir y no ignoraba en el
+    fichero tal cual esta (el juez: su lector, IgnoradoPorFmx): lo NUEVO es
+    este cambio. '' si nada, o si no se pudo preguntar (sin conversor, o un
+    texto que ni el parser lee: eso lo dice Guarda). }
+  function NuevoIgnoradoPorFmx: string;
+  var
+    Antes, Despues: TArray<string>;
+    Quedan: TList<string>;
+  begin
+    Result := '';
+    if not IgnoradoPorFmxDeTexto(Doc.TextoDe(Doc.Lines), Doc.Encoding, Despues) or
+       (Length(Despues) = 0) or not IgnoradoPorFmx(Doc.Path, Antes) then
+      Exit;
+    Quedan := TList<string>.Create;
+    try
+      Quedan.AddRange(Antes);
+      for var D in Despues do
+        if Quedan.Contains(D) then
+          Quedan.Remove(D) // uno que ya estaba: no es de este cambio
+        else
+          Result := Result + IfThen(Result = '', '', '; ') + D;
+    finally
+      Quedan.Free;
+    end;
+  end;
+
 begin
   if AProp.Trim = '' then
     Exit(MsgText(SR_STYLES_NEED_PROP));
@@ -210,6 +241,9 @@ begin
     O := Doc.Resolve(AStyle, AChild, Err);
     if O = nil then
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
+    // ni quitar una propiedad ni renombrar anaden nada que FMX ignore
+    if ASoloJuicioFmx and (ADelete or SameText(AProp.Trim, 'StyleName')) then
+      Exit('');
     // StyleName is not a property like the others: writing it RENAMES the
     // style. Done blind it produced two styles with the same name in one
     // file, and after that `delete` silently took the first of the two
@@ -260,6 +294,17 @@ begin
     end
     else
       Line := Doc.SetProp(O, AProp.Trim, AValue.Trim, WasThere);
+    // una propiedad que la clase no publica o un valor que no lee pasaba el
+    // parser del IDE y FMX lo tiraba al cargar: en la app y en el .bin.style
+    // no estaba (Hermes, completo de la 1.20.1). Lo juzga la pasada sin
+    // cerrojo, y aqui sale sin escribir
+    if ASoloJuicioFmx then
+    begin
+      Err := NuevoIgnoradoPorFmx;
+      if Err <> '' then
+        Exit(MsgFmt(SR_STYLES_FMX_LO_IGNORARIA_FMT, [Err]));
+      Exit('');
+    end;
     Result := Doc.Guarda;
     if Result <> '' then
       Exit;
@@ -350,7 +395,9 @@ var
   Names, Defaults: TDictionary<string, string>;
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx: TJSONArray;
+  Ignorado: TArray<string>;
+  NIgnorados: Integer;
   M: TMatch;
   Lines: TArray<string>;
   I: Integer;
@@ -392,6 +439,8 @@ begin
   Rc := TJSONArray.Create;
   SinNombre := TJSONArray.Create;
   ComoEstilo := TJSONArray.Create;
+  PorFmx := TJSONArray.Create;
+  NIgnorados := 0;
   try
     // 1) style names per file + duplicates
     for F in Files do
@@ -567,6 +616,22 @@ begin
           Rc.AddElement(Issue);
         end;
     end;
+    // lo que FMX se traga al cargar cada fichero (IgnoradoPorFmx): una
+    // propiedad que la clase no publica, un valor que no lee, una clase que
+    // no conoce. lint lo revisa todo y no lo veia: salia del .bin.style con
+    // ok:true (Hermes, completo de la 1.20.1)
+    for F in Files do
+      if IgnoradoPorFmx(F, Ignorado) and (Length(Ignorado) > 0) then
+      begin
+        Issue := TJSONObject.Create;
+        Issue.AddPair('file', TPath.GetFileName(F));
+        var Lista := TJSONArray.Create;
+        for var Cosa in Ignorado do
+          Lista.Add(Cosa);
+        Issue.AddPair('ignored', Lista);
+        PorFmx.AddElement(Issue);
+        Inc(NIgnorados, Length(Ignorado));
+      end;
     Ret.AddPair('stylesDir', MaskDriveText('', Dir));
     Ret.AddPair('projectDir', MaskDriveText('', ProjDir));
     Ret.AddPair('styleFiles', TJSONNumber.Create(Length(Files)));
@@ -580,6 +645,9 @@ begin
     Ret.AddPair('withoutStyleName', SinNombre);
     if SinNombre.Count > 0 then
       Ret.AddPair('withoutStyleNameNote', MsgText(SN_STYLES_SIN_STYLENAME));
+    Ret.AddPair('ignoredByFmx', PorFmx);
+    if NIgnorados > 0 then
+      Ret.AddPair('ignoredByFmxNote', MsgFmt(SN_STYLES_FMX_IGNORA_FMT, [NIgnorados]));
     // una pista, no un error seguro: sale solo si hay, y no cambia clean
     if ComoEstilo.Count > 0 then
     begin
@@ -590,7 +658,7 @@ begin
       ComoEstilo.Free;
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
-      (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0)));
+      (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0)));
     if Length(PlatformDefaultStyleNames) = 0 then
       Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
     else
@@ -756,7 +824,8 @@ var
   Arr: TJSONArray;
   Code: Cardinal;
   AllOk: Boolean;
-  N: Integer;
+  N, Ignorados: Integer;
+  Ignorado: TArray<string>;
 begin
   Dir := StylesDirOf(APath);
   Exe := StyleConverterExe;
@@ -792,6 +861,7 @@ begin
     CrearCarpeta(Tmp);
     AllOk := True;
     N := 0;
+    Ignorados := 0;
     for F in Files do
     begin
       Bin := BinDeEstilo(Dir, F);
@@ -814,7 +884,20 @@ begin
       E.AddPair('binary', TPath.GetFileName(Bin));
       E.AddPair('ok', TJSONBool.Create(Code = 0));
       if Code = 0 then
-        E.AddPair('bytes', TJSONNumber.Create(TFile.GetSize(Bin)))
+      begin
+        E.AddPair('bytes', TJSONNumber.Create(TFile.GetSize(Bin)));
+        // lo que el binario NO lleva aunque el texto lo diga: lo que FMX se
+        // trago al cargarlo (IgnoradoPorFmx). Salia ok:true y nada mas
+        // (Hermes, completo de la 1.20.1)
+        if IgnoradoPorFmx(F, Ignorado) and (Length(Ignorado) > 0) then
+        begin
+          var Lista := TJSONArray.Create;
+          for var Cosa in Ignorado do
+            Lista.Add(Cosa);
+          E.AddPair('ignored', Lista);
+          Inc(Ignorados, Length(Ignorado));
+        end;
+      end
       else
       begin
         E.AddPair('error', Out.Trim);
@@ -868,6 +951,8 @@ begin
     // "recompila el proyecto" solo cuando hay un .res nuevo que meter
     if AllOk then
       Ret.AddPair('note', MsgText(SN_STYLES_BUILD_NOTE));
+    if Ignorados > 0 then
+      Ret.AddPair('ignoredNote', MsgFmt(SN_STYLES_FMX_IGNORA_FMT, [Ignorados]));
     Result := Ret.ToJSON;
   finally
     Ret.Free;
@@ -955,7 +1040,7 @@ end;
 { ---- dispatcher ---- }
 
 { El gesto; ExecuteWithParams envuelve los que ESCRIBEN en el cerrojo. }
-function GestoDeEstilos(const Params: TDelphiStylesParams): string;
+function GestoDeEstilos(const Params: TDelphiStylesParams; ASoloJuicioFmx: Boolean = False): string;
 var
   Cmd, Denied: string;
 begin
@@ -1024,7 +1109,7 @@ begin
       Result := GetStyle(Params.Path, Params.Style.Trim, Params.Child.Trim)
     else if Cmd = 'set' then
       Result := SetStyleProp(Params.Path, Params.Style.Trim, Params.Child.Trim,
-        Params.Prop, Params.Value, Params.Delete)
+        Params.Prop, Params.Value, Params.Delete, ASoloJuicioFmx)
     else if Cmd = 'clone' then
       Result := CloneStyle(Params.Path, Params.Style.Trim, Params.Name)
     else if Cmd = 'delete' then
@@ -1053,6 +1138,16 @@ begin
   // del servidor seria peor que la carrera que evita.
   if not MatchText(Params.Command.Trim.ToLower, ['set', 'clone', 'delete']) then
     Exit(GestoDeEstilos(Params));
+  // set: lo que FMX ignoraria se juzga ANTES y sin el cerrojo - lanza el
+  // conversor externo, decimas o hasta su tope si se cuelga -, como build.
+  // El veredicto depende de la clase del objeto, la propiedad y el valor, y
+  // una escritura de este fichero entre medias no cambia ninguno de los tres
+  if SameText(Params.Command.Trim, 'set') then
+  begin
+    Result := GestoDeEstilos(Params, True);
+    if Result <> '' then
+      Exit;
+  end;
   EnterFileEdit;
   try
     Result := GestoDeEstilos(Params);

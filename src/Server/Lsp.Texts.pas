@@ -244,11 +244,17 @@ const
     'separated by dots (1.2, 1.2.3, 1.2.3.4), each between 0 and 65535. ' +
     'A suffix like -beta is accepted and ignored for the VERSIONINFO.';
 
+  { Sin la clave FileVersion ni los numeros no hay version que mantener. Decia
+    "no VerInfo_MajorVer", que el IDE solo escribe cuando la version deja de
+    ser 1.0.0.0: rechazaba todo proyecto nuevo del IDE (Hermes, dirigido de la
+    1.20.1). }
   SR_CONFIG_VERSION_SIN_VERINFO =
-    '[CFG-003 DENIED] This project has no VERSIONINFO (there is no ' +
-    'VerInfo_MajorVer in the .dproj). The IDE creates that block when ' +
-    '"Include version information" is checked in Project Options; once ' +
-    'it exists, this tool maintains its values.';
+    '[CFG-003 DENIED] This project has no Windows version information to ' +
+    'maintain: no FileVersion key in a VerInfo_Keys (the key the build ' +
+    'takes the version of the binary from) and no VerInfo_MajorVer. The ' +
+    'IDE writes them when "Include version information" is checked in ' +
+    'Project Options > Version Info; once they exist, this tool maintains ' +
+    'the version.';
 
   SN_CONFIG_VERSION_OK_FMT =
     '[CFG-004] Project version: %s (was %s). The Windows VERSIONINFO and ' +
@@ -2927,7 +2933,7 @@ const
     'is ignored - VERSIONINFO is numeric). Written to the Windows VerInfo ' +
     'numbers AND the FileVersion/ProductVersion keys at once, which is ' +
     'what drifts by hand. Android and iOS versions are NOT touched. Needs ' +
-    'the project''s VERSIONINFO block (Version Info page), else CFG-003.';
+    'the version keys the IDE writes (Version Info page), else CFG-003.';
 
   SP_CONFIG_SDK =
     'set-sdk: the SDK this PROJECT builds that platform with, by name ' +
@@ -3458,13 +3464,16 @@ const
     'lines, parts); get shows one whole; set changes or adds ONE property of ' +
     'a style or of a part inside it (child=background/text), value written ' +
     'exactly as the file does (xAARRGGBB colors, floats with 18 decimals, ' +
-    'quoted strings); clone copies a style under a new StyleName - the way to ' +
+    'quoted strings), refused if FMX would ignore it when it loads the ' +
+    'style; clone copies a style under a new StyleName - the way to ' +
     'add a variant; delete removes a whole style by StyleName (the copy in ' +
     '__delphi-patch is the way back); lint checks the whole thing: ' +
     'duplicated StyleNames, ' +
     'StyleLookup values in the project''s .fmx/.pas that NO style defines ' +
     '(the platform default style counts), design tokens missing in a theme ' +
-    'of a *Tokens.ini, .rc entries whose file is missing; build converts ' +
+    'of a *Tokens.ini, .rc entries whose file is missing, what FMX ignores ' +
+    'when it loads them (a property the class does not publish, a value it ' +
+    'cannot read); build converts ' +
     'every text .style of the folder to .bin.style (the form an app embeds: ' +
     'embedded TEXT loads but does not resolve StyleLookup) and compiles the ' +
     'folder''s .rc to .res with brcc32. Binary styles are never edited. ' +
@@ -3637,6 +3646,21 @@ const
     'RCDATA -> .res). Rebuild the project afterwards (delphi_build ' +
     'target=Build) so the new .res goes in; MSBuild reuses an old .res ' +
     'otherwise.';
+
+  { Lo que el lector de estilos de FMX se traga sin decir nada: lo dice el
+    conversor (Lsp.Styles.IgnoradoPorFmx). Pasaba el parser del IDE y salia
+    del .bin.style con ok:true (Hermes, completo de la 1.20.1). }
+  SR_STYLES_FMX_LO_IGNORARIA_FMT =
+    '[STYLE-050 DENIED] FMX would ignore this change when it loads the ' +
+    'style - %s - so neither the app nor the .bin.style would carry it. ' +
+    'Nothing written. What a class publishes, and the values a property ' +
+    'takes: delphi_designer command=prop classname=<class> framework=fmx.';
+  SN_STYLES_FMX_IGNORA_FMT =
+    '[STYLE-051] FMX ignores %d thing(s) of these text styles when it loads ' +
+    'them ("ignored"): a property the class does not publish, a value it ' +
+    'cannot read, a class it does not know - with everything inside it. The ' +
+    'app does not see them and build leaves them out of the .bin.style: fix ' +
+    'them in the text .style.';
 
   // ---- delphi_messages ----
 
@@ -7234,11 +7258,16 @@ const
     '[EDIT-048 DENIED] The end of the .dpr header/uses was not found, so ' +
     'there is no place to put the routine.';
 
+  { Tambien sin frontera: una unidad que no se lee como Pascal. Decia solo "sin
+    implementation" y Hermes, con el CUERPO de una funcion en la interface, lo
+    atribuyo a su implementation vacia (completo de la 1.20.1, medido 17-oct). }
   SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT =
     '[EDIT-049 DENIED] The boundary at the end of the unit''s implementation ' +
     'was not found - its initialization, its main begin or its final ''end.'', ' +
-    'starting a line (a unit without an implementation section has none). ' +
-    'Nothing was written: place the routine with an edit.';
+    'starting a line. A unit without an implementation section has none, and ' +
+    'neither has one that does not read as Pascal (a routine BODY in the ' +
+    'interface, a section out of place): delphi_diagnostics says what the ' +
+    'compiler sees there. Nothing was written: place the routine with an edit.';
 
   SR_EDIT_INSERT_METODO_NECESITA_INCLASS =
     '[EDIT-050 INVALID_PARAM] insert:"metodo" needs "inclass" with the exact ' +
@@ -9226,7 +9255,7 @@ const
     '(remove a whole style by StyleName; the __delphi-patch copy is the ' +
     'way back) | lint (duplicated StyleNames, StyleLookup values of the ' +
     'project''s .fmx that no style defines, design tokens missing in a ' +
-    'theme, .rc entries without file) | build (every text .style of the ' +
+    'theme, .rc entries without file, what FMX ignores) | build (every text .style of the ' +
     'folder -> .bin.style, then the .rc -> .res with brcc32)';
 
   SP_STYLE_PROJECT =
@@ -10153,6 +10182,15 @@ const
 
   SF_CFG_EN_NUMEROS_Y_CLAVES_FMT =
     '%s in the numbers and %s in the keys';
+
+  { set-version en un proyecto que no incluye la version en sus binarios: el
+    build no mete el recurso (medido el 17-oct-2026: sin IncludeVerInfo el exe
+    sale sin version, con las claves y los numeros escritos). }
+  SF_CFG_VERSION_NO_INCLUIDA =
+    'The project does not include the version in its binaries ' +
+    '(VerInfo_IncludeVerInfo is true in no configuration): the version is ' +
+    'written, and a binary carries it once "Include version information" ' +
+    'is checked (Project Options > Version Info).';
 
   // Textos que estaban en linea en Lsp.Dproj.pas (el resto, 27-sep-2026)
   SF_CFG_VCL_SOLO_WINDOWS_FMT =

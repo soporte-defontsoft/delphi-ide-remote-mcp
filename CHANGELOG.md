@@ -71,9 +71,8 @@ the MCP `initialize` response (`serverInfo.version`).
   descriptions of `delphi_paserver` and of `delphi_build`'s `platform`,
   and the skill, gave the step ("get-sdk once") without saying how to know
   it was done: Hermes pulled an SDK it already had, and later proposed it
-  again for a new project. They now say `command=platforms` answers
-  `ready (SDK present)` when it is there, and `profiles` lists each SDK
-  with its date.
+  again for a new project. They now say that `command=platforms` tells
+  when it is already pulled (`ready (SDK present)`).
 - **Three answers that read as something else.** `delphi_list dirs=true`
   on a folder with files and no subfolders answered `total: 0` and nothing
   more, which reads as an empty folder: it now says how many files there
@@ -92,6 +91,49 @@ the MCP `initialize` response (`serverInfo.version`).
   sets it is now rewritten, the base group gets it when it lacks it, and
   `CFG-081` says what each group had. The writer is the inverse of the
   reader the build uses to find its outputs, with the same parse.
+- **`delphi_config set-version` works on a project the IDE made.** It asked
+  for `VerInfo_MajorVer`, which the IDE writes only once the version is no
+  longer 1.0.0.0, so it refused every new project of the IDE - and 284 of
+  the 296 `.dproj` of the 37.0 samples that include the version - with
+  `CFG-003` ("This project has no VERSIONINFO"). The build takes the
+  binary's version from the `FileVersion` key of `VerInfo_Keys` (measured:
+  with the numbers at 2.3.4.5 and the key at 9.8.7.6, the exe says
+  9.8.7.6), and that key is what it now needs. A project without the
+  numbers gets the four in each group that holds the key, right before its
+  `VerInfo_Keys`, as the IDE leaves them. `CFG-003` says what is missing,
+  and the answer says when the project does not include the version in its
+  binaries (no `VerInfo_IncludeVerInfo`), instead of reporting a version
+  the binary does not carry. Found by Hermes (Flash) in the targeted test
+  of 1.20.1; a battery builds the IDE's own templates and reads the version
+  of the binary.
+- **A project `delphi_create` makes is born with the version information
+  the IDE writes.** Its `.dproj` had none - no `VerInfo_Keys`, no
+  `VerInfo_IncludeVerInfo` -, so its binary carried no version and
+  `set-version` refused it. It now has what the 37.0 IDE writes in a
+  project it has just created (measured with one of each kind, made in the
+  IDE): the keys in `Base_Win32` and `Base_Win64`, and the version included
+  in the binary in every kind but a console or test project, which the IDE
+  also leaves unchecked. A console `.dpr` now links its resource
+  (`{$R *.res}`), as the IDE's template does: without it the resource the
+  build generates - the version, the icon - never reached the exe.
+- **`delphi_styles` says what FMX ignores in a text style, and `set` does
+  not write it.** FMX's style reader swallows every error while it loads a
+  style: a property the class does not publish (`Fill.Color` on a
+  `TLayout`), a value it cannot read (`Fill.Color = red`), a class it does
+  not know - with everything inside it. `set` wrote them (they pass the
+  IDE's parser), `build` made a `.bin.style` without them and answered
+  `ok:true`, and the app never saw them. The style converter now repeats
+  that load and lists what the reader swallowed, with the RTL's own message
+  (`Error reading TLayout.Fill.Color: Property Fill.Color does not exist`):
+  `set` refuses a change FMX would ignore (`STYLE-050`, nothing written),
+  and `lint` (`ignoredByFmx`, no longer `clean`) and `build` (`ignored` per
+  file) name what is already there (`STYLE-051`). Found by Hermes (Flash) in
+  the full test of 1.20.1, who read the binary by hand.
+- **`delphi_edit insert` says why a unit has no boundary.** `EDIT-049` blamed
+  only "a unit without an implementation section"; a unit that does not read
+  as Pascal - a routine BODY in its interface - has none either, and Hermes
+  took his empty implementation section for the cause. The message now names
+  both and sends to `delphi_diagnostics`.
 - **`delphi_edit removeuses` takes a library unit out of a `.dpr`, as
   `adduses` puts one in.** `adduses System.JSON` on a program worked, and
   nothing could undo it: `removeuses` answered `USES-014` and sent the
