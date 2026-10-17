@@ -1575,8 +1575,13 @@ begin
   // PREVIOUS binary with today's date and zero warnings - the measured
   // half-a-session trap (vault: delphi-android-deploy-sin-build). The IDE
   // never deploys stale either.
+  // Lo que corre msbuild va aparte de lo que se pidio: la respuesta dice
+  // "target": "Deploy", lo que el agente puede volver a pedir (decia
+  // "Build;Deploy", que BUILD-004 niega como entrada: Hermes lo copio de la
+  // respuesta y se lo negamos, 17-oct-2026)
+  var TargetsMsBuild := Target;
   if SameText(Target, 'Deploy') then
-    Target := 'Build;Deploy';
+    TargetsMsBuild := 'Build;Deploy';
   // La puerta de RemoteHosts, tambien aqui: un deploy por perfil MARCA el host
   // del perfil (PAClient), igual que test-connection / remote-run, asi que pasa
   // por la MISMA puerta (ProfileHostDenied). Hasta la 1.15 el deploy la saltaba
@@ -1749,7 +1754,7 @@ begin
   // Security audit trail: a build can run arbitrary pre/post-build steps
   // declared in the .dproj, so record every one.
   TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_TARGET_FMT,
-    [TPath.GetFullPath(ADprojPath), Plat, Cfg, Target, SdkArg]));
+    [TPath.GetFullPath(ADprojPath), Plat, Cfg, TargetsMsBuild, SdkArg]));
 
   // Los MISMOS flags que BuildWithParams.bat, que es el contrato de la casa
   // para builds con agentes: quiet = solo errores y el resumen (unas pocas
@@ -1781,7 +1786,7 @@ begin
   // valor es solo un caracter, y los jueces de cada valor siguen como segunda
   // barrera (David, 11-oct)
   var Orden := Format('%s %s /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s %s',
-    [EnComillas(MsBuildExe), EnComillas(TPath.GetFullPath(ADprojPath)), Target, Cfg,
+    [EnComillas(MsBuildExe), EnComillas(TPath.GetFullPath(ADprojPath)), TargetsMsBuild, Cfg,
      Plat, SdkArg, ProfileArg, DeviceArg, EventArg, Verb]);
   // la carpeta del proyecto como cwd: sin ella, msbuild hereda la del proceso
   // (el servicio: la casa del servidor) y lo que una tarea escribe RELATIVO -el

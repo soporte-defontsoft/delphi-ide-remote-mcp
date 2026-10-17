@@ -41,6 +41,13 @@ the MCP `initialize` response (`serverInfo.version`).
   it now ends with `valid: fsBold, fsItalic, fsUnderline, fsStrikeOut`,
   for a set of the framework and for one a class of yours publishes.
   Measured with Hermes (Flash) replicating a form from an image.
+- **`delphi_build target=Deploy` answers `"target": "Deploy"`.** It
+  answered `"Build;Deploy"` - the targets the server hands msbuild, since a
+  Deploy always builds first - and that value is refused as input
+  (`BUILD-004`): Hermes copied it from our own answer into its next call
+  and we refused it. The answer now says what was asked; msbuild still
+  runs `Build;Deploy`, and a battery now checks that a Deploy builds first
+  (a bare `/t:Deploy` re-ships the previous binary).
 
 ## [1.20.0] - 2026-10-16
 
