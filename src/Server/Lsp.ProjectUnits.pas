@@ -2356,8 +2356,9 @@ begin
 end;
 
 { El eco de adduses y removeuses: la clausula de ASec de APasPath tal y como
-  quedo, releida del disco; ASinElla si no hay seccion o clausula. Estaba
-  dos veces, una en cada una }
+  quedo, releida del disco; ASinElla si no hay seccion o clausula. ASec = ''
+  es el uses de un programa, que tiene uno solo. Estaba dos veces, una en
+  cada una, y otra en el adduses del .dpr }
 function ClausulaReleida(const APasPath, ASec, ASinElla: string): string;
 var
   Text, Enc: string;
@@ -2366,13 +2367,16 @@ var
 begin
   Result := ASinElla;
   Text := PatchLoadText(APasPath, Enc);
-  PosSec := FinDeSeccion(CodigoPascal(Text), ASec);
-  if PosSec > 0 then
+  PosSec := 0;
+  if ASec <> '' then
   begin
-    U := FindUses(Text, PosSec);
-    if U.Found then
-      Result := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
+    PosSec := FinDeSeccion(CodigoPascal(Text), ASec);
+    if PosSec = 0 then
+      Exit;
   end;
+  U := FindUses(Text, PosSec);
+  if U.Found then
+    Result := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
 end;
 
 { La OTRA seccion de ASec (interface <-> implementation) y su clausula uses
@@ -2448,6 +2452,33 @@ begin
   end;
 end;
 
+{ Las unidades de ANames que son del PROYECTO de ADpr: para cada nombre, en
+  su mismo indice, la ruta relativa de la .pas de ese nombre al lado del .dpr
+  o en cualquier carpeta de su arbol (EL recorredor: enlaces legibles; sin
+  artefactos del IDE ni la papelera), o '' si no lo es. Solo se miraba la de
+  al lado: una en Domain\ entraba como unidad de biblioteca, sin su ruta
+  (punto 8 de la 1.18.2). El juez de adduses y de removeuses en un .dpr, uno
+  para los dos (D8, 1.20.1). }
+function UnidadesDelProyecto(const ADpr: string; const ANames: TArray<string>): TArray<string>;
+begin
+  var Dir := TPath.GetDirectoryName(ADpr);
+  // UN paseo del arbol, no uno por nombre (M10 del revisor de cierre; que
+  // siga los enlaces legibles es la regla del recorredor, la del copiador:
+  // dcc los sigue igual)
+  var Pas := WalkFiles(Dir, '*.pas');
+  SetLength(Result, Length(ANames));
+  for var I := 0 to High(ANames) do
+  begin
+    Result[I] := '';
+    for var F in Pas do
+      if SameText(TPath.GetFileNameWithoutExtension(F), ANames[I]) and not SkipBajoLaRaiz(F, Dir) then
+      begin
+        Result[I] := ExtractRelativePath(IncludeTrailingPathDelimiter(Dir), F);
+        Break;
+      end;
+  end;
+end;
+
 { adduses en un .dpr (11.6, David 10-oct-2026: un muro medido moviendo
   SondaOrdenFmx): unidades de BIBLIOTECA - sin ruta: las encuentra el
   compilador por su search path - al uses del programa, por el mismo
@@ -2461,21 +2492,11 @@ var
   U: TUsesClause;
   Faltan, YaEstan: TArray<string>;
 begin
-  // una unidad del PROYECTO va por add-unit, con su ruta: la .pas de ese
-  // nombre al lado del .dpr o en cualquier carpeta de su arbol (EL
-  // recorredor: enlaces legibles; sin artefactos del IDE ni la papelera). Solo
-  // se miraba la de al lado: una en Domain\ entraba como unidad de
-  // biblioteca, sin su ruta (punto 8 de la 1.18.2)
-  var Dir := TPath.GetDirectoryName(ADpr);
-  // UN paseo del arbol, no uno por nombre (M10 del revisor de cierre; que
-  // siga los enlaces legibles es la regla del recorredor, la del copiador:
-  // dcc los sigue igual)
-  var Pas := WalkFiles(Dir, '*.pas');
-  for var N in ANames do
-    for var F in Pas do
-      if SameText(TPath.GetFileNameWithoutExtension(F), N) and not SkipBajoLaRaiz(F, Dir) then
-        Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT,
-          [N, ExtractRelativePath(IncludeTrailingPathDelimiter(Dir), F)]));
+  // una unidad del PROYECTO va por add-unit, con su ruta
+  var Propias := UnidadesDelProyecto(ADpr, ANames);
+  for var I := 0 to High(ANames) do
+    if Propias[I] <> '' then
+      Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT, [ANames[I], Propias[I]]));
   EnterFileEdit;
   try
     if not TFile.Exists(ADpr) then
@@ -2510,11 +2531,7 @@ begin
       Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(ADpr)]));
     PatchSaveText(ADpr, Text, Enc);
     // el eco, releido del disco: la clausula tal y como ha quedado
-    var Clausula := '(?)';
-    Text := PatchLoadText(ADpr, Enc);
-    U := FindUses(Text);
-    if U.Found then
-      Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
+    var Clausula := ClausulaReleida(ADpr, '', '(?)');
     Result := MsgFmt(SN_ADDUSES_ADDED_FMT, ['program', TPath.GetFileName(ADpr),
       string.Join(', ', Faltan),
       IfThen(Length(YaEstan) > 0, MsgFmt(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), ''),
@@ -2587,6 +2604,64 @@ begin
   end;
 end;
 
+{ removeuses en un .dpr: la inversa de AddUsesToProgram (D8 de la auditoria
+  de la 1.20.1, medido: adduses System.JSON entraba en el .dpr y nada la
+  sacaba - removeuses contestaba USES-014 y remitia a remove-unit, que pide
+  un .pas). Solo unidades de BIBLIOTECA: una del PROYECTO - su .pas en el
+  arbol del .dpr, el juez de adduses, o una entrada con su in '...' aunque el
+  .pas viva fuera - va por remove-unit, que quita tambien su CreateForm y su
+  DCCReference. Si la clausula se queda vacia se va entera. }
+function RemoveUsesFromProgram(const ADpr: string; const ANames: TArray<string>): string;
+var
+  Text, Enc, E: string;
+  U: TUsesClause;
+  Entries, Quitadas, NoEstaban: TArray<string>;
+begin
+  // el arbol se recorre FUERA del cerrojo, como en adduses; y solo cuenta
+  // para las que estan en el uses: la que no esta es USES-017, no remove-unit
+  var Propias := UnidadesDelProyecto(ADpr, ANames);
+  EnterFileEdit;
+  try
+    if not TFile.Exists(ADpr) then
+      Exit(NoEsFichero(ADpr, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [ADpr])));
+    Text := PatchLoadText(ADpr, Enc);
+    U := FindUses(Text);
+    if not U.Found then
+      Exit(MsgFmt(SN_REMOVEUSES_NO_CLAUSE_FMT, ['program', TPath.GetFileName(ADpr)]));
+    if U.EnRamas then
+      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(ADpr)]));
+    Entries := U.Entries;
+    Quitadas := [];
+    NoEstaban := [];
+    for var I := 0 to High(ANames) do
+      if LocateEntry(U, ANames[I], E) then
+      begin
+        // del proyecto: con su in '...' aunque el .pas viva fuera del arbol,
+        // o con su .pas en el
+        if EntryInclude(E) <> '' then
+          Exit(MsgFmt(SR_REMOVEUSES_UNIDAD_DEL_PROYECTO_FMT, [ANames[I], EntryInclude(E)]));
+        if Propias[I] <> '' then
+          Exit(MsgFmt(SR_REMOVEUSES_UNIDAD_DEL_PROYECTO_FMT, [ANames[I], Propias[I]]));
+        Quitadas := Quitadas + [ANames[I]];
+        Entries := EntriesWithout(Entries, ANames[I]);
+      end
+      else
+        NoEstaban := NoEstaban + [ANames[I]];
+    if Length(Quitadas) = 0 then
+      Exit(MsgFmt(SN_REMOVEUSES_ABSENT_FMT, [string.Join(', ', ANames), 'program',
+        TPath.GetFileName(ADpr)]));
+    Text := ReplaceUses(Text, U, Entries); // vacia: la clausula entera fuera
+    PatchSaveText(ADpr, Text, Enc);
+    // el eco, releido del disco
+    Result := MsgFmt(SN_REMOVEUSES_REMOVED_FMT, ['program', TPath.GetFileName(ADpr),
+      string.Join(', ', Quitadas),
+      IfThen(Length(NoEstaban) > 0, MsgFmt(SN_REMOVEUSES_SOME_ABSENT_FMT, [string.Join(', ', NoEstaban)]), ''),
+      ClausulaReleida(ADpr, '', MsgFmt(SN_REMOVEUSES_GONE_FMT, ['program']))]);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
 { removeuses: la inversa de adduses. Si la clausula se queda vacia se va
   entera, con el salto de linea que la seguia: un `uses ;` no compila. }
 function RemoveUsesFromUnit(const APasPath: string; const ANames: TArray<string>;
@@ -2619,7 +2694,7 @@ var
   end;
 
 begin
-  if not SameText(TPath.GetExtension(APasPath), '.pas') then
+  if not MatchText(TPath.GetExtension(APasPath), ['.pas', '.dpr']) then
     Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do
@@ -2630,6 +2705,9 @@ begin
   for Nombre in Names do
     if not EsIdentificador(Nombre, True) then
       Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+  // un programa tiene UN uses: section no aplica
+  if SameText(TPath.GetExtension(APasPath), '.dpr') then
+    Exit(RemoveUsesFromProgram(APasPath, Names));
   Sec := LowerCase(ASection.Trim);
   if Sec = '' then
     Sec := 'implementation';

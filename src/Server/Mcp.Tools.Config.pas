@@ -497,49 +497,40 @@ end;
 { ValidOutputFolder (la regla de "carpeta relativa al proyecto, apta para
   escribirse en un .dproj") vive ahora en Lsp.Dproj: delphi_create necesita
   la misma para sus subcarpetas, y una regla asi no se escribe dos veces. }
-{ Inner text currently between <ATag>..</ATag> ('' if the tag is absent),
-  ya desescapado: la inversa de XmlElemento. }
-function TagInner(const AXml, ATag: string): string;
+{ El "before" de CFG-081: el valor que tenia; si estaba en mas de un grupo, o
+  en uno que no es el base, cada uno con su grupo - una config con su propia
+  carpeta que set-output ha reescrito se dice, no se calla. }
+function LoQueHabia(const ACambios: TArray<TValorReescrito>): string;
 var
-  Low: string;
-  OpenPos, InnerStart, ClosePos: Integer;
+  Trozos: TArray<string>;
+  Valor: string;
 begin
-  Result := '';
-  Low := LowerCase(AXml);
-  OpenPos := Pos('<' + LowerCase(ATag) + '>', Low);
-  if OpenPos = 0 then Exit;
-  InnerStart := OpenPos + Length(ATag) + 2;
-  ClosePos := Pos('</' + LowerCase(ATag) + '>', Low, InnerStart);
-  if ClosePos = 0 then Exit;
-  Result := XmlUnescape(Copy(AXml, InnerStart, ClosePos - InnerStart));
-end;
-
-{ Replace the inner text of an existing <ATag>..</ATag>. True if it existed. }
-function SetTagInner(var AXml: string; const ATag, ANewInner: string): Boolean;
-var
-  Low: string;
-  OpenPos, InnerStart, ClosePos: Integer;
-begin
-  Result := False;
-  Low := LowerCase(AXml);
-  OpenPos := Pos('<' + LowerCase(ATag) + '>', Low);
-  if OpenPos = 0 then Exit;
-  InnerStart := OpenPos + Length(ATag) + 2;
-  ClosePos := Pos('</' + LowerCase(ATag) + '>', Low, InnerStart);
-  if ClosePos = 0 then Exit;
-  AXml := Copy(AXml, 1, InnerStart - 1) + XmlEscape(ANewInner) + Copy(AXml, ClosePos, MaxInt);
-  Result := True;
+  if Length(ACambios) = 0 then
+    Exit(MsgText(SF_CFG_SIN_DEFINIR));
+  if (Length(ACambios) = 1) and ACambios[0].EnBase and (ACambios[0].Antes <> '') then
+    Exit(ACambios[0].Antes);
+  Trozos := [];
+  for var C in ACambios do
+  begin
+    Valor := IfThen(C.Antes = '', MsgText(SF_CFG_SIN_DEFINIR), C.Antes);
+    if C.Grupo = '' then
+      Trozos := Trozos + [MsgFmt(SF_CFG_VALOR_EN_GRUPO_SIN_CONDICION_FMT, [Valor])]
+    else
+      Trozos := Trozos + [MsgFmt(SF_CFG_VALOR_EN_GRUPO_FMT, [Valor, C.Grupo])];
+  end;
+  Result := string.Join('; ', Trozos);
 end;
 
 { Put every build artifact of the project under one folder (default Compiled),
   matching the common RAD Studio convention:
     DCC_ExeOutput = .\<folder>\$(Platform)\$(Config)
     DCC_DcuOutput = .\<folder>\Dcu\$(Platform)\$(Config)
-  A curated edit of the base PropertyGroup only; the .dproj is backed up. }
+  in the base PropertyGroup AND in every group that sets its own
+  (FijaPropiedadParaTodos); the .dproj is backed up. }
 function SetOutput(const ADproj, ARawFolder: string): string;
 var
-  Enc, Xml, Clean, ExeInner, DcuInner, OldExe, OldDcu: string;
-  BasePos, InsertAt: Integer;
+  Enc, Xml, Clean, ExeInner, DcuInner: string;
+  Exes, Dcus: TArray<TValorReescrito>;
   Restore: Boolean;
 begin
   Restore := SameText(ARawFolder.Trim, 'default') or SameText(ARawFolder.Trim, 'reset');
@@ -564,35 +555,18 @@ begin
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
-  OldExe := TagInner(Xml, 'DCC_ExeOutput');
-  OldDcu := TagInner(Xml, 'DCC_DcuOutput');
-
-  // Replace existing tags in place (both real projects have them).
-  SetTagInner(Xml, 'DCC_ExeOutput', ExeInner);
-  SetTagInner(Xml, 'DCC_DcuOutput', DcuInner);
-
-  // If either tag was missing, insert it into the base PropertyGroup.
-  if (OldExe = '') or (OldDcu = '') then
-  begin
-    BasePos := Pos(LowerCase('<PropertyGroup Condition="''$(Base)''!=''''">'),
-                   LowerCase(Xml));
-    if BasePos = 0 then
-      Exit(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
-    InsertAt := Pos('>', Xml, BasePos) + 1;
-    if OldDcu = '' then
-      Xml := Copy(Xml, 1, InsertAt - 1) + sLineBreak +
-        '        ' + XmlElemento('DCC_DcuOutput', DcuInner) +
-        Copy(Xml, InsertAt, MaxInt);
-    if OldExe = '' then
-      Xml := Copy(Xml, 1, InsertAt - 1) + sLineBreak +
-        '        ' + XmlElemento('DCC_ExeOutput', ExeInner) +
-        Copy(Xml, InsertAt, MaxInt);
-  end;
+  // TODAS las que haya, en el grupo que sea: una config con su propia carpeta
+  // se quedaba con ella y la respuesta decia lo contrario (D4, 1.20.1). La
+  // Dcu primero: cada una que falte se escribe al principio del grupo base, y
+  // asi la Exe queda delante, como antes. Si una falla no se guarda nada.
+  if not FijaPropiedadParaTodos(Xml, 'DCC_DcuOutput', DcuInner, Dcus) or
+     not FijaPropiedadParaTodos(Xml, 'DCC_ExeOutput', ExeInner, Exes) then
+    Exit(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
 
   PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CFG_SALIDA_BINARIOS_FIJADA_AHORA_FMT,
-    [Clean, sLineBreak, ExeInner, IfThen(OldExe = '', MsgText(SF_CFG_SIN_DEFINIR), OldExe),
-     sLineBreak, DcuInner, IfThen(OldDcu = '', MsgText(SF_CFG_SIN_DEFINIR), OldDcu), sLineBreak]);
+    [Clean, sLineBreak, ExeInner, LoQueHabia(Exes),
+     sLineBreak, DcuInner, LoQueHabia(Dcus), sLineBreak]);
 end;
 
 { ---- unit search paths ---------------------------------------------------

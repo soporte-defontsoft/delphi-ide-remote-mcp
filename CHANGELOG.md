@@ -83,6 +83,22 @@ the MCP `initialize` response (`serverInfo.version`).
   does not exist, as neither folder nor file. `maxwidth` was described as
   "the width the image is scaled to"; it is the most width it travels at -
   a narrower capture is never enlarged.
+- **`delphi_config set-output` sets the folder in EVERY configuration and
+  platform.** It rewrote only the first `DCC_ExeOutput` and
+  `DCC_DcuOutput` of the `.dproj`: a project whose Debug configuration sets
+  its own folder kept it, and the Debug build landed there while the answer
+  said `Compiled` (measured in the 1.20.0 audit; 5 of the 192 `.dproj` of
+  the 37.0 samples set the folder in more than one group). Every group that
+  sets it is now rewritten, the base group gets it when it lacks it, and
+  `CFG-081` says what each group had. The writer is the inverse of the
+  reader the build uses to find its outputs, with the same parse.
+- **`delphi_edit removeuses` takes a library unit out of a `.dpr`, as
+  `adduses` puts one in.** `adduses System.JSON` on a program worked, and
+  nothing could undo it: `removeuses` answered `USES-014` and sent the
+  agent to `delphi_config remove-unit`, which takes a `.pas`. A unit of the
+  project - its `.pas` in the program's tree, or an entry with its `in
+  '...'` path - still goes by `remove-unit`, which also removes its
+  `CreateForm` and its `DCCReference` (`USES-025`, nothing written).
 
 ### Added
 

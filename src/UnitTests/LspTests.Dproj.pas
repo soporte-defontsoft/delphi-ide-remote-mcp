@@ -37,6 +37,8 @@ type
     [Test] procedure RutasDeBusquedaResueltasYDesescapadas;
     [Test] procedure TrozosEscritosNoPartenUnaEntidad;
     [Test] procedure TagValueNoDistingueMayusculas;
+    [Test] procedure FijaPropiedadParaTodosReescribeCadaGrupo;
+    [Test] procedure FijaPropiedadParaTodosSinGrupoBaseNoToca;
   end;
 
 implementation
@@ -148,6 +150,53 @@ begin
     '<Project><PropertyGroup><Profile_SysRoot>C:\R&amp;D\sysroot</Profile_SysRoot>' +
     '</PropertyGroup></Project>', 'Profile_sysroot'));
   Assert.AreEqual('', TagValue('<Project/>', 'Profile_sysroot'));
+end;
+
+procedure TXmlTextoTests.FijaPropiedadParaTodosReescribeCadaGrupo;
+const
+  NUEVO = '.\C&D\$(Platform)\$(Config)';
+var
+  Xml: string;
+  C: TArray<TValorReescrito>;
+begin
+  // la de una config ANTES del grupo base (el texto crece por delante de el y
+  // la que falta en la base tiene que caer justo tras su '>'), y la de una
+  // plataforma con mayusculas y blancos: las dos se reescriben (D4, 1.20.1)
+  Xml := '<Project>' +
+    '<PropertyGroup Condition="''$(Cfg_2)''!=''''"><DCC_ExeOutput>.\R&amp;D</DCC_ExeOutput></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base)''!=''''"><X>a</X></PropertyGroup>' +
+    '<PropertyGroup Condition = "''$(Base_Win64)'' != ''''"><DCC_EXEOUTPUT >.\b</DCC_EXEOUTPUT ></PropertyGroup>' +
+    '</Project>';
+  Assert.IsTrue(FijaPropiedadParaTodos(Xml, 'DCC_ExeOutput', NUEVO, C), Xml);
+  Assert.IsTrue(Length(C) = 2, 'cambios: ' + IntToStr(Length(C)));
+  Assert.AreEqual('.\R&D', C[0].Antes, 'el valor de verdad');
+  Assert.AreEqual('''$(Cfg_2)''!=''''', C[0].Grupo);
+  Assert.IsFalse(C[0].EnBase or C[1].EnBase, 'ninguna estaba en la base');
+  Assert.AreEqual('.\b', C[1].Antes);
+  Assert.IsTrue(Length(AllTagValues(Xml, 'DCC_ExeOutput')) = 3, Xml);
+  for var V in AllTagValues(Xml, 'DCC_ExeOutput') do
+    Assert.AreEqual(NUEVO, V, Xml);
+  Assert.IsTrue(Xml.Contains('<PropertyGroup Condition="''$(Base)''!=''''">' + sLineBreak +
+    '        ' + XmlElemento('DCC_ExeOutput', NUEVO) + '<X>a</X>'), 'en la base: ' + Xml);
+  // con la base ya puesta no se escribe otra
+  Assert.IsTrue(FijaPropiedadParaTodos(Xml, 'DCC_ExeOutput', '.\x', C), Xml);
+  Assert.IsTrue((Length(C) = 3) and C[1].EnBase, 'la segunda vez, la de la base cuenta');
+  Assert.IsTrue(Length(AllTagValues(Xml, 'DCC_ExeOutput')) = 3, Xml);
+end;
+
+procedure TXmlTextoTests.FijaPropiedadParaTodosSinGrupoBaseNoToca;
+const
+  XML_SIN_BASE = '<Project><PropertyGroup Condition="''$(Cfg_1)''!=''''">' +
+    '<DCC_ExeOutput>.\a</DCC_ExeOutput></PropertyGroup></Project>';
+var
+  Xml: string;
+  C: TArray<TValorReescrito>;
+begin
+  // sin grupo base no hay de donde lo hereden las demas: False y el texto
+  // tal cual (set-output contesta CFG-087 y no guarda nada)
+  Xml := XML_SIN_BASE;
+  Assert.IsFalse(FijaPropiedadParaTodos(Xml, 'DCC_ExeOutput', '.\b', C));
+  Assert.AreEqual(XML_SIN_BASE, Xml);
 end;
 
 procedure CompruebaImport(const AForma: string;

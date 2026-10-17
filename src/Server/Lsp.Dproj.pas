@@ -85,6 +85,30 @@ function XmlAtributo(const ANombre, AValor: string): string;
   devuelven el valor ya desescapado. }
 function XmlElemento(const ATag, AValor: string): string;
 
+type
+  { Una <Tag> que FijaPropiedadParaTodos ha reescrito: la Condition del
+    PropertyGroup que la lleva, tal cual esta escrita ('' = sin condicion), el
+    valor que tenia, ya desescapado, y si ese grupo es el base. }
+  TValorReescrito = record
+    Grupo: string;
+    Antes: string;
+    EnBase: Boolean;
+  end;
+
+{ Una propiedad con el MISMO valor en todas las configuraciones y plataformas
+  de un .dproj - la inversa de AllTagValues para escribir, con su mismo
+  analisis: cada <ATag> de un PropertyGroup, en el grupo que sea, pasa a valer
+  AValor, y si el grupo base ('$(Base)'!='') no la lleva se le escribe, que es
+  de donde la heredan los demas. ACambios: una entrada por cada una que ya
+  estaba, en orden de documento. False, con AXml sin tocar, si habia que
+  escribirla en la base y el .dproj no tiene grupo base. set-output solo
+  cambiaba la primera <DCC_ExeOutput>: una config con su propia carpeta se
+  quedaba con ella y el build de Debug salia alli mientras la respuesta decia
+  Compiled (D4 de la auditoria de la 1.20.1, medido el 17-oct-2026; 5 de los
+  192 .dproj de los Samples de la 37.0 la fijan en mas de un grupo). }
+function FijaPropiedadParaTodos(var AXml: string; const ATag, AValor: string;
+  out ACambios: TArray<TValorReescrito>): Boolean;
+
 { ---- .dproj reading ---- }
 
 { Reads a .dproj file. Missing file / unreadable -> empty record (all fields
@@ -347,9 +371,32 @@ begin
   Result := 0;
 end;
 
-function AllTagValues(const AXml, ATag: string): TArray<string>;
+type
+  { Donde esta escrito el valor de una <Tag>..</Tag>: AXml[Ini .. Fin - 1],
+    sin desescapar }
+  TTramoXml = record
+    Ini, Fin: Integer;
+  end;
+
+  { Un <PropertyGroup> con contenido: AXml[Ini .. Fin - 1], y su Condition
+    tal cual esta escrita ('' = sin condicion) }
+  TGrupoXml = record
+    Ini, Fin: Integer;
+    Condicion: string;
+  end;
+
+const
+  // la Condition del grupo base, en la forma de CondicionNormalizada
+  CONDICION_BASE = '''$(base)''!=''''';
+
+{ Donde esta el valor de cada <ATag>..</ATag> de AXml, en orden de documento:
+  el UNICO analisis de la etiqueta, con el que lee AllTagValues y escribe
+  FijaPropiedadParaTodos - un escritor con su propio analisis reescribia otra
+  cosa que la que el lector lee. }
+function TramosDeEtiqueta(const AXml, ATag: string): TArray<TTramoXml>;
 var
-  List: TList<string>;
+  List: TList<TTramoXml>;
+  T: TTramoXml;
   Low, Open, CloseOpen: string;
   P, After, TagEnd, CloseP, Q: Integer;
 begin
@@ -358,7 +405,7 @@ begin
   // <DCC_EXEOUTPUT>, ni un salto de linea antes de Condition=, ni un '>'
   // dentro de una condicion pueden saltarsela (25-sep-2026). LowerCase solo
   // toca A..Z: las posiciones de Low valen en AXml.
-  List := TList<string>.Create;
+  List := TList<TTramoXml>.Create;
   try
     Low := LowerCase(AXml);
     Open := '<' + LowerCase(ATag);
@@ -399,13 +446,72 @@ begin
       end;
       if CloseP = 0 then
         Break;
-      List.Add(XmlUnescape(Copy(AXml, P, CloseP - P))); // el valor de verdad
+      T.Ini := P;
+      T.Fin := CloseP;
+      List.Add(T);
       P := Q + 1;
     end;
     Result := List.ToArray;
   finally
     List.Free;
   end;
+end;
+
+function AllTagValues(const AXml, ATag: string): TArray<string>;
+begin
+  Result := [];
+  for var T in TramosDeEtiqueta(AXml, ATag) do
+    Result := Result + [XmlUnescape(Copy(AXml, T.Ini, T.Fin - T.Ini))]; // el valor de verdad
+end;
+
+{ Los <PropertyGroup> con contenido de AXml, en orden de documento: el UNICO
+  recorrido de los grupos, el de EffectiveProperty y FijaPropiedadParaTodos. }
+function GruposDePropiedades(const AXml: string): TArray<TGrupoXml>;
+var
+  Low: string;
+  P, Ini, After, TagEnd, CloseP: Integer;
+  G: TGrupoXml;
+begin
+  Result := [];
+  Low := LowerCase(AXml);
+  P := 1;
+  while True do
+  begin
+    Ini := Pos('<propertygroup', Low, P);
+    if Ini = 0 then
+      Break;
+    After := Ini + Length('<propertygroup');
+    if (After > Length(Low)) or
+       not CharInSet(Low[After], ['>', '/', ' ', #9, #13, #10]) then
+    begin
+      P := After;
+      Continue;
+    end;
+    TagEnd := FinDeEtiqueta(Low, After);
+    if TagEnd = 0 then
+      Break;
+    P := TagEnd + 1;
+    if Low[TagEnd - 1] = '/' then
+      Continue; // <PropertyGroup/>: vacio
+    CloseP := Pos('</propertygroup', Low, P);
+    if CloseP = 0 then
+      Break;
+    G.Ini := P;
+    G.Fin := CloseP;
+    G.Condicion := '';
+    for var V in AllTagAttr(Copy(AXml, Ini, TagEnd - Ini + 1), 'PropertyGroup', 'Condition') do
+      G.Condicion := V;
+    Result := Result + [G];
+    P := CloseP + 1;
+  end;
+end;
+
+{ Una Condition en la forma en que se comparan: minusculas y sin blancos }
+function CondicionNormalizada(const ACondicion: string): string;
+begin
+  Result := LowerCase(ACondicion).Replace(' ', '', [rfReplaceAll])
+    .Replace(#9, '', [rfReplaceAll]).Replace(#13, '', [rfReplaceAll])
+    .Replace(#10, '', [rfReplaceAll]);
 end;
 
 function AllTagAttr(const AXml, ATag, AAttr: string): TArray<string>;
@@ -588,6 +694,60 @@ end;
 function XmlElemento(const ATag, AValor: string): string;
 begin
   Result := '<' + ATag + '>' + XmlEscape(AValor) + '</' + ATag + '>';
+end;
+
+function FijaPropiedadParaTodos(var AXml: string; const ATag, AValor: string;
+  out ACambios: TArray<TValorReescrito>): Boolean;
+var
+  Grupos: TArray<TGrupoXml>;
+  Escrito, Nuevo: string;
+  Base, Ult, Desplaza: Integer;
+  EnBase: Boolean;
+  C: TValorReescrito;
+begin
+  ACambios := [];
+  Grupos := GruposDePropiedades(AXml);
+  Base := -1;
+  for var I := 0 to High(Grupos) do
+    if CondicionNormalizada(Grupos[I].Condicion) = CONDICION_BASE then
+    begin
+      Base := I;
+      Break;
+    end;
+  Escrito := XmlEscape(AValor);
+  Nuevo := '';
+  Ult := 1;
+  Desplaza := 0; // lo que crece o encoge el texto por delante del grupo base
+  EnBase := False;
+  for var T in TramosDeEtiqueta(AXml, ATag) do
+    for var I := 0 to High(Grupos) do
+      // solo la de un PropertyGroup es una propiedad para MSBuild
+      if (T.Ini >= Grupos[I].Ini) and (T.Fin <= Grupos[I].Fin) then
+      begin
+        C.Grupo := Grupos[I].Condicion;
+        C.Antes := XmlUnescape(Copy(AXml, T.Ini, T.Fin - T.Ini));
+        C.EnBase := I = Base;
+        EnBase := EnBase or C.EnBase;
+        ACambios := ACambios + [C];
+        if (Base >= 0) and (T.Fin <= Grupos[Base].Ini) then
+          Inc(Desplaza, Length(Escrito) - (T.Fin - T.Ini));
+        Nuevo := Nuevo + Copy(AXml, Ult, T.Ini - Ult) + Escrito;
+        Ult := T.Fin;
+        Break;
+      end;
+  Nuevo := Nuevo + Copy(AXml, Ult, MaxInt);
+  if not EnBase then
+  begin
+    if Base < 0 then
+      Exit(False);
+    // al principio del grupo base, donde la ponia set-output; el salto lo
+    // deja como el del fichero quien lo guarda (PatchSaveConSuSalto)
+    var En := Grupos[Base].Ini + Desplaza;
+    Nuevo := Copy(Nuevo, 1, En - 1) + sLineBreak + '        ' +
+      XmlElemento(ATag, AValor) + Copy(Nuevo, En, MaxInt);
+  end;
+  AXml := Nuevo;
+  Result := True;
 end;
 
 { TDprojInfo }
@@ -1169,50 +1329,20 @@ end;
   declarado. }
 function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
 var
-  Low, Plat, Key, Cond, V: string;
+  Plat, Key, V: string;
   Validas: TArray<string>;
-  P, Ini, After, TagEnd, CloseP: Integer;
 begin
   Result := '';
-  Low := LowerCase(AXml);
   Plat := LowerCase(APlatform);
   Key := LowerCase(ConfigKey(AXml, AConfig));
-  Validas := ['', '''$(base)''!=''''', '''$(base_' + Plat + ')''!=''''' ];
+  Validas := ['', CONDICION_BASE, '''$(base_' + Plat + ')''!=''''' ];
   if Key <> '' then
     Validas := Validas + ['''$(' + Key + ')''!=''''',
       '''$(' + Key + '_' + Plat + ')''!=''''' ];
-  P := 1;
-  while True do
-  begin
-    Ini := Pos('<propertygroup', Low, P);
-    if Ini = 0 then
-      Break;
-    After := Ini + Length('<propertygroup');
-    if (After > Length(Low)) or
-       not CharInSet(Low[After], ['>', '/', ' ', #9, #13, #10]) then
-    begin
-      P := After;
-      Continue;
-    end;
-    TagEnd := FinDeEtiqueta(Low, After);
-    if TagEnd = 0 then
-      Break;
-    P := TagEnd + 1;
-    if Low[TagEnd - 1] = '/' then
-      Continue; // <PropertyGroup/>: vacio
-    CloseP := Pos('</propertygroup', Low, P);
-    if CloseP = 0 then
-      Break;
-    Cond := '';
-    for V in AllTagAttr(Copy(AXml, Ini, TagEnd - Ini + 1), 'PropertyGroup', 'Condition') do
-      Cond := LowerCase(V).Replace(' ', '', [rfReplaceAll])
-        .Replace(#9, '', [rfReplaceAll]).Replace(#13, '', [rfReplaceAll])
-        .Replace(#10, '', [rfReplaceAll]);
-    if MatchStr(Cond, Validas) then
-      for V in AllTagValues(Copy(AXml, P, CloseP - P), ATag) do
+  for var G in GruposDePropiedades(AXml) do
+    if MatchStr(CondicionNormalizada(G.Condicion), Validas) then
+      for V in AllTagValues(Copy(AXml, G.Ini, G.Fin - G.Ini), ATag) do
         Result := V.Trim; // el ultimo gana
-    P := CloseP + 1;
-  end;
 end;
 
 function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): string;

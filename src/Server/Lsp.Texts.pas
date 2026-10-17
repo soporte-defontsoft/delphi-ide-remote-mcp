@@ -3276,9 +3276,16 @@ const
 
   { removeuses: la inversa de adduses. }
   SR_REMOVEUSES_NOT_PAS_FMT =
-    '[USES-014 INVALID_PARAM] removeuses is for units (.pas); %s is a ' +
-    'project. To take a unit out of a .dpr/.dpk use delphi_config ' +
-    'command=remove-unit.';
+    '[USES-014 INVALID_PARAM] removeuses is for units (.pas) and programs ' +
+    '(.dpr, library units); %s is not one of them. A unit of a package ' +
+    'comes out of its contains with delphi_config command=remove-unit.';
+  { removeuses en un .dpr (D8 de la auditoria de la 1.20.1: adduses metia una
+    unidad de biblioteca y nada la sacaba): una del PROYECTO, no }
+  SR_REMOVEUSES_UNIDAD_DEL_PROYECTO_FMT =
+    '[USES-025 INVALID_PARAM] %s is a unit of this project (%s): take it ' +
+    'out with delphi_config command=remove-unit, which also removes its ' +
+    'CreateForm and its DCCReference in the .dproj. removeuses in a .dpr ' +
+    'is for library units (no path). Nothing was written.';
   SR_REMOVEUSES_NEED_NAMES =
     '[USES-015 INVALID_PARAM] Missing "removeuses": the unit names to remove, ' +
     'separated by ; (UCustomer;UOther).';
@@ -8763,8 +8770,10 @@ const
   SP_CFG_OUTPUT =
     'set-output: a simple relative folder name (Compiled by default): .exe ' +
     'to <folder>\$(Platform)\$(Config), .dcu to ' +
-    '<folder>\Dcu\$(Platform)\$(Config). "default" restores the RAD Studio ' +
-    'layout. No absolute paths, no "..".';
+    '<folder>\Dcu\$(Platform)\$(Config) - for every configuration and ' +
+    'platform, also one that sets its own folder (the answer says what ' +
+    'each had). "default" restores the RAD Studio layout. No absolute ' +
+    'paths, no "..".';
 
   SP_CFG_REQUIRES =
     'add-requires: package names for the .dpk requires clause, separated ' +
@@ -8779,8 +8788,8 @@ const
     'PAServer profile. add-platform / remove-platform: enable or disable a ' +
     'platform in the .dproj (a curated edit of <Platforms> only). ' +
     'set-version: the project VERSION everywhere it must agree. ' +
-    'set-output: every binary under one folder (Compiled by default), ' +
-    'keeping the platform/config subfolders. add-searchpath / ' +
+    'set-output: every binary under one folder (Compiled by default), in ' +
+    'every configuration, keeping the platform/config subfolders. add-searchpath / ' +
     'remove-searchpath: a unit search path for ONE platform, as the IDE''s ' +
     'Project Options > Search path; a platform added to a project inherits ' +
     'NO search paths from the others - the usual reason a unit is "not ' +
@@ -9056,8 +9065,9 @@ const
     'REMOVEUSES mode: units to take out of the uses clause of "section", ' +
     'separated by ; - the inverse of adduses. A directive around the ' +
     'entry stays with its neighbour, the clause goes when it empties, and ' +
-    'names not there are reported. For a .dpr/.dpk: delphi_config ' +
-    'remove-unit.';
+    'names not there are reported. In a .dpr it takes LIBRARY units, as ' +
+    'adduses does (section does not apply); a unit of the project comes ' +
+    'out with delphi_config remove-unit, and so does a unit of a .dpk.';
 
   SD_EDIT_READ =
     'Read a Delphi source file DECODED CORRECTLY (ANSI - the machine''s ' +
@@ -10127,6 +10137,14 @@ const
 
   SF_CFG_SIN_DEFINIR =
     '(not set)';
+
+  { el "before" de CFG-081 cuando la carpeta estaba en mas de un grupo: el
+    valor y la Condition de su PropertyGroup, tal cual (D4, 1.20.1) }
+  SF_CFG_VALOR_EN_GRUPO_FMT =
+    '%s in the group where %s';
+
+  SF_CFG_VALOR_EN_GRUPO_SIN_CONDICION_FMT =
+    '%s in a group with no condition';
 
   SF_CFG_TODAS_PLATAFORMAS_BASE =
     'all platforms (base group)';
