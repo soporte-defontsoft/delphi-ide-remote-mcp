@@ -105,7 +105,17 @@ the MCP `initialize` response (`serverInfo.version`).
   binaries (no `VerInfo_IncludeVerInfo`), instead of reporting a version
   the binary does not carry. Found by Hermes (Flash) in the targeted test
   of 1.20.1; a battery builds the IDE's own templates and reads the version
-  of the binary.
+  of the binary. And `include=true` makes the binaries carry it: it writes
+  `VerInfo_IncludeVerInfo=true` in each group that holds the version keys,
+  what the IDE's "Include version information" checkbox writes. No tool
+  could check that box, so on a console - born unchecked, as the IDE makes
+  it - an agent could set the version and never get it into the exe (Hermes,
+  the three rounds of the targeted test that checked these fixes).
+- **A `.dproj` in `delphi_edit` or `delphi_textedit` points to
+  `delphi_config`.** The two refusals sent the agent to each other -
+  `EDIT-032` to `delphi_textedit`, `TEXT-001` to "the IDE / delphi_create" -
+  and neither named the tool that edits a project. Both now answer the same
+  `EDIT-128`, which says what `delphi_config` edits (Hermes, targeted test).
 - **A project `delphi_create` makes is born with the version information
   the IDE writes.** Its `.dproj` had none - no `VerInfo_Keys`, no
   `VerInfo_IncludeVerInfo` -, so its binary carried no version and

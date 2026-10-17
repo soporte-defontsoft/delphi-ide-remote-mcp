@@ -2933,7 +2933,14 @@ const
     'is ignored - VERSIONINFO is numeric). Written to the Windows VerInfo ' +
     'numbers AND the FileVersion/ProductVersion keys at once, which is ' +
     'what drifts by hand. Android and iOS versions are NOT touched. Needs ' +
-    'the version keys the IDE writes (Version Info page), else CFG-003.';
+    'the version keys the IDE writes (Version Info page), else CFG-003. ' +
+    'With include=true the binaries carry it too.';
+
+  SP_CONFIG_INCLUDE =
+    'set-version: true = the binaries carry the version too: ' +
+    'VerInfo_IncludeVerInfo=true in each group that holds the version ' +
+    'keys, what the IDE''s "Include version information" (Project Options ' +
+    '> Version Info) writes. Without it, that setting stays as it is.';
 
   SP_CONFIG_SDK =
     'set-sdk: the SDK this PROJECT builds that platform with, by name ' +
@@ -7184,6 +7191,16 @@ const
     'is only for Delphi files; for non-Delphi text (.md .py .html .js ' +
     '.ini ...) use delphi_textedit.';
 
+  { Un proyecto del IDE, el MISMO texto en delphi_edit y en delphi_textedit:
+    se mandaban el uno al otro (EDIT-032 a textedit, TEXT-001 al IDE /
+    delphi_create) y ninguno a delphi_config, que es quien lo edita (Hermes,
+    dirigido de la 1.20.1). %s = el fichero. }
+  SR_EDIT_FICHERO_DE_PROYECTO_FMT =
+    '[EDIT-128 INVALID_PARAM] %s is a project file: delphi_config edits it ' +
+    '(platforms, search paths, output, version, SDK, profile, units, ' +
+    'deploy files, the projects of a group) and delphi_create writes a new ' +
+    'one; neither delphi_edit nor delphi_textedit writes it.';
+
   SR_EDIT_HISTORY_RECOVERY_SON_COPIAS =
     '[EDIT-033 DENIED] __history\ and __recovery\ are dead copies kept ' +
     'by the IDE. The live file is in the project folder.';
@@ -7382,8 +7399,7 @@ const
   // Mensajes que estaban en linea en Lsp.TextEdit.pas (paso 3c, 27-sep-2026)
   SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT =
     '[TEXT-001 INVALID_PARAM] "%s" is a Delphi file. For sources and ' +
-    'designers use delphi_edit; project files (.dproj) are maintained by ' +
-    'the IDE / delphi_create.';
+    'designers use delphi_edit.';
 
   SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT =
     '[TEXT-002 INVALID_PARAM] atline=%d is none of the occurrences (%s).';
@@ -8813,7 +8829,8 @@ const
     'platform - enabled or not, possible for THIS project, needing a ' +
     'PAServer profile. add-platform / remove-platform: enable or disable a ' +
     'platform in the .dproj (a curated edit of <Platforms> only). ' +
-    'set-version: the project VERSION everywhere it must agree. ' +
+    'set-version: the project VERSION everywhere it must agree ' +
+    '(include=true: in the binaries too). ' +
     'set-output: every binary under one folder (Compiled by default), ' +
     'keeping the platform/config subfolders. add-searchpath / ' +
     'remove-searchpath: a unit search path for ONE platform, as the IDE''s ' +
@@ -10189,8 +10206,13 @@ const
   SF_CFG_VERSION_NO_INCLUIDA =
     'The project does not include the version in its binaries ' +
     '(VerInfo_IncludeVerInfo is true in no configuration): the version is ' +
-    'written, and a binary carries it once "Include version information" ' +
-    'is checked (Project Options > Version Info).';
+    'written, and the binaries carry it with include=true (what the IDE''s ' +
+    '"Include version information", Project Options > Version Info, does).';
+
+  { set-version con include=true: %d = los grupos donde quedo a true. }
+  SF_CFG_VERSION_INCLUIDA_FMT =
+    'The binaries carry it: VerInfo_IncludeVerInfo=true in %d group(s), ' +
+    'the ones that hold the version keys.';
 
   // Textos que estaban en linea en Lsp.Dproj.pas (el resto, 27-sep-2026)
   SF_CFG_VCL_SOLO_WINDOWS_FMT =

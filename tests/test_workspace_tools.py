@@ -678,7 +678,7 @@ try:
     check('textedit: .pas vetado (usa delphi_edit)', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT') and 'delphi_edit' in out, out[:150])
     out = call('delphi_textedit', {"path": os.path.join(SRC, 'DelphiLspMcp.dproj'),
                                    "old": "x", "new": "y"})
-    check('textedit: .dproj vetado', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT'), out[:150])
+    check('textedit: .dproj vetado, y manda a delphi_config (no al IDE)', mc.rechazado(out) and mc.es(out, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT') and 'delphi_config' in out, out[:150])
     html = os.path.join(tmptxt, 'index.html')
     out = call('delphi_textedit', {"path": html, "create": True,
         "content": "<html><body>hola</body></html>\r\n"})

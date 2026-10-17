@@ -292,6 +292,11 @@ function EsRutaDeDesigner(const APath: string): Boolean;
   tambien un .inc incluido desde un .pas sin BOM). EL predicado, como
   EsRutaDeDesigner: estaba escrito a mano con su lista en cinco sitios. }
 function EsRutaDeFuente(const APath: string): Boolean;
+{ Si APath es un PROYECTO del IDE por su extension (PROJECT_EXTS: .dproj,
+  .groupproj): lo que lleva delphi_config, y ni delphi_edit ni delphi_textedit
+  escriben. EL predicado: los dos rechazos se mandaban el uno al otro y
+  ninguno a delphi_config (Hermes, dirigido de la 1.20.1). }
+function EsRutaDeProyecto(const APath: string): Boolean;
 { Si APath es un fichero de DELPHI: lo del motor de Pascal (EsDelMotorPascal:
   fuentes y designers) o un proyecto del IDE (PROJECT_EXTS). Lo que
   delphi_textedit no edita y lo que el changeset no mueve ni borra suelto -
@@ -1633,9 +1638,14 @@ begin
   Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);
 end;
 
+function EsRutaDeProyecto(const APath: string): Boolean;
+begin
+  Result := MatchText(TPath.GetExtension(APath), PROJECT_EXTS);
+end;
+
 function EsFicheroDeDelphi(const APath: string): Boolean;
 begin
-  Result := EsDelMotorPascal(APath) or MatchText(TPath.GetExtension(APath), PROJECT_EXTS);
+  Result := EsDelMotorPascal(APath) or EsRutaDeProyecto(APath);
 end;
 
 function MascarasDe(const AExts: array of string): TArray<string>;
@@ -3957,6 +3967,8 @@ begin
   if Result <> '' then
     Exit;
   Ext := LowerCase(TPath.GetExtension(APath));
+  if EsRutaDeProyecto(APath) then
+    Exit(MsgFmt(SR_EDIT_FICHERO_DE_PROYECTO_FMT, [TPath.GetFileName(APath)]));
   if not EsRutaDeFuente(APath) and not EsRutaDeDesigner(APath) then
     Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
   if TFile.Exists(APath) then

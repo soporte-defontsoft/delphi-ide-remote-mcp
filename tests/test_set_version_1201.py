@@ -26,8 +26,18 @@ delphi_installs says the installation is.
   V8  a VCL, FMX or package project delphi_create makes includes the version
       in Base_Win32 and Base_Win64, and set-version maintains it there
   V9  the judge: the exe of a VCL project just created carries the version
+  V10 include=true (the wall of the targeted test: no tool could check
+      "Include version information"): on the console, VerInfo_IncludeVerInfo
+      =true in Base_Win32 and Base_Win64, right before the numbers as the IDE
+      lays it out, the answer says so - and the judge: its exe carries it
+  V11 ...again: no second VerInfo_IncludeVerInfo, the file does not change
+  V12 include with another command is refused, not ignored
+  V13 a .dproj in delphi_edit and delphi_textedit: the SAME answer, and it
+      names delphi_config (they sent the agent to each other: EDIT-032 to
+      delphi_textedit, TEXT-001 to the IDE / delphi_create)
 
-V1-V5 and V7-V9 are RED with the binary before this fix (run the battery
+V1-V5 and V7-V13 are RED with the binary before this fix, V10-V13 also with
+eb35410, the first fix (run the battery
 with it as argument); V6 is green with both.
 
 Usage:  python tests/test_set_version_1201.py [path-to-DelphiLspMcp.exe]
@@ -41,6 +51,7 @@ EXE = mc.copia_exe(BASE)
 S = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='setver', t=600)
 # un trozo de la respuesta (SF_) no lleva etiqueta: se busca por su frase
 NO_INCLUIDA = mc.catalogo()['SF_CFG_VERSION_NO_INCLUIDA'].strip()[:40]
+INCLUIDA = mc.catalogo()['SF_CFG_VERSION_INCLUIDA_FMT'].split('%')[0]
 
 # donde esta la instalacion: lo dice el servidor, no se supone
 inst = mc.como_json(S.call('delphi_installs', {})) or {}
@@ -190,6 +201,36 @@ exe = os.path.join(BASE, 'Vcl8', 'Win64', 'Debug', 'Vcl8.exe')
 check('V9 el exe del proyecto VCL recien creado lleva la version 2.3.4.5',
       os.path.isfile(exe) and version_del_exe(exe) == '2.3.4.5',
       (version_del_exe(exe) if os.path.isfile(exe) else 'sin exe') + ' ' + r[:200])
+
+# ---- V10..V12 include=true: lo que hace la casilla del IDE ----
+r = S.call('delphi_config', {'project': P7, 'command': 'set-version', 'version': '3.0.0.1', 'include': True})
+x = mc.lee(P7)
+check('V10 include=true en la consola: contesta y dice que el binario la lleva',
+      mc.abre(r, 'SN_CONFIG_VERSION_OK_FMT') and INCLUIDA in r and NO_INCLUIDA not in r, r[-300:])
+check('V10 ...VerInfo_IncludeVerInfo=true en Base_Win32 y Base_Win64, delante de los numeros (como el IDE)',
+      grupos_con(x, '<VerInfo_IncludeVerInfo>true') == ['Base_Win32', 'Base_Win64']
+      and len(re.findall(r'<VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>\r\n[ \t]*<VerInfo_MajorVer>3<', x)) == 2,
+      re.findall(r'<VerInfo_\w+>[^<]*', x)[:12])
+r = S.call('delphi_build', {'project': P7, 'platform': 'Win64', 'config': 'Debug'}, 600)
+exe = os.path.join(BASE, 'Cons', 'Win64', 'Debug', 'Cons.exe')
+check('V10 el juez: el exe de la consola lleva ahora la version 3.0.0.1',
+      os.path.isfile(exe) and version_del_exe(exe) == '3.0.0.1',
+      (version_del_exe(exe) if os.path.isfile(exe) else 'sin exe') + ' ' + r[:200])
+b10 = open(P7, 'rb').read()
+r = S.call('delphi_config', {'project': P7, 'command': 'set-version', 'version': '3.0.0.1', 'include': True})
+check('V11 otra vez: contesta, sin un segundo IncludeVerInfo y sin cambiar el fichero',
+      mc.abre(r, 'SN_CONFIG_VERSION_OK_FMT') and open(P7, 'rb').read() == b10
+      and mc.lee(P7).count('<VerInfo_IncludeVerInfo>') == 2, r[:200])
+r = S.call('delphi_config', {'project': P7, 'command': 'view', 'include': True})
+check('V12 include con otro comando: se dice, no se ignora', mc.rechazado(r)
+      and mc.abre(r, 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT') and 'include' in r, r[:300])
+
+# ---- V13 un .dproj en las dos tools de edicion: el mismo texto, que manda a delphi_config ----
+r1 = S.call('delphi_edit', {'path': P7, 'old': '<Project', 'new': '<Project'})
+r2 = S.call('delphi_textedit', {'path': P7, 'old': '<Project', 'new': '<Project'})
+check('V13 delphi_edit y delphi_textedit con un .dproj: EDIT-128 los dos, que nombra delphi_config',
+      mc.abre(r1, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT') and mc.abre(r2, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT')
+      and 'delphi_config' in r1 and open(P7, 'rb').read() == b10, [r1[:160], r2[:160]])
 
 S.cierra()
 mc.fin('set-version 1.20.1')

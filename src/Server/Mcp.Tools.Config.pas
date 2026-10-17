@@ -41,6 +41,7 @@ type
     FRemoteDir: string;
     FSection: string;
     FVersion: string;
+    FInclude: Boolean;
     FRequires: string;
   public
     [SchemaDescription(SP_CFG_PROJECT)]
@@ -74,6 +75,8 @@ type
     property RemoteDir: string read FRemoteDir write FRemoteDir;
     [SchemaDescription(SP_CONFIG_VERSION)]
     property Version: string read FVersion write FVersion;
+    [SchemaDescription(SP_CONFIG_INCLUDE)]
+    property Include: Boolean read FInclude write FInclude;
     [SchemaDescription(SP_CFG_OUTPUT)]
     property Output: string read FOutput write FOutput;
     [SchemaDescription(SP_CFG_REQUIRES)]
@@ -1198,7 +1201,7 @@ end;
   Esa numeracion es otra cosa - versionCode es un entero que solo puede subir
   y una tienda lo rechaza si baja -, asi que cambiarla de rebote seria una
   sorpresa, no un favor. }
-function SetVersion(const ADproj, ARawVersion: string): string;
+function SetVersion(const ADproj, ARawVersion: string; AIncluir: Boolean): string;
 var
   Enc, Xml, Pedida, Sufijo, Cuatro, AntesNum, AntesKey, Nota, Eol: string;
   Partes, Tags: TArray<string>;
@@ -1347,11 +1350,46 @@ begin
       Xml := Copy(Xml, 1, Claves[K].Ini - 1) + Cuatro +
         Copy(Xml, Claves[K].Ini + Numerico(Xml, Claves[K]), MaxInt);
 
+  // include=true: lo que escribe la casilla "Include version information"
+  // del IDE, en cada grupo que lleva la version (el de la clave FileVersion):
+  // VerInfo_IncludeVerInfo a true donde ya esta y, donde no, delante de los
+  // numeros del grupo o de su VerInfo_Keys, como lo deja el IDE (el .dproj de
+  // este servidor, en Base). Android e iOS no llevan FileVersion: no se rozan.
+  // Del ultimo grupo al primero, para que los de delante no se muevan.
+  var Incluidos := 0;
+  if AIncluir then
+  begin
+    var ClavesI := ClavesDeVersion(Xml);
+    var Grupos := GruposDePropiedades(Xml);
+    for var G := High(Grupos) downto 0 do
+      for var T in TramosEnGrupo(Xml, 'VerInfo_Keys', Grupos[G]) do
+        if ConFileVersion(ClavesI, T.Ini, T.Fin) then
+        begin
+          var Ya := TramosEnGrupo(Xml, 'VerInfo_IncludeVerInfo', Grupos[G]);
+          if Length(Ya) > 0 then
+            for var K := High(Ya) downto 0 do
+              Xml := Copy(Xml, 1, Ya[K].Ini - 1) + 'true' + Copy(Xml, Ya[K].Fin, MaxInt)
+          else
+          begin
+            var Delante := T.Abre;
+            for var M in TramosEnGrupo(Xml, 'VerInfo_MajorVer', Grupos[G]) do
+              if M.Abre < Delante then
+                Delante := M.Abre;
+            Xml := Copy(Xml, 1, Delante - 1) + XmlElemento('VerInfo_IncludeVerInfo', 'true') + Eol +
+              SangriaDeLaLineaEn(Xml, Delante) + Copy(Xml, Delante, MaxInt);
+          end;
+          Inc(Incluidos);
+          Break;
+        end;
+  end;
+
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   Nota := '';
   if Sufijo <> '' then
     Nota := Eol + MsgFmt(SF_CFG_SUFIJO_NO_VA_DPROJ_FMT, [Sufijo]);
-  if not IncluyeVersion(Xml) then
+  if Incluidos > 0 then
+    Nota := Nota + Eol + MsgFmt(SF_CFG_VERSION_INCLUIDA_FMT, [Incluidos])
+  else if not IncluyeVersion(Xml) then
     Nota := Nota + Eol + MsgText(SF_CFG_VERSION_NO_INCLUIDA);
   Result := MsgFmt(SN_CONFIG_VERSION_OK_FMT,
     [Cuatro, IfThen(AntesNum = AntesKey, AntesNum,
@@ -1477,7 +1515,7 @@ const
     'remove-searchpath', 'platform path',
     'add-deployfile', 'platform path remotedir',
     'remove-deployfile', 'platform path',
-    'set-version', 'version',
+    'set-version', 'version include',
     'set-sdk', 'platform sdk',
     'set-profile', 'platform profile',
     'add-requires', 'requires',
@@ -1491,6 +1529,7 @@ begin
     ['platform', P.Platform, '', 'sdk', P.Sdk, '', 'profile', P.Profile, '',
      'path', P.Path, '', 'section', P.Section, CFG_SECTION_POR_DEFECTO,
      'remotedir', P.RemoteDir, '', 'version', P.Version, '',
+     'include', IfThen(P.Include, 'true'), '',
      'output', P.Output, '', 'requires', P.Requires, ''], ASuyos, AVaCon);
 end;
 
@@ -1649,7 +1688,7 @@ begin
     else if Cmd = 'remove-deployfile' then
       Result := RemoveDeployFile(Proj, Params.Platform, Params.Path)
     else if Cmd = 'set-version' then
-      Result := SetVersion(Proj, Params.Version)
+      Result := SetVersion(Proj, Params.Version, Params.Include)
     else if Cmd = 'set-sdk' then
       Result := SetSdk(Proj, Params.Platform, Params.Sdk)
     else if Cmd = 'set-profile' then

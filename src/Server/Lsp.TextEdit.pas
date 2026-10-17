@@ -73,8 +73,10 @@ var
 begin
   Result := '';
   Ext := LowerCase(TPath.GetExtension(APath));
+  // un proyecto del IDE: delphi_config, con el MISMO texto que delphi_edit
+  if EsRutaDeProyecto(APath) then
+    Exit(MsgFmt(SR_EDIT_FICHERO_DE_PROYECTO_FMT, [TPath.GetFileName(APath)]));
   // lo del motor de Pascal (EL predicado de delphi_edit: fuentes y designers)
-  // y los proyectos del IDE: EsFicheroDeDelphi
   if EsFicheroDeDelphi(APath) then
     Exit(MsgFmt(SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT, [Ext]));
 end;
