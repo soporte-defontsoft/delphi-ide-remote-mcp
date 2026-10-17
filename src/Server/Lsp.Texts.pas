@@ -10723,8 +10723,11 @@ const
   SF_DSGN_ES_UN_SET_FMT =
     '%s is a SET: the values go between brackets, e.g. [%s]';
 
+  { Con sus elementos, como el de un enumerado (SF_DSGN_NO_ES_VALOR_FMT): sin
+    ellos, Font.Style=[Underline] obligaba a saber fsUnderline de memoria
+    (Hermes/Flash por Telegram, 17-oct-2026). }
   SF_DSGN_NO_ES_ELEMENTO_FMT =
-    '"%s" is not an element of %s';
+    '"%s" is not an element of %s; valid: %s';
 
   // ---------------------------------------------------------------------
   // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)

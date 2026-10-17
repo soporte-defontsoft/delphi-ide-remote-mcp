@@ -756,6 +756,13 @@ try:
           all(J(x).get('set') is None and any(mc.abre(x, k) for k in (
               'SR_DESIGNER_SET_TIPO_FMT', 'SR_DESIGNER_SET_INVALIDO_FMT', 'SR_DESIGNER_SET_GRAMATICA_FMT'))
               for x in rs) and bytes_de(RDFM) == antes, [x[:120] for x in rs])
+    # 1.20.1: un elemento que no es del conjunto dice los que si, como un
+    # enumerado (Hermes/Flash, 17-oct: Font.Style=[Underline] obligaba a saber
+    # fsUnderline de memoria)
+    r = dsg(command='set', path=RDFM, component='Label1', prop='Font.Style', value='[Underline]')
+    check('R5 ...[Underline] en un TFontStyles: negado con sus elementos (fsUnderline entre ellos), nada escrito',
+          J(r).get('set') is None and 'Underline' in r and 'is not an element of TFontStyles; valid:' in r and
+          'fsUnderline' in r and bytes_de(RDFM) == antes, r[:400])
     # un numero que no cabe en su tipo: 1E400 en un TDate (Double), que el
     # servidor no llega a leer, se escribia tal cual (segunda revision)
     dsg(command='insert', path=RDFM, classname='TDateTimePicker')

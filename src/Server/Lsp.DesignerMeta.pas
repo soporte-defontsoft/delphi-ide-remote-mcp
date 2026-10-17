@@ -901,12 +901,14 @@ begin
         V := Have.Split([','])[0].Trim;
       Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [AHoja.TypeName, V]));
     end;
+    if not M.SetShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
+      Have := '?';
     if ARhs.Substring(1, Length(ARhs) - 2).Trim <> '' then
       for V in ARhs.Substring(1, Length(ARhs) - 2).Split([',']) do
         if not EsIdentificador(V.Trim, False) or
            (M.Sets.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Members) and
             not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
-          Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', ARhs, V.Trim), AHoja.TypeName]));
+          Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', ARhs, V.Trim), AHoja.TypeName, Have]));
   end;
 end;
 
@@ -1490,7 +1492,8 @@ begin
       if AValor.Substring(1, Length(AValor) - 2).Trim <> '' then
         for V in AValor.Substring(1, Length(AValor) - 2).Split([',']) do
           if not EsIdentificador(V.Trim, False) or not EnLista(V.Trim) then
-            Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', AValor, V.Trim), AProp.Tipo]));
+            Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', AValor, V.Trim), AProp.Tipo,
+              string.Join(', ', Miembros)]));
     end;
   finally
     U.Free;

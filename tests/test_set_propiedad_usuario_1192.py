@@ -24,6 +24,7 @@ se niega diciendo por que, y una ruta dentro de una (Modo.X) tambien.
   S9  Tono=toRojo: negado, toClaro, toOscuro
   S10 Tonos=[toClaro]: escrito            (ROJO)
   S11 Tonos=toClaro: negado, es un SET
+  S11b Tonos=[toRojo]: negado con los elementos validos (toClaro, toOscuro; 1.20.1)
   S12 Tinte=clRed: escrito                (ROJO)
   S13 Tinte=clNada: negado
   S14 Cosa=X: negado diciendo que TCosa no lo puede juzgar nadie, delphi_edit (ROJO: "no existe en TForm")
@@ -108,6 +109,9 @@ try:
     check('S10 Tonos=[toClaro] (conjunto del usuario): escrito', escrito(r, 'Tonos = [toClaro]'), r[:400])
     r = pon('Tonos', 'toClaro')
     check('S11 Tonos=toClaro: negado, es un SET', negado(r, 'DSGN-087', 'SET'), r[:400])
+    r = pon('Tonos', '[toRojo]')
+    check('S11b Tonos=[toRojo]: negado con los elementos validos, como un enumerado (1.20.1)',
+          negado(r, 'DSGN-087', 'toRojo', 'valid: toClaro, toOscuro'), r[:400])
     r = pon('Tinte', 'clRed')
     check('S12 Tinte=clRed (TColor): escrito', escrito(r, 'Tinte = clRed'), r[:400])
     r = pon('Tinte', 'clNada')

@@ -34,6 +34,13 @@ the MCP `initialize` response (`serverInfo.version`).
   was consumed: the image is already yours, in this answer) or `CAPT-017`
   (the file you named in `out=` stays where `screenshot` says). One place
   composes it for the three tools.
+- **A value that is not an element of a set lists the elements, as one
+  that is not a value of an enumeration already did.** `delphi_designer
+  set Font.Style=[Underline]` answered `"Underline" is not an element of
+  TFontStyles` and nothing more, so an agent had to know `fsUnderline`;
+  it now ends with `valid: fsBold, fsItalic, fsUnderline, fsStrikeOut`,
+  for a set of the framework and for one a class of yours publishes.
+  Measured with Hermes (Flash) replicating a form from an image.
 
 ## [1.20.0] - 2026-10-16
 
