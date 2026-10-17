@@ -694,6 +694,17 @@ end
           cerca(pixel_de(png('p6.png'), 16 + 8 + 10, 168 + 64 + 10), (255, 255, 128)),
           pixel_de(png('p6.png'), 34, 242))
     check('P6 ...sin nada ignorado', 'ignored' not in j, j.get('ignored'))
+    # 1.20.1: el state sigue una ruta con punto como prop y set (Flash, ronda
+    # del filtro de la 1.20: Font.Size y TextSettings.FontColor salian RENDER-012)
+    r = preview(path=CONFRAMEF, state='FrameF1.RectF.Fill.Color=claRed', out=png('p6s.png'), inline='false')
+    check('P6 state con una ruta con punto (FrameF1.RectF.Fill.Color): el rectangulo del primero en rojo',
+          not mc.fallo(r) and cerca(pixel_de(png('p6s.png'), 34, 106), ROJO), (r[:200], pixel_de(png('p6s.png'), 34, 106)))
+    r = preview(path=CONFRAMEF, state='FrameF1.RectF.Fill.Colr=claRed')
+    check('P6 ...un tramo que el objeto no publica: RENDER-012 con la clase del objeto (TBrush)',
+          mc.abre(r, 'SR_RENDER_ESTADO_NO_PUBLICA_FMT') and 'TBrush' in r and 'Colr' in r, r[:300])
+    r = preview(path=CONFRAMEF, state='FrameF1.RectF.PopupMenu.Algo=1')
+    check('P6 ...y una referencia a un componente no se cruza: RENDER-021',
+          mc.abre(r, 'SR_RENDER_ESTADO_REFERENCIA_FMT'), r[:300])
     r = preview(path=CONFRAMEF, component='FrameF2', out=png('p6c.png'), inline='false')
     check('P6 FMX component: el rect del frame metido, en coordenadas de la form',
           J(r).get('componentRect') == '16,168,300,120', r[:400])

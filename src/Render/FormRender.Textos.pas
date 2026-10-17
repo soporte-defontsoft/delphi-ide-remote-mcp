@@ -79,6 +79,16 @@ const
   SR_RENDER_SIN_ESCENA_FMT =
     '[RENDER-019 INTERNAL] The canvas does not accept a scene (%s).';
 
+  SR_RENDER_ESTADO_NO_OBJETO_FMT =
+    '[RENDER-020 INVALID_PARAM] state: %s of %s holds a value, not an ' +
+    'object: a dotted path cannot go on past it.';
+
+  SR_RENDER_ESTADO_REFERENCIA_FMT =
+    '[RENDER-021 INVALID_PARAM] state: %s of %s holds a reference to a ' +
+    'component (now %s), not an object of its own: a dotted path does not ' +
+    'go through it - give that component''s own Name instead ' +
+    '(Component.Property=Value), as the form file does.';
+
   // La linea de uso (stderr, con el codigo 2)
   SF_RENDER_USO_FMT =
     '%s --path <dfm|fmx> --out <png> [--state Component.Property=Value]* ' +

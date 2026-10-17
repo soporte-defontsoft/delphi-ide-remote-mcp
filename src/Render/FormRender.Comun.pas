@@ -740,11 +740,53 @@ begin
     Result := FindNestedComponent(ARaiz, ARuta.Substring(Length(ARaiz.Name) + 1));
 end;
 
+{ El objeto que tiene la ULTIMA propiedad de una ruta con punto (Font.Size,
+  TextSettings.FontColor, Fill.Color) y esa propiedad en AHoja, recorrida
+  como la recorre TReader.ReadProperty al leer el form: cada tramo menos el
+  ultimo es una propiedad de clase y se entra en su objeto. Un objeto PROPIO
+  (TFont, TTextSettings, TBrush) se cruza; una referencia a un componente
+  no, juzgada por el TIPO de la propiedad (vacia o no): en el fichero se
+  escribe su Name, no sus propiedades - la misma regla que set y prop en el
+  servidor (EsObjetoPropio). Antes solo se miraba un nivel: Font.Size salia
+  RENDER-012 (Flash, ronda del filtro de la 1.20, 16-oct). }
+function ObjetoDeRuta(AComp: TComponent; const ARuta: string; out AHoja: string): TPersistent;
+var
+  Tramos: TArray<string>;
+  PI: PPropInfo;
+  Obj: TObject;
+  Tramo, Ahora: string;
+begin
+  Result := AComp;
+  Tramos := ARuta.Split(['.']);
+  for var I := 0 to High(Tramos) - 1 do
+  begin
+    Tramo := Tramos[I].Trim;
+    PI := GetPropInfo(Result, Tramo);
+    if PI = nil then
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [Result.ClassName, Tramo]));
+    if PI.PropType^.Kind <> tkClass then
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_OBJETO_FMT, [Tramo, Result.ClassName]));
+    Obj := GetObjectProp(Result, PI);
+    if GetTypeData(PI.PropType^).ClassType.InheritsFrom(TComponent) then
+    begin
+      Ahora := 'nil';
+      if Obj <> nil then
+        Ahora := TComponent(Obj).Name;
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_REFERENCIA_FMT, [Tramo, Result.ClassName, Ahora]));
+    end;
+    if not (Obj is TPersistent) then
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_OBJETO_FMT, [Tramo, Result.ClassName]));
+    Result := TPersistent(Obj);
+  end;
+  AHoja := Tramos[High(Tramos)].Trim;
+end;
+
 procedure AplicaEstado(ARoot: TComponent; const AEspec: string);
 var
-  Comp, Valor, Prop: string;
+  Comp, Valor, Prop, Hoja: string;
   Partes: TArray<string>;
   C, Ref: TComponent;
+  Obj: TPersistent;
   PI: PPropInfo;
   N64: Int64;
   Entero: Longint;
@@ -772,15 +814,16 @@ begin
       Comp := Comp.Substring(0, Comp.LastIndexOf('.')).Trim;
     raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_COMPONENTE_FMT, [Comp]));
   end;
-  PI := GetPropInfo(C, Prop);
+  Obj := ObjetoDeRuta(C, Prop, Hoja);
+  PI := GetPropInfo(Obj, Hoja);
   if PI = nil then
-    raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [C.ClassName, Prop]));
+    raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [Obj.ClassName, Hoja]));
   if PI.PropType^.Kind = tkClass then
   begin
     Ref := ComponenteDeRuta(ARoot, Valor);
     if Ref = nil then
       raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_REFERIDO_FMT, [Valor, Comp]));
-    SetObjectProp(C, PI, Ref);
+    SetObjectProp(Obj, PI, Ref);
   end
   // un entero con NOMBRE (clRed en un TColor, crHandPoint en un TCursor,
   // claRed en un TAlphaColor), como lo lee TReader: el lector que registra
@@ -788,9 +831,9 @@ begin
   // DSGN-061, EVariantTypeCastError (3.5 de la 1.18.0, Hermes)
   else if (PI.PropType^.Kind in [tkInteger, tkInt64]) and not TryStrToInt64(Valor, N64) and
           Assigned(FindIdentToInt(PI.PropType^)) and FindIdentToInt(PI.PropType^)(Valor, Entero) then
-    SetOrdProp(C, PI, Entero)
+    SetOrdProp(Obj, PI, Entero)
   else
-    SetPropValue(C, Prop, Valor);
+    SetPropValue(Obj, Hoja, Valor);
 end;
 
 { ---- iconos de los no visuales ---- }

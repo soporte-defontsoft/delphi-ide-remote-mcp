@@ -4609,7 +4609,9 @@ const
   SP_DESIGNER_STATE =
     'preview optional: a VIEW state applied before drawing, never written ' +
     'to the file - Component.Property=Value (inside an inline frame, ' +
-    'Frame1.Component.Property=Value), several separated by ; ' +
+    'Frame1.Component.Property=Value; a sub-property dotted, as prop and ' +
+    'set take it: Label1.Font.Size=14, Label1.TextSettings.FontColor=claRed), ' +
+    'several separated by ; ' +
     '(PageControl1.ActivePage=TabSheet2;Edit1.Text=hello). A value with a ; ' +
     'goes in single quotes as in a form (Edit1.Text=''a;b''; a quote inside ' +
     'is written twice); a quote that does not start the value is just a ' +

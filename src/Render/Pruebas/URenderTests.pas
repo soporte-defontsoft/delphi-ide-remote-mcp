@@ -41,6 +41,7 @@ type
     [Test] procedure Vcl_print_forzado;
     [Test] procedure Vcl_estado_de_vista;
     [Test] procedure Vcl_estado_invalido_rc1;
+    [Test] procedure Vcl_estado_ruta_con_punto;
     [Test] procedure Vcl_rect_del_componente;
     [Test] procedure Vcl_form_heredada;
     [Test] procedure Vcl_frames_inline_con_cambios;
@@ -52,6 +53,7 @@ type
     [Test] procedure Vcl_valor_que_no_carga;
     [Test] procedure Fmx_guardada_por_codigo_no_carga;
     [Test] procedure Fmx_frames_inline_con_cambios;
+    [Test] procedure Fmx_estado_ruta_con_punto;
   end;
 
   { Con las cobayas DUMMY: RENDER_COBAYAS apunta a Pruebas\DUMMY. }
@@ -337,6 +339,29 @@ begin
   Assert.IsTrue(R.Valor(FR_ERROR).Contains('Nadie'), R.Valor(FR_ERROR));
 end;
 
+{ Una ruta con punto en el estado (1.20.1): se entra en el objeto PROPIO
+  (Font) como lo hace TReader; un valor o una referencia a un componente
+  cortan la ruta, cada uno con su mensaje. Antes, Font.Size salia RENDER-012. }
+procedure TRenderTests.Vcl_estado_ruta_con_punto;
+var
+  R: TRespuesta;
+begin
+  R := Vcl(Format('--path "%s" --out "%s" --state Label1.Font.Size=20 --state Panel1.Font.Color=clRed',
+    [Pruebas + 'Prueba.dfm', Salida('prueba_ruta')]));
+  CompruebaCaptura(R, '400x200');
+  R := Vcl(Format('--path "%s" --out "%s" --state Label1.Font.Sise=1', [Pruebas + 'Prueba.dfm', Salida('prueba_ruta_bad')]));
+  Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc);
+  Assert.IsTrue(R.Valor(FR_ERROR).StartsWith('[RENDER-012 NOT_FOUND]'), R.Valor(FR_ERROR));
+  Assert.IsTrue(R.Valor(FR_ERROR).Contains('TFont') and R.Valor(FR_ERROR).Contains('Sise'),
+    'nombra el objeto del tramo que falla: ' + R.Valor(FR_ERROR));
+  R := Vcl(Format('--path "%s" --out "%s" --state Label1.Caption.Algo=1', [Pruebas + 'Prueba.dfm', Salida('prueba_ruta_valor')]));
+  Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc);
+  Assert.IsTrue(R.Valor(FR_ERROR).StartsWith('[RENDER-020 INVALID_PARAM]'), R.Valor(FR_ERROR));
+  R := Vcl(Format('--path "%s" --out "%s" --state Edit1.PopupMenu.AutoPopup=False', [Pruebas + 'Prueba.dfm', Salida('prueba_ruta_ref')]));
+  Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc);
+  Assert.IsTrue(R.Valor(FR_ERROR).StartsWith('[RENDER-021 INVALID_PARAM]'), 'una referencia vacia tambien: ' + R.Valor(FR_ERROR));
+end;
+
 { Un valor que el lector no carga (DSGN-061 de la 1.20). VCL: un entero que
   no cabe en el Integer de Left - el Ignore se lo salta SIN consumirlo, y lo
   siguiente que lee es basura: "Stream read error" -. Lo que se salto sale
@@ -486,6 +511,23 @@ begin
   // el rectangulo del segundo frame lo cambia el inline a xFFFFFF80 (BGR $80FFFF)
   Assert.AreEqual<TColor>($80FFFF, Pixel(R.Valor(FR_CAPTURE), 40, 252), 'el cambio del inline se aplico');
   Assert.AreEqual<TColor>($FFE0C0, Pixel(R.Valor(FR_CAPTURE), 40, 116), 'el primero conserva el del frame');
+end;
+
+{ La ruta con punto en FMX (1.20.1): Fill.Color del rectangulo de un frame
+  inline y TextSettings.FontColor de una etiqueta; el pixel dice que se
+  aplico. Una referencia a un componente (PopupMenu) corta la ruta. }
+procedure TRenderTests.Fmx_estado_ruta_con_punto;
+var
+  R: TRespuesta;
+begin
+  R := Fmx(Format('--path "%s" --out "%s" --state FrameF1.RectF.Fill.Color=claRed ' +
+    '--state LabelForm.TextSettings.FontColor=claRed', [Pruebas + 'ConFrameF.fmx', Salida('confremef_ruta')]));
+  CompruebaCaptura(R, '340x300');
+  Assert.AreEqual<TColor>($0000FF, Pixel(R.Valor(FR_CAPTURE), 40, 116), 'Fill.Color por la ruta con punto');
+  Assert.AreEqual<TColor>($80FFFF, Pixel(R.Valor(FR_CAPTURE), 40, 252), 'el otro frame no se toca');
+  R := Fmx(Format('--path "%s" --out "%s" --state LabelForm.PopupMenu.Algo=1', [Pruebas + 'ConFrameF.fmx', Salida('confremef_ruta_ref')]));
+  Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc);
+  Assert.IsTrue(R.Valor(FR_ERROR).StartsWith('[RENDER-021 INVALID_PARAM]'), R.Valor(FR_ERROR));
 end;
 
 { ---- con las cobayas de Galatea ---- }

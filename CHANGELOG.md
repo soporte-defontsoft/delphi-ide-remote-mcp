@@ -8,6 +8,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`delphi_designer preview state=` follows a dotted path, as `prop` and
+  `set` do.** `Label1.Font.Size=14`, `Label1.TextSettings.FontColor=claRed`
+  or `FrameF1.RectF.Fill.Color=claRed` were refused with `RENDER-012 ...
+  does not publish Font.Size`: the renderer looked the whole path up as ONE
+  property of the component. It now walks it the way the RTL reads a form
+  (`TReader`): each segment but the last is an object of the component's
+  own (a `TFont`, a `TTextSettings`, a `TBrush`) and the last one is set on
+  it. A segment the object does not publish names that object's class
+  (`TFont does not publish Sise`); a segment that holds a value ends the
+  path (`RENDER-020`); one that holds a reference to another component is
+  not walked through (`RENDER-021`): in a form file that component is
+  written by its Name, so its properties are set by its own Name - the same
+  rule `set` applies. Measured by Hermes (Qwen3.8 Flash Next) in the
+  targeted rounds of 1.20.0: two refusals for one task.
+
 ## [1.20.0] - 2026-10-16
 
 What an agent reads back, measured with Hermes on Delphi 13.2 with two
