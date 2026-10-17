@@ -167,6 +167,23 @@ try:
     r = info('TTextSettings', 'fmx', 'color')
     check('P16 info TTextSettings fmx filter=color: FontColor de su familia, sin DSGN-048',
           '"name":"FontColor"' in r and not mc.tiene(r, 'DSGN-048') and 'descendantsPublish' in r, r[:700])
+
+    # 1.20.1: prop de un entero con constantes dice lo que toma, con EL texto
+    # que da set al negar (LoQueToma). Decia solo el tipo y Flash tuvo que
+    # provocar DSGN-093 para saber cla*/cl*/xNN
+    r = r17 = prop('TLabel', 'fmx', 'TextSettings.FontColor')
+    check('P17 prop TLabel fmx TextSettings.FontColor (TAlphaColor): takes con sus nombres y la forma x+hexadecimal',
+          not mc.fallo(r) and '"takes":' in r and 'claAliceblue' in r and 'xFF00FF00' in r, r[:900])
+    r = prop('TLabel', 'vcl', 'Font.Color')
+    check('P18 prop TLabel vcl Font.Color (TColor): takes con sus constantes con nombre',
+          not mc.fallo(r) and '"takes":' in r and 'named constants' in r, r[:900])
+    t = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Label1',
+                                           'prop': 'TextSettings.FontColor', 'value': 'Rojo'}))
+    toma = mc.como_json(r17).get('takes', '')
+    check('P19 ...y es EL mismo texto que da set al negar un valor (Rojo en el TAlphaColor de un form FMX)',
+          mc.tiene(t, 'DSGN-093') and toma != '' and toma in t, (toma[:200], t[:600]))
+    r = prop('TLabel', 'fmx', 'TextSettings.HorzAlign')
+    check('P20 control: un enumerado no lleva takes (sus members ya lo dicen)', '"takes"' not in r, r[:400])
 finally:
     srv.cierra()
 

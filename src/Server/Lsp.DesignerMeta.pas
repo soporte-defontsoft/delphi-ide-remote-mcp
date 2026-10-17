@@ -263,6 +263,14 @@ function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: strin
   out AAviso: string;
   out AParecida: string): string;
 
+{ Lo que toma el TIPO de una propiedad 'o' con constantes con nombre (un
+  TColor, un TAlphaColor, un TCursor), sin mirar ningun valor: sus nombres
+  y lo que su lector tambien carga. EL texto que da BaseQueNoCasa al negar
+  uno, y el que da prop al describirla (1.20.1: prop decia solo el tipo y
+  Flash tuvo que provocar DSGN-093 para saber cla*/cl*/xNN). '' si el tipo
+  no registra constantes o la base no se sabe. }
+function LoQueToma(M: TMetaTable; const AHoja: TPropRec): string;
+
 // El mismo lint contra una tabla dada (las pruebas le dan la suya). APas, el
 // .pas del form: con el se juzga tambien su raiz (ClaseDeJuezDeRaiz)
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
@@ -1133,8 +1141,6 @@ end;
 function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: string;
   out AAviso: string;
   out AParecida: string): string;
-const
-  MAX_MUESTRA = 12;
 var
   Base, K, Lista, Show, Formas: string;
   Nombres: TArray<string>;
@@ -1206,8 +1212,6 @@ begin
         if Cerca <> '' then
           AParecida := MsgFmt(SF_DESIGNER_QUIZAS_FMT, [Cerca]);
       end;
-      if Length(Nombres) > MAX_MUESTRA then
-        Show := string.Join(', ', Copy(Nombres, 0, MAX_MUESTRA)) + ', ...';
       // ABIERTA (su IdentTo lee mas que sus nombres): con sus formas leidas
       // del fuente (generacion 12) el juicio es exacto - 'Rojo' en un
       // TAlphaColor se escribia y el form no abria; clRed y xFF00FF00 si
@@ -1223,7 +1227,7 @@ begin
           AParecida := '';
           Exit;
         end;
-        Exit(MsgFmt(SF_DESIGNER_TOMA_ABIERTA_FMT, [Show, FormasQueSeEnsenan(Formas, Nombres)]));
+        Exit(LoQueToma(M, AHoja));
       end;
       if Abierta and EsIdentificador(AValor, False) then
       begin
@@ -1231,7 +1235,7 @@ begin
         AParecida := '';
         Exit;
       end;
-      Exit(MsgFmt(SF_DESIGNER_TOMA_CONSTANTES_FMT, [Show]));
+      Exit(LoQueToma(M, AHoja));
     end;
     Exit(MsgText(SF_DESIGNER_TOMA_ENTERO));
   end;
@@ -1260,6 +1264,30 @@ begin
             MatchText(AValor, ['True', 'False', 'Null', 'nil'])) then
       Result := MsgText(SF_DESIGNER_TOMA_VARIANTE);
   end;
+end;
+
+function LoQueToma(M: TMetaTable; const AHoja: TPropRec): string;
+const
+  MAX_MUESTRA = 12;
+var
+  K, Base, Lista, Show, Formas: string;
+  Nombres: TArray<string>;
+begin
+  Result := '';
+  if AHoja.Kind <> 'o' then
+    Exit;
+  K := ClaveDeIdentificador(AHoja.TypeId);
+  if not (M.Bases.TryGetValue(K, Base) and (Base = 'integer') and M.Constantes.TryGetValue(K, Lista)) then
+    Exit;
+  if Lista = '*' then
+    Exit(MsgText(SF_DESIGNER_TOMA_CONSTANTE));
+  Show := M.ConstantesShow[K];
+  Nombres := Show.Split([', ']);
+  if Length(Nombres) > MAX_MUESTRA then
+    Show := string.Join(', ', Copy(Nombres, 0, MAX_MUESTRA)) + ', ...';
+  if Lista.StartsWith('*') and M.FormasAbiertas.TryGetValue(K, Formas) then
+    Exit(MsgFmt(SF_DESIGNER_TOMA_ABIERTA_FMT, [Show, FormasQueSeEnsenan(Formas, Nombres)]));
+  Result := MsgFmt(SF_DESIGNER_TOMA_CONSTANTES_FMT, [Show]);
 end;
 
 // una propiedad publicada por una clase del usuario, con su clase y su unidad

@@ -93,6 +93,14 @@ the MCP `initialize` response (`serverInfo.version`).
   Hermes: three containers got the `StyleName` of a style and none was
   dressed, while `set` and `lint` said nothing. It is a hint, apart from
   the findings: it does not change `clean`.
+- **`delphi_designer prop` says what an integer with named constants
+  takes** (`takes`): for every type whose unit registers names for its
+  values - read from the installed source (`RegisterIntegerConsts` and its
+  `IdentTo`), so `TColor`, `TAlphaColor`, `TCursor` and those of installed
+  components alike. A whole number, the type's own names, and what its
+  reader also loads (`xFF00FF00` for a `TAlphaColor`). It is the same text
+  `set` gives when it refuses a value, from one function; `prop` said only
+  the type, and Hermes had to provoke a refusal to learn the forms.
 
 ## [1.20.0] - 2026-10-16
 

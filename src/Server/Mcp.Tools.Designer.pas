@@ -428,6 +428,12 @@ begin
       Ret.AddPair('members', Members);
     if R.Kind = 's' then
       Ret.AddPair('membersNote', MsgText(SN_DESIGNER_SET_NOTE));
+    // un entero con constantes (TColor, TAlphaColor, TCursor): lo que toma,
+    // con EL texto del juez de set (LoQueToma). Decia solo el tipo y Flash
+    // tuvo que provocar un DSGN-093 para saberlo (1.20.1)
+    var Toma := LoQueToma(M, R);
+    if Toma <> '' then
+      Ret.AddPair('takes', Toma);
     // una propiedad objeto: lo suyo lo publica SU clase, y se pregunta a ella
     // (el enlace de la ayuda de Delphi; David, 1.20). Sin equivalencias. Una
     // REFERENCIA a un componente (PopupMenu) no: toma un Name, no lleva punto

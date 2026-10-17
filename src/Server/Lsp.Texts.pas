@@ -4555,7 +4555,8 @@ const
   SP_DESIGNER_COMMAND =
     'info (every property a class really publishes: kind and type, events ' +
     'apart) | prop (one property in detail, with the legal members of an ' +
-    'enum/set) | tree (the component tree: name, class, line) | get (one ' +
+    'enum/set, and what an integer with named constants takes - TColor, ' +
+    'TAlphaColor, TCursor) | tree (the component tree: name, class, line) | get (one ' +
     'component''s block, verbatim) | lint (first what the IDE''s own form ' +
     'parser says, then properties the class does not publish and values ' +
     'their type does not take, as set judges them; objects it could not check ' +
