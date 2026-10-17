@@ -2,8 +2,8 @@
 17-oct-2026 en el sandbox.
 
 D4: delphi_config set-output solo reescribia la PRIMERA <DCC_ExeOutput> del
-.dproj. Un proyecto que fija su propia carpeta en la config Debug (5 de los
-192 .dproj de los Samples de la 37.0 la fijan en mas de un grupo) se quedaba
+.dproj. Un proyecto que fija su propia carpeta en la config Debug (de los 296
+.dproj de los Samples de la 37.0, 192 la fijan y 5 en mas de un grupo) se quedaba
 con ella: el build de Debug salia en SalidaDebug mientras la respuesta decia
 Compiled. Ahora cada grupo que la fija se reescribe, la respuesta dice que
 tenia cada uno, y si la base no la lleva se le escribe.
@@ -184,4 +184,37 @@ open(DPK, 'w', newline='\r\n').write('package PaqD8;\n\nrequires\n  rtl;\n\nend.
 r = S.call('delphi_edit', {'path': DPK, 'removeuses': 'rtl'})
 check('D8d removeuses en un .dpk: USES-014', mc.rechazado(r) and mc.es(r, 'SR_REMOVEUSES_NOT_PAS_FMT'), r[:300])
 
-mc.fin('auditoria 1.20.1 (D4 set-output, D8 removeuses en .dpr)')
+# ---- D4 e. el grupo de una plataforma escrito a mano (blancos): es el mismo grupo ----
+# El buscador de grupos de delphi_config comparaba la Condition letra a letra:
+# no lo encontraba, creaba OTRO '$(Base_Linux64)'!='' y la ruta caia en el nuevo.
+P6 = proyecto('SpD4e')
+GRUPO_A_MANO = ("    <PropertyGroup Condition=\"'$(Base_Linux64)' != ''\">\r\n"
+                '        <DCC_UnitSearchPath>uno;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>\r\n'
+                '    </PropertyGroup>\r\n')
+reescribe(P6, lambda x: x.replace('    <ItemGroup>', GRUPO_A_MANO + '    <ItemGroup>', 1))
+DIR6 = os.path.dirname(P6)
+r = S.call('delphi_config', {'project': P6, 'command': 'add-searchpath', 'platform': 'Linux64', 'path': DIR6})
+x = mc.lee(P6)
+VALORES_LINUX = re.compile(r"<PropertyGroup Condition=\"'\$\(Base_Linux64\)'\s*!=\s*''\">(.*?)</PropertyGroup>", re.S)
+grupos = VALORES_LINUX.findall(x)
+check('D4e add-searchpath reconoce el grupo escrito a mano: UN grupo de valores Linux64',
+      mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT') and len(grupos) == 1, r[:200] + ' | grupos=%d' % len(grupos))
+check('D4e ...y la ruta entra en SU DCC_UnitSearchPath, junto a la que tenia',
+      len(grupos) == 1 and 'SpD4e;uno;$(DCC_UnitSearchPath)' in grupos[0], grupos)
+
+# ---- D3 a. dos PlatformSDK en el grupo de la plataforma: se quitan las dos ----
+# set-sdk y set-profile eran gemelas que solo quitaban la PRIMERA: con dos, la
+# otra seguia en el grupo y msbuild se quedaba con ella.
+P7 = proyecto('SdkD3')
+DOS_SDK = ("    <PropertyGroup Condition=\"'$(Base_Linux64)'!=''\">\r\n"
+           '        <PlatformSDK>viejo1.sdk</PlatformSDK>\r\n'
+           '        <PlatformSDK>viejo2.sdk</PlatformSDK>\r\n'
+           '    </PropertyGroup>\r\n')
+reescribe(P7, lambda x: x.replace('    <ItemGroup>', DOS_SDK + '    <ItemGroup>', 1))
+r = S.call('delphi_config', {'project': P7, 'command': 'set-sdk', 'platform': 'Linux64', 'sdk': 'none'})
+x = mc.lee(P7)
+check('D3a set-sdk none con dos PlatformSDK: CFG-011 y "before" es la que valia (la ultima)',
+      mc.abre(r, 'SN_CONFIG_SDK_QUITADO_FMT') and 'viejo2.sdk' in r, r[:300])
+check('D3a ...y no queda NINGUNA en el .dproj', 'PlatformSDK' not in x, x[x.find('Base_Linux64'):][:300])
+
+mc.fin('auditoria 1.20.1 (D4 set-output y el analisis del .dproj, D8 removeuses en .dpr, D3)')

@@ -39,6 +39,10 @@ type
     [Test] procedure TagValueNoDistingueMayusculas;
     [Test] procedure FijaPropiedadParaTodosReescribeCadaGrupo;
     [Test] procedure FijaPropiedadParaTodosSinGrupoBaseNoToca;
+    [Test] procedure ElTramoSabeDondeEmpiezaYAcabaElElemento;
+    [Test] procedure ElGrupoPorSuCondicionSinMirarBlancos;
+    [Test] procedure QuitaConSuLineaSoloSiEstaSola;
+    [Test] procedure PlatformPropertyComoMsbuild;
   end;
 
 implementation
@@ -197,6 +201,73 @@ begin
   Xml := XML_SIN_BASE;
   Assert.IsFalse(FijaPropiedadParaTodos(Xml, 'DCC_ExeOutput', '.\b', C));
   Assert.AreEqual(XML_SIN_BASE, Xml);
+end;
+
+procedure TXmlTextoTests.ElTramoSabeDondeEmpiezaYAcabaElElemento;
+const
+  XML = '<P><X a="1>2">v</X ><X/></P>';
+var
+  T: TArray<TTramoXml>;
+begin
+  // un '>' entre comillas no cierra; </X > con blanco; <X/> no tiene valor
+  T := TramosDeEtiqueta(XML, 'X');
+  Assert.IsTrue(Length(T) = 1, 'tramos: ' + IntToStr(Length(T)));
+  Assert.AreEqual('<X a="1>2">v</X >', Copy(XML, T[0].Abre, T[0].Cierra - T[0].Abre));
+  Assert.AreEqual('v', Copy(XML, T[0].Ini, T[0].Fin - T[0].Ini));
+end;
+
+procedure TXmlTextoTests.ElGrupoPorSuCondicionSinMirarBlancos;
+const
+  XML = '<Project>' +
+    '<PropertyGroup Condition = "(''$(Platform)''==''Linux64'' and ''$(Base)''==''true'') or ''$(Base_Linux64)''!=''''"></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(BASE_LINUX64)'' != ''''"><PlatformSDK>z</PlatformSDK></PropertyGroup >' +
+    '</Project>';
+var
+  G: TGrupoXml;
+begin
+  // el grupo que escribe a mano quien no es el IDE: mayusculas y blancos
+  Assert.IsTrue(GrupoConCondicion(XML, GroupCondition('Linux64'), G), 'el de valores');
+  Assert.AreEqual('Linux64', PlataformaDeGrupo(G.Condicion, False), 'su plataforma, con su grafia');
+  Assert.AreEqual('</PropertyGroup >', Copy(XML, G.Fin, G.Cierra - G.Fin), 'su cierre entero');
+  Assert.IsTrue(Length(TramosEnGrupo(XML, 'PlatformSDK', G)) = 1, 'su etiqueta');
+  Assert.IsTrue(GrupoConCondicion(XML, DefinerCondition('Linux64'), G), 'el definidor');
+  Assert.AreEqual('Linux64', PlataformaDeGrupo(G.Condicion, True), 'el definidor de Linux64');
+  Assert.AreEqual('', PlataformaDeGrupo(G.Condicion, False), 'un definidor no es un grupo de valores');
+  Assert.AreEqual('', PlataformaDeGrupo(GroupCondition(''), False), 'la base no es de ninguna plataforma');
+  Assert.IsFalse(GrupoConCondicion(XML, GroupCondition('OSX64'), G), 'el de otra no esta');
+end;
+
+procedure TXmlTextoTests.QuitaConSuLineaSoloSiEstaSola;
+var
+  S: string;
+begin
+  // sola en su linea: se va la linea con su salto de delante
+  S := 'a'#13#10'    <X>1</X>'#13#10'b';
+  QuitaConSuLinea(S, Pos('<X>', S), Pos('</X>', S) + 4);
+  Assert.AreEqual('a'#13#10'b', S);
+  // con algo delante en la linea: solo el elemento
+  S := 'a<X>1</X>b';
+  QuitaConSuLinea(S, 2, 10);
+  Assert.AreEqual('ab', S);
+  // en la primera linea del texto, sin salto delante
+  S := '  <X>1</X>'#10'b';
+  QuitaConSuLinea(S, 3, 11);
+  Assert.AreEqual(#10'b', S);
+end;
+
+procedure TXmlTextoTests.PlatformPropertyComoMsbuild;
+const
+  XML = '<Project>' +
+    '<PropertyGroup Condition="''$(Cfg_2)''!=''''"><PlatformSDK>de-config</PlatformSDK></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base)''!=''''"><PlatformSDK>de-base</PlatformSDK></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base_Linux64)''!=''''"><PlatformSDK Condition="''$(X)''==''''">suya</PlatformSDK></PropertyGroup>' +
+    '</Project>';
+begin
+  // la del grupo de la plataforma, aunque la etiqueta lleve atributos
+  Assert.AreEqual('suya', PlatformProperty(XML, 'Linux64', 'PlatformSDK'));
+  // otra plataforma hereda la base; la de una CONFIG no es la base (el
+  // lector propio la tomaba por reserva por ir primero)
+  Assert.AreEqual('de-base', PlatformProperty(XML, 'OSX64', 'PlatformSDK'));
 end;
 
 procedure CompruebaImport(const AForma: string;

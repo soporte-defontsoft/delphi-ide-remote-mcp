@@ -591,102 +591,81 @@ end;
   read: they must resolve (macros expanded with the IDE's own environment
   table) inside the workspace roots or the read-only library zone, and exist. }
 
-function GroupCondition(const APlatform: string): string;
-begin
-  if APlatform = '' then
-    Result := '''$(Base)''!='''''
-  else
-    Result := '''$(Base_' + APlatform + ')''!=''''';
-end;
-
-function DefinerCondition(const APlatform: string): string;
-begin
-  Result := '(''$(Platform)''==''' + APlatform + ''' and ''$(Base)''==''true'') or ' +
-    '''$(Base_' + APlatform + ')''!=''''';
-end;
-
-{ <PropertyGroup Condition="ACondition"> ... </PropertyGroup>: AOpen = start of
-  the open tag, AInner = first char after it, AClose = start of the close tag.
-  False when the group does not exist. Conditions are matched verbatim. }
-function FindGroup(const AXml, ACondition: string; out AOpen, AInner, AClose: Integer): Boolean;
-var
-  Low, Tag: string;
-begin
-  Result := False;
-  Tag := LowerCase('<PropertyGroup Condition="' + ACondition + '">');
-  Low := LowerCase(AXml);
-  AOpen := Pos(Tag, Low);
-  if AOpen = 0 then
-    Exit;
-  AInner := AOpen + Length(Tag);
-  AClose := Pos('</propertygroup>', Low, AInner);
-  Result := AClose > 0;
-end;
-
+{ Las Condition de los grupos (GroupCondition, DefinerCondition), el grupo por
+  su Condition (GrupoConCondicion) y la etiqueta dentro de el (TramosEnGrupo)
+  viven en Lsp.Dproj: EL analisis del .dproj, el mismo que lee el build. Aqui
+  eran un buscador del grupo letra a letra y otro de la etiqueta exacta
+  (D4 de la auditoria de la 1.20.1). }
 { Creates the definer and values groups of a platform when the .dproj lacks
   them (the IDE writes both the first time a platform option is touched). }
 procedure EnsurePlatformGroups(var AXml: string; const APlatform: string);
 var
-  O, I, C, LastDef, At: Integer;
-  Low, Needle: string;
+  G: TGrupoXml;
+  Tras: Integer;
 begin
-  if not FindGroup(AXml, DefinerCondition(APlatform), O, I, C) then
+  if not GrupoConCondicion(AXml, DefinerCondition(APlatform), G) then
   begin
     // after the last platform definer (any platform), else after the Base one
-    Low := LowerCase(AXml);
-    Needle := LowerCase(' or ''$(Base_');
-    LastDef := 0;
-    At := Pos(Needle, Low);
-    while At > 0 do
-    begin
-      LastDef := At;
-      At := Pos(Needle, Low, At + 1);
-    end;
-    if LastDef = 0 then
-      LastDef := Pos(LowerCase('<PropertyGroup Condition="''$(Config)''==''Base'' or ''$(Base)''!=''''">'), Low);
-    if LastDef = 0 then
+    Tras := 0;
+    for var D in GruposDePropiedades(AXml) do
+      if PlataformaDeGrupo(D.Condicion, True) <> '' then
+        Tras := D.Cierra;
+    if (Tras = 0) and
+       GrupoConCondicion(AXml, '''$(Config)''==''Base'' or ''$(Base)''!=''''', G) then
+      Tras := G.Cierra;
+    if Tras = 0 then
       raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_CONFIG));
-    At := Pos('</propertygroup>', Low, LastDef);
-    At := At + Length('</PropertyGroup>');
-    AXml := Copy(AXml, 1, At - 1) + sLineBreak +
+    AXml := Copy(AXml, 1, Tras - 1) + sLineBreak +
       '    <PropertyGroup Condition="' + DefinerCondition(APlatform) + '">' + sLineBreak +
       '        <Base_' + APlatform + '>true</Base_' + APlatform + '>' + sLineBreak +
       '        <CfgParent>Base</CfgParent>' + sLineBreak +
       '        <Base>true</Base>' + sLineBreak +
-      '    </PropertyGroup>' + Copy(AXml, At, MaxInt);
+      '    </PropertyGroup>' + Copy(AXml, Tras, MaxInt);
   end;
-  if not FindGroup(AXml, GroupCondition(APlatform), O, I, C) then
+  if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
   begin
-    if not FindGroup(AXml, GroupCondition(''), O, I, C) then
+    if not GrupoConCondicion(AXml, GroupCondition(''), G) then
       raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
-    At := C + Length('</PropertyGroup>');
-    AXml := Copy(AXml, 1, At - 1) + sLineBreak +
+    AXml := Copy(AXml, 1, G.Cierra - 1) + sLineBreak +
       '    <PropertyGroup Condition="' + GroupCondition(APlatform) + '">' + sLineBreak +
-      '    </PropertyGroup>' + Copy(AXml, At, MaxInt);
+      '    </PropertyGroup>' + Copy(AXml, G.Cierra, MaxInt);
   end;
 end;
 
-{ The <DCC_UnitSearchPath> element INSIDE one group: positions of the value
-  (AValStart..AValEnd-1) and of the whole element (AElStart..AElEnd-1). }
-function FindSearchTag(const AXml: string; AInner, AClose: Integer;
-  out AElStart, AValStart, AValEnd, AElEnd: Integer): Boolean;
-const
-  OpenTag = '<DCC_UnitSearchPath>';
-  CloseTag = '</DCC_UnitSearchPath>';
+{ set-sdk y set-profile: ATag (PlatformSDK, Profile) en el grupo de valores de
+  APlatform - donde la escribe el IDE y la lee msbuild para ella -, creado
+  como lo crea el IDE si falta. Las que hubiera DENTRO de ese grupo se quitan
+  con su linea (AAntes, la que valia: la ultima) y, si no es quitar, la nueva
+  va al principio del grupo. Eran dos gemelas de treinta lineas que solo
+  quitaban la primera: con dos, la otra seguia valiendo (D3 de la auditoria de
+  la 1.20.1). '' o la negativa: AInconsistente si el grupo no aparece despues
+  de quitarlas. }
+function PonPropiedadDePlataforma(var AXml: string; const APlatform, ATag, AValor: string;
+  AQuitar: Boolean; const AInconsistente: string; out AAntes: string): string;
 var
-  Low: string;
+  G: TGrupoXml;
+  Tramos: TArray<TTramoXml>;
 begin
-  Result := False;
-  Low := LowerCase(AXml);
-  AElStart := Pos(LowerCase(OpenTag), Low, AInner);
-  if (AElStart = 0) or (AElStart > AClose) then
-    Exit;
-  AValStart := AElStart + Length(OpenTag);
-  AValEnd := Pos(LowerCase(CloseTag), Low, AValStart);
-  if (AValEnd = 0) or (AValEnd > AClose) then
-    Exit;
-  AElEnd := AValEnd + Length(CloseTag);
-  Result := True;
+  Result := '';
+  AAntes := '';
+  EnsurePlatformGroups(AXml, APlatform);
+  if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
+    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT, [APlatform]));
+  // lo que hubiera DENTRO de ese grupo, no en cualquier sitio del fichero; de
+  // la ultima a la primera, para que las de delante no se muevan
+  Tramos := TramosEnGrupo(AXml, ATag, G);
+  if Length(Tramos) > 0 then
+  begin
+    AAntes := XmlUnescape(Copy(AXml, Tramos[High(Tramos)].Ini,
+      Tramos[High(Tramos)].Fin - Tramos[High(Tramos)].Ini));
+    for var K := High(Tramos) downto 0 do
+      QuitaConSuLinea(AXml, Tramos[K].Abre, Tramos[K].Cierra);
+    if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
+      Exit(AInconsistente);
+  end;
+  if not AQuitar then
+    AXml := Copy(AXml, 1, G.Ini - 1) + sLineBreak +
+      '        ' + XmlElemento(ATag, AValor) + Copy(AXml, G.Ini, MaxInt);
 end;
 
 { Las rutas de una lista ESCRITA en el .dproj (con sus entidades: el ';' de
@@ -806,7 +785,9 @@ end;
 function AddSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
 var
   Enc, Xml, Plat, Show, Path, NewInner, P: string;
-  O, I, C, ElS, VS, VE, ElE: Integer;
+  G: TGrupoXml;
+  Tramos: TArray<TTramoXml>;
+  VS, VE: Integer;
 begin
   Plat := '';
   if ARawPlatform.Trim <> '' then
@@ -828,10 +809,13 @@ begin
     on E: Exception do
       Exit(MsgExcepcion(E.ClassName, E.Message));
   end;
-  if not FindGroup(Xml, GroupCondition(Plat), O, I, C) then
+  if not GrupoConCondicion(Xml, GroupCondition(Plat), G) then
     Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT, [GroupCondition(Plat)]));
-  if FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
+  Tramos := TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G);
+  if Length(Tramos) > 0 then
   begin
+    VS := Tramos[0].Ini;
+    VE := Tramos[0].Fin;
     for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
       if SameText(XmlUnescape(P), Path) then
         Exit(MsgFmt(SN_CONFIG_PATH_PRESENT_FMT,
@@ -840,9 +824,9 @@ begin
     Xml := Copy(Xml, 1, VS - 1) + NewInner + Copy(Xml, VE, MaxInt);
   end
   else
-    Xml := Copy(Xml, 1, I - 1) + sLineBreak +
+    Xml := Copy(Xml, 1, G.Ini - 1) + sLineBreak +
       '        ' + XmlElemento('DCC_UnitSearchPath', Path + ';$(DCC_UnitSearchPath)') +
-      Copy(Xml, I, MaxInt);
+      Copy(Xml, G.Ini, MaxInt);
   PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CONFIG_PATH_ADDED_FMT,
     [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat), Show,
@@ -852,7 +836,8 @@ end;
 function RemoveSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
 var
   Enc, Xml, Plat, Path, Rest, P: string;
-  O, I, C, ElS, VS, VE, ElE, LineStart: Integer;
+  G: TGrupoXml;
+  Tramos: TArray<TTramoXml>;
   Found: Boolean;
   Keep: TList<string>;
 begin
@@ -867,14 +852,16 @@ begin
   if Path = '' then
     Exit(MsgText(SR_CONFIG_NEED_PATH));
   Xml := PatchLoadText(ADproj, Enc);
-  if not FindGroup(Xml, GroupCondition(Plat), O, I, C) or
-     not FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
+  Tramos := [];
+  if GrupoConCondicion(Xml, GroupCondition(Plat), G) then
+    Tramos := TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G);
+  if Length(Tramos) = 0 then
     Exit(MsgFmt(SN_CONFIG_PATH_ABSENT_FMT,
       [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]));
   Found := False;
   Keep := TList<string>.Create;
   try
-    for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
+    for P in SplitPaths(Copy(Xml, Tramos[0].Ini, Tramos[0].Fin - Tramos[0].Ini)) do
       if SameText(XmlUnescape(P), Path) then
         Found := True
       else
@@ -887,24 +874,10 @@ begin
     Keep.Free;
   end;
   if (Rest = '') or SameText(Rest, '$(DCC_UnitSearchPath)') then
-  begin
     // nothing of ours left: drop the whole element, its line included
-    LineStart := ElS;
-    while (LineStart > 1) and not CharInSet(Xml[LineStart - 1], [#10, #13]) do
-      Dec(LineStart);
-    if Copy(Xml, LineStart, ElS - LineStart).Trim = '' then
-    begin
-      if (LineStart > 1) and (Xml[LineStart - 1] = #10) then
-        Dec(LineStart);
-      if (LineStart > 1) and (Xml[LineStart - 1] = #13) then
-        Dec(LineStart);
-      Xml := Copy(Xml, 1, LineStart - 1) + Copy(Xml, ElE, MaxInt);
-    end
-    else
-      Xml := Copy(Xml, 1, ElS - 1) + Copy(Xml, ElE, MaxInt);
-  end
+    QuitaConSuLinea(Xml, Tramos[0].Abre, Tramos[0].Cierra)
   else
-    Xml := Copy(Xml, 1, VS - 1) + Rest + Copy(Xml, VE, MaxInt);
+    Xml := Copy(Xml, 1, Tramos[0].Ini - 1) + Rest + Copy(Xml, Tramos[0].Fin, MaxInt);
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   Result := MsgFmt(SN_CONFIG_PATH_REMOVED_FMT,
     [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]);
@@ -915,27 +888,27 @@ procedure AddSearchPathsView(const AXml: string; AReturn: TJSONObject);
 var
   Obj: TJSONObject;
   Arr: TJSONArray;
-  M, TagM: TMatch;
   Name, P: string;
+  Tramos: TArray<TTramoXml>;
   Any: Boolean;
 begin
   Obj := TJSONObject.Create;
   Any := False;
-  for M in TRegEx.Matches(AXml,
-    '<PropertyGroup Condition="''\$\((Base(?:_(\w+))?)\)''!=''''">(.*?)</PropertyGroup>',
-    [roIgnoreCase, roSingleLine]) do
+  for var G in GruposDePropiedades(AXml) do
   begin
-    TagM := TRegEx.Match(M.Groups[3].Value,
-      '<DCC_UnitSearchPath>(.*?)</DCC_UnitSearchPath>', [roIgnoreCase, roSingleLine]);
-    if not TagM.Success then
-      Continue;
-    // el sufijo es un grupo opcional, y su Success es el de la coincidencia
-    // entera, no el suyo: GrupoDe (Lsp.Regex)
-    Name := GrupoDe(M, 2);
+    // la base y el grupo de valores de cada plataforma, los que escriben el
+    // IDE y add-searchpath, por EL analisis del .dproj (era una regex propia)
+    if CondicionNormalizada(G.Condicion) = CondicionNormalizada(GroupCondition('')) then
+      Name := 'base'
+    else
+      Name := PlataformaDeGrupo(G.Condicion, False);
     if Name = '' then
-      Name := 'base';
+      Continue;
+    Tramos := TramosEnGrupo(AXml, 'DCC_UnitSearchPath', G);
+    if Length(Tramos) = 0 then
+      Continue;
     Arr := TJSONArray.Create;
-    for P in SplitPaths(TagM.Groups[1].Value) do
+    for P in SplitPaths(Copy(AXml, Tramos[0].Ini, Tramos[0].Fin - Tramos[0].Ini)) do
       Arr.Add(XmlUnescape(P));
     Obj.AddPair(Name, Arr);
     Any := True;
@@ -1179,15 +1152,7 @@ begin
     Exit(MsgFmt(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
   // remove from the end so earlier spans stay valid; eat the element's line
   for I := High(Spans) downto 0 do
-  begin
-    var S := Spans[I].Key;
-    var E := S + Spans[I].Value;
-    while (S > 1) and CharInSet(Xml[S - 1], [' ', #9]) do
-      Dec(S);
-    while (E <= Length(Xml)) and CharInSet(Xml[E], [#13, #10]) do
-      Inc(E);
-    Xml := Copy(Xml, 1, S - 1) + Copy(Xml, E, MaxInt);
-  end;
+    QuitaConSuLinea(Xml, Spans[I].Key, Spans[I].Key + Spans[I].Value);
   // an ItemGroup left empty is dropped too (the IDE keeps empty ones, but
   // ours were added by us)
   Xml := TRegEx.Replace(Xml,
@@ -1365,7 +1330,6 @@ function SetSdk(const ADproj, ARawPlatform, ARawSdk: string): string;
 var
   APlatform, Sdk, Enc, Xml, Antes, Disponibles: string;
   Info: TRadStudioInfo;
-  O, I, C, TagIni, TagFin: Integer;
   Quitar: Boolean;
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
@@ -1397,36 +1361,10 @@ begin
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
-  EnsurePlatformGroups(Xml, APlatform);
-  if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT, [APlatform]));
-
-  // lo que hubiera DENTRO de ese grupo, no en cualquier sitio del fichero
-  Antes := '';
-  TagIni := Pos(LowerCase('<PlatformSDK>'), LowerCase(Xml), I);
-  if (TagIni > 0) and (TagIni < C) then
-  begin
-    TagFin := Pos(LowerCase('</PlatformSDK>'), LowerCase(Xml), TagIni);
-    Antes := XmlUnescape(Copy(Xml, TagIni + Length('<PlatformSDK>'),
-      TagFin - TagIni - Length('<PlatformSDK>')));
-    TagFin := TagFin + Length('</PlatformSDK>');
-    // se lleva por delante la linea entera, sangria incluida
-    while (TagIni > 1) and CharInSet(Xml[TagIni - 1], [' ', #9]) do
-      Dec(TagIni);
-    if (TagIni > 2) and (Xml[TagIni - 1] = #10) then
-    begin
-      Dec(TagIni);
-      if (TagIni > 1) and (Xml[TagIni - 1] = #13) then
-        Dec(TagIni);
-    end;
-    Xml := Copy(Xml, 1, TagIni - 1) + Copy(Xml, TagFin, MaxInt);
-    if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-      Exit(MsgText(SR_CFG_QUEDO_INCONSISTENTE_PLATFORMSDK));
-  end;
-
-  if not Quitar then
-    Xml := Copy(Xml, 1, I - 1) + sLineBreak +
-      '        ' + XmlElemento('PlatformSDK', Sdk) + Copy(Xml, I, MaxInt);
+  Result := PonPropiedadDePlataforma(Xml, APlatform, 'PlatformSDK', Sdk, Quitar,
+    MsgText(SR_CFG_QUEDO_INCONSISTENTE_PLATFORMSDK), Antes);
+  if Result <> '' then
+    Exit;
 
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   if Quitar then
@@ -1446,7 +1384,6 @@ function SetProfile(const ADproj, ARawPlatform, ARawProfile: string): string;
 var
   APlatform, Perfil, Enc, Xml, Antes, Disponibles: string;
   Info: TRadStudioInfo;
-  O, I, C, TagIni, TagFin: Integer;
   Quitar: Boolean;
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
@@ -1476,34 +1413,10 @@ begin
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
-  EnsurePlatformGroups(Xml, APlatform);
-  if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT, [APlatform]));
-
-  Antes := '';
-  TagIni := Pos(LowerCase('<Profile>'), LowerCase(Xml), I);
-  if (TagIni > 0) and (TagIni < C) then
-  begin
-    TagFin := Pos(LowerCase('</Profile>'), LowerCase(Xml), TagIni);
-    Antes := XmlUnescape(Copy(Xml, TagIni + Length('<Profile>'),
-      TagFin - TagIni - Length('<Profile>')));
-    TagFin := TagFin + Length('</Profile>');
-    while (TagIni > 1) and CharInSet(Xml[TagIni - 1], [' ', #9]) do
-      Dec(TagIni);
-    if (TagIni > 2) and (Xml[TagIni - 1] = #10) then
-    begin
-      Dec(TagIni);
-      if (TagIni > 1) and (Xml[TagIni - 1] = #13) then
-        Dec(TagIni);
-    end;
-    Xml := Copy(Xml, 1, TagIni - 1) + Copy(Xml, TagFin, MaxInt);
-    if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-      Exit(MsgText(SR_CFG_QUEDO_INCONSISTENTE_PROFILE));
-  end;
-
-  if not Quitar then
-    Xml := Copy(Xml, 1, I - 1) + sLineBreak +
-      '        ' + XmlElemento('Profile', Perfil) + Copy(Xml, I, MaxInt);
+  Result := PonPropiedadDePlataforma(Xml, APlatform, 'Profile', Perfil, Quitar,
+    MsgText(SR_CFG_QUEDO_INCONSISTENTE_PROFILE), Antes);
+  if Result <> '' then
+    Exit;
 
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   if Quitar then

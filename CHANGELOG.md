@@ -87,8 +87,8 @@ the MCP `initialize` response (`serverInfo.version`).
   platform.** It rewrote only the first `DCC_ExeOutput` and
   `DCC_DcuOutput` of the `.dproj`: a project whose Debug configuration sets
   its own folder kept it, and the Debug build landed there while the answer
-  said `Compiled` (measured in the 1.20.0 audit; 5 of the 192 `.dproj` of
-  the 37.0 samples set the folder in more than one group). Every group that
+  said `Compiled` (measured in the 1.20.0 audit; of the 296 `.dproj` of the
+  37.0 samples, 192 set it and 5 in more than one group). Every group that
   sets it is now rewritten, the base group gets it when it lacks it, and
   `CFG-081` says what each group had. The writer is the inverse of the
   reader the build uses to find its outputs, with the same parse.
@@ -99,6 +99,25 @@ the MCP `initialize` response (`serverInfo.version`).
   project - its `.pas` in the program's tree, or an entry with its `in
   '...'` path - still goes by `remove-unit`, which also removes its
   `CreateForm` and its `DCCReference` (`USES-025`, nothing written).
+- **`delphi_config` reads and edits a `.dproj` with one parse, the one the
+  build uses.** Five places read a property group or an element each in its
+  own way - the exact tag with no attributes, "the last group opened before
+  it", the group by its `Condition` matched letter by letter, a regex for the
+  view. What an agent sees:
+  - `add-searchpath`, `set-sdk` and `set-profile` find a platform group
+    written by hand (`'$(Base_Linux64)' != ''`) instead of creating a second
+    one and writing into it;
+  - `set-sdk` and `set-profile` take out EVERY `PlatformSDK` / `Profile` of
+    the group: they removed only the first, and with two the other one kept
+    winning; `before` names the one that was in effect;
+  - the SDK and the profile a project declares (`view`, `delphi_build`) are
+    read as msbuild reads them - the last one that sets it among the groups
+    that apply to the platform; a configuration's group no longer counts as
+    the base, and a tag with attributes is read.
+  Measured against the previous binary on the 296 `.dproj` of the 37.0
+  samples: the same answers and the same bytes for `view`, `add/remove-
+  searchpath`, `set-sdk` and `set-profile`. `remove-deployfile` takes its
+  line out with the same helper.
 
 ### Added
 
