@@ -248,6 +248,19 @@ out = call('delphi_create', {"kind": "project-fmx", "dir": FDIR, "name": "HolaFm
 check('create: proyecto FMX', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out)
 ok, err = build_ok(os.path.join(FDIR, 'HolaFmx.dproj'))
 check('build: proyecto FMX COMPILA', ok, err)
+# 1.20.1: los ambitos de unidad como los reparte el IDE (Samples de la 37.0):
+# sin los de la VCL en un FMX, y los de Windows en Base_Win32/Win64. Con la
+# plantilla de antes, 'uses Dialogs' sin calificar compilaba contra
+# Vcl.Dialogs en Win32 y no en Linux64 (RetoFMX de Hermes, 17-oct)
+dp = open(os.path.join(FDIR, 'HolaFmx.dproj'), encoding='utf-8-sig').read()
+check('create FMX: el .dproj no lleva los ambitos de la VCL, y los de Windows van en Base_Win32 y Base_Win64',
+      'Vcl;' not in dp and "'$(Base_Win32)'!=''" in dp and "'$(Base_Win64)'!=''" in dp and
+      'Xml.Win;Bde;$(DCC_Namespace)' in dp, dp[:1500])
+call('delphi_create', {"kind": "unit", "name": "USinCalificar", "project": os.path.join(FDIR, 'HolaFmx.dpr'),
+                       "content": "unit USinCalificar;\n\ninterface\n\nuses\n  Dialogs;\n\nimplementation\n\nend.\n"})
+ok, err = build_ok(os.path.join(FDIR, 'HolaFmx.dproj'))
+check('create FMX: el compilador no resuelve un "uses Dialogs" sin calificar contra la VCL',
+      not ok and 'Dialogs' in str(err), err)
 
 # --- B0: createunit accepts DOTTED namespace unit names ---
 out = call('delphi_edit', {"path": os.path.join(VDIR, 'Lsp.BuildRunner.pas'),

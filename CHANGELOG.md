@@ -48,6 +48,15 @@ the MCP `initialize` response (`serverInfo.version`).
   and we refused it. The answer now says what was asked; msbuild still
   runs `Build;Deploy`, and a battery now checks that a Deploy builds first
   (a bare `/t:Deploy` re-ships the previous binary).
+- **A project `delphi_create` makes for FMX no longer carries the VCL unit
+  scopes.** One template gave every project
+  `Winapi;...;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell` in its Base
+  group, so in an FMX project an unqualified `uses Dialogs` compiled
+  against `Vcl.Dialogs` on Win32 - and failed on Linux64. The scopes are
+  now laid out as the IDE lays them out (measured on the 37.0 samples):
+  the common ones in Base, the Windows ones (`Winapi`, `System.Win`...) in
+  `Base_Win32` and `Base_Win64`, and the VCL ones never in an FMX project.
+  VCL, console and package projects resolve exactly as before on Windows.
 
 ## [1.20.0] - 2026-10-16
 

@@ -97,8 +97,18 @@ end;
 function DprojTemplate(const AName, AGuid, AAppType, AFramework,
   AFormUnit, AFormName, AFormType: string): string;
 var
-  FormRef, MainExt, ProjectType, PkgProps: string;
+  FormRef, MainExt, ProjectType, PkgProps, Ambitos: string;
 begin
+  // Los ambitos de unidad como los reparte el IDE (medido en los Samples de
+  // la 37.0 y en GalateaFMX.dproj, 17-oct-2026): en Base los de todas las
+  // plataformas, y los de Windows (Winapi, System.Win...) en Base_Win32 (con
+  // Bde) y Base_Win64. Los de la VCL, nunca en un proyecto FMX: con ellos un
+  // 'uses Dialogs' sin calificar compilaba contra Vcl.Dialogs en Win32 y no
+  // en Linux64 (RetoFMX de Hermes). Consola y paquete los conservan como
+  // hasta ahora (el IDE no los pone: decide David, pendientes-1-21-0).
+  Ambitos := 'System;Xml;Data;Datasnap;Web;Soap;';
+  if not SameText(AFramework, 'FMX') then
+    Ambitos := Ambitos + 'Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;';
   // Un paquete se diferencia en cuatro cosas, medidas contra un .dproj de
   // paquete del IDE (FMXDefontsoft, 2026-09-23): el fuente principal es el
   // .dpk, AppType/ProjectType = Package, GenDll+GenPackage+AppFileExt=bpl,
@@ -178,7 +188,13 @@ begin
     '        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>' + CRLF +
     PkgProps +
     '        <VerInfo_Locale>1033</VerInfo_Locale>' + CRLF +
-    '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+    '        <DCC_Namespace>' + Ambitos + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+    '    </PropertyGroup>' + CRLF +
+    '    <PropertyGroup Condition="''$(Base_Win32)''!=''''">' + CRLF +
+    '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+    '    </PropertyGroup>' + CRLF +
+    '    <PropertyGroup Condition="''$(Base_Win64)''!=''''">' + CRLF +
+    '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
     '    </PropertyGroup>' + CRLF +
     '    <ItemGroup>' + CRLF +
     '        <DelphiCompile Include="$(MainSource)">' + CRLF +
