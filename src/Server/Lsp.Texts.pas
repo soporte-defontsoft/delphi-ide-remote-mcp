@@ -2452,10 +2452,22 @@ const
     '[CAPT-001] The image is IN this answer (scaled %s of the capture). ' +
     'To press what you see, measure x,y ON THIS IMAGE and pass them to ' +
     'tap/type with frame (below): the server converts - never divide or ' +
-    'add yourself. Its temp file was consumed: need it again, take ' +
-    'another screenshot; inline=false gives a download link instead (over ' +
-    'stdio, out=); a ' +
-    'capture with out= is yours and stays.';
+    'add yourself.';
+
+  { La cola de la nota de una imagen en linea, la MISMA para toda tool que
+    captura (desktop, adb, preview): lo que pasa con el fichero depende de
+    quien lo nombro. Era una frase para los dos casos, y con out= decia "Its
+    temp file was consumed" de un fichero que se quedaba: Hermes lo leyo
+    como "perdiste la imagen" y la volvio a pedir por fetch y curl (informe
+    20261016-234036, Flash por Telegram). }
+  SN_CAPTURE_TEMPORAL_CONSUMIDO =
+    '[CAPT-016] It is already yours, in this answer: what was consumed is ' +
+    'only the server''s temporary file. For a new one, ask again; ' +
+    'inline=false gives a download link instead (over stdio, out=).';
+
+  SN_CAPTURE_OUT_SE_QUEDA =
+    '[CAPT-017] The file you named in out= stays where "screenshot" says: ' +
+    'it is yours, and the image in this answer is that same capture.';
 
   SR_BORRADO_DENEGADO_FMT =
     '[GUARD-017 DENIED] NOT DELETING "%s": %s. The tree deleter only ' +
@@ -4835,9 +4847,7 @@ const
 
   SN_DESIGNER_INLINE_NOTE_FMT =
     '[DSGN-071] The image is IN this answer (scaled %s of the render). ' +
-    'Measure on it and convert with frame (below). Its temp file was ' +
-    'consumed: preview again for a new one; inline=false gives a download ' +
-    'link instead (over stdio, out=); a preview with out= is yours and stays.';
+    'Measure on it and convert with frame (below).';
 
   SR_DESIGNER_STYLE_VCL_FMT =
     '[DSGN-072 INVALID_PARAM] A VCL form takes a .vsf file as style (by ' +

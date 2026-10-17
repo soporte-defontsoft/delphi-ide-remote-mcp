@@ -271,10 +271,18 @@ begin
       else if IsAgentCapture(AFile) then
         AReturn.AddPair('consumed', TJSONBool.Create(False)); // no era nuestra: se queda
       var EscalaTexto := FormatFloat('0.000', Escala, TFormatSettings.Invariant);
-      if ANotaEnLineaFmt <> '' then
-        AReturn.AddPair('inlineNote', MsgFmt(ANotaEnLineaFmt, [EscalaTexto]))
+      // la cola dice que pasa con EL fichero: el temporal nuestro se consumio,
+      // el out= del agente se queda (una frase para los dos, 1.20.0, se leia
+      // como "perdiste la imagen" con out=)
+      var Cola: string;
+      if Nuestra then
+        Cola := MsgText(SN_CAPTURE_TEMPORAL_CONSUMIDO)
       else
-        AReturn.AddPair('inlineNote', MsgFmt(SN_CAPTURE_INLINE_NOTE_FMT, [EscalaTexto]));
+        Cola := MsgText(SN_CAPTURE_OUT_SE_QUEDA);
+      if ANotaEnLineaFmt <> '' then
+        AReturn.AddPair('inlineNote', MsgFmt(ANotaEnLineaFmt, [EscalaTexto]) + ' ' + Cola)
+      else
+        AReturn.AddPair('inlineNote', MsgFmt(SN_CAPTURE_INLINE_NOTE_FMT, [EscalaTexto]) + ' ' + Cola);
       Exit(True);
     end;
     // no se pudo escalar: se dice y se entrega como fichero (por stdio, sin

@@ -24,6 +24,16 @@ the MCP `initialize` response (`serverInfo.version`).
   written by its Name, so its properties are set by its own Name - the same
   rule `set` applies. Measured by Hermes (Qwen3.8 Flash Next) in the
   targeted rounds of 1.20.0: two refusals for one task.
+- **The note of an inline image says what happened to THAT file.** It was
+  one sentence for every case - "Its temp file was consumed" - also when
+  the agent had named `out=` and its file stayed; Hermes read it as "the
+  image is lost" and fetched it again with a download and curl, several
+  turns for an image it already had. The note of `delphi_designer
+  preview` (`DSGN-071`) and of `delphi_desktop` / `delphi_adb` captures
+  (`CAPT-001`) now ends with `CAPT-016` (only the server's temporary file
+  was consumed: the image is already yours, in this answer) or `CAPT-017`
+  (the file you named in `out=` stays where `screenshot` says). One place
+  composes it for the three tools.
 
 ## [1.20.0] - 2026-10-16
 

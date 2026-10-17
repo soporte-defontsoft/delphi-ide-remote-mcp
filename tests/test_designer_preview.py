@@ -791,6 +791,19 @@ end
           j.get('inlineImage') is True and j.get('consumed') is True and 'screenshot' not in j and
           mc.es(j.get('inlineNote', ''), 'SN_DESIGNER_INLINE_NOTE_FMT') and
           mc.es(j.get('frameNote', ''), 'SN_DESIGNER_FRAME_NOTE'), r[:600])
+    # 1.20.1: la cola de la nota dice que pasa con EL fichero (con out= decia
+    # "Its temp file was consumed" de uno que se quedaba: Hermes lo volvio a
+    # pedir por fetch y curl, informe 20261016-234036)
+    check('P9 ...y la nota dice que lo consumido es el temporal del servidor, no la imagen (CAPT-016)',
+          mc.es(j.get('inlineNote', ''), 'SN_CAPTURE_TEMPORAL_CONSUMIDO') and
+          not mc.es(j.get('inlineNote', ''), 'SN_CAPTURE_OUT_SE_QUEDA'), j.get('inlineNote'))
+    r = preview(path=PRUEBA, out=png('p9out.png'))
+    j = J(r)
+    check('P9 con out= e inline: la imagen viaja, el fichero se queda y la nota lo dice (CAPT-017, nada de consumido)',
+          j.get('inlineImage') is True and os.path.exists(png('p9out.png')) and
+          mc.es(j.get('inlineNote', ''), 'SN_DESIGNER_INLINE_NOTE_FMT') and
+          mc.es(j.get('inlineNote', ''), 'SN_CAPTURE_OUT_SE_QUEDA') and
+          not mc.es(j.get('inlineNote', ''), 'SN_CAPTURE_TEMPORAL_CONSUMIDO'), r[:600])
     # 'antes' no vacio: el glob ve la carpeta de capturas (el de P8 esta ahi);
     # con la ruta mal, los dos conjuntos vacios pasaban (revision de la 1.17.0)
     # la carpeta de capturas del disenador existe (se dibujo en ella): con la
