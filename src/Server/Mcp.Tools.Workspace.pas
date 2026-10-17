@@ -608,6 +608,15 @@ begin
       if PagDirs.HayMas then
         Return.AddPair('shownNote', MsgFmt(SN_LIST_DIRS_CAPPED_FMT,
           [PagDirs.Mostrados, PagDirs.Total, PagDirs.Siguiente]));
+      // ninguna subcarpeta y si ficheros: se dice (total:0 a secas parecia
+      // una carpeta vacia; Flash, 1.20)
+      if PagDirs.Total = 0 then
+      begin
+        var NFicheros := Length(TDirectory.GetFiles(Root));
+        if NFicheros > 0 then
+          // 'note' ya puede llevarlo Ocultos (LIST-012): una clave propia
+          Return.AddPair('filesNote', MsgFmt(SN_LIST_DIRS_SOLO_FICHEROS_FMT, [NFicheros]));
+      end;
       Ocultos.Report(Return);
       ListaDirs.Cuelga(Return);
       Result := Return.ToJSON;

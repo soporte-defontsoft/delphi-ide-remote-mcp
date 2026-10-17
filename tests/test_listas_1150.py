@@ -188,6 +188,19 @@ try:
     jp = mc.como_json(llama('delphi_list', {'root': PYC, 'pattern': '*'}))
     check('L5 ...nombrado como root, se lista',
           [e['name'] for e in mc.ficheros(jp)] == ['c.cpython-314.pyc'], jp)
+    # 1.20.1: dirs=true en una carpeta SIN subcarpetas y con ficheros contestaba
+    # total:0 a secas, y parecia vacia (Flash, ronda 3 del filtro de la 1.20)
+    jpd = mc.como_json(llama('delphi_list', {'root': PYC, 'dirs': True}))
+    check('L5b dirs=true en una carpeta solo de ficheros: total 0 y LIST-014 dice cuantos ficheros hay',
+          jpd.get('total') == 0 and mc.es(jpd.get('filesNote', ''), 'SN_LIST_DIRS_SOLO_FICHEROS_FMT') and
+          '1 files' in jpd.get('filesNote', ''), jpd)
+    check('L5b ...y una con subcarpetas no lleva esa nota', 'filesNote' not in jd, jd)
+    # 1.20.1: search admite un FICHERO como root; si no existe, WS-008 decia
+    # "Directory not found" y Flash creyo que no admitia ficheros (17-oct)
+    jx = llama('delphi_search', {'root': os.path.join(ARBOL, 'NoEsta', 'Unidad.pas'), 'query': 'x'})
+    check('L5c search con root = un fichero que no existe: WS-008 dice que no existe (ni carpeta ni fichero), '
+          'no "Directory not found"',
+          mc.abre(jx, 'SR_WS_DIR_NOT_FOUND_FMT') and 'does not exist' in jx and 'Directory' not in jx, jx[:300])
 
     # ------------------------------------------------------------------- L6
     raw = llama('delphi_search', {'root': ARBOL, 'query': 'marca listas', 'maxresults': 100})

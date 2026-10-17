@@ -2444,8 +2444,9 @@ const
     'wants the bytes); over stdio there is no link: use out=.';
 
   SP_CAPTURE_MAXWIDTH =
-    'Inline only: the width the image is scaled to before it travels (0 = ' +
-    '1280). The answer says inlineScale: divide what you measure on the ' +
+    'Inline only: the MOST width the image travels at (0 = 1280) - a wider ' +
+    'capture is scaled down to it, a narrower one travels as it is, never ' +
+    'enlarged. The answer says inlineScale: divide what you measure on the ' +
     'inline image by it to get capture pixels, or use the answer''s frame ' +
     '(a tap takes it, and delphi_desktop''s type too; preview''s converts ' +
     'to form units).';
@@ -7599,8 +7600,13 @@ const
     'delphi_report: %s (%s) from "%s"';
 
   // Mensajes que estaban en linea en Mcp.Tools.Workspace.pas (paso 3c a mano, 27-sep-2026)
+  { Neutro: lo dicen list y package (una carpeta) y search, cuya raiz es una
+    carpeta o UN fichero. "Directory not found" de un fichero que no existia
+    (le faltaba una carpeta a la ruta) hizo creer a Flash que search no
+    admitia ficheros: tres vueltas (17-oct-2026). }
   SR_WS_DIR_NOT_FOUND_FMT =
-    '[WS-008 NOT_FOUND] Directory not found: %s';
+    '[WS-008 NOT_FOUND] %s does not exist: there is no folder and no file ' +
+    'with that path.';
 
   { Una raiz o referencia a la que el servidor no llega AHORA (informe de
     Hermes, 5-oct-2026: una referencia en una letra sin montar salia listada
@@ -10901,6 +10907,14 @@ const
 
   SN_LIST_DIRS_CAPPED_FMT =
     '[LIST-013] Here are %d of %d folders. The next page is offset=%d.';
+
+  { dirs=true sobre una carpeta sin subcarpetas y CON ficheros: contestaba
+    total:0 y nada mas, y parecia vacia (Flash, ronda 3 del encargo del
+    filtro de la 1.20: source\fmx, 281 ficheros, "no hay nada"). }
+  SN_LIST_DIRS_SOLO_FICHEROS_FMT =
+    '[LIST-014] No subfolder to show here, but %d files: dirs=true lists folders ' +
+    'only. Without it, delphi_list lists the files (pattern=* for all of ' +
+    'them, not only the Delphi ones).';
 
   SR_SYS_PARAM_VALUE_FMT =
     '[SYS-016 INVALID_PARAM] Parameter "%s": %s';

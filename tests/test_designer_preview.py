@@ -829,6 +829,11 @@ end
     check('P9 ...y la nota dice que lo consumido es el temporal del servidor, no la imagen (CAPT-016)',
           mc.es(j.get('inlineNote', ''), 'SN_CAPTURE_TEMPORAL_CONSUMIDO') and
           not mc.es(j.get('inlineNote', ''), 'SN_CAPTURE_OUT_SE_QUEDA'), j.get('inlineNote'))
+    # 1.20.1: maxwidth es el ancho MAXIMO (la descripcion decia "the width the
+    # image is scaled to" y Flash espero que una de 400 subiera a 1280)
+    jm = J(preview(path=PRUEBA, maxwidth=1280))
+    check('P9 maxwidth mayor que la captura: viaja a su tamano, nunca ampliada (inlineScale 1)',
+          jm.get('inlineWidth') == 400 and jm.get('inlineScale') == 1, jm)
     r = preview(path=PRUEBA, out=png('p9out.png'))
     j = J(r)
     check('P9 con out= e inline: la imagen viaja, el fichero se queda y la nota lo dice (CAPT-017, nada de consumido)',

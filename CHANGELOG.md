@@ -74,6 +74,15 @@ the MCP `initialize` response (`serverInfo.version`).
   again for a new project. They now say `command=platforms` answers
   `ready (SDK present)` when it is there, and `profiles` lists each SDK
   with its date.
+- **Three answers that read as something else.** `delphi_list dirs=true`
+  on a folder with files and no subfolders answered `total: 0` and nothing
+  more, which reads as an empty folder: it now says how many files there
+  are and how to list them (`LIST-014`). `WS-008` said "Directory not
+  found" also when `delphi_search` was given a FILE that does not exist,
+  and Hermes concluded that `root` takes no files: it now says the path
+  does not exist, as neither folder nor file. `maxwidth` was described as
+  "the width the image is scaled to"; it is the most width it travels at -
+  a narrower capture is never enlarged.
 
 ### Added
 
