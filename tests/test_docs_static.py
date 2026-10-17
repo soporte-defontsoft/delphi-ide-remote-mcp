@@ -107,6 +107,24 @@ sin_indice = sorted('docs/changelog/' + os.path.basename(f)
 check('el indice del CHANGELOG enlaza cada docs/changelog/*.md y cada enlace existe',
       bool(indice) and not faltan and not sin_indice, {'faltan': faltan, 'sin indice': sin_indice})
 
+# ---- get-sdk: una vez por MAQUINA destino, y quien dice si ya esta ------
+# 1.20.1: los textos daban el paso ("get-sdk once") sin nombrar la llamada
+# que dice si ya esta hecho; Hermes lo repitio el 14-oct con el SDK ya traido
+# y el 17-oct lo volvio a proponer tras compactar. Cada texto que manda hacer
+# get-sdk nombra command=platforms y dice que no es por proyecto.
+def constante(nombre):
+    m = re.search(r'^  %s =\r?\n(.*?);\r?$' % re.escape(nombre), texts, re.S | re.M)
+    return m.group(1) if m else ''
+
+
+skill_md = open(os.path.join(REPO, 'skills', 'SKILL.md'), encoding='utf-8').read()
+paso = skill_md[skill_md.find('`get-sdk`'):skill_md.find('`get-sdk`') + 400]
+for donde, t in (('SD_PASERVER', constante('SD_PASERVER')), ('SP_BUILD_PLATFORM', constante('SP_BUILD_PLATFORM')),
+                 ('SKILL.md', paso)):
+    plano = re.sub(r"'\s*\+\s*'", '', t).replace("''", "'")
+    check('get-sdk en %s: una vez por maquina destino (no por proyecto) y command=platforms dice si ya esta' % donde,
+          'get-sdk' in plano and 'platforms' in plano and 'not per project' in plano.replace('\n', ' '), plano[:300])
+
 # ---- settings.example.ini vs docs/CONFIGURATION.md --------------------
 # Operator rule (2026-09-01): the docs are PART of every repo update - and
 # they get forgotten. So it is a gate: every section and every ACTIVE key of

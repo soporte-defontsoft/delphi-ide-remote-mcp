@@ -346,8 +346,10 @@ reads for its own list - the IDE picks it up at its NEXT start, so do
 not expect it to appear in a running IDE. If a profile is on disk but
 missing from the IDE, `command=reseat` writes the missing seats
 from the files themselves, no PAServer and no passwords needed)
--> `test-connection` -> `get-sdk` once (pulls the sysroot; minutes -
-re-running it is safe and incremental: `already up to date` is success) ->
+-> `test-connection` -> `get-sdk` ONCE PER TARGET MACHINE, not per
+project (pulls the sysroot; minutes. Look first: `command=platforms`
+says `ready (SDK present)` when it is already there - then skip it;
+re-running is safe and incremental: `already up to date` is success) ->
 `delphi_config command=add-platform platform=Linux64` (once per project)
 -> `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
 (`download` link, sha256) to run the ELF on YOUR machine - or run it ON

@@ -1833,8 +1833,10 @@ const
     'subcommand in "command"). The first time: packages (download the ' +
     'installer with delphi_fetch and run it on the target) -> add-profile ' +
     '(the password is stored encrypted) -> test-connection -> get-sdk (the ' +
-    'libraries the linker needs, once per target and again after an OS ' +
-    'upgrade there; minutes) -> delphi_build for that platform -> ' +
+    'libraries the linker needs, once per TARGET MACHINE - not per project - ' +
+    'and again after an OS upgrade there; minutes. command=platforms says ' +
+    '"ready (SDK present)" when it is already pulled, and profiles lists ' +
+    'each SDK with its date) -> delphi_build for that platform -> ' +
     'delphi_build target=Deploy -> remote-run. Enabling a platform in a ' +
     'project is delphi_config.';
 
@@ -8800,7 +8802,9 @@ const
     'and has enabled (delphi_config add-platform / remove-platform), so the ' +
     'IDE builds the same: Win32/Win64 build natively here; ' +
     'Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need their SDK pulled ' +
-    'once (delphi_paserver get-sdk). Building is LOCAL against that SDK and ' +
+    'once per target machine, not per project (delphi_paserver get-sdk; ' +
+    'command=platforms says whether it already is). Building is LOCAL ' +
+    'against that SDK and ' +
     'does NOT use profile - a profile is only for target=Deploy.';
 
   SP_BUILD_CONFIG =

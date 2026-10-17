@@ -66,6 +66,14 @@ the MCP `initialize` response (`serverInfo.version`).
   unless its code loads a style), and with `style=` it ends with `for this
   image only: the form itself carries ...` - its StyleBook with N styles,
   an empty one, or none. The parameter's description says the same.
+- **`get-sdk` is said to be once per target machine, not per project, and
+  the texts name the call that says whether it is already done.** The
+  descriptions of `delphi_paserver` and of `delphi_build`'s `platform`,
+  and the skill, gave the step ("get-sdk once") without saying how to know
+  it was done: Hermes pulled an SDK it already had, and later proposed it
+  again for a new project. They now say `command=platforms` answers
+  `ready (SDK present)` when it is there, and `profiles` lists each SDK
+  with its date.
 
 ## [1.20.0] - 2026-10-16
 
