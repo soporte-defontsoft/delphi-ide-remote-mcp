@@ -89,6 +89,32 @@ const
     'go through it - give that component''s own Name instead ' +
     '(Component.Property=Value), as the form file does.';
 
+  // Lo que dice STYLE= del StyleBook de la form, y la coletilla de un style=
+  // de la peticion: lo que lleva la form ES lo que vera la app. Decia "(1
+  // items)" de un StyleBook con un item vacio, y nada con style=: Hermes tomo
+  // dos previews con style= por el aspecto del exe (RetoFMX, 17-oct-2026)
+  SF_RENDER_ESTILO_PROPIO_FMT =
+    'the form''s own StyleBook %s (%d items)';
+
+  SF_RENDER_ESTILO_PROPIO_VACIO_FMT =
+    'the form''s own StyleBook %s, EMPTY (%d item(s) with no style in ' +
+    'them): the platform default is drawn, and the app runs with it too ' +
+    'unless its code loads a style';
+
+  SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT =
+    '%s - for this image only: the form itself carries %s';
+
+  SF_RENDER_LLEVA_ESTILOS_FMT =
+    'its StyleBook %s with %d style(s)';
+
+  SF_RENDER_LLEVA_VACIO_FMT =
+    'an EMPTY StyleBook %s (unless its code loads a style, the app gets ' +
+    'the platform default)';
+
+  SF_RENDER_LLEVA_NADA =
+    'no StyleBook (unless its code loads a style, the app gets the ' +
+    'platform default)';
+
   // La linea de uso (stderr, con el codigo 2)
   SF_RENDER_USO_FMT =
     '%s --path <dfm|fmx> --out <png> [--state Component.Property=Value]* ' +

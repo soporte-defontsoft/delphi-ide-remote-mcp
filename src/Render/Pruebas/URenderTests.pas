@@ -564,7 +564,11 @@ begin
   R := Fmx(Format('--path "%s" --out "%s" --style "%s"', [Cobaya('Galatea.View.Login.fmx'), Salida('login_clasico'),
     Cobaya('Galatea.Clasico.style')]));
   CompruebaCaptura(R, '920x700');
-  Assert.AreEqual('file Galatea.Clasico.style', R.Valor(FR_STYLE));
+  Assert.IsTrue(R.Valor(FR_STYLE).StartsWith('file Galatea.Clasico.style'), R.Valor(FR_STYLE));
+  // 1.20.1: y dice lo que lleva la form, lo que vera la app: el StyleBook del
+  // login esta vacio en el .fmx (Galatea lo carga por codigo)
+  Assert.IsTrue(R.Valor(FR_STYLE).Contains('for this image only') and
+    R.Valor(FR_STYLE).Contains('EMPTY StyleBook StyleBookGalatea'), R.Valor(FR_STYLE));
   R := Fmx(Format('--path "%s" --out "%s" --style none', [Cobaya('Galatea.View.Login.fmx'), Salida('login_none')]));
   CompruebaCaptura(R, '920x700');
   Assert.IsTrue(R.Valor(FR_STYLE).StartsWith('none'), R.Valor(FR_STYLE));

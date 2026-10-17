@@ -4637,7 +4637,10 @@ const
     'default, as the designer). FMX: empty = the form''s own StyleBook (as ' +
     'the designer), none = the Windows default, a .style file, or a ' +
     'platform of the designer''s Style list (android, ios, win11...; an ' +
-    'unknown name is answered with the list). A file goes by absolute path.';
+    'unknown name is answered with the list). A file goes by absolute path. ' +
+    'A style given here is for THAT image only - nothing is written to the ' +
+    'form, and the app runs with what the form itself carries, which the ' +
+    'answer''s style says.';
 
   SP_DESIGNER_NONVISUAL =
     'preview optional: true = draw the non-visual components (TTimer, ' +

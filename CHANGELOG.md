@@ -57,6 +57,15 @@ the MCP `initialize` response (`serverInfo.version`).
   the common ones in Base, the Windows ones (`Winapi`, `System.Win`...) in
   `Base_Win32` and `Base_Win64`, and the VCL ones never in an FMX project.
   VCL, console and package projects resolve exactly as before on Windows.
+- **`delphi_designer preview` says what style the form itself carries.**
+  A StyleBook whose only item is empty was described as `the form's own
+  StyleBook StyleBook1 (1 items)`, and a `style=` file or platform said
+  nothing about the form: Hermes took two previews drawn with `style=` for
+  the look of the app, and its StyleBook was empty. `style` now says
+  `EMPTY` (the platform default is drawn, and the app runs with it too
+  unless its code loads a style), and with `style=` it ends with `for this
+  image only: the form itself carries ...` - its StyleBook with N styles,
+  an empty one, or none. The parameter's description says the same.
 
 ## [1.20.0] - 2026-10-16
 

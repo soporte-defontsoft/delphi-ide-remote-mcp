@@ -140,32 +140,59 @@ begin
   Result := 'windows|win7|win8|win10|win11|mobile|android|ios|ios-dark|osx|linux|gnome';
 end;
 
+{ Cuantos items del StyleBook llevan un estilo: uno vacio (Styles = < item
+  end>) cuenta en Styles.Count y no pinta nada. Lo dice el propio item
+  (TStyleCollectionItem.IsEmpty). }
+function EstilosConContenido(ASB: TStyleBook): Integer;
+begin
+  Result := 0;
+  for var I := 0 to ASB.Styles.Count - 1 do
+    if not ASB.Styles[I].IsEmpty then
+      Inc(Result);
+end;
+
+{ Lo que lleva la form ella misma (lo que vera la app), para la coletilla
+  de un style= de la peticion }
+function LoQueLlevaLaForm(AForm: TForm): string;
+begin
+  if AForm.StyleBook = nil then
+    Exit(MsgText(SF_RENDER_LLEVA_NADA));
+  var N := EstilosConContenido(AForm.StyleBook);
+  if N = 0 then
+    Exit(MsgFmt(SF_RENDER_LLEVA_VACIO_FMT, [AForm.StyleBook.Name]));
+  Result := MsgFmt(SF_RENDER_LLEVA_ESTILOS_FMT, [AForm.StyleBook.Name, N]);
+end;
+
 { Aplica --style a la form: '' = lo suyo; none = sin StyleBook; fichero;
-  plataforma del designer. Devuelve la descripcion para STYLE=. }
+  plataforma del designer. Devuelve la descripcion para STYLE=; con un
+  --style, termina diciendo lo que lleva la form (solo esta imagen lo usa). }
 function AplicaEstilo(AForm: TForm): string;
 var
   SB: TStyleBook;
-  Bpl, Recurso: string;
+  Bpl, Recurso, Lleva: string;
   Modulo: HMODULE;
   Res: TResourceStream;
 begin
   if GPeticion.Estilo = '' then
   begin
-    if AForm.StyleBook <> nil then
-      Exit(Format('the form''s own StyleBook %s (%d items)', [AForm.StyleBook.Name, AForm.StyleBook.Styles.Count]));
-    Exit('none (the form has no StyleBook: Windows default, as the designer)');
+    if AForm.StyleBook = nil then
+      Exit('none (the form has no StyleBook: Windows default, as the designer)');
+    if EstilosConContenido(AForm.StyleBook) = 0 then
+      Exit(MsgFmt(SF_RENDER_ESTILO_PROPIO_VACIO_FMT, [AForm.StyleBook.Name, AForm.StyleBook.Styles.Count]));
+    Exit(MsgFmt(SF_RENDER_ESTILO_PROPIO_FMT, [AForm.StyleBook.Name, AForm.StyleBook.Styles.Count]));
   end;
+  Lleva := LoQueLlevaLaForm(AForm);
   if SameText(GPeticion.Estilo, 'none') or SameText(GPeticion.Estilo, 'windows') then
   begin
     AForm.StyleBook := nil;
-    Exit('none (Windows default, as the designer)');
+    Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, ['none (Windows default, as the designer)', Lleva]));
   end;
   if TFile.Exists(GPeticion.Estilo) then
   begin
     SB := TStyleBook.Create(AForm);
     SB.LoadFromFile(GPeticion.Estilo);
     AForm.StyleBook := SB;
-    Exit('file ' + ExtractFileName(GPeticion.Estilo));
+    Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, ['file ' + ExtractFileName(GPeticion.Estilo), Lleva]));
   end;
   if not RecursoDePlataforma(GPeticion.Estilo, Bpl, Recurso) then
     raise ERender.Create(MsgFmt(SR_RENDER_ESTILO_DESCONOCIDO_FMT, [GPeticion.Estilo, NombresDePlataforma]));
@@ -182,7 +209,8 @@ begin
   finally
     Res.Free;
   end;
-  Result := Format('designer platform style %s (%s of %s)', [GPeticion.Estilo.ToLower, Recurso, ExtractFileName(Bpl)]);
+  Result := MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [Format('designer platform style %s (%s of %s)',
+    [GPeticion.Estilo.ToLower, Recurso, ExtractFileName(Bpl)]), Lleva]);
 end;
 
 { Los no visuales como los ensena el designer: icono en su Left/Top y el nombre debajo }

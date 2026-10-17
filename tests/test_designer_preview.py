@@ -428,6 +428,27 @@ MALAF = escribe('MalaF.fmx', """object FormMalaF: TFormMalaF
   end
 end
 """)
+# 1.20.1: un StyleBook con un item VACIO, lo que dejo Hermes en RetoFMX
+SBVACIO = escribe('SBVacio.fmx', """object FormSBVacio: TFormSBVacio
+  Left = 0
+  Top = 0
+  Caption = 'SB vacio'
+  ClientHeight = 120
+  ClientWidth = 300
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  StyleBook = StyleBook1
+  DesignerMasterStyle = 0
+  object StyleBook1: TStyleBook
+    Styles = <
+      item
+      end>
+    Left = 40
+    Top = 40
+  end
+end
+""")
 
 
 def linea_de(ruta, texto):
@@ -715,8 +736,19 @@ end
     check('P6 un frame FMX suelto: frame por su .pas',
           (J(r).get('root') or {}).get('kind') == 'frame', r[:300])
     r = preview(path=CONFRAMEF, style='android', out=png('p6a.png'), inline='false')
-    check('P6 style con una plataforma del designer (android): STYLE lo dice',
-          'ANDROIDSTYLE' in str(J(r).get('style', '')), r[:300])
+    check('P6 style con una plataforma del designer (android): STYLE lo dice, solo para esta imagen, '
+          'y que la form no lleva StyleBook (1.20.1)',
+          'ANDROIDSTYLE' in str(J(r).get('style', '')) and 'for this image only' in str(J(r).get('style', '')) and
+          'no StyleBook' in str(J(r).get('style', '')), r[:300])
+    # 1.20.1: un StyleBook con un item vacio contaba "(1 items)" y Hermes tomo
+    # dos previews con style= por el aspecto del exe (RetoFMX, 17-oct)
+    r = preview(path=SBVACIO)
+    check('P6 un StyleBook con un item vacio: STYLE dice EMPTY (lo que vera la app), no "(1 items)"',
+          'EMPTY' in str(J(r).get('style', '')) and '(1 items)' not in str(J(r).get('style', '')), r[:400])
+    r = preview(path=SBVACIO, style='android')
+    check('P6 ...y con style=, la coletilla: solo esta imagen, la form lleva un StyleBook vacio',
+          'for this image only' in str(J(r).get('style', '')) and
+          'EMPTY StyleBook StyleBook1' in str(J(r).get('style', '')), r[:400])
     r = preview(path=CONFRAMEF, style='none')
     check('P6 style none: el estilo por defecto de Windows, como el designer',
           str(J(r).get('style', '')).startswith('none'), r[:300])
