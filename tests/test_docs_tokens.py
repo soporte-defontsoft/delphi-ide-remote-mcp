@@ -1,8 +1,13 @@
 """E2E battery for v1.13.0 - what an agent pays in tokens (the token reviewer
 of 4-oct-2026: ~27K fixed per session, tools/list 26.9K of it).
 
-  T1  tools/list stays under its budget: 100.000 characters (105.592 with the
-      1.12.1). Raising it is a decision, not an accident.
+  T1  tools/list stays under its budget: 105.000 characters (105.592 with the
+      1.12.1; 100.000 until 1.20.0, which closed at 99.964). Raising it is a
+      decision, not an accident: David, 17-oct-2026, "if we can save, we save;
+      if we lose quality, 105k" - the 1.20.1 added 1.047 and gave back 767 by
+      rewriting shared texts shorter (100.244); the last 244 were what agents
+      use (prop's named constants, set-output in every configuration, get-sdk
+      "not per project", which test_docs_static keeps).
   T2  the fields of an "edits" entry - read from EDIT-012, the list the engine
       itself checks (Lsp.Patch.CAMPOS_DE_UNA_EDICION) - are ALL named in the
       long description (delphi_edit) and in the short one (delphi_textedit).
@@ -37,7 +42,7 @@ call = srv.call
 
 TOOLS = srv.request('tools/list', {})['result']['tools']
 TAM = len(json.dumps(TOOLS, ensure_ascii=False))
-check('T1 tools/list por debajo de su presupuesto (100.000 caracteres)', TAM < 100000, TAM)
+check('T1 tools/list por debajo de su presupuesto (105.000 caracteres)', TAM < 105000, TAM)
 
 
 def prop(tool, p):

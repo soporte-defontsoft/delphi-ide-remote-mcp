@@ -99,12 +99,17 @@ the MCP `initialize` response (`serverInfo.version`).
   project - its `.pas` in the program's tree, or an entry with its `in
   '...'` path - still goes by `remove-unit`, which also removes its
   `CreateForm` and its `DCCReference` (`USES-025`, nothing written).
-- **`delphi_config` and the build read and edit a `.dproj` and a
-  `.deployproj` with one parse, and read them as msbuild does.** Eight places
-  read a group or an element each in its own way - the exact tag with no
-  attributes, "the last group opened before it", the group by its
-  `Condition` matched letter by letter, regexes that wanted `Include` first
-  and in double quotes. What an agent sees:
+- **`delphi_config`, the build and a move read and edit project XML with one
+  parse, checked against the parser the IDE loads.** Five units read a
+  `.dproj`, `.deployproj` or `.groupproj` each in its own way, in 39
+  regexes and searches for a tag and a few needles in constants - the exact
+  tag with no attributes, "the last group opened before it", the group by
+  its `Condition` matched letter by letter, regexes that wanted the
+  attribute first and in double quotes and also read what a comment holds.
+  Now one reader does it (an element with its own closing even when another
+  of its name sits inside, a CDATA read as XML reads it, nothing inside a
+  comment), and every tool reads and writes through it, in place. What an
+  agent sees:
   - `add-searchpath`, `set-sdk` and `set-profile` find a platform group
     written by hand (`'$(Base_Linux64)' != ''`) instead of creating a second
     one and writing into it;
@@ -122,16 +127,53 @@ the MCP `initialize` response (`serverInfo.version`).
     entry whose `Condition` comes before its `Include` (4 entries the IDE
     wrote in a sample were invisible), an empty `<DeployFile .../>` no longer
     swallows the entry after it, and a group of a platform the server does
-    not list any more (`OSX32`) shows as written.
+    not list any more (`OSX32`) shows as written;
+  - `target=Deploy` and `add-deployfile` add the manifest's `<Import>` to a
+    `.dproj` whose `CodeGear.Delphi.Targets` import has its `Condition`
+    first: they looked for `Project` first, never found it, and the deploy
+    failed with `MSB4057` (13 of the 296 samples write it that way, 8 of
+    them without that import);
+  - `add-platform` and `remove-platform` find a platform written in single
+    quotes or with another attribute (3 samples declare
+    `<Platform value="Win32" Profile="win_desktop">`: `remove-platform`
+    answered that Win32 was not declared while `view` listed it enabled),
+    and one inside a comment no longer counts;
+  - `set-version` changes `FileVersion` and `ProductVersion` only as keys of
+    `VerInfo_Keys`: it rewrote that text wherever it appeared, a build event
+    included;
+  - `add-unit`, moving a unit and `remove-unit` find a `DCCReference` whose
+    `Include` is not the first attribute, is in single quotes or shares its
+    line;
+  - moving a folder re-points the paths of an attribute in any order or
+    quotes, and never one inside a comment;
+  - `add-project` / `remove-project` compare target names as msbuild does
+    (without case): an aggregate target written `build` got a second
+    `Build`.
+  `tests/test_xml_familia_1201.py` measures each of these on its own
+  project, and each is red against the previous binary.
   Measured against the previous binary on the 296 `.dproj` of the 37.0
-  samples (view, search paths, SDK, profile, deployment, 16 steps each):
-  every write leaves the same bytes; the answers differ only in the two
-  samples where the previous reading was wrong. Measured against MSXML - the
-  XML parser the IDE loads - on the 4,082 project files of this machine,
-  the reader sees the same groups, conditions and values, but for the
-  end-of-line normalization inside 4 multi-line build events (no decision of
-  the server reads their text). The DOM is not the writer: none of the three
-  engines Delphi ships writes a project file back byte for byte.
+  samples and their 27 `.groupproj` (view, platforms, version, deployment
+  with the manifest generated from scratch, add-unit, a unit move,
+  remove-unit, a folder move, group add/remove; 4,575 steps on each side):
+  the same answers and the same bytes but for 24 steps, each one of the
+  fixes above - the manifest's `<Import>` (8 projects for Linux64, the 13
+  with the anchor written `Condition` first for Android) and
+  `remove-platform` on a platform with a `Profile` (3). A move reads every
+  project file under the workspace edge, so its speed was measured too: in
+  a root of 316 projects, moving a folder takes 2.23 s against 2.48 s and
+  moving a unit 2.33 s against 2.49 s.
+  Measured against MSXML - what the IDE loads, through `Xml.XMLDoc` - element
+  by element on the 4,124 project files of this machine: the same attributes
+  and values, 0 discrepancies (the previous reader disagreed in 3,537 of
+  the 4,084 first measured). The judge decided one detail: MSXML keeps a
+  tab or a line break written inside an attribute (only CRLF becomes LF),
+  though XML says they become blanks, and so does the reader. The DOM is
+  not the writer: none of the three engines Delphi ships writes a project
+  file back byte for byte.
+  `tests/test_oraculo_xml.py` keeps the comparison (a planted file with the
+  hard cases, and its mutant), and a rule of `test_paisaje` keeps project
+  XML out of regexes and `Pos` of a tag anywhere else (39 copies in 5 units
+  before).
 
 ### Added
 

@@ -389,7 +389,7 @@ var
   Info: TDprojInfo;
   Reason, Enc, Xml, Indent, APlatform: string;
   P: TDprojPlatform;
-  ClosePos, OpenPos: Integer;
+  Bloque: TTramoXml;
 begin
   if ARawPlatform.Trim = '' then
     Exit(MsgText(SR_CFG_ADD_PLATFORM_NECESITA_PLATFORM));
@@ -413,85 +413,71 @@ begin
     end;
 
   Xml := PatchLoadText(ADproj, Enc);
-  // Enable an existing-but-disabled platform: flip its value to True.
-  var Tag := Format('<Platform value="%s">', [APlatform]);
-  var TagPos := Pos(LowerCase(Tag), LowerCase(Xml));
-  if TagPos > 0 then
-  begin
-    var ValStart := TagPos + Length(Tag);
-    var ValEnd := Pos('<', Xml, ValStart);
-    if ValEnd > 0 then
+  // Enable an existing-but-disabled platform: flip its value to True, en su
+  // sitio (EL lector del bloque: era un Pos de '<Platform value="X">' con las
+  // comillas dobles y el value el primero)
+  for var D in PlataformasDelBloque(Xml) do
+    if SameText(D.Nombre, APlatform) then
     begin
-      Xml := Copy(Xml, 1, ValStart - 1) + 'True' + Copy(Xml, ValEnd, MaxInt);
+      Xml := Copy(Xml, 1, D.Tramo.Ini - 1) + 'True' + Copy(Xml, D.Tramo.Fin, MaxInt);
       PatchSaveConSuSalto(ADproj, Xml, Enc);
       Exit(MsgFmt(SN_CFG_HABILITADA_PLATAFORMA_ESTABA_DECLARAD_FMT, [APlatform]));
     end;
-  end;
 
   // Insert a new <Platform value="X">True</Platform> before </Platforms>,
   // copying the indentation of the existing entries.
-  ClosePos := Pos('</Platforms>', Xml);
-  OpenPos := Pos('<Platforms>', Xml);
-  if (ClosePos = 0) or (OpenPos = 0) or (ClosePos < OpenPos) then
+  if not BloqueDePlataformas(Xml, Bloque) then
     Exit(MsgText(SR_CFG_NO_ENCUENTRO_BLOQUE_PLATFORMS));
   // la sangria (solo el blanco) de la linea de </Platforms>, y la entrada
   // nueva JUSTO delante de </Platforms>. Con </Platforms> lo primero de su
   // linea (lo normal) sale igual que antes; con otra etiqueta delante en esa
   // linea (un .dproj editado a mano) se copiaba esa etiqueta como sangria y
   // la entrada nueva podia quedar fuera del bloque (revisor de la 1.15.0)
-  Indent := SangriaDeLaLineaEn(Xml, ClosePos);
-  Xml := Copy(Xml, 1, ClosePos - 1) + '    ' +
-    Format('<Platform value="%s">True</Platform>', [APlatform]) + sLineBreak + Indent +
-    Copy(Xml, ClosePos, MaxInt);
+  Indent := SangriaDeLaLineaEn(Xml, Bloque.Fin);
+  Xml := Copy(Xml, 1, Bloque.Fin - 1) + '    ' +
+    XmlPlataformaDelBloque(APlatform, True) + sLineBreak + Indent +
+    Copy(Xml, Bloque.Fin, MaxInt);
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   Result := MsgFmt(SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT, [APlatform, APlatform]);
 end;
 
 { Disable a platform (flip its <Platform value="X">True</Platform> to False).
   Reversible and non-destructive - the safe inverse of add-platform. }
-{ How many <Platform value="X">True</Platform> the .dproj still has on. }
-function EnabledPlatformCount(const AXml: string): Integer;
-var
-  M: TMatch;
-begin
-  Result := 0;
-  M := TRegEx.Match(AXml, '(?i)<Platform\s+value="[^"]+"\s*>\s*True\s*</Platform>');
-  while M.Success do
-  begin
-    Inc(Result);
-    M := M.NextMatch;
-  end;
-end;
-
 function RemovePlatform(const ADproj, ARawPlatform: string): string;
 var
   Enc, Xml, APlatform: string;
+  Plats: TArray<TPlataformaDelBloque>;
+  Activas: Integer;
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
     Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT, [ARawPlatform.Trim]));
   Xml := PatchLoadText(ADproj, Enc);
-  var Tag := Format('<Platform value="%s">', [APlatform]);
-  var TagPos := Pos(LowerCase(Tag), LowerCase(Xml));
-  if TagPos = 0 then
-    Exit(MsgFmt(SN_CFG_PLATAFORMA_ESTA_DECLARADA_PROYECTO_FMT, [APlatform]));
-  var ValStart := TagPos + Length(Tag);
-  var ValEnd := Pos('<', Xml, ValStart);
-  if ValEnd = 0 then
-    Exit(MsgText(SR_CFG_PLATFORM_FORMA_INESPERADA));
-  // Idempotence, like add-platform already had: repeating the call used to
-  // answer "DESHABILITADA" again and take a backup of a no-op, filling the
-  // trash with identical copies of an unchanged .dproj (field round 8).
-  if SameText(Trim(Copy(Xml, ValStart, ValEnd - ValStart)), 'False') then
-    Exit(MsgFmt(SN_CONFIG_PLAT_ALREADY_FMT, [APlatform]));
-  // ...and never leave a project with nothing to build for. Three calls in a
-  // row used to disable every platform, and the next delphi_build compiled
-  // anyway without a word, so nothing ever pointed back here.
-  if EnabledPlatformCount(Xml) <= 1 then
-    Exit(MsgFmt(SR_CONFIG_PLAT_LAST_FMT, [APlatform]));
-  Xml := Copy(Xml, 1, ValStart - 1) + 'False' + Copy(Xml, ValEnd, MaxInt);
-  PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
-  Result := MsgFmt(SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT, [APlatform]);
+  // EL lector del bloque, el de ReadDproj y add-platform: eran un Pos de
+  // '<Platform value="X">' y una regex para contar las activas
+  Plats := PlataformasDelBloque(Xml);
+  Activas := 0;
+  for var D in Plats do
+    if D.Activa then
+      Inc(Activas);
+  for var D in Plats do
+    if SameText(D.Nombre, APlatform) then
+    begin
+      // Idempotence, like add-platform already had: repeating the call used to
+      // answer "DESHABILITADA" again and take a backup of a no-op, filling the
+      // trash with identical copies of an unchanged .dproj (field round 8).
+      if not D.Activa then
+        Exit(MsgFmt(SN_CONFIG_PLAT_ALREADY_FMT, [APlatform]));
+      // ...and never leave a project with nothing to build for. Three calls in a
+      // row used to disable every platform, and the next delphi_build compiled
+      // anyway without a word, so nothing ever pointed back here.
+      if Activas <= 1 then
+        Exit(MsgFmt(SR_CONFIG_PLAT_LAST_FMT, [APlatform]));
+      Xml := Copy(Xml, 1, D.Tramo.Ini - 1) + 'False' + Copy(Xml, D.Tramo.Fin, MaxInt);
+      PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+      Exit(MsgFmt(SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT, [APlatform]));
+    end;
+  Result := MsgFmt(SN_CFG_PLATAFORMA_ESTA_DECLARADA_PROYECTO_FMT, [APlatform]);
 end;
 
 { ValidOutputFolder (la regla de "carpeta relativa al proyecto, apta para
@@ -616,8 +602,8 @@ begin
     if Tras = 0 then
       raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_CONFIG));
     AXml := Copy(AXml, 1, Tras - 1) + sLineBreak +
-      '    <PropertyGroup Condition="' + DefinerCondition(APlatform) + '">' + sLineBreak +
-      '        <Base_' + APlatform + '>true</Base_' + APlatform + '>' + sLineBreak +
+      '    <PropertyGroup ' + XmlAtributo('Condition', DefinerCondition(APlatform)) + '>' + sLineBreak +
+      '        ' + XmlElemento('Base_' + APlatform, 'true') + sLineBreak +
       '        <CfgParent>Base</CfgParent>' + sLineBreak +
       '        <Base>true</Base>' + sLineBreak +
       '    </PropertyGroup>' + Copy(AXml, Tras, MaxInt);
@@ -627,7 +613,7 @@ begin
     if not GrupoConCondicion(AXml, GroupCondition(''), G) then
       raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
     AXml := Copy(AXml, 1, G.Cierra - 1) + sLineBreak +
-      '    <PropertyGroup Condition="' + GroupCondition(APlatform) + '">' + sLineBreak +
+      '    <PropertyGroup ' + XmlAtributo('Condition', GroupCondition(APlatform)) + '>' + sLineBreak +
       '    </PropertyGroup>' + Copy(AXml, G.Cierra, MaxInt);
   end;
 end;
@@ -656,8 +642,7 @@ begin
   Tramos := TramosEnGrupo(AXml, ATag, G);
   if Length(Tramos) > 0 then
   begin
-    AAntes := XmlUnescape(Copy(AXml, Tramos[High(Tramos)].Ini,
-      Tramos[High(Tramos)].Fin - Tramos[High(Tramos)].Ini));
+    AAntes := ValorDeTramo(AXml, Tramos[High(Tramos)]);
     for var K := High(Tramos) downto 0 do
       QuitaConSuLinea(AXml, Tramos[K].Abre, Tramos[K].Cierra);
     if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
@@ -1029,21 +1014,6 @@ begin
           Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
 end;
 
-function DeployEntryXml(const AFile, ARemoteDir, AConfig: string): string;
-begin
-  Result :=
-    '        <DeployFile ' + XmlAtributo('Include', AFile) + ' Condition="' + ConfigCondition(AConfig) + '">' + sLineBreak +
-    '            ' + XmlElemento('RemoteDir', ARemoteDir) + sLineBreak +
-    '            ' + XmlElemento('RemoteName', TPath.GetFileName(AFile)) + sLineBreak +
-    '            <DeployClass>File</DeployClass>' + sLineBreak +
-    '            <Operation>0</Operation>' + sLineBreak +
-    '            <LocalCommand/>' + sLineBreak +
-    '            <RemoteCommand/>' + sLineBreak +
-    '            <Overwrite>True</Overwrite>' + sLineBreak +
-    '            <Required>True</Required>' + sLineBreak +
-    '        </DeployFile>' + sLineBreak;
-end;
-
 function AddDeployFile(const ADproj, ARawPlatform, ARawPath, ARawRemoteDir: string): string;
 var
   Plat, Full, RemoteDir, DeployProj, Enc, Xml, Block, Include, BaseDir: string;
@@ -1091,7 +1061,7 @@ begin
   if Length(FindDeployEntries(Xml, Plat, Full,
        TPath.GetDirectoryName(TPath.GetFullPath(DeployProj)))) > 0 then
     Exit(MsgFmt(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat]));
-  ClosePos := Pos('</project>', LowerCase(Xml));
+  ClosePos := CierreDelProyecto(Xml);
   if ClosePos = 0 then
     Exit(MsgText(SR_CFG_DEPLOYPROJ_SIN_CIERRE_PROJECT));
   // The IDE writes `UMain.pas`, not `D:\proyectos\x\UMain.pas`: an absolute
@@ -1102,9 +1072,9 @@ begin
   BaseDir := TPath.GetDirectoryName(TPath.GetFullPath(DeployProj));
   if Full.ToLower.StartsWith(IncludeTrailingPathDelimiter(BaseDir).ToLower) then
     Include := Full.Substring(Length(IncludeTrailingPathDelimiter(BaseDir)));
-  Block := '    <ItemGroup Condition="' + DeployGroupCondition(Plat) + '">' + sLineBreak +
-    DeployEntryXml(Include, RemoteDir, 'Debug') +
-    DeployEntryXml(Include, RemoteDir, 'Release') +
+  Block := '    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(Plat)) + '>' + sLineBreak +
+    XmlDeployFile(Include, 'Debug', RemoteDir, TPath.GetFileName(Include), 'File', 0, True) +
+    XmlDeployFile(Include, 'Release', RemoteDir, TPath.GetFileName(Include), 'File', 0, True) +
     '    </ItemGroup>' + sLineBreak;
   Xml := Copy(Xml, 1, ClosePos - 1) + Block + Copy(Xml, ClosePos, MaxInt);
   PatchSaveConSuSalto(DeployProj, Xml, Enc); // __delphi-patch copy first
@@ -1235,7 +1205,17 @@ var
   N: array [0 .. 3] of Integer;
   I: Integer;
   Previo: string;
-  M: TMatch;
+
+  { Cuantos caracteres del valor de AClave son su numero (los digitos y
+    puntos del principio): lo que cambiaba FileVersion=[\d.]*. }
+  function Numerico(const AXml: string; const AClave: TClaveDeVersion): Integer;
+  begin
+    Result := 0;
+    while (AClave.Ini + Result < AClave.Fin) and
+          CharInSet(AXml[AClave.Ini + Result], ['0'..'9', '.']) do
+      Inc(Result);
+  end;
+
 begin
   Pedida := ARawVersion.Trim;
   if Pedida = '' then
@@ -1258,7 +1238,10 @@ begin
   Cuatro := Format('%d.%d.%d.%d', [N[0], N[1], N[2], N[3]]);
 
   Xml := PatchLoadText(ADproj, Enc);
-  if not TRegEx.IsMatch(Xml, '(?i)<VerInfo_MajorVer>') then
+  // por EL analisis del .dproj (los numeros, sus tramos; las claves,
+  // ClavesDeVersion): eran siete regex, y las de las claves buscaban
+  // FileVersion= en TODO el texto, un evento de build incluido
+  if Length(TramosDeEtiqueta(Xml, 'VerInfo_MajorVer')) = 0 then
     Exit(MsgText(SR_CONFIG_VERSION_SIN_VERINFO));
   Eol := SaltoDominante(Xml); // el salto del fichero, la regla de todos
 
@@ -1269,39 +1252,49 @@ begin
     'VerInfo_Build'];
   for I := 0 to 3 do
   begin
-    M := TRegEx.Match(Xml, '(?i)<' + Tags[I] + '>([^<]*)</' + Tags[I] + '>');
-    if M.Success then
-      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + XmlUnescape(M.Groups[1].Value)
+    var V := AllTagValues(Xml, Tags[I]);
+    if Length(V) > 0 then
+      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + V[0]
     else
       AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + '0';
   end;
-  M := TRegEx.Match(Xml, '(?i)FileVersion=([\d.]+)');
-  if M.Success then
-    AntesKey := M.Groups[1].Value
-  else
-    AntesKey := MsgText(SF_NINGUNO);
+  AntesKey := MsgText(SF_NINGUNO);
+  for var C in ClavesDeVersion(Xml) do
+    if SameText(C.Nombre, 'FileVersion') and (Numerico(Xml, C) > 0) then
+    begin
+      AntesKey := Copy(Xml, C.Ini, Numerico(Xml, C));
+      Break;
+    end;
 
   // Los numeros: se sustituyen donde ya estan (en TODOS los grupos que los
   // lleven) y el que falte entra justo detras del anterior de la serie, que
-  // es como los escribe el IDE.
+  // es como los escribe el IDE. De la ultima a la primera, para que las de
+  // delante no se muevan.
   Previo := '';
   for I := 0 to 3 do
   begin
-    if TRegEx.IsMatch(Xml, '(?i)<' + Tags[I] + '>') then
-      Xml := TRegEx.Replace(Xml, '(?i)<' + Tags[I] + '>[^<]*</' + Tags[I] + '>',
-        XmlElemento(Tags[I], N[I].ToString))
+    var Ts := TramosDeEtiqueta(Xml, Tags[I]);
+    if Length(Ts) > 0 then
+      for var K := High(Ts) downto 0 do
+        Xml := Copy(Xml, 1, Ts[K].Ini - 1) + XmlEscape(N[I].ToString) + Copy(Xml, Ts[K].Fin, MaxInt)
     else if Previo <> '' then
-      Xml := TRegEx.Replace(Xml,
-        '(?i)([ \t]*)(<' + Previo + '>[^<]*</' + Previo + '>)',
-        '$1$2' + Eol + '$1' + XmlElemento(Tags[I], N[I].ToString));
+    begin
+      var Ps := TramosDeEtiqueta(Xml, Previo);
+      for var K := High(Ps) downto 0 do
+        Xml := Copy(Xml, 1, Ps[K].Cierra - 1) + Eol + SangriaDeLaLineaEn(Xml, Ps[K].Abre) +
+          XmlElemento(Tags[I], N[I].ToString) + Copy(Xml, Ps[K].Cierra, MaxInt);
+    end;
     Previo := Tags[I];
   end;
 
   // Y las claves de texto, solo donde ya existen: las de Android e iOS no
-  // llevan FileVersion ni ProductVersion, asi que no las roza.
-  Xml := TRegEx.Replace(Xml, '(?i)FileVersion=[\d.]*', 'FileVersion=' + Cuatro);
-  Xml := TRegEx.Replace(Xml, '(?i)ProductVersion=[\d.]*',
-    'ProductVersion=' + Cuatro);
+  // llevan FileVersion ni ProductVersion, asi que no las roza. Se cambia la
+  // parte numerica del valor, en su sitio.
+  var Claves := ClavesDeVersion(Xml);
+  for var K := High(Claves) downto 0 do
+    if MatchText(Claves[K].Nombre, ['FileVersion', 'ProductVersion']) then
+      Xml := Copy(Xml, 1, Claves[K].Ini - 1) + Cuatro +
+        Copy(Xml, Claves[K].Ini + Numerico(Xml, Claves[K]), MaxInt);
 
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   Nota := '';

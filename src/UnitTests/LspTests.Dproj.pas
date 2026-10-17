@@ -25,6 +25,9 @@ type
     [Test] procedure DeployprojLocalSeComprueba;
     [Test] procedure NombreParecidoAUserToolsSeComprueba;
     [Test] procedure ConfigConCaracteresDeShellSeNiegaSiempre;
+    [Test] procedure ElNombreDeUnEventoNoEsUnPrefijo;
+    [Test] procedure UnEventoEnUnComentarioTambienCuenta;
+    [Test] procedure UnaAperturaSinCierreNoEscondeLoQueSigue;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -48,6 +51,25 @@ type
     [Test] procedure ElIncludeEnCualquierOrden;
     [Test] procedure LasCuatroFormasDeLaCondicion;
     [Test] procedure LaCondicionDelElementoYElVacioCuentan;
+  end;
+
+  { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
+    (tests/test_oraculo_xml.py) encontro y lo que la familia pide de el: un
+    lector, sus escritores y las posiciones para reescribir en su sitio. }
+  [TestFixture]
+  TXmlNucleoTests = class
+  public
+    [Test] procedure ElCierreCuentaLosDelMismoNombre;
+    [Test] procedure LoOcultoNoEsUnaEtiqueta;
+    [Test] procedure ElValorComoLoDaXml;
+    [Test] procedure LosAtributosConSuSitio;
+    [Test] procedure ConSuLineaSoloSiNadaLaSigue;
+    [Test] procedure ElCierreDelProyectoEsElDelRaiz;
+    [Test] procedure LasPlataformasDelBloque;
+    [Test] procedure LasClavesDeVersionConSuSitio;
+    [Test] procedure LasRutasDeExists;
+    [Test] procedure ElEscritorDelDeployFileEsElDelIde;
+    [Test] procedure XmlEscapeEnSuComilla;
   end;
 
 implementation
@@ -446,8 +468,189 @@ begin
   end;
 end;
 
+procedure TDprojHazardTests.ElNombreDeUnEventoNoEsUnPrefijo;
+begin
+  // '<prebuildevent' como prefijo casaba con <PreBuildEventIgnoreExitCode>,
+  // que no ejecuta nada (lo vio el oraculo, 17-oct-2026)
+  Assert.AreEqual('', DprojBuildHazard(CABECERA +
+    '  <PropertyGroup><PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode></PropertyGroup>'#13#10 +
+    PIE, RUTA));
+end;
+
+procedure TDprojHazardTests.UnEventoEnUnComentarioTambienCuenta;
+begin
+  // el escaner es MAS estricto que el juez: mira tambien lo comentado
+  Assert.AreNotEqual('', DprojBuildHazard(CABECERA +
+    '  <!-- <PropertyGroup><PostBuildEvent>x</PostBuildEvent></PropertyGroup> -->'#13#10 +
+    PIE, RUTA));
+end;
+
+procedure TDprojHazardTests.UnaAperturaSinCierreNoEscondeLoQueSigue;
+begin
+  // en un comentario cabe una etiqueta sin cerrar y el XML sigue bien formado:
+  // msbuild ejecuta el evento de verdad, y el escaner, que tambien mira lo
+  // comentado, dejaba de leer en la que no tenia cierre (revision del diff de
+  // la familia, 17-oct-2026)
+  Assert.AreNotEqual('', DprojBuildHazard(CABECERA +
+    '  <!-- <PostBuildEvent> -->'#13#10 +
+    '  <PropertyGroup><PostBuildEvent>calc.exe</PostBuildEvent></PropertyGroup>'#13#10 +
+    PIE, RUTA));
+end;
+
+procedure TXmlNucleoTests.ElCierreCuentaLosDelMismoNombre;
+const
+  XML = '<P><VersionInfo><VersionInfo Name="a">1</VersionInfo></VersionInfo><X/></P>';
+var
+  T: TArray<TTramoXml>;
+begin
+  // el IDE escribe <VersionInfo><VersionInfo Name=...> en ProjectExtensions
+  T := TramosDeEtiqueta(XML, 'VersionInfo');
+  Assert.AreEqual(2, Integer(Length(T)));
+  Assert.AreEqual('<VersionInfo><VersionInfo Name="a">1</VersionInfo></VersionInfo>',
+    Copy(XML, T[0].Abre, T[0].Cierra - T[0].Abre), 'el de fuera, con el de dentro');
+  Assert.AreEqual('1', ValorDeTramo(XML, T[1]));
+end;
+
+procedure TXmlNucleoTests.LoOcultoNoEsUnaEtiqueta;
+const
+  XML = '<P><!-- <X>1</X> --><X>2</X><![CDATA[<X>3</X>]]><?pi <X>4</X>?></P>';
+begin
+  Assert.AreEqual(1, Integer(Length(TramosDeEtiqueta(XML, 'X'))), 'el juez solo ve una');
+  Assert.AreEqual(4, Integer(Length(TramosDeEtiqueta(XML, 'X', False, True))),
+    'el escaner de peligros, todas');
+end;
+
+procedure TXmlNucleoTests.ElValorComoLoDaXml;
+const
+  XML = '<E>a<![CDATA[<b>&amp;]]><!-- c -->d&amp;'#13#10'e</E>';
+begin
+  // el CDATA tal cual, el comentario fuera, las entidades y los saltos como XML
+  Assert.AreEqual('a<b>&amp;d&'#10'e', ValorDeTramo(XML, TramosDeEtiqueta(XML, 'E')[0]));
+end;
+
+procedure TXmlNucleoTests.LosAtributosConSuSitio;
+const
+  XML = '<X a=''1'' b = "2&amp;"'#13#10#9'c="x'#13#10#9'y"/>';
+var
+  A: TArray<TAtributoXml>;
+begin
+  A := AtributosDeTramo(XML, TramosDeEtiqueta(XML, 'X', True)[0]);
+  Assert.AreEqual(3, Integer(Length(A)));
+  Assert.AreEqual('a', A[0].Nombre);
+  Assert.AreEqual('1', Copy(XML, A[0].Ini, A[0].Fin - A[0].Ini));
+  Assert.AreEqual('''', XML[A[0].Ini - 1], 'la comilla, delante del valor');
+  Assert.AreEqual('b', Copy(XML, A[1].Abre, 1), 'Abre: donde empieza el nombre');
+  Assert.AreEqual('2&', ValorDeAtributo(XML, A[1]));
+  Assert.AreEqual('x'#10#9'y', ValorDeAtributo(XML, A[2]),
+    'como MSXML: el salto en LF y el tabulador se quedan');
+end;
+
+procedure TXmlNucleoTests.ConSuLineaSoloSiNadaLaSigue;
+const
+  S = 'a'#13#10'    <X/>  '#13#10'b <Y/> c';
+var
+  P, D, H: Integer;
+begin
+  P := Pos('<X/>', S);
+  ConSuLinea(S, P, P + 4, D, H);
+  Assert.AreEqual('    <X/>  '#13#10, Copy(S, D, H - D), 'sola: con sus blancos y su salto');
+  P := Pos('<Y/>', S);
+  ConSuLinea(S, P, P + 4, D, H);
+  Assert.AreEqual(' <Y/>', Copy(S, D, H - D), 'con algo detras: sus blancos de delante y ella');
+end;
+
+procedure TXmlNucleoTests.ElCierreDelProyectoEsElDelRaiz;
+const
+  XML = '<Project><ProjectExtensions></ProjectExtensions><ItemGroup><Projects Include="a"/>' +
+    '</ItemGroup></Project >';
+begin
+  Assert.AreEqual(Pos('</Project >', XML), CierreDelProyecto(XML));
+  Assert.AreEqual(0, CierreDelProyecto('<P/>'));
+end;
+
+procedure TXmlNucleoTests.LasPlataformasDelBloque;
+const
+  XML = '<Project><PropertyGroup><Platform Condition="''$(Platform)''==''''">Win64</Platform>' +
+    '</PropertyGroup><!-- <Platforms><Platform value="Linux64">True</Platform></Platforms> -->' +
+    '<ProjectExtensions><BorlandProject><Platforms><Platform value=''Win32''>False</Platform>' +
+    '<Platform value="Win64"> True </Platform></Platforms></BorlandProject></ProjectExtensions></Project>';
+var
+  P: TArray<TPlataformaDelBloque>;
+begin
+  P := PlataformasDelBloque(XML);
+  Assert.AreEqual(2, Integer(Length(P)), 'ni el selector ni lo comentado');
+  Assert.AreEqual('Win32', P[0].Nombre);
+  Assert.IsFalse(P[0].Activa);
+  Assert.AreEqual('Win64', P[1].Nombre);
+  Assert.IsTrue(P[1].Activa, 'el nombre y si esta activa, del mismo elemento');
+  Assert.AreEqual(' True ', Copy(XML, P[1].Tramo.Ini, P[1].Tramo.Fin - P[1].Tramo.Ini));
+  Assert.AreEqual('<Platform value="OSX64">True</Platform>', XmlPlataformaDelBloque('OSX64', True));
+  Assert.AreEqual('OSX64', PlataformasDelBloque('<Platforms>' +
+    XmlPlataformaDelBloque('OSX64', False) + '</Platforms>')[0].Nombre, 'el lector lee al escritor');
+end;
+
+procedure TXmlNucleoTests.LasClavesDeVersionConSuSitio;
+const
+  XML = '<P><VerInfo_Keys>CompanyName=R&amp;D;FileVersion=1.2.3.4;X</VerInfo_Keys>' +
+    '<!-- <VerInfo_Keys>FileVersion=9</VerInfo_Keys> --><PreBuildEvent>echo FileVersion=7</PreBuildEvent></P>';
+var
+  C: TArray<TClaveDeVersion>;
+begin
+  C := ClavesDeVersion(XML);
+  Assert.AreEqual(2, Integer(Length(C)), 'X no es una clave; ni lo comentado ni el evento son claves');
+  Assert.AreEqual('CompanyName', C[0].Nombre);
+  Assert.AreEqual('R&amp;D', Copy(XML, C[0].Ini, C[0].Fin - C[0].Ini), 'escrito, con su entidad');
+  Assert.AreEqual('FileVersion', C[1].Nombre);
+  Assert.AreEqual('1.2.3.4', Copy(XML, C[1].Ini, C[1].Fin - C[1].Ini));
+end;
+
+procedure TXmlNucleoTests.LasRutasDeExists;
+const
+  COND = '''$(Base)''!='''' And Exists(''..\Comun.optset'') and !exists( ''b.optset'')';
+var
+  R: TArray<TTrozoEscrito>;
+begin
+  R := RutasDeExists(COND);
+  Assert.AreEqual(2, Integer(Length(R)));
+  Assert.AreEqual('..\Comun.optset', Copy(COND, R[0].Ini, R[0].Fin - R[0].Ini));
+  Assert.AreEqual('b.optset', Copy(COND, R[1].Ini, R[1].Fin - R[1].Ini));
+end;
+
+procedure TXmlNucleoTests.ElEscritorDelDeployFileEsElDelIde;
+var
+  X: string;
+  T: TArray<TTramoXml>;
+begin
+  // los bytes de los cuatro compositores que habia, uno a uno
+  Assert.AreEqual(
+    '        <DeployFile Include="Linux64\Debug\App" Condition="''$(Config)''==''Debug''">' + sLineBreak +
+    '            <RemoteDir>App\</RemoteDir>' + sLineBreak +
+    '            <RemoteName>App</RemoteName>' + sLineBreak +
+    '            <DeployClass>ProjectOutput</DeployClass>' + sLineBreak +
+    '            <Operation>1</Operation>' + sLineBreak +
+    '            <LocalCommand/>' + sLineBreak +
+    '            <RemoteCommand/>' + sLineBreak +
+    '            <Overwrite>True</Overwrite>' + sLineBreak +
+    '            <Required>True</Required>' + sLineBreak +
+    '        </DeployFile>' + sLineBreak,
+    XmlDeployFile('Linux64\Debug\App', 'Debug', 'App\', 'App', 'ProjectOutput', 1, True));
+  // ...y su lector lo lee
+  X := '<ItemGroup>' + XmlDeployFile('R&D.so', '', 'x\', 'R&D.so', 'File', 0, False) + '</ItemGroup>';
+  T := TramosDeEtiqueta(X, 'DeployFile');
+  Assert.AreEqual('R&D.so', AtributoDeTramo(X, T[0], 'DeployFile', 'Include'));
+  Assert.AreEqual('', AtributoDeTramo(X, T[0], 'DeployFile', 'Condition'), 'sin config, sin Condition');
+  Assert.AreEqual(0, Integer(Length(TramosDeEtiqueta(X, 'Required'))), 'sin Required si no lo es');
+end;
+
+procedure TXmlNucleoTests.XmlEscapeEnSuComilla;
+begin
+  Assert.AreEqual('O''Brien &amp; co', XmlEscapeEn('O''Brien & co', '"'));
+  Assert.AreEqual('O&apos;Brien &amp; co', XmlEscapeEn('O''Brien & co', ''''));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TDprojHazardTests);
   TDUnitX.RegisterTestFixture(TXmlTextoTests);
+  TDUnitX.RegisterTestFixture(TXmlNucleoTests);
 
 end.

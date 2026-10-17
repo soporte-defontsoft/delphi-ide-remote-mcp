@@ -681,6 +681,26 @@ REGLAS = [
      [('Lsp.DesignerMeta.pas', 'TMetaTable.RecorreFamilia'), ('Lsp.DesignerMeta.pas', 'TMetaTable.Create')],
      'RecorreFamilia: AClase y sus descendientes por generaciones, con un visitante; la '
      'tabla solo llena Hijas al leerse (1.20)'),
+    # el XML de proyecto (.dproj, .deployproj, .groupproj, .optset, el .sdk del IDE): UN
+    # analisis, el de Lsp.Dproj, contrastado con MSXML -el juez que carga el IDE- por
+    # test_oraculo_xml. Habia regex y Pos de etiquetas por todas partes, cada una con su
+    # forma: quince en la mudanza, diez en el .groupproj, el ancla del Deploy que no veia el
+    # Import con la Condition delante (1.20.1, medido contra los Samples). Tres formas: una
+    # TRegEx con una etiqueta en el patron, un Pos/IndexOf/Contains de '<Etiqueta' y un
+    # literal de regex sobre una etiqueta (la linea de continuacion de una TRegEx). Componer
+    # un elemento nuevo (con XmlAtributo / XmlElemento) no es leerlo y no se caza. Medida
+    # contra 7a3733d: 39 copias en 5 unidades; NO ve una aguja guardada en una constante (el
+    # ANCHOR del Deploy, el Needle de ReadDproj) ni buscar un texto que no es una etiqueta
+    # (Contains('minSdkVersion')): esas las caza el revisor, no esta regla
+    ('leer o editar XML de proyecto a mano',
+     r"TRegEx\.\w+\s*\([^;]*'[^']*</?[A-Za-z(]"
+     r"|\b(?:Pos|PosEx|PosMin|IndexOf|LastIndexOf|Contains|StartsWith|EndsWith)\s*\(\s*'</?[A-Za-z]"
+     r"|'[^']*</?[A-Za-z]\w*(?:\\s|\(\?:\\s)|\[\^<\]\*",
+     [('Lsp.Docs.pas', '*'), ('Mcp.Tools.DelphiLsp.pas', 'TDelphiCompletionTool.ExecuteWithParams')],
+     'Por Lsp.Dproj (TramosDeEtiqueta, AtributosDeTramo, ValorDeTramo y sus escritores), que '
+     'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
+     'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
+     'del motor'),
 ]
 
 
@@ -860,6 +880,9 @@ PLANTADO = {
     'objeto propio o referencia a mano': "  if not F.Tabla.Desciende(AHoja.TypeId, ID_COMPONENTE) then",
     # la de PublicadaEnDescendiente hasta la 1.19
     'recorrer la familia a mano': "  if not Hijas.TryGetValue(Cola.Dequeue, Hs) then",
+    # el de set-version hasta la 1.20.1
+    'leer o editar XML de proyecto a mano':
+        "  M := TRegEx.Match(Xml, '(?i)<VerInfo_MajorVer>([^<]*)</VerInfo_MajorVer>');",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -868,6 +891,19 @@ for regla in REGLAS:
     cazados = fuera_de_casa(regla, [('Plantado.pas', planta)])
     check('mutante "%s": la copia plantada se caza (y el comentario no)' % nombre,
           len(cazados) == 1 and ':6 ' in cazados[0], cazados)
+
+# las otras formas del XML de proyecto a mano: un Pos de una etiqueta (ReadDproj), la linea
+# de continuacion de una regex (el .groupproj) y un Contains; y lo que NO es leerlo: componer
+REGLA_XML = next(r for r in REGLAS if r[0] == 'leer o editar XML de proyecto a mano')
+for forma in ("  Op := Pos('<platform value=\"', Low, Scan);",
+              "    '[ \\t]*<Projects\\s+Include=\"([^\"]*)\"\\s*(/>|>.*?</Projects>)', [roSingleLine]) do",
+              "  if not Dproj.ToLower.Contains('<import ') then"):
+    cazados = fuera_de_casa(REGLA_XML, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                         'LeeAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_XML[0], forma.strip()), len(cazados) == 1, cazados)
+COMPONER = fuera_de_casa(REGLA_XML, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure Compone;\n'
+    "begin\n  S := '<Platform ' + XmlAtributo('value', P) + '>True</Platform>';\nend;\nend.\n")])
+check('mutante "%s": componer un elemento con XmlAtributo no se caza' % REGLA_XML[0], COMPONER == [], COMPONER)
 
 # las otras formas de la cabecera de un PNG: la firma en literal y byte a byte (el
 # escritor del nodo) y por sus letras (su lector)

@@ -641,7 +641,7 @@ const
   // Android 8.1). Every property is conditioned on being empty, so anything
   // the IDE ever writes into the project wins.
   ANDROID_PROPS =
-    '<PropertyGroup Condition="%s">' + sLineBreak +
+    '<PropertyGroup %s>' + sLineBreak +
     '%s    <VerInfo_Keys Condition="''$(VerInfo_Keys)''==''''">package=com.embarcadero.$(MSBuildProjectName);' +
     'label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;' +
     'restoreAnyVersion=False;installLocation=auto;largeHeap=False;theme=TitleBar;' +
@@ -651,6 +651,19 @@ const
     '%s    <BT_BuildType Condition="''$(BT_BuildType)''==''''">Debug</BT_BuildType>' + sLineBreak +
     '%s</PropertyGroup>';
 
+{ La cabecera del manifiesto que genera el servidor, la del IDE: el Import
+  de CodeGear.Deployment.targets y su ProjectFileVersion (estaba escrita dos
+  veces, en el de Android y en el de las demas plataformas). }
+function CabeceraDeManifiesto: string;
+begin
+  Result := '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">' + sLineBreak +
+    '    <Import Condition="Exists(''$(BDS)\bin\CodeGear.Deployment.targets'')" ' +
+    'Project="$(BDS)\bin\CodeGear.Deployment.targets"/>' + sLineBreak +
+    '    <ProjectExtensions>' + sLineBreak +
+    '        <ProjectFileVersion>12</ProjectFileVersion>' + sLineBreak +
+    '    </ProjectExtensions>' + sLineBreak;
+end;
+
 function AndroidDeployXml(const AName, APlat, ABdsRoot: string): string;
 var
   SB: TStringBuilder;
@@ -659,17 +672,7 @@ var
 
   procedure Add(const AInclude, ADir, AFile, ACls: string; ARequired: Boolean);
   begin
-    SB.AppendLine('        <DeployFile ' + XmlAtributo('Include', AInclude) + '>');
-    SB.AppendLine('            ' + XmlElemento('RemoteDir', AName + '\' + ADir));
-    SB.AppendLine('            ' + XmlElemento('RemoteName', AFile));
-    SB.AppendLine('            ' + XmlElemento('DeployClass', ACls));
-    SB.AppendLine('            <Operation>1</Operation>');
-    SB.AppendLine('            <LocalCommand/>');
-    SB.AppendLine('            <RemoteCommand/>');
-    SB.AppendLine('            <Overwrite>True</Overwrite>');
-    if ARequired then
-      SB.AppendLine('            <Required>True</Required>');
-    SB.AppendLine('        </DeployFile>');
+    SB.Append(XmlDeployFile(AInclude, '', AName + '\' + ADir, AFile, ACls, 1, ARequired));
   end;
 
 begin
@@ -679,15 +682,10 @@ begin
     Abi := 'armeabi-v7a';
   SB := TStringBuilder.Create;
   try
-    SB.AppendLine('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">');
-    SB.AppendLine('    <Import Condition="Exists(''$(BDS)\bin\CodeGear.Deployment.targets'')" ' +
-      'Project="$(BDS)\bin\CodeGear.Deployment.targets"/>');
-    SB.AppendLine('    <ProjectExtensions>');
-    SB.AppendLine('        <ProjectFileVersion>12</ProjectFileVersion>');
-    SB.AppendLine('    </ProjectExtensions>');
+    SB.Append(CabeceraDeManifiesto);
     for Cfg in TArray<string>.Create('Debug', 'Release') do
     begin
-      SB.AppendLine('    <ItemGroup Condition="' + DeployGroupCondition(APlat, Cfg) + '">');
+      SB.AppendLine('    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>');
       Add(APlat + '\' + Cfg + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
         'ProjectAndroidManifest', True);
       Add(APlat + '\' + Cfg + '\lib' + AName + '.so', 'library\lib\' + Abi + '\',
@@ -740,17 +738,7 @@ begin
   if APlat.StartsWith('Win', True) then
     Ext := '.exe';
   Include := IncludeTrailingPathDelimiter(OutDir) + AName + Ext;
-  Result :=
-    '        <DeployFile ' + XmlAtributo('Include', Include) + ' Condition="' + ConfigCondition(ACfg) + '">'#13#10 +
-    '            ' + XmlElemento('RemoteDir', AName + '\') + #13#10 +
-    '            ' + XmlElemento('RemoteName', AName + Ext) + #13#10 +
-    '            <DeployClass>ProjectOutput</DeployClass>'#13#10 +
-    '            <Operation>1</Operation>'#13#10 +
-    '            <LocalCommand/>'#13#10 +
-    '            <RemoteCommand/>'#13#10 +
-    '            <Overwrite>True</Overwrite>'#13#10 +
-    '            <Required>True</Required>'#13#10 +
-    '        </DeployFile>'#13#10;
+  Result := XmlDeployFile(Include, ACfg, AName + '\', AName + Ext, 'ProjectOutput', 1, True);
 end;
 
 { Adds the ProjectOutput entries for APlat to an existing manifest that has
@@ -769,9 +757,10 @@ begin
   // any DeployFile with ProjectOutput inside a group of this platform? Por EL
   // analisis del .deployproj: era una regex por grupos y un Contains del texto
   for var G in GruposDe(Xml, 'ItemGroup') do
-    if SameText(PlataformaDeGrupoDeDespliegue(G.Condicion), APlat) and
-       Copy(Xml, G.Ini, G.Fin - G.Ini).Contains('ProjectOutput') then
-      Exit;
+    if SameText(PlataformaDeGrupoDeDespliegue(G.Condicion), APlat) then
+      for var C in TramosEnGrupo(Xml, 'DeployClass', G) do
+        if SameText(ValorDeTramo(Xml, C).Trim, 'ProjectOutput') then
+          Exit;
   DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
   for Cfg in TArray<string>.Create('Debug', 'Release') do
@@ -795,7 +784,7 @@ begin
   // an empty self-closing group for the platform: fill it
   if HayHueco then
     Xml := Copy(Xml, 1, Hueco.Abre - 1) +
-      '<ItemGroup Condition="' + Cond + '">'#13#10 + Entries +
+      '<ItemGroup ' + XmlAtributo('Condition', Cond) + '>'#13#10 + Entries +
       '    </ItemGroup>' + Copy(Xml, Hueco.Cierra, MaxInt)
   else
   begin
@@ -805,11 +794,11 @@ begin
         Copy(Xml, Suyo.Ini, MaxInt).TrimLeft([#13, #10])
     else
     begin
-      var P := Xml.ToLower.LastIndexOf('</project>');
-      if P < 0 then
+      var P := CierreDelProyecto(Xml);
+      if P = 0 then
         Exit;
-      Xml := Copy(Xml, 1, P) + '    <ItemGroup Condition="' + Cond + '">'#13#10 +
-        Entries + '    </ItemGroup>'#13#10 + Copy(Xml, P + 1, MaxInt);
+      Xml := Copy(Xml, 1, P - 1) + '    <ItemGroup ' + XmlAtributo('Condition', Cond) + '>'#13#10 +
+        Entries + '    </ItemGroup>'#13#10 + Copy(Xml, P, MaxInt);
     end;
   end;
   PatchSaveConSuSalto(ADeployProj, Xml, Enc);
@@ -825,10 +814,12 @@ const
   // fails MSB4057 with the .deployproj sitting right there (measured).
   DEPLOY_IMPORT = '<Import Project="$(MSBuildProjectName).deployproj" ' +
     'Condition="Exists(''$(MSBuildProjectName).deployproj'')"/>';
-  ANCHOR = '<Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets"';
+  // el Import que hace de ancla, por su Project
+  ANCHOR_PROJECT = '$(BDS)\Bin\CodeGear.Delphi.Targets';
 var
   F, N, Ext, Xml: string;
   Cfg: string;
+  Ancla: TTramoXml;
 begin
   AGenerated := False;
   N := TPath.GetFileNameWithoutExtension(ADprojPath);
@@ -838,28 +829,40 @@ begin
   var Enc := '';
   var Dproj := PatchLoadText(ADprojPath, Enc);
   var Changed := False;
-  var P := Pos(ANCHOR.ToLower, Dproj.ToLower);
+  // los <Import> del .dproj por EL analisis: el ancla era un Pos del texto
+  // con el Project el primero, y "ya importa el manifiesto" un Contains de
+  // '.deployproj' en cualquier sitio, un comentario incluido
+  var P := 0;
+  var YaLoImporta := False;
+  for var T in TramosDeEtiqueta(Dproj, 'Import', True) do
+  begin
+    var Proyecto := AtributoDeTramo(Dproj, T, 'Import', 'Project');
+    if (P = 0) and SameText(Proyecto, ANCHOR_PROJECT) then
+    begin
+      P := T.Abre;
+      Ancla := T;
+    end;
+    if Proyecto.ToLower.EndsWith('.deployproj') then
+      YaLoImporta := True;
+  end;
   var Indent := '';
   // solo el blanco de la linea del ancla: se copiaba todo lo de delante, y
   // con otra etiqueta en esa linea se duplicaba (revisor de la 1.15.0)
   if P > 0 then
     Indent := SangriaDeLaLineaEn(Dproj, P);
-  if (P > 0) and not Dproj.ToLower.Contains('.deployproj') then
+  if (P > 0) and not YaLoImporta then
   begin
-    var AnchorEnd := Pos('/>', Dproj, P);
-    if AnchorEnd > 0 then
-    begin
-      AnchorEnd := AnchorEnd + 2;
-      Dproj := Copy(Dproj, 1, AnchorEnd - 1) + sLineBreak + Indent +
-        DEPLOY_IMPORT + Copy(Dproj, AnchorEnd, MaxInt);
-      Changed := True;
-    end;
+    Dproj := Copy(Dproj, 1, Ancla.Cierra - 1) + sLineBreak + Indent +
+      DEPLOY_IMPORT + Copy(Dproj, Ancla.Cierra, MaxInt);
+    Changed := True;
   end;
   // 1b) Android fallback version properties, only when the project has no
   //     Android version block at all (ours contains minSdkVersion too, so
   //     this also makes the insert idempotent). Placed before the anchor.
-  if (P > 0) and APlat.StartsWith('Android', True) and
-     not Dproj.Contains('minSdkVersion') then
+  var TieneMinSdk := False;
+  for var C in ClavesDeVersion(Dproj) do
+    TieneMinSdk := TieneMinSdk or SameText(C.Nombre, 'minSdkVersion');
+  if (P > 0) and APlat.StartsWith('Android', True) and not TieneMinSdk then
   begin
     // The default system-jar list is exactly the product's pre-dexed jar
     // directory (measured: 88 of 88 identical to an IDE-written project) -
@@ -876,7 +879,8 @@ begin
     // justo delante del ancla (con el ancla lo primero de su linea, igual que
     // al principio de la linea; con algo delante, no se mete antes de ello)
     Dproj := Copy(Dproj, 1, P - 1) +
-      Format(ANDROID_PROPS, [DeployGroupCondition(APlat), Indent, Indent, Indent, XmlEscape(Jars), Indent,
+      Format(ANDROID_PROPS, [XmlAtributo('Condition', DeployGroupCondition(APlat)), Indent, Indent, Indent,
+        XmlEscape(Jars), Indent,
         Indent]) + sLineBreak + Indent + Copy(Dproj, P, MaxInt);
     Changed := True;
   end;
@@ -919,25 +923,11 @@ begin
   Ext := '';
   if APlat.StartsWith('Win', True) then
     Ext := '.exe';
-  Xml := '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'#13#10 +
-    '    <Import Condition="Exists(''$(BDS)\bin\CodeGear.Deployment.targets'')" ' +
-    'Project="$(BDS)\bin\CodeGear.Deployment.targets"/>'#13#10 +
-    '    <ProjectExtensions>'#13#10 +
-    '        <ProjectFileVersion>12</ProjectFileVersion>'#13#10 +
-    '    </ProjectExtensions>'#13#10;
+  Xml := CabeceraDeManifiesto;
   for Cfg in TArray<string>.Create('Debug', 'Release') do
     Xml := Xml +
-      '    <ItemGroup Condition="' + DeployGroupCondition(APlat, Cfg) + '">'#13#10 +
-      '        <DeployFile ' + XmlAtributo('Include', APlat + '\' + Cfg + '\' + N + Ext) + '>'#13#10 +
-      '            ' + XmlElemento('RemoteDir', N + '\') + #13#10 +
-      '            ' + XmlElemento('RemoteName', N + Ext) + #13#10 +
-      '            <DeployClass>ProjectOutput</DeployClass>'#13#10 +
-      '            <Operation>1</Operation>'#13#10 +
-      '            <LocalCommand/>'#13#10 +
-      '            <RemoteCommand/>'#13#10 +
-      '            <Overwrite>True</Overwrite>'#13#10 +
-      '            <Required>True</Required>'#13#10 +
-      '        </DeployFile>'#13#10 +
+      '    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>'#13#10 +
+      XmlDeployFile(APlat + '\' + Cfg + '\' + N + Ext, '', N + '\', N + Ext, 'ProjectOutput', 1, True) +
       '    </ItemGroup>'#13#10;
   Xml := Xml + '</Project>'#13#10;
   EscribeTexto(F, Xml, ltJaula, ekUtf8Bom); // como el de Android, arriba

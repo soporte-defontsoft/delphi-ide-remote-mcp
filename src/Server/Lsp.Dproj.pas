@@ -48,14 +48,17 @@ type
 
 { ---- tolerant XML primitives (shared) ---- }
 
-{ Inner texts of <ATag ...>...</ATag>, in document order, YA DESESCAPADOS
-  (&amp; -> &): el valor de verdad, la inversa de XmlElemento. SIN distinguir
+{ Inner texts of <ATag ...>...</ATag>, in document order, como los da XML
+  (ValorDeTramo): el valor de verdad, la inversa de XmlElemento. SIN distinguir
   mayusculas y con cualquier blanco tras el nombre: MSBuild no distingue
   mayusculas en el nombre de una propiedad, y una puerta lee con esta. }
 function AllTagValues(const AXml, ATag: string): TArray<string>;
 
-{ Value of one attribute across every <ATag attr="...">, in document order. }
-function AllTagAttr(const AXml, ATag, AAttr: string): TArray<string>;
+{ Value of one attribute across every <ATag attr="...">, in document order,
+  como lo da XML (ValorDeAtributo). AConOcultos: tambien las etiquetas que hay
+  dentro de un comentario o un CDATA, que para el juez no lo son - solo el
+  escaner de peligros, mas estricto que el juez. }
+function AllTagAttr(const AXml, ATag, AAttr: string; AConOcultos: Boolean = False): TArray<string>;
 
 { Merge an accumulating MSBuild property (each value may embed $(Prop) = the
   value so far). }
@@ -73,6 +76,10 @@ function TrozosEscritos(const AEscrito: string): TArray<string>;
   texto de un elemento: un & o unas comillas en una ruta (una carpeta R&D)
   rompen el fichero. }
 function XmlEscape(const S: string): string;
+{ ...para escribir DENTRO de un atributo ya escrito, con la comilla que lo
+  cierra (AXml[AAtributo.Ini - 1]): entre comillas simples se escapa tambien
+  la ' (lo que compone el servidor va siempre entre dobles: XmlAtributo). }
+function XmlEscapeEn(const S: string; AComilla: Char): string;
 { EL escritor de un atributo: Nombre="valor escapado". Una ruta con & o
   comillas (una carpeta R&D) rompia el .dproj, el .deployproj o el grupo:
   nueve sitios lo componian a mano (26-sep-2026). Su lector es AllTagAttr,
@@ -134,16 +141,71 @@ type
     Condicion: string;
   end;
 
+  { Un atributo de una etiqueta de apertura: su nombre tal cual esta escrito
+    (empieza en AXml[Abre]) y su valor, sin comillas y sin desescapar, en
+    AXml[Ini .. Fin - 1] - para reescribirlo en su sitio, o quitarlo entero
+    hasta su comilla de cierre (AXml[Fin]); ValorDeAtributo da lo que vale. }
+  TAtributoXml = record
+    Nombre: string;
+    Abre, Ini, Fin: Integer;
+  end;
+
 { Cada <ATag>..</ATag> de AXml, en orden de documento: el UNICO analisis de una
   etiqueta - sin distinguir mayusculas, con atributos y blancos tras el nombre,
-  y un '>' entre comillas no la cierra -, con el que lee AllTagValues y
-  escriben los editores del .dproj y del .deployproj. Una <ATag/> no tiene
-  valor y solo sale si se piden (AConVacios: un grupo vacio que el IDE deja
-  escrito es donde van las entradas de esa plataforma). }
-function TramosDeEtiqueta(const AXml, ATag: string; AConVacios: Boolean = False): TArray<TTramoXml>;
+  un '>' entre comillas no la cierra, cada una con SU cierre aunque lleve
+  dentro otra del mismo nombre, y lo que hay en un comentario, un CDATA o una
+  instruccion de proceso no es una etiqueta -, con el que lee AllTagValues y
+  escriben los editores del .dproj, el .deployproj y el .groupproj. Contrastado
+  con MSXML, el juez que carga el IDE, por tests/test_oraculo_xml.py. Una
+  <ATag/> no tiene valor y solo sale si se piden (AConVacios: un grupo vacio
+  que el IDE deja escrito es donde van las entradas de esa plataforma);
+  AConOcultos, tambien las de dentro de un comentario o un CDATA (el escaner de
+  peligros, mas estricto que el juez). }
+function TramosDeEtiqueta(const AXml, ATag: string; AConVacios: Boolean = False;
+  AConOcultos: Boolean = False): TArray<TTramoXml>;
+{ El texto en que se buscan las etiquetas de AXml: en minusculas y, salvo
+  AConOcultos, con los comentarios, los CDATA y las instrucciones de proceso
+  tapados. Quien busca VARIAS etiquetas en el mismo texto lo calcula una vez
+  y se lo da a TramosEnTexto: la mudanza busca veinte por fichero, y
+  calcularlo veinte veces la hacia un 20% mas lenta que las regex de antes
+  con una raiz de 300 proyectos (medido el 17-oct-2026). }
+function TextoDeBusqueda(const AXml: string; AConOcultos: Boolean = False): string;
+{ ...y TramosDeEtiqueta sobre ese texto ya calculado (ALow, el de AXml). }
+function TramosEnTexto(const AXml, ALow, ATag: string; AConVacios: Boolean = False): TArray<TTramoXml>;
+{ El texto de un elemento como lo da XML: los CDATA tal cual, los comentarios
+  fuera, las entidades decodificadas y los saltos de linea en LF. }
+function ValorDeTramo(const AXml: string; const ATramo: TTramoXml): string;
+{ Los atributos de la etiqueta de apertura de ATramo, en orden y con la
+  posicion de su valor: EL lector de atributos (AllTagAttr lee con el). }
+function AtributosDeTramo(const AXml: string; const ATramo: TTramoXml): TArray<TAtributoXml>;
+{ Lo que vale un atributo, como lo da el juez (MSXML6, el que carga el IDE):
+  las entidades decodificadas y los saltos de linea en LF, como el texto. Los
+  tabuladores y los saltos NO pasan a blancos, aunque XML lo pida: MSXML no lo
+  hace, ni con preserveWhiteSpace ni sin el (medido el 17-oct-2026; lo vigila
+  el fichero plantado de tests/test_oraculo_xml.py). }
+function ValorDeAtributo(const AXml: string; const AAtributo: TAtributoXml): string;
 { ...las que estan dentro de AGrupo }
 function TramosEnGrupo(const AXml, ATag: string; const AGrupo: TGrupoXml;
   AConVacios: Boolean = False): TArray<TTramoXml>;
+{ ...las que estan dentro del elemento ADentro (las <Key> de un
+  <BuildConfiguration>, las <Platform> de un <Platforms>, la <FileMask> de
+  un <ProfileInclude>). }
+function TramosDentro(const AXml, ATag: string; const ADentro: TTramoXml;
+  AConVacios: Boolean = False): TArray<TTramoXml>;
+{ El valor (ValorDeTramo, sin blancos alrededor) de la primera <ATag> que hay
+  dentro de ADentro; '' si no la lleva: la <FileMask> y el <SubDirs> de una
+  ruta de un SDK. }
+function ValorDentro(const AXml, ATag: string; const ADentro: TTramoXml): string;
+{ AXml[AIni .. AFin - 1] con su linea, para reescribirlo o quitarlo sin dejar
+  un hueco: ADesde retrocede sobre los blancos de delante y AHasta, si tras
+  el solo hay blancos hasta el salto de linea, llega detras del salto (o al
+  final). La forma que escriben DccRefXml y los items del .groupproj, que la
+  buscaban con cinco regex [ \t]*...\r?\n. }
+procedure ConSuLinea(const AXml: string; AIni, AFin: Integer; out ADesde, AHasta: Integer);
+{ El '<' del </Project> del elemento raiz; 0 si no lo tiene. Donde entra lo
+  que va al final de un .dproj, un .deployproj o un .groupproj: eran tres
+  Pos de '</Project>' a mano, uno sin mirar mayusculas. }
+function CierreDelProyecto(const AXml: string): Integer;
 { El valor de un atributo del elemento de ATramo (Include, Condition...), ya
   desescapado; '' si no lo lleva. Por EL lector de atributos (AllTagAttr):
   en cualquier orden, con comillas simples o dobles. }
@@ -178,6 +240,14 @@ function PlataformaDeGrupo(const ACondicion: string; ADefinidor: Boolean): strin
   DeployFile de una config). Se componian a mano en siete sitios. }
 function DeployGroupCondition(const APlatform: string; const AConfig: string = ''): string;
 function ConfigCondition(const AConfig: string): string;
+{ EL escritor de una entrada <DeployFile> del .deployproj, como la escribe el
+  IDE (sangrias de 8 y 12, un salto por linea, que PatchSaveConSuSalto deja
+  como el del fichero); AConfig '' = sin Condition. Eran cuatro compositores
+  a mano, cada uno con sus campos: el manifiesto que se genera, el de
+  Android, la salida que se le anade y add-deployfile. Lo leen
+  FindDeployEntries y TramosEnGrupo. }
+function XmlDeployFile(const AInclude, AConfig, ARemoteDir, ARemoteName, AClase: string;
+  AOperacion: Integer; ARequerido: Boolean): string;
 { La plataforma y la config que nombra una Condition de esas formas - la
   plataforma sola, la config sola, o las dos con And en cualquier orden, que el
   IDE escribe '$(Config)'=='Debug' And '$(Platform)'=='Win32' -, tal cual
@@ -187,6 +257,19 @@ function CondicionDePlataformaYConfig(const ACondicion: string; out APlataforma,
 { La plataforma (con la grafia de las conocidas, y la que no lo es tal cual) de
   un ItemGroup del .deployproj; '' si su Condition no es de una plataforma. }
 function PlataformaDeGrupoDeDespliegue(const ACondicion: string): string;
+
+type
+  { Un trozo de un texto escrito: AEscrito[Ini .. Fin - 1]. }
+  TTrozoEscrito = record
+    Ini, Fin: Integer;
+  end;
+
+{ Las rutas de los Exists('...') de una Condition tal como esta ESCRITA (con
+  sus entidades), por su posicion en ella: la otra parte de la gramatica de
+  condiciones de msbuild que lee el servidor, junto a
+  CondicionDePlataformaYConfig. La mudanza re-apunta asi el .optset que
+  importa un .dproj; era una regex Exists\('...'\) sobre el texto entero. }
+function RutasDeExists(const AEscrita: string): TArray<TTrozoEscrito>;
 { Quita AXml[AIni .. AFin - 1] y, si eso ocupaba su linea solo, la linea con
   ello: sus blancos de delante y el salto que la precede. Lo escribian a mano,
   de tres maneras, remove-searchpath, set-sdk / set-profile y
@@ -198,6 +281,43 @@ procedure QuitaConSuLinea(var AXml: string; AIni, AFin: Integer);
 { Reads a .dproj file. Missing file / unreadable -> empty record (all fields
   blank), never raises. }
 function ReadDproj(const ADprojPath: string): TDprojInfo;
+
+type
+  { Una plataforma del bloque <Platforms>: <Platform value="Win64">True</Platform>.
+    Nombre, su value (desescapado); su valor esta en AXml[Tramo.Ini ..
+    Tramo.Fin - 1], para reescribirlo en su sitio. }
+  TPlataformaDelBloque = record
+    Nombre: string;
+    Activa: Boolean;
+    Tramo: TTramoXml;
+  end;
+
+{ El bloque <Platforms> (el primero); False si el .dproj no lo tiene. }
+function BloqueDePlataformas(const AXml: string; out ABloque: TTramoXml): Boolean;
+{ Las plataformas que declara el .dproj, en orden de documento: EL lector del
+  bloque (ReadDproj, add-platform, remove-platform). El nombre y si esta
+  activa salen del MISMO elemento (R6-A), y el selector
+  <Platform Condition="...">X</Platform>, que no lleva value, no es una. Eran
+  un Pos de '<platform value="' en ReadDproj y otro, con su formato, en cada
+  editor de Mcp.Tools.Config. }
+function PlataformasDelBloque(const AXml: string): TArray<TPlataformaDelBloque>;
+{ ...y su escritor: <Platform value="X">True</Platform> (o False). }
+function XmlPlataformaDelBloque(const APlatform: string; AActiva: Boolean): string;
+
+type
+  { Una clave de un <VerInfo_Keys> (FileVersion=1.0.0.0;minSdkVersion=23;...):
+    su nombre tal cual y su valor, escrito, en AXml[Ini .. Fin - 1]. }
+  TClaveDeVersion = record
+    Nombre: string;
+    Ini, Fin: Integer;
+  end;
+
+{ Las claves de cada <VerInfo_Keys> de AXml, en orden de documento: EL lector
+  (set-version, el manifiesto de Android). Buscar FileVersion= en todo el
+  texto no es leer una clave: set-version reescribia tambien lo que dijera un
+  evento de build, y el manifiesto preguntaba por minSdkVersion en cualquier
+  sitio del .dproj. }
+function ClavesDeVersion(const AXml: string): TArray<TClaveDeVersion>;
 
 { EL .dproj de lo que nombra el agente: el de al lado de un .dpr o un .dpk,
   y cualquier otra cosa tal cual (la tool decide si es un proyecto). Solo
@@ -455,109 +575,396 @@ begin
   Result := 0;
 end;
 
-function TramosDeEtiqueta(const AXml, ATag: string; AConVacios: Boolean): TArray<TTramoXml>;
+{ El texto en que se buscan las etiquetas: en minusculas (LowerCase solo toca
+  A..Z, asi que las posiciones valen en AXml) y, salvo AConOcultos, con los
+  comentarios, los CDATA y las instrucciones de proceso tapados con blancos:
+  lo que hay dentro no son etiquetas para un parser de XML - el juez, MSXML,
+  no las ve. Los saltos de linea se quedan (alguien cuenta lineas). }
+{ True si en AText[AAt] empieza ASub, comparando en sitio: TextoDeBusqueda
+  lo pregunta en cada '<' del fichero, y un Copy por pregunta era la mitad
+  de su coste (medido el 17-oct-2026). }
+function HayEn(const AText: string; AAt: Integer; const ASub: string): Boolean;
+begin
+  Result := (AAt >= 1) and (AAt + Length(ASub) - 1 <= Length(AText)) and
+    CompareMem(@AText[AAt], Pointer(ASub), Length(ASub) * SizeOf(Char));
+end;
+
+function TextoDeBusqueda(const AXml: string; AConOcultos: Boolean): string;
 var
-  List: TList<TTramoXml>;
+  P, Q: Integer;
+  Cierre: string;
+begin
+  Result := LowerCase(AXml);
+  if AConOcultos then
+    Exit;
+  P := 1;
+  while True do
+  begin
+    P := Pos('<', Result, P);
+    if P = 0 then
+      Break;
+    if HayEn(Result, P, '<!--') then
+      Cierre := '-->'
+    else if HayEn(Result, P, '<![cdata[') then
+      Cierre := ']]>'
+    else if HayEn(Result, P, '<?') then
+      Cierre := '?>'
+    else
+    begin
+      Inc(P);
+      Continue;
+    end;
+    Q := Pos(Cierre, Result, P + 2);
+    if Q = 0 then
+      Q := Length(Result) - Length(Cierre) + 1; // sin cierre: hasta el final
+    var Hasta := Q + Length(Cierre) - 1;
+    if Hasta > Length(Result) then
+      Hasta := Length(Result);
+    for var I := P to Hasta do
+      if not CharInSet(Result[I], [#13, #10]) then
+        Result[I] := ' ';
+    P := Q + Length(Cierre);
+  end;
+end;
+
+type
+  { Una etiqueta de apertura: AXml[Abre .. Cierra - 1], '>' incluido }
+  TAperturaXml = record
+    Abre, Cierra: Integer;
+    Vacia: Boolean; // <Tag/>
+  end;
+
+{ Cada etiqueta de apertura de ATag en ALow (TextoDeBusqueda), en orden: EL
+  buscador de aperturas, el de los elementos y el de los atributos (eran dos
+  bucles gemelos, uno en TramosDeEtiqueta y otro en AllTagAttr). }
+function AperturasDe(const ALow, ATag: string): TArray<TAperturaXml>;
+var
+  Open: string;
+  P, After, TagEnd: Integer;
+  A: TAperturaXml;
+begin
+  Result := [];
+  Open := '<' + LowerCase(ATag);
+  P := 1;
+  while True do
+  begin
+    P := Pos(Open, ALow, P);
+    if P = 0 then
+      Break;
+    After := P + Length(Open);
+    if (After > Length(ALow)) or
+       not CharInSet(ALow[After], ['>', '/', ' ', #9, #13, #10]) then
+    begin
+      P := After; // <Platforms> no es <Platform>
+      Continue;
+    end;
+    TagEnd := FinDeEtiqueta(ALow, After);
+    if TagEnd = 0 then
+      Break;
+    A.Abre := P;
+    A.Cierra := TagEnd + 1;
+    A.Vacia := ALow[TagEnd - 1] = '/';
+    Result := Result + [A];
+    P := TagEnd + 1;
+  end;
+end;
+
+{ El cierre de AAbierta, contando las del mismo nombre que lleve dentro: el
+  IDE escribe <VersionInfo><VersionInfo Name="..."> en ProjectExtensions, y
+  cerrar en el primer </VersionInfo> perdia el de dentro (lo vio el oraculo
+  contra MSXML, 17-oct-2026). AFin, el '<' de </Tag; ACierra, lo primero
+  tras su '>' (que admite blancos delante: </Tag >). False si no lo tiene. }
+function CierreDe(const ALow, ATag: string; const AAbierta: TAperturaXml;
+  out AFin, ACierra: Integer): Boolean;
+var
+  Open, CloseOpen: string;
+  P, C, Q, O, After, TagEnd, Nivel: Integer;
+begin
+  Result := False;
+  Open := '<' + LowerCase(ATag);
+  CloseOpen := '</' + LowerCase(ATag);
+  Nivel := 1;
+  P := AAbierta.Cierra;
+  while True do
+  begin
+    // el siguiente cierre
+    C := P;
+    while True do
+    begin
+      C := Pos(CloseOpen, ALow, C);
+      if C = 0 then
+        Exit;
+      Q := C + Length(CloseOpen);
+      while (Q <= Length(ALow)) and CharInSet(ALow[Q], [' ', #9, #13, #10]) do
+        Inc(Q);
+      if (Q <= Length(ALow)) and (ALow[Q] = '>') then
+        Break;
+      C := Q;
+    end;
+    // las del mismo nombre que se abren antes de el (y no son <Tag/>) suben
+    O := P;
+    while True do
+    begin
+      O := Pos(Open, ALow, O);
+      if (O = 0) or (O >= C) then
+        Break;
+      After := O + Length(Open);
+      if (After <= Length(ALow)) and CharInSet(ALow[After], ['>', '/', ' ', #9, #13, #10]) then
+      begin
+        TagEnd := FinDeEtiqueta(ALow, After);
+        if TagEnd = 0 then
+          Break;
+        if ALow[TagEnd - 1] <> '/' then
+          Inc(Nivel);
+        O := TagEnd + 1;
+      end
+      else
+        O := After;
+    end;
+    Dec(Nivel);
+    if Nivel = 0 then
+    begin
+      AFin := C;
+      ACierra := Q + 1;
+      Exit(True);
+    end;
+    P := Q + 1;
+  end;
+end;
+
+{ Los atributos de la etiqueta de apertura AXml[AAbre .. ACierra - 1], con la
+  posicion de su valor. Uno a uno ('Include' no casa dentro de 'XInclude'), con
+  comillas simples o dobles; uno mal formado corta la lectura. }
+function AtributosDeApertura(const AXml: string; AAbre, ACierra: Integer): TArray<TAtributoXml>;
+var
+  A, K, NombreFin, ValEnd, TagEnd: Integer;
+  At: TAtributoXml;
+begin
+  Result := [];
+  TagEnd := ACierra - 1; // el '>'
+  A := AAbre + 1;
+  // el nombre de la etiqueta
+  while (A < TagEnd) and not CharInSet(AXml[A], [' ', #9, #13, #10, '/', '>']) do
+    Inc(A);
+  while A < TagEnd do
+  begin
+    while (A < TagEnd) and CharInSet(AXml[A], [' ', #9, #13, #10, '/']) do
+      Inc(A);
+    K := A;
+    while (K < TagEnd) and not CharInSet(AXml[K], ['=', ' ', #9, #13, #10, '/']) do
+      Inc(K);
+    NombreFin := K;
+    while (K < TagEnd) and CharInSet(AXml[K], [' ', #9, #13, #10]) do
+      Inc(K);
+    if (K >= TagEnd) or (AXml[K] <> '=') then
+      Break; // no es un atributo bien formado
+    Inc(K);
+    while (K < TagEnd) and CharInSet(AXml[K], [' ', #9, #13, #10]) do
+      Inc(K);
+    if (K >= TagEnd) or not CharInSet(AXml[K], ['"', '''']) then
+      Break;
+    ValEnd := Pos(AXml[K], AXml, K + 1);
+    if (ValEnd = 0) or (ValEnd > TagEnd) then
+      Break;
+    At.Nombre := Copy(AXml, A, NombreFin - A);
+    At.Abre := A;
+    At.Ini := K + 1;
+    At.Fin := ValEnd;
+    Result := Result + [At];
+    A := ValEnd + 1;
+  end;
+end;
+
+function TramosDeEtiqueta(const AXml, ATag: string; AConVacios: Boolean;
+  AConOcultos: Boolean): TArray<TTramoXml>;
+begin
+  Result := TramosEnTexto(AXml, TextoDeBusqueda(AXml, AConOcultos), ATag, AConVacios);
+end;
+
+function TramosEnTexto(const AXml, ALow, ATag: string; AConVacios: Boolean): TArray<TTramoXml>;
+var
   T: TTramoXml;
-  Low, Open, CloseOpen: string;
-  P, After, TagEnd, CloseP, Q, Abre: Integer;
+  Fin, Cierra: Integer;
 begin
   // SIN distinguir mayusculas y con cualquier blanco tras el nombre: con esta
   // funcion lee la puerta de las carpetas de salida (BuildOutputDirs), y ni
   // <DCC_EXEOUTPUT>, ni un salto de linea antes de Condition=, ni un '>'
-  // dentro de una condicion pueden saltarsela (25-sep-2026). LowerCase solo
-  // toca A..Z: las posiciones de Low valen en AXml.
-  List := TList<TTramoXml>.Create;
-  try
-    Low := LowerCase(AXml);
-    Open := '<' + LowerCase(ATag);
-    CloseOpen := '</' + LowerCase(ATag);
-    P := 1;
-    while True do
+  // dentro de una condicion pueden saltarsela (25-sep-2026).
+  Result := [];
+  for var A in AperturasDe(ALow, ATag) do
+  begin
+    T.Abre := A.Abre;
+    if A.Vacia then
     begin
-      P := Pos(Open, Low, P);
-      if P = 0 then
-        Break;
-      After := P + Length(Open);
-      if (After > Length(Low)) or
-         not CharInSet(Low[After], ['>', '/', ' ', #9, #13, #10]) then
-      begin
-        P := After; // <Platforms> no es <Platform>
+      // <Tag/> o <Tag Condition="..."/>: vacia, sin valor
+      if not AConVacios then
         Continue;
-      end;
-      Abre := P;
-      TagEnd := FinDeEtiqueta(Low, After);
-      if TagEnd = 0 then
-        Break;
-      P := TagEnd + 1;
-      if Low[TagEnd - 1] = '/' then
-      begin
-        // <Tag/> o <Tag Condition="..."/>: vacia, sin valor
-        if AConVacios then
-        begin
-          T.Abre := Abre;
-          T.Ini := P;
-          T.Fin := P;
-          T.Cierra := P;
-          T.Vacio := True;
-          List.Add(T);
-        end;
+      T.Ini := A.Cierra;
+      T.Fin := A.Cierra;
+      T.Cierra := A.Cierra;
+      T.Vacio := True;
+    end
+    else
+    begin
+      // sin cierre, esa no es un elemento, pero lo que sigue se sigue leyendo:
+      // con AConOcultos, un comentario puede llevar una etiqueta sin cerrar y
+      // el XML seguir bien formado, y cortar aqui escondia al escaner de
+      // peligros el evento de verdad que venia detras (revision del diff,
+      // 17-oct-2026)
+      if not CierreDe(ALow, ATag, A, Fin, Cierra) then
         Continue;
-      end;
-      // el cierre, admitiendo blancos antes del '>' (</Tag >)
-      CloseP := P;
-      Q := 0;
-      while True do
-      begin
-        CloseP := Pos(CloseOpen, Low, CloseP);
-        if CloseP = 0 then
-          Break;
-        Q := CloseP + Length(CloseOpen);
-        while (Q <= Length(Low)) and CharInSet(Low[Q], [' ', #9, #13, #10]) do
-          Inc(Q);
-        if (Q <= Length(Low)) and (Low[Q] = '>') then
-          Break;
-        CloseP := Q;
-      end;
-      if CloseP = 0 then
-        Break;
-      T.Abre := Abre;
-      T.Ini := P;
-      T.Fin := CloseP;
-      T.Cierra := Q + 1;
+      T.Ini := A.Cierra;
+      T.Fin := Fin;
+      T.Cierra := Cierra;
       T.Vacio := False;
-      List.Add(T);
-      P := Q + 1;
     end;
-    Result := List.ToArray;
-  finally
-    List.Free;
+    Result := Result + [T];
   end;
+end;
+
+function ValorDeTramo(const AXml: string; const ATramo: TTramoXml): string;
+var
+  S, L, Cierre: string;
+  P, Q, Salta: Integer;
+begin
+  // el IDE escribe los eventos de build en CDATA, y se leian con su
+  // <![CDATA[ delante (lo vio el oraculo contra MSXML, 17-oct-2026)
+  S := Copy(AXml, ATramo.Ini, ATramo.Fin - ATramo.Ini);
+  Result := '';
+  L := LowerCase(S);
+  P := 1;
+  while P <= Length(S) do
+  begin
+    Q := Pos('<', S, P);
+    while Q > 0 do
+    begin
+      if HayEn(L, Q, '<![cdata[') or HayEn(L, Q, '<!--') or HayEn(L, Q, '<?') then
+        Break;
+      Q := Pos('<', S, Q + 1);
+    end;
+    if Q = 0 then
+    begin
+      Result := Result + XmlUnescape(Copy(S, P, MaxInt));
+      Break;
+    end;
+    Result := Result + XmlUnescape(Copy(S, P, Q - P));
+    if HayEn(L, Q, '<![cdata[') then
+    begin
+      Cierre := ']]>';
+      Salta := 9;
+    end
+    else if HayEn(L, Q, '<!--') then
+    begin
+      Cierre := '-->';
+      Salta := 4;
+    end
+    else
+    begin
+      Cierre := '?>';
+      Salta := 2;
+    end;
+    P := Pos(Cierre, S, Q + Salta);
+    if P = 0 then
+      P := Length(S) + 1;
+    if Cierre = ']]>' then
+      Result := Result + Copy(S, Q + Salta, P - Q - Salta); // literal
+    P := P + Length(Cierre);
+  end;
+  Result := Result.Replace(#13#10, #10).Replace(#13, #10);
+end;
+
+function AtributosDeTramo(const AXml: string; const ATramo: TTramoXml): TArray<TAtributoXml>;
+begin
+  // la etiqueta de apertura acaba donde empieza el valor ('/>' en una vacia)
+  Result := AtributosDeApertura(AXml, ATramo.Abre, ATramo.Ini);
+end;
+
+function ValorDeAtributo(const AXml: string; const AAtributo: TAtributoXml): string;
+begin
+  Result := XmlUnescape(Copy(AXml, AAtributo.Ini, AAtributo.Fin - AAtributo.Ini)
+    .Replace(#13#10, #10).Replace(#13, #10));
 end;
 
 function AllTagValues(const AXml, ATag: string): TArray<string>;
 begin
   Result := [];
   for var T in TramosDeEtiqueta(AXml, ATag) do
-    Result := Result + [XmlUnescape(Copy(AXml, T.Ini, T.Fin - T.Ini))]; // el valor de verdad
+    Result := Result + [ValorDeTramo(AXml, T)]; // el valor de verdad
 end;
 
-function TramosEnGrupo(const AXml, ATag: string; const AGrupo: TGrupoXml;
+function TramosDentro(const AXml, ATag: string; const ADentro: TTramoXml;
   AConVacios: Boolean): TArray<TTramoXml>;
 begin
   Result := [];
   for var T in TramosDeEtiqueta(AXml, ATag, AConVacios) do
-    if (T.Abre >= AGrupo.Ini) and (T.Cierra <= AGrupo.Fin) then
+    if (T.Abre >= ADentro.Ini) and (T.Cierra <= ADentro.Fin) then
       Result := Result + [T];
+end;
+
+function TramosEnGrupo(const AXml, ATag: string; const AGrupo: TGrupoXml;
+  AConVacios: Boolean): TArray<TTramoXml>;
+var
+  T: TTramoXml;
+begin
+  T.Abre := AGrupo.Abre;
+  T.Ini := AGrupo.Ini;
+  T.Fin := AGrupo.Fin;
+  T.Cierra := AGrupo.Cierra;
+  T.Vacio := AGrupo.Vacio;
+  Result := TramosDentro(AXml, ATag, T, AConVacios);
+end;
+
+function ValorDentro(const AXml, ATag: string; const ADentro: TTramoXml): string;
+begin
+  Result := '';
+  for var T in TramosDentro(AXml, ATag, ADentro) do
+    Exit(ValorDeTramo(AXml, T).Trim);
+end;
+
+procedure ConSuLinea(const AXml: string; AIni, AFin: Integer; out ADesde, AHasta: Integer);
+var
+  P: Integer;
+begin
+  ADesde := AIni;
+  while (ADesde > 1) and CharInSet(AXml[ADesde - 1], [' ', #9]) do
+    Dec(ADesde);
+  AHasta := AFin;
+  P := AFin;
+  while (P <= Length(AXml)) and CharInSet(AXml[P], [' ', #9]) do
+    Inc(P);
+  // con algo mas detras en su linea, solo el elemento
+  if P > Length(AXml) then
+    AHasta := P
+  else if AXml[P] = #10 then
+    AHasta := P + 1
+  else if AXml[P] = #13 then
+  begin
+    AHasta := P + 1;
+    if (AHasta <= Length(AXml)) and (AXml[AHasta] = #10) then
+      Inc(AHasta);
+  end;
+end;
+
+function CierreDelProyecto(const AXml: string): Integer;
+var
+  T: TArray<TTramoXml>;
+begin
+  // el raiz es el primero en orden de documento (<ProjectExtensions> y
+  // <Projects> son otras etiquetas para el analisis)
+  T := TramosDeEtiqueta(AXml, 'Project');
+  if Length(T) = 0 then
+    Exit(0);
+  Result := T[0].Fin;
 end;
 
 function AtributoDeTramo(const AXml: string; const ATramo: TTramoXml;
   const ATag, AAtributo: string): string;
 begin
-  // la etiqueta de apertura, '>' (o '/>') incluido; el ultimo, si lo repite
+  // el ultimo, si lo repite
   Result := '';
-  for var V in AllTagAttr(Copy(AXml, ATramo.Abre, ATramo.Ini - ATramo.Abre), ATag, AAtributo) do
-    Result := V;
+  for var At in AtributosDeTramo(AXml, ATramo) do
+    if SameText(At.Nombre, AAtributo) then
+      Result := ValorDeAtributo(AXml, At);
 end;
 
 function GruposDe(const AXml, AElemento: string; AConVacios: Boolean): TArray<TGrupoXml>;
@@ -626,67 +1033,16 @@ begin
   AXml := Copy(AXml, 1, AIni - 1) + Copy(AXml, AFin, MaxInt);
 end;
 
-function AllTagAttr(const AXml, ATag, AAttr: string): TArray<string>;
-var
-  List: TList<string>;
-  Low, Open, Attr, Nombre: string;
-  P, After, TagEnd, A, K, ValEnd: Integer;
+function AllTagAttr(const AXml, ATag, AAttr: string; AConOcultos: Boolean): TArray<string>;
 begin
-  // Mismo criterio que AllTagValues: sin distinguir mayusculas, con cualquier
-  // blanco, y el valor entre comillas dobles O simples (las dos son XML).
-  // Los atributos se leen uno a uno: 'Include' no casa dentro de 'XInclude'.
-  List := TList<string>.Create;
-  try
-    Low := LowerCase(AXml);
-    Open := '<' + LowerCase(ATag);
-    Attr := LowerCase(AAttr);
-    P := 1;
-    while True do
-    begin
-      P := Pos(Open, Low, P);
-      if P = 0 then
-        Break;
-      After := P + Length(Open);
-      if (After > Length(Low)) or not CharInSet(Low[After], [' ', #9, #13, #10]) then
-      begin
-        P := After;
-        Continue;
-      end;
-      TagEnd := FinDeEtiqueta(Low, After);
-      if TagEnd = 0 then
-        Break;
-      A := After;
-      while A < TagEnd do
-      begin
-        while (A < TagEnd) and CharInSet(Low[A], [' ', #9, #13, #10, '/']) do
-          Inc(A);
-        K := A;
-        while (K < TagEnd) and not CharInSet(Low[K], ['=', ' ', #9, #13, #10, '/']) do
-          Inc(K);
-        Nombre := Copy(Low, A, K - A);
-        while (K < TagEnd) and CharInSet(Low[K], [' ', #9, #13, #10]) do
-          Inc(K);
-        if (K >= TagEnd) or (Low[K] <> '=') then
-          Break; // no es un atributo bien formado
-        Inc(K);
-        while (K < TagEnd) and CharInSet(Low[K], [' ', #9, #13, #10]) do
-          Inc(K);
-        if (K >= TagEnd) or not CharInSet(Low[K], ['"', '''']) then
-          Break;
-        ValEnd := Pos(Low[K], Low, K + 1);
-        if (ValEnd = 0) or (ValEnd > TagEnd) then
-          Break;
-        if Nombre = Attr then
-          // el valor DE VERDAD: la inversa de XmlAtributo
-          List.Add(XmlUnescape(Copy(AXml, K + 1, ValEnd - K - 1)));
-        A := ValEnd + 1;
-      end;
-      P := TagEnd + 1;
-    end;
-    Result := List.ToArray;
-  finally
-    List.Free;
-  end;
+  // EL buscador de aperturas y EL lector de atributos, los de TramosDeEtiqueta:
+  // sin distinguir mayusculas, con cualquier blanco, el valor entre comillas
+  // dobles O simples (las dos son XML) y como lo da XML (ValorDeAtributo)
+  Result := [];
+  for var A in AperturasDe(TextoDeBusqueda(AXml, AConOcultos), ATag) do
+    for var At in AtributosDeApertura(AXml, A.Abre, A.Cierra) do
+      if SameText(At.Nombre, AAttr) then
+        Result := Result + [ValorDeAtributo(AXml, At)];
 end;
 
 function MergeProperty(const AXml, APropName: string): string;
@@ -798,6 +1154,13 @@ begin
     .Replace('"', '&quot;');
 end;
 
+function XmlEscapeEn(const S: string; AComilla: Char): string;
+begin
+  Result := XmlEscape(S);
+  if AComilla = '''' then
+    Result := Result.Replace('''', '&apos;');
+end;
+
 function XmlAtributo(const ANombre, AValor: string): string;
 begin
   Result := ANombre + '="' + XmlEscape(AValor) + '"';
@@ -837,7 +1200,7 @@ begin
       if (T.Ini >= Grupos[I].Ini) and (T.Fin <= Grupos[I].Fin) then
       begin
         C.Grupo := Grupos[I].Condicion;
-        C.Antes := XmlUnescape(Copy(AXml, T.Ini, T.Fin - T.Ini));
+        C.Antes := ValorDeTramo(AXml, T);
         C.EnBase := I = Base;
         EnBase := EnBase or C.EnBase;
         ACambios := ACambios + [C];
@@ -982,14 +1345,73 @@ begin
     Result := MsgFmt(SR_TEST_CONFIG_FMT, [AConfig, string.Join(', ', Info.Configs)]);
 end;
 
+function BloqueDePlataformas(const AXml: string; out ABloque: TTramoXml): Boolean;
+var
+  B: TArray<TTramoXml>;
+begin
+  B := TramosDeEtiqueta(AXml, 'Platforms');
+  Result := Length(B) > 0;
+  if Result then
+    ABloque := B[0];
+end;
+
+function PlataformasDelBloque(const AXml: string): TArray<TPlataformaDelBloque>;
+var
+  P: TPlataformaDelBloque;
+begin
+  Result := [];
+  for var B in TramosDeEtiqueta(AXml, 'Platforms') do
+    for var T in TramosDentro(AXml, 'Platform', B) do
+    begin
+      P.Nombre := AtributoDeTramo(AXml, T, 'Platform', 'value').Trim;
+      if P.Nombre = '' then
+        Continue;
+      P.Activa := SameText(ValorDeTramo(AXml, T).Trim, 'True');
+      P.Tramo := T;
+      Result := Result + [P];
+    end;
+end;
+
+function ClavesDeVersion(const AXml: string): TArray<TClaveDeVersion>;
+var
+  C: TClaveDeVersion;
+  Base, Igual: Integer;
+begin
+  Result := [];
+  for var T in TramosDeEtiqueta(AXml, 'VerInfo_Keys') do
+  begin
+    // por trozos ESCRITOS (el ';' de un &amp; no separa), con su posicion
+    // para reescribir un valor en su sitio; uno con un CDATA o un comentario
+    // dentro no se sabe reescribir y no se toca
+    var Escrito := Copy(AXml, T.Ini, T.Fin - T.Ini);
+    if Escrito.Contains('<') then
+      Continue;
+    Base := T.Ini;
+    for var Trozo in TrozosEscritos(Escrito) do
+    begin
+      Igual := Pos('=', Trozo);
+      if Igual > 0 then
+      begin
+        C.Nombre := Copy(Trozo, 1, Igual - 1).Trim;
+        C.Ini := Base + Igual;
+        C.Fin := Base + Length(Trozo);
+        Result := Result + [C];
+      end;
+      Inc(Base, Length(Trozo) + 1);
+    end;
+  end;
+end;
+
+function XmlPlataformaDelBloque(const APlatform: string; AActiva: Boolean): string;
+begin
+  Result := '<Platform ' + XmlAtributo('value', APlatform) + '>' +
+    IfThen(AActiva, 'True', 'False') + '</Platform>';
+end;
+
 function ReadDproj(const ADprojPath: string): TDprojInfo;
 var
-  Xml, Low: string;
-  Plats: TList<TDprojPlatform>;
-  P: TDprojPlatform;
-  Scan, Op, NameStart, NameEnd, TagEnd, CloseP: Integer;
-const
-  Needle = '<platform value="';
+  Xml: string;
+  D: TDprojPlatform;
 begin
   Result := Default(TDprojInfo);
   if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
@@ -1007,52 +1429,23 @@ begin
     Result.AppType := At[0].Trim;
   // Build configurations: <BuildConfiguration Include="Debug">
   Result.Configs := AllTagAttr(Xml, 'BuildConfiguration', 'Include');
-  // Platforms: <Platform value="Win64">True</Platform> under <Platforms>.
-  // Parse each tag as a UNIT so the name (value attr) and enabled (inner text)
-  // always come from the SAME element. A separate attr-list + value-list drift
-  // apart because the .dproj also carries a selector
-  // <Platform Condition="'$(Platform)'==''">Win64</Platform> that has NO value
-  // attribute but DOES have inner text, shifting the value list by one and
-  // mislabelling every platform's enabled flag (field round 6, R6-A). Matching
-  // only '<Platform value="' also ignores that selector cleanly.
-  Low := LowerCase(Xml);
-  Plats := TList<TDprojPlatform>.Create;
-  try
-    Scan := 1;
-    while True do
-    begin
-      Op := Pos(Needle, Low, Scan);
-      if Op = 0 then
-        Break;
-      NameStart := Op + Length(Needle);
-      NameEnd := Pos('"', Xml, NameStart);
-      TagEnd := Pos('>', Xml, NameStart);
-      if (NameEnd = 0) or (TagEnd = 0) then
-        Break;
-      CloseP := Pos('</platform>', Low, TagEnd);
-      P.Name := Copy(Xml, NameStart, NameEnd - NameStart).Trim;
-      if CloseP > 0 then
-        P.Enabled := SameText(Copy(Xml, TagEnd + 1, CloseP - TagEnd - 1).Trim, 'True')
-      else
-        P.Enabled := False;
-      if P.Name <> '' then
-        Plats.Add(P);
-      Scan := TagEnd + 1;
-    end;
-    Result.Platforms := Plats.ToArray;
-  finally
-    Plats.Free;
-  end;
-  // la plataforma por defecto: el selector, que no lleva value (el bucle de
-  // arriba no lo ve); la que compilan el IDE y msbuild si nadie pide otra
-  Op := Pos('<platform condition=', Low);
-  if Op > 0 then
+  // las plataformas, por EL lector del bloque
+  Result.Platforms := [];
+  for var P in PlataformasDelBloque(Xml) do
   begin
-    TagEnd := Pos('>', Xml, Op);
-    CloseP := Pos('</platform>', Low, TagEnd + 1);
-    if (TagEnd > 0) and (CloseP > TagEnd) then
-      Result.DefaultPlatform := Copy(Xml, TagEnd + 1, CloseP - TagEnd - 1).Trim;
+    D.Name := P.Nombre;
+    D.Enabled := P.Activa;
+    Result.Platforms := Result.Platforms + [D];
   end;
+  // la plataforma por defecto: el selector, que no lleva value; la que
+  // compilan el IDE y msbuild si nadie pide otra
+  for var T in TramosDeEtiqueta(Xml, 'Platform') do
+    if (AtributoDeTramo(Xml, T, 'Platform', 'Condition') <> '') and
+       (AtributoDeTramo(Xml, T, 'Platform', 'value') = '') then
+    begin
+      Result.DefaultPlatform := ValorDeTramo(Xml, T).Trim;
+      Break;
+    end;
 end;
 
 function IsLocalPlatform(const APlatform: string): Boolean;
@@ -1208,6 +1601,58 @@ end;
 function ConfigCondition(const AConfig: string): string;
 begin
   Result := '''$(Config)''==''' + AConfig + '''';
+end;
+
+function XmlDeployFile(const AInclude, AConfig, ARemoteDir, ARemoteName, AClase: string;
+  AOperacion: Integer; ARequerido: Boolean): string;
+begin
+  Result := '        <DeployFile ' + XmlAtributo('Include', AInclude);
+  if AConfig <> '' then
+    Result := Result + ' ' + XmlAtributo('Condition', ConfigCondition(AConfig));
+  Result := Result + '>' + sLineBreak +
+    '            ' + XmlElemento('RemoteDir', ARemoteDir) + sLineBreak +
+    '            ' + XmlElemento('RemoteName', ARemoteName) + sLineBreak +
+    '            ' + XmlElemento('DeployClass', AClase) + sLineBreak +
+    '            ' + XmlElemento('Operation', AOperacion.ToString) + sLineBreak +
+    '            <LocalCommand/>' + sLineBreak +
+    '            <RemoteCommand/>' + sLineBreak +
+    '            ' + XmlElemento('Overwrite', 'True') + sLineBreak;
+  if ARequerido then
+    Result := Result + '            ' + XmlElemento('Required', 'True') + sLineBreak;
+  Result := Result + '        </DeployFile>' + sLineBreak;
+end;
+
+function RutasDeExists(const AEscrita: string): TArray<TTrozoEscrito>;
+var
+  Low: string;
+  P, Q, R: Integer;
+  T: TTrozoEscrito;
+begin
+  Result := [];
+  Low := LowerCase(AEscrita);
+  P := 1;
+  while True do
+  begin
+    P := Pos('exists(', Low, P);
+    if P = 0 then
+      Break;
+    Q := P + Length('exists(');
+    while (Q <= Length(Low)) and CharInSet(Low[Q], [' ', #9]) do
+      Inc(Q);
+    if (Q <= Length(Low)) and (Low[Q] = '''') then
+    begin
+      R := Pos('''', Low, Q + 1);
+      if R > 0 then
+      begin
+        T.Ini := Q + 1;
+        T.Fin := R;
+        Result := Result + [T];
+        P := R + 1;
+        Continue;
+      end;
+    end;
+    P := Q;
+  end;
 end;
 
 function CondicionDePlataformaYConfig(const ACondicion: string; out APlataforma, AConfig: string): Boolean;
@@ -1442,8 +1887,10 @@ begin
     // venga de un .optset: dcc trabaja alli.
     for Xml in ProjectXmlChain(ADprojPath) do
       for var Tag in BUILD_OUTPUT_TAGS do
-        for V in AllTagValues(Xml, Tag) do
+        for var T in TramosDeEtiqueta(Xml, Tag) do
         begin
+          V := ValorDeTramo(Xml, T);
+          var Escrito := Copy(Xml, T.Ini, T.Fin - T.Ini);
           Item.Tag := Tag;
           Item.Value := V.Trim;
           Item.Dir := '';
@@ -1453,10 +1900,12 @@ begin
             Continue; // vacia: la del IDE por defecto (BuildOutputUndeclared)
           // Una macro sin resolver, un escape de MSBuild (%3A), una entidad
           // numerica (&#58;) o un CDATA: msbuild lo leeria distinto que
-          // nosotros, y lo que no se puede comprobar no se aprueba.
+          // nosotros, y lo que no se puede comprobar no se aprueba. El lector
+          // lee ya el CDATA como XML (17-oct-2026), y aqui se sigue sin aprobar
+          // lo que no esta escrito tal cual: la segunda barrera se queda.
           if not (Cand.Contains('$(') or Cand.Contains('@(') or
                   Cand.Contains('%') or Item.Value.Contains('&#') or
-                  Cand.Contains('<')) then
+                  Cand.Contains('<') or Escrito.Contains('<')) then
           begin
             if not TPath.IsPathRooted(Cand) then
               Cand := TPath.Combine(Dir, Cand);
@@ -1494,28 +1943,13 @@ end;
   <BuildConfiguration Include="Debug"><Key>Cfg_2</Key>. No se supone: en
   lo que escribe delphi_create, Cfg_1 es Release. '' si no esta. }
 function ConfigKey(const AXml, AConfig: string): string;
-var
-  Low: string;
-  P, TagEnd, CloseP: Integer;
 begin
+  // por EL analisis: era un recorredor gemelo de '<buildconfiguration'
   Result := '';
-  Low := LowerCase(AXml);
-  P := 1;
-  while True do
-  begin
-    P := Pos('<buildconfiguration', Low, P);
-    if P = 0 then
-      Exit;
-    TagEnd := FinDeEtiqueta(Low, P + 1);
-    if TagEnd = 0 then
-      Exit;
-    CloseP := Pos('</buildconfiguration', Low, TagEnd);
-    for var Incl in AllTagAttr(Copy(AXml, P, TagEnd - P + 1), 'BuildConfiguration', 'Include') do
-      if SameText(Incl.Trim, AConfig) and (CloseP > 0) then
-        for var K in AllTagValues(Copy(AXml, TagEnd + 1, CloseP - TagEnd - 1), 'Key') do
-          Exit(K.Trim);
-    P := TagEnd + 1;
-  end;
+  for var T in TramosDeEtiqueta(AXml, 'BuildConfiguration') do
+    if SameText(AtributoDeTramo(AXml, T, 'BuildConfiguration', 'Include').Trim, AConfig) then
+      for var K in TramosDentro(AXml, 'Key', T) do
+        Exit(ValorDeTramo(AXml, K).Trim);
 end;
 
 { El valor EFECTIVO de ATag para un build APlatform/AConfig: los grupos del
@@ -1551,7 +1985,7 @@ begin
       // Samples del IDE se contaba para OSX64 e iOS
       for var T in TramosEnGrupo(AXml, ATag, G, True) do
         if SeAplicaA(AtributoDeTramo(AXml, T, ATag, 'Condition'), APlatform, AConfig) then
-          Result := XmlUnescape(Copy(AXml, T.Ini, T.Fin - T.Ini)).Trim; // el ultimo gana
+          Result := ValorDeTramo(AXml, T).Trim; // el ultimo gana
 end;
 
 function PlatformProperty(const AXml, APlatform, ATag: string): string;
@@ -1746,7 +2180,6 @@ function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
   AIgnoreBuildEvents: Boolean): string;
 var
   Low, V, Resolved, Imported: string;
-  Scan, TagEnd, CloseP: Integer;
 begin
   Result := '';
   // The whole scan is CASE-INSENSITIVE on purpose. MSBuild itself is picky
@@ -1790,22 +2223,14 @@ begin
   if not AIgnoreBuildEvents then
   for var Tag in ['prebuildevent', 'postbuildevent', 'prelinkevent',
                   'postlinkevent', 'buildevent'] do
-  begin
-    Scan := 1;
-    while True do
-    begin
-      Scan := Pos('<' + Tag, Low, Scan);
-      if Scan = 0 then
-        Break;
-      TagEnd := Pos('>', Low, Scan);
-      CloseP := Pos('</' + Tag + '>', Low, Scan);
-      if (TagEnd = 0) or (CloseP = 0) then
-        Break;
-      if Copy(AXml, TagEnd + 1, CloseP - TagEnd - 1).Trim <> '' then
+    // por EL analisis, pero mas estricto que el juez: tambien dentro de un
+    // comentario, y el texto ESCRITO (un CDATA vacio o un comentario dentro
+    // cuentan). Buscaba '<prebuildevent' como prefijo, y el
+    // <PreBuildEventIgnoreExitCode> que el IDE escribe junto a cada evento
+    // contaba como un evento con texto (oraculo, 17-oct-2026)
+    for var T in TramosDeEtiqueta(AXml, Tag, False, True) do
+      if Copy(AXml, T.Ini, T.Fin - T.Ini).Trim <> '' then
         Exit(MsgFmt(SF_CFG_HAZARD_SHELL_COMMAND_FMT, [Tag]));
-      Scan := CloseP + 1;
-    end;
-  end;
 
   // <Import> brings in another MSBuild file, which carries its own targets -
   // so the payload can sit one file away from the project. Being macro-based
@@ -1814,7 +2239,8 @@ begin
   // Rule: trust ONLY the IDE's own imports without reading them; resolve and
   // SCAN anything else; refuse what cannot be resolved.
   // UN lector de atributos XML: comillas, blancos y entidades compartidos.
-  for var Importado in AllTagAttr(AXml, 'Import', 'Project') do
+  // (tambien los de dentro de un comentario: mas estricto que el juez)
+  for var Importado in AllTagAttr(AXml, 'Import', 'Project', True) do
   begin
     V := Importado.Trim;
     if V.StartsWith('\\') or V.StartsWith('//') then

@@ -505,9 +505,9 @@ const
     'shows where a text is today.';
 
   SP_LSP_FILE_PATH =
-    'A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a ' +
-    'folder: these tools resolve a position inside a source. To see at ' +
-    'once what each unit of a folder offers, that is delphi_symbols.';
+    'A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: these ' +
+    'tools resolve a position in a source. What each unit of a folder ' +
+    'offers, at once: delphi_symbols.';
 
   SP_SYMBOLS_PATH =
     'A Delphi file (.pas/.dpr) for its symbols - or a FOLDER: at once, ' +
@@ -968,9 +968,9 @@ const
   SP_PATCH_FRAGMENT =
     'FRAGMENT mode for a LONG line: "fragment" = the exact piece to change ' +
     '(case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based ' +
-    'line (MANDATORY) and "new" = what replaces just that piece; the rest ' +
-    'of the line stays byte for byte. One line only; it goes INSTEAD of ' +
-    '"old" and combines with no other mode (nor toline).';
+    'line (MANDATORY), "new" = its replacement; the rest of the line stays ' +
+    'byte for byte. One line only, INSTEAD of "old", with no other mode ' +
+    '(nor toline).';
 
   SR_FRAG_NEEDS_ATLINE =
     '[EDIT-002 INVALID_PARAM] "fragment" needs "atline": the number (1-based, ' +
@@ -1833,10 +1833,9 @@ const
     'subcommand in "command"). The first time: packages (download the ' +
     'installer with delphi_fetch and run it on the target) -> add-profile ' +
     '(the password is stored encrypted) -> test-connection -> get-sdk (the ' +
-    'libraries the linker needs, once per TARGET MACHINE - not per project - ' +
-    'and again after an OS upgrade there; minutes. command=platforms says ' +
-    '"ready (SDK present)" when it is already pulled, and profiles lists ' +
-    'each SDK with its date) -> delphi_build for that platform -> ' +
+    'libraries the linker needs, once per TARGET MACHINE, not per project, ' +
+    'and again after an OS upgrade there; minutes; platforms says when it ' +
+    'is already pulled) -> delphi_build for that platform -> ' +
     'delphi_build target=Deploy -> remote-run. Enabling a platform in a ' +
     'project is delphi_config.';
 
@@ -2437,19 +2436,18 @@ const
   // Lsp.InlineImages: la entrega de una captura, la misma en toda tool que capture.
   // tambien la de un gesto (8.6 de la 1.18.0, Hermes: no sabia que tap la traia)
   SP_CAPTURE_INLINE =
-    'Default true: the capture this answer brings - a screenshot, the one ' +
-    'a desktop gesture returns (tap, type, key), a preview - comes back IN ' +
-    'it as an image scaled to maxwidth, and no file is kept. false = a ' +
-    'download link that works once (a client without vision, or one that ' +
-    'wants the bytes); over stdio there is no link: use out=.';
+    'Default true: the capture of this answer - a screenshot, a desktop ' +
+    'gesture''s (tap, type, key), a preview - comes IN it as an image scaled ' +
+    'to maxwidth, and no file is kept. false = a one-use download link (a ' +
+    'client without vision, or wanting the bytes); over stdio there is ' +
+    'none: use out=.';
 
   SP_CAPTURE_MAXWIDTH =
-    'Inline only: the MOST width the image travels at (0 = 1280) - a wider ' +
-    'capture is scaled down to it, a narrower one travels as it is, never ' +
-    'enlarged. The answer says inlineScale: divide what you measure on the ' +
-    'inline image by it to get capture pixels, or use the answer''s frame ' +
-    '(a tap takes it, and delphi_desktop''s type too; preview''s converts ' +
-    'to form units).';
+    'Inline only: the MOST width the image travels at (0 = 1280): a wider ' +
+    'capture is scaled down, a narrower one never enlarged. The answer says ' +
+    'inlineScale: divide what you measure on the inline image by it for ' +
+    'capture pixels, or use the answer''s frame (tap takes it, and ' +
+    'delphi_desktop''s type; preview''s converts to form units).';
 
   SN_CAPTURE_INLINE_NOTE_FMT =
     '[CAPT-001] The image is IN this answer (scaled %s of the capture). ' +
@@ -2525,9 +2523,9 @@ const
 
   SP_CAPTURE_FRAME =
     'tap (and type, on delphi_desktop): the "frame" of the screenshot you ' +
-    'measured on, copied verbatim; then x,y are pixels of THAT image and ' +
-    'the server converts them (inline scale, crop origin, device display). ' +
-    'Without it, x,y are capture pixels.';
+    'measured on, verbatim; x,y are then pixels of THAT image and the ' +
+    'server converts them (inline scale, crop origin, device display). ' +
+    'Without it, capture pixels.';
 
   SN_CAPTURE_FRAME_NOTE =
     '[CAPT-003] To press something you see in this image: tap (or type) ' +
@@ -4562,8 +4560,8 @@ const
   SP_DESIGNER_COMMAND =
     'info (every property a class really publishes: kind and type, events ' +
     'apart) | prop (one property in detail, with the legal members of an ' +
-    'enum/set, and what an integer with named constants takes - TColor, ' +
-    'TAlphaColor, TCursor) | tree (the component tree: name, class, line) | get (one ' +
+    'enum/set, and what an integer with named constants takes (TColor, ' +
+    'TCursor...)) | tree (the component tree: name, class, line) | get (one ' +
     'component''s block, verbatim) | lint (first what the IDE''s own form ' +
     'parser says, then properties the class does not publish and values ' +
     'their type does not take, as set judges them; objects it could not check ' +
@@ -4643,8 +4641,8 @@ const
   SP_DESIGNER_STATE =
     'preview optional: a VIEW state applied before drawing, never written ' +
     'to the file - Component.Property=Value (inside an inline frame, ' +
-    'Frame1.Component.Property=Value; a sub-property dotted, as prop and ' +
-    'set take it: Label1.Font.Size=14, Label1.TextSettings.FontColor=claRed), ' +
+    'Frame1.Component.Property=Value; a sub-property dotted, as in prop and ' +
+    'set: Label1.TextSettings.FontColor=claRed), ' +
     'several separated by ; ' +
     '(PageControl1.ActivePage=TabSheet2;Edit1.Text=hello). A value with a ; ' +
     'goes in single quotes as in a form (Edit1.Text=''a;b''; a quote inside ' +
@@ -4660,9 +4658,8 @@ const
     'the designer), none = the Windows default, a .style file, or a ' +
     'platform of the designer''s Style list (android, ios, win11...; an ' +
     'unknown name is answered with the list). A file goes by absolute path. ' +
-    'A style given here is for THAT image only - nothing is written to the ' +
-    'form, and the app runs with what the form itself carries, which the ' +
-    'answer''s style says.';
+    'It is for THAT image only: nothing is written, and the app runs with ' +
+    'the form''s own, which the answer''s style names.';
 
   SP_DESIGNER_NONVISUAL =
     'preview optional: true = draw the non-visual components (TTimer, ' +
@@ -8770,10 +8767,10 @@ const
   SP_CFG_OUTPUT =
     'set-output: a simple relative folder name (Compiled by default): .exe ' +
     'to <folder>\$(Platform)\$(Config), .dcu to ' +
-    '<folder>\Dcu\$(Platform)\$(Config) - for every configuration and ' +
-    'platform, also one that sets its own folder (the answer says what ' +
-    'each had). "default" restores the RAD Studio layout. No absolute ' +
-    'paths, no "..".';
+    '<folder>\Dcu\$(Platform)\$(Config) - in every configuration and ' +
+    'platform, even one with its own folder (the answer says what each ' +
+    'had). "default" restores the RAD Studio layout. No absolute paths, no ' +
+    '"..".';
 
   SP_CFG_REQUIRES =
     'add-requires: package names for the .dpk requires clause, separated ' +
@@ -8788,8 +8785,8 @@ const
     'PAServer profile. add-platform / remove-platform: enable or disable a ' +
     'platform in the .dproj (a curated edit of <Platforms> only). ' +
     'set-version: the project VERSION everywhere it must agree. ' +
-    'set-output: every binary under one folder (Compiled by default), in ' +
-    'every configuration, keeping the platform/config subfolders. add-searchpath / ' +
+    'set-output: every binary under one folder (Compiled by default), ' +
+    'keeping the platform/config subfolders. add-searchpath / ' +
     'remove-searchpath: a unit search path for ONE platform, as the IDE''s ' +
     'Project Options > Search path; a platform added to a project inherits ' +
     'NO search paths from the others - the usual reason a unit is "not ' +
@@ -8830,7 +8827,7 @@ const
     'IDE builds the same: Win32/Win64 build natively here; ' +
     'Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need their SDK pulled ' +
     'once per target machine, not per project (delphi_paserver get-sdk; ' +
-    'command=platforms says whether it already is). Building is LOCAL ' +
+    'its platforms says if it is). Building is LOCAL ' +
     'against that SDK and ' +
     'does NOT use profile - a profile is only for target=Deploy.';
 
@@ -8907,8 +8904,8 @@ const
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3d, 27-sep-2026)
   SP_LSP_LINE =
-    'Zero-based line number of the identifier: the "line0" of a search, ' +
-    'references, symbols or definition hit (their "line" is 1-based)';
+    'Zero-based line of the identifier: the "line0" of a search, ' +
+    'references, symbols or definition hit ("line" is 1-based)';
 
   SP_LSP_CHARACTER =
     'Zero-based character (column) inside the identifier (a hit''s ' +
@@ -9066,8 +9063,8 @@ const
     'separated by ; - the inverse of adduses. A directive around the ' +
     'entry stays with its neighbour, the clause goes when it empties, and ' +
     'names not there are reported. In a .dpr it takes LIBRARY units, as ' +
-    'adduses does (section does not apply); a unit of the project comes ' +
-    'out with delphi_config remove-unit, and so does a unit of a .dpk.';
+    'adduses (no section); a unit of the project, or of a .dpk, goes by ' +
+    'delphi_config remove-unit.';
 
   SD_EDIT_READ =
     'Read a Delphi source file DECODED CORRECTLY (ANSI - the machine''s ' +
@@ -10127,10 +10124,6 @@ const
   SR_CFG_NO_ENCUENTRO_BLOQUE_PLATFORMS =
     '[CFG-101 DENIED] Cannot find a <Platforms>...</Platforms> ' +
     'block in the .dproj.';
-
-  SR_CFG_PLATFORM_FORMA_INESPERADA =
-    '[CFG-102 DENIED] The <Platform> of the .dproj has an ' +
-    'unexpected shape.';
 
   SF_CFG_RAD_STUDIO_DEFAULT =
     '(RAD Studio default)';

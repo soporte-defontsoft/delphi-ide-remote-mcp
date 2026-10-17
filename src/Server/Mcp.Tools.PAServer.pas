@@ -807,7 +807,6 @@ function RegistrarSdkEnIde(const AVersion, ARootDir, ASysRoot,
 var
   R: TRegistry;
   Fichero, Xml, Clave: string;
-  M: TMatch;
   I: Integer;
 begin
   Result := False;
@@ -837,18 +836,35 @@ begin
     R.WriteString('SDKStartupObjS', TagValue(Xml, 'Profile_startupobjS'));
     R.WriteString('SDKEndCodeObjS', TagValue(Xml, 'Profile_endcodeobjS'));
     I := 0;
-    for M in TRegEx.Matches(Xml,
-      '(?is)<Profile(Include|Library)\s+Include="([^"]+)">.*?' +
-      '<FileMask>([^<]*)</FileMask>.*?<SubDirs>([^<]*)</SubDirs>') do
+    // las rutas de cabeceras y bibliotecas, en orden de documento, por EL
+    // analisis (era una regex cuyo .*? se llevaba la FileMask de la entrada
+    // siguiente si a una le faltaba)
+    var Cabeceras := TramosDeEtiqueta(Xml, 'ProfileInclude');
+    var Bibliotecas := TramosDeEtiqueta(Xml, 'ProfileLibrary');
+    var C := 0;
+    var B := 0;
+    while (C <= High(Cabeceras)) or (B <= High(Bibliotecas)) do
     begin
-      R.WriteString('Path' + IntToStr(I), XmlUnescape(M.Groups[2].Value));
-      R.WriteString('Mask' + IntToStr(I), XmlUnescape(M.Groups[3].Value).Trim);
-      if SameText(M.Groups[4].Value.Trim, 'True') then
+      var EsBiblioteca := (C > High(Cabeceras)) or
+        ((B <= High(Bibliotecas)) and (Bibliotecas[B].Abre < Cabeceras[C].Abre));
+      var E: TTramoXml;
+      if EsBiblioteca then
+      begin
+        E := Bibliotecas[B];
+        Inc(B);
+      end
+      else
+      begin
+        E := Cabeceras[C];
+        Inc(C);
+      end;
+      R.WriteString('Path' + IntToStr(I), AtributoDeTramo(Xml, E, '', 'Include'));
+      R.WriteString('Mask' + IntToStr(I), ValorDentro(Xml, 'FileMask', E));
+      if SameText(ValorDentro(Xml, 'SubDirs', E), 'True') then
         R.WriteString('IncludeSubDir' + IntToStr(I), '1')
       else
         R.WriteString('IncludeSubDir' + IntToStr(I), '0');
-      R.WriteInteger('Type' + IntToStr(I),
-        Ord(SameText(M.Groups[1].Value, 'Library')));
+      R.WriteInteger('Type' + IntToStr(I), Ord(EsBiblioteca));
       Inc(I);
     end;
     R.WriteInteger('PathCount', I);

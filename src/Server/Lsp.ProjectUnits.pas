@@ -1566,49 +1566,44 @@ end;
   \ unified). Returns its [Start, Len) in Xml including the trailing newline. }
 function FindDccRef(const Xml, AInclude: string; out AStart, ALen: Integer): Boolean;
 var
-  M: TMatch;
-  Want, Got: string;
+  Want: string;
+  Hasta: Integer;
 begin
+  // por EL analisis del .dproj (TramosDeEtiqueta, AtributoDeTramo): era una
+  // regex con el Include el primero, entre comillas dobles, y la etiqueta
+  // sola en su linea
   Result := False;
   Want := AInclude.Replace('/', '\').ToLower;
-  for M in TRegEx.Matches(Xml, '[ \t]*<DCCReference\s+Include="([^"]*)"\s*(/>|>.*?</DCCReference>)\s*?(\r?\n|$)',
-    [roIgnoreCase, roSingleline]) do
-  begin
-    Got := XmlUnescape(M.Groups[1].Value).Replace('/', '\').ToLower;
-    if Got = Want then
+  for var T in TramosDeEtiqueta(Xml, 'DCCReference', True) do
+    if AtributoDeTramo(Xml, T, 'DCCReference', 'Include').Replace('/', '\').ToLower = Want then
     begin
-      AStart := M.Index;
-      ALen := M.Length;
+      ConSuLinea(Xml, T.Abre, T.Cierra, AStart, Hasta);
+      ALen := Hasta - AStart;
       Exit(True);
     end;
-  end;
 end;
 
 { Inserts the element after the last DCCReference; else after </DelphiCompile>;
   else before the first <BuildConfiguration; else before the first </ItemGroup>. }
 function InsertDccRef(const Xml, AElement: string): string;
 var
-  M: TMatch;
-  At: Integer;
+  At, Desde, Hasta: Integer;
 begin
-  At := 0;
-  for M in TRegEx.Matches(Xml, '[ \t]*<DCCReference\s[^>]*?(/>|>.*?</DCCReference>)[ \t]*\r?\n', [roIgnoreCase, roSingleline]) do
-    At := M.Index + M.Length;
-  if At = 0 then
-  begin
-    M := TRegEx.Match(Xml, '</DelphiCompile>[ \t]*\r?\n', [roIgnoreCase]);
-    if M.Success then
-      At := M.Index + M.Length
-    else
-    begin
-      M := TRegEx.Match(Xml, '[ \t]*<BuildConfiguration\s', [roIgnoreCase]);
-      if not M.Success then
-        M := TRegEx.Match(Xml, '[ \t]*</ItemGroup>', [roIgnoreCase]);
-      if not M.Success then
-        Exit(Xml); // no ItemGroup at all: the caller reports "not in .dproj"
-      At := M.Index;
-    end;
-  end;
+  // los mismos cuatro sitios, por EL analisis (eran cuatro regex)
+  var Refs := TramosDeEtiqueta(Xml, 'DCCReference', True);
+  var Compila := TramosDeEtiqueta(Xml, 'DelphiCompile', True);
+  var Configs := TramosDeEtiqueta(Xml, 'BuildConfiguration', True);
+  var Grupos := TramosDeEtiqueta(Xml, 'ItemGroup');
+  if Length(Refs) > 0 then
+    ConSuLinea(Xml, Refs[High(Refs)].Abre, Refs[High(Refs)].Cierra, Desde, At)
+  else if Length(Compila) > 0 then
+    ConSuLinea(Xml, Compila[0].Abre, Compila[0].Cierra, Desde, At)
+  else if Length(Configs) > 0 then
+    ConSuLinea(Xml, Configs[0].Abre, Configs[0].Cierra, At, Hasta)
+  else if Length(Grupos) > 0 then
+    ConSuLinea(Xml, Grupos[0].Fin, Grupos[0].Cierra, At, Hasta)
+  else
+    Exit(Xml); // no ItemGroup at all: the caller reports "not in .dproj"
   Result := Copy(Xml, 1, At - 1) + AElement + Copy(Xml, At, MaxInt);
 end;
 
@@ -3099,11 +3094,12 @@ begin
 end;
 
 { Una lista ESCRITA de rutas (a;b;c, o una sola) con cada trozo re-apuntado
-  por RutaReapuntada: solo se reescriben los trozos que cambian (XmlEscape del
-  nuevo) y el resto queda byte a byte. '' si no cambia ninguno; ACuenta suma
-  los que cambian. }
+  por RutaReapuntada: solo se reescriben los trozos que cambian (XmlEscapeEn
+  del nuevo, con la comilla del atributo que la lleva, #0 si no es uno) y el
+  resto queda byte a byte. '' si no cambia ninguno; ACuenta suma los que
+  cambian. }
 function ListaReapuntada(const AEscrito, ABaseVieja, AFichero: string;
-  const AMapa: TFunc<string, string>; var ACuenta: Integer): string;
+  const AMapa: TFunc<string, string>; AComilla: Char; var ACuenta: Integer): string;
 var
   Partes: TArray<string>;
   Cambiado: Boolean;
@@ -3116,7 +3112,7 @@ begin
     var R := RutaReapuntada(XmlUnescape(Partes[I]), ABaseVieja, AFichero, AMapa);
     if R <> '' then
     begin
-      Partes[I] := XmlEscape(R);
+      Partes[I] := XmlEscapeEn(R, AComilla);
       Cambiado := True;
       Inc(ACuenta);
     end;
@@ -3125,33 +3121,76 @@ begin
     Result := string.Join(';', Partes);
 end;
 
-{ EL esqueleto de las reescrituras de XML de la mudanza: en AFichero, el
-  grupo 1 de cada patron es una lista escrita de rutas relativas a AFichero,
-  y se re-apuntan las que cruzan el borde; se guarda UNA vez. Era el mismo
-  bucle en el .dproj y en el grupo (revision 26-sep-2026). Devuelve cuantas
-  rutas cambio. }
-function ReapuntaPatrones(const AFichero, ABaseVieja: string;
-  const APatrones: TArray<string>; const AMapa: TFunc<string, string>): Integer;
+type
+  { Un sitio de un fichero de proyecto que lleva rutas relativas a el: el
+    valor de una etiqueta (Atributo = '') o uno de sus atributos; Extension,
+    si no es '', deja solo las que acaban asi; EnExists, las de los
+    Exists('...') del atributo (una Condition, por RutasDeExists). }
+  TSitioDeRutas = record
+    Etiqueta, Atributo, Extension: string;
+    EnExists: Boolean;
+  end;
+
+function Sitio(const AEtiqueta: string; const AAtributo: string = '';
+  const AExtension: string = ''; AEnExists: Boolean = False): TSitioDeRutas;
+begin
+  Result.Etiqueta := AEtiqueta;
+  Result.Atributo := AAtributo;
+  Result.Extension := AExtension;
+  Result.EnExists := AEnExists;
+end;
+
+{ EL esqueleto de las reescrituras de XML de la mudanza: en AFichero, cada
+  sitio es una lista escrita de rutas relativas a AFichero, y se re-apuntan
+  las que cruzan el borde, en su sitio; se guarda UNA vez. Era el mismo bucle
+  en el .dproj y en el grupo (revision 26-sep-2026), sobre quince regex que
+  pedian el atributo el primero y entre comillas dobles, y veian lo que hay
+  en un comentario; ahora por EL analisis (TramosDeEtiqueta,
+  AtributosDeTramo). Devuelve cuantas rutas cambio. }
+function ReapuntaSitios(const AFichero, ABaseVieja: string;
+  const ASitios: TArray<TSitioDeRutas>; const AMapa: TFunc<string, string>): Integer;
 var
   Enc, Texto: string;
   Cambios: TArray<TCambioTexto>;
+  Cuenta: Integer;
+
+  procedure Reapunta(AIni, AFin: Integer; const AExtension: string; AComilla: Char);
+  begin
+    var Escrito := Copy(Texto, AIni, AFin - AIni);
+    // un valor con un CDATA o un comentario dentro no se sabe reescribir
+    if Escrito.Contains('<') or
+       ((AExtension <> '') and not Escrito.Trim.ToLower.EndsWith(AExtension)) then
+      Exit;
+    var Nueva := ListaReapuntada(Escrito, ABaseVieja, AFichero, AMapa, AComilla, Cuenta);
+    if Nueva = '' then
+      Exit;
+    var C: TCambioTexto;
+    C.Inicio := AIni;
+    C.Largo := AFin - AIni;
+    C.Texto := Nueva;
+    Cambios := Cambios + [C];
+  end;
+
 begin
-  Result := 0;
+  Cuenta := 0;
   Texto := PatchLoadText(AFichero, Enc);
   Cambios := [];
-  for var Patron in APatrones do
-    for var M in TRegEx.Matches(Texto, Patron, [roIgnoreCase]) do
-    begin
-      var Nueva := ListaReapuntada(M.Groups[1].Value, ABaseVieja, AFichero, AMapa, Result);
-      if Nueva <> '' then
-      begin
-        var C: TCambioTexto;
-        C.Inicio := M.Groups[1].Index;
-        C.Largo := M.Groups[1].Length;
-        C.Texto := Nueva;
-        Cambios := Cambios + [C];
-      end;
-    end;
+  // el texto de busqueda UNA vez para todos los sitios: veinte veces era un
+  // 20% mas lenta que las regex de antes con una raiz grande (17-oct-2026)
+  var Low := TextoDeBusqueda(Texto);
+  for var S in ASitios do
+    for var T in TramosEnTexto(Texto, Low, S.Etiqueta, S.Atributo <> '') do
+      if S.Atributo = '' then
+        Reapunta(T.Ini, T.Fin, S.Extension, #0)
+      else
+        for var At in AtributosDeTramo(Texto, T) do
+          if SameText(At.Nombre, S.Atributo) then
+            if not S.EnExists then
+              Reapunta(At.Ini, At.Fin, S.Extension, Texto[At.Ini - 1])
+            else
+              for var E in RutasDeExists(Copy(Texto, At.Ini, At.Fin - At.Ini)) do
+                Reapunta(At.Ini + E.Ini - 1, At.Ini + E.Fin - 1, S.Extension, #0);
+  Result := Cuenta;
   if Result > 0 then
     PatchSaveText(AFichero, AplicaCambios(Texto, Cambios), Enc);
 end;
@@ -3161,18 +3200,18 @@ end;
   icono, el manifiesto, los .rc que compila, los ficheros que despliega y
   los .optset que importa (David, 26-sep-2026: que "sigue compilando" sea
   verdad tambien con recursos e iconos). }
-function PatronesDeDproj: TArray<string>;
+function SitiosDeDproj: TArray<TSitioDeRutas>;
 begin
   Result := [];
   for var E in TArray<string>.Create('DCC_UnitSearchPath', 'DCC_IncludePath',
     'DCC_ResourcePath', 'DCC_ObjPath', 'Icon_MainIcon', 'Manifest_File',
     'CfgDependentOn') do
-    Result := Result + ['<' + E + '(?:\s[^>]*)?>([^<]*)</' + E + '>'];
+    Result := Result + [Sitio(E)];
   for var E in BUILD_OUTPUT_TAGS do
-    Result := Result + ['<' + E + '(?:\s[^>]*)?>([^<]*)</' + E + '>'];
-  Result := Result + ['<RcCompile\s+Include="([^"]*)"', '<RcItem\s+Include="([^"]*)"',
-    '<DeployFile\s+LocalName="([^"]*)"', '<Import\s[^>]*?\bProject="([^"]*\.optset)"',
-    'Exists\(''([^'']*\.optset)''\)'];
+    Result := Result + [Sitio(E)];
+  Result := Result + [Sitio('RcCompile', 'Include'), Sitio('RcItem', 'Include'),
+    Sitio('DeployFile', 'LocalName'), Sitio('Import', 'Project', '.optset'),
+    Sitio('Import', 'Condition', '.optset', True)];
 end;
 
 function ReapuntaDirectivas(const AFichero, ABaseVieja: string;
@@ -3210,8 +3249,8 @@ end;
 function ReapuntaGrupo(const AGroup, ABaseVieja: string;
   const AMapa: TFunc<string, string>): Integer;
 begin
-  Result := ReapuntaPatrones(AGroup, ABaseVieja, ['<Projects\s+Include="([^"]*)"',
-    '<MSBuild\s+Projects="([^"]*)"', '<Dependencies>([^<]*)</Dependencies>'], AMapa);
+  Result := ReapuntaSitios(AGroup, ABaseVieja, [Sitio('Projects', 'Include'),
+    Sitio('MSBuild', 'Projects'), Sitio('Dependencies')], AMapa);
 end;
 
 { Las units que lista un proyecto y cuyo destino dice AMapa: por
@@ -3380,15 +3419,15 @@ var
       end;
     if Ext = '.dproj' then
       try
-        Anota(AFichero, ReapuntaPatrones(AFichero, ABase, PatronesDeDproj, AMapa), ARutas);
+        Anota(AFichero, ReapuntaSitios(AFichero, ABase, SitiosDeDproj, AMapa), ARutas);
       except
         on E: Exception do
           Falla(AFichero, E);
       end;
     if Ext = '.deployproj' then
       try
-        Anota(AFichero, ReapuntaPatrones(AFichero, ABase,
-          ['<DeployFile\s+Include="([^"]*)"'], AMapa), ARutas);
+        Anota(AFichero, ReapuntaSitios(AFichero, ABase,
+          [Sitio('DeployFile', 'Include')], AMapa), ARutas);
       except
         on E: Exception do
           Falla(AFichero, E);
@@ -3504,21 +3543,55 @@ end;
 function AnadeProyectoAGrupo(const AGroup, AProject: string): string;
 var
   Enc, Texto, NL, Proj, Incl, Nombre: string;
-  M: TMatch;
-  P: Integer;
+  P, Desde, Hasta: Integer;
+  T: TTramoXml;
+
+  { El <Target> que se llama ANombre: msbuild no distingue mayusculas en el
+    nombre de un target. Por EL analisis, como todo el grupo (eran diez regex,
+    con el Name el primero y entre comillas dobles). }
+  function TargetLlamado(const ANombre: string; out ATarget: TTramoXml): Boolean;
+  begin
+    for var X in TramosDeEtiqueta(Texto, 'Target', True) do
+      if SameText(AtributoDeTramo(Texto, X, 'Target', 'Name'), ANombre) then
+      begin
+        ATarget := X;
+        Exit(True);
+      end;
+    Result := False;
+  end;
+
+  { El Targets= del <CallTarget> de un agregado en la forma del IDE: el
+    CallTarget es lo primero que lleva. False si no la tiene. }
+  function ListaDeAgregado(const ATarget: TTramoXml; out AAtributo: TAtributoXml): Boolean;
+  begin
+    Result := False;
+    var Llamadas := TramosDentro(Texto, 'CallTarget', ATarget, True);
+    if (Length(Llamadas) = 0) or
+       (Copy(Texto, ATarget.Ini, Llamadas[0].Abre - ATarget.Ini).Trim <> '') then
+      Exit;
+    for var At in AtributosDeTramo(Texto, Llamadas[0]) do
+      if SameText(At.Nombre, 'Targets') then
+      begin
+        AAtributo := At;
+        Result := True;
+      end;
+  end;
 
   { Donde entra lo que el grupo no tiene: delante de su Import, o de su
     cierre, como lo pone el IDE. 0 si el fichero no tiene forma de grupo.
     Estaba escrito dos veces. }
   function AlFinal: Integer;
   var
-    MI: TMatch;
+    D, H: Integer;
   begin
-    MI := TRegEx.Match(Texto, '[ \t]*<Import\s');
-    if MI.Success then
-      Result := MI.Index
+    var Imports := TramosDeEtiqueta(Texto, 'Import', True);
+    if Length(Imports) > 0 then
+    begin
+      ConSuLinea(Texto, Imports[0].Abre, Imports[0].Cierra, D, H);
+      Result := D;
+    end
     else
-      Result := Pos('</Project>', Texto);
+      Result := CierreDelProyecto(Texto);
   end;
 
 begin
@@ -3533,28 +3606,24 @@ begin
   Nombre := TPath.GetFileNameWithoutExtension(Proj);
   // El IDE nombra los targets por el proyecto: dos con el mismo nombre en un
   // grupo no caben. Se dice, no se inventa un sufijo.
-  if TRegEx.IsMatch(Texto, '<Target\s+Name="' + TRegEx.Escape(XmlEscape(Nombre)) + '"', [roIgnoreCase]) then
+  if TargetLlamado(Nombre, T) then
     Exit(MsgFmt(SR_GRUPO_TARGET_DUP_FMT, [Nombre, TPath.GetFileName(AGroup)]));
   Incl := IncludeFor(AGroup, Proj);
   // 1. el item, detras del ultimo <Projects> (o en un ItemGroup nuevo)
   var Item := '        <Projects ' + XmlAtributo('Include', Incl) + '>' + NL +
     '            <Dependencies/>' + NL + '        </Projects>' + NL;
-  M := TRegEx.Match(Texto, '</Projects>[ \t]*\r?\n', [roIgnoreCase]);
-  var Ultimo := -1;
-  while M.Success do
+  var Items := TramosDeEtiqueta(Texto, 'Projects', True);
+  if Length(Items) > 0 then
   begin
-    Ultimo := M.Index + M.Length;
-    M := M.NextMatch;
-  end;
-  if Ultimo > 0 then
-    Insert(Item, Texto, Ultimo)
+    ConSuLinea(Texto, Items[High(Items)].Abre, Items[High(Items)].Cierra, Desde, Hasta);
+    Insert(Item, Texto, Hasta);
+  end
   else
   begin
-    P := Pos('</PropertyGroup>', Texto);
-    if P = 0 then
+    var Grupos := TramosDeEtiqueta(Texto, 'PropertyGroup');
+    if Length(Grupos) = 0 then
       Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup), MsgText(SF_GRUPO_SIN_SITIO_PROYECTO)]));
-    P := P + Length('</PropertyGroup>');
-    Insert(NL + '    <ItemGroup>' + NL + Item + '    </ItemGroup>', Texto, P);
+    Insert(NL + '    <ItemGroup>' + NL + Item + '    </ItemGroup>', Texto, Grupos[0].Cierra);
   end;
   // 2. sus tres targets, delante de Build (o de lo que cierra el grupo)
   var Targets := '';
@@ -3566,9 +3635,11 @@ begin
       Targets := Targets + ' ' + XmlAtributo('Targets', Suf.Substring(1));
     Targets := Targets + '/>' + NL + '    </Target>' + NL;
   end;
-  M := TRegEx.Match(Texto, '[ \t]*<Target\s+Name="Build"');
-  if M.Success then
-    P := M.Index
+  if TargetLlamado('Build', T) then
+  begin
+    ConSuLinea(Texto, T.Abre, T.Cierra, Desde, Hasta);
+    P := Desde;
+  end
   else
     P := AlFinal;
   if P = 0 then
@@ -3582,23 +3653,26 @@ begin
   for var Agregado in TArray<string>.Create('Build', 'Clean', 'Make') do
   begin
     var Suf := IfThen(Agregado = 'Build', '', ':' + Agregado);
-    M := TRegEx.Match(Texto, '(<Target\s+Name="' + Agregado + '"[^>]*>\s*<CallTarget\s+Targets=")([^"]*)(")');
-    if M.Success then
+    var Lista: TAtributoXml;
+    if TargetLlamado(Agregado, T) then
     begin
-      var Lista := M.Groups[2].Value;
-      if Lista <> '' then
-        Lista := Lista + ';';
-      Texto := Copy(Texto, 1, M.Groups[2].Index - 1) + Lista + XmlEscape(Nombre + Suf) +
-        Copy(Texto, M.Groups[2].Index + M.Groups[2].Length, MaxInt);
+      if ListaDeAgregado(T, Lista) then
+      begin
+        var Escrita := Copy(Texto, Lista.Ini, Lista.Fin - Lista.Ini);
+        if Escrita <> '' then
+          Escrita := Escrita + ';';
+        Texto := Copy(Texto, 1, Lista.Ini - 1) + Escrita +
+          XmlEscapeEn(Nombre + Suf, Texto[Lista.Ini - 1]) + Copy(Texto, Lista.Fin, MaxInt);
+      end
+      else
+        SinAgregado := SinAgregado + [Agregado];
     end
-    else if TRegEx.IsMatch(Texto, '<Target\s+Name="' + Agregado + '"') then
-      SinAgregado := SinAgregado + [Agregado]
     else
     begin
       P := AlFinal;
       if P = 0 then
         Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup), MsgText(SF_GRUPO_SIN_FINAL)]));
-      Insert('    <Target Name="' + Agregado + '">' + NL + '        <CallTarget ' +
+      Insert('    <Target ' + XmlAtributo('Name', Agregado) + '>' + NL + '        <CallTarget ' +
         XmlAtributo('Targets', Nombre + Suf) + '/>' + NL + '    </Target>' + NL, Texto, P);
     end;
   end;
@@ -3613,8 +3687,7 @@ var
   Enc, Texto, Proj: string;
   Nombres: TArray<string>;
   Cambios: TArray<TCambioTexto>;
-  M: TMatch;
-  NDeps: Integer;
+  NDeps, Desde, Hasta: Integer;
 
   { Lo que ya se borra entero (el item y los targets del proyecto) no se toca
     otra vez: dos cambios sobre el mismo trozo lo corromperian. }
@@ -3636,38 +3709,14 @@ var
     Cambios := Cambios + [C];
   end;
 
-begin
-  Proj := TPath.GetFullPath(DprojDe(AProject));
-  Texto := PatchLoadText(AGroup, Enc);
-  Cambios := [];
-  // 1. el item <Projects> (con su linea)
-  for M in TRegEx.Matches(Texto,
-    '[ \t]*<Projects\s+Include="([^"]*)"\s*(/>|>.*?</Projects>)[ \t]*\r?\n?', [roSingleLine]) do
-    if MismoProyecto(AGroup, XmlUnescape(M.Groups[1].Value), Proj) then
-      Cambia(M.Index, M.Length, '');
-  if Length(Cambios) = 0 then
-    Exit(MsgFmt(SN_GRUPO_NO_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
-  // 2. sus targets -los que construyen ESE proyecto, con o sin
-  //    DependsOnTargets: el IDE lo escribe en los que dependen de otro, y la
-  //    regex lo exigia sin nada-, y se apuntan sus nombres
-  Nombres := [];
-  for M in TRegEx.Matches(Texto,
-    '[ \t]*<Target\s+Name="([^"]*)"[^>]*>\s*<MSBuild\s+Projects="([^"]*)"[^>]*/>\s*</Target>[ \t]*\r?\n?') do
-    if MismoProyecto(AGroup, XmlUnescape(M.Groups[2].Value), Proj) then
-    begin
-      Cambia(M.Index, M.Length, '');
-      Nombres := Nombres + [XmlUnescape(M.Groups[1].Value)];
-    end;
-  // 3. esos nombres fuera de las listas de targets: los CallTarget de los
-  //    agregados y el DependsOnTargets de los que dependian de el (si se
-  //    queda, msbuild falla: el target no existe)
-  for M in TRegEx.Matches(Texto, '(\s+DependsOnTargets|<CallTarget\s+Targets)="([^"]*)"') do
+  { Los nombres de Nombres fuera de una lista de targets escrita (el
+    Targets= de un CallTarget, el DependsOnTargets de un Target); la de
+    dependencias que se queda vacia se va con su atributo. }
+  procedure QuitaNombres(const AAtributo: TAtributoXml; AEsDependencia: Boolean);
   begin
-    if Borrado(M.Index) then
-      Continue;
     var Quedan: TArray<string> := [];
     var Quitados := 0;
-    for var N in TrozosEscritos(M.Groups[2].Value) do
+    for var N in TrozosEscritos(Copy(Texto, AAtributo.Ini, AAtributo.Fin - AAtributo.Ini)) do
       if N.Trim = '' then
         Continue
       else if MatchText(XmlUnescape(N.Trim), Nombres) then
@@ -3675,21 +3724,75 @@ begin
       else
         Quedan := Quedan + [N.Trim];
     if Quitados = 0 then
-      Continue;
-    if (Length(Quedan) = 0) and not M.Groups[1].Value.Contains('CallTarget') then
-      Cambia(M.Index, M.Length, '') // sin dependencias: fuera el atributo entero
+      Exit;
+    if (Length(Quedan) = 0) and AEsDependencia then
+    begin
+      // sin dependencias: fuera el atributo entero, con el blanco de delante
+      var Ini := AAtributo.Abre;
+      while (Ini > 1) and CharInSet(Texto[Ini - 1], [' ', #9, #13, #10]) do
+        Dec(Ini);
+      Cambia(Ini, AAtributo.Fin + 1 - Ini, '');
+    end
     else
-      Cambia(M.Groups[2].Index, M.Groups[2].Length, string.Join(';', Quedan));
+      Cambia(AAtributo.Ini, AAtributo.Fin - AAtributo.Ini, string.Join(';', Quedan));
   end;
+
+begin
+  // por EL analisis del grupo (TramosDeEtiqueta, AtributosDeTramo): eran
+  // cuatro regex con el atributo el primero y entre comillas dobles
+  Proj := TPath.GetFullPath(DprojDe(AProject));
+  Texto := PatchLoadText(AGroup, Enc);
+  Cambios := [];
+  // 1. el item <Projects> (con su linea)
+  for var T in TramosDeEtiqueta(Texto, 'Projects', True) do
+    if MismoProyecto(AGroup, AtributoDeTramo(Texto, T, 'Projects', 'Include'), Proj) then
+    begin
+      ConSuLinea(Texto, T.Abre, T.Cierra, Desde, Hasta);
+      Cambia(Desde, Hasta - Desde, '');
+    end;
+  if Length(Cambios) = 0 then
+    Exit(MsgFmt(SN_GRUPO_NO_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
+  // 2. sus targets -los que construyen ESE proyecto: un <MSBuild> y nada
+  //    mas, con o sin DependsOnTargets (el IDE lo escribe en los que dependen
+  //    de otro, y la regex lo exigia sin nada)-, y se apuntan sus nombres
+  Nombres := [];
+  for var T in TramosDeEtiqueta(Texto, 'Target', True) do
+  begin
+    var Llamadas := TramosDentro(Texto, 'MSBuild', T, True);
+    if (Length(Llamadas) <> 1) or
+       (Copy(Texto, T.Ini, Llamadas[0].Abre - T.Ini).Trim <> '') or
+       (Copy(Texto, Llamadas[0].Cierra, T.Fin - Llamadas[0].Cierra).Trim <> '') then
+      Continue;
+    if MismoProyecto(AGroup, AtributoDeTramo(Texto, Llamadas[0], 'MSBuild', 'Projects'), Proj) then
+    begin
+      ConSuLinea(Texto, T.Abre, T.Cierra, Desde, Hasta);
+      Cambia(Desde, Hasta - Desde, '');
+      Nombres := Nombres + [AtributoDeTramo(Texto, T, 'Target', 'Name')];
+    end;
+  end;
+  // 3. esos nombres fuera de las listas de targets: los CallTarget de los
+  //    agregados y el DependsOnTargets de los que dependian de el (si se
+  //    queda, msbuild falla: el target no existe)
+  for var T in TramosDeEtiqueta(Texto, 'Target', True) do
+    if not Borrado(T.Abre) then
+      for var At in AtributosDeTramo(Texto, T) do
+        if SameText(At.Nombre, 'DependsOnTargets') then
+          QuitaNombres(At, True);
+  for var T in TramosDeEtiqueta(Texto, 'CallTarget', True) do
+    if not Borrado(T.Abre) then
+      for var At in AtributosDeTramo(Texto, T) do
+        if SameText(At.Nombre, 'Targets') then
+          QuitaNombres(At, False);
   // 4. y su ruta fuera de las <Dependencies> de los demas proyectos
   NDeps := 0;
-  for M in TRegEx.Matches(Texto, '<Dependencies>([^<]*)</Dependencies>') do
+  for var T in TramosDeEtiqueta(Texto, 'Dependencies') do
   begin
-    if Borrado(M.Index) then
+    var Escrito := Copy(Texto, T.Ini, T.Fin - T.Ini);
+    if Borrado(T.Abre) or Escrito.Contains('<') then
       Continue;
     var Quedan: TArray<string> := [];
     var Quitados := 0;
-    for var D in TrozosEscritos(M.Groups[1].Value) do
+    for var D in TrozosEscritos(Escrito) do
       if D.Trim = '' then
         Continue
       else if MismoProyecto(AGroup, XmlUnescape(D.Trim), Proj) then
@@ -3700,9 +3803,9 @@ begin
       Continue;
     Inc(NDeps, Quitados);
     if Length(Quedan) = 0 then
-      Cambia(M.Index, M.Length, '<Dependencies/>')
+      Cambia(T.Abre, T.Cierra - T.Abre, '<Dependencies/>')
     else
-      Cambia(M.Groups[1].Index, M.Groups[1].Length, string.Join(';', Quedan));
+      Cambia(T.Ini, T.Fin - T.Ini, string.Join(';', Quedan));
   end;
   PatchSaveText(AGroup, AplicaCambios(Texto, Cambios), Enc);
   Result := MsgFmt(SN_GRUPO_QUITADO_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup),
