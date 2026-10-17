@@ -95,7 +95,12 @@ open(os.path.join(PRJ, 'UMain.fmx'), 'w', encoding='utf-8').write(
     "  object Label1: TLabel\n    StyleLookup = 'labelinventado'\n  end\n"
     # un lookup con un #N (2.2 de la 1.18.0: la regex leia 'card' y lo daba
     # por estilo que falta): es cardstyle, que existe
-    "  object Panel2: TPanel\n    StyleLookup = 'card'#115'tyle'\n  end\nend\n")
+    "  object Panel2: TPanel\n    StyleLookup = 'card'#115'tyle'\n  end\n"
+    # 1.20.1: un contenedor con el StyleName de un estilo (la confusion con
+    # StyleLookup, medida con Hermes) y otro con un StyleName que no es de
+    # ningun estilo (el control: ese no se nombra)
+    "  object Layout1: TLayout\n    StyleName = 'cardstyle'\n  end\n"
+    "  object Layout2: TLayout\n    StyleName = 'minombre'\n  end\nend\n")
 open(os.path.join(PRJ, 'UMain.pas'), 'w', encoding='utf-8').write(
     "unit UMain;\ninterface\nimplementation\n// NOTA: no usar Lbl.StyleLookup := 'comentado1' aqui\n{ ni StyleLookup := 'comentado2' }\n(* StyleLookup := 'comentado3' *)\nprocedure X;\nbegin\n  Btn.StyleLookup := 'formheader';\n  Lbl.StyleLookup := 'otroinventado'; // StyleLookup := 'comentado4'\n  Pnl.StyleLookup := 'form' + 'header';\nend;\nend.\n")
 # a binary style (signature only) to test the refusal
@@ -289,6 +294,11 @@ check('lint: buttonstyle es estandar (estilo por defecto de la plataforma)', d['
 check('lint: token ausente en un tema', len(d['tokensMissing']) == 1 and d['tokensMissing'][0]['theme'] == 'oscuro' and d['tokensMissing'][0]['token'] == 'accent', d['tokensMissing'])
 check('lint: .rc con fichero ausente', len(d['rcMissingFiles']) == 1 and d['rcMissingFiles'][0]['missing'] == 'NoExiste.bin.style', d['rcMissingFiles'])
 check('lint: clean=false (era ok, el nombre de "la llamada fue bien")', d['clean'] is False, d.get('clean'))
+nombrados = sorted(x['styleName'] for x in mc.aciertos(d, 'componentsNamedLikeAStyle'))
+check('lint: un componente con el StyleName de un estilo, aparte y con su nota (STYLE-049); '
+      'uno con un StyleName que no es de ningun estilo, no (1.20.1)',
+      nombrados == ['cardstyle'] and mc.es(d.get('componentsNamedLikeAStyleNote', ''), 'SN_STYLES_STYLENAME_DE_UN_ESTILO'),
+      (nombrados, out[:400]))
 check('lint: rutas enmascaradas', 'srv' in d['stylesDir'] and ':' in d['stylesDir'], d['stylesDir'])
 
 # ---- build ----

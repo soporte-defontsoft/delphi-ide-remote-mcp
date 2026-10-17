@@ -3610,6 +3610,17 @@ const
     'files - two themes - sharing names is how themes work). ' +
     'lookupsStandard are names the platform default style provides.';
 
+  { Un componente de un form con el StyleName de uno de estos estilos: la
+    confusion StyleName/StyleLookup (1.20.1, medida con Hermes: tres
+    contenedores con el StyleName de un estilo, ninguno vestido). Es una
+    pista, no un error seguro: por eso va aparte y no cambia clean. }
+  SN_STYLES_STYLENAME_DE_UN_ESTILO =
+    '[STYLE-049] componentsNamedLikeAStyle: components of a form whose ' +
+    'StyleName is the name of one of these styles. StyleName names the ' +
+    'component itself as a style resource; it does not dress it - a ' +
+    'control takes a style by StyleLookup (delphi_designer prop says ' +
+    'whether its class publishes one). Leave it only if that name is meant.';
+
   SN_STYLES_NO_DEFAULTS =
     '[STYLE-017] The platform default style names could not be extracted ' +
     '(converter missing): standard lookups such as buttonstyle may ' +

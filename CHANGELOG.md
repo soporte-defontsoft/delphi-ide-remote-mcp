@@ -75,6 +75,16 @@ the MCP `initialize` response (`serverInfo.version`).
   `ready (SDK present)` when it is there, and `profiles` lists each SDK
   with its date.
 
+### Added
+
+- **`delphi_styles lint` names a component whose `StyleName` is the name
+  of one of the styles** (`componentsNamedLikeAStyle`, `STYLE-049`).
+  `StyleName` names the component itself as a style resource; it does not
+  dress it - a control takes a style by `StyleLookup`. Measured with
+  Hermes: three containers got the `StyleName` of a style and none was
+  dressed, while `set` and `lint` said nothing. It is a hint, apart from
+  the findings: it does not change `clean`.
+
 ## [1.20.0] - 2026-10-16
 
 What an agent reads back, measured with Hermes on Delphi 13.2 with two

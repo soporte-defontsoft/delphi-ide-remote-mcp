@@ -350,7 +350,7 @@ var
   Names, Defaults: TDictionary<string, string>;
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc, SinNombre: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo: TJSONArray;
   M: TMatch;
   Lines: TArray<string>;
   I: Integer;
@@ -391,6 +391,7 @@ begin
   Tokens := TJSONArray.Create;
   Rc := TJSONArray.Create;
   SinNombre := TJSONArray.Create;
+  ComoEstilo := TJSONArray.Create;
   try
     // 1) style names per file + duplicates
     for F in Files do
@@ -473,8 +474,21 @@ begin
           else
           begin
             var Prop, Valor: string;
-            if not (LineaDePropiedad(Lines[I], Prop, Valor) and SameText(Prop, 'StyleLookup') and
-                    LeeLiteralDeForm(Valor, Lookup)) then
+            if not LineaDePropiedad(Lines[I], Prop, Valor) then
+              Continue;
+            // un componente con el StyleName de uno de estos estilos: la
+            // confusion con StyleLookup (1.20.1), una pista aparte
+            if SameText(Prop, 'StyleName') and LeeLiteralDeForm(Valor, Lookup) and
+               Names.ContainsKey(ClaveDeEstilo(Lookup)) then
+            begin
+              Issue := TJSONObject.Create;
+              Issue.AddPair('styleName', Lookup);
+              Issue.AddPair('path', F);
+              Issue.AddPair('line', TJSONNumber.Create(I + 1));
+              ComoEstilo.AddElement(Issue);
+              Continue;
+            end;
+            if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then
               Continue;
           end;
           Inc(Used);
@@ -566,6 +580,14 @@ begin
     Ret.AddPair('withoutStyleName', SinNombre);
     if SinNombre.Count > 0 then
       Ret.AddPair('withoutStyleNameNote', MsgText(SN_STYLES_SIN_STYLENAME));
+    // una pista, no un error seguro: sale solo si hay, y no cambia clean
+    if ComoEstilo.Count > 0 then
+    begin
+      Ret.AddPair('componentsNamedLikeAStyle', ComoEstilo);
+      Ret.AddPair('componentsNamedLikeAStyleNote', MsgText(SN_STYLES_STYLENAME_DE_UN_ESTILO));
+    end
+    else
+      ComoEstilo.Free;
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0)));
@@ -576,6 +598,8 @@ begin
     // por carpeta y fichero, y DESPUES de 'clean': el par libera la lista
     // plana (Missing) al quedarse la agrupada
     AgrupaPorFichero(Ret, 'lookupsWithoutStyle');
+    if Ret.GetValue('componentsNamedLikeAStyle') <> nil then
+      AgrupaPorFichero(Ret, 'componentsNamedLikeAStyle');
     Result := Ret.ToJSON;
   finally
     Ret.Free; // owns Dups/Missing/Tokens/Rc once added
