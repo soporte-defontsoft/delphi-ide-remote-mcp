@@ -8,6 +8,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.20.1] - 2026-10-17
+
+What Hermes (Qwen3.8 Flash Next) found in the targeted rounds of 1.20.0 and of these fixes,
+each fix checked again with three rounds on Delphi 13.2 before
+publishing. `delphi_config` reads and edits a `.dproj` with one parse -
+the one the build uses -, checked against MSXML: `set-output` sets every
+group, `set-version` works on a project the IDE made and takes
+`include=true` for the IDE's "Include version information", and a
+project `delphi_create` makes is born with the version information the
+IDE writes. `delphi_styles` asks FMX itself what it would ignore when it
+loads a style: `set` does not write it, `lint` and `build` name it.
+`delphi_designer preview state=` follows a dotted path, `prop` says what
+an integer with named constants takes, `removeuses` takes a library unit
+out of a `.dpr`, and several answers now say what happened instead of
+something else: the elements of a set, the style a form carries, the file
+of an inline image, why a unit has no boundary for `insert`, and
+`delphi_config` for a `.dproj` given to the edit tools.
+
 ### Fixed
 
 - **`delphi_designer preview state=` follows a dotted path, as `prop` and
@@ -40,7 +58,7 @@ the MCP `initialize` response (`serverInfo.version`).
   TFontStyles` and nothing more, so an agent had to know `fsUnderline`;
   it now ends with `valid: fsBold, fsItalic, fsUnderline, fsStrikeOut`,
   for a set of the framework and for one a class of yours publishes.
-  Measured with Hermes (Flash) replicating a form from an image.
+  Measured with Hermes (Qwen3.8 Flash Next) replicating a form from an image.
 - **`delphi_build target=Deploy` answers `"target": "Deploy"`.** It
   answered `"Build;Deploy"` - the targets the server hands msbuild, since a
   Deploy always builds first - and that value is refused as input
@@ -103,19 +121,21 @@ the MCP `initialize` response (`serverInfo.version`).
   `VerInfo_Keys`, as the IDE leaves them. `CFG-003` says what is missing,
   and the answer says when the project does not include the version in its
   binaries (no `VerInfo_IncludeVerInfo`), instead of reporting a version
-  the binary does not carry. Found by Hermes (Flash) in the targeted test
+  the binary does not carry. Found by Hermes (Qwen3.8 Flash Next) in the targeted test
   of 1.20.1; a battery builds the IDE's own templates and reads the version
   of the binary. And `include=true` makes the binaries carry it: it writes
   `VerInfo_IncludeVerInfo=true` in each group that holds the version keys,
   what the IDE's "Include version information" checkbox writes. No tool
   could check that box, so on a console - born unchecked, as the IDE makes
-  it - an agent could set the version and never get it into the exe (Hermes,
-  the three rounds of the targeted test that checked these fixes).
+  it - an agent could set the version and never get it into the exe. Found
+  by Hermes (Qwen3.8 Flash Next) in the three rounds of the targeted test
+  that checked these fixes.
 - **A `.dproj` in `delphi_edit` or `delphi_textedit` points to
   `delphi_config`.** The two refusals sent the agent to each other -
   `EDIT-032` to `delphi_textedit`, `TEXT-001` to "the IDE / delphi_create" -
   and neither named the tool that edits a project. Both now answer the same
-  `EDIT-128`, which says what `delphi_config` edits (Hermes, targeted test).
+  `EDIT-128`, which says what `delphi_config` edits. Found by Hermes
+  (Qwen3.8 Flash Next) in the targeted test.
 - **A project `delphi_create` makes is born with the version information
   the IDE writes.** Its `.dproj` had none - no `VerInfo_Keys`, no
   `VerInfo_IncludeVerInfo` -, so its binary carried no version and
@@ -137,7 +157,7 @@ the MCP `initialize` response (`serverInfo.version`).
   (`Error reading TLayout.Fill.Color: Property Fill.Color does not exist`):
   `set` refuses a change FMX would ignore (`STYLE-050`, nothing written),
   and `lint` (`ignoredByFmx`, no longer `clean`) and `build` (`ignored` per
-  file) name what is already there (`STYLE-051`). Found by Hermes (Flash) in
+  file) name what is already there (`STYLE-051`). Found by Hermes (Qwen3.8 Flash Next) in
   the full test of 1.20.1, who read the binary by hand.
 - **`delphi_edit insert` says why a unit has no boundary.** `EDIT-049` blamed
   only "a unit without an implementation section"; a unit that does not read

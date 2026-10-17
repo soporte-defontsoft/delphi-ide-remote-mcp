@@ -193,7 +193,11 @@ handshake.
   shows one, `set style=cardstyle child=background prop=Fill.Color
   value=xFF112233` changes one property (value exactly as the file writes
   it), `clone style=cardstyle name=cardstyle_alt` adds a variant and
-  `delete style=cardstyle_alt` removes one. The way back is the
+  `delete style=cardstyle_alt` removes one. `set` refuses a change FMX
+  would ignore when it loads the style (`STYLE-050`: a property the class
+  does not publish, a value it cannot read - `delphi_designer command=prop`
+  says what the class publishes), and `lint`/`build` list what FMX ignores
+  in a file already written (`ignoredByFmx`). The way back is the
   `__delphi-patch\<day>\` copy, which is the file BEFORE ITS FIRST CHANGE
   TODAY: putting it back (`delphi_delete` the file, then `delphi_move` the
   copy to its name - `delphi_move` never overwrites) undoes the day's other
@@ -291,7 +295,11 @@ in frame. Do the gesture you came for and nothing else.
   project: `form-vcl`/`form-fmx`, `frame-vcl`/`frame-fmx`, `datamodule`
   and `unit` (a plain .pas). Everything compiles at birth and is already
   registered in the `.dpr` and the `.dproj`. Then `delphi_config
-  command=add-platform` for extra targets.
+  command=add-platform` for extra targets. A new project carries the
+  version information the IDE writes: `delphi_config command=set-version
+  version=1.2.3` keeps the numbers and the keys together, and
+  `include=true` makes the binaries carry it (a console is born, as in the
+  IDE, without it - the answer says so).
 - **The folder layout is yours**: inside a project, `dir=` is a SUBFOLDER
   of the project (relative, as deep as you like - no drive, no `..`); the
   unit is born there and registered with its relative path. Moving or
@@ -458,4 +466,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.20.0 -->
+<!-- contract reviewed: v1.20.1 -->
