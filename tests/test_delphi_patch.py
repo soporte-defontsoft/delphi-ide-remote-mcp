@@ -540,7 +540,10 @@ check('removeuses: la clausula vacia se va entera y lo dice',
 out = call('delphi_edit', {"path": ADDU, "removeuses": "X", "section": "interface"})
 check('removeuses: seccion sin uses lo dice', mc.es(out, 'SN_REMOVEUSES_NO_CLAUSE_FMT'), out[:200])
 out = call('delphi_edit', {"path": DPRX, "removeuses": "X"})
-check('removeuses: en un .dpr remite a remove-unit', mc.rechazado(out) and mc.es(out, 'SR_REMOVEUSES_NOT_PAS_FMT') and 'remove-unit' in out, out[:200])
+# 1.20.1 (D8): removeuses en un .dpr ya no remite a remove-unit - entra al uses del
+# programa, como adduses (test_auditoria_1201 mide el resto, .dpk incluido)
+check('removeuses: en un .dpr entra al uses del programa; X no esta: USES-017',
+      mc.abre(out, 'SN_REMOVEUSES_ABSENT_FMT') and 'program uses' in out, out[:200])
 # un // detras de la coma es de la entrada de ANTES: quitar la ULTIMA no mete el
 # ; en el comentario (medido 27-sep: la clausula quedaba sin cerrar), y quitar una
 # del medio no baja el comentario a una linea suya

@@ -43,6 +43,11 @@ type
     [Test] procedure ElGrupoPorSuCondicionSinMirarBlancos;
     [Test] procedure QuitaConSuLineaSoloSiEstaSola;
     [Test] procedure PlatformPropertyComoMsbuild;
+    [Test] procedure ElGrupoDeDespliegueDeLasDosFormas;
+    [Test] procedure LosGruposVaciosSoloSiSePiden;
+    [Test] procedure ElIncludeEnCualquierOrden;
+    [Test] procedure LasCuatroFormasDeLaCondicion;
+    [Test] procedure LaCondicionDelElementoYElVacioCuentan;
   end;
 
 implementation
@@ -260,14 +265,99 @@ const
   XML = '<Project>' +
     '<PropertyGroup Condition="''$(Cfg_2)''!=''''"><PlatformSDK>de-config</PlatformSDK></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Base)''!=''''"><PlatformSDK>de-base</PlatformSDK></PropertyGroup>' +
-    '<PropertyGroup Condition="''$(Base_Linux64)''!=''''"><PlatformSDK Condition="''$(X)''==''''">suya</PlatformSDK></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base_Linux64)''!=''''"><PlatformSDK Label="x">suya</PlatformSDK></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base_OSX64)''!=''''"><PlatformSDK Condition="''$(X)''==''''">rara</PlatformSDK></PropertyGroup>' +
     '</Project>';
 begin
-  // la del grupo de la plataforma, aunque la etiqueta lleve atributos
+  // la del grupo de la plataforma, aunque la etiqueta lleve atributos (Label)
   Assert.AreEqual('suya', PlatformProperty(XML, 'Linux64', 'PlatformSDK'));
+  // una Condition del elemento que no es de plataforma/config no se da por
+  // aplicada: OSX64 se queda con la base
+  Assert.AreEqual('de-base', PlatformProperty(XML, 'OSX64', 'PlatformSDK'), 'condicion desconocida');
   // otra plataforma hereda la base; la de una CONFIG no es la base (el
   // lector propio la tomaba por reserva por ir primero)
-  Assert.AreEqual('de-base', PlatformProperty(XML, 'OSX64', 'PlatformSDK'));
+  Assert.AreEqual('de-base', PlatformProperty(XML, 'Win64', 'PlatformSDK'));
+end;
+
+procedure TXmlTextoTests.ElGrupoDeDespliegueDeLasDosFormas;
+begin
+  // la que escribe el IDE y la que escribe el manifiesto del servidor
+  Assert.AreEqual('Linux64', PlataformaDeGrupoDeDespliegue(DeployGroupCondition('Linux64')));
+  Assert.AreEqual('Win64x', PlataformaDeGrupoDeDespliegue(DeployGroupCondition('Win64x', 'Debug')),
+    'Win64x no es Win64');
+  Assert.AreEqual('Android64', PlataformaDeGrupoDeDespliegue('''$(Platform)'' == ''ANDROID64'''),
+    'blancos y mayusculas; Android64 no es Android');
+  Assert.AreEqual('''$(Platform)''==''OSX64'' And ''$(Config)''==''Release''',
+    DeployGroupCondition('OSX64', 'Release'), 'la que escribia a mano el generador');
+  Assert.AreEqual('', PlataformaDeGrupoDeDespliegue('''$(Config)''==''Debug'''), 'sin plataforma');
+  // una que ya no esta entre las conocidas (un .deployproj del IDE de los
+  // Samples lleva OSX32): tal cual esta escrita, no fuera
+  Assert.AreEqual('OSX32', PlataformaDeGrupoDeDespliegue('''$(Platform)''==''OSX32'''), 'OSX32');
+  Assert.AreEqual('OSX32', PlataformaDeGrupo('''$(Base_OSX32)''!=''''', False), 'el grupo de valores de OSX32');
+  Assert.AreEqual('', PlataformaDeGrupoDeDespliegue('''$(Platform)''==''Linux64'' or ''$(X)''=='''''),
+    'otra forma de Condition no es la de un grupo de despliegue');
+end;
+
+procedure TXmlTextoTests.LosGruposVaciosSoloSiSePiden;
+const
+  XML = '<P><ItemGroup Condition="''$(Platform)''==''Linux64''"/>' +
+    '<ItemGroup Condition="''$(Platform)''==''OSX64''"><DeployFile Include="a"/></ItemGroup></P>';
+var
+  G: TArray<TGrupoXml>;
+begin
+  G := GruposDe(XML, 'ItemGroup');
+  Assert.IsTrue((Length(G) = 1) and not G[0].Vacio, 'sin pedirlos, solo el que tiene contenido');
+  G := GruposDe(XML, 'ItemGroup', True);
+  Assert.IsTrue((Length(G) = 2) and G[0].Vacio, 'pidiendolos, el vacio tambien');
+  Assert.AreEqual('Linux64', PlataformaDeGrupoDeDespliegue(G[0].Condicion));
+  Assert.AreEqual('<ItemGroup Condition="''$(Platform)''==''Linux64''"/>',
+    Copy(XML, G[0].Abre, G[0].Cierra - G[0].Abre), 'el elemento entero');
+  Assert.IsTrue(Length(TramosEnGrupo(XML, 'DeployFile', G[1])) = 0, 'un <DeployFile/> no tiene valor');
+  Assert.IsTrue(Length(TramosEnGrupo(XML, 'DeployFile', G[1], True)) = 1, '...pero esta');
+end;
+
+procedure TXmlTextoTests.ElIncludeEnCualquierOrden;
+const
+  XML = '<DeployFile Condition=''x'' Include=''lib&amp;uno.so''><RemoteDir>P\</RemoteDir></DeployFile>';
+var
+  T: TArray<TTramoXml>;
+begin
+  T := TramosDeEtiqueta(XML, 'DeployFile');
+  Assert.IsTrue(Length(T) = 1);
+  Assert.AreEqual('lib&uno.so', AtributoDeTramo(XML, T[0], 'DeployFile', 'Include'),
+    'detras de otro atributo, con comillas simples, desescapado');
+  Assert.AreEqual('', AtributoDeTramo(XML, T[0], 'DeployFile', 'LocalName'), 'el que no lleva');
+end;
+
+procedure TXmlTextoTests.LasCuatroFormasDeLaCondicion;
+var
+  X, C: string;
+begin
+  Assert.IsTrue(CondicionDePlataformaYConfig('''$(Platform)''==''Win32''', X, C) and (X = 'Win32') and (C = ''));
+  Assert.IsTrue(CondicionDePlataformaYConfig('''$(Config)''==''Debug''', X, C) and (X = '') and (C = 'Debug'));
+  Assert.IsTrue(CondicionDePlataformaYConfig(DeployGroupCondition('Linux64', 'Release'), X, C) and
+    (X = 'Linux64') and (C = 'Release'), 'la del manifiesto del servidor');
+  // como la escribe el IDE en un grupo de eventos (TetherDatabase de los Samples)
+  Assert.IsTrue(CondicionDePlataformaYConfig('''$(Config)''==''Debug'' And ''$(Platform)''==''Win32''', X, C) and
+    (X = 'Win32') and (C = 'Debug'), 'config delante');
+  Assert.IsFalse(CondicionDePlataformaYConfig('''$(Platform)''==''Win32'' or ''$(X)''==''''', X, C), 'otra forma');
+  Assert.IsFalse(CondicionDePlataformaYConfig('Exists(''a.optset'')', X, C), 'una funcion');
+  Assert.IsTrue((X = '') and (C = ''), 'sin forma, nada leido');
+end;
+
+procedure TXmlTextoTests.LaCondicionDelElementoYElVacioCuentan;
+const
+  // la forma de 5 Samples del IDE (ExploreDevicesLE, Notifications...): el
+  // perfil de Win32 con SU condicion en el grupo sin condicion
+  XML = '<Project><PropertyGroup>' +
+    '<Profile Condition="''$(Platform)''==''Win32''">win_desktop</Profile>' +
+    '<PlatformSDK>de-base</PlatformSDK></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base_Linux64)''!=''''"><PlatformSDK/></PropertyGroup></Project>';
+begin
+  Assert.AreEqual('win_desktop', PlatformProperty(XML, 'Win32', 'Profile'), 'en Win32 si');
+  Assert.AreEqual('', PlatformProperty(XML, 'OSX64', 'Profile'), 'en OSX64 no: la condicion es del elemento');
+  Assert.AreEqual('de-base', PlatformProperty(XML, 'OSX64', 'PlatformSDK'), 'OSX64 hereda la base');
+  Assert.AreEqual('', PlatformProperty(XML, 'Linux64', 'PlatformSDK'), 'un <PlatformSDK/> la deja vacia, como msbuild');
 end;
 
 procedure CompruebaImport(const AForma: string;

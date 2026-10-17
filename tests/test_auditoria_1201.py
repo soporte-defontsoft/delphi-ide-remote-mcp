@@ -217,4 +217,79 @@ check('D3a set-sdk none con dos PlatformSDK: CFG-011 y "before" es la que valia 
       mc.abre(r, 'SN_CONFIG_SDK_QUITADO_FMT') and 'viejo2.sdk' in r, r[:300])
 check('D3a ...y no queda NINGUNA en el .dproj', 'PlatformSDK' not in x, x[x.find('Base_Linux64'):][:300])
 
-mc.fin('auditoria 1.20.1 (D4 set-output y el analisis del .dproj, D8 removeuses en .dpr, D3)')
+# ---- D4 f. el .deployproj por el mismo analisis ----
+# La vista, remove-deployfile y add-deployfile leian cada DeployFile con una
+# regex que pedia el Include PRIMERO y entre comillas dobles, y su plataforma
+# por "el ultimo <itemgroup antes": una entrada con la Condition delante no
+# existia, y un <DeployFile .../> vacio se comia la entrada siguiente.
+P8 = proyecto('DepD4f')
+DEP8 = P8[:-len('.dproj')] + '.deployproj'
+DIR8 = os.path.dirname(P8)
+open(DEP8, 'w', encoding='utf-8', newline='\r\n').write(
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+    '    <ItemGroup Condition="\'$(Platform)\'==\'Linux64\'">\n'
+    '        <DeployFile Condition="\'$(Config)\'==\'Debug\'" Include="libuno.so">\n'
+    '            <RemoteDir>P\\</RemoteDir>\n'
+    '        </DeployFile>\n'
+    '        <DeployFile Include="vacio.dat"/>\n'
+    '        <DeployFile Include="libdos.so" Condition="\'$(Config)\'==\'Debug\'">\n'
+    '            <RemoteDir>Q\\</RemoteDir>\n'
+    '        </DeployFile>\n'
+    '    </ItemGroup>\n'
+    '    <ItemGroup Condition="\'$(Platform)\'==\'OSX64\' And \'$(Config)\'==\'Release\'">\n'
+    '        <DeployFile Include="OSX64\\Release\\DepD4f">\n'
+    '            <RemoteDir>DepD4f\\</RemoteDir>\n'
+    '        </DeployFile>\n'
+    '    </ItemGroup>\n'
+    '    <ItemGroup Condition="\'$(Platform)\'==\'OSX32\'">\n'
+    '        <DeployFile Condition="\'$(Config)\'==\'Debug\'" Include="OSX32\\Debug\\DepD4f.icns">\n'
+    '            <RemoteDir>DepD4f.app\\Contents\\Resources\\</RemoteDir>\n'
+    '        </DeployFile>\n'
+    '    </ItemGroup>\n'
+    '</Project>\n')
+r = S.call('delphi_config', {'project': P8, 'command': 'view', 'section': 'deploy'})
+vista = mc.como_json(r).get('deployFiles') or {}
+check('D4f la vista ve las tres entradas de Linux64: la de la Condition delante y la vacia, cada una con lo suyo',
+      sorted(vista.get('Linux64', [])) == sorted(['libuno.so -> P\\', 'vacio.dat -> ', 'libdos.so -> Q\\']),
+      vista)
+check('D4f ...y el grupo con la forma del manifiesto del servidor (plataforma And config) es de OSX64',
+      vista.get('OSX64') == ['OSX64\\Release\\DepD4f -> DepD4f\\'], vista)
+# como RegExpressionDemo.deployproj de los Samples (escrito por el IDE): OSX32,
+# que ya no es una plataforma conocida, y la Condition delante del Include
+check('D4f ...y el de OSX32, una plataforma que ya no esta entre las conocidas, con lo suyo',
+      vista.get('OSX32') == ['OSX32\\Debug\\DepD4f.icns -> DepD4f.app\\Contents\\Resources\\'], vista)
+r = S.call('delphi_config', {'project': P8, 'command': 'remove-deployfile', 'platform': 'Linux64',
+                             'path': os.path.join(DIR8, 'vacio.dat')})
+x = mc.lee(DEP8)
+check('D4f remove-deployfile de la vacia: se va SOLO ella',
+      mc.abre(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and 'vacio.dat' not in x and 'libdos.so' in x
+      and 'libuno.so' in x, r[:200] + ' | ' + x[:600])
+r = S.call('delphi_config', {'project': P8, 'command': 'remove-deployfile', 'platform': 'Linux64',
+                             'path': os.path.join(DIR8, 'libuno.so')})
+x = mc.lee(DEP8)
+check('D4f remove-deployfile encuentra la de la Condition delante',
+      mc.abre(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and 'libuno.so' not in x, r[:200])
+r = S.call('delphi_config', {'project': P8, 'command': 'remove-deployfile', 'platform': 'Linux64',
+                             'path': os.path.join(DIR8, 'libdos.so')})
+x = mc.lee(DEP8)
+check('D4f quitada la ultima de Linux64, su ItemGroup se va; el de OSX64 se queda',
+      mc.abre(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and "'Linux64'" not in x and 'OSX64\\Release\\DepD4f' in x, x)
+
+# ---- D4 g. la Condition del ELEMENTO cuenta (5 Samples del IDE la escriben) ----
+# <Profile Condition="'$(Platform)'=='Win32'"> en el grupo sin condicion: msbuild
+# solo lo aplica en Win32. Medido con el juez (MSXML) el 17-oct: el lector que
+# leia ya las etiquetas con atributos se lo daba a OSX64 e iOS.
+P9 = proyecto('PerfilD4g')
+reescribe(P9, lambda x: x.replace(
+    '        <ProjectVersion>',
+    '        <Profile Condition="\'$(Platform)\'==\'Win32\'">win_desktop</Profile>\r\n        <ProjectVersion>', 1))
+r = S.call('delphi_config', {'project': P9, 'command': 'add-platform', 'platform': 'OSX64'})
+check('D4g OSX64 declarada (la vista solo ensena las declaradas)', not mc.rechazado(r), r[:200])
+r = S.call('delphi_config', {'project': P9, 'command': 'view', 'section': 'platforms'})
+plats = {p.get('name'): p for p in (mc.como_json(r).get('platforms') or [])}
+check('D4g el perfil con la condicion de Win32 NO es el de OSX64',
+      'OSX64' in plats and plats['OSX64'].get('profile') == '' and plats['OSX64'].get('profileSource') == 'none',
+      plats.get('OSX64'))
+
+mc.fin('auditoria 1.20.1 (D4 set-output y el analisis del .dproj y .deployproj, D8 removeuses en .dpr, D3)')

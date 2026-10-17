@@ -1016,38 +1016,23 @@ begin
 end;
 
 function FindDeployEntries(const AXml, APlatform, AFile, ABaseDir: string): TArray<TPair<Integer, Integer>>;
-var
-  M: TMatch;
-  L: TList<TPair<Integer, Integer>>;
-  GroupStart: Integer;
-  Low, Cond: string;
 begin
-  L := TList<TPair<Integer, Integer>>.Create;
-  try
-    Low := LowerCase(AXml);
-    for M in TRegEx.Matches(AXml, '<DeployFile\s+Include="([^"]*)"[^>]*>.*?</DeployFile>',
-      [roIgnoreCase, roSingleLine]) do
-    begin
-      if not SameDeployFile(XmlUnescape(M.Groups[1].Value), ABaseDir, AFile) then
-        Continue;
-      // the enclosing ItemGroup decides the platform
-      GroupStart := Low.LastIndexOf('<itemgroup', M.Index - 1) + 1;
-      if GroupStart <= 0 then
-        Continue;
-      Cond := Copy(AXml, GroupStart, Pos('>', AXml, GroupStart) - GroupStart);
-      if ContainsText(Cond, '''$(Platform)''==''' + APlatform + '''') then
-        L.Add(TPair<Integer, Integer>.Create(M.Index, M.Length));
-    end;
-    Result := L.ToArray;
-  finally
-    L.Free;
-  end;
+  // the enclosing ItemGroup decides the platform, and each entry is matched
+  // by its Include - por EL analisis: era una regex con el Include primero y
+  // "el ultimo <itemgroup antes", y un <DeployFile .../> vacio se comia la
+  // entrada siguiente hasta su </DeployFile>
+  Result := [];
+  for var G in GruposDe(AXml, 'ItemGroup') do
+    if SameText(PlataformaDeGrupoDeDespliegue(G.Condicion), APlatform) then
+      for var T in TramosEnGrupo(AXml, 'DeployFile', G, True) do
+        if SameDeployFile(AtributoDeTramo(AXml, T, 'DeployFile', 'Include'), ABaseDir, AFile) then
+          Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
 end;
 
 function DeployEntryXml(const AFile, ARemoteDir, AConfig: string): string;
 begin
   Result :=
-    '        <DeployFile ' + XmlAtributo('Include', AFile) + ' Condition="''$(Config)''==''' + AConfig + '''">' + sLineBreak +
+    '        <DeployFile ' + XmlAtributo('Include', AFile) + ' Condition="' + ConfigCondition(AConfig) + '">' + sLineBreak +
     '            ' + XmlElemento('RemoteDir', ARemoteDir) + sLineBreak +
     '            ' + XmlElemento('RemoteName', TPath.GetFileName(AFile)) + sLineBreak +
     '            <DeployClass>File</DeployClass>' + sLineBreak +
@@ -1117,7 +1102,7 @@ begin
   BaseDir := TPath.GetDirectoryName(TPath.GetFullPath(DeployProj));
   if Full.ToLower.StartsWith(IncludeTrailingPathDelimiter(BaseDir).ToLower) then
     Include := Full.Substring(Length(IncludeTrailingPathDelimiter(BaseDir)));
-  Block := '    <ItemGroup Condition="''$(Platform)''==''' + Plat + '''">' + sLineBreak +
+  Block := '    <ItemGroup Condition="' + DeployGroupCondition(Plat) + '">' + sLineBreak +
     DeployEntryXml(Include, RemoteDir, 'Debug') +
     DeployEntryXml(Include, RemoteDir, 'Release') +
     '    </ItemGroup>' + sLineBreak;
@@ -1154,10 +1139,13 @@ begin
   for I := High(Spans) downto 0 do
     QuitaConSuLinea(Xml, Spans[I].Key, Spans[I].Key + Spans[I].Value);
   // an ItemGroup left empty is dropped too (the IDE keeps empty ones, but
-  // ours were added by us)
-  Xml := TRegEx.Replace(Xml,
-    '[ \t]*<ItemGroup Condition="''\$\(Platform\)''==''' + Plat + '''">\s*</ItemGroup>\r?\n?', '',
-    [roIgnoreCase]);
+  // ours were added by us): the platform's own, '$(Platform)'=='X', with
+  // nothing but blanks inside - from the last, so the earlier stay put
+  var Grupos := GruposDe(Xml, 'ItemGroup');
+  for var K := High(Grupos) downto 0 do
+    if (CondicionNormalizada(Grupos[K].Condicion) = CondicionNormalizada(DeployGroupCondition(Plat))) and
+       (Copy(Xml, Grupos[K].Ini, Grupos[K].Fin - Grupos[K].Ini).Trim = '') then
+      QuitaConSuLinea(Xml, Grupos[K].Abre, Grupos[K].Cierra);
   PatchSaveConSuSalto(DeployProj, Xml, Enc);
   Result := MsgFmt(SN_CONFIG_DEPLOY_REMOVED_FMT, [Full, Plat, Length(Spans)]);
 end;
@@ -1166,12 +1154,9 @@ end;
   manifest next to the project - '' when there is none. }
 procedure AddDeployFilesView(const ADproj: string; AReturn: TJSONObject);
 var
-  DeployProj, Xml, Low, Cond, Plat: string;
+  DeployProj, Xml, Plat: string;
   Obj: TJSONObject;
   Arr: TJSONArray;
-  M, RM: TMatch;
-  GroupStart: Integer;
-  PM: TMatch;
 begin
   DeployProj := DeployProjPath(ADproj);
   if not TFile.Exists(DeployProj) then
@@ -1180,39 +1165,40 @@ begin
     Exit;
   end;
   Xml := LeeTexto(DeployProj, [ltJaula]);
-  Low := LowerCase(Xml);
   Obj := TJSONObject.Create;
-  for M in TRegEx.Matches(Xml, '<DeployFile\s+Include="([^"]*)"[^>]*>(.*?)</DeployFile>',
-    [roIgnoreCase, roSingleLine]) do
+  // el ItemGroup decide la plataforma y cada DeployFile dice su Include, por
+  // EL analisis (era una regex con el Include primero y "el ultimo <itemgroup
+  // antes", y otra para sacar la plataforma de la Condition)
+  for var G in GruposDe(Xml, 'ItemGroup') do
   begin
-    GroupStart := Low.LastIndexOf('<itemgroup', M.Index - 1) + 1;
-    if GroupStart <= 0 then
+    Plat := PlataformaDeGrupoDeDespliegue(G.Condicion);
+    if Plat = '' then
       Continue;
-    Cond := Copy(Xml, GroupStart, Pos('>', Xml, GroupStart) - GroupStart);
-    PM := TRegEx.Match(Cond, '''\$\(Platform\)''==''(\w+)''');
-    if not PM.Success then
-      Continue;
-    Plat := PM.Groups[1].Value;
-    RM := TRegEx.Match(M.Groups[2].Value, '<RemoteDir>([^<]*)</RemoteDir>', [roIgnoreCase]);
-    if Obj.GetValue(Plat) = nil then
-      Obj.AddPair(Plat, TJSONArray.Create);
-    Arr := Obj.GetValue(Plat) as TJSONArray;
-    // one line per file (the IDE writes one entry per configuration)
-    // IfThen evalua los DOS brazos: un DeployFile sin <RemoteDir> lanzaba
-    // "Index out of bounds (1)" (el gemelo del de Lsp.BuildRunner, 2026-09-23)
-    var Remoto := '';
-    if RM.Success then
-      Remoto := XmlUnescape(RM.Groups[1].Value);
-    var Line := XmlUnescape(M.Groups[1].Value) + ' -> ' + Remoto;
-    var Dup := False;
-    for var V in Arr do
-      if SameText(V.Value, Line) then
+    for var T in TramosEnGrupo(Xml, 'DeployFile', G, True) do
+    begin
+      if Obj.GetValue(Plat) = nil then
+        Obj.AddPair(Plat, TJSONArray.Create);
+      Arr := Obj.GetValue(Plat) as TJSONArray;
+      // one line per file (the IDE writes one entry per configuration); un
+      // DeployFile sin <RemoteDir> deja el destino vacio (lanzaba "Index out
+      // of bounds (1)", el gemelo del de Lsp.BuildRunner, 2026-09-23)
+      var Remoto := '';
+      for var R in AllTagValues(Copy(Xml, T.Ini, T.Fin - T.Ini), 'RemoteDir') do
       begin
-        Dup := True;
+        Remoto := R;
         Break;
       end;
-    if not Dup then
-      Arr.Add(Line);
+      var Line := AtributoDeTramo(Xml, T, 'DeployFile', 'Include') + ' -> ' + Remoto;
+      var Dup := False;
+      for var V in Arr do
+        if SameText(V.Value, Line) then
+        begin
+          Dup := True;
+          Break;
+        end;
+      if not Dup then
+        Arr.Add(Line);
+    end;
   end;
   AReturn.AddPair('deployFiles', Obj);
 end;

@@ -641,7 +641,7 @@ const
   // Android 8.1). Every property is conditioned on being empty, so anything
   // the IDE ever writes into the project wins.
   ANDROID_PROPS =
-    '<PropertyGroup Condition="''$(Platform)''==''%s''">' + sLineBreak +
+    '<PropertyGroup Condition="%s">' + sLineBreak +
     '%s    <VerInfo_Keys Condition="''$(VerInfo_Keys)''==''''">package=com.embarcadero.$(MSBuildProjectName);' +
     'label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;' +
     'restoreAnyVersion=False;installLocation=auto;largeHeap=False;theme=TitleBar;' +
@@ -687,8 +687,7 @@ begin
     SB.AppendLine('    </ProjectExtensions>');
     for Cfg in TArray<string>.Create('Debug', 'Release') do
     begin
-      SB.AppendLine('    <ItemGroup Condition="''$(Platform)''==''' + APlat +
-        ''' And ''$(Config)''==''' + Cfg + '''">');
+      SB.AppendLine('    <ItemGroup Condition="' + DeployGroupCondition(APlat, Cfg) + '">');
       Add(APlat + '\' + Cfg + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
         'ProjectAndroidManifest', True);
       Add(APlat + '\' + Cfg + '\lib' + AName + '.so', 'library\lib\' + Abi + '\',
@@ -742,7 +741,7 @@ begin
     Ext := '.exe';
   Include := IncludeTrailingPathDelimiter(OutDir) + AName + Ext;
   Result :=
-    '        <DeployFile ' + XmlAtributo('Include', Include) + ' Condition="''$(Config)''==''' + ACfg + '''">'#13#10 +
+    '        <DeployFile ' + XmlAtributo('Include', Include) + ' Condition="' + ConfigCondition(ACfg) + '">'#13#10 +
     '            ' + XmlElemento('RemoteDir', AName + '\') + #13#10 +
     '            ' + XmlElemento('RemoteName', AName + Ext) + #13#10 +
     '            <DeployClass>ProjectOutput</DeployClass>'#13#10 +
@@ -760,36 +759,50 @@ function EnsurePlatformOutputEntries(const ADeployProj, ADprojPath, APlat,
   AName: string): Boolean;
 var
   Enc, Xml, DprojXml, Cond, Entries: string;
-  M: TMatch;
   Cfg: string;
+  Hueco, Suyo: TGrupoXml;
+  HayHueco, HaySuyo: Boolean;
 begin
   Result := False;
   Xml := PatchLoadText(ADeployProj, Enc);
-  Cond := '''$(Platform)''==''' + APlat + '''';
-  // any DeployFile with ProjectOutput inside a group of this platform?
-  for M in TRegEx.Matches(Xml, '<ItemGroup\s+Condition="([^"]*)"\s*>(.*?)</ItemGroup>',
-    [roIgnoreCase, roSingleline]) do
-    if M.Groups[1].Value.Contains(Cond) and
-       M.Groups[2].Value.Contains('ProjectOutput') then
+  Cond := DeployGroupCondition(APlat);
+  // any DeployFile with ProjectOutput inside a group of this platform? Por EL
+  // analisis del .deployproj: era una regex por grupos y un Contains del texto
+  for var G in GruposDe(Xml, 'ItemGroup') do
+    if SameText(PlataformaDeGrupoDeDespliegue(G.Condicion), APlat) and
+       Copy(Xml, G.Ini, G.Fin - G.Ini).Contains('ProjectOutput') then
       Exit;
   DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
   for Cfg in TArray<string>.Create('Debug', 'Release') do
     Entries := Entries + OutputDeployEntry(DprojXml, APlat, Cfg, AName);
+  // el grupo de la plataforma, '$(Platform)'=='X': el vacio que el IDE deja
+  // escrito (<ItemGroup .../>), o el que tiene otros ficheros
+  HayHueco := False;
+  HaySuyo := False;
+  for var G in GruposDe(Xml, 'ItemGroup', True) do
+    if CondicionNormalizada(G.Condicion) = CondicionNormalizada(Cond) then
+      if G.Vacio and not HayHueco then
+      begin
+        Hueco := G;
+        HayHueco := True;
+      end
+      else if not G.Vacio and not HaySuyo then
+      begin
+        Suyo := G;
+        HaySuyo := True;
+      end;
   // an empty self-closing group for the platform: fill it
-  M := TRegEx.Match(Xml, '[ \t]*<ItemGroup\s+Condition="' + TRegEx.Escape(Cond) +
-    '"\s*/>[ \t]*\r?\n?', [roIgnoreCase]);
-  if M.Success then
-    Xml := Copy(Xml, 1, M.Index - 1) +
-      '    <ItemGroup Condition="' + Cond + '">'#13#10 + Entries +
-      '    </ItemGroup>'#13#10 + Copy(Xml, M.Index + M.Length, MaxInt)
+  if HayHueco then
+    Xml := Copy(Xml, 1, Hueco.Abre - 1) +
+      '<ItemGroup Condition="' + Cond + '">'#13#10 + Entries +
+      '    </ItemGroup>' + Copy(Xml, Hueco.Cierra, MaxInt)
   else
   begin
     // a group with other files but no output, or no group at all
-    M := TRegEx.Match(Xml, '<ItemGroup\s+Condition="' + TRegEx.Escape(Cond) + '"\s*>', [roIgnoreCase]);
-    if M.Success then
-      Xml := Copy(Xml, 1, M.Index + M.Length - 1) + #13#10 + Entries +
-        Copy(Xml, M.Index + M.Length, MaxInt).TrimLeft([#13, #10])
+    if HaySuyo then
+      Xml := Copy(Xml, 1, Suyo.Ini - 1) + #13#10 + Entries +
+        Copy(Xml, Suyo.Ini, MaxInt).TrimLeft([#13, #10])
     else
     begin
       var P := Xml.ToLower.LastIndexOf('</project>');
@@ -863,7 +876,7 @@ begin
     // justo delante del ancla (con el ancla lo primero de su linea, igual que
     // al principio de la linea; con algo delante, no se mete antes de ello)
     Dproj := Copy(Dproj, 1, P - 1) +
-      Format(ANDROID_PROPS, [APlat, Indent, Indent, Indent, XmlEscape(Jars), Indent,
+      Format(ANDROID_PROPS, [DeployGroupCondition(APlat), Indent, Indent, Indent, XmlEscape(Jars), Indent,
         Indent]) + sLineBreak + Indent + Copy(Dproj, P, MaxInt);
     Changed := True;
   end;
@@ -914,8 +927,7 @@ begin
     '    </ProjectExtensions>'#13#10;
   for Cfg in TArray<string>.Create('Debug', 'Release') do
     Xml := Xml +
-      '    <ItemGroup Condition="''$(Platform)''==''' + APlat +
-        ''' And ''$(Config)''==''' + Cfg + '''">'#13#10 +
+      '    <ItemGroup Condition="' + DeployGroupCondition(APlat, Cfg) + '">'#13#10 +
       '        <DeployFile ' + XmlAtributo('Include', APlat + '\' + Cfg + '\' + N + Ext) + '>'#13#10 +
       '            ' + XmlElemento('RemoteDir', N + '\') + #13#10 +
       '            ' + XmlElemento('RemoteName', N + Ext) + #13#10 +

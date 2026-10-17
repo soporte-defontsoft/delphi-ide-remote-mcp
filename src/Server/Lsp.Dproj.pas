@@ -118,28 +118,42 @@ function FijaPropiedadParaTodos(var AXml: string; const ATag, AValor: string;
 
 type
   { Una <Tag>..</Tag>: el elemento entero es AXml[Abre .. Cierra - 1], y su
-    valor, sin desescapar, AXml[Ini .. Fin - 1] }
+    valor, sin desescapar, AXml[Ini .. Fin - 1]. Vacio: era un <Tag/>, y
+    Ini = Fin = Cierra. }
   TTramoXml = record
     Abre, Ini, Fin, Cierra: Integer;
+    Vacio: Boolean;
   end;
 
-  { Un <PropertyGroup> con contenido: el grupo entero es AXml[Abre ..
+  { Un <PropertyGroup> o un <ItemGroup>: el grupo entero es AXml[Abre ..
     Cierra - 1], su contenido AXml[Ini .. Fin - 1], y su Condition tal cual
-    esta escrita ('' = sin condicion) }
+    esta escrita ('' = sin condicion). Vacio: era un <Grupo .../>. }
   TGrupoXml = record
     Abre, Ini, Fin, Cierra: Integer;
+    Vacio: Boolean;
     Condicion: string;
   end;
 
 { Cada <ATag>..</ATag> de AXml, en orden de documento: el UNICO analisis de una
   etiqueta - sin distinguir mayusculas, con atributos y blancos tras el nombre,
   y un '>' entre comillas no la cierra -, con el que lee AllTagValues y
-  escriben los editores del .dproj. Una <ATag/> no tiene valor y no sale. }
-function TramosDeEtiqueta(const AXml, ATag: string): TArray<TTramoXml>;
+  escriben los editores del .dproj y del .deployproj. Una <ATag/> no tiene
+  valor y solo sale si se piden (AConVacios: un grupo vacio que el IDE deja
+  escrito es donde van las entradas de esa plataforma). }
+function TramosDeEtiqueta(const AXml, ATag: string; AConVacios: Boolean = False): TArray<TTramoXml>;
 { ...las que estan dentro de AGrupo }
-function TramosEnGrupo(const AXml, ATag: string; const AGrupo: TGrupoXml): TArray<TTramoXml>;
-{ Los <PropertyGroup> con contenido de AXml, en orden de documento: el UNICO
-  recorrido de los grupos. }
+function TramosEnGrupo(const AXml, ATag: string; const AGrupo: TGrupoXml;
+  AConVacios: Boolean = False): TArray<TTramoXml>;
+{ El valor de un atributo del elemento de ATramo (Include, Condition...), ya
+  desescapado; '' si no lo lleva. Por EL lector de atributos (AllTagAttr):
+  en cualquier orden, con comillas simples o dobles. }
+function AtributoDeTramo(const AXml: string; const ATramo: TTramoXml;
+  const ATag, AAtributo: string): string;
+{ Los grupos AElemento (PropertyGroup, ItemGroup) de AXml con su Condition,
+  en orden de documento: el UNICO recorrido de los grupos, sobre
+  TramosDeEtiqueta. }
+function GruposDe(const AXml, AElemento: string; AConVacios: Boolean = False): TArray<TGrupoXml>;
+{ ...los <PropertyGroup> con contenido. }
 function GruposDePropiedades(const AXml: string): TArray<TGrupoXml>;
 { Una Condition en la forma en que se comparan: minusculas y sin blancos. }
 function CondicionNormalizada(const ACondicion: string): string;
@@ -156,6 +170,23 @@ function DefinerCondition(const APlatform: string): string;
   (ADefinidor = False) o de un definidor; '' si la Condition no es la de
   ninguna - la base tampoco: esa es GroupCondition(''). }
 function PlataformaDeGrupo(const ACondicion: string; ADefinidor: Boolean): string;
+{ Las Condition de plataforma y config, como las escriben el IDE y el servidor
+  en un grupo o en un elemento - EL nombrador, y CondicionDePlataformaYConfig
+  su inversa -: '$(Platform)'=='X' (el ItemGroup de una plataforma en el
+  .deployproj), con AConfig '$(Platform)'=='X' And '$(Config)'=='Y' (el
+  manifiesto que genera el servidor), y ConfigCondition, '$(Config)'=='Y' (un
+  DeployFile de una config). Se componian a mano en siete sitios. }
+function DeployGroupCondition(const APlatform: string; const AConfig: string = ''): string;
+function ConfigCondition(const AConfig: string): string;
+{ La plataforma y la config que nombra una Condition de esas formas - la
+  plataforma sola, la config sola, o las dos con And en cualquier orden, que el
+  IDE escribe '$(Config)'=='Debug' And '$(Platform)'=='Win32' -, tal cual
+  estan escritas ('' la que no nombra). False si la Condition es otra cosa: lo
+  que no se sabe si se aplica no se da por aplicado. }
+function CondicionDePlataformaYConfig(const ACondicion: string; out APlataforma, AConfig: string): Boolean;
+{ La plataforma (con la grafia de las conocidas, y la que no lo es tal cual) de
+  un ItemGroup del .deployproj; '' si su Condition no es de una plataforma. }
+function PlataformaDeGrupoDeDespliegue(const ACondicion: string): string;
 { Quita AXml[AIni .. AFin - 1] y, si eso ocupaba su linea solo, la linea con
   ello: sus blancos de delante y el salto que la precede. Lo escribian a mano,
   de tres maneras, remove-searchpath, set-sdk / set-profile y
@@ -424,7 +455,7 @@ begin
   Result := 0;
 end;
 
-function TramosDeEtiqueta(const AXml, ATag: string): TArray<TTramoXml>;
+function TramosDeEtiqueta(const AXml, ATag: string; AConVacios: Boolean): TArray<TTramoXml>;
 var
   List: TList<TTramoXml>;
   T: TTramoXml;
@@ -460,7 +491,19 @@ begin
         Break;
       P := TagEnd + 1;
       if Low[TagEnd - 1] = '/' then
-        Continue; // <Tag/> o <Tag Condition="..."/>: vacia
+      begin
+        // <Tag/> o <Tag Condition="..."/>: vacia, sin valor
+        if AConVacios then
+        begin
+          T.Abre := Abre;
+          T.Ini := P;
+          T.Fin := P;
+          T.Cierra := P;
+          T.Vacio := True;
+          List.Add(T);
+        end;
+        Continue;
+      end;
       // el cierre, admitiendo blancos antes del '>' (</Tag >)
       CloseP := P;
       Q := 0;
@@ -482,6 +525,7 @@ begin
       T.Ini := P;
       T.Fin := CloseP;
       T.Cierra := Q + 1;
+      T.Vacio := False;
       List.Add(T);
       P := Q + 1;
     end;
@@ -498,57 +542,46 @@ begin
     Result := Result + [XmlUnescape(Copy(AXml, T.Ini, T.Fin - T.Ini))]; // el valor de verdad
 end;
 
-function TramosEnGrupo(const AXml, ATag: string; const AGrupo: TGrupoXml): TArray<TTramoXml>;
+function TramosEnGrupo(const AXml, ATag: string; const AGrupo: TGrupoXml;
+  AConVacios: Boolean): TArray<TTramoXml>;
 begin
   Result := [];
-  for var T in TramosDeEtiqueta(AXml, ATag) do
+  for var T in TramosDeEtiqueta(AXml, ATag, AConVacios) do
     if (T.Abre >= AGrupo.Ini) and (T.Cierra <= AGrupo.Fin) then
       Result := Result + [T];
 end;
 
-function GruposDePropiedades(const AXml: string): TArray<TGrupoXml>;
+function AtributoDeTramo(const AXml: string; const ATramo: TTramoXml;
+  const ATag, AAtributo: string): string;
+begin
+  // la etiqueta de apertura, '>' (o '/>') incluido; el ultimo, si lo repite
+  Result := '';
+  for var V in AllTagAttr(Copy(AXml, ATramo.Abre, ATramo.Ini - ATramo.Abre), ATag, AAtributo) do
+    Result := V;
+end;
+
+function GruposDe(const AXml, AElemento: string; AConVacios: Boolean): TArray<TGrupoXml>;
 var
-  Low: string;
-  P, Ini, After, TagEnd, CloseP, Fin: Integer;
   G: TGrupoXml;
 begin
+  // un grupo es una etiqueta mas su Condition: era un segundo bucle, gemelo
+  // del de TramosDeEtiqueta, solo para los PropertyGroup
   Result := [];
-  Low := LowerCase(AXml);
-  P := 1;
-  while True do
+  for var T in TramosDeEtiqueta(AXml, AElemento, AConVacios) do
   begin
-    Ini := Pos('<propertygroup', Low, P);
-    if Ini = 0 then
-      Break;
-    After := Ini + Length('<propertygroup');
-    if (After > Length(Low)) or
-       not CharInSet(Low[After], ['>', '/', ' ', #9, #13, #10]) then
-    begin
-      P := After;
-      Continue;
-    end;
-    TagEnd := FinDeEtiqueta(Low, After);
-    if TagEnd = 0 then
-      Break;
-    P := TagEnd + 1;
-    if Low[TagEnd - 1] = '/' then
-      Continue; // <PropertyGroup/>: vacio
-    CloseP := Pos('</propertygroup', Low, P);
-    if CloseP = 0 then
-      Break;
-    Fin := Pos('>', Low, CloseP);
-    if Fin = 0 then
-      Break;
-    G.Abre := Ini;
-    G.Ini := P;
-    G.Fin := CloseP;
-    G.Cierra := Fin + 1;
-    G.Condicion := '';
-    for var V in AllTagAttr(Copy(AXml, Ini, TagEnd - Ini + 1), 'PropertyGroup', 'Condition') do
-      G.Condicion := V;
+    G.Abre := T.Abre;
+    G.Ini := T.Ini;
+    G.Fin := T.Fin;
+    G.Cierra := T.Cierra;
+    G.Vacio := T.Vacio;
+    G.Condicion := AtributoDeTramo(AXml, T, AElemento, 'Condition');
     Result := Result + [G];
-    P := CloseP + 1;
   end;
+end;
+
+function GruposDePropiedades(const AXml: string): TArray<TGrupoXml>;
+begin
+  Result := GruposDe(AXml, 'PropertyGroup');
 end;
 
 { Una Condition en la forma en que se comparan: minusculas y sin blancos }
@@ -1109,16 +1142,124 @@ begin
     '''$(Base_' + APlatform + ')''!=''''';
 end;
 
+{ Lo que va entre AAntes (sin distinguir mayusculas) y ACierre en ACondicion,
+  tal cual esta escrito; '' si no esta. }
+function TrozoDeCondicion(const ACondicion, AAntes, ACierre: string): string;
+var
+  P, Q: Integer;
+begin
+  Result := '';
+  P := Pos(LowerCase(AAntes), LowerCase(ACondicion));
+  if P = 0 then
+    Exit;
+  Inc(P, Length(AAntes));
+  Q := Pos(ACierre, ACondicion, P);
+  if Q > 0 then
+    Result := Copy(ACondicion, P, Q - P);
+end;
+
+{ El valor entre comillas que sigue a AClave ('$(Platform)', '$(Config)') en
+  ACondicion - '$(Platform)' == 'X' -, tal cual esta escrito; '' si no esta. }
+function ValorDeCondicion(const ACondicion, AClave: string): string;
+var
+  P: Integer;
+begin
+  P := Pos(LowerCase(AClave), LowerCase(ACondicion));
+  if P = 0 then
+    Exit('');
+  // lo de detras de la clave, y en ello lo de dentro de las comillas siguientes
+  Result := TrozoDeCondicion(Copy(ACondicion, P + Length(AClave), MaxInt), '''', '''');
+end;
+
+{ La plataforma leida de una Condition con la grafia de las conocidas, y la
+  que no lo es tal cual esta escrita: un .deployproj del IDE lleva grupos de
+  OSX32, que ya no esta entre ellas, y la vista los dejaba de ensenar }
+function ConSuGrafia(const APlataforma: string): string;
+begin
+  Result := CanonicalPlatform(APlataforma);
+  if Result = '' then
+    Result := APlataforma;
+end;
+
 function PlataformaDeGrupo(const ACondicion: string; ADefinidor: Boolean): string;
+var
+  X, N: string;
+begin
+  // la inversa del nombrador: la plataforma que la Condition nombra, si con
+  // ella el nombrador vuelve a escribir ESA Condition (elegir entre las
+  // conocidas dejaba fuera las de proyectos de otra version)
+  Result := '';
+  X := TrozoDeCondicion(ACondicion, '$(Base_', ')').Trim;
+  if X = '' then
+    Exit;
+  N := CondicionNormalizada(ACondicion);
+  if (not ADefinidor and (N = CondicionNormalizada(GroupCondition(X)))) or
+     (ADefinidor and (N = CondicionNormalizada(DefinerCondition(X)))) then
+    Result := ConSuGrafia(X);
+end;
+
+function DeployGroupCondition(const APlatform: string; const AConfig: string): string;
+begin
+  Result := '''$(Platform)''==''' + APlatform + '''';
+  if AConfig <> '' then
+    Result := Result + ' And ' + ConfigCondition(AConfig);
+end;
+
+function ConfigCondition(const AConfig: string): string;
+begin
+  Result := '''$(Config)''==''' + AConfig + '''';
+end;
+
+function CondicionDePlataformaYConfig(const ACondicion: string; out APlataforma, AConfig: string): Boolean;
 var
   N: string;
 begin
+  // la inversa del nombrador, como PlataformaDeGrupo: los valores que la
+  // Condition da a '$(Platform)' y a '$(Config)', y que con ellos se vuelva a
+  // escribir ESA Condition en una de sus formas. Era un ContainsText del texto
+  // de la etiqueta en tres sitios, y una regex en la vista
+  APlataforma := ValorDeCondicion(ACondicion, '''$(Platform)''').Trim;
+  AConfig := ValorDeCondicion(ACondicion, '''$(Config)''').Trim;
   N := CondicionNormalizada(ACondicion);
-  for var P in KNOWN_PLATFORMS do
-    if (not ADefinidor and (N = CondicionNormalizada(GroupCondition(P)))) or
-       (ADefinidor and (N = CondicionNormalizada(DefinerCondition(P)))) then
-      Exit(P);
+  if (APlataforma <> '') and (AConfig <> '') then
+    Result := (N = CondicionNormalizada(DeployGroupCondition(APlataforma, AConfig))) or
+      (N = CondicionNormalizada(ConfigCondition(AConfig) + ' And ' + DeployGroupCondition(APlataforma)))
+  else if APlataforma <> '' then
+    Result := N = CondicionNormalizada(DeployGroupCondition(APlataforma))
+  else if AConfig <> '' then
+    Result := N = CondicionNormalizada(ConfigCondition(AConfig))
+  else
+    Result := False;
+  if not Result then
+  begin
+    APlataforma := '';
+    AConfig := '';
+  end;
+end;
+
+function PlataformaDeGrupoDeDespliegue(const ACondicion: string): string;
+var
+  X, C: string;
+begin
   Result := '';
+  if CondicionDePlataformaYConfig(ACondicion, X, C) and (X <> '') then
+    Result := ConSuGrafia(X);
+end;
+
+{ Si una Condition (de un grupo o de un elemento) se aplica a un build de
+  APlatform / AConfig: sin condicion, si; de plataforma y/o config, si nombra
+  esas (una config sin AConfig: no se sabe, no); otra cosa, no - lo que no se
+  sabe si se aplica no se da por aplicado. }
+function SeAplicaA(const ACondicion, APlatform, AConfig: string): Boolean;
+var
+  X, C: string;
+begin
+  if ACondicion.Trim = '' then
+    Exit(True);
+  if not CondicionDePlataformaYConfig(ACondicion, X, C) then
+    Exit(False);
+  Result := ((X = '') or SameText(X, APlatform)) and
+    ((C = '') or ((AConfig <> '') and SameText(C, AConfig)));
 end;
 
 function TagValue(const AXml, ATag: string): string;
@@ -1388,7 +1529,7 @@ end;
   declarado. }
 function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
 var
-  Plat, Key, V: string;
+  Plat, Key: string;
   Validas: TArray<string>;
 begin
   Result := '';
@@ -1400,9 +1541,17 @@ begin
     Validas := Validas + ['''$(' + Key + ')''!=''''',
       '''$(' + Key + '_' + Plat + ')''!=''''' ];
   for var G in GruposDePropiedades(AXml) do
-    if MatchStr(CondicionNormalizada(G.Condicion), Validas) then
-      for V in AllTagValues(Copy(AXml, G.Ini, G.Fin - G.Ini), ATag) do
-        Result := V.Trim; // el ultimo gana
+    // el grupo: los que escribe el IDE (la base, la plataforma, la config) o
+    // uno de plataforma y/o config que se aplique a este build
+    if MatchStr(CondicionNormalizada(G.Condicion), Validas) or
+       ((G.Condicion.Trim <> '') and SeAplicaA(G.Condicion, APlatform, AConfig)) then
+      // cada etiqueta con SU Condition, y la vacia (<X/>) tambien: deja el
+      // valor vacio, como en msbuild. El juez (MSXML, 17-oct-2026) las veia y
+      // el escaner no: un <Profile Condition="'$(Platform)'=='Win32'"> de 5
+      // Samples del IDE se contaba para OSX64 e iOS
+      for var T in TramosEnGrupo(AXml, ATag, G, True) do
+        if SeAplicaA(AtributoDeTramo(AXml, T, ATag, 'Condition'), APlatform, AConfig) then
+          Result := XmlUnescape(Copy(AXml, T.Ini, T.Fin - T.Ini)).Trim; // el ultimo gana
 end;
 
 function PlatformProperty(const AXml, APlatform, ATag: string): string;

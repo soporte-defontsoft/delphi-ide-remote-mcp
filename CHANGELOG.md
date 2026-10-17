@@ -99,25 +99,39 @@ the MCP `initialize` response (`serverInfo.version`).
   project - its `.pas` in the program's tree, or an entry with its `in
   '...'` path - still goes by `remove-unit`, which also removes its
   `CreateForm` and its `DCCReference` (`USES-025`, nothing written).
-- **`delphi_config` reads and edits a `.dproj` with one parse, the one the
-  build uses.** Five places read a property group or an element each in its
-  own way - the exact tag with no attributes, "the last group opened before
-  it", the group by its `Condition` matched letter by letter, a regex for the
-  view. What an agent sees:
+- **`delphi_config` and the build read and edit a `.dproj` and a
+  `.deployproj` with one parse, and read them as msbuild does.** Eight places
+  read a group or an element each in its own way - the exact tag with no
+  attributes, "the last group opened before it", the group by its
+  `Condition` matched letter by letter, regexes that wanted `Include` first
+  and in double quotes. What an agent sees:
   - `add-searchpath`, `set-sdk` and `set-profile` find a platform group
     written by hand (`'$(Base_Linux64)' != ''`) instead of creating a second
     one and writing into it;
   - `set-sdk` and `set-profile` take out EVERY `PlatformSDK` / `Profile` of
     the group: they removed only the first, and with two the other one kept
     winning; `before` names the one that was in effect;
-  - the SDK and the profile a project declares (`view`, `delphi_build`) are
-    read as msbuild reads them - the last one that sets it among the groups
-    that apply to the platform; a configuration's group no longer counts as
-    the base, and a tag with attributes is read.
+  - the SDK and the profile a project declares (`view`, `delphi_build`), and
+    the output folders the build checks, are read as msbuild reads them: the
+    last value among the groups that apply, an element's own `Condition`
+    counts (5 of the 37.0 samples carry
+    `<Profile Condition="'$(Platform)'=='iOSDevice64'">` in the
+    unconditional group), and an empty `<X/>` leaves the value empty; a
+    configuration's group no longer counts as the base;
+  - the deployment view, `add-deployfile` and `remove-deployfile` see an
+    entry whose `Condition` comes before its `Include` (4 entries the IDE
+    wrote in a sample were invisible), an empty `<DeployFile .../>` no longer
+    swallows the entry after it, and a group of a platform the server does
+    not list any more (`OSX32`) shows as written.
   Measured against the previous binary on the 296 `.dproj` of the 37.0
-  samples: the same answers and the same bytes for `view`, `add/remove-
-  searchpath`, `set-sdk` and `set-profile`. `remove-deployfile` takes its
-  line out with the same helper.
+  samples (view, search paths, SDK, profile, deployment, 16 steps each):
+  every write leaves the same bytes; the answers differ only in the two
+  samples where the previous reading was wrong. Measured against MSXML - the
+  XML parser the IDE loads - on the 4,082 project files of this machine,
+  the reader sees the same groups, conditions and values, but for the
+  end-of-line normalization inside 4 multi-line build events (no decision of
+  the server reads their text). The DOM is not the writer: none of the three
+  engines Delphi ships writes a project file back byte for byte.
 
 ### Added
 
