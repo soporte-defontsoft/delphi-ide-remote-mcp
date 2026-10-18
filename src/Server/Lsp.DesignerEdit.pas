@@ -135,7 +135,8 @@ uses
   Lsp.DesignerBinding, // EL lector de la linea de evento; los avisos del binding
   Lsp.ProjectUnits,    // UsesConUnidades: el uses de la unidad
   Lsp.TodoONada,       // FicherosTodoONada
-  Lsp.FormRender;      // ComoLoEscribeElIde: el juez del orden entre hermanos (3.11)
+  Lsp.FormRender,      // ComoLoEscribeElIde: el juez del orden entre hermanos (3.11)
+  Lsp.Args;
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)
@@ -1929,12 +1930,12 @@ begin
   DelUsuario := False;
   Juzgado := False;
   Juicio := '';
-  if (Obj = F.Doc.Root) and PropiedadDelUsuarioLlamada(Propias, Prop.Split(['.'])[0], Propia) and
+  if (Obj = F.Doc.Root) and PropiedadDelUsuarioLlamada(Propias, PrimerTrozo(Prop, ['.']), Propia) and
      (Propia.Tipo <> '') then
   begin
     if Prop.Contains('.') then
       Exit(MsgFmt(SR_DESIGNER_SET_INVALIDO_FMT, [NombreDe(Obj), Prop, V,
-        MsgFmt(SF_DESIGNER_RUTA_DEL_USUARIO_FMT, [Prop.Split(['.'])[0], Propia.Clase,
+        MsgFmt(SF_DESIGNER_RUTA_DEL_USUARIO_FMT, [PrimerTrozo(Prop, ['.']), Propia.Clase,
         TPath.GetFileName(Propia.Fichero)]), '']));
     Juicio := HojaDelUsuario(F.Tabla, Propia, V, Hoja, Juzgado);
     if Juicio <> '' then

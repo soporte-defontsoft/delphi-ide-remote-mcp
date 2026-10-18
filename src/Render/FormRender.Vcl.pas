@@ -410,34 +410,45 @@ var
   Frame: TFrame;
   Cab: TCabecera;
 begin
+  // el grupo de clases de la VCL, como lo activa el designer VCL del IDE: cada
+  // unidad FMX de un paquete cargado activa el suyo al inicializarse
+  // (RegisterFmxClasses, FMX.Types), y GetClass solo busca en el activo - un
+  // TCalendar o un TMediaPlayer salian los de FMX (corpus, 18-oct-2026)
+  ActivateClassGroup(Vcl.Controls.TControl);
   Cab := Cabecera(GPeticion.Path);
   Result := TFormOculta.CreateNew(nil);
-  if ADesigning then
-    PonEnDiseno(Result);
-  if EsFrame(GPeticion.Path, Cab.Clase) then
-  begin
-    Frame := TFrame.Create(Result);
+  try
     if ADesigning then
-      PonEnDiseno(Frame);
-    ARaiz := Frame;
-    ACargador.LeeRaiz(GPeticion.Path, Cab.Nombre, Frame);
-    Result.ClientWidth := Frame.Width;
-    Result.ClientHeight := Frame.Height;
-    Frame.Parent := Result;
-    Frame.Left := 0;
-    Frame.Top := 0;
-  end
-  else
-  begin
-    ARaiz := Result;
-    ACargador.LeeRaiz(GPeticion.Path, Cab.Nombre, Result);
+      PonEnDiseno(Result);
+    if EsFrame(GPeticion.Path, Cab.Clase, TFrame) then // el que se crea aqui abajo
+    begin
+      Frame := TFrame.Create(Result);
+      if ADesigning then
+        PonEnDiseno(Frame);
+      ARaiz := Frame;
+      ACargador.LeeRaiz(GPeticion.Path, Cab.Nombre, Frame);
+      Result.ClientWidth := Frame.Width;
+      Result.ClientHeight := Frame.Height;
+      Frame.Parent := Result;
+      Frame.Left := 0;
+      Frame.Top := 0;
+    end
+    else
+    begin
+      ARaiz := Result;
+      ACargador.LeeRaiz(GPeticion.Path, Cab.Nombre, Result);
+    end;
+  except
+    // la que no se pudo leer no se queda: con --packages auto se lee otra
+    Result.Free;
+    raise;
   end;
 end;
 
 function Main: Integer;
 var
   Uso, Error, Captor, Usado: string;
-  Cargador: TCargadorVcl;
+  Cargador: TCargador;
   F: TForm;
   Raiz: TComponent;
   Bmp: TBitmap;
@@ -493,17 +504,15 @@ begin
       end;
       Reloj := TStopwatch.StartNew;
       Cargando := True;
-      F := CreaYLee(Cargador, Designing, Raiz);
-      if (GPeticion.Paquetes = 'auto') and (Cargador.Sustituidas.Count > 0) then
-      begin
-        // clases que no son estandar: los paquetes de diseno del IDE, y otra vez
-        Traza('clases sin registrar: ' + string.Join(',', Cargador.Sustituidas.ToStringArray) + ' -> paquetes del IDE');
-        FreeAndNil(F);
-        Cargador.Free;
-        Cargador := TCargadorVcl.Create;
-        CargaPaquetesDelIde(GPeticion.Bds, Cargados, Conocidos);
-        F := CreaYLee(Cargador, Designing, Raiz);
-      end;
+      F := TForm(LeeConLosPaquetes(Cargador,
+        function: TCargador
+        begin
+          Result := TCargadorVcl.Create;
+        end,
+        function(ACargador: TCargador; out ARaiz: TComponent): TComponent
+        begin
+          Result := CreaYLee(ACargador, Designing, ARaiz);
+        end, Raiz, Cargados, Conocidos));
       Cargando := False;
       MsCarga := Reloj.ElapsedMilliseconds;
       Responde(FR_ROOT, Format('%s:%s:%s', [Raiz.Name, Cabecera(GPeticion.Path).Clase,

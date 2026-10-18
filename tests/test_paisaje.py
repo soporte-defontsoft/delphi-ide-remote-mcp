@@ -501,6 +501,8 @@ REGLAS = [
       # programas que NO son el servidor: los renderizadores y el conversor leen lo que
       # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
       ('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'AncestroDeClase'),
+      # (la gemela de AncestroDeClase para una vista FMX: el .pas del maestro, 18-oct-2026)
+      ('FormRender.Comun.pas', 'MaestroDeVista'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
       ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Entrada'),
      # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (4 bytes de un designer o
@@ -682,9 +684,10 @@ REGLAS = [
     # TipoQueNoCasa (set); prop no la llamo y decia de un PopupMenu "set writes them
     # dotted" (1.20). Esta regla caza la COPIA; el olvido lo caza test_prop_ruta_120
     ('objeto propio o referencia a mano', r"Desciende\s*\([^)]*ID_COMPONENTE",
-     [('Lsp.DesignerMeta.pas', 'TMetaTable.EsObjetoPropio')],
+     [('Lsp.DesignerMeta.pas', 'TMetaTable.EsObjetoPropio'), ('Lsp.DesignerMeta.pas', 'RaizDeDiseno')],
      'EsObjetoPropio: si una propiedad de clase guarda un objeto suyo o una referencia a un '
-     'componente; la piden set, prop y el filtro de info (1.20)'),
+     'componente; la piden set, prop y el filtro de info (1.20). RaizDeDiseno pregunta otra '
+     'cosa con el mismo juez: si la clase juez de una raiz es un componente (un modulo)'),
     # el recorrido de una clase y sus descendientes: dos copias del mismo BFS sobre Hijas
     # (PublicadaEnDescendiente, PublicadasDeLaFamilia) y el filtro de info iba a ser la
     # tercera (1.20; propuesta de la auditoria de duplicados). La tabla lo llena al leerse
@@ -712,6 +715,45 @@ REGLAS = [
      'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
      'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
      'del motor'),
+    # el argumento de una directiva de fichero ($I, $R, $L) troceado a mano: el bucle de
+    # DirectivasDeFichero y el Split()[0] de la vista FMX del renderizador, que con un {$R}
+    # vacio leia fuera del array (EAccessViolation, medido el 18-oct-2026). Dos formas:
+    # partir el Argumento de una directiva, o mirar si un caracter abre una ruta entre comillas
+    ('trocear el argumento de una directiva a mano',
+     r"\.Argumento\b[^;]*\.Split\s*\(|CharInSet\(\s*\w+\[\w+\]\s*,\s*\[''''\s*,\s*'\"'\]\s*\)",
+     [('Lsp.Pascal.pas', 'TrozosDeDirectiva')],
+     'TrozosDeDirectiva (Lsp.Pascal), junto a DirectivasPascal: lo usan la mudanza, la puerta '
+     'del build y la vista FMX de los renderizadores'),
+    # el resultado de un Split indexado a secas: con '' Delphi devuelve un array VACIO y [0]
+    # lee fuera (EAccessViolation: 25-ago en delphi_edit, 26-sep en delphi_textedit, 18-oct en
+    # la vista FMX; quedaban nueve en el servidor, cambiados por PrimerTrozo ese dia)
+    ('indexar un Split a secas', r"\.Split\s*\([^;]*\)\s*\[", [],
+     'PrimerTrozo (Lsp.Args), o el array en una variable con su Length mirado antes'),
+    # la marca del grupo de clases que el IDE escribe en un modulo de datos: la
+    # componia Lsp.Scaffold a mano y nadie la leia - un modulo de datos .dfm de
+    # FMX se juzgaba con la VCL (corpus, 18-oct-2026)
+    ('la marca CLASSGROUP del IDE a mano', r"'CLASSGROUP|\{%CLASSGROUP", [('Lsp.Pascal.pas', '*')],
+     'GrupoDeClasesDe (el lector) y PseudoDirectivaGrupoDeClases (el compositor), en Lsp.Pascal'),
+    # lo que es la raiz de un designer (form, frame, modulo) por el NOMBRE de una clase:
+    # una lista (TFrame, TCustomFrame, TDataModule, TForm, TCustomForm, TForm3D) y un
+    # sufijo en Lsp.ProjectUnits, 'frame' dentro del nombre en el ayudante, otra lista en
+    # check-binding y una regex del ancestro (TForm*, TDataModule*, TFrame*): fallaban en
+    # las 39 unidades de los Samples cuya cadena sale de la unidad (18-oct-2026). Tres
+    # formas: el nombre solo entre comillas, mirar si un nombre contiene o acaba en
+    # frame/datamodule (o empieza por TFrame, TForm...), y la alternancia de esos nombres en
+    # una regex. Componer el fuente de una clase nueva (' = class(TFrame)') no es juzgar, y
+    # el kind de delphi_create ('frame-vcl') no es una clase: no se cazan
+    ('la raiz de un designer por el nombre de su clase',
+     r"'(?:T(?:Custom)?Frame|T(?:Custom|CommonCustom)?Form(?:3D)?|TDataModule)'"
+     r"|\b(?:Contains|EndsWith)\s*\(\s*'(?i:t?frame|t?datamodule)'"
+     r"|\bStartsWith\s*\(\s*'(?i:tframe|tdatamodule|tform)'"
+     r"|\b(?:Form|Frame|DataModule)\|(?:Form|Frame|DataModule)\b",
+     [('Lsp.FormRender.pas', 'ClaseDelSustituto'), ('Lsp.DesignerMetaGen.pas', 'TGenerador.EsRaiz')],
+     'RaizDeDiseno (Lsp.DesignerMeta: la cadena por el motor hasta la clase que la tabla conoce '
+     'y su categoria por la jerarquia de la tabla) y su escritor y lector del <DesignClass> '
+     '(DesignClassDeFrame, RaizDeDesignClass); en el ayudante, la clase CARGADA (EsFrame). '
+     'Su casa: el sustituto que crea el ayudante (ClaseDelSustituto) y el generador de la '
+     'tabla, que lee las raices del fuente por su identidad (EsRaiz)'),
 ]
 
 
@@ -894,6 +936,14 @@ PLANTADO = {
     # el de set-version hasta la 1.20.1
     'leer o editar XML de proyecto a mano':
         "  M := TRegEx.Match(Xml, '(?i)<VerInfo_MajorVer>([^<]*)</VerInfo_MajorVer>');",
+    # el de MaestroDeVista hasta el 18-oct-2026
+    'trocear el argumento de una directiva a mano': "  V := D.Argumento.Trim.Split([' ', #9])[0];",
+    # el de PonFalloDelLanzador hasta el 18-oct-2026
+    'indexar un Split a secas': "  AObj.AddPair('error', ASalida.TrimLeft.Split([#10])[0].Trim);",
+    # la de Lsp.Scaffold hasta el 18-oct-2026
+    'la marca CLASSGROUP del IDE a mano': "  S := '{%CLASSGROUP ''FMX.Controls.TControl''}';",
+    # la de Lsp.ProjectUnits.RaizDeLaCadena hasta el 18-oct-2026
+    'la raiz de un designer por el nombre de su clase': "    if SameText(AUltimo, 'TFrame') then Exit('TFrame');",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -928,6 +978,20 @@ for forma in ("  Op := Pos('<platform value=\"', Low, Scan);",
     cazados = fuera_de_casa(REGLA_XML, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                          'LeeAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (REGLA_XML[0], forma.strip()), len(cazados) == 1, cazados)
+# las otras formas de la raiz por su nombre: el sufijo (DesignClassOf), 'frame' dentro
+# (EsFrame del ayudante) y la regex del ancestro (InspectUnit), hasta el 18-oct-2026; y
+# lo que NO es juzgar: el fuente de una clase nueva que compone el scaffold
+REGLA_RAIZ = next(r for r in REGLAS if r[0] == 'la raiz de un designer por el nombre de su clase')
+for forma in ("  else if Name.EndsWith('DataModule', True) then",
+              "  Result := A.ToLower.Contains('frame');",
+              "  if TRegEx.IsMatch(UltimoTrozo(T.Ancestro), '(?i)\\AT(?:Form|DataModule|Frame)') then"):
+    cazados = fuera_de_casa(REGLA_RAIZ, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                          'RaizAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_RAIZ[0], forma.strip()), len(cazados) == 1, cazados)
+COMPONE_CLASE = fuera_de_casa(REGLA_RAIZ, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+    "Compone;\nbegin\n  S := '  T' + ANombre + ' = class(TFrame)' + CRLF;\nend;\nend.\n")])
+check('mutante "%s": componer el fuente de una clase nueva no se caza' % REGLA_RAIZ[0],
+      COMPONE_CLASE == [], COMPONE_CLASE)
 COMPONER = fuera_de_casa(REGLA_XML, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure Compone;\n'
     "begin\n  S := '<Platform ' + XmlAtributo('value', P) + '>True</Platform>';\nend;\nend.\n")])
 check('mutante "%s": componer un elemento con XmlAtributo no se caza' % REGLA_XML[0], COMPONER == [], COMPONER)
@@ -941,6 +1005,14 @@ for forma in ("  F: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0
     cazados = fuera_de_casa(REGLA_PNG, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                          'LeeAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (REGLA_PNG[0], forma.strip()), len(cazados) == 1, cazados)
+
+# la otra forma de trocear el argumento de una directiva: el bucle a mano, por la comilla
+# que abre una ruta (el de DirectivasDeFichero hasta el 18-oct-2026)
+REGLA_TROZOS = next(r for r in REGLAS if r[0] == 'trocear el argumento de una directiva a mano')
+cazados = fuera_de_casa(REGLA_TROZOS, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                        "TroceaAMano;\nbegin\n  if CharInSet(G[P], ['''', '\"']) then Q := P;\nend;\nend.\n")])
+check('mutante "%s": tambien el bucle a mano (la comilla que abre una ruta)' % REGLA_TROZOS[0],
+      len(cazados) == 1, cazados)
 
 # una casa con su clase delante es ESE metodo y no otro del mismo nombre: la
 # excepcion de una tool no tapa a sus hermanas de la unidad

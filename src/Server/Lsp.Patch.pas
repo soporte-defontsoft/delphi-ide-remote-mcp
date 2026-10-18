@@ -5644,8 +5644,24 @@ begin
   end;
 end;
 
+{ La unidad de un designer para EsDesignerFmx (Lsp.DesignerForma: el marco de
+  un .dfm de un modulo de datos lo dice su grupo de clases), por LA puerta de
+  leer y con los lugares del propio designer (TextoDeDesigner). '' si no se
+  puede: entonces, la extension. }
+function TextoDeUnidadDeDesigner(const APas: string): string;
+begin
+  Result := '';
+  try
+    if TFile.Exists(APas) then
+      Result := LeeTexto(APas, [ltJaula]);
+  except
+    // negada o ilegible: el marco, por la extension
+  end;
+end;
+
 initialization
   GLock := TCriticalSection.Create;
+  GTextoDeUnidad := TextoDeUnidadDeDesigner;
 
 finalization
   GLock.Free;

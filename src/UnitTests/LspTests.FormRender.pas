@@ -46,6 +46,8 @@ type
     [Test]
     procedure RaizSoloSiLaCadenaLlega;
     [Test]
+    procedure LaRaizDeDisenoPorLaTabla;
+    [Test]
     procedure RutaDeComponenteConLaRaizDelante;
   end;
 
@@ -66,11 +68,15 @@ uses
   Lsp.Texts,
   FormRender.Comun, // del ayudante (src\Render): el escritor del protocolo y lo que no crea ventanas
   Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.DesignerMeta; // RaizDeDiseno: lo que es la raiz para el IDE, con una tabla dada
 
 type
   // el "control" del framework para NoVisualesDe, sin VCL ni FMX
   TControlFalso = class(TComponent);
+  // el frame del marco para EsFrame, sin VCL ni FMX: lo que el ayudante
+  // tiene cargado y registrado
+  TMarcoDePrueba = class(TComponent);
   // uno que vive DENTRO de otro componente (un item de menu, una accion, un
   // campo): su contenedor lo devuelve GetParentComponent, como en TMenuItem
   TItemDentro = class(TComponent)
@@ -449,11 +455,22 @@ begin
     '  TFormHija = class(TFormBase)'#13#10'  end;'#13#10'implementation'#13#10'end.'#13#10);
   Dfm := Escribe('UHija.dfm', 'inherited FormHija: TFormHija'#13#10'end'#13#10);
   Assert.AreEqual('TFormBase', AncestroDeClase(Dfm, 'TFormHija'));
-  Assert.IsFalse(EsFrame(Dfm, 'TFormHija'), 'una form no es un frame');
+  Assert.IsFalse(EsFrame(Dfm, 'TFormHija', TMarcoDePrueba), 'una form no es un frame');
   Escribe('UFrameX.pas', 'unit UFrameX;'#13#10'interface'#13#10'type'#13#10 +
-    '  TFrameX = class(TFrame)'#13#10'  end;'#13#10'implementation'#13#10'end.'#13#10);
+    '  TFrameX = class(TMarcoDePrueba)'#13#10'  end;'#13#10'implementation'#13#10'end.'#13#10);
   FrameDfm := Escribe('UFrameX.dfm', 'object FrameX: TFrameX'#13#10'end'#13#10);
-  Assert.IsTrue(EsFrame(FrameDfm, 'TFrameX'), 'un frame se reconoce por su .pas');
+  // sin --root, lo dice la clase CARGADA del ancestro que escribe el .pas, no
+  // su nombre
+  System.Classes.RegisterClass(TMarcoDePrueba); // no el de Winapi.Windows
+  try
+    Assert.IsTrue(EsFrame(FrameDfm, 'TFrameX', TMarcoDePrueba), 'un frame: su ancestro cargado es el frame del marco');
+    Escribe('UHost.pas', 'unit UHost;'#13#10'interface'#13#10'type'#13#10 +
+      '  TFormHost = class(TMainframeForm)'#13#10'  end;'#13#10'implementation'#13#10'end.'#13#10);
+    Assert.IsFalse(EsFrame(Escribe('UHost.dfm', 'object FormHost: TFormHost'#13#10'end'#13#10), 'TFormHost',
+      TMarcoDePrueba), 'frame en el nombre del ancestro no lo hace frame (la regla vieja decia que si)');
+  finally
+    System.Classes.UnRegisterClass(TMarcoDePrueba);
+  end;
   Assert.AreEqual('', AncestroDeClase(Escribe('Suelto.dfm', 'object A: TA'#13#10'end'#13#10), 'TA'),
     'sin .pas al lado no hay ancestro');
   Escribe('UAbs.pas', 'unit UAbs;'#13#10'interface'#13#10'type'#13#10 +
@@ -539,23 +556,76 @@ procedure TFormRenderTests.RaizSoloSiLaCadenaLlega;
   end;
 
 begin
-  // --root solo cuando la cadena LLEGA a la raiz del marco; un sufijo
-  // adivinado (o una base de otra unidad) es '': que mire el ayudante
-  // (segunda revision de la 1.17.0)
-  Assert.AreEqual('frame', RaizParaElRender(Unidad('UMarcoA', 'TMarcoA', '(TFrame)')));
-  Assert.AreEqual('frame', RaizParaElRender(Unidad('UMarcoB', 'TMarcoB', ' abstract(Vcl.Forms.TCustomFrame)')),
-    'abstract y con la unidad delante');
-  Assert.AreEqual('form', RaizParaElRender(Unidad('UFichaA', 'TFichaA', '(TForm)')));
-  Assert.AreEqual('form', RaizParaElRender(Unidad('UDatosA', 'TDatosA', '(TDataModule)')));
-  Assert.AreEqual('', RaizParaElRender(Unidad('UHijaA', 'THijaA', '(TBaseDeOtraUnidad)')),
-    'la base vive en otra unidad: no se sabe');
-  Assert.AreEqual('', RaizParaElRender(Unidad('UOtroFrame', 'TOtroFrame', '(TMiBaseFrame)')),
-    'el sufijo es una adivinanza, no un hecho');
+  // --root solo si el designer pedido es el de la unidad; lo que es su raiz
+  // lo juzga Lsp.DesignerMeta.RaizDeDiseno (LaRaizDeDisenoPorLaTabla, con una
+  // tabla dada; con la de la instalacion y el motor, el registro del IDE y
+  // add-unit, tests/test_raiz_de_diseno_1202.py). Aqui, lo que no llega al
+  // juez
   // un X.fmx al lado de un X.dfm: la unidad es del .dfm, no del .fmx pedido
   Unidad('UDos', 'TDos', '(TFrame)');
   Assert.AreEqual('', RaizParaElRender(Escribe('UDos.fmx', 'object Dos: TDos'#13#10'end'#13#10)),
     'el designer de la unidad no es el pedido');
   Assert.AreEqual('', RaizParaElRender(Escribe('Suelto.dfm', 'object A: TA'#13#10'end'#13#10)), 'sin .pas');
+end;
+
+procedure TFormRenderTests.LaRaizDeDisenoPorLaTabla;
+var
+  M: TMetaTable;
+  DC, Corte: string;
+
+  function Raiz(const ANombre, ATipos, AClase: string): TRaizDeDiseno;
+  begin
+    Result := RaizDeDiseno(M, Escribe(ANombre + '.pas', 'unit ' + ANombre + ';'#13#10'interface'#13#10 +
+      'type'#13#10 + ATipos + 'implementation'#13#10'end.'#13#10), '', AClase, DC, Corte);
+  end;
+
+begin
+  // lo que es la raiz para el IDE: la clase juez (la primera de la cadena que
+  // la tabla conoce) y su categoria por la JERARQUIA de la tabla, no por su
+  // nombre. Era una lista (TFrame, TDataModule, TForm, TForm3D...) y un
+  // sufijo; un TWebModule era una form. Sin bases de otra unidad: esas las
+  // sigue el motor
+  M := TMetaTable.Create([
+    'C System.Classes:TComponent',
+    'C System.Classes:TStringList',
+    'C System.Classes:TDataModule', 'H System.Classes:TDataModule System.Classes:TComponent',
+    'C Vcl.Forms:TScrollingWinControl', 'H Vcl.Forms:TScrollingWinControl System.Classes:TComponent',
+    'C Vcl.Forms:TCustomFrame', 'H Vcl.Forms:TCustomFrame Vcl.Forms:TScrollingWinControl',
+    'C Vcl.Forms:TFrame', 'H Vcl.Forms:TFrame Vcl.Forms:TCustomFrame',
+    'C Vcl.Forms:TCustomForm', 'H Vcl.Forms:TCustomForm Vcl.Forms:TScrollingWinControl',
+    'C Vcl.Forms:TForm', 'H Vcl.Forms:TForm Vcl.Forms:TCustomForm',
+    'C Web.HTTPApp:TWebModule', 'H Web.HTTPApp:TWebModule System.Classes:TDataModule']);
+  try
+    Assert.AreEqual(Ord(rdFrame), Ord(Raiz('URA', '  TMarcoA = class(TFrame)'#13#10'  end;'#13#10, 'TMarcoA')), 'frame');
+    Assert.AreEqual('TFrame', DC, 'lo que escribe el IDE en un frame');
+    Assert.AreEqual(Ord(rdFrame), Ord(Raiz('URB', '  TMarcoB = class abstract(Vcl.Forms.TCustomFrame)'#13#10 +
+      '  end;'#13#10, 'TMarcoB')), 'abstract y con la unidad delante');
+    Assert.AreEqual('TFrame', DC, 'el frame del marco, no su base');
+    Assert.AreEqual(Ord(rdForm), Ord(Raiz('URC', '  TFichaA = class(TForm)'#13#10'  end;'#13#10, 'TFichaA')), 'form');
+    Assert.AreEqual('', DC, 'una form no lleva DesignClass');
+    Assert.AreEqual(Ord(rdModulo), Ord(Raiz('URD', '  TDatosA = class(TDataModule)'#13#10'  end;'#13#10, 'TDatosA')),
+      'data module');
+    Assert.AreEqual('TDataModule', DC);
+    Assert.AreEqual(Ord(rdModulo), Ord(Raiz('URE', '  TWebA = class(TWebModule)'#13#10'  end;'#13#10, 'TWebA')),
+      'un modulo que no es TDataModule (la lista decia form)');
+    Assert.AreEqual('TWebModule', DC, 'su clase, la que escribe el IDE');
+    // una base del MISMO fichero, declarada antes: sin motor
+    Assert.AreEqual(Ord(rdFrame), Ord(Raiz('URF', '  TBaseLocal = class(TFrame)'#13#10'  end;'#13#10 +
+      '  TMarcoF = class(TBaseLocal)'#13#10'  end;'#13#10, 'TMarcoF')), 'la base de la propia unidad');
+    // frame en el nombre no lo hace frame
+    Assert.AreEqual(Ord(rdForm), Ord(Raiz('URG', '  TMainframeForm = class(TForm)'#13#10'  end;'#13#10 +
+      '  TFormHost = class(TMainframeForm)'#13#10'  end;'#13#10, 'TFormHost')), 'una form con frame en el nombre');
+    // la que llega a una clase que no es un componente no es una raiz
+    Assert.AreEqual(Ord(rdDesconocida), Ord(Raiz('URH', '  TListaRara = class(TStringList)'#13#10'  end;'#13#10,
+      'TListaRara')), 'un TStringList no es un modulo');
+    Assert.AreEqual('TStringList', Corte, 'donde se acaba lo que se sabe');
+  finally
+    M.Free;
+  end;
+  // y su lector, lo que el IDE ya escribio en un <DesignClass>
+  Assert.AreEqual(Ord(rdForm), Ord(RaizDeDesignClass('')), 'sin DesignClass, una form');
+  Assert.AreEqual(Ord(rdFrame), Ord(RaizDeDesignClass(DesignClassDeFrame(False))), 'el inverso del escritor');
+  Assert.AreEqual(Ord(rdModulo), Ord(RaizDeDesignClass('TdmlMainComp')), 'la base del usuario que nombra el IDE');
 end;
 
 procedure TFormRenderTests.RutaDeComponenteConLaRaizDelante;

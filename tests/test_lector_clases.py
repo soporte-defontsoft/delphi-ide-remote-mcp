@@ -585,7 +585,7 @@ uses
 type
   TFormCV = class(TForm)
     lblBien: TLabel;
-    class var lblDeClase: TLabel;
+    class var chkDeClase: TCheckBox;
   end;
 
 implementation
@@ -598,13 +598,15 @@ CV_DFM = os.path.join(PRJ, 'UFormCV.dfm')
 escribe(CV_DFM, """object FormCV: TFormCV
   object lblBien: TLabel
   end
-  object lblDeClase: TLabel
+  object chkDeClase: TCheckBox
   end
 end
 """)
+# (18-oct-2026) de una clase que ningun campo nombra: con otro campo TLabel, TReader
+# lo crea (System.Classes, GetFieldClass) y ya no se avisa
 d = J(call('delphi_designer', {'command': 'check-binding', 'path': CV_DFM}))
 check('C15 check-binding: el componente que solo tiene un class var no tiene campo',
-      d.get('clean') is False and 'lblDeClase' in str(d.get('componentsWithoutField')) and
+      d.get('clean') is False and 'chkDeClase' in str(d.get('componentsWithoutField')) and
       'lblBien' not in str(d.get('componentsWithoutField')), str(d)[:500])
 
 # C16: references en una familia GENERICA: la llamada a un override y su

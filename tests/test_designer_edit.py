@@ -728,17 +728,19 @@ try:
     escribe(RDFM, re.sub(r'\r\nend\r\n$', "\r\n  object Cats: TCategoryButtons\r\n    Left = 10\r\n    Top = 60\r\n"
                          "    Width = 150\r\n    Height = 100\r\n    Categories = <\r\n      item\r\n"
                          "        Caption = 'Uno'\r\n        Items = <>\r\n      end>\r\n    TabOrder = 5\r\n  end\r\n"
-                         "  object Lbl2: TLabel\r\n    Left = 10\r\n    Top = 170\r\n    Caption = 'Lbl2'\r\n  end\r\n"
+                         "  object Lbl2: TCheckBox\r\n    Left = 10\r\n    Top = 170\r\n    Caption = 'Lbl2'\r\n  end\r\n"
                          "end\r\n", mc.lee(RDFM)))
     escribe(RPAS, mc.lee(RPAS).replace('    Button1: TButton;\r\n', '    Button1: TButton;\r\n    Cats: TCategoryButtons;\r\n'))
     call('delphi_edit', {'path': RPAS, 'adduses': 'Vcl.CategoryButtons', 'section': 'interface'})
     raiz, hijos = hijos_de(RDFM)
     check('R3 un Items = <> dentro de un item no descoloca el arbol: la raiz es el form, Cats y Lbl2 sus hijos',
           raiz == RFORM and {'Cats', 'Lbl2'} <= set(hijos), (raiz, hijos))
+    # (18-oct-2026) Lbl2 es un TCheckBox: de un TLabel, con Label1 en la clase,
+    # TReader lo crea sin campo (System.Classes, GetFieldClass) y ya no se avisa
     r = dsg(command='check-binding', path=RDFM)
     check('R3 ...y check-binding ve el Lbl2 de DESPUES de la coleccion, sin su campo',
           J(r).get('clean') is False and 'Lbl2' in r, r[:400])
-    escribe(RPAS, mc.lee(RPAS).replace('    Cats: TCategoryButtons;\r\n', '    Cats: TCategoryButtons;\r\n    Lbl2: TLabel;\r\n'))
+    escribe(RPAS, mc.lee(RPAS).replace('    Cats: TCategoryButtons;\r\n', '    Cats: TCategoryButtons;\r\n    Lbl2: TCheckBox;\r\n'))
     compila_y_cuadra('R3', RPROJ, RDFM)
 
     # ------------------------------------------------------------------ R4
@@ -819,7 +821,7 @@ try:
     escribe(RDFM, re.sub(r'\r\nend\r\n$', "\r\n  inline MarcoRev1: TMarcoRev\r\n    Left = 300\r\n    Top = 10\r\n"
                          "    Width = 150\r\n    Height = 40\r\n    TabOrder = 9\r\n    inherited LblAviso: TLabel\r\n"
                          "      Caption = 'Del frame'\r\n    end\r\n  end\r\nend\r\n", mc.lee(RDFM)))
-    escribe(RPAS, mc.lee(RPAS).replace('    Lbl2: TLabel;\r\n', '    Lbl2: TLabel;\r\n    MarcoRev1: TMarcoRev;\r\n'))
+    escribe(RPAS, mc.lee(RPAS).replace('    Lbl2: TCheckBox;\r\n', '    Lbl2: TCheckBox;\r\n    MarcoRev1: TMarcoRev;\r\n'))
     call('delphi_edit', {'path': RPAS, 'adduses': 'UMarcoRev', 'section': 'interface'})
     r = dsg(command='insert', path=RDFM, classname='TLabel', component='LblAviso')
     check('R9 un LblAviso del FORM aunque el frame en linea tenga el suyo', J(r).get('inserted') == 'LblAviso', r[:300])
@@ -941,7 +943,7 @@ try:
     escribe(RDFM, re.sub(r'\r\nend\r\n$', '\r\n  object FDBatchMove1: TFDBatchMove\r\n    Reader = FDBatchMoveTextReader1\r\n'
                          '    Left = 400\r\n    Top = 200\r\n  end\r\n  object FDBatchMoveTextReader1: TFDBatchMoveTextReader\r\n'
                          '    Left = 440\r\n    Top = 200\r\n  end\r\nend\r\n', mc.lee(RDFM)))
-    escribe(RPAS, mc.lee(RPAS).replace('    Lbl2: TLabel;\r\n', '    Lbl2: TLabel;\r\n    FDBatchMove1: TFDBatchMove;\r\n'
+    escribe(RPAS, mc.lee(RPAS).replace('    Lbl2: TCheckBox;\r\n', '    Lbl2: TCheckBox;\r\n    FDBatchMove1: TFDBatchMove;\r\n'
                                        '    FDBatchMoveTextReader1: TFDBatchMoveTextReader;\r\n'))
     call('delphi_edit', {'path': RPAS, 'adduses': 'FireDAC.Comp.BatchMove;FireDAC.Comp.BatchMove.Text',
                          'section': 'interface'})

@@ -297,17 +297,20 @@ open(ACD, 'w', encoding='utf-8-sig', newline='\r\n').write(
   object lblDirecci\u00f3n: TLabel
     Caption = 'x'
   end
-  object lblSinCampo\u00d1: TLabel
-    Caption = 'y'
+  object edtSinCampo\u00d1: TEdit
+    Text = 'y'
   end
 end
 """)
+# (18-oct-2026) los que faltan, de una clase que NINGUN campo nombra: con otro
+# campo de su clase, TReader los crea (System.Classes, GetFieldClass) y ya no
+# se avisan
 r = call('delphi_designer', {'command': 'check-binding', 'path': ACD})
 faltan = ' '.join(mc.como_json(r).get('componentsWithoutField', []))
 check('check-binding: tras un objeto SIN nombre, el siguiente se mira (antes se tomaba por el form)',
       'btnSinCampo' in faltan, r[:600])
 check('check-binding: un nombre con acento se lee entero: sin campo se avisa, con campo no',
-      'lblSinCampo\u00d1' in faltan and 'lblDirecci\u00f3n' not in faltan, r[:600])
+      'edtSinCampo\u00d1' in faltan and 'lblDirecci\u00f3n' not in faltan, r[:600])
 r = call('delphi_designer', {'command': 'tree', 'path': ACD})
 # (el JSON trae el acento escapado: se mira el arbol, no el texto)
 def _nodos(n):
@@ -361,7 +364,7 @@ open(COD, 'w', encoding='utf-8-sig', newline='\r\n').write(
   end
   object lblUno: TLabel
   end
-  object lblSinCampo: TLabel
+  object chkSinCampo: TCheckBox
   end
 end
 """)
@@ -371,7 +374,7 @@ check('check-binding: con class of y una clase sin ancestro en el .pas NO cae (S
       not mc.es(r, 'SR_SYS_TOOL_FAILED_FMT') and 'Index out of bounds' not in r and d.get('form') == 'FormClaseOf', r[:400])
 check('check-binding: el ancestro de una class abstract(TRaiz) se sigue: el campo de TRaiz cuenta, el que falta se avisa',
       d.get('inheritanceChain') == 'TFormClaseOf -> TBase -> TRaiz' and
-      'lblSinCampo' in ' '.join(d.get('componentsWithoutField', [])) and
+      'chkSinCampo' in ' '.join(d.get('componentsWithoutField', [])) and
       'btnRaiz' not in ' '.join(d.get('componentsWithoutField', [])), r[:500])
 # un ancestro escrito con su unidad (Vcl.Forms.TForm) es una raiz como TForm:
 # no lo era, la clase salia "partial" y lo que falta no se avisaba (revision
@@ -382,10 +385,10 @@ open(NSP, 'w', encoding='utf-8-sig', newline='\r\n').write(
     'unit UConUnidad;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.StdCtrls;\n\ntype\n'
     '  TFormNs = class(Vcl.Forms.TForm)\n    lblUno: TLabel;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
 open(NSD, 'w', encoding='utf-8-sig', newline='\r\n').write(
-    'object FormNs: TFormNs\n  object lblUno: TLabel\n  end\n  object lblFaltaNs: TLabel\n  end\nend\n')
+    'object FormNs: TFormNs\n  object lblUno: TLabel\n  end\n  object chkFaltaNs: TCheckBox\n  end\nend\n')
 d = mc.como_json(call('delphi_designer', {'command': 'check-binding', 'path': NSD}))
 check('check-binding: class(Vcl.Forms.TForm) es una raiz: no sale partial y lo que falta se avisa',
-      'partialNote' not in d and 'lblFaltaNs' in ' '.join(d.get('componentsWithoutField', [])), str(d)[:400])
+      'partialNote' not in d and 'chkFaltaNs' in ' '.join(d.get('componentsWithoutField', [])), str(d)[:400])
 # una clase SIN cuerpo en la cadena ('TFormBase = class(TForm);') no tiene
 # miembros: se leian como suyos los de la clase de debajo, y un componente sin
 # campo quedaba tapado por el campo de otra clase (revision del 4-oct-2026)
@@ -393,14 +396,14 @@ SCP = os.path.join(BASE, 'USinCuerpo.pas')
 SCD = os.path.join(BASE, 'USinCuerpo.dfm')
 open(SCP, 'w', encoding='utf-8-sig', newline='\r\n').write(
     'unit USinCuerpo;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.StdCtrls;\n\ntype\n'
-    '  TFormBaseSc = class(TForm);\n  TOtraSc = class(TForm)\n    lblAjena: TLabel;\n  end;\n'
+    '  TFormBaseSc = class(TForm);\n  TOtraSc = class(TForm)\n    chkAjena: TCheckBox;\n  end;\n'
     '  TFormSc = class(TFormBaseSc)\n    lblUno: TLabel;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
 open(SCD, 'w', encoding='utf-8-sig', newline='\r\n').write(
-    'object FormSc: TFormSc\n  object lblUno: TLabel\n  end\n  object lblAjena: TLabel\n  end\nend\n')
+    'object FormSc: TFormSc\n  object lblUno: TLabel\n  end\n  object chkAjena: TCheckBox\n  end\nend\n')
 d = mc.como_json(call('delphi_designer', {'command': 'check-binding', 'path': SCD}))
 check('check-binding: una clase sin cuerpo en la cadena no se lleva los campos de la de debajo',
       d.get('inheritanceChain') == 'TFormSc -> TFormBaseSc' and
-      'lblAjena' in ' '.join(d.get('componentsWithoutField', [])), str(d)[:400])
+      'chkAjena' in ' '.join(d.get('componentsWithoutField', [])), str(d)[:400])
 # 7.1 de la 1.18.0 (sin prueba desde la segunda revision de la 1.17.0): el
 # evento de un ITEM de una coleccion (el OnClick de un TButtonItem) es una
 # propiedad mas: sin su manejador se avisa, con el no
@@ -432,7 +435,7 @@ check('tree: con dos raices pegadas manda la primera, con sus hijos, y lo de det
 r = call('delphi_designer', {'command': 'lint', 'path': COD})
 # (y llega al binding: el aviso del componente sin campo sale tambien sin tabla)
 check('lint: con class of en el .pas NO cae y mira el form contra su clase',
-      'Index out of bounds' not in r and not mc.es(r, 'SR_SYS_TOOL_FAILED_FMT') and 'lblSinCampo' in r, r[:300])
+      'Index out of bounds' not in r and not mc.es(r, 'SR_SYS_TOOL_FAILED_FMT') and 'chkSinCampo' in r, r[:300])
 
 # los avisos del enlace form-clase decian "line N of the .dfm" tambien de un .fmx
 # (medido el 14-oct en un DSGN-021 de un form FMX; 1.18.3): dicen el fichero del form

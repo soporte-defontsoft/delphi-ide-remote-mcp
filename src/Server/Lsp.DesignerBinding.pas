@@ -49,6 +49,7 @@ uses
   System.Generics.Collections,
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
+  Lsp.DesignerMeta, // MetaTable: donde acaban las clases del usuario
   Lsp.Json;
 
 const
@@ -57,12 +58,6 @@ const
   // identificador (Lsp.Pascal): un manejador con enye no casaba.
   PATRON_EVENTO = 'On' + PATRON_IDENT; // la propiedad: OnClick
   EVENT_LINE_RE = '^(' + PATRON_EVENTO + ')\s*=\s*(' + PATRON_IDENT + ')\s*$';
-
-const
-  // las raices del RTL: sus miembros no son del programador ni salen en un
-  // .dfm como objetos
-  RAICES_DE_FORM: array [0 .. 5] of string = ('TForm', 'TFrame', 'TDataModule',
-    'TCustomForm', 'TComponent', 'TObject');
 
 function EventoDeLinea(const ALinea: string; out AEvento, AMetodo: string): Boolean;
 var
@@ -83,7 +78,8 @@ begin
   end;
 end;
 
-function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string): string;
+function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string;
+  AIsFmx: Boolean): string;
 var
   L, Nm, Cl2, Ev, Handler, RootClass, Chain, OClave: string;
   Ret: TJSONObject;
@@ -117,6 +113,33 @@ var
       end;
   end;
 
+  { Algun campo publicado de la cadena es de la clase AClase (sin unidad
+    delante): lo que mira TReader.GetFieldClass para crear un componente que
+    no tiene campo propio. }
+  function ClaseConCampo(const AClase: string): Boolean;
+  begin
+    for var K := 0 to Fields.Count - 1 do
+      if SameText(Fields.ValueFromIndex[K], UltimoTrozo(AClase)) then
+        Exit(True);
+    Result := False;
+  end;
+
+  { Una clase de la instalacion - la tabla de su marco la conoce (sin
+    esperarla) -: sus miembros no son del programador ni salen en el .dfm
+    como objetos. Donde acaban las clases del usuario, como para el juez de
+    la raiz (Lsp.DesignerMeta.ClaseDeJuezDeRaiz). Era una lista de seis
+    nombres (TForm, TFrame, TDataModule...): un TForm3D, un TWebModule o un
+    TQuickRep eran una base del usuario y el informe salia a medias. Sin
+    tabla no se sabe, y se dice (a medias). }
+  function DeLaInstalacion(const AClase: string): Boolean;
+  var
+    Falta: TFaltaTabla;
+    Id: string;
+  begin
+    var M := MetaTable(AIsFmx, Falta, 0);
+    Result := (M <> nil) and M.ClaseDeNombre(UltimoTrozo(AClase), Id);
+  end;
+
   { La clase y sus ancestros HASTA DONDE LLEGA ESTA UNIDAD (LA cadena,
     Lsp.PascalDecl.CadenaDeAncestros). Un form cuyo ancestro vive en otra
     unidad hereda componentes que este fichero no ve: llamarlos ausentes seria
@@ -139,11 +162,11 @@ var
         if Sale and (K = High(Cadena)) then
         begin
           // por donde sale de la unidad: o la clase no esta declarada aqui, o
-          // su cadena sigue en otra unidad (una raiz del RTL, por su nombre
-          // corto, no: Vcl.Forms.TForm tambien lo es)
+          // su cadena sigue en otra unidad (una de la instalacion no:
+          // Vcl.Forms.TForm tambien lo es)
           if K = 0 then
             ClassFound := False
-          else if not MatchText(UltimoTrozo(Cadena[K]), RAICES_DE_FORM) then
+          else if not DeLaInstalacion(Cadena[K]) then
           begin
             AncestorOutside := True;
             Chain := Chain + ' -> ' + Cadena[K];
@@ -252,8 +275,12 @@ begin
             Dups.Add(MsgFmt(SF_DSGN_REPITE_UN_NOMBRE_FMT, [Nm, I + 1]))
           else
             Seen.Add(Nm);
-          if Complete and (Fields.IndexOfName(Nm) < 0) then
-            Miss.Add(MsgFmt(SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT, [Nm, Cl2, I + 1]));
+          // sin campo, TReader lo crea igual si su CLASE la nombra otro campo
+          // publicado de la cadena (System.Classes, GetFieldClass): solo se
+          // avisa cuando no (un Sample con cuatro TLabel sin campo y otros
+          // con el salia como que no cargaba; 18-oct-2026)
+          if Complete and (Fields.IndexOfName(Nm) < 0) and not ClaseConCampo(Cl2) then
+            Miss.Add(MsgFmt(SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT, [Nm, Cl2, I + 1, Cl2]));
         end;
         if OClave = 'inline' then
           SkipBelow := Depth;
@@ -348,7 +375,7 @@ begin
   // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto); la
   // unit, entera: sus clases las lee EL lector (LeeFuentePascal, sobre su
   // codigo: un bloque comentado no declara componentes)
-  Result := BindingReport(SplitToLines(DfmTxt), PatchLoadText(Pas, Enc), Pas);
+  Result := BindingReport(SplitToLines(DfmTxt), PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm));
 end;
 
 function DesignerBindingWarnings(const ADfm: string;
@@ -364,7 +391,7 @@ begin
   Pas := UnidadDeDesigner(ADfm);
   if not TFile.Exists(Pas) then
     Exit;
-  S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc), Pas);
+  S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm));
   O := ObjetoJson(S); // EL lector (Lsp.Json): estaba su cuerpo aqui
   if O = nil then
     Exit;

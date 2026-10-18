@@ -19,6 +19,8 @@ type
     [Test] procedure LasDeFicheroNoVenLasComentadas;
     [Test] procedure LlavesAnidadasSeVen;
     [Test] procedure LaDirectivaSinCerrarEntera;
+    [Test] procedure LosTrozosDeUnaDeFichero;
+    [Test] procedure ElGrupoDeClasesDelIde;
   end;
 
   // EL lexico (Lsp.Pascal): que es codigo, cadena, comentario y directiva.
@@ -335,6 +337,41 @@ begin
   // una sola lista de directivas, con las nuevas (insert=metodo no conocia estas)
   Assert.IsTrue(MatchText('noreturn', DIRECTIVAS_DE_RUTINA) and MatchText('unsafe', DIRECTIVAS_DE_RUTINA));
   Assert.IsTrue(MatchText('overload', DIRECTIVAS_DE_RUTINA) and MatchText('message', DIRECTIVAS_DE_RUTINA));
+end;
+
+procedure TDirectivasTests.LosTrozosDeUnaDeFichero;
+begin
+  // vacio: ninguno ({$R} a secas; un Split()[0] leia fuera del array)
+  Assert.IsTrue(Length(TrozosDeDirectiva('', 2)) = 0, 'vacio');
+  Assert.IsTrue(Length(TrozosDeDirectiva('   ', 2)) = 0, 'solo blancos');
+  // la vista FMX: el comodin y la plataforma, y el maximo manda
+  var T := TrozosDeDirectiva(' *.iPad.fmx IOS', 1);
+  Assert.IsTrue(Length(T) = 1, 'uno: ' + IntToStr(Length(T)));
+  Assert.AreEqual('*.iPad.fmx', T[0].Texto);
+  Assert.AreEqual(2, T[0].Inicio, 'donde empieza');
+  Assert.IsTrue(T[0].Comilla = #0, 'sin comilla');
+  // entre comillas, con un blanco dentro; y la segunda ruta
+  T := TrozosDeDirectiva('''a b.res'' x.rc', 2);
+  Assert.IsTrue(Length(T) = 2, 'dos: ' + IntToStr(Length(T)));
+  Assert.AreEqual('a b.res', T[0].Texto);
+  Assert.IsTrue(T[0].Comilla = '''', 'la comilla');
+  Assert.AreEqual(2, T[0].Inicio, 'detras de la comilla');
+  Assert.AreEqual('x.rc', T[1].Texto);
+  Assert.AreEqual(11, T[1].Inicio, 'la segunda');
+end;
+
+procedure TDirectivasTests.ElGrupoDeClasesDelIde;
+begin
+  // el que escribe el IDE en un modulo de datos, y su compositor: el inverso
+  Assert.AreEqual('FMX.Controls.TControl', GrupoDeClasesDe('implementation'#13#10#13#10 +
+    PseudoDirectivaGrupoDeClases('FMX.Controls.TControl') + #13#10#13#10'{$R *.dfm}'));
+  Assert.AreEqual('Vcl.Controls.TControl', GrupoDeClasesDe('{%CLASSGROUP ''Vcl.Controls.TControl''}'));
+  // comentada, en una cadena o sin ella: ninguno
+  Assert.AreEqual('', GrupoDeClasesDe('// {%CLASSGROUP ''FMX.Controls.TControl''}'), 'comentada');
+  Assert.AreEqual('', GrupoDeClasesDe('S := ''{%CLASSGROUP X}'';'), 'en una cadena');
+  Assert.AreEqual('', GrupoDeClasesDe('{$R *.dfm}'), 'sin ella');
+  // una marca del IDE no es una directiva del compilador
+  Assert.IsTrue(Length(DirectivasPascal('{%CLASSGROUP ''X''}')) = 0, 'con $ no se lee');
 end;
 
 initialization

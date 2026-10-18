@@ -191,6 +191,11 @@ const
   // un form FMX no es un control: es de esta (revision de la 1.17.0, la raiz
   // de un insert)
   ID_FMX_FORMA = 'FMX.Forms:TCommonCustomForm';
+  // lo que es la raiz de un designer para el IDE (RaizDeDiseno): un frame
+  // VCL desciende de esta (el de FMX, de ID_FMX_FRAME) y una form VCL de la
+  // otra (la de FMX, de ID_FMX_FORMA: TForm3D tambien)
+  ID_VCL_CUSTOM_FRAME = 'Vcl.Forms:TCustomFrame';
+  ID_VCL_FORMA = 'Vcl.Forms:TCustomForm';
   // lo que una propiedad de clase guarda: un componente (una referencia) o un
   // objeto suyo (TFont, una lista de cadenas)
   ID_COMPONENTE = 'System.Classes:TComponent';
@@ -293,13 +298,42 @@ function LintConTablaYSinJuez(M: TMetaTable; const AIsFmx: Boolean;
   USUARIO (TBaseForm) la localiza EL MOTOR (Lsp.Herencia), nunca un barrido
   de la carpeta por nombre: con dos TBaseForm en la carpeta elegia el orden
   de ficheros, no el uses (medido el 15-oct-2026); y asi la base puede vivir
-  en otra carpeta del proyecto. '' si no se llega (sin ajustes de proyecto
+  en otra carpeta del proyecto; la que el mismo fichero declara antes, sin
+  cualificar, es la suya sin preguntar. '' si no se llega (sin ajustes de proyecto
   no hay motor): no se juzga. APropias, las propiedades que publican las
   clases del USUARIO de esa cadena (la raiz incluida: un TBaseForm con su
   property Foo): la clase real las lee y la tabla no las conoce. La juzgan
   set y el lint (H8 de la 1.19.2). Nunca lanza. }
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
   out APropias: TArray<TPropiedadDelUsuario>): string;
+
+type
+  { Lo que el IDE disena en la raiz de un designer: una form, un frame u otro
+    modulo (TDataModule, TWebModule, TService, TQuickRep...); rdDesconocida
+    si no se pudo juzgar. }
+  TRaizDeDiseno = (rdDesconocida, rdForm, rdFrame, rdModulo);
+
+{ Lo que es para el IDE la raiz de AClase (de APas; su texto, APasTexto, si
+  ya se tiene): la categoria de su clase juez (ClaseDeJuezDeRaiz: la primera
+  de su cadena que M conoce, por el motor si sale de la unidad) por la
+  jerarquia de M - desciende del frame o de la form del marco, o es otro
+  modulo -, y ADesignClass, lo que el IDE escribe en el <DesignClass> del
+  .dproj y en el comentario Form: X de su entrada del .dpr: '' en una form, DesignClassDeFrame en
+  un frame, la clase juez en un modulo. Medido el 18-oct-2026 contra las 654
+  unidades con designer de los .dproj de los Samples: coincide en 640; en 6
+  el IDE nombra la base del usuario (TdmlMainComp por TDataModule), en 1
+  TDataModule por TDSServerModule, y las 8 de TAndroidService, que la tabla
+  no tiene, no se juzgan. rdDesconocida si la cadena no llega a ninguna que
+  M conozca, o la que llega no es un componente: ACorte, la clase en la que
+  se acaba lo que se sabe. Nunca lanza. }
+function RaizDeDiseno(M: TMetaTable; const APas, APasTexto, AClase: string;
+  out ADesignClass, ACorte: string): TRaizDeDiseno;
+{ El <DesignClass> que escribe el IDE en un frame, el de todos (los 7 de los
+  Samples): el TFrame del marco, no su base. Su lector, RaizDeDesignClass. }
+function DesignClassDeFrame(AFmx: Boolean): string;
+{ La inversa de lo que escribe RaizDeDiseno: lo que es una raiz por el
+  <DesignClass> que el IDE ya escribio ('' = una form). }
+function RaizDeDesignClass(const ADesignClass: string): TRaizDeDiseno;
 
 { Entre las que publica el usuario (ClaseDeJuezDeRaiz), la llamada ANombre. }
 function PropiedadDelUsuarioLlamada(const APropias: TArray<TPropiedadDelUsuario>;
@@ -327,6 +361,32 @@ function HojaDelUsuario(M: TMetaTable; const AProp: TPropiedadDelUsuario; const 
   es suya, no un error. Vacio sin .pas, sin tabla o sin cadena. Nunca lanza. }
 function PublicadasPorElUsuario(const ADesigner, AClaseRaiz: string;
   AIsFmx: Boolean): TArray<TPropiedadDelUsuario>;
+
+type
+  { Lo que el LECTOR del IDE (el renderizador: lee la raiz en su form, o en su
+    frame) no ve de la RAIZ de un designer: la clase juez de la raiz
+    (ClaseDeJuezDeRaiz), lo que publican las clases del usuario de su cadena
+    y, si la cadena se corto sin juez, la clase en la que se corto. }
+  TRaizParaElLector = record
+    Tabla: TMetaTable;
+    Juez: string;          // su identidad en Tabla; '' si no se llego
+    Desconocida: string;   // el ancestro en el que se corto sin juez
+    Clase: string;         // para decirla: el nombre del juez, o la desconocida
+    Propias: TArray<TPropiedadDelUsuario>;
+  end;
+
+{ La raiz de ADesigner para el lector: su .pas por el nombrador y la tabla
+  de su marco, sin esperarla. Vacia sin .pas o sin tabla. Nunca lanza. }
+function RaizParaElLector(const ADesigner, AClaseRaiz: string; AIsFmx: Boolean): TRaizParaElLector;
+
+{ Si lo que el lector se salto de la RAIZ, la propiedad AProp (ruta con
+  punto), es de su clase y no de ASustituto, la clase en la que la lee (TForm,
+  TFrame): su "no existe" es del lector, no del form - la raiz de un
+  TQuickRep, un TForm3D, un TWebModule, un modulo de datos FMX (la corpus del
+  18-oct-2026). Lo juzga la tabla: la clase juez la publica o la guarda por
+  codigo, y el sustituto no. Si la cadena se corto en una clase que la tabla
+  no conoce (un TAndroidService), no se puede juzgar: tambien es del lector. }
+function DeLaRaizQueElLectorNoVe(const R: TRaizParaElLector; const ASustituto, AProp: string): Boolean;
 
 { Por que una clase no esta en la tabla M: no existe para ella (DSGN-015),
   o dos unidades la declaran con otras publicadas (DSGN-056). Lo dicen info,
@@ -358,7 +418,8 @@ uses
   Lsp.PascalDecl, // EL lector de clases: la raiz y sus bases
   Lsp.Pascal,
   Lsp.Herencia, // LA cadena de ancestros por el motor (la base de la raiz)
-  Lsp.DesignerForma; // UnidadDeDesigner: el .pas de un designer (PublicadasPorElUsuario)
+  Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un designer (PublicadasPorElUsuario)
+  Lsp.Args;
 
 type
   TJubilada = record
@@ -906,7 +967,7 @@ begin
     begin
       V := ARhs;
       if not EsIdentificador(V, False) and M.SetShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
-        V := Have.Split([','])[0].Trim;
+        V := PrimerTrozo(Have, [',']).Trim;
       Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [AHoja.TypeName, V]));
     end;
     if not M.SetShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
@@ -1295,19 +1356,23 @@ end;
 function PropiedadDelUsuario(const AProp: TPropiedadPas; ATipo: TTipoPas;
   const AFichero: string): TPropiedadDelUsuario; forward;
 
-function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
-  out APropias: TArray<TPropiedadDelUsuario>): string;
+{ ClaseDeJuezDeRaiz, y ACorte: la clase de la cadena en la que se paro sin
+  juez (ni la conoce la tabla ni se pudo seguir); '' si llego o si la cadena
+  acaba en TObject }
+function JuezDeRaizConCorte(M: TMetaTable; const APas, APasTexto, AClase: string;
+  out APropias: TArray<TPropiedadDelUsuario>; out ACorte: string): string;
 const
   MAX_SALTOS = 8;
 var
   Texto, Enc, Fichero, Fichero2, Nombre, Id: string;
-  U: TUnidadPas;
-  T: TTipoPas;
+  U, UActual: TUnidadPas;
+  T, Local: TTipoPas;
   Cadena: TCadenaPorElMotor;
   Linea2: Integer;
 begin
   Result := '';
   APropias := [];
+  ACorte := '';
   if (M = nil) or (APas = '') or (AClase = '') then
     Exit;
   Texto := APasTexto;
@@ -1325,6 +1390,7 @@ begin
   try
     try
       U := LeeFuentePascal(Texto);
+      UActual := U;
       T := U.Clase(AClase);
       Fichero := APas;
       for var Salto := 0 to MAX_SALTOS do
@@ -1344,6 +1410,23 @@ begin
         // primera de su cadena que la tabla conoce es el juez
         if M.ClaseDeNombre(Nombre, Id) then
           Exit(Id);
+        // si no se puede seguir, ahi se corto
+        ACorte := Nombre;
+        // una base declarada ANTES en el mismo fichero, sin cualificar, es la
+        // suya: el compilador mira primero lo que declara la propia unidad, y
+        // para eso no hace falta el motor (sin proyecto no lo hay, y la
+        // cadena se cortaba aqui; la lista de nombres de Lsp.ProjectUnits que
+        // esto sustituye si la seguia)
+        if not T.Ancestro.Contains('.') then
+        begin
+          Local := UActual.Clase(Nombre);
+          if (Local <> nil) and (Local <> T) and (Local.Linea < T.Linea) then
+          begin
+            T := Local;
+            ACorte := '';
+            Continue;
+          end;
+        end;
         // una base del USUARIO: donde esta la dice el MOTOR, no la carpeta
         // del form (dos TBaseForm en la carpeta: elegia el orden de
         // ficheros, no el uses; medido el 15-oct-2026)
@@ -1356,7 +1439,10 @@ begin
         if not Cadena.AncestroDe(Fichero, T.Linea, Fichero2, Linea2) then
           Break;
         Fichero := Fichero2;
+        UActual := Cadena.UnidadDe(Fichero);
         T := Cadena.TipoEn(Fichero, Linea2);
+        if T <> nil then
+          ACorte := '';
       end;
     except
       // un fuente que no se deja leer, un motor que no contesta: la raiz,
@@ -1365,6 +1451,72 @@ begin
   finally
     Cadena.Free;
     U.Free;
+  end;
+end;
+
+function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
+  out APropias: TArray<TPropiedadDelUsuario>): string;
+var
+  Corte: string;
+begin
+  Result := JuezDeRaizConCorte(M, APas, APasTexto, AClase, APropias, Corte);
+end;
+
+function DesignClassDeFrame(AFmx: Boolean): string;
+begin
+  Result := NombreDeIdDeTipo(IfThen(AFmx, ID_FMX_FRAME, ID_VCL_FRAME));
+end;
+
+function RaizDeDesignClass(const ADesignClass: string): TRaizDeDiseno;
+begin
+  if ADesignClass.Trim = '' then
+    Result := rdForm
+  else if SameText(ADesignClass.Trim, DesignClassDeFrame(False)) or
+          SameText(ADesignClass.Trim, DesignClassDeFrame(True)) then
+    Result := rdFrame
+  else
+    Result := rdModulo;
+end;
+
+function RaizDeDiseno(M: TMetaTable; const APas, APasTexto, AClase: string;
+  out ADesignClass, ACorte: string): TRaizDeDiseno;
+var
+  Juez: string;
+  Propias: TArray<TPropiedadDelUsuario>;
+begin
+  ADesignClass := '';
+  Result := rdDesconocida;
+  Juez := JuezDeRaizConCorte(M, APas, APasTexto, AClase, Propias, ACorte);
+  if Juez = '' then
+  begin
+    // una cadena que acaba en TObject sin pasar por ninguna de la tabla, o
+    // una clase que su unidad no declara: se corto en ella
+    if ACorte = '' then
+      ACorte := AClase;
+    Exit;
+  end;
+  ACorte := '';
+  if M.Desciende(Juez, ID_VCL_CUSTOM_FRAME) or M.Desciende(Juez, ID_FMX_FRAME) then
+  begin
+    ADesignClass := DesignClassDeFrame(M.Desciende(Juez, ID_FMX_FRAME));
+    Result := rdFrame;
+  end
+  else if M.Desciende(Juez, ID_VCL_FORMA) or M.Desciende(Juez, ID_FMX_FORMA) then
+    Result := rdForm
+  else
+  begin
+    // el nombre como lo da la tabla (la identidad va en minusculas)
+    if not M.Classes.TryGetValue(Juez, ADesignClass) then
+      ADesignClass := NombreDeIdDeTipo(Juez);
+    // la raiz de un modulo es un componente (lo que crea el IDE al disenarlo):
+    // un TStringList no lo es, y ahi se acaba lo que se puede decir
+    if M.Desciende(Juez, ID_COMPONENTE) then
+      Result := rdModulo
+    else
+    begin
+      ACorte := ADesignClass;
+      ADesignClass := '';
+    end;
   end;
 end;
 
@@ -1528,25 +1680,56 @@ begin
   end;
 end;
 
-function PublicadasPorElUsuario(const ADesigner, AClaseRaiz: string;
-  AIsFmx: Boolean): TArray<TPropiedadDelUsuario>;
+function RaizParaElLector(const ADesigner, AClaseRaiz: string; AIsFmx: Boolean): TRaizParaElLector;
 var
   Pas: string;
-  M: TMetaTable;
   Falta: TFaltaTabla;
 begin
-  Result := [];
+  Result := Default(TRaizParaElLector);
   try
     Pas := UnidadDeDesigner(ADesigner);
     if (Pas = '') or not TFile.Exists(Pas) then
       Exit;
-    M := MetaTable(AIsFmx, Falta, 0); // sin esperar: sin tabla no se dice nada
-    if M = nil then
+    Result.Tabla := MetaTable(AIsFmx, Falta, 0); // sin esperar: sin tabla no se dice nada
+    if Result.Tabla = nil then
       Exit;
-    ClaseDeJuezDeRaiz(M, Pas, '', AClaseRaiz, Result);
+    Result.Juez := JuezDeRaizConCorte(Result.Tabla, Pas, '', AClaseRaiz, Result.Propias, Result.Desconocida);
+    if (Result.Juez = '') or not Result.Tabla.Classes.TryGetValue(Result.Juez, Result.Clase) then
+      Result.Clase := Result.Desconocida;
   except
-    Result := [];
+    Result := Default(TRaizParaElLector);
   end;
+end;
+
+function DeLaRaizQueElLectorNoVe(const R: TRaizParaElLector; const ASustituto, AProp: string): Boolean;
+
+  // la acepta como el juez del lint (JuzgaRuta): llega a la hoja publicada
+  // (sin valor, lo que diga del valor no cuenta), o calla sin hoja - guardada
+  // por codigo en algun tramo de la ruta (TQRPage guarda Values de
+  // Page.Values) o sin que la tabla sepa decir
+  function LaTiene(const AId: string): Boolean;
+  var
+    Hoja: TPropRec;
+    Hay: Boolean;
+  begin
+    Result := (JuzgaRuta(R.Tabla, AId, AProp, '', Hoja, Hay, False) = '') or Hay;
+  end;
+
+var
+  Sustituto: string;
+begin
+  Result := False;
+  if (R.Tabla = nil) or (AProp = '') then
+    Exit;
+  if R.Juez = '' then
+    Exit(R.Desconocida <> '');
+  Result := R.Tabla.ClaseDeNombre(ASustituto, Sustituto) and LaTiene(R.Juez) and not LaTiene(Sustituto);
+end;
+
+function PublicadasPorElUsuario(const ADesigner, AClaseRaiz: string;
+  AIsFmx: Boolean): TArray<TPropiedadDelUsuario>;
+begin
+  Result := RaizParaElLector(ADesigner, AClaseRaiz, AIsFmx).Propias;
 end;
 
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
@@ -1689,7 +1872,7 @@ begin
               Continue;
             // en la raiz, lo que publica una clase del usuario de su cadena
             // (TBaseForm.Foo): la clase real lo lee y la tabla no lo conoce
-            if (Stack.Count = 1) and PublicaElUsuario(Propias, Lhs.Split(['.'])[0]) then
+            if (Stack.Count = 1) and PublicaElUsuario(Propias, PrimerTrozo(Lhs, ['.'])) then
               Continue;
             // en FMX Left/Top no colocan un control: los guarda TComponent, el
             // sitio del icono de un no visual (3.7 de la 1.18.0, Hermes)

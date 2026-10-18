@@ -91,6 +91,9 @@ DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
 - `inline` frames are built from their own `.dfm`/`.fmx` found by class name
   in the form's folder, then the form's `inherited` overrides are applied;
   an `inherited` form is read after its ancestors (chain from the `.pas`).
+  An FMX view (`<unit>.<View>.fmx`, whose class no `.pas` declares) is read
+  on top of its master (`<unit>.fmx`) when the master's `.pas` declares it
+  with `{$R *.<View>.fmx ...}`, as the IDE does.
 
 ## Output (stdout, `KEY=value` lines; the keys live in `FormRenderProtocolo.inc`)
 

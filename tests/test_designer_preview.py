@@ -17,7 +17,8 @@ pedir uno corto (lo dice una NOTA).
   P2  component: el recorte (componentRect, el frame con su origen, el PNG
       del tamano del componente) y el componente que no existe (DSGN-066)
   P3  state: un estado de vista que se ve (el color del panel) y el que
-      nombra un componente que no existe (RENDER-011, del ayudante tal cual)
+      nombra un componente que no existe (RENDER-011, del ayudante tal cual);
+      sin propiedad detras del punto, la forma (RENDER-006), nunca un AV
   P4  una form heredada: el color que pone la hija, no el de la base
   P5  frames inline VCL: el fichero del frame y los inherited de cada uno; un
       componente dentro de un frame por su ruta (component= y state=); el
@@ -591,6 +592,13 @@ try:
     r = preview(path=PRUEBA, state='Edit1.NoExisteTal=1')
     check('P3 ...y el de una propiedad que la clase no publica: RENDER-012',
           mc.abre(r, 'SR_RENDER_ESTADO_NO_PUBLICA_FMT') and 'NoExisteTal' in r, r[:300])
+    # (18-oct-2026) sin propiedad detras del ultimo punto: ObjetoDeRuta leia
+    # fuera del array y el ayudante caia con un EAccessViolation (auditoria de
+    # los Split; medido en vivo)
+    for forma in ('Edit1.=x', 'Edit1. =x'):
+        r = preview(path=PRUEBA, state=forma)
+        check('P3 ...un estado sin propiedad (%s): RENDER-006, la forma, sin AV' % forma,
+              mc.abre(r, 'SR_RENDER_ESTADO_FORMA_FMT') and 'Access violation' not in r, r[:300])
     # 6.5 de la 1.18.0 (David, 9-oct-2026): inline es Boolean en el esquema de
     # las tres tools que capturan, true si no llega; el texto 'true'/'false'
     # se sigue leyendo (un cliente con el esquema de antes). Era un string en

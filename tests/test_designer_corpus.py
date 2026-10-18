@@ -56,6 +56,7 @@ if not os.path.isdir(SAMPLES):
 # leen al vuelo, pero aqui se mide el lint, no el conversor)
 FORMS = os.path.join(BASE, 'forms')
 copiados = []
+con_pas = 0
 for d, dirs, fs in os.walk(SAMPLES):
     dirs[:] = [x for x in dirs if x.lower() not in ('__history', '__recovery', 'win32', 'win64')]
     for f in fs:
@@ -68,7 +69,16 @@ for d, dirs, fs in os.walk(SAMPLES):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copyfile(src, dst)
             copiados.append(dst)
+            # ...con su .pas: sin el no corria el form contra su clase
+            # (check-binding) ni se encontraba el maestro de una vista FMX, que
+            # declara la vista con su R *.<Vista>.fmx (18-oct-2026: un Sample
+            # con TLabel sin campo "no cargaba" y nadie lo habia medido aqui)
+            pas = os.path.splitext(src)[0] + '.pas'
+            if os.path.isfile(pas):
+                shutil.copyfile(pas, os.path.splitext(dst)[0] + '.pas')
+                con_pas += 1
 check('corpus: los forms de texto de los Samples (%d)' % len(copiados), len(copiados) > 100, str(len(copiados)))
+check('corpus: con su .pas los que lo tienen (%d)' % con_pas, con_pas > 100, con_pas)
 
 # que las dos tablas esten (se generan en segundo plano; info espera un rato):
 # la espera de la casa, mc.espera_info (este bucle era su gemelo)
@@ -111,12 +121,10 @@ for dst in copiados:
             bloque = 'bad' if mc.abre(l, 'SN_DESIGNER_LINT_BAD_FMT') else 'otro'
         elif bloque == 'bad' and l.strip() and not LINEA_N.match(l):
             falsos += 1
-            if len(ejemplos) < 8:
-                ejemplos.append('%s aviso sin linea: %s' % (rel, l.strip()[:160]))
+            ejemplos.append('%s aviso sin linea: %s' % (rel, l.strip()[:160]))
     if mc.es(r, 'SN_DSGN_PARSER_FMT'):
         falsos += 1
-        if len(ejemplos) < 8:
-            ejemplos.append('%s parser del IDE: %s' % (os.path.relpath(dst, FORMS), r[:160]))
+        ejemplos.append('%s parser del IDE: %s' % (os.path.relpath(dst, FORMS), r[:160]))
     for l in r.splitlines():
         m = re.match(r'\s*line (\d+): (.*?)\s+->\s+(.*)$', l)
         if not m:
@@ -128,16 +136,21 @@ for dst in copiados:
             familia += 1        # politica pendiente (ver la cabecera)
         else:
             falsos += 1
-            if len(ejemplos) < 8:
-                ejemplos.append('%s:%s %s -> %s' % (os.path.relpath(dst, FORMS), m.group(1), m.group(2)[:60], msg[:120]))
+            ejemplos.append('%s:%s %s -> %s' % (os.path.relpath(dst, FORMS), m.group(1), m.group(2)[:60], msg[:120]))
 check('corpus: el lint CONTESTA de cada form (limpio, avisos, notas o sin confirmar)',
       not sin_lint, ' || '.join(sin_lint[:5]))
 check('corpus: al lector se le pregunta (el arnes pone los renderizadores)',
       not sin_render, ' || '.join(sin_render[:5]))
+# (18-oct-2026) TODOS, uno por linea: el detalle de check se recorta y con
+# los 8 primeros no se podia medir cuantos ni cuales eran
 for motivo, forms in sorted(sin_lector.items()):
-    print('NOTA: corpus: %d forms sin confirmar por el lector, %s: %s' % (len(forms), motivo, ', '.join(forms[:3])))
-check('corpus: ni un aviso sobre los forms que el IDE escribio (%d forms)' % len(copiados),
-      falsos == 0, ' || '.join(ejemplos))
+    print('NOTA: corpus: %d forms sin confirmar por el lector, %s:' % (len(forms), motivo))
+    for f in forms:
+        print('    ' + f)
+for e in ejemplos:
+    print('AVISO: ' + e)
+check('corpus: ni un aviso sobre los forms que el IDE escribio (%d forms; %d avisos, arriba)' % (len(copiados), falsos),
+      falsos == 0, ' || '.join(ejemplos[:3]))
 if familia:
     print('NOTA: corpus: %d avisos de familia (clases que registra un paquete sin fuente: politica pendiente)' % familia)
 print('NOTA: corpus: %d notas de clase sin fuente o ambigua (no juzgan)' % notas)

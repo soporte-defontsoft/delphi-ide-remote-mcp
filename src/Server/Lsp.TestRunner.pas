@@ -67,7 +67,8 @@ uses
   Lsp.Rutas,
   Lsp.Casa,
   Lsp.TodoONada,
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.Args;
 
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);
@@ -416,7 +417,7 @@ begin
       // listas de ficheros) y '.' es esa carpeta, que se borra con la llamada.
       // Era una lista plana de otra forma, la unica (11.2 de la 1.18.0)
       O.AddPair('path', TPath.Combine('.', N));
-      Tam := StrToInt64Def(Despues[N].Split(['|'])[0], 0);
+      Tam := StrToInt64Def(PrimerTrozo(Despues[N], ['|']), 0);
       O.AddPair('size', TJSONNumber.Create(Tam));
       // sin contenido, y por que: lo que ya no cabe ni se lee
       if Tam > TOPE_DE_LECTURA then

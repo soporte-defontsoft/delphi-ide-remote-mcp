@@ -110,14 +110,20 @@ function FormRenderExe(const AFramework: string; out ANombre: string): string;
 function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRender;
   out AOrden: string): string;
 
-{ El --root de un render (form | frame), por EL lector de clases del servidor
-  (InspectUnit): solo cuando la cadena de la clase de la unidad LLEGA a la
-  raiz del marco (TForm/TCustomForm/TForm3D/TDataModule, TFrame/TCustomFrame)
-  y su designer es el form pedido (un X.fmx al lado de un X.dfm: la unidad
-  es del .dfm). Si no se sabe, '': que mire el ayudante. La unidad, ya por la
-  puerta de lectura de quien llama. Nunca lanza (segunda revision de la
-  1.17.0: un sufijo adivinado viajaba como un hecho). }
+{ El --root de un render (form | frame): lo que es la raiz de la unidad para
+  el IDE, por sus jueces (Lsp.ProjectUnits.JuzgaRaizDeDiseno: su cadena
+  contra la tabla del marco, sin esperarla, y si no llega, el registro del
+  IDE en un .dproj que la lista), y solo si su designer es el form pedido (un X.fmx al lado
+  de un X.dfm: la unidad es del .dfm). Un modulo se lee en la form. Si no se
+  sabe, '': que mire el ayudante. La unidad, ya por la puerta de lectura de
+  quien llama. Nunca lanza (segunda revision de la 1.17.0: un sufijo
+  adivinado viajaba como un hecho; despues, una lista de nombres). }
 function RaizParaElRender(const ARuta: string): string;
+
+{ La clase en la que el lector del IDE (el ayudante) lee la raiz, por la
+  clase de raiz que dijo (RaizTipo: frame o form): su frame o su form. La
+  componian igual, a mano, lo que no cargo (LoQueNoCargo) y preview. }
+function ClaseDelSustituto(const ARaizTipo: string): string;
 
 { Una linea IGNORED= -> sus partes (TIgnorada): el UNICO lector del texto de
   TReader. Componente es el Name del objeto (o su clase, el de un item de una
@@ -148,8 +154,12 @@ function IgnoradaDelUsuario(const ARaizNombre: string; const AI: TIgnorada;
   CUAL con la linea de ADoc que nombra (SF_DSGN_LINEA_AVISO_FMT, la forma de
   los avisos del lint); sin linea, solo lo que dijo. Sin repetir: el error
   que lo paro suele ser el ultimo que se salto. ADoc nil: todo sin linea.
-  AForm, el form de verdad (su .pas dice lo que publica el usuario). }
-function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: string): TArray<string>;
+  AForm, el form de verdad (su .pas dice lo que publica el usuario).
+  ARaizNoVista: el motivo de DSGN-154 si se salto algo de la RAIZ que es de
+  su clase y no de la form en la que la lee el lector (DeLaRaizQueElLectorNoVe):
+  eso no va entre lo que no carga. }
+function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: string;
+  out ARaizNoVista: string): TArray<string>;
 
 { La salida del renderizador -> sus campos (las lineas '#' son traza). }
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
@@ -256,13 +266,34 @@ begin
     if (InspectUnit(UnidadDeDesigner(ARuta), Unidad) <> '') or (Unidad.ClassName = '') or
        not SameFileName(Unidad.Designer, TPath.GetFullPath(ARuta)) then
       Exit;
-    if Unidad.DesignRoot = 'TFrame' then
-      Result := 'frame'
-    else if Unidad.DesignRoot <> '' then
-      Result := 'form';
+    // la cadena primero (el lint pregunta lo mismo para la raiz: el motor, si
+    // hace falta, ya esta): aqui solo cuenta la categoria, y el registro del
+    // IDE sube por las carpetas leyendo cada .dpr - en cada preview y en el
+    // lint de cada edicion. Solo si la cadena no llega
+    JuzgaRaizDeDiseno(Unidad, '', 0);
+    if Unidad.Raiz = rdDesconocida then
+    begin
+      var Registro := RegistroDelIde(Unidad.PasPath, '');
+      if Registro <> '' then
+        JuzgaRaizDeDiseno(Unidad, Registro, 0);
+    end;
+    case Unidad.Raiz of
+      rdFrame: Result := 'frame';
+      rdForm, rdModulo: Result := 'form';
+    end;
   except
     Result := ''; // una unidad que no se deja leer: que mire el ayudante
   end;
+end;
+
+function ClaseDelSustituto(const ARaizTipo: string): string;
+begin
+  // el frame que crea el ayudante es el del marco (Lsp.DesignerMeta), y su
+  // form oculta, una TForm
+  if SameText(ARaizTipo, 'frame') then
+    Result := DesignClassDeFrame(False)
+  else
+    Result := 'TForm';
 end;
 
 { Un valor que viaja como UN argumento entre comillas }
@@ -489,12 +520,13 @@ begin
     PropiedadDelUsuarioLlamada(APublicadas, AI.Propiedad, ASuya);
 end;
 
-function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: string): TArray<string>;
+function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: string;
+  out ARaizNoVista: string): TArray<string>;
 var
   Vistos: TArray<string>;
   Lineas: TArray<string>;
-  RaizNombre, RaizClase: string;
-  Publicadas: TArray<TPropiedadDelUsuario>;
+  RaizNombre, RaizClase, Sustituto, NoVistas: string;
+  Raiz: TRaizParaElLector;
 
   procedure Pon(const AI: TIgnorada);
   begin
@@ -536,15 +568,30 @@ begin
     RaizNombre := ADoc.Root.ObjName;
     RaizClase := ADoc.Root.ClassName_;
   end;
-  Publicadas := [];
+  Raiz := Default(TRaizParaElLector);
   if (AForm <> '') and (RaizClase <> '') then
-    Publicadas := PublicadasPorElUsuario(AForm, RaizClase, EsDesignerFmx(AForm));
+    Raiz := RaizParaElLector(AForm, RaizClase, EsDesignerFmx(AForm));
+  // la clase en la que el lector lee la raiz
+  Sustituto := ClaseDelSustituto(R.RaizTipo);
+  NoVistas := '';
   for var I in R.Ignoradas do
   begin
     var Suya: TPropiedadDelUsuario;
-    if not DeSustituida(I) and not IgnoradaDelUsuario(RaizNombre, I, Publicadas, Suya) then
-      Pon(I);
+    if DeSustituida(I) or IgnoradaDelUsuario(RaizNombre, I, Raiz.Propias, Suya) then
+      Continue;
+    // de la raiz, y de su clase y no de la form en la que la lee el lector: un
+    // TQuickRep, un TForm3D, un modulo de datos FMX - no se sabe (DSGN-154)
+    if (RaizNombre <> '') and SameText(I.Componente, RaizNombre) and
+       DeLaRaizQueElLectorNoVe(Raiz, Sustituto, I.Propiedad) then
+    begin
+      NoVistas := NoVistas + (if NoVistas <> '' then ', ' else '') + I.Propiedad;
+      Continue;
+    end;
+    Pon(I);
   end;
+  ARaizNoVista := '';
+  if NoVistas <> '' then
+    ARaizNoVista := MsgFmt(SF_DSGN_LECTOR_RAIZ_NO_VISTA_FMT, [Sustituto, Raiz.Clase, NoVistas]);
   if R.NoCarga then
   begin
     // el error que lo paro, sin la clase delante ('EReadError: '): como lo
@@ -791,8 +838,11 @@ begin
       var Form := APeticion.Path;
       if APeticion.Carpeta <> '' then
         Form := TPath.Combine(APeticion.Carpeta, TPath.GetFileName(APeticion.Path));
+      // (lo de la raiz que el lector no ve no va en la lista; el error que lo
+      // paro, si)
+      var NoVista: string;
       Result.Fallo := MsgFmt(SR_DESIGNER_NO_CARGA_FMT, [TPath.GetFileName(APeticion.Path),
-        #10 + string.Join(#10, LoQueNoCargo(Result, Doc, Form))]);
+        #10 + string.Join(#10, LoQueNoCargo(Result, Doc, Form, NoVista))]);
     finally
       Doc.Free;
     end;
@@ -921,6 +971,15 @@ begin
   ANoPregunto := '';
   try
     var R := JuezDelIde(APath, ATexto, AEnc);
+    // leido SIN un ancestro (PARTIAL=): cada 'inherited' sin el dice "Ancestor
+    // for X not found", y eso es de NUESTRA lectura, no del form - una vista
+    // FMX de C++ (sin .pas) o de un .pas que no la declara "no cargaba"
+    // (medido el 18-oct-2026). No se sabe, y se dice por que
+    if Length(R.SinLeer) > 0 then
+    begin
+      ANoPregunto := MsgFmt(SF_DSGN_LECTOR_SIN_ANCESTRO_FMT, [string.Join(', ', R.SinLeer)]);
+      Exit;
+    end;
     // lo cargo, o fallo por otra cosa (sin renderizador, el tiempo, un
     // paquete): de lo suyo el lector no dijo nada
     if not R.NoCarga and (Length(R.Ignoradas) = 0) then
@@ -935,7 +994,11 @@ begin
       except
         Doc := nil; // sin lineas: lo que dijo el lector, tal cual
       end;
-      Result := LoQueNoCargo(R, Doc, APath);
+      var NoVista: string;
+      Result := LoQueNoCargo(R, Doc, APath, NoVista);
+      // lo unico que salto es de la raiz que el lector no ve: no se sabe
+      if (Length(Result) = 0) and (NoVista <> '') then
+        ANoPregunto := NoVista;
     finally
       Doc.Free;
     end;

@@ -3243,6 +3243,19 @@ const
     '[CFG-046] There is no Application.Run nor any other CreateForm in ' +
     'the .dpr: create the form instance where it belongs (delphi_edit).';
 
+  { La raiz de un designer que se registra y que ningun juez supo decir
+    (Lsp.ProjectUnits.JuzgaRaizDeDiseno): se escribe como una form, y se dice
+    por que. Antes se adivinaba por una lista de nombres y un sufijo. }
+  SN_UNIT_RAIZ_SIN_JUEZ_FMT =
+    '[CFG-122] NOTE: what the root class %s is for the IDE (a form, a frame ' +
+    'or another module) could not be judged: %s. It was registered as a ' +
+    'form, with no DesignClass in the .dproj; a frame takes no ' +
+    'Application.CreateForm in the .dpr.';
+  SF_UNIT_RAIZ_CORTE_FMT =
+    'its chain of ancestors reaches no form, frame or module the server can ' +
+    'see (for the server it ends at %s: neither its unit, the engine of its ' +
+    'project nor the table of installed classes says more)';
+
   SN_UNIT_NO_ITEMGROUP =
     '[CFG-047] The .dproj has no ItemGroup to hang the DCCReference on; ' +
     'the IDE will complete it when it opens the project (MSBuild ' +
@@ -4707,8 +4720,10 @@ const
     'one; without it, the IDE''s own (Button1, Button2...)';
 
   SP_DESIGNER_FRAMEWORK =
-    'info/prop: vcl | fmx (default vcl). preview: the file decides (.dfm = ' +
-    'vcl, .fmx = fmx); if given, it must agree';
+    'info/prop: vcl | fmx (default vcl). preview: the file decides (.fmx = ' +
+    'fmx; .dfm = vcl, but a data module whose unit says CLASSGROUP ' +
+    '''FMX.Controls.TControl'', as the IDE writes it in an FMX project, is ' +
+    'fmx); if given, it must agree';
 
   SP_DESIGNER_FILTER =
     'info optional: only properties whose name contains this text - also ' +
@@ -4836,6 +4851,26 @@ const
     'the rest was drawn. The form will fail to open until they are fixed (the ' +
     'program cannot create it, and the IDE asks to ignore each one): set them ' +
     'with delphi_designer set, or remove them - line says where each one is.';
+  { ...salvo si el form se leyo SIN un ancestro (PARTIAL=): lo saltado puede
+    ser solo lo que ese ancestro aporta, no un defecto del form (una vista FMX
+    de C++ salia en blanco y "no abrira"; 18-oct-2026). %s: lo que falto }
+  SN_DESIGNER_PREVIEW_IGNORADAS_PARCIAL_FMT =
+    '[DSGN-156] The form was read WITHOUT one of its ancestors (%s: no .pas next ' +
+    'to it says which class it inherits from, or that class has no file in this ' +
+    'folder): what was skipped may be just what that ancestor brings, not a ' +
+    'defect of this form. The IDE opens it with its ancestors: preview the ' +
+    'ancestor, or put the .pas that declares the class next to it (an FMX ' +
+    'view, <unit>.<View>.fmx, is read on top of <unit>.fmx when that unit''s ' +
+    '.pas declares it with {$R *.<View>.fmx}, as the IDE writes it).';
+  { ...y lo saltado de la RAIZ que es de su clase y no de la form (o el frame)
+    en la que la lee el lector: un TQuickRep, un TForm3D, un TWebModule, un
+    modulo de datos FMX (Lsp.DesignerMeta.DeLaRaizQueElLectorNoVe; corpus del
+    18-oct-2026). %s la form o el frame, %s la clase de la raiz, %s lo saltado }
+  SN_DESIGNER_PREVIEW_RAIZ_NO_VISTA_FMT =
+    '[DSGN-157] Skipped by this preview, not by the IDE: it reads the root into ' +
+    'a %s, and this root is a %s, whose own properties a %s does not have (%s). ' +
+    'The IDE creates the root as its own class and loads them; nothing to fix ' +
+    'in the form for these.';
   { ...salvo lo que publica una clase del USUARIO en la raiz: el renderizador
     no carga sus clases, la forma real si las lee (1.19.2) }
   SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT =
@@ -5571,9 +5606,10 @@ const
   SN_DESIGNER_BINDING_LINT_HEADER =
     '[DSGN-021] *** DESIGNER WARNING: the form does NOT match its class ' +
     '(check-binding). The build passes, because the compiler does not ' +
-    'look at this, and the app dies when LOADING the form: an event ' +
-    'wired to a method that is not published does not resolve ("Invalid ' +
-    'property value" / EReadError). Fix it before deploying: ***';
+    'look at this; each line says what happens when the program LOADS the ' +
+    'form (an event wired to a method that is not published does not ' +
+    'resolve: "Invalid property value" / EReadError). Fix it before ' +
+    'deploying: ***';
 
   SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT =
     '[EDIT-031] published section chosen by the tool: the paired ' +
@@ -5854,9 +5890,11 @@ const
   SN_DESIGNER_BINDING_BAD =
     '[DSGN-035] NOTE: the form file and the class do NOT match. This compiles ' +
     'anyway and fails when the form is CREATED, at run time, with a ' +
-    'message that does not point here. An object without a published ' +
-    'field ends up nil; an event whose method does not exist makes the ' +
-    'form fail to load. Fix the three lists before calling anything done.';
+    'message that does not point here: an event whose method does not exist ' +
+    'or is not published makes the form fail to load, a component whose ' +
+    'class no published field names loads only if that class is registered, ' +
+    'and a published field with no object ends up nil. Fix what the lists ' +
+    'say before calling anything done.';
 
   SN_DESIGNER_SET_NOTE =
     '[DSGN-036] It is a SET: in the .dfm/.fmx it is written in square ' +
@@ -10675,8 +10713,19 @@ const
     '%s (line %d of the form file) repeats a name already used in this form: ' +
     'loading it raises EComponentError';
 
+  { Un componente sin campo publicado: lo crea TReader si su CLASE la nombra
+    algun campo publicado de la cadena (GetFieldClass) o esta registrada
+    (GetClass); si no, EClassNotFound (System.Classes, FindComponentClass). Solo
+    se avisa del primer caso que no se cumple, y el registro se decide al
+    ejecutar: FMX.StdCtrls registra sus controles (RegisterFmxClasses) y
+    Vcl.StdCtrls ninguno - medido el 18-oct-2026; un Sample de Embarcadero con
+    cuatro TLabel sin campo, y otros TLabel con el, salia como que no cargaba.
+    %s nombre, %s clase, %d linea, %s clase otra vez }
   SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT =
-    '%s: %s (line %d of the form file) has no published field in the class';
+    '%s: %s (line %d of the form file) has no published field, and no published ' +
+    'field of the class is a %s: the program creates it only if that class is ' +
+    'registered when it runs (the FMX control units register theirs, ' +
+    'Vcl.StdCtrls does not); if it is not, loading the form raises EClassNotFound';
 
   SF_DSGN_QUEDADO_SIN_VALOR_FMT =
     '"%s" (line %d of the form file) has been left without a value: the form ' +
@@ -10885,6 +10934,23 @@ const
   // ancestro, de un frame, o sin componente: "Stream read error")
   SF_DSGN_LECTOR_SIN_LINEA_FMT =
     '  %s';
+  // el motivo de DSGN-154 cuando el lector leyo el form SIN un ancestro
+  // (PARTIAL=): sin el, cada 'inherited' dice "Ancestor for X not found", que
+  // es de nuestra lectura y no del form (una vista FMX de C++, medido el
+  // 18-oct-2026). %s: el ancestro o el fichero que falto
+  SF_DSGN_LECTOR_SIN_ANCESTRO_FMT =
+    'it only reads this form together with its ancestors, and one was missing ' +
+    '(%s: no .pas next to it says which class it inherits from, or that class ' +
+    'has no file in this folder; an FMX view, <unit>.<View>.fmx, is read on ' +
+    'top of <unit>.fmx when that unit''s .pas declares it with ' +
+    '{$R *.<View>.fmx})';
+  // el motivo de DSGN-154 cuando lo que el lector salto es de la RAIZ y de su
+  // clase, no de la form (o el frame) en la que la lee (DSGN-157 en preview;
+  // corpus del 18-oct-2026). %s la form o el frame, %s la clase de la raiz,
+  // %s lo saltado
+  SF_DSGN_LECTOR_RAIZ_NO_VISTA_FMT =
+    'it reads the root of this form into a %s, and this root is a %s: what ' +
+    'only that class has, it cannot load (%s)';
 
   SF_DSGN_SIN_SUBPROPIEDADES_FMT =
     '"%s" (%s) has no subproperties';

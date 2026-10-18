@@ -162,8 +162,25 @@ function EsEnlace(const AFichero: string): Boolean;
 { 'TX = class(TY' en el .pas hermano de AFichero: TY ('' si no hay). Con
   ALeidos, el .pas leido se anota ahi con su huella (READ=) }
 function AncestroDeClase(const AFichero, AClase: string; ALeidos: TStrings = nil): string;
-{ Es un frame segun el .pas: ancestro TFrame/TCustomFrame, o lo dice --root }
-function EsFrame(const AFichero, AClase: string): Boolean;
+{ Es un frame: lo dice --root (el servidor, por sus jueces) o, sin el, la
+  clase CARGADA del ancestro que escribe el .pas, que desciende de AFrame (el
+  frame del marco) }
+function EsFrame(const AFichero, AClase: string; AFrame: TClass): Boolean;
+
+type
+  { Crea la form del renderizador y lee en ella el fichero de la peticion }
+  TCreaYLee = reference to function(ACargador: TCargador; out ARaiz: TComponent): TComponent;
+
+{ La form de la peticion leida con su modo de paquetes, IGUAL en los dos
+  renderizadores: con 'auto', una pasada con lo estandar y, si sustituyo
+  alguna clase, otra con los paquetes del IDE y un cargador nuevo (ANuevo) -
+  tambien cuando la primera CAYO. Sin los paquetes, la propiedad de una clase
+  que falta leida en el sustituto puede dejar al lector a mitad del flujo: el
+  Size de un TStringField en el sustituto FMX daba "Stream read error" y el
+  form "no cargaba" sin haber probado con ellos (GridDemo, la corpus del
+  18-oct-2026). Estaba escrito en los dos Main, sin ese reintento. }
+function LeeConLosPaquetes(var ACargador: TCargador; const ANuevo: TFunc<TCargador>;
+  const ALee: TCreaYLee; out ARaiz: TComponent; var ACargados, AConocidos: Integer): TComponent;
 
 { Los Known Packages del IDE de 32 bits (HKCU\...\BDS\<Bds>\Known Packages),
   con el Register de cada unidad llamado como lo hace el IDE; los expertos se
@@ -213,6 +230,7 @@ implementation
 uses
   System.TypInfo, System.Win.Registry, System.IOUtils, System.RegularExpressions,
   System.Actions, System.Variants, System.SyncObjs, System.Diagnostics,
+  Winapi.PsAPI,      // EnumProcessModules: el paquete que exporta el registro de modulos
   FormRender.Textos,
   Lsp.DesignerForma, // la forma del fichero, la misma que lee el servidor
   Lsp.Pascal,        // EL lexico Pascal: que es codigo y que comentario
@@ -225,7 +243,10 @@ var
   GVerbose: Boolean = False;
   GVigia: TThread = nil;
   GVigiaPara: TEvent = nil;
-  GRegistradas: TDictionary<string, Boolean>;
+  // por la CLASE, no por su nombre: la VCL y FMX tienen clases con el mismo
+  // (TCalendar, TMediaPlayer, TWebBrowser...), cada una en su grupo de la RTL,
+  // y por el nombre la segunda no se registraba (18-oct-2026)
+  GRegistradas: TDictionary<TClass, Boolean>;
   GModulos: TList<HMODULE>;          // paquetes cargados de verdad (su codigo corre)
   GModulosDatos: TDictionary<string, HMODULE>; // paquetes abiertos solo como datos (iconos)
   GConocidos: TStringList;           // rutas de los Known Packages
@@ -343,8 +364,12 @@ begin
       raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Carpeta]));
     if not TFile.Exists(GPeticion.Path) then
       raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Path]));
+    // ...y con una propiedad detras del ultimo punto: Button1.=x llegaba a
+    // ObjetoDeRuta con la ruta vacia y leia fuera del array (EAccessViolation,
+    // medido en vivo el 18-oct-2026)
     for var E in GPeticion.Estados do
-      if (E.IndexOf('=') < 1) or (E.IndexOf('.') < 1) or (E.IndexOf('.') > E.IndexOf('=')) then
+      if (E.IndexOf('=') < 1) or (E.IndexOf('.') < 1) or (E.IndexOf('.') > E.IndexOf('=')) or
+         E.Substring(0, E.IndexOf('=')).Trim.EndsWith('.') then
         raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_FORMA_FMT, [E]));
     GVerbose := GPeticion.Verbose;
   except
@@ -512,16 +537,57 @@ begin
     Result := M.Groups[1].Value.Substring(M.Groups[1].Value.LastIndexOf('.') + 1);
 end;
 
-function EsFrame(const AFichero, AClase: string): Boolean;
+{ La VISTA de un form FMX (<unidad>.<Vista>.fmx): su ancestro es el maestro
+  (<unidad>.fmx), y eso lo DICE el IDE en el .pas del maestro, con
+  la directiva R '*.<Vista>.fmx ...' - por EL lector de directivas (Lsp.Pascal.
+  DirectivasPascal: una comentada no cuenta). El IDE carga la vista ENCIMA de
+  su maestro; leida sola, cada 'inherited' daba "Ancestor for X not found" y el
+  lint decia que no cargaba (31 de las 78 vistas de los Samples, medido el
+  18-oct-2026). '' si no es una vista que el .pas del maestro declare. Con
+  ALeidos, el .pas leido se anota con su huella (READ=). }
+function MaestroDeVista(const AFichero: string; ALeidos: TStrings): string;
 var
-  A: string;
+  Nombre, Base, Vista, Ext, Maestro, Pas: string;
+  P: Integer;
+begin
+  Result := '';
+  Nombre := ExtractFileName(RutaQueRepresenta(AFichero));
+  Ext := ExtractFileExt(Nombre);
+  Base := ChangeFileExt(Nombre, '');
+  P := Base.LastIndexOf('.');
+  if P <= 0 then
+    Exit;
+  Vista := Base.Substring(P + 1);
+  Base := Base.Substring(0, P);
+  Maestro := TPath.Combine(ExtractFilePath(RutaQueRepresenta(AFichero)), Base + Ext);
+  Pas := UnidadDeDesigner(Maestro);
+  if not TFile.Exists(Maestro) or EsEnlace(Maestro) or not TFile.Exists(Pas) or EsEnlace(Pas) then
+    Exit;
+  // la huella ANTES que el texto, como AncestroDeClase
+  if ALeidos <> nil then
+    AnotaLeido(ALeidos, Pas, TFile.ReadAllBytes(Pas));
+  for var D in DirectivasPascal(TFile.ReadAllText(Pas)) do
+    // su primer trozo, por EL troceador de las directivas de fichero
+    if (D.Nombre = 'R') or (D.Nombre = 'RESOURCE') then
+      for var T in TrozosDeDirectiva(D.Argumento, 1) do
+        if SameText(T.Texto, '*.' + Vista + Ext) then
+          Exit(Maestro);
+end;
+
+function EsFrame(const AFichero, AClase: string; AFrame: TClass): Boolean;
+var
+  C: TPersistentClass;
 begin
   if GPeticion.Raiz = 'frame' then
     Exit(True);
   if GPeticion.Raiz = 'form' then
     Exit(False);
-  A := AncestroDeClase(AFichero, AClase);
-  Result := SameText(A, 'TFrame') or SameText(A, 'TCustomFrame') or A.ToLower.Contains('frame');
+  // sin --root (el servidor no lo sabe, o llama otro): la clase CARGADA del
+  // ancestro - la del marco o la de un paquete -, no su nombre ('frame' en
+  // el nombre era un frame, y un TMainframeForm tambien). Una base que no
+  // esta cargada (del usuario, de otra unidad) no se sabe: se lee en la form
+  C := GetClass(AncestroDeClase(AFichero, AClase));
+  Result := (C <> nil) and C.InheritsFrom(AFrame);
 end;
 
 { ---- paquetes del IDE ---- }
@@ -533,11 +599,11 @@ procedure Apunta(const AClases: array of TComponentClass);
 begin
   for var C in AClases do
   begin
-    if (C = nil) or GRegistradas.ContainsKey(C.ClassName) then
+    if (C = nil) or GRegistradas.ContainsKey(C) then
       Continue;
     try
       System.Classes.RegisterClass(C);
-      GRegistradas.Add(C.ClassName, True);
+      GRegistradas.Add(C, True);
     except
       on E: Exception do
         Traza(Format('%s: RegisterClass(%s): %s', [GPaqueteActual, C.ClassName, E.Message]));
@@ -568,10 +634,10 @@ procedure ApuntaAcciones(const CategoryName: string; const AClasses: array of TB
   Resource: TComponentClass);
 begin
   for var C in AClasses do
-    if (C <> nil) and not GRegistradas.ContainsKey(C.ClassName) then
+    if (C <> nil) and not GRegistradas.ContainsKey(C) then
     begin
       System.Classes.RegisterClass(C);
-      GRegistradas.Add(C.ClassName, True);
+      GRegistradas.Add(C, True);
     end;
 end;
 
@@ -681,6 +747,52 @@ begin
   Result := GPaquetesCargados;
 end;
 
+var
+  // 'TClaseBase=TClaseDelModulo' de cada RegisterCustomModule de los paquetes
+  GModulosDeDiseno: TStringList;
+
+{ El RegisterCustomModuleProc del IDE (DesignIntf.TRegisterCustomModuleProc):
+  lo que un paquete registra como raiz de un designer propio - un TWebModule,
+  un modulo remoto -, con la clase de su modulo de diseno (AModulo, un
+  TCustomModuleClass: aqui no se enlaza DesignIntf) }
+procedure ApuntaModulo(AGrupo: Integer; ABase: TComponentClass; AModulo: TClass);
+begin
+  if (ABase <> nil) and (AModulo <> nil) then
+    GModulosDeDiseno.Values[ABase.ClassName] := AModulo.ClassName;
+end;
+
+{ La variable RegisterCustomModuleProc de DesignIntf, por el simbolo que
+  exporta el paquete que la tiene (designide, que llega como dependencia de
+  los de diseno): el ayudante no enlaza DesignIntf. nil si no esta cargado. }
+function VariableDeModulos: PPointer;
+var
+  Modulos: array[0..1023] of HMODULE;
+  Bytes: DWORD;
+begin
+  Result := nil;
+  if not EnumProcessModules(GetCurrentProcess, @Modulos[0], SizeOf(Modulos), Bytes) then
+    Exit;
+  for var I := 0 to Integer(Bytes div SizeOf(HMODULE)) - 1 do
+  begin
+    Result := GetProcAddress(Modulos[I], '@Designintf@RegisterCustomModuleProc');
+    if Result <> nil then
+      Exit;
+  end;
+end;
+
+{ Los ganchos de registro del IDE, apuntados a los nuestros }
+procedure PonGanchos;
+begin
+  RegisterComponentsProc := ApuntaComponentes;
+  RegisterNoIconProc := ApuntaSinIcono;
+  RegisterNonActiveXProc := ApuntaNoActiveX;
+  RegisterActionsProc := ApuntaAcciones;
+  UnRegisterActionsProc := DesapuntaAcciones;
+  var V := VariableDeModulos;
+  if V <> nil then
+    V^ := @ApuntaModulo;
+end;
+
 procedure CargaPaquetesDelIde(const ABds: string; out ACargados, AConocidos: Integer);
 const
   // expertos del IDE: no registran componentes y tocan BorlandIDEServices
@@ -699,11 +811,7 @@ begin
     Exit;
   end;
   GPaquetesCargados := True;
-  RegisterComponentsProc := ApuntaComponentes;
-  RegisterNoIconProc := ApuntaSinIcono;
-  RegisterNonActiveXProc := ApuntaNoActiveX;
-  RegisterActionsProc := ApuntaAcciones;
-  UnRegisterActionsProc := DesapuntaAcciones;
+  PonGanchos;
   for var Ruta in GConocidos do
   begin
     if not TFile.Exists(Ruta) then
@@ -719,6 +827,13 @@ begin
     try
       H := LoadPackage(Ruta);
       GModulos.Add(H);
+      // OTRA vez, antes de su Register: ActionEditors (designide, que llega
+      // como dependencia del primer paquete de diseno) pone a nil los de las
+      // acciones al inicializarse (ToolsAPI\ActionEditors.pas:1613) y el IDE
+      // pone los suyos despues. Sin esto cada RegisterActions daba "Invalid
+      // action registration" y el Register entero se cortaba ahi: las acciones
+      // de FMX, de LiveBindings y de datos salian sustituidas (18-oct-2026)
+      PonGanchos;
       LlamaRegisters(H);
       Inc(ACargados);
       Traza(Format('%s: %d clases, %d ms', [GPaqueteActual, GRegistradas.Count - Antes, Reloj.ElapsedMilliseconds]));
@@ -726,6 +841,36 @@ begin
       on E: Exception do
         Traza(Format('%s: no carga: %s: %s', [GPaqueteActual, E.ClassName, E.Message]));
     end;
+  end;
+  for var I := 0 to GModulosDeDiseno.Count - 1 do
+    Traza('modulo de diseno: ' + GModulosDeDiseno.Names[I] + ' -> ' + GModulosDeDiseno.ValueFromIndex[I]);
+end;
+
+function LeeConLosPaquetes(var ACargador: TCargador; const ANuevo: TFunc<TCargador>;
+  const ALee: TCreaYLee; out ARaiz: TComponent; var ACargados, AConocidos: Integer): TComponent;
+
+  function ConPaquetes: Boolean;
+  begin
+    Result := (GPeticion.Paquetes = 'auto') and (ACargador.Sustituidas.Count > 0);
+  end;
+
+begin
+  Result := nil;
+  ARaiz := nil;
+  try
+    Result := ALee(ACargador, ARaiz);
+  except
+    if not ConPaquetes then
+      raise;
+  end;
+  if ConPaquetes then
+  begin
+    Traza('clases sin registrar: ' + string.Join(',', ACargador.Sustituidas.ToStringArray) + ' -> paquetes del IDE');
+    FreeAndNil(Result);
+    ACargador.Free;
+    ACargador := ANuevo();
+    CargaPaquetesDelIde(GPeticion.Bds, ACargados, AConocidos);
+    Result := ALee(ACargador, ARaiz);
   end;
 end;
 
@@ -814,6 +959,9 @@ begin
       Comp := Comp.Substring(0, Comp.LastIndexOf('.')).Trim;
     raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_COMPONENTE_FMT, [Comp]));
   end;
+  // la segunda barrera, donde nace: sin propiedad no hay ruta que seguir
+  if Prop = '' then
+    raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_FORMA_FMT, [AEspec]));
   Obj := ObjetoDeRuta(C, Prop, Hoja);
   PI := GetPropInfo(Obj, Hoja);
   if PI = nil then
@@ -1172,6 +1320,16 @@ begin
       Ancestro := AncestroDeClase(Fichero, Cab.Clase, FLeidos);
       if Ancestro = '' then
       begin
+        // una VISTA FMX: ningun .pas declara su clase (la crea el IDE al
+        // disenar), y su ancestro es el maestro que el .pas de este declara
+        var Maestro := MaestroDeVista(Fichero, FLeidos);
+        if (Maestro <> '') and (Cadena.IndexOf(Maestro) < 0) then
+        begin
+          Fichero := Maestro;
+          Cadena.Insert(0, Fichero);
+          Cab := Cabecera(Fichero);
+          Continue;
+        end;
         FAvisos.Add(MsgFmt(SN_RENDER_HEREDA_SIN_PAS_FMT, [ExtractFileName(Fichero)]));
         FSinLeer.Add(ExtractFileName(Fichero));
         Break;
@@ -1218,7 +1376,8 @@ initialization
   // WRITTEN=, ROOT=, NONVISUALS= e IGNORED= (revisor 5 de la noche, A1: el
   // juez del orden perdia al hermano y aceptaba en falso)
   SetTextCodePage(Output, CP_UTF8);
-  GRegistradas := TDictionary<string, Boolean>.Create;
+  GRegistradas := TDictionary<TClass, Boolean>.Create;
+  GModulosDeDiseno := TStringList.Create;
   GModulos := TList<HMODULE>.Create;
   GModulosDatos := TDictionary<string, HMODULE>.Create;
 
@@ -1226,6 +1385,7 @@ finalization
   GModulosDatos.Free;
   GModulos.Free;
   GRegistradas.Free;
+  GModulosDeDiseno.Free;
   GConocidos.Free;
 
 end.

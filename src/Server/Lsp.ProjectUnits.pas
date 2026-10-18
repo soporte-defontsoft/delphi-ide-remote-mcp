@@ -17,7 +17,8 @@ unit Lsp.ProjectUnits;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON;
+  System.SysUtils, System.Classes, System.JSON,
+  Lsp.DesignerMeta; // TRaizDeDiseno: lo que es la raiz de un designer para el IDE
 
 type
   { What a .pas is to the project: a plain unit or a designer unit. }
@@ -29,12 +30,14 @@ type
     ClassName: string;   // TForm1
     Ancestor: string;    // TForm / TDataModule / TFrame / ...
     FormType: string;    // 'dfm' | 'fmx' | ''
-    DesignClass: string; // 'TDataModule' | 'TFrame' | '' (plain form)
-    // la raiz del marco a la que LLEGA la cadena por las clases de la unidad
-    // (TForm, TFrame, TDataModule); '' si sale de ella sin llegar, y entonces
-    // DesignClass adivina por el sufijo (segunda revision de la 1.17.0: preview
-    // tomaba esa adivinanza por un hecho)
-    DesignRoot: string;
+    // lo que es la raiz para el IDE y lo que escribe en su <DesignClass> y en
+    // el Form: X de la entrada del .dpr ('' en una form); los pone
+    // JuzgaRaizDeDiseno, no InspectUnit: remove-unit no los necesita y su juez
+    // puede esperar a la tabla y arrancar el motor. rdDesconocida, con el
+    // porque en RaizSinJuez, si no se pudo juzgar
+    Raiz: TRaizDeDiseno;
+    DesignClass: string;
+    RaizSinJuez: string;
     function IsDesigner: Boolean;
     function NeedsCreateForm: Boolean; // forms and data modules, not frames
   end;
@@ -54,9 +57,35 @@ function ResolveProjectPair(const AProject: string; out ADpr, ADproj: string): s
   when OK, else a refusal text (no header, header/file mismatch...). }
 function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
 
+{ Lo que es para el IDE la raiz del designer de AInfo (ya inspeccionada):
+  AInfo.Raiz y AInfo.DesignClass, por sus jueces en orden. Quien la CREO
+  (delphi_create) lo sabe: ARaizDelCreador, y el nombre de su fuente. Si no,
+  el registro del IDE (ARegistro, de RegistroDelIde), que es exacto - el
+  IDE nombra a veces la base del usuario de un modulo (TdmlMainComp) -; y
+  sin registro, la clase de la unidad por su cadena contra la tabla de su
+  marco (Lsp.DesignerMeta.RaizDeDiseno), esperando AEsperaMs a una tabla
+  que se esta generando. Lo que no se sepa, rdDesconocida con el porque en
+  AInfo.RaizSinJuez. Era una lista de nombres y un sufijo (TBaseFrame =
+  frame) que fallaba en todo modulo cuya cadena sale de la unidad: 39 de las
+  654 unidades con designer de los Samples (medido el 18-oct-2026). Con el
+  cerrojo de escritura cogido, AEsperaMs = 0: la tabla se espera FUERA, como
+  la del disenador (delphi_config add-unit), que dentro se paraban todas las
+  ediciones del servidor mientras se generaba. Nunca lanza. }
+procedure JuzgaRaizDeDiseno(var AInfo: TUnitInfo; const ARegistro: string;
+  AEsperaMs: Cardinal; ARaizDelCreador: TRaizDeDiseno = rdDesconocida);
+{ El <DCCReference> con el que el IDE registro APasPath como designer (con
+  su <Form>), por la RUTA que resuelve su Include desde la carpeta de cada
+  .dproj: primero en ADproj (el proyecto que se toca; '' ninguno), luego en
+  los que la listan (ProjectsUsingUnit). '' si ninguno. Nunca lanza. }
+function RegistroDelIde(const APasPath, ADproj: string): string;
+
 { Adds the unit to the .dpr uses (+ CreateForm) and the .dproj. Idempotent:
-  an entry already present is left alone and reported. }
-function AddProjectUnit(const AProject, APasPath: string): string;
+  an entry already present is left alone and reported. ARaizDelCreador: what
+  its root is, when the caller wrote it (delphi_create); otherwise it is
+  judged (JuzgaRaizDeDiseno) with the table as it is - who waits for it does
+  so before taking the write lock. }
+function AddProjectUnit(const AProject, APasPath: string;
+  ARaizDelCreador: TRaizDeDiseno = rdDesconocida): string;
 
 { Takes the unit out of the .dpr (uses + CreateForm) and the .dproj. The
   file itself stays on disk. }
@@ -235,7 +264,8 @@ uses
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
   Lsp.Rutas,
   Lsp.Settings,
-  Lsp.TodoONada;
+  Lsp.TodoONada,
+  Lsp.Args;
 
 { TUnitInfo }
 
@@ -246,7 +276,7 @@ end;
 
 function TUnitInfo.NeedsCreateForm: Boolean;
 begin
-  Result := IsDesigner and (FormName <> '') and (DesignClass <> 'TFrame');
+  Result := IsDesigner and (FormName <> '') and (Raiz <> rdFrame);
 end;
 
 { ---- paths ---- }
@@ -349,57 +379,124 @@ begin
   end;
 end;
 
-{ The IDE's DesignClass for an ancestor: TFrame / TDataModule (unit-qualified
-  accepted), a class declared in the same unit is followed up the chain, and
-  a custom base living elsewhere is classified by its NAME SUFFIX only
-  (TBaseFrame -> frame, TDMBase -> form: the form side is the safe default
-  because a spurious CreateForm on a frame breaks the build, a missing
-  DesignClass on a data module only changes the IDE's icon). The chain is
-  THE one (Lsp.PascalDecl.CadenaDeAncestros) over the classes of this unit
-  (AnotaAncestros): its own regex did not follow 'class abstract(TFrame)'
-  and add-unit wrote a CreateForm for a frame (4-oct-2026). }
-function RaizDeLaCadena(const AMapa: TDictionary<string, string>; const AAncestor: string;
-  out AUltimo: string): string;
-var
-  Sale: Boolean;
+{ ---- lo que es la raiz de un designer para el IDE ---- }
+
+function RegistroDelIde(const APasPath, ADproj: string): string;
+
+  function EnUno(const ADprojDe: string): string;
+  var
+    Xml, Enc, Dir: string;
+  begin
+    Result := '';
+    if (ADprojDe = '') or not TFile.Exists(ADprojDe) then
+      Exit;
+    Xml := PatchLoadText(ADprojDe, Enc);
+    Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprojDe));
+    // por EL analisis del .dproj, y por la ruta que resuelve el Include (como
+    // ProyectoListaUnidad), no por como va escrito
+    for var T in TramosDeEtiqueta(Xml, 'DCCReference', True) do
+      if NormPath(TPath.Combine(Dir, AtributoDeTramo(Xml, T, 'DCCReference', 'Include'))) =
+         NormPath(APasPath) then
+      begin
+        Result := Copy(Xml, T.Abre, T.Cierra - T.Abre);
+        if Length(AllTagValues(Result, 'Form')) = 0 then
+          Result := ''; // la registro como unit sin designer
+        Exit;
+      end;
+  end;
+
 begin
   Result := '';
-  AUltimo := '';
-  for var C in CadenaDeAncestros(AMapa, AAncestor, Sale, 9) do // 8 saltos
-  begin
-    AUltimo := UltimoTrozo(C);
-    if SameText(AUltimo, 'TFrame') or SameText(AUltimo, 'TCustomFrame') then
-      Exit('TFrame');
-    if SameText(AUltimo, 'TDataModule') then
-      Exit('TDataModule');
-    if SameText(AUltimo, 'TForm') or SameText(AUltimo, 'TCustomForm') or SameText(AUltimo, 'TForm3D') then
-      Exit('TForm');
+  try
+    Result := EnUno(ADproj);
+    if Result <> '' then
+      Exit;
+    for var P in ProjectsUsingUnit(APasPath) do
+    begin
+      Result := EnUno(DprojDe(P));
+      if Result <> '' then
+        Exit;
+    end;
+  except
+    Result := ''; // un proyecto que no se deja leer: sin registro
   end;
 end;
 
-function DesignClassOf(const AMapa: TDictionary<string, string>; const AAncestor: string): string;
+procedure JuzgaRaizDeDiseno(var AInfo: TUnitInfo; const ARegistro: string;
+  AEsperaMs: Cardinal; ARaizDelCreador: TRaizDeDiseno);
 var
-  Name: string;
+  M: TMetaTable;
+  Falta: TFaltaTabla;
+  Clase, Corte: string;
+  Fmx: Boolean;
 begin
-  // la raiz a la que llega la cadena; si sale de la unidad sin llegar, por el
-  // sufijo de la ultima clase que se ve
-  Result := RaizDeLaCadena(AMapa, AAncestor, Name);
-  if Result = 'TForm' then
-    Exit('');
-  if Result <> '' then
+  AInfo.Raiz := rdDesconocida;
+  AInfo.DesignClass := '';
+  AInfo.RaizSinJuez := '';
+  if not AInfo.IsDesigner or (AInfo.FormName = '') then
+    Exit; // nada de designer que escribir
+  Fmx := EsDesignerFmx(AInfo.Designer);
+  // 1) quien la creo sabe lo que escribio; el nombre, el de su fuente
+  if ARaizDelCreador <> rdDesconocida then
+  begin
+    AInfo.Raiz := ARaizDelCreador;
+    if ARaizDelCreador = rdFrame then
+      AInfo.DesignClass := DesignClassDeFrame(Fmx)
+    else if ARaizDelCreador = rdModulo then
+      AInfo.DesignClass := UltimoTrozo(AInfo.Ancestor);
     Exit;
-  if Name.EndsWith('Frame', True) then
-    Result := 'TFrame'
-  else if Name.EndsWith('DataModule', True) then
-    Result := 'TDataModule';
+  end;
+  // 2) lo que el IDE ya escribio: exacto
+  if ARegistro <> '' then
+  begin
+    for var V in AllTagValues(ARegistro, 'DesignClass') do
+    begin
+      AInfo.DesignClass := V.Trim;
+      Break;
+    end;
+    AInfo.Raiz := RaizDeDesignClass(AInfo.DesignClass);
+    Exit;
+  end;
+  // 3) la clase de la unidad por su cadena, contra la tabla de su marco
+  try
+    M := MetaTable(Fmx, Falta, AEsperaMs);
+    if M = nil then
+      AInfo.RaizSinJuez := Falta.Razon
+    else
+    begin
+      AInfo.Raiz := RaizDeDiseno(M, AInfo.PasPath, '', AInfo.ClassName, Clase, Corte);
+      if AInfo.Raiz = rdDesconocida then
+        AInfo.RaizSinJuez := MsgFmt(SF_UNIT_RAIZ_CORTE_FMT, [Corte])
+      else
+        AInfo.DesignClass := Clase;
+    end;
+  except
+    on E: Exception do
+    begin
+      AInfo.Raiz := rdDesconocida;
+      AInfo.DesignClass := '';
+      AInfo.RaizSinJuez := E.Message;
+    end;
+  end;
+end;
+
+{ Lo que se dice cuando la raiz de un designer que se registra no se pudo
+  juzgar (JuzgaRaizDeDiseno): se escribe como una form, y por que. '' si se
+  juzgo o no hay designer que escribir. }
+function NotaDeRaiz(const AInfo: TUnitInfo): string;
+begin
+  Result := '';
+  if AInfo.IsDesigner and (AInfo.FormName <> '') and (AInfo.Raiz = rdDesconocida) then
+    Result := MsgFmt(SN_UNIT_RAIZ_SIN_JUEZ_FMT, [AInfo.ClassName, AInfo.RaizSinJuez]);
 end;
 
 function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
 var
-  Enc, Src, Stem, DName, DClass, Cab, Ultima: string;
+  Enc, Src, Stem, DName, DClass, Cab, DC, Corte: string;
   Ini, Largo: Integer;
   U: TUnidadPas;
-  Mapa: TDictionary<string, string>;
+  M: TMetaTable;
+  Falta: TFaltaTabla;
 begin
   Result := '';
   AInfo := Default(TUnitInfo);
@@ -440,9 +537,7 @@ begin
   // ('TViejo = class(TForm)' between braces) is not the form's (censo del
   // lexico, 2-oct-2026)
   U := LeeFuentePascal(Src);
-  Mapa := TDictionary<string, string>.Create;
   try
-    AnotaAncestros(U, Mapa);
     if DesignerHeaderName(AInfo.Designer, DName, DClass) then
     begin
       AInfo.FormName := DName;
@@ -453,15 +548,22 @@ begin
     end
     else
     begin
-      // binary designer: the first designer class of the unit, then its variable
-      for var T in U.Tipos do
-        if (T.Clase = ctClase) and (T.Contenedor = '') and T.Nombre.StartsWith('T', True) and
-           TRegEx.IsMatch(UltimoTrozo(T.Ancestro), '(?i)\AT(?:Form|DataModule|Frame)') then
-        begin
-          AInfo.ClassName := T.Nombre;
-          AInfo.Ancestor := T.Ancestro;
-          Break;
-        end;
+      // un designer cuya cabecera no se deja leer (danado): la primera clase
+      // de la unidad que SU juez dice que es una raiz del IDE (una form, un
+      // frame o un modulo: Lsp.DesignerMeta.RaizDeDiseno, la tabla sin
+      // esperar), y su variable. Era una regex del nombre del ancestro
+      // (TForm*, TDataModule*, TFrame*): un TFormatter = class(TFormatBase)
+      // era la form
+      M := MetaTable(EsDesignerFmx(AInfo.Designer), Falta, 0);
+      if M <> nil then
+        for var T in U.Tipos do
+          if (T.Clase = ctClase) and (T.Contenedor = '') and
+             (RaizDeDiseno(M, AInfo.PasPath, Src, T.Nombre, DC, Corte) <> rdDesconocida) then
+          begin
+            AInfo.ClassName := T.Nombre;
+            AInfo.Ancestor := T.Ancestro;
+            Break;
+          end;
       if AInfo.ClassName <> '' then
       begin
         var V := TRegEx.Match(CodigoPascal(Src), '^\s*(' + PATRON_IDENT + ')\s*:\s*' +
@@ -470,10 +572,7 @@ begin
           AInfo.FormName := V.Groups[1].Value;
       end;
     end;
-    AInfo.DesignClass := DesignClassOf(Mapa, AInfo.Ancestor);
-    AInfo.DesignRoot := RaizDeLaCadena(Mapa, AInfo.Ancestor, Ultima);
   finally
-    Mapa.Free;
     U.Free;
   end;
 end;
@@ -1639,7 +1738,8 @@ end;
 
 { ---- public operations ---- }
 
-function AddProjectUnitNucleo(const AProject, APasPath: string): string;
+function AddProjectUnitNucleo(const AProject, APasPath: string;
+  ARaizDelCreador: TRaizDeDiseno): string;
 var
   Dpr, Dproj, Enc, Text, Include, Entry, Note: string;
   Info: TUnitInfo;
@@ -1655,6 +1755,9 @@ begin
   Result := InspectUnit(APasPath, Info);
   if Result <> '' then
     Exit;
+  // lo que es su raiz para el IDE, con la tabla como este: quien la espera lo
+  // hace antes de coger el cerrojo
+  JuzgaRaizDeDiseno(Info, RegistroDelIde(Info.PasPath, Dproj), 0, ARaizDelCreador);
   Include := IncludeFor(Dpr, Info.PasPath);
 
   // .dpr
@@ -1764,6 +1867,8 @@ begin
   end
   else
     Note := Note + IfThen(Note <> '', ' ', '') + MsgText(SN_UNIT_NO_DPROJ);
+  if NotaDeRaiz(Info) <> '' then
+    Note := Note + IfThen(Note <> '', ' ', '') + NotaDeRaiz(Info);
 
   if Completada then
     Result := MsgFmt(SN_UNIT_COMPLETED_FMT, [Info.UnitName, TPath.GetFileName(Dpr),
@@ -1809,7 +1914,8 @@ begin
   Result := ProyectoTodoONada(AProject, [], AAccion);
 end;
 
-function AddProjectUnit(const AProject, APasPath: string): string;
+function AddProjectUnit(const AProject, APasPath: string;
+  ARaizDelCreador: TRaizDeDiseno): string;
 begin
   // Registrar una unidad es leer el .dpr, modificarlo y escribirlo: dos
   // agentes creando unidades en el MISMO proyecto a la vez perdian entradas
@@ -1820,7 +1926,7 @@ begin
     Result := ProyectoTodoONada(AProject,
       function: string
       begin
-        Result := AddProjectUnitNucleo(AProject, APasPath);
+        Result := AddProjectUnitNucleo(AProject, APasPath, ARaizDelCreador);
       end);
   finally
     LeaveFileEdit;
@@ -2036,6 +2142,8 @@ begin
   Result := InspectUnit(ANewPasPath, Info);
   if Result <> '' then
     Exit;
+  // su raiz: la registro el IDE con la ruta VIEJA
+  JuzgaRaizDeDiseno(Info, RegistroDelIde(AOldPasPath, Dproj), 0);
   OldName := TPath.GetFileNameWithoutExtension(AOldPasPath);
   NewInclude := IncludeFor(Dpr, Info.PasPath);
 
@@ -2098,6 +2206,8 @@ begin
   if Length(ANoEscritos) > 0 then
     Result := Result + #10 + MsgFmt(SN_UNIT_RENAME_NOT_WRITTEN_FMT,
       [Length(ANoEscritos), string.Join(', ', ANoEscritos)]);
+  if NotaDeRaiz(Info) <> '' then
+    Result := Result + #10 + NotaDeRaiz(Info);
 end;
 
 function FicherosDelRename(const AProject, ANewPasPath: string;
@@ -2997,9 +3107,7 @@ end;
 function DirectivasDeFichero(const ATexto: string): TArray<TDirectivaFichero>;
 var
   D: TDirectivaFichero;
-  G, Tok: string;
-  P, Q, Maximo: Integer;
-  Comilla: Char;
+  Maximo: Integer;
 begin
   Result := [];
   // por el lector UNICO de directivas: una comentada (tambien con //) o
@@ -3008,51 +3116,26 @@ begin
   begin
     if not MatchText(X.Nombre, ['I', 'INCLUDE', 'R', 'RESOURCE', 'L', 'LINK']) then
       Continue;
-    G := X.Argumento;
     // {$R a.res a.rc}: el .rc del que sale el .res es la SEGUNDA ruta de la
     // misma directiva, y tambien es un fichero (revision 26-sep-2026)
     Maximo := 1;
     if MatchText(X.Nombre, ['R', 'RESOURCE']) then
       Maximo := 2;
-    P := 1;
-    for var N := 1 to Maximo do
-    begin
-      while (P <= Length(G)) and CharInSet(G[P], [' ', #9, #13, #10]) do
-        Inc(P);
-      if P > Length(G) then
-        Break;
-      Comilla := #0;
-      if CharInSet(G[P], ['''', '"']) then
-      begin
-        Comilla := G[P];
-        Inc(P);
-        Q := P;
-        while (Q <= Length(G)) and (G[Q] <> Comilla) do
-          Inc(Q);
-      end
-      else
-      begin
-        Q := P;
-        while (Q <= Length(G)) and not CharInSet(G[Q], [' ', #9, #13, #10]) do
-          Inc(Q);
-      end;
-      Tok := Copy(G, P, Q - P);
+    // los trozos, por EL troceador (Lsp.Pascal, el que lee tambien la vista
+    // FMX del renderizador)
+    for var T in TrozosDeDirectiva(X.Argumento, Maximo) do
       // Un comodin es el andamiaje del IDE ({$R *.res}, {$R *.dfm}); un
       // caracter suelto, un interruptor ({$I +}), no un fichero.
-      if not ((Tok = '') or Tok.Contains('*') or
-         ((Comilla = #0) and ((Length(Tok) <= 1) or CharInSet(Tok[1], ['+', '-'])))) then
+      if not ((T.Texto = '') or T.Texto.Contains('*') or
+         ((T.Comilla = #0) and ((Length(T.Texto) <= 1) or CharInSet(T.Texto[1], ['+', '-'])))) then
       begin
         D.Texto := Copy(ATexto, X.Inicio, X.Largo);
-        D.Ruta := Tok;
-        D.Comilla := Comilla;
-        D.Inicio := X.InicioArg + P - 1;
-        D.Largo := Length(Tok);
+        D.Ruta := T.Texto;
+        D.Comilla := T.Comilla;
+        D.Inicio := X.InicioArg + T.Inicio - 1;
+        D.Largo := Length(T.Texto);
         Result := Result + [D];
       end;
-      P := Q;
-      if Comilla <> #0 then
-        Inc(P);
-    end;
   end;
 end;
 
@@ -3306,7 +3389,7 @@ begin
       var Fuera := ReadPathDenied(Nuevo);
       if Fuera <> '' then
       begin
-        AFallos := AFallos + [TPath.GetFileName(AProyecto) + ': ' + Fuera.Split([#10])[0]];
+        AFallos := AFallos + [TPath.GetFileName(AProyecto) + ': ' + PrimerTrozo(Fuera, [#10])];
         Continue;
       end;
       // La ruta VIEJA de verdad: RenameProjectUnit busca en el .dpr por el
@@ -3318,7 +3401,7 @@ begin
       if Reapuntada(Resp) then
         Inc(Result)
       else
-        AFallos := AFallos + [TPath.GetFileName(AProyecto) + ': ' + Resp.Split([#10])[0]];
+        AFallos := AFallos + [TPath.GetFileName(AProyecto) + ': ' + PrimerTrozo(Resp, [#10])];
     end;
 end;
 
@@ -3930,7 +4013,7 @@ begin
         if Reapuntada(Resp) then
           Hechos := Hechos + [PU.Include + ' -> ' + IncludeFor(Dpr, Cands[0])]
         else
-          Fallidas := Fallidas + [PU.Include + ': ' + Resp.Split([#10])[0]];
+          Fallidas := Fallidas + [PU.Include + ': ' + PrimerTrozo(Resp, [#10])];
       end
       else if Length(Cands) = 0 then
         Sin := Sin + [PU.Include]

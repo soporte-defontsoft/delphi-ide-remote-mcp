@@ -111,7 +111,9 @@ uses
   Lsp.Patch,
   Lsp.Regex,
   Lsp.TodoONada,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.DesignerMeta,  // MetaTable: la tabla que juzga la raiz de un add-unit
+  Lsp.DesignerForma; // DesignersDeUnidad, EsDesignerFmx: de que marco es
 
 constructor TDelphiConfigTool.Create;
 begin
@@ -1729,6 +1731,19 @@ begin
     Exit(MsgFmt(SR_CONFIG_NOT_PROJECT_FMT, [TPath.GetFileName(Proj)]));
   if (Cmd = '') or (Cmd = 'view') then
     Exit(ViewConfig(Proj, Params.Section));
+
+  // add-unit juzga la raiz de un designer contra la tabla de su marco
+  // (Lsp.ProjectUnits.JuzgaRaizDeDiseno), y la tabla se espera FUERA del
+  // cerrojo, como la del disenador: dentro se paraban todas las ediciones
+  // del servidor mientras se generaba. Sin ella, lo que no se sepa se dice
+  if (Cmd = 'add-unit') and (Params.Path.Trim <> '') and (ReadPathDenied(Params.Path) = '') then
+    for var D in DesignersDeUnidad(TPath.GetFullPath(Params.Path)) do
+      if TFile.Exists(D) then
+      begin
+        var Falta: TFaltaTabla;
+        MetaTable(EsDesignerFmx(D), Falta);
+        Break;
+      end;
 
   // Todo lo demas ESCRIBE el .dproj leyendolo, cambiandolo y guardandolo, asi
   // que va bajo el mismo cerrojo que las demas ediciones: dos agentes tocando

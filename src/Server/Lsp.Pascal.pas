@@ -56,6 +56,14 @@ type
     InicioArg: Integer;     // donde empieza Argumento en el texto
   end;
 
+  // Un trozo del argumento de una directiva de FICHERO (I, R, L): una ruta
+  // entre comillas, o hasta el primer blanco si va sin ellas.
+  TTrozoDeDirectiva = record
+    Texto: string;   // sin sus comillas
+    Comilla: Char;   // la que lo abre; #0 si va sin
+    Inicio: Integer; // donde empieza Texto en el argumento (1-based)
+  end;
+
 // Largo del comentario o directiva que empieza en S[I] (0 si no empieza uno)
 function CommentLen(const S: string; I: Integer): Integer;
 // Largo de la cadena que empieza en S[I] (0 si no empieza una)
@@ -105,8 +113,25 @@ function ComentariosDeLinea(const ALineas: TArray<string>): TArray<Integer>;
 // entrada quitada de un uses deja detras). Cuatro lectores con su regex sobre
 // el texto crudo veian una directiva COMENTADA -tambien con //- o dentro de
 // una cadena, y no la forma parentesis-asterisco (revision del 27-sep-2026,
-// David: "incluso //").
-function DirectivasPascal(const ATexto: string): TArray<TDirectivaPascal>;
+// David: "incluso //"). AMarca, lo que sigue a la llave: '$' las del
+// compilador; '%' las marcas que escribe el IDE y el compilador no lee
+// ({%CLASSGROUP 'FMX.Controls.TControl'} de un modulo de datos).
+function DirectivasPascal(const ATexto: string; AMarca: Char = '$'): TArray<TDirectivaPascal>;
+
+// Los primeros AMaximo trozos de AArgumento, el argumento de una directiva de
+// fichero: {$R a.res a.rc} da dos, y {$R *.iPad.fmx IOS} el comodin y la
+// plataforma. EL troceador de la mudanza y la puerta del build
+// (DirectivasDeFichero) y de la vista FMX del renderizador; un argumento
+// vacio no da ninguno (un Split()[0] leia ahi fuera del array, 18-oct-2026).
+function TrozosDeDirectiva(const AArgumento: string; AMaximo: Integer): TArray<TTrozoDeDirectiva>;
+
+// El grupo de clases que el IDE escribe en la unidad de un modulo de datos,
+// {%CLASSGROUP 'FMX.Controls.TControl'}: de que marco es su designer (un .dfm
+// de un proyecto FMX es de FMX: Property Editors\FMX.ActnRes del propio IDE,
+// medido el 18-oct-2026). '' si no lo lleva. EL lector, y su compositor el que
+// escribe Lsp.Scaffold.
+function GrupoDeClasesDe(const ATexto: string): string;
+function PseudoDirectivaGrupoDeClases(const AGrupo: string): string;
 
 // Las lineas (1-based) de ATexto donde empieza un comentario de LLAVE que
 // lleva otra llave abierta dentro. Pascal no anida llaves: el primer cierre
@@ -559,7 +584,7 @@ begin
   end;
 end;
 
-function DirectivasPascal(const ATexto: string): TArray<TDirectivaPascal>;
+function DirectivasPascal(const ATexto: string; AMarca: Char): TArray<TDirectivaPascal>;
 var
   I, N, P, Q, Fin: Integer;
   D: TDirectivaPascal;
@@ -584,9 +609,9 @@ begin
     // una directiva; uno de // nunca lo es, y lo de dentro de un comentario
     // tampoco
     P := 0;
-    if (ATexto[I] = '{') and (I < Length(ATexto)) and (ATexto[I + 1] = '$') then
+    if (ATexto[I] = '{') and (I < Length(ATexto)) and (ATexto[I + 1] = AMarca) then
       P := I + 2
-    else if (ATexto[I] = '(') and (I + 2 <= Length(ATexto)) and (ATexto[I + 2] = '$') then
+    else if (ATexto[I] = '(') and (I + 2 <= Length(ATexto)) and (ATexto[I + 2] = AMarca) then
       P := I + 3;
     if P > 0 then
     begin
@@ -616,6 +641,60 @@ begin
     end;
     Inc(I, N);
   end;
+end;
+
+function TrozosDeDirectiva(const AArgumento: string; AMaximo: Integer): TArray<TTrozoDeDirectiva>;
+var
+  P, Q: Integer;
+  T: TTrozoDeDirectiva;
+begin
+  Result := [];
+  P := 1;
+  for var N := 1 to AMaximo do
+  begin
+    while (P <= Length(AArgumento)) and CharInSet(AArgumento[P], [' ', #9, #13, #10]) do
+      Inc(P);
+    if P > Length(AArgumento) then
+      Break;
+    T.Comilla := #0;
+    if CharInSet(AArgumento[P], ['''', '"']) then
+    begin
+      T.Comilla := AArgumento[P];
+      Inc(P);
+      Q := P;
+      while (Q <= Length(AArgumento)) and (AArgumento[Q] <> T.Comilla) do
+        Inc(Q);
+    end
+    else
+    begin
+      Q := P;
+      while (Q <= Length(AArgumento)) and not CharInSet(AArgumento[Q], [' ', #9, #13, #10]) do
+        Inc(Q);
+    end;
+    T.Texto := Copy(AArgumento, P, Q - P);
+    T.Inicio := P;
+    Result := Result + [T];
+    P := Q;
+    if T.Comilla <> #0 then
+      Inc(P);
+  end;
+end;
+
+const
+  PSEUDO_GRUPO_DE_CLASES = 'CLASSGROUP';
+
+function GrupoDeClasesDe(const ATexto: string): string;
+begin
+  Result := '';
+  for var D in DirectivasPascal(ATexto, '%') do
+    if D.Nombre = PSEUDO_GRUPO_DE_CLASES then
+      for var T in TrozosDeDirectiva(D.Argumento, 1) do
+        Exit(T.Texto);
+end;
+
+function PseudoDirectivaGrupoDeClases(const AGrupo: string): string;
+begin
+  Result := '{%' + PSEUDO_GRUPO_DE_CLASES + ' ''' + AGrupo + '''}';
 end;
 
 function FinDeLinea(const ATexto: string; APos: Integer): Integer;

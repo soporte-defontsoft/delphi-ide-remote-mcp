@@ -53,7 +53,8 @@ uses
   Lsp.Casa,
   Lsp.TodoONada,
   Lsp.Args,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.DesignerMeta; // TRaizDeDiseno: lo que es la raiz que se crea
 
 const
   CRLF = #13#10;
@@ -494,7 +495,7 @@ begin
     'var' + CRLF +
     '  ' + AModuleName + ': T' + AModuleName + ';' + CRLF + CRLF +
     'implementation' + CRLF + CRLF +
-    IfThen(AFmx, '{%CLASSGROUP ''FMX.Controls.TControl''}', '{%CLASSGROUP ''Vcl.Controls.TControl''}') + CRLF + CRLF +
+    PseudoDirectivaGrupoDeClases(IfThen(AFmx, 'FMX.Controls.TControl', 'Vcl.Controls.TControl')) + CRLF + CRLF +
     '{$R *.dfm}' + CRLF + CRLF +
     'end.' + CRLF;
 end;
@@ -1024,9 +1025,18 @@ begin
     end;
   end;
 
-  // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
+  // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference),
+  // diciendo lo que es su raiz: la acaba de escribir este (sin esperar a la
+  // tabla que la juzgaria)
+  // (las mismas ramas que el par de arriba: lo que no es form ni frame es el
+  // data module)
+  var Raiz := rdModulo;
+  if MatchText(Kind, ['vcl', 'fmx']) then
+    Raiz := rdForm
+  else if MatchText(Kind, ['frame-vcl', 'frame-fmx']) then
+    Raiz := rdFrame;
   try
-    Result := AddProjectUnit(ADprPath, PasPath);
+    Result := AddProjectUnit(ADprPath, PasPath, Raiz);
   except
     on E: Exception do
       Result := MsgExcepcion(E.ClassName, E.Message);

@@ -463,7 +463,7 @@ procedure PonFalloDelLanzador(AObj: TJSONObject; const ASalida: string;
   ACodigo: Integer);
 begin
   if (ACodigo <> 0) and EsFallo(ASalida) then
-    AObj.AddPair('error', ASalida.TrimLeft.Split([#10])[0].Trim);
+    AObj.AddPair('error', PrimerTrozo(ASalida.TrimLeft, [#10]).Trim);
 end;
 
 { Un id de trabajo lo compone ESTE servidor (fecha-hora-fragmento): otra

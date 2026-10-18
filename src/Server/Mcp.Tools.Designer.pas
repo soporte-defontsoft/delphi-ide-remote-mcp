@@ -1508,20 +1508,43 @@ begin
     if Length(R.Ignoradas) > 0 then
     begin
       Return.AddPair('ignored', IgnoradasConLinea(Ruta, R.Ignoradas));
-      Return.AddPair('ignoredNote', MsgText(SN_DESIGNER_PREVIEW_IGNORADAS));
       // lo que publica una clase del USUARIO en la raiz no lo lee el
       // renderizador (no carga sus clases): se dice cual es, que no es un
-      // error del form (1.19.2)
+      // error del form (1.19.2). Y lo que es de la clase de la RAIZ y no de la
+      // form en la que la lee (un TQuickRep, un TForm3D, un modulo de datos
+      // FMX: DSGN-157, corpus del 18-oct-2026). EL juicio, el de lo que no
+      // carga: Lsp.FormRender.IgnoradaDelUsuario y DeLaRaizQueElLectorNoVe
       var Suyas := '';
-      var Publicadas := PublicadasPorElUsuario(Ruta, R.RaizClase, Fw = 'fmx');
-      // (EL juicio, Lsp.FormRender.IgnoradaDelUsuario: el de lo que no carga)
+      var NoVistas := '';
+      var DelForm := 0;
+      var RaizL := RaizParaElLector(Ruta, R.RaizClase, Fw = 'fmx');
+      var Sustituto := ClaseDelSustituto(R.RaizTipo);
       for var Ig in R.Ignoradas do
       begin
         var Suya: TPropiedadDelUsuario;
-        if IgnoradaDelUsuario(R.RaizNombre, Ig, Publicadas, Suya) then
+        if IgnoradaDelUsuario(R.RaizNombre, Ig, RaizL.Propias, Suya) then
+        begin
           Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
             TPath.GetFileName(Suya.Fichero) + ')';
+          Inc(DelForm);
+        end
+        else if (R.RaizNombre <> '') and SameText(Ig.Componente, R.RaizNombre) and
+                DeLaRaizQueElLectorNoVe(RaizL, Sustituto, Ig.Propiedad) then
+          NoVistas := NoVistas + IfThen(NoVistas <> '', ', ') + Ig.Propiedad
+        else
+          Inc(DelForm);
       end;
+      // leido sin un ancestro: lo saltado puede ser solo lo que el aporta, y
+      // "no abrira" seria falso (una vista FMX de C++, 18-oct-2026); y si todo
+      // lo saltado es de la raiz que el lector no ve, tampoco
+      if Length(R.SinLeer) > 0 then
+        Return.AddPair('ignoredNote', MsgFmt(SN_DESIGNER_PREVIEW_IGNORADAS_PARCIAL_FMT,
+          [string.Join(', ', R.SinLeer)]))
+      else if DelForm > 0 then
+        Return.AddPair('ignoredNote', MsgText(SN_DESIGNER_PREVIEW_IGNORADAS));
+      if NoVistas <> '' then
+        Return.AddPair('ignoredRootNote', MsgFmt(SN_DESIGNER_PREVIEW_RAIZ_NO_VISTA_FMT,
+          [Sustituto, RaizL.Clase, Sustituto, NoVistas]));
       if Suyas <> '' then
         Return.AddPair('ignoredUserNote', MsgFmt(SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT, [Suyas]));
     end;

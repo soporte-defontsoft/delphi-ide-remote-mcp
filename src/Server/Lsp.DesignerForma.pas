@@ -97,18 +97,28 @@ function ComponeLineaDeObjeto(const AClave, ANombre, AClase: string): string;
   IDE). Escrita a mano en cuatro sitios hasta la 1.17.0. }
 function UnidadDeDesigner(const ADesigner: string): string;
 
-{ True si ADesigner es de FMX (un .fmx), por su extension, como decide el IDE;
-  un .dfm es VCL. La preguntaban a mano siete sitios del servidor, de tres
-  formas (EndsWith, ToLower.EndsWith, SameText de la extension; 2.3 de la
-  1.18.0). }
+{ True si ADesigner es de FMX, como decide el IDE: un .fmx; y un .dfm cuya
+  unidad lo dice con el grupo de clases que el IDE escribe en un modulo de
+  datos (la marca CLASSGROUP 'FMX.Controls.TControl': un TDataModule de un proyecto
+  FMX vive en un .dfm - Property Editors\FMX.ActnRes del propio IDE -, y se
+  juzgaba con la VCL: "Property Source does not exist" en su TImageList;
+  corpus del 18-oct-2026). La preguntaban a mano siete sitios del servidor,
+  de tres formas (2.3 de la 1.18.0). La unidad se lee por GTextoDeUnidad. }
 function EsDesignerFmx(const ADesigner: string): Boolean;
+
+var
+  { El texto de la unidad de un designer por la puerta de leer del servidor
+    ('' si no se puede): lo pone el servidor al arrancar. En los
+    renderizadores queda nil: alli el marco lo da el propio ejecutable. }
+  GTextoDeUnidad: function(const APas: string): string = nil;
 
 implementation
 
 uses
   System.SysUtils,
   System.RTLConsts,   // SParseError: el formato del mensaje del parser
-  System.RegularExpressions;
+  System.RegularExpressions,
+  Lsp.Pascal;         // GrupoDeClasesDe: el {%CLASSGROUP} de un modulo de datos
 
 function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
 begin
@@ -299,6 +309,8 @@ end;
 function EsDesignerFmx(const ADesigner: string): Boolean;
 begin
   Result := SameText(ExtractFileExt(ADesigner.Trim), '.fmx');
+  if not Result and Assigned(GTextoDeUnidad) and SameText(ExtractFileExt(ADesigner.Trim), '.dfm') then
+    Result := GrupoDeClasesDe(GTextoDeUnidad(UnidadDeDesigner(ADesigner.Trim))).StartsWith('FMX.', True);
 end;
 
 function UnidadDeDesigner(const ADesigner: string): string;

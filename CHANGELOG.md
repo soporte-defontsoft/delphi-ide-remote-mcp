@@ -111,10 +111,79 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_config add-searchpath` on the base group suggested
   `delphi_build {platform:"Win64"}` whatever the project; it names the
   project's own platform now.
+- The lint said an FMX **view** (`<unit>.<View>.fmx`) did not load: the
+  renderer read it on its own, and every `inherited` child gave "Ancestor
+  for 'X' not found" - 31 of the 78 views of the Samples, and `delphi_edit`
+  after any change to a view warned that "the app dies creating the form".
+  The IDE loads a view on top of its master, and declares it in the master's
+  `.pas` with `{$R *.<View>.fmx ...}`: the renderer reads that directive and
+  loads the master first, like the IDE (lint CLEAN, preview drawn). A form
+  read WITHOUT one of its ancestors (no `.pas` says which class it inherits
+  from - a C++ form, for one) is no longer "does not load": the lint says it
+  could not be confirmed (`DSGN-154`), and preview says what was skipped may
+  be what the missing ancestor brings (`DSGN-156`) instead of "it will not
+  open".
+- The lint (check-binding) said a component without a published field made
+  the form fail to load. `TReader` does not need the field: it creates the
+  component when its CLASS is the type of some published field of the class
+  chain, or registered. Only when no field names its class is it reported,
+  and the warning says it loads only if the class is registered (the FMX
+  control units register theirs, `Vcl.StdCtrls` does not). A Sample of
+  Embarcadero with four field-less `TLabel` was reported as broken.
+- A VCL form with a `TCalendar`, `TMediaPlayer`, `TWebBrowser` or
+  `TBindNavigator` - names FMX has too - was reported as not loading: the
+  renderer registered the IDE's classes by NAME and skipped the VCL one when
+  the FMX one came first, so the reader built a stand-in without its
+  properties. Classes are registered as themselves now, and each renderer
+  activates its framework's class group before reading
+  (`ActivateClassGroup`), as the IDE's designer does: every FMX unit
+  activates FMX's group when it initializes.
+- The actions of FMX (`TChangeTabAction`, the photo actions), of LiveBindings
+  and of data sets came out substituted: the IDE's design core clears the
+  action-registration hook when it loads (`ActionEditors`), so each
+  `RegisterActions` of a design package failed and cut its `Register` short.
+  The renderer sets its hooks again after loading each package, as the IDE
+  does.
+- With the IDE packages loaded on demand, a first pass that FAILED was the
+  answer: a stand-in reading a property of a class it is not (the `Size` of a
+  `TStringField`) left the reader mid-stream ("Stream read error") and a form
+  with FireDAC fields "did not load". It is read again with the packages, as
+  a first pass that only substituted classes already was.
+- A data module of an FMX project lives in a `.dfm`, and it was judged as VCL
+  ("Property Source does not exist" in its `TImageList`). Its framework is the
+  class group the IDE writes in its unit (`{%CLASSGROUP
+  'FMX.Controls.TControl'}`, which `delphi_create` writes too): for the lint,
+  the tables, `set`, `insert` and preview.
+- The reader loads the root of a form into a `TForm` (or a `TFrame`), and
+  what only the root's own class has - a `TQuickRep`, a `TForm3D`, a
+  `TWebModule`, a data module read as FMX - was reported as not loading. It
+  is "not confirmed" now (`DSGN-154`, naming the class), and preview notes it
+  (`DSGN-157`) instead of "it will not open". The tables judge it: the root's
+  class has the property and the class it is read into does not.
+- `preview` with a `state` whose component part ends in a dot (`Label1.=x`)
+  took the renderer down with an access violation; it is a shape error now
+  (`RENDER-006`). Nine other places took the first piece of a text without
+  checking it was there (the same access violation on an empty text); they use
+  the shared helper, and `test_paisaje` keeps the bare form out.
 - `DSGN-154` (the lint could not ask the IDE's form reader) put the reason in
   the middle of the sentence, and every reason ends in a full stop: the
   agent read "...read the form without it.. preview loads the form." The
   reason goes last now.
+- What the root of a designer unit is for the IDE - a form, a frame or another
+  module - was decided by a list of class names and, when the chain of
+  ancestors left the unit, by the NAME SUFFIX of the last class seen. Measured
+  against the 654 designer units of the Samples' projects, it was wrong in the
+  39 whose chain leaves the unit: a data module on a user base in another unit
+  lost its `DesignClass`, a frame on such a base got an `Application.CreateForm`,
+  a `TWebModule` was a form, a form on a `TPanelFrame` was a frame. `add-unit`,
+  a unit's rename and the reader's `--root` now ask, in order: the IDE's own
+  record (the `<DesignClass>` of a `.dproj` that lists the unit), and the chain
+  of ancestors - followed by the engine when it leaves the unit - up to the
+  first class the designer table knows, whose category the table's hierarchy
+  says. What cannot be judged is said (`CFG-122`) and registered as a form. The
+  same name lists went from `check-binding` (a `TForm3D`, `TWebModule` or
+  `TQuickRep` root left it partial and silent) and from the renderer (`frame`
+  inside a class name made it a frame: the loaded class decides now).
 
 ### Added
 
