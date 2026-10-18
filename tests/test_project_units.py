@@ -405,6 +405,15 @@ cabusa = os.path.join(VDIR, 'UCabUsa.pas')
 open(cabusa, 'wb').write(b"unit UCabUsa; interface uses UVenta; implementation end.\r\n")
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": cabusa})
 check('unit con la cabecera y el uses de UVenta en una linea anadida', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
+# y una con un CAMPO y una VARIABLE que se llaman como la unit: no son la unit, y se
+# renombraban con ella (el build caia con E2003 y la tool decia MOVED; 18-oct-2026)
+campo = os.path.join(VDIR, 'UCampoVenta.pas')
+open(campo, 'wb').write(b"unit UCampoVenta;\r\n\r\ninterface\r\n\r\nuses\r\n  UVenta;\r\n\r\ntype\r\n  TFila = record\r\n"
+                        b"    UVenta: Integer;\r\n  end;\r\n\r\nfunction Cuenta(const F: TFila): Integer;\r\n\r\n"
+                        b"implementation\r\n\r\nfunction Cuenta(const F: TFila): Integer;\r\nvar\r\n  UVenta: Integer;\r\n"
+                        b"begin\r\n  UVenta := F.UVenta;\r\n  Result := UVenta;\r\nend;\r\n\r\nend.\r\n")
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": campo})
+check('unit con un campo y una variable que se llaman UVenta anadida', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
 # un // detras de la coma de UVenta es suyo y la sigue con su nombre nuevo (la
 # entrada se cambia EN SU SITIO: 1.10.0, la duena del // ya no se busca por el
 # nombre, que el rename cambia)
@@ -434,7 +443,18 @@ check('move rename: el calificador UVenta.X sigue el rename', 'if UVentas.FormUV
 _cab = rd(cabusa)
 check('move rename: el uses de la linea de la cabecera tambien, y su nombre no',
       _cab.startswith('unit UCabUsa; interface uses UVentas;'), _cab)
+# ...y adduses en su implementation, que no tiene uses: nace pegado a la palabra, en su
+# linea (la seccion solo se buscaba a principio de linea y se negaba; encontrada en
+# medio, debajo de la linea caia detras del end. final; 18-oct-2026)
+# (en su propia variable: los checks de abajo leen el out del move)
+_ad = call('delphi_edit', {"path": cabusa, "adduses": "System.Classes", "section": "implementation"})
+_cab = rd(cabusa)
+check('adduses en la implementation de una unit de una linea: la clausula nace detras de la palabra',
+      not mc.fallo(_ad) and 'implementation uses System.Classes; end.' in _cab, _ad[:300] + ' | ' + _cab)
 check('move rename: dentro de una cadena NO se toca', "'UVenta.FormUVenta'" in usa_src, usa_src)
+_campo = rd(campo)
+check('move rename: un campo y una variable que se llaman como la unit NO son la unit (su uses si)',
+      '  UVentas;' in _campo and _campo.count('  UVenta: Integer;') == 2 and 'UVenta := F.UVenta;' in _campo, _campo)
 # una referencia detras de un comentario de llave con un apostrofo se quedaba
 # sin renombrar (E2003) y el // que nombra la unit si se renombraba; ahora
 # solo el CODIGO (sonda del lexico y David, 2-oct-2026)

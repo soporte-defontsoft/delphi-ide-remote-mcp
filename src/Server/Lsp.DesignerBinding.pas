@@ -14,6 +14,10 @@
 
 interface
 
+uses
+  Lsp.DesignerMeta, // la tabla: que es una propiedad, y donde acaban las clases del usuario
+  Lsp.DesignerBin; // TLineaForm: las lineas de un form, por EL lector
+
 { El informe JSON de check-binding. APas vacio = el .pas del mismo nombre. La
   jaula del segundo path es de la tool, no de aqui. }
 function DesignerBindingJson(const ADfm, APas: string): string;
@@ -24,13 +28,35 @@ function DesignerBindingJson(const ADfm, APas: string): string;
 function DesignerBindingWarnings(const ADfm: string;
   const ADfmLines: TArray<string>): TArray<string>;
 
-{ EL lector de una linea de evento de un form ('OnClick = Button1Click',
-  sangrada o no): el evento y el metodo; False si no lo es. Lo usan el
-  informe, insert=metodo y el analizador de impacto de delphi_designer
-  (delete, set de Name), que leia la misma linea con su propia regex. }
-function EventoDeLinea(const ALinea: string; out AEvento, AMetodo: string): Boolean;
+{ EL juez de una linea de evento de un form ('OnClick = Button1Click',
+  'AfterOpen = Tabla1AfterOpen', sangrada o no) en un objeto de clase AClase
+  (su nombre o su identidad): el evento y el metodo; False si no lo es. Que
+  la propiedad sea un evento lo dice la tabla M (Kind 'm': un metodo); solo
+  si no lo sabe - sin tabla, una clase que no tiene, un item de una coleccion
+  (AClase vacia: su clase no la dice el form) - lo dice el nombre (On...).
+  Lo decidia siempre el nombre, y los eventos de un TDataSet no empiezan por
+  On: medido el 18-oct-2026, check-binding daba clean un AfterOpen sin
+  manejador o con el suyo en public, e insert=metodo lo dejaba en public.
+  Lo usan el informe, insert=metodo y el analizador de impacto de
+  delphi_designer (delete, set de Name). }
+function EventoDeObjeto(M: TMetaTable; const AClase, ALinea: string;
+  out AEvento, AMetodo: string): Boolean;
 
-{ El designer (texto o binario) cablea AMethod como evento (OnX = AMethod). }
+{ La clase de cada linea de un form, por su indice: la del objeto que la
+  contiene (su linea de objeto la dice; la RAIZ, ARaiz: la clase que la
+  juzga, que la suya es del usuario), o '' dentro de un item de una coleccion
+  (su clase no la dice el form). Lo que EventoDeObjeto le pregunta a la
+  tabla. }
+function ClasesDeLasLineas(const AForm: TArray<TLineaForm>; const ARaiz: string): TArray<string>;
+
+{ La clase que juzga la RAIZ de un form (ClaseDeJuezDeRaiz, sin el motor: lo
+  piden el lint tras cada escritura e insert=metodo con el cerrojo de
+  escribir): '' sin tabla o si su cadena sale a una base del usuario de otra
+  unidad. APas, su .pas; APasTexto, su texto si ya se tiene. }
+function JuezDeLaRaiz(M: TMetaTable; const AForm: TArray<TLineaForm>; const APas, APasTexto: string): string;
+
+{ El designer (texto o binario) cablea AMethod como evento (Evento = AMethod,
+  juzgado por EventoDeObjeto con la tabla sin esperarla). }
 function DesignerWiresMethodFile(const ADfm, AMethod: string): Boolean;
 
 implementation
@@ -44,38 +70,92 @@ uses
   System.RegularExpressions,
   Lsp.Texts,
   Lsp.Patch,
-  Lsp.DesignerBin,
   Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un form
   System.Generics.Collections,
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
-  Lsp.DesignerMeta, // MetaTable: donde acaban las clases del usuario
   Lsp.Json;
 
 const
-  // UNA expresion para "evento cableado por nombre": la lee el informe y la
-  // consulta insert=metodo. Nadie la vuelve a escribir. Los nombres, con EL
+  // la FORMA de una linea de evento - Prop = Metodo, y Prop = sin manejador -;
+  // que Prop sea un evento lo dice EsEvento. Los nombres, con EL
   // identificador (Lsp.Pascal): un manejador con enye no casaba.
-  PATRON_EVENTO = 'On' + PATRON_IDENT; // la propiedad: OnClick
-  EVENT_LINE_RE = '^(' + PATRON_EVENTO + ')\s*=\s*(' + PATRON_IDENT + ')\s*$';
+  LINEA_DE_EVENTO_RE = '^(' + PATRON_IDENT + ')\s*=\s*(' + PATRON_IDENT + ')\s*$';
+  LINEA_SIN_VALOR_RE = '^(' + PATRON_IDENT + ')\s*=\s*$';
 
-function EventoDeLinea(const ALinea: string; out AEvento, AMetodo: string): Boolean;
+{ La propiedad AProp de un objeto de clase AClase es un evento: lo dice la
+  tabla (Kind 'm'), si conoce la clase y llega a la propiedad; si no, el
+  nombre (On...: la gramatica de la casa donde no hay juez, declarada). }
+function EsEvento(M: TMetaTable; const AClase, AProp: string): Boolean;
+const
+  EVENTO_POR_EL_NOMBRE = '\AOn' + PATRON_IDENT + '\z';
 var
-  M: TMatch;
+  Id: string;
+  Hoja: TPropRec;
+  Hay: Boolean;
 begin
-  // sobre la linea RECORTADA: empieza por On, sin sangria
-  M := TRegEx.Match(ALinea.Trim, EVENT_LINE_RE);
-  Result := M.Success;
+  if (M <> nil) and (AClase <> '') and M.ClaseDeNombre(AClase, Id) then
+  begin
+    JuzgaPropiedad(M, Id, AProp, '', Hoja, Hay);
+    if Hay and (Hoja.Kind <> '?') then
+      Exit(Hoja.Kind = 'm');
+  end;
+  Result := TRegEx.IsMatch(AProp, EVENTO_POR_EL_NOMBRE);
+end;
+
+function EventoDeObjeto(M: TMetaTable; const AClase, ALinea: string;
+  out AEvento, AMetodo: string): Boolean;
+var
+  Mt: TMatch;
+begin
+  AEvento := '';
+  AMetodo := '';
+  // sobre la linea RECORTADA, sin sangria
+  Mt := TRegEx.Match(ALinea.Trim, LINEA_DE_EVENTO_RE);
+  Result := Mt.Success and EsEvento(M, AClase, Mt.Groups[1].Value);
   if Result then
   begin
-    AEvento := M.Groups[1].Value;
-    AMetodo := M.Groups[2].Value;
-  end
-  else
-  begin
-    AEvento := '';
-    AMetodo := '';
+    AEvento := Mt.Groups[1].Value;
+    AMetodo := Mt.Groups[2].Value;
   end;
+end;
+
+// un evento que se quedo sin manejador ('OnClick =')
+function EventoSinValor(M: TMetaTable; const AClase, ALinea: string): Boolean;
+var
+  Mt: TMatch;
+begin
+  Mt := TRegEx.Match(ALinea.Trim, LINEA_SIN_VALOR_RE);
+  Result := Mt.Success and EsEvento(M, AClase, Mt.Groups[1].Value);
+end;
+
+function ClasesDeLasLineas(const AForm: TArray<TLineaForm>; const ARaiz: string): TArray<string>;
+var
+  Pila: TArray<string>;
+begin
+  SetLength(Result, Length(AForm));
+  Pila := [];
+  for var I := 0 to High(AForm) do
+  begin
+    if AForm[I].Clase = clfObjeto then
+      Pila := Pila + [IfThen(Length(Pila) = 0, ARaiz, AForm[I].ClaseObj)];
+    if (Length(Pila) > 0) and (AForm[I].Coleccion = 0) then
+      Result[I] := Pila[High(Pila)];
+    if (AForm[I].Clase = clfFin) and (Length(Pila) > 0) then
+      SetLength(Pila, Length(Pila) - 1);
+  end;
+end;
+
+function JuezDeLaRaiz(M: TMetaTable; const AForm: TArray<TLineaForm>; const APas, APasTexto: string): string;
+var
+  Propias: TArray<TPropiedadDelUsuario>;
+begin
+  Result := '';
+  if M = nil then
+    Exit;
+  for var I := 0 to High(AForm) do
+    if AForm[I].Clase = clfObjeto then
+      Exit(ClaseDeJuezDeRaiz(M, APas, APasTexto, AForm[I].ClaseObj, Propias, False));
 end;
 
 function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string;
@@ -88,6 +168,9 @@ var
   I, Depth, SkipBelow: Integer;
   AncestorOutside, ClassFound, Complete: Boolean;
   Form: TArray<TLineaForm>;
+  Clases: TArray<string>; // la clase de cada linea: la que juzga sus eventos
+  Tabla: TMetaTable;
+  FaltaTabla: TFaltaTabla;
 
   { Los campos y metodos publicados de UNA clase, del lector de clases
     (Lsp.PascalDecl): lo que va antes de cualquier palabra de visibilidad es
@@ -228,6 +311,10 @@ begin
     AncestorOutside := False;
     Chain := '';
     CollectClass(RootClass);
+    // que propiedad es un evento lo dice la tabla, sin esperarla (esto corre
+    // tras cada escritura); la raiz, por la clase que la juzga
+    Tabla := MetaTable(AIsFmx, FaltaTabla, 0);
+    Clases := ClasesDeLasLineas(Form, JuezDeLaRaiz(Tabla, Form, Pas, APasTexto));
     Ret.AddPair('inheritanceChain', Chain);
 
     Miss := TJSONArray.Create;
@@ -297,12 +384,12 @@ begin
       // (el OnClick de un TButtonItem); un trozo de una cadena partida no
       if (Form[I].Clase <> clfPropiedad) or ((SkipBelow >= 0) and (Depth > SkipBelow)) then
         Continue;
-      if TRegEx.IsMatch(L, '^(' + PATRON_EVENTO + ')\s*=\s*$') then
+      if EventoSinValor(Tabla, Clases[I], L) then
       begin
         Empty.Add(MsgFmt(SF_DSGN_QUEDADO_SIN_VALOR_FMT, [L, I + 1]));
         Continue;
       end;
-      if EventoDeLinea(L, Ev, Handler) then
+      if EventoDeObjeto(Tabla, Clases[I], L, Ev, Handler) then
       begin
         if PubMethods.IndexOf(Handler) >= 0 then
           Continue;
@@ -418,18 +505,27 @@ end;
 function DesignerWiresMethodFile(const ADfm, AMethod: string): Boolean;
 var
   Txt, Enc, Ev, Metodo: string;
+  Lineas, Clases: TArray<string>;
+  Form: TArray<TLineaForm>;
+  Falta: TFaltaTabla;
 begin
   Result := False;
   if not TFile.Exists(ADfm) then
     Exit;
   if TextoDeDesigner(ADfm, Txt, Enc) <> '' then
     Exit;
-  // La misma expresion que el informe, y como la aplica el informe: sobre
-  // cada linea RECORTADA (empieza por ^On, sin sangria).
-  for var Linea in SplitToLines(Txt) do
+  // EL juez del informe, y como lo aplica el informe: la tabla sin esperarla
+  // (esto corre con el cerrojo de escribir: insert=metodo) y la raiz por la
+  // clase que la juzga, sin el motor; un trozo de una cadena no es una linea
+  Lineas := SplitToLines(Txt);
+  Form := LineasDeForm(Lineas);
+  var Tabla := MetaTable(EsDesignerFmx(ADfm), Falta, 0);
+  Clases := ClasesDeLasLineas(Form, JuezDeLaRaiz(Tabla, Form, UnidadDeDesigner(ADfm), ''));
+  for var I := 0 to High(Lineas) do
     // el mismo metodo aunque la caja de una letra acentuada difiera: asi lo
     // encuentra el streaming (MethodAddress) al cargar el form
-    if EventoDeLinea(Linea, Ev, Metodo) and MismoIdentificador(Metodo, AMethod) then
+    if (Form[I].Clase = clfPropiedad) and EventoDeObjeto(Tabla, Clases[I], Lineas[I], Ev, Metodo) and
+       MismoIdentificador(Metodo, AMethod) then
       Exit(True);
 end;
 

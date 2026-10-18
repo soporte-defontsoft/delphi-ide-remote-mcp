@@ -5592,27 +5592,49 @@ begin
       // lo que mira, en el CODIGO del fichero escrito: una firma dentro de un
       // comentario, o un comentario con ':=' encima de una de verdad,
       // avisaban de una insercion en un metodo que no habia (revision de la
-      // 1.10.0)
+      // 1.10.0). Y DONDE cayo, por EL lector de rutinas (TUnidadPas): dentro
+      // del cuerpo de otra (entre su begin y su end) o detras de las
+      // declaraciones (el bloque principal, initialization, tras el end
+      // final). Lo decia la linea de ENCIMA, con una lista de sentencias: dos
+      // declaraciones seguidas en un interface (la de arriba acaba en ');')
+      // avisaban (medido el 18-oct-2026)
       var AfterVista := LineasDelTexto(CodigoPascal(AfterText));
       var NewLines := Replacement.Split([#10]);
-      for var J := 0 to High(NewLines) do
-      begin
-        if (Idx < 0) or (Idx + J > High(AfterVista)) then
-          Break;
-        if not TRegEx.IsMatch(AfterVista[Idx + J], '^(?:class\s+)?' + PatronPalabraDeRutina + '\b', [roIgnoreCase]) then
-          Continue;
-        var Encima := '';
-        if Idx + J > 0 then
-          Encima := AfterVista[Idx + J - 1].Trim;
-        var EsStmt := Encima.Contains(':=') or TRegEx.IsMatch(Encima, '\);?$') or
-          TRegEx.IsMatch(Encima, '^' + PATRON_IDENT + '(?:\.' + PATRON_IDENT + ')+\s*;$') or
-          TRegEx.IsMatch(Encima, '^(if|while|for|case|repeat|until|raise|exit|inc|dec|with|begin|try)\b', [roIgnoreCase]);
-        if EsStmt then
+      var Lector: TUnidadPas := nil;
+      try
+        for var J := 0 to High(NewLines) do
         begin
-          Warnings.Add(MsgFmt(SN_EDIT_POSIBLE_INSERCION_METODO_FMT,
-            [Copy(NewLines[J], 1, 60), Copy(Encima, 1, 60)]));
-          Break;
+          if (Idx < 0) or (Idx + J > High(AfterVista)) then
+            Break;
+          if not TRegEx.IsMatch(AfterVista[Idx + J], '^(?:class\s+)?' + PatronPalabraDeRutina + '\b', [roIgnoreCase]) then
+            Continue;
+          if Lector = nil then
+            Lector := LeeFuentePascal(AfterText);
+          var L := Idx + J; // 0-based, como Linea de un cuerpo
+          var Donde := '';
+          for var C in Lector.Cuerpos do
+          begin
+            if (C.CuerpoFin < C.CuerpoIni) or (C.Linea = L) then
+              Continue;
+            var LIni := LineaDePosicion(AfterText, C.CuerpoIni) - 1;
+            var LFin := LineaDePosicion(AfterText, C.CuerpoFin) - 1;
+            if (L >= LIni) and (L <= LFin) then
+            begin
+              Donde := MsgFmt(SF_EDIT_EN_EL_CUERPO_DE_FMT, [C.Nombre, C.Linea + 1, C.LineaFin + 1]);
+              Break;
+            end;
+          end;
+          if (Donde = '') and (Lector.FinDeclaraciones > 0) and
+             (L > LineaDePosicion(AfterText, Lector.FinDeclaraciones) - 1) then
+            Donde := MsgText(SF_EDIT_TRAS_LAS_DECLARACIONES);
+          if Donde <> '' then
+          begin
+            Warnings.Add(MsgFmt(SN_EDIT_POSIBLE_INSERCION_METODO_FMT, [Copy(NewLines[J], 1, 60), Donde]));
+            Break;
+          end;
         end;
+      finally
+        Lector.Free;
       end;
     end;
 

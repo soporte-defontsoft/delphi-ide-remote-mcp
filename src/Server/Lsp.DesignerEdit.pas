@@ -30,7 +30,8 @@
 interface
 
 uses
-  Lsp.Styles;
+  Lsp.Styles,
+  Lsp.DesignerMeta;    // la tabla del framework y su juez (JuzgaPropiedad); el analizador la recibe
 
 type
   { Un campo publicado de la clase del form que es de un componente que se
@@ -75,16 +76,18 @@ type
 { EL analizador de impacto: lo que el componente AObj (con su subarbol, o
   solo el si ASoloEl) ata en el form y en su unidad. APasTexto vacio = solo
   el form. Lo usan delete y set de Name. AJuez: que lineas del form son
-  referencias (Align = Client en FMX no nombra a un componente Client). }
+  referencias (Align = Client en FMX no nombra a un componente Client).
+  ATabla, la del marco: que lineas son eventos (EventoDeObjeto: el AfterOpen
+  de un TDataSet no empieza por On); sin ella, el nombre. }
 function AnalizaImpacto(ADoc: TStyleDoc; AObj: TStyleObj; ASoloEl: Boolean;
-  const APasTexto, APasNombre: string; AJuez: TJuezDeReferencia = nil): TImpacto;
+  const APasTexto, APasNombre: string; AJuez: TJuezDeReferencia = nil; ATabla: TMetaTable = nil): TImpacto;
 
 { El delete sobre los TEXTOS: '' y el form y la unidad como quedan, o la
   negativa (un metodo propio con cuerpo). AImp, el impacto, con SeBorra
   puesto en los metodos que se van. }
 function PlanDeBorrado(ADoc: TStyleDoc; AObj: TStyleObj;
   const APasTexto, APasNombre: string; out AImp: TImpacto;
-  out ADfm, APas: string; AJuez: TJuezDeReferencia = nil): string;
+  out ADfm, APas: string; AJuez: TJuezDeReferencia = nil; ATabla: TMetaTable = nil): string;
 
 { El renombrado sobre los TEXTOS (ANuevo ya validado): la cabecera del objeto,
   las lineas del form que lo nombran (AImp.Referencias) y su campo; y su
@@ -92,7 +95,8 @@ function PlanDeBorrado(ADoc: TStyleDoc; AObj: TStyleObj;
   nombrarse (PropiedadesDeTexto; [] = no lo hace). }
 function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
   const ANuevo, APasTexto, APasNombre: string; const ATextos: TArray<string>;
-  out AImp: TImpacto; out ADfm, APas: string; AJuez: TJuezDeReferencia = nil): string;
+  out AImp: TImpacto; out ADfm, APas: string; AJuez: TJuezDeReferencia = nil;
+  ATabla: TMetaTable = nil): string;
 
 { Los comandos. Cada uno devuelve el JSON de lo hecho, o la negativa sin
   haber escrito nada. La jaula de escritura la piden ellos; el cerrojo de
@@ -129,7 +133,6 @@ uses
   Lsp.PascalDecl,      // EL lector de clases: campos, rutinas y cuerpos
   Lsp.DesignerBin,     // el literal de cadena, el flotante, las lineas del form
   Lsp.DesignerForma,   // la linea de objeto y su compositor
-  Lsp.DesignerMeta,    // la tabla del framework y su juez (JuzgaPropiedad)
   Lsp.Herencia,        // LA cadena de ancestros por el motor (los componentes heredados)
   Lsp.DesignerMetaGen, // la unidad de una clase (UnidadDeIdDeTipo)
   Lsp.DesignerBinding, // EL lector de la linea de evento; los avisos del binding
@@ -296,7 +299,9 @@ var
 begin
   Result := False;
   ANombre := '';
-  if (AForm[AI].Clase <> clfPropiedad) or EventoDeLinea(ADoc.Lines[AI], Ev, Met) then
+  // un evento por su nombre: lo que sabe la tabla lo dice AJuez abajo (un
+  // evento no guarda un componente)
+  if (AForm[AI].Clase <> clfPropiedad) or EventoDeObjeto(nil, '', ADoc.Lines[AI], Ev, Met) then
     Exit;
   V := AForm[AI].Valor;
   if not EsIdentificador(V, True) then
@@ -531,7 +536,7 @@ end;
 { ---- el analizador ---- }
 
 function AnalizaImpacto(ADoc: TStyleDoc; AObj: TStyleObj; ASoloEl: Boolean;
-  const APasTexto, APasNombre: string; AJuez: TJuezDeReferencia = nil): TImpacto;
+  const APasTexto, APasNombre: string; AJuez: TJuezDeReferencia = nil; ATabla: TMetaTable = nil): TImpacto;
 var
   Sub, Todos, Vistos: TStringList;
   Dentro, Fuera: TDictionary<string, string>;
@@ -542,6 +547,7 @@ var
   LineasFuera: TDictionary<Integer, Boolean>;
   Form: TArray<TLineaForm>;
   Clases: TArray<TClasePascal>;
+  ClasesDelForm: TArray<string>;
 begin
   Result := Default(TImpacto);
   Result.Componente := AObj.ObjName;
@@ -565,8 +571,11 @@ begin
     // de fuera que lo nombran - por EL lector de las lineas: un trozo de una
     // cadena no es una propiedad
     Form := LineasDeForm(ADoc.Lines);
+    // que linea es un evento: la tabla, por la clase de su objeto (la raiz,
+    // por la que la juzga), como check-binding
+    ClasesDelForm := ClasesDeLasLineas(Form, JuezDeLaRaiz(ATabla, Form, UnidadDeDesigner(ADoc.Path), APasTexto));
     for I := 0 to High(ADoc.Lines) do
-      if (Form[I].Clase = clfPropiedad) and EventoDeLinea(ADoc.Lines[I], Ev, Met) then
+      if (Form[I].Clase = clfPropiedad) and EventoDeObjeto(ATabla, ClasesDelForm[I], ADoc.Lines[I], Ev, Met) then
       begin
         var Dueno := ObjetoEnLinea(ADoc.Root, I + 1);
         Quien := NombreDe(Dueno) + '.' + Ev;
@@ -705,7 +714,7 @@ end;
 
 function PlanDeBorrado(ADoc: TStyleDoc; AObj: TStyleObj;
   const APasTexto, APasNombre: string; out AImp: TImpacto;
-  out ADfm, APas: string; AJuez: TJuezDeReferencia = nil): string;
+  out ADfm, APas: string; AJuez: TJuezDeReferencia = nil; ATabla: TMetaTable = nil): string;
 var
   Bloquean: string;
   N, I, K: Integer;
@@ -718,7 +727,7 @@ begin
   Result := '';
   ADfm := '';
   APas := APasTexto;
-  AImp := AnalizaImpacto(ADoc, AObj, False, APasTexto, APasNombre, AJuez);
+  AImp := AnalizaImpacto(ADoc, AObj, False, APasTexto, APasNombre, AJuez, ATabla);
   if AImp.Nota <> '' then
     Exit(MsgFmt(SR_DESIGNER_EDIT_SIN_CLASE_FMT, [ADoc.Root.ClassName_, APasNombre]));
   // la puerta: un metodo propio, exclusivo y con cuerpo
@@ -828,7 +837,8 @@ end;
 
 function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
   const ANuevo, APasTexto, APasNombre: string; const ATextos: TArray<string>;
-  out AImp: TImpacto; out ADfm, APas: string; AJuez: TJuezDeReferencia = nil): string;
+  out AImp: TImpacto; out ADfm, APas: string; AJuez: TJuezDeReferencia = nil;
+  ATabla: TMetaTable = nil): string;
 var
   Lineas, PasLineas, PasSaltos, Nuevas: TArray<string>;
   I, Delta: Integer;
@@ -838,7 +848,7 @@ var
   Form: TArray<TLineaForm>;
 begin
   Result := '';
-  AImp := AnalizaImpacto(ADoc, AObj, True, APasTexto, APasNombre, AJuez);
+  AImp := AnalizaImpacto(ADoc, AObj, True, APasTexto, APasNombre, AJuez, ATabla);
   Lineas := Copy(ADoc.Lines);
   Form := LineasDeForm(ADoc.Lines);
   // la cabecera: solo el nombre, por EL lector y EL compositor de esa linea;
@@ -1049,7 +1059,7 @@ function PonEnMemoria(const F: TFormEnEdicion; const ANombre, AProp, AValor: str
 function ParesDeProps(const AProps: string; out AProps_, AValores: TArray<string>): string; forward;
 procedure PonValorPuesto(AObj: TJSONObject; const ANombre: string; const AInfo: TValorPuesto); forward;
 function CargaLoPuesto(var F: TFormEnEdicion; const ANombre: string;
-  const AInfos: array of TValorPuesto): string; forward;
+  const AInfos: array of TValorPuesto; out ANota: string): string; forward;
 // EL movimiento de un bloque de form (set parent= y el orden, 3.11)
 function ConBloqueMovido(const ALineas, ABloque: TArray<string>; AIni, ALargo: Integer;
   var ADest: Integer): TArray<string>; forward;
@@ -1410,7 +1420,7 @@ var
   Props, Valores: TArray<string>;
   Infos: TArray<TValorPuesto>;
   Antes, AntesPas: TArray<Byte>;
-  NotaOrden: string;
+  NotaOrden, NotaLector: string;
 begin
   if AClase.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_CLASS));
@@ -1540,7 +1550,7 @@ begin
           Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Props[I], Result]));
       end;
       DfmLineas := Copy(F.Doc.Lines);
-      Result := CargaLoPuesto(F, Nombre, Infos);
+      Result := CargaLoPuesto(F, Nombre, Infos, NotaLector);
       if Result <> '' then
         Exit;
       var Nuevo := ObjetoPorNombre(F.Doc, Nombre);
@@ -1615,6 +1625,8 @@ begin
       Ret.AddPair('note', MsgText(SN_DESIGNER_INSERT_NOTE));
       if NotaOrden <> '' then
         Ret.AddPair('orderNote', NotaOrden);
+      if NotaLector <> '' then
+        Ret.AddPair('readerNote', NotaLector);
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -2106,7 +2118,7 @@ var
   F: TFormEnEdicion;
   Obj: TStyleObj;
   Info: TValorPuesto;
-  Nombre: string;
+  Nombre, NotaLector: string;
   LineaN, Ini, Fin: Integer;
   Ret: TJSONObject;
 begin
@@ -2126,7 +2138,7 @@ begin
       Exit;
     if Info.NadaQueQuitar then
       Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, Info.Prop]));
-    Result := CargaLoPuesto(F, Nombre, [Info]);
+    Result := CargaLoPuesto(F, Nombre, [Info], NotaLector);
     if Result <> '' then
       Exit;
     Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
@@ -2143,6 +2155,8 @@ begin
       PonValorPuesto(Ret, Nombre, Info);
       Ret.AddPair('file', F.DfmNombre);
       Ret.AddPair('line', TJSONNumber.Create(LineaN));
+      if NotaLector <> '' then
+        Ret.AddPair('readerNote', NotaLector);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally
@@ -2198,7 +2212,7 @@ var
   Obj: TStyleObj;
   Props, Valores: TArray<string>;
   Infos: TArray<TValorPuesto>;
-  Nombre: string;
+  Nombre, NotaLector: string;
   Ret, Una: TJSONObject;
   Lista: TJSONArray;
 begin
@@ -2229,7 +2243,7 @@ begin
         Cambia := True;
     if not Cambia then
       Exit(MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [Nombre, string.Join(', ', Props)]));
-    Result := CargaLoPuesto(F, Nombre, Infos);
+    Result := CargaLoPuesto(F, Nombre, Infos, NotaLector);
     if Result <> '' then
       Exit;
     Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
@@ -2248,6 +2262,8 @@ begin
         PonValorPuesto(Una, Nombre, Infos[I]);
       end;
       Ret.AddPair('file', F.DfmNombre);
+      if NotaLector <> '' then
+        Ret.AddPair('readerNote', NotaLector);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally
@@ -2429,7 +2445,7 @@ begin
     if not F.Tabla.ClaseDeNombre(Obj.ClassName_, Id) then
       Id := '';
     Result := PlanDeRenombre(F.Doc, Obj, Nuevo, F.PasTexto, F.PasNombre,
-      PropiedadesDeTexto(F.Tabla, F.EsFmx, Id), Imp, Dfm, Pas, JuezDeReferencias(F));
+      PropiedadesDeTexto(F.Tabla, F.EsFmx, Id), Imp, Dfm, Pas, JuezDeReferencias(F), F.Tabla);
     if Result <> '' then
       Exit;
     Linea := Obj.StartLine;
@@ -2656,6 +2672,7 @@ var
   Escrito, ErrorAyudante: string;
   Sustituidas, Avisos, SinLeer, Faltan: TArray<string>;
   Leidos: TArray<TLeidoPorElJuez>;
+  Parada: TIgnorada;
   Doc: TStyleDoc;
   P: TStyleObj;
 begin
@@ -2663,7 +2680,7 @@ begin
   ASuyo := [];
   AEscrito := '';
   Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer,
-    Leidos, ErrorAyudante);
+    Leidos, ErrorAyudante, Parada);
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
   F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
   if Result <> '' then
@@ -3100,7 +3117,7 @@ begin
     Result := QueNoSeToca(F, Obj);
     if Result <> '' then
       Exit;
-    Result := PlanDeBorrado(F.Doc, Obj, F.PasTexto, F.PasNombre, Imp, Dfm, Pas, JuezDeReferencias(F));
+    Result := PlanDeBorrado(F.Doc, Obj, F.PasTexto, F.PasNombre, Imp, Dfm, Pas, JuezDeReferencias(F), F.Tabla);
     if Result <> '' then
       Exit;
     Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
@@ -3164,36 +3181,61 @@ end;
   produccion: FontColor = -65536 en un TEdit FMX -> "ok", y el form ya no
   cargaba: EReadError "Invalid property value"). Solo si alguna de AInfos va
   SinJuez: el form tal como quedaria, cargado como lo carga el designer
-  (ComoLoEscribeElIde). '' si carga, o si lo que falla no es UNA de esas
-  propiedades de ANombre (un form que ya no cargaba por otra cosa no niega
-  este set); si no, la negativa con lo que dijo el lector. }
+  (ComoLoEscribeElIde). '' si carga; la negativa si lo que no carga es UNA de
+  esas propiedades de ANombre (DSGN-149, por las partes del error que da el
+  ayudante en su idioma), o si falla por otra cosa y el form como se leyo SI
+  carga (DSGN-158). Si tampoco cargaba antes, o no se pudo preguntar, el
+  valor queda sin juzgar: '' y ANota lo dice (DSGN-159; un form que ya no
+  cargaba por otra cosa no niega este set). }
 function CargaLoPuesto(var F: TFormEnEdicion; const ANombre: string;
-  const AInfos: array of TValorPuesto): string;
+  const AInfos: array of TValorPuesto; out ANota: string): string;
 var
-  Escrito, ErrorAyudante: string;
+  Escrito, ErrorAyudante, Valores: string;
   Sustituidas, Avisos, SinLeer: TArray<string>;
   Leidos: TArray<TLeidoPorElJuez>;
+  Lectura: TIgnorada;
 begin
   Result := '';
-  var Hay := False;
+  ANota := '';
+  Valores := '';
   for var I := 0 to High(AInfos) do
     if AInfos[I].SinJuez then
-      Hay := True;
-  if not Hay then
+      Valores := Valores + (if Valores <> '' then ', ' else '') +
+        MsgFmt(SF_DESIGNER_VALOR_PUESTO_FMT, [ANombre, AInfos[I].Prop, AInfos[I].Valor]);
+  if Valores = '' then
     Exit;
   var Juicio := ComoLoEscribeElIde(F.Dfm, F.Doc.TextoDe(F.Doc.Lines), F.Doc.Encoding, Escrito, Sustituidas,
-    Avisos, SinLeer, Leidos, ErrorAyudante);
+    Avisos, SinLeer, Leidos, ErrorAyudante, Lectura);
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
   F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
   if Juicio = '' then
     Exit;
-  var Lectura := ErrorDeLecturaDe(ErrorAyudante);
-  if not SameText(Lectura.Componente, ANombre) then
+  // el lector NOMBRA uno de estos valores (las partes de su error, que da el
+  // ayudante en su idioma): es el
+  if SameText(Lectura.Componente, ANombre) then
+    for var I := 0 to High(AInfos) do
+      if AInfos[I].SinJuez and SameText(AInfos[I].Prop, Lectura.Propiedad) then
+        Exit(MsgFmt(SR_DESIGNER_SET_NO_CARGA_FMT, [ANombre, AInfos[I].Prop, AInfos[I].Valor,
+          Lectura.Motivo]));
+  // el ayudante no dijo nada (no se le dio el form - un literal que nombra un
+  // fichero fuera de la jaula - o no contesto): no se juzgo, y se dice; se
+  // escribia sin juzgar y sin decirlo
+  if ErrorAyudante = '' then
+  begin
+    ANota := MsgFmt(SN_DESIGNER_SET_SIN_JUZGAR_FMT, [Valores, MsgCuerpo(Juicio)]);
     Exit;
-  for var I := 0 to High(AInfos) do
-    if AInfos[I].SinJuez and SameText(AInfos[I].Prop, Lectura.Propiedad) then
-      Exit(MsgFmt(SR_DESIGNER_SET_NO_CARGA_FMT, [ANombre, AInfos[I].Prop, AInfos[I].Valor,
-        Lectura.Motivo]));
+  end;
+  // fallo por otra cosa - otro componente, un error que no es del lector -:
+  // el MISMO juez con el form como se leyo, como Guarda con el parser. Si ese
+  // carga, lo rompe este cambio; si tampoco, ya no cargaba (y no niega)
+  var Motivo := ErrorAyudante;
+  var Antes := ComoLoEscribeElIde(F.Dfm, F.Doc.TextoDe(F.Doc.Leidas), F.Doc.Encoding, Escrito, Sustituidas,
+    Avisos, SinLeer, Leidos, ErrorAyudante, Lectura);
+  F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
+  if Antes = '' then
+    Exit(MsgFmt(SR_DESIGNER_SET_ROMPE_CARGA_FMT, [Valores, Motivo]));
+  ANota := MsgFmt(SN_DESIGNER_SET_SIN_JUZGAR_FMT, [Valores, MsgFmt(SF_DESIGNER_LECTOR_YA_NO_CARGABA_FMT,
+    [IfThen(ErrorAyudante <> '', ErrorAyudante, MsgCuerpo(Antes))])]);
 end;
 
 end.

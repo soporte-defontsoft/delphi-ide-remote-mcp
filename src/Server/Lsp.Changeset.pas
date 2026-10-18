@@ -754,9 +754,11 @@ begin
       // happily, previewed "clean" and then blew up at commit, taking the
       // three good operations of the batch down with it (measured
       // 2026-08-25): a preview that says clean about something the commit
-      // will reject is a preview that lies.
-      if MatchText(TPath.GetExtension(Op.Path), ['.dproj', '.groupproj', '.dpk']) and
-         (Op.Kind in [opEdit, opDeleteLine]) then
+      // will reject is a preview that lies. Lo que niega es EL predicado del
+      // escritor (EsRutaDeProyecto): aqui habia otra lista, con el .dpk, que es
+      // un fuente y delphi_edit escribe (medido el 18-oct-2026: CHSET-018 decia
+      // que el commit lo habria negado)
+      if EsRutaDeProyecto(Op.Path) and (Op.Kind in [opEdit, opDeleteLine]) then
         Exit(MsgFmt(SR_CHANGESET_PROJECT_FILE_FMT, [TPath.GetFileName(Op.Path)]));
       // ...y un fichero de Delphi se mueve o se borra ENTERO (su .dfm/.fmx, su
       // cabecera, los proyectos que lo listan, las rutas relativas que

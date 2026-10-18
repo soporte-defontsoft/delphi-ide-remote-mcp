@@ -303,9 +303,12 @@ function LintConTablaYSinJuez(M: TMetaTable; const AIsFmx: Boolean;
   no hay motor): no se juzga. APropias, las propiedades que publican las
   clases del USUARIO de esa cadena (la raiz incluida: un TBaseForm con su
   property Foo): la clase real las lee y la tabla no las conoce. La juzgan
-  set y el lint (H8 de la 1.19.2). Nunca lanza. }
+  set y el lint (H8 de la 1.19.2). AConMotor False: sin el motor, la cadena
+  para en una base del usuario de otra unidad (quien la pide tras cada
+  escritura, o con el cerrojo de escribir, no espera a un motor). Nunca
+  lanza. }
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
-  out APropias: TArray<TPropiedadDelUsuario>): string;
+  out APropias: TArray<TPropiedadDelUsuario>; AConMotor: Boolean = True): string;
 
 type
   { Lo que el IDE disena en la raiz de un designer: una form, un frame u otro
@@ -1360,7 +1363,7 @@ function PropiedadDelUsuario(const AProp: TPropiedadPas; ATipo: TTipoPas;
   juez (ni la conoce la tabla ni se pudo seguir); '' si llego o si la cadena
   acaba en TObject }
 function JuezDeRaizConCorte(M: TMetaTable; const APas, APasTexto, AClase: string;
-  out APropias: TArray<TPropiedadDelUsuario>; out ACorte: string): string;
+  out APropias: TArray<TPropiedadDelUsuario>; out ACorte: string; AConMotor: Boolean = True): string;
 const
   MAX_SALTOS = 8;
 var
@@ -1432,6 +1435,8 @@ begin
         // ficheros, no el uses; medido el 15-oct-2026)
         if Cadena = nil then
         begin
+          if not AConMotor then
+            Break;
           Cadena := CadenaPara(APas);
           if Cadena = nil then
             Break; // sin ajustes de proyecto no hay motor: la raiz, sin juzgar
@@ -1455,11 +1460,11 @@ begin
 end;
 
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
-  out APropias: TArray<TPropiedadDelUsuario>): string;
+  out APropias: TArray<TPropiedadDelUsuario>; AConMotor: Boolean): string;
 var
   Corte: string;
 begin
-  Result := JuezDeRaizConCorte(M, APas, APasTexto, AClase, APropias, Corte);
+  Result := JuezDeRaizConCorte(M, APas, APasTexto, AClase, APropias, Corte, AConMotor);
 end;
 
 function DesignClassDeFrame(AFmx: Boolean): string;

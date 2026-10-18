@@ -138,6 +138,32 @@ initialization
 end.
 """)
 
+# una suite DUnitX VERDE cuyo runner falla DESPUES del resumen (un cierre global
+# que lanza: ExitCode 2), y una de consola con todo PASS que sale con 3 (1.20.2,
+# censo de lo que imita a un juez): las cuentas decian 'pass' y el exit code no
+# se miraba (medido el 18-oct-2026 contra produccion: 'pass', exitCode 2)
+r = A.call('delphi_create', {'kind': 'project-test', 'name': 'CierreTest', 'dir': os.path.join(BASE, 'CierreTest')})
+check('CierreTest creado', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
+CIERRE = os.path.join(BASE, 'CierreTest', 'CierreTest.dproj')
+_c = os.path.join(BASE, 'CierreTest', 'CierreTest.dpr')
+_t = open(_c, encoding='utf-8-sig').read()
+check('CierreTest: el runner de delphi_create pone ExitCode 1 si algo falla', 'ExitCode := 1;' in _t, _t)
+open(_c, 'w', encoding='utf-8-sig', newline='').write(_t.replace(
+    'ExitCode := 1;', "ExitCode := 1;\r\n    raise Exception.Create('fallo al cerrar la suite');", 1))
+r = A.call('delphi_create', {'kind': 'project-console', 'name': 'SaleMalTest', 'dir': os.path.join(BASE, 'SaleMalTest')})
+SALEMAL = os.path.join(BASE, 'SaleMalTest', 'SaleMalTest.dpr')
+open(SALEMAL, 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""program SaleMalTest;
+
+{$APPTYPE CONSOLE}
+
+begin
+  Writeln('PASS uno');
+  Writeln('PASS dos');
+  ExitCode := 3;
+end.
+""")
+
 # ---- discover ----
 j = J(A.call('delphi_test', {'command': 'discover', 'path': BASE}))
 names = [p.get('name', '') for p in mc.ficheros(j, 'projects')]
@@ -178,6 +204,18 @@ j = J(B.call('delphi_test', {'command': 'run', 'project': LANZA}, t=900))
 check('suite con un test que lanza: result=fail', j.get('result') == 'fail', str(j)[:400])
 check('...con el error contado y NOMBRADO', j.get('errored') == 1 and j.get('failed') == 0
       and any('Lanza' in f and 'a proposito' in f for f in j.get('failures', [])), str(j)[:400])
+
+# ---- cuentas en verde y el runner saliendo con error: manda el exit code ----
+j = J(B.call('delphi_test', {'command': 'run', 'project': CIERRE}, t=900))
+check('DUnitX verde que falla al cerrar: las cuentas en verde (sin ellas no mide nada)',
+      j.get('total') == 1 and j.get('passed') == 1 and j.get('failed') == 0 and j.get('exitCode') == 2, str(j)[:400])
+check('...result=fail por el exit code, con la nota TEST-034',
+      j.get('result') == 'fail' and j.get('verdictFrom') == 'exitCode'
+      and mc.es(j.get('verdictNote') or '', 'SN_TEST_VERDE_CON_SALIDA_FMT'), str(j)[:500])
+j = J(B.call('delphi_test', {'command': 'run', 'project': SALEMAL}, t=900))
+check('consola con todo PASS que sale con 3: result=fail por el exit code',
+      j.get('passed') == 2 and j.get('failed') == 0 and j.get('exitCode') == 3
+      and j.get('result') == 'fail' and j.get('verdictFrom') == 'exitCode', str(j)[:400])
 
 # un test NUEVO metido con delphi_edit INSERT metodo, con su atributo delante y
 # una directiva detras (1.11.2): se rechazaba con EDIT-070. Que DUnitX lo

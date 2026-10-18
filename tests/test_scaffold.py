@@ -169,6 +169,27 @@ check('package de una linea con requires: se amplia el suyo (rtl y vcl, un solo 
       and 'rtl' in _k and 'vcl' in _k and 'rtl' in out, out[:200] + ' | ' + _k)
 out = call('delphi_build', {"project": os.path.join(BASE, 'PUna', 'PUna.dproj'), "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 check('package de una linea con requires ampliado: COMPILA', '"success":true' in out.replace(' ', ''), out[:300])
+# ...y un requires con un {$IFDEF} y un comentario: se amplia CONSERVANDOLOS (EL escritor
+# de contains, ReplaceUses); se reescribia entera, un nombre por linea, y vcl pasaba a ser
+# de todas las plataformas (medido el 18-oct-2026)
+open(_pdpk, 'wb').write(b"package PUna;\r\n\r\nrequires\r\n  rtl, // la base\r\n  dbrtl{$IFDEF MSWINDOWS},\r\n"
+                        b"  vcl{$ENDIF};\r\n\r\ncontains\r\n  UPu in 'UPu.pas';\r\n\r\nend.\r\n")
+out = call('delphi_config', {"project": os.path.join(BASE, 'PUna', 'PUna.dproj'), "command": "add-requires", "requires": "xmlrtl"})
+_k = open(_pdpk, 'rb').read().decode('utf-8-sig')
+check('package con {$IFDEF} y un comentario en requires: add-requires los conserva (vcl sigue en su rama)',
+      mc.abre(out, 'SN_REQUIRES_ADDED_FMT') and '// la base' in _k and 'xmlrtl' in _k.split('contains')[0] and
+      _k.find('{$IFDEF MSWINDOWS}') < _k.find('vcl') < _k.find('{$ENDIF}') and _k.find('{$IFDEF MSWINDOWS}') > 0,
+      out[:200] + ' | ' + _k)
+out = call('delphi_build', {"project": os.path.join(BASE, 'PUna', 'PUna.dproj'), "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
+check('package con {$IFDEF} en requires ampliado: COMPILA', '"success":true' in out.replace(' ', ''), out[:300])
+# ...y uno partido en RAMAS (su ';' dentro del condicional): no sabe en que rama va, y no
+# se toca (como contains, SR_USES_EN_RAMAS_FMT)
+_ramas = (b"package PUna;\r\n\r\nrequires\r\n  rtl{$IFDEF MSWINDOWS},\r\n  vcl;{$ELSE};{$ENDIF}\r\n\r\n"
+          b"contains\r\n  UPu in 'UPu.pas';\r\n\r\nend.\r\n")
+open(_pdpk, 'wb').write(_ramas)
+out = call('delphi_config', {"project": os.path.join(BASE, 'PUna', 'PUna.dproj'), "command": "add-requires", "requires": "xmlrtl"})
+check('package con requires partido en ramas: add-requires lo niega y no escribe',
+      mc.rechazado(out) and mc.es(out, 'SR_USES_EN_RAMAS_FMT') and open(_pdpk, 'rb').read() == _ramas, out[:300])
 out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 try:
     d = json.loads(out)

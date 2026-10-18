@@ -547,6 +547,28 @@ def bloqueado(ruta, lectura=False):
         _k32.CloseHandle(h)
 
 
+# donde busca el RTL de Delphi el idioma de un exe (System.pas,
+# GetLocaleOverride): un valor por exe, con su ruta LARGA
+LOCALES_RTL = r'Software\Embarcadero\Locales'
+
+
+@contextlib.contextmanager
+def idioma_rtl(exe, idioma):
+    """El RTL de Delphi de ESE exe habla otro idioma mientras dura el bloque
+    ('DE', 'FR', 'JA': los rtl370.de/.fr/.ja que instala el IDE junto a
+    rtl370.bpl), y se quita al salir. Un Windows es-ES no tiene ES y lee en
+    ingles; uno aleman, en aleman (medido el 18-oct-2026 con el ayudante FMX:
+    "Fehler beim Lesen von EditRight.FontColor")."""
+    nombre = larga(exe)
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LOCALES_RTL) as k:
+        winreg.SetValueEx(k, nombre, 0, winreg.REG_SZ, idioma)
+    try:
+        yield nombre
+    finally:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, LOCALES_RTL, 0, winreg.KEY_SET_VALUE) as k:
+            winreg.DeleteValue(k, nombre)
+
+
 def carpeta(nombre):
     """<raiz temporal>\\<nombre>, vacia: lo que dejo una pasada anterior no
     puede sostener a esta. Si no se puede vaciar, lo dice (no sigue encima)."""

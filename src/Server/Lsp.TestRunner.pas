@@ -322,7 +322,18 @@ begin
   finally
     Near.Free;
   end;
-  if HasNumbers and (Failed >= 0) then
+  if HasNumbers and (Failed = 0) and (Errored = 0) and (AExitCode <> 0) then
+  begin
+    // las cuentas dicen verde y el runner SALIO con error: algo fallo fuera
+    // de lo que cuentan (un cierre, una fuga, el propio runner), y manda el
+    // codigo de salida. Medido el 18-oct-2026 contra produccion: 'pass' por
+    // las cuentas con exitCode 2 y la excepcion en la salida. El Errored del
+    // 2-oct-2026 (arriba) era un caso de esto mismo
+    ARet.AddPair('result', 'fail');
+    ARet.AddPair('verdictFrom', 'exitCode');
+    ARet.AddPair('verdictNote', MsgFmt(SN_TEST_VERDE_CON_SALIDA_FMT, [AExitCode]));
+  end
+  else if HasNumbers and (Failed >= 0) then
   begin
     ARet.AddPair('result', IfThen((Failed = 0) and (Errored = 0), 'pass', 'fail'));
     ARet.AddPair('verdictFrom', 'counts');

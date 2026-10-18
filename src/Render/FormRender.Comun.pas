@@ -123,6 +123,13 @@ procedure Responde(const AClave, AValor: string);
 procedure Aviso(const S: string);
 procedure Traza(const S: string);      // '# ...' solo con --verbose
 procedure SinDesbordar(var S: string); // una linea: sin saltos
+{ EL compositor de un mensaje del lector EN PARTES (FormRenderProtocolo.inc,
+  FR_PARTES_SEP), partido por EL formato que lo compuso: SPropertyException
+  de System.RTLConsts, en el idioma que cargo ESTE proceso (rtl370.de/.fr/.ja
+  junto a rtl370.bpl, por el de Windows: medido el 18-oct-2026, "Fehler beim
+  Lesen von EditRight.FontColor"). El servidor lo partia con el ingles, y un
+  lector aleman no nombraba nada. }
+function LecturaEnPartes(const AMensaje: string): string;
 
 { El vigia: pasado AMs el proceso escribe ERROR=timeout y se mata con FR_RC_TIMEOUT }
 procedure ArrancaVigia(AMs: Integer);
@@ -228,7 +235,7 @@ function ListaDeNoVisuales(const ALista: TArray<TComponent>): string;
 implementation
 
 uses
-  System.TypInfo, System.Win.Registry, System.IOUtils, System.RegularExpressions,
+  System.TypInfo, System.Win.Registry, System.IOUtils, System.RegularExpressions, System.RTLConsts,
   System.Actions, System.Variants, System.SyncObjs, System.Diagnostics,
   Winapi.PsAPI,      // EnumProcessModules: el paquete que exporta el registro de modulos
   FormRender.Textos,
@@ -273,6 +280,37 @@ end;
 procedure Aviso(const S: string);
 begin
   Responde(FR_WARNING, S);
+end;
+
+function LecturaEnPartes(const AMensaje: string): string;
+var
+  Formato: string;
+  Trozos: TArray<string>;
+  M: TMatch;
+begin
+  Result := FR_PARTES_SEP + FR_PARTES_SEP + FR_PARTES_SEP + AMensaje;
+  // Format(SPropertyException, [Name, DotSep, PropPath, E.Message]) de
+  // TReader.ReadProperty: cuatro %s; con otro especificador (%0:s, %%) no se
+  // invierte a mano, y va sin partes
+  Formato := SPropertyException;
+  Trozos := Formato.Split(['%s']);
+  if Length(Trozos) <> 5 then
+    Exit;
+  for var T in Trozos do
+    if T.Contains('%') then
+      Exit;
+  // el Name no lleva puntos; la ruta (Font.Size) llega hasta lo que separa el
+  // motivo, y el motivo es lo demas: uno anidado (una coleccion) es el suyo
+  M := TRegEx.Match(AMensaje, '\A' + TRegEx.Escape(Trozos[0]) + '([^.]+)' +
+    TRegEx.Escape(Trozos[1] + DotSep + Trozos[2]) + '(.+?)' + TRegEx.Escape(Trozos[3]) + '(.*)' +
+    TRegEx.Escape(Trozos[4]) + '\z', [roSingleLine]);
+  if not M.Success then
+    Exit;
+  for var G := 1 to 3 do
+    if M.Groups[G].Value.Contains(FR_PARTES_SEP) then
+      Exit;
+  Result := M.Groups[1].Value + FR_PARTES_SEP + M.Groups[2].Value + FR_PARTES_SEP + M.Groups[3].Value +
+    FR_PARTES_SEP + AMensaje;
 end;
 
 procedure Traza(const S: string);
@@ -1234,7 +1272,7 @@ begin
   if ACargador.Sustituidas.Count > 0 then
     Responde(FR_SUBSTITUTED, string.Join(',', ACargador.Sustituidas.ToStringArray));
   for var S in ACargador.Ignoradas do
-    Responde(FR_IGNORED, S);
+    Responde(FR_IGNORED, LecturaEnPartes(S));
   for var S in ACargador.Avisos do
     Aviso(S);
   for var S in ACargador.SinLeer do
@@ -1248,7 +1286,7 @@ begin
   if not AYaLeido and (ACargador <> nil) then
     RespondeLoLeido(ACargador);
   if ACargando and ((E is EFilerError) or (E is EParserError)) then
-    Responde(FR_NOT_LOADED, E.ClassName);
+    Responde(FR_NOT_LOADED, E.ClassName + FR_PARTES_SEP + LecturaEnPartes(E.Message));
   if E is ERender then
     Responde(FR_ERROR, E.Message) // ya lleva su etiqueta
   else

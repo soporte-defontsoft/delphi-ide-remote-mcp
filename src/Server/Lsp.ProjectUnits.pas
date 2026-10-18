@@ -591,6 +591,9 @@ type
     // escritor la toca: no sabe en que rama va una unit (el muro del 26-sep).
     EnRamas: Boolean;
     OtrasRamas: TArray<string>;
+    // donde acaba la clausula ENTERA: EndPos, o en ramas, el condicional que
+    // las cierra (lo que mira el renombrado de una unit: sus entradas)
+    FinRamas: Integer;
   end;
 
 function CabeceraDeUnit(const ASrc: string; out ANombre: string;
@@ -876,7 +879,8 @@ end;
 { Las entradas de las OTRAS ramas de una clausula partida: de ADesde (tras el
   ';' de la primera) al condicional que la cierra. Cada rama acaba en su ';':
   se leen como una lista mas, sin las que solo son directivas. }
-function EntradasDeOtrasRamas(const ATexto: string; ADesde, AAbiertos: Integer): TArray<string>;
+function EntradasDeOtrasRamas(const ATexto: string; ADesde, AAbiertos: Integer;
+  out AFin: Integer): TArray<string>;
 var
   Prof, Fin: Integer;
 begin
@@ -894,13 +898,17 @@ begin
       Break;
     end;
   end;
+  AFin := Fin;
   Result := [];
   for var E in SplitEntries(Copy(ATexto, ADesde, Fin - ADesde).Replace(';', ',')) do
     if BlankComments(E).Trim <> '' then
       Result := Result + [E];
 end;
 
-function FindUses(const Dpr: string; AFrom: Integer = 0): TUsesClause;
+// APalabra: otra clausula que la de la unidad, del programa o del paquete -
+// 'requires', la de un paquete: la leia una regex sobre el codigo con las
+// directivas en blanco, y add-requires la reescribia sin ellas (18-oct-2026)
+function FindUses(const Dpr: string; AFrom: Integer = 0; const APalabra: string = ''): TUsesClause;
 var
   I, N, Start, K: Integer;
   Token: string;
@@ -927,6 +935,8 @@ begin
         Result.Keyword := 'contains';
     end;
   end;
+  if APalabra <> '' then
+    Result.Keyword := APalabra;
   K := Length(Result.Keyword);
   Start := 0;
   while I <= Length(Dpr) do
@@ -989,6 +999,7 @@ begin
       Result.EndPos := I;
       Result.Found := True;
       Result.Entries := SplitEntries(Copy(Dpr, Start + K, I - (Start + K)));
+      Result.FinRamas := I;
       // Un ';' DENTRO de un condicional abierto cierra una rama, no la
       // clausula: las otras ramas van detras (el uses del nodo de escritorio,
       // Windows y Linux). Se leia solo la primera.
@@ -996,7 +1007,7 @@ begin
       if Abiertos > 0 then
       begin
         Result.EnRamas := True;
-        Result.OtrasRamas := EntradasDeOtrasRamas(Dpr, I + 1, Abiertos);
+        Result.OtrasRamas := EntradasDeOtrasRamas(Dpr, I + 1, Abiertos, Result.FinRamas);
       end;
       Exit;
     end;
@@ -2274,9 +2285,9 @@ function AddPackageRequires(const AProject, ANames: string): string;
 var
   Dpr, Dproj, Enc, Text, NL, Clausula, N, E: string;
   Nombres, Nuevos: TStringList;
-  Existentes: TArray<string>;
-  Ya, Hay: Boolean;
-  Ini, Largo: Integer;
+  Entradas, Existentes: TArray<string>;
+  Ya: Boolean;
+  U: TUsesClause;
 begin
   Result := ResolveProjectPair(AProject, Dpr, Dproj);
   if Result <> '' then
@@ -2299,28 +2310,37 @@ begin
     try
       Text := PatchLoadText(Dpr, Enc);
       NL := SaltoDominante(Text);
-      // la clausula se localiza sobre el texto con los comentarios en blanco
-      // (mismas posiciones) y se reescribe entera, un nombre por linea
-      Hay := ClausulaRequires(Text, Existentes, Ini, Largo);
+      // EL lector y EL escritor de las clausulas (FindUses / ReplaceUses, los
+      // de contains): se reescribia entera, un nombre por linea, y se perdian
+      // sus comentarios y sus {$IFDEF} - en 'rtl, dbrtl{$IFDEF MSWINDOWS},
+      // vcl{$ENDIF}' vcl pasaba a ser de todas las plataformas (medido el
+      // 18-oct-2026). Partida en ramas no se toca, como contains
+      U := FindUses(Text, 0, 'requires');
+      if U.EnRamas then
+        Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+      Entradas := U.Entries;
       for N in Nombres do
       begin
         Ya := False;
-        for E in Existentes do
-          if MismoIdentificador(E, N) then
+        for E in Entradas do
+          if MismoIdentificador(EntryUnitName(E), N) then
             Ya := True;
         if not Ya then
         begin
-          Existentes := Existentes + [N];
+          Entradas := Entradas + [N];
           Nuevos.Add(N);
         end;
       end;
       if Nuevos.Count = 0 then
         Exit(MsgFmt(SN_REQUIRES_PRESENT_FMT, [TPath.GetFileName(Dpr)]));
-      Clausula := 'requires' + NL + '  ' + string.Join(',' + NL + '  ', Existentes) + ';';
-      if Hay then
-        Text := Copy(Text, 1, Ini - 1) + Clausula + Copy(Text, Ini + Largo, MaxInt)
+      Existentes := [];
+      for E in Entradas do
+        Existentes := Existentes + [EntryUnitName(E)];
+      if U.Found then
+        Text := ReplaceUses(Text, U, Entradas)
       else
       begin
+        Clausula := 'requires' + NL + '  ' + string.Join(',' + NL + '  ', Existentes) + ';';
         // delante de contains (EL lector de la clausula: FindUses) o del end.
         // final (EL suyo: Lsp.Pascal). contains se buscaba al principio de una
         // linea, y en un .dpk de una linea el requires caia DETRAS de el
@@ -2351,30 +2371,26 @@ end;
 function ClausulaRequires(const ATexto: string; out ANombres: TArray<string>;
   out AIni, ALargo: Integer): Boolean;
 var
-  M: TMatch;
   Cab: TCabeceraFuente;
+  U: TUsesClause;
 begin
   ANombres := [];
   AIni := 0;
   ALargo := 0;
-  // donde la lee FindUses: lo PRIMERO detras de la cabecera del paquete (EL
-  // lector de la cabecera, Lsp.Pascal). Se buscaba a principio de LINEA, y en
-  // 'package P; requires rtl; end.' no habia ninguna: add-requires estrenaba
-  // otra detras ('requires rtl; requires vcl;', E2029) y decia que la
-  // clausula era solo la nueva (revisor de version de la 1.18.0, medido)
-  var Codigo := CodigoPascal(ATexto);
-  if not CabeceraDeFuente(Codigo, Cab) or (Cab.Palabra <> 'package') then
+  if not CabeceraDeFuente(CodigoPascal(ATexto), Cab) or (Cab.Palabra <> 'package') then
     Exit(False);
-  M := TRegEx.Match(Copy(Codigo, Cab.Fin, MaxInt), '^(\s*)(requires\b\s*(.*?);)',
-    [roIgnoreCase, roSingleline]);
-  Result := M.Success;
+  // EL lector de las clausulas (FindUses, el de contains): lo PRIMERO detras
+  // de la cabecera, con sus comentarios y sus ramas; los nombres, de todas.
+  // Era una regex sobre el codigo con las directivas en blanco
+  U := FindUses(ATexto, 0, 'requires');
+  Result := U.Found;
   if not Result then
     Exit;
-  AIni := Cab.Fin - 1 + M.Groups[2].Index;
-  ALargo := M.Groups[2].Length;
-  for var E in M.Groups[3].Value.Split([',']) do
-    if E.Trim <> '' then
-      ANombres := ANombres + [E.Trim];
+  AIni := U.StartPos;
+  ALargo := U.EndPos - U.StartPos + 1;
+  for var E in U.Entries + U.OtrasRamas do
+    if EntryUnitName(E) <> '' then
+      ANombres := ANombres + [EntryUnitName(E)];
 end;
 
 function ProjectUnits(const AProject: string; ANeedDproj: Boolean): TArray<TProjectUnit>;
@@ -2459,12 +2475,18 @@ end;
 { DONDE acaba la palabra de la seccion ASec (interface|implementation) en
   ACodigo (la vista CodigoPascal): la posicion 1-based detras de ella, 0 si
   no esta. LA regla de la seccion de un uses: estaba cinco veces en tres
-  funciones (inventario del 10-oct-2026, test_paisaje la fija aqui) }
+  funciones (inventario del 10-oct-2026). La primera vez que la palabra sale
+  ENTERA en el codigo, este donde este: se buscaba a principio de linea, y
+  en 'unit X; interface uses A; implementation end.' no habia seccion
+  (adduses negaba, y el renombrado de una unit, que desde el 18-oct-2026 mira
+  sus clausulas, la necesita). Lo que la lleva dentro de otra palabra
+  (dispinterface, IInterface) no; en una unit la seccion va antes que un
+  'IX = interface'. }
 function FinDeSeccion(const ACodigo, ASec: string): Integer;
 var
   M: TMatch;
 begin
-  M := TRegEx.Match(ACodigo, '^[ \t]*' + ASec + '\b', [roIgnoreCase, roMultiline]);
+  M := TRegEx.Match(ACodigo, '(?<![\w.])' + ASec + '\b', [roIgnoreCase]);
   if M.Success then
     Result := M.Index + M.Length
   else
@@ -2563,8 +2585,16 @@ begin
     // linea, que un comentario abierto en ella se la llevaba dentro
     // (revision de la 1.10.0, medido)
     FinLinea := FinDeLinea(AText, PosSec);
-    AText := Copy(AText, 1, FinLinea - 1) + NL + NL + 'uses' + NL + '  ' +
-      string.Join(', ', AFaltan) + ';' + Copy(AText, FinLinea, MaxInt);
+    // ...salvo si detras de la palabra, en su linea, sigue el CODIGO (una unit
+    // de una linea: 'unit X; interface implementation end.', que FinDeSeccion
+    // encuentra desde el 18-oct-2026): ahi va pegada a la palabra; debajo
+    // caia detras del end. final
+    if Trim(Copy(Blank, PosSec, FinLinea - PosSec)) <> '' then
+      AText := Copy(AText, 1, PosSec - 1) + ' uses ' + string.Join(', ', AFaltan) + ';' +
+        Copy(AText, PosSec, MaxInt)
+    else
+      AText := Copy(AText, 1, FinLinea - 1) + NL + NL + 'uses' + NL + '  ' +
+        string.Join(', ', AFaltan) + ';' + Copy(AText, FinLinea, MaxInt);
   end;
 end;
 
@@ -3067,10 +3097,38 @@ begin
   var NomIni := 0;
   var NomFin := 0;
   var Cab: TCabeceraFuente;
-  if CabeceraDeFuente(VistaTexto, Cab) and (Cab.Palabra = 'unit') then
+  var HayCab := CabeceraDeFuente(VistaTexto, Cab);
+  if HayCab and (Cab.Palabra = 'unit') then
   begin
     NomIni := Cab.NombreIni;
     NomFin := Cab.NombreIni + Cab.NombreLen;
+  end;
+  // donde el nombre ES la unit: una entrada de sus clausulas (los uses de
+  // interface e implementation; el uses o contains de un programa o un
+  // paquete, con sus ramas), y fuera de ellas delante de un punto (Vieja.X).
+  // Se cambiaba TODO identificador igual: un campo o una variable con el
+  // nombre de la unit pasaban a llamarse como la nueva, y el build caia con
+  // E2003 y la tool decia MOVED (medido el 18-oct-2026). Por EL lector de
+  // las clausulas (FindUses) y EL de la seccion (FinDeSeccion)
+  var Clausulas: TArray<TUsesClause> := [];
+  if HayCab and (Cab.Palabra = 'unit') then
+  begin
+    for var Sec in TArray<string>.Create('interface', 'implementation') do
+    begin
+      var PosSec := FinDeSeccion(VistaTexto, Sec);
+      if PosSec > 0 then
+      begin
+        var U := FindUses(Texto, PosSec);
+        if U.Found then
+          Clausulas := Clausulas + [U];
+      end;
+    end;
+  end
+  else
+  begin
+    var U := FindUses(Texto);
+    if U.Found then
+      Clausulas := Clausulas + [U];
   end;
   var IniLinea := 1; // donde empieza la linea I en el texto (1-based)
   for I := 0 to High(Lineas) do
@@ -3083,7 +3141,21 @@ begin
       Ultimo := 0; // 0-based: hasta donde se ha copiado ya la linea
       for M in Re.Matches(Vistas[I]) do
       begin
-        if (IniLinea + M.Index - 1 >= NomIni) and (IniLinea + M.Index - 1 < NomFin) then
+        var PosAbs := IniLinea + M.Index - 1; // en el texto, 1-based
+        if (PosAbs >= NomIni) and (PosAbs < NomFin) then
+          Continue;
+        var EnClausula := False;
+        for var U in Clausulas do
+          if (PosAbs >= U.StartPos) and (PosAbs <= U.FinRamas) then
+            EnClausula := True;
+        // delante de un punto (y no de un rango: '..'), en la vista del codigo
+        var J := PosAbs + M.Length;
+        while (J <= Length(VistaTexto)) and VistaTexto[J].IsWhiteSpace do
+          Inc(J);
+        var Punto := (J < Length(VistaTexto)) and (VistaTexto[J] = '.') and (VistaTexto[J + 1] <> '.');
+        // en una clausula, la entrada (Vieja.Algo seria OTRA unit, con
+        // puntos); fuera, solo la cualificada
+        if EnClausula = Punto then
           Continue;
         Partes.Append(Linea.Substring(Ultimo, M.Index - 1 - Ultimo));
         Partes.Append(ANuevo);

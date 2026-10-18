@@ -170,9 +170,14 @@ begin
     FR_STYLE + 'none (as the VCL designer)'#13#10 +
     FR_ROOT + 'FormPrueba:TFormPrueba:form'#13#10 + FR_PACKAGES + '112/153'#13#10 +
     FR_COMPONENTS + '5'#13#10 + FR_SUBSTITUTED + 'TRaro,TOtro'#13#10 +
-    FR_IGNORED + 'Property Alineacion does not exist'#13#10 +
-    FR_IGNORED + 'Invalid property value'#13#10 +
-    FR_IGNORED + 'Error reading Panel1.Font.Size: Invalid property value'#13#10 +
+    FR_IGNORED + '|||Property Alineacion does not exist'#13#10 +
+    FR_IGNORED + '|||Invalid property value'#13#10 +
+    FR_IGNORED + 'Panel1|Font.Size|Invalid property value|Error reading Panel1.Font.Size: Invalid property value'#13#10 +
+    FR_IGNORED + 'Edit1|FontColor|Ungültiger Eigenschaftswert|Fehler beim Lesen von Edit1.FontColor: ' +
+      'Ungültiger Eigenschaftswert'#13#10 +
+    FR_IGNORED + '|||a|b'#13#10 +
+    FR_NOT_LOADED + 'EReadError|EditRight|FontColor|Invalid property value|Error reading EditRight.FontColor: ' +
+      'Invalid property value'#13#10 +
     FR_WARNING + '[RENDER-016] component: there is no Z in FormPrueba.'#13#10 +
     FR_NONVISUALS + 'Timer1:TTimer,ActionList1:TActionList'#13#10 + FR_NONVISUAL + '2'#13#10 +
     FR_RECT + 'Panel1=16,140,344,41'#13#10 + FR_FIDELITY + 'print'#13#10 +
@@ -186,14 +191,28 @@ begin
   Assert.AreEqual('112/153', R.Paquetes);
   Assert.AreEqual(5, R.Componentes);
   Assert.AreEqual('TRaro|TOtro', string.Join('|', R.Sustituidas));
-  Assert.AreEqual<NativeInt>(3, Length(R.Ignoradas), 'IGNORED es repetible');
-  // la forma de TReader (SPropertyException) en sus partes, con la ruta de la
-  // propiedad entera; lo que no casa, solo como texto (David, 7-oct-2026)
+  Assert.AreEqual<NativeInt>(5, Length(R.Ignoradas), 'IGNORED es repetible');
+  // en sus partes, como las da el ayudante con el formato que compuso el
+  // mensaje (en SU idioma), y el texto tal cual; sin partes, solo el texto
+  // (David, 7-oct-2026)
   Assert.AreEqual('', R.Ignoradas[0].Componente, 'otra forma: solo texto');
   Assert.AreEqual('Property Alineacion does not exist', R.Ignoradas[0].Texto);
   Assert.AreEqual('Panel1', R.Ignoradas[2].Componente);
   Assert.AreEqual('Font.Size', R.Ignoradas[2].Propiedad);
   Assert.AreEqual('Invalid property value', R.Ignoradas[2].Motivo);
+  Assert.AreEqual('Error reading Panel1.Font.Size: Invalid property value', R.Ignoradas[2].Texto);
+  // un lector aleman: el servidor ya no parte el texto con el ingles
+  Assert.AreEqual('Edit1', R.Ignoradas[3].Componente);
+  Assert.AreEqual('FontColor', R.Ignoradas[3].Propiedad);
+  Assert.AreEqual('Ungültiger Eigenschaftswert', R.Ignoradas[3].Motivo);
+  // el texto puede llevar el separador: es lo ultimo
+  Assert.AreEqual('a|b', R.Ignoradas[4].Texto);
+  Assert.AreEqual('', R.Ignoradas[4].Componente);
+  // NOTLOADED=<clase>|<partes>: el error que paro al lector
+  Assert.IsTrue(R.NoCarga, 'NOTLOADED=');
+  Assert.AreEqual('EditRight', R.Parada.Componente);
+  Assert.AreEqual('FontColor', R.Parada.Propiedad);
+  Assert.AreEqual('Error reading EditRight.FontColor: Invalid property value', R.Parada.Texto);
   Assert.AreEqual<NativeInt>(1, Length(R.Avisos));
   // cada item en sus partes: lo lee el lector, no la tool
   Assert.AreEqual<NativeInt>(2, Length(R.NoVisuales));

@@ -18,6 +18,9 @@ with another forty. This battery is the ones that became code.
   F4  a changeset id is a capability: status shows only its public half
   F6  ANY drive letter is masked, and a UNC host never travels
   M3  a project file is refused at stage, not at commit
+  M3b ...and a .dpk is not one: it is a source, staged and written (the stage
+      refused it with CHSET-018, "the commit would have refused it", and
+      delphi_edit - the commit's own writer - writes it; measured 18-oct-2026)
   P3  rename answers 1-based lines (and line0 alongside)
   P4  git's own list of commands is complete
   P7  delphi_projects on a root that is not there is an error
@@ -197,6 +200,17 @@ r = A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'edit',
 check('M3 un .dproj se rechaza EN EL STAGE, no en el commit',
       mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_PROJECT_FILE_FMT') and 'delphi_config' in r, r[:250])
 A.call('delphi_changeset', {'command': 'rollback', 'id': CID2})
+r = A.call('delphi_create', {'kind': 'project-package', 'name': 'Pk', 'dir': os.path.join(BASE, 'Pk')})
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
+DPK = os.path.join(BASE, 'Pk', 'Pk.dpk')
+CID3 = mc.id_changeset(A.call('delphi_changeset', {'command': 'begin'}))
+rs = A.call('delphi_changeset', {'command': 'stage', 'id': CID3, 'kind': 'edit', 'path': DPK,
+                                 'old': '{$IMPLICITBUILD ON}', 'new': '{$IMPLICITBUILD OFF}'})
+A.call('delphi_changeset', {'command': 'preview', 'id': CID3})
+rc = A.call('delphi_changeset', {'command': 'commit', 'id': CID3})
+check('M3b un .dpk es un fuente, no un fichero de proyecto: se apila y el commit lo escribe',
+      not mc.fallo(rs) and not mc.fallo(rc) and b'{$IMPLICITBUILD OFF}' in open(DPK, 'rb').read(),
+      (rs[:250], rc[:250]))
 
 # ------------------------------------------------------------- B4/P8/B3 ----
 PAS = os.path.join(BASE, 'Proy', 'UAlgo.pas')

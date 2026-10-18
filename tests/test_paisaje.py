@@ -323,12 +323,12 @@ REGLAS = [
     ('la seccion interface/implementation buscada a mano',
      r"'\^(?:\[ \\t\]\*|\\s\*)'\s*\+\s*\w+\s*\+\s*'\\b'|\^(?:interface|implementation)\[ \]\*\$|"
      r"\.Trim\.ToLower\s*=\s*'(?:interface|implementation)'",
-     [('Lsp.ProjectUnits.pas', 'FinDeSeccion'), ('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest'),
-      ('Lsp.Patch.pas', 'ExecutePatch')],
-     'la primera linea que empieza por la palabra (FinDeSeccion: estaba cinco veces en tres funciones '
-     'de ProjectUnits), la linea exacta (InterfaceDigest) o la linea que es la palabra (ExecutePatch, '
-     'la frontera del insert; la vio el revisor 7): tres reglas para lo que TLectorPas ya sabe '
-     '(inventario del 10-oct-2026)'),
+     [('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest'), ('Lsp.Patch.pas', 'ExecutePatch')],
+     'FinDeSeccion (Lsp.ProjectUnits): la palabra entera en el codigo, este donde este (estaba cinco '
+     'veces en tres funciones de ProjectUnits; a principio de linea hasta el 18-oct-2026, y una unit de '
+     'una linea no tenia seccion). DEUDA declarada: la linea exacta (InterfaceDigest) y la linea que es '
+     'la palabra (ExecutePatch, la frontera del insert; la vio el revisor 7), dos reglas mas para lo '
+     'mismo (inventario del 10-oct-2026)'),
     ('la forma canonica de una ruta preguntada a Windows',
      r'\bGet(?:LongPathName|FinalPathNameByHandle)\w*\s*\(',
      [('Lsp.Rutas.pas', 'LongCanonical'), ('Lsp.Rutas.pas', 'NombreFinal'),
@@ -424,6 +424,16 @@ REGLAS = [
      [('Lsp.Patch.pas', 'EsRutaDeDesigner'), ('Lsp.Patch.pas', 'DesignersDeUnidad')],
      'DESIGNER_EXTS, EsRutaDeDesigner y DesignersDeUnidad (Lsp.Patch): la lista estaba escrita a mano en '
      'nueve sitios, y el detector necesita saber si un fichero es un form (4.1 de la 1.18.0)'),
+    ('las extensiones de un proyecto del IDE a mano',
+     # la lista de lo que mantiene el IDE (.dproj, .groupproj) salvo la declaracion de
+     # PROJECT_EXTS, o el predicado reescrito con ella: el changeset llevaba la suya CON el
+     # .dpk, que es un fuente, y negaba apilarlo diciendo que el commit lo negaria
+     # (18-oct-2026). Una comparacion con '.groupproj' sola (es un grupo?) es otra pregunta
+     r"^(?!\s*PROJECT_EXTS\s*:).*'\*?\.(?:dproj|groupproj)'\s*,\s*'\*?\.(?:dproj|groupproj)'|"
+     r"MatchText\s*\([^;]*\bPROJECT_EXTS\s*\)|\bin\s+PROJECT_EXTS\b",
+     [('Lsp.Patch.pas', 'EsRutaDeProyecto')],
+     'EsRutaDeProyecto (Lsp.Patch): lo que lleva delphi_config y ni delphi_edit, ni delphi_textedit, '
+     'ni el changeset escriben'),
     ('una cadena ASCII preguntada a mano', r'\bOrd\s*\(\s*\w+\s*\)\s*>\s*127\b',
      [('Lsp.Codificacion.pas', 'IsAscii')],
      'IsAscii (Lsp.Codificacion): estaba en Lsp.TextEdit y en linea en NombreQueElFicheroNoLee, y '
@@ -754,6 +764,40 @@ REGLAS = [
      '(DesignClassDeFrame, RaizDeDesignClass); en el ayudante, la clase CARGADA (EsFrame). '
      'Su casa: el sustituto que crea el ayudante (ClaseDelSustituto) y el generador de la '
      'tabla, que lee las raices del fuente por su identidad (EsRaiz)'),
+    # el mensaje del lector de forms (Format(SPropertyException, ...) de TReader) partido
+    # con un formato propio: el servidor lo partia con el INGLES y el RTL del ayudante habla
+    # el idioma de Windows (rtl370.de/.fr/.ja; medido el 18-oct-2026: en aleman no nombraba
+    # nada, set escribia sin juzgar y el lint perdia la linea). Dos formas: una regex sobre
+    # el texto ingles, y el formato del RTL usado fuera de su casa. Mirar si una salida
+    # CONTIENE ese texto (las baterias, los tests) no es partirlo
+    ('el mensaje del lector de forms partido a mano',
+     r"TRegEx\.\w+\s*\([^;]*'[^']*Error reading|\bSPropertyException\b",
+     [('FormRender.Comun.pas', 'LecturaEnPartes')],
+     'LecturaEnPartes (FormRender.Comun): el ayudante lo parte con el formato que lo compuso, en '
+     'su idioma, y lo manda en partes (FR_PARTES_SEP); el servidor lo lee con PartesDeLectura '
+     '(Lsp.FormRender)'),
+    # que una linea de un form es un EVENTO, por el prefijo On: los de un TDataSet (AfterOpen,
+    # BeforePost) y los de un TWebModule (BeforeDispatch) no lo llevan, y check-binding los
+    # daba por buenos sin manejador o con el suyo en public (medido el 18-oct-2026). Dos
+    # formas: el patron 'On' + identificador, y mirar si un nombre empieza por On
+    # la clausula requires de un paquete leida con una regex: sobre el codigo con las
+    # directivas en blanco, y add-requires la reescribia sin sus {$IFDEF} ni sus
+    # comentarios (medido el 18-oct-2026: vcl pasaba a ser de todas las plataformas)
+    ('la clausula requires leida con una regex', r"TRegEx\.\w+\s*\([^;]*'[^']*\brequires\b", [],
+     'FindUses con la palabra (APalabra=requires): EL lector de las clausulas, con sus comentarios '
+     'y sus ramas; y ReplaceUses, su escritor (Lsp.ProjectUnits)'),
+    # que una linea es una SENTENCIA, por una lista de palabras clave (el aviso de un
+    # metodo partido miraba asi la linea de encima, y dos declaraciones seguidas en un
+    # interface avisaban; 18-oct-2026): donde esta cada cuerpo lo sabe el lector
+    ('una sentencia por una lista de palabras clave',
+     r"'\^\((?:\?:)?if\|while\|for\|case\b", [],
+     'TUnidadPas (Lsp.PascalDecl): Cuerpos (entre el begin y el end de cada rutina) y '
+     'FinDeclaraciones (donde acaban las declaraciones)'),
+    ('un evento por el prefijo On',
+     r"'(?:\\A|\^\(?)?On'\s*\+|StartsWith\(\s*'On'",
+     [('Lsp.DesignerBinding.pas', 'EsEvento')],
+     'EsEvento (Lsp.DesignerBinding): la tabla (Kind m, por la clase del objeto: ClasesDeLasLineas, '
+     'y la raiz por JuezDeLaRaiz); el nombre solo donde la tabla no sabe, y ahi, declarado'),
 ]
 
 
@@ -916,6 +960,9 @@ PLANTADO = {
     'la regla de ida y vuelta preguntada a mano': "  if not BytesVuelvenIgual(B, K) then Exit;",
     'las extensiones de un fuente a mano': "  if MatchText(Ext, ['.pas', '.dpr', '.dpk', '.inc']) then X := 1;",
     'las extensiones de un designer a mano': "  if MatchText(TPath.GetExtension(P), ['.dfm', '.fmx']) then X := 1;",
+    # la de Lsp.Changeset hasta el 18-oct-2026
+    'las extensiones de un proyecto del IDE a mano':
+        "  if MatchText(TPath.GetExtension(Op.Path), ['.dproj', '.groupproj', '.dpk']) and",
     'una pagina de codigos a mano': "  E := TEncoding.GetEncoding(1252);",
     'fijar la pagina ANSI': "  UsaPaginaAnsi(1251);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
@@ -944,6 +991,17 @@ PLANTADO = {
     'la marca CLASSGROUP del IDE a mano': "  S := '{%CLASSGROUP ''FMX.Controls.TControl''}';",
     # la de Lsp.ProjectUnits.RaizDeLaCadena hasta el 18-oct-2026
     'la raiz de un designer por el nombre de su clase': "    if SameText(AUltimo, 'TFrame') then Exit('TFrame');",
+    # la de Lsp.FormRender.IgnoradaDeTexto hasta el 18-oct-2026
+    'el mensaje del lector de forms partido a mano':
+        r"  M := TRegEx.Match(ATexto, '\AError reading ([^.:\s]+)\.([^:\s]+): (.+)\z');",
+    # la del aviso EDIT-101 de Lsp.Patch hasta el 18-oct-2026
+    'una sentencia por una lista de palabras clave':
+        "  S := TRegEx.IsMatch(E, '^(if|while|for|case|repeat|until|raise|exit|with|begin|try)\\b', [roIgnoreCase]);",
+    # la de Lsp.ProjectUnits.ClausulaRequires hasta el 18-oct-2026
+    'la clausula requires leida con una regex':
+        r"  M := TRegEx.Match(Copy(Codigo, Cab.Fin, MaxInt), '^(\s*)(requires\b\s*(.*?);)', [roIgnoreCase]);",
+    # la de Lsp.DesignerBinding hasta el 18-oct-2026
+    'un evento por el prefijo On': "  PATRON_EVENTO = 'On' + PATRON_IDENT;",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -988,6 +1046,16 @@ for forma in ("  else if Name.EndsWith('DataModule', True) then",
     cazados = fuera_de_casa(REGLA_RAIZ, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                           'RaizAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (REGLA_RAIZ[0], forma.strip()), len(cazados) == 1, cazados)
+# la otra forma del mensaje del lector a mano: su formato del RTL fuera de su casa
+REGLA_LECTOR = next(r for r in REGLAS if r[0] == 'el mensaje del lector de forms partido a mano')
+cazados = fuera_de_casa(REGLA_LECTOR, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                        'PartesAMano;\nbegin\n  F := SPropertyException;\nend;\nend.\n')])
+check('mutante "%s": tambien el formato del RTL fuera de su casa' % REGLA_LECTOR[0], len(cazados) == 1, cazados)
+# la otra forma del evento por su nombre: mirar si empieza por On
+REGLA_ON = next(r for r in REGLAS if r[0] == 'un evento por el prefijo On')
+cazados = fuera_de_casa(REGLA_ON, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                    "EventoAMano;\nbegin\n  if Prop.StartsWith('On') then X := 1;\nend;\nend.\n")])
+check('mutante "%s": tambien mirar si el nombre empieza por On' % REGLA_ON[0], len(cazados) == 1, cazados)
 COMPONE_CLASE = fuera_de_casa(REGLA_RAIZ, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
     "Compone;\nbegin\n  S := '  T' + ANombre + ' = class(TFrame)' + CRLF;\nend;\nend.\n")])
 check('mutante "%s": componer el fuente de una clase nueva no se caza' % REGLA_RAIZ[0],

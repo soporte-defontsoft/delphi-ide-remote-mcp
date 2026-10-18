@@ -60,13 +60,13 @@ PAS_FMX = ("unit {u};\r\n\r\ninterface\r\n\r\nuses\r\n  System.SysUtils, System.
            "System.Classes, System.Variants,\r\n  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, "
            "FMX.StdCtrls, FMX.Edit, FMX.Layouts, FMX.Controls.Presentation;\r\n\r\ntype\r\n"
            "  TFormF = class(TForm)\r\n    Label1: TLabel;\r\n    Edit1: TEdit;\r\n    Layout1: TLayout;\r\n"
-           "  end;\r\n\r\nvar\r\n  FormF: TFormF;\r\n\r\nimplementation\r\n\r\n{{$R *.fmx}}\r\n\r\nend.\r\n")
+           "  end;\r\n\r\nvar\r\n  FormF: TFormF;\r\n\r\nimplementation\r\n\r\n{$R *.fmx}\r\n\r\nend.\r\n")
 VCL = ("object FormV: TFormV\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'V'\r\n  ClientHeight = 200\r\n"
        "  ClientWidth = 300\r\n  object Label1: TLabel\r\n    Left = 8\r\n    Top = 8\r\n    Width = 30\r\n"
        "    Height = 15\r\n    Caption = 'Label1'\r\n  end\r\nend\r\n")
 PAS_VCL = ("unit {u};\r\n\r\ninterface\r\n\r\nuses\r\n  System.SysUtils, System.Classes, Vcl.Controls, "
            "Vcl.Forms, Vcl.StdCtrls;\r\n\r\ntype\r\n  TFormV = class(TForm)\r\n    Label1: TLabel;\r\n"
-           "  end;\r\n\r\nvar\r\n  FormV: TFormV;\r\n\r\nimplementation\r\n\r\n{{$R *.dfm}}\r\n\r\nend.\r\n")
+           "  end;\r\n\r\nvar\r\n  FormV: TFormV;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n")
 
 
 def fmx(nombre, label=''):

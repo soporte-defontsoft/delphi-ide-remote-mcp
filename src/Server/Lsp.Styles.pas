@@ -68,6 +68,11 @@ type
     destructor Destroy; override;
     property Root: TStyleObj read FRoot;
     property Lines: TArray<string> read FLines;
+    { Las lineas como se leyeron del disco (Reload), sin las ediciones en
+      memoria: con ellas se pregunta a un juez como estaba el fichero ANTES
+      del cambio (Guarda al parser; CargaLoPuesto de Lsp.DesignerEdit al
+      lector del IDE). }
+    property Leidas: TArray<string> read FLeidas;
     property Path: string read FPath;
     { True si el fichero en disco es un .dfm BINARIO leido al vuelo como texto
       (Lsp.DesignerBin): se lee entero, no se guarda (ver Guarda). }

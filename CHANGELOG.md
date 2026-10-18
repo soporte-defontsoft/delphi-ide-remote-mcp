@@ -184,6 +184,79 @@ the MCP `initialize` response (`serverInfo.version`).
   same name lists went from `check-binding` (a `TForm3D`, `TWebModule` or
   `TQuickRep` root left it partial and silent) and from the renderer (`frame`
   inside a class name made it a frame: the loaded class decides now).
+- `delphi_test` answered `pass` for a run whose counts were green and whose
+  runner exited with an error. Measured: a DUnitX project that passes every
+  test and then raises while it closes exits with code 2, and the run was a
+  pass; so was a console runner that prints PASS for each test and sets
+  `ExitCode := 3`. Something failed outside the tests it counted - a
+  finalization, a leak check, the runner itself. The run is `fail` now, with
+  `verdictFrom: exitCode` and a note that says it (`TEST-034`).
+- **The IDE's form reader speaks the language of Windows, and the server read
+  it in English.** The form helpers are built with runtime packages, so their
+  RTL loads `rtl370.de`, `.fr` or `.ja` - installed next to `rtl370.bpl` - on a
+  German, French or Japanese Windows (or with the IDE set to that language).
+  The server split the reader's message ("Error reading Edit1.FontColor:
+  ...") with the English format, and measured with the reader in German
+  ("Fehler beim Lesen von ..."), it named nothing:
+  - `delphi_designer set` (and `insert` with `props`) of a value the class
+    stores by code - the one only the reader can judge - wrote
+    `FontColor = -65536` with `ok`, and the form no longer opened;
+  - the lint lost the line of what the reader said, and what it skipped from
+    a substituted third-party class came out as a reader warning (`EDIT-127`)
+    instead of its note.
+
+  The helper now splits the message itself, with the format that composed it
+  in its own language, and sends the parts; measured in German, French and
+  Japanese (whose format puts the name first). And when the reader does not
+  name the value, `set` no longer writes it silently: it asks the same reader
+  about the form as it was, as saving asks the form parser. If that loads,
+  this change broke it (`DSGN-158`, nothing written); if it does not load
+  either, or the reader could not be asked (a literal naming a file outside
+  the jail), the value is written and `readerNote` says it was not judged
+  (`DSGN-159`).
+- A line of a form was an event when its property started with `On`. The
+  events of a dataset (`AfterOpen`, `BeforePost`...) and of a web module
+  (`BeforeDispatch`) do not, and the table of the framework already knew which
+  property is a method. Measured with a `TFDMemTable` and `AfterOpen =
+  FDMemTable1AfterOpen`: `check-binding` (and the lint after every write)
+  said `clean` with no handler and with the handler in `public` - the form
+  does not load: streaming only finds published methods -, `insert=metodo`
+  left that handler in `public`, and `delete` of the dataset left its empty
+  handler behind. The table decides now, by the class of the object the line
+  belongs to (the root, by the class that judges it); the name only where the
+  table cannot tell (an item of a collection, a class it does not have).
+- `delphi_changeset` refused to stage an edit of a `.dpk` (`CHSET-018`: "a
+  project file the IDE maintains; the commit would have refused it anyway").
+  A `.dpk` is a source, and `delphi_edit` - the commit's own writer - writes
+  it. The stage had its own list of project files; it asks the writer's rule
+  now (`.dproj` and `.groupproj` stay refused, for `delphi_config`).
+- `delphi_config add-requires` rewrote the whole `requires` clause of a
+  package, one name per line, read with its directives blanked out: its
+  comments and its `{$IFDEF}` went. Measured with `rtl, // la base` and
+  `dbrtl{$IFDEF MSWINDOWS}, vcl{$ENDIF}`: after adding `xmlrtl`, `vcl` was
+  required on every platform. The clause is read and written now by the
+  reader and the writer of `contains` and `uses`, which keep comments and
+  directives in place; one split in `{$IFDEF}` branches is refused, as for
+  those (`USES-001`, the same message), instead of guessing the branch.
+- Renaming a unit (`delphi_move` to a new name) rewrote EVERY identifier equal
+  to the old unit name in the files of the project, not only the unit: a
+  record field `Precio: Double` became `UPrecio: Double` when unit `Precio`
+  was renamed, the build died with `E2003` and the answer said `MOVED`
+  (measured). The name is the unit only in an entry of a `uses` or
+  `contains` clause (its branches included) and, outside them, in front of a
+  dot (`Precio.Base`); fields, variables and properties of that name stay.
+- The section of a unit (`interface`, `implementation`) was found only at the
+  start of a line: `adduses` refused `unit X; interface uses A;
+  implementation end.` (`USES-007`, "I cannot find the implementation
+  section"). The keyword is found where it is in the code now, and a clause
+  `adduses` creates there goes right after it, on its line.
+- The warning that a routine was inserted inside a method (`EDIT-101`) judged
+  by the line above the new header: two declarations in a row in an
+  `interface` (the one above ends in `);`) raised it, and a header written
+  after `initialization` did not. It is decided now by the reader of the
+  unit's routines: inside the body of another one (between its `begin` and
+  its `end`), or after the declarations (the main block, `initialization`,
+  past the final `end`); the warning says which.
 
 ### Added
 

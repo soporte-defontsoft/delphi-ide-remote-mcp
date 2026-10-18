@@ -31,6 +31,12 @@ lector y su linea, y cuando la tabla calla se le pregunta al lector en el lint
   L10 upload ENTERO sin sha256 de un form con el BOM mal transcrito (Hermes,
      hermes-120 de la 1.20: ok:true y nada mas): designerNote con UPLOAD-013
      y lo que dijo el parser (ROJO en 708ed8b)
+  L11 con el lector en ALEMAN (el RTL del ayudante habla el idioma de
+     Windows; el servidor partia su mensaje con el ingles, medido el
+     18-oct-2026): el lint dice lo que dijo el lector CON su linea (ROJO en
+     produccion: sin linea)
+  L12 ...y L9 en aleman: lo que se salta la clase sustituida sigue sin ser un
+     aviso del lector (ROJO en produccion: EDIT-127 con X1.Foo)
 
 Uso:  python tests/test_lector_puertas_120.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -55,7 +61,7 @@ TERCEROS = "  object X1: TComponenteQueNoExiste1201\r\n    Foo = 1\r\n  end\r\n"
 PAS = ("unit {u};\r\n\r\ninterface\r\n\r\nuses\r\n  System.SysUtils, System.Types, System.UITypes, "
        "System.Classes, System.Variants,\r\n  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, "
        "FMX.Edit;\r\n\r\ntype\r\n  TFormC = class(TForm)\r\n    Edit1: TEdit;\r\n  end;\r\n\r\nvar\r\n"
-       "  FormC: TFormC;\r\n\r\nimplementation\r\n\r\n{{$R *.fmx}}\r\n\r\nend.\r\n")
+       "  FormC: TFormC;\r\n\r\nimplementation\r\n\r\n{$R *.fmx}\r\n\r\nend.\r\n")
 
 
 def texto(dentro='', otro=''):
@@ -168,6 +174,20 @@ try:
     check('L9 una clase de terceros sustituida: lo que el lector se salta de ella no es un aviso del lector',
           not mc.fallo(e) and not mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and 'X1.Foo' not in e
           and b'TabOrder = 1' in open(p, 'rb').read(), e[-600:])
+
+    # el ayudante que lanza ESTE servidor (copia_exe lo puso a su lado)
+    with mc.idioma_rtl(os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), 'DE'):
+        p = form('UL11', dentro=MALO + '\r\n')
+        n = linea_de(p, 'FontColor = -65536')
+        r = srv.call('delphi_designer', {'path': p, 'command': 'lint'}, t=240)
+        check('L11 con el lector en aleman: el lint dice lo que dijo el lector con su linea (%d)' % n,
+              mc.tiene(r, 'DSGN-038') and ('line %d:' % n) in r and 'Fehler beim Lesen von Edit1.FontColor' in r,
+              r[:600])
+        p = form('UL12', otro=TERCEROS)
+        e = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 1'}, t=240)
+        check('L12 ...y la clase sustituida en aleman: lo que se salta de ella no es un aviso del lector',
+              not mc.fallo(e) and not mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and 'X1.Foo' not in e
+              and b'TabOrder = 1' in open(p, 'rb').read(), e[-600:])
 finally:
     srv.cierra()
 

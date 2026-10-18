@@ -50,10 +50,10 @@ type
   end;
 
   { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
-    el ayudante contesta Ignore): lo que dijo tal cual y, si casa con su forma
-    ('Error reading Panel1.Color: Invalid property value', SPropertyException
-    de System.RTLConsts), sus partes. Uno traducido, o de otra forma, queda
-    solo en Texto (David, 7-oct-2026: que guien al modelo). }
+    el ayudante contesta Ignore), o el error que lo paro (NOTLOADED=): lo que
+    dijo tal cual y sus partes, que da el ayudante con el formato que lo
+    compuso (SPropertyException, en SU idioma: PartesDeLectura). Uno de otra
+    forma queda solo en Texto (David, 7-oct-2026: que guien al modelo). }
   TIgnorada = record
     Texto: string;
     Componente, Propiedad, Motivo: string; // '' si no casa
@@ -79,6 +79,7 @@ type
     // NOTLOADED=: lo que fallo fue el LECTOR mientras cargaba el form - el
     // fichero, no el ayudante (DSGN-061 de la 1.20)
     NoCarga: Boolean;
+    Parada: TIgnorada;         // ...y el error con el que paro, en sus partes
     Codigo: Cardinal;          // su codigo de salida
     Captura: string;           // CAPTURE=
     Ancho, Alto: Integer;      // SIZE=
@@ -125,15 +126,13 @@ function RaizParaElRender(const ARuta: string): string;
   componian igual, a mano, lo que no cargo (LoQueNoCargo) y preview. }
 function ClaseDelSustituto(const ARaizTipo: string): string;
 
-{ Una linea IGNORED= -> sus partes (TIgnorada): el UNICO lector del texto de
-  TReader. Componente es el Name del objeto (o su clase, el de un item de una
-  coleccion: lo que pone TReader) y Propiedad su ruta (Font.Size). }
-function IgnoradaDeTexto(const ATexto: string): TIgnorada;
-{ El ERROR= de un ayudante que no pudo LEER el form ('EReadError: Error
-  reading Edit1.FontColor: Invalid property value': la clase de la excepcion,
-  ': ' y su mensaje, como lo escriben FormRender.Vcl y FormRender.Fmx) -> sus
-  partes, por IgnoradaDeTexto. Componente vacio si no es eso. }
-function ErrorDeLecturaDe(const AError: string): TIgnorada;
+{ Un mensaje del lector EN PARTES (FR_PARTES_SEP, de IGNORED= y NOTLOADED=)
+  -> TIgnorada: EL lector, inverso de FormRender.Comun.LecturaEnPartes.
+  Componente es el Name del objeto (o su clase, el de un item de una
+  coleccion: lo que pone TReader) y Propiedad su ruta (Font.Size). Aqui se
+  partia el texto con el formato INGLES, y el RTL del ayudante habla el idioma
+  de Windows (medido el 18-oct-2026: en aleman no nombraba nada). }
+function PartesDeLectura(const AValor: string): TIgnorada;
 
 { La linea (1-based) de ADoc que nombra lo que dijo el lector en AI - su
   componente y su propiedad -, o 0 si no esta en ESTE fichero (de un
@@ -178,12 +177,13 @@ function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
   escribe el IDE); ASinLeer, los ancestros sin los que leyo el form (PARTIAL=:
   un juicio a medias); ALeidos, los ficheros que leyo para cargarlo (READ=:
   quien escribe lo juzgado los vuelve a mirar, CambioEnLoLeido). '' si bien;
-  si no, el fallo, y en AError el ERROR= del ayudante tal cual
-  (ErrorDeLecturaDe lo lee). La propuesta se escribe en una carpeta de
-  descarga del temporal del disenador y se borra siempre. }
+  si no, el fallo, en AError el ERROR= del ayudante tal cual y, si lo que
+  fallo fue el lector (NOTLOADED=), en AParada su error en partes. La
+  propuesta se escribe en una carpeta de descarga del temporal del disenador
+  y se borra siempre. }
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
-  out AError: string): string;
+  out AError: string; out AParada: TIgnorada): string;
 
 { CON el cerrojo, justo antes de escribir lo que juzgo el ayudante: '' si
   cada fichero que leyo para cargar el form (ALeidos) sigue con los bytes de
@@ -347,35 +347,27 @@ begin
     AOrden := AOrden + Arg('--style', APeticion.Estilo);
 end;
 
-function IgnoradaDeTexto(const ATexto: string): TIgnorada;
+function PartesDeLectura(const AValor: string): TIgnorada;
 var
-  M: TMatch;
+  P1, P2, P3: Integer;
 begin
   Result := Default(TIgnorada);
-  Result.Texto := ATexto;
-  // 'Error reading %s%s%s: %s' (SPropertyException): el Name, sin puntos; un
-  // punto; la ruta de la propiedad, que si los lleva (Font.Size); el motivo
-  M := TRegEx.Match(ATexto, '\AError reading ([^.:\s]+)\.([^:\s]+): (.+)\z');
-  if M.Success then
-  begin
-    Result.Componente := M.Groups[1].Value;
-    Result.Propiedad := M.Groups[2].Value;
-    Result.Motivo := M.Groups[3].Value;
-  end;
-end;
-
-function ErrorDeLecturaDe(const AError: string): TIgnorada;
-var
-  P: Integer;
-begin
-  Result := Default(TIgnorada);
-  Result.Texto := AError;
-  P := Pos(': ', AError);
-  if (P > 1) and TRegEx.IsMatch(Copy(AError, 1, P - 1), '\AE\w+\z') then
-  begin
-    Result := IgnoradaDeTexto(Copy(AError, P + 2, MaxInt));
-    Result.Texto := AError;
-  end;
+  Result.Texto := AValor;
+  // las tres partes no llevan el separador (el ayudante no parte si lo
+  // llevaran) y el texto si puede: Split con tope tira lo que sobra
+  P1 := AValor.IndexOf(FR_PARTES_SEP);
+  if P1 < 0 then
+    Exit;
+  P2 := AValor.IndexOf(FR_PARTES_SEP, P1 + 1);
+  if P2 < 0 then
+    Exit;
+  P3 := AValor.IndexOf(FR_PARTES_SEP, P2 + 1);
+  if P3 < 0 then
+    Exit;
+  Result.Componente := AValor.Substring(0, P1);
+  Result.Propiedad := AValor.Substring(P1 + 1, P2 - P1 - 1);
+  Result.Motivo := AValor.Substring(P2 + 1, P3 - P2 - 1);
+  Result.Texto := AValor.Substring(P3 + 1);
 end;
 
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
@@ -433,7 +425,7 @@ begin
     else if Es(FR_SUBSTITUTED) then
       Result.Sustituidas := V.Split([','], TStringSplitOptions.ExcludeEmpty)
     else if Es(FR_IGNORED) then
-      Result.Ignoradas := Result.Ignoradas + [IgnoradaDeTexto(V)]
+      Result.Ignoradas := Result.Ignoradas + [PartesDeLectura(V)]
     else if Es(FR_NONVISUALS) then
       for var Item in V.Split([','], TStringSplitOptions.ExcludeEmpty) do
       begin
@@ -496,7 +488,13 @@ begin
     else if Es(FR_ERROR) then
       Result.Error := V
     else if Es(FR_NOT_LOADED) then
+    begin
+      // <clase>|<su mensaje en partes>
       Result.NoCarga := True;
+      P := V.IndexOf(FR_PARTES_SEP);
+      if P > 0 then
+        Result.Parada := PartesDeLectura(V.Substring(P + 1));
+    end;
   end;
 end;
 
@@ -594,12 +592,11 @@ begin
     ARaizNoVista := MsgFmt(SF_DSGN_LECTOR_RAIZ_NO_VISTA_FMT, [Sustituto, Raiz.Clase, NoVistas]);
   if R.NoCarga then
   begin
-    // el error que lo paro, sin la clase delante ('EReadError: '): como lo
-    // dice el lector, y como lo dicen las que se salto
-    var E := ErrorDeLecturaDe(R.Error);
-    var P := Pos(': ', R.Error);
-    if P > 1 then
-      E.Texto := Copy(R.Error, P + 2, MaxInt);
+    // el error que lo paro, sin la clase delante: como lo dice el lector, y
+    // como lo dicen las que se salto
+    var E := R.Parada;
+    if E.Texto = '' then
+      E.Texto := R.Error;
     Pon(E);
   end;
   Result := Lineas;
@@ -928,7 +925,7 @@ end;
 
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
-  out AError: string): string;
+  out AError: string; out AParada: TIgnorada): string;
 begin
   AEscrito := '';
   ASustituidas := [];
@@ -937,6 +934,7 @@ begin
   ALeidos := [];
   var R := JuezDelIde(APath, ATexto, AEnc);
   AError := R.Error;
+  AParada := R.Parada;
   Result := R.Fallo;
   if Result <> '' then
     Exit;

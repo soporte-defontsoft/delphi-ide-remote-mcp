@@ -993,6 +993,20 @@ check('edit: una firma dentro de un comentario no avisa de un metodo partido',
 out = call('delphi_edit', {"path": AVI, "old": "  X := 1;", "new": "  X := 2;\nprocedure Suelta;"})
 check('edit: ...y una de verdad detras de una asignacion SI avisa (control)',
       mc.es(out, 'SN_EDIT_POSIBLE_INSERCION_METODO_FMT'), out[-300:])
+# donde cayo lo dice EL lector de rutinas (dentro del cuerpo de otra, o detras de las
+# declaraciones), no la linea de encima: dos declaraciones seguidas en un interface (la
+# de arriba acaba en ');') avisaban, y una firma detras de initialization no (18-oct-2026)
+DOS = os.path.join(DIR, 'ConDosDeclaraciones.pas')
+open(DOS, 'wb').write(CRLF.join(['unit ConDosDeclaraciones;', '', 'interface', '', 'procedure Uno(A: Integer);', '',
+                                 'implementation', '', 'procedure Uno(A: Integer);', 'begin', 'end;', '',
+                                 'initialization', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DOS, "old": "procedure Uno(A: Integer);", "atline": 5,
+                           "new": "procedure Uno(A: Integer);\nprocedure Dos(B: Integer);"})
+check('edit: dos declaraciones seguidas en el interface no avisan de un metodo partido',
+      mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT') and not mc.es(out, 'SN_EDIT_POSIBLE_INSERCION_METODO_FMT'), out[-400:])
+out = call('delphi_edit', {"path": DOS, "old": "initialization", "new": "initialization\nprocedure Tarde;"})
+check('edit: ...y una firma detras de initialization SI avisa (alli no se declara)',
+      mc.es(out, 'SN_EDIT_POSIBLE_INSERCION_METODO_FMT'), out[-400:])
 
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})

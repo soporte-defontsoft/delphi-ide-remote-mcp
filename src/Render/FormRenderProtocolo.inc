@@ -13,7 +13,7 @@
   FR_PACKAGES = 'PACKAGES=';     // PACKAGES=<cargados>/<conocidos> de diseno del IDE (0/0 = no hicieron falta)
   FR_COMPONENTS = 'COMPONENTS='; // COMPONENTS=<n> leidos de la raiz
   FR_SUBSTITUTED = 'SUBSTITUTED='; // SUBSTITUTED=<TClase,TClase> que no existen en ningun paquete (sustituto rosa con el nombre)
-  FR_IGNORED = 'IGNORED=';       // IGNORED=<propiedad o error del lector que se salto> (repetible)
+  FR_IGNORED = 'IGNORED=';       // IGNORED=<error del lector que se salto, EN PARTES> (repetible; FR_PARTES_SEP)
   FR_NONVISUAL = 'NONVISUAL=';   // NONVISUAL=<n> iconos de no visuales dibujados (solo con --nonvisual on)
   FR_NONVISUALS = 'NONVISUALS='; // NONVISUALS=<Nombre:Clase,...> los no visuales de la raiz, se dibujen o no: el
                                  // agente necesita saber que existen aunque no los vea (David, 7-oct-2026)
@@ -29,10 +29,15 @@
                                  // blancos; --writeback on: el juez del orden, 3.11 de la 1.18.0)
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos
   FR_ERROR = 'ERROR=';           // ERROR=<motivo>; va con codigo de salida 1 (3 si fue el tiempo limite)
-  FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>, antes del ERROR=: lo que fallo fue el
-                                 // LECTOR mientras cargaba el form (EFilerError o EParserError, lo dice la
-                                 // jerarquia de la RTL): es el contenido del fichero, no el ayudante ni un
-                                 // paquete al pintar (DSGN-061 de la 1.20)
+  FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>|<su mensaje EN PARTES>, antes del ERROR=:
+                                 // lo que fallo fue el LECTOR mientras cargaba el form (EFilerError o
+                                 // EParserError, lo dice la jerarquia de la RTL): es el contenido del
+                                 // fichero, no el ayudante ni un paquete al pintar (DSGN-061 de la 1.20)
+  // un mensaje del lector EN PARTES: <Componente>|<Propiedad>|<Motivo>|<texto tal cual>, partido por el
+  // ayudante con EL formato que lo compuso (SPropertyException, en el idioma de ese proceso: el RTL lo
+  // traduce por el de Windows, medido el 18-oct-2026); '|||<texto>' si no tiene esa forma. Lo compone
+  // FormRender.Comun.LecturaEnPartes y lo lee Lsp.FormRender.PartesDeLectura
+  FR_PARTES_SEP = '|';
   FR_RC_OK = 0;
   FR_RC_ERROR = 1;
   FR_RC_USAGE = 2;

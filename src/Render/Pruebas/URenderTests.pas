@@ -373,9 +373,13 @@ var
 begin
   R := Vcl(Format('--path "%s" --out "%s"', [Pruebas + 'NoCarga.dfm', Salida('nocarga')]));
   Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc, string.Join(' | ', R.Lineas));
-  Assert.AreEqual('EReadError', R.Valor(FR_NOT_LOADED), 'lo que fallo fue el lector');
+  Assert.IsTrue(R.Valor(FR_NOT_LOADED).StartsWith('EReadError' + FR_PARTES_SEP),
+    'lo que fallo fue el lector: ' + R.Valor(FR_NOT_LOADED));
   Assert.IsTrue(string.Join(' | ', R.Todas(FR_IGNORED)).Contains('Error reading Edit1.Left'),
     'la causa, que el Ignore se salto: ' + string.Join(' | ', R.Todas(FR_IGNORED)));
+  // ...en sus partes, partida aqui con el formato que compuso el mensaje
+  Assert.IsTrue(string.Join(' | ', R.Todas(FR_IGNORED)).Contains('Edit1|Left|'),
+    'en sus partes: ' + string.Join(' | ', R.Todas(FR_IGNORED)));
 end;
 
 { FMX: una propiedad que la clase guarda POR CODIGO (FontColor de un TEdit,
@@ -387,7 +391,8 @@ var
 begin
   R := Fmx(Format('--path "%s" --out "%s"', [Pruebas + 'NoCargaPorCodigo.fmx', Salida('nocarga_fmx')]));
   Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc, string.Join(' | ', R.Lineas));
-  Assert.AreEqual('EReadError', R.Valor(FR_NOT_LOADED), 'lo que fallo fue el lector');
+  Assert.IsTrue(R.Valor(FR_NOT_LOADED).StartsWith('EReadError|EditRight|FontColor|'),
+    'lo que fallo fue el lector, con su error en partes: ' + R.Valor(FR_NOT_LOADED));
   Assert.IsTrue(R.Valor(FR_ERROR).Contains('Error reading EditRight.FontColor'), R.Valor(FR_ERROR));
 end;
 

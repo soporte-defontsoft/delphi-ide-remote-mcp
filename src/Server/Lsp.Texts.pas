@@ -3328,7 +3328,7 @@ const
   SN_ADDUSES_SOME_PRESENT_FMT =
     ' [USES-011] Already there: %s.';
   SN_ADDUSES_CREATED_FMT =
-    ' [USES-012] The %s section had no uses: created below the section ' +
+    ' [USES-012] The %s section had no uses: created right after the section ' +
     'keyword.';
   SN_ADDUSES_ADDED_FMT =
     '[USES-013] ADDED to the %s uses of %s: %s.%s%s Backup in ' +
@@ -4320,7 +4320,8 @@ const
     'and the tail of its output - read from the DUnitX summary or the ' +
     'PASS/FAIL + ExitCode convention of a hand-written runner; verdictFrom ' +
     '(counts or exitCode) says where the verdict comes from, never ' +
-    'invented. Running tests is RUNNING, the only thing that runs on this ' +
+    'invented, and a runner that exits with an error fails the run even ' +
+    'when its counts are green. Running tests is RUNNING, the only thing that runs on this ' +
     'server, behind its own switch [Workspace.<name>] AllowTests (without ' +
     'it, discover works and run is refused). The binary runs in a Windows ' +
     'container of its own, on a COPY of its output folder: it reads and ' +
@@ -4388,6 +4389,15 @@ const
     'command=discover ("countsFormat"): the first word has to be ' +
     'PASS/PASSED/OK or FAIL/FAILED/ERROR. If those lines were failures ' +
     'of yours, the verdict above falls short.';
+
+  { Las cuentas en verde y el runner saliendo con error (Lsp.TestRunner.
+    ParseOutcome): manda el codigo de salida. Antes salia 'pass' (medido el
+    18-oct-2026). }
+  SN_TEST_VERDE_CON_SALIDA_FMT =
+    '[TEST-034] NOTE: the counts say every test passed, but the runner ' +
+    'exited with code %d: something failed outside the tests it counted (a ' +
+    'finalization, a leak check, the runner itself - its output says what). ' +
+    'The result is fail, from the exit code.';
 
   SR_TEST_NAME_NOT_PATH_FMT =
     '[TEST-005 INVALID_PARAM] "%s" looks like the NAME of the project, ' +
@@ -4687,7 +4697,9 @@ const
     'field in the form''s class and its unit in the uses; the answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
-    'class BEFORE writing; parent= alone moves the component; before=, ' +
+    'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
+    'form reader, and readerNote says when it could not judge it; parent= ' +
+    'alone moves the component; before=, ' +
     'after= or index= alone reorders it among its siblings; prop=Name ' +
     'renames it, its field and the form lines that name it) | delete (the ' +
     'component and what is inside it, the references to it in the form, its ' +
@@ -5149,6 +5161,30 @@ const
     'not load that value (%s), so the form would not open. The class stores ' +
     'this property by code, and only the reader can judge its value: write it ' +
     'as the IDE writes it for this class, or leave it out. Nothing was written.';
+  { ...lo mismo cuando lo que falla no NOMBRA el valor (otro componente, un
+    error que no es del lector), y el form como estaba SI carga: lo rompe este
+    cambio. %s = los valores (Comp.Prop = valor, ...); %s = lo que dijo el
+    ayudante, tal cual. }
+  SR_DESIGNER_SET_ROMPE_CARGA_FMT =
+    '[DSGN-158 INVALID_PARAM] %s: the IDE''s own form reader loads the form ' +
+    'as it is now, and does not load it with this change, so the form would ' +
+    'not open. What the reader said: %s. The class stores this property by ' +
+    'code, and only the reader can judge its value: write it as the IDE ' +
+    'writes it for this class, or leave it out. Nothing was written.';
+  { ...y cuando el form como estaba TAMPOCO carga, o no se pudo preguntar al
+    lector: el valor se escribe sin juzgar, y se dice. %s = los valores; %s =
+    por que no se pudo juzgar (el fallo, o SF_DESIGNER_LECTOR_YA_NO_CARGABA_FMT). }
+  SN_DESIGNER_SET_SIN_JUZGAR_FMT =
+    '[DSGN-159] %s was written WITHOUT being judged: the class stores it by ' +
+    'code, so only the IDE''s own form reader can judge its value, and it ' +
+    'could not judge it here (%s). Fix that first; then preview says whether ' +
+    'this value loads.';
+  { el porque de DSGN-159 cuando el form ya no cargaba: %s = lo que dijo el
+    ayudante del form como estaba }
+  SF_DESIGNER_LECTOR_YA_NO_CARGABA_FMT =
+    'the form did not load in it before this change either: %s';
+  { uno de los valores de DSGN-158/159: %s.%s = %s, componente, propiedad y valor }
+  SF_DESIGNER_VALOR_PUESTO_FMT = '%s.%s = %s';
 
   SR_DESIGNER_SET_BLOQUE_FMT =
     '[DSGN-089 INVALID_PARAM] %s.%s holds a list, a collection or a binary ' +
@@ -10192,11 +10228,18 @@ const
   SF_EDIT_NO_LOCALIZAR_LINEA_NUEVA =
     '(could not locate the new line)';
 
+  { %s = la cabecera escrita; %s = donde cayo (SF_EDIT_EN_EL_CUERPO_DE_FMT o
+    SF_EDIT_TRAS_LAS_DECLARACIONES), por EL lector de rutinas. Lo decia la
+    linea de encima, y dos declaraciones seguidas en un interface avisaban
+    (18-oct-2026) }
   SN_EDIT_POSIBLE_INSERCION_METODO_FMT =
     '[EDIT-101] *** POSSIBLE INSERTION INSIDE A METHOD: the signature ' +
-    '''%s'' ended up with ''%s'' above it, which looks like a statement. ' +
+    '''%s'' ended up inside %s, where no routine can be declared. ' +
     'Check the begin/end balance; if the method was split, restore with ' +
     'restore:true. ***';
+  SF_EDIT_EN_EL_CUERPO_DE_FMT = 'the body of %s (lines %d-%d, between its begin and its end)';
+  SF_EDIT_TRAS_LAS_DECLARACIONES =
+    'the code after the declarations (the main begin..end, initialization, or past the final end)';
 
   SF_EDIT_ECO_ESCRITURA_FMT =
     '%s'#10 +
