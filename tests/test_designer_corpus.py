@@ -18,7 +18,7 @@ ListView appearances) are counted apart while that policy is pending.
 
 Usage:  python tests/test_designer_corpus.py [path-to-DelphiLspMcp.exe]
 """
-import glob, json, os, re, shutil, time
+import atexit, glob, json, os, re, shutil, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -27,12 +27,33 @@ BASE = mc.carpeta('designer-corpus')
 # que las tablas no juzgan (DSGN-061), y sin ellos cada form que lo necesita
 # contestaba DSGN-154 "no se le pudo preguntar" (revisor de baterias,
 # 18-oct-2026: el corpus no media al lector desde la 1.20)
-EXE = mc.copia_exe(BASE, con_render=True)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
 APPDATA = os.path.join(BASE, 'appdata')
 os.makedirs(APPDATA, exist_ok=True)
-env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'LOCALAPPDATA': APPDATA})
-srv = mc.Stdio(EXE, env, nombre='dc')
-call = srv.call
+# por HTTP, para lintar EN PARALELO (mc.en_paralelo): en serie por stdio el
+# corpus era la mitad de run_all, 30 de 60 minutos (auditoria de las baterias,
+# 18-oct-2026); medido con 96 forms, 8 hilos 3,1 veces mas rapido y las mismas
+# respuestas. Una muestra rotatoria no: sus avisos pendientes saldrian rojos o
+# verdes segun el dia
+TOKEN = 'designer-corpus'
+with open(os.path.join(BASE, 'srv', 'settings.ini'), 'w') as f:
+    f.write('[Workspace.Corpus]\nToken=%s\nRoots=%s\n' % (TOKEN, BASE))
+PORT = mc.puerto_libre()
+proc = mc.lanza_http(EXE, PORT, mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1', 'LOCALAPPDATA': APPDATA}))
+cli = mc.Http(PORT, TOKEN, t=300)
+cli.session('dc')
+call = cli.call
+
+
+def para():
+    proc.kill()
+    proc.wait()
+
+
+# un servidor HTTP no muere con la bateria (el de stdio si: se le cierra la
+# entrada), y uno huerfano tiene cogida la carpeta para la siguiente pasada
+# (medido el 18-oct-2026, al reventar un lint por su plazo)
+atexit.register(para)
 
 
 def J(t):
@@ -47,7 +68,7 @@ SAMPLES = os.path.join(os.environ.get('PUBLIC', r'C:\Users\Public'), 'Documents'
                        'Studio', version, 'Samples')
 if not os.path.isdir(SAMPLES):
     print('NOTA: no hay Samples de RAD Studio %s en %s: nada que medir' % (version, SAMPLES))
-    srv.cierra()
+    para()
     mc.borra(BASE)
     mc.fin('designer-corpus battery')
     raise SystemExit(0)
@@ -100,8 +121,11 @@ check('corpus: las tablas VCL y FMX del Delphi activo estan', listo, (a + ' | ' 
 LINEA_N = re.compile(r'\s*line (\d+): (.*?)\s+->\s+(.*)$')
 falsos, familia, notas, ejemplos, sin_lint = 0, 0, 0, [], []
 sin_lector, sin_render = {}, []
-for dst in copiados:
-    r = call('delphi_designer', {'command': 'lint', 'path': dst}, t=120)
+# t=300: un lint puede preguntar al lector mas de una vez, y el lector tiene 75
+# s (RENDER_TIEMPO_MS; 8 forms de los Samples los agotan, RENDER-007)
+respuestas = mc.en_paralelo(PORT, TOKEN, 'delphi_designer',
+                            [{'command': 'lint', 'path': dst} for dst in copiados], t=300, nombre='dc')
+for dst, r in zip(copiados, respuestas):
     rel = os.path.relpath(dst, FORMS)
     if not any(mc.abre(r, c) for c in ('SN_DESIGNER_LINT_OK_FMT', 'SN_DESIGNER_LINT_BAD_FMT',
                                         'SN_DESIGNER_LINT_NOTAS_FMT', 'SN_DESIGNER_LINT_SIN_LECTOR_FMT')):
@@ -155,6 +179,6 @@ if familia:
     print('NOTA: corpus: %d avisos de familia (clases que registra un paquete sin fuente: politica pendiente)' % familia)
 print('NOTA: corpus: %d notas de clase sin fuente o ambigua (no juzgan)' % notas)
 
-srv.cierra()
+para()
 mc.borra(BASE)
 mc.fin('designer-corpus battery')

@@ -386,7 +386,7 @@ begin
     nombre del perfil (que no significa nada). "key" habla el idioma del destino
     (codigo evdev en Linux, nombre en Windows), por eso su validacion va DESPUES
     de la puerta. }
-  EsWin := PlataformaDelPerfil(Params.Profile.Trim).StartsWith('Win', True);
+  EsWin := SistemaDePlataforma(PlataformaDelPerfil(Params.Profile.Trim)) = spWindows;
   if Cmd = 'key' then
   begin
     { Cada nodo habla el idioma de su sistema: en Linux un codigo evdev (una

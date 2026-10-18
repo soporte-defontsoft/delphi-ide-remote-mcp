@@ -798,6 +798,16 @@ REGLAS = [
      [('Lsp.DesignerBinding.pas', 'EsEvento')],
      'EsEvento (Lsp.DesignerBinding): la tabla (Kind m, por la clase del objeto: ClasesDeLasLineas, '
      'y la raiz por JuezDeLaRaiz); el nombre solo donde la tabla no sabe, y ahi, declarado'),
+    # lo que es una plataforma (de Windows, de Android, el ABI de su apk) por su nombre:
+    # StartsWith('Win'), StartsWith('Android')... en ~20 sitios y SameText(P, 'Android64')
+    # para el ABI, dos veces; y tres preguntas con una respuesta ("se compila aqui" por
+    # "corre aqui" y por "despliega por PAServer"; censo de jueces, lote 2, 18-oct-2026).
+    # Las filas de la tabla (llevan Sistema:) son la casa
+    ('la familia de una plataforma por su nombre a mano',
+     r"\.StartsWith\(\s*'(?:Win|Android|Linux|OSX|iOS)'|SameText\([^;]*'Android(?:64)?'\s*\)|"
+     r"^(?!.*\bSistema\s*:).*'(?:arm64-v8a|armeabi-v7a)'", [],
+     'la tabla PLATAFORMAS de Lsp.Dproj y sus preguntas: SistemaDePlataforma, SistemaDelPAServer, '
+     'CorreEnEstaMaquina, ExtensionDeEjecutable, CarpetaDeLibreriasDelApk'),
 ]
 
 
@@ -1002,6 +1012,8 @@ PLANTADO = {
         r"  M := TRegEx.Match(Copy(Codigo, Cab.Fin, MaxInt), '^(\s*)(requires\b\s*(.*?);)', [roIgnoreCase]);",
     # la de Lsp.DesignerBinding hasta el 18-oct-2026
     'un evento por el prefijo On': "  PATRON_EVENTO = 'On' + PATRON_IDENT;",
+    # la de Lsp.BuildRunner hasta el 18-oct-2026 (una de nueve)
+    'la familia de una plataforma por su nombre a mano': "  if APlat.StartsWith('Android', True) then",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -1056,6 +1068,17 @@ REGLA_ON = next(r for r in REGLAS if r[0] == 'un evento por el prefijo On')
 cazados = fuera_de_casa(REGLA_ON, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                     "EventoAMano;\nbegin\n  if Prop.StartsWith('On') then X := 1;\nend;\nend.\n")])
 check('mutante "%s": tambien mirar si el nombre empieza por On' % REGLA_ON[0], len(cazados) == 1, cazados)
+# las otras formas de la plataforma por su nombre: el ABI por SameText (BuildRunner y
+# add-deployfile) y su literal suelto; y lo que NO se caza: una fila de la tabla
+REGLA_PLAT = next(r for r in REGLAS if r[0] == 'la familia de una plataforma por su nombre a mano')
+for forma in ("  if SameText(APlatform, 'Android64') then",
+              "    Abi := 'armeabi-v7a';"):
+    cazados = fuera_de_casa(REGLA_PLAT, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                          'PlataformaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_PLAT[0], forma.strip()), len(cazados) == 1, cazados)
+FILA = fuera_de_casa(REGLA_PLAT, [('Plantado.pas', 'unit Plantado;\nimplementation\nconst\n'
+    "  X: TPlataformaConocida = (Nombre: 'Android64'; Sistema: spAndroid; Maquina: 0; Abi: 'arm64-v8a');\nend.\n")])
+check('mutante "%s": una fila de la tabla no se caza' % REGLA_PLAT[0], FILA == [], FILA)
 COMPONE_CLASE = fuera_de_casa(REGLA_RAIZ, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
     "Compone;\nbegin\n  S := '  T' + ANombre + ' = class(TFrame)' + CRLF;\nend;\nend.\n")])
 check('mutante "%s": componer el fuente de una clase nueva no se caza' % REGLA_RAIZ[0],

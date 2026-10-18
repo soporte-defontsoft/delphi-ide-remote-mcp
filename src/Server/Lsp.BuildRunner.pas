@@ -667,7 +667,7 @@ end;
 function AndroidDeployXml(const AName, APlat, ABdsRoot: string): string;
 var
   SB: TStringBuilder;
-  Cfg, Abi, OutName: string;
+  Cfg, Libs, OutName: string;
   E: TApkEntry;
 
   procedure Add(const AInclude, ADir, AFile, ACls: string; ARequired: Boolean);
@@ -676,10 +676,7 @@ var
   end;
 
 begin
-  if SameText(APlat, 'Android64') then
-    Abi := 'arm64-v8a'
-  else
-    Abi := 'armeabi-v7a';
+  Libs := CarpetaDeLibreriasDelApk(APlat); // library\lib\<abi>\, por la tabla de Lsp.Dproj
   SB := TStringBuilder.Create;
   try
     SB.Append(CabeceraDeManifiesto);
@@ -688,7 +685,7 @@ begin
       SB.AppendLine('    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>');
       Add(APlat + '\' + Cfg + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
         'ProjectAndroidManifest', True);
-      Add(APlat + '\' + Cfg + '\lib' + AName + '.so', 'library\lib\' + Abi + '\',
+      Add(APlat + '\' + Cfg + '\lib' + AName + '.so', Libs,
         'lib' + AName + '.so', 'ProjectOutput', True);
       for E in APK_RES do
         Add(APlat + '\' + Cfg + '\' + E.Src, E.Dir, E.Name, E.Cls, False);
@@ -734,9 +731,7 @@ begin
     .Replace('$(Config)', ACfg, [rfReplaceAll, rfIgnoreCase]).Trim;
   if OutDir.StartsWith('.\') then
     OutDir := OutDir.Substring(2);
-  Ext := '';
-  if APlat.StartsWith('Win', True) then
-    Ext := '.exe';
+  Ext := ExtensionDeEjecutable(APlat);
   Include := IncludeTrailingPathDelimiter(OutDir) + AName + Ext;
   Result := XmlDeployFile(Include, ACfg, AName + '\', AName + Ext, 'ProjectOutput', 1, True);
 end;
@@ -862,7 +857,7 @@ begin
   var TieneMinSdk := False;
   for var C in ClavesDeVersion(Dproj) do
     TieneMinSdk := TieneMinSdk or SameText(C.Nombre, 'minSdkVersion');
-  if (P > 0) and APlat.StartsWith('Android', True) and not TieneMinSdk then
+  if (P > 0) and (SistemaDePlataforma(APlat) = spAndroid) and not TieneMinSdk then
   begin
     // The default system-jar list is exactly the product's pre-dexed jar
     // directory (measured: 88 of 88 identical to an IDE-written project) -
@@ -889,7 +884,7 @@ begin
   // 1c) Android: the AndroidManifest.template.xml seed the IDE would write,
   //     copied from the product's ObjRepos - never invented, never
   //     overwritten (an existing template is the project's own).
-  if APlat.StartsWith('Android', True) then
+  if SistemaDePlataforma(APlat) = spAndroid then
   begin
     var Tpl := TPath.Combine(TPath.GetDirectoryName(ADprojPath),
       'AndroidManifest.template.xml');
@@ -907,11 +902,11 @@ begin
   F := TPath.ChangeExtension(ADprojPath, '.deployproj');
   if TFile.Exists(F) then
   begin
-    if not APlat.StartsWith('Android', True) then
+    if SistemaDePlataforma(APlat) <> spAndroid then
       AGenerated := EnsurePlatformOutputEntries(F, ADprojPath, APlat, N);
     Exit;
   end;
-  if APlat.StartsWith('Android', True) then
+  if SistemaDePlataforma(APlat) = spAndroid then
   begin
     // como lo escribe el IDE (el juez: UTF-8 con BOM, medido en sus
     // .deployproj): en ASCII un nombre de proyecto no ASCII salia con '?' en
@@ -920,9 +915,7 @@ begin
     AGenerated := True;
     Exit;
   end;
-  Ext := '';
-  if APlat.StartsWith('Win', True) then
-    Ext := '.exe';
+  Ext := ExtensionDeEjecutable(APlat);
   Xml := CabeceraDeManifiesto;
   for Cfg in TArray<string>.Create('Debug', 'Release') do
     Xml := Xml +
@@ -1607,7 +1600,16 @@ begin
   // EnvOptions.proj pueden ponerle otro que nadie juzgo. Sin perfil, un
   // destino remoto para con "Missing profile name" de msbuild.
   var Perfil := AProfile.Trim;
-  if Target.Contains('Deploy') and (Perfil = '') then
+  // Android no despliega por PAServer: en un Deploy, un profile= se niega, y
+  // el <Profile> que el proyecto lleve (set-profile lo escribia hasta la
+  // 1.20.2) no se lee - msbuild recibe /p:Profile= vacio. Con el, el primer
+  // Deploy fallaba E8712 y los demas decian "Deployed through profile" con el
+  // .apk aqui (medido el 18-oct-2026). Como la puerta de hosts, solo en un
+  // Deploy: un Build no despliega, el perfil no hace nada en el
+  var SinPAServer := SistemaDelPAServer(Plat) = spDesconocido;
+  if Target.Contains('Deploy') and SinPAServer and (Perfil <> '') then
+    raise Exception.Create(MsgFmt(SR_CONFIG_PROFILE_SIN_PASERVER_FMT, [Plat]));
+  if Target.Contains('Deploy') and not SinPAServer and (Perfil = '') then
     Perfil := PropiedadDelProyecto(ADprojPath, Plat, 'Profile');
   // El perfil, venga de la llamada o del .dproj, es UNO de los que el IDE
   // declara (PerfilDelIde, el juez de set-profile), con su nombre, el de la
@@ -1624,6 +1626,11 @@ begin
   end;
   if Target.Contains('Deploy') and (Perfil <> '') then
   begin
+    // ...uno que DESPLIEGA esta plataforma (el juez de set-profile: uno de
+    // Windows no despliega un Linux64), antes de marcar su host
+    var NoSirve := PerfilQueNoSirve(Info.Version, Perfil, Plat);
+    if NoSirve <> '' then
+      raise Exception.Create(NoSirve);
     var HostDenegado := ProfileHostDenied(Perfil);
     if HostDenegado <> '' then
       raise Exception.Create(HostDenegado);
@@ -2112,7 +2119,7 @@ begin
       var Note := '';
       // An Android Deploy's real product is the .apk the packager left in
       // <Platform>\<Config>\<name>\bin - declare THAT, not the .so.
-      if Plat.StartsWith('Android', True) and Target.Contains('Deploy') then
+      if (SistemaDePlataforma(Plat) = spAndroid) and Target.Contains('Deploy') then
       begin
         var ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
         var Apk := TPath.Combine(
@@ -2186,7 +2193,7 @@ begin
     // The agent should know its project just gained a manifest whether or
     // not this particular msbuild run succeeded.
     if ManifestNew then
-      if Plat.StartsWith('Android', True) then
+      if SistemaDePlataforma(Plat) = spAndroid then
         Result.AddPair('deployManifest', MsgText(SN_BUILD_ANDROID_NEW))
       else if ManifestFilled then
         Result.AddPair('deployManifest', MsgFmt(SN_BUILD_MANIFEST_FILLED_FMT, [Plat]))

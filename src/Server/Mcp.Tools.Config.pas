@@ -125,9 +125,12 @@ end;
 procedure AddSearchPathsView(const AXml: string; AReturn: TJSONObject); forward;
 procedure AddDeployFilesView(const ADproj: string; AReturn: TJSONObject); forward;
 
+{ Un Deploy de APlatform necesita un perfil de PAServer: las remotas que
+  despliegan por el (Android no: su .apk lo instala delphi_adb; y view decia
+  needsProfileForDeploy=true con "Android takes no profile" al lado). }
 function PlatformNeedsProfile(const APlatform: string): Boolean;
 begin
-  Result := not IsLocalPlatform(APlatform);
+  Result := not IsLocalPlatform(APlatform) and (SistemaDelPAServer(APlatform) <> spDesconocido);
 end;
 
 { Lo que es un .groupproj: sus proyectos (<Projects Include>), por el lector
@@ -229,7 +232,7 @@ var
     end;
     // el PAServer solo existe en las plataformas que despliegan por el:
     // Android va por adb y no tiene perfil que fijar
-    if APlat.StartsWith('Android', True) then
+    if SistemaDelPAServer(APlat) = spDesconocido then
       Exit;
     V := PlatformProperty(Xml, APlat, 'Profile');
     AObj.AddPair('profile', V);
@@ -308,9 +311,9 @@ begin
         // needs a profile" (hermes' blind eval, 2026-08-26): building for a
         // remote platform is LOCAL against the SDK; the profile is only for
         // shipping. Two names, two questions.
-        Obj.AddPair('needsSDKForBuild', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
+        Obj.AddPair('needsSDKForBuild', TJSONBool.Create(not IsLocalPlatform(P.Name)));
         Obj.AddPair('needsProfileForDeploy', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
-        if PlatformNeedsProfile(P.Name) then
+        if not IsLocalPlatform(P.Name) then
           PonDestino(Obj, P.Name);
       end;
       Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
@@ -333,7 +336,7 @@ begin
       Remotos := TJSONArray.Create;
       Return.AddPair('remoteTargets', Remotos);
       for P in Info.Platforms do
-        if P.Enabled and PlatformNeedsProfile(P.Name) then
+        if P.Enabled and not IsLocalPlatform(P.Name) then
         begin
           Obj := TJSONObject.Create;
           Remotos.AddElement(Obj);
@@ -940,12 +943,7 @@ function DefaultRemoteDir(const AProjectName, APlatform, AFile: string): string;
 begin
   Result := AProjectName + '\';
   if SameText(TPath.GetExtension(AFile), '.so') then
-  begin
-    if SameText(APlatform, 'Android64') then
-      Result := Result + 'library\lib\arm64-v8a\'
-    else if SameText(APlatform, 'Android') then
-      Result := Result + 'library\lib\armeabi-v7a\';
-  end;
+    Result := Result + CarpetaDeLibreriasDelApk(APlatform); // '' fuera de Android
 end;
 
 { '' = fine; else the refusal. AFull receives the resolved file. }
@@ -1466,6 +1464,12 @@ begin
     Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
   if IsLocalPlatform(APlatform) then
     Exit(MsgFmt(SR_CONFIG_PROFILE_LOCAL_FMT, [APlatform]));
+  // Android no despliega por PAServer: lo aceptaba, decia "will deploy and
+  // run Android64 through profile zorin-desktop", el primer Deploy fallaba
+  // E8712 y los siguientes decian "Deployed through profile" con el .apk
+  // aqui (medido el 18-oct-2026)
+  if SistemaDelPAServer(APlatform) = spDesconocido then
+    Exit(MsgFmt(SR_CONFIG_PROFILE_SIN_PASERVER_FMT, [APlatform]));
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
@@ -1485,6 +1489,11 @@ begin
     if Elegido = '' then
       Exit(MsgFmt(SR_CONFIG_PROFILE_NOEXISTE_FMT, [Perfil, Disponibles]));
     Perfil := Elegido;
+    // la gemela de set-sdk: cada .profile declara SU plataforma, y uno de
+    // Windows no despliega un Linux64 (lo aceptaba, medido el 18-oct-2026)
+    Result := PerfilQueNoSirve(Info.Version, Perfil, APlatform);
+    if Result <> '' then
+      Exit;
   end;
 
   Xml := PatchLoadText(ADproj, Enc);

@@ -689,7 +689,9 @@ begin
   // fuego); que la declare lo dice el build (Lsp.Dproj.PlataformaNoDeclarada)
   if Plat = '' then
     Plat := ReadDproj(Dproj).PlataformaPorDefecto;
-  if not IsLocalPlatform(Plat) then
+  // corre AQUI, no "es de Windows": un WinARM64EC compilaba, reventaba con
+  // 0xC0000005 en este x64 y la respuesta culpaba al runner (18-oct-2026)
+  if not CorreEnEstaMaquina(Plat) then
   begin
     Result.AddPair('error', MsgFmt(SR_TEST_PLATFORM_FMT, [Plat]));
     Exit;

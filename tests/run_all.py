@@ -11,7 +11,7 @@ and every battery is pointed at that copy.
 Usage:
     python tests/run_all.py [path-to-DelphiLspMcp.exe] [-k substring]
 """
-import os, sys, glob, shutil, tempfile, subprocess, time
+import os, sys, glob, json, shutil, tempfile, subprocess, time
 import mcp_cliente as mc  # borra(): el barrido que puede con lo de solo lectura
 
 # La consola es cp1252, y el error de una bateria puede traer un mensaje de
@@ -113,6 +113,27 @@ if notas:
     print('\n--- lo que las baterias dicen que NO midieron (NOTA/SKIP) ---')
     for n in notas:
         print('   ', n)
+# Lo que tarda cada bateria contra la suite ENTERA anterior: el corpus paso de
+# 100 s a 930 (16-oct) y a 1.830 (18-oct-2026) y nadie lo vio, porque nadie
+# compara 233 lineas a mano (auditoria de las baterias, 18-oct). Se guarda lo
+# de una suite entera (un -k compara contra ella y no la pisa); una marca de
+# menos de 10 s no cuenta, asi que una roja que murio al segundo no avisa luego
+TIEMPOS = os.path.join(HERE, '.tiempos_run_all.json')
+try:
+    with open(TIEMPOS, encoding='utf-8') as _f:
+        antes = json.load(_f)
+except (OSError, ValueError):
+    antes = {}
+saltos = [(n, antes[n], s) for _v, n, _o, _b, s in rows
+          if isinstance(antes.get(n), (int, float)) and antes[n] >= 10
+          and s > antes[n] * 1.5 and s - antes[n] > 30]
+if saltos:
+    print('\n--- lo que tardo mucho mas que en la suite entera anterior ---')
+    for n, a, s in saltos:
+        print('    %s: %.0f s -> %.0f s (+%d %%)' % (n, a, s, round((s / a - 1) * 100)))
+if not only:
+    with open(TIEMPOS, 'w', encoding='utf-8') as _f:
+        json.dump({n: round(s, 1) for _v, n, _o, _b, s in rows}, _f, indent=0, sort_keys=True)
 for name, out, rc in failed:
     print('\n--- %s (rc=%d) ---' % (name, rc))
     motivo = [line for line in out.splitlines()

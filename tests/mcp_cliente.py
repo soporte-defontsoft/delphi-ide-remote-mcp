@@ -18,6 +18,7 @@ import hashlib
 import json, os, queue, re, shutil, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
 import string, winreg
+import concurrent.futures
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -1621,3 +1622,30 @@ class Http:
     def toolnames(self, sid=PROPIA):
         m = self.request('tools/list', sid=sid)
         return {x['name'] for x in ((m or {}).get('result') or {}).get('tools', [])}
+
+
+def en_paralelo(puerto, token, tool, lista, hilos=None, t=120, nombre='paralelo'):
+    """UNA tool sobre muchos argumentos a la vez, por HTTP: un cliente y una
+    sesion por hilo, las respuestas (su texto) en el orden de la lista; una
+    llamada que revienta (un plazo vencido) vuelve como 'EXCEPCION ...' en su
+    sitio, no tumba las demas: la bateria la cuenta como no contestada. hilos:
+    por defecto el doble de nucleos, hasta 8 - el lint de un form espera sobre
+    todo a que arranque su renderizador (medido el 18-oct-2026 con 96 forms de
+    los Samples: 8 hilos en 4 nucleos, 3,1 veces lo de en serie y las mismas
+    respuestas)."""
+    locales = threading.local()
+
+    def una(args):
+        c = getattr(locales, 'c', None)
+        if c is None:
+            c = locales.c = Http(puerto, token, t=max(t, 120))
+            c.session('%s-%d' % (nombre, threading.get_ident()))
+        try:
+            return c.call(tool, args, t)
+        except Exception as e:
+            return 'EXCEPCION en %s: %r' % (tool, e)
+
+    if hilos is None:
+        hilos = max(2, min(8, 2 * (os.cpu_count() or 1)))
+    with concurrent.futures.ThreadPoolExecutor(hilos) as ex:
+        return list(ex.map(una, lista))

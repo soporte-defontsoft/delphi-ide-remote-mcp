@@ -408,9 +408,43 @@ function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string)
   PACLIENT_PLATFORMS, la misma lista que valida (estaban copiadas a mano). }
 function PaclientPlatformsList: string;
 
+type
+  { El sistema de una plataforma de Delphi: lo que decide la extension del
+    binario, el lanzador de PAServer, si despliega por PAServer o por adb...
+    Lo dice UNA tabla (PLATAFORMAS, en la implementacion); era
+    StartsWith('Win'), StartsWith('Android')... en ~20 sitios (censo de
+    jueces del 18-oct-2026, lote 2). }
+  TSistemaDePlataforma = (spDesconocido, spWindows, spMacOS, spLinux, spAndroid, spIOS);
+
 { True when APlatform is one that never needs a remote profile/SDK (it builds
-  natively on this Windows host). }
+  natively on this Windows host): las de Windows. }
 function IsLocalPlatform(const APlatform: string): Boolean;
+
+{ El sistema de APlatform; spDesconocido si no es una plataforma de Delphi. }
+function SistemaDePlataforma(const APlatform: string): TSistemaDePlataforma;
+
+{ El sistema del PAServer que despliega APlatform: el suyo, salvo iOS, que
+  despliega por el PAServer de un Mac (paclient no conoce otra plataforma de
+  Apple que OSX64), y Android, que no despliega por PAServer (el .apk se hace
+  aqui y delphi_adb lo instala): spDesconocido. Un perfil sirve a una
+  plataforma si su Profile_platform es de este sistema. }
+function SistemaDelPAServer(const APlatform: string): TSistemaDePlataforma;
+
+{ True si un binario de APlatform corre en ESTA maquina, que es lo que hace
+  delphi_test: de Windows y de una arquitectura que este Windows ejecuta, y
+  eso lo dice Windows (GetMachineTypeAttributes). Un WinARM64EC compila aqui
+  pero no corre en un x64: reventaba con 0xC0000005 y la respuesta culpaba al
+  runner (medido el 18-oct-2026). }
+function CorreEnEstaMaquina(const APlatform: string): Boolean;
+
+{ La extension del ejecutable de APlatform: '.exe' en Windows, '' en el resto
+  (un ELF de Linux, el binario de macOS). }
+function ExtensionDeEjecutable(const APlatform: string): string;
+
+{ La carpeta del .apk donde van las librerias nativas de APlatform
+  (library\lib\<abi>\); '' si no es de Android. La componian a mano el
+  manifiesto de Android y add-deployfile, con el ABI escrito en cada uno. }
+function CarpetaDeLibreriasDelApk(const APlatform: string): string;
 
 { The CANONICAL set of Delphi target platforms. add-platform validates
   against this: a platform name is a fixed, known token, so anything else is
@@ -594,6 +628,7 @@ function RedefinedIdeImportProperty(const ADprojPath: string): string;
 implementation
 
 uses
+  Winapi.Windows, // WindowsEjecuta: que maquinas corre este Windows (el primero: no tapa a SysUtils)
   System.SysUtils,
   System.Classes,
   System.StrUtils,
@@ -1550,19 +1585,129 @@ begin
     Result.DefaultConfig := ValorDeTramo(AXml, T).Trim;
 end;
 
+type
+  TPlataformaConocida = record
+    Nombre: string;
+    Sistema: TSistemaDePlataforma;
+    Maquina: Word; // IMAGE_FILE_MACHINE_* de un binario de Windows; 0 en el resto
+    Abi: string;   // la carpeta library\lib\<abi> del .apk; '' fuera de Android
+  end;
+
+const
+  { Las plataformas de Delphi y lo que es cada una. Son las mismas 13 que las
+    claves Library del registro del IDE (medido el 18-oct-2026 en el HKCU del
+    servicio, iOSDevice32/iOSSimulator incluidas), pero el registro no dice
+    el sistema, la maquina ni el ABI: no hay juez que los diga, y esta es la
+    UNA tabla que los dice (test_paisaje la vigila). Win64x y WinARM64EC son
+    de Delphi: su lib\ trae .dcu. WinARM64EC es la maquina ARM64 (un binario
+    ARM64EC solo corre en un Windows ARM64). }
+  PLATAFORMAS: array [0 .. 12] of TPlataformaConocida = (
+    (Nombre: 'Win32'; Sistema: spWindows; Maquina: $014C; Abi: ''),
+    (Nombre: 'Win64'; Sistema: spWindows; Maquina: $8664; Abi: ''),
+    (Nombre: 'Win64x'; Sistema: spWindows; Maquina: $8664; Abi: ''),
+    (Nombre: 'WinARM64EC'; Sistema: spWindows; Maquina: $AA64; Abi: ''),
+    (Nombre: 'OSX64'; Sistema: spMacOS; Maquina: 0; Abi: ''),
+    (Nombre: 'OSXARM64'; Sistema: spMacOS; Maquina: 0; Abi: ''),
+    (Nombre: 'Linux64'; Sistema: spLinux; Maquina: 0; Abi: ''),
+    (Nombre: 'Android'; Sistema: spAndroid; Maquina: 0; Abi: 'armeabi-v7a'),
+    (Nombre: 'Android64'; Sistema: spAndroid; Maquina: 0; Abi: 'arm64-v8a'),
+    (Nombre: 'iOSDevice32'; Sistema: spIOS; Maquina: 0; Abi: ''),
+    (Nombre: 'iOSDevice64'; Sistema: spIOS; Maquina: 0; Abi: ''),
+    (Nombre: 'iOSSimARM64'; Sistema: spIOS; Maquina: 0; Abi: ''),
+    (Nombre: 'iOSSimulator'; Sistema: spIOS; Maquina: 0; Abi: ''));
+
+{ La fila de APlatform en PLATAFORMAS, sin mirar mayusculas. }
+function DatosDePlataforma(const APlatform: string; out AFila: TPlataformaConocida): Boolean;
+begin
+  for var P in PLATAFORMAS do
+    if SameText(P.Nombre, APlatform.Trim) then
+    begin
+      AFila := P;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function SistemaDePlataforma(const APlatform: string): TSistemaDePlataforma;
+var
+  P: TPlataformaConocida;
+begin
+  if DatosDePlataforma(APlatform, P) then
+    Result := P.Sistema
+  else
+    Result := spDesconocido;
+end;
+
 function IsLocalPlatform(const APlatform: string): Boolean;
 begin
-  Result := MatchText(APlatform,
-    ['Win32', 'Win64', 'Win64x', 'WinARM64EC']);
+  Result := SistemaDePlataforma(APlatform) = spWindows;
+end;
+
+function SistemaDelPAServer(const APlatform: string): TSistemaDePlataforma;
+begin
+  Result := SistemaDePlataforma(APlatform);
+  case Result of
+    spIOS: Result := spMacOS;
+    spAndroid: Result := spDesconocido;
+  end;
+end;
+
+{ Si este Windows ejecuta en modo usuario un binario de AMaquina. Lo dice
+  GetMachineTypeAttributes (Windows 11 y Server 2022; medido aqui: I386 5,
+  AMD64 3, ARM64 0); antes, IsWow64Process2 da la maquina nativa (Windows 10
+  1709), y la x86 corre siempre por WOW64. }
+function WindowsEjecuta(AMaquina: Word): Boolean;
+type
+  TGetMachineTypeAttributes = function(Machine: Word; out Attributes: DWORD): HRESULT; stdcall;
+  TIsWow64Process2 = function(hProcess: THandle; out ProcessMachine, NativeMachine: Word): BOOL; stdcall;
+const
+  MAQUINA_I386 = $014C;
+  MAQUINA_AMD64 = $8664;
+  USER_ENABLED = 1;
+var
+  K: HMODULE;
+  Atributos: TGetMachineTypeAttributes;
+  Wow64: TIsWow64Process2;
+  Dato: DWORD;
+  Proceso, Nativa: Word;
+begin
+  K := GetModuleHandle(kernel32);
+  @Atributos := GetProcAddress(K, 'GetMachineTypeAttributes');
+  if Assigned(Atributos) then
+    Exit(Succeeded(Atributos(AMaquina, Dato)) and (Dato and USER_ENABLED <> 0));
+  @Wow64 := GetProcAddress(K, 'IsWow64Process2');
+  if Assigned(Wow64) and Wow64(GetCurrentProcess, Proceso, Nativa) then
+    Exit((AMaquina = Nativa) or (AMaquina = MAQUINA_I386));
+  // un Windows anterior: el servidor es de 64 bits, asi que x64 (y x86)
+  Result := (AMaquina = MAQUINA_AMD64) or (AMaquina = MAQUINA_I386);
+end;
+
+function CorreEnEstaMaquina(const APlatform: string): Boolean;
+var
+  P: TPlataformaConocida;
+begin
+  Result := DatosDePlataforma(APlatform, P) and (P.Sistema = spWindows) and
+    WindowsEjecuta(P.Maquina);
+end;
+
+function ExtensionDeEjecutable(const APlatform: string): string;
+begin
+  if SistemaDePlataforma(APlatform) = spWindows then
+    Result := '.exe'
+  else
+    Result := '';
+end;
+
+function CarpetaDeLibreriasDelApk(const APlatform: string): string;
+var
+  P: TPlataformaConocida;
+begin
+  Result := '';
+  if DatosDePlataforma(APlatform, P) and (P.Abi <> '') then
+    Result := 'library\lib\' + P.Abi + '\';
 end;
 
 const
-  KNOWN_PLATFORMS: array [0 .. 12] of string = (
-    'Win32', 'Win64', 'Win64x', 'WinARM64EC',
-    'OSX64', 'OSXARM64', 'Linux64',
-    'Android', 'Android64',
-    'iOSDevice32', 'iOSDevice64', 'iOSSimARM64', 'iOSSimulator');
-
   // MSBuild tasks whose presence turns a build into arbitrary execution or an
   // out-of-tree file write. A <Target> that uses NONE of these (only Message,
   // PropertyGroup, ItemGroup, CallTarget...) is inert and allowed to build; one
@@ -1603,17 +1748,22 @@ end;
 
 function KnownPlatformsList: string;
 begin
-  Result := string.Join(', ', KNOWN_PLATFORMS);
+  Result := '';
+  for var P in PLATAFORMAS do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + P.Nombre;
+  end;
 end;
 
 function CanonicalPlatform(const AName: string): string;
 var
-  P: string;
+  P: TPlataformaConocida;
 begin
   Result := '';
-  for P in KNOWN_PLATFORMS do
-    if SameText(P, AName.Trim) then
-      Exit(P); // canonical casing, and proven metachar-free
+  if DatosDePlataforma(AName, P) then
+    Result := P.Nombre; // canonical casing, and proven metachar-free
 end;
 
 function PlataformaDeClaveLibrary(const AClave: string): string;
@@ -2260,14 +2410,13 @@ begin
   // an ELF WITHOUT extension (plus .so), macOS the same (plus .dylib),
   // Android/iOS a .so. Measured 2026-08-23: a Linux64 build declared no
   // output at all and the agent had to hunt the ELF with delphi_list.
-  if APlatform.StartsWith('Win', True) then
-    ArtifactExts := ['.exe', '.dll', '.bpl']
-  else if APlatform.StartsWith('Linux', True) then
-    ArtifactExts := ['', '.so']
-  else if APlatform.StartsWith('OSX', True) then
-    ArtifactExts := ['', '.dylib']
+  case SistemaDePlataforma(APlatform) of
+    spWindows: ArtifactExts := ['.exe', '.dll', '.bpl'];
+    spLinux: ArtifactExts := ['', '.so'];
+    spMacOS: ArtifactExts := ['', '.dylib'];
   else
     ArtifactExts := ['.so', ''];
+  end;
   Best := '';
   BestTime := 0;
   Dirs := TList<string>.Create;

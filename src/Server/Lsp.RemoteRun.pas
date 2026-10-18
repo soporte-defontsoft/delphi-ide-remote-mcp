@@ -173,6 +173,7 @@ uses
   Lsp.NetDrives,
   Lsp.Casa,
   Lsp.ProcessLaunch, // TrocearArgs: el argv que remote-run da al programa
+  Lsp.Dproj,         // ExtensionDeEjecutable, SistemaDePlataforma: lo que es cada plataforma
   Lsp.Args;
 
 var
@@ -365,9 +366,7 @@ const
   mano el lanzador, el nodo y la negativa de "no esta" (P1-L4 de la 1.18.0). }
 function BinarioDelDestino(const ABase, APlataforma: string): string;
 begin
-  Result := ABase;
-  if APlataforma.StartsWith('Win', True) then
-    Result := ABase + '.exe';
+  Result := ABase + ExtensionDeEjecutable(APlataforma);
 end;
 
 { Ese binario tal como viaja con el servidor (node\ junto al exe); '' si la
@@ -572,7 +571,7 @@ begin
       [BinarioDelDestino(RUNJOB_PROJECT, Plataforma)]));
     Exit;
   end;
-  if Plataforma.StartsWith('Win', True) then
+  if SistemaDePlataforma(Plataforma) = spWindows then
   begin
     Flag := 5;
     RemotoLanzador := 'run-' + JobId + '.exe';
@@ -785,18 +784,14 @@ end;
 function PlataformaDelPerfil(const AProfile: string): string;
 var
   Info: TRadStudioInfo;
-  P: string;
 begin
   { El .profile dice para que plataforma se creo (Profile_platform). Es la
     unica fuente fiable: el nombre del perfil no significa nada. Los
     perfiles del Delphi de ESTE servidor, no los de otra instalacion. }
   Result := '';
   Info := DiscoverRadStudio;
-  if not Info.Found then
-    Exit;
-  P := RutaDePerfil(Info.Version, AProfile);
-  if TFile.Exists(P) then
-    Result := CamposDePerfil(LeeTexto(P, [ltIde])).Plataforma;
+  if Info.Found then
+    Result := PlataformaDePerfil(Info.Version, AProfile); // EL lector (Lsp.Discovery)
 end;
 
 function BundledNodePath(const APlataforma: string): string;

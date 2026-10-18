@@ -136,6 +136,22 @@ function CamposDePerfil(const AXml: string): TCamposDePerfil;
 function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string; overload;
 function HostDePerfil(const AVersion, AName: string): string; overload;
 
+{ La plataforma para la que se creo un perfil del IDE (su Profile_platform:
+  Linux64, Win64, OSX64...), leida del MISMO fichero que compone RutaDePerfil;
+  '' si no existe o no se lee. El nombre del perfil no significa nada. }
+function PlataformaDePerfil(const AVersion, AName: string): string;
+
+{ Los perfiles del IDE que pueden desplegar APlatform: los de un PAServer del
+  sistema que la despliega (Lsp.Dproj.SistemaDelPAServer: uno de un Mac sirve
+  a OSX64, OSXARM64 e iOS). Ninguno para Android ni para una plataforma que no
+  se conoce. La gemela de SdksDePlataforma (cada .sdk declara su plataforma). }
+function PerfilesDePlataforma(const AVersion, APlatform: string): TArray<string>;
+
+{ '' si el perfil AProfile despliega APlatform; si no, la negativa, con su
+  plataforma y los que si sirven. La de set-profile y la del build: un
+  perfil de Windows aceptado para un Linux64 (medido el 18-oct-2026). }
+function PerfilQueNoSirve(const AVersion, AProfile, APlatform: string): string;
+
 { '' si este servidor PUEDE marcar el host del perfil AProfName: la puerta de
   RemoteHosts (ProbeHostDenied en Lsp.Settings) con el host leido del perfil.
   Falla CERRADO: sin Delphi, perfil que no existe, que no se lee o sin host ->
@@ -1048,6 +1064,46 @@ var
   Ignorado: string;
 begin
   Result := HostDePerfil(AVersion, AName, Ignorado);
+end;
+
+function PlataformaDePerfil(const AVersion, AName: string): string;
+var
+  Ruta: string;
+begin
+  Result := '';
+  Ruta := RutaDePerfil(AVersion, AName);
+  if not TFile.Exists(Ruta) then
+    Exit;
+  try
+    Result := CamposDePerfil(LeeTexto(Ruta, [ltIde])).Plataforma.Trim;
+  except
+    Result := ''; // un .profile que no se lee no es de ninguna plataforma
+  end;
+end;
+
+function PerfilesDePlataforma(const AVersion, APlatform: string): TArray<string>;
+var
+  Sistema: TSistemaDePlataforma;
+begin
+  Result := nil;
+  Sistema := SistemaDelPAServer(APlatform);
+  if Sistema = spDesconocido then
+    Exit;
+  for var P in PerfilesDelIde(AVersion) do
+    if SistemaDePlataforma(PlataformaDePerfil(AVersion, P)) = Sistema then
+      Result := Result + [P];
+end;
+
+function PerfilQueNoSirve(const AVersion, AProfile, APlatform: string): string;
+var
+  Sirven: TArray<string>;
+begin
+  Sirven := PerfilesDePlataforma(AVersion, APlatform);
+  if MatchText(AProfile.Trim, Sirven) then
+    Exit('');
+  Result := MsgFmt(SR_CONFIG_PROFILE_OTRO_SISTEMA_FMT, [AProfile.Trim,
+    ONinguno(PlataformaDePerfil(AVersion, AProfile)), APlatform,
+    ONinguno(string.Join(', ', Sirven))]);
 end;
 
 function ProfileHostDenied(const AProfName: string): string;

@@ -257,6 +257,29 @@ the MCP `initialize` response (`serverInfo.version`).
   unit's routines: inside the body of another one (between its `begin` and
   its `end`), or after the declarations (the main block, `initialization`,
   past the final `end`); the warning says which.
+- **Platforms by what they are, not by their name.** Three questions shared
+  one answer, and each site spelled the platform family its own way
+  (`StartsWith('Win')`, `StartsWith('Android')`, the Android ABI twice):
+  - `delphi_config view` said `needsProfileForDeploy=true` for Android, with
+    "Android takes no profile" next to it. It is `false` now: an Android
+    deploy builds the `.apk` here and `delphi_adb` installs it.
+  - `set-profile` wrote a PAServer profile into an Android platform (the
+    first Deploy then failed with `E8712 AndroidManifest.xml does not
+    exist`, and the next ones answered "Deployed through profile ..." with
+    the `.apk` still here), and accepted a Windows profile for `Linux64`
+    (`set-sdk` already checked the platform of its `.sdk`). Both are refused
+    now (`CFG-123`, `CFG-124` naming the profiles that can), and so is a
+    `delphi_build target=Deploy` with such a profile, before compiling and
+    before its host is contacted; an Android Deploy no longer reads a
+    `<Profile>` the project carries. A profile serves a platform when its
+    `Profile_platform` is of the system whose PAServer deploys it (a Mac's
+    serves macOS and iOS).
+  - `delphi_test platform=WinARM64EC` on an x64 machine built the runner,
+    ran it, crashed with `0xC0000005` and blamed the runner. "Runs here" is
+    asked of Windows now (`GetMachineTypeAttributes`): `TEST-007` before
+    building.
+  One table in `Lsp.Dproj` says what each platform is (system, machine,
+  Android ABI); the IDE's registry lists the same 13 but not that.
 
 ### Added
 

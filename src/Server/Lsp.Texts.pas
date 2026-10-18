@@ -2960,8 +2960,20 @@ const
 
   SR_CONFIG_PROFILE_LOCAL_FMT =
     '[CFG-012 INVALID_PARAM] %s is compiled and run ON this machine, so it ' +
-    'takes no PAServer profile. Profiles are for remote targets ' +
-    '(Linux64, OSX64, Android...).';
+    'takes no PAServer profile. Profiles are for the targets a PAServer ' +
+    'deploys (Linux64, OSX64, iOS...).';
+
+  // ---- set-profile y el build (lote 2 del censo, 18-oct-2026) ----
+  SR_CONFIG_PROFILE_SIN_PASERVER_FMT =
+    '[CFG-123 INVALID_PARAM] %s does not deploy through PAServer, so it ' +
+    'takes no profile: delphi_build target=Deploy builds its .apk here and ' +
+    'delphi_adb command=install puts it on a device.';
+
+  SR_CONFIG_PROFILE_OTRO_SISTEMA_FMT =
+    '[CFG-124 INVALID_PARAM] Profile "%s" was created for %s (its ' +
+    'Profile_platform), and it cannot deploy %s. Profiles that can: %s. ' +
+    'delphi_paserver command=add-profile with the platform of that target ' +
+    'machine creates one.';
 
   SR_CONFIG_SDK_LOCAL_FMT =
     '[CFG-108 INVALID_PARAM] %s is compiled ON this machine, so it takes ' +
@@ -5719,8 +5731,9 @@ const
     '[CFG-059] sdk/profile per remote platform and where they come from. ' +
     'sdkSource: project (the .dproj sets it) | ide-default (the active ' +
     'SDK of the SDK Manager; set it with delphi_config command=set-sdk) ' +
-    '| none (there is no SDK: delphi_paserver command=get-sdk and then ' +
-    'set-sdk). profileSource: project | none (the project does not set ' +
+    '| none (there is no SDK: for Linux64, delphi_paserver command=get-sdk ' +
+    'and then set-sdk; Android, macOS and iOS SDKs come from the IDE''s SDK ' +
+    'Manager). profileSource: project | none (the project does not set ' +
     'PAServer: delphi_build target=Deploy takes it from profile=, or set ' +
     'it with command=set-profile). Android takes no profile: it deploys ' +
     'through delphi_adb.';
@@ -7545,8 +7558,9 @@ const
   // Mensajes que estaban en linea en Mcp.Tools.Config.pas (paso 3c, 27-sep-2026)
   SN_CFG_BUILD_DELPHI_BUILD_PROJECT =
     '[CFG-073] To build: delphi_build {project, platform, config}. ' +
-    'needsSDKForBuild=true: pull the SDK once with delphi_paserver ' +
-    'get-sdk and build locally - no profile involved. ' +
+    'needsSDKForBuild=true: it links against an SDK, and builds locally - ' +
+    'no profile involved (Linux64: pull it once with delphi_paserver ' +
+    'get-sdk; Android, macOS and iOS: the IDE''s SDK Manager). ' +
     'needsProfileForDeploy=true: a PAServer profile is needed only for ' +
     'target=Deploy.';
 
