@@ -112,11 +112,19 @@ function EsLiteralDeForm(const AValor: string): Boolean;
 function NombreDeValor(const AValor: string): string;
 // UN caracter, lo que ReadChar acepta: 'A', #39, #65
 function EsCaracterDeForm(const AValor: string): Boolean;
-{ Un numero como lo lee el cargador (TParser): entero, $hex, o con decimales
-  y exponente (1.5, -2E3, 1.5e-5), con su signo. }
+{ Un numero como lo lee el cargador, PREGUNTADO a su parser (ObjectTextToBinary):
+  entero, $hex, con decimales y exponente (1.5, -2E3, 1.5e-5), con su signo y
+  con el sufijo del tipo con que lo escribe el IDE (34700d un TDate, 1.5s un
+  Single, 12.5c un Currency). }
 function EsNumeroDeForm(const AValor: string): Boolean;
-// y uno ENTERO (decimal con su signo, o $hex sin el: TParser no lee -$FF)
+// y uno ENTERO (lo que el parser deja como vaInt8..vaInt64)
 function EsEnteroDeForm(const AValor: string): Boolean;
+{ Y uno que lee una propiedad de coma flotante (TReader.ReadFloat): entero o
+  con decimales, SIN el sufijo s/c/d - ReadFloat no los lee y el form no
+  carga; asi guardan un TDate un Variant o una propiedad que se escribe por
+  codigo (AccessTokenExpiryDate = 41488.4481893519d, WriteDate; medido en el
+  RTL el 18-oct-2026). }
+function EsNumeroDeFloat(const AValor: string): Boolean;
 
 (* LA gramatica de las lineas de un designer de texto, la que escribe
   ObjectBinaryToText: cada linea, que es. Un objeto (LineaDeObjeto) y su end;
@@ -568,17 +576,144 @@ begin
   Result := LeeLiteralDeForm(AValor, T) and (Length(T) = 1);
 end;
 
-function EsNumeroDeForm(const AValor: string): Boolean;
+{ La forma de numero de un valor que el parser no CONVIERTE: el tipo con que
+  lo escribiria por la forma que le ve su TOKENIZADOR (TParser) - entero, coma
+  flotante, o el de su sufijo s/c/d -, si Val lo lee entero: lo que esta bien
+  escrito y solo no cabe (1E400 da INF y codigo 0; 1e y 1e+ dan otro codigo,
+  y TokenFloat lanza el mismo EConvertError para los tres: medido el
+  18-oct-2026). False si no es un numero bien escrito. }
+function FormaDeNumero(const AValor: string; out ATipo: TValueType): Boolean;
+var
+  Flujo: TStringStream;
+  P: TParser;
+  V: string;
+  D: Double;
+  Codigo: Integer;
 begin
-  Result := TRegEx.IsMatch(AValor.Trim,
-    // el signo solo delante de los digitos: TParser.NextToken (ctDash) no lee
-    // -$FF (segunda revision de la 1.17.0)
-    '^(?:\$[0-9A-Fa-f]+|-?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)$');
+  Result := False;
+  ATipo := vaNull;
+  Val(AValor, D, Codigo);
+  if Codigo <> 0 then
+    Exit;
+  V := AValor;
+  if V.StartsWith('-') then
+    V := V.Substring(1); // el signo lo lee ConvertValue, delante del numero
+  Flujo := TStringStream.Create(V, TEncoding.ASCII);
+  try
+    try
+      P := TParser.Create(Flujo);
+      try
+        case P.Token of
+          toInteger: ATipo := vaInt64;
+          toFloat:
+            case UpCase(P.FloatType) of
+              'S': ATipo := vaSingle;
+              'C': ATipo := vaCurrency;
+              'D': ATipo := vaDate;
+            else
+              ATipo := vaExtended;
+            end;
+        else
+          Exit;
+        end;
+        Result := P.NextToken = toEOF;
+      finally
+        P.Free;
+      end;
+    except
+      Result := False;
+    end;
+  finally
+    Flujo.Free;
+  end;
+end;
+
+{ Como deja EL parser del IDE (ObjectTextToBinary, por DesignerAFlujo) AValor
+  puesto como valor de una propiedad: el TValueType que escribe en el binario.
+  False si no lo lee, si no es de UNA linea o si se lleva algo detras (la
+  propiedad que le sigue, un centinela, tiene que llegar entera). Lo que el
+  IDE escribe y lee no lo dice una gramatica nuestra: un TDate como lo escribe
+  el IDE, 45123.5d, era "not a one-line form value" (DSGN-092; 3 en los .dfm
+  de los Samples; lote 3 del censo de jueces, 18-oct-2026). }
+function TipoDeValorDeForm(const AValor: string; out ATipo: TValueType): Boolean;
+const
+  CENTINELA = 'Z';
+var
+  V: string;
+  Entrada: TBytesStream;
+  Binario: TMemoryStream;
+  R: TReader;
+  Flags: TFilerFlags;
+  Pos: Integer;
+begin
+  Result := False;
+  ATipo := vaNull;
+  V := AValor.Trim;
+  if (V = '') or (V.IndexOfAny([#10, #13]) >= 0) then
+    Exit;
+  Entrada := nil;
+  Binario := TMemoryStream.Create;
+  try
+    try
+      // las dos lineas por SU escritor (LineasDePropiedad), como el IDE
+      Entrada := TBytesStream.Create(TextoParaElParser('object A: TA'#13#10 +
+        LineasDePropiedad(SangriaDeNivel(1), 'P', [V])[0] + #13#10 +
+        LineasDePropiedad(SangriaDeNivel(1), CENTINELA, ['0'])[0] + #13#10'end'#13#10, ekUtf8Bom));
+      DesignerAFlujo(Entrada, Binario);
+      Binario.Position := 0;
+      R := TReader.Create(Binario, 4096);
+      try
+        R.ReadSignature;
+        Flags := [];
+        Pos := 0;
+        R.ReadPrefix(Flags, Pos);
+        R.ReadStr; // la clase
+        R.ReadStr; // el nombre
+        if R.ReadStr <> 'P' then
+          Exit;
+        ATipo := R.NextValue;
+        R.SkipValue;
+        Result := not R.EndOfList and (R.ReadStr = CENTINELA);
+      finally
+        R.Free;
+      end;
+    except
+      // un numero que el parser no CONVIERTE (TokenInt y TokenFloat lanzan
+      // EConvertError: 1E400, 99999999999999999999) tiene su forma, la de su
+      // tokenizador; que no cabe lo dice luego quien lo convierte (set, con el
+      // tope de su tipo: "a number its type holds"). Lo demas, no lo lee
+      on EConvertError do
+        Result := FormaDeNumero(V, ATipo);
+      on Exception do
+        Result := False;
+    end;
+  finally
+    Binario.Free;
+    Entrada.Free;
+  end;
+end;
+
+function EsNumeroDeForm(const AValor: string): Boolean;
+var
+  T: TValueType;
+begin
+  Result := TipoDeValorDeForm(AValor, T) and
+    (T in [vaInt8, vaInt16, vaInt32, vaInt64, vaExtended, vaDouble, vaSingle, vaCurrency, vaDate]);
 end;
 
 function EsEnteroDeForm(const AValor: string): Boolean;
+var
+  T: TValueType;
 begin
-  Result := TRegEx.IsMatch(AValor.Trim, '^(?:-?\d+|\$[0-9A-Fa-f]+)$');
+  Result := TipoDeValorDeForm(AValor, T) and (T in [vaInt8, vaInt16, vaInt32, vaInt64]);
+end;
+
+function EsNumeroDeFloat(const AValor: string): Boolean;
+var
+  T: TValueType;
+begin
+  Result := TipoDeValorDeForm(AValor, T) and
+    (T in [vaInt8, vaInt16, vaInt32, vaInt64, vaExtended, vaDouble]);
 end;
 
 // una linea que sigue una cadena: un trozo empieza por comilla o por #

@@ -280,6 +280,15 @@ the MCP `initialize` response (`serverInfo.version`).
     building.
   One table in `Lsp.Dproj` says what each platform is (system, machine,
   Android ABI); the IDE's registry lists the same 13 but not that.
+- **A number in a form is what the IDE's own parser reads.** A regex decided
+  it, without the suffixes the IDE writes (`41488.4481893519d`, a TDate a
+  class writes by code - `AccessTokenExpiryDate` of TOAuth2Authenticator -;
+  `34700d` in a Variant; `1.5s`, `12.5c`): `delphi_designer set` refused such
+  a value as "not a one-line form value" (`DSGN-092`) without asking the
+  form reader, which loads it. The parser says it now, with the type it
+  stores. A published float property (a TDate included) still takes no
+  suffix - the reader reads it with `ReadFloat`, which does not take them -
+  and the refusal says so.
 
 ### Added
 

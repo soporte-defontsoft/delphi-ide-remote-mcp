@@ -216,10 +216,13 @@ REGLAS = [
      r"Trim\(\s*\[\s*''''\s*\]\s*\)|StartsWith\(\s*''''\s*\)\s*and\s*[\w.]+\.EndsWith\(\s*''''\s*\)", [],
      'LeeLiteralDeForm / NombreDeValor (Lsp.DesignerBin): .Trim([\'\'\'\']) en los estilos y las comillas '
      'quitadas a mano en el renombrado no leian ni #N ni trozos (revision de la 1.17.0; P5)'),
-    ('la gramatica de un numero de un form', r"\\d\+\(\?:\\\.\\d\+\)\?|\\\$\[0-9A-Fa-f\]\+",
-     [('Lsp.DesignerBin.pas', 'EsNumeroDeForm'), ('Lsp.DesignerBin.pas', 'EsEnteroDeForm')],
-     'EsNumeroDeForm / EsEnteroDeForm: la de ValidStyleValue y la del entero del juez eran copias, y '
-     'las dos aceptaron -$FF, que TParser no lee (segunda revision de la 1.17.0)'),
+    # sin casa desde el 18-oct-2026: la regex de EsNumeroDeForm / EsEnteroDeForm (la de
+    # ValidStyleValue y la del entero del juez eran copias, y aceptaron -$FF; segunda
+    # revision de la 1.17.0) no veia los sufijos con que el IDE escribe un TDate, un Single o
+    # un Currency (DSGN-092 en un 41500.5d que se escribe por codigo; lote 3 del censo)
+    ('la gramatica de un numero de un form', r"\\d\+\(\?:\\\.\\d\+\)\?|\\\$\[0-9A-Fa-f\]\+", [],
+     'TipoDeValorDeForm (Lsp.DesignerBin): el parser del IDE y el tipo con que deja el valor; '
+     'EsNumeroDeForm, EsEnteroDeForm y EsNumeroDeFloat le preguntan'),
     ('una linea de propiedad de un form compuesta a mano',
      r"'\s+[A-Za-z_][\w.]*\s+=\s+'\s*\+|\b\w*Prop\w*\s*\+\s*' = '\s*\+", [],
      'LineasDePropiedad (Lsp.DesignerBin): Prop = valor, y sus trozos en las lineas de debajo como el IDE '

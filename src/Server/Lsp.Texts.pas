@@ -5236,7 +5236,9 @@ const
   SF_DESIGNER_TOMA_VARIANTE =
     'a number, a string, True, False, Null or nil';
   SF_DESIGNER_TOMA_NUMERO =
-    'a number';
+    'a number, without the d, s or c suffix (the form reader reads it with ' +
+    'ReadFloat, which does not take them: 45123.5d is how a Variant, or a ' +
+    'property written by code, keeps a TDate)';
   SF_DESIGNER_TOMA_CARACTER =
     'one character, quoted (''A'') or by its code (#65)';
   SF_DESIGNER_TOMA_CONSTANTE =

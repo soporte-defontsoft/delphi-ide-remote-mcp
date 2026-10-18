@@ -560,6 +560,23 @@ begin
   Assert.IsTrue(ValidStyleValue('1e3') and ValidStyleValue('''abc''') and ValidStyleValue('''a'' + ''b'''));
   Assert.IsFalse(ValidStyleValue('''abc'), 'una cadena sin cerrar');
   Assert.IsTrue(EsEnteroDeForm('-12') and EsEnteroDeForm('$7FFFFFFF') and not EsEnteroDeForm('1.5'));
+  // el sufijo con el que el IDE escribe un TDate, un Single o un Currency: el
+  // parser los lee, y una regex propia los negaba (45123.5d en un set: DSGN-092;
+  // 34700d en los Samples; lote 3 del censo, 18-oct-2026)
+  Assert.IsTrue(EsNumeroDeForm('34700d') and EsNumeroDeForm('41488.4481893519d') and
+    EsNumeroDeForm('1.5s') and EsNumeroDeForm('12.5c'), 'los sufijos que el IDE escribe');
+  Assert.IsFalse(EsEnteroDeForm('34700d'), 'un TDate no es un entero');
+  // ...pero una propiedad de coma flotante los lee con ReadFloat, que no los
+  // toma: solo un Variant o una escrita por codigo (WriteDate)
+  Assert.IsFalse(EsNumeroDeFloat('45123.5d') or EsNumeroDeFloat('1.5s') or EsNumeroDeFloat('12.5c'));
+  Assert.IsTrue(EsNumeroDeFloat('45123.5') and EsNumeroDeFloat('-2E3') and EsNumeroDeFloat('$FF'));
+  // lo que el parser no CONVIERTE sigue siendo un numero (su forma): que no
+  // cabe lo dice quien lo convierte, con el tope de su tipo
+  Assert.IsTrue(EsNumeroDeForm('1E400') and EsNumeroDeFloat('1E400') and
+    EsEnteroDeForm('99999999999999999999'), 'la forma, aunque no quepa');
+  Assert.IsTrue(ValidStyleValue('45123.5d'), 'un valor de una linea');
+  // ...y lo que se lleva algo detras no es UN valor (el centinela no llega)
+  Assert.IsFalse(EsNumeroDeForm('1 end') or EsNumeroDeForm('1'#13#10'end') or EsNumeroDeForm('1 2'));
   // bajo el decimal 18, redondeado en el; con mas de 16 cifras enteras, la
   // forma general (lo que hace FloatToStrF en el IDE de 32 bits)
   Assert.AreEqual('0.000000000000000001', FlotanteDeForm(6E-19, False));

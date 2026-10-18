@@ -1305,9 +1305,10 @@ begin
   end;
   if (Base = 'float') or (Base = 'single') then
   begin
-    // LA gramatica del numero (Lsp.DesignerBin): con exponente, y un $hex
-    // tambien, que ReadFloat lee como entero
-    if not EsNumeroDeForm(AValor) then
+    // lo que lee ReadFloat, por el parser del IDE (Lsp.DesignerBin): con
+    // exponente, y un $hex tambien, que lee como entero; el sufijo s/c/d no
+    // (cae a ReadInt64 y el form no carga)
+    if not EsNumeroDeFloat(AValor) then
       Result := MsgText(SF_DESIGNER_TOMA_NUMERO);
   end
   else if Base = 'char' then
