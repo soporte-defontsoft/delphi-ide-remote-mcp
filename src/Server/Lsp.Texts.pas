@@ -4886,6 +4886,15 @@ const
     'ancestor, or put the .pas that declares the class next to it (an FMX ' +
     'view, <unit>.<View>.fmx, is read on top of <unit>.fmx when that unit''s ' +
     '.pas declares it with {$R *.<View>.fmx}, as the IDE writes it).';
+  { ...y lo que el lector salto SIN nombrar una propiedad del form, o de las
+    partes de un componente que elige por una clase que no esta instalada
+    (la del proyecto): no es un defecto del fichero que esta preview pueda
+    afirmar (corpus del 18-oct-2026). %s: lo que dijo, uno por linea }
+  SN_DESIGNER_PREVIEW_IGNORADAS_NO_CONFIRMADAS_FMT =
+    '[DSGN-163] Skipped by the IDE''s reader because of an exception that is ' +
+    'not a reader error (the code of a component in this environment), or ' +
+    'under parts a class of the project provides (which the reader does not ' +
+    'load): not the file, as far as this preview can tell - %s';
   { ...y lo saltado de la RAIZ que es de su clase y no de la form (o el frame)
     en la que la lee el lector: un TQuickRep, un TForm3D, un TWebModule, un
     modulo de datos FMX (Lsp.DesignerMeta.DeLaRaizQueElLectorNoVe; corpus del
@@ -10819,17 +10828,19 @@ const
 
   { Un componente sin campo publicado: lo crea TReader si su CLASE la nombra
     algun campo publicado de la cadena (GetFieldClass) o esta registrada
-    (GetClass); si no, EClassNotFound (System.Classes, FindComponentClass). Solo
-    se avisa del primer caso que no se cumple, y el registro se decide al
-    ejecutar: FMX.StdCtrls registra sus controles (RegisterFmxClasses) y
-    Vcl.StdCtrls ninguno - medido el 18-oct-2026; un Sample de Embarcadero con
-    cuatro TLabel sin campo, y otros TLabel con el, salia como que no cargaba.
+    (GetClass); si no, EClassNotFound (System.Classes, FindComponentClass). Se
+    avisa cuando no se cumple ninguna de las dos: el registro lo dice la tabla
+    (hecho R, lo que la unidad de la clase registra al ejecutar: FMX.Menus su
+    TMainMenu, FMX.ListBox su TListBoxGroupHeader; Vcl.StdCtrls ninguno -
+    medido el 18-oct-2026; cuatro Samples de Embarcadero salian como que no
+    cargaban). Lo que registre el PROGRAMA por su cuenta no se ve.
     %s nombre, %s clase, %d linea, %s clase otra vez }
   SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT =
-    '%s: %s (line %d of the form file) has no published field, and no published ' +
-    'field of the class is a %s: the program creates it only if that class is ' +
-    'registered when it runs (the FMX control units register theirs, ' +
-    'Vcl.StdCtrls does not); if it is not, loading the form raises EClassNotFound';
+    '%s: %s (line %d of the form file) has no published field, no published ' +
+    'field of the class is a %s, and no unit of the installation registers ' +
+    'that class when it runs (RegisterClass, RegisterClasses, ' +
+    'RegisterFmxClasses): loading the form raises EClassNotFound unless the ' +
+    'program registers it itself';
 
   SF_DSGN_QUEDADO_SIN_VALOR_FMT =
     '"%s" (line %d of the form file) has been left without a value: the form ' +
@@ -11055,6 +11066,23 @@ const
   SF_DSGN_LECTOR_RAIZ_NO_VISTA_FMT =
     'it reads the root of this form into a %s, and this root is a %s: what ' +
     'only that class has, it cannot load (%s)';
+  { ...cuando lo que el lector se salto fue una excepcion que NO era suya (la
+    clase, por la jerarquia de la RTL: no EFilerError ni EParserError): la
+    lanzo el codigo de un componente en ESTE entorno - IBX sin gds32.dll, un
+    TActionManager sin su unidad de estilo, un AV de un bpl (corpus del
+    18-oct-2026) -, no la lectura de una linea. %s clase: lo que dijo }
+  SF_DSGN_LECTOR_DEL_CODIGO_FMT =
+    'it skipped an exception that is not a reader error (%s): the code of a ' +
+    'component in this environment raised it - a library it needs, a unit the ' +
+    'program must use -, not a line of this file';
+  { ...y cuando un componente elige sus PARTES por una clase que esta
+    instalacion no tiene (ItemAppearanceClassName de un TListView: la registra
+    una unidad del PROYECTO, que el lector no carga; corpus del 18-oct-2026).
+    %s el componente, %s la propiedad, %s la clase, %s lo saltado }
+  SF_DSGN_LECTOR_CLASE_DEL_PROYECTO_FMT =
+    '%s picks its parts by a class this installation does not have (%s = ' +
+    '''%s'', registered by the project itself, which the reader does not ' +
+    'load): what it skipped under it (%s) cannot be confirmed here';
 
   SF_DSGN_SIN_SUBPROPIEDADES_FMT =
     '"%s" (%s) has no subproperties';

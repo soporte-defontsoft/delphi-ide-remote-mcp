@@ -13,7 +13,11 @@
   FR_PACKAGES = 'PACKAGES=';     // PACKAGES=<cargados>/<conocidos> de diseno del IDE (0/0 = no hicieron falta)
   FR_COMPONENTS = 'COMPONENTS='; // COMPONENTS=<n> leidos de la raiz
   FR_SUBSTITUTED = 'SUBSTITUTED='; // SUBSTITUTED=<TClase,TClase> que no existen en ningun paquete (sustituto rosa con el nombre)
-  FR_IGNORED = 'IGNORED=';       // IGNORED=<error del lector que se salto, EN PARTES> (repetible; FR_PARTES_SEP)
+  FR_IGNORED = 'IGNORED=';       // IGNORED=<de quien>|<error que se salto, EN PARTES> (repetible; FR_PARTES_SEP): <de quien> =
+                                 // FR_ORIGEN_LECTOR si la excepcion era del lector (EFilerError, EParserError: el
+                                 // fichero), o la clase de la excepcion si la lanzo el codigo de un componente (IBX
+                                 // sin gds32.dll, un AV de un bpl: no es del fichero, que se sepa; corpus 18-oct-2026)
+  FR_ORIGEN_LECTOR = 'reader';   // el <de quien> de un IGNORED= del propio lector
   FR_NONVISUAL = 'NONVISUAL=';   // NONVISUAL=<n> iconos de no visuales dibujados (solo con --nonvisual on)
   FR_NONVISUALS = 'NONVISUALS='; // NONVISUALS=<Nombre:Clase,...> los no visuales de la raiz, se dibujen o no: el
                                  // agente necesita saber que existen aunque no los vea (David, 7-oct-2026)

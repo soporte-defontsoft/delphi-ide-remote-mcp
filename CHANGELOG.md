@@ -126,10 +126,30 @@ the MCP `initialize` response (`serverInfo.version`).
 - The lint (check-binding) said a component without a published field made
   the form fail to load. `TReader` does not need the field: it creates the
   component when its CLASS is the type of some published field of the class
-  chain, or registered. Only when no field names its class is it reported,
-  and the warning says it loads only if the class is registered (the FMX
+  chain, or registered. The tables now record what each unit of the
+  installation registers when it runs (`RegisterClass`, `RegisterClasses`,
+  `RegisterFmxClasses` in its `initialization`; generation 14), so a
+  `TMainMenu`, a `TComboEdit` or a `TListBoxGroupHeader` without a field -
+  four Samples of Embarcadero - is no longer reported. Only when no field
+  names its class and no unit registers it is it reported, and the warning
+  says it loads only if the program registers it itself (the FMX
   control units register theirs, `Vcl.StdCtrls` does not). A Sample of
   Embarcadero with four field-less `TLabel` was reported as broken.
+- What the IDE's reader skips because of an exception that is NOT a reader
+  error is no longer a warning of the form. The renderer now says whose each
+  skipped exception was (`IGNORED=<reader|class>|...`, the same rule as
+  `NOTLOADED=`: `EFilerError` and `EParserError` are the reader's, anything
+  else is a component's code in this environment - IBX without `gds32.dll`,
+  a `TActionManager` without its style unit, an access violation inside a
+  bpl; three Samples of Embarcadero). The lint answers "not confirmed"
+  (`DSGN-154`) with the class and the message, and preview says so
+  (`DSGN-163`) instead of "the form will fail to open". A reader error that
+  names no property - "Ancestor for 'X' not found" - stays a warning. And a
+  component that picks its parts by a class name this installation does not
+  have (`ItemAppearanceClassName` of a `TListView`, registered by a unit of
+  the project, which the reader does not load) is "not confirmed" too, with
+  the property and the class, instead of a warning on every property under
+  those parts.
 - A VCL form with a `TCalendar`, `TMediaPlayer`, `TWebBrowser` or
   `TBindNavigator` - names FMX has too - was reported as not loading: the
   renderer registered the IDE's classes by NAME and skipped the VCL one when

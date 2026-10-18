@@ -225,6 +225,12 @@ REGLAS = [
      'como las lee LineasDeForm (Lsp.DesignerBin.LineaQueElParserLeeDistinta, DSGN-160)'),
     # el .rc lo leian dos regex de linea (RcPathsDenied y el lint de estilos), cada una
     # con su parte: 'X RCDATA DISCARDABLE "f"' no lo veia ninguna (3c del censo, 18-oct-2026)
+    # las listas de Register* (la paleta y, desde el hecho R, el registro al ejecutar)
+    # las leia cada lector con su regex: dos gemelas (18-oct-2026, David: "no dupliques reglas")
+    ('el argumento de una llamada a Register* leido a mano', r"\\s\*\\\(\(\.\*\?\)\\\)\\s\*;",
+     [('Lsp.DesignerMetaGen.pas', 'NombresRegistrados')],
+     'NombresRegistrados (Lsp.DesignerMetaGen): EL lector del argumento de una llamada Register* '
+     '(RegistradosEnPaleta y RegistradasAlEjecutar solo le dan el nombre de la rutina)'),
     ('un .rc leido a mano', r"'[^']*(?i:rcdata|rcinclude|#include)[^']*'",
      [('Lsp.Styles.pas', 'LeeRc')],
      'LeeRc (Lsp.Styles): EL lector del .rc, por tokens como brcc32; la segunda barrera y el lint le '
@@ -963,6 +969,8 @@ PLANTADO = {
     'un documento de lineas abierto sin su juez': "  Doc := TStyleDoc.Create(APath);",
     'el recorrido del parser con sus lineas': "  L := Parser.SourceLine - 1;",
     'un .rc leido a mano': "  for M in TRegEx.Matches(T, '^\\s*(\\w+)\\s+RCDATA\\s+\"([^\"]+)\"') do",
+    'el argumento de una llamada a Register* leido a mano':
+        "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
     'un literal de form leido a mano': "  N := V.Trim(['''']);",
     'la gramatica de un numero de un form': r"  if TRegEx.IsMatch(V, '^-?\d+(?:\.\d+)?$') then",
     'una linea de propiedad de un form compuesta a mano': "  T := '  Size.Width = ' + FlotanteFmx(320);",

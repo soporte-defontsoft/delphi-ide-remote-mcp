@@ -1218,8 +1218,19 @@ begin
 end;
 
 procedure TCargador.ReaderError(Reader: TReader; const Message: string; var Handled: Boolean);
+var
+  Origen: string;
 begin
-  FIgnoradas.Add(Message);
+  // de quien es la excepcion que TReader nos deja ignorar: la suya (EFilerError,
+  // EParserError: el fichero) o la del codigo de un componente (IBX sin
+  // gds32.dll, un TActionManager sin su unidad de estilo, un AV de un bpl):
+  // OnError corre dentro del except de TReader.ReadProperty, con ExceptObject
+  // vivo. La MISMA regla que RespondeFallo para NOTLOADED=
+  Origen := FR_ORIGEN_LECTOR;
+  var E := ExceptObject;
+  if (E <> nil) and not ((E is EFilerError) or (E is EParserError)) then
+    Origen := E.ClassName;
+  FIgnoradas.Add(Origen + FR_PARTES_SEP + Message);
   Handled := True;
 end;
 
@@ -1271,8 +1282,12 @@ procedure RespondeLoLeido(ACargador: TCargador);
 begin
   if ACargador.Sustituidas.Count > 0 then
     Responde(FR_SUBSTITUTED, string.Join(',', ACargador.Sustituidas.ToStringArray));
+  // <de quien>|<mensaje en partes>: ReaderError guarda 'origen|mensaje'
   for var S in ACargador.Ignoradas do
-    Responde(FR_IGNORED, LecturaEnPartes(S));
+  begin
+    var P := Pos(FR_PARTES_SEP, S);
+    Responde(FR_IGNORED, Copy(S, 1, P - 1) + FR_PARTES_SEP + LecturaEnPartes(Copy(S, P + 1, MaxInt)));
+  end;
   for var S in ACargador.Avisos do
     Aviso(S);
   for var S in ACargador.SinLeer do

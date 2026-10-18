@@ -74,8 +74,10 @@ type
 
 const
   { Sube cuando cambian las reglas del generador: una tabla de otra
-    generacion no se reutiliza aunque el fuente sea el mismo. }
-  GENERACION_TABLAS = 13; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+    generacion no se reutiliza aunque el fuente sea el mismo.
+    14 (1.20.2): lo que registra cada unidad al ejecutar (hecho R): check-binding
+    no avisa de un componente sin campo cuya clase se registra. }
+  GENERACION_TABLAS = 14; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
   // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
   // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
@@ -139,6 +141,15 @@ function PropiedadesDefinidasPorCodigo(const ATexto: string): TArray<string>;
   cuando dos unidades tienen un TFoo (el THttpServer de ICS, registrado, y
   el THTTPServer de HTTPIntr, un modulo). }
 function RegistradosEnPaleta(const ATexto: string): TArray<string>;
+
+{ Los nombres de clase que ATexto registra AL EJECUTAR - RegisterClass(TA),
+  RegisterClasses([TA, TB]) y RegisterFmxClasses([...]) de su initialization
+  (o del texto entero si no la tiene) -: lo que TReader encuentra con GetClass
+  para crear un componente sin campo publicado (System.Classes,
+  FindComponentClass). Lo de RegisterComponents no: eso es la paleta del IDE y
+  un programa no lo ejecuta. Hecho R de la tabla; el juez de verdad es la
+  clase cargada en el ayudante (lote 5 del censo de jueces). }
+function RegistradasAlEjecutar(const ATexto: string): TArray<string>;
 
 { Las clases de ATexto (un texto ACTIVO) que sobrescriben SetName, como
   'TClase 1' si con su SetName el Text sigue al nombre (el TTextControl y el
@@ -290,25 +301,52 @@ begin
     Result := '';
 end;
 
-function RegistradosEnPaleta(const ATexto: string): TArray<string>;
+{ Los identificadores del argumento de cada llamada de ATexto a una rutina
+  de registro, APatron su nombre como regex ('Register(?:Components|NoIcon)'):
+  la lista entre corchetes ([TA, TB]) si la hay, o el argumento a secas
+  (RegisterClass(TA)). UN lector para las tres familias de Register*: la
+  paleta y el registro al ejecutar eran dos regex iguales (18-oct-2026). }
+function NombresRegistrados(const ATexto, APatron: string): TArray<string>;
 var
   Lista: TList<string>;
-  Lista2: TMatch;
+  Arg: string;
+  Corchetes: TMatch;
 begin
   Lista := TList<string>.Create;
   try
-    for var Mt in TRegEx.Matches(ATexto, '(?is)' + PATRON_NO_IDENT_ANTES + 'Register(?:Components|NoIcon)\s*\((.*?)\)\s*;') do
+    for var Mt in TRegEx.Matches(ATexto, '(?is)' + PATRON_NO_IDENT_ANTES + APatron + '\s*\((.*?)\)\s*;') do
     begin
-      Lista2 := TRegEx.Match(Mt.Groups[1].Value, '\[([^\]]*)\]');
-      if Lista2.Success then
-        for var N in Lista2.Groups[1].Value.Split([',']) do
-          if EsIdentificador(N.Trim, True) and not Lista.Contains(N.Trim) then
-            Lista.Add(N.Trim);
+      Corchetes := TRegEx.Match(Mt.Groups[1].Value, '\[([^\]]*)\]');
+      if Corchetes.Success then
+        Arg := Corchetes.Groups[1].Value
+      else
+        Arg := Mt.Groups[1].Value;
+      for var N in Arg.Split([',']) do
+        if EsIdentificador(N.Trim, True) and not Lista.Contains(N.Trim) then
+          Lista.Add(N.Trim);
     end;
     Result := Lista.ToArray;
   finally
     Lista.Free;
   end;
+end;
+
+function RegistradosEnPaleta(const ATexto: string): TArray<string>;
+begin
+  Result := NombresRegistrados(ATexto, 'Register(?:Components|NoIcon)');
+end;
+
+function RegistradasAlEjecutar(const ATexto: string): TArray<string>;
+var
+  Mi: TMatch;
+begin
+  // desde su initialization: un RegisterClass dentro de un Register (de
+  // diseno) no corre en el programa
+  Mi := TRegEx.Match(ATexto, '(?im)^\s*initialization\b');
+  if Mi.Success then
+    Result := NombresRegistrados(ATexto.Substring(Mi.Index - 1), 'Register(?:Fmx)?Class(?:es)?')
+  else
+    Result := NombresRegistrados(ATexto, 'Register(?:Fmx)?Class(?:es)?');
 end;
 
 { Los nombres que da el primer argumento de un Filer.DefineProperty, que
@@ -894,6 +932,7 @@ type
     Marcos: TMarcosDisenador;
     Definidas: TArray<string>; // PropiedadesDefinidasPorCodigo: 'TClase Nombre'
     Registra: TArray<string>;  // RegistradosEnPaleta: los nombres, sin resolver
+    RegistraEjecucion: TArray<string>; // RegistradasAlEjecutar: los nombres (hecho R)
     SetNames: TArray<string>;  // SetNamesDeUnidad: 'TClase 1' / 'TClase 0'
     Estilos: TArray<string>;   // EstilosDeUnidad: 'TClase AS' (hecho K)
     Constantes: TArray<string>; // ConstantesDeTexto: 'R Tipo Funcion' / 'L ...' / 'D ...'
@@ -1220,6 +1259,7 @@ begin
     // las cadenas, solo en las que lo nombran (unas cien de 4.000)
     if ContainsText(Txt, 'DefineProperty') or ContainsText(Txt, 'DefineBinaryProperty') or
        ContainsText(Txt, 'RegisterComponents') or ContainsText(Txt, 'RegisterNoIcon') or
+       ContainsText(Txt, 'RegisterClass') or ContainsText(Txt, 'RegisterFmxClasses') or
        ContainsText(Txt, 'RegisterIntegerConsts') or ContainsText(Txt, 'IdentToInt') then
     begin
       Sim := FBase.Copia;
@@ -1233,12 +1273,15 @@ begin
           U.Definidas := PropiedadesDefinidasPorCodigo(ConCadenas);
           // y lo que registra en la paleta (quien se queda un nombre)
           U.Registra := RegistradosEnPaleta(ConCadenas);
+          // y lo que registra al ejecutar (hecho R: TReader lo crea sin campo)
+          U.RegistraEjecucion := RegistradasAlEjecutar(ConCadenas);
           // y las constantes con nombre de sus tipos enteros (hecho I)
           if ContainsText(Txt, 'RegisterIntegerConsts') or ContainsText(Txt, 'IdentToInt') then
             U.Constantes := ConstantesDeUnidad(ConCadenas, Decl);
         except
           U.Definidas := nil; // lo que no se sabe leer no tumba la tabla
           U.Registra := nil;
+          U.RegistraEjecucion := nil;
           U.Constantes := nil;
         end;
       finally
@@ -2319,6 +2362,11 @@ begin
             for var E in U.Estilos do
               if MismoIdentificador(E.Substring(0, E.IndexOf(' ')), T.NombreCompleto) then
                 Hechos := Hechos + ['K ' + Id + E.Substring(E.IndexOf(' '))];
+            // y si su unidad la registra al ejecutar: en ELLA sola, que el
+            // registro es por nombre de clase y no se hereda (hecho R)
+            for var Rg in U.RegistraEjecucion do
+              if MismoIdentificador(Rg, T.NombreCompleto) then
+                Hechos := Hechos + ['R ' + Id];
             Lineas[M].AddRange(Hechos);
             Emitidas[M].Add(K, True);
             // ...pero un form escribe el NOMBRE ('object X: TScrollBar'):

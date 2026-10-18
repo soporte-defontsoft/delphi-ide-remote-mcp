@@ -207,6 +207,19 @@ var
     Result := False;
   end;
 
+  { La unidad de AClase la registra al ejecutar (RegisterClass, RegisterClasses,
+    RegisterFmxClasses: hecho R de la tabla): TReader la crea sin campo, con
+    GetClass. Sin tabla no se sabe, y se avisa como cuando no hay campo (el
+    aviso dice que carga si la clase esta registrada). }
+  function ClaseRegistrada(const AClase: string): Boolean;
+  var
+    Falta: TFaltaTabla;
+    Id: string;
+  begin
+    var M := MetaTable(AIsFmx, Falta, 0);
+    Result := (M <> nil) and M.ClaseDeNombre(UltimoTrozo(AClase), Id) and M.RegistradaAlEjecutar(Id);
+  end;
+
   { Una clase de la instalacion - la tabla de su marco la conoce (sin
     esperarla) -: sus miembros no son del programador ni salen en el .dfm
     como objetos. Donde acaban las clases del usuario, como para el juez de
@@ -363,10 +376,13 @@ begin
           else
             Seen.Add(Nm);
           // sin campo, TReader lo crea igual si su CLASE la nombra otro campo
-          // publicado de la cadena (System.Classes, GetFieldClass): solo se
-          // avisa cuando no (un Sample con cuatro TLabel sin campo y otros
-          // con el salia como que no cargaba; 18-oct-2026)
-          if Complete and (Fields.IndexOfName(Nm) < 0) and not ClaseConCampo(Cl2) then
+          // publicado de la cadena (System.Classes, GetFieldClass) o si su
+          // unidad la registra al ejecutar (GetClass; FMX.Menus registra
+          // TMainMenu, FMX.ListBox TListBoxGroupHeader: cuatro Samples salian
+          // como que no cargaban): solo se avisa cuando ninguna de las dos
+          // (un Sample con cuatro TLabel sin campo y otros con el; 18-oct-2026)
+          if Complete and (Fields.IndexOfName(Nm) < 0) and not ClaseConCampo(Cl2) and
+             not ClaseRegistrada(Cl2) then
             Miss.Add(MsgFmt(SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT, [Nm, Cl2, I + 1, Cl2]));
         end;
         if OClave = 'inline' then

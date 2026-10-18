@@ -26,6 +26,9 @@ registradas).
   B1 VCL: Label2 sin campo, con Label1 (un TLabel) con el: ningun aviso
   B2 ...y Memo1 sin campo y sin ningun campo TMemo: el aviso, condicional
      (EClassNotFound si la clase no esta registrada)
+  B3 FMX: un TMainMenu y un TComboEdit sin campo ni otro campo de su clase:
+     ningun aviso, que sus unidades los registran al ejecutar (hecho R de la
+     tabla, RegisterFmxClasses; cuatro Samples salian como que no cargaban)
   G1 un TCalendar de la VCL (Vcl.Samples.Calendar, no estandar: se cargan los
      paquetes del IDE) con su Color: LINT CLEAN. Un paquete FMX activaba el grupo
      de clases de FMX (RegisterFmxClasses) y GetClass daba el TCalendar de FMX:
@@ -41,6 +44,17 @@ registradas).
   R2b control: una propiedad que TForm3D no tiene: el aviso
   S1 (si hay Samples) la vista Delphi de ListCollections CLEAN (leida sin su
      ancestro la miden V4/V5; C++ no: este MCP es solo de Delphi)
+  S2 el TitlebarPanel de la VCL: el lector se salta "No ActionBand style unit"
+     y un AV de vclactnband, excepciones que NO son suyas (el ayudante lo dice
+     por la clase, IGNORED=<de quien>|...: el codigo de un componente en este
+     entorno): DSGN-154 con el motivo, no un aviso. V3 es su control: un
+     "Ancestor for X not found" SI es del lector y sigue siendo aviso
+  S3 el IBX2FDMigration: "InterBase library gds32.dll not found", igual
+  S4 el ListViewMultiDetailAppearance: su ItemAppearanceClassName es una clase
+     del PROYECTO (la registra MultiDetailAppearanceU) que el lector no carga:
+     lo saltado bajo ItemAppearanceObjects no se confirma (DSGN-154), no es
+     un aviso; y su preview lo dice (DSGN-163) en vez de "no abrira"
+  (S2-S4, ROJAS contra h1c: salian como avisos del form en el corpus)
 
 V1, V2 y V4 son ROJAS contra bb246ed (la vista se leia sola); B1 tambien.
 V6, contra el renderizador con el Split()[0]: el AV medido en vivo contra
@@ -135,6 +149,23 @@ try:
           'Label2' not in r, r[:500])
     check('B2 Memo1 sin campo y sin ningun campo TMemo: el aviso, que dice cuando carga (EClassNotFound)',
           mc.abre(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'Memo1' in r and 'EClassNotFound' in r, r[:500])
+    # B3: lo mismo en FMX con clases que su unidad registra al ejecutar
+    # (FMX.Menus, FMX.ComboEdit: RegisterFmxClasses): TReader las crea sin campo
+    PRG = os.path.join(JAIL, 'registradas')
+    os.makedirs(PRG)
+    escribe(os.path.join(PRG, 'UReg.pas'),
+            'unit UReg;\n\ninterface\n\nuses\n  System.SysUtils, System.Classes, FMX.Types, FMX.Controls, FMX.Forms,\n'
+            '  FMX.Menus, FMX.Edit, FMX.ComboEdit;\n\ntype\n  TFormReg = class(TForm)\n  private\n  public\n  end;\n\n'
+            'var\n  FormReg: TFormReg;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n')
+    escribe(os.path.join(PRG, 'UReg.fmx'),
+            'object FormReg: TFormReg\n  Left = 0\n  Top = 0\n  Caption = \'Reg\'\n  ClientHeight = 300\n'
+            '  ClientWidth = 400\n  FormFactor.Width = 320\n  FormFactor.Height = 480\n'
+            '  FormFactor.Devices = [Desktop]\n  DesignerMasterStyle = 0\n  object MainMenu1: TMainMenu\n  end\n'
+            '  object ComboEdit1: TComboEdit\n    Position.X = 40.000000000000000000\n'
+            '    Position.Y = 40.000000000000000000\n  end\nend\n')
+    r = dsg({'command': 'lint', 'path': os.path.join(PRG, 'UReg.fmx')})
+    check('B3 FMX: MainMenu1 y ComboEdit1 sin campo, con sus clases registradas al ejecutar: ningun aviso suyo',
+          'MainMenu1' not in r and 'ComboEdit1' not in r and not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT'), r[:500])
 
     # ------------------------------------ grupos de clases de la RTL (VCL/FMX)
     PGR = os.path.join(JAIL, 'grupos')
@@ -201,6 +232,32 @@ try:
         check('S1 la vista Delphi de un Sample (ListCollections): LINT CLEAN', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
     else:
         print('NOTA: S1 no se mide: no estan los Samples de esta instalacion')
+    # lo que el lector dice de un Sample y NO es del fichero: se copia el
+    # proyecto entero a la jaula (el lint lee el .pas de al lado)
+    import shutil
+    for clave, carpeta, form, pista in (
+            ('S2', os.path.join('Object Pascal', 'VCL', 'Titlebar', 'TitlebarPanel'), 'Main.dfm', 'ActionBand'),
+            ('S3', os.path.join('Object Pascal', 'Database', 'FireDAC', 'Tool', 'reFind', 'IBX2FDMigration', 'Demo'),
+             'DataMod.dfm', 'gds32'),
+            ('S4', os.path.join('Object Pascal', 'Multi-Device Samples', 'User Interface', 'ListView',
+                                'ListViewMultiDetailAppearance'), 'MultiDetailMainFormU.fmx', 'TMultiDetailItemAppearance')):
+        origen = os.path.join(SAM, carpeta)
+        if not os.path.isfile(os.path.join(origen, form)):
+            print('NOTA: %s no se mide: no esta %s' % (clave, os.path.join(carpeta, form)))
+            continue
+        destino = os.path.join(JAIL, clave)
+        shutil.copytree(origen, destino, ignore=shutil.ignore_patterns('__history', '__recovery', 'Win32', 'Win64'))
+        r = dsg({'command': 'lint', 'path': os.path.join(destino, form)}, t=300)
+        check('%s %s: lo que el lector dijo no es del fichero (%s): DSGN-154 con el motivo, no un aviso'
+              % (clave, form, pista),
+              mc.abre(r, 'SN_DESIGNER_LINT_SIN_LECTOR_FMT') and pista in r and not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT'),
+              r[:500])
+        if clave == 'S4':
+            j = mc.como_json(dsg({'command': 'preview', 'path': os.path.join(destino, form), 'inline': False,
+                                  'out': os.path.join(JAIL, 's4.png')}, t=300))
+            check('S4 su preview: DSGN-163 (no confirmado), no DSGN-114 ("no abrira")',
+                  mc.es(j.get('ignoredUnconfirmedNote') or '', 'SN_DESIGNER_PREVIEW_IGNORADAS_NO_CONFIRMADAS_FMT')
+                  and not mc.es(j.get('ignoredNote') or '', 'SN_DESIGNER_PREVIEW_IGNORADAS'), str(j)[:500])
 finally:
     S.cierra()
     mc.borra(BASE)

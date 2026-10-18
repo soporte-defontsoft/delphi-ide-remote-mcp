@@ -81,6 +81,9 @@ type
     Ambiguas: TDictionary<string, string>;
     // clase lower -> su SetName pone el Text desde el nombre (T)
     TextoEsNombre: TDictionary<string, Boolean>;
+    // clase lower -> su unidad la registra al ejecutar (R): TReader la crea
+    // aunque ningun campo publicado la nombre
+    Registradas: TDictionary<string, Boolean>;
     // tipo 'o' lower -> su base: integer, int64, char, single, float, string
     // o variant (B, Lsp.DesignerMetaGen: lo que TReader mira de un valor)
     Bases: TDictionary<string, string>;
@@ -145,6 +148,11 @@ type
       el SetName mas cercano de su cadena que el fuente sobrescribe (hecho T,
       Lsp.DesignerMetaGen.SetNamesDeTexto). Lo que escribe insert. }
     function TextoSigueAlNombre(const AClase: string): Boolean;
+    { La unidad de AClase la registra al ejecutar (RegisterClass, RegisterClasses,
+      RegisterFmxClasses: hecho R, Lsp.DesignerMetaGen.RegistradasAlEjecutar):
+      TReader la crea sin campo publicado (GetClass). De ELLA, no de su cadena:
+      el registro va por nombre de clase. Lo que pregunta check-binding. }
+    function RegistradaAlEjecutar(const AClase: string): Boolean;
     { El valor ABandera (0 csAcceptsControls, 1 csSetCaption) del ControlStyle
       de AClase: lo dice el constructor mas cercano de su cadena que lo toca
       (hecho K); '.' si ninguno, '?' si no se sabe. }
@@ -575,6 +583,7 @@ begin
   Definidas := TDictionary<string, string>.Create;
   Ambiguas := TDictionary<string, string>.Create;
   TextoEsNombre := TDictionary<string, Boolean>.Create;
+  Registradas := TDictionary<string, Boolean>.Create;
   Bases := TDictionary<string, string>.Create;
   Constantes := TDictionary<string, string>.Create;
   ConstantesShow := TDictionary<string, string>.Create;
@@ -628,6 +637,8 @@ begin
       PorNombre.AddOrSetValue(ClaveDeIdentificador(P[1]), ClaveDeIdentificador(P[2]))
     else if (P[0] = 'T') and (Length(P) >= 3) then
       TextoEsNombre.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2] = '1')
+    else if (P[0] = 'R') and (Length(P) >= 2) then
+      Registradas.AddOrSetValue(ClaveDeIdentificador(P[1]), True)
     else if (P[0] = 'B') and (Length(P) >= 3) then
       Bases.AddOrSetValue(ClaveDeIdentificador(P[1]), LowerCase(P[2]))
     else if (P[0] = 'I') and (Length(P) >= 3) then
@@ -678,6 +689,7 @@ begin
   Constantes.Free;
   Bases.Free;
   TextoEsNombre.Free;
+  Registradas.Free;
   Ambiguas.Free;
   Definidas.Free;
   Hijas.Free;
@@ -829,6 +841,11 @@ begin
   // (TControlListButton lo quita y publica Caption: revision de la 1.17.0)
   if Result and Desciende(AClase, ID_VCL_CONTROL) then
     Result := EstiloDe(AClase, 1) <> '-';
+end;
+
+function TMetaTable.RegistradaAlEjecutar(const AClase: string): Boolean;
+begin
+  Result := Registradas.ContainsKey(ClaveDeIdentificador(AClase));
 end;
 
 function TMetaTable.EstiloDe(const AClase: string; ABandera: Integer): Char;

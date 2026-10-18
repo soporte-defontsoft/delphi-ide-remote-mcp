@@ -32,6 +32,7 @@ type
     [Test] procedure DesciendeYJuez;
     [Test] procedure LaMasParecida;
     [Test] procedure TextoSigueAlNombreDelFuente;
+    [Test] procedure RegistradaAlEjecutarDelFuente;
     [Test] procedure LineaCompartidaNoSeBorra;
     [Test] procedure DosCamposDeUnaLinea;
     [Test] procedure ConstantesDelFuente;
@@ -1171,6 +1172,45 @@ begin
   end;
 end;
 
+{ Lo que una unidad registra AL EJECUTAR (Lsp.DesignerMetaGen.RegistradasAlEjecutar,
+  hecho R): RegisterFmxClasses, RegisterClasses y RegisterClass de su
+  initialization; no un RegisterClass de un Register (de diseno) ni
+  RegisterComponents (la paleta); el generador le da el texto ACTIVO, como a
+  RegistradosEnPaleta, asi que uno comentado tampoco. Y en la tabla,
+  de ELLA sola: una hija no esta registrada por serlo su madre. Cuatro Samples
+  (TMainMenu, TComboEdit, TListBoxGroupHeader sin campo) salian como que no
+  cargaban (corpus, 18-oct-2026). }
+procedure TDesignerEditTests.RegistradaAlEjecutarDelFuente;
+const
+  FUENTE =
+    'unit Medida;' + CRLF + 'interface' + CRLF + 'implementation' + CRLF +
+    'procedure Register;' + CRLF + 'begin' + CRLF +
+    '  RegisterComponents(''Pagina'', [TPaleta]);' + CRLF +
+    '  RegisterClass(TDeDiseno);' + CRLF + 'end;' + CRLF +
+    'initialization' + CRLF +
+    '  RegisterFmxClasses([TMenuItem, TMenuView, TPopupMenu, TMainMenu, TMenuBar]);' + CRLF +
+    '  RegisterClasses([TUna, TOtra]);' + CRLF +
+    '  RegisterClass(TSuelta);' + CRLF +
+    'end.' + CRLF;
+var
+  M: TMetaTable;
+  Id: string;
+begin
+  Assert.AreEqual('TMenuItem|TMenuView|TPopupMenu|TMainMenu|TMenuBar|TUna|TOtra|TSuelta',
+    string.Join('|', RegistradasAlEjecutar(FUENTE)));
+  M := TMetaTable.Create([
+    'C FMX.Menus:TMainMenu', 'R FMX.Menus:TMainMenu',
+    'C Mio:TMiMenu', 'H Mio:TMiMenu FMX.Menus:TMainMenu',
+    'C FMX.Menus:TMenuBar']);
+  try
+    Assert.IsTrue(M.ClaseDeNombre('TMainMenu', Id) and M.RegistradaAlEjecutar(Id), 'TMainMenu, registrada');
+    Assert.IsTrue(M.ClaseDeNombre('TMiMenu', Id) and not M.RegistradaAlEjecutar(Id), 'una hija no lo hereda');
+    Assert.IsTrue(M.ClaseDeNombre('TMenuBar', Id) and not M.RegistradaAlEjecutar(Id), 'sin hecho R, no');
+  finally
+    M.Free;
+  end;
+end;
+
 (* EL lector de un .rc (Lsp.Styles.LeeRc, 3c del censo de jueces): la
   gramatica de brcc32 medida el 18-oct-2026, por tokens. Las banderas de
   memoria delante del fichero (la regex de RcPathsDenied y la del lint no lo
@@ -1552,6 +1592,11 @@ begin
     'el Caption que pone es el de su etiqueta, y su Text lo vacia');
   Assert.IsTrue(Tiene(SetNamesDeTexto(Lee('fmx\FMX.Controls.pas')), 'TTextControl 1'));
   Assert.IsTrue(Tiene(SetNamesDeTexto(Lee('fmx\FMX.Edit.pas')), 'TEditButton 0'));
+  // lo que registran al ejecutar (hecho R): FMX si, Vcl.StdCtrls nada
+  Assert.IsTrue(Tiene(RegistradasAlEjecutar(Lee('fmx\FMX.Menus.pas')), 'TMainMenu'), 'FMX.Menus registra TMainMenu');
+  Assert.IsTrue(Tiene(RegistradasAlEjecutar(Lee('fmx\FMX.ListBox.pas')), 'TListBoxGroupHeader'),
+    'FMX.ListBox registra TListBoxGroupHeader');
+  Assert.IsTrue(Length(RegistradasAlEjecutar(Lee('vcl\Vcl.StdCtrls.pas'))) = 0, 'Vcl.StdCtrls no registra ninguna');
   A := '';
   for var L in ConstantesDeTexto(Lee('rtl\common\System.UIConsts.pas')) do
     if L.StartsWith('A IdentToAlphaColor ') then

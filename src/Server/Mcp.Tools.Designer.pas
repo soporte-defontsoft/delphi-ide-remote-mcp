@@ -1518,12 +1518,20 @@ begin
       // carga: Lsp.FormRender.IgnoradaDelUsuario y DeLaRaizQueElLectorNoVe
       var Suyas := '';
       var NoVistas := '';
+      var NoConfirmadas := '';
       var DelForm := 0;
       var RaizL := RaizParaElLector(Ruta, R.RaizClase, Fw = 'fmx');
       var Sustituto := ClaseDelSustituto(R.RaizTipo);
+      // el documento, para las partes de una clase del proyecto (el juicio es
+      // el del lint: Lsp.FormRender.PartesDeClaseNoInstalada)
+      var DocP: TStyleDoc := nil;
+      if TStyleDoc.Lee(Ruta, DocP) <> '' then
+        DocP := nil;
+      try
       for var Ig in R.Ignoradas do
       begin
         var Suya: TPropiedadDelUsuario;
+        var PropCn, ClaseCn: string;
         if IgnoradaDelUsuario(R.RaizNombre, Ig, RaizL.Propias, Suya) then
         begin
           Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
@@ -1533,8 +1541,16 @@ begin
         else if (R.RaizNombre <> '') and SameText(Ig.Componente, R.RaizNombre) and
                 DeLaRaizQueElLectorNoVe(RaizL, Sustituto, Ig.Propiedad) then
           NoVistas := NoVistas + IfThen(NoVistas <> '', ', ') + Ig.Propiedad
+        // una excepcion del codigo de un componente (no del lector), o bajo las
+        // partes de una clase del proyecto: no es del fichero que se sepa
+        else if DelCodigoDeUnComponente(Ig) or PartesDeClaseNoInstalada(DocP, Ig, Fw = 'fmx', PropCn, ClaseCn) then
+          NoConfirmadas := NoConfirmadas + IfThen(NoConfirmadas <> '', ' | ') +
+            IfThen(Ig.Origen <> '', Ig.Origen + ': ') + Ig.Texto
         else
           Inc(DelForm);
+      end;
+      finally
+        DocP.Free;
       end;
       // leido sin un ancestro: lo saltado puede ser solo lo que el aporta, y
       // "no abrira" seria falso (una vista FMX sin su maestro, 18-oct-2026); y si todo
@@ -1547,6 +1563,9 @@ begin
       if NoVistas <> '' then
         Return.AddPair('ignoredRootNote', MsgFmt(SN_DESIGNER_PREVIEW_RAIZ_NO_VISTA_FMT,
           [Sustituto, RaizL.Clase, Sustituto, NoVistas]));
+      if NoConfirmadas <> '' then
+        Return.AddPair('ignoredUnconfirmedNote', MsgFmt(SN_DESIGNER_PREVIEW_IGNORADAS_NO_CONFIRMADAS_FMT,
+          [NoConfirmadas]));
       if Suyas <> '' then
         Return.AddPair('ignoredUserNote', MsgFmt(SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT, [Suyas]));
     end;
