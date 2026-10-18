@@ -951,12 +951,17 @@ begin
   F.Marco := IfThen(F.EsFmx, 'FMX', 'VCL');
   if IsBinaryDesignerFile(APath) then
     Exit(MsgFmt(SR_DESIGNER_EDIT_BINARIO_FMT, [F.DfmNombre]));
+  // por lineas como las lee el parser del IDE, o nada: con el '>' de una
+  // coleccion en su linea, set escribia un Left nuevo en vez de cambiar el
+  // que habia (DSGN-160, 3b del censo de jueces)
   try
-    F.Doc := TStyleDoc.Create(APath);
+    Result := TStyleDoc.Lee(APath, F.Doc);
   except
     on E: Exception do
       Exit(MsgEnvuelve(SR_DESIGNER_ILEGIBLE_FMT, E.Message, [APath, E.Message]));
   end;
+  if Result <> '' then
+    Exit;
   if (F.Doc.Root = nil) or (F.Doc.Root.ClassName_ = '') then
     Exit(MsgText(SR_DESIGNER_EMPTY));
   // su unidad: la del mismo nombre, la que crea el IDE

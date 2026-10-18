@@ -37,6 +37,7 @@ type
     [Test] procedure ConstantesDelFuente;
     [Test] procedure ValorPorLaBaseDeSuTipo;
     [Test] procedure LineasDelFormComoLasEscribeElIde;
+    [Test] procedure FormaDeLasLineasSuJuez;
     [Test] procedure ReferenciaSoloSiGuardaUnComponente;
     [Test] procedure NombresDelFrameEnLinea;
     [Test] procedure MetodoPorSusBordes;
@@ -1024,6 +1025,146 @@ begin
     Assert.DoesNotContain(Texto, 'next card', 'los trozos de debajo se van con su valor');
     Doc.SetPropTrozos(Doc.ObjetoDeNombre('Label1'), 'Caption', TrozosDeLiteral(LARGO), Era);
     Assert.Contains(Doc.TextoDe(Doc.Lines), TROZOS + '    Hint = ', 'como la escribio el IDE en el ejemplo');
+  finally
+    Doc.Free;
+  end;
+end;
+
+(* Lo que lee LineasDeForm frente a lo que lee EL parser del IDE, linea a
+  linea (LineaQueElParserLeeDistinta, 3b del censo de jueces de la 1.20.2).
+  El form como lo escribe el IDE pasa: una coleccion con un item [1], una
+  lista dentro de otra y una vacia (ObjectBinaryToText, vaList: el lector la
+  cerraba en la primera linea acabada en ')', la de la de dentro), una
+  cadena en trozos y un bloque binario. Y cada forma que el parser lee y el
+  lector no sale con la linea que se nombra: el '>' de una coleccion en su
+  propia linea (en vivo, set escribia un Left = 20 nuevo y seguia mandando
+  el Left = 10), 'end >', un item con su propiedad en su linea, dos
+  propiedades en una, la cabecera de un objeto partida, una lista que
+  empieza en la linea de su propiedad. Una propiedad dos veces en su objeto
+  es forma del IDE (DefineProperties: ImageIndex de una accion FMX, Left y
+  Top de un form FMX - lo midio la sonda sobre los Samples -): set y delete
+  las cambian todas, y se lee la ultima, la que guarda el lector. Lo de
+  detras del end de la raiz no lo lee nadie: no se compara, se avisa
+  (ADetras; test_designer: con dos raices pegadas manda la primera). Lo que
+  el parser no lee no es suyo: 0, y lo dice ParserDeForm. *)
+procedure TDesignerEditTests.FormaDeLasLineasSuJuez;
+const
+  IDE =
+    'object Form1: TForm1' + CRLF +       // 1
+    '  object Bar: TStatusBar' + CRLF +   // 2
+    '    Panels = <' + CRLF +             // 3
+    '      item' + CRLF +                 // 4
+    '        Width = 50' + CRLF +         // 5
+    '      end' + CRLF +                  // 6
+    '      item [1]' + CRLF +             // 7
+    '        Text = ''a''' + CRLF +       // 8
+    '      end>' + CRLF +                 // 9
+    '    Datos = (' + CRLF +              // 10
+    '      (' + CRLF +                    // 11
+    '        1' + CRLF +                  // 12
+    '        2)' + CRLF +                 // 13
+    '      ()' + CRLF +                   // 14
+    '      3)' + CRLF +                   // 15
+    '    Hint = ''x'' +' + CRLF +         // 16
+    '      ''y''' + CRLF +                // 17
+    '    Bits = {' + CRLF +               // 18
+    '      0102' + CRLF +                 // 19
+    '      0304}' + CRLF +                // 20
+    '    Left = 10' + CRLF +              // 21
+    '  end' + CRLF +                      // 22
+    'end' + CRLF;                         // 23
+  CAB = 'object Form1: TForm1' + CRLF + '  object Bar: TStatusBar' + CRLF;
+  PIE = '    Left = 10' + CRLF + '  end' + CRLF + 'end' + CRLF;
+  SUELTO =
+    CAB + '    Panels = <' + CRLF + '      item' + CRLF + '      end' + CRLF + '      >' + CRLF + PIE;
+
+  function Linea(const ATexto: string): Integer;
+  var
+    Detras: Integer;
+  begin
+    Result := LineaQueElParserLeeDistinta(SplitToLines(ATexto), Detras);
+  end;
+
+  function Detras(const ATexto: string): Integer;
+  begin
+    LineaQueElParserLeeDistinta(SplitToLines(ATexto), Result);
+  end;
+
+var
+  Doc: TStyleDoc;
+  Ini, Fin: Integer;
+  Era: Boolean;
+begin
+  Assert.AreEqual<Integer>(0, Linea(IDE), 'el form como lo escribe el IDE');
+  Assert.AreEqual<Integer>(7, Linea(CAB + '    Panels = <' + CRLF + '      item' + CRLF +
+    '        Width = 50' + CRLF + '      end' + CRLF + '      >' + CRLF + PIE),
+    'el > de una coleccion en su propia linea');
+  Assert.AreEqual<Integer>(6, Linea(CAB + '    Panels = <' + CRLF + '      item' + CRLF +
+    '        Width = 50' + CRLF + '      end >' + CRLF + PIE), 'end >, su linea');
+  Assert.AreEqual<Integer>(4, Linea(CAB + '    Panels = <' + CRLF + '      item Width = 50 end>' + CRLF + PIE),
+    'un item con su propiedad en su linea');
+  Assert.AreEqual<Integer>(3, Linea(CAB + '    Top = 1 Left = 10' + CRLF + '  end' + CRLF + 'end' + CRLF),
+    'dos propiedades en una linea');
+  // una coleccion dentro de una lista: tambien la escribe el IDE (_Headers de
+  // un TTeeGrid, su DefineProperties; un frame de Galatea, en la sonda)
+  Assert.AreEqual<Integer>(0, Linea(CAB + '    _Headers = (' + CRLF + '      1' + CRLF +
+    '      ''TColumnHeaderBand''' + CRLF + '      <' + CRLF + '        item' + CRLF + '        end>)' + CRLF + PIE),
+    'una coleccion dentro de una lista');
+  // una propiedad dos veces en su objeto: forma del IDE (DefineProperties)
+  Assert.AreEqual<Integer>(0, Linea(CAB + '    Left = 20' + CRLF + '    Top = 1' + CRLF + PIE),
+    'una propiedad dos veces en su objeto: la escribe el IDE');
+  // lo de detras del end de la raiz: no se compara, se dice donde empieza
+  Assert.AreEqual<Integer>(0, Linea(CAB + PIE + '  end' + CRLF), 'un end de mas al final');
+  Assert.AreEqual<Integer>(6, Detras(CAB + PIE + '  end' + CRLF), '...y donde empieza lo que no lee nadie');
+  Assert.AreEqual<Integer>(5, Detras(CAB + '  end' + CRLF + 'end' + CRLF + '  object Otro: TLabel' + CRLF +
+    '  end' + CRLF + 'end' + CRLF), 'un end de mas que cierra la raiz antes: lo de debajo, fuera');
+  Assert.AreEqual<Integer>(0, Detras(IDE), 'el form del IDE no tiene nada detras');
+  Assert.Contains(AvisoDeFormaDeLineas(SplitToLines(CAB + PIE + '  end' + CRLF)), 'DSGN-162');
+  Assert.AreEqual<Integer>(3, Linea('object Form1: TForm1' + CRLF + '  object Bar:' + CRLF +
+    '    TStatusBar' + CRLF + PIE), 'la cabecera de un objeto partida');
+  Assert.AreEqual<Integer>(4, Linea(CAB + '    Items.Strings = (''a''' + CRLF + '      ''b'')' + CRLF + PIE),
+    'una lista que empieza en la linea de su propiedad');
+  Assert.AreEqual<Integer>(0, Linea(CAB + '    Caption = ''sin cerrar' + CRLF + PIE),
+    'lo que el parser no lee lo dice ParserDeForm');
+  // la lista de dentro no cierra la de fuera
+  Doc := TStyleDoc.DeTexto(IDE);
+  try
+    Assert.AreEqual('', Doc.FormaDistinta);
+    Assert.IsTrue(Doc.PropLines(Doc.ObjetoDeNombre('Bar'), 'Datos', Ini, Fin));
+    Assert.AreEqual<Integer>(14, Fin, 'una lista dentro de otra: hasta su ultimo )');
+    Assert.IsTrue(Doc.PropLines(Doc.ObjetoDeNombre('Bar'), 'Left', Ini, Fin), 'y lo de detras sigue siendo suyo');
+    Assert.AreEqual<Integer>(20, Ini);
+  finally
+    Doc.Free;
+  end;
+  // la negativa de quien lee o escribe por lineas, y el aviso del lint
+  Doc := TStyleDoc.DeTexto(SUELTO);
+  try
+    Assert.Contains(Doc.FormaDistinta, 'DSGN-160');
+    Assert.Contains(Doc.FormaDistinta, 'line 6');
+  finally
+    Doc.Free;
+  end;
+  Assert.Contains(AvisoDeFormaDeLineas(SplitToLines(SUELTO)), 'DSGN-161');
+  Assert.AreEqual('', AvisoDeFormaDeLineas(SplitToLines(IDE)));
+  // una propiedad dos veces (ImageIndex de una accion FMX, la publicada y la
+  // de DefineProperties): se lee la ultima, y set y delete cambian las dos;
+  // set cambiaba la primera y la segunda seguia mandando
+  Doc := TStyleDoc.DeTexto('object Form1: TForm1' + CRLF + '  object Act: TControlAction' + CRLF +
+    '    ImageIndex = 8' + CRLF + '    Text = ''Opciones''' + CRLF + '    ImageIndex = 9' + CRLF +
+    '  end' + CRLF + 'end' + CRLF);
+  try
+    Assert.IsTrue(Doc.PropLines(Doc.ObjetoDeNombre('Act'), 'ImageIndex', Ini, Fin));
+    Assert.AreEqual<Integer>(4, Ini, 'la que guarda el lector: la ultima');
+    Doc.SetProp(Doc.ObjetoDeNombre('Act'), 'ImageIndex', '5', Era);
+    Assert.IsTrue(Era);
+    Assert.AreEqual('object Form1: TForm1' + CRLF + '  object Act: TControlAction' + CRLF +
+      '    ImageIndex = 5' + CRLF + '    Text = ''Opciones''' + CRLF + '    ImageIndex = 5' + CRLF +
+      '  end' + CRLF + 'end', Doc.TextoDe(Doc.Lines).TrimRight, 'set: las dos');
+    Doc.Reparsea;
+    Assert.IsTrue(Doc.DeleteProp(Doc.ObjetoDeNombre('Act'), 'ImageIndex'));
+    Assert.AreEqual('object Form1: TForm1' + CRLF + '  object Act: TControlAction' + CRLF +
+      '    Text = ''Opciones''' + CRLF + '  end' + CRLF + 'end', Doc.TextoDe(Doc.Lines).TrimRight, 'delete: las dos');
   finally
     Doc.Free;
   end;

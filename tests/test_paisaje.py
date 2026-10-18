@@ -212,6 +212,21 @@ REGLAS = [
     ('la gramatica de las lineas de un form', r"EndsWith\(\s*'= <'|Contains\(\s*'= \{'|'\(\?i\)\^end\\b", [],
      'LineasDeForm (Lsp.DesignerBin): la leian cuatro lectores, cada uno con su parte de la gramatica '
      '(revision de la 1.17.0)'),
+    # quien lee o escribe un form o un estilo POR SUS LINEAS (LineasDeForm) pregunta
+    # antes al parser del IDE si las lee igual: un form que el IDE carga, con el '>'
+    # de una coleccion en su propia linea, y set escribia un Left nuevo encima (3b
+    # del censo de jueces, 18-oct-2026). Las casas que abren sin Lee lo juzgan aparte
+    ('un documento de lineas abierto sin su juez', r'\bTStyleDoc\.Create\s*\(',
+     [('Lsp.Styles.pas', 'TStyleDoc.Lee'),                    # EL abridor: lee y juzga
+      ('Lsp.FormRender.pas', 'LiteralesDeRenderDenegados'),   # la puerta del preview, con su fichero
+      ('Lsp.FormRender.pas', 'CorreRender'),                  # lo que dijo el lector de uno que no cargo
+      ('Mcp.Tools.Styles.pas', 'LintStyles')],                # el lint dice cual no tiene la forma
+     'TStyleDoc.Lee (y FormaDistinta): el parser del IDE, con su SourceLine, dice si las lineas se leen '
+     'como las lee LineasDeForm (Lsp.DesignerBin.LineaQueElParserLeeDistinta, DSGN-160)'),
+    ('el recorrido del parser con sus lineas', r'\.SourceLine\b',
+     [('Lsp.DesignerBin.pas', 'LineaQueElParserLeeDistinta')],
+     'LineaQueElParserLeeDistinta: EL juez de la forma de las lineas de un form, el recorrido de '
+     'ObjectTextToBinary con el TParser del IDE; otro recorrido seria otro juez'),
     ('un literal de form leido a mano',
      r"Trim\(\s*\[\s*''''\s*\]\s*\)|StartsWith\(\s*''''\s*\)\s*and\s*[\w.]+\.EndsWith\(\s*''''\s*\)", [],
      'LeeLiteralDeForm / NombreDeValor (Lsp.DesignerBin): .Trim([\'\'\'\']) en los estilos y las comillas '
@@ -939,6 +954,8 @@ PLANTADO = {
     'el .dpr de un .dproj': "  D := TPath.ChangeExtension(P, '.dpr');",
     'el juez del nombre de un perfil': "  if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then",
     'la gramatica de las lineas de un form': "  if L.Trim.EndsWith('= <') then",
+    'un documento de lineas abierto sin su juez': "  Doc := TStyleDoc.Create(APath);",
+    'el recorrido del parser con sus lineas': "  L := Parser.SourceLine - 1;",
     'un literal de form leido a mano': "  N := V.Trim(['''']);",
     'la gramatica de un numero de un form': r"  if TRegEx.IsMatch(V, '^-?\d+(?:\.\d+)?$') then",
     'una linea de propiedad de un form compuesta a mano': "  T := '  Size.Width = ' + FlotanteFmx(320);",

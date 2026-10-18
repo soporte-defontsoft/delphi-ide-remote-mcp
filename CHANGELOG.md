@@ -289,6 +289,34 @@ the MCP `initialize` response (`serverInfo.version`).
   stores. A published float property (a TDate included) still takes no
   suffix - the reader reads it with `ReadFloat`, which does not take them -
   and the refusal says so.
+- **A form is read by its lines only where the IDE's parser reads it the
+  same way.** The designer and the style tools read and edit a form line by
+  line, in the shape the IDE writes it; the IDE's parser reads tokens. A
+  form the IDE loads with the `>` of a collection on a line of its own (or
+  `end >`, an item and its property on one line, two properties on a line)
+  was read with other lines: `lint` said CLEAN,
+  `tree` lost the component's `end`, and `set Left=20` wrote a second
+  `Left` above the collection and answered ok - the old one, the last, is
+  the one the IDE keeps. The parser is asked now, with the line of each
+  thing it reads: `tree`, `get`, `layout`, `check-binding`, `preview`,
+  `set`, `insert`, `delete` and `delphi_styles` refuse such a file naming
+  the line (`DSGN-160`), the `lint` of a form - also the one after
+  `delphi_edit` - says it (`DSGN-161`) and the styles `lint` lists it
+  (`notInTheIdeShape`); `to-binary` and then `to-text` give it the IDE's
+  shape. What comes after the `end` of the root object - an extra `end`
+  that closed it early, something pasted after it - the parser does not
+  read and the IDE drops when it saves: the `lint` says so (`DSGN-162`),
+  and the root is read as the IDE reads it. A list inside a list, as the
+  IDE writes it, is now read to its last `)`, not to the inner one's.
+- **A property written twice is set where it counts.** The IDE writes one
+  twice when a class defines it with `DefineProperties` as well as
+  publishing it (`ImageIndex` of an FMX action, `Left` and `Top` of an FMX
+  form - 14 forms of the Samples); its reader reads both in order and keeps
+  the last. `delphi_designer set` changed the first and answered ok with no
+  effect; `set` and `delete` now change every one, and the value read
+  (`previous`) is the last. The styles `lint` no longer counts an empty
+  `StyleLookup` - the class's default style, which FMX picks without a
+  name - as a lookup without a style.
 
 ### Added
 

@@ -65,6 +65,20 @@ type
     { A document from a TEXT with no file behind it (the DUnitX tests of
       Lsp.DesignerEdit): it reads like any other; Guarda has nowhere to go. }
     class function DeTexto(const AText: string): TStyleDoc;
+    { EL abridor de quien lee o escribe un fichero por sus lineas: el
+      documento de APath, como Create, SOLO si el parser del IDE lee sus
+      lineas como las lee este (FormaDistinta); si no, ADoc nil y la
+      negativa DSGN-160. Lanza, como Create, si no se puede leer. Lo usan
+      delphi_designer (tree, get, layout, set, insert, delete) y
+      delphi_styles (view, get, set, clone, delete). }
+    class function Lee(const APath: string; out ADoc: TStyleDoc): string;
+    { '' si EL parser del IDE lee las lineas leidas (Leidas) como las lee
+      este documento (Lsp.DesignerBin.LineasDeForm); si no, la negativa
+      DSGN-160 con la primera linea en que no. Un set sobre un form con el
+      '>' de una coleccion en su propia linea, que el IDE carga, escribia
+      un Left nuevo en vez de cambiar el que habia (3b del censo de
+      jueces, 1.20.2). }
+    function FormaDistinta: string;
     destructor Destroy; override;
     property Root: TStyleObj read FRoot;
     property Lines: TArray<string> read FLines;
@@ -103,7 +117,10 @@ type
     procedure CloneStyle(ASrc: TStyleObj; const ANewName: string);
     { The lines AProp's value takes at AObj's own level (0-based, AIni..AFin:
       a list, a binary block, a collection or a string split with '+' run
-      over several); False when absent. What SetProp and DeleteProp replace. }
+      over several); False when absent. Si esta mas de una vez (una clase
+      con DefineProperties del mismo nombre, ImageIndex de una accion FMX),
+      la ULTIMA, la que guarda el lector del IDE; SetProp y DeleteProp
+      cambian todas (RangosDePropiedad). }
     function PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
     { El VALOR de AProp en el nivel propio de AObj, entero (una cadena partida,
       sus trozos en uno: ValorEnteroDe; de una lista o un bloque, su primera
@@ -271,6 +288,25 @@ begin
   Result.FLines := SplitToLines(AText);
   Result.FLeidas := Copy(Result.FLines);
   Result.Parse;
+end;
+
+class function TStyleDoc.Lee(const APath: string; out ADoc: TStyleDoc): string;
+begin
+  ADoc := nil;
+  ADoc := TStyleDoc.Create(APath);
+  try
+    Result := ADoc.FormaDistinta;
+  except
+    FreeAndNil(ADoc);
+    raise;
+  end;
+  if Result <> '' then
+    FreeAndNil(ADoc);
+end;
+
+function TStyleDoc.FormaDistinta: string;
+begin
+  Result := FormaDistintaDeLineas(FLeidas, TPath.GetFileName(FPath));
 end;
 
 destructor TStyleDoc.Destroy;
@@ -452,14 +488,23 @@ end;
   ocupan varias, y lo de dentro de un valor no es del nivel propio (el
   'Caption =' de un item pasaba por el del objeto, y un set dejaba debajo el
   resto de un valor partido: delphi_designer set, 1.17.0). False si no esta. }
-function RangoDePropiedad(AObj: TStyleObj; const AForm: TArray<TLineaForm>;
-  const AProp: string; out AIni, AFin: Integer): Boolean;
+type
+  TRangoDeLineas = record
+    Ini, Fin: Integer;
+  end;
+
+{ ...cada vez que esta: dos, cuando su clase la define con DefineProperties
+  ademas de publicarla - ImageIndex de una accion FMX (FMX.ActnList), Left y
+  Top de un form FMX: 14 forms de los Samples, medido el 18-oct-2026 - o
+  cuando se escribio a mano. El lector del IDE las lee todas en orden y se
+  queda con la ULTIMA: set cambiaba la primera y contestaba ok sin efecto. }
+function RangosDePropiedad(AObj: TStyleObj; const AForm: TArray<TLineaForm>;
+  const AProp: string): TArray<TRangoDeLineas>;
 var
   I, Stop: Integer;
+  R: TRangoDeLineas;
 begin
-  Result := False;
-  AIni := -1;
-  AFin := -1;
+  Result := [];
   Stop := AObj.EndLine - 1;
   if AObj.Children.Count > 0 then
     Stop := AObj.Children[0].StartLine - 1;
@@ -467,10 +512,27 @@ begin
     if (AForm[I].Clase = clfPropiedad) and (AForm[I].Coleccion = 0) and
        SameText(AForm[I].Prop, AProp) then
     begin
-      AIni := I;
-      AFin := AForm[I].Fin;
-      Exit(True);
+      R.Ini := I;
+      R.Fin := AForm[I].Fin;
+      Result := Result + [R];
     end;
+end;
+
+// la que cuenta, si esta mas de una vez: la ultima, la que guarda el lector
+function RangoDePropiedad(AObj: TStyleObj; const AForm: TArray<TLineaForm>;
+  const AProp: string; out AIni, AFin: Integer): Boolean;
+var
+  Rangos: TArray<TRangoDeLineas>;
+begin
+  Rangos := RangosDePropiedad(AObj, AForm, AProp);
+  Result := Length(Rangos) > 0;
+  AIni := -1;
+  AFin := -1;
+  if Result then
+  begin
+    AIni := Rangos[High(Rangos)].Ini;
+    AFin := Rangos[High(Rangos)].Fin;
+  end;
 end;
 
 function TStyleDoc.SetProp(AObj: TStyleObj; const AProp, AValue: string; out AWasThere: Boolean): string;
@@ -481,15 +543,17 @@ end;
 function TStyleDoc.SetPropTrozos(AObj: TStyleObj; const AProp: string; const ATrozos: TArray<string>;
   out AWasThere: Boolean): string;
 var
-  Ini, Fin, InsertAt: Integer;
+  Ini, Fin, InsertAt, K: Integer;
   Sangria: string;
   Nuevas: TArray<string>;
   L: TList<string>;
+  Rangos: TArray<TRangoDeLineas>;
 begin
-  AWasThere := RangoDePropiedad(AObj, Clasificadas, AProp, Ini, Fin);
+  Rangos := RangosDePropiedad(AObj, Clasificadas, AProp);
+  AWasThere := Length(Rangos) > 0;
   // la sangria de la casa de esa linea (Lsp.Patch); la del nivel si es nueva
   if AWasThere then
-    Sangria := LeadingWhite(FLines[Ini])
+    Sangria := LeadingWhite(FLines[Rangos[High(Rangos)].Ini])
   else
     Sangria := SangriaDeNivel(AObj.Depth + 1);
   Nuevas := LineasDePropiedad(Sangria, AProp, ATrozos);
@@ -497,11 +561,14 @@ begin
   try
     L.AddRange(FLines);
     if AWasThere then
-    begin
-      // el valor entero fuera, el nuevo con sus lineas
-      L.DeleteRange(Ini, Fin - Ini + 1);
-      L.InsertRange(Ini, Nuevas);
-    end
+      // el valor entero fuera, el nuevo con sus lineas; en CADA una si esta
+      // mas de una vez (el lector se queda con la ultima, y el IDE las
+      // guarda iguales), de abajo arriba: las de arriba no se mueven
+      for K := High(Rangos) downto 0 do
+      begin
+        L.DeleteRange(Rangos[K].Ini, Rangos[K].Fin - Rangos[K].Ini + 1);
+        L.InsertRange(Rangos[K].Ini, Nuevas);
+      end
     else
     begin
       // detras de su StyleName si lo tiene (el SUYO: se buscaba en todo el
@@ -520,16 +587,20 @@ end;
 
 function TStyleDoc.DeleteProp(AObj: TStyleObj; const AProp: string): Boolean;
 var
-  Ini, Fin: Integer;
+  K: Integer;
   L: TList<string>;
+  Rangos: TArray<TRangoDeLineas>;
 begin
-  Result := RangoDePropiedad(AObj, Clasificadas, AProp, Ini, Fin);
+  // todas las veces que esta (RangosDePropiedad), de abajo arriba
+  Rangos := RangosDePropiedad(AObj, Clasificadas, AProp);
+  Result := Length(Rangos) > 0;
   if not Result then
     Exit;
   L := TList<string>.Create;
   try
     L.AddRange(FLines);
-    L.DeleteRange(Ini, Fin - Ini + 1);
+    for K := High(Rangos) downto 0 do
+      L.DeleteRange(Rangos[K].Ini, Rangos[K].Fin - Rangos[K].Ini + 1);
     FLines := L.ToArray;
   finally
     L.Free;
@@ -661,7 +732,12 @@ var
   Linea, LineaAntes: Integer;
   Cita, CitaAntes, Error, Antes: string;
 begin
-  Result := '';
+  // lo LEIDO, por lineas como lo lee el parser del IDE: si no, lo que se va
+  // a escribir se compuso sobre otras lineas (DSGN-160). La segunda barrera
+  // de quien abre con Lee, y la de quien no
+  Result := FormaDistinta;
+  if Result <> '' then
+    Exit;
   Error := ParserDeForm(ATexto, FEnc, Linea, Cita);
   if Error <> '' then
   begin

@@ -151,6 +151,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="..\Server\Lsp.DesignerForma.pas"/>
+        <DCCReference Include="..\Server\Lsp.Pascal.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

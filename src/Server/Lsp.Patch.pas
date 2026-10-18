@@ -5072,6 +5072,16 @@ begin
   Result := Default(TLintDeForm);
   // las lineas como delphi_read: los avisos citan su numero (septima revision)
   Lineas := LineasDelTexto(ATexto);
+  // EL parser del IDE las lee como LineasDeForm, que es como las leen los
+  // jueces de abajo? Si no (DSGN-161), lo que dirian saldria de otras lineas:
+  // eso solo (3b del censo de jueces, 1.20.2). Un binario ya tiene la forma
+  // del IDE, la de su conversion
+  if AJuzga then
+  begin
+    Result.Parser := AvisoDeFormaDeLineas(Lineas);
+    if Result.Parser <> '' then
+      Exit;
+  end;
   // ...y su raiz, por la cadena de ancestros de su .pas (H8 de la 1.19.2)
   Result.Propiedades := DesignerMetaLint(EsDesignerFmx(ADfm), Lineas, Result.Notas,
     Result.Falta, Result.SinJuez, AEsperaMs, UnidadDeDesigner(ADfm));

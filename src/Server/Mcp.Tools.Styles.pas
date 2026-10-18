@@ -112,7 +112,10 @@ var
   E: TJSONObject;
   N: Integer;
 begin
-  Doc := TStyleDoc.Create(APath);
+  // EL abridor: por lineas como las lee el parser del IDE, o DSGN-160
+  Result := TStyleDoc.Lee(APath, Doc);
+  if Result <> '' then
+    Exit;
   try
     Ret := TJSONObject.Create;
     try
@@ -157,7 +160,9 @@ var
   O: TStyleObj;
   Err: string;
 begin
-  Doc := TStyleDoc.Create(APath);
+  Result := TStyleDoc.Lee(APath, Doc);
+  if Result <> '' then
+    Exit;
   try
     O := Doc.Resolve(AStyle, AChild, Err);
     if O = nil then
@@ -236,7 +241,9 @@ begin
   // la 1.17.0)
   if (not ADelete) and not SameText(AProp.Trim, 'StyleName') and not ValidStyleValue(AValue) then
     Exit(MsgFmt(SR_STYLES_VALUE_GRAMMAR_FMT, [AValue.Trim]));
-  Doc := TStyleDoc.Create(APath);
+  Result := TStyleDoc.Lee(APath, Doc);
+  if Result <> '' then
+    Exit;
   try
     O := Doc.Resolve(AStyle, AChild, Err);
     if O = nil then
@@ -330,7 +337,9 @@ begin
   Result := NombreDeEstiloQueNoVale(Nuevo);
   if Result <> '' then
     Exit;
-  Doc := TStyleDoc.Create(APath);
+  Result := TStyleDoc.Lee(APath, Doc);
+  if Result <> '' then
+    Exit;
   try
     // por EL lector de un estilo por su StyleName (Resolve): clone y delete
     // tenian su propio "no hay" (STYLE-027), gemelo del de get y set
@@ -364,7 +373,9 @@ var
   Src: TStyleObj;
   First, Last, N: Integer;
 begin
-  Doc := TStyleDoc.Create(APath);
+  Result := TStyleDoc.Lee(APath, Doc);
+  if Result <> '' then
+    Exit;
   try
     var Err: string;
     Src := Doc.Resolve(AStyle, '', Err);
@@ -395,9 +406,9 @@ var
   Names, Defaults: TDictionary<string, string>;
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas: TJSONArray;
   Ignorado: TArray<string>;
-  NIgnorados: Integer;
+  NIgnorados, NFormas: Integer;
   M: TMatch;
   Lines: TArray<string>;
   I: Integer;
@@ -440,13 +451,27 @@ begin
   SinNombre := TJSONArray.Create;
   ComoEstilo := TJSONArray.Create;
   PorFmx := TJSONArray.Create;
+  Formas := TJSONArray.Create;
   NIgnorados := 0;
+  NFormas := 0;
   try
     // 1) style names per file + duplicates
     for F in Files do
     begin
       Doc := TStyleDoc.Create(F);
       try
+        // uno que el parser del IDE no lee por lineas como este lector: sus
+        // nombres saldrian de otras lineas (DSGN-160). Se dice y no se cuenta
+        var Forma := Doc.FormaDistinta;
+        if Forma <> '' then
+        begin
+          Issue := TJSONObject.Create;
+          Issue.AddPair('file', TPath.GetFileName(F));
+          Issue.AddPair('reason', Forma);
+          Formas.AddElement(Issue);
+          Inc(NFormas);
+          Continue;
+        end;
         Seen.Clear;
         for O in Doc.Styles do
         begin
@@ -540,6 +565,13 @@ begin
             if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then
               Continue;
           end;
+          // vacio: el estilo por defecto de su clase, sin buscar ninguno por
+          // nombre (FMX.Controls, TStyledControl.GetStyleObject: con
+          // StyleLookup vacio va a DefaultStyleLookup). Salia como un lookup
+          // sin estilo y clean=false (StyleLookup = '' de un TTabItem que
+          // escribe el IDE; frame de Galatea, 18-oct-2026)
+          if Lookup = '' then
+            Continue;
           Inc(Used);
           N := ClaveDeEstilo(Lookup);
           if Names.ContainsKey(N) then
@@ -648,6 +680,11 @@ begin
     Ret.AddPair('ignoredByFmx', PorFmx);
     if NIgnorados > 0 then
       Ret.AddPair('ignoredByFmxNote', MsgFmt(SN_STYLES_FMX_IGNORA_FMT, [NIgnorados]));
+    // los que no tienen la forma del IDE: salen solo si los hay
+    if NFormas > 0 then
+      Ret.AddPair('notInTheIdeShape', Formas)
+    else
+      Formas.Free;
     // una pista, no un error seguro: sale solo si hay, y no cambia clean
     if ComoEstilo.Count > 0 then
     begin
@@ -658,7 +695,8 @@ begin
       ComoEstilo.Free;
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
-      (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0)));
+      (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0) and
+      (NFormas = 0)));
     if Length(PlatformDefaultStyleNames) = 0 then
       Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
     else

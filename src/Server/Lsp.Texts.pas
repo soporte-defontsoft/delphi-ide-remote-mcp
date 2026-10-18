@@ -10618,6 +10618,42 @@ const
     'the IDE''s form parser would not read %s: "%s" (line %d of the ' +
     'result: %s).';
 
+  // 3b del censo de jueces (1.20.2): un form que EL parser del IDE lee, pero
+  // no por lineas como lo escribe el IDE, que es como lo leen los lectores
+  // de la casa (Lsp.DesignerBin.LineaQueElParserLeeDistinta). La negativa de
+  // quien lo lee o lo escribe por lineas, y el aviso del lint
+  SR_DSGN_FORMA_DISTINTA_FMT =
+    '[DSGN-160 INVALID_PARAM] %s, line %d: %s - the IDE''s form parser ' +
+    'reads this file, but not line by line in the shape the IDE writes, ' +
+    'which is how this server reads and edits a form or a style: one ' +
+    'object header, property, collection item or end per line; a value on ' +
+    'more lines only when it is a list, a binary block or a string in ' +
+    'pieces joined by +; a collection closed by end> on the line of its ' +
+    'last end. It would take the wrong lines, so the file was not read or ' +
+    'written. Write that line as the IDE does (delphi_edit); for a .dfm, ' +
+    'delphi_designer to-binary and then to-text rewrite it whole in that ' +
+    'shape, each with a backup.';
+  SN_DSGN_FORMA_DISTINTA_FMT =
+    '[DSGN-161] *** Line %d: %s - the IDE''s form parser reads this file ' +
+    '(it loads), but not in the shape the IDE writes: one object header, ' +
+    'property, collection item or end per line; a value on more lines only ' +
+    'when it is a list, a binary block or a string in pieces joined by +; ' +
+    'a collection closed by end> on the line of its last end. ' +
+    'delphi_designer and delphi_styles read and edit a form line by line in ' +
+    'that shape and refuse this one (DSGN-160), and the rest of this lint, ' +
+    'which reads it the same way, waits for it too. Write that line as the ' +
+    'IDE does; for a .dfm, delphi_designer to-binary and then to-text ' +
+    'rewrite it whole in that shape.';
+  // ...y lo que hay detras del end de la raiz, que no lee nadie
+  SN_DSGN_DETRAS_DE_LA_RAIZ_FMT =
+    '[DSGN-162] *** Line %d: %s - the IDE''s form parser stops at the end ' +
+    'of the root object, above this line: from here on it reads nothing, ' +
+    'and the IDE drops it when it saves the form. Usually an extra end ' +
+    'closed the root early (what follows was meant to be inside it) or ' +
+    'something was pasted after it. delphi_designer reads the root as the ' +
+    'IDE does; the rest of this lint waits until those lines are fixed or ' +
+    'removed (delphi_edit).';
+
   SR_DSGN_PREVIEW_PARSER_FMT =
     '[DSGN-126 INVALID_PARAM] Nothing was rendered: the IDE''s form parser ' +
     'does not read %s: "%s" (line %d: %s - where it NOTICED the problem, ' +

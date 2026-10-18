@@ -455,14 +455,20 @@ begin
   var MotivoBin := TextoDeDesigner(ADfm, DfmTxt, Enc);
   if MotivoBin <> '' then
     Exit(MsgEnvuelve(SR_RECHAZADO_FMT, MotivoBin));
+  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto)
+  var Lineas := SplitToLines(DfmTxt);
+  // uno que el parser del IDE no lee por lineas como LineasDeForm: el informe
+  // saldria de otras lineas (DSGN-160, 3b del censo de jueces)
+  Result := FormaDistintaDeLineas(Lineas, ExtractFileName(ADfm));
+  if Result <> '' then
+    Exit;
   if Pas = '' then
     Pas := UnidadDeDesigner(ADfm);
   if not TFile.Exists(Pas) then
     Exit(MsgFmt(SR_DESIGNER_NO_UNIT_FMT, [Pas]));
-  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto); la
-  // unit, entera: sus clases las lee EL lector (LeeFuentePascal, sobre su
+  // la unit, entera: sus clases las lee EL lector (LeeFuentePascal, sobre su
   // codigo: un bloque comentado no declara componentes)
-  Result := BindingReport(SplitToLines(DfmTxt), PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm));
+  Result := BindingReport(Lineas, PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm));
 end;
 
 function DesignerBindingWarnings(const ADfm: string;

@@ -25,7 +25,8 @@ uses
   FMX.Styles,
   FMX.Consts, // SCannotLoadStyleFromFile: la negativa de TStyleStreaming.LoadFromFile
   FMX.Controls.Win, // links the platform style resources (win10style...)
-  Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas'; // DesignerAFlujo, como los renderizadores
+  Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas', // DesignerAFlujo, como los renderizadores
+  Lsp.Pascal in '..\Server\Lsp.Pascal.pas'; // la usa Lsp.DesignerForma (GrupoDeClasesDe), como en los renderizadores
 
 { LA lectura del conversor: la entrada que el servidor ya paso por su puerta,
   abierta como la abre TStyleStreaming.LoadFromFile. }

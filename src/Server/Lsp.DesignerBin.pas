@@ -219,6 +219,34 @@ function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;
 { El aviso del lint con eso (DSGN-123); '' si el parser lo lee. }
 function AvisoDelParserDeForm(const ATexto, AEnc: string): string;
 
+{ La linea (1-based) en la que EL parser del IDE lee las lineas de un
+  designer de texto de otra manera que LineasDeForm, que lee la forma en que
+  las escribe el IDE (ObjectBinaryToText): un objeto, una propiedad, un item
+  o un end que no estan solos en su linea, un valor que acaba en otra linea
+  que la que cree el lector, una coleccion que no cierra con 'end>'. Hasta
+  el end de la raiz, que es donde el parser se para y donde se para el
+  lector (TStyleDoc): lo de detras no lo lee ninguno - ADetras dice su
+  primera linea con algo, 0 si no hay, y lo avisa el lint: el IDE lo quita
+  al guardar -. 0 si las lee igual, o si el parser no las lee (eso lo dice
+  ParserDeForm, con los bytes del fichero). El juez es el recorrido de
+  ObjectTextToBinary
+  (System.Classes: ConvertObject, ConvertProperty, ConvertValue) con el
+  TParser del IDE y su SourceLine, que dice en que linea esta cada cosa; lo
+  que ve LineasDeForm tiene que ser eso, linea a linea. Sin el, set escribia
+  un Left = 20 nuevo en vez de cambiar el que habia en un form con el '>' de
+  una coleccion en su propia linea, que el IDE carga, y contestaba ok (3b del
+  censo de jueces, medido en vivo el 18-oct-2026); la puerta del preview
+  (Lsp.FormRender) juzga los literales del form por esas mismas lineas. }
+function LineaQueElParserLeeDistinta(const ALineas: TArray<string>; out ADetras: Integer): Integer;
+{ Con eso, lo que dice de un fichero AFichero quien lo lee o lo escribe por
+  lineas: la negativa DSGN-160, o '' si el parser lo lee como LineasDeForm.
+  La preguntan TStyleDoc (Lee y JuicioDelParser), el preview y
+  check-binding. }
+function FormaDistintaDeLineas(const ALineas: TArray<string>; const AFichero: string): string;
+{ ...y el aviso del lint: DSGN-161 si no las lee igual, DSGN-162 si hay algo
+  detras del end de la raiz; '' si nada. }
+function AvisoDeFormaDeLineas(const ALineas: TArray<string>): string;
+
 { LA sintaxis de una lista de propiedades - 'Prop=valor;Prop2=valor' (props de
   insert y set) o 'Comp.Prop=valor;...' (state de preview) -: los trozos
   separados por ';' FUERA de un literal entre comillas ('a;b' es un valor, y
@@ -273,6 +301,15 @@ begin
   Result := EncodeText(ATexto, KindParaElParser(AK), False);
 end;
 
+// la linea ALinea (1-based) de ALineas como la nombra una respuesta: su texto,
+// sin blancos alrededor y hasta 120 caracteres. La de un error del parser y
+// la de una forma que no es la del IDE (la cita numerada 'N|texto' es otra
+// cosa: Lsp.Mascara.CitaDeLinea)
+function ExtractoDeLinea(const ALineas: TArray<string>; ALinea: Integer): string;
+begin
+  Result := Copy(ALineas[ALinea - 1].Trim, 1, 120);
+end;
+
 function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;
   out ACita: string): string;
 var
@@ -312,7 +349,7 @@ begin
   for var I := ALinea - 1 to High(Lineas) do
     if Lineas[I].Trim <> '' then
     begin
-      ACita := Copy(Lineas[ALinea - 1].Trim, 1, 120);
+      ACita := ExtractoDeLinea(Lineas, ALinea);
       Break;
     end;
 end;
@@ -325,6 +362,336 @@ begin
   Result := ParserDeForm(ATexto, AEnc, Linea, Cita);
   if Result <> '' then
     Result := MsgFmt(SN_DSGN_PARSER_FMT, [Result, Linea, Cita]);
+end;
+
+type
+  // el juez y el lector ya no ven lo mismo: se para en la primera linea
+  EFormaDistinta = class(Exception);
+
+function LineaQueElParserLeeDistinta(const ALineas: TArray<string>; out ADetras: Integer): Integer;
+var
+  P: TParser;
+  Flujo: TBytesStream;
+  Hex: TMemoryStream;
+  Juez, Lector: TArray<TLineaForm>;
+  Tomada: TArray<Boolean>;
+  Mala, I, FinRaiz: Integer;
+
+  // la linea (0-based) del token de ahora
+  function Aqui: Integer;
+  begin
+    Result := P.SourceLine - 1;
+  end;
+
+  procedure Distinta(L: Integer);
+  begin
+    Mala := L;
+    raise EFormaDistinta.Create('');
+  end;
+
+  // la linea L es de UNA cosa, como la escribe el IDE: si ya era de otra, el
+  // lector no la lee como el parser
+  procedure Toma(L: Integer; AClase: TClaseLineaForm; ACol: Integer);
+  begin
+    if (L < 0) or (L > High(Juez)) or Tomada[L] then
+      Distinta(L);
+    Tomada[L] := True;
+    Juez[L].Clase := AClase;
+    Juez[L].Coleccion := ACol;
+  end;
+
+  // un token que va en la linea L: la cabecera de un objeto o de un item, el
+  // nombre de una propiedad y su '='
+  procedure EnLaLinea(L: Integer);
+  begin
+    if Aqui <> L then
+      Distinta(Aqui);
+  end;
+
+  // el [n] detras de un objeto o de un item (ConvertOrderModifier)
+  procedure Orden(L: Integer);
+  begin
+    if P.Token <> '[' then
+      Exit;
+    EnLaLinea(L);
+    P.NextToken;
+    P.CheckToken(toInteger);
+    EnLaLinea(L);
+    P.NextToken;
+    P.CheckToken(']');
+    EnLaLinea(L);
+    P.NextToken;
+  end;
+
+  procedure Propiedad(ACol: Integer; AMarca: Boolean); forward;
+
+  { El valor (ConvertValue) de la propiedad de la linea L, dentro de ACol
+    colecciones: la linea de su ultimo token, con el parser en el siguiente.
+    Con AMarca, el de una propiedad, las lineas de debajo que ocupa son
+    suyas; las de un valor de dentro de una lista son de la lista }
+  function Valor(L, ACol: Integer; AMarca: Boolean): Integer;
+  var
+    Ultimo, K: Integer;
+  begin
+    if CharInSet(P.Token, [System.Classes.toString, toWString]) then
+    begin
+      // una cadena, con sus trozos unidos por '+' (CombineString)
+      Ultimo := Aqui;
+      while P.NextToken = '+' do
+      begin
+        P.NextToken;
+        if not CharInSet(P.Token, [System.Classes.toString, toWString]) then
+          P.CheckToken(System.Classes.toString);
+        Ultimo := Aqui;
+      end;
+    end
+    else
+    begin
+      case P.Token of
+        toSymbol:
+          P.TokenComponentIdent; // Frame1.Edit1: los puntos son del valor
+        toInteger, toFloat:
+          ;
+        '[':
+          while P.NextToken <> ']' do
+            if P.Token = toEOF then
+              P.CheckToken(']');
+        '(':
+          begin
+            P.NextToken;
+            while P.Token <> ')' do
+              Valor(L, ACol, False);
+          end;
+        '{':
+          begin
+            Hex.Clear;
+            P.HexToBinary(Hex); // y deja el parser en su '}'
+          end;
+        '<':
+          if not AMarca then
+          begin
+            // una coleccion dentro de una lista: tambien la escribe el IDE
+            // (_Headers de un TTeeGrid, por su DefineProperties: un frame de
+            // Galatea, medido el 18-oct-2026), y sus lineas son de la lista,
+            // como para el lector: se recorre sin tomar ninguna
+            P.NextToken;
+            while P.Token <> '>' do
+            begin
+              P.CheckTokenSymbol('item');
+              if P.NextToken = '[' then
+              begin
+                P.NextToken;
+                P.CheckToken(toInteger);
+                P.NextToken;
+                P.CheckToken(']');
+                P.NextToken;
+              end;
+              while not P.TokenSymbolIs('end') do
+                Propiedad(ACol + 1, False);
+              P.NextToken;
+            end;
+          end
+          else
+          begin
+            // una coleccion: cada item y su end en su linea, con sus
+            // propiedades
+            Ultimo := L; // sin items, '<>': en la linea de su propiedad
+            P.NextToken;
+            while P.Token <> '>' do
+            begin
+              Ultimo := Aqui;
+              P.CheckTokenSymbol('item');
+              Toma(Ultimo, clfItem, ACol + 1);
+              P.NextToken;
+              Orden(Ultimo);
+              while not P.TokenSymbolIs('end') do
+                Propiedad(ACol + 1, True);
+              Ultimo := Aqui;
+              Toma(Ultimo, clfFinItem, ACol + 1);
+              P.NextToken;
+            end;
+            // el IDE la cierra en la linea de su ultimo end: 'end>'
+            EnLaLinea(Ultimo);
+            P.NextToken;
+            Exit(Ultimo);
+          end;
+      else
+        P.CheckToken(toSymbol); // lo que el parser no toma por un valor
+      end;
+      Ultimo := Aqui;
+      P.NextToken;
+    end;
+    if AMarca then
+      for K := L + 1 to Ultimo do
+        Toma(K, clfValor, ACol);
+    Result := Ultimo;
+  end;
+
+  // una propiedad (ConvertProperty): su nombre, con sus puntos, y su '=' en
+  // su linea. Dos veces en su objeto es la forma del IDE tambien: la escribe
+  // una clase con DefineProperties del mismo nombre que una publicada
+  // (ImageIndex de una accion FMX, FMX.ActnList; Left y Top de un form FMX:
+  // 14 forms de los Samples, medido el 18-oct-2026). Lo que hace set con
+  // ellas es de su escritor (TStyleDoc.SetPropTrozos). Sin AMarca, la de un
+  // item de una coleccion de dentro de una lista: no toma lineas
+  procedure Propiedad(ACol: Integer; AMarca: Boolean);
+  var
+    L: Integer;
+    Nombre: string;
+  begin
+    L := Aqui;
+    P.CheckToken(toSymbol);
+    Nombre := P.TokenString;
+    P.NextToken;
+    while P.Token = '.' do
+    begin
+      if AMarca then
+        EnLaLinea(L);
+      P.NextToken;
+      P.CheckToken(toSymbol);
+      if AMarca then
+        EnLaLinea(L);
+      Nombre := Nombre + '.' + P.TokenString;
+      P.NextToken;
+    end;
+    P.CheckToken('=');
+    if AMarca then
+      EnLaLinea(L);
+    P.NextToken;
+    if not AMarca then
+    begin
+      Valor(L, ACol, False);
+      Exit;
+    end;
+    Toma(L, clfPropiedad, ACol);
+    Juez[L].Prop := Nombre;
+    Juez[L].Fin := Valor(L, ACol, True);
+  end;
+
+  // un objeto (ConvertObject y ConvertHeader): su cabecera en su linea, sus
+  // propiedades, sus hijos y su end
+  procedure Objeto;
+  var
+    L: Integer;
+  begin
+    L := Aqui;
+    if not P.TokenSymbolIs('INHERITED') and not P.TokenSymbolIs('INLINE') then
+      P.CheckTokenSymbol('OBJECT');
+    Toma(L, clfObjeto, 0);
+    P.NextToken;
+    P.CheckToken(toSymbol);
+    EnLaLinea(L);
+    Juez[L].ClaseObj := P.TokenString;
+    if P.NextToken = ':' then
+    begin
+      EnLaLinea(L);
+      P.NextToken;
+      P.CheckToken(toSymbol);
+      EnLaLinea(L);
+      Juez[L].Nombre := Juez[L].ClaseObj;
+      Juez[L].ClaseObj := P.TokenString;
+      P.NextToken;
+    end;
+    Orden(L);
+    while not P.TokenSymbolIs('END') and not P.TokenSymbolIs('OBJECT') and
+      not P.TokenSymbolIs('INHERITED') and not P.TokenSymbolIs('INLINE') do
+      Propiedad(0, True);
+    while not P.TokenSymbolIs('END') do
+      Objeto;
+    // el de la raiz, el ultimo: ahi se para el parser (ConvertObject)
+    FinRaiz := Aqui;
+    Toma(FinRaiz, clfFin, 0);
+    P.NextToken;
+  end;
+
+begin
+  Result := 0;
+  ADetras := 0;
+  FinRaiz := -1;
+  SetLength(Juez, Length(ALineas));
+  SetLength(Tomada, Length(ALineas));
+  for I := 0 to High(Juez) do
+  begin
+    Juez[I] := Default(TLineaForm);
+    Juez[I].Fin := I;
+  end;
+  Mala := 0;
+  P := nil;
+  Flujo := nil;
+  Hex := TMemoryStream.Create;
+  try
+    try
+      // las lineas como las cuenta TParser, por LF; en UTF-8 con BOM, que
+      // lee tal cual
+      Flujo := TBytesStream.Create(TextoParaElParser(string.Join(#10, ALineas), ekUtf8Bom));
+      P := TParser.Create(Flujo, TFormatSettings.Invariant);
+      Objeto;
+    except
+      on EFormaDistinta do
+      begin
+        if Mala > High(ALineas) then
+          Mala := High(ALineas);
+        Exit(Mala + 1);
+      end;
+      // lo que el parser no lee lo dice ParserDeForm, con los bytes del
+      // fichero
+      on Exception do
+        Exit(0);
+    end;
+  finally
+    P.Free;
+    Flujo.Free;
+    Hex.Free;
+  end;
+  // lo que vio el juez, linea a linea, contra lo que lee LineasDeForm: que es
+  // cada linea (de una en blanco no cuenta en que coleccion esta), y la
+  // primera que no es lo mismo es la que se nombra - un 'end >' antes que la
+  // coleccion que no cierra -... hasta el end de la raiz: lo de detras no lo
+  // lee el parser, y el lector tampoco (TStyleDoc.Parse)
+  Lector := LineasDeForm(ALineas);
+  for I := 0 to FinRaiz do
+    if (Juez[I].Clase <> Lector[I].Clase) or
+       ((Juez[I].Clase <> clfOtra) and (Juez[I].Coleccion <> Lector[I].Coleccion)) then
+      Exit(I + 1);
+  // ...y de las que si, lo que dicen: el nombre de una propiedad y hasta
+  // donde llega su valor, el nombre y la clase de un objeto
+  for I := 0 to FinRaiz do
+    if ((Juez[I].Clase = clfPropiedad) and
+        ((Juez[I].Prop <> Lector[I].Prop) or (Juez[I].Fin <> Lector[I].Fin))) or
+       ((Juez[I].Clase = clfObjeto) and
+        ((Juez[I].Nombre <> Lector[I].Nombre) or (Juez[I].ClaseObj <> Lector[I].ClaseObj))) then
+      Exit(I + 1);
+  // ...y lo de detras, que no lee nadie: un end de mas que cerro la raiz
+  // antes, o algo pegado detras (en vivo, un frame de Hermes con un end de
+  // mas al final; test_designer, dos raices pegadas: manda la primera)
+  for I := FinRaiz + 1 to High(ALineas) do
+    if ALineas[I].Trim <> '' then
+    begin
+      ADetras := I + 1;
+      Break;
+    end;
+end;
+
+function FormaDistintaDeLineas(const ALineas: TArray<string>; const AFichero: string): string;
+var
+  Detras: Integer;
+begin
+  Result := '';
+  var N := LineaQueElParserLeeDistinta(ALineas, Detras);
+  if N > 0 then
+    Result := MsgFmt(SR_DSGN_FORMA_DISTINTA_FMT, [AFichero, N, ExtractoDeLinea(ALineas, N)]);
+end;
+
+function AvisoDeFormaDeLineas(const ALineas: TArray<string>): string;
+var
+  Detras: Integer;
+begin
+  Result := '';
+  var N := LineaQueElParserLeeDistinta(ALineas, Detras);
+  if N > 0 then
+    Result := MsgFmt(SN_DSGN_FORMA_DISTINTA_FMT, [N, ExtractoDeLinea(ALineas, N)])
+  else if Detras > 0 then
+    Result := MsgFmt(SN_DSGN_DETRAS_DE_LA_RAIZ_FMT, [Detras, ExtractoDeLinea(ALineas, Detras)]);
 end;
 
 function TrozosDeEstado(const AEspec: string; out ATrozos: TArray<string>): string;
@@ -733,21 +1100,45 @@ end;
 function FinDeValor(const ALineas: TArray<string>; AIni: Integer; const AValor: string): Integer;
 var
   T, Cierre: string;
-  Tope: Integer;
+  Tope, Nivel, K: Integer;
 begin
   Result := AIni;
   Tope := High(ALineas);
   if (AValor = '(') or ((AValor <> '') and (AValor[1] = '{') and not AValor.EndsWith('}')) then
   begin
     Cierre := IfThen(AValor = '(', ')', '}');
+    Nivel := 1;
     while Result < Tope do
     begin
       // uno sin cerrar no se lleva el end de su objeto
       if SameText(ALineas[Result + 1].Trim, 'end') then
         Exit;
       Inc(Result);
-      if ALineas[Result].Trim.EndsWith(Cierre) then
-        Exit;
+      T := ALineas[Result].Trim;
+      if Cierre = '}' then
+      begin
+        if T.EndsWith(Cierre) then
+          Exit;
+        Continue;
+      end;
+      // una lista dentro de la lista: el IDE la abre con un '(' en su propia
+      // linea y cierra cada una con un ')' detras de su ultimo elemento
+      // (ObjectBinaryToText, vaList); una vacia, '()', se cierra sola. Se
+      // cerraba en la primera linea acabada en ')', la de la de dentro (3b
+      // del censo de jueces, 1.20.2)
+      if T = '(' then
+        Inc(Nivel)
+      else
+      begin
+        K := Length(T);
+        while (K > 0) and (T[K] = ')') do
+          Dec(K);
+        Dec(Nivel, Length(T) - K);
+        if T.StartsWith('(') then
+          Inc(Nivel);
+        if Nivel <= 0 then
+          Exit;
+      end;
     end;
     Exit;
   end;

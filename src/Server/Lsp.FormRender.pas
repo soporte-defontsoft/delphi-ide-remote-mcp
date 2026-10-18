@@ -659,6 +659,13 @@ var
     else
       Doc := TStyleDoc.Create(ARuta); // tambien el binario, por el lector existente
     try
+      // los literales se juzgan por las lineas de LineasDeForm, y el ayudante
+      // carga el form con el lector del IDE: uno que el parser no lee por
+      // lineas como LineasDeForm no se juzga, y no se dibuja (DSGN-160, 3b
+      // del censo de jueces)
+      Result := FormaDistintaDeLineas(Doc.Lines, TPath.GetFileName(ARuta));
+      if Result <> '' then
+        Exit;
       Form := LineasDeForm(Doc.Lines);
       for var I := 0 to High(Doc.Lines) do
         if Form[I].Clase = clfPropiedad then

@@ -462,9 +462,11 @@ begin
   if not EsRutaDeDesigner(APath) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un binario se lee al vuelo (TStyleDoc lo convierte); solo uno danado
-  // sigue siendo un rechazo, con el motivo de la RTL.
+  // sigue siendo un rechazo, con el motivo de la RTL. Y uno que el parser del
+  // IDE no lee por lineas como este lector, tampoco: tree, get y layout
+  // darian otras lineas (DSGN-160, 3b del censo de jueces)
   try
-    ADoc := TStyleDoc.Create(APath);
+    Result := TStyleDoc.Lee(APath, ADoc);
   except
     on E: Exception do
       Exit(MsgEnvuelve(SR_DESIGNER_ILEGIBLE_FMT, E.Message, [APath, E.Message]));
