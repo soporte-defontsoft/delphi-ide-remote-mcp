@@ -334,12 +334,15 @@ the MCP `initialize` response (`serverInfo.version`).
   what is sensitive (the server's home, the profile, the roots), but a file
   Windows lets every app package read (`etc\hosts`) went into the `.res`.
   The second barrier now judges every path-shaped token of a directive,
-  quoted or not, before `brcc32` runs. Still open, measured and declared: a
-  `..` that stays inside the workspace seen from the `.rc`'s folder but
-  climbs out of the copy `brcc32` compiles - the container stops it short
-  of anything sensitive, and a more restricted token (LPAC) is planned for
-  1.21. `test_estilos_derivados_1182` S15 measures the container on its own
-  again: the barrier now stops S13 and S14 first. And the styles `lint` no
+  quoted or not, before `brcc32` runs. And everything a `.rc` names must
+  now stay inside the styles folder (`STYLE-052`): `brcc32` compiles a copy
+  of that folder alone, so nothing outside it ever worked, and a `..` that
+  stayed inside the workspace seen from the `.rc`'s folder climbed out of
+  that copy - measured: `etc\hosts` went into the `.res`. This is a
+  stopgap until a more restricted token (LPAC) for the container, planned
+  for 1.21. `test_estilos_derivados_1182` S15 measures the container on its
+  own again (red with `brcc32` run outside it): the barrier now stops S13,
+  S14 and S16 first. And the styles `lint` no
   longer says a resource's file is missing when that file is a macro
   (`#define F "x.bin"` / `X RCDATA F`, which `brcc32` expands): since the
   token reader above, it named `F` as the missing file.

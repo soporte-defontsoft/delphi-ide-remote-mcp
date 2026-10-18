@@ -808,9 +808,10 @@ end;
   de aplicacion, asi que falla cerrado (medido). RESIDUO (H1, revisor del 2al):
   un fichero que el SO concede a TODOS LOS PAQUETES DE APLICACIONES -
   C:\Windows, Program Files - el AppContainer SI lo lee, como cualquiera. Por
-  un absoluto o un #define ya no entra (lo niega la segunda barrera, H1 de la
-  1.20.2); por un .. que desde la jaula se queda dentro y desde la etapa sube,
-  SI (medido el 18-oct-2026): lo cierra un token mas restringido (LPAC, 1.21).
+  un absoluto, un #define o un .. que sube desde la etapa ya no llega: la
+  segunda barrera exige que todo quede dentro de la carpeta de estilos (H1 de
+  la 1.20.2, CHAPUZA TEMPORAL); lo que el preprocesador componga por su
+  cuenta lo cerrara un token mas restringido (LPAC, 1.21).
   Y cierra la carrera: compila la COPIA, que el agente no puede cambiar entre
   la puerta y brcc32. El .res se coloca con ColocaProducto.
   '' = compilado y colocado; si no, el motivo (ya con su etiqueta). }
@@ -1033,6 +1034,7 @@ end;
 function RcPathsDenied(const ARc: string): string;
 var
   Seen: TStringList;
+  Carpeta: string; // la de estilos: la que brcc32 ve, copiada en su etapa
 
   // One file of the closure. Recurses through #include, because a .rc whose
   // own lines are all legal can still pull in a second file that is not -
@@ -1077,6 +1079,21 @@ var
       end;
       if ReadPathDenied(Cand) <> '' then
         Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
+      // CHAPUZA TEMPORAL (David, 18-oct-2026), hasta el token LPAC de la
+      // 1.21: brcc32 compila una COPIA de la carpeta de estilos (la etapa de
+      // CompilaRcEnContenedor) y fuera de ella no funciona nada; un .. que
+      // desde la jaula se quedaba dentro subia desde la etapa, y un fichero
+      // que el SO deja leer a todos los paquetes (etc\hosts) entraba en el
+      // .res (medido). Dentro, por las rutas REALES (un enlace de dentro que
+      // lleva fuera, fuera)
+      var Dentro := False;
+      try
+        Dentro := DentroDeSiMismo(Carpeta, Cand);
+      except
+        Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
+      end;
+      if not Dentro then
+        Exit(MsgFmt(SR_STYLES_RC_FUERA_DE_CARPETA_FMT, [Raw, TPath.GetFileName(AFile)]));
     end;
     // an #include (or RCINCLUDE) brings a whole new file's worth of
     // references with it
@@ -1100,6 +1117,7 @@ var
 begin
   Seen := TStringList.Create;
   try
+    Carpeta := TPath.GetDirectoryName(TPath.GetFullPath(ARc));
     Result := Walk(TPath.GetFullPath(ARc), 0);
   finally
     Seen.Free;

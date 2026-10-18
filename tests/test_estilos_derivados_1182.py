@@ -42,12 +42,14 @@ convertiria antes de la negativa es el otro.
       1.20.2): STYLE-023 y ningun .res
   H1  un #define a un fichero world-readable del SO (C:/Windows, que el
       AppContainer concede): la segunda barrera lo niega y el .res no lo lleva
-  S15 un '..' que desde la jaula se queda dentro y desde la ETAPA (la copia de
-      la carpeta en la casa del servidor) sube a la casa: la barrera lo deja,
-      brcc32 confinado no la alcanza, el .res no la lleva. Es el que mide el
-      CONTENEDOR desde que S13/S14 los para la barrera
-      (NOTA H1: el mismo '..' hasta un fichero world-readable SI entra, medido;
-       el token LPAC, en la 1.21)
+  S15 el CONTENEDOR solo (S13/S14/S16 los para ya la barrera): un absoluto a
+      un fichero de la PROPIA carpeta de estilos pasa la barrera, y brcc32, que
+      solo ve la copia de la etapa, no lo abre
+  S16 un '..' que desde la jaula se queda dentro y desde la ETAPA (la copia de
+      la carpeta en la casa del servidor) sube - a la casa, y a un fichero
+      world-readable del SO (etc\hosts, que el AppContainer concede y entraba:
+      medido) -: STYLE-052, todo dentro de la carpeta de estilos (CHAPUZA
+      TEMPORAL de la 1.20.2, David 18-oct, hasta el token LPAC de la 1.21)
 
 Uso:  python tests/test_estilos_derivados_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -213,10 +215,21 @@ try:
               '(STYLE-023) y el .res NO lo lleva', mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not entra,
               (r[:200], entra))
 
-    # S15: un '..' que DESDE LA JAULA se queda dentro y desde la ETAPA (la copia
-    # de la carpeta en <casa>\<temporal>\styles-rc-X) sube a la casa: la barrera
-    # no lo ve fuera y la puerta es el contenedor (S13/S14 ya no la miden: los
-    # para la barrera)
+    # S15: el CONTENEDOR, solo: un absoluto a un fichero de la PROPIA carpeta -
+    # la barrera lo deja (esta dentro) y brcc32, que solo ve la copia de la
+    # etapa, no abre el real: confinado no llega ni a lo que el agente lee
+    limpia()
+    open(RC, 'w', encoding='utf-8').write('X RCDATA "%s"\n' % SRC)
+    r = build(srv)
+    check('S15 el contenedor: un absoluto a un fichero de la propia carpeta pasa la barrera y brcc32 '
+          'confinado no lo abre (solo ve la copia de la etapa)',
+          not mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not mc.abre(r, 'SR_STYLES_RC_FUERA_DE_CARPETA_FMT') and
+          mc.como_json(r).get('ok') is False and 'annot open' in r, r[:300])
+
+    # S16: un '..' que DESDE LA JAULA se queda dentro y desde la ETAPA (la copia
+    # de la carpeta en <casa>\<temporal>\styles-rc-X) sube: a la casa, y a un
+    # fichero world-readable del SO contando lo hondo que esta la etapa (el
+    # contenedor lo concedia y entraba, medido). CHAPUZA TEMPORAL hasta LPAC
     def carpeta_honda(hondo):
         sty = os.path.join(JAIL, *(['h%d' % i for i in range(hondo)] + ['Styles']))
         os.makedirs(sty)
@@ -227,22 +240,19 @@ try:
     open(RC_H, 'w', encoding='utf-8').write('X RCDATA "..\\..\\%s"\n' % os.path.basename(SECRETO))
     r = srv.call('delphi_styles', {'path': HONDA, 'command': 'build'})
     fuga = os.path.exists(RES_H) and b'SECRETO-2AL' in open(RES_H, 'rb').read()
-    check('S15 un .. que desde la jaula se queda dentro y desde la etapa sube a la CASA: la barrera lo deja, '
-          'brcc32 confinado no la abre y el .res NO la lleva',
-          not mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and mc.como_json(r).get('ok') is False and
-          'annot open' in r and not fuga, (r[:300], fuga))
+    check('S16 un .. que desde la etapa sube a la CASA: STYLE-052 (fuera de la carpeta de estilos) y el .res '
+          'NO la lleva', mc.abre(r, 'SR_STYLES_RC_FUERA_DE_CARPETA_FMT') and not fuga, (r[:300], fuga))
     os.remove(SECRETO)
-    # NOTA H1, lo que queda (medido): el mismo '..' hasta un fichero world-readable
-    # del SO, contando lo hondo que esta la etapa; el contenedor lo concede
     PROF = len(os.path.splitdrive(SRVDIR)[1].strip('\\').split('\\')) + 2  # <SRVDIR>\<temporal>\styles-rc-X
     if os.path.exists(PUBLICO) and os.path.splitdrive(SRVDIR)[0].lower() == os.path.splitdrive(PUBLICO)[0].lower():
         HONDA, RC_H, RES_H = carpeta_honda(PROF)
         open(RC_H, 'w', encoding='utf-8').write('X RCDATA "%s%s"\n' % ('..\\' * PROF, os.path.splitdrive(PUBLICO)[1].lstrip('\\')))
         r = srv.call('delphi_styles', {'path': HONDA, 'command': 'build'})
         entra = os.path.exists(RES_H) and open(PUBLICO, 'rb').read() in open(RES_H, 'rb').read()
-        print('NOTA H1 (lo que queda, a decidir David): un .. que desde la jaula se queda dentro y desde la etapa '
-              'llega a un fichero world-readable del SO (etc\\hosts) %s en el .res (ok=%s). Lo sensible no (S15). '
-              'Lo cierra el token LPAC (1.21)' % ('SI entra' if entra else 'no entra', mc.como_json(r).get('ok')))
+        check('S16 un .. que desde la etapa llega a un fichero world-readable del SO (etc\\hosts): STYLE-052 y el '
+              '.res NO lo lleva', mc.abre(r, 'SR_STYLES_RC_FUERA_DE_CARPETA_FMT') and not entra, (r[:300], entra))
+    else:
+        print('NOTA S16 (hosts) no se mide: la casa del servidor y %s no estan en la misma unidad' % PUBLICO)
     open(RC, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
     open(RC, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
 

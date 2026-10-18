@@ -6470,8 +6470,17 @@ const
     'server''s permissions and puts the content inside the .res, which ' +
     'can then be downloaded; that way everything from win.ini to the ' +
     'configuration file with the token has been pulled out. The .rc ' +
-    'paths must stay inside the workspace, and preferably be relative to ' +
-    'the styles folder.';
+    'paths must stay inside the styles folder, relative to it.';
+
+  { Lo que un .rc nombra dentro de la jaula pero FUERA de su carpeta de
+    estilos: brcc32 compila una COPIA de esa carpeta y nada mas. CHAPUZA
+    TEMPORAL de la 1.20.2 (David, 18-oct-2026), hasta el token LPAC de la
+    1.21: ver Mcp.Tools.Styles.RcPathsDenied. }
+  SR_STYLES_RC_FUERA_DE_CARPETA_FMT =
+    '[STYLE-052 DENIED] The entry %s of %s points outside the styles ' +
+    'folder. build compiles a copy of that folder alone, so nothing ' +
+    'outside it can be reached: put the file inside the styles folder and ' +
+    'name it relative to it.';
 
   SR_STYLES_RC_DEEP =
     '[STYLE-024 DENIED] The manifest''s #include directives nest too deep ' +
