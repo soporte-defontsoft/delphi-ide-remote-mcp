@@ -12,7 +12,8 @@ QuickReport FontSize), the root class of a form sharing its name with a
 demo's, an unnamed 'object TMemo' whose properties went to its parent.
 Unit checks catch each rule; this catches the next one nobody thought of.
 
-Only the Samples (they are on every machine with RAD Studio): the warnings
+Only the Delphi Samples (they are on every machine with RAD Studio; the CPP
+folder is C++Builder, and this server is for Delphi only): the warnings
 of a family whose real class a package registers without source (the
 ListView appearances) are counted apart while that policy is pending.
 
@@ -79,7 +80,10 @@ FORMS = os.path.join(BASE, 'forms')
 copiados = []
 con_pas = 0
 for d, dirs, fs in os.walk(SAMPLES):
-    dirs[:] = [x for x in dirs if x.lower() not in ('__history', '__recovery', 'win32', 'win64')]
+    # la carpeta CPP es de C++Builder: este MCP es solo de Delphi (David,
+    # 18-oct-2026), y sus forms no los escribio el IDE de Delphi
+    dirs[:] = [x for x in dirs if x.lower() not in ('__history', '__recovery', 'win32', 'win64') and
+               not (d == SAMPLES and x.lower() == 'cpp')]
     for f in fs:
         if f.lower().endswith(('.dfm', '.fmx')):
             src = os.path.join(d, f)

@@ -1537,7 +1537,7 @@ begin
           Inc(DelForm);
       end;
       // leido sin un ancestro: lo saltado puede ser solo lo que el aporta, y
-      // "no abrira" seria falso (una vista FMX de C++, 18-oct-2026); y si todo
+      // "no abrira" seria falso (una vista FMX sin su maestro, 18-oct-2026); y si todo
       // lo saltado es de la raiz que el lector no ve, tampoco
       if Length(R.SinLeer) > 0 then
         Return.AddPair('ignoredNote', MsgFmt(SN_DESIGNER_PREVIEW_IGNORADAS_PARCIAL_FMT,

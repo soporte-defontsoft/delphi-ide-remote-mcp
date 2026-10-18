@@ -4877,7 +4877,7 @@ const
     'with delphi_designer set, or remove them - line says where each one is.';
   { ...salvo si el form se leyo SIN un ancestro (PARTIAL=): lo saltado puede
     ser solo lo que ese ancestro aporta, no un defecto del form (una vista FMX
-    de C++ salia en blanco y "no abrira"; 18-oct-2026). %s: lo que falto }
+    sin su maestro salia en blanco y "no abrira"; 18-oct-2026). %s: lo que falto }
   SN_DESIGNER_PREVIEW_IGNORADAS_PARCIAL_FMT =
     '[DSGN-156] The form was read WITHOUT one of its ancestors (%s: no .pas next ' +
     'to it says which class it inherits from, or that class has no file in this ' +
@@ -11040,8 +11040,8 @@ const
     '  %s';
   // el motivo de DSGN-154 cuando el lector leyo el form SIN un ancestro
   // (PARTIAL=): sin el, cada 'inherited' dice "Ancestor for X not found", que
-  // es de nuestra lectura y no del form (una vista FMX de C++, medido el
-  // 18-oct-2026). %s: el ancestro o el fichero que falto
+  // es de nuestra lectura y no del form (una vista FMX sin su maestro, medido
+  // el 18-oct-2026). %s: el ancestro o el fichero que falto
   SF_DSGN_LECTOR_SIN_ANCESTRO_FMT =
     'it only reads this form together with its ancestors, and one was missing ' +
     '(%s: no .pas next to it says which class it inherits from, or that class ' +

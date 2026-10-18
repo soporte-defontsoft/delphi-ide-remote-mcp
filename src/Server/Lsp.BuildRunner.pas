@@ -1861,7 +1861,7 @@ begin
   // clasificar: errors[], warnings[] y la cola salen sin ella.
   for var K := 0 to High(Lines) do
     Lines[K] := TRegEx.Replace(Lines[K],
-      '\s\[[^\[\]]+\.(?:dproj|groupproj|cbproj)\]\s*$', '', [roIgnoreCase]);
+      '\s\[[^\[\]]+\.(?:dproj|groupproj)\]\s*$', '', [roIgnoreCase]);
   for Line in Lines do
   begin
     if Line.Contains(': error ') or Line.Contains(' error E') or

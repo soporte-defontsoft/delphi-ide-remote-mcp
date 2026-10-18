@@ -978,8 +978,8 @@ begin
     var R := JuezDelIde(APath, ATexto, AEnc);
     // leido SIN un ancestro (PARTIAL=): cada 'inherited' sin el dice "Ancestor
     // for X not found", y eso es de NUESTRA lectura, no del form - una vista
-    // FMX de C++ (sin .pas) o de un .pas que no la declara "no cargaba"
-    // (medido el 18-oct-2026). No se sabe, y se dice por que
+    // FMX sin el .pas de su maestro al lado, o con uno que no la declara, "no
+    // cargaba" (medido el 18-oct-2026). No se sabe, y se dice por que
     if Length(R.SinLeer) > 0 then
     begin
       ANoPregunto := MsgFmt(SF_DSGN_LECTOR_SIN_ANCESTRO_FMT, [string.Join(', ', R.SinLeer)]);

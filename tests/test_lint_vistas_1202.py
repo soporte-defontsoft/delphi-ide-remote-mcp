@@ -39,8 +39,8 @@ registradas).
   R2 una raiz TForm3D (UsingDesignCamera, que su form no tiene): no "no carga"
      (el lector la lee en una form; lo de su clase lo juzga la tabla)
   R2b control: una propiedad que TForm3D no tiene: el aviso
-  S1/S2 (si hay Samples) la vista Delphi de ListCollections CLEAN; la de C++
-     de Contacts (sin .pas) DSGN-154
+  S1 (si hay Samples) la vista Delphi de ListCollections CLEAN (leida sin su
+     ancestro la miden V4/V5; C++ no: este MCP es solo de Delphi)
 
 V1, V2 y V4 son ROJAS contra bb246ed (la vista se leia sola); B1 tambien.
 V6, contra el renderizador con el Split()[0]: el AV medido en vivo contra
@@ -196,16 +196,11 @@ try:
                        str(mc.como_json(S.call('delphi_workspace', {})).get('activeDelphi') or ''), 'Samples')
     DEL = os.path.join(SAM, 'Object Pascal', 'Multi-Device Samples', 'User Interface', 'ListCollections',
                        'ListExpressionsSampleFormUnit1.SmXhdpiPh.fmx')
-    CPP = os.path.join(SAM, 'CPP', 'Multi-Device Samples', 'Device Sensors and Services', 'Address Book',
-                       'Contacts', 'main_u.iPhone47in.fmx')
-    if os.path.isfile(DEL) and os.path.isfile(CPP):
+    if os.path.isfile(DEL):
         r = dsg({'command': 'lint', 'path': DEL})
         check('S1 la vista Delphi de un Sample (ListCollections): LINT CLEAN', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
-        r = dsg({'command': 'lint', 'path': CPP})
-        check('S2 la vista C++ de un Sample (sin .pas): DSGN-154 con su motivo',
-              mc.abre(r, 'SN_DESIGNER_LINT_SIN_LECTOR_FMT') and PARCIAL in r, r[:300])
     else:
-        print('NOTA: S1/S2 no se miden: no estan los Samples de esta instalacion')
+        print('NOTA: S1 no se mide: no estan los Samples de esta instalacion')
 finally:
     S.cierra()
     mc.borra(BASE)

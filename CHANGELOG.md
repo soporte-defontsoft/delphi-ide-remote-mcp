@@ -118,8 +118,8 @@ the MCP `initialize` response (`serverInfo.version`).
   The IDE loads a view on top of its master, and declares it in the master's
   `.pas` with `{$R *.<View>.fmx ...}`: the renderer reads that directive and
   loads the master first, like the IDE (lint CLEAN, preview drawn). A form
-  read WITHOUT one of its ancestors (no `.pas` says which class it inherits
-  from - a C++ form, for one) is no longer "does not load": the lint says it
+  read WITHOUT one of its ancestors (no `.pas` next to it says which class it
+  inherits from) is no longer "does not load": the lint says it
   could not be confirmed (`DSGN-154`), and preview says what was skipped may
   be what the missing ancestor brings (`DSGN-156`) instead of "it will not
   open".
