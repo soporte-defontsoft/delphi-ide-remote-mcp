@@ -256,11 +256,14 @@ dp = open(os.path.join(FDIR, 'HolaFmx.dproj'), encoding='utf-8-sig').read()
 check('create FMX: el .dproj no lleva los ambitos de la VCL, y los de Windows van en Base_Win32 y Base_Win64',
       'Vcl;' not in dp and "'$(Base_Win32)'!=''" in dp and "'$(Base_Win64)'!=''" in dp and
       'Xml.Win;Bde;$(DCC_Namespace)' in dp, dp[:1500])
-call('delphi_create', {"kind": "unit", "name": "USinCalificar", "project": os.path.join(FDIR, 'HolaFmx.dpr'),
-                       "content": "unit USinCalificar;\n\ninterface\n\nuses\n  Dialogs;\n\nimplementation\n\nend.\n"})
+_rc = call('delphi_create', {"kind": "unit", "name": "USinCalificar", "project": os.path.join(FDIR, 'HolaFmx.dpr'),
+                             "content": "unit USinCalificar;\n\ninterface\n\nuses\n  Dialogs;\n\nimplementation\n\nend.\n"})
 ok, err = build_ok(os.path.join(FDIR, 'HolaFmx.dproj'))
+# la unit SE CREO y el fallo es el de la unit no encontrada (F2613 Dialogs), no
+# uno cualquiera que nombre Dialogs (revisor de baterias, 18-oct-2026)
 check('create FMX: el compilador no resuelve un "uses Dialogs" sin calificar contra la VCL',
-      not ok and 'Dialogs' in str(err), err)
+      os.path.isfile(os.path.join(FDIR, 'USinCalificar.pas')) and not ok and 'F2613' in str(err)
+      and 'Dialogs' in str(err), (_rc[:120], err))
 
 # --- B0: createunit accepts DOTTED namespace unit names ---
 out = call('delphi_edit', {"path": os.path.join(VDIR, 'Lsp.BuildRunner.pas'),

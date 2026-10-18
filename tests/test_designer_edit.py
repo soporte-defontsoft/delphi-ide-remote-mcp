@@ -404,7 +404,12 @@ try:
     antes_dfm = bytes_de(VDFM)
     with mc.solo_lectura(VPAS):
         r = dsg(command='insert', path=VDFM, classname='TCheckBox')
-    check('V8 la unidad no se deja escribir: el insert falla...', mc.fallo(r) or mc.rechazado(r), r[:300])
+    # (revisor de baterias, 18-oct-2026) la negativa del +R de la unidad, la que
+    # llega DESPUES de escribir el .dfm: con cualquier fallo, uno de antes de
+    # escribir dejaba el form intacto sin ejercitar el deshacer
+    check('V8 la unidad no se deja escribir: el insert falla por su atributo de solo lectura (SYS-029)...',
+          mc.es(r, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and os.path.basename(VPAS) in r,
+          r[:300])
     check('V8 ...y el form vuelve a como estaba (todo o nada)', bytes_de(VDFM) == antes_dfm,
           mc.lee(VDFM)[-300:])
 
@@ -1040,7 +1045,10 @@ try:
             "unit Fuera;\r\ninterface\r\ntype\r\n  TFuera = class(TForm)\r\n  end;\r\nimplementation\r\nend.\r\n")
     antes = bytes_de(FDFM)
     r = dsg(command='insert', path=FDFM, classname='TButton')
-    check('X1 un form fuera de la jaula: rechazado, y no se toca', mc.rechazado(r) and bytes_de(FDFM) == antes, r[:300])
+    # la negativa de la JAULA, no una cualquiera (un parametro renombrado, la
+    # tabla, la unidad): revisor de baterias, 18-oct-2026
+    check('X1 un form fuera de la jaula: rechazado por la jaula, y no se toca',
+          mc.es(r, 'SR_JAIL_FMT') and bytes_de(FDFM) == antes, r[:300])
 finally:
     try:
         srv.mata()

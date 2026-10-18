@@ -594,6 +594,10 @@ try:
         out3 = call('delphi_git', {"repo": dest, "command": "pull"}, 300)
         check('git pull: permitido', mc.llego_a_git(out3), out3[:120])
     else:
+        # (revisor de baterias, 18-oct-2026) SKIP solo si git corrio y fallo
+        # (la red): una negativa del servidor contaba como "sin red"
+        check('git clone: la puerta deja llegar a git (github.com en GitRemotes)',
+              mc.llego_a_git(out), out[:200])
         print('SKIP - git clone (sin red o repo inaccesible):', out[:100])
     out = call('delphi_git', {"repo": dest, "command": "clone",
                               "message": "file:///C:/Windows"})

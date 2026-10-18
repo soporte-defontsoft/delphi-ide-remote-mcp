@@ -92,7 +92,7 @@ def nuevas(patron, antes):
 # nuestra casa de capturas (la temporal del servidor), y lo que NO debe haber
 # nunca: una captura en el workspace
 CASA_SRV = os.path.join(mc.casa_de_capturas(os.path.join(BASE, 'srv')), '**', 'desktop', '*.png')
-TEMP_JAULA = os.path.join(JAIL, '__delphi-temp')
+TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)
 
 
 def bajadas():
@@ -190,8 +190,8 @@ try:
     n = nuevas(CASA_SRV, antes)
     check('D5 la raiz en 8.3 y su entrada en largo: en nuestra casa, NO dentro de la raiz',
           SOLO.lower() != mc.larga(SOLO).lower() and not mc.fallo(r) and en_casa(r) and not n and
-          not os.path.exists(os.path.join(SOLO, '__delphi-temp')),
-          (r[:400], n, os.path.exists(os.path.join(SOLO, '__delphi-temp'))))
+          not os.path.exists(os.path.join(SOLO, mc.TEMPORALES)),
+          (r[:400], n, os.path.exists(os.path.join(SOLO, mc.TEMPORALES))))
 finally:
     srv.cierra()
 

@@ -178,12 +178,11 @@ end;
 function ProjectsSearching(const ADir: string): TArray<string>;
 var
   L: TStringList;
-  Target, Root, Xml: string;
+  Root, Xml: string;
 begin
   Result := nil;
   if ADir = '' then
     Exit;
-  Target := IncludeTrailingPathDelimiter(TPath.GetFullPath(ADir)).ToLower;
   L := TStringList.Create;
   try
     L.Duplicates := dupIgnore;
@@ -201,10 +200,10 @@ begin
         except
           Continue;
         end;
-        for var R in RutasDeBusqueda(Dproj, Xml) do
-          if (R.Carpeta <> '') and
-             (IncludeTrailingPathDelimiter(R.Carpeta).ToLower = Target) then
-            L.Add(TPath.GetDirectoryName(Dproj));
+        // EL juez de "compila contra esa carpeta" (Lsp.Dproj), el mismo que
+        // usa la sesion para saber que proyecto sirve a una unidad
+        if BuscaEnCarpeta(Dproj, Xml, ADir) then
+          L.Add(TPath.GetDirectoryName(Dproj));
       end;
     end;
     Result := L.ToStringArray;
@@ -657,7 +656,7 @@ begin
   FullPath := TPath.GetFullPath(AFilePath);
   SinLeer := 0;
   Client := Session.AcquireFor(FullPath, Settings);
-  Session.ResolveSettings(FullPath, RootDir);
+  RootDir := Session.RaizDelMotor(FullPath); // la raiz, sin hacer otra vez los ajustes
 
   // Identify the symbol under the cursor.
   Lines := TStringList.Create;

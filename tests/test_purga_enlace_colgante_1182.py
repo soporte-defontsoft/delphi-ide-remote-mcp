@@ -44,10 +44,12 @@ try:
         shutil.rmtree(os.path.join(JAIL, 'd1'))   # J1 queda colgante en la papelera
         r = srv.call('delphi_delete', {'path': c1, 'purge': True})
         check('Y1 purgar un enlace COLGANTE de la papelera: se va (no SYS-012)',
-              not mc.rechazado(r) and c1 is not None and not os.path.lexists(c1), (r[:200], c1))
+              # PURGADO de verdad: not rechazado aceptaba INTERNAL y NO_ANSWER
+              # (revisor de baterias, 18-oct-2026)
+              mc.abre(r, 'SN_FILE_PURGED_FMT') and c1 is not None and not os.path.lexists(c1), (r[:200], c1))
         r = srv.call('delphi_delete', {'path': c2, 'purge': True})
         check('Y2 control: purgar un enlace VIVO quita el enlace y NO toca lo de detras',
-              not mc.rechazado(r) and c2 is not None and not os.path.lexists(c2) and
+              mc.abre(r, 'SN_FILE_PURGED_FMT') and c2 is not None and not os.path.lexists(c2) and
               os.path.exists(os.path.join(JAIL, 'd2', 'x.txt')), (r[:200], c2))
 finally:
     srv.cierra()

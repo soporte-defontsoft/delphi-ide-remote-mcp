@@ -81,7 +81,9 @@ try:
                                      'value': 'claRed'}, t=240)
     pv = srv.call('delphi_designer', {'path': p, 'command': 'preview', 'maxwidth': 200}, t=240)
     check('C4 el control: FontColor=claRed se escribe y el form carga (preview sin DSGN-061)',
-          not mc.rechazado(r) and b'FontColor = claRed' in open(p, 'rb').read() and not mc.rechazado(pv),
+          # not fallo: DSGN-061 es INTERNAL y "not rechazado" lo dejaba pasar
+          # (revisor de baterias, 18-oct-2026)
+          not mc.fallo(r) and b'FontColor = claRed' in open(p, 'rb').read() and not mc.fallo(pv),
           (r[:200], pv[:200]))
 
     p = form('UC5', con_edit2=True)

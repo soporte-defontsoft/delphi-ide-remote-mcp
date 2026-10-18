@@ -91,7 +91,7 @@ try:
         {'old': BLOQUE_P, 'new': ''},
         {'old': BLOQUE_L, 'new': BLOQUE_L + '\n' + BLOQUE_P}]}, t=240)
     check('J1 tanda que mueve el bloque de Panel1: sin DSGN-021 (el form final esta limpio)',
-          not mc.rechazado(r) and dsgn021(r) == 0, r[:500])
+          not mc.fallo(r) and dsgn021(r) == 0, r[:500])
 
     pas, dfm = par('j2')
     cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
@@ -102,7 +102,7 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
     check('J2 changeset que renombra Panel1 -> Panel2 en .dfm y .pas: sin DSGN-021',
-          not mc.rechazado(r) and dsgn021(r) == 0, r[:600])
+          not mc.fallo(r) and dsgn021(r) == 0, r[:600])
 
     pas, dfm = par('j3')
     cid = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
@@ -125,13 +125,13 @@ try:
         {'old': '    Panel1: TPanel;', 'new': '    // sin campo'},
         {'old': '    Label1: TLabel;', 'new': '    Label1: TLabel;\n    Panel1: TPanel;'}]}, t=240)
     check('J8 una tanda del .pas que quita el campo y lo vuelve a poner: sin DSGN-021',
-          not mc.rechazado(r) and dsgn021(r) == 0, r[:600])
+          not mc.fallo(r) and dsgn021(r) == 0, r[:600])
 
     pas, dfm = par('j9')
     r = srv.call('delphi_edit', {'path': pas, 'old': "  Form1: TForm1;", 'new': "  Form1: TForm1; // la form"},
                  t=240)
     check('J9 control: un delphi_edit del .pas que no toca el enlace: sin DSGN-021',
-          not mc.rechazado(r) and dsgn021(r) == 0, r[:600])
+          not mc.fallo(r) and dsgn021(r) == 0, r[:600])
 
     pas, dfm = par_roto('j10')
     antes = open(dfm, 'rb').read()
@@ -153,7 +153,7 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
     check('J11 un changeset con un paso sin cambio en el .pas: no juzga el form de esa unidad',
-          not mc.rechazado(r) and dsgn021(r) == 0 and open(nota).read() == 'dos\n', r[:600])
+          not mc.fallo(r) and dsgn021(r) == 0 and open(nota).read() == 'dos\n', r[:600])
 
     pas, dfm = par('j12')
     rb = srv.call('delphi_designer', {'command': 'to-binary', 'path': dfm}, t=240)

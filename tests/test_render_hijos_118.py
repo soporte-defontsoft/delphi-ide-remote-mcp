@@ -21,6 +21,8 @@ k.GetExitCodeProcess.argtypes=[ctypes.c_void_p,ctypes.POINTER(ctypes.c_uint32)]
 k.QueryFullProcessImageNameW.argtypes=[ctypes.c_void_p,ctypes.c_uint32,ctypes.c_wchar_p,ctypes.POINTER(ctypes.c_uint32)]
 k.TerminateProcess.argtypes=[ctypes.c_void_p,ctypes.c_uint32]
 def alive(pid,cleanup=False):
+    # la pregunta sola es la de la casa (mc.pid_vivo); aqui solo lo de matar
+    if not cleanup:return mc.pid_vivo(pid)
     h=k.OpenProcess(0x1000|(1 if cleanup else 0),0,pid)
     if not h:
         err=ctypes.get_last_error()

@@ -25,7 +25,10 @@ try:
             check('ruta normal sigue legible, jaula=%s' % jailed, 'local' in out and not mc.fallo(out), out)
             if jailed:
                 out = srv.call('delphi_read', {'path': os.path.join(LINK, 'privado.txt')})
-                check('junction no lee ni nombra a la victima', mc.rechazado(out) and 'intacto' not in out, out)
+                # la negativa del ENLACE (revisor de baterias, 18-oct-2026): "ni
+                # nombra" no se puede medir aqui (la ruta pedida ya lleva el nombre)
+                check('junction no lee a la victima (negado por el enlace)',
+                      mc.es(out, 'SR_JAIL_LINK_FMT') and 'intacto' not in out, out)
         finally:
             srv.cierra()
     check('victima intacta', os.listdir(VICTIM) == ['privado.txt'] and mc.lee(os.path.join(VICTIM, 'privado.txt')) == 'intacto')

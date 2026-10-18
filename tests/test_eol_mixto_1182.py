@@ -57,7 +57,9 @@ def corto(t):
 
 
 def sin_082(r):
-    return '[EDIT-082]' not in str(r)
+    # por su constante: con el id a mano un renumerado pasaba siempre (revisor de
+    # baterias, 18-oct-2026)
+    return not mc.es(str(r), 'SN_EDIT_FINALES_LINEA_AJENOS_FMT')
 
 
 try:

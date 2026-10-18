@@ -98,8 +98,10 @@ try:
           open(MD, 'rb').read() == antes)
     r = call('delphi_textedit', {'path': AJENO, 'fragment': 'SECRETO',
                                  'new': 'x', 'atline': 1})
+    # la negativa de la JAULA (un timeout o cualquier error tampoco ensenaban la
+    # linea; revisor de baterias, 18-oct-2026)
     check('F8 fuera de la jaula: ni se escribe ni el rechazo ensena la linea',
-          'SECRETO-DE-OTRO' not in r and
+          mc.es(r, 'SR_JAIL_FMT') and 'SECRETO-DE-OTRO' not in r and
           open(AJENO, 'rb').read() == b'clave=SECRETO-DE-OTRO\r\n', r[:200])
 
     # ------------------------------------------------------ delphi_textedit
@@ -156,6 +158,22 @@ try:
           open(PAS, 'rb').read() == pas0.replace(b'68', b'69').replace(
               'camión'.encode('cp1252'),
               'camión grande'.encode('cp1252')), r[:240])
+    # (revisor de baterias, 18-oct-2026) la TANDA de la gemela: B1/B2 solo se
+    # median en delphi_textedit, y la de delphi_edit (un .pas en CP1252) no
+    pas1 = open(PAS, 'rb').read()
+    r = call('delphi_edit', {'path': PAS, 'edits': json.dumps([
+        {'fragment': '69', 'new': '70', 'atline': 6},
+        {'fragment': 'camión grande', 'new': 'camión', 'atline': 6}])})
+    check('E2b tanda de delphi_edit: dos trozos de la MISMA linea en orden, el CP1252 intacto',
+          mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and open(PAS, 'rb').read() == pas1.replace(b'69', b'70').replace(
+              'camión grande'.encode('cp1252'), 'camión'.encode('cp1252')), r[:240])
+    pas2 = open(PAS, 'rb').read()
+    r = call('delphi_edit', {'path': PAS, 'edits': json.dumps([
+        {'fragment': '70', 'new': '71', 'atline': 6},
+        {'fragment': 'no-esta', 'new': 'x', 'atline': 6}])})
+    check('E2c ...y si una falla, todo o nada: el .pas vuelve byte a byte',
+          mc.es(r, 'SR_PATCH_EDITS_ROLLED_FMT') and open(PAS, 'rb').read() == pas2, r[:240])
+    open(PAS, 'wb').write(pas1)   # lo de abajo parte de E2
     r = call('delphi_edit', {'path': PAS, 'fragment': '69', 'new': '70',
                              'atline': 6, 'insert': 'rutina-global'})
     # desde la quinta revision lo dice la regla de los modos (EDIT-111), la

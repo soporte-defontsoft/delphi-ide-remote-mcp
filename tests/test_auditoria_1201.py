@@ -27,9 +27,18 @@ S = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='aud1201', t=60
 
 COMPILED = r'.\Compiled\$(Platform)\$(Config)'
 SALIDA_DEBUG = r'.\SalidaDebug\$(Platform)'
-GRUPO_DEBUG = ('    <PropertyGroup Condition="\'$(Cfg_2)\'!=\'\'">\r\n'
-               '        <DCC_ExeOutput>' + SALIDA_DEBUG + '</DCC_ExeOutput>\r\n'
-               '    </PropertyGroup>\r\n')
+
+
+def clave_debug(x):
+    """La clave (Cfg_N) con la que el .dproj nombra Debug (mc.clave_de_config)."""
+    return mc.clave_de_config(x, 'Debug')
+
+
+def grupo_debug(x):
+    return ('    <PropertyGroup Condition="\'$(%s)\'!=\'\'">\r\n' % clave_debug(x) +
+            '        <DCC_ExeOutput>' + SALIDA_DEBUG + '</DCC_ExeOutput>\r\n'
+            '    </PropertyGroup>\r\n')
+
 EXES = re.compile(r'<DCC_ExeOutput\s*>(.*?)</DCC_ExeOutput\s*>', re.I | re.S)
 GRUPO_BASE = re.compile(r'<PropertyGroup Condition="\'\$\(Base\)\'!=\'\'">(.*?)</PropertyGroup>', re.S)
 
@@ -51,7 +60,7 @@ def reescribe(dproj, cambio):
 
 
 def con_grupo_debug(x):
-    return x.replace('    <ItemGroup>', GRUPO_DEBUG + '    <ItemGroup>', 1)
+    return x.replace('    <ItemGroup>', grupo_debug(x) + '    <ItemGroup>', 1)
 
 
 def set_output(dproj, carpeta='Compiled'):
@@ -70,7 +79,7 @@ x = mc.lee(P1)
 check('D4a TODAS las <DCC_ExeOutput> dicen Compiled, la de Debug tambien',
       EXES.findall(x) == [COMPILED, COMPILED], EXES.findall(x))
 check('D4a la respuesta dice lo que tenia la de Debug y su grupo',
-      SALIDA_DEBUG in r and "'$(Cfg_2)'!=''" in r, r[:500])
+      SALIDA_DEBUG in r and "'$(%s)'!=''" % clave_debug(antes) in r, r[:500])
 ok, err = mc.build_ok(S.call, P1)
 check('D4a el build de Debug compila', ok, err)
 DIR1 = os.path.dirname(P1)
@@ -82,8 +91,8 @@ check('D4a ...y el binario sale en Compiled\\Win64\\Debug, no en SalidaDebug',
 # ---- D4 b. la base no la lleva: solo la config Debug ----
 P2 = proyecto('SalD4Base')
 reescribe(P2, lambda x: re.sub(r'\s*<DCC_(Exe|Dcu)Output>[^<]*</DCC_(Exe|Dcu)Output>', '',
-                               con_grupo_debug(x).replace(GRUPO_DEBUG, '@@'), flags=re.I)
-          .replace('@@', GRUPO_DEBUG))
+                               con_grupo_debug(x).replace(grupo_debug(x), '@@'), flags=re.I)
+          .replace('@@', grupo_debug(x)))
 x0 = mc.lee(P2)
 check('D4b la unica <DCC_ExeOutput> es la de Debug, y no hay <DCC_DcuOutput>',
       EXES.findall(x0) == [SALIDA_DEBUG] and 'DCC_DcuOutput' not in x0, EXES.findall(x0))
@@ -96,7 +105,7 @@ check('D4b la base las recibe, la Exe delante de la Dcu (como antes)',
 check('D4b ...y la de Debug se reescribe: dos, las dos Compiled',
       EXES.findall(x) == [COMPILED, COMPILED], EXES.findall(x))
 check('D4b la respuesta: la Exe estaba solo en Debug, la Dcu sin definir',
-      SALIDA_DEBUG in r and "'$(Cfg_2)'!=''" in r and '(not set)' in r, r[:500])
+      SALIDA_DEBUG in r and "'$(%s)'!=''" % clave_debug(x0) in r and '(not set)' in r, r[:500])
 
 # ---- D4 c. sin grupo base: CFG-087 y nada escrito ----
 P3 = proyecto('SalD4SinBase')

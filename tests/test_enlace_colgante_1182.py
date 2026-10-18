@@ -68,20 +68,26 @@ if SKIP is None:
         op = mc.Http(PUERTO, TOKEN, t=120)
         op.session('ana')
         r = op.call('delphi_move', {'path': os.path.join(JAIL, 'src', 'B7'), 'dest': N7})
-        check('K1 move al destino de un colgante protegido: negado y J7\\U.dfm no aparece',
-              mc.rechazado(r) and not os.path.exists(os.path.join(J7, 'U.dfm')), r[:300])
+        # (revisor de baterias, 18-oct-2026) SU negativa: la de lo protegido
+        # donde lo es (una carpeta que se muda: el destino que lo CONTENDRIA,
+        # MOVE-020; un fichero: GUARD-012), la de la jaula donde sale de las
+        # raices; con cualquier rechazo, un parametro renombrado o un destino
+        # existente dejaban el colgante sin ejercitar
+        check('K1 move al destino de un colgante protegido: negado (MOVE-020) y J7\\U.dfm no aparece',
+              mc.es(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT') and not os.path.exists(os.path.join(J7, 'U.dfm')), r[:300])
         r = op.call('delphi_textedit', {'path': os.path.join(N8, 'V.txt'), 'create': True, 'content': 'x'})
         check('K2 crear dentro del destino de una carpeta protegida por un colgante: negado',
-              mc.rechazado(r) and not os.path.exists(os.path.join(N8, 'V.txt')), r[:300])
+              mc.es(r, 'SR_READONLY_PATH_FMT') and not os.path.exists(os.path.join(N8, 'V.txt')), r[:300])
         r = op.call('delphi_textedit', {'path': os.path.join(JF, 'x.txt'), 'create': True, 'content': 'x'})
         check('K3 control: a traves de un colgante que sale de las raices no se escribe ni se crea nada fuera',
-              mc.rechazado(r) and not os.path.exists(VICTIMA) and os.listdir(FUERA) == [], (r[:300], os.listdir(FUERA)))
+              (mc.es(r, 'SR_JAIL_FMT') or mc.es(r, 'SR_JAIL_LINK_FMT')) and not os.path.exists(VICTIMA)
+              and os.listdir(FUERA) == [], (r[:300], os.listdir(FUERA)))
         r = op.call('delphi_move', {'path': os.path.join(JAIL, 'src', 'B9', 'U.dfm'), 'dest': os.path.join(N9, 'U.dfm')})
         check('K4 control: con el enlace vivo, mover un fichero encima de lo protegido (n9\\U.dfm = J9\\U.dfm) se niega',
-              mc.rechazado(r) and not os.path.exists(os.path.join(N9, 'U.dfm')), r[:300])
+              mc.es(r, 'SR_READONLY_PATH_FMT') and not os.path.exists(os.path.join(N9, 'U.dfm')), r[:300])
         r = op.call('delphi_move', {'path': os.path.join(JAIL, 'src', 'B10'), 'dest': N10})
         check('K5 una cadena de 9 colgantes hasta n10, protegido C1\\U.dfm: el move a n10 se niega',
-              mc.rechazado(r) and not os.path.exists(os.path.join(CADENA[0], 'U.dfm')), r[:300])
+              mc.es(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT') and not os.path.exists(os.path.join(CADENA[0], 'U.dfm')), r[:300])
         t0 = time.time()
         r = op.call('delphi_textedit', {'path': os.path.join(JU, 'q.txt'), 'create': True, 'content': 'q'})
         dt = time.time() - t0

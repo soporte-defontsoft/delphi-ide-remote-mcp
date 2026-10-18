@@ -32,6 +32,12 @@ try:
     r = srv.call('delphi_config', {'command': 'add-unit',
         'project': os.path.join(MINE, 'JaulaLocal.dproj'), 'path': LOCAL})
     check('fixture unidad local registrada', not mc.fallo(r), r)
+    # (revisor de baterias, 18-oct-2026) cada tool tiene que ver lo LOCAL: solo
+    # ausencias, una respuesta vacia pasaba (discover no tenia nada que ver)
+    open(os.path.join(MINE, 'LocalTests.dpr'), 'w', encoding='utf-8').write(
+        'program LocalTests;\n{$APPTYPE CONSOLE}\nbegin end.\n')
+    LO_LOCAL = {'delphi_test': 'LocalTests', 'delphi_symbols': 'Saludo',
+                'delphi_references': 'ULocal.pas', 'delphi_rename_symbol': 'ULocal.pas'}
     for tool, args in (
         ('delphi_test', {'command': 'discover', 'path': MINE}),
         ('delphi_symbols', {'path': MINE}),
@@ -40,8 +46,8 @@ try:
                                   'newname': 'SaludoNuevo', 'mode': 'preview'}),
     ):
         r = srv.call(tool, args)
-        check(tool + ': responde sin nombres ni contenido de fuera',
-              not mc.sin_respuesta(r) and not mc.fallo(r) and
+        check(tool + ': responde sin nombres ni contenido de fuera, y con lo de dentro (%s)' % LO_LOCAL[tool],
+              not mc.sin_respuesta(r) and not mc.fallo(r) and LO_LOCAL[tool] in r and
               MARK not in r and 'JaulaVictima' not in r and 'MARCA_PRIVADA' not in r, r)
     SUELTA = os.path.join(MINE, 'suelta')
     os.makedirs(SUELTA)

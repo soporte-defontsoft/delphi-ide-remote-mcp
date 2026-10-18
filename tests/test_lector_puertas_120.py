@@ -157,13 +157,17 @@ try:
     p = form('UL8')
     r = srv.call('delphi_designer', {'path': p, 'command': 'lint'}, t=240)
     e = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 1'}, t=240)
+    # (revisor de baterias, 18-oct-2026) el edit ESCRIBIO (un INTERNAL no
+    # trae EDIT-127 y pasaba), y los ids por su constante
     check('L8 el control: un form sano con lineas guardadas por codigo: lint CLEAN y delphi_edit sin EDIT-127',
-          mc.tiene(r, 'DSGN-020') and not mc.rechazado(e) and not mc.tiene(e, 'EDIT-127'), (r[:300], e[-400:]))
+          mc.es(r, 'SN_DESIGNER_LINT_OK_FMT') and not mc.fallo(e) and not mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT')
+          and b'TabOrder = 1' in open(p, 'rb').read(), (r[:300], e[-400:]))
 
     p = form('UL9', otro=TERCEROS)
     e = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 1'}, t=240)
     check('L9 una clase de terceros sustituida: lo que el lector se salta de ella no es un aviso del lector',
-          not mc.rechazado(e) and not mc.tiene(e, 'EDIT-127') and 'X1.Foo' not in e, e[-600:])
+          not mc.fallo(e) and not mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and 'X1.Foo' not in e
+          and b'TabOrder = 1' in open(p, 'rb').read(), e[-600:])
 finally:
     srv.cierra()
 

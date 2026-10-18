@@ -330,7 +330,7 @@ begin
     var DsgIlegibles: TArray<string> := [];
     DsgList := TStringList.Create;
     try
-      TLspSession.Instance.ResolveSettings(TPath.GetFullPath(AFilePath), Root);
+      Root := TLspSession.Instance.RaizDelMotor(TPath.GetFullPath(AFilePath));
       for P in Touched do
       begin
         // the sibling designer of each touched unit

@@ -137,9 +137,10 @@ try:
     check('L2 el dir es la ruta COMPLETA de la carpeta, con su unidad virtual',
           len(gs) == 2 and all(g['dir'].lower().startswith('srv') for g in gs)
           and misma(gs[0]['dir'], A) and misma(gs[1]['dir'], B), dirs_de(j))
-    low = re.sub('srv[a-z]:', '', raw.lower())
+    # (revisor de baterias, 18-oct-2026) EL lector de la fuga: el de aqui no la
+    # veia tras un \n escapado en JSON (la n es una letra)
     check('L2 ...ninguna letra REAL en el texto y ninguna doble mascara',
-          not re.findall(r'(?<![a-z])[a-z]:\\', low) and 'srvsrv' not in raw.lower(), raw[:300])
+          not mc.fuga_de_letra(raw) and 'srvsrv' not in raw.lower(), raw[:300])
     disco = sorted(os.path.normcase(os.path.join(c, n)) for c in (A, B) for n in os.listdir(c))
     check('L2 ...y carpeta + nombre son los 60 ficheros de disco',
           sorted(os.path.normcase(mc.larga(mc.real(e['path']))) for e in mc.ficheros(j))
@@ -218,10 +219,9 @@ try:
     # delphi_search es una tool de ECO: su texto no pasa por el filtro de
     # salida, asi que el dir lo enmascara el organizador o nadie (en list y
     # projects lo tapa ademas el filtro; medido con el mutante, 6-oct-2026)
-    low = re.sub('srv[a-z]:', '', raw.lower())
     check('L6 ...el dir de search sale con su unidad virtual, sin letra real (lo enmascara el organizador)',
           len(gs) == 2 and all(g['dir'].lower().startswith('srv') for g in gs)
-          and not re.findall(r'(?<![a-z])[a-z]:\\', low), dirs_de(js))
+          and not mc.fuga_de_letra(raw), dirs_de(js))
     ac = mc.aciertos(js)
     check('L6 ...y carpeta + fichero de cada acierto es un fichero de disco que lo contiene',
           len(ac) == 60 and all('marca listas' in open(mc.larga(mc.real(a['path']))).read() for a in ac),

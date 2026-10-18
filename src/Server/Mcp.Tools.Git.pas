@@ -782,6 +782,19 @@ begin
     Result := MsgFmt(SR_GIT_NOMBRE_NO_VALE_FMT, [ACampo, AValor.Trim]);
 end;
 
+{ La FORMA de un refspec que destruye en el remoto: un '+' inicial FUERZA y un
+  src vacio (':dst') BORRA. Se niega por la forma, ANTES de preguntar a git y
+  juzgue lo que juzgue el: check-ref-format ACEPTA "+main" como nombre (medido
+  el 9-oct) y rev-parse lo encuentra en cuanto hay una ref que se llama asi -
+  medido el 18-oct-2026: tag name="+main" y luego push ref="+main" FORZABA el
+  remoto (la 1.19.0 dejo el ref de push solo con los jueces de git). EL juez de
+  la forma: lo que envia la configuracion (EnvioQueNoVale) y el ref de push, en
+  su juez y en la segunda barrera. }
+function RefspecQueDestruye(const ATrozo: string): Boolean;
+begin
+  Result := ATrozo.StartsWith('+') or ATrozo.StartsWith(':');
+end;
+
 { LO QUE push ENVIA: los trozos sin guion de detras del remoto. push ANADE
   al remoto; lo que ya hay alli no se reescribe ni se borra por esta tool
   (David, 29-sep-2026: "nada de destruccion remota"). La sintaxis del refspec
@@ -809,8 +822,8 @@ begin
   for I := 1 to High(Trozos) do
   begin
     Trozo := Trozos[I];
-    // un '+' inicial es FORZAR: fuera por la forma (check-ref-format lo admite)
-    if Trozo.StartsWith('+') then
+    // la forma que fuerza o borra, fuera (RefspecQueDestruye)
+    if RefspecQueDestruye(Trozo) then
     begin
       AMalo := Trozo;
       Exit(True);
@@ -820,12 +833,6 @@ begin
     begin
       Src := Trozo.Substring(0, P);
       Dst := Trozo.Substring(P + 1);
-      // un src vacio (:dst) es BORRAR: fuera por la forma
-      if Src = '' then
-      begin
-        AMalo := Trozo;
-        Exit(True);
-      end;
       Vale := EsNombreDeRef(ARepo, AFijado, Src, True) and
         EsNombreDeRef(ARepo, AFijado, Dst, False);
     end
@@ -1871,12 +1878,14 @@ begin
     // centralized model (the repo lives next to the compiler). Lo que se
     // envia, UN nombre de rama o de tag que esta aqui: va al remoto con ese
     // mismo nombre. Asi push solo ANADE (David, 29-sep-2026: "nada de
-    // destruccion remota"): un '+' (forzar) o un ':dst' (borrar) no son ni
-    // nombre ni revision, y git lo dice (EsNombreDeRef)
+    // destruccion remota"): un '+' (forzar) o un ':dst' (borrar) se niegan por
+    // la FORMA (RefspecQueDestruye) antes que por git, que ACEPTA "+main" en
+    // cuanto hay una ref que se llama asi (medido el 18-oct-2026: forzaba)
     if (Params.Ref.Trim <> '') and (Params.Remote.Trim = '') then
       Exit(MsgFmt(SR_GIT_SIN_REMOTO_FMT, ['push', 'ref']));
-    if (Params.Ref.Trim <> '') and not (EsNombreDeRef(Repo, Fijado, Params.Ref.Trim, False) and
-       EsNombreDeRef(Repo, Fijado, Params.Ref.Trim, True)) then
+    if (Params.Ref.Trim <> '') and (RefspecQueDestruye(Params.Ref.Trim) or
+       not (EsNombreDeRef(Repo, Fijado, Params.Ref.Trim, False) and
+       EsNombreDeRef(Repo, Fijado, Params.Ref.Trim, True))) then
       Exit(MsgFmt(SR_GIT_PUSH_NOMBRE_FMT, [Params.Ref.Trim]));
     GitArgs := 'push' + IfThen(Params.Remote.Trim <> '', ' ' + EnComillas(Params.Remote.Trim)) +
       IfThen(Params.Ref.Trim <> '', ' ' + EnComillas(Params.Ref.Trim));
@@ -2029,6 +2038,9 @@ begin
     else if Cmd = 'config' then Valor := Params.Message;
     if Valor.Trim.StartsWith('-') then
       Exit(MsgFmt(SR_GIT_CAMPO_OPCION_FMT, [Campo, Valor.Trim]));
+    // ...ni el ref de push con la forma que fuerza o borra en el remoto
+    if (Cmd = 'push') and (Campo = 'ref') and RefspecQueDestruye(Valor.Trim) then
+      Exit(MsgFmt(SR_GIT_PUSH_NOMBRE_FMT, [Valor.Trim]));
   end;
   if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push', 'ls-remote']) then
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,

@@ -8,6 +8,145 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`delphi_git push` could FORCE the remote.** Since 1.19.0 the `ref` of a
+  push was judged only by git - the name of a branch or tag that exists
+  here -, and `check-ref-format` accepts `+main`: after `delphi_git tag
+  name="+main"` (git and the tool accept that name), `push ref="+main"`
+  sent `git push origin "+main"`, which git reads as "force main", and the
+  history of the remote was rewritten (measured: `+ d9d8cb9...765a884 main ->
+  main (forced update)`). A `ref` that starts with `+` (force) or `:`
+  (delete) is refused by its form before git is asked, in the judge of push
+  and again in its second barrier. The three batteries that claimed to watch
+  it passed only because no ref was called `+main`; one now creates it,
+  with the history diverged, and checks the remote. Push adds to the
+  remote, never overwrites or deletes.
+- **The engine runs with OUR settings, made for the configuration and
+  platform the project has selected (Win32 for one that is not Windows:
+  Code Insight is a Windows front end), and a running engine gets them
+  again when they change.** Measured on 17/18-oct-2026, four faults behind one
+  door, the settings file the engine runs with (`.delphilsp.json`):
+  - The IDE's own was preferred while it named a project that existed. The
+    IDE rewrites it only when it reloads the project, and nobody opens the
+    IDE on a server: after `delphi_config add-searchpath`, `delphi_diagnostics`
+    kept answering `F2063` for a unit in the new folder and
+    `delphi_definition` answered null, until somebody opened the IDE. And a
+    copy of a project carried one naming the ORIGINAL: the unit of the copy
+    resolved into the original's folder. It is never read now.
+  - An engine already running never got new settings: they went to it once,
+    when it started. `add-searchpath` was not seen, with ours either, until
+    the server restarted. The settings are made again on every request,
+    outside the lock that keeps their writer, written to the server's cache
+    only when they change, and given again to a running engine, which
+    reloads them (measured: 0.2 s the agent, 0.6 s the linter; its compiler
+    too, Win64 to Win32 on the same engine); the linter lints the same text
+    again with them.
+  - Ours chained every `DCC_Define` of every configuration - DEBUG and
+    RELEASE at once, a configuration that does not exist - and lacked the
+    `FRAMEWORK_<type>` that msbuild adds (`CodeGear.Delphi.Targets`). The
+    judge, msbuild, on the IDE's own VCL template: an error under
+    `{$IFDEF FRAMEWORK_VCL}`, which dcc reports in every configuration, was
+    invisible to `delphi_diagnostics`, and one under `{$IFDEF RELEASE}` was
+    reported in Debug. The properties now come from the build's evaluator
+    for the selected pair, a `$(DCC_Define)` inside a value being what the
+    groups before it said (as the IDE writes the defines of each
+    configuration); the unit paths are the ones the IDE gives its own engine
+    and msbuild compiles with - with `DCC_DebugDCUs` the IDE's Debug DCU
+    Path first, then the project's search path, then the Library Path
+    (`lib\<platform>\release` first; measured against the IDE's own
+    `.delphilsp.json` of six new projects) -, the macros of a project's
+    search path are expanded with the IDE's table (a `$(BDSCatalogRepository)`
+    there was dropped), and the navigation folders are the IDE's Browsing
+    Path from the registry instead of a list of 14 folders written by hand.
+  - The project of a unit was the first `.dproj` whose TEXT carried its
+    name. A unit its project reaches by search path had none (`LSP-035`,
+    nothing linted), and with two copies of a project side by side the
+    shared unit of one was linted with the other's project. A project now
+    serves a unit when its `.dpr`/`.dpk` lists it by its path (or the unit
+    is its main source) - the judge `delphi_move` already used -, and one
+    that only reaches the unit's folder by search path, the judge of
+    `delphi_references`, serves it when no project lists it. A single
+    `.dproj` in the unit's folder or above still governs it; among several,
+    the one that lists it. Only what one of these judges decided is cached,
+    and the cache follows everything the answer was decided on: every folder
+    walked, up and down (a project that appears there changes it), and every
+    `.dproj` judged with its `.dpr` - with only the chosen one's stamps, a
+    second project that lists the unit, created beside the first, was not
+    seen until the server restarted. (A first version put the two
+    judges at one level and lost the main source: with two `.dproj` in a
+    folder, `B.dpr` was linted with `A.dproj`, and a demo below that reaches
+    the folder by search path won over the project above that lists the
+    unit - review of 18-oct, both red before the fix.) `LSP-021`, `LSP-014`
+    and `LSP-038` no longer send the agent to the IDE's json: they say what
+    serves a unit, and `LSP-035` its remedy (`add-unit`, `add-searchpath`).
+- **`delphi_build` and `delphi_test` without `config=` build the
+  configuration the project has selected**, as the IDE and msbuild do, as
+  they already did with the platform; it was Debug, written by hand. The
+  answer says which one (`config`). `config=Base` is refused with its own
+  `CFG-120`: Base is what the configurations inherit from, the IDE does not
+  build it, and it built into `Win64\Base\` with the base settings. A
+  selected configuration the project does not declare says so (`CFG-121`),
+  not "does not exist" of a name the agent never sent. A `config` of blanks
+  was taken as "none" by the judge and reached msbuild as `/p:Config=" "`,
+  which builds with the base settings. The schemas no longer advertise
+  `Debug` as the default of `config`; `delphi_test discover` says the
+  `config` next to the `platform` that `run` will use, and no longer takes
+  `config=Debug` / `platform=Win64` for its schema's defaults (one was
+  refused, the other passed in silence).
+- **A project `delphi_create` makes is born with the configurations the
+  IDE writes.** Compared group by group with projects the 37.0 IDE had just
+  created (VCL, FMX, console, package, DUnitX): 1.20.1 aligned only the
+  version information, and a new project had no Debug or Release groups at
+  all - no `DEBUG` or `RELEASE` define, none of the debug information,
+  optimization, range and overflow checks of each -, no manifest, no icon
+  and no per-monitor DPI. They are written now as the IDE writes them, with
+  its keys (`Cfg_1` is Debug), the console target of a console, the
+  Android permissions of an FMX, the DUnitX folder of a test project; and
+  the console, package and test projects no longer carry the VCL unit
+  scopes, which the IDE does not give them. What stays ours on purpose: the
+  output folders (the build gate wants them declared), Win32 and Win64
+  enabled, and neither the list of packages installed on the machine nor
+  the groups of platforms the project does not enable.
+- `delphi_config add-searchpath` on the base group suggested
+  `delphi_build {platform:"Win64"}` whatever the project; it names the
+  project's own platform now.
+- `DSGN-154` (the lint could not ask the IDE's form reader) put the reason in
+  the middle of the sentence, and every reason ends in a full stop: the
+  agent read "...read the form without it.. preview loads the form." The
+  reason goes last now.
+
+### Added
+
+- **`delphi_config set-active config= platform=`**: the configuration
+  and/or platform the project builds by default - what *Activate* in the
+  IDE's Project Manager writes, the two default lines of the `.dproj` and
+  nothing else. Only ones the project declares (a configuration that is
+  not `Base`; a platform it has enabled and its framework can target), all
+  or nothing (`CFG-115`..`CFG-118`); the same value again writes nothing
+  and makes no backup (`CFG-119`). `view` says `defaultConfig` next to
+  `defaultPlatform`.
+
+### Changed
+
+- **One reader of the IDE's Library Search Path.** The library zone, the
+  engine's settings and `delphi_components` each read it from the registry
+  and expanded its macros their own way - three readers of one setting, two
+  of them over a hand-written twin of the generic registry reader. They ask
+  one now (`IdePlatformLibraryPaths`), with one macro table; measured to
+  give the same folders on the 13 platforms of this machine. And the
+  conditions of a project's property groups, its value groups and its
+  default lines (`<Config Condition="'$(Config)'==''">`) are written by one
+  namer each, which `delphi_create`, `add-platform`, `set-active` and the
+  build's evaluator share.
+- **The engine's settings are composed outside the lock that keeps their
+  writer.** It was held for the whole fabrication - the registry, the jail
+  for every folder of the search path, a `.dproj` on a network drive - and
+  every engine request of every session waited for another's. A lint makes
+  them once per request, not twice, and who only asks whether a unit HAS a
+  project (the lint, references, rename, the ancestor chain) no longer makes
+  them; settings of an older generation in the server's cache are purged.
+
 ## [1.20.1] - 2026-10-17
 
 What Hermes (Qwen3.8 Flash Next) found in the targeted rounds of 1.20.0 and of these fixes,

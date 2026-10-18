@@ -304,9 +304,11 @@ try:
             'delphi_components', {'platform': 'Amiga500'}, 'INVALID_PARAM', 'SR_COMPONENTS_PLATFORM_FMT')
 
     res, sc, t = llama('delphi_styles', {'command': 'view', 'path': ESTILO})
+    # (revisor de baterias, 18-oct-2026) con CONTENIDO: un exito en prosa no
+    # publica structuredContent (sc={}) y un view vacio pasaba
     check('E6 y un exito sigue siendo exito',
-          t.strip() != '' and not mc.fallo(t) and not res.get('isError') and sc.get('ok') is not False,
-          t[:200])
+          t.strip() != '' and not mc.fallo(t) and not res.get('isError') and sc.get('ok') is not False
+          and 'boton' in t, t[:200])
 
     res, sc, t = llama('delphi_read', {'path': ECO})
     check('E8 delphi_read devuelve el contenido tal cual aunque cite etiquetas con resultado',
@@ -335,7 +337,8 @@ try:
     res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': cid})
     check('E10 un commit que revienta a mitad es un fallo y DESHACE lo aplicado',
           cid != '' and limpio and res.get('isError') is True and
-          mc.abre(t, 'SR_CHANGESET_ROLLED_BACK_FMT') and open(NOTES).read() == 'First line.\nSecond line.\n',
+          # los BYTES: en modo texto un deshacer con otro salto de linea pasaba
+          mc.abre(t, 'SR_CHANGESET_ROLLED_BACK_FMT') and open(NOTES, 'rb').read() == b'First line.\nSecond line.\n',
           '%s | %s | %r' % (json.dumps(sc)[:120], t[:200], open(NOTES).read()))
     os.remove(NUEVA)
 
@@ -492,7 +495,7 @@ try:
     cli2.session('resultados-2')
     BX = 'procedure A;\nbegin\nend;'
     BY = 'procedure A;\nbegin\n  // y\nend;'
-    est = {'a1': BX, 'a2': 0}
+    est = {'a1': BX, 'a2': 0, 'ok1': 0}
 
     def agente1():
         for _ in range(10):
@@ -501,6 +504,7 @@ try:
                              300)
             if (r or {}).get('result') and not r['result'].get('isError'):
                 est['a1'] = otro
+                est['ok1'] += 1
 
     def agente2():
         for _ in range(10):
@@ -513,8 +517,11 @@ try:
     h1, h2 = threading.Thread(target=agente1), threading.Thread(target=agente2)
     h1.start(); h2.start(); h1.join(); h2.join()
     disco = open(BIG, encoding='utf-8-sig').read().replace('\r\n', '\n')
+    # ...y la TANDA (el agente 1, la que no tomaba el cerrojo) consiguio OKs: sin
+    # ninguno, est['a1'] seguia en BX, que ya estaba, y la carrera no se
+    # ejercitaba (revisor de baterias, 18-oct-2026)
     check('E33 dos agentes a la vez: lo que cada uno recibio como OK esta en el disco',
-          est['a2'] == 10 and ('// marca %d\n' % est['a2']) in disco and est['a1'] in disco,
+          est['a2'] == 10 and est['ok1'] >= 1 and ('// marca %d\n' % est['a2']) in disco and est['a1'] in disco,
           'agente2 OK hasta marca %d; en disco: %s' % (est['a2'],
                                                       [l for l in disco.split('\n') if 'marca' in l]))
 
@@ -538,7 +545,11 @@ try:
                                    'old': 'linea', 'new': 'linea del commit'})
     llama('delphi_changeset', {'command': 'stage', 'id': cid4, 'kind': 'create', 'path': UX,
                                'content': 'unit UAgente2;\ninterface\nimplementation\nend.\n'})
-    llama('delphi_changeset', {'command': 'preview', 'id': cid4})
+    res, sc, tp = llama('delphi_changeset', {'command': 'preview', 'id': cid4})
+    # (revisor de baterias, 18-oct-2026) el lote se abrio y el preview salio
+    # limpio: si no, el commit no aplicaba nada y el create corria solo
+    check('E34 preparacion: el lote abierto y su preview limpio',
+          cid4 != '' and (mc.como_json(tp) or {}).get('unresolved') == 0, tp[:200])
     fin_commit = {}
 
     def hace_commit():
@@ -547,9 +558,11 @@ try:
     hc = threading.Thread(target=hace_commit)
     hc.start()
     t0 = time.time()
+    a_mitad = False
     while time.time() - t0 < 60:
         try:
             if open(fsc[50]).read() != 'linea\n':
+                a_mitad = True
                 break
         except OSError:
             pass
@@ -561,8 +574,9 @@ try:
     ok2 = bool((r2 or {}).get('result')) and not r2['result'].get('isError')
     okc = bool((fin_commit.get('r') or {}).get('result')) and not fin_commit['r']['result'].get('isError')
     cont = open(UX).read() if os.path.exists(UX) else None
+    # (a_mitad: el create se mando A MITAD del commit, no a los 60 s)
     check('E34 un commit y un delphi_create del mismo fichero a la vez: lo que recibio OK esta en el disco',
-          ok2 != okc and cont is not None and (('DEL AGENTE 2' in cont) == ok2),
+          a_mitad and ok2 != okc and cont is not None and (('DEL AGENTE 2' in cont) == ok2),
           'create OK=%s, commit OK=%s, en disco: %r' % (ok2, okc, (cont or '')[:60]))
 
     rechazo('E35 una tanda de delphi_textedit sobre una CARPETA: INVALID_PARAM (decia "no existe")',
@@ -665,7 +679,7 @@ try:
     open(N2, 'w').write('ahora soy un fichero')
     res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': cid5})
     check('E45 el deshacer de un commit quita las carpetas que creo',
-          res.get('isError') is True and not os.path.exists(NV), '%s | %s' % (t[:200], os.listdir(JAIL)))
+          res.get('isError') is True and mc.es(t, 'SR_CHANGESET_ROLLED_BACK_FMT') and mc.es(t, 'SR_GUARD_FICHERO_EN_RUTA_FMT') and not os.path.exists(NV), '%s | %s' % (t[:200], os.listdir(JAIL)))
     os.remove(N2)
 
     TAP = os.path.join(JAIL, 'tapada')
@@ -725,7 +739,7 @@ try:
     res, sc, t = llama('delphi_upload', {'path': os.path.join(TAP, 'n.txt'), 'offset': 0,
                                          'chunkbase64': base64.b64encode(b'nuevo\n').decode()})
     check('E50 upload sin poder copiar lo que pisa: DENIED y no escribe',
-          res.get('isError') is True and sc.get('code') == 'DENIED' and
+          res.get('isError') is True and mc.es(t, 'SR_GUARD_FICHERO_EN_CARPETA_SERVIDOR_FMT') and sc.get('code') == 'DENIED' and
           open(os.path.join(TAP, 'n.txt')).read() == 'uno\n', '%s | %s' % (json.dumps(sc)[:100], t[:200]))
 
     UTF = os.path.join(JAIL, 'utf.txt')
@@ -759,10 +773,14 @@ try:
     rechazo('E53 un texto que llega como lista es INVALID_PARAM (se escribia su JSON)',
             'delphi_textedit', {'path': NOTES, 'old': ['First line.'], 'new': 'X'},
             'INVALID_PARAM', 'SR_SYS_PARAM_VALUE_FMT')
-    res, sc, t = llama('delphi_textedit', {'path': NOTES, 'edits': [{'old': 'Second line.',
-                                                                    'new': 'Second line.'}]})
-    check('E53 ...pero "edits" como lista JSON de verdad se acepta',
-          not res.get('isError') and open(NOTES, 'rb').read() == NOTES_ANTES, t[:200])
+    # (revisor de baterias, 18-oct-2026) una entrada que CAMBIA algo, en un
+    # fichero suyo: con old == new "los bytes iguales" pasaban siempre, y un
+    # error de protocolo (res={}) tambien
+    NOTES53 = os.path.join(JAIL, 'notas53.md')
+    open(NOTES53, 'wb').write(b'uno\ndos\n')
+    res, sc, t = llama('delphi_textedit', {'path': NOTES53, 'edits': [{'old': 'dos', 'new': 'DOS'}]})
+    check('E53 ...pero "edits" como lista JSON de verdad se acepta (y se aplica)',
+          not mc.fallo(t) and res.get('isError') is not True and open(NOTES53, 'rb').read() == b'uno\nDOS\n', t[:200])
 
     GRP = os.path.join(JAIL, 'Grupo.groupproj')
     open(GRP, 'w').write('<Project><ItemGroup><Projects Include="App.dproj"/></ItemGroup></Project>\n')
@@ -865,7 +883,7 @@ try:
     open(MV, 'w').write('mv\n')
     res, sc, t = llama('delphi_move', {'path': MV, 'dest': os.path.join(ECO, 'sub', 'mv.txt')})
     check('E64 move rechazado (un FICHERO en el camino): no deja copia en la papelera',
-          res.get('isError') is True and os.path.exists(MV) and not copias_de('mv.txt'),
+          res.get('isError') is True and mc.es(t, 'SR_GUARD_FICHERO_EN_RUTA_FMT') and os.path.exists(MV) and not copias_de('mv.txt'),
           '%s | %s' % (t[:200], copias_de('mv.txt')))
 
     antes_c = len(copias_de('Lf.pas'))
@@ -906,7 +924,7 @@ try:
         res, sc, t = llama('delphi_package', {'dir': PKF, 'outfile': os.path.join(JAIL, 'paqf.zip')})
     tmps = [n for n in os.listdir(JAIL) if n.startswith('paqf.zip') and n.endswith('.tmp')]
     check('E70 un paquete que se cae a medias no deja su .tmp',
-          res.get('isError') is True and not tmps, '%s | %s' % (t[:200], tmps))
+          res.get('isError') is True and mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and not tmps, '%s | %s' % (t[:200], tmps))
 
     TT = os.path.join(JAIL, 'tt')
     res, sc, t = llama('delphi_create', {'kind': 'project-test', 'name': 'Tt', 'dir': TT})
@@ -1115,8 +1133,10 @@ try:
     # CFG-034 NOT_FOUND, sin llegar a usar el defecto (octava revision)
     res, sc, t = llama('delphi_config', {'command': 'fix-references', 'project': P83,
                                          'section': 'summary'})
+    # ("funciona": not fallo - un timeout o un error de protocolo dan res={} y
+    # pasaban; revisor de baterias, 18-oct-2026)
     check('E88 fix-references con section=summary (el defecto): NO es CFG-110 y funciona',
-          not res.get('isError') and not mc.abre(t, 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT'), t[:200])
+          not mc.fallo(t) and not res.get('isError') and not mc.abre(t, 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT'), t[:200])
     rechazo('E88 ...y con section=platforms si (la regla sigue viva)', 'delphi_config',
             {'command': 'fix-references', 'project': DPROJ, 'section': 'platforms'},
             'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
@@ -1324,7 +1344,7 @@ try:
     finally:
         abierto.close()
     check('E97 una carpeta que no se deja mover: fallo, sigue ahi y SIN papelera vacia a su lado',
-          res.get('isError') is True and os.path.exists(F97) and
+          res.get('isError') is True and mc.es(t, 'SR_FILE_DELETE_LOCKED_FMT') and os.path.exists(F97) and
           not os.path.exists(os.path.join(D97, PAP['BACKUP_SUB'])), '%s | %s' % (t[:200], os.listdir(D97)))
 
     # E98 una tanda con un BLOQUE que no cambia nada: UNCHANGED (EDIT-114)
@@ -1599,7 +1619,7 @@ try:
     with mc.bloqueado(P119, lectura=True): # leer si; mover no
         res, sc, t = llama('delphi_delete', {'path': P119})
     check('E119 borrar una unit cuyo .pas no se deja mover: el form vuelve y SIN su copia',
-          res.get('isError') is True and os.path.exists(P119) and open(F119, 'rb').read() == ANT119 and
+          res.get('isError') is True and mc.es(t, 'SR_FILE_UNIT_DESHECHO_FMT') and mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and os.path.exists(P119) and open(F119, 'rb').read() == ANT119 and
           not mc.copias(D119, 'UFo.dfm') and not os.path.exists(os.path.join(D119, PAP['BACKUP_SUB'])),
           '%s | %s' % (t[:250], os.listdir(D119)))
 
@@ -1760,7 +1780,8 @@ try:
                                        'dest': os.path.join(D132, 'ULocal2.pas')})
     dt = time.time() - t0
     check('E132 mover una unit con un \\\\?\\UNC\\ en el .dpr: en %.1f s, sin SMB' % dt,
-          not res.get('isError') and dt < 5, t[:200])
+          not mc.fallo(t) and not res.get('isError') and dt < 5 and os.path.isfile(os.path.join(D132, 'ULocal2.pas')),
+          t[:200])
 
     # E133 una unit con .dfm Y .fmx: si el .fmx no se deja mover, el .dfm vuelve
     # (se quedaba en el destino) y la carpeta de destino que se creo, tambien fuera
@@ -1797,7 +1818,7 @@ try:
     with mc.bloqueado(F135):
         res, sc, t = llama('delphi_move', {'path': F135, 'dest': os.path.join(D135, 'n1', 'n2', 'n3', 'lk.txt')})
     check('E135 un move que falla: sin n1\\n2\\n3 (quedaban vacias)',
-          res.get('isError') is True and not os.path.exists(os.path.join(D135, 'n1')), os.listdir(D135))
+          res.get('isError') is True and mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and not os.path.exists(os.path.join(D135, 'n1')), os.listdir(D135))
 
     # E136 un copy=true que falla a mitad no deja la copia a medias
     D136 = os.path.join(JAIL, 'e136')
@@ -1809,7 +1830,7 @@ try:
         res, sc, t = llama('delphi_move', {'path': os.path.join(D136, 'src'),
                                            'dest': os.path.join(D136, 'dst'), 'copy': True})
     check('E136 copy=true que falla a mitad: sin la copia a medias (el "repite" daba FILE-025)',
-          res.get('isError') is True and not os.path.exists(os.path.join(D136, 'dst')), t[:200])
+          res.get('isError') is True and mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and not os.path.exists(os.path.join(D136, 'dst')), t[:200])
 
     # E137 restaurar una unit de la papelera con su form bloqueado: MOVE-017 y
     # la copia conserva su marca de dueno (otro agente podia purgarla)
@@ -1993,11 +2014,16 @@ try:
     F147 = os.path.join(D147, 'f.txt')
     open(F147, 'w').write('f\n')
     ROTA = os.path.join(D147, 'rota')
-    subprocess.run(['cmd', '/c', 'mklink', '/J', ROTA, os.path.join(BASE, 'no_existe_147')], capture_output=True)
+    # (revisor de baterias, 18-oct-2026) el destino que no existe, DENTRO de la
+    # jaula: fuera, desde la 2w de la 1.18.2 la puerta sigue el enlace colgante y
+    # lo niega antes de crear nada, y el deshacer que esto vigila no se llegaba
+    # a ejercitar (SR_JAIL_LINK_FMT en vez del fallo del move)
+    subprocess.run(['cmd', '/c', 'mklink', '/J', ROTA, os.path.join(JAIL, 'no_existe_147')], capture_output=True)
     if os.path.lexists(ROTA):
         res, sc, t = llama('delphi_move', {'path': F147, 'dest': os.path.join(ROTA, 'g.txt')})
-        check('E147 un move a traves de una junction rota falla y la junction SIGUE (la quitaba)',
-              res.get('isError') is True and os.path.lexists(ROTA) and os.path.exists(F147), t[:200])
+        check('E147 un move a traves de una junction rota falla EN EL MOVE (no en la puerta) y la junction SIGUE (la quitaba)',
+              res.get('isError') is True and not mc.es(t, 'SR_JAIL_LINK_FMT') and not mc.es(t, 'SR_JAIL_FMT')
+              and os.path.lexists(ROTA) and os.path.exists(F147), t[:200])
         if os.path.lexists(ROTA):  # el enlace (el fallo que vigila lo quitaba)
             os.rmdir(ROTA)
     else:
@@ -2312,7 +2338,8 @@ try:
     rechazo('E162 una carpeta COM1 en el camino: GUARD-027', 'delphi_read',
             {'path': os.path.join(D155, 'COM1', 'a.txt')}, 'INVALID_PARAM', 'SR_GUARD_NOMBRE_RESERVADO_FMT')
     res, sc, t = llama('delphi_textedit', {'path': os.path.join(D155, 'console.txt'), 'create': True, 'content': 'x'})
-    check('E162 ...y "console.txt" no es reservado', not res.get('isError'), t[:160])
+    check('E162 ...y "console.txt" no es reservado', not mc.fallo(t) and not res.get('isError')
+          and os.path.isfile(os.path.join(D155, 'console.txt')), t[:160])
 
     # E163 insert rutina-global de una rutina que YA existe: se AVISA (EDIT-116), no se
     # niega (dcc dira si es la misma; no somos la ninera) - se insertaba a ciegas
@@ -2369,7 +2396,8 @@ try:
     rechazo('E168 delphi_paserver platforms con sdk: PAS-051', 'delphi_paserver',
             {'command': 'platforms', 'sdk': 'x'}, 'INVALID_PARAM', 'SR_PASERVER_NO_VA_CON_COMANDO_FMT')
     res, sc, t = llama('delphi_designer', {'command': 'tree', 'path': os.path.join(D158, 'sub', 'UDos.dfm')})
-    check('E168 ...y una llamada con lo suyo sigue funcionando (designer tree)', not res.get('isError'), t[:160])
+    check('E168 ...y una llamada con lo suyo sigue funcionando (designer tree)', not mc.fallo(t) and not res.get('isError'),
+          t[:160])
 
     # E169 el preview ENSAYA con el motor lo que el commit va a comprobar (copiaba
     # tres reglas del commit y le faltaban las demas: decia Clean y el commit caia)
@@ -2476,8 +2504,10 @@ try:
     # 1.5 sigue sin serlo. Y changeset status no lleva id (su tabla decia que
     # si y SP_CHANGESET_ID que no)
     res, sc, t = llama('delphi_read', {'path': NOTES, 'fromline': 1.0, 'toline': 1.0})
+    # y LEE: un -32602 de protocolo no lleva SYS-016 y pasaba (revisor de baterias)
     check('E173 fromline=1.0 se acepta como entero (era SYS-016)',
-          not res.get('isError') and not mc.es(t, 'SR_SYS_PARAM_VALUE_FMT'), t[:200])
+          not mc.fallo(t) and not res.get('isError') and not mc.es(t, 'SR_SYS_PARAM_VALUE_FMT')
+          and 'First line.' in t, t[:200])
     res, sc, t = llama('delphi_read', {'path': NOTES, 'fromline': 1.5})
     check('E173 ...y 1.5 sigue siendo SYS-016', res.get('isError') is True and 'SYS-016' in t, t[:200])
     res, sc, t = llama('delphi_changeset', {'command': 'begin'})

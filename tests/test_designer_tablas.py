@@ -239,8 +239,11 @@ check('purga: la de una generacion mas nueva (otro servidor) se queda', nueva in
 check('purga: la de un Delphi que no esta se borra', otro not in hay, str(hay)[:500])
 check('purga: el .tmp viejo de un escritor que murio se borra', tmp not in hay, str(hay)[:500])
 r = call('delphi_designer', {'command': 'info', 'classname': 'TButton', 'framework': 'vcl', 'filter': 'Marca'})
+# contesta, y sin Marca: el filtro vacio con su pista (DSGN-048); un info en
+# error daba {} y "sin Marca" pasaba (revisor de baterias, 18-oct-2026)
 check('con la nueva generada, contesta la nueva (la falsa ya no)',
-      not any(p.get('name') == 'Marca' for p in J(r).get('properties', [])), r[:300])
+      not mc.fallo(r) and mc.es(r, 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT')
+      and not any(p.get('name') == 'Marca' for p in J(r).get('properties', [])), r[:300])
 
 srv.cierra()
 

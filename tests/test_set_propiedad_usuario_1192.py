@@ -115,7 +115,11 @@ try:
     r = pon('Tinte', 'clRed')
     check('S12 Tinte=clRed (TColor): escrito', escrito(r, 'Tinte = clRed'), r[:400])
     r = pon('Tinte', 'clNada')
-    check('S13 Tinte=clNada: negado', mc.fallo(r) and 'Tinte = clNada' not in mc.lee(DFM), r[:400])
+    # el juicio del TIPO (DSGN-093), no un fallo cualquiera (revisor de baterias,
+    # 18-oct-2026: si dejara de juzgar un TColor del usuario y lo negara como
+    # no juzgable, seguia verde)
+    check('S13 Tinte=clNada: negado por su tipo (DSGN-093)',
+          mc.es(r, 'SR_DESIGNER_SET_TIPO_FMT') and 'clNada' in r and 'Tinte = clNada' not in mc.lee(DFM), r[:400])
     r = pon('Cosa', 'X')
     check('S14 Cosa=X (una clase del usuario): negado diciendo que TCosa no lo puede juzgar, delphi_edit',
           negado(r, 'DSGN-087', 'TCosa', 'delphi_edit') and 'does not exist in TForm' not in r, r[:400])

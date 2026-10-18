@@ -69,6 +69,30 @@ def real(texto):
     return re.sub(r'(?i)(?<![a-z])srv([a-z]):', r'\1:', texto)
 
 
+def fuga_de_letra(texto, letras=None, con_separador=True):
+    """Las apariciones de una unidad REAL en un texto: [] si no se escapa
+    ninguna. EL lector de la casa (revisor de baterias, 18-oct-2026: siete
+    baterias con el suyo, y cada uno con su ceguera: solo la mayuscula, solo
+    tras una comilla, ciego tras un \\n escapado en JSON...).
+    letras: la o las que se buscan ('C', 'z:', ['d', 'e']); sin ellas,
+    cualquiera. La forma virtual (srvX:) no cuenta. Cuenta la letra sola o
+    tras algo que no es letra ni digito, o tras un escape de JSON (\\n \\r \\t
+    \\"), en mayuscula o minuscula; detras, los dos puntos y una barra (\\ o /,
+    tambien escapadas en JSON o en URL, o los dos puntos en URL: %3A) o, con
+    con_separador=False, los dos puntos solos (el motivo de una raiz: "drive
+    Z: is not connected"; sin letras daria falsos con cualquier 'x:')."""
+    low = re.sub(r'srv[a-z]:', '', (texto or '').lower())
+    if letras is None:
+        cuales = '[a-z]'
+    else:
+        if isinstance(letras, str):
+            letras = [letras]
+        cuales = '[' + ''.join(l.strip()[0].lower() for l in letras if l and l.strip()) + ']'
+    antes = r'(?:(?<![a-z0-9])|(?<=\\[nrt"]))'
+    despues = r'(?::(?:\\|/|%5c|%2f)|%3a)' if con_separador else r'(?::|%3a)'
+    return re.findall(antes + cuales + despues, low)
+
+
 _PAPELERA = {}
 
 
@@ -325,6 +349,75 @@ def motores_en(ppid, carpeta):
         if d and (os.path.normcase(larga(d)).rstrip('\\') + '\\').startswith(base):
             r.append(pid)
     return r
+
+
+def pid_vivo(pid):
+    """True si el proceso pid sigue vivo (su codigo de salida es STILL_ACTIVE,
+    259); False si ya no existe o acabo. Vivia en test_render_hijos_118 y lo
+    necesita test_remoterun (revisor de baterias, 18-oct-2026: "el proceso ha
+    muerto" miraba la ausencia de un .pid que borro la propia bateria)."""
+    import ctypes
+    k = ctypes.WinDLL('kernel32', use_last_error=True)
+    k.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    k.OpenProcess.restype = ctypes.c_void_p
+    k.CloseHandle.argtypes = [ctypes.c_void_p]
+    k.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    h = k.OpenProcess(0x1000, 0, pid)                     # QUERY_LIMITED_INFORMATION
+    if not h:
+        err = ctypes.get_last_error()
+        if err == 87:                                     # ERROR_INVALID_PARAMETER: no existe
+            return False
+        raise ctypes.WinError(err)
+    try:
+        code = ctypes.c_uint32()
+        if not k.GetExitCodeProcess(h, ctypes.byref(code)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return code.value == 259
+    finally:
+        k.CloseHandle(h)
+
+
+def etiqueta_de_integridad(ruta):
+    """El SID de la etiqueta de integridad de ruta, preguntado a WINDOWS (su
+    SACL, GetNamedSecurityInfo): 'S-1-16-4096' Low, 'S-1-16-8192' Medium...;
+    None si no lleva etiqueta explicita (la de por defecto, Medium). Dos
+    baterias leian el texto de icacls en ingles o en castellano: en otro
+    idioma no la veian nunca (revisor de baterias, 18-oct-2026)."""
+    import ctypes
+    from ctypes import wintypes as wt
+    adv = ctypes.WinDLL('advapi32', use_last_error=True)
+    k = ctypes.WinDLL('kernel32')
+    adv.GetNamedSecurityInfoW.argtypes = [wt.LPCWSTR, ctypes.c_int, wt.DWORD, ctypes.c_void_p, ctypes.c_void_p,
+                                          ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p),
+                                          ctypes.POINTER(ctypes.c_void_p)]
+    adv.GetNamedSecurityInfoW.restype = wt.DWORD
+    adv.GetAce.argtypes = [ctypes.c_void_p, wt.DWORD, ctypes.POINTER(ctypes.c_void_p)]
+    adv.ConvertSidToStringSidW.argtypes = [ctypes.c_void_p, ctypes.POINTER(wt.LPWSTR)]
+    k.LocalFree.argtypes = [ctypes.c_void_p]
+    sacl, sd = ctypes.c_void_p(), ctypes.c_void_p()
+    # SE_FILE_OBJECT = 1, LABEL_SECURITY_INFORMATION = 0x10 (se lee sin privilegios)
+    err = adv.GetNamedSecurityInfoW(ruta, 1, 0x10, None, None, None, ctypes.byref(sacl), ctypes.byref(sd))
+    if err:
+        raise ctypes.WinError(err)
+    try:
+        if not sacl.value:
+            return None
+        cuantos = ctypes.c_ushort.from_address(sacl.value + 4).value     # ACL.AceCount
+        for i in range(cuantos):
+            ace = ctypes.c_void_p()
+            if not adv.GetAce(sacl, i, ctypes.byref(ace)):
+                continue
+            if ctypes.c_ubyte.from_address(ace.value).value != 0x11:     # SYSTEM_MANDATORY_LABEL_ACE
+                continue
+            texto = wt.LPWSTR()
+            if adv.ConvertSidToStringSidW(ace.value + 8, ctypes.byref(texto)):   # header(4) + mask(4)
+                try:
+                    return texto.value
+                finally:
+                    k.LocalFree(texto)
+        return None
+    finally:
+        k.LocalFree(sd)
 
 
 def suspende(pid):
@@ -833,6 +926,16 @@ def lee(p):
     return open(p, 'rb').read().decode('utf-8-sig')
 
 
+def clave_de_config(dproj_xml, config):
+    """La clave (Cfg_N) con la que un .dproj nombra una configuracion: se lee de
+    su <BuildConfiguration>, nunca se supone (desde la 1.20.2 delphi_create
+    numera como el IDE, Debug Cfg_1 y Release Cfg_2: antes al reves, y una
+    bateria que tenia Cfg_2 por Debug se puso roja). '?' si no la declara.
+    Estaba en test_auditoria_1201; test_escritor_guardado la necesitaba."""
+    m = re.search(r'<BuildConfiguration\s+Include="%s">\s*<Key>(\w+)</Key>' % re.escape(config), dproj_xml)
+    return m.group(1) if m else '?'
+
+
 def espera_info(call, args, cond=lambda r: False, tope=240):
     """delphi_designer con args (info o prop), repetido mientras diga DSGN-051:
     la tabla del disenador se genera en segundo plano la primera vez (tras
@@ -1098,6 +1201,17 @@ def llego_a_git(t):
     el 27-sep-2026; antes "exit=N" salia como exito y las baterias lo
     miraban con startswith('exit=')."""
     return (t or '').startswith('exit=') or abre(t, 'SR_GIT_EXIT_FMT')
+
+
+def arbol_limpio(t):
+    """True si la respuesta de delphi_git status dice arbol LIMPIO: git
+    contesto con exit=0 y tras la linea de la rama ("## ...", status sale en
+    --porcelain=v1 -b desde la 1.19.0) no hay ni un fichero. Un status con
+    " M x" tambien sale con exit=0 (revisor de baterias, 18-oct-2026: "el
+    clone queda limpio" miraba solo eso)."""
+    lineas = (t or '').splitlines()
+    return (bool(lineas) and lineas[0].strip() == 'exit=0' and
+            all(not l.strip() or l.startswith('## ') for l in lineas[1:]))
 
 
 def rechazado(t):

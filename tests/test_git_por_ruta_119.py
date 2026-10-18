@@ -60,7 +60,15 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
 WHOAMI = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'whoami.exe')
 shutil.copy(WHOAMI, os.path.join(PLANTA, 'git.exe'))
-MARCA = 'WHOAMI /?'
+# (revisor de baterias, 18-oct-2026) la marca era 'WHOAMI /?', que el whoami
+# RENOMBRADO no imprime nunca (R1 lo mide): "MARCA not in r" no podia fallar.
+# El testigo es el contrario: lo que solo git de verdad contesta, la linea de
+# la rama de status --porcelain -b ("## main"); y donde no se lanza nada, ni
+# un "exit=" en la respuesta
+
+
+def git_de_verdad(r):
+    return mc.llego_a_git(r) and '## main' in r
 
 
 def git(*a):
@@ -99,7 +107,7 @@ s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='git-por-ruta',
 try:
     r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('R2 status con un git.exe plantado en la carpeta actual del servidor: contesta git de verdad',
-          mc.llego_a_git(r) and not mc.fallo(r) and MARCA not in r, ('marca' if MARCA in r else 'sin marca', r[:200]))
+          git_de_verdad(r) and not mc.fallo(r), r[:200])
 finally:
     s.cierra()
 
@@ -110,7 +118,7 @@ s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'PATH': SIN_GIT}), nombr
 try:
     r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('R3 un PATH sin git con la sonda en la carpeta actual: GIT-050, y la sonda no corre',
-          'GIT-050' in r and MARCA not in r, ('marca' if MARCA in r else 'sin marca', r[:200]))
+          mc.es(r, 'SR_GIT_NO_HAY_GIT_FMT') and 'exit=' not in r, r[:200])
 finally:
     s.cierra()
 
@@ -124,7 +132,7 @@ s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'PATH': BIN + ';' + SIN_
 try:
     r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('R4 un git.exe del PATH en una carpeta donde el agente escribe: GIT-050, y la sonda no corre',
-          'GIT-050' in r and 'exit=' not in r and MARCA not in r, r[:200])
+          mc.es(r, 'SR_GIT_NO_HAY_GIT_FMT') and 'exit=' not in r, r[:200])
 finally:
     s.cierra()
 
@@ -133,7 +141,7 @@ s = mc.Stdio(EXE, mc.entorno({}), nombre='git-por-ruta-sin-raices', cwd=PLANTA)
 try:
     r = s.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('R5 un servidor sin raices (solo lectura) usa el git del PATH: status contesta',
-          r.startswith('exit=0') and 'GIT-050' not in r, r[:200])
+          r.startswith('exit=0') and git_de_verdad(r) and not mc.es(r, 'SR_GIT_NO_HAY_GIT_FMT'), r[:200])
 finally:
     s.cierra()
 

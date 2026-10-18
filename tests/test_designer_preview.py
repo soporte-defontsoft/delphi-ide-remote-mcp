@@ -537,8 +537,11 @@ try:
     _ru = preview(path=_u32)
     check('P1u ...uno UTF-32 se niega antes de lanzar el renderizador (DSGN-122), no con un error de sintaxis',
           mc.rechazado(_ru) and mc.es(_ru, 'SR_DSGN_FORM_UTF32_FMT'), _ru[:400])
-    check('P1u ...y P1, ANSI, no lleva la nota', 'encodingNote' not in J(preview(path=PRUEBA)),
-          'encodingNote en un form ANSI')
+    # (revisor de baterias, 18-oct-2026) "sin la nota" sobre un preview en
+    # error pasaba: que se dibuje (su raiz) y no la lleve
+    _ra = J(preview(path=PRUEBA))
+    check('P1u ...y P1, ANSI, se dibuja y no lleva la nota',
+          bool((_ra.get('root') or {}).get('name')) and 'encodingNote' not in _ra, str(_ra)[:300])
     check('P1 el frame de una imagen sin recorte empieza en 0,0',
           j.get('frame') == '400x200@400x200+0+0', j.get('frame'))
 
@@ -658,7 +661,9 @@ try:
     # VALOR de una propiedad de clase tambien se lee por su ruta, como la RTL
     # lee una referencia (ComponenteDeRuta): el TEdit de dentro del frame
     r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.EditFrame')
-    check('P5 state con una referencia por su ruta (FrameX1.EditFrame): se encuentra y se aplica',
+    # ("se aplica" no se ve en la imagen: FocusControl no pinta nada; lo que se
+    # mide es que el referido se ENCUENTRA, frente a la negativa de abajo)
+    check('P5 state con una referencia por su ruta (FrameX1.EditFrame): se encuentra (sin negativa, se dibuja)',
           not mc.fallo(r) and not mc.rechazado(r) and J(r).get('root'), r[:300])
     r = preview(path=CONFRAME, state='FrameX1.LabelFrame.FocusControl=FrameX1.NoHayTal')
     check('P5 ...y una ruta que no nombra nada: RENDER, con el valor',

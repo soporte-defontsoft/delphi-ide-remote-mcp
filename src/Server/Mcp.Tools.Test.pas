@@ -34,8 +34,8 @@ type
     [RutaDelServidor]
     [RutaRelativa] // un NOMBRE suelto lo explica la tool (TEST-005): lo que da delphi_projects
     property Project: string read FProject write FProject;
+    // sin default en el esquema: sin config, la seleccionada en el proyecto
     [SchemaDescription(SP_TEST_CONFIG)]
-    [SchemaDefault('Debug')]
     property Config: string read FConfig write FConfig;
     [SchemaDescription(SP_TEST_FILTER)]
     property Filter: string read FFilter write FFilter;
@@ -88,8 +88,11 @@ begin
       'discover', 'path',
       'run', 'project config filter platform timeoutms nobuild'],
     ['path', Params.Path, '', 'project', Params.Project, '',
-     'config', Params.Config, 'Debug', 'filter', Params.Filter, '',
-     'platform', Params.Platform, 'Win64',
+     // sin valor por defecto en el esquema (1.20.2: los del proyecto); con
+     // 'Debug' y 'Win64' aqui, discover config=Debug pasaba callado y
+     // config=Release se decia (revision del 18-oct-2026)
+     'config', Params.Config, '', 'filter', Params.Filter, '',
+     'platform', Params.Platform, '',
      'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), '',
      'nobuild', IfThen(Params.NoBuild, 'true'), ''], Suyos, VaCon);
   if Sobra <> '' then

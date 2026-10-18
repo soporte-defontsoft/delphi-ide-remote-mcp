@@ -46,7 +46,7 @@ with open(os.path.join(BASE, 'settings.ini'), 'w') as _f:
     _f.write('[Workspace.%s]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\n\n' % (WS1, T1, T1RO, RAIZ1))
     _f.write('[Workspace.%s]\nToken=%s\nRoots=%s\n\n' % (WS2, T2, RAIZ2))
     _f.write('[Workspace.%s]\nToken=%s\nRoots=%s\n' % (WS3, T3, RAIZ3))
-REPORTS = os.path.join(BASE, 'reports')
+REPORTS = os.path.join(BASE, mc.INFORMES)
 MESSAGES = os.path.join(BASE, 'messages')
 VICTIMA = mc.carpeta('buzon-workspace-victima')
 SECRETO = '20260101-000000-bug-secreto.md'

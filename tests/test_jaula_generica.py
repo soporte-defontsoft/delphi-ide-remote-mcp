@@ -34,10 +34,13 @@ Medida contra el binario publicado de la 1.7.2 (el del agujero): la forma
 larga sale ROJA y las demas verdes. Es la prueba de que esta bateria ve lo
 que la de aquella regla no veia.
 
-Limite sabido: la negativa puede venir de la puerta o de un argumento que
-falta (a los obligatorios que no son rutas se les pasa 'x'): esta bateria
-mide que NO se lee ni se escribe fuera por ningun parametro, no cual puerta
-lo paro. Eso lo miden las baterias de cada regla.
+La negativa de cada par es la de la PUERTA (la jaula, GUARD-002/001, o una de
+sus anomalias, GUARD-009/010/022): el suelo de las rutas del servidor
+(Lsp.Guard, ArgPathOutsideDenied) corre antes del handler y del binder, asi
+que el 'x' de los obligatorios que no son rutas no llega a contestar. Hasta el
+18-oct-2026 valia cualquier isError (un INTERNAL incluido) o cualquier
+rechazo, y un handler que se negara por ese 'x' sin mirar la ruta pasaba: el
+suelo no lo vigilaba nadie (revisor de baterias).
 
 Usage:  python tests/test_jaula_generica.py [path-to-DelphiLspMcp.exe]
 """
@@ -135,6 +138,11 @@ open(DENTRO_TXT, 'w', newline='\n').write(CONTROL + '\n')
 ENLACE = os.path.join(JAIL, 'enlace-victima')
 subprocess.run(['cmd', '/c', 'mklink', '/J', ENLACE, VICT], capture_output=True)
 HAY_ENLACE = os.path.isdir(ENLACE) and os.path.exists(os.path.join(ENLACE, 'nota.txt'))
+
+
+# las negativas de la PUERTA: la jaula y sus anomalias (ver la cabecera)
+NEGATIVAS_DE_PUERTA = ('SR_JAIL_FMT', 'SR_JAIL_LINK_FMT', 'SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT',
+                       'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT', 'SR_GUARD_PREFIJO_DISPOSITIVO_FMT')
 
 
 def unc(p):
@@ -280,7 +288,7 @@ try:
                 ofensores.append('%s.%s -> SIN RESPUESTA %s' % (tool, param, t[:80]))
                 colgado = True
                 break
-            negada = (res.get('isError') is True) or mc.rechazado(t)
+            negada = mc.rechazado(t) and any(mc.es(t, c) for c in NEGATIVAS_DE_PUERTA)
             # el secreto con guiones (los .txt) y como identificador (el .pas y el .dproj)
             if not negada or fuga_en(crudo, SECRETO) or fuga_en(crudo, IDENT):
                 ofensores.append('%s.%s -> %s' % (tool, param, t[:120]))
@@ -296,9 +304,11 @@ try:
     despues = foto(JAIL)
     # ...y nada NUEVO dentro (una copia de la victima que entrara y luego fallara
     # no cambiaba ninguna clave de antes; r12b). Lo del servidor (sus temporales y
-    # su papelera dentro de la raiz) no cuenta como nuevo.
+    # su papelera dentro de la raiz) no cuenta como nuevo. Solo la papelera: desde
+    # la 1.18.2 nada del servidor vive en la jaula, y eximir __delphi-temp dejaba
+    # pasar una regresion que volviera a escribir ahi (revisor de baterias)
     nuevo = [x for x in despues if x not in DENTRO_ANTES and
-             not x.startswith(('__delphi-temp', mc.PAPELERA))]
+             not x.startswith(mc.PAPELERA)]
     check('J99 los fixtures de dentro siguen intactos, y nada nuevo dentro',
           not nuevo and all(despues.get(k) == v for k, v in DENTRO_ANTES.items()),
           nuevo[:6] + [k for k, v in DENTRO_ANTES.items() if despues.get(k) != v][:6])

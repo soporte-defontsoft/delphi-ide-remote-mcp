@@ -82,7 +82,11 @@ check('preview del lote resuelve (la trampa es en apply)', j.get('unresolved') =
 # test_changeset_solape_1191)
 with mc.bloqueado(files[6], lectura=True):
     r = cs({'command': 'commit', 'id': cid})
-check('commit falla y hace ROLLBACK COMPLETO', mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT'), r[:250])
+# ...y falla en la 7: un commit que cayera ANTES de escribir nada (un
+# pre-chequeo) daba "cero cambios" sin pasar por el deshacer de las 6
+# (revisor de baterias, 18-oct-2026)
+check('commit falla en la operacion 7 y hace ROLLBACK COMPLETO',
+      mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT') and re.search(r'operation 7 of \d+', r) is not None, r[:250])
 after = {p: sha(p) for p in files}
 check('CERO cambios netos tras el rollback (byte a byte)', before == after,
       [p for p in files if before[p] != after[p]])
@@ -188,15 +192,21 @@ _xa1 = os.path.join(BASE, 'x_a1.txt')
 open(_xa1, 'wb').write(b'uno\r\n')
 _ma1 = os.path.join(BASE, 'm_a1.txt')
 cid = begin()
-cs({'command': 'stage', 'id': cid, 'kind': 'move', 'path': _largo, 'dest': _ma1})
+# (revisor de baterias, 18-oct-2026) el move SE APILA, el preview sale limpio y
+# el commit cae en la 2: si el move no llegaba a apilarse, el commit solo
+# llevaba el edit y no habia nada que deshacer
+r1 = cs({'command': 'stage', 'id': cid, 'kind': 'move', 'path': _largo, 'dest': _ma1})
 cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': _xa1, 'old': 'uno', 'new': 'dos'})
 r = cs({'command': 'preview', 'id': cid})
+check('A-1 preparacion: el move de origen largo se apila y el preview sale limpio',
+      mc.abre(r1, 'SN_CHANGESET_STAGED_FMT') and (mc.como_json(r) or {}).get('unresolved') == 0, (r1[:200], r[:200]))
 os.chmod(_xa1, stat.S_IREAD)
 try:
     r = cs({'command': 'commit', 'id': cid})
     check('A-1 un move de origen largo (%d) y un commit que falla: el origen vuelve y el destino se va, '
           'sin perder el fichero' % len(_largo),
-          mc.fallo(r) and os.path.exists(_largo) and open(_largo, 'rb').read() == b'contenido unico\r\n' and
+          mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT') and re.search(r'operation 2 of 2', r) is not None and
+          os.path.exists(_largo) and open(_largo, 'rb').read() == b'contenido unico\r\n' and
           not os.path.exists(_ma1), (r[:300], os.path.exists(_largo), os.path.exists(_ma1)))
 finally:
     os.chmod(_xa1, stat.S_IREAD | stat.S_IWRITE)

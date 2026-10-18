@@ -1489,7 +1489,11 @@ begin
   // se aceptaban en silencio: "Relase" compilaba en Win64\Relase\ con los
   // ajustes de Base (segunda revision, 27-sep-2026). La regla de la
   // configuracion es la de delphi_test (Lsp.Dproj.ConfigDesconocida).
-  Denied := ConfigDesconocida(ADprojPath, IfThen(AConfig.Trim = '', 'Debug', AConfig.Trim));
+  // Sin config, la SELECCIONADA en el proyecto: la que compilan el IDE y
+  // msbuild mientras nadie pide otra (era Debug a fuego, como la plataforma
+  // hasta la 1.15; delphi_config set-active la cambia)
+  Denied := ConfigDesconocida(ADprojPath, IfThen(AConfig.Trim = '',
+    ReadDproj(ADprojPath).ConfigPorDefecto, AConfig.Trim), AConfig.Trim = '');
   if Denied <> '' then
     raise Exception.Create(Denied);
   if (AVerbosity <> '') and not MatchText(AVerbosity, ['quiet', 'normal', 'verbose']) then
@@ -1547,9 +1551,12 @@ begin
   NoPuede := PlataformaNoDeclarada(Proyecto, Plat);
   if NoPuede <> '' then
     raise Exception.Create(NoPuede);
-  Cfg := AConfig;
+  // (sin los blancos: el juez de arriba los tomaba por "sin config" y aqui
+  // llegaban a msbuild como /p:Config=" ", que compila con los ajustes de
+  // Base; revision del 18-oct-2026)
+  Cfg := AConfig.Trim;
   if Cfg = '' then
-    Cfg := 'Debug';
+    Cfg := Proyecto.ConfigPorDefecto;
   // la configuracion con SU nombre, el que declara el .dproj: lo que teclea el
   // agente solo elige (2an). Sin configuraciones declaradas, el nombre que ya
   // juzgo NombreDeConfigNoValido (ConfigDesconocida, arriba)

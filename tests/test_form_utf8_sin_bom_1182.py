@@ -54,11 +54,16 @@ try:
     p = form('B', b'\xef\xbb\xbf' + TXT.encode('utf-8'))
     r1 = srv.call('delphi_read', {'path': p})
     r2 = srv.call('delphi_designer', {'command': 'lint', 'path': p}, t=240)
-    check('F3 control: con BOM, sin nota', 'READ-009' not in r1 and 'READ-009' not in r2, (r1[:200], r2[:200]))
+    # (revisor de baterias, 18-oct-2026) "sin nota" sobre una lectura o un
+    # lint que fallaron pasaba: que contesten; el id por su constante
+    NOTA9 = 'SN_READ_FORM_UTF8_SIN_BOM_FMT'
+    check('F3 control: con BOM, sin nota', not mc.fallo(r1) and not mc.fallo(r2)
+          and not mc.es(r1, NOTA9) and not mc.es(r2, NOTA9), (r1[:200], r2[:200]))
     p = form('C', TXT.encode('cp1252'))
     r1 = srv.call('delphi_read', {'path': p})
     r2 = srv.call('delphi_designer', {'command': 'lint', 'path': p}, t=240)
-    check('F4 control: ANSI de verdad, sin nota', 'READ-009' not in r1 and 'READ-009' not in r2, (r1[:200], r2[:200]))
+    check('F4 control: ANSI de verdad, sin nota', not mc.fallo(r1) and not mc.fallo(r2)
+          and not mc.es(r1, NOTA9) and not mc.es(r2, NOTA9), (r1[:200], r2[:200]))
     p = form('D', "object Form1: TForm1\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'CAFÉ…'\r\nend\r\n"
              .encode('cp1252'))
     r = srv.call('delphi_read', {'path': p})

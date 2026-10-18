@@ -113,6 +113,25 @@ try:
         # AppendLine con el LF del mensaje que lo envuelve (26-sep-2026)
         check('B4b %s: el eco no mezcla CRLF con LF' % tool,
               '\r' not in r and r.count('\n') >= 3, repr(r[:120]))
+        # B3d (revisor de baterias, 18-oct-2026): B3 decia vigilar que un bloque
+        # que AÑADE lineas desplaza las ocurrencias pendientes, pero su tanda
+        # cambia 2 lineas por 2 (Delta 0: el arrastre ni corre). Aqui el primero
+        # se hace TRES lineas y, detras, la 3a: con el arrastre quitado, la 3a
+        # cae una linea antes (en el 2o bloque) y el eco y el disco lo dicen
+        open(f, 'w', newline='\n').write(semilla())
+        r = call(tool, {'path': f, 'edits': json.dumps([
+            {'old': 'alfa\nbeta', 'new': 'UNO-1\nUNO-2\nUNO-3', 'occurrence': 1},
+            {'old': 'alfa\nbeta', 'new': 'TRES-1\nTRES-2', 'occurrence': 3},
+        ])})
+        lineas = [l for l in open(f).read().split('\n')]
+        try:
+            i = lineas.index('final')
+            acerto = (lineas[i - 2:i] == ['TRES-1', 'TRES-2'] and
+                      lineas[lineas.index('medio uno') + 1:lineas.index('medio dos')] == ['alfa', 'beta'])
+        except ValueError:
+            acerto = False
+        check('B3d %s: un bloque que AÑADE lineas no descoloca la ocurrencia de detras (cae en la 3a, '
+              'el 2o intacto)' % tool, acerto, 'quedo: %s | respuesta: %s' % (lineas, r[:160]))
 
     # ------------------------------------------------------------------ B5
     f = os.path.join(JAIL, 'atomico.md')

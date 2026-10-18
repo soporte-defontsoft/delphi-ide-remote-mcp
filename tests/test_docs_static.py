@@ -143,7 +143,9 @@ for ln in ini_text.splitlines():
     m = re.match(r'([A-Za-z][A-Za-z0-9_]*)=', s)
     if m:
         need.add(m.group(1))
-missing_cfg = sorted(k for k in need if k not in config_md)
+# (revisor de baterias, 18-oct-2026) por PALABRA: 'Roots' se encontraba
+# dentro de 'ReadOnlyRoots' y una clave sin documentar pasaba
+missing_cfg = sorted(k for k in need if not re.search(r'\b' + re.escape(k) + r'\b', config_md))
 check('docs/CONFIGURATION.md menciona TODA seccion y clave activa de settings.example.ini '
       '(regla: la documentacion forma parte de cada actualizacion)',
       not missing_cfg, missing_cfg)

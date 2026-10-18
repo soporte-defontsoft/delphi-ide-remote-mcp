@@ -127,8 +127,9 @@ try:
 
     # ===== control FUERA de las raices + victima intacta =====
     r = git(SINLFS, 'worktree', action='add', path=os.path.join(OUT, 'wt'), ref='main')
-    check('worktree add FUERA de las raices: negado (control)',
-          mc.rechazado(r) and not os.path.exists(os.path.join(OUT, 'wt')), r[:300])
+    # (revisor de baterias, 18-oct-2026) por la JAULA, no por cualquier rechazo
+    check('worktree add FUERA de las raices: negado por la jaula (control)',
+          mc.es(r, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(OUT, 'wt')), r[:300])
     check('la victima de fuera sigue intacta', os.listdir(VIC) == ['v.txt'], os.listdir(VIC))
 finally:
     srv.cierra()

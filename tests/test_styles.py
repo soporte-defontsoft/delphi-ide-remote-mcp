@@ -420,13 +420,21 @@ check('delete: sin style pide style', mc.es(out, 'SR_STYLES_NEED_STYLE') and not
 U16 = os.path.join(STY, 'Utf16.style')
 open(U16, 'wb').write(b'\xff\xfe' + STYLE.encode('utf-16-le'))
 out = call('delphi_styles', {"path": U16, "command": "view"})
-check('un .style de texto en UTF-16 (FF FE) se ve: no es binario',
-      not mc.es(out, 'SR_STYLES_BINARY_FMT') and not mc.rechazado(out), out[:200])
+# (revisor de baterias, 18-oct-2026) "no es binario" pasaba con un view
+# vacio (STYLE-048, sin outcome) o un INTERNAL: los MISMOS estilos que el mismo
+# texto en UTF-8, y alguno
+U8 = os.path.join(STY, 'Utf8.style')
+open(U8, 'wb').write(STYLE.encode('utf-8'))
+de16 = sorted(x.get('style') for x in (mc.como_json(out) or {}).get('styles', []))
+de8 = sorted(x.get('style') for x in (mc.como_json(call('delphi_styles', {"path": U8, "command": "view"})) or {}).get('styles', []))
+check('un .style de texto en UTF-16 (FF FE) se ve: no es binario, y los mismos estilos que en UTF-8',
+      not mc.es(out, 'SR_STYLES_BINARY_FMT') and not mc.fallo(out) and de16 and de16 == de8,
+      (de16, de8, out[:200]))
 TPF = os.path.join(STY, 'Tpf0.style')
 open(TPF, 'wb').write(b'TPF0' + b'\x00' * 40)
 out = call('delphi_styles', {"path": TPF, "command": "view"})
 check('...y un flujo TPF0 a pelo si es binario', mc.es(out, 'SR_STYLES_BINARY_FMT'), out[:200])
-for f in (U16, TPF):
+for f in (U16, U8, TPF):
     os.remove(f)
 
 srv.cierra()

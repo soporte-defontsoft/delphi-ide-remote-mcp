@@ -101,6 +101,17 @@ procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
   file tools: delete/move a unit keeps the projects that use it consistent. }
 { AAlsoDir: una segunda carpeta desde la que subir (la de DESTINO de un move). }
 function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string = ''): TArray<string>;
+{ True si el .dpr o el .dpk de AProyecto (un .dproj se mira por su fuente
+  principal) nombra APasPath por su RUTA (in '...'): la unidad es de ese
+  proyecto. EL juez de ProjectsUsingUnit y el de que proyecto sirve a una
+  unidad (Lsp.Session.FindDproj): el nombre en el texto del .dproj casaba
+  con la copia de al lado (medido el 18-oct-2026). Lanza, como
+  UnitsParaBuscar, si el proyecto no se deja leer. AConSuFuente: su fuente
+  principal cuenta tambien como suya - el proyecto de un .dpr es el suyo, y
+  con varios .dproj en su carpeta se le daban los ajustes del primero
+  (revision del 18-oct-2026). }
+function ProyectoListaUnidad(const AProyecto, APasPath: string;
+  AConSuFuente: Boolean = False): Boolean;
 
 { Paquetes (.dpk) del workspace cuya clausula contains lista la unit
   AUnitName, subiendo desde la carpeta de ADpkPath hasta el borde de la jaula
@@ -2848,15 +2859,33 @@ begin
   end;
 end;
 
-function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string): TArray<string>;
+function ProyectoListaUnidad(const AProyecto, APasPath: string;
+  AConSuFuente: Boolean): Boolean;
 var
-  Dir, D, F, Stem: string;
-  Dirs: TArray<string>;
-  P: TProjectUnit;
+  F, Stem: string;
 begin
-  Result := [];
+  Result := False;
+  F := AProyecto;
+  if SameText(TPath.GetExtension(F), '.dproj') then
+    F := DprDe(F);
+  if not MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) or not TFile.Exists(F) then
+    Exit;
+  if AConSuFuente and (NormPath(F) = NormPath(APasPath)) then
+    Exit(True);
   // el nombre de la unit sale del nombre LARGO: el de UPROVE~1.PAS no es UPROVE~1
   Stem := TPath.GetFileNameWithoutExtension(LongCanonical(APasPath));
+  for var P in UnitsParaBuscar(F, Stem) do
+    if MismoIdentificador(P.UnitName, Stem) and
+      (NormPath(TPath.Combine(TPath.GetDirectoryName(F), P.Include)) = NormPath(APasPath)) then
+      Exit(True);
+end;
+
+function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string): TArray<string>;
+var
+  Dir, D, F: string;
+  Dirs: TArray<string>;
+begin
+  Result := [];
   Dir := TPath.GetDirectoryName(TPath.GetFullPath(APasPath));
   // Se sube desde la carpeta de la unit HASTA EL BORDE DE LA JAULA. Solo
   // miraba la carpeta y su madre, asi que en cuanto un proyecto tenia
@@ -2882,13 +2911,8 @@ begin
   begin
     for F in TDirectory.GetFiles(D, '*.dp?') do // .dpr y .dpk, no .dproj
       if MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) then
-      for P in UnitsParaBuscar(F, Stem) do // the .dpr decides; no .dproj read
-        if MismoIdentificador(P.UnitName, Stem) and
-          (NormPath(TPath.Combine(TPath.GetDirectoryName(F), P.Include)) = NormPath(APasPath)) then
-        begin
+        if ProyectoListaUnidad(F, APasPath) then // the .dpr decides; no .dproj read
           Result := Result + [F];
-          Break;
-        end;
   end;
 end;
 

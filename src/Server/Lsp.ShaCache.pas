@@ -33,6 +33,15 @@ const
 function DiskStamp(const APath: string): string;
 function HasStamp(const AStamp: string): Boolean;
 
+{ The stamp of a FOLDER: its last write time, which Windows moves when an
+  entry is created, deleted or renamed inside it (not when a file inside is
+  edited: that is the file's DiskStamp). For whoever cached an answer that a
+  NEW file in that folder would change: the project of a unit (FindDproj) went
+  stale when a second .dproj appeared beside it (measured 18-oct-2026). Same
+  sentinels as DiskStamp; STAMP_UNKNOWN for a file, and for a folder that is a
+  LINK (its own date does not move when its target's entries do). }
+function FolderStamp(const APath: string): string;
+
 implementation
 
 uses
@@ -48,10 +57,23 @@ var
   // full path (lower) -> (stamp, sha)
   GCache: TDictionary<string, TPair<string, string>>;
 
+// el sello de lo que GetFileAttributesEx no pudo preguntar, por su error: no
+// esta (STAMP_GONE) o esta y no se deja (STAMP_UNKNOWN). Lo comparten el sello
+// de un fichero y el de una carpeta
+function SelloSinAtributos: string;
+var
+  Err: DWORD;
+begin
+  Err := GetLastError;
+  if (Err = ERROR_FILE_NOT_FOUND) or (Err = ERROR_PATH_NOT_FOUND) or (Err = ERROR_INVALID_NAME) then
+    Result := STAMP_GONE
+  else
+    Result := STAMP_UNKNOWN;
+end;
+
 function DiskStamp(const APath: string): string;
 var
   Data: TWin32FileAttributeData;
-  Err: DWORD;
 begin
   if GetFileAttributesEx(PChar(APath), GetFileExInfoStandard, @Data) then
   begin
@@ -67,13 +89,19 @@ begin
       + '|' + UIntToStr((UInt64(Data.nFileSizeHigh) shl 32) or Data.nFileSizeLow);
   end
   else
-  begin
-    Err := GetLastError;
-    if (Err = ERROR_FILE_NOT_FOUND) or (Err = ERROR_PATH_NOT_FOUND) or (Err = ERROR_INVALID_NAME) then
-      Result := STAMP_GONE
-    else
-      Result := STAMP_UNKNOWN;
-  end;
+    Result := SelloSinAtributos;
+end;
+
+function FolderStamp(const APath: string): string;
+var
+  Data: TWin32FileAttributeData;
+begin
+  if not GetFileAttributesEx(PChar(APath), GetFileExInfoStandard, @Data) then
+    Exit(SelloSinAtributos);
+  if ((Data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY) = 0) or
+     ((Data.dwFileAttributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+    Exit(STAMP_UNKNOWN);
+  Result := UIntToStr((UInt64(Data.ftLastWriteTime.dwHighDateTime) shl 32) or Data.ftLastWriteTime.dwLowDateTime);
 end;
 
 function HasStamp(const AStamp: string): Boolean;

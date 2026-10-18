@@ -491,9 +491,17 @@ try:
     os.makedirs(ruta('r11'))
     subprocess.run(['cmd', '/c', 'mklink', '/J', ruta('r11', 'enlace'), os.path.join(VIC, 'victima')],
                    capture_output=True)
+    # (revisor de baterias, 18-oct-2026) el enlace EXISTE y la negativa es SUYA:
+    # la jaula mide el destino REAL de la ruta, y el de un junction que sale de
+    # las raices esta fuera (GUARD-001); con cualquier rechazo, "la victima
+    # intacta" pasaba sin haber ejercitado nada. Mover el enlace COMO enlace
+    # (lo que haria un operador) es de la 1.20.2
+    check('R11 fixture: el junction hacia la victima de fuera', os.path.isjunction(ruta('r11', 'enlace')))
     try:
         r = call('delphi_move', {'path': ruta('r11', 'enlace'), 'dest': ruta('r11', 'enlace2')})
-        check('R11 mover un junction: la victima de fuera sale intacta y no se intento reescribir',
+        check('R11 mover un junction que sale de las raices: negado por el enlace (GUARD-001), sigue donde estaba y la victima intacta',
+              mc.es(r, 'SR_JAIL_LINK_FMT') and os.path.isjunction(ruta('r11', 'enlace')) and
+              not os.path.lexists(ruta('r11', 'enlace2')) and
               open(os.path.join(VIC, 'victima', 'UVic.pas'), 'rb').read() == antes11 and not mc.es(r, 'SN_REUBICA_FALLOS_FMT') and not mc.es(r, 'SN_REUBICA_SALTADAS_FMT'),
               r[:300])
     finally:

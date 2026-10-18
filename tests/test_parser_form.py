@@ -74,9 +74,14 @@ try:
     # P5: los controles
     open(FMX, 'wb').write(ROTO.replace(b'  // un comentario que el parser del IDE no lee\r\n', b''))
     r = srv.call('delphi_designer', {'command': 'lint', 'path': FMX}, t=200)
-    check('P5 el form arreglado: lint sin DSGN-123', not mc.es(r, 'SN_DSGN_PARSER_FMT'), r[:300])
+    # (revisor de baterias, 18-oct-2026) ausencias sobre respuestas que podian
+    # ser error: el lint CONTESTA (limpio), y el preview pasa la puerta del
+    # parser y llega a la del renderizador - que este servidor no lleva: DSGN-060
+    check('P5 el form arreglado: lint limpio, sin DSGN-123',
+          mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT') and not mc.es(r, 'SN_DSGN_PARSER_FMT'), r[:300])
     r = srv.call('delphi_designer', {'command': 'preview', 'path': FMX}, t=200)
-    check('P5 ...y preview sin DSGN-126', not mc.es(r, 'SR_DSGN_PREVIEW_PARSER_FMT'), r[:300])
+    check('P5 ...y preview pasa el parser (sin DSGN-126) hasta el renderizador, que aqui no esta (DSGN-060)',
+          not mc.es(r, 'SR_DSGN_PREVIEW_PARSER_FMT') and mc.abre(r, 'SR_DESIGNER_SIN_RENDER_FMT'), r[:300])
     r = srv.call('delphi_styles', {'command': 'set', 'path': STYLE, 'style': 'mibtn', 'prop': 'Opacity',
                                    'value': '0.5'}, t=120)
     check('P5 ...y un set bueno en el estilo se escribe', not mc.fallo(r) and b'Opacity = 0.5' in open(STYLE, 'rb').read(),

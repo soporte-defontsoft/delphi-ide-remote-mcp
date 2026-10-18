@@ -293,12 +293,19 @@ job6b = j.get('jobId') or ''
 pidf = os.path.join(DEPLOY, job6b + '.pid')
 _vigias = [f for f in os.listdir(DEPLOY) if f.startswith(job6b + '.wait.') and f.endswith('.exe')]
 check('vigia con el pid en el nombre (<job>.wait.<pid>.exe) junto al .pid', j.get('stillRunning') is True and os.path.isfile(pidf) and len(_vigias) == 1 and _vigias[0][len(job6b) + 6:-4].isdigit(), (r[:150], os.listdir(DEPLOY)))
+# (revisor de baterias, 18-oct-2026) el pid del trabajo, del nombre del vigia:
+# "ha muerto" se mide en el PROCESO, no en el .pid que borra la bateria
+pid6b = int(_vigias[0][len(job6b) + 6:-4]) if len(_vigias) == 1 and _vigias[0][len(job6b) + 6:-4].isdigit() else 0
+check('kill sin .pid (preparacion): el trabajo vive antes del kill', pid6b > 0 and mc.pid_vivo(pid6b), (pid6b, _vigias))
 if os.path.isfile(pidf):
     os.remove(pidf)   # lo que hace un deploy fallido antes de rendirse
 r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6b}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('kill sin .pid: lo mata por el nombre del vigia', j.get('killed') is True and mc.es(j.get('output'), 'SK_JOB_TERMINADO_EL_TRABAJO_FMT') and mc.catalogo()['SF_JOB_NOMBRE_DEL_VIGIA'] in (j.get('output') or ''), r[:300])
-check('kill sin .pid: el proceso ha muerto de verdad', not any(f.endswith('.pid') for f in os.listdir(DEPLOY)), os.listdir(DEPLOY))
+_dl = time.time() + 10
+while pid6b and mc.pid_vivo(pid6b) and time.time() < _dl:
+    time.sleep(0.2)
+check('kill sin .pid: el proceso ha muerto de verdad', pid6b > 0 and not mc.pid_vivo(pid6b), (pid6b, os.listdir(DEPLOY)))
 
 # 7) sin AllowRemoteRun: remote-run RECHAZADO, install-runner permitido
 r = call_off('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})

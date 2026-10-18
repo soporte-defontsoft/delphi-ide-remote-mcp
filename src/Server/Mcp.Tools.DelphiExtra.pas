@@ -62,8 +62,9 @@ type
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_BUILD_PLATFORM)]
     property Platform: string read FPlatform write FPlatform;
+    // sin default en el esquema: sin config, la que el proyecto tiene
+    // seleccionada (TDprojInfo.ConfigPorDefecto), no Debug
     [SchemaDescription(SP_BUILD_CONFIG)]
-    [SchemaDefault('Debug')]
     property Config: string read FConfig write FConfig;
     [SchemaDescription(SP_BUILD_TARGET)]
     [SchemaDefault('Build')]

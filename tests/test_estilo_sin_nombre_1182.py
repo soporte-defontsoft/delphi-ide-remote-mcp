@@ -73,21 +73,24 @@ try:
     p = estilo('s3', SIN)
     r = J(srv.call('delphi_styles', {'path': p, 'command': 'lint'}))
     v = J(srv.call('delphi_styles', {'path': p, 'command': 'view'}))
+    # (revisor de baterias, 18-oct-2026) con view en error v es {} y "sin
+    # styleNote" pasaba: que liste sus estilos; y los ids por su constante
     check('S3 control: sin ese objeto, clean y sin styleNote',
-          r.get('clean') is True and not (r.get('withoutStyleName') or []) and
+          r.get('clean') is True and not (r.get('withoutStyleName') or []) and bool(v.get('styles')) and
           not any(e.get('styleNote') for e in v.get('styles', [])), (r.get('clean'), v.get('styles')))
 
     p = estilo('s4', b"object TStyleContainer\r\n  inherited cardstyle: TLayout\r\n    Hint = 'x'\r\n  end\r\nend\r\n")
     r = srv.call('delphi_styles', {'path': p, 'command': 'get', 'style': 'cardstyle'})
     check('S4 get de un nombre que es el de un objeto sin StyleName: STYLE-047, con sus lineas',
-          mc.rechazado(r) and 'STYLE-047' in r and '2-4' in r, r[:300])
+          mc.abre(r, 'SR_STYLE_SOLO_NOMBRE_FMT') and '2-4' in r, r[:300])
     r = srv.call('delphi_styles', {'path': p, 'command': 'delete', 'style': 'cardstyle'})
-    check('S5 delete del mismo: STYLE-047 (un solo "no hay")', mc.rechazado(r) and 'STYLE-047' in r, r[:300])
+    check('S5 delete del mismo: STYLE-047 (un solo "no hay")', mc.abre(r, 'SR_STYLE_SOLO_NOMBRE_FMT'), r[:300])
     p = estilo('s6', b"object TStyleContainer\r\nend\r\n")
     r = srv.call('delphi_styles', {'path': p, 'command': 'view'})
-    check('S6 view de un contenedor vacio: STYLE-048', 'STYLE-048' in r and 'STYLE-010' not in r, r[:300])
+    check('S6 view de un contenedor vacio: STYLE-048',
+          mc.es(r, 'SN_STYLES_VIEW_VACIO') and not mc.es(r, 'SN_STYLES_VIEW_NOTE'), r[:300])
     r = srv.call('delphi_styles', {'path': estilo('s7', SIN), 'command': 'get', 'style': 'nada'})
-    check('S7 control: get de uno que no existe, STYLE-036', mc.rechazado(r) and 'STYLE-036' in r, r[:300])
+    check('S7 control: get de uno que no existe, STYLE-036', mc.abre(r, 'SR_STYLE_NINGUN_ESTILO_STYLENAME_FMT'), r[:300])
 finally:
     srv.cierra()
 

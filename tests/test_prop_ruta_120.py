@@ -183,7 +183,10 @@ try:
     check('P19 ...y es EL mismo texto que da set al negar un valor (Rojo en el TAlphaColor de un form FMX)',
           mc.tiene(t, 'DSGN-093') and toma != '' and toma in t, (toma[:200], t[:600]))
     r = prop('TLabel', 'fmx', 'TextSettings.HorzAlign')
-    check('P20 control: un enumerado no lleva takes (sus members ya lo dicen)', '"takes"' not in r, r[:400])
+    # contesta, y es el enumerado (sin takes); "no lleva takes" sobre un error
+    # pasaba (revisor de baterias, 18-oct-2026)
+    check('P20 control: un enumerado no lleva takes (sus members ya lo dicen)',
+          not mc.fallo(r) and 'TTextAlign' in r and '"takes"' not in r, r[:400])
 finally:
     srv.cierra()
 

@@ -60,13 +60,15 @@ try:
     r = srv.call('delphi_designer', {'path': d, 'command': 'set', 'component': 'Button1', 'prop': 'Caption',
                                      'value': "'nil'"}, t=240)
     check("N3 el remedio: Caption='nil' entre comillas escribe ese texto",
-          not mc.rechazado(r) and b"    Caption = 'nil'\r\n" in open(d, 'rb').read(), r[:300])
+          not mc.fallo(r) and b"    Caption = 'nil'\r\n" in open(d, 'rb').read(), r[:300])
 
     d = form('UN4')
     r = srv.call('delphi_designer', {'path': d, 'command': 'set', 'component': 'Button1', 'prop': 'PopupMenu',
                                      'value': 'nil'}, t=240)
+    # (revisor de baterias, 18-oct-2026) la LINEA entera: un PopupMenu = nil
+    # escrito seguia verde
     check('N4 el control: PopupMenu=nil (una referencia) quita su linea',
-          not mc.rechazado(r) and b'PopupMenu = PopupMenu1' not in open(d, 'rb').read(), r[:300])
+          not mc.fallo(r) and b'PopupMenu =' not in open(d, 'rb').read(), r[:300])
 finally:
     srv.cierra()
 

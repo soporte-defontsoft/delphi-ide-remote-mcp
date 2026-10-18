@@ -65,7 +65,7 @@ type
     [Setup] procedure Prepara;
     [TearDown] procedure Limpia;
     [Test] procedure FabricarALaVezNoChoca;
-    [Test] procedure ElFicheroDelIdeRechazadoSeVuelveAMirar;
+    [Test] procedure ElFicheroDelIdeNoSeUsa;
     [Test] procedure BajoUnaCarpetaQueSeVaNoSeArrancaMotor;
     [Test] procedure ElPreguntadoIlegibleNoSeCallaYElOtroSeDejaParaLuego;
     [Test] procedure LosSinUsoYLosQueSeFueronSeCierran;
@@ -857,13 +857,11 @@ begin
   end;
 end;
 
-// La configuracion de un proyecto se resuelve una vez y se recuerda mientras
-// no cambie el fichero que la decidio. Con un .delphilsp.json del IDE que se
-// RECHAZA (caducado, o leido a medio escribir) decide el .dproj, y el del IDE
-// no se volvia a mirar hasta que cambiase el .dproj: el IDE lo dejaba entero
-// un momento despues y el servidor seguia con la fabricada (tercera revision
-// de la 1.7.7, leido en el codigo; esta prueba lo mide).
-procedure TFabricaTests.ElFicheroDelIdeRechazadoSeVuelveAMirar;
+// Los ajustes del motor son SIEMPRE los nuestros, de su .dproj: el
+// .delphilsp.json del IDE no se usa nunca, ni a medio escribir ni entero y
+// nombrando el proyecto (1.20.2; hasta entonces, entero, ganaba: medido, M4).
+// Antes esta prueba media lo contrario (tercera revision de la 1.7.7).
+procedure TFabricaTests.ElFicheroDelIdeNoSeUsa;
 var
   Dpr, Ide, Raiz, Primera, Segunda: string;
 begin
@@ -877,8 +875,8 @@ begin
   TFile.WriteAllText(Ide, Format('{"settings": {"project": "%s", "dllname": ""}}',
     [TLspClient.PathToUri(Dpr)]));
   Segunda := TLspSession.Instance.ResolveSettings(Dpr, Raiz);
-  Assert.IsTrue(SameText(Segunda, Ide),
-    'el del IDE, ya entero, es el que vale; y se sigue con: ' + Segunda);
+  Assert.IsTrue(SameText(Segunda, Primera),
+    'el del IDE, entero, tampoco: se sigue con los nuestros, y salio: ' + Segunda);
 end;
 
 // Entre los dos avisos de una carpeta que se va no se arranca ningun motor

@@ -152,7 +152,9 @@ open(os.path.join(T, 'MiTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').w
     "  Writeln('PASS uno');\nend.\n")
 r = A.call('delphi_test', {'project': os.path.join(T, 'MiTest.dproj')}, t=900)
 check('C1 delphi_test con solo "project" se entiende como run',
-      not mc.es(r, 'SR_TEST_NEED_PATH') and ('"result"' in r or 'result' in r), r[:250])
+      # el JSON de un run, con su campo result ('result' suelto lo traia cualquier
+      # texto; revisor de baterias, 18-oct-2026)
+      not mc.es(r, 'SR_TEST_NEED_PATH') and 'result' in (mc.como_json(r) or {}), r[:250])
 A.call('delphi_config', {'project': os.path.join(T, 'MiTest.dproj'),
                           'command': 'add-searchpath', 'path': P1})
 j = J(A.call('delphi_projects', {}))

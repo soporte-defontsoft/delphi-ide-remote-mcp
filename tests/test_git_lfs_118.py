@@ -73,7 +73,8 @@ try:
             mc.check('objeto descargado con SHA-256 propio',got==oid)
             mc.check('control batch y objeto reales',any(h[0]=='batch' for h in hits) and any(h[0]=='object' for h in hits),hits)
             mc.check('hosts del control permitidos',all(h[1].startswith('127.0.0.1:') for h in hits),hits)
-            mc.check('clone queda limpio',srv.call('delphi_git',dict(repo=dest,command='status')).startswith('exit=0'))
+            st=srv.call('delphi_git',dict(repo=dest,command='status'))
+            mc.check('clone queda limpio',mc.arbol_limpio(st),st[:300])
         else:
             mc.check('LFS exterior se niega por su endpoint',mc.es(out,'SR_GIT_LFS_ENDPOINT_FMT') and 'LFS endpoint' in out,out)
             mc.check('rechazo nunca muestra valor','localhost' not in out and '/lfs' not in out,out)

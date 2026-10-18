@@ -43,6 +43,7 @@ type
     FVersion: string;
     FInclude: Boolean;
     FRequires: string;
+    FConfig: string;
   public
     [SchemaDescription(SP_CFG_PROJECT)]
     [Required]
@@ -81,6 +82,8 @@ type
     property Output: string read FOutput write FOutput;
     [SchemaDescription(SP_CFG_REQUIRES)]
     property Requires: string read FRequires write FRequires;
+    [SchemaDescription(SP_CFG_CONFIG)]
+    property Config: string read FConfig write FConfig;
   end;
 
   TDelphiConfigTool = class(TMCPToolBase<TDelphiConfigParams>)
@@ -282,8 +285,9 @@ begin
         Cfgs.Add(C);
       // la que delphi_build y delphi_test compilan sin platform=, con el MISMO
       // lector: no habia forma de saberla sin compilar (Hermes, validacion de
-      // la 1.16.0)
+      // la 1.16.0); y la configuracion, igual (set-active las cambia)
       Return.AddPair('defaultPlatform', Info.PlataformaPorDefecto);
+      Return.AddPair('defaultConfig', Info.ConfigPorDefecto);
     end;
     if (Sec = 'all') or (Sec = 'platforms') then
     begin
@@ -600,24 +604,21 @@ begin
       if PlataformaDeGrupo(D.Condicion, True) <> '' then
         Tras := D.Cierra;
     if (Tras = 0) and
-       GrupoConCondicion(AXml, '''$(Config)''==''Base'' or ''$(Base)''!=''''', G) then
+       GrupoConCondicion(AXml, ConfigDefinerCondition('Base', 'Base'), G) then
       Tras := G.Cierra;
     if Tras = 0 then
       raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_CONFIG));
+    // EL escritor del definidor (Lsp.Dproj), el de delphi_create tambien
     AXml := Copy(AXml, 1, Tras - 1) + sLineBreak +
-      '    <PropertyGroup ' + XmlAtributo('Condition', DefinerCondition(APlatform)) + '>' + sLineBreak +
-      '        ' + XmlElemento('Base_' + APlatform, 'true') + sLineBreak +
-      '        <CfgParent>Base</CfgParent>' + sLineBreak +
-      '        <Base>true</Base>' + sLineBreak +
-      '    </PropertyGroup>' + Copy(AXml, Tras, MaxInt);
+      XmlGrupoDefinidor(APlatform, 'Base') + Copy(AXml, Tras, MaxInt);
   end;
   if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
   begin
     if not GrupoConCondicion(AXml, GroupCondition(''), G) then
       raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
+    // EL escritor del grupo de valores (Lsp.Dproj), el de delphi_create tambien
     AXml := Copy(AXml, 1, G.Cierra - 1) + sLineBreak +
-      '    <PropertyGroup ' + XmlAtributo('Condition', GroupCondition(APlatform)) + '>' + sLineBreak +
-      '    </PropertyGroup>' + Copy(AXml, G.Cierra, MaxInt);
+      XmlGrupoDeValores(APlatform, 'Base', '') + Copy(AXml, G.Cierra, MaxInt);
   end;
 end;
 
@@ -818,7 +819,9 @@ begin
   PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CONFIG_PATH_ADDED_FMT,
     [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat), Show,
-     IfThen(Plat = '', 'Win64', Plat)]);
+     // en el grupo base, la que el proyecto compila sin platform= (era Win64 a
+     // fuego: el build que se proponia no era el del proyecto)
+     IfThen(Plat = '', InfoDeDproj(Xml).PlataformaPorDefecto, Plat)]);
 end;
 
 function RemoveSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
@@ -1497,6 +1500,108 @@ begin
       [APlatform, Perfil, ONinguno(Antes)]);
 end;
 
+{ La pareja que el proyecto compila mientras nadie pide otra: sus dos
+  SELECTORES (<Config Condition="'$(Config)'==''"> y el de Platform, los que
+  lee Lsp.Dproj.SelectorDe), lo que deja "Activate" en el Project Manager del
+  IDE. Solo lo que el proyecto declara - una configuracion suya que se
+  compila (Base no) y una plataforma que tiene activa y su framework puede -,
+  con el nombre que el proyecto le da. Todo o nada: con las dos, una que no
+  vale no deja escrita la otra. Lo leen delphi_build y delphi_test sin config
+  ni platform, el IDE y los ajustes del motor (Lsp.ConfigFabricator). }
+function SetActive(const ADproj, ARawConfig, ARawPlatform: string): string;
+type
+  TCambio = record
+    Tag, Valor, Antes: string;
+    Tramo: TTramoXml;
+  end;
+var
+  Info: TDprojInfo;
+  Enc, Xml, Razon, Hecho, Ya: string;
+  Cambios, Quedan: TArray<TCambio>;
+  C: TCambio;
+
+  function Pon(const ATag, AValor: string): string;
+  var
+    X: TCambio;
+  begin
+    Result := '';
+    if not SelectorDe(Xml, ATag, X.Tramo) then
+      Exit(MsgFmt(SR_CFG_SET_ACTIVE_SIN_SELECTOR_FMT, [TPath.GetFileName(ADproj), ATag]));
+    X.Tag := ATag;
+    X.Valor := AValor;
+    X.Antes := ValorDeTramo(Xml, X.Tramo).Trim;
+    Cambios := Cambios + [X];
+  end;
+
+begin
+  if (ARawConfig.Trim = '') and (ARawPlatform.Trim = '') then
+    Exit(MsgText(SR_CFG_SET_ACTIVE_NECESITA));
+  Xml := PatchLoadText(ADproj, Enc);
+  Info := InfoDeDproj(Xml);
+  Cambios := nil;
+  if ARawConfig.Trim <> '' then
+  begin
+    // una que declara, con SU nombre: lo que teclea el agente solo elige
+    var Cfg := '';
+    var Validas := '';
+    for var N in Info.Configs do
+      if not SameText(N, 'Base') then
+      begin
+        Validas := IfThen(Validas = '', N, Validas + ', ' + N);
+        if SameText(N, ARawConfig.Trim) then
+          Cfg := N;
+      end;
+    if Cfg = '' then
+      Exit(MsgFmt(SR_CFG_SET_ACTIVE_CONFIG_FMT, [ARawConfig.Trim, ONinguno(Validas)]));
+    Result := Pon('Config', Cfg);
+    if Result <> '' then
+      Exit;
+  end;
+  if ARawPlatform.Trim <> '' then
+  begin
+    // las reglas del build: la que su framework puede y el proyecto tiene activa
+    var Plat := CanonicalPlatform(ARawPlatform);
+    if Plat = '' then
+      Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+    if not Info.CanTarget(Plat, Razon) then
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Razon));
+    Result := PlataformaNoDeclarada(Info, Plat);
+    if Result <> '' then
+      Exit;
+    Result := Pon('Platform', Plat);
+    if Result <> '' then
+      Exit;
+  end;
+  // lo que ya era: no se escribe, ni copia (como CFG-020, la carpeta que ya
+  // estaba en el search path; revision del 18-oct-2026)
+  Ya := '';
+  Quedan := nil;
+  for C in Cambios do
+    if C.Antes = C.Valor then
+      Ya := IfThen(Ya = '', '', Ya + ', ') + MsgFmt(SF_CFG_SET_ACTIVE_ACTUAL_FMT, [LowerCase(C.Tag), C.Valor])
+    else
+      Quedan := Quedan + [C];
+  if Length(Quedan) = 0 then
+    Exit(MsgFmt(SN_CFG_SET_ACTIVE_YA_FMT, [TPath.GetFileName(ADproj), Ya]));
+  Cambios := Quedan;
+  // del ultimo al primero: las posiciones de los de delante siguen valiendo
+  if (Length(Cambios) = 2) and (Cambios[0].Tramo.Ini < Cambios[1].Tramo.Ini) then
+  begin
+    C := Cambios[0];
+    Cambios[0] := Cambios[1];
+    Cambios[1] := C;
+  end;
+  Hecho := '';
+  for C in Cambios do
+  begin
+    Xml := Copy(Xml, 1, C.Tramo.Ini - 1) + XmlEscape(C.Valor) + Copy(Xml, C.Tramo.Fin, MaxInt);
+    Hecho := MsgFmt(SF_CFG_SET_ACTIVE_PIEZA_FMT, [LowerCase(C.Tag), C.Valor, ONinguno(C.Antes)]) +
+      IfThen(Hecho = '', '', ', ' + Hecho);
+  end;
+  PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  Result := MsgFmt(SN_CFG_SET_ACTIVE_FMT, [TPath.GetFileName(ADproj), Hecho]);
+end;
+
 { Los parametros de CADA comando, ademas de project y command. Uno que no es
   del comando se dice: set-output con path=".\bin" contestaba "puesto en
   Compiled" (su valor por defecto) ignorando lo que se pidio (sexta revision).
@@ -1506,7 +1611,7 @@ end;
 function ParametroQueSobra(const ACmd: string; const P: TDelphiConfigParams;
   out ASuyos, AVaCon: string): string;
 const
-  COMANDOS: array [0 .. 33] of string = (
+  COMANDOS: array [0 .. 35] of string = (
     'view', 'section',
     'add-platform', 'platform sdk profile',
     'remove-platform', 'platform',
@@ -1518,6 +1623,7 @@ const
     'set-version', 'version include',
     'set-sdk', 'platform sdk',
     'set-profile', 'platform profile',
+    'set-active', 'config platform',
     'add-requires', 'requires',
     'add-unit', 'path',
     'remove-unit', 'path',
@@ -1530,7 +1636,8 @@ begin
      'path', P.Path, '', 'section', P.Section, CFG_SECTION_POR_DEFECTO,
      'remotedir', P.RemoteDir, '', 'version', P.Version, '',
      'include', IfThen(P.Include, 'true'), '',
-     'output', P.Output, '', 'requires', P.Requires, ''], ASuyos, AVaCon);
+     'output', P.Output, '', 'requires', P.Requires, '',
+     'config', P.Config, ''], ASuyos, AVaCon);
 end;
 
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
@@ -1693,6 +1800,8 @@ begin
       Result := SetSdk(Proj, Params.Platform, Params.Sdk)
     else if Cmd = 'set-profile' then
       Result := SetProfile(Proj, Params.Platform, Params.Profile)
+    else if Cmd = 'set-active' then
+      Result := SetActive(Proj, Params.Config, Params.Platform)
     else if Cmd = 'add-requires' then
     begin
       Result := WriteTargetDenied(Params.Project);

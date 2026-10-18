@@ -10,7 +10,10 @@ FILES = {
     'JaulaVictima.pas': "unit JaulaVictima;\ninterface\nimplementation\nStyleLookup := 'JaulaVictimaLookup';\nend.\n",
     'JaulaVictima.fmx': "object JaulaVictima: TForm\n StyleLookup = 'JaulaVictimaLookup'\nend\n",
     'copia.txt': 'privado',
-    'copia.txt.by': 'JaulaVictimaDueno',
+    # la marca de dueno por SU nombrador (era '.by' a mano: si cambiaba la
+    # extension, el cruce no se probaba y la ausencia pasaba; revisor de
+    # baterias, 18-oct-2026)
+    mc.marca_dueno('copia.txt'): 'JaulaVictimaDueno',
 }
 for n, t in FILES.items():
     open(os.path.join(OUT, n), 'w').write(t)
@@ -29,10 +32,17 @@ try:
     os.makedirs(DELETE)
     DLINK = os.path.join(DELETE, 'enlace')
     check('fixture junction en carpeta por borrar', mc.junction(DLINK, OUT))
+    # un proyecto que LISTA la unit de detras del enlace: lo unico que nombra
+    # algo de dentro al borrar es la nota de proyectos, y sin el la ausencia no
+    # podia fallar; y el borrado OCURRE (revisor de baterias, 18-oct-2026)
+    PDPR = os.path.join(MINE, 'P.dpr')
+    open(PDPR, 'w').write("program P;\nuses\n  JaulaVictima in 'borrar\\enlace\\JaulaVictima.pas';\nbegin\nend.\n")
+    _pdpr = open(PDPR, 'rb').read()
     try:
         r = srv.call('delphi_delete', {'path': DELETE})
-        check('delete carpeta no muestra nombres de fuera', not mc.sin_respuesta(r) and
-              'JaulaVictima' not in r, r)
+        check('delete carpeta no muestra nombres de fuera, y borra (a la papelera)',
+              mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(DELETE) and
+              'JaulaVictima' not in r and open(PDPR, 'rb').read() == _pdpr, r)
     finally:
         if os.path.exists(DLINK):
             os.rmdir(DLINK)
@@ -42,8 +52,8 @@ try:
     check('fixture junction en papelera propia', mc.junction(TLINK, OUT))
     try:
         r = srv.call('delphi_delete', {'path': TRASH, 'purge': True})
-        check('purge no lee ni anuncia el dueno de fuera', not mc.sin_respuesta(r) and
-              'JaulaVictima' not in r, r)
+        check('purge no lee ni anuncia el dueno de fuera, y purga',
+              mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(TRASH) and 'JaulaVictima' not in r, r)
     finally:
         if os.path.exists(TLINK):
             os.rmdir(TLINK)

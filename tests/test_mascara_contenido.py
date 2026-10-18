@@ -92,10 +92,20 @@ L_RUTA = lineas.index(LINEA_RUTA)
 L_USO = next(i for i, l in enumerate(lineas) if 'Result := RUTA' in l)
 
 
+# la raiz de la bateria en TODAS sus formas con la letra real: corta (8.3, como
+# viene del %TEMP%), larga (la que escribe el servidor) y escapadas en JSON. Solo
+# la corta, y el servidor escribe la larga: "no aparece" pasaba siempre
+# (revisor de baterias, 18-oct-2026). Precedida de una letra no cuenta: srvc:\
+# acaba en c:\ y es la ruta YA enmascarada
+FORMAS_BASE = [re.compile(r'(?<![A-Za-z])' + re.escape(f), re.I)
+               for p in {BASE, mc.larga(BASE), mc.corta(BASE)} if p
+               for f in (p, p.replace('\\', '\\\\'))]
+
+
 def ruta_enmascarada(t):
     """las rutas de la respuesta van con la unidad virtual, y la del proyecto
-    no sale con la letra real"""
-    return VIRTUAL in t and (BASE + '\\') not in t and BASE.replace('\\', '\\\\') not in t
+    no sale con la letra real en ninguna de sus formas"""
+    return VIRTUAL in t and not any(f.search(t) for f in FORMAS_BASE)
 
 
 # ---- M1 / M2: symbols ----
@@ -141,7 +151,8 @@ r = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'pa
                               'fragment': 'no-esta', 'new': 'x', 'atline': L_RUTA + 1})
 check('M6 changeset: la linea real de la negativa TAL CUAL y la ruta enmascarada',
       mc.rechazado(r) and re.search(r'(?m)^\s+%d\|%s$' % (L_RUTA + 1, re.escape(LINEA_RUTA)), r) is not None and
-      BASE not in r, r[:600])
+      # (la negativa no nombra ruta: que no salga la raiz real en ninguna forma)
+      not any(f.search(r) for f in FORMAS_BASE), r[:600])
 call('delphi_changeset', {'command': 'rollback', 'id': cid})
 
 # ---- M7..M10: la ENTRADA (B-9) ----

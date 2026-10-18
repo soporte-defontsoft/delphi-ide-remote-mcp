@@ -163,7 +163,9 @@ try:
     g('reset', '-q')
     r = tool(command='add', paths=['enlace'])
     check('E4 add paths=["enlace"]: negado, indice limpio',
-          mc.rechazado(r) and 'enlace' not in g('ls-files').stdout, r[:300] + ' | ' + g('ls-files').stdout)
+          # SU negativa (GIT-076), como E3: un SYS-015 o cualquier otra puerta
+          # tambien dejaban el indice limpio (revisor de baterias, 18-oct-2026)
+          negado(r) and 'enlace' not in g('ls-files').stdout, r[:300] + ' | ' + g('ls-files').stdout)
     g('reset', '-q')
     r = tool(command='diff')
     check('E5 diff: GIT-076', negado(r), r[:300])

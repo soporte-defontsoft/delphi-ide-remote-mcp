@@ -66,7 +66,9 @@ for _d in (JAIL, FUERA):
 EXE = mc.copia_exe(SRV)
 open(os.path.join(JAIL, 'secreto.txt'), 'w').write('de la jaula')
 open(os.path.join(SRV, 'casa.txt'), 'w').write('de la casa del servidor')
-TEMP_SRV = os.path.join(SRV, '__delphi-temp')
+# la temporal del servidor por SU nombrador (revisor de baterias, 18-oct-2026:
+# con el nombre a mano, si cambiaba TempFolderName copias() daba [] siempre)
+TEMP_SRV = os.path.join(SRV, mc.TEMPORALES)
 MAP = (r'Software\Classes\Local Settings\Software\Microsoft\Windows'
        r'\CurrentVersion\AppContainer\Mappings')
 ue = ctypes.WinDLL('userenv')
@@ -131,8 +133,8 @@ junction = mc.junction  # EL de mcp_cliente (vivia aqui)
 
 
 def etiqueta_baja(p):
-    o = subprocess.run(['icacls', p], capture_output=True).stdout.decode('cp850', 'replace').lower()
-    return 'low mandatory' in o or 'obligatorio bajo' in o
+    # por EL lector de la casa: el SID que da Windows, no el texto de icacls
+    return mc.etiqueta_de_integridad(p) == 'S-1-16-4096'
 
 
 def J(t):
@@ -258,7 +260,10 @@ begin
   WSAStartup($0202, Wsa);
   S := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   Modo := 1;
-  ioctlsocket(S, FIONBIO, Modo);
+  // FIONBIO es un DWORD por encima de MaxInt y el parametro un Longint: con
+  // {$R+} -el Debug que crea el IDE, y delphi_create desde la 1.20.2- daba
+  // ERangeError (medido el 18-oct-2026 con un programa de diez lineas)
+  ioctlsocket(S, Longint(FIONBIO), Modo);
   FillChar(A, SizeOf(A), 0);
   A.sin_family := AF_INET;
   A.sin_port := htons(APuerto);
@@ -690,8 +695,14 @@ while time.time() < _fin and not huerfano:
     huerfano = next(iter(nuevos), None)
     time.sleep(0.5)
 time.sleep(2)
+# el control POSITIVO de copias(): mientras el test corre, su copia esta en la
+# temporal (sin el, K12b/K13c/K19 "ni copias" pasaban tambien si copias() no
+# viera nunca ninguna: otro prefijo, otra carpeta; revisor de baterias)
+copias_vivas = copias()
 srv.mata()
 time.sleep(1)
+check('K13 control: mientras corria, copias() veia la copia del test en la temporal del servidor',
+      bool(copias_vivas), '%s en %s' % (copias_vivas, TEMP_SRV))
 check('K13 fixture: muerto el servidor a mitad de un test, su contenedor (con SU marca) queda huerfano',
       huerfano is not None and huerfano in contenedores(),
       'marca %s; los de la cuenta: %s' % (MARCA, contenedores(todos=True)))

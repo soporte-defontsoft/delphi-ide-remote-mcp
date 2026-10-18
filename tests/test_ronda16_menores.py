@@ -3,9 +3,11 @@
 
   R1  a .delphilsp.json next to a project that is not a JSON object (an
       array, a "settings" that is text, a number) answered SYS-006 INTERNAL
-      "Invalid class typecast" in EVERY tool of the engine: now it names no
-      project and the server fabricates its own (Lsp.Client.ObjetoJson, the
-      one reader of a JSON that must be an object)
+      "Invalid class typecast" in EVERY tool of the engine. Since 1.20.2 the
+      IDE's settings file is never read, so it cannot break anything: what is
+      measured now is that, with one planted, the engine answers and lints
+      with the project's .dproj (review of 18-oct-2026: the old check passed
+      whatever ObjetoJson did, nothing opened that file any more)
   R2  delphi_references opened each candidate with AcquireFor, which looks
       for the CANDIDATE's engine: a unit shared by two projects started the
       engine of the other one (the first .dproj naming it) just to warm it,
@@ -14,8 +16,10 @@
       (TLspSession.AbreEn)
   R3  the settings cache decided by a .dproj, with no IDE settings file at
       the time, stayed valid while the .dproj did not change: a
-      <project>.delphilsp.json the IDE writes later was never taken. Now the
-      entry stops being valid when it appears
+      <project>.delphilsp.json the IDE writes later was never taken. Since
+      1.20.2 the IDE's settings file is never taken at all (the engine runs
+      with ours, made from the .dproj: test_json_nuestro_1202), so the one
+      that appears later starts no other engine
   R4  delphi_definition kind=declaration chained to the target file with
       AcquireFor too - the twin of R2: a declaration in a shared unit
       started another engine and overwrote the settings of the answer
@@ -58,12 +62,16 @@ def proyecto(nombre, dir_):
 
 # R1: un .delphilsp.json que no es un objeto
 for nombre, cuerpo in (('array', '[]'), ('settings_texto', '{"settings": "x"}'), ('numero', '42')):
-    dpr, _ = proyecto('P', os.path.join(BASE, 'r1_' + nombre))
+    dpr, _ = proyecto('P', os.path.join(BASE, 'r1_' + nombre))  # _ = su .dproj
     open(os.path.join(os.path.dirname(dpr), 'P.delphilsp.json'), 'w').write(cuerpo)
     r = call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
     # y contesta: no vale cualquier otro fallo (un timeout, otro INTERNAL)
     check('R1 un .delphilsp.json %s no es un INTERNAL: el hover contesta' % nombre,
           not mc.tiene(r, 'SYS-006') and 'typecast' not in r and not mc.fallo(r), r[:200])
+    d1 = mc.como_json(call('delphi_diagnostics', {'path': dpr}, 300)) or {}
+    check('R1 ...y se linta con el .dproj del proyecto, no con ese json',
+          os.path.normcase(mc.larga(mc.real(d1.get('project', '')))) == os.path.normcase(mc.larga(_)),
+          str(d1)[:200])
 
 # R2: references no arranca el motor de otro proyecto para calentar un candidato
 comun = os.path.join(BASE, 'r2', 'comun')
@@ -77,7 +85,8 @@ for prj, uso in (('Z', 'UsoZ'), ('B', 'UsoB')):  # B sale antes al buscar el .dp
         'unit %s;\ninterface\nprocedure Llama;\nimplementation\nuses UComun;\n'
         'procedure Llama;\nbegin\n  Saluda;\nend;\nend.\n' % uso)
     for u in (os.path.join(d, uso + '.pas'), os.path.join(comun, 'UComun.pas')):
-        call('delphi_config', {'command': 'add-unit', 'project': dproj, 'path': u})
+        r = call('delphi_config', {'command': 'add-unit', 'project': dproj, 'path': u})
+        check('R2 preparacion: %s en %s' % (os.path.basename(u), os.path.basename(dproj)), not mc.fallo(r), r[:200])
 uso_z = os.path.join(BASE, 'r2', 'Z', 'UsoZ.pas')
 call('delphi_hover', {'path': uso_z, 'line': 7, 'character': 4}, 300)
 antes = motores()
@@ -93,10 +102,17 @@ r = call('delphi_definition', {'path': uso_z, 'line': 7, 'character': 4, 'kind':
 check('R4 declaration de una rutina de la unidad compartida: la encuentra',
       'UComun' in r and not mc.fallo(r), r[:300])
 check('R4 ...sin arrancar otro motor (%d -> %d) ni una nota LSP-021 falsa' % (antes, motores()),
-      antes >= 1 and motores() == antes and not mc.tiene(r, 'LSP-021'), (antes, motores(), r[:300]))
+      antes >= 1 and motores() == antes and not mc.es(r, 'SN_LSP_NO_SETTINGS_WARNING'), (antes, motores(), r[:300]))
+# la premisa de R2 y R4, DESPUES (un diagnostics arranca un linter): el motor de
+# la comun es el de PB, no el de PZ que pregunta; con el de PZ los mutantes
+# (AcquireFor) no arrancaban ninguno y los dos seguian verdes
+d2 = mc.como_json(call('delphi_diagnostics', {'path': os.path.join(comun, 'UComun.pas')}, 300)) or {}
+check('R2/R4 premisa: la comun se sirve con OTRO proyecto (PB), no con el que pregunta (PZ)',
+      os.path.basename(mc.real(d2.get('project', ''))).lower() == 'pb.dproj', str(d2)[:200])
 
-# R3: el .delphilsp.json que el IDE escribe DESPUES se toma. Con su propio
-# nombre: los settings fabricados se llaman <proyecto>-<hash>-..., y los
+# R3: el .delphilsp.json que el IDE escribe DESPUES no se toma (1.20.2: el
+# del IDE no se toma nunca; hasta entonces si, y arrancaba otro motor). Con su
+# propio nombre: los settings fabricados se llaman <proyecto>-<hash>-..., y los
 # tres P de R1 casaban con el mismo glob (revision de la 1.13.0)
 dpr, _ = proyecto('PTres', os.path.join(BASE, 'r3'))
 call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
@@ -104,13 +120,12 @@ antes = motores()
 fab = glob.glob(os.path.join(mc.cache_servidor('configs', APPDATA), 'PTres-*.delphilsp.json'))
 check('R3 preparacion: los settings fabricados de PTres, y solo esos', len(fab) == 1, fab)
 if fab:
-    # el motor nuevo es el de los settings del IDE; el de los fabricados se
-    # queda hasta que el barrendero lo pare por no usarse
+    # el del IDE al lado del proyecto: el mismo motor sigue con los nuestros
     shutil.copy(fab[0], os.path.join(BASE, 'r3', 'PTres.delphilsp.json'))
     time.sleep(1)
     call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
-    check('R3 el del IDE que aparece despues se toma: un motor con SUS settings (%d -> %d)'
-          % (antes, motores()), motores() == antes + 1, (antes, motores()))
+    check('R3 el del IDE que aparece despues NO se toma: ningun motor mas (%d -> %d)'
+          % (antes, motores()), antes >= 1 and motores() == antes, (antes, motores()))
 
 srv.cierra()
 mc.borra(BASE)

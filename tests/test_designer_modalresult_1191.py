@@ -45,9 +45,11 @@ try:
           mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_SET_TIPO_FMT') and mc.lee(DFM) == antes, r[:300])
     r = d(command='set', path=DFM, component='BtnOk', prop='ModalResult', value='1')
     p = d(command='preview', path=DFM, maxwidth=200)
+    # (revisor de baterias, 18-oct-2026) sin "ignored" no se miraba el preview:
+    # uno que fallaba (el form no carga, el renderizador) pasaba
     check('M2 set ModalResult=1: escrito, y el preview no lo ignora',
-          not mc.fallo(r) and 'ModalResult = 1' in mc.lee(DFM) and 'ModalResult' not in p.split('"ignored"')[-1][:200]
-          if '"ignored"' in p else not mc.fallo(r) and 'ModalResult = 1' in mc.lee(DFM), (r[:200], p[:300]))
+          not mc.fallo(r) and 'ModalResult = 1' in mc.lee(DFM) and not mc.fallo(p)
+          and 'ModalResult' not in str((mc.como_json(p) or {}).get('ignored') or ''), (r[:200], p[:300]))
     s.call('delphi_edit', {'path': DFM, 'old': 'ModalResult = 1', 'new': 'ModalResult = mrOK'})
     r = d(command='lint', path=DFM)
     check('M3 lint con "ModalResult = mrOK" escrito a mano: no CLEAN, y lo nombra',

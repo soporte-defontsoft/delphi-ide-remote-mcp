@@ -31,8 +31,8 @@ EXE = mc.copia_exe(SRV)
 with open(os.path.join(SRV, 'settings.ini'), 'w') as f:
     f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n' % PORT +
             '[Workspace.Purga]\nToken=%s\nRoots=%s\n' % (TOKEN, JAIL))
-CASA = os.path.join(SRV, '__delphi-temp')
-RAIZ_TMP = os.path.join(JAIL, '__delphi-temp')
+CASA = os.path.join(SRV, mc.TEMPORALES)
+RAIZ_TMP = os.path.join(JAIL, mc.TEMPORALES)
 VIVO_CASA = os.path.join(CASA, 'vivo-de-la-stdio.txt')
 VIVO_RAIZ = os.path.join(RAIZ_TMP, 'vivo-de-la-stdio.txt')
 env = mc.entorno()

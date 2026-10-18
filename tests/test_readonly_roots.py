@@ -166,8 +166,15 @@ out = call('delphi_delete', {'path': REF_PAS})
 check('delete en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
 out = call('delphi_build', {'project': REF_DPROJ})
 check('build de la referencia: RECHAZADO (compilar escribe)', refused_as_reference(out), out[:200])
-out = call('delphi_designer', {'command': 'to-text', 'path': os.path.join(REF, 'Ref', 'X.dfm')})
-check('to-text en la referencia: RECHAZADO o inexistente, nunca escrito', mc.rechazado(out), out[:200])
+# (revisor de baterias, 18-oct-2026) un form de VERDAD en la referencia y una
+# conversion que lo escribiria (to-binary de uno de texto): X.dfm no existia y
+# un NOT_FOUND valia; ahora la negativa es la de la referencia y los bytes siguen
+_xdfm = os.path.join(REF, 'Ref', 'X.dfm')
+open(_xdfm, 'wb').write(b"object X: TX\r\n  Caption = 'x'\r\nend\r\n")
+_xantes = open(_xdfm, 'rb').read()
+out = call('delphi_designer', {'command': 'to-binary', 'path': _xdfm})
+check('to-binary en la referencia: RECHAZADO como referencia, nunca escrito',
+      refused_as_reference(out) and open(_xdfm, 'rb').read() == _xantes, out[:200])
 check('la referencia sigue byte a byte', open(REF_PAS, 'rb').read() == before, '')
 
 # precedence: the doubled folder is read-only although it is a root

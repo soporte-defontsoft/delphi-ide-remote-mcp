@@ -55,9 +55,25 @@ check('check no borra', os.path.exists(os.path.join(MSG, 'dsh', '20260823-0100-d
 t = call('delphi_messages', {"agent": "dsh"})
 check('read entrega el suyo', 'MESSAGE 1/1' in t and 'Sigue con target=Deploy' in t
       and 'Aviso general' not in t and mc.es(t, 'SN_MESSAGES_DELIVERED'), t)
+# (revisor de baterias, 18-oct-2026) "en ningun sitio" se mide en todo BASE
+# (buzones, la casa del servidor, la papelera): solo se miraba si existia una
+# carpeta _entregados, y una copia con otro nombre pasaba
+def con_el_texto(raiz, texto):
+    r = []
+    for d, _, fs in os.walk(raiz):
+        for f in fs:
+            try:
+                if texto.encode('utf-8') in open(os.path.join(d, f), 'rb').read():
+                    r.append(os.path.relpath(os.path.join(d, f), raiz))
+            except OSError:
+                pass
+    return r
+propio = con_el_texto(BASE, 'Para quien pregunta.')
+check('control: el buscador encuentra un mensaje que sigue ahi (el propio, sin leer)',
+      propio == [os.path.join(os.path.relpath(MSG, BASE), 'messages-battery', '20260823-0102-propio.md')], propio)
+copias = con_el_texto(BASE, 'Sigue con target=Deploy')
 check('leido = BORRADO, y no queda copia en ningun sitio',
-      not os.path.exists(os.path.join(MSG, 'dsh', '20260823-0100-deploy.md'))
-      and not os.path.exists(os.path.join(MSG, '_entregados')), os.listdir(MSG))
+      not os.path.exists(os.path.join(MSG, 'dsh', '20260823-0100-deploy.md')) and not copias, copias)
 t = call('delphi_messages', {"agent": "dsh"})
 check('segunda lectura: nada', mc.abre(t, 'SN_MESSAGES_NONE_FMT') and 'dsh' in t, t)
 t = call('delphi_messages', {})

@@ -658,14 +658,14 @@ check('copy sobre destino existente: RECHAZADO, no sobreescribe', mc.rechazado(o
 # approved by David): temp, __history and trash are refused; moving OUT of
 # them (restore, keep a capture) is the source and stays free. ----
 mdir = os.path.join(BASE, 'MoveMuerto')
-os.makedirs(os.path.join(mdir, '__delphi-temp'), exist_ok=True)
+os.makedirs(os.path.join(mdir, mc.TEMPORALES), exist_ok=True)
 open(os.path.join(mdir, 'a.txt'), 'w').write('x')
-open(os.path.join(mdir, '__delphi-temp', 'b.txt'), 'w').write('y')
-out = call('delphi_move', {"path": os.path.join(mdir, 'a.txt'), "dest": os.path.join(mdir, '__delphi-temp', 'a.txt')})
+open(os.path.join(mdir, mc.TEMPORALES, 'b.txt'), 'w').write('y')
+out = call('delphi_move', {"path": os.path.join(mdir, 'a.txt'), "dest": os.path.join(mdir, mc.TEMPORALES, 'a.txt')})
 check('move HACIA __delphi-temp: RECHAZADO, el origen sigue', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TEMP') and os.path.exists(os.path.join(mdir, 'a.txt')), out[:200])
 out = call('delphi_move', {"path": os.path.join(mdir, 'a.txt'), "dest": os.path.join(mdir, '__history', 'a.txt')})
 check('move HACIA __history: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_IDE'), out[:200])
-out = call('delphi_move', {"path": os.path.join(mdir, '__delphi-temp', 'b.txt'), "dest": os.path.join(mdir, 'b.txt')})
+out = call('delphi_move', {"path": os.path.join(mdir, mc.TEMPORALES, 'b.txt'), "dest": os.path.join(mdir, 'b.txt')})
 check('move DESDE __delphi-temp a una carpeta normal: permitido', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(os.path.join(mdir, 'b.txt')), out[:200])
 
 srv.cierra()

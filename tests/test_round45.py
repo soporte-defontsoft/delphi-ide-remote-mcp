@@ -365,11 +365,16 @@ try:
     # job de la llamada y moria con ella, y una conexion wifi se perdia entre
     # un connect y el devices siguiente (medido 2026-09-23 con un movil).
     # Sin dispositivo aqui, lo que se mide es el demonio: vivo tras la llamada.
+    # (revisor de baterias, 18-oct-2026) un adb que ya corria (el del IDE, el
+    # de otra bateria) dejaba G5 en verde sin medir nada: se mide solo si NO
+    # vivia antes, y el de David no se para (puede tener un movil por wifi)
+    antes = mc.adb_vivo()
     a = call('delphi_adb', {'command': 'devices'})
-    t = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq adb.exe'],
-                       capture_output=True, text=True).stdout
-    check('G5 el demonio adb.exe sobrevive a la llamada (fuera del job)',
-          '"devices"' in a and 'adb.exe' in t, (a[:120] + ' | ' + t[-120:]))
+    if antes:
+        print('NOTA: G5 no medible: ya habia un servidor de adb escuchando antes de la llamada')
+    else:
+        check('G5 el demonio adb.exe sobrevive a la llamada (fuera del job)',
+              '"devices"' in a and mc.adb_vivo(), a[:200])
 finally:
     try:
         proc.kill()

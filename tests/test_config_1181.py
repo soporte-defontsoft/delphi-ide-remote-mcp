@@ -76,8 +76,10 @@ reescribe(ESP, lambda x: x.replace('<BuildConfiguration Include="Release">',
 r = S.call('delphi_build', {'project': ESP, 'config': 'Release Plus'}, t=900)
 check('C4 contraprueba: config "Release Plus" declarada NO es BUILD-015',
       not mc.es(r, 'SR_BUILD_CONFIG_FMT'), r[:300])
-check('C4b ...y msbuild la recibe en UN argumento (sin comillas: MSB1008, dos proyectos)',
-      'MSB1008' not in r and not mc.rechazado(r), r[:600])
+# ...y COMPILA (lo que promete la cabecera): las ausencias solas pasaban con un
+# timeout o con un build que cayera por otra cosa (revisor de baterias, 18-oct-2026)
+check('C4b ...y msbuild la recibe en UN argumento (sin comillas: MSB1008, dos proyectos) y compila',
+      'MSB1008' not in r and not mc.rechazado(r) and (mc.como_json(r) or {}).get('success') is True, r[:600])
 
 S.mata()
 mc.fin('config 1.18.1 battery')

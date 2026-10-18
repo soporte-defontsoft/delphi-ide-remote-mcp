@@ -94,7 +94,7 @@ try:
     # el agente lo lee como cualquier fichero de su jaula y no se borra. La
     # entrega y el consumo de las nuestras, con un agente confinado tambien,
     # los mide test_captura_puertas_1182 (C1-C2, F1, E3-E4)
-    CAP = os.path.join(base, '__delphi-temp', 'alice', 'desktop', 'cap.png')
+    CAP = os.path.join(base, mc.TEMPORALES, 'alice', 'desktop', 'cap.png')
     os.makedirs(os.path.dirname(CAP), exist_ok=True)
     open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
     r = a.call('delphi_fetch', {'path': CAP, 'offset': 0})
@@ -116,5 +116,12 @@ srv = mc.Stdio(exe, env, nombre='')
 ok6 = crea(srv, os.path.join(base, 'bob', 'stdio.txt'))
 srv.mata()
 check('C6 ON: una sesion sin identidad (stdio/operador) no esta confinada', ok6)
+# (revisor de baterias, 18-oct-2026) el control: el MISMO entorno con identidad SI
+# confina - si el confinamiento ni se encendia, C6 pasaba igual
+srv = mc.Stdio(exe, env, nombre='alice')
+r6 = srv.call('delphi_textedit', {'path': os.path.join(base, 'bob', 'alice.txt'), 'create': True, 'content': 'x'})
+srv.mata()
+check('C6b control: con identidad (alice), escribir en la carpeta de bob se niega (el confinamiento esta encendido)',
+      mc.es(r6, 'SR_AGENT_CONFINED_FMT') and not os.path.exists(os.path.join(base, 'bob', 'alice.txt')), r6[:300])
 
 mc.fin('confine battery')

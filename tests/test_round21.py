@@ -54,7 +54,12 @@ check('Z1b lint del designer tambien (segunda entrada a las tablas)',
 _q = chr(39)
 call('delphi_create', {"kind": "project-console", "dir": os.path.join(BASE, 'SbxTest'), "name": "SbxTest"})
 _body = ['program SbxTest;', '{$APPTYPE CONSOLE}', 'uses System.SysUtils, System.IOUtils;', 'begin',
-         '  try TFile.WriteAllText(' + _q + 'entre.txt' + _q + ', ' + _q + 'y' + _q + '); Writeln('
+         # (revisor de baterias, 18-oct-2026) dice lo que HABIA antes de escribir:
+         # sin eso, Z3 pasaba creando un entre.txt nuevo aunque el de fuera no
+         # viajara con la copia
+         '  try if TFile.Exists(' + _q + 'entre.txt' + _q + ') then Writeln(' + _q + 'ANTES=' + _q
+         + ' + TFile.ReadAllText(' + _q + 'entre.txt' + _q + '));',
+         '    TFile.WriteAllText(' + _q + 'entre.txt' + _q + ', ' + _q + 'y' + _q + '); Writeln('
          + _q + 'LOCAL-OK' + _q + '); except Writeln(' + _q + 'local-blocked' + _q + '); end;', 'end.']
 open(os.path.join(BASE, 'SbxTest', 'SbxTest.dpr'), 'w', encoding='utf-8-sig', newline='').write('\r\n'.join(_body) + '\r\n')
 out = call('delphi_build', {"project": os.path.join(BASE, 'SbxTest', 'SbxTest.dproj'),
@@ -77,7 +82,8 @@ if sbok:
             j = {}
         return j.get('outputTail', ''), j.get('sandboxed') is True, r
     tail, sbx, raw = _run()
-    check('Z2 run #1 sandboxed escribe en su carpeta', 'LOCAL-OK' in tail and sbx, raw[:200])
+    check('Z2 run #1 sandboxed escribe en su carpeta (y no habia entre.txt)',
+          'LOCAL-OK' in tail and 'ANTES=' not in tail and sbx, raw[:200])
     # BETWEEN runs: this test process (MEDIUM integrity) creates the file the
     # program will overwrite. It travels with the copy into the container's
     # folder, where it is the container's. Measure it.
@@ -85,7 +91,7 @@ if sbok:
     tail, sbx, raw = _run()
     check('Z3 fichero MEDIUM creado ENTRE runs: run #2 lo sobrescribe en su copia, '
           'y el original del agente queda como estaba',
-          'LOCAL-OK' in tail and sbx and
+          'ANTES=medium-file-created-between-runs' in tail and 'LOCAL-OK' in tail and sbx and
           open(os.path.join(rundir, 'entre.txt')).read() == 'medium-file-created-between-runs', raw[:220])
 
 srv.mata()

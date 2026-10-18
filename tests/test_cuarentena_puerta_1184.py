@@ -52,7 +52,11 @@ open(Q1, 'wb').write(b'PROTEGIDO')
 s = lanza(Q1)
 try:
     j = sube(s, F1, b'MALO')
-    check('Q1 un .corrupt de ReadOnlyPaths: la cuarentena no lo toca; la subida mala va a la papelera',
+    # (revisor de baterias, 18-oct-2026) desde la A de la 1.19.2 la cuarentena ya
+    # no compone <nombre>.corrupt: que no lo toque no puede fallar y queda de
+    # guarda; lo que mide es que la subida mala va a la PAPELERA (la proteccion
+    # de lo de solo lectura la mide Q3)
+    check('Q1 la subida mala va a la papelera (y un .corrupt de antes, de solo lectura, sigue)',
           open(Q1, 'rb').read() == b'PROTEGIDO' and not os.path.exists(F1) and 'quarantined' in j
           and [open(c, 'rb').read() for c in mc.copias(D1, 'q1.bin', 'CAJON_CORRUPTOS')] == [b'MALO'],
           (open(Q1, 'rb').read(), os.path.exists(F1), str(j)[:300]))

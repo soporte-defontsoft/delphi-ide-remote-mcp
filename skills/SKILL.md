@@ -322,7 +322,9 @@ in frame. Do the gesture you came for and nothing else.
 - **A build is what the IDE would build**: only a platform the project
   declares and has enabled (another is refused with `BUILD-046`:
   `delphi_config command=add-platform` declares it, as the IDE does), and
-  without `platform` the project's own default. What you build, the
+  without `platform` or `config` the ones the project has selected
+  (`delphi_config view`: `defaultPlatform`, `defaultConfig`; `set-active`
+  changes them, as *Activate* in the IDE). What you build, the
   operator builds the same in the IDE without reconfiguring anything.
 - **"Unit 'X' not found" on a platform you just added** (and only
   there): the unit belongs to an installed component whose folder is in

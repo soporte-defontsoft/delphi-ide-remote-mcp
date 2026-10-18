@@ -205,13 +205,6 @@ procedure ExigeElDelphiDelServidor;
   por que (David, 5-oct-2026). }
 function NotasDeArranqueDelphi: TArray<string>;
 
-{ The IDE's global Library Search Path for a platform ('Win32'/'Win64'),
-  raw, with its $() variables unexpanded. This is where INSTALLED COMPONENT
-  packages (third-party) register their source/dcu paths - a project using
-  them usually does not repeat those paths in its .dproj, so the Config
-  Fabricator must merge this list to resolve their symbols. '' if absent. }
-function IdeLibrarySearchPath(const AVersion, APlatform: string): string;
-
 type
   TIdePackage = record
     Description: string;  // what the IDE shows ("Embarcadero FMX Standard Components")
@@ -305,9 +298,17 @@ procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
   'Search Path' (la de siempre) o 'Browsing Path', la del fuente que el IDE
   ensena (las tablas del disenador leen las dos: Lsp.DesignerMetaGen). De
   ESA instalacion, la que se le da - la del servidor, DiscoverRadStudio:
-  hasta el 5-oct-2026 la buscaba por su numero entre todas. }
+  hasta el 5-oct-2026 la buscaba por su numero entre todas. AConfig: la
+  configuracion de un build, para las entradas con $(Config) ('' = esas se
+  quedan fuera). EL lector de esa lista: la zona de biblioteca
+  (Lsp.Lugares), los ajustes del motor (Lsp.ConfigFabricator) y components
+  la leian cada uno con su lectura del registro y su expansion (tres, regla
+  del paisaje; medido el 18-oct-2026 que daban lo mismo en las 13
+  plataformas de esta maquina). Es ahi, en una instalacion, donde los
+  paquetes de COMPONENTES de terceros registran sus carpetas, que un
+  proyecto no suele repetir en su .dproj. }
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
-  const AValor: string = 'Search Path'): TArray<string>;
+  const AValor: string = 'Search Path'; const AConfig: string = ''): TArray<string>;
 
 { Expands $(NAME) macros with the IDE's environment table (AVars as
   NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
@@ -718,23 +719,6 @@ begin
   if StartsText(IncludeTrailingPathDelimiter(Shared), Common) then
     Result := TPath.Combine(TPath.GetDocumentsPath,
       Common.Substring(Length(Shared) + 1));
-end;
-
-function IdeLibrarySearchPath(const AVersion, APlatform: string): string;
-var
-  Reg: TRegistry;
-begin
-  Result := '';
-  // Library settings are per-user: HKCU only (both registry views).
-  Reg := TRegistry.Create(KEY_READ);
-  try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\Library\%s',
-      [AVersion, APlatform])) and Reg.ValueExists('Search Path') then
-      Result := Reg.ReadString('Search Path');
-  finally
-    Reg.Free;
-  end;
 end;
 
 procedure IdeEnvironmentVars(const AVersion: string; ADest: TStrings);
@@ -1199,10 +1183,15 @@ begin
   if (ADest.Values['BDSCatalogRepository'] = '') and (UserDocs <> '') then
     ADest.Values['BDSCatalogRepository'] :=
       IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
+  // ...y el de todos, por si el IDE no lo trae (lo tenia solo el lector de
+  // los ajustes del motor: una tabla, no dos)
+  if (ADest.Values['BDSCatalogRepositoryAllUsers'] = '') and (CommonDocs <> '') then
+    ADest.Values['BDSCatalogRepositoryAllUsers'] :=
+      IncludeTrailingPathDelimiter(CommonDocs) + 'CatalogRepository';
 end;
 
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
-  const AValor: string): TArray<string>;
+  const AValor: string; const AConfig: string): TArray<string>;
 var
   Vars, List: TStringList;
   Item, Expanded: string;
@@ -1215,6 +1204,8 @@ begin
   try
     IdeMacroVars(AInfo, Vars);
     Vars.Values['Platform'] := APlatform;
+    if AConfig <> '' then
+      Vars.Values['Config'] := AConfig;
     for Item in IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor).Split([';']) do
     begin
       Expanded := ExpandIdeMacros(Item.Trim, Vars);

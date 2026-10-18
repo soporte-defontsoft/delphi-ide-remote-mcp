@@ -41,8 +41,8 @@ if HAY_NODO:
     os.makedirs(os.path.join(EXEDIR, 'node'), exist_ok=True)
     shutil.copy(NODO_SRC, os.path.join(EXEDIR, 'node', 'McpDesktopNode.exe'))
 
-TEMP_SERVIDOR = os.path.join(EXEDIR, '__delphi-temp')
-TEMP_JAULA = os.path.join(JAIL, '__delphi-temp')
+TEMP_SERVIDOR = os.path.join(EXEDIR, mc.TEMPORALES)
+TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)
 # El %TEMP% de la MAQUINA: las carpetas que el servidor usaba antes. Se mira
 # que no vuelva a aparecer ninguna.
 VIEJAS = [os.path.join(tempfile.gettempdir(), n) for n in

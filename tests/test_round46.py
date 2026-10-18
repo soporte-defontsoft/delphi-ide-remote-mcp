@@ -63,7 +63,7 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
 
 # Los dos junctions, ANTES de arrancar: el de lectura bajo el ReadOnlyPath
 # (el perdon), y el de la purga dentro de __delphi-temp.
-TEMP_JAULA = os.path.join(JAIL, '__delphi-temp')
+TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)
 os.makedirs(os.path.join(TEMP_JAULA, 'normal'))
 open(os.path.join(TEMP_JAULA, 'normal', 'basura.txt'), 'w').write('x')
 HAY_J1 = junction(os.path.join(JAIL, 'vendor', 'out'), SECRETO)
@@ -92,11 +92,11 @@ UNIDAD = os.path.splitdrive(JAIL)[0].lower() + '\\'  # p.ej. 'c:\'
 # La fuga es la unidad CRUDA. Cuidado con el substring a secas: 'c:\' esta
 # DENTRO de 'srvc:\' y este check se puso en rojo a si mismo la primera vez
 # que corrio, con la mascara funcionando perfectamente.
-FUGA = re.compile('(?<![a-z0-9])' + re.escape(UNIDAD))
 
 
 def filtra(texto):
-    return bool(FUGA.search(texto.lower()))
+    # por EL lector de la casa (revisor de baterias, 18-oct-2026: uno de siete)
+    return bool(mc.fuga_de_letra(texto, UNIDAD[0]))
 
 try:
     # ------------------------------------------------------------------ J1
@@ -188,7 +188,7 @@ try:
     # Solo purga la PRIMERA instancia viva del exe: la premisa "no pueden
     # correr dos a la vez, comparten puerto" era falsa para stdio, y la
     # purga del segundo borraba ficheros EN USO del primero.
-    en_uso = os.path.join(EXEDIR, '__delphi-temp', 'git')
+    en_uso = os.path.join(EXEDIR, mc.TEMPORALES, 'git')
     os.makedirs(en_uso, exist_ok=True)
     testigo = os.path.join(en_uso, 'msg-en-vuelo.txt')
     open(testigo, 'w').write('commit -F en vuelo')

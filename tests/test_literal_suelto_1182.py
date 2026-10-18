@@ -90,24 +90,25 @@ try:
     check('L5 el control de styles: el par valido se escribe (#55357#56832)',
           not mc.rechazado(r) and b"#55357#56832" in open(p, 'rb').read(), (r[:200], open(p, 'rb').read()))
 
-    # ---- los NOMBRES: su validacion los niega; que no se escriban
+    # ---- los NOMBRES: su validacion los niega (SU negativa, no una cualquiera:
+    # revisor de baterias, 18-oct-2026); que no se escriban
     d = form('UN1')
     r = srv.call('delphi_designer', {'path': d, 'command': 'set', 'component': 'Label1', 'prop': 'Name',
                                      'value': 'Bot' + S})
-    check('N1 designer set Name con medio caracter: negado y el form intacto',
-          mc.rechazado(r) and open(d, 'rb').read() == DFM, r[:300])
+    check('N1 designer set Name con medio caracter: negado por su nombre (DSGN-095) y el form intacto',
+          mc.es(r, 'SR_DESIGNER_NOMBRE_INVALIDO_FMT') and open(d, 'rb').read() == DFM, r[:300])
 
     d = form('UN2')
     r = srv.call('delphi_designer', {'path': d, 'command': 'insert', 'classname': 'TButton', 'component': 'Bot' + S})
-    check('N2 designer insert con un nombre con medio caracter: negado y el form intacto',
-          mc.rechazado(r) and open(d, 'rb').read() == DFM, r[:300])
+    check('N2 designer insert con un nombre con medio caracter: negado por su nombre (DSGN-095) y el form intacto',
+          mc.es(r, 'SR_DESIGNER_NOMBRE_INVALIDO_FMT') and open(d, 'rb').read() == DFM, r[:300])
 
     p = estilo('N3')
     antes = open(p, 'rb').read()
     r = srv.call('delphi_styles', {'path': p, 'command': 'set', 'style': 'cardstyle', 'prop': 'StyleName',
                                    'value': "'card" + S + "'"})
-    check('N3 styles set StyleName con medio caracter: negado y el estilo intacto',
-          mc.rechazado(r) and open(p, 'rb').read() == antes, r[:300])
+    check('N3 styles set StyleName con medio caracter: negado por su nombre (STYLE-006) y el estilo intacto',
+          mc.es(r, 'SR_STYLES_NAME_CHARS_FMT') and open(p, 'rb').read() == antes, r[:300])
 
     con_suelto = DFM.replace(b"Caption = 'x'", b"Caption = 'a'#55296'b'")
     d = form('UR1')
@@ -131,8 +132,8 @@ try:
     p = estilo('N4')
     antes = open(p, 'rb').read()
     r = srv.call('delphi_styles', {'path': p, 'command': 'clone', 'style': 'cardstyle', 'name': 'otra' + S})
-    check('N4 styles clone con un nombre con medio caracter: negado y el estilo intacto',
-          mc.rechazado(r) and open(p, 'rb').read() == antes, r[:300])
+    check('N4 styles clone con un nombre con medio caracter: negado por su nombre (STYLE-006) y el estilo intacto',
+          mc.es(r, 'SR_STYLES_NAME_CHARS_FMT') and open(p, 'rb').read() == antes, r[:300])
 finally:
     srv.cierra()
 

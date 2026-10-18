@@ -64,8 +64,15 @@ def lee(repo, rel):
     return open(os.path.join(repo, rel.replace('/', os.sep)), encoding='utf-8').read().strip()
 
 
+# (revisor de baterias, 18-oct-2026) la config GLOBAL del usuario, vacia: un
+# core.quotePath=false en el ~/.gitconfig de la maquina dejaba Q1-Q3 en verde
+# sin el interruptor del servidor
+GLOBAL = os.path.join(BASE, 'global.gitconfig')
+open(GLOBAL, 'w').close()
+
+
 def arranca(ro_paths='', ro_roots=''):
-    env = {'DELPHI_MCP_ROOTS': JAIL}
+    env = {'DELPHI_MCP_ROOTS': JAIL, 'GIT_CONFIG_GLOBAL': GLOBAL}
     if ro_paths:
         env['DELPHI_MCP_READONLY_PATHS'] = ro_paths
     if ro_roots:

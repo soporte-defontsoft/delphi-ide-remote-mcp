@@ -71,7 +71,7 @@ for d in (OTRA, OTRA2, VENDOR, VAULT, REF):
     os.makedirs(d)
     open(os.path.join(d, 'dato.txt'), 'w').write('no me borres\n')
 open(os.path.join(VAULT, 'AGENTS-VAULT.md'), 'w').write('# reglas\n')
-TEMP_REF = os.path.join(REF, '__delphi-temp')
+TEMP_REF = os.path.join(REF, mc.TEMPORALES)
 os.makedirs(TEMP_REF)
 MIGA_REF = os.path.join(TEMP_REF, 'de-la-referencia.txt')
 open(MIGA_REF, 'w').write('de la referencia\n')
@@ -85,12 +85,12 @@ RO_OTRO = os.path.join(OTRA, 'soloconsulta')
 os.makedirs(RO_OTRO)
 MIGAS = []
 for _d in (VAULT, VAULT_OTRO, RO_OTRO):
-    os.makedirs(os.path.join(_d, '__delphi-temp'), exist_ok=True)
-    MIGAS.append(os.path.join(_d, '__delphi-temp', 'miga.txt'))
+    os.makedirs(os.path.join(_d, mc.TEMPORALES), exist_ok=True)
+    MIGAS.append(os.path.join(_d, mc.TEMPORALES, 'miga.txt'))
     open(MIGAS[-1], 'w').write('no me purgues\n')
 os.makedirs(os.path.join(VAULT, '.obsidian'))  # A11: la carpeta excluida
 # el CONTROL de A5/A10: una temporal normal, anidada, que la purga SI vacia
-PURGAME = os.path.join(JAIL, 'normal', '__delphi-temp', 'purgame.txt')
+PURGAME = os.path.join(JAIL, 'normal', mc.TEMPORALES, 'purgame.txt')
 os.makedirs(os.path.dirname(PURGAME))
 open(PURGAME, 'w').write('purgame\n')
 
@@ -299,13 +299,16 @@ try:
     os.makedirs(PRE)
     res, sc, t = llama('delphi_git', {'repo': PRE, 'command': 'clone',
                                       'message': 'http://127.0.0.1:1/x.git'})
+    # (revisor de baterias, 18-oct-2026) que LLEGO a git y fallo alli: asi corre la
+    # limpieza de un clone fallido; cualquier isError tambien valia
     check('A7 un clone que falla no borra la carpeta vacia que ya estaba',
-          res.get('isError') is True and os.path.isdir(PRE), t[:200])
+          res.get('isError') is True and mc.llego_a_git(t) and os.path.isdir(PRE), t[:200])
     NUEVA = os.path.join(JAIL, 'no_se_crea')
     res, sc, t = llama('delphi_git', {'repo': NUEVA, 'command': 'clone',
                                       'message': 'ftp://127.0.0.1/x.git'})
     check('A7 ...y uno rechazado por su URL no deja su carpeta',
-          res.get('isError') is True and not os.path.exists(NUEVA), t[:200])
+          res.get('isError') is True and mc.abre(t, 'SR_GIT_CLONE_URLS_ACCEPTED') and not os.path.exists(NUEVA),
+          t[:200])
 
     # B1 changeset delete tras dos ediciones del dia
     T = os.path.join(JAIL, 't.txt')

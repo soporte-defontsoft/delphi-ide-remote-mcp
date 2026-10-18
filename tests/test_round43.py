@@ -114,7 +114,10 @@ try:
     # (Con un perfil ficticio ningun servidor, ni uno roto, llega a capturar:
     # esta mitad solo muerde en vivo, contra un PAServer. Lo que mira aqui es
     # que no haya NADA fuera, ni la carpeta que el servidor viejo creaba.)
-    check('W1b ...y NO acaba una captura escrita fuera de la jaula',
+    # (revisor de baterias, 18-oct-2026) lo que esto puede ver aqui: que no se
+    # CREE nada fuera antes de la puerta (la carpeta del out=, lo que hacia el
+    # servidor viejo); la captura escrita fuera solo se mide en vivo
+    check('W1b ...y NO crea nada fuera de la jaula (ni la carpeta del out=)',
           nada_en(FUERA),
           'hay algo bajo %s: %s' % (FUERA, os.listdir(FUERA)))
 
@@ -185,10 +188,10 @@ try:
           not rechazada_por_jaula(f) and mc.es(f, 'SR_REMOTERUN_NODO_DENIED_FMT')
           and 'RemoteRunProjects' in f
           and 'McpDesktopNode' in f, f[:280])
-    check('W4c ...y fuera sigue vacio', nada_en(FUERA),
-          'hay algo bajo %s: %s' % (FUERA, os.listdir(FUERA)))
-    print('NOTA: W4b, W5e y W5f (captura real por perfil) se miden en vivo '
-          'contra un PAServer, no aqui.')
+    # (W4c, "y fuera sigue vacio", no podia ponerse rojo: con un perfil
+    # ficticio nada captura; revisor de baterias, 18-oct-2026)
+    print('NOTA: W4b, W4c, W5e y W5f (captura real por perfil, y que no escriba '
+          'fuera) se miden en vivo contra un PAServer, no aqui.')
 finally:
     try:
         proc.kill()

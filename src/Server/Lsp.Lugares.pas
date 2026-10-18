@@ -213,7 +213,7 @@ function LibraryRoots: TArray<string>;
 var
   Info: TRadStudioInfo;
   List, Vars: TStringList;
-  Plat, Raw, Item, Expanded: string;
+  Plat, Item, Expanded: string;
 begin
   if not GLibLoaded then
   begin
@@ -249,17 +249,15 @@ begin
 
           // ALL platforms registered for this install, never a fixed pair:
           // Linux64, OSX64, Android64, iOSDevice64... each has its own path.
+          // Por EL lector de esa lista (IdePlatformLibraryPaths): aqui habia
+          // otra lectura del registro y otra expansion (regla del paisaje,
+          // 18-oct-2026; medido que daban lo mismo en las 13 plataformas)
           for Plat in IdeLibraryPlatforms(Info.Version) do
           begin
-            Vars.Values['Platform'] := Plat;
-            Raw := IdeLibrarySearchPath(Info.Version, Plat);
-            for Item in Raw.Split([';']) do
+            for Item in IdePlatformLibraryPaths(Info, Plat) do
             begin
-              Expanded := ExpandIdeMacros(Item.Trim, Vars);
-              if (Expanded <> '') and not Expanded.Contains('$(') and
-                 TPath.IsPathRooted(Expanded) then
               try
-                Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Expanded));
+                Expanded := IncludeTrailingPathDelimiter(Item);
                 if List.IndexOf(Expanded) < 0 then
                   List.Add(Expanded);
                 // A component's INSTALL ROOT is library territory too: the IDE

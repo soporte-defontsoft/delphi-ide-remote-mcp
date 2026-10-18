@@ -78,27 +78,40 @@ check('edit: sin BOM, CRLF', not nb.startswith(b'\xef') and b'\r\n' in nb[:20])
 # dice como desempatar. El que se aplica lo mide test_ancla_bloque_120.
 antes = open(PAS, 'rb').read()
 out = call('delphi_edit', {"path": PAS, "old": "begin\n  X := 1;", "new": "x"})
+# SU negativa, la del BLOQUE ambiguo (EDIT-015): la de una linea (EDIT-077)
+# tambien dice atline, y juzgar el bloque por su primera linea seguia verde
+# (revisor de baterias, 18-oct-2026)
 check('gate: ancla multilinea repetida = bloque repetido, nada escrito',
-      mc.rechazado(out) and not mc.es(out, 'SR_PATCH_ANCHOR_MULTILINE') and
+      mc.es(out, 'SR_PATCH_BLOCK_AMBIGUOUS_FMT') and not mc.es(out, 'SR_PATCH_ANCHOR_MULTILINE') and
       open(PAS, 'rb').read() == antes and ('occurrence' in out or 'atline' in out), out)
 out = call('delphi_edit', {"path": PAS, "old": "  Writeln('inventada');", "new": "x"})
 check('gate: ancla inexistente', mc.rechazado(out) and mc.es(out, 'SR_ANCLA_NO_ESTA_FMT'), out)
 out = call('delphi_edit', {"path": PAS, "old": "  X := 1;", "new": "  X := 2;"})
 check('gate: ancla repetida lista lineas', mc.rechazado(out) and mc.es(out, 'SR_EDIT_ANCLA_NO_UNICA_FMT'), out)
-out = call('delphi_edit', {"path": PAS, "old": "  X := 1;", "new": "  X := 2;", "atline": 11})
-check('edit: atline desempata', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT'), out)
+# la SEGUNDA (linea 17): con atline=11, la primera, un atline ignorado -o
+# tratado como occurrence 1- seguia verde; y se miran los bytes (revisor de
+# baterias, 18-oct-2026)
+out = call('delphi_edit', {"path": PAS, "old": "  X := 1;", "new": "  X := 2;", "atline": 17})
+_l = open(PAS, 'rb').read().decode('cp1252').split(CRLF)
+check('edit: atline desempata (cambia la 17 y la 11 sigue)',
+      mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT') and _l[16] == '  X := 2;' and _l[10] == '  X := 1;', (out, _l[9:18]))
 out = call('delphi_edit', {"path": PAS, "new": "algo"})
 check('gate: reescritura total prohibida', mc.rechazado(out) and mc.es(out, 'SR_EDIT_NEW_SIN_ANCLA'), out)
+_antes_pas = open(PAS, 'rb').read()
 out = call('delphi_edit', {"path": PAS, "old": "procedure Otro;",
                             "new": "procedure Otro; // marca ✔"})
-check('gate: caracter fuera de cp1252 con consejo #$', mc.rechazado(out) and mc.es(out, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and '#$2714' in out, out)
+check('gate: caracter fuera de cp1252 con consejo #$, y el fichero sin tocar', mc.rechazado(out)
+      and mc.es(out, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and '#$2714' in out and open(PAS, 'rb').read() == _antes_pas, out)
 out = call('delphi_edit', {"path": PAS, "old": "linea con �", "new": "x"})
 check('gate: U+FFFD en ancla', mc.rechazado(out) and mc.es(out, 'SR_EDIT_TU_ANCLA_LLEVA_CARACTER'), out)
+_antes_dfm, _antes_ff = open(DFM, 'rb').read(), open(DFM_FF, 'rb').read()
 out = call('delphi_edit', {"path": DFM, "old": "a", "new": "b"})
-check('gate: designer binario TPF0', mc.rechazado(out) and mc.es(out, 'SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT'), out)
+check('gate: designer binario TPF0, y sus bytes sin tocar', mc.rechazado(out)
+      and mc.es(out, 'SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT') and open(DFM, 'rb').read() == _antes_dfm, out)
 out = call('delphi_edit', {"path": DFM_FF, "old": "a", "new": "b"})
-check('gate: designer binario con envoltorio $FF (formato real del IDE)',
-      mc.rechazado(out) and mc.es(out, 'SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT'), out)
+check('gate: designer binario con envoltorio $FF (formato real del IDE), y sus bytes sin tocar',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT')
+      and open(DFM_FF, 'rb').read() == _antes_ff, out)
 out = call('delphi_edit', {"path": os.path.join(DIR, '__history', 'x.pas'),
                             "old": "a", "new": "b"})
 check('gate: __history vetado', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_IDE'), out)
@@ -377,7 +390,7 @@ check('lint fmx: un designer LIMPIO no genera aviso',
       mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT') and not mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT')
       and not mc.es(out, 'SN_DESIGNER_BINDING_LINT_HEADER')
       # y SI se valido: sin tabla la edicion dice DSGN-052 y tampoco avisa
-      and not mc.tiene(out, 'DSGN-052'), out[-300:])
+      and not mc.es(out, 'SN_DESIGNER_LINT_SIN_TABLA_FMT'), out[-300:])
 VDFM = os.path.join(DIR, 'LintV.dfm')
 with open(VDFM, 'wb') as f:
     f.write(('object Form1: TForm1\r\n'
@@ -431,7 +444,7 @@ check('eco: la ventana cubre TODO lo escrito, no solo las dos primeras lineas',
 ADDU = os.path.join(DIR, 'ConUses.pas')
 open(ADDU, 'wb').write(CRLF.join([
     'unit ConUses;', '', 'interface', '', 'uses', '  System.Classes;', '',
-    'type', '  TX = class end;', '', 'implementation', '', '{$R *.res} // uses (en comentario, no cuenta)', '',
+    'type', '  TX = class end; // gestión', '', 'implementation', '', '{$R *.res} // uses (en comentario, no cuenta)', '',
     'end.', '']).encode('cp1252'))
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.SysUtils; Modules.API"})
 check('adduses: implementation sin uses -> se crea', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and mc.es(out, 'SN_ADDUSES_CREATED_FMT'), out[:300])
@@ -494,7 +507,13 @@ open(DPKX, 'wb').write(b'package Paq;\r\nrequires\r\n  rtl;\r\nend.\r\n')
 out = call('delphi_edit', {"path": DPKX, "adduses": "System.SysUtils"})
 check('adduses en un .dpk: remite a add-unit / add-requires', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_NOT_PAS_FMT')
       and 'add-requires' in out, out[:200])
-check('adduses: cp1252 intacto (sin BOM, CRLF)', not open(ADDU, 'rb').read().startswith(b'\xef\xbb\xbf') and b'\n' not in open(ADDU, 'rb').read().replace(b'\r\n', b''))
+# (revisor de baterias, 18-oct-2026) ConUses.pas lleva un acento en CP1252: era
+# ASCII, y CP1252 y UTF-8 sin BOM son entonces los mismos bytes - la pagina no
+# se media, solo el BOM y los saltos
+_bytes = open(ADDU, 'rb').read()
+check('adduses: la pagina (CP1252, gesti\\xf3n), sin BOM y CRLF intactos',
+      b'gesti\xf3n' in _bytes and b'gesti\xc3\xb3n' not in _bytes and not _bytes.startswith(b'\xef\xbb\xbf')
+      and b'\n' not in _bytes.replace(b'\r\n', b''), _bytes[:200])
 # --- una clausula COMPACTA se edita en su sitio (3.13 de la 1.18.0): adduses y
 # removeuses la rehacian una por linea, un diff de cuarenta lineas por una unit
 # (medido el 9-oct-2026 en UTrayMain) ---
@@ -815,7 +834,7 @@ DPRE = os.path.join(DIR, 'EndJunto.dpr')
 open(DPRE, 'wb').write(b'program EndJunto;\r\n\r\nbegin\r\nend.\r\n')
 out = call('delphi_edit', {"path": DPRE, "old": "end.", "new": "Writeln('x'); end."})
 check('end.: una sentencia delante del end. en su linea no es BROKEN STRUCTURE',
-      not mc.rechazado(out) and not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
+      not mc.fallo(out) and not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
       not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA') and
       open(DPRE, 'rb').read() == b"program EndJunto;\r\n\r\nbegin\r\nWriteln('x'); end.\r\n", out[:300])
 # y una tanda de BLOQUE que se lleva el end. avisa: el bloque no preguntaba por la
@@ -893,7 +912,7 @@ PASD = os.path.join(DIR, 'UPunto.Dos.pas')
 out = call('delphi_edit', {"path": PASD, "createunit": True,
                             "content": "unit UPunto . Dos;\n\ninterface\n\nimplementation\n\nend.\n"})
 check('cabecera "unit UPunto . Dos;": create la toma (es UPunto.Dos, como la lee dcc)',
-      os.path.exists(PASD) and not mc.rechazado(out), out[:300])
+      os.path.exists(PASD) and mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out[:300])
 if os.path.exists(PASD):
     out = call('delphi_move', {"path": PASD, "dest": os.path.join(DIR, 'UTres.pas')})
     _src = open(os.path.join(DIR, 'UTres.pas'), 'rb').read().decode('utf-8-sig') if os.path.exists(os.path.join(DIR, 'UTres.pas')) else ''
@@ -977,7 +996,10 @@ check('edit: ...y una de verdad detras de una asignacion SI avisa (control)',
 
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})
-check('restore: paso 1 solo avisa', mc.es(out, 'SN_EDIT_RESTAURAR_NADA_HECHO_FMT'), out)
+# ...y NO restaura: el fichero sigue editado (si el paso 1 escribiera y avisara,
+# el byte a byte de despues del paso 2 seguia verde; revisor de baterias)
+check('restore: paso 1 solo avisa, y no toca el fichero',
+      mc.es(out, 'SN_EDIT_RESTAURAR_NADA_HECHO_FMT') and open(PAS, 'rb').read() != ORIG, out)
 out = call('delphi_edit', {"path": PAS, "restore": True, "confirm": True})
 check('restore: paso 2 ejecuta', mc.abre(out, 'SK_EDIT_RESTAURADO_DESDE_FMT'), out)
 check('restore: bytes identicos al original', open(PAS, 'rb').read() == ORIG)
@@ -1146,8 +1168,13 @@ _out = call('delphi_textedit', {'path': _md, 'old': 'nada', 'new': 'Omega\u03a9'
 # se escribe UTF-8 SIN BOM; con ANSI la Omega no cabe y se niega - y entonces
 # esto no mide la regla (un fichero sin tocar tampoco tiene BOM)
 _IDE_PREFIERE_UTF8 = not mc.rechazado(_out)
-if mc.rechazado(_out):
+# NOTA solo si la negativa es la de la pagina (EDIT-078): cualquier otra
+# (un parametro, otra puerta) dejaba la regla sin medir y en verde (revisor de
+# baterias, 18-oct-2026)
+if mc.abre(_out, 'SR_EDIT_CARACTERES_NO_CABEN_FMT'):
     print('NOTA: la regla del .md no se mide: el IDE de esta maquina prefiere ANSI y la Omega se niega')
+elif mc.fallo(_out):
+    check('...la Omega en un .md se escribe, o se niega por la pagina (EDIT-078): nada mas', False, _out[:300])
 else:
     check('...y un fichero que no lee dcc (un .md) no entra en la regla: UTF-8 sin BOM, sin ganar uno',
           open(_md, 'rb').read() == b'# titulo\r\nOmega\xce\xa9\r\n', open(_md, 'rb').read()[:40])
@@ -1219,8 +1246,10 @@ call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path'
 _intacto_tras('delphi_changeset (su preview) en un BOM de UTF-8 con el cuerpo roto', _roto, _ROTO,
               call('delphi_changeset', {'command': 'preview', 'id': _cid}))
 _r = call('delphi_changeset', {'command': 'commit', 'id': _cid})
-check('ida y vuelta: ...y su commit se niega sin tocar un byte',
-      mc.rechazado(_r) and open(_roto, 'rb').read() == _ROTO, _r[:300])
+# lo que lo para es el bloqueo del preview no limpio (CHSET-016), no la regla
+# del escritor: se dice asi (revisor de baterias, 18-oct-2026)
+check('ida y vuelta: ...y su commit queda bloqueado (CHSET-016) sin tocar un byte',
+      mc.abre(_r, 'SR_CHANGESET_NOT_PREVIEWED') and open(_roto, 'rb').read() == _ROTO, _r[:300])
 # (2) un UTF-32 mal formado (le sobran dos bytes al final)
 _u32m = os.path.join(DIR, 'U32Mal.pas')
 _U32M = b'\xff\xfe\x00\x00' + "unit U32Mal;\r\n  T = 1;\r\nend.\r\n".encode('utf-32-le') + b'\x41\x00'
@@ -1425,7 +1454,8 @@ for _nom, _bytes in _r8.items():
     open(os.path.join(DIR, _nom), 'wb').write(_bytes)
     _out = call('delphi_read', {'path': os.path.join(DIR, _nom)})
     check('...READ-008 no sale en %s (con BOM, solo ASCII, acentos solo en comentarios o un form)' % _nom,
-          not mc.rechazado(_out) and not mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT'), _out[:300])
+          # (lo leyo: un INTERNAL tampoco traia READ-008)
+          not mc.fallo(_out) and 'encoding=' in _out and not mc.es(_out, 'SN_READ_UTF8_SIN_BOM_FMT'), _out[:300])
 
 # --- P3-L9 de la 1.18.0: borrar una linea EN BLANCO. No tiene texto que copiar
 # como ancla (EDIT-056 pedia "old" con la linea, y una vacia no se puede dar: el

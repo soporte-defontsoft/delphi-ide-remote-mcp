@@ -108,9 +108,12 @@ def prop(tool, name):
         'properties', {}).get(name, {})
 
 
-check('R5 delphi_build: platform SIN default (la del proyecto), config default Debug (tipados)',
+check('R5 delphi_build: platform y config SIN default (las que el proyecto tiene seleccionadas, 1.20.2), target tipado',
+      # que los parametros EXISTAN: de uno renombrado prop da {} y "sin default"
+      # pasaba (revisor de baterias, 18-oct-2026)
+      bool(prop('delphi_build', 'platform')) and bool(prop('delphi_build', 'config')) and
       'default' not in prop('delphi_build', 'platform') and
-      prop('delphi_build', 'config').get('default') == 'Debug' and
+      'default' not in prop('delphi_build', 'config') and
       prop('delphi_build', 'target').get('default') == 'Build',
       {k: prop('delphi_build', k).get('default') for k in ('platform', 'config', 'target')})
 check('R5 delphi_build: verbosity default quiet (el contrato del bat de la casa)',

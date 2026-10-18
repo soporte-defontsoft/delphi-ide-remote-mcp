@@ -23,7 +23,11 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('designer-corpus')
-EXE = mc.copia_exe(BASE)
+# con los renderizadores: desde la 1.20 el lint pregunta al LECTOR del IDE lo
+# que las tablas no juzgan (DSGN-061), y sin ellos cada form que lo necesita
+# contestaba DSGN-154 "no se le pudo preguntar" (revisor de baterias,
+# 18-oct-2026: el corpus no media al lector desde la 1.20)
+EXE = mc.copia_exe(BASE, con_render=True)
 APPDATA = os.path.join(BASE, 'appdata')
 os.makedirs(APPDATA, exist_ok=True)
 env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'LOCALAPPDATA': APPDATA})
@@ -75,9 +79,44 @@ b = mc.espera_info(call, {'command': 'info', 'classname': 'TButton', 'framework'
 listo = 'Caption' in a and '"Text"' in b
 check('corpus: las tablas VCL y FMX del Delphi activo estan', listo, (a + ' | ' + b)[:300])
 
-falsos, familia, notas, ejemplos = 0, 0, 0, []
+# (revisor de baterias, 18-oct-2026) un lint que no contesta (un error, un
+# timeout) no dejaba ninguna linea "line N:" y contaba como limpio; y el
+# parser del IDE (DSGN-123, juez desde el 8-oct) no tiene esa forma de linea:
+# los dos cuentan. Y el LECTOR del IDE (DSGN-061 de la 1.20) habla cuando las
+# tablas callan: lo que dice de un form del IDE es un aviso falso como otro,
+# con linea o sin ella (SF_DSGN_LECTOR_SIN_LINEA_FMT); y si no se le pudo
+# preguntar (DSGN-154) se cuenta por su motivo, nunca por falta de
+# renderizador (este arnes los pone)
+LINEA_N = re.compile(r'\s*line (\d+): (.*?)\s+->\s+(.*)$')
+falsos, familia, notas, ejemplos, sin_lint = 0, 0, 0, [], []
+sin_lector, sin_render = {}, []
 for dst in copiados:
     r = call('delphi_designer', {'command': 'lint', 'path': dst}, t=120)
+    rel = os.path.relpath(dst, FORMS)
+    if not any(mc.abre(r, c) for c in ('SN_DESIGNER_LINT_OK_FMT', 'SN_DESIGNER_LINT_BAD_FMT',
+                                        'SN_DESIGNER_LINT_NOTAS_FMT', 'SN_DESIGNER_LINT_SIN_LECTOR_FMT')):
+        sin_lint.append('%s: %s' % (rel, r[:100]))
+    if mc.es(r, 'SN_DESIGNER_LINT_SIN_LECTOR_FMT'):
+        if mc.es(r, 'SR_DESIGNER_SIN_RENDER_FMT'):
+            sin_render.append(rel)
+        else:
+            m = re.search(r'could not be asked: (\[[A-Z]+-\d+[^\]]*\])?', r)
+            motivo = (m.group(1) if m and m.group(1) else 'sin id')
+            sin_lector.setdefault(motivo, []).append(rel)
+    # los avisos del bloque de DSGN-038 sin linea de este fichero: los del
+    # lector y los del form contra su clase (check-binding)
+    bloque = None
+    for l in r.splitlines():
+        if not l.startswith(' '):
+            bloque = 'bad' if mc.abre(l, 'SN_DESIGNER_LINT_BAD_FMT') else 'otro'
+        elif bloque == 'bad' and l.strip() and not LINEA_N.match(l):
+            falsos += 1
+            if len(ejemplos) < 8:
+                ejemplos.append('%s aviso sin linea: %s' % (rel, l.strip()[:160]))
+    if mc.es(r, 'SN_DSGN_PARSER_FMT'):
+        falsos += 1
+        if len(ejemplos) < 8:
+            ejemplos.append('%s parser del IDE: %s' % (os.path.relpath(dst, FORMS), r[:160]))
     for l in r.splitlines():
         m = re.match(r'\s*line (\d+): (.*?)\s+->\s+(.*)$', l)
         if not m:
@@ -91,6 +130,12 @@ for dst in copiados:
             falsos += 1
             if len(ejemplos) < 8:
                 ejemplos.append('%s:%s %s -> %s' % (os.path.relpath(dst, FORMS), m.group(1), m.group(2)[:60], msg[:120]))
+check('corpus: el lint CONTESTA de cada form (limpio, avisos, notas o sin confirmar)',
+      not sin_lint, ' || '.join(sin_lint[:5]))
+check('corpus: al lector se le pregunta (el arnes pone los renderizadores)',
+      not sin_render, ' || '.join(sin_render[:5]))
+for motivo, forms in sorted(sin_lector.items()):
+    print('NOTA: corpus: %d forms sin confirmar por el lector, %s: %s' % (len(forms), motivo, ', '.join(forms[:3])))
 check('corpus: ni un aviso sobre los forms que el IDE escribio (%d forms)' % len(copiados),
       falsos == 0, ' || '.join(ejemplos))
 if familia:

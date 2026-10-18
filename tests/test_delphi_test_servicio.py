@@ -89,7 +89,12 @@ def mi_sid():
 SDDL = 'D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;%s)' % mi_sid()
 # Medir derechos en ESTE escritorio privado antes de acotar el fuente:
 # una ACE ya presente hace que el servidor conserve su mascara.
+# (revisor de baterias, 18-oct-2026) 'none' = SIN la ACE de AC, la sesion 0
+# desnuda: un valor vacio no se puede pedir (en Windows una variable vacia no
+# existe). Medido ese dia: S1-S8 pasan igual con 0x1 y con none
 MASCARA_FIXTURE = os.environ.get('DELPHI_MCP_TEST_DESKTOP_MASK', '0x1')
+if MASCARA_FIXTURE.lower() == 'none':
+    MASCARA_FIXTURE = ''
 if MASCARA_FIXTURE:
     SDDL += '(A;;%s;;;AC)' % MASCARA_FIXTURE
 DESK = 'dmcp_srv_%d' % os.getpid()
@@ -100,6 +105,9 @@ sa = SECURITY_ATTRIBUTES(ctypes.sizeof(SECURITY_ATTRIBUTES), sd.value, False)
 # Estacion tambien PRIVADA: no tocar la DACL de WinSta0 del usuario.
 STATION = 'WinSta0'
 hstation = None
+# (revisor de baterias, 18-oct-2026) sin ella S9-S13 no corrian y nadie lo decia
+if os.environ.get('DELPHI_MCP_TEST_PRIVATE_STATION') != '1':
+    print('NOTA: S9-S13 (la estacion) no se miden: piden DELPHI_MCP_TEST_PRIVATE_STATION=1 y un token de administrador')
 if os.environ.get('DELPHI_MCP_TEST_PRIVATE_STATION') == '1':
     STATION = 'dmcp_wsta_%d' % os.getpid()
     MASCARA_ESTACION = os.environ.get('DELPHI_MCP_TEST_STATION_MASK', '')

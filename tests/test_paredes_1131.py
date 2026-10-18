@@ -110,8 +110,9 @@ def llama(cli, tool, args):
 def fuga(texto, letra):
     """La letra REAL en el texto, con barra detras o sin ella ('x:' dentro de
     'srvx:' no cuenta). Con la barra solamente, la primera pasada no vio la
-    letra suelta del motivo, 'drive Z: is not connected'."""
-    return bool(re.search(r'(?<![a-z0-9])' + letra.lower() + ':', texto.lower()))
+    letra suelta del motivo, 'drive Z: is not connected'. Por EL lector de la
+    casa (revisor de baterias, 18-oct-2026: era uno de siete)."""
+    return bool(mc.fuga_de_letra(texto, letra, con_separador=False))
 
 
 def no_conectada(letra):

@@ -55,8 +55,20 @@ try:
     mc.check('se midieron procesos git',any(e.get('event')=='start' for e in events))
     mc.check('ninguna orden de metadatos lanza lfs env',
         not any('lfs' in e.get('argv',[]) and 'env' in e.get('argv',[]) for e in events))
+    # (revisor de baterias, 18-oct-2026) sin un fichero LFS en el indice el
+    # juez sale antes de lfs env y el endpoint no se juzgaba: aqui uno de
+    # verdad (el filtro clean del SYSTEM lo guarda como puntero)
+    open(os.path.join(repos[1],'.gitattributes'),'w').write('*.bin filter=lfs diff=lfs merge=lfs -text\n')
+    open(os.path.join(repos[1],'DUMMY.bin'),'wb').write(b'\x00DUMMY\x00')
+    raw('add','.gitattributes','DUMMY.bin',cwd=repos[1]);raw('commit','-qm','DUMMY lfs',cwd=repos[1])
+    mc.check('fixture: DUMMY.bin es un fichero LFS',
+             'DUMMY.bin' in raw('ls-files',':(attr:filter=lfs)',cwd=repos[1]))
+    antes=len(events)
     out=call(repos[1],'switch',branch='main')
     mc.check('endpoint de carpeta usa puerta de carpeta',out.startswith('exit=0'),out[:250])
+    events=[json.loads(l) for l in open(TRACE,encoding='utf-8') if l.strip()]
+    mc.check('el endpoint SE juzgo: switch con LFS lanza lfs env',
+        any('lfs' in e.get('argv',[]) and 'env' in e.get('argv',[]) for e in events[antes:]))
     url='http://127.0.0.1:%d/DUMMY.git'%http.server_port
     raw('remote','set-url','origin',url,cwd=repos[0])
     for cmd in ('ls-remote','fetch'):

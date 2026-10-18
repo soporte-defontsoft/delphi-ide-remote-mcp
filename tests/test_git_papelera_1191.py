@@ -74,7 +74,9 @@ try:
 
     r = g(command='add', paths=['app/' + mc.PAPELERA])
     indice = git('ls-files', '--cached')
-    check('P4 la papelera nombrada a proposito tampoco entra', mc.PAPELERA not in indice,
+    # y la respuesta es la de GIT (el pathspec excluido): un add que fallaba por
+    # cualquier otra cosa dejaba el indice igual (revisor de baterias, 18-oct-2026)
+    check('P4 la papelera nombrada a proposito tampoco entra', mc.llego_a_git(r) and mc.PAPELERA not in indice,
           r[:200] + ' | ' + indice)
 
     open(os.path.join(APP, 'nuevo.txt'), 'w').write('nuevo')

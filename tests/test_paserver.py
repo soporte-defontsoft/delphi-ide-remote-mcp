@@ -220,7 +220,9 @@ out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
 # With the IDE open on the server, paclient CANNOT save profiles (W0013 with
 # exit 0; the server now answers a clear refusal naming bds.exe). A human may
 # be working - the whole profile-dependent block degrades to SKIP.
-ide_open = 'bds.exe' in out
+# (revisor de baterias, 18-oct-2026) por SU negativa (PAS-029), no por la
+# palabra: cualquier respuesta que nombrara bds.exe saltaba los 9 checks
+ide_open = mc.es(out, 'SR_PASERVER_IDE_OPEN')
 if ide_open:
     print('SKIP bloque de perfil real: el IDE esta abierto en este servidor '
           '(paclient no puede guardar perfiles; el server lo explica)')

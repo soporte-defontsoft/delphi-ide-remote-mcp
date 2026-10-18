@@ -74,7 +74,9 @@ b1 = open(DFM, 'rb').read()
 # la cabecera de recurso entera, FF 0A 00 (DesignerShapeOf): solo $FF tambien
 # es el BOM de un texto UTF-16 LE (la regla vieja; segunda revision de la 1.17.0)
 check('en disco: envoltorio de recurso FF 0A 00 con TPF0 dentro', b1[:3] == b'\xff\x0a\x00' and b'TPF0' in b1[:64], b1[:24])
-check('copia previa en __delphi-patch', os.path.isdir(os.path.join(BASE, mc.PAPELERA)), '')
+# la copia de ESE fichero, por el lector de la papelera (una carpeta que existe
+# no dice que el escritor la nombro como el lector la lee: el caso v1.0.8)
+check('copia previa en __delphi-patch', bool(mc.copias(BASE, os.path.basename(DFM))), '')
 r = call('delphi_designer', {'command': 'to-binary', 'path': DFM})
 check('to-binary dos veces: nada que hacer', mc.abre(r, 'SN_DESIGNER_ALREADY_FMT'), r[:120])
 
@@ -283,10 +285,16 @@ BAD = os.path.join(BASE, 'Roto.dfm')
 open(BAD, 'wb').write(b'\xff\x0a\x00TROTO\x00\x30\x10\x10\x00\x00\x00TPF0basura sin sentido')
 r = call('delphi_designer', {'command': 'tree', 'path': BAD})
 check('binario danado: RECHAZADO con motivo', mc.abre(r, 'SR_DSGN_BINARIO_DANADO_FMT') and 'Stream read error' in r, r[:200])
+# (revisor de baterias, 18-oct-2026) SU negativa, la del binario danado: una
+# cualquiera (la puerta NUL de delphi_read, un parametro) pasaba; e "intacto"
+# son los bytes enteros
+BAD_BYTES = open(BAD, 'rb').read()
 r = call('delphi_read', {'path': BAD})
-check('delphi_read de un binario danado: RECHAZADO', mc.rechazado(r), r[:200])
+check('delphi_read de un binario danado: RECHAZADO como binario danado (DSGN-044)',
+      mc.es(r, 'SR_DSGN_BINARIO_DANADO_FMT'), r[:200])
 r = call('delphi_designer', {'command': 'to-text', 'path': BAD})
-check('to-text de un binario danado: RECHAZADO, fichero intacto', mc.rechazado(r) and open(BAD, 'rb').read().startswith(b'\xff\x0a\x00TROTO'), r[:200])
+check('to-text de un binario danado: RECHAZADO (DSGN-044), fichero intacto',
+      mc.es(r, 'SR_DSGN_BINARIO_DANADO_FMT') and open(BAD, 'rb').read() == BAD_BYTES, r[:200])
 
 # ---- T7 (segunda revision de la 1.17.0): binarios escritos por el IDE, no por
 # nuestro escritor. Todos los de arriba los escribe to-binary, asi que si

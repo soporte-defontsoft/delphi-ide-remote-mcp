@@ -147,7 +147,7 @@ def pngs_en(raiz):
 
 PRUEBA = escribe(JAIL, 'Prueba.dfm', FORM)
 PRUEBA_SOLO = escribe(SOLO, 'Prueba.dfm', FORM)
-TEMP_JAULA = os.path.join(JAIL, '__delphi-temp')
+TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)
 RECT = '16,140,344,41'
 
 # ---------------------------------------------------- servidor A: confinado
@@ -221,8 +221,12 @@ try:
     check('K6a __delphi-temp de la raiz como enlace a la carpeta de otro agente quedo plantado',
           mc.junction(TEMP_JAULA, BOB), TEMP_JAULA)
     r = srv.call('delphi_fetch', {'path': os.path.join(TEMP_JAULA, 'designer', 'v.png'), 'offset': 0})
+    # (revisor de baterias, 18-oct-2026) se LEE de verdad, y sigue con sus
+    # bytes: consumedOnServer ya no existe (1b9a7f4) y un fetch que fallaba
+    # antes de leer dejaba el fichero en su sitio igual
     check('K6 un png con forma de captura en el workspace se lee, pero no es nuestro y no se borra',
-          os.path.isfile(AJENA) and mc.como_json(r).get('consumedOnServer') is not True,
+          not mc.fallo(r) and os.path.isfile(AJENA)
+          and open(AJENA, 'rb').read() == b'\x89PNG\r\n\x1a\n' + b'0' * 64,
           (r[:300], os.path.isfile(AJENA)))
     quita_enlace(TEMP_JAULA)
     # ------------------------------------------------------------------ K7
@@ -272,8 +276,10 @@ try:
     uno = os.path.join(CASA_ANA2, 'designer-20261013-000000000-f2f2f2f2.png')
     open(uno, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
     f = srv2.call('delphi_fetch', {'path': uno, 'maxbytes': 65536})
+    # la negativa de la JAULA (la casa esta fuera de las raices), no una cualquiera
     check('F2 delphi_fetch es para los ficheros del agente: la ruta de nuestra casa se niega y no se consume',
-          mc.rechazado(f) and os.path.isfile(uno), (f[:300], os.path.isfile(uno)))
+          (mc.es(f, 'SR_JAIL_FMT') or mc.es(f, 'SR_JAIL_LINK_FMT')) and os.path.isfile(uno),
+          (f[:300], os.path.isfile(uno)))
     os.remove(uno)
     antes = set(glob.glob(CAPS2, recursive=True))
     r = preview(srv2, path=PRUEBA_SOLO, component='Panel1')
@@ -316,7 +322,7 @@ for nombre, raiz, entrada in (('S4 la raiz en 8.3 y su entrada en largo', SOLO, 
 RAIZ3 = os.path.join(BASE, 'raiz3')
 os.makedirs(RAIZ3)
 PRUEBA3 = escribe(RAIZ3, 'Prueba.dfm', FORM)
-TEMP3 = os.path.join(RAIZ3, '__delphi-temp')
+TEMP3 = os.path.join(RAIZ3, mc.TEMPORALES)
 for clave, entrada in (('DELPHI_MCP_READONLY_PATHS', os.path.join(TEMP3, 'ana')),
                        ('DELPHI_MCP_READONLY_PATHS', TEMP3),
                        ('DELPHI_MCP_READONLY_ROOTS', os.path.join(TEMP3, 'ana'))):
@@ -371,13 +377,15 @@ try:
           (r[:400], nuevos, pngs_en(RAIZ_OP)))
     f = otro.call('delphi_fetch', {'path': cap, 'maxbytes': 65536})
     check('E1 delphi_fetch de la ruta de la casa: el OTRO workspace no se la lleva, y se queda',
-          mc.rechazado(f) and os.path.isfile(cap), (f[:300], os.path.isfile(cap)))
+          (mc.es(f, 'SR_JAIL_FMT') or mc.es(f, 'SR_JAIL_LINK_FMT')) and os.path.isfile(cap),
+          (f[:300], os.path.isfile(cap)))
     codigo, cuerpo = get(dl, T_OTRO)
     check('E2 ...ni por el enlace (404: no es de su workspace), y se queda',
           codigo == 404 and os.path.isfile(cap), (codigo, cuerpo[:200]))
     f = op.call('delphi_fetch', {'path': cap, 'maxbytes': 65536})
     check('E4 delphi_fetch es para los ficheros del agente: al DUEÑO tambien se le niega, y se queda',
-          mc.rechazado(f) and os.path.isfile(cap), (f[:300], os.path.isfile(cap)))
+          (mc.es(f, 'SR_JAIL_FMT') or mc.es(f, 'SR_JAIL_LINK_FMT')) and os.path.isfile(cap),
+          (f[:300], os.path.isfile(cap)))
     codigo, cuerpo = get('/files?path=' + urllib.request.quote(cap), T_OP)
     check('E5a ?path= de la ruta de la casa: la jaula lo niega (403) y no se consume',
           codigo == 403 and os.path.isfile(cap), (codigo, cuerpo[:200]))

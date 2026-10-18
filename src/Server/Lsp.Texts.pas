@@ -669,11 +669,12 @@ const
     (medido el mismo dia: E2029 al momento). }
   SR_LSP_LINT_SIN_AJUSTES_FMT =
     '[LSP-035 NOT_FOUND] %s has no project settings to be linted with: no ' +
-    '.delphilsp.json or .dproj was found for it in its folder or the ones ' +
-    'above. The engine compiles a unit with the settings of a project and, ' +
-    'with none, never answers - nothing was linted. Put it in a project ' +
-    '(delphi_config command=add-unit) or create one (delphi_create), and ' +
-    'lint it again.';
+    '.dproj serves it - none in its folder or the ones above, and none near ' +
+    'that lists it or has its folder in the search path. The engine ' +
+    'compiles a unit with the settings of a project and, with none, never ' +
+    'answers - nothing was linted. Put it in a project (delphi_config ' +
+    'command=add-unit, or add-searchpath to its folder) or create one ' +
+    '(delphi_create), and lint it again.';
 
   { La ruta existe, pero es de otro tipo - que no es lo mismo que no existir.
     Medido 2026-09-20: delphi_read sobre la raiz del repo contestaba "no
@@ -823,9 +824,10 @@ const
     'worse than not answering. Two things cause it: a unit the project''s ' +
     '.dpr names with a path outside the roots (bring that unit into the ' +
     'workspace or take it out of the project), or an UNCONFIGURED unit (no ' +
-    '.delphilsp.json or .dproj nearby), which the engine resolves against ' +
-    'another unit with the same name that it indexed before - then work on ' +
-    'the project, with its .dproj next to it, so that it gets configured. ' +
+    '.dproj serves it: none lists it or has its folder in the search path), ' +
+    'which the engine resolves against another unit with the same name that ' +
+    'it indexed before - then put it in its project (delphi_config add-unit ' +
+    'or add-searchpath), so that it gets configured. ' +
     'delphi_definition and delphi_hover deny it the same way (LSP-038).';
 
   SN_REFS_ILEGIBLES_FMT =
@@ -1604,8 +1606,8 @@ const
     en el IDE sin reconfigurar (Lsp.Dproj.PlataformaNoDeclarada). }
   SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT =
     '[BUILD-046 DENIED] %s is not an enabled platform of this project ' +
-    '(enabled: %s), so it is not built: the IDE would not build it without ' +
-    'adding it, and what is built here has to build the same there. ' +
+    '(enabled: %s): the IDE would not build it - nor make it the default - ' +
+    'without adding it, and what is done here has to build the same there. ' +
     'delphi_config command=add-platform platform=%s declares it as the IDE ' +
     'does (for a remote one, sdk= and profile= go in the same call).';
 
@@ -2970,6 +2972,42 @@ const
     'Profiles are created with delphi_paserver command=add-profile ' +
     'against the live PAServer of that machine.';
 
+  // ---- delphi_config set-active (1.20.2): la pareja que el proyecto compila
+  // sin que nadie pida otra, sus dos selectores ----
+  SR_CFG_SET_ACTIVE_NECESITA =
+    '[CFG-115 INVALID_PARAM] set-active needs config (Debug, Release...) and/or ' +
+    'platform (Win32, Win64...): the ones the project builds by default from ' +
+    'now on. delphi_config view says the current ones (defaultConfig, ' +
+    'defaultPlatform).';
+
+  SR_CFG_SET_ACTIVE_CONFIG_FMT =
+    '[CFG-116 INVALID_PARAM] The project has no configuration "%s" to build. ' +
+    'The ones it declares: %s. Nothing was written.';
+
+  SR_CFG_SET_ACTIVE_SIN_SELECTOR_FMT =
+    '[CFG-117 NOT_FOUND] %s has no default <%s Condition="..."> - the line ' +
+    'the IDE writes to say what it builds by default (a project from before ' +
+    'the platforms). Nothing was written; delphi_build config= and platform= ' +
+    'still build any of them.';
+
+  { un trozo de SN_CFG_SET_ACTIVE_FMT: "config Release (was Debug)" }
+  SF_CFG_SET_ACTIVE_PIEZA_FMT = '%s %s (was %s)';
+
+  SN_CFG_SET_ACTIVE_FMT =
+    '[CFG-118] %s now builds by default: %s. delphi_build and delphi_test ' +
+    'without config= / platform= build that, as the IDE does, and the engine ' +
+    '(diagnostics, definition...) answers with it from the next call - as ' +
+    'Win32 when the platform is not Windows (Code Insight is a Windows front ' +
+    'end; delphi_test runs Win32 and Win64 only). Backup of the .dproj in ' +
+    '__delphi-patch.';
+
+  { ...y cuando ya era esa: nada se escribe, ni copia (como CFG-020) }
+  SN_CFG_SET_ACTIVE_YA_FMT =
+    '[CFG-119] %s already builds by default: %s. Nothing was written.';
+
+  { un trozo de SN_CFG_SET_ACTIVE_YA_FMT: "config Debug" }
+  SF_CFG_SET_ACTIVE_ACTUAL_FMT = '%s %s';
+
   SN_CONFIG_PROFILE_PUESTO_FMT =
     '[CFG-014] The project will deploy and run %s through profile %s ' +
     '(before: %s). It is the Profile property, the one msbuild reads, so ' +
@@ -4294,7 +4332,8 @@ const
     'run: the .dproj (or .dpr) of the test project to run';
 
   SP_TEST_CONFIG =
-    'run: configuration to build and run (Debug by default)';
+    'run: configuration to build and run (not Base); omitted, the one the ' +
+    'project has selected (defaultConfig, as delphi_build)';
 
   SP_TEST_FILTER =
     'run optional: test filter for frameworks that read it (DUnitX --run:, ' +
@@ -4311,9 +4350,9 @@ const
     'building first (by default it builds: running an old binary is lying).';
 
   SP_TEST_PLATFORM =
-    'run optional: platform to build and run - by default the project''s ' +
-    'own, as the IDE. Only one the project declares and of THIS machine: ' +
-    'the binary runs here';
+    'run optional: platform to build and run - omitted, the one the project ' +
+    'has selected (defaultPlatform, as delphi_build). Only one the project ' +
+    'declares and of THIS machine: the binary runs here';
 
   SR_TEST_PLATFORM_UNKNOWN_FMT =
     '[TEST-001 INVALID_PARAM] "%s" is not a Delphi platform. Valid for ' +
@@ -4345,6 +4384,22 @@ const
   SR_TEST_CONFIG_FMT =
     '[CFG-107 NOT_FOUND] The configuration "%s" does not exist in this ' +
     'project. It has these: %s.';
+
+  { config=Base: no es una configuracion que se compile (1.20.2; decia
+    CFG-107, "no existe", de una que la vista lista) }
+  SR_CFG_BASE_NO_SE_COMPILA_FMT =
+    '[CFG-120 INVALID_PARAM] "Base" is not a configuration to build: it is ' +
+    'what the configurations inherit from, and the IDE does not build it. ' +
+    'The ones this project builds: %s.';
+
+  { la SELECCIONADA (sin config=) que el proyecto no declara: "no existe" de
+    un nombre que el agente no habia mandado no se entendia }
+  SR_CFG_SELECCIONADA_NO_DECLARADA_FMT =
+    '[CFG-121 NOT_FOUND] Without config=, the project builds "%s" - its ' +
+    'default <Config Condition="''$(Config)''==''''"> line, or Debug when ' +
+    'it has none - and it does not declare it (it declares: %s). Pass ' +
+    'config= with one of them; delphi_config set-active config= changes the ' +
+    'default where the project has that line.';
 
   SR_TEST_PLATFORM_FMT =
     '[TEST-007 DENIED] %s cannot be RUN on this machine, and running is ' +
@@ -5657,8 +5712,8 @@ const
     lint no dice CLEAN de lo que no sabe (DSGN-061 de la 1.20). }
   SN_DESIGNER_LINT_SIN_LECTOR_FMT =
     '[DSGN-154] Not confirmed: %d line(s) hold a property the class ' +
-    'stores by code, whose value only the IDE''s own form reader can judge, ' +
-    'and it could not be asked: %s. preview loads the form.';
+    'stores by code, whose value only the IDE''s own form reader can judge ' +
+    '(preview loads the form), and it could not be asked: %s';
 
   SN_LINT_UNKNOWN_CLASS_FMT =
     '[DSGN-039] "%s" is not in this server''s %s table (it comes from a ' +
@@ -7465,7 +7520,7 @@ const
   SR_CFG_COMMAND_DEBE_SER_VIEW =
     '[CFG-084 INVALID_PARAM] command must be view | add-platform | ' +
     'remove-platform | set-output | set-version | set-sdk | set-profile ' +
-    '| add-searchpath | remove-searchpath | add-deployfile | ' +
+    '| set-active | add-searchpath | remove-searchpath | add-deployfile | ' +
     'remove-deployfile | add-unit | remove-unit | add-requires | ' +
     'fix-references | add-project | remove-project (these last two, on a ' +
     '.groupproj)';
@@ -7577,7 +7632,7 @@ const
   // Mensajes que estaban en linea en Mcp.Tools.Workspace.pas (paso 3c, 27-sep-2026)
   SR_WS_PATTERN_DEBE_SER_MASCARA =
     '[WS-005 INVALID_PARAM] pattern must be ONE simple mask (*.style, *.ini, ' +
-    'Galatea*.rc).';
+    'MyApp*.rc).';
 
   SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION =
     '[WS-006 INVALID_PARAM] pattern does not accept braces {a,b} (shell ' +
@@ -7908,9 +7963,11 @@ const
 
   // Mensajes que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3c a mano, 27-sep-2026)
   SN_LSP_NO_SETTINGS_WARNING =
-    ' [LSP-021] [warning: no .delphilsp.json project settings found for ' +
-    'this file - semantic answers may be null. Generate one in the IDE ' +
-    '(Code Insight > Generate LSP config + Reload LSP Server).]';
+    ' [LSP-021] [warning: no .dproj serves this file - none in its folder ' +
+    'or above, and none near that lists it or has its folder in the search ' +
+    'path -, so semantic answers may be null. Put it in a project ' +
+    '(delphi_config add-unit, or add-searchpath to its folder) or create ' +
+    'one (delphi_create).]';
 
   { Lo que el proyecto le haria ver al motor FUERA de lo que la sesion puede
     leer (David, 9-oct-2026: "recortar y negar", coherente con LSP-014): las
@@ -7942,9 +7999,10 @@ const
     'what it declares - the same rule as delphi_references (LSP-014). Two ' +
     'things cause it: a unit the project''s .dpr names with a path outside ' +
     'the roots (bring that unit into the workspace or take it out of the ' +
-    'project), or an UNCONFIGURED unit (no .delphilsp.json or .dproj nearby), ' +
-    'which the engine resolves against another unit with the same name that ' +
-    'it indexed before (work on its project, with its .dproj next to it).';
+    'project), or an UNCONFIGURED unit (no .dproj serves it: none lists it ' +
+    'or has its folder in the search path), which the engine resolves against ' +
+    'another unit with the same name that it indexed before (put it in its ' +
+    'project: delphi_config add-unit or add-searchpath).';
   SR_LSP_NOMBRES_FUERA_FMT =
     '[LSP-039 DENIED] This project''s .dpr names units OUTSIDE this workspace ' +
     '(%s). %s answers names without saying where they come from, so it could ' +
@@ -8796,6 +8854,7 @@ const
     'project builds a remote platform with, by name; "none" = back to the ' +
     'SDK Manager default) | set-profile (the PAServer profile it deploys ' +
     'and runs that platform with; "none" = the platform''s active profile) ' +
+    '| set-active (config and/or platform: what it builds by default) ' +
     '| add-searchpath | remove-searchpath | add-deployfile | ' +
     'remove-deployfile | add-unit | remove-unit | add-requires (packages: ' +
     'names for the .dpk requires clause, from requiresSuggested after a ' +
@@ -8807,7 +8866,8 @@ const
     'Android64...; an unknown one is refused with the list). ' +
     'add/remove-searchpath: the platform whose path changes; empty = the ' +
     'base group (all). add/remove-deployfile: the platform it ships on ' +
-    '(required). set-sdk / set-profile: the platform they apply to.';
+    '(required). set-sdk / set-profile: the platform they apply to. ' +
+    'set-active: the platform to build by default.';
 
   SP_CFG_OUTPUT =
     'set-output: a simple relative folder name (Compiled by default): .exe ' +
@@ -8822,15 +8882,24 @@ const
     'by ; (vcl;dbrtl) - take them from requiresSuggested of delphi_build. ' +
     'Names already there are kept.';
 
+  SP_CFG_CONFIG =
+    'set-active: the configuration the project builds by default from now ' +
+    'on (one it declares: Debug, Release...). With platform= too, both at ' +
+    'once.';
+
   SD_CFG_CONFIG =
     'See and manage a project''s build configurations and target PLATFORMS. ' +
     'view (read-only): the framework (VCL is Windows-only; FMX and console ' +
-    'cross platforms), the configurations (Debug/Release/custom), the defaultPlatform (what delphi_build builds without platform=) and every ' +
+    'cross platforms), the configurations (Debug/Release/custom), the ' +
+    'defaultConfig and defaultPlatform (what delphi_build builds without ' +
+    'config= / platform=) and every ' +
     'platform - enabled or not, possible for THIS project, needing a ' +
     'PAServer profile. add-platform / remove-platform: enable or disable a ' +
     'platform in the .dproj (a curated edit of <Platforms> only). ' +
     'set-version: the project VERSION everywhere it must agree ' +
-    '(include=true: in the binaries too). ' +
+    '(include=true: in the binaries too). set-active: the configuration ' +
+    'and/or platform it builds by default, as Activate in the IDE''s Project ' +
+    'Manager - one it declares. ' +
     'set-output: every binary under one folder (Compiled by default), ' +
     'keeping the platform/config subfolders. add-searchpath / ' +
     'remove-searchpath: a unit search path for ONE platform, as the IDE''s ' +
@@ -8867,8 +8936,9 @@ const
     'Absolute path of the project''s .dproj (its .dpr/.dpk resolves to it)';
 
   SP_BUILD_PLATFORM =
-    'Target platform. Omitted: the project''s own default, the one the IDE ' +
-    'builds while nobody changes it. Only a platform the project declares ' +
+    'Target platform. Omitted: the one the project has selected, the one the ' +
+    'IDE builds while nobody changes it (defaultPlatform in delphi_config ' +
+    'view; set-active changes it). Only a platform the project declares ' +
     'and has enabled (delphi_config add-platform / remove-platform), so the ' +
     'IDE builds the same: Win32/Win64 build natively here; ' +
     'Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need their SDK pulled ' +
@@ -8878,8 +8948,11 @@ const
     'does NOT use profile - a profile is only for target=Deploy.';
 
   SP_BUILD_CONFIG =
-    'A configuration the project declares, e.g. Debug (default) or ' +
-    'Release; another is refused (delphi_config view lists them).';
+    'A configuration the project declares (not Base, which the others ' +
+    'inherit from), e.g. Debug or Release; another is refused (delphi_config ' +
+    'view lists them). Omitted: the one the project has selected, the one ' +
+    'the IDE builds while nobody changes it (defaultConfig in delphi_config ' +
+    'view; set-active changes it).';
 
   SP_BUILD_TARGET =
     'Build (full, default) | Make (incremental) | Clean | Deploy (builds ' +

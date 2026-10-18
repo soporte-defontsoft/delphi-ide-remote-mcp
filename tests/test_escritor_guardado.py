@@ -99,7 +99,10 @@ check('H1 rename: MOVIDO', mc.abre(out, 'SK_MOVE_MOVIDO_FMT'), out[:300])
 check('H1 el fichero de FUERA sigue byte a byte', open(SHARED, 'rb').read() == antes_out, open(SHARED).read()[:120])
 check('H1 ...y sin __delphi-patch creado fuera', os.listdir(OUT) == ['Shared.pas'], os.listdir(OUT))
 check('H1 el fichero de la REFERENCIA sigue byte a byte', open(REFSH, 'rb').read() == antes_ref, open(REFSH).read()[:120])
-check('H1 la respuesta dice cuales NO se reescribieron', mc.es(out, 'SN_UNIT_RENAME_NOT_WRITTEN_FMT') and 'Shared.pas' in out and 'RefShared.pas' in out, out[-400:])
+# ('Shared.pas' a secas es parte de 'RefShared.pas': el de FUERA, sin el Ref
+# delante; revisor de baterias, 18-oct-2026)
+check('H1 la respuesta dice cuales NO se reescribieron', mc.es(out, 'SN_UNIT_RENAME_NOT_WRITTEN_FMT')
+      and re.search(r'(?<!Ref)Shared\.pas', out) is not None and 'RefShared.pas' in out, out[-400:])
 check('H1 lo propio SI se reescribe (el .dpr nombra UNew)', 'UNew' in open(os.path.join(APP, 'App.dpr'), encoding='utf-8-sig').read(), '')
 
 # ---- B: a junction inside the root does not make a read-only place writable
@@ -115,13 +118,15 @@ out = call('delphi_read', {'path': os.path.join(MINE, 'aNest', 'n.txt')})
 check('B leer por el junction a la referencia sigue OK', 'referencia de dentro' in out, out[:200])
 
 # ---- C: consuming a capture = deleting: never with only the read gate
-CAPD = os.path.join(REF, 'x', '__delphi-temp', 'desktop')
+CAPD = os.path.join(REF, 'x', mc.TEMPORALES, 'desktop')
 os.makedirs(CAPD, exist_ok=True)
 CAP = os.path.join(CAPD, 'captura.png')
 open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
 out = call('delphi_fetch', {'path': CAP, 'offset': 0})
 check('C fetch de una captura en la REFERENCIA: se sirve', '"chunkBase64"' in out or '"download"' in out, out[:200])
-check('C ...y NO se borra (solo se podia leer)', os.path.exists(CAP), out[:300])
+# (desde la 1.18.2 delphi_fetch no consume nada: esto es una guarda de esa
+# regla, no de la puerta de leer que nombraba)
+check('C ...y NO se borra (delphi_fetch no consume)', os.path.exists(CAP), out[:300])
 # ...y la respuesta no habla de consumo: hasta la 1.7.3 anunciaba
 # consumedOnServer:true de una captura que seguia en disco (duodecima revision),
 # y desde la 1.18.2 (2af) delphi_fetch no consume nada - es para los ficheros
@@ -250,9 +255,16 @@ open(os.path.join(RS, 'R.pas'), 'w').write('unit R;\ninterface\n// hoy\nimplemen
 subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(RS, mc.PAPELERA), RSV], capture_output=True)
 _victima = sorted(os.path.join(r, n) for r, d, fs in os.walk(RSV) for n in fs)
 _rpas = open(os.path.join(RS, 'R.pas'), 'rb').read()
+# (revisor de baterias, 18-oct-2026) la negativa del ENLACE (la puerta de leer
+# sobre la ruta real), no una cualquiera: las dos puertas se tapaban entre si y
+# un NOT_FOUND de la copia tambien valia. Y sin confirm, donde la de leer es la
+# unica barrera: devolvia las perdidas y la hora de la copia de fuera
+previa = call('delphi_edit', {'path': os.path.join(RS, 'R.pas'), 'restore': True})
+check('R8 restore SIN confirm con __delphi-patch enlazado fuera: negado por el enlace, nada de la copia de fuera',
+      mc.es(previa, 'SR_JAIL_LINK_FMT') and 'implementation' not in previa, previa[:200])
 out = call('delphi_edit', {'path': os.path.join(RS, 'R.pas'), 'restore': True, 'confirm': True})
-check('R8 restore con __delphi-patch enlazado fuera: RECHAZADO, la victima y la unit intactas',
-      os.path.isjunction(os.path.join(RS, mc.PAPELERA)) and mc.rechazado(out) and
+check('R8 restore con __delphi-patch enlazado fuera: RECHAZADO por el enlace, la victima y la unit intactas',
+      os.path.isjunction(os.path.join(RS, mc.PAPELERA)) and mc.es(out, 'SR_JAIL_LINK_FMT') and
       sorted(os.path.join(r, n) for r, d, fs in os.walk(RSV) for n in fs) == _victima and
       open(os.path.join(RS, 'R.pas'), 'rb').read() == _rpas, out[:200])
 os.rmdir(os.path.join(RS, mc.PAPELERA))  # el ENLACE, nunca su destino
@@ -371,8 +383,10 @@ def solo_para(cond):
 
 out = build(proyecto_con('solowin32', solo_para('Base_Win32')))
 check('O DCC_DcuOutput solo para Win32 y el build es Win64: RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
-out = build(proyecto_con('anulada', lambda x, d: grupo('Cfg_2', '<DCC_DcuOutput></DCC_DcuOutput>')(x)))
-check('O la global anulada por una particular VACIA de Debug (Cfg_2): RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+out = build(proyecto_con('anulada', lambda x, d: grupo(mc.clave_de_config(x, 'Debug'),
+                                                      '<DCC_DcuOutput></DCC_DcuOutput>')(x)))
+check('O la global anulada por una particular VACIA de Debug (su clave, la del .dproj): RECHAZADO',
+      rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
 dpw = proyecto_con('solowin64', solo_para('Base_Win64'))
 out = build(dpw)
 try:
@@ -441,8 +455,8 @@ open(os.path.join(TV, 'v.txt'), 'w').write('fuera')
 
 
 def etiqueta_baja(p):
-    o = subprocess.run(['icacls', p], capture_output=True).stdout.decode('cp850', 'replace').lower()
-    return 'low mandatory' in o or 'obligatorio bajo' in o
+    # por EL lector de la casa: el SID que da Windows, no el texto de icacls
+    return mc.etiqueta_de_integridad(p) == 'S-1-16-4096'
 
 
 TA = os.path.join(MINE, 'build', 'contests')
@@ -453,7 +467,17 @@ subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(TS, 'aFuera'), TV], ca
 check('T fixture: exe de test y junction en su carpeta', os.path.exists(os.path.join(TS, 'AppTests.exe'))
       and os.path.isjunction(os.path.join(TS, 'aFuera')), out[:200])
 check('T fixture: la victima empieza con su etiqueta normal', not etiqueta_baja(os.path.join(TV, 'v.txt')), '')
+# (revisor de baterias, 18-oct-2026) el lector de la etiqueta, con su control
+# POSITIVO: un fichero puesto a Low tiene que leerse Low (en otro idioma de
+# Windows etiqueta_baja daba siempre False)
+_low = os.path.join(MINE, 'low.txt')
+open(_low, 'w').write('x')
+subprocess.run(['icacls', _low, '/setintegritylevel', 'l'], capture_output=True)
+check('T control: el lector ve una etiqueta Low puesta a mano', etiqueta_baja(_low), _low)
 out = ts.call('delphi_test', {'project': os.path.join(TA, 'AppTests.dproj'), 'platform': 'Win64', 'nobuild': True}, t=300)
+# ...y el run LLEGO (una negativa no corre el contenedor y la etiqueta no baja)
+check('T delphi_test corrio el test en su contenedor', 'result' in (mc.como_json(out) or {}) and not mc.fallo(out),
+      out[:300])
 check('T delphi_test: el fichero de FUERA conserva su etiqueta', not etiqueta_baja(os.path.join(TV, 'v.txt')), out[:200])
 check('T ...y lo suyo TAMPOCO: la jaula trabaja sobre una copia (1.11)', not etiqueta_baja(os.path.join(TS, 'AppTests.exe')), out[:200])
 ts.cierra()

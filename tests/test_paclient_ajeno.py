@@ -96,9 +96,12 @@ try:
           mc.es(r, 'SN_PACLIENT_OTRO_DELPHI_FMT'), r[:400])
 
     r = con(ST_OK, lambda c: c('delphi_paserver', {'command': 'test-connection', 'name': PERFIL}))
+    # (revisor de baterias, 18-oct-2026) que CONECTO (PAS-026, connected=true):
+    # solo ausencias, un error cualquiera tambien pasaba por "conecta"
     check('A5 control: un paclient que conecta no lleva aviso',
-          not mc.es(r, 'SN_PACLIENT_OTRO_DELPHI_FMT') and not mc.es(r, 'SN_PACLIENT_OTRA_PLATAFORMA_FMT')
-          and 'PAS-056' not in r and 'PAS-057' not in r, r[:300])
+          mc.como_json(r).get('connected') is True and mc.es(r, 'SN_PASERVER_CONNECTED')
+          and not mc.es(r, 'SN_PACLIENT_OTRO_DELPHI_FMT') and not mc.es(r, 'SN_PACLIENT_OTRA_PLATAFORMA_FMT'),
+          r[:300])
 finally:
     try:
         mc.fin('paclient ajeno battery')  # sys.exit: la carpeta se borra en el finally

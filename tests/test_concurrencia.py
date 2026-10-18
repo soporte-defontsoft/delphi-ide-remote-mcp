@@ -136,13 +136,12 @@ try:
     disk_a = open(A, encoding='utf-8').read()
     done_a = sum(1 for i in range(N) if ('SLOT-%02d HECHO' % i) in disk_a)
     lost = [i for i in range(N) if ('SLOT-%02d HECHO' % i) not in disk_a]
-    renames = sum(1 for r in ra if r and 'rename atomico' in r)
     tmp_left = glob.glob(os.path.join(JAIL, '*' + mc.TEMPORAL_SUSTITUCION_EXT))
 
     check('A mismo fichero: los %d escritores reportan exito' % N, ok_a == N,
           '%d/%d; muestras: %s' % (ok_a, N, [r[:80] for r in ra if bad(r)][:3]))
-    check('A mismo fichero: ningun "rename atomico fallido"', renames == 0,
-          '%d renames fallidos' % renames)
+    # (el check de "ningun rename atomico fallido" buscaba un texto que no
+    # existe en el catalogo: pasaba siempre; revisor de baterias, 18-oct-2026)
     check('A mismo fichero: las %d ediciones estan EN DISCO' % N, done_a == N,
           '%d/%d; perdidas: %s' % (done_a, N, lost))
     check('A mismo fichero: exitos reportados == ediciones en disco',
@@ -208,7 +207,7 @@ try:
         "kind": "question", "title": "concurrencia",
         "message": "informe %02d de la rafaga" % i}), NR)
     ok_d = sum(1 for r in rd if not bad(r))
-    files_d = glob.glob(os.path.join(mc.buzon(os.path.join(WORK, 'reports'), ws='Bateria'), '*.md'))
+    files_d = glob.glob(os.path.join(mc.buzon(os.path.join(WORK, mc.INFORMES), ws='Bateria'), '*.md'))
     check('D informes: los %d se escriben sin pisarse' % NR,
           ok_d == NR and len(files_d) == NR,
           'exitos=%d ficheros=%d; los que no: %s' % (
@@ -325,6 +324,7 @@ try:
             ok_run = 'vivo' in str(res.get('run', ''))
             b2 = str(res.get('build', ''))
             ok_build, why_build = False, b2[:300]
+            jb = {}
             try:
                 jb = json.loads(b2)
                 ok_build = jb.get('success') is True
@@ -333,8 +333,16 @@ try:
                 pass
             check('H build con el exe corriendo: el programa corre entero', ok_run,
                   str(res.get('run'))[:200])
-            check('H build con el exe corriendo: el build NO falla por el exe en uso',
-                  ok_build, re.sub(r'\s+', ' ', why_build)[:300])
+            # (revisor de baterias, 18-oct-2026) si el build llega a enlazar
+            # cuando el programa ya termino no hay solape y "no falla" no mide
+            # nada: la prueba del solape la da el servidor (lockedRetries, los
+            # reintentos ante F2039); sin ella, NOTA y no PASS
+            if (jb.get('lockedRetries') or 0) >= 1:
+                check('H build con el exe corriendo: el build NO falla por el exe en uso (hubo solape)',
+                      ok_build, re.sub(r'\s+', ' ', why_build)[:300])
+            else:
+                print('NOTA: H sin solape (el build enlazo cuando el exe ya no corria): no se mide; '
+                      'success=%s' % ok_build)
     # ------------------------------------------------------------------ S
     # S: initialize a la vez -> ids DISTINTOS. El id vivia en UN campo del
     # manager, compartido por los hilos de Indy: dos agentes se llevaban el

@@ -171,6 +171,9 @@ check('read: la pagina cabe en el presupuesto por-resultado',
 # the continuation offset the server hands back must actually work
 import re as _re
 _m = _re.search(r'offset:\s*(\d+)', out)
+# (revisor de baterias, 18-oct-2026) sin el offset en el texto la
+# continuacion no se probaba y nadie lo decia
+check('read: la nota paginada dice su offset de continuacion (offset: N)', bool(_m), out[-220:])
 if _m:
     nxt = int(_m.group(1))
     out2 = s.call('vault_read', {"path": "projects/delphi/grande.md", "offset": nxt})
@@ -568,6 +571,11 @@ with open(marker, 'ab') as f:
     f.write(b'\n- [Mi nota](mia.md) - editada por el usuario\n')
 mine = open(marker, encoding='utf-8').read()
 s6 = Server(vault=FRESH)
+# (revisor de baterias, 18-oct-2026) que ARRANCO sobre ese vault: un servidor
+# que no llegaba a arrancar tampoco pisaba MEMORY.md
+out6 = s6.call('vault_read', {"path": "MEMORY.md"})
+check('siembra (preparacion): el segundo servidor arranca y lee ESE vault (la nota del usuario)',
+      'Mi nota' in out6, out6[:200])
 check('siembra: un vault YA existente no se vuelve a sembrar (no pisa MEMORY.md)',
       open(marker, encoding='utf-8').read() == mine, 'MEMORY.md fue modificado')
 s6.close()
@@ -582,7 +590,12 @@ FUERA13 = mc.carpeta('vault-semilla-fuera')
 _proj13 = os.path.join(VACIO, 'projects')
 if mc.junction(_proj13, FUERA13):
     s7 = Server(vault=VACIO)
+    # (revisor de baterias, 18-oct-2026) que arranco y contesta: sin arrancar,
+    # "no se crea nada" pasaba solo
+    out7 = s7.call('vault_read', {})
     s7.close()
+    check('siembra (preparacion): el servidor con projects\\ como union arranca y contesta',
+          mc.resultado(out7) != 'NO_ANSWER', out7[:200])
     check('siembra: con projects\\ como union afuera no se crea NADA detras ni a medias',
           os.listdir(FUERA13) == [] and os.listdir(VACIO) == ['projects'],
           (os.listdir(FUERA13), os.listdir(VACIO)))

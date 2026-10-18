@@ -44,7 +44,15 @@ try:
     except Exception:
         j = {}
     if 'items' not in j:
-        SKIP = 'el motor no contesto la completion: %s' % r[:200]
+        # (revisor de baterias, 18-oct-2026) sin items salia SIN CHECKS y run_all
+        # la daba por buena: unos ajustes del motor inservibles (lo que cambio la
+        # 1.20.2) caian justo ahi. Neutra solo sin RAD Studio; con el, roja
+        _inst = (mc.como_json(srv.call('delphi_installs', {})) or {}).get('installs', [])
+        if not any(i.get('active') for i in _inst):
+            SKIP = 'no hay RAD Studio activo en esta maquina: %s' % r[:200]
+        else:
+            check('P0 la completion contesta con items (hay RAD Studio: sin ellos, el motor no tiene buenos ajustes)',
+                  False, r[:300])
     else:
         labels = [i.get('label', '') for i in j['items']]
         check('P1 cursor tras "Writ": prefix=Writ, Writeln esta y todos empiezan por Writ',

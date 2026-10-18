@@ -150,8 +150,11 @@ def en_papelera(nombre):
 try:
     r = srv.call('delphi_edit', {'path': U_DFM, 'old': "  Caption = 'FormU'", 'new': "  Caption = 'Otro'"})
     r2 = srv.call('delphi_move', {'path': U_DFM, 'dest': os.path.join(NUEVO1, 'U.dfm')})
+    # por la regla de SOLO LECTURA (GUARD-012), no por otra (revisor de baterias,
+    # 18-oct-2026): si no, G3 deja de probar que leer lo de solo lectura es libre
     check('G0 control: el .dfm de solo lectura no se edita ni se mueve por si solo',
-          mc.rechazado(r) and mc.rechazado(r2) and intacto(U_DFM), (r[:300], r2[:300]))
+          mc.es(r, 'SR_READONLY_PATH_FMT') and mc.es(r2, 'SR_READONLY_PATH_FMT') and intacto(U_DFM),
+          (r[:300], r2[:300]))
 
     # (el %s de FILE-043, no la ruta que cita la negativa de dentro)
     r = srv.call('delphi_move', {'path': U_PAS, 'dest': os.path.join(NUEVO1, 'V.pas')})
@@ -171,7 +174,7 @@ try:
 
     # que C.dfm ES de solo lectura (si no, el control no mide nada)
     r = srv.call('delphi_edit', {'path': C_DFM, 'old': "  Caption = 'FormC'", 'new': "  Caption = 'Otro'"})
-    check('G3a control: C.dfm es de solo lectura de verdad (no se edita)', mc.rechazado(r), r[:300])
+    check('G3a control: C.dfm es de solo lectura de verdad (no se edita)', mc.es(r, 'SR_READONLY_PATH_FMT'), r[:300])
     COPIA = os.path.join(JAIL, 'copia', 'C2.pas')
     r = srv.call('delphi_move', {'path': C_PAS, 'dest': COPIA, 'copy': True})
     check('G3 control: COPIAR la unit si, con su .dfm (leer lo de solo lectura es libre), y el original intacto',

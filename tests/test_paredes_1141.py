@@ -193,7 +193,7 @@ NETDIR = os.environ.get('DELPHI_MCP_TEST_NETDIR', '').strip().rstrip('\\')
 if NETDIR:
     # una carpeta PROPIA de esta pasada, que se borra al acabar
     NETBASE = os.path.join(NETDIR, 'paredes1141-%d-%d' % (os.getpid(), random.randint(1000, 9999)))
-    os.makedirs(os.path.join(NETBASE, '__delphi-temp'))
+    os.makedirs(os.path.join(NETBASE, mc.TEMPORALES))
     try:
         with open(os.path.join(EXEDIR, 'settings.ini'), 'w') as f:
             f.write('\n'.join(['[Workspace.Uno]', 'Token=uno-1141', 'Roots=%s' % NETBASE,

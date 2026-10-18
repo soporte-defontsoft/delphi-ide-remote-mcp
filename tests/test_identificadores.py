@@ -241,6 +241,21 @@ check('I6c la cita del disco de la entrada que fallo, tambien tal cual',
       "2|S := '%s:\\otro';" % L in r, r[:800])
 check('I6d lo que tecleo el agente (el fragmento, no la linea del disco) sale enmascarado',
       ('OK: ' + mc.virtual('%s:\\datos' % L) + '  ->') in r and ('OK: %s:' % L) not in r, r[:600])
+# (revisor de baterias, 18-oct-2026) la GEMELA: el eco del deshacer de una tanda
+# de delphi_edit (un .pas) no lo miraba nadie
+PASI6 = os.path.join(PRJ, 'UNotasI6.pas')
+open(PASI6, 'w', encoding='utf-8', newline='\n').write(
+    "unit UNotasI6;\ninterface\nconst R = '[^\\s:]' + '%s:\\datos';\nconst S = '%s:\\otro';\nimplementation\nend.\n" % (L, L))
+antes = open(PASI6, 'rb').read()
+r = call('delphi_edit', {'path': PASI6, 'edits': json.dumps([
+    {'fragment': '%s:\\datos' % L, 'new': '%s:\\DATOS' % L, 'atline': 3},
+    {'fragment': 'no-esta', 'new': 'x', 'atline': 4}])})
+check('I6e delphi_edit: tanda con una entrada mala, ROLLBACK y el .pas intacto',
+      mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') and open(PASI6, 'rb').read() == antes, r[:400])
+check('I6f ...la linea releida del disco, TAL CUAL y en una linea suya',
+      re.search(r"(?m)^\s+3\|const R = '\[\^\\s:\]' \+ '%s:\\DATOS';" % L, r) is not None, r[:600])
+check('I6g ...y lo que tecleo el agente, enmascarado',
+      ('OK: ' + mc.virtual('%s:\\datos' % L) + '  ->') in r and ('OK: %s:' % L) not in r, r[:600])
 
 # ---- I7 la PUERTA rechaza los controles sin citar rutas ni raices ----
 # una ruta con un salto y '1|' dentro hacia que el filtro de las tools de eco
@@ -250,7 +265,10 @@ for _p in ('a\n1|', 'a\nb  ->  1|'):
     r = call('delphi_read', {'path': _p})
     check('I7 la negativa de la puerta con %r no cita ninguna raiz' % _p,
           mc.rechazado(r) and mc.es(r, 'SR_GUARD_CONTROL_EN_RUTA_FMT')
-          and mc.virtual(BASE) not in r and BASE not in r, r[:400])
+          # (y en su forma LARGA: BASE viene corta, 8.3, del %TEMP%, y el
+          # servidor escribe la larga; revisor de baterias, 18-oct-2026)
+          and mc.virtual(BASE) not in r and BASE not in r
+          and mc.virtual(mc.larga(BASE)) not in r and mc.larga(BASE) not in r, r[:400])
 
 # ---- I8 la cabecera que ABRE una clase (PATRON_ABRE_CLASE) ----
 # insert=metodo tomaba la primera 'TFoo = class': una declaracion adelantada,
@@ -410,8 +428,11 @@ check('I12b ...y el proyecto COMPILA', ok, err)
 # tambien con la regla vieja si el rename no habia escrito el nombre)
 open(os.path.join(PRJ, 'Punto.txt'), 'w', encoding='utf-8').write('x := %s;\n' % COL)
 j = J(call('delphi_search', {'root': PRJ, 'query': 'Col', 'wholeword': True, 'pattern': 'Punto.txt'}))
-check('I12c search wholeword: "Col" no es una palabra entera dentro de %s' % COL,
-      j.get('total') == 0, str(j)[:300])
+# el control en el MISMO fichero: la palabra entera si se encuentra (si la
+# mascara no lo recorriera, total 0 pasaba igual; revisor de baterias, 18-oct-2026)
+j2 = J(call('delphi_search', {'root': PRJ, 'query': COL, 'wholeword': True, 'pattern': 'Punto.txt'}))
+check('I12c search wholeword: "Col" no es una palabra entera dentro de %s (y %s entera si)' % (COL, COL),
+      j.get('total') == 0 and j2.get('total') == 1, (str(j)[:200], str(j2)[:200]))
 
 srv.cierra()
 mc.fin('identificadores battery')

@@ -32,7 +32,12 @@ JAIL = os.path.join(BASE, 'jail')
 REPO = os.path.join(JAIL, 'repo')
 os.makedirs(REPO)
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
-s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='git-consejos', t=120)
+# (revisor de baterias, 18-oct-2026) la config GLOBAL del usuario, vacia: un
+# advice.*=false en el ~/.gitconfig de la maquina dejaba A1-A4 en verde sin
+# el interruptor del servidor (GIT_ADVICE=0)
+GLOBAL = os.path.join(BASE, 'global.gitconfig')
+open(GLOBAL, 'w').close()
+s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'GIT_CONFIG_GLOBAL': GLOBAL}), nombre='git-consejos', t=120)
 
 
 def git(**kw):

@@ -59,7 +59,9 @@ try:
     r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'Label1', 'prop': 'FocusControl',
                                      'value': 'Label1'}, t=240)
     check('M2 la lista de los que caben en la referencia dice tambien cuantos faltan',
-          mc.rechazado(r) and (faltan(r) or 0) > 0, r[-300:])
+          # la negativa del TIPO de la referencia (DSGN-107), no otra que liste
+          # los nombres del form con "and N more" (revisor de baterias, 18-oct-2026)
+          mc.abre(r, 'SR_DESIGNER_REFERENCIA_TIPO_FMT') and (faltan(r) or 0) > 0, r[-300:])
 
     p = form('UM3', 3)
     r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'NoExiste', 'prop': 'Caption',

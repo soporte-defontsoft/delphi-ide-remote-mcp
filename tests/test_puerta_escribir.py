@@ -40,7 +40,7 @@ def detras():
 
 
 AGENTE = 'por-union'
-union_r = mc.buzon(os.path.join(SRVDIR, 'reports'), AGENTE)  # el del proceso local
+union_r = mc.buzon(os.path.join(SRVDIR, mc.INFORMES), AGENTE)  # el del proceso local
 os.makedirs(os.path.dirname(union_r), exist_ok=True)
 union_d = mc.cache_servidor('designer', LOCAL)
 os.makedirs(os.path.dirname(union_d), exist_ok=True)

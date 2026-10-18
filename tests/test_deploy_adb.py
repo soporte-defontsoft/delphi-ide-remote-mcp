@@ -246,6 +246,12 @@ check('dproj: linea de import del deployproj (la que escribe el IDE)',
 n_first = dproj.count('MSBuildProjectName).deployproj')
 
 # second run: import NOT duplicated, existing manifest NOT touched
+# (revisor de baterias, 18-oct-2026) el generador es determinista: regenerarlo
+# daba los MISMOS bytes y el check no veia que se pisaba. Se le deja una marca
+# del operador, como haria el IDE al tocarlo, y tiene que seguir ahi
+if os.path.isfile(DEPLOYPROJ):
+    _m = open(DEPLOYPROJ, 'rb').read()
+    open(DEPLOYPROJ, 'wb').write(_m.replace(b'</Project>', b'<!-- marca del operador -->\r\n</Project>', 1))
 before = open(DEPLOYPROJ, 'rb').read() if os.path.isfile(DEPLOYPROJ) else b''
 out = srv.call('delphi_build', {"project": DPROJ, "platform": "Linux64",
                                 "config": "Debug", "target": "Deploy",
@@ -254,8 +260,8 @@ dproj2 = open(DPROJ, encoding='utf-8-sig').read()
 check('deploy repetido: el import NO se duplica',
       dproj2.count('MSBuildProjectName).deployproj') == n_first,
       'antes=%d ahora=%d' % (n_first, dproj2.count('MSBuildProjectName).deployproj')))
-check('deploy repetido: el .deployproj existente NO se toca',
-      open(DEPLOYPROJ, 'rb').read() == before, DEPLOYPROJ)
+check('deploy repetido: el .deployproj existente NO se toca (la marca del operador sigue)',
+      b'marca del operador' in before and open(DEPLOYPROJ, 'rb').read() == before, DEPLOYPROJ)
 
 # ====================== deploy Android: full staging generation ===========
 # con la zona de biblioteca APAGADA (un workspace con nombre que no la declara):
@@ -292,9 +298,18 @@ if os.path.isfile(FDEPLOY):
     check('deployproj Android: manifest + so en arm64-v8a + iconos',
           'ProjectAndroidManifest' in m and 'arm64-v8a' in m
           and 'ic_launcher.png' in m, m[:300])
-    check('deployproj Android: los stubs libnative salen de $(BDS), no inventados',
-          m.count('libnative-activity.so') ==
-          m.count('$(BDS)\\lib\\android\\debug\\'), m[:300])
+    # (revisor de baterias, 18-oct-2026) 0 == 0 pasaba sin stubs: si la
+    # instalacion los trae, tienen que estar
+    _inst = next((i for i in (mc.como_json(srv.call('delphi_installs', {})) or {}).get('installs', [])
+                  if i.get('active')), {})
+    _so = os.path.join(mc.real(_inst.get('rootdir', '')).rstrip('\\'), 'lib', 'android', 'debug',
+                       'armeabi-v7a', 'libnative-activity.so')
+    if os.path.isfile(_so):
+        check('deployproj Android: los stubs libnative salen de $(BDS), no inventados (y estan)',
+              m.count('libnative-activity.so') > 0 and m.count('libnative-activity.so') ==
+              m.count('$(BDS)\\lib\\android\\debug\\'), m[:300])
+    else:
+        print('NOTA: la instalacion no trae libnative-activity.so (%s): los stubs no se miden' % _so)
 check('deploy Android: siembra AndroidManifest.template.xml (semilla ObjRepos)',
       os.path.isfile(os.path.join(FDIR, 'AndroidManifest.template.xml')), out[:200])
 fdproj = open(os.path.join(FDIR, 'DeployFmx.dproj'), encoding='utf-8-sig').read()

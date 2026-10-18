@@ -234,7 +234,14 @@ try:
     st = json.load(open(os.path.join(cdir, fab[-1]), encoding='utf-8-sig'))['settings']
     from urllib.parse import unquote
     rutas = [unquote(u[len('file:///'):]).replace('/', '\\') for u in st['browsingPaths']]
-    inst = rutas[0].split('\\source\\')[0] + '\\'
+    # la instalacion, por quien la sabe (delphi_installs): la deducia de la
+    # primera browsingPath, que era <inst>\source\rtl\common con la lista a mano
+    # de antes de la 1.20.2; con el Browsing Path del IDE la primera es OCX\Servers
+    # y la unidad elegida salia de la instalacion (revisor de baterias, 18-oct-2026)
+    _act = next((i for i in (mc.como_json(call('delphi_installs', {})) or {}).get('installs', [])
+                 if i.get('active')), {})
+    inst = mc.real(_act.get('rootdir', '')).rstrip('\\') + '\\'
+    check('F8b preparacion: la carpeta de la instalacion activa (delphi_installs)', os.path.isdir(inst), inst)
     unidad = ''
     for d in rutas:
         if d.lower().startswith(inst.lower()) or not os.path.isdir(d):

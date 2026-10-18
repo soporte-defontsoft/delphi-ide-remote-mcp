@@ -54,9 +54,11 @@ try:
 
     out = srv.call('delphi_build', {'project': D}, 900)
     j = J(out)
-    check('Q1 sin platform=: la por defecto del proyecto (Win64), no Win32, y sin la nota BUILD-036',
+    # (BUILD-036 esta retirado: su ausencia era cierta por construccion y se quito
+    # de aqui; revisor de baterias, 18-oct-2026)
+    check('Q1 sin platform=: la por defecto del proyecto (Win64), no Win32',
           j.get('success') is True and j.get('platform') == 'Win64'
-          and '\\Win64\\' in str(j.get('output')) and 'BUILD-036' not in out, out[:300])
+          and '\\Win64\\' in str(j.get('output')), out[:300])
 
     out = srv.call('delphi_build', {'project': D, 'platform': 'Linux64', 'sdk': 'zorin18'}, 900)
     check('Q2 Linux64 sin declarar: BUILD-046 y no se compila nada',

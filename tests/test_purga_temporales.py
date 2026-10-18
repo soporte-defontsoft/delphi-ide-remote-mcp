@@ -24,24 +24,27 @@ def siembra(*partes):
     return p
 
 
-arriba = siembra(ROOT, '__delphi-temp', 'agente', 'desktop', 'cap.png')
-anidada = siembra(ROOT, 'proy', 'sub', '__delphi-temp', 'viejo.png')
-honda = siembra(ROOT, 'a', 'b', 'c', 'd', '__delphi-temp', 'log.txt')
-git = siembra(ROOT, 'proy', '.git', '__delphi-temp', 'no-tocar.txt')
-vendor = siembra(ROOT, 'vendor', '__delphi-temp', 'no-tocar.txt')
-ref = siembra(REF, 'p', '__delphi-temp', 'no-tocar.txt')
-fuera = siembra(FUERA, '__delphi-temp', 'no-tocar.txt')
+arriba = siembra(ROOT, mc.TEMPORALES, 'agente', 'desktop', 'cap.png')
+anidada = siembra(ROOT, 'proy', 'sub', mc.TEMPORALES, 'viejo.png')
+honda = siembra(ROOT, 'a', 'b', 'c', 'd', mc.TEMPORALES, 'log.txt')
+git = siembra(ROOT, 'proy', '.git', mc.TEMPORALES, 'no-tocar.txt')
+vendor = siembra(ROOT, 'vendor', mc.TEMPORALES, 'no-tocar.txt')
+ref = siembra(REF, 'p', mc.TEMPORALES, 'no-tocar.txt')
+fuera = siembra(FUERA, mc.TEMPORALES, 'no-tocar.txt')
 normal = siembra(ROOT, 'proy', 'temp', 'fichero.txt')  # "temp" no es __delphi-temp
 # the deletion guard (25-sep-2026): a SECOND root that lives inside the
 # first root's temp folder must survive the purge of that temp folder,
 # and a junction planted inside a temp folder is removed as a LINK - the
 # folder it points to is never emptied.
-RAIZ2 = os.path.join(ROOT, '__delphi-temp', 'otra-raiz')
+RAIZ2 = os.path.join(ROOT, mc.TEMPORALES, 'otra-raiz')
 raiz2 = siembra(RAIZ2, 'proyecto.pas')
 VICTIMA = os.path.join(BASE, 'victima')
 victima = siembra(VICTIMA, 'no-tocar.txt')
-enlace_tmp = os.path.join(ROOT, 'proy', 'sub', '__delphi-temp', 'lnk')
+enlace_tmp = os.path.join(ROOT, 'proy', 'sub', mc.TEMPORALES, 'lnk')
 subprocess.run(['cmd', '/c', 'mklink', '/J', enlace_tmp, VICTIMA], capture_output=True)
+# (revisor de baterias, 18-oct-2026) si el mklink no la creaba, "cae como
+# enlace" pasaba porque no existia y "la victima intacta" porque nadie la toco
+check('fixture: junction dentro de una temporal, hacia la victima', os.path.isjunction(enlace_tmp), enlace_tmp)
 enlace = os.path.join(ROOT, 'enlace')
 subprocess.run(['cmd', '/c', 'mklink', '/J', enlace, FUERA], capture_output=True)
 check('fixture: junction creado dentro de la raiz apuntando fuera', os.path.isdir(enlace), enlace)
@@ -74,7 +77,7 @@ check('guard: la carpeta a la que apuntaba el junction sigue intacta',
 # vacia: hasta hoy una bateria sobre el repo vaciaba REPO\__delphi-temp con
 # el servicio vivo y sus llamadas en vuelo (el cerrojo iba por la carpeta del
 # exe, y cada bateria corre el suyo).
-en_vuelo = siembra(ROOT, '__delphi-temp', 'agente', 'en-vuelo.txt')
+en_vuelo = siembra(ROOT, mc.TEMPORALES, 'agente', 'en-vuelo.txt')
 srv2 = mc.Stdio(mc.copia_exe(os.path.join(BASE, 'srv2')), env, nombre='bateria-purga-2')
 time.sleep(0.5)
 check('dueno: un SEGUNDO servidor con la misma raiz NO vacia la temporal de uno vivo',

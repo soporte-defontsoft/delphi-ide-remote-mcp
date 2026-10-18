@@ -4,13 +4,15 @@ unit Lsp.Session;
   MCP tools. One agent-mode client per project settings file, created lazily
   on the first request that touches a file of that project, then kept warm.
 
-  Project settings resolution: walk up from the requested file's directory
-  looking for a *.delphilsp.json (the IDE-generated project settings). The
-  first directory that has one wins; a single match is used directly, and
-  with several the one whose name matches a .dpr in the directory wins,
-  falling back to the first. Files with no settings anywhere still get
-  documentSymbol (measured: it works unconfigured), but hover/definition
-  will answer null - the tools say so in their output. }
+  Project settings resolution: the .dproj that serves the requested file
+  (FindDproj: the one in its folder or above, or the one that lists it or
+  reaches its folder by search path), and the settings the server makes from
+  it (Lsp.ConfigFabricator), made again on every request and given again to
+  an engine that is running when they change. The IDE's *.delphilsp.json is
+  never read (1.20.2: it was stale as soon as an agent touched the .dproj,
+  measured). Files with no project anywhere still get documentSymbol
+  (measured: it works unconfigured), but hover/definition will answer null -
+  the tools say so in their output. }
 
 interface
 
@@ -58,23 +60,29 @@ var
 type
   ELspSession = class(Exception);
 
-  { What ResolveSettings answered for a directory, plus the file that
-    justified the answer and its disk stamp: while that file is unchanged the
-    walk (directory scans + settings fabrication) is skipped entirely
-    (hermes, release audit 2026-08-26, P1.6). And the settings file of the
-    IDE that was found and REJECTED on the way, with its stamp: the answer
-    stands while that one does not change either. Rejected once - stale, or
-    read half written -, it was not looked at again until the .dproj changed,
-    fresh as the IDE might have left it since. }
+  { The .dproj FindDproj found for a FILE, with the stamps of EVERYTHING the
+    answer was decided on (HuellaDe): every folder walked - a .dproj that
+    appears closer, beside it or in a folder walked below changes the answer
+    - and every .dproj judged, with its main source. Only the chosen one's
+    stamps were kept, and a second project that LISTS the unit, created
+    beside the first, was not seen until the server restarted (measured
+    18-oct-2026). While all of them are unchanged the walk (directory scans,
+    the projects read on the way) is skipped (hermes, release audit
+    2026-08-26, P1.6). Only an answer a JUDGE gave in the folders walked is
+    kept (it lists the unit, it reaches its folder, it is the only one
+    there): a fallback, one given while a candidate could not be read, one
+    with a stamp that could not be asked, or the one found by search path
+    BELOW when nobody lists the unit (a project listing it could appear
+    anywhere down there) is looked for again. The settings are made again on
+    every request - the .dproj is not all they depend on. Per file and not
+    per folder: the judge of a unit's project is whether a project LISTS it,
+    and two units of one shared folder may belong to two projects. }
   TSettingsEntry = record
-    Settings, RootDir, SourceFile, SourceStamp: string;
-    RejectedFile, RejectedStamp: string;
-    // Decidida por el .dproj (fabricada) sin ningun fichero del IDE: donde
-    // lo escribiria el IDE (<proyecto>.delphilsp.json junto al .dproj). La
-    // respuesta vale mientras NO aparezca: uno generado despues no se veia
-    // hasta que cambiase el .dproj (menor de la ronda 16, medido el
-    // 4-oct-2026: el mismo motor con los fabricados).
-    IdeEsperado: string;
+    SourceFile: string;
+    // lo sellado (PARTE_CARPETA / PARTE_PROYECTO + la ruta) y sus sellos, en
+    // ese orden: la huella (HuellaDe)
+    Partes: TArray<string>;
+    Huella: string;
   end;
 
   { A client taken out of service, and when. }
@@ -134,8 +142,8 @@ type
     FSettingsCache: TDictionary<string, TSettingsEntry>;
     FSweeper: TThread; // calls Sweep every LspSweepMs
     function EnsureExe: string;
-    function ResolveSettingsWalk(const AFilePath: string;
-      out ARootDir, ASource, ASourceStamp, ARejected, ARejectedStamp: string): string;
+    function BuscaDproj(const AFilePath: string; out ADecidido: Boolean;
+      out APartes: TArray<string>; out AHuella: string): string;
     function CreateClient(const ARootDir, ASettingsFile: string;
       AServerType: TLspServerType): TLspClient;
     function ClientKey(const AFullPath: string; ALinter: Boolean;
@@ -148,7 +156,7 @@ type
     procedure DoFolderLeaves(const AFolder: string);
     procedure DoFolderLeft(const AFolder: string);
     function RutaParaAbrir(const AFilePath: string; ADelMotor: Boolean): string;
-    procedure AbreDocumento(AClient: TLspClient; const AFullPath: string);
+    procedure AbreDocumento(AClient: TLspClient; const AFullPath, ASettings: string);
   public
     constructor Create;
     destructor Destroy; override;
@@ -185,19 +193,32 @@ type
       that never gets its pair expires on its own. }
     class procedure FolderLeaves(const AFolder: string; ABegins: Boolean);
 
-    { Finds the project settings for a source file ('' if none). }
-    function FindSettingsFile(const AFilePath: string): string;
-
-    { Finds the .dproj that governs a source file ('' if none): walks up the
-      directory tree; when a directory has several, prefers one whose text
-      references the file's base name, then one matching the directory name,
-      then the first. }
+    { Finds the .dproj that governs a source file ('' if none), full path:
+      walks up the directory tree; a .dproj in the file's folder or above
+      governs it (with several, the one that LISTS it - by its path, or it is
+      its main source -, then one that reaches its folder by search path, then
+      one matching the directory name, then the first); from a folder with
+      none, the first .dproj of the levels below that LISTS it (a
+      SharedSource next to codigofuente), and only when no project lists it
+      anywhere, the first of them that reaches its folder by search path. It
+      was the first whose TEXT carried the unit's name: a unit reached by
+      search path had no project, and with two copies side by side the unit
+      of one went to the other's (measured 18-oct-2026); and the two judges
+      at one level gave a demo below that reaches the folder over the project
+      above that lists the unit (review of 18-oct-2026). Cached per file
+      (TSettingsEntry). }
     function FindDproj(const AFilePath: string): string;
 
-    { Full resolution: fresh IDE settings win; stale/missing settings are
-      replaced by a fabricated one when a .dproj is available; '' otherwise.
-      ARootDir is the workspace root to initialize the LSP with - always a
-      PROJECT directory, never the settings cache. }
+    { The folder an engine for this file starts with: the one of the .dproj
+      that serves it (FindDproj), its own without one - for who needs the
+      root and not the settings (the root of a rename or a references). }
+    function RaizDelMotor(const AFilePath: string): string;
+
+    { Full resolution: the settings made from the .dproj that serves the file
+      (FindDproj), '' when there is none. ARootDir is the workspace root to
+      initialize the LSP with (RaizDelMotor) - always a PROJECT directory,
+      never the settings cache. Who only asks whether there IS a project asks
+      FindDproj: this one makes the settings. }
     function ResolveSettings(const AFilePath: string; out ARootDir: string): string;
 
     { Returns the warm agent client for the file's project (creating it if
@@ -243,7 +264,9 @@ uses
   Lsp.Texts,
   Lsp.ShaCache, // DiskStamp: one composer of the disk fingerprint
   Lsp.Patch, // LeeTexto: la puerta de leer
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Dproj,         // BuscaEnCarpeta: que proyecto sirve a una unidad
+  Lsp.ProjectUnits;  // ProyectoListaUnidad, la otra mitad
 
 type
   { What the engine holds of one document. }
@@ -279,7 +302,19 @@ type
     // GetTickCount64 of the last time the session handed this client out
     // (under the session's FTables): what the sweeper calls "not used"
     FLastUsed: UInt64;
+    // the disk stamp of its settings file when it was last given to the
+    // engine (under FDocLock, set at creation before the client is public)
+    FSettingsStamp: string;
     function Refresh(const AExceptKey, AStrictKey: string): Boolean;
+    { The engine with the settings of NOW: when their file changed since it
+      was last given (its stamp), it is given again -
+      workspace/didChangeConfiguration, which a running engine reloads
+      (measured with the engine alone: 0.2 s the agent's, 0.6 s the linter's)
+      - and the lints it remembers are forgotten, so the same text is linted
+      again with them. They went to it once, when it started, and an
+      add-searchpath was not seen until the server restarted (M5). Called
+      with FDocLock held. True when they were given. }
+    function AjustesAlDia(const ASettings: string): Boolean;
     procedure Close(const AKey: string; const AD: TDocState);
     procedure Touch(const AKey: string);
   public
@@ -660,6 +695,23 @@ begin
   end;
 end;
 
+function TSessionClient.AjustesAlDia(const ASettings: string): Boolean;
+var
+  Sello: string;
+begin
+  Result := False;
+  if ASettings = '' then
+    Exit;
+  // el sello ANTES de darlos: una escritura entre los dos se ve la proxima vez
+  Sello := DiskStamp(ASettings);
+  if (Sello = FSettingsStamp) or not HasStamp(Sello) then
+    Exit;
+  SetSettingsFile(ASettings);
+  FSettingsStamp := Sello;
+  FLintText.Clear;
+  Result := True;
+end;
+
 { The engine forgets the document, and so do the tables. Called with
   FDocLock held. Never raises: an engine that cannot be told is one that is
   going, and its tables go with it. }
@@ -941,199 +993,270 @@ begin
   Result := (ADir <> '') and (ReadPathDenied(ADir) = '');
 end;
 
-function TLspSession.FindSettingsFile(const AFilePath: string): string;
+{ La raiz con la que arranca el motor de un fichero: la carpeta del .dproj que
+  lo sirve, la del fichero sin el. EL nombrador (ResolveSettings,
+  RaizDelMotor). }
+function RaizDe(const AFilePath, ADproj: string): string;
+begin
+  if ADproj <> '' then
+    Result := TPath.GetDirectoryName(TPath.GetFullPath(ADproj))
+  else
+    Result := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
+end;
+
+const
+  // LO QUE se sella para el proyecto de una unidad (TSettingsEntry): una
+  // carpeta (su FolderStamp) o un .dproj (su DiskStamp y el de su fuente
+  // principal). Lo compone BuscaDproj y lo lee SelloDeParte, su inversa
+  PARTE_CARPETA = 'd:';
+  PARTE_PROYECTO = 'p:';
+
+function SelloDeParte(const AParte: string): string;
 var
-  Dir, Candidate: string;
-  Matches: TArray<string>;
-  Depth: Integer;
+  Ruta: string;
+begin
+  if AParte.StartsWith(PARTE_CARPETA) then
+    Exit(FolderStamp(AParte.Substring(Length(PARTE_CARPETA))));
+  Ruta := AParte.Substring(Length(PARTE_PROYECTO));
+  Result := DiskStamp(Ruta) + '|' + DiskStamp(DprDe(Ruta));
+end;
+
+{ La huella de lo sellado, sello a sello en su orden: la compone BuscaDproj
+  con los sellos tomados ANTES de mirar cada cosa, y FindDproj la vuelve a
+  pedir al disco para saber si lo guardado sigue valiendo. }
+function HuellaDe(const APartes: TArray<string>): string;
 begin
   Result := '';
-  Dir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
-  for Depth := 1 to 8 do
+  for var P in APartes do
+    Result := Result + SelloDeParte(P) + #10;
+end;
+
+function TLspSession.BuscaDproj(const AFilePath: string; out ADecidido: Boolean;
+  out APartes: TArray<string>; out AHuella: string): string;
+var
+  Dir, Carpeta, C: string;
+  Matches: TArray<string>;
+  Depth: Integer;
+  Abajo: TList<string>;
+  Juzgados: TDictionary<string, Boolean>;
+  Sellos: TDictionary<string, string>;
+  Orden: TList<string>;
+  NoLeido: Boolean;
+
+  // los sellos de lo que se mira ANTES de mirarlo, como AcquireFor con un
+  // fuente: una carpeta (lo que aparezca dentro mueve el suyo) y un .dproj con
+  // su fuente principal. Lo que cambie despues invalida lo guardado
+  procedure Marca(const AParte: string);
   begin
-    if not PuedoSubirA(Dir) then
-      Exit;
-    Matches := TDirectory.GetFiles(Dir, '*.delphilsp.json');
-    if Length(Matches) > 0 then
+    if not Sellos.ContainsKey(AParte) then
     begin
-      if Length(Matches) = 1 then
-        Exit(Matches[0]);
-      // Several: prefer the one that pairs with a .dpr of the same name.
-      for Candidate in Matches do
-        if FileExists(Candidate.Replace('.delphilsp.json', '.dpr',
-          [rfIgnoreCase])) then
-          Exit(Candidate);
-      Exit(Matches[0]);
+      Sellos.Add(AParte, SelloDeParte(AParte));
+      Orden.Add(AParte);
     end;
-    var Parent := TPath.GetDirectoryName(Dir);
-    if SameText(Parent, Dir) then
+  end;
+
+  procedure Sella(const ADproj: string);
+  begin
+    Marca(PARTE_PROYECTO + ADproj.ToLower);
+  end;
+
+  // Los dos jueces de que un proyecto sirve a la unidad. LA LISTA: su .dpr/.dpk
+  // la nombra por su ruta o es ella (Lsp.ProjectUnits). Era el NOMBRE en el
+  // texto del .dproj: casaba con la copia de al lado (medido el 18-oct-2026).
+  // Un candidato que la puerta no deja leer no es de este workspace y no se
+  // adopta; uno que no se deja leer no sirve, y lo que se decida sin el no se
+  // guarda (NoLeido).
+  function Lista(const ADproj: string): Boolean;
+  begin
+    if Juzgados.TryGetValue(ADproj.ToLower, Result) then
       Exit;
-    Dir := Parent;
+    Result := False;
+    if LugarDeLecturaDenegado(ADproj, [ltJaula]) = '' then
+    try
+      Sella(ADproj);
+      Result := ProyectoListaUnidad(ADproj, AFilePath, True);
+    except
+      NoLeido := True;
+    end;
+    Juzgados.Add(ADproj.ToLower, Result);
+  end;
+
+  // ...y LA ALCANZA: su search path es la carpeta de la unidad (Lsp.Dproj).
+  // Solo cuando nadie la lista: una demo de debajo con '..' en su search path
+  // le ganaba al proyecto de arriba que la lista (revision del 18-oct-2026).
+  function Alcanza(const ADproj: string): Boolean;
+  begin
+    Result := False;
+    if LugarDeLecturaDenegado(ADproj, [ltJaula]) = '' then
+    try
+      Sella(ADproj);
+      Result := BuscaEnCarpeta(ADproj, LeeTexto(ADproj, [ltJaula]), Carpeta);
+    except
+      NoLeido := True;
+    end;
+  end;
+
+  // la respuesta, la de un juez (se guarda) o la de un respaldo (no), con la
+  // huella de todo lo que se miro para darla
+  function Elige(const ADproj: string; APorJuez: Boolean): string;
+  begin
+    Result := ADproj;
+    Sella(ADproj);
+    APartes := Orden.ToArray;
+    AHuella := '';
+    for var P in APartes do
+      AHuella := AHuella + Sellos[P] + #10;
+    // un sello que no se pudo preguntar (una carpeta que es un enlace, un
+    // permiso) no vigila nada: esa respuesta no se guarda
+    ADecidido := APorJuez and not NoLeido and not AHuella.Contains(STAMP_UNKNOWN);
+  end;
+
+begin
+  Result := '';
+  ADecidido := False;
+  APartes := nil;
+  AHuella := '';
+  NoLeido := False;
+  Carpeta := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
+  Dir := Carpeta;
+  Abajo := TList<string>.Create;
+  Juzgados := TDictionary<string, Boolean>.Create;
+  Sellos := TDictionary<string, string>.Create;
+  Orden := TList<string>.Create;
+  try
+    for Depth := 1 to 8 do
+    begin
+      if not PuedoSubirA(Dir) then
+        Break;
+      // la carpeta, sellada antes de listarla: un .dproj que aparezca en ella
+      // cambia la respuesta
+      Marca(PARTE_CARPETA + Dir.ToLower);
+      Matches := TDirectory.GetFiles(Dir, '*.dproj');
+      if Length(Matches) = 1 then
+        Exit(Elige(Matches[0], True));
+      if Length(Matches) > 1 then
+      begin
+        for C in Matches do
+          if Lista(C) then
+            Exit(Elige(C, True));
+        for C in Matches do
+          if Alcanza(C) then
+            Exit(Elige(C, True));
+        for C in Matches do
+          if SameText(TPath.GetFileNameWithoutExtension(C), TPath.GetFileName(Dir)) then
+            Exit(Elige(C, False));
+        Exit(Elige(Matches[0], False));
+      end;
+      // No .dproj here: a unit in a SIBLING folder of the project
+      // (SharedSource next to codigofuente, the usual shared-units layout)
+      // belongs to the .dproj of the levels below that LISTS it; the ones
+      // that only reach its folder wait until nobody lists it (below).
+      if Depth <= 3 then
+        // por EL recorredor (WalkFiles): solo sigue los enlaces que esta sesion
+        // puede leer (GetFiles con soAllDirectories cruzaba cualquier union y
+        // cada candidato tenia que negarse uno a uno; 2h de la 1.18.4)
+        // ...y cada carpeta de debajo, al entrar (un proyecto que la liste
+        // puede aparecer en cualquiera)
+        for C in WalkFiles(Dir, ['*.dproj'], False, True,
+          procedure(const ACarpeta: string)
+          begin
+            var K := PARTE_CARPETA + ACarpeta.ToLower;
+            if not Sellos.ContainsKey(K) then
+            begin
+              Sellos.Add(K, SelloDeParte(K));
+              Orden.Add(K);
+            end;
+          end) do
+          if not Juzgados.ContainsKey(C.ToLower) then
+          begin
+            if Lista(C) then
+              Exit(Elige(C, True));
+            Abajo.Add(C);
+          end;
+      var Parent := TPath.GetDirectoryName(Dir);
+      if SameText(Parent, Dir) then
+        Break;
+      Dir := Parent;
+    end;
+    // nadie la lista, ni hay un .dproj en su carpeta o encima: el primero de
+    // debajo, del nivel mas cercano, que la alcanza por search path. No se
+    // guarda: uno que la liste podria aparecer en cualquier carpeta de abajo
+    for C in Abajo do
+      if Alcanza(C) then
+        Exit(Elige(C, False));
+  finally
+    Orden.Free;
+    Sellos.Free;
+    Juzgados.Free;
+    Abajo.Free;
   end;
 end;
 
 function TLspSession.FindDproj(const AFilePath: string): string;
 var
-  Dir, BaseName, C: string;
-  Matches: TArray<string>;
-  Depth: Integer;
-
-  // un candidato que la puerta no deja leer no es de este workspace y no se
-  // adopta: GetFiles con soAllDirectories cruza junctions, y se leia por
-  // ellas un .dproj de fuera de la jaula
-  function Menciona(const ADproj: string): Boolean;
-  begin
-    Result := (LugarDeLecturaDenegado(ADproj, [ltJaula]) = '') and
-      LeeTexto(ADproj, [ltJaula]).ToLower.Contains(BaseName.ToLower);
-  end;
-
+  Key, Huella: string;
+  Partes: TArray<string>;
+  E: TSettingsEntry;
+  Found, Decidido: Boolean;
 begin
-  Result := '';
-  BaseName := TPath.GetFileNameWithoutExtension(AFilePath);
-  Dir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
-  for Depth := 1 to 8 do
-  begin
-    if not PuedoSubirA(Dir) then
-      Exit;
-    Matches := TDirectory.GetFiles(Dir, '*.dproj');
-    if Length(Matches) > 0 then
-    begin
-      if Length(Matches) = 1 then
-        Exit(Matches[0]);
-      for C in Matches do
-        if Menciona(C) then
-          Exit(C);
-      for C in Matches do
-        if SameText(TPath.GetFileNameWithoutExtension(C),
-          TPath.GetFileName(Dir)) then
-          Exit(C);
-      Exit(Matches[0]);
-    end;
-    // No .dproj here: a unit in a SIBLING folder of the project (SharedSource
-    // next to codigofuente, the usual shared-units layout) belongs to the
-    // .dproj one level down that REFERENCES it (DCCReference or search path).
-    if Depth <= 3 then
-      // por EL recorredor (WalkFiles): solo sigue los enlaces que esta sesion
-      // puede leer (GetFiles con soAllDirectories cruzaba cualquier union y
-      // cada candidato tenia que negarse uno a uno; 2h de la 1.18.4)
-      for C in WalkFiles(Dir, ['*.dproj']) do
-        if Menciona(C) then
-          Exit(C);
-    var Parent := TPath.GetDirectoryName(Dir);
-    if SameText(Parent, Dir) then
-      Exit;
-    Dir := Parent;
+  // La clave lleva la JAULA ademas del fichero: el veredicto de la escalada
+  // (PuedoSubirA, via ReadPathDenied) depende de los roots del token que
+  // llama, y con workspaces solapados el primero que resolvia una carpeta
+  // fijaba SU proyecto para todos los demas - el token ancho le regalaba al
+  // estrecho una raiz que su jaula le prohibe (auditoria 2026-09-21). The
+  // stamps are asked of the disk with no lock held.
+  Key := string.Join(';', WorkspaceRoots).ToLower + '|' + TPath.GetFullPath(AFilePath).ToLower;
+  FTables.Enter;
+  try
+    Found := FSettingsCache.TryGetValue(Key, E);
+  finally
+    FTables.Leave;
+  end;
+  if Found and (HuellaDe(E.Partes) = E.Huella) then
+    Exit(E.SourceFile);
+  Result := BuscaDproj(AFilePath, Decidido, Partes, Huella);
+  if Result = '' then
+    Exit; // no project: never cached - a project file could appear at any moment
+  Result := TPath.GetFullPath(Result);
+  if not Decidido then
+    Exit;
+  E.SourceFile := Result;
+  E.Partes := Partes;
+  E.Huella := Huella; // each stamp taken before its part was looked at (BuscaDproj)
+  FTables.Enter;
+  try
+    if FSettingsCache.Count > 1024 then
+      FSettingsCache.Clear; // small map of files asked about; a clear is fine
+    FSettingsCache.AddOrSetValue(Key, E);
+  finally
+    FTables.Leave;
   end;
 end;
 
-function TLspSession.ResolveSettingsWalk(const AFilePath: string;
-  out ARootDir, ASource, ASourceStamp, ARejected, ARejectedStamp: string): string;
-var
-  Info: TRadStudioInfo;
-  Dproj, Stamp: string;
+function TLspSession.RaizDelMotor(const AFilePath: string): string;
 begin
-  ASource := '';
-  ASourceStamp := '';
-  ARejected := '';
-  ARejectedStamp := '';
-  Info := DiscoverRadStudio;
-  Result := FindSettingsFile(AFilePath);
-  // The stamp of a file is taken BEFORE the file is read, as AcquireFor does
-  // with a source. Taken after, a file read half written and completed in
-  // between got the stamp of the whole file, which nobody had looked at,
-  // and the cache stood on it (fourth review of 1.7.7, read in the code).
-  Stamp := '';
-  if Result <> '' then
-    Stamp := DiskStamp(Result);
-  // los del IDE NO si el proyecto tiene carpetas en su search path que esta
-  // sesion no puede leer: el motor las veria (David, 9-oct-2026: "recortar y
-  // negar"); los fabricados las dejan fuera
-  Dproj := FindDproj(AFilePath);
-  if (Result <> '') and not IsSettingsStale(Result, Info) and
-     ((Dproj = '') or (Length(CarpetasDeFueraDelProyecto(Dproj, Info)) = 0)) then
-  begin
-    ARootDir := TPath.GetDirectoryName(Result);
-    ASource := Result;
-    ASourceStamp := Stamp;
-    Exit; // fresh IDE-generated settings: best possible source
-  end;
-  ARejected := Result; // found, and not taken ('' if there was none)
-  ARejectedStamp := Stamp;
-  if Dproj <> '' then
-  begin
-    ARootDir := TPath.GetDirectoryName(TPath.GetFullPath(Dproj));
-    ASource := TPath.GetFullPath(Dproj);
-    ASourceStamp := DiskStamp(ASource);
-    Exit(FabricateSettings(Dproj, Info));
-  end;
-  // No .dproj anywhere: a stale settings file is worse than none (its paths
-  // point at machines/drives gone by), so fall back to unconfigured.
-  ARootDir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
-  Result := '';
+  Result := RaizDe(AFilePath, FindDproj(AFilePath));
 end;
 
 function TLspSession.ResolveSettings(const AFilePath: string;
   out ARootDir: string): string;
 var
-  Dir, Src, SrcStamp, Rejected, RejectedStamp: string;
-  E: TSettingsEntry;
-  Found: Boolean;
+  Dproj: string;
 begin
-  // Cached per directory, invalidated by the stamp of the file that decided
-  // the answer (.delphilsp.json or .dproj): editing search paths touches the
-  // .dproj, which changes the stamp, which re-fabricates. And by the stamp
-  // of the IDE's settings file that was rejected on the way, if there was
-  // one (see TSettingsEntry). The no-source case is never cached - a project
-  // file could appear at any moment. The stamps are asked of the disk with
-  // no lock held.
-  // La clave lleva la JAULA ademas del directorio: el veredicto de la
-  // escalada (PuedoSubirA, via ReadPathDenied) depende de los roots del
-  // token que llama, y con workspaces solapados el primero que resolvia
-  // una carpeta fijaba SU RootDir para todos los demas - el token ancho
-  // le regalaba al estrecho una raiz que su jaula le prohibe
-  // (auditoria 2026-09-21).
-  // ...y la VERSION de RAD Studio, porque los settings fabricados salen de
-  // los paths de ESA instalacion (la del servidor: no cambia en vida del
-  // proceso, pero la clave no tiene que saberlo).
-  Dir := DiscoverRadStudio.Version + '|' +
-    string.Join(';', WorkspaceRoots).ToLower + '|' +
-    TPath.GetDirectoryName(TPath.GetFullPath(AFilePath)).ToLower;
-  FTables.Enter;
-  try
-    Found := FSettingsCache.TryGetValue(Dir, E);
-  finally
-    FTables.Leave;
-  end;
-  if Found and (E.SourceFile <> '') and
-     (DiskStamp(E.SourceFile) = E.SourceStamp) and
-     ((E.RejectedFile = '') or (DiskStamp(E.RejectedFile) = E.RejectedStamp)) and
-     ((E.IdeEsperado = '') or not FileExists(E.IdeEsperado)) then
-  begin
-    ARootDir := E.RootDir;
-    Exit(E.Settings);
-  end;
-  Result := ResolveSettingsWalk(AFilePath, ARootDir, Src, SrcStamp, Rejected,
-    RejectedStamp);
-  if Src <> '' then
-  begin
-    E.Settings := Result;
-    E.RootDir := ARootDir;
-    E.SourceFile := Src;
-    E.SourceStamp := SrcStamp; // taken before the file was read (the walk)
-    E.RejectedFile := Rejected;
-    E.RejectedStamp := RejectedStamp;
-    E.IdeEsperado := '';
-    if (Rejected = '') and SameText(TPath.GetExtension(Src), '.dproj') then
-      E.IdeEsperado := TPath.ChangeExtension(Src, '.delphilsp.json');
-    FTables.Enter;
-    try
-      if FSettingsCache.Count > 256 then
-        FSettingsCache.Clear; // tiny map of project dirs; a clear is fine
-      FSettingsCache.AddOrSetValue(Dir, E);
-    finally
-      FTables.Leave;
-    end;
-  end;
+  // Los ajustes son SIEMPRE los nuestros, de su .dproj: el .delphilsp.json
+  // del IDE no se lee (David, 17-oct-2026: "ese json lo mantiene el IDE y
+  // nosotros no usamos el IDE"). Se preferia mientras nombrase un proyecto
+  // que existiera, y el IDE solo lo reescribe al abrir el proyecto: lo que
+  // un agente cambiaba en el .dproj no lo veia el motor (medido, M4), y el
+  // de una copia nombraba el original (Fable 1). The project of a file is
+  // cached (FindDproj); the settings are made AGAIN every time
+  // (FabricateSettings, written only when they change): they depend on more
+  // than the .dproj.
+  Dproj := FindDproj(AFilePath);
+  ARootDir := RaizDe(AFilePath, Dproj);
+  if Dproj = '' then
+    Exit(''); // No .dproj anywhere: unconfigured
+  Result := FabricateSettings(Dproj, DiscoverRadStudio);
 end;
 
 function TLspSession.CreateClient(const ARootDir, ASettingsFile: string;
@@ -1151,6 +1274,9 @@ begin
     Result.SendInitialized;
     if ASettingsFile <> '' then
     begin
+      // el sello ANTES de darlos (AjustesAlDia): lo que cambie despues se le
+      // da otra vez en la proxima peticion
+      (Result as TSessionClient).FSettingsStamp := DiskStamp(ASettingsFile);
       Result.SetSettingsFile(ASettingsFile);
       Sleep(1500); // let the server load project settings before first use
     end;
@@ -1364,7 +1490,7 @@ var
 begin
   FullPath := RutaParaAbrir(AFilePath, False);
   Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
-  AbreDocumento(Result, FullPath);
+  AbreDocumento(Result, FullPath, ASettingsUsed);
 end;
 
 { LA puerta de abrir un fichero en un motor (AcquireFor y AbreEn): abrir es
@@ -1393,8 +1519,11 @@ begin
 end;
 
 { El documento abierto y al dia en ESE motor (AcquireFor y AbreEn), con la
-  ventaja de indexado si acaba de abrirse o de refrescarse. }
-procedure TLspSession.AbreDocumento(AClient: TLspClient; const AFullPath: string);
+  ventaja de indexado si acaba de abrirse o de refrescarse. ASettings: los
+  ajustes de ESA peticion, que el motor recibe otra vez si cambiaron
+  (AjustesAlDia); '' cuando el motor ya los recibio en la misma peticion
+  (AbreEn, tras el AcquireFor que lo dio). }
+procedure TLspSession.AbreDocumento(AClient: TLspClient; const AFullPath, ASettings: string);
 var
   DocKey: string;
   Nuevo: Boolean;
@@ -1409,12 +1538,15 @@ begin
     // its is written down, and the caller is told at once
     if AClient.Stopped then
       raise ELspSession.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+    // los ajustes de ahora antes que nada: lo que se le pregunte se contesta
+    // con ellos (y la ventaja de indexado tambien les toca)
+    Nuevo := Mine.AjustesAlDia(ASettings);
     // Every document this engine has open is brought up to date with the
     // disk FIRST - the one asked about and the others alike (delphi_edit,
     // scaffolding, git, an external editor...): an answer must reflect the
     // CURRENT source of every unit it crosses, never a stale snapshot. The
     // engine reads the disk itself only for units it does NOT have open.
-    Nuevo := Mine.Refresh('', DocKey);
+    Nuevo := Mine.Refresh('', DocKey) or Nuevo;
     if not Mine.FDocs.ContainsKey(DocKey) then
     begin
       // the stamp BEFORE the text: a write between the two is seen next time
@@ -1437,7 +1569,7 @@ end;
 
 procedure TLspSession.AbreEn(AClient: TLspClient; const AFilePath: string);
 begin
-  AbreDocumento(AClient, RutaParaAbrir(AFilePath, True));
+  AbreDocumento(AClient, RutaParaAbrir(AFilePath, True), '');
 end;
 
 function TLspSession.LintFile(const AFilePath: string; ATimeoutMs: Integer;
@@ -1458,9 +1590,9 @@ begin
   // Sin ajustes de proyecto el motor no publica NUNCA (medido 2026-10-06,
   // ver SR_LSP_LINT_SIN_AJUSTES_FMT): se dice aqui, antes de arrancar un
   // motor para nada, y no tras 40 s de "in-progress" en bucle. La misma
-  // resolucion que hace GetClient; FabricateSettings no devuelve '' nunca
-  // (o su fichero o una excepcion), asi que '' es que no se encontro nada.
-  if ResolveSettings(FullPath, RootDir) = '' then
+  // resolucion que hace GetClient (FindDproj, sin hacer los ajustes: los
+  // hace GetClient, una vez por peticion).
+  if FindDproj(FullPath) = '' then
     raise ELspSession.Create(MsgFmt(SR_LSP_LINT_SIN_AJUSTES_FMT, [AFilePath]));
   // Bajo una ruta con un caracter mas alla de U+FFFF el motor publica una
   // lista VACIA (medido el 14-oct con el motor solo): un "0 errors" falso. Se
@@ -1484,6 +1616,11 @@ begin
     // A retry on the SAME text (the client timed out before a slow lint
     // finished) must not restart the lint: the LSP is still working, or the
     // diagnostics are already queued - just wait for them below.
+    // Los ajustes de ahora (AjustesAlDia): si cambiaron, se le dan otra vez -
+    // el motor vivo seguia con los de su arranque (M5) - y se olvida lo que
+    // estaba lintando: un lint en curso era de los ajustes de antes, y el
+    // reintento con el mismo texto lo esperaba en vez de lintar de nuevo.
+    Mine.AjustesAlDia(ASettingsUsed);
     // The other units this engine has open first: a lint reads across them
     // (see AcquireFor). This one goes below, by its text, not by its stamp.
     Mine.Refresh(DocKey, '');

@@ -199,7 +199,9 @@ try:
     srv = mc.Http(PORT, RO)
     srv.session('git-jaula-113-ro')
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'init'})
-    check('control: la credencial RO deniega una escritura', mc.rechazado(out), out)
+    # (revisor de baterias, 18-oct-2026) por SER de solo lectura (READ-002):
+    # con cualquier rechazo el control no controlaba nada
+    check('control: la credencial RO deniega una escritura', mc.es(out, 'SR_READ_ONLY_FMT'), out)
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'remote': 'origin'})
     check('ls-remote funciona con credencial de solo lectura', out.startswith('exit=0') and 'refs/heads/main' in out, out)
 finally:

@@ -141,7 +141,11 @@ check('B matado desde fuera: lo registrado sigue ahi (no hace falta salir bien)'
 # ---- C: rotacion, poda y el nombrador
 shutil.rmtree(LOGS, ignore_errors=True)
 os.makedirs(LOGS)
-open(INI, 'w', encoding='utf-8').write('[Log]\nLinesPerFile=100\nMaxFiles=3\n')
+# (revisor de baterias, 18-oct-2026) MaxFiles=2: con 3, el orden del
+# nombrador y el ALFABETICO se quedaban con los mismos dos falsos ('-' va
+# antes que '.'); con 2 y un bloque nuevo, el nombrador guarda el "-2" y el
+# alfabetico guardaria 000001.log
+open(INI, 'w', encoding='utf-8').write('[Log]\nLinesPerFile=100\nMaxFiles=2\n')
 FALSOS = ['20200101-000000.log', '20200101-000001.log', '20200101-000001-2.log']
 AJENOS = ['notas.log', '20200101-000002-01.log', 'x20200101-000000.log', '20200101-000003-1.log']
 for n in FALSOS + AJENOS:
@@ -163,12 +167,12 @@ s.call('delphi_help', {"command": "tool", "name": "TRAS-CORTE"})
 check('C tras el corte, lo nuevo va a un actual.log nuevo (nada se pierde en el corte)',
       espera(lambda: 'TRAS-CORTE' in lee(VIVO), 3) and 'ROTA-000' not in lee(VIVO), lee(VIVO)[:200])
 todos = bloques()
-check('C se guardan los MaxFiles (3) bloques mas nuevos', len(todos) == 3, todos)
+check('C se guardan los MaxFiles (2) bloques mas nuevos', len(todos) == 2, todos)
 check('C el mas viejo se poda', '20200101-000000.log' not in todos, todos)
 quedan = [n for n in todos if n.startswith('2020')]
-check('C orden del nombrador: el "-2" es MAS NUEVO que su primero (se queda antes que el)',
-      (not quedan) or ('20200101-000001-2.log' in quedan and
-                       (len(quedan) == 2 or '20200101-000001.log' not in quedan)), quedan)
+check('C premisa del orden: un solo bloque nuevo (queda sitio para UN falso)', len(nuevos) == 1, nuevos)
+check('C orden del nombrador: el "-2" es MAS NUEVO que su primero (se queda el, no 000001.log)',
+      quedan == ['20200101-000001-2.log'], quedan)
 check('C un .log que el nombrador no compone NUNCA se toca',
       all(os.path.exists(os.path.join(LOGS, n)) for n in AJENOS), sorted(os.listdir(LOGS)))
 s.cierra()

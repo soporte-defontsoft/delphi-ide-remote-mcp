@@ -67,7 +67,9 @@ try:
     # bastaron y el TimeoutExpired corto la bateria antes de R7-R9 (run_all
     # del 5-oct y del 7-oct-2026)
     direct.wait(60)
-    origin=os.environ.get('MCP_RUNJOB_EXE',os.path.join(mc.REPO,'src','RunJob','Win64','Release','McpRunJob.exe'))
+    # (revisor de baterias, 18-oct-2026) el que se ENTREGA (node\, el que copia
+    # install-runner), no el compilado de src\ (hoy iguales byte a byte)
+    origin=os.environ.get('MCP_RUNJOB_EXE',os.path.join(mc.REPO,'node','McpRunJob.exe'))
     launcher=os.path.join(remote,'run-1234.exe');shutil.copy(origin,launcher)
     out=os.path.join(remote,'1234.out');pidfile=os.path.join(remote,'1234.pid')
     with open(os.path.join(remote,'run-1234.job'),'w',encoding='utf-8') as f:f.write('Probe.exe\n1234.out\n'+script+'\n')

@@ -162,8 +162,10 @@ try:
         fichas = {}
     check('sysroot con DOS libc: se marca como mezclado',
           'warning' in fichas.get('mezclado', {}), out[:400])
+    # (revisor de baterias, 18-oct-2026) la ficha ESTA: sin ella (otro nombre,
+    # un JSON roto) "no se marca" pasaba solo
     check('sysroot limpio con /lib64 (Ubuntu): NO se marca',
-          'warning' not in fichas.get('limpio', {}), out[:400])
+          'limpio' in fichas and 'warning' not in fichas['limpio'], out[:400])
     # los Default_<Plataforma> del IDE, leidos AQUI del registro (solo se
     # leen; el de verdad, del usuario): el servidor los da por EL lector de
     # las claves del IDE desde la 1.10.0, y aqui ninguna bateria los miraba
@@ -187,6 +189,8 @@ try:
         dados = json.loads(out).get('ideSdkDefaults', [])
     except Exception:
         dados = None
+    if not esperados:
+        print('NOTA: ideSdkDefaults no medible: el IDE de esta maquina no tiene ningun Default_ en PlatformSDKs')
     check('ideSdkDefaults: los Default_ del IDE, los mismos que el registro (%d aqui)' % len(esperados),
           dados is not None and all(e in dados for e in esperados), (esperados, dados))
 

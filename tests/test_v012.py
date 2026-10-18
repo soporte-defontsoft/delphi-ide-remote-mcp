@@ -221,7 +221,7 @@ check('C1-bis: declaracion DESPUES del campo y antes de private (no E2169)',
 
 # ---- delphi_report: works at every level, one .md per report ---------------
 import glob as _glob
-RDIR = mc.buzon(os.path.join(os.path.dirname(EXE), 'reports'))  # el del proceso local: sin workspace
+RDIR = mc.buzon(os.path.join(os.path.dirname(EXE), mc.INFORMES))  # el del proceso local: sin workspace
 before = set(_glob.glob(os.path.join(RDIR, '*.md')))
 out = call('delphi_report', {"message": "Al usar delphi_x paso Y, esperaba Z.",
                              "title": "Prueba de la bateria",
@@ -332,8 +332,10 @@ check('config: view lista plataformas con estado',
       any(p.get('name') == 'Win64' for p in cfg.get('platforms', [])), out[:150])
 
 out = call('delphi_config', {"project": VCLP, "command": "add-platform", "platform": "Linux64"})
+# la regla del framework por su texto del catalogo, no "VCL" suelto (revisor de
+# baterias, 18-oct-2026)
 check('config: add-platform Linux64 en VCL RECHAZADO (regla VCL!=FMX)',
-      mc.rechazado(out) and 'VCL' in out, out[:150])
+      mc.rechazado(out) and mc.catalogo()['SF_CFG_VCL_SOLO_WINDOWS_FMT'].split('(')[0].strip() in out, out[:150])
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "Linux64"})
 # shape, not data: the fixture is a copy of the live .dproj, so Linux64 may
 # arrive undeclared (ANADIDA) or declared-but-disabled (HABILITADA) - both
@@ -706,7 +708,6 @@ check('prueba viable: quedan letras sin unidad real', len(FREE) >= 2, FREE)
 GHOST = FREE[0] if FREE else None
 if GHOST:
     GV = mc.virtual(GHOST + ':\\secreto\\x.pas')
-    REAL = re.compile(r'(?<!srv)' + GHOST + r':\\', re.I)  # the real form only
     for tool, args in (('delphi_read', {"path": GV}),
                        ('delphi_edit', {"path": GV, "old": "a", "new": "b"}),
                        # delphi_list with dirs=true was the exact vector of the
@@ -715,8 +716,10 @@ if GHOST:
         out = call(tool, args)
         check(tool + ': unidad no servida rechazada por nombre',
               mc.es(out, 'SR_UNIT_UNKNOWN_FMT'), out)
+        # (revisor de baterias, 18-oct-2026) EL lector de la fuga: el de aqui
+        # solo veia la letra con barra invertida detras
         check(tool + ': la letra real NO viaja de vuelta',
-              REAL.search(out) is None, out)
+              not mc.fuga_de_letra(out, GHOST), out)
     # rule 4: a rejection always names the legitimate way in
     out = call('delphi_read', {"path": GV})
     check('unidad no servida: el rechazo ofrece las unidades validas',
@@ -766,7 +769,7 @@ if VDRV:
                   not mc.es(out, 'SR_UNIT_UNKNOWN_FMT') and mc.resultado(out) not in ('INTERNAL', 'NO_ANSWER'),
                   out)
             check('vault en otra unidad: la letra real no viaja',
-                  re.search(r'(?<!srv)' + VDRV + r':\\', out, re.I) is None, out)
+                  not mc.fuga_de_letra(out, VDRV), out)
         finally:
             subprocess.run('subst %s: /d' % VDRV, shell=True, capture_output=True)
     else:

@@ -29,7 +29,7 @@ What it covers, by the number the reports used:
 
 Usage:  python tests/test_round8.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, base64, glob
+import json, os, base64, glob, re as _re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -144,9 +144,9 @@ open(DPR, 'w', encoding='utf-8-sig', newline='\r\n').write(
     'program FugaTest;\n\n{$APPTYPE CONSOLE}\n\nuses\n  FugaU in \'' + FUGAU + '\';\n\nbegin\nend.\n')
 raw = raw_result(A, 'delphi_build', {'project': os.path.join(PROJ, 'FugaTest.dproj'),
                                      'platform': 'Win64', 'config': 'Debug'}, t=900)
-import re as _re
-low = _re.sub('srv[a-z]:', '', raw.lower())   # the virtual form CONTAINS "c:"
-leaked = _re.findall(r'[a-z]:\\', low) + _re.findall(r'[a-z]%3a', low)
+# EL lector de la fuga (mc.fuga_de_letra): el de aqui, que vio el \n escapado,
+# era uno de siete (revisor de baterias, 18-oct-2026)
+leaked = mc.fuga_de_letra(raw)
 check('#7 ninguna unidad REAL viaja en la respuesta del build (ni tras un \\n)',
       not leaked, (leaked, raw[:400]))
 check('#7 ...y las virtuales si estan (la respuesta no viene vacia)',
@@ -401,8 +401,18 @@ check('#27 el target bueno sigue funcionando', 'nota.md' in r, r[:200])
 # ------------------------------------------------------------------- #22 --
 schema = tools_schema(A)
 desc = json.dumps(schema['delphi_fetch']['inputSchema'])
-check('#22 maxbytes documenta el limite REAL de los trozos inline',
-      '1048576' in desc and '4' in desc, desc[:400])
+# (revisor de baterias, 18-oct-2026) los limites, del FUENTE (el juez): '4' in
+# desc era cierto con solo '1048576' (lleva un 4), y el tope ya no es de 4 MB
+_ws = open(os.path.join(mc.REPO, 'src', 'Server', 'Mcp.Tools.Workspace.pas'), encoding='utf-8-sig', errors='replace').read()
+def _tope(nombre):
+    m = _re.search(r'\b' + nombre + r'\s*=\s*([\d\s*]+);', _ws)
+    v = 1
+    for f in (m.group(1).split('*') if m else []):
+        v *= int(f)
+    return v if m else 0
+_max, _small = _tope('MAX_CHUNK'), _tope('SMALL_CHUNK')
+check('#22 maxbytes documenta el limite REAL de los trozos inline (los del fuente: %d y %d)' % (_small, _max),
+      _max > 0 and _small > 0 and str(_small) in desc and str(_max) in desc, desc[:400])
 
 # ---------------------------------------------------------- M1 / unstage --
 CS = os.path.join(BASE, 'tanda')
@@ -531,12 +541,19 @@ proj = mc.ficheros(j, 'projects')
 check('C2 delphi_projects: repo y rama UNA vez arriba (repos), ninguno en cada proyecto',
       bool(proj) and not any({'repo', 'branch'} & set(p) for p in proj)
       and all(set(r) <= {'dir', 'branch'} and 'dir' in r for r in j.get('repos', [])), str(j)[:200])
+# (revisor de baterias, 18-oct-2026) VARIOS errores de verdad: FugaU tenia uno,
+# y "menos de dos" pasaba sin mirar nada
+open(FUGAU, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'unit FugaU;\n\ninterface\n\nimplementation\n\ninitialization\n  NoExisteUno := 1;\n  NoExisteDos := 2;\nend.\n')
 raw = raw_result(A, 'delphi_build', {'project': os.path.join(PROJ, 'FugaTest.dproj'),
                                      'platform': 'Win64', 'config': 'Debug'}, t=900)
 b = json.loads(raw)['result']['content'][0]['text']
 jb = J(b)
+_errs = jb.get('errors', [])
+check('F2 (preparacion) el build tiene varios errores', len(_errs) >= 2, str(jb)[:250])
 check('F2 un build con varios errores nombra el PRIMERO',
-      (len(jb.get('errors', [])) < 2) or (bool(jb.get('firstError')) and bool(jb.get('firstErrorNote'))),
+      bool(jb.get('firstError')) and bool(jb.get('firstErrorNote')) and bool(_errs)
+      and ('NoExisteUno' in jb.get('firstError', '') or jb.get('firstError') in _errs[0] or _errs[0] in jb.get('firstError', '')),
       str(jb)[:250])
 
 A.mata()

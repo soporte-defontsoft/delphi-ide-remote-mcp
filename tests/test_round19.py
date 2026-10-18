@@ -106,7 +106,10 @@ try:
     check('L2 add-searchpath toca el .dproj',
           mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT') or mc.abre(r, 'SN_CONFIG_PATH_PRESENT_FMT'), r[:160])
     r = cli.call('delphi_symbols', {'path': dpr['WarmA']})
-    check('L2 tras cambiar el .dproj, symbols sigue respondiendo (cache invalidada)',
+    # (revisor de baterias, 18-oct-2026) symbols contesta SIN ajustes: esto no ve
+    # si la cache se invalido - eso lo miden J1/J2 de test_json_nuestro_1202, con
+    # un definition hacia la carpeta nueva -; aqui, que el cliente sigue vivo
+    check('L2 tras cambiar el .dproj, symbols sigue respondiendo',
           r.lstrip().startswith('[') and '"range"' in r, r[:150])
 
     # L3: hover on the program name still works on the warm client

@@ -25,11 +25,17 @@ type
     Configs: TArray<string>;         // 'Base','Debug','Release',...
     Platforms: TArray<TDprojPlatform>;
     DefaultPlatform: string; // el selector <Platform Condition="'$(Platform)'==''">X</Platform>
+    DefaultConfig: string;   // el selector <Config Condition="'$(Config)'==''">X</Config>
     function HasConfig(const AName: string): Boolean;
     function HasPlatform(const AName: string): Boolean;
     { La plataforma que compilan el IDE y msbuild mientras nadie pide otra: la
       que el proyecto tiene por defecto, y Win32 si no dice ninguna. }
     function PlataformaPorDefecto: string;
+    { La configuracion que compilan el IDE y msbuild mientras nadie pide
+      otra: la seleccionada (el selector), con el nombre que declara el
+      proyecto; Debug si no tiene selector (un .dproj de antes de las
+      plataformas: 339 de los 3295 de esta maquina, medido el 18-oct-2026). }
+    function ConfigPorDefecto: string;
     { True si el proyecto DECLARA APlatform y la tiene activa: lo que el IDE
       compila sin tocar nada. Sin bloque <Platforms> (un proyecto anterior a
       las plataformas), solo la suya por defecto. }
@@ -225,9 +231,25 @@ function GrupoConCondicion(const AXml, ACondicion: string; out AGrupo: TGrupoXml
 { Las Condition de los grupos que el IDE escribe para una plataforma - EL
   nombrador, y PlataformaDeGrupo su inversa -: la de sus VALORES,
   '$(Base_X)'!='' (con APlatform = '', '$(Base)'!='': la base), y la de su
-  DEFINIDOR, ('$(Platform)'=='X' and '$(Base)'=='true') or '$(Base_X)'!=''. }
-function GroupCondition(const APlatform: string): string;
-function DefinerCondition(const APlatform: string): string;
+  DEFINIDOR, ('$(Platform)'=='X' and '$(Base)'=='true') or '$(Base_X)'!=''.
+  AClave: la de una configuracion (Cfg_1: '$(Cfg_1_X)'!='', '$(Cfg_1)'!=''),
+  Base si no se dice. Las escribian a mano delphi_create y el evaluador
+  (1.20.2). }
+function GroupCondition(const APlatform: string; const AClave: string = 'Base'): string;
+function DefinerCondition(const APlatform: string; const AClave: string = 'Base'): string;
+{ ...y la del definidor de una CONFIGURACION: '$(Config)'=='Debug' or
+  '$(Cfg_1)'!='' (la base: '$(Config)'=='Base' or '$(Base)'!=''). }
+function ConfigDefinerCondition(const AConfig, AClave: string): string;
+{ El grupo DEFINIDOR de AClave en APlatform como lo escribe el IDE, entero y
+  sin el salto del final: su Condition (DefinerCondition), <AClave_X>true,
+  <CfgParent>AClave y las claves de las que hereda (<Cfg_1>true si no es la
+  base, y <Base>true). EL escritor: delphi_create y add-platform. }
+function XmlGrupoDefinidor(const APlatform, AClave: string): string;
+{ ...y el de sus VALORES: la Condition de GroupCondition y AProps dentro (sus
+  lineas, cada una con su salto), entero y sin el salto del final. EL
+  escritor: delphi_create y add-platform (se escribia a mano en los dos;
+  revision del 18-oct-2026). }
+function XmlGrupoDeValores(const APlatform, AClave, AProps: string): string;
 { La plataforma (una de las conocidas, con su grafia) de un grupo de valores
   (ADefinidor = False) o de un definidor; '' si la Condition no es la de
   ninguna - la base tampoco: esa es GroupCondition(''). }
@@ -281,6 +303,16 @@ procedure QuitaConSuLinea(var AXml: string; AIni, AFin: Integer);
 { Reads a .dproj file. Missing file / unreadable -> empty record (all fields
   blank), never raises. }
 function ReadDproj(const ADprojPath: string): TDprojInfo;
+{ ...lo mismo de un texto ya leido: quien lee el .dproj una vez para varias
+  preguntas (los ajustes del motor) no lo lee dos. }
+function InfoDeDproj(const AXml: string): TDprojInfo;
+{ El SELECTOR de ATag (Config o Platform): el primer <ATag Condition="...">X</ATag>
+  sin value, lo que el IDE y msbuild compilan mientras nadie pide otro. EL
+  lector (ReadDproj) y el sitio donde escribe set-active. False si no hay. }
+function SelectorDe(const AXml, ATag: string; out ATramo: TTramoXml): Boolean;
+{ ...y su escritor: <ATag Condition="'$(ATag)'==''">AValor</ATag>, como lo
+  escribe el IDE (delphi_create; set-active cambia el valor en su sitio). }
+function XmlSelector(const ATag, AValor: string): string;
 
 type
   { Una plataforma del bloque <Platforms>: <Platform value="Win64">True</Platform>.
@@ -343,8 +375,13 @@ function DprDe(const AProject: string): string;
   Antes que la lista, el NOMBRE (NombreDeConfigNoValido): el valor va a la
   linea de msbuild (por cmd.exe hasta 2an de la 1.18.2; sin shell ahora, el
   juez queda de segunda barrera), y ni un proyecto sin configuraciones ni uno que
-  declara un nombre raro lo hacen seguro (4.8, revision de la 1.18.1). }
-function ConfigDesconocida(const ADproj, AConfig: string): string;
+  declara un nombre raro lo hacen seguro (4.8, revision de la 1.18.1). Base,
+  su negativa propia (CFG-120). ADeLaSeleccion: AConfig no lo pidio el agente,
+  es la seleccionada del proyecto (ConfigPorDefecto), y la negativa lo dice
+  (CFG-121): "no existe" de algo que no habia pedido no se entendia (revision
+  del 18-oct-2026). }
+function ConfigDesconocida(const ADproj, AConfig: string;
+  ADeLaSeleccion: Boolean = False): string;
 
 { El nombre de una configuracion que puede llegar a la linea de msbuild del
   build (/p:Config=): letras, digitos, espacio, ".", "_" y "-". UNA
@@ -442,6 +479,16 @@ function TagValue(const AXml, ATag: string): string;
   OSX64 el SDK de Linux64 (paisaje del 2026-09-22). '' si no hay. }
 function PlatformProperty(const AXml, APlatform, ATag: string): string;
 
+{ El valor EFECTIVO de ATag para un build APlatform/AConfig, como lo evalua
+  msbuild: los grupos que se aplican a ese build, en orden de documento, el
+  ultimo que la fija gana, y un $(ATag) dentro del valor es lo que valia
+  hasta ahi (<DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>, como escribe el IDE
+  los defines de cada configuracion). El juez de las propiedades por
+  grupos: la salida, el SDK, el perfil, los paquetes y los ajustes del motor.
+  Una configuracion que hereda de otra que no es Base no suma los grupos de
+  esa otra: medido el 18-oct-2026, 0 de los 3295 .dproj de esta maquina. }
+function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
+
 type
   { Una entrada del search path de un proyecto: tal como esta escrita (ya
     desescapada) y resuelta contra la carpeta del .dproj. Carpeta = '' si
@@ -457,6 +504,11 @@ type
   escrito tres veces: el informe de fix-references, delphi_projects y los
   proyectos que compilan contra una carpeta (26-sep-2026). }
 function RutasDeBusqueda(const ADprojPath, AXml: string): TArray<TRutaDeBusqueda>;
+{ True si una entrada del search path de ADprojPath (AXml, su texto) es la
+  carpeta ADir: el proyecto compila contra las unidades de alli aunque no las
+  liste. La pregunta de las referencias (los proyectos que consumen una
+  carpeta) y la de que proyecto sirve a una unidad (Lsp.Session.FindDproj). }
+function BuscaEnCarpeta(const ADprojPath, AXml, ADir: string): Boolean;
 
 { Whether a project would EXECUTE a shell during a build: a custom MSBuild
   <Target> or <Exec> task (with or without an XML namespace prefix), a
@@ -1254,6 +1306,17 @@ begin
     Result := 'Win32';
 end;
 
+function TDprojInfo.ConfigPorDefecto: string;
+begin
+  Result := DefaultConfig.Trim;
+  if Result = '' then
+    Exit('Debug');
+  // con SU nombre, el que declara el proyecto (msbuild no distingue)
+  for var C in Configs do
+    if SameText(C, Result) then
+      Exit(C);
+end;
+
 function TDprojInfo.Declara(const APlatform: string): Boolean;
 var
   P: TDprojPlatform;
@@ -1331,7 +1394,8 @@ begin
   Result := False;
 end;
 
-function ConfigDesconocida(const ADproj, AConfig: string): string;
+function ConfigDesconocida(const ADproj, AConfig: string;
+  ADeLaSeleccion: Boolean): string;
 var
   Info: TDprojInfo;
 begin
@@ -1341,8 +1405,21 @@ begin
     Exit(MsgFmt(SR_BUILD_CONFIG_FMT, [AConfig]));
   Result := '';
   Info := ReadDproj(ADproj);
+  // Base no es una configuracion que se compile: es de la que heredan las
+  // demas, y el IDE no la deja activar (lo que se compila aqui se compila
+  // igual en el IDE); compilaba con los ajustes de la base en Win64\Base\. La
+  // lista, sin ella, como la de set-active
+  var Validas: TArray<string> := nil;
+  for var C in Info.Configs do
+    if not SameText(C, 'Base') then
+      Validas := Validas + [C];
+  if SameText(AConfig.Trim, 'Base') then
+    Exit(MsgFmt(SR_CFG_BASE_NO_SE_COMPILA_FMT, [string.Join(', ', Validas)]));
   if (Length(Info.Configs) > 0) and not Info.HasConfig(AConfig) then
-    Result := MsgFmt(SR_TEST_CONFIG_FMT, [AConfig, string.Join(', ', Info.Configs)]);
+    if ADeLaSeleccion then
+      Result := MsgFmt(SR_CFG_SELECCIONADA_NO_DECLARADA_FMT, [AConfig, string.Join(', ', Validas)])
+    else
+      Result := MsgFmt(SR_TEST_CONFIG_FMT, [AConfig, string.Join(', ', Validas)]);
 end;
 
 function BloqueDePlataformas(const AXml: string; out ABloque: TTramoXml): Boolean;
@@ -1408,10 +1485,29 @@ begin
     IfThen(AActiva, 'True', 'False') + '</Platform>';
 end;
 
+function SelectorDe(const AXml, ATag: string; out ATramo: TTramoXml): Boolean;
+begin
+  // el selector no lleva value: <Platform value="Win64">True</Platform> es
+  // una entrada del bloque <Platforms>, no el que elige
+  for var T in TramosDeEtiqueta(AXml, ATag) do
+    if (AtributoDeTramo(AXml, T, ATag, 'Condition') <> '') and
+       (AtributoDeTramo(AXml, T, ATag, 'value') = '') then
+    begin
+      ATramo := T;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function XmlSelector(const ATag, AValor: string): string;
+begin
+  Result := '<' + ATag + ' ' + XmlAtributo('Condition', '''$(' + ATag + ')''==''''') + '>' +
+    XmlEscape(AValor) + '</' + ATag + '>';
+end;
+
 function ReadDproj(const ADprojPath: string): TDprojInfo;
 var
   Xml: string;
-  D: TDprojPlatform;
 begin
   Result := Default(TDprojInfo);
   if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
@@ -1421,31 +1517,37 @@ begin
   except
     Exit;
   end;
-  var Fw := AllTagValues(Xml, 'FrameworkType');
+  Result := InfoDeDproj(Xml);
+end;
+
+function InfoDeDproj(const AXml: string): TDprojInfo;
+var
+  D: TDprojPlatform;
+  T: TTramoXml;
+begin
+  Result := Default(TDprojInfo);
+  var Fw := AllTagValues(AXml, 'FrameworkType');
   if Length(Fw) > 0 then
     Result.FrameworkType := Fw[0].Trim;
-  var At := AllTagValues(Xml, 'AppType');
+  var At := AllTagValues(AXml, 'AppType');
   if Length(At) > 0 then
     Result.AppType := At[0].Trim;
   // Build configurations: <BuildConfiguration Include="Debug">
-  Result.Configs := AllTagAttr(Xml, 'BuildConfiguration', 'Include');
+  Result.Configs := AllTagAttr(AXml, 'BuildConfiguration', 'Include');
   // las plataformas, por EL lector del bloque
   Result.Platforms := [];
-  for var P in PlataformasDelBloque(Xml) do
+  for var P in PlataformasDelBloque(AXml) do
   begin
     D.Name := P.Nombre;
     D.Enabled := P.Activa;
     Result.Platforms := Result.Platforms + [D];
   end;
-  // la plataforma por defecto: el selector, que no lleva value; la que
+  // la plataforma y la configuracion por defecto: los selectores, los que
   // compilan el IDE y msbuild si nadie pide otra
-  for var T in TramosDeEtiqueta(Xml, 'Platform') do
-    if (AtributoDeTramo(Xml, T, 'Platform', 'Condition') <> '') and
-       (AtributoDeTramo(Xml, T, 'Platform', 'value') = '') then
-    begin
-      Result.DefaultPlatform := ValorDeTramo(Xml, T).Trim;
-      Break;
-    end;
+  if SelectorDe(AXml, 'Platform', T) then
+    Result.DefaultPlatform := ValorDeTramo(AXml, T).Trim;
+  if SelectorDe(AXml, 'Config', T) then
+    Result.DefaultConfig := ValorDeTramo(AXml, T).Trim;
 end;
 
 function IsLocalPlatform(const APlatform: string): Boolean;
@@ -1521,18 +1623,40 @@ begin
   Result := CanonicalPlatform(AClave);
 end;
 
-function GroupCondition(const APlatform: string): string;
+function GroupCondition(const APlatform: string; const AClave: string): string;
 begin
   if APlatform = '' then
-    Result := '''$(Base)''!='''''
+    Result := '''$(' + AClave + ')''!='''''
   else
-    Result := '''$(Base_' + APlatform + ')''!=''''';
+    Result := '''$(' + AClave + '_' + APlatform + ')''!=''''';
 end;
 
-function DefinerCondition(const APlatform: string): string;
+function DefinerCondition(const APlatform: string; const AClave: string): string;
 begin
-  Result := '(''$(Platform)''==''' + APlatform + ''' and ''$(Base)''==''true'') or ' +
-    '''$(Base_' + APlatform + ')''!=''''';
+  Result := '(''$(Platform)''==''' + APlatform + ''' and ''$(' + AClave + ')''==''true'') or ' +
+    GroupCondition(APlatform, AClave);
+end;
+
+function ConfigDefinerCondition(const AConfig, AClave: string): string;
+begin
+  // las dos mitades, por sus nombradores (se componian aqui a mano)
+  Result := ConfigCondition(AConfig) + ' or ' + GroupCondition('', AClave);
+end;
+
+function XmlGrupoDefinidor(const APlatform, AClave: string): string;
+begin
+  Result := '    <PropertyGroup ' + XmlAtributo('Condition', DefinerCondition(APlatform, AClave)) + '>' + sLineBreak +
+    '        ' + XmlElemento(AClave + '_' + APlatform, 'true') + sLineBreak +
+    '        ' + XmlElemento('CfgParent', AClave) + sLineBreak;
+  if not SameText(AClave, 'Base') then
+    Result := Result + '        ' + XmlElemento(AClave, 'true') + sLineBreak;
+  Result := Result + '        <Base>true</Base>' + sLineBreak + '    </PropertyGroup>';
+end;
+
+function XmlGrupoDeValores(const APlatform, AClave, AProps: string): string;
+begin
+  Result := '    <PropertyGroup ' + XmlAtributo('Condition', GroupCondition(APlatform, AClave)) + '>' +
+    sLineBreak + AProps + '    </PropertyGroup>';
 end;
 
 { Lo que va entre AAntes (sin distinguir mayusculas) y ACierre en ACondicion,
@@ -1742,6 +1866,21 @@ begin
       end;
       Result := Result + [R];
     end;
+end;
+
+function BuscaEnCarpeta(const ADprojPath, AXml, ADir: string): Boolean;
+var
+  Target: string;
+begin
+  // la comparacion de ProjectsSearching (Lsp.References), sacada aqui para
+  // que la haga tambien quien busca el proyecto de una unidad
+  Result := False;
+  if ADir = '' then
+    Exit;
+  Target := IncludeTrailingPathDelimiter(TPath.GetFullPath(ADir)).ToLower;
+  for var R in RutasDeBusqueda(ADprojPath, AXml) do
+    if (R.Carpeta <> '') and (IncludeTrailingPathDelimiter(R.Carpeta).ToLower = Target) then
+      Exit(True);
 end;
 
 { True when the XML contains an element whose LOCAL name is AName, with or
@@ -1960,20 +2099,29 @@ end;
   hereda la global, y una particular vacia la anula. Cada plataforma y
   config puede tener su carpeta (David, 25-sep-2026). Un grupo con otra
   condicion NO cuenta: lo que no se sabe si se aplica no se da por
-  declarado. }
+  declarado. Y un $(ATag) dentro del valor es lo que valia hasta ahi, como
+  en MSBuild: el IDE escribe asi los defines de cada configuracion, y sin
+  expandirlo el de Debug era el texto "DEBUG;$(DCC_Define)" (1.20.2). }
 function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
 var
-  Plat, Key: string;
+  Key: string;
   Validas: TArray<string>;
+  Suyas: TArray<TTramoXml>;
 begin
   Result := '';
-  Plat := LowerCase(APlatform);
-  Key := LowerCase(ConfigKey(AXml, AConfig));
+  // las etiquetas ATag del documento UNA vez, repartidas luego por grupos: con
+  // TramosEnGrupo era un recorrido del documento entero por cada grupo, 7 ms
+  // en un .dproj de 117 KB por propiedad, y los ajustes del motor piden
+  // cuatro en cada peticion (medido el 18-oct-2026, FabProbe). Las mismas, en
+  // el mismo orden: las de dentro de cada grupo, por su posicion
+  Suyas := TramosDeEtiqueta(AXml, ATag, True);
+  Key := ConfigKey(AXml, AConfig);
   Validas := ['', CondicionNormalizada(GroupCondition('')),
     CondicionNormalizada(GroupCondition(APlatform))];
+  // las de la configuracion, por EL nombrador (se componian aqui a mano)
   if Key <> '' then
-    Validas := Validas + ['''$(' + Key + ')''!=''''',
-      '''$(' + Key + '_' + Plat + ')''!=''''' ];
+    Validas := Validas + [CondicionNormalizada(GroupCondition('', Key)),
+      CondicionNormalizada(GroupCondition(APlatform, Key))];
   for var G in GruposDePropiedades(AXml) do
     // el grupo: los que escribe el IDE (la base, la plataforma, la config) o
     // uno de plataforma y/o config que se aplique a este build
@@ -1983,9 +2131,11 @@ begin
       // valor vacio, como en msbuild. El juez (MSXML, 17-oct-2026) las veia y
       // el escaner no: un <Profile Condition="'$(Platform)'=='Win32'"> de 5
       // Samples del IDE se contaba para OSX64 e iOS
-      for var T in TramosEnGrupo(AXml, ATag, G, True) do
-        if SeAplicaA(AtributoDeTramo(AXml, T, ATag, 'Condition'), APlatform, AConfig) then
-          Result := ValorDeTramo(AXml, T).Trim; // el ultimo gana
+      for var T in Suyas do
+        if (T.Abre >= G.Ini) and (T.Cierra <= G.Fin) and
+           SeAplicaA(AtributoDeTramo(AXml, T, ATag, 'Condition'), APlatform, AConfig) then
+          Result := ValorDeTramo(AXml, T).Trim.Replace('$(' + ATag + ')', Result,
+            [rfReplaceAll, rfIgnoreCase]); // el ultimo gana, con lo de antes dentro
 end;
 
 function PlatformProperty(const AXml, APlatform, ATag: string): string;

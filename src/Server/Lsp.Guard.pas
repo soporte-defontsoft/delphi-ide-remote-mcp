@@ -518,9 +518,13 @@ function EnlaceAjenoEn(const ADir: string; AEscribe: Boolean;
   const AOmite: TOmiteAlCopiar = nil): string;
 
 { Recorrido de lectura compartido: solo enlaces legibles, ciclos cortados y
-  carpetas ilegibles toleradas. Las tools deciden sus filtros de artefactos. }
+  carpetas ilegibles toleradas. Las tools deciden sus filtros de artefactos.
+  AAlEntrar, si va: cada carpeta del paseo, al ENTRAR en ella y antes de
+  listarla (quien sella lo que vio - el proyecto de una unidad, FindDproj -
+  sella antes de mirar: lo que cambie despues mueve el sello). }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
-  AConPapelera: Boolean = False; ARecursivo: Boolean = True): TArray<string>; overload;
+  AConPapelera: Boolean = False; ARecursivo: Boolean = True;
+  const AAlEntrar: TVisitaRuta = nil): TArray<string>; overload;
 function WalkFiles(const ADir, AMask: string;
   AConPapelera: Boolean = False): TArray<string>; overload;
 
@@ -3276,7 +3280,7 @@ end;
   classic limit and killed an entire delphi_list. One bad folder must never
   hide the rest of the tree. }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
-  AConPapelera, ARecursivo: Boolean): TArray<string>;
+  AConPapelera, ARecursivo: Boolean; const AAlEntrar: TVisitaRuta): TArray<string>;
 var
   Acc: TStringList;
   Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
@@ -3300,6 +3304,8 @@ var
   var
     F, Sub: string;
   begin
+    if Assigned(AAlEntrar) then
+      AAlEntrar(D);
     try
       // Un enlace (de fichero o de carpeta) se sigue solo si lo de detras se
       // puede LEER: EnlaceLegible, la regla del copiador. Un junction a

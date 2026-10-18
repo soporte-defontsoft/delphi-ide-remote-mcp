@@ -411,7 +411,9 @@ try:
     t = bytes_de(DFM).decode('utf-8')
     dentro = t.index('  object Panel1') < t.index('    object Button3') < t.index('  object Button1')
     check('O5 el form reordenado lo lee el parser del IDE (lint sin DSGN-123) y Button3 sigue dentro de Panel1',
-          not mc.es(r, 'SN_DSGN_PARSER_FMT') and dentro, r[:300])
+          # el lint CONTESTA (un lint que caia no traia DSGN-123 y pasaba)
+          (mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT') or mc.abre(r, 'SN_DESIGNER_LINT_BAD_FMT'))
+          and not mc.es(r, 'SN_DSGN_PARSER_FMT') and dentro, r[:300])
 
     # O6 revisor 4, M2: en un TToolBar el orden del fichero ES la posicion del boton y mezcla
     # botones y controles con ventana - una lista propia lo negaba; el juez lo deja
@@ -493,9 +495,13 @@ try:
     # '(unnamed X #n)' es la clave de un hijo SIN Name en las listas de DSGN-136/143,
     # no un Name: before=/after= no pueden senalarlo, y nadie lo decia (D5 de los
     # revisores de cierre; DSGN-078 "no component" con la lista de nombres)
+    antes = bytes_de(DFM)
     r = dsg(DFM, {'component': 'Button2', 'before': '(unnamed TTimer #1)'})
+    # (revisor de baterias, 18-oct-2026) "nada escrito" se mide en los bytes, y
+    # los ids por su constante
     check('O24 before= con la clave de un hijo sin nombre: DSGN-151 (no es un Name; index= o ponerle Name), '
-          'nada escrito', 'DSGN-151' in r and 'DSGN-078' not in r and 'index=' in r, r[:300])
+          'nada escrito', mc.abre(r, 'SR_DESIGNER_ORDEN_REF_SIN_NOMBRE_FMT')
+          and not mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'index=' in r and bytes_de(DFM) == antes, r[:300])
     r = dsg(DFM, {'component': 'Panel1', 'after': 'Button1'})
     t = bytes_de(DFM).decode('utf-8')
     check('O14 un bloque con hijos se mueve entero (Panel1 con Button3 dentro, tras Button1) (B4)',
@@ -520,7 +526,7 @@ try:
     import glob
     import threading
     import time
-    tmp = os.path.join(os.path.dirname(EXE), '__delphi-temp')
+    tmp = os.path.join(os.path.dirname(EXE), mc.TEMPORALES)
 
     def mientras_juzga(path, args, accion):
         """set con orden en un hilo; al aparecer la carpeta __tmp- del juez, accion().
@@ -693,7 +699,7 @@ try:
           and _t.index('object EditN') < _t.index('object ButtonX'), (r[:300], _t))
 
     # B5: la carpeta de cada llamada del juez se borra siempre (en el temporal del SERVIDOR)
-    quedan = glob.glob(os.path.join(os.path.dirname(EXE), '__delphi-temp', '**', '__tmp-*'), recursive=True)
+    quedan = glob.glob(os.path.join(os.path.dirname(EXE), mc.TEMPORALES, '**', '__tmp-*'), recursive=True)
     check('O15 no queda ninguna carpeta __tmp- del juez en el temporal del servidor (B5)', not quedan, quedan)
 finally:
     srv.cierra()

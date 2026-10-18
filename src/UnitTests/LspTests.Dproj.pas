@@ -46,6 +46,9 @@ type
     [Test] procedure ElGrupoPorSuCondicionSinMirarBlancos;
     [Test] procedure QuitaConSuLineaSoloSiEstaSola;
     [Test] procedure PlatformPropertyComoMsbuild;
+    [Test] procedure LaPropiedadEfectivaConLoDeAntesDentro;
+    [Test] procedure LosSelectoresDelProyecto;
+    [Test] procedure ElNombradorDeLosGruposConSuClave;
     [Test] procedure ElGrupoDeDespliegueDeLasDosFormas;
     [Test] procedure LosGruposVaciosSoloSiSePiden;
     [Test] procedure ElIncludeEnCualquierOrden;
@@ -299,6 +302,80 @@ begin
   // otra plataforma hereda la base; la de una CONFIG no es la base (el
   // lector propio la tomaba por reserva por ir primero)
   Assert.AreEqual('de-base', PlatformProperty(XML, 'Win64', 'PlatformSDK'));
+end;
+
+// Los defines de cada configuracion como los escribe el IDE: un $(X) dentro
+// del valor es lo que valia hasta ahi, y solo los grupos de ESA configuracion
+// cuentan (los ajustes del motor encadenaban todos: DEBUG y RELEASE a la vez,
+// medido el 17-oct-2026, T2/M9).
+procedure TXmlTextoTests.LaPropiedadEfectivaConLoDeAntesDentro;
+const
+  XML = '<Project><ItemGroup>' +
+    '<BuildConfiguration Include="Debug"><Key>Cfg_1</Key></BuildConfiguration>' +
+    '<BuildConfiguration Include="Release"><Key>Cfg_2</Key></BuildConfiguration>' +
+    '</ItemGroup>' +
+    '<PropertyGroup Condition="''$(Base)''!=''''"><DCC_Define>BASE;$(DCC_Define)</DCC_Define></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base_Win32)''!=''''"><DCC_Define>W32;$(dcc_define)</DCC_Define></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Cfg_1)''!=''''"><DCC_Define>DEBUG;$(DCC_Define)</DCC_Define></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Cfg_2)''!=''''"><DCC_Define>RELEASE;$(DCC_Define)</DCC_Define></PropertyGroup>' +
+    '</Project>';
+begin
+  Assert.AreEqual('DEBUG;W32;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win32', 'Debug'));
+  Assert.AreEqual('RELEASE;W32;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win32', 'Release'));
+  Assert.AreEqual('DEBUG;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win64', 'Debug'),
+    'el grupo de otra plataforma no cuenta');
+end;
+
+// La pareja que compilan el IDE y msbuild sin que nadie pida otra: los dos
+// selectores, no las entradas del bloque <Platforms> (que llevan value).
+procedure TXmlTextoTests.LosSelectoresDelProyecto;
+const
+  XML = '<Project><PropertyGroup>' +
+    '<Config Condition="''$(Config)''==''''">Release</Config>' +
+    '<Platform Condition="''$(Platform)''==''''">Win64</Platform>' +
+    '</PropertyGroup><ItemGroup>' +
+    '<BuildConfiguration Include="Release"><Key>Cfg_2</Key></BuildConfiguration>' +
+    '</ItemGroup><ProjectExtensions><BorlandProject><Platforms>' +
+    '<Platform value="Win32">True</Platform><Platform value="Win64">True</Platform>' +
+    '</Platforms></BorlandProject></ProjectExtensions></Project>';
+var
+  Info: TDprojInfo;
+  T: TTramoXml;
+begin
+  Info := InfoDeDproj(XML);
+  Assert.AreEqual('Release', Info.ConfigPorDefecto);
+  Assert.AreEqual('Win64', Info.PlataformaPorDefecto);
+  Assert.IsTrue(SelectorDe(XML, 'Platform', T));
+  Assert.AreEqual('Win64', Copy(XML, T.Ini, T.Fin - T.Ini), 'el sitio del valor, para reescribirlo');
+  // sin selector, Debug, como msbuild sin /p:Config
+  Assert.AreEqual('Debug', InfoDeDproj('<Project></Project>').ConfigPorDefecto);
+  Assert.IsFalse(SelectorDe('<Project></Project>', 'Config', T));
+end;
+
+// Las Condition de los grupos y el definidor entero, por EL nombrador: los de
+// la base como siempre (add-platform), y los de una configuracion como los
+// escribe el IDE al crear un proyecto (delphi_create, 1.20.2)
+procedure TXmlTextoTests.ElNombradorDeLosGruposConSuClave;
+begin
+  Assert.AreEqual('''$(Base_Win32)''!=''''', GroupCondition('Win32'));
+  Assert.AreEqual('''$(Cfg_1)''!=''''', GroupCondition('', 'Cfg_1'));
+  Assert.AreEqual('''$(Cfg_1_Win64)''!=''''', GroupCondition('Win64', 'Cfg_1'));
+  Assert.AreEqual('(''$(Platform)''==''Win32'' and ''$(Cfg_2)''==''true'') or ''$(Cfg_2_Win32)''!=''''',
+    DefinerCondition('Win32', 'Cfg_2'));
+  Assert.AreEqual('''$(Config)''==''Debug'' or ''$(Cfg_1)''!=''''', ConfigDefinerCondition('Debug', 'Cfg_1'));
+  // el definidor de la base, byte a byte el que escribia add-platform
+  Assert.AreEqual('    <PropertyGroup Condition="(''$(Platform)''==''Linux64'' and ''$(Base)''==''true'') or ' +
+    '''$(Base_Linux64)''!=''''">' + sLineBreak +
+    '        <Base_Linux64>true</Base_Linux64>' + sLineBreak +
+    '        <CfgParent>Base</CfgParent>' + sLineBreak +
+    '        <Base>true</Base>' + sLineBreak +
+    '    </PropertyGroup>', XmlGrupoDefinidor('Linux64', 'Base'));
+  // el de una configuracion lleva tambien la clave de la que hereda
+  Assert.IsTrue(XmlGrupoDefinidor('Win32', 'Cfg_1').Contains(
+    '<CfgParent>Cfg_1</CfgParent>' + sLineBreak + '        <Cfg_1>true</Cfg_1>' + sLineBreak +
+    '        <Base>true</Base>'));
+  // y la inversa no toma una de configuracion por una de plataforma
+  Assert.AreEqual('', PlataformaDeGrupo(GroupCondition('Win32', 'Cfg_1'), False));
 end;
 
 procedure TXmlTextoTests.ElGrupoDeDespliegueDeLasDosFormas;

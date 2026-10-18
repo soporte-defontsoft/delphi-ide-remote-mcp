@@ -98,7 +98,9 @@ var
 begin
   Result := nil;
   try
-    if TLspSession.Instance.ResolveSettings(AFile, RootDir) = '' then
+    // un fichero sin proyecto no arranca motor (FindDproj: sin hacer los
+    // ajustes, que hace AcquireFor)
+    if TLspSession.Instance.FindDproj(AFile) = '' then
       Exit;
     Result := TLspSession.Instance.AcquireFor(AFile, Settings);
   except

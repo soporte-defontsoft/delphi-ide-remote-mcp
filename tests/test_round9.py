@@ -84,7 +84,9 @@ for orden, donde in ((['git', 'init', '-q', '--bare', ORIGEN], BASE),
                      (['git', 'remote', 'add', 'local', 'http://127.0.0.1:3131/mcp'], REPOD),
                      (['git', 'remote', 'add', 'evil', 'https://198.51.100.7/evil.git'], REPOD),
                      (['git', 'remote', 'add', 'otro', 'https://otro.example.org/x.git'], REPOD),
-                     (['git', 'remote', 'add', 'permitido', 'https://example.com/x.git'], REPOD)):
+                     # un host .invalid (RFC 2606): example.com es real y el fetch
+                     # abria HTTPS de verdad desde la maquina (revisor de baterias)
+                     (['git', 'remote', 'add', 'permitido', 'https://permitido.invalid/x.git'], REPOD)):
     subprocess.run(orden, cwd=donde, capture_output=True)
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'local'})
 check('R1 un remoto con una URL a localhost: RECHAZADO sin conectar',
@@ -96,10 +98,10 @@ r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'remote': 'origin'})
 check('R1 un remoto POR NOMBRE sigue permitido (no es una URL): llega a git, que no tiene que enviar',
       mc.llego_a_git(r), r[:300])
 
-B = spawn({'DELPHI_MCP_GIT_REMOTES': 'example.com'})
+B = spawn({'DELPHI_MCP_GIT_REMOTES': 'permitido.invalid'})
 r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'otro'})
 check('R1 host fuera de la lista del operador: RECHAZADO nombrando la lista',
-      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_HOST_FMT') and 'example.com' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_HOST_FMT') and 'permitido.invalid' in r, r[:250])
 r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'remote': 'permitido'})
 check('R1 el host permitido SI pasa la puerta (falle luego lo que falle)',
       mc.llego_a_git(r), r[:200])
@@ -123,9 +125,11 @@ check('B1 merge action=abort SI se acepta (la salida del merge a medias)',
       mc.llego_a_git(r), r[:200])
 
 # ------------------------------------------------------------- P4: comandos --
-r = A.call('delphi_git', {'repo': REPOD, 'command': 'switchh'})
+# un comando que NO contiene ninguno valido: 'switch' estaba en el eco de
+# 'switchh' y pasaba sin la lista (revisor de baterias, 18-oct-2026)
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'zzz'})
 check('P4 el error enumera TODOS los comandos, switch/merge/stash incluidos',
-      'switch' in r and 'merge' in r and 'stash' in r, r[:250])
+      mc.abre(r, 'SR_GIT_UNKNOWN_COMMAND_FMT') and 'switch' in r and 'merge' in r and 'stash' in r, r[:250])
 
 # ---------------------------------------------------------- F1/F3: upload ---
 U = os.path.join(BASE, 'sub')
@@ -158,8 +162,9 @@ D = os.path.join(BASE, 'paraborrar')
 os.makedirs(os.path.join(D, 'dentro'))
 open(os.path.join(D, 'dentro', 'f.txt'), 'w').write('x')
 r = A.call('delphi_delete', {'path': D})
+# las DOS cosas: False == False (no borra y no lo dice) pasaba (revisor de baterias)
 check('R3 borrar una carpeta la quita DE VERDAD, y solo entonces dice BORRADO',
-      mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') == (not os.path.isdir(D)), (r[:150], os.path.isdir(D)))
+      mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.isdir(D), (r[:150], os.path.isdir(D)))
 
 # ------------------------------------------------------- F2/F4/M3 changeset --
 CS = os.path.join(BASE, 'tanda')

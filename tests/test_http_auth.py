@@ -691,7 +691,10 @@ try:
         code, hdr, data = get(mc.virtual(os.path.join(tmpdir4, 'outside', 'secret.txt')), TOKEN)
         check('files: fuera de la jaula -> 403 FUERA', code == 403 and mc.es(data.decode('utf-8', 'replace'), 'SR_JAIL_FMT'),
               '%s %r' % (code, data[:120]))
-        check('files: el rechazo no ensena letras reales', b'"' + jail4[:2].encode() not in data, data[:160])
+        # (revisor de baterias, 18-oct-2026) EL lector de la fuga: aqui solo se
+        # miraba la letra tras una comilla
+        check('files: el rechazo no ensena letras reales',
+              not mc.fuga_de_letra(data.decode('utf-8', 'replace'), jail4[0]), data[:160])
         code, hdr, data = get(vjail + '\\sub', TOKEN)
         # un directorio donde va un fichero es la peticion mal hecha (FILE-001
         # INVALID_PARAM): 400, por el resultado de la negativa (septima revision)
@@ -740,7 +743,7 @@ try:
         # 1.18.2); the download route consumes THOSE (test_captura_puertas_1182
         # E3). A png shaped like a capture planted in the WORKSPACE is not
         # ours: /files serves it like any file of the jail and leaves it.
-        capdir = os.path.join(jail4, '__delphi-temp', 'desktop')
+        capdir = os.path.join(jail4, mc.TEMPORALES, 'desktop')
         os.makedirs(capdir, exist_ok=True)
         cap = os.path.join(capdir, 'desktop-bateria-20260925-000000000-cafe02.png')
         cappayload = b'\x89PNG' + os.urandom(5000)

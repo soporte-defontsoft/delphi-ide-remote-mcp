@@ -88,8 +88,18 @@ try:
     hb.join(320)
     a_fin, b_fin = res.get('a_fin', 0), res.get('b_fin', 0)
     print('  (A tardo %.2f s; B acabo a los %.2f s)' % (a_fin, b_fin))
+    # (revisor de baterias, 18-oct-2026) antes de decidir que no se puede
+    # medir: A y B contestaron y escribieron. Un edit que fallaba deprisa (un
+    # ancla cambiada, un hilo colgado: a_fin 0) daba SKIP, y tras los dos K0
+    # la bateria salia verde sin decirlo
+    check('K1 preparacion: A contesto y escribio (Left = 153), y B tambien (tres)',
+          not mc.fallo(res.get('a', '')) and b'Left = 153' in open(dfm, 'rb').read()
+          and not mc.fallo(res.get('b', '')) and b'tres' in open(txt, 'rb').read(),
+          (res.get('a', '')[:200], res.get('b', '')[:200]))
     if a_fin < MIN_A:
         SKIP = 'A tardo %.2f s: el lector es demasiado rapido aqui para separar espera de no espera' % a_fin
+        # con los K0 ya contados fin(sin_checks=) no lo diria: lo dice la NOTA
+        print('NOTA: K1 y K2 no se miden: %s' % SKIP)
     else:
         # lo que tarda B frente a lo que A pasa con su lector: con el lector
         # DENTRO del cerrojo B espera casi todo (mutante del 16-oct: 43,5 s de
@@ -97,10 +107,10 @@ try:
         # los dos: era una guarda que no media
         b_dur = b_fin - B_DELAY
         check('K1 B (otro fichero) no espera al lector de A: tarda menos de la mitad de lo que A pasa con el',
-              not mc.rechazado(res.get('b', '')) and b_dur < (a_fin - B_DELAY) / 2,
+              not mc.fallo(res.get('b', '')) and b_dur < (a_fin - B_DELAY) / 2,
               (a_fin, b_fin, res.get('b', '')[:200]))
         check('K2 A escribio y trae el juicio del lector (el form carga: sin EDIT-127)',
-              not mc.rechazado(res.get('a', '')) and not mc.tiene(res.get('a', ''), 'EDIT-127')
+              not mc.fallo(res.get('a', '')) and not mc.es(res.get('a', ''), 'SN_EDIT_AVISO_LECTOR_FMT')
               and b'Left = 153' in open(dfm, 'rb').read(), res.get('a', '')[-400:])
 finally:
     try:

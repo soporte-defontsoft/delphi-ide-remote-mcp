@@ -104,12 +104,15 @@ if SKIP is None:
               os.path.isjunction(LINK) and UNIT in entradas, (os.path.isjunction(LINK), entradas[:6]))
 
         r = s.call('delphi_read', {'path': os.path.join(LINK, UNIT)})
-        check('V2 delphi_read de la unit a traves del enlace: NEGADO y sin su contenido',
-              mc.rechazado(r) and MARCADOR not in r, r[:200])
+        # la negativa del ENLACE/la jaula, no un NOT_FOUND (si la resolucion del
+        # GUID fallara, tambien pasaba; revisor de baterias, 18-oct-2026)
+        check('V2 delphi_read de la unit a traves del enlace: NEGADO por la jaula y sin su contenido',
+              (mc.es(r, 'SR_JAIL_LINK_FMT') or mc.es(r, 'SR_JAIL_FMT')) and MARCADOR not in r, r[:200])
 
         r = s.call('delphi_list', {'root': LINK})
-        check('V3 delphi_list a traves del enlace: NEGADO y sin los nombres de detras',
-              mc.rechazado(r) and 'Secreto' not in r and MARCADOR not in r, r[:200])
+        check('V3 delphi_list a traves del enlace: NEGADO por la jaula y sin los nombres de detras',
+              (mc.es(r, 'SR_JAIL_LINK_FMT') or mc.es(r, 'SR_JAIL_FMT')) and 'Secreto' not in r
+              and MARCADOR not in r, r[:200])
 
         r = s.call('delphi_move', {'path': CARPETA, 'dest': COPIA, 'copy': True}, t=120)
         # la copia copia lo del workspace y NO sigue el enlace

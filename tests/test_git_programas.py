@@ -23,6 +23,13 @@ def git(cmd,args=None,message='',**campos):
     llamada=dict({'repo':REPO,'command':cmd,'message':message},**campos)
     if args is not None:llamada['args']=args
     return srv.call('delphi_git',llamada)
+# la clave que planta cada caso, como la nombra la negativa (en minusculas)
+CLAVES={'fsmonitor':'core.fsmonitor','filter':'filter.fixture.clean','filter-importado':'include.path',
+        'diff-externo':'diff.external','diff-driver':'diff.fixture.command','textconv':'diff.fixture.textconv',
+        'firma':'gpg.program','ssh':'core.sshcommand','credencial':'credential.helper',
+        'gitproxy':'core.gitproxy','uploadpack':'remote.fixture.uploadpack','receivepack':'remote.fixture.receivepack'}
+# git a pelo para el control positivo: sin la config global ni la del sistema
+GIT_A_PELO=dict(os.environ,GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL=os.devnull,GIT_TERMINAL_PROMPT='0')
 def script(path,marker,extra=''):
     with open(path,'w',encoding='utf-8',newline='\n') as f:
         f.write("#!/bin/sh\nprintf 'fixture\\n' > '"+marker.replace('\\','/')+"'\n"+extra)
@@ -86,6 +93,21 @@ try:
                      and not os.path.exists(os.path.join(REPO,case)),r[:400])
         else:r=git('status')
         mc.check(case+': el programa del repo no se activa',not os.path.exists(marker),r[:400])
+        # (revisor de baterias, 18-oct-2026) la ausencia del testigo pasaba
+        # aunque git ni corriera: cada caso dice POR QUE no se activo. La
+        # clave del repo, negada por su nombre (GIT-051) antes de lanzar git...
+        if case in CLAVES:
+            mc.check(case+': negado por su clave (%s)'%CLAVES[case],
+                     mc.es(r,'SR_GIT_CONFIG_PROGRAMA_FMT') and '"'+CLAVES[case]+'"' in r.lower(),r[:400])
+        # ...y el hook, con git corriendo: el commit se hace sin el, y el
+        # mismo hook a pelo SI corre (si no, la ausencia no mediria nada)
+        if case=='hook':
+            mc.check('hook: git corre y el commit se hace',mc.llego_a_git(r) and r.startswith('exit=0'),r[:400])
+            with open(archivo,'a') as f:f.write('a pelo\n')
+            subprocess.run(['git','-C',REPO,'add','a.txt'],env=GIT_A_PELO,capture_output=True,timeout=60)
+            subprocess.run(['git','-C',REPO,'commit','-m','a pelo'],env=GIT_A_PELO,capture_output=True,timeout=60)
+            mc.check('hook: control positivo, el mismo hook a pelo se activa',os.path.exists(marker),marker)
+            if os.path.exists(marker):os.remove(marker)
         if os.path.isfile(program):os.remove(program)
         attrs=os.path.join(REPO,'.gitattributes')
         if os.path.isfile(attrs):os.remove(attrs)

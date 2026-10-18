@@ -41,8 +41,13 @@ try:
     orig = unit('UOrig')
     copia = os.path.join(JAIL, 'UCopia.pas')
     s.call('delphi_move', {'path': orig, 'dest': copia, 'copy': True})
+    # (revisor de baterias, 18-oct-2026) el edit y el restore se MIRAN: si los dos
+    # fallaban, "Result := 1" seguia ahi y R1/R3 pasaban sin restaurar nada
     s.call('delphi_edit', {'path': copia, 'old': '  Result := 1;', 'new': '  Result := 2;'})
-    s.call('delphi_edit', {'path': copia, 'restore': True, 'confirm': True})
+    check('R1 preparacion: el edit escribio (Result := 2)',
+          '  Result := 2;' in open(copia, encoding='utf-8-sig').read(), open(copia, encoding='utf-8-sig').read()[:200])
+    r = s.call('delphi_edit', {'path': copia, 'restore': True, 'confirm': True})
+    check('R1 el restore RESTAURO', mc.abre(r, 'SK_EDIT_RESTAURADO_DESDE_FMT'), r[:200])
     check('R1 copy=true + edit + restore: la cabecera es la NUEVA (unit UCopia;)',
           linea1(copia) == 'unit UCopia;', linea1(copia))
     check('R3 ...el original sigue intacto y el edit se deshizo',
@@ -53,9 +58,14 @@ try:
     nuevo = os.path.join(JAIL, 'UNuevo.pas')
     s.call('delphi_move', {'path': viejo, 'dest': nuevo})
     s.call('delphi_edit', {'path': nuevo, 'old': '  Result := 1;', 'new': '  Result := 3;'})
-    s.call('delphi_edit', {'path': nuevo, 'restore': True, 'confirm': True})
-    check('R2 move que renombra + edit + restore: la cabecera es la NUEVA (unit UNuevo;)',
-          linea1(nuevo) == 'unit UNuevo;', linea1(nuevo))
+    check('R2 preparacion: el edit escribio (Result := 3)',
+          '  Result := 3;' in open(nuevo, encoding='utf-8-sig').read(), open(nuevo, encoding='utf-8-sig').read()[:200])
+    r = s.call('delphi_edit', {'path': nuevo, 'restore': True, 'confirm': True})
+    # la cabecera ya era unit UNuevo por la mudanza: lo que mide el restore es que
+    # deshizo el edit SIN volver a la cabecera vieja de la primera copia del dia
+    check('R2 move que renombra + edit + restore: restaurado, el 3 fuera y la cabecera es la NUEVA (unit UNuevo;)',
+          mc.abre(r, 'SK_EDIT_RESTAURADO_DESDE_FMT') and '  Result := 3;' not in open(nuevo, encoding='utf-8-sig').read()
+          and linea1(nuevo) == 'unit UNuevo;', (r[:200], linea1(nuevo)))
 finally:
     s.cierra()
 

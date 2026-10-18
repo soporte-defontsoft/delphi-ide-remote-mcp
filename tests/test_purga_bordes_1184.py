@@ -56,7 +56,7 @@ try:
     check('G1 un .git FICHERO con gitdir: hacia fuera: el repo se purga entero y lo de fuera sale intacto',
           ok and foto(FUERA) == ANTES, r[:500])
 
-    T = os.path.join(JAIL, '__delphi-temp', 'agente', 'repo')
+    T = os.path.join(JAIL, mc.TEMPORALES, 'agente', 'repo')
     os.makedirs(os.path.dirname(T))
     subprocess.run(['git', 'init', '-q', T], check=True, capture_output=True)
     open(os.path.join(T, 'b.txt'), 'w').write('b')
@@ -64,7 +64,7 @@ try:
     check('G2 un repo dentro de una __delphi-temp se borra de verdad, sin restos',
           not os.path.exists(T) and mc.PAPELERA not in r, r[:300])
 
-    T3 = os.path.join(JAIL, '__delphi-temp', 'agente', 'repo3')
+    T3 = os.path.join(JAIL, mc.TEMPORALES, 'agente', 'repo3')
     subprocess.run(['git', 'init', '-q', T3], check=True, capture_output=True)
     subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(T3, '.git', 'enlace'), VICTIMA],
                    check=True, capture_output=True)

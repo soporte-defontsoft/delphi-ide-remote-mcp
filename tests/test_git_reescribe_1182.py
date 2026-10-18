@@ -124,7 +124,10 @@ srv = arranca(ro_roots=os.path.join(repo, 'vendor'))
 try:
     r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b2'})
     check('X2 switch a una rama que cambia un fichero de ReadOnlyRoots: GIT-065 nombrando vendor/V.txt, y V.txt intacto',
-          mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'vendor' in r.replace('\\\\', '/').replace('\\', '/') and
+          # el FICHERO protegido, no 'vendor' (el texto de GIT-065 dice "a vendor"
+          # siempre), y no los que no lo son (revisor de baterias, 18-oct-2026)
+          mc.abre(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'vendor/V.txt' in r.replace('\\\\', '/').replace('\\', '/')
+          and 'U.dfm' not in r and 'src/S.txt' not in r.replace('\\\\', '/').replace('\\', '/') and
           lee(repo, 'vendor/V.txt') == 'VENDOR_MAIN', (r[:260], lee(repo, 'vendor/V.txt')))
 finally:
     srv.cierra()
@@ -194,7 +197,7 @@ try:
     g('switch', '-q', '-f', 'main')
     r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'nb2', 'create': True})
     check('X9 el control: switch -c nb2 (sin punto de partida, el arbol no se mueve) se permite',
-          not mc.rechazado(r) and lee(repo, 'U.dfm') == 'EN_MAIN', (r[:260], lee(repo, 'U.dfm')))
+          r.startswith('exit=0') and lee(repo, 'U.dfm') == 'EN_MAIN', (r[:260], lee(repo, 'U.dfm')))
 finally:
     srv.cierra()
 

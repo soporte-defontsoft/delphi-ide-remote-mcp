@@ -58,8 +58,12 @@ try:
     # cosa (LSP-043, el motor pierde la carpeta)
     dpr, lin, col = proyecto(srv, 'Par' + '\U0001F600')
     r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
-    check('S4 control: un par de sustitutos ENTERO no es medio caracter: nada de LSP-044',
-          'LSP-044' not in r, ascii(r[:300]))
+    # (revisor de baterias, 18-oct-2026) la ausencia sola pasaba con cualquier
+    # fallo: lo que pasa de verdad ahi es LSP-043 (el motor pierde la carpeta,
+    # test_motor_sin_carpeta E1) o la definicion, sin fallo
+    check('S4 control: un par de sustitutos ENTERO no es medio caracter: nada de LSP-044 (LSP-043 o la definicion)',
+          not mc.es(r, 'SR_LSP_RUTA_SIN_URI_FMT') and
+          (mc.es(r, 'SR_LSP_MOTOR_SIN_CARPETA_FMT') or ('UA.pas' in r and not mc.fallo(r))), ascii(r[:300]))
     # W5 del revisor de cierre: LSP-044 vivia en un borde (NoEsFuenteDelphi) y el
     # NOMBRADOR seguia escribiendo U+FFFD en silencio: un candidato de references
     # bajo una carpeta con medio caracter se abria en el motor por otra ruta y

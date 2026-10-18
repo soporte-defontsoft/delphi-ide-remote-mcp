@@ -33,8 +33,10 @@ try:
         d=preview('DUMMY-inline.dfm','child-'+mode,component='F.DUMMYLabel')
         mc.check(mode+' PAS aporta frame solo sin enlace',
           r.get('root',{}).get('kind')==('frame' if mode=='normal' else 'form'),r)
-        mc.check(mode+' DFM aporta componente solo sin enlace',
-          bool(d.get('componentRect'))==(mode=='normal'),d)
+        # (revisor de baterias, 18-oct-2026) un preview que FALLA tampoco trae
+        # componentRect: en modo link pasaba con cualquier error
+        mc.check(mode+' DFM aporta componente solo sin enlace (y el preview sale)',
+          'error' not in d and bool(d.get('componentRect'))==(mode=='normal'),d)
     mc.check('servidor vivo',not mc.fallo(srv.call('delphi_list',{'root':JAIL})))
 finally:
     srv.cierra()

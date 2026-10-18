@@ -31,7 +31,13 @@ try:
     dproj = os.path.join(d, 'CortaTests.dproj')
     r = srv.call('delphi_test', {'command': 'run', 'project': dproj}, t=600)
     if '"result":"pass"' not in r.replace(' ', ''):
-        SKIP = 'el proyecto de test no compilo o no paso: %s' % r[:200]
+        # (revisor de baterias, 18-oct-2026) SIN CHECKS solo sin RAD Studio: con el,
+        # un proyecto de test recien creado que no compila o no pasa es ROJO (hoy
+        # cambio su plantilla: UsingDelphiRTL, $(DUnitX), los grupos de Debug)
+        if mc.catalogo()['SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED'] in r:
+            SKIP = 'no hay RAD Studio en esta maquina: %s' % r[:200]
+        else:
+            check('T0 el proyecto de test que crea delphi_create compila y pasa', False, r[:300])
     else:
         r = srv.call('delphi_test', {'command': 'run', 'project': dproj, 'nobuild': True,
                                      'timeoutms': 1}, t=120)
@@ -43,8 +49,10 @@ try:
               j.get('result') == 'timeout' and j.get('timedOut') is True, r[:300])
         nota = j.get('timeoutNote', '')
         m = re.search(r'exitCode comes as (\d+)', nota)
+        # la nota EXISTE (por su constante): con timeoutNote renombrado, m era None
+        # y pasaba siempre
         check('T2 la nota no afirma un exitCode que el campo contradiga',
-              (m is None) or (int(m.group(1)) == j.get('exitCode')),
+              mc.es(nota, 'SN_TEST_TIMEOUT_NOTE') and ((m is None) or (int(m.group(1)) == j.get('exitCode'))),
               (j.get('exitCode'), nota[:160]))
 finally:
     srv.cierra()

@@ -166,7 +166,13 @@ begin
     // la plataforma en la que run lo compila y lo corre si no se pide otra:
     // la del proyecto, como el IDE (TEST-012 ya no puede nombrar una para todos)
     if TFile.Exists(SuDproj) then
-      Obj.AddPair('platform', ReadDproj(SuDproj).PlataformaPorDefecto);
+    begin
+      var SuInfo := ReadDproj(SuDproj);
+      Obj.AddPair('platform', SuInfo.PlataformaPorDefecto);
+      // ...y la configuracion, la seleccionada: run la compila sin config=
+      // desde la 1.20.2 (revision del 18-oct-2026)
+      Obj.AddPair('config', SuInfo.ConfigPorDefecto);
+    end;
     if K = tkConsole then
       Obj.AddPair('countsFormat', MsgText(SN_TEST_CONSOLE_FORMAT));
   end;
@@ -640,14 +646,15 @@ begin
   end;
   Result.AddPair('project', Dproj);
   Result.AddPair('framework', KindName(K));
-  Cfg := AConfig;
-  if Cfg = '' then
-    Cfg := 'Debug';
   // A configuration the project does not have used to be accepted in silence
   // and built into Win64\Inventada\ (measured 2026-08-25). Say the ones
   // that exist instead.
   Info := ReadDproj(Dproj);
-  var Mala := ConfigDesconocida(Dproj, Cfg);
+  // sin config, la seleccionada en el proyecto, como delphi_build (era Debug)
+  Cfg := AConfig.Trim; // sin blancos, como delphi_build
+  if Cfg = '' then
+    Cfg := Info.ConfigPorDefecto;
+  var Mala := ConfigDesconocida(Dproj, Cfg, AConfig.Trim = '');
   if Mala <> '' then
   begin
     Result.AddPair('error', Mala);

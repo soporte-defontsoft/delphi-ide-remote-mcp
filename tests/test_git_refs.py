@@ -120,6 +120,30 @@ r = push('ñandú')
 check('push "ñandú" (tag no ASCII): ENTRA y git lo crea (exit=0)',
       r0.startswith('exit=0') and r.startswith('exit=0'), (r0[:200], r[:200]))
 
+# ===== push "+main" CON una ref que se llama asi: la FORMA, no git =====
+# (revisor de baterias, 18-oct-2026: el "+main" de arriba se negaba solo porque
+# no habia ninguna ref con ese nombre; con un tag "+main" -que git y la tool
+# aceptan- los dos jueces de git lo dejaban pasar y push origin "+main" FORZABA
+# el remoto: medido, "+ d9d8cb9...765a884 main -> main (forced update)". Roja
+# contra la 1.20.1.) El main local, divergido del remoto: sin la forma, forzaria.
+antes_remoto = g('ls-remote', BARE, 'refs/heads/main').stdout.split()[:1]
+g('checkout', '-q', '--orphan', 'reescrita')
+open(os.path.join(REPO, 'a.txt'), 'w').write('REESCRITO')
+g('add', '-A')
+g('commit', '-qm', 'reescrita')
+g('branch', '-f', 'main', 'reescrita')
+g('checkout', '-q', 'main')
+r0 = srv.call('delphi_git', {'repo': REPO, 'command': 'tag', 'name': '+main'})
+check('preparacion: el main local divergido del remoto y un tag "+main" (git lo admite)',
+      bool(antes_remoto) and r0.startswith('exit=0') and '+main' in g('tag', '-l').stdout.split()
+      and g('rev-parse', 'main').stdout.strip() != antes_remoto[0], (antes_remoto, r0[:200]))
+r = push('+main')
+check('push "+main" con la ref "+main" existente: negado por la FORMA, no llega a git',
+      mc.es(r, 'SR_GIT_PUSH_NOMBRE_FMT') and not mc.llego_a_git(r), r[:200])
+check('...y el main del remoto no se ha reescrito',
+      g('ls-remote', BARE, 'refs/heads/main').stdout.split()[:1] == antes_remoto,
+      (g('ls-remote', BARE, 'refs/heads/main').stdout, antes_remoto))
+
 # ===== worktree ref: una REVISION que debe EXISTIR, por rev-parse =====
 # NUEVO: un ref con {} que EXISTE entra (la regex lo negaba)
 WTX = os.path.join(MINE, 'wt-llaves')
@@ -135,8 +159,10 @@ check('worktree ref="-x" (empieza por guion): negado (--end-of-options)',
 
 # ===== control FUERA de las raices =====
 r = wt(action='add', path=os.path.join(OUT, 'wt'), ref='main')
-check('worktree add FUERA de las raices: negado (control)',
-      mc.rechazado(r) and not os.path.exists(os.path.join(OUT, 'wt')), r[:200])
+# (revisor de baterias, 18-oct-2026) por la JAULA: con cualquier rechazo, un
+# campo renombrado tambien pasaba
+check('worktree add FUERA de las raices: negado por la jaula (control)',
+      mc.es(r, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(OUT, 'wt')), r[:200])
 check('la victima de fuera sigue intacta', os.listdir(VIC) == ['v.txt'], os.listdir(VIC))
 
 srv.cierra()

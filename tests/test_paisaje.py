@@ -32,7 +32,10 @@ SRC = os.path.join(REPO, 'src')
 # UnitTests y Pruebas (la bateria manual de src/Render): una prueba calcula lo
 # esperado POR SU CUENTA, y la de los renderizadores compone su orden a mano
 FUERA = ('__delphi-patch', '__history', '__recovery', 'Compiled', 'UnitTests', 'Pruebas')
-LANZA = r'\b(?:RunCaptured(?:In|EnContenedor)?|RunDetached|CreateProcess[AW]?|ShellExecute\w*)\s*\('
+# CreateProcess\w*: tambien los lanzadores con nombre propio (CreateProcessConHandles,
+# CreateProcessEnContenedor), que desde la 1.11.3 la regla no veia (revisor de
+# baterias, 18-oct-2026: cuatro llamadas sin casa)
+LANZA = r'\b(?:RunCaptured(?:In|EnContenedor)?|RunDetached|CreateProcess\w*|ShellExecute\w*)\s*\('
 
 # (nombre, formato, casas: [(fichero, funcion o '*' = todo el fichero)], por que)
 REGLAS = [
@@ -49,7 +52,12 @@ REGLAS = [
       # el lanzado se movio aqui desde BuildStyles (antes compilaba el .rc directo)
       ('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor'),
       ('Lsp.TestRunner.pas', 'CorreEnContenedor'), ('Mcp.Tools.Adb.pas', 'RunAdb'),
-      ('Mcp.Tools.Git.pas', 'GitCorre'), ('Lsp.FormRender.pas', 'CorreRender')],
+      ('Mcp.Tools.Git.pas', 'GitCorre'), ('Lsp.FormRender.pas', 'CorreRender'),
+      # los que la regla no veia hasta el 18-oct-2026: el nucleo de RunCaptured*
+      # (con y sin contenedor), el lanzador del AppContainer, el del motor LSP
+      # (DelphiLSP.exe) y el ayudante de remote-run que arranca lo pedido
+      ('Lsp.BuildRunner.pas', 'RunCore'), ('Lsp.Sandbox.pas', 'CreateProcessEnContenedor'),
+      ('Lsp.Transport.Process.pas', 'TLspProcessTransport.Start'), ('McpRunJob.dpr', 'Arrancar')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
     ('lanzar el conversor de estilos', LANZA + r""".*'"' \+ A?Exe \+""",
      [('Lsp.Styles.pas', 'CorreStyleConvert')],
@@ -451,7 +459,7 @@ REGLAS = [
       ('Lsp.Guard.pas', 'RootItselfDenied'), ('Lsp.Guard.pas', 'RutaRelativaDenegada'),
       ('Lsp.Mascara.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
       ('Lsp.BuildRunner.pas', 'UnitSourceFolders'), ('Lsp.ProjectUnits.pas', 'BordeDeMudanza'),
-      ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.ResolveSettings'),
+      ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.FindDproj'),
       ('Mcp.Tools.Workspace.pas', 'TDelphiWorkspaceTool.ExecuteWithParams'),
       ('Mcp.Tools.Workspace.pas', 'TDelphiProjectsTool.ExecuteWithParams')],
      'Lsp.Settings lee las listas de los sitios y Lsp.Lugares las recorre: quien las recorre por su '
@@ -646,7 +654,10 @@ REGLAS = [
     # servidor ejecuta lo que necesite (David: "internamente podemos ejecutar lo que nos
     # convenga, es el agente el que no debe poder"), pero un shell nuevo se declara aqui con su
     # porque: que nada del agente decida que corre ni como
-    ('lanzar un shell', r"\bcmd(?:\.exe)?\s+/[cCkK]\b|\bcmd\.exe\b|\bComSpec\b",
+    # ...y no solo cmd: los otros interpretes de Windows (revisor de baterias,
+    # 18-oct-2026: la regla solo conocia cmd y ComSpec)
+    ('lanzar un shell', r"\bcmd(?:\.exe)?\s+/[cCkK]\b|\bcmd\.exe\b|\bComSpec\b|"
+                        r"\b(?:powershell|pwsh|wscript|cscript|bash|mshta)(?:\.exe)?\b|\bsh\.exe\b",
      [],
      'Ningun shell en el servidor sin casa declarada: un shell busca en su carpeta actual, expande '
      'variables y lee metacaracteres, y es donde mas cuesta que nada del agente decida que se ejecuta. '
@@ -892,6 +903,22 @@ for regla in REGLAS:
     check('mutante "%s": la copia plantada se caza (y el comentario no)' % nombre,
           len(cazados) == 1 and ':6 ' in cazados[0], cazados)
 
+# las otras formas de lanzar: los lanzadores con nombre propio (fuera de su casa) y
+# los otros interpretes (revisor de baterias, 18-oct-2026)
+REGLA_LANZA = next(r for r in REGLAS if r[0] == 'lanzar un programa')
+for forma in ("  if not CreateProcessConHandles(Cmd, nil, 0, nil, SI, PI) then Exit;",
+              "  Ok := CreateProcessEnContenedor(C, Cmd, nil, 0, nil, SI, PI);"):
+    cazados = fuera_de_casa(REGLA_LANZA, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                           'LanzaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_LANZA[0], forma.strip()), len(cazados) == 1, cazados)
+REGLA_SHELL = next(r for r in REGLAS if r[0] == 'lanzar un shell')
+for forma in ("  Cmd := '\"' + Sys32 + '\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -Command ' + X;",
+              "  Cmd := 'pwsh -c ' + X;", "  Cmd := Sys32 + '\\cscript.exe //nologo ' + X;",
+              "  Cmd := Git + '\\bin\\bash.exe -c ' + X;"):
+    cazados = fuera_de_casa(REGLA_SHELL, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                           'ShellAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_SHELL[0], forma.strip()), len(cazados) == 1, cazados)
+
 # las otras formas del XML de proyecto a mano: un Pos de una etiqueta (ReadDproj), la linea
 # de continuacion de una regex (el .groupproj) y un Contains; y lo que NO es leerlo: componer
 REGLA_XML = next(r for r in REGLAS if r[0] == 'leer o editar XML de proyecto a mano')
@@ -1107,8 +1134,8 @@ REGLAS_PY = [
     ('el cajon de lo borrado a mano', r"""os\.path\.join\([^)]*['"]deleted['"]""", [],
      'mc.CAJON_BORRADOS, leido de Lsp.Patch'),
     # (las dos de abajo, del revisor de version de la 1.18.0; __delphi-temp y reports
-    # tienen sus comprobaciones de ausencia por mc, y el barrido de sus ~45 lineas
-    # restantes va a la 1.19.0)
+    # tenian sus comprobaciones de ausencia por mc, y el barrido de sus ~45 lineas
+    # restantes, apuntado para la 1.19.0, se hizo el 18-oct-2026: las dos ultimas)
     ('el intermedio del escritor atomico a mano', r"delphi-patch-tmp", [],
      'mc.TEMPORAL_SUSTITUCION_EXT, leido de TEMPORAL_DE_SUSTITUCION_EXT (Lsp.Patch)'),
     ('la carpeta de las copias del IDE a mano', r"""(['"])ide-copias\1""", [],
@@ -1116,6 +1143,19 @@ REGLAS_PY = [
     # (revisor del 2af de la 1.18.2: seis baterias componian la casa de capturas)
     ('la casa de capturas a mano', r"""(['"])captures\1""", [],
      'mc.casa_de_capturas, leido de CAPTURAS_SUB (Lsp.Casa)'),
+    # (revisor de baterias, 18-oct-2026: 40 lineas en 17 baterias, y 4 de reports)
+    ('la carpeta de los temporales a mano', r"""(['"])__delphi-temp\1""",
+     # mira el FUENTE del servidor a proposito (su nombrador y su lector)
+     [('test_round44.py', 'g_src')],
+     'mc.TEMPORALES, leido de TempFolderName'),
+    ('la carpeta de los informes a mano', r"""(['"])reports\1""", [],
+     'mc.INFORMES, leido de CarpetaDeInformes'),
+    # (revisor de baterias, 18-oct-2026: siete baterias con su lector, cada una
+    # con su ceguera) quitar la mascara a mano para buscar letras, o mirar
+    # solo lo que no va tras 'srv'
+    ('la fuga de una letra real leida a mano', r"srv\[a-z\]:|\(\?<!srv\)",
+     [('mcp_cliente.py', 'def fuga_de_letra')],
+     'mc.fuga_de_letra: crudo o escapado en JSON, tras un \\n escapado, en URL, con o sin barra'),
 ]
 
 
@@ -1159,7 +1199,10 @@ PLANTADO_PY = {
     'el cajon de lo borrado a mano': "    c = os.path.join(pap, dia, 'deleted', 'x')",
     'el intermedio del escritor atomico a mano': "    t = glob.glob(os.path.join(d, '*.delphi-patch-tmp'))",
     'la carpeta de las copias del IDE a mano': "    c = os.path.join(cache, 'ide-copias', '37.0')",
-    'la casa de capturas a mano': "    c = os.path.join(srv, '__delphi-temp', 'captures', '_local')",
+    'la casa de capturas a mano': "    c = os.path.join(srv, mc.TEMPORALES, 'captures', '_local')",
+    'la carpeta de los temporales a mano': "    t = os.path.join(raiz, '__delphi-temp', 'agente')",
+    'la carpeta de los informes a mano': "    r = mc.buzon(os.path.join(srv, 'reports'))",
+    'la fuga de una letra real leida a mano': "    low = re.sub('srv[a-z]:', '', raw.lower())",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]

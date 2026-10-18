@@ -304,7 +304,10 @@ try:
 
     # D11 la temporal
     res, sc, t = llama('delphi_package', {'dir': VQ + 'sub', 'outfile': VQ + 'sub.zip'})
-    check('D11 la carpeta temporal y lo que el servidor crea no caen en su carpeta actual',
+    # (revisor de baterias, 18-oct-2026) desde 2af de la 1.18.2 el servidor no deja
+    # temporales en las raices: "aqui vacia" queda de guarda; lo que mide es que
+    # el zip va DONDE se pidio en la unidad y nada cae en su carpeta actual
+    check('D11 el zip va donde se pidio en la unidad y nada cae en la carpeta actual del servidor',
           bien(res, t) and os.path.isfile(os.path.join(UNIDAD, 'sub.zip'))
           and sorted(os.listdir(os.path.join(SRV, 'aqui'))) == [],
           '%s | aqui=%s' % (t[:200], os.listdir(os.path.join(SRV, 'aqui'))))
@@ -312,7 +315,7 @@ try:
     # 1.18.2: hasta la 1.18.1 la casa era <unidad>:\__delphi-temp, y con "Q:" a
     # secas habia sido la __delphi-temp de la carpeta actual). Un png con forma
     # de captura plantado en la raiz-unidad NO es nuestro: se lee y no se borra
-    CAP = os.path.join(RQ, '__delphi-temp', 'desktop', 'cap.png')
+    CAP = os.path.join(RQ, mc.TEMPORALES, 'desktop', 'cap.png')
     os.makedirs(os.path.dirname(CAP), exist_ok=True)
     open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
     res, sc, t = llama('delphi_fetch', {'path': VQ + '__delphi-temp\\desktop\\cap.png', 'offset': 0})

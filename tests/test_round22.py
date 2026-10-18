@@ -83,9 +83,10 @@ check('M3c ...pero la carpeta de sus ficheros si viaja como unidad virtual',
 # punto de salida: parchear los emisores uno a uno es como sobrevivio esto.
 for sonda in ('D:', 'C:', 'D:relativo' + BS + 'x'):
     r = call('delphi_list', {'root': sonda})
+    # (revisor de baterias, 18-oct-2026) EL lector de la fuga, con la letra sola
+    # tambien: aqui solo "D:" entre comillas y "D:\" en mayuscula
     check('M5 la unidad sin separador no filtra la letra real (%r)' % sonda,
-          ('"' + sonda[:2] + '"') not in r and (sonda[:2] + BS) not in r
-          and 'srv' in r, r[:200])
+          not mc.fuga_de_letra(r, sonda[0], con_separador=False) and 'srv' in r, r[:200])
 
 # ...y el reves, que es el riesgo del arreglo: NO enmascarar de mas. Un dos
 # puntos seguido de espacio no es una unidad.

@@ -95,19 +95,63 @@ begin
 end;
 
 function DprojTemplate(const AName, AGuid, AAppType, AFramework,
-  AFormUnit, AFormName, AFormType: string): string;
+  AFormUnit, AFormName, AFormType: string; AEsTest: Boolean = False): string;
+const
+  // las claves de las configuraciones como las numera el IDE al crear: Debug
+  // la 1 y Release la 2 (eran al reves; nadie las supone, ConfigKey las lee)
+  CFG_DEBUG = 'Cfg_1';
+  CFG_RELEASE = 'Cfg_2';
 var
   FormRef, MainExt, ProjectType, PkgProps, Ambitos, VerInfoWin: string;
+  BaseProps, Win32Props, Win64Props, Uwp, Dpi, Definidores, Valores: string;
+  EsVcl, EsFmx, EsVisual, EsConsola: Boolean;
+
+  function Prop(const ATag, AValor: string): string;
+  begin
+    Result := '        ' + XmlElemento(ATag, AValor) + CRLF;
+  end;
+
+  // un grupo de VALORES, por EL escritor (Lsp.Dproj), con su salto
+  function GrupoDeValores(const APlat, AClave, AProps: string): string;
+  begin
+    Result := XmlGrupoDeValores(APlat, AClave, AProps) + CRLF;
+  end;
+
+  // el definidor de una configuracion: '$(Config)'=='Debug' or '$(Cfg_1)'!=''
+  function DefinidorDeConfig(const AConfig, AClave: string): string;
+  begin
+    Result := '    <PropertyGroup ' + XmlAtributo('Condition', ConfigDefinerCondition(AConfig, AClave)) + '>' + CRLF;
+    if not SameText(AClave, 'Base') then
+      Result := Result + Prop(AClave, 'true') + Prop('CfgParent', 'Base');
+    Result := Result + Prop('Base', 'true') + '    </PropertyGroup>' + CRLF;
+  end;
+
 begin
+  // Lo que sigue es lo que escribe el IDE de la 37.0 al CREAR cada tipo
+  // de proyecto, medido el 18-oct-2026 contra los que David creo en el IDE
+  // (Vivo1201\ide: VCL, FMX, consola, paquete, DUnitX), grupo a grupo: en la
+  // 1.20.1 solo se alineo la version, y los proyectos nacian sin los grupos de
+  // Debug y Release - sin DEBUG ni RELEASE, sin la informacion de depuracion,
+  // las comprobaciones y la optimizacion de cada una -, sin el manifiesto, el
+  // icono ni el DPI por monitor. Lo NUESTRO, a proposito: las carpetas de
+  // salida (los .dcu en su carpeta; el BPL y el DCP del paquete en la suya,
+  // y sin la salida C++: la puerta del build las pide declaradas), Win32 y
+  // Win64 activas, y sin DCC_UsePackage (es la lista de los paquetes de ESA
+  // maquina) ni los grupos de las plataformas que no se activan (los escribe
+  // add-platform).
+  EsVcl := SameText(AFramework, 'VCL');
+  EsFmx := SameText(AFramework, 'FMX');
+  EsVisual := EsVcl or EsFmx;
+  EsConsola := SameText(AAppType, 'Console') and not AEsTest;
   // Los ambitos de unidad como los reparte el IDE (medido en los Samples de
   // la 37.0 y en GalateaFMX.dproj, 17-oct-2026): en Base los de todas las
   // plataformas, y los de Windows (Winapi, System.Win...) en Base_Win32 (con
-  // Bde) y Base_Win64. Los de la VCL, nunca en un proyecto FMX: con ellos un
+  // Bde) y Base_Win64. Los de la VCL, solo en un proyecto VCL: con ellos un
   // 'uses Dialogs' sin calificar compilaba contra Vcl.Dialogs en Win32 y no
-  // en Linux64 (RetoFMX de Hermes). Consola y paquete los conservan como
-  // hasta ahora (el IDE no los pone: decide David, pendientes-1-21-0).
+  // en Linux64 (RetoFMX de Hermes), y la consola, el paquete y el DUnitX que
+  // crea el IDE tampoco los llevan (medido el 18-oct-2026).
   Ambitos := 'System;Xml;Data;Datasnap;Web;Soap;';
-  if not SameText(AFramework, 'FMX') then
+  if EsVcl then
     Ambitos := Ambitos + 'Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;';
   // La informacion de version de Windows, como la escribe el IDE en un
   // proyecto nuevo (medido el 17-oct-2026 con proyectos que el IDE de la 37.0
@@ -144,12 +188,79 @@ begin
       '        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>' + CRLF +
       '        <GenDll>true</GenDll>' + CRLF +
       '        <GenPackage>true</GenPackage>' + CRLF +
-      '        <AppFileExt>bpl</AppFileExt>' + CRLF +
-      '        <DCC_E>false</DCC_E>' + CRLF +
-      '        <DCC_N>false</DCC_N>' + CRLF +
-      '        <DCC_S>false</DCC_S>' + CRLF +
-      '        <DCC_F>false</DCC_F>' + CRLF +
-      '        <DCC_K>false</DCC_K>' + CRLF;
+      '        <AppFileExt>bpl</AppFileExt>' + CRLF;
+  end;
+  // la base: los interruptores E N S F K (todos los tipos), los permisos de
+  // Android de un FMX (el IDE los pone en la base aunque no active Android),
+  // los iconos y, en un DUnitX, el RTL de Delphi y la carpeta de DUnitX
+  BaseProps := Prop('DCC_E', 'false') + Prop('DCC_N', 'false') + Prop('DCC_S', 'false') +
+    Prop('DCC_F', 'false') + Prop('DCC_K', 'false');
+  if EsFmx then
+    for var Permiso in TArray<string>.Create('ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION',
+      'CALL_PHONE', 'CAMERA', 'INTERNET', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE',
+      'READ_PHONE_STATE') do
+      BaseProps := BaseProps + Prop('AUP_' + Permiso, 'true');
+  if AEsTest then
+    BaseProps := BaseProps + Prop('UsingDelphiRTL', 'true');
+  if EsVisual or AEsTest then
+    BaseProps := BaseProps + Prop('Icon_MainIcon', '$(BDS)\bin\delphi_PROJECTICON.ico');
+  if EsFmx or AEsTest then
+    BaseProps := BaseProps + Prop('Icns_MainIcns', '$(BDS)\bin\delphi_PROJECTICNS.icns');
+  Uwp := Prop('UWP_DelphiLogo44', '$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png') +
+    Prop('UWP_DelphiLogo150', '$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png');
+  if EsVcl then
+    BaseProps := BaseProps + Uwp;
+  if AEsTest then
+    BaseProps := BaseProps + Prop('DCC_UnitSearchPath', '$(DUnitX);$(DCC_UnitSearchPath)');
+  // los de Windows: el tipo de build, el manifiesto de las aplicaciones con
+  // ventana, el destino de consola, los logos UWP de un FMX y de una consola
+  Win32Props := Prop('BT_BuildType', 'Debug');
+  Win64Props := '';
+  if EsVisual then
+  begin
+    Win64Props := Prop('BT_BuildType', 'Debug');
+    Win32Props := Win32Props + Prop('Manifest_File', '$(BDS)\bin\default_app.manifest');
+    Win64Props := Win64Props + Prop('Manifest_File', '$(BDS)\bin\default_app.manifest');
+  end;
+  if EsConsola then
+  begin
+    Win32Props := Win32Props + Prop('DCC_ConsoleTarget', 'true');
+    Win64Props := Win64Props + Prop('DCC_ConsoleTarget', 'true');
+  end;
+  if EsFmx or EsConsola then
+  begin
+    Win32Props := Win32Props + Uwp;
+    Win64Props := Win64Props + Uwp;
+  end;
+  // Las configuraciones: sus definidores (y los de cada plataforma con
+  // valores: Win32 en todos, Win64 en los de ventana) detras de los de la
+  // base, y sus valores detras de los de la base, en el orden del IDE
+  Dpi := '';
+  if EsVisual then
+    Dpi := Prop('AppDPIAwarenessMode', 'PerMonitorV2');
+  Definidores := DefinidorDeConfig('Debug', CFG_DEBUG) +
+    XmlGrupoDefinidor('Win32', CFG_DEBUG) + CRLF;
+  Valores := GrupoDeValores('', CFG_DEBUG,
+      Prop('DCC_Define', 'DEBUG;$(DCC_Define)') + Prop('DCC_DebugDCUs', 'true') +
+      Prop('DCC_Optimize', 'false') + Prop('DCC_GenerateStackFrames', 'true') +
+      Prop('DCC_DebugInfoInExe', 'true') + Prop('DCC_RemoteDebug', 'true') +
+      Prop('DCC_IntegerOverflowCheck', 'true') + Prop('DCC_RangeChecking', 'true')) +
+    GrupoDeValores('Win32', CFG_DEBUG, Prop('DCC_RemoteDebug', 'false') + Dpi);
+  if EsVisual then
+  begin
+    Definidores := Definidores + XmlGrupoDefinidor('Win64', CFG_DEBUG) + CRLF;
+    Valores := Valores + GrupoDeValores('Win64', CFG_DEBUG, Dpi);
+  end;
+  Definidores := Definidores + DefinidorDeConfig('Release', CFG_RELEASE);
+  Valores := Valores + GrupoDeValores('', CFG_RELEASE,
+    Prop('DCC_LocalDebugSymbols', 'false') + Prop('DCC_Define', 'RELEASE;$(DCC_Define)') +
+    Prop('DCC_SymbolReferenceInfo', '0') + Prop('DCC_DebugInformation', '0'));
+  if EsVisual then
+  begin
+    Definidores := Definidores + XmlGrupoDefinidor('Win32', CFG_RELEASE) + CRLF +
+      XmlGrupoDefinidor('Win64', CFG_RELEASE) + CRLF;
+    Valores := Valores + GrupoDeValores('Win32', CFG_RELEASE, Dpi) +
+      GrupoDeValores('Win64', CFG_RELEASE, Dpi);
   end;
   FormRef := '';
   if (AFormUnit <> '') and (AFormName = '') then
@@ -168,53 +279,34 @@ begin
     '        ' + XmlElemento('ProjectGuid', AGuid) + CRLF +
     '        ' + XmlElemento('MainSource', AName + MainExt) + CRLF +
     '        <Base>True</Base>' + CRLF +
-    '        <Config Condition="''$(Config)''==''''">Debug</Config>' + CRLF +
-    '        <ProjectName Condition="''$(ProjectName)''==''''">' + XmlEscape(AName) + '</ProjectName>' + CRLF +
+    // los selectores, por SU escritor (Lsp.Dproj; SelectorDe los lee)
+    '        ' + XmlSelector('Config', 'Debug') + CRLF +
+    '        ' + XmlSelector('ProjectName', AName) + CRLF +
     '        <TargetedPlatforms>3</TargetedPlatforms>' + CRLF +
     '        ' + XmlElemento('AppType', AAppType) + CRLF +
     '        ' + XmlElemento('FrameworkType', AFramework) + CRLF +
     '        <ProjectVersion>20.4</ProjectVersion>' + CRLF +
-    '        <Platform Condition="''$(Platform)''==''''">Win64</Platform>' + CRLF +
+    '        ' + XmlSelector('Platform', 'Win64') + CRLF +
     '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="''$(Config)''==''Base'' or ''$(Base)''!=''''">' + CRLF +
-    '        <Base>true</Base>' + CRLF +
-    '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="(''$(Platform)''==''Win32'' and ''$(Base)''==''true'') or ''$(Base_Win32)''!=''''">' + CRLF +
-    '        <Base_Win32>true</Base_Win32>' + CRLF +
-    '        <CfgParent>Base</CfgParent>' + CRLF +
-    '        <Base>true</Base>' + CRLF +
-    '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="(''$(Platform)''==''Win64'' and ''$(Base)''==''true'') or ''$(Base_Win64)''!=''''">' + CRLF +
-    '        <Base_Win64>true</Base_Win64>' + CRLF +
-    '        <CfgParent>Base</CfgParent>' + CRLF +
-    '        <Base>true</Base>' + CRLF +
-    '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="''$(Config)''==''Release'' or ''$(Cfg_1)''!=''''">' + CRLF +
-    '        <Cfg_1>true</Cfg_1>' + CRLF +
-    '        <CfgParent>Base</CfgParent>' + CRLF +
-    '        <Base>true</Base>' + CRLF +
-    '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="''$(Config)''==''Debug'' or ''$(Cfg_2)''!=''''">' + CRLF +
-    '        <Cfg_2>true</Cfg_2>' + CRLF +
-    '        <CfgParent>Base</CfgParent>' + CRLF +
-    '        <Base>true</Base>' + CRLF +
-    '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="''$(Base)''!=''''">' + CRLF +
-    '        ' + XmlElemento('SanitizedProjectName', AName) + CRLF +
-    '        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>' + CRLF +
-    '        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>' + CRLF +
-    PkgProps +
-    '        <VerInfo_Locale>1033</VerInfo_Locale>' + CRLF +
-    '        <DCC_Namespace>' + Ambitos + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
-    '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="''$(Base_Win32)''!=''''">' + CRLF +
-    '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
-    VerInfoWin +
-    '    </PropertyGroup>' + CRLF +
-    '    <PropertyGroup Condition="''$(Base_Win64)''!=''''">' + CRLF +
-    '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
-    VerInfoWin +
-    '    </PropertyGroup>' + CRLF +
+    DefinidorDeConfig('Base', 'Base') +
+    XmlGrupoDefinidor('Win32', 'Base') + CRLF +
+    XmlGrupoDefinidor('Win64', 'Base') + CRLF +
+    Definidores +
+    GrupoDeValores('', 'Base',
+      Prop('SanitizedProjectName', AName) +
+      '        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>' + CRLF +
+      '        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>' + CRLF +
+      PkgProps +
+      '        <VerInfo_Locale>1033</VerInfo_Locale>' + CRLF +
+      '        <DCC_Namespace>' + Ambitos + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      BaseProps) +
+    GrupoDeValores('Win32', 'Base',
+      '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      VerInfoWin + Win32Props) +
+    GrupoDeValores('Win64', 'Base',
+      '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      VerInfoWin + Win64Props) +
+    Valores +
     '    <ItemGroup>' + CRLF +
     '        <DelphiCompile Include="$(MainSource)">' + CRLF +
     '            <MainSource>MainSource</MainSource>' + CRLF +
@@ -223,12 +315,12 @@ begin
     '        <BuildConfiguration Include="Base">' + CRLF +
     '            <Key>Base</Key>' + CRLF +
     '        </BuildConfiguration>' + CRLF +
-    '        <BuildConfiguration Include="Release">' + CRLF +
-    '            <Key>Cfg_1</Key>' + CRLF +
+    '        <BuildConfiguration Include="Debug">' + CRLF +
+    '            <Key>' + CFG_DEBUG + '</Key>' + CRLF +
     '            <CfgParent>Base</CfgParent>' + CRLF +
     '        </BuildConfiguration>' + CRLF +
-    '        <BuildConfiguration Include="Debug">' + CRLF +
-    '            <Key>Cfg_2</Key>' + CRLF +
+    '        <BuildConfiguration Include="Release">' + CRLF +
+    '            <Key>' + CFG_RELEASE + '</Key>' + CRLF +
     '            <CfgParent>Base</CfgParent>' + CRLF +
     '        </BuildConfiguration>' + CRLF +
     '    </ItemGroup>' + CRLF +
@@ -630,7 +722,7 @@ begin
         '  TDUnitX.RegisterTestFixture(T' + AName + ');' + CRLF + CRLF +
         'end.' + CRLF);
       WriteNewFile(Dproj,
-        DprojTemplate(AName, NewGuidStr, 'Console', 'None', MainUnit, '', ''));
+        DprojTemplate(AName, NewGuidStr, 'Console', 'None', MainUnit, '', '', True));
       Files.Add(AName + '.dpr');
       Files.Add(TPath.GetFileName(Dproj));
       Files.Add(MainUnit + '.pas');

@@ -61,8 +61,10 @@ call = cli.call
 def sin_letra_real(texto):
     """La letra real del servidor no puede salir. Se mira la forma completa
     (letra + dos puntos + separador), que es lo que el enmascarador reconoce:
-    buscar 'C:' a secas daria falso positivo con cualquier otra cosa."""
-    return (DRIVE + '\\') not in texto and (DRIVE + '/') not in texto
+    buscar 'C:' a secas daria falso positivo con cualquier otra cosa. Por EL
+    lector de la casa (revisor de baterias, 18-oct-2026: el de aqui solo veia
+    la letra en MAYUSCULA)."""
+    return not mc.fuga_de_letra(texto, DRIVE)
 
 
 try:
@@ -80,8 +82,11 @@ try:
     # se mide: es el que demuestra que la pareja iba descuadrada.
     b = call('delphi_edit', {'path': os.path.join(JAIL, 'UNueva.pas'),
                              'createunit': True})
+    # que la creacion OCURRIO: un createunit que fallaba tampoco traia la letra
+    # real (revisor de baterias, 18-oct-2026)
     check('L2 el CREADA de delphi_edit tampoco',
-          sin_letra_real(b), b[:200])
+          mc.abre(b, 'SK_EDIT_CREADA_UNIT_FMT') and os.path.isfile(os.path.join(JAIL, 'UNueva.pas'))
+          and sin_letra_real(b), b[:200])
 
     # ------------------------------------------------------------------ L3
     # La negativa ya se enmascaraba (empieza por RECHAZADO, que la exencion

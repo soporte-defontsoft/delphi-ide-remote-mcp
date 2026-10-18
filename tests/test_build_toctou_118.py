@@ -55,8 +55,13 @@ os.makedirs(JAIL)
 MARKER = os.path.join(WORK, 'marcador-pwned.txt')   # bajo mc.RAIZ: nada real, nada fuera de la bateria
 
 # Sin AllowBuildScripts: los DOS builds son NO confiados -> corre el escaneo compile-only.
+# ...y un workspace CONFIADO sobre la misma jaula, para el control positivo del
+# veneno (revisor de baterias, 18-oct-2026: tras 2an msbuild se lanza de otra
+# manera, y "ningun marcador" solo mide si el veneno, compilado, lo escribe)
+TOKEN_CONFIADO = 'toctou-confiado'
 with open(os.path.join(WORK, 'settings.ini'), 'w') as f:
-    f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, JAIL))
+    f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n\n[Workspace.Confiado]\nToken=%s\nRoots=%s\n'
+            'AllowBuildScripts=1\n' % (TOKEN, JAIL, TOKEN_CONFIADO, JAIL))
 
 PORT = mc.puerto_libre()
 proc = mc.lanza_http(EXE, PORT, mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1'}))
@@ -180,6 +185,13 @@ try:
             check('TOCTOU build: la edicion del .dproj espera a que A suelte el cerrojo',
                   iny1 >= a1 - 1.5,
                   'la edicion acabo a +%.1fs y A a +%.1fs (duro %.1fs)' % (iny1 - a0, a_dur, iny1 - iny0))
+            # el control positivo: el MISMO .dproj envenenado, de un build confiado
+            if not hay_marcador:
+                rc = mc.Http(PORT, TOKEN_CONFIADO, t=600).call('delphi_build', {'project': B_PROJ, 'config': 'Debug'}, t=600)
+                check('TOCTOU build (control positivo): confiado, el mismo veneno SI escribe el marcador',
+                      compilo(rc) and os.path.exists(MARKER), str(rc)[:300])
+                if os.path.exists(MARKER):
+                    os.remove(MARKER)
 finally:
     proc.kill()
 

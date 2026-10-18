@@ -70,8 +70,11 @@ try:
     p = pas('UB4')
     antes = open(p, 'rb').read()
     r = call('delphi_edit', {'path': p, 'old': "begin\n  X := 1;\nend;", 'new': "begin\n  X := 9;\nend;"})
-    check('B4 un bloque repetido: negado, nada escrito, y dice como desempatar',
-          mc.rechazado(r) and open(p, 'rb').read() == antes and ('atline' in r or 'occurrence' in r), r[:400])
+    # la negativa del BLOQUE ambiguo (EDIT-015): la de una linea (EDIT-077) tambien
+    # dice atline (revisor de baterias, 18-oct-2026)
+    check('B4 un bloque repetido: negado (EDIT-015), nada escrito, y dice como desempatar',
+          mc.es(r, 'SR_PATCH_BLOCK_AMBIGUOUS_FMT') and open(p, 'rb').read() == antes
+          and ('atline' in r or 'occurrence' in r), r[:400])
     n = texto(p).split(CRLF).index('procedure Tres;') + 2   # su begin, 1-based
     r = call('delphi_edit', {'path': p, 'old': "begin\n  X := 1;\nend;", 'new': "begin\n  X := 9;\nend;",
                              'atline': n})
@@ -90,6 +93,21 @@ try:
     r = call('delphi_edit', {'path': p, 'old': "procedure Dos;\nbegin\n  Y := 7;", 'new': 'x'})
     check('B6 un bloque que no esta: negado con la linea que falta, nada escrito',
           mc.rechazado(r) and 'Y := 7;' in r and open(p, 'rb').read() == antes, r[:400])
+
+    # B4t-B6t (revisor de baterias, 18-oct-2026): el gemelo, delphi_textedit, con
+    # los mismos casos (comparten motor; B4-B6 solo los media delphi_edit)
+    md2 = os.path.join(JAIL, 'gemelo.md')
+    SRC2 = b'uno\r\nbegin\r\nX\r\nend\r\nmedio\r\nbegin\r\nX\r\nend\r\nfin\r\n'
+    open(md2, 'wb').write(SRC2)
+    r = call('delphi_textedit', {'path': md2, 'old': 'begin\nX\nend', 'new': 'begin\nY\nend'})
+    check('B4t delphi_textedit, un bloque repetido: negado (EDIT-015), nada escrito',
+          mc.es(r, 'SR_PATCH_BLOCK_AMBIGUOUS_FMT') and open(md2, 'rb').read() == SRC2, r[:400])
+    r = call('delphi_textedit', {'path': md2, 'old': 'uno\nbegin', 'new': 'x', 'toline': 5})
+    check('B5t delphi_textedit, toline con un bloque: EDIT-020, nada escrito',
+          mc.es(r, 'SR_RANGE_WITH_BLOCK') and open(md2, 'rb').read() == SRC2, r[:400])
+    r = call('delphi_textedit', {'path': md2, 'old': 'medio\nbegin\nZETA-QUE-FALTA', 'new': 'x'})
+    check('B6t delphi_textedit, un bloque que no esta: negado con la linea que falta, nada escrito',
+          mc.rechazado(r) and 'ZETA-QUE-FALTA' in r and open(md2, 'rb').read() == SRC2, r[:400])
 
     p = pas('UB7')
     r = call('delphi_edit', {'path': p, 'old': '  Writeln(\'gestoría\');', 'new': "  Writeln('otra');"})

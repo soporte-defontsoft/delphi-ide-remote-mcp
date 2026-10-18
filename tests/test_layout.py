@@ -169,16 +169,19 @@ OUT = """object F: TF
 end
 """
 o = layout('Out', OUT)
-txt = json.dumps(o, ensure_ascii=False)
+# (revisor de baterias, 18-oct-2026) el nombre DENTRO de outsideParent: en el
+# JSON entero salian siempre (boxes trae todos los controles), y con los dos
+# botones fuera a la vez cada mitad pasaba por la otra
+fuera = json.dumps(o.get('outsideParent') or [], ensure_ascii=False)
 check('L4 se sale por la derecha del panel que lo contiene',
-      o.get('clean') is False and 'BtnFuera' in txt and 'Panel1' in txt, o)
-check('L4 y tambien por abajo', 'BtnAlto' in txt, o)
+      o.get('clean') is False and 'BtnFuera' in fuera and 'Panel1' in fuera, o)
+check('L4 y tambien por abajo', 'BtnAlto' in fuera, o)
 
 # L4b - negative coordinates count as outside too
 NEG = OUT.replace('Left = 360', 'Left = -20').replace('Left = 10', 'Left = 10')
 o = layout('Neg', NEG)
 check('L4 una coordenada negativa tambien se sale',
-      o.get('clean') is False and 'BtnFuera' in json.dumps(o), o)
+      o.get('clean') is False and 'BtnFuera' in json.dumps(o.get('outsideParent') or []), o)
 
 # L5 - aligned children eating the whole parent
 NOROOM = """object F: TF
@@ -222,8 +225,12 @@ TWOCLIENT = """object F: TF
 end
 """
 o = layout('TwoClient', TWOCLIENT)
-check('L6 el segundo alClient no recibe nada',
-      o.get('clean') is False and 'M2' in json.dumps(o), o)
+# (revisor de baterias, 18-oct-2026) la premisa ya no era la del servidor: un
+# alClient toma TODO el hueco y dos se solapan al 100% (lo mide tambien Bug3,
+# con otro form); "M2 en el JSON" pasaba con cualquier respuesta
+check('L6 dos alClient: el segundo tapa al primero al 100%',
+      o.get('clean') is False and 'M2' in json.dumps(o.get('overlapping') or [])
+      and '100%' in json.dumps(o.get('overlapping') or []), o)
 
 # L8 - a size the .dfm never wrote
 NOSIZE = """object F: TF

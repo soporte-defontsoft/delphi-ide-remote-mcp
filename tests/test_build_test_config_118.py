@@ -112,39 +112,50 @@ try:
             SKIP = 'fixture: TestSinCfg sin configs=%s, TestConCfg con configs=%s' % (sin_ok, con_ok)
         else:
             # --- lo que se exige de delphi_test ---
+            # (revisor de baterias, 18-oct-2026) desde 2an (1.18.2) msbuild va sin
+            # cmd.exe: los marcadores ya no pueden aparecer y quedan de guarda.
+            # Lo que mide la puerta es SU negativa: la del nombre (BUILD-015) y la
+            # de la plataforma (TEST-001); con cualquier rechazo, un AllowTests que
+            # dejara de leerse (TEST-020) daba las cinco en verde
             mk_test = os.path.join(WORK, MK_TEST)
             check('delphi_test: una config con metacaracteres (proyecto SIN configuraciones) '
                   'NO produce efecto (ningun fichero creado)',
                   not os.path.exists(mk_test),
                   'marcador presente = la config se ejecuto (vulnerable). %s' % corto(primera))
-            check('delphi_test: esa config es RECHAZADA (como en delphi_build)',
-                  mc.rechazado(primera), corto(primera))
+            check('delphi_test: esa config es RECHAZADA por su nombre (BUILD-015, como en delphi_build)',
+                  mc.es(primera, 'SR_BUILD_CONFIG_FMT'), corto(primera))
 
             # ";" -> propiedades de msbuild: tiene que rechazarse igual
             out_semic = call('delphi_test', {'command': 'run', 'project': PSIN,
                                              'config': 'Debug;ZZZ=1', 'platform': 'Win64'}, t=240)
-            check('delphi_test: un ";" en config (propiedad extra de msbuild) es RECHAZADO',
-                  mc.rechazado(out_semic), corto(out_semic))
+            check('delphi_test: un ";" en config (propiedad extra de msbuild) es RECHAZADO por su nombre',
+                  mc.es(out_semic, 'SR_BUILD_CONFIG_FMT'), corto(out_semic))
 
             # platform ya esta a salvo (whitelist exacta): se vigila que siga
             out_plat = call('delphi_test', {'command': 'run', 'project': PSIN,
                                             'config': 'Debug', 'platform': 'Win64;ZZZ=1'}, t=60)
-            check('delphi_test: una platform fuera de la whitelist exacta es RECHAZADA',
-                  mc.rechazado(out_plat), corto(out_plat))
+            check('delphi_test: una platform fuera de la whitelist exacta es RECHAZADA (TEST-001)',
+                  mc.es(out_plat, 'SR_TEST_PLATFORM_UNKNOWN_FMT'), corto(out_plat))
 
             # --- CONTROL 1: delphi_build con la MISMA entrada ya se rechaza ---
             mk_build = os.path.join(WORK, MK_BUILD)
             out_b = call('delphi_build', {'project': PSIN, 'config': inj(MK_BUILD),
                                           'platform': 'Win64'}, t=60)
-            check('control: delphi_build con la misma config -> RECHAZADA y sin efecto',
-                  mc.rechazado(out_b) and not os.path.exists(mk_build), corto(out_b))
+            check('control: delphi_build con la misma config -> RECHAZADA por su nombre y sin efecto',
+                  mc.es(out_b, 'SR_BUILD_CONFIG_FMT') and not os.path.exists(mk_build), corto(out_b))
 
             # --- CONTROL 2: proyecto CON configuraciones -> rechazado por nombre ---
             mk_con = os.path.join(WORK, MK_CON)
             out_c = call('delphi_test', {'command': 'run', 'project': PCON,
                                          'config': inj(MK_CON), 'platform': 'Win64'}, t=240)
-            check('control: delphi_test con un proyecto CON configuraciones -> RECHAZADA (nombre exacto) y sin efecto',
-                  mc.rechazado(out_c) and not os.path.exists(mk_con), corto(out_c))
+            # con metacaracteres salta antes la regla de los caracteres (BUILD-015);
+            # el "nombre exacto" se mide con uno limpio que el proyecto no declara
+            check('control: delphi_test con un proyecto CON configuraciones -> RECHAZADA por su nombre y sin efecto',
+                  mc.es(out_c, 'SR_BUILD_CONFIG_FMT') and not os.path.exists(mk_con), corto(out_c))
+            out_n = call('delphi_test', {'command': 'run', 'project': PCON,
+                                         'config': 'Inventada', 'platform': 'Win64'}, t=240)
+            check('control: ...y una limpia que no declara: CFG-107 (nombre exacto)',
+                  mc.abre(out_n, 'SR_TEST_CONFIG_FMT') and 'Inventada' in out_n, corto(out_n))
 finally:
     srv.cierra()
 

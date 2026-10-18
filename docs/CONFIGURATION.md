@@ -229,14 +229,14 @@ DelphiUpdate=13.1
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
 ; workspaces' roots are not even readable. Overlap is allowed and never
-; subtracts (note Audit's root is a subfolder of Galatea's). EACH SECTION IS
+; subtracts (note Audit's root is a subfolder of Shop's). EACH SECTION IS
 ; COMPLETE IN ITSELF: absent switch = off, absent list = empty.
-[Workspace.Galatea]
+[Workspace.Shop]
 ; read-write, but only inside THESE roots
-Token=galatea-secret
+Token=shop-secret
 ; optional read-only twin, same roots
-ReadOnlyToken=galatea-reviewer-secret
-Roots=D:\Projects\Galatea;D:\Projects\Shared
+ReadOnlyToken=shop-reviewer-secret
+Roots=D:\Projects\Shop;D:\Projects\Shared
 ; INSIDE the jail: read, never write
 ReadOnlyPaths=vendor;third-party\libx
 ; OUTSIDE the jail: reference projects, read only, win over Roots
@@ -257,8 +257,8 @@ Profile=coder
 
 [Workspace.Audit]
 Token=audit-secret
-; a SUBFOLDER of Galatea - deliberate
-Roots=D:\Projects\Galatea\src\Forms
+; a SUBFOLDER of Shop - deliberate
+Roots=D:\Projects\Shop\src\Forms
 ; navigation tools only in its listing (declares nothing else: it HAS nothing else)
 Profile=reader
 
@@ -573,8 +573,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   parameters the floor watches (`jailedParams`), so an empty floor can be seen. The two
   exceptions are paths on the TARGET machine - `delphi_paserver`'s `exe` and `delphi_config`'s
   `remotedir` - where this server's jail has nothing to say.
-- **A root is also where project discovery STOPS.** Looking for a unit's `.delphilsp.json` or
-  `.dproj`, the server walks up from the file — but never past the edge of what this workspace
+- **A root is also where project discovery STOPS.** Looking for the `.dproj` that serves a unit
+  (the IDE's `.delphilsp.json` is not read since 1.20.2), the server walks up from the file — but never past the edge of what this workspace
   may read. A project file sitting ABOVE the root is not adopted (since 1.0.11): if your layout
   puts the root at `src\` and the `.dproj` one level up, point the root at the project folder.
   Measured on 2026-09-21: without that stop, a stray 10-byte `.dproj` left in `%TEMP%` became

@@ -110,6 +110,27 @@ try:
         codigo, cuerpo = e.code, b''
     check('Q3 control: la nueva sigue esperando y se baja por su enlace (200, un PNG)',
           bool(dl) and codigo == 200 and cuerpo[:8] == PNG, (r[:300], codigo))
+    # (revisor de baterias, 18-oct-2026) la EDAD sola, lejos del tope: con 70 en
+    # el workspace el tope de 50 se lleva primero las mas viejas, y Q1/Q4 seguian
+    # verdes sin la regla de la edad. Ahora 3 viejas y 5 recientes, y nada mas
+    for p in glob.glob(os.path.join(CASA, '*.png')) + glob.glob(os.path.join(CASA_BOB, '*.png')):
+        os.remove(p)
+    viejas2, recientes2 = [], []
+    for i in range(3):
+        p = os.path.join(CASA, 'vieja2_%d.png' % i)
+        open(p, 'wb').write(PNG)
+        os.utime(p, (hace_dos_horas, hace_dos_horas))
+        viejas2.append(p)
+    for i in range(5):
+        p = os.path.join(CASA, 'reciente2_%d.png' % i)
+        open(p, 'wb').write(PNG)
+        recientes2.append(p)
+    r2 = op.call('delphi_designer', {'command': 'preview', 'path': PRUEBA, 'inline': False}, t=180)
+    check('Q6 la EDAD sola, lejos del tope: las de hace dos horas se van y las recientes se quedan',
+          not mc.fallo(r2) and not any(os.path.exists(v) for v in viejas2)
+          and all(os.path.exists(p) for p in recientes2),
+          (r2[:200], [os.path.basename(v) for v in viejas2 if os.path.exists(v)],
+           [os.path.basename(p) for p in recientes2 if not os.path.exists(p)]))
 finally:
     try:
         proc.kill()

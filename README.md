@@ -55,7 +55,7 @@ The table below says which engine each one uses and why it matters:
 
 | Engine | Tools | What that means for you |
 |---|---|---|
-| **DelphiLSP** (official, compiler-grade) | `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics` | Real semantic answers, not grep: resolves inheritance, `with`, overloads, and follows into RTL/VCL. Needs a `.delphilsp.json` (used when fresh, fabricated from the `.dproj` when not). |
+| **DelphiLSP** (official, compiler-grade) | `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics` | Real semantic answers, not grep: resolves inheritance, `with`, overloads, and follows into RTL/VCL. Runs with settings the server makes from the `.dproj` on every request, for the configuration and platform the project selects (Win32 when that platform is not Windows: Code Insight is a Windows front end; the IDE's `.delphilsp.json` is never read). |
 | **DelphiLSP + disk scan** (hybrid) | `delphi_references` | The LSP has no `references`, so candidates are scanned from disk and then each one is *validated* by asking the LSP where it resolves to. Verified against the live compiler, never an index. A name written in a comment or inside a string literal is **not** a reference: it goes to `mentions`, listed but harmless, instead of counting as `unverified` and blocking a rename. |
 | **Own safe-editing engine** | `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create` | Anchored edits with encoding preserved (ANSI vs UTF-8), atomic writes, automatic backups, designer-file awareness. No LSP involved. |
 | **MSBuild** (`rsvars.bat`, located via the registry) | `delphi_build` | The real compiler and linker. The LSP cannot build — it has no such operation. A failed build with F2613 names each missing unit and where its `.pas` lives in the library zone (`missingUnits`), with the `add-searchpath` to run |
@@ -347,7 +347,7 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 Each one is told with its measurements and its history in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#design-points).
 
 - **Zero hardcoded paths** — the RAD Studio installation (11/12/13+) is discovered via the Windows registry.
-- **Project config made automatic** — the IDE's `.delphilsp.json` when fresh, one fabricated from the `.dproj` when absent or stale.
+- **Project config made automatic** — the engine's settings made from the `.dproj` on every request, for the selected configuration and platform (Win32 for one that is not Windows), and given again to a running engine when they change (the IDE's `.delphilsp.json`, stale on a server, is never read).
 - **Warm engines** — one `DelphiLSP` per workspace, kept alive between agent sessions, stopped when idle or hung and started again on the next request.
 - **Correct source encoding** — BOM, strict UTF-8, and otherwise the machine's ANSI code page, as the IDE and the compiler read a file without BOM.
 - **One executable, three modes** — service, terminal and tray are the same binary and the same 42 tools.
