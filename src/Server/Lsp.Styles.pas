@@ -223,6 +223,37 @@ function PlatformDefaultStyleNames: TArray<string>;
   en mayusculas como nueva (P7 de la segunda revision de la 1.17.0). }
 function ClaveDeEstilo(const ANombre: string): string;
 
+type
+  TClaseRc = (crRecurso, crInclude);
+  { Lo que un .rc hace leer a brcc32: un recurso NOMBRE TIPO [banderas]
+    FICHERO, o un #include / RCINCLUDE (Tipo dice cual). Linea, 1-based;
+    Fichero tal cual lo escribe el .rc, sin comillas. }
+  TEntradaRc = record
+    Clase: TClaseRc;
+    Linea: Integer;
+    Nombre, Tipo, Fichero: string;
+  end;
+  TLecturaRc = record
+    Entradas: TArray<TEntradaRc>;
+    { todo lo que podria nombrar un fichero: el de cada entrada, y cada
+      cadena o palabra con forma de ruta - la puerta de leer no apuesta por
+      la gramatica: la de brcc32 es mas rica que esta }
+    Rutas: TArray<string>;
+  end;
+
+{ LA lectura de un .rc: la de la segunda barrera de delphi_styles build
+  (RcPathsDenied) y la del lint de estilos. La puerta es brcc32 en su
+  contenedor (CompilaRcEnContenedor): esto es una gramatica nuestra, porque
+  brcc32 no dice que va a leer. La suya, medida el 18-oct-2026: lee por
+  TOKENS - el fichero puede ir en otra linea, con banderas de memoria delante
+  (PRELOAD LOADONCALL FIXED MOVEABLE DISCARDABLE PURE IMPURE; SHARED y
+  NONSHARED las toma por fichero), dos recursos en una linea, RCINCLUDE con y
+  sin comillas -, los comentarios // y /* */ no lo son dentro de una cadena,
+  no decodifica escapes, y tiene preprocesador (#define, ##...), que esta
+  lectura no sigue. Eran dos regex de linea, una por lector: 'LOGO RCDATA
+  DISCARDABLE "falta.png"' no lo veia ninguna (3c del censo de jueces). }
+function LeeRc(const ATexto: string): TLecturaRc;
+
 implementation
 
 uses
@@ -923,6 +954,293 @@ end;
 function ClaveDeEstilo(const ANombre: string): string;
 begin
   Result := ANombre.ToLowerInvariant;
+end;
+
+const
+  // las banderas de memoria que brcc32 toma por banderas (SHARED y
+  // NONSHARED no: las toma por el fichero; medido el 18-oct-2026)
+  BANDERAS_RC: array[0..6] of string =
+    ('PRELOAD', 'LOADONCALL', 'FIXED', 'MOVEABLE', 'DISCARDABLE', 'PURE', 'IMPURE');
+  // los tipos que no nombran un fichero: su bloque, con lo de antes de su BEGIN
+  TIPOS_DE_BLOQUE_RC: array[0..9] of string =
+    ('DIALOG', 'DIALOGEX', 'MENU', 'MENUEX', 'ACCELERATORS', 'VERSIONINFO', 'TEXTINCLUDE',
+     'DLGINIT', 'TOOLBAR', 'STRINGTABLE');
+
+type
+  TClaseTokRc = (ctrCadena, ctrPalabra, ctrSigno, ctrDirectiva);
+  TTokRc = record
+    Clase: TClaseTokRc;
+    Texto: string;
+    Linea: Integer;
+  end;
+
+(* Los tokens de un .rc como los separa brcc32: cadenas entre comillas (""
+  dentro es una comilla; sin escapes), palabras hasta un blanco, una coma,
+  una llave o un comentario, los signos , { } y cada directiva # entera, la
+  de su linea. Los comentarios fuera de una cadena no son tokens. *)
+function TokensDeRc(const ATexto: string): TArray<TTokRc>;
+var
+  I, N, Linea, Ini, LineaIni: Integer;
+  AlEmpezar: Boolean;
+  C: Char;
+  S: string;
+  L: TList<TTokRc>;
+
+  procedure Pon(AClase: TClaseTokRc; const AToken: string; ALinea: Integer);
+  var
+    T: TTokRc;
+  begin
+    T.Clase := AClase;
+    T.Texto := AToken;
+    T.Linea := ALinea;
+    L.Add(T);
+  end;
+
+  function Comentario(K: Integer): Boolean;
+  begin
+    Result := (ATexto[K] = '/') and (K < N) and CharInSet(ATexto[K + 1], ['/', '*']);
+  end;
+
+begin
+  L := TList<TTokRc>.Create;
+  try
+    I := 1;
+    N := Length(ATexto);
+    Linea := 1;
+    AlEmpezar := True; // al principio de una linea: una # ahi es una directiva
+    while I <= N do
+    begin
+      C := ATexto[I];
+      if C = #10 then
+      begin
+        Inc(Linea);
+        AlEmpezar := True;
+        Inc(I);
+        Continue;
+      end;
+      if CharInSet(C, [#9, #11, #12, #13, ' ']) then
+      begin
+        Inc(I);
+        Continue;
+      end;
+      if Comentario(I) then
+      begin
+        if ATexto[I + 1] = '/' then
+          while (I <= N) and (ATexto[I] <> #10) do
+            Inc(I)
+        else
+        begin
+          Inc(I, 2);
+          while (I <= N) and not ((ATexto[I] = '*') and (I < N) and (ATexto[I + 1] = '/')) do
+          begin
+            if ATexto[I] = #10 then
+            begin
+              Inc(Linea);
+              AlEmpezar := True;
+            end;
+            Inc(I);
+          end;
+          Inc(I, 2);
+        end;
+        Continue;
+      end;
+      if (C = '#') and AlEmpezar then
+      begin
+        Ini := I;
+        while (I <= N) and not CharInSet(ATexto[I], [#10, #13]) do
+          Inc(I);
+        Pon(ctrDirectiva, Copy(ATexto, Ini, I - Ini).Trim, Linea);
+        Continue;
+      end;
+      AlEmpezar := False;
+      if C = '"' then
+      begin
+        LineaIni := Linea;
+        S := '';
+        Inc(I);
+        while I <= N do
+        begin
+          if ATexto[I] = '"' then
+          begin
+            if (I < N) and (ATexto[I + 1] = '"') then
+            begin
+              S := S + '"';
+              Inc(I, 2);
+              Continue;
+            end;
+            Break;
+          end;
+          if ATexto[I] = #10 then
+            Inc(Linea);
+          S := S + ATexto[I];
+          Inc(I);
+        end;
+        Inc(I); // su comilla de cierre
+        Pon(ctrCadena, S, LineaIni);
+        Continue;
+      end;
+      if CharInSet(C, [',', '{', '}']) then
+      begin
+        Pon(ctrSigno, C, Linea);
+        Inc(I);
+        Continue;
+      end;
+      Ini := I;
+      while (I <= N) and not CharInSet(ATexto[I], [#9, #10, #11, #12, #13, ' ', ',', '{', '}', '"']) and
+        not Comentario(I) do
+        Inc(I);
+      Pon(ctrPalabra, Copy(ATexto, Ini, I - Ini), Linea);
+    end;
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+// lo que tiene forma de ruta: con una barra, una unidad o una extension
+function PareceRutaDeRc(const AToken: string): Boolean;
+var
+  Punto: Integer;
+begin
+  if AToken.Contains('\') or AToken.Contains('/') or ((AToken.Length > 1) and (AToken[2] = ':')) then
+    Exit(True);
+  Punto := AToken.LastIndexOf('.');
+  Result := not AToken.Contains(' ') and (Punto > 0) and (Punto < AToken.Length - 1);
+end;
+
+function LeeRc(const ATexto: string): TLecturaRc;
+var
+  T: TArray<TTokRc>;
+  I, J: Integer;
+  Lectura: TLecturaRc;
+
+  function Es(K: Integer; const APalabra: string): Boolean;
+  begin
+    Result := (K <= High(T)) and (T[K].Clase = ctrPalabra) and SameText(T[K].Texto, APalabra);
+  end;
+
+  function Signo(K: Integer; const ASigno: string): Boolean;
+  begin
+    Result := (K <= High(T)) and (T[K].Clase = ctrSigno) and (T[K].Texto = ASigno);
+  end;
+
+  function Abre(K: Integer): Boolean;
+  begin
+    Result := Es(K, 'BEGIN') or Signo(K, '{');
+  end;
+
+  // desde K, lo de antes de su BEGIN y el bloque entero, con los de dentro:
+  // la K de detras de su END
+  function SaltaBloque(K: Integer): Integer;
+  var
+    Nivel: Integer;
+  begin
+    while (K <= High(T)) and not Abre(K) do
+      Inc(K);
+    Nivel := 0;
+    while K <= High(T) do
+    begin
+      if Abre(K) then
+        Inc(Nivel)
+      else if Es(K, 'END') or Signo(K, '}') then
+        Dec(Nivel);
+      Inc(K);
+      if Nivel <= 0 then
+        Break;
+    end;
+    Result := K;
+  end;
+
+  procedure Entrada(AClase: TClaseRc; ALinea: Integer; const ANombre, ATipo, AFichero: string);
+  var
+    E: TEntradaRc;
+  begin
+    E.Clase := AClase;
+    E.Linea := ALinea;
+    E.Nombre := ANombre;
+    E.Tipo := ATipo;
+    E.Fichero := AFichero;
+    Lectura.Entradas := Lectura.Entradas + [E];
+  end;
+
+begin
+  Lectura := Default(TLecturaRc);
+  T := TokensDeRc(ATexto);
+  I := 0;
+  while I <= High(T) do
+  begin
+    if T[I].Clase = ctrDirectiva then
+    begin
+      // '#include "x"', '#include <x>' (con -x, de su carpeta), '# include'; lo
+      // demas del preprocesador (#define, #if, #pragma) no se sigue aqui
+      var D := T[I].Texto.Substring(1).TrimLeft;
+      if D.StartsWith('include', True) then
+      begin
+        var F := D.Substring(7).Trim;
+        if (F.Length >= 2) and (((F[1] = '"') and F.EndsWith('"')) or ((F[1] = '<') and F.EndsWith('>'))) then
+          F := Copy(F, 2, F.Length - 2);
+        Entrada(crInclude, T[I].Linea, '', '#include', F);
+      end;
+      Inc(I);
+      Continue;
+    end;
+    if T[I].Clase = ctrSigno then
+    begin
+      // un bloque suelto, o la coma de un LANGUAGE x, y
+      if Abre(I) then
+        I := SaltaBloque(I)
+      else
+        Inc(I);
+      Continue;
+    end;
+    if Es(I, 'RCINCLUDE') then
+    begin
+      if I < High(T) then
+        Entrada(crInclude, T[I].Linea, '', 'RCINCLUDE', T[I + 1].Texto);
+      Inc(I, 2);
+      Continue;
+    end;
+    // los que no nombran ningun fichero: LANGUAGE p, s; VERSION n;
+    // CHARACTERISTICS n; STRINGTABLE [banderas] y su bloque
+    if Es(I, 'LANGUAGE') then
+    begin
+      Inc(I, 2);
+      while Signo(I, ',') do
+        Inc(I, 2);
+      Continue;
+    end;
+    if Es(I, 'VERSION') or Es(I, 'CHARACTERISTICS') then
+    begin
+      Inc(I, 2);
+      Continue;
+    end;
+    if Es(I, 'STRINGTABLE') then
+    begin
+      I := SaltaBloque(I + 1);
+      Continue;
+    end;
+    // NOMBRE TIPO [banderas] FICHERO, o un recurso de bloque
+    if I = High(T) then
+      Break;
+    J := I + 2;
+    while (J <= High(T)) and (T[J].Clase = ctrPalabra) and MatchText(T[J].Texto, BANDERAS_RC) do
+      Inc(J);
+    if MatchText(T[I + 1].Texto, TIPOS_DE_BLOQUE_RC) or Abre(J) then
+    begin
+      I := SaltaBloque(J);
+      Continue;
+    end;
+    if J > High(T) then
+      Break;
+    Entrada(crRecurso, T[I].Linea, T[I].Texto, T[I + 1].Texto, T[J].Texto);
+    I := J + 1;
+  end;
+  for var E in Lectura.Entradas do
+    Lectura.Rutas := Lectura.Rutas + [E.Fichero];
+  for var K := 0 to High(T) do
+    if (T[K].Clase in [ctrCadena, ctrPalabra]) and PareceRutaDeRc(T[K].Texto) then
+      Lectura.Rutas := Lectura.Rutas + [T[K].Texto];
+  Result := Lectura;
 end;
 
 end.

@@ -38,6 +38,7 @@ type
     [Test] procedure ValorPorLaBaseDeSuTipo;
     [Test] procedure LineasDelFormComoLasEscribeElIde;
     [Test] procedure FormaDeLasLineasSuJuez;
+    [Test] procedure ElRcPorSusTokens;
     [Test] procedure ReferenciaSoloSiGuardaUnComponente;
     [Test] procedure NombresDelFrameEnLinea;
     [Test] procedure MetodoPorSusBordes;
@@ -1168,6 +1169,54 @@ begin
   finally
     Doc.Free;
   end;
+end;
+
+(* EL lector de un .rc (Lsp.Styles.LeeRc, 3c del censo de jueces): la
+  gramatica de brcc32 medida el 18-oct-2026, por tokens. Las banderas de
+  memoria delante del fichero (la regex de RcPathsDenied y la del lint no lo
+  veian), un recurso en tres lineas, dos en una con y sin comillas, un
+  nombre numerico, SHARED tomado por el fichero, los comentarios // y /* */
+  fuera de una cadena y no dentro, #include y RCINCLUDE, y un STRINGTABLE
+  que no nombra ficheros - pero cuya ruta la ve la puerta igual: la segunda
+  barrera no apuesta por la gramatica. *)
+procedure TDesignerEditTests.ElRcPorSusTokens;
+const
+  RC =
+    'LOGO RCDATA DISCARDABLE "falta1.png"' + CRLF +       // 1
+    'FONDO' + CRLF + 'RCDATA' + CRLF + '"fondo.png"' + CRLF + // 2-4
+    'A RCDATA a.bin B RCDATA "b.bin"' + CRLF +              // 5
+    '100 RCDATA PRELOAD MOVEABLE "cien.bin"' + CRLF +       // 6
+    'C RCDATA SHARED' + CRLF +                              // 7
+    '// D RCDATA "comentado.bin"' + CRLF +                  // 8
+    '/* E RCDATA "tambien.bin" */' + CRLF +                 // 9
+    'F RCDATA "con // dentro.bin"' + CRLF +                 // 10
+    '#include "otro.rc"' + CRLF +                           // 11
+    'RCINCLUDE mas.rc' + CRLF +                             // 12
+    'STRINGTABLE' + CRLF + 'BEGIN' + CRLF +                 // 13-14
+    '  1, "C:\no\es\un\fichero.txt"' + CRLF + 'END' + CRLF + // 15-16
+    'G ICON "dir\g.ico"' + CRLF;                            // 17
+
+  function EnRutas(const AL: TLecturaRc; const ARuta: string): Boolean;
+  begin
+    Result := False;
+    for var R in AL.Rutas do
+      if SameText(R, ARuta) then
+        Exit(True);
+  end;
+
+var
+  L: TLecturaRc;
+  Vistos: string;
+begin
+  L := LeeRc(RC);
+  Vistos := '';
+  for var E in L.Entradas do
+    Vistos := Vistos + Format('%d:%s:%s|', [E.Linea, E.Nombre, E.Fichero]);
+  Assert.AreEqual('1:LOGO:falta1.png|2:FONDO:fondo.png|5:A:a.bin|5:B:b.bin|6:100:cien.bin|7:C:SHARED|' +
+    '10:F:con // dentro.bin|11::otro.rc|12::mas.rc|17:G:dir\g.ico|', Vistos);
+  Assert.IsTrue(EnRutas(L, 'C:\no\es\un\fichero.txt'), 'la puerta ve tambien lo que la gramatica no da por fichero');
+  Assert.IsTrue(EnRutas(L, 'otro.rc') and EnRutas(L, 'mas.rc'), 'y lo que incluye');
+  Assert.IsFalse(EnRutas(L, 'comentado.bin') or EnRutas(L, 'tambien.bin'), 'un comentario no nombra nada');
 end;
 
 { Una linea es una referencia si su propiedad guarda un componente (la

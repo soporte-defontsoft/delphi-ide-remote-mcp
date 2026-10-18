@@ -317,6 +317,17 @@ the MCP `initialize` response (`serverInfo.version`).
   (`previous`) is the last. The styles `lint` no longer counts an empty
   `StyleLookup` - the class's default style, which FMX picks without a
   name - as a lookup without a style.
+- **A `.rc` is read the way `brcc32` reads it: by tokens.** Two line
+  regexes read it - the styles `lint` (`NAME RCDATA "file"` only) and the
+  second barrier of `delphi_styles build` (two words and a file) - and
+  `brcc32` takes memory flags before the file (`LOGO RCDATA DISCARDABLE
+  "x.png"`), the file on another line, two resources on one line,
+  `RCINCLUDE`: neither saw them. One reader now (`Lsp.Styles.LeeRc`): the
+  `lint` lists every resource whose file is missing, whatever its type, and
+  the barrier checks every file the `.rc` names, and anything shaped like a
+  path, against the jail before `brcc32` runs. `brcc32` also runs with `-x`
+  in its container: the server's `INCLUDE` variable is not a place an `.rc`
+  of the workspace looks in.
 
 ### Added
 

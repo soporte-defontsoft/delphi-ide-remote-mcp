@@ -638,15 +638,30 @@ begin
     for F in WalkFiles(Dir, ['*.rc'], False, False) do
     begin
       Text := PatchLoadText(F, Enc);
-      for M in TRegEx.Matches(Text, '^\s*(\w+)\s+RCDATA\s+"([^"]+)"', [roIgnoreCase, roMultiline]) do
-        if not TFile.Exists(TPath.Combine(Dir, M.Groups[2].Value)) then
-        begin
-          Issue := TJSONObject.Create;
-          Issue.AddPair('rc', TPath.GetFileName(F));
-          Issue.AddPair('resource', M.Groups[1].Value);
-          Issue.AddPair('missing', M.Groups[2].Value);
-          Rc.AddElement(Issue);
+      // EL lector del .rc (Lsp.Styles.LeeRc): cada recurso con su fichero,
+      // tambien con banderas delante; solo veia 'X RCDATA "f"'. Lo que la
+      // jaula no deja leer no se mira, ni si existe
+      for var Entrada in LeeRc(Text).Entradas do
+      begin
+        if Entrada.Clase <> crRecurso then
+          Continue;
+        var Esta := False;
+        try
+          var Ruta := Entrada.Fichero;
+          if not TPath.IsPathRooted(Ruta) then
+            Ruta := TPath.Combine(TPath.GetDirectoryName(F), Ruta);
+          Esta := (ReadPathDenied(Ruta) = '') and TFile.Exists(Ruta);
+        except
+          // una ruta que no es ruta: no esta
         end;
+        if Esta then
+          Continue;
+        Issue := TJSONObject.Create;
+        Issue.AddPair('rc', TPath.GetFileName(F));
+        Issue.AddPair('resource', Entrada.Nombre);
+        Issue.AddPair('missing', Entrada.Fichero);
+        Rc.AddElement(Issue);
+      end;
     end;
     // lo que FMX se traga al cargar cada fichero (IgnoradoPorFmx): una
     // propiedad que la clase no publica, un valor que no lee, una clase que
@@ -826,7 +841,10 @@ begin
     try
       // rutas RELATIVAS a la etapa (el cwd del proceso): brcc32 solo ve la
       // etapa, nombrar la casa en la orden no serviria
-      Out := RunCapturedEnContenedor('"' + ABrcc + '" -fo"r.res" "' +
+      // -x: sin la variable INCLUDE, que no es de la etapa (brcc32 busca ahi
+      // un #include <x> y un fichero; un #include <x> de la carpeta sigue
+      // valiendo: medido el 18-oct-2026)
+      Out := RunCapturedEnContenedor('"' + ABrcc + '" -x -fo"r.res" "' +
         TPath.GetFileName(ARc) + '"', Etapa, AC, 120000, Code, TimedOut);
     except
       on E: EOSError do
@@ -1021,8 +1039,8 @@ var
   // downloadable .res through an #include of a .txt).
   function Walk(const AFile: string; ADepth: Integer): string;
   var
-    Txt, Enc, Cand, Base, Raw: string;
-    M: TMatch;
+    Txt, Enc, Cand, Base: string;
+    Lectura: TLecturaRc;
   begin
     Result := '';
     if ADepth > 8 then
@@ -1039,25 +1057,36 @@ var
       Exit(MsgFmt(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
     end;
     Base := TPath.GetDirectoryName(TPath.GetFullPath(AFile));
-    for M in TRegEx.Matches(Txt, '(?im)^\s*(?:#include\s+|[A-Za-z_]\w*\s+[A-Za-z_]\w*\s+)("[^"]+"|\S+)\s*$') do
+    // EL lector del .rc (Lsp.Styles.LeeRc), por tokens como brcc32: la
+    // regex de linea de aqui no veia 'X RCDATA DISCARDABLE "f"', un fichero
+    // en la linea de debajo ni dos recursos en una (3c del censo de jueces)
+    Lectura := LeeRc(Txt);
+    for var Raw in Lectura.Rutas do
     begin
-      Raw := M.Groups[1].Value.Trim;
-      Cand := Raw.Trim(['''', '"']);
+      Cand := Raw.Trim;
       if Cand = '' then
         Continue;
-      if not (Cand.Contains('.') or Cand.Contains('\') or Cand.Contains('/')) then
-        Continue;
-      if not TPath.IsPathRooted(Cand) then
-        Cand := TPath.Combine(Base, Cand);
       try
+        if not TPath.IsPathRooted(Cand) then
+          Cand := TPath.Combine(Base, Cand);
         Cand := TPath.GetFullPath(Cand);
       except
         Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
       end;
       if ReadPathDenied(Cand) <> '' then
         Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
-      // an #include brings a whole new file's worth of references with it
-      if M.Value.TrimLeft.ToLower.StartsWith('#include') and TFile.Exists(Cand) then
+    end;
+    // an #include (or RCINCLUDE) brings a whole new file's worth of
+    // references with it
+    for var E in Lectura.Entradas do
+    begin
+      if E.Clase <> crInclude then
+        Continue;
+      Cand := E.Fichero.Trim;
+      if not TPath.IsPathRooted(Cand) then
+        Cand := TPath.Combine(Base, Cand);
+      Cand := TPath.GetFullPath(Cand); // ya paso arriba por la puerta
+      if TFile.Exists(Cand) then
       begin
         Result := Walk(Cand, ADepth + 1);
         if Result <> '' then
