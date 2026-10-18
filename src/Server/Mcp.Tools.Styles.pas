@@ -640,10 +640,11 @@ begin
       Text := PatchLoadText(F, Enc);
       // EL lector del .rc (Lsp.Styles.LeeRc): cada recurso con su fichero,
       // tambien con banderas delante; solo veia 'X RCDATA "f"'. Lo que la
-      // jaula no deja leer no se mira, ni si existe
+      // jaula no deja leer no se mira, ni si existe; un fichero que es una
+      // macro (X RCDATA F) no se sabe cual es: no se dice que falte
       for var Entrada in LeeRc(Text).Entradas do
       begin
-        if Entrada.Clase <> crRecurso then
+        if (Entrada.Clase <> crRecurso) or Entrada.PorMacro then
           Continue;
         var Esta := False;
         try
@@ -804,11 +805,12 @@ end;
   .res descargable, el agujero del 25-ago). El juez es el SO: brcc32 confinado
   no alcanza lo SENSIBLE que el .rc nombre fuera de la etapa - la casa con el
   token, el perfil, las raices, la red: ninguna concede lectura a los paquetes
-  de aplicacion, asi que falla cerrado (medido). RESIDUO (H1, revisor del 2al,
-  a decidir David): un fichero que el SO concede a TODOS LOS PAQUETES DE
-  APLICACIONES - C:\Windows, Program Files - el AppContainer SI lo lee, como
-  cualquiera, y por un absoluto o un .. en el .rc entra en el .res; cerrarlo
-  pide un token mas restringido (LPAC) o preprocesar el .rc nosotros (regla 6).
+  de aplicacion, asi que falla cerrado (medido). RESIDUO (H1, revisor del 2al):
+  un fichero que el SO concede a TODOS LOS PAQUETES DE APLICACIONES -
+  C:\Windows, Program Files - el AppContainer SI lo lee, como cualquiera. Por
+  un absoluto o un #define ya no entra (lo niega la segunda barrera, H1 de la
+  1.20.2); por un .. que desde la jaula se queda dentro y desde la etapa sube,
+  SI (medido el 18-oct-2026): lo cierra un token mas restringido (LPAC, 1.21).
   Y cierra la carrera: compila la COPIA, que el agente no puede cambiar entre
   la puerta y brcc32. El .res se coloca con ColocaProducto.
   '' = compilado y colocado; si no, el motivo (ya con su etiqueta). }

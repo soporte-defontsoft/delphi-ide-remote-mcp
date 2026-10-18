@@ -1178,7 +1178,10 @@ end;
   nombre numerico, SHARED tomado por el fichero, los comentarios // y /* */
   fuera de una cadena y no dentro, #include y RCINCLUDE, y un STRINGTABLE
   que no nombra ficheros - pero cuya ruta la ve la puerta igual: la segunda
-  barrera no apuesta por la gramatica. *)
+  barrera no apuesta por la gramatica. Y lo que nombra un #define, con y
+  sin comillas, aunque la lectura no siga el preprocesador (H1 de la
+  1.20.2); un #include <x> va por su entrada, sin los < >; y el fichero de
+  un recurso que es una macro de antes (X RCDATA F) va marcado PorMacro. *)
 procedure TDesignerEditTests.ElRcPorSusTokens;
 const
   RC =
@@ -1194,7 +1197,11 @@ const
     'RCINCLUDE mas.rc' + CRLF +                             // 12
     'STRINGTABLE' + CRLF + 'BEGIN' + CRLF +                 // 13-14
     '  1, "C:\no\es\un\fichero.txt"' + CRLF + 'END' + CRLF + // 15-16
-    'G ICON "dir\g.ico"' + CRLF;                            // 17
+    'G ICON "dir\g.ico"' + CRLF +                           // 17
+    '#include <local.h>' + CRLF +                           // 18
+    '#define F "C:\fuera\de\la\jaula.txt"' + CRLF +          // 19
+    '#define H C:\sin\comillas.txt' + CRLF +                 // 20
+    'X RCDATA F' + CRLF;                                    // 21
 
   function EnRutas(const AL: TLecturaRc; const ARuta: string): Boolean;
   begin
@@ -1213,10 +1220,15 @@ begin
   for var E in L.Entradas do
     Vistos := Vistos + Format('%d:%s:%s|', [E.Linea, E.Nombre, E.Fichero]);
   Assert.AreEqual('1:LOGO:falta1.png|2:FONDO:fondo.png|5:A:a.bin|5:B:b.bin|6:100:cien.bin|7:C:SHARED|' +
-    '10:F:con // dentro.bin|11::otro.rc|12::mas.rc|17:G:dir\g.ico|', Vistos);
+    '10:F:con // dentro.bin|11::otro.rc|12::mas.rc|17:G:dir\g.ico|18::local.h|21:X:F|', Vistos);
   Assert.IsTrue(EnRutas(L, 'C:\no\es\un\fichero.txt'), 'la puerta ve tambien lo que la gramatica no da por fichero');
   Assert.IsTrue(EnRutas(L, 'otro.rc') and EnRutas(L, 'mas.rc'), 'y lo que incluye');
   Assert.IsFalse(EnRutas(L, 'comentado.bin') or EnRutas(L, 'tambien.bin'), 'un comentario no nombra nada');
+  Assert.IsTrue(EnRutas(L, 'C:\fuera\de\la\jaula.txt') and EnRutas(L, 'C:\sin\comillas.txt'),
+    'la puerta ve lo que nombra un #define');
+  Assert.IsTrue(EnRutas(L, 'local.h') and not EnRutas(L, '<local.h>'), 'un #include <x>, por su entrada');
+  for var E in L.Entradas do
+    Assert.IsTrue((E.Linea = 21) = E.PorMacro, Format('PorMacro de la linea %d', [E.Linea]));
 end;
 
 { Una linea es una referencia si su propiedad guarda un componente (la

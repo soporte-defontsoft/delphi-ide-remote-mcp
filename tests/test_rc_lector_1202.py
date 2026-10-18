@@ -13,6 +13,10 @@ fichero en otra linea, dos recursos en una. Ninguna de las dos lo veia.
      no existe: nada se lee) -> la segunda barrera lo niega, STYLE-023, antes de
      convertir (ROJO: pasaba al contenedor)
   R4 control: el .rc de siempre compila
+  R5 lint: un recurso cuyo fichero es una MACRO (#define F "esta.bin" /
+     X RCDATA F, que brcc32 expande) no sale como que falta; el de al lado
+     que si falta, si (ROJO desde el 3c: decia que faltaba 'F'; medido en vivo
+     el 18-oct-2026)
 
 Uso:  python tests/test_rc_lector_1202.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -75,6 +79,13 @@ try:
     escribe_rc('UNO RCDATA "Uno.bin.style"\n')
     r = call('delphi_styles', {'command': 'build', 'path': STY}, t=300)
     check('R4 control: el .rc de siempre compila', mc.como_json(r).get('rcOk') is True, r[:300])
+
+    # ------------------------------------------------------------------ R5
+    escribe_rc('#define F "esta.bin"\nX RCDATA F\nY RCDATA "falta5.bin"\n')
+    r = call('delphi_styles', {'command': 'lint', 'path': STY}, t=180)
+    f = faltan(r)
+    check('R5 lint: el fichero que es una macro no falta; el de al lado, si',
+          ('X', 'F') not in f and ('Y', 'falta5.bin') in f, (f, r[:200]))
 finally:
     srv.cierra()
 

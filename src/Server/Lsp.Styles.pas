@@ -227,11 +227,14 @@ type
   TClaseRc = (crRecurso, crInclude);
   { Lo que un .rc hace leer a brcc32: un recurso NOMBRE TIPO [banderas]
     FICHERO, o un #include / RCINCLUDE (Tipo dice cual). Linea, 1-based;
-    Fichero tal cual lo escribe el .rc, sin comillas. }
+    Fichero tal cual lo escribe el .rc, sin comillas. PorMacro: el fichero
+    de un recurso es el nombre de un #define de antes (X RCDATA F), que
+    brcc32 expande y esta lectura no: no se sabe que fichero es. }
   TEntradaRc = record
     Clase: TClaseRc;
     Linea: Integer;
     Nombre, Tipo, Fichero: string;
+    PorMacro: Boolean;
   end;
   TLecturaRc = record
     Entradas: TArray<TEntradaRc>;
@@ -250,7 +253,8 @@ type
   NONSHARED las toma por fichero), dos recursos en una linea, RCINCLUDE con y
   sin comillas -, los comentarios // y /* */ no lo son dentro de una cadena,
   no decodifica escapes, y tiene preprocesador (#define, ##...), que esta
-  lectura no sigue. Eran dos regex de linea, una por lector: 'LOGO RCDATA
+  lectura no sigue (lo que nombra una directiva si va a Rutas). Eran dos
+  regex de linea, una por lector: 'LOGO RCDATA
   DISCARDABLE "falta.png"' no lo veia ninguna (3c del censo de jueces). }
 function LeeRc(const ATexto: string): TLecturaRc;
 
@@ -269,7 +273,8 @@ uses
   Lsp.Texts,
   Lsp.Casa,
   Lsp.Mascara,
-  Lsp.Codificacion;
+  Lsp.Codificacion,
+  Lsp.Args; // PrimerTrozo: el nombre de una macro del .rc
 
 { TStyleObj }
 
@@ -1113,6 +1118,7 @@ var
   T: TArray<TTokRc>;
   I, J: Integer;
   Lectura: TLecturaRc;
+  Macros: TArray<string>;
 
   function Es(K: Integer; const APalabra: string): Boolean;
   begin
@@ -1151,7 +1157,8 @@ var
     Result := K;
   end;
 
-  procedure Entrada(AClase: TClaseRc; ALinea: Integer; const ANombre, ATipo, AFichero: string);
+  procedure Entrada(AClase: TClaseRc; ALinea: Integer; const ANombre, ATipo, AFichero: string;
+    APorMacro: Boolean = False);
   var
     E: TEntradaRc;
   begin
@@ -1160,6 +1167,7 @@ var
     E.Nombre := ANombre;
     E.Tipo := ATipo;
     E.Fichero := AFichero;
+    E.PorMacro := APorMacro;
     Lectura.Entradas := Lectura.Entradas + [E];
   end;
 
@@ -1172,7 +1180,10 @@ begin
     if T[I].Clase = ctrDirectiva then
     begin
       // '#include "x"', '#include <x>' (con -x, de su carpeta), '# include'; lo
-      // demas del preprocesador (#define, #if, #pragma) no se sigue aqui
+      // demas del preprocesador (#define, #if, #pragma) no se sigue aqui, pero
+      // lo que nombra (#define F "C:\...") lo juzga la puerta igual (H1 de la
+      // 1.20.2). brcc32 expande una macro en el fichero de un recurso
+      // (X RCDATA F), no en un #include ni en un RCINCLUDE (medido)
       var D := T[I].Texto.Substring(1).TrimLeft;
       if D.StartsWith('include', True) then
       begin
@@ -1180,6 +1191,15 @@ begin
         if (F.Length >= 2) and (((F[1] = '"') and F.EndsWith('"')) or ((F[1] = '<') and F.EndsWith('>'))) then
           F := Copy(F, 2, F.Length - 2);
         Entrada(crInclude, T[I].Linea, '', '#include', F);
+      end
+      else
+      begin
+        var Toks := TokensDeRc(D);
+        for var Tok in Toks do
+          if (Tok.Clase <> ctrSigno) and PareceRutaDeRc(Tok.Texto) then
+            Lectura.Rutas := Lectura.Rutas + [Tok.Texto];
+        if (Length(Toks) > 1) and SameText(Toks[0].Texto, 'define') then
+          Macros := Macros + [PrimerTrozo(Toks[1].Texto, ['('])]; // F de F(a, b)
       end;
       Inc(I);
       Continue;
@@ -1232,7 +1252,8 @@ begin
     end;
     if J > High(T) then
       Break;
-    Entrada(crRecurso, T[I].Linea, T[I].Texto, T[I + 1].Texto, T[J].Texto);
+    Entrada(crRecurso, T[I].Linea, T[I].Texto, T[I + 1].Texto, T[J].Texto,
+      (T[J].Clase = ctrPalabra) and (IndexStr(T[J].Texto, Macros) >= 0));
     I := J + 1;
   end;
   for var E in Lectura.Entradas do

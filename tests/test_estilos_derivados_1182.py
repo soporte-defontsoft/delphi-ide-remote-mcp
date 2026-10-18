@@ -38,9 +38,16 @@ convertiria antes de la negativa es el otro.
       tokens): STYLE-023 y ningun .res; antes la gramatica no la veia y la
       paraba solo el contenedor (2al)
   S14 ...y una macro #define a la casa del servidor: la lectura no sigue el
-      preprocesador; brcc32 en el AppContainer no la alcanza, el .res no la lleva
-      (NOTA H1: un fichero world-readable del SO - C:/Windows - por un #define
-       SI entra; el AppContainer lo concede. Residuo del 2al, a decidir David)
+      preprocesador, pero lo que nombra una directiva si lo juzga (H1 de la
+      1.20.2): STYLE-023 y ningun .res
+  H1  un #define a un fichero world-readable del SO (C:/Windows, que el
+      AppContainer concede): la segunda barrera lo niega y el .res no lo lleva
+  S15 un '..' que desde la jaula se queda dentro y desde la ETAPA (la copia de
+      la carpeta en la casa del servidor) sube a la casa: la barrera lo deja,
+      brcc32 confinado no la alcanza, el .res no la lleva. Es el que mide el
+      CONTENEDOR desde que S13/S14 los para la barrera
+      (NOTA H1: el mismo '..' hasta un fichero world-readable SI entra, medido;
+       el token LPAC, en la 1.21)
 
 Uso:  python tests/test_estilos_derivados_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -181,24 +188,20 @@ try:
     # (SRVDIR, donde vive settings.ini con el token): el contenedor no la lee
     SECRETO = os.path.join(SRVDIR, 'secreto_casa.txt')
     open(SECRETO, 'w').write('SECRETO-2AL ' + 'x' * 40)
-    for clave, linea, barrera in (('S13 una linea DISCARDABLE', 'X RCDATA DISCARDABLE "%s"' % SECRETO, True),
-                                  ('S14 una macro #define', '#define F "%s"\nX RCDATA F' % SECRETO, False)):
+    for clave, linea in (('S13 una linea DISCARDABLE', 'X RCDATA DISCARDABLE "%s"' % SECRETO),
+                         ('S14 una macro #define', '#define F "%s"\nX RCDATA F' % SECRETO)):
         limpia()
         open(RC, 'w', encoding='utf-8').write(linea + '\n')
         r = build(srv)
         fuga = os.path.exists(RES) and b'SECRETO-2AL' in open(RES, 'rb').read()
-        if barrera:
-            check('%s a la CASA: la ve la segunda barrera (STYLE-023) y el .res NO la lleva' % clave,
-                  mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not fuga, (r[:200], fuga))
-        else:
-            check('%s a la CASA que la lectura no sigue: el .res NO la lleva (brcc32 confinado no alcanza la casa '
-                  'del servidor)' % clave, mc.como_json(r).get('ok') is False and not fuga, (r[:200], fuga))
+        check('%s a la CASA: la ve la segunda barrera (STYLE-023) y el .res NO la lleva' % clave,
+              mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not fuga, (r[:200], fuga))
     os.remove(SECRETO)
-    # RESIDUO H1 (revisor del 2al, a decidir David): un fichero que el SO concede
-    # a TODOS LOS PAQUETES DE APLICACIONES (C:\Windows) el AppContainer SI lo lee
-    # -> por un #define entra en el .res (por un absoluto a secas ya no: lo niega
-    # la segunda barrera desde el 3c). No es un check (David no ha decidido): se
-    # MIDE y se dice, para que no pase inadvertido.
+    # H1 (residuo del 2al): un fichero que el SO concede a TODOS LOS PAQUETES DE
+    # APLICACIONES (C:\Windows) el AppContainer SI lo lee -> por un #define
+    # entraba en el .res. David 18-oct: la segunda barrera mira tambien lo que
+    # nombra una directiva (opcion a); lo que componga una macro, el token LPAC
+    # (1.21)
     PUBLICO = os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'System32', 'drivers', 'etc', 'hosts')
     if os.path.exists(PUBLICO) and os.path.getsize(PUBLICO) > 40:
         marca = open(PUBLICO, 'rb').read()
@@ -206,9 +209,40 @@ try:
         open(RC, 'w', encoding='utf-8').write('#define F "%s"\nX RCDATA DISCARDABLE F\n' % PUBLICO)
         r = build(srv)
         entra = os.path.exists(RES) and marca in open(RES, 'rb').read()  # su contenido REAL en el .res
-        print('NOTA H1 (residuo 2al, a decidir David): un fichero world-readable del SO (etc\\hosts), por un #define, %s en el .res '
-              '(ok=%s). Lo SENSIBLE -casa, perfil, raices- no (S13/S14). Cerrarlo: token LPAC o preprocesar el .rc.'
-              % ('SI entra' if entra else 'no entra', mc.como_json(r).get('ok')))
+        check('H1 un #define a un fichero world-readable del SO (etc\\hosts): la segunda barrera lo niega '
+              '(STYLE-023) y el .res NO lo lleva', mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not entra,
+              (r[:200], entra))
+
+    # S15: un '..' que DESDE LA JAULA se queda dentro y desde la ETAPA (la copia
+    # de la carpeta en <casa>\<temporal>\styles-rc-X) sube a la casa: la barrera
+    # no lo ve fuera y la puerta es el contenedor (S13/S14 ya no la miden: los
+    # para la barrera)
+    def carpeta_honda(hondo):
+        sty = os.path.join(JAIL, *(['h%d' % i for i in range(hondo)] + ['Styles']))
+        os.makedirs(sty)
+        open(os.path.join(sty, 'Bat.style'), 'w', encoding='utf-8', newline='\n').write(STYLE)
+        return sty, os.path.join(sty, 'Bat.Estilos.rc'), os.path.join(sty, 'Bat.Estilos.res')
+    HONDA, RC_H, RES_H = carpeta_honda(1)
+    open(SECRETO, 'w').write('SECRETO-2AL ' + 'x' * 40)
+    open(RC_H, 'w', encoding='utf-8').write('X RCDATA "..\\..\\%s"\n' % os.path.basename(SECRETO))
+    r = srv.call('delphi_styles', {'path': HONDA, 'command': 'build'})
+    fuga = os.path.exists(RES_H) and b'SECRETO-2AL' in open(RES_H, 'rb').read()
+    check('S15 un .. que desde la jaula se queda dentro y desde la etapa sube a la CASA: la barrera lo deja, '
+          'brcc32 confinado no la abre y el .res NO la lleva',
+          not mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and mc.como_json(r).get('ok') is False and
+          'annot open' in r and not fuga, (r[:300], fuga))
+    os.remove(SECRETO)
+    # NOTA H1, lo que queda (medido): el mismo '..' hasta un fichero world-readable
+    # del SO, contando lo hondo que esta la etapa; el contenedor lo concede
+    PROF = len(os.path.splitdrive(SRVDIR)[1].strip('\\').split('\\')) + 2  # <SRVDIR>\<temporal>\styles-rc-X
+    if os.path.exists(PUBLICO) and os.path.splitdrive(SRVDIR)[0].lower() == os.path.splitdrive(PUBLICO)[0].lower():
+        HONDA, RC_H, RES_H = carpeta_honda(PROF)
+        open(RC_H, 'w', encoding='utf-8').write('X RCDATA "%s%s"\n' % ('..\\' * PROF, os.path.splitdrive(PUBLICO)[1].lstrip('\\')))
+        r = srv.call('delphi_styles', {'path': HONDA, 'command': 'build'})
+        entra = os.path.exists(RES_H) and open(PUBLICO, 'rb').read() in open(RES_H, 'rb').read()
+        print('NOTA H1 (lo que queda, a decidir David): un .. que desde la jaula se queda dentro y desde la etapa '
+              'llega a un fichero world-readable del SO (etc\\hosts) %s en el .res (ok=%s). Lo sensible no (S15). '
+              'Lo cierra el token LPAC (1.21)' % ('SI entra' if entra else 'no entra', mc.como_json(r).get('ok')))
     open(RC, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
     open(RC, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
 
