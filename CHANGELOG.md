@@ -141,7 +141,10 @@ the MCP `initialize` response (`serverInfo.version`).
   `NOTLOADED=`: `EFilerError` and `EParserError` are the reader's, anything
   else is a component's code in this environment - IBX without `gds32.dll`,
   a `TActionManager` without its style unit, an access violation inside a
-  bpl; three Samples of Embarcadero). The lint answers "not confirmed"
+  bpl; three Samples of Embarcadero. An exception raised by a property
+  setter reaches the reader wrapped as a reader error and stays a warning:
+  only what fails while a component is created or named shows its class).
+  The lint answers "not confirmed"
   (`DSGN-154`) with the class and the message, and preview says so
   (`DSGN-163`) instead of "the form will fail to open". A reader error that
   names no property - "Ancestor for 'X' not found" - stays a warning. And a
@@ -149,7 +152,14 @@ the MCP `initialize` response (`serverInfo.version`).
   have (`ItemAppearanceClassName` of a `TListView`, registered by a unit of
   the project, which the reader does not load) is "not confirmed" too, with
   the property and the class, instead of a warning on every property under
-  those parts.
+  those parts, and only for the properties under those parts: a typo in
+  another property of the same component is still a warning.
+- The styles `lint` now asks the same judge as `delphi_styles build` about
+  every `.rc` (`refused`, with the build's own refusal): a file inside the
+  workspace but outside the styles folder exists and build refuses it
+  (`STYLE-052`), and the lint said nothing. And `#include "x" // comment`
+  is read as `x`: the comment was taken as part of the file name (`STYLE-025`
+  in build, `missing` in lint).
 - A VCL form with a `TCalendar`, `TMediaPlayer`, `TWebBrowser` or
   `TBindNavigator` - names FMX has too - was reported as not loading: the
   renderer registered the IDE's classes by NAME and skipped the VCL one when

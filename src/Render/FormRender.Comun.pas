@@ -1223,9 +1223,13 @@ var
 begin
   // de quien es la excepcion que TReader nos deja ignorar: la suya (EFilerError,
   // EParserError: el fichero) o la del codigo de un componente (IBX sin
-  // gds32.dll, un TActionManager sin su unidad de estilo, un AV de un bpl):
-  // OnError corre dentro del except de TReader.ReadProperty, con ExceptObject
-  // vivo. La MISMA regla que RespondeFallo para NOTLOADED=
+  // gds32.dll al CREARLO, un TActionManager sin su unidad de estilo, un AV de
+  // un bpl): OnError corre dentro de un except de TReader con ExceptObject
+  // vivo. La MISMA regla que RespondeFallo para NOTLOADED=. LIMITE medido
+  // (System.Classes 12220: ReadProperty): la excepcion de un SETTER llega ya
+  // envuelta en el EReadError de SPropertyException y sale como del lector;
+  // la clase original solo se ve al crear o nombrar el componente
+  // (ReadComponent.Recover) y en los fixups (revisor de la 1.20.2)
   Origen := FR_ORIGEN_LECTOR;
   var E := ExceptObject;
   if (E <> nil) and not ((E is EFilerError) or (E is EParserError)) then

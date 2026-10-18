@@ -184,6 +184,11 @@ function DelCodigoDeUnComponente(const AI: TIgnorada): Boolean;
 function PartesDeClaseNoInstalada(ADoc: TStyleDoc; const AI: TIgnorada; AFmx: Boolean;
   out AProp, AClase: string): Boolean;
 
+{ Lo que dijo el lector de AI, con la clase de la excepcion delante si no era
+  suya ('EIBClientError: ...'): EL compositor, para el lint (LoQueNoCargo) y
+  el preview (revisor de la 1.20.2: dos emisores). }
+function TextoDeIgnorada(const AI: TIgnorada): string;
+
 { La salida del renderizador -> sus campos (las lineas '#' son traza). }
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
 
@@ -554,6 +559,13 @@ begin
   Result := AI.Origen <> '';
 end;
 
+function TextoDeIgnorada(const AI: TIgnorada): string;
+begin
+  Result := AI.Texto;
+  if AI.Origen <> '' then
+    Result := AI.Origen + ': ' + AI.Texto;
+end;
+
 function PartesDeClaseNoInstalada(ADoc: TStyleDoc; const AI: TIgnorada; AFmx: Boolean;
   out AProp, AClase: string): Boolean;
 var
@@ -573,7 +585,12 @@ begin
   if M = nil then
     Exit;
   // las propiedades del nivel propio del objeto (ni las de sus hijos ni las
-  // de un item de coleccion) que acaban en ClassName, por EL lector de lineas
+  // de un item de coleccion) que acaban en ClassName, por EL lector de lineas.
+  // '...ClassName' es gramatica NUESTRA, declarada (test_paisaje) y sin juez:
+  // lo decide el setter de cada clase con GetClass. Y solo cuenta lo saltado
+  // que cuelga de esas partes (ItemAppearance -> ItemAppearanceObjects...):
+  // una errata en otra propiedad del mismo componente sigue siendo aviso
+  // (revisor de la 1.20.2)
   var Lineas := LineasDeForm(ADoc.Lines);
   Nivel := 0;
   for var I := Obj.StartLine to Obj.EndLine - 2 do // 0-based: de debajo del object a encima del end
@@ -585,6 +602,7 @@ begin
       clfFin: Dec(Nivel);
       clfPropiedad:
         if (Nivel = 0) and (Lineas[I].Coleccion = 0) and Lineas[I].Prop.EndsWith('ClassName', True) and
+           AI.Propiedad.StartsWith(Lineas[I].Prop.Substring(0, Lineas[I].Prop.Length - Length('ClassName')), True) and
            LeeLiteralDeForm(Lineas[I].Valor, Nombre) and (Nombre <> '') and not M.ClaseDeNombre(Nombre, Id) then
         begin
           AProp := Lineas[I].Prop;
@@ -595,6 +613,13 @@ begin
   end;
 end;
 
+type
+  // las partes de un componente de una clase que no esta instalada: que
+  // propiedad las elige, con que clase, y lo que el lector salto debajo
+  TPartesDelProyecto = record
+    Componente, Prop, Clase, Saltado: string;
+  end;
+
 function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: string;
   out ANoConfirmado: string): TArray<string>;
 var
@@ -602,7 +627,7 @@ var
   Lineas, SinProp: TArray<string>;
   RaizNombre, RaizClase, Sustituto, NoVistas, PropCn, ClaseCn: string;
   Raiz: TRaizParaElLector;
-  ProyectoComp, ProyectoDatos: TArray<string>; // componente, y 'prop|clase|lo saltado debajo'
+  Proyecto: TArray<TPartesDelProyecto>;
 
   procedure Pon(const AI: TIgnorada);
   begin
@@ -636,8 +661,7 @@ begin
   Vistos := [];
   Lineas := [];
   SinProp := [];
-  ProyectoComp := [];
-  ProyectoDatos := [];
+  Proyecto := [];
   // la raiz: la que dijo el ayudante, o (si fallo antes de decirla) la del
   // fichero; lo que publica su cadena del usuario no lo conoce el lector
   RaizNombre := R.RaizNombre;
@@ -670,22 +694,26 @@ begin
     // bajo las partes de una clase del proyecto: no se sabe (DSGN-154)
     if DelCodigoDeUnComponente(I) then
     begin
-      SinProp := SinProp + [I.Origen + ': ' + I.Texto];
+      SinProp := SinProp + [TextoDeIgnorada(I)];
       Continue;
     end;
     if PartesDeClaseNoInstalada(ADoc, I, EsDesignerFmx(AForm), PropCn, ClaseCn) then
     begin
       var K := -1;
-      for var J := 0 to High(ProyectoComp) do
-        if SameText(ProyectoComp[J], I.Componente) then
+      for var J := 0 to High(Proyecto) do
+        if SameText(Proyecto[J].Componente, I.Componente) then
           K := J;
       if K < 0 then
       begin
-        ProyectoComp := ProyectoComp + [I.Componente];
-        ProyectoDatos := ProyectoDatos + [PropCn + '|' + ClaseCn + '|' + I.Propiedad];
+        var Nueva: TPartesDelProyecto;
+        Nueva.Componente := I.Componente;
+        Nueva.Prop := PropCn;
+        Nueva.Clase := ClaseCn;
+        Nueva.Saltado := I.Propiedad;
+        Proyecto := Proyecto + [Nueva];
       end
       else
-        ProyectoDatos[K] := ProyectoDatos[K] + ', ' + I.Propiedad;
+        Proyecto[K].Saltado := Proyecto[K].Saltado + ', ' + I.Propiedad;
       Continue;
     end;
     Pon(I);
@@ -696,13 +724,9 @@ begin
   if Length(SinProp) > 0 then
     ANoConfirmado := ANoConfirmado + (if ANoConfirmado <> '' then '; ' else '') +
       MsgFmt(SF_DSGN_LECTOR_DEL_CODIGO_FMT, [string.Join(' | ', SinProp)]);
-  for var K := 0 to High(ProyectoComp) do
-  begin
-    var P := ProyectoDatos[K].Split(['|']);
-    if Length(P) >= 3 then
-      ANoConfirmado := ANoConfirmado + (if ANoConfirmado <> '' then '; ' else '') +
-        MsgFmt(SF_DSGN_LECTOR_CLASE_DEL_PROYECTO_FMT, [ProyectoComp[K], P[0], P[1], P[2]]);
-  end;
+  for var Pr in Proyecto do
+    ANoConfirmado := ANoConfirmado + (if ANoConfirmado <> '' then '; ' else '') +
+      MsgFmt(SF_DSGN_LECTOR_CLASE_DEL_PROYECTO_FMT, [Pr.Componente, Pr.Prop, Pr.Clase, Pr.Saltado]);
   if R.NoCarga then
   begin
     // el error que lo paro, sin la clase delante: como lo dice el lector, y
@@ -1114,8 +1138,11 @@ begin
       end;
       var NoVista: string;
       Result := LoQueNoCargo(R, Doc, APath, NoVista);
-      // lo unico que salto es de la raiz que el lector no ve: no se sabe
-      if (Length(Result) = 0) and (NoVista <> '') then
+      // lo no confirmado (la raiz que el lector no ve, una excepcion del codigo
+      // de un componente, las partes de una clase del proyecto) se dice
+      // TAMBIEN cuando hay avisos de verdad: el lint imprime las dos partes
+      // (se tiraba si habia aviso; revisor de la 1.20.2)
+      if NoVista <> '' then
         ANoPregunto := NoVista;
     finally
       Doc.Free;

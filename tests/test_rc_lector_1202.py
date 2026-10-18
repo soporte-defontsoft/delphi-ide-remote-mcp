@@ -17,6 +17,12 @@ fichero en otra linea, dos recursos en una. Ninguna de las dos lo veia.
      X RCDATA F, que brcc32 expande) no sale como que falta; el de al lado
      que si falta, si (ROJO desde el 3c: decia que faltaba 'F'; medido en vivo
      el 18-oct-2026)
+  R6 lint: un fichero DENTRO de la jaula pero FUERA de la carpeta de estilos
+     existe y build lo niega (STYLE-052): el lint lo dice (refused), el MISMO
+     juez que build (revisor de la 1.20.2: lo daba por bueno)
+  R7 lint y build: '#include "inc.rc" // comentario': el fichero es inc.rc,
+     no el texto con el comentario (STYLE-025 en build, 'missing' en lint); y
+     brcc32 admite el comentario detras (medido aqui)
 
 Uso:  python tests/test_rc_lector_1202.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -86,6 +92,25 @@ try:
     f = faltan(r)
     check('R5 lint: el fichero que es una macro no falta; el de al lado, si',
           ('X', 'F') not in f and ('Y', 'falta5.bin') in f, (f, r[:200]))
+
+    # ------------------------------------------------------------------ R6
+    os.makedirs(os.path.join(JAIL, 'otra'))
+    open(os.path.join(JAIL, 'otra', 'a.bin'), 'wb').write(b'x')
+    escribe_rc('X RCDATA "..\\otra\\a.bin"\n')
+    r = call('delphi_styles', {'command': 'lint', 'path': STY}, t=180)
+    negados = [e.get('refused', '') for e in mc.como_json(r).get('rcMissingFiles', []) if e.get('refused')]
+    check('R6 lint: un fichero de la jaula fuera de la carpeta de estilos: refused con STYLE-052 (el juez de build)',
+          any('STYLE-052' in n for n in negados) and mc.como_json(r).get('clean') is False, (negados, r[:200]))
+
+    # ------------------------------------------------------------------ R7
+    open(os.path.join(STY, 'inc.rc'), 'w', encoding='utf-8', newline='\r\n').write('UNO RCDATA "Uno.bin.style"\n')
+    escribe_rc('#include "inc.rc" // el estilo embebido\n')
+    r = call('delphi_styles', {'command': 'lint', 'path': STY}, t=180)
+    check('R7 lint: #include con un comentario detras: el fichero es inc.rc y nada falta',
+          not faltan(r) and not mc.como_json(r).get('rcMissingFiles'), r[:300])
+    r = call('delphi_styles', {'command': 'build', 'path': STY}, t=300)
+    check('R7 build: brcc32 admite el comentario detras del #include y compila', mc.como_json(r).get('rcOk') is True,
+          r[:300])
 finally:
     srv.cierra()
 

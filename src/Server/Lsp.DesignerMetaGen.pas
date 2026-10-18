@@ -144,7 +144,8 @@ function RegistradosEnPaleta(const ATexto: string): TArray<string>;
 
 { Los nombres de clase que ATexto registra AL EJECUTAR - RegisterClass(TA),
   RegisterClasses([TA, TB]) y RegisterFmxClasses([...]) de su initialization
-  (o del texto entero si no la tiene) -: lo que TReader encuentra con GetClass
+  (sin initialization, nada: un RegisterClass de un Register de diseno no
+  corre en el programa; revisor de la 1.20.2) -: lo que TReader encuentra con GetClass
   para crear un componente sin campo publicado (System.Classes,
   FindComponentClass). Lo de RegisterComponents no: eso es la paleta del IDE y
   un programa no lo ejecuta. Hecho R de la tabla; el juez de verdad es la
@@ -346,7 +347,7 @@ begin
   if Mi.Success then
     Result := NombresRegistrados(ATexto.Substring(Mi.Index - 1), 'Register(?:Fmx)?Class(?:es)?')
   else
-    Result := NombresRegistrados(ATexto, 'Register(?:Fmx)?Class(?:es)?');
+    Result := nil; // sin initialization nada corre al arrancar: callar seria tapar un EClassNotFound
 end;
 
 { Los nombres que da el primer argumento de un Filer.DefineProperty, que

@@ -1198,6 +1198,12 @@ var
 begin
   Assert.AreEqual('TMenuItem|TMenuView|TPopupMenu|TMainMenu|TMenuBar|TUna|TOtra|TSuelta',
     string.Join('|', RegistradasAlEjecutar(FUENTE)));
+  // sin initialization nada corre al arrancar: un RegisterClass de un Register
+  // (de diseno) no cuenta (revisor de la 1.20.2)
+  Assert.AreEqual('', string.Join('|', RegistradasAlEjecutar(
+    'unit M2;' + CRLF + 'interface' + CRLF + 'implementation' + CRLF + 'procedure Register;' + CRLF +
+    'begin' + CRLF + '  RegisterClass(TDeDiseno);' + CRLF + 'end;' + CRLF + 'end.' + CRLF)),
+    'sin initialization, nada');
   M := TMetaTable.Create([
     'C FMX.Menus:TMainMenu', 'R FMX.Menus:TMainMenu',
     'C Mio:TMiMenu', 'H Mio:TMiMenu FMX.Menus:TMainMenu',

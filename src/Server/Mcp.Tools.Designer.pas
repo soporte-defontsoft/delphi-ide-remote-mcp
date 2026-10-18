@@ -1544,8 +1544,7 @@ begin
         // una excepcion del codigo de un componente (no del lector), o bajo las
         // partes de una clase del proyecto: no es del fichero que se sepa
         else if DelCodigoDeUnComponente(Ig) or PartesDeClaseNoInstalada(DocP, Ig, Fw = 'fmx', PropCn, ClaseCn) then
-          NoConfirmadas := NoConfirmadas + IfThen(NoConfirmadas <> '', ' | ') +
-            IfThen(Ig.Origen <> '', Ig.Origen + ': ') + Ig.Texto
+          NoConfirmadas := NoConfirmadas + IfThen(NoConfirmadas <> '', ' | ') + TextoDeIgnorada(Ig)
         else
           Inc(DelForm);
       end;

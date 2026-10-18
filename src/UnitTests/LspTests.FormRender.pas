@@ -170,12 +170,14 @@ begin
     FR_STYLE + 'none (as the VCL designer)'#13#10 +
     FR_ROOT + 'FormPrueba:TFormPrueba:form'#13#10 + FR_PACKAGES + '112/153'#13#10 +
     FR_COMPONENTS + '5'#13#10 + FR_SUBSTITUTED + 'TRaro,TOtro'#13#10 +
-    FR_IGNORED + '|||Property Alineacion does not exist'#13#10 +
-    FR_IGNORED + '|||Invalid property value'#13#10 +
-    FR_IGNORED + 'Panel1|Font.Size|Invalid property value|Error reading Panel1.Font.Size: Invalid property value'#13#10 +
-    FR_IGNORED + 'Edit1|FontColor|Ungültiger Eigenschaftswert|Fehler beim Lesen von Edit1.FontColor: ' +
+    // IGNORED=<de quien>|<partes> desde la 1.20.2: FR_ORIGEN_LECTOR si la
+    // excepcion era del lector, la clase si la lanzo el codigo de un componente
+    FR_IGNORED + FR_ORIGEN_LECTOR + '||||Property Alineacion does not exist'#13#10 +
+    FR_IGNORED + FR_ORIGEN_LECTOR + '||||Invalid property value'#13#10 +
+    FR_IGNORED + FR_ORIGEN_LECTOR + '|Panel1|Font.Size|Invalid property value|Error reading Panel1.Font.Size: Invalid property value'#13#10 +
+    FR_IGNORED + FR_ORIGEN_LECTOR + '|Edit1|FontColor|Ungültiger Eigenschaftswert|Fehler beim Lesen von Edit1.FontColor: ' +
       'Ungültiger Eigenschaftswert'#13#10 +
-    FR_IGNORED + '|||a|b'#13#10 +
+    FR_IGNORED + 'EIBClientError||||a|b'#13#10 +
     FR_NOT_LOADED + 'EReadError|EditRight|FontColor|Invalid property value|Error reading EditRight.FontColor: ' +
       'Invalid property value'#13#10 +
     FR_WARNING + '[RENDER-016] component: there is no Z in FormPrueba.'#13#10 +
@@ -208,6 +210,12 @@ begin
   // el texto puede llevar el separador: es lo ultimo
   Assert.AreEqual('a|b', R.Ignoradas[4].Texto);
   Assert.AreEqual('', R.Ignoradas[4].Componente);
+  // el origen: '' si era del lector, la clase si no (DelCodigoDeUnComponente)
+  Assert.AreEqual('', R.Ignoradas[0].Origen, 'del lector');
+  Assert.IsFalse(DelCodigoDeUnComponente(R.Ignoradas[2]));
+  Assert.AreEqual('EIBClientError', R.Ignoradas[4].Origen, 'el codigo de un componente');
+  Assert.IsTrue(DelCodigoDeUnComponente(R.Ignoradas[4]));
+  Assert.AreEqual('EIBClientError: a|b', TextoDeIgnorada(R.Ignoradas[4]));
   // NOTLOADED=<clase>|<partes>: el error que paro al lector
   Assert.IsTrue(R.NoCarga, 'NOTLOADED=');
   Assert.AreEqual('EditRight', R.Parada.Componente);

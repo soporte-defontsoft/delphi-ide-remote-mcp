@@ -1187,8 +1187,14 @@ begin
       var D := T[I].Texto.Substring(1).TrimLeft;
       if D.StartsWith('include', True) then
       begin
-        var F := D.Substring(7).Trim;
-        if (F.Length >= 2) and (((F[1] = '"') and F.EndsWith('"')) or ((F[1] = '<') and F.EndsWith('>'))) then
+        // el fichero, por los tokens: una cadena sin sus comillas, un <x> sin
+        // los picos, y un comentario detras no es parte de el ('#include "x"
+        // // c' se negaba con STYLE-025; revisor de la 1.20.2)
+        var Toks := TokensDeRc(D.Substring(7));
+        var F := '';
+        if Length(Toks) > 0 then
+          F := Toks[0].Texto;
+        if (F.Length >= 2) and (F[1] = '<') and F.EndsWith('>') then
           F := Copy(F, 2, F.Length - 2);
         Entrada(crInclude, T[I].Linea, '', '#include', F);
       end

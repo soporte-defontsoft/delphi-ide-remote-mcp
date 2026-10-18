@@ -227,6 +227,12 @@ REGLAS = [
     # con su parte: 'X RCDATA DISCARDABLE "f"' no lo veia ninguna (3c del censo, 18-oct-2026)
     # las listas de Register* (la paleta y, desde el hecho R, el registro al ejecutar)
     # las leia cada lector con su regex: dos gemelas (18-oct-2026, David: "no dupliques reglas")
+    # la propiedad que elige las PARTES de un componente ('...ClassName') es gramatica nuestra
+    # sin juez (lo decide el setter con GetClass): UNA, declarada (revisor de la 1.20.2)
+    ('la propiedad que elige las partes de un componente', r"EndsWith\('ClassName'",
+     [('Lsp.FormRender.pas', 'PartesDeClaseNoInstalada')],
+     'PartesDeClaseNoInstalada (Lsp.FormRender): lo saltado bajo las partes de una clase que la tabla '
+     'no tiene no se confirma (DSGN-154/163)'),
     ('el argumento de una llamada a Register* leido a mano', r"\\s\*\\\(\(\.\*\?\)\\\)\\s\*;",
      [('Lsp.DesignerMetaGen.pas', 'NombresRegistrados')],
      'NombresRegistrados (Lsp.DesignerMetaGen): EL lector del argumento de una llamada Register* '
@@ -971,6 +977,7 @@ PLANTADO = {
     'un .rc leido a mano': "  for M in TRegEx.Matches(T, '^\\s*(\\w+)\\s+RCDATA\\s+\"([^\"]+)\"') do",
     'el argumento de una llamada a Register* leido a mano':
         "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
+    'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
     'un literal de form leido a mano': "  N := V.Trim(['''']);",
     'la gramatica de un numero de un form': r"  if TRegEx.IsMatch(V, '^-?\d+(?:\.\d+)?$') then",
     'una linea de propiedad de un form compuesta a mano': "  T := '  Size.Width = ' + FlotanteFmx(320);",

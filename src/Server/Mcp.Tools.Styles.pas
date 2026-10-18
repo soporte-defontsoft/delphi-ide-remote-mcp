@@ -395,6 +395,8 @@ begin
   end;
 end;
 
+function RcPathsDenied(const ARc: string): string; forward; // la segunda barrera de build: el lint le pregunta tambien
+
 { ---- lint ---- }
 
 function LintStyles(const APath, AProject: string): string;
@@ -663,6 +665,18 @@ begin
         Issue.AddPair('missing', Entrada.Fichero);
         Rc.AddElement(Issue);
       end;
+      // y el juicio de la segunda barrera de build, el MISMO (RcPathsDenied):
+      // un fichero dentro de la jaula pero fuera de la carpeta de estilos
+      // existe, y build lo niega (STYLE-052); el lint lo daba por bueno
+      // (revisor de la 1.20.2: dos jueces de la misma entrada)
+      var Negado := RcPathsDenied(F);
+      if Negado <> '' then
+      begin
+        Issue := TJSONObject.Create;
+        Issue.AddPair('rc', TPath.GetFileName(F));
+        Issue.AddPair('refused', Negado);
+        Rc.AddElement(Issue);
+      end;
     end;
     // lo que FMX se traga al cargar cada fichero (IgnoradoPorFmx): una
     // propiedad que la clase no publica, un valor que no lee, una clase que
@@ -733,7 +747,6 @@ end;
 
 { ---- build ---- }
 
-function RcPathsDenied(const ARc: string): string; forward;
 
 const
   { la temporal del servidor donde el conversor y brcc32 dejan lo que hacen:
@@ -813,7 +826,11 @@ end;
   la 1.20.2, CHAPUZA TEMPORAL); lo que el preprocesador componga por su
   cuenta lo cerrara un token mas restringido (LPAC, 1.21).
   Y cierra la carrera: compila la COPIA, que el agente no puede cambiar entre
-  la puerta y brcc32. El .res se coloca con ColocaProducto.
+  la puerta y brcc32 (la copia se hace DESPUES del juicio de RcPathsDenied:
+  los escritores del MCP van en serie por el cerrojo, y un escritor ajeno -el
+  IDE, un shell- podria cambiar el .rc entre medias; la puerta real sigue
+  siendo el contenedor; revisor de la 1.20.2). El .res se coloca con
+  ColocaProducto.
   '' = compilado y colocado; si no, el motivo (ya con su etiqueta). }
 function CompilaRcEnContenedor(const ADir, ARc, ARes, ABrcc: string): string;
 var

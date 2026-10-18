@@ -145,8 +145,8 @@ try:
           'Label2: TLabel' not in sin and 'Memo1: TMemo' not in sin and 'Label1: TLabel' in sin, sin[:500])
     escribe(PASV, sin)
     r = dsg({'command': 'lint', 'path': DFM})
-    check('B1 Label2 sin campo, con otro campo TLabel en la clase: ningun aviso suyo',
-          'Label2' not in r, r[:500])
+    check('B1 Label2 sin campo, con otro campo TLabel en la clase: ningun aviso suyo (el lint contesto, con el de Memo1)',
+          'Label2' not in r and mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT'), r[:500])
     check('B2 Memo1 sin campo y sin ningun campo TMemo: el aviso, que dice cuando carga (EClassNotFound)',
           mc.abre(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'Memo1' in r and 'EClassNotFound' in r, r[:500])
     # B3: lo mismo en FMX con clases que su unidad registra al ejecutar
@@ -164,8 +164,8 @@ try:
             '  object ComboEdit1: TComboEdit\n    Position.X = 40.000000000000000000\n'
             '    Position.Y = 40.000000000000000000\n  end\nend\n')
     r = dsg({'command': 'lint', 'path': os.path.join(PRG, 'UReg.fmx')})
-    check('B3 FMX: MainMenu1 y ComboEdit1 sin campo, con sus clases registradas al ejecutar: ningun aviso suyo',
-          'MainMenu1' not in r and 'ComboEdit1' not in r and not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT'), r[:500])
+    check('B3 FMX: MainMenu1 y ComboEdit1 sin campo, con sus clases registradas al ejecutar: LINT CLEAN',
+          'MainMenu1' not in r and 'ComboEdit1' not in r and mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:500])
 
     # ------------------------------------ grupos de clases de la RTL (VCL/FMX)
     PGR = os.path.join(JAIL, 'grupos')

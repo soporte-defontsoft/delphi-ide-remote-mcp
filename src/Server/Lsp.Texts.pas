@@ -5804,12 +5804,16 @@ const
 
   { lint (b) sin el lector: la tabla no encontro nada, pero hay lineas que
     la clase guarda por codigo y el lector del IDE no se pudo preguntar (sin
-    renderizador, el tiempo...). %d: cuantas; %s: por que. Va como nota: el
-    lint no dice CLEAN de lo que no sabe (DSGN-061 de la 1.20). }
+    renderizador, el tiempo...) - o SI se le pregunto y lo que salto no se
+    puede cargar a este fichero (la raiz que no ve, una excepcion del codigo
+    de un componente, las partes de una clase del proyecto; 1.20.2). %d:
+    cuantas; %s: por que. Va como nota: el lint no dice CLEAN de lo que no
+    sabe (DSGN-061 de la 1.20). }
   SN_DESIGNER_LINT_SIN_LECTOR_FMT =
     '[DSGN-154] Not confirmed: %d line(s) hold a property the class ' +
     'stores by code, whose value only the IDE''s own form reader can judge ' +
-    '(preview loads the form), and it could not be asked: %s';
+    '(preview loads the form), and either it could not be asked or what it ' +
+    'skipped cannot be pinned on this file: %s';
 
   SN_LINT_UNKNOWN_CLASS_FMT =
     '[DSGN-039] "%s" is not in this server''s %s table (it comes from a ' +
@@ -11080,9 +11084,10 @@ const
     una unidad del PROYECTO, que el lector no carga; corpus del 18-oct-2026).
     %s el componente, %s la propiedad, %s la clase, %s lo saltado }
   SF_DSGN_LECTOR_CLASE_DEL_PROYECTO_FMT =
-    '%s picks its parts by a class this installation does not have (%s = ' +
-    '''%s'', registered by the project itself, which the reader does not ' +
-    'load): what it skipped under it (%s) cannot be confirmed here';
+    '%s picks its parts by a class this server''s table does not have (%s = ' +
+    '''%s'': the project, or a package without source, registers it, and ' +
+    'the reader does not load it): what it skipped under it (%s) cannot be ' +
+    'confirmed here';
 
   SF_DSGN_SIN_SUBPROPIEDADES_FMT =
     '"%s" (%s) has no subproperties';

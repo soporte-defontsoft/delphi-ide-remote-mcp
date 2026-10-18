@@ -15,8 +15,9 @@
   FR_SUBSTITUTED = 'SUBSTITUTED='; // SUBSTITUTED=<TClase,TClase> que no existen en ningun paquete (sustituto rosa con el nombre)
   FR_IGNORED = 'IGNORED=';       // IGNORED=<de quien>|<error que se salto, EN PARTES> (repetible; FR_PARTES_SEP): <de quien> =
                                  // FR_ORIGEN_LECTOR si la excepcion era del lector (EFilerError, EParserError: el
-                                 // fichero), o la clase de la excepcion si la lanzo el codigo de un componente (IBX
-                                 // sin gds32.dll, un AV de un bpl: no es del fichero, que se sepa; corpus 18-oct-2026)
+                                 // fichero), o la clase de la excepcion si la lanzo el codigo de un componente al
+                                 // crearlo o nombrarlo (IBX sin gds32.dll, un AV de un bpl: no es del fichero, que se
+                                 // sepa; corpus 18-oct-2026). La de un SETTER llega envuelta en EReadError: del lector
   FR_ORIGEN_LECTOR = 'reader';   // el <de quien> de un IGNORED= del propio lector
   FR_NONVISUAL = 'NONVISUAL=';   // NONVISUAL=<n> iconos de no visuales dibujados (solo con --nonvisual on)
   FR_NONVISUALS = 'NONVISUALS='; // NONVISUALS=<Nombre:Clase,...> los no visuales de la raiz, se dibujen o no: el
