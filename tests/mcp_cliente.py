@@ -1822,6 +1822,7 @@ class VigilanteDeEscritorio:
 
     def __init__(self):
         self.ventanas = self.cuadros = self.foco = self.muestras = 0
+        self.detalles = {}  # hwnd -> quien era (resumen)
         self._parar = False
         self._hilo = None
 
@@ -1837,8 +1838,13 @@ class VigilanteDeEscritorio:
         return self
 
     def resumen(self):
-        return 'ventanas de aplicacion visibles %d, cuadros %d, muestras con el foco %d (de %d)' % (
-            self.ventanas, self.cuadros, self.foco, self.muestras)
+        """Las cuentas y, de cada ventana vista, quien era: exe, clase, titulo,
+        estilo extendido, el hilo que la creo y si es el principal. El release
+        check del 19-oct-2026 vio 2 muestras con ventana en la barra que ni el
+        corpus solo ni con carga reprodujeron: la siguiente se explica sola."""
+        return 'ventanas de aplicacion visibles %d, cuadros %d, muestras con el foco %d (de %d)%s' % (
+            self.ventanas, self.cuadros, self.foco, self.muestras,
+            ''.join('\n    %s' % d for d in list(self.detalles.values())[:6]))
 
     def _vigila(self):
         u32 = ctypes.WinDLL('user32', use_last_error=True)
@@ -1854,6 +1860,20 @@ class VigilanteDeEscritorio:
         k32.QueryFullProcessImageNameW.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_wchar_p,
                                                    ctypes.POINTER(ctypes.c_uint32)]
         nombres = {}
+        principales = {}
+        u32.GetWindowTextW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
+
+        def apunta(hwnd, pid, tid, cls):
+            if hwnd in self.detalles:
+                return
+            tit = ctypes.create_unicode_buffer(128)
+            u32.GetWindowTextW(hwnd, tit, 128)
+            if pid not in principales:
+                principales[pid] = hilo_principal(pid)
+            self.detalles[hwnd] = dict(
+                muestra=self.muestras, exe=nombres.get(pid, ''), pid=pid, clase=cls, titulo=tit.value, hilo=tid,
+                es_principal=(tid == principales[pid]),
+                ex='%08X' % (u32.GetWindowLongW(hwnd, -20) & 0xFFFFFFFF))
 
         def de_render(pid):
             if pid not in nombres:
@@ -1865,19 +1885,21 @@ class VigilanteDeEscritorio:
                     if k32.QueryFullProcessImageNameW(h, 0, b, ctypes.byref(s)):
                         n = os.path.basename(b.value)
                     k32.CloseHandle(h)
-                nombres[pid] = n.lower().startswith('delphiformrender')
-            return nombres[pid]
+                nombres[pid] = n
+            return nombres[pid].lower().startswith('delphiformrender')
 
         def cb(hwnd, _lp):
             pid = ctypes.c_uint32()
-            u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            tid = u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
             if de_render(pid.value) and u32.IsWindowVisible(hwnd):
                 cls = ctypes.create_unicode_buffer(64)
                 u32.GetClassNameW(hwnd, cls, 64)
                 if cls.value == '#32770':
                     self.cuadros += 1
+                    apunta(hwnd, pid.value, tid, cls.value)
                 elif u32.GetWindowLongW(hwnd, -20) & 0x40000:
                     self.ventanas += 1
+                    apunta(hwnd, pid.value, tid, cls.value)
             return 1
         f = PROC(cb)
         while not self._parar:
