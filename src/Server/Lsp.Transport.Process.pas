@@ -87,7 +87,8 @@ uses
   Lsp.Sandbox, // EnterSpawn / LeaveSpawn: one handle-inheriting launch at a time
   Lsp.ErrorMode, // NoErrorDialogs
   Lsp.Texts,
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.AtomosRtl;
 
 const
   READ_CHUNK = 65536;
@@ -195,11 +196,17 @@ begin
 end;
 
 procedure TLspProcessTransport.Stop;
+var
+  Matado: Boolean;
+  Pid, Tid: DWORD;
 begin
   // By what there IS, not by FRunning: the reader clears that flag when it
   // ends by itself, and a stop that left at once then neither ended a
   // process that was still alive nor collected the thread (2026-09-29).
   FRunning := False;
+  Matado := False;
+  Pid := FProcInfo.dwProcessId;
+  Tid := FProcInfo.dwThreadId;
 
   if FProcInfo.hProcess <> 0 then
   begin
@@ -207,10 +214,14 @@ begin
     // A writer stuck in the pipe (an engine that stopped reading) holds the
     // lock: ending the process breaks the pipe and lets that writer go.
     if not CloseStdIn(2000) then
+    begin
       TerminateProcess(FProcInfo.hProcess, 1);
+      Matado := True;
+    end;
     if WaitForSingleObject(FProcInfo.hProcess, 2000) = WAIT_TIMEOUT then
     begin
       TerminateProcess(FProcInfo.hProcess, 1);
+      Matado := True;
       // TerminateProcess only ASKS. What the process held - its current
       // directory, the reason an engine is stopped before its folder moves -
       // is released when it has really ended.
@@ -250,6 +261,11 @@ begin
     end;
   end;
   CloseHandles;
+  // lo que matamos, lo limpiamos (Lsp.AtomosRtl): el motor no es VCL, pero
+  // la regla es una. Con sus handles YA cerrados: un muerto con un handle
+  // abierto sigue existiendo para OpenProcess y la guarda lo toma por vivo
+  if Matado then
+    BorraAtomosDeProceso(Pid, Tid);
 end;
 
 { Under the write lock: a writer on another thread either finishes before the

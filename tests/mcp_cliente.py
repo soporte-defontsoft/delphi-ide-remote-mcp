@@ -15,7 +15,7 @@ import atexit
 import ctypes
 import glob
 import hashlib
-import json, os, queue, re, shutil, socket, stat, subprocess, sys, tempfile, threading, time
+import json, os, queue, re, shutil, signal, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
 import string, winreg
 import concurrent.futures
@@ -661,16 +661,46 @@ def espera_puerto(puerto, proc=None, segundos=30):
     return False
 
 
+class ServidorHttp(subprocess.Popen):
+    """Un servidor HTTP de bateria se PARA, no se mata. El exe lleva VCL
+    (la bandeja y el servicio) y registra atomos globales al arrancar que
+    solo borra su finalizacion: matado con TerminateProcess los deja en la
+    tabla de la sesion (16384 para todos los procesos) para siempre. Medido
+    el 18-oct-2026: 3.894 servidores de bateria matados con proc.kill() (81
+    sitios en tests/) la llenaron, y con la tabla llena Windows no arranca
+    NINGUN proceso (0xC0000142): 195 baterias rojas y la maquina de David
+    caida. kill() y terminate() aqui son CTRL_BREAK, que el servidor atiende
+    (DelphiLspMcp.dpr ConsoleCtrl -> ShutdownEvent: para el HTTP y finaliza);
+    el kill de verdad, solo si no sale en 15 s. Los 81 sitios no cambian:
+    siguen llamando a proc.kill(), que ahora para."""
+    PLAZO_PARADA = 15
+
+    def kill(self):
+        if self.poll() is None:
+            try:
+                self.send_signal(signal.CTRL_BREAK_EVENT)
+                self.wait(self.PLAZO_PARADA)
+                return
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                pass
+        super().kill()
+
+    terminate = kill
+
+
 def lanza_http(exe, puerto=None, env=None, args=(), segundos=30, **popen):
     """Arranca exe --http [puerto] y ESPERA a que escuche. Sin puerto, el que
     diga su settings.ini: entonces hay que pasar el que se espera en
-    'espera_en'. Devuelve el proceso; si no llega a escuchar, lo mata y
-    lanza RuntimeError con el motivo (la bateria lo ve, no un sleep mudo)."""
+    'espera_en'. Devuelve el proceso (ServidorHttp: su kill() lo PARA); si no
+    llega a escuchar, lo mata y lanza RuntimeError con el motivo (la bateria
+    lo ve, no un sleep mudo)."""
     espera_en = popen.pop('espera_en', puerto)
     cmd = [exe, '--http'] + ([str(puerto)] if puerto is not None else []) + list(args)
     popen.setdefault('stdout', subprocess.DEVNULL)
     popen.setdefault('stderr', subprocess.DEVNULL)
-    proc = subprocess.Popen(cmd, env=env, **popen)
+    # su propio grupo de procesos: CTRL_BREAK le llega a el y no a la bateria
+    popen['creationflags'] = popen.get('creationflags', 0) | subprocess.CREATE_NEW_PROCESS_GROUP
+    proc = ServidorHttp(cmd, env=env, **popen)
     if not espera_puerto(espera_en, proc, segundos):
         murio = proc.poll()
         try:
@@ -1622,6 +1652,179 @@ class Http:
     def toolnames(self, sid=PROPIA):
         m = self.request('tools/list', sid=sid)
         return {x['name'] for x in ((m or {}).get('result') or {}).get('tools', [])}
+
+
+# ---------------------------------------------------------------- atomos
+
+# La forma de los atomos del RTL de Delphi en la tabla global de la sesion
+# (Lsp.AtomosRtl es su casa en el servidor; esta es la del arnes, para MEDIR):
+# Vcl.Controls 'Delphi<pid>' y 'ControlOfs<HInstance><tid>', Vcl.Dialogs
+# 'WndProcPtr<HInstance><tid>', FMX.Platform.Win 'FIREMONKEY<pid>_<tid>'. Un
+# proceso muerto sin finalizar los deja; llena la tabla (16384), Windows no
+# arranca ningun proceso mas (0xC0000142; medido el 18-oct-2026).
+_ATOMO_RTL = re.compile(r'^(?:(ControlOfs|WndProcPtr)[0-9A-F]+?([0-9A-F]{8})|(FIREMONKEY)([0-9A-F]{8})_([0-9A-F]{8})|(Delphi)([0-9A-F]{8}))$')
+
+
+def _vivo(abre, derecho, ident, codigo_de):
+    """vivo = existe Y no ha terminado (un muerto EXISTE mientras alguien tenga
+    un handle, y su id no se reutiliza mientras exista: Lsp.AtomosRtl igual)"""
+    h = abre(derecho, False, ident)
+    if h:
+        c = ctypes.c_uint32(0)
+        vivo = bool(codigo_de(h, ctypes.byref(c))) and c.value == 259  # STILL_ACTIVE
+        ctypes.windll.kernel32.CloseHandle(h)
+        return vivo
+    return ctypes.get_last_error() != 87  # 87 = no hay nada con ese id; otro error = lo hay
+
+
+def atomos_rtl():
+    """Los atomos del RTL que hay ahora en la tabla global: [(nombre, vivo)],
+    vivo = su hilo o su proceso existen (un id reutilizado cuenta como vivo)."""
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    k32.GlobalGetAtomNameW.argtypes = [ctypes.c_uint16, ctypes.c_wchar_p, ctypes.c_int]
+    k32.OpenThread.restype = k32.OpenProcess.restype = ctypes.c_void_p
+    k32.GetExitCodeThread.argtypes = k32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    buf = ctypes.create_unicode_buffer(512)
+    res = []
+    for a in range(0xC000, 0x10000):
+        if not k32.GlobalGetAtomNameW(a, buf, 512):
+            continue
+        m = _ATOMO_RTL.match(buf.value)
+        if not m:
+            continue
+        if m.group(1):
+            vivo = _vivo(k32.OpenThread, 0x0800, int(m.group(2), 16), k32.GetExitCodeThread)
+        elif m.group(3):
+            vivo = (_vivo(k32.OpenProcess, 0x1000, int(m.group(4), 16), k32.GetExitCodeProcess) or
+                    _vivo(k32.OpenThread, 0x0800, int(m.group(5), 16), k32.GetExitCodeThread))
+        else:
+            vivo = _vivo(k32.OpenProcess, 0x1000, int(m.group(7), 16), k32.GetExitCodeProcess)
+        res.append((buf.value, vivo))
+    return res
+
+
+def atomos_rtl_nombres():
+    """Los nombres de los atomos del RTL que hay ahora: la foto de ANTES."""
+    return {n for n, _v in atomos_rtl()}
+
+
+def atomos_rtl_dejados(antes):
+    """Los atomos del RTL de procesos muertos que NO estaban en la foto de
+    antes: lo que dejo lo que corrio entre medias (una suite, una bateria).
+    Por nombres nuevos y no por la cuenta: un atomo viejo cuyo id reutilizado
+    era de un hilo vivo pasa a 'muerto' en cuanto ese hilo acaba, y la cuenta
+    subia sin fuga ninguna (medido el 19-oct-2026, con restos en la tabla)."""
+    return [n for n, vivo in atomos_rtl() if not vivo and n not in antes]
+
+
+def hilo_principal(pid):
+    """El id del hilo principal de un proceso vivo (el primero de los suyos en
+    la foto de Toolhelp), o 0: el que llevan sus atomos del RTL."""
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+
+    class THREADENTRY32(ctypes.Structure):
+        _fields_ = [('dwSize', ctypes.c_uint32), ('cntUsage', ctypes.c_uint32), ('th32ThreadID', ctypes.c_uint32),
+                    ('th32OwnerProcessID', ctypes.c_uint32), ('tpBasePri', ctypes.c_int32),
+                    ('tpDeltaPri', ctypes.c_int32), ('dwFlags', ctypes.c_uint32)]
+    k32.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+    k32.Thread32First.argtypes = k32.Thread32Next.argtypes = [ctypes.c_void_p, ctypes.POINTER(THREADENTRY32)]
+    snap = k32.CreateToolhelp32Snapshot(0x4, 0)  # TH32CS_SNAPTHREAD
+    if not snap or snap == ctypes.c_void_p(-1).value:
+        return 0
+    try:
+        e = THREADENTRY32()
+        e.dwSize = ctypes.sizeof(e)
+        ok = k32.Thread32First(snap, ctypes.byref(e))
+        while ok:
+            if e.th32OwnerProcessID == pid:
+                return e.th32ThreadID
+            ok = k32.Thread32Next(snap, ctypes.byref(e))
+    finally:
+        k32.CloseHandle(snap)
+    return 0
+
+
+# ---------------------------------------------------------------- escritorio
+
+class VigilanteDeEscritorio:
+    """Lo que un renderizador deja ver en el escritorio del servidor, que
+    ninguna bateria miraba (produccion es un servicio sin escritorio y las
+    baterias leen respuestas): cada 100 ms, las ventanas VISIBLES de los
+    DelphiFormRender* que son de aplicacion (WS_EX_APPWINDOW: salen en la
+    barra), sus cuadros de dialogo (clase #32770: un MessageBox modal que
+    ademas los deja colgados hasta el plazo) y si uno tiene el primer plano
+    (roba el foco). Medido el 18/19-oct-2026 en el escritorio de David
+    durante el corpus: siete "Delphiformrenderfmx" en la barra, cuadros de
+    FireDAC y el foco perdido; solo lo vio una persona delante del monitor."""
+
+    def __init__(self):
+        self.ventanas = self.cuadros = self.foco = self.muestras = 0
+        self._parar = False
+        self._hilo = None
+
+    def arranca(self):
+        self._hilo = threading.Thread(target=self._vigila, daemon=True)
+        self._hilo.start()
+        return self
+
+    def para(self):
+        self._parar = True
+        if self._hilo:
+            self._hilo.join(2)
+        return self
+
+    def resumen(self):
+        return 'ventanas de aplicacion visibles %d, cuadros %d, muestras con el foco %d (de %d)' % (
+            self.ventanas, self.cuadros, self.foco, self.muestras)
+
+    def _vigila(self):
+        u32 = ctypes.WinDLL('user32', use_last_error=True)
+        k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        PROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+        u32.EnumWindows.argtypes = [PROC, ctypes.c_void_p]
+        u32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+        u32.GetForegroundWindow.restype = ctypes.c_void_p
+        u32.IsWindowVisible.argtypes = u32.GetWindowTextLengthW.argtypes = [ctypes.c_void_p]
+        u32.GetClassNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
+        u32.GetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        k32.OpenProcess.restype = ctypes.c_void_p
+        k32.QueryFullProcessImageNameW.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_wchar_p,
+                                                   ctypes.POINTER(ctypes.c_uint32)]
+        nombres = {}
+
+        def de_render(pid):
+            if pid not in nombres:
+                n = ''
+                h = k32.OpenProcess(0x1000, False, pid)
+                if h:
+                    b = ctypes.create_unicode_buffer(1024)
+                    s = ctypes.c_uint32(1024)
+                    if k32.QueryFullProcessImageNameW(h, 0, b, ctypes.byref(s)):
+                        n = os.path.basename(b.value)
+                    k32.CloseHandle(h)
+                nombres[pid] = n.lower().startswith('delphiformrender')
+            return nombres[pid]
+
+        def cb(hwnd, _lp):
+            pid = ctypes.c_uint32()
+            u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if de_render(pid.value) and u32.IsWindowVisible(hwnd):
+                cls = ctypes.create_unicode_buffer(64)
+                u32.GetClassNameW(hwnd, cls, 64)
+                if cls.value == '#32770':
+                    self.cuadros += 1
+                elif u32.GetWindowLongW(hwnd, -20) & 0x40000:
+                    self.ventanas += 1
+            return 1
+        f = PROC(cb)
+        while not self._parar:
+            u32.EnumWindows(f, None)
+            fg = ctypes.c_uint32()
+            u32.GetWindowThreadProcessId(u32.GetForegroundWindow(), ctypes.byref(fg))
+            if de_render(fg.value):
+                self.foco += 1
+            self.muestras += 1
+            time.sleep(0.1)
 
 
 def en_paralelo(puerto, token, tool, lista, hilos=None, t=120, nombre='paralelo'):

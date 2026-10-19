@@ -190,6 +190,7 @@
         <DCCReference Include="..\Server\Lsp.DesignerForma.pas"/>
         <DCCReference Include="..\DesktopNode\Mld.Textos.pas"/>
         <DCCReference Include="..\DesktopNode\Mld.Captura.pas"/>
+        <DCCReference Include="LspTests.AtomosRtl.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

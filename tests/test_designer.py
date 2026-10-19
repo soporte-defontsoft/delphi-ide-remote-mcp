@@ -438,17 +438,21 @@ check('lint: con class of en el .pas NO cae y mira el form contra su clase',
       'Index out of bounds' not in r and not mc.es(r, 'SR_SYS_TOOL_FAILED_FMT') and 'chkSinCampo' in r, r[:300])
 
 # los avisos del enlace form-clase decian "line N of the .dfm" tambien de un .fmx
-# (medido el 14-oct en un DSGN-021 de un form FMX; 1.18.3): dicen el fichero del form
+# (medido el 14-oct en un DSGN-021 de un form FMX; 1.18.3): dicen el fichero del form.
+# Un TActionList sin campo, no un TLabel: desde el hecho R (18-oct-2026) un TLabel
+# sin campo no avisa porque FMX.StdCtrls lo registra al ejecutar (RegisterFmxClasses)
+# y TReader lo crea igual; a TActionList y TImageList no los registra nadie (medido
+# con check-binding sobre diez clases FMX)
 FXP = os.path.join(BASE, 'UFmxSinCampo.pas')
 FXD = os.path.join(BASE, 'UFmxSinCampo.fmx')
 open(FXP, 'w', encoding='utf-8-sig', newline='\r\n').write(
-    'unit UFmxSinCampo;\n\ninterface\n\nuses\n  FMX.Forms, FMX.StdCtrls, System.Classes;\n\ntype\n'
+    'unit UFmxSinCampo;\n\ninterface\n\nuses\n  FMX.Forms, FMX.ActnList, System.Classes;\n\ntype\n'
     '  TFormFx = class(TForm)\n  end;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n')
 open(FXD, 'w', encoding='utf-8-sig', newline='\r\n').write(
-    "object FormFx: TFormFx\n  object LabelFx: TLabel\n    Text = 'x'\n  end\nend\n")
+    "object FormFx: TFormFx\n  object ActionsFx: TActionList\n    Left = 8\n  end\nend\n")
 r = call('delphi_designer', {'command': 'check-binding', 'path': FXD})
 check('check-binding de un .fmx: el aviso nombra el fichero del form, no ".dfm"',
-      'LabelFx' in r and '.dfm' not in r, r[:400])
+      'ActionsFx' in r and '.dfm' not in r, r[:400])
 
 r = call('delphi_designer', {'command': 'totext', 'path': BIN})
 # aceptado = llego al conversor (el BIN de prueba esta danado: lo dice el)

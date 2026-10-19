@@ -127,8 +127,15 @@ falsos, familia, notas, ejemplos, sin_lint = 0, 0, 0, [], []
 sin_lector, sin_render = {}, []
 # t=300: un lint puede preguntar al lector mas de una vez, y el lector tiene 75
 # s (RENDER_TIEMPO_MS; 8 forms de los Samples los agotan, RENDER-007)
+# y lo que los renderizadores dejan ver en el escritorio mientras tanto: NADA
+# (ventanas en la barra, cuadros modales, el foco; 18/19-oct-2026: lo vio David)
+vigilante = mc.VigilanteDeEscritorio().arranca()
 respuestas = mc.en_paralelo(PORT, TOKEN, 'delphi_designer',
                             [{'command': 'lint', 'path': dst} for dst in copiados], t=300, nombre='dc')
+vigilante.para()
+check('corpus: ningun renderizador puso una ventana en la barra ni abrio un cuadro de dialogo',
+      vigilante.ventanas == 0 and vigilante.cuadros == 0, vigilante.resumen())
+check('corpus: ningun renderizador robo el foco', vigilante.foco == 0, vigilante.resumen())
 for dst, r in zip(copiados, respuestas):
     rel = os.path.relpath(dst, FORMS)
     if not any(mc.abre(r, c) for c in ('SN_DESIGNER_LINT_OK_FMT', 'SN_DESIGNER_LINT_BAD_FMT',

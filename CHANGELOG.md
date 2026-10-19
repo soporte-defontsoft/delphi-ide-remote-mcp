@@ -10,6 +10,74 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The server's machine could stop starting processes at all: what we
+  kill, we clean.** Measured 18-oct-2026, 23:33: the release gate ran the
+  237 batteries and 195 of them died at once with 0xC0000142
+  (STATUS_DLL_INIT_FAILED), the desktop full of "Delphiformrenderfmx"
+  windows, and the whole machine needed a reboot. The global atom table of
+  the session (16384 entries, shared by every process) was at 16320. A VCL
+  or FMX process registers atoms when it starts (`Vcl.Controls`:
+  `Delphi<pid>` and `ControlOfs<HInstance><tid>`; `Vcl.Dialogs`:
+  `WndProcPtr<HInstance><tid>`; `FMX.Platform.Win`: `FIREMONKEY<pid>_<tid>`;
+  and one more per runtime package it loads) and only its finalization
+  deletes them: a process killed with `TerminateProcess` leaves them until
+  Windows restarts. 3,894 of them were server copies of the batteries (the
+  exe carries VCL for the tray) killed by the harness with `proc.kill()`;
+  about 1,000 were renderers that had loaded the IDE's design packages and
+  ended NORMALLY: the units of a package loaded with `LoadPackage` only
+  finalize with `UnloadPackage` (and unloading the design packages outside
+  the IDE crashes), so the copies of VCL and FMX inside `vcl370.bpl` and
+  `fmx370.bpl` left their six atoms on every render with packages (measured
+  by hand: +6 with packages, 0 without). Now:
+  - `Lsp.AtomosRtl` is the one house of that form (there is no judge to ask:
+    Windows does not know whose an atom is; `test_paisaje` watches it). After
+    every kill of ours - the deadline of `RunCapturedIn`, the Job of a
+    `delphi_test`, the stop of the engine, the renderer's watchdog before it
+    kills itself - the atoms of the dead process (its pid, its main thread)
+    are deleted, and never those of a pid or a thread that has not
+    terminated (existing is not enough: a dead process exists while anybody
+    holds a handle, and its id is not reused meanwhile). And the renderers
+    delete their own atoms as the very last thing before `ExitProcess`,
+    after every finalization: what is still there with their pid is the
+    packages' copies', which nobody else will ever delete.
+  - The harness stops its servers instead of killing them: `lanza_http`
+    returns a process whose `kill()` is CTRL_BREAK (the server's console
+    handler stops the HTTP server and finalizes), the real kill only after
+    15 s; the 81 `proc.kill()` of the batteries need no change. `run_all`
+    counts the atoms of dead processes before and after the suite and fails
+    if the batteries left any; `test_atomos_1202` measures the watchdog, the
+    stop of a server, and a control that does leak.
+- **The FMX renderer put a window on the taskbar.** With the IDE's design
+  packages loaded (a form with installed components) FMX created its
+  application window (`TFMAppClass`, `WS_EX_APPWINDOW`, visible) as soon as
+  a package asked for `Application.Handle`: the "Delphiformrenderfmx" entry
+  seen seven times at once during the corpus (its eight threads). Measured
+  with `EnumWindows` and the window's module: the renderer has TWO copies of
+  FMX - the one linked into the exe and the one the design packages bring in
+  (`fmx370.bpl`) - and the window was the second copy's, created inside the
+  initialization of `dclfmxstd370.bpl`, which installs the IDE's own handle
+  hook (it answers 0 outside the IDE). Both renderers (the VCL one loads
+  those packages too) now hand both copies a hidden window of their own
+  through the hook the IDE uses for the designer
+  (`RegisterApplicationHWNDProc`; the package's export is found by the name
+  of the routine, not by its decorated name), re-apply it around every
+  package, and a window guard on the main thread (a CBT hook) makes any
+  `TFMAppClass` still created be born as a tool window, without
+  `WS_EX_APPWINDOW` and without activating. Measured at 5 ms: no visible
+  application window of a renderer, ever, and no focus taken.
+- **A component's dialog hung the renderer and reached the desktop.** Half
+  of the FireDAC demos in the Samples keep a connection `Connected` (or a
+  dataset `Active`) against a definition the machine's ini does not have; at
+  design time FireDAC raised and showed a MODAL message box - one per lint,
+  on the desktop, taking the focus - and the renderer waited behind it until
+  its deadline (RENDER-007, 60 s). The same window guard refuses every
+  dialog window (`#32770`: MessageBox, TaskDialog, the common dialogs; and
+  the VCL's `TMessageForm`) and every activation: the code that opened it
+  goes on as if it had been accepted, the render ends in a second, and the
+  answer carries `[RENDER-022]` naming the dialog. The corpus battery now
+  watches the desktop while it runs (application windows, dialogs and focus
+  of the renderers: all zero), which no battery did before - only a person
+  at the screen could see it.
 - **`delphi_git push` could FORCE the remote.** Since 1.19.0 the `ref` of a
   push was judged only by git - the name of a branch or tag that exists
   here -, and `check-ref-format` accepts `+main`: after `delphi_git tag

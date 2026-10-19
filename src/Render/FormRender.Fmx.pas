@@ -36,7 +36,8 @@ uses
   FMX.MultiView, FMX.ActnList, FMX.DateTimeCtrls, FMX.Controls.Presentation,
   FMX.ExtCtrls, FMX.Calendar, FMX.EditBox, FMX.SearchBox, FMX.Platform, FMX.Filter.Effects,
   FMX.MediaLibrary.Actions, FMX.StdActns, FMX.WebBrowser, FMX.Media, FMX.Gestures,
-  FMX.Controls.Model, FMX.Presentation.Style, FMX.Dialogs, FMX.DialogService;
+  FMX.Controls.Model, FMX.Presentation.Style, FMX.Dialogs, FMX.DialogService,
+  FMX.Platform.Win;
 
 type
   { Un rectangulo con el nombre de la clase que no existe en ningun paquete }
@@ -371,6 +372,10 @@ begin
   try
     try
       Responde(FR_DPI, IntToStr(DeclaraAjenoAlDpi));
+      // nada en la barra de tareas: la ventana de aplicacion de FMX es la
+      // nuestra, oculta (VentanaDeAplicacionOculta), antes de cargar paquetes
+      RegisterApplicationHWNDProc(VentanaDeAplicacionOculta); // la copia estatica de FMX; la de los paquetes, Comun
+      ArrancaGuardaDeVentanas; // ningun cuadro, ninguna activacion (Comun)
       Responde(FR_SESSION, IntToStr(SesionActual));
       // nada al escritorio: sin servicio de dialogos, TDialogService no tiene a quien llamar
       TPlatformServices.Current.RemovePlatformService(IFMXDialogService);
@@ -444,6 +449,7 @@ begin
     F.Free;
     Cargador.Free;
     ParaVigia;
+    ParaGuardaDeVentanas;
   end;
 end;
 

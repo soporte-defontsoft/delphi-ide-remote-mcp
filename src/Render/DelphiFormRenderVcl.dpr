@@ -17,7 +17,8 @@ uses
   FormRender.Textos in 'FormRender.Textos.pas',
   Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas',
   Lsp.Pascal in '..\Server\Lsp.Pascal.pas',
-  Lsp.ShaCache in '..\Server\Lsp.ShaCache.pas';
+  Lsp.ShaCache in '..\Server\Lsp.ShaCache.pas',
+  Lsp.AtomosRtl in '..\Server\Lsp.AtomosRtl.pas';
 
 begin
   ExitCode := Main;

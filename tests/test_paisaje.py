@@ -229,6 +229,13 @@ REGLAS = [
     # las leia cada lector con su regex: dos gemelas (18-oct-2026, David: "no dupliques reglas")
     # la propiedad que elige las PARTES de un componente ('...ClassName') es gramatica nuestra
     # sin juez (lo decide el setter con GetClass): UNA, declarada (revisor de la 1.20.2)
+    # la forma de los atomos del RTL (Vcl.Controls, Vcl.Dialogs, FMX.Platform.Win) que un proceso
+    # muerto sin finalizar deja en la tabla global de la sesion: Windows no sabe de quien es un
+    # atomo, asi que es gramatica nuestra con UNA casa (la maquina se cayo el 18-oct-2026)
+    ('la forma de los atomos del RTL', r"'(?:ControlOfs|WndProcPtr|FIREMONKEY%|Delphi%\.8X)'",
+     [('Lsp.AtomosRtl.pas', '*')],
+     'Lsp.AtomosRtl: los atomos globales que deja un proceso VCL/FMX muerto sin finalizar (llena la tabla, '
+     'Windows no arranca ningun proceso: 0xC0000142); lo que matamos, lo limpiamos ahi'),
     ('la propiedad que elige las partes de un componente', r"EndsWith\('ClassName'",
      [('Lsp.FormRender.pas', 'PartesDeClaseNoInstalada')],
      'PartesDeClaseNoInstalada (Lsp.FormRender): lo saltado bajo las partes de una clase que la tabla '
@@ -978,6 +985,7 @@ PLANTADO = {
     'el argumento de una llamada a Register* leido a mano':
         "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
+    'la forma de los atomos del RTL': "  N := Format('Delphi%.8X', [Pid]);",
     'un literal de form leido a mano': "  N := V.Trim(['''']);",
     'la gramatica de un numero de un form': r"  if TRegEx.IsMatch(V, '^-?\d+(?:\.\d+)?$') then",
     'una linea de propiedad de un form compuesta a mano': "  T := '  Size.Width = ' + FlotanteFmx(320);",
@@ -1319,6 +1327,29 @@ for fichero,funcion in LISTAS_NEGRAS:
     check('deuda declarada '+fichero+' '+funcion,negra_declarada(texto,funcion))
     check('mutante cabecera sin declarar '+funcion,
           not negra_declarada(texto.replace('LISTA NEGRA','sin declarar'),funcion))
+
+# ---- Lo que matamos, lo limpiamos (18-oct-2026): un TerminateProcess o un
+# TerminateJobObject nuestro deja en la tabla de la sesion los atomos globales
+# del RTL del muerto (Lsp.AtomosRtl): cada unidad que mata, limpia
+# (BorraAtomosDeProceso tras el kill, BorraAtomosPropios antes de matarse).
+# McpRunJob.dpr es el ayudante de LINUX de remote-run: alli no hay atomos.
+MATA = re.compile(r'\bTerminate(?:Process|JobObject_?)\s*\(')
+LIMPIA = re.compile(r'\bBorraAtomos(?:DeProceso|Propios)\b')
+def matan_sin_limpiar(ficheros_texto):
+    malas = []
+    for f, t in ficheros_texto:
+        if os.path.basename(f) == 'McpRunJob.dpr':
+            continue
+        c = '\n'.join(codigo(t))
+        if MATA.search(c) and not LIMPIA.search(c):
+            malas.append(os.path.basename(f))
+    return malas
+check('mutante de lo que matamos: una unidad que mata sin limpiar se caza',
+      matan_sin_limpiar([('Plantado.pas', 'unit Plantado;\ninterface\nimplementation\nprocedure P;\nbegin\n'
+                                          '  TerminateProcess(H, 1);\nend;\nend.\n')]) == ['Plantado.pas'])
+MATAN = matan_sin_limpiar(TEXTOS)
+check('lo que matamos, lo limpiamos: toda unidad con TerminateProcess/TerminateJobObject borra los atomos '
+      'del RTL del muerto (Lsp.AtomosRtl; la maquina se cayo el 18-oct-2026)', not MATAN, MATAN)
 
 # ---- LAS BATERIAS TAMBIEN (2.3 de la 1.18.0): los formatos que tests/*.py
 # escribia a mano (63 nombres de la papelera, el dia en 6 sitios, el cajon de

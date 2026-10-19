@@ -148,7 +148,8 @@ uses
   Lsp.Lugares in 'Lsp.Lugares.pas',
   Lsp.Mascara in 'Lsp.Mascara.pas',
   Lsp.Png in 'Lsp.Png.pas',
-  Lsp.Herencia in 'Lsp.Herencia.pas';
+  Lsp.Herencia in 'Lsp.Herencia.pas',
+  Lsp.AtomosRtl in 'Lsp.AtomosRtl.pas';
 
 {$R *.res}
 

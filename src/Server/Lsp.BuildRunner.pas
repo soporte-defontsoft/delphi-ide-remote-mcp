@@ -109,7 +109,8 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.Lugares,
-  Lsp.Codificacion;
+  Lsp.Codificacion,
+  Lsp.AtomosRtl;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -333,7 +334,9 @@ var
   Deadline: UInt64;
   Launched: Boolean;
   Job: THandle; // declared here: it outlives the launch block below
+  Matado: Boolean; // por plazo: sus atomos se limpian al cerrar sus handles
 begin
+  Matado := False;
   // From the pipe to the closing of the child's end, nobody else launches:
   // another child would take this end with it (see Lsp.Sandbox, 2026-09-29).
   EnterSpawn;
@@ -463,12 +466,21 @@ begin
       if GetTickCount64 > Deadline then
       begin
         TimedOut := True;
+        Matado := True;
         TerminateProcess(PI.hProcess, 1);
         Break;
       end;
     until False;
     if not TimedOut then
-      WaitForSingleObject(PI.hProcess, 10000);
+      WaitForSingleObject(PI.hProcess, 10000)
+    else
+    begin
+      // que muera, el hilo tambien: el proceso se senala antes de que su hilo
+      // principal deje de contestar STILL_ACTIVE (medido el 19-oct-2026), y
+      // la guarda de Lsp.AtomosRtl lo tomaria por vivo. Sus atomos, abajo
+      WaitForSingleObject(PI.hProcess, 5000);
+      WaitForSingleObject(PI.hThread, 5000);
+    end;
     if not GetExitCodeProcess(PI.hProcess, AExitCode) then
       AExitCode := DWORD(-1);
     ATimedOut := TimedOut;
@@ -476,6 +488,13 @@ begin
     CloseHandle(ReadH);
     CloseHandle(PI.hProcess);
     CloseHandle(PI.hThread);
+    // lo que matamos, lo limpiamos: un hijo VCL/FMX muerto sin finalizar deja
+    // sus atomos globales y, llena la tabla de la sesion, Windows no arranca
+    // ningun proceso mas (Lsp.AtomosRtl; la maquina se cayo el 18-oct-2026).
+    // Con sus handles YA cerrados: un muerto con un handle abierto sigue
+    // existiendo para OpenProcess y la guarda lo tomaba por vivo (medido)
+    if Matado then
+      BorraAtomosDeProceso(PI.dwProcessId, PI.dwThreadId);
     // Closing the job kills any process in the tree still alive (e.g. children
     // orphaned by a timeout): kill-on-close leaves nothing running behind us.
     if Job <> 0 then
@@ -483,7 +502,12 @@ begin
       // Con contenedor no se vuelve hasta que el arbol del test este muerto:
       // la foto y el borrado de la copia no deben correr con un hijo vivo.
       if AContenedor <> nil then
+      begin
         EsperaJobVacio(Job, 5000);
+        // y si al test hubo que matarlo, lo que dejo (Lsp.AtomosRtl no toca
+        // nada de un pid o un hilo que sigan vivos: si acabo solo, finalizo)
+        BorraAtomosDeProceso(PI.dwProcessId, PI.dwThreadId);
+      end;
       CloseHandle(Job);
     end;
   end;

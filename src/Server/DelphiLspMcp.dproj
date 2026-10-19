@@ -251,6 +251,7 @@
         <DCCReference Include="Lsp.Mascara.pas"/>
         <DCCReference Include="Lsp.Png.pas"/>
         <DCCReference Include="Lsp.Herencia.pas"/>
+        <DCCReference Include="Lsp.AtomosRtl.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

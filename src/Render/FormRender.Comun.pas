@@ -135,6 +135,25 @@ function LecturaEnPartes(const AMensaje: string): string;
 procedure ArrancaVigia(AMs: Integer);
 procedure ParaVigia;
 
+{ La guarda de ventanas del renderizador: un gancho CBT del hilo principal
+  con el que NINGUN cuadro de dialogo nace (la clase '#32770' - MessageBox,
+  TaskDialog, los dialogos comunes - y TMessageForm, el de la VCL) y NINGUNA
+  ventana se activa. Nada llega al escritorio ni roba el foco, y el codigo
+  de un componente que abre un cuadro sigue como si se hubiera aceptado;
+  cada cuadro bloqueado se avisa (RENDER-022). Medido el 19-oct-2026: los
+  demos de FireDAC de los Samples llevan conexiones activas contra
+  definiciones que no existen en el ini de la maquina, y al cargarlos en
+  modo diseno FireDAC abria un cuadro MODAL en el escritorio de David - uno
+  por lint, robando el foco - y el renderizador se quedaba ahi hasta el
+  plazo. Y una ventana de aplicacion de FMX (TFMAppClass) que se vaya a
+  crear - la de la copia de FMX del IDE, dentro de la inicializacion de
+  dclfmxstd<nnn>, donde ningun gancho nuestro llega - nace ya como tool
+  window, sin WS_EX_APPWINDOW y sin activarse: nunca pisa la barra de tareas
+  (medido el 19-oct-2026: nacia visible y activada - CreateAppHandle la
+  ensena con SW_SHOWNORMAL - y la escondiamos 19 ms despues). }
+procedure ArrancaGuardaDeVentanas;
+procedure ParaGuardaDeVentanas;
+
 { Un pixel = una unidad del dfm: el proceso se declara ajeno al DPI ANTES de
   crear ventana alguna; devuelve el DPI que ve. }
 function DeclaraAjenoAlDpi: Integer;
@@ -195,6 +214,45 @@ function LeeConLosPaquetes(var ACargador: TCargador; const ANuevo: TFunc<TCargad
 procedure CargaPaquetesDelIde(const ABds: string; out ACargados, AConocidos: Integer);
 function RaizDelIde(const ABds: string): string;
 function PaquetesCargados: Boolean;
+{ La ventana de aplicacion que se le da a FMX en vez de la suya. Sin ella FMX
+  se crea una (TFMAppClass: WS_EX_APPWINDOW, VISIBLE y ACTIVADA, en
+  TPlatformWin.CreateAppHandle) en cuanto alguien pide Application.Handle -
+  un paquete de diseno del IDE al cargarse -, y sale en la barra de tareas
+  como "Delphiformrenderfmx" o "Delphiformrendervcl" robando el foco (David
+  vio siete a la vez el 18-oct-2026, los ocho hilos del corpus; medido con
+  EnumWindows: sin paquetes no aparece). RegisterApplicationHWNDProc es el
+  gancho con el que el IDE le da la suya al designer; esta es una STATIC
+  oculta (sin WS_VISIBLE, tool window: nunca en la barra), que vive lo que el
+  proceso y que FMX no destruye porque es "de fuera". El renderizador FMX se
+  la da a su copia estatica de FMX; a la copia de los paquetes se la da
+  EnganchaVentanaEnFmxDelIde, en los dos renderizadores. }
+function VentanaDeAplicacionOculta: HWND;
+
+{ La OTRA copia de FMX, en los DOS renderizadores: los paquetes de diseno del
+  IDE van con paquetes de ejecucion y traen al proceso fmx<nnn>.bpl, una
+  segunda FMX.Platform.Win con su TPlatformWin, que se hace su propia ventana
+  de aplicacion en cuanto un paquete pide Application.Handle. Medido el
+  19-oct-2026: la ventana era del modulo fmx370.bpl y nacia dentro de la
+  inicializacion de dclfmxstd370.bpl, que IMPORTA RegisterApplicationHWNDProc
+  e instala el gancho del IDE (fuera del IDE devuelve 0). Se le da la misma
+  ventana oculta por ese gancho, que el bpl exporta (buscado por el nombre de
+  la rutina: el decorado lleva los tipos), en los tres pasos de la carga de
+  cada paquete (antes, tras inicializarlo, tras su Register), en cuanto un
+  paquete lo haya traido (nunca lo traemos nosotros: un bpl cargado con
+  LoadLibrary no finaliza al salir y perdia sus atomos); si sus unidades no
+  estan inicializadas todavia (su TPlatformWin es nil: el gancho lanza), al
+  paso siguiente; y la ventana que naciera entre dos ganchos se esconde. La
+  guarda de ventanas (abajo) hace ademas que toda TFMAppClass nazca ya
+  oculta. }
+procedure EnganchaVentanaEnFmxDelIde;
+{ El modulo YA cargado en este proceso cuyo nombre de fichero casa con la regex
+  APatron (0 si ninguno), por EnumProcessModules como VariableDeModulos }
+function ModuloCargado(const APatron: string): HMODULE;
+{ La direccion de un export de AModulo por el NOMBRE de la rutina (o de la
+  variable) dentro del decorado (@Unidad@Rutina$<tipos>, @Unidad@Variable: los
+  tipos cambian de una version a otra, el nombre no), recorriendo su tabla de
+  exports; nil si no lo exporta }
+function ExportDe(AModulo: HMODULE; const ARutina: string): Pointer;
 
 { Registro de clases como lo haria RegisterComponents }
 procedure Apunta(const AClases: array of TComponentClass);
@@ -235,13 +293,21 @@ function ListaDeNoVisuales(const ALista: TArray<TComponent>): string;
 implementation
 
 uses
-  System.TypInfo, System.Win.Registry, System.IOUtils, System.RegularExpressions, System.RTLConsts,
-  System.Actions, System.Variants, System.SyncObjs, System.Diagnostics,
+  System.TypInfo,
+  System.Win.Registry,
+  System.IOUtils,
+  System.RegularExpressions,
+  System.RTLConsts,
+  System.Actions,
+  System.Variants,
+  System.SyncObjs,
+  System.Diagnostics,
   Winapi.PsAPI,      // EnumProcessModules: el paquete que exporta el registro de modulos
   FormRender.Textos,
   Lsp.DesignerForma, // la forma del fichero, la misma que lee el servidor
   Lsp.Pascal,        // EL lexico Pascal: que es codigo y que comentario
-  Lsp.ShaCache;      // Sha256DeBytes: la huella de READ=, la misma con la que compara el servidor
+  Lsp.ShaCache,      // Sha256DeBytes: la huella de READ=, la misma con la que compara el servidor
+  Lsp.AtomosRtl;
 
 type
   TComponentCrack = class(TComponent);
@@ -416,6 +482,140 @@ begin
   end;
 end;
 
+{ ---- la ventana de aplicacion de FMX ---- }
+
+var
+  GVentanaApp: HWND = 0;
+  GFmxDelIde: HMODULE = 0;
+  GRegistraDelIde: Pointer = nil;
+  GFmxDelIdeSinGancho: Boolean = False; // no exporta el gancho: se queda con la suya
+  GFmxDelIdeTrazado: Boolean = False;
+
+function VentanaDeAplicacionOculta: HWND;
+begin
+  if GVentanaApp = 0 then
+    GVentanaApp := CreateWindowEx(WS_EX_TOOLWINDOW, 'STATIC', nil,
+      WS_POPUP, 0, 0, 0, 0, 0, 0, HInstance, nil);
+  Result := GVentanaApp;
+end;
+
+{ La ventana de aplicacion que el fmx del IDE llego a crearse (TFMAppClass)
+  mientras su gancho era el del designer: se esconde y deja de ser una
+  ventana de aplicacion (segunda barrera de la guarda). No se destruye: es suya. }
+function EscondeVentanaDeApp(AVentana: HWND; AParam: LPARAM): BOOL; stdcall;
+var
+  Clase: array[0..63] of Char;
+begin
+  Result := True;
+  if (GetClassName(AVentana, Clase, Length(Clase)) > 0) and (string(Clase) = 'TFMAppClass') and
+     (IsWindowVisible(AVentana) or (GetWindowLong(AVentana, GWL_EXSTYLE) and WS_EX_APPWINDOW <> 0)) then
+  begin
+    ShowWindow(AVentana, SW_HIDE);
+    SetWindowLong(AVentana, GWL_EXSTYLE,
+      (GetWindowLong(AVentana, GWL_EXSTYLE) and not WS_EX_APPWINDOW) or WS_EX_TOOLWINDOW);
+    Inc(PInteger(AParam)^);
+  end;
+end;
+
+procedure EnganchaVentanaEnFmxDelIde;
+type
+  // la forma de FMX.Platform.Win.RegisterApplicationHWNDProc (TApplicationHWNDProc = function: HWND)
+  TRegistra = procedure(const Proc: Pointer);
+var
+  H: HMODULE;
+  Escondidas: Integer;
+begin
+  if GFmxDelIdeSinGancho then
+    Exit;
+  // lo que naciera entre dos ganchos (dclfmxstd<nnn> pone el suyo al
+  // inicializarse y FMX se crea la ventana ahi mismo): escondido ya
+  Escondidas := 0;
+  EnumThreadWindows(MainThreadID, @EscondeVentanaDeApp, LPARAM(@Escondidas));
+  if Escondidas > 0 then
+    Traza(Format('%d ventana(s) de aplicacion del fmx del IDE escondida(s)', [Escondidas]));
+  // solo cuando un paquete ya lo trajo: traerlo nosotros con LoadLibrary (fuera
+  // de LoadPackage) dejaba sus unidades SIN finalizar al salir y cada render
+  // con paquetes perdia los 6 atomos de las copias de VCL/FMX (medido el
+  // 19-oct-2026: +6 por render; sin la precarga, 0). Lo que nazca antes del
+  // gancho ya nace oculto por la guarda de ventanas
+  H := GFmxDelIde;
+  if H = 0 then
+    H := ModuloCargado('^fmx\d+\.bpl$');
+  if H = 0 then
+    Exit;
+  if GFmxDelIde <> H then
+  begin
+    GFmxDelIde := H;
+    GRegistraDelIde := ExportDe(H, 'RegisterApplicationHWNDProc');
+  end;
+  if GRegistraDelIde = nil then
+  begin
+    Traza('el fmx del IDE no exporta RegisterApplicationHWNDProc: se queda con su ventana');
+    GFmxDelIdeSinGancho := True;
+    Exit;
+  end;
+  try
+    TRegistra(GRegistraDelIde)(@VentanaDeAplicacionOculta);
+    if not GFmxDelIdeTrazado then
+      Traza('ventana de aplicacion enganchada al fmx del IDE');
+    GFmxDelIdeTrazado := True;
+  except
+    on E: Exception do
+      Traza('el fmx del IDE aun sin inicializar (' + E.Message + '): al paso siguiente');
+  end;
+end;
+
+{ ---- guarda de ventanas ---- }
+
+var
+  GGuardaCbt: HHOOK = 0;
+
+function CbtGuardaDeVentanas(ACodigo: Integer; AWParam: WPARAM; ALParam: LPARAM): LRESULT; stdcall;
+var
+  Clase, Titulo: string;
+  EsDialogo: Boolean;
+begin
+  case ACodigo of
+    HCBT_CREATEWND:
+      begin
+        var CS := PCBTCreateWnd(ALParam).lpcs;
+        // lpszClass es un nombre o un atomo (la palabra alta a cero): el de
+        // los dialogos del sistema es 32770, como nombre '#32770'
+        if HiWord(NativeUInt(CS.lpszClass)) <> 0 then
+          Clase := string(CS.lpszClass)
+        else
+          Clase := '#' + IntToStr(LoWord(NativeUInt(CS.lpszClass)));
+        EsDialogo := SameText(Clase, '#32770') or SameText(Clase, 'TMessageForm');
+        if EsDialogo then
+        begin
+          if CS.lpszName <> nil then
+            Titulo := string(CS.lpszName);
+          Aviso(MsgFmt(SN_RENDER_CUADRO_BLOQUEADO_FMT, [Clase, Titulo]));
+          Exit(1); // no nace: CreateWindow devuelve 0 y quien lo abria sigue
+        end;
+        // la ventana de aplicacion de FMX nace oculta, fuera de la barra y sin activarse
+        if SameText(Clase, 'TFMAppClass') then
+          CS.dwExStyle := (CS.dwExStyle and not WS_EX_APPWINDOW) or WS_EX_TOOLWINDOW or WS_EX_NOACTIVATE;
+      end;
+    HCBT_ACTIVATE:
+      Exit(1); // ninguna ventana de este proceso se activa: nada roba el foco
+  end;
+  Result := CallNextHookEx(GGuardaCbt, ACodigo, AWParam, ALParam);
+end;
+
+procedure ArrancaGuardaDeVentanas;
+begin
+  if GGuardaCbt = 0 then
+    GGuardaCbt := SetWindowsHookEx(WH_CBT, @CbtGuardaDeVentanas, 0, GetCurrentThreadId);
+end;
+
+procedure ParaGuardaDeVentanas;
+begin
+  if GGuardaCbt <> 0 then
+    UnhookWindowsHookEx(GGuardaCbt);
+  GGuardaCbt := 0;
+end;
+
 { ---- vigia ---- }
 
 type
@@ -431,6 +631,10 @@ begin
   if GVigiaPara.WaitFor(FMs) = wrTimeout then
   begin
     Responde(FR_ERROR, MsgFmt(SR_RENDER_TIEMPO_FMT, [FMs]));
+    // lo que matamos, lo limpiamos: este proceso no va a finalizar, y sus
+    // atomos globales (los del exe y los de cada bpl cargado) se quedarian
+    // en la tabla de la sesion para siempre (Lsp.AtomosRtl; 18-oct-2026)
+    BorraAtomosPropios;
     TerminateProcess(GetCurrentProcess, FR_RC_TIMEOUT);
   end;
 end;
@@ -802,20 +1006,37 @@ end;
 { La variable RegisterCustomModuleProc de DesignIntf, por el simbolo que
   exporta el paquete que la tiene (designide, que llega como dependencia de
   los de diseno): el ayudante no enlaza DesignIntf. nil si no esta cargado. }
-function VariableDeModulos: PPointer;
+{ Los modulos cargados en este proceso (EnumProcessModules), TODOS: en Bytes
+  devuelve lo que NECESITA, no lo que copio, y un bucle hasta ahi sobre un
+  array fijo leia fuera de el con mas de 1024 modulos (revision 19-oct-2026);
+  aqui se vuelve a pedir con sitio para todos y se recorta a lo copiado }
+function ModulosDelProceso: TArray<HMODULE>;
 var
-  Modulos: array[0..1023] of HMODULE;
   Bytes: DWORD;
 begin
-  Result := nil;
-  if not EnumProcessModules(GetCurrentProcess, @Modulos[0], SizeOf(Modulos), Bytes) then
-    Exit;
-  for var I := 0 to Integer(Bytes div SizeOf(HMODULE)) - 1 do
+  SetLength(Result, 1024);
+  if not EnumProcessModules(GetCurrentProcess, @Result[0], Length(Result) * SizeOf(HMODULE), Bytes) then
+    Exit(nil);
+  if Bytes > DWORD(Length(Result) * SizeOf(HMODULE)) then
   begin
-    Result := GetProcAddress(Modulos[I], '@Designintf@RegisterCustomModuleProc');
+    SetLength(Result, Bytes div SizeOf(HMODULE));
+    if not EnumProcessModules(GetCurrentProcess, @Result[0], Length(Result) * SizeOf(HMODULE), Bytes) then
+      Exit(nil);
+    if Bytes > DWORD(Length(Result) * SizeOf(HMODULE)) then
+      Bytes := Length(Result) * SizeOf(HMODULE);
+  end;
+  SetLength(Result, Bytes div SizeOf(HMODULE));
+end;
+
+function VariableDeModulos: PPointer;
+begin
+  for var M in ModulosDelProceso do
+  begin
+    Result := GetProcAddress(M, '@Designintf@RegisterCustomModuleProc');
     if Result <> nil then
       Exit;
   end;
+  Result := nil;
 end;
 
 { Los ganchos de registro del IDE, apuntados a los nuestros }
@@ -863,8 +1084,10 @@ begin
     Antes := GRegistradas.Count;
     Reloj := TStopwatch.StartNew;
     try
+      EnganchaVentanaEnFmxDelIde;
       H := LoadPackage(Ruta);
       GModulos.Add(H);
+      EnganchaVentanaEnFmxDelIde; // tras su inicializacion, antes de su Register
       // OTRA vez, antes de su Register: ActionEditors (designide, que llega
       // como dependencia del primer paquete de diseno) pone a nil los de las
       // acciones al inicializarse (ToolsAPI\ActionEditors.pas:1613) y el IDE
@@ -873,6 +1096,7 @@ begin
       // de FMX, de LiveBindings y de datos salian sustituidas (18-oct-2026)
       PonGanchos;
       LlamaRegisters(H);
+      EnganchaVentanaEnFmxDelIde; // y tras su Register
       Inc(ACargados);
       Traza(Format('%s: %d clases, %d ms', [GPaqueteActual, GRegistradas.Count - Antes, Reloj.ElapsedMilliseconds]));
     except
@@ -883,6 +1107,23 @@ begin
   for var I := 0 to GModulosDeDiseno.Count - 1 do
     Traza('modulo de diseno: ' + GModulosDeDiseno.Names[I] + ' -> ' + GModulosDeDiseno.ValueFromIndex[I]);
 end;
+
+{ Al salir del proceso, tras TODAS las finalizaciones (System.ExitProcessProc,
+  justo antes de ExitProcess): los atomos del RTL que aun lleven este pid o
+  este hilo son los de las copias de VCL y FMX de los bpl de ejecucion
+  (vcl<nnn>.bpl, fmx<nnn>.bpl) que traen los paquetes de diseno. Las unidades
+  de un bpl cargado con LoadPackage solo finalizan con UnloadPackage, y
+  descargar los de diseno fuera del IDE revienta (AV en dclstd, rtl; medido
+  el 19-oct-2026); asi que al salir del proceso quedaban sus 6 atomos
+  (Delphi<pid>, FIREMONKEY, ControlOfs x2, WndProcPtr x2) POR CADA RENDER con
+  paquetes, +6 medido a mano y 0 sin paquetes: eran los ~1.000
+  "renderizadores matados" del censo del 18-oct, que eran renders normales.
+  Los del exe ya los borro su finalizacion: aqui no queda ninguno suyo. }
+procedure LimpiaAtomosAlSalir;
+begin
+  BorraAtomosPropios;
+end;
+
 
 function LeeConLosPaquetes(var ACargador: TCargador; const ANuevo: TFunc<TCargador>;
   const ALee: TCreaYLee; out ARaiz: TComponent; var ACargados, AConocidos: Integer): TComponent;
@@ -1427,7 +1668,60 @@ begin
     ARaiz.Name := ANombre;
 end;
 
+
+function ModuloCargado(const APatron: string): HMODULE;
+var
+  Nombre: array[0..MAX_PATH] of Char;
+begin
+  Result := 0;
+  for var M in ModulosDelProceso do
+    if (GetModuleFileName(M, Nombre, Length(Nombre)) > 0) and
+       TRegEx.IsMatch(ExtractFileName(string(Nombre)), '(?i)' + APatron) then
+      Exit(M);
+end;
+
+function ExportDe(AModulo: HMODULE; const ARutina: string): Pointer;
+var
+  Dos: PImageDosHeader;
+  Nt: PImageNtHeaders;
+  Dir: PImageExportDirectory;
+  Nombres, Funciones: PDWORD;
+  Ordinales: PWord;
+  Base: NativeUInt;
+begin
+  Result := nil;
+  if AModulo = 0 then
+    Exit;
+  Base := NativeUInt(AModulo);
+  Dos := Pointer(Base);
+  if Dos._lfanew <= 0 then
+    Exit;
+  Nt := Pointer(Base + NativeUInt(Dos._lfanew));
+  if Nt.Signature <> IMAGE_NT_SIGNATURE then
+    Exit;
+  var Rva := Nt.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+  if Rva = 0 then
+    Exit;
+  Dir := Pointer(Base + Rva);
+  Nombres := Pointer(Base + Dir.AddressOfNames);
+  Ordinales := Pointer(Base + Dir.AddressOfNameOrdinals);
+  Funciones := Pointer(Base + Dir.AddressOfFunctions);
+  for var I := 0 to Integer(Dir.NumberOfNames) - 1 do
+  begin
+    var Nombre := string(PAnsiChar(Base + PDWORD(NativeUInt(Nombres) + NativeUInt(I) * SizeOf(DWORD))^));
+    // '@Unidad@Rutina$<tipos>': la rutina entera, entre '@' y '$'; una
+    // VARIABLE se exporta sin tipos: '@Unidad@Variable'
+    if Nombre.Contains('@' + ARutina + '$') or Nombre.EndsWith('@' + ARutina) then
+    begin
+      var Ordinal := PWord(NativeUInt(Ordinales) + NativeUInt(I) * SizeOf(Word))^;
+      Exit(Pointer(Base + PDWORD(NativeUInt(Funciones) + NativeUInt(Ordinal) * SizeOf(DWORD))^));
+    end;
+  end;
+end;
+
 initialization
+  // lo que matamos, lo limpiamos; y lo que nunca finaliza (los bpl), tambien
+  ExitProcessProc := LimpiaAtomosAlSalir;
   // el protocolo, en UTF-8: con stdout en un pipe la RTL escribia en la ANSI y
   // el servidor lo leia con otra pagina - un nombre con acento llegaba roto en
   // WRITTEN=, ROOT=, NONVISUALS= e IGNORED= (revisor 5 de la noche, A1: el

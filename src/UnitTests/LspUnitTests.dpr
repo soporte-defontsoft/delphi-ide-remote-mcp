@@ -28,7 +28,8 @@ uses
   LspTests.DesignerEdit in 'LspTests.DesignerEdit.pas',
   Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas',
   Mld.Textos in '..\DesktopNode\Mld.Textos.pas',
-  Mld.Captura in '..\DesktopNode\Mld.Captura.pas';
+  Mld.Captura in '..\DesktopNode\Mld.Captura.pas',
+  LspTests.AtomosRtl in 'LspTests.AtomosRtl.pas';
 
 var
   Runner: ITestRunner;

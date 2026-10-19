@@ -59,6 +59,11 @@ if os.path.isdir(CLEAN):
              'comparten la carpeta temporal y se pisan.\nEspera a que termine '
              '(o matala) y vuelve a lanzar.')
 os.makedirs(CLEAN)
+# Lo que las baterias no pueden dejar de mas: atomos globales de procesos VCL/FMX
+# muertos sin finalizar (servidores matados, renderizadores por plazo). La tabla
+# de la sesion tiene 16384 para todos; llena, Windows no arranca ningun proceso
+# (0xC0000142): el 18-oct-2026 cayeron 195 baterias y la maquina entera
+atomos_antes = mc.atomos_rtl_nombres()
 EXE = os.path.join(CLEAN, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
 # The helper executables travel WITH the server (delphi_styles needs the
@@ -174,4 +179,11 @@ if not failed:
     if n_caches:
         print('NOTA: %d caches .delphilsp.json de proyectos de baterias en el %%LOCALAPPDATA%% REAL '
               '(quitadas): alguna bateria no paso por mc.entorno' % n_caches)
+atomos_dejados = mc.atomos_rtl_dejados(atomos_antes)
+if atomos_dejados:
+    print('\nFAIL atomos: las baterias dejaron %d atomos globales del RTL de procesos muertos sin finalizar '
+          '(un servidor matado en vez de parado, un renderizador muerto por plazo sin limpiar): '
+          'la tabla de la sesion se llena y la maquina deja de arrancar procesos. Los primeros: %s'
+          % (len(atomos_dejados), ', '.join(atomos_dejados[:6])))
+    failed.append(('atomos', '', 0))
 sys.exit(1 if failed else 0)

@@ -479,6 +479,7 @@ begin
   try
     try
       Responde(FR_DPI, IntToStr(DeclaraAjenoAlDpi));
+      ArrancaGuardaDeVentanas; // ningun cuadro, ninguna activacion (Comun; FireDAC, 19-oct-2026)
       Responde(FR_SESSION, IntToStr(SesionActual));
       Application.OnException := SinCuadro.Excepcion;
       Application.ShowHint := False;
@@ -571,6 +572,7 @@ begin
     Cargador.Free;
     SinCuadro.Free;
     ParaVigia;
+    ParaGuardaDeVentanas;
   end;
 end;
 

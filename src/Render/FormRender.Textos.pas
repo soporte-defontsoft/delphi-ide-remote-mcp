@@ -89,6 +89,16 @@ const
     'go through it - give that component''s own Name instead ' +
     '(Component.Property=Value), as the form file does.';
 
+  // La guarda de ventanas (FormRender.Comun): un cuadro que un componente
+  // quiso abrir al cargarse (FireDAC con una conexion activa contra una
+  // definicion que no existe, 19-oct-2026) no nace y se dice
+  SN_RENDER_CUADRO_BLOQUEADO_FMT =
+    '[RENDER-022] A component tried to open a dialog (%s "%s") while the ' +
+    'form was loading: blocked, nothing reaches the server''s desktop, and ' +
+    'its code went on as if the dialog had been accepted. Something in the ' +
+    'form runs at design time (a connection set to Connected or a dataset ' +
+    'to Active, usually): the IDE would show that dialog when opening it.';
+
   // Lo que dice STYLE= del StyleBook de la form, y la coletilla de un style=
   // de la peticion: lo que lleva la form ES lo que vera la app. Decia "(1
   // items)" de un StyleBook con un item vacio, y nada con style=: Hermes tomo
