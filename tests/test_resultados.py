@@ -2402,6 +2402,24 @@ try:
             'INVALID_PARAM', 'SR_ADB_NO_VA_CON_COMANDO_FMT')
     rechazo('E168 delphi_paserver platforms con sdk: PAS-051', 'delphi_paserver',
             {'command': 'platforms', 'sdk': 'x'}, 'INVALID_PARAM', 'SR_PASERVER_NO_VA_CON_COMANDO_FMT')
+    # ...y en delphi_desktop, que lo tragaba: sin command la llamada es una captura, y siete
+    # key/tap/type con command FUERA de sus argumentos fueron siete capturas (perfil opus-5
+    # de Hermes, 19-oct-2026). El perfil no existe: la guarda habla antes que el destino
+    SIN_CMD168 = mc.catalogo()['SF_DESKTOP_SIN_COMANDO'].strip()
+    t = rechazo('E168 delphi_desktop SIN command con code: DESK-025 (era una captura callada)', 'delphi_desktop',
+                {'profile': 'e168-no-existe', 'code': '1'}, 'INVALID_PARAM', 'SR_DESKTOP_NO_VA_CON_COMANDO_FMT')
+    check('E168 ...y dice que no llego command y que el defecto es screenshot', SIN_CMD168 in t, t[:300])
+    t = rechazo('E168 delphi_desktop screenshot con x,y: DESK-025', 'delphi_desktop',
+                {'command': 'screenshot', 'profile': 'e168-no-existe', 'x': '10', 'y': '10'}, 'INVALID_PARAM',
+                'SR_DESKTOP_NO_VA_CON_COMANDO_FMT')
+    check('E168 ...con command dado no dice que faltaba, y nombra tap y type para x,y',
+          SIN_CMD168 not in t and 'tap' in t and 'type' in t, t[:300])
+    rechazo('E168 delphi_desktop key con text: DESK-025', 'delphi_desktop',
+            {'command': 'key', 'profile': 'e168-no-existe', 'code': '1', 'text': 'hola'}, 'INVALID_PARAM',
+            'SR_DESKTOP_NO_VA_CON_COMANDO_FMT')
+    res, sc, t = llama('delphi_desktop', {'command': 'key', 'profile': 'e168-no-existe', 'code': '1'})
+    check('E168 ...y key con lo suyo pasa la guarda (lo para el destino, no DESK-025)',
+          bool(t) and not mc.abre(t, 'SR_DESKTOP_NO_VA_CON_COMANDO_FMT'), t[:200])
     res, sc, t = llama('delphi_designer', {'command': 'tree', 'path': os.path.join(D158, 'sub', 'UDos.dfm')})
     check('E168 ...y una llamada con lo suyo sigue funcionando (designer tree)', not mc.fallo(t) and not res.get('isError'),
           t[:160])

@@ -2615,6 +2615,17 @@ const
   SR_ADBLINUX_CMD =
     '[DESK-011 INVALID_PARAM] command must be screenshot, tap, type, key, ' +
     'overview or status.';
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa), como en
+    delphi_adb: aqui se ignoraba en silencio, y sin command la llamada es una
+    captura - siete key/tap/type de un agente con command FUERA de sus
+    argumentos fueron siete capturas (perfil opus-5 de Hermes, 19-oct-2026).
+    El ultimo %s es SF_DESKTOP_SIN_COMANDO cuando no llego command. }
+  SR_DESKTOP_NO_VA_CON_COMANDO_FMT =
+    '[DESK-025 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.%s%s';
+  SF_DESKTOP_SIN_COMANDO =
+    ' "command" did not arrive, and without it the call is a screenshot ' +
+    '(the default): send command=tap, type, key or overview with the gesture.';
   SR_ADBLINUX_NEEDPROFILE =
     '[DESK-012 INVALID_PARAM] "profile" is missing: the PAServer profile of the ' +
     'machine whose desktop you want (delphi_paserver command=profiles ' +

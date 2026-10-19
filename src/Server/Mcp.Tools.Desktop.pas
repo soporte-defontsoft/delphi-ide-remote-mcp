@@ -710,6 +710,28 @@ function TDesktopLinuxTool.ExecuteWithParams(const Params: TDesktopLinuxParams):
 var
   Cerrojo: TCriticalSection;
 begin
+  // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en
+  // delphi_adb: se ignoraba en silencio, y sin command la llamada es una
+  // captura - siete key/tap/type de un agente con command fuera de sus
+  // argumentos fueron siete capturas que el tomo por gestos (perfil opus-5
+  // de Hermes, 19-oct-2026). Antes del cerrojo: no necesita al destino.
+  // region y window los dice DESK-004 (abajo); profile y project van con todos
+  var Cmd := ComandoDeEscritorio(Params.Command);
+  var Suyos, VaCon: string;
+  var Sobra := ParametroQueNoVa(Cmd, [
+      'screenshot', 'out region window inline maxwidth',
+      'tap', 'x y frame out inline maxwidth',
+      'type', 'text x y frame out inline maxwidth',
+      'key', 'code modifiers out inline maxwidth',
+      'overview', 'out inline maxwidth',
+      'status', ''],
+    ['x', Params.X, '', 'y', Params.Y, '', 'frame', Params.Frame, '',
+     'code', Params.Code, '', 'modifiers', Params.Modifiers, '', 'text', Params.Text, '',
+     'out', Params.Out_, '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
+     'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), ''], Suyos, VaCon);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_DESKTOP_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, Suyos, VaCon,
+      IfThen(Params.Command.Trim = '', MsgText(SF_DESKTOP_SIN_COMANDO))]));
   // por stdio, inline=false sin out= no tendria por donde salir: screenshot
   // y overview, cuya respuesta ES la captura, se niegan antes de ir al
   // destino (2ai de la 1.18.2) y antes del cerrojo de SU maquina: CAPT-012

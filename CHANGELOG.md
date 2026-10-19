@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`delphi_desktop` took the parameters of a gesture it was not doing
+  without a word.** A call with `code`, `x`, `y` or `text` and no
+  `command` is a screenshot - the default - and the server answered with
+  one: an agent on Hermes (Claude Sonnet 5) that put `command` outside the
+  tool's arguments sent Escape, Super, four taps and a `type` that were
+  seven screenshots, and reported that GNOME's overview took no input
+  (19-oct-2026; its calls, read back in Hermes's log, showed it). The tool
+  now judges what goes with each command like the other tools with several
+  commands (`delphi_adb` among them): `DESK-025`, nothing done, with what
+  that command takes, which commands the parameter goes with and - when
+  `command` did not arrive - that the call was a screenshot.
+
 ## [1.21.0] - 2026-10-19
 
 Measured on real projects and on the Samples, and checked by Hermes
