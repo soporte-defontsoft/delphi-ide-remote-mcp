@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.20.1';
+  SERVER_VERSION = '1.21.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -6516,7 +6516,7 @@ const
   { Lo que un .rc nombra dentro de la jaula pero FUERA de su carpeta de
     estilos: brcc32 compila una COPIA de esa carpeta y nada mas. CHAPUZA
     TEMPORAL de la 1.20.2 (David, 18-oct-2026), hasta el token LPAC de la
-    1.21: ver Mcp.Tools.Styles.RcPathsDenied. }
+    1.22: ver Mcp.Tools.Styles.RcPathsDenied. }
   SR_STYLES_RC_FUERA_DE_CARPETA_FMT =
     '[STYLE-052 DENIED] The entry %s of %s points outside the styles ' +
     'folder. build compiles a copy of that folder alone, so nothing ' +

@@ -862,7 +862,7 @@ end;
   un absoluto, un #define o un .. que sube desde la etapa ya no llega: la
   segunda barrera exige que todo quede dentro de la carpeta de estilos (H1 de
   la 1.20.2, CHAPUZA TEMPORAL); lo que el preprocesador componga por su
-  cuenta lo cerrara un token mas restringido (LPAC, 1.21).
+  cuenta lo cerrara un token mas restringido (LPAC, 1.22).
   Y cierra la carrera: compila la COPIA, que el agente no puede cambiar entre
   la puerta y brcc32 (la copia se hace DESPUES del juicio de RcPathsDenied:
   los escritores del MCP van en serie por el cerrojo, y un escritor ajeno -el
@@ -1135,7 +1135,7 @@ var
       if ReadPathDenied(Cand) <> '' then
         Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
       // CHAPUZA TEMPORAL (David, 18-oct-2026), hasta el token LPAC de la
-      // 1.21: brcc32 compila una COPIA de la carpeta de estilos (la etapa de
+      // 1.22: brcc32 compila una COPIA de la carpeta de estilos (la etapa de
       // CompilaRcEnContenedor) y fuera de ella no funciona nada; un .. que
       // desde la jaula se quedaba dentro subia desde la etapa, y un fichero
       // que el SO deja leer a todos los paquetes (etc\hosts) entraba en el

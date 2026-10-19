@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-17 (current release v1.20.1; 42 tools).
+Status page as of 2026-10-19 (current release v1.21.0; 42 tools).
 
 ## Delivered
 
@@ -48,6 +48,8 @@ Status page as of 2026-10-17 (current release v1.20.1; 42 tools).
 
 - What an agent reads back, measured with an independent agent and two models before publishing: answers sent once; desktop gestures that say only what they did; the IDE's own form reader asked at every door that writes or shows a form; a block as the anchor of a single edit; refusals that say where a parameter goes and which framework a property belongs to; `prop` and `info` that follow a class-typed property into its class (1.20.0)
 
+- What the IDE would do, and nothing left behind: `delphi_config set-active` and a build without `config` that builds the project's selected one; the engine with the settings of the selected configuration and platform; a project `delphi_create` makes born as the IDE makes it; the IDE's form reader judging lines, numbers and the language of Windows; a `.rc` read by tokens and confined to its styles folder; `push` that never forces; every process the server kills cleaned from Windows' global atom table, and form renderers that put nothing on the desktop (1.21.0)
+
 ## Next
 
 Stabilizing what is there, not adding to it:
@@ -56,6 +58,7 @@ Stabilizing what is there, not adding to it:
 - The designer: what it already does, measured where it is not yet (preview at other DPIs and from the tray)
 - Lighter for small models: a second pass over the tool descriptions, measured against a small local model
 - The jail measured, not only declared: the protections that need a privilege measured in the suite, and fewer rules of our own where a real judge can answer
+- A more restricted token (LPAC) for the resource compiler of `delphi_styles build`, which can lift the styles-folder stopgap of 1.21.0 (`STYLE-052`) (1.22)
 
 ## Open
 

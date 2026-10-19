@@ -2229,8 +2229,9 @@ begin
 end;
 
 { La clave (Cfg_N) con la que el .dproj nombra una configuracion:
-  <BuildConfiguration Include="Debug"><Key>Cfg_2</Key>. No se supone: en
-  lo que escribe delphi_create, Cfg_1 es Release. '' si no esta. }
+  <BuildConfiguration Include="Debug"><Key>Cfg_1</Key>. No se supone: en
+  lo que escribe delphi_create desde la 1.21.0, como el IDE, Cfg_1 es Debug
+  (era al reves). '' si no esta. }
 function ConfigKey(const AXml, AConfig: string): string;
 begin
   // por EL analisis: era un recorredor gemelo de '<buildconfiguration'

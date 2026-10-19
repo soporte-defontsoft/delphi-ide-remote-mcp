@@ -113,7 +113,10 @@ handshake.
 - `delphi_test command=discover path=<folder>` finds the test projects;
   `command=run project=<the test .dproj>` builds and runs one and answers
   `total`/`passed`/`failed` with the failing lines. That is your red-green
-  loop: edit -> diagnostics -> build -> **test** -> commit.
+  loop: edit -> diagnostics -> build -> **test** -> commit. `filter` takes
+  what DUnitX matches - a fixture by its full name or the start of it
+  (`Unit.TFixture`), a test by its full name (`Unit.TFixture.Method`) - and
+  no wildcards; one that ran nothing says so (`filterNote`).
 - `delphi_diagnostics` is the quick check and `delphi_build` the real one.
   The answer names the project it linted with (`project`); of a unit in a
   folder BELOW that project's folder the engine gives the errors only,
@@ -196,8 +199,10 @@ handshake.
   `delete style=cardstyle_alt` removes one. `set` refuses a change FMX
   would ignore when it loads the style (`STYLE-050`: a property the class
   does not publish, a value it cannot read - `delphi_designer command=prop`
-  says what the class publishes), and `lint`/`build` list what FMX ignores
-  in a file already written (`ignoredByFmx`). The way back is the
+  says what the class publishes) or with which it could not load the style
+  at all (`STYLE-053`: a color goes as `xAARRGGBB`, never `$AARRGGBB`), and
+  `lint`/`build` list what FMX ignores in a file already written
+  (`ignoredByFmx`) and what it cannot load (`fmxCannotLoad`). The way back is the
   `__delphi-patch\<day>\` copy, which is the file BEFORE ITS FIRST CHANGE
   TODAY: putting it back (`delphi_delete` the file, then `delphi_move` the
   copy to its name - `delphi_move` never overwrites) undoes the day's other
@@ -468,4 +473,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.20.1 -->
+<!-- contract reviewed: v1.21.0 -->
