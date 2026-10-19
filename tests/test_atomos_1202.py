@@ -127,5 +127,30 @@ check('B4 mata() de un servidor stdio tambien lo PARA (62 sitios en tests/): cod
       srv.p.returncode == 0 and time.time() - t0 < 15 and not mc.atomos_rtl_dejados(antes) and not suyos(pid, antes),
       'rc=%s %.1f s %s %s' % (srv.p.returncode, time.time() - t0, mc.atomos_rtl_dejados(antes), suyos(pid, antes)))
 
+# un servidor lanzado SIN consola (CREATE_NO_WINDOW, como las baterias de handles):
+# el CTRL_BREAK no le llega; kill() lo mata y recoge sin esperar. Con el kill suave
+# llamandose a si mismo (560c99b) colgaba 15 s por vuelta: el release_check se quedo
+# 52 minutos en test_handles_heredados (19-oct-2026). Con plazo: rojo, no colgado
+import threading
+antes = mc.atomos_rtl_nombres()
+proc = mc.lanza_http(EXE, mc.puerto_libre(), mc.entorno({'DELPHI_MCP_ROOTS': JAIL}),
+                     creationflags=subprocess.CREATE_NO_WINDOW)
+pid = proc.pid
+t0 = time.time()
+h = threading.Thread(target=proc.kill, daemon=True)
+h.start()
+h.join(30)
+dt = time.time() - t0
+colgado = h.is_alive()
+if proc.poll() is None:
+    subprocess.Popen.kill(proc)
+    proc.wait(10)
+    mc.atomos_rtl_recoge(pid, 0)
+check('B5 kill() de un servidor sin consola: muere enseguida, sin esperar el CTRL_BREAK que no le llega',
+      not colgado and dt < mc.ServidorHttp.PLAZO_PARADA and proc.poll() is not None,
+      'colgado=%s %.1f s rc=%s' % (colgado, dt, proc.poll()))
+check('B6 ...y lo que deja matado, el arnes lo recoge (sin atomos)',
+      not mc.atomos_rtl_dejados(antes) and not suyos(pid, antes), (mc.atomos_rtl_dejados(antes), suyos(pid, antes)))
+
 mc.borra(BASE)
 mc.fin('atomos battery')

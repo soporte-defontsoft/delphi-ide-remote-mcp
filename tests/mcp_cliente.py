@@ -672,11 +672,15 @@ class ServidorHttp(subprocess.Popen):
     caida. kill() y terminate() aqui son CTRL_BREAK, que el servidor atiende
     (DelphiLspMcp.dpr ConsoleCtrl -> ShutdownEvent: para el HTTP y finaliza);
     el kill de verdad, solo si no sale en 15 s. Los 81 sitios no cambian:
-    siguen llamando a proc.kill(), que ahora para."""
+    siguen llamando a proc.kill(), que ahora para. Un servidor lanzado SIN
+    consola (CREATE_NO_WINDOW, DETACHED_PROCESS: lanza_http lo apunta en
+    sin_consola) no recibe el CTRL_BREAK: se mata y se recoge sin esperar
+    (medido el 19-oct-2026 con test_handles_heredados)."""
     PLAZO_PARADA = 15
+    sin_consola = False
 
     def kill(self):
-        if self.poll() is None:
+        if self.poll() is None and not self.sin_consola:
             try:
                 self.send_signal(signal.CTRL_BREAK_EVENT)
                 self.wait(self.PLAZO_PARADA)
@@ -701,6 +705,7 @@ def lanza_http(exe, puerto=None, env=None, args=(), segundos=30, **popen):
     # su propio grupo de procesos: CTRL_BREAK le llega a el y no a la bateria
     popen['creationflags'] = popen.get('creationflags', 0) | subprocess.CREATE_NEW_PROCESS_GROUP
     proc = ServidorHttp(cmd, env=env, **popen)
+    proc.sin_consola = bool(popen['creationflags'] & (subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS))
     if not espera_puerto(espera_en, proc, segundos):
         murio = proc.poll()
         try:
@@ -1760,7 +1765,11 @@ def mata_y_recoge(p, t=15):
         return
     tid = hilo_principal(p.pid)
     try:
-        p.kill()
+        # el kill de Popen, el de VERDAD: el de ServidorHttp es la parada suave,
+        # que vuelve aqui si no sale, y sin consola (el CTRL_BREAK no le llega)
+        # se llamaban el uno al otro 15 s por vuelta: test_handles_heredados
+        # colgo el release_check 52 minutos (medido el 19-oct-2026)
+        subprocess.Popen.kill(p)
         p.wait(t)
     except Exception:
         pass
