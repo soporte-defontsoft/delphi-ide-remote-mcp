@@ -74,6 +74,17 @@ if j.get('result') not in ('pass', 'fail'):
     mc.borra(BASE)
     mc.fin('engine-dunitx battery')
 EN_CONTENEDOR = j.get('total') or 0
+# un filter que DUnitX no casa - un comodin: su TNameFilter casa el principio del
+# nombre de un fixture o el nombre entero de un test - corre cero tests y sale con
+# 0; la respuesta dice lo que casa (TEST-035). Hermes probo '*WritesFile' y
+# 'WritesFile' antes del nombre entero (test completo de la 1.21.0). El binario ya
+# esta compilado: nobuild
+raw = call('delphi_test', {'command': 'run', 'project': SUITE, 'platform': 'Win64', 'nobuild': True,
+                           'filter': '*Pascal*', 'timeoutms': 300000}, t=600)
+j2 = J(raw)
+check('run: un filter con comodin no corre nada, y filterNote dice lo que casa (TEST-035)',
+      j2.get('result') == 'no-tests' and mc.es(j2.get('filterNote', ''), 'SN_TEST_FILTRO_SIN_TESTS_FMT')
+      and '*Pascal*' in j2.get('filterNote', ''), str(j2)[:500])
 
 # la suite ENTERA, lanzada directamente: el ejecutable que acaba de compilar
 # delphi_test - el que dice su "binary", no una ruta escrita aqui: con otra

@@ -3730,7 +3730,7 @@ begin
       [ALine, TPath.GetFileName(APath), Length(Lines), Length(Lines) - 1]))
   else if AChar > Length(Lines[ALine]) then
     Exit(MsgFmt(SR_LSP_CHAR_RANGE_FMT,
-      [AChar, ALine, Length(Lines[ALine]), Lines[ALine].Trim]));
+      [AChar, ALine, ALine + 1, Length(Lines[ALine]), Lines[ALine].Trim]));
 end;
 
 { READ-007 entero: que unos bytes no cuadran con su codificacion, con la

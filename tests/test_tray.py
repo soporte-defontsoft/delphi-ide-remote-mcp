@@ -92,8 +92,11 @@ def vivo(pid):
 # sin las DELPHI_MCP_* de quien lanza la bateria: el puerto, la jaula y el
 # token salen de SU settings.ini y de nada mas
 gui = subprocess.Popen([EXE, '/gui'], env=mc.entorno())
-term = subprocess.Popen([EXE, '--http', str(PORT_TERM)], env=mc.entorno(),
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+# su hilo principal, medido VIVO: T5 la cierra a lo bruto (es lo que mide) y sus
+# atomos globales del RTL se recogen despues (mc.atomos_rtl_recoge; 19-oct-2026)
+TID_GUI = mc.hilo_principal(gui.pid)
+# el terminal, por EL lanzador del arnes: al final se PARA (no taskkill)
+term = mc.lanza_http(EXE, PORT_TERM, mc.entorno(), espera=False)
 try:
     # ---------------------------------------------------------------- T1
     # el host de bandeja levanta VCL antes que el HTTP: tarda mas que el
@@ -183,12 +186,17 @@ try:
 except NoArranca:
     pass
 finally:
-    for pr in (gui, term):
-        try:
-            subprocess.run(['taskkill', '/F', '/T', '/PID', str(pr.pid)],
-                           capture_output=True, timeout=60)
-        except Exception:
-            pass
+    try:
+        subprocess.run(['taskkill', '/F', '/T', '/PID', str(gui.pid)],
+                       capture_output=True, timeout=60)
+        gui.wait(15)
+    except Exception:
+        pass
+    mc.atomos_rtl_recoge(gui.pid, TID_GUI)
+    try:
+        term.kill()
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------- T6
 # Lanzado a mano, el despachador de servicios falla al instante (no lo lanzo
@@ -213,7 +221,7 @@ try:
     rc = svc.returncode
 except subprocess.TimeoutExpired:
     rc = None
-    svc.kill()
+    mc.mata_y_recoge(svc)
     _, err = svc.communicate()
 check('T6 el host de servicio lanzado sin el SCM se va SOLO (%.1f s): su bucle principal acaba cuando el '
       'despachador de servicios vuelve' % (time.time() - t0), rc == 0 and not err,

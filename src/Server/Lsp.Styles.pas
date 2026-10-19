@@ -203,12 +203,18 @@ function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
   el mensaje del RTL - "Error reading TLayout.Fill.Color: Property Fill.Color
   does not exist" -, en el orden en que FMX los encuentra. AFichero: el .style
   tal cual esta. False si no hay conversor o no contesto: no se sabe, y
-  AIgnorado viene vacio. }
-function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>): Boolean;
+  AIgnorado viene vacio. ANoCarga: el error con el que FMX NO PUDO cargarlo
+  (el conversor corrio y su lectura lanzo: 'EReadError: Invalid property
+  value' de un TextSettings.FontColor = $FFFF0000), '' si cargo. Es el juicio
+  mas fuerte y se tomaba por "no se sabe": set lo escribia, lint decia clean
+  y solo build lo negaba (Hermes, test completo de la 1.21.0). }
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>;
+  out ANoCarga: string): Boolean;
 { ...de un texto que aun no esta en disco (lo que set va a escribir), con la
   codificacion AEnc de su fichero: la copia que se pregunta va a la temporal
   del servidor, no a la jaula. }
-function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>): Boolean;
+function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
+  out ANoCarga: string): Boolean;
 
 { StyleNames of the Windows platform default style, extracted once through the
   helper and cached under LOCALAPPDATA. Empty when the helper is missing.
@@ -859,19 +865,32 @@ const
   { la temporal del servidor donde se le pregunta al conversor por un texto }
   ESTILOS_CHECK_SUB = 'styles-check';
 
-function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>): Boolean;
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>;
+  out ANoCarga: string): Boolean;
+const
+  // lo que escribe el conversor cuando la lectura lanza (DelphiStyleConvert.dpr:
+  // 'ERROR: <clase>: <mensaje>' y codigo 1); otro codigo es que no se pudo
+  // preguntar (el uso, el plazo)
+  ERROR_DEL_CONVERSOR = 'ERROR: ';
 var
   Exe, Salida: string;
   Code: Cardinal;
   L: TList<string>;
 begin
   AIgnorado := [];
+  ANoCarga := '';
   Exe := StyleConverterExe;
   if Exe = '' then
     Exit(False);
   Salida := CorreStyleConvert(Exe, 'check "' + AFichero + '"', '', 60000, Code);
   if Code <> 0 then
-    Exit(False);
+  begin
+    if Code = 1 then
+      for var Linea in SplitToLines(Salida) do
+        if Linea.StartsWith(ERROR_DEL_CONVERSOR) then
+          ANoCarga := Linea.Substring(Length(ERROR_DEL_CONVERSOR)).Trim;
+    Exit(ANoCarga <> '');
+  end;
   L := TList<string>.Create;
   try
     for var Linea in SplitToLines(Salida) do
@@ -884,11 +903,13 @@ begin
   Result := True;
 end;
 
-function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>): Boolean;
+function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
+  out ANoCarga: string): Boolean;
 var
   Dir: string;
 begin
   AIgnorado := [];
+  ANoCarga := '';
   if StyleConverterExe = '' then
     Exit(False);
   // la copia que se le PREGUNTA, en una carpeta de ESTA llamada del temporal
@@ -900,7 +921,7 @@ begin
       CrearCarpeta(Dir);
       var Cand := TPath.Combine(Dir, 'c.style');
       EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc), False);
-      Result := IgnoradoPorFmx(Cand, AIgnorado);
+      Result := IgnoradoPorFmx(Cand, AIgnorado, ANoCarga);
     except
       Result := False; // sin la pregunta no se sabe: quien llama sigue como antes
     end;

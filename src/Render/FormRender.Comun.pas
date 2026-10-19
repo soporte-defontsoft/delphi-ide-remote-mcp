@@ -65,7 +65,11 @@ type
     FCarpeta: string;
     FDesconocida: string;
     FFramePendiente: string;      // el fichero del frame inline que toca crear
+    FClaseFrame: string;          // y la clase con la que lo escribe el fichero
     FPorClase: TDictionary<string, string>; // clase raiz -> fichero, en la carpeta
+    // lo creado con OTRA clase que la escrita (un sustituto, un frame inline):
+    // la escrita, la que el agente conoce (ClaseEscrita)
+    FEscritas: TDictionary<TComponent, string>;
     procedure FindComponentClass(Reader: TReader; const ClassName: string; var ComponentClass: TComponentClass);
     procedure CreateComponent(Reader: TReader; ComponentClass: TComponentClass; var Component: TComponent);
     procedure FindMethod(Reader: TReader; const MethodName: string; var Address: Pointer; var Error: Boolean);
@@ -99,6 +103,13 @@ type
       --packages auto el form se vuelve a leer con otro }
     property Leidos: TStringList read FLeidos;
     property Eventos: Integer read FEventos;
+    { La clase de AObj como la escribe el fichero, la que el agente conoce:
+      la de la cabecera para la raiz ARaiz (que se crea como una form o un
+      frame NUESTROS: TFormOculta...), la escrita para un sustituto o un frame
+      inline, y la suya para lo demas. Un mensaje que nombraba ClassName
+      ensenaba nuestra clase interna (RENDER-012 decia TFormOculta: Hermes,
+      test completo de la 1.21.0) }
+    function ClaseEscrita(AObj: TObject; ARaiz: TComponent): string;
     { Lee (ancestros incluidos) la RAIZ de la peticion con ANombre, el de la
       cabecera del fichero: el que dicen sus errores y el que se le queda }
     procedure LeeRaiz(const AFichero, ANombre: string; ARaiz: TComponent);
@@ -270,7 +281,7 @@ function ComponenteDeRuta(ARaiz: TComponent; const ARuta: string): TComponent;
   tkClass resuelve Valor como nombre de componente. Comp y Valor se resuelven
   como lee la RTL una referencia (ComponenteDeRuta): Marco1.LblAviso, uno
   dentro de un frame inline. Lanza si no existe. }
-procedure AplicaEstado(ARoot: TComponent; const AEspec: string);
+procedure AplicaEstado(ACargador: TCargador; ARoot: TComponent; const AEspec: string);
 
 { El icono de una clase como lo tiene el paquete de diseno: RCDATA
   '<CLASE>128_PNG' (el IDE actual) en los paquetes cargados o, si no, en los
@@ -1173,7 +1184,8 @@ end;
   escribe su Name, no sus propiedades - la misma regla que set y prop en el
   servidor (EsObjetoPropio). Antes solo se miraba un nivel: Font.Size salia
   RENDER-012 (Flash, ronda del filtro de la 1.20, 16-oct). }
-function ObjetoDeRuta(AComp: TComponent; const ARuta: string; out AHoja: string): TPersistent;
+function ObjetoDeRuta(ACargador: TCargador; ARaiz, AComp: TComponent; const ARuta: string;
+  out AHoja: string): TPersistent;
 var
   Tramos: TArray<string>;
   PI: PPropInfo;
@@ -1187,25 +1199,25 @@ begin
     Tramo := Tramos[I].Trim;
     PI := GetPropInfo(Result, Tramo);
     if PI = nil then
-      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [Result.ClassName, Tramo]));
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [ACargador.ClaseEscrita(Result, ARaiz), Tramo]));
     if PI.PropType^.Kind <> tkClass then
-      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_OBJETO_FMT, [Tramo, Result.ClassName]));
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_OBJETO_FMT, [Tramo, ACargador.ClaseEscrita(Result, ARaiz)]));
     Obj := GetObjectProp(Result, PI);
     if GetTypeData(PI.PropType^).ClassType.InheritsFrom(TComponent) then
     begin
       Ahora := 'nil';
       if Obj <> nil then
         Ahora := TComponent(Obj).Name;
-      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_REFERENCIA_FMT, [Tramo, Result.ClassName, Ahora]));
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_REFERENCIA_FMT, [Tramo, ACargador.ClaseEscrita(Result, ARaiz), Ahora]));
     end;
     if not (Obj is TPersistent) then
-      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_OBJETO_FMT, [Tramo, Result.ClassName]));
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_OBJETO_FMT, [Tramo, ACargador.ClaseEscrita(Result, ARaiz)]));
     Result := TPersistent(Obj);
   end;
   AHoja := Tramos[High(Tramos)].Trim;
 end;
 
-procedure AplicaEstado(ARoot: TComponent; const AEspec: string);
+procedure AplicaEstado(ACargador: TCargador; ARoot: TComponent; const AEspec: string);
 var
   Comp, Valor, Prop, Hoja: string;
   Partes: TArray<string>;
@@ -1241,10 +1253,10 @@ begin
   // la segunda barrera, donde nace: sin propiedad no hay ruta que seguir
   if Prop = '' then
     raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_FORMA_FMT, [AEspec]));
-  Obj := ObjetoDeRuta(C, Prop, Hoja);
+  Obj := ObjetoDeRuta(ACargador, ARoot, C, Prop, Hoja);
   PI := GetPropInfo(Obj, Hoja);
   if PI = nil then
-    raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [Obj.ClassName, Hoja]));
+    raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_NO_PUBLICA_FMT, [ACargador.ClaseEscrita(Obj, ARoot), Hoja]));
   if PI.PropType^.Kind = tkClass then
   begin
     Ref := ComponenteDeRuta(ARoot, Valor);
@@ -1370,10 +1382,12 @@ begin
   FLeidos.Sorted := True; // un frame dos veces en el form es UN fichero leido
   FLeidos.Duplicates := dupIgnore;
   FPorClase := TDictionary<string, string>.Create;
+  FEscritas := TDictionary<TComponent, string>.Create;
 end;
 
 destructor TCargador.Destroy;
 begin
+  FEscritas.Free;
   FPorClase.Free;
   FLeidos.Free;
   FAvisos.Free;
@@ -1419,6 +1433,7 @@ begin
   FFramePendiente := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(GPeticion.Path)), ClassName);
   if FFramePendiente <> '' then
   begin
+    FClaseFrame := ClassName;
     ComponentClass := ClaseFrame;
     Exit;
   end;
@@ -1437,6 +1452,7 @@ begin
     Fichero := FFramePendiente;
     FFramePendiente := '';
     Component := ClaseFrame.Create(Reader.Owner);
+    FEscritas.AddOrSetValue(Component, FClaseFrame);
     PonEnDiseno(Component);
     // su propio fichero, con sus ancestros; luego el lector exterior aplica
     // los 'inherited' del inline sobre lo que ya tiene. Para eso el lector
@@ -1448,7 +1464,23 @@ begin
     Exit;
   end;
   if ComponentClass = ClaseSustituto then
+  begin
     Component := CreaSustituto(Reader.Owner, FDesconocida);
+    FEscritas.AddOrSetValue(Component, FDesconocida);
+  end;
+end;
+
+function TCargador.ClaseEscrita(AObj: TObject; ARaiz: TComponent): string;
+begin
+  if (AObj = ARaiz) and (GPeticion.Path <> '') then
+  begin
+    Result := Cabecera(GPeticion.Path).Clase;
+    if Result <> '' then
+      Exit;
+  end;
+  if (AObj is TComponent) and FEscritas.TryGetValue(TComponent(AObj), Result) then
+    Exit;
+  Result := AObj.ClassName;
 end;
 
 procedure TCargador.FindMethod(Reader: TReader; const MethodName: string; var Address: Pointer; var Error: Boolean);

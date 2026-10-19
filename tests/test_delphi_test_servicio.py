@@ -325,12 +325,18 @@ try:
 finally:
     try:
         k32.TerminateProcess(pi.hProcess, 0)
+        # a que muera, el hilo tambien (Lsp.AtomosRtl: el proceso se senala antes)
+        k32.WaitForSingleObject(pi.hProcess, 10000)
+        k32.WaitForSingleObject(pi.hThread, 10000)
     except Exception:
         pass
     try:
         k32.CloseHandle(pi.hThread); k32.CloseHandle(pi.hProcess)
     except Exception:
         pass
+    # sin consola no se le puede PARAR (CTRL_BREAK): lo que deja matado, recogido
+    # (sus atomos globales del RTL; 19-oct-2026)
+    mc.atomos_rtl_recoge(pi.dwProcessId, pi.dwThreadId)
     u32.CloseDesktop(hdesk)
     if hstation:
         u32.CloseWindowStation(hstation)

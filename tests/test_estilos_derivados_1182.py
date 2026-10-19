@@ -47,9 +47,9 @@ convertiria antes de la negativa es el otro.
       solo ve la copia de la etapa, no lo abre
   S16 un '..' que desde la jaula se queda dentro y desde la ETAPA (la copia de
       la carpeta en la casa del servidor) sube - a la casa, y a un fichero
-      world-readable del SO (etc\hosts, que el AppContainer concede y entraba:
+      world-readable del SO (etc\\hosts, que el AppContainer concede y entraba:
       medido) -: STYLE-052, todo dentro de la carpeta de estilos (CHAPUZA
-      TEMPORAL de la 1.20.2, David 18-oct, hasta el token LPAC de la 1.21)
+      TEMPORAL de la 1.20.2, David 18-oct, hasta el token LPAC de la 1.22)
 
 Uso:  python tests/test_estilos_derivados_1182.py [ruta-a-DelphiLspMcp.exe]
 """

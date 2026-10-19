@@ -198,21 +198,34 @@ function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelet
 var
   Doc: TStyleDoc;
   O: TStyleObj;
-  Err, Line, NewName, Texto: string;
+  Err, Line, NewName, Texto, NoCarga: string;
   WasThere: Boolean;
 
   { Lo que FMX ignoraria del texto que se va a escribir y no ignoraba en el
     fichero tal cual esta (el juez: su lector, IgnoradoPorFmx): lo NUEVO es
     este cambio. '' si nada, o si no se pudo preguntar (sin conversor, o un
-    texto que ni el parser lee: eso lo dice Guarda). }
-  function NuevoIgnoradoPorFmx: string;
+    texto que ni el parser lee: eso lo dice Guarda). ANoCarga: el error con
+    el que FMX no podria cargar el estilo con este cambio, si SIN el si
+    cargaba (uno que ya no cargaba no se le achaca a este cambio). Un texto
+    que ni se PARSEA (EParserError, la conversion a binario) no es de aqui:
+    lo niega Guarda con el parser del IDE y su linea (DSGN-124). }
+  function NuevoIgnoradoPorFmx(out ANoCarga: string): string;
   var
     Antes, Despues: TArray<string>;
     Quedan: TList<string>;
+    NoCargaba: string;
   begin
     Result := '';
-    if not IgnoradoPorFmxDeTexto(Doc.TextoDe(Doc.Lines), Doc.Encoding, Despues) or
-       (Length(Despues) = 0) or not IgnoradoPorFmx(Doc.Path, Antes) then
+    if not IgnoradoPorFmxDeTexto(Doc.TextoDe(Doc.Lines), Doc.Encoding, Despues, ANoCarga) then
+      Exit;
+    if ANoCarga <> '' then
+    begin
+      if ANoCarga.StartsWith(EParserError.ClassName + ':') or
+         not IgnoradoPorFmx(Doc.Path, Antes, NoCargaba) or (NoCargaba <> '') then
+        ANoCarga := '';
+      Exit;
+    end;
+    if (Length(Despues) = 0) or not IgnoradoPorFmx(Doc.Path, Antes, NoCargaba) then
       Exit;
     Quedan := TList<string>.Create;
     try
@@ -307,7 +320,11 @@ begin
     // cerrojo, y aqui sale sin escribir
     if ASoloJuicioFmx then
     begin
-      Err := NuevoIgnoradoPorFmx;
+      Err := NuevoIgnoradoPorFmx(NoCarga);
+      // lo que FMX ni siquiera puede cargar: pasaba set y lint, y solo build lo
+      // negaba (TextSettings.FontColor = $FFFF0000; Hermes, test completo de la 1.21.0)
+      if NoCarga <> '' then
+        Exit(MsgFmt(SR_STYLES_FMX_NO_CARGARIA_FMT, [AProp.Trim, AValue.Trim, NoCarga]));
       if Err <> '' then
         Exit(MsgFmt(SR_STYLES_FMX_LO_IGNORARIA_FMT, [Err]));
       Exit('');
@@ -408,8 +425,10 @@ var
   Names, Defaults: TDictionary<string, string>;
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan: TJSONArray;
   Ignorado: TArray<string>;
+  NoCarga: string;
+  CarganTodos: Boolean;
   NIgnorados, NFormas: Integer;
   M: TMatch;
   Lines: TArray<string>;
@@ -453,6 +472,7 @@ begin
   SinNombre := TJSONArray.Create;
   ComoEstilo := TJSONArray.Create;
   PorFmx := TJSONArray.Create;
+  NoCargan := TJSONArray.Create;
   Formas := TJSONArray.Create;
   NIgnorados := 0;
   NFormas := 0;
@@ -682,8 +702,17 @@ begin
     // propiedad que la clase no publica, un valor que no lee, una clase que
     // no conoce. lint lo revisa todo y no lo veia: salia del .bin.style con
     // ok:true (Hermes, completo de la 1.20.1)
+    // Y lo que FMX ni siquiera puede cargar (su lector lanza): lint decia
+    // clean y solo build lo negaba (Hermes, test completo de la 1.21.0)
     for F in Files do
-      if IgnoradoPorFmx(F, Ignorado) and (Length(Ignorado) > 0) then
+      if IgnoradoPorFmx(F, Ignorado, NoCarga) and (NoCarga <> '') then
+      begin
+        Issue := TJSONObject.Create;
+        Issue.AddPair('file', TPath.GetFileName(F));
+        Issue.AddPair('error', NoCarga);
+        NoCargan.AddElement(Issue);
+      end
+      else if Length(Ignorado) > 0 then
       begin
         Issue := TJSONObject.Create;
         Issue.AddPair('file', TPath.GetFileName(F));
@@ -710,6 +739,15 @@ begin
     Ret.AddPair('ignoredByFmx', PorFmx);
     if NIgnorados > 0 then
       Ret.AddPair('ignoredByFmxNote', MsgFmt(SN_STYLES_FMX_IGNORA_FMT, [NIgnorados]));
+    // sale solo si lo hay, como notInTheIdeShape
+    CarganTodos := NoCargan.Count = 0;
+    if CarganTodos then
+      NoCargan.Free
+    else
+    begin
+      Ret.AddPair('fmxCannotLoad', NoCargan);
+      Ret.AddPair('fmxCannotLoadNote', MsgText(SN_STYLES_FMX_NO_CARGA));
+    end;
     // los que no tienen la forma del IDE: salen solo si los hay
     if NFormas > 0 then
       Ret.AddPair('notInTheIdeShape', Formas)
@@ -726,7 +764,7 @@ begin
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0) and
-      (NFormas = 0)));
+      CarganTodos and (NFormas = 0)));
     if Length(PlatformDefaultStyleNames) = 0 then
       Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
     else
@@ -894,7 +932,7 @@ end;
 
 function BuildStyles(const APath: string): string;
 var
-  Dir, Exe, F, Bin, Out, Rc, Res, Brcc, RcDenied, Tmp, Hecho, Motivo: string;
+  Dir, Exe, F, Bin, Out, Rc, Res, Brcc, RcDenied, Tmp, Hecho, Motivo, NoCarga: string;
   Files: TArray<string>;
   Ret, E: TJSONObject;
   Arr: TJSONArray;
@@ -965,7 +1003,7 @@ begin
         // lo que el binario NO lleva aunque el texto lo diga: lo que FMX se
         // trago al cargarlo (IgnoradoPorFmx). Salia ok:true y nada mas
         // (Hermes, completo de la 1.20.1)
-        if IgnoradoPorFmx(F, Ignorado) and (Length(Ignorado) > 0) then
+        if IgnoradoPorFmx(F, Ignorado, NoCarga) and (Length(Ignorado) > 0) then
         begin
           var Lista := TJSONArray.Create;
           for var Cosa in Ignorado do

@@ -173,6 +173,20 @@ out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader",
 check('set: un valor que FMX no lee (Fill.Color = red): STYLE-050, sin escribir',
       mc.rechazado(out) and mc.abre(out, 'SR_STYLES_FMX_LO_IGNORARIA_FMT') and 'Invalid property value' in out
       and rd(S) == _antes_fmx, out[:300])
+# ...y uno con el que FMX ni siquiera puede CARGAR el estilo: su lector lanza (no lo
+# ignora). TextSettings.FontColor = $FFFF0000 pasaba set y lint, y solo build lo negaba
+# con un EReadError (Hermes, test completo de la 1.21.0): STYLE-053, sin escribir
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
+                             "prop": "TextSettings.FontColor", "value": "$FFFF0000"})
+check('set: un valor con el que FMX no puede cargar el estilo ($FFFF0000 en un color): STYLE-053, sin escribir',
+      mc.rechazado(out) and mc.abre(out, 'SR_STYLES_FMX_NO_CARGARIA_FMT') and 'EReadError' in out
+      and rd(S) == _antes_fmx, out[:300])
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
+                             "prop": "TextSettings.FontColor", "value": "xFFFF0000"})
+check('set: ...el mismo color como lo escribe el fichero (xFFFF0000) entra',
+      not mc.rechazado(out) and 'TextSettings.FontColor = xFFFF0000' in rd(S), out[:200])
+call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
+                       "prop": "TextSettings.FontColor", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "0.500000000000000000"})
 check('set: ANADIDA tras StyleName', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and tras_etiqueta(out).startswith(mc.catalogo()['SF_STYLE_ANADIDA']), out[:200])
 txt = rd(S)
@@ -383,6 +397,23 @@ d = json.loads(out)
 check('build: convierte (el binario es fiel a FMX) y nombra lo que no lleva, con su nota',
       d['ok'] is True and len(d['converted'][0].get('ignored', [])) == 3 and
       mc.es(d.get('ignoredNote', ''), 'SN_STYLES_FMX_IGNORA_FMT'), out[:400])
+# un estilo que FMX NO PUEDE CARGAR (su lector lanza): lint decia clean y solo build
+# lo negaba (Hermes, test completo de la 1.21.0)
+STY3 = os.path.join(BASE, 'Styles3')
+os.makedirs(STY3)
+open(os.path.join(STY3, 'NoCarga.style'), 'w', encoding='utf-8', newline='\n').write(
+    "object TStyleContainer\n  object TLayout\n    StyleName = 'tarjeta'\n    object TText\n"
+    "      StyleName = 'text'\n      TextSettings.FontColor = $FFFF0000\n      Text = 'x'\n    end\n  end\nend\n")
+out = call('delphi_styles', {"path": STY3, "command": "lint", "project": PRJ})
+d = json.loads(out)
+_nc = d.get('fmxCannotLoad', [])
+check('lint: un estilo que FMX no puede cargar sale en fmxCannotLoad, con el error de su lector',
+      len(_nc) == 1 and _nc[0].get('file') == 'NoCarga.style' and 'EReadError' in _nc[0].get('error', ''), out[:400])
+check('lint: ...deja de estar clean, con su nota (STYLE-054)',
+      d['clean'] is False and mc.es(d.get('fmxCannotLoadNote', ''), 'SN_STYLES_FMX_NO_CARGA'), out[:400])
+out = call('delphi_styles', {"path": STY3, "command": "build"})
+check('build: ...y no lo convierte (STYLE-039 con el error de FMX)',
+      mc.rechazado(out) and 'EReadError' in out, out[:300])
 
 # ---- refusals ----
 out = call('delphi_styles', {"path": STY, "command": "get", "style": "x"})

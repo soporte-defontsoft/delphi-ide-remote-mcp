@@ -426,9 +426,9 @@ const
     'while delphi_read numbers them from 1.';
 
   SR_LSP_CHAR_RANGE_FMT =
-    '[LSP-005 INVALID_PARAM] Column %d does not exist on line %d, which has ' +
-    '%d characters: "%s". Columns also count from 0, and you must point ' +
-    'INSIDE the identifier.';
+    '[LSP-005 INVALID_PARAM] Column %d does not exist on line %d (line %d ' +
+    'in delphi_read), which has %d characters: "%s". Columns also count ' +
+    'from 0, and you must point INSIDE the identifier.';
 
   SR_LSP_NEGATIVE_FMT =
     '[LSP-006 INVALID_PARAM] Line %d and column %d: there are no ' +
@@ -3535,7 +3535,8 @@ const
     'a style or of a part inside it (child=background/text), value written ' +
     'exactly as the file does (xAARRGGBB colors, floats with 18 decimals, ' +
     'quoted strings), refused if FMX would ignore it when it loads the ' +
-    'style; clone copies a style under a new StyleName - the way to ' +
+    'style or could not load the style with it; clone copies a style under ' +
+    'a new StyleName - the way to ' +
     'add a variant; delete removes a whole style by StyleName (the copy in ' +
     '__delphi-patch is the way back); lint checks the whole thing: ' +
     'duplicated StyleNames, ' +
@@ -3543,7 +3544,7 @@ const
     '(the platform default style counts), design tokens missing in a theme ' +
     'of a *Tokens.ini, .rc entries whose file is missing, what FMX ignores ' +
     'when it loads them (a property the class does not publish, a value it ' +
-    'cannot read); build converts ' +
+    'cannot read) and what it cannot load at all; build converts ' +
     'every text .style of the folder to .bin.style (the form an app embeds: ' +
     'embedded TEXT loads but does not resolve StyleLookup) and compiles the ' +
     'folder''s .rc to .res with brcc32. Binary styles are never edited. ' +
@@ -3731,6 +3732,21 @@ const
     'cannot read, a class it does not know - with everything inside it. The ' +
     'app does not see them and build leaves them out of the .bin.style: fix ' +
     'them in the text .style.';
+  { Lo que FMX ni siquiera puede CARGAR: su lector lanza y el estilo entero se
+    pierde. Un TextSettings.FontColor = $FFFF0000 (EReadError: Invalid property
+    value) pasaba set y lint, y solo build lo negaba (Hermes, test completo de
+    la 1.21.0). Lo dice el conversor (Lsp.Styles.IgnoradoPorFmx). }
+  SR_STYLES_FMX_NO_CARGARIA_FMT =
+    '[STYLE-053 DENIED] With %s = %s FMX cannot load the style at all - %s - ' +
+    'so the app would not get it and build would refuse to convert it. ' +
+    'Nothing written. The value goes exactly as a .style file writes it ' +
+    '(colors xAARRGGBB); what a property takes: delphi_designer ' +
+    'command=prop classname=<class> framework=fmx.';
+  SN_STYLES_FMX_NO_CARGA =
+    '[STYLE-054] FMX cannot load these text styles at all (fmxCannotLoad, ' +
+    'with the error its reader raised): the app does not get them and build ' +
+    'refuses to convert them. Fix the value the error points to in the text ' +
+    '.style (colors go as xAARRGGBB).';
 
   // ---- delphi_messages ----
 
@@ -4364,8 +4380,10 @@ const
   SP_TEST_FILTER =
     'run optional: test filter for frameworks that read it (DUnitX --run:, ' +
     'through TDUnitX.CheckCommandLine, which the delphi_create ' +
-    'kind=project-test project calls); a runner that does not read its ' +
-    'command line ignores it.';
+    'kind=project-test project calls): a fixture by its full name or the ' +
+    'start of it (Unit.TFixture) or a test by its full name ' +
+    '(Unit.TFixture.Method), several separated by commas - no wildcards. A ' +
+    'runner that does not read its command line ignores it.';
 
   SP_TEST_TIMEOUT =
     'run optional: maximum run time in milliseconds (120000 by default, ' +
@@ -4466,6 +4484,16 @@ const
     'prove it tested anything. Either the project runs no tests, or its ' +
     'output follows neither of the two formats I can read (see ' +
     '"countsFormat" in command=discover).';
+
+  { Un filter que no casa nada: DUnitX corre cero tests y sale con 0. Lo que
+    casa lo dice su TNameFilter.Match (DUnitX.Filters): el principio del
+    nombre de un fixture o el nombre entero de un test, sin comodines. Hermes
+    probo '*WritesFile' y 'WritesFile' antes del nombre entero (test
+    completo de la 1.21.0, cuatro turnos). }
+  SN_TEST_FILTRO_SIN_TESTS_FMT =
+    '[TEST-035] filter=%s ran no test. DUnitX takes a fixture by its full ' +
+    'name or the start of it (Unit.TFixture) or a test by its full name ' +
+    '(Unit.TFixture.Method), several separated by commas - no wildcards.';
 
   SN_TEST_CONSOLE_FORMAT =
     '[TEST-011] For me to count your tests, print ONE LINE PER CHECK ' +
@@ -5988,8 +6016,8 @@ const
 
   SR_STYLES_VALUE_GRAMMAR_FMT =
     '[STYLE-019 INVALID_PARAM] "%s" is not a value a .style can hold. A style ' +
-    'file is a text DFM: a number (12, -3.5), a hexadecimal color ' +
-    '($FF2A2A2A), an identifier (claRed, True, TAlignLayout.Top), text ' +
+    'file is a text DFM: a number (12, -3.5), a color as the file writes ' +
+    'it (xFF2A2A2A), an identifier (claRed, True, TAlignLayout.Top), text ' +
     'in single quotes (''OK'') or a set ([a, b]). If I write it as is, the ' +
     'file can no longer be read and you would only find out at ' +
     'command=build.';

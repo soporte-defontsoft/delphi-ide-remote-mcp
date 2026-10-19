@@ -1051,6 +1051,13 @@ try:
     check('E81 LSP-004: "has 3 lines" como delphi_read (decia 4)',
           res.get('isError') is True and mc.abre(t, 'SR_LSP_LINE_RANGE_FMT') and 'has 3 lines' in t,
           t[:200])
+    # E81b LSP-005 dice la linea en las DOS cuentas: con la de 0 sola, Hermes leyo
+    # "line 1 ... interface" como la linea 1 de delphi_read ("unit Tres;") y gasto
+    # cinco sondas (test completo de la 1.21.0)
+    res, sc, t = llama('delphi_hover', {'path': TRES, 'line': 1, 'character': 40})
+    check('E81b LSP-005: la linea en la cuenta de 0 y en la de delphi_read ("line 1 (line 2 in delphi_read)")',
+          res.get('isError') is True and mc.abre(t, 'SR_LSP_CHAR_RANGE_FMT') and
+          'line 1 (line 2 in delphi_read)' in t and '"interface"' in t, t[:300])
 
     # E82 una busqueda de CARPETA no se cae entera por un fichero bloqueado
     BUSCA = os.path.join(JAIL, 'e82')

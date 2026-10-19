@@ -592,6 +592,12 @@ try:
     r = preview(path=PRUEBA, state='Edit1.NoExisteTal=1')
     check('P3 ...y el de una propiedad que la clase no publica: RENDER-012',
           mc.abre(r, 'SR_RENDER_ESTADO_NO_PUBLICA_FMT') and 'NoExisteTal' in r, r[:300])
+    # ...y en la RAIZ nombra la clase que escribe el fichero, no la nuestra: decia
+    # "TFormOculta does not publish" (Hermes, test completo de la 1.21.0)
+    _cab = open(PRUEBA, encoding='utf-8-sig', errors='replace').readline().split()
+    r = preview(path=PRUEBA, state='%s.NoExisteTal=1' % _cab[1].rstrip(':'))
+    check('P3 ...en la raiz, RENDER-012 nombra la clase del fichero (%s), nunca la del renderizador' % _cab[2],
+          mc.abre(r, 'SR_RENDER_ESTADO_NO_PUBLICA_FMT') and _cab[2] in r and 'TFormOculta' not in r, r[:300])
     # (18-oct-2026) sin propiedad detras del ultimo punto: ObjetoDeRuta leia
     # fuera del array y el ayudante caia con un EAccessViolation (auditoria de
     # los Split; medido en vivo)

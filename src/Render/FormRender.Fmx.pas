@@ -415,7 +415,7 @@ begin
       end;
       Responde(FR_STYLE, AplicaEstilo(F));
       for var S in GPeticion.Estados do
-        AplicaEstado(Raiz, S);
+        AplicaEstado(Cargador, Raiz, S); // sus mensajes, con la clase que escribe el fichero
       Reloj := TStopwatch.StartNew;
       Bmp := TBitmap.Create(Round(F.ClientWidth), Round(F.ClientHeight));
       if Bmp.Canvas.BeginScene then

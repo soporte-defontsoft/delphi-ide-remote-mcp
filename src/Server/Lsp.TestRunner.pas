@@ -824,6 +824,10 @@ begin
     begin
       Result.AddPair('result', 'no-tests');
       Result.AddPair('noTestsNote', MsgText(SN_TEST_NO_COUNTS));
+      // con un filter que no casa nada DUnitX corre cero tests y sale con 0:
+      // lo que casa, dicho (Hermes probo comodines, test completo de la 1.21.0)
+      if AFilter <> '' then
+        Result.AddPair('filterNote', MsgFmt(SN_TEST_FILTRO_SIN_TESTS_FMT, [AFilter]));
     end;
   end;
   Tail := Output.Replace(#13#10, #10).Split([#10]);

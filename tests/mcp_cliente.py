@@ -692,12 +692,14 @@ class ServidorHttp(subprocess.Popen):
     terminate = kill
 
 
-def lanza_http(exe, puerto=None, env=None, args=(), segundos=30, **popen):
+def lanza_http(exe, puerto=None, env=None, args=(), segundos=30, espera=True, **popen):
     """Arranca exe --http [puerto] y ESPERA a que escuche. Sin puerto, el que
     diga su settings.ini: entonces hay que pasar el que se espera en
     'espera_en'. Devuelve el proceso (ServidorHttp: su kill() lo PARA); si no
     llega a escuchar, lo mata y lanza RuntimeError con el motivo (la bateria
-    lo ve, no un sleep mudo)."""
+    lo ve, no un sleep mudo). espera=False: lo devuelve en cuanto existe, para
+    la bateria que lo apunta ANTES de esperar (y espera ella, con
+    espera_puerto): el lanzamiento y la parada son los de aqui igual."""
     espera_en = popen.pop('espera_en', puerto)
     cmd = [exe, '--http'] + ([str(puerto)] if puerto is not None else []) + list(args)
     popen.setdefault('stdout', subprocess.DEVNULL)
@@ -706,6 +708,8 @@ def lanza_http(exe, puerto=None, env=None, args=(), segundos=30, **popen):
     popen['creationflags'] = popen.get('creationflags', 0) | subprocess.CREATE_NEW_PROCESS_GROUP
     proc = ServidorHttp(cmd, env=env, **popen)
     proc.sin_consola = bool(popen['creationflags'] & (subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS))
+    if not espera:
+        return proc
     if not espera_puerto(espera_en, proc, segundos):
         murio = proc.poll()
         try:

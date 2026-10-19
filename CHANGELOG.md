@@ -78,6 +78,39 @@ the MCP `initialize` response (`serverInfo.version`).
   watches the desktop while it runs (application windows, dialogs and focus
   of the renderers: all zero), which no battery did before - only a person
   at the screen could see it.
+- **`delphi_styles set` wrote a value FMX cannot load at all, and `lint`
+  called the folder clean.** The judge since 1.20.1 is FMX's own reader (the
+  converter's `check`), and it reported what FMX skips; when the reader
+  RAISED instead - `TextSettings.FontColor = $FFFF0000`, `EReadError:
+  Invalid property value` - the converter exited with its error and the
+  server took that, the strongest verdict, for "could not ask": `set` wrote
+  it, `lint` said clean, and only `build` refused the style (Hermes, the
+  full test of 1.21.0). Now `set` refuses such a change with FMX's error
+  (`STYLE-053`, nothing written) when the file loaded without it, and
+  `lint` lists the styles FMX cannot load in `fmxCannotLoad` and is no
+  longer clean (`STYLE-054`). A text that does not even parse stays with the
+  IDE's parser and its line (`DSGN-124`). And `STYLE-019` gave
+  `$FF2A2A2A` as the example of a color - one of the values that breaks the
+  load: the example is the form the file writes, `xFF2A2A2A`.
+- **`delphi_designer preview state=` named the renderer's own class.**
+  `[RENDER-012] state: TFormOculta does not publish AnchoTotal` - the
+  renderer builds the root of a form as a class of its own, and the three
+  `state` refusals that name a class took it from the object. They name the
+  class the FILE writes now: the root's from its header, a substituted
+  component's or an inline frame's as the reader found it, and the real one
+  for the rest (`TFont`). Hermes spent four calls looking for a
+  `TFormOculta` in its project (the full test of 1.21.0).
+- **`delphi_test` with a `filter` DUnitX does not match said only "no
+  tests".** DUnitX matches the start of a fixture's full name or a test's
+  full name - its `TNameFilter`, no wildcards - and with nothing matched it
+  runs zero tests and exits with 0. Hermes tried `*WritesFile` and
+  `WritesFile` before the full name. The `filter` parameter says what it
+  matches, and a run with a `filter` that ran nothing adds `filterNote`
+  (`TEST-035`).
+- **The column refusal of the position tools gave the line in one count
+  only.** `LSP-005` said "line 16" in the 0-based count the tools take and
+  showed that line's text, which is line 17 of `delphi_read`: it says both
+  now ("line 16 (line 17 in delphi_read)").
 - **`delphi_git push` could FORCE the remote.** Since 1.19.0 the `ref` of a
   push was judged only by git - the name of a branch or tag that exists
   here -, and `check-ref-format` accepts `+main`: after `delphi_git tag

@@ -542,7 +542,7 @@ begin
       // el estado de vista va DESPUES de mostrar: un ActivePage puesto antes
       // llega al control nativo con la seleccion vieja
       for var S in GPeticion.Estados do
-        AplicaEstado(Raiz, S);
+        AplicaEstado(Cargador, Raiz, S); // sus mensajes, con la clase que escribe el fichero
       Repinta(F);
       Bmp := Captura(F, Captor, Usado);
       Esconde(F);

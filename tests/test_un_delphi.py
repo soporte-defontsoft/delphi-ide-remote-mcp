@@ -101,8 +101,10 @@ def lanza(exe, nombre, extra=None):
     env = mc.entorno(dict({'DELPHI_MCP_BIND_IP': '127.0.0.1'}, **(extra or {})))
     puerto = mc.puerto_libre()
     try:
-        proc = subprocess.Popen([exe, '--http', str(puerto)], env=env,
-                                stdout=salida, stderr=subprocess.STDOUT)
+        # por EL lanzador del arnes: su kill() (el de para) PARA el servidor; con
+        # Popen a pelo lo mataba y cada uno dejaba sus 3 atomos globales del RTL
+        # (13 servidores, 39 atomos: release_check del 19-oct-2026)
+        proc = mc.lanza_http(exe, puerto, env, espera=False, stdout=salida, stderr=subprocess.STDOUT)
     except Exception:
         salida.close()  # sin proceso no entra en procs: se cierra aqui
         raise

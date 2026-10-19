@@ -133,7 +133,9 @@ PORT = mc.puerto_libre()
 h = mc.lanza_http(EXE, PORT, ENV, stdin=subprocess.DEVNULL)
 check('B --http: el arranque esta en disco con el proceso vivo',
       espera(lambda: ('HTTP :%d' % PORT) in lee(VIVO) and 'Ready.' in lee(VIVO)), lee(VIVO)[-300:])
-h.kill(); h.wait(10)
+# matado DE VERDAD (no h.kill(): desde la 1.21.0 ese PARA el servidor, que escribe
+# su ": stopped"); y lo que deja en la tabla de atomos, recogido (mc.mata_y_recoge)
+mc.mata_y_recoge(h)
 t = lee(VIVO)
 check('B matado desde fuera: lo registrado sigue ahi (no hace falta salir bien)',
       ('HTTP :%d' % PORT) in t and ': stopped' not in t, t[-300:])
