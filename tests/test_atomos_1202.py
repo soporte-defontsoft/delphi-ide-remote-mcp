@@ -13,7 +13,9 @@ dejan nada:
      que la medida ve una fuga), y la bateria los recoge: son basura suya.
   B. un servidor HTTP de bateria se PARA con proc.kill() (mc.ServidorHttp:
      CTRL_BREAK, salida limpia con codigo 0) sin dejar atomos; por stdio,
-     cierra() tampoco.
+     cierra() y mata() tampoco (mata() mataba a pelo: 3 atomos por servidor
+     en 62 sitios de tests/, medido el 19-oct-2026). Lo que el arnes mata de
+     verdad, lo recoge (mc.atomos_rtl_recoge: A4 lo usa con el control).
 
 (El plazo del servidor sobre un renderizador colgado - 75 s - no se provoca
 aqui: lo cubren la prueba DUnitX de Lsp.AtomosRtl y la regla de test_paisaje
@@ -79,14 +81,12 @@ dejados = atomos_de(p.pid, tid)
 nuevos = mc.atomos_rtl_dejados(antes)
 check('A3 control: el mismo renderizador matado desde fuera deja sus atomos (la medida ve una fuga)',
       bool(tid) and nuevos and any(n.startswith('FIREMONKEY') for n in dejados), (dejados, nuevos))
-# son basura de esta bateria: se recogen por su nombre exacto (de un proceso que ya no existe)
-for n in dejados:
-    a = k32.GlobalFindAtomW(n)
-    while a:
-        k32.GlobalDeleteAtom(a)
-        a = k32.GlobalFindAtomW(n)
-check('A4 ...y la bateria recoge lo que dejo su control', not mc.atomos_rtl_dejados(antes),
-      mc.atomos_rtl_dejados(antes))
+# son basura de esta bateria: se recogen por su pid y su hilo (el mismo recogedor
+# que usa el arnes tras un kill de verdad)
+recogidos = mc.atomos_rtl_recoge(p.pid, tid)
+check('A4 ...y la bateria recoge lo que dejo su control (mc.atomos_rtl_recoge)',
+      recogidos > 0 and not mc.atomos_rtl_dejados(antes),
+      (recogidos, dejados, mc.atomos_rtl_dejados(antes)))
 
 # ---- B. un servidor de bateria se PARA, no se mata
 antes = mc.atomos_rtl_nombres()
@@ -117,6 +117,15 @@ srv.cierra()
 check('B3 cierra() de un servidor stdio: salida limpia (codigo 0) y sin atomos',
       srv.p.returncode == 0 and not mc.atomos_rtl_dejados(antes) and not suyos(pid, antes),
       'rc=%s %s %s' % (srv.p.returncode, mc.atomos_rtl_dejados(antes), suyos(pid, antes)))
+
+antes = mc.atomos_rtl_nombres()
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='atomos', t=60)
+pid = srv.p.pid
+t0 = time.time()
+srv.mata()
+check('B4 mata() de un servidor stdio tambien lo PARA (62 sitios en tests/): codigo 0, antes del plazo y sin atomos',
+      srv.p.returncode == 0 and time.time() - t0 < 15 and not mc.atomos_rtl_dejados(antes) and not suyos(pid, antes),
+      'rc=%s %.1f s %s %s' % (srv.p.returncode, time.time() - t0, mc.atomos_rtl_dejados(antes), suyos(pid, antes)))
 
 mc.borra(BASE)
 mc.fin('atomos battery')

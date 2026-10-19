@@ -683,7 +683,7 @@ class ServidorHttp(subprocess.Popen):
                 return
             except (OSError, ValueError, subprocess.TimeoutExpired):
                 pass
-        super().kill()
+        mata_y_recoge(self)
 
     terminate = kill
 
@@ -1495,7 +1495,8 @@ class Stdio:
         return texto(self.call_msg(name, args, t), self.respaldo_json)
 
     def cierra(self, t=20):
-        """Fin de stdin = el cliente se fue: salida LIMPIA; si no sale, se mata."""
+        """Fin de stdin = el cliente se fue: salida LIMPIA; si no sale, se mata
+        y se recoge lo que deje (mata_y_recoge)."""
         try:
             self.p.stdin.close()
         except Exception:
@@ -1503,7 +1504,7 @@ class Stdio:
         try:
             self.p.wait(t)
         except subprocess.TimeoutExpired:
-            self.p.kill()
+            mata_y_recoge(self.p)
         if self._hilo_err:
             # el stderr ENTERO antes de que la bateria lo lea: con carga el hilo
             # iba por detras del initialize y un check leyo [] (run_all del
@@ -1511,12 +1512,15 @@ class Stdio:
             self._hilo_err.join(10)
 
     def mata(self):
+        """Como cierra: un servidor de bateria se PARA (fin de stdin), no se
+        mata - matado con kill() dejaba sus 3 atomos globales (medido el
+        19-oct-2026 en designer y preview: ver ServidorHttp); el kill, solo si
+        no sale en 15 s, y entonces se recoge lo que deja. Y a que muera: el
+        borrado de su carpeta justo detras (el atexit de una bateria) fallaba
+        con el exe aun abierto (segunda revision de la 1.17.0). Los 62 sitios
+        de tests/ que llaman a mata() no cambian."""
         try:
-            self.p.kill()
-            # y a que muera: el borrado de su carpeta justo detras (el atexit
-            # de una bateria) fallaba con el exe aun abierto (segunda revision
-            # de la 1.17.0)
-            self.p.wait(timeout=15)
+            self.cierra(15)
         except Exception:
             pass
 
@@ -1715,6 +1719,52 @@ def atomos_rtl_dejados(antes):
     era de un hilo vivo pasa a 'muerto' en cuanto ese hilo acaba, y la cuenta
     subia sin fuga ninguna (medido el 19-oct-2026, con restos en la tabla)."""
     return [n for n, vivo in atomos_rtl() if not vivo and n not in antes]
+
+
+def atomos_rtl_recoge(pid, tid):
+    """Lo que matamos, lo limpiamos, tambien el arnes (Lsp.AtomosRtl lo hace
+    en el servidor): los atomos del RTL que dejo un proceso MUERTO de pid y
+    hilo principal tid - por su nombre exacto (Delphi<pid>, FIREMONKEY<pid>_)
+    o por el tid del final (ControlOfs/WndProcPtr<HInstance><tid>) -, y solo
+    si ese proceso y ese hilo han terminado (existir no basta): un id
+    reutilizado por un vivo se respeta. Cuantos borro."""
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    k32.OpenThread.restype = k32.OpenProcess.restype = ctypes.c_void_p
+    k32.GetExitCodeThread.argtypes = k32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    k32.GlobalFindAtomW.argtypes = [ctypes.c_wchar_p]
+    if _vivo(k32.OpenProcess, 0x1000, pid, k32.GetExitCodeProcess):
+        return 0
+    if tid and _vivo(k32.OpenThread, 0x0800, tid, k32.GetExitCodeThread):
+        return 0
+    borrados = 0
+    for nombre, _v in atomos_rtl():
+        m = _ATOMO_RTL.match(nombre)
+        suyo = (nombre == 'Delphi%08X' % pid or nombre.startswith('FIREMONKEY%08X_' % pid) or
+                (bool(m.group(1)) and bool(tid) and m.group(2) == '%08X' % tid))
+        if not suyo:
+            continue
+        a = k32.GlobalFindAtomW(nombre)
+        # GlobalDeleteAtom devuelve 0 si quito una referencia (dos muertos con la
+        # misma cadena son dos referencias) y el atomo si no
+        while a and k32.GlobalDeleteAtom(a) == 0:
+            borrados += 1
+            a = k32.GlobalFindAtomW(nombre)
+    return borrados
+
+
+def mata_y_recoge(p, t=15):
+    """El kill de verdad de un servidor de bateria que no ha salido solo, y lo
+    que deja: su hilo principal se mide ANTES (muerto ya no se ve), se espera
+    a que muera y se recogen sus atomos del RTL (atomos_rtl_recoge)."""
+    if p.poll() is not None:
+        return
+    tid = hilo_principal(p.pid)
+    try:
+        p.kill()
+        p.wait(t)
+    except Exception:
+        pass
+    atomos_rtl_recoge(p.pid, tid)
 
 
 def hilo_principal(pid):
