@@ -286,7 +286,9 @@ begin
     (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AAccion), 'list')) or
     // ...y stash list, lo aparcado: pasaba por escritura, con el cerrojo
     // de los escritores y parando los motores del repo (1.7.7)
-    (SameText(Trim(ACmd), 'stash') and SameText(Trim(AAccion), 'list'));
+    (SameText(Trim(ACmd), 'stash') and SameText(Trim(AAccion), 'list')) or
+    // ...y config sin valor LEE el que hay (1.21.1; se negaba con GIT-033)
+    (SameText(Trim(ACmd), 'config') and (Trim(AMessage) = ''));
 end;
 
 function PrimerTrozo(const S: string; const ASeps: array of Char): string;

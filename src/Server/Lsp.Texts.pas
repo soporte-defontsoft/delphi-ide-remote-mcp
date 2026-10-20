@@ -7818,7 +7818,8 @@ const
 
   SR_GIT_CONFIG_ONLY_ACCEPTS_USER =
     '[GIT-024 INVALID_PARAM] config only accepts name=user.name or ' +
-    'name=user.email (the value goes in "message")';
+    'name=user.email (the value goes in "message"; without it, the ' +
+    'current value is read)';
 
   SR_WS_RUTA_ARTEFACTOS_IDE_HISTORY =
     '[WS-007 DENIED] Path of IDE artifacts (__history, ' +
@@ -7944,9 +7945,13 @@ const
     '[GIT-032 DENIED] "%s" is already a git repository. Use pull ' +
     'to update it, or clone into another folder.';
 
-  SR_GIT_CONFIG_NEEDS_VALUE =
-    '[GIT-033 INVALID_PARAM] Config needs the value in the "message" ' +
-    'parameter';
+  { config sin valor lee el que hay; una clave que no esta es esto, no un
+    fallo (1.21.1: se negaba con GIT-033 y no se podia leer). }
+  SN_GIT_CONFIG_SIN_VALOR_FMT =
+    '[GIT-079] %s is not set: no git config this repository reads has it ' +
+    '(that is what exit=1 with no output means for a read). A commit here ' +
+    'would stop with "Author identity unknown": set it with command=config ' +
+    'name=%s message=<value>.';
 
   { Un parametro que no es del comando: commit con path hacia un commit de
     TODO el indice, no de ese fichero (octava revision). }
@@ -8078,7 +8083,7 @@ const
     'share or a NAS). The fix is the OPERATOR''s, on the server: the ' +
     'safe.directory line git printed above, in the GLOBAL git config of ' +
     'the server''s account. No tool writes that setting - it lives outside ' +
-    'the workspace, and command=config only sets user.name/user.email of ' +
+    'the workspace, and command=config only reads or sets user.name/user.email of ' +
     'the repo - so ask the operator (delphi_report) and work in another ' +
     'repository meanwhile.';
 
@@ -9770,7 +9775,8 @@ const
     'merge: abort.';
 
   SP_GIT_NAME =
-    'tag: the new tag (none = list them). config: user.name | user.email.';
+    'tag: the new tag (none = list them). config: user.name | user.email ' +
+    '(no message = read the value a commit would use).';
 
   SP_WS_CREATE =
     'switch: true = create the branch and move to it (git switch -c). ' +
@@ -9778,7 +9784,8 @@ const
 
   SP_WS_MESSAGE =
     'commit: the message. tag: makes it annotated. stash push: its label. ' +
-    'config: the value. clone: the repository URL.';
+    'config: the value (none = read the current one). clone: the ' +
+    'repository URL.';
 
   SP_WS_PATH =
     'worktree add: a NEW folder inside your roots. worktree remove: one ' +

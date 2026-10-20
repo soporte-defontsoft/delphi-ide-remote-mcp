@@ -80,6 +80,17 @@ the MCP `initialize` response (`serverInfo.version`).
   program's name, and only one name was passed. Measured on 20-oct-2026 with
   the production renderers; nobody reads it but an operator, who now gets
   the name.
+- **`delphi_git command=config` could not read the identity it sets.**
+  Without `message` it answered `GIT-033` ("config needs the value"), so an
+  agent had no way to know which name and e-mail its commits would carry
+  short of committing and reading the log. Now `config name=user.name` (or
+  `user.email`) without `message` reads the value a commit here would use -
+  the repository's, or the global one of the server's account - and a key
+  that no config has is said as such (`GIT-079`, not an error) with how to
+  set it. Reading is a query: it takes no write lock and works in a
+  read-only root, where setting is still refused. Any other key is still
+  refused, to read or to write (`GIT-024`). `test_git_config_lee_1211`,
+  red against 1.21.0.
 
 ## [1.21.0] - 2026-10-19
 

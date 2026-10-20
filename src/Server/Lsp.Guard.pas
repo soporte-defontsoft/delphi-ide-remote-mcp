@@ -2215,7 +2215,8 @@ begin
   AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show', 'ls-remote', 'branch'], 'command',
     ['tag', 'without name or message (then it lists)',
      'worktree', 'with action=list',
-     'stash', 'with action=list']);
+     'stash', 'with action=list',
+     'config', 'without message (then it reads the value)']);
   // lecturas para la puerta, con un EFECTO fuera del workspace: el hint MCP
   // "no modifica su entorno" es falso y se dice (r11e H6)
   AnadeAcceso('delphi_report', atLectura, [], 'command', nil,

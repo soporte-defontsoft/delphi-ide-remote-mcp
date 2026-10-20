@@ -1780,9 +1780,13 @@ begin
     if not (SameText(Params.Name.Trim, 'user.name') or
             SameText(Params.Name.Trim, 'user.email')) then
       Exit(MsgText(SR_GIT_CONFIG_ONLY_ACCEPTS_USER));
+    // Sin valor LEE el que hay: el que usaria un commit aqui (el del repo, o
+    // el global de la cuenta del servidor). Se negaba con GIT-033 y no habia
+    // forma de saber con que identidad se iba a firmar (1.21.1)
     if Params.Message.Trim = '' then
-      Exit(MsgText(SR_GIT_CONFIG_NEEDS_VALUE));
-    GitArgs := 'config ' + Params.Name.Trim.ToLower + ' ' + EnComillas(Params.Message);
+      GitArgs := 'config --get ' + Params.Name.Trim.ToLower
+    else
+      GitArgs := 'config ' + Params.Name.Trim.ToLower + ' ' + EnComillas(Params.Message);
   end
   else if Cmd = 'switch' then
   begin
@@ -2187,6 +2191,11 @@ begin
     Result := GitFallo(ExitCode, Output)
   else
     Result := GitExito(Output.Trim, 0);
+  // config --get de una clave que no esta sale con 1 y sin decir nada: es la
+  // forma de git de contestar "no esta fijada", no un fallo (GIT-079)
+  if (ExitCode = 1) and (Output.Trim = '') and (Cmd = 'config') and (Params.Message.Trim = '') then
+    Result := GitExito(MsgFmt(SN_GIT_CONFIG_SIN_VALOR_FMT,
+      [Params.Name.Trim.ToLower, Params.Name.Trim.ToLower]), 1);
   // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
   // por el camino, y lo primero que hace quien la recibe es repetirla. El
   // silencio de git SIGNIFICA cosas distintas segun la orden, asi que se
