@@ -36,6 +36,12 @@ type
       proyecto; Debug si no tiene selector (un .dproj de antes de las
       plataformas: 339 de los 3295 de esta maquina, medido el 18-oct-2026). }
     function ConfigPorDefecto: string;
+    { Las configuraciones que se COMPILAN: las que declara, menos Base (de la
+      que heredan las demas; el IDE no la deja activar), con su nombre y en su
+      orden. Vacia si no declara ninguna. Estaba a mano en ConfigDesconocida y
+      en set-active, y el manifiesto de despliegue escribia 'Debug','Release'
+      a fuego (con otra configuracion no desplegaba nada y decia exito). }
+    function Compilables: TArray<string>;
     { True si el proyecto DECLARA APlatform y la tiene activa: lo que el IDE
       compila sin tocar nada. Sin bloque <Platforms> (un proyecto anterior a
       las plataformas), solo la suya por defecto. }
@@ -1352,6 +1358,14 @@ begin
       Exit(C);
 end;
 
+function TDprojInfo.Compilables: TArray<string>;
+begin
+  Result := nil;
+  for var C in Configs do
+    if not SameText(C, 'Base') then
+      Result := Result + [C];
+end;
+
 function TDprojInfo.Declara(const APlatform: string): Boolean;
 var
   P: TDprojPlatform;
@@ -1444,10 +1458,7 @@ begin
   // demas, y el IDE no la deja activar (lo que se compila aqui se compila
   // igual en el IDE); compilaba con los ajustes de la base en Win64\Base\. La
   // lista, sin ella, como la de set-active
-  var Validas: TArray<string> := nil;
-  for var C in Info.Configs do
-    if not SameText(C, 'Base') then
-      Validas := Validas + [C];
+  var Validas := Info.Compilables;
   if SameText(AConfig.Trim, 'Base') then
     Exit(MsgFmt(SR_CFG_BASE_NO_SE_COMPILA_FMT, [string.Join(', ', Validas)]));
   if (Length(Info.Configs) > 0) and not Info.HasConfig(AConfig) then

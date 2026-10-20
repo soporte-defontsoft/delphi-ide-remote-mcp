@@ -1555,13 +1555,12 @@ begin
     // una que declara, con SU nombre: lo que teclea el agente solo elige
     var Cfg := '';
     var Validas := '';
-    for var N in Info.Configs do
-      if not SameText(N, 'Base') then
-      begin
-        Validas := IfThen(Validas = '', N, Validas + ', ' + N);
-        if SameText(N, ARawConfig.Trim) then
-          Cfg := N;
-      end;
+    for var N in Info.Compilables do
+    begin
+      Validas := IfThen(Validas = '', N, Validas + ', ' + N);
+      if SameText(N, ARawConfig.Trim) then
+        Cfg := N;
+    end;
     if Cfg = '' then
       Exit(MsgFmt(SR_CFG_SET_ACTIVE_CONFIG_FMT, [ARawConfig.Trim, ONinguno(Validas)]));
     Result := Pon('Config', Cfg);

@@ -688,7 +688,21 @@ begin
     '    </ProjectExtensions>' + sLineBreak;
 end;
 
-function AndroidDeployXml(const AName, APlat, ABdsRoot: string): string;
+{ Las configuraciones con grupo en un manifiesto que genera el servidor: las
+  que el proyecto compila (TDprojInfo.Compilables). Eran 'Debug','Release' a
+  fuego en los tres generadores: con otra (Prod) el deploy no enviaba nada y
+  msbuild decia exito tras limpiar la carpeta del destino (medido el
+  20-oct-2026 contra el Zorin). Un .dproj que no declara ninguna (anterior a
+  las configuraciones) se queda con las dos de siempre. }
+function ConfigsDelManifiesto(const ADprojXml: string): TArray<string>;
+begin
+  Result := InfoDeDproj(ADprojXml).Compilables;
+  if Length(Result) = 0 then
+    Result := ['Debug', 'Release'];
+end;
+
+function AndroidDeployXml(const AName, APlat, ABdsRoot: string;
+  const AConfigs: TArray<string>): string;
 var
   SB: TStringBuilder;
   Cfg, Libs, OutName: string;
@@ -704,7 +718,7 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.Append(CabeceraDeManifiesto);
-    for Cfg in TArray<string>.Create('Debug', 'Release') do
+    for Cfg in AConfigs do
     begin
       SB.AppendLine('    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>');
       Add(APlat + '\' + Cfg + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
@@ -782,7 +796,7 @@ begin
           Exit;
   DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
-  for Cfg in TArray<string>.Create('Debug', 'Release') do
+  for Cfg in ConfigsDelManifiesto(DprojXml) do
     Entries := Entries + OutputDeployEntry(DprojXml, APlat, Cfg, AName);
   // el grupo de la plataforma, '$(Platform)'=='X': el vacio que el IDE deja
   // escrito (<ItemGroup .../>), o el que tiene otros ficheros
@@ -935,13 +949,13 @@ begin
     // como lo escribe el IDE (el juez: UTF-8 con BOM, medido en sus
     // .deployproj): en ASCII un nombre de proyecto no ASCII salia con '?' en
     // el Include (P3-L1 de la 1.18.0)
-    EscribeTexto(F, AndroidDeployXml(N, APlat, ABdsRoot), ltJaula, ekUtf8Bom);
+    EscribeTexto(F, AndroidDeployXml(N, APlat, ABdsRoot, ConfigsDelManifiesto(Dproj)), ltJaula, ekUtf8Bom);
     AGenerated := True;
     Exit;
   end;
   Ext := ExtensionDeEjecutable(APlat);
   Xml := CabeceraDeManifiesto;
-  for Cfg in TArray<string>.Create('Debug', 'Release') do
+  for Cfg in ConfigsDelManifiesto(Dproj) do
     Xml := Xml +
       '    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>'#13#10 +
       XmlDeployFile(APlat + '\' + Cfg + '\' + N + Ext, '', N + '\', N + Ext, 'ProjectOutput', 1, True) +

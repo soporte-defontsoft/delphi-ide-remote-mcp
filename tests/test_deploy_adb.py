@@ -263,6 +263,39 @@ check('deploy repetido: el import NO se duplica',
 check('deploy repetido: el .deployproj existente NO se toca (la marca del operador sigue)',
       b'marca del operador' in before and open(DEPLOYPROJ, 'rb').read() == before, DEPLOYPROJ)
 
+# ====================== deploy con una configuracion PROPIA ================
+# El manifiesto que genera el servidor llevaba 'Debug','Release' a fuego: con
+# otra configuracion (Prod) msbuild no desplegaba NADA y decia exito, tras
+# limpiar la carpeta del destino (medido el 20-oct-2026 contra el Zorin). Los
+# grupos, los de las configuraciones que el proyecto compila. Rojo contra la 1.21.0
+PDIR = os.path.join(BASE, 'DeployProd')
+out = srv.call('delphi_create', {"kind": "project-console", "dir": PDIR, "name": "DeployProd"})
+check('create: proyecto console con una configuracion propia', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out[:150])
+PDPROJ = os.path.join(PDIR, 'DeployProd.dproj')
+PDEPLOY = os.path.join(PDIR, 'DeployProd.deployproj')
+srv.call('delphi_config', {"command": "add-platform", "platform": "Linux64", "project": PDPROJ})
+# Prod, como la declara el IDE: su BuildConfiguration y su grupo de propiedades
+_x = open(PDPROJ, encoding='utf-8-sig').read()
+_nl = '\r\n' if '\r\n' in _x else '\n'
+_x = _x.replace("    <PropertyGroup Condition=\"'$(Config)'=='Release' or '$(Cfg_2)'!=''\">",
+                "    <PropertyGroup Condition=\"'$(Config)'=='Prod' or '$(Cfg_3)'!=''\">" + _nl +
+                "        <Cfg_3>true</Cfg_3>" + _nl + "        <CfgParent>Base</CfgParent>" + _nl +
+                "        <Base>true</Base>" + _nl + "    </PropertyGroup>" + _nl +
+                "    <PropertyGroup Condition=\"'$(Config)'=='Release' or '$(Cfg_2)'!=''\">", 1)
+_x = _x.replace('        <BuildConfiguration Include="Release">',
+                '        <BuildConfiguration Include="Prod">' + _nl + '            <Key>Cfg_3</Key>' + _nl +
+                '            <CfgParent>Base</CfgParent>' + _nl + '        </BuildConfiguration>' + _nl +
+                '        <BuildConfiguration Include="Release">', 1)
+open(PDPROJ, 'w', encoding='utf-8-sig', newline='').write(_x)
+_v = mc.como_json(srv.call('delphi_config', {"command": "view", "project": PDPROJ}))
+check('fixture: el proyecto declara Prod', 'Prod' in (_v.get('configurations') or []), _v.get('configurations'))
+out = srv.call('delphi_build', {"project": PDPROJ, "platform": "Linux64", "config": "Prod",
+                                "target": "Deploy", "profile": "mcp-e2e-noprof"}, t=600)
+_m = open(PDEPLOY, encoding='utf-8-sig').read() if os.path.isfile(PDEPLOY) else ''
+check('deploy config=Prod: el manifiesto generado lleva el grupo de Prod (y los de Debug y Release)',
+      "'Prod'" in _m and "'Debug'" in _m and "'Release'" in _m and 'Linux64\\Prod\\DeployProd' in _m,
+      _m[:600] or out[:300])
+
 # ====================== deploy Android: full staging generation ===========
 # con la zona de biblioteca APAGADA (un workspace con nombre que no la declara):
 # la semilla de ObjRepos es de la instalacion del IDE y se lee por la puerta con

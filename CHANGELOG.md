@@ -36,6 +36,16 @@ the MCP `initialize` response (`serverInfo.version`).
   scan and MSBuild run under the same write lock, so the file cannot appear
   in between through the server. Measured live: the VCL and FMX projects the
   IDE created build. `test_build_imports`, red against 1.21.0.
+- **Deploying a configuration other than Debug or Release shipped nothing
+  and said it had succeeded.** The deployment manifest the server generates
+  had groups for 'Debug' and 'Release' only, written by hand; with a
+  configuration of the project's own (`Prod`) msbuild cleaned the target's
+  folder, found no file for that configuration and reported success
+  (measured on 20-oct-2026 against the Zorin: nothing arrived). The groups
+  are now those of the configurations the project builds - the ones it
+  declares except Base, the same list that `delphi_build` and `set-active`
+  accept, now read by one helper. Measured live: the `Prod` binary arrives
+  and runs. `test_deploy_adb`, red against 1.21.0.
 
 - **`delphi_desktop` took the parameters of a gesture it was not doing
   without a word.** A call with `code`, `x`, `y` or `text` and no
