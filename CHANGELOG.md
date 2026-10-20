@@ -22,6 +22,20 @@ the MCP `initialize` response (`serverInfo.version`).
   name as it is - and where the file system does not know it, the read-only
   attribute of a file with more than one name is never cleared (deleting it
   fails and says so). `test_enlace_duro_1182`, red against 1.21.0.
+- **A project just created in the IDE did not build through the server.**
+  Its `.dproj` imports `$(MSBuildProjectName).deployproj` with
+  `Condition="Exists('$(MSBuildProjectName).deployproj')"`, and that file
+  does not exist until the first deployment; the build gate refused every
+  `<Import>` of a missing file - `BUILD-017`, in the words of a security
+  refusal - although MSBuild, the judge, simply does not import it. The same
+  wall stopped a `delphi_git worktree` of a repository that ignores its
+  `.deployproj` (an agent on Hermes, 19-oct-2026). That exact form - a
+  condition that is `Exists()` of the import's own path - is now let through
+  when the file is missing; any other condition is still not evaluated by
+  the server, and a file that IS there is read and scanned as before. The
+  scan and MSBuild run under the same write lock, so the file cannot appear
+  in between through the server. Measured live: the VCL and FMX projects the
+  IDE created build. `test_build_imports`, red against 1.21.0.
 
 - **`delphi_desktop` took the parameters of a gesture it was not doing
   without a word.** A call with `code`, `x`, `y` or `text` and no

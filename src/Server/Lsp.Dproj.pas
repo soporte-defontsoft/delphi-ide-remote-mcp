@@ -2540,8 +2540,23 @@ begin
   // SCAN anything else; refuse what cannot be resolved.
   // UN lector de atributos XML: comillas, blancos y entidades compartidos.
   // (tambien los de dentro de un comentario: mas estricto que el juez)
-  for var Importado in AllTagAttr(AXml, 'Import', 'Project', True) do
+  // El Project y la Condition del MISMO <Import>, por las piezas de ese lector
+  // (AperturasDe + AtributosDeApertura, las de AllTagAttr)
+  for var Apertura in AperturasDe(TextoDeBusqueda(AXml, True), 'Import') do
   begin
+    var Importado := '';
+    var Condicion := '';
+    var ConProject := False;
+    for var At in AtributosDeApertura(AXml, Apertura.Abre, Apertura.Cierra) do
+      if SameText(At.Nombre, 'Project') then
+      begin
+        Importado := ValorDeAtributo(AXml, At);
+        ConProject := True;
+      end
+      else if SameText(At.Nombre, 'Condition') then
+        Condicion := ValorDeAtributo(AXml, At);
+    if not ConProject then
+      Continue;
     V := Importado.Trim;
     if V.StartsWith('\\') or V.StartsWith('//') then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_UNC_FMT, [V]));
@@ -2553,7 +2568,19 @@ begin
     if Resolved = '' then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT, [V]));
     if not TFile.Exists(Resolved) then
+    begin
+      // el que el IDE escribe para el manifiesto de despliegue lleva
+      // Condition="Exists('<su mismo Project>')": sin el fichero msbuild -el
+      // juez- no lo importa, y se negaba todo proyecto recien creado en el IDE
+      // hasta su primer despliegue (BUILD-017; 17-oct y 19-oct-2026, medido).
+      // Solo ESA forma, literal: otra condicion no se evalua aqui (frontera:
+      // se le pregunta a msbuild, no se amplia el evaluador). Que aparezca
+      // entre este escaneo y msbuild no se puede por el MCP: los dos van bajo
+      // el cerrojo de escritura (Lsp.BuildRunner, EscaneoCompileOnly)
+      if SameText(Condicion.Trim, 'Exists(''' + Importado + ''')') then
+        Continue;
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_ESTA_FMT, [V]));
+    end;
     // lo que no es del IDE se escanea si esta en las raices (o en la zona de
     // biblioteca); de fuera, se rechaza: el build lo cargaria de alli
     if LugarDeLecturaDenegado(Resolved, [ltJaula]) <> '' then

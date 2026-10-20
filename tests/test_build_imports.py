@@ -43,6 +43,43 @@ try:
                  mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and
                  'a <exec> task' in r, r[:400])
 
+    # BUILD-017 (17-oct y 19-oct-2026): el Import que el IDE escribe para el
+    # manifiesto de despliegue lleva Condition="Exists(<el mismo>)"; sin el
+    # fichero msbuild no lo importa, y se negaba TODO proyecto recien creado en
+    # el IDE hasta su primer despliegue (y el worktree de un repo que ignora el
+    # .deployproj). Rojo contra la 1.21.0. Solo ESA forma, literal.
+    IDE_DEP = ('<Import Project="$(MSBuildProjectName).deployproj" '
+               'Condition="Exists(\'$(MSBuildProjectName).deployproj\')"/>')
+    carpeta = os.path.join(BASE, 'cond')
+    salida = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fixture', 'dir': carpeta})
+    mc.check('cond: fixture creada', mc.abre(salida, 'SK_CREATE_CREADO_PROYECTO_FMT'), salida[:200])
+    proyecto = os.path.join(carpeta, 'Fixture.dproj')
+    with open(proyecto, encoding='utf-8-sig') as f:
+        xml_cond = f.read()
+
+    def con_import(linea):
+        with open(proyecto, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write(xml_cond.replace('</Project>', linea + '</Project>'))
+
+    con_import(IDE_DEP)
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('cond: el Import del IDE con Exists de si mismo y SIN el .deployproj compila (era BUILD-017)',
+             mc.como_json(r).get('success') is True, mc.como_json(r).get('firstError') or r[:400])
+    # con el fichero, se lee y se escanea como cualquier otro: un Exec dentro se niega
+    dep = os.path.join(carpeta, 'Fixture.deployproj')
+    with open(dep, 'w', encoding='utf-8') as f:
+        f.write('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"><Target Name="Fixture" BeforeTargets="Build"><Exec Command=""/></Target></Project>')
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('cond: ...y CON el .deployproj se escanea: un <Exec> dentro se niega',
+             mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and 'a <exec> task' in r, r[:400])
+    os.remove(dep)
+    # otra condicion (Exists de OTRO fichero) no se evalua aqui: sigue negado
+    con_import('<Import Project="cond.targets" Condition="Exists(\'otro.targets\')"/>')
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('cond: un Import que falta con la condicion de OTRO fichero sigue negado (BUILD-017)',
+             mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and 'not there to be checked (cond.targets)' in r,
+             r[:400])
+
     # Un Import de un fichero FUERA de las raices, INOCUO a proposito: la puerta
     # de leer no lo deja leer (bloque de las puertas de la 1.18.0) y el build lo
     # cargaria de alli. Hasta 22c83e1 el escaner lo leia, lo veia limpio y
