@@ -3911,7 +3911,7 @@ const
     'configuration: that is what happened in the field, and the rename ' +
     'said yes while it left a project that did not compile. Check them ' +
     'one by one before applying anything; "scope" tells you where I ' +
-    'searched.';
+    'searched, and "project" with which project''s settings.';
 
   SR_RENAME_UNVERIFIED_FMT =
     '[RENAME-018 DENIED] %d candidate references NOT semantically ' +
@@ -5942,6 +5942,15 @@ const
     '[LSP-042] %d candidates; the first %d are shown, in the engine''s ' +
     'order. Put the cursor after the first letters of the name you want, ' +
     'and only those that start with them come back.';
+
+  { Un trigger que el motor no anuncia (su initialize): no cambia nada, y se
+    leia como un fallo (Hermes, dos veces; 1.21.1). }
+  SN_COMPLETION_TRIGGER_NO_ES_FMT =
+    '[LSP-047] trigger "%s" is not one of the characters this engine ' +
+    'completes on (%s), so it changes nothing: the answer is the one ' +
+    'without it. To narrow by a name being typed, put the cursor right ' +
+    'after its first letters: the prefix under the cursor filters ' +
+    '("prefix").';
 
   SN_COMPLETION_SNAPPED_FMT =
     '[LSP-027] I moved the position from column %d to column %d: you ' +
@@ -9175,7 +9184,9 @@ const
     'is harmless; a string literal blocks delphi_rename_symbol ' +
     '(RENAME-020), because it may be a FindComponent/RTTI by name. ' +
     'Bounded work: leftovers are listed as unverified, never silently ' +
-    'dropped; a file it cannot read, as unreadable.';
+    'dropped; a file it cannot read, as unreadable. The answer says where ' +
+    'it looked ("scope") and with the settings of which project ' +
+    '("project"), as delphi_diagnostics.';
 
   SD_BUILD_BUILD =
     'Build a Delphi project for real with MSBuild on this machine - the ' +
@@ -9205,7 +9216,9 @@ const
     '"character0")';
 
   SP_LSP_TRIGGER =
-    'Optional trigger character, e.g. "." (empty = manual invocation)';
+    'Optional trigger character, e.g. "." (empty = manual invocation). ' +
+    'Only the ones the engine completes on do anything; another is said ' +
+    'in "triggerNote" (LSP-047).';
 
   SP_LSP_KIND =
     'Optional: definition (default) | declaration (jump to the interface ' +

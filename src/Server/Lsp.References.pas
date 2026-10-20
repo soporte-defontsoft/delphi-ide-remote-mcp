@@ -1192,6 +1192,12 @@ begin
       Result.AddPair('scope', ScopeArr);
       for var SD in ScopeDirs do
         ScopeArr.Add(SD);
+      // ...y CON QUE proyecto: el motor resuelve con los ajustes de uno, y el
+      // alcance sale de el (lista de pendientes de la 1.21: salia el scope y
+      // no de quien era)
+      var Proyecto := ProyectoDeLosAjustes(Settings);
+      if Proyecto <> '' then
+        Result.AddPair('project', Proyecto);
     finally
       OpenedFiles.Free;
     end;

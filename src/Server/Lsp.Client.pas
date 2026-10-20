@@ -63,6 +63,8 @@ type
     FWaitingSince: UInt64; // when that wait began, or the engine's last sign of life since
     FSeenCpuMs, FSeenIoOps: UInt64; // the process's counters at the last look
     FWaiters: Integer;     // calls waiting for a notification right now (under FLock)
+    // los caracteres de disparo de completion que anuncia el motor (Initialize)
+    FTriggersDeCompletion: TArray<string>;
     procedure BeginWait;
     procedure EndWait;
     procedure HandleRawMessage(const AJson: string);
@@ -145,6 +147,12 @@ type
       AAgentCount: Integer = 2; ATimeoutMs: Integer = 30000): TJSONObject;
     procedure SendInitialized;
     procedure SetSettingsFile(const ASettingsFilePath: string);
+    { Los caracteres con los que el motor dice que completa: los de su
+      respuesta a initialize (capabilities.completionProvider.
+      triggerCharacters; el agente de la 37.0 anuncia . ( < [, medido el
+      20-oct-2026). Vacio si no anuncio nada - el linter no anuncia
+      completion. Se llena en Initialize, antes de que nadie use el cliente. }
+    property TriggersDeCompletion: TArray<string> read FTriggersDeCompletion;
 
     { Document sync }
     procedure DidOpenText(const AUri, AText: string; AVersion: Integer = 1);
@@ -745,6 +753,13 @@ begin
     '{"serverType":"%s","agentCount":%d},"capabilities":{}}',
     [Integer(GetCurrentProcessId), ARootUri, TypeNames[AServerType], AAgentCount]);
   Result := Request('initialize', Params, ATimeoutMs);
+  // lo que el motor anuncia para completion: el juez de un trigger
+  // (delphi_completion lo dice cuando el que le dan no es de estos)
+  FTriggersDeCompletion := [];
+  var Lista := Result.FindValue('result.capabilities.completionProvider.triggerCharacters');
+  if Lista is TJSONArray then
+    for var V in TJSONArray(Lista) do
+      FTriggersDeCompletion := FTriggersDeCompletion + [V.Value];
 end;
 
 procedure TLspClient.SendInitialized;

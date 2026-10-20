@@ -107,7 +107,7 @@ Code completion candidates at a 0-based line:character position (official Delphi
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `trigger` | string | optional | Optional trigger character, e.g. "." (empty = manual invocation) |
+| `trigger` | string | optional | Optional trigger character, e.g. "." (empty = manual invocation). Only the ones the engine completes on do anything; another is said in "triggerNote" (LSP-047). |
 | `line` | integer | **yes** | Zero-based line of the identifier: the "line0" of a search, references, symbols or definition hit ("line" is 1-based) |
 | `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
 | `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: these tools resolve a position in a source. What each unit of a folder offers, at once: delphi_symbols. |
@@ -117,7 +117,7 @@ Code completion candidates at a 0-based line:character position (official Delphi
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Find references to the identifier at a 0-based line:character position. Hybrid method (DelphiLSP has no native references): project-wide text scan, then every candidate is validated by asking the compiler engine for its definition - only candidates resolving to the SAME symbol are confirmed, homonyms are rejected. A name written in a COMMENT or inside a string literal is not a reference and does not count as unverified: those go to "mentions". A comment is harmless; a string literal blocks delphi_rename_symbol (RENAME-020), because it may be a FindComponent/RTTI by name. Bounded work: leftovers are listed as unverified, never silently dropped; a file it cannot read, as unreadable.
+Find references to the identifier at a 0-based line:character position. Hybrid method (DelphiLSP has no native references): project-wide text scan, then every candidate is validated by asking the compiler engine for its definition - only candidates resolving to the SAME symbol are confirmed, homonyms are rejected. A name written in a COMMENT or inside a string literal is not a reference and does not count as unverified: those go to "mentions". A comment is harmless; a string literal blocks delphi_rename_symbol (RENAME-020), because it may be a FindComponent/RTTI by name. Bounded work: leftovers are listed as unverified, never silently dropped; a file it cannot read, as unreadable. The answer says where it looked ("scope") and with the settings of which project ("project"), as delphi_diagnostics.
 
 *Access: read-only OK.*
 
@@ -868,7 +868,7 @@ A text form (`.dfm`/`.fmx`) is judged as `delphi_edit` judges what it writes - t
 
 Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work - the rules of each are in "command". clone is the fast way to get a whole repo onto the server (far better than recreating files one by one). worktree puts ANOTHER version of the repo next to it to build and compare, without touching anybody's working tree (yours to clean up). Commit/tag messages, config values and the clone URL travel in "message"; push/pull use the credentials and remotes stored on the server. The repository - root folder and .git - has to be inside your roots: git works on the whole repository it finds from "repo" upwards, so one that starts above your roots is refused (GIT-041). No arbitrary git commands, no shell.
 
-*Access: mixed (`command` status / diff / log / show / ls-remote / branch read-only; tag only without name or message (then it lists); worktree only with action=list; stash only with action=list; every other command read-write, refused to a read-only credential).*
+*Access: mixed (`command` status / diff / log / show / ls-remote / branch read-only; tag only without name or message (then it lists); worktree only with action=list; stash only with action=list; config only without message (then it reads the value); every other command read-write, refused to a read-only credential).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -885,9 +885,9 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | `branch` | string | optional | switch (create=true: a new name), merge, pull. |
 | `remote` | string | optional | The name of a remote of this repo: pull, fetch, push, ls-remote. |
 | `action` | string | optional | stash: push (default) \| pop \| list. worktree: add \| list \| remove. merge: abort. |
-| `name` | string | optional | tag: the new tag (none = list them). config: user.name \| user.email. |
+| `name` | string | optional | tag: the new tag (none = list them). config: user.name \| user.email (no message = read the value a commit would use). |
 | `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Refused with any other command (GIT-038). |
-| `message` | string | optional | commit: the message. tag: makes it annotated. stash push: its label. config: the value. clone: the repository URL. |
+| `message` | string | optional | commit: the message. tag: makes it annotated. stash push: its label. config: the value (none = read the current one). clone: the repository URL. |
 | `path` | string | optional | worktree add: a NEW folder inside your roots. worktree remove: one that action=list shows. |
 | `ref` | string | optional | A commit, tag or branch (v1.3.2, main, HEAD~3). diff: the base (to: the other end). log: the newest commit (to: ref..to). show: this one. push: the name to send. tag: what it marks. worktree add: the version. |
 | `offset` | integer | optional | Lines to skip when a listing did not fit in one page - pass the offset its note gives. |

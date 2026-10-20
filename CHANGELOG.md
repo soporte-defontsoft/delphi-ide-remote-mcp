@@ -91,6 +91,21 @@ the MCP `initialize` response (`serverInfo.version`).
   read-only root, where setting is still refused. Any other key is still
   refused, to read or to write (`GIT-024`). `test_git_config_lee_1211`,
   red against 1.21.0.
+- **`delphi_references` and `delphi_rename_symbol` said where they looked
+  but not with which project.** Both answered `scope` (the folders searched)
+  and not whose settings the engine resolved with; with two copies of the
+  same project in the workspace - the usual case - an agent could not tell
+  which one its uses came from. Both now name it in `project`, as
+  `delphi_diagnostics` already did, read by one helper for the three
+  (`ProyectoDeLosAjustes`). `test_refs_proyecto_1211`, red against 1.21.0.
+- **`delphi_completion` ignored a `trigger` the engine does not complete
+  on, without a word.** A letter (`S`, `Z`) changes nothing - the answer is
+  the one without it, measured - and an agent read it as a bug twice (on
+  Hermes). The answer now says so in `triggerNote` (`LSP-047`) with the
+  characters the engine announces; the judge is the engine itself, the
+  `triggerCharacters` of its `initialize` answer (`. ( < [` for the 37.0
+  agent), not a list of ours. `test_completion_trigger_1211`, red against
+  1.21.0.
 
 ## [1.21.0] - 2026-10-19
 

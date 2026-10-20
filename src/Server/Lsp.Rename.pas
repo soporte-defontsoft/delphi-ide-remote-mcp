@@ -288,6 +288,9 @@ begin
       end;
       if Refs.GetValue('scope') <> nil then
         Result.AddPair('scope', TJSONArray(Refs.GetValue('scope').Clone));
+      // (el proyecto de ese alcance, como lo dice references)
+      if Refs.GetValue('project') <> nil then
+        Result.AddPair('project', Refs.GetValue('project').Value);
       // A COUNT of unverified references blocks the rename and tells you
       // nothing about which ones they are, so there is no way to go and look
       // (measured 2026-08-25). Name them - that is the whole point of a

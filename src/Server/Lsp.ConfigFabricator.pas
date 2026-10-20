@@ -52,6 +52,13 @@ const
   2026-09-29), so it is the folder an engine holds. }
 function ProjectOfSettings(const ASettingsFile: string): string;
 
+{ El PROYECTO con el que contesto el motor, como lo nombran las demas tools:
+  el .dproj de ProjectOfSettings (su fuente principal si no hay .dproj); ''
+  si los ajustes no nombran ninguno. Lo dicen diagnostics, references y
+  rename: una unidad que no lista nadie toma el de mas arriba, y lo que el
+  motor dice de ella depende de el. Nunca lanza. }
+function ProyectoDeLosAjustes(const ASettingsFile: string): string;
+
 { The settings file for ADprojPath, made again from the .dproj, the IDE's
   library and the jail every time it is asked, and written to the cache only
   when its bytes change: the path stays, its disk stamp moves. Returns the
@@ -339,6 +346,13 @@ begin
   except
     Result := '';
   end;
+end;
+
+function ProyectoDeLosAjustes(const ASettingsFile: string): string;
+begin
+  Result := ProjectOfSettings(ASettingsFile);
+  if (Result <> '') and FileExists(DprojDe(Result)) then
+    Result := DprojDe(Result);
 end;
 
 { Una lista ;-separada como la quiere el motor: sin vacios, sin repetidos y

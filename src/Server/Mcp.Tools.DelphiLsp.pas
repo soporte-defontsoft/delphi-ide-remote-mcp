@@ -1527,6 +1527,14 @@ begin
       Prefijo := '';
   end;
 
+  // Un trigger que el motor no anuncia no cambia nada: lo ignora en silencio,
+  // y una letra (S, Z) se leyo como un fallo dos veces (Hermes). Lo juzga EL
+  // MOTOR, con lo que anuncio en su initialize; si no anuncio nada, no se dice
+  var TriggerNota := '';
+  var Disparos := Client.TriggersDeCompletion;
+  if (Params.Trigger <> '') and (Length(Disparos) > 0) and (IndexStr(Params.Trigger, Disparos) < 0) then
+    TriggerNota := MsgFmt(SN_COMPLETION_TRIGGER_NO_ES_FMT, [Params.Trigger, string.Join(' ', Disparos)]);
+
   Resp := Client.Completion(TLspClient.PathToUri(Params.Path), Params.Line,
     EffChar, Params.Trigger);
   try
@@ -1560,6 +1568,8 @@ begin
         Return.AddPair('positionNote', AdjNote);
       if Prefijo <> '' then
         Return.AddPair('prefix', Prefijo);
+      if TriggerNota <> '' then
+        Return.AddPair('triggerNote', TriggerNota);
       OutItems := TJSONArray.Create;
       Return.AddPair('items', OutItems);
       // el tope cuenta lo que SE DEVUELVE: contaba indices de la lista cruda,
