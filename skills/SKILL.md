@@ -85,6 +85,9 @@ handshake.
 - Pascal traps: a method signature exists TWICE (interface +
   implementation); there are TWO uses clauses; one single `end.` at the
   file end. Half an edit is not an edit.
+- A NEW routine or method goes in with `insert` (`rutina-global`, or
+  `metodo` + `inclass`): ONE routine per call - a `code` with two is
+  refused (`EDIT-129`) naming them, and nothing is written.
 - `.fmx`/`.dfm` are DATA, not code. The compiler only checks their text
   grammar - a wrong property name or enum value compiles fine and then
   **crashes the form at load time on the target, silently**. The server
@@ -146,6 +149,10 @@ handshake.
   never taken for yours: `via: "override"` in `delphi_references` is the
   inheritance family as the engine resolves it, and a namesake leaves the
   rename not applicable (`RENAME-017`) instead of being renamed with it.
+  `delphi_references` lists the lines of the form files that name it as
+  well (`designer`) - the ones a rename blocks on (`RENAME-019`); a
+  component of the form is renamed with `delphi_designer command=set
+  prop=Name`.
 - If `applicable=true`, repeat the same call with `mode=apply`: the tool
   writes it through the changeset engine (all files or none, a backup of
   each) and answers with the commit. Then `delphi_build`. If false, the
@@ -340,6 +347,9 @@ in frame. Do the gesture you came for and nothing else.
   first build on a new platform, `delphi_components platform=<the one>`
   lists the components registered elsewhere and not there. An empty
   `sourceFolders` means no source for that platform: `delphi_report`.
+  A unit that only exists under a scope (`Dialogs`: `FMX.Dialogs`,
+  `Vcl.Dialogs`) comes back in `qualified`: write it qualified in the
+  uses (`BUILD-049`) - there is no folder to add.
 - **A component that loads a native library at runtime** (a `.so` on
   Linux, `.dylib` on macOS, `.dll` on Windows - OBR's `libzbar`, for
   instance) needs that file shipped with the binary:
@@ -473,4 +483,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.21.0 -->
+<!-- contract reviewed: v1.21.1 -->

@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-10-20
+
+A patch of 1.21.0 with what agents and our own measurements found once it
+was out, checked by Hermes (Qwen3.8 Flash Next) on Delphi 13.2 before
+publishing - a targeted pass, the full test, and rounds on what they
+found - and, this once, by a full review of Claude Sonnet 5 and GPT-5.6
+Luna. Three holes through hard links are closed: reading one whose other
+name is outside the roots (`GUARD-041`), also through the copies the
+server makes on its own; `delphi_upload` writing through one into the file
+outside (`GUARD-043`); and purging a folder that held one, which changed
+the attributes of the file outside. A project the IDE
+has just created builds, a configuration of the project's own deploys,
+and a path written with forward slashes is written as it is read. And
+the tools say what they used to keep quiet: a parameter of another
+command (`DESK-025`, `HELP-009`, `DOCS-017`, `REPORT-013`), a completion
+trigger the engine ignores, the project `references` and `rename`
+resolved with and the uses in the form files, a unit that only exists
+qualified (`BUILD-049`), and two routines in one `insert` (`EDIT-129`);
+`delphi_git config` reads the identity it sets.
+
 ### Fixed
 
 - **Purging a folder that held a hard link changed the attributes of a file
@@ -46,7 +66,6 @@ the MCP `initialize` response (`serverInfo.version`).
   declares except Base, the same list that `delphi_build` and `set-active`
   accept, now read by one helper. Measured live: the `Prod` binary arrives
   and runs. `test_deploy_adb`, red against 1.21.0.
-
 - **`delphi_desktop` took the parameters of a gesture it was not doing
   without a word.** A call with `code`, `x`, `y` or `text` and no
   `command` is a screenshot - the default - and the server answered with
@@ -128,9 +147,27 @@ the MCP `initialize` response (`serverInfo.version`).
   when they cannot be listed (`GUARD-042`); a hard link whose names are all
   inside - the roots or a reference - is read as before. It judges READING
   (read, search, fetch, copy, the edits that read first, the files a build
-  or a style pulls in): deleting or moving that name does not touch the
-  other one and is still allowed. A file with one name costs one open that
-  reads nothing. `test_enlace_duro_lectura_1211`, red against 1.21.0.
+  includes - `{$I}`, `{$R}` - or a style names): deleting or moving that
+  name does not touch the other one and is still allowed. A file with one
+  name costs one open that reads nothing. `test_enlace_duro_lectura_1211`,
+  red against 1.21.0.
+- **The copies the server makes on its own read a hard link, and
+  `delphi_upload` wrote through one.** Measured on 20-oct-2026 with a hard
+  link in the roots to a file outside them: `delphi_upload` over it wrote
+  the uploaded bytes INTO the file outside - upload writes into the file,
+  with any offset, where every other writer puts a new file in place with a
+  rename - and the copies the server keeps before replacing or moving a file
+  (upload's sealed copy, the trash copy of `delphi_move`, the `.res` that
+  `delphi_styles build` replaces) and `copy=true` of a folder took that
+  file's bytes into the roots, where the read gate refused them. Upload now
+  refuses a file with more than one name (`GUARD-043`: delete this name
+  first). The copies ask the read gate's question about the other names: a
+  move takes the name without a copy, as it does with a symlink; a folder
+  copy leaves it out and lists it (`FILE-032`); a styles build over it is
+  refused before anything runs, and anything else that would replace it
+  keeping a copy, before it is touched (`GUARD-041`, `GUARD-042`).
+  Deleting such a name was already safe: the trash keeps the name, not a
+  copy. `test_enlace_duro_copias_1211`, red against 1.21.0.
 - **`delphi_edit` INSERT with two routines in `code` wrote the second as it
   came and said both halves were done.** With `insert=metodo`, only the
   first routine was declared in the class and qualified; the second went in
