@@ -2030,7 +2030,7 @@ begin
     function(const ANombre, AValor: string): string
     begin
       Result := AValor;
-      if (AValor.IndexOf('~') < 0) or not EsRutaAbsoluta(AValor) or
+      if ((AValor.IndexOf('~') < 0) and (AValor.IndexOf('/') < 0)) or not EsRutaAbsoluta(AValor) or
          not Mapa.ContainsKey(ClaveDeParam(Tool, ANombre)) then
         Exit;
       // Alargar NUNCA cambia a que fichero se refiere la llamada. La forma
@@ -2040,10 +2040,19 @@ begin
       // tal cual y su negativa (PathAnomaly) la ve como vino.
       if PathAnomaly(AValor) <> '' then
         Exit;
+      // ...y el separador de Windows: '/' vale para el sistema, pero no para
+      // ExtractFileDir y los suyos, que solo ven '\'. Con "D:/a/x.pas" la
+      // carpeta real del escritor salia "D:" y la escritura se negaba como si
+      // hubiera un ENLACE (GUARD-037) despues de que read leyera la misma
+      // ruta (Hermes, validacion de la 1.21.1; medido en produccion). UNA
+      // forma, aqui, para todas las tools
+      Result := AValor.Replace('/', '\');
+      if Result.IndexOf('~') < 0 then
+        Exit;
       try
-        Result := LongCanonical(AValor);
+        Result := LongCanonical(Result);
       except
-        Exit(AValor); // una ruta que no parsea sigue a su negativa tal cual
+        Exit(AValor.Replace('/', '\')); // una ruta que no parsea sigue a su negativa
       end;
       // la separacion final, como venia: una carpeta se nombra igual
       if AValor.EndsWith('\') or AValor.EndsWith('/') then

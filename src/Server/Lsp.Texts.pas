@@ -7499,7 +7499,8 @@ const
     'ONE: only the first would be declared as you asked, and the others ' +
     'would go in as they came (a method becomes a global routine; ' +
     'visible=true leaves them out of the interface). Nothing was written. ' +
-    'Insert them one per call, with the same insert, inclass and visibility.';
+    'Insert them one per call, with the same parameters (insert, and ' +
+    'inclass/visibility for a method or visible for a global routine).';
 
   SR_EDIT_INSERT_SOLO_FUENTES_PASCAL =
     '[EDIT-040 INVALID_PARAM] insert is only for Pascal sources, not for ' +

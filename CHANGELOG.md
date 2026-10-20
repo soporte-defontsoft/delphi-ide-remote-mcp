@@ -142,6 +142,17 @@ the MCP `initialize` response (`serverInfo.version`).
   The routines are counted by the house reader (`Lsp.PascalDecl`), so a
   local routine nested inside one does not count. `test_insert_una_rutina_1211`,
   red against 1.21.0.
+- **A path written with forward slashes could be read but not written.**
+  `delphi_edit` and `delphi_textedit` of `D:/dir/file.pas` (or `srvd:/...`)
+  were refused with `GUARD-037` - "some part of the path is a LINK" - when
+  there was no link, right after `delphi_read` had read the same path (Hermes,
+  in the validation of 1.21.1; measured in production). Windows takes `/`,
+  but the functions that cut a path into folder and name only see `\`, so
+  the writer's real folder came out as the drive itself. The entrance now
+  gives every absolute server path (`[RutaDelServidor]`) one form, with
+  `\`, for every tool at once - where it already turned 8.3 names into long
+  ones; a path outside the roots is still refused as outside.
+  `test_rutas_con_barra_1211`, red against 1.21.0.
 
 ## [1.21.0] - 2026-10-19
 
