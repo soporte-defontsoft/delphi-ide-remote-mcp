@@ -7492,6 +7492,15 @@ const
     '[EDIT-039 NOT_FOUND] There is no copy of %s in %s\. I can only restore ' +
     'what I copied myself.';
 
+  { INSERT con varias rutinas en code: solo la primera se trataba como lo que
+    se pedia (Hermes, validacion de la 1.21.1). }
+  SR_EDIT_INSERT_UNA_RUTINA_FMT =
+    '[EDIT-129 INVALID_PARAM] code carries %d routines (%s) and INSERT takes ' +
+    'ONE: only the first would be declared as you asked, and the others ' +
+    'would go in as they came (a method becomes a global routine; ' +
+    'visible=true leaves them out of the interface). Nothing was written. ' +
+    'Insert them one per call, with the same insert, inclass and visibility.';
+
   SR_EDIT_INSERT_SOLO_FUENTES_PASCAL =
     '[EDIT-040 INVALID_PARAM] insert is only for Pascal sources, not for ' +
     'designer files.';
@@ -9332,7 +9341,8 @@ const
     'declaration. Pass code, not old/new';
 
   SP_EDIT_CODE =
-    'INSERT mode: the COMPLETE block, signature UNQUALIFIED (procedure ' +
+    'INSERT mode: the COMPLETE block of ONE routine (two or more: one call ' +
+    'each, EDIT-129), signature UNQUALIFIED (procedure ' +
     'Save; - not procedure TOrder.Save;) + begin..end;. NEVER include end. ' +
     'For a method, attributes before the signature ([Test]) and ' +
     'directives after it (virtual; override; static;...) go to the class ' +

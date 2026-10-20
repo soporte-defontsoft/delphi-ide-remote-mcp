@@ -208,6 +208,13 @@ function LeeUnidadPascal(const ATextoActivo: string): TUnidadPas;
   CR suelto, un LF o un CRLF, un salto). Es el de los que trabajan por lineas. }
 function LeeFuentePascal(const AFuente: string): TUnidadPas;
 
+{ Las rutinas CON CUERPO de un bloque de codigo suelto (el code de un INSERT
+  de delphi_edit), por su nombre tal como va escrito y en orden; las anidadas
+  van dentro de la suya y no cuentan. El bloque se lee como el implementation
+  de una unidad, con EL lector. [] si no se puede leer: quien pregunta sigue
+  con sus propias comprobaciones. }
+function RutinasDeUnBloque(const ACodigo: string): TArray<string>;
+
 { Las clases de AUnidad y su ancestro como esta escrito ('' = TObject), por
   ClaveDeIdentificador de su nombre simple: el mapa de CadenaDeAncestros. Se
   puede llenar con varias unidades; una clase de la unidad gana a una anidada
@@ -2082,6 +2089,25 @@ begin
   // CodigoPascal: comentarios, cadenas y directivas en blanco, con el mismo
   // largo y los saltos en su sitio (las lineas del lector son las del fuente)
   Result := LeeUnidadPascal(CodigoPascal(AFuente));
+end;
+
+function RutinasDeUnBloque(const ACodigo: string): TArray<string>;
+var
+  U: TUnidadPas;
+begin
+  Result := [];
+  try
+    U := LeeFuentePascal('unit Bloque; interface implementation' + sLineBreak + ACodigo +
+      sLineBreak + 'end.');
+    try
+      for var C in U.Cuerpos do
+        Result := Result + [C.Nombre];
+    finally
+      U.Free;
+    end;
+  except
+    Result := [];
+  end;
 end;
 
 function ClaseDeImplementacion(const ALinea, ARutina: string): string;

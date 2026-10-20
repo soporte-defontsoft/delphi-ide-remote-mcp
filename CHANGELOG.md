@@ -131,6 +131,17 @@ the MCP `initialize` response (`serverInfo.version`).
   or a style pulls in): deleting or moving that name does not touch the
   other one and is still allowed. A file with one name costs one open that
   reads nothing. `test_enlace_duro_lectura_1211`, red against 1.21.0.
+- **`delphi_edit` INSERT with two routines in `code` wrote the second as it
+  came and said both halves were done.** With `insert=metodo`, only the
+  first routine was declared in the class and qualified; the second went in
+  as a global routine nobody declared (E2003 at the next build). With
+  `insert=rutina-global visible=true`, only the first reached the
+  interface. Found by Hermes in the validation of 1.21.1 and measured in
+  production. `code` is one routine, as its description says: a block with
+  more is refused now (`EDIT-129`) naming them, and nothing is written.
+  The routines are counted by the house reader (`Lsp.PascalDecl`), so a
+  local routine nested inside one does not count. `test_insert_una_rutina_1211`,
+  red against 1.21.0.
 
 ## [1.21.0] - 2026-10-19
 

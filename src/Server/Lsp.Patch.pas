@@ -4296,6 +4296,16 @@ begin
           Exit(MsgFmt(SR_EDIT_ULTIMA_LINEA_BLOQUE_RUTINA_FMT,
             [Copy(LastLine, 1, 80)]));
         end;
+        // UNA rutina por INSERT: con dos, la primera se declaraba (o se
+        // cualificaba) y la segunda entraba tal cual - una global sin declarar
+        // en un insert=metodo, fuera del interface con visible=true - y la
+        // respuesta decia "las DOS mitades" (Hermes, validacion de la 1.21.1;
+        // medido en produccion). Las cuenta EL lector (Lsp.PascalDecl): las
+        // anidadas van dentro de la suya
+        var RutinasDelCode := RutinasDeUnBloque(A.Code);
+        if Length(RutinasDelCode) > 1 then
+          Exit(MsgFmt(SR_EDIT_INSERT_UNA_RUTINA_FMT,
+            [Length(RutinasDelCode), string.Join(', ', RutinasDelCode)]));
 
         // La firma puede ocupar VARIAS lineas y venir precedida de un
         // comentario de documentacion (el estilo de la casa lo hace). Se busca
