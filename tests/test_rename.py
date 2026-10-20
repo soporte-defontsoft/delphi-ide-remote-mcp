@@ -147,6 +147,12 @@ open(DFM, 'w', encoding='utf-8', newline='\r\n').write(
     "object F: TF\n  OnClick = Doble\nend\n")
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Duplica'}))
 check('mencion en designer bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_DESIGNER_FMT') for b in j.get('blockers', [])), str(j)[:400])
+# ...y RENAME-019 nombra la via de un COMPONENTE (designer set prop=Name): solo decia
+# "el IDE lo repara a mano" y un agente no la encontraba (perfil opus-5 de Hermes,
+# 19-oct-2026). Rojo contra la 1.21.0
+check('RENAME-019 nombra delphi_designer set prop=Name para un componente del form',
+      any(mc.es(b, 'SR_RENAME_DESIGNER_FMT') and 'delphi_designer command=set prop=Name' in b
+          for b in j.get('blockers', [])), str(j.get('blockers'))[:400])
 os.remove(DFM)
 
 # 6. RTL symbol refused (definition outside the jail): IntToStr usage

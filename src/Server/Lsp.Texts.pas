@@ -3925,7 +3925,10 @@ const
   SR_RENAME_DESIGNER_FMT =
     '[RENAME-019 DENIED] %d occurrences in designers (.dfm/.fmx): ' +
     'renaming a published member breaks the form''s binding (the IDE only ' +
-    'repairs it interactively).';
+    'repairs it interactively). For a COMPONENT of the form, delphi_designer ' +
+    'command=set prop=Name renames it as the IDE does - the component, its ' +
+    'field and the form lines that name it - and lists the uses left in the ' +
+    'code (usesInCode).';
 
   SR_RENAME_STRINGS_FMT =
     '[RENAME-020 DENIED] %d occurrences inside string literals ' +

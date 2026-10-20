@@ -101,6 +101,15 @@ check('L4 control: el juez contesto (WRITTEN=) sin form a medias (sin PARTIAL=)'
       p.returncode == 0 and any(x.startswith('WRITTEN=') for x in salida) and
       not any(x.startswith('PARTIAL=') for x in salida), (p.returncode, salida[:20]))
 
+# U1: sin argumentos, la linea de uso con el nombre del programa en sus DOS formas
+# (salia "%s --path ..." y "(No argument for format ...)": el texto tiene dos %s y
+# TextoDeUso pasaba uno; medido el 20-oct-2026). Rojo contra la 1.21.0
+u = subprocess.run([RENDER], capture_output=True, timeout=60, cwd=JAIL)
+uso = u.stderr.decode('utf-8', 'replace')
+check('U1 sin argumentos: la linea de uso nombra el programa en sus dos formas, sin %s ni "No argument"',
+      u.returncode == 2 and uso.count('DelphiFormRenderVcl.exe --path') == 2 and '%s' not in uso
+      and 'No argument' not in uso, (u.returncode, uso[:300]))
+
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='render-leido', t=300)
 try:
     r = srv.call('delphi_designer', {'command': 'set', 'path': HIJA, 'component': 'Button3',

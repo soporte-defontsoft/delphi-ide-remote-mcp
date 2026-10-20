@@ -69,6 +69,17 @@ the MCP `initialize` response (`serverInfo.version`).
   `query` beside it (its description promises so), and `report` takes
   `agent` with every command (rule 12 of `delphi_help` asks for it on every
   call).
+- **`RENAME-019` did not name the way that exists for a component of the
+  form.** It said a published member breaks the form's binding and that the
+  IDE "only repairs it interactively"; `delphi_designer command=set
+  prop=Name` renames a component as the IDE does - the component, its field
+  and the form lines that name it - and an agent did not find it (on
+  Hermes, 19-oct-2026). The refusal names it now.
+- **The form renderers printed their usage line as `%s --path ...`** with
+  "(No argument for format)" behind it: the line has two forms, each with the
+  program's name, and only one name was passed. Measured on 20-oct-2026 with
+  the production renderers; nobody reads it but an operator, who now gets
+  the name.
 
 ## [1.21.0] - 2026-10-19
 

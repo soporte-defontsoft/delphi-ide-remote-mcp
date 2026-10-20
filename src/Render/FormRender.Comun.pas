@@ -403,7 +403,9 @@ end;
 
 function TextoDeUso(const AExe: string): string;
 begin
-  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe]);
+  // dos formas de uso, cada una con el nombre del programa: con uno solo
+  // salia "%s --path ..." y el "(No argument for format)" de MsgFmt
+  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe, AExe]);
 end;
 
 function ParseaArgumentos(out AUso: string): string;
