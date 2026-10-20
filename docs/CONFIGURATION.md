@@ -470,13 +470,21 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   append/create/anchored-replace only, always backed up first. `tools/list` announces a
   workspace only the vault tools its vault allows (none without one, no write tools while
   it is read-only). See `docs/VAULT.md`.
-- **AllowBuildScripts**: `delphi_build` refuses a project whose `.dproj` (or an imported
-  `.targets`) carries a task that *executes a program or plants/deletes files* at build
-  time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a
-  planted `<Exec>`; an `<Import>` of a file outside the workspace, other than the IDE's own,
-  is refused even when harmless (`BUILD-017`). An **inert** custom `<Target>` (a
-  `<Message>`, a property) always
-  builds. The project's **pre/post build events** (signing, copies, EurekaLog) are not
+- **AllowBuildScripts**: `delphi_build` builds only what a compile-only build understands —
+  the gate is a **whitelist** (since 1.21.2): under `<Project>` only PropertyGroup, ItemGroup,
+  Import, ProjectExtensions and Target; inside a `<Target>` only Message, Warning, Error,
+  CallTarget, OnError, PropertyGroup and ItemGroup. Anything else in the `.dproj` or in an
+  imported `.targets` is refused by its name (`BUILD-017`): a task that *executes a program
+  or plants/deletes files* (a planted `<Exec>`), an element the gate does not know, free text
+  for the compiler's command line (`DCC_AdditionalSwitches`, `BRCC_UserSuppliedOptions`,
+  `BRCC_ResponseFilename`), and an `<Import>` of a file outside the workspace, other than
+  the IDE's own, even when harmless. An **inert** custom `<Target>` (a `<Message>`, a
+  property) always builds. Independently of this switch, what the build **reads** through the
+  project — the icon, the manifest, the search paths, a `.rc` and the files it names, a
+  deployment file — has to lie where the session may read (the workspace, the IDE and its
+  library zone), whether it exists or not (`BUILD-050` to `BUILD-053`; a hard link in the
+  project's tree to a file outside is refused too). The project's **pre/post build events**
+  (signing, copies, EurekaLog) are not
   refused either: the build runs with them emptied and says so (`buildEventsSkipped`) -
   the binary is for working and testing in the agent's workspace; the final, signed one is
   the operator's build, outside this server, where those events run. For a

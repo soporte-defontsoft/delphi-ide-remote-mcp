@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.21.1';
+  SERVER_VERSION = '1.21.2';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -9295,15 +9295,16 @@ const
 
   SD_BUILD_BUILD =
     'Build a Delphi project for real with MSBuild on this machine - the ' +
-    'closing check after editing (the linter neither links nor produces ' +
-    'binaries). The answer carries the success flag, the compiler ' +
-    'errors/warnings (as much as "verbosity" asks), the output tail, where ' +
-    'the binary landed and, with several Delphi, which one built. ' +
-    'Compile-only: a project that would EXECUTE a shell during build (a ' +
-    'custom <Target>/<Exec>, a foreign <Import>) is refused unless the ' +
-    'workspace declares AllowBuildScripts=1; its pre/post build EVENTS ' +
-    '(signing, copies) are skipped instead (buildEventsSkipped says so) - ' +
-    'the final binary is built where the events run. For a package (.dpk) ' +
+    'closing check after editing (the linter does not link). The answer ' +
+    'carries the success flag, the compiler errors/warnings (as much as ' +
+    '"verbosity" asks), the output tail, where the binary landed and, with ' +
+    'several Delphi, which one built. Compile-only: a project is refused ' +
+    'when it carries what a compile-only build does not understand (a ' +
+    'task, an unknown element, free compiler options, a foreign <Import>: ' +
+    'AllowBuildScripts=1 in the workspace admits them) or when what the ' +
+    'build READS (icon, manifest, search paths, .rc) lies outside what you ' +
+    'can read; its pre/post build EVENTS (signing, copies) are skipped ' +
+    'instead (buildEventsSkipped says so). For a package (.dpk) ' +
     'the answer adds implicitImports (units of OTHER packages it compiled ' +
     'into itself, W1033) and requiresSuggested (their packages, from this ' +
     'install''s BPLs, or a .dpk of your workspace with ' +

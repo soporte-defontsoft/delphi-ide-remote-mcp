@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-20 (current release v1.21.1; 42 tools).
+Status page as of 2026-10-20 (current release v1.21.2; 42 tools).
 
 ## Delivered
 
@@ -49,6 +49,8 @@ Status page as of 2026-10-20 (current release v1.21.1; 42 tools).
 - What an agent reads back, measured with an independent agent and two models before publishing: answers sent once; desktop gestures that say only what they did; the IDE's own form reader asked at every door that writes or shows a form; a block as the anchor of a single edit; refusals that say where a parameter goes and which framework a property belongs to; `prop` and `info` that follow a class-typed property into its class (1.20.0)
 
 - What the IDE would do, and nothing left behind: `delphi_config set-active` and a build without `config` that builds the project's selected one; the engine with the settings of the selected configuration and platform; a project `delphi_create` makes born as the IDE makes it; the IDE's form reader judging lines, numbers and the language of Windows; a `.rc` read by tokens and confined to its styles folder; `push` that never forces; every process the server kills cleaned from Windows' global atom table, and form renderers that put nothing on the desktop (1.21.0)
+
+- The patches of 1.21: a hard link to a file outside the roots neither read, copied nor written through (every door, the server's own copies included); the build gate a whitelist of what a compile-only build understands, and what the build reads through the project judged by the read gate, whether it exists or not (1.21.1, 1.21.2)
 
 ## Next
 

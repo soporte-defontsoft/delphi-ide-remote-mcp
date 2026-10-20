@@ -331,6 +331,12 @@ in frame. Do the gesture you came for and nothing else.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).
+  It is compile-only and its gate is a whitelist: an element a build does
+  not understand, a task, free compiler options or a foreign `<Import>`
+  is refused by name (`BUILD-017`), and what the build reads through the
+  project - the icon, the manifest, the search paths, a `.rc` - has to
+  lie inside what you can read (`BUILD-050`); the refusal names the
+  element and the value, so fix the `.dproj`, do not retry.
 - **A build is what the IDE would build**: only a platform the project
   declares and has enabled (another is refused with `BUILD-046`:
   `delphi_config command=add-platform` declares it, as the IDE does), and
@@ -483,4 +489,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.21.1 -->
+<!-- contract reviewed: v1.21.2 -->

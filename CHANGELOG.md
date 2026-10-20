@@ -8,6 +8,15 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.21.2] - 2026-10-20
+
+A patch of 1.21.1 that turns the build gate into a whitelist and judges what
+the build reads, after the lesson of 1.20.1 (a resource script and a manifest
+from outside the workspace ended up inside the binary); validated by Hermes
+(Qwen3.8 Flash Next) on Delphi 13.2 before publishing. The server also cleans
+what any child that died without finalizing left in Windows' atom table, and
+the FMX application window no longer flashes in the taskbar.
+
 ### Security
 
 - **The build gate is a whitelist.** `delphi_build` refused a project by a
