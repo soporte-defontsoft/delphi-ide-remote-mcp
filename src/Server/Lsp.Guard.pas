@@ -4393,6 +4393,59 @@ begin
   Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
+function FindFirstFileNameCrudo(AFichero: PChar; ABanderas: DWORD; var ATam: DWORD;
+  ANombre: PChar): THandle; stdcall; external kernel32 name 'FindFirstFileNameW';
+function FindNextFileNameCrudo(ABusqueda: THandle; var ATam: DWORD;
+  ANombre: PChar): BOOL; stdcall; external kernel32 name 'FindNextFileNameW';
+
+{ Un FICHERO con otro nombre (un enlace duro) que esta sesion no puede leer:
+  es el MISMO fichero, y leerlo por aqui era leer el de fuera (2al-H2, medido
+  el 20-oct-2026 contra 1.21.0: delphi_read, delphi_search y el .res de
+  delphi_styles lo leian). El juez es Windows: los nombres del fichero
+  (FindFirstFileNameW), cada uno por la jaula (JaulaDecide). Uno de un solo
+  nombre - lo normal - cuesta una apertura sin leer nada; uno con varios que
+  no se pueden listar se niega: no se sabe donde estan. '' si no es un
+  fichero, no existe o tiene un nombre. }
+function EnlaceDuroDenegado(const APath: string): string;
+const
+  TAM_NOMBRE = 32768;
+var
+  Full, Raiz: string;
+  Nombres, Tam: DWORD;
+  Vol: array [0 .. MAX_PATH] of Char;
+  Buf: array of Char;
+  H: THandle;
+  Fuera: Boolean;
+begin
+  Result := '';
+  try
+    Full := TPath.GetFullPath(APath);
+  except
+    Exit; // la jaula ya dijo lo suyo de una ruta invalida
+  end;
+  Nombres := NombresDelFichero(Full);
+  if Nombres <= 1 then
+    Exit;
+  if not GetVolumePathName(PChar(Full), Vol, Length(Vol)) then
+    Exit(MsgFmt(SR_JAIL_ENLACE_DURO_SIN_NOMBRES_FMT, [APath, Nombres]));
+  // cada nombre llega desde la raiz de su volumen ("\Users\...\x.txt")
+  Raiz := ExcludeTrailingPathDelimiter(string(PChar(@Vol[0])));
+  SetLength(Buf, TAM_NOMBRE);
+  Tam := TAM_NOMBRE;
+  H := FindFirstFileNameCrudo(PChar(Full), 0, Tam, @Buf[0]);
+  if H = INVALID_HANDLE_VALUE then
+    Exit(MsgFmt(SR_JAIL_ENLACE_DURO_SIN_NOMBRES_FMT, [APath, Nombres]));
+  try
+    repeat
+      if JaulaDecide(Raiz + string(PChar(@Buf[0])), Fuera) <> '' then
+        Exit(MsgFmt(SR_JAIL_ENLACE_DURO_FMT, [APath]));
+      Tam := TAM_NOMBRE;
+    until not FindNextFileNameCrudo(H, Tam, @Buf[0]);
+  finally
+    Winapi.Windows.FindClose(H);
+  end;
+end;
+
 function JaulaDenegada(const APath: string; out AFueraDeJaula: Boolean;
   APermiteGit: Boolean): string; overload;
 begin
@@ -4680,6 +4733,12 @@ begin
   // las rutas invalidas (revision 27-sep-2026)
   if (Result <> '') and Fuera and LibraryZoneEnabled then
     Result := Result + ' ' + MsgText(SN_READ_ZONE_HINT);
+  // ...y un fichero con otro nombre que esta sesion no lee: leerlo es leer
+  // ese (un enlace duro). Solo al LEER - aqui pregunta la puerta de leer
+  // (LeeTexto/LeeBytes) -: quitar o mover ESTE nombre no toca el otro, y el
+  // escritor atomico pone un fichero nuevo en su sitio. Sin jaula no hay fuera
+  if (Result = '') and HayJaula then
+    Result := EnlaceDuroDenegado(APath);
 end;
 
 function MotivoToolOculta(const AToolName: string): TMotivoOculta;

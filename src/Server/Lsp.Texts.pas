@@ -280,7 +280,8 @@ const
     caia la busqueda entera (SYS-027) por uno solo (sexta revision). }
   SN_SEARCH_ILEGIBLES_FMT =
     '[SEARCH-003] %d file(s) could not be read (another process holds ' +
-    'them, or no permission) and were skipped: %s';
+    'them, no permission, or the jail refuses them - a hard link with a ' +
+    'name outside your roots, GUARD-041) and were skipped: %s';
 
   { regex=true y el tope de tamano de delphi_search (muros de la lista del
     4-oct-2026: solo literal, y un fichero se leia entero fuera cual fuera) }
@@ -739,6 +740,19 @@ const
     'folder this entry really sits in is not one this session writes in ' +
     '(outside the roots, a reference, a read-only folder or a vault): ' +
     'removing, moving or creating it would happen there. Nothing was done.';
+
+  // la gemela de GUARD-001 para un ENLACE DURO: el mismo fichero con otro
+  // nombre que esta sesion no lee (2al-H2, 1.21.1)
+  SR_JAIL_ENLACE_DURO_FMT =
+    '[GUARD-041 DENIED] "%s" is a hard link: the same file also has a name ' +
+    'outside what this session can read, and reading it here would be ' +
+    'reading that one. Nothing was read. If you need its content, it is ' +
+    'the operator who can copy it into your roots (delphi_report); this ' +
+    'name itself you can delete or move.';
+  SR_JAIL_ENLACE_DURO_SIN_NOMBRES_FMT =
+    '[GUARD-042 DENIED] "%s" has %d names (hard links) and Windows does not ' +
+    'list them here, so I cannot tell whether one is outside your roots. ' +
+    'Nothing was read.';
 
   // la gemela de GUARD-001 para la zona de biblioteca (M1 de la 1.18.0)
   SR_JAIL_LINK_BIBLIOTECA_FMT =
@@ -3806,6 +3820,14 @@ const
     'candidates: the component is not installed or ships no source for ' +
     'this platform (delphi_components platform=<platform>, and if it is ' +
     'missing, delphi_report).';
+  { Una unit sin fuente con su nombre pero si bajo un ambito (Hermes, punto 9
+    de la 1.18.2: uses Dialogs en FMX; 1.21.1). }
+  SN_BUILD_MISSING_UNITS_QUALIFY =
+    ' [BUILD-049] A unit with "qualified" names has no source under that ' +
+    'bare name, but exists under a unit scope this project''s scope names ' +
+    '(DCC_Namespace) do not include - Dialogs as FMX.Dialogs or ' +
+    'Vcl.Dialogs: write it qualified in the uses, the one of the framework ' +
+    'this project uses. No search path fixes that.';
   { En un paquete el F2613 tiene otra salida mas: la unit vive en OTRO
     paquete propio (Hermes, bateria 1.2 A.2, 2026-09-23): hace falta el
     requires Y el .dcp a mano; el search path solo no lo resuelve. }

@@ -106,6 +106,31 @@ the MCP `initialize` response (`serverInfo.version`).
   `triggerCharacters` of its `initialize` answer (`. ( < [` for the 37.0
   agent), not a list of ours. `test_completion_trigger_1211`, red against
   1.21.0.
+- **A unit missing under its bare name sent the agent to add-searchpath
+  when it only had to be qualified.** `uses Dialogs` in a project whose unit
+  scope names do not include FMX or Vcl fails with F2613, and `BUILD-042`
+  found no folder with a `Dialogs.pas` and said "add the folder, or the
+  component is not installed" (an agent on Hermes). When a missing unit has
+  no source under its own name, the build now lists in `qualified` the
+  scoped names that do exist - `FMX.Dialogs`, `Vcl.Dialogs` - and the note
+  says to write it qualified (`BUILD-049`). The judge is what is on disk
+  (the `<scope>.<unit>.pas` of the session's roots and of the library zone),
+  not a list of scopes; one behind a link that leaves the roots is not
+  offered. `test_build_cualifica_1211`, red against 1.21.0.
+- **A hard link inside the roots read a file outside them.** A hard link is
+  the same file under another name, and the jail judged the name - and its
+  real path, which for a hard link is its own. Measured on 20-oct-2026
+  against 1.21.0 with a hard link to a file outside every root:
+  `delphi_read` and `delphi_search` read it, and `delphi_styles build`
+  baked it into the `.res`. The read gate now asks Windows for the other names
+  of a file that has more than one (`FindFirstFileNameW`) and refuses it
+  when one of them is outside what the session can read (`GUARD-041`), or
+  when they cannot be listed (`GUARD-042`); a hard link whose names are all
+  inside - the roots or a reference - is read as before. It judges READING
+  (read, search, fetch, copy, the edits that read first, the files a build
+  or a style pulls in): deleting or moving that name does not touch the
+  other one and is still allowed. A file with one name costs one open that
+  reads nothing. `test_enlace_duro_lectura_1211`, red against 1.21.0.
 
 ## [1.21.0] - 2026-10-19
 

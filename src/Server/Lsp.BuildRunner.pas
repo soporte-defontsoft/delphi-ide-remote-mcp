@@ -1012,6 +1012,47 @@ begin
   end;
 end;
 
+{ Los .pas que casan con AMascaras bajo ARaices, por EL recorredor y con la
+  puerta de lectura sobre cada uno; fuera los artefactos del IDE, __recovery
+  y las copias \backup. EL paseo de las fuentes de una unit: el de sus
+  carpetas y el de sus nombres cualificados (UnitSourceFolders). }
+function FuentesBajo(const ARaices, AMascaras: TArray<string>): TArray<string>;
+var
+  L: TList<string>;
+  Files: TArray<string>;
+begin
+  L := TList<string>.Create;
+  try
+    for var Root in ARaices do
+    begin
+      try
+        // por EL recorredor (WalkFiles): solo sigue los enlaces que esta
+        // sesion puede leer y tolera una rama ilegible; GetFiles con
+        // soAllDirectories cruzaba cualquier union (2h de la 1.18.4)
+        Files := WalkFiles(Root, AMascaras);
+      except
+        Continue; // an unreadable root is not the agent's problem
+      end;
+      for var F in Files do
+      begin
+        var Dir := TPath.GetDirectoryName(F);
+        // y LA puerta de lectura sobre cada candidata: el paseo de la RTL
+        // sigue los enlaces, y un junction de las raices a una carpeta de
+        // fuera daba como candidata lo que la jaula no deja leer (medido el
+        // 4-oct-2026, test_missing_units)
+        if SkipIdeArtifacts(F) or Dir.Contains('__recovery') or ContainsText(Dir, '\backup') or
+           (ReadPathDenied(Dir) <> '') then
+          Continue;
+        if not L.Contains(F) then
+          L.Add(F);
+      end;
+    end;
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
 { Where a unit's .pas lives: in the session's own roots (its workspace and
   its references) first, then in the library zone (RAD Studio installs,
   registered components, GetIt catalog): the folders to add-searchpath.
@@ -1021,40 +1062,28 @@ end;
   trash copies are skipped (SkipIdeArtifacts). Only the library zone was
   searched, and a unit of the workspace itself (a vendor folder of the
   project: MCPServer.Types) got no candidate (BUILD-042, 3-oct-2026). An
-  unrestricted session (no roots) does not walk the whole disk. }
-function UnitSourceFolders(const AUnit: string): TArray<string>;
+  unrestricted session (no roots) does not walk the whole disk.
+  Y si no hay ninguna con ESE nombre, en ACualificadas los nombres
+  CUALIFICADOS que si tienen fuente (Dialogs -> FMX.Dialogs, Vcl.Dialogs),
+  en los mismos sitios, sin repetir, por orden y a lo sumo 6: la F2613 de
+  una unit que el proyecto no resuelve con SUS ambitos (DCC_Namespace), que
+  se arregla escribiendola cualificada y no con un search path (Hermes,
+  punto 9 de la 1.18.2: uses Dialogs en FMX, y la pista mandaba a
+  add-searchpath). El juez es lo que hay en disco, no una lista de ambitos.
+  Vacio para una unit ya cualificada. }
+function UnitSourceFolders(const AUnit: string; out ACualificadas: TArray<string>): TArray<string>;
 
   function Busca(const ARaices: TArray<string>): TArray<string>;
   var
-    Root, F, Dir: string;
     L: TList<string>;
-    Files: TArray<string>;
   begin
     L := TList<string>.Create;
     try
-      for Root in ARaices do
+      for var F in FuentesBajo(ARaices, [AUnit + '.pas']) do
       begin
-        try
-          // por EL recorredor (WalkFiles): solo sigue los enlaces que esta
-          // sesion puede leer y tolera una rama ilegible; GetFiles con
-          // soAllDirectories cruzaba cualquier union (2h de la 1.18.4)
-          Files := WalkFiles(Root, [AUnit + '.pas']);
-        except
-          Continue; // an unreadable root is not the agent's problem
-        end;
-        for F in Files do
-        begin
-          Dir := TPath.GetDirectoryName(F);
-          // y LA puerta de lectura sobre cada candidata: el paseo de la RTL
-          // sigue los enlaces, y un junction de las raices a una carpeta de
-          // fuera daba como candidata lo que la jaula no deja leer (medido el
-          // 4-oct-2026, test_missing_units)
-          if SkipIdeArtifacts(F) or Dir.Contains('__recovery') or ContainsText(Dir, '\backup') or
-             (ReadPathDenied(Dir) <> '') then
-            Continue;
-          if not L.Contains(Dir) then
-            L.Add(Dir);
-        end;
+        var Dir := TPath.GetDirectoryName(F);
+        if not L.Contains(Dir) then
+          L.Add(Dir);
       end;
       L.Sort(TComparer<string>.Construct(
         function(const A, B: string): Integer
@@ -1070,14 +1099,27 @@ function UnitSourceFolders(const AUnit: string): TArray<string>;
   end;
 
 begin
-  Result := [];
+  ACualificadas := [];
+  var Sesion: TArray<string> := [];
   if Length(WorkspaceRoots) > 0 then
-    Result := Busca(WorkspaceRoots + WorkspaceReadOnlyRoots);
+    Sesion := WorkspaceRoots + WorkspaceReadOnlyRoots;
+  Result := Busca(Sesion);
   for var D in Busca(LibraryReadRoots) do
     if IndexText(D, Result) < 0 then
       Result := Result + [D];
   if Length(Result) > 6 then
     SetLength(Result, 6);
+  if (Length(Result) > 0) or AUnit.Contains('.') then
+    Exit;
+  for var F in FuentesBajo(Sesion + LibraryReadRoots, ['*.' + AUnit + '.pas']) do
+  begin
+    var N := TPath.GetFileNameWithoutExtension(F);
+    if IndexText(N, ACualificadas) < 0 then
+      ACualificadas := ACualificadas + [N];
+  end;
+  TArray.Sort<string>(ACualificadas, TIStringComparer.Ordinal);
+  if Length(ACualificadas) > 6 then
+    SetLength(ACualificadas, 6);
 end;
 
 // Compiler directives that pull a FILE into the build: {$I}/{$INCLUDE} for
@@ -2125,6 +2167,7 @@ begin
       begin
         var MArr := TJSONArray.Create;
         Result.AddPair('missingUnits', MArr);
+        var HayCualificadas := False;
         for var U in Missing do
         begin
           var MObj := TJSONObject.Create;
@@ -2132,10 +2175,22 @@ begin
           MObj.AddPair('unit', U);
           var CArr := TJSONArray.Create;
           MObj.AddPair('sourceFolders', CArr);
-          for var D in UnitSourceFolders(U) do
+          var Cualificadas: TArray<string>;
+          for var D in UnitSourceFolders(U, Cualificadas) do
             CArr.Add(D);
+          // sin fuente con ESE nombre pero si bajo un ambito (Dialogs ->
+          // FMX.Dialogs): lo que falta es cualificarla (BUILD-049)
+          if Length(Cualificadas) > 0 then
+          begin
+            var QArr := TJSONArray.Create;
+            MObj.AddPair('qualified', QArr);
+            for var Q in Cualificadas do
+              QArr.Add(Q);
+            HayCualificadas := True;
+          end;
         end;
         Result.AddPair('missingUnitsNote', MsgText(SN_BUILD_MISSING_UNITS_NOTE) +
+          IfThen(HayCualificadas, MsgText(SN_BUILD_MISSING_UNITS_QUALIFY), '') +
           IfThen(EsPaquete, MsgText(SN_BUILD_MISSING_UNITS_PACKAGE), ''));
       end;
     end;
