@@ -252,7 +252,7 @@ begin
     // cada lista de usos por carpeta y fichero (el organizador), al
     // contestar: por dentro sigue plana, que es como la consume el rename.
     // La ruta repetida en cada uso era el 20% de la respuesta (6-oct-2026)
-    for var Campo in TArray<string>.Create('confirmed', 'unverified', 'mentions', 'rejected') do
+    for var Campo in TArray<string>.Create('confirmed', 'unverified', 'mentions', 'rejected', 'designer') do
       AgrupaPorFichero(R, Campo);
     // la linea de cada uso, tal cual (un ancla); lo demas, enmascarado
     Result := EnmascaraJsonSalvo(R.ToJSON, CONTENIDO_DE_UN_USO);

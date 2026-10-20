@@ -19,9 +19,29 @@ interface
 uses
   System.JSON;
 
+type
+  { un uso de un nombre: el fichero, su linea y su columna (0-based) y la
+    linea tal cual }
+  TCandidate = record
+    Path: string;
+    Line, Col: Integer;
+    Text: string;
+  end;
+
 function FindDelphiReferences(const AFilePath: string;
   ALine, ACharacter: Integer; AMaxFiles: Integer = 40;
   AMaxCandidates: Integer = 400): TJSONObject;
+
+{ Los usos de AIdent en los ficheros de diseno (.dfm/.fmx): los hermanos de
+  AUnidades y todos los de la raiz del motor de AFilePath, uno por aparicion,
+  por TEXTO y palabra entera - en un .dfm no hay otro juez. Un form enlaza por
+  NOMBRE (OnClick = Button1Click, un componente por su campo): el compilador
+  no lo ve y el cargador del form si, al ejecutar. EL paseo de rename (que
+  bloquea con ellos, RENAME-019) y de references (que los lista). AIlegibles:
+  los que no se pudieron leer (cogidos por otro proceso: no se sabe si lo
+  nombran). }
+function UsosEnDisenadores(const AFilePath, AIdent: string;
+  const AUnidades: TArray<string>; out AIlegibles: TArray<string>): TArray<TCandidate>;
 
 const
   // los campos de un uso (references, rename_symbol) que son la LINEA del
@@ -146,13 +166,6 @@ uses
   Lsp.Settings,
   Lsp.Rutas,            // EsRutaAbsoluta: LA regla de ruta completa
   Lsp.Herencia;         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
-
-type
-  TCandidate = record
-    Path: string;
-    Line, Col: Integer;
-    Text: string;
-  end;
 
 function IdentifierAt(const ALineText: string; ACol: Integer): string;
 var
@@ -1167,6 +1180,29 @@ begin
           [RejectedArr.Count, Rejected]));
       // los leidos de verdad, como delphi_search (revisor 7, B1)
       Result.AddPair('filesScanned', TJSONNumber.Create(Scanned - SinLeer));
+      // ...y los usos en los FORMS: un .dfm/.fmx enlaza por NOMBRE (OnClick =
+      // Button1Click) y el compilador no lo ve. rename los veia y bloqueaba
+      // (RENAME-019) mientras references no los listaba, y quien media el
+      // impacto con references contaba de menos (Sonnet, validacion de la
+      // 1.21.1). EL paseo de rename (UsosEnDisenadores), sobre la unidad de la
+      // definicion y las de los confirmados
+      var UnidadesConUsos: TArray<string> := [TLspClient.UriToPath(TargetUri)];
+      for var V in Confirmed do
+        if (V is TJSONObject) and (TJSONObject(V).GetValue('path') <> nil) and
+           (IndexText(TJSONObject(V).GetValue('path').Value, UnidadesConUsos) < 0) then
+          UnidadesConUsos := UnidadesConUsos + [TJSONObject(V).GetValue('path').Value];
+      var IlegiblesDeForms: TArray<string>;
+      var EnForms := UsosEnDisenadores(FullPath, Ident, UnidadesConUsos, IlegiblesDeForms);
+      Ilegibles := Ilegibles + IlegiblesDeForms;
+      if Length(EnForms) > 0 then
+      begin
+        var DsgArr := TJSONArray.Create;
+        Result.AddPair('designer', DsgArr);
+        for var U in EnForms do
+          if DsgArr.Count < 25 then
+            DsgArr.AddElement(CandidateJson(U));
+        Result.AddPair('designerNote', MsgFmt(SN_REFS_DESIGNER_FMT, [Length(EnForms), DsgArr.Count]));
+      end;
       // ...y lo que la cadena no pudo leer (un fichero al que llevo el motor)
       Ilegibles := Ilegibles + Cadena.Ilegibles;
       if Length(Ilegibles) > 0 then
@@ -1206,6 +1242,59 @@ begin
     Menciones.Free;
     AllFiles.Free;
     Cadena.Free;
+  end;
+end;
+
+function UsosEnDisenadores(const AFilePath, AIdent: string;
+  const AUnidades: TArray<string>; out AIlegibles: TArray<string>): TArray<TCandidate>;
+var
+  Lista, Lineas: TStringList;
+  Texto, Enc, Root, Patron: string;
+  Uso: TCandidate;
+begin
+  Result := [];
+  AIlegibles := [];
+  Patron := '(?i)' + PatronIdentEntero(AIdent);
+  Lista := TStringList.Create;
+  Lineas := TStringList.Create;
+  try
+    // el hermano de cada unidad con usos...
+    for var U in AUnidades do
+      for var D in DesignersDeUnidad(U) do
+        if TFile.Exists(D) and (Lista.IndexOf(D) < 0) then
+          Lista.Add(D);
+    // ...y todos los de la raiz del motor: UN paseo con las dos mascaras (8.3
+    // de la 1.18.0: eran dos, uno por extension, cada uno con su purga de la
+    // papelera al pasar)
+    Root := TLspSession.Instance.RaizDelMotor(TPath.GetFullPath(AFilePath));
+    if (Root <> '') and TDirectory.Exists(Root) then
+      for var D in WalkFiles(Root, MascarasDe(DESIGNER_EXTS)) do
+        if not SkipBajoLaRaiz(D, Root) and (Lista.IndexOf(D) < 0) then
+          Lista.Add(D);
+    for var P in Lista do
+    begin
+      // un designer cogido por otro proceso tumbaba el rename: no se sabe si
+      // lo nombra (revisor 7, M3)
+      try
+        Texto := PatchLoadText(P, Enc);
+      except
+        AIlegibles := AIlegibles + [P];
+        Continue;
+      end;
+      Lineas.Text := Texto;
+      for var I := 0 to Lineas.Count - 1 do
+        for var M in TRegEx.Matches(Lineas[I], Patron) do
+        begin
+          Uso.Path := P;
+          Uso.Line := I;
+          Uso.Col := M.Index - 1;
+          Uso.Text := Lineas[I];
+          Result := Result + [Uso];
+        end;
+    end;
+  finally
+    Lineas.Free;
+    Lista.Free;
   end;
 end;
 

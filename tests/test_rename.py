@@ -153,7 +153,18 @@ check('mencion en designer bloquea', j.get('applicable') is False and any(mc.es(
 check('RENAME-019 nombra delphi_designer set prop=Name para un componente del form',
       any(mc.es(b, 'SR_RENAME_DESIGNER_FMT') and 'delphi_designer command=set prop=Name' in b
           for b in j.get('blockers', [])), str(j.get('blockers'))[:400])
+# ...y delphi_references, su hermana, LISTA ese uso del form ("designer", LSP-048):
+# rename lo veia y bloqueaba y references no lo decia, y quien media el impacto
+# con references contaba de menos (Sonnet, validacion de la 1.21.1). Rojo contra
+# la 1.21.0
+j = J(call('delphi_references', {'path': UCALC, 'line': 4, 'character': 9}))
+_dsg = mc.aciertos(j, 'designer')
+check('references lista el uso del form (designer) con su linea, y lo explica (LSP-048)',
+      any('OnClick = Doble' in (h.get('text') or '') and h.get('line') == 2 for h in _dsg) and
+      mc.es(j.get('designerNote') or '', 'SN_REFS_DESIGNER_FMT'), str(j)[:400])
 os.remove(DFM)
+j = J(call('delphi_references', {'path': UCALC, 'line': 4, 'character': 9}))
+check('...y sin el form, references no trae designer', 'designer' not in j, str(j)[:300])
 
 # 6. RTL symbol refused (definition outside the jail): IntToStr usage
 s = open(UCALC, encoding='utf-8-sig').read().replace(

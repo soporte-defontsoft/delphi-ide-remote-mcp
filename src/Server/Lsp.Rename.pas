@@ -69,7 +69,7 @@ function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
 var
   Refs, DefObj: TJSONObject;
   Blockers, Warnings, Changes, UnvArr, RejArr: TJSONArray;
-  Ident, DefPath, EncName, Text, P, Root: string;
+  Ident, DefPath, EncName, Text, P: string;
   Arr: TJSONArray;
   I, N, Files, DefLine: Integer;
   HasDef: Boolean;
@@ -77,7 +77,6 @@ var
   Touched: TList<string>;
   Item, Chg: TJSONObject;
   DesignerHits, StringHits: Integer;
-  DsgList: TStringList;
 begin
   Result := TJSONObject.Create;
   try
@@ -328,44 +327,23 @@ begin
       Refs.Free;
     end;
 
-    // 3. what a text rename would silently break
-    DesignerHits := 0;
-    var DsgIlegibles: TArray<string> := [];
-    DsgList := TStringList.Create;
-    try
-      Root := TLspSession.Instance.RaizDelMotor(TPath.GetFullPath(AFilePath));
-      for P in Touched do
+    // 3. what a text rename would silently break: EL paseo de los designers
+    // (Lsp.References.UsosEnDisenadores), el mismo con que references los
+    // lista; aqui se cuentan por fichero y bloquean
+    var DsgIlegibles: TArray<string>;
+    var EnForms := UsosEnDisenadores(AFilePath, Ident, Touched.ToArray, DsgIlegibles);
+    DesignerHits := Length(EnForms);
+    I := 0;
+    while I < Length(EnForms) do
+    begin
+      P := EnForms[I].Path;
+      N := 0;
+      while (I < Length(EnForms)) and SameText(EnForms[I].Path, P) do
       begin
-        // the sibling designer of each touched unit
-        for var D in DesignersDeUnidad(P) do
-          if TFile.Exists(D) and (DsgList.IndexOf(D) < 0) then
-            DsgList.Add(D);
+        Inc(N);
+        Inc(I);
       end;
-      if (Root <> '') and TDirectory.Exists(Root) then
-        // UN paseo con las dos mascaras (8.3 de la 1.18.0): eran dos, uno por
-        // extension, cada uno con su purga de la papelera al pasar
-        for var D in WalkFiles(Root, MascarasDe(DESIGNER_EXTS)) do
-          if not SkipBajoLaRaiz(D, Root) and (DsgList.IndexOf(D) < 0) then
-            DsgList.Add(D);
-      for P in DsgList do
-      begin
-        // un designer cogido por otro proceso tumbaba el rename: no se sabe
-        // si lo nombra, asi que bloquea como el resto (revisor 7, M3)
-        try
-          Text := PatchLoadText(P, EncName);
-        except
-          DsgIlegibles := DsgIlegibles + [P];
-          Continue;
-        end;
-        N := TRegEx.Matches(Text, '(?i)' + PatronIdentEntero(Ident)).Count;
-        if N > 0 then
-        begin
-          Inc(DesignerHits, N);
-          Warnings.Add(MsgFmt(SN_RENAME_DESIGNER_HIT_FMT, [N, P]));
-        end;
-      end;
-    finally
-      DsgList.Free;
+      Warnings.Add(MsgFmt(SN_RENAME_DESIGNER_HIT_FMT, [N, P]));
     end;
     if DesignerHits > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_DESIGNER_FMT, [DesignerHits]));

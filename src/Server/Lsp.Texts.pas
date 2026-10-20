@@ -849,6 +849,16 @@ const
     'holds them, or the gate refused): they are listed in "unreadable" and ' +
     'were NOT scanned, so a reference in them is not here. ' +
     'delphi_rename_symbol refuses while any is listed.';
+  { Los usos en los ficheros de diseno: rename los veia y bloqueaba, references
+    no los listaba (Sonnet, validacion de la 1.21.1). }
+  SN_REFS_DESIGNER_FMT =
+    '[LSP-048] The name also appears %d time(s) in the form files (.dfm/.fmx; ' +
+    '%d listed in "designer"): a form binds an event handler or a component ' +
+    'by NAME (OnClick = Button1Click), which the compiler does not see and ' +
+    'the form loader does at run time. Found by text, whole word: look at ' +
+    'each one. A rename has to change them too - delphi_rename_symbol ' +
+    'refuses while they are there (RENAME-019).';
+
   SN_REFS_MENTIONS_FMT =
     '[LSP-015] The name also appears %d time(s) in COMMENTS or inside ' +
     'strings (%d are listed in "mentions"). They are not references - ' +
@@ -9216,7 +9226,9 @@ const
     'is harmless; a string literal blocks delphi_rename_symbol ' +
     '(RENAME-020), because it may be a FindComponent/RTTI by name. ' +
     'Bounded work: leftovers are listed as unverified, never silently ' +
-    'dropped; a file it cannot read, as unreadable. The answer says where ' +
+    'dropped; a file it cannot read, as unreadable. The uses in the form ' +
+    'files (.dfm/.fmx: an event bound by name) come in "designer". The ' +
+    'answer says where ' +
     'it looked ("scope") and with the settings of which project ' +
     '("project"), as delphi_diagnostics.';
 

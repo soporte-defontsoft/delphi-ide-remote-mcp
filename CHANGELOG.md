@@ -153,6 +153,17 @@ the MCP `initialize` response (`serverInfo.version`).
   `\`, for every tool at once - where it already turned 8.3 names into long
   ones; a path outside the roots is still refused as outside.
   `test_rutas_con_barra_1211`, red against 1.21.0.
+- **`delphi_references` did not list the uses in the form files, which its
+  sibling `delphi_rename_symbol` sees and blocks on.** For an event handler,
+  references answered the two lines of the `.pas` and nothing about
+  `OnClick = Button1Click` in the `.dfm`, while rename at the same position
+  refused with `RENAME-019` because of that line (Sonnet, in the validation
+  of 1.21.1; measured with its exact calls). An agent measuring the impact of
+  a change with references counted fewer places than there are. References
+  now lists them in `designer`, grouped by folder and file like the others,
+  with their line, and says what they are (`LSP-048`). Both tools walk the
+  form files with one helper (`UsosEnDisenadores`): rename counts and
+  blocks, references lists. `test_rename`, red against 1.21.0.
 
 ## [1.21.0] - 2026-10-19
 
