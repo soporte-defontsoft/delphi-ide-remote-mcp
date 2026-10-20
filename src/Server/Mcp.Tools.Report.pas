@@ -279,6 +279,18 @@ var
 begin
   // leer lo del propio workspace (la via de operador): ni mueve ni borra
   var Cmd := Params.Command.Trim.ToLower;
+  // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en las
+  // demas tools de varios comandos: title con list se ignoraba en silencio
+  // (20-oct-2026). agent va con todos: la regla 12 de delphi_help lo pide en
+  // CADA llamada a quien no puede fijar su clientInfo.name
+  var Modo := IfThen(Cmd = '', 'report', Cmd);
+  var Suyos, VaCon: string;
+  var Sobra := ParametroQueNoVa(Modo, [
+      'report', 'message title kind from agent', 'list', 'agent', 'read', 'name agent'],
+    ['message', Params.Message, '', 'title', Params.Title, '', 'kind', Params.Kind, '',
+     'from', Params.From, '', 'agent', Params.Agent, '', 'name', Params.Name, ''], Suyos, VaCon);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_REPORT_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos, VaCon]));
   if Cmd = 'list' then
     Exit(ListaDeInformes);
   if Cmd = 'read' then

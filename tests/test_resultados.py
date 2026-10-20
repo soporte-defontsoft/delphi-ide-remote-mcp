@@ -2420,6 +2420,24 @@ try:
     res, sc, t = llama('delphi_desktop', {'command': 'key', 'profile': 'e168-no-existe', 'code': '1'})
     check('E168 ...y key con lo suyo pasa la guarda (lo para el destino, no DESK-025)',
           bool(t) and not mc.abre(t, 'SR_DESKTOP_NO_VA_CON_COMANDO_FMT'), t[:200])
+    # ...y en help, docs y report, las ultimas de varios comandos sin la guarda: se
+    # tragaban name con conventions, offset con search, title con list (20-oct-2026)
+    rechazo('E168 delphi_help conventions con name: HELP-009', 'delphi_help',
+            {'command': 'conventions', 'name': 'delphi_edit'}, 'INVALID_PARAM', 'SR_HELP_NO_VA_CON_COMANDO_FMT')
+    rechazo('E168 delphi_docs search con offset: DOCS-017', 'delphi_docs',
+            {'command': 'search', 'query': 'FormatDateTime', 'offset': 5}, 'INVALID_PARAM',
+            'SR_DOCS_NO_VA_CON_COMANDO_FMT')
+    rechazo('E168 delphi_report list con title: REPORT-013', 'delphi_report',
+            {'command': 'list', 'title': 'no va con list'}, 'INVALID_PARAM', 'SR_REPORT_NO_VA_CON_COMANDO_FMT')
+    res, sc, t = llama('delphi_report', {'command': 'list', 'agent': 'e168'})
+    check('E168 ...report list con agent pasa (la regla 12 de help lo pide en CADA llamada)',
+          not mc.abre(t, 'SR_REPORT_NO_VA_CON_COMANDO_FMT') and not res.get('isError'), t[:200])
+    res, sc, t = llama('delphi_help', {'command': 'tool', 'name': 'delphi_edit'})
+    check('E168 ...help tool con name pasa', not mc.abre(t, 'SR_HELP_NO_VA_CON_COMANDO_FMT') and
+          not res.get('isError'), t[:160])
+    res, sc, t = llama('delphi_docs', {'id': 'e168:NoExiste.htm', 'query': 'x'})
+    check('E168 ...docs SIN command, con id y query: el query de al lado se tolera (lo promete la descripcion)',
+          bool(t) and not mc.abre(t, 'SR_DOCS_NO_VA_CON_COMANDO_FMT'), t[:200])
     res, sc, t = llama('delphi_designer', {'command': 'tree', 'path': os.path.join(D158, 'sub', 'UDos.dfm')})
     check('E168 ...y una llamada con lo suyo sigue funcionando (designer tree)', not mc.fallo(t) and not res.get('isError'),
           t[:160])

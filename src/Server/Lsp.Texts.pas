@@ -4025,6 +4025,11 @@ const
   SR_DOCS_CMD =
     '[DOCS-002 INVALID_PARAM] command must be search (with query) or read ' +
     '(with id).';
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa): se
+    ignoraba en silencio (offset en un search, medido el 20-oct-2026). }
+  SR_DOCS_NO_VA_CON_COMANDO_FMT =
+    '[DOCS-017 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.%s';
 
   SR_DOCS_SIN_CONSULTA =
     '[DOCS-003 INVALID_PARAM] command=search needs "query": a concept or a ' +
@@ -4127,6 +4132,11 @@ const
 
   SR_HELP_CMD =
     '[HELP-001 INVALID_PARAM] Command must be tasks | tool | conventions.';
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa): se
+    ignoraba en silencio (name con conventions, medido el 20-oct-2026). }
+  SR_HELP_NO_VA_CON_COMANDO_FMT =
+    '[HELP-009 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.%s';
 
   SR_HELP_NEED_NAME =
     '[HELP-007 INVALID_PARAM] command=tool needs "name". The ones there are:';
@@ -7271,6 +7281,11 @@ const
 
   SR_REPORT_COMMAND =
     '[REPORT-006 INVALID_PARAM] command must be report | list | read.';
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa): se
+    ignoraba en silencio (title con list, medido el 20-oct-2026). }
+  SR_REPORT_NO_VA_CON_COMANDO_FMT =
+    '[REPORT-013 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.%s';
 
   SR_REPORT_READ_SIN_NAME =
     '[REPORT-007 INVALID_PARAM] command=read needs "name": the report as ' +

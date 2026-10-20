@@ -58,6 +58,17 @@ the MCP `initialize` response (`serverInfo.version`).
   commands (`delphi_adb` among them): `DESK-025`, nothing done, with what
   that command takes, which commands the parameter goes with and - when
   `command` did not arrive - that the call was a screenshot.
+- **`delphi_help`, `delphi_docs` and `delphi_report` took a parameter of
+  another command without a word too** - the last tools with several
+  commands that did not judge them: `name` with `help conventions`,
+  `offset` with `docs search`, `title` with `report list` were ignored
+  (measured live on 20-oct-2026). They are refused now like everywhere
+  else (`HELP-009`, `DOCS-017`, `REPORT-013`), with what the command takes
+  and which commands the parameter goes with. Two exceptions, kept on
+  purpose: `docs` without `command` and with an `id` still tolerates a
+  `query` beside it (its description promises so), and `report` takes
+  `agent` with every command (rule 12 of `delphi_help` asks for it on every
+  call).
 
 ## [1.21.0] - 2026-10-19
 

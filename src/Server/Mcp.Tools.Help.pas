@@ -149,6 +149,15 @@ begin
     Cmd := 'tool'; // name given, intent obvious
   if Cmd = '' then
     Cmd := 'tasks';
+  // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en las
+  // demas tools de varios comandos: name con conventions se ignoraba en
+  // silencio (20-oct-2026). Los alias, con lo suyo
+  var Suyos, VaCon: string;
+  var Sobra := ParametroQueNoVa(Cmd, ['tasks', '', 'task', '', 'index', '',
+      'conventions', '', 'rules', '', 'reglas', '', 'tool', 'name', 'tools', 'name'],
+    ['name', Params.Name, ''], Suyos, VaCon);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_HELP_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, Suyos, VaCon]));
   if MatchText(Cmd, ['tasks', 'task', 'index']) then
   begin
     // las filas del vault, las que tools/list anuncia a ESTE workspace: se le

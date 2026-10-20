@@ -65,7 +65,8 @@ uses
   MCPServer.Registration,
   Lsp.Discovery,
   Lsp.Mascara,  // MaskDriveText
-  Lsp.Docs;
+  Lsp.Docs,
+  Lsp.Guard;
 
 const
   // lo que se da de una pagina de una vez, unos 2.000 tokens (medido: la
@@ -252,6 +253,20 @@ begin
       Cmd := 'search';
   if not MatchText(Cmd, ['search', 'read']) then
     Exit(MsgText(SR_DOCS_CMD));
+  // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en las
+  // demas tools de varios comandos: offset en un search se ignoraba en
+  // silencio (20-oct-2026). Sin command y con id, el query de al lado se
+  // tolera: la descripcion lo promete. limit=10 es su defecto: un cliente que
+  // rellene los defectos del esquema no lo "envia"
+  var Suyos, VaCon: string;
+  var Sobra := ParametroQueNoVa(Cmd, [
+      'search', 'query framework limit',
+      'read', IfThen(Params.Command.Trim = '', 'id offset query', 'id offset')],
+    ['query', Params.Query, '', 'id', Params.Id, '', 'framework', Params.Framework, '',
+     'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), '',
+     'limit', IfThen(Params.Limit <> 0, IntToStr(Params.Limit)), '10'], Suyos, VaCon);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_DOCS_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, Suyos, VaCon]));
   // las ayudas, UNA vez por llamada (eran tres: aqui, en la busqueda y en la
   // lectura, con la version de bds.exe leida cada vez)
   Ayudas := AyudasInstaladas;
