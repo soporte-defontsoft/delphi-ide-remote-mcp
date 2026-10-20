@@ -606,9 +606,16 @@ begin
           Aviso(MsgFmt(SN_RENDER_CUADRO_BLOQUEADO_FMT, [Clase, Titulo]));
           Exit(1); // no nace: CreateWindow devuelve 0 y quien lo abria sigue
         end;
-        // la ventana de aplicacion de FMX nace oculta, fuera de la barra y sin activarse
+        // la ventana de aplicacion de FMX: fuera de la barra y sin activarse.
+        // Sobre la VENTANA (AWParam: ya existe, aun sin mostrar), no sobre el
+        // CREATESTRUCT: Windows ignora un dwExStyle cambiado en el gancho
+        // (medido el 20-oct-2026 con una sonda: nacia con WS_EX_APPWINDOW y
+        // se veia en la barra hasta que EscondeVentanaDeApp la escondia; las
+        // 3 muestras de 4.043 del corpus y las 2 del 19-oct eran eso)
         if SameText(Clase, 'TFMAppClass') then
-          CS.dwExStyle := (CS.dwExStyle and not WS_EX_APPWINDOW) or WS_EX_TOOLWINDOW or WS_EX_NOACTIVATE;
+          SetWindowLong(AWParam, GWL_EXSTYLE,
+            (GetWindowLong(AWParam, GWL_EXSTYLE) and not WS_EX_APPWINDOW) or
+            WS_EX_TOOLWINDOW or WS_EX_NOACTIVATE);
       end;
     HCBT_ACTIVATE:
       Exit(1); // ninguna ventana de este proceso se activa: nada roba el foco

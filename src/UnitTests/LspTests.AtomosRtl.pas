@@ -21,6 +21,7 @@ type
     [Test] procedure LosPropiosSeBorranAunqueEsteVivo;
     [Test] procedure UnMuertoSeLimpiaAunConNuestroHandleAbierto;
     [Test] procedure UnMuertoDentroDeUnJobAbiertoSeLimpia;
+    [Test] procedure LoQueDejoUnHijoAcabadoPorSuCuentaSeLimpia;
   end;
 
 implementation
@@ -179,6 +180,36 @@ begin
   finally
     CloseHandle(Job);
   end;
+end;
+
+{ El camino de RunCore para un hijo que acabo SOLO sin finalizar (su Job lo
+  mato, revento): BorraAtomosSiLosDejo limpia lo que dejo; sin su atomo de
+  proceso no recorre nada (0, y rapido); y a un vivo no lo toca }
+procedure TAtomosRtlTests.LoQueDejoUnHijoAcabadoPorSuCuentaSeLimpia;
+var
+  PI: TProcessInformation;
+  N1, N2: string;
+  T0: UInt64;
+begin
+  // un muerto que no dejo nada: ni se recorre la tabla
+  T0 := GetTickCount64;
+  Assert.AreEqual(0, BorraAtomosSiLosDejo(PID_MUERTO, TID_MUERTO), 'sin nada que limpiar: 0');
+  Assert.IsTrue(GetTickCount64 - T0 < 50, 'sin su atomo de proceso no recorre la tabla');
+  Assert.IsTrue(ArrancaParado(PI), 'arranca parado');
+  N1 := Format('Delphi%.8X', [PI.dwProcessId]);
+  N2 := Format('ControlOfs%.8X%.8X', [$00400000, PI.dwThreadId]);
+  Planta(N1);
+  Planta(N2);
+  Assert.AreEqual(0, BorraAtomosSiLosDejo(PI.dwProcessId, PI.dwThreadId), 'vivo: nada');
+  // muere por su cuenta (aqui, matado desde fuera: para RunCore es lo mismo)
+  TerminateProcess(PI.hProcess, 1);
+  Assert.IsTrue(WaitForSingleObject(PI.hProcess, 5000) = WAIT_OBJECT_0, 'muerto');
+  Assert.IsTrue(WaitForSingleObject(PI.hThread, 5000) = WAIT_OBJECT_0, 'su hilo, muerto');
+  CloseHandle(PI.hThread);
+  CloseHandle(PI.hProcess);
+  Assert.IsTrue(BorraAtomosSiLosDejo(PI.dwProcessId, PI.dwThreadId) >= 2, 'lo que dejo: los dos');
+  Assert.IsTrue((GlobalFindAtom(PChar(N1)) = 0) and (GlobalFindAtom(PChar(N2)) = 0), 'borrados');
+  Assert.AreEqual(0, BorraAtomosSiLosDejo(PI.dwProcessId, PI.dwThreadId), 'segunda pasada: nada');
 end;
 
 initialization

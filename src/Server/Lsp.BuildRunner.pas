@@ -319,6 +319,30 @@ begin
   until GetTickCount64 >= Fin;
 end;
 
+{ El programa de una linea de mando, solo su nombre, para el log: la linea
+  entera puede llevar lo que no se imprime (la URL de un clone con credenciales) }
+function ProgramaDe(const ACmdLine: string): string;
+var
+  S: string;
+  Fin: Integer;
+begin
+  S := ACmdLine.TrimLeft;
+  if S.StartsWith('"') then
+  begin
+    Fin := S.IndexOf('"', 1);
+    if Fin < 0 then
+      Fin := S.Length;
+    S := S.Substring(1, Fin - 1);
+  end
+  else
+  begin
+    Fin := S.IndexOf(' ');
+    if Fin >= 0 then
+      S := S.Substring(0, Fin);
+  end;
+  Result := TPath.GetFileName(S);
+end;
+
 function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   AContenedor: PContenedor; out AExitCode: Cardinal;
   out ATimedOut: Boolean; const AEntorno: string = ''): string;
@@ -472,7 +496,11 @@ begin
       end;
     until False;
     if not TimedOut then
-      WaitForSingleObject(PI.hProcess, 10000)
+    begin
+      WaitForSingleObject(PI.hProcess, 10000);
+      // y su hilo, como abajo: lo que dejo se juzga con el hilo terminado
+      WaitForSingleObject(PI.hThread, 5000);
+    end
     else
     begin
       // que muera, el hilo tambien: el proceso se senala antes de que su hilo
@@ -494,7 +522,20 @@ begin
     // Con sus handles YA cerrados: un muerto con un handle abierto sigue
     // existiendo para OpenProcess y la guarda lo tomaba por vivo (medido)
     if Matado then
-      BorraAtomosDeProceso(PI.dwProcessId, PI.dwThreadId);
+      BorraAtomosDeProceso(PI.dwProcessId, PI.dwThreadId)
+    else
+    begin
+      // ...y lo que acabo POR SU CUENTA sin finalizar: su Job lo mata por una
+      // excepcion sin tratar (DIE_ON_UNHANDLED_EXCEPTION), un paquete de diseno
+      // revienta dentro del renderizador. Dejaba sus atomos igual que un
+      // matado, y aqui solo se limpiaba lo matado (medido el 20-oct-2026: un
+      // juez del orden muerto solo, que set tolera, dejo sus tres). Barato
+      // para el que finalizo. Queda en el log con su codigo
+      var Dejados := BorraAtomosSiLosDejo(PI.dwProcessId, PI.dwThreadId);
+      if (Dejados > 0) or (AExitCode >= $C0000000) then
+        try TLogger.Warning(MsgFmt(SL_HIJO_SIN_FINALIZAR_FMT,
+          [ProgramaDe(ACmdLine), AExitCode, Dejados])); except end;
+    end;
     // Closing the job kills any process in the tree still alive (e.g. children
     // orphaned by a timeout): kill-on-close leaves nothing running behind us.
     if Job <> 0 then

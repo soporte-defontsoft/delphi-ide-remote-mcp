@@ -40,6 +40,16 @@ function BorraAtomosDeProceso(APid, ATidPrincipal: DWORD): Integer;
   renderizador): no comprueba que este muerto, porque no lo esta. }
 function BorraAtomosPropios: Integer;
 
+{ Lo que dejo un hijo que acabo POR SU CUENTA sin finalizar: una excepcion
+  sin tratar (su Job lo mata, DIE_ON_UNHANDLED_EXCEPTION), un limite del Job,
+  un paquete de diseno que revienta dentro del renderizador. Medido el
+  20-oct-2026: RunCore solo limpiaba lo que mataba ella, y un renderizador VCL
+  muerto solo - el juez del orden de un set, que lo tolera - dejaba sus tres
+  atomos y nadie los veia. Barato para el que finalizo, que es casi todos: sin
+  su atomo de proceso (Delphi<pid> o FIREMONKEY<pid>_) no se recorre la
+  tabla. Para llamar cuando el hijo ha terminado. Cuantos borro. }
+function BorraAtomosSiLosDejo(APid, ATidPrincipal: DWORD): Integer;
+
 implementation
 
 uses
@@ -151,6 +161,16 @@ end;
 function BorraAtomosPropios: Integer;
 begin
   Result := Borra(GetCurrentProcessId, MainThreadID);
+end;
+
+function BorraAtomosSiLosDejo(APid, ATidPrincipal: DWORD): Integer;
+begin
+  Result := 0;
+  // un proceso VCL o FMX que finalizo ya quito el suyo: sin el, nada que mirar
+  if (GlobalFindAtom(PChar(Format(ATOMO_VENTANA_VCL, [APid]))) = 0) and
+     (GlobalFindAtom(PChar(Format(ATOMO_VENTANA_FMX, [APid, ATidPrincipal]))) = 0) then
+    Exit;
+  Result := BorraAtomosDeProceso(APid, ATidPrincipal);
 end;
 
 end.

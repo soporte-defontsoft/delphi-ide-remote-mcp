@@ -4745,6 +4745,15 @@ const
     'delphi_test: could not query the test Job Object (error %d); stopped ' +
     'waiting for its processes - the copy is cleaned up anyway';
 
+  // Un hijo de RunCore que acabo por su cuenta SIN finalizar (su Job lo mato
+  // por una excepcion sin tratar, revento un paquete de diseno): dejaba sus
+  // atomos del RTL y nadie lo veia (medido el 20-oct-2026). Queda en el log
+  // con su codigo, y lo que dejo se limpia
+  SL_HIJO_SIN_FINALIZAR_FMT =
+    '%s ended with code 0x%.8X without finalizing (an unhandled exception ' +
+    'kills it inside its Job, or it crashed): %d RTL atom(s) it left were ' +
+    'cleaned';
+
   // El contenedor no arranca si su estacion/escritorio no concede acceso a
   // los AppContainers (ALL APPLICATION PACKAGES): user32 falla al iniciar
   // (0xC0000142). WinSta0\Default la trae; la estacion de un SERVICIO (sesion

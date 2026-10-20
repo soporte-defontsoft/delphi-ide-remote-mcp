@@ -8,6 +8,29 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A child that died on its own left its atoms in Windows' global table.**
+  The server cleaned the RTL atoms (`Delphi<pid>`, `ControlOfs...`,
+  `WndProcPtr...`, `FIREMONKEY...`) only of the children it killed itself,
+  by their deadline; a renderer that died without finalizing on its own -
+  its Job kills it on an unhandled exception, a design package crashes
+  inside it - left them for good, and when it was the judge of a `set`,
+  which tolerates that failure, nobody saw it. Measured on 20-oct-2026:
+  6 VCL renderers in one release gate (18 atoms), 2 in an instrumented pass,
+  intermittent. `RunCore`, the one launcher, now cleans what any ended child
+  left (cheap for the ones that finalized: without their process atom
+  nothing is scanned) and logs it with the exit code, so the next death
+  says why. `test_hijo_sin_finalizar_1212`, red against 1.21.1.
+- **The FMX application window flashed in the taskbar for an instant.** The
+  renderer's CBT hook changed the `CREATESTRUCT`'s extended style when
+  `TFMAppClass` was created, and Windows ignores that (measured with a
+  probe): the window was born with `WS_EX_APPWINDOW` and stayed visible
+  until the renderer hid it - 3 samples of 4,043 in the designer corpus, the
+  "2 samples with no cause" of 19-oct. The hook now sets the style on the
+  window itself, which Windows honours. Same battery, red against 1.21.1
+  (caught in 1 of 3 renders).
+
 ## [1.21.1] - 2026-10-20
 
 A patch of 1.21.0 with what agents and our own measurements found once it
