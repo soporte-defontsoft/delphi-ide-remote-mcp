@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.21.0';
+  SERVER_VERSION = '1.21.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -753,6 +753,14 @@ const
     '[GUARD-042 DENIED] "%s" has %d names (hard links) and Windows does not ' +
     'list them here, so I cannot tell whether one is outside your roots. ' +
     'Nothing was read.';
+  // ...y la de ESCRIBIR dentro de uno: delphi_upload escribe en el fichero
+  // (sus trozos se anaden), no pone uno nuevo con un renombre (1.21.1)
+  SR_ESCRITURA_EN_ENLACE_DURO_FMT =
+    '[GUARD-043 DENIED] "%s" has %d names (a hard link): this tool writes ' +
+    'INTO the file, so the bytes would change under every name, and one ' +
+    'may be outside your roots. Nothing was written. Delete this name ' +
+    'first (delphi_delete moves only this one to the trash; the others are ' +
+    'not touched) and write it again.';
 
   // la gemela de GUARD-001 para la zona de biblioteca (M1 de la 1.18.0)
   SR_JAIL_LINK_BIBLIOTECA_FMT =
@@ -2541,7 +2549,8 @@ const
   { ...y lo que es un VAULT (de las tools vault_*, de cualquier workspace):
     se copiaba el de OTRO workspace (octava revision). }
   SN_COPY_LINKS_NOT_FOLLOWED_FMT =
-    '  [FILE-032] %d item(s) NOT copied: links that point to something ' +
+    '  [FILE-032] %d item(s) NOT copied: links (a junction, a symlink, a ' +
+    'hard link) that lead to something ' +
     'this workspace cannot read (outside its roots, its ReadOnlyRoots and ' +
     'the library zone), or a knowledge vault (it belongs to the vault_* ' +
     'tools): %s. The rest has been ' +

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Un ENLACE DURO en la jaula a un fichero de FUERA de las raices (2al-H2,
+r"""Un ENLACE DURO en la jaula a un fichero de FUERA de las raices (2al-H2,
 1.21.1). Es el MISMO fichero con otro nombre: la jaula miraba el nombre (y su
 ruta real, que para un enlace duro es la suya) y lo dejaba leer. Medido el
 20-oct-2026 contra 1.21.0: delphi_read y delphi_search leian el secreto, y

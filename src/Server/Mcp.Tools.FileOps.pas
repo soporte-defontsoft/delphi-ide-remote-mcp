@@ -1021,6 +1021,11 @@ begin
       // guardar, y copiarlo era copiar su destino (una junction a un
       // antepasado copiaba la jaula en su papelera y fallaba; octava revision)
       BackupNote := ''
+    else if EnlaceDuroIlegible(Params.Path) <> '' then
+      // ...y un ENLACE DURO con un nombre que la sesion no lee, igual: el move
+      // lleva ESTE nombre y el otro no se toca; copiarlo era leer el de fuera
+      // (medido el 20-oct-2026: la copia de la papelera salia con sus bytes)
+      BackupNote := ''
     else
     begin
       BackupNote := TrashPathFor(Params.Path, CAJON_BORRADOS);

@@ -358,7 +358,8 @@ try:
         # ni state=, el escritorio sin out= ni project= (status, sin project=)
         check('anuncio: git, adb, designer y desktop anuncian sus lecturas CONDICIONADAS (readOnlyWhen)',
               # 1.19.0: branch solo lista, y es una lectura sin condicion
-              set((cuando.get('delphi_git') or {})) == {'tag', 'worktree', 'stash'} and
+              # 1.21.1: config sin message LEE el valor
+              set((cuando.get('delphi_git') or {})) == {'tag', 'worktree', 'stash', 'config'} and
               'branch' in next((t.get('_meta') or {}).get('readOnlyCommands') or []
                                for t in anunciadas if t['name'] == 'delphi_git') and
               set((cuando.get('delphi_adb') or {})) == {'logcat', 'screenshot'} and

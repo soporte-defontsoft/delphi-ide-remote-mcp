@@ -1506,6 +1506,10 @@ begin
       Result := SustitucionDenegada(ADestino);
     if Result = '' then
       Result := RutaLargaDenegada(ADestino);
+    // lo que se sustituye se copia antes (GuardaContenidoActual): es leerlo,
+    // y quien pregunta antes de lanzar nada (styles build) lo sabe aqui
+    if Result = '' then
+      Result := EnlaceDuroIlegible(ADestino);
   end
   else
     Result := LugarDeEscrituraDenegado(ADestino, ALugar);
@@ -1694,6 +1698,10 @@ begin
   Motivo := SustitucionDenegada(APath);
   if Motivo = '' then
     Motivo := EscrituraDenegada(DayDir);
+  // la copia es LEER el fichero (un enlace duro: GUARD-041). La segunda
+  // barrera: quien edita ya lo leyo por la puerta de leer
+  if Motivo = '' then
+    Motivo := EnlaceDuroIlegible(APath);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
   if TFile.Exists(Dest) then
@@ -2163,6 +2171,13 @@ begin
   // dejaba una papelera DENTRO de la temporal (septima revision)
   if EnTemporal(APath) then
     Exit;
+  // ...y la copia es LEER el fichero: un enlace duro con un nombre que la
+  // sesion no lee no se copia, y sin copia no se pisa (medido el
+  // 20-oct-2026: upload y el .res de styles build metian en la papelera los
+  // bytes del fichero de fuera de las raices)
+  Motivo := EnlaceDuroIlegible(APath);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
   Result := TrashPathFor(APath, ACajon); // la puerta, o la negativa
   CrearCarpeta(TPath.GetDirectoryName(Result));
   TFile.Copy(APath, Result);

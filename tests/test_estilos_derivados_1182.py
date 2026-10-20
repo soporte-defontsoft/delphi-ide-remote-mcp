@@ -15,12 +15,16 @@ convertiria antes de la negativa es el otro.
   S1  una entrada de ReadOnlyPaths que nombra Bat.bin.style: GUARD-012 ANTES de
       convertir nada (Otro.bin.style no nace), Bat.bin.style intacto y sin .res
   S2  ...que nombra el .res: GUARD-012 antes de convertir (ningun .bin.style nace)
-  S3  el .bin.style es un HARDLINK de un fichero de FUERA de las raices: la
-      victima intacta (el renombre rompe el enlace), y en la jaula el binario
+  S3  el .bin.style es un HARDLINK de un fichero de FUERA de las raices: desde
+      la 1.21.1, GUARD-041/042 ANTES de convertir (colocar copia antes lo que
+      habia, y copiarlo era leer el de fuera), la victima intacta y sus
+      bytes fuera de la papelera; hasta la 1.21.0 se sustituia y la copia
+      sellada se los llevaba
   S4  ...y el .res, igual
   S5  un .bin.style con el atributo +R: su negativa (SYS-029), no un error del
       conversor
-  S6  lo que habia se puede recuperar: la copia sellada en la papelera
+  S6  lo que habia en un derivado de UN nombre se puede recuperar: la copia
+      sellada en la papelera
   S7  nada del proceso se queda: ni temporales en la carpeta de estilos ni la
       carpeta de la llamada en la temporal del servidor
   S8  un .style que es un enlace a uno de FUERA: la puerta de leer antes de que
@@ -145,17 +149,25 @@ try:
             check('%s el hardlink de la prueba se crea' % clave, False, ctypes.GetLastError())
             continue
         r = build(srv)
-        j = mc.como_json(r)
-        firma = b'FMX_STYLE' if derivado == BIN else b'\x00\x00\x00\x00'
-        check('%s %s es un hardlink de un fichero de fuera: la victima intacta y en la jaula el derivado nuevo'
-              % (clave, os.path.basename(derivado)),
-              j.get('ok') is True and bytes_de(victima) == VIEJO and
-              (bytes_de(derivado) or b'').startswith(firma), (r[:300], bytes_de(victima)[:20]))
-        # S6: lo que habia, recuperable (la copia sellada de lo que se sustituye)
+        otros = [p for p in (BIN, RES, OTRO_BIN) if p != derivado and os.path.exists(p)]
+        check('%s %s es un hardlink de un fichero de fuera: GUARD-041/042 antes de convertir, la victima '
+              'intacta y nada nace' % (clave, os.path.basename(derivado)),
+              (mc.abre(r, 'SR_JAIL_ENLACE_DURO_FMT') or mc.abre(r, 'SR_JAIL_ENLACE_DURO_SIN_NOMBRES_FMT')) and
+              bytes_de(victima) == VIEJO and not otros, (r[:300], bytes_de(victima)[:20], otros))
         copias = glob.glob(os.path.join(STY, mc.PAPELERA, '**', os.path.basename(derivado) + '*'), recursive=True)
-        check('%s/S6 lo que habia en %s queda en la papelera, sellado' % (clave, os.path.basename(derivado)),
-              any(bytes_de(c) == VIEJO for c in copias), copias)
+        check('%s los bytes de la victima no entran en la papelera' % clave,
+              not any(bytes_de(c) == VIEJO for c in copias), copias)
+        os.remove(derivado)
         os.remove(victima)
+
+    # --------------------------- S6: lo que habia en un derivado de UN nombre, recuperable
+    limpia()
+    open(BIN, 'wb').write(VIEJO)
+    r = build(srv)
+    copias = glob.glob(os.path.join(STY, mc.PAPELERA, '**', 'Bat.bin.style*'), recursive=True)
+    check('S6 lo que habia en Bat.bin.style (un nombre) queda en la papelera, sellado, y el derivado es nuevo',
+          mc.como_json(r).get('ok') is True and (bytes_de(BIN) or b'').startswith(b'FMX_STYLE') and
+          any(bytes_de(c) == VIEJO for c in copias), (r[:300], copias))
 
     # --------------------------- S5: el +R
     limpia()

@@ -1605,6 +1605,11 @@ begin
   // ...y uno de solo lectura, SYS-006 INTERNAL "Cannot create file" (sexta revision)
   if Result = '' then
     Result := SoloLecturaDenegado(FullPath);
+  // ...y uno con OTRO nombre (un enlace duro): upload escribe DENTRO del
+  // fichero, con cualquier offset, y los bytes cambiaban bajo todos sus
+  // nombres - el de fuera de las raices tambien (medido el 20-oct-2026)
+  if Result = '' then
+    Result := EscrituraEnElFicheroDenegada(FullPath);
   if Result <> '' then
     Exit;
   if Params.Offset < 0 then

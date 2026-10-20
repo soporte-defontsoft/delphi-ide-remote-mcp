@@ -151,6 +151,20 @@ function PathDenied(const APath: string; APermiteGit: Boolean = False): string;
   cual, mas la pista de la zona de biblioteca en la negativa de fuera. }
 function ReadPathDenied(const APath: string; APermiteGit: Boolean = False): string;
 
+{ La pregunta de la puerta de leer sobre los OTROS nombres de un fichero (un
+  enlace duro: GUARD-041/042), para quien lee sus BYTES por su cuenta - las
+  copias de la papelera, la de un move, la de una carpeta -. ReadPathDenied
+  la hace al final. '' si no es un enlace duro, si todos sus nombres se leen
+  o si no hay jaula. }
+function EnlaceDuroIlegible(const APath: string): string;
+
+{ Para quien escribe DENTRO del fichero en vez de poner uno nuevo con un
+  renombre (AtomicWrite): con mas de un nombre los bytes cambian bajo todos,
+  y alguno puede estar fuera de las raices (GUARD-043). Solo delphi_upload
+  escribe asi: sus trozos se anaden al mismo fichero. '' si tiene un nombre
+  o si no hay jaula. }
+function EscrituraEnElFicheroDenegada(const APath: string): string;
+
 { La raiz de referencia que contiene APath ('' = ninguna). EL sitio que sabe
   si una ruta es de referencia: lo usan la guarda, los temporales y
   delphi_projects. }
@@ -1695,6 +1709,12 @@ end;
 
 procedure CopiaNuestra(const AOrigen, ADestino: string);
 begin
+  // copiar es LEER el origen: un enlace duro con un nombre que la sesion no
+  // lee no se copia (la segunda barrera: quien llama ya pregunto a la puerta
+  // de leer por la ruta que le dieron, y CopiaArbol por cada fichero)
+  var Motivo := EnlaceDuroIlegible(AOrigen);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
   TFile.Copy(AOrigen, ADestino);
   QuitaSoloLectura(ADestino);
 end;
@@ -3525,7 +3545,12 @@ var
     for E in EntradasDeCarpeta(O) do
       if not TDirectory.Exists(E) then
       begin
-        if (not EsEnlace(E) or SeSigue(E)) and
+        // un ENLACE DURO con un nombre que la sesion no lee tampoco se copia:
+        // copiarlo era leer el de fuera (medido el 20-oct-2026: la copia de
+        // una carpeta salia con sus bytes). Va con los no seguidos
+        if EnlaceDuroIlegible(E) <> '' then
+          NoSeg.Add(E)
+        else if (not EsEnlace(E) or SeSigue(E)) and
            (not Assigned(AOmite) or not AOmite(E)) then
           // la copia CON papelera es la de seguridad de un move (conserva los
           // atributos); la otra es la del agente (copy=true): sin el +R heredado
@@ -4438,7 +4463,7 @@ begin
   if not GetVolumePathName(PChar(Full), Vol, Length(Vol)) then
     Exit(MsgFmt(SR_JAIL_ENLACE_DURO_SIN_NOMBRES_FMT, [APath, Nombres]));
   // cada nombre llega desde la raiz de su volumen ("\Users\...\x.txt")
-  Raiz := ExcludeTrailingPathDelimiter(string(PChar(@Vol[0])));
+  Raiz := PrefijoSinBarra(string(PChar(@Vol[0])));
   SetLength(Buf, TAM_NOMBRE);
   Tam := TAM_NOMBRE;
   H := FindFirstFileNameCrudo(PChar(Full), 0, Tam, @Buf[0]);
@@ -4453,6 +4478,28 @@ begin
   finally
     Winapi.Windows.FindClose(H);
   end;
+end;
+
+function EnlaceDuroIlegible(const APath: string): string;
+begin
+  // sin jaula no hay fuera
+  Result := '';
+  if HayJaula then
+    Result := EnlaceDuroDenegado(APath);
+end;
+
+function EscrituraEnElFicheroDenegada(const APath: string): string;
+var
+  Nombres: Cardinal;
+begin
+  Result := '';
+  if not HayJaula then
+    Exit;
+  // medido el 20-oct-2026: delphi_upload sobre un enlace duro dejo lo subido
+  // en el fichero de FUERA de las raices
+  Nombres := NombresDelFichero(APath);
+  if Nombres > 1 then
+    Result := MsgFmt(SR_ESCRITURA_EN_ENLACE_DURO_FMT, [APath, Nombres]);
 end;
 
 function JaulaDenegada(const APath: string; out AFueraDeJaula: Boolean;
@@ -4746,8 +4793,8 @@ begin
   // ese (un enlace duro). Solo al LEER - aqui pregunta la puerta de leer
   // (LeeTexto/LeeBytes) -: quitar o mover ESTE nombre no toca el otro, y el
   // escritor atomico pone un fichero nuevo en su sitio. Sin jaula no hay fuera
-  if (Result = '') and HayJaula then
-    Result := EnlaceDuroDenegado(APath);
+  if Result = '' then
+    Result := EnlaceDuroIlegible(APath);
 end;
 
 function MotivoToolOculta(const AToolName: string): TMotivoOculta;
