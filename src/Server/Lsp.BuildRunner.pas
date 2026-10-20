@@ -110,7 +110,8 @@ uses
   Lsp.Settings,
   Lsp.Lugares,
   Lsp.Codificacion,
-  Lsp.AtomosRtl;
+  Lsp.AtomosRtl,
+  Lsp.Styles; // RcLecturasDenegadas: EL juez del .rc (el de delphi_styles build)
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -1185,18 +1186,30 @@ begin
   Files := TList<string>.Create;
   try
     if TFile.Exists(Dpr) then
+    begin
+      // (1.21.2) un fichero con OTRO nombre que esta sesion no puede leer
+      // (un enlace duro a uno de fuera) lo leeria el compilador por este
+      if EnlaceDuroIlegible(Dpr) <> '' then
+        Exit(MsgFmt(SR_BUILD_ENLACE_DURO_FMT, [TPath.GetFileName(Dpr)]));
       Files.Add(Dpr);
+    end;
     // Everything the compiler could reach from the project's own folder. Not
     // the .dproj's unit list: a unit can be pulled in by a search path and
     // still carry a directive, and this check is cheap enough to be broad.
     Base := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
     // por EL recorredor (WalkFiles): solo sigue los enlaces que esta sesion
     // puede leer (TDirectory con soAllDirectories cruzaba una union y leia
-    // lo de detras: medida M1)
+    // lo de detras: medida M1). TODO el arbol, no solo los fuentes (1.21.2):
+    // la pregunta del enlace duro es de cada fichero (.pas, .inc, .res,
+    // .ico...), y de los fuentes, ademas, sus directivas
     if TDirectory.Exists(Base) then
-      for var SF in WalkFiles(Base, MascarasDe(SOURCE_EXTS)) do
-        if not Files.Contains(SF) then
+      for var SF in WalkFiles(Base, '*') do
+      begin
+        if EnlaceDuroIlegible(SF) <> '' then
+          Exit(MsgFmt(SR_BUILD_ENLACE_DURO_FMT, [TPath.GetFileName(SF)]));
+        if EsRutaDeFuente(SF) and not Files.Contains(SF) then
           Files.Add(SF);
+      end;
     for var F in Files do
     begin
       try
@@ -1496,11 +1509,166 @@ begin
     Result := Raiz;
 end;
 
+{ Lo que este build LEE por lo que el proyecto escribe - el icono, el
+  manifiesto, un search path, un .rc, un DeployFile, un keystore... - tiene
+  que estar donde esta sesion puede leer: cada valor de cada propiedad y cada
+  Include de cada item del .dproj y de lo que importa (ValoresQueLeeElBuild),
+  con las macros expandidas como las expande NUESTRO msbuild (la tabla del
+  IDE, rsvars.bat, las propiedades del proyecto, el entorno del servidor sin
+  las DELPHI_MCP_*, y vacio lo demas), resuelto contra la carpeta del
+  proyecto, y juzgado por la puerta de leer con los lugares del motor (la
+  jaula, el IDE y su biblioteca: lo mismo que dcc y brcc32 van a abrir). Se
+  juzga exista o no: negar solo lo que existe seria un oraculo de fuera. Lo
+  que no es una ruta (un define, una clave de version) no lo abre nadie y se
+  salta. Y el .rc de un RcCompile, por EL lector del .rc. Medido en la 1.20.1:
+  un RcCompile y un Manifest_File de fuera acababan en el .res y en el exe;
+  censo del 20-oct-2026 sobre los 122 proyectos de las raices de produccion:
+  0 valores de fuera. Parte 3 del gate del build (1.21.2). }
+function LecturasDelBuildDenegadas(const ADprojPath, APlat, ACfg: string;
+  const AInfo: TRadStudioInfo): string;
+var
+  Vars: TStringList;
+  Cache: TDictionary<string, string>;
+  Xmls, Ficheros: TArray<string>;
+  Dir, Base: string;
+
+  // $(X) como lo expande nuestro msbuild: la tabla, una propiedad del
+  // proyecto (EffectiveProperty, la de ESTE build), el entorno, o vacio
+  function Expande(const AValor: string): string;
+  var
+    P, Q, Vueltas: Integer;
+    Nombre, Valor: string;
+  begin
+    Result := AValor;
+    Vueltas := 0;
+    while Vueltas < 64 do
+    begin
+      Inc(Vueltas);
+      P := Pos('$(', Result);
+      if P = 0 then
+        Break;
+      Q := Pos(')', Result, P + 2);
+      if Q = 0 then
+        Break; // sin cierre: se queda, y lo que queda con $( no se aprueba
+      Nombre := Copy(Result, P + 2, Q - P - 2).Trim;
+      if Vars.IndexOfName(Nombre) >= 0 then
+        Valor := Vars.Values[Nombre]
+      else if not Cache.TryGetValue(LowerCase(Nombre), Valor) then
+      begin
+        Valor := '';
+        for var Xml in Xmls do
+        begin
+          Valor := EffectiveProperty(Xml, Nombre, APlat, ACfg);
+          if Valor <> '' then
+            Break;
+        end;
+        if (Valor = '') and (Nombre <> '') and not StartsText('DELPHI_MCP_', Nombre) then
+          Valor := GetEnvironmentVariable(Nombre);
+        Cache.Add(LowerCase(Nombre), Valor);
+      end;
+      Result := Copy(Result, 1, P - 1) + Valor + Copy(Result, Q + 1, MaxInt);
+    end;
+  end;
+
+  function Juzga(const AValor: TValorDelProyecto; const AFichero: string): string;
+  var
+    Cand: string;
+  begin
+    Result := '';
+    Cand := Expande(AValor.Escrito).Trim;
+    if Cand = '' then
+      Exit;
+    if Cand.Contains('$(') or Cand.Contains('@(') or Cand.Contains('%(') then
+      Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
+        [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
+    // Lo que no es una ruta no lo abre nadie: una clave=valor (VerInfo_Keys,
+    // un alias de unidad: el '=' antes de toda barra) y un texto con ':' que
+    // no es el de la unidad y lleva barras detras (una URL, un
+    // "Comments=D:\x" ya partido). Un ':' sin barras detras es un flujo
+    // alternativo (f.txt:s): se juzga el FICHERO del que es - lo de dentro
+    // es de dentro, y el de fuera (por .. o por un enlace) lo niega la
+    // jaula. (W14 de test_build_lista_blanca_1212: VerInfo_Keys se negaba)
+    var Sep := Cand.IndexOfAny(['\', '/']);
+    var Igual := Cand.IndexOf('=');
+    if (Igual >= 0) and ((Sep < 0) or (Igual < Sep)) then
+      Exit;
+    var DosPuntos := Cand.LastIndexOf(':');
+    if DosPuntos > 1 then
+    begin
+      if Cand.Substring(DosPuntos + 1).IndexOfAny(['\', '/']) >= 0 then
+        Exit;
+      Cand := Cand.Substring(0, DosPuntos);
+    end;
+    try
+      if not TPath.IsPathRooted(Cand) then
+        Cand := TPath.Combine(Dir, Cand);
+      Cand := TPath.GetFullPath(Cand);
+    except
+      Exit; // no es una ruta (un define, una clave de version): nadie la abre
+    end;
+    if LugarDeLecturaDenegado(Cand, LUGARES_DEL_MOTOR) <> '' then
+      Exit(MsgFmt(SR_BUILD_LECTURA_FUERA_FMT,
+        [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
+    // el .rc que compila brcc32: cada fichero que nombra, por EL lector
+    if MatchText(AValor.Elemento, ['RcCompile', 'RcItem']) and TFile.Exists(Cand) then
+    begin
+      var Rc := RcLecturasDenegadas(Cand);
+      if Rc <> '' then
+        Exit(MsgFmt(SR_BUILD_RC_FMT,
+          [AValor.Escrito, TPath.GetFileName(AFichero), Rc]));
+    end;
+  end;
+
+begin
+  Result := '';
+  Xmls := ProjectXmlChain(ADprojPath, Ficheros);
+  if Xmls = nil then
+    Exit;
+  Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+  Base := TPath.GetFileNameWithoutExtension(ADprojPath);
+  Vars := TStringList.Create;
+  Cache := TDictionary<string, string>.Create;
+  try
+    IdeMacroVars(AInfo, Vars);
+    // rsvars.bat manda sobre la tabla: es el entorno que recibe msbuild
+    for var V in VariablesDeRsVars(AInfo) do
+    begin
+      var I := Pos('=', V);
+      if I > 1 then
+        Vars.Values[Copy(V, 1, I - 1)] := Copy(V, I + 1, MaxInt);
+    end;
+    Vars.Values['Platform'] := APlat;
+    Vars.Values['Config'] := ACfg;
+    // las de msbuild sobre este proyecto (las de ResolveImportPath y
+    // ExpandOutputMacros, en una tabla)
+    Vars.Values['MSBuildProjectDirectory'] := Dir;
+    Vars.Values['MSBuildThisFileDirectory'] := IncludeTrailingPathDelimiter(Dir);
+    Vars.Values['MSBuildProjectName'] := Base;
+    Vars.Values['SanitizedProjectName'] := Base;
+    Vars.Values['MSBuildProjectFile'] := TPath.GetFileName(ADprojPath);
+    Vars.Values['MSBuildProjectFullPath'] := TPath.GetFullPath(ADprojPath);
+    Vars.Values['ProjectDir'] := Dir;
+    for var I := 0 to High(Xmls) do
+      for var V in ValoresQueLeeElBuild(Xmls[I]) do
+      begin
+        Result := Juzga(V, Ficheros[I]);
+        if Result <> '' then
+          Exit;
+      end;
+  finally
+    Cache.Free;
+    Vars.Free;
+  end;
+end;
+
 { El escaneo compile-only del .dproj en UN solo sitio (hazard + propiedad de IDE
-  redefinida + directivas/imports), para correrlo BAJO el cerrojo y sobre los
-  MISMOS bytes que compilara msbuild. Devuelve si hay que vaciar los eventos de
-  build; lanza con su motivo si el proyecto no pasa. }
-function EscaneoCompileOnly(const ADprojPath: string; AAllowScripts: Boolean): Boolean;
+  redefinida + directivas/imports/enlaces duros + lo que el build lee), para
+  correrlo BAJO el cerrojo y sobre los MISMOS bytes que compilara msbuild.
+  APlat/ACfg/AInfo: el build que se va a lanzar (las macros de lo que lee).
+  Devuelve si hay que vaciar los eventos de build; lanza con su motivo si el
+  proyecto no pasa. }
+function EscaneoCompileOnly(const ADprojPath, APlat, ACfg: string;
+  const AInfo: TRadStudioInfo; AAllowScripts: Boolean): Boolean;
 begin
   // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
   // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
@@ -1559,6 +1727,16 @@ begin
     TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
       [TPath.GetFullPath(ADprojPath), IncBad]));
     raise Exception.Create(IncBad);
+  end;
+  // Parte 3 del mismo gate (1.21.2): lo que el build LEE por lo que el
+  // proyecto escribe (el icono, el manifiesto, los search paths, los .rc, los
+  // DeployFile...), siempre: la jaula de leer no es un opt-in del operador.
+  var LecturaMala := LecturasDelBuildDenegadas(ADprojPath, APlat, ACfg, AInfo);
+  if LecturaMala <> '' then
+  begin
+    TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
+      [TPath.GetFullPath(ADprojPath), LecturaMala]));
+    raise Exception.Create(LecturaMala);
   end;
 end;
 
@@ -1790,7 +1968,7 @@ begin
   if not Confiado then
     EnterFileEdit;
   try
-  EventosSaltados := EscaneoCompileOnly(ADprojPath, Confiado);
+  EventosSaltados := EscaneoCompileOnly(ADprojPath, Plat, Cfg, Info, Confiado);
   // Un Windows REMOTO (perfil PAServer de Windows) despliega como un Linux:
   // sin manifiesto, msbuild "desplegaba" cero ficheros y decia exito. La
   // plataforma local solo lo es cuando no hay perfil (medido 2026-09-22 con

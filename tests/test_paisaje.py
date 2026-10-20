@@ -17,8 +17,10 @@ regla busca su formato FUERA de su casa (fichero y funcion). Cada regla lleva
 su MUTANTE dentro: una copia plantada en un fragmento de Pascal que el
 mismo buscador tiene que cazar (si no la caza, la regla no mide nada).
 
-Deuda declarada (listas negras): ShellArgDenied (metacaracteres), HazardScan (DANGER_TASKS de MSBuild) y
-BorradoDenegado (lugares protegidos tras su lista blanca de desechables).
+Deuda declarada (listas negras): ShellArgDenied (metacaracteres) y BorradoDenegado (lugares
+protegidos tras su lista blanca de desechables). HazardScan dejo de serlo en la 1.21.2: la puerta
+del build es una LISTA BLANCA de elementos (ElementoNoAdmitido) y DANGER_TASKS queda de segunda
+barrera y para nombrar el porque de una tarea conocida.
 La config local/worktree de Git y los hosts de todos sus remotos son listas blancas.
 
 Uso:  python tests/test_paisaje.py
@@ -1318,7 +1320,6 @@ check('ninguna unidad tiene dos sobrecargas de igual aridad que solo difieran en
 LISTAS_NEGRAS = [
     ('Lsp.Args.pas','ShellArgDenied'),
     ('Lsp.Guard.pas','BorradoDenegado'),
-    ('Lsp.Dproj.pas','HazardScan'),
 ]
 def negra_declarada(texto,funcion):
     for m in re.finditer(r'(?m)^function '+re.escape(funcion)+r'\b',texto):

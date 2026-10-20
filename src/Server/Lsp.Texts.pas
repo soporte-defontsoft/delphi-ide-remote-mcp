@@ -1645,13 +1645,16 @@ const
 
   SR_BUILD_HAZARD_FMT =
     '[BUILD-017 DENIED] The project contains %s. This server only ' +
-    'COMPILES, never executes, and that task would run a program or ' +
-    'write files during the build. Compile a .dproj without execution ' +
-    'tasks (a <Target> that only prints a message or sets a property IS ' +
-    'accepted; a pre/post build event for signing or copying is not ' +
-    'refused either: it is compiled without running it and the answer ' +
-    'says so). For a trusted project to really run its tasks, the ' +
-    'operator enables it with [Workspace.<name>] AllowBuildScripts=1.';
+    'COMPILES, never executes: a build is approved only when every piece ' +
+    'of the project is one a compile-only build understands, and an ' +
+    'unknown element, a task that runs a program or writes files, free ' +
+    'text for the compiler''s command line or an <Import> it cannot read ' +
+    'is not. Compile a .dproj as the IDE writes it (a <Target> that only ' +
+    'prints a message or sets a property IS accepted; a pre/post build ' +
+    'event for signing or copying is not refused either: it is compiled ' +
+    'without running it and the answer says so). For a trusted project ' +
+    'to really run its tasks, the operator enables it with ' +
+    '[Workspace.<name>] AllowBuildScripts=1.';
   SN_BUILD_EVENTS_SKIPPED =
     '[BUILD-018] Compiled WITHOUT running the project''s pre/post build ' +
     'events (signing, copies, EurekaLog...): this server only compiles. ' +
@@ -5815,6 +5818,46 @@ const
     'not resolve), and an output folder that cannot be checked is not ' +
     'approved. Write it as a path relative to the project, with ' +
     '$(Platform) and $(Config) if needed.';
+
+  { Lo que el build LEE por lo que el proyecto escribe (el icono, el
+    manifiesto, un search path, un .rc, un DeployFile, un keystore...): cada
+    valor de cada propiedad y cada Include de cada item, por la puerta de
+    leer con los lugares del motor (Lsp.BuildRunner.LecturasDelBuildDenegadas,
+    1.21.2). Se juzga la ruta, exista o no: decir "existe" de una de fuera
+    seria un oraculo. Medido en la 1.20.1: un RcCompile y un Manifest_File
+    de fuera acababan dentro del .res y del exe. %s = el elemento, %s = el
+    fichero de proyecto que lo lleva, %s = el valor tal como esta escrito. }
+  SR_BUILD_LECTURA_FUERA_FMT =
+    '[BUILD-050 DENIED] I will not build this. <%s> in %s names %s, a ' +
+    'path the build READS that is OUTSIDE what this server lets you read ' +
+    '(the workspace, the IDE and its library zone). The compiler and the ' +
+    'resource compiler open it with the server''s permissions, and what ' +
+    'goes in comes back out (inside the binary, quoted in the errors). ' +
+    'Point it at something inside the workspace, or remove it.';
+
+  SR_BUILD_LECTURA_NO_VERIFICABLE_FMT =
+    '[BUILD-051 DENIED] I will not build this. <%s> in %s names %s, which ' +
+    'this server cannot resolve to a path (an item list, a metadata ' +
+    'reference or a macro it cannot expand), and a path the build reads ' +
+    'that cannot be checked is not approved. Write it as a plain path, with ' +
+    '$(Platform), $(Config) or a macro of the IDE if needed.';
+
+  { El .rc de un RcCompile: cada fichero que nombra, por EL lector del .rc
+    (Lsp.Styles.RcLecturasDenegadas, el de delphi_styles build). %s = el
+    .rc, %s = el fichero de proyecto, %s = la negativa del lector. }
+  SR_BUILD_RC_FMT =
+    '[BUILD-052 DENIED] I will not build this. The resource script %s ' +
+    '(RcCompile of %s) names a file the resource compiler would read and ' +
+    'put inside the .res: %s';
+
+  { Un fichero del arbol del proyecto con OTRO nombre que esta sesion no
+    puede leer (un enlace duro a uno de fuera): el compilador lo leeria por
+    este. El juez es la puerta de leer (Lsp.Guard.EnlaceDuroIlegible). }
+  SR_BUILD_ENLACE_DURO_FMT =
+    '[BUILD-053 DENIED] I will not build this. %s, in the project''s ' +
+    'folder, is another name (a hard link) of a file that is OUTSIDE what ' +
+    'this server lets you read: the compiler would read it through this ' +
+    'name. Replace it with a copy of something you can read.';
 
   SN_BUILD_LOCKED_OUTPUT =
     '[BUILD-032] F2039 "Could not create output file" is almost never a ' +
@@ -10584,6 +10627,46 @@ const
 
   SF_CFG_HAZARD_POR_IMPORT_FMT =
     '%s, brought in by <Import> "%s"';
+
+  { LISTA BLANCA del build compile-only (Lsp.Dproj.ElementoNoAdmitido,
+    1.21.2): un elemento que no es de la estructura de un proyecto se niega
+    por su nombre y el de su padre; una tarea conocida (DANGER_TASKS), por
+    el suyo (SF_CFG_HAZARD_TASK_FMT). }
+  SF_CFG_HAZARD_ELEMENTO_FMT =
+    'a <%s> element inside <%s>, which is not part of what a compile-only ' +
+    'build understands (under <Project>: PropertyGroup, ItemGroup, Import, ' +
+    'ProjectExtensions and Target; inside a <Target>: Message, Warning, ' +
+    'Error, CallTarget, OnError, PropertyGroup and ItemGroup)';
+
+  SF_CFG_HAZARD_RAIZ_FMT =
+    'a <%s> root element where <Project> should be';
+
+  { XML que el recorrido (Lsp.Dproj.ElementosDe) no puede seguir: lo que no
+    se deja comprobar no se aprueba (msbuild tampoco lo compila). %s = el
+    detalle (SF_CFG_XML_*). }
+  SF_CFG_HAZARD_XML_FMT =
+    'XML that cannot be followed (%s)';
+
+  SF_CFG_XML_CIERRE_FMT =
+    '</%s> closes <%s>';
+
+  SF_CFG_XML_CIERRE_SIN_APERTURA_FMT =
+    '</%s> closes nothing';
+
+  SF_CFG_XML_SIN_CERRAR_FMT =
+    '<%s> is never closed';
+
+  SF_CFG_XML_SIN_NOMBRE =
+    'a tag without a name';
+
+  SF_CFG_XML_SIN_FIN_FMT =
+    'the <%s> tag never ends';
+
+  { Opciones LIBRES al compilador (1.21.2): van tal cual a la linea de
+    ordenes de dcc o brcc32, y un texto libre no se juzga: se niegan, salvo
+    para el proyecto de confianza (AllowBuildScripts), como las tareas. }
+  SF_CFG_HAZARD_OPCIONES_FMT =
+    'a non-empty <%s> (free text handed to the compiler''s command line)';
 
   // Textos que estaban en linea en Lsp.ProjectUnits.pas (el resto, 27-sep-2026)
   SF_USES_EL_FICHERO =

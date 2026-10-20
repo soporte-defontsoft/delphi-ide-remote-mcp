@@ -58,6 +58,13 @@ type
     Dir: string;   // absoluto y resuelto; '' si no se sabe resolver
   end;
 
+  { Un valor que el build LEE, tal como lo escribe el proyecto
+    (ValoresQueLeeElBuild). }
+  TValorDelProyecto = record
+    Elemento: string; // el nombre LOCAL del elemento, como esta escrito (Icon_MainIcon, RcCompile)
+    Escrito: string;  // el valor (ya desescapado): un trozo de la lista, o el Include
+  end;
+
 { ---- tolerant XML primitives (shared) ---- }
 
 { Inner texts of <ATag ...>...</ATag>, in document order, como los da XML
@@ -160,6 +167,18 @@ type
   TAtributoXml = record
     Nombre: string;
     Abre, Ini, Fin: Integer;
+  end;
+
+  { Un elemento del documento en el recorrido con pila (ElementosDe): su
+    nombre LOCAL (sin prefijo de espacio de nombres) en minusculas y como
+    esta escrito, los nombres de sus antepasados (Ruta[0] es la raiz) y su
+    tramo, el de TramosDeEtiqueta (ValorDeTramo y AtributosDeTramo leen con
+    el). }
+  TElementoXml = record
+    Nombre: string;
+    Escrito: string;
+    Ruta: TArray<string>;
+    Tramo: TTramoXml;
   end;
 
 { Cada <ATag>..</ATag> de AXml, en orden de documento: el UNICO analisis de una
@@ -573,6 +592,36 @@ function BuscaEnCarpeta(const ADprojPath, AXml, ADir: string): Boolean;
   version final, otra poder trabajar y ejecutar mientras tanto"). }
 function DprojBuildHazard(const AXml, AProjectPath: string;
   AIgnoreBuildEvents: Boolean = False): string;
+
+{ Todos los elementos de AXml en orden de documento, con la pila de sus
+  antepasados: EL recorrido del documento entero, el de la lista blanca del
+  build (ElementoNoAdmitido) y el de lo que el build lee
+  (ValoresQueLeeElBuild). Sobre el texto de busqueda SIN lo oculto: lo que
+  hay en un comentario o un CDATA no es un elemento para msbuild, y negarlo
+  rompia un .targets con ejemplos comentados. AMalFormado: '' o por que no
+  se pudo seguir (un cierre que no casa, una etiqueta sin fin o sin cerrar),
+  con lo recorrido hasta ahi: lo que no se deja seguir no se aprueba. }
+function ElementosDe(const AXml: string; out AMalFormado: string): TArray<TElementoXml>;
+
+{ Lo que un build LEE de un proyecto por lo que ESCRIBE (1.21.2): cada valor
+  de cada propiedad de un PropertyGroup (menos los eventos de build, que el
+  runner vacia y DprojBuildHazard juzga) partido por ';', y el Include de
+  cada item de un ItemGroup, con el elemento que lo lleva, tal como esta
+  escrito (las macros sin expandir: las expande el build con SU tabla). Las
+  condiciones no se evaluan: una de mas es prudencia, una de menos es una
+  puerta (como BuildOutputDirs). Lo de ProjectExtensions no es del build:
+  msbuild lo ignora. }
+function ValoresQueLeeElBuild(const AXml: string): TArray<TValorDelProyecto>;
+
+{ Los textos del .dproj y de cada fichero DEL PROYECTO que importa (un
+  .optset), recursivo hasta 4 niveles, con el fichero de cada texto en el
+  mismo orden: lo que un build lee de este proyecto. Los del IDE no se leen
+  (IsStockImport); lo que no se resuelve se salta aqui y lo rechaza
+  DprojBuildHazard. UN lector para las preguntas sobre la salida
+  (BuildOutputDirs, BuildOutputUndeclared) y sobre lo que lee
+  (Lsp.BuildRunner.LecturasDelBuildDenegadas). }
+function ProjectXmlChain(const ADprojPath: string; out AFicheros: TArray<string>): TArray<string>; overload;
+function ProjectXmlChain(const ADprojPath: string): TArray<string>; overload;
 
 { The artifact a build just produced, found ON DISK (truth of the moment,
   never an index): candidate output dirs are every DCC_ExeOutput /
@@ -1720,9 +1769,10 @@ end;
 
 const
   // MSBuild tasks whose presence turns a build into arbitrary execution or an
-  // out-of-tree file write. A <Target> that uses NONE of these (only Message,
-  // PropertyGroup, ItemGroup, CallTarget...) is inert and allowed to build; one
-  // that uses ANY of these needs AllowBuildScripts en su workspace. Local names,
+  // out-of-tree file write. Desde la 1.21.2 la puerta es la LISTA BLANCA de
+  // abajo (ElementoNoAdmitido): esta lista queda de segunda barrera (tambien
+  // dentro de un comentario) y para nombrar el porque de una tarea conocida;
+  // cualquiera de ellas needs AllowBuildScripts en su workspace. Local names,
   // lowercase; HasElement matches them with or without a namespace prefix.
   //   exec/usingtask/code  -> run a shell / load a task assembly / inline code
   //   copy..touch          -> plant, move or delete files by arbitrary path
@@ -1736,6 +1786,29 @@ const
     'readlinesfromfile', // Lectura de una ruta arbitraria durante el build.
     'unzip', 'zipdirectory',
     'csc', 'vbc', 'fsc', 'xslttransformation', 'generateresource');
+
+  { LISTA BLANCA del build compile-only (1.21.2, ElementoNoAdmitido): lo que
+    puede haber bajo <Project> y dentro de un <Target>; dentro de una tarea
+    admitida, solo <Output>; lo demas se niega por su nombre. Nombres
+    locales, en minusculas. OPACOS: lo de dentro no se mira - un
+    PropertyGroup/ItemGroup lleva propiedades, items y metadatos (texto para
+    msbuild, aunque se llamen Exec) y ProjectExtensions lo ignora msbuild. }
+  ELEMENTOS_DE_PROJECT: array [0 .. 4] of string =
+    ('propertygroup', 'itemgroup', 'import', 'projectextensions', 'target');
+  ELEMENTOS_DE_TARGET: array [0 .. 6] of string =
+    ('message', 'warning', 'error', 'calltarget', 'onerror', 'propertygroup', 'itemgroup');
+  ELEMENTOS_OPACOS: array [0 .. 2] of string =
+    ('propertygroup', 'itemgroup', 'projectextensions');
+  { Los eventos de build de RAD Studio: un texto de shell, que el runner
+    vacia (BUILD-018) y HazardScan juzga; no son rutas (ValoresQueLeeElBuild
+    los salta). En minusculas, como el texto de busqueda. }
+  EVENTOS_DE_BUILD: array [0 .. 4] of string =
+    ('prebuildevent', 'postbuildevent', 'prelinkevent', 'postlinkevent', 'buildevent');
+  { Opciones LIBRES al compilador: su texto va tal cual a la linea de
+    ordenes de dcc/brcc32 (CodeGear.Delphi.Targets), y un texto libre no se
+    juzga: HazardScan las niega si no estan vacias. }
+  OPCIONES_LIBRES: array [0 .. 2] of string =
+    ('DCC_AdditionalSwitches', 'BRCC_UserSuppliedOptions', 'BRCC_ResponseFilename');
 
 function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
 var
@@ -2125,14 +2198,10 @@ begin
   Result := Result.Replace('$(SanitizedProjectName)', ABase, [rfReplaceAll, rfIgnoreCase]);
 end;
 
-{ El texto del .dproj y el de cada fichero DEL PROYECTO que importa (un
-  .optset), recursivo hasta 4 niveles: lo que un build lee de este proyecto.
-  Los del IDE no se leen (IsStockImport); lo que no se resuelve se salta
-  aqui y lo rechaza DprojBuildHazard. UN lector para las dos preguntas sobre
-  la salida (BuildOutputDirs, BuildOutputUndeclared). }
-function ProjectXmlChain(const ADprojPath: string): TArray<string>;
+{ ProjectXmlChain: EL lector, con los ficheros; la forma sin ellos, debajo. }
+function ProjectXmlChain(const ADprojPath: string; out AFicheros: TArray<string>): TArray<string>;
 var
-  List: TList<string>;
+  List, Files: TList<string>;
 
   procedure Lee(const AFile: string; ADepth: Integer);
   var
@@ -2145,6 +2214,7 @@ var
       Exit;
     end;
     List.Add(Xml);
+    Files.Add(AFile);
     if ADepth >= 4 then
       Exit;
     for V in AllTagAttr(Xml, 'Import', 'Project') do
@@ -2159,15 +2229,26 @@ var
 
 begin
   Result := nil;
+  AFicheros := nil;
   if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
     Exit;
   List := TList<string>.Create;
+  Files := TList<string>.Create;
   try
     Lee(TPath.GetFullPath(ADprojPath), 0);
     Result := List.ToArray;
+    AFicheros := Files.ToArray;
   finally
+    Files.Free;
     List.Free;
   end;
+end;
+
+function ProjectXmlChain(const ADprojPath: string): TArray<string>;
+var
+  Ficheros: TArray<string>;
+begin
+  Result := ProjectXmlChain(ADprojPath, Ficheros);
 end;
 
 function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<TBuildOutputDir>;
@@ -2476,6 +2557,192 @@ begin
   Result := Best;
 end;
 
+function ElementosDe(const AXml: string; out AMalFormado: string): TArray<TElementoXml>;
+var
+  Low: string;
+  Lista: TList<TElementoXml>;
+  Pila: TList<Integer>; // indices en Lista de los elementos abiertos
+  Ruta: TArray<string>;
+  P, Inicio, NombreFin, TagEnd: Integer;
+  Cierre: Boolean;
+  Nombre: string;
+  E: TElementoXml;
+
+  // el nombre local: lo de detras del prefijo de espacio de nombres (msb:Target)
+  function NombreLocal(const S: string): string;
+  var
+    C: Integer;
+  begin
+    Result := S;
+    C := Result.LastIndexOf(':');
+    if C >= 0 then
+      Result := Result.Substring(C + 1);
+  end;
+
+begin
+  AMalFormado := '';
+  Low := TextoDeBusqueda(AXml, False);
+  Lista := TList<TElementoXml>.Create;
+  Pila := TList<Integer>.Create;
+  try
+    Ruta := nil;
+    P := 1;
+    while True do
+    begin
+      P := Pos('<', Low, P);
+      if P = 0 then
+        Break;
+      Cierre := (P < Length(Low)) and (Low[P + 1] = '/');
+      Inicio := P + 1;
+      if Cierre then
+        Inc(Inicio);
+      NombreFin := Inicio;
+      while (NombreFin <= Length(Low)) and
+            not CharInSet(Low[NombreFin], [' ', #9, #13, #10, '/', '>', '<']) do
+        Inc(NombreFin);
+      Nombre := NombreLocal(Copy(Low, Inicio, NombreFin - Inicio));
+      if Nombre = '' then
+      begin
+        AMalFormado := MsgText(SF_CFG_XML_SIN_NOMBRE);
+        Break;
+      end;
+      // el '>' de la etiqueta, saltando lo que va entre comillas
+      TagEnd := FinDeEtiqueta(Low, NombreFin);
+      if TagEnd = 0 then
+      begin
+        AMalFormado := MsgFmt(SF_CFG_XML_SIN_FIN_FMT, [Nombre]);
+        Break;
+      end;
+      if Cierre then
+      begin
+        if Pila.Count = 0 then
+        begin
+          AMalFormado := MsgFmt(SF_CFG_XML_CIERRE_SIN_APERTURA_FMT, [Nombre]);
+          Break;
+        end;
+        E := Lista[Pila.Last];
+        if E.Nombre <> Nombre then
+        begin
+          AMalFormado := MsgFmt(SF_CFG_XML_CIERRE_FMT, [Nombre, E.Nombre]);
+          Break;
+        end;
+        E.Tramo.Fin := P;
+        E.Tramo.Cierra := TagEnd + 1;
+        Lista[Pila.Last] := E;
+        Pila.Delete(Pila.Count - 1);
+        SetLength(Ruta, Length(Ruta) - 1);
+      end
+      else
+      begin
+        E := Default(TElementoXml);
+        E.Nombre := Nombre;
+        E.Escrito := NombreLocal(Copy(AXml, Inicio, NombreFin - Inicio));
+        E.Ruta := Copy(Ruta);
+        E.Tramo.Abre := P;
+        E.Tramo.Ini := TagEnd + 1;
+        E.Tramo.Vacio := Low[TagEnd - 1] = '/';
+        E.Tramo.Fin := E.Tramo.Ini;
+        E.Tramo.Cierra := E.Tramo.Ini;
+        Lista.Add(E);
+        if not E.Tramo.Vacio then
+        begin
+          Pila.Add(Lista.Count - 1);
+          Ruta := Ruta + [Nombre];
+        end;
+      end;
+      P := TagEnd + 1;
+    end;
+    if (AMalFormado = '') and (Pila.Count > 0) then
+      AMalFormado := MsgFmt(SF_CFG_XML_SIN_CERRAR_FMT, [Lista[Pila.Last].Nombre]);
+    Result := Lista.ToArray;
+  finally
+    Pila.Free;
+    Lista.Free;
+  end;
+end;
+
+{ El primer elemento de AXml que no esta en la LISTA BLANCA del build, con su
+  padre; '' si todos lo estan. Lo que un build compile-only entiende: bajo
+  <Project>, ELEMENTOS_DE_PROJECT; dentro de un <Target>, ELEMENTOS_DE_TARGET;
+  dentro de una tarea admitida, solo <Output>; lo de dentro de un OPACO no se
+  mira. Una tarea de DANGER_TASKS se nombra como tarea (el porque que ya
+  entiende el agente); lo demas, por su nombre y el de su padre. }
+function ElementoNoAdmitido(const AXml: string): string;
+var
+  Mal, Padre: string;
+  Admitido: Boolean;
+begin
+  Result := '';
+  for var E in ElementosDe(AXml, Mal) do
+  begin
+    Admitido := False;
+    for var A in E.Ruta do
+      if MatchStr(A, ELEMENTOS_OPACOS) then
+      begin
+        Admitido := True; // dentro de un opaco: contenido, no estructura
+        Break;
+      end;
+    if Admitido then
+      Continue;
+    if Length(E.Ruta) = 0 then
+    begin
+      if E.Nombre <> 'project' then
+        Exit(MsgFmt(SF_CFG_HAZARD_RAIZ_FMT, [E.Nombre]));
+      Continue;
+    end;
+    Padre := E.Ruta[High(E.Ruta)];
+    if Padre = 'project' then
+      Admitido := MatchStr(E.Nombre, ELEMENTOS_DE_PROJECT)
+    else if Padre = 'target' then
+      Admitido := MatchStr(E.Nombre, ELEMENTOS_DE_TARGET)
+    else if MatchStr(Padre, ELEMENTOS_DE_TARGET) then
+      Admitido := E.Nombre = 'output'; // lo unico que lleva una tarea
+    if Admitido then
+      Continue;
+    if MatchStr(E.Nombre, DANGER_TASKS) then
+      Exit(MsgFmt(SF_CFG_HAZARD_TASK_FMT, [E.Nombre]));
+    Exit(MsgFmt(SF_CFG_HAZARD_ELEMENTO_FMT, [E.Nombre, Padre]));
+  end;
+  if Mal <> '' then
+    Result := MsgFmt(SF_CFG_HAZARD_XML_FMT, [Mal]);
+end;
+
+function ValoresQueLeeElBuild(const AXml: string): TArray<TValorDelProyecto>;
+var
+  Mal, Padre: string;
+  V: TValorDelProyecto;
+begin
+  Result := nil;
+  for var E in ElementosDe(AXml, Mal) do
+  begin
+    if (Length(E.Ruta) = 0) or MatchStr('projectextensions', E.Ruta) then
+      Continue;
+    Padre := E.Ruta[High(E.Ruta)];
+    V.Elemento := E.Escrito;
+    if Padre = 'propertygroup' then
+    begin
+      if E.Tramo.Vacio or MatchStr(E.Nombre, EVENTOS_DE_BUILD) then
+        Continue;
+      for var Trozo in ValorDeTramo(AXml, E.Tramo).Split([';']) do
+        if Trozo.Trim <> '' then
+        begin
+          V.Escrito := Trozo.Trim;
+          Result := Result + [V];
+        end;
+    end
+    else if Padre = 'itemgroup' then
+      for var At in AtributosDeTramo(AXml, E.Tramo) do
+        if SameText(At.Nombre, 'Include') then
+          // un Include es una LISTA para msbuild (a.pas;b.pas): cada uno
+          for var Trozo in ValorDeAtributo(AXml, At).Split([';']) do
+            if Trozo.Trim <> '' then
+            begin
+              V.Escrito := Trozo.Trim;
+              Result := Result + [V];
+            end;
+  end;
+end;
+
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
   AIgnoreBuildEvents: Boolean): string; forward;
 
@@ -2485,8 +2752,12 @@ begin
   Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents);
 end;
 
-{ LISTA NEGRA: DANGER_TASKS y otras construcciones peligrosas conocidas.
-  No es un interprete cerrado de MSBuild; AllowBuildScripts lo decide el operador. }
+{ LISTA BLANCA (1.21.2): lo que un build compile-only entiende, y nada mas
+  (ElementoNoAdmitido); las funciones de propiedad, los eventos, las
+  opciones libres y los Import se juzgan aparte. DANGER_TASKS queda de
+  segunda barrera (tambien dentro de un comentario) y para nombrar el porque
+  de una tarea conocida. No es un interprete de MSBuild; AllowBuildScripts lo
+  decide el operador. }
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
   AIgnoreBuildEvents: Boolean): string;
 var
@@ -2514,16 +2785,19 @@ begin
     Funcion := Pos('$(', Evaluado, Funcion + 2);
   end;
 
-  // A custom <Target> is NOT a hazard in itself. Real projects legitimately use
-  // targets to copy their OWN output, print a message or set a property after a
-  // build; refusing every target was a false positive as serious as a hole - it
-  // broke legitimate projects, Authenticode signing among them (field round 9).
-  // What turns "build" into "run" is a TASK that executes a program or plants/
-  // deletes files. Scan for THOSE, wherever they sit (inside a target or not),
-  // matched with or without a namespace prefix (<msb:Exec> passed a literal
-  // "<Exec" check in field round 8; MSBuild rejected it, but the guard must not
-  // depend on that). A trusted project that needs one of these enables it with
-  // AllowBuildScripts del workspace (checked by the caller), never here.
+  // LISTA BLANCA (1.21.2): un elemento que no es de la estructura de un
+  // proyecto se niega por su nombre y el de su padre, y una tarea conocida
+  // por el suyo (ElementoNoAdmitido). Un <Target> inerte (Message,
+  // PropertyGroup, ItemGroup, CallTarget...) sigue compilando: negar todo
+  // Target fue un falso positivo tan grave como un agujero (ronda 9: la
+  // firma Authenticode). Antes era una LISTA NEGRA (DANGER_TASKS) que solo
+  // conocia 21 tareas, y la deuda solo podia encoger.
+  Result := ElementoNoAdmitido(AXml);
+  if Result <> '' then
+    Exit;
+  // DANGER_TASKS, segunda barrera: tambien lo de dentro de un comentario o
+  // un CDATA, mas estricto que el juez, y con o sin prefijo de espacio de
+  // nombres (<msb:Exec> paso una busqueda literal en la ronda 8).
   for var Danger in DANGER_TASKS do
     if HasElement(Low, Danger) then
       Exit(MsgFmt(SF_CFG_HAZARD_TASK_FMT,
@@ -2532,8 +2806,7 @@ begin
   // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
   // Con AIgnoreBuildEvents no cuentan: el runner los vacia al compilar.
   if not AIgnoreBuildEvents then
-  for var Tag in ['prebuildevent', 'postbuildevent', 'prelinkevent',
-                  'postlinkevent', 'buildevent'] do
+  for var Tag in EVENTOS_DE_BUILD do
     // por EL analisis, pero mas estricto que el juez: tambien dentro de un
     // comentario, y el texto ESCRITO (un CDATA vacio o un comentario dentro
     // cuentan). Buscaba '<prebuildevent' como prefijo, y el
@@ -2542,6 +2815,15 @@ begin
     for var T in TramosDeEtiqueta(AXml, Tag, False, True) do
       if Copy(AXml, T.Ini, T.Fin - T.Ini).Trim <> '' then
         Exit(MsgFmt(SF_CFG_HAZARD_SHELL_COMMAND_FMT, [Tag]));
+
+  // Opciones LIBRES al compilador (1.21.2): un texto que va tal cual a la
+  // linea de ordenes de dcc o brcc32 no se juzga, se niega (el proyecto de
+  // confianza, con AllowBuildScripts, como las tareas). Lo escrito, y
+  // tambien dentro de un comentario, como los eventos.
+  for var Tag in OPCIONES_LIBRES do
+    for var T in TramosDeEtiqueta(AXml, Tag, False, True) do
+      if Copy(AXml, T.Ini, T.Fin - T.Ini).Trim <> '' then
+        Exit(MsgFmt(SF_CFG_HAZARD_OPCIONES_FMT, [Tag]));
 
   // <Import> brings in another MSBuild file, which carries its own targets -
   // so the payload can sit one file away from the project. Being macro-based

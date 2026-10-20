@@ -264,6 +264,17 @@ type
   DISCARDABLE "falta.png"' no lo veia ninguna (3c del censo de jueces). }
 function LeeRc(const ATexto: string): TLecturaRc;
 
+{ LA segunda barrera sobre un .rc: cada fichero que nombra (LeeRc: los
+  recursos, los #include y RCINCLUDE, y lo que parece una ruta), resuelto
+  contra la carpeta del .rc, por la puerta de leer (ReadPathDenied),
+  siguiendo los #include hasta 8 niveles. ACarpetaDentro, si va: ademas,
+  DENTRO de esa carpeta por las rutas reales (STYLE-052: delphi_styles build
+  compila una COPIA de la carpeta de estilos y fuera de ella no hay nada).
+  '' = limpio. La escribio delphi_styles (Mcp.Tools.Styles.RcPathsDenied,
+  25-ago-2026, medido con win.ini y el settings.ini del servidor dentro de un
+  .res); el build pregunta por el .rc de cada RcCompile con ella (1.21.2). }
+function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string = ''): string;
+
 implementation
 
 uses
@@ -1289,6 +1300,101 @@ begin
     if (T[K].Clase in [ctrCadena, ctrPalabra]) and PareceRutaDeRc(T[K].Texto) then
       Lectura.Rutas := Lectura.Rutas + [T[K].Texto];
   Result := Lectura;
+end;
+
+function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string): string;
+var
+  Seen: TStringList;
+
+  // One file of the closure. Recurses through #include, because a .rc whose
+  // own lines are all legal can still pull in a second file that is not -
+  // and that is exactly how the guard was walked around the day after it was
+  // written (measured 2026-08-25: settings.ini, with the token, embedded in a
+  // downloadable .res through an #include of a .txt).
+  function Walk(const AFile: string; ADepth: Integer): string;
+  var
+    Txt, Enc, Cand, Base: string;
+    Lectura: TLecturaRc;
+  begin
+    Result := '';
+    if ADepth > 8 then
+      Exit(MsgText(SR_STYLES_RC_DEEP));
+    if Seen.IndexOf(AFile.ToLower) >= 0 then
+      Exit; // already checked (and it stops an include cycle dead)
+    Seen.Add(AFile.ToLower);
+    if ReadPathDenied(AFile) <> '' then
+      Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT,
+        [TPath.GetFileName(AFile), TPath.GetFileName(ARc)]));
+    try
+      Txt := PatchLoadText(AFile, Enc);
+    except
+      Exit(MsgFmt(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
+    end;
+    Base := TPath.GetDirectoryName(TPath.GetFullPath(AFile));
+    // EL lector del .rc (LeeRc), por tokens como brcc32: la regex de linea
+    // de antes no veia 'X RCDATA DISCARDABLE "f"', un fichero en la linea de
+    // debajo ni dos recursos en una (3c del censo de jueces)
+    Lectura := LeeRc(Txt);
+    for var Raw in Lectura.Rutas do
+    begin
+      Cand := Raw.Trim;
+      if Cand = '' then
+        Continue;
+      try
+        if not TPath.IsPathRooted(Cand) then
+          Cand := TPath.Combine(Base, Cand);
+        Cand := TPath.GetFullPath(Cand);
+      except
+        Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
+      end;
+      if ReadPathDenied(Cand) <> '' then
+        Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
+      // CHAPUZA TEMPORAL (David, 18-oct-2026), hasta el token LPAC de la
+      // 1.22: delphi_styles build compila una COPIA de la carpeta de estilos
+      // (la etapa de CompilaRcEnContenedor) y fuera de ella no funciona
+      // nada; un .. que desde la jaula se quedaba dentro subia desde la
+      // etapa, y un fichero que el SO deja leer a todos los paquetes
+      // (etc\hosts) entraba en el .res (medido). Dentro, por las rutas
+      // REALES (un enlace de dentro que lleva fuera, fuera). Solo para quien
+      // compila asi (ACarpetaDentro): el build de un RcCompile no copia nada
+      if ACarpetaDentro <> '' then
+      begin
+        var Dentro := False;
+        try
+          Dentro := DentroDeSiMismo(ACarpetaDentro, Cand);
+        except
+          Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
+        end;
+        if not Dentro then
+          Exit(MsgFmt(SR_STYLES_RC_FUERA_DE_CARPETA_FMT, [Raw, TPath.GetFileName(AFile)]));
+      end;
+    end;
+    // an #include (or RCINCLUDE) brings a whole new file's worth of
+    // references with it
+    for var E in Lectura.Entradas do
+    begin
+      if E.Clase <> crInclude then
+        Continue;
+      Cand := E.Fichero.Trim;
+      if not TPath.IsPathRooted(Cand) then
+        Cand := TPath.Combine(Base, Cand);
+      Cand := TPath.GetFullPath(Cand); // ya paso arriba por la puerta
+      if TFile.Exists(Cand) then
+      begin
+        Result := Walk(Cand, ADepth + 1);
+        if Result <> '' then
+          Exit;
+      end;
+    end;
+  end;
+
+begin
+  Seen := TStringList.Create;
+  try
+    Result := Walk(TPath.GetFullPath(ARc), 0);
+  finally
+    Seen.Free;
+  end;
 end;
 
 end.

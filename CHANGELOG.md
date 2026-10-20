@@ -8,6 +8,34 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Security
+
+- **The build gate is a whitelist.** `delphi_build` refused a project by a
+  list of 21 MSBuild task names (`<Exec>`, `<Copy>`...); whatever the list
+  did not know, built. Now a project builds only when every element is one
+  a compile-only build understands - under `<Project>`: PropertyGroup,
+  ItemGroup, Import, ProjectExtensions and Target; inside a `<Target>`:
+  Message, Warning, Error, CallTarget, OnError, PropertyGroup and ItemGroup;
+  inside a task, only Output - and anything else is refused by its name and
+  its parent's (the known tasks keep their own wording). XML the scanner
+  cannot follow is refused too. The list stays as a second barrier.
+- **What the build reads is judged by the read gate.** Every value of every
+  property and every `Include` of every item of the `.dproj` and what it
+  imports - the icon, the manifest, the search paths, the `.rc` files, the
+  deployment files, a keystore - is expanded as msbuild expands it and has
+  to lie where this session may read (the workspace, the IDE and its library
+  zone), whether it exists or not; measured in 1.20.1, an `RcCompile` and a
+  `Manifest_File` from outside ended up inside the `.res` and the exe. The
+  `.rc` of each `RcCompile` is read with the same judge as `delphi_styles
+  build`. Free text handed to the compiler's command line
+  (`DCC_AdditionalSwitches`, `BRCC_UserSuppliedOptions`,
+  `BRCC_ResponseFilename`) is refused without `AllowBuildScripts`. And a
+  file in the project's tree that is a hard link to one outside what the
+  session may read is refused: the compiler would read it through that
+  name. BUILD-050 to BUILD-053; `test_build_lista_blanca_1212`, red against
+  1.21.1. Census on the 122 projects of the production roots: nothing
+  legitimate is refused.
+
 ### Fixed
 
 - **A child that died on its own left its atoms in Windows' global table.**
