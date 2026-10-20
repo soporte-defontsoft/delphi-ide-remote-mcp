@@ -735,8 +735,10 @@ function SustitucionDenegada(const APath: string): string;
 function EntradaDenegada(const APath: string): string;
 
 { Quita el atributo de solo lectura a un FICHERO; una carpeta o un enlace
-  no se tocan (lo de detras no es de la operacion). Nunca lanza. Estaba a
-  mano en BorraDeVerdad y hacia falta en cada deshacer (decima revision). }
+  no se tocan (lo de detras no es de la operacion), ni un enlace duro: su
+  atributo es el del otro nombre, quiza fuera de las raices (11-oct-2026).
+  Nunca lanza. Estaba a mano en BorraDeVerdad y hacia falta en cada deshacer
+  (decima revision). }
 procedure QuitaSoloLectura(const APath: string);
 
 { Borra un fichero que ESTA operacion acaba de dejar: la copia de algo que
@@ -1611,6 +1613,28 @@ begin
     Result := MsgFmt(SR_ENTRADA_CARPETA_REAL_FMT, [APath]);
 end;
 
+{ Cuantos NOMBRES tiene el fichero de APath: 1 en uno normal; mas de 1 es un
+  enlace duro, el MISMO fichero con otro nombre en otra parte - quiza fuera de
+  las raices -, y sus atributos SON los de ese otro. 0 si no se puede abrir
+  (no se sabe: quien pregunta no toca nada). Sin cruzar un enlace. }
+function NombresDelFichero(const APath: string): Cardinal;
+var
+  H: THandle;
+  Info: TByHandleFileInformation;
+begin
+  Result := 0;
+  H := CreateFile(PChar(APath), 0, FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+    nil, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT or FILE_FLAG_BACKUP_SEMANTICS, 0);
+  if H = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    if GetFileInformationByHandle(H, Info) then
+      Result := Info.nNumberOfLinks;
+  finally
+    CloseHandle(H);
+  end;
+end;
+
 procedure QuitaSoloLectura(const APath: string);
 var
   A: Cardinal;
@@ -1619,13 +1643,54 @@ begin
   if (A = INVALID_FILE_ATTRIBUTES) or ((A and FILE_ATTRIBUTE_DIRECTORY) <> 0) or
      ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) or ((A and FILE_ATTRIBUTE_READONLY) = 0) then
     Exit;
+  // un enlace duro tampoco: su +R es el del otro nombre, y quitarlo aqui lo
+  // quitaba FUERA de las raices (medido el 11-oct-2026: una carpeta con un
+  // enlace duro, purgada, dejo sin +R ni oculto el fichero de fuera)
+  if NombresDelFichero(APath) <> 1 then
+    Exit;
   SetFileAttributes(PChar(APath), A and not FILE_ATTRIBUTE_READONLY);
+end;
+
+const
+  // FileDispositionInfoEx (Windows 10 1809) y sus banderas: borrar un nombre
+  // aunque lleve +R SIN cambiar los atributos del fichero
+  CLASE_DISPOSICION_EX = 21;
+  DISPOSICION_BORRA = $00000001;
+  DISPOSICION_IGNORA_SOLO_LECTURA = $00000010;
+
+function SetFileInformationByHandleCrudo(hFile: THandle; AClase: Integer; AInfo: Pointer;
+  ATam: DWORD): BOOL; stdcall; external kernel32 name 'SetFileInformationByHandle';
+
+{ Borra el NOMBRE APath sin cambiar los atributos del fichero: con un +R
+  tambien, y en un enlace duro solo se va este nombre - el otro, quiza fuera
+  de las raices, se queda con sus bytes y sus atributos. EL borrador de un
+  fichero de BorraArbolDentro y BorraLoNuestro: los dos ponian los atributos a
+  mano antes de borrar (11-oct-2026). Un enlace cae como enlace. Donde el
+  sistema de ficheros no conoce la disposicion Ex, como antes, sin tocar un
+  enlace duro (QuitaSoloLectura no lo toca, y su borrado con +R falla y se
+  dice). Lanza como TFile.Delete. }
+procedure BorraNombre(const APath: string);
+var
+  H: THandle;
+  Banderas: DWORD;
+begin
+  H := CreateFile(PChar(APath), _DELETE, FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+    nil, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, 0);
+  if H <> INVALID_HANDLE_VALUE then
+  try
+    Banderas := DISPOSICION_BORRA or DISPOSICION_IGNORA_SOLO_LECTURA;
+    if SetFileInformationByHandleCrudo(H, CLASE_DISPOSICION_EX, @Banderas, SizeOf(Banderas)) then
+      Exit;
+  finally
+    CloseHandle(H);
+  end;
+  QuitaSoloLectura(APath);
+  TFile.Delete(APath);
 end;
 
 procedure BorraLoNuestro(const APath: string);
 begin
-  QuitaSoloLectura(APath);
-  TFile.Delete(APath);
+  BorraNombre(APath);
 end;
 
 procedure CopiaNuestra(const AOrigen, ADestino: string);
@@ -2895,11 +2960,10 @@ begin
   // TFile.SetAttributes: esa valida que la ruta sea un FICHERO y sobre un
   // directorio lanza "file not found" - lo cazaron round13 y round44 en la
   // primera pasada de la suite (2026-09-21).
+  // ...salvo en un FICHERO: sus atributos pueden ser los de un enlace duro
+  // de fuera (BorraNombre los deja como estan, +R incluido)
   for E in TDirectory.GetFiles(ADir) do
-  begin
-    SetFileAttributes(PChar(E), FILE_ATTRIBUTE_NORMAL);
-    TFile.Delete(E);
-  end;
+    BorraNombre(E);
   for E in TDirectory.GetDirectories(ADir) do
     BorraArbolDentro(E);
   SetFileAttributes(PChar(ADir), FILE_ATTRIBUTE_NORMAL);

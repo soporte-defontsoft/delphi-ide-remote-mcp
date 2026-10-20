@@ -10,6 +10,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **Purging a folder that held a hard link changed the attributes of a file
+  OUTSIDE the workspace.** The deleter of trees cleared the attributes of
+  every file before deleting it, and the attributes of a hard link ARE those
+  of the file - the same file, with its other name outside the roots.
+  Measured on 11-oct-2026 and again on 20-oct against 1.21.0: a folder with a
+  hard link to a read-only, hidden file outside, sent to the trash and
+  purged, left that file without both attributes (its bytes untouched). A
+  name is now deleted without touching the file's attributes - Windows'
+  `FileDispositionInfoEx` with "ignore read-only", which deletes a read-only
+  name as it is - and where the file system does not know it, the read-only
+  attribute of a file with more than one name is never cleared (deleting it
+  fails and says so). `test_enlace_duro_1182`, red against 1.21.0.
+
 - **`delphi_desktop` took the parameters of a gesture it was not doing
   without a word.** A call with `code`, `x`, `y` or `text` and no
   `command` is a screenshot - the default - and the server answered with
