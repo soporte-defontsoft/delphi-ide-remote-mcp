@@ -75,7 +75,7 @@ def intacta(p, atrib):
 
 def en_papelera(patron):
     # la copia, sin su marca de dueno (<copia>.by, la deja la papelera al lado)
-    return [p for p in glob.glob(os.path.join(JAIL, '__delphi-patch', '*', 'deleted', patron))
+    return [p for p in glob.glob(os.path.join(JAIL, mc.PAPELERA, '*', mc.CAJON_BORRADOS, patron))
             if not p.endswith('.by')]
 
 

@@ -645,13 +645,17 @@ REGLAS = [
      'get-sdk pisaba un .sdk del IDE sin copia y las libX.so se copiaban al sysroot sin preguntar'),
     ('borrar sin la puerta',
      r"TFile\.Delete\s*\(|\bDeleteFile\w*\s*\(|\bRemoveDir\w*\s*\(|TDirectory\.Delete\s*\(|"
-     r"\bRemoveDirectory\w*\s*\(|\bBorraLoNuestro\s*\(",
+     r"\bRemoveDirectory\w*\s*\(|\bBorraLoNuestro\s*\(|\bBorraNombre\s*\(",
      [# LA puerta de borrar fuera de la jaula (BorraFichero) y los temporales que los
       # escritores acaban de dejar (el suyo, la copia que no se llego a usar)
       ('Lsp.Patch.pas', 'BorraFichero'), ('Lsp.Patch.pas', 'EscribeBytes'),
       ('Lsp.Patch.pas', 'SustituyePorRenombre'), ('Lsp.Patch.pas', 'Coloca'),
       # la jaula: su borrado de lo que la operacion acaba de dejar, sus recorredores
       # (no cruzan enlaces; la puerta antes), la papelera y el deshacer
+      # BorraNombre: borra un NOMBRE sin tocar los atributos del fichero (un enlace
+      # duro de fuera los compartia: 11-oct y 20-oct-2026); su TFile.Delete es el
+      # respaldo donde el sistema de ficheros no conoce la disposicion Ex
+      ('Lsp.Guard.pas', 'BorraNombre'),
       ('Lsp.Guard.pas', 'BorraLoNuestro'), ('Lsp.Guard.pas', 'ConsumeAgentCapture'),
       ('Lsp.Guard.pas', 'BorraArbolDentro'), ('Lsp.Guard.pas', 'VaciaDesechable'),
       ('Lsp.Guard.pas', 'QuitaCarpetasCreadas'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
@@ -1233,7 +1237,8 @@ check('...y un CreateFile para LEER no es una escritura', not NO_CAZADO, NO_CAZA
 # las otras formas de borrar por su cuenta
 REGLA_BORRAR = next(r for r in REGLAS if r[0] == 'borrar sin la puerta')
 for forma in ("  System.SysUtils.DeleteFile(Ruta);", "  DeleteFileW(PChar(Ruta));", "  RemoveDir(Dir);",
-              "  TDirectory.Delete(Dir, False);", "  RemoveDirectory(PChar(Dir));", "  BorraLoNuestro(Ruta);"):
+              "  TDirectory.Delete(Dir, False);", "  RemoveDirectory(PChar(Dir));", "  BorraLoNuestro(Ruta);",
+              "  BorraNombre(Ruta);"):
     cazados = fuera_de_casa(REGLA_BORRAR, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                             'BorraAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (REGLA_BORRAR[0], forma.strip()), len(cazados) == 1, cazados)
