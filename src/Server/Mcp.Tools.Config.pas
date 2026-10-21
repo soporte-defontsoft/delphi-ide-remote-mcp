@@ -65,6 +65,10 @@ type
     [SchemaDescription(SP_CONFIG_PATH)]
     [RutaDelServidor]
     [RutaRelativa] // relativa al proyecto, o una macro del IDE ($(BDS)...)
+    // ...y en los remove-* es la ENTRADA que se quita, tal como la lista el
+    // proyecto: ni se lee ni se escribe, asi que el suelo no la juzga (una de
+    // fuera, que BUILD-050 pide quitar, se quita; 21-oct-2026)
+    [NombreSiComando('remove-unit,remove-searchpath,remove-project')]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_CONFIG_SECTION)]
     [SchemaDefault(CFG_SECTION_POR_DEFECTO)]
@@ -1709,9 +1713,14 @@ begin
         Exit(ArreglaReferencias(Proj));
       if Params.Path.Trim = '' then
         Exit(MsgText(SR_GRUPO_NECESITA_PATH));
-      Result := ReadPathDenied(Params.Path);
-      if Result <> '' then
-        Exit;
+      // add-project lee el .dproj que entra; remove-project solo quita la
+      // entrada tal como la lista el grupo (uno movido fuera, o que ya no esta)
+      if Cmd = 'add-project' then
+      begin
+        Result := ReadPathDenied(Params.Path);
+        if Result <> '' then
+          Exit;
+      end;
       EnterFileEdit;
       try
         if Cmd = 'add-project' then
@@ -1836,10 +1845,13 @@ begin
       if Params.Path.Trim = '' then
         Exit(MsgText(SR_UNIT_NEED_PATH));
       Result := WriteTargetDenied(Params.Project);
-      if Result = '' then
-        // la unit solo se NOMBRA: la pregunta es la de LEER. Una unit de una
-        // referencia o de vendor va al .dpr propio (su .dcu cae en la salida
-        // del proyecto) y no se le escribe nada (duodecima revision, r12a)
+      // add-unit: la unit solo se NOMBRA y la pregunta es la de LEER (una de
+      // una referencia o de vendor va al .dpr propio y no se le escribe nada;
+      // duodecima revision, r12a). remove-unit: la ruta es la ENTRADA que se
+      // quita, tal como la lista el proyecto, y no se lee ni se escribe: una
+      // de fuera (BUILD-050 pide quitarla) o que ya no existe se quita igual
+      // (21-oct-2026; el nucleo no la abre si esta fuera)
+      if (Result = '') and (Cmd = 'add-unit') then
         Result := ReadPathDenied(Params.Path);
       if Result <> '' then
         Exit;

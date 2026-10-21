@@ -10,6 +10,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- **`delphi_config remove-unit` / `remove-searchpath` / `remove-project` take
+  the entry as the project lists it, even one that points outside.** The
+  path of a `remove-*` was judged by the jail as if the tool were going to
+  read it (the generic floor of `[RutaDelServidor]` and the tool itself), so
+  a `<DCCReference>` or a search path pointing outside what the session can
+  read answered `GUARD-002` - the very entry `BUILD-050` asks to remove
+  before it builds (measured on 2026-10-21 with a real project copied to the
+  NAS: 29 absolute references to the component folder of ANOTHER machine).
+  Now that path is what the project SAYS (`[NombreSiComando]`, one attribute
+  read by the same RTTI census as the other marks): nothing is read or
+  written there, the core does not open a path outside what is readable and
+  says so (`CFG-123`), the entry leaves the `.dpr` and the `.dproj`, and the
+  project itself is still judged for writing. `add-unit`, `add-searchpath`
+  and `add-project` still require a readable path. `BUILD-050` names the
+  way out. `test_remove_fuera_1213` (R1, R3, R4 red against 1.21.2).
 - **The build supplies the output folders a project leaves undeclared,
   instead of refusing it.** Until 1.21.2 a project without `DCC_DcuOutput`
   (or a package without `DCC_BplOutput`/`DCC_DcpOutput`) for the platform and

@@ -1788,6 +1788,9 @@ type
     Rutas: TDictionary<string, Boolean>;
     DeContenido: TDictionary<string, Boolean>;
     DeLista: TDictionary<string, Boolean>;
+    // [NombreSiComando]: con estos valores de "command" (separados por coma)
+    // la ruta es lo que el proyecto DICE, y el suelo no la juzga
+    NombreSi: TDictionary<string, string>;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -1798,6 +1801,7 @@ begin
   Rutas := TDictionary<string, Boolean>.Create;
   DeContenido := TDictionary<string, Boolean>.Create;
   DeLista := TDictionary<string, Boolean>.Create;
+  NombreSi := TDictionary<string, string>.Create;
 end;
 
 destructor TMarcasDeParams.Destroy;
@@ -1805,6 +1809,7 @@ begin
   Rutas.Free;
   DeContenido.Free;
   DeLista.Free;
+  NombreSi.Free;
   inherited;
 end;
 
@@ -1857,11 +1862,14 @@ begin
         var AceptaRelativa := False;
         var EsContenido := False;
         var EsLista := False;
+        var NombreSi := '';
         for Attr in Prop.GetAttributes do
           if Attr is RutaDelServidorAttribute then
             EsRuta := True
           else if Attr is RutaRelativaAttribute then
             AceptaRelativa := True
+          else if Attr is NombreSiComandoAttribute then
+            NombreSi := NombreSiComandoAttribute(Attr).Comandos
           else if Attr is ContenidoAttribute then
             EsContenido := True
           else if (Attr is JsonComoTextoAttribute) and
@@ -1869,6 +1877,8 @@ begin
             EsLista := True;
         if EsRuta then
           Marcas.Rutas.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), AceptaRelativa);
+        if EsRuta and (NombreSi <> '') then
+          Marcas.NombreSi.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), NombreSi);
         if EsContenido then
           Marcas.DeContenido.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
         if EsLista then
@@ -1960,6 +1970,37 @@ begin
   Result := RutasNuestras.Count;
 end;
 
+{ True si el parametro de AClave lleva [NombreSiComando] y el "command" de
+  esta llamada es uno de los suyos: entonces la ruta es la ENTRADA que la
+  tool quita del proyecto (remove-unit, remove-searchpath, remove-project),
+  no un sitio del servidor que vaya a leer o escribir, y el suelo no la
+  juzga: la tool juzga el proyecto, para escribir. El comando se busca con la
+  misma normalizacion que el binder (ClaveDeParam). Medido el 21-oct-2026:
+  BUILD-050 pedia quitar una <DCCReference> de fuera y remove-unit la negaba
+  (GUARD-002) por esa misma ruta, que nadie abre. }
+function EsNombreConEsteComando(const AToolName: string;
+  const AArguments: TJSONObject; const AClave: string): Boolean;
+var
+  Comandos, Cmd: string;
+  P: TJSONPair;
+  I: Integer;
+begin
+  Result := False;
+  if not MarcasDeParams.NombreSi.TryGetValue(AClave, Comandos) then
+    Exit;
+  Cmd := '';
+  for I := 0 to AArguments.Count - 1 do
+  begin
+    P := AArguments.Pairs[I];
+    if (ClaveDeParam(AToolName, P.JsonString.Value) = ClaveDeParam(AToolName, 'command')) and
+       (P.JsonValue is TJSONString) and not (P.JsonValue is TJSONNumber) then
+      Cmd := TJSONString(P.JsonValue).Value;
+  end;
+  // coma, no ';': el censo del fuente de test_jaula_generica lee los
+  // atributos de una propiedad hasta el primer ';'
+  Result := (Cmd.Trim <> '') and MatchText(Cmd.Trim, Comandos.Split([',']));
+end;
+
 { Las DOS pasadas del suelo, una funcion: ARelativas=False mira las rutas
   absolutas y va en su sitio de siempre; ARelativas=True mira las que no lo
   son y va la ultima. Las dos preguntan lo que preguntaria la tool
@@ -1986,6 +2027,10 @@ begin
     P := AArguments.Pairs[I];
     var Clave := ClaveDeParam(AToolName, P.JsonString.Value);
     if not Mapa.ContainsKey(Clave) then
+      Continue;
+    // con estos comandos la ruta es lo que el proyecto DICE, no un sitio que
+    // la tool toque ([NombreSiComando]): el suelo no la juzga
+    if EsNombreConEsteComando(AToolName, AArguments, Clave) then
       Continue;
     // cada texto del valor: el suyo, o cada uno de una lista de rutas
     // ("paths" de delphi_git, 1.19.0): una ruta en una lista no se salta el

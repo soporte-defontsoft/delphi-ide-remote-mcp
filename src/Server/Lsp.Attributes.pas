@@ -79,6 +79,29 @@ type
 
   RutaRelativa = RutaRelativaAttribute;
 
+  { Una ruta DEL SERVIDOR que, con ciertos valores del parametro "command" de
+    su tool, es lo que el PROYECTO DICE y no un sitio que la tool lea o
+    escriba: la entrada que remove-unit / remove-searchpath / remove-project
+    quitan de un .dpr, un .dproj o un .groupproj. Con esos comandos el suelo
+    de la jaula (ArgPathOutsideDenied) no la juzga -la tool juzga el
+    PROYECTO, para escribir, y el nucleo no abre una ruta de fuera-, y sigue
+    siendo [RutaDelServidor] para lo demas: la traduccion de las unidades
+    virtuales y la forma larga, que es lo que la hace casar con lo escrito en
+    el proyecto. Medido el 21-oct-2026: BUILD-050 pedia quitar una
+    <DCCReference> de fuera y remove-unit la negaba (GUARD-002) por esa misma
+    ruta, que nadie abre. Los comandos, separados por COMA: el censo del
+    fuente (test_jaula_generica) lee los atributos de una propiedad hasta
+    el primer ';'. }
+  NombreSiComandoAttribute = class(TCustomAttribute)
+  private
+    FComandos: string;
+  public
+    constructor Create(const AComandos: string);
+    property Comandos: string read FComandos;
+  end;
+
+  NombreSiComando = NombreSiComandoAttribute;
+
   { Marca un parametro de TEXTO que acepta un JSON (array u objeto) como
     valor: el deserializador se lo pasa como su texto JSON. Sin la marca, un
     array o un objeto donde va un texto es INVALID_PARAM: new=["a","b"] se
@@ -143,6 +166,12 @@ constructor JsonComoTextoAttribute.Create(const AItems: string);
 begin
   inherited Create;
   FItems := AItems;
+end;
+
+constructor NombreSiComandoAttribute.Create(const AComandos: string);
+begin
+  inherited Create;
+  FComandos := AComandos;
 end;
 
 end.

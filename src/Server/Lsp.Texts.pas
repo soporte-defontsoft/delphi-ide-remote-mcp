@@ -3466,6 +3466,18 @@ const
     '[CFG-055] REMOVED unit %s from project %s (%s%s%s). The file %s ' +
     'goes to the trash with this same delete. Backups in __delphi-patch.';
 
+  { ...y la ruta dada cae FUERA de lo que esta sesion puede leer: nada se abre
+    alli (ni se dice si existe), la entrada se va del proyecto tal como la
+    listaba - lo que BUILD-050 pide para una <DCCReference> de fuera
+    (21-oct-2026). %s = unidad, .dpr, donde, CreateForm, DCCReference, la
+    ruta dada. }
+  SN_UNIT_REMOVED_FUERA_FMT =
+    '[CFG-123] REMOVED unit %s from project %s (%s%s%s). The path given, %s, ' +
+    'lies outside what this session can read: nothing was opened there, ' +
+    'the entry is simply gone from the project (the compiler will look the ' +
+    'unit up by name in the search and library paths, as the IDE does). ' +
+    'Backups in __delphi-patch.';
+
   SN_UNIT_ABSENT_FMT =
     '[CFG-056] Unit %s is not in project %s. See the units with ' +
     'command=view.';
@@ -5843,7 +5855,9 @@ const
     '(the workspace, the IDE and its library zone). The compiler and the ' +
     'resource compiler open it with the server''s permissions, and what ' +
     'goes in comes back out (inside the binary, quoted in the errors). ' +
-    'Point it at something inside the workspace, or remove it.';
+    'Point it at something inside the workspace, or remove it: ' +
+    'delphi_config remove-unit / remove-searchpath take the entry as the ' +
+    'project lists it, even one that points outside.';
 
   SR_BUILD_LECTURA_NO_VERIFICABLE_FMT =
     '[BUILD-051 DENIED] I will not build this. <%s> in %s names %s, which ' +
@@ -9219,8 +9233,10 @@ const
     'file with the build on ONE platform, as the IDE''s Deployment Manager ' +
     '(a native .so/.dylib/.dll a component loads, data files), into the ' +
     '.deployproj, creating the standard manifest if missing. add-unit / ' +
-    'remove-unit: the IDE''s Add to / Remove from project for an EXISTING ' +
-    '.pas (.dpr uses, CreateForm for forms, the .dproj); the file stays on ' +
+    'remove-unit: the IDE''s Add to / Remove from project (.dpr uses, ' +
+    'CreateForm for forms, the .dproj): add-unit takes an EXISTING .pas, ' +
+    'remove-unit the entry as the project lists it - even one whose file ' +
+    'is gone or lies outside what you can read -, and the file stays on ' +
     'disk. fix-references, on a project or a group: re-points what was ' +
     'moved by hand, finding it by name in the workspace - one match only, ' +
     'never a guess. On a .groupproj: view lists its projects, and ' +

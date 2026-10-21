@@ -2045,7 +2045,11 @@ begin
   UnitName := TPath.GetFileNameWithoutExtension(APasPath);
   ClassName := '';
   FormName := '';
-  if InspectUnit(APasPath, Info) = '' then
+  // una ruta de FUERA de lo legible no se abre: la entrada se quita por su
+  // nombre, como una que no existe (remove-unit de una <DCCReference> que
+  // BUILD-050 pide quitar, 21-oct-2026)
+  var Fuera := ReadPathDenied(APasPath) <> '';
+  if (not Fuera) and (InspectUnit(APasPath, Info) = '') then
   begin
     UnitName := Info.UnitName;
     ClassName := Info.ClassName;
@@ -2100,6 +2104,9 @@ begin
   var Listado := '';
   if AFileGoesToo then
     Plantilla := MsgText(SN_UNIT_REMOVED_GONE_FMT)
+  else if Fuera then
+    // de fuera no se dice ni si existe: nada se abre alli
+    Plantilla := MsgText(SN_UNIT_REMOVED_FUERA_FMT)
   else if not TFile.Exists(APasPath) then
   begin
     // ...y si el proyecto la listaba por OTRA ruta que SI existe, es esa la
