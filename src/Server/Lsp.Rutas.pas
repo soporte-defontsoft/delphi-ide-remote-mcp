@@ -86,6 +86,11 @@ function EsRutaAbsoluta(const AValue: string): Boolean;
   el disco. Estaba escrito dos veces, y NormPath resolvia un \\?\UNC\ leido
   de un .dpr: SMB hacia ese host, 21 s (novena revision). }
 function EsPrefijoDeDispositivo(const APath: string): Boolean;
+{ ...y la ruta sin el: \\?\C:\x -> C:\x, \\?\UNC\host\x -> \\host\x (lo que
+  devuelve GetFinalPathNameByHandle, y lo que un .dproj puede traer en un
+  search path: dcc abre una carpeta por ese prefijo, medido el 21-oct-2026, y
+  la puerta del build lo juzga sin el). Sin prefijo, tal cual. }
+function SinPrefijoDeDispositivo(const APath: string): string;
 
 { Un UNC de verdad (\\host\...), no un prefijo de dispositivo (\\?\, \\.\).
   Con barras de Windows. LA pregunta de quien mira un UNC por su texto:
@@ -167,11 +172,9 @@ begin
     if (Len = 0) or (Len >= DWORD(Length(Buf))) then
       Exit;
     SetString(AReal, PChar(@Buf[0]), Len);
-    // GetFinalPathNameByHandle devuelve la forma extendida.
-    if AReal.StartsWith('\\?\UNC\') then
-      AReal := '\\' + AReal.Substring(8)
-    else if AReal.StartsWith('\\?\') then
-      AReal := AReal.Substring(4);
+    // GetFinalPathNameByHandle devuelve la forma extendida (EL quitador del
+    // prefijo, el de la puerta del build tambien)
+    AReal := SinPrefijoDeDispositivo(AReal);
     Result := AReal <> '';
   finally
     CloseHandle(H);
@@ -436,6 +439,19 @@ var
 begin
   P := APath.Trim.Replace('/', '\');
   Result := StartsText('\\?\', P) or StartsText('\\.\', P);
+end;
+
+function SinPrefijoDeDispositivo(const APath: string): string;
+begin
+  Result := APath;
+  if not EsPrefijoDeDispositivo(Result) then
+    Exit;
+  Result := Result.Trim.Replace('/', '\');
+  // \\?\UNC\host\x es \\host\x; lo demas, la ruta tras las cuatro del prefijo
+  if StartsText('\\?\UNC\', Result) or StartsText('\\.\UNC\', Result) then
+    Result := '\\' + Result.Substring(8)
+  else
+    Result := Result.Substring(4);
 end;
 
 function EsUnc(const APath: string): Boolean;

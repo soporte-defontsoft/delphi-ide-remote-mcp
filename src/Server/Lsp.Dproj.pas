@@ -9,7 +9,8 @@ unit Lsp.Dproj;
   - <BuildConfiguration Include="Debug"><Key>Cfg_2</Key>...     -> build configurations
   - <FrameworkType>VCL|FMX|None</FrameworkType>                 -> which UI framework
   - <AppType>Application|Console</AppType>
-  Accumulating property lists (search paths) are merged with MergeProperty. }
+  The value of a property for ONE build is read with EffectiveProperty and
+  written with PonPropiedadDelBuild (the group of that build, as the IDE). }
 
 interface
 
@@ -81,10 +82,6 @@ function AllTagValues(const AXml, ATag: string): TArray<string>;
   dentro de un comentario o un CDATA, que para el juez no lo son - solo el
   escaner de peligros, mas estricto que el juez. }
 function AllTagAttr(const AXml, ATag, AAttr: string; AConOcultos: Boolean = False): TArray<string>;
-
-{ Merge an accumulating MSBuild property (each value may embed $(Prop) = the
-  value so far). }
-function MergeProperty(const AXml, APropName: string): string;
 
 function XmlUnescape(const S: string): string;
 { Los trozos de una lista de MSBuild (a;b;c) tal como esta ESCRITA en el XML,
@@ -309,6 +306,12 @@ function ClaveDelBuild(const AXml, AConfig: string): string;
 { El grupo de valores del build APlatform/AConfig ('' = sin esa mitad), si
   lo hay: EL lector del grupo. }
 function GrupoDelBuild(const AXml, APlatform, AConfig: string; out AGrupo: TGrupoXml): Boolean;
+{ ...y su inversa: de que build es el grupo de valores con esa Condition - la
+  plataforma ('' = todas) y la configuracion con el nombre que declara el
+  proyecto ('' = todas; la base, las dos vacias). False si la Condition no es
+  la de un grupo de valores de un build (un definidor, otra cosa). La vista
+  de los search paths la usa para nombrar cada grupo. }
+function BuildDelGrupo(const AXml, ACondicion: string; out APlatform, AConfig: string): Boolean;
 { ...creandolo si falta, con su definidor, donde los pone el IDE (medido en
   un .dproj suyo el 21-oct-2026): los definidores por clave - el de la
   configuracion y tras el los de sus plataformas - y luego los grupos de
@@ -370,6 +373,24 @@ type
   (revisores del 21-oct-2026, medido). }
 function EvaluaCondicion(const ACondicion, APlatform, AConfig: string;
   ABusca: TBuscaBandera): TVeredicto;
+{ Para cada elemento de AElementos (los de ElementosDe) que esta en un
+  PropertyGroup, lo que vale para el build APlatform/AConfig su Condition y
+  la de su grupo, evaluadas como msbuild en orden de documento sobre lo que
+  los grupos y elementos anteriores que se aplican dejan puesto (el ultimo
+  gana): vNo si una de las dos es falsa, vNoSeSabe si ninguna es falsa y
+  alguna no se sabe, vSi si las dos son ciertas; vSi tambien para lo que no
+  esta en un PropertyGroup. Las propiedades dudosas (puestas por un grupo o
+  un elemento que no se sabe si se aplica) hacen dudoso lo que las compare,
+  y las que msbuild toma de fuera del documento - AExternas (la tabla con
+  que el build expande) y el entorno del servidor - no se dan por vacias;
+  una definida en el documento y aun no puesta vale ''. EL juez de "este
+  grupo se aplica a este build": para leer (EffectiveProperty: solo vSi
+  cuenta) y para juzgar (la puerta del build: vNo no se juzga, lo demas si).
+  Decidia por el NOMBRE de la clave (Cfg_N) y leia otra cosa que msbuild con
+  una bandera plantada, una config hija o una clave renombrada (revisores
+  del 21-oct-2026). }
+function VeredictosDeElementos(const AXml, APlatform, AConfig: string;
+  const AElementos: TArray<TElementoXml>; const AExternas: TArray<string>): TArray<TVeredicto>;
 { Para cada elemento de AElementos (los de ElementosDe), si es de OTRO build
   que APlatform/AConfig: esta en un PropertyGroup cuya Condition, o la suya,
   es falsa (vNo) evaluada como msbuild en orden de documento, con las
@@ -401,6 +422,14 @@ function ConfigCondition(const AConfig: string): string;
   FindDeployEntries y TramosEnGrupo. }
 function XmlDeployFile(const AInclude, AConfig, ARemoteDir, ARemoteName, AClase: string;
   AOperacion: Integer; ARequerido: Boolean): string;
+{ EL escritor de un <ItemGroup Condition="..."> del .deployproj con sus
+  entradas (las de XmlDeployFile, cada una con su salto) dentro: la apertura
+  con su Condition, las entradas y el cierre con la sangria del IDE, sin la
+  sangria de delante ni el salto del final (los pone quien lo coloca). Lo
+  componian a mano cinco sitios: los dos manifiestos que genera el servidor,
+  el hueco y el grupo nuevo de un manifiesto que se completa y add-deployfile
+  (revisor del 21-oct-2026). }
+function XmlGrupoDeDespliegue(const ACondicion, AEntradas: string): string;
 { La plataforma y la config que nombra una Condition de esas formas - la
   plataforma sola, la config sola, o las dos con And en cualquier orden, que el
   IDE escribe '$(Config)'=='Debug' And '$(Platform)'=='Win32' -, tal cual
@@ -670,13 +699,19 @@ function TagValue(const AXml, ATag: string): string;
 function PlatformProperty(const AXml, APlatform, ATag: string): string;
 
 { El valor EFECTIVO de ATag para un build APlatform/AConfig, como lo evalua
-  msbuild: los grupos que se aplican a ese build, en orden de documento, el
-  ultimo que la fija gana, y un $(ATag) dentro del valor es lo que valia
-  hasta ahi (<DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>, como escribe el IDE
-  los defines de cada configuracion). El juez de las propiedades por
-  grupos: la salida, el SDK, el perfil, los paquetes y los ajustes del motor.
-  Una configuracion que hereda de otra que no es Base no suma los grupos de
-  esa otra: medido el 18-oct-2026, 0 de los 3295 .dproj de esta maquina. }
+  msbuild: los grupos que se aplican a ese build - EL juez de la puerta,
+  VeredictosDeElementos: las Condition evaluadas en orden de documento sobre
+  lo que los grupos anteriores dejan puesto, no por el nombre de la clave -,
+  en orden de documento, el ultimo que la fija gana, y un $(ATag) dentro del
+  valor es lo que valia hasta ahi (<DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>,
+  como escribe el IDE los defines de cada configuracion). Para LEER solo
+  cuenta lo cierto: un grupo o un elemento cuya Condition no se sabe (un
+  nombre de fuera, una funcion) no se da por declarado; la puerta, en cambio,
+  lo juzga. El juez de las propiedades por grupos: la salida, el SDK, el
+  perfil, los paquetes, los ajustes del motor y get-property. Una
+  configuracion que hereda de otra que no es Base SI lee los grupos de esa
+  otra, como msbuild: su definidor pone la clave de la madre (medido el
+  21-oct-2026 con msbuild, G11 de test_build_grupos_1215). }
 function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
 
 type
@@ -767,6 +802,14 @@ function ProjectXmlChain(const ADprojPath: string): TArray<string>; overload;
   existing <project>.exe/.dll/.bpl among them wins. Returns '' when nothing
   is there (build failed, macro we cannot resolve, unusual layout). }
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
+{ EL expansor de los macros de un valor de SALIDA del .dproj: $(Platform),
+  $(Config), $(MSBuildProjectDirectory) / $(ProjectDir) (ADir) y
+  $(MSBuildProjectName) / $(SanitizedProjectName) (ABase). Lo que conserva
+  '$(' no se sabe resolver aqui. UNA copia: ResolveBuildOutput, BuildOutputDirs
+  (la puerta) y el ProjectOutput del manifiesto de despliegue (que expandia
+  a mano; revisor del 21-oct-2026). }
+function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
+  AConfig: string): string;
 
 { El NOMBRE del binario (sin carpeta) que deja el build de APlatform/AConfig,
   como lo compone CodeGear.Delphi.Targets: <proyecto>.<OutputExt> cuando el
@@ -1349,15 +1392,6 @@ begin
     for var At in AtributosDeApertura(AXml, A.Abre, A.Cierra) do
       if SameText(At.Nombre, AAttr) then
         Result := Result + [ValorDeAtributo(AXml, At)];
-end;
-
-function MergeProperty(const AXml, APropName: string): string;
-var
-  V: string;
-begin
-  Result := '';
-  for V in AllTagValues(AXml, APropName) do
-    Result := V.Replace('$(' + APropName + ')', Result, [rfReplaceAll, rfIgnoreCase]);
 end;
 
 function XmlUnescape(const S: string): string;
@@ -2344,8 +2378,8 @@ begin
     Result := vNoSeSabe; // algo que no se ha entendido
 end;
 
-function ElementosDeOtroBuild(const AXml, APlatform, AConfig: string;
-  const AElementos: TArray<TElementoXml>; const AExternas: TArray<string>): TArray<Boolean>;
+function VeredictosDeElementos(const AXml, APlatform, AConfig: string;
+  const AElementos: TArray<TElementoXml>; const AExternas: TArray<string>): TArray<TVeredicto>;
 var
   Banderas, Dudosas, Definidas: TStringList;
   Grupo, Elemento: TVeredicto;
@@ -2353,6 +2387,9 @@ var
   Busca: TBuscaBandera;
 begin
   SetLength(Result, Length(AElementos));
+  // lo que no esta en un PropertyGroup no es de otro build
+  for var I := 0 to High(Result) do
+    Result[I] := vSi;
   Banderas := TStringList.Create;
   Dudosas := TStringList.Create;
   Definidas := TStringList.Create;
@@ -2395,26 +2432,33 @@ begin
           Continue;
         if Grupo = vNo then
         begin
-          Result[I] := True;
+          Result[I] := vNo;
           Continue;
         end;
         Elemento := EvaluaCondicion(AtributoDeTramo(AXml, E.Tramo, E.Escrito, 'Condition'),
           APlatform, AConfig, Busca);
-        Result[I] := Elemento = vNo;
         if Elemento = vNo then
+        begin
+          Result[I] := vNo;
           Continue;
+        end;
         // lo que deja puesto para los siguientes: seguro si el grupo y el
         // elemento son ciertos (el ultimo gana, como en msbuild); dudoso si
         // alguno no se sabe
         D := Dudosas.IndexOf(E.Escrito);
         if (Grupo = vSi) and (Elemento = vSi) then
         begin
+          Result[I] := vSi;
           Banderas.Values[E.Escrito] := ValorDeTramo(AXml, E.Tramo).Trim;
           if D >= 0 then
             Dudosas.Delete(D);
         end
-        else if D < 0 then
-          Dudosas.Add(E.Escrito);
+        else
+        begin
+          Result[I] := vNoSeSabe;
+          if D < 0 then
+            Dudosas.Add(E.Escrito);
+        end;
       end;
     end;
   finally
@@ -2422,6 +2466,19 @@ begin
     Dudosas.Free;
     Banderas.Free;
   end;
+end;
+
+function ElementosDeOtroBuild(const AXml, APlatform, AConfig: string;
+  const AElementos: TArray<TElementoXml>; const AExternas: TArray<string>): TArray<Boolean>;
+var
+  V: TArray<TVeredicto>;
+begin
+  // de otro build = su Condition o la de su grupo es FALSA; lo que no se
+  // sabe se juzga (una de mas es prudencia)
+  V := VeredictosDeElementos(AXml, APlatform, AConfig, AElementos, AExternas);
+  SetLength(Result, Length(V));
+  for var I := 0 to High(V) do
+    Result[I] := V[I] = vNo;
 end;
 
 function TrozosDeLista(const AValor: string): TArray<string>;
@@ -2460,6 +2517,12 @@ begin
   if ARequerido then
     Result := Result + '            ' + XmlElemento('Required', 'True') + sLineBreak;
   Result := Result + '        </DeployFile>' + sLineBreak;
+end;
+
+function XmlGrupoDeDespliegue(const ACondicion, AEntradas: string): string;
+begin
+  Result := '<ItemGroup ' + XmlAtributo('Condition', ACondicion) + '>' + sLineBreak +
+    AEntradas + '    </ItemGroup>';
 end;
 
 function RutasDeExists(const AEscrita: string): TArray<TTrozoEscrito>;
@@ -2529,22 +2592,6 @@ begin
   Result := '';
   if CondicionDePlataformaYConfig(ACondicion, X, C) and (X <> '') then
     Result := ConSuGrafia(X);
-end;
-
-{ Si una Condition (de un grupo o de un elemento) se aplica a un build de
-  APlatform / AConfig: sin condicion, si; de plataforma y/o config, si nombra
-  esas (una config sin AConfig: no se sabe, no); otra cosa, no - lo que no se
-  sabe si se aplica no se da por aplicado. }
-function SeAplicaA(const ACondicion, APlatform, AConfig: string): Boolean;
-var
-  X, C: string;
-begin
-  if ACondicion.Trim = '' then
-    Exit(True);
-  if not CondicionDePlataformaYConfig(ACondicion, X, C) then
-    Exit(False);
-  Result := ((X = '') or SameText(X, APlatform)) and
-    ((C = '') or ((AConfig <> '') and SameText(C, AConfig)));
 end;
 
 function TagValue(const AXml, ATag: string): string;
@@ -2900,6 +2947,27 @@ begin
   Result := (Clave <> '') and GrupoConCondicion(AXml, GroupCondition(APlatform, Clave), AGrupo);
 end;
 
+function BuildDelGrupo(const AXml, ACondicion: string; out APlatform, AConfig: string): Boolean;
+var
+  Clave: string;
+begin
+  Result := False;
+  APlatform := '';
+  AConfig := '';
+  // cada configuracion que declara el proyecto (Base la primera), por su
+  // clave, contra la inversa de los nombradores (EsGrupoDeClave)
+  for var C in InfoDeDproj(AXml).Configs do
+  begin
+    Clave := ConfigKey(AXml, C);
+    if (Clave <> '') and EsGrupoDeClave(ACondicion, Clave, False, APlatform) then
+    begin
+      if not SameText(C, 'Base') then
+        AConfig := C;
+      Exit(True);
+    end;
+  end;
+end;
+
 function AseguraGrupoDelBuild(var AXml: string; const APlatform, AConfig: string;
   out AGrupo: TGrupoXml; out AFalta: TFaltaDeGrupo): Boolean;
 var
@@ -3030,50 +3098,39 @@ begin
 end;
 
 { El valor EFECTIVO de ATag para un build APlatform/AConfig: los grupos del
-  .dproj con las condiciones que escribe el IDE - ninguna, '$(Base)' (la
-  global: todas las configs y plataformas), '$(Base_<plataforma>)',
-  '$(Cfg_N)' y '$(Cfg_N_<plataforma>)' -, en orden de documento, y el
-  ultimo que lo fija gana, como en MSBuild: sin definicion particular se
-  hereda la global, y una particular vacia la anula. Cada plataforma y
-  config puede tener su carpeta (David, 25-sep-2026). Un grupo con otra
-  condicion NO cuenta: lo que no se sabe si se aplica no se da por
-  declarado. Y un $(ATag) dentro del valor es lo que valia hasta ahi, como
-  en MSBuild: el IDE escribe asi los defines de cada configuracion, y sin
-  expandirlo el de Debug era el texto "DEBUG;$(DCC_Define)" (1.20.2). }
+  .dproj que se aplican a ese build, en orden de documento, y el ultimo que
+  lo fija gana, como en MSBuild: sin definicion particular se hereda la
+  global, y una particular vacia la anula. Cada plataforma y config puede
+  tener su carpeta (David, 25-sep-2026). Y un $(ATag) dentro del valor es lo
+  que valia hasta ahi, como en MSBuild: el IDE escribe asi los defines de
+  cada configuracion, y sin expandirlo el de Debug era el texto
+  "DEBUG;$(DCC_Define)" (1.20.2). }
 function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
 var
-  Key: string;
-  Validas: TArray<string>;
-  Suyas: TArray<TTramoXml>;
+  Mal, Tag: string;
+  Elementos: TArray<TElementoXml>;
+  V: TArray<TVeredicto>;
 begin
   Result := '';
-  // las etiquetas ATag del documento UNA vez, repartidas luego por grupos: con
-  // TramosEnGrupo era un recorrido del documento entero por cada grupo, 7 ms
-  // en un .dproj de 117 KB por propiedad, y los ajustes del motor piden
-  // cuatro en cada peticion (medido el 18-oct-2026, FabProbe). Las mismas, en
-  // el mismo orden: las de dentro de cada grupo, por su posicion
-  Suyas := TramosDeEtiqueta(AXml, ATag, True);
-  Key := ConfigKey(AXml, AConfig);
-  Validas := ['', CondicionNormalizada(GroupCondition('')),
-    CondicionNormalizada(GroupCondition(APlatform))];
-  // las de la configuracion, por EL nombrador (se componian aqui a mano)
-  if Key <> '' then
-    Validas := Validas + [CondicionNormalizada(GroupCondition('', Key)),
-      CondicionNormalizada(GroupCondition(APlatform, Key))];
-  for var G in GruposDePropiedades(AXml) do
-    // el grupo: los que escribe el IDE (la base, la plataforma, la config) o
-    // uno de plataforma y/o config que se aplique a este build
-    if MatchStr(CondicionNormalizada(G.Condicion), Validas) or
-       ((G.Condicion.Trim <> '') and SeAplicaA(G.Condicion, APlatform, AConfig)) then
-      // cada etiqueta con SU Condition, y la vacia (<X/>) tambien: deja el
-      // valor vacio, como en msbuild. El juez (MSXML, 17-oct-2026) las veia y
-      // el escaner no: un <Profile Condition="'$(Platform)'=='Win32'"> de 5
-      // Samples del IDE se contaba para OSX64 e iOS
-      for var T in Suyas do
-        if (T.Abre >= G.Ini) and (T.Cierra <= G.Fin) and
-           SeAplicaA(AtributoDeTramo(AXml, T, ATag, 'Condition'), APlatform, AConfig) then
-          Result := ValorDeTramo(AXml, T).Trim.Replace('$(' + ATag + ')', Result,
-            [rfReplaceAll, rfIgnoreCase]); // el ultimo gana, con lo de antes dentro
+  // EL juez de "este grupo se aplica a este build", el de la puerta
+  // (VeredictosDeElementos): las Condition evaluadas como msbuild, en orden
+  // de documento, sobre lo que los grupos anteriores dejan puesto, y no por
+  // el NOMBRE de la clave (los grupos del IDE elegidos por su Condition
+  // escrita leian otra cosa que msbuild con una bandera plantada, una config
+  // hija o una clave renombrada: revisores del 21-oct-2026). Para LEER solo
+  // cuenta lo cierto: lo que no se sabe si se aplica (un nombre de fuera,
+  // una funcion) no se da por declarado; la puerta, en cambio, lo juzga. Cada
+  // elemento con SU Condition, y la vacia (<X/>) tambien: deja el valor
+  // vacio, como en msbuild (un <Profile Condition="'$(Platform)'=='Win32'">
+  // de 5 Samples del IDE se contaba para OSX64 e iOS; MSXML, 17-oct-2026)
+  Elementos := ElementosDe(AXml, Mal);
+  V := VeredictosDeElementos(AXml, APlatform, AConfig, Elementos, []);
+  Tag := LowerCase(ATag);
+  for var I := 0 to High(Elementos) do
+    if (V[I] = vSi) and (Elementos[I].Nombre = Tag) and (Length(Elementos[I].Ruta) > 0) and
+       (Elementos[I].Ruta[High(Elementos[I].Ruta)] = 'propertygroup') then
+      Result := ValorDeTramo(AXml, Elementos[I].Tramo).Trim.Replace('$(' + ATag + ')', Result,
+        [rfReplaceAll, rfIgnoreCase]); // el ultimo gana, con lo de antes dentro
 end;
 
 function PlatformProperty(const AXml, APlatform, ATag: string): string;

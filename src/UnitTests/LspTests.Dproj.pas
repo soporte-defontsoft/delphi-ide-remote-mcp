@@ -57,6 +57,7 @@ type
     [Test] procedure LaCondicionDeUnGrupoComoMsbuild;
     [Test] procedure ElGrupoDelBuildDondeLoEscribeElIde;
     [Test] procedure PonPropiedadDelBuildEnLasCuatroFormas;
+    [Test] procedure LaPropiedadEfectivaNoSeHaceLenta;
   end;
 
   { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
@@ -146,8 +147,10 @@ begin
   Assert.IsFalse(Xml.Contains('R&D') or Xml.Contains('<x>'), 'escrito sin escapar: ' + Xml);
   Assert.AreEqual(VALOR, TagValue(Xml, 'DCC_UnitSearchPath'), 'TagValue');
   Assert.AreEqual(VALOR, AllTagValues(Xml, 'DCC_UnitSearchPath')[0], 'AllTagValues');
+  // el lector de un build (un grupo sin condicion se aplica a todos): con lo
+  // de antes dentro, y desescapado
   Assert.AreEqual(VALOR.Replace(';$(DCC_UnitSearchPath)', ';'),
-    MergeProperty(Xml, 'DCC_UnitSearchPath'), 'MergeProperty');
+    EffectiveProperty(Xml, 'DCC_UnitSearchPath', 'Win64', 'Debug'), 'EffectiveProperty');
 end;
 
 procedure TXmlTextoTests.RutasDeBusquedaResueltasYDesescapadas;
@@ -288,15 +291,52 @@ begin
   Assert.AreEqual(#10'b', S);
 end;
 
+{ Lo que el IDE escribe ANTES de los grupos de valores y sin lo cual msbuild
+  no aplica ninguno (y el lector, que evalua como msbuild, tampoco):
+  <Base>True</Base> en el primer grupo, el definidor de la configuracion Base,
+  el de cada plataforma de APlataformas para Base, y por cada 'Nombre=Cfg_N'
+  de AConfigs su definidor y los de sus plataformas. }
+function CadenaDelIde(const APlataformas, AConfigs: TArray<string>): string;
+
+  function DefinidorDeConfig(const ANombre, AClave: string): string;
+  begin
+    Result := '<PropertyGroup ' + XmlAtributo('Condition', ConfigDefinerCondition(ANombre, AClave)) + '>';
+    if not SameText(AClave, 'Base') then
+      Result := Result + XmlElemento(AClave, 'true');
+    Result := Result + XmlElemento('Base', 'true') + '</PropertyGroup>';
+  end;
+
+var
+  P: Integer;
+  Nombre, Clave: string;
+begin
+  Result := '<PropertyGroup>' + XmlElemento('Base', 'True') + '</PropertyGroup>' +
+    DefinidorDeConfig('Base', 'Base');
+  for var Plat in APlataformas do
+    Result := Result + XmlGrupoDefinidor(Plat, 'Base');
+  for var C in AConfigs do
+  begin
+    P := Pos('=', C);
+    Nombre := Copy(C, 1, P - 1);
+    Clave := Copy(C, P + 1, MaxInt);
+    Result := Result + DefinidorDeConfig(Nombre, Clave);
+    for var Plat in APlataformas do
+      Result := Result + XmlGrupoDefinidor(Plat, Clave);
+  end;
+end;
+
 procedure TXmlTextoTests.PlatformPropertyComoMsbuild;
-const
-  XML = '<Project>' +
+var
+  XML: string;
+begin
+  // con la cadena del IDE delante (<Base>True</Base> y los definidores), que
+  // es lo que msbuild evalua: sin ella no se aplica ningun grupo
+  XML := '<Project>' + CadenaDelIde(['Linux64', 'OSX64'], []) +
     '<PropertyGroup Condition="''$(Cfg_2)''!=''''"><PlatformSDK>de-config</PlatformSDK></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Base)''!=''''"><PlatformSDK>de-base</PlatformSDK></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Base_Linux64)''!=''''"><PlatformSDK Label="x">suya</PlatformSDK></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Base_OSX64)''!=''''"><PlatformSDK Condition="''$(X)''==''''">rara</PlatformSDK></PropertyGroup>' +
     '</Project>';
-begin
   // la del grupo de la plataforma, aunque la etiqueta lleve atributos (Label)
   Assert.AreEqual('suya', PlatformProperty(XML, 'Linux64', 'PlatformSDK'));
   // una Condition del elemento que no es de plataforma/config no se da por
@@ -312,17 +352,18 @@ end;
 // cuentan (los ajustes del motor encadenaban todos: DEBUG y RELEASE a la vez,
 // medido el 17-oct-2026, T2/M9).
 procedure TXmlTextoTests.LaPropiedadEfectivaConLoDeAntesDentro;
-const
-  XML = '<Project><ItemGroup>' +
+var
+  XML: string;
+begin
+  XML := '<Project><ItemGroup>' +
     '<BuildConfiguration Include="Debug"><Key>Cfg_1</Key></BuildConfiguration>' +
     '<BuildConfiguration Include="Release"><Key>Cfg_2</Key></BuildConfiguration>' +
-    '</ItemGroup>' +
+    '</ItemGroup>' + CadenaDelIde(['Win32'], ['Debug=Cfg_1', 'Release=Cfg_2']) +
     '<PropertyGroup Condition="''$(Base)''!=''''"><DCC_Define>BASE;$(DCC_Define)</DCC_Define></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Base_Win32)''!=''''"><DCC_Define>W32;$(dcc_define)</DCC_Define></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Cfg_1)''!=''''"><DCC_Define>DEBUG;$(DCC_Define)</DCC_Define></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Cfg_2)''!=''''"><DCC_Define>RELEASE;$(DCC_Define)</DCC_Define></PropertyGroup>' +
     '</Project>';
-begin
   Assert.AreEqual('DEBUG;W32;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win32', 'Debug'));
   Assert.AreEqual('RELEASE;W32;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win32', 'Release'));
   Assert.AreEqual('DEBUG;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win64', 'Debug'),
@@ -448,14 +489,15 @@ begin
 end;
 
 procedure TXmlTextoTests.LaCondicionDelElementoYElVacioCuentan;
-const
+var
+  XML: string;
+begin
   // la forma de 5 Samples del IDE (ExploreDevicesLE, Notifications...): el
   // perfil de Win32 con SU condicion en el grupo sin condicion
-  XML = '<Project><PropertyGroup>' +
+  XML := '<Project>' + CadenaDelIde(['Linux64'], []) + '<PropertyGroup>' +
     '<Profile Condition="''$(Platform)''==''Win32''">win_desktop</Profile>' +
     '<PlatformSDK>de-base</PlatformSDK></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Base_Linux64)''!=''''"><PlatformSDK/></PropertyGroup></Project>';
-begin
   Assert.AreEqual('win_desktop', PlatformProperty(XML, 'Win32', 'Profile'), 'en Win32 si');
   Assert.AreEqual('', PlatformProperty(XML, 'OSX64', 'Profile'), 'en OSX64 no: la condicion es del elemento');
   Assert.AreEqual('de-base', PlatformProperty(XML, 'OSX64', 'PlatformSDK'), 'OSX64 hereda la base');
@@ -860,6 +902,7 @@ begin
     '<BuildConfiguration Include="Release"><Key>Cfg_2</Key><CfgParent>Base</CfgParent></BuildConfiguration>' +
     '<BuildConfiguration Include="Debug2"><Key>Cfg_3</Key><CfgParent>Cfg_1</CfgParent></BuildConfiguration>' +
     '</ItemGroup>' + sLineBreak +
+    '    <PropertyGroup>' + XmlElemento('Base', 'True') + '</PropertyGroup>' + sLineBreak +
     CfgDef('Base', 'Base') + Def('Win32', 'Base') + Def('Win64', 'Base') +
     CfgDef('Debug', 'Cfg_1') + Def('Win32', 'Cfg_1') +
     CfgDef('Release', 'Cfg_2') +
@@ -983,6 +1026,41 @@ begin
   Assert.IsTrue(Falta = fgConfigNoDeclarada, 'poner en Nope');
   Assert.IsFalse(PonPropiedadDelBuild(Xml, 'PF_X', '', '', 'Nope', True, Antes, Falta));
   Assert.IsTrue(Falta = fgConfigNoDeclarada, 'quitar de Nope');
+end;
+
+procedure TXmlTextoTests.LaPropiedadEfectivaNoSeHaceLenta;
+const
+  CLAVES: array [0 .. 2] of string = ('Base', 'Cfg_1', 'Cfg_2');
+var
+  Xml, Props, V: string;
+  Plats: TArray<string>;
+  T0, Ms: Cardinal;
+begin
+  // el lector evalua como msbuild (ElementosDe + VeredictosDeElementos por
+  // lectura) y los ajustes del motor piden cuatro o cinco por peticion: un
+  // .dproj grande, como el de 117 KB que se midio el 18-oct-2026 (7 ms por
+  // propiedad con el lector por nombre), con 21 grupos de 150 propiedades
+  Props := '';
+  for var I := 1 to 150 do
+    Props := Props + '        ' + XmlElemento('Prop_' + IntToStr(I), 'valor ' + IntToStr(I)) + sLineBreak;
+  Plats := ['Win32', 'Win64', 'Linux64', 'Android64', 'OSX64', 'iOSDevice64'];
+  Xml := '<Project>' + CadenaDelIde(Plats, ['Debug=Cfg_1', 'Release=Cfg_2']);
+  for var Clave in CLAVES do
+  begin
+    Xml := Xml + XmlGrupoDeValores('', Clave, Props);
+    for var Plat in Plats do
+      Xml := Xml + XmlGrupoDeValores(Plat, Clave, Props);
+  end;
+  Xml := Xml + '</Project>';
+  Assert.IsTrue(Length(Xml) > 100000, 'el fixture es grande: ' + IntToStr(Length(Xml)));
+  T0 := TThread.GetTickCount;
+  for var I := 1 to 5 do
+    V := EffectiveProperty(Xml, 'Prop_7', 'Win64', 'Debug');
+  Ms := TThread.GetTickCount - T0;
+  Assert.AreEqual('valor 7', V);
+  TDUnitX.CurrentRunner.Status(Format('EffectiveProperty x5 en un .dproj de %d KB: %d ms', [Length(Xml) div 1024, Ms]));
+  // el tope: cinco lecturas en menos de medio segundo (lo medido, en el Status)
+  Assert.IsTrue(Ms < 500, Format('%d ms para cinco lecturas', [Ms]));
 end;
 
 initialization

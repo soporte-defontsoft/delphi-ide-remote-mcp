@@ -112,7 +112,8 @@ uses
   Lsp.Codificacion,
   Lsp.AtomosRtl,
   Lsp.Styles, // RcLecturasDenegadas: EL juez del .rc (el de delphi_styles build)
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Rutas;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -748,12 +749,12 @@ function AndroidDeployXml(const AName, APlat, ABdsRoot: string;
   const AConfigs: TArray<string>): string;
 var
   SB: TStringBuilder;
-  Cfg, Libs, OutName: string;
+  Cfg, Libs, OutName, Entradas: string;
   E: TApkEntry;
 
   procedure Add(const AInclude, ADir, AFile, ACls: string; ARequired: Boolean);
   begin
-    SB.Append(XmlDeployFile(AInclude, '', AName + '\' + ADir, AFile, ACls, 1, ARequired));
+    Entradas := Entradas + XmlDeployFile(AInclude, '', AName + '\' + ADir, AFile, ACls, 1, ARequired);
   end;
 
 begin
@@ -763,7 +764,7 @@ begin
     SB.Append(CabeceraDeManifiesto);
     for Cfg in AConfigs do
     begin
-      SB.AppendLine('    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>');
+      Entradas := '';
       Add(APlat + '\' + Cfg + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
         'ProjectAndroidManifest', True);
       Add(APlat + '\' + Cfg + '\lib' + AName + '.so', Libs,
@@ -779,7 +780,8 @@ begin
             OutName := E.Name;
           Add('$(BDS)\' + E.Src, E.Dir, OutName, E.Cls, False);
         end;
-      SB.AppendLine('    </ItemGroup>');
+      // EL escritor del grupo de una plataforma y config del .deployproj (Lsp.Dproj)
+      SB.AppendLine('    ' + XmlGrupoDeDespliegue(DeployGroupCondition(APlat, Cfg), Entradas));
     end;
     SB.AppendLine('</Project>');
     Result := SB.ToString;
@@ -801,15 +803,18 @@ end;
 { The IDE's DeployFile block for the project output of one config. The
   Include follows the project's real DCC_ExeOutput (Compiled\Linux64\Debug\X
   when delphi_config set-output was used), like the IDE writes it. }
-function OutputDeployEntry(const ADprojXml, APlat, ACfg, AName: string): string;
+function OutputDeployEntry(const ADprojXml, ADir, APlat, ACfg, AName: string): string;
 var
   OutDir, Ext, Include: string;
 begin
-  OutDir := MergeProperty(ADprojXml, 'DCC_ExeOutput');
+  // la carpeta de salida de ESTE build (EffectiveProperty) y sus macros por
+  // EL expansor (ExpandOutputMacros): mezclaba los DCC_ExeOutput de TODOS los
+  // grupos (MergeProperty) y expandia a mano, y un proyecto con carpeta propia
+  // en otra plataforma podia desplegar desde esa (revisor del 21-oct-2026)
+  OutDir := EffectiveProperty(ADprojXml, 'DCC_ExeOutput', APlat, ACfg);
   if OutDir.Trim = '' then
     OutDir := IDE_OUTPUT_DEFAULT; // el '.\' se quita abajo
-  OutDir := OutDir.Replace('$(Platform)', APlat, [rfReplaceAll, rfIgnoreCase])
-    .Replace('$(Config)', ACfg, [rfReplaceAll, rfIgnoreCase]).Trim;
+  OutDir := ExpandOutputMacros(OutDir, ADir, AName, APlat, ACfg).Trim;
   if OutDir.StartsWith('.\') then
     OutDir := OutDir.Substring(2);
   // el nombre del binario por EL nombrador (OutputExt de esa plataforma y
@@ -842,7 +847,7 @@ begin
   DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
   for Cfg in ConfigsDelManifiesto(DprojXml) do
-    Entries := Entries + OutputDeployEntry(DprojXml, APlat, Cfg, AName);
+    Entries := Entries + OutputDeployEntry(DprojXml, ExtractFileDir(ADprojPath), APlat, Cfg, AName);
   // el grupo de la plataforma, '$(Platform)'=='X': el vacio que el IDE deja
   // escrito (<ItemGroup .../>), o el que tiene otros ficheros
   HayHueco := False;
@@ -861,9 +866,9 @@ begin
       end;
   // an empty self-closing group for the platform: fill it
   if HayHueco then
-    Xml := Copy(Xml, 1, Hueco.Abre - 1) +
-      '<ItemGroup ' + XmlAtributo('Condition', Cond) + '>'#13#10 + Entries +
-      '    </ItemGroup>' + Copy(Xml, Hueco.Cierra, MaxInt)
+    // EL escritor del grupo (Lsp.Dproj); la sangria ya esta delante del hueco
+    Xml := Copy(Xml, 1, Hueco.Abre - 1) + XmlGrupoDeDespliegue(Cond, Entries) +
+      Copy(Xml, Hueco.Cierra, MaxInt)
   else
   begin
     // a group with other files but no output, or no group at all
@@ -875,8 +880,8 @@ begin
       var P := CierreDelProyecto(Xml);
       if P = 0 then
         Exit;
-      Xml := Copy(Xml, 1, P - 1) + '    <ItemGroup ' + XmlAtributo('Condition', Cond) + '>'#13#10 +
-        Entries + '    </ItemGroup>'#13#10 + Copy(Xml, P, MaxInt);
+      Xml := Copy(Xml, 1, P - 1) + '    ' + XmlGrupoDeDespliegue(Cond, Entries) + #13#10 +
+        Copy(Xml, P, MaxInt);
     end;
   end;
   PatchSaveConSuSalto(ADeployProj, Xml, Enc);
@@ -1003,10 +1008,9 @@ begin
   begin
     // el nombre del binario de CADA config por EL nombrador (OutputExt)
     Ext := NombreDelBinario(Dproj, N, APlat, Cfg);
-    Xml := Xml +
-      '    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>'#13#10 +
-      XmlDeployFile(APlat + '\' + Cfg + '\' + Ext, '', N + '\', Ext, 'ProjectOutput', 1, True) +
-      '    </ItemGroup>'#13#10;
+    // EL escritor del grupo de una plataforma y config (Lsp.Dproj)
+    Xml := Xml + '    ' + XmlGrupoDeDespliegue(DeployGroupCondition(APlat, Cfg),
+      XmlDeployFile(APlat + '\' + Cfg + '\' + Ext, '', N + '\', Ext, 'ProjectOutput', 1, True)) + #13#10;
   end;
   Xml := Xml + '</Project>'#13#10;
   EscribeTexto(F, Xml, ltJaula, ekUtf8Bom); // como el de Android, arriba
@@ -1618,6 +1622,12 @@ var
     // alternativo (f.txt:s): se juzga el FICHERO del que es - lo de dentro
     // es de dentro, y el de fuera (por .. o por un enlace) lo niega la
     // jaula. (W14 de test_build_lista_blanca_1212: VerInfo_Keys se negaba)
+    // el prefijo de ruta extendida o de dispositivo (\\?\C:\x, \\?\UNC\srv\x,
+    // \\.\): dcc abre la carpeta por el (medido el 21-oct-2026: una unidad de
+    // FUERA por ese search path compilaba, porque la regla del ':' de abajo lo
+    // tomaba por una URL); se juzga sin el, por EL quitador (Lsp.Rutas)
+    if EsPrefijoDeDispositivo(Cand) then
+      Cand := SinPrefijoDeDispositivo(Cand);
     var Sep := Cand.IndexOfAny(['\', '/']);
     var Igual := Cand.IndexOf('=');
     if (Igual >= 0) and ((Sep < 0) or (Igual < Sep)) then

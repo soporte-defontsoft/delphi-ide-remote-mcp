@@ -78,6 +78,12 @@ procedure JuzgaRaizDeDiseno(var AInfo: TUnitInfo; const ARegistro: string;
   .dproj: primero en ADproj (el proyecto que se toca; '' ninguno), luego en
   los que la listan (ProjectsUsingUnit). '' si ninguno. Nunca lanza. }
 function RegistroDelIde(const APasPath, ADproj: string): string;
+{ EL escritor de una <DCCReference> del .dproj, como la escribe el IDE: a
+  secas para una unit cualquiera, y con su <Form>, <FormType> y <DesignClass>
+  para un designer (AInfo.IsDesigner con FormName). Lo usan add-unit, el
+  rename y delphi_create (que la componia a mano, dos veces; revisor del
+  21-oct-2026). Compone en CRLF. }
+function DccRefXml(const AInfo: TUnitInfo; const AInclude: string): string;
 
 { Adds the unit to the .dpr uses (+ CreateForm) and the .dproj. Idempotent:
   an entry already present is left alone and reported. ARaizDelCreador: what

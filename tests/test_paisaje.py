@@ -846,6 +846,19 @@ REGLAS = [
      [('Lsp.Dproj.pas', '*'), ('Lsp.Scaffold.pas', '*')],
      'GrupoDelBuild / AseguraGrupoDelBuild / PonPropiedadDelBuild (Lsp.Dproj); delphi_create compone '
      'el .dproj entero con los nombradores (Lsp.Scaffold)'),
+    # un <ItemGroup Condition="..."> del .deployproj compuesto a mano: lo componian cinco sitios
+    # (el manifiesto de Android y el de las demas plataformas, el hueco y el grupo nuevo de
+    # EnsurePlatformOutputEntries, add-deployfile; revisor del 21-oct-2026)
+    ('un ItemGroup de despliegue compuesto a mano',
+     r"'\s*<ItemGroup\s",
+     [('Lsp.Dproj.pas', 'XmlGrupoDeDespliegue')],
+     'XmlGrupoDeDespliegue (Lsp.Dproj), con las entradas de XmlDeployFile dentro'),
+    # una <DCCReference> compuesta a mano: delphi_create la componia dos veces al lado del
+    # escritor de add-unit (revisor del 21-oct-2026)
+    ('una DCCReference compuesta a mano',
+     r"'\s*<DCCReference\s",
+     [('Lsp.ProjectUnits.pas', 'DccRefXml')],
+     'DccRefXml (Lsp.ProjectUnits): add-unit, el rename y delphi_create'),
     # el argumento de una directiva de fichero ($I, $R, $L) troceado a mano: el bucle de
     # DirectivasDeFichero y el Split()[0] de la vista FMX del renderizador, que con un {$R}
     # vacio leia fuera del array (EAccessViolation, medido el 18-oct-2026). Dos formas:
@@ -1022,6 +1035,8 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 # regla tiene que cazar (y un comentario con el formato, que NO)
 PLANTADO = {
     'elegir el grupo de un build a mano': "  if GrupoConCondicion(Xml, GroupCondition(Plat), G) then",
+    'un ItemGroup de despliegue compuesto a mano': "  B := '    <ItemGroup ' + XmlAtributo('Condition', C) + '>';",
+    'una DCCReference compuesta a mano': "  R := '        <DCCReference ' + XmlAtributo('Include', I) + '/>';",
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",

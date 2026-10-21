@@ -272,16 +272,20 @@ begin
       GrupoDeValores('Win64', CFG_RELEASE, Dpi);
   end;
   FormRef := '';
-  if (AFormUnit <> '') and (AFormName = '') then
-    // Una unit sin form (el fixture de un proyecto de test): la referencia
-    // a secas, como la escribe el IDE para un .pas cualquiera.
-    FormRef := '        <DCCReference ' + XmlAtributo('Include', AFormUnit + '.pas') + '/>' + CRLF
-  else if AFormUnit <> '' then
-    FormRef :=
-      '        <DCCReference ' + XmlAtributo('Include', AFormUnit + '.pas') + '>' + CRLF +
-      '            ' + XmlElemento('Form', AFormName) + CRLF +
-      '            ' + XmlElemento('FormType', AFormType) + CRLF +
-      '        </DCCReference>' + CRLF;
+  if AFormUnit <> '' then
+  begin
+    // EL escritor de una <DCCReference> (DccRefXml, el de add-unit): una
+    // unit sin form (el fixture de un proyecto de test) es la referencia a
+    // secas, como la escribe el IDE para un .pas cualquiera; con form, con su
+    // <Form> y su <FormType>. Se componia aqui a mano, dos veces (revisor del
+    // 21-oct-2026)
+    var Info := Default(TUnitInfo);
+    Info.FormName := AFormName;
+    Info.FormType := AFormType;
+    if AFormName <> '' then
+      Info.Designer := AFormUnit + '.' + AFormType;
+    FormRef := DccRefXml(Info, AFormUnit + '.pas');
+  end;
   Result :=
     '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">' + CRLF +
     '    <PropertyGroup>' + CRLF +

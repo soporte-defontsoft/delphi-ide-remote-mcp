@@ -991,7 +991,7 @@ procedure AddSearchPathsView(const AXml: string; AReturn: TJSONObject);
 var
   Obj: TJSONObject;
   Arr: TJSONArray;
-  Name, P: string;
+  Name, P, Plat, Cfg: string;
   Tramos: TArray<TTramoXml>;
   Any: Boolean;
 begin
@@ -999,14 +999,16 @@ begin
   Any := False;
   for var G in GruposDePropiedades(AXml) do
   begin
-    // la base y el grupo de valores de cada plataforma, los que escriben el
-    // IDE y add-searchpath, por EL analisis del .dproj (era una regex propia)
-    if CondicionNormalizada(G.Condicion) = CondicionNormalizada(GroupCondition('')) then
+    // cada grupo de valores de un build, por EL lector inverso de Lsp.Dproj
+    // (BuildDelGrupo): la base, una plataforma y, desde la 1.22.0, tambien una
+    // configuracion ("Debug") o la pareja ("Win64 Debug"), donde escribe
+    // set-property (era una regex propia; luego solo base y plataformas)
+    if not BuildDelGrupo(AXml, G.Condicion, Plat, Cfg) then
+      Continue;
+    if (Plat = '') and (Cfg = '') then
       Name := 'base'
     else
-      Name := PlataformaDeGrupo(G.Condicion, False);
-    if Name = '' then
-      Continue;
+      Name := (Plat + ' ' + Cfg).Trim;
     Tramos := TramosEnGrupo(AXml, 'DCC_UnitSearchPath', G);
     if Length(Tramos) = 0 then
       Continue;
@@ -1185,10 +1187,10 @@ begin
   BaseDir := TPath.GetDirectoryName(TPath.GetFullPath(DeployProj));
   if Full.ToLower.StartsWith(IncludeTrailingPathDelimiter(BaseDir).ToLower) then
     Include := Full.Substring(Length(IncludeTrailingPathDelimiter(BaseDir)));
-  Block := '    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(Plat)) + '>' + sLineBreak +
+  // EL escritor del grupo de una plataforma del .deployproj (Lsp.Dproj)
+  Block := '    ' + XmlGrupoDeDespliegue(DeployGroupCondition(Plat),
     XmlDeployFile(Include, 'Debug', RemoteDir, TPath.GetFileName(Include), 'File', 0, True) +
-    XmlDeployFile(Include, 'Release', RemoteDir, TPath.GetFileName(Include), 'File', 0, True) +
-    '    </ItemGroup>' + sLineBreak;
+    XmlDeployFile(Include, 'Release', RemoteDir, TPath.GetFileName(Include), 'File', 0, True)) + sLineBreak;
   Xml := Copy(Xml, 1, ClosePos - 1) + Block + Copy(Xml, ClosePos, MaxInt);
   PatchSaveConSuSalto(DeployProj, Xml, Enc); // __delphi-patch copy first
   Result := MsgFmt(SN_CONFIG_DEPLOY_ADDED_FMT,

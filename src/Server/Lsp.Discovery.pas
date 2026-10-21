@@ -1390,9 +1390,12 @@ begin
     Vars.Values['Platform'] := APlatform;
     if AConfig <> '' then
       Vars.Values['Config'] := AConfig;
-    for Item in IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor).Split([';']) do
+    // expandido ANTES de partir, como los ajustes del motor: un macro que
+    // expande a una lista era UN trozo con ';' dentro (revisor C, 21-oct-2026);
+    // EL troceador, el de la puerta del build (TrozosDeLista)
+    for Item in TrozosDeLista(ExpandIdeMacros(IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor), Vars)) do
     begin
-      Expanded := ExpandIdeMacros(Item.Trim, Vars);
+      Expanded := Item;
       if (Expanded = '') or Expanded.Contains('$(') or
          not TPath.IsPathRooted(Expanded) then
         Continue;

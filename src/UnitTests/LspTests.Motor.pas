@@ -73,6 +73,8 @@ type
     [Test] procedure ElMotorSinUsoSeParaYElSiguienteContesta;
     [Test] procedure ElMotorColgadoSeRelanza;
     [Test] procedure ElQueNoContestaUnaPeticionNoEstaColgado;
+    [Test]
+    procedure ElSearchPathSePartePorTrozosTrasExpandir;
   end;
 
 implementation
@@ -1381,6 +1383,31 @@ begin
   finally
     LspHungMs := Antes;
     LspSweepMs := AntesBarrido;
+  end;
+end;
+
+procedure TFabricaTests.ElSearchPathSePartePorTrozosTrasExpandir;
+var
+  Vars: TStringList;
+  R: TArray<string>;
+begin
+  // un macro de la tabla del IDE que expande a DOS carpetas (una variable de
+  // entorno del IDE con ';'): CleanPathList partia por ';' ANTES de expandir y
+  // era UN trozo "C:\a;C:\b", una carpeta que no existe, y el motor no veia
+  // ninguna de las dos (revisor C, 21-oct-2026). Lo que no expande se tira, lo
+  // relativo va contra la carpeta del proyecto, y cada carpeta una vez
+  Vars := TStringList.Create;
+  try
+    Vars.Values['LM'] := 'C:\a;C:\b';
+    Vars.Values['BDS'] := 'C:\bds';
+    R := CleanPathList('$(LM);lib;$(BDS)\lib;$(NADIE);C:\a', 'C:\p', Vars);
+    Assert.IsTrue(Length(R) = 4, string.Join(' | ', R));
+    Assert.AreEqual('C:\a', R[0]);
+    Assert.AreEqual('C:\b', R[1]);
+    Assert.AreEqual('C:\p\lib', R[2]);
+    Assert.AreEqual('C:\bds\lib', R[3]);
+  finally
+    Vars.Free;
   end;
 end;
 

@@ -30,6 +30,7 @@ interface
 
 uses
   System.SysUtils,
+  System.Classes, // TStrings: la tabla de macros de CleanPathList
   Lsp.Discovery;
 
 type
@@ -86,11 +87,16 @@ function NotaDeRecorte(const ASettingsFile: string): string;
   carpeta del proyecto y en una hermana publica todo). '' en otro caso, y
   nunca lanza: es una nota, no puede costar la respuesta. }
 function NotaDeDebajoDelProyecto(const ASettingsFile, AFile: string): string;
+{ Las carpetas de una lista de search path (a;b;c) como las ve el motor: los
+  macros expandidos con AVars (la tabla del IDE, IdeMacroVars, con Platform y
+  Config) ANTES de partir - uno que expande a una lista son varias carpetas -,
+  sin lo que no expande ni lo vacio, lo relativo contra ABaseDir, cada una una
+  vez. Expuesta para medirla (LspTests.Motor). }
+function CleanPathList(const ARaw, ABaseDir: string; AVars: TStrings): TArray<string>;
 
 implementation
 
 uses
-  System.Classes,
   System.StrUtils,
   System.IOUtils,
   System.JSON,
@@ -114,9 +120,10 @@ const
     'WinTypes=Winapi.Windows;WinProcs=Winapi.Windows;' +
     'DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE';
 
-{ AllTagValues / MergeProperty / XmlUnescape now live in Lsp.Dproj (shared). }
+{ AllTagValues / XmlUnescape now live in Lsp.Dproj (shared); MergeProperty is
+  gone: the value of ONE build is EffectiveProperty (1.22.0). }
 
-{ Split a ;-list, expand variables, drop unexpanded/$-laden or empty entries,
+{ Expand variables, THEN split the ;-list, drop unexpanded/$-laden or empty entries,
   absolutize relative entries against ABaseDir, keep only unique. AVars: LA
   tabla de macros del IDE (Lsp.Discovery.IdeMacroVars) con la plataforma y la
   configuracion de los ajustes. Aqui habia otra con cuatro clavadas (BDS,
@@ -130,9 +137,13 @@ var
 begin
   List := TList<string>.Create;
   try
-    for Item in ARaw.Split([';']) do
+    // expandido ANTES de partir: un macro que expande a una lista ($(Path),
+    // una variable del entorno con dos carpetas) era UN trozo con ';' dentro,
+    // una carpeta que no existe, y el motor no veia las que nombraba (revisor
+    // C, 21-oct-2026). EL troceador, el de la puerta del build (TrozosDeLista)
+    for Item in TrozosDeLista(ExpandIdeMacros(ARaw, AVars)) do
     begin
-      Expanded := ExpandIdeMacros(Item.Trim, AVars);
+      Expanded := Item;
       if (Expanded = '') or Expanded.Contains('$(') then
         Continue;
       if not TPath.IsPathRooted(Expanded) then

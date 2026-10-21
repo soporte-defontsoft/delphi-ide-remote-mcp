@@ -47,6 +47,18 @@ the MCP `initialize` response (`serverInfo.version`).
   group msbuild would never read; `CFG-088`, `CFG-091` and `CFG-093` are
   gone with the code that answered them. `test_paisaje` watches that no unit
   outside `Lsp.Dproj` chooses or creates a build's group by hand.
+- **The reader of a project property judges "this build" like the gate.**
+  `EffectiveProperty` - output folders, SDK and profile, packages, the
+  engine's settings, `get-property`, and the expansion of `$(X)` inside a
+  value the gate judges - chose the groups by the name of the configuration
+  key, the first form of the gate; it now uses the gate's own evaluator
+  (`VeredictosDeElementos`: one judge of "this group applies to this build",
+  for reading and for judging), so a flag planted in an unconditioned group,
+  a child configuration or a renamed key read what msbuild reads. For
+  reading, only what is certainly applied counts: a condition the evaluator
+  cannot decide is not taken as declared (the gate judges it instead), as
+  before. (`LspTests.Dproj`, with a check that five reads of a 100 KB
+  `.dproj` stay under half a second.)
 - **The build gate judges what the requested build reads, not every property
   group of the `.dproj`.** A keystore that only an Android64 Debug build reads
   (`PF_KeyStoreDebug`, in the `'$(Cfg_1_Android64)'!=''` group the IDE
@@ -80,6 +92,42 @@ the MCP `initialize` response (`serverInfo.version`).
   judged at all; now every folder of the list is judged and the ones outside
   are refused. (`tests/test_build_lista_macro_1215.py`, 10 checks, 4 red
   against 1.21.4.)
+- **`delphi_config view section=searchpaths` lists the groups of a
+  configuration too** (`Debug`, `Win64 Debug`), where `set-property` can now
+  write a search path; it listed the base group and the platforms only.
+- **One writer of a deployment `ItemGroup` and of a `DCCReference`.** Five
+  places composed the `<ItemGroup Condition=...>` of a `.deployproj` by hand
+  (the Android manifest, the one of the other platforms, the empty group and
+  the new group of a completed manifest, `add-deployfile`) and `delphi_create`
+  composed the `<DCCReference>` of a unit twice beside the writer of
+  `add-unit`; `XmlGrupoDeDespliegue` (`Lsp.Dproj`) and `DccRefXml`
+  (`Lsp.ProjectUnits`) are the houses now, watched by `test_paisaje`.
+
+### Fixed
+
+- **A search path written with Windows' extended-path prefix (`\\?\C:\...`)
+  was not judged by the build gate.** The gate took "a `:` with slashes after
+  it" for a URL and skipped the piece, while dcc opens such a folder: a unit
+  that only existed outside the roots compiled through it (a reviewer's note,
+  measured on 2026-10-21, red against 1.21.4). The prefix is now removed
+  before judging, by the house that already read it (`Lsp.Rutas`), and the
+  path goes through the gate like any other; a prefixed path inside the roots
+  still compiles. (`tests/test_build_prefijo_1220.py`.)
+- **The engine's search path and the IDE's Library path split the list before
+  expanding macros.** A macro that expands to a list (`$(Path)`, an
+  environment variable holding two folders) stayed one piece with a `;`
+  inside - a folder that does not exist - so the LSP engine did not see the
+  folders it named. Both now expand first and then split, with the build
+  gate's own splitter. (`LspTests.Motor`: a macro of the IDE's table that
+  expands to two folders gives two entries; it gave one that did not exist.
+  The engine's settings expand the IDE's macro table only, not the process
+  environment, so the case is measured at the unit level.)
+- **The deployment manifest took the output folder of any platform.** The
+  `ProjectOutput` entry of a generated or completed `.deployproj` read
+  `DCC_ExeOutput` by merging every group of the `.dproj`, so a project with a
+  folder of its own for another platform could ship from the wrong one; it
+  now reads the value of that platform and configuration and expands its
+  macros with the one expander of output folders. The old merger is gone.
 
 ## Earlier versions
 
