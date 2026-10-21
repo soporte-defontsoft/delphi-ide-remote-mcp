@@ -287,11 +287,12 @@ var
   // nothing.
   GFabLock: TObject;
   // Si el motor puede ensenar cada carpeta del Browsing Path del IDE (su ruta
-  // en minusculas -> si): los lugares del IDE y su biblioteca no cambian en
-  // la vida del proceso (Lsp.Lugares.LibraryRoots se carga una vez), y
-  // preguntarlo en cada peticion costaba 26-31 ms por las 58 carpetas, mas
-  // que todo lo demas (medido el 18-oct-2026, FabProbe). Bajo su propio
-  // cerrojo (TMonitor del diccionario).
+  // en minusculas -> si): preguntarlo en cada peticion costaba 26-31 ms por
+  // las 58 carpetas, mas que todo lo demas (medido el 18-oct-2026, FabProbe).
+  // Es POR CARPETA, no una foto de la lista: una que el operador registre
+  // con el servidor en marcha (la zona de biblioteca se recarga desde la
+  // 1.21.4) se pregunta la primera vez que aparece, y una que quite deja una
+  // entrada que nadie lee. Bajo su propio cerrojo (TMonitor del diccionario).
   GNavegable: TDictionary<string, Boolean>;
 
 { ---- public API ---- }

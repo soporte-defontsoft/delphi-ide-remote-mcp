@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- **The library read zone follows the IDE's Library Path while the server
+  runs.** It was read once at startup (`Lsp.Lugares.LibraryRoots`): a folder
+  the operator registered in the IDE afterwards was still refused with
+  `GUARD-002` by every reading tool, while `delphi_components` (which reads
+  the registry per call), the IDE and msbuild already used it - measured on
+  2026-10-21 on Delphi 13.2, with the 19 folders of a component suite
+  registered with the server up. Now the server asks Windows to signal when
+  the IDE's `Library` or `Environment Variables` registry keys change
+  (`RegNotifyChangeKeyValue`, thread-agnostic: `Lsp.Discovery.VigilaClave`)
+  and reloads the zone - and the served drive letters derived from it - on
+  the next call; a call that finds nothing changed costs one look at an
+  event. (`LspTests.Vigia`: nine unit tests on a probe key of the suite's
+  own, never the IDE's.)
+
 ## [1.21.3] - 2026-10-21
 
 A patch of 1.21.2 born from compiling a real twenty-year-old project through

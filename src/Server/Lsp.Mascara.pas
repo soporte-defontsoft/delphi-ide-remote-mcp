@@ -168,6 +168,8 @@ var
   // [i] el workspace i
   GDrvLetters: TArray<string>;
   GDrvLoaded: TArray<Boolean>;
+  // la generacion de la zona de biblioteca con la que se calculo cada una
+  GDrvGeneracion: TArray<Integer>;
 
 { The drives that can legitimately appear in tool output: those hosting the
   workspace roots, the library zone (RAD Studio + components) and the
@@ -175,7 +177,9 @@ var
   con el workspace de la PRIMERA llamada, y a otro con su raiz en otra unidad
   le salia esa raiz como srv0:\ y su srvn:\ como "not a drive of this
   server" hasta reiniciar (apuntado en la 1.8.2; medido el 1-oct-2026 con
-  dos workspaces en dos unidades: dependia de quien llamase primero). }
+  dos workspaces en dos unidades: dependia de quien llamase primero). Y por
+  GENERACION de la zona de biblioteca: recargada (1.21.4), una carpeta
+  registrada en otra unidad trae una letra nueva que servir. }
 function ServedDriveLetters: string;
 var
   Letras: string;
@@ -190,14 +194,15 @@ var
 
 var
   R: string;
-  Ix: Integer;
+  Ix, Gen: Integer;
 begin
   Ix := 0;
   if HasActiveWS then
     Ix := TWorkspaceIx1; // las letras de ESTE workspace
+  Gen := GeneracionDeLaBiblioteca; // (recarga la zona si el IDE la cambio)
   GDrvLock.Enter;
   try
-    if (Ix <= High(GDrvLoaded)) and GDrvLoaded[Ix] then
+    if (Ix <= High(GDrvLoaded)) and GDrvLoaded[Ix] and (GDrvGeneracion[Ix] = Gen) then
       Exit(GDrvLetters[Ix]);
   finally
     GDrvLock.Leave;
@@ -221,8 +226,10 @@ begin
     begin
       SetLength(GDrvLoaded, Ix + 1);
       SetLength(GDrvLetters, Ix + 1);
+      SetLength(GDrvGeneracion, Ix + 1);
     end;
     GDrvLetters[Ix] := Letras;
+    GDrvGeneracion[Ix] := Gen;
     GDrvLoaded[Ix] := True;
   finally
     GDrvLock.Leave;

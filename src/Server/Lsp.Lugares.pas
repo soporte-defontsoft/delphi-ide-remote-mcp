@@ -59,7 +59,7 @@ function LugaresDelIde(AParaEscribir: Boolean = False): TArray<string>;
   que el motor lee de la Library Path lo pide el IDE, no el agente (P2 de la
   1.18.0). Aparte de LugaresDelIde por lo que dice alli (cargarla pasa por la
   puerta con el IDE como lugar). En la forma con la que se compara
-  (FormaLarga), medida una vez, como LibraryRoots. }
+  (FormaLarga), rehecha cuando LibraryRoots se recarga. }
 function LugaresDeLaBiblioteca: TArray<string>;
 
 { AReal (una ruta REAL: RealPath, RutaDelEnlace) cae DE VERDAD donde la
@@ -154,11 +154,22 @@ function FirmaDeLasRaices: string;
 function CasaDentroDeUnaRaiz(const ACasa: string; out ADeSiMismas: TArray<string>): Boolean;
 
 { La zona de biblioteca (la instalacion de este Delphi, sus catalogos de
-  GetIt y el Library Search Path de todas sus plataformas), canonica y
-  cargada una vez, este o no encendida (eso lo pregunta quien la lee): la
-  recorren la jaula (JaulaDecide) y las letras que se sirven
-  (ServedDriveLetters). La que se anuncia es LibraryReadRoots. }
+  GetIt y el Library Search Path de todas sus plataformas), canonica, este o
+  no encendida (eso lo pregunta quien la lee): la recorren la jaula
+  (JaulaDecide) y las letras que se sirven (ServedDriveLetters). La que se
+  anuncia es LibraryReadRoots. Cargada una vez y RECARGADA cuando el IDE
+  cambia lo que la compone: Windows avisa (Lsp.Discovery.VigiasDeLaBiblioteca,
+  sobre Library y Environment Variables), y preguntarlo por llamada cuesta lo
+  que mirar un evento. Hasta la 1.21.4 vivia lo que el proceso: medido el
+  21-oct-2026 en la VM, el operador registro 19 carpetas en el Library Path
+  con el servidor en marcha y delphi_list las negaba con GUARD-002 mientras
+  el IDE y msbuild ya compilaban con ellas (delphi_components, que lee el
+  registro por llamada, si las veia). }
 function LibraryRoots: TArray<string>;
+{ Cuantas veces se ha cargado la zona (sube en cada recarga): lo que cachea
+  algo DERIVADO de ella (las letras servidas, Lsp.Mascara) lo compara para
+  rehacerse. Pregunta antes a LibraryRoots, asi que recarga si toca. }
+function GeneracionDeLaBiblioteca: Integer;
 { Los lugares que el operador declaro, en UNA lista: la lee UncFueraDeLugares
   (Lsp.Guard). }
 function LugaresDeclarados: TArray<string>;
@@ -197,101 +208,146 @@ uses
   System.StrUtils;
 
 var
+  // la zona de biblioteca y lo derivado de ella, bajo UN cerrojo: la cargan
+  // y la recargan los hilos de las peticiones (no se libera: como GDrvLock
+  // en Lsp.Mascara, lo usan hilos que aun contestan y se va con el proceso)
+  GLibCandado: TObject;
   GLibLoaded: Boolean = False;
   GLibRoots: TArray<string>;
-  // los lugares del IDE: se miden una vez, como la zona de biblioteca (las
-  // puertas los preguntan por cada fichero, y IdeSdksDir lee el registro)
+  // los vigias de las claves del IDE que la componen: Windows senala su
+  // evento cuando el IDE las escribe (se van con el proceso, como el cerrojo)
+  GLibVigias: TArray<TVigiaDeClave>;
+  GLibGeneracion: Integer = 0; // sube en cada carga
+  // los lugares del IDE: se miden una vez (las puertas los preguntan por cada
+  // fichero, y IdeSdksDir lee el registro); los sysroots, por llamada
   GIdeLoaded: Boolean = False;
   GIdeInstalacion: string;      // la instalacion: solo para leer
   GIdeLugares: TArray<string>;  // datos del usuario y SDK: leer y escribir
   GLibLugaresLoaded: Boolean = False;
   GLibLugares: TArray<string>;  // la zona de biblioteca, en FormaLarga
 
-{ The read-only library zone: RAD Studio installation + IDE Library Search
-  Path directories (installed components), canonicalized. Cached. }
-function LibraryRoots: TArray<string>;
+{ Lee la zona del IDE de este servidor: la instalacion, los catalogos y el
+  Library Search Path de TODAS sus plataformas, canonica. Lo llama
+  LibraryRoots bajo su cerrojo, la primera vez y en cada recarga. }
+procedure CargaLaBiblioteca;
 var
   Info: TRadStudioInfo;
   List, Vars: TStringList;
   Plat, Item, Expanded: string;
 begin
-  if not GLibLoaded then
-  begin
-    List := TStringList.Create;
-    try
-      // THE Delphi of this server, and no other (David, 5-oct-2026: "nos
-      // centramos en el Delphi que usemos en el server"). Until then EVERY
-      // installation was readable; another version's sources are no use
-      // to a server that builds with this one.
-      Info := DiscoverRadStudio;
-      if Info.Found then
-      begin
-        List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
-        Vars := TStringList.Create;
-        try
-          IdeMacroVars(Info, Vars);
+  List := TStringList.Create;
+  try
+    // THE Delphi of this server, and no other (David, 5-oct-2026: "nos
+    // centramos en el Delphi que usemos en el server"). Until then EVERY
+    // installation was readable; another version's sources are no use
+    // to a server that builds with this one.
+    Info := DiscoverRadStudio;
+    if Info.Found then
+    begin
+      List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
+      Vars := TStringList.Create;
+      try
+        IdeMacroVars(Info, Vars);
 
-          // The catalog repositories THEMSELVES, whole: every GetIt package
-          // lives there (FmxLinux, LockBox...), and the Library Search Path
-          // only points at its compiled Lib\ folder - what an agent actually
-          // wants to read is the sibling source\. Also covers the Android
-          // SDKs and the PAServer installers.
-          for Item in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
-            Vars.Values['BDSCatalogRepository']) do
-            if (Item <> '') and TPath.IsPathRooted(Item) then
+        // The catalog repositories THEMSELVES, whole: every GetIt package
+        // lives there (FmxLinux, LockBox...), and the Library Search Path
+        // only points at its compiled Lib\ folder - what an agent actually
+        // wants to read is the sibling source\. Also covers the Android
+        // SDKs and the PAServer installers.
+        for Item in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
+          Vars.Values['BDSCatalogRepository']) do
+          if (Item <> '') and TPath.IsPathRooted(Item) then
+          try
+            Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Item));
+            if List.IndexOf(Expanded) < 0 then
+              List.Add(Expanded);
+          except
+            // never breaks the server
+          end;
+
+        // ALL platforms registered for this install, never a fixed pair:
+        // Linux64, OSX64, Android64, iOSDevice64... each has its own path.
+        // Por EL lector de esa lista (IdePlatformLibraryPaths): aqui habia
+        // otra lectura del registro y otra expansion (regla del paisaje,
+        // 18-oct-2026; medido que daban lo mismo en las 13 plataformas)
+        for Plat in IdeLibraryPlatforms(Info.Version) do
+        begin
+          for Item in IdePlatformLibraryPaths(Info, Plat) do
+          begin
             try
-              Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Item));
+              Expanded := IncludeTrailingPathDelimiter(Item);
               if List.IndexOf(Expanded) < 0 then
                 List.Add(Expanded);
-            except
-              // never breaks the server
-            end;
-
-          // ALL platforms registered for this install, never a fixed pair:
-          // Linux64, OSX64, Android64, iOSDevice64... each has its own path.
-          // Por EL lector de esa lista (IdePlatformLibraryPaths): aqui habia
-          // otra lectura del registro y otra expansion (regla del paisaje,
-          // 18-oct-2026; medido que daban lo mismo en las 13 plataformas)
-          for Plat in IdeLibraryPlatforms(Info.Version) do
-          begin
-            for Item in IdePlatformLibraryPaths(Info, Plat) do
-            begin
-              try
-                Expanded := IncludeTrailingPathDelimiter(Item);
+              // A component's INSTALL ROOT is library territory too: the IDE
+              // registers its Source\ (or a per-platform Lib\), and next to
+              // it live Library\, Redist\, Examples\ - the native runtime
+              // libraries a deployment must ship (field 2026-08-22: OBR's
+              // libzbar.so in Library\Linux64, unreadable because only
+              // Source\ was registered). One level up, never a drive root,
+              // never above the IDE's own documents trees.
+              Expanded := PrefijoSinBarra(Expanded);
+              Expanded := TPath.GetDirectoryName(Expanded);
+              if (Expanded <> '') and (Length(Expanded) > 3) and
+                 (TPath.GetDirectoryName(Expanded) <> '') then
+              begin
+                Expanded := IncludeTrailingPathDelimiter(Expanded);
                 if List.IndexOf(Expanded) < 0 then
                   List.Add(Expanded);
-                // A component's INSTALL ROOT is library territory too: the IDE
-                // registers its Source\ (or a per-platform Lib\), and next to
-                // it live Library\, Redist\, Examples\ - the native runtime
-                // libraries a deployment must ship (field 2026-08-22: OBR's
-                // libzbar.so in Library\Linux64, unreadable because only
-                // Source\ was registered). One level up, never a drive root,
-                // never above the IDE's own documents trees.
-                Expanded := PrefijoSinBarra(Expanded);
-                Expanded := TPath.GetDirectoryName(Expanded);
-                if (Expanded <> '') and (Length(Expanded) > 3) and
-                   (TPath.GetDirectoryName(Expanded) <> '') then
-                begin
-                  Expanded := IncludeTrailingPathDelimiter(Expanded);
-                  if List.IndexOf(Expanded) < 0 then
-                    List.Add(Expanded);
-                end;
-              except
-                // an unparseable entry never breaks the server
               end;
+            except
+              // an unparseable entry never breaks the server
             end;
           end;
-        finally
-          Vars.Free;
         end;
+      finally
+        Vars.Free;
       end;
-      GLibRoots := List.ToStringArray;
-    finally
-      List.Free;
     end;
-    GLibLoaded := True;
+    GLibRoots := List.ToStringArray;
+  finally
+    List.Free;
   end;
-  Result := GLibRoots;
+end;
+
+{ The read-only library zone: RAD Studio installation + IDE Library Search
+  Path directories (installed components), canonicalized. Cached, and
+  reloaded when Windows says the IDE's keys changed (GLibVigias). }
+function LibraryRoots: TArray<string>;
+var
+  Info: TRadStudioInfo;
+begin
+  TMonitor.Enter(GLibCandado);
+  try
+    if not GLibLoaded then
+    begin
+      // los vigias ANTES de la primera lectura: un cambio que llegue
+      // mientras se lee sale en la siguiente pregunta
+      Info := DiscoverRadStudio;
+      if Info.Found then
+        GLibVigias := VigiasDeLaBiblioteca(Info.Version);
+    end;
+    if (not GLibLoaded) or CambioAlgunaClave(GLibVigias) then
+    begin
+      CargaLaBiblioteca;
+      GLibLoaded := True;
+      GLibLugaresLoaded := False; // la forma larga se rehace de esta carga
+      Inc(GLibGeneracion);
+    end;
+    Result := GLibRoots;
+  finally
+    TMonitor.Exit(GLibCandado);
+  end;
+end;
+
+function GeneracionDeLaBiblioteca: Integer;
+begin
+  TMonitor.Enter(GLibCandado);
+  try
+    LibraryRoots; // recarga si el IDE cambio
+    Result := GLibGeneracion;
+  finally
+    TMonitor.Exit(GLibCandado);
+  end;
 end;
 
 { Los lugares que el operador declaro (raices, referencias, solo lectura, el
@@ -771,19 +827,26 @@ end;
 
 function LugaresDeLaBiblioteca: TArray<string>;
 var
-  Lugares: TArray<string>;
+  Raices, Lugares: TArray<string>;
 begin
-  if not GLibLugaresLoaded then
-  begin
-    // en locales, y las globales al final, como LugaresDelIde
-    Lugares := nil;
-    for var L in LibraryRoots do
-      if EsRutaAbsoluta(L.Trim) then
-        Lugares := Lugares + [FormaLarga(L)];
-    GLibLugares := Lugares;
-    GLibLugaresLoaded := True;
+  TMonitor.Enter(GLibCandado);
+  try
+    // recarga si el IDE cambio, y entonces la forma larga se rehace de ella
+    Raices := LibraryRoots;
+    if not GLibLugaresLoaded then
+    begin
+      // en locales, y las globales al final, como LugaresDelIde
+      Lugares := nil;
+      for var L in Raices do
+        if EsRutaAbsoluta(L.Trim) then
+          Lugares := Lugares + [FormaLarga(L)];
+      GLibLugares := Lugares;
+      GLibLugaresLoaded := True;
+    end;
+    Result := GLibLugares;
+  finally
+    TMonitor.Exit(GLibCandado);
   end;
-  Result := GLibLugares;
 end;
 
 function EscribibleDeVerdad(const AReal: string): Boolean;
@@ -829,5 +892,8 @@ begin
       Result := SinBarraFinal(Larga);
   end;
 end;
+
+initialization
+  GLibCandado := TObject.Create;
 
 end.

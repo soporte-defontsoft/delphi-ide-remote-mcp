@@ -29,7 +29,8 @@ uses
   Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas',
   Mld.Textos in '..\DesktopNode\Mld.Textos.pas',
   Mld.Captura in '..\DesktopNode\Mld.Captura.pas',
-  LspTests.AtomosRtl in 'LspTests.AtomosRtl.pas';
+  LspTests.AtomosRtl in 'LspTests.AtomosRtl.pas',
+  LspTests.Vigia in 'LspTests.Vigia.pas';
 
 var
   Runner: ITestRunner;

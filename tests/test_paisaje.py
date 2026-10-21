@@ -234,6 +234,13 @@ REGLAS = [
     # la forma de los atomos del RTL (Vcl.Controls, Vcl.Dialogs, FMX.Platform.Win) que un proceso
     # muerto sin finalizar deja en la tabla global de la sesion: Windows no sabe de quien es un
     # atomo, asi que es gramatica nuestra con UNA casa (la maquina se cayo el 18-oct-2026)
+    # la notificacion de cambio de una clave del registro (RegNotifyChangeKeyValue): EL juez de
+    # "cambio la configuracion del IDE" para lo que se cachea de ella (la zona de biblioteca,
+    # 1.21.4); otra llamada seria otro vigia con otro rearme
+    ('vigilar una clave del registro', r'\bRegNotifyChangeKeyValue\s*\(',
+     [('Lsp.Discovery.pas', 'ArmaVigia')],
+     'ArmaVigia (Lsp.Discovery): VigilaClave abre y arma, CambioLaClave pregunta y rearma; quien cachea '
+     'algo del registro del IDE pregunta a su vigia, ni relee por llamada ni cachea para siempre'),
     ('la forma de los atomos del RTL', r"'(?:ControlOfs|WndProcPtr|FIREMONKEY%|Delphi%\.8X)'",
      [('Lsp.AtomosRtl.pas', '*')],
      'Lsp.AtomosRtl: los atomos globales que deja un proceso VCL/FMX muerto sin finalizar (llena la tabla, '
@@ -991,6 +998,7 @@ PLANTADO = {
     'el argumento de una llamada a Register* leido a mano':
         "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
+    'vigilar una clave del registro': "  RegNotifyChangeKeyValue(H, True, REG_NOTIFY_CHANGE_LAST_SET, Ev, True);",
     'la forma de los atomos del RTL': "  N := Format('Delphi%.8X', [Pid]);",
     'un literal de form leido a mano': "  N := V.Trim(['''']);",
     'la gramatica de un numero de un form': r"  if TRegEx.IsMatch(V, '^-?\d+(?:\.\d+)?$') then",

@@ -633,7 +633,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   server does not serve leaves as `srv0:` - it says there is a path and not where - and
   is refused by name if it comes back. The letters served are those of each workspace's own places (until 1.9.0 they were worked out once, with the workspace of the first call). (It was `srvx:` until 1.0.13, which is exactly what
   a genuinely served `X:` drive masks to.)
-- **Library read zone** (off unless the workspace declares `LibraryZone=1`; read once when the server starts, so a component registered in the IDE's Library Path afterwards needs a restart of the service or the tray; absent, reads are confined to the roots exactly
+- **Library read zone** (off unless the workspace declares `LibraryZone=1`; re-read when the IDE's Library Path or its Environment Variables change - the server asks Windows to signal those registry keys - so a component registered while the server runs is readable from the next call, no restart (since 1.21.4); absent, reads are confined to the roots exactly
   like writes): READING tools (read/search/list/fetch/LSP navigation) additionally
   accept, for **every installed Delphi**, its installation directory, the Library Search Path
   of **every registered platform** (Win, Linux64, macOS, Android, iOS…) and the **GetIt

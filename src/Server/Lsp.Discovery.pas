@@ -63,6 +63,48 @@ function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
   deployment, etc.) - never compose registry paths by hand elsewhere. }
 function IdeConfigValue(const AVersion, ASubKey, AValueName: string): string;
 
+{ VIGIA DE UNA CLAVE del registro: Windows senala su evento cuando alguien -
+  cualquier proceso, el IDE incluido - escribe un valor o crea o borra una
+  subclave debajo (RegNotifyChangeKeyValue sobre el arbol entero, atado a la
+  clave y no al hilo que la vigila). Es EL juez de "cambio la configuracion
+  del IDE" para lo que el servidor cachea de ella: la zona de biblioteca
+  (Lsp.Lugares.LibraryRoots; medido el 21-oct-2026 en la VM: el operador
+  registro 19 carpetas en el Library Path con el servidor en marcha y
+  delphi_list las negaba con GUARD-002 mientras el IDE y msbuild ya
+  compilaban con ellas). Clave = 0 es "sin vigia" (la clave no existe o no
+  se deja abrir): CambioLaClave contesta siempre False y lo cacheado vive lo
+  que el proceso, como hasta la 1.21.4. Medido con una clave de prueba
+  (sonda del 21-oct-2026, y LspTests.Vigia): no se senala sola; un cambio en
+  una clave hermana no la senala; dos cambios seguidos sin rearme entre
+  medias dejan uno latente que sale al siguiente rearme (una recarga de mas,
+  inofensiva); y sin REG_NOTIFY_THREAD_AGNOSTIC el evento se senalaba al
+  morir el hilo que armo - aqui cada peticion es un hilo. }
+type
+  TVigiaDeClave = record
+    Clave: NativeUInt;   // la clave abierta con KEY_NOTIFY (0 = sin vigia)
+    Evento: NativeUInt;  // el evento (manual) que Windows senala
+  end;
+{ Vigila una clave de la configuracion del IDE de esa version (relativa a
+  HKCU\...\BDS\<ver>, como IdeConfigValue), o cualquiera por su raiz y su
+  ruta (VigilaClave: la prueba unitaria vigila una clave propia). Queda
+  ARMADA: el primer cambio desde ahora la senala. }
+function VigilaClaveDelIde(const AVersion, ASubKey: string): TVigiaDeClave;
+function VigilaClave(ARaiz: NativeUInt; const ARuta: string): TVigiaDeClave;
+{ Los vigias de lo que compone la ZONA DE BIBLIOTECA: las claves que leen
+  IdeLibraryPlatforms e IdePlatformLibraryPaths (Library, con sus
+  plataformas y el Search Path de cada una) e IdeEnvironmentVars (las macros
+  con las que se expanden, y los catalogos). Junto a sus lectores, para que
+  la clave se nombre aqui y no en quien cachea. }
+function VigiasDeLaBiblioteca(const AVersion: string): TArray<TVigiaDeClave>;
+{ Si Windows senalo el evento desde la ultima pregunta: True UNA vez por
+  cambio, y REARMADA antes de contestar, para que un cambio que llegue
+  mientras quien pregunta recarga salga en la siguiente pregunta. Sin vigia,
+  False. CambioAlgunaClave pregunta (y rearma) a TODAS las de una lista. }
+function CambioLaClave(var AVigia: TVigiaDeClave): Boolean;
+function CambioAlgunaClave(var AVigias: TArray<TVigiaDeClave>): Boolean;
+{ Cierra la clave y el evento; queda sin vigia (dos veces no hace nada). }
+procedure SueltaVigia(var AVigia: TVigiaDeClave);
+
 { The IDE's configured default encoding for new/saved files (Tools > Options
   > Editor), read from the Editor\DefaultFileFilter value of that install
   (e.g. 'Borland.FileFilter.UTF8ToUTF8'). True = UTF-8; False = the
@@ -749,6 +791,16 @@ begin
     ADest.Values[V.Nombre] := V.Dato;
 end;
 
+{ LA clave de la configuracion del IDE de una version, con una subclave o
+  sin ella: la componian a mano IdeConfigValue, IdeValoresDeClave,
+  IdeLibraryPlatforms y el vigia (1.21.4). }
+function ClaveDelIde(const AVersion, ASubKey: string): string;
+begin
+  Result := 'SOFTWARE\Embarcadero\BDS\' + AVersion;
+  if ASubKey <> '' then
+    Result := Result + '\' + ASubKey;
+end;
+
 function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
 var
   Reg: TRegistry;
@@ -759,8 +811,7 @@ begin
   Keys := TStringList.Create;
   try
     Reg.RootKey := HKEY_CURRENT_USER;
-    if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\Library',
-      [AVersion])) then
+    if not Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'Library')) then
       Exit;
     Reg.GetKeyNames(Keys);
     Result := Keys.ToStringArray;
@@ -854,8 +905,7 @@ function IdeValoresDeClave(const AVersion, ASubKey: string;
     Names := TStringList.Create;
     try
       Reg.RootKey := ARoot;
-      if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\%s',
-        [AVersion, ASubKey])) then
+      if not Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, ASubKey)) then
         Exit;
       Reg.GetValueNames(Names);
       for var N in Names do
@@ -912,14 +962,85 @@ begin
   Reg := TRegistry.Create(KEY_READ);
   try
     Reg.RootKey := HKEY_CURRENT_USER;
-    Key := 'SOFTWARE\Embarcadero\BDS\' + AVersion;
-    if ASubKey <> '' then
-      Key := Key + '\' + ASubKey;
+    Key := ClaveDelIde(AVersion, ASubKey);
     if Reg.OpenKeyReadOnly(Key) and Reg.ValueExists(AValueName) then
       Result := Reg.ReadString(AValueName);
   finally
     Reg.Free;
   end;
+end;
+
+const
+  // la notificacion no muere con el hilo que la pidio (Windows 8+): aqui cada
+  // peticion es un hilo, y sin esto el evento se senalaba al acabar el que
+  // armo (medido el 21-oct-2026)
+  REG_NOTIFY_THREAD_AGNOSTIC = $10000000;
+
+{ Arma (o rearma) la vigilancia: Windows senalara el evento al siguiente
+  cambio de un valor o de una subclave, en todo el arbol. LA llamada a
+  RegNotifyChangeKeyValue de la casa (test_paisaje). }
+function ArmaVigia(const AVigia: TVigiaDeClave): Boolean;
+begin
+  Result := RegNotifyChangeKeyValue(HKEY(AVigia.Clave), True,
+    REG_NOTIFY_CHANGE_NAME or REG_NOTIFY_CHANGE_LAST_SET or REG_NOTIFY_THREAD_AGNOSTIC,
+    THandle(AVigia.Evento), True) = ERROR_SUCCESS;
+end;
+
+function VigilaClave(ARaiz: NativeUInt; const ARuta: string): TVigiaDeClave;
+var
+  H: HKEY;
+begin
+  Result := Default(TVigiaDeClave);
+  if RegOpenKeyEx(HKEY(ARaiz), PChar(ARuta), 0, KEY_NOTIFY, H) <> ERROR_SUCCESS then
+    Exit;
+  Result.Clave := H;
+  Result.Evento := CreateEvent(nil, True, False, nil); // manual: se baja al leerlo
+  if (Result.Evento = 0) or not ArmaVigia(Result) then
+    SueltaVigia(Result);
+end;
+
+function VigilaClaveDelIde(const AVersion, ASubKey: string): TVigiaDeClave;
+begin
+  Result := VigilaClave(HKEY_CURRENT_USER, ClaveDelIde(AVersion, ASubKey));
+end;
+
+function VigiasDeLaBiblioteca(const AVersion: string): TArray<TVigiaDeClave>;
+begin
+  Result := [VigilaClaveDelIde(AVersion, 'Library'),
+    VigilaClaveDelIde(AVersion, 'Environment Variables')];
+end;
+
+function CambioLaClave(var AVigia: TVigiaDeClave): Boolean;
+begin
+  Result := False;
+  if AVigia.Clave = 0 then
+    Exit;
+  if WaitForSingleObject(THandle(AVigia.Evento), 0) <> WAIT_OBJECT_0 then
+    Exit;
+  ResetEvent(THandle(AVigia.Evento));
+  // rearmada ANTES de contestar; una clave que ya no se deja vigilar
+  // (borrada) se suelta, y este cambio se contesta igual
+  if not ArmaVigia(AVigia) then
+    SueltaVigia(AVigia);
+  Result := True;
+end;
+
+function CambioAlgunaClave(var AVigias: TArray<TVigiaDeClave>): Boolean;
+begin
+  Result := False;
+  // todas, no hasta la primera: cada una consume su senal y se rearma
+  for var I := 0 to High(AVigias) do
+    if CambioLaClave(AVigias[I]) then
+      Result := True;
+end;
+
+procedure SueltaVigia(var AVigia: TVigiaDeClave);
+begin
+  if AVigia.Clave <> 0 then
+    RegCloseKey(HKEY(AVigia.Clave));
+  if AVigia.Evento <> 0 then
+    CloseHandle(THandle(AVigia.Evento));
+  AVigia := Default(TVigiaDeClave);
 end;
 
 function IdeDefaultUtf8(const AVersion: string): Boolean;
