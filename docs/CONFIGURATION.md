@@ -490,6 +490,36 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   the operator's build, outside this server, where those events run. For a
   **trusted** project that must really execute its tasks, set `AllowBuildScripts=1` — this
   permits its build scripts and nothing else. Off by default.
+  **To see the gate work from a client** (it judges the `.dproj` however it got there, and
+  `delphi_upload` is the channel that writes one raw — `delphi_edit` and `delphi_textedit`
+  refuse a project file): create a console project with `delphi_create`, then upload this
+  minimal `.dproj` over its own (whole file, base64, `offset=0`; it declares the output
+  folders, so the build reaches the whitelist) and build it — it compiles:
+
+  ```xml
+  <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+      <MainSource>Probe.dpr</MainSource>
+      <Config Condition="'$(Config)'==''">Debug</Config>
+      <Platform Condition="'$(Platform)'==''">Win64</Platform>
+      <AppType>Console</AppType>
+      <FrameworkType>None</FrameworkType>
+      <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+      <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
+      <DCC_ConsoleTarget>true</DCC_ConsoleTarget>
+    </PropertyGroup>
+    <ItemGroup>
+      <DelphiCompile Include="Probe.dpr"/>
+    </ItemGroup>
+    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
+  </Project>
+  ```
+
+  Add `<Foo/>` before `</Project>` and the build answers `BUILD-017` naming
+  "a <foo> element inside <project>"; put `<Icon_MainIcon>C:\Windows\win.ini</Icon_MainIcon>`
+  in the PropertyGroup and it answers `BUILD-050` naming the element. Nothing is read or run
+  either way. The copy of the original `.dproj` is in the `__delphi-patch` trash
+  (`delphi_delete` the probe, then `delphi_move` the copy back).
 - **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
   `AdbAllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers whatever
   port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the
