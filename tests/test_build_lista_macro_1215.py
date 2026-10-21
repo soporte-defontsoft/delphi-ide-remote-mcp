@@ -26,9 +26,14 @@ se compila Win64 Release.
      de fuera se niega
   M6 guarda: lib;$(DCC_UnitSearchPath) en la base y $(DCC_UnitSearchPath) solo en
      el grupo de Win64, con lib dentro: compila
+  M7 guarda (revisor C): un macro del ENTORNO que expande a "dentro;fuera" en un
+     search path: BUILD-050 citando el elemento (el trozo de fuera se niega aunque
+     no sea el primero); su gemelo que expande a "dentro;dentro" compila
 
-M2, M4 y M5 son ROJAS contra 1.21.4 (pasar su exe como argumento): M2 y M4 con
-BUILD-050 citando $(DCC_UsePackage), M5 compilando lo que no debia.
+M2, M4, M5 y M7 son ROJAS contra 1.21.4 (pasar su exe como argumento): M2 y M4
+con BUILD-050 citando $(DCC_UsePackage), M5 y M7 compilando lo que no debian
+(la lista entera con una letra de unidad dentro parecia una URL). M7 es ademas
+la guarda del troceado: con un Juzga que mirase solo el primer trozo, pasaria.
 
 Uso:  python tests/test_build_lista_macro_1215.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -38,7 +43,10 @@ from mcp_cliente import check
 
 BASE = mc.carpeta('build-lista-macro')
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='lm', t=600)
+LIB = os.path.join(BASE, 'lista', 'lib')  # la carpeta lib del fixture 'lista'
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE,
+                                'LM_LISTA': LIB + ';' + r'C:\no-existe-1215\lib',
+                                'LM_DENTRO': LIB + ';' + os.path.join(BASE, 'lista')}), nombre='lm', t=600)
 
 BASE_COND = "'$(Base)'!=''"
 WIN64_COND = "'$(Base_Win64)'!=''"
@@ -119,6 +127,14 @@ try:
             grupo(WIN64_COND, '<DCC_UnitSearchPath>$(DCC_UnitSearchPath)</DCC_UnitSearchPath>'))
     r = build(proyecto)
     check('M6 guarda: lib;$(DCC_UnitSearchPath) y el macro solo en Win64, lib dentro: compila', compila(r), detalle(r))
+
+    escribe(proyecto, xml, grupo(BASE_COND, '<DCC_UnitSearchPath>$(LM_LISTA)</DCC_UnitSearchPath>'))
+    r = build(proyecto)
+    check('M7 guarda: un macro del entorno que expande a dentro;fuera: BUILD-050 (el trozo de fuera, el segundo, se niega)',
+          lectura_fuera(r, 'DCC_UnitSearchPath'), r[:300])
+    escribe(proyecto, xml, grupo(BASE_COND, '<DCC_UnitSearchPath>$(LM_DENTRO)</DCC_UnitSearchPath>'))
+    r = build(proyecto)
+    check('M7 ...y su gemelo que expande a dentro;dentro: compila', compila(r), detalle(r))
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -1662,7 +1662,7 @@ var
     // en cuanto carpeta + lista pasaban de MAX_PATH (medido el 21-oct-2026:
     // 217 caracteres pasaban, 313 no; sin el macro, 1599 pasaban)
     Result := '';
-    for var Trozo in Expande(AValor.Escrito).Split([';']) do
+    for var Trozo in TrozosDeLista(Expande(AValor.Escrito)) do
     begin
       Result := JuzgaTrozo(Trozo, AValor, AFichero);
       if Result <> '' then
@@ -1699,8 +1699,13 @@ begin
     Vars.Values['MSBuildProjectFile'] := TPath.GetFileName(ADprojPath);
     Vars.Values['MSBuildProjectFullPath'] := TPath.GetFullPath(ADprojPath);
     Vars.Values['ProjectDir'] := Dir;
+    // los nombres que msbuild toma de fuera del documento (esta tabla): la
+    // evaluacion de las Condition no los da por vacios
+    var Externas: TArray<string> := [];
+    for var I := 0 to Vars.Count - 1 do
+      Externas := Externas + [Vars.Names[I]];
     for var I := 0 to High(Xmls) do
-      for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg) do
+      for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg, Externas) do
       begin
         Result := Juzga(V, Ficheros[I]);
         if Result <> '' then

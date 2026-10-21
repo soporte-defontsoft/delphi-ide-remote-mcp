@@ -54,8 +54,7 @@ type
     [Test] procedure ElIncludeEnCualquierOrden;
     [Test] procedure LasCuatroFormasDeLaCondicion;
     [Test] procedure LaCondicionDelElementoYElVacioCuentan;
-    [Test]
-    procedure ElBuildDeUnGrupoYLoQueEsDeOtro;
+    [Test] procedure LaCondicionDeUnGrupoComoMsbuild;
   end;
 
   { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
@@ -80,7 +79,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.IOUtils,
+  System.SysUtils, System.Classes, System.IOUtils,
   Lsp.Dproj;
 
 const
@@ -727,44 +726,105 @@ begin
   Assert.AreEqual('O&apos;Brien &amp; co', XmlEscapeEn('O''Brien & co', ''''));
 end;
 
-procedure TXmlTextoTests.ElBuildDeUnGrupoYLoQueEsDeOtro;
-var
-  X, K: string;
+{ Una tabla de propiedades para EvaluaCondicion: 'Nombre=Valor' sabida,
+  'Nombre?' dudosa, lo que no esta desconocido. }
+function Tabla(APares: TArray<string>): TBuscaBandera;
 begin
-  // la inversa del nombrador para todas las formas que escribe el IDE
-  Assert.IsTrue(BuildDeGrupo(GroupCondition(''), X, K) and (X = '') and (K = 'Base'), 'la base');
-  Assert.IsTrue(BuildDeGrupo(GroupCondition('Win64'), X, K) and (X = 'Win64') and (K = 'Base'), 'los valores de Win64');
-  Assert.IsTrue(BuildDeGrupo(GroupCondition('', 'Cfg_1'), X, K) and (X = '') and (K = 'Cfg_1'), 'los de Debug');
-  Assert.IsTrue(BuildDeGrupo(GroupCondition('Android64', 'Cfg_1'), X, K) and (X = 'Android64') and (K = 'Cfg_1'),
-    'los de Debug en Android64');
-  Assert.IsTrue(BuildDeGrupo(DefinerCondition('Linux64'), X, K) and (X = 'Linux64') and (K = 'Base'), 'el definidor de Linux64');
-  Assert.IsTrue(BuildDeGrupo(DefinerCondition('Win32', 'Cfg_1'), X, K) and (X = 'Win32') and (K = 'Cfg_1'),
-    'el definidor de Debug en Win32');
-  Assert.IsTrue(BuildDeGrupo(ConfigDefinerCondition('Release', 'Cfg_2'), X, K) and (X = '') and (K = 'Cfg_2'),
-    'el definidor de Release');
-  Assert.IsTrue(BuildDeGrupo(ConfigDefinerCondition('Base', 'Base'), X, K) and (X = '') and (K = 'Base'),
-    'el definidor de la base');
-  Assert.IsTrue(BuildDeGrupo('''$(cfg_1_win64)'' != ''''', X, K) and (X = 'Win64') and (K = 'Cfg_1'),
-    'blancos y mayusculas, y la plataforma con su grafia');
-  Assert.IsFalse(BuildDeGrupo('''$(Platform)''==''Win32''', X, K), 'la forma de un .deployproj no es de grupo del .dproj');
-  Assert.IsFalse(BuildDeGrupo('''$(Base_Win64)''==''x''', X, K), 'otra forma con Base_');
-  Assert.IsTrue((X = '') and (K = ''), 'sin forma, nada leido');
-  // lo que es de OTRO build que Win64 / Cfg_2 (Release), y lo que no se sabe
-  Assert.IsFalse(CondicionDeOtroBuild('', 'Win64', 'Cfg_2', 'Release'), 'sin condicion: de todos');
-  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition(''), 'Win64', 'Cfg_2', 'Release'), 'la base: de todos');
-  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition('Win64'), 'Win64', 'Cfg_2', 'Release'), 'su plataforma');
-  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition('Win64', 'Cfg_2'), 'Win64', 'Cfg_2', 'Release'), 'su plataforma y su config');
-  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('Android64', 'Cfg_1'), 'Win64', 'Cfg_2', 'Release'), 'Debug de Android64: de otro');
-  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('Win64', 'Cfg_1'), 'Win64', 'Cfg_2', 'Release'), 'Debug de Win64: otra config');
-  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('Win32'), 'Win64', 'Cfg_2', 'Release'), 'Win32: otra plataforma');
-  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('', 'Cfg_1'), 'Win64', 'Cfg_2', 'Release'), 'Debug: otra config');
-  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition('', 'Cfg_1'), 'Win64', '', 'Release'),
-    'sin la clave del build (un .optset): no se sabe, se juzga');
-  Assert.IsTrue(CondicionDeOtroBuild(DeployGroupCondition('Win32'), 'Win64', 'Cfg_2', 'Release'), 'la forma del elemento: otra plataforma');
-  Assert.IsTrue(CondicionDeOtroBuild(ConfigCondition('Debug'), 'Win64', 'Cfg_2', 'Release'), 'la forma del elemento: otra config');
-  Assert.IsFalse(CondicionDeOtroBuild(ConfigCondition('Release'), 'Win64', 'Cfg_2', 'Release'), 'la forma del elemento: la suya');
-  Assert.IsFalse(CondicionDeOtroBuild('''$(Foo)''==''bar''', 'Win64', 'Cfg_2', 'Release'), 'otra forma: no se sabe, se juzga');
-  Assert.IsFalse(CondicionDeOtroBuild('Exists(''a.optset'')', 'Win64', 'Cfg_2', 'Release'), 'una funcion: no se sabe, se juzga');
+  Result := function(const ANombre: string): TBanderaDelBuild
+    begin
+      Result.Valor := '';
+      Result.Estado := eDesconocida;
+      for var P in APares do
+        if SameText(P, ANombre + '?') then
+          Result.Estado := eDudosa
+        else if SameText(Copy(P, 1, Pos('=', P) - 1), ANombre) then
+        begin
+          Result.Estado := eSabida;
+          Result.Valor := Copy(P, Pos('=', P) + 1, MaxInt);
+        end;
+    end;
+end;
+
+procedure TXmlTextoTests.LaCondicionDeUnGrupoComoMsbuild;
+const
+  // la cadena del IDE (Base, definidores de config y plataforma, grupos de
+  // valores), un grupo de Android, una config hija, una Condition que no se
+  // sabe y una en el elemento
+  XML = '<Project><PropertyGroup><Base>True</Base></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Config)''==''Debug'' or ''$(Cfg_1)''!=''''"><Cfg_1>true</Cfg_1></PropertyGroup>' +
+    '<PropertyGroup Condition="(''$(Platform)''==''Win64'' and ''$(Base)''==''true'') or ''$(Base_Win64)''!=''''">' +
+    '<Base_Win64>true</Base_Win64></PropertyGroup>' +
+    '<PropertyGroup Condition="(''$(Platform)''==''Android64'' and ''$(Cfg_1)''==''true'') or ''$(Cfg_1_Android64)''!=''''">' +
+    '<Cfg_1_Android64>true</Cfg_1_Android64></PropertyGroup>' +
+    // el definidor de la config hija, como el IDE: antes de los grupos de valores
+    '<PropertyGroup Condition="''$(Config)''==''Debug2'' or ''$(Cfg_3)''!=''''"><Cfg_3>true</Cfg_3><Cfg_1>true</Cfg_1></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Cfg_1_Android64)''!=''''"><PF_KeyStoreDebug>k</PF_KeyStoreDebug></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Base_Win64)''!=''''"><DCC_UnitSearchPath>a</DCC_UnitSearchPath></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Cfg_1)''!=''''"><DCC_Define>D</DCC_Define></PropertyGroup>' +
+    '<PropertyGroup Condition="Exists(''x'')"><Icon_MainIcon>i</Icon_MainIcon></PropertyGroup>' +
+    '<PropertyGroup><Manifest_File Condition="''$(Platform)''==''Win32''">m</Manifest_File></PropertyGroup>' +
+    '</Project>';
+  PLANTADA = '<Project><PropertyGroup><Cfg_1>true</Cfg_1></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Cfg_1)''!=''''"><DCC_Define>D</DCC_Define></PropertyGroup></Project>';
+  EXTERNA = '<Project><PropertyGroup Condition="''$(Platform)''==''Android64''"><BDS>x</BDS></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(BDS)''!=''''"><DCC_Define>D</DCC_Define></PropertyGroup></Project>';
+var
+  Mal: string;
+  E: TArray<TElementoXml>;
+  Otro: TArray<Boolean>;
+
+  function DeOtro(const ANombre: string): Boolean;
+  begin
+    for var I := 0 to High(E) do
+      if SameText(E[I].Escrito, ANombre) then
+        Exit(Otro[I]);
+    raise Exception.Create('no esta ' + ANombre);
+  end;
+
+begin
+  // la gramatica: lo que se sabe y lo que no (Tabla: Nombre=Valor sabida,
+  // Nombre? dudosa, lo demas desconocido)
+  Assert.IsTrue(EvaluaCondicion('', 'Win64', 'Release', Tabla([])) = vSi, 'sin condicion: cierta');
+  Assert.IsTrue(EvaluaCondicion('''$(Base)''!=''''', 'Win64', 'Release', Tabla(['Base='])) = vNo, 'Base definida y sin poner: falsa');
+  Assert.IsTrue(EvaluaCondicion('''$(Base)''!=''''', 'Win64', 'Release', Tabla(['Base=True'])) = vSi, 'Base puesta: cierta');
+  Assert.IsTrue(EvaluaCondicion('''$(Base)''!=''''', 'Win64', 'Release', Tabla([])) = vNoSeSabe, 'un nombre que nadie define (puede venir de fuera): no se sabe');
+  Assert.IsTrue(EvaluaCondicion('''$(config)''==''RELEASE''', 'Win64', 'Release', Tabla([])) = vSi, 'sin distinguir mayusculas');
+  Assert.IsTrue(EvaluaCondicion('''$(Config)''==''Debug''', 'Win64', 'Release', Tabla([])) = vNo, 'otra config: falsa');
+  Assert.IsTrue(EvaluaCondicion(DefinerCondition('Win64'), 'Win64', 'Release', Tabla(['Base=True', 'Base_Win64='])) = vSi, 'el definidor de Win64 con Base puesta');
+  Assert.IsTrue(EvaluaCondicion(DefinerCondition('Win32'), 'Win64', 'Release', Tabla(['Base=True', 'Base_Win32='])) = vNo, 'el de Win32: falso');
+  Assert.IsTrue(EvaluaCondicion(ConfigDefinerCondition('Release', 'Cfg_2'), 'Win64', 'Release', Tabla(['Cfg_2='])) = vSi, 'el definidor de Release');
+  Assert.IsTrue(EvaluaCondicion('''$(LbA)''=='''' or ''$(LbB)''!=''''', 'Win64', 'Release', Tabla(['LbA=', 'LbB='])) = vSi, 'or con una cierta');
+  Assert.IsTrue(EvaluaCondicion('''$(LbA)''!='''' and Exists(''b'')', 'Win64', 'Release', Tabla(['LbA='])) = vNo, 'falso and lo que sea: falso');
+  Assert.IsTrue(EvaluaCondicion('''$(LbA)''!='''' and Exists(''b'')', 'Win64', 'Release', Tabla(['LbA=1'])) = vNoSeSabe, 'cierto and no se sabe: no se sabe');
+  Assert.IsTrue(EvaluaCondicion('Exists(''a'')', 'Win64', 'Release', Tabla([])) = vNoSeSabe, 'una funcion: no se sabe');
+  Assert.IsTrue(EvaluaCondicion('''$(LbA.Trim())''==''''', 'Win64', 'Release', Tabla(['LbA='])) = vNoSeSabe, 'una funcion de propiedad: no se sabe');
+  Assert.IsTrue(EvaluaCondicion('"$(Base)"!=''''', 'Win64', 'Release', Tabla(['Base=True'])) = vNoSeSabe, 'otras comillas: no se sabe');
+  Assert.IsTrue(EvaluaCondicion('''$(LbA)''==''1'' and', 'Win64', 'Release', Tabla(['LbA=1'])) = vNoSeSabe, 'una condicion a medias: no se sabe');
+  Assert.IsTrue(EvaluaCondicion('''$(LbA)''!=''''', 'Win64', 'Release', Tabla(['LbA?'])) = vNoSeSabe, 'una bandera dudosa: no se sabe');
+  Assert.IsTrue(EvaluaCondicion('''$(lbb)''==''x''', 'Win64', 'Release', Tabla(['LbB=X'])) = vSi, 'el valor, sin distinguir mayusculas');
+  // los grupos de un .dproj, en orden de documento
+  E := ElementosDe(XML, Mal);
+  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Release', E, []);
+  Assert.IsTrue(DeOtro('PF_KeyStoreDebug'), 'Release/Win64: el grupo de Debug de Android64 es de otro');
+  Assert.IsFalse(DeOtro('DCC_UnitSearchPath'), 'los valores de Win64 son de este');
+  Assert.IsTrue(DeOtro('DCC_Define'), 'los valores de Debug son de otro en Release');
+  Assert.IsFalse(DeOtro('Icon_MainIcon'), 'lo que no se sabe (Exists) se juzga');
+  Assert.IsTrue(DeOtro('Manifest_File'), 'la Condition del elemento, de Win32, es de otro');
+  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug', E, []);
+  Assert.IsFalse(DeOtro('DCC_Define'), 'en Debug, los valores de Debug son de este');
+  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug2', E, []);
+  Assert.IsFalse(DeOtro('DCC_Define'), 'una config hija de Debug lee los valores de Debug');
+  Assert.IsTrue(DeOtro('PF_KeyStoreDebug'), '...y no los de Android64');
+  // una bandera plantada en un grupo sin condicion: msbuild lee el grupo
+  E := ElementosDe(PLANTADA, Mal);
+  Otro := ElementosDeOtroBuild(PLANTADA, 'Win64', 'Release', E, []);
+  Assert.IsFalse(DeOtro('DCC_Define'), 'la bandera plantada: el grupo se lee en cualquier config');
+  // un nombre que msbuild toma de fuera (la tabla del build) no se da por vacio
+  E := ElementosDe(EXTERNA, Mal);
+  Otro := ElementosDeOtroBuild(EXTERNA, 'Win64', 'Release', E, ['BDS']);
+  Assert.IsFalse(DeOtro('DCC_Define'), 'un grupo sobre $(BDS), que viene de rsvars: no se sabe, se juzga');
+  // los trozos de una lista
+  Assert.IsTrue(Length(TrozosDeLista(' a; ;b ;;c')) = 3, 'sin vacios ni blancos');
 end;
 
 initialization

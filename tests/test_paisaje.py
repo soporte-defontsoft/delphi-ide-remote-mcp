@@ -824,6 +824,17 @@ REGLAS = [
      'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
      'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
      'del motor'),
+    # la Condition de un grupo o de un elemento del .dproj escrita o leida a mano:
+    # '$(Base_X)'!='', '$(Cfg_N)'!='', '$(Platform)'=='X', '$(Config)'=='Y'. Los
+    # nombradores y sus inversas viven en Lsp.Dproj, y la puerta del build las
+    # evalua con EvaluaCondicion (revisor C, 21-oct-2026: nadie lo vigilaba)
+    ('la Condition de un grupo del .dproj a mano',
+     r"(?i)'\$\((?:base|cfg_)|''\$\((?:platform|config)\)''\s*[!=]=",
+     [('Lsp.Dproj.pas', 'DefinerCondition'), ('Lsp.Dproj.pas', 'DeployGroupCondition'),
+      ('Lsp.Dproj.pas', 'ConfigCondition'), ('Lsp.Dproj.pas', 'PlataformaDeGrupo')],
+     'los nombradores de Lsp.Dproj (GroupCondition y ConfigDefinerCondition componen sin el '
+     'literal; DefinerCondition, DeployGroupCondition y ConfigCondition lo llevan) y la inversa '
+     'PlataformaDeGrupo; la puerta del build las evalua con EvaluaCondicion, no las compara'),
     # el argumento de una directiva de fichero ($I, $R, $L) troceado a mano: el bucle de
     # DirectivasDeFichero y el Split()[0] de la vista FMX del renderizador, que con un {$R}
     # vacio leia fuera del array (EAccessViolation, medido el 18-oct-2026). Dos formas:
@@ -1104,6 +1115,7 @@ PLANTADO = {
     # la de PublicadaEnDescendiente hasta la 1.19
     'recorrer la familia a mano': "  if not Hijas.TryGetValue(Cola.Dequeue, Hs) then",
     # el de set-version hasta la 1.20.1
+    'la Condition de un grupo del .dproj a mano': "  if Pos('$(Base_' + P + ')', Cond) > 0 then",
     'leer o editar XML de proyecto a mano':
         "  M := TRegEx.Match(Xml, '(?i)<VerInfo_MajorVer>([^<]*)</VerInfo_MajorVer>');",
     # el de MaestroDeVista hasta el 18-oct-2026

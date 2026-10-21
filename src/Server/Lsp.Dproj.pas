@@ -282,19 +282,55 @@ function XmlGrupoDeValores(const APlatform, AClave, AProps: string): string;
   (ADefinidor = False) o de un definidor; '' si la Condition no es la de
   ninguna - la base tampoco: esa es GroupCondition(''). }
 function PlataformaDeGrupo(const ACondicion: string; ADefinidor: Boolean): string;
-{ El build que nombra una Condition de grupo del .dproj en las formas que
-  escribe el IDE: la plataforma ('' = todas) y la clave de configuracion
-  ('Base' = todas, Cfg_N la de una) - la inversa de GroupCondition,
-  DefinerCondition y ConfigDefinerCondition, como PlataformaDeGrupo lo es de
-  los grupos Base_X. False si la Condition es otra cosa. }
-function BuildDeGrupo(const ACondicion: string; out APlataforma, AClave: string): Boolean;
-{ Si una Condition (de un grupo o de un elemento) se SABE de otro build que
-  APlatform / AClave (la Cfg_N de AConfig) / AConfig: otra plataforma u otra
-  configuracion, en las formas del IDE (BuildDeGrupo) o las de un
-  .deployproj (CondicionDePlataformaYConfig). Lo que no se sabe NO es de
-  otro: la puerta de leer lo juzga (una de mas es prudencia); lo contrario
-  de SeAplicaA, que da por no aplicado lo que no sabe. }
-function CondicionDeOtroBuild(const ACondicion, APlatform, AClave, AConfig: string): Boolean;
+type
+  { Lo que vale una Condition para un build: cierta, falsa, o no se sabe. }
+  TVeredicto = (vSi, vNo, vNoSeSabe);
+
+  { Lo que vale una propiedad al evaluar una Condition: sabida (puesta por un
+    grupo que se aplica, o definida en el documento y aun no puesta: ''),
+    dudosa (puesta por un grupo o un elemento que no se sabe si se aplica) o
+    desconocida (msbuild la toma de fuera del documento: el entorno,
+    rsvars.bat, la tabla del IDE, y la puerta no sabe que vale). }
+  TEstadoDeBandera = (eSabida, eDudosa, eDesconocida);
+  TBanderaDelBuild = record
+    Valor: string;
+    Estado: TEstadoDeBandera;
+  end;
+  TBuscaBandera = reference to function(const ANombre: string): TBanderaDelBuild;
+
+{ Una Condition de un .dproj evaluada como la evalua msbuild para un build
+  APlatform/AConfig, sobre lo PUESTO hasta ahi: '$(X)'!='' / '$(X)'=='' /
+  '$(X)'=='v' / '$(X)'!='v' (sin distinguir mayusculas), 'and', 'or' y
+  parentesis; $(Config) y $(Platform) valen lo pedido y las demas lo que los
+  grupos anteriores dejaron en ABanderas (nombre=valor; '' si nadie la puso).
+  Otra cosa - Exists(), una funcion de propiedad, un item, otro operador, otras
+  comillas - es vNoSeSabe, y una bandera de ADudosas (puesta por un grupo o un
+  elemento que no se sabe si se aplica) hace vNoSeSabe lo que la compare: lo
+  que no se sabe se da por aplicado, una de mas es prudencia. Gramatica
+  propia, UNA y declarada: el juez es msbuild, al que no se puede preguntar
+  sin evaluar el proyecto antes de que la puerta lo juzgue (una Exists() en
+  una condicion le haria mirar fuera de la jaula). No decide por el NOMBRE de
+  la clave (Cfg_N) sino por lo que esta puesto: una bandera plantada en un
+  grupo sin condicion, una configuracion hija que pone la de su madre o una
+  clave renombrada en BuildConfiguration son grupos que msbuild lee
+  (revisores del 21-oct-2026, medido). }
+function EvaluaCondicion(const ACondicion, APlatform, AConfig: string;
+  ABusca: TBuscaBandera): TVeredicto;
+{ Para cada elemento de AElementos (los de ElementosDe), si es de OTRO build
+  que APlatform/AConfig: esta en un PropertyGroup cuya Condition, o la suya,
+  es falsa (vNo) evaluada como msbuild en orden de documento, con las
+  propiedades que los grupos y elementos anteriores que se aplican dejan
+  puestas (el ultimo gana), dudosas las de los que no se sabe, y desconocidas
+  las que msbuild toma de fuera del documento: AExternas (la tabla con que el
+  build expande: la del IDE, rsvars.bat, las de msbuild) y el entorno del
+  servidor; una definida en el documento y aun no puesta vale ''. Lo que no
+  esta en un PropertyGroup no es de otro build. }
+function ElementosDeOtroBuild(const AXml, APlatform, AConfig: string;
+  const AElementos: TArray<TElementoXml>; const AExternas: TArray<string>): TArray<Boolean>;
+{ Los trozos de un valor de lista del proyecto (a;b;c): partidos por ';', sin
+  blancos alrededor y sin vacios. EL troceador de lo que lee la puerta del
+  build - lo escrito y lo que expande un macro - que eran tres Split a pelo. }
+function TrozosDeLista(const AValor: string): TArray<string>;
 { Las Condition de plataforma y config, como las escriben el IDE y el servidor
   en un grupo o en un elemento - EL nombrador, y CondicionDePlataformaYConfig
   su inversa -: '$(Platform)'=='X' (el ItemGroup de una plataforma en el
@@ -649,15 +685,16 @@ function ElementosDe(const AXml: string; out AMalFormado: string): TArray<TEleme
   eventos de build, que el runner vacia y DprojBuildHazard juzga) partido
   por ';', y el Include de cada item de un ItemGroup, con el elemento que lo
   lleva, tal como esta escrito (las macros sin expandir: las expande el build
-  con SU tabla). Lo que el IDE escribe para OTRA plataforma u otra
-  configuracion (CondicionDeOtroBuild, en el grupo o en el elemento) no lo
-  lee este build y no se juzga: hasta la 1.21.4 se juzgaba todo, y un
-  keystore solo de Android64 tumbaba un build Linux64 (David, 21-oct-2026:
-  se juzga la compilacion pedida, no las demas). Una condicion que no se
-  sabe de que build es se sigue juzgando: una de mas es prudencia, una de
-  menos es una puerta. Lo de ProjectExtensions no es del build: msbuild lo
-  ignora. }
-function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string): TArray<TValorDelProyecto>;
+  con SU tabla). Lo que esta en un grupo (o un elemento con Condition) que
+  este build NO evalua (ElementosDeOtroBuild: la Condition es falsa, como la
+  evalua msbuild en orden de documento) no lo lee y no se juzga: hasta la
+  1.21.4 se juzgaba todo, y un keystore solo de Android64 tumbaba un build
+  Linux64 (David, 21-oct-2026: se juzga la compilacion pedida, no las
+  demas). Una condicion que no se sabe evaluar se sigue juzgando: una de mas
+  es prudencia, una de menos es una puerta. Lo de ProjectExtensions no es del
+  build: msbuild lo ignora. }
+function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string;
+  const AExternas: TArray<string>): TArray<TValorDelProyecto>;
 
 { Los textos del .dproj y de cada fichero DEL PROYECTO que importa (un
   .optset), recursivo hasta 4 niveles, con el fichero de cada texto en el
@@ -2035,78 +2072,306 @@ begin
     Result := ConSuGrafia(X);
 end;
 
-function BuildDeGrupo(const ACondicion: string; out APlataforma, AClave: string): Boolean;
+function EvaluaCondicion(const ACondicion, APlatform, AConfig: string;
+  ABusca: TBuscaBandera): TVeredicto;
 var
-  N, Dentro, X, Cfg: string;
+  S: string;
   P: Integer;
-  Formas: TArray<string>;
-begin
-  // la inversa del nombrador, como PlataformaDeGrupo: lo que la Condition
-  // nombra (la clave, la plataforma, la config de un definidor) y, con ello,
-  // que el nombrador vuelva a escribir ESA Condition en una de sus formas
-  APlataforma := '';
-  AClave := '';
-  Result := False;
-  if Pos('$(cfg_', LowerCase(ACondicion)) > 0 then
+  Duda: Boolean; // una propiedad dudosa o desconocida en la comparacion en curso
+
+  procedure SaltaBlancos;
   begin
-    // '$(Cfg_N)' o '$(Cfg_N_X)' (en un definidor, el primero es '$(Cfg_N)')
-    Dentro := TrozoDeCondicion(ACondicion, '$(Cfg_', ')').Trim;
-    P := Pos('_', Dentro);
-    if P > 0 then
+    while (P <= Length(S)) and (S[P] <= ' ') do
+      Inc(P);
+  end;
+
+  // la palabra APalabra en P, seguida de blanco, parentesis o comilla
+  function EsPalabra(const APalabra: string): Boolean;
+  var
+    N: Integer;
+  begin
+    N := Length(APalabra);
+    Result := SameText(Copy(S, P, N), APalabra) and
+      ((P + N > Length(S)) or (S[P + N] <= ' ') or CharInSet(S[P + N], ['(', '''']));
+  end;
+
+  function Palabra(const APalabra: string): Boolean;
+  begin
+    Result := EsPalabra(APalabra);
+    if Result then
+      Inc(P, Length(APalabra));
+  end;
+
+  // lo que no se entiende se salta hasta el siguiente and / or / ')' de este
+  // nivel (o el final), para que el resto de la condicion cuente igual
+  procedure SaltaDesconocido;
+  var
+    Nivel: Integer;
+    EnComillas: Boolean;
+  begin
+    Nivel := 0;
+    EnComillas := False;
+    while P <= Length(S) do
     begin
-      AClave := 'Cfg_' + Copy(Dentro, 1, P - 1);
-      X := Copy(Dentro, P + 1, MaxInt);
-    end
+      if S[P] = '''' then
+        EnComillas := not EnComillas
+      else if not EnComillas then
+      begin
+        if S[P] = '(' then
+          Inc(Nivel)
+        else if S[P] = ')' then
+        begin
+          if Nivel = 0 then
+            Exit;
+          Dec(Nivel);
+        end
+        else if (Nivel = 0) and (P > 1) and (S[P - 1] <= ' ') and
+                (EsPalabra('and') or EsPalabra('or')) then
+          Exit;
+      end;
+      Inc(P);
+    end;
+  end;
+
+  function EsNombre(const ANombre: string): Boolean;
+  begin
+    Result := ANombre <> '';
+    for var C in ANombre do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+        Exit(False);
+  end;
+
+  // la cadena entre comillas simples que empieza en P, con sus $(X) resueltos:
+  // Config y Platform valen lo pedido, las demas lo que diga ABusca (una
+  // dudosa o desconocida deja la comparacion en no se sabe). False si no hay
+  // cadena o lleva algo que no se resuelve (una funcion de propiedad, un
+  // item, un metadato, un macro sin cerrar)
+  function Cadena(out AValor: string): Boolean;
+  var
+    Q, A, B, Vueltas: Integer;
+    Nombre: string;
+    Bandera: TBanderaDelBuild;
+  begin
+    Result := False;
+    SaltaBlancos;
+    if (P > Length(S)) or (S[P] <> '''') then
+      Exit;
+    Q := Pos('''', S, P + 1);
+    if Q = 0 then
+      Exit;
+    AValor := Copy(S, P + 1, Q - P - 1);
+    P := Q + 1;
+    Vueltas := 0;
+    A := Pos('$(', AValor);
+    while (A > 0) and (Vueltas < 32) do
+    begin
+      Inc(Vueltas);
+      B := Pos(')', AValor, A + 2);
+      if B = 0 then
+        Exit;
+      Nombre := Copy(AValor, A + 2, B - A - 2).Trim;
+      if not EsNombre(Nombre) then
+        Exit;
+      if SameText(Nombre, 'Config') then
+        AValor := Copy(AValor, 1, A - 1) + AConfig + Copy(AValor, B + 1, MaxInt)
+      else if SameText(Nombre, 'Platform') then
+        AValor := Copy(AValor, 1, A - 1) + APlatform + Copy(AValor, B + 1, MaxInt)
+      else
+      begin
+        Bandera := ABusca(Nombre);
+        if Bandera.Estado <> eSabida then
+          Duda := True;
+        AValor := Copy(AValor, 1, A - 1) + Bandera.Valor + Copy(AValor, B + 1, MaxInt);
+      end;
+      A := Pos('$(', AValor);
+    end;
+    Result := (A = 0) and (Pos('@(', AValor) = 0) and (Pos('%(', AValor) = 0);
+  end;
+
+  function Expresion: TVeredicto; forward;
+
+  // '(' expresion ')' o una comparacion 'a' == 'b' / 'a' != 'b'; msbuild
+  // compara sin distinguir mayusculas
+  function Comparacion: TVeredicto;
+  var
+    Izq, Der, Op: string;
+  begin
+    Result := vNoSeSabe;
+    SaltaBlancos;
+    if (P <= Length(S)) and (S[P] = '(') then
+    begin
+      Inc(P);
+      Result := Expresion;
+      SaltaBlancos;
+      if (P <= Length(S)) and (S[P] = ')') then
+        Inc(P)
+      else
+        Result := vNoSeSabe;
+      Exit;
+    end;
+    Duda := False;
+    if not Cadena(Izq) then
+    begin
+      SaltaDesconocido;
+      Exit;
+    end;
+    SaltaBlancos;
+    Op := Copy(S, P, 2);
+    if (Op <> '==') and (Op <> '!=') then
+    begin
+      SaltaDesconocido;
+      Exit;
+    end;
+    Inc(P, 2);
+    if not Cadena(Der) then
+    begin
+      SaltaDesconocido;
+      Exit;
+    end;
+    if Duda then
+      Exit; // compara una propiedad dudosa o desconocida: no se sabe
+    if SameText(Izq, Der) = (Op = '==') then
+      Result := vSi
     else
-    begin
-      AClave := 'Cfg_' + Dentro;
-      X := '';
-    end;
-  end
-  else if Pos('$(base', LowerCase(ACondicion)) > 0 then
+      Result := vNo;
+  end;
+
+  // comparaciones unidas por and: falso con cualquier cosa es falso, y lo que
+  // no se sabe mancha lo demas
+  function Termino: TVeredicto;
+  var
+    Sig: TVeredicto;
   begin
-    AClave := 'Base';
-    X := TrozoDeCondicion(ACondicion, '$(Base_', ')').Trim;
-  end
-  else
-    Exit;
-  // un definidor de plataforma nombra la suya en '$(Platform)'=='X'
-  if ValorDeCondicion(ACondicion, '''$(Platform)''').Trim <> '' then
-    X := ValorDeCondicion(ACondicion, '''$(Platform)''').Trim;
-  Cfg := ValorDeCondicion(ACondicion, '''$(Config)''').Trim;
-  Formas := [GroupCondition(X, AClave)];
-  if X <> '' then
-    Formas := Formas + [DefinerCondition(X, AClave)]
-  else if Cfg <> '' then
-    Formas := Formas + [ConfigDefinerCondition(Cfg, AClave)];
-  N := CondicionNormalizada(ACondicion);
-  for var F in Formas do
-    if CondicionNormalizada(F) = N then
+    Result := Comparacion;
+    SaltaBlancos;
+    while Palabra('and') do
     begin
-      Result := True;
-      Break;
+      Sig := Comparacion;
+      if (Result = vNo) or (Sig = vNo) then
+        Result := vNo
+      else if (Result = vNoSeSabe) or (Sig = vNoSeSabe) then
+        Result := vNoSeSabe;
+      SaltaBlancos;
     end;
-  if not Result then
-    AClave := ''
-  else if X <> '' then
-    APlataforma := ConSuGrafia(X);
-end;
+  end;
 
-function CondicionDeOtroBuild(const ACondicion, APlatform, AClave, AConfig: string): Boolean;
-var
-  X, K: string;
+  // terminos unidos por or: cierto con cualquier cosa es cierto
+  function Expresion: TVeredicto;
+  var
+    Sig: TVeredicto;
+  begin
+    Result := Termino;
+    SaltaBlancos;
+    while Palabra('or') do
+    begin
+      Sig := Termino;
+      if (Result = vSi) or (Sig = vSi) then
+        Result := vSi
+      else if (Result = vNoSeSabe) or (Sig = vNoSeSabe) then
+        Result := vNoSeSabe;
+      SaltaBlancos;
+    end;
+  end;
+
 begin
-  Result := False;
-  if ACondicion.Trim = '' then
-    Exit;
-  if BuildDeGrupo(ACondicion, X, K) then
-    Exit(((X <> '') and not SameText(X, APlatform)) or
-      ((AClave <> '') and not SameText(K, 'Base') and not SameText(K, AClave)));
-  if CondicionDePlataformaYConfig(ACondicion, X, K) then
-    Result := ((X <> '') and not SameText(X, APlatform)) or
-      ((K <> '') and (AConfig <> '') and not SameText(K, AConfig));
+  S := ACondicion;
+  P := 1;
+  Duda := False;
+  if S.Trim = '' then
+    Exit(vSi);
+  Result := Expresion;
+  SaltaBlancos;
+  if P <= Length(S) then
+    Result := vNoSeSabe; // algo que no se ha entendido
 end;
 
+function ElementosDeOtroBuild(const AXml, APlatform, AConfig: string;
+  const AElementos: TArray<TElementoXml>; const AExternas: TArray<string>): TArray<Boolean>;
+var
+  Banderas, Dudosas, Definidas: TStringList;
+  Grupo, Elemento: TVeredicto;
+  D: Integer;
+  Busca: TBuscaBandera;
+begin
+  SetLength(Result, Length(AElementos));
+  Banderas := TStringList.Create;
+  Dudosas := TStringList.Create;
+  Definidas := TStringList.Create;
+  try
+    Banderas.CaseSensitive := False;
+    Dudosas.CaseSensitive := False;
+    Definidas.CaseSensitive := False;
+    // lo que el documento define en algun PropertyGroup: una de esas, aun no
+    // puesta, vale '' (como en msbuild); un nombre que no define nadie puede
+    // venir de fuera (el entorno, rsvars, el IDE) y no se da por vacio
+    for var E in AElementos do
+      if (Length(E.Ruta) > 0) and (E.Ruta[High(E.Ruta)] = 'propertygroup') and
+         (Definidas.IndexOf(E.Escrito) < 0) then
+        Definidas.Add(E.Escrito);
+    Busca := function(const ANombre: string): TBanderaDelBuild
+      begin
+        Result.Valor := '';
+        if Dudosas.IndexOf(ANombre) >= 0 then
+          Result.Estado := eDudosa
+        else if Banderas.IndexOfName(ANombre) >= 0 then
+        begin
+          Result.Estado := eSabida;
+          Result.Valor := Banderas.Values[ANombre];
+        end
+        else if MatchText(ANombre, AExternas) or (GetEnvironmentVariable(ANombre) <> '') then
+          Result.Estado := eDesconocida
+        else if Definidas.IndexOf(ANombre) >= 0 then
+          Result.Estado := eSabida
+        else
+          Result.Estado := eDesconocida;
+      end;
+    for var G in GruposDePropiedades(AXml) do
+    begin
+      Grupo := EvaluaCondicion(G.Condicion, APlatform, AConfig, Busca);
+      for var I := 0 to High(AElementos) do
+      begin
+        var E := AElementos[I];
+        if (E.Tramo.Abre < G.Ini) or (E.Tramo.Cierra > G.Fin) or
+           (Length(E.Ruta) = 0) or (E.Ruta[High(E.Ruta)] <> 'propertygroup') then
+          Continue;
+        if Grupo = vNo then
+        begin
+          Result[I] := True;
+          Continue;
+        end;
+        Elemento := EvaluaCondicion(AtributoDeTramo(AXml, E.Tramo, E.Escrito, 'Condition'),
+          APlatform, AConfig, Busca);
+        Result[I] := Elemento = vNo;
+        if Elemento = vNo then
+          Continue;
+        // lo que deja puesto para los siguientes: seguro si el grupo y el
+        // elemento son ciertos (el ultimo gana, como en msbuild); dudoso si
+        // alguno no se sabe
+        D := Dudosas.IndexOf(E.Escrito);
+        if (Grupo = vSi) and (Elemento = vSi) then
+        begin
+          Banderas.Values[E.Escrito] := ValorDeTramo(AXml, E.Tramo).Trim;
+          if D >= 0 then
+            Dudosas.Delete(D);
+        end
+        else if D < 0 then
+          Dudosas.Add(E.Escrito);
+      end;
+    end;
+  finally
+    Definidas.Free;
+    Dudosas.Free;
+    Banderas.Free;
+  end;
+end;
+
+function TrozosDeLista(const AValor: string): TArray<string>;
+begin
+  Result := [];
+  for var T in AValor.Split([';']) do
+    if T.Trim <> '' then
+      Result := Result + [T.Trim];
+end;
 function DeployGroupCondition(const APlatform: string; const AConfig: string): string;
 begin
   Result := '''$(Platform)''==''' + APlatform + '''';
@@ -2924,49 +3189,34 @@ begin
     Result := MsgFmt(SF_CFG_HAZARD_XML_FMT, [Mal]);
 end;
 
-function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string): TArray<TValorDelProyecto>;
+function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string;
+  const AExternas: TArray<string>): TArray<TValorDelProyecto>;
 var
-  Mal, Padre, Clave: string;
+  Mal, Padre: string;
   V: TValorDelProyecto;
-  Grupos: TArray<TGrupoXml>;
-  G: TGrupoXml;
-
-  // el PropertyGroup que contiene el tramo; False si ninguno
-  function GrupoDe(const ATramo: TTramoXml; out AGrupo: TGrupoXml): Boolean;
-  begin
-    for var Gr in Grupos do
-      if (ATramo.Abre >= Gr.Ini) and (ATramo.Cierra <= Gr.Fin) then
-      begin
-        AGrupo := Gr;
-        Exit(True);
-      end;
-    Result := False;
-  end;
-
+  Elementos: TArray<TElementoXml>;
+  OtroBuild: TArray<Boolean>;
 begin
   Result := nil;
-  Clave := ConfigKey(AXml, AConfig);
-  Grupos := GruposDePropiedades(AXml);
-  for var E in ElementosDe(AXml, Mal) do
+  Elementos := ElementosDe(AXml, Mal);
+  // lo que esta en un grupo que ESTE build no evalua no lo lee: se juzga la
+  // compilacion pedida, no las demas (un keystore solo de Android64 tumbaba
+  // un build Linux64, 21-oct-2026), decidido como msbuild sobre lo que los
+  // grupos anteriores dejan puesto y no por el nombre de la clave (una
+  // bandera plantada, una config hija: revisores, 21-oct-2026)
+  OtroBuild := ElementosDeOtroBuild(AXml, APlatform, AConfig, Elementos, AExternas);
+  for var I := 0 to High(Elementos) do
   begin
+    var E := Elementos[I];
     if (Length(E.Ruta) = 0) or MatchStr('projectextensions', E.Ruta) then
       Continue;
     Padre := E.Ruta[High(E.Ruta)];
     V.Elemento := E.Escrito;
     if Padre = 'propertygroup' then
     begin
-      if E.Tramo.Vacio or MatchStr(E.Nombre, EVENTOS_DE_BUILD) then
+      if E.Tramo.Vacio or MatchStr(E.Nombre, EVENTOS_DE_BUILD) or OtroBuild[I] then
         Continue;
-      // lo que el IDE escribe para OTRA plataforma u otra configuracion no lo
-      // lee ESTE build: se juzga la compilacion pedida, no las demas (un
-      // keystore solo de Android64 tumbaba un build Linux64, 21-oct-2026);
-      // una condicion que no se sabe de que build es se juzga igual
-      if GrupoDe(E.Tramo, G) and CondicionDeOtroBuild(G.Condicion, APlatform, Clave, AConfig) then
-        Continue;
-      if CondicionDeOtroBuild(AtributoDeTramo(AXml, E.Tramo, E.Escrito, 'Condition'),
-           APlatform, Clave, AConfig) then
-        Continue;
-      for var Trozo in ValorDeTramo(AXml, E.Tramo).Split([';']) do
+      for var Trozo in TrozosDeLista(ValorDeTramo(AXml, E.Tramo)) do
         if Trozo.Trim <> '' then
         begin
           V.Escrito := Trozo.Trim;
@@ -2977,7 +3227,7 @@ begin
       for var At in AtributosDeTramo(AXml, E.Tramo) do
         if SameText(At.Nombre, 'Include') then
           // un Include es una LISTA para msbuild (a.pas;b.pas): cada uno
-          for var Trozo in ValorDeAtributo(AXml, At).Split([';']) do
+          for var Trozo in TrozosDeLista(ValorDeAtributo(AXml, At)) do
             if Trozo.Trim <> '' then
             begin
               V.Escrito := Trozo.Trim;
