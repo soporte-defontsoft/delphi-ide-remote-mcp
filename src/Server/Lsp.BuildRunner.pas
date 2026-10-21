@@ -811,9 +811,11 @@ begin
     .Replace('$(Config)', ACfg, [rfReplaceAll, rfIgnoreCase]).Trim;
   if OutDir.StartsWith('.\') then
     OutDir := OutDir.Substring(2);
-  Ext := ExtensionDeEjecutable(APlat);
-  Include := IncludeTrailingPathDelimiter(OutDir) + AName + Ext;
-  Result := XmlDeployFile(Include, ACfg, AName + '\', AName + Ext, 'ProjectOutput', 1, True);
+  // el nombre del binario por EL nombrador (OutputExt de esa plataforma y
+  // config, como lo escribe el IDE en el DeployFile: App.x64.exe)
+  Ext := NombreDelBinario(ADprojXml, AName, APlat, ACfg);
+  Include := IncludeTrailingPathDelimiter(OutDir) + Ext;
+  Result := XmlDeployFile(Include, ACfg, AName + '\', Ext, 'ProjectOutput', 1, True);
 end;
 
 { Adds the ProjectOutput entries for APlat to an existing manifest that has
@@ -995,13 +997,16 @@ begin
     AGenerated := True;
     Exit;
   end;
-  Ext := ExtensionDeEjecutable(APlat);
   Xml := CabeceraDeManifiesto;
   for Cfg in ConfigsDelManifiesto(Dproj) do
+  begin
+    // el nombre del binario de CADA config por EL nombrador (OutputExt)
+    Ext := NombreDelBinario(Dproj, N, APlat, Cfg);
     Xml := Xml +
       '    <ItemGroup ' + XmlAtributo('Condition', DeployGroupCondition(APlat, Cfg)) + '>'#13#10 +
-      XmlDeployFile(APlat + '\' + Cfg + '\' + N + Ext, '', N + '\', N + Ext, 'ProjectOutput', 1, True) +
+      XmlDeployFile(APlat + '\' + Cfg + '\' + Ext, '', N + '\', Ext, 'ProjectOutput', 1, True) +
       '    </ItemGroup>'#13#10;
+  end;
   Xml := Xml + '</Project>'#13#10;
   EscribeTexto(F, Xml, ltJaula, ekUtf8Bom); // como el de Android, arriba
   AGenerated := True;
@@ -1259,8 +1264,9 @@ begin
   ASuplidas := nil;
   // La que NO declara la pone el IDE fuera del proyecto (David, 25-sep-2026).
   // Hasta la 1.21.2 se rechazaba; desde la 1.21.3 el build la suple el mismo
-  // sin tocar el .dproj (David, 21-oct-2026: Galatea compilaba en el IDE y
-  // aqui no, y el IDE dejo 14 .dcu de Defontsoft en Program Files).
+  // sin tocar el .dproj (David, 21-oct-2026: un proyecto real de veinte anos
+  // compilaba en el IDE y aqui no, y el IDE dejo 14 .dcu de un componente en
+  // Program Files).
   for var Falta in BuildOutputUndeclared(ADprojPath, APlat, ACfg) do
   begin
     if not MatchText(Falta, SALIDAS_QUE_SUPLE_EL_BUILD) then
@@ -1630,7 +1636,7 @@ var
     // el guion de un RcCompile: un RcItem es un FICHERO de recurso (el .gif o
     // .png que el IDE mete como RCDATA por el .rc que genera el mismo) y ya
     // esta juzgado por su ruta, arriba; leerlo como guion lo parseaba como
-    // texto y citaba sus bytes en la negativa (Galatea, 21-oct-2026)
+    // texto y citaba sus bytes en la negativa (un proyecto real, 21-oct-2026)
     if SameText(AValor.Elemento, 'RcCompile') and TFile.Exists(Cand) then
     begin
       var Rc := RcLecturasDenegadas(Cand);

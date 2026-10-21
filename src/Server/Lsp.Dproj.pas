@@ -531,10 +531,11 @@ const
   IDE_OUTPUT_DEFAULT = '.\$(Platform)\$(Config)';
 
   { Las salidas que el build SUPLE cuando el proyecto no las declara para esa
-    plataforma/config (David, 21-oct-2026: Galatea compilaba en el IDE y aqui
-    no): sin ellas dcc deja los .dcu junto a cada fuente - los de un
-    componente instalado, en su carpeta de Program Files (medido ese dia: 14
-    .dcu de Defontsoft) - y el .bpl y el .dcp en las carpetas globales del
+    plataforma/config (David, 21-oct-2026: un proyecto real de veinte anos
+    compilaba en el IDE y aqui no): sin ellas dcc deja los .dcu junto a cada
+    fuente - los de un componente instalado, en su carpeta de Program Files
+    (medido ese dia: 14 .dcu de un componente) - y el .bpl y el .dcp en las
+    carpetas globales del
     IDE. La .hpp (salida C++) no se suple: C++ queda fuera del producto
     (David, 18-oct) y BuildOutputUndeclared la sigue pidiendo. }
   SALIDAS_QUE_SUPLE_EL_BUILD: array [0 .. 2] of string = (
@@ -647,6 +648,21 @@ function ProjectXmlChain(const ADprojPath: string): TArray<string>; overload;
   existing <project>.exe/.dll/.bpl among them wins. Returns '' when nothing
   is there (build failed, macro we cannot resolve, unusual layout). }
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
+
+{ El NOMBRE del binario (sin carpeta) que deja el build de APlatform/AConfig,
+  como lo compone CodeGear.Delphi.Targets: <proyecto>.<OutputExt> cuando el
+  .dproj declara OutputExt para ese build (Project Options > Application >
+  Target file extension: App.x64.exe, App.Debug.exe, App.x64.Debug.exe, por
+  plataforma y configuracion, lo que David llama
+  "otro concepto": el nombre del exe), y si no, la extension de la
+  plataforma (ExtensionDeEjecutable). UN nombrador: lo leen ResolveBuildOutput
+  (el "output" de delphi_build y el exe de delphi_test) y los DeployFile del
+  .deployproj (OutputDeployEntry y el manifiesto generado). Medido el
+  21-oct-2026: el build Win32 de un proyecto real contesto "output" con un
+  <proyecto>.exe de diciembre, el ultimo .exe que habia en la carpeta, mientras
+  acababa de escribir el <proyecto>.<OutputExt> al lado; en Win64 no
+  contesto ninguno. }
+function NombreDelBinario(const AXml, ABase, APlatform, AConfig: string): string;
 
 { TODAS las carpetas donde un build de ADprojPath (APlatform/AConfig) deja
   ficheros, tal como las declaran el .dproj y lo que importa del proyecto
@@ -2540,10 +2556,24 @@ begin
         Exit(Prop);
 end;
 
+function NombreDelBinario(const AXml, ABase, APlatform, AConfig: string): string;
+var
+  Ext: string;
+begin
+  // la extension efectiva de ESE build (EffectiveProperty: el grupo de la
+  // plataforma y la config, como msbuild); los targets la ponen tras el punto
+  // (-TX.$(OutputExt)), con o sin punto delante en el .dproj
+  Ext := EffectiveProperty(AXml, 'OutputExt', APlatform, AConfig).Trim;
+  if Ext <> '' then
+    Result := ABase + '.' + Ext.TrimLeft(['.'])
+  else
+    Result := ABase + ExtensionDeEjecutable(APlatform);
+end;
+
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
 var
-  Xml, Dir, Base, D, Cand, Ext, Artifact: string;
-  ArtifactExts: TArray<string>;
+  Xml, Dir, Base, D, Cand, Ext, Artifact, Nombre: string;
+  ArtifactExts, Nombres: TArray<string>;
   Dirs: TList<string>;
   Best: string;
   BestTime, T: TDateTime;
@@ -2575,6 +2605,15 @@ begin
   else
     ArtifactExts := ['.so', ''];
   end;
+  // los NOMBRES candidatos: con OutputExt declarada, el que compone el
+  // nombrador y ninguno mas (un <proyecto>.exe viejo al lado no es el de este
+  // build); sin ella, el proyecto con cada extension de la plataforma
+  Nombres := [];
+  if EffectiveProperty(Xml, 'OutputExt', APlatform, AConfig).Trim <> '' then
+    Nombres := [NombreDelBinario(Xml, Base, APlatform, AConfig)]
+  else
+    for Ext in ArtifactExts do
+      Nombres := Nombres + [Base + Ext];
   Best := '';
   BestTime := 0;
   Dirs := TList<string>.Create;
@@ -2596,15 +2635,15 @@ begin
       except
         Continue;
       end;
-      for Ext in ArtifactExts do
+      for Nombre in Nombres do
       begin
         // Android and iOS name the artifact lib<Project>.so, not <Project>.so,
         // so the search used to come up empty and delphi_build answered
         // success with no "output" at all - the agent had to guess the path
         // (field round 8).
-        Artifact := TPath.Combine(Cand, Base + Ext);
-        if not TFile.Exists(Artifact) and (Ext = '.so') then
-          Artifact := TPath.Combine(Cand, 'lib' + Base + Ext);
+        Artifact := TPath.Combine(Cand, Nombre);
+        if not TFile.Exists(Artifact) and Nombre.EndsWith('.so', True) then
+          Artifact := TPath.Combine(Cand, 'lib' + Nombre);
         if TFile.Exists(Artifact) then
         begin
           T := TFile.GetLastWriteTime(Artifact);

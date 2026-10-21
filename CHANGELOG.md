@@ -59,6 +59,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The binary's name follows `OutputExt`.** A `.dproj` can declare
+  `<OutputExt>` per platform and configuration (Project Options >
+  Application > Target file extension) and the IDE and MSBuild then write
+  `<project>.<OutputExt>` (`App.x64.exe`, `App.Debug.exe`).
+  Whoever looked for the binary (`ResolveBuildOutput`: the `output` of
+  `delphi_build` and the exe `delphi_test` runs) only tried
+  `<project>.exe/.dll/.bpl`, and the `DeployFile` of a `.deployproj` was
+  written with a bare `.exe`. Measured on 2026-10-21 with a real project: the
+  Win32 build answered `output` with a `<project>.exe` from December 2025
+  that was lying in the folder, while it had just written the `.DPI.exe`
+  next to it; Win64 answered none. Now one namer (`NombreDelBinario`)
+  composes the name as the targets do, for the build answer, the test exe
+  and the deploy entries. `test_build_outputext_1213` (E1, E2, E4 red
+  against 1.21.2).
 - **The build gate read an `<RcItem>` as if it were a `.rc` script.** An
   `RcItem` is a resource FILE (the `.gif` or `.png` the IDE lists under
   Resources and Images and compiles as RCDATA through the `.rc` it generates
