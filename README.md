@@ -1,6 +1,6 @@
 # Delphi IDE Remote MCP Server
 
-[![Latest release](https://img.shields.io/badge/download-v1.21.3-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v1.21.4-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ![Delphi IDE Remote MCP — RAD Studio as a remote backend for AI programming agents: any MCP client on one side, Windows/Linux/Android test targets on the other, one workspace-jailed server in the middle](docs/media/hero.webp)
@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: latest 1.21.3 (published today, validated by its batteries and by compiling a real twenty-year-old project through the server on Delphi 13.2); stable 1.20.1.** Covered by 254 end-to-end batteries — 6,613 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: latest 1.21.4 (published today, validated by its batteries and live against the IDE: a component suite registered in the Library Path with the server up became readable with no restart); stable 1.20.1.** Covered by 260 end-to-end batteries — 6,672 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -195,7 +195,7 @@ finds its commits there and is the one that stops the engines.
 of those causes it is — there is no process or handle listing here, by the same decision.
 
 **"What about my third-party packages — Boss, GetIt, submodules?"** Search paths are first-class:
-`delphi_config command=add-searchpath` edits them **per platform** (Delphi keeps unit search paths
+`delphi_config command=add-searchpath` edits them **per platform**, several folders in one call (`paths`; Delphi keeps unit search paths
 per platform, not per Debug/Release configuration), `delphi_config command=view` reports what a
 project resolves against, `delphi_components` lists what is installed in the IDE, and the library
 read zone lets an agent read RTL/VCL and component sources without any write rights. A failed
@@ -241,7 +241,7 @@ switch and its own allowlist; it will not arrive by accident.
 | [`delphi_projects`](docs/TOOLS.md#delphi_projects) | Locate projects (.dproj/.groupproj) by name under a root or under the workspace roots, paged |
 | [`delphi_installs`](docs/TOOLS.md#delphi_installs) | Every RAD Studio installation on the machine, and which one this server works with |
 | [`delphi_workspace`](docs/TOOLS.md#delphi_workspace) | **The first call**: your roots, access level and workspace, the active Delphi, and who is answering (version, mode, machine, account) |
-| [`delphi_git`](docs/TOOLS.md#delphi_git) | Whitelisted git - `clone`/`pull`/`fetch`/`push`, status/diff/log/show, branch/switch/merge (`--ff-only`), stash, add/restore/commit, tag, `worktree` - each command with its own fields, never free arguments (1.19.0) - on repositories inside the roots and towards remotes the operator allows; never a shell |
+| [`delphi_git`](docs/TOOLS.md#delphi_git) | Whitelisted git - `clone`/`pull`/`fetch`/`push`, status/diff/log/show, branch/switch/merge (`--ff-only`), stash, add/restore/untrack/commit, tag, `worktree` - each command with its own fields, never free arguments (1.19.0) - on repositories inside the roots and towards remotes the operator allows; never a shell |
 | [`delphi_report`](docs/TOOLS.md#delphi_report) | **Feedback channel**: the agent files a bug, limitation or suggestion for the operator; it works at every access level |
 | [`delphi_config`](docs/TOOLS.md#delphi_config) | A project's configurations, platforms, the ones it builds by default (`set-active`, the IDE's *Activate*), output folder, version, search paths, deployment files and units - the IDE's Project Options and Add/Remove from project |
 | [`delphi_paserver`](docs/TOOLS.md#delphi_paserver) | The bridge to **Linux, macOS and Windows targets** through PAServer: installers, profiles, connection tests, the SDK sysroot, and `remote-run` / `kill` / `output` of the binary a project deployed - nothing installed on the target |

@@ -6,7 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.21.4] - 2026-10-21
+
+A patch of 1.21.3 that follows the IDE while the server runs and takes lists
+where an agent gave one folder at a time. The library read zone follows the
+IDE's Library Path with no restart (the server asks Windows to signal the
+IDE's registry keys); `add-searchpath` and `remove-searchpath` take several
+folders in one call (`paths`, all or nothing, one write); `delphi_git
+untrack` takes paths out of the index and leaves the files; a `.dproj` cut
+short by an upload is refused as incomplete (`BUILD-055`) with how to put it
+back, not as "platform not enabled"; a folder on a NAS is released from the
+engine that had a document open under it, and `FILE-011` names what is left;
+`delphi_textedit` asks FMX after writing a `.style`; `delphi_completion` says
+why it answers no items; three judges of the compiler's, git's and adb's
+output read their codes instead of their prose; and four rules that were
+written more than once are written once.
 
 ### Added
 

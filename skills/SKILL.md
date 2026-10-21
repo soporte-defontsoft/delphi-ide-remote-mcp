@@ -344,7 +344,7 @@ in frame. Do the gesture you came for and nothing else.
   the same, with them in its binary output folder.
 - **A build is what the IDE would build**: only a platform the project
   declares and has enabled (another is refused with `BUILD-046`:
-  `delphi_config command=add-platform` declares it, as the IDE does), and
+  `delphi_config command=add-platform` declares it, as the IDE does; a `.dproj` whose `<Project>` never closes - an upload cut short - is `BUILD-055`, which says how to put it back, not `BUILD-046`), and
   without `platform` or `config` the ones the project has selected
   (`delphi_config view`: `defaultPlatform`, `defaultConfig`; `set-active`
   changes them, as *Activate* in the IDE). What you build, the
@@ -494,4 +494,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.21.3 -->
+<!-- contract reviewed: v1.21.4 -->

@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-21 (current release v1.21.3; 42 tools).
+Status page as of 2026-10-21 (current release v1.21.4; 42 tools).
 
 ## Delivered
 
@@ -50,7 +50,7 @@ Status page as of 2026-10-21 (current release v1.21.3; 42 tools).
 
 - What the IDE would do, and nothing left behind: `delphi_config set-active` and a build without `config` that builds the project's selected one; the engine with the settings of the selected configuration and platform; a project `delphi_create` makes born as the IDE makes it; the IDE's form reader judging lines, numbers and the language of Windows; a `.rc` read by tokens and confined to its styles folder; `push` that never forces; every process the server kills cleaned from Windows' global atom table, and form renderers that put nothing on the desktop (1.21.0)
 
-- The patches of 1.21: a hard link to a file outside the roots neither read, copied nor written through (every door, the server's own copies included); the build gate a whitelist of what a compile-only build understands, and what the build reads through the project judged by the read gate, whether it exists or not; the build supplying the output folders a project leaves undeclared, a `remove-*` of `delphi_config` taking an entry that points outside, an `<RcItem>` judged by its path and the binary's name following `OutputExt`, all found by compiling a real twenty-year-old project through the server (1.21.1, 1.21.2, 1.21.3)
+- The patches of 1.21: a hard link to a file outside the roots neither read, copied nor written through (every door, the server's own copies included); the build gate a whitelist of what a compile-only build understands, and what the build reads through the project judged by the read gate, whether it exists or not; the build supplying the output folders a project leaves undeclared, a `remove-*` of `delphi_config` taking an entry that points outside, an `<RcItem>` judged by its path and the binary's name following `OutputExt`, all found by compiling a real twenty-year-old project through the server; the library read zone following the IDE's Library Path while the server runs, `add-searchpath` taking several folders in one call, `delphi_git untrack`, a `.dproj` cut short refused as incomplete instead of "platform not enabled", a folder on a NAS released from the engine that had a document open under it, and the judges of the compiler's and git's output reading their codes instead of their prose (1.21.1, 1.21.2, 1.21.3, 1.21.4)
 
 ## Next
 
