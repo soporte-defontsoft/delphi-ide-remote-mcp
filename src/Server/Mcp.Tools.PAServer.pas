@@ -456,8 +456,7 @@ begin
   L := TStringList.Create;
   try
     R.RootKey := HKEY_CURRENT_USER;
-    if R.OpenKeyReadOnly(Format('Software\Embarcadero\BDS\%s\PlatformSDKs',
-      [AVersion])) then
+    if R.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then
     begin
       R.GetKeyNames(L);
       Result := L.ToStringArray;
@@ -527,8 +526,7 @@ begin
   R := TRegistry.Create(KEY_READ);
   try
     R.RootKey := HKEY_CURRENT_USER;
-    if R.OpenKeyReadOnly('\Software\Embarcadero\BDS\' + AVersion +
-         '\PlatformSDKs\' + NombreDeSdk(ANombre)) then
+    if R.OpenKeyReadOnly('\' + ClaveDelIde(AVersion, 'PlatformSDKs\' + NombreDeSdk(ANombre))) then
     try
       if R.ValueExists('PlatformName') then
         Result := R.ReadString('PlatformName');
@@ -645,8 +643,7 @@ begin
       Reg := TRegistry.Create(KEY_READ);
       try
         Reg.RootKey := HKEY_CURRENT_USER;
-        if Reg.OpenKeyReadOnly(Format('Software\\Embarcadero\\BDS\\%s\\RemoteProfiles',
-             [Info.Version])) then
+        if Reg.OpenKeyReadOnly(ClaveDelIde(Info.Version, 'RemoteProfiles')) then
         begin
           Claves := TStringList.Create;
           try
@@ -765,8 +762,7 @@ begin
   R := TRegistry.Create(KEY_WRITE);
   try
     R.RootKey := HKEY_CURRENT_USER;
-    if R.OpenKey('\Software\Embarcadero\BDS\' + AVersion +
-       '\RemoteProfiles\' + AName, True) then
+    if R.OpenKey('\' + ClaveDelIde(AVersion, 'RemoteProfiles\' + AName), True) then
     begin
       R.WriteString('Platform', APlat);
       R.WriteString('HostName', AHost);
@@ -788,8 +784,7 @@ begin
   R := TRegistry.Create(KEY_WRITE);
   try
     R.RootKey := HKEY_CURRENT_USER;
-    R.DeleteKey('\Software\Embarcadero\BDS\' + AVersion +
-      '\RemoteProfiles\' + AName);
+    R.DeleteKey('\' + ClaveDelIde(AVersion, 'RemoteProfiles\' + AName));
   finally
     R.Free;
   end;
@@ -823,7 +818,7 @@ begin
     // 2026-09-20 al comparar con las otras cuatro claves de esta unidad, que
     // si la llevan): el SDK quedaba perfecto para msbuild - que solo mira el
     // fichero .sdk - y jamas aparecia en el SDK Manager del IDE.
-    Clave := '\Software\Embarcadero\BDS\' + AVersion + '\PlatformSDKs';
+    Clave := '\' + ClaveDelIde(AVersion, 'PlatformSDKs');
     if not R.OpenKey(Clave + '\' + NombreDeSdk(ASdkName), True) then
       Exit;
     R.WriteString('SDKName', NombreDeSdk(ASdkName));
@@ -1605,8 +1600,7 @@ begin
         Reg := TRegistry.Create(KEY_READ);
         try
           Reg.RootKey := HKEY_CURRENT_USER;
-          YaEstaba := Reg.KeyExists('\Software\Embarcadero\BDS\' +
-            Info.Version + '\RemoteProfiles\' + Nombre);
+          YaEstaba := Reg.KeyExists('\' + ClaveDelIde(Info.Version, 'RemoteProfiles\' + Nombre));
         finally
           Reg.Free;
         end;
@@ -1805,8 +1799,7 @@ begin
   R := TRegistry.Create(KEY_WRITE);
   try
     R.RootKey := HKEY_CURRENT_USER;
-    R.DeleteKey('\Software\Embarcadero\BDS\' + Info.Version +
-      '\PlatformSDKs\' + NombreDeSdk(Nombre));
+    R.DeleteKey('\' + ClaveDelIde(Info.Version, 'PlatformSDKs\' + NombreDeSdk(Nombre)));
   finally
     R.Free;
   end;

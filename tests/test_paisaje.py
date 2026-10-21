@@ -237,6 +237,17 @@ REGLAS = [
     # la notificacion de cambio de una clave del registro (RegNotifyChangeKeyValue): EL juez de
     # "cambio la configuracion del IDE" para lo que se cachea de ella (la zona de biblioteca,
     # 1.21.4); otra llamada seria otro vigia con otro rearme
+    # la clave del IDE en el registro (SOFTWARE\Embarcadero\BDS\<ver>\...) se componia a mano
+    # unas 18 veces en cuatro unidades con dos grafias, y dio un bug medido el 9-oct-2026
+    # (SysrootsRegistrados); D9 de la auditoria de duplicados, cerrado en la 1.21.4
+    ('la clave del IDE en el registro', r'Embarcadero\\+BDS',
+     [('Lsp.Discovery.pas', 'ClaveDelIde'),
+      # otro programa: el renderizador de forms no lleva Lsp.Discovery (sus dos lecturas)
+      ('FormRender.Comun.pas', 'RaizDelIde'), ('FormRender.Comun.pas', 'LeeConocidos'),
+      # ...y sus textos (el Lsp.Texts del renderizador): un mensaje la nombra, no la compone
+      ('FormRender.Textos.pas', '*')],
+     'ClaveDelIde (Lsp.Discovery): la raiz, la de una version o una subclave; quien la quiera '
+     'absoluta le pone la barra delante'),
     ('vigilar una clave del registro', r'\bRegNotifyChangeKeyValue\s*\(',
      [('Lsp.Discovery.pas', 'ArmaVigia')],
      'ArmaVigia (Lsp.Discovery): VigilaClave abre y arma, CambioLaClave pregunta y rearma; quien cachea '
@@ -998,6 +1009,7 @@ PLANTADO = {
     'el argumento de una llamada a Register* leido a mano':
         "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
+    'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
     'vigilar una clave del registro': "  RegNotifyChangeKeyValue(H, True, REG_NOTIFY_CHANGE_LAST_SET, Ev, True);",
     'la forma de los atomos del RTL': "  N := Format('Delphi%.8X', [Pid]);",
     'un literal de form leido a mano': "  N := V.Trim(['''']);",

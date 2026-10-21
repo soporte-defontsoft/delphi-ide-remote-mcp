@@ -486,6 +486,13 @@ const
     'undone): the working tree keeps its changes. To discard a file''s ' +
     'changes: command=stash with its paths - they go back to HEAD and the ' +
     'change stays in the stash.';
+  { untrack acaba en silencio (--quiet) y solo toca el indice: se dice que
+    hizo y que viene despues (1.21.4). }
+  SN_GIT_UNTRACK_SOLO_INDICE =
+    '[GIT-081] untrack only took those paths out of the index: git stops ' +
+    'following them, the files stay on disk, and the next commit records ' +
+    'their removal. To keep them out for good, list them in .gitignore ' +
+    '(command=status shows them as untracked now).';
   { add de un IGNORADO: con :(literal,icase) (H10 de la 1.19.2) git dice
     "pathspec ... did not match any files" y no "paths are ignored", y el
     agente creia que el fichero no existia (medido el 15-oct-2026). Lo dice
@@ -3847,6 +3854,14 @@ const
     'Nothing written. The value goes exactly as a .style file writes it ' +
     '(colors xAARRGGBB); what a property takes: delphi_designer ' +
     'command=prop classname=<class> framework=fmx.';
+  { Un .style escrito por delphi_textedit (create o edit) no pasaba por el
+    juez de set: se pregunta a FMX DESPUES de escribir y se dice (Hermes,
+    rondas de la 1.21.0; 1.21.4). }
+  SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT =
+    '[STYLE-055] WARNING: FMX cannot load the .style as written - %s. The ' +
+    'app would not get it and delphi_styles build would refuse it. The copy ' +
+    'from before is in __delphi-patch; delphi_styles lint shows what else ' +
+    'FMX ignores.';
   SN_STYLES_FMX_NO_CARGA =
     '[STYLE-054] FMX cannot load these text styles at all (fmxCannotLoad, ' +
     'with the error its reader raised): the app does not get them and build ' +
@@ -6105,6 +6120,15 @@ const
     'after its first letters: the prefix under the cursor filters ' +
     '("prefix").';
 
+  { Con prefijo y ninguno que empiece por el, items=[] sin decir por que
+    (Luna, 20-oct-2026: un turno perdido; su trigger="." sin punto cerca). }
+  SN_COMPLETION_NINGUNO_FMT =
+    '[LSP-049] None of the %d candidates the engine offers here starts ' +
+    'with "%s", the identifier under the cursor: the name may be misspelt, ' +
+    'or the cursor sits after a different token than you think. Put it ' +
+    'right after the first letters of what you want, or on whitespace for ' +
+    'the whole scope.';
+
   SN_COMPLETION_SNAPPED_FMT =
     '[LSP-027] I moved the position from column %d to column %d: you ' +
     'asked for member completion (trigger ".") but the column fell on ' +
@@ -7019,6 +7043,15 @@ const
     'index (the add is undone) and the working tree is never touched. To ' +
     'discard a file''s changes: command=stash with those paths. Nothing ' +
     'was done.';
+
+  { untrack = rm --cached: quitar del INDICE lo que git sigue, sin tocar el
+    disco (1.21.4). Dos .res regenerados por msbuild obligaron a la consola
+    el 14-oct-2026, y Hermes choco con la falta de rm/reset el 28-sep. }
+  SR_GIT_UNTRACK_NEEDS_PATHS =
+    '[GIT-080 INVALID_PARAM] untrack needs "paths": one or more files or ' +
+    'folders git follows. It is rm --cached: they leave the index and git ' +
+    'stops following them, the files stay on disk untouched, and the next ' +
+    'commit records their removal. Nothing was done.';
 
   { git no trabaja sobre la carpeta que se le da: sube desde ella hasta dar
     con el repo, y lee y reescribe ESE arbol entero. Con la raiz del repo por
@@ -8148,7 +8181,7 @@ const
   SR_GIT_UNKNOWN_COMMAND_FMT =
     '[GIT-034 INVALID_PARAM] Unknown command "%s". Allowed: status | ' +
     'diff | log | show | branch | switch | merge | stash | add | commit ' +
-    '| init | push | tag | config | clone | pull | fetch | ls-remote | worktree | restore';
+    '| init | push | tag | config | clone | pull | fetch | ls-remote | worktree | restore | untrack';
 
   SR_GIT_EXIT_FMT =
     '[GIT-036 DENIED] exit=%d - git ended with an error; its own answer ' +
@@ -9363,7 +9396,9 @@ const
     'is harmless; a string literal blocks delphi_rename_symbol ' +
     '(RENAME-020), because it may be a FindComponent/RTTI by name. ' +
     'Bounded work: leftovers are listed as unverified, never silently ' +
-    'dropped; a file it cannot read, as unreadable. The uses in the form ' +
+    'dropped; a file it cannot read, as unreadable. The name in "unit X;" ' +
+    'is not a symbol the engine resolves (LSP-003): who uses a unit is a ' +
+    'delphi_search of its name in the uses clauses. The uses in the form ' +
     'files (.dfm/.fmx: an event bound by name) come in "designer". The ' +
     'answer says where ' +
     'it looked ("scope") and with the settings of which project ' +
@@ -9437,7 +9472,10 @@ const
     'line:character position: the routine signatures with their ' +
     'parameter list, from the official DelphiLSP engine - the IDE''s ' +
     'Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right ' +
-    'after "(" or a ","). Requires project settings for full answers.';
+    'after "(" or a ","). Requires project settings for full answers. ' +
+    'An engine limit, measured: a call to a METHOD (Obj.Method( ...) ' +
+    'often answers null where a free routine answers; delphi_hover on ' +
+    'the method name gives its signature then.';
 
   SD_LSP_HOVER =
     'Type/signature information for the identifier at a 0-based ' +
@@ -9926,20 +9964,21 @@ const
 
   SP_WS_COMMAND =
     'status | diff | log | show | branch | switch | merge | stash | add | ' +
-    'restore | commit | init | push | tag | config | clone | pull | fetch ' +
+    'restore | untrack | commit | init | push | tag | config | clone | pull | fetch ' +
     '| ls-remote | worktree. Each takes ITS fields, never free arguments. ' +
     'merge and pull: always --ff-only (one needing a commit is refused). ' +
     'push adds to the remote, never overwrites or deletes. stash never ' +
     'drops: push with paths parks ONLY those and sets them back to HEAD - ' +
     'how you discard a file''s changes without losing them. restore: ' +
-    'always --staged (undoes an add). branch lists.';
+    'always --staged (undoes an add). untrack: rm --cached (git stops ' +
+    'following those paths; the files stay on disk). branch lists.';
 
   { los campos de delphi_git sin args (1.19.0): lo que USAMOS (David,
     14-oct-2026: "por defecto lo nuestro"; lo que haga falta despues se
     anade con su caso) }
   SP_GIT_PATHS =
     'Files or folders of this repo, a LIST (relative to it or absolute): ' +
-    'status, diff, log, show, add, restore, stash push.';
+    'status, diff, log, show, add, restore, untrack, stash push.';
 
   SP_GIT_TO =
     'diff, log: the other end of the range that starts at ref.';
@@ -11202,6 +11241,17 @@ const
   // Textos que estaban en linea en Mcp.Tools.FileOps.pas (el resto, 27-sep-2026)
   SF_FILE_SIGUE_AHI_DESPUES_BORRARLO =
     'still there after deleting it';
+  { ...y lo que queda dentro, con lo que Windows lista pero no deja abrir:
+    un borrado PENDIENTE, retenido por un handle de algun proceso (medido el
+    19-oct-2026 en el NAS: un motor con una unidad abierta; 1.21.4). }
+  SF_FILE_LO_QUE_QUEDA_FMT =
+    ' Left inside: %s%s.';
+  SF_FILE_Y_MAS_FMT =
+    ' (and %d more)';
+  SF_FILE_ENTRADA_RETENIDA_FMT =
+    '%s [listed, but Windows will not open it: a pending delete, held open ' +
+    'by some process - an engine of this server lets go on its own after ' +
+    'EngineIdleMinutes]';
 
   SF_FILE_TAMBIEN_A_PAPELERA =
     'also moved to the trash';

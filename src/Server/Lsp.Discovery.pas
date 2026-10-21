@@ -63,6 +63,16 @@ function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
   deployment, etc.) - never compose registry paths by hand elsewhere. }
 function IdeConfigValue(const AVersion, ASubKey, AValueName: string): string;
 
+{ LA clave de la configuracion del IDE en el registro: la raiz
+  (SOFTWARE\Embarcadero\BDS, con AVersion = ''), la de una version, o una
+  subclave de ella. Nombrador UNICO (D9 de la auditoria de duplicados,
+  1.21.4): se componia a mano unas 18 veces en cuatro unidades con dos
+  grafias, y ya dio un bug medido el 9-oct-2026 (SysrootsRegistrados). Sin
+  barra delante: TRegistry la toma relativa a su raiz, que es lo mismo con
+  nada abierto; quien la quiera absoluta le pone la barra. test_paisaje
+  vigila que nadie vuelva a escribir el formato. }
+function ClaveDelIde(const AVersion, ASubKey: string): string;
+
 { VIGIA DE UNA CLAVE del registro: Windows senala su evento cuando alguien -
   cualquier proceso, el IDE incluido - escribe un valor o crea o borra una
   subclave debajo (RegNotifyChangeKeyValue sobre el arbol entero, atado a la
@@ -467,7 +477,7 @@ begin
   Keys := TStringList.Create;
   try
     Reg.RootKey := ARootKey;
-    if not Reg.OpenKeyReadOnly('SOFTWARE\Embarcadero\BDS') then
+    if not Reg.OpenKeyReadOnly(ClaveDelIde('', '')) then
       Exit;
     Reg.GetKeyNames(Keys);
     Reg.CloseKey;
@@ -477,7 +487,7 @@ begin
       Ver := Keys[I];
       if AMap.ContainsKey(Ver) then
         Continue; // an earlier (higher-priority) hive already provided it
-      if not Reg.OpenKeyReadOnly('SOFTWARE\Embarcadero\BDS\' + Ver) then
+      if not Reg.OpenKeyReadOnly(ClaveDelIde(Ver, '')) then
         Continue;
       RootDir := Reg.ReadString('RootDir');
       Reg.CloseKey;
@@ -494,7 +504,7 @@ begin
         Info.RsVarsBat := Bat;
       // como se llama a si misma: Personalities (valor por defecto "RAD
       // Studio 13", Delphi.Win32 "Delphi 13"); ausente = no lo dice
-      if Reg.OpenKeyReadOnly('SOFTWARE\Embarcadero\BDS\' + Ver + '\Personalities') then
+      if Reg.OpenKeyReadOnly(ClaveDelIde(Ver, 'Personalities')) then
       begin
         Info.ProductName := Reg.ReadString('').Trim;
         if Reg.ValueExists('Delphi.Win32') then
@@ -503,7 +513,7 @@ begin
       end;
       // el update instalado, lo que el IDE pone en su Acerca de (13.1 es
       // "Update 1", 13.2 "Update 2"); ausente = no lo dice
-      if Reg.OpenKeyReadOnly('SOFTWARE\Embarcadero\BDS\' + Ver + '\InstalledUpdates') then
+      if Reg.OpenKeyReadOnly(ClaveDelIde(Ver, 'InstalledUpdates')) then
       begin
         if Reg.ValueExists('Main Product Update') then
           Info.InstalledUpdate := Reg.ReadString('Main Product Update').Trim;
@@ -791,12 +801,11 @@ begin
     ADest.Values[V.Nombre] := V.Dato;
 end;
 
-{ LA clave de la configuracion del IDE de una version, con una subclave o
-  sin ella: la componian a mano IdeConfigValue, IdeValoresDeClave,
-  IdeLibraryPlatforms y el vigia (1.21.4). }
 function ClaveDelIde(const AVersion, ASubKey: string): string;
 begin
-  Result := 'SOFTWARE\Embarcadero\BDS\' + AVersion;
+  Result := 'SOFTWARE\Embarcadero\BDS';
+  if AVersion <> '' then
+    Result := Result + '\' + AVersion;
   if ASubKey <> '' then
     Result := Result + '\' + ASubKey;
 end;
@@ -1252,8 +1261,7 @@ begin
   Claves := TStringList.Create;
   try
     Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs',
-      [AVersion])) then
+    if Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then
     begin
       Reg.GetKeyNames(Claves);
       // CERRADA antes de abrir cada SDK: una ruta sin '\' delante es RELATIVA
@@ -1263,8 +1271,7 @@ begin
       // 9-oct-2026; en esta maquina el default coincide y no se veia)
       Reg.CloseKey;
       for K in Claves do
-        if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs\%s',
-          [AVersion, K])) then
+        if Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs\' + K)) then
         try
           try
             Raiz := Reg.ReadString('SystemRoot');

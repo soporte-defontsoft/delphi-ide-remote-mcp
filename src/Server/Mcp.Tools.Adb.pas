@@ -193,7 +193,10 @@ end;
 function ResultadoAdb(const AOutput: string; AExitCode: Integer;
   const AExito: string = ''): string;
 begin
-  if DeviceGone(AOutput) then
+  // solo con adb acabado en ERROR: las siete frases de DeviceGone sobre toda
+  // la salida ganaban a un exit 0 (una linea de logcat con "offline" daba un
+  // falso "dispositivo perdido"; lote 4 del censo de jueces, 18-oct-2026)
+  if (AExitCode <> 0) and DeviceGone(AOutput) then
     Exit(MsgFmt(SR_ADB_GONE_FMT, [AOutput.Trim]));
   if AExitCode <> 0 then
     Exit(MsgFmt(SR_ADB_FALLO_FMT, [AExitCode, AOutput.Trim]));

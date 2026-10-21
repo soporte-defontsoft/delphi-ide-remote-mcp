@@ -58,6 +58,14 @@ uses
 
 const
   CRLF = #13#10;
+  // El ProjectVersion que escribe el IDE de la casa al crear un proyecto (13.1
+  // = 20.4; el 13.2 escribe 20.5 y sube el 20.4 al abrir, quitando ademas las
+  // plataformas Apple). SIN JUEZ medible (21-oct-2026): los .targets no lo
+  // llevan (solo nombran ficheros de version), las plantillas del ObjRepos
+  // traen 17.1/18.7/20.0 y los Samples estan retocados; lo unico que lo dice
+  // es un proyecto recien creado por el IDE instalado. Declarado aqui, UNA
+  // vez; msbuild y dcc no lo miran.
+  PROJECT_VERSION_DEL_IDE = '20.4';
 
 function NewGuidStr: string;
 var
@@ -286,7 +294,7 @@ begin
     '        <TargetedPlatforms>3</TargetedPlatforms>' + CRLF +
     '        ' + XmlElemento('AppType', AAppType) + CRLF +
     '        ' + XmlElemento('FrameworkType', AFramework) + CRLF +
-    '        <ProjectVersion>20.4</ProjectVersion>' + CRLF +
+    '        ' + XmlElemento('ProjectVersion', PROJECT_VERSION_DEL_IDE) + CRLF +
     '        ' + XmlSelector('Platform', 'Win64') + CRLF +
     '    </PropertyGroup>' + CRLF +
     DefinidorDeConfig('Base', 'Base') +

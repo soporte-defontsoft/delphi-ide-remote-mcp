@@ -28,9 +28,10 @@ SKIP = None
 
 DPR = ("program Pref;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils, System.Classes;\r\n\r\n"
        "var\r\n  L: TStringList;\r\n\r\nbegin\r\n  L := TStringList.Create;\r\n  Writeln('x');\r\n"
-       "  L.Free;\r\nend.\r\n")
+       "  L.Free;\r\n  Zqxv;\r\nend.\r\n")
 LINEA_W = 12    # 0-based: "  Writeln('x');"
 LINEA_L = 13    # 0-based: "  L.Free;"
+LINEA_Z = 14    # 0-based: "  Zqxv;" (un nombre que no casa con nada)
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='completion', t=240)
 try:
@@ -76,6 +77,13 @@ try:
         check('P4 los miembros de TStringList pasan del tope: truncated, total > items y la nota LSP-042',
               j.get('truncated') is True and j.get('total', 0) > len(j.get('items', [])) and 'LSP-042' in r,
               (j.get('truncated'), j.get('total'), len(j.get('items', []))))
+        # 1.21.4: con prefijo y ninguno que empiece por el, la nota LSP-049 (Luna,
+        # 20-oct-2026: items=[] sin decir por que costaba un turno)
+        r = srv.call('delphi_completion', {'path': dpr, 'line': LINEA_Z, 'character': 6}, t=240)
+        j = mc.como_json(r) or {}
+        check('P5 prefijo que no casa con nada: matching 0, items vacio y la nota LSP-049',
+              j.get('prefix') == 'Zqxv' and j.get('matching') == 0 and j.get('items') == [] and 'LSP-049' in r,
+              r[:300])
 finally:
     srv.cierra()
 

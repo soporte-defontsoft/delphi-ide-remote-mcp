@@ -1608,6 +1608,10 @@ begin
           ItemObj.AddPair('detail', Detail.Value);
       end;
       Return.AddPair('matching', TJSONNumber.Create(Casan));
+      // con prefijo y ninguno que empiece por el, items=[] sin decir por que
+      // (Luna, 20-oct-2026: un turno perdido); el motor si ofrecia candidatos
+      if (Casan = 0) and (Prefijo <> '') and (Items.Count > 0) then
+        Return.AddPair('matchingNote', MsgFmt(SN_COMPLETION_NINGUNO_FMT, [Items.Count, Prefijo]));
       if Casan > MAX_COMPLETION_ITEMS then
       begin
         Return.AddPair('truncated', TJSONBool.Create(True));

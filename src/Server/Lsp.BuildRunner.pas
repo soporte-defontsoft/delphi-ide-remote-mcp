@@ -1028,7 +1028,10 @@ begin
 end;
 
 { F2613 "Unit 'X' not found" / F1026 "File not found: 'X.dcu'": the unit
-  names the compiler could not resolve, in order, without duplicates. }
+  names the compiler could not resolve, in order, without duplicates. Por el
+  CODIGO y el primer '...' que lo sigue, no por la prosa inglesa: un dcc
+  traducido (dcc32370.de/.fr/.ja) dejaba missingUnits vacio y en quiet ni
+  senal (lote 4 del censo de jueces, 18-oct-2026; 1.21.4). }
 function MissingUnitsOf(const AErrors: TJSONArray): TArray<string>;
 var
   I: Integer;
@@ -1041,7 +1044,7 @@ begin
     for I := 0 to AErrors.Count - 1 do
     begin
       M := TRegEx.Match(AErrors.Items[I].Value,
-        'F2613:? Unit ''([^'']+)'' not found|F1026:? File not found: ''([^'']+)\.dcu''',
+        'F2613:?[^'']*''([^'']+)''|F1026:?[^'']*''([^'']+)\.dcu''',
         [roIgnoreCase]);
       if not M.Success then
         Continue;
@@ -1346,8 +1349,7 @@ begin
   Reg := TRegistry.Create(KEY_READ);
   try
     Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs',
-      [AVersion])) then
+    if Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then
       try
         if Reg.ValueExists('Default_' + APlat) then
           Result := Reg.ReadString('Default_' + APlat).Trim;
@@ -2332,7 +2334,8 @@ begin
         Implicitas.Sorted := True; Implicitas.Duplicates := dupIgnore;
         Sugeridos.Sorted := True; Sugeridos.Duplicates := dupIgnore;
         SinPaquete.Sorted := True; SinPaquete.Duplicates := dupIgnore;
-        for var MI in TRegEx.Matches(Output, 'W1033: Unit ''([^'']+)'' implicitly imported', [roIgnoreCase]) do
+        // por el CODIGO y el primer '...' (un dcc traducido no dice "implicitly imported")
+        for var MI in TRegEx.Matches(Output, 'W1033:?[^'']*''([^'']+)''', [roIgnoreCase]) do
         begin
           Implicitas.Add(MI.Groups[1].Value);
           var Pk := PaqueteDeUnit(Info.RootDir, MI.Groups[1].Value);

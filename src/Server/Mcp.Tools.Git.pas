@@ -309,9 +309,13 @@ begin
     // interruptor del propio git (2.46 en adelante): quita los consejos y deja
     // los hechos (medido con git 2.53 en stash pop, commit, add, merge, pull y
     // push); un git anterior lo ignora y sigue GIT-006 de segunda barrera.
+    // LC_ALL=C / LANGUAGE=C: git habla en ingles haga lo que haga el sistema,
+    // porque lo que de su salida se JUZGA por prosa (fast-forward, --no-ff,
+    // "specify the URL", las pistas de abajo) es ingles; un git traducido las
+    // dejaba sin casar (lote 4 del censo de jueces, 18-oct-2026; 1.21.4)
     Result := RunCapturedIn(GitLinea(ARepo, AFijado, AResto), '', ATimeoutMs,
       ACodigo, EntornoSinConfiguracion(['GIT_TERMINAL_PROMPT=0', 'GCM_INTERACTIVE=never',
-      'GIT_ADVICE=0']));
+      'GIT_ADVICE=0', 'LC_ALL=C', 'LANGUAGE=C']));
   except
     on E: EOSError do
     begin
@@ -356,7 +360,7 @@ end;
   incluido: deshace escribiendo-, pull, stash push y pop: unpack_trees
   escribe y borra a traves del junction). Lo demas no lo toca: log, show,
   branch, tag, config, fetch, push, ls-remote, init, commit (el indice),
-  restore --staged (el indice), switch -c (sale de HEAD), clone y worktree
+  restore --staged y untrack (rm --cached: el indice), switch -c (sale de HEAD), clone y worktree
   add (una carpeta nueva; remove tiene su GIT-020). Hermano de
   GitMaterializaArbol (que ordenes bajan objetos LFS) y del juez de
   GitReescribeProtegido (que ficheros cambiaria, preguntado a git): tres
@@ -1491,7 +1495,8 @@ begin
       'diff', 'paths ref to staged format context offset',
       'log', 'paths ref to format count search offset',
       'show', 'paths ref patch offset',
-      'branch', 'offset', 'add', 'paths', 'restore', 'paths', 'commit', 'message',
+      'branch', 'offset', 'add', 'paths', 'restore', 'paths', 'untrack', 'paths',
+      'commit', 'message',
       'pull', 'remote branch', 'fetch', 'remote', 'push', 'remote ref',
       'ls-remote', 'remote offset', 'init', '', 'clone', 'message',
       'config', 'name message', 'merge', 'branch action', 'switch', 'branch create',
@@ -1529,7 +1534,7 @@ begin
   // comando nuevo que no se apunte aqui no funciona - cerrado).
   if not MatchText(Cmd, ['status', 'diff', 'log', 'show', 'branch', 'add',
        'commit', 'clone', 'pull', 'fetch', 'init', 'config', 'switch', 'merge',
-       'stash', 'restore', 'push', 'tag', 'worktree', 'ls-remote']) then
+       'stash', 'restore', 'untrack', 'push', 'tag', 'worktree', 'ls-remote']) then
     Exit(MsgFmt(SR_GIT_UNKNOWN_COMMAND_FMT, [Params.Command]));
 
   // LA JAULA DEL REPO. git no trabaja sobre la carpeta que se le da: sube
@@ -1875,6 +1880,17 @@ begin
     if Length(Lista) = 0 then
       Exit(MsgText(SR_GIT_RESTORE_NEEDS_PATHS));
     GitArgs := 'restore --staged' + Rutas;
+  end
+  else if Cmd = 'untrack' then
+  begin
+    // rm --cached: quitar del INDICE lo que git sigue, sin tocar el disco
+    // (dos .res regenerados por msbuild obligaron a la consola el
+    // 14-oct-2026; Hermes choco con la falta de rm/reset el 28-sep). -r para
+    // una carpeta; --quiet, que el eco lo pone la nota (GIT-081). Como
+    // restore: el arbol de trabajo, nunca.
+    if Length(Lista) = 0 then
+      Exit(MsgText(SR_GIT_UNTRACK_NEEDS_PATHS));
+    GitArgs := 'rm --cached -r --quiet' + Rutas;
   end
   else if Cmd = 'push' then
   begin
@@ -2224,6 +2240,9 @@ begin
   // restore no toca el arbol: se dice, con la via que si descarta (GIT-077)
   if (ExitCode = 0) and (Cmd = 'restore') then
     Result := Result + #10 + MsgText(SN_GIT_RESTORE_SOLO_INDICE);
+  // untrack tampoco: se dice que hizo y que viene despues (GIT-081)
+  if (ExitCode = 0) and (Cmd = 'untrack') then
+    Result := Result + #10 + MsgText(SN_GIT_UNTRACK_SOLO_INDICE);
   // add que no pudo por un ignorado: cual y por que regla (GIT-078)
   if (ExitCode <> 0) and (Cmd = 'add') then
     Result := Result + IgnoradosDeGit(Repo, Fijado, Raiz, Relativas);
