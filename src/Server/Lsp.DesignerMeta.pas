@@ -1382,14 +1382,12 @@ function PropiedadDelUsuario(const AProp: TPropiedadPas; ATipo: TTipoPas;
   acaba en TObject }
 function JuezDeRaizConCorte(M: TMetaTable; const APas, APasTexto, AClase: string;
   out APropias: TArray<TPropiedadDelUsuario>; out ACorte: string; AConMotor: Boolean = True): string;
-const
-  MAX_SALTOS = 8;
 var
-  Texto, Enc, Fichero, Fichero2, Nombre, Id: string;
+  Texto, Enc, Fichero, Nombre, Id: string;
   U, UActual: TUnidadPas;
   T, Local: TTipoPas;
   Cadena: TCadenaPorElMotor;
-  Linea2: Integer;
+  Linea2, Salto: Integer;
 begin
   Result := '';
   APropias := [];
@@ -1414,7 +1412,8 @@ begin
       UActual := U;
       T := U.Clase(AClase);
       Fichero := APas;
-      for var Salto := 0 to MAX_SALTOS do
+      Salto := 0;
+      while True do
       begin
         if T = nil then
           Break;
@@ -1459,9 +1458,10 @@ begin
           if Cadena = nil then
             Break; // sin ajustes de proyecto no hay motor: la raiz, sin juzgar
         end;
-        if not Cadena.AncestroDe(Fichero, T.Linea, Fichero2, Linea2) then
+        // por EL recorredor (Lsp.Herencia.Siguiente): el tope de saltos es suyo
+        Linea2 := T.Linea;
+        if not Cadena.Siguiente(Fichero, Linea2, Salto) then
           Break;
-        Fichero := Fichero2;
         UActual := Cadena.UnidadDe(Fichero);
         T := Cadena.TipoEn(Fichero, Linea2);
         if T <> nil then

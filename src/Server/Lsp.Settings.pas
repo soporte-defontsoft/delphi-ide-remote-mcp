@@ -538,11 +538,40 @@ end;
   ACTUAL del proceso, que bajo el SCM es system32. Misma forma canonica que
   los roots - con barra final - para que la comparacion de despues sea la
   misma y no una parecida. }
+{ UNA entrada ABSOLUTA de un sitio (raiz, raiz de solo lectura o ruta de
+  solo lectura) a la lista, en su forma canonica - GetFullPath de la unidad a
+  secas o de la ruta, con letra y barra final -, o a las rechazadas si no es
+  un sitio con letra o no parsea. La rama que ParseRootsList y
+  ParseReadOnlyList tenian cada una (D5 de la auditoria de duplicados,
+  1.21.4): configuracion + jaula = UN lector, y la forma con la que la jaula
+  compara se mantiene aqui, no a mano en dos sitios. ARelativaVale es lo que
+  EntradaDeSitio pregunta de esa lista. test_paisaje vigila la rama. }
+procedure EntradaAbsolutaDeSitio(const V: string; ARelativaVale: Boolean;
+  AList: TStrings; var ARechazadas: TArray<string>);
+var
+  Full: string;
+begin
+  try
+    // (la unidad a secas es su raiz: con el servidor en esa unidad,
+    // GetFullPath de "N:" era la carpeta del servidor, y la jaula, ella)
+    Full := TPath.GetFullPath(RaizSiUnidad(V));
+    if EntradaDeSitio(V, ARelativaVale) and EsSitioConLetra(Full) then
+      AList.Add(IncludeTrailingPathDelimiter(Full))
+    else
+      ARechazadas := ARechazadas + [V];
+  except
+    // una entrada que no parsea (un comodin, un caracter que Windows no
+    // admite) nunca tumba el servidor, pero tampoco se calla: se ignoraba, y
+    // lo que nombraba se quedaba sin proteger (revision de la 1.9.0)
+    ARechazadas := ARechazadas + [V];
+  end;
+end;
+
 function ParseReadOnlyList(const ARaw: string;
   const ARoots: TArray<string>; var ARechazadas: TArray<string>): TArray<string>;
 var
   List: TStringList;
-  E, R, V, Full: string;
+  E, R, V: string;
 begin
   List := TStringList.Create;
   try
@@ -555,13 +584,8 @@ begin
         if not EntradaDeSitio(V, True) then
           ARechazadas := ARechazadas + [V]
         else if TPath.IsPathRooted(V) then
-        begin
-          Full := TPath.GetFullPath(RaizSiUnidad(V));
-          if EsSitioConLetra(Full) then
-            List.Add(IncludeTrailingPathDelimiter(Full))
-          else
-            ARechazadas := ARechazadas + [V];
-        end
+          // la rama absoluta, LA MISMA que la de las raices (D5)
+          EntradaAbsolutaDeSitio(V, True, List, ARechazadas)
         else
           for R in ARoots do
             List.Add(IncludeTrailingPathDelimiter(
@@ -587,7 +611,7 @@ function ParseRootsList(const ARaw: string;
   var ARechazadas: TArray<string>): TArray<string>;
 var
   List: TStringList;
-  R, V, Full: string;
+  R, V: string;
 begin
   List := TStringList.Create;
   try
@@ -596,19 +620,8 @@ begin
       V := R.Trim.Trim(['"']).Trim;
       if V = '' then
         Continue;
-      try
-        // (la unidad a secas es su raiz: con el servidor en esa unidad,
-        // GetFullPath de "N:" era la carpeta del servidor, y la jaula, ella)
-        Full := TPath.GetFullPath(RaizSiUnidad(V));
-        if EntradaDeSitio(V, False) and EsSitioConLetra(Full) then
-          List.Add(IncludeTrailingPathDelimiter(Full))
-        else
-          ARechazadas := ARechazadas + [V];
-      except
-        // an unparseable entry never crashes the server; it is not loaded,
-        // and the startup says so
-        ARechazadas := ARechazadas + [V];
-      end;
+      // una raiz es siempre absoluta: la rama de EntradaAbsolutaDeSitio (D5)
+      EntradaAbsolutaDeSitio(V, False, List, ARechazadas);
     end;
     Result := List.ToStringArray;
   finally

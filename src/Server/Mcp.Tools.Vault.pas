@@ -738,23 +738,36 @@ begin
   FDescription := SD_VAULT_APPEND;
 end;
 
-function TVaultAppendTool.ExecuteWithParams(const Params: TVaultAppendParams): string;
-var
-  Full, Add, Anchor, Backup: string;
+{ LA puerta de escritura del vault, UNA para las tools que escriben (append,
+  create, patch; D6 de la auditoria de duplicados, 1.21.4 - estaba a mano en
+  las tres): hay vault, se deja escribir, la ruta resuelve dentro
+  (VaultResolve) y no es un fichero de gobierno. '' y AFull si se puede; si
+  no, la negativa. La cuarta tool que escriba la llama, no la copia;
+  test_paisaje lo vigila. "Sin vault" y "vault de solo lectura" son dos cosas
+  distintas, y decir la segunda cuando pasaba la primera mandaba al agente a
+  quitar un ReadOnly que no existia (medido el 2026-09-20 desde un workspace
+  con token de ESCRITURA y sin VaultPath). }
+function VaultEscrituraDenegada(const ARel: string; out AFull: string): string;
 begin
-  // "Sin vault" y "vault de solo lectura" son dos cosas distintas, y decir
-  // la segunda cuando pasaba la primera mandaba al agente a quitar un
-  // ReadOnly que no existia (medido el 2026-09-20 desde un workspace con
-  // token de ESCRITURA y sin VaultPath).
+  AFull := '';
   if not VaultConfigured then
     Exit(MsgText(SR_VAULT_UNSET));
   if not VaultWritable then
     Exit(MsgText(SR_VAULT_READONLY));
-  Result := VaultResolve(Params.Path, Full);
+  Result := VaultResolve(ARel, AFull);
   if Result <> '' then
     Exit;
-  if VaultGovernance(Full) then
+  if VaultGovernance(AFull) then
     Exit(MsgText(SR_VAULT_GOVERNANCE));
+end;
+
+function TVaultAppendTool.ExecuteWithParams(const Params: TVaultAppendParams): string;
+var
+  Full, Add, Anchor, Backup: string;
+begin
+  Result := VaultEscrituraDenegada(Params.Path, Full);
+  if Result <> '' then
+    Exit;
   if not TFile.Exists(Full) then
     Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_VAULT_APPEND_FMT,
       [Params.Path.Trim]));
@@ -813,15 +826,9 @@ function TVaultCreateTool.ExecuteWithParams(const Params: TVaultCreateParams): s
 var
   Full, Dir: string;
 begin
-  if not VaultConfigured then
-    Exit(MsgText(SR_VAULT_UNSET));
-  if not VaultWritable then
-    Exit(MsgText(SR_VAULT_READONLY));
-  Result := VaultResolve(Params.Path, Full);
+  Result := VaultEscrituraDenegada(Params.Path, Full);
   if Result <> '' then
     Exit;
-  if VaultGovernance(Full) then
-    Exit(MsgText(SR_VAULT_GOVERNANCE));
   if Params.Content.Trim = '' then
     Exit(MsgText(SR_VAULT_FALTA_CONTENT_NOTA_NUEVA));
 
@@ -856,15 +863,9 @@ function TVaultPatchTool.ExecuteWithParams(const Params: TVaultPatchParams): str
 var
   Full, Backup: string;
 begin
-  if not VaultConfigured then
-    Exit(MsgText(SR_VAULT_UNSET));
-  if not VaultWritable then
-    Exit(MsgText(SR_VAULT_READONLY));
-  Result := VaultResolve(Params.Path, Full);
+  Result := VaultEscrituraDenegada(Params.Path, Full);
   if Result <> '' then
     Exit;
-  if VaultGovernance(Full) then
-    Exit(MsgText(SR_VAULT_GOVERNANCE));
   if not TFile.Exists(Full) then
     Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_FMT, [Params.Path.Trim]));
   if Params.Old_Text = '' then

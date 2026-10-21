@@ -755,6 +755,21 @@ function ConAvisosDelLector(const ARespuesta, APath: string): string;
   ANegativa. Lo usan las dos gemelas, delphi_edit y delphi_textedit. }
 function TandaDeUnBloque(const AOld, ANew, AFragment: string; AAtLine, AToLine: Integer;
   ADelete: Boolean; out ANegativa: string): string;
+{ El SIGNIFICADO de old/new de una edicion suelta o de una entrada de tanda,
+  escrito UNA vez (D7 de la auditoria de duplicados, 1.21.4: estaba en los
+  dos gemelos y en sus dos tandas, donde ya vivio el bug de occurrence): old
+  dado = hay ancla; old dado con new vacio = dejar la linea en blanco
+  (legitimo); sin old y con new lo caza la puerta de reescritura entera del
+  motor. test_paisaje vigila que nadie lo vuelva a escribir. }
+procedure SignificadoDeOldNew(const AOld, ANew: string; out AHasOld, AHasNew: Boolean);
+{ Con "fragment", lo que NO puede venir en la misma llamada - el primero que
+  venga: old, delete, toline, y los modos propios de quien llama (createunit,
+  restore, insert; create; occurrence en una tanda), ya decididos en
+  AModosPropios -, para que FragmentoALinea lo niegue por su nombre. '' si
+  nada. La escalera estaba en ExecutePatch, en TextEditNucleo y en la tanda
+  (D7). }
+function OtroModoConFragmento(AHasOld: Boolean; const AOldLine: string; ADelete: Boolean;
+  AToLine: Integer; const AModosPropios: string): string;
 { La nota de un fichero EN DISCO que es UTF-8 sin BOM y que dcc lee en ANSI
   (READ-008 de un fuente, READ-009 de un form), por la puerta de leer y EL
   detector: la de delphi_read, para quien no lo lee entero (designer lint).
@@ -3474,12 +3489,9 @@ begin
         var Frag := Obj.GetValue<string>('fragment', '');
         if Frag <> '' then
         begin
-          var Otros := '';
-          if Anc <> '' then Otros := 'old'
-          else if BooleanoDeEntrada(Obj, 'delete') then Otros := 'delete'
-          else if Hasta[N - 1] > 0 then Otros := 'toline'
-          else if EnteroDeEntrada(Obj, 'occurrence') > 0 then
-            Otros := 'occurrence';
+          // lo que choca con fragment, por LA escalera (OtroModoConFragmento)
+          var Otros := OtroModoConFragmento(Anc <> '', Anc, BooleanoDeEntrada(Obj, 'delete'),
+            Hasta[N - 1], IfThen(EnteroDeEntrada(Obj, 'occurrence') > 0, 'occurrence', ''));
           var NueLinea: string;
           var Mal: string;
           // lee el fichero: una excepcion aqui (otro proceso lo tiene) es el
@@ -4016,6 +4028,21 @@ begin
     Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
 end;
 
+procedure SignificadoDeOldNew(const AOld, ANew: string; out AHasOld, AHasNew: Boolean);
+begin
+  AHasOld := AOld <> '';
+  AHasNew := (ANew <> '') or AHasOld;
+end;
+
+function OtroModoConFragmento(AHasOld: Boolean; const AOldLine: string; ADelete: Boolean;
+  AToLine: Integer; const AModosPropios: string): string;
+begin
+  if AHasOld and (AOldLine <> '') then Result := 'old'
+  else if ADelete then Result := 'delete'
+  else if AToLine > 0 then Result := 'toline'
+  else Result := AModosPropios;
+end;
+
 function ExecutePatch(const A: TPatchArgs): string;
 var
   Ext: string;
@@ -4051,13 +4078,13 @@ begin
       // por el motor de siempre (ver FragmentoALinea).
       if A.Fragment <> '' then
       begin
-        var Otros := '';
-        if A.HasOld and (A.OldLine <> '') then Otros := 'old'
-        else if A.DeleteLine then Otros := 'delete'
-        else if A.ToLine > 0 then Otros := 'toline'
-        else if A.CreateUnit_ then Otros := 'createunit'
-        else if A.Restore then Otros := 'restore'
-        else if A.Insert <> '' then Otros := 'insert';
+        // lo que choca con fragment, por LA escalera (OtroModoConFragmento);
+        // los modos propios de delphi_edit, decididos aqui
+        var Propios := '';
+        if A.CreateUnit_ then Propios := 'createunit'
+        else if A.Restore then Propios := 'restore'
+        else if A.Insert <> '' then Propios := 'insert';
+        var Otros := OtroModoConFragmento(A.HasOld, A.OldLine, A.DeleteLine, A.ToLine, Propios);
         var LineaVieja, LineaNueva: string;
         Result := FragmentoALinea(A.Path, A.Fragment, A.NewText, A.AtLine,
           Otros, LineaVieja, LineaNueva);

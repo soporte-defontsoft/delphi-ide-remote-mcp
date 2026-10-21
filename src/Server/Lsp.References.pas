@@ -632,8 +632,8 @@ var
   end;
 
   { true si una de las dos clases desciende de la otra, subiendo por los
-    ancestros que contesta el motor (AncestroDe), hasta 20 saltos (una
-    jerarquia circular en fuentes a medio escribir). Una clase NO es pariente
+    ancestros que contesta el motor (EL recorredor, Lsp.Herencia.Siguiente,
+    con su tope de saltos). Una clase NO es pariente
     de si misma (una sobrecarga no es un override), y dos clases son la misma
     por su fichero y su linea, nunca por su nombre. }
   function EsPariente(const AFile1: string; ALinea1: Integer; const AFile2: string;
@@ -642,20 +642,15 @@ var
     function Desciende(const AHijo: string; ALinea: Integer; const AAbuelo: string;
       ALineaAbuelo: Integer): Boolean;
     var
-      F, F2: string;
-      L, L2, Salto: Integer;
+      F: string;
+      L, Salto: Integer;
     begin
       F := AHijo;
       L := ALinea;
-      for Salto := 1 to 20 do
-      begin
-        if not Cadena.AncestroDe(F, L, F2, L2) then
-          Exit(False);
-        if SameText(F2, AAbuelo) and (L2 = ALineaAbuelo) then
+      Salto := 0;
+      while Cadena.Siguiente(F, L, Salto) do
+        if SameText(F, AAbuelo) and (L = ALineaAbuelo) then
           Exit(True);
-        F := F2;
-        L := L2;
-      end;
       Result := False;
     end;
 

@@ -1644,12 +1644,10 @@ end;
 { ---- set ---- }
 
 function NombresHeredados(const F: TFormEnEdicion; AClase: TTipoPas): TArray<string>;
-const
-  MAX_SALTOS = 8;
 var
   Cadena: TCadenaPorElMotor;
-  Fichero, Fichero2, Id: string;
-  Linea2: Integer;
+  Fichero, Id: string;
+  Linea, Salto: Integer;
   T: TTipoPas;
 begin
   Result := [];
@@ -1659,7 +1657,8 @@ begin
   try
     T := AClase;
     Fichero := F.Pas;
-    for var Salto := 1 to MAX_SALTOS do
+    Salto := 0;
+    while True do
     begin
       // una clase de la tabla (TForm, un componente instalado) acaba la
       // cadena: sus campos no son componentes del form
@@ -1674,12 +1673,13 @@ begin
         if Cadena = nil then
           Break; // sin ajustes de proyecto no hay motor
       end;
-      if not Cadena.AncestroDe(Fichero, T.Linea, Fichero2, Linea2) then
+      // por EL recorredor (Lsp.Herencia.Siguiente): el tope de saltos es suyo
+      Linea := T.Linea;
+      if not Cadena.Siguiente(Fichero, Linea, Salto) then
         Break;
-      T := Cadena.TipoEn(Fichero2, Linea2);
+      T := Cadena.TipoEn(Fichero, Linea);
       if T = nil then
         Break;
-      Fichero := Fichero2;
       // sus campos publicados: los componentes de su form
       for var Campo in T.Campos do
         if not Campo.DeClase and (Campo.Visibilidad in [vpDefecto, vpPublicada]) then

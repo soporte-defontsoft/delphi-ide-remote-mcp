@@ -303,11 +303,9 @@ begin
     // motor de siempre con la linea COMPLETA (ver Lsp.Patch.FragmentoALinea).
     if A.Fragment <> '' then
     begin
-      var Otros := '';
-      if A.HasOld and (A.OldLine <> '') then Otros := 'old'
-      else if A.DeleteLine then Otros := 'delete'
-      else if A.ToLine > 0 then Otros := 'toline'
-      else if A.CreateFile_ then Otros := 'create';
+      // lo que choca con fragment, por LA escalera (Lsp.Patch, D7)
+      var Otros := OtroModoConFragmento(A.HasOld, A.OldLine, A.DeleteLine, A.ToLine,
+        IfThen(A.CreateFile_, 'create', ''));
       var AF := A;
       var LineaVieja, LineaNueva: string;
       Result := FragmentoALinea(A.Path, A.Fragment, A.NewText, A.AtLine,
@@ -359,8 +357,7 @@ begin
       A.Path := APath;
       A.OldLine := AOld;
       A.NewText := ANew;
-      A.HasOld := AOld <> '';
-      A.HasNew := (ANew <> '') or A.HasOld;
+      SignificadoDeOldNew(AOld, ANew, A.HasOld, A.HasNew); // UNA regla (D7)
       A.AtLine := AAtLine;
       A.ToLine := AToLine;
       A.DeleteLine := ADelete;

@@ -248,6 +248,38 @@ REGLAS = [
       ('FormRender.Textos.pas', '*')],
      'ClaveDelIde (Lsp.Discovery): la raiz, la de una version o una subclave; quien la quiera '
      'absoluta le pone la barra delante'),
+    # la rama ABSOLUTA de una entrada de sitio (la unidad a secas o la ruta -> GetFullPath, letra,
+    # barra final, o rechazada) la tenian ParseRootsList y ParseReadOnlyList cada una (D5 de la
+    # auditoria de duplicados, 1.21.4): configuracion + jaula = UN lector. Lsp.Rutas canonicaliza
+    # rutas con la misma forma (otra pregunta: no una entrada declarada), y VaultNormalizado es la
+    # del VaultPath, que no es un sitio de la jaula
+    ('la rama absoluta de una entrada de sitio', r'GetFullPath\(\s*RaizSiUnidad\(',
+     [('Lsp.Settings.pas', 'EntradaAbsolutaDeSitio'), ('Lsp.Settings.pas', 'VaultNormalizado'),
+      ('Lsp.Rutas.pas', '*')],
+     'EntradaAbsolutaDeSitio (Lsp.Settings): la forma con la que la jaula compara se mantiene en UN '
+     'sitio, no a mano en cada lista'),
+    # el significado de old/new (old dado = ancla; con new vacio = linea en blanco) estaba en los dos
+    # gemelos y en sus dos tandas, donde ya vivio el bug de occurrence (D7 de la auditoria, 1.21.4)
+    ('el significado de old/new', r'HasNew\s*:=\s*\(',
+     [('Lsp.Patch.pas', 'SignificadoDeOldNew')],
+     'SignificadoDeOldNew (Lsp.Patch): UNA regla para delphi_edit, delphi_textedit y sus tandas'),
+    # ...y la escalera de lo que choca con fragment (old, delete, toline, los modos propios), que
+    # estaba en ExecutePatch, en TextEditNucleo y en la tanda (D7)
+    ('lo que choca con fragment', r"then\s+\w+\s*:=\s*'old'",
+     [('Lsp.Patch.pas', 'OtroModoConFragmento')],
+     'OtroModoConFragmento (Lsp.Patch): la escalera, con los modos propios de quien llama ya decididos'),
+    # la cadena de ancestros por el motor la recorrian tres bucles con su cuenta y su tope (8 o 20):
+    # el disenador (NombresHeredados, ClaseDeJuezDeRaiz) y references (D2 de la auditoria, 1.21.4)
+    ('la cadena de ancestros por el motor', r'\bAncestroDe\s*\(',
+     [('Lsp.Herencia.pas', 'TCadenaPorElMotor.Siguiente')],
+     'TCadenaPorElMotor.Siguiente (Lsp.Herencia): EL recorredor, con TOPE_SALTOS; quien recorre decide '
+     'que hacer en cada salto, no cuantos dar'),
+    # la puerta de escritura del vault (hay vault, se deja escribir, resuelve dentro, no es de
+    # gobierno) estaba a mano en append, create y patch (D6 de la auditoria de duplicados, 1.21.4)
+    ('la puerta de escritura del vault', r'\bVaultGovernance\s*\(',
+     [('Mcp.Tools.Vault.pas', 'VaultEscrituraDenegada')],
+     'VaultEscrituraDenegada (Mcp.Tools.Vault): la EscrituraDenegada del vault; la cuarta tool que '
+     'escriba la llama, no copia los cuatro pasos'),
     ('vigilar una clave del registro', r'\bRegNotifyChangeKeyValue\s*\(',
      [('Lsp.Discovery.pas', 'ArmaVigia')],
      'ArmaVigia (Lsp.Discovery): VigilaClave abre y arma, CambioLaClave pregunta y rearma; quien cachea '
@@ -1010,6 +1042,11 @@ PLANTADO = {
         "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
     'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
+    'la rama absoluta de una entrada de sitio': "  Full := TPath.GetFullPath(RaizSiUnidad(V));",
+    'el significado de old/new': "  A.HasNew := (ANew <> '') or A.HasOld;",
+    'lo que choca con fragment': "  if A.HasOld then Otros := 'old'",
+    'la cadena de ancestros por el motor': "  if not Cadena.AncestroDe(F, L, F2, L2) then",
+    'la puerta de escritura del vault': "  if VaultGovernance(Full) then",
     'vigilar una clave del registro': "  RegNotifyChangeKeyValue(H, True, REG_NOTIFY_CHANGE_LAST_SET, Ev, True);",
     'la forma de los atomos del RTL': "  N := Format('Delphi%.8X', [Pid]);",
     'un literal de form leido a mano': "  N := V.Trim(['''']);",

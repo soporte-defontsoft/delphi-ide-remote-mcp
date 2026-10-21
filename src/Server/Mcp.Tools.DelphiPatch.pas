@@ -198,8 +198,7 @@ begin
       A.Path := APath;
       A.OldLine := AOld;
       A.NewText := ANew;
-      A.HasOld := AOld <> '';
-      A.HasNew := (ANew <> '') or A.HasOld;
+      SignificadoDeOldNew(AOld, ANew, A.HasOld, A.HasNew); // UNA regla (D7)
       A.AtLine := AAtLine;
       A.ToLine := AToLine;
       A.DeleteLine := ADelete;
@@ -299,10 +298,8 @@ begin
   A.Path := Params.Path;
   A.OldLine := Params.Old;
   A.NewText := Params.New;
-  A.HasOld := Params.Old <> '';
-  // old given + empty new = blank the line (legitimate); absent old + new
-  // is caught by the whole-file-rewrite gate inside the engine.
-  A.HasNew := (Params.New <> '') or A.HasOld;
+  // old dado con new vacio = dejar la linea en blanco: UNA regla, en Lsp.Patch (D7)
+  SignificadoDeOldNew(Params.Old, Params.New, A.HasOld, A.HasNew);
   A.AtLine := Params.AtLine;
   A.ToLine := Params.ToLine;
   A.DeleteLine := Params.Delete;

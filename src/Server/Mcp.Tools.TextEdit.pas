@@ -137,8 +137,7 @@ begin
   A.Path := Params.Path;
   A.OldLine := Params.Old;
   A.NewText := Params.New;
-  A.HasOld := Params.Old <> '';
-  A.HasNew := (Params.New <> '') or A.HasOld;
+  SignificadoDeOldNew(Params.Old, Params.New, A.HasOld, A.HasNew); // UNA regla (Lsp.Patch, D7)
   A.AtLine := Params.AtLine;
   A.ToLine := Params.ToLine;
   A.DeleteLine := Params.Delete;

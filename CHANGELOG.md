@@ -57,6 +57,17 @@ the MCP `initialize` response (`serverInfo.version`).
 - **Two engine limits are in the descriptions now**: `delphi_signature` often
   answers null for a call to a method where a free routine answers, and
   `delphi_references` cannot resolve the name in `unit X;` (`LSP-003`).
+- **Four rules that were written more than once are written once** (the
+  duplicate audit of 2026-10-16, no measured failure; `test_paisaje` watches
+  each): the absolute entry of a root or a read-only path has one reader
+  (`EntradaAbsolutaDeSitio`: configuration and jail compare the same form);
+  the vault's write gate is one call for append, create and patch
+  (`VaultEscrituraDenegada`); what `old`/`new` mean and what clashes with
+  `fragment` live once in `Lsp.Patch` for `delphi_edit`, `delphi_textedit`
+  and their batches, where the `occurrence` bug once lived twice; and the
+  ancestor chain the engine answers is walked by one walker with one cap
+  (`TCadenaPorElMotor.Siguiente`, 20 hops) for the designer and references
+  instead of three loops with 8 or 20.
 - **One composer of the IDE's registry key.** `SOFTWARE\Embarcadero\BDS\<ver>\...`
   was written by hand some eighteen times in four units, in two spellings
   (one of them with doubled backslashes), and had already produced a measured

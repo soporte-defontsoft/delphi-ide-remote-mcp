@@ -59,6 +59,15 @@ type
       ensenar, o uno fuera de Alcance. Nunca lanza. }
     function AncestroDe(const AFile: string; ALinea: Integer; out AFile2: string;
       out ALinea2: Integer): Boolean;
+    { EL recorredor: el siguiente salto de la cadena desde (AFile, ALinea),
+      contando los saltos contra UN tope (TOPE_SALTOS). True y la posicion
+      del ancestro en AFile/ALinea; False sin ancestro (AncestroDe) o con el
+      tope hecho. Quien recorre decide que hacer en cada salto y cuando parar
+      antes (references al dar con el abuelo, el disenador en la primera
+      clase de sus tablas); tres bucles lo hacian cada uno con su cuenta y su
+      tope, 8 o 20 (D2 de la auditoria de duplicados, 1.21.4). ASalto empieza
+      en 0 y es suyo. test_paisaje: nadie llama a AncestroDe salvo este. }
+    function Siguiente(var AFile: string; var ALinea: Integer; var ASalto: Integer): Boolean;
     property Client: TLspClient read FClient;
     { Que ficheros valen como destino de un salto; nil = todo lo que el motor
       puede ensenar (references: solo los del barrido, que un parentesco de
@@ -79,6 +88,12 @@ function MotorPara(const AFile: string): TLspClient;
 { Un recorredor sobre el motor de AFile (MotorPara); nil sin motor. Para
   quien no maneja motores (el disenador): lo crea, lo usa, lo libera. }
 function CadenaPara(const AFile: string): TCadenaPorElMotor;
+
+const
+  { Hasta donde sube el recorredor: una jerarquia circular en fuentes a medio
+    escribir no acaba nunca, y ninguna real llega aqui. UNO para los tres
+    recorridos (eran 8 en el disenador y 20 en references). }
+  TOPE_SALTOS = 20;
 
 implementation
 
@@ -177,6 +192,23 @@ begin
     FAbre(AFile)
   else
     TLspSession.Instance.AbreEn(FClient, AFile);
+end;
+
+function TCadenaPorElMotor.Siguiente(var AFile: string; var ALinea: Integer;
+  var ASalto: Integer): Boolean;
+var
+  F2: string;
+  L2: Integer;
+begin
+  Result := False;
+  if ASalto >= TOPE_SALTOS then
+    Exit;
+  Inc(ASalto);
+  if not AncestroDe(AFile, ALinea, F2, L2) then
+    Exit;
+  AFile := F2;
+  ALinea := L2;
+  Result := True;
 end;
 
 function TCadenaPorElMotor.AncestroDe(const AFile: string; ALinea: Integer;
