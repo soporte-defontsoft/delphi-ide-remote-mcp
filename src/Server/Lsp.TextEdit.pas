@@ -56,7 +56,8 @@ uses
   Lsp.Patch,
   Lsp.Casa,
   Lsp.Codificacion, // IsAscii
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Styles;       // IgnoradoPorFmx: lo que FMX hace con un .style escrito
 
 // Las extensiones de otras tools (fuentes y designers de delphi_edit, los de
 // proyecto del IDE / delphi_create) son las listas del motor: SOURCE_EXTS,
@@ -368,6 +369,22 @@ begin
 end;
 
 
+{ Un .style escrito por aqui no pasa por el juez de delphi_styles set
+  (STYLE-053, que niega antes de escribir): se pregunta a FMX DESPUES de
+  escribir y se dice si no lo carga (Hermes, rondas de la 1.21.0: lint lo
+  veia despues). Solo lo escrito con exito; una negativa, nada. }
+function NotaDeEstiloFmx(const APath, AResultado: string): string;
+var
+  Ignorado: TArray<string>;
+  NoCarga: string;
+begin
+  Result := '';
+  if EsFallo(AResultado) or not SameText(TPath.GetExtension(APath), '.style') then
+    Exit;
+  if IgnoradoPorFmx(APath, Ignorado, NoCarga) and (NoCarga <> '') then
+    Result := #10 + MsgFmt(SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT, [NoCarga]);
+end;
+
 function ExecuteTextEdits(const APath, AEditsJson: string): string;
 begin
   EnterFileEdit;
@@ -376,6 +393,7 @@ begin
   finally
     LeaveFileEdit;
   end;
+  Result := Result + NotaDeEstiloFmx(APath, Result);
 end;
 
 function ExecuteTextEdit(const A: TTextEditArgs): string;
@@ -389,6 +407,8 @@ begin
   finally
     LeaveFileEdit;
   end;
+  if not A.Ensayo then // (un ensayo no escribe: nada que preguntar a FMX)
+    Result := Result + NotaDeEstiloFmx(A.Path, Result);
 end;
 
 end.

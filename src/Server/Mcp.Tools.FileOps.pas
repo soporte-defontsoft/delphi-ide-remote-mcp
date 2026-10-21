@@ -307,6 +307,46 @@ begin
   Result := TFile.Exists(APath) or TDirectory.Exists(APath);
 end;
 
+{ Lo que queda dentro de una carpeta que no se dejo borrar, para decirlo:
+  sus primeras entradas, y cual de ellas Windows lista pero no deja abrir -
+  un borrado PENDIENTE, retenido por el handle de algun proceso (medido el
+  19-oct-2026 en el NAS: un motor con una unidad abierta; FILE-011 decia
+  "not empty" y nada mas). '' si no es una carpeta, no se deja listar o no
+  queda nada. }
+function LoQueQueda(const ADir: string): string;
+const
+  TOPE = 5;
+var
+  Entradas, Partes: TArray<string>;
+  Nombre: string;
+  I: Integer;
+begin
+  Result := '';
+  if not TDirectory.Exists(ADir) then
+    Exit;
+  try
+    Entradas := EntradasDeCarpeta(ADir);
+  except
+    Exit; // lo que no se deja listar no se describe
+  end;
+  Partes := nil;
+  for I := 0 to High(Entradas) do
+  begin
+    if I >= TOPE then
+      Break;
+    Nombre := TPath.GetFileName(Entradas[I]);
+    // listada pero sin abrir (ERROR_ACCESS_DENIED): un borrado pendiente
+    if (GetFileAttributes(PChar(Entradas[I])) = INVALID_FILE_ATTRIBUTES) and
+       (GetLastError = ERROR_ACCESS_DENIED) then
+      Nombre := MsgFmt(SF_FILE_ENTRADA_RETENIDA_FMT, [Nombre]);
+    Partes := Partes + [Nombre];
+  end;
+  if Length(Partes) = 0 then
+    Exit;
+  Result := MsgFmt(SF_FILE_LO_QUE_QUEDA_FMT, [string.Join(', ', Partes),
+    IfThen(Length(Entradas) > TOPE, MsgFmt(SF_FILE_Y_MAS_FMT, [Length(Entradas) - TOPE]), '')]);
+end;
+
 { Borrar DE VERDAD, sin papelera: una carpeta por el borrador con guard
   (no cruza enlaces: el junction cae como entrada y su destino ni se
   mira), un fichero quitandole antes el solo-lectura. '' si ya no esta;
@@ -326,12 +366,12 @@ begin
   except
     on E: Exception do
       Exit(MsgFmt(SR_FILE_PURGE_FAILED_FMT,
-        [TPath.GetFileName(SinBarraFinal(APath)), E.Message]));
+        [TPath.GetFileName(SinBarraFinal(APath)), E.Message + LoQueQueda(APath)]));
   end;
   if StillThere(APath) then
     Result := MsgFmt(SR_FILE_PURGE_FAILED_FMT,
       [TPath.GetFileName(SinBarraFinal(APath)),
-       MsgText(SF_FILE_SIGUE_AHI_DESPUES_BORRARLO)]);
+       MsgText(SF_FILE_SIGUE_AHI_DESPUES_BORRARLO) + LoQueQueda(APath)]);
 end;
 
 { Las carpetas de la papelera que una purga deja VACIAS, de abajo arriba y

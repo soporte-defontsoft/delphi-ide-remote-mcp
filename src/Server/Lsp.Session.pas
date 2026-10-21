@@ -320,6 +320,12 @@ type
   public
     constructor Create(ATransport: TLspProcessTransport);
     destructor Destroy; override;
+    { Tiene abierto en el motor algun documento BAJO esa carpeta (real): el
+      motor guarda un handle del fichero y, en un recurso SMB, la carpeta
+      borrada queda "borrandose" hasta que el motor se para (medido el
+      19-oct-2026 en el NAS: una unidad gobernada por un .dproj de ARRIBA,
+      cuya carpeta retenida no esta bajo la que se va). Bajo FDocLock. }
+    function TieneDocumentoBajo(const AFolderReal: string): Boolean;
   end;
 
 constructor TSessionClient.Create(ATransport: TLspProcessTransport);
@@ -787,6 +793,23 @@ begin
     CaeDentro(AFolderReal, ADirReal);
 end;
 
+function TSessionClient.TieneDocumentoBajo(const AFolderReal: string): Boolean;
+var
+  D: TDocState;
+begin
+  Result := False;
+  if AFolderReal = '' then
+    Exit;
+  FDocLock.Enter;
+  try
+    for D in FDocs.Values do
+      if IsUnder(AFolderReal, Resolved(TPath.GetDirectoryName(D.Path))) then
+        Exit(True);
+  finally
+    FDocLock.Leave;
+  end;
+end;
+
 const
   BUILD_WAIT_MS = 6000;     // an engine being built under the folder (it takes 2-3 s)
   // A folder still "leaving" after this was forgotten there. The net for a
@@ -856,6 +879,15 @@ var
   L: TLeavingFolder;
   C: TLspClient;
   Building: Boolean;
+
+  function YaEsta(const AKey: string): Boolean;
+  begin
+    for var X in Keys do
+      if SameText(X, AKey) then
+        Exit(True);
+    Result := False;
+  end;
+
 begin
   Keys := nil;
   Gone := nil;
@@ -868,6 +900,14 @@ begin
     Old := TakeRetired(False);
     for K in FHeldFolders.Keys.ToArray do
       if IsUnder(L.Real, FHeldFolders[K]) then
+        Keys := Keys + [K];
+    // ...y los que tienen un DOCUMENTO abierto bajo ella aunque su carpeta
+    // retenida no lo este: una unidad gobernada por un .dproj de arriba
+    // (medido el 19-oct-2026 en el NAS: el handle del motor dejaba la carpeta
+    // "borrandose" hasta que se paraba solo). FTables y luego FDocLock, el
+    // orden de siempre.
+    for K in FClients.Keys.ToArray do
+      if (not YaEsta(K)) and (FClients[K] as TSessionClient).TieneDocumentoBajo(L.Real) then
         Keys := Keys + [K];
     for K in Keys do
     begin
