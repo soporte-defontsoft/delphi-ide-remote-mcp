@@ -5,8 +5,9 @@ DCC_DcpOutput) para la plataforma y config del build se rechazaba con
 BUILD-030: sin ellas dcc deja cada .dcu junto a su fuente - los de un
 componente instalado o de una referencia, FUERA del proyecto - y el .bpl y el
 .dcp en las carpetas globales del IDE. Medido el 21-oct-2026 en la VM 13.2:
-Galatea (sin DCC_DcuOutput desde siempre) compilaba en el IDE, que dejo 14
-.dcu de Defontsoft en Program Files, y aqui no. Desde la 1.21.3 el build pone
+un proyecto real de veinte anos (sin DCC_DcuOutput desde siempre) compilaba en
+el IDE, que dejo 14 .dcu de un componente en Program Files, y aqui no. Desde la
+1.21.3 el build pone
 el mismo esas carpetas en la linea de msbuild (la del binario de ese build,
 dentro del proyecto; .\$(Platform)\$(Config) si tampoco la hay), sin tocar el
 .dproj, y la respuesta lo dice (outputSupplied, BUILD-054). Lo que el proyecto

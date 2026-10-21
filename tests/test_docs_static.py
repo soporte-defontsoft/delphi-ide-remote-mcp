@@ -61,6 +61,15 @@ for m in re.finditer(r'the other (\d+)\b', readme):
 check('README nombra los 5 vault_* como opcionales',
       '5 optional `vault_*`' in readme and len(VAULT_TOOLS) == 5, VAULT_TOOLS)
 
+# ---- lo que se publica no nombra proyectos internos nuestros -----------
+# David, 21-oct-2026 ("eso debe convertirse en regla"): una entrada nombraba el
+# exe de un proyecto interno. UNA lista con nombre, vigilada: el caso se cuenta
+# de forma generica ("un proyecto real", "<proyecto>.<OutputExt>").
+INTERNOS = ('galatea', 'galateamdb')
+changelog_pub = open(os.path.join(REPO, 'CHANGELOG.md'), encoding='utf-8').read().lower()
+nombrados = [n for n in INTERNOS if n in changelog_pub]
+check('CHANGELOG.md no nombra proyectos internos nuestros (regla del 21-oct-2026)', not nombrados, nombrados)
+
 # ---- TOOLS.md ----------------------------------------------------------
 toolsmd = open(os.path.join(REPO, 'docs', 'TOOLS.md'), encoding='utf-8').read()
 documented = sorted(set(re.findall(r'^### `([a-z_]+)`', toolsmd, re.M)))
