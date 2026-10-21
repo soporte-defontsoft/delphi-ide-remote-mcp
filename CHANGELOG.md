@@ -59,6 +59,16 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The build gate read an `<RcItem>` as if it were a `.rc` script.** An
+  `RcItem` is a resource FILE (the `.gif` or `.png` the IDE lists under
+  Resources and Images and compiles as RCDATA through the `.rc` it generates
+  itself); the gate of 1.21.2 ran the `.rc` reader on it, parsed its bytes as
+  text and refused with `BUILD-052` quoting them. Found on a real project the
+  first time it reached that gate (2026-10-21). Now only the script of an
+  `RcCompile` goes through the `.rc` reader; an `RcItem` is judged by its
+  path like everything else the build reads (one inside compiles, one outside
+  is `BUILD-050`). `test_build_lista_blanca_1212` W10 extended, red against
+  1.21.2.
 - **`delphi_styles set` rewrote a property FMX already ignored and said CHANGED.**
   The judge of `set` (STYLE-050, what FMX's own reader ignores) compared the
   ignored list before and after the change and refused only what the change

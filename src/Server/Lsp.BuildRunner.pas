@@ -1626,8 +1626,12 @@ var
     if LugarDeLecturaDenegado(Cand, LUGARES_DEL_MOTOR) <> '' then
       Exit(MsgFmt(SR_BUILD_LECTURA_FUERA_FMT,
         [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
-    // el .rc que compila brcc32: cada fichero que nombra, por EL lector
-    if MatchText(AValor.Elemento, ['RcCompile', 'RcItem']) and TFile.Exists(Cand) then
+    // el .rc que compila brcc32: cada fichero que nombra, por EL lector. Solo
+    // el guion de un RcCompile: un RcItem es un FICHERO de recurso (el .gif o
+    // .png que el IDE mete como RCDATA por el .rc que genera el mismo) y ya
+    // esta juzgado por su ruta, arriba; leerlo como guion lo parseaba como
+    // texto y citaba sus bytes en la negativa (Galatea, 21-oct-2026)
+    if SameText(AValor.Elemento, 'RcCompile') and TFile.Exists(Cand) then
     begin
       var Rc := RcLecturasDenegadas(Cand);
       if Rc <> '' then

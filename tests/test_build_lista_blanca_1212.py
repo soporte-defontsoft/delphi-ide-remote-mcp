@@ -21,7 +21,10 @@ nada (un <Foo/>, un <Touch Files=""/>, un icono, un .rc, un .pas vacio).
       existe (se juzga la ruta, no si existe: nada de oraculos)
   W9  DCC_UnitSearchPath dentro (lib;$(DCC_UnitSearchPath)) compila
   W10 RcCompile cuyo .rc nombra un fichero de fuera: BUILD-052 (con la
-      negativa del lector del .rc dentro); el .rc que nombra uno de dentro compila
+      negativa del lector del .rc dentro); el .rc que nombra uno de dentro compila;
+      un RcItem (un .gif RCDATA, un FICHERO, no un guion) de dentro compila y uno
+      de fuera es BUILD-050 por su ruta (1.21.3: se leia como guion y citaba sus
+      bytes, BUILD-052 con basura)
   W11 DCC_AdditionalSwitches no vacio: negado; con AllowBuildScripts compila
   W12 un ENLACE DURO en el arbol del proyecto a un fichero de fuera: BUILD-053;
       uno entre dos ficheros de dentro compila (donde Windows lista los
@@ -205,6 +208,17 @@ try:
     open(rc, 'w', encoding='utf-8').write('DATOS RCDATA "dentro.txt"\r\n')
     r = build(proyecto)
     check('W10 el .rc que nombra uno de dentro compila', compila(r), detalle(r))
+    # un RcItem es un FICHERO de recurso (RCDATA), no un guion: se juzga por su
+    # ruta y no se lee como texto (1.21.3; en 1.21.2 salia BUILD-052 con sus bytes)
+    open(os.path.join(carpeta, 'dentro.gif'), 'wb').write(b'GIF89a' + bytes(range(1, 200)))
+    escribe(proyecto, xml, '<ItemGroup><RcItem Include="dentro.gif"><ResourceType>RCDATA</ResourceType>'
+                           '<ResourceId>dentro</ResourceId></RcItem></ItemGroup>')
+    r = build(proyecto)
+    check('W10 un RcItem binario de DENTRO (un .gif RCDATA) compila: es un fichero, no un guion', compila(r), detalle(r))
+    escribe(proyecto, xml, '<ItemGroup><RcItem Include="%s"><ResourceType>RCDATA</ResourceType>'
+                           '<ResourceId>fuera</ResourceId></RcItem></ItemGroup>' % attr(secreto))
+    r = build(proyecto)
+    check('W10 un RcItem de FUERA: BUILD-050 por su ruta', lectura_fuera(r, 'RcItem'), r[:300])
 
     # --- W12: un enlace duro en el arbol ---
     carpeta, proyecto, xml = fixture('enlace')
