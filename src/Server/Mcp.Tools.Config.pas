@@ -45,6 +45,8 @@ type
     FInclude: Boolean;
     FRequires: string;
     FConfig: string;
+    FName: string;
+    FValue: string;
   public
     [SchemaDescription(SP_CFG_PROJECT)]
     [Required]
@@ -98,6 +100,14 @@ type
     property Requires: string read FRequires write FRequires;
     [SchemaDescription(SP_CFG_CONFIG)]
     property Config: string read FConfig write FConfig;
+    // set-property / remove-property / get-property (1.22.0): UNA propiedad
+    // del .dproj por su nombre, en el grupo del build que digan platform y
+    // config. El nombre solo elige (lo que no es una opcion se niega) y el
+    // valor lo juzga la puerta del build cuando ese build lo lea
+    [SchemaDescription(SP_CFG_NAME)]
+    property Name: string read FName write FName;
+    [SchemaDescription(SP_CFG_VALUE)]
+    property Value: string read FValue write FValue;
   end;
 
   TDelphiConfigTool = class(TMCPToolBase<TDelphiConfigParams>)
@@ -510,13 +520,25 @@ end;
 { ValidOutputFolder (la regla de "carpeta relativa al proyecto, apta para
   escribirse en un .dproj") vive ahora en Lsp.Dproj: delphi_create necesita
   la misma para sus subcarpetas, y una regla asi no se escribe dos veces. }
+{ "valor in the group X" / "valor in a group with no condition": la pieza de
+  LoQueHabia (set-output) y de DondeEsta (get-property). }
+function ValorEnGrupo(const AValor, AGrupo: string): string;
+var
+  Valor: string;
+begin
+  Valor := IfThen(AValor = '', MsgText(SF_CFG_SIN_DEFINIR), AValor);
+  if AGrupo.Trim = '' then
+    Result := MsgFmt(SF_CFG_VALOR_EN_GRUPO_SIN_CONDICION_FMT, [Valor])
+  else
+    Result := MsgFmt(SF_CFG_VALOR_EN_GRUPO_FMT, [Valor, AGrupo]);
+end;
+
 { El "before" de CFG-081: el valor que tenia; si estaba en mas de un grupo, o
   en uno que no es el base, cada uno con su grupo - una config con su propia
   carpeta que set-output ha reescrito se dice, no se calla. }
 function LoQueHabia(const ACambios: TArray<TValorReescrito>): string;
 var
   Trozos: TArray<string>;
-  Valor: string;
 begin
   if Length(ACambios) = 0 then
     Exit(MsgText(SF_CFG_SIN_DEFINIR));
@@ -524,13 +546,7 @@ begin
     Exit(ACambios[0].Antes);
   Trozos := [];
   for var C in ACambios do
-  begin
-    Valor := IfThen(C.Antes = '', MsgText(SF_CFG_SIN_DEFINIR), C.Antes);
-    if C.Grupo = '' then
-      Trozos := Trozos + [MsgFmt(SF_CFG_VALOR_EN_GRUPO_SIN_CONDICION_FMT, [Valor])]
-    else
-      Trozos := Trozos + [MsgFmt(SF_CFG_VALOR_EN_GRUPO_FMT, [Valor, C.Grupo])];
-  end;
+    Trozos := Trozos + [ValorEnGrupo(C.Antes, C.Grupo)];
   Result := string.Join('; ', Trozos);
 end;
 
@@ -604,77 +620,67 @@ end;
   read: they must resolve (macros expanded with the IDE's own environment
   table) inside the workspace roots or the read-only library zone, and exist. }
 
-{ Las Condition de los grupos (GroupCondition, DefinerCondition), el grupo por
-  su Condition (GrupoConCondicion) y la etiqueta dentro de el (TramosEnGrupo)
-  viven en Lsp.Dproj: EL analisis del .dproj, el mismo que lee el build. Aqui
-  eran un buscador del grupo letra a letra y otro de la etiqueta exacta
-  (D4 de la auditoria de la 1.20.1). }
-{ Creates the definer and values groups of a platform when the .dproj lacks
-  them (the IDE writes both the first time a platform option is touched). }
-procedure EnsurePlatformGroups(var AXml: string; const APlatform: string);
-var
-  G: TGrupoXml;
-  Tras: Integer;
+{ Las Condition de los grupos (GroupCondition, DefinerCondition), el grupo de
+  un build (GrupoDelBuild; AseguraGrupoDelBuild lo crea con su definidor como
+  lo crea el IDE si falta) y EL escritor de una propiedad de un build
+  (PonPropiedadDelBuild) viven en Lsp.Dproj: EL analisis del .dproj, el mismo
+  que lee el build. Aqui eran un buscador del grupo letra a letra y otro de
+  la etiqueta exacta (D4 de la auditoria de la 1.20.1), y luego
+  EnsurePlatformGroups (solo plataforma) y PonPropiedadDePlataforma (set-sdk /
+  set-profile), con add-searchpath eligiendo el grupo por su cuenta; en un
+  grupo de configuracion no escribia nadie (unificacion de la 1.22.0). }
+
+{ El nombre de un build en las respuestas: la base, una plataforma, una
+  configuracion o la pareja. }
+function NombreDelBuild(const APlatform, AConfig: string): string;
 begin
-  if not GrupoConCondicion(AXml, DefinerCondition(APlatform), G) then
-  begin
-    // after the last platform definer (any platform), else after the Base one
-    Tras := 0;
-    for var D in GruposDePropiedades(AXml) do
-      if PlataformaDeGrupo(D.Condicion, True) <> '' then
-        Tras := D.Cierra;
-    if (Tras = 0) and
-       GrupoConCondicion(AXml, ConfigDefinerCondition('Base', 'Base'), G) then
-      Tras := G.Cierra;
-    if Tras = 0 then
-      raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_CONFIG));
-    // EL escritor del definidor (Lsp.Dproj), el de delphi_create tambien
-    AXml := Copy(AXml, 1, Tras - 1) + sLineBreak +
-      XmlGrupoDefinidor(APlatform, 'Base') + Copy(AXml, Tras, MaxInt);
-  end;
-  if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
-  begin
-    if not GrupoConCondicion(AXml, GroupCondition(''), G) then
-      raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
-    // EL escritor del grupo de valores (Lsp.Dproj), el de delphi_create tambien
-    AXml := Copy(AXml, 1, G.Cierra - 1) + sLineBreak +
-      XmlGrupoDeValores(APlatform, 'Base', '') + Copy(AXml, G.Cierra, MaxInt);
-  end;
+  if (APlatform = '') and (AConfig = '') then
+    Result := MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE)
+  else if AConfig = '' then
+    Result := APlatform
+  else if APlatform = '' then
+    Result := MsgFmt(SF_CFG_BUILD_CONFIG_FMT, [AConfig])
+  else
+    Result := APlatform + ' ' + AConfig;
 end;
 
-{ set-sdk y set-profile: ATag (PlatformSDK, Profile) en el grupo de valores de
-  APlatform - donde la escribe el IDE y la lee msbuild para ella -, creado
-  como lo crea el IDE si falta. Las que hubiera DENTRO de ese grupo se quitan
-  con su linea (AAntes, la que valia: la ultima) y, si no es quitar, la nueva
-  va al principio del grupo. Eran dos gemelas de treinta lineas que solo
-  quitaban la primera: con dos, la otra seguia valiendo (D3 de la auditoria de
-  la 1.20.1). '' o la negativa: AInconsistente si el grupo no aparece despues
-  de quitarlas. }
-function PonPropiedadDePlataforma(var AXml: string; const APlatform, ATag, AValor: string;
-  AQuitar: Boolean; const AInconsistente: string; out AAntes: string): string;
+{ La configuracion ARaw con el nombre que declara el proyecto (una que se
+  compila: Base no): lo que teclea el agente solo elige (set-active,
+  set-property...). La negativa, con las que declara, si no es ninguna. }
+function ConfigDeclarada(const AXml, ARaw: string; out AConfig: string): string;
 var
-  G: TGrupoXml;
-  Tramos: TArray<TTramoXml>;
+  Validas: string;
 begin
   Result := '';
-  AAntes := '';
-  EnsurePlatformGroups(AXml, APlatform);
-  if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
-    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT, [APlatform]));
-  // lo que hubiera DENTRO de ese grupo, no en cualquier sitio del fichero; de
-  // la ultima a la primera, para que las de delante no se muevan
-  Tramos := TramosEnGrupo(AXml, ATag, G);
-  if Length(Tramos) > 0 then
+  AConfig := '';
+  Validas := '';
+  for var N in InfoDeDproj(AXml).Compilables do
   begin
-    AAntes := ValorDeTramo(AXml, Tramos[High(Tramos)]);
-    for var K := High(Tramos) downto 0 do
-      QuitaConSuLinea(AXml, Tramos[K].Abre, Tramos[K].Cierra);
-    if not GrupoConCondicion(AXml, GroupCondition(APlatform), G) then
-      Exit(AInconsistente);
+    Validas := IfThen(Validas = '', N, Validas + ', ' + N);
+    if SameText(N, ARaw.Trim) then
+      AConfig := N;
   end;
-  if not AQuitar then
-    AXml := Copy(AXml, 1, G.Ini - 1) + sLineBreak +
-      '        ' + XmlElemento(ATag, AValor) + Copy(AXml, G.Ini, MaxInt);
+  if AConfig = '' then
+    Result := MsgFmt(SR_CFG_SET_ACTIVE_CONFIG_FMT, [ARaw.Trim, ONinguno(Validas)]);
+end;
+
+{ La negativa de un build sin grupo de valores (AseguraGrupoDelBuild), con
+  lo que le falta. }
+function MensajeDeFalta(AFalta: TFaltaDeGrupo; const AXml, APlatform, AConfig, ATag: string): string;
+begin
+  case AFalta of
+    fgConfigNoDeclarada:
+      Result := MsgFmt(SR_CFG_SET_ACTIVE_CONFIG_FMT,
+        [AConfig, ONinguno(string.Join(', ', InfoDeDproj(AXml).Compilables))]);
+    fgSinDefinidor:
+      Result := MsgFmt(SR_CFG_SIN_DEFINIDOR_FMT, [NombreDelBuild(APlatform, AConfig)]);
+    fgSinGrupoBase:
+      Result := MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE);
+    fgInconsistente:
+      Result := MsgFmt(SR_CFG_QUEDO_INCONSISTENTE_FMT, [ATag]);
+  else
+    Result := '';
+  end;
 end;
 
 { Las rutas de una lista ESCRITA en el .dproj (con sus entidades: el ';' de
@@ -816,6 +822,7 @@ var
   G: TGrupoXml;
   Tramos: TArray<TTramoXml>;
   VS: Integer;
+  Falta: TFaltaDeGrupo;
 
   // ya listada en el proyecto, o repetida en la misma llamada
   function Listada(const APath: string): Boolean;
@@ -848,18 +855,13 @@ begin
       Exit;
     end;
   end;
-  Etiqueta := IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat);
+  Etiqueta := NombreDelBuild(Plat, '');
 
   Xml := PatchLoadText(ADproj, Enc);
-  try
-    if Plat <> '' then
-      EnsurePlatformGroups(Xml, Plat);
-  except
-    on E: Exception do
-      Exit(MsgExcepcion(E.ClassName, E.Message));
-  end;
-  if not GrupoConCondicion(Xml, GroupCondition(Plat), G) then
-    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT, [GroupCondition(Plat)]));
+  // el grupo de valores de esa plataforma (o la base), creado con su
+  // definidor como lo crea el IDE si falta (EL creador, Lsp.Dproj)
+  if not AseguraGrupoDelBuild(Xml, Plat, '', G, Falta) then
+    Exit(MensajeDeFalta(Falta, Xml, Plat, '', 'DCC_UnitSearchPath'));
   Tramos := TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G);
   Actuales := nil;
   if Length(Tramos) > 0 then
@@ -939,10 +941,10 @@ begin
   for var R in ARawPaths do
     if R.Trim = '' then
       Exit(MsgText(SR_CONFIG_NEED_PATH));
-  Etiqueta := IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat);
+  Etiqueta := NombreDelBuild(Plat, '');
   Xml := PatchLoadText(ADproj, Enc);
   Tramos := [];
-  if GrupoConCondicion(Xml, GroupCondition(Plat), G) then
+  if GrupoDelBuild(Xml, Plat, '', G) then // EL lector del grupo (Lsp.Dproj)
     Tramos := TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G);
   Quitadas := nil;
   NoEstaban := nil;
@@ -1509,6 +1511,7 @@ var
   APlatform, Sdk, Enc, Xml, Antes, Disponibles: string;
   Info: TRadStudioInfo;
   Quitar: Boolean;
+  Falta: TFaltaDeGrupo;
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
@@ -1539,10 +1542,10 @@ begin
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
-  Result := PonPropiedadDePlataforma(Xml, APlatform, 'PlatformSDK', Sdk, Quitar,
-    MsgText(SR_CFG_QUEDO_INCONSISTENTE_PLATFORMSDK), Antes);
-  if Result <> '' then
-    Exit;
+  // EL escritor de una propiedad de un build (Lsp.Dproj): el grupo de
+  // valores de la plataforma, creado como lo crea el IDE si falta
+  if not PonPropiedadDelBuild(Xml, 'PlatformSDK', Sdk, APlatform, '', Quitar, Antes, Falta) then
+    Exit(MensajeDeFalta(Falta, Xml, APlatform, '', 'PlatformSDK'));
 
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   if Quitar then
@@ -1563,6 +1566,7 @@ var
   APlatform, Perfil, Enc, Xml, Antes, Disponibles: string;
   Info: TRadStudioInfo;
   Quitar: Boolean;
+  Falta: TFaltaDeGrupo;
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
@@ -1602,10 +1606,9 @@ begin
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
-  Result := PonPropiedadDePlataforma(Xml, APlatform, 'Profile', Perfil, Quitar,
-    MsgText(SR_CFG_QUEDO_INCONSISTENTE_PROFILE), Antes);
-  if Result <> '' then
-    Exit;
+  // EL escritor de una propiedad de un build (Lsp.Dproj), como set-sdk
+  if not PonPropiedadDelBuild(Xml, 'Profile', Perfil, APlatform, '', Quitar, Antes, Falta) then
+    Exit(MensajeDeFalta(Falta, Xml, APlatform, '', 'Profile'));
 
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   if Quitar then
@@ -1658,16 +1661,11 @@ begin
   if ARawConfig.Trim <> '' then
   begin
     // una que declara, con SU nombre: lo que teclea el agente solo elige
-    var Cfg := '';
-    var Validas := '';
-    for var N in Info.Compilables do
-    begin
-      Validas := IfThen(Validas = '', N, Validas + ', ' + N);
-      if SameText(N, ARawConfig.Trim) then
-        Cfg := N;
-    end;
-    if Cfg = '' then
-      Exit(MsgFmt(SR_CFG_SET_ACTIVE_CONFIG_FMT, [ARawConfig.Trim, ONinguno(Validas)]));
+    // (ConfigDeclarada, la regla de set-property tambien)
+    var Cfg: string;
+    Result := ConfigDeclarada(Xml, ARawConfig, Cfg);
+    if Result <> '' then
+      Exit;
     Result := Pon('Config', Cfg);
     if Result <> '' then
       Exit;
@@ -1717,6 +1715,160 @@ begin
   Result := MsgFmt(SN_CFG_SET_ACTIVE_FMT, [TPath.GetFileName(ADproj), Hecho]);
 end;
 
+{ ---- set-property / remove-property / get-property (1.22.0) -------------
+  UNA propiedad del .dproj por su nombre, en el grupo del build que digan
+  platform y config (sin ninguno, la base), por EL escritor de Lsp.Dproj
+  (PonPropiedadDelBuild): la casa del keystore de Android (PF_KeyStoreDebug,
+  PF_AliasKeyDebug... en '$(Cfg_1_Android64)'!='') y de lo que venga - un
+  agente con un keystore de fuera de las raices no tenia tool que lo quitase
+  ni re-apuntase (21-oct-2026). El nombre lo teclea el agente, pero solo
+  elige: lo que es estructura del .dproj (los selectores, las claves y sus
+  banderas) tiene su comando o no se toca, y un evento de build o una opcion
+  libre es texto que este servidor nunca pasa a un programa (el build los
+  vacia o los niega). El VALOR no se juzga aqui: lo juzga la puerta del build
+  cuando ESE build lo lea (BUILD-050), como lo que entra por delphi_upload. }
+
+{ Un nombre de propiedad como los que escribe el IDE: letra o _ y luego
+  letras, digitos, _ . - (lo que XML admite en una etiqueta; gramatica
+  propia, declarada: el juez, MSXML, no entra en el servidor). }
+function NombreDePropiedadValido(const ANombre: string): Boolean;
+begin
+  Result := (ANombre <> '') and CharInSet(ANombre[1], ['A'..'Z', 'a'..'z', '_']);
+  for var C in ANombre do
+    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '.', '-']) then
+      Exit(False);
+end;
+
+{ Lo que no es una opcion sino la ESTRUCTURA del .dproj: los selectores
+  (Config, Platform: set-active), las claves (Base, Cfg_N) y las banderas de
+  los definidores (Base_X, Cfg_N_X, CfgParent), y lo que identifica el
+  proyecto (ProjectGuid, ProjectVersion, MainSource). }
+function EsClaveDeEstructura(const ANombre: string): Boolean;
+begin
+  Result := MatchText(ANombre, ['Config', 'Platform', 'Base', 'CfgParent', 'ProjectGuid',
+    'ProjectVersion', 'MainSource']) or ANombre.StartsWith('Base_', True) or
+    ANombre.StartsWith('Cfg_', True);
+end;
+
+{ En que grupos del .dproj esta <ATag> y con que valor, en orden de
+  documento, como lo cuenta set-output (ValorEnGrupo); '' si en ninguno. }
+function DondeEsta(const AXml, ATag: string): string;
+var
+  Trozos: TArray<string>;
+begin
+  Trozos := [];
+  for var G in GruposDePropiedades(AXml) do
+    for var T in TramosEnGrupo(AXml, ATag, G, True) do
+      Trozos := Trozos + [ValorEnGrupo(ValorDeTramo(AXml, T), G.Condicion)];
+  Result := string.Join('; ', Trozos);
+end;
+
+{ ...como coletilla de una respuesta (" Set in: ..."), o nada. }
+function EnOtrosGrupos(const AXml, ATag: string): string;
+begin
+  Result := DondeEsta(AXml, ATag);
+  if Result <> '' then
+    Result := MsgFmt(SF_CFG_PROPERTY_DONDE_FMT, [Result]);
+end;
+
+{ El build que nombran platform y config de la llamada: la plataforma
+  canonica y la configuracion con el nombre que declara el proyecto ('' =
+  sin esa mitad); la negativa si no valen. }
+function BuildDeLaLlamada(const AXml, ARawPlatform, ARawConfig: string;
+  out APlatform, AConfig: string): string;
+begin
+  Result := '';
+  APlatform := '';
+  AConfig := '';
+  if ARawPlatform.Trim <> '' then
+  begin
+    APlatform := CanonicalPlatform(ARawPlatform);
+    if APlatform = '' then
+      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+  end;
+  if ARawConfig.Trim <> '' then
+    Result := ConfigDeclarada(AXml, ARawConfig, AConfig);
+end;
+
+function SetProperty(const ADproj, ARawName, ARawValue, ARawPlatform, ARawConfig: string;
+  AQuitar: Boolean): string;
+var
+  Nombre, Valor, Enc, Xml, Original, Plat, Cfg, Antes, Donde, Grupo: string;
+  Falta: TFaltaDeGrupo;
+begin
+  Nombre := ARawName.Trim;
+  if Nombre = '' then
+    Exit(MsgText(SR_CFG_NEED_NAME));
+  if not NombreDePropiedadValido(Nombre) then
+    Exit(MsgFmt(SR_CFG_NAME_NO_ES_PROPIEDAD_FMT, [Nombre]));
+  if EsClaveDeEstructura(Nombre) then
+    Exit(MsgFmt(SR_CFG_NAME_ES_ESTRUCTURA_FMT, [Nombre]));
+  if EsTextoLibreDelBuild(Nombre) then
+    Exit(MsgFmt(SR_CFG_NAME_ES_TEXTO_LIBRE_FMT, [Nombre]));
+  Valor := ARawValue.Trim;
+  if not AQuitar then
+  begin
+    if Valor = '' then
+      Exit(MsgText(SR_CFG_NEED_VALUE));
+    for var C in Valor do
+      if Ord(C) < 32 then
+        Exit(MsgText(SR_CFG_VALUE_CON_CONTROL));
+  end;
+  Xml := PatchLoadText(ADproj, Enc);
+  Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, Plat, Cfg);
+  if Result <> '' then
+    Exit;
+  Original := Xml;
+  if not PonPropiedadDelBuild(Xml, Nombre, Valor, Plat, Cfg, AQuitar, Antes, Falta) then
+    Exit(MensajeDeFalta(Falta, Xml, Plat, Cfg, Nombre));
+  Donde := NombreDelBuild(Plat, Cfg);
+  Grupo := GroupCondition(Plat, ClaveDelBuild(Xml, Cfg)); // el nombrador, para decirlo
+  if AQuitar then
+  begin
+    if Xml = Original then
+      Exit(MsgFmt(SN_CFG_PROPERTY_NO_ESTABA_FMT, [Nombre, Donde, Grupo, EnOtrosGrupos(Xml, Nombre)]));
+    PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+    Exit(MsgFmt(SN_CFG_PROPERTY_QUITADA_FMT,
+      [Nombre, Donde, Grupo, ONinguno(Antes), EnOtrosGrupos(Xml, Nombre)]));
+  end;
+  // lo que ya era no se escribe, ni copia (como set-active)
+  if Xml = Original then
+    Exit(MsgFmt(SN_CFG_PROPERTY_YA_FMT, [Nombre, Valor, Donde, Grupo]));
+  PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  Result := MsgFmt(SN_CFG_PROPERTY_PUESTA_FMT, [Nombre, Valor, Donde, Grupo, ONinguno(Antes)]);
+end;
+
+function GetProperty(const ADproj, ARawName, ARawPlatform, ARawConfig: string): string;
+var
+  Nombre, Enc, Xml, Plat, Cfg, Valor, Donde: string;
+  Info: TDprojInfo;
+begin
+  Nombre := ARawName.Trim;
+  if Nombre = '' then
+    Exit(MsgText(SR_CFG_NEED_NAME));
+  if not NombreDePropiedadValido(Nombre) then
+    Exit(MsgFmt(SR_CFG_NAME_NO_ES_PROPIEDAD_FMT, [Nombre]));
+  Xml := PatchLoadText(ADproj, Enc);
+  Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, Plat, Cfg);
+  if Result <> '' then
+    Exit;
+  // el build que se lee: el pedido y, sin pedirlo, el que el proyecto
+  // compila por defecto (lo que hace delphi_build sin platform= / config=)
+  Info := InfoDeDproj(Xml);
+  Donde := '';
+  if (Plat = '') or (Cfg = '') then
+    Donde := MsgText(SF_CFG_BUILD_POR_DEFECTO);
+  if Plat = '' then
+    Plat := Info.PlataformaPorDefecto;
+  if Cfg = '' then
+    Cfg := Info.ConfigPorDefecto;
+  // EL juez de una propiedad por grupos (EffectiveProperty, el del build)
+  Valor := EffectiveProperty(Xml, Nombre, Plat, Cfg);
+  if Valor = '' then
+    Valor := MsgText(SF_CFG_PROPERTY_SIN_VALOR);
+  Result := MsgFmt(SN_CFG_PROPERTY_GET_FMT, [Nombre, Plat, Cfg, Donde, Valor, EnOtrosGrupos(Xml, Nombre)]);
+end;
+
 { Los parametros de CADA comando, ademas de project y command. Uno que no es
   del comando se dice: set-output con path=".\bin" contestaba "puesto en
   Compiled" (su valor por defecto) ignorando lo que se pidio (sexta revision).
@@ -1726,7 +1878,7 @@ end;
 function ParametroQueSobra(const ACmd: string; const P: TDelphiConfigParams;
   out ASuyos, AVaCon: string): string;
 const
-  COMANDOS: array [0 .. 35] of string = (
+  COMANDOS: array [0 .. 41] of string = (
     'view', 'section',
     'add-platform', 'platform sdk profile',
     'remove-platform', 'platform',
@@ -1739,6 +1891,9 @@ const
     'set-sdk', 'platform sdk',
     'set-profile', 'platform profile',
     'set-active', 'config platform',
+    'set-property', 'name value platform config',
+    'remove-property', 'name platform config',
+    'get-property', 'name platform config',
     'add-requires', 'requires',
     'add-unit', 'path',
     'remove-unit', 'path',
@@ -1752,7 +1907,7 @@ begin
      'remotedir', P.RemoteDir, '', 'version', P.Version, '',
      'include', IfThen(P.Include, 'true'), '',
      'output', P.Output, '', 'requires', P.Requires, '',
-     'config', P.Config, ''], ASuyos, AVaCon);
+     'config', P.Config, '', 'name', P.Name, '', 'value', P.Value, ''], ASuyos, AVaCon);
 end;
 
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
@@ -1769,9 +1924,9 @@ begin
   if Sobra <> '' then
     Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'view', Cmd),
       IfThen(Cmd = '', 'view', Cmd), ONinguno(Suyos)]) + VaCon);
-  // view solo LEE el .dproj (y vale en un proyecto de REFERENCIA); todo lo
-  // demas lo escribe y pasa por la puerta de escritura.
-  if (Cmd = '') or (Cmd = 'view') then
+  // view y get-property solo LEEN el .dproj (y valen en un proyecto de
+  // REFERENCIA); todo lo demas lo escribe y pasa por la puerta de escritura.
+  if (Cmd = '') or (Cmd = 'view') or (Cmd = 'get-property') then
     Result := ReadPathDenied(Params.Project)
   else
     Result := WriteTargetDenied(Params.Project);
@@ -1850,6 +2005,8 @@ begin
     Exit(MsgFmt(SR_CONFIG_NOT_PROJECT_FMT, [TPath.GetFileName(Proj)]));
   if (Cmd = '') or (Cmd = 'view') then
     Exit(ViewConfig(Proj, Params.Section));
+  if Cmd = 'get-property' then
+    Exit(GetProperty(Proj, Params.Name, Params.Platform, Params.Config));
 
   // add-unit juzga la raiz de un designer contra la tabla de su marco
   // (Lsp.ProjectUnits.JuzgaRaizDeDiseno), y la tabla se espera FUERA del
@@ -1885,9 +2042,9 @@ begin
       if not EsFallo(Result) then
       begin
         var Pega := '';
-        // un paso que LANZA (EnsurePlatformGroups sin su PropertyGroup) es
-        // un fallo como el que se devuelve: se saltaba el deshacer y la
-        // plataforma quedaba anadida (segunda revision, 27-sep-2026)
+        // un paso que LANZA es un fallo como el que se devuelve: se saltaba
+        // el deshacer y la plataforma quedaba anadida (segunda revision,
+        // 27-sep-2026; el grupo que falta ya no lanza: MensajeDeFalta)
         try
           if Params.Sdk.Trim <> '' then
             Pega := SetSdk(Proj, Params.Platform, Params.Sdk);
@@ -1944,6 +2101,9 @@ begin
       Result := SetProfile(Proj, Params.Platform, Params.Profile)
     else if Cmd = 'set-active' then
       Result := SetActive(Proj, Params.Config, Params.Platform)
+    else if (Cmd = 'set-property') or (Cmd = 'remove-property') then
+      Result := SetProperty(Proj, Params.Name, Params.Value, Params.Platform, Params.Config,
+        Cmd = 'remove-property')
     else if Cmd = 'add-requires' then
     begin
       Result := WriteTargetDenied(Params.Project);

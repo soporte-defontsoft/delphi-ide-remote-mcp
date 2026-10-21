@@ -2256,8 +2256,8 @@ begin
   AnadeAcceso('vault_append', atEscritura, []);
   AnadeAcceso('vault_create', atEscritura, []);
   AnadeAcceso('vault_patch', atEscritura, []);
-  // mixtas: "view" lee, "add-platform" escribe el .dproj
-  AnadeAcceso('delphi_config', atMixta, ['view']);
+  // mixtas: "view" y "get-property" leen, "add-platform" escribe el .dproj
+  AnadeAcceso('delphi_config', atMixta, ['view', 'get-property']);
   // discover solo mira; run construye y EJECUTA
   AnadeAcceso('delphi_test', atMixta, ['discover']);
   AnadeAcceso('delphi_styles', atMixta, ['view', 'get', 'lint']);

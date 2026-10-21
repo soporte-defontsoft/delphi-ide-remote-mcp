@@ -3065,6 +3065,75 @@ const
     'now on. delphi_config view says the current ones (defaultConfig, ' +
     'defaultPlatform).';
 
+  // ---- delphi_config set-property / remove-property / get-property (1.22.0):
+  // UNA propiedad del .dproj por su nombre, en el grupo del build que digan
+  // platform y config; la casa del keystore de Android y de lo que venga ----
+  SR_CFG_NEED_NAME =
+    '[CFG-130 INVALID_PARAM] set-property, remove-property and get-property ' +
+    'need "name": the property as the .dproj writes it (PF_KeyStoreDebug, ' +
+    'DCC_Define, VerInfo_Keys...).';
+
+  SR_CFG_NAME_NO_ES_PROPIEDAD_FMT =
+    '[CFG-131 INVALID_PARAM] "%s" is not a property name: a letter or _ and ' +
+    'then letters, digits, _ . - (what a .dproj tag may carry).';
+
+  SR_CFG_NAME_ES_ESTRUCTURA_FMT =
+    '[CFG-132 INVALID_PARAM] %s is the structure of the .dproj, not an ' +
+    'option: the selectors Config and Platform (set-active changes them), ' +
+    'the keys Base and Cfg_N with their flags (the IDE writes them when it ' +
+    'declares a configuration or a platform: add-platform), ProjectGuid, ' +
+    'ProjectVersion and MainSource. Nothing was written.';
+
+  SR_CFG_NAME_ES_TEXTO_LIBRE_FMT =
+    '[CFG-133 INVALID_PARAM] %s is not written here: a build event or a free ' +
+    'command-line option is text this server never passes to a program (its ' +
+    'build empties the events and refuses the free options). Nothing was ' +
+    'written.';
+
+  SR_CFG_NEED_VALUE =
+    '[CFG-134 INVALID_PARAM] set-property needs "value": the text the ' +
+    'property takes, as the IDE would write it. To take a property away, ' +
+    'remove-property.';
+
+  SR_CFG_VALUE_CON_CONTROL =
+    '[CFG-135 INVALID_PARAM] "value" has a control character (a line break, a ' +
+    'tab): a .dproj property is one line. Nothing was written.';
+
+  SN_CFG_PROPERTY_PUESTA_FMT =
+    '[CFG-136] SET %s = %s for %s (the PropertyGroup %s; before: %s). Backup ' +
+    'copy in __delphi-patch. delphi_build reads it from now on and judges it ' +
+    'as any value that build reads; the IDE honors it when it opens the ' +
+    'project.';
+
+  SN_CFG_PROPERTY_YA_FMT =
+    '[CFG-137] %s is already %s for %s (the PropertyGroup %s): nothing ' +
+    'written.';
+
+  SN_CFG_PROPERTY_QUITADA_FMT =
+    '[CFG-138] REMOVED %s for %s (the PropertyGroup %s; it was %s). Backup ' +
+    'copy in __delphi-patch. That build now takes what the other groups it ' +
+    'reads leave, if any.%s';
+
+  SN_CFG_PROPERTY_NO_ESTABA_FMT =
+    '[CFG-139] %s was not set for %s (the PropertyGroup %s): nothing to ' +
+    'remove.%s';
+
+  SN_CFG_PROPERTY_GET_FMT =
+    '[CFG-140] %s for %s %s%s = %s.%s';
+
+  SF_CFG_PROPERTY_SIN_VALOR =
+    'not set (no group that build reads sets it)';
+
+  SF_CFG_PROPERTY_DONDE_FMT =
+    ' Set in: %s.';
+
+  SF_CFG_BUILD_CONFIG_FMT =
+    '%s (every platform)';
+
+  SF_CFG_BUILD_POR_DEFECTO =
+    ' (the build the project makes by default; platform= / config= pick ' +
+    'another)';
+
   SR_CFG_SET_ACTIVE_CONFIG_FMT =
     '[CFG-116 INVALID_PARAM] The project has no configuration "%s" to build. ' +
     'The ones it declares: %s. Nothing was written.';
@@ -7917,7 +7986,8 @@ const
   SR_CFG_COMMAND_DEBE_SER_VIEW =
     '[CFG-084 INVALID_PARAM] command must be view | add-platform | ' +
     'remove-platform | set-output | set-version | set-sdk | set-profile ' +
-    '| set-active | add-searchpath | remove-searchpath | add-deployfile | ' +
+    '| set-active | set-property | remove-property | get-property ' +
+    '| add-searchpath | remove-searchpath | add-deployfile | ' +
     'remove-deployfile | add-unit | remove-unit | add-requires | ' +
     'fix-references | add-project | remove-project (these last two, on a ' +
     '.groupproj)';
@@ -8477,10 +8547,6 @@ const
     '[CFG-087 DENIED] The base PropertyGroup ("$(Base)") of the ' +
     '.dproj was not found; open the project once in the IDE and retry.';
 
-  SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT =
-    '[CFG-088 DENIED] The PropertyGroup %s of the .dproj was not ' +
-    'found.';
-
   SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT =
     '[CFG-089 INTERNAL] Could not generate the deployment manifest: ' +
     '%s';
@@ -8488,17 +8554,9 @@ const
   SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT =
     '[CFG-090 NOT_FOUND] %s does not exist and could not be generated.';
 
-  SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT =
-    '[CFG-091 DENIED] The PropertyGroup of %s was not found in ' +
-    'the .dproj';
-
-  SR_CFG_QUEDO_INCONSISTENTE_PLATFORMSDK =
+  SR_CFG_QUEDO_INCONSISTENTE_FMT =
     '[CFG-092 INTERNAL] The .dproj was left inconsistent when ' +
-    'removing the previous PlatformSDK';
-
-  SR_CFG_QUEDO_INCONSISTENTE_PROFILE =
-    '[CFG-093 INTERNAL] The .dproj was left inconsistent when ' +
-    'removing the previous Profile';
+    'removing the previous %s';
 
   SR_CFG_NO_EXISTE_PROYECTO_FMT =
     '[CFG-094 NOT_FOUND] The project %s does not exist';
@@ -9257,6 +9315,8 @@ const
     'SDK Manager default) | set-profile (the PAServer profile it deploys ' +
     'and runs that platform with; "none" = the platform''s active profile) ' +
     '| set-active (config and/or platform: what it builds by default) ' +
+    '| set-property | remove-property | get-property (one property by name; ' +
+    'see name) ' +
     '| add-searchpath | remove-searchpath | add-deployfile | ' +
     'remove-deployfile | add-unit | remove-unit | add-requires (packages: ' +
     'names for the .dpk requires clause, from requiresSuggested after a ' +
@@ -9269,7 +9329,9 @@ const
     'add/remove-searchpath: the platform whose path changes; empty = the ' +
     'base group (all). add/remove-deployfile: the platform it ships on ' +
     '(required). set-sdk / set-profile: the platform they apply to. ' +
-    'set-active: the platform to build by default.';
+    'set-active: the platform to build by default. set-property / ' +
+    'remove-property / get-property: the platform of the group (empty: ' +
+    'every platform; get-property reads the default one).';
 
   SP_CFG_OUTPUT =
     'set-output: a simple relative folder name (Compiled by default): .exe ' +
@@ -9287,7 +9349,21 @@ const
   SP_CFG_CONFIG =
     'set-active: the configuration the project builds by default from now ' +
     'on (one it declares: Debug, Release...). With platform= too, both at ' +
-    'once.';
+    'once. set-property / remove-property / get-property: the configuration ' +
+    'of the group (with platform=, the group of that pair, as the IDE writes ' +
+    'an option of Debug for Android64; empty: every configuration; ' +
+    'get-property reads the default one).';
+
+  SP_CFG_NAME =
+    'set-property / remove-property / get-property: the property, as the ' +
+    '.dproj writes it (PF_KeyStoreDebug, DCC_Define, VerInfo_Keys...). Not ' +
+    'the structure (Config, Platform, Base, Cfg_N and their flags), a build ' +
+    'event or a free compiler option.';
+
+  SP_CFG_VALUE =
+    'set-property: the text the property takes, one line, as the IDE would ' +
+    'write it. Judged when that build reads it, like the rest of the .dproj ' +
+    '(a file outside your roots is BUILD-050 then).';
 
   SD_CFG_CONFIG =
     'See and manage a project''s build configurations and target PLATFORMS. ' +
@@ -9319,7 +9395,11 @@ const
     'moved by hand, finding it by name in the workspace - one match only, ' +
     'never a guess. On a .groupproj: view lists its projects, and ' +
     'add-project / remove-project write what the IDE''s Add existing ' +
-    'project writes. set-sdk, set-profile and add-requires: see command. ' +
+    'project writes. set-property / remove-property / get-property: one ' +
+    'property of the .dproj by name, in the group of the build platform= and ' +
+    'config= name, as the IDE writes it (none: the base) - what no other ' +
+    'command covers, an Android keystore to re-point or drop included. ' +
+    'set-sdk, set-profile and add-requires: see command. ' +
     'To BUILD a combination: delphi_build with platform+config.';
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiExtra.pas (paso 3d, 27-sep-2026)
@@ -10283,10 +10363,12 @@ const
     '(delphi_read numbers lines from 1).';
 
   // Excepciones que estaban en linea en Mcp.Tools.Config.pas (paso 3e, 27-sep-2026)
-  SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_CONFIG =
-    '[CFG-104 DENIED] Cannot find the base configuration PropertyGroups ' +
-    'of the .dproj; open the project once in the IDE (it writes them) ' +
-    'and try again.';
+  SR_CFG_SIN_DEFINIDOR_FMT =
+    '[CFG-104 DENIED] The .dproj has no definer PropertyGroup for %s - the ' +
+    'one the IDE writes when it declares a configuration (its Condition ' +
+    'names $(Config) and the key Cfg_N) and without which msbuild never ' +
+    'reads the groups of that build. Open the project once in the IDE (it ' +
+    'writes them) and try again.';
 
   // Excepciones que estaban en linea en Mcp.Vault.Session.pas (paso 3e, 27-sep-2026)
   // Excepciones que estaban en linea en Lsp.Client.pas (paso 3e, 27-sep-2026)

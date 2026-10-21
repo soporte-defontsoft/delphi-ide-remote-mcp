@@ -83,6 +83,14 @@ texts = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'), encoding='utf
 mv = re.search(r"SERVER_VERSION = '([^']+)'", texts)
 ch = open(os.path.join(REPO, 'CHANGELOG.md'), encoding='utf-8').read()
 mc = re.search(r'^## \[([^\]]+)\] - ', ch, re.M)
+# con una linea nueva recien abierta (solo [Unreleased]) la version mas reciente
+# es la primera de la linea anterior, entera en docs/changelog/<linea>.md: el
+# primer enlace de "Earlier versions" (CHANGELOG por linea; 21-oct-2026)
+if not mc:
+    ml = re.search(r'^- \[[^\]]+\]\((docs/changelog/[^)]+)\)', ch, re.M)
+    if ml:
+        mc = re.search(r'^## \[([^\]]+)\] - ',
+                       open(os.path.join(REPO, ml.group(1)), encoding='utf-8').read(), re.M)
 check('CHANGELOG mas reciente == SERVER_VERSION (%s)' % (mv and mv.group(1)),
       bool(mv and mc) and mv.group(1) == mc.group(1),
       (mv and mv.group(1), mc and mc.group(1)))

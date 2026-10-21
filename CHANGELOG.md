@@ -8,8 +8,45 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- **`delphi_config set-property`, `remove-property` and `get-property`: one
+  property of the `.dproj` by name, in the group of the build `platform=` and
+  `config=` name.** An agent whose project kept its Android keystore outside
+  its roots (`PF_KeyStoreDebug`, in the `'$(Cfg_1_Android64)'!=''` group the
+  IDE writes) had no tool to drop or re-point it: the two text editors refuse
+  a `.dproj` on purpose and no command wrote in the group of a configuration
+  (measured on 2026-10-21). `set-property name=PF_KeyStoreDebug value=<path>
+  platform=Android64 config=Debug` writes it where the IDE would - the group
+  of that pair, created with its definer in the IDE's own order when the
+  project lacks it -, `remove-property` takes it out with its line, and
+  `get-property` answers the value that build reads (the default build
+  without `platform=` / `config=`) and every group that sets it. The name
+  only chooses: the structure of the `.dproj` (`Config`, `Platform`, `Base`,
+  `Cfg_N` and their flags, `ProjectGuid`, `ProjectVersion`, `MainSource`) is
+  refused with `CFG-132`, a build event or a free compiler option - text this
+  server never passes to a program - with `CFG-133`; the value is not judged
+  when written but when that build reads it, like any value of the `.dproj`
+  (`BUILD-050`). `get-property` is a read, allowed in read-only mode.
+  (`tests/test_config_property_1220.py`, with msbuild as the judge of where
+  the property landed; `LspTests.Dproj`.)
+
 ### Changed
 
+- **One writer of a project property, in `Lsp.Dproj`.** `set-sdk`,
+  `set-profile`, `add-searchpath` and `remove-searchpath` each chose the
+  `PropertyGroup` of a platform their own way (a private writer for the first
+  two, the group by its condition for the other two, and a creator of the
+  platform's groups that raised), and none could write in the group of a
+  configuration. They now go through `GrupoDelBuild` / `AseguraGrupoDelBuild`
+  / `PonPropiedadDelBuild`, the writing twin of `EffectiveProperty`: the group
+  of a build - base, platform, configuration or the pair -, created with its
+  definer where the IDE puts it (measured on a `.dproj` the IDE wrote) when
+  the project lacks it. A configuration without the definer group the IDE
+  writes is refused (`CFG-104`, now naming the build) instead of getting a
+  group msbuild would never read; `CFG-088`, `CFG-091` and `CFG-093` are
+  gone with the code that answered them. `test_paisaje` watches that no unit
+  outside `Lsp.Dproj` chooses or creates a build's group by hand.
 - **The build gate judges what the requested build reads, not every property
   group of the `.dproj`.** A keystore that only an Android64 Debug build reads
   (`PF_KeyStoreDebug`, in the `'$(Cfg_1_Android64)'!=''` group the IDE

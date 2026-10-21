@@ -55,6 +55,8 @@ type
     [Test] procedure LasCuatroFormasDeLaCondicion;
     [Test] procedure LaCondicionDelElementoYElVacioCuentan;
     [Test] procedure LaCondicionDeUnGrupoComoMsbuild;
+    [Test] procedure ElGrupoDelBuildDondeLoEscribeElIde;
+    [Test] procedure PonPropiedadDelBuildEnLasCuatroFormas;
   end;
 
   { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
@@ -825,6 +827,162 @@ begin
   Assert.IsFalse(DeOtro('DCC_Define'), 'un grupo sobre $(BDS), que viene de rsvars: no se sabe, se juzga');
   // los trozos de una lista
   Assert.IsTrue(Length(TrozosDeLista(' a; ;b ;;c')) = 3, 'sin vacios ni blancos');
+end;
+
+{ Un .dproj con los grupos en el orden en que los escribe el IDE (medido el
+  21-oct-2026 en uno suyo): los definidores por clave - Base y sus
+  plataformas, Cfg_1 y las suyas, Cfg_2 - y luego los valores en el mismo
+  orden; Win64 solo tiene grupos de Base, Release ninguno de plataforma, y
+  Debug2 (Cfg_3) esta declarada SIN su definidor. }
+function XmlDeIde: string;
+
+  function Def(const APlat, AClave: string): string;
+  begin
+    Result := XmlGrupoDefinidor(APlat, AClave) + sLineBreak;
+  end;
+
+  function CfgDef(const ACfg, AClave: string): string;
+  begin
+    Result := '    <PropertyGroup ' + XmlAtributo('Condition', ConfigDefinerCondition(ACfg, AClave)) + '>' +
+      XmlElemento(AClave, 'true') + '</PropertyGroup>' + sLineBreak;
+  end;
+
+  function Val(const APlat, AClave, AProps: string): string;
+  begin
+    Result := XmlGrupoDeValores(APlat, AClave, AProps) + sLineBreak;
+  end;
+
+begin
+  Result := '<Project>' + sLineBreak +
+    '    <ItemGroup>' +
+    '<BuildConfiguration Include="Base"><Key>Base</Key></BuildConfiguration>' +
+    '<BuildConfiguration Include="Debug"><Key>Cfg_1</Key><CfgParent>Base</CfgParent></BuildConfiguration>' +
+    '<BuildConfiguration Include="Release"><Key>Cfg_2</Key><CfgParent>Base</CfgParent></BuildConfiguration>' +
+    '<BuildConfiguration Include="Debug2"><Key>Cfg_3</Key><CfgParent>Cfg_1</CfgParent></BuildConfiguration>' +
+    '</ItemGroup>' + sLineBreak +
+    CfgDef('Base', 'Base') + Def('Win32', 'Base') + Def('Win64', 'Base') +
+    CfgDef('Debug', 'Cfg_1') + Def('Win32', 'Cfg_1') +
+    CfgDef('Release', 'Cfg_2') +
+    Val('', 'Base', '        <DCC_E>false</DCC_E>' + sLineBreak) +
+    Val('Win32', 'Base', '') + Val('Win64', 'Base', '') +
+    Val('', 'Cfg_1', '        <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>' + sLineBreak) +
+    Val('Win32', 'Cfg_1', '') +
+    Val('', 'Cfg_2', '') +
+    '</Project>';
+end;
+
+{ Donde empieza el grupo con esa Condition; falla si no esta. }
+function PosDe(const AXml, ACondicion: string): Integer;
+var
+  G: TGrupoXml;
+begin
+  Assert.IsTrue(GrupoConCondicion(AXml, ACondicion, G), 'no esta el grupo ' + ACondicion);
+  Result := G.Abre;
+end;
+
+procedure TXmlTextoTests.ElGrupoDelBuildDondeLoEscribeElIde;
+var
+  Xml, X: string;
+  G: TGrupoXml;
+  Falta: TFaltaDeGrupo;
+begin
+  Xml := XmlDeIde;
+  // lo que hay se encuentra, lo que no, no
+  Assert.IsTrue(GrupoDelBuild(Xml, 'Win64', '', G), 'Base_Win64');
+  Assert.IsTrue(GrupoDelBuild(Xml, '', 'Debug', G), 'Cfg_1');
+  Assert.IsFalse(GrupoDelBuild(Xml, 'Win64', 'Debug', G), 'Cfg_1_Win64 no esta');
+  Assert.IsFalse(GrupoDelBuild(Xml, '', 'Nope', G), 'una config que no declara');
+  // una config que no declara, y una declarada sin su definidor
+  Assert.IsFalse(AseguraGrupoDelBuild(Xml, 'Win64', 'Nope', G, Falta));
+  Assert.IsTrue(Falta = fgConfigNoDeclarada, 'Nope: no declarada');
+  Assert.IsFalse(AseguraGrupoDelBuild(Xml, '', 'Debug2', G, Falta));
+  Assert.IsTrue(Falta = fgSinDefinidor, 'Debug2 (Cfg_3) sin su definidor');
+  // lo que ya esta no cambia nada
+  X := Xml;
+  Assert.IsTrue(AseguraGrupoDelBuild(Xml, '', 'Release', G, Falta));
+  Assert.AreEqual(X, Xml, 'Cfg_2 ya estaba');
+  // Win64/Debug: el definidor de Cfg_1_Win64 tras el de Cfg_1_Win32 y antes
+  // del de Cfg_2; los valores tras los de Cfg_1_Win32 y antes de los de Cfg_2
+  Assert.IsTrue(AseguraGrupoDelBuild(Xml, 'Win64', 'Debug', G, Falta), 'crea Cfg_1_Win64');
+  Assert.IsTrue(Xml.Contains(XmlGrupoDefinidor('Win64', 'Cfg_1')), 'EL definidor, el del IDE: ' + Xml);
+  Assert.IsTrue(Xml.Contains(XmlGrupoDeValores('Win64', 'Cfg_1', '')), 'EL grupo de valores, el del IDE');
+  Assert.IsTrue((PosDe(Xml, DefinerCondition('Win64', 'Cfg_1')) > PosDe(Xml, DefinerCondition('Win32', 'Cfg_1'))) and
+    (PosDe(Xml, DefinerCondition('Win64', 'Cfg_1')) < PosDe(Xml, ConfigDefinerCondition('Release', 'Cfg_2'))),
+    'el definidor, tras los de su clave: ' + Xml);
+  Assert.IsTrue((PosDe(Xml, GroupCondition('Win64', 'Cfg_1')) > PosDe(Xml, GroupCondition('Win32', 'Cfg_1'))) and
+    (PosDe(Xml, GroupCondition('Win64', 'Cfg_1')) < PosDe(Xml, GroupCondition('', 'Cfg_2'))),
+    'los valores, tras los de su clave: ' + Xml);
+  Assert.IsTrue(G.Abre = PosDe(Xml, GroupCondition('Win64', 'Cfg_1')), 'devuelve el grupo creado');
+  // Linux64 (Base): el definidor tras el de Base_Win64 y antes del de Cfg_1;
+  // los valores tras los de Base_Win64 y antes de los de Cfg_1
+  Assert.IsTrue(AseguraGrupoDelBuild(Xml, 'Linux64', '', G, Falta), 'crea Base_Linux64');
+  Assert.IsTrue((PosDe(Xml, DefinerCondition('Linux64')) > PosDe(Xml, DefinerCondition('Win64'))) and
+    (PosDe(Xml, DefinerCondition('Linux64')) < PosDe(Xml, ConfigDefinerCondition('Debug', 'Cfg_1'))),
+    'el definidor de Base_Linux64: ' + Xml);
+  Assert.IsTrue((PosDe(Xml, GroupCondition('Linux64')) > PosDe(Xml, GroupCondition('Win64'))) and
+    (PosDe(Xml, GroupCondition('Linux64')) < PosDe(Xml, GroupCondition('', 'Cfg_1'))),
+    'los valores de Base_Linux64: ' + Xml);
+  // Android64/Release: tras todo lo de Cfg_2, lo ultimo, y los definidores
+  // siempre antes que los valores
+  Assert.IsTrue(AseguraGrupoDelBuild(Xml, 'Android64', 'Release', G, Falta), 'crea Cfg_2_Android64');
+  Assert.IsTrue(PosDe(Xml, DefinerCondition('Android64', 'Cfg_2')) > PosDe(Xml, ConfigDefinerCondition('Release', 'Cfg_2')),
+    'el definidor de Cfg_2_Android64, tras el de Release');
+  Assert.IsTrue(PosDe(Xml, DefinerCondition('Android64', 'Cfg_2')) < PosDe(Xml, GroupCondition('')),
+    'los definidores van antes que los valores');
+  Assert.IsTrue(PosDe(Xml, GroupCondition('Android64', 'Cfg_2')) > PosDe(Xml, GroupCondition('', 'Cfg_2')),
+    'los valores de Cfg_2_Android64, tras los de Release');
+end;
+
+procedure TXmlTextoTests.PonPropiedadDelBuildEnLasCuatroFormas;
+var
+  Xml, X, Antes: string;
+  Falta: TFaltaDeGrupo;
+begin
+  Xml := XmlDeIde;
+  // la base, una plataforma, una config y la pareja (su grupo, creado): cada
+  // una en SU grupo, y EffectiveProperty, el lector, lee cada una donde msbuild
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', 'base', '', '', False, Antes, Falta), 'la base');
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', 'w64', 'Win64', '', False, Antes, Falta), 'Win64');
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', 'dbg', '', 'Debug', False, Antes, Falta), 'Debug');
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', 'w64dbg', 'Win64', 'Debug', False, Antes, Falta), 'Win64 Debug, con su grupo creado');
+  Assert.AreEqual('', Antes, 'no habia');
+  Assert.IsTrue(Length(AllTagValues(Xml, 'PF_X')) = 4, Xml);
+  Assert.AreEqual('w64dbg', EffectiveProperty(Xml, 'PF_X', 'Win64', 'Debug'));
+  Assert.AreEqual('dbg', EffectiveProperty(Xml, 'PF_X', 'Win32', 'Debug'));
+  Assert.AreEqual('w64', EffectiveProperty(Xml, 'PF_X', 'Win64', 'Release'));
+  Assert.AreEqual('base', EffectiveProperty(Xml, 'PF_X', 'Win32', 'Release'));
+  // la nueva al principio del grupo, escapada (XmlElemento), y lo que valia
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', 'R&D', 'Win64', '', False, Antes, Falta));
+  Assert.AreEqual('w64', Antes, 'lo que valia');
+  Assert.AreEqual('R&D', EffectiveProperty(Xml, 'PF_X', 'Win64', 'Release'));
+  Assert.IsTrue(Xml.Contains('<PropertyGroup ' + XmlAtributo('Condition', GroupCondition('Win64')) + '>' +
+    sLineBreak + '        ' + XmlElemento('PF_X', 'R&D')), 'al principio del grupo: ' + Xml);
+  // el mismo valor una sola vez: no toca nada
+  X := Xml;
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', 'R&D', 'Win64', '', False, Antes, Falta));
+  Assert.AreEqual(X, Xml, 'ya estaba');
+  Assert.AreEqual('R&D', Antes);
+  // dos en el grupo (una vacia): se van las dos y queda la nueva
+  Xml := Xml.Replace(XmlElemento('PF_X', 'base'), XmlElemento('PF_X', 'base') + '<PF_X/>');
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', 'b2', '', '', False, Antes, Falta));
+  Assert.AreEqual('', Antes, 'la ultima, la vacia');
+  Assert.IsTrue(Length(AllTagValues(Xml, 'PF_X')) = 4, 'una por grupo: ' + Xml);
+  Assert.AreEqual('b2', EffectiveProperty(Xml, 'PF_X', 'Win32', 'Release'));
+  // quitar: se va con su linea y el build toma lo que queda; de un grupo
+  // que no existe, nada, y no se crea
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', '', 'Win64', 'Debug', True, Antes, Falta));
+  Assert.AreEqual('w64dbg', Antes);
+  Assert.AreEqual('dbg', EffectiveProperty(Xml, 'PF_X', 'Win64', 'Debug'), 'toma la de Debug');
+  Assert.IsFalse(Xml.Contains('w64dbg'), 'se fue: ' + Xml);
+  X := Xml;
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'PF_X', '', 'Linux64', 'Release', True, Antes, Falta));
+  Assert.AreEqual(X, Xml, 'quitar de un grupo que no existe no lo crea');
+  Assert.AreEqual('', Antes);
+  // una config que no declara, al poner y al quitar
+  Assert.IsFalse(PonPropiedadDelBuild(Xml, 'PF_X', 'x', '', 'Nope', False, Antes, Falta));
+  Assert.IsTrue(Falta = fgConfigNoDeclarada, 'poner en Nope');
+  Assert.IsFalse(PonPropiedadDelBuild(Xml, 'PF_X', '', '', 'Nope', True, Antes, Falta));
+  Assert.IsTrue(Falta = fgConfigNoDeclarada, 'quitar de Nope');
 end;
 
 initialization

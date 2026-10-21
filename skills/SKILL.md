@@ -361,6 +361,18 @@ in frame. Do the gesture you came for and nothing else.
   A unit that only exists under a scope (`Dialogs`: `FMX.Dialogs`,
   `Vcl.Dialogs`) comes back in `qualified`: write it qualified in the
   uses (`BUILD-049`) - there is no folder to add.
+- **A project option no other command covers** (an Android keystore, a
+  define, a version key, a search path of one configuration):
+  `delphi_config command=set-property name=<property> value=<text>
+  platform=<the one> config=<the one>` writes it in the group the IDE
+  would use for that build (neither: the base group, inherited by every
+  build); `get-property` says what that build reads and every group that
+  sets it; `remove-property` drops it. The value is judged when that
+  build reads it, like the rest of the `.dproj`: a keystore outside your
+  roots refuses the Android build with `BUILD-050` - re-point it to one
+  inside or remove it. The structure of the `.dproj` (`Config`,
+  `Platform`, `Base`, `Cfg_N`), the build events and the free compiler
+  options are refused (`CFG-132`, `CFG-133`).
 - **A component that loads a native library at runtime** (a `.so` on
   Linux, `.dylib` on macOS, `.dll` on Windows - OBR's `libzbar`, for
   instance) needs that file shipped with the binary:

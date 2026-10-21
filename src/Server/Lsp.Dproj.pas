@@ -282,6 +282,60 @@ function XmlGrupoDeValores(const APlatform, AClave, AProps: string): string;
   (ADefinidor = False) o de un definidor; '' si la Condition no es la de
   ninguna - la base tampoco: esa es GroupCondition(''). }
 function PlataformaDeGrupo(const ACondicion: string; ADefinidor: Boolean): string;
+
+{ ---- el grupo de VALORES de un build y su escritor: UNA casa ----
+  Donde el IDE escribe una opcion de una plataforma y una configuracion, y
+  de donde msbuild la lee para ese build: '$(Base)'!='' (sin ninguna de las
+  dos: todos los builds), '$(Base_X)'!='' (la plataforma, todas las configs),
+  '$(Cfg_N)'!='' (la config, todas las plataformas) y '$(Cfg_N_X)'!='' (las
+  dos), con Cfg_N la clave de BuildConfiguration. Lo elegia cada uno a su
+  manera: set-sdk / set-profile (solo plataforma, PonPropiedadDePlataforma en
+  Mcp.Tools.Config), add-searchpath y remove-searchpath (EnsurePlatformGroups
+  y el grupo por su Condition), y en un grupo de configuracion no escribia
+  nadie: el keystore de Android que el IDE deja en '$(Cfg_1_Android64)'!=''
+  no tenia tool que lo quitase (David, 21-oct-2026: "hay que unificar
+  claramente la gestion de los ficheros de proyecto"). }
+type
+  { Por que un build no tiene grupo de valores ni se le puede crear: la
+    configuracion no la declara el proyecto; le falta el definidor que el
+    IDE escribe al declararla (sin el msbuild nunca pone su clave y un grupo
+    suyo no se leeria); no hay grupo de valores ni definidor del que
+    colgarlo; o el .dproj quedo inconsistente al quitar lo que habia. }
+  TFaltaDeGrupo = (fgNinguna, fgConfigNoDeclarada, fgSinDefinidor, fgSinGrupoBase, fgInconsistente);
+
+{ La clave con la que el .dproj nombra el build de AConfig: Base sin config,
+  y con ella la Cfg_N de su BuildConfiguration ('' si no la declara). }
+function ClaveDelBuild(const AXml, AConfig: string): string;
+{ El grupo de valores del build APlatform/AConfig ('' = sin esa mitad), si
+  lo hay: EL lector del grupo. }
+function GrupoDelBuild(const AXml, APlatform, AConfig: string; out AGrupo: TGrupoXml): Boolean;
+{ ...creandolo si falta, con su definidor, donde los pone el IDE (medido en
+  un .dproj suyo el 21-oct-2026): los definidores por clave - el de la
+  configuracion y tras el los de sus plataformas - y luego los grupos de
+  valores en el mismo orden, Base y las configuraciones como las declara
+  BuildConfiguration. El definidor de una plataforma va tras el ultimo
+  definidor de su clave; el grupo de valores de una plataforma tras el ultimo
+  de valores de su clave, y el de una clave sola tras los de las claves
+  anteriores (la base, sin ninguno, tras los definidores). El definidor de
+  la configuracion ('$(Config)'=='X' or '$(Cfg_N)'!='') tiene que estar: lo
+  escribe el IDE al declararla y sin el msbuild no lee ese grupo. }
+function AseguraGrupoDelBuild(var AXml: string; const APlatform, AConfig: string;
+  out AGrupo: TGrupoXml; out AFalta: TFaltaDeGrupo): Boolean;
+{ EL escritor de una propiedad de un build, el gemelo de EffectiveProperty:
+  <ATag>AValor</ATag> en el grupo de valores de APlatform/AConfig, creado si
+  falta (AseguraGrupoDelBuild). Las <ATag> que hubiera DENTRO de ese grupo
+  (una vacia tambien) se quitan con su linea - AAntes, la que valia: la
+  ultima - y, si no es quitar, la nueva va al principio del grupo, donde la
+  ponian set-sdk y set-output. Con el mismo valor ya puesto una sola vez no
+  toca nada; quitar de un grupo que no existe no lo crea. False, con AFalta,
+  si no hay grupo ni se pudo crear. }
+function PonPropiedadDelBuild(var AXml: string; const ATag, AValor, APlatform, AConfig: string;
+  AQuitar: Boolean; out AAntes: string; out AFalta: TFaltaDeGrupo): Boolean;
+{ Si ANombre es un evento de build o una opcion libre al compilador: texto
+  que va a una linea de ordenes, que el build vacia (los eventos) o niega
+  (las opciones) y que ninguna tool escribe en un .dproj (set-property lo
+  niega). }
+function EsTextoLibreDelBuild(const ANombre: string): Boolean;
 type
   { Lo que vale una Condition para un build: cierta, falsa, o no se sabe. }
   TVeredicto = (vSi, vNo, vNoSeSabe);
@@ -1933,6 +1987,11 @@ const
   OPCIONES_LIBRES: array [0 .. 2] of string =
     ('DCC_AdditionalSwitches', 'BRCC_UserSuppliedOptions', 'BRCC_ResponseFilename');
 
+function EsTextoLibreDelBuild(const ANombre: string): Boolean;
+begin
+  Result := MatchText(ANombre.Trim, EVENTOS_DE_BUILD) or MatchText(ANombre.Trim, OPCIONES_LIBRES);
+end;
+
 function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
 var
   C: Char;
@@ -2766,6 +2825,208 @@ begin
     if SameText(AtributoDeTramo(AXml, T, 'BuildConfiguration', 'Include').Trim, AConfig) then
       for var K in TramosDentro(AXml, 'Key', T) do
         Exit(ValorDeTramo(AXml, K).Trim);
+end;
+
+function ClaveDelBuild(const AXml, AConfig: string): string;
+begin
+  if AConfig.Trim = '' then
+    Result := 'Base'
+  else
+    Result := ConfigKey(AXml, AConfig.Trim);
+end;
+
+{ Las claves de los builds en el orden del IDE: Base y luego las de
+  BuildConfiguration en orden de documento (ConfigKey, EL lector de la
+  clave). }
+function ClavesDelProyecto(const AXml: string): TArray<string>;
+begin
+  Result := ['Base'];
+  for var C in InfoDeDproj(AXml).Configs do
+  begin
+    var K := ConfigKey(AXml, C);
+    if (K <> '') and (IndexText(K, Result) < 0) then
+      Result := Result + [K];
+  end;
+end;
+
+{ Si ACondicion es la de un grupo de la clave AClave - de valores
+  (GroupCondition) o definidor (DefinerCondition, y el de la configuracion,
+  ConfigDefinerCondition) -: la inversa de los nombradores, con la plataforma
+  que nombra en APlataforma ('' = el de la clave sola). }
+function EsGrupoDeClave(const ACondicion, AClave: string; ADefinidor: Boolean;
+  out APlataforma: string): Boolean;
+var
+  N, X: string;
+begin
+  Result := False;
+  APlataforma := '';
+  N := CondicionNormalizada(ACondicion);
+  if N = '' then
+    Exit;
+  if ADefinidor then
+  begin
+    X := ValorDeCondicion(ACondicion, '''$(Platform)''').Trim;
+    if X = '' then
+      // el de la configuracion: '$(Config)'=='Debug' or '$(Cfg_1)'!=''
+      Result := N = CondicionNormalizada(ConfigDefinerCondition(
+        ValorDeCondicion(ACondicion, '''$(Config)''').Trim, AClave))
+    else
+      Result := N = CondicionNormalizada(DefinerCondition(X, AClave));
+  end
+  else
+  begin
+    // el nombre entre $( y ): Base, Base_Win64, Cfg_1, Cfg_1_Win64
+    X := TrozoDeCondicion(ACondicion, '$(', ')').Trim;
+    if SameText(X, AClave) then
+    begin
+      X := '';
+      Result := N = CondicionNormalizada(GroupCondition('', AClave));
+    end
+    else if X.StartsWith(AClave + '_', True) then
+    begin
+      X := Copy(X, Length(AClave) + 2, MaxInt);
+      Result := N = CondicionNormalizada(GroupCondition(X, AClave));
+    end;
+  end;
+  if Result and (X <> '') then
+    APlataforma := ConSuGrafia(X);
+end;
+
+function GrupoDelBuild(const AXml, APlatform, AConfig: string; out AGrupo: TGrupoXml): Boolean;
+var
+  Clave: string;
+begin
+  Clave := ClaveDelBuild(AXml, AConfig);
+  Result := (Clave <> '') and GrupoConCondicion(AXml, GroupCondition(APlatform, Clave), AGrupo);
+end;
+
+function AseguraGrupoDelBuild(var AXml: string; const APlatform, AConfig: string;
+  out AGrupo: TGrupoXml; out AFalta: TFaltaDeGrupo): Boolean;
+var
+  Clave, Nombre, X: string;
+  Claves: TArray<string>;
+  Mia, Tras: Integer;
+  G: TGrupoXml;
+
+  { La posicion de la clave de la Condition de un grupo (de valores o
+    definidor) entre las del proyecto; -1 si no es de ninguna. }
+  function IndiceDe(const ACondicion: string; ADefinidor: Boolean): Integer;
+  begin
+    for var I := 0 to High(Claves) do
+      if EsGrupoDeClave(ACondicion, Claves[I], ADefinidor, X) then
+        Exit(I);
+    Result := -1;
+  end;
+
+begin
+  Result := False;
+  AFalta := fgNinguna;
+  Clave := ClaveDelBuild(AXml, AConfig);
+  if Clave = '' then
+  begin
+    AFalta := fgConfigNoDeclarada;
+    Exit;
+  end;
+  if GrupoConCondicion(AXml, GroupCondition(APlatform, Clave), AGrupo) then
+    Exit(True);
+  // el definidor de la configuracion (o de la base) tiene que estar: sin el
+  // msbuild nunca pone la clave y el grupo no se leeria
+  Nombre := IfThen(AConfig.Trim = '', 'Base', AConfig.Trim);
+  if not GrupoConCondicion(AXml, ConfigDefinerCondition(Nombre, Clave), G) then
+  begin
+    AFalta := fgSinDefinidor;
+    Exit;
+  end;
+  Claves := ClavesDelProyecto(AXml);
+  Mia := IndexText(Clave, Claves);
+  if (APlatform <> '') and not GrupoConCondicion(AXml, DefinerCondition(APlatform, Clave), G) then
+  begin
+    // EL escritor del definidor (XmlGrupoDefinidor, el de delphi_create),
+    // tras el ultimo definidor de mi clave o de una anterior (el de la
+    // configuracion esta: Tras > 0)
+    Tras := 0;
+    for var D in GruposDePropiedades(AXml) do
+    begin
+      var I := IndiceDe(D.Condicion, True);
+      if (I >= 0) and (I <= Mia) then
+        Tras := D.Cierra;
+    end;
+    AXml := Copy(AXml, 1, Tras - 1) + sLineBreak + XmlGrupoDefinidor(APlatform, Clave) +
+      Copy(AXml, Tras, MaxInt);
+  end;
+  // EL escritor del grupo de valores (XmlGrupoDeValores), tras el ultimo de
+  // valores de mi clave (una plataforma) o de las claves anteriores (la
+  // clave sola, que va delante de sus plataformas); sin ninguno (la base de
+  // un .dproj sin grupos de valores), tras los definidores
+  Tras := 0;
+  for var V in GruposDePropiedades(AXml) do
+  begin
+    var I := IndiceDe(V.Condicion, False);
+    if (I >= 0) and ((I < Mia) or ((I = Mia) and (APlatform <> ''))) then
+      Tras := V.Cierra;
+  end;
+  if Tras = 0 then
+    for var D in GruposDePropiedades(AXml) do
+      if IndiceDe(D.Condicion, True) >= 0 then
+        Tras := D.Cierra;
+  if Tras = 0 then
+  begin
+    AFalta := fgSinGrupoBase;
+    Exit;
+  end;
+  AXml := Copy(AXml, 1, Tras - 1) + sLineBreak + XmlGrupoDeValores(APlatform, Clave, '') +
+    Copy(AXml, Tras, MaxInt);
+  Result := GrupoConCondicion(AXml, GroupCondition(APlatform, Clave), AGrupo);
+  if not Result then
+    AFalta := fgInconsistente;
+end;
+
+function PonPropiedadDelBuild(var AXml: string; const ATag, AValor, APlatform, AConfig: string;
+  AQuitar: Boolean; out AAntes: string; out AFalta: TFaltaDeGrupo): Boolean;
+var
+  G: TGrupoXml;
+  Tramos: TArray<TTramoXml>;
+begin
+  Result := False;
+  AAntes := '';
+  AFalta := fgNinguna;
+  if AQuitar then
+  begin
+    if ClaveDelBuild(AXml, AConfig) = '' then
+    begin
+      AFalta := fgConfigNoDeclarada;
+      Exit;
+    end;
+    // sin grupo no hay nada que quitar, y no se crea
+    if not GrupoDelBuild(AXml, APlatform, AConfig, G) then
+      Exit(True);
+  end
+  else if not AseguraGrupoDelBuild(AXml, APlatform, AConfig, G, AFalta) then
+    Exit;
+  // lo que hubiera DENTRO de ese grupo (una <ATag/> vacia tambien), no en
+  // cualquier sitio del fichero; de la ultima a la primera, para que las de
+  // delante no se muevan
+  Tramos := TramosEnGrupo(AXml, ATag, G, True);
+  if Length(Tramos) > 0 then
+  begin
+    AAntes := ValorDeTramo(AXml, Tramos[High(Tramos)]);
+    // el mismo valor, una sola vez: nada que escribir
+    if not AQuitar and (Length(Tramos) = 1) and (AAntes = AValor) then
+      Exit(True);
+    for var K := High(Tramos) downto 0 do
+      QuitaConSuLinea(AXml, Tramos[K].Abre, Tramos[K].Cierra);
+    if not GrupoDelBuild(AXml, APlatform, AConfig, G) then
+    begin
+      AFalta := fgInconsistente;
+      Exit;
+    end;
+  end;
+  if not AQuitar then
+    // (XmlElemento escapa el valor); el salto lo deja como el del fichero
+    // quien lo guarda (PatchSaveConSuSalto)
+    AXml := Copy(AXml, 1, G.Ini - 1) + sLineBreak + '        ' +
+      XmlElemento(ATag, AValor) + Copy(AXml, G.Ini, MaxInt);
+  Result := True;
 end;
 
 { El valor EFECTIVO de ATag para un build APlatform/AConfig: los grupos del
