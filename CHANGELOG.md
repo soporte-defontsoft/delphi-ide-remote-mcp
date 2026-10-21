@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- **The build gate judges what the requested build reads, not every property
+  group of the `.dproj`.** A keystore that only an Android64 Debug build reads
+  (`PF_KeyStoreDebug`, in the `'$(Cfg_1_Android64)'!=''` group the IDE
+  writes) refused a Linux64 or Win64 build with `BUILD-050`, while the IDE
+  built them because it never reads that value (measured on 2026-10-21 on a
+  real FMX project; an agent reported it the same day). Now a value in a
+  group, or an element with a `Condition`, that the IDE writes for another
+  platform or another configuration is not judged for this build; a
+  condition the server cannot classify is still judged, as before. One
+  inverse of the group-condition namer for every form the IDE writes
+  (`Lsp.Dproj.BuildDeGrupo`, `CondicionDeOtroBuild`), with its unit tests.
+  (`tests/test_build_grupos_1215.py`, 12 checks, 5 red against 1.21.4.)
+
 ## [1.21.4] - 2026-10-21
 
 A patch of 1.21.3 that follows the IDE while the server runs and takes lists

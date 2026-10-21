@@ -1537,8 +1537,10 @@ end;
 
 { Lo que este build LEE por lo que el proyecto escribe - el icono, el
   manifiesto, un search path, un .rc, un DeployFile, un keystore... - tiene
-  que estar donde esta sesion puede leer: cada valor de cada propiedad y cada
-  Include de cada item del .dproj y de lo que importa (ValoresQueLeeElBuild),
+  que estar donde esta sesion puede leer: cada valor de cada propiedad - de
+  los grupos de ESTE build, no de los que el IDE escribe para otra plataforma
+  u otra configuracion (1.21.5) - y cada Include de cada item del .dproj y
+  de lo que importa (ValoresQueLeeElBuild),
   con las macros expandidas como las expande NUESTRO msbuild (la tabla del
   IDE, rsvars.bat, las propiedades del proyecto, el entorno del servidor sin
   las DELPHI_MCP_*, y vacio lo demas), resuelto contra la carpeta del
@@ -1679,7 +1681,7 @@ begin
     Vars.Values['MSBuildProjectFullPath'] := TPath.GetFullPath(ADprojPath);
     Vars.Values['ProjectDir'] := Dir;
     for var I := 0 to High(Xmls) do
-      for var V in ValoresQueLeeElBuild(Xmls[I]) do
+      for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg) do
       begin
         Result := Juzga(V, Ficheros[I]);
         if Result <> '' then

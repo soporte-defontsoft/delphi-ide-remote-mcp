@@ -282,6 +282,19 @@ function XmlGrupoDeValores(const APlatform, AClave, AProps: string): string;
   (ADefinidor = False) o de un definidor; '' si la Condition no es la de
   ninguna - la base tampoco: esa es GroupCondition(''). }
 function PlataformaDeGrupo(const ACondicion: string; ADefinidor: Boolean): string;
+{ El build que nombra una Condition de grupo del .dproj en las formas que
+  escribe el IDE: la plataforma ('' = todas) y la clave de configuracion
+  ('Base' = todas, Cfg_N la de una) - la inversa de GroupCondition,
+  DefinerCondition y ConfigDefinerCondition, como PlataformaDeGrupo lo es de
+  los grupos Base_X. False si la Condition es otra cosa. }
+function BuildDeGrupo(const ACondicion: string; out APlataforma, AClave: string): Boolean;
+{ Si una Condition (de un grupo o de un elemento) se SABE de otro build que
+  APlatform / AClave (la Cfg_N de AConfig) / AConfig: otra plataforma u otra
+  configuracion, en las formas del IDE (BuildDeGrupo) o las de un
+  .deployproj (CondicionDePlataformaYConfig). Lo que no se sabe NO es de
+  otro: la puerta de leer lo juzga (una de mas es prudencia); lo contrario
+  de SeAplicaA, que da por no aplicado lo que no sabe. }
+function CondicionDeOtroBuild(const ACondicion, APlatform, AClave, AConfig: string): Boolean;
 { Las Condition de plataforma y config, como las escriben el IDE y el servidor
   en un grupo o en un elemento - EL nombrador, y CondicionDePlataformaYConfig
   su inversa -: '$(Platform)'=='X' (el ItemGroup de una plataforma en el
@@ -631,15 +644,20 @@ function DprojBuildHazard(const AXml, AProjectPath: string;
   con lo recorrido hasta ahi: lo que no se deja seguir no se aprueba. }
 function ElementosDe(const AXml: string; out AMalFormado: string): TArray<TElementoXml>;
 
-{ Lo que un build LEE de un proyecto por lo que ESCRIBE (1.21.2): cada valor
-  de cada propiedad de un PropertyGroup (menos los eventos de build, que el
-  runner vacia y DprojBuildHazard juzga) partido por ';', y el Include de
-  cada item de un ItemGroup, con el elemento que lo lleva, tal como esta
-  escrito (las macros sin expandir: las expande el build con SU tabla). Las
-  condiciones no se evaluan: una de mas es prudencia, una de menos es una
-  puerta (como BuildOutputDirs). Lo de ProjectExtensions no es del build:
-  msbuild lo ignora. }
-function ValoresQueLeeElBuild(const AXml: string): TArray<TValorDelProyecto>;
+{ Lo que un build APlatform/AConfig LEE de un proyecto por lo que ESCRIBE
+  (1.21.2): cada valor de cada propiedad de un PropertyGroup (menos los
+  eventos de build, que el runner vacia y DprojBuildHazard juzga) partido
+  por ';', y el Include de cada item de un ItemGroup, con el elemento que lo
+  lleva, tal como esta escrito (las macros sin expandir: las expande el build
+  con SU tabla). Lo que el IDE escribe para OTRA plataforma u otra
+  configuracion (CondicionDeOtroBuild, en el grupo o en el elemento) no lo
+  lee este build y no se juzga: hasta la 1.21.4 se juzgaba todo, y un
+  keystore solo de Android64 tumbaba un build Linux64 (David, 21-oct-2026:
+  se juzga la compilacion pedida, no las demas). Una condicion que no se
+  sabe de que build es se sigue juzgando: una de mas es prudencia, una de
+  menos es una puerta. Lo de ProjectExtensions no es del build: msbuild lo
+  ignora. }
+function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string): TArray<TValorDelProyecto>;
 
 { Los textos del .dproj y de cada fichero DEL PROYECTO que importa (un
   .optset), recursivo hasta 4 niveles, con el fichero de cada texto en el
@@ -2017,6 +2035,78 @@ begin
     Result := ConSuGrafia(X);
 end;
 
+function BuildDeGrupo(const ACondicion: string; out APlataforma, AClave: string): Boolean;
+var
+  N, Dentro, X, Cfg: string;
+  P: Integer;
+  Formas: TArray<string>;
+begin
+  // la inversa del nombrador, como PlataformaDeGrupo: lo que la Condition
+  // nombra (la clave, la plataforma, la config de un definidor) y, con ello,
+  // que el nombrador vuelva a escribir ESA Condition en una de sus formas
+  APlataforma := '';
+  AClave := '';
+  Result := False;
+  if Pos('$(cfg_', LowerCase(ACondicion)) > 0 then
+  begin
+    // '$(Cfg_N)' o '$(Cfg_N_X)' (en un definidor, el primero es '$(Cfg_N)')
+    Dentro := TrozoDeCondicion(ACondicion, '$(Cfg_', ')').Trim;
+    P := Pos('_', Dentro);
+    if P > 0 then
+    begin
+      AClave := 'Cfg_' + Copy(Dentro, 1, P - 1);
+      X := Copy(Dentro, P + 1, MaxInt);
+    end
+    else
+    begin
+      AClave := 'Cfg_' + Dentro;
+      X := '';
+    end;
+  end
+  else if Pos('$(base', LowerCase(ACondicion)) > 0 then
+  begin
+    AClave := 'Base';
+    X := TrozoDeCondicion(ACondicion, '$(Base_', ')').Trim;
+  end
+  else
+    Exit;
+  // un definidor de plataforma nombra la suya en '$(Platform)'=='X'
+  if ValorDeCondicion(ACondicion, '''$(Platform)''').Trim <> '' then
+    X := ValorDeCondicion(ACondicion, '''$(Platform)''').Trim;
+  Cfg := ValorDeCondicion(ACondicion, '''$(Config)''').Trim;
+  Formas := [GroupCondition(X, AClave)];
+  if X <> '' then
+    Formas := Formas + [DefinerCondition(X, AClave)]
+  else if Cfg <> '' then
+    Formas := Formas + [ConfigDefinerCondition(Cfg, AClave)];
+  N := CondicionNormalizada(ACondicion);
+  for var F in Formas do
+    if CondicionNormalizada(F) = N then
+    begin
+      Result := True;
+      Break;
+    end;
+  if not Result then
+    AClave := ''
+  else if X <> '' then
+    APlataforma := ConSuGrafia(X);
+end;
+
+function CondicionDeOtroBuild(const ACondicion, APlatform, AClave, AConfig: string): Boolean;
+var
+  X, K: string;
+begin
+  Result := False;
+  if ACondicion.Trim = '' then
+    Exit;
+  if BuildDeGrupo(ACondicion, X, K) then
+    Exit(((X <> '') and not SameText(X, APlatform)) or
+      ((AClave <> '') and not SameText(K, 'Base') and not SameText(K, AClave)));
+  if CondicionDePlataformaYConfig(ACondicion, X, K) then
+    Result := ((X <> '') and not SameText(X, APlatform)) or
+      ((K <> '') and (AConfig <> '') and not SameText(K, AConfig));
+end;
+
 function DeployGroupCondition(const APlatform: string; const AConfig: string): string;
 begin
   Result := '''$(Platform)''==''' + APlatform + '''';
@@ -2834,12 +2924,29 @@ begin
     Result := MsgFmt(SF_CFG_HAZARD_XML_FMT, [Mal]);
 end;
 
-function ValoresQueLeeElBuild(const AXml: string): TArray<TValorDelProyecto>;
+function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string): TArray<TValorDelProyecto>;
 var
-  Mal, Padre: string;
+  Mal, Padre, Clave: string;
   V: TValorDelProyecto;
+  Grupos: TArray<TGrupoXml>;
+  G: TGrupoXml;
+
+  // el PropertyGroup que contiene el tramo; False si ninguno
+  function GrupoDe(const ATramo: TTramoXml; out AGrupo: TGrupoXml): Boolean;
+  begin
+    for var Gr in Grupos do
+      if (ATramo.Abre >= Gr.Ini) and (ATramo.Cierra <= Gr.Fin) then
+      begin
+        AGrupo := Gr;
+        Exit(True);
+      end;
+    Result := False;
+  end;
+
 begin
   Result := nil;
+  Clave := ConfigKey(AXml, AConfig);
+  Grupos := GruposDePropiedades(AXml);
   for var E in ElementosDe(AXml, Mal) do
   begin
     if (Length(E.Ruta) = 0) or MatchStr('projectextensions', E.Ruta) then
@@ -2849,6 +2956,15 @@ begin
     if Padre = 'propertygroup' then
     begin
       if E.Tramo.Vacio or MatchStr(E.Nombre, EVENTOS_DE_BUILD) then
+        Continue;
+      // lo que el IDE escribe para OTRA plataforma u otra configuracion no lo
+      // lee ESTE build: se juzga la compilacion pedida, no las demas (un
+      // keystore solo de Android64 tumbaba un build Linux64, 21-oct-2026);
+      // una condicion que no se sabe de que build es se juzga igual
+      if GrupoDe(E.Tramo, G) and CondicionDeOtroBuild(G.Condicion, APlatform, Clave, AConfig) then
+        Continue;
+      if CondicionDeOtroBuild(AtributoDeTramo(AXml, E.Tramo, E.Escrito, 'Condition'),
+           APlatform, Clave, AConfig) then
         Continue;
       for var Trozo in ValorDeTramo(AXml, E.Tramo).Split([';']) do
         if Trozo.Trim <> '' then

@@ -54,6 +54,8 @@ type
     [Test] procedure ElIncludeEnCualquierOrden;
     [Test] procedure LasCuatroFormasDeLaCondicion;
     [Test] procedure LaCondicionDelElementoYElVacioCuentan;
+    [Test]
+    procedure ElBuildDeUnGrupoYLoQueEsDeOtro;
   end;
 
   { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
@@ -723,6 +725,46 @@ procedure TXmlNucleoTests.XmlEscapeEnSuComilla;
 begin
   Assert.AreEqual('O''Brien &amp; co', XmlEscapeEn('O''Brien & co', '"'));
   Assert.AreEqual('O&apos;Brien &amp; co', XmlEscapeEn('O''Brien & co', ''''));
+end;
+
+procedure TXmlTextoTests.ElBuildDeUnGrupoYLoQueEsDeOtro;
+var
+  X, K: string;
+begin
+  // la inversa del nombrador para todas las formas que escribe el IDE
+  Assert.IsTrue(BuildDeGrupo(GroupCondition(''), X, K) and (X = '') and (K = 'Base'), 'la base');
+  Assert.IsTrue(BuildDeGrupo(GroupCondition('Win64'), X, K) and (X = 'Win64') and (K = 'Base'), 'los valores de Win64');
+  Assert.IsTrue(BuildDeGrupo(GroupCondition('', 'Cfg_1'), X, K) and (X = '') and (K = 'Cfg_1'), 'los de Debug');
+  Assert.IsTrue(BuildDeGrupo(GroupCondition('Android64', 'Cfg_1'), X, K) and (X = 'Android64') and (K = 'Cfg_1'),
+    'los de Debug en Android64');
+  Assert.IsTrue(BuildDeGrupo(DefinerCondition('Linux64'), X, K) and (X = 'Linux64') and (K = 'Base'), 'el definidor de Linux64');
+  Assert.IsTrue(BuildDeGrupo(DefinerCondition('Win32', 'Cfg_1'), X, K) and (X = 'Win32') and (K = 'Cfg_1'),
+    'el definidor de Debug en Win32');
+  Assert.IsTrue(BuildDeGrupo(ConfigDefinerCondition('Release', 'Cfg_2'), X, K) and (X = '') and (K = 'Cfg_2'),
+    'el definidor de Release');
+  Assert.IsTrue(BuildDeGrupo(ConfigDefinerCondition('Base', 'Base'), X, K) and (X = '') and (K = 'Base'),
+    'el definidor de la base');
+  Assert.IsTrue(BuildDeGrupo('''$(cfg_1_win64)'' != ''''', X, K) and (X = 'Win64') and (K = 'Cfg_1'),
+    'blancos y mayusculas, y la plataforma con su grafia');
+  Assert.IsFalse(BuildDeGrupo('''$(Platform)''==''Win32''', X, K), 'la forma de un .deployproj no es de grupo del .dproj');
+  Assert.IsFalse(BuildDeGrupo('''$(Base_Win64)''==''x''', X, K), 'otra forma con Base_');
+  Assert.IsTrue((X = '') and (K = ''), 'sin forma, nada leido');
+  // lo que es de OTRO build que Win64 / Cfg_2 (Release), y lo que no se sabe
+  Assert.IsFalse(CondicionDeOtroBuild('', 'Win64', 'Cfg_2', 'Release'), 'sin condicion: de todos');
+  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition(''), 'Win64', 'Cfg_2', 'Release'), 'la base: de todos');
+  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition('Win64'), 'Win64', 'Cfg_2', 'Release'), 'su plataforma');
+  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition('Win64', 'Cfg_2'), 'Win64', 'Cfg_2', 'Release'), 'su plataforma y su config');
+  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('Android64', 'Cfg_1'), 'Win64', 'Cfg_2', 'Release'), 'Debug de Android64: de otro');
+  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('Win64', 'Cfg_1'), 'Win64', 'Cfg_2', 'Release'), 'Debug de Win64: otra config');
+  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('Win32'), 'Win64', 'Cfg_2', 'Release'), 'Win32: otra plataforma');
+  Assert.IsTrue(CondicionDeOtroBuild(GroupCondition('', 'Cfg_1'), 'Win64', 'Cfg_2', 'Release'), 'Debug: otra config');
+  Assert.IsFalse(CondicionDeOtroBuild(GroupCondition('', 'Cfg_1'), 'Win64', '', 'Release'),
+    'sin la clave del build (un .optset): no se sabe, se juzga');
+  Assert.IsTrue(CondicionDeOtroBuild(DeployGroupCondition('Win32'), 'Win64', 'Cfg_2', 'Release'), 'la forma del elemento: otra plataforma');
+  Assert.IsTrue(CondicionDeOtroBuild(ConfigCondition('Debug'), 'Win64', 'Cfg_2', 'Release'), 'la forma del elemento: otra config');
+  Assert.IsFalse(CondicionDeOtroBuild(ConfigCondition('Release'), 'Win64', 'Cfg_2', 'Release'), 'la forma del elemento: la suya');
+  Assert.IsFalse(CondicionDeOtroBuild('''$(Foo)''==''bar''', 'Win64', 'Cfg_2', 'Release'), 'otra forma: no se sabe, se juzga');
+  Assert.IsFalse(CondicionDeOtroBuild('Exists(''a.optset'')', 'Win64', 'Cfg_2', 'Release'), 'una funcion: no se sabe, se juzga');
 end;
 
 initialization
