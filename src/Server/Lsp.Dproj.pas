@@ -523,6 +523,23 @@ const
     'DCC_ExeOutput', 'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput',
     'DCC_HppOutput', 'DCC_ObjOutput', 'DCC_BpiOutput', 'BRCC_OutputDir');
 
+  { La carpeta de salida que el IDE escribe en un proyecto nuevo (Output
+    directory; la de unidades cuelga de ella): UN literal para quien la
+    supone cuando el proyecto no declara nada (ResolveBuildOutput,
+    BuildOutputDefault), para quien la restaura (delphi_config set-output
+    default) y para quien la escribe (Lsp.Scaffold). }
+  IDE_OUTPUT_DEFAULT = '.\$(Platform)\$(Config)';
+
+  { Las salidas que el build SUPLE cuando el proyecto no las declara para esa
+    plataforma/config (David, 21-oct-2026: Galatea compilaba en el IDE y aqui
+    no): sin ellas dcc deja los .dcu junto a cada fuente - los de un
+    componente instalado, en su carpeta de Program Files (medido ese dia: 14
+    .dcu de Defontsoft) - y el .bpl y el .dcp en las carpetas globales del
+    IDE. La .hpp (salida C++) no se suple: C++ queda fuera del producto
+    (David, 18-oct) y BuildOutputUndeclared la sigue pidiendo. }
+  SALIDAS_QUE_SUPLE_EL_BUILD: array [0 .. 2] of string = (
+    'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput');
+
 { Value of <ATag>...</ATag> in a small TRUSTED XML (our own .profile/.sdk
   files, written by paclient or by this server). Not a general parser on
   purpose. One definition, shared by delphi_paserver, delphi_adb and
@@ -648,17 +665,29 @@ function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<T
   declarada, uno de mas es prudencia. Rutas completas. }
 function BuildResourceFiles(const ADprojPath: string): TArray<string>;
 
-{ La carpeta de salida que este proyecto NO declara y que el IDE pondria
-  fuera de el, o '' si declara todas las que usa: sin DCC_DcuOutput los .dcu
-  caen junto a cada fuente (tambien las de una referencia de solo lectura);
-  un paquete sin DCC_BplOutput/DCC_DcpOutput los deja en las carpetas
-  globales del IDE, y la salida C++ (DCC_CBuilderOutput) sin DCC_HppOutput
-  deja alli los .hpp (los .obj y .bpi van a la del .dcp). Decidido con David
-  (25-sep-2026): se rechaza y se pide declararla. Medido: 1 de 22 proyectos
-  de nuestras raices. Se mira PARA ESTE BUILD (APlatform/AConfig): cada
-  plataforma y config puede tener su carpeta, o heredar la global
-  (EffectiveProperty). }
-function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): string;
+{ Las carpetas de salida que este proyecto NO declara PARA ESTE BUILD
+  (APlatform/AConfig: cada plataforma y config puede tener la suya o heredar
+  la global, EffectiveProperty) y que el IDE pondria fuera de el, en orden;
+  vacio si declara todas las que usa. Sin DCC_DcuOutput los .dcu caen junto a
+  cada fuente (tambien los de una referencia de solo lectura y los de un
+  componente instalado, en Program Files); un paquete sin
+  DCC_BplOutput/DCC_DcpOutput los deja en las carpetas globales del IDE, y la
+  salida C++ (DCC_CBuilderOutput) sin DCC_HppOutput deja alli los .hpp (los
+  .obj y .bpi van a la del .dcp). Hasta la 1.21.2 se rechazaba la primera que
+  faltaba (David, 25-sep-2026; 1 de 22 proyectos de nuestras raices); desde
+  la 1.21.3 las de SALIDAS_QUE_SUPLE_EL_BUILD las pone el build
+  (BuildOutputDefault) y solo la .hpp se sigue pidiendo. }
+function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): TArray<string>;
+
+{ La carpeta que el build usa para una salida que el proyecto no declara
+  (SALIDAS_QUE_SUPLE_EL_BUILD): la del binario de ESE build (DCC_ExeOutput
+  efectivo del .dproj; un .optset no cuenta, se importa con su condicion),
+  que es donde el IDE deja tambien los .dcu de un proyecto nuevo, o
+  IDE_OUTPUT_DEFAULT si tampoco la declara. Tag vacio: quien la pide pone el
+  suyo. Value tal como se escribiria; Dir resuelta como las declaradas
+  (BuildOutputDirs), '' si no se sabe resolver, y la puerta la rechaza igual.
+  Nunca pisa un valor declarado: solo se pregunta por lo que falta. }
+function BuildOutputDefault(const ADprojPath, APlatform, AConfig: string): TBuildOutputDir;
 
 { True si el build APlatform/AConfig de ADprojPath enlaza con paquetes en
   tiempo de ejecucion (UsePackages=true en su valor EFECTIVO, en el .dproj o
@@ -2198,6 +2227,32 @@ begin
   Result := Result.Replace('$(SanitizedProjectName)', ABase, [rfReplaceAll, rfIgnoreCase]);
 end;
 
+{ Un valor de salida YA expandido (ACand, de ExpandOutputMacros), resuelto a
+  carpeta real contra la del proyecto; '' si no se puede comprobar: una macro
+  sin resolver, un escape de MSBuild (%3A), una entidad numerica (&#58;) o un
+  CDATA (AEscrito, el tramo tal cual) los leeria msbuild distinto que
+  nosotros, y lo que no se puede comprobar no se aprueba (el lector lee ya el
+  CDATA como XML, 17-oct-2026, y aqui se sigue sin aprobar lo que no esta
+  escrito tal cual: la segunda barrera se queda). UNA copia: BuildOutputDirs
+  (lo declarado) y BuildOutputDefault (lo suplido). }
+function ResuelveSalida(const ACand, AValue, AEscrito, ADir: string): string;
+var
+  Cand: string;
+begin
+  Result := '';
+  if ACand.Contains('$(') or ACand.Contains('@(') or ACand.Contains('%') or
+     AValue.Contains('&#') or ACand.Contains('<') or AEscrito.Contains('<') then
+    Exit;
+  Cand := ACand;
+  if not TPath.IsPathRooted(Cand) then
+    Cand := TPath.Combine(ADir, Cand);
+  try
+    Result := TPath.GetFullPath(Cand);
+  except
+    Result := '';
+  end;
+end;
+
 { ProjectXmlChain: EL lector, con los ficheros; la forma sin ellos, debajo. }
 function ProjectXmlChain(const ADprojPath: string; out AFicheros: TArray<string>): TArray<string>;
 var
@@ -2279,23 +2334,8 @@ begin
             APlatform, AConfig).Trim;
           if Cand = '' then
             Continue; // vacia: la del IDE por defecto (BuildOutputUndeclared)
-          // Una macro sin resolver, un escape de MSBuild (%3A), una entidad
-          // numerica (&#58;) o un CDATA: msbuild lo leeria distinto que
-          // nosotros, y lo que no se puede comprobar no se aprueba. El lector
-          // lee ya el CDATA como XML (17-oct-2026), y aqui se sigue sin aprobar
-          // lo que no esta escrito tal cual: la segunda barrera se queda.
-          if not (Cand.Contains('$(') or Cand.Contains('@(') or
-                  Cand.Contains('%') or Item.Value.Contains('&#') or
-                  Cand.Contains('<') or Escrito.Contains('<')) then
-          begin
-            if not TPath.IsPathRooted(Cand) then
-              Cand := TPath.Combine(Dir, Cand);
-            try
-              Item.Dir := TPath.GetFullPath(Cand);
-            except
-              Item.Dir := '';
-            end;
-          end;
+          // lo que no se puede comprobar queda con Dir = '' (ResuelveSalida)
+          Item.Dir := ResuelveSalida(Cand, Item.Value, Escrito, Dir);
           List.Add(Item);
         end;
     Result := List.ToArray;
@@ -2390,7 +2430,7 @@ begin
   Result := EffectiveProperty(AXml, ATag, APlatform, '');
 end;
 
-function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): string;
+function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): TArray<string>;
 var
   Chain: TArray<string>;
 
@@ -2406,7 +2446,7 @@ var
   Xml, V: string;
   Paquete, Cpp: Boolean;
 begin
-  Result := '';
+  Result := nil;
   Chain := ProjectXmlChain(ADprojPath);
   if Chain = nil then
     Exit;
@@ -2423,14 +2463,39 @@ begin
       if (V.Trim <> '') and not SameText(V.Trim, 'None') then
         Cpp := True;
   end;
+  // TODAS las que faltan, en este orden: el llamante suple las que puede
+  // (SALIDAS_QUE_SUPLE_EL_BUILD) y rechaza por la primera que no
   if not Declara('DCC_DcuOutput') then
-    Exit('DCC_DcuOutput');
+    Result := Result + ['DCC_DcuOutput'];
   if Paquete and not Declara('DCC_BplOutput') then
-    Exit('DCC_BplOutput');
+    Result := Result + ['DCC_BplOutput'];
   if (Paquete or Cpp) and not Declara('DCC_DcpOutput') then
-    Exit('DCC_DcpOutput');
+    Result := Result + ['DCC_DcpOutput'];
   if Cpp and not Declara('DCC_HppOutput') then
-    Exit('DCC_HppOutput');
+    Result := Result + ['DCC_HppOutput'];
+end;
+
+function BuildOutputDefault(const ADprojPath, APlatform, AConfig: string): TBuildOutputDir;
+var
+  Chain: TArray<string>;
+  Dir, Base, Cand: string;
+begin
+  Result.Tag := '';
+  Result.Value := '';
+  Result.Dir := '';
+  Chain := ProjectXmlChain(ADprojPath);
+  if Chain = nil then
+    Exit;
+  // la del binario de ESTE build, tal como la declara el .dproj; sin ella,
+  // la que el IDE escribe en un proyecto nuevo
+  Result.Value := EffectiveProperty(Chain[0], 'DCC_ExeOutput', APlatform, AConfig).Trim;
+  if Result.Value = '' then
+    Result.Value := IDE_OUTPUT_DEFAULT;
+  Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
+  Base := TPath.GetFileNameWithoutExtension(ADprojPath);
+  Cand := ExpandOutputMacros(Result.Value, Dir, Base, APlatform, AConfig).Trim;
+  if Cand <> '' then
+    Result.Dir := ResuelveSalida(Cand, Result.Value, Result.Value, Dir);
 end;
 
 function UsaPaquetesEnEjecucion(const ADprojPath, APlatform, AConfig: string): Boolean;
@@ -2518,7 +2583,7 @@ begin
       Dirs.Add(D.Trim);
     for D in AllTagValues(Xml, 'DCC_BplOutput') do
       Dirs.Add(D.Trim);
-    Dirs.Add('.\$(Platform)\$(Config)'); // the IDE default when unset
+    Dirs.Add(IDE_OUTPUT_DEFAULT); // the IDE default when unset
     for D in Dirs do
     begin
       Cand := Expand(D);

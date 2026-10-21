@@ -10,6 +10,29 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- **The build supplies the output folders a project leaves undeclared,
+  instead of refusing it.** Until 1.21.2 a project without `DCC_DcuOutput`
+  (or a package without `DCC_BplOutput`/`DCC_DcpOutput`) for the platform and
+  config of the build answered `BUILD-030`, because without them dcc leaves
+  every `.dcu` next to its source - a component's or a reference's inside its
+  own folder, outside the workspace - and the `.bpl`/`.dcp` in the IDE's
+  global folders. Measured on 2026-10-21 against a twenty-year-old real
+  project copied to the NAS and opened in the IDE 13.2: the IDE compiled it
+  and wrote 14 `.dcu` of a component into `Program Files`; this server
+  refused it. Now the build passes those folders itself on MSBuild's command
+  line, as global properties: the binary output folder of that build
+  (`DCC_ExeOutput`), or `.\$(Platform)\$(Config)` - what the IDE writes for a
+  new project - when there is none; per platform and configuration, judged
+  by the same two judges as a declared folder (`BUILD-029`, `BUILD-031`),
+  never written to the `.dproj`, and a folder the project does declare is
+  always the one used. The answer says which and where (`outputSupplied`,
+  `BUILD-054`). `BUILD-030` stays for the one folder the build does not
+  supply, the C++ `.hpp` one. One literal for the IDE's default layout
+  (`IDE_OUTPUT_DEFAULT`), shared by the gate, `set-output default` and
+  `delphi_create`. `test_build_salida_suplida_1213` (S1, S3, S4, S5 and S7
+  red against 1.21.2, S3 being a unit of a read-only reference compiled from
+  its source with its folder left untouched); `test_escritor_guardado` O
+  updated.
 - **`delphi_upload` says when what it wrote is a project file.** It is the
   one channel that writes a `.dproj` raw, on purpose - `delphi_edit` and
   `delphi_textedit` refuse one (`EDIT-128`) - and the build judges it

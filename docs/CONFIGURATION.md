@@ -493,8 +493,9 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   **To see the gate work from a client** (it judges the `.dproj` however it got there, and
   `delphi_upload` is the channel that writes one raw — `delphi_edit` and `delphi_textedit`
   refuse a project file): create a console project with `delphi_create`, then upload this
-  minimal `.dproj` over its own (whole file, base64, `offset=0`; it declares the output
-  folders, so the build reaches the whitelist) and build it — it compiles:
+  minimal `.dproj` over its own (whole file, base64, `offset=0`) and build it — it compiles
+  (the output folders are optional since 1.21.3: a `.dcu` folder the project leaves
+  undeclared is supplied by the build, and `outputSupplied` says where):
 
   ```xml
   <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">

@@ -1662,6 +1662,16 @@ const
     'final, signed version is compiled by the operator outside this ' +
     'server, where those events run. With AllowBuildScripts=1 in the ' +
     'workspace they would run.';
+  SN_BUILD_OUTPUT_SUPPLIED =
+    '[BUILD-054] The project does not declare where this platform and ' +
+    'config put part of what the build writes (outputSupplied names ' +
+    'which: the .dcu, .bpl or .dcp folder). The IDE would leave those ' +
+    'next to each source - a component''s inside its install folder - or ' +
+    'in its global Bpl/Dcp folders, outside the project; this build put ' +
+    'them in the project''s binary output folder instead (dir), the ' +
+    'layout the IDE gives a new project. Nothing was written to the ' +
+    '.dproj, and a folder the project does declare is always the one ' +
+    'used: delphi_config set-output declares it for good.';
 
   SR_BUILD_RESERVED_PROP_FMT =
     '[BUILD-019 DENIED] The project (or something it imports) defines ' +
@@ -5804,13 +5814,13 @@ const
 
   SR_BUILD_OUTPUT_UNDECLARED_FMT =
     '[BUILD-030 DENIED] I will not build this. The project does not ' +
-    'declare %s for this platform and config (neither in the global one ' +
-    'nor in the specific one), and without it the IDE puts that output ' +
-    'outside the project: the .dcu files next to each source (also those ' +
-    'of a reference), the .bpl, .dcp and .hpp in their global folders. ' +
-    'Declare it inside the project, for example .\$(Platform)\$(Config) ' +
-    'as delphi_create does (delphi_config set-output sets the binary one ' +
-    'and the .dcu one).';
+    'declare %s for this platform and config (neither in the global ' +
+    'group nor in the specific one), and without it the IDE puts that ' +
+    'output outside the project. The build supplies the .dcu, .bpl and ' +
+    '.dcp folders itself when a project leaves them undeclared ' +
+    '(outputSupplied); this one it does not: declare it inside the ' +
+    'project (Project Options > Delphi Compiler > Output directories in ' +
+    'the IDE), for example .\$(Platform)\$(Config).';
 
   SR_BUILD_OUTPUT_UNRESOLVED_FMT =
     '[BUILD-031 DENIED] I will not build this. I do not know where the ' +
@@ -8714,7 +8724,7 @@ const
     'delphi_build: REFUSED "%s" - %s';
 
   SL_BUILD_DELPHI_BUILD_TARGET_FMT =
-    'delphi_build: BUILD "%s" %s/%s target=%s%s';
+    'delphi_build: BUILD "%s" %s/%s target=%s%s%s';
 
   // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c a mano, 27-sep-2026)
   SR_EDIT_FICHERO_BINARIO_NUL_FMT =
@@ -9318,7 +9328,10 @@ const
     'AllowBuildScripts=1 in the workspace admits them) or when what the ' +
     'build READS (icon, manifest, search paths, .rc) lies outside what you ' +
     'can read; its pre/post build EVENTS (signing, copies) are skipped ' +
-    'instead (buildEventsSkipped says so). For a package (.dpk) ' +
+    'instead (buildEventsSkipped says so), and an output folder the ' +
+    'project leaves undeclared (.dcu, .bpl, .dcp) is supplied inside the ' +
+    'project for that build (outputSupplied says where), never written ' +
+    'to the .dproj. For a package (.dpk) ' +
     'the answer adds implicitImports (units of OTHER packages it compiled ' +
     'into itself, W1033) and requiresSuggested (their packages, from this ' +
     'install''s BPLs, or a .dpk of your workspace with ' +

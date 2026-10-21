@@ -535,8 +535,8 @@ begin
   if Restore then
   begin
     Clean := MsgText(SF_CFG_RAD_STUDIO_DEFAULT);
-    ExeInner := '.\$(Platform)\$(Config)';
-    DcuInner := '.\$(Platform)\$(Config)\dcu';
+    ExeInner := IDE_OUTPUT_DEFAULT; // lo que escribe el IDE en un proyecto nuevo (un literal, Lsp.Dproj)
+    DcuInner := IDE_OUTPUT_DEFAULT + '\dcu';
   end
   else
   begin

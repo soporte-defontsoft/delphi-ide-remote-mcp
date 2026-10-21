@@ -336,7 +336,12 @@ in frame. Do the gesture you came for and nothing else.
   is refused by name (`BUILD-017`), and what the build reads through the
   project - the icon, the manifest, the search paths, a `.rc` - has to
   lie inside what you can read (`BUILD-050`); the refusal names the
-  element and the value, so fix the `.dproj`, do not retry.
+  element and the value, so fix the `.dproj`, do not retry. An output
+  folder the project does not declare (the `.dcu`, `.bpl` or `.dcp` one)
+  is supplied inside the project for that build (`outputSupplied` says
+  where; `BUILD-054`), never written to the `.dproj`: a project that
+  compiles in the IDE with its `.dcu` next to the sources compiles here
+  the same, with them in its binary output folder.
 - **A build is what the IDE would build**: only a platform the project
   declares and has enabled (another is refused with `BUILD-046`:
   `delphi_config command=add-platform` declares it, as the IDE does), and

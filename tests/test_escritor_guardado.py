@@ -331,6 +331,21 @@ def rechazado(out):
     return mc.rechazado(out) and any(mc.es(out, c) for c in ('SR_BUILD_OUTPUT_DENIED_FMT', 'SR_BUILD_OUTPUT_UNDECLARED_FMT', 'SR_BUILD_OUTPUT_UNRESOLVED_FMT'))
 
 
+def compila(out):
+    try:
+        return json.loads(out).get('success') is True
+    except Exception:
+        return False
+
+
+def suplidas(out):
+    # las salidas que el proyecto no declara y el build SUPLE (1.21.3, outputSupplied)
+    try:
+        return {e.get('property') for e in (json.loads(out).get('outputSupplied') or [])}
+    except Exception:
+        return set()
+
+
 out = build(proyecto_con('fuera', salida(SAL)))
 check('O DCC_ExeOutput absoluto fuera de las raices: RECHAZADO', rechazado(out) and 'DCC_ExeOutput' in out, out[:300])
 out = build(proyecto_con('mayus', salida(SAL, etiqueta='DCC_EXEOUTPUT')))
@@ -361,10 +376,13 @@ out = build(dpj)
 check('O una salida relativa que es un junction a fuera: RECHAZADO (ruta real)', rechazado(out), out[:300])
 out = build(proyecto_con('referencia', salida(REF)))
 check('O la salida dentro de una referencia de solo lectura: RECHAZADO', rechazado(out), out[:300])
+# Hasta la 1.21.2 estas dos se rechazaban (BUILD-030); desde la 1.21.3 el build
+# SUPLE esas carpetas dentro del proyecto (outputSupplied) y el resto del bloque
+# sigue igual: nada cae fuera (test_build_salida_suplida_1213 mide el detalle)
 out = build(proyecto_con('sindcu', lambda x, d: re.sub(r'\s*<DCC_DcuOutput>[^<]*</DCC_DcuOutput>', '', x)))
-check('O sin DCC_DcuOutput (los .dcu junto a cada fuente): RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+check('O sin DCC_DcuOutput: el build la SUPLE dentro (outputSupplied) y compila', compila(out) and 'DCC_DcuOutput' in suplidas(out), out[:300])
 out = build(proyecto_con('paquete', lambda x, d: re.sub(r'<AppType>[^<]*</AppType>', '<AppType>Package</AppType>', x)))
-check('O un paquete sin DCC_BplOutput (la carpeta global del IDE): RECHAZADO', rechazado(out) and 'DCC_BplOutput' in out, out[:300])
+check('O un paquete sin DCC_BplOutput/DCC_DcpOutput: las SUPLE dentro, no se rechaza', not rechazado(out) and {'DCC_BplOutput', 'DCC_DcpOutput'} <= suplidas(out), out[:300])
 
 
 def grupo(cond, cuerpo):
@@ -382,11 +400,11 @@ def solo_para(cond):
 
 
 out = build(proyecto_con('solowin32', solo_para('Base_Win32')))
-check('O DCC_DcuOutput solo para Win32 y el build es Win64: RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+check('O DCC_DcuOutput solo para Win32 y el build es Win64: la de Win64 se SUPLE y compila', compila(out) and 'DCC_DcuOutput' in suplidas(out), out[:300])
 out = build(proyecto_con('anulada', lambda x, d: grupo(mc.clave_de_config(x, 'Debug'),
                                                       '<DCC_DcuOutput></DCC_DcuOutput>')(x)))
-check('O la global anulada por una particular VACIA de Debug (su clave, la del .dproj): RECHAZADO',
-      rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+check('O la global anulada por una particular VACIA de Debug (su clave, la del .dproj): se SUPLE y compila',
+      compila(out) and 'DCC_DcuOutput' in suplidas(out), out[:300])
 dpw = proyecto_con('solowin64', solo_para('Base_Win64'))
 out = build(dpw)
 try:

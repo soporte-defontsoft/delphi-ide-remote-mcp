@@ -806,7 +806,7 @@ var
 begin
   OutDir := MergeProperty(ADprojXml, 'DCC_ExeOutput');
   if OutDir.Trim = '' then
-    OutDir := '$(Platform)\$(Config)';
+    OutDir := IDE_OUTPUT_DEFAULT; // el '.\' se quita abajo
   OutDir := OutDir.Replace('$(Platform)', APlat, [rfReplaceAll, rfIgnoreCase])
     .Replace('$(Config)', ACfg, [rfReplaceAll, rfIgnoreCase]).Trim;
   if OutDir.StartsWith('.\') then
@@ -1246,15 +1246,32 @@ end;
   que msbuild arranque - un Clean borra en esas mismas carpetas. El gate de
   la ruta del proyecto no bastaba: un .dproj con DCC_ExeOutput absoluto
   fuera de las raices dejaba App.exe y App.rsm fuera de la jaula (medido en
-  vivo, 25-sep-2026). Una salida que no se sabe resolver no se aprueba. }
-function SalidaDenegada(const ADprojPath, APlat, ACfg: string): string;
+  vivo, 25-sep-2026). Una salida que no se sabe resolver no se aprueba.
+  Las que el proyecto NO declara y el build SUPLE (SALIDAS_QUE_SUPLE_EL_BUILD:
+  la carpeta del binario de este build, dentro del proyecto,
+  BuildOutputDefault) salen en ASuplidas, juzgadas por los MISMOS jueces que
+  las declaradas; la que no se suple (la .hpp) se sigue pidiendo (BUILD-030).
+  Lo que el proyecto declara, sea lo que sea, se respeta tal cual. }
+function SalidaDenegada(const ADprojPath, APlat, ACfg: string;
+  out ASuplidas: TArray<TBuildOutputDir>): string;
 begin
   Result := '';
+  ASuplidas := nil;
   // La que NO declara la pone el IDE fuera del proyecto (David, 25-sep-2026).
-  var Falta := BuildOutputUndeclared(ADprojPath, APlat, ACfg);
-  if Falta <> '' then
-    Exit(MsgFmt(SR_BUILD_OUTPUT_UNDECLARED_FMT, [Falta]));
-  for var S in BuildOutputDirs(ADprojPath, APlat, ACfg) do
+  // Hasta la 1.21.2 se rechazaba; desde la 1.21.3 el build la suple el mismo
+  // sin tocar el .dproj (David, 21-oct-2026: Galatea compilaba en el IDE y
+  // aqui no, y el IDE dejo 14 .dcu de Defontsoft en Program Files).
+  for var Falta in BuildOutputUndeclared(ADprojPath, APlat, ACfg) do
+  begin
+    if not MatchText(Falta, SALIDAS_QUE_SUPLE_EL_BUILD) then
+      Exit(MsgFmt(SR_BUILD_OUTPUT_UNDECLARED_FMT, [Falta]));
+    var Suplida := BuildOutputDefault(ADprojPath, APlat, ACfg);
+    Suplida.Tag := Falta;
+    ASuplidas := ASuplidas + [Suplida];
+  end;
+  // ...y cada carpeta, declarada o suplida, por los mismos jueces
+  var Salidas := BuildOutputDirs(ADprojPath, APlat, ACfg) + ASuplidas;
+  for var S in Salidas do
   begin
     if S.Dir = '' then
       Exit(MsgFmt(SR_BUILD_OUTPUT_UNRESOLVED_FMT, [S.Tag, S.Value]));
@@ -1864,8 +1881,11 @@ begin
   if IdxTarget < 0 then
     raise Exception.Create(MsgFmt(SR_BUILD_TARGET_FMT, [Target]));
   Target := TARGETS_DE_BUILD[IdxTarget];
-  // Donde deja la salida, con la plataforma y la config de ESTE build.
-  var SalidaMala := SalidaDenegada(ADprojPath, Plat, Cfg);
+  // Donde deja la salida, con la plataforma y la config de ESTE build, y las
+  // carpetas que el build suple porque el proyecto no las declara (Suplidas:
+  // van a la linea de msbuild y a la respuesta)
+  var Suplidas: TArray<TBuildOutputDir>;
+  var SalidaMala := SalidaDenegada(ADprojPath, Plat, Cfg, Suplidas);
   if SalidaMala <> '' then
   begin
     TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
@@ -2066,10 +2086,19 @@ begin
     end;
   end;
 
+  // Las salidas que el proyecto no declara, suplidas por el build como
+  // propiedad global de msbuild (BuildOutputDefault, ya juzgadas por
+  // SalidaDenegada): msbuild la usa como si el .dproj la trajera y el .dproj
+  // no se toca. Lo declarado nunca se pisa: solo va lo que falta. Sin barra
+  // final (dcc no la quiere; EnComillas la escaparia bien de todos modos).
+  var SalidaArg := '';
+  for var Sup in Suplidas do
+    SalidaArg := SalidaArg + Format(' /p:%s=%s',
+      [Sup.Tag, EnComillas(ExcludeTrailingPathDelimiter(Sup.Dir))]);
   // Security audit trail: a build can run arbitrary pre/post-build steps
-  // declared in the .dproj, so record every one.
+  // declared in the .dproj, so record every one - and what the build supplies.
   TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_TARGET_FMT,
-    [TPath.GetFullPath(ADprojPath), Plat, Cfg, TargetsMsBuild, SdkArg]));
+    [TPath.GetFullPath(ADprojPath), Plat, Cfg, TargetsMsBuild, SdkArg, SalidaArg]));
 
   // Los MISMOS flags que BuildWithParams.bat, que es el contrato de la casa
   // para builds con agentes: quiet = solo errores y el resumen (unas pocas
@@ -2100,9 +2129,9 @@ begin
   // msbuild.exe por su ruta y sin shell (2an, arriba): un metacaracter en un
   // valor es solo un caracter, y los jueces de cada valor siguen como segunda
   // barrera (David, 11-oct)
-  var Orden := Format('%s %s /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s %s',
+  var Orden := Format('%s %s /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s%s %s',
     [EnComillas(MsBuildExe), EnComillas(TPath.GetFullPath(ADprojPath)), TargetsMsBuild, Cfg,
-     Plat, SdkArg, ProfileArg, DeviceArg, EventArg, Verb]);
+     Plat, SdkArg, ProfileArg, DeviceArg, EventArg, SalidaArg, Verb]);
   // la carpeta del proyecto como cwd: sin ella, msbuild hereda la del proceso
   // (el servicio: la casa del servidor) y lo que una tarea escribe RELATIVO -el
   // .vrc/.res de la info de version- cae FUERA de la jaula (2ak de la 1.18.2,
@@ -2250,6 +2279,17 @@ begin
     begin
       Result.AddPair('buildEventsSkipped', TJSONBool.Create(True));
       Result.AddPair('buildEventsNote', MsgText(SN_BUILD_EVENTS_SKIPPED));
+    end;
+    // las salidas que el proyecto no declara y este build puso dentro
+    // (BuildOutputDefault): cual y donde, para que el agente sepa donde han
+    // caido sus .dcu/.bpl/.dcp sin que nadie tocara el .dproj
+    if Length(Suplidas) > 0 then
+    begin
+      var Suplido := TJSONArray.Create;
+      for var Sup in Suplidas do
+        Suplido.Add(TJSONObject.Create.AddPair('property', Sup.Tag).AddPair('dir', Sup.Dir));
+      Result.AddPair('outputSupplied', Suplido);
+      Result.AddPair('outputSuppliedNote', MsgText(SN_BUILD_OUTPUT_SUPPLIED));
     end;
     if SdkUsado <> '' then
       Result.AddPair('sdk', SdkUsado);

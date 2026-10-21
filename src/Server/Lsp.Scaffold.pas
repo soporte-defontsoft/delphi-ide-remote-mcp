@@ -185,8 +185,8 @@ begin
     MainExt := '.dpk';
     ProjectType := 'Package';
     PkgProps :=
-      '        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>' + CRLF +
-      '        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>' + CRLF +
+      '        <DCC_BplOutput>' + IDE_OUTPUT_DEFAULT + '</DCC_BplOutput>' + CRLF +
+      '        <DCC_DcpOutput>' + IDE_OUTPUT_DEFAULT + '</DCC_DcpOutput>' + CRLF +
       '        <GenDll>true</GenDll>' + CRLF +
       '        <GenPackage>true</GenPackage>' + CRLF +
       '        <AppFileExt>bpl</AppFileExt>' + CRLF;
@@ -295,8 +295,8 @@ begin
     Definidores +
     GrupoDeValores('', 'Base',
       Prop('SanitizedProjectName', AName) +
-      '        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>' + CRLF +
-      '        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>' + CRLF +
+      '        <DCC_ExeOutput>' + IDE_OUTPUT_DEFAULT + '</DCC_ExeOutput>' + CRLF +
+      '        <DCC_DcuOutput>' + IDE_OUTPUT_DEFAULT + '\dcu</DCC_DcuOutput>' + CRLF +
       PkgProps +
       '        <VerInfo_Locale>1033</VerInfo_Locale>' + CRLF +
       '        <DCC_Namespace>' + Ambitos + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
