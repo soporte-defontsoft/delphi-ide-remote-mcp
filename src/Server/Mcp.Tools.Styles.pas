@@ -230,8 +230,18 @@ var
     Quedan := TList<string>.Create;
     try
       Quedan.AddRange(Antes);
+      // La propiedad que ESTE set escribe es de este cambio aunque FMX ya la
+      // ignorase antes: reescribirla salia CHANGED y nunca llegaba a la app
+      // (deep-test de Hermes sobre la 1.21.2, 21-oct-2026: Fill.Color en un
+      // TButton puesto el dia antes). El mensaje del RTL (SReadError) nombra
+      // la CLASE del objeto y la propiedad: "Error reading TButton.Fill.Color:
+      // Property Fill.Color does not exist". Solo si la propiedad YA ESTABA en
+      // este objeto (WasThere): si es nueva, el diff de abajo la ve.
+      var Mia := O.ClassName_ + '.' + AProp.Trim + ':';
       for var D in Despues do
-        if Quedan.Contains(D) then
+        if WasThere and ContainsText(D, Mia) then
+          Result := Result + IfThen(Result = '', '', '; ') + D
+        else if Quedan.Contains(D) then
           Quedan.Remove(D) // uno que ya estaba: no es de este cambio
         else
           Result := Result + IfThen(Result = '', '', '; ') + D;

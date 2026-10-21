@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`delphi_styles set` rewrote a property FMX already ignored and said CHANGED.**
+  The judge of `set` (STYLE-050, what FMX's own reader ignores) compared the
+  ignored list before and after the change and refused only what the change
+  added: a property the class does not publish that was already in the object
+  (a `Fill.Color` on a TButton, set the day before) was rewritten with
+  CHANGED, and the value never reached the app nor the `.bin.style` - lint and
+  build said so, `set` did not. Found by Hermes (Qwen3.8 Flash Next) in its
+  deep test of 1.21.2. Now what FMX ignores that names the property this
+  `set` writes is refused even if it was already ignored; a valid property on
+  the same object, or the same property on a class that publishes it, still
+  builds. `test_styles_set_ignorado_1213`, red against 1.21.2.
+
 ## [1.21.2] - 2026-10-20
 
 A patch of 1.21.1 that turns the build gate into a whitelist and judges what
