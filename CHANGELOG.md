@@ -57,6 +57,13 @@ the MCP `initialize` response (`serverInfo.version`).
 - **Two engine limits are in the descriptions now**: `delphi_signature` often
   answers null for a call to a method where a free routine answers, and
   `delphi_references` cannot resolve the name in `unit X;` (`LSP-003`).
+- **A `.dproj` that does not close its `<Project>` is refused as incomplete
+  (`BUILD-055`), not as "platform not enabled".** An upload cut short leaves
+  the `<Platforms>` block, which sits at the end of the file, out of it, and
+  the build answered `BUILD-046` (an agent measured it on 2026-10-21). The
+  refusal says what happened and how to put the file back. One named check
+  of our own (`Lsp.Dproj.DprojIncompleto`); the IDE's XML loader stays the
+  oracle of the tests. (`tests/test_build_dproj_truncado_1214.py`.)
 - **Four rules that were written more than once are written once** (the
   duplicate audit of 2026-10-16, no measured failure; `test_paisaje` watches
   each): the absolute entry of a root or a read-only path has one reader

@@ -1860,6 +1860,11 @@ begin
   // mientras nadie la cambia (hasta la 1.15 era Win32 a fuego, aunque el
   // proyecto tuviera Win64 por defecto, como los que crea delphi_create).
   var Proyecto := ReadDproj(ADprojPath);
+  // un .dproj a medias (no cierra su <Project>) no se juzga ni se compila:
+  // se decia "plataforma no habilitada", que es lo que un fichero cortado
+  // por el final parece (Hermes, 21-oct-2026)
+  if Proyecto.Incompleto then
+    raise Exception.Create(MsgFmt(SR_BUILD_DPROJ_INCOMPLETO_FMT, [ADprojPath]));
   if Plat = '' then
     Plat := Proyecto.PlataformaPorDefecto;
   // Lo que el proyecto no puede ser en esa plataforma (VCL fuera de Windows)

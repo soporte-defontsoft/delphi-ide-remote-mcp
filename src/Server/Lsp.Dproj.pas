@@ -26,6 +26,9 @@ type
     Platforms: TArray<TDprojPlatform>;
     DefaultPlatform: string; // el selector <Platform Condition="'$(Platform)'==''">X</Platform>
     DefaultConfig: string;   // el selector <Config Condition="'$(Config)'==''">X</Config>
+    // el texto no cierra su <Project>: un upload cortado o una edicion a
+    // medias (DprojIncompleto); lo que se lea de el es de un fichero a medias
+    Incompleto: Boolean;
     function HasConfig(const AName: string): Boolean;
     function HasPlatform(const AName: string): Boolean;
     { La plataforma que compilan el IDE y msbuild mientras nadie pide otra: la
@@ -331,6 +334,13 @@ function ReadDproj(const ADprojPath: string): TDprojInfo;
 { ...lo mismo de un texto ya leido: quien lee el .dproj una vez para varias
   preguntas (los ajustes del motor) no lo lee dos. }
 function InfoDeDproj(const AXml: string): TDprojInfo;
+{ Un .dproj que no CIERRA su <Project>: un upload cortado (Hermes, 21-oct-2026:
+  el bloque <Platforms> va al final y el build decia BUILD-046 "plataforma no
+  habilitada") o una edicion a medias. GRAMATICA PROPIA, declarada: el juez
+  seria MSXML, el cargador del IDE, que es oraculo en tests/test_oraculo_xml y
+  no entra en el servidor (decision del 17-oct-2026); esta pregunta - abre la
+  raiz y no la cierra - es la unica que se hace aqui, y UNA vez. }
+function DprojIncompleto(const AXml: string): Boolean;
 { El SELECTOR de ATag (Config o Platform): el primer <ATag Condition="...">X</ATag>
   sin value, lo que el IDE y msbuild compilan mientras nadie pide otro. EL
   lector (ReadDproj) y el sitio donde escribe set-active. False si no hay. }
@@ -1660,12 +1670,25 @@ begin
   Result := InfoDeDproj(Xml);
 end;
 
+function DprojIncompleto(const AXml: string): Boolean;
+var
+  Low: string;
+begin
+  // el raiz abre y no cierra (un upload cortado): por el escaner de etiquetas
+  // de esta unidad, que solo da por elemento lo que cierra. Un texto sin
+  // <Project> no es incompleto, es otra cosa (lo dira el cargador del IDE)
+  Low := TextoDeBusqueda(AXml);
+  Result := (Length(AperturasDe(Low, 'Project')) > 0) and
+    (Length(TramosEnTexto(AXml, Low, 'Project')) = 0);
+end;
+
 function InfoDeDproj(const AXml: string): TDprojInfo;
 var
   D: TDprojPlatform;
   T: TTramoXml;
 begin
   Result := Default(TDprojInfo);
+  Result.Incompleto := DprojIncompleto(AXml);
   var Fw := AllTagValues(AXml, 'FrameworkType');
   if Length(Fw) > 0 then
     Result.FrameworkType := Fw[0].Trim;

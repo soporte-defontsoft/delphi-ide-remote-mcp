@@ -1650,6 +1650,15 @@ const
     'delphi_config command=add-platform platform=%s declares it as the IDE ' +
     'does (for a remote one, sdk= and profile= go in the same call).';
 
+  { Un .dproj que no cierra su <Project> (Lsp.Dproj.DprojIncompleto): un
+    upload cortado dejaba el bloque <Platforms> fuera y el build decia
+    BUILD-046 "plataforma no habilitada" (Hermes, 21-oct-2026; 1.21.4). }
+  SR_BUILD_DPROJ_INCOMPLETO_FMT =
+    '[BUILD-055 DENIED] %s is incomplete: it does not close its <Project> ' +
+    'element (an upload cut short, or an edit left half way), so nothing ' +
+    'read from it can be trusted and it is not built. Restore the copy ' +
+    'from __delphi-patch, or upload the whole file again from offset=0.';
+
   SR_BUILD_HAZARD_FMT =
     '[BUILD-017 DENIED] The project contains %s. This server only ' +
     'COMPILES, never executes: a build is approved only when every piece ' +
