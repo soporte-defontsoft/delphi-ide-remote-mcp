@@ -22,6 +22,19 @@ the MCP `initialize` response (`serverInfo.version`).
   inverse of the group-condition namer for every form the IDE writes
   (`Lsp.Dproj.BuildDeGrupo`, `CondicionDeOtroBuild`), with its unit tests.
   (`tests/test_build_grupos_1215.py`, 12 checks, 5 red against 1.21.4.)
+- **A macro that expands to a list is judged piece by piece.** The IDE closes
+  the package list of every project with `$(DCC_UsePackage)`; the build gate
+  expanded it to the whole list and judged that as one relative path, so any
+  project with more than about twenty-five runtime packages was refused with
+  `BUILD-050` naming `$(DCC_UsePackage)` (measured on 2026-10-21: 217
+  characters passed, 313 did not, 1,599 without the macro passed). What a
+  macro expands to is now split by `;` like the written value, and each piece
+  judged on its own. The same mistake hid a hole: a search path that expanded
+  to a list of folders with drive letters (`$(Path)`) looked like a text with
+  a `:` and slashes after it, which the gate takes for a URL, and was not
+  judged at all; now every folder of the list is judged and the ones outside
+  are refused. (`tests/test_build_lista_macro_1215.py`, 8 checks, 3 red
+  against 1.21.4.)
 
 ## [1.21.4] - 2026-10-21
 

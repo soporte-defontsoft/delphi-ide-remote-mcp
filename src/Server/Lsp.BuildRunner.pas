@@ -1598,12 +1598,14 @@ var
     end;
   end;
 
-  function Juzga(const AValor: TValorDelProyecto; const AFichero: string): string;
+  // un trozo YA expandido: una ruta, o lo que no lo es
+  function JuzgaTrozo(const ATrozo: string; const AValor: TValorDelProyecto;
+    const AFichero: string): string;
   var
     Cand: string;
   begin
     Result := '';
-    Cand := Expande(AValor.Escrito).Trim;
+    Cand := ATrozo.Trim;
     if Cand = '' then
       Exit;
     if Cand.Contains('$(') or Cand.Contains('@(') or Cand.Contains('%(') then
@@ -1648,6 +1650,23 @@ var
       if Rc <> '' then
         Exit(MsgFmt(SR_BUILD_RC_FMT,
           [AValor.Escrito, TPath.GetFileName(AFichero), Rc]));
+    end;
+  end;
+
+  function Juzga(const AValor: TValorDelProyecto; const AFichero: string): string;
+  begin
+    // lo que un macro expande a una LISTA se juzga trozo a trozo, como el
+    // valor escrito (ValoresQueLeeElBuild ya lo parte por ';'): el
+    // $(DCC_UsePackage) con que el IDE cierra la lista de paquetes de todo
+    // proyecto expandia a la lista entera y se juzgaba como UNA ruta, negada
+    // en cuanto carpeta + lista pasaban de MAX_PATH (medido el 21-oct-2026:
+    // 217 caracteres pasaban, 313 no; sin el macro, 1599 pasaban)
+    Result := '';
+    for var Trozo in Expande(AValor.Escrito).Split([';']) do
+    begin
+      Result := JuzgaTrozo(Trozo, AValor, AFichero);
+      if Result <> '' then
+        Exit;
     end;
   end;
 
