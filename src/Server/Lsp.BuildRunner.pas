@@ -111,7 +111,8 @@ uses
   Lsp.Lugares,
   Lsp.Codificacion,
   Lsp.AtomosRtl,
-  Lsp.Styles; // RcLecturasDenegadas: EL juez del .rc (el de delphi_styles build)
+  Lsp.Styles, // RcLecturasDenegadas: EL juez del .rc (el de delphi_styles build)
+  Lsp.NetDrives;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -2104,7 +2105,7 @@ begin
   var SalidaArg := '';
   for var Sup in Suplidas do
     SalidaArg := SalidaArg + Format(' /p:%s=%s',
-      [Sup.Tag, EnComillas(ExcludeTrailingPathDelimiter(Sup.Dir))]);
+      [Sup.Tag, EnComillas(SinBarraFinal(Sup.Dir))]); // EL quitabarras de la casa (Lsp.NetDrives)
   // Security audit trail: a build can run arbitrary pre/post-build steps
   // declared in the .dproj, so record every one - and what the build supplies.
   TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_TARGET_FMT,

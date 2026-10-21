@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.21.2';
+  SERVER_VERSION = '1.21.3';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -3472,7 +3472,7 @@ const
     (21-oct-2026). %s = unidad, .dpr, donde, CreateForm, DCCReference, la
     ruta dada. }
   SN_UNIT_REMOVED_FUERA_FMT =
-    '[CFG-123] REMOVED unit %s from project %s (%s%s%s). The path given, %s, ' +
+    '[CFG-125] REMOVED unit %s from project %s (%s%s%s). The path given, %s, ' +
     'lies outside what this session can read: nothing was opened there, ' +
     'the entry is simply gone from the project (the compiler will look the ' +
     'unit up by name in the search and library paths, as the IDE does). ' +

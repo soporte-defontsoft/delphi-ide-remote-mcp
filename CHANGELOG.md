@@ -6,7 +6,17 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.21.3] - 2026-10-21
+
+A patch of 1.21.2 born from compiling a real twenty-year-old project through
+the server on Delphi 13.2, the first project of that size to reach the build
+gate: four walls fell in one afternoon. The build supplies the output folders
+a project leaves undeclared instead of refusing it (`BUILD-054`);
+`remove-unit`, `remove-searchpath` and `remove-project` take an entry that
+points outside, the way out `BUILD-050` asks for; an `<RcItem>` is judged by
+its path and no longer read as a `.rc` script; and the binary's name follows
+`OutputExt`, so `output` names the file the build just wrote. Plus the two
+fixes from the deep test of 1.21.2 (`delphi_styles set`, `UPLOAD-014`).
 
 ### Changed
 
@@ -21,7 +31,7 @@ the MCP `initialize` response (`serverInfo.version`).
   Now that path is what the project SAYS (`[NombreSiComando]`, one attribute
   read by the same RTTI census as the other marks): nothing is read or
   written there, the core does not open a path outside what is readable and
-  says so (`CFG-123`), the entry leaves the `.dpr` and the `.dproj`, and the
+  says so (`CFG-125`), the entry leaves the `.dpr` and the `.dproj`, and the
   project itself is still judged for writing. `add-unit`, `add-searchpath`
   and `add-project` still require a readable path. `BUILD-050` names the
   way out. `test_remove_fuera_1213` (R1, R3, R4 red against 1.21.2).

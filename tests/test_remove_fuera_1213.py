@@ -12,7 +12,7 @@ del .dpr y del .dproj; add-unit sigue pidiendo un .pas legible.
 
   R0  fixture: el proyecto lista una unidad de FUERA (uses in '...' +
       DCCReference): el build la niega (BUILD-050)
-  R1  remove-unit con esa ruta (existe, fuera): QUITADA (CFG-123), fuera del
+  R1  remove-unit con esa ruta (existe, fuera): QUITADA (CFG-125), fuera del
       .dpr y del .dproj, el fichero de fuera intacto y su contenido sin citar
   R2  ...y el build compila
   R3  remove-unit con una ruta de fuera que NO existe: quitada por su nombre
@@ -94,7 +94,7 @@ try:
     check('R0 el proyecto lista una unidad de FUERA: el build la niega (BUILD-050)',
           mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT') and 'UFuera' in r, r[:300])
     r = srv.call('delphi_config', {'project': dproj, 'command': 'remove-unit', 'path': victima})
-    check('R1 remove-unit con la ruta de fuera: QUITADA (CFG-123), no GUARD-002',
+    check('R1 remove-unit con la ruta de fuera: QUITADA (CFG-125), no GUARD-002',
           not mc.rechazado(r) and mc.es(r, 'SN_UNIT_REMOVED_FUERA_FMT'), r[:300])
     check('R1 ...fuera del .dpr y del .dproj', 'UFuera' not in lee(dpr) and 'UFuera' not in lee(dproj),
           lee(dpr)[:300])
@@ -108,7 +108,7 @@ try:
     fantasma = os.path.join(FUERA, 'NoEsta', 'UOtra.pas')
     lista_unidad(dpr, dproj, 'UOtra', fantasma)
     r = srv.call('delphi_config', {'project': dproj, 'command': 'remove-unit', 'path': fantasma})
-    check('R3 remove-unit con una ruta de fuera que no existe: quitada por su nombre (CFG-123)',
+    check('R3 remove-unit con una ruta de fuera que no existe: quitada por su nombre (CFG-125)',
           not mc.rechazado(r) and mc.es(r, 'SN_UNIT_REMOVED_FUERA_FMT') and 'UOtra' not in lee(dpr) and
           'UOtra' not in lee(dproj), r[:300])
 

@@ -320,7 +320,7 @@ in frame. Do the gesture you came for and nothing else.
 - **Project membership is the server's job, never a hand edit of the
   `.dpr`/`.dproj`**: an existing `.pas` joins with `delphi_config
   command=add-unit path=<.pas>` (forms get their `CreateForm`, frames do
-  not), `remove-unit` drops it from the project and keeps the file,
+  not), `remove-unit` drops it from the project and keeps the file (even an entry whose file is gone or lies outside what you can read: the way out of a `BUILD-050` on a `<DCCReference>`),
   `delphi_delete` on a unit trashes its designer pair and updates the
   projects that list it, `delphi_move` renames/moves a unit with its pair,
   header and project entries; with `copy=true` it copies instead (header
@@ -494,4 +494,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.21.2 -->
+<!-- contract reviewed: v1.21.3 -->
