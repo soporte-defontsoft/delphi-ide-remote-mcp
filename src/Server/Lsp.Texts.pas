@@ -5985,8 +5985,11 @@ const
     'resource compiler open it with the server''s permissions, and what ' +
     'goes in comes back out (inside the binary, quoted in the errors). ' +
     'Point it at something inside the workspace, or remove it: ' +
-    'delphi_config remove-unit / remove-searchpath take the entry as the ' +
-    'project lists it, even one that points outside.';
+    'delphi_config set-property / remove-property for a property (a ' +
+    'keystore, a manifest, an icon: the group of that platform and ' +
+    'configuration), remove-unit / remove-searchpath for a unit or a search ' +
+    'path - they take the entry as the project lists it, even one that ' +
+    'points outside.';
 
   SR_BUILD_LECTURA_NO_VERIFICABLE_FMT =
     '[BUILD-051 DENIED] I will not build this. <%s> in %s names %s, which ' +
