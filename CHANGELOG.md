@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Changed
+
+- **`delphi_upload` says when what it wrote is a project file.** It is the
+  one channel that writes a `.dproj` raw, on purpose - `delphi_edit` and
+  `delphi_textedit` refuse one (`EDIT-128`) - and the build judges it
+  however it got there; an agent that found that out by trying (Hermes, deep
+  test of 1.21.2) read it as a gap. The answer now carries `projectNote`
+  (`UPLOAD-014`) for a `.dproj`, a `.groupproj`, a `.dpr` or a `.dpk`: the
+  build judges it before compiling, and which tool is the house for editing
+  it. `test_upload_nota_proyecto_1213`, red against 1.21.2.
+
 ### Fixed
 
 - **`delphi_styles set` rewrote a property FMX already ignored and said CHANGED.**

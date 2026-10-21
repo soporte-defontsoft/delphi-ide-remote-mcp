@@ -6530,6 +6530,20 @@ const
     'last one, sent with sha256, gets it judged. If this was the whole file, ' +
     'it is broken. The parser said:';
 
+  { Un fichero de proyecto subido crudo (un .dproj, un .groupproj, un .dpr,
+    un .dpk): upload es el canal que lo escribe tal cual, a proposito - edit y
+    textedit lo niegan con EDIT-128 -, y quien lo juzga es el build, haya
+    llegado como haya llegado. Se dice (deep-test de Hermes sobre la 1.21.2:
+    "upload lo bordea"). }
+  SN_UPLOAD_FICHERO_DE_PROYECTO =
+    '[UPLOAD-014] NOTE: a project file, written as it came. delphi_build ' +
+    'judges it before compiling, however it got there: a .dproj and what it ' +
+    'imports against the whitelist of a compile-only build (BUILD-017) and ' +
+    'what the build reads (BUILD-050); a .dpr or .dpk and every source of ' +
+    'the tree for their directives and hard links (BUILD-028, BUILD-053). ' +
+    'The houses for editing: delphi_config for the settings of a .dproj or ' +
+    'a .groupproj, delphi_edit for a .dpr or .dpk.';
+
   SP_DELETE_PURGE =
     'true = DELETE FOR REAL, with no way back - only INSIDE the trash ' +
     '(__delphi-patch), to clean up your own copies when you no longer need ' +
