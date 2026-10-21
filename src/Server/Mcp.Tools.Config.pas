@@ -38,6 +38,7 @@ type
     FProfile: string;
     FOutput: string;
     FPath: string;
+    FPaths: string;
     FRemoteDir: string;
     FSection: string;
     FVersion: string;
@@ -70,6 +71,15 @@ type
     // fuera, que BUILD-050 pide quitar, se quita; 21-oct-2026)
     [NombreSiComando('remove-unit,remove-searchpath,remove-project')]
     property Path: string read FPath write FPath;
+    // VARIAS carpetas de add/remove-searchpath en una llamada (1.21.4), una
+    // LISTA como paths de delphi_git: la jaula juzga cada una, y en
+    // remove-searchpath son las entradas que se quitan, como path
+    [SchemaDescription(SP_CONFIG_PATHS)]
+    [JsonComoTexto('string')]
+    [RutaDelServidor]
+    [RutaRelativa]
+    [NombreSiComando('remove-searchpath')]
+    property Paths: string read FPaths write FPaths;
     [SchemaDescription(SP_CONFIG_SECTION)]
     [SchemaDefault(CFG_SECTION_POR_DEFECTO)]
     property Section: string read FSection write FSection;
@@ -116,6 +126,7 @@ uses
   Lsp.Regex,
   Lsp.TodoONada,
   Lsp.Rutas,
+  Lsp.Json,          // ListaDeTextos: paths es una LISTA, como en delphi_git
   Lsp.DesignerMeta,  // MetaTable: la tabla que juzga la raiz de un add-unit
   Lsp.DesignerForma; // DesignersDeUnidad, EsDesignerFmx: de que marco es
 
@@ -780,12 +791,41 @@ begin
     Exit(MsgFmt(SR_CONFIG_PATH_MISSING_FMT, [Expanded]));
 end;
 
-function AddSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
+{ Las carpetas de add/remove-searchpath: path (una) y paths (una LISTA, como
+  en delphi_git), juntas; '' = bien, si no el rechazo (1.21.4: la copia de un
+  proyecto real pedia 19 llamadas de add-searchpath platform=Win64, una por
+  carpeta de un componente). }
+function RutasDeSearchPath(const P: TDelphiConfigParams; out ARutas: TArray<string>): string;
+begin
+  Result := '';
+  if not ListaDeTextos(P.Paths, ARutas) then
+    Exit(MsgText(SR_CONFIG_PATHS_NO_ES_LISTA));
+  if P.Path.Trim <> '' then
+    ARutas := [P.Path] + ARutas;
+end;
+
+{ add-searchpath con una o VARIAS carpetas: cada una se juzga ANTES de tocar
+  nada y es todo o nada; las que ya estaban se dicen; UNA escritura del
+  .dproj, delante de lo que habia, como la de una. Con una sola, lo de siempre
+  (CFG-019/020). }
+function AddSearchPath(const ADproj, ARawPlatform: string;
+  const ARawPaths: TArray<string>): string;
 var
-  Enc, Xml, Plat, Show, Path, NewInner, P: string;
+  Enc, Xml, Plat, Etiqueta, Compila, Crudo, P: string;
+  Shows, Actuales, Nuevos, YaEstaban: TArray<string>;
   G: TGrupoXml;
   Tramos: TArray<TTramoXml>;
-  VS, VE: Integer;
+  VS: Integer;
+
+  // ya listada en el proyecto, o repetida en la misma llamada
+  function Listada(const APath: string): Boolean;
+  begin
+    for var A in Actuales do
+      if SameText(XmlUnescape(A), APath) then
+        Exit(True);
+    Result := IndexText(APath, Nuevos) >= 0;
+  end;
+
 begin
   Plat := '';
   if ARawPlatform.Trim <> '' then
@@ -794,10 +834,21 @@ begin
     if Plat = '' then
       Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
   end;
-  Result := SearchPathDenied(ADproj, ARawPath, Show);
-  if Result <> '' then
-    Exit;
-  Path := ARawPath.Trim;
+  if Length(ARawPaths) = 0 then
+    Exit(MsgText(SR_CONFIG_NEED_PATH));
+  // todas juzgadas antes de tocar nada: todo o nada
+  SetLength(Shows, Length(ARawPaths));
+  for var I := 0 to High(ARawPaths) do
+  begin
+    Result := SearchPathDenied(ADproj, ARawPaths[I], Shows[I]);
+    if Result <> '' then
+    begin
+      if Length(ARawPaths) > 1 then
+        Result := Result + ' ' + MsgFmt(SN_CONFIG_PATHS_NADA_FMT, [Length(ARawPaths)]);
+      Exit;
+    end;
+  end;
+  Etiqueta := IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat);
 
   Xml := PatchLoadText(ADproj, Enc);
   try
@@ -810,36 +861,71 @@ begin
   if not GrupoConCondicion(Xml, GroupCondition(Plat), G) then
     Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT, [GroupCondition(Plat)]));
   Tramos := TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G);
+  Actuales := nil;
+  if Length(Tramos) > 0 then
+    Actuales := SplitPaths(Copy(Xml, Tramos[0].Ini, Tramos[0].Fin - Tramos[0].Ini));
+  Nuevos := nil;
+  YaEstaban := nil;
+  for var R in ARawPaths do
+  begin
+    P := R.Trim;
+    if Listada(P) then
+      YaEstaban := YaEstaban + [P]
+    else
+      Nuevos := Nuevos + [P];
+  end;
+  if Length(Nuevos) = 0 then
+  begin
+    // todas estaban: lo de siempre, una linea por carpeta
+    Result := '';
+    for P in YaEstaban do
+      Result := Result + IfThen(Result = '', '', sLineBreak) +
+        MsgFmt(SN_CONFIG_PATH_PRESENT_FMT, [P, Etiqueta]);
+    Exit;
+  end;
+  Crudo := string.Join(';', Nuevos) + ';';
   if Length(Tramos) > 0 then
   begin
     VS := Tramos[0].Ini;
-    VE := Tramos[0].Fin;
-    for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
-      if SameText(XmlUnescape(P), Path) then
-        Exit(MsgFmt(SN_CONFIG_PATH_PRESENT_FMT,
-          [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]));
-    NewInner := XmlEscape(Path) + ';' + Copy(Xml, VS, VE - VS);
-    Xml := Copy(Xml, 1, VS - 1) + NewInner + Copy(Xml, VE, MaxInt);
+    Xml := Copy(Xml, 1, VS - 1) + XmlEscape(Crudo) + Copy(Xml, VS, MaxInt);
   end
   else
+    // (XmlElemento escapa el valor: aqui va crudo)
     Xml := Copy(Xml, 1, G.Ini - 1) + sLineBreak +
-      '        ' + XmlElemento('DCC_UnitSearchPath', Path + ';$(DCC_UnitSearchPath)') +
+      '        ' + XmlElemento('DCC_UnitSearchPath', Crudo + '$(DCC_UnitSearchPath)') +
       Copy(Xml, G.Ini, MaxInt);
   PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
-  Result := MsgFmt(SN_CONFIG_PATH_ADDED_FMT,
-    [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat), Show,
-     // en el grupo base, la que el proyecto compila sin platform= (era Win64 a
-     // fuego: el build que se proponia no era el del proyecto)
-     IfThen(Plat = '', InfoDeDproj(Xml).PlataformaPorDefecto, Plat)]);
+  // en el grupo base, la que el proyecto compila sin platform= (era Win64 a
+  // fuego: el build que se proponia no era el del proyecto)
+  Compila := IfThen(Plat = '', InfoDeDproj(Xml).PlataformaPorDefecto, Plat);
+  if Length(ARawPaths) = 1 then
+    Result := MsgFmt(SN_CONFIG_PATH_ADDED_FMT, [Nuevos[0], Etiqueta, Shows[0], Compila])
+  else
+    Result := MsgFmt(SN_CONFIG_PATHS_ADDED_FMT, [Length(Nuevos), Etiqueta,
+      string.Join(', ', Nuevos), IfThen(Length(YaEstaban) = 0, '',
+      MsgFmt(SF_CONFIG_PATHS_YA_ESTABAN_FMT, [string.Join(', ', YaEstaban)])), Compila]);
 end;
 
-function RemoveSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
+{ remove-searchpath con una o VARIAS: las que no estaban se dicen; UNA
+  escritura. Con una sola, lo de siempre (CFG-021/022). }
+function RemoveSearchPath(const ADproj, ARawPlatform: string;
+  const ARawPaths: TArray<string>): string;
 var
-  Enc, Xml, Plat, Path, Rest, P: string;
+  Enc, Xml, Plat, Etiqueta, Rest, P: string;
+  Quitadas, NoEstaban: TArray<string>;
   G: TGrupoXml;
   Tramos: TArray<TTramoXml>;
-  Found: Boolean;
   Keep: TList<string>;
+
+  // la entrada del proyecto es una de las pedidas
+  function Pedida(const AEntrada: string): Boolean;
+  begin
+    for var R in ARawPaths do
+      if SameText(XmlUnescape(AEntrada), R.Trim) then
+        Exit(True);
+    Result := False;
+  end;
+
 begin
   Plat := '';
   if ARawPlatform.Trim <> '' then
@@ -848,27 +934,38 @@ begin
     if Plat = '' then
       Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT, [ARawPlatform.Trim]));
   end;
-  Path := ARawPath.Trim;
-  if Path = '' then
+  if Length(ARawPaths) = 0 then
     Exit(MsgText(SR_CONFIG_NEED_PATH));
+  for var R in ARawPaths do
+    if R.Trim = '' then
+      Exit(MsgText(SR_CONFIG_NEED_PATH));
+  Etiqueta := IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat);
   Xml := PatchLoadText(ADproj, Enc);
   Tramos := [];
   if GrupoConCondicion(Xml, GroupCondition(Plat), G) then
     Tramos := TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G);
-  if Length(Tramos) = 0 then
-    Exit(MsgFmt(SN_CONFIG_PATH_ABSENT_FMT,
-      [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]));
-  Found := False;
+  Quitadas := nil;
+  NoEstaban := nil;
   Keep := TList<string>.Create;
   try
-    for P in SplitPaths(Copy(Xml, Tramos[0].Ini, Tramos[0].Fin - Tramos[0].Ini)) do
-      if SameText(XmlUnescape(P), Path) then
-        Found := True
-      else
-        Keep.Add(P);
-    if not Found then
-      Exit(MsgFmt(SN_CONFIG_PATH_ABSENT_FMT,
-        [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]));
+    if Length(Tramos) > 0 then
+      for P in SplitPaths(Copy(Xml, Tramos[0].Ini, Tramos[0].Fin - Tramos[0].Ini)) do
+        if Pedida(P) then
+          Quitadas := Quitadas + [XmlUnescape(P)]
+        else
+          Keep.Add(P);
+    for var R in ARawPaths do
+      if (IndexText(R.Trim, Quitadas) < 0) and (IndexText(R.Trim, NoEstaban) < 0) then
+        NoEstaban := NoEstaban + [R.Trim];
+    if Length(Quitadas) = 0 then
+    begin
+      // ninguna estaba: lo de siempre, una linea por carpeta
+      Result := '';
+      for P in NoEstaban do
+        Result := Result + IfThen(Result = '', '', sLineBreak) +
+          MsgFmt(SN_CONFIG_PATH_ABSENT_FMT, [P, Etiqueta]);
+      Exit;
+    end;
     Rest := string.Join(';', Keep.ToArray);
   finally
     Keep.Free;
@@ -879,8 +976,12 @@ begin
   else
     Xml := Copy(Xml, 1, Tramos[0].Ini - 1) + Rest + Copy(Xml, Tramos[0].Fin, MaxInt);
   PatchSaveConSuSalto(ADproj, Xml, Enc);
-  Result := MsgFmt(SN_CONFIG_PATH_REMOVED_FMT,
-    [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]);
+  if Length(ARawPaths) = 1 then
+    Result := MsgFmt(SN_CONFIG_PATH_REMOVED_FMT, [ARawPaths[0].Trim, Etiqueta])
+  else
+    Result := MsgFmt(SN_CONFIG_PATHS_REMOVED_FMT, [Length(Quitadas), Etiqueta,
+      string.Join(', ', Quitadas), IfThen(Length(NoEstaban) = 0, '',
+      MsgFmt(SF_CONFIG_PATHS_NO_ESTABAN_FMT, [string.Join(', ', NoEstaban)]))]);
 end;
 
 { view: the search paths per group, as the .dproj states them (macros kept). }
@@ -1630,8 +1731,8 @@ const
     'add-platform', 'platform sdk profile',
     'remove-platform', 'platform',
     'set-output', 'output',
-    'add-searchpath', 'platform path',
-    'remove-searchpath', 'platform path',
+    'add-searchpath', 'platform path paths',
+    'remove-searchpath', 'platform path paths',
     'add-deployfile', 'platform path remotedir',
     'remove-deployfile', 'platform path',
     'set-version', 'version include',
@@ -1647,7 +1748,7 @@ const
 begin
   Result := ParametroQueNoVa(IfThen(ACmd = '', 'view', ACmd), COMANDOS,
     ['platform', P.Platform, '', 'sdk', P.Sdk, '', 'profile', P.Profile, '',
-     'path', P.Path, '', 'section', P.Section, CFG_SECTION_POR_DEFECTO,
+     'path', P.Path, '', 'paths', P.Paths, '', 'section', P.Section, CFG_SECTION_POR_DEFECTO,
      'remotedir', P.RemoteDir, '', 'version', P.Version, '',
      'include', IfThen(P.Include, 'true'), '',
      'output', P.Output, '', 'requires', P.Requires, '',
@@ -1657,6 +1758,7 @@ end;
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
   Cmd, Proj, Sibling: string;
+  Rutas: TArray<string>;
 begin
   if Params.Project.Trim = '' then
     Exit(MsgText(SR_CFG_DELPHI_CONFIG_NECESITA_PROJECT));
@@ -1819,9 +1921,17 @@ begin
     else if Cmd = 'set-output' then
       Result := SetOutput(Proj, Params.Output)
     else if Cmd = 'add-searchpath' then
-      Result := AddSearchPath(Proj, Params.Platform, Params.Path)
+    begin
+      Result := RutasDeSearchPath(Params, Rutas);
+      if Result = '' then
+        Result := AddSearchPath(Proj, Params.Platform, Rutas);
+    end
     else if Cmd = 'remove-searchpath' then
-      Result := RemoveSearchPath(Proj, Params.Platform, Params.Path)
+    begin
+      Result := RutasDeSearchPath(Params, Rutas);
+      if Result = '' then
+        Result := RemoveSearchPath(Proj, Params.Platform, Rutas);
+    end
     else if Cmd = 'add-deployfile' then
       Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir)
     else if Cmd = 'remove-deployfile' then

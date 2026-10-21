@@ -83,6 +83,12 @@ open(os.path.join(JAIL, 'propio.exe'), 'wb').write(b'MZ')
 # ...y una form DENTRO para preview: el path pasa y la negativa es la de out/style
 PROPIO_DFM = os.path.join(JAIL, 'Propia.dfm')
 open(PROPIO_DFM, 'w', newline='\r\n').write('object Form1: TForm1\nend\n')
+# ...y un proyecto DENTRO para que la negativa de 'paths' sea la de paths (1.21.4)
+PROPIO_DPROJ = os.path.join(JAIL, 'Propio.dproj')
+open(PROPIO_DPROJ, 'w', newline='\r\n').write(
+    '<?xml version="1.0" encoding="utf-8"?>\n<Project><PropertyGroup>'
+    '<MainSource>Propio.dpr</MainSource></PropertyGroup></Project>\n')
+open(os.path.join(JAIL, 'Propio.dpr'), 'w', newline='\r\n').write('program Propio;\nbegin\nend.\n')
 AJENO_TXT = os.path.join(FUERA, 'ajeno.txt')
 open(AJENO_TXT, 'w').write('hola\n')
 AJENO_STYLE = os.path.join(FUERA, 'ajeno.style')
@@ -130,6 +136,8 @@ PROBAR = [
     ('delphi_package', 'outfile', {'dir': JAIL, 'outfile': AJENO_ZIP}),
     ('delphi_build', 'project', {'project': AJENO_DPROJ}),
     ('delphi_config', 'project', {'project': AJENO_DPROJ, 'command': 'view'}),
+    # 1.21.4: una LISTA de carpetas; el suelo mira cada una, como paths de delphi_git
+    ('delphi_config', 'paths', {'project': PROPIO_DPROJ, 'command': 'add-searchpath', 'paths': [FUERA]}),
     ('delphi_create', 'dir', {'kind': 'project-console', 'name': 'Nuevo',
                               'dir': FUERA}),
     ('delphi_create', 'project', {'kind': 'unit', 'name': 'UNueva',
@@ -315,13 +323,14 @@ try:
     # 26-sep: 39 -> 40, delphi_git gana path (worktree, 1.4.0).
     # 7-oct: 40 -> 42, delphi_designer gana out y style (preview, 1.17.0).
     # 14-oct: 42 -> 43, delphi_git gana paths (sin args, 1.19.0).
+    # 21-oct: 43 -> 44, delphi_config gana paths (varias carpetas de searchpath, 1.21.4).
     w = call('delphi_workspace', {})
     try:
         vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
     except Exception:
         vigilados = -1
-    check('G4 el suelo de la puerta vigila los 43 parametros marcados',
-          vigilados == 43, 'jailedParams=%s' % vigilados)
+    check('G4 el suelo de la puerta vigila los 44 parametros marcados',
+          vigilados == 44, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar

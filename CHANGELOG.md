@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- **`delphi_config add-searchpath` / `remove-searchpath` take several
+  folders in one call: `paths`, a list like the one of `delphi_git`.** Each
+  folder is judged before anything is touched (the jail on each entry, the
+  macros, existence) and it is all or nothing (`CFG-127`); the ones already
+  listed are named, the `.dproj` is written once with the new ones in front,
+  and the answer counts what changed (`CFG-128` / `CFG-129`); `path` and
+  `paths` together add up, a `paths` that is not a list is refused
+  (`CFG-126`). With one folder, the contract of before (`CFG-019` to
+  `CFG-022`). Measured on 2026-10-21: giving a real project its Win64
+  search paths took 19 calls, one per folder of a component suite.
+  (`tests/test_searchpath_lista_1214.py`, 19 checks, 15 red against 1.21.3.)
+
 ### Changed
 
 - **The library read zone follows the IDE's Library Path while the server

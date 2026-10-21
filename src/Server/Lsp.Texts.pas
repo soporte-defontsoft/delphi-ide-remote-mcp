@@ -3092,12 +3092,19 @@ const
     '.pas/.dcu (e.g. an installed component''s Source; delphi_workspace ' +
     'lists the readable library zone); $(BDS)-style macros accepted, ' +
     'relative = from the project folder; it must exist inside the ' +
-    'workspace or the library zone. add/remove-unit: the .pas. ' +
+    'workspace or the library zone; several at once go in paths. ' +
+    'add/remove-unit: the .pas. ' +
     'add/remove-deployfile: the file to ship. add/remove-project: the ' +
     '.dproj, in the .groupproj given in project.';
 
+  SP_CONFIG_PATHS =
+    'add-searchpath / remove-searchpath: SEVERAL folders in one call, a ' +
+    'LIST (["..\\Lib", "$(BDS)\\source\\rtl\\common"]), each judged like ' +
+    'path, all or nothing, one write of the .dproj; with path too, both. ' +
+    'Other commands do not take it.';
+
   SR_CONFIG_NEED_PATH =
-    '[CFG-095 INVALID_PARAM] Missing "path": the folder to add to/remove ' +
+    '[CFG-095 INVALID_PARAM] Missing "path" (or "paths", a list of them): the folder to add to/remove ' +
     'from the search path (e.g. the Source folder of an installed ' +
     'component). If your tool schema has no "path" parameter, the server ' +
     'was updated after you connected: reconnect the MCP session to ' +
@@ -3106,7 +3113,8 @@ const
   SR_CONFIG_PATH_CHARS =
     '[CFG-016 INVALID_PARAM] The path contains characters that are not allowed ' +
     '(< > " ; | or control characters, and & except in a search path) or ' +
-    'is too long. One path per call, without ";".';
+    'is too long. One folder per entry, without ";" (several at once: ' +
+    '"paths", a list).';
 
   SR_CONFIG_PATH_MACRO_FMT =
     '[CFG-017 INVALID_PARAM] I cannot resolve "%s" (unknown macro or invalid ' +
@@ -3158,6 +3166,34 @@ const
     'compiler finds units through the IDE library path of each platform. ' +
     'A platform added later gets none of that - add-searchpath fixes ' +
     '"unit not found" on one platform only.';
+
+  { paths: VARIAS carpetas en una llamada (1.21.4; la copia de un proyecto
+    real pedia 19 llamadas de add-searchpath platform=Win64, una por carpeta
+    de un componente). Todo o nada y una escritura; con una sola, los textos
+    de siempre (CFG-019..022). }
+  SR_CONFIG_PATHS_NO_ES_LISTA =
+    '[CFG-126 INVALID_PARAM] "paths" is a LIST of folders: ["..\Lib", ' +
+    '"$(BDS)\source\rtl\common"]. One folder goes in "path". Nothing was done.';
+
+  SN_CONFIG_PATHS_NADA_FMT =
+    '[CFG-127] With %d folders in one call it is all or nothing: none was ' +
+    'added and the .dproj is untouched.';
+
+  SN_CONFIG_PATHS_ADDED_FMT =
+    '[CFG-128] ADDED %d folder(s) to the search path of %s: %s.%s The ' +
+    'PropertyGroups of the platform were created the way the IDE would ' +
+    'if they did not exist; one backup of the .dproj in __delphi-patch. ' +
+    'Verify with delphi_build {platform:"%s"}.';
+
+  SF_CONFIG_PATHS_YA_ESTABAN_FMT =
+    ' Already in it: %s.';
+
+  SN_CONFIG_PATHS_REMOVED_FMT =
+    '[CFG-129] REMOVED %d folder(s) from the search path of %s: %s.%s ' +
+    'Backup of the .dproj in __delphi-patch.';
+
+  SF_CONFIG_PATHS_NO_ESTABAN_FMT =
+    ' Not in it: %s.';
 
   // ---- delphi_config: deployment files ----
 

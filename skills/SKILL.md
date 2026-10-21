@@ -353,7 +353,7 @@ in frame. Do the gesture you came for and nothing else.
   there): the unit belongs to an installed component whose folder is in
   the IDE's library path for the other platforms only. The failed build
   already says where: `missingUnits[].sourceFolders` - run the
-  `delphi_config command=add-searchpath platform=<the one> path=<folder>`
+  `delphi_config command=add-searchpath platform=<the one> path=<folder>` (several folders at once: `paths=[...]`, all or nothing, one write)
   it names and build again (one round per library, not two). Before the
   first build on a new platform, `delphi_components platform=<the one>`
   lists the components registered elsewhere and not there. An empty
