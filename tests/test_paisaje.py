@@ -536,9 +536,11 @@ REGLAS = [
     ('una pagina de codigos a mano',
      r'GetEncoding\s*\(|TEncoding\.(?:ANSI|Default)\b|\bGetACP\b|TMBCSEncoding\.Create\s*\(',
      [('Lsp.Codificacion.pas', '*'),
-      # la pagina OEM de la CONSOLA (GetConsoleOutputCP, o GetOEMCP sin consola) con
-      # la que escribe un hijo en su tuberia: otro juez y otra pagina, no la ANSI
-      ('Lsp.BuildRunner.pas', 'RunCore')],
+      # el codec de la pagina en que escribe un hijo en su tuberia: la OEM de la
+      # CONSOLA (GetConsoleOutputCP, o GetOEMCP sin consola), otro juez y otra pagina,
+      # o la ANSI, que pregunta a PaginaAnsi (salio de RunCore en la 1.22.1 para leer
+      # git linea a linea)
+      ('Lsp.BuildRunner.pas', 'DecodificaHijo')],
      'LA pagina ANSI es la de la maquina, medida en UN lector (PaginaAnsi: GetACP, la de '
      'TEncoding.ANSI), y los codecs se crean en la casa (CodecDeCharset para la pagina que declara '
      'un formato): r5 de la 1.18.0, norma 6 del paisaje - el servidor tenia la 1252 clavada en el '

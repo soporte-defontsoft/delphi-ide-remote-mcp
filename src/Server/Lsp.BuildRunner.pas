@@ -29,8 +29,13 @@ type
     un agente: delphi_test devolvia cada i con tilde como una Y con tilde (1252
     leido en 850; test completo de la 1.22.0, y medido en produccion el
     22-oct-2026 con cuatro letras). Nuestros programas de Delphi ponen la
-    suya en UTF-8 (el nodo de escritorio, el renderizador). }
-  TPaginaDelHijo = (phConsola, phAnsi);
+    suya en UTF-8 (el nodo de escritorio, el renderizador). phPorLinea: git
+    escribe su texto en UTF-8 y lo de los ficheros (un diff, un show) tal cual:
+    cada LINEA, UTF-8 si lo es; si no, la ANSI de la maquina, la que leen dcc y
+    el IDE en un fuente sin BOM - un fuente ANSI salia en el diff con cada letra
+    cambiada (1252 leido en 850), y en una salida con un fuente UTF-8 y uno ANSI
+    los dos (completo de Opus de la 1.22.1). }
+  TPaginaDelHijo = (phConsola, phAnsi, phPorLinea);
 
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
@@ -80,9 +85,11 @@ function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   PAClient de msbuild. }
 function AvisoDePaclient(const ASalida: string): string;
 
-{ Same, with an explicit working directory ('' = inherit). }
+{ Same, with an explicit working directory ('' = inherit). APagina: en que
+  pagina escribe el hijo lo que no es UTF-8 (TPaginaDelHijo). }
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
-  out AExitCode: Cardinal; const AEntorno: string = ''): string;
+  out AExitCode: Cardinal; const AEntorno: string = '';
+  APagina: TPaginaDelHijo = phConsola): string;
 
 { Como RunCapturedIn, pero DENTRO del contenedor AC (Lsp.Sandbox), que ya
   tiene su carpeta preparada: AWorkDir. Falla cerrado: si Windows no lo lanza
@@ -360,6 +367,103 @@ begin
   Result := TPath.GetFileName(S);
 end;
 
+{ Lo que escribio un hijo en su tuberia, como texto, segun en que pagina
+  escribe lo que no es UTF-8 (TPaginaDelHijo). Sale de RunCore para que
+  phPorLinea decodifique cada linea con la regla de phAnsi. }
+function DecodificaHijo(const ABytes: TBytes; APagina: TPaginaDelHijo): string;
+begin
+  // phPorLinea: cada linea por su cuenta, con su salto. Una secuencia UTF-8
+  // nunca lleva un byte 10, asi que partir por el no rompe ninguna
+  if APagina = phPorLinea then
+  begin
+    var SB := TStringBuilder.Create;
+    try
+      var Ini := 0;
+      while Ini <= High(ABytes) do
+      begin
+        var Fin := Ini;
+        while (Fin < High(ABytes)) and (ABytes[Fin] <> 10) do
+          Inc(Fin);
+        SB.Append(DecodificaHijo(Copy(ABytes, Ini, Fin - Ini + 1), phAnsi));
+        Ini := Fin + 1;
+      end;
+      Result := SB.ToString;
+    finally
+      SB.Free;
+    end;
+    Exit;
+  end;
+  // git and modern tools emit UTF-8 (measured mojibake in remote field
+  // test: "AÃ±ade" for "Añade"); compilers emit OEM. Strictly valid UTF-8
+  // with high bytes IS UTF-8; anything else is the console codepage.
+  //
+  // NOT TEncoding.ANSI: a child writing to a pipe is still a console program
+  // and encodes in the console OUTPUT codepage (850 here), not in the ANSI
+  // one (1252). They differ exactly on the accented letters, so decoding as
+  // ANSI turned MSBuild's "raiz"/"linea"/"posicion" into "ra¡z"/"l¡nea"/
+  // "posici¢n" - measured 2026-09-20. Asked to Windows, never hardcoded:
+  // another machine has another codepage.
+  if LooksUtf8(ABytes) then
+    try
+      Exit(TEncoding.UTF8.GetString(ABytes));
+    except
+      // LooksUtf8 mira la FORMA de los bytes, y hay secuencias bien
+      // formadas que el decodificador estricto (MB_ERR_INVALID_CHARS)
+      // rechaza igual: los surrogates CESU-8 y las sobrelargas del
+      // "modified UTF-8" que emiten las herramientas Java/Android (adb,
+      // gradle). La red de abajo se puso el 21-sep JUSTO por esta
+      // excepcion... y esta rama quedo fuera de ella (auditoria del mismo
+      // dia). Se cae a la rama del codepage, que decodifica distinto y
+      // ademas tiene la red byte a byte que no puede fallar.
+    end;
+  begin
+    var Cp: Cardinal;
+    if APagina = phAnsi then
+      // un programa de Delphi a una tuberia, o una linea de git
+      // (TPaginaDelHijo): EL lector de la ANSI de la maquina
+      Cp := PaginaAnsi
+    else
+    begin
+      Cp := GetConsoleOutputCP;
+      if Cp = 0 then
+        Cp := GetOEMCP; // tray and service have no console: ask the machine
+    end;
+    var Enc := TEncoding.GetEncoding(Cp);
+    try
+      try
+        Result := Enc.GetString(ABytes);
+      except
+        // DECODIFICAR NO PUEDE MATAR LA LLAMADA. Windows rechaza una
+        // secuencia que esa pagina de codigos no sabe representar y Delphi la
+        // convierte en "No mapping for the Unicode character exists in the
+        // target multi-byte code page", que sale al agente como "Error
+        // executing tool" - o sea, en las reglas de este servidor, "me he
+        // roto por dentro". Y no se ha roto nada: solo que un programa hijo
+        // escribio algo que no era ni UTF-8 valido ni de la consola (un
+        // titulo de ventana con un emoji, por ejemplo).
+        //
+        // Medido el 2026-09-21: delphi_desktop dejo de funcionar ENTERO -
+        // hasta command=status- segun lo que hubiera en la pantalla del
+        // operador, y lo mismo le podia pasar a delphi_build, delphi_git,
+        // delphi_test, delphi_adb y delphi_paserver, que capturan por aqui.
+        // Perder un acento es un defecto; perder la salida de una
+        // compilacion es otra cosa.
+        //
+        // La vuelta atras es byte a byte y no puede fallar: cada byte se lee
+        // como su punto de codigo latin-1. Lo que no sea ASCII saldra raro,
+        // pero saldra - y los errores del compilador, que es lo que importa,
+        // son ASCII.
+        Result := '';
+        SetLength(Result, Length(ABytes));
+        for var K := 0 to High(ABytes) do
+          Result[K + 1] := Char(ABytes[K]);
+      end;
+    finally
+      Enc.Free; // GetEncoding returns a new object, not a singleton
+    end;
+  end;
+end;
+
 function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   AContenedor: PContenedor; out AExitCode: Cardinal;
   out ATimedOut: Boolean; const AEntorno: string = '';
@@ -570,73 +674,8 @@ begin
       CloseHandle(Job);
     end;
   end;
-  // git and modern tools emit UTF-8 (measured mojibake in remote field
-  // test: "AÃ±ade" for "Añade"); compilers emit OEM. Strictly valid UTF-8
-  // with high bytes IS UTF-8; anything else is the console codepage.
-  //
-  // NOT TEncoding.ANSI: a child writing to a pipe is still a console program
-  // and encodes in the console OUTPUT codepage (850 here), not in the ANSI
-  // one (1252). They differ exactly on the accented letters, so decoding as
-  // ANSI turned MSBuild's "raiz"/"linea"/"posicion" into "ra¡z"/"l¡nea"/
-  // "posici¢n" - measured 2026-09-20. Asked to Windows, never hardcoded:
-  // another machine has another codepage.
-  if LooksUtf8(Bytes) then
-    try
-      Exit(TEncoding.UTF8.GetString(Bytes));
-    except
-      // LooksUtf8 mira la FORMA de los bytes, y hay secuencias bien
-      // formadas que el decodificador estricto (MB_ERR_INVALID_CHARS)
-      // rechaza igual: los surrogates CESU-8 y las sobrelargas del
-      // "modified UTF-8" que emiten las herramientas Java/Android (adb,
-      // gradle). La red de abajo se puso el 21-sep JUSTO por esta
-      // excepcion... y esta rama quedo fuera de ella (auditoria del mismo
-      // dia). Se cae a la rama del codepage, que decodifica distinto y
-      // ademas tiene la red byte a byte que no puede fallar.
-    end;
-  begin
-    var Cp: Cardinal;
-    if APagina = phAnsi then
-      Cp := GetACP // un programa de Delphi a una tuberia (TPaginaDelHijo)
-    else
-    begin
-      Cp := GetConsoleOutputCP;
-      if Cp = 0 then
-        Cp := GetOEMCP; // tray and service have no console: ask the machine
-    end;
-    var Enc := TEncoding.GetEncoding(Cp);
-    try
-      try
-        Result := Enc.GetString(Bytes);
-      except
-        // DECODIFICAR NO PUEDE MATAR LA LLAMADA. Windows rechaza una
-        // secuencia que esa pagina de codigos no sabe representar y Delphi la
-        // convierte en "No mapping for the Unicode character exists in the
-        // target multi-byte code page", que sale al agente como "Error
-        // executing tool" - o sea, en las reglas de este servidor, "me he
-        // roto por dentro". Y no se ha roto nada: solo que un programa hijo
-        // escribio algo que no era ni UTF-8 valido ni de la consola (un
-        // titulo de ventana con un emoji, por ejemplo).
-        //
-        // Medido el 2026-09-21: delphi_desktop dejo de funcionar ENTERO -
-        // hasta command=status- segun lo que hubiera en la pantalla del
-        // operador, y lo mismo le podia pasar a delphi_build, delphi_git,
-        // delphi_test, delphi_adb y delphi_paserver, que capturan por aqui.
-        // Perder un acento es un defecto; perder la salida de una
-        // compilacion es otra cosa.
-        //
-        // La vuelta atras es byte a byte y no puede fallar: cada byte se lee
-        // como su punto de codigo latin-1. Lo que no sea ASCII saldra raro,
-        // pero saldra - y los errores del compilador, que es lo que importa,
-        // son ASCII.
-        Result := '';
-        SetLength(Result, Length(Bytes));
-        for var K := 0 to High(Bytes) do
-          Result[K + 1] := Char(Bytes[K]);
-      end;
-    finally
-      Enc.Free; // GetEncoding returns a new object, not a singleton
-    end;
-  end;
+  // lo que escribio, como texto (DecodificaHijo)
+  Result := DecodificaHijo(Bytes, APagina);
 end;
 
 function AvisoDePaclient(const ASalida: string): string;
@@ -657,11 +696,11 @@ begin
 end;
 
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
-  out AExitCode: Cardinal; const AEntorno: string): string;
+  out AExitCode: Cardinal; const AEntorno: string; APagina: TPaginaDelHijo): string;
 var
   Ignored: Boolean;
 begin
-  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, nil, AExitCode, Ignored, AEntorno);
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, nil, AExitCode, Ignored, AEntorno, APagina);
 end;
 
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;

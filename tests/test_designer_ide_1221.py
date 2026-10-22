@@ -24,6 +24,10 @@ guarda).
      Otro.Edit1) no se pierde al poner otra propiedad del mismo componente
   G2 guarda: set en la raiz (Color del form) como siempre, sin ideNote
   G3 guarda: insert FMX = lo que guarda el IDE (sin Size), sin ideNote
+  S6 FMX set Width (stored False en su clase: su valor va en Size): ni notStored ni
+     linea 0 - storedIn con el Size.Width que escribe el IDE, DSGN-167, y su linea
+     (completo de Opus de la 1.22.1: decia DSGN-165, "el valor de la clase", con
+     Size.Width = 120 escrito)
 
 Uso:  python tests/test_designer_ide_1221.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -143,6 +147,13 @@ try:
     check('S4 FMX set Size.Width: Size.Height y Size.PlatformDefault = False, como el IDE',
           not mc.fallo(r) and {'Size.Width', 'Size.Height', 'Size.PlatformDefault'} <= set(p)
           and 'Size.PlatformDefault = False' in mc.lee(FMXF), (p, r[:400]))
+    r = d(command='set', path=FMXF, component='BtnF', prop='Width', value='120')
+    j = mc.como_json(r) or {}
+    check('S6 FMX set Width (stored False): ni notStored ni linea 0, storedIn con Size.Width = 120 y DSGN-167',
+          not mc.fallo(r) and 'notStored' not in j and 'Size.Width = 120' in str(j.get('storedIn'))
+          and mc.tiene(r, 'DSGN-167') and (j.get('line') or 0) > 0, r[:500])
+    check('S6 ...y el fichero lleva el Size.Width que guarda el IDE',
+          'Size.Width = 120.000000000000000000' in mc.lee(FMXF), mc.lee(FMXF)[-400:])
 finally:
     s.cierra()
 

@@ -1645,6 +1645,37 @@ begin
   end;
 end;
 
+{ Las publicadas de la clase de AObj que esa clase declara stored False, la
+  CONSTANTE: TWriter no las escribe nunca por su nombre (en FMX, Width y Height
+  van en Size). La regla es la de la RTL (TypInfo.IsStoredPropRTTI: un
+  StoredProc sin nada por encima del byte bajo es una constante, y ese byte su
+  valor); un stored con metodo depende de la instancia - el valor por defecto -
+  y no entra. Separadas por coma. }
+function NuncaGuardadas(AObj: TPersistent): string;
+var
+  Lista: PPropList;
+  N: Integer;
+begin
+  Result := '';
+  N := GetTypeData(AObj.ClassInfo)^.PropCount;
+  if N = 0 then
+    Exit;
+  GetMem(Lista, N * SizeOf(Pointer));
+  try
+    GetPropInfos(AObj.ClassInfo, Lista);
+    for var I := 0 to N - 1 do
+    begin
+      if Lista^[I] = nil then
+        Break;
+      var Guarda := UIntPtr(Lista^[I]^.StoredProc);
+      if ((Guarda and not NativeUInt($FF)) = 0) and ((Guarda and $FF) = 0) then
+        Result := Result + (if Result <> '' then ',' else '') + GetPropName(Lista^[I]);
+    end;
+  finally
+    FreeMem(Lista);
+  end;
+end;
+
 procedure EscribeComoElIde(ARaiz: TComponent);
 var
   Bin: TMemoryStream;
@@ -1668,7 +1699,11 @@ begin
     begin
       var C := ComponenteDeRuta(ARaiz, GPeticion.Componente);
       if C <> nil then
+      begin
         Responde(FR_ORDER, GPeticion.Componente + '=' + OrdenDelEscritor(C));
+        // ...y las que su clase no guarda nunca por su nombre (UNSTORED=)
+        Responde(FR_UNSTORED, GPeticion.Componente + '=' + NuncaGuardadas(C));
+      end;
     end;
   finally
     Lineas.Free;

@@ -26,6 +26,15 @@ entrecomilla ninguno). Y el juez de protegidos lee cada nombre con LeeRutaDeGit
      intacto (ROJO: SYS-011)
   C1 control: un nombre ASCII sale igual que siempre
 
+Y el CONTENIDO (completo de Opus de la 1.22.1): git escribe su texto en UTF-8 y lo de
+los ficheros tal cual, y el servidor leia todo lo que no era UTF-8 en la pagina de la
+consola: un fuente en la ANSI de la maquina salia en diff y show con cada letra
+cambiada ('año' por 'a±o', 1252 leido en 850). Cada linea, UTF-8 si lo es; si no, la
+ANSI de la maquina, la que leen dcc y el IDE en un fuente sin BOM:
+  Q7 diff de un fuente ANSI y uno UTF-8 a la vez: los dos con sus letras (ROJO)
+  Q8 show del commit del ANSI con su parche: con sus letras (ROJO)
+  C2 control: un diff solo UTF-8 sale como siempre
+
 Uso:  python tests/test_git_acentos_1193.py [ruta-a-DelphiLspMcp.exe]
 """
 import os, subprocess
@@ -123,6 +132,51 @@ try:
     check('Q6 ReadOnlyRoots=vendor, stash pop que devolveria vendor/Café.dfm: GIT-065, intacto',
           mc.rechazado(r) and 'GIT-065' in r and 'vendor/Café.dfm' in r and 'SYS-011' not in r
           and lee(repo, 'vendor/Café.dfm') == 'EN_MAIN', r[:400])
+finally:
+    srv.cierra()
+
+# --------- Q7, Q8 y C2: el CONTENIDO con acentos, en la ANSI de la maquina y en UTF-8
+import ctypes
+ANSI = 'cp%d' % ctypes.windll.kernel32.GetACP()  # la de la maquina, preguntada a Windows
+ANTES, DESPUES = "const S = 'año ñu á';", "const S = 'año ñu á ó';"
+try:
+    ANTES.encode(ANSI)
+    DESPUES.encode(ANSI)
+    hay_ansi = True
+except UnicodeEncodeError:
+    hay_ansi = False
+repo = os.path.join(JAIL, 'contenido')
+os.makedirs(repo)
+
+
+def git_c(*a):
+    subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@e.com'] + list(a),
+                   cwd=repo, capture_output=True)
+
+
+def escribe(rel, txt, enc):
+    open(os.path.join(repo, rel), 'wb').write(('unit X;\r\n%s\r\nend.\r\n' % txt).encode(enc))
+
+
+escribe('UAnsi.pas', ANTES if hay_ansi else 'x', ANSI if hay_ansi else 'ascii')
+escribe('UUtf8.pas', "const T = 'Ñandú 😀';", 'utf-8')
+git_c('init', '-q', '-b', 'main'); git_c('add', '.'); git_c('commit', '-qm', 'base')
+escribe('UAnsi.pas', DESPUES if hay_ansi else 'y', ANSI if hay_ansi else 'ascii')
+escribe('UUtf8.pas', "const T = 'Ñandú 😀 ü';", 'utf-8')
+srv = arranca()
+try:
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'diff'})
+    if hay_ansi:
+        check('Q7 diff de un fuente ANSI (%s) y uno UTF-8 a la vez: los dos con sus letras' % ANSI,
+              ('-' + ANTES) in r and ('+' + DESPUES) in r and "+const T = 'Ñandú 😀 ü';" in r, r[:600])
+    else:
+        print('  -- Q7 no se mide: la ANSI de esta maquina (%s) no tiene estas letras' % ANSI)
+    check('C2 control: lo UTF-8 del diff sale como siempre', "-const T = 'Ñandú 😀';" in r, r[:600])
+    git_c('commit', '-qam', 'cambio')
+    r = srv.call('delphi_git', {'repo': repo, 'command': 'show', 'patch': True})
+    if hay_ansi:
+        check('Q8 show del commit con su parche: el ANSI con sus letras',
+              ('+' + DESPUES) in r and "+const T = 'Ñandú 😀 ü';" in r, r[:600])
 finally:
     srv.cierra()
 

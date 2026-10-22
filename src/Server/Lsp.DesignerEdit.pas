@@ -179,12 +179,20 @@ type
     // lo cambia al cargarse
     NoGuardada: Boolean;
     GuardadaComo: string;
+    // una stored False de su clase: lo que el IDE escribe por ella (DSGN-167)
+    // y la primera de esas propiedades, para su linea
+    GuardadaEnOtras: Boolean;
+    GuardadaEn, GuardadaEnProp: string;
   end;
 
   { Una propiedad compuesta aqui que el escritor del IDE guarda con otro valor:
     el suyo (ConLasPropiedadesDelIde, 1.22.1) }
   TGuardadaComo = record
     Prop, Valor: string;
+    // una stored False de su clase, que el IDE no guarda por su nombre: Valor
+    // son las lineas que escribe por ella y Donde la primera de sus propiedades
+    EnOtras: Boolean;
+    Donde: string;
   end;
 
 { ---- el form ---- }
@@ -1441,10 +1449,15 @@ end;
   (DSGN-166). Sin juez -lo heredado o de un frame en linea (el IDE
   guarda la diferencia con su ancestro), sin respuesta, leido sin un
   ancestro, con su clase sustituida, sin el orden-, ALineas tal cual y ANota
-  (DSGN-164) dice por que; la raiz, tal cual y sin nota, como antes. }
+  (DSGN-164) dice por que; la raiz, tal cual y sin nota, como antes. Lo que
+  puso el agente (APuestas) es lo ULTIMO que lee el cargador, como el IDE, que
+  pone el valor en el componente ya cargado; y una propiedad que su clase
+  declara stored False (UNSTORED=: en FMX, Width y Height van en Size) va en
+  AOtras con EnOtras y lo que el escritor escribe por ella (DSGN-167), no en
+  ANoGuarda (completo de Opus de la 1.22.1). }
 function ConLasPropiedadesDelIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
-  const ANomObj: string; out ANota: string; out ANoGuarda: TArray<string>;
-  out AOtras: TArray<TGuardadaComo>): TArray<string>;
+  const ANomObj: string; const APuestas: TArray<string>; out ANota: string;
+  out ANoGuarda: TArray<string>; out AOtras: TArray<TGuardadaComo>): TArray<string>;
 
   // el valor de AProp en el nivel propio de AObj, por EL lector de ADoc: de
   // un literal, su texto (cada escritor parte una cadena larga por su sitio)
@@ -1492,6 +1505,31 @@ function ConLasPropiedadesDelIde(var F: TFormEnEdicion; const ALineas: TArray<st
     Result := True;
   end;
 
+  // ALineas con las propiedades de APuestas al final del bloque de AObj, en su
+  // orden; nil si no hay que mover nada o el bloque no es solo propiedades
+  function LoPuestoAlFinal(ADoc: TStyleDoc; AObj: TStyleObj): TArray<string>;
+  var
+    De, A: Integer;
+    Antes, Puestas: TArray<string>;
+  begin
+    Result := nil;
+    if Length(APuestas) = 0 then
+      Exit;
+    var Rangos := ADoc.Propiedades(AObj, De, A);
+    if not SoloPropiedades(ADoc, Rangos, De, A) then
+      Exit;
+    Antes := [];
+    Puestas := [];
+    for var Rg in Rangos do
+      if MatchText(Rg.Prop, APuestas) then
+        Puestas := Puestas + Copy(ALineas, Rg.Ini, Rg.Fin - Rg.Ini + 1)
+      else
+        Antes := Antes + Copy(ALineas, Rg.Ini, Rg.Fin - Rg.Ini + 1);
+    if Length(Puestas) = 0 then
+      Exit;
+    Result := Copy(ALineas, 0, De) + Antes + Puestas + Copy(ALineas, A + 1, MaxInt);
+  end;
+
 var
   Doc, DocE: TStyleDoc;
   O, OE: TStyleObj;
@@ -1513,6 +1551,24 @@ begin
     O := ObjetoPorNombre(Doc, ANomObj);
     if (O = nil) or (O.Parent = nil) then
       Exit;
+    // lo que puso el agente, lo ULTIMO que lee su cargador: el IDE pone el valor
+    // en el componente ya cargado y gana a lo que el fichero decia. Leido
+    // arriba, lo de detras lo pisaba: un Width en FMX (stored False, va en Size)
+    // con un Size.Width ya escrito se perdia en silencio (completo de Opus de la
+    // 1.22.1)
+    var Lineas := LoPuestoAlFinal(Doc, O);
+    if Lineas <> nil then
+    begin
+      Doc.Free;
+      Doc := nil;
+      Texto := F.Doc.TextoDe(Lineas);
+      Doc := TStyleDoc.DeTexto(Texto);
+      O := ObjetoPorNombre(Doc, ANomObj);
+      if O = nil then
+        Exit;
+    end
+    else
+      Lineas := ALineas;
     if not SameText(O.Clave, 'object') or (InlineQueLoContiene(O) <> nil) then
       Motivo := MsgFmt(SF_DESIGNER_IDE_HEREDADO_FMT, [ANomObj])
     else
@@ -1557,6 +1613,24 @@ begin
           // las suyas, con la sangria del fichero
           var Delta := Length(LeadingWhite(Doc.Lines[O.StartLine - 1])) -
             Length(LeadingWhite(DocE.Lines[OE.StartLine - 1]));
+          // lo que el escritor guarda y no estaba tal cual en lo compuesto: lo que
+          // escribe por una stored False (el Size.Width de un Width en FMX)
+          var Cambiadas: TArray<string> := [];
+          var PrimeraCambiada := '';
+          for var S in Suyas do
+            for var K := S.Ini to S.Fin do
+            begin
+              var Estaba := False;
+              for var J := Desde to Hasta do
+                if Doc.Lines[J].Trim = DocE.Lines[K].Trim then
+                  Estaba := True;
+              if not Estaba then
+              begin
+                Cambiadas := Cambiadas + [DocE.Lines[K].Trim];
+                if PrimeraCambiada = '' then
+                  PrimeraCambiada := S.Prop;
+              end;
+            end;
           for var S in Suyas do
           begin
             var B: TArray<string> := [];
@@ -1577,7 +1651,7 @@ begin
               var Suyo := ValorComparable(DocE, OE, N.Prop);
               if Suyo <> ValorComparable(Doc, O, N.Prop) then
               begin
-                var Otra: TGuardadaComo;
+                var Otra := Default(TGuardadaComo);
                 Otra.Prop := N.Prop;
                 Otra.Valor := Suyo;
                 AOtras := AOtras + [Otra];
@@ -1599,7 +1673,22 @@ begin
                 Queda := True;
             if not Queda then
             begin
-              ANoGuarda := ANoGuarda + [N.Prop];
+              // una que su clase no guarda nunca por su nombre (stored False: en
+              // FMX, Width y Height van en Size) no es "el valor que ya da la
+              // clase": lo que el form guarda de ella es lo que el escritor
+              // escribe por ella (completo de Opus de la 1.22.1: DSGN-165 con el
+              // Size.Width escrito)
+              if MatchText(ArribaDe(N.Prop), R.NuncaGuardadas) then
+              begin
+                var EnOtras := Default(TGuardadaComo);
+                EnOtras.Prop := N.Prop;
+                EnOtras.Valor := string.Join('; ', Cambiadas);
+                EnOtras.EnOtras := True;
+                EnOtras.Donde := PrimeraCambiada;
+                AOtras := AOtras + [EnOtras];
+              end
+              else
+                ANoGuarda := ANoGuarda + [N.Prop];
               Continue;
             end;
             // detras de las que van antes en el orden, o a la par
@@ -1612,7 +1701,7 @@ begin
           var Nuevas: TArray<string> := [];
           for var B in Bloques do
             Nuevas := Nuevas + B;
-          Result := Copy(ALineas, 0, Desde) + Nuevas + Copy(ALineas, Hasta + 1, MaxInt);
+          Result := Copy(Lineas, 0, Desde) + Nuevas + Copy(Lineas, Hasta + 1, MaxInt);
         end;
       finally
         Puestos.Free;
@@ -1639,7 +1728,22 @@ begin
       AInfo.NoGuardada := True;
   for var O in AOtras do
     if SameText(O.Prop, AInfo.Prop) then
-      AInfo.GuardadaComo := O.Valor;
+      if O.EnOtras then
+      begin
+        AInfo.GuardadaEnOtras := True;
+        AInfo.GuardadaEn := O.Valor;
+        AInfo.GuardadaEnProp := O.Donde;
+      end
+      else
+        AInfo.GuardadaComo := O.Valor;
+end;
+
+// las propiedades que puso el agente (las APuestas de ConLasPropiedadesDelIde)
+function PropsDe(const AInfos: TArray<TValorPuesto>): TArray<string>;
+begin
+  Result := [];
+  for var I in AInfos do
+    Result := Result + [I.Prop];
 end;
 
 { ---- insert ---- }
@@ -1815,7 +1919,7 @@ begin
     var NotaIde: string;
     var NoGuarda: TArray<string>;
     var Otras: TArray<TGuardadaComo>;
-    DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, NotaIde, NoGuarda, Otras);
+    DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras);
     for var I := 0 to High(Infos) do
       MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
     var DocI := TStyleDoc.DeTexto(F.Doc.TextoDe(DfmLineas));
@@ -2374,6 +2478,13 @@ begin
   // lo que guarda el escritor del IDE, si no es lo que se dio (1.22.1)
   if AInfo.NoGuardada then
     AObj.AddPair('notStored', MsgFmt(SN_DESIGNER_IDE_NO_GUARDA_FMT, [AInfo.Prop, ANombre]))
+  else if AInfo.GuardadaEnOtras then
+  begin
+    // una stored False: lo que el IDE escribe por ella (DSGN-167)
+    AObj.AddPair('storedIn', AInfo.GuardadaEn);
+    AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT, [AInfo.Prop, ANombre,
+      IfThen(AInfo.GuardadaEn = '', MsgText(SF_DESIGNER_IDE_NADA_CAMBIA), AInfo.GuardadaEn)]));
+  end
   else if AInfo.GuardadaComo <> '' then
   begin
     AObj.AddPair('storedAs', AInfo.GuardadaComo);
@@ -2414,7 +2525,7 @@ begin
     var NotaIde: string;
     var NoGuarda: TArray<string>;
     var Otras: TArray<TGuardadaComo>;
-    F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, NotaIde, NoGuarda, Otras));
+    F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, [Info.Prop], NotaIde, NoGuarda, Otras));
     MarcaLoQueGuarda(Info, NoGuarda, Otras);
     Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
     if Result <> '' then
@@ -2423,6 +2534,10 @@ begin
     LineaN := 0;
     Obj := ObjetoPorNombre(F.Doc, Nombre);
     if not Info.Quitada and (Obj <> nil) and F.Doc.PropLines(Obj, Info.Prop, Ini, Fin) then
+      LineaN := Ini + 1
+    // una stored False no tiene su linea: la de lo que el IDE escribe por ella
+    else if (Obj <> nil) and (Info.GuardadaEnProp <> '') and
+      F.Doc.PropLines(Obj, Info.GuardadaEnProp, Ini, Fin) then
       LineaN := Ini + 1;
     Ret := TJSONObject.Create;
     try
@@ -2527,7 +2642,7 @@ begin
     var NotaIde: string;
     var NoGuarda: TArray<string>;
     var Otras: TArray<TGuardadaComo>;
-    F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, NotaIde, NoGuarda, Otras));
+    F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras));
     for var I := 0 to High(Infos) do
       MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
     Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)

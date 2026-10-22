@@ -919,7 +919,18 @@ begin
       MsgFmt(SF_CONFIG_PATHS_YA_ESTABAN_FMT, [string.Join(', ', YaEstaban)])), Compila]);
 end;
 
-function DondeEsta(const AXml, ATag: string): string; forward;
+function DondeEsta(const AXml, ATag: string; const ASoloCon: TArray<string> = nil): string; forward;
+
+{ La entrada de un search path del proyecto es una de las carpetas pedidas:
+  como la escribio el agente, sin el escape del XML. LA regla de
+  remove-searchpath, y la de los grupos que nombra CFG-022 (DondeEsta). }
+function EsEntradaPedida(const AEntrada: string; const APedidas: TArray<string>): Boolean;
+begin
+  for var R in APedidas do
+    if SameText(XmlUnescape(AEntrada), R.Trim) then
+      Exit(True);
+  Result := False;
+end;
 
 { remove-searchpath con una o VARIAS: las que no estaban se dicen; UNA
   escritura. Con una sola, lo de siempre (CFG-021/022). }
@@ -935,10 +946,7 @@ var
   // la entrada del proyecto es una de las pedidas
   function Pedida(const AEntrada: string): Boolean;
   begin
-    for var R in ARawPaths do
-      if SameText(XmlUnescape(AEntrada), R.Trim) then
-        Exit(True);
-    Result := False;
+    Result := EsEntradaPedida(AEntrada, ARawPaths);
   end;
 
 begin
@@ -985,12 +993,13 @@ begin
           MsgFmt(SN_CONFIG_PATH_ABSENT_FMT, [P, Etiqueta]);
       // ...una ENTRADA de ese search path, con la regla con la que se quita
       // (Pedida): como texto, lib casaba con lib2 o con C:\x\lib\y (revisor
-      // Opus de la 1.22.0, H7). Aqui ninguna estaba: las pedidas son NoEstaban
-      for var G2 in GruposDePropiedades(Xml) do
-        for var T in TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G2, True) do
-          for P in SplitPaths(Copy(Xml, T.Ini, T.Fin - T.Ini)) do
-            if Pedida(P) then
-              Exit(Result + MsgFmt(SF_CONFIG_PATH_EN_OTRO_GRUPO_FMT, [DondeEsta(Xml, 'DCC_UnitSearchPath')]));
+      // Opus de la 1.22.0, H7). Aqui ninguna estaba: las pedidas son NoEstaban.
+      // Y se nombran SOLO los grupos que la tienen: salian todos los que tienen
+      // search path, el de la plataforma pedida incluido, y el mensaje parecia
+      // decir que alli si estaba (dirigido de Opus de la 1.22.1)
+      var Donde := DondeEsta(Xml, 'DCC_UnitSearchPath', NoEstaban);
+      if Donde <> '' then
+        Result := Result + MsgFmt(SF_CONFIG_PATH_EN_OTRO_GRUPO_FMT, [Donde]);
       Exit;
     end;
     Rest := string.Join(';', Keep.ToArray);
@@ -1780,15 +1789,27 @@ begin
 end;
 
 { En que grupos del .dproj esta <ATag> y con que valor, en orden de
-  documento, como lo cuenta set-output (ValorEnGrupo); '' si en ninguno. }
-function DondeEsta(const AXml, ATag: string): string;
+  documento, como lo cuenta set-output (ValorEnGrupo); '' si en ninguno. Con
+  ASoloCon, una lista de rutas (un search path), solo los grupos donde una de
+  sus entradas es una de esas (EsEntradaPedida). }
+function DondeEsta(const AXml, ATag: string; const ASoloCon: TArray<string> = nil): string;
 var
   Trozos: TArray<string>;
+
+  function LaLleva(const AValor: string): Boolean;
+  begin
+    for var E in SplitPaths(AValor) do
+      if EsEntradaPedida(E, ASoloCon) then
+        Exit(True);
+    Result := False;
+  end;
+
 begin
   Trozos := [];
   for var G in GruposDePropiedades(AXml) do
     for var T in TramosEnGrupo(AXml, ATag, G, True) do
-      Trozos := Trozos + [ValorEnGrupo(ValorDeTramo(AXml, T), G.Condicion)];
+      if (ASoloCon = nil) or LaLleva(Copy(AXml, T.Ini, T.Fin - T.Ini)) then
+        Trozos := Trozos + [ValorEnGrupo(ValorDeTramo(AXml, T), G.Condicion)];
   Result := string.Join('; ', Trozos);
 end;
 

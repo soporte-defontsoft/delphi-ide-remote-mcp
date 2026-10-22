@@ -8,9 +8,18 @@ modos dicen el que no va con lo pedido (Lsp.Guard.ParametroQueNoVa) y estas dos 
   S2 ...con filter: LSP-050 (ROJO igual)
   S3 control: la carpeta sola da el digest; un FICHERO con mode=full, su arbol
 
+Y lo que dicen (dirigido de Opus de la 1.22.1 en Hermes, 22-oct-2026: el mensaje decia otra cosa que la tool):
+  L3 LIST-015 dice con que modo SI va como se pide (dirs=false), no el valor suelto (ROJO: "goes with: false")
+  C1 remove-searchpath de lib en Win64 cuando Win32 tiene lib y Win64 lib2 y libs: CFG-022 nombra el grupo que
+     SI la tiene y SOLO ese (ROJO: listaba todos los grupos, el propio Win64 incluido)
+  U1 a trozos, el sha256 del ULTIMO TROZO (no del fichero) en el segundo: UPLOAD-011 dice que es el del trozo
+     (ROJO: decia que el fichero difiere del origen, y estaba bien)
+  U2 el fichero entero con un sha256 que no es: UPLOAD-015 dice cual mando el agente y cual da lo subido
+     (ROJO: "received/expected", que se lee al reves)
+
 Uso:  python tests/test_contratos_1221.py [ruta-a-DelphiLspMcp.exe]
 """
-import os
+import base64, hashlib, os
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -38,6 +47,46 @@ try:
     check('S3 control: la carpeta sola da el digest', '"units"' in r and 'UUno' in r, r[:300])
     r = srv.call('delphi_symbols', {'path': unit, 'mode': 'full'}, 240)
     check('S3 control: un fichero con mode=full da su arbol', 'Uno' in r and not mc.fallo(r), r[:300])
+
+    r = srv.call('delphi_list', {'root': d, 'dirs': True, 'pattern': '*.pas'})
+    check('L3 LIST-015 dice con que modo SI va: dirs=false (no "goes with: false")',
+          'goes with: dirs=false.' in r and 'goes with: false' not in r, r[:400])
+
+    carpeta = os.path.join(BASE, 'fixture')
+    r = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fixture', 'dir': carpeta})
+    check('C0 fixture creada (delphi_create)', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
+    proyecto = os.path.join(carpeta, 'Fixture.dproj')
+    for sub in ('lib', 'lib2', 'libs'):
+        os.makedirs(os.path.join(carpeta, sub))
+    r1 = srv.call('delphi_config', {'project': proyecto, 'command': 'add-searchpath', 'platform': 'Win32',
+                                    'path': 'lib'})
+    r2 = srv.call('delphi_config', {'project': proyecto, 'command': 'add-searchpath', 'platform': 'Win64',
+                                    'paths': ['lib2', 'libs']})
+    check('C0 ...lib en Win32; lib2 y libs en Win64', not mc.fallo(r1) and not mc.fallo(r2), (r1[:200], r2[:200]))
+    r = srv.call('delphi_config', {'project': proyecto, 'command': 'remove-searchpath', 'platform': 'Win64',
+                                   'path': 'lib'})
+    check('C1 remove-searchpath de lib en Win64: CFG-022 y el grupo que SI la tiene (Win32)',
+          mc.es(r, 'SN_CONFIG_PATH_ABSENT_FMT') and "'$(Base_Win32)'!=''" in r, r[:500])
+    check('C1 ...y SOLO ese: ni el de Win64 (lib2, libs), que acaba de decir que no la tiene',
+          "'$(Base_Win64)'!=''" not in r and 'lib2' not in r, r[:500])
+
+    sube = os.path.join(BASE, 'subidas')
+    os.makedirs(sube)
+    trozo1, trozo2 = b'hola', b' mundo'
+    r = srv.call('delphi_upload', {'path': os.path.join(sube, 'a.txt'), 'offset': 0,
+                                   'chunkbase64': base64.b64encode(trozo1).decode()})
+    check('U1 primer trozo sin sha256', not mc.fallo(r), r[:200])
+    r = srv.call('delphi_upload', {'path': os.path.join(sube, 'a.txt'), 'offset': len(trozo1),
+                                   'chunkbase64': base64.b64encode(trozo2).decode(),
+                                   'sha256': hashlib.sha256(trozo2).hexdigest()})
+    check('U1 el segundo con el sha256 de SU trozo: UPLOAD-011 y que esa suma es la del trozo (chunkSha256)',
+          mc.es(r, 'SR_UPLOAD_SHA_MISMATCH_FMT') and 'is the sum of THIS chunk alone' in r, r[:600])
+    bueno = hashlib.sha256(b'otra cosa').hexdigest()
+    r = srv.call('delphi_upload', {'path': os.path.join(sube, 'b.txt'), 'offset': 0,
+                                   'chunkbase64': base64.b64encode(trozo1).decode(), 'sha256': bueno})
+    check('U2 entero con un sha256 que no es: UPLOAD-015 dice el que mando el agente como suyo',
+          mc.es(r, 'SR_UPLOAD_SHA_ENTERO_MISMATCH_FMT') and ('your sha256 says %s' % bueno) in r
+          and hashlib.sha256(trozo1).hexdigest() in r, r[:500])
 finally:
     srv.cierra()
     mc.borra(BASE)

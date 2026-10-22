@@ -560,12 +560,14 @@ begin
     Exit(MsgFmt(SR_LIST_ROOT_IS_FILE_FMT, [TPath.GetFileName(Root)]));
   // lo que no va con lo que se lista se dice (Lsp.Guard.ParametroQueNoVa),
   // como en las tools de varios comandos: pattern con dirs=true se ignoraba en
-  // silencio (test completo de Opus de la 1.22.0)
+  // silencio (test completo de Opus de la 1.22.0). El modo, como se pide
+  // (dirs=false): con el valor suelto el "con que va" decia "goes with: false"
+  // (dirigido de Opus de la 1.22.1)
   var Suyos, VaCon: string;
-  var Modo := IfThen(Params.Dirs, 'true', 'false');
+  var Modo := IfThen(Params.Dirs, 'dirs=true', 'dirs=false');
   var Sobra := ParametroQueNoVa(Modo, [
-      'false', 'root pattern dirs includetrash maxresults offset',
-      'true', 'root dirs includetrash maxresults offset'],
+      'dirs=false', 'root pattern dirs includetrash maxresults offset',
+      'dirs=true', 'root dirs includetrash maxresults offset'],
     ['root', Params.Root, '', 'pattern', Params.Pattern, '',
      'includetrash', IfThen(Params.IncludeTrash, 'true'), '',
      'maxresults', IfThen(Params.MaxResults <> 0, IntToStr(Params.MaxResults)), '500',
@@ -1819,11 +1821,16 @@ begin
         end;
         // sin apartar, el error lo dice: decia "lo aparte en" con la ruta
         // de siempre
+        // y si la suma que mando es la de ESTE trozo, se dice: el fichero
+        // puede estar bien y la suma ir en el campo que no es (dirigido de Opus
+        // de la 1.22.1)
+        var DelTrozo := IfThen(SameText(Sha256DeBytes(Bytes), Params.Sha256.Trim),
+          MsgText(SF_UPLOAD_SHA_ES_DEL_TROZO), '');
         if SinCuarentena = '' then
-          Return.AddPair('error', MsgFmt(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]))
+          Return.AddPair('error', MsgFmt(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]) + DelTrozo)
         else
           Return.AddPair('error', MsgFmt(SR_UPLOAD_SHA_MISMATCH_SIN_CUARENTENA_FMT,
-            [SinCuarentena, FullPath]));
+            [SinCuarentena, FullPath]) + DelTrozo);
       end;
     end;
     // un fichero de proyecto llega crudo por aqui a proposito (edit y textedit

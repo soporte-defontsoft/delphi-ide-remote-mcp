@@ -103,6 +103,9 @@ type
     // ORDER=: del componente pedido, sus propiedades publicadas en el orden en
     // que las escribe su escritor (1.22.1)
     Orden: TArray<string>;
+    // UNSTORED=: del componente pedido, las publicadas que su clase declara
+    // stored False - el escritor no las escribe nunca por su nombre (1.22.1)
+    NuncaGuardadas: TArray<string>;
     // UNAPPLIED=: lo que el lector leyo y no pudo aplicar - el metodo de un
     // evento, una referencia que no resolvio -, por su valor (1.22.1)
     NoAplicados: TArray<string>;
@@ -526,6 +529,13 @@ begin
       P := V.IndexOf('=');
       if P > 0 then
         Result.Orden := V.Substring(P + 1).Split([','], TStringSplitOptions.ExcludeEmpty);
+    end
+    else if Es(FR_UNSTORED) then
+    begin
+      // <Nombre>=<prop>,<prop>,...: como ORDER=
+      P := V.IndexOf('=');
+      if P > 0 then
+        Result.NuncaGuardadas := V.Substring(P + 1).Split([','], TStringSplitOptions.ExcludeEmpty);
     end
     else if Es(FR_UNAPPLIED) then
       Result.NoAplicados := Result.NoAplicados + [V]

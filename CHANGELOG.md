@@ -57,6 +57,13 @@ the MCP `initialize` response (`serverInfo.version`).
   diagnostic's range came back shifted. The engine's client now converts
   every column it sends and every one it receives with the line the engine
   holds (`LspTests.Encodings`, `tests/test_columna_acentos_1221.py`).
+- **`delphi_git diff` and `show` give a source in the machine's ANSI code page
+  with its accents.** git writes its own text in UTF-8 and the lines of a
+  file as they are, and the server read whatever was not UTF-8 in the
+  console's code page: `año` came back as `a±o` (1252 read as 850), and in a
+  diff with a UTF-8 source and an ANSI one, both. Each line is now read as
+  UTF-8 when it is, else in the machine's ANSI code page, the one `dcc` and
+  the IDE read a source without a BOM in (`tests/test_git_acentos_1193.py`).
 - **`delphi_test` returns a failure message with its accents.** A Delphi
   test runner writes to a pipe in the machine's ANSI code page (its RTL uses
   the console's only for a console), and the server read it in the OEM one:
@@ -78,7 +85,12 @@ the MCP `initialize` response (`serverInfo.version`).
   block, `Size.Width` in FMX comes with the `Size.Height` and
   `Size.PlatformDefault = False` the IDE adds, `Font.Style` with the other
   `Font.*` and `ParentFont = False`, and a value the class already gives is
-  not written (`notStored`, `DSGN-165`). A value the component turns into
+  not written (`notStored`, `DSGN-165`). What the agent sets is read after the
+  rest of the component, as the IDE sets it on the loaded one, so it is the
+  value that stays; and a property its class declares `stored False` - `Width`
+  and `Height` in FMX, which the IDE keeps in `Size` - is answered with what
+  the IDE writes for it (`storedIn`, `DSGN-167`), not as a value the class
+  already gives. A value the component turns into
   another when it loads is written as the IDE stores it, and the answer says
   so (`storedAs`, `DSGN-166`): a `Left` that an `Align` places, the time of a
   date picker's `Date`, the name of an alpha color given as `xAARRGGBB` - the
@@ -104,11 +116,15 @@ the MCP `initialize` response (`serverInfo.version`).
   its SDK pulled - it builds here, as `delphi_build` says - not only for the
   Windows ones (`tests/test_v012.py`).
 - `remove-searchpath` names the other group that holds a folder only when
-  the folder is an entry there: `lib` matched `lib2` as text (`CFG-022`;
-  `tests/test_config_property_1220.py`).
+  the folder is an entry there, and names only the groups that hold it: `lib`
+  matched `lib2` as text, and the hint listed every group with a search path,
+  the one just said not to have it included (`CFG-022`;
+  `tests/test_config_property_1220.py`, `tests/test_contratos_1221.py`).
 - `delphi_list dirs=true` with a `pattern`, and `delphi_symbols` of a folder
   with `mode` or `filter`, say the parameter does not go with what was asked
-  (`LIST-015`, `LSP-050`) instead of ignoring it (`tests/test_contratos_1221.py`).
+  (`LIST-015`, `LSP-050`) instead of ignoring it, and `LIST-015` names the
+  mode it does go with as it is asked for (`dirs=false`)
+  (`tests/test_contratos_1221.py`).
 - `delphi_config set-property`, `add-searchpath` and `set-output` write a new
   property where the IDE does: at the END of its group, in the order the
   properties are created (measured in the IDE's Project Options on a new
@@ -123,7 +139,12 @@ the MCP `initialize` response (`serverInfo.version`).
   parameter said only "on the LAST chunk, the whole file", and an agent sent
   the whole file's sum on the first of several chunks and a chunk's own sum
   on a later one; `UPLOAD-015` and `UPLOAD-011` now say which sum goes where
-  (`chunkSha256` for a chunk's own bytes).
+  (`chunkSha256` for a chunk's own bytes). `UPLOAD-009` and `UPLOAD-015` say
+  which sum the call's bytes give and which one was sent (they said "received"
+  and "expected", read the other way round), `UPLOAD-011` and `UPLOAD-012` no
+  longer say the file differs from the source - the sum sent may be the wrong
+  one - and say so when it is the sum of that chunk alone
+  (`tests/test_contratos_1221.py`).
 - The global properties of a build are one list: the outputs the build
   supplies were copied by hand next to the fixed ones, and `test_paisaje`
   now also sees a property passed as `/p:%s`.

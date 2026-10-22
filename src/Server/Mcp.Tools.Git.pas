@@ -312,10 +312,13 @@ begin
     // LC_ALL=C / LANGUAGE=C: git habla en ingles haga lo que haga el sistema,
     // porque lo que de su salida se JUZGA por prosa (fast-forward, --no-ff,
     // "specify the URL", las pistas de abajo) es ingles; un git traducido las
-    // dejaba sin casar (lote 4 del censo de jueces, 18-oct-2026; 1.21.4)
+    // dejaba sin casar (lote 4 del censo de jueces, 18-oct-2026; 1.21.4).
+    // phPorLinea: su texto es UTF-8 y lo de los ficheros (diff, show) va tal
+    // cual - un fuente ANSI, en la ANSI de la maquina (completo de Opus de la
+    // 1.22.1: salia leido en la de la consola, 1252 leido en 850)
     Result := RunCapturedIn(GitLinea(ARepo, AFijado, AResto), '', ATimeoutMs,
       ACodigo, EntornoSinConfiguracion(['GIT_TERMINAL_PROMPT=0', 'GCM_INTERACTIVE=never',
-      'GIT_ADVICE=0', 'LC_ALL=C', 'LANGUAGE=C']));
+      'GIT_ADVICE=0', 'LC_ALL=C', 'LANGUAGE=C']), phPorLinea);
   except
     on E: EOSError do
     begin

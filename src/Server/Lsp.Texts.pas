@@ -909,10 +909,12 @@ const
 
   { Un parametro que no va con lo que se lista (Lsp.Guard.ParametroQueNoVa):
     pattern con dirs=true se ignoraba en silencio (test completo de Opus de
-    la 1.22.0). }
+    la 1.22.0). %s = el modo COMO SE PIDE (dirs=true): con el valor suelto,
+    el "con que va" de ParametroQueNoVa decia "goes with: false" (dirigido de
+    Opus de la 1.22.1). }
   SR_LIST_NO_VA_CON_MODO_FMT =
-    '[LIST-015 INVALID_PARAM] "%s" does not go with dirs=%s (it would be ' +
-    'ignored). Nothing was listed: dirs=%s takes %s.%s';
+    '[LIST-015 INVALID_PARAM] "%s" does not go with %s (it would be ' +
+    'ignored). Nothing was listed: %s takes %s.%s';
 
   SR_LIST_IS_FILE_FMT =
     '[LIST-002 INVALID_PARAM] %s is a FILE, not a folder. delphi_list ' +
@@ -5726,6 +5728,19 @@ const
     'it, a date without its time, the name of the same color...), so that is ' +
     'what is written and what the form loads with.';
 
+  { Lo que el agente puso en una propiedad que su clase declara stored False:
+    el IDE no la guarda nunca por su nombre y lo que el form guarda de ella va
+    en otras (en FMX, Width y Height van en Size). Decia DSGN-165, "el valor de
+    la clase", con Size.Width escrito (completo de Opus de la 1.22.1). Lleva
+    [prop, nombre, lo que escribe por ella: SF_DESIGNER_IDE_NADA_CAMBIA si no
+    cambio nada de lo que guarda]. }
+  SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT =
+    '[DSGN-167] The IDE never stores %s of %s by that name (its class declares ' +
+    'it stored False): the form keeps it in the properties the IDE writes for ' +
+    'it - here: %s.';
+  SF_DESIGNER_IDE_NADA_CAMBIA =
+    'nothing it stores changed';
+
   SN_DESIGNER_YA_ESTA_FMT =
     '[DSGN-101] %s is already inside %s: nothing to move.';
 
@@ -6773,7 +6788,8 @@ const
 
   SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT =
     '[UPLOAD-009 INVALID_PARAM] The sha256 of THIS chunk does not match ' +
-    '(received %s, expected %s; %d bytes decoded). I wrote nothing: the ' +
+    '(its bytes hash to %s, your chunkSha256 says %s; %d bytes decoded). ' +
+    'I wrote nothing: the ' +
     'file is as it was. Resend the same chunk with the same offset.';
 
   { El sha256 final de una subida a TROZOS: lo ya escrito no casa. Lo que
@@ -6783,7 +6799,7 @@ const
   SR_UPLOAD_SHA_MISMATCH_FMT =
     '[UPLOAD-011 INVALID_PARAM] The sha256 does NOT match the file ' +
     'assembled so far (sha256 is that file, not this chunk: a chunk''s own ' +
-    'bytes go in chunkSha256): it differs from the source, so I do NOT leave it published ' +
+    'bytes go in chunkSha256): the file and your sha256 disagree, so I do NOT leave it published ' +
     'under its name: it is in the recoverable trash, %s. Resend from ' +
     'offset=0. If a file was there before this upload, its first chunk ' +
     'kept a copy and named it in "backup" (delphi_list includetrash=true ' +
@@ -6791,11 +6807,13 @@ const
 
   { El fichero ENTERO en una sola llamada (offset=0 con su sha256): se
     comprueba antes de escribir y no se escribe nada (Hermes, test completo
-    de la 1.22.0; David: verificar antes). %s = el sha de lo recibido, %s =
-    el esperado, %d = los bytes. }
+    de la 1.22.0; David: verificar antes). %s = el sha de lo que trae la
+    llamada, %s = el que mando el agente, %d = los bytes: decia "received /
+    expected", que se leia al reves (dirigido de Opus de la 1.22.1). }
   SR_UPLOAD_SHA_ENTERO_MISMATCH_FMT =
     '[UPLOAD-015 INVALID_PARAM] The sha256 does NOT match what this call ' +
-    'carries (received %s, expected %s; %d bytes decoded): sha256 is the ' +
+    'carries (its bytes hash to %s, your sha256 says %s; %d bytes decoded): ' +
+    'sha256 is the ' +
     'file as it stands after this call, and with offset=0 that is this ' +
     'chunk alone. I wrote nothing: the file is as it was. If more chunks ' +
     'follow, send sha256 on the last one (chunkSha256 checks a chunk''s ' +
@@ -6805,14 +6823,23 @@ const
   SF_UPLOAD_SIN_PAPELERA =
     'a temporary folder has no trash';
 
+  { Coletilla de UPLOAD-011 / UPLOAD-012 cuando el sha256 que mando el agente
+    es el del TROZO de esta llamada: el servidor lo sabe (tiene sus bytes) y
+    lo dice, en vez de "el fichero y tu suma no casan" a secas (dirigido de
+    Opus de la 1.22.1: el fichero estaba bien y la suma era la del trozo). }
+  SF_UPLOAD_SHA_ES_DEL_TROZO =
+    ' The sha256 you sent is the sum of THIS chunk alone: ' +
+    'sha256 is the file from offset 0 through this chunk, and a chunk''s own ' +
+    'sum goes in chunkSha256.';
+
   { ...y cuando no se pudo apartar (la puerta niega su papelera, no se deja
     copiar o quitar, o es de un temporal, que no tiene papelera): decia "lo
     aparte en" con la ruta de siempre, y seguia con su nombre (2t de la
     1.18.x; desde la A de la 1.19.2 se aparta a la papelera) }
   SR_UPLOAD_SHA_MISMATCH_SIN_CUARENTENA_FMT =
     '[UPLOAD-012 INVALID_PARAM] The sha256 does NOT match: what was ' +
-    'assembled differs from the source, and I could NOT set it aside (%s). ' +
-    'It is still under its name %s with WRONG content: do not use it. ' +
+    'assembled and your sha256 disagree, and I could NOT set it aside (%s). ' +
+    'It is still under its name %s and may be WRONG: do not use it. ' +
     'Resend from offset=0.';
 
   { Decia "una por dia, la de esta manana" y backup es la copia SELLADA de

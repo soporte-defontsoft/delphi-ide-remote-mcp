@@ -36,6 +36,11 @@
                                  // propiedades publicadas de SU clase en el orden en que las escribe TWriter
                                  // (GetPropInfos). El servidor coloca ahi lo que el escritor no puede dar:
                                  // lo de UNAPPLIED= y lo que su lector salto (1.22.1)
+  FR_UNSTORED = 'UNSTORED=';     // UNSTORED=<Nombre>=<prop>,<prop>,... con --writeback y --component: las
+                                 // publicadas que SU clase declara stored False (la constante, como la lee
+                                 // TypInfo): TWriter no las escribe nunca por su nombre, y lo que el form
+                                 // guarda de ellas va en otras (en FMX, Width y Height van en Size). El
+                                 // servidor no las da por "el valor de la clase" (1.22.1)
   FR_UNAPPLIED = 'UNAPPLIED=';   // UNAPPLIED=<valor> (repetible): lo que el lector leyo y NO pudo aplicar, el
                                  // nombre del metodo de un evento (no hay codigo) o una referencia a un
                                  // componente que no resolvio en el form (la de otro modulo). El escritor no
