@@ -10,6 +10,41 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The build read gate judges a search path the way the compiler resolves it,
+  not by its text.** A path the build reads that looked like a key=value pair
+  (an `=` before the first slash, `a=b\..\..\outside`) or a URL (a `:` with
+  slashes after it, `s\a:b\..\..\outside`, or the NT device form `\??\C:\outside`)
+  was skipped unjudged and `dcc` read a unit from outside the roots (measured on
+  2026-10-22: each compiled). The `=` and `:` shortcuts now apply only to the
+  properties the build reads as key=value, not paths (`VerInfo_Keys`,
+  `DCC_UnitAlias`); every other value is resolved - `GetFullPath` collapses `..`
+  exactly as Win32 and `dcc` do - and judged, and the `\??\` device prefix is
+  stripped like `\\?\` (`tests/test_puerta_1221.py`).
+- **The build read gate unescapes `%XX` before it judges a path, as msbuild
+  does.** `%2E%2E\%2E%2E\outside` (escaped dots) and `inside%3B..\..\outside`
+  (an escaped `;` that msbuild turns into a list separator) reached `dcc` as
+  `..\..\outside` while the gate judged the literal, inside-looking text
+  (measured on 2026-10-22: both compiled reading a unit from outside). The
+  expanded value is now unescaped before it is split and judged
+  (`tests/test_puerta_1221.py`).
+- **`$(ProjectDir)` in a path the build reads is no longer expanded with the
+  project folder.** It is not an msbuild reserved property, and msbuild reads it
+  empty in the body of a `.dproj` (measured on 2026-10-22: `$(ProjectDir)\outside`
+  compiled reading outside the roots while the gate judged a folder inside). The
+  gate now leaves it empty, as msbuild does; `MSBuildProjectDirectory` (reserved)
+  and `SanitizedProjectName` (which msbuild does set, measured) stay
+  (`tests/test_puerta_1221.py`).
+- **A `$(...)` whose property name has a dash is no longer refused.**
+  `set-property` accepts creating `My-Path`, but the build gate denied any value
+  that then said `$(My-Path)` with `BUILD-051`, because its name grammar did not
+  allow `-` while msbuild does (measured on 2026-10-22: `$(My-Path)` expands).
+  The gate's grammar now accepts `-` too (`tests/test_puerta_1221.py`).
+- **A `$( Name )` with spaces is judged as msbuild reads it.** msbuild does not
+  trim the name, so `$( A )` is the (undefined, empty) property " A ", not `A`;
+  the gate trimmed it and expanded with `A`'s value (measured on 2026-10-22:
+  `$( A )` let through a path msbuild read differently). The gate no longer trims
+  the name, so a `$(...)` that is not a plain property name is refused as
+  non-verifiable, `BUILD-051` (`tests/test_puerta_1221.py`).
 - **The position tools point at the right symbol on a line with accents.**
   DelphiLSP counts a column in UTF-8 bytes of the line, both ways - measured
   with the engine alone: an `ñ` is one more, a `€` two, an emoji two more

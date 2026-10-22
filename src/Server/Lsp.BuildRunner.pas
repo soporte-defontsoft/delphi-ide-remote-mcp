@@ -1667,9 +1667,34 @@ var
     end;
   end;
 
+  // Gramatica propia (no hay juez de "URL o ruta"): el esquema de una URL
+  // (http, https, ssh, git, file...) son 2+ letras al principio seguidas de
+  // '://'; una UNIDAD de Windows es UNA sola letra (C:), que dcc abre como
+  // ruta. Por eso no vale Contains('://') a secas: saltaba C://x -que dcc abre
+  // como C:\x (medido el 22-oct-2026, leia fuera de la jaula)- por URL.
+  function EsEsquemaDeUrl(const ACand: string): Boolean;
+  var
+    P, I: Integer;
+  begin
+    P := ACand.IndexOf('://');
+    Result := P >= 2; // 2+ caracteres de esquema (una unidad es 1)
+    if not Result then
+      Exit;
+    for I := 0 to P - 1 do
+      if not CharInSet(ACand.Chars[I], ['A'..'Z', 'a'..'z']) then
+        Exit(False); // el esquema son letras; C:\ o \\host\x no son URL
+  end;
+
   // un trozo YA expandido: una ruta, o lo que no lo es
   function JuzgaTrozo(const ATrozo: string; const AValor: TValorDelProyecto;
     const AFichero: string): string;
+  const
+    // Las propiedades que el build lee como CLAVE=VALOR, no como rutas: la
+    // version (VerInfo_Keys) y los alias de unidad (DCC_UnitAlias). Solo en
+    // ellas un '=' o una ':' con barras detras no es una ruta y se salta; en una
+    // propiedad de ruta se juzga siempre. Gramatica propia (no hay juez),
+    // declarada aqui con nombre (H1, H2; W14 de test_build_lista_blanca_1212).
+    PROPIEDADES_CLAVE_VALOR: array[0..1] of string = ('VerInfo_Keys', 'DCC_UnitAlias');
   var
     Cand: string;
   begin
@@ -1680,30 +1705,37 @@ var
     if Cand.Contains('$(') or Cand.Contains('@(') or Cand.Contains('%(') then
       Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
         [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo]));
-    // Lo que no es una ruta no lo abre nadie: una clave=valor (VerInfo_Keys,
-    // un alias de unidad: el '=' antes de toda barra) y un texto con ':' que
-    // no es el de la unidad y lleva barras detras (una URL, un
-    // "Comments=D:\x" ya partido). Un ':' sin barras detras es un flujo
-    // alternativo (f.txt:s): se juzga el FICHERO del que es - lo de dentro
-    // es de dentro, y el de fuera (por .. o por un enlace) lo niega la
-    // jaula. (W14 de test_build_lista_blanca_1212: VerInfo_Keys se negaba)
-    // el prefijo de ruta extendida o de dispositivo (\\?\C:\x, \\?\UNC\srv\x,
-    // \\.\): dcc abre la carpeta por el (medido el 21-oct-2026: una unidad de
-    // FUERA por ese search path compilaba, porque la regla del ':' de abajo lo
-    // tomaba por una URL); se juzga sin el, por EL quitador (Lsp.Rutas)
+    // Un prefijo de ruta extendida o de dispositivo (\\?\C:\x, \\?\UNC\srv\x,
+    // \\.\, \??\C:\x): dcc abre la carpeta por el; Win32 GetFullPath no lo
+    // entiende, asi que se quita y se juzga la ruta real (Lsp.Rutas; H2, H2b)
     if EsPrefijoDeDispositivo(Cand) then
       Cand := SinPrefijoDeDispositivo(Cand);
-    var Sep := Cand.IndexOfAny(['\', '/']);
-    var Igual := Cand.IndexOf('=');
-    if (Igual >= 0) and ((Sep < 0) or (Igual < Sep)) then
+    // El '=' de una clave=valor solo se salta en una propiedad que NO es de
+    // ruta (PROPIEDADES_CLAVE_VALOR: la version, un alias; "Comments=D:\x"). En
+    // una propiedad de RUTA se juzga la ruta entera: GetFullPath colapsa los ..
+    // como Win32 y dcc (medido el 22-oct-2026), asi que a=b\..\..\fuera se
+    // resuelve y se ve que sale (H1).
+    var EsClaveValor := MatchText(AValor.Elemento, PROPIEDADES_CLAVE_VALOR);
+    if EsClaveValor then
+    begin
+      var Sep := Cand.IndexOfAny(['\', '/']);
+      var Igual := Cand.IndexOf('=');
+      if (Igual >= 0) and ((Sep < 0) or (Igual < Sep)) then
+        Exit;
+    end;
+    // una URL (esquema://...) no es un fichero local que dcc abra: no se juzga
+    // como ruta (W14 de test_build_lista_blanca_1212: un LbUrl pasa); pero una
+    // unidad con doble barra (C://x) SI es una ruta que dcc abre: EsEsquemaDeUrl
+    // la distingue (un esquema son 2+ letras; una unidad, una sola).
+    // Un ':' que no es el de la unidad ni de una URL es un flujo alternativo
+    // (f.txt:stream): sin barras detras se recorta y se juzga el FICHERO; con
+    // barras detras es una ruta disfrazada (a:b\..\..) y se juzga entera, que
+    // GetFullPath resuelve igual que Win32/dcc y se ve que sale (H2, 22-oct-2026).
+    if EsEsquemaDeUrl(Cand) then
       Exit;
     var DosPuntos := Cand.LastIndexOf(':');
-    if DosPuntos > 1 then
-    begin
-      if Cand.Substring(DosPuntos + 1).IndexOfAny(['\', '/']) >= 0 then
-        Exit;
+    if (DosPuntos > 1) and (Cand.Substring(DosPuntos + 1).IndexOfAny(['\', '/']) < 0) then
       Cand := Cand.Substring(0, DosPuntos);
-    end;
     try
       if not TPath.IsPathRooted(Cand) then
         Cand := TPath.Combine(Dir, Cand);
@@ -1744,7 +1776,10 @@ var
       var Qm := Pos(')', AValor.Escrito, Pm + 2);
       if Qm = 0 then
         Break; // sin cerrar: no es un macro; lo juzga el trozo ya expandido
-      if not EsNombreDeMacro(Copy(AValor.Escrito, Pm + 2, Qm - Pm - 2).Trim) then
+      // SIN recortar: msbuild no recorta el nombre, $( A ) es la propiedad " A "
+      // (no "A"), que nadie define y vale vacio; la puerta lo niega como no
+      // verificable en vez de expandirlo con el valor de A (H12, 22-oct-2026)
+      if not EsNombreDeMacro(Copy(AValor.Escrito, Pm + 2, Qm - Pm - 2)) then
         Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
           [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
       Pm := Pos('$(', AValor.Escrito, Qm + 1);
@@ -1761,7 +1796,9 @@ var
     // entera y se juzgaba como UNA ruta, negada en cuanto carpeta + lista
     // pasaban de MAX_PATH (medido el 21-oct-2026: 217 caracteres pasaban,
     // 313 no; sin el macro, 1599 pasaban)
-    for var Trozo in TrozosDeLista(Expande(AValor.Expandido, ADeOtros)) do
+    // desescapado ANTES de partir, como msbuild: un %2E%2E es .. y un %3B es un
+    // ';' que separa la lista (medido el 22-oct-2026, los dos leian fuera) (H3)
+    for var Trozo in TrozosDeLista(DesescapaDeMsbuild(Expande(AValor.Expandido, ADeOtros))) do
     begin
       Result := JuzgaTrozo(Trozo, AValor, AFichero);
       if Result <> '' then
@@ -1796,7 +1833,11 @@ begin
     Vars.Values['SanitizedProjectName'] := Base;
     Vars.Values['MSBuildProjectFile'] := TPath.GetFileName(ADprojPath);
     Vars.Values['MSBuildProjectFullPath'] := TPath.GetFullPath(ADprojPath);
-    Vars.Values['ProjectDir'] := Dir;
+    // ProjectDir NO va en la tabla: msbuild lo lee VACIO en el cuerpo del .dproj
+    // (no es una propiedad reservada; medido el 22-oct-2026, $(ProjectDir)\fuera
+    // compilaba leyendo fuera de la jaula), asi que la puerta lo expande vacio
+    // como msbuild y no con Dir (H4). MSBuildProjectDirectory (reservada) y
+    // SanitizedProjectName (= Base, medido) si valen y se quedan arriba.
     // los nombres que msbuild toma de fuera del documento (esta tabla): la
     // evaluacion de las Condition no los da por vacios
     var Externas: TArray<string> := [];

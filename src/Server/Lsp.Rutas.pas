@@ -438,7 +438,11 @@ var
   P: string;
 begin
   P := APath.Trim.Replace('/', '\');
-  Result := StartsText('\\?\', P) or StartsText('\\.\', P);
+  // \??\ es la forma NT (del object manager) del mismo prefijo de dispositivo:
+  // dcc abre una ruta asi igual que \\?\ (medido el 22-oct-2026: un search path
+  // \??\C:\fuera compilaba leyendo fuera de la jaula), y Win32 GetFullPath no la
+  // entiende, asi que hay que quitarla para juzgar la ruta real (H2b)
+  Result := StartsText('\\?\', P) or StartsText('\\.\', P) or StartsText('\??\', P);
 end;
 
 function SinPrefijoDeDispositivo(const APath: string): string;
@@ -448,7 +452,7 @@ begin
     Exit;
   Result := Result.Trim.Replace('/', '\');
   // \\?\UNC\host\x es \\host\x; lo demas, la ruta tras las cuatro del prefijo
-  if StartsText('\\?\UNC\', Result) or StartsText('\\.\UNC\', Result) then
+  if StartsText('\\?\UNC\', Result) or StartsText('\\.\UNC\', Result) or StartsText('\??\UNC\', Result) then
     Result := '\\' + Result.Substring(8)
   else
     Result := Result.Substring(4);

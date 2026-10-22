@@ -15,7 +15,7 @@ msbuild, el entorno, lo que nadie define) lo expande la puerta con su tabla, y l
 (una propiedad puesta bajo una Condition que no se sabe evaluar, una global del build) se niega
 con BUILD-056 nombrando el macro. Y dentro de un valor que el build lee un $(...) solo vale si lo de
 dentro es un nombre de propiedad simple (letras, cifras y _); cualquier otra cosa (una funcion, un
-item, un nombre con un punto o un guion) hace el valor NO verificable y se niega con BUILD-051, antes
+item, un nombre con un punto o parentesis - una funcion) hace el valor NO verificable y se niega con BUILD-051, antes
 de expandir, exista o no la ruta (censo: 0 de 3.651 .dproj con algo asi):
 
   X0 control: A=.. una sola vez y el search path $(A)\..\fuera: BUILD-050 (sigue)
@@ -41,7 +41,7 @@ de expandir, exista o no la ruta (censo: 0 de 3.651 .dproj con algo asi):
      es de fuera: BUILD-050 (ROJA: pasaba la puerta)
   X12 definida una vez por configuracion (Debug hacia .., Release hacia lib\): en Release compila
      (ROJA contra la lista blanca: la contaba dos veces)
-  X13 un $(...) cuyo contenido no es un nombre simple ($(No-Simple)) en un valor que el build lee:
+  X13 un $(...) cuyo contenido no es un nombre simple ($(No.Simple), una funcion por el punto) en un valor que lee:
      BUILD-051 no verificable, antes de expandir (ROJA contra el anterior, que lo expandia a vacio y
      compilaba con lib\)
 
@@ -190,9 +190,9 @@ try:
     check('X12 definida una vez por configuracion (Debug hacia .., Release hacia lib\\): en Release compila',
           compila(r), detalle(r))
 
-    con('<PropertyGroup><DCC_UnitSearchPath>$(No-Simple)%s</DCC_UnitSearchPath></PropertyGroup>' % escape(LIB))
+    con('<PropertyGroup><DCC_UnitSearchPath>$(No.Simple)%s</DCC_UnitSearchPath></PropertyGroup>' % escape(LIB))
     r = build(proyecto)
-    check('X13 un $(...) que no es un nombre simple ($(No-Simple)) en DCC_UnitSearchPath: BUILD-051 no verificable '
+    check('X13 un $(...) que no es un nombre simple ($(No.Simple)) en DCC_UnitSearchPath: BUILD-051 no verificable '
           '(ROJA contra el anterior, que lo expandia a vacio y compilaba con lib\\)',
           mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_NO_VERIFICABLE_FMT') and '<DCC_UnitSearchPath>' in r, r[:300])
 finally:

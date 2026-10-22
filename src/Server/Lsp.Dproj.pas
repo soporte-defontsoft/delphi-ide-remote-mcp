@@ -450,10 +450,16 @@ function VeredictosDeElementos(const AXml, APlatform, AConfig: string;
 function VeredictosDeElementos(const AXml, APlatform, AConfig: string;
   const AElementos: TArray<TElementoXml>; const AExternas, AGlobales: TArray<string>;
   out AExpandidos, ADudosos: TArray<string>): TArray<TVeredicto>; overload;
-{ True si ANombre es un nombre de propiedad simple (letras, cifras y _): lo
-  unico que vale dentro de un $() de un valor que el build lee (la lista blanca
-  de la puerta de lectura, Lsp.BuildRunner.LecturasDelBuildDenegadas; 1.22.0). }
+{ True si ANombre es un nombre de propiedad de msbuild (letras, cifras, _ y -,
+  como EsNombreDeEtiqueta): lo unico que vale dentro de un $() de un valor que el
+  build lee (la lista blanca de la puerta, Lsp.BuildRunner.LecturasDelBuildDenegadas;
+  1.22.0). msbuild acepta el '-' en un nombre (medido el 22-oct-2026: $(My-Path)
+  se expande), asi que la puerta no lo niega (H9). }
 function EsNombreDeMacro(const ANombre: string): Boolean;
+{ Los %XX de una cadena de msbuild como el caracter que nombran (%2E = '.'):
+  msbuild desescapa un valor tras expandirlo, y la puerta de lecturas juzga lo
+  desescapado (H3, 22-oct-2026). }
+function DesescapaDeMsbuild(const S: string): string;
 { Para cada elemento de AElementos (los de ElementosDe), si es de OTRO build
   que APlatform/AConfig: esta en un PropertyGroup cuya Condition, o la suya,
   es falsa (vNo) evaluada como msbuild en orden de documento, con las
@@ -2239,7 +2245,7 @@ function EsNombreDeMacro(const ANombre: string): Boolean;
 begin
   Result := ANombre <> '';
   for var C in ANombre do
-    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) then
       Exit(False);
 end;
 
