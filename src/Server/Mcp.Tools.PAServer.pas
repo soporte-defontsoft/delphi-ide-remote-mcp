@@ -709,10 +709,14 @@ begin
         Arr.AddElement(Obj);
         Obj.AddPair('platform', Nombre);
         Local := IsLocalPlatform(Nombre); // la lista de Lsp.Dproj, no una copia
-        Obj.AddPair('buildsLocally', TJSONBool.Create(Local));
+        var ConSdk := not Local and HasProfileFor(Info.Version, Nombre);
+        // se compila AQUI la nativa y la que tiene su SDK: delphi_build compila
+        // contra el SDK en local y no usa el perfil (era Local solo: Linux64 con
+        // su SDK salia false; test completo de Opus de la 1.22.0)
+        Obj.AddPair('buildsLocally', TJSONBool.Create(Local or ConSdk));
         if Local then
           Obj.AddPair('status', MsgText(SF_PAS_STATUS_READY_NATIVE))
-        else if HasProfileFor(Info.Version, Nombre) then
+        else if ConSdk then
           Obj.AddPair('status', MsgText(SF_PAS_STATUS_READY_SDK))
         else
           Obj.AddPair('status', MsgText(SF_PAS_STATUS_NEEDS_PROFILE_SDK));

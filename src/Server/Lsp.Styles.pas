@@ -26,6 +26,14 @@ uses
   Lsp.DesignerBin; // EL lector de las lineas de un designer de texto (LineasDeForm)
 
 type
+  { Las lineas de UNA propiedad del nivel propio de un objeto, Ini..Fin
+    (0-based: una lista, un bloque, una coleccion o una cadena partida ocupan
+    varias), con su nombre como esta escrito. }
+  TRangoDeLineas = record
+    Prop: string;
+    Ini, Fin: Integer;
+  end;
+
   TStyleObj = class
     ClassName_: string;   // TLayout, TRectangle...
     ObjName: string;      // the name before ':' when present
@@ -122,6 +130,12 @@ type
       la ULTIMA, la que guarda el lector del IDE; SetProp y DeleteProp
       cambian todas (RangosDePropiedad). }
     function PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
+    { TODAS las propiedades del nivel propio de AObj, en el orden del fichero,
+      por el lector de PropLines; ADesde..AHasta (0-based), las lineas de ese
+      nivel, de detras de su cabecera a delante de su primer hijo o su end: lo
+      que queda ahi fuera de los rangos no es una propiedad. Lo pide la mezcla
+      con lo que guarda el IDE (Lsp.DesignerEdit, 1.22.1). }
+    function Propiedades(AObj: TStyleObj; out ADesde, AHasta: Integer): TArray<TRangoDeLineas>;
     { El VALOR de AProp en el nivel propio de AObj, entero (una cadena partida,
       sus trozos en uno: ValorEnteroDe; de una lista o un bloque, su primera
       linea); '' y AFound False si no esta. EL lector del valor de una
@@ -534,6 +548,15 @@ begin
   end;
 end;
 
+// la linea (0-based) donde acaba el nivel propio de AObj: la de su primer
+// hijo o la de su end
+function FinDePropiedades(AObj: TStyleObj): Integer;
+begin
+  Result := AObj.EndLine - 1;
+  if AObj.Children.Count > 0 then
+    Result := AObj.Children[0].StartLine - 1;
+end;
+
 { La propiedad AProp del nivel PROPIO de AObj - las lineas tras su cabecera
   y antes de su primer hijo, fuera de sus colecciones - y las lineas que
   ocupa su valor, AIni y AFin (0-based), por EL lector de las lineas
@@ -541,10 +564,6 @@ end;
   ocupan varias, y lo de dentro de un valor no es del nivel propio (el
   'Caption =' de un item pasaba por el del objeto, y un set dejaba debajo el
   resto de un valor partido: delphi_designer set, 1.17.0). False si no esta. }
-type
-  TRangoDeLineas = record
-    Ini, Fin: Integer;
-  end;
 
 { ...cada vez que esta: dos, cuando su clase la define con DefineProperties
   ademas de publicarla - ImageIndex de una accion FMX (FMX.ActnList), Left y
@@ -558,13 +577,13 @@ var
   R: TRangoDeLineas;
 begin
   Result := [];
-  Stop := AObj.EndLine - 1;
-  if AObj.Children.Count > 0 then
-    Stop := AObj.Children[0].StartLine - 1;
+  Stop := FinDePropiedades(AObj);
+  // AProp '' = todas (TStyleDoc.Propiedades)
   for I := AObj.StartLine to Min(Stop, Length(AForm)) - 1 do
     if (AForm[I].Clase = clfPropiedad) and (AForm[I].Coleccion = 0) and
-       SameText(AForm[I].Prop, AProp) then
+       ((AProp = '') or SameText(AForm[I].Prop, AProp)) then
     begin
+      R.Prop := AForm[I].Prop;
       R.Ini := I;
       R.Fin := AForm[I].Fin;
       Result := Result + [R];
@@ -733,6 +752,13 @@ end;
 function TStyleDoc.PropLines(AObj: TStyleObj; const AProp: string; out AIni, AFin: Integer): Boolean;
 begin
   Result := RangoDePropiedad(AObj, Clasificadas, AProp, AIni, AFin);
+end;
+
+function TStyleDoc.Propiedades(AObj: TStyleObj; out ADesde, AHasta: Integer): TArray<TRangoDeLineas>;
+begin
+  ADesde := AObj.StartLine;
+  AHasta := FinDePropiedades(AObj) - 1;
+  Result := RangosDePropiedad(AObj, Clasificadas, '');
 end;
 
 function TStyleDoc.ValorDe(AObj: TStyleObj; const AProp: string; out AFound: Boolean): string;

@@ -17,14 +17,16 @@ que no lee igual se niega (DSGN-160) o se avisa (DSGN-161).
   F4 lint: DSGN-161, no CLEAN (ROJO: CLEAN)
   F5 preview: negado (ROJO: dibujaba sin juzgar los literales de esas lineas)
   F6 el remedio: to-binary y to-text lo dejan como el IDE, y set cambia el
-     Left que habia (control)
+     Height que habia (control; Height y no Left/Top desde la 1.22.1: un
+     TStatusBar nace con Align = alBottom y el IDE guarda la posicion que da
+     su alineacion, storedAs)
   F7 un .style con dos propiedades en una linea: view negado y el lint de
      estilos lo dice (notInTheIdeShape; ROJO: lo leia); bien escrito, control
   F8 una propiedad dos veces en su objeto - la forma del IDE con
      DefineProperties (ImageIndex de una accion FMX, Left y Top de un form
-     FMX: 14 forms de los Samples) -: ni avisada ni negada; set cambia las
-     dos y dice como previous la que cuenta, la ultima (ROJO: cambiaba la
-     primera y la segunda seguia mandando)
+     FMX: 14 forms de los Samples) -: ni avisada ni negada; set deja la que
+     guarda el IDE (una en VCL, desde la 1.22.1) y dice como previous la que
+     cuenta, la ultima (ROJO: cambiaba la primera y la segunda seguia mandando)
   F9 algo detras del end de la raiz (un end de mas, como en un frame de
      Hermes): el lint lo dice (DSGN-162; ROJO: CLEAN), y la raiz se sigue
      leyendo y editando como la lee el IDE
@@ -104,23 +106,23 @@ try:
     check('F6 ...to-text lo deja como el IDE: end> pegado', not mc.fallo(r) and b'      end>\r\n' in texto and
           b'      >\r\n' not in texto, r[:250])
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
-                                 'prop': 'Left', 'value': '20'})
+                                 'prop': 'Height', 'value': '20'})
     texto = lee(DFM)
-    check('F6 ...y set cambia el Left que habia, uno solo', not mc.rechazado(r) and
-          texto.count(b'    Left = 20\r\n') == 1 and b'    Left = 10\r\n' not in texto, r[:250])
+    check('F6 ...y set cambia el Height que habia, uno solo', not mc.rechazado(r) and
+          texto.count(b'    Height = 20\r\n') == 1 and b'    Height = 19\r\n' not in texto, r[:250])
     r = call('delphi_designer', {'command': 'lint', 'path': DFM})
     check('F6 ...y lint: CLEAN', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:250])
 
     # ------------------------------------------------------------------ F8
-    r = call('delphi_edit', {'path': DFM, 'old': '    Top = 10', 'new': '    Top = 10\r\n    Left = 30'})
-    check('F8 delphi_edit escribe un segundo Left: forma del IDE, sin aviso de forma',
+    r = call('delphi_edit', {'path': DFM, 'old': '    Height = 20', 'new': '    Height = 20\r\n    Height = 30'})
+    check('F8 delphi_edit escribe un segundo Height: forma del IDE, sin aviso de forma',
           not mc.fallo(r) and 'DSGN-161' not in r and 'DSGN-162' not in r, r[-400:])
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
-                                 'prop': 'Left', 'value': '40'})
+                                 'prop': 'Height', 'value': '40'})
     texto = lee(DFM)
-    check('F8 set Left con dos: cambia las DOS', not mc.rechazado(r) and
-          texto.count(b'    Left = 40\r\n') == 2 and b'Left = 20' not in texto and b'Left = 30' not in texto,
-          r[:250])
+    check('F8 set Height con dos: queda la que guarda el IDE, una, con el valor nuevo', not mc.rechazado(r) and
+          texto.count(b'    Height = 40\r\n') == 1 and b'    Height = 20' not in texto and
+          b'    Height = 30' not in texto, r[:250])
     check('F8 ...y su previous es el que contaba, el ultimo (30)', '"previous":"30"' in r.replace(' ', ''), r[:250])
 
     # ------------------------------------------------------------------ F9
@@ -133,8 +135,8 @@ try:
     r = call('delphi_designer', {'command': 'tree', 'path': DFM})
     check('F9 ...y tree lee la raiz como el IDE', not mc.fallo(r) and 'StatusBar1' in r, r[:250])
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
-                                 'prop': 'Top', 'value': '12'})
-    check('F9 ...y set la edita', not mc.rechazado(r) and b'    Top = 12\r\n' in lee(DFM), r[:250])
+                                 'prop': 'Height', 'value': '12'})
+    check('F9 ...y set la edita', not mc.rechazado(r) and b'    Height = 12\r\n' in lee(DFM), r[:250])
 
     # ------------------------------------------------------------------ F7
     ESTILOS = os.path.join(JAIL, 'estilos')

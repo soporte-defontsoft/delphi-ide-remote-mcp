@@ -85,7 +85,11 @@ try:
     check('N3 un TDate no toma texto: negado y nada escrito', mc.rechazado(r) and lee(DFM) == antes, r[:250])
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'DateTimePicker1',
                                  'prop': 'Date', 'value': '45200.25'})
-    check('N3 control: sin sufijo, como siempre', not mc.rechazado(r) and b'Date = 45200.25' in lee(DFM), r[:250])
+    # (1.22.1) el TDateTimePicker guarda su Date sin la hora: se escribe lo que
+    # guarda el IDE y storedAs lo dice
+    check('N3 control: sin sufijo se escribe, como lo guarda el IDE (el Date sin la hora, storedAs)',
+          not mc.rechazado(r) and b'Date = 45200.000000000000000000' in lee(DFM) and
+          (mc.como_json(r) or {}).get('storedAs') == '45200.000000000000000000', r[:250])
 finally:
     srv.cierra()
 

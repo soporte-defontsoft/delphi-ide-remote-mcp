@@ -357,6 +357,17 @@ check('PAServer que no contesta: DENIED y que mirar (era INTERNAL)',
       mc.abre(j.get('error', ''), 'SR_REMOTERUN_PUT_FMT') and
       j.get('error', '').startswith('[RUN-010 DENIED]') and 'E0003' in j.get('error', ''),
       r[:300])
+# ...y desktop status contra ese destino: no alcanzable es SU respuesta (reachable=false, el
+# motivo en hint, sin error), como en su gemela test-connection (test completo de Opus de la
+# 1.22.0: DENIED)
+open(SIN, 'w').write('x')
+try:
+    r = call('delphi_desktop', {'command': 'status', 'profile': PROFILE, 'project': DPROJ}, t=180)
+finally:
+    os.remove(SIN)
+j = json.loads(r) if r.startswith('{') else {}
+check('desktop status contra un PAServer que no contesta: reachable=false con el motivo, sin error',
+      j.get('reachable') is False and 'error' not in j and 'E0003' in (j.get('hint') or ''), r[:300])
 
 # ---- 2ab de la 1.18.2 (revisor, R1): una credencial de SOLO LECTURA no
 # ejecuta. delphi_desktop screenshot/status con project= corre ESE proyecto en

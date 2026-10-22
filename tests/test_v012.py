@@ -588,6 +588,10 @@ pf = json.loads(out)
 check('paserver: platforms distingue local vs remoto',
       any(p['platform'] == 'Win64' and p['buildsLocally'] for p in pf.get('platforms', []))
       and any(not p['buildsLocally'] for p in pf.get('platforms', [])), out[:150])
+# ...y una con su SDK tambien se compila aqui (delphi_build compila contra el SDK en local): Linux64
+# con su SDK salia buildsLocally=false (test completo de Opus de la 1.22.0)
+check('paserver: platforms, la que tiene su SDK se compila aqui (buildsLocally)',
+      all(p['buildsLocally'] for p in pf.get('platforms', []) if 'SDK present' in p.get('status', '')), out[:400])
 out = call('delphi_paserver', {"command": "profiles"})
 check('paserver: profiles responde', isinstance(mc.como_json(out).get('profiles'), list), out[:120])
 

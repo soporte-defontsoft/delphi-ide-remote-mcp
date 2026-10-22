@@ -11,11 +11,12 @@
     insert  un control VISUAL nuevo, hijo de su padre donde lo deja el IDE (el form por
             defecto), en 10,10, con su texto (su Name) si la clase lo tiene,
             su TabOrder, su campo publicado en la clase del form y su unidad
-            en el uses. Nada del constructor: el IDE y la app lo crean con el
-            suyo, y un Width/Height ausente queda con su tamano.
+            en el uses; sus propiedades, como las guarda el escritor del IDE
+            (el tamano de su constructor en VCL: ConLasPropiedadesDelIde).
     set     UNA propiedad, juzgada contra las tablas (JuzgaPropiedad, el juez
-            del lint) ANTES de escribir; parent= mueve el bloque entero a otro
-            contenedor; Name renombra (el form, sus referencias y el campo).
+            del lint) ANTES de escribir, y escrita con las del componente como
+            las guarda el escritor del IDE; parent= mueve el bloque entero a
+            otro contenedor; Name renombra (el form, sus referencias y el campo).
     delete  el componente con su subarbol, las referencias a el desde el
             form, su campo y sus manejadores VACIOS exclusivos. Nunca deja
             codigo huerfano como el IDE (David, 7-oct-2026): un metodo propio
@@ -173,6 +174,17 @@ type
     // la tabla la acepto SIN hoja de tipo (la guarda la clase por codigo):
     // su valor lo juzga el cargador (CargaLoPuesto, H2 de Hermes, 1.18.2)
     SinJuez: Boolean;
+    // lo que guarda el escritor del IDE (ConLasPropiedadesDelIde, 1.22.1):
+    // nada, si es el valor que ya da la clase, u otro valor, si el componente
+    // lo cambia al cargarse
+    NoGuardada: Boolean;
+    GuardadaComo: string;
+  end;
+
+  { Una propiedad compuesta aqui que el escritor del IDE guarda con otro valor:
+    el suyo (ConLasPropiedadesDelIde, 1.22.1) }
+  TGuardadaComo = record
+    Prop, Valor: string;
   end;
 
 { ---- el form ---- }
@@ -1076,6 +1088,8 @@ function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas:
 function DondeLoDejaElIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer; ASinTabOrder: Boolean;
   out ANota: string; out ATabOrder: Integer): TArray<string>; forward;
+// la mezcla con lo que guarda el escritor del IDE (1.22.1) la usa
+function Resangra(const S: string; ADelta: Integer): string; forward;
 
 { P puede recibir un control: el form, o en VCL un control con ventana
   (TWinControl por ascendencia: David, 4-oct-2026) y en FMX un control.
@@ -1408,6 +1422,226 @@ begin
     end);
 end;
 
+{ ALineas -un form con el bloque de ANomObj ya compuesto- con las propiedades
+  de ANomObj como las guarda el escritor del IDE (1.22.1, David: "el juez da
+  tambien el orden"). Se le pregunta a el (PropiedadesComoLasEscribeElIde: lo
+  que escribe TWriter y, de ANomObj, el orden de sus propiedades) y sus lineas
+  sustituyen a las nuestras: el tamano que da el constructor, Size.Height y
+  Size.PlatformDefault junto a un Size.Width, las Font.* y ParentFont junto a
+  un Font.Style, cada una en su sitio (medido con el renderizador en
+  --writeback). Lo nuestro que el no puede dar se queda, en su sitio de ese
+  orden, y lo dice SU cargador: lo que leyo y no pudo aplicar (UNAPPLIED=: el
+  metodo de un evento, que alli no hay codigo; una referencia que no resolvio,
+  la de otro modulo) y lo que su lector se salto (IGNORED=). Ninguna regla
+  propia de que es un evento o una referencia (David, 22-oct-2026: "hay que
+  buscar al juez"). Lo demas nuestro que no escribe es el valor
+  que ya da la clase: va en ANoGuarda (DSGN-165) y no se escribe, como no lo
+  guardaria el IDE; y la que el escribe con OTRO valor (un Align que la
+  coloca, un Date sin la hora, el nombre de un color), en AOtras con el suyo
+  (DSGN-166). Sin juez -lo heredado o de un frame en linea (el IDE
+  guarda la diferencia con su ancestro), sin respuesta, leido sin un
+  ancestro, con su clase sustituida, sin el orden-, ALineas tal cual y ANota
+  (DSGN-164) dice por que; la raiz, tal cual y sin nota, como antes. }
+function ConLasPropiedadesDelIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
+  const ANomObj: string; out ANota: string; out ANoGuarda: TArray<string>;
+  out AOtras: TArray<TGuardadaComo>): TArray<string>;
+
+  // el valor de AProp en el nivel propio de AObj, por EL lector de ADoc: de
+  // un literal, su texto (cada escritor parte una cadena larga por su sitio)
+  function ValorComparable(ADoc: TStyleDoc; AObj: TStyleObj; const AProp: string): string;
+  var
+    Hay: Boolean;
+  begin
+    Result := ADoc.LiteralDe(AObj, AProp);
+    if Result = '' then
+      Result := ADoc.ValorDe(AObj, AProp, Hay);
+  end;
+
+  // la propiedad de arriba de AProp (Size de Size.Width): la que esta en el orden
+  function ArribaDe(const AProp: string): string;
+  begin
+    Result := AProp;
+    if Pos('.', Result) > 0 then
+      Result := Copy(Result, 1, Pos('.', Result) - 1);
+  end;
+
+  // su sitio en el orden del escritor; MaxInt si no esta (la escribe
+  // DefineProperties, detras de las publicadas)
+  function EnElOrden(const AOrden: TArray<string>; const AProp: string): Integer;
+  begin
+    for var I := 0 to High(AOrden) do
+      if SameText(AOrden[I], ArribaDe(AProp)) then
+        Exit(I);
+    Result := MaxInt;
+  end;
+
+  // las lineas ADesde..AHasta de ADoc son las de ARangos, o en blanco (esas
+  // las quita el IDE al guardar)
+  function SoloPropiedades(ADoc: TStyleDoc; const ARangos: TArray<TRangoDeLineas>;
+    ADesde, AHasta: Integer): Boolean;
+  begin
+    for var I := ADesde to AHasta do
+    begin
+      var Dentro := False;
+      for var Rg in ARangos do
+        if (I >= Rg.Ini) and (I <= Rg.Fin) then
+          Dentro := True;
+      if not Dentro and (ADoc.Lines[I].Trim <> '') then
+        Exit(False);
+    end;
+    Result := True;
+  end;
+
+var
+  Doc, DocE: TStyleDoc;
+  O, OE: TStyleObj;
+  R: TRespuestaRender;
+  Nuestras, Suyas: TArray<TRangoDeLineas>;
+  Desde, Hasta, DesdeE, HastaE: Integer;
+  Bloques: TList<TArray<string>>;
+  Puestos: TList<Integer>;
+  Motivo: string;
+begin
+  Result := ALineas;
+  ANota := '';
+  ANoGuarda := [];
+  AOtras := [];
+  Motivo := '';
+  var Texto := F.Doc.TextoDe(ALineas);
+  Doc := TStyleDoc.DeTexto(Texto);
+  try
+    O := ObjetoPorNombre(Doc, ANomObj);
+    if (O = nil) or (O.Parent = nil) then
+      Exit;
+    if not SameText(O.Clave, 'object') or (InlineQueLoContiene(O) <> nil) then
+      Motivo := MsgFmt(SF_DESIGNER_IDE_HEREDADO_FMT, [ANomObj])
+    else
+    begin
+      R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj);
+      // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
+      F.LeidoPorElJuez := F.LeidoPorElJuez + R.Leidos;
+      if R.Fallo <> '' then
+        Motivo := MsgFmt(SF_DESIGNER_IDE_SIN_RESPUESTA_FMT, [MsgCuerpo(R.Fallo)])
+      else if Length(R.SinLeer) > 0 then
+        Motivo := MsgFmt(SF_DESIGNER_IDE_SIN_ANCESTRO_FMT, [string.Join(', ', R.SinLeer)])
+      else if Length(R.Orden) = 0 then
+        Motivo := MsgText(SF_DESIGNER_IDE_SIN_ORDEN);
+      for var S in R.Sustituidas do
+        if (Motivo = '') and SameText(S, O.ClassName_) then
+          Motivo := MsgFmt(SF_DESIGNER_IDE_SUSTITUIDA_FMT, [O.ClassName_]);
+      // un salto de su lector sin dueno (el error del codigo de un componente)
+      // podria ser de ANomObj: su linea se daria por no guardada y se perderia
+      for var Ig in R.Ignoradas do
+        if (Motivo = '') and (Ig.Componente = '') then
+          Motivo := MsgFmt(SF_DESIGNER_IDE_SALTO_SIN_DUENO_FMT, [Ig.Texto]);
+    end;
+    if Motivo = '' then
+    begin
+      DocE := TStyleDoc.DeTexto(string.Join(#13#10, R.Escrito));
+      Bloques := TList<TArray<string>>.Create;
+      Puestos := TList<Integer>.Create;
+      try
+        OE := ObjetoPorNombre(DocE, ANomObj);
+        if OE = nil then
+          Motivo := MsgText(SF_DESIGNER_IDE_NO_LO_ESCRIBE)
+        else
+        begin
+          Nuestras := Doc.Propiedades(O, Desde, Hasta);
+          Suyas := DocE.Propiedades(OE, DesdeE, HastaE);
+          if not SoloPropiedades(Doc, Nuestras, Desde, Hasta) or
+             not SoloPropiedades(DocE, Suyas, DesdeE, HastaE) then
+            Motivo := MsgText(SF_DESIGNER_IDE_BLOQUE_ILEGIBLE);
+        end;
+        if Motivo = '' then
+        begin
+          // las suyas, con la sangria del fichero
+          var Delta := Length(LeadingWhite(Doc.Lines[O.StartLine - 1])) -
+            Length(LeadingWhite(DocE.Lines[OE.StartLine - 1]));
+          for var S in Suyas do
+          begin
+            var B: TArray<string> := [];
+            for var K := S.Ini to S.Fin do
+              B := B + [Resangra(DocE.Lines[K], Delta)];
+            Bloques.Add(B);
+            Puestos.Add(EnElOrden(R.Orden, S.Prop));
+          end;
+          // ...y las nuestras que el no da, cada una en su sitio de su orden
+          for var N in Nuestras do
+          begin
+            var Suya := False;
+            for var S in Suyas do
+              if SameText(S.Prop, N.Prop) then
+                Suya := True;
+            if Suya then
+            begin
+              var Suyo := ValorComparable(DocE, OE, N.Prop);
+              if Suyo <> ValorComparable(Doc, O, N.Prop) then
+              begin
+                var Otra: TGuardadaComo;
+                Otra.Prop := N.Prop;
+                Otra.Valor := Suyo;
+                AOtras := AOtras + [Otra];
+              end;
+              Continue;
+            end;
+            var Puesto := EnElOrden(R.Orden, N.Prop);
+            // lo que su cargador no pudo aplicar, por su valor (el metodo, la
+            // referencia), o lo que su lector se salto de este componente
+            var Hay: Boolean;
+            var Valor := Doc.ValorDe(O, N.Prop, Hay);
+            var Queda := False;
+            for var V in R.NoAplicados do
+              if SameText(V, Valor) then
+                Queda := True;
+            for var Ig in R.Ignoradas do
+              if SameText(Ig.Componente, ANomObj) and
+                 (SameText(Ig.Propiedad, N.Prop) or SameText(Ig.Propiedad, ArribaDe(N.Prop))) then
+                Queda := True;
+            if not Queda then
+            begin
+              ANoGuarda := ANoGuarda + [N.Prop];
+              Continue;
+            end;
+            // detras de las que van antes en el orden, o a la par
+            var K := 0;
+            while (K < Puestos.Count) and (Puestos[K] <= Puesto) do
+              Inc(K);
+            Bloques.Insert(K, Copy(Doc.Lines, N.Ini, N.Fin - N.Ini + 1));
+            Puestos.Insert(K, Puesto);
+          end;
+          var Nuevas: TArray<string> := [];
+          for var B in Bloques do
+            Nuevas := Nuevas + B;
+          Result := Copy(ALineas, 0, Desde) + Nuevas + Copy(ALineas, Hasta + 1, MaxInt);
+        end;
+      finally
+        Puestos.Free;
+        Bloques.Free;
+        DocE.Free;
+      end;
+    end;
+    if Motivo <> '' then
+      ANota := MsgFmt(SN_DESIGNER_PROPIEDADES_SIN_JUEZ_FMT, [ANomObj, Motivo]);
+  finally
+    Doc.Free;
+  end;
+end;
+
+// lo que guarda el IDE de una propiedad que puso el agente (ANoGuarda y
+// AOtras de ConLasPropiedadesDelIde): la respuesta lo dice (PonValorPuesto)
+procedure MarcaLoQueGuarda(var AInfo: TValorPuesto; const ANoGuarda: TArray<string>;
+  const AOtras: TArray<TGuardadaComo>);
+begin
+  if AInfo.Quitada or AInfo.NadaQueQuitar then
+    Exit;
+  for var P in ANoGuarda do
+    if SameText(P, AInfo.Prop) then
+      AInfo.NoGuardada := True;
+  for var O in AOtras do
+    if SameText(O.Prop, AInfo.Prop) then
+      AInfo.GuardadaComo := O.Valor;
+end;
+
 { ---- insert ---- }
 
 function InsertaComponente(const APath, AClase, AComponente, AParent: string;
@@ -1576,6 +1810,25 @@ begin
     FinBloque := Ini + Largo - 1;
     if ConTab and not TabDelAgente and (TabDelIde >= 0) then
       PonSuTabOrder(F, DfmLineas, Nombre, TabDelIde);
+    // sus propiedades como las guarda el escritor del IDE (1.22.1: el tamano
+    // del constructor, su orden); el bloque cambia de largo y se vuelve a medir
+    var NotaIde: string;
+    var NoGuarda: TArray<string>;
+    var Otras: TArray<TGuardadaComo>;
+    DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, NotaIde, NoGuarda, Otras);
+    for var I := 0 to High(Infos) do
+      MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
+    var DocI := TStyleDoc.DeTexto(F.Doc.TextoDe(DfmLineas));
+    try
+      var Puesto := ObjetoPorNombre(DocI, Nombre);
+      if Puesto <> nil then
+      begin
+        Ini := Puesto.StartLine - 1;
+        FinBloque := Puesto.EndLine - 1;
+      end;
+    finally
+      DocI.Free;
+    end;
     // con el cerrojo: el form y la unidad son los que se juzgaron
     EnterFileEdit;
     try
@@ -1632,6 +1885,8 @@ begin
         Ret.AddPair('orderNote', NotaOrden);
       if NotaLector <> '' then
         Ret.AddPair('readerNote', NotaLector);
+      if NotaIde <> '' then
+        Ret.AddPair('ideNote', NotaIde);
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -2116,6 +2371,15 @@ begin
     AObj.AddPair('removed', TJSONBool.Create(True));
   if AInfo.Aviso <> '' then
     AObj.AddPair('warning', AInfo.Aviso);
+  // lo que guarda el escritor del IDE, si no es lo que se dio (1.22.1)
+  if AInfo.NoGuardada then
+    AObj.AddPair('notStored', MsgFmt(SN_DESIGNER_IDE_NO_GUARDA_FMT, [AInfo.Prop, ANombre]))
+  else if AInfo.GuardadaComo <> '' then
+  begin
+    AObj.AddPair('storedAs', AInfo.GuardadaComo);
+    AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_OTRO_FMT, [AInfo.Prop, ANombre,
+      AInfo.GuardadaComo, AInfo.Valor]));
+  end;
 end;
 
 function PoneValor(const APath, AComponente, AProp, AValor: string): string;
@@ -2146,6 +2410,12 @@ begin
     Result := CargaLoPuesto(F, Nombre, [Info], NotaLector);
     if Result <> '' then
       Exit;
+    // sus propiedades como las guarda el escritor del IDE (1.22.1)
+    var NotaIde: string;
+    var NoGuarda: TArray<string>;
+    var Otras: TArray<TGuardadaComo>;
+    F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, NotaIde, NoGuarda, Otras));
+    MarcaLoQueGuarda(Info, NoGuarda, Otras);
     Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
     if Result <> '' then
       Exit;
@@ -2162,6 +2432,8 @@ begin
       Ret.AddPair('line', TJSONNumber.Create(LineaN));
       if NotaLector <> '' then
         Ret.AddPair('readerNote', NotaLector);
+      if NotaIde <> '' then
+        Ret.AddPair('ideNote', NotaIde);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally
@@ -2251,6 +2523,13 @@ begin
     Result := CargaLoPuesto(F, Nombre, Infos, NotaLector);
     if Result <> '' then
       Exit;
+    // sus propiedades como las guarda el escritor del IDE (1.22.1)
+    var NotaIde: string;
+    var NoGuarda: TArray<string>;
+    var Otras: TArray<TGuardadaComo>;
+    F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, NotaIde, NoGuarda, Otras));
+    for var I := 0 to High(Infos) do
+      MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
     Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
     if Result <> '' then
       Exit;
@@ -2269,6 +2548,8 @@ begin
       Ret.AddPair('file', F.DfmNombre);
       if NotaLector <> '' then
         Ret.AddPair('readerNote', NotaLector);
+      if NotaIde <> '' then
+        Ret.AddPair('ideNote', NotaIde);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally

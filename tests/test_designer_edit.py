@@ -177,9 +177,11 @@ try:
           any('object Button1: TButton' in b for b in j.get('block', [])) and
           mc.es(j.get('note', ''), 'SN_DESIGNER_INSERT_NOTE'), r[:700])
     dfm, pas = mc.lee(VDFM), mc.lee(VPAS)
-    check('V1 ...lo minimo del IDE: 10,10, su nombre de Caption, TabOrder 0; ningun tamano',
-          re.search(r"\r\n  object Button1: TButton\r\n    Left = 10\r\n    Top = 10\r\n"
-                    r"    Caption = 'Button1'\r\n    TabOrder = 0\r\n  end\r\nend", dfm) is not None, dfm[-300:])
+    # (1.22.1) como lo guarda el escritor del IDE: con el tamano de su constructor
+    check('V1 ...como lo guarda el IDE: 10,10, el tamano de su constructor, su nombre de Caption, TabOrder 0',
+          re.search(r"\r\n  object Button1: TButton\r\n    Left = 10\r\n    Top = 10\r\n    Width = 75\r\n"
+                    r"    Height = 25\r\n    Caption = 'Button1'\r\n    TabOrder = 0\r\n  end\r\nend", dfm) is not None,
+          dfm[-300:])
     check('V1 ...el campo en la seccion published de la clase y Vcl.StdCtrls en el uses del interface',
           re.search(r'= class\(TForm\)\r\n    Button1: TButton;', pas) is not None and
           'Vcl.StdCtrls' in pas.split('implementation')[0], pas[:700])
@@ -193,14 +195,14 @@ try:
     r = dsg(command='insert', path=VDFM, classname='TPanel')
     check('V2 insert de un contenedor: Panel1 con su Caption y el TabOrder siguiente (1)',
           J(r).get('inserted') == 'Panel1' and
-          re.search(r"object Panel1: TPanel\r\n    Left = 10\r\n    Top = 10\r\n    Caption = 'Panel1'\r\n"
-                    r"    TabOrder = 1\r\n", mc.lee(VDFM)) is not None, r[:300])
+          re.search(r"object Panel1: TPanel\r\n    Left = 10\r\n    Top = 10\r\n    Width = 185\r\n    Height = 41\r\n"
+                    r"    Caption = 'Panel1'\r\n    TabOrder = 1\r\n", mc.lee(VDFM)) is not None, r[:300])
     r = dsg(command='insert', path=VDFM, classname='TEdit', parent='Panel1')
     j = J(r)
     check('V2 insert dentro de un padre: Edit1, Text con su nombre, TabOrder 0 dentro de Panel1',
           j.get('inserted') == 'Edit1' and j.get('parent') == 'Panel1' and
-          re.search(r"    object Edit1: TEdit\r\n      Left = 10\r\n      Top = 10\r\n      Text = 'Edit1'\r\n"
-                    r"      TabOrder = 0\r\n    end\r\n  end", mc.lee(VDFM)) is not None, r[:400])
+          re.search(r"    object Edit1: TEdit\r\n      Left = 10\r\n      Top = 10\r\n      Width = \d+\r\n      Height = \d+\r\n"
+                    r"      TabOrder = 0\r\n      Text = 'Edit1'\r\n    end\r\n  end", mc.lee(VDFM)) is not None, r[:400])
     check('V2 ...sin aviso de fuera del padre (cabe)', 'outsideParent' not in j, r[:400])
 
     # ------------------------------------------------------------------ V3
@@ -267,8 +269,8 @@ try:
     # ------------------------------------------------------------------ V5
     r = dsg(command='set', path=VDFM, component='Button1', prop='Left', value='300')
     check('V5 set de un entero', '    Left = 300' in mc.lee(VDFM), r[:300])
-    # el tamano del panel, escrito: el de su constructor no esta en el .dfm, y
-    # layout no juzga "fuera" de un padre cuyo tamano no sabe
+    # el tamano del panel, escrito: layout no juzga "fuera" de un padre cuyo
+    # tamano no sabe (desde la 1.22.1 insert ya escribe el de su constructor)
     dsg(command='set', path=VDFM, component='Panel1', prop='Width', value='185')
     dsg(command='set', path=VDFM, component='Panel1', prop='Height', value='41')
     r = dsg(command='set', path=VDFM, component='Button1', parent='Panel1')
@@ -278,7 +280,7 @@ try:
     check('V5 ...y como no cabe (Left 300 en un panel de 185) la respuesta lo dice',
           any(x.startswith('Button1:') for x in j.get('outsideParent', [])), r[:600])
     check('V5 ...el bloque entero, con su sangria nueva, ultimo hijo de Panel1',
-          re.search(r"      TabOrder = 0\r\n    end\r\n    object Button1: TButton\r\n(      [^\r\n]*\r\n)*      Left = 300\r\n",
+          re.search(r"      Text = 'Edit1'\r\n    end\r\n    object Button1: TButton\r\n(      [^\r\n]*\r\n)*      Left = 300\r\n",
                     mc.lee(VDFM)) is not None, mc.lee(VDFM)[-500:])
     dsg(command='set', path=VDFM, component='Button1', prop='Left', value='60')
     rect, png = rect_de(VDFM, 'Button1')
@@ -289,7 +291,8 @@ try:
     r = dsg(command='insert', path=VDFM, classname='TLabel')
     check('V5 insert de un TLabel: Caption, sin TabOrder (no lo publica)',
           J(r).get('inserted') == 'Label1' and
-          re.search(r"object Label1: TLabel\r\n    Left = 10\r\n    Top = 10\r\n    Caption = 'Label1'\r\n  end",
+          re.search(r"object Label1: TLabel\r\n    Left = 10\r\n    Top = 10\r\n    Width = \d+\r\n    Height = \d+\r\n"
+                    r"    Caption = 'Label1'\r\n  end",
                     mc.lee(VDFM)) is not None, r[:300])
     r = dsg(command='insert', path=VDFM, classname='TButton', parent='Label1')
     check('V5 un padre que no es contenedor en VCL: DSGN-080', mc.abre(r, 'SR_DESIGNER_PADRE_VCL_FMT'), r[:300])
@@ -377,7 +380,8 @@ try:
           j.get('inserted') == 'BtnAceptar' and j.get('field') == 'BtnAceptar: TButton', r[:400])
     dfm, pas = mc.lee(VDFM), mc.lee(VPAS)
     check('V7b ...y su Caption nace con su nombre (el texto sigue al nombre)',
-          re.search(r"object BtnAceptar: TButton\r\n    Left = 10\r\n    Top = 10\r\n    Caption = 'BtnAceptar'\r\n",
+          re.search(r"object BtnAceptar: TButton\r\n    Left = 10\r\n    Top = 10\r\n    Width = 75\r\n    Height = 25\r\n"
+                    r"    Caption = 'BtnAceptar'\r\n",
                     dfm) is not None and 'BtnAceptar: TButton;' in pas, dfm[-300:])
     antes_dfm, antes_pas = bytes_de(VDFM), bytes_de(VPAS)
     r = dsg(command='insert', path=VDFM, classname='TButton', component='btnaceptar')
@@ -614,7 +618,8 @@ try:
     r = dsg(command='insert', path=FFMX, classname='TLabel', component='LblTitulo')
     check('F1 insert component= en FMX: LblTitulo, su Text nace con su nombre',
           J(r).get('inserted') == 'LblTitulo' and
-          re.search(r"object LblTitulo: TLabel\r\n(    [^\r\n]*\r\n)*    Text = 'LblTitulo'\r\n  end", mc.lee(FFMX))
+          re.search(r"object LblTitulo: TLabel\r\n(    [^\r\n]*\r\n)*    Text = 'LblTitulo'\r\n(    [^\r\n]*\r\n)*  end",
+                    mc.lee(FFMX))
           is not None, mc.lee(FFMX)[-300:])
     compila_y_cuadra('F1', FPROJ, FFMX)
     rect, png = rect_de(FFMX, 'Button1')
@@ -649,8 +654,9 @@ try:
     check('F2 ...y ensena lo que el lector de TAlphaColor tambien toma: xFF00FF00',
           'xFF00FF00' in r, r[:400])
     r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Fill.Color', value='xFF00FF00')
-    check('F2 xAARRGGBB en un TAlphaColor: su IdentTo lo acepta (no es una busqueda en el mapa: cualquiera)',
-          '    Fill.Color = xFF00FF00' in mc.lee(FFMX), r[:300])
+    # (1.22.1) el IDE lo guarda por su nombre, y la respuesta lo dice
+    check('F2 xAARRGGBB en un TAlphaColor: su IdentTo lo acepta, y el IDE lo guarda por su nombre (storedAs)',
+          '    Fill.Color = claLime' in mc.lee(FFMX) and J(r).get('storedAs') == 'claLime', r[:300])
     r = dsg(command='set', path=FFMX, component='Rectangle1', prop='Fill.Color', value='claRed')
     check('F2 set de una subpropiedad FMX (Fill.Color)', '    Fill.Color = claRed' in mc.lee(FFMX), r[:300])
     rect, png = rect_de(FFMX, 'Rectangle1')
@@ -885,11 +891,13 @@ try:
     # sin aviso, y lo demas se niega - 'Rojo' se escribia callado y el form no
     # abria (segunda revision de la 1.17.0). claRde y no claRedd: la parecida
     # no puede estar ya en el valor (un check que no podia fallar)
-    for v in ('claRed', 'clRed', 'xFF00FF00'):
+    # (1.22.1) escrito como lo guarda el IDE, por su nombre: storedAs lo dice
+    for v, guardado in (('claRed', 'claRed'), ('clRed', 'claRed'), ('xFF00FF00', 'claLime')):
         r = dsg(command='set', path=FFMX, component='Fondo', prop='Fill.Color', value=v)
-        check('R13 TAlphaColor %s: lo carga IdentToAlphaColor, se escribe sin aviso' % v,
+        check('R13 TAlphaColor %s: lo carga IdentToAlphaColor, sin aviso, y se escribe como lo guarda el IDE' % v,
               J(r).get('set') == 'Fondo.Fill.Color' and 'warning' not in J(r) and
-              ('    Fill.Color = %s' % v) in mc.lee(FFMX), r[:300])
+              ('    Fill.Color = %s' % guardado) in mc.lee(FFMX) and
+              J(r).get('storedAs') == (None if v == guardado else guardado), r[:300])
     antes = bytes_de(FFMX)
     r = dsg(command='set', path=FFMX, component='Fondo', prop='Fill.Color', value='Rojo')
     check('R13 ...Rojo no lo carga: se niega (y dice que formas toma), nada escrito',

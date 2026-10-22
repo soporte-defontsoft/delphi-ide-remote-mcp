@@ -6,6 +6,85 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **The position tools point at the right symbol on a line with accents.**
+  DelphiLSP counts a column in UTF-8 bytes of the line, both ways - measured
+  with the engine alone: an `ñ` is one more, a `€` two, an emoji two more
+  than UTF-16, in hover, definition, document symbols and diagnostics, with
+  the unit opened or read from disk, ANSI or UTF-8, and it declares no
+  `positionEncoding` whatever the client offers - while the agent,
+  `delphi_read` and `delphi_search` count UTF-16. With an accent earlier on
+  the line, definition, hover and signature asked about the symbol next to
+  it, references confirmed nothing and rename refused, and a
+  diagnostic's range came back shifted. The engine's client now converts
+  every column it sends and every one it receives with the line the engine
+  holds (`LspTests.Encodings`, `tests/test_columna_acentos_1221.py`).
+- **`delphi_test` returns a failure message with its accents.** A Delphi
+  test runner writes to a pipe in the machine's ANSI code page (its RTL uses
+  the console's only for a console), and the server read it in the OEM one:
+  `í ñ € Ç` came back as `Ý ± Ç Ã` (`tests/test_delphi_test.py`).
+- **Every project file the server writes is now really judged by the IDE's
+  XML parser.** 1.22.0 promised it, but the check lived in the editors of
+  the `.dproj`, and five writers saved without it: `add-project` /
+  `remove-project` of a `.groupproj`, a move that re-points a `.dproj` or a
+  `.groupproj`, the `.dproj` of `delphi_create` and a `create` in a
+  changeset. It now lives in the one writer underneath, by the kind of file
+  (`.dproj`, `.groupproj`, `.deployproj`), and a changeset's preview says it
+  too (`CFG-142`; `tests/test_xml_ide_1221.py`).
+- **`delphi_designer insert` and `set` write a component's properties as the
+  IDE's writer stores them.** The server asks that writer - the form loaded
+  as the designer loads it and written back - and takes its lines for the
+  component: an inserted VCL control carries the size its constructor gives
+  (the IDE stores `Width` and `Height`, and `layout` read them as missing),
+  a property set lands where the IDE writes it instead of at the top of the
+  block, `Size.Width` in FMX comes with the `Size.Height` and
+  `Size.PlatformDefault = False` the IDE adds, `Font.Style` with the other
+  `Font.*` and `ParentFont = False`, and a value the class already gives is
+  not written (`notStored`, `DSGN-165`). A value the component turns into
+  another when it loads is written as the IDE stores it, and the answer says
+  so (`storedAs`, `DSGN-166`): a `Left` that an `Align` places, the time of a
+  date picker's `Date`, the name of an alpha color given as `xAARRGGBB` - the
+  answer said the value given while the IDE would save another. What its
+  loader read and could not apply - an event's method (it runs no code), a
+  reference to a component of another module - and what its reader skipped
+  stay, in their place in the writer's order. When it cannot be asked - an
+  inherited component or one of an inline frame, a class it did not load, an
+  ancestor it did not read - the lines stay as composed and `ideNote` says
+  why (`DSGN-164`; `tests/test_designer_ide_1221.py`).
+- `adduses` followed by `removeuses` gives back the same bytes in a compact
+  unit too (the section keyword with code right below it): the new clause
+  takes the spacing the keyword already had, before and after it, instead of
+  a blank line of its own (`tests/test_delphi_patch.py`).
+- `delphi_definition kind=declaration` on the header of a routine's body
+  returns its declaration - in the interface or in its class - and no longer
+  the body (`tests/test_definition_implementation_120.py`).
+- `delphi_desktop status` against a target whose PAServer does not answer
+  says `reachable: false` with the reason, as `delphi_paserver
+  test-connection` does, instead of refusing with `RUN-010`
+  (`tests/test_remoterun.py`).
+- `delphi_paserver platforms`: `buildsLocally` is true for a platform with
+  its SDK pulled - it builds here, as `delphi_build` says - not only for the
+  Windows ones (`tests/test_v012.py`).
+- `remove-searchpath` names the other group that holds a folder only when
+  the folder is an entry there: `lib` matched `lib2` as text (`CFG-022`;
+  `tests/test_config_property_1220.py`).
+- `delphi_list dirs=true` with a `pattern`, and `delphi_symbols` of a folder
+  with `mode` or `filter`, say the parameter does not go with what was asked
+  (`LIST-015`, `LSP-050`) instead of ignoring it (`tests/test_contratos_1221.py`).
+- `delphi_upload` says what its `sha256` is: the file as it stands at the
+  end of that call - every byte from offset 0 through that chunk, the whole
+  file on the last one - which is what the server always checked. The
+  parameter said only "on the LAST chunk, the whole file", and an agent sent
+  the whole file's sum on the first of several chunks and a chunk's own sum
+  on a later one; `UPLOAD-015` and `UPLOAD-011` now say which sum goes where
+  (`chunkSha256` for a chunk's own bytes).
+- The global properties of a build are one list: the outputs the build
+  supplies were copied by hand next to the fixed ones, and `test_paisaje`
+  now also sees a property passed as `/p:%s`.
+
 ## [1.22.0] - 2026-10-22
 
 A project of the IDE builds through the server the way the IDE builds it,

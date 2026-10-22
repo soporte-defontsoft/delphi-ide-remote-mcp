@@ -1734,6 +1734,32 @@ begin
   Result := Copy(Xml, 1, At - 1) + AElement + Copy(Xml, At, MaxInt);
 end;
 
+{ Estrena la clausula ACuerpo ('uses ...;') en APos de AText, donde empieza el
+  salto que sigue a la palabra de seccion o a la cabecera: con la MISMA
+  separacion que habia alli, delante y detras. Asi removeuses, que quita la
+  clausula con los saltos que la siguen (ReplaceUses), es su inversa: con dos
+  saltos fijos delante, una unit compacta ('interface' y el codigo justo
+  debajo) ganaba una linea en blanco tras adduses + removeuses (test completo
+  de Opus de la 1.22.0); con una linea en blanco, la forma del IDE, salen los
+  mismos bytes que antes. Sin salto en APos, dos delante, como antes. EL
+  escritor de una clausula nueva de un .pas y de un .dpr (eran dos). }
+procedure EstrenaClausula(var AText: string; APos: Integer; const ACuerpo: string);
+var
+  Fin: Integer;
+begin
+  Fin := APos;
+  while (Fin <= Length(AText)) and CharInSet(AText[Fin], [#10, #13]) do
+    Inc(Fin);
+  if Fin = APos then
+    AText := Copy(AText, 1, APos - 1) + SaltoDominante(AText) + SaltoDominante(AText) +
+      ACuerpo + Copy(AText, APos, MaxInt)
+  else
+  begin
+    var Sep := Copy(AText, APos, Fin - APos);
+    AText := Copy(AText, 1, APos - 1) + Sep + ACuerpo + Sep + Copy(AText, Fin, MaxInt);
+  end;
+end;
+
 { Estrena el uses de un programa o una biblioteca justo detras de su
   cabecera (EL lector: CabeceraDeFuente) con AEntradas ya escritas, sin el
   ';'. False si AText no es un program/library. La clausula que nace la
@@ -1748,8 +1774,7 @@ begin
   if Result then
   begin
     var NL := SaltoDominante(AText);
-    AText := Copy(AText, 1, Cab.Fin - 1) + NL + NL + 'uses' + NL + '  ' + AEntradas + ';' +
-      Copy(AText, Cab.Fin, MaxInt);
+    EstrenaClausula(AText, Cab.Fin, 'uses' + NL + '  ' + AEntradas + ';');
   end;
 end;
 
@@ -2593,10 +2618,10 @@ begin
     AText := ReplaceUses(AText, U, Entries)
   else
   begin
-    // sin clausula: nace justo debajo de la palabra de seccion, con su
-    // linea en blanco, como la escribe el IDE; debajo de donde ACABA esa
-    // linea, que un comentario abierto en ella se la llevaba dentro
-    // (revision de la 1.10.0, medido)
+    // sin clausula: nace justo debajo de la palabra de seccion, con la
+    // separacion que la palabra ya tenia (EstrenaClausula: la del IDE es una
+    // linea en blanco); debajo de donde ACABA esa linea, que un comentario
+    // abierto en ella se la llevaba dentro (revision de la 1.10.0, medido)
     FinLinea := FinDeLinea(AText, PosSec);
     // ...salvo si detras de la palabra, en su linea, sigue el CODIGO (una unit
     // de una linea: 'unit X; interface implementation end.', que FinDeSeccion
@@ -2606,8 +2631,7 @@ begin
       AText := Copy(AText, 1, PosSec - 1) + ' uses ' + string.Join(', ', AFaltan) + ';' +
         Copy(AText, PosSec, MaxInt)
     else
-      AText := Copy(AText, 1, FinLinea - 1) + NL + NL + 'uses' + NL + '  ' +
-        string.Join(', ', AFaltan) + ';' + Copy(AText, FinLinea, MaxInt);
+      EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');
   end;
 end;
 

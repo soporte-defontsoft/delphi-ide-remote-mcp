@@ -20,7 +20,8 @@ Win64 Release lo encuentra Release y Debug no (F2613).
   P3  get-property para Win64 Release = lib; para Win64 Debug no esta (y dice donde esta);
       remove-searchpath de lib para Win64: CFG-022 (solo cambia el grupo de la plataforma) dice
       en que grupo SI esta y que lo quita remove-property (Hermes, dirigido de la 1.22.0: "no
-      esta" le costo dos turnos; ROJA contra rel1220j)
+      esta" le costo dos turnos; ROJA contra rel1220j); y de li (un trozo de lib, no una entrada):
+      CFG-022 sin esa pista (la 1.22.0 la daba: comparaba como texto; revisor Opus, H7)
   P4  el mismo valor otra vez: CFG-137 y el .dproj byte a byte
   P5  el keystore: set-property PF_KeyStoreDebug=<fuera> para Android64 Debug (CFG-136, el
       grupo del IDE); un build Win64 Release compila (la puerta juzga el build pedido);
@@ -142,6 +143,9 @@ try:
     r = config(proyecto, 'remove-searchpath', path='lib', platform='Win64')
     check('P3 ...remove-searchpath de lib para Win64: CFG-022 dice en que grupo esta y que lo quita remove-property',
           mc.es(r, 'SN_CONFIG_PATH_ABSENT_FMT') and "'$(Cfg_2_Win64)'!=''" in r and 'remove-property' in r, r[:400])
+    r = config(proyecto, 'remove-searchpath', path='li', platform='Win64')
+    check('P3 ...y de li (un trozo de lib, no una entrada): CFG-022 sin la pista de otro grupo',
+          mc.es(r, 'SN_CONFIG_PATH_ABSENT_FMT') and 'remove-property' not in r, r[:400])
 
     r = config(proyecto, 'set-property', name='DCC_UnitSearchPath', value='lib', platform='Win64', config='Release')
     check('P4 el mismo valor otra vez: CFG-137', mc.es(r, 'SN_CFG_PROPERTY_YA_FMT'), r[:300])

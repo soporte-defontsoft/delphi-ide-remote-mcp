@@ -32,6 +32,14 @@
                                  // vuelve a mirar antes de escribir lo juzgado (B5 rev6, 1.18.2)
   FR_WRITTEN = 'WRITTEN=';       // WRITTEN=<una linea del form como lo guarda el IDE> (repetible, con sus
                                  // blancos; --writeback on: el juez del orden, 3.11 de la 1.18.0)
+  FR_ORDER = 'ORDER=';           // ORDER=<Nombre>=<prop>,<prop>,... con --writeback y --component: las
+                                 // propiedades publicadas de SU clase en el orden en que las escribe TWriter
+                                 // (GetPropInfos). El servidor coloca ahi lo que el escritor no puede dar:
+                                 // lo de UNAPPLIED= y lo que su lector salto (1.22.1)
+  FR_UNAPPLIED = 'UNAPPLIED=';   // UNAPPLIED=<valor> (repetible): lo que el lector leyo y NO pudo aplicar, el
+                                 // nombre del metodo de un evento (no hay codigo) o una referencia a un
+                                 // componente que no resolvio en el form (la de otro modulo). El escritor no
+                                 // lo escribe, y el servidor conserva esa linea (1.22.1)
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos
   FR_ERROR = 'ERROR=';           // ERROR=<motivo>; va con codigo de salida 1 (3 si fue el tiempo limite)
   FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>|<su mensaje EN PARTES>, antes del ERROR=:

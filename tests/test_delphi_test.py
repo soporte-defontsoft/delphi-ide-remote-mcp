@@ -129,7 +129,7 @@ end;
 
 procedure TLanzaTest.Lanza;
 begin
-  raise Exception.Create('lanza a proposito');
+  raise Exception.Create('lanza a proposito: í ñ € Ç');
 end;
 
 initialization
@@ -204,6 +204,11 @@ j = J(B.call('delphi_test', {'command': 'run', 'project': LANZA}, t=900))
 check('suite con un test que lanza: result=fail', j.get('result') == 'fail', str(j)[:400])
 check('...con el error contado y NOMBRADO', j.get('errored') == 1 and j.get('failed') == 0
       and any('Lanza' in f and 'a proposito' in f for f in j.get('failures', [])), str(j)[:400])
+# ...y su mensaje, con acentos, como lo escribio el test (1.22.1): el runner de Delphi escribe a
+# la tuberia en la ANSI de la maquina (su RTL) y el servidor lo leia en la OEM, la de una consola:
+# i, n con tilde, euro y C cedilla llegaban como Y con tilde, +-, C cedilla y A con tilde
+check('...con su mensaje con acentos intacto (i n euro C de la 1252, no leidos en la OEM)',
+      any('a proposito: í ñ € Ç' in f for f in j.get('failures', [])), str(j.get('failures'))[:300])
 
 # ---- cuentas en verde y el runner saliendo con error: manda el exit code ----
 j = J(B.call('delphi_test', {'command': 'run', 'project': CIERRE}, t=900))

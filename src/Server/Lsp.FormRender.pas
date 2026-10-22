@@ -100,6 +100,12 @@ type
     MsCarga, MsPintado: Integer; // MS=
     MsTotal: Int64;            // lo que tardo de verdad, lanzamiento incluido
     Escrito: TArray<string>;   // WRITTEN=: el form como lo guarda el IDE, con sus blancos
+    // ORDER=: del componente pedido, sus propiedades publicadas en el orden en
+    // que las escribe su escritor (1.22.1)
+    Orden: TArray<string>;
+    // UNAPPLIED=: lo que el lector leyo y no pudo aplicar - el metodo de un
+    // evento, una referencia que no resolvio -, por su valor (1.22.1)
+    NoAplicados: TArray<string>;
     SinLeer: TArray<string>;   // PARTIAL=: sin que ancestro (o fichero) se leyo el form
     Leidos: TArray<TLeidoPorElJuez>; // READ=: lo que leyo para cargarlo, con su huella
   end;
@@ -213,6 +219,13 @@ function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
   out AError: string; out AParada: TIgnorada): string;
+
+{ EL JUEZ de las propiedades de UN componente (1.22.1): ATexto, un form
+  PROPUESTO para APath, cargado y escrito como lo guarda el IDE (el de
+  ComoLoEscribeElIde) y, del componente AComponente, el orden en que su
+  escritor escribe sus propiedades (Orden). La respuesta entera, con lo que
+  sustituyo, salto o no leyo; Fallo si no se pudo preguntar. }
+function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string): TRespuestaRender;
 
 { CON el cerrojo, justo antes de escribir lo que juzgo el ayudante: '' si
   cada fichero que leyo para cargar el form (ALeidos) sigue con los bytes de
@@ -507,6 +520,15 @@ begin
     end
     else if Es(FR_WRITTEN) then
       Result.Escrito := Result.Escrito + [V]
+    else if Es(FR_ORDER) then
+    begin
+      // <Nombre>=<prop>,<prop>,...: el nombre no lleva '='
+      P := V.IndexOf('=');
+      if P > 0 then
+        Result.Orden := V.Substring(P + 1).Split([','], TStringSplitOptions.ExcludeEmpty);
+    end
+    else if Es(FR_UNAPPLIED) then
+      Result.NoAplicados := Result.NoAplicados + [V]
     else if Es(FR_PARTIAL) then
       Result.SinLeer := Result.SinLeer + [V]
     else if Es(FR_READ) then
@@ -1022,7 +1044,7 @@ end;
   el form como lo carga el designer, sin pintar): lo que contesto, con Fallo
   si ni se pudo escribir. La carpeta se borra siempre. EL juez de
   ComoLoEscribeElIde y de LoQueNoCargaElIde. }
-function JuezDelIde(const APath, ATexto, AEnc: string): TRespuestaRender;
+function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = ''): TRespuestaRender;
 var
   Pet: TPeticionRender;
   Dir, Cand: string;
@@ -1057,6 +1079,7 @@ begin
     Pet.Path := Cand;
     Pet.Carpeta := TPath.GetDirectoryName(APath);
     Pet.Escribe := True;
+    Pet.Componente := AComponente; // con el, tambien su orden (ORDER=)
     Result := CorreRender(Pet);
   finally
     try
@@ -1087,6 +1110,11 @@ begin
   AAvisos := R.Avisos;
   ASinLeer := R.SinLeer;
   ALeidos := R.Leidos;
+end;
+
+function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string): TRespuestaRender;
+begin
+  Result := JuezDelIde(APath, ATexto, AEnc, AComponente);
 end;
 
 function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;

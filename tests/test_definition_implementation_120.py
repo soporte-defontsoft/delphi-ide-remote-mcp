@@ -10,6 +10,10 @@ desde la 1.20 kind=implementation es definition.
   D2 kind=implementation: lo MISMO que D1, nunca el metodo que contiene la llamada
      (ROJO en 3cc31fc: UsoZ.pas, la cabecera de Llama)
   D3 kind=declaration: la de la interface de UComun
+  D4 kind=declaration desde la CABECERA del cuerpo de Saluda: la de la interface (1.22.1; ROJO
+     contra la 1.22.0: el cuerpo - definition ya es la declaracion y la cadena seguia al cuerpo)
+  D5 lo mismo con un metodo, TFoo.Bar: su declaracion en la clase (ROJO igual)
+  D6 control: kind=declaration desde la propia declaracion de la interface, ella misma
 
 Uso:  python tests/test_definition_implementation_120.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -36,7 +40,12 @@ try:
     open(uso, 'w', newline='\r\n').write(
         'unit UsoZ;\ninterface\nprocedure Llama;\nimplementation\nuses UComun;\n'
         'procedure Llama;\nbegin\n  Saluda;\nend;\nend.\n')
-    for u in (uso, comun):
+    clase = os.path.join(d, 'UClaseZ.pas')
+    # UClaseZ: 5 la declaracion de Bar en la clase, 8 la cabecera de su cuerpo (Bar en la col 14)
+    open(clase, 'w', newline='\r\n').write(
+        'unit UClaseZ;\ninterface\ntype\n  TFoo = class\n  public\n    function Bar(A: Integer): Integer;\n'
+        '  end;\nimplementation\nfunction TFoo.Bar(A: Integer): Integer;\nbegin\n  Result := A + 1;\nend;\nend.\n')
+    for u in (uso, comun, clase):
         call('delphi_config', {'command': 'add-unit', 'project': dproj, 'path': u})
     call('delphi_hover', {'path': uso, 'line': 7, 'character': 4}, 300)
 
@@ -56,6 +65,15 @@ try:
     f3, l3, j3 = destino('declaration')
     check('D3 kind=declaration: la de la interface de UComun (linea0 2)',
           f3 == 'UComun.pas' and l3 == 2, str(j3)[:300])
+    for caso, path, linea, col, esperada in (
+            ('D4 desde la cabecera del cuerpo de Saluda', comun, 4, 12, 2),
+            ('D5 desde la cabecera del cuerpo de TFoo.Bar', clase, 8, 15, 5),
+            ('D6 control: desde la declaracion de Saluda', comun, 2, 12, 2)):
+        j = mc.como_json(call('delphi_definition', {'path': path, 'line': linea, 'character': col,
+                                                    'kind': 'declaration'}, 300))
+        check('%s: kind=declaration da la declaracion (linea0 %d)' % (caso, esperada),
+              os.path.basename(str(j.get('path', ''))) == os.path.basename(path) and j.get('line0') == esperada,
+              str(j)[:300])
 finally:
     srv.cierra()
 

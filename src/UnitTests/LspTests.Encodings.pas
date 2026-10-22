@@ -83,6 +83,8 @@ type
     [Test] procedure ZonaDelCambioMueveLoDeDebajo;
     [Test] procedure UriDelMotorYSuInversa;
     [Test] procedure CompositorConservaLosSaltosDeFuera;
+    [Test]
+    procedure ColumnaDelMotorYSuInversa;
   end;
 
 implementation
@@ -1017,6 +1019,39 @@ begin
   finally
     V.Free;
   end;
+end;
+
+procedure TNombradorTests.ColumnaDelMotorYSuInversa;
+const
+  // a, enye, b, euro, c, un emoji (un par de sustitutos), d: la columna
+  // UTF-16 y la del motor (bytes UTF-8); el 6 parte el emoji, y el 10 y el
+  // 15 pasan del final
+  COLS16: array [0 .. 9] of Integer = (0, 1, 2, 3, 4, 5, 6, 7, 8, 10);
+  COLS8: array [0 .. 9] of Integer = (0, 1, 3, 4, 7, 8, 8, 12, 13, 15);
+var
+  L: string;
+  I: Integer;
+begin
+  // la cuenta del motor es la de los BYTES UTF-8 de la linea (medido el
+  // 22-oct-2026 con el motor solo: una enye +1, un euro +2, un emoji +2)
+  L := 'a' + #$00F1 + 'b' + #$20AC + 'c' + #$D83D#$DE00 + 'd';
+  for I := 0 to High(COLS16) do
+    Assert.AreEqual(COLS8[I], TLspClient.ColumnaAlMotor(L, COLS16[I]), 'al motor desde ' + IntToStr(COLS16[I]));
+  // ...y la inversa: cada columna que no parte un caracter vuelve a ser ella
+  for I := 0 to High(COLS16) do
+    if COLS16[I] <> 6 then
+      Assert.AreEqual(COLS16[I], TLspClient.ColumnaDelMotor(L, COLS8[I]), 'del motor desde ' + IntToStr(COLS8[I]));
+  // un byte de en medio de un caracter cuenta desde donde empieza
+  Assert.AreEqual(1, TLspClient.ColumnaDelMotor(L, 2), 'en medio de la enye');
+  Assert.AreEqual(3, TLspClient.ColumnaDelMotor(L, 6), 'en medio del euro');
+  Assert.AreEqual(5, TLspClient.ColumnaDelMotor(L, 11), 'en medio del emoji');
+  // en ASCII las dos cuentas son la misma; 0 o menos, tal cual; y sin linea,
+  // lo que pasa del final sigue pasando lo mismo
+  Assert.AreEqual(5, TLspClient.ColumnaAlMotor('abcdefg', 5), 'ASCII');
+  Assert.AreEqual(5, TLspClient.ColumnaDelMotor('abcdefg', 5), 'ASCII de vuelta');
+  Assert.AreEqual(-1, TLspClient.ColumnaAlMotor(L, -1), 'negativa');
+  Assert.AreEqual(0, TLspClient.ColumnaDelMotor('', 0), 'linea vacia');
+  Assert.AreEqual(4, TLspClient.ColumnaDelMotor('', 4), 'sin linea');
 end;
 
 initialization

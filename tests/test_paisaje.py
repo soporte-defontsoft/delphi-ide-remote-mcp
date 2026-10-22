@@ -1553,16 +1553,32 @@ for regla in REGLAS_PY:
     malos = fuera_de_casa_py(regla, TEXTOS_PY)
     check('"%s" en ninguna bateria - %s' % (nombre, regla[3]), not malos, malos)
 # ---- LAS GLOBALES DEL BUILD (revisor E, 21-oct-2026): cada /p:Nombre que la orden de
-# msbuild lleva (Lsp.BuildRunner) esta en GLOBALES_DEL_BUILD, lo que la puerta da por
+# msbuild lleva (Lsp.BuildRunner) esta en GLOBALES_DE_LA_ORDEN, lo que la puerta da por
 # dudoso al evaluar las Condition del .dproj: una global gana a lo escrito aun definida
 # despues (medido con el msbuild del IDE), y la puerta no sabe su valor. Config y
-# Platform son lo pedido y van aparte; las salidas suplidas van por nombre en la lista.
+# Platform son lo pedido y van aparte. Las salidas suplidas van por UN '/p:%s' desde su
+# lista (SALIDAS_QUE_SUPLE_EL_BUILD) y GlobalesDelBuild la suma: la regex de /p:Nombre no
+# las veia y estaban copiadas a mano (revisor Opus de la 1.22.0, H6). Otro /p: compuesto
+# tiene que pasar por aqui.
 BR = '\n'.join(codigo(next(t for f, t in TEXTOS if os.path.basename(f) == 'Lsp.BuildRunner.pas')))
 PASADAS = set(re.findall(r'/p:([A-Za-z_]\w*)', BR)) - {'Config', 'Platform'}
-_m = re.search(r'GLOBALES_DEL_BUILD\s*:\s*TArray<string>\s*=\s*\[(.*?)\]', BR, re.S)
+_m = re.search(r'GLOBALES_DE_LA_ORDEN\s*:\s*TArray<string>\s*=\s*\[(.*?)\]', BR, re.S)
 GLOBALES = set(re.findall(r"'(\w+)'", _m.group(1))) if _m else set()
 check('mutante de las globales: un /p:Nuevo= que no esta en la lista se caza',
       not ((PASADAS | {'Nuevo'}) <= GLOBALES))
-check('las globales del build: cada /p: de la orden de msbuild esta en GLOBALES_DEL_BUILD (%d)' % len(PASADAS),
+check('las globales del build: cada /p: de la orden de msbuild esta en GLOBALES_DE_LA_ORDEN (%d)' % len(PASADAS),
       _m is not None and len(PASADAS) >= 5 and PASADAS <= GLOBALES, sorted(PASADAS - GLOBALES))
+
+
+def compuestas(texto):
+    """Cuantos /p: compuestos (/p:%s) lleva la orden: solo el de las salidas suplidas."""
+    return len(re.findall(r'/p:%s', texto))
+
+
+SUMA = re.search(r'function GlobalesDelBuild\b.*?\bend;', BR, re.S)
+check('las salidas suplidas: UN /p:%s en la orden y GlobalesDelBuild suma SALIDAS_QUE_SUPLE_EL_BUILD',
+      compuestas(BR) == 1 and SUMA is not None and 'SALIDAS_QUE_SUPLE_EL_BUILD' in SUMA.group(0),
+      (compuestas(BR), SUMA.group(0) if SUMA else None))
+check('mutante de las suplidas: un segundo /p:%s compuesto se caza',
+      compuestas(BR + "\n  X := Format(' /p:%s=%s', [A, B]);") != 1)
 mc.fin('paisaje battery')

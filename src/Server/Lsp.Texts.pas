@@ -907,6 +907,13 @@ const
     'several separated by ";" (*.pas;*.dfm) are accepted. Without ' +
     'pattern, the Delphi sources and projects are listed.';
 
+  { Un parametro que no va con lo que se lista (Lsp.Guard.ParametroQueNoVa):
+    pattern con dirs=true se ignoraba en silencio (test completo de Opus de
+    la 1.22.0). }
+  SR_LIST_NO_VA_CON_MODO_FMT =
+    '[LIST-015 INVALID_PARAM] "%s" does not go with dirs=%s (it would be ' +
+    'ignored). Nothing was listed: dirs=%s takes %s.%s';
+
   SR_LIST_IS_FILE_FMT =
     '[LIST-002 INVALID_PARAM] %s is a FILE, not a folder. delphi_list ' +
     'walks folders; to read it use delphi_read, and to search INSIDE it, ' +
@@ -3158,11 +3165,12 @@ const
     '_ and -), so the groups of that build cannot be named after it. Fix the ' +
     'key in the IDE; nothing was written.';
 
-  // lo compuesto en sitio por los escritores de proyecto, juzgado por el parser
-  // del IDE (MSXML 6) antes de escribirlo (PatchSaveConSuSalto, 21-oct-2026)
+  // lo que se va a escribir de un fichero que el IDE carga como XML, juzgado por
+  // su parser (MSXML 6) antes de escribirlo (PatchSaveText; 21-oct-2026, y para
+  // todos los escritores desde la 1.22.1): lo que compone el servidor o un create
   SR_PATCH_XML_MAL_FORMADO_FMT =
-    '[CFG-142 DENIED] The %s the server composed is not XML the IDE''s parser ' +
-    '(MSXML 6) loads: %s. Nothing was written; the file is as it was.';
+    '[CFG-142 DENIED] The %s, as it would be written, is not XML the IDE''s ' +
+    'parser (MSXML 6) loads: %s. Nothing was written; the file is as it was.';
 
   SF_XML_ERROR_DEL_PARSER_FMT =
     'line %d: %s';
@@ -5006,12 +5014,16 @@ const
     'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
     'form by default; placed at 10,10 where the IDE keeps it among its ' +
     'siblings (its own writer is asked; the last one, with orderNote, when ' +
-    'it cannot be), with its published ' +
+    'it cannot be), its properties as the IDE''s writer stores them (ideNote ' +
+    'says when it cannot be asked), with its published ' +
     'field in the form''s class and its unit in the uses; the answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
     'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
-    'form reader, and readerNote says when it could not judge it; parent= ' +
+    'form reader, and readerNote says when it could not judge it - and ' +
+    'written with the component''s properties as the IDE''s writer stores ' +
+    'them: a value the class already gives is not written (notStored), one ' +
+    'the component turns into another is written as it stores it (storedAs); parent= ' +
     'alone moves the component; before=, ' +
     'after= or index= alone reorders it among its siblings; prop=Name ' +
     'renames it, its field and the form lines that name it) | delete (the ' +
@@ -5664,13 +5676,55 @@ const
     'writes it as %s.Strings = ( ... ), which set does not write. Edit those ' +
     'lines with delphi_edit (command=get shows them). Nothing was written.';
 
+  // lo que dice insert: el bloque es el que guarda el escritor del IDE (1.22.1;
+  // medido: en VCL guarda el tamano del constructor, en FMX no lo guarda)
   SN_DESIGNER_INSERT_NOTE =
-    '[DSGN-100] Inserted with the minimum the IDE writes: position, its Name ' +
-    'as text when the class shows one, TabOrder; its size is the class''s ' +
-    'own (its constructor). It lands at 10,10 even when something is ' +
-    'already there: place it with set Left/Top (Position.X/Position.Y in ' +
-    'FMX). Change a property with command=set, move it with set parent=, ' +
-    'see it with command=preview.';
+    '[DSGN-100] Inserted as the IDE''s writer stores it: position, the size ' +
+    'its constructor gives when the IDE stores it (VCL does, FMX keeps the ' +
+    'platform size unwritten), its Name as text when the class shows one, ' +
+    'TabOrder. It lands at 10,10 even when something is already there: place ' +
+    'it with set Left/Top (Position.X/Position.Y in FMX). Change a property ' +
+    'with command=set, move it with set parent=, see it with command=preview.';
+
+  { Las propiedades de un componente que NO se pudieron escribir como las
+    guarda el IDE (Lsp.DesignerEdit.ConLasPropiedadesDelIde): se escriben
+    como se compusieron, y por que (1.22.1). }
+  SN_DESIGNER_PROPIEDADES_SIN_JUEZ_FMT =
+    '[DSGN-164] The lines of %s are written as composed here, not as the ' +
+    'IDE''s writer stores them (%s): the IDE puts them in its own order, and ' +
+    'adds what it stores, when it saves the form.';
+  SF_DESIGNER_IDE_HEREDADO_FMT =
+    '%s is inherited or comes from an inline frame, and the IDE stores only ' +
+    'what differs from its ancestor';
+  SF_DESIGNER_IDE_SIN_RESPUESTA_FMT =
+    'its writer did not answer: %s';
+  SF_DESIGNER_IDE_SIN_ANCESTRO_FMT =
+    'the form was read without %s';
+  SF_DESIGNER_IDE_SUSTITUIDA_FMT =
+    'its class %s did not load: a stand-in would write it';
+  SF_DESIGNER_IDE_SIN_ORDEN =
+    'its writer did not give the order of its properties';
+  SF_DESIGNER_IDE_NO_LO_ESCRIBE =
+    'its writer did not write it';
+  SF_DESIGNER_IDE_BLOQUE_ILEGIBLE =
+    'a line of its block is not a property this server can read';
+  SF_DESIGNER_IDE_SALTO_SIN_DUENO_FMT =
+    'its reader skipped something without naming whose it was: %s';
+
+  { Lo que el agente puso y el IDE no guarda: es el valor que la clase da
+    (su escritor no lo escribe; 1.22.1). }
+  SN_DESIGNER_IDE_NO_GUARDA_FMT =
+    '[DSGN-165] The IDE does not store %s for %s: it is the value the class ' +
+    'already gives it, so its line is not written, and the form loads with ' +
+    'that value.';
+
+  { Lo que el agente puso y el IDE guarda con OTRO valor: el componente lo
+    cambia al cargarse (1.22.1). Lleva [prop, nombre, el guardado, el dado]. }
+  SN_DESIGNER_IDE_GUARDA_OTRO_FMT =
+    '[DSGN-166] The IDE stores %s of %s as %s, not %s: the component itself ' +
+    'turns the value into that when the form loads (an Align that places ' +
+    'it, a date without its time, the name of the same color...), so that is ' +
+    'what is written and what the form loads with.';
 
   SN_DESIGNER_YA_ESTA_FMT =
     '[DSGN-101] %s is already inside %s: nothing to move.';
@@ -6727,8 +6781,9 @@ const
     "backup"): se dice como volver a el (Hermes, test completo de la 1.22.0:
     "el fichero que existia deja de existir bajo su nombre"). }
   SR_UPLOAD_SHA_MISMATCH_FMT =
-    '[UPLOAD-011 INVALID_PARAM] The sha256 does NOT match: what was ' +
-    'assembled differs from the source, so I do NOT leave it published ' +
+    '[UPLOAD-011 INVALID_PARAM] The sha256 does NOT match the file ' +
+    'assembled so far (sha256 is that file, not this chunk: a chunk''s own ' +
+    'bytes go in chunkSha256): it differs from the source, so I do NOT leave it published ' +
     'under its name: it is in the recoverable trash, %s. Resend from ' +
     'offset=0. If a file was there before this upload, its first chunk ' +
     'kept a copy and named it in "backup" (delphi_list includetrash=true ' +
@@ -6739,9 +6794,12 @@ const
     de la 1.22.0; David: verificar antes). %s = el sha de lo recibido, %s =
     el esperado, %d = los bytes. }
   SR_UPLOAD_SHA_ENTERO_MISMATCH_FMT =
-    '[UPLOAD-015 INVALID_PARAM] The sha256 does NOT match the file this ' +
-    'call carries whole (received %s, expected %s; %d bytes decoded). I ' +
-    'wrote nothing: the file is as it was. Resend it.';
+    '[UPLOAD-015 INVALID_PARAM] The sha256 does NOT match what this call ' +
+    'carries (received %s, expected %s; %d bytes decoded): sha256 is the ' +
+    'file as it stands after this call, and with offset=0 that is this ' +
+    'chunk alone. I wrote nothing: the file is as it was. If more chunks ' +
+    'follow, send sha256 on the last one (chunkSha256 checks a chunk''s ' +
+    'own bytes); if this is the whole file, resend it.';
   { el motivo de UPLOAD-012 cuando la subida mala es de un temporal: alli no
     hay papelera (A de la 1.19.2) }
   SF_UPLOAD_SIN_PAPELERA =
@@ -8083,6 +8141,14 @@ const
     '[LSP-019 INVALID_PARAM] Mode must be "summary", "full" or empty ' +
     '(automatic).';
 
+  { Lo que es de un FICHERO en delphi_symbols de una carpeta
+    (Lsp.Guard.ParametroQueNoVa): mode y filter se ignoraban en silencio (test
+    completo de Opus de la 1.22.0). }
+  SR_SYMBOLS_NO_VA_CON_CARPETA_FMT =
+    '[LSP-050 INVALID_PARAM] "%s" goes with a FILE, not with a folder (it ' +
+    'would be ignored: a folder answers the interface of each unit). Nothing ' +
+    'was done: a folder takes %s.%s';
+
   SR_LSP_KIND_DEBE_SER_DEFINITION =
     '[LSP-020 INVALID_PARAM] kind must be definition | declaration | ' +
     'implementation.';
@@ -8102,9 +8168,11 @@ const
     'this server to connect.';
 
   SN_PAS_WINDOWS_PLATFORMS_BUILD_NATIVELY =
-    '[PAS-036] Windows platforms build natively here. The rest need ' +
-    'PAServer on the target: get the installer with command=packages, ' +
-    'run it there, then a profile/SDK links this server to it.';
+    '[PAS-036] buildsLocally: the platform builds HERE now - a Windows one ' +
+    'natively, any other against its SDK, pulled once per target machine ' +
+    'with get-sdk from the PAServer of a profile. Deploying and running them ' +
+    'needs that PAServer on the target: get the installer with ' +
+    'command=packages, run it there, then add-profile and get-sdk.';
 
   SN_PAS_ASIENTO_IDE_LEE_LISTA =
     '[PAS-037] The IDE seat is what the IDE reads for ITS list; the ' +
@@ -10270,10 +10338,18 @@ const
     'Byte offset this chunk starts at (0 = beginning). Send chunks in ' +
     'order, increasing offset by the bytes written';
 
+  { Lo que el servidor comprueba de verdad (Mcp.Tools.Workspace, upload): el
+    fichero como queda al final de ESTA llamada; con offset=0, antes de
+    escribir. Decia solo "en el ultimo trozo, el del fichero entero", y Hermes
+    mando el del fichero entero en el primero de varios (UPLOAD-015) y el del
+    trozo en otro (UPLOAD-011): pentest del 22-oct-2026, 1.22.1 }
   SP_WS_SHA256 =
-    'Optional, on the LAST chunk: the whole-file SHA-256. A mismatch FAILS ' +
-    'the call: a file sent whole is not written; one sent in chunks goes ' +
-    'to the recoverable trash.';
+    'Optional: the SHA-256 of the file as it stands at the END of this call ' +
+    '- every byte from offset 0 through this chunk. On the last chunk, or a ' +
+    'file sent in one call, that is the whole file: the usual place for it. ' +
+    'A mismatch FAILS the call: with offset=0 nothing is written; on a later ' +
+    'chunk the assembled file goes to the recoverable trash. A chunk''s own ' +
+    'bytes are checked with chunkSha256.';
 
   SP_WS_CHUNKSHA256 =
     'Optional: the SHA-256 of THIS chunk (of its decoded bytes), verified ' +
@@ -10358,9 +10434,10 @@ const
     'delphi_fetch, for what you cannot recreate by editing: binaries ' +
     '(.res, icons, images), archives, reference ' +
     'material. Chunks in order: offset=0 creates/truncates, later offsets ' +
-    'append and must match the current size. sha256 on the LAST chunk has ' +
-    'the server verify the assembled file; chunkSha256 on ANY chunk checks ' +
-    'that chunk BEFORE it is written. Jailed to the workspace roots; ' +
+    'append and must match the current size. sha256 has the server verify ' +
+    'the file assembled up to that call - on the LAST chunk, the whole ' +
+    'file; chunkSha256 on ANY chunk checks that chunk BEFORE it is ' +
+    'written. Jailed to the workspace roots; ' +
     'parent folders are created; a fresh upload over an existing file ' +
     'backs the old one up to the recoverable trash first. For SOURCE CODE ' +
     'prefer delphi_edit / delphi_textedit (they audit encoding and keep ' +

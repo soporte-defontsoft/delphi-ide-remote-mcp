@@ -61,6 +61,7 @@ type
     FAvisos: TStringList;
     FSinLeer: TStringList;
     FLeidos: TStringList;
+    FNoAplicados: TStringList;
     FEventos: Integer;
     FCarpeta: string;
     FDesconocida: string;
@@ -73,6 +74,7 @@ type
     procedure FindComponentClass(Reader: TReader; const ClassName: string; var ComponentClass: TComponentClass);
     procedure CreateComponent(Reader: TReader; ComponentClass: TComponentClass; var Component: TComponent);
     procedure FindMethod(Reader: TReader; const MethodName: string; var Address: Pointer; var Error: Boolean);
+    procedure FindComponentInstance(Reader: TReader; const Name: string; var Instance: Pointer);
     procedure ReaderError(Reader: TReader; const Message: string; var Handled: Boolean);
     procedure AncestorNotFound(Reader: TReader; const ComponentName: string;
       ComponentClass: TPersistentClass; var Component: TComponent);
@@ -102,6 +104,13 @@ type
       cadena -, 'sha256|ruta' (READ=): lo de ESTE cargador, que con
       --packages auto el form se vuelve a leer con otro }
     property Leidos: TStringList read FLeidos;
+    { Lo que el lector leyo y NO pudo aplicar (UNAPPLIED=): el nombre de cada
+      metodo de un evento (aqui no hay codigo: FindMethod) y cada referencia a
+      un componente que no resolvio en el form (OnFindComponentInstance,
+      System.Classes DoFixupReferences: la de otro modulo, que no esta
+      cargado). El escritor no las escribe, y no es porque el IDE no las
+      guarde: el servidor las conserva (1.22.1) }
+    property NoAplicados: TStringList read FNoAplicados;
     property Eventos: Integer read FEventos;
     { La clase de AObj como la escribe el fichero, la que el agente conoce:
       la de la cabecera para la raiz ARaiz (que se crea como una form o un
@@ -1390,6 +1399,9 @@ begin
   FLeidos := TStringList.Create;
   FLeidos.Sorted := True; // un frame dos veces en el form es UN fichero leido
   FLeidos.Duplicates := dupIgnore;
+  FNoAplicados := TStringList.Create;
+  FNoAplicados.Sorted := True;
+  FNoAplicados.Duplicates := dupIgnore;
   FPorClase := TDictionary<string, string>.Create;
   FEscritas := TDictionary<TComponent, string>.Create;
 end;
@@ -1398,6 +1410,7 @@ destructor TCargador.Destroy;
 begin
   FEscritas.Free;
   FPorClase.Free;
+  FNoAplicados.Free;
   FLeidos.Free;
   FAvisos.Free;
   FSinLeer.Free;
@@ -1497,6 +1510,14 @@ begin
   Address := nil;
   Error := False;
   Inc(FEventos);
+  FNoAplicados.Add(MethodName);
+end;
+
+procedure TCargador.FindComponentInstance(Reader: TReader; const Name: string; var Instance: Pointer);
+begin
+  // el lector no la encontro en el form: Instance sigue nil, como sin este
+  // manejador, y se apunta
+  FNoAplicados.Add(Name);
 end;
 
 procedure TCargador.ReaderError(Reader: TReader; const Message: string; var Handled: Boolean);
@@ -1552,6 +1573,7 @@ begin
       Reader.OnFindComponentClass := FindComponentClass;
       Reader.OnCreateComponent := CreateComponent;
       Reader.OnFindMethod := FindMethod;
+      Reader.OnFindComponentInstance := FindComponentInstance;
       Reader.OnError := ReaderError;
       Reader.OnAncestorNotFound := AncestorNotFound;
       Reader.ReadRootComponent(AInstancia);
@@ -1580,6 +1602,8 @@ begin
     Responde(FR_PARTIAL, S);
   for var S in ACargador.Leidos do
     Responde(FR_READ, S);
+  for var S in ACargador.NoAplicados do
+    Responde(FR_UNAPPLIED, S);
 end;
 
 function RespondeFallo(E: Exception; ACargador: TCargador; ACargando, AYaLeido: Boolean): Integer;
@@ -1593,6 +1617,32 @@ begin
   else
     Responde(FR_ERROR, E.ClassName + ': ' + E.Message);
   Result := FR_RC_ERROR;
+end;
+
+{ Las propiedades publicadas de la clase de AObj en el orden en que las
+  escribe TWriter.WriteProperties (GetPropInfos: el NameIndex, el de la clase
+  que la publico primero), separadas por coma. Solo la RTTI. }
+function OrdenDelEscritor(AObj: TPersistent): string;
+var
+  Lista: PPropList;
+  N: Integer;
+begin
+  Result := '';
+  N := GetTypeData(AObj.ClassInfo)^.PropCount;
+  if N = 0 then
+    Exit;
+  GetMem(Lista, N * SizeOf(Pointer));
+  try
+    GetPropInfos(AObj.ClassInfo, Lista);
+    for var I := 0 to N - 1 do
+    begin
+      if Lista^[I] = nil then
+        Break;
+      Result := Result + (if Result <> '' then ',' else '') + GetPropName(Lista^[I]);
+    end;
+  finally
+    FreeMem(Lista);
+  end;
 end;
 
 procedure EscribeComoElIde(ARaiz: TComponent);
@@ -1612,6 +1662,14 @@ begin
     Lineas.Text := DesignerBinarioATexto(Bytes);
     for var L in Lineas do
       Responde(FR_WRITTEN, L);
+    // ...y del componente pedido, el orden de su escritor (ORDER=): ahi coloca
+    // el servidor lo que este escritor no puede dar (1.22.1)
+    if GPeticion.Componente <> '' then
+    begin
+      var C := ComponenteDeRuta(ARaiz, GPeticion.Componente);
+      if C <> nil then
+        Responde(FR_ORDER, GPeticion.Componente + '=' + OrdenDelEscritor(C));
+    end;
   finally
     Lineas.Free;
     Bin.Free;

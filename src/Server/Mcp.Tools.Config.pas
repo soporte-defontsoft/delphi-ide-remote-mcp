@@ -984,13 +984,14 @@ begin
       for P in NoEstaban do
         Result := Result + IfThen(Result = '', '', sLineBreak) +
           MsgFmt(SN_CONFIG_PATH_ABSENT_FMT, [P, Etiqueta]);
-      var Donde := DondeEsta(Xml, 'DCC_UnitSearchPath');
-      for P in NoEstaban do
-        if ContainsText(Donde, P) then
-        begin
-          Result := Result + MsgFmt(SF_CONFIG_PATH_EN_OTRO_GRUPO_FMT, [Donde]);
-          Break;
-        end;
+      // ...una ENTRADA de ese search path, con la regla con la que se quita
+      // (Pedida): como texto, lib casaba con lib2 o con C:\x\lib\y (revisor
+      // Opus de la 1.22.0, H7). Aqui ninguna estaba: las pedidas son NoEstaban
+      for var G2 in GruposDePropiedades(Xml) do
+        for var T in TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G2, True) do
+          for P in SplitPaths(Copy(Xml, T.Ini, T.Fin - T.Ini)) do
+            if Pedida(P) then
+              Exit(Result + MsgFmt(SF_CONFIG_PATH_EN_OTRO_GRUPO_FMT, [DondeEsta(Xml, 'DCC_UnitSearchPath')]));
       Exit;
     end;
     Rest := string.Join(';', Keep.ToArray);

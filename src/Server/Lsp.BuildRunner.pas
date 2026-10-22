@@ -19,6 +19,19 @@ type
     TEST-027). }
   ETestNoConfinado = class(Exception);
 
+  { En que pagina escribe un programa hijo lo que no es UTF-8 cuando escribe a
+    una TUBERIA. phConsola: un programa de consola de Windows (msbuild, los
+    compiladores) escribe en la de su consola aunque escriba a una tuberia
+    (medido el 20-sep-2026: msbuild en la 850). phAnsi: uno de Delphi escribe
+    con su RTL, y a lo que no es una consola la RTL escribe en
+    DefaultSystemCodePage, la ANSI de la maquina (System.pas, TryOpenForOutput:
+    la de la consola solo si GetFileType dice que lo es) - el test que compila
+    un agente: delphi_test devolvia cada i con tilde como una Y con tilde (1252
+    leido en 850; test completo de la 1.22.0, y medido en produccion el
+    22-oct-2026 con cuatro letras). Nuestros programas de Delphi ponen la
+    suya en UTF-8 (el nodo de escritorio, el renderizador). }
+  TPaginaDelHijo = (phConsola, phAnsi);
+
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
   ATimeoutMs: Integer = 600000; const ASdk: string = '';
@@ -80,7 +93,7 @@ function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   exitCode 1 y salida vacia (medido 2026-08-25). }
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
   const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
-  out ATimedOut: Boolean): string;
+  out ATimedOut: Boolean; APagina: TPaginaDelHijo = phConsola): string;
 
 implementation
 
@@ -349,7 +362,8 @@ end;
 
 function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   AContenedor: PContenedor; out AExitCode: Cardinal;
-  out ATimedOut: Boolean; const AEntorno: string = ''): string;
+  out ATimedOut: Boolean; const AEntorno: string = '';
+  APagina: TPaginaDelHijo = phConsola): string;
 var
   SA: TSecurityAttributes;
   ReadH, WriteH: THandle;
@@ -580,9 +594,15 @@ begin
       // ademas tiene la red byte a byte que no puede fallar.
     end;
   begin
-    var Cp: Cardinal := GetConsoleOutputCP;
-    if Cp = 0 then
-      Cp := GetOEMCP; // tray and service have no console: ask the machine
+    var Cp: Cardinal;
+    if APagina = phAnsi then
+      Cp := GetACP // un programa de Delphi a una tuberia (TPaginaDelHijo)
+    else
+    begin
+      Cp := GetConsoleOutputCP;
+      if Cp = 0 then
+        Cp := GetOEMCP; // tray and service have no console: ask the machine
+    end;
     var Enc := TEncoding.GetEncoding(Cp);
     try
       try
@@ -646,13 +666,13 @@ end;
 
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
   const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
-  out ATimedOut: Boolean): string;
+  out ATimedOut: Boolean; APagina: TPaginaDelHijo): string;
 var
   Copia: TContenedor;
 begin
   Copia := AC; // RunCore lo quiere por puntero, y AC es const
   Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, @Copia, AExitCode,
-    ATimedOut);
+    ATimedOut, '', APagina);
 end;
 
 { The Android staging map, measured against an IDE-written .deployproj
@@ -1548,10 +1568,21 @@ const
     despues (medido el 21-oct-2026), y la puerta no sabe su valor al evaluar
     las Condition, asi que una Condition que las compare no se sabe y se
     juzga. Config y Platform van aparte: son lo pedido. Cada /p: nuevo de la
-    orden entra aqui; test_paisaje lo vigila. }
-  GLOBALES_DEL_BUILD: TArray<string> = ['Profile', 'DeviceId', 'PlatformSDK',
-    'PreBuildEvent', 'PostBuildEvent', 'PreLinkEvent', 'PostLinkEvent',
-    'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput'];
+    orden entra aqui; test_paisaje lo vigila. Las salidas que el build suple
+    van aparte, por su lista (GlobalesDelBuild). }
+  GLOBALES_DE_LA_ORDEN: TArray<string> = ['Profile', 'DeviceId', 'PlatformSDK',
+    'PreBuildEvent', 'PostBuildEvent', 'PreLinkEvent', 'PostLinkEvent'];
+
+{ Las globales del build: las de la orden y las salidas que el build suple
+  (SALIDAS_QUE_SUPLE_EL_BUILD, que van por /p: como las otras). UNA lista: las
+  salidas estaban copiadas a mano, y una suplida nueva no habria entrado aqui
+  (revisor Opus de la 1.22.0, H6). }
+function GlobalesDelBuild: TArray<string>;
+begin
+  Result := GLOBALES_DE_LA_ORDEN;
+  for var S in SALIDAS_QUE_SUPLE_EL_BUILD do
+    Result := Result + [S];
+end;
 
 { Lo que este build LEE por lo que el proyecto escribe - el icono, el
   manifiesto, un search path, un .rc, un DeployFile, un keystore... - tiene
@@ -1791,7 +1822,7 @@ begin
       for var J := 0 to High(Xmls) do
         if J <> I then
           DeOtros := DeOtros + Definidos[J];
-      for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg, Externas + DeOtros, GLOBALES_DEL_BUILD) do
+      for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg, Externas + DeOtros, GlobalesDelBuild) do
       begin
         Result := Juzga(V, Ficheros[I], DeOtros);
         if Result <> '' then

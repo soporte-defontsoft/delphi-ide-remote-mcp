@@ -439,7 +439,27 @@ begin
   begin
     Result := EnsureNodeCurrent(Params.Profile.Trim, Nota);
     if Result <> '' then
+    begin
+      // status promete "is the desktop reachable, and what to ask for if
+      // not": un destino que no contesta (paclient no pudo mandar el trabajo,
+      // RUN-010, ya pasadas las puertas de permisos) es SU respuesta y no una
+      // negativa, como en su gemela test-connection (test completo de Opus de
+      // la 1.22.0: DENIED). Lo demas (un permiso que falta) sigue negado
+      if (Cmd = 'status') and EsMsg(Result, SR_REMOTERUN_PUT_FMT) then
+      begin
+        Return := TJSONObject.Create;
+        try
+          Return.AddPair('command', Cmd);
+          Return.AddPair('profile', Params.Profile.Trim);
+          Return.AddPair('reachable', TJSONBool.Create(False));
+          Return.AddPair('hint', Result);
+          Result := Return.ToJSON;
+        finally
+          Return.Free;
+        end;
+      end;
       Exit;
+    end;
     Proj := NODE_PROJECT;
   end;
   { El nodo del target solo obedece al servidor: la clave (NodeKey.inc) va
@@ -498,6 +518,16 @@ begin
       y el mismo motivo que ensenan los gestos, como pista. }
     if Cmd = 'status' then
     begin
+      // ...y si el trabajo del nodo no llego (RUN-010), lo mismo: es el motivo
+      var ErrorDelTrabajo := '';
+      if Return.GetValue('error') <> nil then
+        ErrorDelTrabajo := Return.GetValue('error').Value;
+      if EsMsg(ErrorDelTrabajo, SR_REMOTERUN_PUT_FMT) then
+      begin
+        if Return.GetValue('hint') = nil then
+          Return.AddPair('hint', ErrorDelTrabajo);
+        Return.RemovePair('error').Free;
+      end;
       Return.AddPair('reachable', TJSONBool.Create(RutaDeCaptura(Salida) <> ''));
       if (RutaDeCaptura(Salida) = '') and (Return.GetValue('hint') = nil) and
          (Return.GetValue('error') = nil) then

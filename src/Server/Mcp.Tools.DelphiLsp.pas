@@ -190,6 +190,28 @@ begin
   end;
 end;
 
+{ Si la linea ALine (0-based) de APath es la cabecera de una rutina CON
+  cuerpo, del implementation o de un programa: por EL lector de cuerpos
+  (Lsp.PascalDecl, TUnidadPas.Cuerpos). False si no se deja leer. }
+function EsCabeceraDeCuerpo(const APath: string; ALine: Integer): Boolean;
+var
+  U: TUnidadPas;
+begin
+  Result := False;
+  try
+    U := LeeFuentePascal(LeeTexto(APath, LUGARES_DEL_MOTOR));
+  except
+    Exit;
+  end;
+  try
+    for var C in U.Cuerpos do
+      if C.Linea = ALine then
+        Exit(True);
+  finally
+    U.Free;
+  end;
+end;
+
 { Shared helpers }
 
 function NoSettingsNote(const ASettings: string): string;
@@ -1124,6 +1146,14 @@ begin
     Result := ReadPathDenied(Folder);
     if Result <> '' then
       Exit;
+    // mode y filter son de un FICHERO: con una carpeta se ignoraban en
+    // silencio (test completo de Opus de la 1.22.0); se dice, como en las
+    // tools de varios comandos (Lsp.Guard.ParametroQueNoVa)
+    var Suyos, VaCon: string;
+    var Sobra := ParametroQueNoVa('folder', ['folder', 'path', 'file', 'path mode filter'],
+      ['path', Params.Path, '', 'mode', Params.Mode, '', 'filter', Params.Filter, ''], Suyos, VaCon);
+    if Sobra <> '' then
+      Exit(MsgFmt(SR_SYMBOLS_NO_VA_CON_CARPETA_FMT, [Sobra, Suyos, VaCon]));
     var Ret := TJSONObject.Create;
     try
       var Units := TJSONArray.Create;
@@ -1284,27 +1314,37 @@ begin
         DefResp.Free;
         Exit;
       end;
-      var Col := RoutineIdentCol(TgtPath, DefLoc.Line);
-      // al MISMO motor, que es el que ha llevado hasta ahi (Lsp.Session.AbreEn):
-      // con AcquireFor, una unidad de la RTL o de otro proyecto arrancaba su
-      // propio motor y pisaba Settings con el suyo (una nota LSP-021 falsa).
-      // El gemelo del arreglo de references (revision de la 1.13.0)
-      TLspSession.Instance.AbreEn(Client, TgtPath);
-      var DeclResp := Client.Declaration(DefLoc.Uri, DefLoc.Line, Col);
-      var DeclLoc: TLoc;
-      if ParseLoc(DeclResp.GetValue('result'), DeclLoc) and
-         not ((DeclLoc.Line = DefLoc.Line) and SameText(DeclLoc.Uri, DefLoc.Uri)) then
-      begin
-        // declaration moved elsewhere = the interface declaration we want
-        DefResp.Free;
-        Resp := DeclResp;
-      end
+      // sobre la CABECERA de un cuerpo, definition ya contesta su declaracion
+      // (la de la interfaz, la de la clase: medido el 22-oct-2026 con una
+      // global y con un metodo), y seguir la cadena llevaba de ahi al CUERPO
+      // (test completo de Opus de la 1.22.0); en la de una anidada el motor
+      // contesta la que la contiene: LA correccion de references
+      if EsCabeceraDeCuerpo(Params.Path, Params.Line) then
+        Resp := DefinicionCorregida(DefResp, Params.Path, Params.Line, Params.Character, '')
       else
       begin
-        // declaration stayed on the body (or failed): return the body - far
-        // more useful than the enclosing-scope answer of a direct call
-        DeclResp.Free;
-        Resp := DefResp;
+        var Col := RoutineIdentCol(TgtPath, DefLoc.Line);
+        // al MISMO motor, que es el que ha llevado hasta ahi (Lsp.Session.AbreEn):
+        // con AcquireFor, una unidad de la RTL o de otro proyecto arrancaba su
+        // propio motor y pisaba Settings con el suyo (una nota LSP-021 falsa).
+        // El gemelo del arreglo de references (revision de la 1.13.0)
+        TLspSession.Instance.AbreEn(Client, TgtPath);
+        var DeclResp := Client.Declaration(DefLoc.Uri, DefLoc.Line, Col);
+        var DeclLoc: TLoc;
+        if ParseLoc(DeclResp.GetValue('result'), DeclLoc) and
+           not ((DeclLoc.Line = DefLoc.Line) and SameText(DeclLoc.Uri, DefLoc.Uri)) then
+        begin
+          // declaration moved elsewhere = the interface declaration we want
+          DefResp.Free;
+          Resp := DeclResp;
+        end
+        else
+        begin
+          // declaration stayed on the body (or failed): return the body - far
+          // more useful than the enclosing-scope answer of a direct call
+          DeclResp.Free;
+          Resp := DefResp;
+        end;
       end;
     end
     else if Pending then

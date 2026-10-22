@@ -297,6 +297,10 @@ function EsRutaDeFuente(const APath: string): Boolean;
   escriben. EL predicado: los dos rechazos se mandaban el uno al otro y
   ninguno a delphi_config (Hermes, dirigido de la 1.20.1). }
 function EsRutaDeProyecto(const APath: string): Boolean;
+{ Si APath es un fichero que el IDE carga como XML: un proyecto
+  (EsRutaDeProyecto) o su manifiesto de despliegue (.deployproj). Lo que de
+  ellos escribe el servidor lo juzga antes el parser del IDE (PatchSaveText). }
+function EsXmlDelIde(const APath: string): Boolean;
 { Si APath es un fichero de DELPHI: lo del motor de Pascal (EsDelMotorPascal:
   fuentes y designers) o un proyecto del IDE (PROJECT_EXTS). Lo que
   delphi_textedit no edita y lo que el changeset no mueve ni borra suelto -
@@ -568,10 +572,10 @@ procedure ApuntaEscritoEnLaLlamada(const APath: string; const B: TArray<Byte>);
 procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
 { Lo que el parser del IDE (MSXML 6, el que carga un proyecto) dice de un
   texto XML: '' si lo carga, o su error (linea y motivo) si no. EL juez de
-  "esta bien formado" de lo que el servidor compone en sitio con su escaner:
-  PatchSaveConSuSalto lo pregunta antes de escribir, y un proyecto que el IDE
-  no abriese no se escribe (David, 21-oct-2026: las librerias XML de verdad,
-  sin reinventar la rueda). }
+  "esta bien formado" de lo que el servidor escribe de un fichero que el IDE
+  carga como XML (EsXmlDelIde): PatchSaveText lo pregunta antes de escribir, y
+  un proyecto que el IDE no abriese no se escribe (David, 21-oct-2026: las
+  librerias XML de verdad, sin reinventar la rueda). }
 function XmlMalFormadoSegunElIde(const AXml: string): string;
 
 { EL cerrojo de escritura del servidor, prestado a los otros motores.
@@ -1671,6 +1675,11 @@ begin
   Result := MatchText(TPath.GetExtension(APath), PROJECT_EXTS);
 end;
 
+function EsXmlDelIde(const APath: string): Boolean;
+begin
+  Result := EsRutaDeProyecto(APath) or SameText(TPath.GetExtension(APath), '.deployproj');
+end;
+
 function EsFicheroDeDelphi(const APath: string): Boolean;
 begin
   Result := EsDelMotorPascal(APath) or EsRutaDeProyecto(APath);
@@ -2650,6 +2659,17 @@ begin
   var Cambia := LecturaCambiada(APath, B, K);
   if Cambia <> '' then
     raise Exception.Create(Cambia);
+  // ...y un fichero que el IDE carga como XML, juzgado por SU parser antes de
+  // escribirlo, en el ensayo tambien. Lo preguntaba PatchSaveConSuSalto, y
+  // cinco escritores guardaban sin el: el grupo (add/remove-project), la
+  // mudanza que re-apunta un .dproj o un .groupproj, el .dproj de
+  // delphi_create y el create de un changeset (revisor Opus de la 1.22.0, H5)
+  if EsXmlDelIde(APath) then
+  begin
+    var Mal := XmlMalFormadoSegunElIde(AText);
+    if Mal <> '' then
+      raise Exception.Create(MsgFmt(SR_PATCH_XML_MAL_FORMADO_FMT, [TPath.GetFileName(APath), Mal]));
+  end;
   if AEnsayo then
   begin
     var Motivo := SustitucionDenegada(APath); // lo que preguntara el escritor
@@ -2709,7 +2729,7 @@ end;
 
 procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
 var
-  Enc, Antes, Texto, Mal: string;
+  Enc, Antes, Texto: string;
 begin
   Texto := AText;
   if TFile.Exists(APath) and (Pos(#13#10, Texto) > 0) then
@@ -2718,11 +2738,8 @@ begin
     if Pos(#13#10, Antes) = 0 then
       Texto := Texto.Replace(#13#10, SaltoDominante(Antes));
   end;
-  // el parser del IDE sobre lo compuesto, ANTES de escribir: el escaner
-  // compone en sitio y esta es la segunda barrera (David, 21-oct-2026)
-  Mal := XmlMalFormadoSegunElIde(Texto);
-  if Mal <> '' then
-    raise Exception.Create(MsgFmt(SR_PATCH_XML_MAL_FORMADO_FMT, [TPath.GetFileName(APath), Mal]));
+  // (el parser del IDE sobre lo compuesto, la segunda barrera del escaner, lo
+  // pregunta el escritor de abajo: PatchSaveText, para todo fichero de XML del IDE)
   PatchSaveText(APath, Texto, AEncName);
 end;
 

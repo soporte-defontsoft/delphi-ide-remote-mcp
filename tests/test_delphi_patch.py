@@ -480,9 +480,11 @@ open(DPRX, 'wb').write(b'program Prog;\r\nbegin\r\nend.\r\n')
 # SondaOrdenFmx - FMX.Edit al uses de un .dpr no tenia tool)
 out = call('delphi_edit', {"path": DPRX, "adduses": "System.SysUtils"})
 _src = open(DPRX, 'rb').read().decode('ascii')
+# con la separacion que la cabecera ya tenia, delante y detras (EstrenaClausula, 1.22.1): un .dpr
+# compacto sigue compacto, y removeuses la quita dejando los mismos bytes
 check('adduses en un .dpr sin uses: lo estrena tras la cabecera',
       mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and mc.es(out, 'SN_ADDUSES_CREADA_PROGRAMA') and
-      _src == 'program Prog;\r\n\r\nuses\r\n  System.SysUtils;\r\nbegin\r\nend.\r\n', out[:300] + ' | ' + _src)
+      _src == 'program Prog;\r\nuses\r\n  System.SysUtils;\r\nbegin\r\nend.\r\n', out[:300] + ' | ' + _src)
 out = call('delphi_edit', {"path": DPRX, "adduses": "System.Classes;System.SysUtils"})
 _src = open(DPRX, 'rb').read().decode('ascii')
 check('adduses en un .dpr con uses: entra la que falta y dice la que ya estaba',
@@ -598,6 +600,23 @@ _src = open(FIN, 'rb').read().decode('ascii')
 check('removeuses: quitar la nueva devuelve el ; a su sitio, delante del //',
       mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA,  // de UA\r\n  UB;  // de UB\r\n\r\nend.' in _src,
       _src)
+# adduses + removeuses es la INVERSA tambien en una unit compacta ('interface' con el codigo justo
+# debajo, sin linea en blanco): la clausula nueva lleva la separacion que la palabra ya tenia
+# (Lsp.ProjectUnits.EstrenaClausula). Con dos saltos fijos delante ganaba una linea en blanco
+# (test completo de Opus de la 1.22.0, en ANSI); la de la forma del IDE es el control
+for _nombre, _lineas in (('Compacta', ['unit Compacta;', 'interface', "const S = 'cancion';", 'implementation',
+                                       'end.', '']),
+                         ('ConHuecos', ['unit ConHuecos;', '', 'interface', '', "const S = 'cancion';", '',
+                                        'implementation', '', 'end.', ''])):
+    _p = os.path.join(DIR, _nombre + '.pas')
+    _antes = CRLF.join(_lineas).replace('cancion', 'canci' + chr(0xF3) + 'n').encode('cp1252')
+    open(_p, 'wb').write(_antes)
+    call('delphi_edit', {'path': _p, 'adduses': 'System.SysUtils', 'section': 'interface'})
+    _medio = open(_p, 'rb').read()
+    out = call('delphi_edit', {'path': _p, 'removeuses': 'System.SysUtils', 'section': 'interface'})
+    check('adduses + removeuses en la unit %s (ANSI): vuelven los mismos bytes' % _nombre,
+          mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and open(_p, 'rb').read() == _antes,
+          (_medio, open(_p, 'rb').read()))
 out = call('delphi_edit', {"path": FIN, "removeuses": "UB"})
 _src = open(FIN, 'rb').read().decode('ascii')
 check('removeuses: quitar la del // final se lo lleva (11.3) y no lo pega a la que queda',

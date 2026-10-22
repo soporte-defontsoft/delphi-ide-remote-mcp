@@ -65,6 +65,11 @@ type
     FWaiters: Integer;     // calls waiting for a notification right now (under FLock)
     // los caracteres de disparo de completion que anuncia el motor (Initialize)
     FTriggersDeCompletion: TArray<string>;
+    // las LINEAS del texto que tiene el motor de cada documento que se le
+    // abrio (lo ultimo que se le mando por didOpen o didChange), por su uri en
+    // la forma que se compara (UriCanonica): con ellas se pasa una columna a
+    // la cuenta del motor y de vuelta (ColumnaAlMotor). Bajo FLock
+    FLineas: TDictionary<string, TArray<string>>;
     procedure BeginWait;
     procedure EndWait;
     procedure HandleRawMessage(const AJson: string);
@@ -75,6 +80,22 @@ type
     function DoWaitForNotification(const AMethod: string; ATimeoutMs: Integer;
       const AUriFilter: string): TJSONObject;
     procedure SayHowItEnded(AAsked, AAnswered: Boolean);
+    procedure GuardaLineas(const AUri, AText: string);
+    { Las lineas que tiene el motor de AUri: las que se le mandaron o, si no
+      lo tiene abierto, las del disco por EL lector (el motor lo lee y lo
+      decodifica bien: medido en ANSI y en UTF-8, con BOM y sin el). Nil si no
+      se deja leer: esa columna se queda en la cuenta del motor. Nunca lanza. }
+    function LineasDelMotor(const AUri: string): TArray<string>;
+    { EL compositor de los params de una peticion con posicion (hover,
+      definition, declaration, implementation, signature, completion): la
+      columna del agente, en la cuenta del motor. Estaba escrito seis veces. }
+    function ParamsDePosicion(const AUri: string; ALine, ACharacter: Integer;
+      const AMas: string = ''): string;
+    { Cada Position (line, character) de lo que contesta o notifica el motor,
+      a la columna del agente, con la linea de SU documento: la uri (o
+      targetUri) del objeto que la contiene o, si no hay, AUri (el documento
+      preguntado). En su sitio; AValor nil no hace nada. }
+    procedure PosicionesDelMotor(AValor: TJSONValue; const AUri: string);
   public
     constructor Create(ATransport: TLspProcessTransport; AOwnsTransport: Boolean = True);
     destructor Destroy; override;
@@ -161,7 +182,10 @@ type
     procedure DidChangeText(const AUri, AText: string; AVersion: Integer);
     procedure DidClose(const AUri: string);
 
-    { Language features (positions are 0-based, LSP style) }
+    { Language features (positions are 0-based, LSP style). La columna, en lo
+      que toman y en lo que devuelven, es la del AGENTE (UTF-16, como cuentan
+      delphi_read y delphi_search): el cliente la pasa a la cuenta del motor y
+      de vuelta (ColumnaAlMotor), tambien en los diagnosticos que notifica. }
     function Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function Definition(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     { Definition con hover de oraculo (calentamiento del motor): ver la
@@ -221,6 +245,22 @@ type
       ahi lanza la negativa. Quien recorre carpetas pregunta ADEMAS la de la
       jaula por cada fichero: lo de detras de una union no es suyo. }
     class function LoadSourceText(const AFilePath: string): string;
+    { LA columna del motor y su inversa. DelphiLSP cuenta la columna de una
+      linea en BYTES UTF-8 del texto que tiene de ella, a la ida y a la vuelta
+      (medido el 22-oct-2026 con el motor solo: una enye +1, un euro +2 y un
+      emoji +2 sobre UTF-16, en hover, definition, documentSymbol y
+      publishDiagnostics, con la unidad abierta por didOpen o leida por el del
+      disco, en ANSI o en UTF-8; y no declara positionEncoding, ni ofreciendole
+      utf-16 ni utf-8). El agente, delphi_read y delphi_search cuentan en
+      UTF-16, la de LSP: con un acento delante en la linea, cada tool por
+      posicion apuntaba al simbolo de al lado (test completo de la 1.22.0 en
+      Hermes). ColumnaAlMotor pasa la columna UTF-16 ACol de ALinea a bytes y
+      ColumnaDelMotor la de bytes a UTF-16, las dos con EL codificador UTF-8 de
+      la RTL. Un caracter partido (medio par de sustitutos, un byte de en medio
+      de una secuencia) cuenta desde donde empieza; lo que pasa del final de la
+      linea sigue pasando lo mismo, y 0 o menos va tal cual. }
+    class function ColumnaAlMotor(const ALinea: string; ACol: Integer): Integer;
+    class function ColumnaDelMotor(const ALinea: string; ACol: Integer): Integer;
   end;
 
 implementation
@@ -265,6 +305,7 @@ begin
   FPending := TObjectDictionary<Integer, TPendingCall>.Create([doOwnsValues]);
   FNotifications := TObjectList<TJSONObject>.Create(True);
   FNotifyEvent := TEvent.Create(nil, False, False, '');
+  FLineas := TDictionary<string, TArray<string>>.Create;
   FTransport.OnMessage := HandleRawMessage;
 end;
 
@@ -286,6 +327,7 @@ begin
   FNotifyEvent.Free;
   FNotifications.Free;
   FPending.Free;
+  FLineas.Free;
   FLock.Free;
   inherited;
 end;
@@ -785,6 +827,7 @@ begin
     Doc.AddPair('version', TJSONNumber.Create(AVersion));
     Doc.AddPair('text', AText);
     Notify('textDocument/didOpen', Format('{"textDocument":%s}', [Doc.ToJSON]));
+    GuardaLineas(AUri, AText); // tras el envio: lo que no llego no lo tiene el motor
   finally
     Doc.Free;
   end;
@@ -805,6 +848,7 @@ begin
     Notify('textDocument/didChange', Format(
       '{"textDocument":{"uri":"%s","version":%d},"contentChanges":[%s]}',
       [AUri, AVersion, Change.ToJSON]));
+    GuardaLineas(AUri, AText);
   finally
     Change.Free;
   end;
@@ -815,47 +859,51 @@ end;
 procedure TLspClient.DidClose(const AUri: string);
 begin
   Notify('textDocument/didClose', Format('{"textDocument":{"uri":"%s"}}', [AUri]));
+  // desde aqui el motor lo lee del disco, y su columna se cuenta con el disco
+  var K := UriCanonica(AUri);
+  FLock.Enter;
+  try
+    FLineas.Remove(K);
+  finally
+    FLock.Leave;
+  end;
 end;
 
 function TLspClient.Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
-  Result := RequestWithRetry('textDocument/hover', Format(
-    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
-    [AUri, ALine, ACharacter]), 30000);
+  Result := RequestWithRetry('textDocument/hover', ParamsDePosicion(AUri, ALine, ACharacter), 30000);
+  PosicionesDelMotor(Result, AUri);
 end;
 
 function TLspClient.Definition(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
-  Result := RequestWithRetry('textDocument/definition', Format(
-    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
-    [AUri, ALine, ACharacter]), 30000);
+  Result := RequestWithRetry('textDocument/definition', ParamsDePosicion(AUri, ALine, ACharacter), 30000);
+  PosicionesDelMotor(Result, AUri);
 end;
 
 function TLspClient.Declaration(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
-  Result := RequestWithRetry('textDocument/declaration', Format(
-    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
-    [AUri, ALine, ACharacter]), 30000);
+  Result := RequestWithRetry('textDocument/declaration', ParamsDePosicion(AUri, ALine, ACharacter), 30000);
+  PosicionesDelMotor(Result, AUri);
 end;
 
 function TLspClient.Implementation_(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
-  Result := RequestWithRetry('textDocument/implementation', Format(
-    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
-    [AUri, ALine, ACharacter]), 30000);
+  Result := RequestWithRetry('textDocument/implementation', ParamsDePosicion(AUri, ALine, ACharacter), 30000);
+  PosicionesDelMotor(Result, AUri);
 end;
 
 function TLspClient.SignatureHelp(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
-  Result := RequestWithRetry('textDocument/signatureHelp', Format(
-    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
-    [AUri, ALine, ACharacter]), 30000);
+  Result := RequestWithRetry('textDocument/signatureHelp', ParamsDePosicion(AUri, ALine, ACharacter), 30000);
+  PosicionesDelMotor(Result, AUri);
 end;
 
 function TLspClient.DocumentSymbols(const AUri: string): TJSONObject;
 begin
   Result := RequestWithRetry('textDocument/documentSymbol',
     Format('{"textDocument":{"uri":"%s"}}', [AUri]), 60000);
+  PosicionesDelMotor(Result, AUri);
 end;
 
 function TLspClient.Completion(const AUri: string; ALine, ACharacter: Integer;
@@ -878,9 +926,8 @@ begin
   end
   else
     Ctx := ',"context":{"triggerKind":1}';
-  Result := RequestWithRetry('textDocument/completion', Format(
-    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}%s}',
-    [AUri, ALine, ACharacter, Ctx]), 30000);
+  Result := RequestWithRetry('textDocument/completion', ParamsDePosicion(AUri, ALine, ACharacter, Ctx), 30000);
+  PosicionesDelMotor(Result, AUri);
 end;
 
 { Whoever waits for a notification is USING the engine (Busy): a lint waits
@@ -897,6 +944,8 @@ begin
   end;
   try
     Result := DoWaitForNotification(AMethod, ATimeoutMs, AUriFilter);
+    // los rangos de un diagnostico, en la columna del agente (la uri, la suya)
+    PosicionesDelMotor(Result, '');
   finally
     FLock.Enter;
     try
@@ -1125,6 +1174,177 @@ begin
   // BOM los conoce Lsp.Patch.DetectEnc y aqui no se decide nada (tampoco
   // que un form de texto sin BOM es ANSI: se le dice que es un form).
   Result := DecodeSourceBytes(Bytes, EsRutaDeDesigner(AFilePath));
+end;
+
+class function TLspClient.ColumnaAlMotor(const ALinea: string; ACol: Integer): Integer;
+var
+  N, Exceso: Integer;
+begin
+  if ACol <= 0 then
+    Exit(ACol);
+  N := ACol;
+  Exceso := 0;
+  if N > Length(ALinea) then
+  begin
+    Exceso := N - Length(ALinea);
+    N := Length(ALinea);
+  end
+  else if (N < Length(ALinea)) and ALinea[N].IsHighSurrogate and ALinea[N + 1].IsLowSurrogate then
+    Dec(N); // en medio de un par de sustitutos: desde donde empieza el caracter
+  Result := TEncoding.UTF8.GetByteCount(Copy(ALinea, 1, N)) + Exceso;
+end;
+
+class function TLspClient.ColumnaDelMotor(const ALinea: string; ACol: Integer): Integer;
+var
+  I, Ancho, Bytes, Cuenta: Integer;
+begin
+  if ACol <= 0 then
+    Exit(ACol);
+  I := 1;
+  Cuenta := 0;
+  while I <= Length(ALinea) do
+  begin
+    Ancho := 1;
+    if (I < Length(ALinea)) and ALinea[I].IsHighSurrogate and ALinea[I + 1].IsLowSurrogate then
+      Ancho := 2;
+    Bytes := TEncoding.UTF8.GetByteCount(Copy(ALinea, I, Ancho));
+    if Cuenta + Bytes > ACol then
+      Exit(I - 1); // un byte de en medio del caracter: desde donde empieza
+    Inc(Cuenta, Bytes);
+    Inc(I, Ancho);
+    if Cuenta = ACol then
+      Exit(I - 1);
+  end;
+  Result := Length(ALinea) + (ACol - Cuenta); // pasa del final: lo mismo que pasaba
+end;
+
+procedure TLspClient.GuardaLineas(const AUri, AText: string);
+var
+  K: string;
+  Lineas: TArray<string>;
+begin
+  K := UriCanonica(AUri);
+  Lineas := LineasDelTexto(AText); // como las cuenta delphi_read
+  FLock.Enter;
+  try
+    FLineas.AddOrSetValue(K, Lineas);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TLspClient.LineasDelMotor(const AUri: string): TArray<string>;
+var
+  K: string;
+  Hay: Boolean;
+begin
+  K := UriCanonica(AUri);
+  FLock.Enter;
+  try
+    Hay := FLineas.TryGetValue(K, Result);
+  finally
+    FLock.Leave;
+  end;
+  if Hay then
+    Exit;
+  try
+    Result := LineasDelTexto(LoadSourceText(UriToPath(AUri)));
+  except
+    Result := nil;
+  end;
+end;
+
+function TLspClient.ParamsDePosicion(const AUri: string; ALine, ACharacter: Integer;
+  const AMas: string): string;
+var
+  Lineas: TArray<string>;
+  Col: Integer;
+begin
+  Col := ACharacter;
+  if Col > 0 then
+  begin
+    Lineas := LineasDelMotor(AUri);
+    if (ALine >= 0) and (ALine < Length(Lineas)) then
+      Col := ColumnaAlMotor(Lineas[ALine], Col);
+  end;
+  Result := Format('{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}%s}',
+    [AUri, ALine, Col, AMas]);
+end;
+
+procedure TLspClient.PosicionesDelMotor(AValor: TJSONValue; const AUri: string);
+var
+  Lineas: TDictionary<string, TArray<string>>;
+
+  function LineaDe(const ADoc: string; ALinea: Integer): string;
+  var
+    Ls: TArray<string>;
+  begin
+    if not Lineas.TryGetValue(ADoc, Ls) then
+    begin
+      Ls := LineasDelMotor(ADoc);
+      Lineas.Add(ADoc, Ls);
+    end;
+    if (ALinea >= 0) and (ALinea < Length(Ls)) then
+      Result := Ls[ALinea]
+    else
+      Result := '';
+  end;
+
+  procedure Recorre(V: TJSONValue; const ADoc: string);
+  var
+    O: TJSONObject;
+    VL, VC, VU: TJSONValue;
+    Doc: string;
+    Par: TJSONPair;
+  begin
+    if V is TJSONArray then
+    begin
+      for var Item in TJSONArray(V) do
+        Recorre(Item, ADoc);
+      Exit;
+    end;
+    if not (V is TJSONObject) then
+      Exit;
+    O := TJSONObject(V);
+    VL := O.GetValue('line');
+    VC := O.GetValue('character');
+    if (O.Count = 2) and (VL is TJSONNumber) and (VC is TJSONNumber) then
+    begin
+      var C := TJSONNumber(VC).AsInt;
+      if (C > 0) and (ADoc <> '') then
+      begin
+        var Nueva := ColumnaDelMotor(LineaDe(ADoc, TJSONNumber(VL).AsInt), C);
+        O.RemovePair('character').Free;
+        O.AddPair('character', TJSONNumber.Create(Nueva));
+      end;
+      Exit;
+    end;
+    // un Location (uri), un LocationLink (targetUri) o los diagnosticos de un
+    // documento (uri): sus rangos son de ESE documento; el
+    // originSelectionRange de un LocationLink, del que se pregunto
+    Doc := ADoc;
+    VU := O.GetValue('uri');
+    if VU = nil then
+      VU := O.GetValue('targetUri');
+    if VU is TJSONString then
+      Doc := VU.Value;
+    for Par in O do
+      if Par.JsonString.Value = 'originSelectionRange' then
+        Recorre(Par.JsonValue, AUri)
+      else
+        Recorre(Par.JsonValue, Doc);
+  end;
+
+begin
+  if AValor = nil then
+    Exit;
+  // una por documento y respuesta: un documentSymbol trae cientos
+  Lineas := TDictionary<string, TArray<string>>.Create;
+  try
+    Recorre(AValor, AUri);
+  finally
+    Lineas.Free;
+  end;
 end;
 
 { Definition con hover de oraculo. DelphiLSP contesta null a definition

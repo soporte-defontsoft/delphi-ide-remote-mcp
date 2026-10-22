@@ -558,6 +558,20 @@ begin
 
   if TFile.Exists(Root) then
     Exit(MsgFmt(SR_LIST_ROOT_IS_FILE_FMT, [TPath.GetFileName(Root)]));
+  // lo que no va con lo que se lista se dice (Lsp.Guard.ParametroQueNoVa),
+  // como en las tools de varios comandos: pattern con dirs=true se ignoraba en
+  // silencio (test completo de Opus de la 1.22.0)
+  var Suyos, VaCon: string;
+  var Modo := IfThen(Params.Dirs, 'true', 'false');
+  var Sobra := ParametroQueNoVa(Modo, [
+      'false', 'root pattern dirs includetrash maxresults offset',
+      'true', 'root dirs includetrash maxresults offset'],
+    ['root', Params.Root, '', 'pattern', Params.Pattern, '',
+     'includetrash', IfThen(Params.IncludeTrash, 'true'), '',
+     'maxresults', IfThen(Params.MaxResults <> 0, IntToStr(Params.MaxResults)), '500',
+     'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), ''], Suyos, VaCon);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_LIST_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos, VaCon]));
   if Params.Dirs then
   begin
     Return := TJSONObject.Create;

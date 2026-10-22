@@ -109,7 +109,8 @@ try:
     check('D0c inline=false sin out= por stdio, sin destino: CAPT-012 ANTES de la puerta de control remoto (2ai)',
           mc.abre(r0, 'SR_CAPTURE_SIN_SALIDA'), r0[:300])
     st = srv.call('delphi_desktop', {'command': 'status', 'profile': PERFIL}, t=120)
-    vivo = not mc.fallo(st)
+    # vivo = su status dice reachable (desde la 1.22.1 un destino caido es reachable=false, no un fallo)
+    vivo = mc.como_json(st).get('reachable') is True
     if vivo:
         antes = set(glob.glob(CASA_SRV, recursive=True))
         r = captura(srv)

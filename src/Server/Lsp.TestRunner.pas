@@ -566,7 +566,7 @@ begin
     try
       AOutput := RunCapturedEnContenedor(Format('"%s"%s',
         [TPath.Combine(Etapa, TPath.GetFileName(AExe)), AArgs]), Etapa, AC,
-        ATimeoutMs, AExitCode, ATimedOut);
+        ATimeoutMs, AExitCode, ATimedOut, phAnsi); // un test de Delphi: su RTL escribe en la ANSI
     except
       on E: ETestNoConfinado do
       begin
