@@ -109,6 +109,14 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_list dirs=true` with a `pattern`, and `delphi_symbols` of a folder
   with `mode` or `filter`, say the parameter does not go with what was asked
   (`LIST-015`, `LSP-050`) instead of ignoring it (`tests/test_contratos_1221.py`).
+- `delphi_config set-property`, `add-searchpath` and `set-output` write a new
+  property where the IDE does: at the END of its group, in the order the
+  properties are created (measured in the IDE's Project Options on a new
+  project); a property that is already there changes in place. They put it at
+  the top of the group, and set-property moved an existing one there too: since
+  msbuild reads a group in document order, `DCC_UnitSearchPath=$(MyPath);...`
+  set after `MyPath` landed above it and saw it empty (F2613)
+  (`tests/test_orden_propiedad_1221.py`).
 - `delphi_upload` says what its `sha256` is: the file as it stands at the
   end of that call - every byte from offset 0 through that chunk, the whole
   file on the last one - which is what the server always checked. The

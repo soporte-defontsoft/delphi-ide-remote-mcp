@@ -100,8 +100,11 @@ r = set_output(P2)
 x = mc.lee(P2)
 base = GRUPO_BASE.search(x)
 cuerpo = base.group(1) if base else ''
-check('D4b la base las recibe, la Exe delante de la Dcu (como antes)',
-      0 <= cuerpo.find('<DCC_ExeOutput>' + COMPILED) < cuerpo.find('<DCC_DcuOutput>'), cuerpo[:300])
+# (1.22.1) una propiedad nueva entra al FINAL de su grupo, como la pone el IDE:
+# set-output crea la Dcu y luego la Exe, el orden de la plantilla del IDE
+check('D4b la base las recibe al final de su grupo, la Dcu y detras la Exe (como el IDE)',
+      re.search(r'<DCC_DcuOutput>[^<]*</DCC_DcuOutput>\s*<DCC_ExeOutput>' + re.escape(COMPILED) +
+                r'</DCC_ExeOutput>\s*$', cuerpo) is not None, cuerpo[-300:])
 check('D4b ...y la de Debug se reescribe: dos, las dos Compiled',
       EXES.findall(x) == [COMPILED, COMPILED], EXES.findall(x))
 check('D4b la respuesta: la Exe estaba solo en Debug, la Dcu sin definir',

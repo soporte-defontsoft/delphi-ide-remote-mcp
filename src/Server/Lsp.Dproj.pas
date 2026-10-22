@@ -355,14 +355,25 @@ function AseguraGrupoDelBuild(var AXml: string; const APlatform, AConfig: string
   out AGrupo: TGrupoXml; out AFalta: TFaltaDeGrupo): Boolean;
 { EL escritor de una propiedad de un build, el gemelo de EffectiveProperty:
   <ATag>AValor</ATag> en el grupo de valores de APlatform/AConfig, creado si
-  falta (AseguraGrupoDelBuild). Las <ATag> que hubiera DENTRO de ese grupo
-  (una vacia tambien) se quitan con su linea - AAntes, la que valia: la
-  ultima - y, si no es quitar, la nueva va al principio del grupo, donde la
-  ponian set-sdk y set-output. Con el mismo valor ya puesto una sola vez no
-  toca nada; quitar de un grupo que no existe no lo crea. False, con AFalta,
-  si no hay grupo ni se pudo crear. }
+  falta (AseguraGrupoDelBuild). Si ese grupo ya la lleva, cambia en SU sitio
+  (la ultima, la que valia: AAntes) y las demas copias con esa Condition se
+  quitan con su linea; si no, entra al FINAL del grupo (AnadeAlGrupo), como
+  la pone el IDE. Asi no cambia el orden en que msbuild las evalua: se
+  quitaba y volvia al principio, y DCC_UnitSearchPath=$(X) creada despues de
+  X quedaba encima de X y la veia vacia (22-oct-2026). Con el mismo valor ya
+  puesto una sola vez no toca nada; quitar de un grupo que no existe no lo
+  crea. False, con AFalta, si no hay grupo ni se pudo crear. }
 function PonPropiedadDelBuild(var AXml: string; const ATag, AValor, APlatform, AConfig: string;
   AQuitar: Boolean; out AAntes: string; out AFalta: TFaltaDeGrupo): Boolean;
+{ EL sitio de una propiedad NUEVA en un grupo, como la pone el IDE: al FINAL
+  de su contenido, en su linea, detras de la ultima - en el orden en que se
+  crean, que es el que cuenta para msbuild (orden de documento: una que usa
+  $(X) creada despues de X la ve). Medido el 22-oct-2026 con el IDE: cinco
+  opciones nuevas de Project Options quedaron detras de VerInfo_Keys, en el
+  orden en que se rellenaron; una que ya estaba no se movio. AElemento, el
+  elemento ya compuesto (XmlElemento). AGrupo, uno con su etiqueta de cierre
+  (no un <PropertyGroup/>). }
+procedure AnadeAlGrupo(var AXml: string; const AGrupo: TGrupoXml; const AElemento: string);
 { Si ANombre es un evento de build o una opcion libre al compilador: texto
   que va a una linea de ordenes, que el build vacia (los eventos) o niega
   (las opciones) y que ninguna tool escribe en un .dproj (set-property lo
@@ -1586,7 +1597,7 @@ function FijaPropiedadParaTodos(var AXml: string; const ATag, AValor: string;
 var
   Grupos: TArray<TGrupoXml>;
   Escrito, Nuevo: string;
-  Base, Ult, Desplaza: Integer;
+  Base, Ult: Integer;
   EnBase: Boolean;
   C: TValorReescrito;
 begin
@@ -1602,7 +1613,6 @@ begin
   Escrito := XmlEscape(AValor);
   Nuevo := '';
   Ult := 1;
-  Desplaza := 0; // lo que crece o encoge el texto por delante del grupo base
   EnBase := False;
   for var T in TramosDeEtiqueta(AXml, ATag) do
     for var I := 0 to High(Grupos) do
@@ -1614,8 +1624,6 @@ begin
         C.EnBase := I = Base;
         EnBase := EnBase or C.EnBase;
         ACambios := ACambios + [C];
-        if (Base >= 0) and (T.Fin <= Grupos[Base].Ini) then
-          Inc(Desplaza, Length(Escrito) - (T.Fin - T.Ini));
         Nuevo := Nuevo + Copy(AXml, Ult, T.Ini - Ult) + Escrito;
         Ult := T.Fin;
         Break;
@@ -1625,11 +1633,10 @@ begin
   begin
     if Base < 0 then
       Exit(False);
-    // al principio del grupo base, donde la ponia set-output; el salto lo
-    // deja como el del fichero quien lo guarda (PatchSaveConSuSalto)
-    var En := Grupos[Base].Ini + Desplaza;
-    Nuevo := Copy(Nuevo, 1, En - 1) + sLineBreak + '        ' +
-      XmlElemento(ATag, AValor) + Copy(Nuevo, En, MaxInt);
+    // al FINAL del grupo base, donde pone el IDE una propiedad nueva
+    // (AnadeAlGrupo; era al principio): el grupo, leido del texto ya
+    // cambiado (los mismos grupos, en el mismo orden)
+    AnadeAlGrupo(Nuevo, GruposDePropiedades(Nuevo)[Base], XmlElemento(ATag, AValor));
   end;
   AXml := Nuevo;
   Result := True;
@@ -3407,6 +3414,27 @@ begin
     AFalta := fgInconsistente;
 end;
 
+procedure AnadeAlGrupo(var AXml: string; const AGrupo: TGrupoXml; const AElemento: string);
+var
+  P: Integer;
+begin
+  // delante del salto que precede a la sangria del cierre: la nueva, en su
+  // linea, tras la ultima del grupo (Fin es el '<' del </PropertyGroup>)
+  P := AGrupo.Fin;
+  while (P > AGrupo.Ini) and CharInSet(AXml[P - 1], [' ', #9]) do
+    Dec(P);
+  if (P > AGrupo.Ini) and (AXml[P - 1] = #10) then
+  begin
+    Dec(P);
+    if (P > AGrupo.Ini) and (AXml[P - 1] = #13) then
+      Dec(P);
+  end
+  else
+    P := AGrupo.Fin; // un grupo sin salto delante de su cierre: justo delante de el
+  // el salto lo deja como el del fichero quien lo guarda (PatchSaveConSuSalto)
+  AXml := Copy(AXml, 1, P - 1) + sLineBreak + '        ' + AElemento + Copy(AXml, P, MaxInt);
+end;
+
 function PonPropiedadDelBuild(var AXml: string; const ATag, AValor, APlatform, AConfig: string;
   AQuitar: Boolean; out AAntes: string; out AFalta: TFaltaDeGrupo): Boolean;
 var
@@ -3448,6 +3476,16 @@ begin
     // el mismo valor, una sola vez: nada que escribir
     if not AQuitar and (Length(Tramos) = 1) and (AAntes = AValor) then
       Exit(True);
+    // la que vale ya esta en G: cambia en SU sitio y se quitan las otras (las
+    // de delante, de la ultima a la primera: no mueven lo de antes)
+    var Ultimo := Tramos[High(Tramos)];
+    if not AQuitar and (Ultimo.Abre >= G.Ini) and (Ultimo.Cierra <= G.Fin) then
+    begin
+      AXml := Copy(AXml, 1, Ultimo.Abre - 1) + XmlElemento(ATag, AValor) + Copy(AXml, Ultimo.Cierra, MaxInt);
+      for var K := High(Tramos) - 1 downto 0 do
+        QuitaConSuLinea(AXml, Tramos[K].Abre, Tramos[K].Cierra);
+      Exit(True);
+    end;
     for var K := High(Tramos) downto 0 do
       QuitaConSuLinea(AXml, Tramos[K].Abre, Tramos[K].Cierra);
     if not GrupoDelBuild(AXml, APlatform, AConfig, G) then
@@ -3457,10 +3495,7 @@ begin
     end;
   end;
   if not AQuitar then
-    // (XmlElemento escapa el valor); el salto lo deja como el del fichero
-    // quien lo guarda (PatchSaveConSuSalto)
-    AXml := Copy(AXml, 1, G.Ini - 1) + sLineBreak + '        ' +
-      XmlElemento(ATag, AValor) + Copy(AXml, G.Ini, MaxInt);
+    AnadeAlGrupo(AXml, G, XmlElemento(ATag, AValor)); // (XmlElemento escapa el valor)
   Result := True;
 end;
 

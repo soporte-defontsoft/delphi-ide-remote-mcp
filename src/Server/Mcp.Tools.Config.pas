@@ -904,10 +904,9 @@ begin
     Xml := Copy(Xml, 1, VS - 1) + XmlEscape(Crudo) + Copy(Xml, VS, MaxInt);
   end
   else
-    // (XmlElemento escapa el valor: aqui va crudo)
-    Xml := Copy(Xml, 1, G.Ini - 1) + sLineBreak +
-      '        ' + XmlElemento('DCC_UnitSearchPath', Crudo + '$(DCC_UnitSearchPath)') +
-      Copy(Xml, G.Ini, MaxInt);
+    // al FINAL del grupo, como la pone el IDE (Lsp.Dproj.AnadeAlGrupo); la
+    // ponia al principio. (XmlElemento escapa el valor: aqui va crudo)
+    AnadeAlGrupo(Xml, G, XmlElemento('DCC_UnitSearchPath', Crudo + '$(DCC_UnitSearchPath)'));
   PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   // en el grupo base, la que el proyecto compila sin platform= (era Win64 a
   // fuego: el build que se proponia no era el del proyecto)
