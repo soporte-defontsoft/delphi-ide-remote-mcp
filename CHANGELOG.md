@@ -143,7 +143,9 @@ the MCP `initialize` response (`serverInfo.version`).
   which sum the call's bytes give and which one was sent (they said "received"
   and "expected", read the other way round), `UPLOAD-011` and `UPLOAD-012` no
   longer say the file differs from the source - the sum sent may be the wrong
-  one - and say so when it is the sum of that chunk alone
+  one - and say so when it is the sum of that chunk alone; and once
+  `UPLOAD-011` has set the file aside, the answer's `size` and `nextOffset`
+  are 0, as its "resend from offset=0" says, not the size assembled
   (`tests/test_contratos_1221.py`).
 - The global properties of a build are one list: the outputs the build
   supplies were copied by hand next to the fixed ones, and `test_paisaje`

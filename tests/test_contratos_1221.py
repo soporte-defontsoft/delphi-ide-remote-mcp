@@ -16,6 +16,8 @@ Y lo que dicen (dirigido de Opus de la 1.22.1 en Hermes, 22-oct-2026: el mensaje
      (ROJO: decia que el fichero difiere del origen, y estaba bien)
   U2 el fichero entero con un sha256 que no es: UPLOAD-015 dice cual mando el agente y cual da lo subido
      (ROJO: "received/expected", que se lee al reves)
+  U3 ...y tras UPLOAD-011 el fichero esta en la papelera: size y nextOffset 0, como dice el mensaje ("resend
+     from offset=0"; ROJO: decian 10, ronda 2 de Opus de la 1.22.1)
 
 Uso:  python tests/test_contratos_1221.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -81,6 +83,10 @@ try:
                                    'sha256': hashlib.sha256(trozo2).hexdigest()})
     check('U1 el segundo con el sha256 de SU trozo: UPLOAD-011 y que esa suma es la del trozo (chunkSha256)',
           mc.es(r, 'SR_UPLOAD_SHA_MISMATCH_FMT') and 'is the sum of THIS chunk alone' in r, r[:600])
+    j = mc.como_json(r) or {}
+    check('U3 ...y con el fichero en la papelera, size y nextOffset 0: reenviar desde offset=0',
+          j.get('quarantined') and j.get('size') == 0 and j.get('nextOffset') == 0
+          and not os.path.exists(os.path.join(sube, 'a.txt')), r[:400])
     bueno = hashlib.sha256(b'otra cosa').hexdigest()
     r = srv.call('delphi_upload', {'path': os.path.join(sube, 'b.txt'), 'offset': 0,
                                    'chunkbase64': base64.b64encode(trozo1).decode(), 'sha256': bueno})

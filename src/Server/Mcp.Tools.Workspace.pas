@@ -1809,6 +1809,13 @@ begin
           begin
             TFile.Delete(FullPath); // la ruta que la puerta del upload aprobo
             Return.AddPair('quarantined', Quarantine);
+            // ya no esta con su nombre: size y nextOffset 0, como dice el
+            // mensaje ("resend from offset=0"); decian lo ensamblado, que
+            // invitaba a seguir por ahi (ronda 2 de Opus de la 1.22.1)
+            Return.RemovePair('size').Free;
+            Return.RemovePair('nextOffset').Free;
+            Return.AddPair('size', TJSONNumber.Create(0));
+            Return.AddPair('nextOffset', TJSONNumber.Create(0));
           end;
         except
           on E: Exception do
