@@ -6,7 +6,26 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.22.0] - 2026-10-22
+
+A project of the IDE builds through the server the way the IDE builds it,
+and its options are managed in one place. The build gate judges only what
+the requested platform and configuration read, evaluating the groups of the
+`.dproj` the way msbuild does, and judges a macro that expands to a list
+piece by piece: a real FMX project with an Android keystore outside the
+roots and the IDE's usual package list now builds for Windows and Linux
+(measured on two machines). `delphi_config` gains `set-property`,
+`remove-property` and `get-property` - one property of the `.dproj` by
+name, in the group of the build you name, written where the IDE writes it,
+the way to re-point or drop that keystore. Underneath, one reader and one
+writer of a project property in `Lsp.Dproj`, the reader judging a build with
+the gate's own evaluator, and the leftovers of the reviewers of the change
+closed, two of them holes: a search path written with Windows'
+extended-path prefix was not judged, and five ways the evaluator of the
+group conditions diverged from msbuild, each one a group the gate would not
+judge, and a macro inside a path the build reads that was expanded with a
+value the compiler would not read. And every project file the server writes
+is loaded by the IDE's own XML parser before it is saved.
 
 ### Added
 
@@ -23,13 +42,23 @@ the MCP `initialize` response (`serverInfo.version`).
   `get-property` answers the value that build reads (the default build
   without `platform=` / `config=`) and every group that sets it. The name
   only chooses: the structure of the `.dproj` (`Config`, `Platform`, `Base`,
-  `Cfg_N` and their flags, `ProjectGuid`, `ProjectVersion`, `MainSource`) is
-  refused with `CFG-132`, a build event or a free compiler option - text this
+  `Cfg_N` and their flags, `ProjectGuid`, `ProjectVersion`, `MainSource`, and
+  the properties the IDE's own imports resolve their files through - `BDS`,
+  `APPDATA`..., the list `BUILD-019` refuses a build for) is refused with
+  `CFG-132`, a build event or a free compiler option - text this
   server never passes to a program - with `CFG-133`; the value is not judged
   when written but when that build reads it, like any value of the `.dproj`
   (`BUILD-050`). `get-property` is a read, allowed in read-only mode.
   (`tests/test_config_property_1220.py`, with msbuild as the judge of where
   the property landed; `LspTests.Dproj`.)
+- **Every project file the server writes is loaded by the IDE's own XML
+  parser before it is saved.** The editors of the `.dproj`, the `.deployproj`
+  and the `.groupproj` compose their text in place with the server's scanner;
+  the result now goes through MSXML 6 - the parser the IDE loads a project
+  with - and a text it would not load is not written (`CFG-142`, naming the
+  line and the reason; the file stays as it was). A second barrier behind the
+  scanner, in the one saver every writer of a project file calls.
+  (`LspTests.Dproj`.)
 
 ### Changed
 
@@ -59,6 +88,24 @@ the MCP `initialize` response (`serverInfo.version`).
   cannot decide is not taken as declared (the gate judges it instead), as
   before. (`LspTests.Dproj`, with a check that five reads of a 100 KB
   `.dproj` stay under half a second.)
+- **Two `PropertyGroup`s with the same `Condition`, and the order of the
+  configuration keys.** msbuild applies every group whose condition holds and
+  the last definition wins; the writer of a property took the first group
+  with that condition and a reader could read the other. Both take the last
+  group now, `set-property` removes the copies the earlier groups held of
+  the property (an element with a `Condition` of its own stays, and when the
+  build named by `platform=` and `config=` reads a different value than the
+  one just written, the answer says so), and the keys of the configurations
+  are read in the order of their definer groups, as the IDE writes them, not
+  in the order of `BuildConfiguration` (Release, Base, Debug in 230 of the
+  296 sample projects of the IDE), so a new group lands after its siblings.
+  (`LspTests.Dproj`.)
+- **A property name msbuild rejects is refused, and so is a key it rejects.**
+  `set-property` accepted a name with a `.` (MSB5016 in msbuild, measured)
+  and a name msbuild reserves (`MSBuildProjectName`, MSB4004); `CFG-131` and
+  `CFG-132` refuse them now, by the one grammar of a tag name that also
+  judges the key of a configuration before a group is named after it
+  (`CFG-141`).
 - **The build gate judges what the requested build reads, not every property
   group of the `.dproj`.** A keystore that only an Android64 Debug build reads
   (`PF_KeyStoreDebug`, in the `'$(Cfg_1_Android64)'!=''` group the IDE
@@ -113,6 +160,60 @@ the MCP `initialize` response (`serverInfo.version`).
   before judging, by the house that already read it (`Lsp.Rutas`), and the
   path goes through the gate like any other; a prefixed path inside the roots
   still compiles. (`tests/test_build_prefijo_1220.py`.)
+- **The evaluator of the group conditions diverged from msbuild in five
+  ways, each one a group the build gate would not judge.** A reviewer
+  measured them against the IDE's msbuild on 2026-10-21: a `PropertyGroup`
+  inside `ProjectExtensions` or inside a `Target` set a flag for the
+  evaluator while msbuild ignores it there; a value was expanded late, with
+  the properties it names as they stood at the comparison, while msbuild
+  fixes it when defined; a global property the build passes on its line
+  (`/p:Profile`, `/p:PlatformSDK`, the emptied build events...) was read from
+  the document, while the global wins even when the document defines it
+  later; a property set by a file the project imports was taken as empty;
+  and `'1.0'=='1'`, `'yes'=='true'` or `'%31'=='1'` were false, while msbuild
+  compares numbers and booleans before text and unescapes `%XX`. In each
+  case the gate took the group for another build's and did not judge its
+  values, so a search path to a folder outside the roots in such a group
+  compiled a unit from there. The evaluator now does what was measured; the
+  globals the build passes are one declared list that `test_paisaje` keeps
+  in step with the msbuild line; a name another file of the project's chain
+  defines is never assumed empty; and a reader of one build reads the groups
+  of the root only. A `PropertyGroup` with a namespace prefix was suspected
+  too: msbuild refuses it (MSB4097), nothing to close.
+  (`tests/test_build_evaluador_1220.py`, 8 checks, 5 red against the
+  previous build; `LspTests.Dproj`.)
+- **A macro inside a path the build reads could point one way for the gate
+  and another for the compiler.** The gate expanded `$(Name)` with the last
+  value the project gives that property, while msbuild fixes a property's
+  value where it is defined: with `<A>..</A>`, a search path
+  `$(A)\..\outside` and then `<A>x</A>`, the gate judged a folder inside the
+  roots and dcc read one outside, and a unit that only existed there
+  compiled (measured on 2026-10-22, in 1.21.4 too). Three more shapes of the
+  same cause were measured the same day: a property defined once under a
+  `Condition` the gate cannot evaluate (an `Exists()`) expanded to nothing
+  while msbuild applied it; a name of the IDE's table (`LANGDIR`) redefined
+  by the project expanded to the table's value while msbuild took the
+  project's; a macro used before its only definition expanded to that value
+  while msbuild read it empty. The gate now expands every value the build
+  reads with the same walk that evaluates the group conditions as msbuild
+  does: a property has the value it was last given before that point in a
+  group this build reads (empty until then, the project's over the
+  environment's), an item's `Include` the final one, and what the document
+  does not know (the IDE's and msbuild's own properties, an environment
+  variable, a name nothing defines) is expanded by the gate's table
+  afterwards. What the gate cannot know is refused with `BUILD-056`, naming
+  the macro: a property set under a `Condition` it cannot evaluate, or a
+  property the build passes on its own command line. And a `$(...)` in a value
+  the build reads is approved only when what is inside is a simple property
+  name (letters, digits and `_`): anything else - a property function, an
+  item, a name with a dot or a dash - makes the whole value non-verifiable and
+  is refused with `BUILD-051` before expanding, whether or not the path
+  exists. Measured over 3,651 projects (the IDE's samples, this machine's
+  roots and a NAS): none uses a macro the gate now refuses, none is refused
+  that built before, and a property defined once per configuration is no
+  longer refused. (`tests/test_build_macros_1220.py`, 15 checks, 5 red
+  against 1.21.4, three of which compiled with a unit from outside the roots;
+  `LspTests.Dproj`.)
 - **The engine's search path and the IDE's Library path split the list before
   expanding macros.** A macro that expands to a list (`$(Path)`, an
   environment variable holding two folders) stayed one piece with a `;`
@@ -128,6 +229,29 @@ the MCP `initialize` response (`serverInfo.version`).
   folder of its own for another platform could ship from the wrong one; it
   now reads the value of that platform and configuration and expands its
   macros with the one expander of output folders. The old merger is gone.
+- **Two refusals did not say how to go on** (an independent agent, three
+  directed runs before this release). `remove-searchpath` answered `CFG-022`
+  "not in the search path" for a folder that a configuration's group holds
+  (as `set-property` with `config=` writes it): it now says which group has
+  it and that `remove-property` with that `platform=` and `config=` takes it
+  out. And `BUILD-055` (a `.dproj` cut short) told the agent to restore the
+  copy in `__delphi-patch` without saying how: it now names the way -
+  `delphi_delete` the broken file, then `delphi_move` the copy the upload
+  named in `backup` to its name - which leaves the file byte for byte and
+  builds. (`tests/test_config_property_1220.py`,
+  `tests/test_build_dproj_truncado_1214.py`: one check each, red against the
+  previous build.)
+- **An upload whose final `sha256` did not match left the name empty.** With
+  the whole file in one call (`offset=0` and its `sha256`), the server wrote
+  it, moved the previous version to the trash and then set the upload aside,
+  so the file that was there was no longer under its name (an independent
+  agent's full review before this release). That call is now checked before
+  anything is written: a mismatch is `UPLOAD-015` and the file stays as it
+  was. After several chunks the check can only come at the end: `UPLOAD-011`
+  now says that the first chunk kept a copy of the previous version and that
+  `delphi_move` of that copy puts it back. (`tests/test_upload_corrupt_1192.py`,
+  two checks red against the previous build; the batteries that measure the
+  quarantine reach it in two chunks, the only way it happens now.)
 
 ## Earlier versions
 

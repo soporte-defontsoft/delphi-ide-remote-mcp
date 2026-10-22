@@ -228,7 +228,7 @@ var
     de campo de hermes, 2026-09-21). Inversa de set-sdk / set-profile. }
   procedure PonDestino(AObj: TJSONObject; const APlat: string);
   var
-    V: string;
+    V, Cfg: string;
   begin
     if Xml = '' then
       Xml := LeeTexto(ADproj, [ltJaula]);
@@ -237,7 +237,10 @@ var
       Rad := DiscoverRadStudio;
       RadVisto := True;
     end;
-    V := PlatformProperty(Xml, APlat, 'PlatformSDK');
+    // lo que lee el build por defecto de esa plataforma (la config que el
+    // proyecto compila por defecto), con el lector del build
+    Cfg := InfoDeDproj(Xml).ConfigPorDefecto;
+    V := EffectiveProperty(Xml, 'PlatformSDK', APlat, Cfg);
     // valores CORTOS (project | ide-default | none): cinco destinos con la
     // explicacion repetida en cada uno hacian del resumen un tocho; la
     // explicacion va UNA vez, en remoteTargetsNote
@@ -259,7 +262,7 @@ var
     // Android va por adb y no tiene perfil que fijar
     if SistemaDelPAServer(APlat) = spDesconocido then
       Exit;
-    V := PlatformProperty(Xml, APlat, 'Profile');
+    V := EffectiveProperty(Xml, 'Profile', APlat, Cfg);
     AObj.AddPair('profile', V);
     if V <> '' then
       AObj.AddPair('profileSource', 'project')
@@ -630,6 +633,13 @@ end;
   set-profile), con add-searchpath eligiendo el grupo por su cuenta; en un
   grupo de configuracion no escribia nadie (unificacion de la 1.22.0). }
 
+{ La pareja de un build con nombre ("Win64 Debug"; una mitad sola, ella):
+  UN compositor, el de las respuestas y el de la vista de los search paths. }
+function ParejaDelBuild(const APlatform, AConfig: string): string;
+begin
+  Result := (APlatform + ' ' + AConfig).Trim;
+end;
+
 { El nombre de un build en las respuestas: la base, una plataforma, una
   configuracion o la pareja. }
 function NombreDelBuild(const APlatform, AConfig: string): string;
@@ -641,7 +651,7 @@ begin
   else if APlatform = '' then
     Result := MsgFmt(SF_CFG_BUILD_CONFIG_FMT, [AConfig])
   else
-    Result := APlatform + ' ' + AConfig;
+    Result := ParejaDelBuild(APlatform, AConfig);
 end;
 
 { La configuracion ARaw con el nombre que declara el proyecto (una que se
@@ -678,6 +688,8 @@ begin
       Result := MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE);
     fgInconsistente:
       Result := MsgFmt(SR_CFG_QUEDO_INCONSISTENTE_FMT, [ATag]);
+    fgClaveInvalida:
+      Result := MsgFmt(SR_CFG_CLAVE_INVALIDA_FMT, [ClaveDelBuild(AXml, AConfig), AConfig]);
   else
     Result := '';
   end;
@@ -908,6 +920,8 @@ begin
       MsgFmt(SF_CONFIG_PATHS_YA_ESTABAN_FMT, [string.Join(', ', YaEstaban)])), Compila]);
 end;
 
+function DondeEsta(const AXml, ATag: string): string; forward;
+
 { remove-searchpath con una o VARIAS: las que no estaban se dicen; UNA
   escritura. Con una sola, lo de siempre (CFG-021/022). }
 function RemoveSearchPath(const ADproj, ARawPlatform: string;
@@ -961,11 +975,22 @@ begin
         NoEstaban := NoEstaban + [R.Trim];
     if Length(Quitadas) = 0 then
     begin
-      // ninguna estaba: lo de siempre, una linea por carpeta
+      // ninguna estaba: lo de siempre, una linea por carpeta; y si alguna esta
+      // en el search path de OTRO grupo (el de una configuracion, que escribe
+      // set-property con config=), donde y con que se quita: este comando solo
+      // cambia el de la plataforma (Hermes, dirigido de la 1.22.0: "no esta"
+      // le costo dos turnos)
       Result := '';
       for P in NoEstaban do
         Result := Result + IfThen(Result = '', '', sLineBreak) +
           MsgFmt(SN_CONFIG_PATH_ABSENT_FMT, [P, Etiqueta]);
+      var Donde := DondeEsta(Xml, 'DCC_UnitSearchPath');
+      for P in NoEstaban do
+        if ContainsText(Donde, P) then
+        begin
+          Result := Result + MsgFmt(SF_CONFIG_PATH_EN_OTRO_GRUPO_FMT, [Donde]);
+          Break;
+        end;
       Exit;
     end;
     Rest := string.Join(';', Keep.ToArray);
@@ -1008,7 +1033,7 @@ begin
     if (Plat = '') and (Cfg = '') then
       Name := 'base'
     else
-      Name := (Plat + ' ' + Cfg).Trim;
+      Name := ParejaDelBuild(Plat, Cfg);
     Tramos := TramosEnGrupo(AXml, 'DCC_UnitSearchPath', G);
     if Length(Tramos) = 0 then
       Continue;
@@ -1730,26 +1755,28 @@ end;
   vacia o los niega). El VALOR no se juzga aqui: lo juzga la puerta del build
   cuando ESE build lo lea (BUILD-050), como lo que entra por delphi_upload. }
 
-{ Un nombre de propiedad como los que escribe el IDE: letra o _ y luego
-  letras, digitos, _ . - (lo que XML admite en una etiqueta; gramatica
-  propia, declarada: el juez, MSXML, no entra en el servidor). }
-function NombreDePropiedadValido(const ANombre: string): Boolean;
-begin
-  Result := (ANombre <> '') and CharInSet(ANombre[1], ['A'..'Z', 'a'..'z', '_']);
-  for var C in ANombre do
-    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '.', '-']) then
-      Exit(False);
-end;
-
 { Lo que no es una opcion sino la ESTRUCTURA del .dproj: los selectores
-  (Config, Platform: set-active), las claves (Base, Cfg_N) y las banderas de
-  los definidores (Base_X, Cfg_N_X, CfgParent), y lo que identifica el
-  proyecto (ProjectGuid, ProjectVersion, MainSource). }
-function EsClaveDeEstructura(const ANombre: string): Boolean;
+  (Config, Platform: set-active), las claves de los builds que declara ESTE
+  proyecto y sus banderas de plataforma (ClavesDelProyecto, el juez: Base y
+  Cfg_N o como se llamen, y Base_X / Cfg_N_X; era un StartsWith('Cfg_') que
+  imitaba al juez y dejaba pasar una clave renombrada), CfgParent, lo que
+  identifica el proyecto (ProjectGuid, ProjectVersion, MainSource,
+  FrameworkType, AppType, ProjectType, TargetedPlatforms), las propiedades
+  por las que los <Import> del IDE resuelven lo que cargan (BDS, APPDATA...:
+  el build las niega con BUILD-019; aqui, la segunda barrera) y los nombres
+  que msbuild se reserva (MSBuild*: MSB4004 al escribir MSBuildProjectName
+  en un PropertyGroup, medido el 21-oct-2026). }
+function EsClaveDeEstructura(const AXml, ANombre: string): Boolean;
 begin
-  Result := MatchText(ANombre, ['Config', 'Platform', 'Base', 'CfgParent', 'ProjectGuid',
-    'ProjectVersion', 'MainSource']) or ANombre.StartsWith('Base_', True) or
-    ANombre.StartsWith('Cfg_', True);
+  Result := MatchText(ANombre, ['Config', 'Platform', 'CfgParent', 'ProjectGuid',
+    'ProjectVersion', 'MainSource', 'FrameworkType', 'AppType', 'ProjectType',
+    'TargetedPlatforms']) or EsPropiedadReservadaDelIde(ANombre) or
+    StartsText('MSBuild', ANombre);
+  if Result then
+    Exit;
+  for var K in ClavesDelProyecto(AXml) do
+    if SameText(ANombre, K) or ANombre.StartsWith(K + '_', True) then
+      Exit(True);
 end;
 
 { En que grupos del .dproj esta <ATag> y con que valor, en orden de
@@ -1795,15 +1822,16 @@ end;
 function SetProperty(const ADproj, ARawName, ARawValue, ARawPlatform, ARawConfig: string;
   AQuitar: Boolean): string;
 var
-  Nombre, Valor, Enc, Xml, Original, Plat, Cfg, Antes, Donde, Grupo: string;
+  Nombre, Valor, Enc, Xml, Original, Plat, Cfg, Antes, Donde, Grupo, Leido, Pisada: string;
   Falta: TFaltaDeGrupo;
 begin
   Nombre := ARawName.Trim;
   if Nombre = '' then
     Exit(MsgText(SR_CFG_NEED_NAME));
-  if not NombreDePropiedadValido(Nombre) then
+  if not EsNombreDeEtiqueta(Nombre) then
     Exit(MsgFmt(SR_CFG_NAME_NO_ES_PROPIEDAD_FMT, [Nombre]));
-  if EsClaveDeEstructura(Nombre) then
+  Xml := PatchLoadText(ADproj, Enc);
+  if EsClaveDeEstructura(Xml, Nombre) then
     Exit(MsgFmt(SR_CFG_NAME_ES_ESTRUCTURA_FMT, [Nombre]));
   if EsTextoLibreDelBuild(Nombre) then
     Exit(MsgFmt(SR_CFG_NAME_ES_TEXTO_LIBRE_FMT, [Nombre]));
@@ -1816,7 +1844,6 @@ begin
       if Ord(C) < 32 then
         Exit(MsgText(SR_CFG_VALUE_CON_CONTROL));
   end;
-  Xml := PatchLoadText(ADproj, Enc);
   Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, Plat, Cfg);
   if Result <> '' then
     Exit;
@@ -1833,11 +1860,22 @@ begin
     Exit(MsgFmt(SN_CFG_PROPERTY_QUITADA_FMT,
       [Nombre, Donde, Grupo, ONinguno(Antes), EnOtrosGrupos(Xml, Nombre)]));
   end;
+  // con el build entero nombrado, lo que msbuild lee para el: se escribe en
+  // el ULTIMO grupo con esa Condition, pero un elemento con SU Condition en
+  // ese grupo, o un grupo de otra forma mas abajo, gana; se dice (revisor D,
+  // 21-oct-2026). Un valor con $(Nombre) dentro se lee expandido: no se compara
+  Pisada := '';
+  if (Plat <> '') and (Cfg <> '') and not ContainsText(Valor, '$(' + Nombre + ')') then
+  begin
+    Leido := EffectiveProperty(Xml, Nombre, Plat, Cfg);
+    if Leido <> Valor then
+      Pisada := MsgFmt(SF_CFG_PROPERTY_PISADA_FMT, [ONinguno(Leido)]);
+  end;
   // lo que ya era no se escribe, ni copia (como set-active)
   if Xml = Original then
-    Exit(MsgFmt(SN_CFG_PROPERTY_YA_FMT, [Nombre, Valor, Donde, Grupo]));
+    Exit(MsgFmt(SN_CFG_PROPERTY_YA_FMT, [Nombre, Valor, Donde, Grupo]) + Pisada);
   PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
-  Result := MsgFmt(SN_CFG_PROPERTY_PUESTA_FMT, [Nombre, Valor, Donde, Grupo, ONinguno(Antes)]);
+  Result := MsgFmt(SN_CFG_PROPERTY_PUESTA_FMT, [Nombre, Valor, Donde, Grupo, ONinguno(Antes)]) + Pisada;
 end;
 
 function GetProperty(const ADproj, ARawName, ARawPlatform, ARawConfig: string): string;
@@ -1848,7 +1886,7 @@ begin
   Nombre := ARawName.Trim;
   if Nombre = '' then
     Exit(MsgText(SR_CFG_NEED_NAME));
-  if not NombreDePropiedadValido(Nombre) then
+  if not EsNombreDeEtiqueta(Nombre) then
     Exit(MsgFmt(SR_CFG_NAME_NO_ES_PROPIEDAD_FMT, [Nombre]));
   Xml := PatchLoadText(ADproj, Enc);
   Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, Plat, Cfg);
@@ -1857,9 +1895,15 @@ begin
   // el build que se lee: el pedido y, sin pedirlo, el que el proyecto
   // compila por defecto (lo que hace delphi_build sin platform= / config=)
   Info := InfoDeDproj(Xml);
-  Donde := '';
-  if (Plat = '') or (Cfg = '') then
-    Donde := MsgText(SF_CFG_BUILD_POR_DEFECTO);
+  // lo que no se pidio: el build por defecto entero, o solo su mitad
+  if (Plat = '') and (Cfg = '') then
+    Donde := MsgText(SF_CFG_BUILD_POR_DEFECTO)
+  else if Plat = '' then
+    Donde := MsgText(SF_CFG_BUILD_PLATAFORMA_POR_DEFECTO)
+  else if Cfg = '' then
+    Donde := MsgText(SF_CFG_BUILD_CONFIG_POR_DEFECTO)
+  else
+    Donde := '';
   if Plat = '' then
     Plat := Info.PlataformaPorDefecto;
   if Cfg = '' then

@@ -566,6 +566,13 @@ procedure ApuntaEscritoEnLaLlamada(const APath: string; const B: TArray<Byte>);
   toman el salto del fichero. Un .dproj en LF quedaba mezclado (octava
   revision). No es para una copia, que va con los bytes de su origen. }
 procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
+{ Lo que el parser del IDE (MSXML 6, el que carga un proyecto) dice de un
+  texto XML: '' si lo carga, o su error (linea y motivo) si no. EL juez de
+  "esta bien formado" de lo que el servidor compone en sitio con su escaner:
+  PatchSaveConSuSalto lo pregunta antes de escribir, y un proyecto que el IDE
+  no abriese no se escribe (David, 21-oct-2026: las librerias XML de verdad,
+  sin reinventar la rueda). }
+function XmlMalFormadoSegunElIde(const AXml: string): string;
 
 { EL cerrojo de escritura del servidor, prestado a los otros motores.
 
@@ -887,6 +894,8 @@ uses
   System.Generics.Collections,
   System.RegularExpressions,
   Winapi.Windows,
+  Winapi.ActiveX, // CoInitializeEx: COM en el hilo de la llamada, como Lsp.Chm
+  Winapi.msxml, // MSXML 6, el parser del IDE: el juez de lo que se escribe como XML
   Lsp.Guard,
   Lsp.Discovery,
   Lsp.Texts,
@@ -2655,9 +2664,52 @@ begin
   AtomicWrite(APath, B);
 end;
 
+function XmlMalFormadoSegunElIde(const AXml: string): string;
+
+  // en una rutina APARTE: los temporales de interfaz que deja una expresion
+  // (el parseError) se sueltan al salir de la rutina, no de la sentencia, y
+  // sueltos despues de CoUninitialize llaman a codigo ya descargado (AV en la
+  // suite, medida el 22-oct-2026)
+  function Juzga(const ATexto: string): string;
+  var
+    Doc: IXMLDOMDocument2;
+    Error: IXMLDOMParseError;
+  begin
+    Result := '';
+    Doc := CoDOMDocument60.Create;
+    Doc.async := False;
+    Doc.validateOnParse := False;
+    Doc.resolveExternals := False;
+    if not Doc.loadXML(ATexto) then
+    begin
+      Error := Doc.parseError;
+      Result := MsgFmt(SF_XML_ERROR_DEL_PARSER_FMT, [Error.line, Trim(string(Error.reason))]);
+    end;
+  end;
+
+var
+  ComPropio: Boolean;
+  Texto: string;
+begin
+  // COM en ESTE hilo, el de la llamada, como Lsp.Chm (S_FALSE = ya estaba,
+  // tambien se deshace; RPC_E_CHANGED_MODE = ya estaba en otro modo, no es
+  // nuestro)
+  ComPropio := Succeeded(CoInitializeEx(nil, COINIT_MULTITHREADED));
+  try
+    // el BOM, si el texto lo trae, no es XML para un parser que recibe texto
+    Texto := AXml;
+    if (Texto <> '') and (Texto[1] = #$FEFF) then
+      Texto := Texto.Substring(1);
+    Result := Juzga(Texto);
+  finally
+    if ComPropio then
+      CoUninitialize;
+  end;
+end;
+
 procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
 var
-  Enc, Antes, Texto: string;
+  Enc, Antes, Texto, Mal: string;
 begin
   Texto := AText;
   if TFile.Exists(APath) and (Pos(#13#10, Texto) > 0) then
@@ -2666,6 +2718,11 @@ begin
     if Pos(#13#10, Antes) = 0 then
       Texto := Texto.Replace(#13#10, SaltoDominante(Antes));
   end;
+  // el parser del IDE sobre lo compuesto, ANTES de escribir: el escaner
+  // compone en sitio y esta es la segunda barrera (David, 21-oct-2026)
+  Mal := XmlMalFormadoSegunElIde(Texto);
+  if Mal <> '' then
+    raise Exception.Create(MsgFmt(SR_PATCH_XML_MAL_FORMADO_FMT, [TPath.GetFileName(APath), Mal]));
   PatchSaveText(APath, Texto, AEncName);
 end;
 

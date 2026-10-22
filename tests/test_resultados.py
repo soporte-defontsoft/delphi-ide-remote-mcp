@@ -358,9 +358,10 @@ try:
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
     BAD = os.path.join(JAIL, 'subida.bin')
-    res, sc, t = llama('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'abc').decode(),
-                                         'offset': 0, 'sha256': '0' * 64})
-    check('E12 una subida cuya sha no cuadra es un fallo (y queda apartada)',
+    # a trozos: con el fichero entero en una llamada no se escribe nada (UPLOAD-015)
+    for a in mc.subida_en_dos(BAD, b'abc', '0' * 64):
+        res, sc, t = llama('delphi_upload', a)
+    check('E12 una subida a trozos cuya sha no cuadra es un fallo (y queda apartada)',
           res.get('isError') is True and mc.abre(t, 'SR_UPLOAD_SHA_MISMATCH_FMT') and
           not os.path.exists(BAD) and not os.path.exists(BAD + '.corrupt') and
           len(mc.copias(JAIL, 'subida.bin', 'CAJON_CORRUPTOS')) == 1,

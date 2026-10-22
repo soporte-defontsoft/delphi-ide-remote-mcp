@@ -14,6 +14,16 @@ listados y de git.
   K3 otra subida mala: su copia es otra, la primera sigue
   K4 subida buena despues: verified, publicada, y la carpeta sin .corrupt (ROJO)
   K5 delphi_list de la carpeta: solo el fichero bueno
+  K6 (1.22.0) el fichero ENTERO en una llamada con el sha mal, sobre el bueno: UPLOAD-015, no
+     se escribe nada (el bueno sigue con su nombre) y no hay copia nueva en ningun cajon. Antes
+     se escribia, el bueno iba a la papelera y lo subido se apartaba: el fichero dejaba de
+     estar con su nombre (test completo de Hermes; ROJO contra rel1220j)
+  K7 (1.22.0) a trozos sobre el bueno con el sha mal: UPLOAD-011 dice como volver al de antes
+     (delphi_move de la copia que nombro "backup"), y siguiendo el mensaje vuelve byte a
+     byte (ROJO contra rel1220j en el mensaje)
+
+Las subidas malas de K1-K3 van a TROZOS (mc.subida_en_dos): con el fichero entero en una
+llamada, desde la 1.22.0, no se escribe nada y no hay cuarentena que medir.
 
 Uso:  python tests/test_upload_corrupt_1192.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -31,12 +41,18 @@ F = os.path.join(DIR, 'carga.bin')
 
 
 def sube(datos, sha):
-    r = s.call('delphi_upload', {'path': F, 'chunkbase64': base64.b64encode(datos).decode(),
-                                 'offset': 0, 'sha256': sha})
+    """A trozos (dos llamadas): la respuesta de la ultima."""
+    for a in mc.subida_en_dos(F, datos, sha):
+        r = s.call('delphi_upload', a)
     try:
         return json.loads(r), r
     except ValueError:
         return {}, r
+
+
+def cajones():
+    """Las copias de carga.bin en los cajones de lo corrupto y lo sustituido."""
+    return (len(mc.copias(DIR, 'carga.bin', 'CAJON_CORRUPTOS')), len(mc.copias(DIR, 'carga.bin', 'CAJON_SUSTITUIDOS')))
 
 
 def corruptos():
@@ -66,6 +82,24 @@ try:
     lista = s.call('delphi_list', {'root': DIR, 'pattern': '*'})
     check('K5 delphi_list de la carpeta: solo el fichero bueno',
           'carga.bin' in lista and '.corrupt' not in lista and 'MALO' not in lista, lista[:300])
+
+    antes = cajones()
+    r = s.call('delphi_upload', {'path': F, 'chunkbase64': base64.b64encode(b'MALO-3').decode(),
+                                 'offset': 0, 'sha256': '0' * 64})
+    check('K6 entero en una llamada con el sha mal: UPLOAD-015, nada escrito y el bueno sigue con su nombre',
+          mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_SHA_ENTERO_MISMATCH_FMT') and open(F, 'rb').read() == bueno
+          and cajones() == antes, (r[:300], cajones(), antes))
+
+    a1, a2 = mc.subida_en_dos(F, b'MALO-4', '0' * 64)
+    j1 = mc.como_json(s.call('delphi_upload', a1)) or {}
+    r = s.call('delphi_upload', a2)
+    copia = j1.get('backup', '')
+    check('K7 a trozos sobre el bueno con el sha mal: UPLOAD-011 dice como volver al de antes',
+          'UPLOAD-011' in r and 'delphi_move' in r and 'backup' in r and copia != '' and not os.path.exists(F),
+          (r[:400], copia))
+    r = s.call('delphi_move', {'path': copia, 'dest': F})
+    check('K7 ...y siguiendo el mensaje vuelve byte a byte',
+          os.path.exists(F) and open(F, 'rb').read() == bueno, r[:300])
 finally:
     s.cierra()
 

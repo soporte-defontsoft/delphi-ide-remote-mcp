@@ -39,8 +39,9 @@ function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
 
 { El SDK que fija EL PROYECTO para esa plataforma (PlatformSDK de su
   PropertyGroup), y el que el SDK Manager del IDE tiene por defecto para ella.
-  Los usa delphi_config view para decir con que se compila y por que. }
-function ProyectoDeclaraSdk(const ADproj, APlat: string; out ASdk: string): Boolean;
+  El build lee el primero; delphi_config view, el segundo (y el del proyecto
+  con el lector del build, EffectiveProperty). }
+function ProyectoDeclaraSdk(const ADproj, APlat, AConfig: string; out ASdk: string): Boolean;
 function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
 
 { Lanza ACmdLine FUERA del job object de la llamada y espera a que el proceso
@@ -1365,10 +1366,10 @@ begin
   end;
 end;
 
-{ Lo que EL PROYECTO declara para una plataforma (PlatformSDK, Profile: las
+{ Lo que EL PROYECTO declara para un build (PlatformSDK, Profile: las
   propiedades que CodeGear.Profiles.Targets lee del .dproj). '' si no lo
   declara o el .dproj no se lee. Un lector para el SDK y para el perfil. }
-function PropiedadDelProyecto(const ADproj, APlat, ATag: string): string;
+function PropiedadDelProyecto(const ADproj, APlat, AConfig, ATag: string): string;
 var
   Xml: string;
 begin
@@ -1378,17 +1379,19 @@ begin
   except
     Exit;
   end;
-  // POR PLATAFORMA, que es como lo escriben el IDE, set-sdk y set-profile: el
-  // primer <PlatformSDK> del fichero le daba a un build OSX64 el SDK de Linux64.
-  Result := PlatformProperty(Xml, APlat, ATag);
+  // lo que lee ESE build (plataforma Y config), con el lector del build, el
+  // juez de la puerta: el primer <PlatformSDK> del fichero le daba a un build
+  // OSX64 el SDK de Linux64, y el lector por plataforma no veia el grupo de
+  // una config (revisor D, 21-oct-2026)
+  Result := EffectiveProperty(Xml, ATag, APlat, AConfig);
 end;
 
 { El SDK que declara EL PROYECTO (propiedad PlatformSDK, que es la que lee
   CodeGear.Profiles.Targets). El modelo del IDE es que cada proyecto diga con
   cual se compila; si lo dice, no se le pisa. }
-function ProyectoDeclaraSdk(const ADproj, APlat: string; out ASdk: string): Boolean;
+function ProyectoDeclaraSdk(const ADproj, APlat, AConfig: string; out ASdk: string): Boolean;
 begin
-  ASdk := PropiedadDelProyecto(ADproj, APlat, 'PlatformSDK');
+  ASdk := PropiedadDelProyecto(ADproj, APlat, AConfig, 'PlatformSDK');
   Result := ASdk <> '';
 end;
 
@@ -1539,66 +1542,97 @@ begin
     Result := Raiz;
 end;
 
+const
+  { Las propiedades GLOBALES que este build pasa a msbuild por /p: (la orden
+    de msbuild, mas abajo): ganan a lo que el .dproj ponga, aun definido
+    despues (medido el 21-oct-2026), y la puerta no sabe su valor al evaluar
+    las Condition, asi que una Condition que las compare no se sabe y se
+    juzga. Config y Platform van aparte: son lo pedido. Cada /p: nuevo de la
+    orden entra aqui; test_paisaje lo vigila. }
+  GLOBALES_DEL_BUILD: TArray<string> = ['Profile', 'DeviceId', 'PlatformSDK',
+    'PreBuildEvent', 'PostBuildEvent', 'PreLinkEvent', 'PostLinkEvent',
+    'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput'];
+
 { Lo que este build LEE por lo que el proyecto escribe - el icono, el
   manifiesto, un search path, un .rc, un DeployFile, un keystore... - tiene
   que estar donde esta sesion puede leer: cada valor de cada propiedad - de
   los grupos de ESTE build, no de los que el IDE escribe para otra plataforma
-  u otra configuracion (1.21.5) - y cada Include de cada item del .dproj y
-  de lo que importa (ValoresQueLeeElBuild),
-  con las macros expandidas como las expande NUESTRO msbuild (la tabla del
-  IDE, rsvars.bat, las propiedades del proyecto, el entorno del servidor sin
-  las DELPHI_MCP_*, y vacio lo demas), resuelto contra la carpeta del
-  proyecto, y juzgado por la puerta de leer con los lugares del motor (la
-  jaula, el IDE y su biblioteca: lo mismo que dcc y brcc32 van a abrir). Se
-  juzga exista o no: negar solo lo que existe seria un oraculo de fuera. Lo
-  que no es una ruta (un define, una clave de version) no lo abre nadie y se
-  salta. Y el .rc de un RcCompile, por EL lector del .rc. Medido en la 1.20.1:
-  un RcCompile y un Manifest_File de fuera acababan en el .res y en el exe;
-  censo del 20-oct-2026 sobre los 122 proyectos de las raices de produccion:
-  0 valores de fuera. Parte 3 del gate del build (1.21.2). }
+  u otra configuracion (1.22.0) - y cada Include de cada item del .dproj y
+  de lo que importa (ValoresQueLeeElBuild), con las macros expandidas como
+  las expande NUESTRO msbuild: las propiedades del documento como las tiene
+  msbuild DONDE las lee (el recorrido de Lsp.Dproj.VeredictosDeElementos: lo
+  ultimo puesto antes en un grupo de este build, vacio hasta entonces, un
+  Include con lo del final), y lo que el documento no sabe, aqui (Expande:
+  la tabla del IDE, rsvars.bat, las de msbuild sobre este proyecto, el
+  entorno del servidor sin las DELPHI_MCP_*, y lo que nadie define, vacio,
+  como msbuild; negarlo tumbaba 175 proyectos del censo de 3.651 del
+  22-oct-2026: ModuleName, $(Auto), TargetName, que definen los targets del
+  IDE y no son rutas). Lo que no se sabe se niega, BUILD-056 (una propiedad
+  puesta bajo una Condition que no se sabe evaluar, una global del build),
+  y lo que define OTRO documento de la cadena queda sin expandir y se niega
+  como no verificable (BUILD-051: msbuild lo evalua donde lo importa). Tres
+  agujeros medidos el 22-oct-2026 expandian con otro valor que el que dcc
+  lee: el ultimo del documento (un $(A)\..\fuera con A=.. y luego A=x), el
+  de la tabla con la propiedad redefinida por el proyecto, el definido
+  despues del uso. Resuelto contra la carpeta del proyecto, y juzgado por la
+  puerta de leer con los lugares del motor (la jaula, el IDE y su
+  biblioteca: lo mismo que dcc y brcc32 van a abrir). Se juzga exista o no:
+  negar solo lo que existe seria un oraculo de fuera. Lo que no es una ruta
+  (un define, una clave de version) no lo abre nadie y se salta. Y el .rc de
+  un RcCompile, por EL lector del .rc. Medido en la 1.20.1: un RcCompile y
+  un Manifest_File de fuera acababan en el .res y en el exe; censo del
+  20-oct-2026 sobre los 122 proyectos de las raices de produccion: 0 valores
+  de fuera. Parte 3 del gate del build (1.21.2). }
 function LecturasDelBuildDenegadas(const ADprojPath, APlat, ACfg: string;
   const AInfo: TRadStudioInfo): string;
 var
   Vars: TStringList;
-  Cache: TDictionary<string, string>;
   Xmls, Ficheros: TArray<string>;
+  Docs: TArray<TArray<TElementoXml>>; // los elementos de cada documento de Xmls
   Dir, Base: string;
 
-  // $(X) como lo expande nuestro msbuild: la tabla, una propiedad del
-  // proyecto (EffectiveProperty, la de ESTE build), el entorno, o vacio
-  function Expande(const AValor: string): string;
+  // lo que el documento dejo escrito como $(X) en un valor (lo que el no
+  // sabe: ValoresQueLeeElBuild), expandido como lo expande nuestro msbuild:
+  // la tabla del build (el IDE, rsvars.bat, las de msbuild sobre este
+  // proyecto), el entorno del servidor sin las DELPHI_MCP_*, y lo que nadie
+  // define, vacio. Lo que define OTRO documento de la cadena (ADeOtros) no
+  // se sabe que vale en este punto (msbuild lo evalua donde lo importa) y se
+  // deja escrito: la puerta lo niega como no verificable. Lo que entra
+  // expandido no se vuelve a expandir, como en msbuild
+  function Expande(const AValor: string; const ADeOtros: TArray<string>): string;
   var
-    P, Q, Vueltas: Integer;
-    Nombre, Valor: string;
+    P, Q: Integer;
+    Nombre, V: string;
   begin
     Result := AValor;
-    Vueltas := 0;
-    while Vueltas < 64 do
+    P := Pos('$(', Result);
+    while P > 0 do
     begin
-      Inc(Vueltas);
-      P := Pos('$(', Result);
-      if P = 0 then
-        Break;
       Q := Pos(')', Result, P + 2);
       if Q = 0 then
-        Break; // sin cierre: se queda, y lo que queda con $( no se aprueba
+        Exit; // sin cierre: se queda, y lo que queda con $( no se aprueba
       Nombre := Copy(Result, P + 2, Q - P - 2).Trim;
-      if Vars.IndexOfName(Nombre) >= 0 then
-        Valor := Vars.Values[Nombre]
-      else if not Cache.TryGetValue(LowerCase(Nombre), Valor) then
+      // nunca se sustituye un contenido que no sea un nombre de propiedad
+      // simple: se deja escrito (la puerta ya lo nego, BUILD-051) y se sigue
+      // tras el, sin darle un valor que no es el que lee msbuild
+      if not EsNombreDeMacro(Nombre) then
       begin
-        Valor := '';
-        for var Xml in Xmls do
-        begin
-          Valor := EffectiveProperty(Xml, Nombre, APlat, ACfg);
-          if Valor <> '' then
-            Break;
-        end;
-        if (Valor = '') and (Nombre <> '') and not StartsText('DELPHI_MCP_', Nombre) then
-          Valor := GetEnvironmentVariable(Nombre);
-        Cache.Add(LowerCase(Nombre), Valor);
+        P := Pos('$(', Result, Q + 1);
+        Continue;
       end;
-      Result := Copy(Result, 1, P - 1) + Valor + Copy(Result, Q + 1, MaxInt);
+      if MatchText(Nombre, ADeOtros) then
+      begin
+        P := Pos('$(', Result, Q + 1);
+        Continue;
+      end;
+      if Vars.IndexOfName(Nombre) >= 0 then
+        V := Vars.Values[Nombre]
+      else if (Nombre <> '') and not StartsText('DELPHI_MCP_', Nombre) then
+        V := GetEnvironmentVariable(Nombre)
+      else
+        V := '';
+      Result := Copy(Result, 1, P - 1) + V + Copy(Result, Q + 1, MaxInt);
+      P := Pos('$(', Result, P + Length(V));
     end;
   end;
 
@@ -1614,7 +1648,7 @@ var
       Exit;
     if Cand.Contains('$(') or Cand.Contains('@(') or Cand.Contains('%(') then
       Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
-        [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
+        [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo]));
     // Lo que no es una ruta no lo abre nadie: una clave=valor (VerInfo_Keys,
     // un alias de unidad: el '=' antes de toda barra) y un texto con ':' que
     // no es el de la unidad y lleva barras detras (una URL, un
@@ -1648,7 +1682,7 @@ var
     end;
     if LugarDeLecturaDenegado(Cand, LUGARES_DEL_MOTOR) <> '' then
       Exit(MsgFmt(SR_BUILD_LECTURA_FUERA_FMT,
-        [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
+        [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo]));
     // el .rc que compila brcc32: cada fichero que nombra, por EL lector. Solo
     // el guion de un RcCompile: un RcItem es un FICHERO de recurso (el .gif o
     // .png que el IDE mete como RCDATA por el .rc que genera el mismo) y ya
@@ -1659,20 +1693,44 @@ var
       var Rc := RcLecturasDenegadas(Cand);
       if Rc <> '' then
         Exit(MsgFmt(SR_BUILD_RC_FMT,
-          [AValor.Escrito, TPath.GetFileName(AFichero), Rc]));
+          [ATrozo, TPath.GetFileName(AFichero), Rc]));
     end;
   end;
 
-  function Juzga(const AValor: TValorDelProyecto; const AFichero: string): string;
+  function Juzga(const AValor: TValorDelProyecto; const AFichero: string;
+    const ADeOtros: TArray<string>): string;
   begin
-    // lo que un macro expande a una LISTA se juzga trozo a trozo, como el
-    // valor escrito (ValoresQueLeeElBuild ya lo parte por ';'): el
-    // $(DCC_UsePackage) con que el IDE cierra la lista de paquetes de todo
-    // proyecto expandia a la lista entera y se juzgaba como UNA ruta, negada
-    // en cuanto carpeta + lista pasaban de MAX_PATH (medido el 21-oct-2026:
-    // 217 caracteres pasaban, 313 no; sin el macro, 1599 pasaban)
     Result := '';
-    for var Trozo in TrozosDeLista(Expande(AValor.Escrito)) do
+    // dentro de un valor que el build LEE, un $(...) solo vale si lo de dentro
+    // es un nombre de propiedad simple (EsNombreDeMacro): una funcion de
+    // propiedad, un item, un metadato o un nombre con puntos hacen el valor NO
+    // verificable (msbuild lo evalua donde lo importa y la puerta no sabe a que
+    // ruta lleva), BUILD-051 sobre lo ESCRITO, antes de expandir, exista o no
+    // la ruta (David, 22-oct-2026; censo: 0 de 3.651 .dproj con algo asi)
+    var Pm := Pos('$(', AValor.Escrito);
+    while Pm > 0 do
+    begin
+      var Qm := Pos(')', AValor.Escrito, Pm + 2);
+      if Qm = 0 then
+        Break; // sin cerrar: no es un macro; lo juzga el trozo ya expandido
+      if not EsNombreDeMacro(Copy(AValor.Escrito, Pm + 2, Qm - Pm - 2).Trim) then
+        Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
+          [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
+      Pm := Pos('$(', AValor.Escrito, Qm + 1);
+    end;
+    // un macro cuyo valor no se sabe donde el build lo lee (puesto bajo una
+    // Condition que no se sabe evaluar, o una global del build): el valor no
+    // se sabe leer, BUILD-056, exista o no la ruta a la que llevaria
+    if AValor.Dudoso <> '' then
+      Exit(MsgFmt(SR_BUILD_LECTURA_MACRO_FMT,
+        [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito, AValor.Dudoso]));
+    // el valor expandido se juzga trozo a trozo (es una lista, y lo que un
+    // macro expande puede ser otra): el $(DCC_UsePackage) con que el IDE
+    // cierra la lista de paquetes de todo proyecto expandia a la lista
+    // entera y se juzgaba como UNA ruta, negada en cuanto carpeta + lista
+    // pasaban de MAX_PATH (medido el 21-oct-2026: 217 caracteres pasaban,
+    // 313 no; sin el macro, 1599 pasaban)
+    for var Trozo in TrozosDeLista(Expande(AValor.Expandido, ADeOtros)) do
     begin
       Result := JuzgaTrozo(Trozo, AValor, AFichero);
       if Result <> '' then
@@ -1688,7 +1746,6 @@ begin
   Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
   Vars := TStringList.Create;
-  Cache := TDictionary<string, string>.Create;
   try
     IdeMacroVars(AInfo, Vars);
     // rsvars.bat manda sobre la tabla: es el entorno que recibe msbuild
@@ -1714,15 +1771,34 @@ begin
     var Externas: TArray<string> := [];
     for var I := 0 to Vars.Count - 1 do
       Externas := Externas + [Vars.Names[I]];
+    // y lo que definen los OTROS documentos de la cadena (un .optset
+    // importado pone una propiedad que este documento compara o usa):
+    // msbuild lo evalua en su sitio y aqui cada documento va solo, asi que
+    // esos nombres son de fuera - no se dan por vacios, la Condition no se
+    // sabe y se juzga (revisor E, 21-oct-2026), y un valor que los lleve no
+    // se verifica (Expande los deja escritos)
+    var Definidos: TArray<TArray<string>> := [];
+    SetLength(Docs, Length(Xmls));
     for var I := 0 to High(Xmls) do
-      for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg, Externas) do
+    begin
+      var Mal: string;
+      Docs[I] := ElementosDe(Xmls[I], Mal);
+      Definidos := Definidos + [PropiedadesDefinidas(Docs[I])];
+    end;
+    for var I := 0 to High(Xmls) do
+    begin
+      var DeOtros: TArray<string> := [];
+      for var J := 0 to High(Xmls) do
+        if J <> I then
+          DeOtros := DeOtros + Definidos[J];
+      for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg, Externas + DeOtros, GLOBALES_DEL_BUILD) do
       begin
-        Result := Juzga(V, Ficheros[I]);
+        Result := Juzga(V, Ficheros[I], DeOtros);
         if Result <> '' then
           Exit;
       end;
+    end;
   finally
-    Cache.Free;
     Vars.Free;
   end;
 end;
@@ -1983,7 +2059,7 @@ begin
   if Target.Contains('Deploy') and SinPAServer and (Perfil <> '') then
     raise Exception.Create(MsgFmt(SR_CONFIG_PROFILE_SIN_PASERVER_FMT, [Plat]));
   if Target.Contains('Deploy') and not SinPAServer and (Perfil = '') then
-    Perfil := PropiedadDelProyecto(ADprojPath, Plat, 'Profile');
+    Perfil := PropiedadDelProyecto(ADprojPath, Plat, Cfg, 'Profile');
   // El perfil, venga de la llamada o del .dproj, es UNO de los que el IDE
   // declara (PerfilDelIde, el juez de set-profile), con su nombre, el de la
   // lista. El del .dproj llegaba a /p:Profile= sin juez; lo que teclea el
@@ -2091,7 +2167,7 @@ begin
       SdkArg := ' /p:PlatformSDK="' + Pedido + '"';
       SdkUsado := Pedido;
     end
-    else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), Plat, SdkUsado) then
+    else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), Plat, Cfg, SdkUsado) then
       // el proyecto lo dice: no se le pisa, y se cuenta cual es
       SdkNota := MsgFmt(SN_BUILD_SDK_PROYECTO_FMT, [SdkUsado])
     else

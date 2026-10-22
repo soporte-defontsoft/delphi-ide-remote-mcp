@@ -111,8 +111,9 @@ check('la copia recuperable existe, es el contenido de antes y esta en su papele
       str(j.get('backup')))
 
 BAD = os.path.join(UP, 'corrupto.bin')
-j = J(A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'abc').decode(),
-                                'offset': 0, 'sha256': '0' * 64}))
+# a trozos: con el fichero entero en una llamada no se escribe nada (UPLOAD-015, 1.22.0)
+for _a in mc.subida_en_dos(BAD, b'abc', '0' * 64):
+    j = J(A.call('delphi_upload', _a))
 check('#26 sha que no cuadra: NO queda publicado con su nombre',
       j.get('verified') is False and not os.path.exists(BAD), str(j)[:300])
 # ...en la papelera, en su cajon (A de la 1.19.2: era <nombre>.corrupt al lado,

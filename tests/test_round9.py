@@ -148,10 +148,10 @@ j = J(A.call('delphi_upload', {'path': V, 'chunkbase64': base64.b64encode(b'!').
 check('F1 offset == tamano (append) SI vale', j.get('size') == 15, str(j)[:200])
 
 BAD = os.path.join(U, 'b.bin')
-A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'AAA').decode(),
-                         'offset': 0, 'sha256': '0' * 64})
-A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'BBB').decode(),
-                         'offset': 0, 'sha256': '0' * 64})
+# a trozos: con el fichero entero en una llamada no se escribe nada (UPLOAD-015, 1.22.0)
+for _datos in (b'AAA', b'BBB'):
+    for _a in mc.subida_en_dos(BAD, _datos, '0' * 64):
+        A.call('delphi_upload', _a)
 import glob
 # cada subida mala, su copia sellada en el cajon de lo corrupto: la segunda no
 # pisa a la primera (sexta revision; desde la A de la 1.19.2 en la papelera, no

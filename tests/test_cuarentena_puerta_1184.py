@@ -35,8 +35,10 @@ def lanza(solo=''):
 
 
 def sube(s, ruta, datos):
-    r = s.call('delphi_upload', {'path': ruta, 'chunkbase64': base64.b64encode(datos).decode(),
-                                 'offset': 0, 'sha256': '0' * 64})
+    # a trozos: con el fichero entero en una llamada no se escribe nada y no hay
+    # cuarentena que medir (UPLOAD-015, 1.22.0)
+    for a in mc.subida_en_dos(ruta, datos, '0' * 64):
+        r = s.call('delphi_upload', a)
     try:
         return json.loads(r)
     except ValueError:

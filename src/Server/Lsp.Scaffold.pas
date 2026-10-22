@@ -126,13 +126,11 @@ var
     Result := XmlGrupoDeValores(APlat, AClave, AProps) + CRLF;
   end;
 
-  // el definidor de una configuracion: '$(Config)'=='Debug' or '$(Cfg_1)'!=''
+  // el definidor de una configuracion, por EL escritor (Lsp.Dproj), con su
+  // salto (se componia aqui a mano; revisor del 21-oct-2026)
   function DefinidorDeConfig(const AConfig, AClave: string): string;
   begin
-    Result := '    <PropertyGroup ' + XmlAtributo('Condition', ConfigDefinerCondition(AConfig, AClave)) + '>' + CRLF;
-    if not SameText(AClave, 'Base') then
-      Result := Result + Prop(AClave, 'true') + Prop('CfgParent', 'Base');
-    Result := Result + Prop('Base', 'true') + '    </PropertyGroup>' + CRLF;
+    Result := XmlGrupoDefinidorDeConfig(AConfig, AClave) + CRLF;
   end;
 
 begin

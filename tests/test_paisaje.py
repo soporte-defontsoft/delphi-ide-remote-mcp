@@ -831,18 +831,20 @@ REGLAS = [
     ('la Condition de un grupo del .dproj a mano',
      r"(?i)'\$\((?:base|cfg_)|''\$\((?:platform|config)\)''\s*[!=]=",
      [('Lsp.Dproj.pas', 'DefinerCondition'), ('Lsp.Dproj.pas', 'DeployGroupCondition'),
-      ('Lsp.Dproj.pas', 'ConfigCondition'), ('Lsp.Dproj.pas', 'PlataformaDeGrupo')],
+      ('Lsp.Dproj.pas', 'ConfigCondition')],
      'los nombradores de Lsp.Dproj (GroupCondition y ConfigDefinerCondition componen sin el '
      'literal; DefinerCondition, DeployGroupCondition y ConfigCondition lo llevan) y la inversa '
-     'PlataformaDeGrupo; la puerta del build las evalua con EvaluaCondicion, no las compara'),
+     'EsGrupoDeClave (sin literal: compone y compara); la puerta del build las evalua con '
+     'EvaluaCondicion, no las compara'),
     # el grupo de VALORES de un build elegido o creado a mano - el grupo por su Condition
     # compuesta con un nombrador, o un definidor / grupo de valores escrito con su compositor -
     # fuera de su casa: GrupoDelBuild, AseguraGrupoDelBuild y PonPropiedadDelBuild (Lsp.Dproj),
     # donde el IDE escribe una opcion de una plataforma y una configuracion. Lo elegian cada uno
     # a su manera set-sdk / set-profile, add-searchpath y remove-searchpath (unificacion 1.22.0)
     ('elegir el grupo de un build a mano',
-     r"GrupoConCondicion\s*\(\s*\w+\s*,\s*(?:GroupCondition|DefinerCondition|ConfigDefinerCondition)\s*\("
-     r"|XmlGrupoDeValores\s*\(|XmlGrupoDefinidor\s*\(",
+     r"GrupoConCondicion\s*\("
+     r"|CondicionNormalizada\s*\([^;=]*\)\s*=\s*CondicionNormalizada\s*\(\s*(?:GroupCondition|DefinerCondition|ConfigDefinerCondition)\s*\("
+     r"|PlataformaDeGrupo\s*\(|XmlGrupoDeValores\s*\(|XmlGrupoDefinidor",
      [('Lsp.Dproj.pas', '*'), ('Lsp.Scaffold.pas', '*')],
      'GrupoDelBuild / AseguraGrupoDelBuild / PonPropiedadDelBuild (Lsp.Dproj); delphi_create compone '
      'el .dproj entero con los nombradores (Lsp.Scaffold)'),
@@ -1550,4 +1552,17 @@ for regla in REGLAS_PY:
           len(cazados) == 1 and ':3 ' in cazados[0], cazados)
     malos = fuera_de_casa_py(regla, TEXTOS_PY)
     check('"%s" en ninguna bateria - %s' % (nombre, regla[3]), not malos, malos)
+# ---- LAS GLOBALES DEL BUILD (revisor E, 21-oct-2026): cada /p:Nombre que la orden de
+# msbuild lleva (Lsp.BuildRunner) esta en GLOBALES_DEL_BUILD, lo que la puerta da por
+# dudoso al evaluar las Condition del .dproj: una global gana a lo escrito aun definida
+# despues (medido con el msbuild del IDE), y la puerta no sabe su valor. Config y
+# Platform son lo pedido y van aparte; las salidas suplidas van por nombre en la lista.
+BR = '\n'.join(codigo(next(t for f, t in TEXTOS if os.path.basename(f) == 'Lsp.BuildRunner.pas')))
+PASADAS = set(re.findall(r'/p:([A-Za-z_]\w*)', BR)) - {'Config', 'Platform'}
+_m = re.search(r'GLOBALES_DEL_BUILD\s*:\s*TArray<string>\s*=\s*\[(.*?)\]', BR, re.S)
+GLOBALES = set(re.findall(r"'(\w+)'", _m.group(1))) if _m else set()
+check('mutante de las globales: un /p:Nuevo= que no esta en la lista se caza',
+      not ((PASADAS | {'Nuevo'}) <= GLOBALES))
+check('las globales del build: cada /p: de la orden de msbuild esta en GLOBALES_DEL_BUILD (%d)' % len(PASADAS),
+      _m is not None and len(PASADAS) >= 5 and PASADAS <= GLOBALES, sorted(PASADAS - GLOBALES))
 mc.fin('paisaje battery')

@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.21.4';
+  SERVER_VERSION = '1.22.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1656,8 +1656,11 @@ const
   SR_BUILD_DPROJ_INCOMPLETO_FMT =
     '[BUILD-055 DENIED] %s is incomplete: it does not close its <Project> ' +
     'element (an upload cut short, or an edit left half way), so nothing ' +
-    'read from it can be trusted and it is not built. Restore the copy ' +
-    'from __delphi-patch, or upload the whole file again from offset=0.';
+    'read from it can be trusted and it is not built. Upload the whole file ' +
+    'again from offset=0, or put back the copy an upload left in ' +
+    '__delphi-patch (its answer names it in "backup"; delphi_list ' +
+    'includetrash=true lists the copies): delphi_delete this file, then ' +
+    'delphi_move that copy to its name, without copy=true.';
 
   SR_BUILD_HAZARD_FMT =
     '[BUILD-017 DENIED] The project contains %s. This server only ' +
@@ -3075,14 +3078,18 @@ const
 
   SR_CFG_NAME_NO_ES_PROPIEDAD_FMT =
     '[CFG-131 INVALID_PARAM] "%s" is not a property name: a letter or _ and ' +
-    'then letters, digits, _ . - (what a .dproj tag may carry).';
+    'then letters, digits, _ and - (the names msbuild accepts: a "." is an ' +
+    'error of msbuild itself).';
 
   SR_CFG_NAME_ES_ESTRUCTURA_FMT =
     '[CFG-132 INVALID_PARAM] %s is the structure of the .dproj, not an ' +
     'option: the selectors Config and Platform (set-active changes them), ' +
     'the keys Base and Cfg_N with their flags (the IDE writes them when it ' +
     'declares a configuration or a platform: add-platform), ProjectGuid, ' +
-    'ProjectVersion and MainSource. Nothing was written.';
+    'ProjectVersion and MainSource, the properties the IDE''s own ' +
+    'imports resolve their files through (BDS, APPDATA, ProductVersion...), ' +
+    'which a project never defines, and the names msbuild reserves ' +
+    '(MSBuild...). Nothing was written.';
 
   SR_CFG_NAME_ES_TEXTO_LIBRE_FMT =
     '[CFG-133 INVALID_PARAM] %s is not written here: a build event or a free ' +
@@ -3133,6 +3140,32 @@ const
   SF_CFG_BUILD_POR_DEFECTO =
     ' (the build the project makes by default; platform= / config= pick ' +
     'another)';
+
+  SF_CFG_BUILD_PLATAFORMA_POR_DEFECTO =
+    ' (the platform the project builds by default; platform= picks another)';
+
+  SF_CFG_BUILD_CONFIG_POR_DEFECTO =
+    ' (the configuration the project builds by default; config= picks ' +
+    'another)';
+
+  SF_CFG_PROPERTY_PISADA_FMT =
+    ' For that build msbuild reads %s instead: an element with a Condition ' +
+    'of its own in that group, or a later group, wins.';
+
+  SR_CFG_CLAVE_INVALIDA_FMT =
+    '[CFG-141 DENIED] The key "%s" of configuration %s (BuildConfiguration) ' +
+    'is not a name msbuild accepts (a letter or _ and then letters, digits, ' +
+    '_ and -), so the groups of that build cannot be named after it. Fix the ' +
+    'key in the IDE; nothing was written.';
+
+  // lo compuesto en sitio por los escritores de proyecto, juzgado por el parser
+  // del IDE (MSXML 6) antes de escribirlo (PatchSaveConSuSalto, 21-oct-2026)
+  SR_PATCH_XML_MAL_FORMADO_FMT =
+    '[CFG-142 DENIED] The %s the server composed is not XML the IDE''s parser ' +
+    '(MSXML 6) loads: %s. Nothing was written; the file is as it was.';
+
+  SF_XML_ERROR_DEL_PARSER_FMT =
+    'line %d: %s';
 
   SR_CFG_SET_ACTIVE_CONFIG_FMT =
     '[CFG-116 INVALID_PARAM] The project has no configuration "%s" to build. ' +
@@ -3245,6 +3278,18 @@ const
   SN_CONFIG_PATH_ABSENT_FMT =
     '[CFG-022] "%s" is not in the search path of %s. See the current ' +
     'ones with command=view.';
+
+  { Coletilla de CFG-022 cuando la carpeta SI esta en el DCC_UnitSearchPath
+    de otro grupo del proyecto (el de una configuracion, que set-property
+    escribe con config=): remove-searchpath solo cambia el de la plataforma, y
+    "no esta" costaba dos turnos (Hermes, dirigido de la 1.22.0). %s = donde
+    esta, como lo dice get-property. }
+  SF_CONFIG_PATH_EN_OTRO_GRUPO_FMT =
+    ' The project has it in DCC_UnitSearchPath of another group: %s. ' +
+    'remove-searchpath changes the group of the platform alone; a value ' +
+    'written for one configuration (set-property with config=) goes with ' +
+    'delphi_config remove-property name=DCC_UnitSearchPath and that ' +
+    'platform= and config=, or set-property with the list you want.';
 
   SN_CONFIG_NO_PATHS =
     '[CFG-023] The project declares no unit search paths of its own: the ' +
@@ -5998,6 +6043,29 @@ const
     'that cannot be checked is not approved. Write it as a plain path, with ' +
     '$(Platform), $(Config) or a macro of the IDE if needed.';
 
+  { Un $(macro) dentro de un valor que el build LEE cuyo valor la puerta no
+    sabe donde el build lo lee (Lsp.BuildRunner.LecturasDelBuildDenegadas
+    sobre Lsp.Dproj.ValoresQueLeeElBuild; 1.22.0): una propiedad puesta bajo
+    una Condition que no se sabe evaluar (Exists(), una funcion) o una GLOBAL
+    del build (/p:). Lo demas se expande como lo tiene msbuild EN ESE PUNTO
+    del documento (tres agujeros medidos el 22-oct-2026 expandian con otro
+    valor: el ultimo del documento, el de la tabla cuando el proyecto la
+    redefine, el definido despues del uso). %s = el elemento, %s = el fichero
+    de proyecto, %s = el valor tal como esta escrito, %s = el macro. }
+  SR_BUILD_LECTURA_MACRO_FMT =
+    '[BUILD-056 DENIED] I will not build this. <%s> in %s names %s, and ' +
+    'the macro $(%s) in it cannot be checked: the value that property has ' +
+    'where the compiler reads this one is not known to this server, because ' +
+    'the project sets it under a Condition this server cannot evaluate (an ' +
+    'Exists(), a property function) or it is a property the build passes on ' +
+    'its own command line. A macro inside a path the build reads is approved ' +
+    'when its value is known there: $(Config) or $(Platform), a macro of the ' +
+    'IDE or of msbuild, an environment variable, or a property the project ' +
+    'defines in a group this build reads, with the value it has at that ' +
+    'point (msbuild fixes a value where it defines it). Write the path ' +
+    'without the macro, or define that property in a group this build ' +
+    'reads (delphi_config set-property).';
+
   { El .rc de un RcCompile: cada fichero que nombra, por EL lector del .rc
     (Lsp.Styles.RcLecturasDenegadas, el de delphi_styles build). %s = el
     .rc, %s = el fichero de proyecto, %s = la negativa del lector. }
@@ -6654,11 +6722,26 @@ const
     '(received %s, expected %s; %d bytes decoded). I wrote nothing: the ' +
     'file is as it was. Resend the same chunk with the same offset.';
 
+  { El sha256 final de una subida a TROZOS: lo ya escrito no casa. Lo que
+    habia antes con ese nombre lo aparto el trozo de offset=0 (UPLOAD-010,
+    "backup"): se dice como volver a el (Hermes, test completo de la 1.22.0:
+    "el fichero que existia deja de existir bajo su nombre"). }
   SR_UPLOAD_SHA_MISMATCH_FMT =
     '[UPLOAD-011 INVALID_PARAM] The sha256 does NOT match: what was ' +
     'assembled differs from the source, so I do NOT leave it published ' +
     'under its name: it is in the recoverable trash, %s. Resend from ' +
-    'offset=0.';
+    'offset=0. If a file was there before this upload, its first chunk ' +
+    'kept a copy and named it in "backup" (delphi_list includetrash=true ' +
+    'lists them): delphi_move that copy to its name to put it back.';
+
+  { El fichero ENTERO en una sola llamada (offset=0 con su sha256): se
+    comprueba antes de escribir y no se escribe nada (Hermes, test completo
+    de la 1.22.0; David: verificar antes). %s = el sha de lo recibido, %s =
+    el esperado, %d = los bytes. }
+  SR_UPLOAD_SHA_ENTERO_MISMATCH_FMT =
+    '[UPLOAD-015 INVALID_PARAM] The sha256 does NOT match the file this ' +
+    'call carries whole (received %s, expected %s; %d bytes decoded). I ' +
+    'wrote nothing: the file is as it was. Resend it.';
   { el motivo de UPLOAD-012 cuando la subida mala es de un temporal: alli no
     hay papelera (A de la 1.19.2) }
   SF_UPLOAD_SIN_PAPELERA =
@@ -9354,19 +9437,19 @@ const
     'on (one it declares: Debug, Release...). With platform= too, both at ' +
     'once. set-property / remove-property / get-property: the configuration ' +
     'of the group (with platform=, the group of that pair, as the IDE writes ' +
-    'an option of Debug for Android64; empty: every configuration; ' +
-    'get-property reads the default one).';
+    'an option of Debug for Android64; empty: all; get-property reads the ' +
+    'default).';
 
   SP_CFG_NAME =
     'set-property / remove-property / get-property: the property, as the ' +
-    '.dproj writes it (PF_KeyStoreDebug, DCC_Define, VerInfo_Keys...). Not ' +
-    'the structure (Config, Platform, Base, Cfg_N and their flags), a build ' +
-    'event or a free compiler option.';
+    '.dproj writes it (PF_KeyStoreDebug, DCC_Define...). To write, not the ' +
+    'structure (Config, Platform, Base, Cfg_N...), a build event or a free ' +
+    'compiler option.';
 
   SP_CFG_VALUE =
     'set-property: the text the property takes, one line, as the IDE would ' +
     'write it. Judged when that build reads it, like the rest of the .dproj ' +
-    '(a file outside your roots is BUILD-050 then).';
+    '(outside your roots: BUILD-050).';
 
   SD_CFG_CONFIG =
     'See and manage a project''s build configurations and target PLATFORMS. ' +
@@ -9400,7 +9483,8 @@ const
     'add-project / remove-project write what the IDE''s Add existing ' +
     'project writes. set-property / remove-property / get-property: one ' +
     'property of the .dproj by name, in the group of the build platform= and ' +
-    'config= name, as the IDE writes it (none: the base) - what no other ' +
+    'config= name, as the IDE writes it (none: the base group to write, the ' +
+    'default build to read) - what no other ' +
     'command covers, an Android keystore to re-point or drop included. ' +
     'set-sdk, set-profile and add-requires: see command. ' +
     'To BUILD a combination: delphi_build with platform+config.';
@@ -10187,9 +10271,9 @@ const
     'order, increasing offset by the bytes written';
 
   SP_WS_SHA256 =
-    'Optional, on the LAST chunk: the whole-file SHA-256; a mismatch FAILS ' +
-    'the call and the file goes to the recoverable trash instead of being ' +
-    'published.';
+    'Optional, on the LAST chunk: the whole-file SHA-256. A mismatch FAILS ' +
+    'the call: a file sent whole is not written; one sent in chunks goes ' +
+    'to the recoverable trash.';
 
   SP_WS_CHUNKSHA256 =
     'Optional: the SHA-256 of THIS chunk (of its decoded bytes), verified ' +

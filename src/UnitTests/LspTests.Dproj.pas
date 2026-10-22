@@ -45,7 +45,7 @@ type
     [Test] procedure ElTramoSabeDondeEmpiezaYAcabaElElemento;
     [Test] procedure ElGrupoPorSuCondicionSinMirarBlancos;
     [Test] procedure QuitaConSuLineaSoloSiEstaSola;
-    [Test] procedure PlatformPropertyComoMsbuild;
+    [Test] procedure LaPropiedadEfectivaComoMsbuild;
     [Test] procedure LaPropiedadEfectivaConLoDeAntesDentro;
     [Test] procedure LosSelectoresDelProyecto;
     [Test] procedure ElNombradorDeLosGruposConSuClave;
@@ -58,6 +58,9 @@ type
     [Test] procedure ElGrupoDelBuildDondeLoEscribeElIde;
     [Test] procedure PonPropiedadDelBuildEnLasCuatroFormas;
     [Test] procedure LaPropiedadEfectivaNoSeHaceLenta;
+    [Test] procedure DosGruposConLaMismaCondicionYLaClaveRara;
+    [Test] procedure ElParserDelIdeJuzgaLoCompuesto;
+    [Test] procedure LosValoresDelBuildSeExpandenEnSuPunto;
   end;
 
   { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
@@ -83,7 +86,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  Lsp.Dproj;
+  Lsp.Dproj, Lsp.Patch;
 
 const
   RUTA = 'C:\Proyecto\App.dproj';
@@ -300,10 +303,8 @@ function CadenaDelIde(const APlataformas, AConfigs: TArray<string>): string;
 
   function DefinidorDeConfig(const ANombre, AClave: string): string;
   begin
-    Result := '<PropertyGroup ' + XmlAtributo('Condition', ConfigDefinerCondition(ANombre, AClave)) + '>';
-    if not SameText(AClave, 'Base') then
-      Result := Result + XmlElemento(AClave, 'true');
-    Result := Result + XmlElemento('Base', 'true') + '</PropertyGroup>';
+    // EL escritor del definidor de una configuracion (Lsp.Dproj)
+    Result := XmlGrupoDefinidorDeConfig(ANombre, AClave);
   end;
 
 var
@@ -325,7 +326,7 @@ begin
   end;
 end;
 
-procedure TXmlTextoTests.PlatformPropertyComoMsbuild;
+procedure TXmlTextoTests.LaPropiedadEfectivaComoMsbuild;
 var
   XML: string;
 begin
@@ -338,13 +339,13 @@ begin
     '<PropertyGroup Condition="''$(Base_OSX64)''!=''''"><PlatformSDK Condition="''$(X)''==''''">rara</PlatformSDK></PropertyGroup>' +
     '</Project>';
   // la del grupo de la plataforma, aunque la etiqueta lleve atributos (Label)
-  Assert.AreEqual('suya', PlatformProperty(XML, 'Linux64', 'PlatformSDK'));
+  Assert.AreEqual('suya', EffectiveProperty(XML, 'PlatformSDK', 'Linux64', ''));
   // una Condition del elemento que no es de plataforma/config no se da por
   // aplicada: OSX64 se queda con la base
-  Assert.AreEqual('de-base', PlatformProperty(XML, 'OSX64', 'PlatformSDK'), 'condicion desconocida');
+  Assert.AreEqual('de-base', EffectiveProperty(XML, 'PlatformSDK', 'OSX64', ''), 'condicion desconocida');
   // otra plataforma hereda la base; la de una CONFIG no es la base (el
   // lector propio la tomaba por reserva por ir primero)
-  Assert.AreEqual('de-base', PlatformProperty(XML, 'Win64', 'PlatformSDK'));
+  Assert.AreEqual('de-base', EffectiveProperty(XML, 'PlatformSDK', 'Win64', ''));
 end;
 
 // Los defines de cada configuracion como los escribe el IDE: un $(X) dentro
@@ -498,10 +499,10 @@ begin
     '<Profile Condition="''$(Platform)''==''Win32''">win_desktop</Profile>' +
     '<PlatformSDK>de-base</PlatformSDK></PropertyGroup>' +
     '<PropertyGroup Condition="''$(Base_Linux64)''!=''''"><PlatformSDK/></PropertyGroup></Project>';
-  Assert.AreEqual('win_desktop', PlatformProperty(XML, 'Win32', 'Profile'), 'en Win32 si');
-  Assert.AreEqual('', PlatformProperty(XML, 'OSX64', 'Profile'), 'en OSX64 no: la condicion es del elemento');
-  Assert.AreEqual('de-base', PlatformProperty(XML, 'OSX64', 'PlatformSDK'), 'OSX64 hereda la base');
-  Assert.AreEqual('', PlatformProperty(XML, 'Linux64', 'PlatformSDK'), 'un <PlatformSDK/> la deja vacia, como msbuild');
+  Assert.AreEqual('win_desktop', EffectiveProperty(XML, 'Profile', 'Win32', ''), 'en Win32 si');
+  Assert.AreEqual('', EffectiveProperty(XML, 'Profile', 'OSX64', ''), 'en OSX64 no: la condicion es del elemento');
+  Assert.AreEqual('de-base', EffectiveProperty(XML, 'PlatformSDK', 'OSX64', ''), 'OSX64 hereda la base');
+  Assert.AreEqual('', EffectiveProperty(XML, 'PlatformSDK', 'Linux64', ''), 'un <PlatformSDK/> la deja vacia, como msbuild');
 end;
 
 procedure CompruebaImport(const AForma: string;
@@ -812,6 +813,18 @@ const
     '<PropertyGroup Condition="''$(Cfg_1)''!=''''"><DCC_Define>D</DCC_Define></PropertyGroup></Project>';
   EXTERNA = '<Project><PropertyGroup Condition="''$(Platform)''==''Android64''"><BDS>x</BDS></PropertyGroup>' +
     '<PropertyGroup Condition="''$(BDS)''!=''''"><DCC_Define>D</DCC_Define></PropertyGroup></Project>';
+  // lo que el revisor E midio con el msbuild del IDE el 21-oct-2026: un valor
+  // se fija EXPANDIDO (Tarde vale 'a'), un PropertyGroup dentro de
+  // ProjectExtensions o de un Target no cuenta en la pasada, y una global
+  // (/p:) gana al documento aunque este la ponga
+  PEREZOSA = '<Project><PropertyGroup><Antes>a</Antes><Tarde>$(Antes)</Tarde><Antes>b</Antes></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Tarde)''==''a''"><DCC_Define>D</DCC_Define></PropertyGroup></Project>';
+  ANIDADA = '<Project><PropertyGroup><Puerta>1</Puerta></PropertyGroup>' +
+    '<ProjectExtensions><PropertyGroup><Puerta>0</Puerta></PropertyGroup></ProjectExtensions>' +
+    '<Target Name="Nada"><PropertyGroup><Puerta>0</Puerta><DCC_ExeOutput>t</DCC_ExeOutput></PropertyGroup></Target>' +
+    '<PropertyGroup Condition="''$(Puerta)''==''1''"><DCC_Define>D</DCC_Define><DCC_ExeOutput>r</DCC_ExeOutput></PropertyGroup></Project>';
+  GLOBAL = '<Project><PropertyGroup><Profile>p</Profile></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Profile)''==''''"><DCC_Define>D</DCC_Define></PropertyGroup></Project>';
 var
   Mal: string;
   E: TArray<TElementoXml>;
@@ -846,27 +859,56 @@ begin
   Assert.IsTrue(EvaluaCondicion('''$(LbA)''==''1'' and', 'Win64', 'Release', Tabla(['LbA=1'])) = vNoSeSabe, 'una condicion a medias: no se sabe');
   Assert.IsTrue(EvaluaCondicion('''$(LbA)''!=''''', 'Win64', 'Release', Tabla(['LbA?'])) = vNoSeSabe, 'una bandera dudosa: no se sabe');
   Assert.IsTrue(EvaluaCondicion('''$(lbb)''==''x''', 'Win64', 'Release', Tabla(['LbB=X'])) = vSi, 'el valor, sin distinguir mayusculas');
+  // msbuild compara numeros y booleanos antes que texto, y desescapa %XX
+  // (medido el 21-oct-2026 con el msbuild del IDE)
+  Assert.IsTrue(EvaluaCondicion('''yes''==''true''', 'Win64', 'Release', Tabla([])) = vSi, 'yes y true: booleanos');
+  Assert.IsTrue(EvaluaCondicion('''!off''==''TRUE''', 'Win64', 'Release', Tabla([])) = vSi, '!off es cierto');
+  Assert.IsTrue(EvaluaCondicion('''1.0''==''1''', 'Win64', 'Release', Tabla([])) = vSi, '1.0 y 1: numeros');
+  Assert.IsTrue(EvaluaCondicion('''0x1''!=''1''', 'Win64', 'Release', Tabla([])) = vNo, '0x1 es 1');
+  Assert.IsTrue(EvaluaCondicion('''.5''==''+0.5''', 'Win64', 'Release', Tabla([])) = vSi, '.5 y +0.5');
+  Assert.IsTrue(EvaluaCondicion('''true''==''1''', 'Win64', 'Release', Tabla([])) = vNo, 'un booleano no es un numero');
+  Assert.IsTrue(EvaluaCondicion(''' 1 ''==''1''', 'Win64', 'Release', Tabla([])) = vNo, 'con blancos no es un numero');
+  Assert.IsTrue(EvaluaCondicion('''1e3''==''1000''', 'Win64', 'Release', Tabla([])) = vNo, 'sin exponente');
+  Assert.IsTrue(EvaluaCondicion('''%74rue''==''true''', 'Win64', 'Release', Tabla([])) = vSi, '%74 es t');
+  Assert.IsTrue(EvaluaCondicion('''$(LbA)''==''a''', 'Win64', 'Release', Tabla(['LbA=%61'])) = vSi, 'desescapado tras expandir');
   // los grupos de un .dproj, en orden de documento
   E := ElementosDe(XML, Mal);
-  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Release', E, []);
+  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Release', E, [], []);
   Assert.IsTrue(DeOtro('PF_KeyStoreDebug'), 'Release/Win64: el grupo de Debug de Android64 es de otro');
   Assert.IsFalse(DeOtro('DCC_UnitSearchPath'), 'los valores de Win64 son de este');
   Assert.IsTrue(DeOtro('DCC_Define'), 'los valores de Debug son de otro en Release');
   Assert.IsFalse(DeOtro('Icon_MainIcon'), 'lo que no se sabe (Exists) se juzga');
   Assert.IsTrue(DeOtro('Manifest_File'), 'la Condition del elemento, de Win32, es de otro');
-  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug', E, []);
+  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'en Debug, los valores de Debug son de este');
-  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug2', E, []);
+  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug2', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'una config hija de Debug lee los valores de Debug');
   Assert.IsTrue(DeOtro('PF_KeyStoreDebug'), '...y no los de Android64');
   // una bandera plantada en un grupo sin condicion: msbuild lee el grupo
   E := ElementosDe(PLANTADA, Mal);
-  Otro := ElementosDeOtroBuild(PLANTADA, 'Win64', 'Release', E, []);
+  Otro := ElementosDeOtroBuild(PLANTADA, 'Win64', 'Release', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'la bandera plantada: el grupo se lee en cualquier config');
   // un nombre que msbuild toma de fuera (la tabla del build) no se da por vacio
   E := ElementosDe(EXTERNA, Mal);
-  Otro := ElementosDeOtroBuild(EXTERNA, 'Win64', 'Release', E, ['BDS']);
+  Otro := ElementosDeOtroBuild(EXTERNA, 'Win64', 'Release', E, ['BDS'], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'un grupo sobre $(BDS), que viene de rsvars: no se sabe, se juzga');
+  // un valor se fija expandido: Tarde vale 'a' aunque Antes cambie despues
+  E := ElementosDe(PEREZOSA, Mal);
+  Otro := ElementosDeOtroBuild(PEREZOSA, 'Win64', 'Release', E, [], []);
+  Assert.IsFalse(DeOtro('DCC_Define'), 'Tarde vale a: el grupo se lee');
+  // lo de ProjectExtensions y de un Target no cuenta en la pasada, ni para
+  // las banderas ni para el lector
+  E := ElementosDe(ANIDADA, Mal);
+  Otro := ElementosDeOtroBuild(ANIDADA, 'Win64', 'Release', E, [], []);
+  Assert.IsFalse(DeOtro('DCC_Define'), 'Puerta sigue a 1: el grupo se lee');
+  Assert.AreEqual('r', EffectiveProperty(ANIDADA, 'DCC_ExeOutput', 'Win64', 'Release'), 'el lector no lee el grupo del Target');
+  // una global del build: aunque el documento la ponga, no se sabe y se juzga
+  E := ElementosDe(GLOBAL, Mal);
+  Otro := ElementosDeOtroBuild(GLOBAL, 'Win64', 'Release', E, [], ['Profile']);
+  Assert.IsFalse(DeOtro('DCC_Define'), 'Profile es global: no se sabe, se juzga');
+  Otro := ElementosDeOtroBuild(GLOBAL, 'Win64', 'Release', E, [], []);
+  Assert.IsTrue(DeOtro('DCC_Define'), 'sin globales, el documento manda: p no es vacio');
+  Assert.IsTrue(Length(PropiedadesDefinidas(E)) = 2, 'Profile y DCC_Define: ' + IntToStr(Length(PropiedadesDefinidas(E))));
   // los trozos de una lista
   Assert.IsTrue(Length(TrozosDeLista(' a; ;b ;;c')) = 3, 'sin vacios ni blancos');
 end;
@@ -885,8 +927,7 @@ function XmlDeIde: string;
 
   function CfgDef(const ACfg, AClave: string): string;
   begin
-    Result := '    <PropertyGroup ' + XmlAtributo('Condition', ConfigDefinerCondition(ACfg, AClave)) + '>' +
-      XmlElemento(AClave, 'true') + '</PropertyGroup>' + sLineBreak;
+    Result := XmlGrupoDefinidorDeConfig(ACfg, AClave) + sLineBreak;
   end;
 
   function Val(const APlat, AClave, AProps: string): string;
@@ -1028,6 +1069,109 @@ begin
   Assert.IsTrue(Falta = fgConfigNoDeclarada, 'quitar de Nope');
 end;
 
+procedure TXmlTextoTests.DosGruposConLaMismaCondicionYLaClaveRara;
+var
+  Xml, Antes: string;
+  G: TGrupoXml;
+  Falta: TFaltaDeGrupo;
+begin
+  // dos grupos con la misma Condition: msbuild los aplica los dos y gana el
+  // ULTIMO; el escritor escribe en ese y quita la copia del otro, y un
+  // elemento con SU Condition se queda y sigue ganando donde se cumple
+  // (revisores B y D, 21-oct-2026)
+  Xml := '<Project><ItemGroup><BuildConfiguration Include="Base"><Key>Base</Key></BuildConfiguration>' +
+    '<BuildConfiguration Include="Release"><Key>Cfg_2</Key><CfgParent>Base</CfgParent></BuildConfiguration></ItemGroup>' +
+    CadenaDelIde(['Win64'], ['Release=Cfg_2']) +
+    XmlGrupoDeValores('', 'Cfg_2', '        <X>viejo</X>' + sLineBreak) +
+    XmlGrupoDeValores('', 'Cfg_2', '        <X>ultimo</X>' + sLineBreak +
+      '        <X Condition="''$(Platform)''==''Win32''">w32</X>' + sLineBreak) + '</Project>';
+  Assert.AreEqual('ultimo', EffectiveProperty(Xml, 'X', 'Win64', 'Release'), 'el ultimo gana');
+  Assert.AreEqual('w32', EffectiveProperty(Xml, 'X', 'Win32', 'Release'), 'el elemento con Condition, en Win32');
+  Assert.IsTrue(GrupoDelBuild(Xml, '', 'Release', G) and (G.Abre > Pos('viejo', Xml)), 'el ultimo grupo');
+  Assert.IsTrue(PonPropiedadDelBuild(Xml, 'X', 'nuevo', '', 'Release', False, Antes, Falta));
+  Assert.AreEqual('ultimo', Antes, 'lo que valia en el ultimo');
+  Assert.IsFalse(Xml.Contains('viejo'), 'la copia del primer grupo se fue: ' + Xml);
+  Assert.IsTrue(Xml.Contains('w32'), 'el elemento con su Condition se queda: ' + Xml);
+  Assert.IsTrue(Length(AllTagValues(Xml, 'X')) = 2, 'la nueva y la condicionada: ' + Xml);
+  Assert.AreEqual('nuevo', EffectiveProperty(Xml, 'X', 'Win64', 'Release'));
+  Assert.AreEqual('w32', EffectiveProperty(Xml, 'X', 'Win32', 'Release'), 'en Win32 sigue ganando la condicionada');
+  // una clave que msbuild no admite como nombre de propiedad (medido el
+  // 21-oct-2026: un '.' es MSB5016, un '-' compila): no se escribe un grupo
+  // con ella, y el nombrador de nombres es el mismo que juzga name=
+  Assert.IsFalse(EsNombreDeEtiqueta('Foo.Bar'), 'con punto');
+  Assert.IsTrue(EsNombreDeEtiqueta('Foo-Bar'), 'con guion');
+  Xml := XmlDeIde.Replace('<Key>Cfg_2</Key>', '<Key>Cfg 2</Key>');
+  Assert.IsFalse(AseguraGrupoDelBuild(Xml, 'Win64', 'Release', G, Falta));
+  Assert.IsTrue(Falta = fgClaveInvalida, 'Cfg 2: clave invalida');
+end;
+
+procedure TXmlTextoTests.ElParserDelIdeJuzgaLoCompuesto;
+begin
+  // el juez de "bien formado" de lo que el escaner compone en sitio: MSXML 6,
+  // el parser con que el IDE carga un proyecto (David, 21-oct-2026)
+  Assert.AreEqual('', XmlMalFormadoSegunElIde('<?xml version="1.0" encoding="utf-8"?>'#13#10 +
+    '<Project><PropertyGroup><A>R&amp;D</A><B/></PropertyGroup></Project>'), 'un .dproj como el del IDE');
+  Assert.AreEqual('', XmlMalFormadoSegunElIde(#$FEFF'<Project/>'), 'con el BOM delante');
+  Assert.IsTrue(XmlMalFormadoSegunElIde('<Project><A>x</Project>') <> '', 'una etiqueta sin cerrar');
+  Assert.IsTrue(XmlMalFormadoSegunElIde('<Project><A>R&D</A></Project>') <> '', 'un & sin escapar');
+  Assert.IsTrue(XmlMalFormadoSegunElIde('<Project/><Project/>') <> '', 'dos raices');
+  Assert.IsTrue(XmlMalFormadoSegunElIde('<Project><A>x</A></Project>') = '', 'y la buena, en el mismo hilo tras las malas');
+end;
+
+procedure TXmlTextoTests.LosValoresDelBuildSeExpandenEnSuPunto;
+const
+  // lo que el build lee, expandido como msbuild lo tiene en cada punto: una
+  // propiedad vale lo ultimo puesto ANTES de donde se lee (vacio si aun no
+  // se puso, y lo del proyecto sobre lo de fuera), lo de fuera (la tabla)
+  // queda escrito para quien lo sabe, un Include vale lo del final, y lo
+  // que no se sabe si se aplica (Exists) o una global del build es duda (los
+  // tres agujeros de la puerta medidos el 22-oct-2026)
+  DOC = '<Project>' +
+    '<PropertyGroup><Primera>..</Primera><S1>$(Primera)\x</S1><Primera>y</Primera><S2>$(Primera)\x</S2></PropertyGroup>' +
+    '<PropertyGroup><Ide>$(BDS)\lib</Ide><S3>$(Ide)\s</S3><Vacia></Vacia><S4>$(Vacia)\v</S4></PropertyGroup>' +
+    '<PropertyGroup Condition="Exists(''m'')"><Escondida>..</Escondida></PropertyGroup>' +
+    '<PropertyGroup><S5>$(Escondida)\e</S5><S6>$(Despues)\z</S6><Despues>q</Despues><S7>$(Profile)\p</S7>' +
+    '<DCC_UnitSearchPath>a;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>' +
+    '<DCC_UnitSearchPath>b;$(DCC_UnitSearchPath)</DCC_UnitSearchPath></PropertyGroup>' +
+    '<PropertyGroup Condition="''$(Config)''==''Debug''"><S8>$(Despues)\d</S8></PropertyGroup>' +
+    '<ItemGroup><DCCReference Include="$(Despues)\i.pas"/><DCCReference Include="$(Escondida)\j.pas"/></ItemGroup>' +
+    '</Project>';
+var
+  Valores: TArray<TValorDelProyecto>;
+
+  function De(const AElemento, AEscrito: string): TValorDelProyecto;
+  begin
+    for var V in Valores do
+      if SameText(V.Elemento, AElemento) and ((AEscrito = '') or (V.Escrito = AEscrito)) then
+        Exit(V);
+    raise Exception.Create('no esta ' + AElemento);
+  end;
+
+  function Hay(const AElemento: string): Boolean;
+  begin
+    Result := False;
+    for var V in Valores do
+      if SameText(V.Elemento, AElemento) then
+        Exit(True);
+  end;
+
+begin
+  Valores := ValoresQueLeeElBuild(DOC, 'Win64', 'Release', ['BDS'], ['Profile']);
+  Assert.AreEqual('..\x', De('S1', '').Expandido, 'Primera vale .. donde S1 la lee');
+  Assert.AreEqual('y\x', De('S2', '').Expandido, '...y y donde S2 la lee: msbuild fija cada valor al definirlo');
+  Assert.AreEqual('$(BDS)\lib\s', De('S3', '').Expandido, 'lo de la tabla queda escrito para quien lo sabe, dentro de lo que el documento si sabe');
+  Assert.AreEqual('', De('S3', '').Dudoso, '...y no es duda');
+  Assert.AreEqual('\v', De('S4', '').Expandido, 'una propiedad puesta vacia vale vacio');
+  Assert.AreEqual('Escondida', De('S5', '').Dudoso, 'puesta bajo una Condition que no se sabe evaluar: duda');
+  Assert.AreEqual('\z', De('S6', '').Expandido, 'aun no definida donde S6 la lee: vacio');
+  Assert.AreEqual('Profile', De('S7', '').Dudoso, 'una global del build: duda');
+  Assert.AreEqual('b;a;', De('DCC_UnitSearchPath', 'b;$(DCC_UnitSearchPath)').Expandido, 'la autorreferencia acumula lo de antes');
+  Assert.IsFalse(Hay('S8'), 'el grupo de Debug no es de este build');
+  Assert.AreEqual('q\i.pas', De('DCCReference', '$(Despues)\i.pas').Expandido, 'un Include, con lo que vale al final');
+  Assert.AreEqual('Escondida', De('DCCReference', '$(Escondida)\j.pas').Dudoso, '...y con su duda');
+  Assert.AreEqual('..', De('Escondida', '').Escrito, 'lo que no se sabe si se aplica se juzga tambien');
+end;
+
 procedure TXmlTextoTests.LaPropiedadEfectivaNoSeHaceLenta;
 const
   CLAVES: array [0 .. 2] of string = ('Base', 'Cfg_1', 'Cfg_2');
@@ -1059,8 +1203,10 @@ begin
   Ms := TThread.GetTickCount - T0;
   Assert.AreEqual('valor 7', V);
   TDUnitX.CurrentRunner.Status(Format('EffectiveProperty x5 en un .dproj de %d KB: %d ms', [Length(Xml) div 1024, Ms]));
-  // el tope: cinco lecturas en menos de medio segundo (lo medido, en el Status)
-  Assert.IsTrue(Ms < 500, Format('%d ms para cinco lecturas', [Ms]));
+  // el tope: una guarda contra una regresion patologica (segundos), no una
+  // medida fina: GetTickCount tiene 16 ms de grano y una maquina cargada
+  // (una regresion corriendo) multiplica lo medido (revisor C, 21-oct-2026)
+  Assert.IsTrue(Ms < 2000, Format('%d ms para cinco lecturas', [Ms]));
 end;
 
 initialization

@@ -1656,6 +1656,20 @@ begin
         [Sha, Params.ChunkSha256.Trim, Length(Bytes)]));
   end;
 
+  // ...y el fichero ENTERO en una sola llamada (offset=0 con su sha256): se
+  // comprueba aqui, ANTES de escribir, y si no casa no se escribe nada. Se
+  // escribia, el de antes iba a la papelera y lo subido se apartaba despues:
+  // el fichero que existia dejaba de estar con su nombre (Hermes, test
+  // completo de la 1.22.0; David: verificar antes). Con varios trozos el
+  // sha256 final se juzga sobre lo ensamblado, abajo (UPLOAD-011)
+  if (Params.Offset = 0) and (Params.Sha256.Trim <> '') then
+  begin
+    Sha := Sha256DeBytes(Bytes);
+    if not SameText(Sha, Params.Sha256.Trim) then
+      Exit(MsgFmt(SR_UPLOAD_SHA_ENTERO_MISMATCH_FMT,
+        [Sha, Params.Sha256.Trim, Length(Bytes)]));
+  end;
+
   // A designer this server cannot read is a designer nobody here can fix.
   // Measured 2026-08-25: upload was the one writer with no designer rule, and
   // an agent replaced a LIVE text .dfm of a compiling project with a 19-byte

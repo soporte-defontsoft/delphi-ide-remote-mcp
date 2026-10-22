@@ -17,7 +17,10 @@ Win64 Release lo encuentra Release y Debug no (F2613).
   P1  set-property DCC_UnitSearchPath=lib para Win64 Release: CFG-136, y el grupo
       '$(Cfg_2_Win64)'!='' creado con su definidor como lo escribe el IDE, antes de los Import
   P2  msbuild lo lee donde se escribio: Win64 Release compila; Win64 Debug F2613
-  P3  get-property para Win64 Release = lib; para Win64 Debug no esta (y dice donde esta)
+  P3  get-property para Win64 Release = lib; para Win64 Debug no esta (y dice donde esta);
+      remove-searchpath de lib para Win64: CFG-022 (solo cambia el grupo de la plataforma) dice
+      en que grupo SI esta y que lo quita remove-property (Hermes, dirigido de la 1.22.0: "no
+      esta" le costo dos turnos; ROJA contra rel1220j)
   P4  el mismo valor otra vez: CFG-137 y el .dproj byte a byte
   P5  el keystore: set-property PF_KeyStoreDebug=<fuera> para Android64 Debug (CFG-136, el
       grupo del IDE); un build Win64 Release compila (la puerta juzga el build pedido);
@@ -25,14 +28,15 @@ Win64 Release lo encuentra Release y Debug no (F2613).
       vez: CFG-139
   P6  lo que se niega, sin tocar el .dproj: sin name (CFG-130); un nombre que no es
       (CFG-131); la estructura (Cfg_1, Platform: CFG-132); un evento y una opcion libre
-      (PreBuildEvent, DCC_AdditionalSwitches: CFG-133); set-property sin value (CFG-134);
+      (PreBuildEvent, DCC_AdditionalSwitches: CFG-133); una propiedad por la que importan los
+      <Import> del IDE (BDS: CFG-132, la segunda barrera de BUILD-019); set-property sin value (CFG-134);
       un value con salto (CFG-135); una config que no declara (CFG-116); una plataforma que
       no es (CFG-082); un parametro que no es del comando (value en get-property)
   P7  el .dproj escrito lo carga MSXML6, el juez del IDE (si pywin32 esta; si no, no se mide)
 
 Uso:  python tests/test_config_property_1220.py [ruta-a-DelphiLspMcp.exe]
 """
-import os
+import os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -82,6 +86,15 @@ try:
     salida = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fixture', 'dir': carpeta})
     check('fixture creada (delphi_create)', mc.abre(salida, 'SK_CREATE_CREADO_PROYECTO_FMT'), salida[:200])
     proyecto = os.path.join(carpeta, 'Fixture.dproj')
+    # las claves de las configuraciones, del propio .dproj (el juez), no supuestas
+    xml0 = lee(proyecto)
+
+    def clave(config):
+        m = re.search(r'<BuildConfiguration Include="%s">\s*<Key>([^<]+)</Key>' % config, xml0)
+        assert m, 'sin clave de ' + config
+        return m.group(1)
+
+    CFG_DEBUG, CFG_RELEASE = clave('Debug'), clave('Release')
     # una unidad que SOLO esta en lib\, y el .dpr la usa
     os.makedirs(os.path.join(carpeta, 'lib'))
     open(os.path.join(carpeta, 'lib', 'Ajena.pas'), 'w', encoding='utf-8').write(
@@ -94,28 +107,31 @@ try:
         f.write(fuente.replace('uses', 'uses\r\n  Ajena,', 1))
 
     r = config(proyecto, 'get-property', name='DCC_DcuOutput')
-    check('P0 get-property DCC_DcuOutput: CFG-140 con el build por defecto y donde esta',
-          mc.es(r, 'SN_CFG_PROPERTY_GET_FMT') and 'Set in:' in r and 'by default' in r, r[:300])
+    check('P0 get-property DCC_DcuOutput: CFG-140 con su valor, el build por defecto y donde esta',
+          mc.es(r, 'SN_CFG_PROPERTY_GET_FMT') and 'not set' not in r and 'Set in:' in r and 'by default' in r, r[:300])
 
     antes = lee(proyecto)
     r = config(proyecto, 'set-property', name='DCC_UnitSearchPath', value='lib', platform='Win64', config='Release')
     check('P1 set-property DCC_UnitSearchPath=lib para Win64 Release: CFG-136',
-          mc.es(r, 'SN_CFG_PROPERTY_PUESTA_FMT') and "'$(Cfg_2_Win64)'!=''" in r, r[:300])
+          mc.es(r, 'SN_CFG_PROPERTY_PUESTA_FMT') and "'$(%s_Win64)'!=''" % CFG_RELEASE in r, r[:300])
     xml = lee(proyecto)
-    definidor = ('<PropertyGroup Condition="(\'$(Platform)\'==\'Win64\' and \'$(Cfg_2)\'==\'true\') '
-                 'or \'$(Cfg_2_Win64)\'!=\'\'">')
-    valores = '<PropertyGroup Condition="\'$(Cfg_2_Win64)\'!=\'\'">'
+    definidor = ('<PropertyGroup Condition="(\'$(Platform)\'==\'Win64\' and \'$(%s)\'==\'true\') '
+                 'or \'$(%s_Win64)\'!=\'\'">' % (CFG_RELEASE, CFG_RELEASE))
+    valores = '<PropertyGroup Condition="\'$(%s_Win64)\'!=\'\'">' % CFG_RELEASE
     check('P1 ...el definidor y el grupo de valores de Cfg_2_Win64, como los escribe el IDE',
           definidor in xml and valores in xml and '<DCC_UnitSearchPath>lib</DCC_UnitSearchPath>' in xml, xml[:1500])
     check('P1 ...definidor antes que valores, los dos antes del primer <Import>',
           xml.index(definidor) < xml.index(valores) < xml.index('<Import Project='), xml[:1500])
-    check('P1 ...tras los valores de Release y antes de los de Cfg_2 no habia ninguno de plataforma',
-          xml.index('<PropertyGroup Condition="\'$(Cfg_2)\'!=\'\'">') < xml.index(valores), xml[:1500])
+    check('P1 ...tras los valores de Release (su clave sola), que no tenia ninguno de plataforma',
+          xml.index('<PropertyGroup Condition="\'$(%s)\'!=\'\'">' % CFG_RELEASE) < xml.index(valores), xml[:1500])
 
     r = build(proyecto, 'Release')
     check('P2 msbuild lee el grupo: Win64 Release compila con la unidad de lib\\', compila(r), detalle(r))
     r = build(proyecto, 'Debug')
     check('P2 ...y Win64 Debug no la encuentra (F2613): el grupo es solo de Release',
+          not compila(r) and 'Ajena' in r and 'F2613' in r, r[:400])
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win32', 'config': 'Release'}, 600)
+    check('P2 ...ni Win32 Release (F2613): el grupo es solo de Win64 (la otra mitad, tambien por msbuild)',
           not compila(r) and 'Ajena' in r and 'F2613' in r, r[:400])
 
     r = config(proyecto, 'get-property', name='DCC_UnitSearchPath', platform='Win64', config='Release')
@@ -123,6 +139,9 @@ try:
     r = config(proyecto, 'get-property', name='DCC_UnitSearchPath', platform='Win64', config='Debug')
     check('P3 ...para Win64 Debug no esta, y dice en que grupo esta',
           mc.es(r, 'SN_CFG_PROPERTY_GET_FMT') and 'not set' in r and "'$(Cfg_2_Win64)'!=''" in r, r[:300])
+    r = config(proyecto, 'remove-searchpath', path='lib', platform='Win64')
+    check('P3 ...remove-searchpath de lib para Win64: CFG-022 dice en que grupo esta y que lo quita remove-property',
+          mc.es(r, 'SN_CONFIG_PATH_ABSENT_FMT') and "'$(Cfg_2_Win64)'!=''" in r and 'remove-property' in r, r[:400])
 
     r = config(proyecto, 'set-property', name='DCC_UnitSearchPath', value='lib', platform='Win64', config='Release')
     check('P4 el mismo valor otra vez: CFG-137', mc.es(r, 'SN_CFG_PROPERTY_YA_FMT'), r[:300])
@@ -130,12 +149,13 @@ try:
 
     r = config(proyecto, 'set-property', name='PF_KeyStoreDebug', value=KEYSTORE, platform='Android64', config='Debug')
     check('P5 set-property PF_KeyStoreDebug (de FUERA) para Android64 Debug: CFG-136',
-          mc.es(r, 'SN_CFG_PROPERTY_PUESTA_FMT') and "'$(Cfg_1_Android64)'!=''" in r, r[:300])
+          mc.es(r, 'SN_CFG_PROPERTY_PUESTA_FMT') and "'$(%s_Android64)'!=''" % CFG_DEBUG in r, r[:300])
     xml = lee(proyecto)
-    check('P5 ...en el grupo del IDE, con su definidor',
-          '<PropertyGroup Condition="\'$(Cfg_1_Android64)\'!=\'\'">' in xml and
-          '\'$(Cfg_1_Android64)\'!=\'\'">' in xml.split('<PropertyGroup Condition="(\'$(Platform)\'==\'Android64\' and \'$(Cfg_1)\'==\'true\') or ')[1][:40],
-          xml[:2000])
+    definidor_a = ('<PropertyGroup Condition="(\'$(Platform)\'==\'Android64\' and \'$(%s)\'==\'true\') '
+                   'or \'$(%s_Android64)\'!=\'\'">' % (CFG_DEBUG, CFG_DEBUG))
+    valores_a = '<PropertyGroup Condition="\'$(%s_Android64)\'!=\'\'">' % CFG_DEBUG
+    check('P5 ...en el grupo del IDE, con su definidor delante',
+          definidor_a in xml and valores_a in xml and xml.index(definidor_a) < xml.index(valores_a), xml[:2000])
     r = build(proyecto, 'Release')
     check('P5 ...un build Win64 Release compila: la puerta juzga el build pedido, no ese grupo', compila(r), detalle(r))
     r = config(proyecto, 'get-property', name='PF_KeyStoreDebug', platform='Android64', config='Debug')
@@ -152,8 +172,12 @@ try:
         ('sin name', dict(), 'SR_CFG_NEED_NAME'),
         ('un nombre que no es (a<b)', dict(name='a<b', value='x'), 'SR_CFG_NAME_NO_ES_PROPIEDAD_FMT'),
         ('un nombre que empieza por digito', dict(name='1x', value='x'), 'SR_CFG_NAME_NO_ES_PROPIEDAD_FMT'),
+        ('un nombre con punto (MSB5016 en msbuild, medido el 21-oct)', dict(name='Foo.Bar', value='x'), 'SR_CFG_NAME_NO_ES_PROPIEDAD_FMT'),
+        ('un nombre que msbuild se reserva (MSB4004, medido el 21-oct)', dict(name='MSBuildProjectName', value='x'), 'SR_CFG_NAME_ES_ESTRUCTURA_FMT'),
         ('la estructura: Cfg_1', dict(name='Cfg_1', value='true'), 'SR_CFG_NAME_ES_ESTRUCTURA_FMT'),
         ('la estructura: Platform', dict(name='Platform', value='Win64'), 'SR_CFG_NAME_ES_ESTRUCTURA_FMT'),
+        ('una propiedad por la que importa el IDE: BDS (BUILD-019 en el build; aqui la segunda barrera)',
+         dict(name='BDS', value=carpeta), 'SR_CFG_NAME_ES_ESTRUCTURA_FMT'),
         ('un evento de build', dict(name='PreBuildEvent', value='calc.exe'), 'SR_CFG_NAME_ES_TEXTO_LIBRE_FMT'),
         ('una opcion libre', dict(name='DCC_AdditionalSwitches', value='-x'), 'SR_CFG_NAME_ES_TEXTO_LIBRE_FMT'),
         ('sin value', dict(name='PF_X'), 'SR_CFG_NEED_VALUE'),

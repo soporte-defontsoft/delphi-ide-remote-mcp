@@ -12,6 +12,7 @@ demas; aqui vive una vez.
 No es una bateria (no empieza por test_): run_all no la ejecuta.
 """
 import atexit
+import base64
 import ctypes
 import glob
 import hashlib
@@ -174,6 +175,19 @@ def copias(carpeta, nombre=None, cajon=None, bajo=False):
     sello = re.compile((re.escape(nombre) if nombre else '.+') + r'-\d{9}$', re.I)
     return sorted(f for f in glob.glob(patron, recursive=bajo)
                   if sello.match(os.path.basename(f)))
+
+
+def subida_en_dos(ruta, datos, sha256):
+    """Los argumentos de un delphi_upload de DOS trozos, con el sha256 final en el
+    segundo: la forma en que un sha256 final que no casa con lo YA escrito manda la
+    subida a la cuarentena (UPLOAD-011, cajon CAJON_CORRUPTOS). Con el fichero entero
+    en UNA llamada el servidor lo comprueba antes de escribir y no escribe nada
+    (UPLOAD-015, 1.22.0: test completo de Hermes). datos: 2 bytes o mas."""
+    assert len(datos) >= 2, 'una subida en dos necesita 2 bytes o mas'
+    m = len(datos) // 2
+    return [{'path': ruta, 'offset': 0, 'chunkbase64': base64.b64encode(datos[:m]).decode('ascii')},
+            {'path': ruta, 'offset': m, 'chunkbase64': base64.b64encode(datos[m:]).decode('ascii'),
+             'sha256': sha256}]
 
 
 def slug(s):

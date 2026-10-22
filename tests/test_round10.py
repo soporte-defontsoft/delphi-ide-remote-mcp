@@ -144,7 +144,9 @@ for tool in ('delphi_symbols',):
           r[:200])
 r = A.call('delphi_hover', {'path': GHOST, 'line': 0, 'character': 0})
 check('B5 hover igual', mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_LSP_NO_FILE_FMT'), r[:200])
-r = A.call('delphi_config', {'project': DPROJ, 'command': 'remove-unit', 'name': 'X'})
+# (era name=X; desde la 1.22.0 name es un parametro de delphi_config -set-property- y
+# la respuesta es CFG-110 "no va con este comando", que es otra cosa)
+r = A.call('delphi_config', {'project': DPROJ, 'command': 'remove-unit', 'nombre': 'X'})
 check('B5 un parametro que no existe es "error:", no "Error executing tool:"',
       mc.resultado(r) == 'INVALID_PARAM' and mc.abre(r, 'SR_SYS_UNKNOWN_PARAM_FMT'), r[:200])
 

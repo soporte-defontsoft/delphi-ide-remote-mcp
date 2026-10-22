@@ -1,6 +1,6 @@
 # Delphi IDE Remote MCP Server
 
-[![Latest release](https://img.shields.io/badge/download-v1.21.4-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v1.22.0-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ![Delphi IDE Remote MCP — RAD Studio as a remote backend for AI programming agents: any MCP client on one side, Windows/Linux/Android test targets on the other, one workspace-jailed server in the middle](docs/media/hero.webp)
@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: latest 1.21.4 (published today, validated by its batteries and live against the IDE: a component suite registered in the Library Path with the server up became readable with no restart); stable 1.20.1.** Covered by 260 end-to-end batteries — 6,672 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: latest 1.22.0 (published today, validated by its batteries and live on two machines: a real FMX project with an Android keystore outside the roots and the IDE's package list built for Windows and Linux through the server, with the new `set-property` / `remove-property` as the way to re-point or drop that keystore); stable 1.21.4.** Covered by 266 end-to-end batteries — 6,794 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
