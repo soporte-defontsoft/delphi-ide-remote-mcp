@@ -518,9 +518,13 @@ _x = open(_deployproj, encoding='utf-8-sig').read()
 def _deps_in(xml):
     rel = os.path.relpath(_dep, os.path.dirname(_deployproj))
     return xml.count('<DeployFile Include="' + _dep + '"') +            xml.count('<DeployFile Include="' + rel + '"')
-check('deployfile: entrada Debug y Release con la forma del IDE',
-      _deps_in(_x) == 2 and '<DeployClass>File</DeployClass>' in _x
-      and '<RemoteDir>ConfProj' + chr(92) + '</RemoteDir>' in _x and "'$(Config)'=='Release'" in _x, 'shape mismatch')
+# 1.22.2: como el Deployment Manager del IDE, UNA config (la activa) y en el .dproj tambien (su seccion
+# Deployment, de la que el IDE regenera el .deployproj); antes, Debug y Release solo en el .deployproj
+check('deployfile: una entrada, la de la config activa, con la forma del IDE, en el .deployproj y en el .dproj',
+      _deps_in(_x) == 1 and '<DeployClass>File</DeployClass>' in _x
+      and '<RemoteDir>ConfProj' + chr(92) + '</RemoteDir>' in _x and "'$(Config)'=='Debug'" in _x
+      and ('<DeployFile LocalName="' + os.path.relpath(_dep, os.path.dirname(CON)) + '" Configuration="Debug" Class="File">')
+      in open(CON, encoding='utf-8-sig').read(), 'shape mismatch')
 check('deployfile: el .dproj importa el manifiesto',
       '$(MSBuildProjectName).deployproj' in open(CON, encoding='utf-8-sig').read(), 'import line missing')
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
@@ -528,9 +532,9 @@ out = call('delphi_config', {"project": CON, "command": "add-deployfile",
 check('deployfile: repetir = ya viaja, sin cambios',
       mc.es(out, 'SN_CONFIG_DEPLOY_PRESENT_FMT'), out[:120])
 _v = json.loads(call('delphi_config', {"project": CON, "section": "all"}))
-check('deployfile: view lo ensena por plataforma (una linea por fichero, junto al binario)',
+check('deployfile: view lo ensena por plataforma, del .dproj (una linea por fichero, y donde lo deja)',
       sum('libfake.so' in e for e in (_v.get('deployFiles') or {}).get('Linux64', [])) == 1
-      and any('ConfProj ->' in e for e in (_v.get('deployFiles') or {}).get('Linux64', [])),
+      and any(e.endswith('-> ConfProj' + chr(92) + 'libfake.so') for e in (_v.get('deployFiles') or {}).get('Linux64', [])),
       str(_v.get('deployFiles'))[:160])
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Android64", "path": _dep})
@@ -559,8 +563,9 @@ check('deployfile: sin plataforma RECHAZADO',
       mc.rechazado(out) and mc.es(out, 'SR_CONFIG_DEPLOY_PLATFORM_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
-check('deployfile: quitado (2 entradas)',
-      mc.abre(out, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(2 ' in out, out[:120])
+check('deployfile: quitado (la del .dproj y la del .deployproj)',
+      mc.abre(out, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(1 entries in the project, 1 in its .deployproj)' in out,
+      out[:160])
 _x = open(_deployproj, encoding='utf-8-sig').read()
 # Desde v0.62 la entrada se escribe RELATIVA al proyecto, como la escribe el
 # IDE (una ruta absoluta hacia que el .deployproj no fuese portable, y ademas
@@ -568,7 +573,7 @@ _x = open(_deployproj, encoding='utf-8-sig').read()
 _relname = os.path.basename(_dep)
 check('deployfile: Linux64 limpio, Android64 intacto',
       ('libfake.so' in _x) and
-      (_deps_in(_x) == 2)
+      (_deps_in(_x) == 1)
       and "'$(Platform)'=='Android64'" in _x, 'unexpected manifest state')
 check('deployfile: la entrada NO lleva ruta absoluta (portable)',
       ('<DeployFile Include="' + _dep + '"') not in _x and

@@ -261,7 +261,9 @@ open(DEP8, 'w', encoding='utf-8', newline='\r\n').write(
     '    </ItemGroup>\n'
     '</Project>\n')
 r = S.call('delphi_config', {'project': P8, 'command': 'view', 'section': 'deploy'})
-vista = mc.como_json(r).get('deployFiles') or {}
+# (1.22.2: la vista lee el .dproj, como el IDE; lo que solo esta en el .deployproj, que el
+# proyecto no lista, va aparte - estas, escritas a mano, son todas de ahi)
+vista = mc.como_json(r).get('deployFilesOnlyInManifest') or {}
 check('D4f la vista ve las tres entradas de Linux64: la de la Condition delante y la vacia, cada una con lo suyo',
       sorted(vista.get('Linux64', [])) == sorted(['libuno.so -> P\\', 'vacio.dat -> ', 'libdos.so -> Q\\']),
       vista)

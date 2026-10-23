@@ -40,6 +40,12 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
      contaban como vivas, LIST-008; Opus en Hermes)
   K2 delphi_create con un parametro de otro kind: CREATE-035 nombra los kinds de verdad (ROJO contra r1222h:
      "goes with: form", que no es un kind; Opus en Hermes)
+  DF1-DF8 delphi_config add-deployfile como el Deployment Manager del IDE (medido con David el 23-oct-2026): la
+     entrada en el .dproj (seccion Deployment: LocalName relativa por IncludeFor, la config activa, Class File, su
+     Platform con RemoteName y Overwrite; .\sub\ con remotedir; en el orden ordinal del IDE) y UNA en el
+     .deployproj de esa config (sin Required, RemoteDir <Proyecto>\sub\); compila; CFG-029 sin escribir; una
+     config que no declara, negada; view lee el .dproj; remove-deployfile de los dos (ROJO contra r1222i: solo
+     escribia el .deployproj, Debug y Release, y la vista lo leia de el)
   U1 delphi_config remove-unit con la entrada relativa (Lib\ULibRel.pas), dentro: quitada, sin decir que esta fuera
      de lo legible (ROJO contra r1222h: la juzgaba desde la carpeta del servidor, CFG-125; Opus en Hermes)
 
@@ -315,6 +321,86 @@ try:
     check('K2 formname con kind=unit: CREATE-035 y "goes with" nombra form-vcl...datamodule, no "form"',
           mc.es(r, 'SR_CREATE_NO_VA_CON_KIND_FMT') and 'form-vcl' in r and 'datamodule' in r
           and 'goes with: form.' not in r, r[:400])
+
+    # add-deployfile como el Deployment Manager del IDE: el .dproj (su seccion Deployment) y el .deployproj
+    ddir = os.path.join(JAIL, 'dep')
+    srv.call('delphi_create', {'kind': 'project-vcl', 'name': 'Dep', 'dir': ddir})
+    dproj = os.path.join(ddir, 'Dep.dproj')
+    dmani = os.path.join(ddir, 'Dep.deployproj')
+    os.makedirs(os.path.join(ddir, 'datos'))
+    open(os.path.join(ddir, 'datos', 'datos.txt'), 'w').write('dato\n')
+    os.makedirs(os.path.join(JAIL, 'fuera'))
+    externo = os.path.join(JAIL, 'fuera', 'externo.txt')
+    open(externo, 'w').write('externo\n')
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': os.path.join(ddir, 'datos', 'datos.txt')}, 240)
+    t, m = lee(dproj), (lee(dmani) if os.path.exists(dmani) else '')
+    entrada = m[m.find('Include="datos\\datos.txt"'):]
+    entrada = entrada[:entrada.find('</DeployFile>')]
+    check('DF1 add-deployfile: en el .dproj como el Deployment Manager (relativa, la config activa, Class File,'
+          ' su Platform con RemoteName y Overwrite) y en el .deployproj UNA entrada de esa config, sin Required',
+          mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT') and '<Deployment Version="5">' in t
+          and '<DeployFile LocalName="datos\\datos.txt" Configuration="Debug" Class="File">' in t
+          and '<Platform Name="Win64">' in t and '<RemoteName>datos.txt</RemoteName>' in t
+          and '<Overwrite>true</Overwrite>' in t
+          and "Condition=\"'$(Config)'=='Debug'\"" in entrada and '<RemoteDir>Dep\\</RemoteDir>' in entrada
+          and '<DeployClass>File</DeployClass>' in entrada and '<Required>' not in entrada
+          and m.count('Include="datos\\datos.txt"') == 1, r[:400] + ' | ' + entrada[:400])
+    r = srv.call('delphi_build', {'project': dproj, 'platform': 'Win64'}, 600)
+    check('DF2 ...y el proyecto compila', mc.como_json(r).get('success') is True, r[:300])
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': externo, 'config': 'Release', 'remotedir': 'assets'}, 240)
+    t, m = lee(dproj), lee(dmani)
+    check('DF3 uno de la carpeta HERMANA: ..\\ (IncludeFor, como el IDE), Release, .\\assets\\ en el .dproj y'
+          ' Dep\\assets\\ en el .deployproj; delante de datos\\ (el orden ordinal del IDE)',
+          mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT')
+          and '<DeployFile LocalName="..\\fuera\\externo.txt" Configuration="Release" Class="File">' in t
+          and '<RemoteDir>.\\assets\\</RemoteDir>' in t
+          and 0 < t.find('LocalName="..\\fuera') < t.find('LocalName="datos\\')
+          and 'Include="..\\fuera\\externo.txt"' in m and '<RemoteDir>Dep\\assets\\</RemoteDir>' in m, r[:400])
+    antes = (open(dproj, 'rb').read(), open(dmani, 'rb').read())
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': externo, 'config': 'Release', 'remotedir': 'assets'}, 240)
+    check('DF4 el mismo otra vez: CFG-029 y nada escrito', mc.es(r, 'SN_CONFIG_DEPLOY_PRESENT_FMT')
+          and (open(dproj, 'rb').read(), open(dmani, 'rb').read()) == antes, r[:300])
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': externo, 'config': 'Nada'}, 240)
+    check('DF5 una config que el proyecto no declara: negada con las que declara, nada escrito',
+          mc.rechazado(r) and 'Release' in r
+          and (open(dproj, 'rb').read(), open(dmani, 'rb').read()) == antes, r[:300])
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'view', 'section': 'deploy'}, 240)
+    vista = (mc.como_json(r).get('deployFiles') or {}).get('Win64', [])
+    check('DF6 view section=deploy lee el .dproj: la entrada, su config y clase, y donde la deja',
+          'datos\\datos.txt (Debug, File) -> Dep\\datos.txt' in vista
+          and '..\\fuera\\externo.txt (Release, File) -> Dep\\assets\\externo.txt' in vista, str(vista)[:400])
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'remove-deployfile', 'platform': 'Win64',
+                                   'path': os.path.join(ddir, 'datos', 'datos.txt')}, 240)
+    t, m = lee(dproj), lee(dmani)
+    check('DF7 remove-deployfile: se va de los dos (1 en el proyecto, 1 en el .deployproj); el otro se queda',
+          mc.es(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(1 entries in the project, 1 in its .deployproj)' in r
+          and 'datos\\datos.txt' not in t and 'datos\\datos.txt' not in m
+          and 'externo.txt' in t and 'externo.txt' in m, r[:400])
+    # con la forma de un .dproj del IDE (Vivo1221\despliegue, medido): la clase File con su carpeta en OSX64
+    # y la raiz de cada plataforma (ProjectRoot) deciden el destino; la entrada va tras las otras, ante las clases
+    clases = ('                <DeployClass Name="File">\r\n'
+              '                    <Platform Name="OSX64">\r\n'
+              '                        <RemoteDir>Contents\\Resources\\StartUp\\</RemoteDir>\r\n'
+              '                        <Operation>0</Operation>\r\n'
+              '                    </Platform>\r\n'
+              '                </DeployClass>\r\n'
+              '                <ProjectRoot Platform="OSX64" Name="$(PROJECTNAME).app"/>\r\n'
+              '                <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>\r\n')
+    crudo = open(dproj, 'rb').read()  # byte a byte: su codificacion se queda
+    open(dproj, 'wb').write(crudo.replace(b'            </Deployment>', clases.encode('ascii') + b'            </Deployment>'))
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'OSX64',
+                                   'path': os.path.join(ddir, 'datos', 'datos.txt')}, 240)
+    t, m = lee(dproj), lee(dmani)
+    check('DF8 con la clase y la raiz del IDE: OSX64 deja Dep.app\\Contents\\Resources\\StartUp\\ (sin RemoteDir'
+          ' en el .dproj), y la entrada va tras las otras y ante las clases',
+          mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT')
+          and '<RemoteDir>Dep.app\\Contents\\Resources\\StartUp\\</RemoteDir>' in m
+          and 0 < t.find('LocalName="..\\fuera') < t.find('LocalName="datos\\datos.txt"')
+          < t.find('<DeployClass Name="File">'), r[:400] + ' | ' + t[t.find('<Deployment'):][:900])
 
     plano = os.path.join(JAIL, 'plano')
     os.makedirs(plano)

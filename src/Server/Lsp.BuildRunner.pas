@@ -889,14 +889,11 @@ end;
 function EnsurePlatformOutputEntries(const ADeployProj, ADprojPath, APlat,
   AName: string): Boolean;
 var
-  Enc, Xml, DprojXml, Cond, Entries: string;
+  Enc, Xml, DprojXml, Entries: string;
   Cfg: string;
-  Hueco, Suyo: TGrupoXml;
-  HayHueco, HaySuyo: Boolean;
 begin
   Result := False;
   Xml := PatchLoadText(ADeployProj, Enc);
-  Cond := DeployGroupCondition(APlat);
   // any DeployFile with ProjectOutput inside a group of this platform? Por EL
   // analisis del .deployproj: era una regex por grupos y un Contains del texto
   for var G in GruposDe(Xml, 'ItemGroup') do
@@ -908,42 +905,10 @@ begin
   Entries := '';
   for Cfg in ConfigsDelManifiesto(DprojXml) do
     Entries := Entries + OutputDeployEntry(DprojXml, ExtractFileDir(ADprojPath), APlat, Cfg, AName);
-  // el grupo de la plataforma, '$(Platform)'=='X': el vacio que el IDE deja
-  // escrito (<ItemGroup .../>), o el que tiene otros ficheros
-  HayHueco := False;
-  HaySuyo := False;
-  for var G in GruposDe(Xml, 'ItemGroup', True) do
-    if CondicionNormalizada(G.Condicion) = CondicionNormalizada(Cond) then
-      if G.Vacio and not HayHueco then
-      begin
-        Hueco := G;
-        HayHueco := True;
-      end
-      else if not G.Vacio and not HaySuyo then
-      begin
-        Suyo := G;
-        HaySuyo := True;
-      end;
-  // an empty self-closing group for the platform: fill it
-  if HayHueco then
-    // EL escritor del grupo (Lsp.Dproj); la sangria ya esta delante del hueco
-    Xml := Copy(Xml, 1, Hueco.Abre - 1) + XmlGrupoDeDespliegue(Cond, Entries) +
-      Copy(Xml, Hueco.Cierra, MaxInt)
-  else
-  begin
-    // a group with other files but no output, or no group at all
-    if HaySuyo then
-      Xml := Copy(Xml, 1, Suyo.Ini - 1) + #13#10 + Entries +
-        Copy(Xml, Suyo.Ini, MaxInt).TrimLeft([#13, #10])
-    else
-    begin
-      var P := CierreDelProyecto(Xml);
-      if P = 0 then
-        Exit;
-      Xml := Copy(Xml, 1, P - 1) + '    ' + XmlGrupoDeDespliegue(Cond, Entries) + #13#10 +
-        Copy(Xml, P, MaxInt);
-    end;
-  end;
+  // en el grupo de la plataforma, como lo deja el IDE (Lsp.Dproj)
+  Xml := ConEntradasEnSuGrupo(Xml, APlat, Entries);
+  if Xml = '' then
+    Exit;
   PatchSaveConSuSalto(ADeployProj, Xml, Enc);
   Result := True;
 end;

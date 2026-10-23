@@ -3355,10 +3355,9 @@ const
   // ---- delphi_config: deployment files ----
 
   SP_CONFIG_REMOTEDIR =
-    'add-deployfile: destination folder on the target, relative to the ' +
-    'deployment root (the IDE''s RemoteDir). Default: next to the binary - ' +
-    'for a .so on Android, the apk''s library\lib\<abi>\. No absolute ' +
-    'paths, no "..".';
+    'add-deployfile: target folder, relative to the deployment root (the ' +
+    'IDE''s Remote Path). Default: next to the binary; a .so on Android, the ' +
+    'apk''s library\lib\<abi>\. No absolute paths, no "..".';
 
   SR_CONFIG_DEPLOY_NEED_PATH =
     '[CFG-096 INVALID_PARAM] Missing "path": the file that must travel ' +
@@ -3385,35 +3384,56 @@ const
     'MyApp\lib\.';
 
   SN_CONFIG_DEPLOY_ADDED_FMT =
-    '[CFG-028] ADDED to the deployment of %s: "%s" -> %s%s (Debug and ' +
-    'Release). %sBackup of the .deployproj in __delphi-patch. To ' +
+    '[CFG-028] ADDED to the deployment of %s (%s): "%s" -> %s%s, in the ' +
+    'project (its Deployment section, what the IDE''s Deployment Manager ' +
+    'writes) and in its .deployproj (what msbuild deploys). %sBackups in ' +
+    '__delphi-patch. To ' +
     'actually deploy you need an IDE CONNECTION PROFILE: delphi_build ' +
     'target=Deploy platform=%s only works if the user of this server has ' +
     'one configured (otherwise msbuild answers "Missing profile name" ' +
     'even for Win32). Remotely, delphi_build target=Deploy ' +
-    'profile=<name> does the real deployment; locally, the .deployproj ' +
-    'stays written and the IDE will use it when it opens the project.';
+    'profile=<name> does the real deployment; the IDE keeps the file, as ' +
+    'it is in the Deployment section it regenerates the .deployproj from.';
 
   SF_CONFIG_DEPLOY_GENERATED =
     'The project had no deployment manifest: the standard one (the ' +
     'binary) was generated before adding the file.';
 
   SN_CONFIG_DEPLOY_PRESENT_FMT =
-    '[CFG-029] "%s" already travels in the deployment of %s. Nothing to ' +
-    'change.';
+    '[CFG-029] "%s" already travels in the deployment of %s (%s). Nothing ' +
+    'to change.';
 
   SN_CONFIG_DEPLOY_REMOVED_FMT =
-    '[CFG-030] REMOVED "%s" from the deployment of %s (%d entries). ' +
-    'Backup in __delphi-patch.';
+    '[CFG-030] REMOVED "%s" from the deployment of %s (%d entries in the ' +
+    'project, %d in its .deployproj). Backups in __delphi-patch.';
+
+  { view section=deploy: lo que el .deployproj despliega y el proyecto no
+    lista (1.22.2) }
+  SN_CONFIG_DEPLOY_SOLO_MANIFIESTO =
+    '[CFG-144] deployFilesOnlyInManifest: files the .deployproj deploys ' +
+    'that the project does not list (a manifest written by hand, or by ' +
+    'add-deployfile before 1.22.2): msbuild deploys them, but the IDE drops ' +
+    'them when it regenerates the .deployproj. add-deployfile adds them to ' +
+    'the project.';
+
+  { add-deployfile en un .dproj sin <BorlandProject>, donde va la seccion
+    Deployment del IDE (1.22.2) }
+  SR_CFG_DEPLOY_SIN_BORLANDPROJECT_FMT =
+    '[CFG-143 INVALID_PARAM] %s has no <BorlandProject> (in ' +
+    '<ProjectExtensions>), where the IDE keeps the files a project ' +
+    'deploys: it was not written by the IDE. Open it in the IDE, which ' +
+    'completes it, or create the project with delphi_create. Nothing was ' +
+    'written.';
 
   SN_CONFIG_DEPLOY_ABSENT_FMT =
     '[CFG-031] "%s" is not in the deployment of %s. See the entries with ' +
     'command=view.';
 
   SN_CONFIG_NO_DEPLOYPROJ =
-    '[CFG-032] No deployment manifest (.deployproj) next to the project ' +
-    'yet: add-deployfile writes one (with the binary in it) and adds ' +
-    'your file. Note that RUNNING a deployment needs an IDE connection ' +
+    '[CFG-032] The project lists no deployment files yet (its Deployment ' +
+    'section, the IDE''s Deployment Manager): add-deployfile adds one there ' +
+    'and in the .deployproj msbuild deploys from, which it writes if ' +
+    'missing. Note that RUNNING a deployment needs an IDE connection ' +
     'profile on this machine: without one, delphi_build target=Deploy ' +
     'fails with "Missing profile name" even for Win32. delphi_build ' +
     'target=Deploy with a profile is what deploys remotely.';
@@ -9597,12 +9617,13 @@ const
     'Names already there are kept.';
 
   SP_CFG_CONFIG =
-    'set-active: the configuration the project builds by default from now ' +
-    'on (one it declares: Debug, Release...). With platform= too, both at ' +
+    'set-active: the one the project builds by default (one it declares: ' +
+    'Debug, Release...). With platform= too, both at ' +
     'once. set-property / remove-property / get-property: the configuration ' +
     'of the group (with platform=, the group of that pair, as the IDE writes ' +
     'an option of Debug for Android64; empty: all; get-property reads the ' +
-    'default).';
+    'default). add/remove-deployfile: its config (add: the active one; ' +
+    'remove: empty = all).';
 
   SP_CFG_NAME =
     'set-property / remove-property / get-property: the property, as the ' +
@@ -9636,7 +9657,7 @@ const
     'found" only there. add-deployfile / remove-deployfile: ship an extra ' +
     'file with the build on ONE platform, as the IDE''s Deployment Manager ' +
     '(a native .so/.dylib/.dll a component loads, data files), into the ' +
-    '.deployproj, creating the standard manifest if missing. add-unit / ' +
+    'project and its .deployproj (created if missing). add-unit / ' +
     'remove-unit: the IDE''s Add to / Remove from project (.dpr uses, ' +
     'CreateForm for forms, the .dproj): add-unit takes an EXISTING .pas, ' +
     'remove-unit the entry as the project lists it - even one whose file ' +

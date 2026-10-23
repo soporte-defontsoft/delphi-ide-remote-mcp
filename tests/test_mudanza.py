@@ -320,7 +320,8 @@ try:
         open(DEP, 'w', encoding='utf-8-sig', newline='').write(
             dep.replace('datos.txt', 'datos&amp;mas.txt'))
     j = mc.como_json(call('delphi_config', {'project': DP, 'section': 'deploy'}))
-    lineas = [l for v in (j.get('deployFiles') or {}).values() for l in v]
+    # (1.22.2: la del .deployproj que el proyecto no lista sale aparte)
+    lineas = [l for k in ('deployFiles', 'deployFilesOnlyInManifest') for v in (j.get(k) or {}).values() for l in v]
     check('X6 una entrada de deploy con &amp; (como la escribe el IDE): view la da entera',
           os.path.exists(DEP) and xml_valido(DEP) and
           any('datos&mas.txt' in l and '&amp;' not in l for l in lineas),

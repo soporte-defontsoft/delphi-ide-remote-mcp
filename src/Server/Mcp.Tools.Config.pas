@@ -1064,28 +1064,44 @@ end;
   libzbar.so on Linux / .dylib on macOS, and the project's .deployproj had
   no Linux64 entries because it had never been deployed there).
 
-  Entries follow the IDE's own shape, one ItemGroup per platform:
-    <ItemGroup Condition="'$(Platform)'=='Linux64'">
-        <DeployFile Include="<server path>" Condition="'$(Config)'=='Debug'">
-            <RemoteDir>Project\</RemoteDir>  <RemoteName>libzbar.so</RemoteName>
-            <DeployClass>File</DeployClass>  <Operation>0</Operation> ...
-  One entry per configuration (Debug and Release), as the IDE writes them.
-  A project without a manifest gets the standard one generated first
-  (EnsureDeployManifest). The file is vetted like any read: workspace or
-  library zone, and it must exist. RemoteDir defaults to the project folder
-  on the target (next to the binary); on Android a .so defaults to the apk's
-  library\lib\<abi>\ folder. }
+  Como el IDE (medido con David el 23-oct-2026; la seccion Deployment, en
+  Lsp.Dproj): el Deployment Manager escribe el fichero en el .dproj - una
+  <DeployFile> de UNA configuracion, la del desplegable, con su <Platform> -
+  y de ahi GENERA el IDE el .deployproj al desplegar, que es lo que lee
+  msbuild. add-deployfile escribe los dos, todo o nada: el .dproj para que
+  el IDE no lo pierda al regenerar el manifiesto, el .deployproj para que
+  delphi_build target=Deploy lo lleve ya. Solo escribia el .deployproj (Debug
+  y Release, absoluta fuera de la carpeta del proyecto, un grupo nuevo por
+  llamada) y el IDE lo perdia. Un proyecto sin manifiesto recibe antes el
+  estandar (EnsureDeployManifest). El fichero se juzga como cualquier
+  lectura: workspace o zona de biblioteca, y tiene que existir. }
+
+const
+  // la clase del Deployment Manager para un fichero que se anade a mano
+  CLASE_FICHERO = 'File';
 
 function DeployProjPath(const ADproj: string): string;
 begin
   Result := ManifiestoDe(ADproj); // EL compositor (Lsp.Patch)
 end;
 
-function DefaultRemoteDir(const AProjectName, APlatform, AFile: string): string;
+{ La carpeta de la entrada en el .dproj, en la forma del Deployment Manager
+  (.\sub\): la pedida o, sin ella, '' (la de su clase, que no se escribe),
+  salvo un .so en Android, que va a la carpeta de librerias del apk. }
+function RemoteDirDeLaEntrada(const ARaw, APlatform, AFile: string): string;
 begin
-  Result := AProjectName + '\';
-  if SameText(TPath.GetExtension(AFile), '.so') then
-    Result := Result + CarpetaDeLibreriasDelApk(APlatform); // '' fuera de Android
+  Result := ARaw.Trim.Replace('/', '\');
+  if Result = '' then
+  begin
+    if SameText(TPath.GetExtension(AFile), '.so') and (CarpetaDeLibreriasDelApk(APlatform) <> '') then
+      Result := '.\' + CarpetaDeLibreriasDelApk(APlatform);
+    Exit;
+  end;
+  while Result.StartsWith('.\') do
+    Result := Result.Substring(2);
+  if (Result = '') or (Result = '.') then
+    Exit('.\');
+  Result := '.\' + IncludeTrailingPathDelimiter(Result);
 end;
 
 { '' = fine; else the refusal. AFull receives the resolved file. }
@@ -1124,31 +1140,28 @@ begin
     Exit(MsgText(SR_CONFIG_REMOTEDIR_CHARS));
 end;
 
-{ Every DeployFile element of the manifest whose Include matches AFile
-  (case-insensitive) inside an ItemGroup of APlatform: their spans. }
-{ Resolve a .deployproj Include the way the IDE reads it: relative entries
-  hang off the project folder. Without this, remove-deployfile could not find
-  the very entries the server itself had generated (they are relative), and
-  add-deployfile could add a second copy of a file already there under the
-  other spelling (field round 8). }
-function SameDeployFile(const AInclude, ABaseDir, AFullPath: string): Boolean;
-var
-  Resolved: string;
+{ Resolve a .deployproj Include (or a .dproj LocalName) the way the IDE reads
+  it: relative entries hang off the project folder - por EL lector de lo que
+  escribe IncludeFor (RutaDeInclude). Without this, remove-deployfile could
+  not find the very entries the server itself had generated (they are
+  relative), and add-deployfile could add a second copy of a file already
+  there under the other spelling (field round 8). }
+function SameDeployFile(const AInclude, AProyecto, AFullPath: string): Boolean;
 begin
-  Resolved := AInclude.Trim;
-  if Resolved = '' then
+  if AInclude.Trim = '' then
     Exit(False);
-  if not TPath.IsPathRooted(Resolved) then
-    Resolved := TPath.Combine(ABaseDir, Resolved);
   try
-    Resolved := TPath.GetFullPath(Resolved);
+    Result := SameText(RutaDeInclude(AProyecto, AInclude.Trim), AFullPath);
   except
-    Exit(SameText(AInclude, AFullPath));
+    Result := SameText(AInclude, AFullPath);
   end;
-  Result := SameText(Resolved, AFullPath);
 end;
 
-function FindDeployEntries(const AXml, APlatform, AFile, ABaseDir: string): TArray<TPair<Integer, Integer>>;
+{ Every DeployFile element of the manifest whose Include matches AFile
+  (case-insensitive) inside an ItemGroup of APlatform: their spans. AConfig:
+  only those of that configuration - its Condition, the entry's or its
+  group's; one that names none applies to all ('' = all). }
+function FindDeployEntries(const AXml, APlatform, AFile, AProyecto, AConfig: string): TArray<TPair<Integer, Integer>>;
 begin
   // the enclosing ItemGroup decides the platform, and each entry is matched
   // by its Include - por EL analisis: era una regex con el Include primero y
@@ -1158,16 +1171,26 @@ begin
   for var G in GruposDe(AXml, 'ItemGroup') do
     if SameText(PlataformaDeGrupoDeDespliegue(G.Condicion), APlatform) then
       for var T in TramosEnGrupo(AXml, 'DeployFile', G, True) do
-        if SameDeployFile(AtributoDeTramo(AXml, T, 'DeployFile', 'Include'), ABaseDir, AFile) then
-          Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
+      begin
+        if not SameDeployFile(AtributoDeTramo(AXml, T, 'DeployFile', 'Include'), AProyecto, AFile) then
+          Continue;
+        var Plat, Cfg: string;
+        if not CondicionDePlataformaYConfig(AtributoDeTramo(AXml, T, 'DeployFile', 'Condition'), Plat, Cfg) or
+           (Cfg = '') then
+          if not CondicionDePlataformaYConfig(G.Condicion, Plat, Cfg) then
+            Cfg := '';
+        if (AConfig <> '') and (Cfg <> '') and not SameText(Cfg, AConfig) then
+          Continue;
+        Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
+      end;
 end;
 
-function AddDeployFile(const ADproj, ARawPlatform, ARawPath, ARawRemoteDir: string): string;
+function AddDeployFile(const ADproj, ARawPlatform, ARawPath, ARawRemoteDir, ARawConfig: string): string;
 var
-  Plat, Full, RemoteDir, DeployProj, Enc, Xml, Block, Include, BaseDir: string;
+  Plat, Full, RemoteDir, DeployProj, Enc, EncDproj, Xml, DprojXml, DprojNuevo, LocalName, Cfg,
+    Destino, Nombre: string;
   Info: TRadStudioInfo;
-  Generated: Boolean;
-  ClosePos: Integer;
+  Generated, EnElProyecto, EnElManifiesto: Boolean;
 begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
@@ -1175,19 +1198,28 @@ begin
   Result := DeployFileDenied(ADproj, ARawPath, Full);
   if Result <> '' then
     Exit;
-  RemoteDir := ARawRemoteDir.Trim;
-  if RemoteDir = '' then
-    RemoteDir := DefaultRemoteDir(TPath.GetFileNameWithoutExtension(ADproj), Plat, Full)
-  else
+  if ARawRemoteDir.Trim <> '' then
   begin
-    Result := RemoteDirDenied(RemoteDir);
+    Result := RemoteDirDenied(ARawRemoteDir.Trim);
     if Result <> '' then
       Exit;
-    RemoteDir := RemoteDir.Replace('/', '\');
-    if not RemoteDir.EndsWith('\') then
-      RemoteDir := RemoteDir + '\';
   end;
+  RemoteDir := RemoteDirDeLaEntrada(ARawRemoteDir, Plat, Full);
+  // la configuracion: una que el proyecto declara; sin ella, la activa (el
+  // Deployment Manager anade a la del desplegable, a una sola: con "All
+  // configurations" no deja)
+  DprojXml := LeeTexto(ADproj, [ltJaula]);
+  if ARawConfig.Trim <> '' then
+  begin
+    Result := ConfigDeclarada(DprojXml, ARawConfig, Cfg);
+    if Result <> '' then
+      Exit;
+  end
+  else
+    Cfg := InfoDeDproj(DprojXml).ConfigPorDefecto;
 
+  // sin manifiesto, el estandar (con el binario) ANTES de leer el .dproj
+  // para escribirlo: le anade su <Import>
   DeployProj := DeployProjPath(ADproj);
   Generated := False;
   if not TFile.Exists(DeployProj) then
@@ -1204,37 +1236,60 @@ begin
     if not TFile.Exists(DeployProj) then
       Exit(NoEsFichero(DeployProj, MsgFmt(SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT, [DeployProj])));
   end;
-
+  DprojXml := PatchLoadText(ADproj, EncDproj);
   Xml := PatchLoadText(DeployProj, Enc);
-  if Length(FindDeployEntries(Xml, Plat, Full,
-       TPath.GetDirectoryName(TPath.GetFullPath(DeployProj)))) > 0 then
-    Exit(MsgFmt(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat]));
-  ClosePos := CierreDelProyecto(Xml);
-  if ClosePos = 0 then
-    Exit(MsgText(SR_CFG_DEPLOYPROJ_SIN_CIERRE_PROJECT));
-  // The IDE writes `UMain.pas`, not `D:\proyectos\x\UMain.pas`: an absolute
-  // Include makes the .deployproj stop being portable and stop matching what
-  // the IDE itself generates for the same file (field round 8). Relative
-  // whenever the file lives under the project; absolute only when it does not.
-  Include := Full;
-  BaseDir := TPath.GetDirectoryName(TPath.GetFullPath(DeployProj));
-  if Full.ToLower.StartsWith(IncludeTrailingPathDelimiter(BaseDir).ToLower) then
-    Include := Full.Substring(Length(IncludeTrailingPathDelimiter(BaseDir)));
-  // EL escritor del grupo de una plataforma del .deployproj (Lsp.Dproj)
-  Block := '    ' + XmlGrupoDeDespliegue(DeployGroupCondition(Plat),
-    XmlDeployFile(Include, 'Debug', RemoteDir, TPath.GetFileName(Include), 'File', 0, True) +
-    XmlDeployFile(Include, 'Release', RemoteDir, TPath.GetFileName(Include), 'File', 0, True)) + sLineBreak;
-  Xml := Copy(Xml, 1, ClosePos - 1) + Block + Copy(Xml, ClosePos, MaxInt);
-  PatchSaveConSuSalto(DeployProj, Xml, Enc); // __delphi-patch copy first
+  // la entrada como la escribe el IDE: relativa a la carpeta del proyecto
+  // (tambien con ..\), absoluta solo desde otra unidad - EL nombrador
+  // (IncludeFor); era relativa solo DENTRO de la carpeta
+  LocalName := IncludeFor(ADproj, Full);
+  Nombre := TPath.GetFileName(Full);
+  EnElProyecto := False;
+  for var D in DesplieguesDelProyecto(DprojXml) do
+    if SameText(D.Plataforma, Plat) and SameText(D.Config, Cfg) and
+       SameDeployFile(D.LocalName, ADproj, Full) then
+      EnElProyecto := True;
+  EnElManifiesto := Length(FindDeployEntries(Xml, Plat, Full, ADproj, Cfg)) > 0;
+  if EnElProyecto and EnElManifiesto then
+    Exit(MsgFmt(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat, Cfg]));
+  // en el .dproj, la del Deployment Manager (Lsp.Dproj)
+  DprojNuevo := DprojXml;
+  if not EnElProyecto and
+     not ConDespliegueDelProyecto(DprojXml, LocalName, Cfg, CLASE_FICHERO, Plat, RemoteDir, Nombre,
+       DprojNuevo) then
+    Exit(MsgFmt(SR_CFG_DEPLOY_SIN_BORLANDPROJECT_FMT, [TPath.GetFileName(ADproj)]));
+  // en el .deployproj, como la genera el IDE de esa: su destino, por el
+  // compositor que lee la raiz y la clase del proyecto, y en el grupo de su
+  // plataforma (creaba un grupo nuevo en cada llamada)
+  Destino := DestinoDeDespliegue(DprojNuevo, TPath.GetFileNameWithoutExtension(ADproj), Plat,
+    CLASE_FICHERO, RemoteDir);
+  if not EnElManifiesto then
+  begin
+    Xml := ConEntradasEnSuGrupo(Xml, Plat,
+      XmlDeployFile(LocalName, Cfg, Destino, Nombre, CLASE_FICHERO, 0, False));
+    if Xml = '' then
+      Exit(MsgText(SR_CFG_DEPLOYPROJ_SIN_CIERRE_PROJECT));
+  end;
+  // los dos, todo o nada (y cada uno por el juez XML del IDE, PatchSaveText)
+  Result := FicherosTodoONada([ADproj, DeployProj],
+    function: string
+    begin
+      if not EnElProyecto then
+        PatchSaveConSuSalto(ADproj, DprojNuevo, EncDproj);
+      if not EnElManifiesto then
+        PatchSaveConSuSalto(DeployProj, Xml, Enc); // __delphi-patch copy first
+      Result := '';
+    end);
+  if Result <> '' then
+    Exit;
   Result := MsgFmt(SN_CONFIG_DEPLOY_ADDED_FMT,
-    [Plat, Full, RemoteDir, TPath.GetFileName(Full),
+    [Plat, Cfg, Full, Destino, Nombre,
      IfThen(Generated, MsgText(SF_CONFIG_DEPLOY_GENERATED) + ' ', ''), Plat]);
 end;
 
-function RemoveDeployFile(const ADproj, ARawPlatform, ARawPath: string): string;
+function RemoveDeployFile(const ADproj, ARawPlatform, ARawPath, ARawConfig: string): string;
 var
-  Plat, Full, DeployProj, Enc, Xml: string;
-  Spans: TArray<TPair<Integer, Integer>>;
+  Plat, Full, DeployProj, Enc, EncDproj, Xml, DprojXml, Cfg: string;
+  Spans, DelProyecto: TArray<TPair<Integer, Integer>>;
   I: Integer;
 begin
   Plat := CanonicalPlatform(ARawPlatform);
@@ -1245,80 +1300,150 @@ begin
   Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), ARawPath, ARawPath, Full);
   if Result <> '' then
     Exit;
+  DprojXml := PatchLoadText(ADproj, EncDproj);
+  Cfg := '';
+  if ARawConfig.Trim <> '' then
+  begin
+    Result := ConfigDeclarada(DprojXml, ARawConfig, Cfg);
+    if Result <> '' then
+      Exit;
+  end;
+  // en el .dproj: la <Platform> de cada entrada suya, o la entrada entera si
+  // era su unica plataforma de verdad
+  DelProyecto := [];
+  for var D in DesplieguesDelProyecto(DprojXml) do
+    if SameText(D.Plataforma, Plat) and ((Cfg = '') or SameText(D.Config, Cfg)) and
+       SameDeployFile(D.LocalName, ADproj, Full) then
+      if D.Plataformas = 1 then
+        DelProyecto := DelProyecto + [TPair<Integer, Integer>.Create(D.Entrada.Abre, D.Entrada.Cierra)]
+      else
+        DelProyecto := DelProyecto + [TPair<Integer, Integer>.Create(D.Plat.Abre, D.Plat.Cierra)];
+  // en el .deployproj, sus entradas de esa plataforma (y config)
   DeployProj := DeployProjPath(ADproj);
-  if not TFile.Exists(DeployProj) then
+  Spans := [];
+  if TFile.Exists(DeployProj) then
+  begin
+    Xml := PatchLoadText(DeployProj, Enc);
+    Spans := FindDeployEntries(Xml, Plat, Full, ADproj, Cfg);
+  end;
+  if (Length(DelProyecto) = 0) and (Length(Spans) = 0) then
     Exit(MsgFmt(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
-  Xml := PatchLoadText(DeployProj, Enc);
-  Spans := FindDeployEntries(Xml, Plat, Full,
-    TPath.GetDirectoryName(TPath.GetFullPath(DeployProj)));
-  if Length(Spans) = 0 then
-    Exit(MsgFmt(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
-  // remove from the end so earlier spans stay valid; eat the element's line
+  // del final al principio, que los tramos de delante sigan valiendo; cada
+  // uno con su linea
+  for I := High(DelProyecto) downto 0 do
+    QuitaConSuLinea(DprojXml, DelProyecto[I].Key, DelProyecto[I].Value);
   for I := High(Spans) downto 0 do
     QuitaConSuLinea(Xml, Spans[I].Key, Spans[I].Key + Spans[I].Value);
   // an ItemGroup left empty is dropped too (the IDE keeps empty ones, but
   // ours were added by us): the platform's own, '$(Platform)'=='X', with
   // nothing but blanks inside - from the last, so the earlier stay put
-  var Grupos := GruposDe(Xml, 'ItemGroup');
-  for var K := High(Grupos) downto 0 do
-    if (CondicionNormalizada(Grupos[K].Condicion) = CondicionNormalizada(DeployGroupCondition(Plat))) and
-       (Copy(Xml, Grupos[K].Ini, Grupos[K].Fin - Grupos[K].Ini).Trim = '') then
-      QuitaConSuLinea(Xml, Grupos[K].Abre, Grupos[K].Cierra);
-  PatchSaveConSuSalto(DeployProj, Xml, Enc);
-  Result := MsgFmt(SN_CONFIG_DEPLOY_REMOVED_FMT, [Full, Plat, Length(Spans)]);
+  if Length(Spans) > 0 then
+  begin
+    var Grupos := GruposDe(Xml, 'ItemGroup');
+    for var K := High(Grupos) downto 0 do
+      if (CondicionNormalizada(Grupos[K].Condicion) = CondicionNormalizada(DeployGroupCondition(Plat))) and
+         (Copy(Xml, Grupos[K].Ini, Grupos[K].Fin - Grupos[K].Ini).Trim = '') then
+        QuitaConSuLinea(Xml, Grupos[K].Abre, Grupos[K].Cierra);
+  end;
+  // los dos, todo o nada
+  Result := FicherosTodoONada([ADproj, DeployProj],
+    function: string
+    begin
+      if Length(DelProyecto) > 0 then
+        PatchSaveConSuSalto(ADproj, DprojXml, EncDproj);
+      if Length(Spans) > 0 then
+        PatchSaveConSuSalto(DeployProj, Xml, Enc);
+      Result := '';
+    end);
+  if Result <> '' then
+    Exit;
+  Result := MsgFmt(SN_CONFIG_DEPLOY_REMOVED_FMT, [Full, Plat, Length(DelProyecto), Length(Spans)]);
 end;
 
-{ view: the deployment entries per platform (Include + RemoteDir), from the
-  manifest next to the project - '' when there is none. }
+{ view: los ficheros que despliega el proyecto por plataforma, de su seccion
+  Deployment - lo que lee el IDE para generar el .deployproj (se leian del
+  .deployproj, que el IDE regenera): la entrada, su configuracion y clase, y
+  donde la deja en el destino (el compositor del .deployproj). Y aparte, lo
+  que el .deployproj despliega y el proyecto no lista: msbuild lo lleva y el
+  IDE lo pierde al regenerarlo (la salida del binario no: la genera el IDE de
+  la del proyecto). }
 procedure AddDeployFilesView(const ADproj: string; AReturn: TJSONObject);
 var
-  DeployProj, Xml, Plat: string;
-  Obj: TJSONObject;
-  Arr: TJSONArray;
-begin
-  DeployProj := DeployProjPath(ADproj);
-  if not TFile.Exists(DeployProj) then
+  Xml: string;
+  Obj, Solo: TJSONObject;
+
+  procedure Pon(AObj: TJSONObject; const APlat, ALinea: string);
   begin
-    AReturn.AddPair('deployFilesNote', MsgText(SN_CONFIG_NO_DEPLOYPROJ));
-    Exit;
+    if AObj.GetValue(APlat) = nil then
+      AObj.AddPair(APlat, TJSONArray.Create);
+    var A := AObj.GetValue(APlat) as TJSONArray;
+    for var V in A do
+      if SameText(V.Value, ALinea) then
+        Exit;
+    A.Add(ALinea);
   end;
-  Xml := LeeTexto(DeployProj, [ltJaula]);
-  Obj := TJSONObject.Create;
-  // el ItemGroup decide la plataforma y cada DeployFile dice su Include, por
-  // EL analisis (era una regex con el Include primero y "el ultimo <itemgroup
-  // antes", y otra para sacar la plataforma de la Condition)
-  for var G in GruposDe(Xml, 'ItemGroup') do
+
+  function Listada(const AInclude, APlat: string; const AEntradas: TArray<TDespliegueDelProyecto>): Boolean;
   begin
-    Plat := PlataformaDeGrupoDeDespliegue(G.Condicion);
+    Result := False;
+    for var D in AEntradas do
+      if SameText(D.Plataforma, APlat) then
+      try
+        if SameDeployFile(AInclude, ADproj, RutaDeInclude(ADproj, D.LocalName)) then
+          Exit(True);
+      except
+        if SameText(AInclude, D.LocalName) then
+          Exit(True);
+      end;
+  end;
+
+begin
+  Xml := LeeTexto(ADproj, [ltJaula]);
+  var Entradas := DesplieguesDelProyecto(Xml);
+  if Length(Entradas) = 0 then
+    AReturn.AddPair('deployFilesNote', MsgText(SN_CONFIG_NO_DEPLOYPROJ))
+  else
+  begin
+    Obj := TJSONObject.Create;
+    for var D in Entradas do
+    begin
+      var Que := D.Clase;
+      if D.Config <> '' then
+        Que := D.Config + ', ' + Que;
+      Pon(Obj, D.Plataforma, D.LocalName + ' (' + Que + ') -> ' +
+        DestinoDeDespliegue(Xml, TPath.GetFileNameWithoutExtension(ADproj), D.Plataforma, D.Clase,
+          D.RemoteDir) + D.RemoteName);
+    end;
+    AReturn.AddPair('deployFiles', Obj);
+  end;
+  var Manifiesto := DeployProjPath(ADproj);
+  if not TFile.Exists(Manifiesto) then
+    Exit;
+  // el ItemGroup decide la plataforma y cada DeployFile dice su Include, por
+  // EL analisis; un DeployFile sin <RemoteDir> deja el destino vacio
+  var M := LeeTexto(Manifiesto, [ltJaula]);
+  Solo := TJSONObject.Create;
+  for var G in GruposDe(M, 'ItemGroup') do
+  begin
+    var Plat := PlataformaDeGrupoDeDespliegue(G.Condicion);
     if Plat = '' then
       Continue;
-    for var T in TramosEnGrupo(Xml, 'DeployFile', G, True) do
+    for var T in TramosEnGrupo(M, 'DeployFile', G, True) do
     begin
-      if Obj.GetValue(Plat) = nil then
-        Obj.AddPair(Plat, TJSONArray.Create);
-      Arr := Obj.GetValue(Plat) as TJSONArray;
-      // one line per file (the IDE writes one entry per configuration); un
-      // DeployFile sin <RemoteDir> deja el destino vacio (lanzaba "Index out
-      // of bounds (1)", el gemelo del de Lsp.BuildRunner, 2026-09-23)
-      var Remoto := '';
-      for var R in AllTagValues(Copy(Xml, T.Ini, T.Fin - T.Ini), 'RemoteDir') do
-      begin
-        Remoto := R;
-        Break;
-      end;
-      var Line := AtributoDeTramo(Xml, T, 'DeployFile', 'Include') + ' -> ' + Remoto;
-      var Dup := False;
-      for var V in Arr do
-        if SameText(V.Value, Line) then
-        begin
-          Dup := True;
-          Break;
-        end;
-      if not Dup then
-        Arr.Add(Line);
+      if SameText(ValorDentro(M, 'DeployClass', T), 'ProjectOutput') then
+        Continue;
+      var Include := AtributoDeTramo(M, T, 'DeployFile', 'Include');
+      if not Listada(Include, Plat, Entradas) then
+        Pon(Solo, Plat, Include + ' -> ' + ValorDentro(M, 'RemoteDir', T));
     end;
   end;
-  AReturn.AddPair('deployFiles', Obj);
+  if Solo.Count = 0 then
+    Solo.Free
+  else
+  begin
+    AReturn.AddPair('deployFilesOnlyInManifest', Solo);
+    AReturn.AddPair('deployFilesOnlyInManifestNote', MsgText(SN_CONFIG_DEPLOY_SOLO_MANIFIESTO));
+  end;
 end;
 
 { ---- el SDK del proyecto -------------------------------------------------
@@ -1963,8 +2088,8 @@ const
     'set-output', 'output',
     'add-searchpath', 'platform path paths',
     'remove-searchpath', 'platform path paths',
-    'add-deployfile', 'platform path remotedir',
-    'remove-deployfile', 'platform path',
+    'add-deployfile', 'platform path remotedir config',
+    'remove-deployfile', 'platform path config',
     'set-version', 'version include',
     'set-sdk', 'platform sdk',
     'set-profile', 'platform profile',
@@ -2168,9 +2293,9 @@ begin
         Result := RemoveSearchPath(Proj, Params.Platform, Rutas);
     end
     else if Cmd = 'add-deployfile' then
-      Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir)
+      Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir, Params.Config)
     else if Cmd = 'remove-deployfile' then
-      Result := RemoveDeployFile(Proj, Params.Platform, Params.Path)
+      Result := RemoveDeployFile(Proj, Params.Platform, Params.Path, Params.Config)
     else if Cmd = 'set-version' then
       Result := SetVersion(Proj, Params.Version, Params.Include)
     else if Cmd = 'set-sdk' then

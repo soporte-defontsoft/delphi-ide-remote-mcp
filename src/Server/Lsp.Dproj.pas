@@ -510,6 +510,13 @@ function XmlDeployFile(const AInclude, AConfig, ARemoteDir, ARemoteName, AClase:
   el hueco y el grupo nuevo de un manifiesto que se completa y add-deployfile
   (revisor del 21-oct-2026). }
 function XmlGrupoDeDespliegue(const ACondicion, AEntradas: string): string;
+{ AXml (un .deployproj) con AEntradas (de XmlDeployFile) en el grupo de
+  APlataforma, '$(Platform)'=='X', como lo deja el IDE: el vacio que escribe
+  (<ItemGroup .../>) se llena, en uno con otros ficheros van al principio, y
+  sin ninguno se crea al final; '' si no tiene </Project>. Lo hacian a mano
+  el completado del manifiesto (EnsurePlatformOutputEntries) y
+  add-deployfile, que creaba un grupo nuevo en cada llamada. }
+function ConEntradasEnSuGrupo(const AXml, APlataforma, AEntradas: string): string;
 { La plataforma y la config que nombra una Condition de esas formas - la
   plataforma sola, la config sola, o las dos con And en cualquier orden, que el
   IDE escribe '$(Config)'=='Debug' And '$(Platform)'=='Win32' -, tal cual
@@ -519,6 +526,46 @@ function CondicionDePlataformaYConfig(const ACondicion: string; out APlataforma,
 { La plataforma (con la grafia de las conocidas, y la que no lo es tal cual) de
   un ItemGroup del .deployproj; '' si su Condition no es de una plataforma. }
 function PlataformaDeGrupoDeDespliegue(const ACondicion: string): string;
+
+{ ---- la seccion Deployment del .dproj: el Deployment Manager del IDE ----
+  Lo que escribe el IDE al anadir un fichero en Project > Deployment y lo que
+  lee para GENERAR el .deployproj al desplegar (medido con David el
+  23-oct-2026; msbuild no la lee, lee el .deployproj): en
+  ProjectExtensions/BorlandProject/<Deployment Version="5">, una <DeployFile
+  LocalName Configuration Class> por fichero, configuracion y plataforma, con
+  su <Platform Name>: RemoteDir solo si no es el de su clase, en la forma
+  .\sub\; RemoteName; Overwrite. }
+type
+  { Una <Platform> de verdad (la pseudo 'All Platforms' no) de una
+    <DeployFile> de la seccion, con lo de su entrada; Entrada y Plat, sus
+    tramos; Plataformas, cuantas de verdad lleva la entrada. }
+  TDespliegueDelProyecto = record
+    LocalName, Config, Clase, Plataforma, RemoteDir, RemoteName: string;
+    Entrada, Plat: TTramoXml;
+    Plataformas: Integer;
+  end;
+
+{ EL lector de la seccion: cada <Platform> de verdad de cada <DeployFile>, en
+  orden de documento. }
+function DesplieguesDelProyecto(const AXml: string): TArray<TDespliegueDelProyecto>;
+{ EL escritor de una <DeployFile> de la seccion como la escribe el Deployment
+  Manager, con su <Platform>; ARemoteDir '' = el de su clase (no se
+  escribe). ASangria, la de la <DeployFile>; sin salto al final. }
+function XmlDeployFileDelProyecto(const ALocalName, AConfig, AClase, APlataforma,
+  ARemoteDir, ARemoteName, ASangria: string): string;
+{ AXml con esa <DeployFile> donde la pone el IDE: entre las demas por su
+  LocalName (en orden ordinal, medido), y la seccion <Deployment Version="5">
+  creada al final de <BorlandProject> si no la hay (un .dproj de
+  delphi_create no la trae). False si no hay <BorlandProject>. }
+function ConDespliegueDelProyecto(const AXml, ALocalName, AConfig, AClase, APlataforma,
+  ARemoteDir, ARemoteName: string; out AXmlNuevo: string): Boolean;
+{ La carpeta del destino en que el IDE deja una entrada de APlataforma al
+  generar el .deployproj, con su barra final: la raiz del proyecto en esa
+  plataforma (su <ProjectRoot>, $(PROJECTNAME) = AProyecto; sin el,
+  AProyecto) y la carpeta de la entrada sin su .\ o, sin ella, la de su clase
+  (<DeployClass>): .\data\ -> Proyecto\data\ (medido en un .deployproj que
+  genero el IDE). La comparten el .deployproj que se escribe y la vista. }
+function DestinoDeDespliegue(const AXml, AProyecto, APlataforma, AClase, ARemoteDir: string): string;
 
 type
   { Un trozo de un texto escrito: AEscrito[Ini .. Fin - 1]. }
@@ -2842,6 +2889,178 @@ function XmlGrupoDeDespliegue(const ACondicion, AEntradas: string): string;
 begin
   Result := '<ItemGroup ' + XmlAtributo('Condition', ACondicion) + '>' + sLineBreak +
     AEntradas + '    </ItemGroup>';
+end;
+
+function ConEntradasEnSuGrupo(const AXml, APlataforma, AEntradas: string): string;
+var
+  Hueco, Suyo: TGrupoXml;
+  HayHueco, HaySuyo: Boolean;
+begin
+  var Cond := DeployGroupCondition(APlataforma);
+  // el grupo de la plataforma: el vacio que el IDE deja escrito, o el que
+  // tiene otros ficheros
+  HayHueco := False;
+  HaySuyo := False;
+  for var G in GruposDe(AXml, 'ItemGroup', True) do
+    if CondicionNormalizada(G.Condicion) = CondicionNormalizada(Cond) then
+      if G.Vacio and not HayHueco then
+      begin
+        Hueco := G;
+        HayHueco := True;
+      end
+      else if not G.Vacio and not HaySuyo then
+      begin
+        Suyo := G;
+        HaySuyo := True;
+      end;
+  // el vacio se llena (la sangria ya esta delante del hueco)
+  if HayHueco then
+    Exit(Copy(AXml, 1, Hueco.Abre - 1) + XmlGrupoDeDespliegue(Cond, AEntradas) +
+      Copy(AXml, Hueco.Cierra, MaxInt));
+  // en uno con otros ficheros, al principio
+  if HaySuyo then
+    Exit(Copy(AXml, 1, Suyo.Ini - 1) + #13#10 + AEntradas +
+      Copy(AXml, Suyo.Ini, MaxInt).TrimLeft([#13, #10]));
+  // sin grupo, uno nuevo al final
+  var P := CierreDelProyecto(AXml);
+  if P = 0 then
+    Exit('');
+  Result := Copy(AXml, 1, P - 1) + '    ' + XmlGrupoDeDespliegue(Cond, AEntradas) + #13#10 +
+    Copy(AXml, P, MaxInt);
+end;
+
+const
+  // la pseudo plataforma del Deployment Manager (los valores de todas): en
+  // ella no se despliega
+  TODAS_LAS_PLATAFORMAS = 'All Platforms';
+
+function DesplieguesDelProyecto(const AXml: string): TArray<TDespliegueDelProyecto>;
+begin
+  Result := [];
+  // las <Platform> del documento una vez (las de <Platforms> no estan dentro
+  // de ninguna <DeployFile>)
+  var Todas := TramosDeEtiqueta(AXml, 'Platform');
+  for var Dep in TramosDeEtiqueta(AXml, 'Deployment') do
+    for var E in TramosDentro(AXml, 'DeployFile', Dep) do
+    begin
+      var Suyas: TArray<TTramoXml> := [];
+      for var P in Todas do
+        if (P.Abre >= E.Ini) and (P.Cierra <= E.Fin) and
+           not SameText(AtributoDeTramo(AXml, P, 'Platform', 'Name').Trim, TODAS_LAS_PLATAFORMAS) and
+           (AtributoDeTramo(AXml, P, 'Platform', 'Name').Trim <> '') then
+          Suyas := Suyas + [P];
+      for var P in Suyas do
+      begin
+        var D := Default(TDespliegueDelProyecto);
+        D.LocalName := AtributoDeTramo(AXml, E, 'DeployFile', 'LocalName');
+        D.Config := AtributoDeTramo(AXml, E, 'DeployFile', 'Configuration');
+        D.Clase := AtributoDeTramo(AXml, E, 'DeployFile', 'Class');
+        D.Plataforma := AtributoDeTramo(AXml, P, 'Platform', 'Name').Trim;
+        D.RemoteDir := ValorDentro(AXml, 'RemoteDir', P);
+        D.RemoteName := ValorDentro(AXml, 'RemoteName', P);
+        D.Entrada := E;
+        D.Plat := P;
+        D.Plataformas := Length(Suyas);
+        Result := Result + [D];
+      end;
+    end;
+end;
+
+function XmlDeployFileDelProyecto(const ALocalName, AConfig, AClase, APlataforma,
+  ARemoteDir, ARemoteName, ASangria: string): string;
+begin
+  Result := ASangria + '<DeployFile ' + XmlAtributo('LocalName', ALocalName) + ' ' +
+    XmlAtributo('Configuration', AConfig) + ' ' + XmlAtributo('Class', AClase) + '>' + sLineBreak +
+    ASangria + '    <Platform ' + XmlAtributo('Name', APlataforma) + '>' + sLineBreak;
+  if ARemoteDir <> '' then
+    Result := Result + ASangria + '        ' + XmlElemento('RemoteDir', ARemoteDir) + sLineBreak;
+  Result := Result + ASangria + '        ' + XmlElemento('RemoteName', ARemoteName) + sLineBreak +
+    ASangria + '        ' + XmlElemento('Overwrite', 'true') + sLineBreak +
+    ASangria + '    </Platform>' + sLineBreak +
+    ASangria + '</DeployFile>';
+end;
+
+function ConDespliegueDelProyecto(const AXml, ALocalName, AConfig, AClase, APlataforma,
+  ARemoteDir, ARemoteName: string; out AXmlNuevo: string): Boolean;
+var
+  Desde, Hasta: Integer;
+begin
+  AXmlNuevo := AXml;
+  var Borland := TramosDeEtiqueta(AXml, 'BorlandProject');
+  if Length(Borland) = 0 then
+    Exit(False);
+  var Deps := TramosDentro(AXml, 'Deployment', Borland[0], True);
+  // sin seccion (un .dproj de delphi_create): al final de <BorlandProject>,
+  // con la sangria de sus hijos
+  if Length(Deps) = 0 then
+  begin
+    ConSuLinea(AXml, Borland[0].Fin, Borland[0].Cierra, Desde, Hasta);
+    var S := SangriaDeLaLineaEn(AXml, Borland[0].Fin) + '    ';
+    AXmlNuevo := Copy(AXml, 1, Desde - 1) + S + '<Deployment Version="5">' + sLineBreak +
+      XmlDeployFileDelProyecto(ALocalName, AConfig, AClase, APlataforma, ARemoteDir, ARemoteName,
+        S + '    ') + sLineBreak + S + '</Deployment>' + sLineBreak + Copy(AXml, Desde, MaxInt);
+    Exit(True);
+  end;
+  var Dep := Deps[0];
+  if Dep.Vacio then
+  begin
+    var S := SangriaDeLaLineaEn(AXml, Dep.Abre);
+    AXmlNuevo := Copy(AXml, 1, Dep.Abre - 1) + '<Deployment Version="5">' + sLineBreak +
+      XmlDeployFileDelProyecto(ALocalName, AConfig, AClase, APlataforma, ARemoteDir, ARemoteName,
+        S + '    ') + sLineBreak + S + '</Deployment>' + Copy(AXml, Dep.Cierra, MaxInt);
+    Exit(True);
+  end;
+  var Entradas := TramosDentro(AXml, 'DeployFile', Dep, True);
+  var Sangria := SangriaDeLaLineaEn(AXml, Dep.Abre) + '    ';
+  if Length(Entradas) > 0 then
+    Sangria := SangriaDeLaLineaEn(AXml, Entradas[0].Abre);
+  var Bloque := XmlDeployFileDelProyecto(ALocalName, AConfig, AClase, APlataforma, ARemoteDir,
+    ARemoteName, Sangria);
+  // delante de la primera que va detras por su LocalName: el IDE las ordena
+  // por el, ordinal ('..\fuera' 'Linux64\..' 'N:\..' 'datos\..', medido)
+  for var E in Entradas do
+    if CompareStr(AtributoDeTramo(AXml, E, 'DeployFile', 'LocalName'), ALocalName) > 0 then
+    begin
+      ConSuLinea(AXml, E.Abre, E.Cierra, Desde, Hasta);
+      AXmlNuevo := Copy(AXml, 1, Desde - 1) + Bloque + sLineBreak + Copy(AXml, Desde, MaxInt);
+      Exit(True);
+    end;
+  // ...o detras de la ultima; o, la primera, tras la apertura de la seccion
+  var Tras := Dep.Ini;
+  if Length(Entradas) > 0 then
+    Tras := Entradas[High(Entradas)].Cierra;
+  AXmlNuevo := Copy(AXml, 1, Tras - 1) + sLineBreak + Bloque + Copy(AXml, Tras, MaxInt);
+  Result := True;
+end;
+
+function DestinoDeDespliegue(const AXml, AProyecto, APlataforma, AClase, ARemoteDir: string): string;
+var
+  Sub: string;
+begin
+  // la raiz del proyecto en la plataforma
+  Result := AProyecto;
+  for var T in TramosDeEtiqueta(AXml, 'ProjectRoot', True) do
+    if SameText(AtributoDeTramo(AXml, T, 'ProjectRoot', 'Platform').Trim, APlataforma) then
+    begin
+      Result := StringReplace(AtributoDeTramo(AXml, T, 'ProjectRoot', 'Name').Trim, '$(PROJECTNAME)',
+        AProyecto, [rfIgnoreCase]);
+      Break;
+    end;
+  // la carpeta de la entrada o, sin ella, la de su clase en esa plataforma
+  Sub := ARemoteDir.Trim;
+  if Sub = '' then
+    for var C in TramosDeEtiqueta(AXml, 'DeployClass') do
+      if SameText(AtributoDeTramo(AXml, C, 'DeployClass', 'Name').Trim, AClase) then
+        for var P in TramosDentro(AXml, 'Platform', C) do
+          if SameText(AtributoDeTramo(AXml, P, 'Platform', 'Name').Trim, APlataforma) then
+            Sub := ValorDentro(AXml, 'RemoteDir', P);
+  if Sub.StartsWith('.\') then
+    Sub := Sub.Substring(2)
+  else if Sub = '.' then
+    Sub := '';
+  Result := IncludeTrailingPathDelimiter(Result);
+  if Sub <> '' then
+    Result := IncludeTrailingPathDelimiter(Result + Sub);
 end;
 
 function RutasDeExists(const AEscrita: string): TArray<TTrozoEscrito>;

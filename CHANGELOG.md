@@ -68,6 +68,22 @@ the MCP `initialize` response (`serverInfo.version`).
   the page control's `ActivePage`, which the IDE saves as the page selected
   when it saves and a program usually sets in code (measured in the IDE on
   2026-10-23) (`tests/test_contratos_1222.py`).
+- **`delphi_config add-deployfile` writes what the IDE's Deployment Manager
+  writes.** It wrote only the `.deployproj`, which the IDE regenerates from
+  the project's Deployment section when it deploys: a file added by the
+  server was lost the first time the IDE deployed the project. And it wrote
+  Debug and Release, absolute outside the project folder, in a new group on
+  each call (measured in the IDE with David on 2026-10-23). It now writes
+  the entry in the `.dproj` as the Deployment Manager does - relative to the
+  project, `..\` included, absolute only from another drive; ONE
+  configuration, the active one or `config=`; class `File`, its platform,
+  `RemoteName`, and `.\sub\` for a `remotedir` - and the same entry in the
+  `.deployproj` msbuild deploys from, where the IDE would generate it (the
+  root and class folder the project declares), both or neither.
+  `remove-deployfile` takes it out of both (`config=` narrows it), and
+  `view section=deploy` reads the project, with what only the `.deployproj`
+  lists apart (`CFG-144`: msbuild deploys it, the IDE drops it)
+  (`tests/test_contratos_1222.py`).
 - **`delphi_hover` gives a symbol's file as a path the other tools take.**
   The engine's link (`file:///C%3A/.../System.SysUtils.pas#8766`) came out as
   `file:///srvc%3A/...`, which `delphi_read` refused; it is now the path and
