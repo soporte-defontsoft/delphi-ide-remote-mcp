@@ -785,6 +785,16 @@ function TagValue(const AXml, ATag: string): string;
   otra, como msbuild: su definidor pone la clave de la madre (medido el
   21-oct-2026 con msbuild, G11 de test_build_grupos_1215). }
 function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
+{ Las propiedades del documento que AValor usa ($(X)) y que msbuild lee
+  VACIAS en el elemento ATag que lo lleva (en un PropertyGroup de la raiz,
+  con ese valor), para el build APlatform/AConfig: ninguna definicion de X
+  que se aplique antes de el y alguna despues - msbuild lee un .dproj de
+  arriba abajo y fija cada valor al definirlo -, por EL juez de la puerta
+  (VeredictosDeElementos). Ni la de ATag (la herencia que escribe el IDE) ni
+  lo que el documento no define. Un set-property que cambia un valor en su
+  sitio lo puede dejar encima de la X que usa: F2613 sin aviso (Opus en
+  Hermes, 22-oct-2026). }
+function UsadasAntesDeDefinirse(const AXml, ATag, AValor, APlatform, AConfig: string): TArray<string>;
 
 type
   { Una entrada del search path de un proyecto: tal como esta escrita (ya
@@ -3536,6 +3546,55 @@ begin
         [rfReplaceAll, rfIgnoreCase]); // el ultimo gana, con lo de antes dentro
 end;
 
+function UsadasAntesDeDefinirse(const AXml, ATag, AValor, APlatform, AConfig: string): TArray<string>;
+var
+  Mal: string;
+  Elementos: TArray<TElementoXml>;
+  V: TArray<TVeredicto>;
+  Definidas, Nombres: TArray<string>;
+  P, Q: Integer;
+begin
+  Result := [];
+  // los $(X) de AValor que el documento define, sin el propio (la herencia)
+  Nombres := [];
+  Elementos := ElementosDe(AXml, Mal);
+  Definidas := PropiedadesDefinidas(Elementos);
+  P := Pos('$(', AValor);
+  while P > 0 do
+  begin
+    Q := Pos(')', AValor, P + 2);
+    if Q = 0 then
+      Break;
+    var N := Copy(AValor, P + 2, Q - P - 2);
+    if EsNombreDeMacro(N) and not SameText(N, ATag) and MatchText(N, Definidas) and
+       not MatchText(N, Nombres) then
+      Nombres := Nombres + [N];
+    P := Pos('$(', AValor, Q + 1);
+  end;
+  if Length(Nombres) = 0 then
+    Exit;
+  V := VeredictosDeElementos(AXml, APlatform, AConfig, Elementos, [], []);
+  for var I := 0 to High(Elementos) do
+  begin
+    if not SameText(Elementos[I].Escrito, ATag) or not EsDeGrupoDeLaRaiz(Elementos[I]) or
+       (V[I] = vNo) or (ValorDeTramo(AXml, Elementos[I].Tramo).Trim <> AValor) then
+      Continue;
+    for var N in Nombres do
+    begin
+      // definida antes (y se aplica) o solo despues; lo de otro build no cuenta
+      var Antes := False;
+      var Despues := False;
+      for var J := 0 to High(Elementos) do
+        if SameText(Elementos[J].Escrito, N) and EsDeGrupoDeLaRaiz(Elementos[J]) and (V[J] <> vNo) then
+          if Elementos[J].Tramo.Abre < Elementos[I].Tramo.Abre then
+            Antes := True
+          else
+            Despues := True;
+      if Despues and not Antes and not MatchText(N, Result) then
+        Result := Result + [N];
+    end;
+  end;
+end;
 
 function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): TArray<string>;
 var

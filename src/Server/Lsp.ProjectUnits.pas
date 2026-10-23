@@ -3595,11 +3595,152 @@ end;
 
 function BordeDesde(const ADir: string): string; forward;
 
+{ Lo que el build de AFichero, un .dproj ya re-apuntado, sigue leyendo donde
+  ESTABA lo movido (AViejo, que ahora es ANuevo): un trozo de un sitio de ruta
+  que la mudanza no re-apunta (RutaReapuntada) - el que llega por una
+  propiedad del documento ($(My-Path): una propiedad puede ser cualquier cosa
+  y no se reescribe) o el escrito absoluto -. Cada valor, expandido como lo
+  tiene msbuild donde lo lee (ValoresQueLeeElBuild, EL expansor de la puerta
+  del build) en cada build que el proyecto declara, antes (AXmlAntes, desde
+  ABaseVieja) y despues (desde su carpeta de ahora): lo que llevaba a un sitio
+  que existe y ya no lleva a donde ese sitio esta ahora. Se NOMBRA, uno por
+  valor (Opus en Hermes, 22-oct-2026: tras mover lib, un $(My-Path)=lib daba
+  F2613 sin pista y la descripcion prometia nombrar lo que no re-apunta). }
+function RutasQueYaNoLlegan(const AFichero, AXmlAntes, ABaseVieja, AViejo,
+  ANuevo: string): TArray<string>;
+var
+  Enc, XmlAhora, BaseNueva, Mal: string;
+  Propiedades, Items, Plataformas, Configs: TArray<string>;
+  Info: TDprojInfo;
+
+  // un trozo ya expandido, resuelto desde ABase; '' si no se sabe a donde
+  // lleva (lo que el documento no sabe queda escrito como $(X))
+  function Resuelto(const ATrozo, ABase: string): string;
+  begin
+    Result := '';
+    if ATrozo.Contains('$(') or ATrozo.Contains('@(') or ATrozo.Contains('%(') then
+      Exit;
+    try
+      if TPath.IsPathRooted(ATrozo) then
+        Result := SinBarraFinal(TPath.GetFullPath(ATrozo))
+      else
+        Result := SinBarraFinal(TPath.GetFullPath(TPath.Combine(ABase, ATrozo)));
+    except
+      Result := '';
+    end;
+  end;
+
+  // si algun sitio de ruta lleva un trozo que RutaReapuntada se salta: uno
+  // absoluto o uno que empieza por una propiedad que el documento define (no
+  // la del propio elemento: $(DCC_UnitSearchPath), la herencia que escribe el
+  // IDE). Lo demas lo re-apunto ella; sin esto no se evalua nada
+  function HayQueMirar: Boolean;
+  var
+    Els: TArray<TElementoXml>;
+    Definidas, Valores: TArray<string>;
+  begin
+    Result := False;
+    Els := ElementosDe(AXmlAntes, Mal);
+    Definidas := PropiedadesDefinidas(Els);
+    for var E in Els do
+    begin
+      if Length(E.Ruta) = 0 then
+        Continue;
+      Valores := [];
+      if (E.Ruta[High(E.Ruta)] = 'propertygroup') and MatchText(E.Escrito, Propiedades) then
+        Valores := [ValorDeTramo(AXmlAntes, E.Tramo)]
+      else if (E.Ruta[High(E.Ruta)] = 'itemgroup') and MatchText(E.Escrito, Items) then
+        for var At in AtributosDeTramo(AXmlAntes, E.Tramo) do
+          if SameText(At.Nombre, 'Include') then
+            Valores := Valores + [ValorDeAtributo(AXmlAntes, At)];
+      for var V in Valores do
+        for var T in TrozosDeLista(V) do
+        begin
+          if TPath.IsPathRooted(T) then
+            Exit(True);
+          var Q := Pos(')', T);
+          if T.StartsWith('$(') and (Q > 3) then
+          begin
+            var Nombre := Copy(T, 3, Q - 3);
+            if not SameText(Nombre, E.Escrito) and MatchText(Nombre, Definidas) then
+              Exit(True);
+          end;
+        end;
+    end;
+  end;
+
+begin
+  Result := [];
+  // los sitios de ruta que se leen como valor: las propiedades y el Include
+  // de los items (los de SitiosDeDproj; el atributo de un DeployFile y el
+  // Import no los da ValoresQueLeeElBuild)
+  Propiedades := [];
+  Items := [];
+  for var S in SitiosDeDproj do
+    if S.Atributo = '' then
+      Propiedades := Propiedades + [S.Etiqueta]
+    else if SameText(S.Atributo, 'Include') then
+      Items := Items + [S.Etiqueta];
+  if not HayQueMirar then
+    Exit;
+  XmlAhora := PatchLoadText(AFichero, Enc);
+  BaseNueva := TPath.GetDirectoryName(AFichero);
+  Info := InfoDeDproj(XmlAhora);
+  Plataformas := [];
+  for var P in Info.Platforms do
+    if P.Enabled then
+      Plataformas := Plataformas + [P.Name];
+  if Length(Plataformas) = 0 then
+    Plataformas := [Info.PlataformaPorDefecto];
+  Configs := Info.Compilables;
+  if Length(Configs) = 0 then
+    Configs := [Info.ConfigPorDefecto];
+  for var Plat in Plataformas do
+    for var Cfg in Configs do
+    begin
+      var Antes := ValoresQueLeeElBuild(AXmlAntes, Plat, Cfg, [], []);
+      var Ahora := ValoresQueLeeElBuild(XmlAhora, Plat, Cfg, [], []);
+      // la reescritura no quita ni pone valores: si no casan, no se compara
+      if Length(Antes) <> Length(Ahora) then
+        Continue;
+      for var I := 0 to High(Antes) do
+      begin
+        if not SameText(Antes[I].Elemento, Ahora[I].Elemento) or
+           not MatchText(Antes[I].Elemento, Propiedades + Items) or
+           (Antes[I].Dudoso <> '') or (Ahora[I].Dudoso <> '') then
+          Continue;
+        var Leidas: TArray<string> := [];
+        for var T in TrozosDeLista(DesescapaDeMsbuild(Ahora[I].Expandido)) do
+        begin
+          var R := Resuelto(T, BaseNueva);
+          if R <> '' then
+            Leidas := Leidas + [R];
+        end;
+        for var T in TrozosDeLista(DesescapaDeMsbuild(Antes[I].Expandido)) do
+        begin
+          var R := Resuelto(T, ABaseVieja);
+          if R = '' then
+            Continue;
+          // donde esta AHORA lo que leia: movido si estaba dentro
+          var Destino := R;
+          if DentroDe(R, AViejo) then
+            Destino := ANuevo + R.Substring(Length(AViejo));
+          if MatchText(Destino, Leidas) or not (TDirectory.Exists(Destino) or TFile.Exists(Destino)) then
+            Continue;
+          var Item := MsgFmt(SF_REUBICA_NO_LLEGA_ITEM_FMT, [TPath.GetFileName(AFichero),
+            Antes[I].Elemento, Antes[I].Escrito, R, Destino]);
+          if not MatchText(Item, Result) then
+            Result := Result + [Item];
+        end;
+      end;
+    end;
+end;
+
 function ReubicaArbol(const AViejo, ANuevo: string; ACopia: Boolean): string;
 var
   Viejo, Nuevo: string;
   NUnits, NRutas, NDirect, NGrupos, NFuera: Integer;
-  Tocados, Fallos, Saltadas: TArray<string>;
+  Tocados, Fallos, Saltadas, NoLlegan: TArray<string>;
   EsDeMudanza: TFunc<string, Boolean>;
 
   procedure Anota(const AFichero: string; ACuantos: Integer; var ASuma: Integer);
@@ -3623,7 +3764,7 @@ var
   procedure Reapunta(const AFichero, ABase: string; const AMapa: TFunc<string, string>;
     var AUnits, ARutas, ADirect, AGrupos: Integer);
   var
-    Ext: string;
+    Ext, EncAntes, Antes: string;
   begin
     Ext := LowerCase(TPath.GetExtension(AFichero));
     if (Ext = '.dpr') or (Ext = '.dpk') then
@@ -3634,12 +3775,26 @@ var
           Falla(AFichero, E);
       end;
     if Ext = '.dproj' then
+    begin
+      Antes := '';
       try
+        // el de antes, para lo que el build lee por una propiedad o absoluto
+        Antes := PatchLoadText(AFichero, EncAntes);
         Anota(AFichero, ReapuntaSitios(AFichero, ABase, SitiosDeDproj, AMapa), ARutas);
       except
         on E: Exception do
           Falla(AFichero, E);
       end;
+      if (Antes <> '') and not ACopia then
+        try
+          for var N in RutasQueYaNoLlegan(AFichero, Antes, ABase, Viejo, Nuevo) do
+            if not MatchText(N, NoLlegan) then
+              NoLlegan := NoLlegan + [N];
+        except
+          // una nota, no una reescritura: si no se puede evaluar no hay nota,
+          // y lo re-apuntado queda como esta (no es un fallo de la mudanza)
+        end;
+    end;
     if Ext = '.deployproj' then
       try
         Anota(AFichero, ReapuntaSitios(AFichero, ABase,
@@ -3672,6 +3827,7 @@ begin
   Tocados := [];
   Fallos := [];
   Saltadas := [];
+  NoLlegan := [];
   // Lo de DENTRO que apunta FUERA: su destino no se ha movido, y es el
   // relativo el que ya no llega. Lo de dentro que apunta dentro viaja con el.
   var Fuera: TFunc<string, string> :=
@@ -3733,6 +3889,9 @@ begin
   if Length(Saltadas) > 0 then
     Result := Result + IfThen(Result <> '', #10, '') +
       MsgFmt(SN_REUBICA_SALTADAS_FMT, [string.Join('; ', Saltadas)]);
+  if Length(NoLlegan) > 0 then
+    Result := Result + IfThen(Result <> '', #10, '') +
+      MsgFmt(SN_REUBICA_NO_LLEGA_FMT, [string.Join('; ', NoLlegan)]);
 end;
 
 { ======================================================= grupos de proyectos }

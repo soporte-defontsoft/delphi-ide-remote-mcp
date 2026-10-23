@@ -3120,6 +3120,13 @@ const
     'as any value that build reads; the IDE honors it when it opens the ' +
     'project.';
 
+  { Un $(X) del valor que queda encima de la definicion de X (1.22.2). }
+  SF_CFG_PROPERTY_ANTES_DE_DEFINIR_FMT =
+    ' NOTE: msbuild reads %s EMPTY here - the project defines it further ' +
+    'down, and msbuild reads a .dproj top to bottom. To use it, the value ' +
+    'goes below it: remove-property %s and set-property again writes it at ' +
+    'the end of its group.';
+
   SN_CFG_PROPERTY_YA_FMT =
     '[CFG-137] %s is already %s for %s (the PropertyGroup %s): nothing ' +
     'written.';
@@ -6585,6 +6592,14 @@ const
     'named like an IDE output (Win32, Debug...) but contain sources: %s. ' +
     'If something there pointed to what was moved, check it with ' +
     'delphi_config command=fix-references.';
+  { Lo que el build sigue leyendo donde estaba lo movido (1.22.2): una
+    propiedad ($(X)) o una ruta absoluta, que la mudanza no re-apunta. }
+  SN_REUBICA_NO_LLEGA_FMT =
+    '  [MOVE-021] NOTE, the build still reads these where what moved used ' +
+    'to be - through a property ($(X)) or written absolute, which I do not ' +
+    're-point: %s. Point them at the new place with delphi_config ' +
+    'set-property (a search path: remove-searchpath and add-searchpath).';
+  SF_REUBICA_NO_LLEGA_ITEM_FMT = '%s: %s = %s led to %s, which is now %s';
 
   SR_CONFIG_NO_DPROJ_FMT =
     '[CFG-072 NOT_FOUND] %s is the .dpr (the source), and the project''s ' +
@@ -9945,8 +9960,8 @@ const
     'says -, the projects and dependencies of a .groupproj) and outside ' +
     'it, in everything this session can write (a sibling project, an {$I} ' +
     'from another unit, a group): a project moved one level deeper still ' +
-    'compiles. What it could not re-point is named, for delphi_config ' +
-    'fix-references. A copy re-points only its OWN relative paths that ' +
+    'compiles. What it could not re-point is named, with the tool that ' +
+    'fixes it. A copy re-points only its OWN relative paths that ' +
     'cross its border, so it compiles where it lands, and touches no ' +
     'project that lists the source (see copy); to start a project from ' +
     'another, delphi_create.';

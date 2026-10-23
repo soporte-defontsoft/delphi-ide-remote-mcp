@@ -1892,6 +1892,18 @@ begin
     if Leido <> Valor then
       Pisada := MsgFmt(SF_CFG_PROPERTY_PISADA_FMT, [ONinguno(Leido)]);
   end;
+  // un $(X) del valor que queda ENCIMA de la definicion de X: msbuild lo lee
+  // vacio ahi (de arriba abajo; F2613 sin aviso, Opus en Hermes 22-oct-2026).
+  // En el build pedido, o en el que el proyecto hace por defecto
+  var Info := InfoDeDproj(Xml);
+  var Vacias := UsadasAntesDeDefinirse(Xml, Nombre, Valor,
+    IfThen(Plat <> '', Plat, Info.PlataformaPorDefecto), IfThen(Cfg <> '', Cfg, Info.ConfigPorDefecto));
+  if Length(Vacias) > 0 then
+  begin
+    for var I := 0 to High(Vacias) do
+      Vacias[I] := '$(' + Vacias[I] + ')';
+    Pisada := Pisada + MsgFmt(SF_CFG_PROPERTY_ANTES_DE_DEFINIR_FMT, [string.Join(', ', Vacias), Nombre]);
+  end;
   // lo que ya era no se escribe, ni copia (como set-active)
   if Xml = Original then
     Exit(MsgFmt(SN_CFG_PROPERTY_YA_FMT, [Nombre, Valor, Donde, Grupo]) + Pisada);

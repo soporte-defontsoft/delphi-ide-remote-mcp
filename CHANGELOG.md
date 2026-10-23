@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`delphi_move` names what the build still reads where the moved folder used
+  to be.** Its description promises that what it could not re-point is named,
+  and it was silent about a search path that reaches the folder through a
+  property of the project (`<My-Path>lib</My-Path>` used as `$(My-Path)` in
+  `DCC_UnitSearchPath`) or that is written absolute: after moving `lib` the
+  build failed with `F2613` and nothing pointed at the cause (Claude Opus 5.5
+  through Hermes, measured on 2026-10-22). Such a value is not rewritten - a
+  property can hold anything - but the answer now names it (`MOVE-021`): the
+  project, the property as written, where it led and where that is now. Each
+  value is expanded as msbuild reads it, by the same expander as the build
+  read gate, in every build the project declares (`tests/test_contratos_1222.py`).
+- **`delphi_config set-property` says when a `$(X)` in the value will be read
+  empty.** A value changed in its place can end up above the definition of the
+  property it uses, and msbuild reads a `.dproj` top to bottom: `X` is still
+  empty there (measured on 2026-10-22: `DCC_UnitSearchPath=$(My-Path)` above
+  `My-Path` gave `F2613`). `CFG-136` now says so and how to write the value
+  below it (`tests/test_contratos_1222.py`).
+
 ## [1.22.1] - 2026-10-23
 
 What an agent reads, points at and writes is what the IDE and the compiler
