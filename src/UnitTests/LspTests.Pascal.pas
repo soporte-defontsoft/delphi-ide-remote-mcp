@@ -21,6 +21,7 @@ type
     [Test] procedure LaDirectivaSinCerrarEntera;
     [Test] procedure LosTrozosDeUnaDeFichero;
     [Test] procedure ElGrupoDeClasesDelIde;
+    [Test] procedure UnNombreNuevoNoEsPalabraReservada;
   end;
 
   // EL lexico (Lsp.Pascal): que es codigo, cadena, comentario y directiva.
@@ -358,6 +359,17 @@ begin
   Assert.AreEqual(2, T[0].Inicio, 'detras de la comilla');
   Assert.AreEqual('x.rc', T[1].Texto);
   Assert.AreEqual(11, T[1].Inicio, 'la segunda');
+end;
+
+{ Un nombre NUEVO (un form, un componente): un identificador que no es palabra
+  reservada; formname=Begin pasaba (A23 de la 1.23). }
+procedure TDirectivasTests.UnNombreNuevoNoEsPalabraReservada;
+begin
+  Assert.IsTrue(EsNombreNuevo('FormPrincipal'));
+  Assert.IsTrue(EsNombreNuevo('Bot'#243'n'), 'un acento es de un identificador');
+  Assert.IsFalse(EsNombreNuevo('Begin'), 'una palabra reservada, con cualquier mayuscula');
+  Assert.IsFalse(EsNombreNuevo('2Form'), 'no empieza por un digito');
+  Assert.IsFalse(EsNombreNuevo('A.B'), 'un nombre de form no lleva puntos');
 end;
 
 procedure TDirectivasTests.ElGrupoDeClasesDelIde;

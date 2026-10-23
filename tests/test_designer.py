@@ -148,7 +148,8 @@ check('get: las lineas numeradas como delphi_read, y una ruta de un valor tal cu
 r = call('delphi_designer', {'command': 'get', 'path': DFM, 'component': 'NoEsta'})
 # el form SI se leyo y el componente no esta en el (no un fichero ilegible)
 check('get: componente inexistente',
-      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_COMPONENT_FMT') and '"NoEsta"' in r, r[:150])
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'NoEsta' in r and
+      'BotonUno' in r, r[:300])  # la de los comandos que escriben, con los nombres (A16 de la 1.23)
 
 # ---- lint ----
 r = call('delphi_designer', {'command': 'lint', 'path': DFM})

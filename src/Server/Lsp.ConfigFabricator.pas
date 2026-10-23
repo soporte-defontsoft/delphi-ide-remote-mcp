@@ -495,7 +495,7 @@ begin
   // traiga (un servicio sin el HKCU del IDE).
   Lib := PrefijoSinBarra(AInfo.RootDir) + '\lib\' + Plat + '\release';
   Depuracion := nil;
-  if SameText(EffectiveProperty(Xml, 'DCC_DebugDCUs', Plat, Cfg), 'true') then
+  if EsVerdadDeMsbuild(EffectiveProperty(Xml, 'DCC_DebugDCUs', Plat, Cfg)) then // como msbuild (A33)
     Depuracion := IdePlatformLibraryPaths(AInfo, Plat, 'Debug DCU Path', Cfg);
   UnitPaths := nil;
   for P in Depuracion + ProjDentro + [Lib] + IdePaths do

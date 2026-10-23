@@ -38,6 +38,8 @@ type
     [Test]
     procedure UnaPaginaComoTexto;
     [Test]
+    procedure UnTramoVacioNoEsDeDentro;
+    [Test]
     procedure UnaSeccionSolaSinMirarMayusculas;
     [Test]
     procedure UnaSeccionQueNoEstaDaLaPaginaEntera;
@@ -350,6 +352,19 @@ begin
     'lo que sobra resta 25 como mucho');
   Assert.AreEqual(0, PuntosDePalabra('tlist', 'tstringlist'));
   Assert.AreEqual(0, PuntosDePalabra('', 'tstringlist'));
+end;
+
+{ LA regla de una ruta de dentro de un .chm, la del almacen y la del id de una
+  pagina: el id no negaba un tramo vacio y el almacen si (A27 de la 1.23). }
+procedure TDocsPurasTests.UnTramoVacioNoEsDeDentro;
+var
+  C, P, A: string;
+begin
+  Assert.IsTrue(EsRutaDeDentro('html/x.htm') and EsRutaDeDentro('index.hhk'));
+  Assert.IsFalse(EsRutaDeDentro('a//x.htm') or EsRutaDeDentro('/x.htm') or EsRutaDeDentro('a/../x.htm') or
+    EsRutaDeDentro('a\.\x.htm') or EsRutaDeDentro(''));
+  Assert.IsFalse(PartesDeId('system:a//x.htm', C, P, A), 'el id pregunta lo mismo');
+  Assert.IsTrue(PartesDeId('system:html/x.htm', C, P, A));
 end;
 
 procedure TDocsPurasTests.UnaPaginaComoTexto;

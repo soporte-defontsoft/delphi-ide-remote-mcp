@@ -145,6 +145,32 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **Rules that lived twice now live once** (`tests/test_bloque3_1230.py`):
+  - `delphi_designer get` of a component that is not in the form answers
+    `DSGN-078`, with the form's names, as `set`, `delete` and the other
+    commands that write; it had its own `DSGN-017`, without them.
+  - Every capture is announced by the one deliverer: `screenshot` (only the
+    agent's own `out=`) and `screenshotBytes` - `delphi_adb screenshot`
+    called its size `size`. And the `path` of `delphi_read` says it reads any
+    text file, as it does (it said "the Delphi file").
+  - `delphi_create` of a form refuses a form name that is a reserved word:
+    `formname=Begin` wrote `Begin: TBegin`, which does not compile
+    (`CREATE-026`, the rule of every other new name).
+  - A help page id with an empty segment (`system:a//x.htm`) is refused as
+    not an id (`DOCS-013`), as the help store already refused it, instead of
+    "no such page".
+  - The value of an enumeration or a set is judged by one judge, for a type
+    of the form tables and for one a user class publishes; the hint for a
+    set written without brackets was the value in one and the first member
+    in the other.
+  - A project property that msbuild reads as a boolean (`UsePackages`,
+    `DCC_DebugDCUs`, `VerInfo_IncludeVerInfo`) is true when msbuild says so -
+    `yes`, `on`, `!false` - not only when it says `true`: `set-version`
+    told a project with `VerInfo_IncludeVerInfo=yes` that it did not carry
+    its version.
+  - `none`, `default` and `reset` mean "back to the default" in `set-sdk`,
+    `set-profile` and `set-output` alike: `set-output output=none` wrote a
+    folder called `none`.
 - **An anchor line matches by one rule in both edit tools, in blocks and in
   batches.** `delphi_edit` compared a one-line anchor with the end of its line
   exact - `foo := 1;` did not match `  foo := 1;  ` (`EDIT-093` with the

@@ -634,10 +634,10 @@ begin
   // entrar)
   PaginaYAncla(AId.Substring(K + 1).Trim, Resto, AAncla);
   APagina := ConBarrasNormales(Resto);
-  // una pagina DE DENTRO del .chm, y nada mas: ni unidad, ni subir, ni raiz
+  // una pagina DE DENTRO del .chm, y nada mas: ni unidad, ni subir, ni raiz,
+  // ni un tramo vacio - LA regla del almacen (Lsp.Chm.EsRutaDeDentro, A27)
   Result := (ACorto <> '') and EsPagina(APagina) and not APagina.Contains(':') and
-    not APagina.StartsWith('/') and not ('/' + APagina + '/').Contains('/../') and
-    not ('/' + APagina + '/').Contains('/./');
+    EsRutaDeDentro(APagina);
 end;
 
 function PalabrasDeConsulta(const AConsulta: string): TArray<string>;

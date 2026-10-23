@@ -676,8 +676,8 @@ begin
         // (una excepcion de aqui a la entrega -el tamano- dejaba la captura
         // NUESTRA en la casa: se consume y se relanza; 2ai-B b de la 1.18.2)
         try
-          Return.AddPair('screenshot', Local);
-          Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
+          // ('screenshot' y su tamano los pone DeliverCapture, para toda
+          // tool que capture; A20)
           // UN SOLO PASO (David, 25-sep-2026): la imagen viaja en esta misma
           // respuesta, o fichero + enlace con inline=false. Lo decide
           // DeliverCapture, el mismo para toda tool que capture.

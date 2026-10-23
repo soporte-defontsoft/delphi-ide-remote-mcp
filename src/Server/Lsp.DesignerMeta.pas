@@ -960,6 +960,73 @@ begin
   end;
 end;
 
+{ EL juicio del valor de un enumerado (ASet False) o de un conjunto de tipo
+  ATipo, con sus miembros como se ensenan (AMiembros; [] = no se saben: solo
+  la forma). Un enumerado es UN identificador, o Tipo.valor con el nombre del
+  tipo; un conjunto va entre corchetes, de miembros sueltos. La tabla
+  (JuzgaHoja) y un tipo de una clase del usuario (HojaDelUsuario) lo juzgaban
+  cada uno a su modo, y la pista de un conjunto sin corchetes era el valor en
+  uno y el primer miembro en el otro (S19, A32 de la 1.23). '' = vale. }
+function JuzgaMiembros(ASet: Boolean; const AValor, ATipo: string;
+  const AMiembros: TArray<string>): string;
+
+  function EnLista(const AV: string): Boolean;
+  begin
+    if Length(AMiembros) = 0 then
+      Exit(True); // no se saben: no se puede decir que no
+    for var Mi in AMiembros do
+      if MismoIdentificador(Mi, AV) then
+        Exit(True);
+    Result := False;
+  end;
+
+  function Lista: string;
+  begin
+    if Length(AMiembros) = 0 then
+      Exit('?');
+    Result := string.Join(', ', AMiembros);
+  end;
+
+var
+  V: string;
+begin
+  Result := '';
+  if not ASet then
+  begin
+    // Tipo.valor, con el nombre del tipo (GetEnumValue tambien lo lee)
+    V := AValor;
+    if (Pos('.', V) > 0) and MismoIdentificador(Copy(V, 1, Pos('.', V) - 1), UltimoTrozo(ATipo)) then
+      V := Copy(V, Pos('.', V) + 1, MaxInt);
+    if not EsIdentificador(V, False) or not EnLista(V) then
+      Result := MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [AValor, ATipo, Lista]);
+    Exit;
+  end;
+  if not (AValor.StartsWith('[') and AValor.EndsWith(']')) then
+  begin
+    // la pista: el valor entre corchetes si es un nombre; si no, el primero
+    V := AValor;
+    if not EsIdentificador(V, False) and (Length(AMiembros) > 0) then
+      V := AMiembros[0];
+    Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [ATipo, V]));
+  end;
+  if AValor.Substring(1, Length(AValor) - 2).Trim <> '' then
+    for V in AValor.Substring(1, Length(AValor) - 2).Split([',']) do
+      if not EsIdentificador(V.Trim, False) or not EnLista(V.Trim) then
+        Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', AValor, V.Trim), ATipo, Lista]));
+end;
+
+// los miembros de un tipo de la tabla, como se ensenan ('A, B, C' -> [A, B, C])
+function MiembrosDeLaTabla(ADic: TDictionary<string, string>; const ATypeId: string): TArray<string>;
+var
+  S: string;
+begin
+  Result := [];
+  if ADic.TryGetValue(ClaveDeIdentificador(ATypeId), S) then
+    for var X in S.Split([',']) do
+      if X.Trim <> '' then
+        Result := Result + [X.Trim];
+end;
+
 { EL juicio del VALOR de una hoja (la propiedad final, por su TPropRec) con lo
   que la tabla sabe: un enumerado es UN identificador (ReadIdent) - su valor,
   o Tipo.valor con el nombre del tipo, que GetEnumValue tambien lee; un
@@ -970,40 +1037,12 @@ end;
   una clase del USUARIO con un tipo de la tabla se juzga con el mismo
   (HojaDelUsuario, 1.19.2). }
 function JuzgaHoja(M: TMetaTable; const AHoja: TPropRec; const ARhs: string): string;
-var
-  V, Have, Members: string;
 begin
   Result := '';
   if AHoja.Kind = 'e' then
-  begin
-    V := ARhs;
-    if (Pos('.', V) > 0) and SameText(Copy(V, 1, Pos('.', V) - 1), AHoja.TypeName) then
-      V := Copy(V, Pos('.', V) + 1, MaxInt);
-    if not M.EnumShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
-      Have := '?';
-    if not EsIdentificador(V, False) or
-       (M.Enums.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Members) and
-        not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
-      Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [ARhs, AHoja.TypeName, Have]));
-  end
+    Result := JuzgaMiembros(False, ARhs, AHoja.TypeName, MiembrosDeLaTabla(M.EnumShow, AHoja.TypeId))
   else if AHoja.Kind = 's' then
-  begin
-    if not (ARhs.StartsWith('[') and ARhs.EndsWith(']')) then
-    begin
-      V := ARhs;
-      if not EsIdentificador(V, False) and M.SetShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
-        V := PrimerTrozo(Have, [',']).Trim;
-      Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [AHoja.TypeName, V]));
-    end;
-    if not M.SetShow.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Have) then
-      Have := '?';
-    if ARhs.Substring(1, Length(ARhs) - 2).Trim <> '' then
-      for V in ARhs.Substring(1, Length(ARhs) - 2).Split([',']) do
-        if not EsIdentificador(V.Trim, False) or
-           (M.Sets.TryGetValue(ClaveDeIdentificador(AHoja.TypeId), Members) and
-            not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
-          Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', ARhs, V.Trim), AHoja.TypeName, Have]));
-  end;
+    Result := JuzgaMiembros(True, ARhs, AHoja.TypeName, MiembrosDeLaTabla(M.SetShow, AHoja.TypeId));
 end;
 
 { EL juez de JuzgaPropiedad; AConPista, si lo que no existe lleva la pista
@@ -1581,26 +1620,10 @@ function HojaDelUsuario(M: TMetaTable; const AProp: TPropiedadDelUsuario; const 
   out AHoja: TPropRec; out AJuzgado: Boolean): string;
 var
   Kind: Char;
-  Id, Base, Enc, Texto, Nombre, Clave, V: string;
+  Id, Base, Enc, Texto, Nombre, Clave: string;
   Miembros, Hallados: TArray<string>;
   U: TUnidadPas;
   T: TTipoPas;
-
-  function EnLista(const AV: string): Boolean;
-  begin
-    for var Mi in Miembros do
-      if MismoIdentificador(Mi, AV) then
-        Exit(True);
-    Result := False;
-  end;
-
-  // Tipo.valor, con el nombre del tipo (GetEnumValue tambien lo lee)
-  function SinElTipo(const AV: string): string;
-  begin
-    Result := AV;
-    if (Pos('.', AV) > 0) and MismoIdentificador(Copy(AV, 1, Pos('.', AV) - 1), Nombre) then
-      Result := Copy(AV, Pos('.', AV) + 1, MaxInt);
-  end;
 
   function NoSeJuzga: string;
   begin
@@ -1625,9 +1648,10 @@ begin
     AHoja.TypeId := Id;
     if Kind = 'e' then
     begin
-      V := SinElTipo(AValor);
-      if not EsIdentificador(V, False) or not EnLista(V) then
-        Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [AValor, AProp.Tipo, string.Join(', ', Miembros)]));
+      // EL juicio de un enumerado (JuzgaMiembros, A32)
+      Result := JuzgaMiembros(False, AValor, AProp.Tipo, Miembros);
+      if Result <> '' then
+        Exit;
       AJuzgado := True;
       AHoja.Kind := '?';
     end;
@@ -1687,22 +1711,8 @@ begin
     if Length(Miembros) = 0 then
       Exit(NoSeJuzga);
     AJuzgado := True;
-    if T.Clase = ctEnumerado then
-    begin
-      V := SinElTipo(AValor);
-      if not EsIdentificador(V, False) or not EnLista(V) then
-        Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [AValor, AProp.Tipo, string.Join(', ', Miembros)]));
-    end
-    else
-    begin
-      if not (AValor.StartsWith('[') and AValor.EndsWith(']')) then
-        Exit(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [AProp.Tipo, Miembros[0]]));
-      if AValor.Substring(1, Length(AValor) - 2).Trim <> '' then
-        for V in AValor.Substring(1, Length(AValor) - 2).Split([',']) do
-          if not EsIdentificador(V.Trim, False) or not EnLista(V.Trim) then
-            Exit(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT, [IfThen(V.Trim = '', AValor, V.Trim), AProp.Tipo,
-              string.Join(', ', Miembros)]));
-    end;
+    // EL juicio de un enumerado o un conjunto, el de la tabla (JuzgaMiembros, A32)
+    Result := JuzgaMiembros(T.Clase = ctConjunto, AValor, AProp.Tipo, Miembros);
   finally
     U.Free;
   end;

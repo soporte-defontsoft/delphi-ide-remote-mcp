@@ -571,6 +571,15 @@ begin
   Result := string.Join('; ', Trozos);
 end;
 
+{ La palabra que devuelve un valor a lo de por defecto (quita el SDK o el
+  perfil fijados, la carpeta de salida propia): none, default o reset, LAS
+  mismas en los tres comandos. Eran none/default en set-sdk y set-profile y
+  default/reset en set-output (S31, A37 de la 1.23). }
+function EsPalabraQueQuita(const S: string): Boolean;
+begin
+  Result := MatchText(S.Trim, ['none', 'default', 'reset']);
+end;
+
 { Put every build artifact of the project under one folder (default Compiled),
   matching the common RAD Studio convention:
     DCC_ExeOutput = .\<folder>\$(Platform)\$(Config)
@@ -583,7 +592,7 @@ var
   Exes, Dcus: TArray<TValorReescrito>;
   Restore: Boolean;
 begin
-  Restore := SameText(ARawFolder.Trim, 'default') or SameText(ARawFolder.Trim, 'reset');
+  Restore := EsPalabraQueQuita(ARawFolder);
   if Restore then
   begin
     Clean := MsgText(SF_CFG_RAD_STUDIO_DEFAULT);
@@ -1502,7 +1511,7 @@ var
   function IncluyeVersion(const AXml: string): Boolean;
   begin
     for var T in TramosDeEtiqueta(AXml, 'VerInfo_IncludeVerInfo') do
-      if SameText(ValorDeTramo(AXml, T).Trim, 'true') then
+      if EsVerdadDeMsbuild(ValorDeTramo(AXml, T).Trim) then // como msbuild (A33)
         Exit(True);
     Result := False;
   end;
@@ -1689,7 +1698,7 @@ begin
   // quitarlo esta "none" (tercera revision, 27-sep-2026)
   if Sdk = '' then
     Exit(MsgFmt(SR_CFG_NEED_SDK_FMT, [APlatform, Disponibles]));
-  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default');
+  Quitar := EsPalabraQueQuita(Sdk);
   if not Quitar then
   begin
     Sdk := NombreDeSdk(Sdk);
@@ -1751,7 +1760,7 @@ begin
   Perfil := ARawProfile.Trim;
   if Perfil = '' then
     Exit(MsgFmt(SR_CFG_NEED_PROFILE_FMT, [APlatform, Disponibles]));
-  Quitar := SameText(Perfil, 'none') or SameText(Perfil, 'default');
+  Quitar := EsPalabraQueQuita(Perfil);
   if not Quitar then
   begin
     if BadProfileName(Perfil) then // la regla de la puerta de build y paserver

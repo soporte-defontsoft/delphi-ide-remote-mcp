@@ -585,7 +585,9 @@ begin
       Exit(MsgText(SR_DESIGNER_EMPTY));
     O := Doc.ObjetoDeNombre(AName.Trim);
     if O = nil then
-      Exit(MsgFmt(SR_DESIGNER_COMPONENT_FMT, [AName, PistaDeFrames(Doc, AName.Trim)]));
+      // LA negativa de los comandos que escriben, con los nombres del form
+      // (ComponenteQueNoEsta): get decia otra, DSGN-017 (A16 de la 1.23)
+      Exit(ComponenteQueNoEsta(Doc, AName, TPath.GetFileName(APath)));
     // por su ruta si es de un frame en linea, la que se le dio (decia el Name
     // a secas: rondas de Opus de la 1.22.2)
     Result := MsgFmt(SF_DSGN_BLOQUE_LINEAS_FMT,
@@ -1601,8 +1603,8 @@ begin
     Ms.AddPair('paint', TJSONNumber.Create(R.MsPintado));
     Ms.AddPair('total', TJSONNumber.Create(R.MsTotal));
     Return.AddPair('ms', Ms);
-    Return.AddPair('screenshot', Propia);
-    Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Propia)));
+    // ('screenshot' y su tamano los pone DeliverCapture, para toda tool que
+    // capture; A20)
     // UN SOLO PASO, como toda captura: inline (y su temporal consumido) o
     // fichero + enlace. El frame lleva el origen del recorte: pixeles de la
     // imagen -> unidades de la form, sin cuentas del agente

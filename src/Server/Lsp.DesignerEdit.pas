@@ -118,6 +118,11 @@ function BorraComponente(const APath, AComponente: string): string;
   la forma, con el primer frame; '' si no tiene ninguno: la de las negativas
   de 'no esta' de get, set y delete. }
 function PistaDeFrames(ADoc: TStyleDoc; const ANombre: string = ''): string;
+{ LA negativa de un componente que no esta en el form de ADoc (DSGN-078): sus
+  nombres y la pista de sus frames en linea, la de get y la de los comandos que
+  escriben. get decia otra, sin los nombres (DSGN-017; A16 de la 1.23).
+  AFichero = el nombre del form a ensenar. }
+function ComponenteQueNoEsta(ADoc: TStyleDoc; const ANombre, AFichero: string): string;
 
 implementation
 
@@ -863,7 +868,7 @@ begin
   I := AObj.StartLine - 1;
   if not LineaDeObjeto(Lineas[I], Clave, NomObj, ClaseObj, Resto) or
      not MismoIdentificador(NomObj, AObj.ObjName) then
-    Exit(MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [AObj.ObjName, '?', '', '']));
+    Exit(ComponenteQueNoEsta(ADoc, AObj.ObjName, '?'));
   Lineas[I] := LeadingWhite(Lineas[I]) + ComponeLineaDeObjeto(Clave, ANuevo, ClaseObj) + Resto;
   // las lineas del form que lo nombran, de dentro y de fuera de su bloque
   // (las que guardan un componente: AJuez), con el nombre nuevo y lo de
@@ -1070,14 +1075,19 @@ begin
     Result := MsgFmt(SF_DESIGNER_EN_SUS_FRAMES_FMT, [Primero.Ruta]);
 end;
 
+function ComponenteQueNoEsta(ADoc: TStyleDoc; const ANombre, AFichero: string): string;
+begin
+  Result := MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [ANombre.Trim, AFichero, NombresDelForm(ADoc),
+    PistaDeFrames(ADoc, ANombre.Trim)]);
+end;
+
 function BuscaComponente(const F: TFormEnEdicion; const AName: string;
   out AObj: TStyleObj): string;
 begin
   Result := '';
   AObj := ObjetoPorNombre(F.Doc, AName.Trim);
   if AObj = nil then
-    Result := MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [AName.Trim, F.DfmNombre, NombresDelForm(F.Doc),
-      PistaDeFrames(F.Doc, AName.Trim)]);
+    Result := ComponenteQueNoEsta(F.Doc, AName, F.DfmNombre);
 end;
 
 // lo que no se borra, ni se renombra, ni se mueve desde este form
@@ -1265,7 +1275,7 @@ var
   Motivo: string;
 begin
   ALimpio := NombreDeValor(ANombre); // 'Bot'#243'n' es Boton con su acento
-  if not EsIdentificador(ALimpio, False) or EsPalabraReservada(ALimpio) then
+  if not EsNombreNuevo(ALimpio) then // la regla entera (Lsp.Pascal, A23)
     Exit(MsgFmt(SR_DESIGNER_NOMBRE_INVALIDO_FMT, [ANombre.Trim]));
   Motivo := NombreOcupado(F.Doc, AClase, ALimpio, AYo, NombresHeredados(F, AClase));
   if Motivo <> '' then

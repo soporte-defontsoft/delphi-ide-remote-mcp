@@ -14,6 +14,7 @@ type
   TDprojHazardTests = class
   public
     [Test] procedure ProyectoLimpioNoTienePeligro;
+    [Test] procedure UnBooleanoComoLoLeeMsbuild;
     [Test] procedure EventoDeBuildEsPeligro;
     [Test] procedure EventoDeBuildSeIgnoraSiSePide;
     [Test] procedure EventoVacioNoEsPeligro;
@@ -93,6 +94,16 @@ const
   CABECERA = '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'#13#10 +
     '  <PropertyGroup><MainSource>App.dpr</MainSource></PropertyGroup>'#13#10;
   PIE = '</Project>'#13#10;
+
+{ Lo que msbuild lee como verdad en una propiedad (A33 de la 1.23): se
+  comparaba con 'true' a mano. }
+procedure TDprojHazardTests.UnBooleanoComoLoLeeMsbuild;
+begin
+  Assert.IsTrue(EsVerdadDeMsbuild('true') and EsVerdadDeMsbuild('True') and EsVerdadDeMsbuild('yes') and
+    EsVerdadDeMsbuild('ON') and EsVerdadDeMsbuild('!false'));
+  Assert.IsFalse(EsVerdadDeMsbuild('false') or EsVerdadDeMsbuild('no') or EsVerdadDeMsbuild('!true'));
+  Assert.IsFalse(EsVerdadDeMsbuild('1') or EsVerdadDeMsbuild(''), 'un numero o nada no es un booleano');
+end;
 
 procedure TDprojHazardTests.ProyectoLimpioNoTienePeligro;
 begin

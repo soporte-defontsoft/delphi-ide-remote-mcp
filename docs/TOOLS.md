@@ -153,7 +153,7 @@ Read a Delphi source file DECODED CORRECTLY (ANSI - the machine's code page, CP1
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | Absolute path of the Delphi file (.pas/.dpr/.dpk/.inc/.dfm/.fmx) |
+| `path` | string | **yes** | Absolute path of a text file, Delphi or not (a binary form is shown as text) |
 | `fromline` | integer | optional | First line to show, 1-based (0 = from the start) |
 | `toline` | integer | optional | Last line to show, 1-based (0 = to the end; capped at 400 lines per call) |
 <!-- /contract -->
@@ -272,7 +272,7 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keepi
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi file |
-| `old` | string | optional | EDIT mode: the line to replace - ONE full line copied from delphi_read (everything after the \| bar), or a block of consecutive ones. UNIQUE in the file; the blanks at either end do not count: if the same text is on another line too, add atline (occurrence inside edits). |
+| `old` | string | optional | EDIT mode: the line to replace - ONE full line copied from delphi_read (everything after the \| bar), or a block of consecutive ones. UNIQUE in the file; indentation does not count: if the same text is on another line too, add atline (occurrence inside edits). |
 | `new` | string | optional | EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new with the added code). A final line break is dropped; each extra one adds a blank line. Same rule for one-line and block anchors. |
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers) |
 | `toline` | integer | optional | RANGE (1-based, inclusive): with this, "old" becomes the FIRST line of a range that ends here - delete:true removes it all (a whole method, without pasting it), "new" replaces it all. Refused if backwards, past the end or the whole file. |
@@ -328,7 +328,7 @@ SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .b
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the text file (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml ... any plain text - Delphi files are refused, use delphi_edit) |
-| `old` | string | optional | EDIT mode: the line to replace - ONE full line copied from delphi_read (everything after the \| bar), or a block of consecutive ones. UNIQUE in the file; the blanks at either end do not count: if the same text is on another line too, add atline (occurrence inside edits). |
+| `old` | string | optional | EDIT mode: the line to replace - ONE full line copied from delphi_read (everything after the \| bar), or a block of consecutive ones. UNIQUE in the file; indentation does not count: if the same text is on another line too, add atline (occurrence inside edits). |
 | `new` | string | optional | EDIT mode: the new text; may be several lines. Empty = blank the line. A final line break is dropped; each extra one adds a blank line. Same rule for one-line and block anchors. |
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence |
 | `toline` | integer | optional | RANGE (1-based, inclusive): with this, "old" becomes the FIRST line of a range that ends here - delete:true removes it all (a whole method, without pasting it), "new" replaces it all. Refused if backwards, past the end or the whole file. |

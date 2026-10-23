@@ -30,7 +30,7 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
   F3 un nombre que no esta: DSGN-078 lista Frame11.Edit1 por su ruta y no manda a editarlo en el frame (ROJO)
   F4 control: delete Frame11.Edit1 se niega (es del frame) y el fichero no cambia
   F5 control: Frame11.Nada (no esta en el form) y Button1.Edit1 (Button1 no es un frame): DSGN-078
-  F6 Edit1 a secas cuando solo esta en el frame: get (DSGN-017) y set (DSGN-078) dicen que no esta y nombran
+  F6 Edit1 a secas cuando solo esta en el frame: get y set (DSGN-078, una desde A16) dicen que no esta y nombran
      Frame11.Edit1, nada escrito (ROJO contra r1222g: get daba el del frame y set lo cambiaba; Opus en Hermes)
   F7 con un Edit1 propio en el form: set Frame11.Edit1 cambia el del frame (ROJO contra r1222g: cambiaba el del
      form - set volvia a buscar por el Name a secas, medido)
@@ -292,7 +292,7 @@ try:
     r1 = dsg(command='get', component='Edit1')
     r2 = dsg(command='set', component='Edit1', prop='Text', value="'x'")
     check('F6 Edit1 a secas, solo en el frame: get y set dicen que no esta y nombran la ruta, nada escrito',
-          mc.es(r1, 'SR_DESIGNER_COMPONENT_FMT') and 'Frame11.Edit1' in r1
+          mc.es(r1, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'Frame11.Edit1' in r1
           and mc.es(r2, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'Frame11.Edit1' in r2
           and open(fdfm, 'rb').read() == antes, (r1[:300], r2[:300]))
     # ...y con un Edit1 propio en el form, cada uno es el suyo
@@ -718,8 +718,8 @@ try:
     r = srv.call('delphi_designer', {'command': 'set', 'path': vdfm, 'component': 'Nada', 'prop': 'Caption',
                                      'value': "'x'"}, 240)
     r2 = srv.call('delphi_designer', {'command': 'get', 'path': vdfm, 'component': 'Nada'}, 240)
-    check('T8 en un form SIN frames, DSGN-078 y DSGN-017 no hablan de un frame en linea (rondas de Opus)',
-          mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and mc.es(r2, 'SR_DESIGNER_COMPONENT_FMT')
+    check('T8 en un form SIN frames, la negativa de set y la de get no hablan de un frame en linea (rondas de Opus)',
+          mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and mc.es(r2, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT')
           and 'inline frame' not in r and 'inline frame' not in r2, (r[:300], r2[:300]))
     antes = open(vdfm, 'rb').read()
     r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TTabSheet'}, 240)

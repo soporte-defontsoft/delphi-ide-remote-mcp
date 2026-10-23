@@ -1060,6 +1060,11 @@ function BuildOutputDefault(const ADprojPath, APlatform, AConfig: string): TBuil
   cuya jaula no deja leer esos .bpl (David, 2-oct-2026: "lo compilas entero
   o no molestes"). }
 function UsaPaquetesEnEjecucion(const ADprojPath, APlatform, AConfig: string): Boolean;
+{ Si el valor de una propiedad es VERDAD para msbuild, como lo lee en una
+  condicion =='true' o en el parametro booleano de una tarea: true, on, yes,
+  !false... sin distinguir mayusculas (BooleanoDeMsbuild, medido el
+  21-oct-2026). Se comparaba con 'true' a mano en tres sitios (A33 de la 1.23). }
+function EsVerdadDeMsbuild(const S: string): Boolean;
 
 { La propiedad de ENTORNO del IDE que este proyecto -o algo que importa-
   REDEFINE, o '' si no toca ninguna. Los <Import> de CodeGear.Common.Targets
@@ -2556,6 +2561,13 @@ begin
     Result := False;
 end;
 
+function EsVerdadDeMsbuild(const S: string): Boolean;
+var
+  B: Boolean;
+begin
+  Result := BooleanoDeMsbuild(S, B) and B;
+end;
+
 { 'a'=='b' como lo decide msbuild: los dos numeros, como numeros; si no, los
   dos booleanos, como booleanos; si no, texto sin distinguir mayusculas
   (medido el 21-oct-2026 con el msbuild del IDE: 'yes'=='true', '1.0'=='1',
@@ -3999,7 +4011,7 @@ var
 begin
   Result := False;
   for Xml in ProjectXmlChain(ADprojPath) do
-    if SameText(EffectiveProperty(Xml, 'UsePackages', APlatform, AConfig), 'true') then
+    if EsVerdadDeMsbuild(EffectiveProperty(Xml, 'UsePackages', APlatform, AConfig)) then
       Exit(True);
 end;
 

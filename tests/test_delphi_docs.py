@@ -301,7 +301,9 @@ try:
         # nombra, no la de la extension
         for malo in ('system:../x.htm', 'system:..\\..\\x.htm', 'system:a/../../x.htm',
                      'system:C:\\Windows\\x.htm', 'C:\\Windows\\x.htm',
-                     'system:/System.SysUtils.htm', 'system:index.hhk\x00.htm', 'nada.htm'):
+                     'system:/System.SysUtils.htm', 'system:index.hhk\x00.htm', 'nada.htm',
+                     # un tramo vacio: el almacen lo negaba y el juez del id no (A27 de la 1.23)
+                     'system:a//x.htm'):
             t = docs({'command': 'read', 'id': malo})
             check('D10 id %r -> no es un id (INVALID_PARAM)' % malo, mc.abre(t, 'SR_DOCS_ID_MAL_FMT'), t[:160])
         for falta in ('nada:X.htm', 'system:NoExiste.htm'):

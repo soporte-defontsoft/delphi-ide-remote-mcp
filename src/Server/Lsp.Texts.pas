@@ -6017,9 +6017,9 @@ const
     'framework=%1:s lists its own properties, and set writes them dotted ' +
     '(%2:s.<property>).';
 
-  SR_DESIGNER_COMPONENT_FMT =
-    '[DSGN-017 NOT_FOUND] There is no component "%s" in that form ' +
-    '(command=tree lists them).%s';
+  // DSGN-017 (el componente que no esta, de get) se retiro en la 1.23: es
+  // DSGN-078, la de los comandos que escriben, con sus nombres
+  // (ComponenteQueNoEsta, A16)
 
   SN_DESIGNER_INFO_NOTE =
     '[DSGN-018] Published properties read from the source of the active ' +
@@ -9420,7 +9420,8 @@ const
     'it opens it).%s';
 
   SR_CREATE_IDENTIFICADOR_FORM_FMT =
-    '[CREATE-026 INVALID_PARAM] ''%s'' is not a valid form identifier.';
+    '[CREATE-026 INVALID_PARAM] ''%s'' is not a valid form name: it has to ' +
+    'be an identifier that is not a reserved word.';
 
   SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT =
     '[CREATE-027 DENIED] %s already exists. The scaffolder never ' +
@@ -9908,8 +9909,10 @@ const
     '(label/kind/detail) plus the total count.';
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiPatch.pas (paso 3d, 27-sep-2026)
+  { el path de delphi_read: lee cualquier texto con su codificacion real (solo
+    niega un binario, LooksBinaryBytes) y decia "the Delphi file" (P3 de A20) }
   SP_EDIT_PATH =
-    'Absolute path of the Delphi file (.pas/.dpr/.dpk/.inc/.dfm/.fmx)';
+    'Absolute path of a text file, Delphi or not (a binary form is shown as text)';
 
   SP_EDIT_FROMLINE =
     'First line to show, 1-based (0 = from the start)';
@@ -9929,7 +9932,7 @@ const
   SP_EDIT_OLD =
     'EDIT mode: the line to replace - ONE full line copied from ' +
     'delphi_read (everything after the | bar), or a block of consecutive ' +
-    'ones. UNIQUE in the file; the blanks at either end do not count: if the same ' +
+    'ones. UNIQUE in the file; indentation does not count: if the same ' +
     'text is on another line too, add atline (occurrence inside edits).';
 
   SP_EDIT_ATLINE =

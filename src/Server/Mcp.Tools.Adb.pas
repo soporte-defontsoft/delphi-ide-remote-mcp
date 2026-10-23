@@ -515,8 +515,8 @@ begin
       end;
     Return := TJSONObject.Create;
     try
-      Return.AddPair('screenshot', Destino);
-      Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Destino)));
+      // ('screenshot' y su tamano los pone DeliverCapture, para toda tool
+      // que capture: aqui era 'size' y en las otras 'screenshotBytes'; A20)
       { La pantalla REAL del dispositivo, de `wm size` y `wm density`: lo
         que `input tap` entiende son pixeles de la pantalla en vigor (la
         Override si la hay, la Physical si no). Normalmente el PNG de

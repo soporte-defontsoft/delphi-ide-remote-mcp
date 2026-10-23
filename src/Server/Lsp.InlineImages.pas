@@ -43,7 +43,9 @@ function WrapWithAttachedImages(const AText: string): TJSONArray;
 { Entrega una captura ya en disco (AFile) en AReturn. AInline = el parametro
   inline de la tool (False = fichero + enlace; Boolean en el esquema desde
   la 1.18.0, true por defecto en el constructor de sus params), AMaxWidth = el
-  maxwidth (0 = el de la casa). True si viajo inline. Nunca modifica AFile:
+  maxwidth (0 = el de la casa). True si viajo inline. El anuncio de la
+  captura lo pone ESTA en AReturn, no la tool: 'screenshot' (la ruta, solo si
+  es la del agente) y 'screenshotBytes' (A20 de la 1.23). Nunca modifica AFile:
   si es una captura NUESTRA (CapturaConsumible) la consume y su ruta no sale
   en la respuesta - ni en 'screenshot' ni en el enlace, que la pide por su
   nombre (2af de la 1.18.2) -; un out= es del agente y se queda.
@@ -216,12 +218,14 @@ begin
   Result := False;
   // La ruta de una captura NUESTRA no se ensena nunca: es de nuestra casa
   // (David, 12-oct-2026: "nuestros procesos internos y nuestro temp, los
-  // agentes no deben ni olerlo"). Toda tool de captura la anuncia como
-  // 'screenshot'; se quitaba solo al consumirla en linea, y con inline=false
-  // se quedaba (2af de la 1.18.2)
+  // agentes no deben ni olerlo"): cada tool la anunciaba como 'screenshot' y
+  // se quitaba aqui (se quedaba con inline=false, 2af de la 1.18.2). Ahora el
+  // anuncio lo compone ESTA, para toda tool que capture: la ruta solo si es la
+  // del agente (su out=), y su tamano con UN nombre, 'screenshotBytes' (adb
+  // decia 'size' y desktop y designer 'screenshotBytes': A20 de la 1.23)
   Nuestra := CapturaConsumible(AFile);
-  if Nuestra then
-    AReturn.RemovePair('screenshot').Free;
+  if not Nuestra then
+    AReturn.AddPair('screenshot', AFile);
   // los bytes UNA vez, por la puerta de leer (el out= del agente o su casa de
   // entregables): el tamano y la imagen en linea salen de ellos. Se leian
   // dos veces y sin puerta (1.18.2, 2b)
@@ -233,6 +237,8 @@ begin
     on E: Exception do
       FalloLectura := E.Message;
   end;
+  if FalloLectura = '' then
+    AReturn.AddPair('screenshotBytes', TJSONNumber.Create(Length(Leidos)));
   if not TamanoPngBytes(Leidos, W0, H0) then
   begin
     W0 := 0;

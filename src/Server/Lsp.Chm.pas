@@ -34,6 +34,12 @@ type
     property Ruta: string read FRuta;
   end;
 
+{ Si ANombre es una ruta DE DENTRO de un .chm: tramos sin vacios, sin '.' ni
+  '..', con cualquiera de las dos barras. LA regla del almacen (TChm.Lee) y del
+  juez del id de una pagina (Lsp.Docs.PartesDeId): el juez no negaba un tramo
+  vacio ('a//b.htm') y el almacen si (A27 de la 1.23). }
+function EsRutaDeDentro(const ANombre: string): Boolean;
+
 implementation
 
 uses
@@ -93,6 +99,14 @@ begin
   inherited;
 end;
 
+function EsRutaDeDentro(const ANombre: string): Boolean;
+begin
+  Result := ANombre <> '';
+  for var T in ANombre.Split(['\', '/']) do
+    if (T = '') or (T = '.') or (T = '..') then
+      Exit(False);
+end;
+
 function TChm.Lee(const ANombre: string; out ABytes: TArray<Byte>): Boolean;
 var
   Stg, Sub: IStorage;
@@ -104,20 +118,18 @@ var
   K: Integer;
 begin
   ABytes := nil;
+  if not EsRutaDeDentro(ANombre) then // la segunda barrera, por LA regla
+    Exit(False);
   // las carpetas de dentro son almacenes: se abren tramo a tramo
   Tramos := ANombre.Split(['\', '/']);
   Stg := IStorage(FStg);
   for K := 0 to High(Tramos) - 1 do
   begin
-    if (Tramos[K] = '') or (Tramos[K] = '.') or (Tramos[K] = '..') then
-      Exit(False);
     if Failed(Stg.OpenStorage(PWideChar(Tramos[K]), nil,
       STGM_READ or STGM_SHARE_EXCLUSIVE, nil, 0, Sub)) then
       Exit(False);
     Stg := Sub;
   end;
-  if (Length(Tramos) = 0) or (Tramos[High(Tramos)] = '') then
-    Exit(False);
   Result := Succeeded(Stg.OpenStream(PWideChar(Tramos[High(Tramos)]), nil,
     STGM_READ or STGM_SHARE_EXCLUSIVE, 0, Stm));
   if not Result then

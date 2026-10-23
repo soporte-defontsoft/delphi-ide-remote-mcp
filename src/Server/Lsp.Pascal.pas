@@ -219,6 +219,11 @@ function UltimoTrozo(const ANombre: string): string;
 // Una palabra reservada de Delphi (begin, unit, string...): no vale de
 // identificador ni de nombre de unit. La lista estaba dos veces
 function EsPalabraReservada(const S: string): Boolean;
+// Un nombre NUEVO que da el agente (un form, un componente): UN identificador
+// que no es palabra reservada, la regla entera. Con la mitad, formname=Begin
+// escribia una unit que no compila (A23 de la 1.23). Un nombre de unit, con
+// sus puntos y las de la RTL, es Lsp.Scaffold.BadUnitName
+function EsNombreNuevo(const S: string): Boolean;
 // Los dos son el MISMO identificador. Pascal no distingue mayusculas, y dcc
 // tampoco en las letras acentuadas (medido el 4-oct-2026: 'uses UaRBOL' con
 // su a acentuada compila contra 'unit UArbol' con su A acentuada, y TAMANO
@@ -419,6 +424,11 @@ begin
   for var W in RESERVADAS do
     if SameText(S, W) then
       Exit(True);
+end;
+
+function EsNombreNuevo(const S: string): Boolean;
+begin
+  Result := EsIdentificador(S) and not EsPalabraReservada(S);
 end;
 
 function CommentLen(const S: string; I: Integer): Integer;

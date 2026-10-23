@@ -201,6 +201,35 @@ REGLAS = [
      r".*SR_EDIT_(?:ANCLA_NO_UNICA|LINEA_ESTA_ESE_ANCLA)_FMT",
      [('Lsp.Patch.pas', 'LineaElegida')],
      'LineaElegida (Lsp.Patch, A15 de la 1.23)'),
+    # el componente que no esta en un form: get tenia su negativa (DSGN-017, sin los nombres) y los comandos
+    # que escriben otra (DSGN-078); A16 de la 1.23
+    ('la negativa de un componente que no esta compuesta a mano',
+     r"^(?!\s*SR_DESIGNER_COMPONENTE_NO_ESTA_FMT\s*=).*SR_DESIGNER_COMPONENTE_NO_ESTA_FMT",
+     [('Lsp.DesignerEdit.pas', 'ComponenteQueNoEsta')],
+     'ComponenteQueNoEsta (Lsp.DesignerEdit, A16 de la 1.23)'),
+    # el anuncio de una captura: cada tool lo componia, con su tamano en 'size' (adb) o en 'screenshotBytes'
+    # (desktop, designer); A20 de la 1.23
+    ('el anuncio de una captura compuesto a mano', r"AddPair\(\s*'screenshot(?:Bytes)?'",
+     [('Lsp.InlineImages.pas', 'DeliverCapture')],
+     'DeliverCapture (Lsp.InlineImages, A20 de la 1.23): la ruta solo si es del agente, y screenshotBytes'),
+    # el valor de un enumerado o de un conjunto juzgado dos veces, con pistas distintas (S19, A32 de la 1.23)
+    ('el juicio de un enumerado o un conjunto a mano',
+     r"^(?!\s*SF_DSGN_(?:NO_ES_VALOR|ES_UN_SET|NO_ES_ELEMENTO)_FMT\s*=)"
+     r".*SF_DSGN_(?:NO_ES_VALOR|ES_UN_SET|NO_ES_ELEMENTO)_FMT",
+     [('Lsp.DesignerMeta.pas', 'JuzgaMiembros')],
+     'JuzgaMiembros (Lsp.DesignerMeta, A32 de la 1.23)'),
+    # un booleano que lee msbuild comparado con 'true' a mano: msbuild toma tambien on, yes, !false... (A33 de
+    # la 1.23). El <Platform> activo es del IDE, no de msbuild: su lector es su casa
+    ('un booleano de msbuild comparado a mano',
+     r"(?i)SameText\(\s*(?:EffectiveProperty|ValorDeTramo)\([^;]*,\s*'(?:true|false)'\s*\)",
+     [('Lsp.Dproj.pas', 'PlataformasDelBloque')],
+     'EsVerdadDeMsbuild (Lsp.Dproj, A33 de la 1.23)'),
+    # la palabra que devuelve un valor a lo de por defecto: none/default en set-sdk y set-profile,
+    # default/reset en set-output (S31, A37 de la 1.23)
+    ('la palabra que quita un valor a mano',
+     r"(?i)(?:SameText|MatchText)\([^;]*'none'[^;]*'default'|(?:SameText|MatchText)\([^;]*'default'[^;]*'reset'",
+     [('Mcp.Tools.Config.pas', 'EsPalabraQueQuita')],
+     'EsPalabraQueQuita (Mcp.Tools.Config, A37 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1180,6 +1209,15 @@ PLANTADO = {
     'una linea comparada con un ancla a mano': "      if ALines[I + J].Trim <> AOldLines[J].Trim then",
     'la negativa de un ancla repetida compuesta a mano':
         "      Exit(MsgFmt(SR_EDIT_ANCLA_NO_UNICA_FMT, [Length(Matches), S.Trim]));",
+    'la negativa de un componente que no esta compuesta a mano':
+        "  Exit(MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [N, F, '', '']));",
+    'el anuncio de una captura compuesto a mano':
+        "      Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(F)));",
+    'el juicio de un enumerado o un conjunto a mano':
+        "      Exit(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT, [V, T, string.Join(', ', M)]));",
+    'un booleano de msbuild comparado a mano':
+        "  if SameText(EffectiveProperty(Xml, 'UsePackages', P, C), 'true') then",
+    'la palabra que quita un valor a mano': "  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default');",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

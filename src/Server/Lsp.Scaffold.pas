@@ -968,7 +968,9 @@ begin
   end;
   if TRegEx.IsMatch(FormName, '\A' + PATRON_NOMBRE_TIPO) then
     FormName := FormName.Substring(1); // the T prefix goes on the class only
-  if not EsIdentificador(FormName) then
+  // un nombre NUEVO, la regla entera (EsNombreNuevo): Begin pasaba y la unit
+  // salia con "Begin: TBegin", que no compila (A23 de la 1.23)
+  if not EsNombreNuevo(FormName) then
     Exit(MsgFmt(SR_CREATE_IDENTIFICADOR_FORM_FMT, [FormName]));
 
   Result := CarpetaEnElProyecto(ADprPath, ASubDir, Dir);
