@@ -145,6 +145,15 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **A package is a project for every tool.** What a tool takes as a project
+  - its `.dproj`, `.dpr` or `.dpk` - was written by hand in six places, and
+  `delphi_test` left the `.dpk` out: it answered `CFG-033` "is not a project
+  (.dproj, .dpr or .dpk)", the message that names it valid. It now goes on
+  to `TEST-018`, which says a test is a program. The LSP settings of a
+  package whose `.dproj` names no main source point at its `.dpk`, not at a
+  `.dpr` that is not there. One predicate for "project or its main source"
+  and one for "its main source", next to the pair that goes from one to the
+  other (`tests/test_delphi_test.py`).
 - **The wildcard works in every allowlist of `settings.ini`.** `RemoteHosts`
   took `*` or `0.0.0.0`, `RemoteRunProjects` took `all` or `*`, and
   `GitRemotes` and `AdbAllowedDevices` took none, so `GitRemotes=*` refused

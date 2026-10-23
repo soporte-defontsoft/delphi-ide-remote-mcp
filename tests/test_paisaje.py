@@ -389,6 +389,11 @@ REGLAS = [
      'cada pregunta de la tabla la recorria a mano)'),
     ('el designer de una unidad', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.(?:dfm|fmx)'\)", [],
      'DesignersDeUnidad (Lsp.Patch), la inversa de UnidadDeDesigner (2.2 de la 1.18.0: cinco a mano)'),
+    ('las extensiones de un proyecto a mano', r"\[\s*'\.dp(?:r|k|roj)'(?:\s*,\s*'\.dp(?:r|k|roj)')+\s*\]",
+     [('Lsp.Dproj.pas', 'EsFuentePrincipal')],
+     'EsFuentePrincipal (.dpr/.dpk) y EsProyectoOSuFuente (.dproj o su fuente principal), junto a '
+     'DprojDe/DprDe: eran seis listas de \"proyecto\" y cinco de \"fuente principal\" a mano, y la de delphi_test dejaba fuera el '
+     '.dpk mientras su negativa lo daba por bueno (R1 de Fable, depuracion de la 1.23)'),
     ('el binario de Android en el apk compuesto a mano', r"'lib'\s*\+[^;]*'\.so'",
      # el enlazador busca el nombre de DESARROLLO de una libreria (-lz -> libz.so): otra regla, la de ld
      [('Lsp.Dproj.pas', 'LibreriaDelApk'), ('Lsp.BuildRunner.pas', 'CompletaEnlacesDev')],
@@ -1118,6 +1123,7 @@ PLANTADO = {
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",
     'el binario de Android en el apk compuesto a mano': "  B := 'lib' + Proyecto + '.so';",
+    'las extensiones de un proyecto a mano': "  if MatchText(TPath.GetExtension(F), ['.dproj', '.dpr']) then",
     'el .dpr de un .dproj': "  D := TPath.ChangeExtension(P, '.dpr');",
     'el juez del nombre de un perfil': "  if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then",
     'la gramatica de las lineas de un form': "  if L.Trim.EndsWith('= <') then",

@@ -239,6 +239,12 @@ check('...y DUnitX lo CORRE: 3 tests, 2 pasan (Bien e Insertado) y 1 lanza',
 # ---- contratos ----
 r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')})
 check('un proyecto que no es test: rechazado y explicado', mc.es(r, 'SR_TEST_NOTATEST_FMT'), r[:300])
+# un PAQUETE es un proyecto (R1 de Fable, depuracion de la 1.23): su .dpk se negaba con CFG-033 "no es un proyecto
+# (.dproj, .dpr o .dpk)", la negativa que lo da por bueno; ahora sigue hasta TEST-018, que dice que un test es un programa
+r = B.call('delphi_create', {'kind': 'project-package', 'name': 'PaqT', 'dir': os.path.join(BASE, 'PaqT')})
+r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'PaqT', 'PaqT.dpk')})
+check('un paquete (.dpk) no es un test: TEST-018, no CFG-033 "no es un proyecto" (ROJO contra r1222s)',
+      mc.es(r, 'SR_TEST_NOTATEST_FMT') and not mc.es(r, 'SR_UNIT_PROJECT_EXT_FMT'), r[:300])
 r = B.call('delphi_test', {'command': 'run'})
 check('run sin project rechazado con pista', mc.rechazado(r) and mc.es(r, 'SR_TEST_NEED_PROJECT'), r[:200])
 r = B.call('delphi_test', {'command': 'volar', 'path': BASE})

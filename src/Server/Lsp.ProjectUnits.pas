@@ -301,16 +301,13 @@ begin
 end;
 
 function ResolveProjectPair(const AProject: string; out ADpr, ADproj: string): string;
-var
-  Ext: string;
 begin
   Result := '';
   ADpr := '';
   ADproj := '';
   if AProject.Trim = '' then
     Exit(MsgText(SR_UNIT_NEED_PROJECT));
-  Ext := TPath.GetExtension(AProject).ToLower;
-  if (Ext <> '.dpr') and (Ext <> '.dpk') and (Ext <> '.dproj') then
+  if not EsProyectoOSuFuente(AProject) then
     Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [TPath.GetFileName(AProject)]));
   // Un paquete es un proyecto: su fuente principal es el .dpk (con clausula
   // contains en vez de uses) y el .dproj es el mismo. Desde un .dproj se
@@ -3052,7 +3049,7 @@ begin
   F := AProyecto;
   if SameText(TPath.GetExtension(F), '.dproj') then
     F := DprDe(F);
-  if not MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) or not TFile.Exists(F) then
+  if not EsFuentePrincipal(F) or not TFile.Exists(F) then
     Exit;
   if AConSuFuente and (NormPath(F) = NormPath(APasPath)) then
     Exit(True);
@@ -3094,7 +3091,7 @@ begin
   for D in SitiosDeProyectos(Dirs) do
   begin
     for F in TDirectory.GetFiles(D, '*.dp?') do // .dpr y .dpk, no .dproj
-      if MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) then
+      if EsFuentePrincipal(F) then
         if ProyectoListaUnidad(F, APasPath) then // the .dpr decides; no .dproj read
           Result := Result + [F];
   end;
@@ -3857,8 +3854,8 @@ begin
   EsDeMudanza :=
     function(F: string): Boolean
     begin
-      Result := MatchText(TPath.GetExtension(F), ['.dpr', '.dpk', '.dproj', '.pas',
-        '.inc', '.groupproj', EXT_MANIFIESTO]);
+      // los fuentes, los proyectos y el manifiesto, por SUS predicados
+      Result := EsRutaDeFuente(F) or EsRutaDeProyecto(F) or EsManifiesto(F);
     end;
 
   // Con el cerrojo de las ediciones: la misma carrera que perdia cambios en

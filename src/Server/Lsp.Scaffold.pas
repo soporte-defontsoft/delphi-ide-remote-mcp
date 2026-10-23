@@ -929,7 +929,7 @@ begin
     Exit;
   // "project" tiene que ser un PROYECTO antes de escribir nada: con un .txt
   // se creaban el .pas y el .dfm y luego no se podian registrar
-  if not MatchText(TPath.GetExtension(ADprPath), ['.dpr', '.dproj', '.dpk']) then
+  if not EsProyectoOSuFuente(ADprPath) then
     Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
   if not TFile.Exists(ADprPath) then
     Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
@@ -1145,7 +1145,7 @@ begin
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;
-  if not MatchText(TPath.GetExtension(ADprPath), ['.dpr', '.dproj', '.dpk']) then
+  if not EsProyectoOSuFuente(ADprPath) then
     Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
   if not TFile.Exists(ADprPath) then
     Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));

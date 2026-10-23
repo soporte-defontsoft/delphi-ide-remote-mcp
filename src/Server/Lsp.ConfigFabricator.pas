@@ -465,7 +465,9 @@ begin
   if Length(Values) > 0 then
     MainSource := Values[0]
   else
-    MainSource := TPath.GetFileNameWithoutExtension(ADprojPath) + '.dpr';
+    // la de al lado por EL inverso (DprDe: el .dpr, o el .dpk de un paquete);
+    // se componia <nombre>.dpr a mano y un paquete salia con un .dpr que no hay
+    MainSource := TPath.GetFileName(DprDe(ADprojPath));
   DprPath := TPath.GetFullPath(TPath.Combine(DprojDir, MainSource));
 
   // EL sufijo de su compilador, el que HAY en su bin (TRadStudioInfo). Antes

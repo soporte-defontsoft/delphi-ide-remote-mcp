@@ -2171,7 +2171,7 @@ begin
     end;
     Exit(MsgFmt(SR_CONFIG_GROUP_FMT, [TPath.GetFileName(Proj), Cmd]));
   end;
-  if MatchText(TPath.GetExtension(Proj), ['.dpr', '.dpk']) then
+  if EsFuentePrincipal(Proj) then
   begin
     Sibling := DprojDe(Proj);
     if TFile.Exists(Sibling) then
@@ -2181,7 +2181,7 @@ begin
         [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
   end;
   // Y lo que no es un proyecto no se lee ni se escribe como si lo fuera.
-  if not MatchText(TPath.GetExtension(Proj), ['.dproj', '.dpr', '.dpk']) then
+  if not EsProyectoOSuFuente(Proj) then
     Exit(MsgFmt(SR_CONFIG_NOT_PROJECT_FMT, [TPath.GetFileName(Proj)]));
   if (Cmd = '') or (Cmd = 'view') then
     Exit(ViewConfig(Proj, Params.Section));

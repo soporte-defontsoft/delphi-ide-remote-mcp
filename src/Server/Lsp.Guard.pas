@@ -3698,11 +3698,6 @@ var
   Vistos: TStringList;
   Hallado: string;
 
-  function EsProyecto(const F: string): Boolean;
-  begin
-    Result := MatchText(TPath.GetExtension(F), ['.dproj', '.dpk', '.dpr']);
-  end;
-
   procedure Busca(const O: string);
   var
     E: string;
@@ -3711,7 +3706,7 @@ var
       Exit;
     Vistos.Add(LowerCase(RealPath(O)));
     for E in TDirectory.GetFiles(O) do
-      if EsProyecto(E) and (not EsEnlace(E) or SeSigueAlCopiar(E, ADestino)) then
+      if EsProyectoOSuFuente(E) and (not EsEnlace(E) or SeSigueAlCopiar(E, ADestino)) then
       begin
         Hallado := E;
         Exit;
@@ -3738,7 +3733,7 @@ begin
   Hallado := '';
   if TFile.Exists(AOrigen) then
   begin
-    if EsProyecto(AOrigen) then
+    if EsProyectoOSuFuente(AOrigen) then
       Hallado := AOrigen;
   end
   else if TDirectory.Exists(AOrigen) then

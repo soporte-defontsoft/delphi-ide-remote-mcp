@@ -1847,8 +1847,7 @@ begin
     // lo niegan con EDIT-128): quien lo juzga es el build. Se dice (deep-test
     // de Hermes sobre la 1.21.2, 21-oct-2026: "upload lo bordea"). La familia:
     // EL predicado del proyecto (EsRutaDeProyecto) y el fuente principal
-    if EsRutaDeProyecto(FullPath) or
-       MatchText(TPath.GetExtension(FullPath), ['.dpr', '.dpk']) then
+    if EsRutaDeProyecto(FullPath) or EsFuentePrincipal(FullPath) then
       Return.AddPair('projectNote', MsgText(SN_UPLOAD_FICHERO_DE_PROYECTO));
     Result := Return.ToJSON;
   finally

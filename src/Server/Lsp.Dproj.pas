@@ -676,6 +676,16 @@ function DprojDe(const AProject: string): string;
   como el de un programa de consola (P9 de la segunda revision de la
   1.17.0). }
 function DprDe(const AProject: string): string;
+{ La FUENTE PRINCIPAL de un proyecto por su extension: su programa (.dpr) o
+  su paquete (.dpk). EL predicado de DprojDe y de quien pregunta "es el .dpr
+  o el .dpk": estaba escrito a mano en cinco sitios (R1 del censo de Fable,
+  depuracion de la 1.23). }
+function EsFuentePrincipal(const APath: string): Boolean;
+{ Lo que una tool acepta como PROYECTO: su .dproj o su fuente principal (.dpr,
+  .dpk); un .groupproj es un grupo, otra cosa. Eran seis listas a mano, y la
+  de delphi_test dejaba fuera el .dpk mientras su negativa (CFG-033) lo daba
+  por bueno (R1 del censo de Fable). }
+function EsProyectoOSuFuente(const APath: string): Boolean;
 
 { LA configuracion de un build, un test o lo que delphi_config escribe para
   una: la pedida (ARaw) o, sin ella, la seleccionada del proyecto
@@ -1787,8 +1797,18 @@ end;
 function DprojDe(const AProject: string): string;
 begin
   Result := AProject;
-  if MatchText(TPath.GetExtension(Result), ['.dpr', '.dpk']) then
+  if EsFuentePrincipal(Result) then
     Result := TPath.ChangeExtension(Result, '.dproj');
+end;
+
+function EsFuentePrincipal(const APath: string): Boolean;
+begin
+  Result := MatchText(TPath.GetExtension(APath), ['.dpr', '.dpk']);
+end;
+
+function EsProyectoOSuFuente(const APath: string): Boolean;
+begin
+  Result := SameText(TPath.GetExtension(APath), '.dproj') or EsFuentePrincipal(APath);
 end;
 
 function DprDe(const AProject: string): string;
