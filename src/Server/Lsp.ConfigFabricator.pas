@@ -368,18 +368,21 @@ begin
 end;
 
 { Una lista ;-separada como la quiere el motor: sin vacios, sin repetidos y
-  sin lo que no es un identificador (una macro sin resolver, una ruta). Los
-  defines y los ambitos. }
+  sin lo que no es un identificador (una macro sin resolver, una ruta:
+  gramatica propia, declarada aqui; el juez seria el motor). Los defines y
+  los ambitos. Los trozos, por EL troceador de las listas de msbuild
+  (Lsp.Dproj.TrozosDeLista; aqui habia otro Split, P8 de la revision de
+  Opus 5.5). }
 function ListaDeNombres(const ARaw: string): string;
 begin
   Result := '';
-  for var P in ARaw.Split([';']) do
-    if (P.Trim <> '') and not P.Contains('$(') and not P.Contains('\') and
-       not (';' + Result + ';').ToLower.Contains(';' + P.Trim.ToLower + ';') then
+  for var P in TrozosDeLista(ARaw) do
+    if not P.Contains('$(') and not P.Contains('\') and
+       not (';' + Result + ';').ToLower.Contains(';' + P.ToLower + ';') then
       if Result = '' then
-        Result := P.Trim
+        Result := P
       else
-        Result := Result + ';' + P.Trim;
+        Result := Result + ';' + P;
 end;
 
 { Los ajustes de ESTE proyecto (APrefijo, el principio de su nombre) de una
