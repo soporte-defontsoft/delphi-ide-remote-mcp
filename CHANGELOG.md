@@ -71,6 +71,13 @@ the MCP `initialize` response (`serverInfo.version`).
   project when the build reads it otherwise (an escaped `%2E%2E`), which is
   the entry `remove-searchpath` takes. A build answers with its `durationMs`,
   as `delphi_test` and `remote-run` do (`tests/test_contratos_1222.py`).
+- **`GUARD-002` names the places you can work in, the read-only ones
+  included.** A path outside the roots was refused with a list of the roots
+  that named one the server could not reach and left out the read-only roots,
+  which can be read (Hermes, 2026-10-22: three refusals before finding the
+  root to read). It now lists the roots and read-only roots the server
+  reaches, these marked `(read-only)` - the same list as `WS-022`
+  (`tests/test_contratos_1222.py`).
 - **A parameter that does not go with the call is refused, not ignored.**
   `delphi_search` with ONE file as root and a `pattern` that does not pick it
   searched the file anyway (`SEARCH-009`); `delphi_adb` took `device` with

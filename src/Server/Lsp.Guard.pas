@@ -2125,6 +2125,18 @@ begin
     end);
 end;
 
+function RaicesDisponibles: string; forward;
+
+{ LA negativa de la jaula (GUARD-002), con los sitios donde SI se trabaja
+  (RaicesDisponibles: los que el servidor alcanza ahora, los de solo lectura
+  marcados). Estaba compuesta a mano en tres sitios, nombraba una raiz que no
+  estaba y callaba las de solo lectura, que tambien se leen (Hermes,
+  22-oct-2026: tres negativas hasta dar con la raiz; medido el 23-oct-2026). }
+function NegativaDeJaula(const APath: string): string;
+begin
+  Result := MsgFmt(SR_JAIL_FMT, [APath, RaicesDisponibles]);
+end;
+
 { LA negativa de un UNC que no es de ningun sitio declarado, por UN sitio: la
   daban la pasada de la entrada y la jaula, cada una la suya. Si es la ruta
   de RED de un sitio declarado con su letra (una unidad de red), lo dice
@@ -2148,7 +2160,7 @@ begin
   if AEsFormaDeRed then
     Result := MsgFmt(SR_JAIL_FORMA_DE_RED_FMT, [Declarada])
   else
-    Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', WorkspaceRoots)]);
+    Result := NegativaDeJaula(APath);
 end;
 
 { Una unidad virtual que la expansion de ida dejo tal cual porque esta sesion
@@ -2640,7 +2652,9 @@ begin
   end;
 end;
 
-{ Las raices y referencias a las que SI se llega: donde seguir trabajando. }
+{ Las raices y referencias a las que SI se llega: donde seguir trabajando, las
+  de solo lectura marcadas (se leen y no se escriben). La lista de WS-022 y de
+  GUARD-002 (NegativaDeJaula). }
 function RaicesDisponibles: string;
 var
   R: string;
@@ -2651,7 +2665,10 @@ begin
     begin
       if Result <> '' then
         Result := Result + ', ';
-      Result := Result + SinBarraFinal(R);
+      if MatchText(R, WorkspaceReadOnlyRoots) then
+        Result := Result + MsgFmt(SF_JAIL_SOLO_LECTURA_FMT, [SinBarraFinal(R)])
+      else
+        Result := Result + SinBarraFinal(R);
     end;
   if Result = '' then
     Result := MsgText(SF_WS_NINGUNA_RAIZ_DISPONIBLE);
@@ -4469,7 +4486,7 @@ begin
         Exit(MsgFmt(SR_JAIL_LINK_BIBLIOTECA_FMT, [APath]));
       end;
   AFueraDeJaula := True;
-  Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
+  Result := NegativaDeJaula(APath);
 end;
 
 function FindFirstFileNameCrudo(AFichero: PChar; ABanderas: DWORD; var ATam: DWORD;
@@ -4650,7 +4667,7 @@ begin
     end;
   // la jaula lo dejo pasar sin estar en una raiz: es zona de biblioteca,
   // que se lee y nunca se escribe
-  Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
+  Result := NegativaDeJaula(APath);
 end;
 
 function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of string;

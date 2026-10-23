@@ -62,9 +62,14 @@ Y uno de seguridad (P4 de la revision de Opus 5.5, medido el 23-oct-2026): el id
 visto se reconstruye el estado y se acierta la cola del siguiente, y status ensena el resto.
   CS1 dos begin seguidos: la cola del segundo NO se predice desde el primero (ROJO contra la 1.22.1: acertaba)
 
+Y GUARD-002 (Hermes, 22-oct: tres negativas hasta dar con la raiz que se lee):
+  J1 con una raiz que no existe y otra de solo lectura, una ruta de fuera: GUARD-002 nombra la de solo lectura
+     (marcada) y no la que no existe (ROJO: nombraba la que no existe y callaba la de solo lectura)
+
 Uso:  python tests/test_contratos_1222.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -313,7 +318,6 @@ try:
     r = motor('delphi_hover', {'path': ufoo, 'line': 10, 'character': 12})
     check('H1 hover de IntToStr: el enlace como ruta de la casa y linea, sin file:///',
           'file:///' not in r and 'System.SysUtils.pas' in r and ', line ' in r, r[:500])
-    import re
     m = re.search(r'\((srv\w:.*?System\.SysUtils\.pas), line (\d+)\)', r)
     if m:
         rr = srv.call('delphi_read', {'path': m.group(1), 'fromline': int(m.group(2)), 'toline': int(m.group(2))})
@@ -367,6 +371,19 @@ try:
     for i in ids:
         if i:
             srv.call('delphi_changeset', {'command': 'rollback', 'id': i})
+
+    ref = os.path.join(BASE, 'ref')
+    os.makedirs(ref)
+    no_esta = os.path.join(BASE, 'no-esta')
+    jg = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL + ';' + no_esta, 'DELPHI_MCP_READONLY_ROOTS': ref}),
+                  nombre='c1222jaula', t=120)
+    try:
+        r = jg.call('delphi_search', {'root': os.path.join(BASE, 'srv'), 'query': 'x'})
+        check('J1 GUARD-002 nombra la raiz de solo lectura (marcada) y no la que no existe',
+              mc.es(r, 'SR_JAIL_FMT') and re.search(r'\\ref\\? \(read-only\)', r) is not None and 'no-esta' not in r,
+              r[:500])
+    finally:
+        jg.cierra()
 finally:
     srv.cierra()
     mc.borra(BASE)

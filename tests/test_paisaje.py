@@ -567,7 +567,8 @@ REGLAS = [
       # recalcula sus formas en cada llamada; se va con el cache de formas y el
       # comparador unico de Lsp.Lugares. Por (fichero, funcion): solo puede encoger
       ('Lsp.Guard.pas', 'ArgPathOutsideDenied'),
-      ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'), ('Lsp.Guard.pas', 'NegativaDeUnc'),
+      # (NegativaDeUnc salio el 23-oct-2026: su lista de raices es la de RaicesDisponibles)
+      ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'),
       ('Lsp.Guard.pas', 'LugaresProtegidos'), ('Lsp.Guard.pas', 'PurgeServerTemp'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),

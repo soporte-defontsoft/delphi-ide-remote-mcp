@@ -1576,6 +1576,8 @@ const
     '[GUARD-002 DENIED] "%s" is OUTSIDE the allowed workspaces. This ' +
     'server only operates inside: %s (configured in DELPHI_MCP_ROOTS or ' +
     'settings.ini [Workspace.<name>] Roots).';
+  { Una raiz de solo lectura en la lista de GUARD-002 (Lsp.Guard.NegativaDeJaula) }
+  SF_JAIL_SOLO_LECTURA_FMT = '%s (read-only)';
 
   { La ruta de RED de un sitio que el operador declaro con su letra (una
     unidad de red conectada), mandada por un agente. Sigue negada: cada
