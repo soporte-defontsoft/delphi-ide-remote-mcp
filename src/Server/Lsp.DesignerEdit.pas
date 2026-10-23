@@ -203,25 +203,21 @@ type
 
 { ---- el form ---- }
 
-procedure RecogeNombres(O: TStyleObj; L: TStringList; AConRutas: Boolean = False;
-  const APrefijo: string = '');
+procedure RecogeNombres(O: TStyleObj; L: TStringList; AConRutas: Boolean = False);
 begin
+  // la ruta por SU compositor (TStyleObj.Ruta, la inversa de ObjetoDeNombre):
+  // aqui se componia otra vez con un prefijo (Fable, revision de la 1.22.2)
   if O.ObjName <> '' then
-    L.Add(APrefijo + O.ObjName);
+    L.Add(IfThen(AConRutas, O.Ruta, O.ObjName));
   // lo de dentro de un frame en linea es del frame: sus nombres no son del
   // form, que puede tener su propio Edit1 (el delete del frame se llevaba el
   // campo y las referencias del Edit1 del form: revision de la 1.17.0). Con
   // AConRutas van con su RUTA desde el form (Frame11.Edit1, la que toman set
   // y get, ObjetoDeNombre): el form los cambia en su bloque inherited
-  if O.Clave = 'inline' then
-  begin
-    if AConRutas then
-      for var K in O.Children do
-        RecogeNombres(K, L, True, APrefijo + O.ObjName + '.');
+  if (O.Clave = 'inline') and not AConRutas then
     Exit;
-  end;
   for var K in O.Children do
-    RecogeNombres(K, L, AConRutas, APrefijo);
+    RecogeNombres(K, L, AConRutas);
 end;
 
 function EstaEn(const ANombre: string; L: TStringList): Boolean;
@@ -3003,12 +2999,11 @@ end;
   falsa (D3 y D4 del revisor de cierre de la 1.18.2, medidos). }
 procedure HijosAlineados(const ATexto, AEscrito, ANomPadre: string; out ANuestro, ASuyo: TArray<string>);
 
+  // el form o uno suyo, por EL lector (ObjetoDeNombre contesta tambien la
+  // raiz: aqui, y en los dos de abajo, se miraba antes a mano; Fable, 1.22.2)
   function PadreEn(ADoc: TStyleDoc): TStyleObj;
   begin
-    if (ADoc.Root <> nil) and SameText(ADoc.Root.ObjName, ANomPadre) then
-      Result := ADoc.Root
-    else
-      Result := ObjetoPorNombre(ADoc, ANomPadre);
+    Result := ObjetoPorNombre(ADoc, ANomPadre);
   end;
 
   function SinNombre(P: TStyleObj; const AClase: string): Integer;
@@ -3155,10 +3150,7 @@ begin
   // lo escribe su sustituto, no su clase: donde lo dejaria el IDE no se sabe
   Doc := TStyleDoc.DeTexto(ATexto);
   try
-    if (Doc.Root <> nil) and SameText(Doc.Root.ObjName, ANomPadre) then
-      P := Doc.Root
-    else
-      P := ObjetoPorNombre(Doc, ANomPadre);
+    P := ObjetoPorNombre(Doc, ANomPadre);
     if P <> nil then
       for var S in Sustituidas do
       begin
@@ -3236,11 +3228,7 @@ begin
   // en todo el form podia caer dentro de un frame inline (revisor, B)
   Doc := TStyleDoc.DeTexto(F.Doc.TextoDe(ALineas));
   try
-    var P: TStyleObj;
-    if (Doc.Root <> nil) and SameText(Doc.Root.ObjName, ANomPadre) then
-      P := Doc.Root
-    else
-      P := ObjetoPorNombre(Doc, ANomPadre);
+    var P := ObjetoPorNombre(Doc, ANomPadre);
     if P = nil then
     begin
       ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre,

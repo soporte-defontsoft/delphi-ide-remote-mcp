@@ -447,24 +447,10 @@ end;
   de ideRegistrySeats para perfiles: ver los ficheros .sdk y los asientos uno al
   lado del otro ES el diagnostico de "por que el SDK Manager ensena esto". }
 function AsientosDeSdk(const AVersion: string): TArray<string>;
-var
-  R: TRegistry;
-  L: TStringList;
 begin
-  Result := nil;
-  R := TRegistry.Create(KEY_READ);
-  L := TStringList.Create;
-  try
-    R.RootKey := HKEY_CURRENT_USER;
-    if R.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then
-    begin
-      R.GetKeyNames(L);
-      Result := L.ToStringArray;
-    end;
-  finally
-    L.Free;
-    R.Free;
-  end;
+  // por EL lector de las subclaves del IDE (Lsp.Discovery): aqui habia otra
+  // copia del bucle (Fable, revision de la 1.22.2)
+  Result := IdeSubclaves(AVersion, 'PlatformSDKs');
 end;
 
 { Los Default_<Plataforma> de esa version: que SDK usa el IDE cuando el
@@ -598,8 +584,6 @@ end;
 function ListProfiles: string;
 var
   Asientos: TJSONArray;
-  Reg: TRegistry;
-  Claves: TStringList;
   Info: TRadStudioInfo;
   Dir, F: string;
   Return: TJSONObject;
@@ -644,23 +628,8 @@ begin
         SdkSeats.Add(F);
       for F in DefaultsDeSdk(Info.Version) do
         SdkDefs.Add(F);
-      Reg := TRegistry.Create(KEY_READ);
-      try
-        Reg.RootKey := HKEY_CURRENT_USER;
-        if Reg.OpenKeyReadOnly(ClaveDelIde(Info.Version, 'RemoteProfiles')) then
-        begin
-          Claves := TStringList.Create;
-          try
-            Reg.GetKeyNames(Claves);
-            for F in Claves do
-              Asientos.Add(F);
-          finally
-            Claves.Free;
-          end;
-        end;
-      finally
-        Reg.Free;
-      end;
+      for F in IdeSubclaves(Info.Version, 'RemoteProfiles') do
+        Asientos.Add(F);
     end;
     Return.AddPair('note', MsgText(SN_PAS_PROFILES_EN_DISCO));
     if (Profs.Count = 0) and (Sdks.Count = 0) then
@@ -879,7 +848,7 @@ begin
       // lo piden (David, 20-sep): traerse un sysroot no es decidir con que
       // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
       if AFijarDefault then
-        R.WriteString('Default_Linux64', NombreDeSdk(ASdkName));
+        R.WriteString(ValorDeSdkPorDefecto('Linux64'), NombreDeSdk(ASdkName));
       R.CloseKey;
     end;
     Result := I > 0;

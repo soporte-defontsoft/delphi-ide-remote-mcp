@@ -235,7 +235,8 @@ try:
           mc.abre(t, 'SR_JAIL_FMT') and VQ in t, t[:300])
     res, sc, t = llama('delphi_list', {'root': VQ[:-1], 'dirs': True})
     check('D5 la unidad a secas (%s) no es la raiz: se niega, y la negativa ensena la raiz con su barra' % VQ[:-1],
-          mc.abre(t, 'SR_GUARD_RUTA_RELATIVA_FMT') and ('(%s)' % VQ) in t, t[:300])
+          # la lista es la de GUARD-002 (1.22.2): la raiz con su barra, y detras la de referencia, marcada
+          mc.abre(t, 'SR_GUARD_RUTA_RELATIVA_FMT') and ('(%s,' % VQ) in t and (VR + ' (read-only)') in t, t[:300])
 
     # D6 la referencia-unidad
     res, sc, t = llama('delphi_read', {'path': VR + 'ref.txt'})

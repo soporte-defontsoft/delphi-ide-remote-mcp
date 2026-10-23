@@ -1187,10 +1187,8 @@ end;
 
 function AddDeployFile(const ADproj, ARawPlatform, ARawPath, ARawRemoteDir, ARawConfig: string): string;
 var
-  Plat, Full, RemoteDir, DeployProj, Enc, EncDproj, Xml, DprojXml, DprojNuevo, LocalName, Cfg,
-    Destino, Nombre: string;
-  Info: TRadStudioInfo;
-  Generated, EnElProyecto, EnElManifiesto: Boolean;
+  Plat, Full, RemoteDir, DeployProj, DprojXml, Cfg: string;
+  Generated: Boolean;
 begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
@@ -1218,72 +1216,76 @@ begin
   else
     Cfg := InfoDeDproj(DprojXml).ConfigPorDefecto;
 
-  // sin manifiesto, el estandar (con el binario) ANTES de leer el .dproj
-  // para escribirlo: le anade su <Import>
+  // los dos ficheros, TODO O NADA - el manifiesto que se genera y su <Import>
+  // en el .dproj tambien: se escribian antes y se quedaban si fallaba lo
+  // demas (Fable, revision de la 1.22.2). Cada uno por el juez XML del IDE
+  // (PatchSaveText)
   DeployProj := DeployProjPath(ADproj);
   Generated := False;
-  if not TFile.Exists(DeployProj) then
-  begin
-    Info := DiscoverRadStudio;
-    if not Info.Found then
-      Exit(MsgText(SR_COMPONENTS_MISSING));
-    try
-      EnsureDeployManifest(ADproj, Plat, Info.RootDir, Generated);
-    except
-      on E: Exception do
-        Exit(MsgEnvuelve(SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT, E.Message));
-    end;
-    if not TFile.Exists(DeployProj) then
-      Exit(NoEsFichero(DeployProj, MsgFmt(SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT, [DeployProj])));
-  end;
-  DprojXml := PatchLoadText(ADproj, EncDproj);
-  Xml := PatchLoadText(DeployProj, Enc);
-  // la entrada como la escribe el IDE: relativa a la carpeta del proyecto
-  // (tambien con ..\), absoluta solo desde otra unidad - EL nombrador
-  // (IncludeFor); era relativa solo DENTRO de la carpeta
-  LocalName := IncludeFor(ADproj, Full);
-  Nombre := TPath.GetFileName(Full);
-  EnElProyecto := False;
-  for var D in DesplieguesDelProyecto(DprojXml) do
-    if SameText(D.Plataforma, Plat) and SameText(D.Config, Cfg) and
-       SameDeployFile(D.LocalName, ADproj, Full) then
-      EnElProyecto := True;
-  EnElManifiesto := Length(FindDeployEntries(Xml, Plat, Full, ADproj, Cfg)) > 0;
-  if EnElProyecto and EnElManifiesto then
-    Exit(MsgFmt(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat, Cfg]));
-  // en el .dproj, la del Deployment Manager (Lsp.Dproj)
-  DprojNuevo := DprojXml;
-  if not EnElProyecto and
-     not ConDespliegueDelProyecto(DprojXml, LocalName, Cfg, CLASE_FICHERO, Plat, RemoteDir, Nombre,
-       DprojNuevo) then
-    Exit(MsgFmt(SR_CFG_DEPLOY_SIN_BORLANDPROJECT_FMT, [TPath.GetFileName(ADproj)]));
-  // en el .deployproj, como la genera el IDE de esa: su destino, por el
-  // compositor que lee la raiz y la clase del proyecto, y en el grupo de su
-  // plataforma (creaba un grupo nuevo en cada llamada)
-  Destino := DestinoDeDespliegue(DprojNuevo, TPath.GetFileNameWithoutExtension(ADproj), Plat,
-    CLASE_FICHERO, RemoteDir);
-  if not EnElManifiesto then
-  begin
-    Xml := ConEntradasEnSuGrupo(Xml, Plat,
-      XmlDeployFile(LocalName, Cfg, Destino, Nombre, CLASE_FICHERO, 0, False));
-    if Xml = '' then
-      Exit(MsgText(SR_CFG_DEPLOYPROJ_SIN_CIERRE_PROJECT));
-  end;
-  // los dos, todo o nada (y cada uno por el juez XML del IDE, PatchSaveText)
   Result := FicherosTodoONada([ADproj, DeployProj],
     function: string
+    var
+      Info: TRadStudioInfo;
+      Enc, EncDproj, Xml, Dproj, DprojNuevo, LocalName, Destino, Nombre: string;
+      EnElProyecto, EnElManifiesto: Boolean;
     begin
+      // sin manifiesto, el estandar (con el binario) ANTES de leer el .dproj
+      // para escribirlo: le anade su <Import>
+      if not TFile.Exists(DeployProj) then
+      begin
+        Info := DiscoverRadStudio;
+        if not Info.Found then
+          Exit(MsgText(SR_COMPONENTS_MISSING));
+        try
+          EnsureDeployManifest(ADproj, Plat, Info.RootDir, Generated);
+        except
+          on E: Exception do
+            Exit(MsgEnvuelve(SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT, E.Message));
+        end;
+        if not TFile.Exists(DeployProj) then
+          Exit(NoEsFichero(DeployProj, MsgFmt(SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT, [DeployProj])));
+      end;
+      Dproj := PatchLoadText(ADproj, EncDproj);
+      Xml := PatchLoadText(DeployProj, Enc);
+      // la entrada como la escribe el IDE: relativa a la carpeta del proyecto
+      // (tambien con ..\), absoluta solo desde otra unidad - EL nombrador
+      // (IncludeFor); era relativa solo DENTRO de la carpeta
+      LocalName := IncludeFor(ADproj, Full);
+      Nombre := TPath.GetFileName(Full);
+      EnElProyecto := False;
+      for var D in DesplieguesDelProyecto(Dproj) do
+        if SameText(D.Plataforma, Plat) and SameText(D.Config, Cfg) and
+           SameDeployFile(D.LocalName, ADproj, Full) then
+          EnElProyecto := True;
+      EnElManifiesto := Length(FindDeployEntries(Xml, Plat, Full, ADproj, Cfg)) > 0;
+      if EnElProyecto and EnElManifiesto then
+        Exit(MsgFmt(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat, Cfg]));
+      // en el .dproj, la del Deployment Manager (Lsp.Dproj)
+      DprojNuevo := Dproj;
+      if not EnElProyecto and
+         not ConDespliegueDelProyecto(Dproj, LocalName, Cfg, CLASE_FICHERO, Plat, RemoteDir, Nombre,
+           DprojNuevo) then
+        Exit(MsgFmt(SR_CFG_DEPLOY_SIN_BORLANDPROJECT_FMT, [TPath.GetFileName(ADproj)]));
+      // en el .deployproj, como la genera el IDE de esa: su destino, por el
+      // compositor que lee la raiz y la clase del proyecto, y en el grupo de
+      // su plataforma (creaba un grupo nuevo en cada llamada)
+      Destino := DestinoDeDespliegue(DprojNuevo, TPath.GetFileNameWithoutExtension(ADproj), Plat,
+        CLASE_FICHERO, RemoteDir);
+      if not EnElManifiesto then
+      begin
+        Xml := ConEntradasEnSuGrupo(Xml, Plat,
+          XmlDeployFile(LocalName, Cfg, Destino, Nombre, CLASE_FICHERO, 0, False));
+        if Xml = '' then
+          Exit(MsgText(SR_CFG_DEPLOYPROJ_SIN_CIERRE_PROJECT));
+      end;
       if not EnElProyecto then
         PatchSaveConSuSalto(ADproj, DprojNuevo, EncDproj);
       if not EnElManifiesto then
         PatchSaveConSuSalto(DeployProj, Xml, Enc); // __delphi-patch copy first
-      Result := '';
+      Result := MsgFmt(SN_CONFIG_DEPLOY_ADDED_FMT,
+        [Plat, Cfg, Full, Destino, Nombre,
+         IfThen(Generated, MsgText(SF_CONFIG_DEPLOY_GENERATED) + ' ', ''), Plat]);
     end);
-  if Result <> '' then
-    Exit;
-  Result := MsgFmt(SN_CONFIG_DEPLOY_ADDED_FMT,
-    [Plat, Cfg, Full, Destino, Nombre,
-     IfThen(Generated, MsgText(SF_CONFIG_DEPLOY_GENERATED) + ' ', ''), Plat]);
 end;
 
 function RemoveDeployFile(const ADproj, ARawPlatform, ARawPath, ARawConfig: string): string;
@@ -1334,16 +1336,20 @@ begin
     QuitaConSuLinea(DprojXml, DelProyecto[I].Key, DelProyecto[I].Value);
   for I := High(Spans) downto 0 do
     QuitaConSuLinea(Xml, Spans[I].Key, Spans[I].Key + Spans[I].Value);
-  // an ItemGroup left empty is dropped too (the IDE keeps empty ones, but
-  // ours were added by us): the platform's own, '$(Platform)'=='X', with
-  // nothing but blanks inside - from the last, so the earlier stay put
+  // el grupo de la plataforma, '$(Platform)'=='X', que se queda sin nada
+  // vuelve a ser el vacio que el IDE escribe para cada plataforma (<ItemGroup
+  // .../>, el que add llena): se quitaba, y el siguiente add creaba uno al
+  // final (Fable, revision de la 1.22.2) - del ultimo al primero, que los de
+  // delante sigan en su sitio
   if Length(Spans) > 0 then
   begin
+    var Cond := DeployGroupCondition(Plat);
     var Grupos := GruposDe(Xml, 'ItemGroup');
     for var K := High(Grupos) downto 0 do
-      if (CondicionNormalizada(Grupos[K].Condicion) = CondicionNormalizada(DeployGroupCondition(Plat))) and
+      if (CondicionNormalizada(Grupos[K].Condicion) = CondicionNormalizada(Cond)) and
          (Copy(Xml, Grupos[K].Ini, Grupos[K].Fin - Grupos[K].Ini).Trim = '') then
-        QuitaConSuLinea(Xml, Grupos[K].Abre, Grupos[K].Cierra);
+        Xml := Copy(Xml, 1, Grupos[K].Abre - 1) + XmlGrupoDeDespliegue(Cond, '') +
+          Copy(Xml, Grupos[K].Cierra, MaxInt);
   end;
   // los dos, todo o nada
   Result := FicherosTodoONada([ADproj, DeployProj],
@@ -1363,10 +1369,12 @@ end;
 { view: los ficheros que despliega el proyecto por plataforma, de su seccion
   Deployment - lo que lee el IDE para generar el .deployproj (se leian del
   .deployproj, que el IDE regenera): la entrada, su configuracion y clase, y
-  donde la deja en el destino (el compositor del .deployproj). Y aparte, lo
-  que el .deployproj despliega y el proyecto no lista: msbuild lo lleva y el
-  IDE lo pierde al regenerarlo (la salida del binario no: la genera el IDE de
-  la del proyecto). }
+  donde la deja en el destino (el compositor del .deployproj). Y aparte, los
+  ficheros ANADIDOS (la clase File del Deployment Manager, la que escribe
+  add-deployfile) que el .deployproj despliega y el proyecto no lista: msbuild
+  los lleva y el IDE los pierde al regenerarlo. Lo de las demas clases (la
+  salida, lo de Android, los modulos del IDE) lo genera el IDE de ellas y no
+  se dice nada (CFG-144 lo decia de todo; Fable, revision de la 1.22.2). }
 procedure AddDeployFilesView(const ADproj: string; AReturn: TJSONObject);
 var
   Xml: string;
@@ -1430,7 +1438,7 @@ begin
       Continue;
     for var T in TramosEnGrupo(M, 'DeployFile', G, True) do
     begin
-      if SameText(ValorDentro(M, 'DeployClass', T), 'ProjectOutput') then
+      if not SameText(ValorDentro(M, 'DeployClass', T), CLASE_FICHERO) then
         Continue;
       var Include := AtributoDeTramo(M, T, 'DeployFile', 'Include');
       if not Listada(Include, Plat, Entradas) then

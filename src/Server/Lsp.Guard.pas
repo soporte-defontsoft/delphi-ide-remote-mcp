@@ -1719,16 +1719,21 @@ begin
   QuitaSoloLectura(ADestino);
 end;
 
+function RaicesDisponibles: string; forward;
+
 function RutaRelativaDenegada(const APath: string): string;
 begin
   Result := '';
   if (APath.Trim = '') or EsRutaAbsoluta(APath.Trim) then
     Exit;
   // el nombre de la casa del servidor que pone el filtro de salida, vuelto
-  // como ruta: se dice lo que es (2ag de la 1.18.2, revisor)
+  // como ruta: se dice lo que es (2ag de la 1.18.2, revisor). Las raices, por
+  // LA lista de GUARD-002 (RaicesDisponibles): las dos se componian a mano
+  // con todas las de escritura, las que no se alcanzan incluidas y sin las de
+  // solo lectura (Fable, revision de la 1.22.2)
   if StartsText(NOMBRE_CASA_SERVIDOR, APath.Trim) or StartsText(NOMBRE_CASA_CACHE, APath.Trim) then
-    Exit(MsgFmt(SR_GUARD_CASA_DEL_SERVIDOR_FMT, [APath, string.Join(' | ', WorkspaceRoots)]));
-  Result := MsgFmt(SR_GUARD_RUTA_RELATIVA_FMT, [APath, string.Join(' | ', WorkspaceRoots)]);
+    Exit(MsgFmt(SR_GUARD_CASA_DEL_SERVIDOR_FMT, [APath, RaicesDisponibles]));
+  Result := MsgFmt(SR_GUARD_RUTA_RELATIVA_FMT, [APath, RaicesDisponibles]);
 end;
 
 { EL SUELO DE LA JAULA, en la puerta y para TODAS las tools.
@@ -2124,8 +2129,6 @@ begin
         Result := IncludeTrailingPathDelimiter(Result);
     end);
 end;
-
-function RaicesDisponibles: string; forward;
 
 { LA negativa de la jaula (GUARD-002), con los sitios donde SI se trabaja
   (RaicesDisponibles: los que el servidor alcanza ahora, los de solo lectura

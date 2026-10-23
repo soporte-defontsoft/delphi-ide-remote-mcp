@@ -81,10 +81,12 @@ the MCP `initialize` response (`serverInfo.version`).
   configuration, the active one or `config=`; class `File`, its platform,
   `RemoteName`, and `.\sub\` for a `remotedir` - and the same entry in the
   `.deployproj` msbuild deploys from, where the IDE would generate it (the
-  root and class folder the project declares), both or neither.
-  `remove-deployfile` takes it out of both (`config=` narrows it), and
-  `view section=deploy` reads the project, with what only the `.deployproj`
-  lists apart (`CFG-144`: msbuild deploys it, the IDE drops it)
+  root and class folder the project declares), both or neither - a
+  `.deployproj` generated for it, and its `<Import>`, included.
+  `remove-deployfile` takes it out of both (`config=` narrows it) and leaves a
+  platform group it empties as the IDE writes it, `<ItemGroup .../>`, and
+  `view section=deploy` reads the project, with the files added only to the
+  `.deployproj` apart (`CFG-144`: msbuild deploys them, the IDE drops them)
   (`tests/test_contratos_1222.py`).
 - **`delphi_hover` gives a symbol's file as a path the other tools take.**
   The engine's link (`file:///C%3A/.../System.SysUtils.pas#8766`) came out as
@@ -125,8 +127,10 @@ the MCP `initialize` response (`serverInfo.version`).
   that named one the server could not reach and left out the read-only roots,
   which can be read (Hermes, 2026-10-22: three refusals before finding the
   root to read). It now lists the roots and read-only roots the server
-  reaches, these marked `(read-only)` - the same list as `WS-022`
-  (`tests/test_contratos_1222.py`).
+  reaches, these marked `(read-only)` - the same list as `WS-022`, and now
+  also that of a relative path (`GUARD-021`) and of a `<server>` name
+  (`GUARD-039`), which listed every root as written (Claude Fable 5.1 through
+  Hermes, 2026-10-23) (`tests/test_contratos_1222.py`).
 - **A parameter that does not go with the call is refused, not ignored.**
   `delphi_search` with ONE file as root and a `pattern` that does not pick it
   searched the file anyway (`SEARCH-009`); `delphi_adb` took `device` with

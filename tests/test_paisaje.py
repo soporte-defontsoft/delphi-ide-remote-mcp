@@ -117,10 +117,25 @@ REGLAS = [
     ('.sdk leido a mano', r"EndsWith\('\.sdk'\)",
      [('Lsp.Discovery.pas', 'NombreDeSdk'), ('Lsp.Discovery.pas', 'NombreSinSdk')],
      'NombreSinSdk es la inversa; "es un .sdk" se pregunta al nombrador'),
-    ('el SDK por defecto del IDE a mano', r"^(?!\s*PREFIJO_SDK_POR_DEFECTO\s*=).*'Default_'",
+    # sin la comilla de cierre: 'Default_Linux64' entero (el ESCRITOR de get-sdk) no lo cazaba la forma
+    # con la comilla pegada, y se quedo fuera del nombrador (Fable, revision de la 1.22.2)
+    ('el SDK por defecto del IDE a mano', r"^(?!\s*PREFIJO_SDK_POR_DEFECTO\s*=).*'Default_",
      [],
      'ValorDeSdkPorDefecto y PlataformaDeValorDeSdk (Lsp.Discovery, 1.22.2): el nombre del valor de '
      'PlatformSDKs se componia en el build y se leia con otro StartsWith en paserver (P7 de Opus 5.5)'),
+    # las subclaves de una clave del registro: la del IDE por SU lector; la enumeracion de las versiones
+    # (una vista de cada colmena) y los contenedores de delphi_test (otra clave, no del IDE), aparte
+    ('las subclaves de una clave a mano', r'\.GetKeyNames\s*\(',
+     [('Lsp.Discovery.pas', 'IdeSubclaves'), ('Lsp.Discovery.pas', 'CollectRoot'),
+      ('Lsp.Sandbox.pas', 'PurgaContenedoresHuerfanos')],
+     'IdeSubclaves (Lsp.Discovery, 1.22.2): las plataformas de la biblioteca, los SDK asentados y los '
+     'perfiles remotos se leian a mano en cuatro sitios de dos unidades (Fable)'),
+    # la lista de raices de una negativa: LA de GUARD-002 y WS-022 (RaicesDisponibles: las que se alcanzan,
+    # las de solo lectura marcadas). GUARD-021 y GUARD-039 la componian con un Join de todas las de
+    # escritura (Fable, revision de la 1.22.2)
+    ('la lista de raices de una negativa a mano', r'MsgFmt\s*\(.*\bJoin\s*\([^)]*Roots',
+     [],
+     'RaicesDisponibles (Lsp.Guard): un mensaje nombra las raices por ella'),
     ('el manifiesto de despliegue a mano', r"'\.deployproj'",
      [('Lsp.Patch.pas', '*')],
      'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Patch, 1.22.2): tres compositores y tres '
@@ -576,7 +591,7 @@ REGLAS = [
       ('Lsp.Guard.pas', 'LugaresProtegidos'), ('Lsp.Guard.pas', 'PurgeServerTemp'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
-      ('Lsp.Guard.pas', 'RootItselfDenied'), ('Lsp.Guard.pas', 'RutaRelativaDenegada'),
+      ('Lsp.Guard.pas', 'RootItselfDenied'),
       ('Lsp.Mascara.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
       ('Lsp.BuildRunner.pas', 'UnitSourceFolders'), ('Lsp.ProjectUnits.pas', 'BordeDeMudanza'),
       ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.FindDproj'),
@@ -1070,7 +1085,9 @@ PLANTADO = {
     'un campo de conexion de un perfil': "  H := TagValue(Xml, 'Profile_host');",
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
     'el manifiesto de despliegue a mano': "  F := TPath.ChangeExtension(D, '.deployproj');",
-    'el SDK por defecto del IDE a mano': "  V := Reg.ReadString('Default_' + Plat);",
+    'el SDK por defecto del IDE a mano': "  R.WriteString('Default_Linux64', NombreDeSdk(S));",
+    'las subclaves de una clave a mano': "  R.GetKeyNames(L);",
+    'la lista de raices de una negativa a mano': "  Exit(MsgFmt(SR_X_FMT, [P, string.Join(' | ', WorkspaceRoots)]));",
     '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",

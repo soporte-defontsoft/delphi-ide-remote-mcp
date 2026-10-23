@@ -1470,9 +1470,9 @@ const
     'database, a key file) is gone with it - copy it elsewhere before ' +
     'redeploying if a test needs it. deployedFiles counts what this run ' +
     'shipped (only with verbosity=verbose: quiet and normal do not print ' +
-    'the copies); if it is missing there, nothing was sent: check the ' +
-    'manifest with delphi_config command=view (deployFiles) and add the ' +
-    'missing entries with add-deployfile.';
+    'the copies); if it is missing there, nothing was sent: delphi_config ' +
+    'command=view section=deploy lists what the project deploys ' +
+    '(deployFiles), and add-deployfile adds what is missing.';
 
   { W1033 en un paquete: units de OTROS paquetes compiladas dentro del
     nuestro. El IDE ensena la lista y pregunta si anadirlos al requires
@@ -1519,10 +1519,11 @@ const
     'before deploying.';
 
   SN_BUILD_DEPLOY_EMPTY_ENTRY =
-    '[BUILD-013] The deployment manifest has an entry with an EMPTY ' +
-    'local file for this platform (msbuild: Local file "" not found, ' +
-    'skipped). Open it with delphi_config command=view (deployFiles) and ' +
-    'fix or remove that entry.';
+    '[BUILD-013] The deployment manifest (the project''s .deployproj) has ' +
+    'an entry with an EMPTY local file for this platform (msbuild: Local ' +
+    'file "" not found, skipped): a <DeployFile Include=""> written by ' +
+    'hand - fix or remove it there. What the project deploys is listed by ' +
+    'delphi_config command=view section=deploy.';
 
   SN_BUILD_MANIFEST_FILLED_FMT =
     '[BUILD-014] The project''s .deployproj had NO files for %s (the IDE ' +
@@ -3410,8 +3411,8 @@ const
   { view section=deploy: lo que el .deployproj despliega y el proyecto no
     lista (1.22.2) }
   SN_CONFIG_DEPLOY_SOLO_MANIFIESTO =
-    '[CFG-144] deployFilesOnlyInManifest: files the .deployproj deploys ' +
-    'that the project does not list (a manifest written by hand, or by ' +
+    '[CFG-144] deployFilesOnlyInManifest: files ADDED to the .deployproj ' +
+    '(class File) that the project does not list (a manifest written by hand, or by ' +
     'add-deployfile before 1.22.2): msbuild deploys them, but the IDE drops ' +
     'them when it regenerates the .deployproj. add-deployfile adds them to ' +
     'the project.';

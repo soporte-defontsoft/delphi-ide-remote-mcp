@@ -508,7 +508,7 @@ function XmlDeployFile(const AInclude, AConfig, ARemoteDir, ARemoteName, AClase:
   sangria de delante ni el salto del final (los pone quien lo coloca). Lo
   componian a mano cinco sitios: los dos manifiestos que genera el servidor,
   el hueco y el grupo nuevo de un manifiesto que se completa y add-deployfile
-  (revisor del 21-oct-2026). }
+  (revisor del 21-oct-2026). Sin entradas, el vacio del IDE, auto-cerrado. }
 function XmlGrupoDeDespliegue(const ACondicion, AEntradas: string): string;
 { AXml (un .deployproj) con AEntradas (de XmlDeployFile) en el grupo de
   APlataforma, '$(Platform)'=='X', como lo deja el IDE: el vacio que escribe
@@ -2887,6 +2887,10 @@ end;
 
 function XmlGrupoDeDespliegue(const ACondicion, AEntradas: string): string;
 begin
+  // sin entradas, el que el IDE escribe para cada plataforma: auto-cerrado
+  // (lo que deja remove-deployfile al vaciarlo; Fable, revision de la 1.22.2)
+  if AEntradas = '' then
+    Exit('<ItemGroup ' + XmlAtributo('Condition', ACondicion) + '/>');
   Result := '<ItemGroup ' + XmlAtributo('Condition', ACondicion) + '>' + sLineBreak +
     AEntradas + '    </ItemGroup>';
 end;

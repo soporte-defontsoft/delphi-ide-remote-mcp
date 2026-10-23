@@ -243,29 +243,34 @@ open(DEP8, 'w', encoding='utf-8', newline='\r\n').write(
     '    <ItemGroup Condition="\'$(Platform)\'==\'Linux64\'">\n'
     '        <DeployFile Condition="\'$(Config)\'==\'Debug\'" Include="libuno.so">\n'
     '            <RemoteDir>P\\</RemoteDir>\n'
+    '            <DeployClass>File</DeployClass>\n'
     '        </DeployFile>\n'
     '        <DeployFile Include="vacio.dat"/>\n'
     '        <DeployFile Include="libdos.so" Condition="\'$(Config)\'==\'Debug\'">\n'
     '            <RemoteDir>Q\\</RemoteDir>\n'
+    '            <DeployClass>File</DeployClass>\n'
     '        </DeployFile>\n'
     '    </ItemGroup>\n'
     '    <ItemGroup Condition="\'$(Platform)\'==\'OSX64\' And \'$(Config)\'==\'Release\'">\n'
     '        <DeployFile Include="OSX64\\Release\\DepD4f">\n'
     '            <RemoteDir>DepD4f\\</RemoteDir>\n'
+    '            <DeployClass>File</DeployClass>\n'
     '        </DeployFile>\n'
     '    </ItemGroup>\n'
     '    <ItemGroup Condition="\'$(Platform)\'==\'OSX32\'">\n'
     '        <DeployFile Condition="\'$(Config)\'==\'Debug\'" Include="OSX32\\Debug\\DepD4f.icns">\n'
     '            <RemoteDir>DepD4f.app\\Contents\\Resources\\</RemoteDir>\n'
+    '            <DeployClass>File</DeployClass>\n'
     '        </DeployFile>\n'
     '    </ItemGroup>\n'
     '</Project>\n')
 r = S.call('delphi_config', {'project': P8, 'command': 'view', 'section': 'deploy'})
 # (1.22.2: la vista lee el .dproj, como el IDE; lo que solo esta en el .deployproj, que el
-# proyecto no lista, va aparte - estas, escritas a mano, son todas de ahi)
+# proyecto no lista, va aparte - estas, escritas a mano, son todas de ahi; y de ahi solo los
+# ficheros anadidos, clase File: la vacia no tiene clase y no sale, pero libdos, detras, si)
 vista = mc.como_json(r).get('deployFilesOnlyInManifest') or {}
-check('D4f la vista ve las tres entradas de Linux64: la de la Condition delante y la vacia, cada una con lo suyo',
-      sorted(vista.get('Linux64', [])) == sorted(['libuno.so -> P\\', 'vacio.dat -> ', 'libdos.so -> Q\\']),
+check('D4f la vista ve las de Linux64: la de la Condition delante, y la vacia no se come la siguiente',
+      sorted(vista.get('Linux64', [])) == sorted(['libuno.so -> P\\', 'libdos.so -> Q\\']),
       vista)
 check('D4f ...y el grupo con la forma del manifiesto del servidor (plataforma And config) es de OSX64',
       vista.get('OSX64') == ['OSX64\\Release\\DepD4f -> DepD4f\\'], vista)
@@ -287,8 +292,9 @@ check('D4f remove-deployfile encuentra la de la Condition delante',
 r = S.call('delphi_config', {'project': P8, 'command': 'remove-deployfile', 'platform': 'Linux64',
                              'path': os.path.join(DIR8, 'libdos.so')})
 x = mc.lee(DEP8)
-check('D4f quitada la ultima de Linux64, su ItemGroup se va; el de OSX64 se queda',
-      mc.abre(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and "'Linux64'" not in x and 'OSX64\\Release\\DepD4f' in x, x)
+check('D4f quitada la ultima de Linux64, su ItemGroup queda vacio como lo escribe el IDE; el de OSX64 se queda',
+      mc.abre(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and "<ItemGroup Condition=\"'$(Platform)'=='Linux64'\"/>" in x
+      and x.count("'Linux64'") == 1 and 'OSX64\\Release\\DepD4f' in x, x)
 
 # ---- D4 g. la Condition del ELEMENTO cuenta (5 Samples del IDE la escriben) ----
 # <Profile Condition="'$(Platform)'=='Win32'"> en el grupo sin condicion: msbuild

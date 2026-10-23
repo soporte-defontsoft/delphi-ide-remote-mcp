@@ -56,6 +56,13 @@ procedure IdeEnvironmentVars(const AVersion: string; ADest: TStrings);
   fixed list: each installation exposes its own set. }
 function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
 
+{ Los nombres de las subclaves de una clave de la configuracion del IDE de
+  esa version, las del usuario (HKCU\...\BDS\<ver>\<ASubKey>): las
+  plataformas de la biblioteca, los SDK asentados en el SDK Manager, los
+  perfiles remotos. EL lector: estaba a mano en cuatro sitios de dos unidades
+  (Fable, revision de la 1.22.2). Vacia si la clave no esta. }
+function IdeSubclaves(const AVersion, ASubKey: string): TArray<string>;
+
 { Generic reader of the IDE's per-user configuration (HKCU\...\BDS\<ver>\...).
   ASubKey is relative to the version key (e.g. 'Editor', 'PlatformSDKs',
   'Environment Variables'); '' when the key or value does not exist. The
@@ -819,6 +826,11 @@ begin
 end;
 
 function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
+begin
+  Result := IdeSubclaves(AVersion, 'Library');
+end;
+
+function IdeSubclaves(const AVersion, ASubKey: string): TArray<string>;
 var
   Reg: TRegistry;
   Keys: TStringList;
@@ -828,7 +840,7 @@ begin
   Keys := TStringList.Create;
   try
     Reg.RootKey := HKEY_CURRENT_USER;
-    if not Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'Library')) then
+    if not Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, ASubKey)) then
       Exit;
     Reg.GetKeyNames(Keys);
     Result := Keys.ToStringArray;
@@ -1280,42 +1292,18 @@ begin
 end;
 
 function SysrootsRegistrados(const AVersion: string): TArray<string>;
-var
-  Reg: TRegistry;
-  Claves: TStringList;
-  K, Raiz: string;
 begin
   Result := nil;
-  Reg := TRegistry.Create(KEY_READ);
-  Claves := TStringList.Create;
-  try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then
-    begin
-      Reg.GetKeyNames(Claves);
-      // CERRADA antes de abrir cada SDK: una ruta sin '\' delante es RELATIVA
-      // a la clave abierta (TRegistry.GetBaseKey), y con PlatformSDKs abierta
-      // se buscaba PlatformSDKs\SOFTWARE\...: este bucle no encontro nunca
-      // nada y IdeSdksDir caia siempre en su default (medido en la RTL el
-      // 9-oct-2026; en esta maquina el default coincide y no se veia)
-      Reg.CloseKey;
-      for K in Claves do
-        if Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs\' + K)) then
-        try
-          try
-            Raiz := Reg.ReadString('SystemRoot');
-            if Raiz <> '' then
-              Result := Result + [Raiz];
-          except
-            // una entrada sin SystemRoot (o que no es texto) no dice nada
-          end;
-        finally
-          Reg.CloseKey;
-        end;
-    end;
-  finally
-    Claves.Free;
-    Reg.Free;
+  // por EL lector de las subclaves y el de un valor (IdeConfigValue: '' si no
+  // esta o no es texto; una entrada sin SystemRoot no dice nada). Aqui habia
+  // otra copia del bucle, y con PlatformSDKs abierta la clave de cada SDK
+  // salia relativa a ella y no se encontraba nunca (medido en la RTL el
+  // 9-oct-2026)
+  for var K in IdeSubclaves(AVersion, 'PlatformSDKs') do
+  begin
+    var Raiz := IdeConfigValue(AVersion, 'PlatformSDKs\' + K, 'SystemRoot');
+    if Raiz <> '' then
+      Result := Result + [Raiz];
   end;
 end;
 

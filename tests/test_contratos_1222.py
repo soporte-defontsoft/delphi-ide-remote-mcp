@@ -46,6 +46,11 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
      .deployproj de esa config (sin Required, RemoteDir <Proyecto>\sub\); compila; CFG-029 sin escribir; una
      config que no declara, negada; view lee el .dproj; remove-deployfile de los dos (ROJO contra r1222i: solo
      escribia el .deployproj, Debug y Release, y la vista lo leia de el)
+  DF9-DF12 (Fable, revision de la 1.22.2; ROJOS contra r1222k): el grupo de una plataforma que remove deja vacio
+     queda auto-cerrado como lo escribe el IDE, y el siguiente add lo llena (se quitaba); deployFilesOnlyInManifest
+     solo con los ficheros anadidos (clase File; nombraba los de otras clases con una nota falsa); sin
+     <BorlandProject>, CFG-143 y ni el manifiesto generado ni su Import se quedan (todo o nada); una seccion
+     <Deployment/> auto-cerrada se abre con la entrada
   U1 delphi_config remove-unit con la entrada relativa (Lib\ULibRel.pas), dentro: quitada, sin decir que esta fuera
      de lo legible (ROJO contra r1222h: la juzgaba desde la carpeta del servidor, CFG-125; Opus en Hermes)
 
@@ -83,6 +88,8 @@ visto se reconstruye el estado y se acierta la cola del siguiente, y status ense
 Y GUARD-002 (Hermes, 22-oct: tres negativas hasta dar con la raiz que se lee):
   J1 con una raiz que no existe y otra de solo lectura, una ruta de fuera: GUARD-002 nombra la de solo lectura
      (marcada) y no la que no existe (ROJO: nombraba la que no existe y callaba la de solo lectura)
+  J2 una ruta relativa (GUARD-021) y una con <server> (GUARD-039): nombran las raices con la misma lista (ROJO
+     contra r1222k: las componian a mano con todas las de escritura; Fable, revision de la 1.22.2)
 
 Y las paginas de un TPageControl (Opus en Hermes, 1.22.1; medido el 23-oct-2026: insert no tenia como anadir una):
   T1 insert de un TTabSheet en un TPageControl: dentro de el, y el form carga en preview (ROJO: DSGN-080)
@@ -404,6 +411,63 @@ try:
           and '<RemoteDir>Dep.app\\Contents\\Resources\\StartUp\\</RemoteDir>' in m
           and 0 < t.find('LocalName="..\\fuera') < t.find('LocalName="datos\\datos.txt"')
           < t.find('<DeployClass Name="File">'), r[:400] + ' | ' + t[t.find('<Deployment'):][:900])
+    # (Fable, revision de la 1.22.2) el grupo de la plataforma que se queda vacio vuelve a ser el del IDE,
+    # auto-cerrado, y el siguiente add lo llena: no se quita ni se crea otro al final
+    grupo_w64 = "<ItemGroup Condition=\"'$(Platform)'=='Win64'\""
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'remove-deployfile', 'platform': 'Win64',
+                                   'path': externo}, 240)
+    m = lee(dmani)
+    check('DF9 remove del ultimo de Win64: su grupo queda como lo escribe el IDE, <ItemGroup .../> (ROJO: se quitaba)',
+          mc.es(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and (grupo_w64 + '/>') in m and m.count(grupo_w64) == 1,
+          r[:300] + ' | ' + m[:1500])
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': externo, 'config': 'Release', 'remotedir': 'assets'}, 240)
+    m = lee(dmani)
+    check('DF9 ...y otro add lo llena: un solo grupo de Win64',
+          mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT') and (grupo_w64 + '>') in m and m.count(grupo_w64) == 1, m[:1500])
+    # lo que solo esta en el .deployproj: solo los ficheros ANADIDOS (clase File) se pierden al regenerarlo
+    # el IDE; lo de las demas clases lo genera el de ellas y no se dice nada de ello
+    plantado = ("        <DeployFile Include=\"solo\\manual.txt\" Condition=\"'$(Config)'=='Debug'\">\r\n"
+                "            <RemoteDir>Dep\\</RemoteDir>\r\n            <RemoteName>manual.txt</RemoteName>\r\n"
+                "            <DeployClass>File</DeployClass>\r\n            <Operation>0</Operation>\r\n"
+                "            <Overwrite>True</Overwrite>\r\n        </DeployFile>\r\n"
+                "        <DeployFile Include=\"$(BDS)\\Redist\\win64\\otra.dll\" Condition=\"'$(Config)'=='Debug'\">\r\n"
+                "            <RemoteDir>Dep\\</RemoteDir>\r\n            <RemoteName>otra.dll</RemoteName>\r\n"
+                "            <DeployClass>DependencyModule</DeployClass>\r\n            <Operation>0</Operation>\r\n"
+                "            <Overwrite>True</Overwrite>\r\n        </DeployFile>\r\n")
+    crudo = open(dmani, 'rb').read()
+    open(dmani, 'wb').write(crudo.replace((grupo_w64 + '>\r\n').encode('ascii'),
+                                          (grupo_w64 + '>\r\n' + plantado).encode('ascii'), 1))
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'view', 'section': 'deploy'}, 240)
+    solo = str((mc.como_json(r).get('deployFilesOnlyInManifest') or {}).get('Win64', []))
+    check('DF10 view: deployFilesOnlyInManifest lleva el File plantado y no el de otra clase (ROJO: los dos, con'
+          ' una nota que de la otra clase es falsa)',
+          'solo\\\\manual.txt' in solo and 'otra.dll' not in solo and mc.es(r, 'SN_CONFIG_DEPLOY_SOLO_MANIFIESTO'),
+          solo[:400])
+    # sin <BorlandProject> (CFG-143) y SIN .deployproj: el que se genera y su <Import> se van con el fallo
+    d3dir = os.path.join(JAIL, 'dep3')
+    srv.call('delphi_create', {'kind': 'project-console', 'name': 'Dep3', 'dir': d3dir})
+    d3 = os.path.join(d3dir, 'Dep3.dproj')
+    t = lee(d3)
+    open(d3, 'w', newline='').write(re.sub(r'(?s)\s*<BorlandProject>.*</BorlandProject>', '', t))
+    antes = open(d3, 'rb').read()
+    open(os.path.join(d3dir, 'datos.txt'), 'w').write('dato\n')
+    r = srv.call('delphi_config', {'project': d3, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': os.path.join(d3dir, 'datos.txt')}, 240)
+    check('DF11 sin <BorlandProject>: CFG-143, y ni manifiesto generado ni su Import (ROJO: se quedaban; todo o'
+          ' nada, Fable)',
+          mc.es(r, 'SR_CFG_DEPLOY_SIN_BORLANDPROJECT_FMT') and not os.path.exists(os.path.join(d3dir, 'Dep3.deployproj'))
+          and open(d3, 'rb').read() == antes, r[:400])
+    # una seccion <Deployment/> vacia y auto-cerrada: se abre con la entrada dentro
+    t = lee(d3).replace('</ProjectExtensions>', '    <BorlandProject>\r\n            <Deployment Version="5"/>\r\n'
+                                                '        </BorlandProject>\r\n    </ProjectExtensions>')
+    open(d3, 'w', newline='').write(t)
+    r = srv.call('delphi_config', {'project': d3, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': os.path.join(d3dir, 'datos.txt')}, 240)
+    t = lee(d3)
+    check('DF12 <Deployment Version="5"/> auto-cerrada: se abre con la entrada dentro, una sola seccion',
+          mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT') and t.count('<Deployment') == 1 and '<Deployment Version="5"/>' not in t
+          and '<DeployFile LocalName="datos.txt" Configuration="Debug" Class="File">' in t, r[:300] + ' | ' + t[-900:])
 
     plano = os.path.join(JAIL, 'plano')
     os.makedirs(plano)
@@ -524,6 +588,8 @@ try:
                 return '%04X%04X' % (s3 >> 16, paso(s3) >> 16)
         return None
 
+    # sin prediccion (pred None) tambien mide: la cola de un LCG SIEMPRE tiene un 'bajo' que la explica, asi que
+    # no encontrarlo ya dice que no es del LCG (Fable lo leyo como vacuo, revision de la 1.22.2)
     ids = [mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'})) for _ in range(2)]
     pred = siguiente_de_random(ids[0].rsplit('-', 1)[-1]) if ids[0] else None
     check('CS1 la cola del id de un changeset no se predice desde el anterior (era un LCG)',
@@ -542,6 +608,14 @@ try:
         check('J1 GUARD-002 nombra la raiz de solo lectura (marcada) y no la que no existe',
               mc.es(r, 'SR_JAIL_FMT') and re.search(r'\\ref\\? \(read-only\)', r) is not None and 'no-esta' not in r,
               r[:500])
+        # ...y las otras dos negativas que nombran las raices, por la MISMA lista (Fable, revision de la 1.22.2:
+        # GUARD-021 y GUARD-039 la componian con todas las de escritura)
+        r1 = jg.call('delphi_read', {'path': 'srv\\x.pas'})
+        r2 = jg.call('delphi_read', {'path': '<server>\\x.pas'})
+        check('J2 GUARD-021 y GUARD-039 nombran las raices como GUARD-002 (ROJO: la que no existe, sin la de lectura)',
+              mc.es(r1, 'SR_GUARD_RUTA_RELATIVA_FMT') and mc.es(r2, 'SR_GUARD_CASA_DEL_SERVIDOR_FMT')
+              and all(re.search(r'\\ref\\? \(read-only\)', x) and 'no-esta' not in x for x in (r1, r2)),
+              (r1[:400], r2[:400]))
     finally:
         jg.cierra()
 
