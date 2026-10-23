@@ -3227,6 +3227,13 @@ const
     'the platforms). Nothing was written; delphi_build config= and platform= ' +
     'still build any of them.';
 
+  { set-active config= en un .dproj que no declara ninguna (1.22.2: escribia la
+    que el agente tecleara; antes de d7f03fc lo negaba CFG-116) }
+  SR_CFG_SET_ACTIVE_SIN_CONFIGS_FMT =
+    '[CFG-145 NOT_FOUND] %s declares no configuration (no <BuildConfiguration>), ' +
+    'so there is none to make the default. Nothing was written; delphi_build ' +
+    'config= still builds one by name.';
+
   { un trozo de SN_CFG_SET_ACTIVE_FMT: "config Release (was Debug)" }
   SF_CFG_SET_ACTIVE_PIEZA_FMT = '%s %s (was %s)';
 
@@ -8327,6 +8334,8 @@ const
   SF_PAS_RESEAT_INCOMPLETO_FMT =
     '%s: its .profile names no %s, so no IDE seat is written for it ' +
     '(nothing is guessed)';
+  SF_PAS_RESEAT_ILEGIBLE_FMT =
+    '%s: its .profile could not be read (%s), so no IDE seat is written for it';
 
   SN_PAS_ASIENTO_IDE_LEE_LISTA =
     '[PAS-037] The IDE seat is what the IDE reads for ITS list; the ' +

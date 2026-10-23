@@ -486,6 +486,13 @@ try:
     check('CF1 sin configuraciones declaradas, add-deployfile config=Release vale como en build (ROJO: CFG-116 con'
           ' "(none)"); y una que no declara es CFG-107 tambien en config',
           mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT') and mc.es(r2, 'SR_TEST_CONFIG_FMT'), (r[:300], r2[:300]))
+    # ...pero set-active ESCRIBE: en un .dproj sin configuraciones no deja por defecto una que no declara (quinta ronda
+    # de Fable: desde d7f03fc escribia la que se tecleara)
+    antes = open(d3, 'rb').read()
+    r = srv.call('delphi_config', {'project': d3, 'command': 'set-active', 'config': 'Release'}, 240)
+    check('CF2 set-active config= en un .dproj sin configuraciones: CFG-145 y el .dproj intacto (ROJO contra r1222t:'
+          ' escribia <Config>Release</Config>)',
+          mc.es(r, 'SR_CFG_SET_ACTIVE_SIN_CONFIGS_FMT') and open(d3, 'rb').read() == antes, r[:300])
 
     # LA regla de delete:true en las dos gemelas y en un bloque de una tanda (Fable, revision de la 1.22.2)
     notas = os.path.join(JAIL, 'notas.md')
@@ -564,7 +571,9 @@ try:
         check('W1 GitRemotes=* y AdbAllowedDevices=*: el comodin vale como en RemoteHosts (ROJO: la lista los'
               ' negaba por su host y su dispositivo)',
               not mc.es(r1, 'SR_GIT_REMOTE_HOST_FMT') and 'maquina-que-no-existe' in r1
-              and not mc.es(r2, 'SR_ADB_ALLOWLIST_FMT'), (r1[:300], r2[:300]))
+              # y en positivo: la orden LLEGO a adb (un "not in" solo pasaba con cualquier otra negativa;
+              # quinta ronda de Fable)
+              and not mc.es(r2, 'SR_ADB_ALLOWLIST_FMT') and mc.llego_a_adb(r2), (r1[:300], r2[:300]))
     finally:
         com.cierra()
     r = srv.call('delphi_components', {'platform': 'Win64', 'filter': 'algo'}, 120)

@@ -145,6 +145,23 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **What the review of these changes found (Claude Fable 5.1 through Hermes,
+  2026-10-23).** The access table that decides what a read-only credential
+  may call, what the `reader` profile lists and what `tools/list` announces
+  took a tool missing from it as one that only reads: a new tool that writes,
+  whose author forgot its row, was open to a read-only credential. The table
+  now names every tool, what it does not name writes, and
+  `tests/test_paisaje.py` asks for a row per registered tool.
+  `RemoteRunProjects` compared paths without their extension, so a sibling
+  `X.txt` passed as the allowed `X.dproj` (the same binary ran): what it
+  authorizes is a project (`CFG-033`). `delphi_projects` no longer names a
+  repository whose root lies above the roots. `delphi_config set-active`
+  in a `.dproj` that declares no configuration no longer writes the one you
+  type (`CFG-145`). `reseat` says why it skips a `.profile` it cannot read,
+  the `.sdk` that `get-sdk` writes takes its platform from the same constant
+  as the checks that read it, and `settings.example.ini` tells the wildcard
+  of the four lists (`tests/test_remoterun.py`,
+  `tests/test_contratos_1222.py`, `tests/test_listas_1150.py`).
 - **A package is a project for every tool.** What a tool takes as a project
   - its `.dproj`, `.dpr` or `.dpk` - was written by hand in six places, and
   `delphi_test` left the `.dpk` out: it answered `CFG-033` "is not a project

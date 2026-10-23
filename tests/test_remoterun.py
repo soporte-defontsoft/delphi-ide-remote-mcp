@@ -455,6 +455,14 @@ DNODO = os.path.join(NODO, 'McpDesktopNode.dproj'); open(DNODO, 'w', encoding='u
 r = ejecuta('McpDesktopNode', DNODO)
 check('ID4 un McpDesktopNode.dproj del agente no pasa por el permiso del nodo: RUN-022 (ROJO: el nombre del nodo '
       'autorizaba su homonimo)', mc.es(r, 'SR_REMOTERUN_ENTRADA_A_SECAS_FMT'), r[:300])
+# ID5 (quinta ronda de Fable): la lista compara sin extension, y un hermano del .dproj con OTRA (Saluda.txt) casaba con
+# el proyecto permitido; lo que autoriza es un proyecto
+TXT = os.path.join(PRJDIR, PROJNAME + '.txt')
+open(TXT, 'w', encoding='utf-8').write('no soy un proyecto')
+r = ejecuta(DPROJ, TXT)
+check('ID5 un hermano del .dproj con otra extension (Saluda.txt) no pasa por el proyecto: CFG-033 y nada ejecutado '
+      '(ROJO contra r1222t: casaba sin extension)',
+      mc.es(r, 'SR_UNIT_PROJECT_EXT_FMT') and 'hola desde el target' not in r, r[:300])
 
 srv.mata()
 mc.fin('remote-run')

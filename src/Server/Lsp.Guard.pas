@@ -939,7 +939,8 @@ type
     SinParametros: TArray<string>;
   end;
 
-{ La fila de la tabla para una tool; lo que no esta en ella LEE. }
+{ La fila de la tabla para una tool; lo que no esta en ella ESCRIBE (cerrado:
+  la tabla declara todas, y test_paisaje exige una fila por tool registrada). }
 function AccesoDeTool(const ATool: string): TAccesoDeTool;
 { '' si una credencial de solo lectura puede hacer ESTA llamada; si no, la
   negativa READ-002 con lo que pedia. delphi_git decide por argumentos
@@ -1154,6 +1155,10 @@ begin
   // lista vacia ya no significa "cualquiera de la jaula" sino NADA: era el
   // unico permiso que fallaba abierto, al reves que todo el resto del
   // servidor. Lo que no se declara no existe.
+  // Y lo que autoriza es un PROYECTO: la comparacion de abajo es sin
+  // extension, y un hermano X.txt casaba con X.dproj (quinta ronda de Fable)
+  if not EsProyectoOSuFuente(APath) then
+    Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [TPath.GetFileName(APath)]));
   Lista := RemoteProjectsNow;
   if Length(Lista) = 0 then
     Exit(MsgText(SR_REMOTERUN_NOPROJLIST));
@@ -2275,13 +2280,23 @@ begin
   GAccesos := GAccesos + [F];
 end;
 
-{ LA tabla (ACCESOS). Lo que no esta aqui LEE. Las mixtas listan lo que LEE:
-  un comando desconocido se niega, cerrado (una credencial de solo lectura
-  reescribia forms por un comando que no estaba en ninguna lista; auditoria
-  25-sep-2026). }
+{ LA tabla (ACCESOS), con TODAS las tools: lo que no esta aqui ESCRIBE. Lo
+  ausente era de lectura, y una tool nueva que escribiese y cuyo autor
+  olvidase su fila la llamaba una credencial de solo lectura (quinta ronda de
+  Fable, depuracion de la 1.23); test_paisaje exige una fila por tool
+  registrada. Las mixtas listan lo que LEE: un comando desconocido se niega,
+  cerrado (una credencial de solo lectura reescribia forms por un comando que
+  no estaba en ninguna lista; auditoria 25-sep-2026). }
 procedure ConstruyeAccesos;
 begin
   GAccesos := [];
+  // enteras de lectura: el codigo, los ficheros, el paisaje, la ayuda, el vault
+  for var T in TArray<string>.Create('delphi_read', 'delphi_list', 'delphi_search',
+    'delphi_symbols', 'delphi_definition', 'delphi_hover', 'delphi_signature',
+    'delphi_completion', 'delphi_diagnostics', 'delphi_references', 'delphi_projects',
+    'delphi_installs', 'delphi_workspace', 'delphi_components', 'delphi_fetch',
+    'delphi_help', 'delphi_docs', 'vault_read', 'vault_search') do
+    AnadeAcceso(T, atLectura, []);
   // enteras de escritura: negadas de plano en modo solo lectura
   AnadeAcceso('delphi_edit', atEscritura, []);
   AnadeAcceso('delphi_textedit', atEscritura, []);
@@ -2358,7 +2373,7 @@ begin
     if SameText(F.Tool, ATool) then
       Exit(F);
   Result.Tool := ATool;
-  Result.Acceso := atLectura;
+  Result.Acceso := atEscritura; // cerrado: lo que la tabla no declara
   Result.Lecturas := [];
   Result.Parametro := '';
   Result.Condiciones := nil;

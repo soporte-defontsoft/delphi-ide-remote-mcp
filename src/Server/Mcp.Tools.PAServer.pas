@@ -1489,11 +1489,12 @@ begin
       Sb.AppendLine('<?xml version="1.0" encoding="utf-8"?>');
       Sb.AppendLine('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="">');
       Sb.AppendLine('  <PropertyGroup>');
-      Sb.AppendLine('    <Profile_platform>Linux64</Profile_platform>');
+      // la plataforma que juzgan reseat-sdk y remove-sdk al leerlo: la misma constante
+      Sb.AppendLine('    ' + XmlElemento('Profile_platform', PLATAFORMA_DE_GETSDK));
       Sb.AppendLine('    ' + XmlElemento('Profile_host', CamposDePerfil(ProfXml).Host));
       Sb.AppendLine('    ' + XmlElemento('Profile_port', CamposDePerfil(ProfXml).Puerto));
       Sb.AppendLine('    ' + XmlElemento('Profile_sdkname', NombreDeSdk(SdkName)));
-      Sb.AppendLine('    ' + XmlElemento('Profile_displayname', 'Linux64 ' + SdkName +
+      Sb.AppendLine('    ' + XmlElemento('Profile_displayname', PLATAFORMA_DE_GETSDK + ' ' + SdkName +
         ' (delphi_paserver get-sdk, profile ' + ProfName + ')'));
       Sb.AppendLine('    ' + XmlElemento('Profile_sysroot', SysRoot));
       Sb.AppendLine('    <Profile_startupobj>crt1.o;crti.o;crtbegin.o</Profile_startupobj>');
@@ -1638,7 +1639,12 @@ begin
         try
           Texto := LeeTexto(RutaDePerfil(Info.Version, Nombre), [ltIde]);
         except
-          Continue;
+          // tambien se dice (se saltaba callado; quinta ronda de Fable)
+          on E: Exception do
+          begin
+            Saltados := Saltados + [MsgFmt(SF_PAS_RESEAT_ILEGIBLE_FMT, [Nombre, E.Message])];
+            Continue;
+          end;
         end;
         var Campos := CamposDePerfil(Texto);
         // sin plataforma o sin host no se siembra, y se dice: el asiento diria

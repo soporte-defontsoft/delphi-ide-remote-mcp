@@ -270,8 +270,9 @@ try:
           len(rw) == 1 and misma(rw[0]['dir'], WT) and rw[0].get('branch') == 'otra/rama-wt', jwt)
     jsu = mc.como_json(llama('delphi_projects', {'root': SUELTO}))
     rs = jsu.get('repos') or []
-    check('L7 ...un repo por ENCIMA de la jaula: su rama no se dice (control de jaula)',
-          len(rs) == 1 and not rs[0].get('branch') and 'rama-de-fuera' not in json.dumps(jsu), jsu)
+    check('L7 ...un repo por ENCIMA de la jaula no se nombra ni su rama (control de jaula; ROJO contra r1222t: '
+          'nombraba la carpeta de fuera)',
+          not rs and 'rama-de-fuera' not in json.dumps(jsu) and bool(jsu.get('projects')), jsu)
     # (un paseo: Uno.dproj, Grupo.groupproj, Dos.dproj - el .groupproj es el 2o)
     jp3 = mc.como_json(llama('delphi_projects', {'root': PROYS, 'maxresults': 1, 'offset': 1}))
     g3 = jp3.get('projects') or []

@@ -1178,8 +1178,15 @@ begin
     Dir := TPath.GetDirectoryName(Dir);
   while (Dir <> '') and TDirectory.Exists(Dir) do
   begin
+    // el repo mas cercano; uno cuya raiz no se lee (por encima de las raices)
+    // no se nombra: era una carpeta de fuera en la respuesta, y delphi_git lo
+    // niega igual (GIT-041; quinta ronda de Fable)
     if TieneGit(Dir) then
+    begin
+      if ReadPathDenied(Dir, True) <> '' then
+        Exit('');
       Exit(Dir);
+    end;
     if TPath.GetDirectoryName(Dir) = Dir then
       Break;
     Dir := TPath.GetDirectoryName(Dir);

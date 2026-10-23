@@ -1507,6 +1507,30 @@ MATAN = matan_sin_limpiar(TEXTOS)
 check('lo que matamos, lo limpiamos: toda unidad con TerminateProcess/TerminateJobObject borra los atomos '
       'del RTL del muerto (Lsp.AtomosRtl; la maquina se cayo el 18-oct-2026)', not MATAN, MATAN)
 
+# ---- LA TABLA DE ACCESOS, COMPLETA (quinta ronda de Fable, depuracion de la 1.23): una tool que no estaba en
+# ConstruyeAccesos era de LECTURA (AccesoDeTool fallaba abierto), y una nueva que escribiese y cuyo autor olvidase
+# su AnadeAcceso la llamaba una credencial de solo lectura. Ahora lo que falta es de escritura (cerrado), y el
+# olvido sale aqui, no en la puerta.
+REGISTRADA = re.compile(r"RegisterTool\(\s*'([a-z_]+)'")
+def tools_sin_acceso(ficheros_texto):
+    """Las tools registradas (RegisterTool) que el CUERPO de ConstruyeAccesos no nombra."""
+    reg, dec = set(), set()
+    for f, t in ficheros_texto:
+        c = '\n'.join(codigo(t))
+        reg.update(REGISTRADA.findall(c))
+        if os.path.basename(f) == 'Lsp.Guard.pas':
+            i = c.find('procedure ConstruyeAccesos;')
+            cuerpo = c[i:c.find('\nend;', i)] if i >= 0 else ''
+            dec.update(re.findall(r"'((?:delphi|vault)_[a-z_]+)'", cuerpo))
+    return sorted(reg - dec)
+check('mutante de la tabla de accesos: una tool registrada sin su fila se caza',
+      tools_sin_acceso([('Plantada.pas', "initialization\n  TMCPRegistry.RegisterTool('delphi_nueva', nil);\n"),
+                        ('Lsp.Guard.pas', "procedure ConstruyeAccesos;\nbegin\n  AnadeAcceso('delphi_vieja', "
+                                          "atLectura, []);\nend;\n")]) == ['delphi_nueva'])
+SIN_ACCESO = tools_sin_acceso(TEXTOS)
+check('la tabla de accesos (ConstruyeAccesos) declara TODAS las tools registradas: lo que falta seria de escritura',
+      not SIN_ACCESO, SIN_ACCESO)
+
 # ---- LAS BATERIAS TAMBIEN (2.3 de la 1.18.0): los formatos que tests/*.py
 # escribia a mano (63 nombres de la papelera, el dia en 6 sitios, el cajon de
 # lo borrado en 7). Una comprobacion de AUSENCIA con el formato a mano pasa en

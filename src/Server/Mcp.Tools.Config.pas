@@ -1803,6 +1803,10 @@ begin
     Result := ConfigDelBuild(Info, ARawConfig, Cfg);
     if Result <> '' then
       Exit;
+    // ...que declara: con la lista vacia el juez acepta cualquier nombre, como
+    // msbuild al compilar, pero aqui se ESCRIBE (quinta ronda de Fable)
+    if Length(Info.Configs) = 0 then
+      Exit(MsgFmt(SR_CFG_SET_ACTIVE_SIN_CONFIGS_FMT, [TPath.GetFileName(ADproj)]));
     Result := Pon('Config', Cfg);
     if Result <> '' then
       Exit;
