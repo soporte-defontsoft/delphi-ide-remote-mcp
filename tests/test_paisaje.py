@@ -181,6 +181,12 @@ REGLAS = [
       # que ficheros pueden llevar un StyleLookup (un .fmx o codigo): un filtro de ficheros, no el marco
       ('Mcp.Tools.Styles.pas', 'LintStyles')],
      'EsDesignerFmx / EsDesignerVcl (Lsp.DesignerForma, A13 de la 1.23)'),
+    # la negativa de un nombre que no es una plataforma: cinco textos y cinco codigos para el mismo hecho
+    # (delphi_config cuatro, la puerta del build uno; A14 de la 1.23)
+    ('la negativa de una plataforma compuesta a mano',
+     r"^(?!\s*SR_PLATAFORMA_NO_VALIDA_FMT\s*=).*SR_PLATAFORMA_NO_VALIDA_FMT",
+     [('Lsp.Dproj.pas', 'NegativaDePlataforma')],
+     'NegativaDePlataforma (Lsp.Dproj, A14 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1156,6 +1162,7 @@ PLANTADO = {
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",
     'el marco de un designer por su extension': "  if APath.EndsWith('.dfm', True) then Exit('vcl');",
+    'la negativa de una plataforma compuesta a mano': "  Exit(MsgFmt(SR_PLATAFORMA_NO_VALIDA_FMT, [V, KnownPlatformsList]));",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

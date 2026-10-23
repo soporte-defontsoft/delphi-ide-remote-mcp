@@ -205,6 +205,8 @@ GRUPO_A_MANO = ("    <PropertyGroup Condition=\"'$(Base_Linux64)' != ''\">\r\n"
                 '    </PropertyGroup>\r\n')
 reescribe(P6, lambda x: x.replace('    <ItemGroup>', GRUPO_A_MANO + '    <ItemGroup>', 1))
 DIR6 = os.path.dirname(P6)
+# la plataforma, declarada como el IDE: no se escribe para una que el proyecto no tiene (A14 de la 1.23)
+S.call('delphi_config', {'project': P6, 'command': 'add-platform', 'platform': 'Linux64'})
 r = S.call('delphi_config', {'project': P6, 'command': 'add-searchpath', 'platform': 'Linux64', 'path': DIR6})
 x = mc.lee(P6)
 VALORES_LINUX = re.compile(r"<PropertyGroup Condition=\"'\$\(Base_Linux64\)'\s*!=\s*''\">(.*?)</PropertyGroup>", re.S)

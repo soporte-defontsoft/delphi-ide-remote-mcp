@@ -1440,7 +1440,7 @@ begin
   Result := '';
   V := ArgStr(AArguments, 'platform').Trim;
   if (V <> '') and (CanonicalPlatform(V) = '') then
-    Exit(MsgFmt(SR_BUILD_PLATFORM_FMT, [V]));
+    Exit(NegativaDePlataforma(V));
   V := ArgStr(AArguments, 'target').Trim;
   if (V <> '') and not MatchText(V, TARGETS_DE_BUILD) then
   begin

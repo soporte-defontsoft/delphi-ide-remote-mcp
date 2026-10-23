@@ -2095,7 +2095,7 @@ begin
   // revision).
   Plat := CanonicalPlatform(APlatform);
   if (Plat = '') and (APlatform.Trim <> '') then
-    raise Exception.Create(MsgFmt(SR_BUILD_PLATFORM_FMT, [APlatform.Trim]));
+    raise Exception.Create(NegativaDePlataforma(APlatform));
   // Sin plataforma, la del proyecto: la que compilan el IDE y msbuild
   // mientras nadie la cambia (hasta la 1.15 era Win32 a fuego, aunque el
   // proyecto tuviera Win64 por defecto, como los que crea delphi_create).

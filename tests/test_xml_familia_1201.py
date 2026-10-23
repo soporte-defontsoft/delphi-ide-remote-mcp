@@ -107,6 +107,8 @@ if os.path.exists(DEP):
     os.remove(DEP)
 DATO = os.path.join(os.path.dirname(P4), 'dato.txt')
 open(DATO, 'w').write('x')
+# la plataforma, declarada como el IDE: no se escribe para una que el proyecto no tiene (A14 de la 1.23)
+config(P4, command='add-platform', platform='Linux64')
 r = config(P4, command='add-deployfile', platform='Linux64', path=DATO)
 x = mc.lee(P4)
 check('F4 add-deployfile contesta', mc.abre(r, 'SN_CONFIG_DEPLOY_ADDED_FMT'), r[:300])

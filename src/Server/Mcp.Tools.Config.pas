@@ -424,6 +424,24 @@ begin
   end;
 end;
 
+{ LA plataforma de un comando de config: un nombre de Delphi (CanonicalPlatform,
+  la lista blanca que cierra la inyeccion de XML en el .dproj) o LA negativa
+  de toda tool (NegativaDePlataforma): eran cuatro textos para el mismo hecho
+  segun el comando, y un quinto en el build (K2 de A14, 1.23). Quien ESCRIBE para
+  una plataforma pregunta ademas al juez del build si el proyecto la declara
+  (PlataformaNoDeclarada): add-searchpath, set-sdk, set-profile y
+  add-deployfile escribian para una que el proyecto no declara, y set-sdk
+  contestaba "The project will compile Linux64" en un proyecto solo de
+  Windows (K1, medido el 23-oct-2026). Una declarada y desactivada vale para
+  configurarla (ADesactivadaVale); quitar lo escrito no lo pregunta. }
+function PlataformaDelComando(const ARaw: string; out APlataforma: string): string;
+begin
+  Result := '';
+  APlataforma := CanonicalPlatform(ARaw);
+  if APlataforma = '' then
+    Result := NegativaDePlataforma(ARaw);
+end;
+
 function AddPlatform(const ADproj, ARawPlatform: string): string;
 var
   Info: TDprojInfo;
@@ -436,9 +454,9 @@ begin
   // WHITELIST: a platform name is a fixed, known token. Rejecting anything
   // else makes it impossible to inject XML into the .dproj through this
   // parameter (measured RCE via a crafted <Import> - field round 5, R5-B).
-  APlatform := CanonicalPlatform(ARawPlatform);
-  if APlatform = '' then
-    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+  Result := PlataformaDelComando(ARawPlatform, APlatform);
+  if Result <> '' then
+    Exit;
   Info := ReadDproj(ADproj);
   if Info.FrameworkType = '' then
     Exit(MsgText(SR_CFG_PUEDO_LEER_FRAMEWORK_DPROJ));
@@ -489,9 +507,9 @@ var
   Plats: TArray<TPlataformaDelBloque>;
   Activas: Integer;
 begin
-  APlatform := CanonicalPlatform(ARawPlatform);
-  if APlatform = '' then
-    Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT, [ARawPlatform.Trim]));
+  Result := PlataformaDelComando(ARawPlatform, APlatform);
+  if Result <> '' then
+    Exit;
   Xml := PatchLoadText(ADproj, Enc);
   // EL lector del bloque, el de ReadDproj y add-platform: eran un Pos de
   // '<Platform value="X">' y una regex para contar las activas
@@ -825,9 +843,11 @@ begin
   Plat := '';
   if ARawPlatform.Trim <> '' then
   begin
-    Plat := CanonicalPlatform(ARawPlatform);
-    if Plat = '' then
-      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+    Result := PlataformaDelComando(ARawPlatform, Plat);
+    if Result = '' then
+      Result := PlataformaNoDeclarada(ReadDproj(ADproj), Plat, True);
+    if Result <> '' then
+      Exit;
   end;
   if Length(ARawPaths) = 0 then
     Exit(MsgText(SR_CONFIG_NEED_PATH));
@@ -929,9 +949,9 @@ begin
   Plat := '';
   if ARawPlatform.Trim <> '' then
   begin
-    Plat := CanonicalPlatform(ARawPlatform);
-    if Plat = '' then
-      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT, [ARawPlatform.Trim]));
+    Result := PlataformaDelComando(ARawPlatform, Plat);
+    if Result <> '' then
+      Exit;
   end;
   if Length(ARawPaths) = 0 then
     Exit(MsgText(SR_CONFIG_NEED_PATH));
@@ -1166,9 +1186,11 @@ var
   Plat, Full, RemoteDir, DeployProj, DprojXml, Cfg: string;
   Generated: Boolean;
 begin
-  Plat := CanonicalPlatform(ARawPlatform);
-  if Plat = '' then
-    Exit(MsgFmt(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
+  Result := PlataformaDelComando(ARawPlatform, Plat);
+  if Result = '' then
+    Result := PlataformaNoDeclarada(ReadDproj(ADproj), Plat, True);
+  if Result <> '' then
+    Exit;
   Result := DeployFileDenied(ADproj, ARawPath, Full);
   if Result <> '' then
     Exit;
@@ -1265,9 +1287,9 @@ var
   Spans, DelProyecto: TArray<TPair<Integer, Integer>>;
   I: Integer;
 begin
-  Plat := CanonicalPlatform(ARawPlatform);
-  if Plat = '' then
-    Exit(MsgFmt(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
+  Result := PlataformaDelComando(ARawPlatform, Plat);
+  if Result <> '' then
+    Exit;
   if ARawPath.Trim = '' then
     Exit(MsgText(SR_CONFIG_DEPLOY_NEED_PATH));
   Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), ARawPath, ARawPath, Full);
@@ -1650,9 +1672,9 @@ var
   Quitar: Boolean;
   Falta: TFaltaDeGrupo;
 begin
-  APlatform := CanonicalPlatform(ARawPlatform);
-  if APlatform = '' then
-    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+  Result := PlataformaDelComando(ARawPlatform, APlatform);
+  if Result <> '' then
+    Exit;
   // la regla de su gemela set-profile: Win64 contestaba "Registered for
   // Win64: ." (quinta revision)
   if IsLocalPlatform(APlatform) then
@@ -1676,6 +1698,10 @@ begin
     // que un SDK de Android no puede acabar puesto en Linux64.
     if not MatchText(Sdk, SdksDePlataforma(Info.Version, APlatform)) then
       Exit(MsgFmt(SR_CONFIG_SDK_NOEXISTE_FMT, [Sdk, APlatform, Disponibles]));
+    // ...para una plataforma que el proyecto compila (PlataformaDelComando)
+    Result := PlataformaNoDeclarada(ReadDproj(ADproj), APlatform, True);
+    if Result <> '' then
+      Exit;
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
@@ -1705,9 +1731,9 @@ var
   Quitar: Boolean;
   Falta: TFaltaDeGrupo;
 begin
-  APlatform := CanonicalPlatform(ARawPlatform);
-  if APlatform = '' then
-    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+  Result := PlataformaDelComando(ARawPlatform, APlatform);
+  if Result <> '' then
+    Exit;
   if IsLocalPlatform(APlatform) then
     Exit(MsgFmt(SR_CONFIG_PROFILE_LOCAL_FMT, [APlatform]));
   // Android no despliega por PAServer: lo aceptaba, decia "will deploy and
@@ -1738,6 +1764,9 @@ begin
     // la gemela de set-sdk: cada .profile declara SU plataforma, y uno de
     // Windows no despliega un Linux64 (lo aceptaba, medido el 18-oct-2026)
     Result := PerfilQueNoSirve(Info.Version, Perfil, APlatform);
+    // ...para una plataforma que el proyecto despliega (PlataformaDelComando)
+    if Result = '' then
+      Result := PlataformaNoDeclarada(ReadDproj(ADproj), APlatform, True);
     if Result <> '' then
       Exit;
   end;
@@ -1814,9 +1843,10 @@ begin
   if ARawPlatform.Trim <> '' then
   begin
     // las reglas del build: la que su framework puede y el proyecto tiene activa
-    var Plat := CanonicalPlatform(ARawPlatform);
-    if Plat = '' then
-      Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+    var Plat: string;
+    Result := PlataformaDelComando(ARawPlatform, Plat);
+    if Result <> '' then
+      Exit;
     if not Info.CanTarget(Plat, Razon) then
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Razon));
     Result := PlataformaNoDeclarada(Info, Plat);
@@ -1930,16 +1960,19 @@ end;
   canonica y la configuracion con el nombre que declara el proyecto ('' =
   sin esa mitad); la negativa si no valen. }
 function BuildDeLaLlamada(const AXml, ARawPlatform, ARawConfig: string;
-  out APlatform, AConfig: string): string;
+  AEscribe: Boolean; out APlatform, AConfig: string): string;
 begin
   Result := '';
   APlatform := '';
   AConfig := '';
   if ARawPlatform.Trim <> '' then
   begin
-    APlatform := CanonicalPlatform(ARawPlatform);
-    if APlatform = '' then
-      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+    Result := PlataformaDelComando(ARawPlatform, APlatform);
+    // escribir, solo para una que el proyecto declara (leer o quitar, si)
+    if (Result = '') and AEscribe then
+      Result := PlataformaNoDeclarada(InfoDeDproj(AXml), APlatform, True);
+    if Result <> '' then
+      Exit;
   end;
   if ARawConfig.Trim <> '' then
     Result := ConfigDelBuild(InfoDeDproj(AXml), ARawConfig, AConfig);
@@ -1970,7 +2003,7 @@ begin
       if Ord(C) < 32 then
         Exit(MsgText(SR_CFG_VALUE_CON_CONTROL));
   end;
-  Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, Plat, Cfg);
+  Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, not AQuitar, Plat, Cfg);
   if Result <> '' then
     Exit;
   Original := Xml;
@@ -2027,7 +2060,7 @@ begin
   if not EsNombreDeEtiqueta(Nombre) then
     Exit(MsgFmt(SR_CFG_NAME_NO_ES_PROPIEDAD_FMT, [Nombre]));
   Xml := PatchLoadText(ADproj, Enc);
-  Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, Plat, Cfg);
+  Result := BuildDeLaLlamada(Xml, ARawPlatform, ARawConfig, False, Plat, Cfg);
   if Result <> '' then
     Exit;
   // el build que se lee: el pedido y, sin pedirlo, el que el proyecto

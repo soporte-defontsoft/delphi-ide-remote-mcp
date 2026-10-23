@@ -145,6 +145,20 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **`delphi_config` writes for a platform only when the project has it, and
+  a name that is no platform gets one answer.** `add-searchpath`, `set-sdk`,
+  `set-profile`, `add-deployfile` and `set-property` wrote groups for a
+  platform the project does not declare - an Android64 search path in a
+  project that is only Windows - and `set-sdk` answered "The project will
+  compile Linux64 with SDK ..." while `delphi_build` refuses that platform
+  (`BUILD-046`; measured on 2026-10-23). They now refuse it with the build's
+  own text; a platform the project declares and keeps disabled can still be
+  configured, as `remove-platform` leaves it, and removing what was written
+  is never refused. And "not a valid Delphi platform" came with five codes,
+  four in `delphi_config` (`CFG-007`, `CFG-024`, `CFG-078`, `CFG-082`, only
+  two of them with the valid names) and one in `delphi_build`: it is
+  `BUILD-003` everywhere now, with the valid names
+  (`tests/test_plataforma_comando_1230.py`).
 - **`delphi_designer layout` knows an FMX data module in a `.dfm`.** A data
   module of an FMX project lives in a `.dfm` whose unit names the FMX class
   group, as the IDE writes it, and the server already took it for FMX

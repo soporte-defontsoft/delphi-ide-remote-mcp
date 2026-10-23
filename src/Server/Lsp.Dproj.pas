@@ -722,8 +722,13 @@ function NombreDeConfigNoValido(const AConfig: string): Boolean;
   reconfigurar nada (David, 6-oct-2026): msbuild compilaba Linux64 de un
   proyecto que no la declaraba, sin sus ajustes de plataforma, y el IDE no la
   mostraba (medido; el GuiProbe de Hermes "perdio" asi una plataforma que
-  nunca tuvo). delphi_config add-platform / remove-platform las declaran. }
-function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string): string;
+  nunca tuvo). delphi_config add-platform / remove-platform las declaran.
+  ADesactivadaVale: para CONFIGURAR, una declarada y desactivada vale - queda
+  con sus ajustes para cuando add-platform la active (remove-platform la deja
+  asi) -; lo que no vale es escribir para una que el proyecto no tiene (un
+  grupo de Android64 en un proyecto solo de Windows: A14 de la 1.23). }
+function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string;
+  ADesactivadaVale: Boolean = False): string;
 
 { Las plataformas de paclient, para los mensajes que las ensenan: las de
   PACLIENT_PLATFORMS, la misma lista que valida (estaban copiadas a mano). }
@@ -798,6 +803,11 @@ function PlataformaDeClaveLibrary(const AClave: string): string;
   misma que valida CanonicalPlatform (estaba copiada a mano en tres textos
   con 11 nombres mientras el validador aceptaba 13). }
 function KnownPlatformsList: string;
+{ LA negativa de un nombre que no es una plataforma de Delphi, con las validas:
+  la de toda tool que recibe una (la puerta y el build, delphi_config). Eran
+  cinco textos y cinco codigos para el mismo hecho (BUILD-003, CFG-007,
+  CFG-024, CFG-078, CFG-082; A14 de la 1.23). }
+function NegativaDePlataforma(const ARaw: string): string;
 
 { Una carpeta RELATIVA al proyecto, apta para acabar escrita DENTRO de un
   .dproj o de un .dpr: nombre simple o con niveles (Compiled, bin\out,
@@ -1829,7 +1839,8 @@ begin
   end;
 end;
 
-function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string): string;
+function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string;
+  ADesactivadaVale: Boolean): string;
 var
   P: TDprojPlatform;
   Activas: TArray<string>;
@@ -1837,6 +1848,10 @@ begin
   Result := '';
   if AInfo.Declara(APlatform) then
     Exit;
+  if ADesactivadaVale then
+    for P in AInfo.Platforms do
+      if SameText(P.Name, APlatform) then
+        Exit;
   Activas := nil;
   if Length(AInfo.Platforms) = 0 then
     Activas := [AInfo.PlataformaPorDefecto]
@@ -2262,6 +2277,11 @@ begin
       Result := Result + ', ';
     Result := Result + P.Nombre;
   end;
+end;
+
+function NegativaDePlataforma(const ARaw: string): string;
+begin
+  Result := MsgFmt(SR_PLATAFORMA_NO_VALIDA_FMT, [ARaw.Trim, KnownPlatformsList]);
 end;
 
 function CanonicalPlatform(const AName: string): string;

@@ -1435,10 +1435,9 @@ const
   // a metacharacter there WAS a shell. msbuild runs with no shell now; this
   // refusal stays as the second barrier. delphi_config
   // already armoured the same token for the XML sink; this is its twin mouth.
-  SR_BUILD_PLATFORM_FMT =
-    '[BUILD-003 INVALID_PARAM] "%s" is not a valid Delphi platform. See the ' +
-    'platforms the project has with delphi_config command=view, and use ' +
-    'one of them exactly as written.';
+  SR_PLATAFORMA_NO_VALIDA_FMT =
+    '[BUILD-003 INVALID_PARAM] "%s" is not a valid Delphi platform. Valid: ' +
+    '%s; the ones a project has, delphi_config command=view lists.';
 
   SR_BUILD_TARGET_FMT =
     '[BUILD-004 INVALID_PARAM] "%s" is not a valid target. Use Build (full), ' +
@@ -2201,10 +2200,6 @@ const
     'profile "%s" is for %s. For other platforms (macOS needs a real Mac ' +
     'with PAServer) report it with delphi_report: that is the signal to ' +
     'build them.';
-
-  SR_CONFIG_SDK_PLATFORM_FMT =
-    '[CFG-007 INVALID_PARAM] "%s" is not a valid Delphi platform. Valid: ' +
-    '%s.';
 
   SR_CFG_NEED_SDK_FMT =
     '[CFG-105 INVALID_PARAM] Missing "sdk": the SDK to pin for %s ' +
@@ -3395,10 +3390,6 @@ const
     'runtime). If your tool schema has neither "path" nor "remotedir", ' +
     'the server was updated after you connected: reconnect the MCP ' +
     'session to receive the new schema.';
-
-  SR_CONFIG_DEPLOY_PLATFORM_FMT =
-    '[CFG-024 INVALID_PARAM] "%s" is not a valid Delphi platform ' +
-    '(add/remove-deployfile needs one: Linux64, OSX64, Android64...).';
 
   SR_CONFIG_DEPLOY_NOT_FILE_FMT =
     '[CFG-025 INVALID_PARAM] "%s" is a folder. add-deployfile takes FILES, one ' +
@@ -8268,9 +8259,6 @@ const
     'will fill it in when it opens the project; MSBuild already builds ' +
     'it. If it needs PAServer, set up the profile with delphi_paserver.';
 
-  SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT =
-    '[CFG-078 INVALID_PARAM] "%s" is not a valid Delphi platform.';
-
   SN_CFG_PLATAFORMA_ESTA_DECLARADA_PROYECTO_FMT =
     '[CFG-079] Platform %s is not declared in the project.';
 
@@ -8283,10 +8271,6 @@ const
     '(before: %s)%s  DCC_DcuOutput = %s (before: %s)%sBackup copy in ' +
     '__delphi-patch. Verify with delphi_build; the IDE honors it when it ' +
     'opens the project.';
-
-  SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT =
-    '[CFG-082 INVALID_PARAM] "%s" is not a valid Delphi platform. Valid: ' +
-    '%s (or empty = all).';
 
   SR_CFG_DELPHI_CONFIG_NECESITA_PROJECT =
     '[CFG-083 INVALID_PARAM] delphi_config needs "project" (path of the ' +

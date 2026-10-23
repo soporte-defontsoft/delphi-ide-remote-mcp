@@ -369,12 +369,12 @@ check('config: add-platform con </Platforms> detras de otra etiqueta: la entrada
 inj = 'Win64"/><Import Project=' + chr(34) + 'evilshare' + chr(34) + '/><X y='
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": inj})
 check('R5-B: inyeccion XML por el nombre de plataforma RECHAZADA',
-      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_SDK_PLATFORM_FMT'), out[:150])
+      mc.rechazado(out) and mc.es(out, 'SR_PLATAFORMA_NO_VALIDA_FMT'), out[:150])
 check('R5-B: el payload no se escribio en el .dproj',
       'evilshare' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "NoExiste99"})
 check('R5-B: plataforma inventada RECHAZADA',
-      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_SDK_PLATFORM_FMT'), out[:120])
+      mc.rechazado(out) and mc.es(out, 'SR_PLATAFORMA_NO_VALIDA_FMT'), out[:120])
 # before removing: R6-A - view must report Linux64 as ENABLED (it was just added)
 _plats = {p['name']: p.get('enabled') for p in json.loads(call('delphi_config', {"project": CON, "section": "all"})).get('platforms', [])}
 check('R6-A: view reporta enabled=True para una plataforma activa (Linux64)',
@@ -488,7 +488,7 @@ check('searchpath: el payload no toco el .dproj', 'evil' not in open(CON, encodi
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Commodore64", "path": _spdir})
 check('searchpath: plataforma invalida RECHAZADA',
-      mc.rechazado(out) and mc.es(out, 'SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT'), out[:120])
+      mc.rechazado(out) and mc.es(out, 'SR_PLATAFORMA_NO_VALIDA_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "remove-searchpath",
                              "platform": "Linux64", "path": _spdir})
 check('searchpath: quitado', mc.abre(out, 'SN_CONFIG_PATH_REMOVED_FMT'), out[:120])
@@ -560,7 +560,7 @@ check('deployfile: remotedir con .. RECHAZADO',
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "", "path": _dep})
 check('deployfile: sin plataforma RECHAZADO',
-      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_DEPLOY_PLATFORM_FMT'), out[:120])
+      mc.rechazado(out) and mc.es(out, 'SR_PLATAFORMA_NO_VALIDA_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: quitado (la del .dproj y la del .deployproj)',

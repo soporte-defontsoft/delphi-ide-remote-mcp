@@ -32,7 +32,7 @@ Win64 Release lo encuentra Release y Debug no (F2613).
       (PreBuildEvent, DCC_AdditionalSwitches: CFG-133); una propiedad por la que importan los
       <Import> del IDE (BDS: CFG-132, la segunda barrera de BUILD-019); set-property sin value (CFG-134);
       un value con salto (CFG-135); una config que no declara (CFG-107); una plataforma que
-      no es (CFG-082); un parametro que no es del comando (value en get-property)
+      no es (BUILD-003); un parametro que no es del comando (value en get-property)
   P7  el .dproj escrito lo carga MSXML6, el juez del IDE (si pywin32 esta; si no, no se mide)
 
 Uso:  python tests/test_config_property_1220.py [ruta-a-DelphiLspMcp.exe]
@@ -151,6 +151,8 @@ try:
     check('P4 el mismo valor otra vez: CFG-137', mc.es(r, 'SN_CFG_PROPERTY_YA_FMT'), r[:300])
     check('P4 ...y el .dproj byte a byte', lee(proyecto) == xml)
 
+    # la plataforma, declarada como el IDE: no se escribe para una que el proyecto no tiene (A14 de la 1.23)
+    config(proyecto, 'add-platform', platform='Android64')
     r = config(proyecto, 'set-property', name='PF_KeyStoreDebug', value=KEYSTORE, platform='Android64', config='Debug')
     check('P5 set-property PF_KeyStoreDebug (de FUERA) para Android64 Debug: CFG-136',
           mc.es(r, 'SN_CFG_PROPERTY_PUESTA_FMT') and "'$(%s_Android64)'!=''" % CFG_DEBUG in r, r[:300])
@@ -187,7 +189,7 @@ try:
         ('sin value', dict(name='PF_X'), 'SR_CFG_NEED_VALUE'),
         ('un value con salto', dict(name='PF_X', value='a\nb'), 'SR_CFG_VALUE_CON_CONTROL'),
         ('una config que no declara', dict(name='PF_X', value='x', config='Nope'), 'SR_TEST_CONFIG_FMT'),
-        ('una plataforma que no es', dict(name='PF_X', value='x', platform='Foo'), 'SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT'),
+        ('una plataforma que no es', dict(name='PF_X', value='x', platform='Foo'), 'SR_PLATAFORMA_NO_VALIDA_FMT'),
     ]
     for titulo, campos, codigo in negadas:
         r = config(proyecto, 'set-property', **campos)

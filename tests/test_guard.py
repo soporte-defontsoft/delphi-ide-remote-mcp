@@ -546,7 +546,7 @@ for param, payload in (('platform', 'Win64 && cmd /c echo x > '),
     # 18-oct-2026). Desde 2an no hay cmd.exe: el marcador de abajo ya no puede
     # aparecer y queda de guarda; la puerta (BuildArgDenied) y el fondo dan el
     # mismo id, asi que esto dice que se nego por el valor, no cual de las dos
-    _id = {'platform': 'SR_BUILD_PLATFORM_FMT', 'config': 'SR_BUILD_CONFIG_FMT',
+    _id = {'platform': 'SR_PLATAFORMA_NO_VALIDA_FMT', 'config': 'SR_BUILD_CONFIG_FMT',
            'target': 'SR_BUILD_TARGET_FMT'}[param]
     check('build: inyeccion por "%s" rechazada por su valor' % param, mc.es(out, _id), out[:130])
     check('build: inyeccion por "%s" no ejecuto nada' % param,

@@ -342,7 +342,8 @@ try:
 
     # add-deployfile como el Deployment Manager del IDE: el .dproj (su seccion Deployment) y el .deployproj
     ddir = os.path.join(JAIL, 'dep')
-    srv.call('delphi_create', {'kind': 'project-vcl', 'name': 'Dep', 'dir': ddir})
+    # FMX: DF8 despliega a OSX64, que un proyecto VCL nunca compila (A14 de la 1.23)
+    srv.call('delphi_create', {'kind': 'project-fmx', 'name': 'Dep', 'dir': ddir})
     dproj = os.path.join(ddir, 'Dep.dproj')
     dmani = os.path.join(ddir, 'Dep.deployproj')
     os.makedirs(os.path.join(ddir, 'datos'))
@@ -410,6 +411,8 @@ try:
               '                <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>\r\n')
     crudo = open(dproj, 'rb').read()  # byte a byte: su codificacion se queda
     open(dproj, 'wb').write(crudo.replace(b'            </Deployment>', clases.encode('ascii') + b'            </Deployment>'))
+    # la plataforma, declarada como el IDE: no se escribe para una que el proyecto no tiene
+    srv.call('delphi_config', {'project': dproj, 'command': 'add-platform', 'platform': 'OSX64'})
     r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'OSX64',
                                    'path': os.path.join(ddir, 'datos', 'datos.txt')}, 240)
     t, m = lee(dproj), lee(dmani)
