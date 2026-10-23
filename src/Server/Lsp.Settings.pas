@@ -247,13 +247,22 @@ function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
   una por su cuenta, con la misma forma escrita dos veces. }
 function HostsDeLista(const ALista: string): TArray<string>;
 
+{ LA entrada comodin de una lista blanca del operador: '*' (y las que cada
+  lista ya admitia: 'all' en RemoteRunProjects, '0.0.0.0' en RemoteHosts) =
+  cualquiera. UNA regla para las cuatro listas (RemoteHosts,
+  RemoteRunProjects, GitRemotes, AdbAllowedDevices): dos lo admitian, cada
+  una el suyo, y dos no - GitRemotes=* lo negaba todo (censo de Fable, R18;
+  David, 23-oct-2026: "comodin para todas"). Declararlo sigue siendo decision
+  del operador. }
+function EsComodinDeLista(const AEntrada: string): Boolean;
+
 { El paclient que pone la bateria (DELPHI_MCP_PACLIENT, un stub), '' si no
   hay: lo pregunta PaClientPath (Lsp.RemoteRun). Se lee en cada llamada, como
   se leia alli; aqui para que la configuracion siga teniendo UN lector. }
 function PaclientDeEntorno: string;
 
 { '' si este servidor PUEDE abrir una conexion TCP a AHost: SOLO los hosts de
-  RemoteProbeHosts del workspace activo ('*' / '0.0.0.0' = cualquiera). LA
+  RemoteProbeHosts del workspace activo (EsComodinDeLista = cualquiera). LA
   puerta de red: test-connection, get-sdk, remote-run Y el deploy por perfil
   (el .profile dice COMO conectar, el workspace dice SI). }
 function ProbeHostDenied(const AHost: string): string;
@@ -1635,8 +1644,8 @@ begin
     Exit;
   Allowed := RemoteProbeHosts;
   for var A in HostsDeLista(Allowed) do
-    if SameText(A, H) or (A = '*') or (A = '0.0.0.0') then
-      Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
+    if SameText(A, H) or EsComodinDeLista(A) then
+      Exit; // el comodin: el operador declaro CUALQUIER host
   Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim, ONinguno(Allowed)]);
 end;
 
@@ -1897,8 +1906,14 @@ begin
   if P > 0 then
     Host := Copy(ATarget, 1, P - 1);
   for E in Lista do
-    if SameText(E.Trim, ATarget) or SameText(E.Trim, Host) then
+    if SameText(E.Trim, ATarget) or SameText(E.Trim, Host) or EsComodinDeLista(E) then
       Exit(True);
+end;
+
+function EsComodinDeLista(const AEntrada: string): Boolean;
+begin
+  var E := AEntrada.Trim;
+  Result := (E = '*') or SameText(E, 'all') or (E = '0.0.0.0');
 end;
 
 function WorkspaceRoots: TArray<string>;

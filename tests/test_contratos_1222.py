@@ -54,6 +54,8 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
   CF1 UN juez de la configuracion (ConfigDelBuild) para build, test y config: sin configuraciones declaradas,
      add-deployfile config=Release vale como en el build (ROJO: CFG-116 "(none)"); una que no declara, CFG-107
      tambien en config
+  W1 el comodin de las listas blancas es UNO (EsComodinDeLista): GitRemotes=* y AdbAllowedDevices=* valen como
+     RemoteHosts=* (ROJO contra r1222m: la lista los negaba; David, 23-oct: "comodin para todas")
   DL1-DL4 LA regla de delete:true (Lsp.Patch.DeleteDeLineaDenegado) en delphi_edit, delphi_textedit y cada bloque de una
      tanda: con new, EDIT-057 y nada escrito (ROJOS contra r1222l: textedit borraba la linea y tiraba new; en un
      bloque delete no se leia y el bloque pasaba a ser new); un bloque con delete y sin new se borra entero
@@ -547,6 +549,24 @@ try:
               mc.es(r, 'SR_ADB_NO_VA_CON_COMANDO_FMT') and '"device"' in r, r[:300])
     finally:
         adb.cierra()
+    # el comodin de las listas blancas, UNO para las cuatro (EsComodinDeLista; David, 23-oct: "comodin para
+    # todas"): GitRemotes y AdbAllowedDevices no lo admitian y GitRemotes=* lo negaba todo (censo de Fable, R18)
+    gdir = os.path.join(JAIL, 'gitw')
+    os.makedirs(gdir)
+    import subprocess
+    for a in (['init', '-q'], ['remote', 'add', 'lejos', 'maquina-que-no-existe.invalid:org/repo.git']):
+        subprocess.run(['git'] + a, cwd=gdir, capture_output=True)
+    com = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_GIT_REMOTES': '*',
+                                    'DELPHI_MCP_ADB_DEVICES': '*'}), nombre='c1222comodin', t=120)
+    try:
+        r1 = com.call('delphi_git', {'repo': gdir, 'command': 'fetch', 'remote': 'lejos'}, 90)
+        r2 = com.call('delphi_adb', {'command': 'logcat', 'device': 'CUALQUIERA123'}, 90)
+        check('W1 GitRemotes=* y AdbAllowedDevices=*: el comodin vale como en RemoteHosts (ROJO: la lista los'
+              ' negaba por su host y su dispositivo)',
+              not mc.es(r1, 'SR_GIT_REMOTE_HOST_FMT') and 'maquina-que-no-existe' in r1
+              and not mc.es(r2, 'SR_ADB_ALLOWLIST_FMT'), (r1[:300], r2[:300]))
+    finally:
+        com.cierra()
     r = srv.call('delphi_components', {'platform': 'Win64', 'filter': 'algo'}, 120)
     check('K1 components con platform y filter: COMP-011 INVALID_PARAM y sin contestar a medias',
           mc.es(r, 'SR_COMPONENTS_NO_VA_CON_MODO_FMT') and mc.resultado(r) == 'INVALID_PARAM' and

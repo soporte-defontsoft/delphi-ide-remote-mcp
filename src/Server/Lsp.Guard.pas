@@ -1148,10 +1148,11 @@ begin
   if Length(Lista) = 0 then
     Exit(MsgText(SR_REMOTERUN_NOPROJLIST));
   Result := '';
-  // Comodin EXPLICITO del operador: RemoteRunProjects=all (o *) significa
-  // cualquier proyecto de la jaula. Declararlo sigue siendo su decision.
+  // Comodin EXPLICITO del operador (EsComodinDeLista, el de las cuatro
+  // listas): cualquier proyecto de la jaula. Declararlo sigue siendo su
+  // decision.
   for E in Lista do
-    if SameText(E.Trim, 'all') or (E.Trim = '*') then
+    if EsComodinDeLista(E) then
       Exit;
   try
     Full := TPath.GetFullPath(APath);

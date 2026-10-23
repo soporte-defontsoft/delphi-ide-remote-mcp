@@ -457,9 +457,10 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   existing profile name is never overwritten, and duplicates by host get a warning. `RemoteHosts` does the same for every PAServer dial —
   hand-named hosts AND connection profiles: since v0.98 having a profile in the IDE is not
   permission (the profile says HOW to connect; the workspace says WHETHER) — measured to
-  close a port-scanning primitive. `*` (or `0.0.0.0`) declares "any host" on purpose, and
-  `RemoteRunProjects=all` (or `*`) is the same explicit wildcard for projects. Where each
-  workspace may talk to is its own declaration, like everything else.
+  close a port-scanning primitive. In any of the four lists - `RemoteHosts`, `GitRemotes`,
+  `RemoteRunProjects` and `AdbAllowedDevices` - an entry `*` (or `all`, or `0.0.0.0`) declares
+  "anything" on purpose. Where each workspace may talk to is its own declaration, like
+  everything else.
 - **`[Tools]` profiles**: `full` / `coder` / `reader` (or an explicit `Only=` allowlist) trim
   what `tools/list` advertises — ~15k tokens of schemas drown a small model. Listing only:
   hidden tools stay callable, permissions live in the layers above. A workspace can carry its

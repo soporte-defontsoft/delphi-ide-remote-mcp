@@ -136,6 +136,11 @@ REGLAS = [
     ('la lista de raices de una negativa a mano', r'MsgFmt\s*\(.*\bJoin\s*\([^)]*Roots',
      [],
      'RaicesDisponibles (Lsp.Guard): un mensaje nombra las raices por ella'),
+    # el comodin de una lista blanca del operador: '*', 'all' o '0.0.0.0', UNO para las cuatro listas
+    # (RemoteHosts y RemoteRunProjects lo admitian, cada una el suyo; GitRemotes y AdbAllowedDevices no)
+    ('el comodin de una lista blanca a mano', r"'0\.0\.0\.0'|SameText\([^)]*'all'\)",
+     [('Lsp.Settings.pas', 'EsComodinDeLista')],
+     'EsComodinDeLista (Lsp.Settings, 1.22.2; censo de Fable R18, David: "comodin para todas")'),
     ('el manifiesto de despliegue a mano', r"'\.deployproj'",
      [('Lsp.Patch.pas', '*')],
      'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Patch, 1.22.2): tres compositores y tres '
@@ -1088,6 +1093,7 @@ PLANTADO = {
     'el SDK por defecto del IDE a mano': "  R.WriteString('Default_Linux64', NombreDeSdk(S));",
     'las subclaves de una clave a mano': "  R.GetKeyNames(L);",
     'la lista de raices de una negativa a mano': "  Exit(MsgFmt(SR_X_FMT, [P, string.Join(' | ', WorkspaceRoots)]));",
+    'el comodin de una lista blanca a mano': "  if SameText(E.Trim, 'all') then Exit;",
     '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",

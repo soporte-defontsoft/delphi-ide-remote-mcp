@@ -251,8 +251,9 @@ begin
       else
         Exit(MsgFmt(SR_GIT_REMOTE_OFF_FMT, [Host]));
     Ok := False;
+    // el comodin de las listas blancas, el de las cuatro (EsComodinDeLista)
     for var H in HostsDeLista(Allowed) do
-      if SameText(H, Host) then
+      if SameText(H, Host) or EsComodinDeLista(H) then
       begin
         Ok := True;
         Break;

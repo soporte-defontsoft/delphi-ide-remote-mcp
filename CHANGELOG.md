@@ -99,6 +99,12 @@ the MCP `initialize` response (`serverInfo.version`).
   valid name when it declares none, as msbuild) - and a configuration the
   project does not declare is `CFG-107` everywhere; `CFG-116` is gone
   (`tests/test_contratos_1222.py`).
+- **The wildcard works in every allowlist of `settings.ini`.** `RemoteHosts`
+  took `*` or `0.0.0.0`, `RemoteRunProjects` took `all` or `*`, and
+  `GitRemotes` and `AdbAllowedDevices` took none, so `GitRemotes=*` refused
+  every host (Claude Fable 5.1 through Hermes, 2026-10-23). Now an entry
+  `*`, `all` or `0.0.0.0` means "anything" in all four, and
+  `docs/CONFIGURATION.md` says so (`tests/test_contratos_1222.py`).
 - **`delete: true` follows one rule in `delphi_edit`, `delphi_textedit` and
   every entry of a batch.** Both descriptions say `delete` takes no `new`, and
   only `delphi_edit` refused it: `delphi_textedit` with `old`, `new` and
