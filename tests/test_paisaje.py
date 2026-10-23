@@ -121,9 +121,13 @@ REGLAS = [
      [('Lsp.Patch.pas', '*')],
      'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Patch, 1.22.2): tres compositores y tres '
      'reconocedores lo escribian a mano en el build, la mudanza y config'),
-    ('__delphi-temp', r"'__delphi-temp",
+    # tambien con la barra delante ('\__delphi-temp\', la forma de los saltos de Lsp.References): esa no la
+    # veia y una tercera copia asi entraba sin que nadie la viera (P10 de la revision de Opus 5.5). Las dos
+    # lineas declaradas de Lsp.References (un array const no puede llamar a una funcion; las vigila
+    # test_round44 T6c/T6f) quedan fuera por su forma, como DESIGNER_EXTS
+    ('__delphi-temp', r"^(?!\s*CARPETA_TEMPORAL\s*=).*'\\?__delphi-temp",
      [('Lsp.Casa.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
-    ('__delphi-patch', r"'__delphi-patch",
+    ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
      # la asignacion de un .pas (StyleLookup := ...;), que no es una linea de form
@@ -1061,8 +1065,8 @@ PLANTADO = {
     'un campo de conexion de un perfil': "  H := TagValue(Xml, 'Profile_host');",
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
     'el manifiesto de despliegue a mano': "  F := TPath.ChangeExtension(D, '.deployproj');",
-    '__delphi-temp': "  D := TPath.Combine(Raiz, '__delphi-temp');",
-    '__delphi-patch': "  D := TPath.Combine(Raiz, '__delphi-patch');",
+    '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
+    '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",
