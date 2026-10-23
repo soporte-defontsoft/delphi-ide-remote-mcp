@@ -182,7 +182,7 @@ begin
     Exit('?');
   if EsDesignerFmx(APath) then
     Exit('fmx');
-  if APath.EndsWith('.dfm', True) then
+  if EsDesignerVcl(APath) then
     Exit('vcl');
   Result := '';
 end;
@@ -1013,9 +1013,11 @@ var
 
 begin
   Doc := nil;
-  if not MatchText(TPath.GetExtension(APath), ['.dfm']) then
+  // de que marco es, por EL juez (un .dfm de un modulo de datos de FMX tambien
+  // es FMX): layout solo mide la VCL
+  if not EsDesignerVcl(APath) then
   begin
-    if MatchText(TPath.GetExtension(APath), ['.fmx']) then
+    if EsDesignerFmx(APath) then
       Exit(MsgText(SR_DESIGNER_LAYOUT_FMX));
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   end;
@@ -1628,7 +1630,7 @@ var
   Nombre: string;
 begin
   Result := AResult;
-  if EsFallo(AResult) or not APath.Trim.EndsWith('.dfm', True) then
+  if EsFallo(AResult) or not EsDesignerVcl(APath) then
     Exit;
   Ret := ObjetoJson(AResult);
   if Ret = nil then

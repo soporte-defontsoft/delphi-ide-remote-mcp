@@ -145,6 +145,14 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **`delphi_designer layout` knows an FMX data module in a `.dfm`.** A data
+  module of an FMX project lives in a `.dfm` whose unit names the FMX class
+  group, as the IDE writes it, and the server already took it for FMX
+  everywhere but in `layout` and in the outside-the-parent note of `insert`
+  and `set`: those asked the extension, so `layout` measured it as a VCL
+  window (measured on 2026-10-23). They ask the same judge now, and
+  `layout` answers that it does not measure FMX
+  (`tests/test_es_vcl_1230.py`).
 - **A unit is served by the same project in every tool, however deep it
   lives.** The project of a unit is looked for in the folders above it. The
   language tools climbed eight folders and `delphi_delete`, `delphi_move`

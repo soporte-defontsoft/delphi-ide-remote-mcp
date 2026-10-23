@@ -174,6 +174,13 @@ REGLAS = [
      [('Lsp.Rutas.pas', 'Ancestros')],
      'Ancestros y NIVELES_DE_SUBIDA (Lsp.Rutas, A11 de la 1.23): la subida es una y cada uno para donde '
      'su juez diga'),
+    # el marco de un designer por su extension: un .dfm de un modulo de datos de FMX (su CLASSGROUP) es FMX, y
+    # layout lo media con la VCL (A13 de la 1.23)
+    ('el marco de un designer por su extension', r"(?:EndsWith|SameText|MatchText|MatchStr)\([^;]*'\.(?:dfm|fmx)'",
+     [('Lsp.DesignerForma.pas', 'EsDesignerFmx'), ('Lsp.DesignerForma.pas', 'EsDesignerVcl'),
+      # que ficheros pueden llevar un StyleLookup (un .fmx o codigo): un filtro de ficheros, no el marco
+      ('Mcp.Tools.Styles.pas', 'LintStyles')],
+     'EsDesignerFmx / EsDesignerVcl (Lsp.DesignerForma, A13 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1148,6 +1155,7 @@ PLANTADO = {
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",
+    'el marco de un designer por su extension': "  if APath.EndsWith('.dfm', True) then Exit('vcl');",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

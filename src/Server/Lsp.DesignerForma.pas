@@ -105,6 +105,9 @@ function UnidadDeDesigner(const ADesigner: string): string;
   corpus del 18-oct-2026). La preguntaban a mano siete sitios del servidor,
   de tres formas (2.3 de la 1.18.0). La unidad se lee por GTextoDeUnidad. }
 function EsDesignerFmx(const ADesigner: string): Boolean;
+{ ...y su otra mitad: un .dfm que no es de FMX. layout la preguntaba por la
+  extension y media con la VCL un modulo de datos de FMX (A13 de la 1.23). }
+function EsDesignerVcl(const ADesigner: string): Boolean;
 
 var
   { El texto de la unidad de un designer por la puerta de leer del servidor
@@ -311,6 +314,11 @@ begin
   Result := SameText(ExtractFileExt(ADesigner.Trim), '.fmx');
   if not Result and Assigned(GTextoDeUnidad) and SameText(ExtractFileExt(ADesigner.Trim), '.dfm') then
     Result := GrupoDeClasesDe(GTextoDeUnidad(UnidadDeDesigner(ADesigner.Trim))).StartsWith('FMX.', True);
+end;
+
+function EsDesignerVcl(const ADesigner: string): Boolean;
+begin
+  Result := SameText(ExtractFileExt(ADesigner.Trim), '.dfm') and not EsDesignerFmx(ADesigner);
 end;
 
 function UnidadDeDesigner(const ADesigner: string): string;
