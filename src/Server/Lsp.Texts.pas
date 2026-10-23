@@ -2197,7 +2197,7 @@ const
     'that would break the command line. Remove it.';
 
   SR_PASERVER_SDK_PLATFORM_FMT =
-    '[PAS-007 DENIED] get-sdk covers the Linux64 platform today and ' +
+    '[PAS-007 DENIED] get-sdk covers the %s platform today and ' +
     'profile "%s" is for %s. For other platforms (macOS needs a real Mac ' +
     'with PAServer) report it with delphi_report: that is the signal to ' +
     'build them.';
@@ -2296,7 +2296,7 @@ const
     reseat-sdk ya los saltaba. Solo los de PAServer son cosa de esta tool. }
   SR_PASERVER_SDK_NO_ES_NUESTRO_FMT =
     '[PAS-059 DENIED] "%s" is a %s SDK, not a PAServer one: this tool only ' +
-    'removes the Linux64 SDKs that get-sdk brings. The IDE (GetIt, the SDK ' +
+    'removes the %s SDKs that get-sdk brings. The IDE (GetIt, the SDK ' +
     'Manager) owns the others. Nothing was done.';
 
   { reseat-sdk registraba como sysroot lo que dijera el .sdk, estuviera
@@ -8321,6 +8321,12 @@ const
     'with get-sdk from the PAServer of a profile. Deploying and running them ' +
     'needs that PAServer on the target: get the installer with ' +
     'command=packages, run it there, then add-profile and get-sdk.';
+
+  { reseat de un .profile sin plataforma o sin host (1.22.2: sin plataforma se
+    sembraba como Linux64, sin host se saltaba callado) }
+  SF_PAS_RESEAT_INCOMPLETO_FMT =
+    '%s: its .profile names no %s, so no IDE seat is written for it ' +
+    '(nothing is guessed)';
 
   SN_PAS_ASIENTO_IDE_LEE_LISTA =
     '[PAS-037] The IDE seat is what the IDE reads for ITS list; the ' +

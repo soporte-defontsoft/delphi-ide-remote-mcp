@@ -27,6 +27,9 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
 PROF_NAME = 'mcp-e2e-paserver'
 PROF_PASSWORD = 'dummySecretE2E123'
+# el .profile SIN plataforma del reseat (A4 de la depuracion de la 1.23): vive en un APPDATA de prueba, pero el
+# asiento que un build escribiera iria al registro del IDE, y cleanup_profile lo borra
+SIN_PLAT = 'mcp-e2e-sinplataforma'
 # nothing must be listening here (refused fast = the failure path we want):
 # un puerto recien soltado, no uno fijo que otro proceso pueda tener abierto
 DEAD_PORT = str(mc.puerto_libre())
@@ -44,7 +47,7 @@ def profile_files():
     return glob.glob(os.path.join(base, '*', PROF_NAME + '.profile'))
 
 
-def profile_seats():
+def profile_seats(nombre=PROF_NAME):
     """Asientos del perfil de prueba en el registro del IDE.
 
     Desde v0.98 add-profile no solo escribe el .profile: tambien siembra
@@ -64,7 +67,7 @@ def profile_seats():
                 except OSError:
                     break
                 i += 1
-                sub = base + '\\' + ver + '\\RemoteProfiles\\' + PROF_NAME
+                sub = base + '\\' + ver + '\\RemoteProfiles\\' + nombre
                 try:
                     winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub).Close()
                     encontrados.append(sub)
@@ -82,7 +85,7 @@ def cleanup_profile():
             os.remove(f)
         except OSError:
             pass
-    for sub in profile_seats():
+    for sub in profile_seats() + profile_seats(SIN_PLAT):
         try:
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
         except OSError:
@@ -315,6 +318,18 @@ check('log: la peticion se loguea enmascarada', len(masked) >= 1,
 
 srv.cierra()
 
+# --- reseat de un .profile SIN plataforma (A4 de la depuracion de la 1.23): se sembraba en el IDE como Linux64, un
+# dato que el fichero no dice, cuando remove-sdk ya cierra con una plataforma que no se lee (C5). Ahora no se siembra y
+# la respuesta dice por que, en "skipped" como reseat-sdk. APPDATA de prueba con SOLO ese perfil ---
+_ad, _ = mc.appdata_perfil(os.path.join(BASE, 'sinplat'), SIN_PLAT, '127.0.0.1', platform='')
+sp = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'APPDATA': _ad}), nombre='paserver-sinplat')
+out = sp.call('delphi_paserver', {'command': 'reseat'})
+sp.cierra()
+d = mc.como_json(out)
+check('reseat: un .profile sin plataforma no se siembra (era Linux64 inventado) y skipped dice por que',
+      SIN_PLAT not in (d.get('seated') or []) and SIN_PLAT in (d.get('skipped') or '')
+      and 'platform' in (d.get('skipped') or '') and not profile_seats(SIN_PLAT), out[:300])
+
 # --- read-only process: write commands refused, reads pass ---
 ro = Server(('--readonly',))
 out = ro.call('delphi_paserver', {"command": "platforms"})
@@ -335,6 +350,7 @@ ro.cierra()
 
 cleanup_profile()
 check('cleanup: perfil de prueba eliminado', not profile_files(), profile_files())
-check('cleanup: asiento en el IDE eliminado (no ensuciamos la lista del operador)', not profile_seats(), profile_seats())
+check('cleanup: asiento en el IDE eliminado (no ensuciamos la lista del operador)',
+      not profile_seats() and not profile_seats(SIN_PLAT), profile_seats() + profile_seats(SIN_PLAT))
 
 mc.fin('paserver battery')

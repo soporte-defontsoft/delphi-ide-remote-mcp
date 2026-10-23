@@ -120,6 +120,13 @@ the MCP `initialize` response (`serverInfo.version`).
   says which path to write. `McpDesktopNode` keeps its name: it is this
   server's own node, asked by its own question. `settings.example.ini` no
   longer names internal projects (`tests/test_remoterun.py`).
+- **`delphi_paserver reseat` no longer invents a platform.** A `.profile`
+  that names no platform was seated in the IDE as Linux64, a fact the file
+  does not state, while `remove-sdk` already refuses what has no readable
+  platform; one without a host was skipped without a word. Both are now left
+  unseated and listed in `skipped`, as `reseat-sdk` does. The platform of the
+  SDKs this server brings (Linux64) is written once, for its six checks and
+  two messages (`tests/test_paserver.py`).
 - **The wildcard works in every allowlist of `settings.ini`.** `RemoteHosts`
   took `*` or `0.0.0.0`, `RemoteRunProjects` took `all` or `*`, and
   `GitRemotes` and `AdbAllowedDevices` took none, so `GitRemotes=*` refused

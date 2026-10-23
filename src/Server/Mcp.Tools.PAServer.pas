@@ -130,6 +130,13 @@ uses
   Lsp.Args,
   Lsp.Rutas;
 
+const
+  { La plataforma de los SDK que trae get-sdk y que este servidor registra,
+    reasienta y quita: hoy solo Linux64 (macOS necesita un Mac con su PAServer
+    y no tiene get-sdk). La decian seis literales y dos textos a mano (R5 del
+    censo de Fable, depuracion de la 1.23). }
+  PLATAFORMA_DE_GETSDK = 'Linux64';
+
 constructor TDelphiPAServerTool.Create;
 begin
   inherited;
@@ -783,7 +790,7 @@ var
 begin
   Result := False;
   Fichero := TPath.Combine(TPath.Combine(
-    SinBarraFinal(ARootDir), 'bin'), 'Linux64.defaultsdkpaths');
+    SinBarraFinal(ARootDir), 'bin'), PLATAFORMA_DE_GETSDK + '.defaultsdkpaths');
   if not TFile.Exists(Fichero) then
     Exit;
   Xml := LeeTexto(Fichero, [ltIde]);
@@ -799,8 +806,8 @@ begin
     if not R.OpenKey(Clave + '\' + NombreDeSdk(ASdkName), True) then
       Exit;
     R.WriteString('SDKName', NombreDeSdk(ASdkName));
-    R.WriteString('SDKDisplayName', 'Linux64 ' + ASdkName + ' (MCP get-sdk)');
-    R.WriteString('PlatformName', 'Linux64');
+    R.WriteString('SDKDisplayName', PLATAFORMA_DE_GETSDK + ' ' + ASdkName + ' (MCP get-sdk)');
+    R.WriteString('PlatformName', PLATAFORMA_DE_GETSDK);
     R.WriteString('Version', '');
     R.WriteString('SystemRoot', PrefijoSinBarra(ASysRoot));
     R.WriteString('SDKStartupObj', TagValue(Xml, 'Profile_startupobj'));
@@ -848,7 +855,7 @@ begin
       // lo piden (David, 20-sep): traerse un sysroot no es decidir con que
       // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
       if AFijarDefault then
-        R.WriteString(ValorDeSdkPorDefecto('Linux64'), NombreDeSdk(ASdkName));
+        R.WriteString(ValorDeSdkPorDefecto(PLATAFORMA_DE_GETSDK), NombreDeSdk(ASdkName));
       R.CloseKey;
     end;
     Result := I > 0;
@@ -882,7 +889,7 @@ begin
   if Port = '' then Port := '64211';
   // the gate already refused anything outside PACLIENT_PLATFORMS; this loop
   // just restores paclient's exact casing (and applies the default).
-  Plat := 'Linux64';
+  Plat := PLATAFORMA_DE_GETSDK;
   for P in PACLIENT_PLATFORMS do
     if SameText(P, Params.Platform.Trim) then Plat := P;
   PaClient := FindPaClient(Info);
@@ -1342,8 +1349,8 @@ begin
     Exit;
   ProfXml := LeeTexto(ProfileFile, [ltIde]);
   Plat := CamposDePerfil(ProfXml).Plataforma;
-  if not SameText(Plat, 'Linux64') then
-    Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [ProfName, Plat]));
+  if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
+    Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [PLATAFORMA_DE_GETSDK, ProfName, Plat]));
 
   // UNA CARPETA POR SDK, igual que el IDE hace con los de Android: el nombre
   // sale de la DISTRO del target (zorin18, fedora44...), del parametro "sdk"
@@ -1600,7 +1607,9 @@ var
   YaEstaba: Boolean;
   Return: TJSONObject;
   Sembrados, Intactos: TJSONArray;
+  Saltados: TArray<string>;
 begin
+  Saltados := nil;
   Return := TJSONObject.Create;
   Sembrados := TJSONArray.Create;
   Intactos := TJSONArray.Create;
@@ -1632,21 +1641,27 @@ begin
           Continue;
         end;
         var Campos := CamposDePerfil(Texto);
-        Plat := 'Linux64';
-        if Campos.Plataforma <> '' then
-          Plat := Campos.Plataforma;
-        Host := '';
+        // sin plataforma o sin host no se siembra, y se dice: el asiento diria
+        // lo que el .profile no dice. Sin plataforma era Linux64 inventado,
+        // cuando remove-sdk ya cierra con una que no se lee (C5; R5 del censo
+        // de Fable), y sin host se saltaba callado
+        Plat := Campos.Plataforma;
         Host := Campos.Host;
-        Puerto := 64211;
-        Puerto := StrToIntDef(Campos.Puerto, 64211);
-        Pwd := '';
-        Pwd := Campos.Password; { ya viene cifrada: se copia tal cual }
-        if Host = '' then
+        if (Plat = '') or (Host = '') then
+        begin
+          Saltados := Saltados + [MsgFmt(SF_PAS_RESEAT_INCOMPLETO_FMT,
+            [Nombre, IfThen(Plat = '', 'platform', 'host')])];
           Continue;
+        end;
+        Puerto := StrToIntDef(Campos.Puerto, 64211);
+        Pwd := Campos.Password; { ya viene cifrada: se copia tal cual }
         RegistrarPerfilEnIde(Info.Version, Nombre, Plat, Host, Puerto, Pwd);
         Sembrados.Add(Nombre);
       end;
     end;
+    // como reseat-sdk: lo que no se sembro, una linea por perfil
+    if Length(Saltados) > 0 then
+      Return.AddPair('skipped', string.Join(#10, Saltados));
     Return.AddPair('note', MsgText(SN_PAS_ASIENTO_IDE_LEE_LISTA));
     Result := Return.ToJSON;
   finally
@@ -1707,7 +1722,7 @@ begin
       end;
       // solo los de PAServer: los de Android los pone GetIt y no son cosa
       // nuestra
-      if not SameText(CamposDePerfil(Xml).Plataforma, 'Linux64') then
+      if not SameText(CamposDePerfil(Xml).Plataforma, PLATAFORMA_DE_GETSDK) then
         Continue;
       // los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta
       Raiz := SysrootDeSdk(Info.Version, Xml);
@@ -1790,9 +1805,9 @@ begin
     // una plataforma que no se lee CIERRA, como en la rama del asiento (C5):
     // aqui la condicion era "hay plataforma y no es Linux64", y un .sdk sin
     // ella se borraba (gemelo de C5, triaje de Hermes del 15-oct-2026)
-    if not SameText(Plat, 'Linux64') then
+    if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
       Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT,
-        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown')]));
+        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown'), PLATAFORMA_DE_GETSDK]));
     // por la puerta, con el IDE como lugar: se copia antes en la casa
     try
       CopiaSdk := BorraFichero(Fichero, ltIde);
@@ -1809,9 +1824,9 @@ begin
     Plat := PlataformaDelAsiento(Info.Version, Nombre);
     // sin plataforma legible no se quita nada: la puerta cierra, no abre
     // (C5 del cierre de la 1.19.0; los .sdk y asientos reales si la traen)
-    if not SameText(Plat, 'Linux64') then
+    if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
       Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT,
-        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown')]));
+        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown'), PLATAFORMA_DE_GETSDK]));
   end;
   R := TRegistry.Create(KEY_WRITE);
   try
