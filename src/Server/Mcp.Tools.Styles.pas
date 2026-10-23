@@ -84,7 +84,8 @@ uses
   Lsp.Pascal,
   Lsp.Mascara,
   Lsp.Casa,
-  Lsp.Sandbox;
+  Lsp.Sandbox,
+  Lsp.Rutas;        // RutaDesde: EL resolutor de una ruta leida de un fichero
 
 constructor TDelphiStylesTool.Create;
 begin
@@ -680,10 +681,10 @@ begin
           Continue;
         var Esta := False;
         try
-          var Ruta := Entrada.Fichero;
-          if not TPath.IsPathRooted(Ruta) then
-            Ruta := TPath.Combine(TPath.GetDirectoryName(F), Ruta);
-          Esta := (ReadPathDenied(Ruta) = '') and TFile.Exists(Ruta);
+          // desde la carpeta del .rc, por EL resolutor ("\x" y "X:y" se
+          // miraban en la unidad del PROCESO); lo que no se resuelve, no esta
+          var Ruta := RutaDesde(TPath.GetDirectoryName(F), Entrada.Fichero);
+          Esta := (Ruta <> '') and (ReadPathDenied(Ruta) = '') and TFile.Exists(Ruta);
         except
           // una ruta que no es ruta: no esta
         end;

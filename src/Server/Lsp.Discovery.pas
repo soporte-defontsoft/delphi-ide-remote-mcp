@@ -429,7 +429,8 @@ uses
   // salen de aqui, por el registro y lo descubierto, sin leer ningun fichero:
   // si los midiese leyendo por la puerta, se preguntaria a si misma
   Lsp.Patch,
-  Lsp.Settings; // ServerDelphiVersion: la version que fija el settings.ini
+  Lsp.Settings, // ServerDelphiVersion: la version que fija el settings.ini
+  Lsp.Rutas;    // RutaDesde: EL resolutor de una ruta leida
 
 function TRadStudioInfo.Found: Boolean;
 begin
@@ -1431,15 +1432,14 @@ begin
     // EL troceador, el de la puerta del build (TrozosDeLista)
     for Item in TrozosDeLista(ExpandIdeMacros(IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor), Vars)) do
     begin
-      Expanded := Item;
-      if (Expanded = '') or Expanded.Contains('$(') or
-         not TPath.IsPathRooted(Expanded) then
+      // solo las completas: un valor del registro no tiene carpeta, y "\x" o
+      // "X:y" se resolvian contra el PROCESO del servidor (EL resolutor)
+      if Item.Contains('$(') then
         Continue;
-      try
-        Expanded := PrefijoSinBarra(TPath.GetFullPath(Expanded));
-      except
+      Expanded := RutaDesde('', Item);
+      if Expanded = '' then
         Continue;
-      end;
+      Expanded := PrefijoSinBarra(Expanded);
       if List.IndexOf(Expanded) < 0 then
         List.Add(Expanded);
     end;

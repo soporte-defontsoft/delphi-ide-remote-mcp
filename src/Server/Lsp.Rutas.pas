@@ -81,6 +81,26 @@ function LugarDeRedParaRutaLocal(const ARuta, ALugar: string): Boolean;
   pregunte "me han dado una ruta completa?" pregunta esto. }
 function EsRutaAbsoluta(const AValue: string): Boolean;
 
+{ AValor, una ruta ESCRITA en un fichero (un .dproj, un .groupproj, un .rc,
+  un form, un $I) o en un valor del IDE, resuelta como la resuelve Windows
+  para un proceso cuya carpeta actual es ABase: la de quien la LEE - msbuild
+  corre en la del .dproj (Lsp.BuildRunner), el motor en la de su fuente
+  principal, el ayudante del render en la del form, Windows sigue un enlace
+  relativo desde la suya (DestinoDeEnlace) -. Completa, tal cual (sin .. ni
+  barras normales); relativa, desde ABase; "\x", en la raiz de la unidad de
+  ABase; "X:y", desde ABase si X es su unidad. '' si no se resuelve: "X:y"
+  de OTRA unidad (su carpeta actual es la del proceso que la lea, y no la
+  nombra nadie), lo que no es completo sin una ABase completa (un valor del
+  registro del IDE no tiene carpeta) o lo que GetFullPath no entiende. Quien
+  juzga niega lo que no se resuelve; quien busca se lo salta.
+  TPath.IsPathRooted da por completas "\x" y "X:y", y GetFullPath las
+  resolvia contra el PROCESO del servidor: el juez de los literales del
+  render miraba en una unidad lo que el ayudante lee en otra (A9 de la 1.23,
+  medido por test_rutas_a_medias_1230). Era la tripleta IsPathRooted +
+  Combine + GetFullPath, a mano en una docena de sitios; las de la puerta del
+  build siguen a mano, aparcadas con ella. }
+function RutaDesde(const ABase, AValor: string): string;
+
 { Un prefijo de DISPOSITIVO o de ruta extendida (\\?\, \\.\, tambien con
   barras normales): la entrada lo niega (GUARD-022) y nadie lo resuelve en
   el disco. Estaba escrito dos veces, y NormPath resolvia un \\?\UNC\ leido
@@ -255,9 +275,9 @@ begin
       var CarpetaReal: string;
       if NombreFinal(Carpeta, CarpetaReal) then
         Carpeta := CarpetaReal;
-      if S.StartsWith('\') then
-        Exit(TPath.GetFullPath(ExtractFileDrive(Carpeta) + S));
-      Exit(TPath.GetFullPath(TPath.Combine(Carpeta, S)));
+      // "\x" en la raiz de la unidad del enlace, lo demas desde su carpeta:
+      // la regla de Windows, la de EL resolutor
+      Exit(RutaDesde(Carpeta, S));
     end;
     // la forma NT: \??\C:\... o \??\UNC\host\...
     if S.StartsWith('\??\UNC\') then
@@ -431,6 +451,34 @@ begin
             ((Length(AValue) >= 2) and
              (((AValue[1] = '\') and (AValue[2] = '\')) or
               ((AValue[1] = '/') and (AValue[2] = '/'))));
+end;
+
+function RutaDesde(const ABase, AValor: string): string;
+var
+  Unidad: string;
+begin
+  Result := '';
+  if AValor = '' then
+    Exit;
+  try
+    if EsRutaAbsoluta(AValor) then
+      Exit(TPath.GetFullPath(AValor));
+    // lo demas cuelga de ABase: sin una completa, de la carpeta del proceso
+    if not EsRutaAbsoluta(ABase) then
+      Exit;
+    Unidad := ExtractFileDrive(ABase);
+    if CharInSet(AValor[1], ['\', '/']) then
+      Result := TPath.GetFullPath(Unidad + AValor)
+    else if (Length(AValor) >= 2) and (AValor[2] = ':') then
+    begin
+      if SameText(Copy(AValor, 1, 2), Unidad) then
+        Result := TPath.GetFullPath(TPath.Combine(ABase, Copy(AValor, 3, MaxInt)));
+    end
+    else
+      Result := TPath.GetFullPath(TPath.Combine(ABase, AValor));
+  except
+    Result := ''; // un texto que no es ruta no se resuelve
+  end;
 end;
 
 function EsPrefijoDeDispositivo(const APath: string): Boolean;

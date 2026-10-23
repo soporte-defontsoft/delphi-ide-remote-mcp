@@ -320,7 +320,8 @@ uses
   Lsp.Casa,
   Lsp.Mascara,
   Lsp.Codificacion,
-  Lsp.Args; // PrimerTrozo: el nombre de una macro del .rc
+  Lsp.Args, // PrimerTrozo: el nombre de una macro del .rc
+  Lsp.Rutas; // RutaDesde: EL resolutor de una ruta leida de un fichero
 
 { TStyleObj }
 
@@ -1432,13 +1433,11 @@ var
       Cand := Raw.Trim;
       if Cand = '' then
         Continue;
-      try
-        if not TPath.IsPathRooted(Cand) then
-          Cand := TPath.Combine(Base, Cand);
-        Cand := TPath.GetFullPath(Cand);
-      except
+      // desde la carpeta del .rc, por EL resolutor: "\x" y "X:y" se juzgaban
+      // contra el PROCESO del servidor; lo que no se resuelve se niega
+      Cand := RutaDesde(Base, Cand);
+      if Cand = '' then
         Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
-      end;
       if ReadPathDenied(Cand) <> '' then
         Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
       // CHAPUZA TEMPORAL (David, 18-oct-2026), hasta el token LPAC de la
@@ -1467,11 +1466,8 @@ var
     begin
       if E.Clase <> crInclude then
         Continue;
-      Cand := E.Fichero.Trim;
-      if not TPath.IsPathRooted(Cand) then
-        Cand := TPath.Combine(Base, Cand);
-      Cand := TPath.GetFullPath(Cand); // ya paso arriba por la puerta
-      if TFile.Exists(Cand) then
+      Cand := RutaDesde(Base, E.Fichero.Trim); // ya paso arriba por la puerta
+      if (Cand <> '') and TFile.Exists(Cand) then
       begin
         Result := Walk(Cand, ADepth + 1);
         if Result <> '' then

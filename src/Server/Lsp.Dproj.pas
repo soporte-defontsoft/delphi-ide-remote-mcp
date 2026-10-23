@@ -1075,6 +1075,7 @@ uses
   System.Generics.Defaults, // TIStringComparer: las banderas del build por nombre, sin distinguir mayusculas
   Lsp.Texts,
   Lsp.Patch, // LeeTexto: la puerta de leer (el .dproj y sus Import, en la jaula)
+  Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
   System.Character;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
@@ -3241,8 +3242,17 @@ end;
 function RutasDeBusqueda(const ADprojPath, AXml: string): TArray<TRutaDeBusqueda>;
 var
   R: TRutaDeBusqueda;
+  Carpeta: string;
 begin
   Result := [];
+  // la carpeta en la que corre msbuild: desde ella se lee cada trozo
+  Carpeta := '';
+  try
+    Carpeta := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+  except
+    // una ruta de .dproj que no parsea: sin carpeta, EL resolutor solo
+    // resuelve lo completo
+  end;
   // por EL troceador de las listas del proyecto (TrozosDeLista): era un
   // Split a pelo, gemelo suyo (revisor del 21-oct-2026)
   for var V in AllTagValues(AXml, 'DCC_UnitSearchPath') do
@@ -3251,14 +3261,7 @@ begin
       R.Escrita := Seg;
       if R.Escrita.Contains('$(') then
         Continue;
-      try
-        R.Carpeta := R.Escrita;
-        if not TPath.IsPathRooted(R.Carpeta) then
-          R.Carpeta := TPath.Combine(TPath.GetDirectoryName(ADprojPath), R.Carpeta);
-        R.Carpeta := TPath.GetFullPath(R.Carpeta);
-      except
-        R.Carpeta := '';
-      end;
+      R.Carpeta := RutaDesde(Carpeta, R.Escrita); // '' si no se resuelve
       Result := Result + [R];
     end;
 end;
@@ -4104,13 +4107,10 @@ begin
       Cand := Expand(D);
       if (Cand = '') or Cand.Contains('$(') then
         Continue; // still macro-based: not resolvable here
-      if not TPath.IsPathRooted(Cand) then
-        Cand := TPath.Combine(Dir, Cand);
-      try
-        Cand := TPath.GetFullPath(Cand);
-      except
+      // donde la deja msbuild, que corre en la carpeta del .dproj (EL resolutor)
+      Cand := RutaDesde(Dir, Cand);
+      if Cand = '' then
         Continue;
-      end;
       for Nombre in Nombres do
       begin
         // (Android: lib<Project>.so por el nombrador; buscando <Project>.so el

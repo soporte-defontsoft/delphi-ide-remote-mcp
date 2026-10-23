@@ -167,7 +167,7 @@ var
   O, E: TJSONObject;
   Arr: TJSONArray;
   Lista: TArray<string>;
-  Dir, Incl, Abs: string;
+  Incl, Abs: string;
   Faltan: Integer;
 begin
   try
@@ -176,7 +176,6 @@ begin
     on E: Exception do
       Exit(MsgEnvuelve(SR_CONFIG_GROUP_READ_FMT, E.Message, [AGroup, E.Message]));
   end;
-  Dir := TPath.GetDirectoryName(AGroup);
   Faltan := 0;
   O := TJSONObject.Create;
   try
@@ -188,11 +187,9 @@ begin
       E := TJSONObject.Create;
       Arr.Add(E);
       E.AddPair('include', Incl);
-      try
-        Abs := TPath.GetFullPath(TPath.Combine(Dir, Incl));
-      except
-        Abs := '';
-      end;
+      // por EL lector de lo que lista un grupo, desde su carpeta ('' si no se
+      // resuelve: "\x" y "X:y" se resolvian contra el PROCESO del servidor)
+      Abs := RutaDeInclude(AGroup, Incl);
       if (Abs <> '') and (ReadPathDenied(Abs) = '') then
       begin
         E.AddPair('path', Abs);
@@ -730,18 +727,19 @@ begin
   AFull := '';
   Result := '';
   P := AValor.Trim;
+  // lo que el agente escribe a medias se le niega con su motivo (escrito
+  // asi, el build lo leeria desde la unidad del proyecto, no desde la que
+  // el agente cree); lo demas, por EL resolutor desde la carpeta
   try
-    if not EsRutaAbsoluta(P) then
-    begin
-      if TPath.IsPathRooted(P) then
-        Exit(MsgFmt(SR_CONFIG_PATH_A_MEDIAS_FMT, [AEco.Trim]));
-      P := TPath.Combine(ACarpeta, P);
-    end;
-    AFull := TPath.GetFullPath(P);
+    if not EsRutaAbsoluta(P) and TPath.IsPathRooted(P) then
+      Exit(MsgFmt(SR_CONFIG_PATH_A_MEDIAS_FMT, [AEco.Trim]));
   except
-    on E: Exception do
-      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));
+    // IsPathRooted lanza con un caracter que Windows no admite
+    Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));
   end;
+  AFull := RutaDesde(ACarpeta, P);
+  if AFull = '' then
+    Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));
 end;
 
 { Vets a search path the way every read is vetted: expand the IDE's macros,
@@ -1132,11 +1130,11 @@ function SameDeployFile(const AInclude, AProyecto, AFullPath: string): Boolean;
 begin
   if AInclude.Trim = '' then
     Exit(False);
-  try
-    Result := SameText(RutaDeInclude(AProyecto, AInclude.Trim), AFullPath);
-  except
-    Result := SameText(AInclude, AFullPath);
-  end;
+  // la que no se resuelve se compara como esta escrita
+  var Full := RutaDeInclude(AProyecto, AInclude.Trim);
+  if Full = '' then
+    Exit(SameText(AInclude, AFullPath));
+  Result := SameText(Full, AFullPath);
 end;
 
 { Every DeployFile element of the manifest whose Include matches AFile
@@ -1373,11 +1371,15 @@ var
     Result := False;
     for var D in AEntradas do
       if SameText(D.Plataforma, APlat) then
-      try
-        if SameDeployFile(AInclude, ADproj, RutaDeInclude(ADproj, D.LocalName)) then
-          Exit(True);
-      except
-        if SameText(AInclude, D.LocalName) then
+      begin
+        // la que no se resuelve se compara como esta escrita
+        var Full := RutaDeInclude(ADproj, D.LocalName);
+        if Full = '' then
+        begin
+          if SameText(AInclude, D.LocalName) then
+            Exit(True);
+        end
+        else if SameDeployFile(AInclude, ADproj, Full) then
           Exit(True);
       end;
   end;

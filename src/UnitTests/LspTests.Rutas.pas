@@ -160,6 +160,22 @@ type
     [Test] procedure EnAlgunLugarNoPreguntaAlRecursoDeRed;
   end;
 
+  { EL resolutor de una ruta leida de un fichero (Lsp.Rutas.RutaDesde): la
+    regla de Windows para un proceso cuya carpeta actual es la base, la de
+    quien lee la ruta. "\x" y "X:y" se resolvian contra el PROCESO del
+    servidor (A9 de la 1.23; en vivo lo mide test_rutas_a_medias_1230). Las
+    letras no tienen que existir: nada de esto toca el disco. }
+  [TestFixture]
+  TRutaDesdeTests = class
+  public
+    [Test] procedure LaCompletaTalCual;
+    [Test] procedure LaRelativaDesdeLaBase;
+    [Test] procedure LaDeRaizEnLaUnidadDeLaBase;
+    [Test] procedure LaDeUnidadSoloSiEsLaDeLaBase;
+    [Test] procedure SinBaseSoloLaCompleta;
+    [Test] procedure LoQueNoEsRutaNoSeResuelve;
+  end;
+
 implementation
 
 uses
@@ -172,7 +188,7 @@ uses
   Lsp.Patch,          // las puertas de leer y de escribir
   Lsp.Codificacion,   // ekUtf8Bom
   Lsp.Discovery,      // la instalacion del IDE
-  Lsp.Rutas,          // EsRutaAbsoluta
+  Lsp.Rutas,          // EsRutaAbsoluta, RutaDesde
   LspTests.FormRender, // CreaUnion
   Lsp.Mascara,
   System.RegularExpressions;
@@ -1048,6 +1064,58 @@ begin
   Assert.IsTrue(GetTickCount64 - T0 < 2000, 'no sale a la red');
 end;
 
+{ TRutaDesdeTests }
+
+procedure TRutaDesdeTests.LaCompletaTalCual;
+begin
+  Assert.AreEqual('E:\r', RutaDesde('D:\p', 'E:\q\..\r'));
+  Assert.AreEqual('E:\q\r', RutaDesde('D:\p', 'E:/q/r'));
+  Assert.AreEqual('\\h\s\x', RutaDesde('D:\p', '\\h\s\x'));
+end;
+
+procedure TRutaDesdeTests.LaRelativaDesdeLaBase;
+begin
+  Assert.AreEqual('D:\p\sub\x.pas', RutaDesde('D:\p', 'sub\x.pas'));
+  Assert.AreEqual('D:\x.pas', RutaDesde('D:\p', '..\x.pas'));
+  Assert.AreEqual('\\h\s\p\x', RutaDesde('\\h\s\p', 'x'));
+end;
+
+procedure TRutaDesdeTests.LaDeRaizEnLaUnidadDeLaBase;
+begin
+  // la raiz de la unidad de la base, no la del proceso
+  Assert.AreEqual('D:\x', RutaDesde('D:\p\q', '\x'));
+  Assert.AreEqual('D:\x\y', RutaDesde('D:\p\q', '/x/y'));
+  Assert.AreEqual('\\h\s\x', RutaDesde('\\h\s\p', '\x'));
+end;
+
+procedure TRutaDesdeTests.LaDeUnidadSoloSiEsLaDeLaBase;
+begin
+  // "X:y" es la carpeta actual de X: la base si X es su unidad
+  Assert.AreEqual('D:\p\x', RutaDesde('D:\p', 'D:x'));
+  Assert.AreEqual('D:\p\x', RutaDesde('D:\p', 'd:x'));
+  Assert.AreEqual('D:\p', RutaDesde('D:\p', 'D:'));
+  // ...y la de otra unidad es del proceso que la lea: no se resuelve
+  Assert.AreEqual('', RutaDesde('D:\p', 'E:x'));
+  Assert.AreEqual('', RutaDesde('\\h\s\p', 'D:x'));
+end;
+
+procedure TRutaDesdeTests.SinBaseSoloLaCompleta;
+begin
+  Assert.AreEqual('D:\x', RutaDesde('', 'D:\x'));
+  for var V in TArray<string>.Create('x', '\x', 'D:x', '..\x') do
+    Assert.AreEqual('', RutaDesde('', V), V);
+  // una base que no es completa tampoco es base
+  Assert.AreEqual('', RutaDesde('relativa', 'x'));
+  Assert.AreEqual('', RutaDesde('\sin-unidad', 'x'));
+end;
+
+procedure TRutaDesdeTests.LoQueNoEsRutaNoSeResuelve;
+begin
+  Assert.AreEqual('', RutaDesde('D:\p', ''));
+  Assert.AreEqual('', RutaDesde('D:\p', 'a|b'));
+  Assert.AreEqual('', RutaDesde('D:\p', 'a<b'));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
@@ -1057,5 +1125,6 @@ initialization
   TDUnitX.RegisterTestFixture(TPuertaDeLeerTests);
   TDUnitX.RegisterTestFixture(TPuertaDeEscribirTests);
   TDUnitX.RegisterTestFixture(TLugarDeRedTests);
+  TDUnitX.RegisterTestFixture(TRutaDesdeTests);
 
 end.

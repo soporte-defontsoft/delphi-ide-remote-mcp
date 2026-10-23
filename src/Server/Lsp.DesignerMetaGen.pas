@@ -259,7 +259,8 @@ uses
   Lsp.ConfigFabricator, // DEFAULT_NAMESPACES
   Lsp.NetDrives,        // NotaAlLog
   Lsp.Texts,
-  Lsp.Casa;             // ServerCacheDir (EscribeEnCasaDelServidor vive en Lsp.Patch)
+  Lsp.Casa,             // ServerCacheDir (EscribeEnCasaDelServidor vive en Lsp.Patch)
+  Lsp.Rutas;            // RutaDesde: EL resolutor de una ruta leida de un fichero
 
 var
   // el servidor se cierra: el generador lo mira entre unidad y unidad
@@ -1112,8 +1113,10 @@ begin
   if FIncluidos.TryGetValue(Clave, Result) then
     Exit;
   try
+    // una completa o a medias ("\x", "X:y"), por EL resolutor desde la
+    // carpeta de la unidad: se miraban en la unidad del PROCESO
     if TPath.IsPathRooted(ANombre) then
-      Candidatos := [ANombre, ANombre + '.inc']
+      Candidatos := [RutaDesde(ADir, ANombre), RutaDesde(ADir, ANombre + '.inc')]
     else
     begin
       Candidatos := [TPath.Combine(ADir, ANombre), TPath.Combine(ADir, ANombre + '.inc')];

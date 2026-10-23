@@ -192,7 +192,9 @@ function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Intege
 function IncludeFor(const ADpr, APas: string): string;
 { La inversa: la ruta COMPLETA de lo que un .dpr lista como AInclude (Sub\X.pas,
   ..\shared\X.pas, o absoluta), vista desde su carpeta. EL lector de lo que
-  escribe IncludeFor. }
+  escribe IncludeFor. '' si no se resuelve (Lsp.Rutas.RutaDesde: "X:y" de
+  otra unidad, lo que no es una ruta); "\x" es de la unidad del .dpr, la de
+  la carpeta en la que corre el compilador. }
 function RutaDeInclude(const ADpr, AInclude: string): string;
 
 type
@@ -342,7 +344,12 @@ end;
 
 function RutaDeInclude(const ADpr, AInclude: string): string;
 begin
-  Result := TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(TPath.GetFullPath(ADpr)), AInclude));
+  Result := '';
+  try
+    Result := RutaDesde(TPath.GetDirectoryName(TPath.GetFullPath(ADpr)), AInclude);
+  except
+    // un .dpr sin ruta valida no tiene carpeta desde la que leer
+  end;
 end;
 
 { ---- unit inspection ---- }
@@ -2276,7 +2283,14 @@ begin
   Todos := [Dpr];
   for var PU in ProjectUnits(AProject, False) do
     if PU.Include <> '' then
-      Todos := Todos + [RutaDeInclude(Dpr, PU.Include)];
+    begin
+      // lo que no se resuelve no se abre: se dice, como lo que nadie toca
+      var Ruta := RutaDeInclude(Dpr, PU.Include);
+      if Ruta = '' then
+        ANoEscritos := ANoEscritos + [TPath.GetFileName(PU.Include)]
+      else
+        Todos := Todos + [Ruta];
+    end;
   // la unit en su sitio nuevo: el .dpr todavia la lista por el viejo (que ya
   // no existe y no entra)
   Todos := Todos + [TPath.GetFullPath(ANewPasPath)];
@@ -3624,14 +3638,8 @@ var
     Result := '';
     if ATrozo.Contains('$(') or ATrozo.Contains('@(') or ATrozo.Contains('%(') then
       Exit;
-    try
-      if TPath.IsPathRooted(ATrozo) then
-        Result := SinBarraFinal(TPath.GetFullPath(ATrozo))
-      else
-        Result := SinBarraFinal(TPath.GetFullPath(TPath.Combine(ABase, ATrozo)));
-    except
-      Result := '';
-    end;
+    // como lo lee msbuild desde esa carpeta (EL resolutor)
+    Result := SinBarraFinal(RutaDesde(ABase, ATrozo));
   end;
 
   // si algun sitio de ruta lleva un trozo que RutaReapuntada se salta: uno
@@ -4236,10 +4244,11 @@ begin
     try
       for var I in ProyectosDeGrupo(AProject) do
       begin
-        Abs := TPath.GetFullPath(TPath.Combine(Base, I));
+        Abs := RutaDeInclude(AProject, I);
         // lo de fuera de lo que esta sesion puede leer ni se mira ni se
-        // dice (ni si existe), como en el view de un grupo
-        if (ReadPathDenied(Abs) <> '') or TFile.Exists(Abs) then
+        // dice (ni si existe), como en el view de un grupo; ni lo que no se
+        // resuelve
+        if (Abs = '') or (ReadPathDenied(Abs) <> '') or TFile.Exists(Abs) then
           Continue;
         var Cands := FicherosBajo(Borde, EsDeNombre(TPath.GetFileName(I)), 5, Saltadas);
         if Length(Cands) = 1 then
@@ -4274,8 +4283,8 @@ begin
     begin
       if PU.Include = '' then
         Continue;
-      Abs := TPath.GetFullPath(TPath.Combine(Base, PU.Include));
-      if (ReadPathDenied(Abs) <> '') or TFile.Exists(Abs) then
+      Abs := RutaDeInclude(Dpr, PU.Include);
+      if (Abs = '') or (ReadPathDenied(Abs) <> '') or TFile.Exists(Abs) then
         Continue;
       var Cands := FicherosBajo(Borde, EsDeNombre(TPath.GetFileName(PU.Include)), 5, Saltadas);
       if Length(Cands) = 1 then

@@ -145,6 +145,25 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **A path read from a file is resolved as the program that reads it does.**
+  A path written in a `.dproj`, a group, a `.rc` or a form can be half
+  rooted: `\x`, the root of the current drive of whoever reads it, or `C:x`,
+  the current folder of that drive. The server took both as complete and
+  resolved them against its own process - its drive and its folder, which
+  nobody named - while msbuild runs in the project's folder and the helper
+  that renders a form in the form's. With the server on another drive than
+  the projects (as a Windows service it runs in `C:\Windows\system32`), the
+  judge that refuses a form value naming a file outside the roots looked for
+  it on one drive while the helper resolves it on the other, so a caption
+  `\private\x.txt` naming such a file passed; and the finders missed what
+  the build reads - the
+  `compilesAgainst` of `delphi_projects`, the projects of a group in
+  `delphi_config view`, the files of a `.rc` in `delphi_styles lint`
+  (measured on 2026-10-23). One resolver now applies Windows' own rule from
+  the folder of whoever reads the path, and what it cannot resolve - a
+  drive-relative path on another drive - is refused by a judge and skipped
+  by a finder. It was written by hand in a dozen places
+  (`tests/test_rutas_a_medias_1230.py`).
 - **What the second review found (Claude Fable 5.1 through Hermes,
   2026-10-23).** `delphi_test` on a package whose source names `DUnitX.`
   (a package of test helpers) took it for a test, built it and tried to run

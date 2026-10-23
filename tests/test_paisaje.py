@@ -989,6 +989,25 @@ REGLAS = [
      r"^(?!.*\bSistema\s*:).*'(?:arm64-v8a|armeabi-v7a)'", [],
      'la tabla PLATAFORMAS de Lsp.Dproj y sus preguntas: SistemaDePlataforma, SistemaDelPAServer, '
      'CorreEnEstaMaquina, ExtensionDeEjecutable, CarpetaDeLibreriasDelApk'),
+    # una ruta LEIDA de un fichero, resuelta a mano: IsPathRooted da por completas "\x" y "X:y" y
+    # GetFullPath las resolvia contra el PROCESO del servidor (A9 de la 1.23). Las casas son las que
+    # solo preguntan si el texto cuelga de la carpeta, y las de la puerta del build, aparcada con ella
+    ('una ruta leida resuelta a mano', r'\bTPath\.IsPathRooted\s*\(',
+     [('Lsp.BuildRunner.pas', 'IncludeDirectivesDenied'), ('Lsp.BuildRunner.pas', 'LecturasDelBuildDenegadas'),
+      ('Lsp.Dproj.pas', 'ResolveImportPath'), ('Lsp.Dproj.pas', 'ResuelveSalida'),
+      # re-apuntar en una mudanza: solo lo escrito relativo a la carpeta (lo demas lo nombra
+      # RutasQueYaNoLlegan)
+      ('Lsp.ProjectUnits.pas', 'RutaReapuntada'), ('Lsp.ProjectUnits.pas', 'RutasQueYaNoLlegan'),
+      # un $I relativo se busca ademas por las carpetas; el completo o a medias, por RutaDesde
+      ('Lsp.DesignerMetaGen.pas', 'TGenerador.TextoDeInclude'),
+      # el nombre a secas de delphi_test (TEST-...), la rama de ReadOnlyPaths tras su juez
+      # (EntradaDeSitio ya nego lo a medias) y la negativa CFG-109 de lo que escribe el agente
+      ('Lsp.TestRunner.pas', 'TestRun'), ('Lsp.Settings.pas', 'ParseReadOnlyList'),
+      ('Mcp.Tools.Config.pas', 'RutaEnLaCarpeta')],
+     'RutaDesde (Lsp.Rutas): como la lee quien la lee, desde su carpeta (msbuild en la del .dproj, el '
+     'ayudante del render en la del form); lo que no se resuelve no se usa. El juez de los literales del '
+     'render miraba en la unidad del proceso lo que el ayudante lee en la del form (medido, '
+     'test_rutas_a_medias_1230)'),
 ]
 
 
@@ -1123,6 +1142,7 @@ PLANTADO = {
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",
     'el binario de Android en el apk compuesto a mano': "  B := 'lib' + Proyecto + '.so';",
+    'una ruta leida resuelta a mano': "  if not TPath.IsPathRooted(Cand) then Cand := TPath.Combine(Dir, Cand);",
     'las extensiones de un proyecto a mano': "  if MatchText(TPath.GetExtension(F), ['.dproj', '.dpr']) then",
     'el .dpr de un .dproj': "  D := TPath.ChangeExtension(P, '.dpr');",
     'el juez del nombre de un perfil': "  if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then",

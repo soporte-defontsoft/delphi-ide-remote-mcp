@@ -861,11 +861,9 @@ begin
       var Dproj := Session.FindDproj(FullPath);
       if Dproj <> '' then
         for var PU in ProjectUnits(Dproj, False) do
-          if TPath.IsPathRooted(PU.Include) then
-            Extra := Extra + [TPath.GetDirectoryName(PU.Include)]
-          else
-            Extra := Extra + [TPath.GetDirectoryName(TPath.GetFullPath(
-              TPath.Combine(TPath.GetDirectoryName(Dproj), PU.Include)))];
+          // por EL lector de lo que lista el proyecto ('' si no se resuelve:
+          // su carpeta vacia se salta abajo)
+          Extra := Extra + [TPath.GetDirectoryName(RutaDeInclude(Dproj, PU.Include))];
       for var D in Extra do
       begin
         if (D = '') or not TDirectory.Exists(D) then

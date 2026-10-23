@@ -256,14 +256,16 @@ begin
         // SDKs and the PAServer installers.
         for Item in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
           Vars.Values['BDSCatalogRepository']) do
-          if (Item <> '') and TPath.IsPathRooted(Item) then
-          try
-            Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Item));
-            if List.IndexOf(Expanded) < 0 then
-              List.Add(Expanded);
-          except
-            // never breaks the server
-          end;
+        begin
+          // solo una completa (EL resolutor, sin carpeta): "\x" o "X:y" se
+          // resolvian contra el PROCESO del servidor
+          Expanded := RutaDesde('', Item);
+          if Expanded = '' then
+            Continue;
+          Expanded := IncludeTrailingPathDelimiter(Expanded);
+          if List.IndexOf(Expanded) < 0 then
+            List.Add(Expanded);
+        end;
 
         // ALL platforms registered for this install, never a fixed pair:
         // Linux64, OSX64, Android64, iOSDevice64... each has its own path.

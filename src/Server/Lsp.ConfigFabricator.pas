@@ -111,7 +111,8 @@ uses
   System.RegularExpressions,
   Lsp.ProjectUnits, // las units que nombra el .dpr
   Lsp.Patch,  // LeeTexto: la puerta de leer
-  Lsp.Casa;   // la casa del servidor (EscribeEnCasaDelServidor vive en Lsp.Patch)
+  Lsp.Casa,   // la casa del servidor (EscribeEnCasaDelServidor vive en Lsp.Patch)
+  Lsp.Rutas;  // RutaDesde: EL resolutor de una ruta leida de un fichero
 
 const
   STANDARD_ALIASES =
@@ -143,15 +144,13 @@ begin
     // C, 21-oct-2026). EL troceador, el de la puerta del build (TrozosDeLista)
     for Item in TrozosDeLista(ExpandIdeMacros(ARaw, AVars)) do
     begin
-      Expanded := Item;
-      if (Expanded = '') or Expanded.Contains('$(') then
+      if (Item = '') or Item.Contains('$(') then
         Continue;
-      if not TPath.IsPathRooted(Expanded) then
-      try
-        Expanded := TPath.GetFullPath(TPath.Combine(ABaseDir, Expanded));
-      except
+      // como la lee el motor, que corre en la carpeta del proyecto (EL
+      // resolutor: "\x" y "X:y" se resolvian contra el PROCESO del servidor)
+      Expanded := RutaDesde(ABaseDir, Item);
+      if Expanded = '' then
         Continue;
-      end;
       if not List.Contains(Expanded) then
         List.Add(Expanded);
     end;
@@ -250,8 +249,9 @@ begin
   begin
     var Ensenable := False;
     try
-      Ensenable := MotorPuedeEnsenar(TPath.GetFullPath(TPath.Combine(
-        TPath.GetDirectoryName(Dpr), U.Include)));
+      // por EL lector de lo que lista un .dpr: la que no se resuelve, de fuera
+      var Ruta := RutaDeInclude(Dpr, U.Include);
+      Ensenable := (Ruta <> '') and MotorPuedeEnsenar(Ruta);
     except
       // la ruta que no se deja juzgar cuenta como de fuera
     end;
@@ -468,7 +468,11 @@ begin
     // la de al lado por EL inverso (DprDe: el .dpr, o el .dpk de un paquete);
     // se componia <nombre>.dpr a mano y un paquete salia con un .dpr que no hay
     MainSource := TPath.GetFileName(DprDe(ADprojPath));
-  DprPath := TPath.GetFullPath(TPath.Combine(DprojDir, MainSource));
+  // como la lee msbuild, desde la carpeta del .dproj; una que no se resuelve
+  // ("X:y" de otra unidad) vale lo que no tenerla: la de al lado
+  DprPath := RutaDesde(DprojDir, MainSource);
+  if DprPath = '' then
+    DprPath := DprDe(ADprojPath);
 
   // EL sufijo de su compilador, el que HAY en su bin (TRadStudioInfo). Antes
   // se componia del numero BDS, de dos formas en dos sitios, y solo acertaba

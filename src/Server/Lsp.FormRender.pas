@@ -273,7 +273,8 @@ uses
   Lsp.Patch,        // EscribeTexto: la puerta de escribir, la propuesta del juez
   Lsp.Codificacion, // EncKindOf
   Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
-  Lsp.ShaCache;     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante
+  Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante
+  Lsp.Rutas;        // RutaDesde: EL resolutor de una ruta leida de un fichero
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -796,8 +797,15 @@ var
       Exit;
     for var Base in Bases do
     begin
+      // como lo lee el ayudante, cuya carpeta actual es una de estas bases (EL
+      // resolutor): "\x" y "X:y" se miraban en la unidad del PROCESO, y el
+      // ayudante los lee en la del form (A9 de la 1.23, medido). "X:y" de OTRA
+      // unidad, por la carpeta de esa unidad que el ayudante hereda del
+      // servidor con su entorno (RunCapturedIn): la de este proceso
+      Ruta := RutaDesde(Base, AValor);
+      if Ruta = '' then
       try
-        Ruta := TPath.GetFullPath(TPath.Combine(Base, AValor));
+        Ruta := TPath.GetFullPath(AValor);
       except
         Continue; // una cadena que no es ruta no nombra un fichero
       end;
