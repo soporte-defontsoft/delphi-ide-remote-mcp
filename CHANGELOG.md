@@ -145,6 +145,19 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **A missing unit's folder is suggested also when it is called `Backup...`
+  or lives under a `Release` folder.** When a build fails with `F2613`,
+  `BUILD-042` says where the unit's source is. It skipped every folder whose
+  path held `\backup`, a rule of its own that the IDE does not follow (its
+  dead copies live in `__history` and `__recovery`) and that also skipped a
+  source folder such as `\BackupService\`; and it judged build output by the
+  whole path, so a root that hangs from a folder named `Release` gave no
+  candidate at all (measured on 2026-10-23). Build output and the IDE's dead
+  copies are now judged below each root, as the listings do. The IDE's two
+  folder names are written once, and the second check of `delphi_edit` on a
+  dead copy asks the write gate's question and answers with its code:
+  `EDIT-033` and `EDIT-065` said what `GUARD-005` and `GUARD-004` say, and
+  are gone (`tests/test_copias_y_artefactos_1230.py`).
 - **A path read from a file is resolved as the program that reads it does.**
   A path written in a `.dproj`, a group, a `.rc` or a form can be half
   rooted: `\x`, the root of the current drive of whoever reads it, or `C:x`,

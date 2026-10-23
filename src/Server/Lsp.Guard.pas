@@ -849,6 +849,20 @@ function EnTemporal(const APath: string; out AEsLaCarpeta: Boolean): Boolean; ov
 function EnPapelera(const APath: string): Boolean; overload;
 function EnPapelera(const APath: string; out AEsLaCarpeta: Boolean): Boolean; overload;
 
+{ La misma pregunta para las copias muertas del IDE: lo que hay DENTRO de su
+  __history (las versiones viejas de cada fichero) o de su __recovery (lo que
+  guarda cuando se cae). Sus nombres son del IDE; aqui, UNA vez: la puerta de
+  escribir, la segunda barrera de delphi_edit y el buscador de las fuentes de
+  una unit los escribian a mano con tres formas, y el ultimo saltaba ademas
+  toda carpeta cuya ruta llevase '\backup' (A10 de la 1.23). El filtro de los
+  listados (SkipReason) y el .gitignore de un proyecto nuevo los toman de
+  aqui. }
+const
+  CARPETA_HISTORIA_DEL_IDE = '__history';
+  CARPETA_RECUPERACION_DEL_IDE = '__recovery';
+
+function EnCopiaDelIde(const APath: string): Boolean;
+
 { EL gate de DESTINO de escritura: la jaula (PathDenied) y las carpetas
   muertas (DeadCopyWriteDenied), en ese orden. Todo escritor que cree o
   reescriba un fichero en una ruta que elige el agente pasa por aqui. Hasta
@@ -1087,6 +1101,19 @@ begin
   Result := EnPapelera(APath, EsLaCarpeta);
 end;
 
+function EnCopiaDelIde(const APath: string): Boolean;
+var
+  Carpeta: string;
+  EsLaCarpeta: Boolean;
+begin
+  // DENTRO de una: la carpeta del fichero es una de ellas o esta dentro (la
+  // carpeta misma se crea y se quita: no pisa ninguna copia)
+  Carpeta := ExtractFileDir(APath);
+  Result := (Carpeta <> '') and
+    (EnCarpetaLlamada(Carpeta, CARPETA_HISTORIA_DEL_IDE, EsLaCarpeta) or
+     EnCarpetaLlamada(Carpeta, CARPETA_RECUPERACION_DEL_IDE, EsLaCarpeta));
+end;
+
 function DeadCopyWriteDenied(const APath: string): string;
 var
   P: string;
@@ -1109,7 +1136,7 @@ begin
   // capturas viven en la casa del servidor desde la 1.18.2).
   if EnTemporal(APath) then
     Exit(MsgText(SR_GUARD_DEAD_TEMP));
-  if P.Contains('\__history\') or P.Contains('\__recovery\') then
+  if EnCopiaDelIde(APath) then
     Exit(MsgText(SR_GUARD_DEAD_IDE));
 end;
 

@@ -8025,10 +8025,6 @@ const
     'deploy files, the projects of a group) and delphi_create writes a new ' +
     'one; neither delphi_edit nor delphi_textedit writes it.';
 
-  SR_EDIT_HISTORY_RECOVERY_SON_COPIAS =
-    '[EDIT-033 DENIED] __history\ and __recovery\ are dead copies kept ' +
-    'by the IDE. The live file is in the project folder.';
-
   SR_EDIT_CREATEUNIT_SOLO_CREA_UNITS =
     '[EDIT-034 INVALID_PARAM] createunit only creates units (.pas).';
 
@@ -9224,11 +9220,6 @@ const
   SN_EDIT_RECORTADO_EN_LINEA_FMT =
     '[EDIT-064] ... truncated at line %d of %d. Ask for another range ' +
     'with fromline/toline.';
-
-  SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT =
-    '[EDIT-065 DENIED] %s\ is the backup folder of this tool. Copies, ' +
-    'not live files: this tool does not edit them (restore brings one ' +
-    'back). The live file is one level up.';
 
   SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT =
     '[EDIT-066 DENIED] Could not encode the content: %s'#10 +

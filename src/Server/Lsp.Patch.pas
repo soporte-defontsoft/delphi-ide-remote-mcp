@@ -4151,11 +4151,11 @@ begin
     if EsRutaDeDesigner(APath) and IsBinaryDesignerBytes(B) then
       Exit(MsgFmt(SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT, [TPath.GetFileName(APath), Ext]));
   end;
-  if EnPapelera(APath) then
-    Exit(MsgFmt(SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT, [TrashFolderName]));
-  var PLower := LongCanonical(APath).ToLower.Replace('/', '\');
-  if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
-    Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
+  // las copias muertas (la papelera, las del IDE, la marca de dueno, los
+  // temporales): la segunda barrera, por LA pregunta de la puerta de escribir
+  // y con su codigo. EDIT-065 y EDIT-033 eran el mismo hecho con otro, y no se
+  // alcanzaban: la jaula va antes, tambien en una tanda (A10 de la 1.23, medido)
+  Result := DeadCopyWriteDenied(APath);
 end;
 
 procedure SignificadoDeOldNew(const AOld, ANew: string; out AHasOld, AHasNew: Boolean);

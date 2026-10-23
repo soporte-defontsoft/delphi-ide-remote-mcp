@@ -253,9 +253,10 @@ const
   // __pycache__ es compilado (el de Python): el modo ficheros de delphi_list
   // lo ensenaba entero con pattern=* y solo el modo dirs lo escondia
   // (en vivo, 6-oct-2026)
+  // (las copias muertas del IDE por sus nombres, los de Lsp.Guard)
   CARPETAS_ARTEFACTO: array [0 .. 7] of string = (
-    '\__history\', '\__recovery\', '\win32\', '\win64\', '\debug\',
-    '\release\', '\dcu\', '\__pycache__\');
+    '\' + CARPETA_HISTORIA_DEL_IDE + '\', '\' + CARPETA_RECUPERACION_DEL_IDE + '\',
+    '\win32\', '\win64\', '\debug\', '\release\', '\dcu\', '\__pycache__\');
   CARPETA_TEMPORAL = '\__delphi-temp\';
   CARPETAS_PAPELERA: array [0 .. 1] of string = (
     '\__pascal-patch\', '\__delphi-patch\');

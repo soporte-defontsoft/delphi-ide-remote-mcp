@@ -807,7 +807,7 @@ begin
         '*.local' + CRLF + '*.identcache' + CRLF + '*.projdata' + CRLF +
         '*.tvsconfig' + CRLF + '*.stat' + CRLF + '*.~*' + CRLF +
         TrashFolderName + '/' + CRLF + TempFolderName + '/' + CRLF +
-        '__history/' + CRLF + '__recovery/' + CRLF +
+        CARPETA_HISTORIA_DEL_IDE + '/' + CRLF + CARPETA_RECUPERACION_DEL_IDE + '/' + CRLF +
         '*-deploy.zip' + CRLF + '*.delphilsp.json' + CRLF);
       Files.Add('.gitignore');
     end;

@@ -151,6 +151,11 @@ REGLAS = [
     # test_round44 T6c/T6f) quedan fuera por su forma, como DESIGNER_EXTS
     ('__delphi-temp', r"^(?!\s*CARPETA_TEMPORAL\s*=).*'\\?__delphi-temp",
      [('Lsp.Casa.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
+    # las copias muertas del IDE por su nombre: tres formas a mano en la puerta de escribir, la segunda
+    # barrera de delphi_edit y el buscador de fuentes (A10 de la 1.23); los nombres viven en Lsp.Guard
+    ('las copias muertas del IDE por su nombre',
+     r"^(?!\s*CARPETA_(?:HISTORIA|RECUPERACION)_DEL_IDE\s*=).*'\\?__(?:history|recovery)", [],
+     'EnCopiaDelIde y CARPETA_HISTORIA_DEL_IDE / CARPETA_RECUPERACION_DEL_IDE (Lsp.Guard)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1122,6 +1127,7 @@ PLANTADO = {
     'el comodin de una lista blanca a mano': "  if SameText(E.Trim, 'all') then Exit;",
     '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
+    'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

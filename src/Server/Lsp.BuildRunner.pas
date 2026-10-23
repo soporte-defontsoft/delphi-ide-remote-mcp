@@ -1096,9 +1096,10 @@ begin
 end;
 
 { Los .pas que casan con AMascaras bajo ARaices, por EL recorredor y con la
-  puerta de lectura sobre cada uno; fuera los artefactos del IDE, __recovery
-  y las copias \backup. EL paseo de las fuentes de una unit: el de sus
-  carpetas y el de sus nombres cualificados (UnitSourceFolders). }
+  puerta de lectura sobre cada uno; fuera los artefactos (compilacion, las
+  copias muertas del IDE, la papelera), juzgados bajo cada raiz. EL paseo de
+  las fuentes de una unit: el de sus carpetas y el de sus nombres
+  cualificados (UnitSourceFolders). }
 function FuentesBajo(const ARaices, AMascaras: TArray<string>): TArray<string>;
 var
   L: TList<string>;
@@ -1123,8 +1124,12 @@ begin
         // sigue los enlaces, y un junction de las raices a una carpeta de
         // fuera daba como candidata lo que la jaula no deja leer (medido el
         // 4-oct-2026, test_missing_units)
-        if SkipIdeArtifacts(F) or Dir.Contains('__recovery') or ContainsText(Dir, '\backup') or
-           (ReadPathDenied(Dir) <> '') then
+        // ...y los artefactos BAJO la raiz (SkipBajoLaRaiz): por la ruta
+        // absoluta, una raiz que cuelga de una carpeta Release no daba ninguna
+        // candidata. Se saltaba ademas toda carpeta con '\backup' en la ruta,
+        // una gramatica sin juez (el IDE no escribe carpetas backup) que
+        // casaba con \BackupService\ (A10 de la 1.23, medido)
+        if SkipBajoLaRaiz(F, Root) or (ReadPathDenied(Dir) <> '') then
           Continue;
         if not L.Contains(F) then
           L.Add(F);
