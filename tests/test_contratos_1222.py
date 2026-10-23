@@ -66,6 +66,12 @@ Y GUARD-002 (Hermes, 22-oct: tres negativas hasta dar con la raiz que se lee):
   J1 con una raiz que no existe y otra de solo lectura, una ruta de fuera: GUARD-002 nombra la de solo lectura
      (marcada) y no la que no existe (ROJO: nombraba la que no existe y callaba la de solo lectura)
 
+Y las paginas de un TPageControl (Opus en Hermes, 1.22.1; medido el 23-oct-2026: insert no tenia como anadir una):
+  T1 insert de un TTabSheet en un TPageControl: dentro de el, y el form carga en preview (ROJO: DSGN-080)
+  T2 control: un TButton en esa pagina
+  T3 un TTabSheet en el form: DSGN-168 (ROJO: se insertaba, y su ReadState lo deja sin PageControl)
+  T4 set parent= de la pagina al form: DSGN-168, nada movido (ROJO igual)
+
 Uso:  python tests/test_contratos_1222.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -74,7 +80,7 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('contratos-1222')
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # preview, y set/insert le preguntan al escritor del IDE
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='c1222', t=600)
@@ -384,6 +390,32 @@ try:
               r[:500])
     finally:
         jg.cierra()
+
+    vdir = os.path.join(JAIL, 'pag')
+    r = srv.call('delphi_create', {'kind': 'project-vcl', 'name': 'Pag', 'dir': vdir})
+    vdfm = os.path.join(vdir, 'UMain.dfm')
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TPageControl'}, 240)
+    check('T0 fixture: un TPageControl en el form', not mc.fallo(r) and 'PageControl1' in lee(vdfm), r[:300])
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TTabSheet',
+                                     'parent': 'PageControl1'}, 240)
+    t = lee(vdfm)
+    # dentro del TPageControl: su bloque es el unico de sangria 2, y la pagina va con la 4, detras de el
+    i_pc = t.find('  object PageControl1: TPageControl')
+    check('T1 insert de un TTabSheet en el TPageControl: dentro de el',
+          not mc.fallo(r) and 0 <= i_pc < t.find('    object TabSheet1: TTabSheet'), r[:400] + ' | ' + t[i_pc:i_pc + 400])
+    r = srv.call('delphi_designer', {'command': 'preview', 'path': vdfm}, 240)
+    check('T1 ...y el form carga (preview)', not mc.fallo(r) and 'fidelity' in r, r[:300])
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TButton',
+                                     'parent': 'TabSheet1'}, 240)
+    check('T2 control: un TButton en la pagina', not mc.fallo(r), r[:300])
+    antes = open(vdfm, 'rb').read()
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TTabSheet'}, 240)
+    check('T3 un TTabSheet en el form: DSGN-168 y nada escrito',
+          mc.es(r, 'SR_DESIGNER_PAGINA_FMT') and open(vdfm, 'rb').read() == antes, r[:300])
+    r = srv.call('delphi_designer', {'command': 'set', 'path': vdfm, 'component': 'TabSheet1',
+                                     'parent': 'FormMain'}, 240)
+    check('T4 set parent= de la pagina al form: DSGN-168 y nada movido',
+          mc.es(r, 'SR_DESIGNER_PAGINA_FMT') and open(vdfm, 'rb').read() == antes, r[:300])
 finally:
     srv.cierra()
     mc.borra(BASE)

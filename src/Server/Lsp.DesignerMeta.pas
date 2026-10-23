@@ -195,6 +195,11 @@ const
   // un frame en linea (inline) de un form: su clase es del proyecto, no de
   // la tabla, y es un TFrame (lo que set juzga de su tamano y su sitio)
   ID_VCL_FRAME = 'Vcl.Forms:TFrame';
+  // una pagina y su control: TTabSheet.ReadState toma su PageControl del
+  // padre que la lee - "if Reader.Parent is TPageControl" (Vcl.ComCtrls,
+  // medido en la 37.0) -; la regla de insert y de set parent=
+  ID_VCL_TABSHEET = 'Vcl.ComCtrls:TTabSheet';
+  ID_VCL_PAGECONTROL = 'Vcl.ComCtrls:TPageControl';
   ID_FMX_FRAME = 'FMX.Forms:TFrame';
   // un form FMX no es un control: es de esta (revision de la 1.17.0, la raiz
   // de un insert)

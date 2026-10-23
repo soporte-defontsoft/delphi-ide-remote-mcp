@@ -5405,6 +5405,12 @@ const
     'designer (csAcceptsControls: TPanel, TGroupBox, TScrollBox, a TTabSheet ' +
     'rather than its TPageControl; not a TButton). Nothing was written.';
 
+  { Una pagina fuera de un control de paginas (1.22.2) }
+  SR_DESIGNER_PAGINA_FMT =
+    '[DSGN-168 INVALID_PARAM] A page (TTabSheet) goes in a page control ' +
+    '(TPageControl): the page takes its page control from the parent that ' +
+    'loads it, and %s (%s) is not one. Nothing was written.';
+
   SR_DESIGNER_PADRE_FMX_FMT =
     '[DSGN-081 INVALID_PARAM] %s (%s) is not a control, so it cannot hold ' +
     'one: in FMX a parent is the form or a control (TLayout, TRectangle, ' +

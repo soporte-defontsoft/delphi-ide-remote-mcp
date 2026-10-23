@@ -1113,7 +1113,8 @@ function Resangra(const S: string; ADelta: Integer): string; forward;
   (TWinControl por ascendencia: David, 4-oct-2026) y en FMX un control.
   AMueve: lo pregunta set parent= (la salida a mano es mover el bloque; el
   campo y la unidad ya estan), no insert. }
-function PadreQueNoVale(const F: TFormEnEdicion; P: TStyleObj; AMueve: Boolean): string;
+function PadreQueNoVale(const F: TFormEnEdicion; P: TStyleObj; AMueve: Boolean;
+  const AHijoId: string): string;
 var
   Id: string;
 begin
@@ -1123,6 +1124,18 @@ begin
     Fr := P;
   if Fr <> nil then
     Exit(MsgFmt(SR_DESIGNER_DENTRO_DE_INLINE_FMT, [NombreDe(P), NombreDe(Fr)]));
+  // una PAGINA va en un control de paginas y solo en el: TTabSheet.ReadState
+  // toma su PageControl del padre que la lee (el cargador del IDE), y en otro
+  // se queda sin el; un TPageControl no acepta otros controles
+  // (csAcceptsControls, abajo) pero si sus paginas - insert no tenia como
+  // anadir una (Opus en Hermes, 1.22.1)
+  if not F.EsFmx and (AHijoId <> '') and F.Tabla.Desciende(AHijoId, ID_VCL_TABSHEET) then
+  begin
+    if (P <> F.Doc.Root) and F.Tabla.ClaseDeNombre(P.ClassName_, Id) and
+       F.Tabla.Desciende(Id, ID_VCL_PAGECONTROL) then
+      Exit;
+    Exit(MsgFmt(SR_DESIGNER_PAGINA_FMT, [NombreDe(P), P.ClassName_]));
+  end;
   if P = F.Doc.Root then
   begin
     // la raiz los recibe si es un form o un frame; un data module no (un
@@ -1805,7 +1818,7 @@ begin
       if Result <> '' then
         Exit;
     end;
-    Result := PadreQueNoVale(F, Padre, False);
+    Result := PadreQueNoVale(F, Padre, False, ClsId);
     if Result <> '' then
       Exit;
     // la unidad: el nombre libre, el campo y el uses
@@ -2729,7 +2742,10 @@ begin
       Exit(MsgFmt(SR_DESIGNER_PADRE_CICLO_FMT, [NombreDe(Obj), NombreDe(Padre)]));
     if Padre = Obj.Parent then
       Exit(MsgFmt(SN_DESIGNER_YA_ESTA_FMT, [NombreDe(Obj), NombreDe(Padre)]));
-    Result := PadreQueNoVale(F, Padre, True);
+    var IdMovido := '';
+    if not F.Tabla.ClaseDeNombre(Obj.ClassName_, IdMovido) then
+      IdMovido := '';
+    Result := PadreQueNoVale(F, Padre, True, IdMovido);
     if Result <> '' then
       Exit;
     Viejo := Obj.Parent;

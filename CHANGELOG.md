@@ -51,6 +51,14 @@ the MCP `initialize` response (`serverInfo.version`).
   `DSGN-078` lists what the form overrides by its path, and a delete or a
   rename of one is refused as part of the frame (`DSGN-083`), not as
   inherited from an ancestor form (`tests/test_contratos_1222.py`).
+- **`delphi_designer insert` adds a page to a `TPageControl`.** A
+  `TTabSheet` with a page control as its parent was refused (`DSGN-080`: a
+  page control takes no controls), so there was no way to add a page but
+  writing it by hand; and a `TTabSheet` on the form itself was written,
+  though its loader takes its page control from the parent that loads it and
+  leaves it without one (measured on 2026-10-23). A page now goes in a page
+  control, and only there (`DSGN-168` for any other parent, in `insert` and
+  in `set parent=`) (`tests/test_contratos_1222.py`).
 - **`delphi_hover` gives a symbol's file as a path the other tools take.**
   The engine's link (`file:///C%3A/.../System.SysUtils.pas#8766`) came out as
   `file:///srvc%3A/...`, which `delphi_read` refused; it is now the path and
