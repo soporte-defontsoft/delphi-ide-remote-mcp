@@ -1989,13 +1989,13 @@ begin
       [TPath.GetFileName(ADprojPath)]));
   // Una configuracion que el proyecto no tiene, o una verbosidad inventada,
   // se aceptaban en silencio: "Relase" compilaba en Win64\Relase\ con los
-  // ajustes de Base (segunda revision, 27-sep-2026). La regla de la
-  // configuracion es la de delphi_test (Lsp.Dproj.ConfigDesconocida).
-  // Sin config, la SELECCIONADA en el proyecto: la que compilan el IDE y
+  // ajustes de Base (segunda revision, 27-sep-2026). La configuracion, por
+  // EL juez (Lsp.Dproj.ConfigDelBuild, el de delphi_test y delphi_config):
+  // sin config, la SELECCIONADA en el proyecto, la que compilan el IDE y
   // msbuild mientras nadie pide otra (era Debug a fuego, como la plataforma
-  // hasta la 1.15; delphi_config set-active la cambia)
-  Denied := ConfigDesconocida(ADprojPath, IfThen(AConfig.Trim = '',
-    ReadDproj(ADprojPath).ConfigPorDefecto, AConfig.Trim), AConfig.Trim = '');
+  // hasta la 1.15; delphi_config set-active la cambia), y con el nombre que
+  // declara el proyecto: lo que teclea el agente solo elige (2an)
+  Denied := ConfigDelBuild(ReadDproj(ADprojPath), AConfig, Cfg);
   if Denied <> '' then
     raise Exception.Create(Denied);
   if (AVerbosity <> '') and not MatchText(AVerbosity, ['quiet', 'normal', 'verbose']) then
@@ -2058,18 +2058,6 @@ begin
   NoPuede := PlataformaNoDeclarada(Proyecto, Plat);
   if NoPuede <> '' then
     raise Exception.Create(NoPuede);
-  // (sin los blancos: el juez de arriba los tomaba por "sin config" y aqui
-  // llegaban a msbuild como /p:Config=" ", que compila con los ajustes de
-  // Base; revision del 18-oct-2026)
-  Cfg := AConfig.Trim;
-  if Cfg = '' then
-    Cfg := Proyecto.ConfigPorDefecto;
-  // la configuracion con SU nombre, el que declara el .dproj: lo que teclea el
-  // agente solo elige (2an). Sin configuraciones declaradas, el nombre que ya
-  // juzgo NombreDeConfigNoValido (ConfigDesconocida, arriba)
-  for var C in Proyecto.Configs do
-    if SameText(C, Cfg.Trim) then
-      Cfg := C;
   Target := ATarget.Trim;
   if Target = '' then
     Target := 'Build';
@@ -2323,7 +2311,7 @@ begin
     EventArg := ' /p:PreBuildEvent= /p:PostBuildEvent= /p:PreLinkEvent= /p:PostLinkEvent=';
   // Config entre comillas: su nombre puede llevar un espacio ("Release Plus")
   // y msbuild lo partia en dos argumentos (MSB1008); las comillas no las
-  // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDesconocida).
+  // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDelBuild).
   // msbuild.exe por su ruta y sin shell (2an, arriba): un metacaracter en un
   // valor es solo un caracter, y los jueces de cada valor siguen como segunda
   // barrera (David, 11-oct)

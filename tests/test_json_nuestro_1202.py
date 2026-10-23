@@ -286,9 +286,10 @@ b, _ = lineas_build(dproj3)
 check('J5 ...y la siguen el motor (dcc64 en sus ajustes) y el build sin platform= (Win64)',
       dll3.startswith('dcc64') and b.get('platform') == 'Win64', (dll3, b.get('platform')))
 
-CONFIG_NO = mc.id_de('SR_CFG_SET_ACTIVE_CONFIG_FMT')
-for args, que, cual in (({'config': 'Inventada'}, 'una configuracion que no declara', CONFIG_NO),
-                        ({'config': 'Base'}, 'Base, que no es una configuracion que se compile', CONFIG_NO),
+# el juez de la configuracion es UNO para build, test y config (ConfigDelBuild, 1.22.2): sus negativas
+for args, que, cual in (({'config': 'Inventada'}, 'una configuracion que no declara', mc.id_de('SR_TEST_CONFIG_FMT')),
+                        ({'config': 'Base'}, 'Base, que no es una configuracion que se compile',
+                         mc.id_de('SR_CFG_BASE_NO_SE_COMPILA_FMT')),
                         ({}, 'sin config ni platform', mc.id_de('SR_CFG_SET_ACTIVE_NECESITA'))):
     antes = open(dproj3, 'rb').read()
     a = {'command': 'set-active', 'project': dproj3}

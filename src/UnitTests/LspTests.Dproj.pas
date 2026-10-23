@@ -562,7 +562,7 @@ end;
 
 procedure TDprojHazardTests.ConfigConCaracteresDeShellSeNiegaSiempre;
 var
-  Carpeta, Proyecto: string;
+  Carpeta, Proyecto, Cfg: string;
 begin
   // El nombre de la config va a la linea de cmd.exe del build: el fondo lo
   // juzga antes que la lista del proyecto - con la lista vacia se aceptaba
@@ -578,14 +578,15 @@ begin
   TDirectory.CreateDirectory(Carpeta);
   try
     TFile.WriteAllText(Proyecto, CABECERA + PIE);
-    Assert.IsTrue(ConfigDesconocida(Proyecto, 'Debug;Release').Contains('BUILD-015'),
+    Assert.IsTrue(ConfigDelBuild(ReadDproj(Proyecto), 'Debug;Release', Cfg).Contains('BUILD-015'),
       'sin configuraciones declaradas');
-    Assert.AreEqual('', ConfigDesconocida(Proyecto, 'Debug'),
+    Assert.AreEqual('', ConfigDelBuild(ReadDproj(Proyecto), ' Debug ', Cfg),
       'sin configuraciones declaradas, un nombre limpio vale');
+    Assert.AreEqual('Debug', Cfg, 'tal cual, sin los blancos');
     TFile.WriteAllText(Proyecto, CABECERA +
       '  <ItemGroup><BuildConfiguration Include="Debug;Release"><Key>Cfg_1</Key>' +
       '</BuildConfiguration></ItemGroup>'#13#10 + PIE);
-    Assert.IsTrue(ConfigDesconocida(Proyecto, 'Debug;Release').Contains('BUILD-015'),
+    Assert.IsTrue(ConfigDelBuild(ReadDproj(Proyecto), 'Debug;Release', Cfg).Contains('BUILD-015'),
       'declarado por el proyecto');
   finally
     if TFile.Exists(Proyecto) then TFile.Delete(Proyecto);

@@ -31,7 +31,7 @@ Win64 Release lo encuentra Release y Debug no (F2613).
       (CFG-131); la estructura (Cfg_1, Platform: CFG-132); un evento y una opcion libre
       (PreBuildEvent, DCC_AdditionalSwitches: CFG-133); una propiedad por la que importan los
       <Import> del IDE (BDS: CFG-132, la segunda barrera de BUILD-019); set-property sin value (CFG-134);
-      un value con salto (CFG-135); una config que no declara (CFG-116); una plataforma que
+      un value con salto (CFG-135); una config que no declara (CFG-107); una plataforma que
       no es (CFG-082); un parametro que no es del comando (value en get-property)
   P7  el .dproj escrito lo carga MSXML6, el juez del IDE (si pywin32 esta; si no, no se mide)
 
@@ -186,7 +186,7 @@ try:
         ('una opcion libre', dict(name='DCC_AdditionalSwitches', value='-x'), 'SR_CFG_NAME_ES_TEXTO_LIBRE_FMT'),
         ('sin value', dict(name='PF_X'), 'SR_CFG_NEED_VALUE'),
         ('un value con salto', dict(name='PF_X', value='a\nb'), 'SR_CFG_VALUE_CON_CONTROL'),
-        ('una config que no declara', dict(name='PF_X', value='x', config='Nope'), 'SR_CFG_SET_ACTIVE_CONFIG_FMT'),
+        ('una config que no declara', dict(name='PF_X', value='x', config='Nope'), 'SR_TEST_CONFIG_FMT'),
         ('una plataforma que no es', dict(name='PF_X', value='x', platform='Foo'), 'SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT'),
     ]
     for titulo, campos, codigo in negadas:

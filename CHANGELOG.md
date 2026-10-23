@@ -88,6 +88,17 @@ the MCP `initialize` response (`serverInfo.version`).
   `view section=deploy` reads the project, with the files added only to the
   `.deployproj` apart (`CFG-144`: msbuild deploys them, the IDE drops them)
   (`tests/test_contratos_1222.py`).
+- **One judge of a configuration for `delphi_build`, `delphi_test` and
+  `delphi_config`.** There were two: on a project that declares no
+  configuration (one from before platforms) `delphi_build config=Debug`
+  built while `delphi_config add-deployfile config=Debug` was refused with
+  `CFG-116` "(none)", and `add-deployfile` without `config=` took the selected
+  one without judging it (Claude Fable 5.1 through Hermes, 2026-10-23). Now
+  every command picks the configuration the same way - the one given or the
+  selected one, its name checked, not `Base`, one the project declares (any
+  valid name when it declares none, as msbuild) - and a configuration the
+  project does not declare is `CFG-107` everywhere; `CFG-116` is gone
+  (`tests/test_contratos_1222.py`).
 - **`delphi_hover` gives a symbol's file as a path the other tools take.**
   The engine's link (`file:///C%3A/.../System.SysUtils.pas#8766`) came out as
   `file:///srvc%3A/...`, which `delphi_read` refused; it is now the path and

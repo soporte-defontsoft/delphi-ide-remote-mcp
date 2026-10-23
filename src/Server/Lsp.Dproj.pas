@@ -42,7 +42,7 @@ type
     function ConfigPorDefecto: string;
     { Las configuraciones que se COMPILAN: las que declara, menos Base (de la
       que heredan las demas; el IDE no la deja activar), con su nombre y en su
-      orden. Vacia si no declara ninguna. Estaba a mano en ConfigDesconocida y
+      orden. Vacia si no declara ninguna. Estaba a mano en el juez del build y
       en set-active, y el manifiesto de despliegue escribia 'Debug','Release'
       a fuego (con otra configuracion no desplegaba nada y decia exito). }
     function Compilables: TArray<string>;
@@ -662,25 +662,27 @@ function DprojDe(const AProject: string): string;
   1.17.0). }
 function DprDe(const AProject: string): string;
 
-{ La negativa de una configuracion que el proyecto no tiene ('' = la tiene,
-  o el proyecto no declara ninguna). UNA regla para delphi_test y
-  delphi_build: aceptarla en silencio compilaba en Win64\<Inventada>\ con
+{ LA configuracion de un build, un test o lo que delphi_config escribe para
+  una: la pedida (ARaw) o, sin ella, la seleccionada del proyecto
+  (ConfigPorDefecto), juzgada, y con el nombre que declara en AConfig ('' o
+  la negativa). Aceptar una que no tiene compilaba en Win64\<Inventada>\ con
   los ajustes de Base (medido el 2026-08-25 en test y el 27-sep en build).
   Antes que la lista, el NOMBRE (NombreDeConfigNoValido): el valor va a la
-  linea de msbuild (por cmd.exe hasta 2an de la 1.18.2; sin shell ahora, el
-  juez queda de segunda barrera), y ni un proyecto sin configuraciones ni uno que
-  declara un nombre raro lo hacen seguro (4.8, revision de la 1.18.1). Base,
-  su negativa propia (CFG-120). ADeLaSeleccion: AConfig no lo pidio el agente,
-  es la seleccionada del proyecto (ConfigPorDefecto), y la negativa lo dice
-  (CFG-121): "no existe" de algo que no habia pedido no se entendia (revision
-  del 18-oct-2026). }
-function ConfigDesconocida(const ADproj, AConfig: string;
-  ADeLaSeleccion: Boolean = False): string;
+  linea de msbuild, y ni un proyecto sin configuraciones ni uno que declara
+  un nombre raro lo hacen seguro (4.8, revision de la 1.18.1). Base, su
+  negativa propia (CFG-120). Un proyecto que no declara ninguna (anterior a
+  las plataformas) admite un nombre valido, como msbuild. La seleccionada que
+  no declara lo dice (CFG-121): "no existe" de algo que el agente no habia
+  pedido no se entendia (revision del 18-oct-2026). UN juez: eran
+  ConfigDesconocida (build y test) y ConfigDeclarada (config), que negaba con
+  la lista vacia lo que el build aceptaba, con su propio CFG-116, y
+  add-deployfile tomaba la seleccionada sin juzgarla (Fable, 1.22.2). }
+function ConfigDelBuild(const AInfo: TDprojInfo; const ARaw: string; out AConfig: string): string;
 
 { El nombre de una configuracion que puede llegar a la linea de msbuild del
   build (/p:Config=): letras, digitos, espacio, ".", "_" y "-". UNA
   definicion para la puerta (Lsp.Guard.BuildArgDenied) y el fondo
-  (ConfigDesconocida); '' no es un nombre malo (es "la de por defecto"). }
+  (ConfigDelBuild); '' no es un nombre malo (es "la de por defecto"). }
 { Los cuatro targets de delphi_build, con SU nombre: la puerta los admite
   (BuildArgDenied) y el build elige entre ellos el que va a /t: (UNA lista,
   dos lectores; punto 3 del build, 1.19.0). }
@@ -1824,29 +1826,36 @@ begin
   Result := False;
 end;
 
-function ConfigDesconocida(const ADproj, AConfig: string;
-  ADeLaSeleccion: Boolean): string;
-var
-  Info: TDprojInfo;
+function ConfigDelBuild(const AInfo: TDprojInfo; const ARaw: string; out AConfig: string): string;
 begin
+  Result := '';
+  AConfig := ARaw.Trim;
+  var DeLaSeleccion := AConfig = '';
+  if DeLaSeleccion then
+    AConfig := AInfo.ConfigPorDefecto;
   // el nombre antes que la lista: con la lista vacia se aceptaba todo, y un
   // nombre que el proyecto declara no es por eso un nombre limpio
   if NombreDeConfigNoValido(AConfig) then
     Exit(MsgFmt(SR_BUILD_CONFIG_FMT, [AConfig]));
-  Result := '';
-  Info := ReadDproj(ADproj);
   // Base no es una configuracion que se compile: es de la que heredan las
   // demas, y el IDE no la deja activar (lo que se compila aqui se compila
-  // igual en el IDE); compilaba con los ajustes de la base en Win64\Base\. La
-  // lista, sin ella, como la de set-active
-  var Validas := Info.Compilables;
-  if SameText(AConfig.Trim, 'Base') then
+  // igual en el IDE); compilaba con los ajustes de la base en Win64\Base\
+  var Validas := AInfo.Compilables;
+  if SameText(AConfig, 'Base') then
     Exit(MsgFmt(SR_CFG_BASE_NO_SE_COMPILA_FMT, [string.Join(', ', Validas)]));
-  if (Length(Info.Configs) > 0) and not Info.HasConfig(AConfig) then
-    if ADeLaSeleccion then
-      Result := MsgFmt(SR_CFG_SELECCIONADA_NO_DECLARADA_FMT, [AConfig, string.Join(', ', Validas)])
-    else
-      Result := MsgFmt(SR_TEST_CONFIG_FMT, [AConfig, string.Join(', ', Validas)]);
+  if Length(AInfo.Configs) = 0 then
+    Exit;
+  // con SU nombre: lo que teclea el agente solo elige
+  for var C in Validas do
+    if SameText(C, AConfig) then
+    begin
+      AConfig := C;
+      Exit;
+    end;
+  if DeLaSeleccion then
+    Result := MsgFmt(SR_CFG_SELECCIONADA_NO_DECLARADA_FMT, [AConfig, string.Join(', ', Validas)])
+  else
+    Result := MsgFmt(SR_TEST_CONFIG_FMT, [AConfig, string.Join(', ', Validas)]);
 end;
 
 function BloqueDePlataformas(const AXml: string; out ABloque: TTramoXml): Boolean;

@@ -3195,9 +3195,6 @@ const
   SF_XML_ERROR_DEL_PARSER_FMT =
     'line %d: %s';
 
-  SR_CFG_SET_ACTIVE_CONFIG_FMT =
-    '[CFG-116 INVALID_PARAM] The project declares no configuration "%s". ' +
-    'The ones it declares: %s. Nothing was written.';
 
   SR_CFG_SET_ACTIVE_SIN_SELECTOR_FMT =
     '[CFG-117 NOT_FOUND] %s has no default <%s Condition="..."> - the line ' +

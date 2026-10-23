@@ -51,6 +51,9 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
      solo con los ficheros anadidos (clase File; nombraba los de otras clases con una nota falsa); sin
      <BorlandProject>, CFG-143 y ni el manifiesto generado ni su Import se quedan (todo o nada); una seccion
      <Deployment/> auto-cerrada se abre con la entrada
+  CF1 UN juez de la configuracion (ConfigDelBuild) para build, test y config: sin configuraciones declaradas,
+     add-deployfile config=Release vale como en el build (ROJO: CFG-116 "(none)"); una que no declara, CFG-107
+     tambien en config
   U1 delphi_config remove-unit con la entrada relativa (Lib\ULibRel.pas), dentro: quitada, sin decir que esta fuera
      de lo legible (ROJO contra r1222h: la juzgaba desde la carpeta del servidor, CFG-125; Opus en Hermes)
 
@@ -468,6 +471,16 @@ try:
     check('DF12 <Deployment Version="5"/> auto-cerrada: se abre con la entrada dentro, una sola seccion',
           mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT') and t.count('<Deployment') == 1 and '<Deployment Version="5"/>' not in t
           and '<DeployFile LocalName="datos.txt" Configuration="Debug" Class="File">' in t, r[:300] + ' | ' + t[-900:])
+    # UN juez de la configuracion para build, test y config (Fable, revision de la 1.22.2: con un proyecto que no
+    # declara ninguna, config negaba lo que build aceptaba, y add-deployfile sin config= tomaba la seleccionada)
+    t = lee(d3)
+    open(d3, 'w', newline='').write(re.sub(r'(?s)\s*<BuildConfiguration Include=.*?</BuildConfiguration>', '', t))
+    r = srv.call('delphi_config', {'project': d3, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': os.path.join(d3dir, 'datos.txt'), 'config': 'Release'}, 240)
+    r2 = srv.call('delphi_config', {'project': dproj, 'command': 'set-active', 'config': 'Inventada'}, 240)
+    check('CF1 sin configuraciones declaradas, add-deployfile config=Release vale como en build (ROJO: CFG-116 con'
+          ' "(none)"); y una que no declara es CFG-107 tambien en config',
+          mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT') and mc.es(r2, 'SR_TEST_CONFIG_FMT'), (r[:300], r2[:300]))
 
     plano = os.path.join(JAIL, 'plano')
     os.makedirs(plano)

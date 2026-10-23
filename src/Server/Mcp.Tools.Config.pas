@@ -654,33 +654,13 @@ begin
     Result := ParejaDelBuild(APlatform, AConfig);
 end;
 
-{ La configuracion ARaw con el nombre que declara el proyecto (una que se
-  compila: Base no): lo que teclea el agente solo elige (set-active,
-  set-property...). La negativa, con las que declara, si no es ninguna. }
-function ConfigDeclarada(const AXml, ARaw: string; out AConfig: string): string;
-var
-  Validas: string;
-begin
-  Result := '';
-  AConfig := '';
-  Validas := '';
-  for var N in InfoDeDproj(AXml).Compilables do
-  begin
-    Validas := IfThen(Validas = '', N, Validas + ', ' + N);
-    if SameText(N, ARaw.Trim) then
-      AConfig := N;
-  end;
-  if AConfig = '' then
-    Result := MsgFmt(SR_CFG_SET_ACTIVE_CONFIG_FMT, [ARaw.Trim, ONinguno(Validas)]);
-end;
-
 { La negativa de un build sin grupo de valores (AseguraGrupoDelBuild), con
   lo que le falta. }
 function MensajeDeFalta(AFalta: TFaltaDeGrupo; const AXml, APlatform, AConfig, ATag: string): string;
 begin
   case AFalta of
     fgConfigNoDeclarada:
-      Result := MsgFmt(SR_CFG_SET_ACTIVE_CONFIG_FMT,
+      Result := MsgFmt(SR_TEST_CONFIG_FMT,
         [AConfig, ONinguno(string.Join(', ', InfoDeDproj(AXml).Compilables))]);
     fgSinDefinidor:
       Result := MsgFmt(SR_CFG_SIN_DEFINIDOR_FMT, [NombreDelBuild(APlatform, AConfig)]);
@@ -1207,14 +1187,9 @@ begin
   // Deployment Manager anade a la del desplegable, a una sola: con "All
   // configurations" no deja)
   DprojXml := LeeTexto(ADproj, [ltJaula]);
-  if ARawConfig.Trim <> '' then
-  begin
-    Result := ConfigDeclarada(DprojXml, ARawConfig, Cfg);
-    if Result <> '' then
-      Exit;
-  end
-  else
-    Cfg := InfoDeDproj(DprojXml).ConfigPorDefecto;
+  Result := ConfigDelBuild(InfoDeDproj(DprojXml), ARawConfig, Cfg);
+  if Result <> '' then
+    Exit;
 
   // los dos ficheros, TODO O NADA - el manifiesto que se genera y su <Import>
   // en el .dproj tambien: se escribian antes y se quedaban si fallaba lo
@@ -1306,7 +1281,7 @@ begin
   Cfg := '';
   if ARawConfig.Trim <> '' then
   begin
-    Result := ConfigDeclarada(DprojXml, ARawConfig, Cfg);
+    Result := ConfigDelBuild(InfoDeDproj(DprojXml), ARawConfig, Cfg);
     if Result <> '' then
       Exit;
   end;
@@ -1829,9 +1804,9 @@ begin
   if ARawConfig.Trim <> '' then
   begin
     // una que declara, con SU nombre: lo que teclea el agente solo elige
-    // (ConfigDeclarada, la regla de set-property tambien)
+    // (ConfigDelBuild, EL juez de build, test y config)
     var Cfg: string;
-    Result := ConfigDeclarada(Xml, ARawConfig, Cfg);
+    Result := ConfigDelBuild(Info, ARawConfig, Cfg);
     if Result <> '' then
       Exit;
     Result := Pon('Config', Cfg);
@@ -1969,7 +1944,7 @@ begin
       Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
   end;
   if ARawConfig.Trim <> '' then
-    Result := ConfigDeclarada(AXml, ARawConfig, AConfig);
+    Result := ConfigDelBuild(InfoDeDproj(AXml), ARawConfig, AConfig);
 end;
 
 function SetProperty(const ADproj, ARawName, ARawValue, ARawPlatform, ARawConfig: string;

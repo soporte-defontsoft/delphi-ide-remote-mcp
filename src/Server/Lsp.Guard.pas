@@ -1407,7 +1407,7 @@ begin
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
         Exit(MsgFmt(SR_BUILD_SDK_NAME_FMT, [V]));
   // el nombre de la config, con la regla de su casa (Lsp.Dproj), la misma que
-  // aplica el fondo (ConfigDesconocida)
+  // aplica el fondo (ConfigDelBuild)
   V := ArgStr(AArguments, 'config');
   if NombreDeConfigNoValido(V) then
     Exit(MsgFmt(SR_BUILD_CONFIG_FMT, [V]));
@@ -2543,7 +2543,7 @@ begin
   // a metacharacter was arbitrary execution; with no shell now, this stays as
   // the second barrier. delphi_test compila por el MISMO
   // RunMsBuild y no pasa por aqui: su config la juzga el FONDO, donde vive la
-  // regla del nombre (Lsp.Dproj.ConfigDesconocida, por la que pasan los dos
+  // regla del nombre (Lsp.Dproj.ConfigDelBuild, por la que pasan los dos
   // antes de la linea; 4.8, revision de la 1.18.1), y su platform la lista
   // exacta con su propio mensaje (TEST-001: lo que se puede EJECUTAR aqui).
   // Con delphi_test tambien aqui, una plataforma inventada recibia el

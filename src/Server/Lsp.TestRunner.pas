@@ -662,11 +662,9 @@ begin
   // and built into Win64\Inventada\ (measured 2026-08-25). Say the ones
   // that exist instead.
   Info := ReadDproj(Dproj);
-  // sin config, la seleccionada en el proyecto, como delphi_build (era Debug)
-  Cfg := AConfig.Trim; // sin blancos, como delphi_build
-  if Cfg = '' then
-    Cfg := Info.ConfigPorDefecto;
-  var Mala := ConfigDesconocida(Dproj, Cfg, AConfig.Trim = '');
+  // la pedida o, sin config, la seleccionada en el proyecto (era Debug), con
+  // el nombre que declara: por EL juez de delphi_build (Lsp.Dproj.ConfigDelBuild)
+  var Mala := ConfigDelBuild(Info, AConfig, Cfg);
   if Mala <> '' then
   begin
     Result.AddPair('error', Mala);
