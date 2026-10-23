@@ -110,6 +110,16 @@ the MCP `initialize` response (`serverInfo.version`).
   any id of the right shape was taken); and `exe=` runs only the project
   binary or a file its `.deployproj` lists for that platform (`PAS-063`;
   it was any file of the deploy folder) (`tests/test_remoterun.py`).
+- **`RemoteRunProjects` names projects by their path.** A bare name matched
+  any project with that name in any folder, so a homonym could deploy over
+  the allowed project and run on its target; and the agent's own
+  `McpDesktopNode.dproj` passed by the name that grants the desktop node.
+  Now an entry is the path of a `.dproj` - its `.dpr`, or no extension, is
+  the same project, which the example promised while the path was compared
+  exactly - or the wildcard; a bare name authorizes nothing and `RUN-022`
+  says which path to write. `McpDesktopNode` keeps its name: it is this
+  server's own node, asked by its own question. `settings.example.ini` no
+  longer names internal projects (`tests/test_remoterun.py`).
 - **The wildcard works in every allowlist of `settings.ini`.** `RemoteHosts`
   took `*` or `0.0.0.0`, `RemoteRunProjects` took `all` or `*`, and
   `GitRemotes` and `AdbAllowedDevices` took none, so `GitRemotes=*` refused

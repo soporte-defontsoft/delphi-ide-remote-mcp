@@ -75,7 +75,8 @@ env['DELPHI_MCP_PACLIENT'] = STUB
 env['MCP_STUB_SCRATCH'] = SCRATCH
 env['MCP_STUB_RUNJOB_EXE'] = RUNJOB_EXE   # el gemelo Win64 del lanzador que corre el stub
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'   # v0.48.1: remote execution is opt-in
-env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'Saluda'  # v0.98: lista vacia = NADA (fail closed)
+# v0.98: lista vacia = NADA (fail closed); desde la 1.22.2 la entrada es la RUTA del .dproj (un nombre no autoriza)
+env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = DPROJ
 # APPDATA de prueba con el perfil FALSO (mc.appdata_perfil, un solo sitio): los
 # hijos (el stub de paclient, msbuild) lo heredan; la puerta ProfileHostDenido
 # (fail-closed desde 1.15.1) encuentra 'perfil' con host 127.0.0.1, y ese host
@@ -418,6 +419,42 @@ r = call('delphi_build', {'project': os.path.join(ODIR, 'Otro.dproj'), 'platform
                           'profile': PROFILE}, t=600)
 check('ID3 deploy de un proyecto que RemoteRunProjects no lista: RUN-007, sin compilar ni desplegar (ROJO: el '
       'deploy no miraba la lista)', mc.es(r, 'SR_REMOTERUN_PROJECT_DENIED_FMT') and 'Otro' in r, r[:300])
+
+# ---- ID4, la pieza de los nombres: las entradas de RemoteRunProjects son RUTAS. Un NOMBRE a secas casaba con
+# cualquier proyecto de ese nombre y un homonimo de otra carpeta desplegaba encima del permitido; ahora no autoriza
+# nada (RUN-022 dice que ruta escribir). La ruta con su .dpr, o sin extension, es el mismo proyecto (el ejemplo del
+# settings lo prometia y la ruta se comparaba exacta). Y el nodo de escritorio sigue por su NOMBRE, que es nuestro:
+# un McpDesktopNode.dproj del agente no pasa por ese permiso ----
+def ejecuta(lista, proyecto):
+    e = dict(env); e['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = lista
+    s = mc.Stdio(EXE, e, nombre='id4')
+    try:
+        return s.call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': proyecto,
+                                          'exe': PROJNAME + '.exe', 'args': '"%s"' % SCRIPT.replace(chr(92), '/'),
+                                          'timeoutms': 30000}, t=180)
+    finally:
+        s.mata()
+
+
+r = ejecuta(PROJNAME, DPROJ)
+check('ID4 una entrada a secas con el nombre del proyecto no autoriza: RUN-022 con la ruta a escribir y nada '
+      'ejecutado (ROJO contra r1222o: el nombre bastaba)',
+      mc.es(r, 'SR_REMOTERUN_ENTRADA_A_SECAS_FMT') and PROJNAME + '.dproj' in r and 'hola desde el target' not in r,
+      r[:300])
+HOMO = os.path.join(BASE, 'homonimo'); os.makedirs(HOMO, exist_ok=True)
+DHOMO = os.path.join(HOMO, PROJNAME + '.dproj'); open(DHOMO, 'w', encoding='utf-8').write('<Project/>')
+r = ejecuta(DPROJ, DHOMO)
+check('ID4 un homonimo de otra carpeta, con la lista en la RUTA del permitido: RUN-007 y nada ejecutado',
+      mc.es(r, 'SR_REMOTERUN_PROJECT_DENIED_FMT') and 'hola desde el target' not in r, r[:300])
+for etiqueta, entrada in (('su .dpr', DPROJ[:-6] + '.dpr'), ('sin extension', DPROJ[:-6])):
+    r = ejecuta(entrada, DPROJ)
+    check('ID4 la ruta del proyecto por %s es el mismo proyecto: pasa la lista y corre (ROJO: se comparaba exacta)'
+          % etiqueta, 'hola desde el target' in r, r[:300])
+NODO = os.path.join(BASE, 'nodo'); os.makedirs(NODO, exist_ok=True)
+DNODO = os.path.join(NODO, 'McpDesktopNode.dproj'); open(DNODO, 'w', encoding='utf-8').write('<Project/>')
+r = ejecuta('McpDesktopNode', DNODO)
+check('ID4 un McpDesktopNode.dproj del agente no pasa por el permiso del nodo: RUN-022 (ROJO: el nombre del nodo '
+      'autorizaba su homonimo)', mc.es(r, 'SR_REMOTERUN_ENTRADA_A_SECAS_FMT'), r[:300])
 
 srv.mata()
 mc.fin('remote-run')

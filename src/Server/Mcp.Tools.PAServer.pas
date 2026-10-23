@@ -1165,7 +1165,7 @@ begin
   // que el nodo es un permiso aparte (Hermes, 4-oct-2026)
   if AProj = '' then
   begin
-    if RemoteRunProjectDenied(NODE_PROJECT) <> '' then
+    if not RemoteRunNodeAllowed(NODE_PROJECT) then
       Exit(MsgFmt(SR_REMOTERUN_NODO_DENIED_FMT, [NODE_PROJECT]));
     Exit('');
   end;

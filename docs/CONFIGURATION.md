@@ -436,7 +436,12 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   derives the remote path itself and its launch script verifies the file's signature
   (ELF/Mach-O/PE), so only a native binary ever runs. The one execution path of the product (running on
   the target is not running here). It takes TWO declarations: this switch and
-  `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98).
+  `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98). Its
+  entries are the full paths of the projects' `.dproj` (a `.dpr`, or no extension, is the
+  same project) or the wildcard: a bare name authorizes nothing (`RUN-022` says which path
+  to write), because it matched any project with that name and a homonym in another folder
+  could deploy over the allowed one. `delphi_build target=Deploy` through a profile asks
+  the same list.
   `delphi_desktop` runs the server's own desktop node on the target, and seeing and
   typing on a desktop is a permission of its own: `McpDesktopNode` (or `all`) in
   `RemoteRunProjects` (`RUN-020` when it is missing). Looking leaves traces of the server on

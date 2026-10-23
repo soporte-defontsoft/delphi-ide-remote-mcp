@@ -875,13 +875,22 @@ function WriteTargetDenied(const APath: string): string;
   alli - si el resultado es que la carpeta esta, da igual quien la creo. }
 procedure CrearCarpeta(const ADir: string);
 
-{ '' when APath (a .dproj) may be executed remotely, else a refusal. La
-  lista es la del workspace ACTIVO (RemoteRunProjects= en su seccion), sin
-  herencia, y VACIA significa NADA ejecutable: fallar abierto aqui era la
-  excepcion de todo el servidor y se retiro el 19-sep-2026 (v0.98: nada
-  global, ni seccion global). Field 2026-08-24: an agent working on project A could
-  run the deployed binary of project B. }
+{ '' when APath (a .dproj) may be deployed to and run on a target, else a
+  refusal. La lista es la del workspace ACTIVO (RemoteRunProjects= en su
+  seccion), sin herencia, y VACIA significa NADA ejecutable: fallar abierto
+  aqui era la excepcion de todo el servidor y se retiro el 19-sep-2026 (v0.98:
+  nada global, ni seccion global). Field 2026-08-24: an agent working on
+  project A could run the deployed binary of project B. Una entrada es la
+  RUTA de un .dproj (su .dpr, o sin extension, es el mismo) o el comodin; un
+  NOMBRE a secas no autoriza nada y RUN-022 dice que ruta escribir: casaba con
+  cualquier proyecto de ese nombre, y un homonimo de otra carpeta desplegaba
+  encima del permitido (Fable, revision de la 1.22.2). }
 function RemoteRunProjectDenied(const APath: string): string;
+{ La lista del workspace activo concede el nodo de escritorio del propio
+  servidor: ANodo, por su NOMBRE (Lsp.RemoteRun.NODE_PROJECT), o el comodin.
+  El nodo va por nombre porque es nuestro, no un proyecto del agente, y por
+  eso es otra pregunta: un McpDesktopNode.dproj del agente no pasa por aqui. }
+function RemoteRunNodeAllowed(const ANodo: string): Boolean;
 
 { THE single entry gate, consulted by the tools dispatcher before ANY tool
   executes. '' = allowed; otherwise the rejection message returned to the
@@ -1139,7 +1148,7 @@ end;
 function RemoteRunProjectDenied(const APath: string): string;
 var
   Lista: TArray<string>;
-  E, Full, Name: string;
+  E, Full, Name, Ruta: string;
 begin
   // La lista del workspace ACTIVO, sin herencia. Y desde el 19-sep-2026 la
   // lista vacia ya no significa "cualquiera de la jaula" sino NADA: era el
@@ -1161,14 +1170,36 @@ begin
     Full := APath;
   end;
   Name := TPath.GetFileNameWithoutExtension(Full);
-  // la ruta, por la forma LARGA de los dos lados: una entrada del operador
-  // escrita en 8.3 no casaba nunca (fallaba cerrado; septima revision)
+  // la RUTA, por la forma LARGA de los dos lados: una entrada del operador
+  // escrita en 8.3 no casaba nunca (fallaba cerrado; septima revision). Su
+  // .dpr, o sin extension, es el mismo proyecto: se comparan sin la extension
+  // del .dproj (el .dpr pasa por DprojDe, como en las tools)
   for E in Lista do
-    if (E.Trim <> '') and (SameText(E.Trim, Name) or
-       (EsRutaAbsoluta(E.Trim) and SameText(FormaLarga(E.Trim), FormaLarga(Full)))) then
-      Exit;
+    if EsRutaAbsoluta(E.Trim) then
+    begin
+      Ruta := DprojDe(E.Trim);
+      if SameText(TPath.GetExtension(Ruta), '.dproj') then
+        Ruta := ChangeFileExt(Ruta, '');
+      if SameText(FormaLarga(Ruta), FormaLarga(ChangeFileExt(Full, ''))) then
+        Exit;
+    end;
+  // un NOMBRE a secas que es el de este proyecto: el operador queria este o
+  // un homonimo de otra carpeta, y eso solo lo dice una ruta
+  for E in Lista do
+    if not EsRutaAbsoluta(E.Trim) and SameText(E.Trim, Name) then
+      Exit(MsgFmt(SR_REMOTERUN_ENTRADA_A_SECAS_FMT, [E.Trim, Full]));
   Result := MsgFmt(SR_REMOTERUN_PROJECT_DENIED_FMT,
     [Name, string.Join(', ', Lista)]);
+end;
+
+function RemoteRunNodeAllowed(const ANodo: string): Boolean;
+var
+  E: string;
+begin
+  for E in RemoteProjectsNow do
+    if EsComodinDeLista(E) or SameText(E.Trim, ANodo) then
+      Exit(True);
+  Result := False;
 end;
 
 function InVault(const APath: string): Boolean;

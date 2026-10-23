@@ -2077,9 +2077,20 @@ const
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     '[RUN-007 DENIED] The project "%s" is not in the list of projects ' +
     'this server allows to deploy to and run on a target ([Workspace.<name>] ' +
-    'RemoteRunProjects). Allowed: %s. Only the operator extends that list, ' +
+    'RemoteRunProjects: .dproj paths, or all). Allowed: %s. Only the ' +
+    'operator extends that list, ' +
     'in the server''s settings.ini: it is what may run on a target, so no ' +
     'tool changes it - ask the operator.';
+
+  { una entrada a secas con el nombre del proyecto (1.22.2: casaba con
+    cualquier proyecto de ese nombre, de cualquier carpeta) }
+  SR_REMOTERUN_ENTRADA_A_SECAS_FMT =
+    '[RUN-022 DENIED] RemoteRunProjects names "%s" without a path, and a ' +
+    'name does not say WHICH project: any project with that name, in any ' +
+    'folder, would pass. The entries are .dproj paths: the operator writes ' +
+    'this one, %s (with the server''s real drive letter), in ' +
+    '[Workspace.<name>] RemoteRunProjects of the server''s settings.ini, or ' +
+    'all for every project. Nothing was deployed or run.';
 
   SR_REMOTERUN_NODO_DENIED_FMT =
     '[RUN-020 DENIED] delphi_desktop works through this server''s own ' +
@@ -2127,7 +2138,7 @@ const
     '[RUN-009 DENIED] This workspace does not declare ' +
     'RemoteRunProjects, so it cannot deploy or run ANYTHING on a target (it fails ' +
     'closed: what is not declared does not exist). The operator adds ' +
-    'RemoteRunProjects=<proj1>;<proj2> to this workspace''s section in ' +
+    'RemoteRunProjects=<path of a .dproj>;<another> to this workspace''s section in ' +
     'settings.ini.';
 
   SR_REMOTERUN_PUT_FMT =

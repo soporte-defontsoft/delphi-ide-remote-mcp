@@ -223,7 +223,8 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R45]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
     'AllowRemoteRun=1', 'AllowTests=1',
-    'RemoteRunProjects=Ajeno;McpDesktopNode',
+    # por su RUTA: desde la 1.22.2 un nombre a secas no autoriza (RUN-022)
+    'RemoteRunProjects=%s;McpDesktopNode' % AJENO_DPROJ,
     'AdbAllowedDevices=%s' % DEV,
     # el vault tambien de escritura: tools/list no anuncia las de escritura de
     # un vault de solo lectura (6-oct-2026) y el descubridor no las veria
