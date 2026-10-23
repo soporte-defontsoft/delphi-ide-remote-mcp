@@ -901,7 +901,8 @@ type
     Lecturas = lo que LEE; lo que no este ahi se niega, cerrado). UNA tabla
     (ACCESOS, en ConstruyeAccesos): la mira la puerta (LecturaDenegada) y la
     anuncia tools/list (annotations.readOnlyHint y _meta.access /
-    readOnlyCommands, AnunciaAcceso), de donde TOOLS.md saca su linea Access
+    readOnlyCommands, AnunciaAcceso; y el perfil reader son sus atLectura,
+    MotivoToolOculta), de donde TOOLS.md saca su linea Access
     y test_http_auth mide el anuncio contra la puerta. Antes la lista de
     mutantes estaba DOS veces en la puerta (una con delphi_desktop y otra
     sin) y cada mixta en su if; la linea Access del doc, a mano (28-sep-2026). }
@@ -4869,13 +4870,6 @@ const
   // for help and how it reports that something is missing
   ALWAYS: array [0 .. 2] of string = ('delphi_help', 'delphi_messages',
     'delphi_report');
-  // reader: understand and navigate, nothing that writes or ships
-  READER: array [0 .. 19] of string = ('delphi_read', 'delphi_list',
-    'delphi_search', 'delphi_symbols', 'delphi_definition', 'delphi_hover',
-    'delphi_signature', 'delphi_completion', 'delphi_diagnostics',
-    'delphi_references', 'delphi_projects', 'delphi_installs',
-    'delphi_workspace', 'delphi_fetch', 'delphi_help', 'delphi_messages',
-    'delphi_report', 'vault_read', 'vault_search', 'delphi_docs');
   // coder hides only the shipping trio; everything else is a coder's tool
   DEPLOY_ONLY: array [0 .. 2] of string = ('delphi_adb', 'delphi_paserver',
     'delphi_package');
@@ -4913,7 +4907,10 @@ begin
   Prof := ToolsProfileNow;
   if Prof = 'reader' then
   begin
-    if MatchText(N, READER) then
+    // reader: las tools que solo LEEN, las atLectura de LA tabla de accesos.
+    // Era una lista de 20 nombres al lado de la tabla, y delphi_components,
+    // que lee desde antes que el perfil, no estaba (depuracion de la 1.23)
+    if AccesoDeTool(N).Acceso = atLectura then
       Exit(moNinguna);
     Exit(moPerfil);
   end;

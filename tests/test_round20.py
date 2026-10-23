@@ -8,7 +8,8 @@ tools stay callable - permissions remain the access levels and the jail.
 delphi_help / delphi_messages / delphi_report are always listed.
 
   T1  default: the whole census listed (no behavior change)
-  T2  reader: only the reading/navigation set; edit/build/adb absent
+  T2  reader: only the reading/navigation set; edit/build/adb absent; and it
+      is exactly what tools/list announces as access read-only (ONE table)
   T3  reader: a HIDDEN tool is still callable (delphi_textedit works)
   T4  coder: everything except adb/paserver/package
   T5  Only= allowlist wins over the profile and keeps the always-set
@@ -45,12 +46,14 @@ def start(etiqueta, extra_env):
     return base, mc.Http(port, TOKEN), proc
 
 
+# el contrato a mano (segunda barrera): delphi_components lee y faltaba en la
+# lista del servidor, que ahora es la tabla de accesos (depuracion de la 1.23)
 READER = {'delphi_read', 'delphi_list', 'delphi_search', 'delphi_symbols',
           'delphi_definition', 'delphi_hover', 'delphi_signature',
           'delphi_completion', 'delphi_diagnostics', 'delphi_references',
           'delphi_projects', 'delphi_installs', 'delphi_workspace',
           'delphi_fetch', 'delphi_help', 'delphi_messages', 'delphi_report',
-          'vault_read', 'vault_search', 'delphi_docs'}
+          'vault_read', 'vault_search', 'delphi_docs', 'delphi_components'}
 DEPLOY = {'delphi_adb', 'delphi_paserver', 'delphi_package'}
 
 # T1 default (the test jail has no vault, so vault_* are not registered:
@@ -59,6 +62,10 @@ base, cli, proc = start('t1', {})
 try:
     cli.session('round20')
     ALL = cli.toolnames()
+    # lo que tools/list anuncia como de solo lectura (_meta.access, de LA tabla)
+    _m = cli.request('tools/list')
+    LEEN = {x['name'] for x in ((_m or {}).get('result') or {}).get('tools', [])
+            if (x.get('_meta') or {}).get('access') == 'read-only'}
     check('T1 sin perfil: el censo completo, con las de escribir dentro',
           'delphi_edit' in ALL and 'delphi_adb' in ALL and len(ALL) >= 36,
           len(ALL))
@@ -72,6 +79,8 @@ try:
     names = cli.toolnames()
     check('T2 reader: exactamente el conjunto de lectura/navegacion',
           names == (READER & ALL), sorted(names ^ (READER & ALL)))
+    check('T2 reader: lo que tools/list anuncia como read-only, ni mas ni menos',
+          LEEN and names == LEEN, sorted(names ^ LEEN))
     r = cli.call('delphi_textedit',
              {'path': os.path.join(base, 'x.txt'), 'create': True, 'content': 'x'})
     check('T3 reader: una tool oculta sigue siendo llamable (no es un permiso)',

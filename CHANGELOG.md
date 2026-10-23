@@ -116,6 +116,14 @@ the MCP `initialize` response (`serverInfo.version`).
   every host (Claude Fable 5.1 through Hermes, 2026-10-23). Now an entry
   `*`, `all` or `0.0.0.0` means "anything" in all four, and
   `docs/CONFIGURATION.md` says so (`tests/test_contratos_1222.py`).
+- **The `reader` profile lists every tool that only reads.** `[Tools]
+  Profile=reader` advertised a list of twenty names of its own, written next
+  to the access table five days after `delphi_components` existed, and it
+  left that tool out: an agent with the profile did not see the tool that
+  says what is installed to program with. The profile is now the table's
+  read-only tools - what `tools/list` announces as `_meta.access` read-only -
+  so the next tool that only reads joins it without another list
+  (`tests/test_round20.py`).
 - **`delete: true` follows one rule in `delphi_edit`, `delphi_textedit` and
   every entry of a batch.** Both descriptions say `delete` takes no `new`, and
   only `delphi_edit` refused it: `delphi_textedit` with `old`, `new` and
