@@ -284,7 +284,9 @@ begin
   // cannot - they live in the .dproj. Answering with all of them empty plus
   // a cheerful crossPlatform "yes" was an answer shaped like knowledge that
   // was not (field round 8). Say what is readable, and say what is not.
-  if SameText(TPath.GetExtension(ADproj), '.dpr') then
+  // (su .dpk, un paquete sin .dproj, igual: se leia como un .dproj; octava
+  // pasada de Fable)
+  if EsFuentePrincipal(ADproj) then
   begin
     Return := TJSONObject.Create;
     try
@@ -1853,7 +1855,7 @@ begin
       IfThen(Hecho = '', '', ', ' + Hecho);
   end;
   PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
-  Result := MsgFmt(SN_CFG_SET_ACTIVE_FMT, [TPath.GetFileName(ADproj), Hecho]);
+  Result := MsgFmt(SN_CFG_SET_ACTIVE_FMT, [TPath.GetFileName(ADproj), Hecho, PlataformasQueCorrenAqui]);
 end;
 
 { ---- set-property / remove-property / get-property (1.22.0) -------------

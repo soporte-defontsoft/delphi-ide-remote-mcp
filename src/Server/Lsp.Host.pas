@@ -92,6 +92,7 @@ uses
   System.StrUtils,
   MCPServer.Logger,
   MCPServer.ToolsManager,
+  MCPServer.Registration, // HasTool: un nombre que no es tool lo contesta el registro
   MCPServer.ResourcesManager,
   MCPServer.Resource.Server,
   Lsp.Guard,
@@ -224,6 +225,12 @@ begin
       ClearAttachedImages; // nada de una llamada anterior en este hilo
       OlvidaSalidaHecha;   // ...ni lo que otra dejo dicho al filtro de salida
       OlvidaOrigenes(True); // ...ni sus bytes de antes: empieza esta (Lsp.Patch.EncAlEscribir)
+      // un nombre que no es una tool no pasa por la puerta: lo contesta el
+      // registro ("tool not found"). Con la tabla de accesos cerrada, una
+      // credencial de solo lectura recibia READ-002 "escribe o actua" de un
+      // nombre mal escrito (octava pasada de Fable); nada se ejecuta igual
+      if not TMCPRegistry.HasTool(ToolName) then
+        Exit('');
       Result := ToolCallDenied(ToolName, Arguments);
       // Una negativa de la PUERTA nunca trae contenido de un fichero: sale
       // enmascarada entera aqui, antes del filtro de salida, que en las tools

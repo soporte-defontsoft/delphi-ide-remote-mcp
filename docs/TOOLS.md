@@ -221,7 +221,7 @@ What it does not show is counted BY REASON (1.5.0, one counter shared with `delp
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots when root is empty; optional name filter. The way to answer "open project X" without knowing the disk layout. Answers in PAGES (maxresults, default 50; offset + nextOffset to walk them): a work machine holds thousands of .dproj. Grouped by folder: projects = [{dir, files = [{name, kind}]}], and each git repository once in repos = [{dir, branch}]: a project's is the LONGEST dir its folder is inside.
+Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots when root is empty; optional name filter. The way to answer "open project X" without knowing the disk layout. Answers in PAGES (maxresults, default 50; offset + nextOffset to walk them). Grouped by folder: projects = [{dir, files = [{name, kind}]}], and each git repository once in repos = [{dir, branch}]: a project's is the LONGEST dir its folder is inside (none rooted above your roots).
 
 *Access: read-only OK.*
 
@@ -946,7 +946,7 @@ Concrete sequences that string the tools together. Paths shown as `srvd:\...` ar
 Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .js .css .py .ini ...`. `delphi_edit` refuses them on purpose.
 
 ### Scaffold a new project or form
-`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console"|"project-package"|"project-test", dir, name}`, or `{kind:"form-vcl"|"form-fmx"|"frame-vcl"|"frame-fmx"|"datamodule"|"unit", project, name}` (registered in the `.dpr` and the `.dproj` on creation). An existing `.pas` joins with `delphi_config {project, command:"add-unit", path}`; `remove-unit` takes it out and keeps the file. `delphi_delete`/`delphi_move` on a unit keep the projects that list it consistent (designer pair included).
+`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console"|"project-package"|"project-test", dir, name}`, or `{kind:"form-vcl"|"form-fmx"|"frame-vcl"|"frame-fmx"|"datamodule"|"unit", project, name}` (registered in the `.dpr` and the `.dproj` on creation), or `{kind:"include", name, content}` (a `.inc` for `{$I}`, never registered). An existing `.pas` joins with `delphi_config {project, command:"add-unit", path}`; `remove-unit` takes it out and keeps the file. `delphi_delete`/`delphi_move` on a unit keep the projects that list it consistent (designer pair included).
 
 ### Build and get the binary onto your machine
 1. `delphi_build {project, platform:"Win64", config:"Debug", target:"Build"}` — structured errors/warnings.

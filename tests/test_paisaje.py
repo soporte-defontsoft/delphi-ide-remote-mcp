@@ -1521,7 +1521,11 @@ def tools_sin_acceso(ficheros_texto):
         if os.path.basename(f) == 'Lsp.Guard.pas':
             i = c.find('procedure ConstruyeAccesos;')
             cuerpo = c[i:c.find('\nend;', i)] if i >= 0 else ''
-            dec.update(re.findall(r"'((?:delphi|vault)_[a-z_]+)'", cuerpo))
+            # una FILA: el primer argumento de AnadeAcceso, o un nombre de la lista de las enteras de lectura
+            # (un literal cualquiera del cuerpo no cuenta; octava pasada de Fable)
+            dec.update(re.findall(r"AnadeAcceso\(\s*'((?:delphi|vault)_[a-z_]+)'", cuerpo))
+            for lista in re.findall(r"TArray<string>\.Create\(([^)]*)\)\s*do\s*AnadeAcceso\(\s*T\s*,", cuerpo):
+                dec.update(re.findall(r"'((?:delphi|vault)_[a-z_]+)'", lista))
     return sorted(reg - dec)
 check('mutante de la tabla de accesos: una tool registrada sin su fila se caza',
       tools_sin_acceso([('Plantada.pas', "initialization\n  TMCPRegistry.RegisterTool('delphi_nueva', nil);\n"),

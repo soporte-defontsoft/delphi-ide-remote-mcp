@@ -651,6 +651,14 @@ begin
     Result.AddPair('error', MsgFmt(SR_TEST_NOPATH_FMT, [AProject]));
     Exit;
   end;
+  // un test es un PROGRAMA: un paquete que nombra DUnitX. (uno de ayudas de
+  // test) pasaba KindOf, se compilaba y se lanzaba su .bpl (error 193)
+  // desde 15c8cab (octava pasada de Fable)
+  if not SameText(TPath.GetExtension(Dpr), '.dpr') then
+  begin
+    Result.AddPair('error', MsgFmt(SR_TEST_NOTATEST_FMT, [TPath.GetFileName(Dpr)]));
+    Exit;
+  end;
   K := KindOf(Dpr, Why);
   if K = tkNone then
   begin
@@ -682,7 +690,7 @@ begin
     // platform=Marte used to run Win64 without a word, while config=Turbo and
     // platform=Android64 were both refused properly (measured 2026-08-25).
     Result.AddPair('error', MsgFmt(SR_TEST_PLATFORM_UNKNOWN_FMT,
-      [APlatform.Trim]));
+      [APlatform.Trim, PlataformasQueCorrenAqui]));
     Exit;
   end;
   // sin plataforma, la del proyecto, como el IDE (hasta la 1.15, Win64 a

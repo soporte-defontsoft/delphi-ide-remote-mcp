@@ -145,6 +145,20 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **What the second review found (Claude Fable 5.1 through Hermes,
+  2026-10-23).** `delphi_test` on a package whose source names `DUnitX.`
+  (a package of test helpers) took it for a test, built it and tried to run
+  its `.bpl`: a test is a program, and a package now gets `TEST-018` before
+  anything is built. With the access table closed, a read-only credential
+  that called a tool that does not exist got `READ-002` "writes or acts":
+  a name that is no tool is now answered as such. `TEST-001` and `CFG-118`
+  said "Win32 and Win64" by hand; they now list what really runs on this
+  machine (Win64x too, and WinARM64EC on an ARM). `delphi_config view` of a
+  bare `.dpk` with no `.dproj` reads its units, as for a bare `.dpr`,
+  instead of reading the `.dpk` as a `.dproj`. The description of
+  `delphi_projects` says that a repository rooted above your roots is not
+  listed, and the docs list the `include` kind of `delphi_create`
+  (`tests/test_delphi_test.py`, `tests/test_http_auth.py`).
 - **A connection profile goes on by the name the IDE gives it.**
   `delphi_paserver` and `delphi_desktop` took the profile as typed:
   `Zorin-Desktop` passed (the file system does not mind the case) and went

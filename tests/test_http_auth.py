@@ -588,6 +588,12 @@ try:
         check('ro: delphi_delete RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:120]))
         code, body = call('delphi_move', {'path': paspath, 'dest': paspath + '.x'}, RO_TOKEN)
         check('ro: delphi_move RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:120]))
+        # un nombre que no es tool: "no existe", no READ-002 "escribe o actua" (la tabla de accesos cierra lo que
+        # no declara y la puerta iba antes del registro; octava pasada de Fable)
+        code, body = call('delphi_reed', {'path': paspath}, RO_TOKEN)
+        check('ro: una tool que no existe contesta que no existe, no READ-002 (ROJO contra r1222v)',
+              mc.es(body, 'SR_SYS_TOOL_NOT_FOUND_FMT') and not mc.es(body, 'SR_READ_ONLY_FMT'),
+              '%s %s' % (code, body[:150]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'push'},
                           RO_TOKEN)

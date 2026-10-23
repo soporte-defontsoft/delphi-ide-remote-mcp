@@ -3242,7 +3242,7 @@ const
     'without config= / platform= build that, as the IDE does, and the engine ' +
     '(diagnostics, definition...) answers with it from the next call - as ' +
     'Win32 when the platform is not Windows (Code Insight is a Windows front ' +
-    'end; delphi_test runs Win32 and Win64 only). Backup of the .dproj in ' +
+    'end; delphi_test runs %s only). Backup of the .dproj in ' +
     '__delphi-patch.';
 
   { ...y cuando ya era esa: nada se escribe, ni copia (como CFG-020) }
@@ -4741,7 +4741,7 @@ const
 
   SR_TEST_PLATFORM_UNKNOWN_FMT =
     '[TEST-001 INVALID_PARAM] "%s" is not a Delphi platform. Valid for ' +
-    'running here: Win32 and Win64.';
+    'running here: %s.';
 
   SR_TEST_NOBINARY_NOBUILD =
     '[TEST-002 INVALID_PARAM] You asked for nobuild=true (do not build) ' +
@@ -6590,7 +6590,8 @@ const
     'allowed). output=default restores the standard RAD Studio layout.';
 
   SN_CONFIG_DPR_ONLY =
-    '[CFG-063] This is the .dpr and there is no .dproj next to it, so I ' +
+    '[CFG-063] This is the main source (.dpr or .dpk) and there is no ' +
+    '.dproj next to it, so I ' +
     'can only tell you its UNITS. The framework (VCL/FMX), the ' +
     'platforms, the configurations, the search paths and the deployment ' +
     'live in the .dproj: I do not know them, and I do not make them up. ' +
@@ -10599,10 +10600,10 @@ const
     'under the workspace roots when root is empty; optional name filter. ' +
     'The way to answer "open project X" without knowing the disk layout. ' +
     'Answers in PAGES (maxresults, default 50; offset + nextOffset to walk ' +
-    'them): a work machine holds thousands of .dproj. Grouped by folder: ' +
+    'them). Grouped by folder: ' +
     'projects = [{dir, files = [{name, kind}]}], and each git repository ' +
     'once in repos = [{dir, branch}]: a project''s is the LONGEST dir its ' +
-    'folder is inside.';
+    'folder is inside (none rooted above your roots).';
 
   SD_WS_UPLOAD =
     'Upload a file TO the server in base64 chunks - the mirror of ' +

@@ -311,7 +311,9 @@ in frame. Do the gesture you came for and nothing else.
   and DUnitX test projects (`project-test`: runner + first fixture, green
   at birth; `delphi_test` runs it), and inside a
   project: `form-vcl`/`form-fmx`, `frame-vcl`/`frame-fmx`, `datamodule`
-  and `unit` (a plain .pas). Everything compiles at birth and is already
+  and `unit` (a plain .pas; with no project and an absolute `dir`,
+  standalone), plus `include` (a .inc for `{$I}`, never registered).
+  Everything compiles at birth and is already
   registered in the `.dpr` and the `.dproj`. Then `delphi_config
   command=add-platform` for extra targets. A new project carries the
   version information the IDE writes: `delphi_config command=set-version

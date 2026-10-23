@@ -3771,7 +3771,7 @@ var
     Ext, EncAntes, Antes: string;
   begin
     Ext := LowerCase(TPath.GetExtension(AFichero));
-    if (Ext = '.dpr') or (Ext = '.dpk') then
+    if EsFuentePrincipal(AFichero) then // EL predicado (octava pasada de Fable)
       try
         Anota(AFichero, ReapuntaUnits(AFichero, ABase, AMapa, Fallos), AUnits);
       except

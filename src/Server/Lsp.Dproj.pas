@@ -757,6 +757,10 @@ function SistemaDelPAServer(const APlatform: string): TSistemaDePlataforma;
   pero no corre en un x64: reventaba con 0xC0000005 y la respuesta culpaba al
   runner (medido el 18-oct-2026). }
 function CorreEnEstaMaquina(const APlatform: string): Boolean;
+{ Las plataformas que CorreEnEstaMaquina deja correr aqui, unidas por ', ':
+  lo que dicen TEST-001 y CFG-118, que decian "Win32 and Win64" a mano
+  (Win64x corre en un x64, y WinARM64EC en un ARM; octava pasada de Fable). }
+function PlataformasQueCorrenAqui: string;
 
 { La extension del ejecutable de APlatform, la ExeExt de los targets
   (CodeGear.Common.Targets): '.exe' en Windows, '.so' en Android, '' en el
@@ -2145,6 +2149,14 @@ var
 begin
   Result := DatosDePlataforma(APlatform, P) and (P.Sistema = spWindows) and
     WindowsEjecuta(P.Maquina);
+end;
+
+function PlataformasQueCorrenAqui: string;
+begin
+  Result := '';
+  for var P in PLATAFORMAS do
+    if CorreEnEstaMaquina(P.Nombre) then
+      Result := Result + IfThen(Result <> '', ', ') + P.Nombre;
 end;
 
 function ExtensionDeEjecutable(const APlatform: string): string;
