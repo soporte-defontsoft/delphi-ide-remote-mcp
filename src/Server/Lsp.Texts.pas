@@ -6474,10 +6474,12 @@ const
     'These are the members of the type.';
 
   SR_DESIGNER_LAYOUT_FMX =
-    '[DSGN-027 DENIED] command=layout is only for .dfm (VCL). A .fmx ' +
-    'lays out with another model (Size.Width, Position.X, a different ' +
-    'Align) that this server does not resolve yet; answering clean:true on a ' +
-    '.fmx would be a lie. For .fmx use tree/get/lint for now.';
+    '[DSGN-027 DENIED] command=layout is only for a VCL form (.dfm). An FMX ' +
+    'form - a .fmx, or a .dfm whose unit carries the FMX CLASSGROUP, as a ' +
+    'data module of an FMX project does - lays out with another model ' +
+    '(Size.Width, Position.X, a different Align) that this server does not ' +
+    'resolve yet; answering clean:true on it would be a lie. For FMX use ' +
+    'tree/get/lint for now.';
 
   SN_DESIGNER_LAYOUT_TRUNC =
     '[DSGN-040] NOTE: the .dfm looks TRUNCATED (there are more open ' +
