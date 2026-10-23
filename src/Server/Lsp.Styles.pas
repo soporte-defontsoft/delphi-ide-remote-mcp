@@ -48,6 +48,12 @@ type
     destructor Destroy; override;
     { The part named AName (StyleName or object name), direct child. }
     function Child(const AName: string): TStyleObj;
+    { Su nombre como lo toma TStyleDoc.ObjetoDeNombre, la inversa: el suyo,
+      o su RUTA si esta dentro de un frame en linea (Frame11.Edit1: los frames
+      en linea que lo contienen, de fuera a dentro). EL compositor de esa ruta
+      (1.22.2: set de Frame11.Edit1 la perdia por el camino y cambiaba el
+      Edit1 del form, medido) }
+    function Ruta: string;
   end;
 
   TStyleDoc = class
@@ -146,12 +152,18 @@ type
       literal): lo que ya habia, para la cuenta por valor de los sustitutos
       sueltos (Lsp.DesignerBin.SueltoEnLiteral) de designer set y styles set. }
     function LiteralDe(AObj: TStyleObj; const AProp: string): string;
-    { The object named AName at any depth (a form's component, by its Name;
-      the same identifier as dcc sees it); nil when there is none. Una RUTA
+    { The object named AName at any depth of the FORM (a form's component, by
+      its Name; the same identifier as dcc sees it); nil when there is none.
+      Un nombre a secas es del form, como lo busca su FindComponent: lo de
+      dentro de un frame en linea es del frame y se nombra por su ruta (los
+      dos pueden tener su Edit1; 1.22.2, Opus en Hermes: get daba el del
+      frame y set cambiaba el del form). ATambienEnFrames: si el form no lo
+      tiene, el primero de dentro de sus frames - para lo que nombra el
+      lector del IDE en sus errores, que da el Name a secas. Una RUTA
       (Frame11.Edit1) se resuelve como el cargador (FindNestedComponent): cada
       trozo dentro del frame en linea del anterior, sin bajar a otro frame en
       linea de dentro (Frame11.Frame21.Edit1 es el de Frame21). }
-    function ObjetoDeNombre(const AName: string): TStyleObj;
+    function ObjetoDeNombre(const AName: string; ATambienEnFrames: Boolean = False): TStyleObj;
     { The file text these lines would make, with the file's own line break:
       what Guarda writes. A caller that writes several files at once
       (delphi_designer insert/delete: the form and its unit, all or
@@ -333,6 +345,18 @@ begin
        ((C.ObjName <> '') and MismoIdentificador(C.ObjName, AName)) then
       Exit(C);
   Result := nil;
+end;
+
+function TStyleObj.Ruta: string;
+begin
+  Result := ObjName;
+  var P := Parent;
+  while P <> nil do
+  begin
+    if P.Clave = 'inline' then
+      Result := P.ObjName + '.' + Result;
+    P := P.Parent;
+  end;
 end;
 
 { TStyleDoc }
@@ -721,7 +745,7 @@ begin
   end;
 end;
 
-function TStyleDoc.ObjetoDeNombre(const AName: string): TStyleObj;
+function TStyleDoc.ObjetoDeNombre(const AName: string; ATambienEnFrames: Boolean): TStyleObj;
 
   function Busca(O: TStyleObj): TStyleObj;
   begin
@@ -758,8 +782,17 @@ begin
   Result := nil;
   if (FRoot = nil) or (AName = '') then
     Exit;
+  // a secas, el del form: el mismo, o uno de su dueno (sin bajar a un frame
+  // en linea); los de dentro de un frame, solo si se piden
   if Pos('.', AName) = 0 then
-    Exit(Busca(FRoot));
+  begin
+    if (FRoot.ObjName <> '') and MismoIdentificador(FRoot.ObjName, AName) then
+      Exit(FRoot);
+    Result := BuscaEnSuDueno(FRoot, AName);
+    if (Result = nil) and ATambienEnFrames then
+      Result := Busca(FRoot);
+    Exit;
+  end;
   // una ruta: cada trozo en el dueno del anterior, y todos menos el ultimo,
   // frames en linea
   Result := FRoot;

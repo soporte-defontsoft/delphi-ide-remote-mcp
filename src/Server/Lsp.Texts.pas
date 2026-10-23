@@ -5958,7 +5958,8 @@ const
 
   SR_DESIGNER_COMPONENT_FMT =
     '[DSGN-017 NOT_FOUND] There is no component "%s" in that form ' +
-    '(command=tree lists them).';
+    '(command=tree lists them). One of an inline frame goes by its path ' +
+    '(Frame11.Edit1).';
 
   SN_DESIGNER_INFO_NOTE =
     '[DSGN-018] Published properties read from the source of the active ' +

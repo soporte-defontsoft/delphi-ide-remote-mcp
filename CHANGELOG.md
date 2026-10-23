@@ -50,7 +50,12 @@ the MCP `initialize` response (`serverInfo.version`).
   form, in their `inherited` block. `get` and `set` now take the path,
   `DSGN-078` lists what the form overrides by its path, and a delete or a
   rename of one is refused as part of the frame (`DSGN-083`), not as
-  inherited from an ancestor form (`tests/test_contratos_1222.py`).
+  inherited from an ancestor form. A bare name is the form's own, as the
+  form's `FindComponent` reads it: with an `Edit1` in the form and another in
+  a frame, `get Edit1` gave the frame's and `set Edit1` changed the form's
+  (Claude Opus 5.5 through Hermes, 2026-10-23); a bare name that is only
+  inside a frame is now refused with its path (`DSGN-017`, `DSGN-078`)
+  (`tests/test_contratos_1222.py`).
 - **`delphi_designer insert` adds a page to a `TPageControl`.** A
   `TTabSheet` with a page control as its parent was refused (`DSGN-080`: a
   page control takes no controls), so there was no way to add a page but

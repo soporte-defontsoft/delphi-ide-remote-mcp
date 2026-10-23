@@ -573,7 +573,8 @@ begin
   Result := 0;
   if (ADoc = nil) or (AI.Componente = '') then
     Exit;
-  var Obj := ADoc.ObjetoDeNombre(AI.Componente);
+  // el lector nombra a secas, tambien a uno de dentro de un frame en linea
+  var Obj := ADoc.ObjetoDeNombre(AI.Componente, True);
   if (Obj <> nil) and ADoc.PropLines(Obj, AI.Propiedad, Ini, Fin) then
     Result := Ini + 1;
 end;
@@ -610,7 +611,7 @@ begin
   AClase := '';
   if (ADoc = nil) or (AI.Componente = '') or (AI.Propiedad = '') then
     Exit;
-  var Obj := ADoc.ObjetoDeNombre(AI.Componente);
+  var Obj := ADoc.ObjetoDeNombre(AI.Componente, True);
   if Obj = nil then
     Exit;
   var M := MetaTable(AFmx, Falta, 0);
@@ -682,7 +683,7 @@ var
     Result := False;
     if (ADoc = nil) or (AI.Componente = '') then
       Exit;
-    var Obj := ADoc.ObjetoDeNombre(AI.Componente);
+    var Obj := ADoc.ObjetoDeNombre(AI.Componente, True);
     if Obj <> nil then
       for var S in R.Sustituidas do
         if SameText(S, Obj.ClassName_) then

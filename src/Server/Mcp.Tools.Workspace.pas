@@ -712,7 +712,10 @@ begin
         // son copias y cuantas ficheros vivos (Hermes, 2026-09-22).
         // ...copias: la marca de dueno de una copia (.by) no es otra copia
         // (septima revision)
-        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = SKIP_TRASH) then
+        // ...por EL lector de la papelera, sobre la ruta entera: con la raiz
+        // DENTRO de una papelera, la ruta relativa ya no la nombraba y sus
+        // copias se contaban como vivas (Opus en Hermes, 1.22.2)
+        if Params.IncludeTrash and EnPapelera(F) then
           if EsMarcaDeDueno(F) then
             Inc(ShownMarcas)
           else

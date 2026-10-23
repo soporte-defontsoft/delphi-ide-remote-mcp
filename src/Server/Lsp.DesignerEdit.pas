@@ -230,7 +230,9 @@ function NombreDe(O: TStyleObj): string;
 begin
   if O = nil then
     Exit('?');
-  Result := IfThen(O.ObjName <> '', O.ObjName, O.ClassName_);
+  // su ruta si es de un frame en linea (Frame11.Edit1): con ella se le vuelve
+  // a buscar, y el Edit1 del form no se toma por el (1.22.2)
+  Result := IfThen(O.ObjName <> '', O.Ruta, O.ClassName_);
 end;
 
 // el objeto mas de dentro que contiene la linea ALinea (1-based)
@@ -274,40 +276,15 @@ begin
   Result := False;
 end;
 
-{ El componente ANombre del FORM: sin bajar a lo de dentro de un frame en
-  linea, que es del frame (los dos pueden tener su Edit1, y el del frame,
-  delante en el fichero, se tomaba por el del form: set lo cambiaba, delete
-  y el renombrado lo negaban). nil si no esta. }
-function ObjetoDelForm(ADoc: TStyleDoc; const ANombre: string): TStyleObj;
-
-  function Busca(O: TStyleObj): TStyleObj;
-  begin
-    if (O.ObjName <> '') and MismoIdentificador(O.ObjName, ANombre) then
-      Exit(O);
-    Result := nil;
-    if O.Clave = 'inline' then
-      Exit;
-    for var K in O.Children do
-    begin
-      Result := Busca(K);
-      if Result <> nil then
-        Exit;
-    end;
-  end;
-
-begin
-  Result := nil;
-  if (ADoc.Root <> nil) and (ANombre <> '') then
-    Result := Busca(ADoc.Root);
-end;
-
-// el del form, y si no lo tiene, uno de dentro de un frame (lo que se puede
-// cambiar alli, o negar con su motivo)
+{ El componente que nombra el agente: el del FORM por su Name, sin bajar a
+  lo de dentro de un frame en linea, que es del frame y va por su ruta
+  (Frame11.Edit1). EL lector, TStyleDoc.ObjetoDeNombre: aqui vivia su gemelo
+  para el form (ObjetoDelForm) y get buscaba con el otro, y con un Edit1 en
+  el form y otro en el frame get daba el del frame y set cambiaba el del
+  form (1.22.2, Opus en Hermes). nil si no esta. }
 function ObjetoPorNombre(ADoc: TStyleDoc; const ANombre: string): TStyleObj;
 begin
-  Result := ObjetoDelForm(ADoc, ANombre);
-  if Result = nil then
-    Result := ADoc.ObjetoDeNombre(ANombre);
+  Result := ADoc.ObjetoDeNombre(ANombre);
 end;
 
 { La linea AI del form nombra a uno de ANombres como VALOR de una propiedad
@@ -1184,7 +1161,7 @@ function NombreOcupado(ADoc: TStyleDoc; AClase: TTipoPas; const ANombre: string;
   AYo: TStyleObj; const AHeredados: TArray<string>): string;
 begin
   Result := '';
-  var O := ObjetoDelForm(ADoc, ANombre);
+  var O := ObjetoPorNombre(ADoc, ANombre);
   if (O <> nil) and (O <> AYo) then
     Exit(MsgText(SF_DESIGNER_OCUPA_COMPONENTE));
   if AClase = nil then
@@ -2213,7 +2190,7 @@ begin
     // un componente de este form (PopupMenu1), o de otro (Form2.ImageList1)
     if EsIdentificador(AValor, False) then
     begin
-      Ref := ObjetoDelForm(F.Doc, AValor);
+      Ref := ObjetoPorNombre(F.Doc, AValor);
       if Ref = nil then
         Exit(MsgFmt(SR_DESIGNER_REFERENCIA_NO_ESTA_FMT, [AValor, F.DfmNombre, NombreDe(AObj), AProp]));
       // de su clase o de una hija; lo que la tabla no conoce no se juzga
@@ -3650,7 +3627,9 @@ begin
     Exit;
   // el lector NOMBRA uno de estos valores (las partes de su error, que da el
   // ayudante en su idioma): es el
-  if SameText(Lectura.Componente, ANombre) then
+  // ...por su Name a secas, tambien uno de un frame en linea (ANombre es su ruta)
+  var Suyo := ObjetoPorNombre(F.Doc, ANombre);
+  if (Suyo <> nil) and SameText(Lectura.Componente, Suyo.ObjName) then
     for var I := 0 to High(AInfos) do
       if AInfos[I].SinJuez and SameText(AInfos[I].Prop, Lectura.Propiedad) then
         Exit(MsgFmt(SR_DESIGNER_SET_NO_CARGA_FMT, [ANombre, AInfos[I].Prop, AInfos[I].Valor,

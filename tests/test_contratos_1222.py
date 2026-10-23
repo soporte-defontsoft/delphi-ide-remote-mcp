@@ -30,6 +30,14 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
   F3 un nombre que no esta: DSGN-078 lista Frame11.Edit1 por su ruta y no manda a editarlo en el frame (ROJO)
   F4 control: delete Frame11.Edit1 se niega (es del frame) y el fichero no cambia
   F5 control: Frame11.Nada (no esta en el form) y Button1.Edit1 (Button1 no es un frame): DSGN-078
+  F6 Edit1 a secas cuando solo esta en el frame: get (DSGN-017) y set (DSGN-078) dicen que no esta y nombran
+     Frame11.Edit1, nada escrito (ROJO contra r1222g: get daba el del frame y set lo cambiaba; Opus en Hermes)
+  F7 con un Edit1 propio en el form: set Frame11.Edit1 cambia el del frame (ROJO contra r1222g: cambiaba el del
+     form - set volvia a buscar por el Name a secas, medido)
+  F8 get Edit1: el del form (ROJO: el del frame, el primero del fichero)
+  F9 set Edit1: el del form, y el del frame se queda
+  L1 delphi_list con la raiz dentro de una papelera: todas sus entradas son copias (ROJO contra r1222g: las del dia
+     contaban como vivas, LIST-008; Opus en Hermes)
 
 Menores medidos sobre la 1.22.1 (Opus en Hermes y dos agentes de medida, 23-oct-2026), cada uno ROJO contra ella:
   G1 delphi_git en una carpeta sin repo: GIT-082 NOT_FOUND (decia GIT-036 DENIED)
@@ -253,6 +261,40 @@ try:
     check('F5 control: Frame11.Nada y Button1.Edit1 (Button1 no es un frame): DSGN-078, nada escrito',
           mc.es(r1, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and mc.es(r2, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT')
           and open(fdfm, 'rb').read() == antes, (r1[:300], r2[:300]))
+    # a secas, Edit1 es del form (su FindComponent): el del frame va por su ruta
+    r1 = dsg(command='get', component='Edit1')
+    r2 = dsg(command='set', component='Edit1', prop='Text', value="'x'")
+    check('F6 Edit1 a secas, solo en el frame: get y set dicen que no esta y nombran la ruta, nada escrito',
+          mc.es(r1, 'SR_DESIGNER_COMPONENT_FMT') and 'Frame11.Edit1' in r1
+          and mc.es(r2, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'Frame11.Edit1' in r2
+          and open(fdfm, 'rb').read() == antes, (r1[:300], r2[:300]))
+    # ...y con un Edit1 propio en el form, cada uno es el suyo
+    t = lee(fdfm).replace("    Caption = 'Button1'\r\n    TabOrder = 1\r\n  end\r\n",
+                          "    Caption = 'Button1'\r\n    TabOrder = 1\r\n  end\r\n  object Edit1: TEdit\r\n    Left = 100\r\n"
+                          "    Top = 120\r\n    Width = 121\r\n    Height = 23\r\n    TabOrder = 2\r\n    Text = 'propio'\r\n  end\r\n")
+    open(fdfm, 'w', newline='').write(t)
+    fpas = os.path.join(fdir, 'UForm1.pas')
+    p = lee(fpas)  # leido ANTES de abrir para escribir, que lo vacia
+    open(fpas, 'w', newline='').write(p.replace('    Button1: TButton;', '    Button1: TButton;\r\n    Edit1: TEdit;'))
+    r = dsg(command='set', component='Frame11.Edit1', prop='Text', value="'tres'")
+    t = lee(fdfm)
+    check('F7 set Frame11.Edit1 con un Edit1 en el form: cambia el del frame y no el del form',
+          not mc.fallo(r) and "    inherited Edit1: TEdit\r\n      Text = 'tres'" in t and "Text = 'propio'" in t
+          and '[DSGN-032]' not in r,  # el fixture vale: la clase del form sigue en su unidad
+          r[:400] + ' | ' + t[:900])
+    r = dsg(command='get', component='Edit1')
+    check('F8 get Edit1 con uno en el form: el del form', not mc.fallo(r) and "Text = 'propio'" in r, r[:400])
+    r = dsg(command='set', component='Edit1', prop='Text', value="'cuatro'")
+    t = lee(fdfm)
+    check('F9 set Edit1: el del form, y el del frame se queda',
+          not mc.fallo(r) and "Text = 'cuatro'" in t and "Text = 'tres'" in t and "'propio'" not in t,
+          r[:400] + ' | ' + t[:900])
+    # la papelera de esa carpeta (los set de arriba dejan sus copias) como raiz: todas son copias
+    r = srv.call('delphi_list', {'root': os.path.join(fdir, mc.PAPELERA), 'pattern': '*.*',
+                                 'includetrash': True})
+    j = mc.como_json(r)
+    check('L1 list con la raiz DENTRO de la papelera: todas sus entradas son copias, ninguna viva',
+          j.get('total', 0) > 0 and j.get('shownTrash', 0) + j.get('shownMarkers', 0) == j.get('total'), r[:500])
 
     plano = os.path.join(JAIL, 'plano')
     os.makedirs(plano)
