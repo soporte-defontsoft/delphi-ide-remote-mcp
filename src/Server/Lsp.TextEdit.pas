@@ -320,10 +320,15 @@ begin
     end;
     if A.CreateFile_ then
       Exit(DoCreate(A));
-    // sin old, solo una linea EN BLANCO por su numero (P3-L9, DoEditLine)
-    if A.DeleteLine and not A.HasOld and (A.AtLine <= 0) then
-      Exit(MsgText(SR_TEXT_DELETE_TRUE_NECESITA_OLD));
-    if not A.HasOld and not A.DeleteLine then
+    // delete, por LA regla de las dos gemelas (Lsp.Patch.DeleteDeLineaDenegado):
+    // aqui faltaba lo de new, y la linea se borraba tirandolo
+    if A.DeleteLine then
+    begin
+      Result := DeleteDeLineaDenegado(A.HasOld, A.OldLine, A.NewText, A.AtLine);
+      if Result <> '' then
+        Exit;
+    end
+    else if not A.HasOld then
       Exit(MsgText(SR_TEXT_FALTA_ANCLA_OLD_ESTA));
     Result := DoEditLine(A);
   except

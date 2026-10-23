@@ -1542,7 +1542,8 @@ _out = call('delphi_textedit', {'path': _tx, 'delete': True, 'atline': 1})
 check('...y una con texto: EDIT-123, la misma negativa que delphi_edit',
       mc.abre(_out, 'SR_EDIT_LINEA_NO_EN_BLANCO_FMT') and open(_tx, 'rb').read() == b'uno\r\n\r\ndos\r\n', _out[:300])
 _out = call('delphi_textedit', {'path': _tx, 'delete': True})
-check('...sin old ni atline: TEXT-003', mc.abre(_out, 'SR_TEXT_DELETE_TRUE_NECESITA_OLD'), _out[:300])
+check('...sin old ni atline: EDIT-056, la regla de las dos (era TEXT-003, el mismo hecho con otro codigo)',
+      mc.abre(_out, 'SR_EDIT_DELETE_TRUE_NECESITA_OLD'), _out[:300])
 _out = call('delphi_textedit', {'path': _tx, 'old': '   ', 'new': 'x'})
 check('...y un ancla de solo blancos es EDIT-060, como en delphi_edit (casaba con la linea en blanco y la reescribia)',
       mc.abre(_out, 'SR_EDIT_ANCLA_ESTA_VACIA_SOLO') and open(_tx, 'rb').read() == b'uno\r\n\r\ndos\r\n', _out[:300])

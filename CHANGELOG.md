@@ -99,6 +99,16 @@ the MCP `initialize` response (`serverInfo.version`).
   valid name when it declares none, as msbuild) - and a configuration the
   project does not declare is `CFG-107` everywhere; `CFG-116` is gone
   (`tests/test_contratos_1222.py`).
+- **`delete: true` follows one rule in `delphi_edit`, `delphi_textedit` and
+  every entry of a batch.** Both descriptions say `delete` takes no `new`, and
+  only `delphi_edit` refused it: `delphi_textedit` with `old`, `new` and
+  `delete: true` deleted the line and dropped `new`, answering OK; and in a
+  batch, an entry whose `old` is a block did not read `delete` at all, so the
+  block became `new` (Claude Fable 5.1 through Hermes, 2026-10-23). Now
+  `delete` with `new` is `EDIT-057` everywhere and nothing is written, and a
+  block with `delete` and no `new` is removed whole. A `delete` with neither
+  `old` nor `atline` is `EDIT-056` in both tools (`TEXT-003`, the same fact
+  with another code, is gone) (`tests/test_contratos_1222.py`).
 - **`delphi_hover` gives a symbol's file as a path the other tools take.**
   The engine's link (`file:///C%3A/.../System.SysUtils.pas#8766`) came out as
   `file:///srvc%3A/...`, which `delphi_read` refused; it is now the path and

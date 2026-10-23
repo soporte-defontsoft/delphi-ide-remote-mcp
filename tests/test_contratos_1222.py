@@ -54,6 +54,9 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
   CF1 UN juez de la configuracion (ConfigDelBuild) para build, test y config: sin configuraciones declaradas,
      add-deployfile config=Release vale como en el build (ROJO: CFG-116 "(none)"); una que no declara, CFG-107
      tambien en config
+  DL1-DL4 LA regla de delete:true (Lsp.Patch.DeleteDeLineaDenegado) en delphi_edit, delphi_textedit y cada bloque de una
+     tanda: con new, EDIT-057 y nada escrito (ROJOS contra r1222l: textedit borraba la linea y tiraba new; en un
+     bloque delete no se leia y el bloque pasaba a ser new); un bloque con delete y sin new se borra entero
   U1 delphi_config remove-unit con la entrada relativa (Lib\ULibRel.pas), dentro: quitada, sin decir que esta fuera
      de lo legible (ROJO contra r1222h: la juzgaba desde la carpeta del servidor, CFG-125; Opus en Hermes)
 
@@ -481,6 +484,27 @@ try:
     check('CF1 sin configuraciones declaradas, add-deployfile config=Release vale como en build (ROJO: CFG-116 con'
           ' "(none)"); y una que no declara es CFG-107 tambien en config',
           mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT') and mc.es(r2, 'SR_TEST_CONFIG_FMT'), (r[:300], r2[:300]))
+
+    # LA regla de delete:true en las dos gemelas y en un bloque de una tanda (Fable, revision de la 1.22.2)
+    notas = os.path.join(JAIL, 'notas.md')
+    open(notas, 'w', newline='').write('# Uso\r\nuno\r\ndos\r\ntres\r\n')
+    antes = open(notas, 'rb').read()
+    r = srv.call('delphi_textedit', {'path': notas, 'old': '# Uso', 'new': '# Instalacion', 'delete': True})
+    check('DL1 textedit delete=true con new: EDIT-057 y nada escrito (ROJO: borraba la linea y tiraba new)',
+          mc.es(r, 'SR_EDIT_DELETE_TRUE_LLEVA_NEW') and open(notas, 'rb').read() == antes, r[:300])
+    r = srv.call('delphi_textedit', {'path': notas, 'edits': [{'old': 'uno\ndos', 'new': 'x', 'delete': True}]})
+    check('DL2 un bloque de una tanda con delete y new: EDIT-057 y nada escrito (ROJO: el bloque pasaba a ser new)',
+          mc.es(r, 'SR_EDIT_DELETE_TRUE_LLEVA_NEW') and open(notas, 'rb').read() == antes, r[:300])
+    r = srv.call('delphi_textedit', {'path': notas, 'edits': [{'old': 'uno\ndos', 'delete': True}]})
+    check('DL3 control: un bloque con delete y sin new se borra entero',
+          not mc.fallo(r) and open(notas, 'rb').read() == b'# Uso\r\ntres\r\n', r[:300])
+    upas = os.path.join(JAIL, 'UBorra.pas')
+    open(upas, 'w', newline='').write('unit UBorra;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
+    antes = open(upas, 'rb').read()
+    r = srv.call('delphi_edit', {'path': upas, 'edits': [{'old': 'interface\n\nimplementation', 'new': 'x',
+                                                          'delete': True}]})
+    check('DL4 delphi_edit: el mismo bloque con delete y new, EDIT-057 y nada escrito (ROJO igual)',
+          mc.es(r, 'SR_EDIT_DELETE_TRUE_LLEVA_NEW') and open(upas, 'rb').read() == antes, r[:300])
 
     plano = os.path.join(JAIL, 'plano')
     os.makedirs(plano)

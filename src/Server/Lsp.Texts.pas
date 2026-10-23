@@ -8183,9 +8183,6 @@ const
   SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT =
     '[TEXT-002 INVALID_PARAM] atline=%d is none of the occurrences (%s).';
 
-  SR_TEXT_DELETE_TRUE_NECESITA_OLD =
-    '[TEXT-003 INVALID_PARAM] delete=true needs "old": the line to remove - ' +
-    'or, for a BLANK line, "atline" with its number and no "old".';
 
   SR_TEXT_FALTA_ANCLA_OLD_ESTA =
     '[TEXT-004 INVALID_PARAM] The anchor (old) is missing. This tool does not ' +

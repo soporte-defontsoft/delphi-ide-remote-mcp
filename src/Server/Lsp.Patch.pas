@@ -783,6 +783,14 @@ function TandaDeUnBloque(const AOld, ANew, AFragment: string; AAtLine, AToLine: 
   (legitimo); sin old y con new lo caza la puerta de reescritura entera del
   motor. test_paisaje vigila que nadie lo vuelva a escribir. }
 procedure SignificadoDeOldNew(const AOld, ANew: string; out AHasOld, AHasNew: Boolean);
+{ LA regla de delete:true, la de las dos gemelas y la de cada entrada de una
+  tanda, de una linea o de un bloque: el ancla (old) o, para una linea EN
+  BLANCO, su numero (atline), y sin "new": lo que se borra no se sustituye.
+  '' si vale. Estaba en ExecutePatch (EDIT-056/057) y en TextEditNucleo con
+  otro codigo (TEXT-003) y SIN lo de new: delphi_textedit borraba la linea y
+  tiraba new, y en un bloque de una tanda delete no se leia y el bloque pasaba
+  a ser new (Fable, revision de la 1.22.2). }
+function DeleteDeLineaDenegado(AHasOld: Boolean; const AOld, ANew: string; AAtLine: Integer): string;
 { Con "fragment", lo que NO puede venir en la misma llamada - el primero que
   venga: old, delete, toline, y los modos propios de quien llama (createunit,
   restore, insert; create; occurrence en una tanda), ya decididos en
@@ -3647,12 +3655,20 @@ begin
           EnLinea := EnteroDeEntrada(Obj, 'atline');
           if EnLinea = 0 then
             EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
+          Borra := BooleanoDeEntrada(Obj, 'delete');
           if EsBloque then
-            Una := ApplyBlockEdit(APath, Anc, Nue,
-              EnteroDeEntrada(Obj, 'occurrence'), EnLinea)
+          begin
+            // delete en un bloque, por LA regla de delete: el bloque se va
+            // entero y sin new (no se leia, y el bloque pasaba a ser new)
+            Una := '';
+            if Borra then
+              Una := DeleteDeLineaDenegado(True, Anc, Nue, EnLinea);
+            if Una = '' then
+              Una := ApplyBlockEdit(APath, Anc, Nue,
+                EnteroDeEntrada(Obj, 'occurrence'), EnLinea);
+          end
           else
           begin
-            Borra := BooleanoDeEntrada(Obj, 'delete');
             // el final del rango cuenta como su principio: con atline las dos
             // son lineas del fichero tal como lo dejaron las entradas de antes
             // (atline no se arrastra) y el toline va tal cual lo dio el agente;
@@ -4146,6 +4162,16 @@ procedure SignificadoDeOldNew(const AOld, ANew: string; out AHasOld, AHasNew: Bo
 begin
   AHasOld := AOld <> '';
   AHasNew := (ANew <> '') or AHasOld;
+end;
+
+function DeleteDeLineaDenegado(AHasOld: Boolean; const AOld, ANew: string; AAtLine: Integer): string;
+begin
+  Result := '';
+  // sin old, solo una linea EN BLANCO por su numero (P3-L9, DoEdit)
+  if (not AHasOld or (AOld = '')) and (AAtLine <= 0) then
+    Exit(MsgText(SR_EDIT_DELETE_TRUE_NECESITA_OLD));
+  if ANew <> '' then
+    Exit(MsgText(SR_EDIT_DELETE_TRUE_LLEVA_NEW));
 end;
 
 function OtroModoConFragmento(AHasOld: Boolean; const AOldLine: string; ADelete: Boolean;
@@ -5157,11 +5183,9 @@ begin
       // ---------- DELETE LINE ----------
       if A.DeleteLine then
       begin
-        // sin old, solo una linea EN BLANCO por su numero (P3-L9, DoEdit)
-        if (not A.HasOld or (A.OldLine = '')) and (A.AtLine <= 0) then
-          Exit(MsgText(SR_EDIT_DELETE_TRUE_NECESITA_OLD));
-        if A.NewText <> '' then
-          Exit(MsgText(SR_EDIT_DELETE_TRUE_LLEVA_NEW));
+        Result := DeleteDeLineaDenegado(A.HasOld, A.OldLine, A.NewText, A.AtLine);
+        if Result <> '' then
+          Exit;
         Exit(DoEdit(A.Path, A.OldLine, '', A.AtLine, IsDesigner, True, A.ToLine));
       end;
 
