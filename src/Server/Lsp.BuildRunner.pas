@@ -481,6 +481,15 @@ var
   Launched: Boolean;
   Job: THandle; // declared here: it outlives the launch block below
   Matado: Boolean; // por plazo: sus atomos se limpian al cerrar sus handles
+
+  // lo leido del tubo, al final de lo que lleva
+  procedure Guarda(ALeidos: DWORD);
+  begin
+    var Prev := Length(Bytes);
+    SetLength(Bytes, Prev + Integer(ALeidos));
+    Move(Buffer[0], Bytes[Prev], ALeidos);
+  end;
+
 begin
   Matado := False;
   // From the pipe to the closing of the child's end, nobody else launches:
@@ -595,25 +604,57 @@ begin
           Break;
         if BytesRead = 0 then
           Break;
-        var Prev := Length(Bytes);
-        SetLength(Bytes, Prev + Integer(BytesRead));
-        Move(Buffer[0], Bytes[Prev], BytesRead);
+        Guarda(BytesRead);
       end
       else
       begin
-        // no data right now: has the process finished, or timed out?
-        if WaitForSingleObject(PI.hProcess, 50) = WAIT_OBJECT_0 then
+        // no data right now: has the process finished, or timed out? Hasta el
+        // plazo y no mas: con un sondeo fijo de 50 ms un plazo mas corto se
+        // cumplia tarde, y un run de 55 ms pasaba con timeoutms=1 (medido)
+        var Resta: UInt64 := 0;
+        var Ahora := GetTickCount64;
+        if Ahora < Deadline then
+          Resta := Deadline - Ahora;
+        if Resta > 50 then
+          Resta := 50;
+        if WaitForSingleObject(PI.hProcess, DWORD(Resta)) = WAIT_OBJECT_0 then
         begin
           // drain whatever is still buffered, then stop
           if PeekNamedPipe(ReadH, nil, 0, nil, @Avail, nil) and (Avail = 0) then
             Break;
         end;
       end;
-      if GetTickCount64 > Deadline then
+      if GetTickCount64 >= Deadline then // (con >, en el tic justo el sondeo de 0 ms giraba en vacio)
       begin
-        TimedOut := True;
-        Matado := True;
-        TerminateProcess(PI.hProcess, 1);
+        // cortado por tiempo es MATADO: lo que ya acabo solo (lo que queda en el
+        // tubo es de antes, o de un nieto que el job matara) no se da por
+        // cortado. Se marcaba igual, y delphi_test contestaba result=timeout con
+        // el exitCode 0 de un run que habia acabado bien (medido el 23-oct-2026:
+        // 10 de 10 con timeoutms=1 y un exe de 54 ms)
+        // (y matado de verdad: uno que ya estaba saliendo no se deja matar, y
+        // su exitCode es el suyo - medido, 1 de 10 con timeoutms=1)
+        if (WaitForSingleObject(PI.hProcess, 0) = WAIT_TIMEOUT) and
+           TerminateProcess(PI.hProcess, 1) then
+        begin
+          TimedOut := True;
+          Matado := True;
+          Break;
+        end;
+        // ...y lo que acabo solo se lee ENTERO: lo suyo cabe en el tubo (no pudo
+        // acabar con una escritura esperando). Se dejaba de leer al vencer el
+        // plazo, y su run salia no-tests (medido). Lo que hay AHORA, no lo que
+        // un nieto siga escribiendo: a ese lo mata el job
+        if PeekNamedPipe(ReadH, nil, 0, nil, @Avail, nil) then
+          while Avail > 0 do
+          begin
+            if not ReadFile(ReadH, Buffer, SizeOf(Buffer), BytesRead, nil) or (BytesRead = 0) then
+              Break;
+            Guarda(BytesRead);
+            if BytesRead >= Avail then
+              Avail := 0
+            else
+              Dec(Avail, BytesRead);
+          end;
         Break;
       end;
     until False;

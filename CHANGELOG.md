@@ -145,6 +145,17 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **`delphi_test` says a run was cut by its timeout only when it cut it.**
+  When the deadline passed while the output of a test program that had
+  already ended on its own was still being read, the answer was
+  `result: timeout` with the `exitCode` 0 of a run that had ended well
+  (measured on 2026-10-23: 10 of 10 with `timeoutms=1` and a test program
+  that takes 54 ms). Every program the server runs is waited for the same
+  way, and now a timeout means it was killed: what ended on its own is
+  answered as it ended, with all it printed, and a deadline shorter than
+  the 50 ms the wait used to sleep is kept (`tests/test_test_timeout_1182.py`,
+  whose own cut depended on that race and failed now and then in a full
+  run).
 - **A path written with forward slashes is judged as the same path.**
   Windows opens `C:/x` as it opens `C:\x`, but a check that reads the text
   does not: a file in the IDE's `__history` or `__recovery` was not taken for
