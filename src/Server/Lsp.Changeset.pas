@@ -73,6 +73,7 @@ uses
   Lsp.TextEdit,
   Lsp.Texts,
   Lsp.TodoONada,
+  Lsp.Casa, // FragmentoUnico: la cola del id, de un GUID
   Lsp.Mascara;
 
 type
@@ -605,8 +606,12 @@ begin
     // (found 2026-08-25 while auditing through MCP). So the id gets a
     // random tail, and status shows only the part before it - enough to
     // see that a batch exists and how big it is, not enough to touch it.
+    // La cola, de EL trozo unico de la casa (FragmentoUnico: un GUID de
+    // Windows), en mayusculas como era: con Random (un LCG de 32 bits) un id
+    // visto daba el estado y los siguientes (medido el 23-oct-2026: el
+    // siguiente de otra sesion, acertado; P4 de la revision de Opus 5.5)
     Result := FormatDateTime('hhnnss', Now) + '-' + IntToStr(GSeq) + '-' +
-      IntToHex(Random($10000), 4) + IntToHex(Random($10000), 4);
+      UpperCase(FragmentoUnico);
     GSets.Add(Result, TChangeset.Create(Result));
   finally
     GLock.Leave;

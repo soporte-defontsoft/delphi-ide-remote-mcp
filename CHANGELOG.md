@@ -10,6 +10,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The id of a changeset can no longer be predicted from another one.** The
+  id is a capability - whoever knows it can commit or roll back that batch,
+  and `status` shows every open one without its secret tail - and the tail
+  came from `Random`, a 32-bit linear congruential generator: from one id an
+  agent could rebuild its state and compute the tail of the next changeset
+  another session opened (measured on 2026-10-23: predicted exactly; found by
+  Claude Opus 5.5 in its review of the 1.22.0 code). The tail now comes from a
+  Windows GUID, in the same form (`tests/test_contratos_1222.py`).
 - **`delphi_move` names what the build still reads where the moved folder used
   to be.** Its description promises that what it could not re-point is named,
   and it was silent about a search path that reaches the folder through a

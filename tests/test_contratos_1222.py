@@ -57,6 +57,11 @@ Mcp.Tools.Adb.pas del repo, y git, que no distingue, no lo ensenaba.
   Y1 delphi_symbols de una carpeta: el digest trae 'const X = 1;' en una linea, las constantes con tipo y las
      variables de la interfaz (ROJO: se perdian)
 
+Y uno de seguridad (P4 de la revision de Opus 5.5, medido el 23-oct-2026): el id de un changeset es una CAPACIDAD
+(quien lo sabe hace commit o rollback del lote de otro) y su cola salia de Random, un LCG de 32 bits: con UN id
+visto se reconstruye el estado y se acierta la cola del siguiente, y status ensena el resto.
+  CS1 dos begin seguidos: la cola del segundo NO se predice desde el primero (ROJO contra la 1.22.1: acertaba)
+
 Uso:  python tests/test_contratos_1222.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -343,6 +348,25 @@ try:
     r = srv.call('delphi_symbols', {'path': dig}, 240)
     check('Y1 digest de carpeta: const de una linea, constantes con tipo y variables',
           all(x in r for x in ('MAX_UNO', 'TIPADA', 'NOMBRES', 'GContador')), r[:600])
+
+    def siguiente_de_random(cola):
+        # el Random de Delphi: RandSeed := RandSeed * $08088405 + 1, y Random($10000) son sus 16 bits altos
+        paso = lambda s: (s * 0x08088405 + 1) & 0xFFFFFFFF
+        a, b = int(cola[:4], 16), int(cola[4:8], 16)
+        for bajo in range(0x10000):
+            s2 = paso((a << 16) | bajo)
+            if (s2 >> 16) == b:
+                s3 = paso(s2)
+                return '%04X%04X' % (s3 >> 16, paso(s3) >> 16)
+        return None
+
+    ids = [mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'})) for _ in range(2)]
+    pred = siguiente_de_random(ids[0].rsplit('-', 1)[-1]) if ids[0] else None
+    check('CS1 la cola del id de un changeset no se predice desde el anterior (era un LCG)',
+          all(ids) and len(ids[1].rsplit('-', 1)[-1]) == 8 and not ids[1].endswith(pred or 'x'), (ids, pred))
+    for i in ids:
+        if i:
+            srv.call('delphi_changeset', {'command': 'rollback', 'id': i})
 finally:
     srv.cierra()
     mc.borra(BASE)
