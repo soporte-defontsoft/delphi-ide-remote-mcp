@@ -219,6 +219,20 @@ procedure ColumnaEnElNombre(AResp: TJSONObject);
     begin
       TJSONObject(Start).RemovePair('character').Free;
       TJSONObject(Start).AddPair('character', TJSONNumber.Create(Col));
+      // ...y el end, si quedaba detras en la misma linea: el motor da un rango
+      // vacio en la 0 y quedaba al reves (start 15, end 0; medido en vivo)
+      var Fin := TJSONObject(Rng).GetValue('end');
+      if Fin is TJSONObject then
+      begin
+        var FL := TJSONObject(Fin).GetValue('line');
+        var FC := TJSONObject(Fin).GetValue('character');
+        if (FL <> nil) and (FC <> nil) and (FL.GetValue<Integer> = L.GetValue<Integer>) and
+           (FC.GetValue<Integer> < Col) then
+        begin
+          TJSONObject(Fin).RemovePair('character').Free;
+          TJSONObject(Fin).AddPair('character', TJSONNumber.Create(Col));
+        end;
+      end;
     end;
   end;
 

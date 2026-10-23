@@ -303,6 +303,8 @@ try:
     # la ubicacion, por sus campos de la casa (line0/character0, DecorateLocations)
     check('D2 definition kind=implementation de F.Bar: el cuerpo, con character0 en Bar (15), no 0',
           '"line0":8' in r and '"character0":15' in r, r[:500])
+    check('D2b ...y su rango no queda al reves: el end, que el motor da en la 0, tambien en el nombre',
+          '"end":{"line":8,"character":15}' in r, r[:500])
     r = motor('delphi_hover', {'path': ufoo, 'line': 10, 'character': 12})
     check('H1 hover de IntToStr: el enlace como ruta de la casa y linea, sin file:///',
           'file:///' not in r and 'System.SysUtils.pas' in r and ', line ' in r, r[:500])
