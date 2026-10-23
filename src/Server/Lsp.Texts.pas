@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.22.0';
+  SERVER_VERSION = '1.22.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -519,9 +519,9 @@ const
     'shows where a text is today.';
 
   SP_LSP_FILE_PATH =
-    'A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: these ' +
-    'tools resolve a position in a source. What each unit of a folder ' +
-    'offers, at once: delphi_symbols.';
+    'A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: a ' +
+    'position resolves in a source. What a folder''s units offer: ' +
+    'delphi_symbols.';
 
   SP_SYMBOLS_PATH =
     'A Delphi file (.pas/.dpr) for its symbols - or a FOLDER: at once, ' +
@@ -1024,7 +1024,7 @@ const
   SP_PATCH_FRAGMENT =
     'FRAGMENT mode for a LONG line: "fragment" = the exact piece to change ' +
     '(case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based ' +
-    'line (MANDATORY), "new" = its replacement; the rest of the line stays ' +
+    'line (MANDATORY), "new" = its replacement; the rest stays ' +
     'byte for byte. One line only, INSTEAD of "old", with no other mode ' +
     '(nor toline).';
 
@@ -2517,18 +2517,17 @@ const
   // Lsp.InlineImages: la entrega de una captura, la misma en toda tool que capture.
   // tambien la de un gesto (8.6 de la 1.18.0, Hermes: no sabia que tap la traia)
   SP_CAPTURE_INLINE =
-    'Default true: the capture of this answer - a screenshot, a desktop ' +
-    'gesture''s (tap, type, key), a preview - comes IN it as an image scaled ' +
-    'to maxwidth, and no file is kept. false = a one-use download link (a ' +
-    'client without vision, or wanting the bytes); over stdio there is ' +
-    'none: use out=.';
+    'Default true: the capture (a screenshot, a gesture''s, a preview) comes ' +
+    'IN this answer as an image scaled to maxwidth; no file is kept. false = ' +
+    'a one-use download link (no vision, or you want the bytes); over stdio ' +
+    'there is none: use out=.';
 
   SP_CAPTURE_MAXWIDTH =
-    'Inline only: the MOST width the image travels at (0 = 1280): a wider ' +
-    'capture is scaled down, a narrower one never enlarged. The answer says ' +
-    'inlineScale: divide what you measure on the inline image by it for ' +
-    'capture pixels, or use the answer''s frame (tap takes it, and ' +
-    'delphi_desktop''s type; preview''s converts to form units).';
+    'Inline only: the widest the image travels (0 = 1280); a wider capture ' +
+    'is scaled down, a narrower one never enlarged. Divide what you measure ' +
+    'on it by the answer''s inlineScale for capture pixels, or pass its frame ' +
+    '(tap and delphi_desktop''s type take it; preview''s converts to form ' +
+    'units).';
 
   SN_CAPTURE_INLINE_NOTE_FMT =
     '[CAPT-001] The image is IN this answer (scaled %s of the capture). ' +
@@ -5023,9 +5022,8 @@ const
     'property''s type and the ' +
     'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
     'form reader, and readerNote says when it could not judge it - and ' +
-    'written with the component''s properties as the IDE''s writer stores ' +
-    'them: a value the class already gives is not written (notStored), one ' +
-    'the component turns into another is written as it stores it (storedAs); parent= ' +
+    'written as the IDE''s writer stores the component: notStored, storedAs ' +
+    'or storedIn say when that is not the value given; parent= ' +
     'alone moves the component; before=, ' +
     'after= or index= alone reorders it among its siblings; prop=Name ' +
     'renames it, its field and the form lines that name it) | delete (the ' +
@@ -10371,12 +10369,11 @@ const
     mando el del fichero entero en el primero de varios (UPLOAD-015) y el del
     trozo en otro (UPLOAD-011): pentest del 22-oct-2026, 1.22.1 }
   SP_WS_SHA256 =
-    'Optional: the SHA-256 of the file as it stands at the END of this call ' +
-    '- every byte from offset 0 through this chunk. On the last chunk, or a ' +
-    'file sent in one call, that is the whole file: the usual place for it. ' +
-    'A mismatch FAILS the call: with offset=0 nothing is written; on a later ' +
-    'chunk the assembled file goes to the recoverable trash. A chunk''s own ' +
-    'bytes are checked with chunkSha256.';
+    'Optional: the SHA-256 of the file as it stands after this call (offset ' +
+    '0 through this chunk; on the last chunk, the whole file). A mismatch ' +
+    'FAILS the call: at offset=0 nothing is written; later, the assembled ' +
+    'file goes to the recoverable trash. A chunk''s own sum goes in ' +
+    'chunkSha256.';
 
   SP_WS_CHUNKSHA256 =
     'Optional: the SHA-256 of THIS chunk (of its decoded bytes), verified ' +
@@ -10461,10 +10458,9 @@ const
     'delphi_fetch, for what you cannot recreate by editing: binaries ' +
     '(.res, icons, images), archives, reference ' +
     'material. Chunks in order: offset=0 creates/truncates, later offsets ' +
-    'append and must match the current size. sha256 has the server verify ' +
-    'the file assembled up to that call - on the LAST chunk, the whole ' +
-    'file; chunkSha256 on ANY chunk checks that chunk BEFORE it is ' +
-    'written. Jailed to the workspace roots; ' +
+    'append and must match the current size. sha256 verifies the file ' +
+    'assembled so far (on the last chunk, the whole file); chunkSha256 ' +
+    'checks a chunk BEFORE it is written. Jailed to the workspace roots; ' +
     'parent folders are created; a fresh upload over an existing file ' +
     'backs the old one up to the recoverable trash first. For SOURCE CODE ' +
     'prefer delphi_edit / delphi_textedit (they audit encoding and keep ' +

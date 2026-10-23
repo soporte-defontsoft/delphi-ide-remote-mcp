@@ -7,7 +7,11 @@ of 4-oct-2026: ~27K fixed per session, tools/list 26.9K of it).
       if we lose quality, 105k" - the 1.20.1 added 1.047 and gave back 767 by
       rewriting shared texts shorter (100.244); the last 244 were what agents
       use (prop's named constants, set-output in every configuration, get-sdk
-      "not per project", which test_docs_static keeps).
+      "not per project", which test_docs_static keeps). The 1.22.0 closed at
+      104.996; the 1.22.1 added 562 (insert/set as the IDE's writer stores
+      them, upload's sha256) and gave back 638 by rewriting shared texts
+      shorter - the capture's inline and maxwidth, the path of the position
+      tools - and its own new ones (104.920).
   T2  the fields of an "edits" entry - read from EDIT-012, the list the engine
       itself checks (Lsp.Patch.CAMPOS_DE_UNA_EDICION) - are ALL named in the
       long description (delphi_edit) and in the short one (delphi_textedit).

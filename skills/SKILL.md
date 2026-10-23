@@ -176,7 +176,13 @@ handshake.
   all or none) after checking it against the class (on the form itself, a
   property your own base class publishes is judged by the type it
   declares), `delete` removes one
-  with its empty handlers. Each writes the form and its unit together, all
+  with its empty handlers. The properties go in as the IDE's own writer
+  stores them - its order, the size a control's constructor gives, the
+  companions it adds (`Size.PlatformDefault`, `ParentFont`) - and the answer
+  says when that is not the value you gave: `notStored` (the class already
+  gives it), `storedAs` (the component turns it into another when it loads)
+  or `storedIn` (its class keeps it in other properties: in FMX, `Width` and
+  `Height` go in `Size`). Each writes the form and its unit together, all
   or nothing, and a refusal says exactly what to do instead - including how
   to add by hand what insert cannot place (a non-visual component such as
   a TTimer: its block, its published field, its unit in the uses, then
@@ -506,4 +512,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.22.0 -->
+<!-- contract reviewed: v1.22.1 -->

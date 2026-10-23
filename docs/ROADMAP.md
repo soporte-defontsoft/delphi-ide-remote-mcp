@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-22 (current release v1.22.0; 42 tools).
+Status page as of 2026-10-23 (current release v1.22.1; 42 tools).
 
 ## Delivered
 
@@ -53,6 +53,8 @@ Status page as of 2026-10-22 (current release v1.22.0; 42 tools).
 - The patches of 1.21: a hard link to a file outside the roots neither read, copied nor written through (every door, the server's own copies included); the build gate a whitelist of what a compile-only build understands, and what the build reads through the project judged by the read gate, whether it exists or not; the build supplying the output folders a project leaves undeclared, a `remove-*` of `delphi_config` taking an entry that points outside, an `<RcItem>` judged by its path and the binary's name following `OutputExt`, all found by compiling a real twenty-year-old project through the server; the library read zone following the IDE's Library Path while the server runs, `add-searchpath` taking several folders in one call, `delphi_git untrack`, a `.dproj` cut short refused as incomplete instead of "platform not enabled", a folder on a NAS released from the engine that had a document open under it, and the judges of the compiler's and git's output reading their codes instead of their prose (1.21.1, 1.21.2, 1.21.3, 1.21.4)
 
 - A project of the IDE builds through the server the way the IDE builds it: the build gate judging only what the requested platform and configuration read, evaluating the groups of the `.dproj` as msbuild does, and a macro that expands to a list judged piece by piece (a real FMX project with an Android keystore outside the roots and the IDE's package list built for Windows and Linux on two machines); `delphi_config set-property` / `remove-property` / `get-property`, one property of the `.dproj` by name in the group of a build, written where the IDE writes it, on one reader and one writer of a project property; and a search path written with Windows' extended-path prefix judged like any other (1.22.0)
+
+- The patch of 1.22: accents wherever an agent reads or points - the position tools on a line with accents, the failure messages of `delphi_test`, `delphi_git diff`/`show` of a source in the machine's ANSI code page -; `delphi_designer insert`/`set` writing what the IDE's own writer stores, and saying when it is not what was given; the build gate resolving a search path the way msbuild and `dcc` do; and a new project property written where the IDE writes it (1.22.1)
 
 ## Next
 

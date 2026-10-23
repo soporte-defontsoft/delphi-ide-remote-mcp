@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.22.1] - 2026-10-23
+
+What an agent reads, points at and writes is what the IDE and the compiler
+see, accents included. The position tools point at the right symbol on a
+line with accents - the engine counts a column in UTF-8 bytes and the agent
+in UTF-16, and every column is now converted both ways -, `delphi_test` and
+`delphi_git diff`/`show` return a source's accents as the file has them, and
+`delphi_designer insert`/`set` write a component's properties as the IDE's
+own writer stores them, saying when it stores another value, none at all, or
+keeps it in other properties. The build read gate judges a search path the
+way msbuild and `dcc` resolve it - the `=` and `:` shortcuts, `%XX` escapes,
+`$(ProjectDir)` and the `\??\` prefix let a unit from outside the roots be
+read (measured, now closed) -, a new project property lands where the IDE
+writes it, every project file the server writes goes through the IDE's XML
+parser, and several answers now say what the tool did. Validated before the
+release by Claude Opus 5.5 and Qwen3.8 Flash Next through Hermes on a second
+machine: a directed test of what is new, a full test of every tool, a free
+exploration of the whole server, and three rounds over what they found and
+was fixed.
+
 ### Fixed
 
 - **The build read gate judges a search path the way the compiler resolves it,
