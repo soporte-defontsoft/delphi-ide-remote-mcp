@@ -158,6 +158,12 @@ function PerfilesDelIde(const AVersion: string): TArray<string>;
   la 1.18.2: "el agente pide una operacion"): el build lo pasa asi a msbuild,
   sea el de la llamada o el que declara el proyecto. }
 function PerfilDelIde(const AVersion, APedido: string): string;
+{ El nombre con el que SIGUE un perfil que nombra el agente: el del IDE
+  (PerfilDelIde: con las mayusculas de su .profile, el que usa el deploy) si
+  esta en la lista, y si no lo tecleado, para que la puerta de despues diga
+  que no existe. delphi_paserver y delphi_desktop seguian con lo tecleado,
+  mientras el build despliega con el del IDE (R12 del censo de Fable). }
+function PerfilConSuNombre(const AVersion, APedido: string): string;
 { Los ficheros .sdk del IDE de AVersion (junto a sus perfiles: RutaDeSdk es
   su nombrador), ordenados; vacio si no hay carpeta. EL lector de la lista:
   la recorrian a mano el build (SdksDePlataforma), adb (su adb), profiles,
@@ -1149,6 +1155,13 @@ begin
   for var P in PerfilesDelIde(AVersion) do
     if SameText(P, APedido.Trim) then
       Exit(P);
+end;
+
+function PerfilConSuNombre(const AVersion, APedido: string): string;
+begin
+  Result := PerfilDelIde(AVersion, APedido);
+  if Result = '' then
+    Result := APedido.Trim;
 end;
 
 function SdksDelIde(const AVersion: string): TArray<string>;

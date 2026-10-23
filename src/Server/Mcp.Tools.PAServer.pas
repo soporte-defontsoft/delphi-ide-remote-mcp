@@ -864,6 +864,19 @@ begin
   end;
 end;
 
+{ El perfil que nombra el agente, por EL juez de la lista del IDE
+  (PerfilDelIde): '' y en ANombre SU nombre - el de su .profile, el que usan
+  el deploy y el IDE -, o PAS-022. remove-profile, test-connection y get-sdk
+  lo miraban con TFile.Exists(RutaDePerfil(...)) a mano y seguian con lo
+  tecleado (R12 del censo de Fable, depuracion de la 1.23). }
+function PerfilElegido(const AVersion, APedido: string; out ANombre: string): string;
+begin
+  Result := '';
+  ANombre := PerfilDelIde(AVersion, APedido);
+  if ANombre = '' then
+    Result := MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [APedido.Trim]);
+end;
+
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -899,7 +912,7 @@ begin
   // mismo host:puerto, se crea pero avisando - contra los perfiles a lo
   // loco (David, 2026-09-19).
   ProfileFile := RutaDePerfil(Info.Version, ProfName);
-  if TFile.Exists(ProfileFile) then
+  if PerfilDelIde(Info.Version, ProfName) <> '' then // EL juez de la lista
     Exit(MsgFmt(SR_PASERVER_PROFILE_EXISTS_FMT,
       [ProfName, HostDePerfil(Info.Version, ProfName)]));
   AvisoDup := '';
@@ -1027,9 +1040,12 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
+  var DelIde: string;
+  Result := PerfilElegido(Info.Version, ProfName, DelIde);
+  if Result <> '' then
+    Exit;
+  ProfName := DelIde;
   ProfileFile := RutaDePerfil(Info.Version, ProfName);
-  if not TFile.Exists(ProfileFile) then
-    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   // por la puerta, con el IDE como lugar: se copia antes en la casa del
   // servidor (se borraba sin copia, irrecuperable: medida M3)
   var Copia := '';
@@ -1055,7 +1071,7 @@ end;
 function TestConnection(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
-  PaClient, ProfName, ProfileFile, Output: string;
+  PaClient, ProfName, Output: string;
   ExitCode: Cardinal;
   Return: TJSONObject;
 begin
@@ -1075,9 +1091,11 @@ begin
   end;
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
-  ProfileFile := RutaDePerfil(Info.Version, ProfName);
-  if not TFile.Exists(ProfileFile) then
-    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+  var DelIde: string;
+  Result := PerfilElegido(Info.Version, ProfName, DelIde);
+  if Result <> '' then
+    Exit;
+  ProfName := DelIde;
   Result := ProfileHostDenied(ProfName);
   if Result <> '' then
     Exit;
@@ -1192,7 +1210,9 @@ end;
 function TrabajoDenegado(const Params: TDelphiPAServerParams;
   const ANecesita: string; AConJob: Boolean; out AProf, AProj: string): string;
 begin
-  AProf := Params.Profile.Trim;
+  // con SU nombre, el del IDE, como el build que lo desplego (PerfilConSuNombre);
+  // si no esta en la lista, la puerta lo dice (PAS-053)
+  AProf := PerfilConSuNombre(DiscoverRadStudio.Version, Params.Profile);
   // un .dpr vale por su .dproj, como en delphi_build (DprojDe)
   AProj := DprojDe(Params.Project.Trim);
   if AllowRemoteRun and ((AProf = '') or (AProj = '') or
@@ -1341,9 +1361,12 @@ begin
     Exit(MsgText(SR_PASERVER_NEED_NAME));
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
+  var DelIde: string;
+  Result := PerfilElegido(Info.Version, ProfName, DelIde);
+  if Result <> '' then
+    Exit;
+  ProfName := DelIde;
   ProfileFile := RutaDePerfil(Info.Version, ProfName);
-  if not TFile.Exists(ProfileFile) then
-    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   Result := ProfileHostDenied(ProfName);
   if Result <> '' then
     Exit;

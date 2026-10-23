@@ -145,6 +145,14 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **A connection profile goes on by the name the IDE gives it.**
+  `delphi_paserver` and `delphi_desktop` took the profile as typed:
+  `Zorin-Desktop` passed (the file system does not mind the case) and went
+  on as `Zorin-Desktop` to PAServer, while `delphi_build` deploys with the
+  IDE's `zorin-desktop`; and the desktop took a different lock for each
+  spelling of the same machine. Every command now picks the profile from the
+  IDE's list and goes on with its name; `remove-profile`, `test-connection`
+  and `get-sdk` ask that list instead of the disk (`tests/test_remoterun.py`).
 - **What the review of these changes found (Claude Fable 5.1 through Hermes,
   2026-10-23).** The access table that decides what a read-only credential
   may call, what the `reader` profile lists and what `tools/list` announces

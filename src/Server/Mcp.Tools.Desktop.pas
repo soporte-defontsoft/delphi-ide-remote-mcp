@@ -119,6 +119,7 @@ uses
   Lsp.Patch,        // ColocaProducto / ColocaContenido: la captura bajada o su recorte, sobre el out=
   Lsp.RemoteRun,
   Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
+  Lsp.Discovery, // PerfilConSuNombre: el perfil con el nombre del IDE
   Lsp.Casa;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
@@ -772,6 +773,9 @@ begin
     if Result <> '' then
       Exit;
   end;
+  // el perfil con SU nombre, el del IDE (el que uso el deploy), ANTES del
+  // cerrojo de su maquina: Zorin-Desktop y zorin-desktop cogian dos (R12)
+  Params.Profile := PerfilConSuNombre(DiscoverRadStudio.Version, Params.Profile);
   Cerrojo := CerrojoDePerfil(Params.Profile);
   Cerrojo.Enter;
   try

@@ -463,6 +463,14 @@ r = ejecuta(DPROJ, TXT)
 check('ID5 un hermano del .dproj con otra extension (Saluda.txt) no pasa por el proyecto: CFG-033 y nada ejecutado '
       '(ROJO contra r1222t: casaba sin extension)',
       mc.es(r, 'SR_UNIT_PROJECT_EXT_FMT') and 'hola desde el target' not in r, r[:300])
+# ID6 (A8 de la depuracion, R12 de Fable): el perfil tecleado con otras mayusculas sigue con SU nombre, el del .profile
+# del IDE - el que usa el build al desplegar -; seguia con lo tecleado
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE.upper(), 'project': DPROJ,
+                             'exe': PROJNAME + '.exe', 'args': '"%s"' % SCRIPT.replace(chr(92), '/'),
+                             'timeoutms': 30000}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+check('ID6 profile=%s tecleado sigue como %s, el nombre del IDE (ROJO contra r1222u: seguia con lo tecleado)'
+      % (PROFILE.upper(), PROFILE), j.get('profile') == PROFILE and 'hola desde el target' in r, r[:300])
 
 srv.mata()
 mc.fin('remote-run')
