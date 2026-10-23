@@ -5712,6 +5712,23 @@ const
     'it with set Left/Top (Position.X/Position.Y in FMX). Change a property ' +
     'with command=set, move it with set parent=, see it with command=preview.';
 
+  // ...y de lo que su escritor guarda SIN posicion (una pagina llena su
+  // control de paginas: medido, solo Caption), que no tiene 10,10 que decir
+  // (1.22.2)
+  SN_DESIGNER_INSERT_SIN_SITIO_NOTE =
+    '[DSGN-169] Inserted as the IDE''s writer stores it: this class keeps no ' +
+    'position of its own in the form, so there is nothing to place. Change a ' +
+    'property with command=set, move it with set parent=, see it with ' +
+    'command=preview.';
+
+  // de una pagina, cual abre: el IDE guarda la seleccionada al guardar, y el
+  // programa la suele poner en codigo (David, 23-oct-2026)
+  SF_DESIGNER_INSERT_PAGINA_FMT =
+    ' The page shown when the form opens is %0:s.ActivePage: the IDE saves the ' +
+    'page selected when it saves, and a program usually sets it in code ' +
+    '(%0:s.ActivePage := %1:s). preview state=%0:s.ActivePage=%1:s shows this ' +
+    'page without writing anything; set ActivePage writes it in the form.';
+
   { Las propiedades de un componente que NO se pudieron escribir como las
     guarda el IDE (Lsp.DesignerEdit.ConLasPropiedadesDelIde): se escriben
     como se compusieron, y por que (1.22.1). }

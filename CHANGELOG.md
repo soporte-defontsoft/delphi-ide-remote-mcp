@@ -58,7 +58,11 @@ the MCP `initialize` response (`serverInfo.version`).
   though its loader takes its page control from the parent that loads it and
   leaves it without one (measured on 2026-10-23). A page now goes in a page
   control, and only there (`DSGN-168` for any other parent, in `insert` and
-  in `set parent=`) (`tests/test_contratos_1222.py`).
+  in `set parent=`). Its note no longer says that it lands at 10,10 - a page
+  keeps no position of its own (`DSGN-169`) - and it says which page opens:
+  the page control's `ActivePage`, which the IDE saves as the page selected
+  when it saves and a program usually sets in code (measured in the IDE on
+  2026-10-23) (`tests/test_contratos_1222.py`).
 - **`delphi_hover` gives a symbol's file as a path the other tools take.**
   The engine's link (`file:///C%3A/.../System.SysUtils.pas#8766`) came out as
   `file:///srvc%3A/...`, which `delphi_read` refused; it is now the path and
@@ -78,7 +82,14 @@ the MCP `initialize` response (`serverInfo.version`).
   created on its own. `BUILD-050` quotes a path also as it is written in the
   project when the build reads it otherwise (an escaped `%2E%2E`), which is
   the entry `remove-searchpath` takes. A build answers with its `durationMs`,
-  as `delphi_test` and `remote-run` do (`tests/test_contratos_1222.py`).
+  as `delphi_test` and `remote-run` do. A `delphi_docs` search whose results
+  all fit gives them as its `total` (it counted the candidates: total 5 with
+  4 results and nothing more to see) (`tests/test_contratos_1222.py`).
+- **The folder summary of `delphi_symbols` lists a unit's constants and
+  variables.** The summary of each unit's interface left out a constant
+  written on the line of `const` itself (`const X = 1;`), typed constants
+  (`B: Integer = 2;`) and variables (Claude Opus 5.5 through Hermes,
+  2026-10-22) (`tests/test_contratos_1222.py`).
 - **`GUARD-002` names the places you can work in, the read-only ones
   included.** A path outside the roots was refused with a list of the roots
   that named one the server could not reach and left out the read-only roots,

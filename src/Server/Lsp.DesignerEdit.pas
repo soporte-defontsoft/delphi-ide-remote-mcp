@@ -1945,6 +1945,8 @@ begin
     DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras);
     for var I := 0 to High(Infos) do
       MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
+    // y si guardo su posicion: sin ella no hay 10,10 que decir (una pagina)
+    var ConSitio := True;
     var DocI := TStyleDoc.DeTexto(F.Doc.TextoDe(DfmLineas));
     try
       var Puesto := ObjetoPorNombre(DocI, Nombre);
@@ -1952,6 +1954,7 @@ begin
       begin
         Ini := Puesto.StartLine - 1;
         FinBloque := Puesto.EndLine - 1;
+        DocI.ValorDe(Puesto, IfThen(F.EsFmx, 'Position.X', 'Left'), ConSitio);
       end;
     finally
       DocI.Free;
@@ -2007,7 +2010,15 @@ begin
       if UsesNota <> '' then
         Ret.AddPair('usesNote', UsesNota);
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(DfmLineas)));
-      Ret.AddPair('note', MsgText(SN_DESIGNER_INSERT_NOTE));
+      // la nota, por lo que guardo su escritor; una pagina dice ademas cual abre
+      var Nota: string;
+      if ConSitio then
+        Nota := MsgText(SN_DESIGNER_INSERT_NOTE)
+      else
+        Nota := MsgText(SN_DESIGNER_INSERT_SIN_SITIO_NOTE);
+      if not F.EsFmx and F.Tabla.Desciende(ClsId, ID_VCL_TABSHEET) then
+        Nota := Nota + MsgFmt(SF_DESIGNER_INSERT_PAGINA_FMT, [NombrePadre, Nombre]);
+      Ret.AddPair('note', Nota);
       if NotaOrden <> '' then
         Ret.AddPair('orderNote', NotaOrden);
       if NotaLector <> '' then

@@ -71,6 +71,9 @@ Y las paginas de un TPageControl (Opus en Hermes, 1.22.1; medido el 23-oct-2026:
   T2 control: un TButton en esa pagina
   T3 un TTabSheet en el form: DSGN-168 (ROJO: se insertaba, y su ReadState lo deja sin PageControl)
   T4 set parent= de la pagina al form: DSGN-168, nada movido (ROJO igual)
+  T5 la nota de la pagina: sin 10,10 (DSGN-169) y con la ActivePage de su control, que el programa suele poner en
+     codigo (ROJO contra r1222f: decia "lands at 10,10")
+  T6 control: la nota de un TButton sigue con su 10,10 y sin ActivePage
 
 Uso:  python tests/test_contratos_1222.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -403,11 +406,17 @@ try:
     i_pc = t.find('  object PageControl1: TPageControl')
     check('T1 insert de un TTabSheet en el TPageControl: dentro de el',
           not mc.fallo(r) and 0 <= i_pc < t.find('    object TabSheet1: TTabSheet'), r[:400] + ' | ' + t[i_pc:i_pc + 400])
+    # su nota: una pagina no guarda posicion (nada de 10,10) y dice cual abre (ActivePage, que se pone en codigo)
+    check('T5 la nota de una pagina: sin 10,10 y con la ActivePage de su control',
+          mc.es(r, 'SN_DESIGNER_INSERT_SIN_SITIO_NOTE') and 'PageControl1.ActivePage := TabSheet1' in r
+          and '10,10' not in r, r[:700])
     r = srv.call('delphi_designer', {'command': 'preview', 'path': vdfm}, 240)
     check('T1 ...y el form carga (preview)', not mc.fallo(r) and 'fidelity' in r, r[:300])
     r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TButton',
                                      'parent': 'TabSheet1'}, 240)
     check('T2 control: un TButton en la pagina', not mc.fallo(r), r[:300])
+    check('T6 control: la de un TButton sigue con su 10,10 y sin ActivePage',
+          mc.es(r, 'SN_DESIGNER_INSERT_NOTE') and '10,10' in r and 'ActivePage' not in r, r[:700])
     antes = open(vdfm, 'rb').read()
     r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TTabSheet'}, 240)
     check('T3 un TTabSheet en el form: DSGN-168 y nada escrito',
