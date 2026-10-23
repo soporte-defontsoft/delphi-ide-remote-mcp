@@ -990,24 +990,21 @@ REGLAS = [
      'la tabla PLATAFORMAS de Lsp.Dproj y sus preguntas: SistemaDePlataforma, SistemaDelPAServer, '
      'CorreEnEstaMaquina, ExtensionDeEjecutable, CarpetaDeLibreriasDelApk'),
     # una ruta LEIDA de un fichero, resuelta a mano: IsPathRooted da por completas "\x" y "X:y" y
-    # GetFullPath las resolvia contra el PROCESO del servidor (A9 de la 1.23). Las casas son las que
-    # solo preguntan si el texto cuelga de la carpeta, y las de la puerta del build, aparcada con ella
+    # GetFullPath las resolvia contra el PROCESO del servidor (A9 y A9b de la 1.23, la puerta del
+    # build incluida). Las casas son las que solo preguntan si el texto cuelga de la carpeta
     ('una ruta leida resuelta a mano', r'\bTPath\.IsPathRooted\s*\(',
-     [('Lsp.BuildRunner.pas', 'IncludeDirectivesDenied'), ('Lsp.BuildRunner.pas', 'LecturasDelBuildDenegadas'),
-      ('Lsp.Dproj.pas', 'ResolveImportPath'), ('Lsp.Dproj.pas', 'ResuelveSalida'),
-      # re-apuntar en una mudanza: solo lo escrito relativo a la carpeta (lo demas lo nombra
+     [# re-apuntar en una mudanza: solo lo escrito relativo a la carpeta (lo demas lo nombra
       # RutasQueYaNoLlegan)
       ('Lsp.ProjectUnits.pas', 'RutaReapuntada'), ('Lsp.ProjectUnits.pas', 'RutasQueYaNoLlegan'),
       # un $I relativo se busca ademas por las carpetas; el completo o a medias, por RutaDesde
       ('Lsp.DesignerMetaGen.pas', 'TGenerador.TextoDeInclude'),
-      # el nombre a secas de delphi_test (TEST-...), la rama de ReadOnlyPaths tras su juez
-      # (EntradaDeSitio ya nego lo a medias) y la negativa CFG-109 de lo que escribe el agente
-      ('Lsp.TestRunner.pas', 'TestRun'), ('Lsp.Settings.pas', 'ParseReadOnlyList'),
-      ('Mcp.Tools.Config.pas', 'RutaEnLaCarpeta')],
+      # el nombre a secas de delphi_test (TEST-...) y la rama de ReadOnlyPaths tras su juez
+      # (EntradaDeSitio ya nego lo a medias)
+      ('Lsp.TestRunner.pas', 'TestRun'), ('Lsp.Settings.pas', 'ParseReadOnlyList')],
      'RutaDesde (Lsp.Rutas): como la lee quien la lee, desde su carpeta (msbuild en la del .dproj, el '
-     'ayudante del render en la del form); lo que no se resuelve no se usa. El juez de los literales del '
-     'render miraba en la unidad del proceso lo que el ayudante lee en la del form (medido, '
-     'test_rutas_a_medias_1230)'),
+     'ayudante del render en la del form), y EsRutaAMedias para quien niega lo que no resuelve. El juez '
+     'de los literales del render y la puerta del build miraban en la unidad del proceso lo que el '
+     'ayudante y msbuild leen en la del form o la del proyecto (medido, test_rutas_a_medias_1230)'),
 ]
 
 

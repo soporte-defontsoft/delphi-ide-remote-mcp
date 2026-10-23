@@ -1219,7 +1219,7 @@ end;
 // inside are untouched - that is what an ordinary project uses.
 function IncludeDirectivesDenied(const ADprojPath: string): string;
 var
-  Dpr, Txt, Enc, Cand, Base: string;
+  Dpr, Txt, Enc, Cand, Base, CarpetaDelBuild: string;
   Files: TList<string>;
 begin
   Result := '';
@@ -1238,6 +1238,8 @@ begin
     // the .dproj's unit list: a unit can be pulled in by a search path and
     // still carry a directive, and this check is cheap enough to be broad.
     Base := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+    // la carpeta en la que corre dcc (msbuild arranca en la del .dproj)
+    CarpetaDelBuild := Base;
     // por EL recorredor (WalkFiles): solo sigue los enlaces que esta sesion
     // puede leer (TDirectory con soAllDirectories cruzaba una union y leia
     // lo de detras: medida M1). TODO el arbol, no solo los fuentes (1.21.2):
@@ -1263,13 +1265,17 @@ begin
       // lo comparte con la mudanza de delphi_move, que las re-apunta.
       for var D in DirectivasDeFichero(Txt) do
       begin
-        Cand := D.Ruta;
-        if not TPath.IsPathRooted(Cand) then
-          Cand := TPath.Combine(Base, Cand);
-        try
-          Cand := TPath.GetFullPath(Cand);
-        except
-          Continue;
+        // como la abre dcc (EL resolutor): lo relativo desde la carpeta del
+        // fuente, "\x" y "X:y" desde la suya. Se juzgaban en la unidad del
+        // PROCESO del servidor (A9b de la 1.23, medido). Una "X:y" de otra
+        // unidad dcc la abre desde una carpeta que no nombra nadie: se niega
+        Cand := RutaDesde(Base, D.Ruta, CarpetaDelBuild);
+        if Cand = '' then
+        begin
+          if EsRutaAMedias(D.Ruta) then
+            Exit(MsgFmt(SR_BUILD_INCLUDE_NO_VERIFICABLE_FMT,
+              [D.Texto.Trim, TPath.GetFileName(F)]));
+          Continue; // no es una ruta: dcc tampoco la abre
         end;
         if ReadPathDenied(Cand) <> '' then
           Exit(MsgFmt(SR_BUILD_INCLUDE_OUTSIDE_FMT,
@@ -1730,13 +1736,18 @@ var
     var DosPuntos := Cand.LastIndexOf(':');
     if (DosPuntos > 1) and (Cand.Substring(DosPuntos + 1).IndexOfAny(['\', '/']) < 0) then
       Cand := Cand.Substring(0, DosPuntos);
-    try
-      if not TPath.IsPathRooted(Cand) then
-        Cand := TPath.Combine(Dir, Cand);
-      Cand := TPath.GetFullPath(Cand);
-    except
+    // como la lee dcc, que corre en la carpeta del .dproj (EL resolutor): se
+    // juzgaba en la unidad del PROCESO del servidor (A9b de la 1.23, medido).
+    // Una "X:y" de otra unidad la lee desde una carpeta que no nombra nadie
+    var Resuelta := RutaDesde(Dir, Cand);
+    if Resuelta = '' then
+    begin
+      if EsRutaAMedias(Cand) then
+        Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
+          [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo]));
       Exit; // no es una ruta (un define, una clave de version): nadie la abre
     end;
+    Cand := Resuelta;
     // el trozo como lo lee el build y, si es otro, como esta ESCRITO: la
     // entrada que toma remove-searchpath (un %2E%2E citado como .. no se
     // encontraba en el .dproj)

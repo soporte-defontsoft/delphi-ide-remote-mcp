@@ -29,10 +29,18 @@ estaba.
       FUERA de la jaula es DSGN-115 - lo que el ayudante leeria desde la
       carpeta del form -, y el form no cambia
   M5  la carpeta actual del servidor (en el repo) sale como estaba
+  M6  la puerta del build juzga un search path "\\x" donde lo lee dcc, desde
+      la carpeta del .dproj (en la que corre msbuild): era la unidad del
+      PROCESO, y un proyecto legitimo se negaba (BUILD-050)
+  M7  ...una salida "\\x" (DCC_ExeOutput): se aprueba y el binario cae alli
+  M8  ...un {$I \\x}: el fuente lo nombra desde su carpeta, "\\x" desde la de
+      dcc (BUILD-028 en la unidad del proceso)
+  M9  ...un <Import> "\\x" del .dproj: se escanea el que lee msbuild (era
+      "no esta", el de la unidad del proceso)
 
 Usage:  python tests/test_rutas_a_medias_1230.py [path-to-DelphiLspMcp.exe]
 """
-import os
+import os, glob
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -152,6 +160,62 @@ try:
     check('M4 un Caption "\\x" que nombra un fichero de FUERA: DSGN-115 (lo que el ayudante lee desde la '
           'carpeta del form) y el form no cambia',
           mc.abre(r, 'SR_DESIGNER_LITERAL_FUERA_FMT') and open(DFM, 'rb').read() == antes, r[:300])
+
+    # ------------------------------------------------------------------ M6-M9
+    # un proyecto de consola que el servidor crea, y lo que su build lee escrito a medias
+    r = srv.call('delphi_create', {'kind': 'project-console', 'name': 'PMedias', 'dir': JAIL})
+    dprs = glob.glob(os.path.join(JAIL, '**', 'PMedias.dpr'), recursive=True)
+    check('M6 (preparacion) el proyecto de consola nace', bool(dprs), r[:300])
+    if dprs:
+        DPR = dprs[0]
+        DPROJ = DPR[:-4] + '.dproj'
+        PDIR = os.path.dirname(DPR)
+        escribe(os.path.join(PDIR, 'lib', 'UMediasLib.pas'),
+                'unit UMediasLib;\n\ninterface\n\nfunction Dame: Integer;\n\nimplementation\n\n'
+                'function Dame: Integer;\nbegin\n  Result := 1;\nend;\n\nend.\n')
+        escribe(os.path.join(PDIR, 'inc', 'medias.inc'), '// incluido a medias\n')
+        escribe(os.path.join(PDIR, 'imp', 'medias.targets'),
+                '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+                '  <PropertyGroup><MediasMarca>1</MediasMarca></PropertyGroup>\n</Project>\n')
+
+        # cada paso parte del proyecto como nacio y cambia UNA cosa: la negativa de un paso no tapa
+        # la del siguiente
+        DPR_0 = open(DPR, encoding='utf-8-sig').read()
+        DPROJ_0 = open(DPROJ, encoding='utf-8-sig').read()
+        assert '<ItemGroup>' in DPROJ_0 and '{$APPTYPE CONSOLE}' in DPR_0 and 'uses' in DPR_0
+
+        def paso(dpr=lambda s: s, dproj=lambda s: s):
+            """El proyecto original con un cambio, y su build: (el JSON, su texto - una negativa llega
+            como texto)."""
+            open(DPR, 'w', encoding='utf-8').write(dpr(DPR_0))
+            open(DPROJ, 'w', encoding='utf-8').write(dproj(DPROJ_0))
+            rb = srv.call('delphi_build', {'project': DPROJ, 'platform': 'Win64', 'config': 'Debug'}, t=300)
+            return mc.como_json(rb), rb
+
+        def en_grupo_propio(xml):
+            # tras TODOS los PropertyGroup y antes del primer ItemGroup: manda sobre lo que pone el IDE
+            # en Base, y antes de los Import (tras ellos no llega a dcc)
+            return lambda s: s.replace('<ItemGroup>', '<PropertyGroup>\n        %s\n    </PropertyGroup>\n'
+                                       '    <ItemGroup>' % xml, 1)
+
+        j, rb = paso(lambda s: s.replace('uses', 'uses\n  UMediasLib,', 1),
+                     en_grupo_propio('<DCC_UnitSearchPath>%s;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>'
+                                     % sin_unidad(os.path.join(PDIR, 'lib'))))
+        check('M6 un search path "\\x" se juzga donde lo lee dcc: el build compila (no BUILD-050)',
+              j.get('success') is True, rb[:400])
+        j, rb = paso(dproj=en_grupo_propio('<DCC_ExeOutput>%s</DCC_ExeOutput>'
+                                           % sin_unidad(os.path.join(PDIR, 'salida'))))
+        check('M7 ...una salida "\\x": se aprueba y el binario cae en la carpeta del proyecto (no BUILD-029)',
+              j.get('success') is True and os.path.exists(os.path.join(PDIR, 'salida', 'PMedias.exe')),
+              rb[:400])
+        j, rb = paso(lambda s: s.replace('{$APPTYPE CONSOLE}', '{$APPTYPE CONSOLE}\n{$I %s}'
+                                         % sin_unidad(os.path.join(PDIR, 'inc', 'medias.inc')), 1))
+        check('M8 ...un {$I \\x}: el fichero que abre dcc, dentro: compila (no BUILD-028)',
+              j.get('success') is True, rb[:400])
+        j, rb = paso(dproj=lambda s: s.replace('</Project>', '    <Import Project="%s"/>\n</Project>'
+                                               % sin_unidad(os.path.join(PDIR, 'imp', 'medias.targets')), 1))
+        check('M9 ...un <Import> "\\x": se escanea el que importa msbuild y compila (era "no esta")',
+              j.get('success') is True, rb[:400])
 finally:
     srv.cierra()
 

@@ -730,13 +730,8 @@ begin
   // lo que el agente escribe a medias se le niega con su motivo (escrito
   // asi, el build lo leeria desde la unidad del proyecto, no desde la que
   // el agente cree); lo demas, por EL resolutor desde la carpeta
-  try
-    if not EsRutaAbsoluta(P) and TPath.IsPathRooted(P) then
-      Exit(MsgFmt(SR_CONFIG_PATH_A_MEDIAS_FMT, [AEco.Trim]));
-  except
-    // IsPathRooted lanza con un caracter que Windows no admite
-    Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));
-  end;
+  if EsRutaAMedias(P) then
+    Exit(MsgFmt(SR_CONFIG_PATH_A_MEDIAS_FMT, [AEco.Trim]));
   AFull := RutaDesde(ACarpeta, P);
   if AFull = '' then
     Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));

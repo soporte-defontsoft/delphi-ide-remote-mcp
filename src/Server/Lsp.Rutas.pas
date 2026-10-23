@@ -97,9 +97,21 @@ function EsRutaAbsoluta(const AValue: string): Boolean;
   resolvia contra el PROCESO del servidor: el juez de los literales del
   render miraba en una unidad lo que el ayudante lee en otra (A9 de la 1.23,
   medido por test_rutas_a_medias_1230). Era la tripleta IsPathRooted +
-  Combine + GetFullPath, a mano en una docena de sitios; las de la puerta del
-  build siguen a mano, aparcadas con ella. }
-function RutaDesde(const ABase, AValor: string): string;
+  Combine + GetFullPath, a mano en una docena de sitios, cuatro de ellos en la
+  puerta del build (la puerta miraba en la unidad del proceso lo que msbuild
+  lee en la del proyecto: A9b, medido).
+  ACarpetaActual: la carpeta actual de quien lee cuando no es la del fichero
+  que la escribe - dcc abre un $I relativo desde la carpeta del fuente, y
+  "\x" o "X:y" desde la suya, la del .dproj; msbuild, un Import relativo
+  desde la del fichero que lo escribe -. Vacia, ABase. }
+function RutaDesde(const ABase, AValor: string; const ACarpetaActual: string = ''): string;
+
+{ Una ruta A MEDIAS: "\x" (o "/x"), la raiz de la unidad ACTUAL de quien la
+  lea, o "X:y", la carpeta actual de esa unidad. Ni completa ni relativa a
+  una carpeta: TPath.IsPathRooted la da por completa. La regla de RutaDesde,
+  y la de quien niega lo que escribe el agente (CFG-109) o la puerta del
+  build que no la sabe resolver (otra unidad). }
+function EsRutaAMedias(const AValor: string): Boolean;
 
 { Un prefijo de DISPOSITIVO o de ruta extendida (\\?\, \\.\, tambien con
   barras normales): la entrada lo niega (GUARD-022) y nadie lo resuelve en
@@ -453,9 +465,15 @@ begin
               ((AValue[1] = '/') and (AValue[2] = '/'))));
 end;
 
-function RutaDesde(const ABase, AValor: string): string;
+function EsRutaAMedias(const AValor: string): Boolean;
+begin
+  Result := (AValor <> '') and not EsRutaAbsoluta(AValor) and
+    (CharInSet(AValor[1], ['\', '/']) or ((Length(AValor) >= 2) and (AValor[2] = ':')));
+end;
+
+function RutaDesde(const ABase, AValor, ACarpetaActual: string): string;
 var
-  Unidad: string;
+  Actual, Unidad: string;
 begin
   Result := '';
   if AValor = '' then
@@ -463,18 +481,24 @@ begin
   try
     if EsRutaAbsoluta(AValor) then
       Exit(TPath.GetFullPath(AValor));
-    // lo demas cuelga de ABase: sin una completa, de la carpeta del proceso
-    if not EsRutaAbsoluta(ABase) then
-      Exit;
-    Unidad := ExtractFileDrive(ABase);
-    if CharInSet(AValor[1], ['\', '/']) then
-      Result := TPath.GetFullPath(Unidad + AValor)
-    else if (Length(AValor) >= 2) and (AValor[2] = ':') then
+    if EsRutaAMedias(AValor) then
     begin
-      if SameText(Copy(AValor, 1, 2), Unidad) then
-        Result := TPath.GetFullPath(TPath.Combine(ABase, Copy(AValor, 3, MaxInt)));
-    end
-    else
+      // de la unidad o de la carpeta actual de quien la lee: sin una completa,
+      // las del proceso, que no son de nadie
+      Actual := ACarpetaActual;
+      if Actual = '' then
+        Actual := ABase;
+      if not EsRutaAbsoluta(Actual) then
+        Exit;
+      Unidad := ExtractFileDrive(Actual);
+      if CharInSet(AValor[1], ['\', '/']) then
+        Result := TPath.GetFullPath(Unidad + AValor)
+      else if SameText(Copy(AValor, 1, 2), Unidad) then
+        Result := TPath.GetFullPath(TPath.Combine(Actual, Copy(AValor, 3, MaxInt)));
+      Exit;
+    end;
+    // relativa: desde la carpeta del fichero que la escribe
+    if EsRutaAbsoluta(ABase) then
       Result := TPath.GetFullPath(TPath.Combine(ABase, AValor));
   except
     Result := ''; // un texto que no es ruta no se resuelve

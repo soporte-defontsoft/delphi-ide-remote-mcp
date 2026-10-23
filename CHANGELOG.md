@@ -158,12 +158,17 @@ the MCP `initialize` response (`serverInfo.version`).
   `\private\x.txt` naming such a file passed; and the finders missed what
   the build reads - the
   `compilesAgainst` of `delphi_projects`, the projects of a group in
-  `delphi_config view`, the files of a `.rc` in `delphi_styles lint`
-  (measured on 2026-10-23). One resolver now applies Windows' own rule from
-  the folder of whoever reads the path, and what it cannot resolve - a
-  drive-relative path on another drive - is refused by a judge and skipped
-  by a finder. It was written by hand in a dozen places
-  (`tests/test_rutas_a_medias_1230.py`).
+  `delphi_config view`, the files of a `.rc` in `delphi_styles lint`; and
+  the build gate refused a search path, an output folder, a `{$I}` or an
+  `<Import>` that msbuild reads inside the roots (`BUILD-050`, `BUILD-029`,
+  `BUILD-028`, `BUILD-017`), judging another file than the one msbuild
+  opens (measured on 2026-10-23). One resolver now applies Windows' own
+  rule from the folder of whoever reads the path - msbuild and the compiler
+  run in the project's folder, and a `{$I}` relative to its source is read
+  from the source's - and what it cannot resolve, a drive-relative path on
+  another drive, is refused by a judge (`BUILD-051`, and `BUILD-057` for a
+  directive) and skipped by a finder. It was written by hand in a dozen
+  places (`tests/test_rutas_a_medias_1230.py`).
 - **What the second review found (Claude Fable 5.1 through Hermes,
   2026-10-23).** `delphi_test` on a package whose source names `DUnitX.`
   (a package of test helpers) took it for a test, built it and tried to run

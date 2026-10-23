@@ -3308,8 +3308,11 @@ end;
 
 { Expands the few MSBuild macros that point INSIDE the project, so an import
   written with them can be resolved and read. Returns '' when the path still
-  carries a macro we cannot resolve (which the caller then refuses). }
-function ResolveImportPath(const APath, AProjectFile: string): string;
+  carries a macro we cannot resolve (which the caller then refuses).
+  ACarpetaDelBuild: la del .dproj que se compila, en la que corre msbuild: un
+  "\x" o un "X:y" se lee desde ella aunque lo escriba un Import de otra
+  carpeta; lo relativo, desde la del fichero que lo escribe. }
+function ResolveImportPath(const APath, AProjectFile, ACarpetaDelBuild: string): string;
 var
   Dir, Name: string;
 begin
@@ -3323,13 +3326,9 @@ begin
   Result := Result.Replace('$(ProjectDir)', Dir, [rfReplaceAll, rfIgnoreCase]);
   if Result.Contains('$(') then
     Exit(''); // still macro-based: not resolvable here
-  if not TPath.IsPathRooted(Result) then
-    Result := TPath.Combine(Dir, Result);
-  try
-    Result := TPath.GetFullPath(Result);
-  except
-    Result := '';
-  end;
+  // como lo lee msbuild (EL resolutor): se juzgaba en la unidad del PROCESO
+  // del servidor (A9b de la 1.23, medido)
+  Result := RutaDesde(Dir, Result, ACarpetaDelBuild);
 end;
 
 { The IDE's OWN imports, trusted without reading them: they live in the RAD
@@ -3371,27 +3370,21 @@ end;
   escrito tal cual: la segunda barrera se queda). UNA copia: BuildOutputDirs
   (lo declarado) y BuildOutputDefault (lo suplido). }
 function ResuelveSalida(const ACand, AValue, AEscrito, ADir: string): string;
-var
-  Cand: string;
 begin
   Result := '';
   if ACand.Contains('$(') or ACand.Contains('@(') or ACand.Contains('%') or
      AValue.Contains('&#') or ACand.Contains('<') or AEscrito.Contains('<') then
     Exit;
-  Cand := ACand;
-  if not TPath.IsPathRooted(Cand) then
-    Cand := TPath.Combine(ADir, Cand);
-  try
-    Result := TPath.GetFullPath(Cand);
-  except
-    Result := '';
-  end;
+  // donde la deja msbuild, que corre en ADir (EL resolutor): se juzgaba en la
+  // unidad del PROCESO del servidor (A9b de la 1.23, medido)
+  Result := RutaDesde(ADir, ACand);
 end;
 
 { ProjectXmlChain: EL lector, con los ficheros; la forma sin ellos, debajo. }
 function ProjectXmlChain(const ADprojPath: string; out AFicheros: TArray<string>): TArray<string>;
 var
   List, Files: TList<string>;
+  CarpetaDelBuild: string;
 
   procedure Lee(const AFile: string; ADepth: Integer);
   var
@@ -3411,7 +3404,7 @@ var
     begin
       if IsStockImport(LowerCase(V.Trim)) then
         Continue;
-      Resolved := ResolveImportPath(V.Trim, AFile);
+      Resolved := ResolveImportPath(V.Trim, AFile, CarpetaDelBuild);
       if (Resolved <> '') and TFile.Exists(Resolved) then
         Lee(Resolved, ADepth + 1);
     end;
@@ -3422,6 +3415,7 @@ begin
   AFicheros := nil;
   if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
     Exit;
+  CarpetaDelBuild := ExtractFileDir(TPath.GetFullPath(ADprojPath));
   List := TList<string>.Create;
   Files := TList<string>.Create;
   try
@@ -4335,12 +4329,12 @@ begin
 end;
 
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
-  AIgnoreBuildEvents: Boolean): string; forward;
+  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild: string): string; forward;
 
 function DprojBuildHazard(const AXml, AProjectPath: string;
   AIgnoreBuildEvents: Boolean): string;
 begin
-  Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents);
+  Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents, ExtractFileDir(AProjectPath));
 end;
 
 { LISTA BLANCA (1.21.2): lo que un build compile-only entiende, y nada mas
@@ -4350,7 +4344,7 @@ end;
   de una tarea conocida. No es un interprete de MSBuild; AllowBuildScripts lo
   decide el operador. }
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
-  AIgnoreBuildEvents: Boolean): string;
+  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild: string): string;
 var
   Low, V, Resolved, Imported: string;
 begin
@@ -4448,7 +4442,7 @@ begin
       Continue;
     if ADepth >= 4 then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_PROFUNDO_FMT, [V]));
-    Resolved := ResolveImportPath(V, AProjectFile);
+    Resolved := ResolveImportPath(V, AProjectFile, ACarpetaDelBuild);
     if Resolved = '' then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT, [V]));
     if not TFile.Exists(Resolved) then
@@ -4475,7 +4469,7 @@ begin
     except
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT, [V]));
     end;
-    Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents);
+    Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents, ACarpetaDelBuild);
     if Result <> '' then
       Exit(MsgFmt(SF_CFG_HAZARD_POR_IMPORT_FMT, [Result, V]));
   end;

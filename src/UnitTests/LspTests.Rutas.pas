@@ -174,6 +174,11 @@ type
     [Test] procedure LaDeUnidadSoloSiEsLaDeLaBase;
     [Test] procedure SinBaseSoloLaCompleta;
     [Test] procedure LoQueNoEsRutaNoSeResuelve;
+    { lo relativo, desde la carpeta del fichero; "\x" y "X:y", desde la del
+      lector (dcc abre un $I relativo desde el fuente y lo demas desde la
+      carpeta del .dproj: A9b) }
+    [Test] procedure LaCarpetaActualParaLoAMedias;
+    [Test] procedure QueEsUnaRutaAMedias;
   end;
 
 implementation
@@ -1114,6 +1119,25 @@ begin
   Assert.AreEqual('', RutaDesde('D:\p', ''));
   Assert.AreEqual('', RutaDesde('D:\p', 'a|b'));
   Assert.AreEqual('', RutaDesde('D:\p', 'a<b'));
+end;
+
+procedure TRutaDesdeTests.LaCarpetaActualParaLoAMedias;
+begin
+  Assert.AreEqual('D:\fuentes\x.inc', RutaDesde('D:\fuentes', 'x.inc', 'E:\proy'));
+  Assert.AreEqual('E:\x.inc', RutaDesde('D:\fuentes', '\x.inc', 'E:\proy'));
+  Assert.AreEqual('E:\proy\x.inc', RutaDesde('D:\fuentes', 'E:x.inc', 'E:\proy'));
+  // la unidad del fichero no es la del lector
+  Assert.AreEqual('', RutaDesde('D:\fuentes', 'D:x.inc', 'E:\proy'));
+  // una carpeta actual que no es completa no es carpeta
+  Assert.AreEqual('', RutaDesde('D:\fuentes', '\x.inc', 'relativa'));
+end;
+
+procedure TRutaDesdeTests.QueEsUnaRutaAMedias;
+begin
+  for var V in TArray<string>.Create('\x', '/x', 'C:x', 'c:', 'C:..\x') do
+    Assert.IsTrue(EsRutaAMedias(V), V);
+  for var V in TArray<string>.Create('', 'x', '..\x', 'C:\x', 'C:/x', '\\h\s', '//h/s', '\\?\C:\x') do
+    Assert.IsFalse(EsRutaAMedias(V), V);
 end;
 
 initialization

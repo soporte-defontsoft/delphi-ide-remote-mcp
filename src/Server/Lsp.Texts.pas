@@ -6159,6 +6159,16 @@ const
     'file is not Pascal. The paths of {$I} and {$R} have to stay inside ' +
     'the workspace.';
 
+  // Un $I o un $R relativo a la carpeta ACTUAL de otra unidad ("E:x"): dcc lo
+  // abre desde una carpeta que no nombra nadie, y la puerta no sabe que
+  // fichero es (A9b de la 1.23, Lsp.BuildRunner.IncludeDirectivesDenied)
+  SR_BUILD_INCLUDE_NO_VERIFICABLE_FMT =
+    '[BUILD-057 DENIED] I will not build this. The %s directive of %s ' +
+    'names a path relative to the current folder of another drive, and ' +
+    'which file the compiler opens depends on that folder, which nothing ' +
+    'names: a path the build reads that cannot be checked is not ' +
+    'approved. Write it relative to the source''s folder, or complete.';
+
   SR_BUILD_OUTPUT_DENIED_FMT =
     '[BUILD-029 DENIED] I will not build this. The project puts its ' +
     'output in %s = %s, and this session cannot write there: %s. A build ' +
@@ -6216,7 +6226,8 @@ const
   SR_BUILD_LECTURA_NO_VERIFICABLE_FMT =
     '[BUILD-051 DENIED] I will not build this. <%s> in %s names %s, which ' +
     'this server cannot resolve to a path (an item list, a metadata ' +
-    'reference or a macro it cannot expand), and a path the build reads ' +
+    'reference, a macro it cannot expand, or a path relative to the current ' +
+    'folder of another drive), and a path the build reads ' +
     'that cannot be checked is not approved. Write it as a plain path, with ' +
     '$(Platform), $(Config) or a macro of the IDE if needed.';
 
