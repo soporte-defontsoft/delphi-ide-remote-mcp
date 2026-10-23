@@ -389,6 +389,12 @@ REGLAS = [
      'cada pregunta de la tabla la recorria a mano)'),
     ('el designer de una unidad', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.(?:dfm|fmx)'\)", [],
      'DesignersDeUnidad (Lsp.Patch), la inversa de UnidadDeDesigner (2.2 de la 1.18.0: cinco a mano)'),
+    ('el binario de Android en el apk compuesto a mano', r"'lib'\s*\+[^;]*'\.so'",
+     # el enlazador busca el nombre de DESARROLLO de una libreria (-lz -> libz.so): otra regla, la de ld
+     [('Lsp.Dproj.pas', 'LibreriaDelApk'), ('Lsp.BuildRunner.pas', 'CompletaEnlacesDev')],
+     'LibreriaDelApk, lib<proyecto>.so como los targets ($(DllPlatformPrefix)$(MSBuildProjectName).so); lo '
+     'que deja el build es NombreDelBinario (con OutputExt, lib<p>.<ext>, medido). Lo componian a mano el '
+     'manifiesto de Android y ResolveBuildOutput (R11 de Fable, depuracion de la 1.23)'),
     ('el .dproj compuesto a mano', r"\+\s*'\.dproj'", [],
      'DprojDe tambien para el que se crea (revision de la 1.17.0: Scaffold y ResolveProjectPair lo '
      'componian con + \'.dproj\')'),
@@ -1111,6 +1117,7 @@ PLANTADO = {
     'GetTempPath suelto': "  T := TPath.GetTempPath();",
     'el .dproj de un .dpr': "  D := ChangeFileExt(P, '.dproj');",
     'el .dproj compuesto a mano': "  D := Stem + '.dproj';",
+    'el binario de Android en el apk compuesto a mano': "  B := 'lib' + Proyecto + '.so';",
     'el .dpr de un .dproj': "  D := TPath.ChangeExtension(P, '.dpr');",
     'el juez del nombre de un perfil': "  if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then",
     'la gramatica de las lineas de un form': "  if L.Trim.EndsWith('= <') then",

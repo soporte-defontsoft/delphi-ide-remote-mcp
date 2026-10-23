@@ -36,7 +36,12 @@ _ADB_AD, _ADB_HOST = mc.appdata_perfil(BASE, 'mcp-e2e-noprof', '127.0.0.1', 'Lin
 
 def Server(extra_args=(), env=None):
     e = {'DELPHI_MCP_ROOTS': BASE, 'APPDATA': _ADB_AD,
-         'DELPHI_MCP_REMOTE_HOSTS': _ADB_HOST}  # 1.15.1: perfil FALSO + su host permitido
+         'DELPHI_MCP_REMOTE_HOSTS': _ADB_HOST,  # 1.15.1: perfil FALSO + su host permitido
+         # desde la 1.22.2 el deploy por perfil pasa por RemoteRunProjects (RUN-007/RUN-009), y por la RUTA del
+         # .dproj (RUN-022): los dos proyectos que esta bateria despliega a Linux64. Sin ella, cuatro checks del
+         # deploy salian con RUN-009 desde c871556
+         'DELPHI_MCP_REMOTE_RUN_PROJECTS': ';'.join(os.path.join(BASE, n, n + '.dproj')
+                                                    for n in ('DeployCli', 'DeployProd'))}
     e.update(env or {})
     return mc.Stdio(EXE, mc.entorno(e), nombre='deploy-adb-battery', args=extra_args)
 
@@ -357,6 +362,20 @@ try:
           out[:300])
 except Exception:
     check('deploy Android: resultado parsea', False, out[:300])
+
+# El binario de Android por EL nombrador (R11 de Fable, depuracion de la 1.23): lo que deja el compilador es lib
+# delante de lo que compone el build - lib<proyecto>.so, y con OutputExt lib<proyecto>.<ext> (medido el
+# 23-oct-2026: libAndExt.mx) -; ResolveBuildOutput solo probaba lib delante de un .so y con OutputExt no daba output
+FDPROJ = os.path.join(FDIR, 'DeployFmx.dproj')
+out = srv.call('delphi_build', {"project": FDPROJ, "platform": "Android64", "config": "Debug"}, t=600)
+check('build Android: output es lib<proyecto>.so',
+      (mc.como_json(out).get('output') or '').endswith('\\libDeployFmx.so'), out[:300])
+out = srv.call('delphi_config', {"command": "set-property", "project": FDPROJ, "name": "OutputExt", "value": "mx",
+                                 "platform": "Android64", "config": "Debug"})
+check('config: OutputExt=mx en Android64 Debug', mc.abre(out, 'SN_CFG_PROPERTY_PUESTA_FMT'), out[:200])
+out = srv.call('delphi_build', {"project": FDPROJ, "platform": "Android64", "config": "Debug"}, t=600)
+check('build Android con OutputExt=mx: output es libDeployFmx.mx, el que deja el compilador (ROJO contra r1222r: '
+      'no daba output)', (mc.como_json(out).get('output') or '').endswith('\\libDeployFmx.mx'), out[:300])
 
 # 2ai de la 1.18.2: por stdio no hay enlace de descarga, y una captura con
 # inline=false sin out= se quedaba en nuestra casa sin nadie que la recogiera.

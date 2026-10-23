@@ -136,6 +136,15 @@ the MCP `initialize` response (`serverInfo.version`).
   repository" (`GIT-032`), as into a folder with a `.git` folder: it only looked
   for the folder. One check of "this folder has its .git" for the three
   places (`tests/test_listas_1150.py`).
+- **`delphi_build` names an Android binary as the compiler writes it.** On
+  Android the compiler puts `lib` before what the build composes:
+  `lib<project>.so`, and with a declared `OutputExt` `lib<project>.<ext>`
+  (measured). The server tried `lib` only in front of a `.so`, so a build
+  with `OutputExt` succeeded with no `output`, and two places wrote
+  `lib<project>.so` by hand. Now one namer gives the file the build leaves
+  and another the name the `.apk` loads it by (`lib<project>.so`, as the
+  targets say); an iOS build is looked for without extension, as its
+  targets compose it (`tests/test_deploy_adb.py`).
 - **The wildcard works in every allowlist of `settings.ini`.** `RemoteHosts`
   took `*` or `0.0.0.0`, `RemoteRunProjects` took `all` or `*`, and
   `GitRemotes` and `AdbAllowedDevices` took none, so `GitRemotes=*` refused

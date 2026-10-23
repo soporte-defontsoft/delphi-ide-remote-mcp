@@ -748,14 +748,21 @@ function SistemaDelPAServer(const APlatform: string): TSistemaDePlataforma;
   runner (medido el 18-oct-2026). }
 function CorreEnEstaMaquina(const APlatform: string): Boolean;
 
-{ La extension del ejecutable de APlatform: '.exe' en Windows, '' en el resto
-  (un ELF de Linux, el binario de macOS). }
+{ La extension del ejecutable de APlatform, la ExeExt de los targets
+  (CodeGear.Common.Targets): '.exe' en Windows, '.so' en Android, '' en el
+  resto (un ELF de Linux, el binario de macOS y de iOS). }
 function ExtensionDeEjecutable(const APlatform: string): string;
 
 { La carpeta del .apk donde van las librerias nativas de APlatform
   (library\lib\<abi>\); '' si no es de Android. La componian a mano el
   manifiesto de Android y add-deployfile, con el ABI escrito en cada uno. }
 function CarpetaDeLibreriasDelApk(const APlatform: string): string;
+
+{ El nombre con el que el .apk lleva y carga el binario de AProyecto:
+  lib<proyecto>.so, el que recogen los targets ($(DllPlatformPrefix)
+  $(MSBuildProjectName).so, CodeGear.Delphi.Targets). Es otro hecho que el
+  fichero que deja el build (NombreDelBinario: con OutputExt, lib<p>.<ext>). }
+function LibreriaDelApk(const AProyecto: string): string;
 
 { The CANONICAL set of Delphi target platforms. add-platform validates
   against this: a platform name is a fixed, known token, so anything else is
@@ -971,7 +978,8 @@ function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
   Target file extension: App.x64.exe, App.Debug.exe, App.x64.Debug.exe, por
   plataforma y configuracion, lo que David llama
   "otro concepto": el nombre del exe), y si no, la extension de la
-  plataforma (ExtensionDeEjecutable). UN nombrador: lo leen ResolveBuildOutput
+  plataforma (ExtensionDeEjecutable); en Android, lib<proyecto>.so, como los
+  targets. UN nombrador: lo leen ResolveBuildOutput
   (el "output" de delphi_build y el exe de delphi_test) y los DeployFile del
   .deployproj (OutputDeployEntry y el manifiesto generado). Medido el
   21-oct-2026: el build Win32 de un proyecto real contesto "output" con un
@@ -2121,10 +2129,17 @@ end;
 
 function ExtensionDeEjecutable(const APlatform: string): string;
 begin
-  if SistemaDePlataforma(APlatform) = spWindows then
-    Result := '.exe'
+  case SistemaDePlataforma(APlatform) of
+    spWindows: Result := '.exe';
+    spAndroid: Result := '.so';
   else
     Result := '';
+  end;
+end;
+
+function LibreriaDelApk(const AProyecto: string): string;
+begin
+  Result := 'lib' + AProyecto + '.so';
 end;
 
 function CarpetaDeLibreriasDelApk(const APlatform: string): string;
@@ -3987,6 +4002,12 @@ begin
     Result := ABase + '.' + Ext.TrimLeft(['.'])
   else
     Result := ABase + ExtensionDeEjecutable(APlatform);
+  // en Android el compilador le antepone lib (medido el 23-oct-2026:
+  // libAndExt.so, y con OutputExt=mx libAndExt.mx). Se componia a mano en el
+  // manifiesto de Android y en ResolveBuildOutput, que solo probaba lib
+  // delante de un .so y con OutputExt no daba output (R11 del censo de Fable)
+  if SistemaDePlataforma(APlatform) = spAndroid then
+    Result := 'lib' + Result;
 end;
 
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
@@ -4014,21 +4035,25 @@ begin
   end;
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
   // What a build leaves per platform family: Windows .exe/.dll/.bpl, Linux
-  // an ELF WITHOUT extension (plus .so), macOS the same (plus .dylib),
-  // Android/iOS a .so. Measured 2026-08-23: a Linux64 build declared no
-  // output at all and the agent had to hunt the ELF with delphi_list.
+  // an ELF WITHOUT extension (plus .so), macOS the same (plus .dylib), iOS
+  // its executable without extension (ExeExt vacia en CodeGear.Common.Targets;
+  // decia .so, que es el de Android). Measured 2026-08-23: a Linux64 build
+  // declared no output at all and the agent had to hunt the ELF with
+  // delphi_list.
   case SistemaDePlataforma(APlatform) of
     spWindows: ArtifactExts := ['.exe', '.dll', '.bpl'];
     spLinux: ArtifactExts := ['', '.so'];
     spMacOS: ArtifactExts := ['', '.dylib'];
   else
-    ArtifactExts := ['.so', ''];
+    ArtifactExts := [''];
   end;
-  // los NOMBRES candidatos: con OutputExt declarada, el que compone el
-  // nombrador y ninguno mas (un <proyecto>.exe viejo al lado no es el de este
-  // build); sin ella, el proyecto con cada extension de la plataforma
+  // los NOMBRES candidatos: con OutputExt declarada, o en Android (su
+  // lib<proyecto>.so), el que compone el nombrador y ninguno mas (un
+  // <proyecto>.exe viejo al lado no es el de este build); si no, el proyecto
+  // con cada extension de la plataforma
   Nombres := [];
-  if EffectiveProperty(Xml, 'OutputExt', APlatform, AConfig).Trim <> '' then
+  if (SistemaDePlataforma(APlatform) = spAndroid) or
+     (EffectiveProperty(Xml, 'OutputExt', APlatform, AConfig).Trim <> '') then
     Nombres := [NombreDelBinario(Xml, Base, APlatform, AConfig)]
   else
     for Ext in ArtifactExts do
@@ -4056,13 +4081,9 @@ begin
       end;
       for Nombre in Nombres do
       begin
-        // Android and iOS name the artifact lib<Project>.so, not <Project>.so,
-        // so the search used to come up empty and delphi_build answered
-        // success with no "output" at all - the agent had to guess the path
-        // (field round 8).
+        // (Android: lib<Project>.so por el nombrador; buscando <Project>.so el
+        // build contestaba exito sin "output", field round 8)
         Artifact := TPath.Combine(Cand, Nombre);
-        if not TFile.Exists(Artifact) and Nombre.EndsWith('.so', True) then
-          Artifact := TPath.Combine(Cand, 'lib' + Nombre);
         if TFile.Exists(Artifact) then
         begin
           T := TFile.GetLastWriteTime(Artifact);

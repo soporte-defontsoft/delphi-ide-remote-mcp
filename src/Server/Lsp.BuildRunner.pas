@@ -805,11 +805,11 @@ begin
     Result := ['Debug', 'Release'];
 end;
 
-function AndroidDeployXml(const AName, APlat, ABdsRoot: string;
+function AndroidDeployXml(const ADprojXml, AName, APlat, ABdsRoot: string;
   const AConfigs: TArray<string>): string;
 var
   SB: TStringBuilder;
-  Cfg, Libs, OutName, Entradas: string;
+  Cfg, Libs, OutName, Entradas, Bin: string;
   E: TApkEntry;
 
   procedure Add(const AInclude, ADir, AFile, ACls: string; ARequired: Boolean);
@@ -825,17 +825,20 @@ begin
     for Cfg in AConfigs do
     begin
       Entradas := '';
+      // lo que deja el build por EL nombrador, como los otros manifiestos, y
+      // dentro del apk con el nombre que carga (LibreriaDelApk)
+      Bin := LibreriaDelApk(AName);
       Add(APlat + '\' + Cfg + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
         'ProjectAndroidManifest', True);
-      Add(APlat + '\' + Cfg + '\lib' + AName + '.so', Libs,
-        'lib' + AName + '.so', 'ProjectOutput', True);
+      Add(APlat + '\' + Cfg + '\' + NombreDelBinario(ADprojXml, AName, APlat, Cfg), Libs, Bin,
+        'ProjectOutput', True);
       for E in APK_RES do
         Add(APlat + '\' + Cfg + '\' + E.Src, E.Dir, E.Name, E.Cls, False);
       for E in APK_BDS do
         if TFile.Exists(TPath.Combine(ABdsRoot, E.Src)) then
         begin
           if E.Name = '*' then
-            OutName := 'lib' + AName + '.so'
+            OutName := Bin
           else
             OutName := E.Name;
           Add('$(BDS)\' + E.Src, E.Dir, OutName, E.Cls, False);
@@ -1024,7 +1027,7 @@ begin
     // como lo escribe el IDE (el juez: UTF-8 con BOM, medido en sus
     // .deployproj): en ASCII un nombre de proyecto no ASCII salia con '?' en
     // el Include (P3-L1 de la 1.18.0)
-    EscribeTexto(F, AndroidDeployXml(N, APlat, ABdsRoot, ConfigsDelManifiesto(Dproj)), ltJaula, ekUtf8Bom);
+    EscribeTexto(F, AndroidDeployXml(Dproj, N, APlat, ABdsRoot, ConfigsDelManifiesto(Dproj)), ltJaula, ekUtf8Bom);
     AGenerated := True;
     Exit;
   end;
