@@ -81,10 +81,30 @@ for rel in ('UVivo.pas', '__history\\UVivo.pas.~1~', '__history\\UViejo.pas', '_
     with open(os.path.join(HIST, rel), 'w') as f:
         f.write('unit UVivo;\ninterface\nimplementation\n// marca hist\nend.\n')
 os.makedirs(os.path.join(HIST, 'Vivo'))  # el control en positivo de L10 dirs
-# L7: Proys es un repositorio (el servidor lee .git\HEAD, no lanza git)
-os.makedirs(os.path.join(PROYS, '.git'))
-with open(os.path.join(PROYS, '.git', 'HEAD'), 'w') as f:
-    f.write('ref: refs/heads/rama-l7\n')
+# L7: Proys es un repositorio de VERDAD en una rama con barra, y Wt un worktree
+# enlazado suyo (su .git es un FICHERO). La rama la da git (RamaDelRepo, 1.22.2):
+# el lector a mano de .git\HEAD cortaba fix/x en x y en un worktree no daba ninguna
+import subprocess
+WT = os.path.join(JAIL, 'Wt')
+
+
+def git(*a):
+    subprocess.run(['git', '-c', 'user.email=l7@x', '-c', 'user.name=l7'] + list(a),
+                   check=True, capture_output=True)
+
+
+git('init', '-q', '-b', 'fix/rama-l7', PROYS)
+git('-C', PROYS, 'commit', '-q', '--allow-empty', '-m', 'l7')
+git('-C', PROYS, 'worktree', 'add', '-q', '-b', 'otra/rama-wt', WT)
+with open(os.path.join(WT, 'Tres.dproj'), 'w') as f:
+    f.write(XML)
+# ...y un proyecto suelto cuyo repo esta POR ENCIMA de la jaula (BASE): su rama no se le pregunta a git ni se
+# dice (la puerta de leer va antes de lanzarlo)
+git('init', '-q', '-b', 'rama-de-fuera', BASE)
+SUELTO = os.path.join(JAIL, 'Suelto')
+os.makedirs(SUELTO)
+with open(os.path.join(SUELTO, 'Cuatro.dproj'), 'w') as f:
+    f.write(XML)
 
 # L9: un vault de 30 notas, FUERA de la jaula (dentro, las tools de ficheros
 # no lo ensenan)
@@ -240,9 +260,18 @@ try:
           gp)
     repos = jpr.get('repos') or []
     check('L7 ...el repositorio UNA vez arriba (repos), con su rama; ni repo ni branch en cada proyecto',
-          len(repos) == 1 and misma(repos[0]['dir'], PROYS) and repos[0].get('branch') == 'rama-l7'
+          len(repos) == 1 and misma(repos[0]['dir'], PROYS) and repos[0].get('branch') == 'fix/rama-l7'
           and bool(gp) and not any({'repo', 'branch'} & set(f) for g in gp for f in g.get('files', [])),
           (repos, gp))
+    jwt = mc.como_json(llama('delphi_projects', {'root': WT}))
+    rw = jwt.get('repos') or []
+    check('L7 ...un worktree enlazado (su .git es un fichero) es su repo, con SU rama entera, preguntada a git '
+          '(ROJO contra r1222q: el lector a mano no daba ninguna, y cortaba fix/rama-l7 en rama-l7)',
+          len(rw) == 1 and misma(rw[0]['dir'], WT) and rw[0].get('branch') == 'otra/rama-wt', jwt)
+    jsu = mc.como_json(llama('delphi_projects', {'root': SUELTO}))
+    rs = jsu.get('repos') or []
+    check('L7 ...un repo por ENCIMA de la jaula: su rama no se dice (control de jaula)',
+          len(rs) == 1 and not rs[0].get('branch') and 'rama-de-fuera' not in json.dumps(jsu), jsu)
     # (un paseo: Uno.dproj, Grupo.groupproj, Dos.dproj - el .groupproj es el 2o)
     jp3 = mc.como_json(llama('delphi_projects', {'root': PROYS, 'maxresults': 1, 'offset': 1}))
     g3 = jp3.get('projects') or []

@@ -127,6 +127,15 @@ the MCP `initialize` response (`serverInfo.version`).
   unseated and listed in `skipped`, as `reseat-sdk` does. The platform of the
   SDKs this server brings (Linux64) is written once, for its six checks and
   two messages (`tests/test_paserver.py`).
+- **`delphi_projects` gives a repository's branch as git does.** It read
+  `.git\HEAD` by hand: a branch `fix/x` came out as `x`, and a linked
+  worktree - whose `.git` is a file, the kind `delphi_git worktree add`
+  makes - had no branch at all. The branch is now git's answer, asked once
+  per repository and only when the repository, its git folder and the
+  common one can be read. `delphi_git clone` into a worktree is "already a
+  repository" (`GIT-032`), as into a folder with a `.git` folder: it only looked
+  for the folder. One check of "this folder has its .git" for the three
+  places (`tests/test_listas_1150.py`).
 - **The wildcard works in every allowlist of `settings.ini`.** `RemoteHosts`
   took `*` or `0.0.0.0`, `RemoteRunProjects` took `all` or `*`, and
   `GitRemotes` and `AdbAllowedDevices` took none, so `GitRemotes=*` refused

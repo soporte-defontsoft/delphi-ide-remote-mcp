@@ -107,6 +107,19 @@ type
     constructor Create; override;
   end;
 
+{ ADir tiene su .git: una carpeta, o un FICHERO "gitdir: ..." (un worktree
+  enlazado, un submodulo). La pregunta barata de "aqui hay un repo" antes de
+  preguntarselo a git; estaba escrita tres veces, y clone solo miraba la
+  carpeta (R3 del censo de Fable, depuracion de la 1.23). }
+function TieneGit(const ADir: string): Boolean;
+{ La rama de ARepo, preguntada a git: symbolic-ref, que da tambien la de un
+  worktree enlazado y la de un repo sin commits; con HEAD suelto, el commit
+  corto y ' (detached)'. '' si git no la da o si el repo, su carpeta de git o
+  la comun no se pueden LEER (la jaula de las consultas de delphi_git).
+  delphi_projects la leia de .git\HEAD a mano: cortaba fix/x en x y en un
+  worktree enlazado no daba ninguna (medido el 23-oct-2026). }
+function RamaDelRepo(const ARepo: string): string;
+
 implementation
 
 uses
@@ -891,6 +904,44 @@ begin
     (Length(Lineas) > 0) and SameText(Lineas[0], 'true');
 end;
 
+function TieneGit(const ADir: string): Boolean;
+begin
+  Result := TDirectory.Exists(TPath.Combine(ADir, '.git')) or
+    TFile.Exists(TPath.Combine(ADir, '.git'));
+end;
+
+function RamaDelRepo(const ARepo: string): string;
+var
+  GitDir, Comun, Raiz, Salida, Fijado: string;
+  Codigo: Cardinal;
+  Lineas: TArray<string>;
+begin
+  Result := '';
+  // ANTES de lanzar git: delphi_projects encuentra el repo subiendo, y puede
+  // estar por encima de las raices
+  if ReadPathDenied(ARepo, True) <> '' then
+    Exit;
+  try
+    // por DondeViveElRepo y no por su cache (GitDirDeCarpeta): un "no es
+    // repo" de antes de un init se quedaria para siempre
+    if not DondeViveElRepo(ARepo, GitDir, Comun, Raiz, Salida, Codigo) then
+      Exit;
+    for var Sitio in TArray<string>.Create(GitDir, Comun) do
+      if (Sitio <> '') and (ReadPathDenied(Sitio, True) <> '') then
+        Exit;
+    // fijado a lo que se juzgo, como la tool
+    Fijado := ' --git-dir=' + EnComillas(GitDir);
+    // symbolic-ref sale con 1 y sin salida con HEAD suelto (medido, git 2.53)
+    if GitContesta(ARepo, Fijado, 'symbolic-ref --short -q HEAD', Lineas) and (Length(Lineas) > 0) then
+      Exit(Lineas[0]);
+    if GitContesta(ARepo, Fijado, 'rev-parse --short HEAD', Lineas) and (Length(Lineas) > 0) then
+      Result := Lineas[0] + ' (detached)';
+  except
+    // sin git en el servidor (GIT-050): la rama no se sabe
+    Result := '';
+  end;
+end;
+
 { EL LECTOR de una ruta que git escribe entrecomillada (quote_c_style de git):
   entre comillas van \\ \" \t \n... y los bytes que no son ASCII en octal
   (\303\261 es una n con tilde, en UTF-8); sin comillas, va tal cual. Git
@@ -1552,9 +1603,7 @@ begin
   // la puerta miro, no donde el encuentre un repo al volver a buscar. clone
   // hace su repo. init tambien REINICIALIZA el .git que ya exista: su
   // fichero gitdir puede apuntar fuera, y pasa por la misma puerta.
-  if (Cmd <> 'clone') and ((Cmd <> 'init') or
-     TFile.Exists(TPath.Combine(Repo, '.git')) or
-     TDirectory.Exists(TPath.Combine(Repo, '.git'))) then
+  if (Cmd <> 'clone') and ((Cmd <> 'init') or TieneGit(Repo)) then
   begin
     if not DondeViveElRepo(Repo, GitDir, Comun, Raiz, Output, ExitCode) then
     begin
@@ -1750,7 +1799,8 @@ begin
     if Url.Contains('--upload-pack') or Url.Contains('--config') or
        Url.StartsWith('-') then
       Exit(MsgText(SR_GIT_URL_NOT_ALLOWED));
-    if TDirectory.Exists(TPath.Combine(Repo, '.git')) then
+    // carpeta O fichero .git: clonar en un worktree enlazado no es clonar
+    if TieneGit(Repo) then
       Exit(MsgFmt(SR_GIT_YA_ES_REPOSITORIO_FMT, [Repo]));
     // El destino se crea AQUI, pasadas todas las negativas: un rechazo no
     // deja nada, y si el clone falla se quita solo si lo creo el.

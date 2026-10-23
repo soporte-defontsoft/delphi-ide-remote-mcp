@@ -626,8 +626,7 @@ REGLAS = [
       ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'), ('Lsp.Settings.pas', 'BytesDelIni'),
       # LA puerta (LeeBytes) y el decodificador que usan ella y LeeTexto, tras la puerta
       ('Lsp.Patch.pas', 'LeeBytes'), ('Lsp.Patch.pas', 'TextoDeFichero'),
-      # .git\HEAD: la puerta niega .git y esta lectura lo admite (el juez es git, 9.5)
-      ('Mcp.Tools.Workspace.pas', 'RepoOf'),
+      # (RepoOf leia .git\HEAD a mano: desde la 1.22.2 la rama la da git, RamaDelRepo)
      # BYTES de la jaula que la tool ya comprobo (delphi_fetch, el zip de delphi_package,
      # la descarga). La captura y su recorte ya van por la puerta (1.18.2, 2b)
      ('Mcp.Tools.Workspace.pas', 'TDelphiFetchTool.ExecuteWithParams'),

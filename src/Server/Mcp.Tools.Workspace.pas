@@ -247,6 +247,7 @@ uses
   Lsp.Dproj,      // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.Files,
   Mcp.Tools.Messages,
+  Mcp.Tools.Git, // TieneGit / RamaDelRepo: el repo y la rama de delphi_projects
   Lsp.DesignerBin,
   Lsp.NetDrives, // SinBarraFinal
   Lsp.Pascal,
@@ -1160,43 +1161,25 @@ begin
   FDescription := SD_WS_PROJECTS;
 end;
 
-{ The git repository a path belongs to (the folder holding .git), '' when
-  none, plus the branch checked out there. An agent arriving cold has to know
-  whether what it is about to edit is under version control and on which
-  branch BEFORE it edits: asking for it cost a call and some guessing (field
-  round 7). Read straight from .git/HEAD - no git process, no shell. }
-function RepoOf(const APath: string; out ABranch: string): string;
+{ The git repository a path belongs to: the nearest folder upwards with its
+  .git (Mcp.Tools.Git.TieneGit, a folder or a worktree's file), '' when none.
+  An agent arriving cold has to know whether what it is about to edit is
+  under version control and on which branch BEFORE it edits: asking for it
+  cost a call and some guessing (field round 7). The branch is git's answer
+  (RamaDelRepo), once per repo: read from .git\HEAD by hand it cut fix/x to x
+  and gave none in a linked worktree. }
+function RepoOf(const APath: string): string;
 var
-  Dir, Head: string;
+  Dir: string;
 begin
   Result := '';
-  ABranch := '';
   Dir := APath;
   if TFile.Exists(Dir) then
     Dir := TPath.GetDirectoryName(Dir);
   while (Dir <> '') and TDirectory.Exists(Dir) do
   begin
-    if TDirectory.Exists(TPath.Combine(Dir, '.git')) or
-       TFile.Exists(TPath.Combine(Dir, '.git')) then
-    begin
-      Result := Dir;
-      Head := TPath.Combine(Dir, '.git\HEAD');
-      // Lectura interna: conserva la jaula, sin abrir .git a las tools de ficheros.
-      // EXCEPCION DECLARADA de la puerta de leer (LeeTexto): la puerta niega
-      // .git y esta lectura lo admite a proposito (ReadPathDenied con True).
-      // El juez de la rama es git (rev-parse), punto 9.5 de la 1.18.0.
-      if (ReadPathDenied(Head, True) = '') and TFile.Exists(Head) then
-        try
-          ABranch := TFile.ReadAllText(Head).Trim;
-          if ABranch.StartsWith('ref:') then
-            ABranch := ABranch.Substring(ABranch.LastIndexOf('/') + 1)
-          else
-            ABranch := ABranch.Substring(0, 8) + ' (detached)';
-        except
-          ABranch := '';
-        end;
-      Exit;
-    end;
+    if TieneGit(Dir) then
+      Exit(Dir);
     if TPath.GetDirectoryName(Dir) = Dir then
       Break;
     Dir := TPath.GetDirectoryName(Dir);
@@ -1237,7 +1220,7 @@ var
   Roots: TArray<string>;
   RootDir, F, Filt: string;
   Entry: TJSONObject;
-  Repo, Branch: string;
+  Repo: string;
   AllCount: Integer;
 begin
   if Params.Root <> '' then
@@ -1365,11 +1348,11 @@ begin
                   SPArr.Add(SDir);
               end;
             end;
-            Repo := RepoOf(F, Branch);
+            Repo := RepoOf(F);
             if (Repo <> '') and (Repos.IndexOf(Repo) < 0) then
             begin
               Repos.Add(Repo);
-              Ramas.Add(Branch);
+              Ramas.Add(RamaDelRepo(Repo));
             end;
           end;
         end;
