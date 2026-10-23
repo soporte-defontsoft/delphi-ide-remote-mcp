@@ -527,6 +527,21 @@ function CondicionDePlataformaYConfig(const ACondicion: string; out APlataforma,
   un ItemGroup del .deployproj; '' si su Condition no es de una plataforma. }
 function PlataformaDeGrupoDeDespliegue(const ACondicion: string): string;
 
+type
+  { Un <DeployFile> de un .deployproj: su tramo, el ItemGroup que lo contiene
+    y la plataforma de ese grupo ('' si su Condition no es de una). }
+  TEntradaDelManifiesto = record
+    Tramo: TTramoXml;
+    Grupo: TGrupoXml;
+    Plataforma: string;
+  end;
+
+{ Los <DeployFile> de un .deployproj, cada uno con su grupo y la plataforma
+  de este, en orden de documento. EL recorrido: estaba a mano en
+  FindDeployEntries y en la vista de delphi_config, y lo pide el exe= de
+  remote-run (lo que el proyecto despliega en esa plataforma). }
+function EntradasDelManifiesto(const AXml: string): TArray<TEntradaDelManifiesto>;
+
 { ---- la seccion Deployment del .dproj: el Deployment Manager del IDE ----
   Lo que escribe el IDE al anadir un fichero en Project > Deployment y lo que
   lee para GENERAR el .deployproj al desplegar (medido con David el
@@ -3143,6 +3158,23 @@ begin
   Result := '';
   if CondicionDePlataformaYConfig(ACondicion, X, C) and (X <> '') then
     Result := ConSuGrafia(X);
+end;
+
+function EntradasDelManifiesto(const AXml: string): TArray<TEntradaDelManifiesto>;
+var
+  E: TEntradaDelManifiesto;
+begin
+  Result := [];
+  for var G in GruposDe(AXml, 'ItemGroup') do
+  begin
+    E.Grupo := G;
+    E.Plataforma := PlataformaDeGrupoDeDespliegue(G.Condicion);
+    for var T in TramosEnGrupo(AXml, 'DeployFile', G, True) do
+    begin
+      E.Tramo := T;
+      Result := Result + [E];
+    end;
+  end;
 end;
 
 function TagValue(const AXml, ATag: string): string;

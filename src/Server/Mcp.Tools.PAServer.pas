@@ -1194,6 +1194,40 @@ begin
   Result := EjecucionRemotaDenegada(AProf, AProj, ANecesita);
 end;
 
+{ El exe= de remote-run: el binario del proyecto, o un fichero que su
+  .deployproj despliega en la plataforma del perfil (por su RemoteName, o el
+  nombre de su Include si no lo lleva). Era cualquier fichero de la carpeta
+  del destino (Fable, revision de la 1.22.2; David: "si, tiene razon
+  Fable"). }
+function ExeNoDesplegado(const AProj, AProf, AExe: string): string;
+var
+  Nombres: TArray<string>;
+begin
+  Result := '';
+  var Plat := PlataformaDelPerfil(AProf);
+  // el binario del proyecto, con el nombre que tiene en el destino
+  if SameText(AExe, BinarioDelDestino(TPath.GetFileNameWithoutExtension(AProj), Plat)) then
+    Exit;
+  var Manifiesto := ManifiestoDe(AProj);
+  Nombres := [];
+  if TFile.Exists(Manifiesto) then
+  begin
+    var M := LeeTexto(Manifiesto, [ltJaula]);
+    for var E in EntradasDelManifiesto(M) do
+      if SameText(E.Plataforma, Plat) then
+      begin
+        var N := ValorDentro(M, 'RemoteName', E.Tramo).Trim;
+        if N = '' then
+          N := TPath.GetFileName(AtributoDeTramo(M, E.Tramo, 'DeployFile', 'Include').Trim);
+        if (N <> '') and not MatchText(N, Nombres) then
+          Nombres := Nombres + [N];
+      end;
+  end;
+  if not MatchText(AExe, Nombres) then
+    Result := MsgFmt(SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT,
+      [AExe, Plat, ONinguno(string.Join(', ', Nombres))]);
+end;
+
 function RemoteRunCmd(const Params: TDelphiPAServerParams): string;
 var
   Prof, Proj, ExeName, Denied: string;
@@ -1207,6 +1241,12 @@ begin
   if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
      ExeName.Contains('..')) then
     Exit(MsgText(SR_PASERVER_RUN_EXENAME));
+  if ExeName <> '' then
+  begin
+    Denied := ExeNoDesplegado(Proj, Prof, ExeName);
+    if Denied <> '' then
+      Exit(Denied);
+  end;
   Denied := ShellArgDenied(Prof + ' ' + ExeName + ' ' + Params.Args);
   if Denied <> '' then
     Exit(Denied);

@@ -99,6 +99,17 @@ the MCP `initialize` response (`serverInfo.version`).
   valid name when it declares none, as msbuild) - and a configuration the
   project does not declare is `CFG-107` everywhere; `CFG-116` is gone
   (`tests/test_contratos_1222.py`).
+- **What runs on a target is what the operator allowed, and only that.**
+  Claude Fable 5.1 measured through Hermes (2026-10-23) that a project the
+  agent created with the name of an allowed one ran the binary the allowed
+  one had deployed, and read in the code that the deploy did not ask the
+  list at all, so a homonym could replace the allowed project's files on the
+  target. Now `delphi_build target=Deploy` through a profile asks the same
+  `RemoteRunProjects` as `remote-run` (`RUN-007`); `kill` and `output` touch
+  only a job this server started for that project and profile (`RUN-021`;
+  any id of the right shape was taken); and `exe=` runs only the project
+  binary or a file its `.deployproj` lists for that platform (`PAS-063`;
+  it was any file of the deploy folder) (`tests/test_remoterun.py`).
 - **The wildcard works in every allowlist of `settings.ini`.** `RemoteHosts`
   took `*` or `0.0.0.0`, `RemoteRunProjects` took `all` or `*`, and
   `GitRemotes` and `AdbAllowedDevices` took none, so `GitRemotes=*` refused

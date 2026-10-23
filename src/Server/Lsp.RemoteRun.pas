@@ -71,6 +71,10 @@ function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
   que teclas espera el destino. }
 function PlataformaDelPerfil(const AProfile: string): string;
 
+{ El nombre del binario ABase para el sistema del destino (EL nombrador; la
+  nota larga, en la implementacion). Publico para el exe= de remote-run. }
+function BinarioDelDestino(const ABase, APlataforma: string): string;
+
 { EL paclient.exe de ESTE servidor: DELPHI_MCP_PACLIENT si apunta a un
   fichero (la bateria lo apunta a un stub), si no el bin\paclient.exe del
   Delphi del servidor (DiscoverRadStudio) - nunca el de otra instalacion.
@@ -174,11 +178,19 @@ uses
   Lsp.Casa,
   Lsp.ProcessLaunch, // TrocearArgs: el argv que remote-run da al programa
   Lsp.Dproj,         // ExtensionDeEjecutable, SistemaDePlataforma: lo que es cada plataforma
+  Lsp.Rutas,         // FormaLarga: el proyecto dueno de un trabajo, por su ruta larga
   Lsp.Args;
 
 var
   GNodoLock: TCriticalSection;
   GNodoAlDia: TStringList; // perfiles con nodo comprobado en este proceso
+  // los trabajos que ESTE proceso arranco, jobId=perfil<tab>proyecto: kill y
+  // output solo tocan uno de aqui, del mismo perfil y proyecto. Valia
+  // cualquier id con el alfabeto bueno: el de un proyecto homonimo o el de
+  // otra credencial (Fable, revision de la 1.22.2; David: "si, tiene razon
+  // Fable")
+  GTrabajosLock: TCriticalSection;
+  GTrabajos: TStringList;
 
 const
   POLL_MS = 1500;
@@ -478,6 +490,34 @@ begin
       Exit(False);
 end;
 
+// el dueno de un trabajo: su perfil y la ruta larga de su proyecto
+function DuenoDeTrabajo(const AProfile, ADprojPath: string): string;
+begin
+  Result := LowerCase(AProfile.Trim) + #9 + LowerCase(FormaLarga(ADprojPath));
+end;
+
+procedure ApuntaTrabajo(const AJobId, AProfile, ADprojPath: string);
+begin
+  GTrabajosLock.Enter;
+  try
+    GTrabajos.Values[AJobId] := DuenoDeTrabajo(AProfile, ADprojPath);
+  finally
+    GTrabajosLock.Leave;
+  end;
+end;
+
+// AJobId lo arranco ESTE proceso para ese perfil y ese proyecto
+function TrabajoNuestro(const AJobId, AProfile, ADprojPath: string): Boolean;
+begin
+  GTrabajosLock.Enter;
+  try
+    Result := (GTrabajos.IndexOfName(AJobId) >= 0) and
+      (GTrabajos.Values[AJobId] = DuenoDeTrabajo(AProfile, ADprojPath));
+  finally
+    GTrabajosLock.Leave;
+  end;
+end;
+
 { Trae <ADeployRel>/<job>.out del target y lo parte: el entorno grafico,
   lo que escribio el programa y, si TERMINO, su codigo. EL lector de ese
   fichero: remote-run mientras espera y output despues. False si no se
@@ -555,6 +595,7 @@ begin
   // Por EL nombrador (Lsp.Casa.SelloUnico): la nota del deploy bloqueado
   // lo busca con su patron.
   JobId := SelloUnico;
+  ApuntaTrabajo(JobId, AProfile, ADprojPath);
   // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a
   // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Casa).
   TmpDir := ServerTempDir('remoterun');
@@ -692,11 +733,14 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 var
   Rc: Integer;
 begin
-  if not JobIdValido(AJobId) then
+  if not JobIdValido(AJobId) or not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
   begin
     Result := TJSONObject.Create;
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
+    if JobIdValido(AJobId) then
+      Result.AddPair('error', MsgFmt(SR_REMOTERUN_JOB_AJENO_FMT, [AJobId]))
+    else
+      Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
     Exit;
   end;
   Result := RemoteRun(AProfile, ADprojPath, '@kill', [AJobId], 20000);
@@ -723,6 +767,12 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
+    Exit;
+  end;
+  if not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', MsgFmt(SR_REMOTERUN_JOB_AJENO_FMT, [AJobId]));
     Exit;
   end;
   Pc := PaClientPath;
@@ -900,8 +950,12 @@ end;
 initialization
   GNodoLock := TCriticalSection.Create;
   GNodoAlDia := TStringList.Create;
+  GTrabajosLock := TCriticalSection.Create;
+  GTrabajos := TStringList.Create;
 
 finalization
+  GTrabajos.Free;
+  GTrabajosLock.Free;
   GNodoAlDia.Free;
   GNodoLock.Free;
 

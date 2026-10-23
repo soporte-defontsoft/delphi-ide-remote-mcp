@@ -2139,6 +2139,14 @@ begin
     var HostDenegado := ProfileHostDenied(Perfil);
     if HostDenegado <> '' then
       raise Exception.Create(HostDenegado);
+    // ...y un proyecto que el operador deja ejecutar en un destino (SU lista,
+    // RemoteRunProjects, por LA puerta de remote-run): el deploy lo deja en
+    // <usuario>-<perfil>/<Nombre>/, donde remote-run ejecuta lo que haya, y
+    // un homonimo de cualquier carpeta pisaba la del permitido (Fable,
+    // revision de la 1.22.2; David: "si, tiene razon Fable")
+    var NoEjecutable := RemoteRunProjectDenied(ADprojPath);
+    if NoEjecutable <> '' then
+      raise Exception.Create(NoEjecutable);
   end;
   // The deployment targets address the remote machine through $(Profile)
   // (their PAClient task takes ProfileName="$(Profile)"). Vetted at the gate

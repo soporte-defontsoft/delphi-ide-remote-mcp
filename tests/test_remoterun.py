@@ -55,6 +55,14 @@ open(SCRIPT, 'w', encoding='utf-8').write(
 PRJDIR = os.path.join(BASE, 'proj'); os.makedirs(PRJDIR)
 DPROJ = os.path.join(PRJDIR, PROJNAME + '.dproj')
 open(DPROJ, 'w', encoding='utf-8').write('<Project/>')
+# su .deployproj lista, para Win64, los dos ficheros con los que se miden las barreras del LANZADOR (uno que no
+# esta en el destino y un script): desde la 1.22.2 exe= solo vale lo que el proyecto despliega (PAS-063, antes)
+open(os.path.join(PRJDIR, PROJNAME + '.deployproj'), 'w', encoding='utf-8').write(
+    '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+    '    <ItemGroup Condition="\'$(Platform)\'==\'Win64\'">\n'
+    + ''.join('        <DeployFile Include="%s"><RemoteDir>Saluda\\</RemoteDir><RemoteName>%s</RemoteName>'
+              '<DeployClass>File</DeployClass></DeployFile>\n' % (n, n) for n in ('noexiste.exe', 'run.py')) +
+    '    </ItemGroup>\n</Project>\n')
 
 # paclient stub: a .cmd that calls python on the stub script
 STUB = os.path.join(BASE, 'paclient.cmd')
@@ -388,6 +396,28 @@ try:
               mc.es(r, 'SR_READ_ONLY_FMT') and 'project=' in r and 'nodeOutput' not in r, r[:250])
 finally:
     srv_ro.mata()
+
+# ---- La identidad de remote-run (Fable, revision de la 1.22.2; David: "si, tiene razon Fable"): kill y output solo
+# con un jobId que ESTE servidor emitio para ese perfil y proyecto (valia cualquier id con el alfabeto bueno);
+# exe= solo el binario del proyecto o lo que su .deployproj despliega (valia cualquier fichero de la carpeta del
+# destino); y el deploy por la MISMA lista que remote-run (un homonimo pisaba la carpeta del permitido) ----
+for cmd in ('kill', 'output'):
+    r = call('delphi_paserver', {'command': cmd, 'name': PROFILE, 'project': DPROJ,
+                                 'job': '20991231-235959999-deadbeef'}, t=120)
+    check('ID1 %s con un jobId que este servidor no emitio: RUN-021 (ROJO contra r1222m: valia el alfabeto)' % cmd,
+          mc.es(r, 'SR_REMOTERUN_JOB_AJENO_FMT'), r[:300])
+OTRO = os.path.join(DEPLOY, 'otro.exe')
+shutil.copy(APP, OTRO)
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'otro.exe',
+                             'args': '"%s"' % SCRIPT.replace(chr(92), '/'), 'timeoutms': 30000}, t=180)
+check('ID2 exe= de un nativo de la carpeta que el proyecto no despliega: PAS-063 y nada ejecutado (ROJO: corria)',
+      mc.es(r, 'SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT') and 'hola desde el target' not in r, r[:300])
+ODIR = os.path.join(BASE, 'otro')
+call('delphi_create', {'kind': 'project-console', 'name': 'Otro', 'dir': ODIR})
+r = call('delphi_build', {'project': os.path.join(ODIR, 'Otro.dproj'), 'platform': 'Win64', 'target': 'Deploy',
+                          'profile': PROFILE}, t=600)
+check('ID3 deploy de un proyecto que RemoteRunProjects no lista: RUN-007, sin compilar ni desplegar (ROJO: el '
+      'deploy no miraba la lista)', mc.es(r, 'SR_REMOTERUN_PROJECT_DENIED_FMT') and 'Otro' in r, r[:300])
 
 srv.mata()
 mc.fin('remote-run')

@@ -1969,8 +1969,8 @@ const
     'the target (<user>-<profile>/<Project>/<Project>, what target=Deploy ' +
     'wrote) - nothing else there can be run.';
   SP_PASERVER_EXE =
-    'remote-run OPTIONAL: another file of that same deploy folder to run ' +
-    'instead of the project binary - a plain file name, no path.';
+    'remote-run OPTIONAL: a file its .deployproj lists, to run instead of ' +
+    'its binary - a name, no path.';
   SP_PASERVER_ARGS =
     'remote-run: optional command-line arguments for the program (no shell ' +
     'metacharacters)';
@@ -2033,6 +2033,14 @@ const
   SR_REMOTERUN_BADJOB =
     '[RUN-001 INVALID_PARAM] "job" is not a job id of this server ' +
     '(date-time-fragment, as remote-run returns it).';
+  { kill/output de un trabajo que este proceso no arranco para ese perfil y
+    proyecto (1.22.2: valia cualquier id con el alfabeto bueno) }
+  SR_REMOTERUN_JOB_AJENO_FMT =
+    '[RUN-021 NOT_FOUND] Job %s was not started by this server for this ' +
+    'project and profile: kill and output only touch a job remote-run ' +
+    'started here, with the same project and profile. A server knows only ' +
+    'the jobs its own process started: after a restart, an older job can ' +
+    'only be stopped on the target. Nothing was stopped or read.';
   SN_REMOTERUN_KILL_FMT =
     '[RUN-002] If it hung or you no longer need it: delphi_paserver ' +
     'command=kill profile=%s project=<the same .dproj> job=%s. It kills ' +
@@ -2068,7 +2076,7 @@ const
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     '[RUN-007 DENIED] The project "%s" is not in the list of projects ' +
-    'this server allows to run on a target ([Workspace.<name>] ' +
+    'this server allows to deploy to and run on a target ([Workspace.<name>] ' +
     'RemoteRunProjects). Allowed: %s. Only the operator extends that list, ' +
     'in the server''s settings.ini: it is what may run on a target, so no ' +
     'tool changes it - ask the operator.';
@@ -2104,6 +2112,12 @@ const
     '[PAS-006 INVALID_PARAM] "exe" is optional and, if given, must be a file ' +
     'NAME of that project''s deploy folder (no "/", no "\" and no ".."). ' +
     'By default the project binary is run.';
+  { exe= que el proyecto no despliega en esa plataforma (1.22.2: valia
+    cualquier fichero de la carpeta del destino) }
+  SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT =
+    '[PAS-063 INVALID_PARAM] "exe" %s is not a file this project deploys on ' +
+    '%s: exe runs the project binary or a file its .deployproj lists for ' +
+    'that platform (%s). Nothing was run.';
 
   SR_REMOTERUN_NO_PACLIENT =
     '[RUN-008 INTERNAL] The RAD Studio this server uses ships no ' +
@@ -2111,7 +2125,7 @@ const
 
   SR_REMOTERUN_NOPROJLIST =
     '[RUN-009 DENIED] This workspace does not declare ' +
-    'RemoteRunProjects, so it cannot run ANYTHING on a target (it fails ' +
+    'RemoteRunProjects, so it cannot deploy or run ANYTHING on a target (it fails ' +
     'closed: what is not declared does not exist). The operator adds ' +
     'RemoteRunProjects=<proj1>;<proj2> to this workspace''s section in ' +
     'settings.ini.';
@@ -9718,8 +9732,9 @@ const
 
   SP_BUILD_TARGET =
     'Build (full, default) | Make (incremental) | Clean | Deploy (builds ' +
-    'first, then deploys: to the PAServer of "profile" for Linux/macOS, or ' +
-    'packages the app for Android). After switching platforms use Build.';
+    'first, then deploys: to the PAServer of "profile" for Linux/macOS (a ' +
+    'project in RemoteRunProjects), or packages the app for Android). After ' +
+    'switching platforms use Build.';
 
   SP_BUILD_PROFILE =
     'target=Deploy on a PAServer platform: the connection profile ' +

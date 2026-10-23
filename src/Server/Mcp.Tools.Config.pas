@@ -1148,21 +1148,21 @@ begin
   // "el ultimo <itemgroup antes", y un <DeployFile .../> vacio se comia la
   // entrada siguiente hasta su </DeployFile>
   Result := [];
-  for var G in GruposDe(AXml, 'ItemGroup') do
-    if SameText(PlataformaDeGrupoDeDespliegue(G.Condicion), APlatform) then
-      for var T in TramosEnGrupo(AXml, 'DeployFile', G, True) do
-      begin
-        if not SameDeployFile(AtributoDeTramo(AXml, T, 'DeployFile', 'Include'), AProyecto, AFile) then
-          Continue;
-        var Plat, Cfg: string;
-        if not CondicionDePlataformaYConfig(AtributoDeTramo(AXml, T, 'DeployFile', 'Condition'), Plat, Cfg) or
-           (Cfg = '') then
-          if not CondicionDePlataformaYConfig(G.Condicion, Plat, Cfg) then
-            Cfg := '';
-        if (AConfig <> '') and (Cfg <> '') and not SameText(Cfg, AConfig) then
-          Continue;
-        Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
-      end;
+  for var E in EntradasDelManifiesto(AXml) do
+  begin
+    var T := E.Tramo;
+    if not SameText(E.Plataforma, APlatform) or
+       not SameDeployFile(AtributoDeTramo(AXml, T, 'DeployFile', 'Include'), AProyecto, AFile) then
+      Continue;
+    var Plat, Cfg: string;
+    if not CondicionDePlataformaYConfig(AtributoDeTramo(AXml, T, 'DeployFile', 'Condition'), Plat, Cfg) or
+       (Cfg = '') then
+      if not CondicionDePlataformaYConfig(E.Grupo.Condicion, Plat, Cfg) then
+        Cfg := '';
+    if (AConfig <> '') and (Cfg <> '') and not SameText(Cfg, AConfig) then
+      Continue;
+    Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
+  end;
 end;
 
 function AddDeployFile(const ADproj, ARawPlatform, ARawPath, ARawRemoteDir, ARawConfig: string): string;
@@ -1406,19 +1406,13 @@ begin
   // EL analisis; un DeployFile sin <RemoteDir> deja el destino vacio
   var M := LeeTexto(Manifiesto, [ltJaula]);
   Solo := TJSONObject.Create;
-  for var G in GruposDe(M, 'ItemGroup') do
+  for var E in EntradasDelManifiesto(M) do
   begin
-    var Plat := PlataformaDeGrupoDeDespliegue(G.Condicion);
-    if Plat = '' then
+    if (E.Plataforma = '') or not SameText(ValorDentro(M, 'DeployClass', E.Tramo), CLASE_FICHERO) then
       Continue;
-    for var T in TramosEnGrupo(M, 'DeployFile', G, True) do
-    begin
-      if not SameText(ValorDentro(M, 'DeployClass', T), CLASE_FICHERO) then
-        Continue;
-      var Include := AtributoDeTramo(M, T, 'DeployFile', 'Include');
-      if not Listada(Include, Plat, Entradas) then
-        Pon(Solo, Plat, Include + ' -> ' + ValorDentro(M, 'RemoteDir', T));
-    end;
+    var Include := AtributoDeTramo(M, E.Tramo, 'DeployFile', 'Include');
+    if not Listada(Include, E.Plataforma, Entradas) then
+      Pon(Solo, E.Plataforma, Include + ' -> ' + ValorDentro(M, 'RemoteDir', E.Tramo));
   end;
   if Solo.Count = 0 then
     Solo.Free
