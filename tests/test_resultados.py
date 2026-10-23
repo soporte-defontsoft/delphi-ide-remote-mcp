@@ -353,8 +353,9 @@ try:
     llama('delphi_changeset', {'command': 'rollback', 'id': cid2})
 
     res, sc, t = llama('delphi_git', {'command': 'status', 'repo': NOREPO})
+    # sin repo, desde la 1.22.2 su propio NOT_FOUND (GIT-082), con lo que dijo git
     check('E11 git con exit<>0 es un fallo que lo dice (y trae la salida de git)',
-          res.get('isError') is True and mc.abre(t, 'SR_GIT_EXIT_FMT') and 'not a git repository' in t,
+          res.get('isError') is True and mc.abre(t, 'SR_GIT_NO_ES_REPO_FMT') and 'not a git repository' in t,
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
     BAD = os.path.join(JAIL, 'subida.bin')

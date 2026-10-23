@@ -353,6 +353,23 @@ begin
       if not TRegEx.IsMatch(Params.Pattern.Trim, '\A(?:' + PATRON_CAR_IDENT + '|[*?.\-])+\z') then
         Exit(MsgText(SR_WS_PATTERN_DEBE_SER_MASCARA));
       Masks := [Params.Pattern.Trim];
+      // con UN fichero por raiz que la mascara no elige se buscaba en el igual,
+      // en silencio (Opus en Hermes, 1.22.1); si lo elige, por el MISMO juez
+      // que el paseo (GetFiles, la mascara de Windows), vale
+      if SingleFile then
+      begin
+        var Elegido := False;
+        try
+          for var Elegible in TDirectory.GetFiles(TPath.GetDirectoryName(Params.Root), Masks[0],
+            TSearchOption.soTopDirectoryOnly) do
+            if SameText(TPath.GetFileName(Elegible), TPath.GetFileName(Params.Root)) then
+              Elegido := True;
+        except
+          // una carpeta que no se deja listar: la mascara no lo elige
+        end;
+        if not Elegido then
+          Exit(MsgFmt(SR_SEARCH_PATTERN_CON_FICHERO_FMT, [Masks[0], Params.Root]));
+      end;
     end;
     var Targets: TArray<string> := [];
     if SingleFile then

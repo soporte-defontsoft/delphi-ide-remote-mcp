@@ -117,6 +117,10 @@ REGLAS = [
     ('.sdk leido a mano', r"EndsWith\('\.sdk'\)",
      [('Lsp.Discovery.pas', 'NombreDeSdk'), ('Lsp.Discovery.pas', 'NombreSinSdk')],
      'NombreSinSdk es la inversa; "es un .sdk" se pregunta al nombrador'),
+    ('el manifiesto de despliegue a mano', r"'\.deployproj'",
+     [('Lsp.Patch.pas', '*')],
+     'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Patch, 1.22.2): tres compositores y tres '
+     'reconocedores lo escribian a mano en el build, la mudanza y config'),
     ('__delphi-temp', r"'__delphi-temp",
      [('Lsp.Casa.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
     ('__delphi-patch', r"'__delphi-patch",
@@ -1056,6 +1060,7 @@ PLANTADO = {
     'la nota de codificacion de un form a mano': "  N := NotaDeFormAncho(Nombre, Enc);",
     'un campo de conexion de un perfil': "  H := TagValue(Xml, 'Profile_host');",
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
+    'el manifiesto de despliegue a mano': "  F := TPath.ChangeExtension(D, '.deployproj');",
     '__delphi-temp': "  D := TPath.Combine(Raiz, '__delphi-temp');",
     '__delphi-patch': "  D := TPath.Combine(Raiz, '__delphi-patch');",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",

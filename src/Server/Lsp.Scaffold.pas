@@ -920,6 +920,10 @@ begin
   if (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'frame-vcl') and
      (Kind <> 'frame-fmx') and (Kind <> 'datamodule') then
     Exit(MsgText(SR_CREATE_KIND_DEBE_SER_FORM));
+  // sin project, la puerta de escribir contestaba su GUARD-018 generico ("no
+  // path given"): lo que falta es el proyecto (Opus en Hermes, 1.22.1)
+  if ADprPath.Trim = '' then
+    Exit(MsgText(SR_CREATE_FORM_NEED_PROJECT));
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;

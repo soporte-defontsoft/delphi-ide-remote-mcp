@@ -276,6 +276,8 @@ const
   SOURCE_EXTS: array [0 .. 3] of string = ('.pas', '.dpr', '.dpk', '.inc');
   DESIGNER_EXTS: array [0 .. 1] of string = ('.dfm', '.fmx');
   PROJECT_EXTS: array [0 .. 1] of string = ('.dproj', '.groupproj');
+  // el manifiesto de despliegue del IDE: al lado del .dproj y con su nombre
+  EXT_MANIFIESTO = '.deployproj';
 
 { Los designers que puede tener una unidad: uno por DESIGNER_EXTS, al lado y
   con su mismo nombre (la regla del IDE), existan o no, en el orden de la
@@ -301,6 +303,14 @@ function EsRutaDeProyecto(const APath: string): Boolean;
   (EsRutaDeProyecto) o su manifiesto de despliegue (.deployproj). Lo que de
   ellos escribe el servidor lo juzga antes el parser del IDE (PatchSaveText). }
 function EsXmlDelIde(const APath: string): Boolean;
+{ Si APath es un manifiesto de despliegue del IDE (EXT_MANIFIESTO), por como
+  acaba: tambien el Project de un <Import> ($(MSBuildProjectName).deployproj),
+  que no es una ruta. EL predicado: estaba a mano en el build, en la mudanza y
+  en EsXmlDelIde (paisaje medido el 23-oct-2026). }
+function EsManifiesto(const APath: string): Boolean;
+{ ...y el de ADproj, al lado y con su nombre (la regla del IDE). EL
+  compositor: estaba escrito tres veces (dos en el build y uno en config). }
+function ManifiestoDe(const ADproj: string): string;
 { Si APath es un fichero de DELPHI: lo del motor de Pascal (EsDelMotorPascal:
   fuentes y designers) o un proyecto del IDE (PROJECT_EXTS). Lo que
   delphi_textedit no edita y lo que el changeset no mueve ni borra suelto -
@@ -1456,10 +1466,30 @@ begin
   end;
 end;
 
+{ APath con el nombre de su ultimo trozo como lo tiene el DISCO (las
+  mayusculas con que se creo); APath tal cual si no existe. }
+function ComoEnDisco(const APath: string): string;
+var
+  FD: TWin32FindData;
+  H: THandle;
+begin
+  Result := APath;
+  H := FindFirstFile(PChar(APath), FD);
+  if H = INVALID_HANDLE_VALUE then
+    Exit;
+  Winapi.Windows.FindClose(H);
+  Result := TPath.Combine(TPath.GetDirectoryName(APath), FD.cFileName);
+end;
+
 procedure SustituyePorRenombre(const ATmp, APath: string);
 var
   Antes: TWin32FileAttributeData;
+  Destino: string;
 begin
+  // con el nombre como esta en el DISCO: MoveFileEx deja el que se le da, y
+  // escribir Mcp.Tools.ADB.pas renombraba Mcp.Tools.Adb.pas (medido el
+  // 23-oct-2026 con un delphi_edit; git, que no distingue, no lo ensena)
+  Destino := ComoEnDisco(APath);
   // la fecha de CREACION de lo que se sustituye se conserva: el renombre deja
   // la del temporal (medido por el revisor de P3: no hay tunneling), y el
   // vault (file.ctime de Obsidian y Dataview) o quien ordene por ella veia
@@ -1474,7 +1504,7 @@ begin
   var Codigo: DWORD := 0;
   for var Intento := 1 to 5 do
   begin
-    Renombrado := MoveFileEx(PChar(ATmp), PChar(APath), MOVEFILE_REPLACE_EXISTING);
+    Renombrado := MoveFileEx(PChar(ATmp), PChar(Destino), MOVEFILE_REPLACE_EXISTING);
     if Renombrado then
       Break;
     // el codigo de Windows ANTES de borrar el temporal (despues salia 0)
@@ -1677,7 +1707,17 @@ end;
 
 function EsXmlDelIde(const APath: string): Boolean;
 begin
-  Result := EsRutaDeProyecto(APath) or SameText(TPath.GetExtension(APath), '.deployproj');
+  Result := EsRutaDeProyecto(APath) or EsManifiesto(APath);
+end;
+
+function EsManifiesto(const APath: string): Boolean;
+begin
+  Result := APath.Trim.EndsWith(EXT_MANIFIESTO, True);
+end;
+
+function ManifiestoDe(const ADproj: string): string;
+begin
+  Result := TPath.ChangeExtension(ADproj, EXT_MANIFIESTO);
 end;
 
 function EsFicheroDeDelphi(const APath: string): Boolean;

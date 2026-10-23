@@ -311,6 +311,12 @@ const
   SN_SEARCH_GRANDES_FMT =
     '[SEARCH-006] %d file(s) larger than %d MB were not searched: %s';
 
+  { pattern con un FICHERO por raiz: se ignoraba en silencio (1.22.2) }
+  SR_SEARCH_PATTERN_CON_FICHERO_FMT =
+    '[SEARCH-009 INVALID_PARAM] "pattern" (%s) picks the files of a folder, ' +
+    'and root is ONE file (%s) that it does not pick. Nothing was searched: ' +
+    'drop pattern to search that file, or give its folder as root.';
+
   SR_SEARCH_FICHERO_GRANDE_FMT =
     '[SEARCH-007 INVALID_PARAM] %s is %d MB, more than the %d MB a search ' +
     'reads. Read the part you need with delphi_read (fromline/toline).';
@@ -376,10 +382,13 @@ const
     'that platform. Add, remove or rename it with delphi_edit in the ' +
     'right branch. Nothing was changed.';
 
-  SN_COMPONENTS_FILTER_IGNORED_FMT =
-    '[COMP-001] (I IGNORED filter="%s": with platform= this gives you ' +
-    'the library paths of that platform, which is a different question. ' +
-    'To search the installed packages, call without platform.)';
+  { Un parametro que no va con el modo (Lsp.Guard.ParametroQueNoVa, como las
+    hermanas; era una nota y la tool contestaba igual, 1.22.2) }
+  SR_COMPONENTS_NO_VA_CON_MODO_FMT =
+    '[COMP-011 INVALID_PARAM] "%s" does not go with %s (it would be ' +
+    'ignored): platform= gives the library paths of that platform, a ' +
+    'different question from the installed packages. Nothing was done: %s ' +
+    'takes %s.';
 
   SN_REPORT_KIND_FMT =
     #10 +
@@ -5377,9 +5386,10 @@ const
 
   SR_DESIGNER_COMPONENTE_NO_ESTA_FMT =
     '[DSGN-078 NOT_FOUND] There is no component %s in %s. Nothing was ' +
-    'written. Its components: %s. To add one, command=insert; one inside an ' +
-    'inline frame (Frame1.Name) belongs to the frame''s own file: edit it ' +
-    'there.';
+    'written. Its components: %s. To add one, command=insert. One of an ' +
+    'inline frame goes by its path (Frame11.Edit1); this form holds only ' +
+    'those it overrides (an inherited block), the rest are in the ' +
+    'frame''s own file.';
 
   SR_DESIGNER_INSERT_NO_VISUAL_FMT =
     '[DSGN-079 INVALID_PARAM] %s is not a visual control (it does not descend ' +
@@ -5438,7 +5448,8 @@ const
   SR_DESIGNER_DENTRO_DE_INLINE_FMT =
     '[DSGN-083 INVALID_PARAM] %s is part of the frame %s placed in this form ' +
     '(inline): its components belong to the frame''s own file. Insert, ' +
-    'delete, rename or move them there.';
+    'delete, rename or move them there; their properties can be set here, ' +
+    'by their path (Frame11.Edit1).';
 
   SR_DESIGNER_HEREDADO_FMT =
     '[DSGN-084 INVALID_PARAM] %s is inherited from the ancestor form: it is ' +
@@ -6096,9 +6107,12 @@ const
     1.21.2). Se juzga la ruta, exista o no: decir "existe" de una de fuera
     seria un oraculo. Medido en la 1.20.1: un RcCompile y un Manifest_File
     de fuera acababan dentro del .res y del exe. %s = el elemento, %s = el
-    fichero de proyecto que lo lleva, %s = el valor tal como esta escrito. }
+    fichero de proyecto que lo lleva, %s = el trozo como lo lee el build
+    (expandido y desescapado), %s = como esta escrito, si es otro
+    (SF_BUILD_LECTURA_ESCRITA_FMT): remove-searchpath toma la entrada ESCRITA
+    (Qwen y Opus en Hermes, 1.22.1: un %2E%2E citado como .. no se encontraba). }
   SR_BUILD_LECTURA_FUERA_FMT =
-    '[BUILD-050 DENIED] I will not build this. <%s> in %s names %s, a ' +
+    '[BUILD-050 DENIED] I will not build this. <%s> in %s names %s%s, a ' +
     'path the build READS that is OUTSIDE what this server lets you read ' +
     '(the workspace, the IDE and its library zone). The compiler and the ' +
     'resource compiler open it with the server''s permissions, and what ' +
@@ -6109,6 +6123,8 @@ const
     'configuration), remove-unit / remove-searchpath for a unit or a search ' +
     'path - they take the entry as the project lists it, even one that ' +
     'points outside.';
+
+  SF_BUILD_LECTURA_ESCRITA_FMT = ' (written in the project as %s)';
 
   SR_BUILD_LECTURA_NO_VERIFICABLE_FMT =
     '[BUILD-051 DENIED] I will not build this. <%s> in %s names %s, which ' +
@@ -6644,8 +6660,12 @@ const
     'kind=project-package (a runtime package, .dpk + .dproj) and ' +
     'kind=project-test (a DUnitX runner with its first fixture, for ' +
     'delphi_test). (Then there are form-vcl, form-fmx, frame-vcl, ' +
-    'frame-fmx, datamodule and unit, which go INSIDE a project that ' +
-    'already exists.)';
+    'frame-fmx and datamodule, which go INSIDE a project that already ' +
+    'exists, and unit and include, which can also go on their own.)';
+  SR_CREATE_FORM_NEED_PROJECT =
+    '[CREATE-036 INVALID_PARAM] A form, a frame or a data module needs ' +
+    '"project" (the .dpr, .dproj or .dpk it goes in): it is registered in ' +
+    'it as it is created, as the IDE does. Nothing was written.';
 
   { Un proyecto de test nace verde y con el camino escrito: como se anaden
     fixtures y como se corre. Hermes tuvo que recibir el esqueleto por nota
@@ -7046,7 +7066,7 @@ const
     '[PAS-052 INTERNAL] I cannot check the profile''s host: no RAD Studio ' +
     'installation was found on this server. Nothing was dialed or deployed.';
   SR_PROFILE_NO_EXISTE_FMT =
-    '[PAS-053 DENIED] The connection profile "%s" does not exist on this ' +
+    '[PAS-053 NOT_FOUND] The connection profile "%s" does not exist on this ' +
     'server, so I cannot check its host against RemoteHosts: nothing was ' +
     'dialed or deployed. delphi_paserver command=profiles lists the ones there are.';
   SR_PROFILE_NO_LEIDO_FMT =
@@ -8456,6 +8476,11 @@ const
     'diff | log | show | branch | switch | merge | stash | add | commit ' +
     '| init | push | tag | config | clone | pull | fetch | ls-remote | worktree | restore | untrack';
 
+  { Una carpeta que no esta en un repo: lo dice git (con LC_ALL=C, GitCorre) }
+  SR_GIT_NO_ES_REPO_FMT =
+    '[GIT-082 NOT_FOUND] %s is not inside a git repository (git: "%s"). ' +
+    'Nothing was done: command=init makes one there, clone brings one.';
+
   SR_GIT_EXIT_FMT =
     '[GIT-036 DENIED] exit=%d - git ended with an error; its own answer ' +
     'follows and says why. A command that fails can still have changed ' +
@@ -8690,6 +8715,11 @@ const
   SN_LSP_HINT_INSIDE_CALL =
     ' [LSP-023] [hint: the position must be INSIDE the call parentheses, ' +
     'right after ( or ,]';
+
+  { Un enlace del motor en un hover, como ruta de la casa (1.22.2): el texto
+    del enlace, la ruta y, si la trae, la linea (1-based, la de delphi_read) }
+  SF_LSP_ENLACE_CON_LINEA_FMT = '%s (%s, line %s)';
+  SF_LSP_ENLACE_FMT = '%s (%s)';
 
   SN_LSP_HINT_HOVER_USAGES =
     ' [LSP-024] [hint: hover only answers on usages, not on declarations]';
@@ -10252,7 +10282,8 @@ const
     '| ls-remote | worktree. Each takes ITS fields, never free arguments. ' +
     'merge and pull: always --ff-only (one needing a commit is refused). ' +
     'push adds to the remote, never overwrites or deletes. stash never ' +
-    'drops: push with paths parks ONLY those and sets them back to HEAD - ' +
+    'discards (no drop; pop keeps it on a conflict): push with paths ' +
+    'parks ONLY those and sets them back to HEAD - ' +
     'how you discard a file''s changes without losing them. restore: ' +
     'always --staged (undoes an add). untrack: rm --cached (git stops ' +
     'following those paths; the files stay on disk). branch lists.';
@@ -10781,8 +10812,8 @@ const
     '  %d UNCHANGED (it already says that): %s';
 
   SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT =
-    '[EDIT-100 INVALID_PARAM] %s  encoding=%s  eol=%s  %s'#10 +
-    'The file has %d lines; from=%d is past the end.';
+    '[READ-010 INVALID_PARAM] %s  encoding=%s  eol=%s  %s'#10 +
+    'The file has %d lines; fromline=%d is past the end.';
 
   SK_EDIT_LECTURA_NUMERADA_FMT =
     '[READ-005] %s  encoding=%s  eol=%s  %s'#10 +

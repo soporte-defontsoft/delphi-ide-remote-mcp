@@ -1078,8 +1078,7 @@ end;
 
 function DeployProjPath(const ADproj: string): string;
 begin
-  Result := TPath.Combine(TPath.GetDirectoryName(ADproj),
-    TPath.GetFileNameWithoutExtension(ADproj) + '.deployproj');
+  Result := ManifiestoDe(ADproj); // EL compositor (Lsp.Patch)
 end;
 
 function DefaultRemoteDir(const AProjectName, APlatform, AFile: string): string;

@@ -190,6 +190,49 @@ begin
   end;
 end;
 
+{ Cada ubicacion de AResp (result: un Location o una lista) cuyo start es la
+  columna 0, con la columna del NOMBRE de esa linea por EL lector de la casa
+  (RoutineIdentCol: el de la rutina en una cabecera, si no el primer
+  identificador): definition contesta asi el cuerpo de una rutina, y
+  declaration ya lo corregia para encadenar. Solo sobre lo que ya paso por
+  NegativaDeFuera: leer el destino antes de juzgarlo es la lectura escondida
+  (medida M1). }
+procedure ColumnaEnElNombre(AResp: TJSONObject);
+
+  procedure Una(AV: TJSONValue);
+  begin
+    if not (AV is TJSONObject) then
+      Exit;
+    var Uri := TJSONObject(AV).GetValue('uri');
+    var Rng := TJSONObject(AV).GetValue('range');
+    if (Uri = nil) or not (Rng is TJSONObject) then
+      Exit;
+    var Start := TJSONObject(Rng).GetValue('start');
+    if not (Start is TJSONObject) then
+      Exit;
+    var L := TJSONObject(Start).GetValue('line');
+    var C := TJSONObject(Start).GetValue('character');
+    if (L = nil) or (C = nil) or (C.GetValue<Integer> <> 0) then
+      Exit;
+    var Col := RoutineIdentCol(TLspClient.UriToPath(Uri.Value), L.GetValue<Integer>);
+    if Col > 0 then
+    begin
+      TJSONObject(Start).RemovePair('character').Free;
+      TJSONObject(Start).AddPair('character', TJSONNumber.Create(Col));
+    end;
+  end;
+
+begin
+  if AResp = nil then
+    Exit;
+  var V := AResp.GetValue('result');
+  if V is TJSONArray then
+    for var Item in TJSONArray(V) do
+      Una(Item)
+  else
+    Una(V);
+end;
+
 { Si la linea ALine (0-based) de APath es la cabecera de una rutina CON
   cuerpo, del implementation o de un programa: por EL lector de cuerpos
   (Lsp.PascalDecl, TUnidadPas.Cuerpos). False si no se deja leer. }
@@ -984,7 +1027,7 @@ end;
   the picture, 7 of them reads). }
 function InterfaceDigest(const APath: string): TJSONObject;
 var
-  Text, Enc, L, Cur: string;
+  Text, Enc, L, Cur, Seccion: string;
   Lines, Vista: TArray<string>;
   Arr: TJSONArray;
   Obj: TJSONObject;
@@ -1035,6 +1078,7 @@ begin
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
   Cur := '';
+  Seccion := '';
   Kept := 0;
   I := 0;
   while I <= High(Lines) do
@@ -1076,10 +1120,20 @@ begin
       Inc(I);
       Continue;
     end;
-    if TRegEx.IsMatch(L, '(?i)^(type|const|var|resourcestring)[ ]*$') then
+    // la seccion en curso, y la palabra con una declaracion en la MISMA linea
+    // (const MAX = 1;): se lee la declaracion. Se perdian, y las constantes
+    // con tipo y las variables de la interfaz, que solo se aceptaban dentro
+    // de un tipo (Opus en Hermes, 1.22.1)
+    var MSec := TRegEx.Match(L, '(?i)^(type|const|var|threadvar|resourcestring)\b[ ]*(.*)$');
+    if MSec.Success then
     begin
-      Inc(I);
-      Continue;
+      Seccion := LowerCase(MSec.Groups[1].Value);
+      if (MSec.Groups.Count < 3) or (MSec.Groups[2].Value.Trim = '') then
+      begin
+        Inc(I);
+        Continue;
+      end;
+      L := MSec.Groups[2].Value.Trim;
     end;
     // which type we are inside: a flat list left the reader guessing which
     // member belonged to which class, and hid the private fields entirely -
@@ -1093,7 +1147,8 @@ begin
        TRegEx.IsMatch(L, '(?i)^(class[ ]+)?(?:' + PatronPalabraDeRutina + '|property)\b') or
        TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*=[ ]*(class|record|interface|packed|\()') or
        TRegEx.IsMatch(L, '(?i)^' + PATRON_IDENT + '[ ]*=[ ]*') or
-       ((Dueno <> nil) and TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*:[ ]*' + PATRON_IDENT)) then
+       (((Dueno <> nil) or MatchText(Seccion, ['const', 'var', 'threadvar', 'resourcestring'])) and
+        TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*:[ ]*' + PATRON_IDENT)) then
     begin
       Inc(Kept);
       if Arr.Count < 300 then
@@ -1394,6 +1449,10 @@ begin
     Resp.Free;
     Exit;
   end;
+  // ya juzgada, la columna 0 que da el motor en la cabecera de un cuerpo, en
+  // el nombre (como declaration): con 0, un hover o un rename alli caian en
+  // "procedure" (Opus en Hermes, 1.22.1)
+  ColumnaEnElNombre(Resp);
   Result := RenderResult(Resp, NoSettingsNote(Settings));
 end;
 
@@ -1446,6 +1505,32 @@ begin
   FDescription := SD_LSP_HOVER;
 end;
 
+{ Los enlaces del motor en un hover ([System.SysUtils.pas:8766](file:///C%3A/
+  .../System.SysUtils.pas#8766)) como la ruta de la casa y su linea: ninguna
+  tool toma un URI, y enmascarado salia file:///srvc%3A/..., que delphi_read
+  negaba por los dos puntos (Opus en Hermes, 1.22.1). La ruta, por EL lector
+  de URIs (TLspClient.UriToPath); el #N es la linea como la cuenta
+  delphi_read (medido: #8766, la de IntToStr en System.SysUtils.pas). }
+function EnlacesComoRutas(const AMarkdown: string): string;
+var
+  Desde: Integer;
+begin
+  Result := '';
+  Desde := 1;
+  for var M in TRegEx.Matches(AMarkdown, '\[([^\]]*)\]\((file:///[^)#\s]+)(?:#(\d+))?\)') do
+  begin
+    Result := Result + Copy(AMarkdown, Desde, M.Index - Desde);
+    var Ruta := TLspClient.UriToPath(M.Groups[2].Value);
+    // un grupo opcional que no casa no esta en Groups (Index out of bounds)
+    if (M.Groups.Count > 3) and (M.Groups[3].Value <> '') then
+      Result := Result + MsgFmt(SF_LSP_ENLACE_CON_LINEA_FMT, [M.Groups[1].Value, Ruta, M.Groups[3].Value])
+    else
+      Result := Result + MsgFmt(SF_LSP_ENLACE_FMT, [M.Groups[1].Value, Ruta]);
+    Desde := M.Index + M.Length;
+  end;
+  Result := Result + Copy(AMarkdown, Desde, MaxInt);
+end;
+
 function TDelphiHoverTool.ExecuteWithParams(const Params: TDelphiPositionParams): string;
 var
   Client: TLspClient;
@@ -1468,9 +1553,9 @@ begin
   V := Resp.FindValue('result.contents.value');
   if V <> nil then
   begin
-    // la declaracion, entre ```, es TEXTO del fuente: tal cual; el enlace y
-    // la nota, enmascarados (Lsp.Mascara.EnmascaraSalvoCodigo)
-    Result := EnmascaraSalvoCodigo(V.Value + NoSettingsNote(Settings));
+    // la declaracion, entre ```, es TEXTO del fuente: tal cual; el enlace (ya
+    // como ruta) y la nota, enmascarados (Lsp.Mascara.EnmascaraSalvoCodigo)
+    Result := EnmascaraSalvoCodigo(EnlacesComoRutas(V.Value) + NoSettingsNote(Settings));
     Resp.Free;
   end
   else

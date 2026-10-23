@@ -293,8 +293,9 @@ r = A.call('delphi_report', {'kind': 'invento', 'title': 'x', 'message': 'y', 'a
 check('F11 un kind inventado se archiva como bug PERO se dice',
       mc.es(r, 'SN_REPORT_KIND_FMT'), r[:250])
 r = A.call('delphi_components', {'platform': 'Win64', 'filter': 'algo'})
-check('F12 components avisa de que ha ignorado el filter',
-      mc.es(r, 'SN_COMPONENTS_FILTER_IGNORED_FMT'), r[:250])
+check('F12 components con platform y filter: lo dice y no contesta a medias (COMP-011, desde la 1.22.2 como '
+      'las hermanas; antes una nota y la respuesta)', mc.es(r, 'SR_COMPONENTS_NO_VA_CON_MODO_FMT') and
+      mc.resultado(r) == 'INVALID_PARAM', r[:250])
 
 A.mata()
 mc.fin('round-9 battery')

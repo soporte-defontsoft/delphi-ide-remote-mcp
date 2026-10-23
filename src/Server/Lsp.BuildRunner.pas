@@ -955,8 +955,8 @@ const
   // scaffolded by delphi_create (and some hand-written ones) lack it, and
   // without it the generated manifest is never imported - Deploy still
   // fails MSB4057 with the .deployproj sitting right there (measured).
-  DEPLOY_IMPORT = '<Import Project="$(MSBuildProjectName).deployproj" ' +
-    'Condition="Exists(''$(MSBuildProjectName).deployproj'')"/>';
+  DEPLOY_IMPORT = '<Import Project="$(MSBuildProjectName)' + EXT_MANIFIESTO + '" ' +
+    'Condition="Exists(''$(MSBuildProjectName)' + EXT_MANIFIESTO + ''')"/>';
   // el Import que hace de ancla, por su Project
   ANCHOR_PROJECT = '$(BDS)\Bin\CodeGear.Delphi.Targets';
 var
@@ -985,7 +985,7 @@ begin
       P := T.Abre;
       Ancla := T;
     end;
-    if Proyecto.ToLower.EndsWith('.deployproj') then
+    if EsManifiesto(Proyecto) then
       YaLoImporta := True;
   end;
   var Indent := '';
@@ -1047,7 +1047,7 @@ begin
   //    carries an EMPTY group for it (<ItemGroup Condition="'$(Platform)'==
   //    'Linux64'"/>, measured on GalateaFMX): msbuild then deploys nothing
   //    and still succeeds. The project output is added to such a group.
-  F := TPath.ChangeExtension(ADprojPath, '.deployproj');
+  F := ManifiestoDe(ADprojPath);
   if TFile.Exists(F) then
   begin
     if SistemaDePlataforma(APlat) <> spAndroid then
@@ -1782,9 +1782,14 @@ var
     except
       Exit; // no es una ruta (un define, una clave de version): nadie la abre
     end;
+    // el trozo como lo lee el build y, si es otro, como esta ESCRITO: la
+    // entrada que toma remove-searchpath (un %2E%2E citado como .. no se
+    // encontraba en el .dproj)
     if LugarDeLecturaDenegado(Cand, LUGARES_DEL_MOTOR) <> '' then
       Exit(MsgFmt(SR_BUILD_LECTURA_FUERA_FMT,
-        [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo]));
+        [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo,
+         IfThen(SameText(ATrozo.Trim, AValor.Escrito.Trim), '',
+           MsgFmt(SF_BUILD_LECTURA_ESCRITA_FMT, [AValor.Escrito]))]));
     // el .rc que compila brcc32: cada fichero que nombra, por EL lector. Solo
     // el guion de un RcCompile: un RcItem es un FICHERO de recurso (el .gif o
     // .png que el IDE mete como RCDATA por el .rc que genera el mismo) y ya
@@ -2236,7 +2241,7 @@ begin
   // el primer deploy Win64 a windows-local: carpeta vacia en el destino).
   if Target.Contains('Deploy') and ((Perfil <> '') or not IsLocalPlatform(Plat)) then
   begin
-    ManifestFilled := TFile.Exists(TPath.ChangeExtension(TPath.GetFullPath(ADprojPath), '.deployproj'));
+    ManifestFilled := TFile.Exists(ManifiestoDe(TPath.GetFullPath(ADprojPath)));
     EnsureDeployManifest(TPath.GetFullPath(ADprojPath), Plat, Info.RootDir,
       ManifestNew);
     ManifestFilled := ManifestFilled and ManifestNew;
@@ -2493,6 +2498,9 @@ begin
     try
     Result.AddPair('success', TJSONBool.Create(ExitCode = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
+    // lo que tardo, sin la cola (queuedMs): el mismo nombre que delphi_test y
+    // remote-run (Qwen en la regresion de GalateaFMX, 1.22.1)
+    Result.AddPair('durationMs', TJSONNumber.Create(QueueSW.ElapsedMilliseconds - QueuedMs));
     if QueuedMs >= 500 then
     begin
       Result.AddPair('queuedMs', TJSONNumber.Create(QueuedMs));

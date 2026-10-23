@@ -54,6 +54,7 @@ uses
   MCPServer.Registration,
   Lsp.Discovery,
   Lsp.Dproj,
+  Lsp.Guard, // ParametroQueNoVa: lo que no va con el modo, como en las hermanas
   Lsp.NetDrives;
 
 { The install root a registered library entry belongs to: one level above
@@ -180,18 +181,19 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
+  // platform= switches to a completely different view (the library paths of
+  // that platform), where "filter" means nothing. It used to be dropped
+  // without a word (measured 2026-08-25). Despues fue una nota y la respuesta
+  // seguia; ahora se niega como en las hermanas (Lsp.Guard.ParametroQueNoVa;
+  // Opus en Hermes, 1.22.1)
+  var Suyos, VaCon: string;
+  var Modo := IfThen(Params.Platform.Trim <> '', 'platform=', 'packages');
+  var Sobra := ParametroQueNoVa(Modo, ['platform=', 'platform', 'packages', 'filter'],
+    ['platform', Params.Platform, '', 'filter', Params.Filter, ''], Suyos, VaCon);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_COMPONENTS_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]) + VaCon);
   if Params.Platform.Trim <> '' then
-  begin
-    // platform= switches to a completely different view (the library paths of
-    // that platform), where "filter" means nothing. It used to be dropped
-    // without a word, so a caller who sent both got an answer that ignored
-    // half the question and never said so (measured 2026-08-25).
-    Result := PlatformPathsView(Info, Params.Platform.Trim);
-    if Params.Filter.Trim <> '' then
-      Result := Result + #10#10 + MsgFmt(SN_COMPONENTS_FILTER_IGNORED_FMT,
-        [Params.Filter.Trim]);
-    Exit;
-  end;
+    Exit(PlatformPathsView(Info, Params.Platform.Trim));
 
   Packages := IdeKnownPackages(Info.Version);
   Filter := Params.Filter.Trim;

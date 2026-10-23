@@ -3795,7 +3795,7 @@ var
           // y lo re-apuntado queda como esta (no es un fallo de la mudanza)
         end;
     end;
-    if Ext = '.deployproj' then
+    if EsManifiesto(AFichero) then
       try
         Anota(AFichero, ReapuntaSitios(AFichero, ABase,
           [Sitio('DeployFile', 'Include')], AMapa), ARutas);
@@ -3851,7 +3851,7 @@ begin
     function(F: string): Boolean
     begin
       Result := MatchText(TPath.GetExtension(F), ['.dpr', '.dpk', '.dproj', '.pas',
-        '.inc', '.groupproj', '.deployproj']);
+        '.inc', '.groupproj', EXT_MANIFIESTO]);
     end;
 
   // Con el cerrojo de las ediciones: la misma carrera que perdia cambios en

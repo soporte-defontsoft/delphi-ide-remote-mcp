@@ -1557,7 +1557,13 @@ begin
      TDirectory.Exists(TPath.Combine(Repo, '.git'))) then
   begin
     if not DondeViveElRepo(Repo, GitDir, Comun, Raiz, Output, ExitCode) then
+    begin
+      // una carpeta sin repo no es una negativa sino que no hay repo: lo
+      // dice git (en ingles, LC_ALL=C); lo demas, su respuesta (GIT-036)
+      if Output.Contains('not a git repository') then
+        Exit(MsgFmt(SR_GIT_NO_ES_REPO_FMT, [Params.Repo, Output.Trim]));
       Exit(GitFallo(ExitCode, Output));
+    end;
     for Sitio in TArray<string>.Create(Raiz, GitDir, Comun) do
       if Sitio <> '' then
       begin

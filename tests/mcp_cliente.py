@@ -1276,7 +1276,8 @@ def llego_a_git(t):
     la puerta. Un exit<>0 es un fallo con su etiqueta (SR_GIT_EXIT_FMT) desde
     el 27-sep-2026; antes "exit=N" salia como exito y las baterias lo
     miraban con startswith('exit=')."""
-    return (t or '').startswith('exit=') or abre(t, 'SR_GIT_EXIT_FMT')
+    # ...y una carpeta que no es un repo, desde la 1.22.2 su propio NOT_FOUND: tambien lo dijo git (rev-parse)
+    return (t or '').startswith('exit=') or abre(t, 'SR_GIT_EXIT_FMT') or abre(t, 'SR_GIT_NO_ES_REPO_FMT')
 
 
 def arbol_limpio(t):

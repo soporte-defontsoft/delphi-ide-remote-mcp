@@ -197,17 +197,25 @@ type
 
 { ---- el form ---- }
 
-procedure RecogeNombres(O: TStyleObj; L: TStringList);
+procedure RecogeNombres(O: TStyleObj; L: TStringList; AConRutas: Boolean = False;
+  const APrefijo: string = '');
 begin
   if O.ObjName <> '' then
-    L.Add(O.ObjName);
+    L.Add(APrefijo + O.ObjName);
   // lo de dentro de un frame en linea es del frame: sus nombres no son del
   // form, que puede tener su propio Edit1 (el delete del frame se llevaba el
-  // campo y las referencias del Edit1 del form: revision de la 1.17.0)
+  // campo y las referencias del Edit1 del form: revision de la 1.17.0). Con
+  // AConRutas van con su RUTA desde el form (Frame11.Edit1, la que toman set
+  // y get, ObjetoDeNombre): el form los cambia en su bloque inherited
   if O.Clave = 'inline' then
+  begin
+    if AConRutas then
+      for var K in O.Children do
+        RecogeNombres(K, L, True, APrefijo + O.ObjName + '.');
     Exit;
+  end;
   for var K in O.Children do
-    RecogeNombres(K, L);
+    RecogeNombres(K, L, AConRutas, APrefijo);
 end;
 
 function EstaEn(const ANombre: string; L: TStringList): Boolean;
@@ -1048,7 +1056,7 @@ var
 begin
   L := TStringList.Create;
   try
-    RecogeNombres(ADoc.Root, L);
+    RecogeNombres(ADoc.Root, L, True);
     Result := NombresConTope(L);
   finally
     L.Free;
@@ -1070,11 +1078,13 @@ begin
   Result := '';
   if AObj = F.Doc.Root then
     Exit(MsgFmt(SR_DESIGNER_RAIZ_FMT, [NombreDe(AObj)]));
-  if AObj.Clave = 'inherited' then
-    Exit(MsgFmt(SR_DESIGNER_HEREDADO_FMT, [NombreDe(AObj)]));
+  // lo de un frame en linea antes que lo heredado: su bloque es un inherited
+  // del frame, no del ancestro del form
   var Fr := InlineQueLoContiene(AObj);
   if Fr <> nil then
     Exit(MsgFmt(SR_DESIGNER_DENTRO_DE_INLINE_FMT, [NombreDe(AObj), NombreDe(Fr)]));
+  if AObj.Clave = 'inherited' then
+    Exit(MsgFmt(SR_DESIGNER_HEREDADO_FMT, [NombreDe(AObj)]));
 end;
 
 function ClaseDeJuez(const F: TFormEnEdicion; AObj: TStyleObj; out AClsId: string): string; forward;

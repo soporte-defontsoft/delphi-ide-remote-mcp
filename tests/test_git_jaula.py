@@ -274,8 +274,10 @@ check('J5 un repo bare dentro de las raices (sin arbol de trabajo): log y branch
       not mc.fallo(r1) and 'base' in r1 and not mc.fallo(r2) and 'main' in r2, corto(r1 + ' | ' + r2))
 
 r = g(NADA, command='status')
-check('J6 una carpeta que no es un repo: lo dice git, como antes',
-      mc.abre(r, 'SR_GIT_EXIT_FMT') and 'not a git repository' in r, corto(r))
+check('J6 una carpeta que no es un repo: lo dice git, como antes (GIT-082 NOT_FOUND desde la 1.22.2: no hay repo, '
+      'no es una negativa)',
+      mc.abre(r, 'SR_GIT_NO_ES_REPO_FMT') and mc.resultado(r) == 'NOT_FOUND' and 'not a git repository' in r,
+      corto(r))
 
 pasos = [g(os.path.join(RARO, 'sub carpeta'), command='status'),
          g(os.path.join(RARO, 'sub carpeta'), command='add', paths=['.']),

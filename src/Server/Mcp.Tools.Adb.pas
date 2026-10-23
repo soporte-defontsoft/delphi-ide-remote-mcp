@@ -226,16 +226,19 @@ var
 begin
   Cmd := Params.Command.Trim.ToLower;
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): aqui se
-  // ignoraba en silencio (decima revision). device va con todos
+  // ignoraba en silencio (decima revision). device va con los que hablan con
+  // UN dispositivo (adb -s): discover, devices, connect y disconnect lo
+  // callaban (Opus en Hermes, 1.22.1)
   var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(IfThen(Cmd = '', 'devices', Cmd), [
       'discover', '', 'devices', '',
-      'logcat', 'filter lines out',
+      'logcat', 'filter lines out device',
       'connect', 'address', 'disconnect', 'address',
-      'install', 'apk', 'run', 'app',
-      'screenshot', 'out inline maxwidth',
-      'tap', 'x y frame', 'key', 'key'],
-    ['address', Params.Address, '', 'apk', Params.Apk, '', 'app', Params.App, '',
+      'install', 'apk device', 'run', 'app device',
+      'screenshot', 'out inline maxwidth device',
+      'tap', 'x y frame device', 'key', 'key device'],
+    ['device', Params.Device, '',
+     'address', Params.Address, '', 'apk', Params.Apk, '', 'app', Params.App, '',
      'out', Params.Out, '', 'x', Params.X, '', 'y', Params.Y, '', 'key', Params.Key, '',
      'filter', Params.Filter, '', 'lines', Params.Lines, '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',

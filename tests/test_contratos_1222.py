@@ -22,6 +22,41 @@ msbuild lee el .dproj de arriba abajo y lo lee vacio (F2613), sin aviso. Ahora C
   P2 control: una propiedad NUEVA con $(My-Path) va al final, debajo de My-Path: sin nota
   P3 remove-property y set-property otra vez (lo que dice la nota): sin nota, y compila
 
+delphi_designer con un frame en linea: preview nombraba un componente del frame por su ruta (Frame11.Edit1, como el
+cargador, FindNestedComponent) y get/set no; DSGN-078 no listaba los del frame y mandaba a editarlos en el fichero
+del frame, cuando el IDE los cambia en el form, en su bloque inherited.
+  F1 get Frame11.Edit1: su bloque inherited (ROJO contra la 1.22.1: DSGN not found)
+  F2 set Frame11.Edit1 Text: escrito en su bloque inherited, dentro del inline (ROJO igual)
+  F3 un nombre que no esta: DSGN-078 lista Frame11.Edit1 por su ruta y no manda a editarlo en el frame (ROJO)
+  F4 control: delete Frame11.Edit1 se niega (es del frame) y el fichero no cambia
+  F5 control: Frame11.Nada (no esta en el form) y Button1.Edit1 (Button1 no es un frame): DSGN-078
+
+Menores medidos sobre la 1.22.1 (Opus en Hermes y dos agentes de medida, 23-oct-2026), cada uno ROJO contra ella:
+  G1 delphi_git en una carpeta sin repo: GIT-082 NOT_FOUND (decia GIT-036 DENIED)
+  R1 delphi_read con fromline pasado el final: READ-010 y "fromline=" (decia EDIT-100 y "from=")
+  C1 delphi_create form-vcl sin project: CREATE-036 (decia GUARD-018, "no path given")
+  C2 delphi_create kind=project-library: CREATE-011 nombra include (lo omitia)
+  D1 un perfil que no existe: PAS-053 es NOT_FOUND (era DENIED)
+  B1 BUILD-050 de un %2E%2E escrito: dice tambien como esta ESCRITO (citaba solo el ..)
+  B2 un build que compila dice durationMs (no decia cuanto tardo)
+  S1 delphi_search con UN fichero por raiz y un pattern que no lo elige: SEARCH-009 (buscaba en el, callando)
+  S2 control: con un pattern que SI lo elige, busca
+  A1 delphi_adb devices con device (uno permitido): ADB-028 (lo ignoraba en silencio)
+  K1 delphi_components con platform y filter: COMP-011 INVALID_PARAM, como las hermanas (contestaba y anadia una nota)
+  D2 delphi_definition kind=implementation de un metodo: character0 en el NOMBRE de la cabecera, como declaration
+     (ROJO: 0, la columna de "procedure")
+  H1 delphi_hover de IntToStr: el enlace del motor como ruta de la casa y linea, no file:///srvc%3A/... (ROJO)
+  H1b ...y esa ruta y esa linea las lee delphi_read: es la de IntToStr
+
+Y uno que encontro esta misma noche el primer tester (23-oct-2026): editar un fichero nombrandolo con OTRAS mayusculas
+lo renombraba (MoveFileEx deja el nombre que se le da): un delphi_edit de Mcp.Tools.ADB.pas dejo asi el
+Mcp.Tools.Adb.pas del repo, y git, que no distingue, no lo ensenaba.
+  N1 delphi_edit de UCASO.PAS sobre UCaso.pas: el fichero sigue llamandose UCaso.pas (ROJO contra la 1.22.1)
+  N2 ...y delphi_textedit (el mismo escritor) de NOTAS.TXT sobre Notas.txt
+  O1 delphi_docs search que cabe en limit: total = los resultados (contaba las candidatas: 5 con 4, ROJO)
+  Y1 delphi_symbols de una carpeta: el digest trae 'const X = 1;' en una linea, las constantes con tipo y las
+     variables de la interfaz (ROJO: se perdian)
+
 Uso:  python tests/test_contratos_1222.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -152,6 +187,160 @@ try:
           (rq[:300], r[:600]))
     r = srv.call('delphi_build', {'project': pproj, 'platform': 'Win64'}, 300)
     check('P3 ...y compila', mc.como_json(r).get('success') is True, r[:400])
+
+    fdir = os.path.join(JAIL, 'frm')
+    os.makedirs(fdir)
+    open(os.path.join(fdir, 'UFrame1.pas'), 'w', newline='\r\n').write(
+        'unit UFrame1;\ninterface\nuses\n  Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, System.Classes;\ntype\n'
+        '  TFrame1 = class(TFrame)\n    Edit1: TEdit;\n    Label1: TLabel;\n  end;\nimplementation\n'
+        '{$R *.dfm}\nend.\n')
+    open(os.path.join(fdir, 'UFrame1.dfm'), 'w', newline='\r\n').write(
+        'object Frame1: TFrame1\n  Left = 0\n  Top = 0\n  Width = 200\n  Height = 100\n  TabOrder = 0\n'
+        '  object Edit1: TEdit\n    Left = 8\n    Top = 8\n    Width = 121\n    Height = 23\n    TabOrder = 0\n'
+        "    Text = 'Edit1'\n  end\n  object Label1: TLabel\n    Left = 8\n    Top = 40\n    Width = 34\n    Height = 15\n"
+        "    Caption = 'Label1'\n  end\nend\n")
+    open(os.path.join(fdir, 'UForm1.pas'), 'w', newline='\r\n').write(
+        'unit UForm1;\ninterface\nuses\n  Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, System.Classes, UFrame1;\ntype\n'
+        '  TForm1 = class(TForm)\n    Frame11: TFrame1;\n    Button1: TButton;\n  end;\nvar\n  Form1: TForm1;\n'
+        'implementation\n{$R *.dfm}\nend.\n')
+    fdfm = os.path.join(fdir, 'UForm1.dfm')
+    open(fdfm, 'w', newline='\r\n').write(
+        "object Form1: TForm1\n  Left = 0\n  Top = 0\n  Caption = 'Form1'\n  ClientHeight = 200\n  ClientWidth = 300\n"
+        '  inline Frame11: TFrame1\n    Left = 8\n    Top = 8\n    Width = 200\n    Height = 100\n    TabOrder = 0\n'
+        "    inherited Edit1: TEdit\n      Text = 'uno'\n    end\n  end\n"
+        '  object Button1: TButton\n    Left = 8\n    Top = 120\n    Width = 75\n    Height = 25\n'
+        "    Caption = 'Button1'\n    TabOrder = 1\n  end\nend\n")
+
+    def dsg(**kw):
+        a = {'path': fdfm}
+        a.update(kw)
+        return srv.call('delphi_designer', a, 240)
+
+    r = dsg(command='get', component='Frame11.Edit1')
+    check('F1 get Frame11.Edit1: su bloque inherited', not mc.fallo(r) and "Text = 'uno'" in r, r[:400])
+    r = dsg(command='set', component='Frame11.Edit1', prop='Text', value="'dos'")
+    t = lee(fdfm)
+    check('F2 set Frame11.Edit1 Text: escrito en su bloque inherited, dentro del inline',
+          not mc.fallo(r) and "    inherited Edit1: TEdit\r\n      Text = 'dos'\r\n    end\r\n  end" in t, r[:400] + ' | ' + t[:600])
+    r = dsg(command='set', component='Nada', prop='Caption', value="'x'")
+    check('F3 un nombre que no esta: DSGN-078 lista Frame11.Edit1 por su ruta y no manda a editarlo alli',
+          mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'Frame11.Edit1' in r and 'edit it there' not in r, r[:500])
+    antes = open(fdfm, 'rb').read()
+    r = dsg(command='delete', component='Frame11.Edit1')
+    check('F4 control: delete Frame11.Edit1 se niega (es del frame) y el fichero no cambia',
+          mc.es(r, 'SR_DESIGNER_DENTRO_DE_INLINE_FMT') and open(fdfm, 'rb').read() == antes, r[:400])
+    r1 = dsg(command='set', component='Frame11.Nada', prop='Caption', value="'x'")
+    r2 = dsg(command='set', component='Button1.Edit1', prop='Text', value="'x'")
+    check('F5 control: Frame11.Nada y Button1.Edit1 (Button1 no es un frame): DSGN-078, nada escrito',
+          mc.es(r1, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and mc.es(r2, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT')
+          and open(fdfm, 'rb').read() == antes, (r1[:300], r2[:300]))
+
+    plano = os.path.join(JAIL, 'plano')
+    os.makedirs(plano)
+    r = srv.call('delphi_git', {'repo': plano, 'command': 'status'})
+    check('G1 git en una carpeta sin repo: GIT-082 NOT_FOUND',
+          mc.es(r, 'SR_GIT_NO_ES_REPO_FMT') and mc.resultado(r) == 'NOT_FOUND', r[:300])
+    cinco = os.path.join(plano, 'UCinco.pas')
+    open(cinco, 'w', newline='\r\n').write('unit UCinco;\ninterface\nimplementation\n\nend.\n')
+    r = srv.call('delphi_read', {'path': cinco, 'fromline': 9})
+    check('R1 read con fromline pasado el final: READ-010 y fromline=9',
+          mc.es(r, 'SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT') and '[READ-010' in r and 'fromline=9' in r, r[:300])
+    r = srv.call('delphi_create', {'kind': 'form-vcl', 'name': 'UFormSuelto', 'dir': plano})
+    check('C1 create form-vcl sin project: CREATE-036 (no un GUARD-018 generico)',
+          mc.es(r, 'SR_CREATE_FORM_NEED_PROJECT') and not os.path.exists(os.path.join(plano, 'UFormSuelto.pas')),
+          r[:300])
+    r = srv.call('delphi_create', {'kind': 'project-library', 'name': 'Lib', 'dir': os.path.join(JAIL, 'lib1')})
+    check('C2 create project-library: CREATE-011 nombra include, que tambien va suelto',
+          mc.es(r, 'SR_CREATE_PROJECT_KIND') and 'include' in r, r[:400])
+    r = srv.call('delphi_build', {'project': pproj, 'target': 'Build', 'profile': 'noexiste'}, 300)
+    check('D1 un perfil que no existe: PAS-053 NOT_FOUND', mc.es(r, 'SR_PROFILE_NO_EXISTE_FMT') and
+          mc.resultado(r) == 'NOT_FOUND', r[:300])
+    r = srv.call('delphi_build', {'project': pproj, 'platform': 'Win64'}, 300)
+    j = mc.como_json(r)
+    check('B2 un build que compila dice durationMs', j.get('success') is True and
+          isinstance(j.get('durationMs'), int) and j.get('durationMs') > 0, r[:300])
+    r = pon('DCC_UnitSearchPath', '%2E%2E\\%2E%2E\\%2E%2E\\%2E%2E\\Fuera1222;$(DCC_UnitSearchPath)')
+    r = srv.call('delphi_build', {'project': pproj, 'platform': 'Win64'}, 300)
+    check('B1 BUILD-050 de un %2E%2E escrito: lo cita tambien como esta escrito',
+          mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT') and 'written in the project as %2E%2E' in r, r[:600])
+    r = srv.call('delphi_search', {'root': cinco, 'query': 'unit', 'pattern': '*.md'})
+    check('S1 search de UN fichero con un pattern que no lo elige: SEARCH-009, nada buscado',
+          mc.es(r, 'SR_SEARCH_PATTERN_CON_FICHERO_FMT') and '"hits"' not in r, r[:300])
+    r = srv.call('delphi_search', {'root': cinco, 'query': 'unit', 'pattern': '*.pas'})
+    check('S2 control: con un pattern que SI lo elige, busca', '"hits"' in r and not mc.fallo(r), r[:300])
+    adb = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_ADB_DEVICES': 'SERIALX'}),
+                   nombre='c1222adb', t=120)
+    try:
+        r = adb.call('delphi_adb', {'command': 'devices', 'device': 'SERIALX'}, 60)
+        check('A1 adb devices con un device permitido: ADB-028 (no va con devices)',
+              mc.es(r, 'SR_ADB_NO_VA_CON_COMANDO_FMT') and '"device"' in r, r[:300])
+    finally:
+        adb.cierra()
+    r = srv.call('delphi_components', {'platform': 'Win64', 'filter': 'algo'}, 120)
+    check('K1 components con platform y filter: COMP-011 INVALID_PARAM y sin contestar a medias',
+          mc.es(r, 'SR_COMPONENTS_NO_VA_CON_MODO_FMT') and mc.resultado(r) == 'INVALID_PARAM' and
+          '[COMP-002]' not in r, r[:300])
+
+    ldir = os.path.join(JAIL, 'lsp')
+    r = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Lsp', 'dir': ldir})
+    lproj = os.path.join(ldir, 'Lsp.dproj')
+    r = srv.call('delphi_create', {'kind': 'unit', 'name': 'UFoo', 'project': lproj, 'content':
+        'unit UFoo;\ninterface\nuses System.SysUtils;\ntype\n  TFoo = class\n    procedure Bar;\n  end;\n'
+        'implementation\nprocedure TFoo.Bar;\nbegin\n  Writeln(IntToStr(1));\nend;\nprocedure Usa;\n'
+        'var F: TFoo;\nbegin\n  F := TFoo.Create;\n  F.Bar;\nend;\nend.\n'})
+    ufoo = os.path.join(ldir, 'UFoo.pas')
+    check('D0 fixture: UFoo en un proyecto', os.path.exists(ufoo), r[:200])
+
+    def motor(tool, args):
+        # el motor indexa al arrancar: "todavia no" (LSP warming) se repite
+        for _ in range(6):
+            r = srv.call(tool, args, 240)
+            if not mc.es(r, 'SR_LSP_WARMING'):
+                return r
+        return r
+
+    r = motor('delphi_definition', {'path': ufoo, 'line': 16, 'character': 4, 'kind': 'implementation'})
+    # la ubicacion, por sus campos de la casa (line0/character0, DecorateLocations)
+    check('D2 definition kind=implementation de F.Bar: el cuerpo, con character0 en Bar (15), no 0',
+          '"line0":8' in r and '"character0":15' in r, r[:500])
+    r = motor('delphi_hover', {'path': ufoo, 'line': 10, 'character': 12})
+    check('H1 hover de IntToStr: el enlace como ruta de la casa y linea, sin file:///',
+          'file:///' not in r and 'System.SysUtils.pas' in r and ', line ' in r, r[:500])
+    import re
+    m = re.search(r'\((srv\w:.*?System\.SysUtils\.pas), line (\d+)\)', r)
+    if m:
+        rr = srv.call('delphi_read', {'path': m.group(1), 'fromline': int(m.group(2)), 'toline': int(m.group(2))})
+    else:
+        rr = '(sin ruta en el hover)'
+    check('H1b ...y esa ruta y esa linea las lee delphi_read: la de IntToStr', 'IntToStr' in rr, rr[:300])
+
+    open(os.path.join(plano, 'UCaso.pas'), 'w', newline='\r\n').write('unit UCaso;\ninterface\nimplementation\nend.\n')
+    # por la forma LARGA: con un trozo 8.3 en la ruta (el TEMP de esta maquina) la entrada la alarga entera con
+    # las mayusculas del disco y no se ve; en D:\ (produccion, sin ~) llegaba tal cual y renombraba (medido)
+    largo = mc.larga(plano)
+    r = srv.call('delphi_edit', {'path': os.path.join(largo, 'UCASO.PAS'), 'old': 'interface',
+                                 'new': 'interface\n// uno'})
+    check('N1 delphi_edit de UCASO.PAS: escrito, y el fichero sigue llamandose UCaso.pas',
+          not mc.fallo(r) and 'UCaso.pas' in os.listdir(plano) and '// uno' in lee(os.path.join(plano, 'UCaso.pas')),
+          (r[:200], [n for n in os.listdir(plano) if n.lower() == 'ucaso.pas']))
+    open(os.path.join(plano, 'Notas.txt'), 'w', newline='\r\n').write('uno\ndos\n')
+    r = srv.call('delphi_textedit', {'path': os.path.join(largo, 'NOTAS.TXT'), 'old': 'dos', 'new': 'tres'})
+    check('N2 delphi_textedit de NOTAS.TXT: escrito, y sigue llamandose Notas.txt',
+          not mc.fallo(r) and 'Notas.txt' in os.listdir(plano), (r[:200], [n for n in os.listdir(plano)
+                                                                         if n.lower() == 'notas.txt']))
+    r = srv.call('delphi_docs', {'command': 'search', 'query': 'FormatDateTime', 'limit': 25}, 240)
+    j = mc.como_json(r) or {}
+    res = j.get('results') or []
+    check('O1 docs search que cabe en limit: total = los resultados que salen',
+          res and j.get('total') == len(res), (j.get('total'), len(res), r[:300]))
+    dig = os.path.join(JAIL, 'dig')
+    os.makedirs(dig)
+    open(os.path.join(dig, 'UConst2.pas'), 'w', newline='\r\n').write(
+        "unit UConst2;\ninterface\nconst MAX_UNO = 1;\nconst\n  TIPADA: Integer = 5;\n"
+        "  NOMBRES: array[0..1] of string = ('a', 'b');\nvar\n  GContador: Integer;\nimplementation\nend.\n")
+    r = srv.call('delphi_symbols', {'path': dig}, 240)
+    check('Y1 digest de carpeta: const de una linea, constantes con tipo y variables',
+          all(x in r for x in ('MAX_UNO', 'TIPADA', 'NOMBRES', 'GContador')), r[:600])
 finally:
     srv.cierra()
     mc.borra(BASE)

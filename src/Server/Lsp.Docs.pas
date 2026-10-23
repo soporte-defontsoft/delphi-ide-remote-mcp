@@ -1607,10 +1607,14 @@ begin
     // y cada pagina UNA vez: sus anclas (FMX.Objects.htm, #Types, #Classes)
     // ocupaban tres puestos de cinco (medido en la revision de la 1.10.0)
     Paginas.Clear;
+    var Agotada := True;
     for R in Lista do
     begin
       if Length(Result) >= ALimite then
+      begin
+        Agotada := False;
         Break;
+      end;
       Id := R.Id;
       if not Abiertos.Html(Id, Html) then
         Continue;
@@ -1631,6 +1635,11 @@ begin
       Final.Titulo := TextoDeEtiqueta(Html, 'title');
       Result := Result + [Final];
     end;
+    // recorridas todas, el total es lo que sale (ya redirigido, sin repetir y
+    // sin las ilegibles): contaba las candidatas, y daba total 5 con 4
+    // resultados y sin mas que ver (Opus en Hermes, 1.22.1)
+    if Agotada then
+      ATotal := Length(Result);
   finally
     Lista.Free;
     Paginas.Free;

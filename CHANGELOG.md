@@ -27,6 +27,49 @@ the MCP `initialize` response (`serverInfo.version`).
   empty there (measured on 2026-10-22: `DCC_UnitSearchPath=$(My-Path)` above
   `My-Path` gave `F2613`). `CFG-136` now says so and how to write the value
   below it (`tests/test_contratos_1222.py`).
+- **Editing a file through a path with other capitals no longer renames it.**
+  The atomic writer replaced the file by renaming a temporary over the name it
+  was given, so a `delphi_edit` that named `Mcp.Tools.Adb.pas` as
+  `Mcp.Tools.ADB.pas` renamed it on disk - git, which ignores case on
+  Windows, did not show it (measured on 2026-10-23 on this repository, and
+  on the production server with `UCaso.pas` edited as `UCASO.PAS`). Every
+  writer that replaces a file now keeps the name as it is on disk
+  (`tests/test_contratos_1222.py`).
+- **`delphi_designer` takes a component of an inline frame by its path.**
+  `preview` named `Frame11.Edit1` as the loader does, and `get`, `set` and
+  `delete` answered that it did not exist; `DSGN-078` listed none of them and
+  sent the agent to the frame's own file, while the IDE changes them in the
+  form, in their `inherited` block. `get` and `set` now take the path,
+  `DSGN-078` lists what the form overrides by its path, and a delete or a
+  rename of one is refused as part of the frame (`DSGN-083`), not as
+  inherited from an ancestor form (`tests/test_contratos_1222.py`).
+- **`delphi_hover` gives a symbol's file as a path the other tools take.**
+  The engine's link (`file:///C%3A/.../System.SysUtils.pas#8766`) came out as
+  `file:///srvc%3A/...`, which `delphi_read` refused; it is now the path and
+  the line (`System.SysUtils.pas:8766 (srvc:\...\System.SysUtils.pas, line
+  8766)`). `delphi_definition` puts the column of a routine's body on its name,
+  as `declaration` does, instead of the engine's column 0
+  (`tests/test_contratos_1222.py`).
+- **Several answers now say what really happened.** `delphi_git` on a folder
+  with no repository is `GIT-082 NOT_FOUND` (it was a generic `GIT-036
+  DENIED`), and its description no longer says that stash never drops (`pop`
+  drops the entry once it applies cleanly; git keeps it on a conflict). A
+  connection profile that does not exist is `PAS-053 NOT_FOUND`. `delphi_read`
+  past the end of a file is `READ-010` and names `fromline` (it was `EDIT-100`
+  and `from`). `delphi_create` of a form, frame or data module without
+  `project` says so (`CREATE-036`; it was the generic `GUARD-018`), and
+  `CREATE-011` names `include` and says that a unit or an include can be
+  created on its own. `BUILD-050` quotes a path also as it is written in the
+  project when the build reads it otherwise (an escaped `%2E%2E`), which is
+  the entry `remove-searchpath` takes. A build answers with its `durationMs`,
+  as `delphi_test` and `remote-run` do (`tests/test_contratos_1222.py`).
+- **A parameter that does not go with the call is refused, not ignored.**
+  `delphi_search` with ONE file as root and a `pattern` that does not pick it
+  searched the file anyway (`SEARCH-009`); `delphi_adb` took `device` with
+  `devices`, `discover`, `connect` and `disconnect`, which talk to no single
+  device (`ADB-028`); and `delphi_components` with `platform` and `filter`
+  answered with a note that it ignored the filter, where its siblings refuse
+  (`COMP-011`) (`tests/test_contratos_1222.py`).
 
 ## [1.22.1] - 2026-10-23
 

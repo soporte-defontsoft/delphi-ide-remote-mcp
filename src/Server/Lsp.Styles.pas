@@ -147,7 +147,10 @@ type
       sueltos (Lsp.DesignerBin.SueltoEnLiteral) de designer set y styles set. }
     function LiteralDe(AObj: TStyleObj; const AProp: string): string;
     { The object named AName at any depth (a form's component, by its Name;
-      the same identifier as dcc sees it); nil when there is none. }
+      the same identifier as dcc sees it); nil when there is none. Una RUTA
+      (Frame11.Edit1) se resuelve como el cargador (FindNestedComponent): cada
+      trozo dentro del frame en linea del anterior, sin bajar a otro frame en
+      linea de dentro (Frame11.Frame21.Edit1 es el de Frame21). }
     function ObjetoDeNombre(const AName: string): TStyleObj;
     { The file text these lines would make, with the file's own line break:
       what Guarda writes. A caller that writes several files at once
@@ -733,10 +736,40 @@ function TStyleDoc.ObjetoDeNombre(const AName: string): TStyleObj;
     Result := nil;
   end;
 
+  // ANombre debajo de O, sin bajar a un frame en linea (el suyo lo nombra la
+  // ruta: es del frame)
+  function BuscaEnSuDueno(O: TStyleObj; const ANombre: string): TStyleObj;
+  begin
+    for var K in O.Children do
+    begin
+      if (K.ObjName <> '') and MismoIdentificador(K.ObjName, ANombre) then
+        Exit(K);
+      if K.Clave <> 'inline' then
+      begin
+        Result := BuscaEnSuDueno(K, ANombre);
+        if Result <> nil then
+          Exit;
+      end;
+    end;
+    Result := nil;
+  end;
+
 begin
   Result := nil;
-  if (FRoot <> nil) and (AName <> '') then
-    Result := Busca(FRoot);
+  if (FRoot = nil) or (AName = '') then
+    Exit;
+  if Pos('.', AName) = 0 then
+    Exit(Busca(FRoot));
+  // una ruta: cada trozo en el dueno del anterior, y todos menos el ultimo,
+  // frames en linea
+  Result := FRoot;
+  var Trozos := AName.Split(['.']);
+  for var I := 0 to High(Trozos) do
+  begin
+    Result := BuscaEnSuDueno(Result, Trozos[I].Trim);
+    if (Result = nil) or ((I < High(Trozos)) and (Result.Clave <> 'inline')) then
+      Exit(nil);
+  end;
 end;
 
 function TStyleDoc.TextoDe(const ALines: TArray<string>): string;
