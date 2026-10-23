@@ -393,6 +393,12 @@ procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
   const AValor: string = 'Search Path'; const AConfig: string = ''): TArray<string>;
 
+{ La raiz de instalacion de una carpeta que registra una biblioteca: un nivel
+  por encima (X\Source -> X, X\Lib\Linux64 -> X\Lib), nunca la raiz de una
+  unidad ('' entonces). La zona de biblioteca (Lsp.Lugares) y delphi_components
+  la escribian cada una (depuracion de la 1.23). }
+function ComponentRootOf(const APath: string): string;
+
 { Expands $(NAME) macros with the IDE's environment table (AVars as
   NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
   path vetting of delphi_config: a path with macros must resolve before the
@@ -1429,6 +1435,13 @@ begin
     List.Free;
     Vars.Free;
   end;
+end;
+
+function ComponentRootOf(const APath: string): string;
+begin
+  Result := TPath.GetDirectoryName(PrefijoSinBarra(APath));
+  if (Length(Result) <= 3) or (TPath.GetDirectoryName(Result) = '') then
+    Result := '';
 end;
 
 initialization

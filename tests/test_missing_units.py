@@ -49,6 +49,31 @@ r = call('delphi_components', {})
 check('no platform = packages list as before',
       mc.abre(r, 'SN_COMPONENTS_DESIGN_PACKAGES_FMT'), r)
 
+# --- filter tambien en el Library Search Path (depuracion de la 1.23, David
+# 23-oct-2026): una biblioteca sin paquete, solo unidades, vive solo ahi, y
+# filter contestaba COMP-005 "ningun paquete la tiene" de una que compila
+# (superobject). La carpeta sale del registro de ESTA maquina: una de Win64,
+# fuera de los arboles del propio IDE (lib\Win64\release no es una
+# biblioteca), cuyo nombre no aparece en ningun paquete
+paquetes = r.lower()
+rw = call('delphi_components', {'platform': 'Win64'})
+libre = None
+for l in rw.split('\n\n')[0].split('\n')[1:]:
+    d = l.strip().split('  (')[0]
+    hoja = d.rstrip('\\').split('\\')[-1]
+    if len(hoja) >= 5 and hoja.lower() not in paquetes and '\\studio\\37.0' not in d.lower():
+        libre = (d, hoja)
+        break
+check('filter (preparacion): una carpeta del Library Search Path de Win64 que ningun paquete nombra',
+      libre is not None, rw[:300])
+if libre:
+    r = call('delphi_components', {'filter': libre[1]})
+    check('filter la encuentra en el Library Search Path (COMP-012 con su carpeta y Win64, no COMP-005)',
+          mc.abre(r, 'SN_COMPONENTS_PATH_HEAD_FMT') and libre[0] in r and 'Win64' in r, r[:300])
+r = call('delphi_components', {'filter': 'zz-no-existe-zz'})
+check('filter sin nada ni en paquetes ni en el Library Search Path: COMP-005',
+      mc.es(r, 'SN_COMPONENTS_NONE_FMT'), r[:300])
+
 # --- delphi_build: missingUnits ----------------------------------------------
 r = call('delphi_create', {'kind': 'project-console', 'name': 'MissU', 'dir': BASE})
 check('project created', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r)

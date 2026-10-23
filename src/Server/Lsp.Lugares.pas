@@ -285,10 +285,8 @@ begin
               // libzbar.so in Library\Linux64, unreadable because only
               // Source\ was registered). One level up, never a drive root,
               // never above the IDE's own documents trees.
-              Expanded := PrefijoSinBarra(Expanded);
-              Expanded := TPath.GetDirectoryName(Expanded);
-              if (Expanded <> '') and (Length(Expanded) > 3) and
-                 (TPath.GetDirectoryName(Expanded) <> '') then
+              Expanded := ComponentRootOf(Expanded);
+              if Expanded <> '' then
               begin
                 Expanded := IncludeTrailingPathDelimiter(Expanded);
                 if List.IndexOf(Expanded) < 0 then

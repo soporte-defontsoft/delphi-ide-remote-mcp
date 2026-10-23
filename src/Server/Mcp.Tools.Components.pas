@@ -57,14 +57,52 @@ uses
   Lsp.Guard, // ParametroQueNoVa: lo que no va con el modo, como en las hermanas
   Lsp.NetDrives;
 
-{ The install root a registered library entry belongs to: one level above
-  the entry (X\Source -> X, X\Lib\Linux64 -> X\Lib), the same rule the
-  read jail applies. '' for a drive root. }
-function ComponentRootOf(const APath: string): string;
+{ Apunta que la carpeta AClave la registra la plataforma APlat (las
+  plataformas, 'Win32, Win64'). La vista por plataforma lo escribia a mano y
+  miraba con Contains, donde Win64 esta dentro de Win64x. }
+procedure AnotaPlataforma(ACarpetas: TDictionary<string, string>; const AClave, APlat: string);
+var
+  V: string;
 begin
-  Result := TPath.GetDirectoryName(PrefijoSinBarra(APath));
-  if (Length(Result) <= 3) or (TPath.GetDirectoryName(Result) = '') then
-    Result := '';
+  if not ACarpetas.TryGetValue(AClave, V) then
+    ACarpetas.Add(AClave, APlat)
+  else if not MatchText(APlat, V.Split([', '])) then
+    ACarpetas[AClave] := V + ', ' + APlat;
+end;
+
+{ Las lineas 'carpeta (registered in: plataformas)', por orden de carpeta (un
+  diccionario no tiene orden). }
+function LineasDeCarpetas(ACarpetas: TDictionary<string, string>): string;
+var
+  Claves: TArray<string>;
+  K: string;
+  Sb: TStringBuilder;
+begin
+  Claves := ACarpetas.Keys.ToArray;
+  TArray.Sort<string>(Claves);
+  Sb := TStringBuilder.Create;
+  try
+    for K in Claves do
+      Sb.AppendLine(MsgFmt(SF_COMP_REGISTRADO_EN_FMT, [K, ACarpetas[K]]));
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+end;
+
+{ Las carpetas del Library Search Path del IDE, de cualquier plataforma, cuya
+  ruta contiene AFiltro, con las plataformas que las registran. Una biblioteca
+  sin paquete (solo unidades) vive solo ahi, y filter contestaba "ningun
+  paquete la tiene" de una que compila (David, 23-oct-2026: superobject). }
+function CarpetasConFiltro(const AInfo: TRadStudioInfo; const AFiltro: string): TDictionary<string, string>;
+var
+  Plat, P: string;
+begin
+  Result := TDictionary<string, string>.Create;
+  for Plat in IdeLibraryPlatforms(AInfo.Version) do
+    for P in IdePlatformLibraryPaths(AInfo, Plat) do
+      if ContainsText(P, AFiltro) then
+        AnotaPlataforma(Result, P, Plat);
 end;
 
 { platform=X: the IDE's Library Search Path of that platform, expanded, and
@@ -77,7 +115,6 @@ var
   MineRoots: TList<string>;
   Missing: TDictionary<string, string>; // root -> platforms that have it
   Sb: TStringBuilder;
-  Pair: TPair<string, string>;
   N: Integer;
   UserDocs, CommonDocs: string;
 
@@ -131,13 +168,7 @@ begin
            SameText(Root, UserDocs) or SameText(Root, CommonDocs) or
            UnderMine(Root) then
           Continue;
-        if Missing.ContainsKey(Root) then
-        begin
-          if not Missing[Root].Contains(Other) then
-            Missing[Root] := Missing[Root] + ', ' + Other;
-        end
-        else
-          Missing.Add(Root, Other);
+        AnotaPlataforma(Missing, Root, Other);
       end;
     end;
     N := Missing.Count;
@@ -147,8 +178,7 @@ begin
     else
     begin
       Sb.AppendLine(MsgFmt(SN_COMPONENTS_PLATFORM_MISSING_FMT, [N, Plat]));
-      for Pair in Missing do
-        Sb.AppendLine(MsgFmt(SF_COMP_REGISTRADO_EN_FMT, [Pair.Key, Pair.Value]));
+      Sb.Append(LineasDeCarpetas(Missing));
       Sb.AppendLine;
       Sb.AppendLine(MsgText(SN_COMPONENTS_PLATFORM_HINT));
     end;
@@ -177,6 +207,7 @@ var
   Filter: string;
   Sb: TStringBuilder;
   Shown, Off: Integer;
+  Carpetas: TDictionary<string, string>;
 begin
   Info := DiscoverRadStudio;
   if not Info.Found then
@@ -198,6 +229,7 @@ begin
   Packages := IdeKnownPackages(Info.Version);
   Filter := Params.Filter.Trim;
 
+  Carpetas := nil;
   Sb := TStringBuilder.Create;
   try
     Shown := 0;
@@ -215,15 +247,27 @@ begin
         Sb.Append(MsgText(SF_COMP_DESHABILITADO));
       Sb.AppendLine;
     end;
-    if Shown = 0 then
+    // con filter, tambien las carpetas del Library Search Path: lo que se
+    // puede poner en un uses no es solo lo que trae un paquete
+    if Filter <> '' then
+      Carpetas := CarpetasConFiltro(Info, Filter);
+    if (Shown = 0) and ((Carpetas = nil) or (Carpetas.Count = 0)) then
       Exit(MsgFmt(SN_COMPONENTS_NONE_FMT, [Filter]));
-    Result := MsgFmt(SN_COMPONENTS_DESIGN_PACKAGES_FMT,
-      [Shown, Info.Version,
-       IfThen(Filter <> '', MsgFmt(SF_COMP_CON_FILTRO_FMT, [Filter]), ''),
-       IfThen(Off > 0, MsgFmt(SF_COMP_DESHABILITADOS_FMT, [Off]), '')]) +
-      sLineBreak + sLineBreak + Sb.ToString.TrimRight +
-      sLineBreak + sLineBreak + MsgText(SN_COMPONENTS_NOTE);
+    Result := '';
+    if Shown > 0 then
+      Result := MsgFmt(SN_COMPONENTS_DESIGN_PACKAGES_FMT,
+        [Shown, Info.Version,
+         IfThen(Filter <> '', MsgFmt(SF_COMP_CON_FILTRO_FMT, [Filter]), ''),
+         IfThen(Off > 0, MsgFmt(SF_COMP_DESHABILITADOS_FMT, [Off]), '')]) +
+        sLineBreak + sLineBreak + Sb.ToString.TrimRight;
+    if (Carpetas <> nil) and (Carpetas.Count > 0) then
+      Result := Result + IfThen(Result <> '', sLineBreak + sLineBreak) +
+        MsgFmt(SN_COMPONENTS_PATH_HEAD_FMT, [Carpetas.Count, Filter]) +
+        sLineBreak + LineasDeCarpetas(Carpetas).TrimRight;
+    if Shown > 0 then
+      Result := Result + sLineBreak + sLineBreak + MsgText(SN_COMPONENTS_NOTE);
   finally
+    Carpetas.Free;
     Sb.Free;
   end;
 end;

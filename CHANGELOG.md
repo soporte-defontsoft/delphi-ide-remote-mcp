@@ -124,6 +124,17 @@ the MCP `initialize` response (`serverInfo.version`).
   read-only tools - what `tools/list` announces as `_meta.access` read-only -
   so the next tool that only reads joins it without another list
   (`tests/test_round20.py`).
+- **`delphi_components` with `filter` finds a library that has no package.**
+  It searched only the packages registered in the IDE, so a library that is
+  just folders of the Library Search Path - units to put in a `uses`,
+  nothing in the palette, like `superobject` on the reference machine - got
+  `COMP-005` "no registered package contains", and an agent took it for
+  missing while a build found it (David, 2026-10-23). The filter now also
+  searches the Library Search Path of every platform, and `COMP-012` lists
+  the matching folders with the platforms that register each one; `COMP-005`
+  is left for what is in neither, and the listing without `filter` says where
+  such a library lives. The view of one platform lists its candidate roots
+  in a stable order (`tests/test_missing_units.py`).
 - **`delete: true` follows one rule in `delphi_edit`, `delphi_textedit` and
   every entry of a batch.** Both descriptions say `delete` takes no `new`, and
   only `delphi_edit` refused it: `delphi_textedit` with `old`, `new` and

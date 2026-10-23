@@ -7710,26 +7710,27 @@ const
   // ---- delphi_components ----
 
   SD_COMPONENTS =
-    'What this server''s RAD Studio has INSTALLED to program with: every ' +
-    'component/design package REGISTERED in the IDE (Known Packages - what ' +
-    'the IDE loads into its palette), whatever the channel (GetIt, a ' +
-    'vendor installer, manual). Each line: the package description and its ' +
-    '.bpl; disabled ones are marked, IDE plumbing excluded. Read-only: ' +
-    'there is no install command; if a library you need is missing, say so ' +
-    'with delphi_report. The base RTL units are always there and never ' +
-    'appear here.';
+    'What this server''s RAD Studio has INSTALLED to program with: the ' +
+    'component/design packages REGISTERED in the IDE (Known Packages, its ' +
+    'palette), whatever the channel (GetIt, vendor installer, manual) - ' +
+    'description and .bpl, disabled ones marked. With filter, also the ' +
+    'matching folders of the per-platform Library Search Paths, where a ' +
+    'library with no package (units only) lives. No install command: ' +
+    'report a missing library with delphi_report. The base RTL is always ' +
+    'there and not listed.';
 
   SP_COMPONENTS_FILTER =
-    'Optional: only entries whose description or file name contains this ' +
-    'text (case-insensitive), e.g. "FMX", "TMS", "JEDI".';
+    'Optional: text (case-insensitive) that a package''s description or ' +
+    '.bpl, or a Library Search Path folder, contains, e.g. "FMX", "TMS", ' +
+    '"JEDI".';
 
   SP_COMPONENTS_PLATFORM =
     'Optional: a platform ' +
     '(Win32|Win64|Linux64|Android64|OSX64|iOSDevice64...) to see instead ' +
-    'the IDE''s Library Search Path FOR IT, expanded, plus the component ' +
-    'roots other platforms register and this one does not - the list to ' +
-    'walk when a build on a new platform fails with F2613 (then ' +
-    'delphi_config add-searchpath to the Source folder).';
+    'ITS Library Search Path, expanded, plus the component roots other ' +
+    'platforms register and it lacks - where to look when a build there ' +
+    'fails with F2613 (then delphi_config add-searchpath to the Source ' +
+    'folder).';
 
   SR_COMPONENTS_PLATFORM_FMT =
     '[COMP-008 INVALID_PARAM] Platform "%s" not recognized. Valid: %s.';
@@ -7758,14 +7759,24 @@ const
     'server - without an IDE there are no packages to list.';
 
   SN_COMPONENTS_NONE_FMT =
-    '[COMP-005] No registered package contains "%s". Full list: call ' +
-    'without filter.';
+    '[COMP-005] Neither a registered package nor a folder of the Library ' +
+    'Search Path of any platform contains "%s". Full lists: call without ' +
+    'filter (packages) or with platform= (that platform''s path).';
+
+  SN_COMPONENTS_PATH_HEAD_FMT =
+    '[COMP-012] %d folders with "%s" in the IDE''s Library Search Paths ' +
+    '(one per platform): their units go in a uses clause on the platforms ' +
+    'in brackets, with or without a package (a library with no package is ' +
+    'only here):';
 
   SN_COMPONENTS_NOTE =
     '[COMP-006] These design packages are registered in the SERVER''s RAD ' +
     'Studio: their components and units are available to projects built ' +
-    'here. Base RTL/VCL/FMX are always present and not listed. No ' +
-    'install command exists by design - report a missing library with ' +
+    'here. A library with no package (units only, nothing in the palette) ' +
+    'is not here but on the Library Search Path of its platforms: filter ' +
+    'searches them too, platform= lists one. Base RTL/VCL/FMX are always ' +
+    'present and not listed. No install command exists by design - report ' +
+    'a missing library with ' +
     'delphi_report.';
 
   SN_BUILD_ANDROID_NEW =

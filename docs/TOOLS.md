@@ -419,7 +419,7 @@ Build a Delphi project for real with MSBuild on this machine - the closing check
 | `project` | string | **yes** | Absolute path of the project's .dproj (its .dpr/.dpk resolves to it) |
 | `platform` | string | optional | Target platform. Omitted: the one the project has selected, the one the IDE builds while nobody changes it (defaultPlatform in delphi_config view; set-active changes it). Only a platform the project declares and has enabled (delphi_config add-platform / remove-platform), so the IDE builds the same: Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need their SDK pulled once per target machine, not per project (delphi_paserver get-sdk; its platforms says if it is). Building is LOCAL against that SDK and does NOT use profile - a profile is only for target=Deploy. |
 | `config` | string | optional | A configuration the project declares (not Base, which the others inherit from), e.g. Debug or Release; another is refused (delphi_config view lists them). Omitted: the one the project has selected, the one the IDE builds while nobody changes it (defaultConfig in delphi_config view; set-active changes it). |
-| `target` | string | optional | Build (full, default) \| Make (incremental) \| Clean \| Deploy (builds first, then deploys: to the PAServer of "profile" for Linux/macOS, or packages the app for Android). After switching platforms use Build. |
+| `target` | string | optional | Build (full, default) \| Make (incremental) \| Clean \| Deploy (builds first, then deploys: to the PAServer of "profile" for Linux/macOS (a project in RemoteRunProjects), or packages the app for Android). After switching platforms use Build. |
 | `profile` | string | optional | target=Deploy on a PAServer platform: the connection profile (delphi_paserver command=profiles). The files land on the target under its PAServer scratch dir, in \<windows user>-\<profile>/\<project name>/. |
 | `sdk` | string | optional | The platform SDK to link against, by name (delphi_paserver command=profiles lists them with their glibc). Omit it and the project decides (its own PlatformSDK), or the only one there is; with several and no hint the build is refused instead of guessing. |
 | `verbosity` | string | optional | quiet (DEFAULT: errors + the summary - cheapest for "does it still compile"; warnings are not even asked for) \| normal (warnings and msbuild milestones) \| verbose (everything, the whole linker command line included - when a quiet error is not clear enough). It sets msbuild's own verbosity: quiet asks for less, it does not just hide it. |
@@ -546,7 +546,7 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through PA
 | `password` | string | optional | The PAServer password (add-profile). Used once to create the profile, stored encrypted, never shown back |
 | `platform` | string | optional | Platform of the profile, one that paclient takes (Linux64, OSX64, Win64...; a wrong one is refused with the list). Default: Linux64 |
 | `project` | string | optional | remote-run, kill, output: the ABSOLUTE path of the .dproj (or its .dpr) whose DEPLOYED program it is (not its name); the server derives the path on the target (\<user>-\<profile>/\<Project>/\<Project>, what target=Deploy wrote) - nothing else there can be run. |
-| `exe` | string | optional | remote-run OPTIONAL: another file of that same deploy folder to run instead of the project binary - a plain file name, no path. |
+| `exe` | string | optional | remote-run OPTIONAL: a file its .deployproj lists, to run instead of its binary - a name, no path. |
 | `args` | string | optional | remote-run: optional command-line arguments for the program (no shell metacharacters) |
 | `job` | string | optional | kill / output: the "jobId" a remote-run answer gave you; with profile and project (the same .dproj path) - only a job of THAT project on THAT machine. |
 | `sdk` | string | optional | get-sdk optional: the NAME of the SDK folder to write. Default: the target distro from its /etc/os-release (zorin18, fedora44, ubuntu2404). Pass one to keep "the one this shop builds with". reseat-sdk: the SDK whose IDE seat is rewritten (none = all). remove-sdk: the SDK to remove, by name (command=profiles lists them). |
@@ -663,14 +663,14 @@ The target needs a graphical session open - a headless box has nothing to show -
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-What this server's RAD Studio has INSTALLED to program with: every component/design package REGISTERED in the IDE (Known Packages - what the IDE loads into its palette), whatever the channel (GetIt, a vendor installer, manual). Each line: the package description and its .bpl; disabled ones are marked, IDE plumbing excluded. Read-only: there is no install command; if a library you need is missing, say so with delphi_report. The base RTL units are always there and never appear here.
+What this server's RAD Studio has INSTALLED to program with: the component/design packages REGISTERED in the IDE (Known Packages, its palette), whatever the channel (GetIt, vendor installer, manual) - description and .bpl, disabled ones marked. With filter, also the matching folders of the per-platform Library Search Paths, where a library with no package (units only) lives. No install command: report a missing library with delphi_report. The base RTL is always there and not listed.
 
 *Access: read-only OK.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `filter` | string | optional | Optional: only entries whose description or file name contains this text (case-insensitive), e.g. "FMX", "TMS", "JEDI". |
-| `platform` | string | optional | Optional: a platform (Win32\|Win64\|Linux64\|Android64\|OSX64\|iOSDevice64...) to see instead the IDE's Library Search Path FOR IT, expanded, plus the component roots other platforms register and this one does not - the list to walk when a build on a new platform fails with F2613 (then delphi_config add-searchpath to the Source folder). |
+| `filter` | string | optional | Optional: text (case-insensitive) that a package's description or .bpl, or a Library Search Path folder, contains, e.g. "FMX", "TMS", "JEDI". |
+| `platform` | string | optional | Optional: a platform (Win32\|Win64\|Linux64\|Android64\|OSX64\|iOSDevice64...) to see instead ITS Library Search Path, expanded, plus the component roots other platforms register and it lacks - where to look when a build there fails with F2613 (then delphi_config add-searchpath to the Source folder). |
 <!-- /contract -->
 
 ### `delphi_rename_symbol`
