@@ -1406,23 +1406,10 @@ end;
   plataforma (Default_<Plataforma> de PlatformSDKs). Es la eleccion explicita
   del operador en el IDE, asi que manda sobre cualquier adivinanza nuestra. }
 function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
-var
-  Reg: TRegistry;
 begin
-  Result := '';
-  Reg := TRegistry.Create(KEY_READ);
-  try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then
-      try
-        if Reg.ValueExists('Default_' + APlat) then
-          Result := Reg.ReadString('Default_' + APlat).Trim;
-      except
-        Result := '';
-      end;
-  finally
-    Reg.Free;
-  end;
+  // por EL lector de la configuracion del IDE y EL nombre del valor (Lsp.Discovery):
+  // era el mismo lector reescrito, con el nombre compuesto a mano (P7)
+  Result := IdeConfigValue(AVersion, 'PlatformSDKs', ValorDeSdkPorDefecto(APlat)).Trim;
 end;
 
 { Lo que EL PROYECTO declara para un build (PlatformSDK, Profile: las

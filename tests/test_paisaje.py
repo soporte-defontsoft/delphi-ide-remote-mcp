@@ -117,6 +117,10 @@ REGLAS = [
     ('.sdk leido a mano', r"EndsWith\('\.sdk'\)",
      [('Lsp.Discovery.pas', 'NombreDeSdk'), ('Lsp.Discovery.pas', 'NombreSinSdk')],
      'NombreSinSdk es la inversa; "es un .sdk" se pregunta al nombrador'),
+    ('el SDK por defecto del IDE a mano', r"^(?!\s*PREFIJO_SDK_POR_DEFECTO\s*=).*'Default_'",
+     [],
+     'ValorDeSdkPorDefecto y PlataformaDeValorDeSdk (Lsp.Discovery, 1.22.2): el nombre del valor de '
+     'PlatformSDKs se componia en el build y se leia con otro StartsWith en paserver (P7 de Opus 5.5)'),
     ('el manifiesto de despliegue a mano', r"'\.deployproj'",
      [('Lsp.Patch.pas', '*')],
      'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Patch, 1.22.2): tres compositores y tres '
@@ -1066,6 +1070,7 @@ PLANTADO = {
     'un campo de conexion de un perfil': "  H := TagValue(Xml, 'Profile_host');",
     '.sdk leido a mano': "  if not S.ToLower.EndsWith('.sdk') then S := S;",
     'el manifiesto de despliegue a mano': "  F := TPath.ChangeExtension(D, '.deployproj');",
+    'el SDK por defecto del IDE a mano': "  V := Reg.ReadString('Default_' + Plat);",
     '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",

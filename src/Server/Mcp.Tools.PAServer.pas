@@ -476,8 +476,12 @@ function DefaultsDeSdk(const AVersion: string): TArray<string>;
 begin
   Result := nil;
   for var V in IdeValoresDeClave(AVersion, 'PlatformSDKs', False) do
-    if V.Nombre.StartsWith('Default_', True) then
-      Result := Result + [V.Nombre.Substring(8) + ' = ' + V.Dato];
+  begin
+    var Plat: string;
+    // por EL lector del nombre (Lsp.Discovery), la inversa de su compositor
+    if PlataformaDeValorDeSdk(V.Nombre, Plat) then
+      Result := Result + [Plat + ' = ' + V.Dato];
+  end;
 end;
 
 function AsientoDeSdkExiste(const AVersion, ANombre: string): Boolean;

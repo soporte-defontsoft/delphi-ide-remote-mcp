@@ -60,8 +60,16 @@ function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
   ASubKey is relative to the version key (e.g. 'Editor', 'PlatformSDKs',
   'Environment Variables'); '' when the key or value does not exist. The
   building block for every future IDE setting we need (Android/macOS SDKs,
-  deployment, etc.) - never compose registry paths by hand elsewhere. }
+  deployment, etc.) - never compose registry paths by hand elsewhere. Un
+  valor que no es texto tambien es '' (ReadString lanzaba; SdkPorDefectoDelIde
+  lo leia aparte por eso, P7 de la revision de Opus 5.5). }
 function IdeConfigValue(const AVersion, ASubKey, AValueName: string): string;
+{ El nombre del valor de PlatformSDKs con el SDK que el SDK Manager tiene por
+  defecto para APlat ('Default_' + APlat) y su inversa: el compositor y el
+  lector (los Default_ que ensena delphi_paserver profiles). Estaba a mano en
+  el build y en paserver. }
+function ValorDeSdkPorDefecto(const APlat: string): string;
+function PlataformaDeValorDeSdk(const AValor: string; out APlat: string): Boolean;
 
 { LA clave de la configuracion del IDE en el registro: la raiz
   (SOFTWARE\Embarcadero\BDS, con AVersion = ''), la de una version, o una
@@ -973,10 +981,31 @@ begin
     Reg.RootKey := HKEY_CURRENT_USER;
     Key := ClaveDelIde(AVersion, ASubKey);
     if Reg.OpenKeyReadOnly(Key) and Reg.ValueExists(AValueName) then
-      Result := Reg.ReadString(AValueName);
+      try
+        Result := Reg.ReadString(AValueName);
+      except
+        Result := ''; // un valor que no es texto: no es el dato que se pide
+      end;
   finally
     Reg.Free;
   end;
+end;
+
+const
+  PREFIJO_SDK_POR_DEFECTO = 'Default_';
+
+function ValorDeSdkPorDefecto(const APlat: string): string;
+begin
+  Result := PREFIJO_SDK_POR_DEFECTO + APlat;
+end;
+
+function PlataformaDeValorDeSdk(const AValor: string; out APlat: string): Boolean;
+begin
+  Result := AValor.StartsWith(PREFIJO_SDK_POR_DEFECTO, True) and
+    (Length(AValor) > Length(PREFIJO_SDK_POR_DEFECTO));
+  APlat := '';
+  if Result then
+    APlat := AValor.Substring(Length(PREFIJO_SDK_POR_DEFECTO));
 end;
 
 const
