@@ -2966,24 +2966,18 @@ begin
 end;
 
 { La subida por carpetas, compartida: desde ADesde hasta el borde de la jaula
-  (ReadPathDenied) y con tope de niveles para el modo sin jaula, acumulando
-  en ADirs sin repetir. Un solo buscador para ProjectsUsingUnit y
-  WorkspacePackagesWithUnit (24-sep-2026), no dos. }
-procedure SubeCarpetas(ADesde: string; var ADirs: TArray<string>);
-var
-  Padre: string;
-  Niveles: Integer;
+  (ReadPathDenied) y con el tope de la casa para el modo sin jaula
+  (Ancestros, NIVELES_DE_SUBIDA), acumulando en ADirs sin repetir. Un solo
+  buscador para ProjectsUsingUnit y WorkspacePackagesWithUnit (24-sep-2026),
+  no dos. }
+procedure SubeCarpetas(const ADesde: string; var ADirs: TArray<string>);
 begin
-  Niveles := 0;
-  while (ADesde <> '') and (Niveles < 12) and (ReadPathDenied(ADesde) = '') do
+  for var D in Ancestros(ADesde, NIVELES_DE_SUBIDA) do
   begin
-    if not MatchText(ADesde, ADirs) then
-      ADirs := ADirs + [ADesde];
-    Padre := TPath.GetDirectoryName(ADesde);
-    if (Padre = '') or SameText(Padre, ADesde) then
+    if ReadPathDenied(D) <> '' then
       Break;
-    ADesde := Padre;
-    Inc(Niveles);
+    if not MatchText(D, ADirs) then
+      ADirs := ADirs + [D];
   end;
 end;
 
@@ -3610,12 +3604,13 @@ begin
       Result := Padre;
     Exit;
   end;
-  for var Niveles := 1 to 12 do
+  // las de encima de ADir (la primera de Ancestros es ella), con el tope de la
+  // casa: subia doce por encima de ella, y el motor ocho
+  for var D in Copy(Ancestros(ADir, NIVELES_DE_SUBIDA), 1, MaxInt) do
   begin
-    Padre := TPath.GetDirectoryName(Result);
-    if (Padre = '') or SameText(Padre, Result) or (EscrituraDenegada(Padre) <> '') then
+    if EscrituraDenegada(D) <> '' then
       Break;
-    Result := Padre;
+    Result := D;
   end;
 end;
 

@@ -381,12 +381,12 @@ end;
   enlace): se para en la primera que no lo esta, y nunca sube de la papelera. }
 procedure RecogeVacias(const ADesde: string);
 var
-  P: string;
   EsLaPapelera: Boolean;
 begin
-  P := SinBarraFinal(ADesde);
-  while (P <> '') and IsBackupPath(P) do
+  for var P in Ancestros(SinBarraFinal(ADesde)) do
   begin
+    if not IsBackupPath(P) then
+      Break;
     EsLaPapelera := IsBackupRoot(P);
     // un ENLACE no es una carpeta vacia: RemoveDir lo quitaria tenga lo que
     // tenga detras (revision de la 1.9.0). Ahi se para
@@ -394,7 +394,6 @@ begin
       Break;
     if EsLaPapelera then
       Break;
-    P := TPath.GetDirectoryName(P);
   end;
 end;
 

@@ -1156,8 +1156,7 @@ begin
       // Un FICHERO en el camino (U.pas\sub) es una ruta equivocada, no un
       // fallo del servidor: salia EInOutError como INTERNAL en cinco tools
       // (tercera revision, 27-sep-2026)
-      D := SinBarraFinal(ADir);
-      while (D <> '') and (D <> TPath.GetDirectoryName(D)) do
+      for D in Ancestros(SinBarraFinal(ADir)) do
       begin
         if TFile.Exists(D) then
           // la papelera o los temporales del SERVIDOR tapados por un fichero:
@@ -1166,7 +1165,6 @@ begin
             raise Exception.Create(MsgFmt(SR_GUARD_FICHERO_EN_CARPETA_SERVIDOR_FMT, [D]))
           else
             raise Exception.Create(MsgFmt(SR_GUARD_FICHERO_EN_RUTA_FMT, [ADir, D]));
-        D := TPath.GetDirectoryName(D);
       end;
       raise;
     end;
@@ -3341,11 +3339,12 @@ begin
     if not StartsText(Lugar, IncludeTrailingPathDelimiter(P)) then
       Exit;
     // de APath hacia arriba hasta el lugar, sin el
-    while Length(IncludeTrailingPathDelimiter(P)) > Length(Lugar) do
+    for var D in Ancestros(P) do
     begin
-      if EsEnlace(P) then
+      if Length(IncludeTrailingPathDelimiter(D)) <= Length(Lugar) then
+        Break;
+      if EsEnlace(D) then
         Exit;
-      P := TPath.GetDirectoryName(P);
     end;
     Result := True;
   except
@@ -4829,10 +4828,14 @@ begin
   Result := ARuta;
   // un ENLACE existe aunque su destino no (una junction a una unidad
   // desmontada): TDirectory.Exists dice False, y el deshacer la tomaba
-  // por creada y la quitaba (decima revision)
-  while (Result <> '') and not TDirectory.Exists(Result) and not EsEnlace(Result) and
-        (ExtractFileDir(Result) <> Result) do
-    Result := ExtractFileDir(Result);
+  // por creada y la quitaba (decima revision). Si no existe ninguno, la
+  // raiz (la ultima de la subida)
+  for var D in Ancestros(ARuta) do
+  begin
+    Result := D;
+    if TDirectory.Exists(D) or EsEnlace(D) then
+      Exit;
+  end;
 end;
 
 procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string;
@@ -4849,15 +4852,16 @@ var
   end;
 
 begin
-  D := SinBarraFinal(ADesde);
+  if AAncestro = '' then
+    Exit;
   try
-    while (AAncestro <> '') and (Length(D) > Length(SinBarraFinal(AAncestro))) and
-          (Denegado(D) = '') do
+    for D in Ancestros(SinBarraFinal(ADesde)) do
     begin
+      if (Length(D) <= Length(SinBarraFinal(AAncestro))) or (Denegado(D) <> '') then
+        Break;
       // un enlace no lo creo nadie aqui: nunca se quita (decima revision)
       if EsEnlace(D) or not RemoveDir(D) then
         Break; // no esta vacia (otro dejo algo) o no se puede: se queda
-      D := ExtractFileDir(D);
     end;
   except
     // quitar lo creado nunca lanza

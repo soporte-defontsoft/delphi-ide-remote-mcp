@@ -74,7 +74,8 @@ uses
   Lsp.Texts,
   Lsp.TodoONada,
   Lsp.Casa, // FragmentoUnico: la cola del id, de un GUID
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Rutas;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -536,17 +537,11 @@ var
     reventaba con el texto del sistema (segunda revision, 27-sep-2026).
     Devuelve la ruta que estorba, o ''. }
   function PadreFichero(const APath: string): string;
-  var
-    D: string;
   begin
     Result := '';
-    D := TPath.GetDirectoryName(APath);
-    while (D <> '') and (D <> TPath.GetDirectoryName(D)) do
-    begin
+    for var D in Ancestros(TPath.GetDirectoryName(APath)) do
       if WillExist(Sub, D) then
         Exit(D);
-      D := TPath.GetDirectoryName(D);
-    end;
   end;
 begin
   Result := '';

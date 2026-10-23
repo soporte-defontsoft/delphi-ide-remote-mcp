@@ -1176,20 +1176,19 @@ begin
   Dir := APath;
   if TFile.Exists(Dir) then
     Dir := TPath.GetDirectoryName(Dir);
-  while (Dir <> '') and TDirectory.Exists(Dir) do
+  for var D in Ancestros(Dir) do
   begin
+    if not TDirectory.Exists(D) then
+      Break;
     // el repo mas cercano; uno cuya raiz no se lee (por encima de las raices)
     // no se nombra: era una carpeta de fuera en la respuesta, y delphi_git lo
     // niega igual (GIT-041; quinta ronda de Fable)
-    if TieneGit(Dir) then
+    if TieneGit(D) then
     begin
-      if ReadPathDenied(Dir, True) <> '' then
+      if ReadPathDenied(D, True) <> '' then
         Exit('');
-      Exit(Dir);
+      Exit(D);
     end;
-    if TPath.GetDirectoryName(Dir) = Dir then
-      Break;
-    Dir := TPath.GetDirectoryName(Dir);
   end;
 end;
 

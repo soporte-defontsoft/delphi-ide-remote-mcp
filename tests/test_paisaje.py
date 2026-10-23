@@ -164,6 +164,16 @@ REGLAS = [
      r"Replace\(\s*'/'\s*,\s*(?:'\\'|PathDelim)\s*\)|Replace\(\s*(?:'\\'|PathDelim)\s*,\s*'/'\s*\)",
      [('Lsp.NetDrives.pas', 'ConBarrasDeWindows'), ('Lsp.NetDrives.pas', 'ConBarrasNormales')],
      'ConBarrasDeWindows / ConBarrasNormales (Lsp.NetDrives, A40 de la 1.23)'),
+    # una subida por carpetas a mano: su marca es la parada en la raiz ("el padre es el mismo"), que cada
+    # bucle escribia a su modo - once, con tres topes distintos para la misma busqueda y ExtractFileDir en
+    # unos (que de \\host\recurso sube a \\host) y GetDirectoryName en otros (A11 de la 1.23)
+    ('una subida por carpetas a mano',
+     r"SameText\(\s*(?:Padre|Parent)\s*,|GetDirectoryName\((\w+)\)\s*(?:<>|=)\s*\1\b|"
+     r"\b(\w+)\s*(?:<>|=)\s*(?:TPath\.GetDirectoryName|ExtractFileDir)\(\s*\2\s*\)|"
+     r"ExtractFileDir\((\w+)\)\s*(?:<>|=)\s*\3\b",
+     [('Lsp.Rutas.pas', 'Ancestros')],
+     'Ancestros y NIVELES_DE_SUBIDA (Lsp.Rutas, A11 de la 1.23): la subida es una y cada uno para donde '
+     'su juez diga'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1137,6 +1147,7 @@ PLANTADO = {
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
+    'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

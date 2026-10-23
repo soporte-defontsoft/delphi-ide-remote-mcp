@@ -145,6 +145,16 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **A unit is served by the same project in every tool, however deep it
+  lives.** The project of a unit is looked for in the folders above it. The
+  language tools climbed eight folders and `delphi_delete`, `delphi_move`
+  and the move's search twelve, so a unit ten folders below its `.dproj`
+  belonged to it for a delete and to none for `delphi_diagnostics`, which
+  answered `LSP-035` (measured on 2026-10-23). The climb itself was written
+  by hand in eleven places, each with its own stop at the root, some by a
+  rule that climbs from `\\host\share` to `\\host`. Now there is one climb,
+  up to twelve folders when nothing else stops it first, and each search
+  stops where its own judge says (`tests/test_subida_1230.py`).
 - **`delphi_test` says a run was cut by its timeout only when it cut it.**
   When the deadline passed while the output of a test program that had
   already ended on its own was still being read, the answer was

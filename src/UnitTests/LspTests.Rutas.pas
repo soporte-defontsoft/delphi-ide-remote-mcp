@@ -193,6 +193,17 @@ type
     [Test] procedure UnUncConBarrasNormales;
   end;
 
+  { LA subida por carpetas (A11 de la 1.23): once bucles a mano, cada uno con
+    su parada en la raiz, y tres topes distintos para la misma busqueda. }
+  [TestFixture]
+  TAncestrosTests = class
+  public
+    [Test] procedure HastaLaRaizDeLaUnidad;
+    [Test] procedure HastaLaRaizDeUnRecurso;
+    [Test] procedure ConTope;
+    [Test] procedure LoQueNoEsRuta;
+  end;
+
 implementation
 
 uses
@@ -1173,6 +1184,37 @@ begin
   Assert.IsFalse(EsUnc('C:/x'));
 end;
 
+{ TAncestrosTests }
+
+procedure TAncestrosTests.HastaLaRaizDeLaUnidad;
+begin
+  Assert.AreEqual('C:\a\b|C:\a|C:\', string.Join('|', Ancestros('C:\a\b')));
+  Assert.AreEqual('C:\', string.Join('|', Ancestros('C:\')), 'la raiz sola');
+  // con barra final, la primera de encima es ella sin la barra (lo que hace
+  // GetDirectoryName, y lo que el canonizador espera)
+  Assert.AreEqual('C:\a\|C:\a|C:\', string.Join('|', Ancestros('C:\a\')), 'con barra final');
+end;
+
+procedure TAncestrosTests.HastaLaRaizDeUnRecurso;
+begin
+  // de \\host\recurso no se sube a \\host: no es una carpeta
+  Assert.AreEqual('\\h\s\x|\\h\s', string.Join('|', Ancestros('\\h\s\x')));
+end;
+
+procedure TAncestrosTests.ConTope;
+begin
+  Assert.AreEqual('C:\a\b|C:\a', string.Join('|', Ancestros('C:\a\b', 2)));
+  Assert.AreEqual('C:\a\b|C:\a|C:\', string.Join('|', Ancestros('C:\a\b', NIVELES_DE_SUBIDA)),
+    'un tope mas alto que la ruta no anade nada');
+end;
+
+procedure TAncestrosTests.LoQueNoEsRuta;
+begin
+  Assert.AreEqual('', string.Join('|', Ancestros('')));
+  // un caracter que Windows no admite: ella, y de ahi no se sube
+  Assert.AreEqual('C:\a|b\c', string.Join('|', Ancestros('C:\a|b\c')));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
@@ -1184,5 +1226,6 @@ initialization
   TDUnitX.RegisterTestFixture(TLugarDeRedTests);
   TDUnitX.RegisterTestFixture(TRutaDesdeTests);
   TDUnitX.RegisterTestFixture(TFormaDeTextoTests);
+  TDUnitX.RegisterTestFixture(TAncestrosTests);
 
 end.

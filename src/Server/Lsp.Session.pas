@@ -266,7 +266,8 @@ uses
   Lsp.Patch, // LeeTexto: la puerta de leer
   Lsp.Settings,
   Lsp.Dproj,         // BuscaEnCarpeta: que proyecto sirve a una unidad
-  Lsp.ProjectUnits;  // ProyectoListaUnidad, la otra mitad
+  Lsp.ProjectUnits,  // ProyectoListaUnidad, la otra mitad
+  Lsp.Rutas;
 
 type
   { What the engine holds of one document. }
@@ -1012,7 +1013,8 @@ end;
 
 { HASTA DONDE SE SUBE buscando la configuracion de un fuente.
 
-  Las dos busquedas de abajo trepan ocho niveles desde el fichero, y hasta
+  Las dos busquedas de abajo trepan NIVELES_DE_SUBIDA carpetas desde el
+  fichero (Ancestros, Lsp.Rutas: eran ocho, y doce para delete y move), y hasta
   el 2026-09-21 lo hacian sin mirar la jaula: un .dproj cualquiera colocado
   POR ENCIMA de la raiz del workspace se adoptaba como el proyecto de esa
   unit. Medido: un fichero de 10 bytes llamado "fuera-de-la-jaula.dproj" que
@@ -1075,7 +1077,7 @@ function TLspSession.BuscaDproj(const AFilePath: string; out ADecidido: Boolean;
   out APartes: TArray<string>; out AHuella: string): string;
 var
   Dir, Carpeta, C: string;
-  Matches: TArray<string>;
+  Matches, Subida: TArray<string>;
   Depth: Integer;
   Abajo: TList<string>;
   Juzgados: TDictionary<string, Boolean>;
@@ -1158,14 +1160,15 @@ begin
   AHuella := '';
   NoLeido := False;
   Carpeta := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
-  Dir := Carpeta;
+  Subida := Ancestros(Carpeta, NIVELES_DE_SUBIDA);
   Abajo := TList<string>.Create;
   Juzgados := TDictionary<string, Boolean>.Create;
   Sellos := TDictionary<string, string>.Create;
   Orden := TList<string>.Create;
   try
-    for Depth := 1 to 8 do
+    for Depth := 1 to Length(Subida) do
     begin
+      Dir := Subida[Depth - 1];
       if not PuedoSubirA(Dir) then
         Break;
       // la carpeta, sellada antes de listarla: un .dproj que aparezca en ella
@@ -1213,10 +1216,6 @@ begin
               Exit(Elige(C, True));
             Abajo.Add(C);
           end;
-      var Parent := TPath.GetDirectoryName(Dir);
-      if SameText(Parent, Dir) then
-        Break;
-      Dir := Parent;
     end;
     // nadie la lista, ni hay un .dproj en su carpeta o encima: el primero de
     // debajo, del nivel mas cercano, que la alcanza por search path. No se

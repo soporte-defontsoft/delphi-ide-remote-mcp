@@ -131,6 +131,25 @@ function SinPrefijoDeDispositivo(const APath: string): string;
   cuatro sitios (tercer revisor de la 1.8.2). }
 function EsUnc(const APath: string): Boolean;
 
+{ LA subida por carpetas: ARuta tal cual y cada carpeta de encima, hasta la
+  raiz de su unidad o de su recurso (\\host\recurso), que tambien va. Las de
+  encima son las de TPath.GetDirectoryName, que conoce las raices - la de un
+  UNC tambien: ExtractFileDir subia de \\host\recurso a \\host -; con una barra
+  final, la primera de encima es ARuta sin ella. Una ruta que no admite (un
+  caracter que Windows no deja) acaba la lista. ATope > 0: como mucho ese
+  numero de carpetas, la de partida incluida. Solo texto, no mira el disco:
+  cada uno para donde su juez diga. Estaba a mano en once sitios, cada uno con
+  su parada en la raiz (A11 de la 1.23). }
+function Ancestros(const ARuta: string; ATope: Integer = 0): TArray<string>;
+
+const
+  { Cuantas carpetas sube, como mucho, quien BUSCA hacia arriba (el .dproj de
+    una unidad, los proyectos que la listan, el borde de una mudanza), la de
+    partida incluida. Ningun juez dice a cuantos niveles esta el proyecto de
+    una unidad: es regla de la casa, y UNA. Con jaula para antes su borde; sin
+    ella, esto. Eran 8 en BuscaDproj y 12 en las otras dos (A11 de la 1.23). }
+  NIVELES_DE_SUBIDA = 12;
+
 implementation
 
 uses
@@ -139,6 +158,28 @@ uses
   System.StrUtils,
   System.IOUtils,
   Lsp.NetDrives;        // RaizSiUnidad, SinBarraFinal, PrefijoSinBarra, ConBarrasDeWindows
+
+function Ancestros(const ARuta: string; ATope: Integer): TArray<string>;
+var
+  D, Padre: string;
+begin
+  Result := [];
+  D := ARuta;
+  while D <> '' do
+  begin
+    Result := Result + [D];
+    if (ATope > 0) and (Length(Result) >= ATope) then
+      Break;
+    try
+      Padre := TPath.GetDirectoryName(D);
+    except
+      Break; // una ruta que GetDirectoryName no admite: de ahi no se sube
+    end;
+    if SameText(Padre, D) then
+      Break;
+    D := Padre;
+  end;
+end;
 
 { EL paseo hacia arriba, escrito UNA vez. Dada una ruta, busca el antecesor
   existente mas cercano que AResuelve sepa traducir y le vuelve a pegar el
@@ -149,7 +190,9 @@ uses
   nombre largo), y el 20-sep-2026, para cerrar el escape por junctions, escribi
   RealPath con el MISMO bucle y otra llamada de Windows - sin mirar si habia
   algo aprovechable, teniendolo en esta misma unidad. Entre las dos cambia UNA
-  linea, el resolutor; el paseo era identico. Ahora es uno. }
+  linea, el resolutor; el paseo era identico. Ahora es uno. Y la subida misma
+  es la de todos (Ancestros): aun asi se escribieron otras diez (A11 de la
+  1.23). }
 type
   TResuelveTramo = reference to function(const ADir: string;
     out ASalida: string): Boolean;
@@ -157,11 +200,10 @@ type
 function CanonicalSubiendo(const AFull: string;
   const AResuelve: TResuelveTramo): string;
 var
-  Dir, Tail, Parent, Resuelto: string;
+  Tail, Resuelto: string;
 begin
-  Dir := AFull;
   Tail := '';
-  while Dir <> '' do
+  for var Dir in Ancestros(AFull) do
   begin
     if AResuelve(Dir, Resuelto) then
     begin
@@ -170,14 +212,10 @@ begin
         Result := IncludeTrailingPathDelimiter(Result) + Tail;
       Exit;
     end;
-    Parent := TPath.GetDirectoryName(Dir);
-    if (Parent = '') or SameText(Parent, Dir) then
-      Break;
     if Tail = '' then
       Tail := TPath.GetFileName(Dir)
     else
       Tail := TPath.GetFileName(Dir) + '\' + Tail;
-    Dir := Parent;
   end;
   Result := AFull; // nada del camino existe: se queda la forma textual
 end;
