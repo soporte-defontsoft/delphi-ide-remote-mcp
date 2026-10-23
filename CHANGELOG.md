@@ -54,8 +54,9 @@ the MCP `initialize` response (`serverInfo.version`).
   form's `FindComponent` reads it: with an `Edit1` in the form and another in
   a frame, `get Edit1` gave the frame's and `set Edit1` changed the form's
   (Claude Opus 5.5 through Hermes, 2026-10-23); a bare name that is only
-  inside a frame is now refused with its path (`DSGN-017`, `DSGN-078`)
-  (`tests/test_contratos_1222.py`).
+  inside a frame is now refused with its path (`DSGN-017`, `DSGN-078`), and
+  `get` heads a frame's component with its path. Those refusals speak of
+  inline frames only in a form that has them (`tests/test_contratos_1222.py`).
 - **`delphi_designer insert` adds a page to a `TPageControl`.** A
   `TTabSheet` with a page control as its parent was refused (`DSGN-080`: a
   page control takes no controls), so there was no way to add a page but
@@ -64,7 +65,8 @@ the MCP `initialize` response (`serverInfo.version`).
   leaves it without one (measured on 2026-10-23). A page now goes in a page
   control, and only there (`DSGN-168` for any other parent, in `insert` and
   in `set parent=`). Its note no longer says that it lands at 10,10 - a page
-  keeps no position of its own (`DSGN-169`) - and it says which page opens:
+  keeps no position of its own (`DSGN-169`), and neither does a control
+  that `props` places - and it says which page opens:
   the page control's `ActivePage`, which the IDE saves as the page selected
   when it saves and a program usually sets in code (measured in the IDE on
   2026-10-23) (`tests/test_contratos_1222.py`).

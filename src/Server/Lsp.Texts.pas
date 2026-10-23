@@ -3195,7 +3195,7 @@ const
     'line %d: %s';
 
   SR_CFG_SET_ACTIVE_CONFIG_FMT =
-    '[CFG-116 INVALID_PARAM] The project has no configuration "%s" to build. ' +
+    '[CFG-116 INVALID_PARAM] The project declares no configuration "%s". ' +
     'The ones it declares: %s. Nothing was written.';
 
   SR_CFG_SET_ACTIVE_SIN_SELECTOR_FMT =
@@ -3404,8 +3404,8 @@ const
     'to change.';
 
   SN_CONFIG_DEPLOY_REMOVED_FMT =
-    '[CFG-030] REMOVED "%s" from the deployment of %s (%d entries in the ' +
-    'project, %d in its .deployproj). Backups in __delphi-patch.';
+    '[CFG-030] REMOVED "%s" from the deployment of %s (entries removed: %d ' +
+    'in the project, %d in its .deployproj). Backups in __delphi-patch.';
 
   { view section=deploy: lo que el .deployproj despliega y el proyecto no
     lista (1.22.2) }
@@ -5408,10 +5408,18 @@ const
 
   SR_DESIGNER_COMPONENTE_NO_ESTA_FMT =
     '[DSGN-078 NOT_FOUND] There is no component %s in %s. Nothing was ' +
-    'written. Its components: %s. To add one, command=insert. One of an ' +
-    'inline frame goes by its path (Frame11.Edit1); this form holds only ' +
-    'those it overrides (an inherited block), the rest are in the ' +
+    'written. Its components: %s. To add one, command=insert.%s';
+  { ...y si el form tiene frames en linea, como se nombra uno de dentro, con
+    el primero de los suyos (DSGN-078 y DSGN-017 lo decian tambien en un form
+    sin ninguno: rondas de Opus de la 1.22.2) }
+  SF_DESIGNER_EN_SUS_FRAMES_FMT =
+    ' One of an inline frame goes by its path (%s.<name>); this form holds ' +
+    'only those it overrides (an inherited block), the rest are in the ' +
     'frame''s own file.';
+  // ...y si el nombre pedido esta dentro de uno, sus rutas
+  SF_DESIGNER_ES_DE_SU_FRAME_FMT =
+    ' Inside its inline frames: %s - a component of a frame goes by its ' +
+    'path.';
 
   SR_DESIGNER_INSERT_NO_VISUAL_FMT =
     '[DSGN-079 INVALID_PARAM] %s is not a visual control (it does not descend ' +
@@ -5724,13 +5732,17 @@ const
 
   // lo que dice insert: el bloque es el que guarda el escritor del IDE (1.22.1;
   // medido: en VCL guarda el tamano del constructor, en FMX no lo guarda)
-  SN_DESIGNER_INSERT_NOTE =
+  SN_DESIGNER_INSERT_FMT =
     '[DSGN-100] Inserted as the IDE''s writer stores it: position, the size ' +
     'its constructor gives when the IDE stores it (VCL does, FMX keeps the ' +
     'platform size unwritten), its Name as text when the class shows one, ' +
-    'TabOrder. It lands at 10,10 even when something is already there: place ' +
-    'it with set Left/Top (Position.X/Position.Y in FMX). Change a property ' +
+    'TabOrder.%s Change a property ' +
     'with command=set, move it with set parent=, see it with command=preview.';
+  // ...si su sitio no lo puso props (lo decia tambien con Left/Top en props:
+  // rondas de Opus de la 1.22.2)
+  SF_DESIGNER_INSERT_EN_10_10 =
+    ' It lands at 10,10 even when something is already there: place it with ' +
+    'set Left/Top (Position.X/Position.Y in FMX).';
 
   // ...y de lo que su escritor guarda SIN posicion (una pagina llena su
   // control de paginas: medido, solo Caption), que no tiene 10,10 que decir
@@ -5978,8 +5990,7 @@ const
 
   SR_DESIGNER_COMPONENT_FMT =
     '[DSGN-017 NOT_FOUND] There is no component "%s" in that form ' +
-    '(command=tree lists them). One of an inline frame goes by its path ' +
-    '(Frame11.Edit1).';
+    '(command=tree lists them).%s';
 
   SN_DESIGNER_INFO_NOTE =
     '[DSGN-018] Published properties read from the source of the active ' +

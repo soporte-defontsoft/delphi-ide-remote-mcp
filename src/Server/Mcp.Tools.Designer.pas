@@ -585,9 +585,11 @@ begin
       Exit(MsgText(SR_DESIGNER_EMPTY));
     O := Doc.ObjetoDeNombre(AName.Trim);
     if O = nil then
-      Exit(MsgFmt(SR_DESIGNER_COMPONENT_FMT, [AName]));
+      Exit(MsgFmt(SR_DESIGNER_COMPONENT_FMT, [AName, PistaDeFrames(Doc, AName.Trim)]));
+    // por su ruta si es de un frame en linea, la que se le dio (decia el Name
+    // a secas: rondas de Opus de la 1.22.2)
     Result := MsgFmt(SF_DSGN_BLOQUE_LINEAS_FMT,
-      [O.ObjName, O.ClassName_, O.StartLine, O.EndLine,
+      [O.Ruta, O.ClassName_, O.StartLine, O.EndLine,
        TPath.GetFileName(APath), Doc.BlockText(O)]);
   finally
     Doc.Free;

@@ -2136,7 +2136,9 @@ begin
   // (con una ruta que no existe, la unidad se encontro por su nombre: decia
   // "still on disk" de un fichero que no estaba; punto 8 de la 1.18.2)
   var Plantilla := MsgText(SN_UNIT_REMOVED_FMT);
-  var Dado := TPath.GetFileName(APasPath);
+  // la entrada como la lista el proyecto (Lib\UX.pas): decia solo el fichero
+  // (rondas de Opus de la 1.22.2)
+  var Dado := Include;
   var Listado := '';
   if AFileGoesToo then
     Plantilla := MsgText(SN_UNIT_REMOVED_GONE_FMT)

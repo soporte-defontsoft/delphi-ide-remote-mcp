@@ -175,7 +175,7 @@ try:
           j.get('parent') == (re.search(r'^object (\w+)', mc.lee(VDFM)) or re.search('()', '')).group(1) and
           j.get('usesAdded') == 'Vcl.StdCtrls' and j.get('field') == 'Button1: TButton' and
           any('object Button1: TButton' in b for b in j.get('block', [])) and
-          mc.es(j.get('note', ''), 'SN_DESIGNER_INSERT_NOTE'), r[:700])
+          mc.es(j.get('note', ''), 'SN_DESIGNER_INSERT_FMT'), r[:700])
     dfm, pas = mc.lee(VDFM), mc.lee(VPAS)
     # (1.22.1) como lo guarda el escritor del IDE: con el tamano de su constructor
     check('V1 ...como lo guarda el IDE: 10,10, el tamano de su constructor, su nombre de Caption, TabOrder 0',

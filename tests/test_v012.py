@@ -564,7 +564,7 @@ check('deployfile: sin plataforma RECHAZADO',
 out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: quitado (la del .dproj y la del .deployproj)',
-      mc.abre(out, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(1 entries in the project, 1 in its .deployproj)' in out,
+      mc.abre(out, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(entries removed: 1 in the project, 1 in its .deployproj)' in out,
       out[:160])
 _x = open(_deployproj, encoding='utf-8-sig').read()
 # Desde v0.62 la entrada se escribe RELATIVA al proyecto, como la escribe el

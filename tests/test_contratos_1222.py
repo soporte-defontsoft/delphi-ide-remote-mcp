@@ -254,14 +254,16 @@ try:
         return srv.call('delphi_designer', a, 240)
 
     r = dsg(command='get', component='Frame11.Edit1')
-    check('F1 get Frame11.Edit1: su bloque inherited', not mc.fallo(r) and "Text = 'uno'" in r, r[:400])
+    check('F1 get Frame11.Edit1: su bloque inherited, y la cabecera por su ruta',
+          not mc.fallo(r) and "Text = 'uno'" in r and r.startswith('Frame11.Edit1 (TEdit)'), r[:400])
     r = dsg(command='set', component='Frame11.Edit1', prop='Text', value="'dos'")
     t = lee(fdfm)
     check('F2 set Frame11.Edit1 Text: escrito en su bloque inherited, dentro del inline',
           not mc.fallo(r) and "    inherited Edit1: TEdit\r\n      Text = 'dos'\r\n    end\r\n  end" in t, r[:400] + ' | ' + t[:600])
     r = dsg(command='set', component='Nada', prop='Caption', value="'x'")
     check('F3 un nombre que no esta: DSGN-078 lista Frame11.Edit1 por su ruta y no manda a editarlo alli',
-          mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'Frame11.Edit1' in r and 'edit it there' not in r, r[:500])
+          mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'Frame11.Edit1' in r and 'edit it there' not in r
+          and '(Frame11.<name>)' in r, r[:500])
     antes = open(fdfm, 'rb').read()
     r = dsg(command='delete', component='Frame11.Edit1')
     check('F4 control: delete Frame11.Edit1 se niega (es del frame) y el fichero no cambia',
@@ -315,6 +317,7 @@ try:
     r = srv.call('delphi_config', {'project': uproj, 'command': 'remove-unit', 'path': 'Lib\\ULibRel.pas'})
     check('U1 remove-unit Lib\\ULibRel.pas (relativa, dentro): quitada y SIN decir que esta fuera de lo legible',
           mc.es(r, 'SN_UNIT_REMOVED_FMT') and not mc.es(r, 'SN_UNIT_REMOVED_FUERA_FMT')
+          and 'Lib\\ULibRel.pas is still on disk' in r
           and 'ULibRel' not in lee(os.path.join(udir, 'Quita.dpr')), r[:400])
     # CREATE-035 nombra los kinds de verdad con los que va el parametro, no la familia ('form' no es un kind)
     r = srv.call('delphi_create', {'kind': 'unit', 'name': 'UFn', 'project': uproj, 'formname': 'X'})
@@ -377,7 +380,7 @@ try:
                                    'path': os.path.join(ddir, 'datos', 'datos.txt')}, 240)
     t, m = lee(dproj), lee(dmani)
     check('DF7 remove-deployfile: se va de los dos (1 en el proyecto, 1 en el .deployproj); el otro se queda',
-          mc.es(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(1 entries in the project, 1 in its .deployproj)' in r
+          mc.es(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(entries removed: 1 in the project, 1 in its .deployproj)' in r
           and 'datos\\datos.txt' not in t and 'datos\\datos.txt' not in m
           and 'externo.txt' in t and 'externo.txt' in m, r[:400])
     # con la forma de un .dproj del IDE (Vivo1221\despliegue, medido): la clase File con su carpeta en OSX64
@@ -564,7 +567,17 @@ try:
                                      'parent': 'TabSheet1'}, 240)
     check('T2 control: un TButton en la pagina', not mc.fallo(r), r[:300])
     check('T6 control: la de un TButton sigue con su 10,10 y sin ActivePage',
-          mc.es(r, 'SN_DESIGNER_INSERT_NOTE') and '10,10' in r and 'ActivePage' not in r, r[:700])
+          mc.es(r, 'SN_DESIGNER_INSERT_FMT') and '10,10' in r and 'ActivePage' not in r, r[:700])
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TButton',
+                                     'parent': 'TabSheet1', 'props': 'Left=40;Top=50'}, 240)
+    check('T7 con su sitio en props, la nota no dice 10,10 (rondas de Opus)',
+          mc.es(r, 'SN_DESIGNER_INSERT_FMT') and '10,10' not in r and 'Top = 50' in r, r[:700])
+    r = srv.call('delphi_designer', {'command': 'set', 'path': vdfm, 'component': 'Nada', 'prop': 'Caption',
+                                     'value': "'x'"}, 240)
+    r2 = srv.call('delphi_designer', {'command': 'get', 'path': vdfm, 'component': 'Nada'}, 240)
+    check('T8 en un form SIN frames, DSGN-078 y DSGN-017 no hablan de un frame en linea (rondas de Opus)',
+          mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and mc.es(r2, 'SR_DESIGNER_COMPONENT_FMT')
+          and 'inline frame' not in r and 'inline frame' not in r2, (r[:300], r2[:300]))
     antes = open(vdfm, 'rb').read()
     r = srv.call('delphi_designer', {'command': 'insert', 'path': vdfm, 'classname': 'TTabSheet'}, 240)
     check('T3 un TTabSheet en el form: DSGN-168 y nada escrito',

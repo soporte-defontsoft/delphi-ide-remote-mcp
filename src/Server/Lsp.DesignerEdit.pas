@@ -113,6 +113,12 @@ function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: strin
   AIndex: Integer = -1): string;
 function BorraComponente(const APath, AComponente: string): string;
 
+{ Si el form de ADoc tiene frames en linea, la frase que dice como se nombra
+  uno de dentro: las rutas de los que se llaman ANombre, si los hay; si no,
+  la forma, con el primer frame; '' si no tiene ninguno: la de las negativas
+  de 'no esta' de get, set y delete. }
+function PistaDeFrames(ADoc: TStyleDoc; const ANombre: string = ''): string;
+
 implementation
 
 uses
@@ -861,7 +867,7 @@ begin
   I := AObj.StartLine - 1;
   if not LineaDeObjeto(Lineas[I], Clave, NomObj, ClaseObj, Resto) or
      not MismoIdentificador(NomObj, AObj.ObjName) then
-    Exit(MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [AObj.ObjName, '?', '']));
+    Exit(MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [AObj.ObjName, '?', '', '']));
   Lineas[I] := LeadingWhite(Lineas[I]) + ComponeLineaDeObjeto(Clave, ANuevo, ClaseObj) + Resto;
   // las lineas del form que lo nombran, de dentro y de fuera de su bloque
   // (las que guardan un componente: AJuez), con el nombre nuevo y lo de
@@ -1040,13 +1046,42 @@ begin
   end;
 end;
 
+function PistaDeFrames(ADoc: TStyleDoc; const ANombre: string): string;
+var
+  Primero: TStyleObj;
+  Rutas: TArray<string>;
+
+  procedure Recorre(O: TStyleObj);
+  begin
+    if (O.Clave = 'inline') and (Primero = nil) then
+      Primero := O;
+    if (ANombre <> '') and (InlineQueLoContiene(O) <> nil) and MismoIdentificador(O.ObjName, ANombre) then
+      Rutas := Rutas + [O.Ruta];
+    for var K in O.Children do
+      Recorre(K);
+  end;
+
+begin
+  Result := '';
+  if (ADoc = nil) or (ADoc.Root = nil) then
+    Exit;
+  Primero := nil;
+  Rutas := [];
+  Recorre(ADoc.Root);
+  if Length(Rutas) > 0 then
+    Result := MsgFmt(SF_DESIGNER_ES_DE_SU_FRAME_FMT, [string.Join(', ', Rutas)])
+  else if Primero <> nil then
+    Result := MsgFmt(SF_DESIGNER_EN_SUS_FRAMES_FMT, [Primero.Ruta]);
+end;
+
 function BuscaComponente(const F: TFormEnEdicion; const AName: string;
   out AObj: TStyleObj): string;
 begin
   Result := '';
   AObj := ObjetoPorNombre(F.Doc, AName.Trim);
   if AObj = nil then
-    Result := MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [AName.Trim, F.DfmNombre, NombresDelForm(F.Doc)]);
+    Result := MsgFmt(SR_DESIGNER_COMPONENTE_NO_ESTA_FMT, [AName.Trim, F.DfmNombre, NombresDelForm(F.Doc),
+      PistaDeFrames(F.Doc, AName.Trim)]);
 end;
 
 // lo que no se borra, ni se renombra, ni se mueve desde este form
@@ -1990,7 +2025,14 @@ begin
       // la nota, por lo que guardo su escritor; una pagina dice ademas cual abre
       var Nota: string;
       if ConSitio then
-        Nota := MsgText(SN_DESIGNER_INSERT_NOTE)
+      begin
+        // el 10,10, salvo que props le diera su sitio
+        var Sitio := MsgText(SF_DESIGNER_INSERT_EN_10_10);
+        for var P in Props do
+          if MatchText(P.Trim, ['Left', 'Top', 'Position.X', 'Position.Y']) then
+            Sitio := '';
+        Nota := MsgFmt(SN_DESIGNER_INSERT_FMT, [Sitio]);
+      end
       else
         Nota := MsgText(SN_DESIGNER_INSERT_SIN_SITIO_NOTE);
       if not F.EsFmx and F.Tabla.Desciende(ClsId, ID_VCL_TABSHEET) then
