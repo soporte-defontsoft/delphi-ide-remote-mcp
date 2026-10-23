@@ -103,7 +103,7 @@ out = call('delphi_edit', {"path": PAS, "old": "procedure Otro;",
 check('gate: caracter fuera de cp1252 con consejo #$, y el fichero sin tocar', mc.rechazado(out)
       and mc.es(out, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and '#$2714' in out and open(PAS, 'rb').read() == _antes_pas, out)
 out = call('delphi_edit', {"path": PAS, "old": "linea con �", "new": "x"})
-check('gate: U+FFFD en ancla', mc.rechazado(out) and mc.es(out, 'SR_EDIT_TU_ANCLA_LLEVA_CARACTER'), out)
+check('gate: U+FFFD en un ancla que no esta: la negativa lo dice', mc.rechazado(out) and mc.es(out, 'SN_ANCLA_LLEVA_FFFD'), out)
 _antes_dfm, _antes_ff = open(DFM, 'rb').read(), open(DFM_FF, 'rb').read()
 out = call('delphi_edit', {"path": DFM, "old": "a", "new": "b"})
 check('gate: designer binario TPF0, y sus bytes sin tocar', mc.rechazado(out)

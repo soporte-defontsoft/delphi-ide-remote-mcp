@@ -901,7 +901,7 @@ try:
 
     rechazo('E66 textedit con un atline que no es el de la unica ocurrencia: se niega (como delphi_edit)',
             'delphi_textedit', {'path': NOTES, 'old': 'First line.', 'new': 'X', 'atline': 2},
-            'INVALID_PARAM', 'SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT')
+            'INVALID_PARAM', 'SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT')  # el de delphi_edit desde A15
 
     rechazo('E67 set-sdk en Win64: INVALID_PARAM (decia "Registered for Win64: .")',
             'delphi_config', {'command': 'set-sdk', 'project': DPROJ, 'platform': 'Win64', 'sdk': 'x'},
@@ -1880,8 +1880,9 @@ try:
     else:
         check('E138 fixture: mklink /J crea la junction', False, L138)
 
-    # E139 occurrence cuenta con la regla del motor de Pascal: "  foo;  " no es
-    # una ocurrencia de "foo;" para el motor (daba EDIT-062)
+    # E139 occurrence cuenta con la regla del motor (daba EDIT-062 cuando contaba
+    # con otra): desde A15 de la 1.23 "  foo;  " ES la ocurrencia 1 de "foo;",
+    # los blancos de los dos extremos no cuentan
     D139 = os.path.join(JAIL, 'e139')
     os.makedirs(D139)
     P139 = os.path.join(D139, 'Occ.pas')
@@ -1890,8 +1891,8 @@ try:
     res, sc, t = llama('delphi_edit', {'path': P139, 'edits': json.dumps(
         [{'old': 'foo;', 'new': 'bar;', 'occurrence': 1}])})
     b139 = open(P139, 'rb').read()
-    check('E139 occurrence:1 con la regla del motor: edita "  foo;" (era EDIT-062)',
-          not res.get('isError') and b'  foo;  \r\n  bar;\r\n' in b139, '%s | %r' % (t[:200], b139))
+    check('E139 occurrence:1 con la regla del motor: edita "  foo;  ", la primera (era EDIT-062)',
+          not res.get('isError') and b'  bar;\r\n  foo;\r\n' in b139, '%s | %r' % (t[:200], b139))
 
     # E140 el create de un changeset normaliza el CR suelto como sus gemelos
     res, sc, t = llama('delphi_changeset', {'command': 'begin'})

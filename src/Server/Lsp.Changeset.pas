@@ -230,14 +230,6 @@ end;
   de atline si es de las que casan, como en los motores. El preview
   preguntaba con OTRA regla (exacta en una funcion, recortada en la otra) y
   decia limpio lo que el commit deshacia (octava revision). }
-{ La linea de un delete-line es la de old, con la regla del motor del
-  fichero (sin la sangria en Pascal, recortadas en texto): se comparaba
-  exacta (octava revision). }
-function LineaEsLaDeOld(const ALinea, AOld, APath: string): Boolean;
-begin
-  Result := Length(LineasDondeCasaElAncla([ALinea], AOld, EsDelMotorPascal(APath))) > 0;
-end;
-
 { La clave de "la linea L de ESE fichero" para el registro del preview de lo que
   cada operacion escribe (Escritas): la linea de antes del lote y la ruta sin
   mirar mayusculas ("17@d:\x\u.pas"; la forma "a|b" es la de las marcas de
@@ -247,14 +239,14 @@ begin
   Result := IntToStr(ALinea) + '@' + LowerCase(APath);
 end;
 
-function ResuelveAncla(const AText, APath, ALine: string; AAtLine: Integer;
+function ResuelveAncla(const AText, ALine: string; AAtLine: Integer;
   out ALinea: Integer): Integer;
 var
   Hits: TArray<Integer>;
   H: Integer;
 begin
   ALinea := 0;
-  Hits := LineasDondeCasaElAncla(LineasDelTexto(AText), ALine, EsDelMotorPascal(APath));
+  Hits := LineasDondeCasaElAncla(LineasDelTexto(AText), ALine);
   if AAtLine > 0 then
   begin
     Result := 0;
@@ -475,7 +467,9 @@ begin
             [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]);
           Exit;
         end;
-        if (Op.OldLine <> '') and not LineaEsLaDeOld(Ls[Op.AtLine - 1], Op.OldLine, Op.Path) then
+        // la linea de un delete-line es la de old, por la regla de los motores
+        // (LineaEsLaDelAncla): se comparaba exacta (octava revision)
+        if (Op.OldLine <> '') and not LineaEsLaDelAncla(Ls[Op.AtLine - 1], Op.OldLine) then
         begin
           AError := MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
             [Op.AtLine, Ls[Op.AtLine - 1]]);
@@ -486,7 +480,7 @@ begin
         // cualquiera, y nacio para las lineas en blanco)
         if Op.OldLine = '' then
         begin
-          AError := LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine, EsDelMotorPascal(Op.Path),
+          AError := LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
             TPath.GetFileName(Op.Path));
           if AError <> '' then
             Exit;
@@ -971,7 +965,7 @@ begin
                 [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]));
               Inc(N);
             end
-            else if (Op.OldLine <> '') and not LineaEsLaDeOld(Ls[Op.AtLine - 1], Op.OldLine, Op.Path) then
+            else if (Op.OldLine <> '') and not LineaEsLaDelAncla(Ls[Op.AtLine - 1], Op.OldLine) then
             begin
               Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
                 [Op.AtLine, Ls[Op.AtLine - 1]]));
@@ -979,10 +973,10 @@ begin
             end
             // sin old, solo una linea en blanco (lo que el commit niega, M-4)
             else if (Op.OldLine = '') and (LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
-              EsDelMotorPascal(Op.Path), TPath.GetFileName(Op.Path)) <> '') then
+              TPath.GetFileName(Op.Path)) <> '') then
             begin
               Obj.AddPair('anchor', LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
-                EsDelMotorPascal(Op.Path), TPath.GetFileName(Op.Path)));
+                TPath.GetFileName(Op.Path)));
               Inc(N);
             end
             else if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, Op.AtLine)) then
@@ -1006,7 +1000,7 @@ begin
             // 10) - which is also the earliest warning that an anchor
             // resolved somewhere unexpected.
             var LineaAncla: Integer;
-            var CuantasAncla := ResuelveAncla(Text, Op.Path, Op.OldLine, Op.AtLine, LineaAncla);
+            var CuantasAncla := ResuelveAncla(Text, Op.OldLine, Op.AtLine, LineaAncla);
             Obj.AddPair('atline', TJSONNumber.Create(LineaAncla));
             case CuantasAncla of
               1: // el ENSAYO del motor: todo lo que el commit va a comprobar

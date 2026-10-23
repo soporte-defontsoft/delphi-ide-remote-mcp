@@ -145,6 +145,28 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **An anchor line matches by one rule in both edit tools, in blocks and in
+  batches.** `delphi_edit` compared a one-line anchor with the end of its line
+  exact - `foo := 1;` did not match `  foo := 1;  ` (`EDIT-093` with the
+  `EDIT-094` note) - while `delphi_textedit` and every block anchor trimmed
+  both ends: the same line matched in a block and not alone, and
+  `occurrence` counted it in one tool and not in the other. The blanks at
+  either end no longer count anywhere - one-line and block anchors,
+  `occurrence` and the preview of `delphi_changeset` - and `EDIT-094` is gone
+  with the case it described. An anchor carrying U+FFFD was refused before
+  any search, and only by `delphi_edit` (`EDIT-061`, and `EDIT-005` for a
+  `fragment`): a line that really holds that character could not be edited,
+  and `delphi_textedit` said nothing about a broken read. U+FFFD is now the
+  note of an anchor or a fragment that matches nothing, in both tools.
+  `delphi_textedit` gave two facts of an anchor codes of its own (`TEXT-009`
+  repeated, `TEXT-002` an `atline` that is none of them): both tools say
+  `EDIT-077` and `EDIT-062`. And in a batch, an entry with no tie-break whose
+  anchor appeared more than once in the file as it was before the batch -
+  where `occurrence` counts - was applied wherever it had become unique by
+  its turn, answering `APPLIED`: with `x := 1;` on lines 4 and 6, entry 1
+  changed line 6 by `occurrence` and entry 2 landed on line 4 (measured on
+  2026-10-23). From the second entry on it is refused now, with the lines
+  (`EDIT-130`) (`tests/test_ancla_1230.py`).
 - **`delphi_config` writes for a platform only when the project has it, and
   a name that is no platform gets one answer.** `add-searchpath`, `set-sdk`,
   `set-profile`, `add-deployfile` and `set-property` wrote groups for a

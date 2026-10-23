@@ -80,6 +80,8 @@ type
     [Test] procedure TroceadorConSaltoYSuInversa;
     [Test] procedure ConSaltoNormalizaLosTres;
     [Test] procedure MotorPascalPorExtension;
+    [Test] procedure LaLineaDeUnAnclaUnaRegla;
+    [Test] procedure LaLineaElegidaUnaNegativa;
     [Test] procedure ZonaDelCambioMueveLoDeDebajo;
     [Test] procedure UriDelMotorYSuInversa;
     [Test] procedure CompositorConservaLosSaltosDeFuera;
@@ -94,6 +96,7 @@ uses
   System.SysUtils,
   Lsp.Guard, // ParametroQueNoVa
   Lsp.Patch,
+  Lsp.Texts, // EsMsg y las negativas de un ancla
   Lsp.Codificacion,
   Lsp.Casa,
   System.Character,
@@ -741,6 +744,42 @@ begin
     EsDelMotorPascal('X.inc') and EsDelMotorPascal('X.dfm') and EsDelMotorPascal('X.fmx'));
   Assert.IsFalse(EsDelMotorPascal('X.txt') or EsDelMotorPascal('X.dproj'),
     'el texto y el proyecto no son del motor de Pascal');
+end;
+
+{ Que una linea ES la de un ancla, LA regla de los motores, sus bloques y
+  occurrence (A15 de la 1.23): los blancos de los dos extremos no cuentan. }
+procedure TNombradorTests.LaLineaDeUnAnclaUnaRegla;
+var
+  Hits: TArray<Integer>;
+begin
+  Assert.IsTrue(LineaEsLaDelAncla('  foo;  ', 'foo;'), 'ni la sangria ni los de detras');
+  Assert.IsTrue(LineaEsLaDelAncla(#9'foo;', '    foo;'), 'ni la sangria del ancla');
+  Assert.IsFalse(LineaEsLaDelAncla('  foo; // x', 'foo;'), 'un trozo no es la linea');
+  Assert.IsTrue(LineaEsLaDelAncla('   ', ''), 'una en blanco casa con el ancla vacia');
+  Hits := LineasDondeCasaElAncla(['a', '  foo;  ', 'foo;'], 'foo;');
+  Assert.AreEqual<Integer>(2, Length(Hits));
+  Assert.AreEqual<Integer>(1, Hits[0], 'la de los blancos de detras es la primera');
+  Hits := IniciosDelAncla(['x', '  a  ', 'b', 'a', ' b '], 'a'#10'b');
+  Assert.AreEqual<Integer>(2, Length(Hits), 'un bloque, por la misma regla');
+  Assert.AreEqual<Integer>(3, Hits[1]);
+end;
+
+{ LA eleccion de la linea de un ancla entre las que casan, y LAS negativas,
+  de las dos tools (A15: delphi_textedit tenia otros dos codigos). }
+procedure TNombradorTests.LaLineaElegidaUnaNegativa;
+var
+  Idx: Integer;
+begin
+  Assert.AreEqual('', LineaElegida([3], 0, Idx));
+  Assert.AreEqual<Integer>(3, Idx);
+  Assert.AreEqual('', LineaElegida([3, 5], 6, Idx), 'atline desempata (1-based)');
+  Assert.AreEqual<Integer>(5, Idx);
+  Assert.IsTrue(EsMsg(LineaElegida([3, 5], 0, Idx), SR_EDIT_ANCLA_NO_UNICA_FMT), 'repetida sin atline');
+  Assert.IsTrue(EsMsg(LineaElegida([3, 5], 5, Idx), SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT),
+    'un atline que no es ninguna');
+  Assert.IsTrue(EsMsg(LineaElegida([3], 2, Idx), SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT),
+    'tampoco con una sola');
+  Assert.IsTrue(Pos('4, 6', LineaElegida([3, 5], 0, Idx)) > 0, 'sus lineas, 1-based');
 end;
 
 procedure TNombradorTests.ParametroQueNoVaConSuDefecto;

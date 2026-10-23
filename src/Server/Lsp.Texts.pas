@@ -1052,8 +1052,8 @@ const
     'contain line breaks: it changes a piece INSIDE one line. To add or ' +
     'remove lines use the whole-line anchor ("old").';
   SR_FRAG_EMPTY =
-    '[EDIT-005 INVALID_PARAM] "fragment" is empty or contains U+FFFD (you read ' +
-    'the file with a generic tool). Copy the piece from delphi_read.';
+    '[EDIT-005 INVALID_PARAM] "fragment" is empty. Copy the piece from ' +
+    'delphi_read.';
   SR_FRAG_BEYOND_FMT =
     '[EDIT-006 INVALID_PARAM] atline=%d does not exist in %s, which has %d ' +
     'lines.';
@@ -1135,6 +1135,16 @@ const
     'what is left as it goes: if the earlier entry changes occurrence 1, ' +
     'this one has to ask for 2 (or anchor by atline). Nothing was ' +
     'written.';
+  { P2 de A15 (1.23): una entrada sin desempate cuya ancla aparece varias
+    veces en el fichero de ANTES de la tanda - el que leyo el agente y donde
+    cuenta occurrence - se aplicaba en la que quedase unica cuando le tocaba,
+    contestando OK. %d = la entrada, %d = cuantas, %s = sus lineas. }
+  SR_PATCH_ANCLA_REPETIDA_FMT =
+    '[EDIT-130 INVALID_PARAM] Entry %d: its anchor appears %d times in the ' +
+    'file as it was BEFORE the batch (lines %s), and the entry says which ' +
+    'by neither "occurrence" nor "atline". Earlier entries may leave just ' +
+    'one, but I do not guess which you meant. Nothing was written. Add ' +
+    '"occurrence": K (it counts that same file).';
   SR_PATCH_OCCURRENCE_FMT =
     '[EDIT-011 INVALID_PARAM] Entry %d asks for occurrence %d of "%s", ' +
     'and there are only %d. Nothing was written. Re-read with ' +
@@ -1227,10 +1237,8 @@ const
   SN_ANCLA_COPIALA =
     '[EDIT-014] Copy the literal line from delphi_read (do not rebuild ' +
     'it from memory).';
-  SN_ANCLA_BLANCOS_FMT =
-    '[EDIT-094] NOTE: line %d has that SAME text with other spaces or tabs ' +
-    'around it: the indentation does not count, but the END of the line ' +
-    'does (trailing blanks included). Copy it as is:';
+  // EDIT-094 (la misma linea con otros blancos alrededor) se retiro en la
+  // 1.23: los blancos de los dos extremos ya no cuentan (A15, LineaEsLaDelAncla)
   SN_ANCLA_CONTIENEN =
     '[EDIT-095] Lines that CONTAIN it:';
   SN_ANCLA_PARECIDA_FMT =
@@ -8197,11 +8205,14 @@ const
   SR_EDIT_ANCLA_ESTA_VACIA_SOLO =
     '[EDIT-060 INVALID_PARAM] The anchor is empty or only spaces.';
 
-  SR_EDIT_TU_ANCLA_LLEVA_CARACTER =
-    '[EDIT-061 INVALID_PARAM] Your anchor contains the corruption character ' +
-    'U+FFFD. You read the file with a generic tool that destroyed the ' +
-    'accented characters. Read it again with delphi_read and copy the ' +
-    'anchor from there.';
+  { La pista de un ancla (o un fragment) que no casa y lleva U+FFFD, que ninguna
+    linea del fichero tiene (A15 de la 1.23): era una negativa ANTES de buscar,
+    solo en delphi_edit, y una linea que lo lleva de verdad no se podia editar. }
+  SN_ANCLA_LLEVA_FFFD =
+    '[EDIT-061] NOTE: your anchor carries U+FFFD, the mark a generic tool ' +
+    'leaves where it could not decode a character, and no line of the file ' +
+    'has it: it was read with a tool that destroyed its accented ' +
+    'characters. Read it again with delphi_read and copy it from there.';
 
   SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT =
     '[EDIT-062 INVALID_PARAM] That anchor is not on line %d. Actual ' +
@@ -8224,8 +8235,8 @@ const
     '[TEXT-001 INVALID_PARAM] "%s" is a Delphi file. For sources and ' +
     'designers use delphi_edit.';
 
-  SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT =
-    '[TEXT-002 INVALID_PARAM] atline=%d is none of the occurrences (%s).';
+  // TEXT-002 (un atline que no es ninguna de las ocurrencias) se retiro en la
+  // 1.23: es EDIT-062, el mismo hecho en delphi_edit (A15, LineaElegida)
 
 
   SR_TEXT_FALTA_ANCLA_OLD_ESTA =
@@ -9303,8 +9314,8 @@ const
     '[EDIT-077 INVALID_PARAM] The anchor appears %d times (lines %s), it is ' +
     'not unique. Nothing written.'#10 +
     'Pick another unique line if there is one; only if there is NONE ' +
-    '(signature repeated in interface/implementation) repeat with ' +
-    'atline: <number>.';
+    '(the same line twice, like a signature in interface and ' +
+    'implementation) repeat with atline: <number>.';
 
   SR_EDIT_CARACTERES_NO_CABEN_FMT =
     '[EDIT-078 DENIED] %s. The file is in %s and the new text carries ' +
@@ -9530,9 +9541,8 @@ const
     '[TEXT-008 DENIED] %s looks BINARY (null bytes). This tool is for ' +
     'text only.';
 
-  SR_TEXT_ANCLA_APARECE_LINEAS_FMT =
-    '[TEXT-009 INVALID_PARAM] The anchor appears on %d lines (%s). Repeat with ' +
-    'atline=<number> to pick the exact occurrence.';
+  // TEXT-009 (el ancla repetida) se retiro en la 1.23: es EDIT-077, el mismo
+  // hecho en delphi_edit (A15, LineaElegida)
 
   SR_TEXT_AL_CODIFICAR_FMT =
     '[TEXT-010 DENIED] Could not write the file: %s';
@@ -9919,7 +9929,7 @@ const
   SP_EDIT_OLD =
     'EDIT mode: the line to replace - ONE full line copied from ' +
     'delphi_read (everything after the | bar), or a block of consecutive ' +
-    'ones. UNIQUE in the file; indentation does not count: if the same ' +
+    'ones. UNIQUE in the file; the blanks at either end do not count: if the same ' +
     'text is on another line too, add atline (occurrence inside edits).';
 
   SP_EDIT_ATLINE =

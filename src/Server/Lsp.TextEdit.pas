@@ -142,10 +142,10 @@ end;
 
 function DoEditLine(const A: TTextEditArgs): string;
 var
-  EncNm, Text, Eol, S: string;
+  EncNm, Text, Eol: string;
   Lines, NewLines: TArray<string>;
   Matches: TArray<Integer>;
-  I, Target: Integer;
+  Target: Integer;
 begin
   // una carpeta decia "no existe; creala con create=true" - y el agente que
   // obedecia recibia un INTERNAL
@@ -180,14 +180,14 @@ begin
       Exit(MsgText(SR_EDIT_RANGO_SIN_OLD));
     if not (A.DeleteLine and (A.AtLine > 0)) then
       Exit(MsgText(SR_EDIT_ANCLA_ESTA_VACIA_SOLO));
-    Result := LineaEnBlancoDenegada(Lines, Length(Lines), A.AtLine, False,
+    Result := LineaEnBlancoDenegada(Lines, Length(Lines), A.AtLine,
       TPath.GetFileName(A.Path));
     if Result <> '' then
       Exit;
   end;
 
-  // One-full-line anchor: trimmed comparison, so indentation may be omitted.
-  Matches := LineasDondeCasaElAncla(Lines, A.OldLine, False); // la regla del motor
+  // el ancla de una linea, por LA regla de las dos tools (LineaEsLaDelAncla)
+  Matches := LineasDondeCasaElAncla(Lines, A.OldLine);
 
   if Length(Matches) = 0 then
     // La negativa es la de delphi_edit, su gemela: UN texto
@@ -195,33 +195,12 @@ begin
     // contienen y alli no; ahora las dos dicen lo mismo.
     Exit(AnclaPerdida(Lines, A.OldLine, TPath.GetFileName(A.Path)));
 
-  Target := -1;
-  // Un atline que no es el de la unica ocurrencia se rechaza, como en
-  // delphi_edit: se ignoraba y se editaba la otra linea (quinta revision)
-  if (Length(Matches) = 1) and (A.AtLine <= 0) then
-    Target := Matches[0]
-  else
-  begin
-    if A.AtLine <= 0 then
-    begin
-      S := '';
-      for I in Matches do
-        S := S + IntToStr(I + 1) + ' ';
-      Exit(MsgFmt(SR_TEXT_ANCLA_APARECE_LINEAS_FMT,
-        [Length(Matches), S.Trim]));
-    end;
-    for I in Matches do
-      if I + 1 = A.AtLine then
-        Target := I;
-    if Target < 0 then
-    begin
-      S := '';
-      for I in Matches do
-        S := S + IntToStr(I + 1) + ' ';
-      Exit(MsgFmt(SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT,
-        [A.AtLine, S.Trim]));
-    end;
-  end;
+  // cual de ellas: LA eleccion y LAS negativas de las dos tools (Lsp.Patch.
+  // LineaElegida); aqui eran otros dos codigos para lo mismo (TEXT-009 y
+  // TEXT-002, A15)
+  Result := LineaElegida(Matches, A.AtLine, Target);
+  if Result <> '' then
+    Exit;
 
   // EL RANGO: con toline el ancla es la PRIMERA linea de un tramo que acaba
   // ahi, incluida. Las reglas las pone RangoHasta, en Lsp.Patch, que es de

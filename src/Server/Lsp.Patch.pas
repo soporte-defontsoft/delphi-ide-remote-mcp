@@ -5,7 +5,7 @@ unit Lsp.Patch;
   and large). Every gate below exists because a model was measured breaking
   a file through that exact hole. Design rules:
 
-  - Anchor = ONE full existing line (its indentation does not count, the end does);
+  - Anchor = ONE full existing line (the blanks at either end do not count);
     never substrings, never multi-line anchors, never whole-file rewrites.
   - Encoding is detected (UTF-8 BOM / strict UTF-8 / the machine's ANSI page / UTF-16 by BOM) and preserved;
     a character that does not fit the file's codepage REJECTS the edit with
@@ -126,8 +126,8 @@ function LineasDeNew(const ANew: string): TArray<string>;
 
 { La negativa de un ancla de UNA linea que no casa con ninguna, con el
   motivo: si el texto esta DENTRO de una linea lo dice (y como cambiar
-  solo ese trozo); si no, "no aparece" con la mejor pista (la misma
-  linea con otra indentacion, o la mas parecida). UN texto para
+  solo ese trozo); si no, "no aparece" con la mejor pista (el U+FFFD de
+  una lectura rota, o la linea mas parecida). UN texto para
   delphi_edit y delphi_textedit; la linea que falta de un ancla de
   bloque usa la misma pista. AFichero es el nombre a ensenar. }
 function AnclaPerdida(const ALines: TArray<string>;
@@ -198,23 +198,40 @@ function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
   (sexta revision). CuantasLineasReales es la misma regla para quien
   necesita conservar la fantasma (para volver a unir el texto). }
 function LineasDelTexto(const AText: string): TArray<string>;
-{ Las lineas (0-based) donde casa un ancla de UNA linea, con la regla del
-  motor que la aplica: el de Pascal (APascal, delphi_edit) sin la sangria de
-  ninguna de las dos y el final exacto; el de texto (delphi_textedit), las
-  dos recortadas. El preview del changeset preguntaba con OTRA regla y decia
-  limpio lo que el commit rechazaba (octava revision): UNA pregunta para
-  los motores y para su preview. }
-function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string;
-  APascal: Boolean): TArray<Integer>;
+{ Si una linea del fichero ES la de un ancla: LA regla de los motores de
+  Pascal y de texto, de sus bloques, de occurrence y del preview del
+  changeset (A15 de la 1.23). Los blancos de los DOS extremos no cuentan, ni
+  la sangria ni los de detras ("  foo;  " es "foo;"): lo que quita el Trim de
+  la RTL, todo lo que es <= ' '. Eran tres reglas: el ancla de una linea de
+  Pascal contaba el final exacto, y la de texto y los bloques lo recortaban,
+  asi que la misma linea casaba en un bloque y sola no. }
+function LineaEsLaDelAncla(const ALinea, AAncla: string): Boolean;
+{ Las lineas (0-based) donde casa un ancla de UNA linea, por
+  LineaEsLaDelAncla. El preview del changeset preguntaba con OTRA regla y
+  decia limpio lo que el commit rechazaba (octava revision): UNA pregunta
+  para los motores y para su preview. }
+function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string): TArray<Integer>;
+{ Donde EMPIEZA un ancla (0-based), de una linea o de bloque: todas sus
+  apariciones, en orden, las que cuenta occurrence (las de un bloque, hasta
+  500). Estaba escrito dentro de la guarda de sangria; lo pregunta tambien
+  la puerta de una tanda, en el fichero de antes (A15). }
+function IniciosDelAncla(const ALines: TArray<string>; const AAncla: string): TArray<Integer>;
+{ La linea que edita un ancla de UNA linea entre las que casan (AHits, 0-based,
+  de LineasDondeCasaElAncla, al menos una): la unica, o la de atline (AAtLine,
+  1-based) si es de ellas. '' y su indice en AIdx; si no, LA negativa de las
+  dos tools: repetida sin atline (EDIT-077) o un atline que no es ninguna
+  (EDIT-062). delphi_textedit decia lo mismo con otros dos codigos (TEXT-009
+  y TEXT-002, A15 de la 1.23). }
+function LineaElegida(const AHits: TArray<Integer>; AAtLine: Integer; out AIdx: Integer): string;
 function CuantasLineasReales(const ALines: TArray<string>): Integer;
 { Borrar una linea EN BLANCO (P3-L9): no tiene texto que copiar como ancla,
   asi que el ancla es la posicion (atline, 1-based) y la condicion de que
-  ESA linea este en blanco - lo que casa con un ancla vacia, con la regla
-  del motor que borra (APascal). '' si se puede; si no, la negativa
-  (EDIT-123 con la linea citada, EDIT-124 si no existe). AReales: las
-  lineas sin la fantasma del salto final, como las cuenta cada motor. }
+  ESA linea este en blanco - lo que casa con un ancla vacia
+  (LineaEsLaDelAncla). '' si se puede; si no, la negativa (EDIT-123 con la
+  linea citada, EDIT-124 si no existe). AReales: las lineas sin la fantasma
+  del salto final, como las cuenta cada motor. }
 function LineaEnBlancoDenegada(const ALines: TArray<string>;
-  AReales, AAtLine: Integer; APascal: Boolean; const AFichero: string): string;
+  AReales, AAtLine: Integer; const AFichero: string): string;
 
 { El salto de linea DOMINANTE de un texto (CRLF, LF o CR suelto: el que mas
   aparece; CRLF si no hay ninguno, el de Windows), para quien vuelve a unir
@@ -2102,39 +2119,71 @@ begin
     Result := 'LF';
 end;
 
-function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string;
-  APascal: Boolean): TArray<Integer>;
+function LineaEsLaDelAncla(const ALinea, AAncla: string): Boolean;
+begin
+  // la sangria no cuenta a NINGUNO de los dos lados desde el 9-oct-2026 (era
+  // "la linea TERMINA en el ancla": la sangria del ancla contaba como minima
+  // y una tanda escribio en silencio la linea equivocada); el final tampoco
+  // desde A15: contaba en el ancla de una linea de Pascal y no en sus bloques
+  // ni en delphi_textedit
+  Result := ALinea.Trim = AAncla.Trim;
+end;
+
+function LineasDondeCasaElAncla(const ALines: TArray<string>;
+  const AAncla: string): TArray<Integer>;
 var
   I: Integer;
-  SinSangria: string;
 begin
   Result := [];
-  SinSangria := Copy(AAncla, Length(LeadingWhite(AAncla)) + 1, MaxInt);
   for I := 0 to High(ALines) do
-    if APascal then
-    begin
-      // la sangria (espacios y tabuladores: LeadingWhite) no cuenta a NINGUNO
-      // de los dos lados, como promete la descripcion de old y como cuenta
-      // delphi_textedit; el final si, exacto ("  foo;  " no es "foo;",
-      // EDIT-062). Era "la linea TERMINA en el ancla": la sangria del ancla
-      // contaba como minima, "occurrence" contaba sobre otro conjunto que el
-      // del agente, y una tanda escribio en silencio la linea equivocada
-      // (medido el 9-oct-2026: sangrias 2, 4 y 6, la ocurrencia 2 caia en la 3)
-      if Copy(ALines[I], Length(LeadingWhite(ALines[I])) + 1, MaxInt) = SinSangria then
-        Result := Result + [I];
-    end
-    else if Trim(ALines[I]) = Trim(AAncla) then
+    if LineaEsLaDelAncla(ALines[I], AAncla) then
       Result := Result + [I];
 end;
 
+{ Unas lineas (0-based) como las lee el agente: 1-based, "4, 6". Lo dicen las
+  negativas de un ancla repetida. }
+function ListaDeLineas(const AIdx: TArray<Integer>): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I in AIdx do
+    Result := Result + IfThen(Result <> '', ', ') + IntToStr(I + 1);
+end;
+
+function LineaElegida(const AHits: TArray<Integer>; AAtLine: Integer;
+  out AIdx: Integer): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  AIdx := -1;
+  if (AAtLine <= 0) and (Length(AHits) = 1) then
+  begin
+    AIdx := AHits[0];
+    Exit;
+  end;
+  // un atline que no es el de la unica ocurrencia se niega tambien: se
+  // ignoraba y se editaba la otra linea (quinta revision)
+  for I in AHits do
+    if I + 1 = AAtLine then
+      AIdx := I;
+  if AIdx >= 0 then
+    Exit;
+  if AAtLine <= 0 then
+    Result := MsgFmt(SR_EDIT_ANCLA_NO_UNICA_FMT, [Length(AHits), ListaDeLineas(AHits)])
+  else
+    Result := MsgFmt(SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT, [AAtLine, ListaDeLineas(AHits)]);
+end;
+
 function LineaEnBlancoDenegada(const ALines: TArray<string>;
-  AReales, AAtLine: Integer; APascal: Boolean; const AFichero: string): string;
+  AReales, AAtLine: Integer; const AFichero: string): string;
 begin
   Result := '';
   if (AAtLine < 1) or (AAtLine > AReales) then
     Exit(MsgFmt(SR_EDIT_LINEA_EN_BLANCO_NO_EXISTE_FMT, [AFichero, AReales, AAtLine]));
   // la misma pregunta que despues elige la linea: la de la regla del motor
-  if Length(LineasDondeCasaElAncla([ALines[AAtLine - 1]], '', APascal)) = 0 then
+  if not LineaEsLaDelAncla(ALines[AAtLine - 1], '') then
     Exit(MsgFmt(SR_EDIT_LINEA_NO_EN_BLANCO_FMT, [AAtLine, AFichero,
       CitaDeLinea(AAtLine, Copy(ALines[AAtLine - 1].Trim, 1, 90))]));
 end;
@@ -2805,11 +2854,11 @@ begin
   except
     Exit;
   end;
-  // con la regla del motor que va a aplicar la edicion (LineasDondeCasaElAncla:
-  // en Pascal, sin la sangria y con el final exacto); contaba con Trim y
-  // "  foo;  " era una ocurrencia que el motor no ve (EDIT-062; novena revision)
+  // con la regla del motor que va a aplicar la edicion (LineaEsLaDelAncla):
+  // contaba con otra y "  foo;  " era una ocurrencia que el motor no veia
+  // (EDIT-062; novena revision)
   Seen := 0;
-  for I in LineasDondeCasaElAncla(Lines, AAnchor, EsDelMotorPascal(APath)) do
+  for I in LineasDondeCasaElAncla(Lines, AAnchor) do
   begin
     Inc(Seen);
     if Seen = AN then
@@ -2830,13 +2879,20 @@ begin
   Objetivo := AOld.Trim;
   if Objetivo = '' then
     Exit;
-  // 1. la misma linea con otros blancos alrededor: en el motor de Pascal la
-  // sangria ya no cuenta, asi que lo que difiere es el FINAL (decia "otra
-  // indentacion", falso desde el 9-oct-2026; revisor propio)
-  for I := 0 to High(ALines) do
-    if ALines[I].Trim = Objetivo then
-      Exit(#10 + MsgFmt(SN_ANCLA_BLANCOS_FMT, [I + 1]) +
-        #10'  ' + CitaDeLinea(I + 1, ALines[I]));
+  // 1. un U+FFFD que ninguna linea tiene: el ancla salio de una lectura que
+  // rompio los acentos, y eso es lo que hay que arreglar (A15: se negaba
+  // antes de buscar y solo en delphi_edit, asi que una linea que lo lleva de
+  // verdad no se podia editar). La misma linea con otros blancos alrededor ya
+  // no es una pista: los dos extremos no cuentan (LineaEsLaDelAncla)
+  if Pos(#$FFFD, Objetivo) > 0 then
+  begin
+    var EnElFichero := False;
+    for I := 0 to High(ALines) do
+      if Pos(#$FFFD, ALines[I]) > 0 then
+        EnElFichero := True;
+    if not EnElFichero then
+      Exit(#10 + MsgText(SN_ANCLA_LLEVA_FFFD));
+  end;
   // 2. un TROZO de una o mas lineas
   N := 0;
   for I := 0 to High(ALines) do
@@ -2909,7 +2965,7 @@ begin
   begin
     Ok := True;
     for J := 0 to High(AOldLines) do
-      if ALines[I + J].Trim <> AOldLines[J].Trim then
+      if not LineaEsLaDelAncla(ALines[I + J], AOldLines[J]) then
       begin
         Ok := False;
         Break;
@@ -3090,7 +3146,7 @@ begin
       Hit := -1
     else
       for J := 0 to High(OldLines) do
-        if Lines[Hit + J].Trim <> OldLines[J].Trim then
+        if not LineaEsLaDelAncla(Lines[Hit + J], OldLines[J]) then
         begin
           Hit := -1;
           Break;
@@ -3108,7 +3164,7 @@ begin
     begin
       var Esta := False;
       for I := 0 to High(Lines) do
-        if Lines[I].Trim = OldLines[J].Trim then
+        if LineaEsLaDelAncla(Lines[I], OldLines[J]) then
         begin
           Esta := True;
           Break;
@@ -3170,7 +3226,10 @@ begin
     Exit(MsgFmt(SR_FRAG_MIXED_FMT, [AOtros]));
   if AAtLine <= 0 then
     Exit(MsgText(SR_FRAG_NEEDS_ATLINE));
-  if (AFrag = '') or (Pos(#$FFFD, AFrag) > 0) then
+  // (un U+FFFD no se niega aqui: el que la linea lleva se cambia como otro
+  // caracter, y el de una lectura rota lo dice la negativa de "no esta", E3
+  // de A15)
+  if AFrag = '' then
     Exit(MsgText(SR_FRAG_EMPTY));
   if TieneSalto(AFrag) or TieneSalto(ANew) then
     Exit(MsgText(SR_FRAG_MULTILINE));
@@ -3196,7 +3255,8 @@ begin
     P := Pos(AFrag, Linea, P + 1); // solapadas tambien cuentan: "aa" en "aaa"
   end;
   if Veces = 0 then
-    Exit(MsgFmt(SR_FRAG_NOTFOUND_FMT, [AFrag, AAtLine, CitaDeLinea(AAtLine, Linea)]));
+    Exit(MsgFmt(SR_FRAG_NOTFOUND_FMT, [AFrag, AAtLine, CitaDeLinea(AAtLine, Linea)]) +
+      IfThen(Pos(#$FFFD, AFrag) > 0, #10 + MsgText(SN_ANCLA_LLEVA_FFFD)));
   if Veces > 1 then
     Exit(MsgFmt(SR_FRAG_SEVERAL_FMT, [AFrag, Veces, AAtLine, CitaDeLinea(AAtLine, Linea)]));
   P := Pos(AFrag, Linea);
@@ -3303,6 +3363,24 @@ begin
     Result := MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA);
 end;
 
+function IniciosDelAncla(const ALines: TArray<string>; const AAncla: string): TArray<Integer>;
+var
+  Ancla: TArray<string>;
+  K, Inicio, Cuantas: Integer;
+begin
+  Ancla := LineasDelAncla(AAncla); // normalizada: sin la linea vacia final
+  if Length(Ancla) = 1 then
+    Exit(LineasDondeCasaElAncla(ALines, Ancla[0]));
+  Result := [];
+  K := 1;
+  repeat
+    Inicio := BuscaBloque(ALines, Ancla, K, Cuantas);
+    if Inicio >= 0 then
+      Result := Result + [Inicio];
+    Inc(K);
+  until (Inicio < 0) or (K > 500);
+end;
+
 { La guarda de occurrence (David, 9-oct-2026): con un ancla que TRAE
   sangria, la linea que eligio occurrence -contando sin la sangria- tiene que
   llevar ESA sangria, comparada exacta (un tabulador no son cuatro espacios).
@@ -3314,12 +3392,12 @@ end;
   TEXTO del ancla (una en blanco no lleva). Con una sola coincidencia no hay
   nada que elegir y no salta (como la misma edicion sin occurrence). '' = pasa. }
 function GuardaDeSangria(const ALines: TArray<string>; const AAncla: string;
-  APascal: Boolean; AEntrada, ANth, ALinea: Integer): string;
+  AEntrada, ANth, ALinea: Integer): string;
 var
   Ancla: TArray<string>;
   Inicios: TArray<Integer>;
   Sangria, Lista, Resto: string;
-  J, K, N, Inicio, Cuantas: Integer;
+  J, K, N: Integer;
 begin
   Result := '';
   if (AAncla = '') or (ALinea < 1) or (ALinea > Length(ALines)) then
@@ -3337,19 +3415,7 @@ begin
   // todas las coincidencias del motor, en su orden: el de occurrence (el
   // ancla normalizada: una de una linea que acaba en salto no casaba con
   // nada cruda, y la negativa era la de un bloque corto; revisor propio)
-  if Length(Ancla) = 1 then
-    Inicios := LineasDondeCasaElAncla(ALines, Ancla[0], APascal)
-  else
-  begin
-    Inicios := [];
-    K := 1;
-    repeat
-      Inicio := BuscaBloque(ALines, Ancla, K, Cuantas);
-      if Inicio >= 0 then
-        Inicios := Inicios + [Inicio];
-      Inc(K);
-    until (Inicio < 0) or (K > 500);
-  end;
+  Inicios := IniciosDelAncla(ALines, AAncla);
   if Length(Inicios) <= 1 then
     Exit;
   // cada una citada por su linea CON TEXTO (la J del ancla): la primera de un
@@ -3441,7 +3507,15 @@ begin
       // llevandose por delante lineas que no eran.
       var Hasta: TArray<Integer>;
       SetLength(Hasta, Arr.Count);
-      var LineasAntes: TArray<string> := nil; // las de la guarda de sangria, leidas una vez
+      // el fichero de ANTES de la tanda, leido una vez: el de la guarda de
+      // sangria y el de las anclas sin desempate (nil si no se puede leer)
+      var LineasAntes: TArray<string> := nil;
+      try
+        var EncG: string;
+        LineasAntes := LineasDelTexto(PatchLoadText(APath, EncG));
+      except
+        LineasAntes := nil;
+      end;
       for N := 0 to Arr.Count - 1 do
       begin
         Ocurr[N] := 0;
@@ -3525,17 +3599,26 @@ begin
             // ...y si el ancla trae sangria, la linea elegida lleva ESA: si no,
             // se dicen las candidatas y no se escribe (la guarda de sangria,
             // David 9-oct-2026; las mismas lineas que cuenta NthOccurrenceLine)
-            if LineasAntes = nil then
-            try
-              var EncG: string;
-              LineasAntes := LineasDelTexto(PatchLoadText(APath, EncG));
-            except
-              LineasAntes := nil;
-            end;
-            var Guarda := GuardaDeSangria(LineasAntes, Anc2, EsDelMotorPascal(APath),
-              N + 1, Nth, Ocurr[N]);
+            var Guarda := GuardaDeSangria(LineasAntes, Anc2, N + 1, Nth, Ocurr[N]);
             if Guarda <> '' then
               Exit(Guarda);
+          end;
+          // ...y SIN desempate, el ancla se juzga tambien en el fichero de
+          // ANTES de la tanda, el que leyo el agente y donde cuenta
+          // occurrence: repetida ahi, la entrada escribia en la que quedase
+          // unica cuando le tocaba, contestando OK ("x" en las lineas 4 y 6,
+          // la 1 cambia la 6 por occurrence y la 2, sin desempate, caia en la
+          // 4: P2 de A15, medido contra r1222af). La que no esta ahi la crea
+          // una entrada anterior: se juzga cuando le toque. La primera se
+          // juzga en ese mismo fichero, y su negativa es la del motor (EDIT-077,
+          // la de un bloque EDIT-015, que dice como desempatar)
+          if (N > 0) and (EnteroDeEntrada(O2, 'atline') = 0) and (Nth = 0) and
+             (Anc2.Trim <> '') and (O2.GetValue<string>('fragment', '') = '') then
+          begin
+            var Donde := IniciosDelAncla(LineasAntes, Anc2);
+            if Length(Donde) > 1 then
+              Exit(MsgFmt(SR_PATCH_ANCLA_REPETIDA_FMT,
+                [N + 1, Length(Donde), ListaDeLineas(Donde)]));
           end;
         end;
       end;
@@ -5472,7 +5555,7 @@ var
   Text, Eol: string;
   M, D: TMetrics;
   Lines: TArray<string>;
-  Hits: TList<Integer>;
+  Hits: TArray<Integer>;
   I, HitIdx: Integer;
   Replacement: string;
   Warnings: TStringList;
@@ -5520,53 +5603,30 @@ begin
   var EnBlanco := (AOld.Trim = '') and ADelete and (AAtLine > 0);
   if (AOld.Trim = '') and not EnBlanco then
     Exit(MsgText(SR_EDIT_ANCLA_ESTA_VACIA_SOLO));
-  if Pos(#$FFFD, AOld) > 0 then
-    Exit(MsgText(SR_EDIT_TU_ANCLA_LLEVA_CARACTER));
+  // (un U+FFFD en el ancla no se niega aqui: es la pista de un ancla que no
+  // casa, la de AnclaPerdida; negado antes de buscar, una linea que lo lleva
+  // de verdad no se podia editar - E3 de A15)
 
   Lines := SplitToLines(Text);
   if EnBlanco then
   begin
     var NoBlanca := LineaEnBlancoDenegada(Lines, CuantasLineasReales(Lines), AAtLine,
-      True, TPath.GetFileName(APath));
+      TPath.GetFileName(APath));
     if NoBlanca <> '' then
       Exit(NoBlanca);
   end;
-  Hits := TList<Integer>.Create;
+  Hits := LineasDondeCasaElAncla(Lines, AOld); // la regla del motor
   Warnings := TStringList.Create;
   try
-    for I in LineasDondeCasaElAncla(Lines, AOld, True) do // la regla del motor
-      Hits.Add(I);
-
-    if Hits.Count = 0 then
+    if Length(Hits) = 0 then
       // Por que no casa: UN texto para delphi_edit, delphi_textedit y la
       // linea que falta de un bloque (AnclaPerdida).
       Exit(AnclaPerdida(Lines, AOld, TPath.GetFileName(APath)));
 
-    if (Hits.Count > 1) and (AAtLine <= 0) then
-    begin
-      var Nums := '';
-      for I in Hits do
-        Nums := Nums + IntToStr(I + 1) + ', ';
-      Exit(MsgFmt(SR_EDIT_ANCLA_NO_UNICA_FMT,
-        [Hits.Count, Nums.TrimRight([',', ' '])]));
-    end;
-
-    HitIdx := Hits[0];
-    if AAtLine > 0 then
-    begin
-      HitIdx := -1;
-      for I in Hits do
-        if I + 1 = AAtLine then
-          HitIdx := I;
-      if HitIdx = -1 then
-      begin
-        var Nums := '';
-        for I in Hits do
-          Nums := Nums + IntToStr(I + 1) + ', ';
-        Exit(MsgFmt(SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT,
-          [AAtLine, Nums.TrimRight([',', ' '])]));
-      end;
-    end;
+    // cual de ellas: LA eleccion de las dos tools (LineaElegida, A15)
+    var Eleccion := LineaElegida(Hits, AAtLine, HitIdx);
+    if Eleccion <> '' then
+      Exit(Eleccion);
 
     // EL RANGO. Con AToLine el ancla deja de ser una linea y pasa a ser la
     // PRIMERA de un tramo que acaba en AToLine, incluida. Las reglas de un
@@ -5861,7 +5921,6 @@ begin
     if NotaRelectura <> '' then
       Result := Result + #10 + NotaRelectura;
   finally
-    Hits.Free;
     Warnings.Free;
   end;
 end;

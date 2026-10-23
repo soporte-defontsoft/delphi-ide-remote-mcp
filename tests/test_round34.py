@@ -26,7 +26,7 @@ Con Lsp.Patch.AplicaTanda las tres puertas son una. Esta bateria la vigila:
       occurrence con otra -> negativa con las candidatas, en las dos tools
   B8  un ancla con MAS sangria que su linea unica casa (no hay eleccion)
   B9  un ancla que solo su sangria hacia unica se niega, suelta y en tanda
-  B10 delphi_edit: el final de la linea cuenta, y la pista (EDIT-094) lo dice
+  B10 delphi_edit: el final de la linea tampoco cuenta (A15 de la 1.23): casa y escribe
 
 Usage:  python tests/test_round34.py [path-to-DelphiLspMcp.exe]
 """
@@ -302,14 +302,15 @@ try:
     check('B9 un ancla que solo su sangria hacia unica se niega (EDIT-077), suelta y en una tanda, sin tocar nada',
           mc.es(r, 'SR_EDIT_ANCLA_NO_UNICA_FMT') and mc.rechazado(r2) and open(f, 'rb').read() == ORIG9,
           (r[:200], r2[:200], open(f, 'rb').read()))
-    # B10: la sangria fuera, el FINAL sigue contando (EDIT-062 de la novena
-    # revision) - y la pista lo dice, ya no habla de "otra indentacion"
+    # B10: la sangria fuera y el FINAL tambien (A15 de la 1.23: contaba en el
+    # ancla de una linea de Pascal y no en sus bloques ni en delphi_textedit,
+    # y EDIT-094 lo decia). Casa y escribe; new va con la suya, como en B8
     f = os.path.join(JAIL, 'final.pas')
     open(f, 'wb').write(b'a\r\n  foo;  \r\nb\r\n')
     r = call('delphi_edit', {'path': f, 'old': '      foo;', 'new': 'bar;'})
-    check('B10 delphi_edit: con la sangria fuera el final cuenta - negativa, y la pista habla del final (EDIT-094)',
-          mc.rechazado(r) and mc.es(r, 'SN_ANCLA_BLANCOS_FMT') and
-          open(f, 'rb').read() == b'a\r\n  foo;  \r\nb\r\n', r[:400])
+    check('B10 delphi_edit: los blancos de los dos extremos no cuentan - casa y escribe',
+          not mc.rechazado(r) and open(f, 'rb').read() == b'a\r\nbar;\r\nb\r\n',
+          (r[:400], open(f, 'rb').read()))
 finally:
     try:
         proc.kill()

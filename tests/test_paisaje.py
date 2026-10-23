@@ -187,6 +187,20 @@ REGLAS = [
      r"^(?!\s*SR_PLATAFORMA_NO_VALIDA_FMT\s*=).*SR_PLATAFORMA_NO_VALIDA_FMT",
      [('Lsp.Dproj.pas', 'NegativaDePlataforma')],
      'NegativaDePlataforma (Lsp.Dproj, A14 de la 1.23)'),
+    # una linea comparada con un ancla a mano: eran cinco comparaciones con tres reglas (el ancla de
+    # una linea de Pascal contaba el final exacto, la de texto y los bloques lo recortaban: la misma
+    # linea casaba en un bloque y sola no; A15 de la 1.23)
+    ('una linea comparada con un ancla a mano',
+     r"(?i)(?:\.Trim|\bTrim\([^()]*\))\s*(?:<>|=)\s*(?:Trim\(\s*)?\w*(?:Old|Ancla|Anchor)\w*",
+     [('Lsp.Patch.pas', 'LineaEsLaDelAncla')],
+     'LineaEsLaDelAncla (Lsp.Patch, A15 de la 1.23): los blancos de los dos extremos no cuentan'),
+    # la negativa de un ancla repetida, o de un atline que no es ninguna: delphi_textedit decia lo mismo
+    # con otros dos codigos (TEXT-009 y TEXT-002; A15 de la 1.23)
+    ('la negativa de un ancla repetida compuesta a mano',
+     r"(?i)^(?!\s*SR_EDIT_(?:ANCLA_NO_UNICA|LINEA_ESTA_ESE_ANCLA)_FMT\s*=)"
+     r".*SR_EDIT_(?:ANCLA_NO_UNICA|LINEA_ESTA_ESE_ANCLA)_FMT",
+     [('Lsp.Patch.pas', 'LineaElegida')],
+     'LineaElegida (Lsp.Patch, A15 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1163,6 +1177,9 @@ PLANTADO = {
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",
     'el marco de un designer por su extension': "  if APath.EndsWith('.dfm', True) then Exit('vcl');",
     'la negativa de una plataforma compuesta a mano': "  Exit(MsgFmt(SR_PLATAFORMA_NO_VALIDA_FMT, [V, KnownPlatformsList]));",
+    'una linea comparada con un ancla a mano': "      if ALines[I + J].Trim <> AOldLines[J].Trim then",
+    'la negativa de un ancla repetida compuesta a mano':
+        "      Exit(MsgFmt(SR_EDIT_ANCLA_NO_UNICA_FMT, [Length(Matches), S.Trim]));",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",
