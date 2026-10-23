@@ -83,6 +83,17 @@ function LetraDeRuta(const ARuta: string): Char;
 function SinBarraFinal(const ASitio: string): string;
 function PrefijoSinBarra(const ARuta: string): string;
 function RaizSiUnidad(const ARuta: string): string;
+{ LAS DOS formas de las barras de una ruta, y nadie mas las cambia a mano (lo
+  vigila test_paisaje). Windows abre igual 'C:/x' que 'C:\x', pero el TEXTO
+  no es el mismo: ExtractFileDir, StartsWith('\\'), un prefijo o una clave
+  de diccionario solo ven la '\' (medido el 23-oct-2026: 'C:/x/__history/U.pas'
+  no era una copia del IDE y '//h/s/x' no era un UNC).
+  ConBarrasDeWindows: para JUZGAR, comparar o guardar como clave una ruta que
+  llega de fuera (del agente, de un fichero, de git, del registro).
+  ConBarrasNormales: para escribirla donde se espera '/' (git, una URI, una
+  ruta relativa en la respuesta). }
+function ConBarrasDeWindows(const ARuta: string): string;
+function ConBarrasNormales(const ARuta: string): string;
 { Que es esa letra para este proceso: la tabla de unidades de su sesion, sin
   tocar el disco ni la red. EL lector de esa tabla. }
 function ClaseDeLetra(ALetra: Char): TClaseDeLetra;
@@ -161,6 +172,16 @@ end;
 function SinBarraFinal(const ASitio: string): string;
 begin
   Result := RaizSiUnidad(ExcludeTrailingPathDelimiter(ASitio));
+end;
+
+function ConBarrasDeWindows(const ARuta: string): string;
+begin
+  Result := ARuta.Replace('/', '\');
+end;
+
+function ConBarrasNormales(const ARuta: string): string;
+begin
+  Result := ARuta.Replace('\', '/');
 end;
 
 function ClaseDeLetra(ALetra: Char): TClaseDeLetra;

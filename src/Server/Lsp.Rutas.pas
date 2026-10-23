@@ -28,7 +28,8 @@ interface
 
   This expands the longest existing prefix of a path back to its real names
   before any segment guard looks at it. It cannot blanket-reject "~": the
-  server's own scratch and home paths legitimately contain one (DFONTA~1). }
+  server's own scratch and home paths legitimately contain one (DFONTA~1).
+  Siempre con barras de Windows: quien la usa no las vuelve a cambiar. }
 function LongCanonical(const APath: string): string;
 
 { LA ruta REAL: junctions y symlinks resueltos, nombres largos (la nota
@@ -125,8 +126,9 @@ function EsPrefijoDeDispositivo(const APath: string): Boolean;
 function SinPrefijoDeDispositivo(const APath: string): string;
 
 { Un UNC de verdad (\\host\...), no un prefijo de dispositivo (\\?\, \\.\).
-  Con barras de Windows. LA pregunta de quien mira un UNC por su texto:
-  estaba escrita en cuatro sitios (tercer revisor de la 1.8.2). }
+  Con cualquiera de las dos barras (//host/x tambien lo es: A40 de la 1.23,
+  medido). LA pregunta de quien mira un UNC por su texto: estaba escrita en
+  cuatro sitios (tercer revisor de la 1.8.2). }
 function EsUnc(const APath: string): Boolean;
 
 implementation
@@ -136,7 +138,7 @@ uses
   System.SysUtils,
   System.StrUtils,
   System.IOUtils,
-  Lsp.NetDrives;        // RaizSiUnidad, SinBarraFinal, PrefijoSinBarra
+  Lsp.NetDrives;        // RaizSiUnidad, SinBarraFinal, PrefijoSinBarra, ConBarrasDeWindows
 
 { EL paseo hacia arriba, escrito UNA vez. Dada una ruta, busca el antecesor
   existente mas cercano que AResuelve sepa traducir y le vuelve a pegar el
@@ -388,7 +390,7 @@ function LongCanonical(const APath: string): string;
 var
   Full: string;
 begin
-  Full := TPath.GetFullPath(RaizSiUnidad(APath)).Replace('/', '\');
+  Full := ConBarrasDeWindows(TPath.GetFullPath(RaizSiUnidad(APath)));
   if Full.IndexOf('~') < 0 then
     Exit(Full); // sin 8.3 que deshacer, no se paga el paseo
   Result := CanonicalSubiendo(Full,
@@ -509,7 +511,7 @@ function EsPrefijoDeDispositivo(const APath: string): Boolean;
 var
   P: string;
 begin
-  P := APath.Trim.Replace('/', '\');
+  P := ConBarrasDeWindows(APath.Trim);
   // \??\ es la forma NT (del object manager) del mismo prefijo de dispositivo:
   // dcc abre una ruta asi igual que \\?\ (medido el 22-oct-2026: un search path
   // \??\C:\fuera compilaba leyendo fuera de la jaula), y Win32 GetFullPath no la
@@ -522,7 +524,7 @@ begin
   Result := APath;
   if not EsPrefijoDeDispositivo(Result) then
     Exit;
-  Result := Result.Trim.Replace('/', '\');
+  Result := ConBarrasDeWindows(Result.Trim);
   // \\?\UNC\host\x es \\host\x; lo demas, la ruta tras las cuatro del prefijo
   if StartsText('\\?\UNC\', Result) or StartsText('\\.\UNC\', Result) or StartsText('\??\UNC\', Result) then
     Result := '\\' + Result.Substring(8)
@@ -532,7 +534,7 @@ end;
 
 function EsUnc(const APath: string): Boolean;
 begin
-  Result := APath.StartsWith('\\') and not EsPrefijoDeDispositivo(APath);
+  Result := ConBarrasDeWindows(APath).StartsWith('\\') and not EsPrefijoDeDispositivo(APath);
 end;
 
 end.

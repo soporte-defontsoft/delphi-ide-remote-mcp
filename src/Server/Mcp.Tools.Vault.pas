@@ -229,7 +229,7 @@ function VaultExcluded(const ARel: string): Boolean;
 var
   Low, D: string;
 begin
-  Low := ARel.Replace('/', '\').ToLower;
+  Low := ConBarrasDeWindows(ARel).ToLower;
   if Low.Contains('.bak') then
     Exit(True);
   for D in VAULT_EXCLUIDAS do
@@ -277,7 +277,7 @@ begin
   // what hid the attack: "MEMORY.md " became "MEMORY.md" here, opened the
   // real governance file, while the caller's raw string still read as a
   // different name to every later check (field round 9, critical).
-  Rel := ARel.Trim(['"']).Replace('/', '\');
+  Rel := ConBarrasDeWindows(ARel.Trim(['"']));
   if Rel.Trim = '' then
     Exit(MsgText(SR_VAULT_FALTA_PATH_RUTA_RELATIVA));
   while Rel.StartsWith('\') do
@@ -573,7 +573,7 @@ begin
     // Reuse the jail by resolving a dummy note inside the subfolder.
     var Probe := '';
     Result := VaultResolve(IncludeTrailingPathDelimiter(
-      Params.Subfolder.Trim.Replace('/', '\')) + 'x.md', Probe);
+      ConBarrasDeWindows(Params.Subfolder.Trim)) + 'x.md', Probe);
     if Result <> '' then
       Exit;
     Root := TPath.GetDirectoryName(Probe);

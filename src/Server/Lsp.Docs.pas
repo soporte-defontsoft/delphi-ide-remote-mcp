@@ -153,7 +153,8 @@ uses
   Lsp.Codificacion, // BomUtf8En y CodecDeCharset: los codecs son de la casa
   Lsp.Texts,     // SF_DOCS_ANCESTROS_FMT
   System.Character,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.NetDrives;
 
 { ---------------------------------------------------------------- bytes }
 
@@ -544,7 +545,7 @@ var
   S: string;
   K: Integer;
 begin
-  S := SinAncla(ALocal).Replace('\', '/');
+  S := ConBarrasNormales(SinAncla(ALocal));
   K := S.LastIndexOf('/');
   Result := S.Substring(K + 1);
 end;
@@ -595,7 +596,7 @@ begin
     K := H.IndexOf('::');
     if K < 0 then
       Exit;
-    Fichero := H.Substring(0, K).Replace('/', '\');
+    Fichero := ConBarrasDeWindows(H.Substring(0, K));
     PaginaYAncla(H.Substring(K + 2).TrimLeft(['/']), Pagina, Ancla);
     if not EsPagina(Pagina) then
       Exit;
@@ -608,7 +609,7 @@ begin
     Exit;
   if H.StartsWith('./') then
     H := H.Substring(2);
-  PaginaYAncla(H.Replace('\', '/'), Pagina, Ancla);
+  PaginaYAncla(ConBarrasNormales(H), Pagina, Ancla);
   Result := IdDePagina(ACorto, Pagina, Ancla);
 end;
 
@@ -632,7 +633,7 @@ begin
   // (la entrada no es la misma variable que la salida: un out se vacia al
   // entrar)
   PaginaYAncla(AId.Substring(K + 1).Trim, Resto, AAncla);
-  APagina := Resto.Replace('\', '/');
+  APagina := ConBarrasNormales(Resto);
   // una pagina DE DENTRO del .chm, y nada mas: ni unidad, ni subir, ni raiz
   Result := (ACorto <> '') and EsPagina(APagina) and not APagina.Contains(':') and
     not APagina.StartsWith('/') and not ('/' + APagina + '/').Contains('/../') and

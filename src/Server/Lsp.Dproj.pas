@@ -1076,7 +1076,8 @@ uses
   Lsp.Texts,
   Lsp.Patch, // LeeTexto: la puerta de leer (el .dproj y sus Import, en la jaula)
   Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
-  System.Character;
+  System.Character,
+  Lsp.NetDrives;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
   entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }
@@ -2239,7 +2240,7 @@ var
 begin
   Result := False;
   AClean := AFolder.Trim.Trim(['"']).Trim;
-  AClean := AClean.Replace('/', '\');
+  AClean := ConBarrasDeWindows(AClean);
   while AClean.StartsWith('\') do AClean := AClean.Substring(1);
   while AClean.EndsWith('\') do AClean := AClean.Substring(0, AClean.Length - 1);
   if AClean = '' then Exit;

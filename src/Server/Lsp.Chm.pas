@@ -105,7 +105,7 @@ var
 begin
   ABytes := nil;
   // las carpetas de dentro son almacenes: se abren tramo a tramo
-  Tramos := ANombre.Replace('\', '/').Split(['/']);
+  Tramos := ANombre.Split(['\', '/']);
   Stg := IStorage(FStg);
   for K := 0 to High(Tramos) - 1 do
   begin

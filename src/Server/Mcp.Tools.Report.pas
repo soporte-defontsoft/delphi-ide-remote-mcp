@@ -84,7 +84,8 @@ uses
   Lsp.Codificacion, // ekUtf8Bom
   System.Character,
   Lsp.Listas,     // TListaDeFicheros: el organizador de las listas de ficheros
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.NetDrives;
 
 const
   // delphi_report is the ONE write a read-only (even anonymous) credential may
@@ -228,7 +229,7 @@ var
   Partes: TArray<string>;
 begin
   Result := '';
-  N := AName.Trim.Replace('/', '\');
+  N := ConBarrasDeWindows(AName.Trim);
   if N.StartsWith('.\') then
     N := N.Substring(2);
   Partes := N.Split(['\']);

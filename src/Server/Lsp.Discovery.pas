@@ -881,7 +881,7 @@ var
     begin
       // The value NAME is the bpl path ($(BDSBIN)\dclx370.bpl or absolute);
       // the DATA is the description the IDE shows.
-      FileKey := TPath.GetFileName(V.Nombre.Replace('/', '\'));
+      FileKey := TPath.GetFileName(ConBarrasDeWindows(V.Nombre));
       if FileKey = '' then
         Continue;
       if AsNames then

@@ -1071,7 +1071,7 @@ function EnCarpetaLlamada(const APath, ANombre: string;
 var
   P, T: string;
 begin
-  P := SinBarraFinal(LongCanonical(APath)).ToLower.Replace('/', '\');
+  P := SinBarraFinal(LongCanonical(APath)).ToLower;
   T := '\' + ANombre.ToLower;
   AEsLaCarpeta := P.EndsWith(T);
   Result := AEsLaCarpeta or P.Contains(T + '\');
@@ -1108,7 +1108,7 @@ var
 begin
   // DENTRO de una: la carpeta del fichero es una de ellas o esta dentro (la
   // carpeta misma se crea y se quita: no pisa ninguna copia)
-  Carpeta := ExtractFileDir(APath);
+  Carpeta := ExtractFileDir(ConBarrasDeWindows(APath));
   Result := (Carpeta <> '') and
     (EnCarpetaLlamada(Carpeta, CARPETA_HISTORIA_DEL_IDE, EsLaCarpeta) or
      EnCarpetaLlamada(Carpeta, CARPETA_RECUPERACION_DEL_IDE, EsLaCarpeta));
@@ -1124,7 +1124,7 @@ begin
   // leaking into Delphi) and the whole guard matched nothing while looking
   // perfectly correct - the ".by" rule passed only because it has no slash.
   // canonical first: an 8.3 alias like __DELP~1 IS the trash
-  P := LongCanonical(APath).ToLower.Replace('/', '\');
+  P := LongCanonical(APath).ToLower;
   if EsMarcaDeDueno(P) then // la marca de dueno (Lsp.Casa)
     Exit(MsgText(SR_GUARD_OWNER_MARKER));
   if EnPapelera(APath) then
@@ -2181,13 +2181,13 @@ begin
       // hubiera un ENLACE (GUARD-037) despues de que read leyera la misma
       // ruta (Hermes, validacion de la 1.21.1; medido en produccion). UNA
       // forma, aqui, para todas las tools
-      Result := AValor.Replace('/', '\');
+      Result := ConBarrasDeWindows(AValor);
       if Result.IndexOf('~') < 0 then
         Exit;
       try
         Result := LongCanonical(Result);
       except
-        Exit(AValor.Replace('/', '\')); // una ruta que no parsea sigue a su negativa
+        Exit(ConBarrasDeWindows(AValor)); // una ruta que no parsea sigue a su negativa
       end;
       // la separacion final, como venia: una carpeta se nombra igual
       if AValor.EndsWith('\') or AValor.EndsWith('/') then
@@ -4416,7 +4416,7 @@ begin
   Me := CurrentAgent;
   if Me = '' then
     Exit; // stdio / operator: not confined
-  Rel := AFull.Substring(Length(IncludeTrailingPathDelimiter(ARoot))).Replace('/', '\');
+  Rel := ConBarrasDeWindows(AFull.Substring(Length(IncludeTrailingPathDelimiter(ARoot))));
   P := Rel.IndexOf('\');
   if P < 0 then
     Seg := Rel
@@ -4650,7 +4650,7 @@ begin
   // ruta de la maquina se contestaba si alli habia un fichero (tercera
   // revision de la 1.9.0)
   if (Result = '') and (APath.EndsWith('\') or APath.EndsWith('/')) and
-     TFile.Exists(SinBarraFinal(APath.Replace('/', '\'))) then
+     TFile.Exists(SinBarraFinal(ConBarrasDeWindows(APath))) then
     Result := MsgFmt(SR_GUARD_BARRA_FINAL_FMT, [APath]);
 end;
 
@@ -4874,7 +4874,7 @@ var
   P, L: string;
   Lugares: TArray<string>;
 begin
-  P := APath.Trim.Replace('/', '\');
+  P := ConBarrasDeWindows(APath.Trim);
   // los prefijos de dispositivo son de PathAnomaly (GUARD-022), no de aqui
   if not EsUnc(P) then
     Exit(False);
@@ -4883,18 +4883,17 @@ begin
   // (1,3 s medidos con uno que no existe; tercera revision de la 1.9.0)
   if Length(WorkspaceRoots) = 0 then
     Exit(NegativaDeCierre <> '');
-  Lugares := LugaresDeclarados;
+  Lugares := LugaresDeclarados; // ya sin blancos y con barras de Windows
   P := IncludeTrailingPathDelimiter(P);
   for L in Lugares do
   begin
-    if (L.Trim <> '') and
-       StartsText(IncludeTrailingPathDelimiter(L.Trim.Replace('/', '\')), P) then
+    if (L <> '') and StartsText(IncludeTrailingPathDelimiter(L), P) then
       Exit(False);
     // ...y por la forma LARGA de un sitio declarado en 8.3: la entrada ya
     // alargo la ruta del agente y un sitio UNC declarado con ~ lo negaba
     // TODO (octava revision). La E/S es sobre el sitio del operador, no
     // sobre lo que manda el agente.
-    if (L.IndexOf('~') >= 0) and StartsText(FormaLarga(L.Trim.Replace('/', '\')), P) then
+    if (L.IndexOf('~') >= 0) and StartsText(FormaLarga(L), P) then
       Exit(False);
     // ...y una ruta del agente con segmentos en 8.3 (C$\Users\DAVID~1\...\largo):
     // se alarga ELLA, pero solo si su recurso (\\servidor\recurso) es el de
@@ -4902,8 +4901,8 @@ begin
     // a uno que nombre el agente (octava revision; lo media el A13 de
     // test_alias83 con una raiz UNC, hasta la 1.8.2)
     if (P.IndexOf('~') >= 0) and
-       SameText(ExtractFileDrive(P), ExtractFileDrive(L.Trim.Replace('/', '\'))) and
-       StartsText(FormaLarga(L.Trim.Replace('/', '\')), FormaLarga(P)) then
+       SameText(ExtractFileDrive(P), ExtractFileDrive(L)) and
+       StartsText(FormaLarga(L), FormaLarga(P)) then
       Exit(False);
   end;
   Result := True;

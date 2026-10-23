@@ -273,7 +273,8 @@ uses
   Lsp.Texts, // DecodeSourceBytes: el detector de encoding de delphi_read
   Lsp.Json,  // ObjetoJson: EL lector de un JSON que tiene que ser un objeto
   Lsp.Codificacion,
-  System.Character;
+  System.Character,
+  Lsp.NetDrives;
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
@@ -1032,7 +1033,7 @@ begin
   var Negativa := RutaSinUri(APath);
   if Negativa <> '' then
     raise ELspClient.Create(Negativa);
-  Normalized := APath.Replace('\', '/');
+  Normalized := ConBarrasNormales(APath);
   Utf8 := TEncoding.UTF8.GetBytes(Normalized);
   Sb := TStringBuilder.Create('file:///');
   try
@@ -1099,7 +1100,7 @@ begin
   // estricto - y salia un SYS-006 que no decia nada (punto 5 de la 1.18.2);
   // ahora el byte malo es U+FFFD en una ruta que se ve, y lo de despues dice
   // que no existe
-  Result := DecodeBytes(UriABytes(AUri), ekUtf8).Replace('/', '\');
+  Result := ConBarrasDeWindows(DecodeBytes(UriABytes(AUri), ekUtf8));
 end;
 
 class function TLspClient.UriABytes(const AUri: string): TArray<Byte>;

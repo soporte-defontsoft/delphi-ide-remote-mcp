@@ -307,7 +307,7 @@ begin
   // lo leia de vuelta: el agente no podia repetir lo que el servidor le
   // ensenaba (GUARD-002). Vuelve solo si el operador declaro UN unico host
   // UNC entre sus lugares (novena revision, M5b)
-  V := AValue.Replace('/', '\');
+  V := ConBarrasDeWindows(AValue);
   if StartsText('\\' + HOST_VIRTUAL + '\', V) then
   begin
     Host := HostUncDeclarado;
@@ -411,14 +411,14 @@ var
     J: TJSONString;
     S: string;
   begin
-    Escrituras := [AForma, AForma.Replace('\', '/'),
-      AForma.Replace('\', '/').Replace(':', '%3A')];
+    Escrituras := [AForma, ConBarrasNormales(AForma),
+      ConBarrasNormales(AForma).Replace(':', '%3A')];
     for var K := 0 to 1 do
     begin
       if K = 0 then
         J := TJSONString.Create(AForma)
       else
-        J := TJSONString.Create(AForma.Replace('\', '/'));
+        J := TJSONString.Create(ConBarrasNormales(AForma));
       try
         S := J.ToJSON;
         Escrituras := Escrituras + [Copy(S, 2, Length(S) - 2)];

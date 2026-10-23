@@ -181,6 +181,18 @@ type
     [Test] procedure QueEsUnaRutaAMedias;
   end;
 
+  { LA forma de texto de una ruta (A40 de la 1.23): las preguntas sobre una
+    ruta que llega de cualquier sitio la miran con barras de Windows, y nadie
+    que las llame puede olvidarse de normalizar. EnCopiaDelIde partia el texto
+    con ExtractFileDir, que no ve la '/' (fallo de A10, visto al revisar el
+    diff), y EsUnc solo miraba '\\'. }
+  [TestFixture]
+  TFormaDeTextoTests = class
+  public
+    [Test] procedure UnaCopiaDelIdeConBarrasNormales;
+    [Test] procedure UnUncConBarrasNormales;
+  end;
+
 implementation
 
 uses
@@ -1140,6 +1152,27 @@ begin
     Assert.IsFalse(EsRutaAMedias(V), V);
 end;
 
+{ TFormaDeTextoTests }
+
+procedure TFormaDeTextoTests.UnaCopiaDelIdeConBarrasNormales;
+begin
+  Assert.IsTrue(EnCopiaDelIde('C:\x\__history\U.pas'));
+  Assert.IsTrue(EnCopiaDelIde('C:/x/__history/U.pas'), 'con barras normales');
+  Assert.IsTrue(EnCopiaDelIde('C:/x/__recovery/sub/U.pas'), 'con barras normales, mas abajo');
+  // la carpeta misma no es una copia: se crea y se quita
+  Assert.IsFalse(EnCopiaDelIde('C:/x/__history'));
+  Assert.IsFalse(EnCopiaDelIde('C:/x/historia/U.pas'));
+end;
+
+procedure TFormaDeTextoTests.UnUncConBarrasNormales;
+begin
+  Assert.IsTrue(EsUnc('\\h\s\x'));
+  Assert.IsTrue(EsUnc('//h/s/x'), 'con barras normales');
+  Assert.IsFalse(EsUnc('\\?\C:\x'), 'un prefijo de dispositivo no es un UNC');
+  Assert.IsFalse(EsUnc('//?/C:/x'), 'tampoco con barras normales');
+  Assert.IsFalse(EsUnc('C:/x'));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
@@ -1150,5 +1183,6 @@ initialization
   TDUnitX.RegisterTestFixture(TPuertaDeEscribirTests);
   TDUnitX.RegisterTestFixture(TLugarDeRedTests);
   TDUnitX.RegisterTestFixture(TRutaDesdeTests);
+  TDUnitX.RegisterTestFixture(TFormaDeTextoTests);
 
 end.

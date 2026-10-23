@@ -156,6 +156,14 @@ REGLAS = [
     ('las copias muertas del IDE por su nombre',
      r"^(?!\s*CARPETA_(?:HISTORIA|RECUPERACION)_DEL_IDE\s*=).*'\\?__(?:history|recovery)", [],
      'EnCopiaDelIde y CARPETA_HISTORIA_DEL_IDE / CARPETA_RECUPERACION_DEL_IDE (Lsp.Guard)'),
+    # las barras de una ruta cambiadas a mano: ExtractFileDir, StartsWith('\\') y una clave solo ven la
+    # '\', y cada sitio decidia por su cuenta si normalizar (A40 de la 1.23, medido: 'C:/x/__history/U.pas'
+    # no era una copia del IDE ni '//h/s/x' un UNC; eran 42 sitios a mano). Partir por las dos barras
+    # (Split(['\', '/'])) no es esto
+    ('las barras de una ruta cambiadas a mano',
+     r"Replace\(\s*'/'\s*,\s*(?:'\\'|PathDelim)\s*\)|Replace\(\s*(?:'\\'|PathDelim)\s*,\s*'/'\s*\)",
+     [('Lsp.NetDrives.pas', 'ConBarrasDeWindows'), ('Lsp.NetDrives.pas', 'ConBarrasNormales')],
+     'ConBarrasDeWindows / ConBarrasNormales (Lsp.NetDrives, A40 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1128,6 +1136,7 @@ PLANTADO = {
     '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
+    'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

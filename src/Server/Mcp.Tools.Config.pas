@@ -138,7 +138,8 @@ uses
   Lsp.Rutas,
   Lsp.Json,          // ListaDeTextos: paths es una LISTA, como en delphi_git
   Lsp.DesignerMeta,  // MetaTable: la tabla que juzga la raiz de un add-unit
-  Lsp.DesignerForma; // DesignersDeUnidad, EsDesignerFmx: de que marco es
+  Lsp.DesignerForma, // DesignersDeUnidad, EsDesignerFmx: de que marco es
+  Lsp.NetDrives;
 
 constructor TDelphiConfigTool.Create;
 begin
@@ -1065,7 +1066,7 @@ end;
   salvo un .so en Android, que va a la carpeta de librerias del apk. }
 function RemoteDirDeLaEntrada(const ARaw, APlatform, AFile: string): string;
 begin
-  Result := ARaw.Trim.Replace('/', '\');
+  Result := ConBarrasDeWindows(ARaw.Trim);
   if Result = '' then
   begin
     if SameText(TPath.GetExtension(AFile), '.so') and (CarpetaDeLibreriasDelApk(APlatform) <> '') then

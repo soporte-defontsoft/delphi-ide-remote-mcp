@@ -205,7 +205,7 @@ begin
       if (ALista[I].Trim <> '') and
          not (ALista[I].Contains('*') or ALista[I].Contains('?')) then
         Ruta := SinBarraFinal(TPath.GetFullPath(
-          TPath.Combine(Base, ALista[I].Replace('/', '\'))));
+          TPath.Combine(Base, ConBarrasDeWindows(ALista[I]))));
     except
       Ruta := '';
     end;
@@ -219,7 +219,7 @@ begin
       if Result <> '' then
         Exit;
     end;
-    Rel := Ruta.Substring(Length(Base)).Replace('\', '/');
+    Rel := ConBarrasNormales(Ruta.Substring(Length(Base)));
     if Rel = '' then
       Rel := '.'; // la carpeta del propio repo
     // :(literal): el nombre es el nombre, sin comodines ni magia; y en un
@@ -665,7 +665,7 @@ begin
   Carpetas := nil;
   for Linea in ASalida.Split([#10]) do
   begin
-    Ruta := Linea.Trim.Replace('/', '\');
+    Ruta := ConBarrasDeWindows(Linea.Trim);
     if Ruta = '' then
       Continue;
     try
@@ -1050,7 +1050,7 @@ begin
       Continue;
     if Ignorados <> '' then
       Ignorados := Ignorados + ', ';
-    Fuente := LeeRutaDeGit(Regla.Groups[1].Value).Replace('/', '\');
+    Fuente := ConBarrasDeWindows(LeeRutaDeGit(Regla.Groups[1].Value));
     // con raiz (C:\..., \\servidor, \...) es de dentro solo si cuelga del arbol
     if ((Length(Fuente) >= 2) and (Fuente[2] = ':')) or Fuente.StartsWith('\') then
     begin
@@ -1064,7 +1064,7 @@ begin
         [ARelativas[I], Regla.Groups[3].Value])
     else
       Ignorados := Ignorados + MsgFmt(SF_GIT_IGNORADO_POR_FMT,
-        [ARelativas[I], Regla.Groups[3].Value, Fuente.Replace('\', '/'), Regla.Groups[2].Value]);
+        [ARelativas[I], Regla.Groups[3].Value, ConBarrasNormales(Fuente), Regla.Groups[2].Value]);
   end;
   if Ignorados <> '' then
     Result := #10 + MsgFmt(SN_GIT_ADD_IGNORADO_FMT, [Ignorados]);
@@ -1192,7 +1192,7 @@ begin
       begin
         try
           ACarpeta := SinBarraFinal(TPath.GetFullPath(
-            TPath.Combine(ABase, ACarpeta.Replace('/', '\'))));
+            TPath.Combine(ABase, ConBarrasDeWindows(ACarpeta))));
         except
           Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ADireccion]));
         end;
@@ -1440,7 +1440,7 @@ begin
     // SYS-011 si el cambio tocaba un fichero con acento (medido el
     // 15-oct-2026, 1.19.3)
     Nombre := LeeRutaDeGit(Rel.Trim);
-    Abs := TPath.Combine(ARaiz, Nombre.Replace('/', '\'));
+    Abs := TPath.Combine(ARaiz, ConBarrasDeWindows(Nombre));
     // la puerta de siempre, fichero a fichero: '' si se puede escribir. Con el
     // permiso de git (APermiteGit): un fichero versionado nunca esta en los
     // metadatos, y sin el cada carpeta lanzaba un git (el gitdir separado)
@@ -2061,7 +2061,7 @@ begin
           begin
             // por la ruta real, como arriba: git lista nombres largos
             if not Primero and SameText(DestinoReal, SinBarraFinal(
-                 RealPath(Linea.Substring(9).Trim.Replace('/', '\')))) then
+                 RealPath(ConBarrasDeWindows(Linea.Substring(9).Trim)))) then
               Listado := True;
             Primero := False;
           end;

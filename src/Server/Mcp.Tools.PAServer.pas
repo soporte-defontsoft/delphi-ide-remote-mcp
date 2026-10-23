@@ -1424,7 +1424,7 @@ begin
       else
         Pattern := Pull.RemoteBase + '/*';
       DestDir := TPath.Combine(SysRoot,
-        Pull.RemoteBase.TrimLeft(['/']).Replace('/', '\'));
+        ConBarrasDeWindows(Pull.RemoteBase.TrimLeft(['/'])));
       CrearCarpeta(DestDir);
       ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=30 "--get=' + Pattern + ',' +
         DestDir + '"', ProfName, Output, 1200000));

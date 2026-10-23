@@ -1693,6 +1693,14 @@ begin
     Result := '        <DCCReference ' + XmlAtributo('Include', AInclude) + '/>' + CRLF;
 end;
 
+{ LA clave con la que se comparan dos Include (de un .dproj o de un uses): sin
+  mayusculas y con barras de Windows. El IDE escribe '\', y un agente o una
+  herramienta pueden escribir '/' (estaba a mano en cuatro sitios). }
+function ClaveDeInclude(const AInclude: string): string;
+begin
+  Result := ConBarrasDeWindows(AInclude).ToLower;
+end;
+
 { Finds the element for AInclude (path compared case-insensitively with / and
   \ unified). Returns its [Start, Len) in Xml including the trailing newline. }
 function FindDccRef(const Xml, AInclude: string; out AStart, ALen: Integer): Boolean;
@@ -1704,9 +1712,9 @@ begin
   // regex con el Include el primero, entre comillas dobles, y la etiqueta
   // sola en su linea
   Result := False;
-  Want := AInclude.Replace('/', '\').ToLower;
+  Want := ClaveDeInclude(AInclude);
   for var T in TramosDeEtiqueta(Xml, 'DCCReference', True) do
-    if AtributoDeTramo(Xml, T, 'DCCReference', 'Include').Replace('/', '\').ToLower = Want then
+    if ClaveDeInclude(AtributoDeTramo(Xml, T, 'DCCReference', 'Include')) = Want then
     begin
       ConSuLinea(Xml, T.Abre, T.Cierra, AStart, Hasta);
       ALen := Hasta - AStart;
@@ -2469,7 +2477,7 @@ begin
       if ANeedDproj and TFile.Exists(Dproj) then
         // one sweep of the .dproj, then O(1) per entry
         for var Incl in AllTagAttr(PatchLoadText(Dproj, Enc), 'DCCReference', 'Include') do
-          Includes.AddOrSetValue(Incl.Replace('/', '\').ToLower, True);
+          Includes.AddOrSetValue(ClaveDeInclude(Incl), True);
       // las de TODAS las ramas de un uses partido: la vista, fix-references
       // y la mudanza veian solo la primera
       for E in U.Entries + U.OtrasRamas do
@@ -2479,7 +2487,7 @@ begin
           Continue; // library units (no `in`) are not project files
         P.UnitName := EntryUnitName(E);
         P.FormName := EntryFormName(E);
-        P.InDproj := (not ANeedDproj) or Includes.ContainsKey(P.Include.Replace('/', '\').ToLower);
+        P.InDproj := (not ANeedDproj) or Includes.ContainsKey(ClaveDeInclude(P.Include));
         Result := Result + [P];
       end;
     except

@@ -171,7 +171,8 @@ function LibraryRoots: TArray<string>;
   rehacerse. Pregunta antes a LibraryRoots, asi que recarga si toca. }
 function GeneracionDeLaBiblioteca: Integer;
 { Los lugares que el operador declaro, en UNA lista: la lee UncFueraDeLugares
-  (Lsp.Guard). }
+  (Lsp.Guard). Sin blancos y con barras de Windows: quien la lee compara el
+  texto tal cual. }
 function LugaresDeclarados: TArray<string>;
 { El host UNC de los lugares declarados si es UNO solo: lo que \\srvhost\
   significa al volver del agente (ExpandDriveValue, Lsp.Mascara). }
@@ -361,12 +362,20 @@ end;
   trata un sitio declarado en UNC queda solo para eso, y SIN check propio:
   lo media una raiz UNC (A13 y A14 de test_alias83), que ya no existe. }
 function LugaresDeclarados: TArray<string>;
+var
+  Todos: TArray<string>;
+  I: Integer;
 begin
-  Result := WorkspaceRoots + WorkspaceReadOnlyRoots + WorkspaceReadOnlyPaths;
+  Todos := WorkspaceRoots + WorkspaceReadOnlyRoots + WorkspaceReadOnlyPaths;
   if VaultPath <> '' then
-    Result := Result + [VaultPath];
+    Todos := Todos + [VaultPath];
   if LibraryZoneEnabled then
-    Result := Result + LibraryRoots;
+    Todos := Todos + LibraryRoots;
+  // UNA forma aqui, y no en cada uno que la lee (eran seis re-normalizaciones
+  // a mano en Lsp.Guard y aqui: A40 de la 1.23)
+  SetLength(Result, Length(Todos));
+  for I := 0 to High(Todos) do
+    Result[I] := ConBarrasDeWindows(Todos[I].Trim);
 end;
 
 function HayJaula: Boolean;
@@ -386,7 +395,7 @@ begin
     Exit;
   for L in LugaresDeclarados do
   begin
-    H := L.Trim.Replace('/', '\');
+    H := L;
     if not EsUnc(H) then
       Continue;
     H := H.Substring(2);
@@ -477,7 +486,7 @@ var
   I: Integer;
 begin
   Result := ARuta;
-  P := PrefijoSinBarra(ARuta.Trim.Replace('/', '\'));
+  P := PrefijoSinBarra(ConBarrasDeWindows(ARuta.Trim));
   // El prefijo y el sufijo se cuentan en la misma forma larga, tambien
   // cuando Git devuelve larga la ruta de un destino escrito en 8.3.
   if AConLocales and not EsUnc(P) then
@@ -491,8 +500,8 @@ begin
   begin
     if I > High(AReales) then
       Break;
-    Decl := PrefijoSinBarra(ADeclaradas[I].Trim.Replace('/', '\'));
-    Real := PrefijoSinBarra(AReales[I].Trim.Replace('/', '\'));
+    Decl := PrefijoSinBarra(ConBarrasDeWindows(ADeclaradas[I].Trim));
+    Real := PrefijoSinBarra(ConBarrasDeWindows(AReales[I].Trim));
     // solo un sitio de letra de red. Uno en UNC (desde la 1.9.0 solo puede
     // serlo una carpeta de la zona de biblioteca) se queda con la
     // regla de siempre: vale en la forma en que se escribio
@@ -556,7 +565,8 @@ begin
   AReales := nil;
   for L in WorkspaceRoots + WorkspaceReadOnlyRoots do
   begin
-    Sitio := PrefijoSinBarra(L.Trim.Replace('/', '\'));
+    // (canonicas desde su cargador, Lsp.Settings.EntradaAbsolutaDeSitio)
+    Sitio := PrefijoSinBarra(L);
     Real := RutaDeRedDe(Sitio);
     if EsSitioDeLetraDeRed(Sitio, Real) then
     begin
@@ -613,14 +623,14 @@ begin
   begin
     if K > High(AReales) then
       Break;
-    Decl := PrefijoSinBarra(ADeclaradas[K].Trim.Replace('/', '\'));
-    Real := PrefijoSinBarra(AReales[K].Trim.Replace('/', '\'));
+    Decl := PrefijoSinBarra(ConBarrasDeWindows(ADeclaradas[K].Trim));
+    Real := PrefijoSinBarra(ConBarrasDeWindows(AReales[K].Trim));
     if not EsSitioDeLetraDeRed(Decl, Real) then
       Continue;
     // las tres escrituras de la misma ruta: dobladas dentro de un JSON, las
     // de git y las de Windows. Cada una vuelve con SUS barras
     Anade(Real.Replace('\', '\\'), Decl.Replace('\', '\\'), '\\');
-    Anade(Real.Replace('\', '/'), Decl.Replace('\', '/'), '/');
+    Anade(ConBarrasNormales(Real), ConBarrasNormales(Decl), '/');
     Anade(Real, Decl, '\');
   end;
   Result := CambiaPrefijosEnTexto(ATexto, Agujas, Cambios, Barras);

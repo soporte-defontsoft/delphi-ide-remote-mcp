@@ -545,7 +545,7 @@ begin
     AErr := MsgFmt(SR_STYLE_NINGUN_ESTILO_STYLENAME_FMT, [AStyleName, TPath.GetFileName(FPath)]);
     Exit;
   end;
-  for Seg in AChildPath.Replace('\', '/').Split(['/'], TStringSplitOptions.ExcludeEmpty) do
+  for Seg in AChildPath.Split(['\', '/'], TStringSplitOptions.ExcludeEmpty) do
   begin
     Result := Result.Child(Seg.Trim);
     if Result = nil then

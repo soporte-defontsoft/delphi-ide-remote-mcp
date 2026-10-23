@@ -145,6 +145,17 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **A path written with forward slashes is judged as the same path.**
+  Windows opens `C:/x` as it opens `C:\x`, but a check that reads the text
+  does not: a file in the IDE's `__history` or `__recovery` was not taken for
+  one of its dead copies when its path came with `/`, and `//host/share` was
+  not a network path (measured on 2026-10-23). A complete path an agent
+  passes was already given Windows' separator at the server's door; a path
+  read from a file, from git or from the IDE was turned by hand in 42
+  places, each deciding on its own whether to. Now one function gives a path
+  Windows' separators and its inverse gives it `/`, and every place that
+  judges, compares or keys a path by its text asks them (`LspUnitTests`,
+  `tests/test_paisaje.py`).
 - **A missing unit's folder is suggested also when it is called `Backup...`
   or lives under a `Release` folder.** When a build fails with `F2613`,
   `BUILD-042` says where the unit's source is. It skipped every folder whose
