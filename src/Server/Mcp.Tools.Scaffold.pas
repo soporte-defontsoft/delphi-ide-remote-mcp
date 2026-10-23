@@ -84,14 +84,19 @@ end;
 
 function CrearNucleo(const Params: TDelphiCreateParams): string;
 const
-  // lo que lee cada familia de kind, ademas de kind y name
-  FAMILIAS: array [0 .. 7] of string = (
-    'project', 'dir',
-    'form', 'project formname dir',
+  // lo que lee cada kind, ademas de kind y name: los kinds de verdad, que la
+  // negativa nombra con los que SI lo llevan (decia "goes with: form", un
+  // kind que no existe: Opus en Hermes, 1.22.2)
+  KINDS: array [0 .. 23] of string = (
+    'project-console', 'dir', 'project-vcl', 'dir', 'project-fmx', 'dir',
+    'project-package', 'dir', 'project-test', 'dir',
+    'form-vcl', 'project formname dir', 'form-fmx', 'project formname dir',
+    'frame-vcl', 'project formname dir', 'frame-fmx', 'project formname dir',
+    'datamodule', 'project formname dir',
     'unit', 'project content dir',
     'include', 'project content dir');
 var
-  K, Familia, Suyos, Sobra, VaCon: string;
+  K, Suyos, Sobra, VaCon: string;
 begin
   K := Params.Kind.Trim.ToLower;
   // lo que no es de este kind se dice (Lsp.Guard.ParametroQueNoVa): content
@@ -99,14 +104,7 @@ begin
   // contestaba CREATED con el esqueleto de siempre (septima revision)
   // solo los kinds que EXISTEN: uno que no, lo dice su negativa (CREATE-034),
   // no una tabla que lo daba por bueno (octava revision)
-  if MatchText(K, ['project-console', 'project-vcl', 'project-fmx',
-      'project-package', 'project-test']) then
-    Familia := 'project'
-  else if MatchText(K, ['form-vcl', 'form-fmx', 'frame-vcl', 'frame-fmx', 'datamodule']) then
-    Familia := 'form'
-  else
-    Familia := K;
-  Sobra := ParametroQueNoVa(Familia, FAMILIAS,
+  Sobra := ParametroQueNoVa(K, KINDS,
     ['dir', Params.Dir, '', 'project', Params.Project, '',
      'formname', Params.FormName, '', 'content', Params.Content, ''], Suyos, VaCon);
   if Sobra <> '' then

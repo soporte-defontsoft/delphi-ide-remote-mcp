@@ -89,7 +89,14 @@ the MCP `initialize` response (`serverInfo.version`).
   the entry `remove-searchpath` takes. A build answers with its `durationMs`,
   as `delphi_test` and `remote-run` do. A `delphi_docs` search whose results
   all fit gives them as its `total` (it counted the candidates: total 5 with
-  4 results and nothing more to see) (`tests/test_contratos_1222.py`).
+  4 results and nothing more to see). `delphi_list` with its root inside a
+  trash folder counts every entry as a trash copy (`LIST-008` called the day
+  copies live files). `delphi_config remove-unit` reads a relative path as
+  the project lists it, from its `.dpr`: it was judged from the server's own
+  folder, and `CFG-125` said that a unit inside the project lay outside what
+  the session can read. `CREATE-035` names the kinds a parameter goes with
+  (`form-vcl`, ... `datamodule`), not `form`, which is no kind (Claude Opus
+  5.5 through Hermes, 2026-10-23) (`tests/test_contratos_1222.py`).
 - **The folder summary of `delphi_symbols` lists a unit's constants and
   variables.** The summary of each unit's interface left out a constant
   written on the line of `const` itself (`const X = 1;`), typed constants

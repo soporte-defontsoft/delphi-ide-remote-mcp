@@ -2074,13 +2074,18 @@ begin
   if TPath.GetExtension(APasPath).ToLower <> '.pas' then
     Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   UnitName := TPath.GetFileNameWithoutExtension(APasPath);
+  // la ENTRADA como la lista el proyecto: una relativa es desde su .dpr (EL
+  // lector de lo que escribe IncludeFor). Se juzgaba desde la carpeta de
+  // trabajo del servidor, y una que estaba dentro se daba por de fuera de lo
+  // legible (Opus en Hermes, 1.22.2)
+  var Pas := RutaDeInclude(Dpr, APasPath);
   ClassName := '';
   FormName := '';
   // una ruta de FUERA de lo legible no se abre: la entrada se quita por su
   // nombre, como una que no existe (remove-unit de una <DCCReference> que
   // BUILD-050 pide quitar, 21-oct-2026)
-  var Fuera := ReadPathDenied(APasPath) <> '';
-  if (not Fuera) and (InspectUnit(APasPath, Info) = '') then
+  var Fuera := ReadPathDenied(Pas) <> '';
+  if (not Fuera) and (InspectUnit(Pas, Info) = '') then
   begin
     UnitName := Info.UnitName;
     ClassName := Info.ClassName;
@@ -2094,7 +2099,7 @@ begin
   if U.EnRamas then
     Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
   InDpr := LocateEntry(U, UnitName, Entry);
-  Include := IncludeFor(Dpr, TPath.GetFullPath(APasPath));
+  Include := IncludeFor(Dpr, Pas);
   if InDpr then
   begin
     if EntryInclude(Entry) <> '' then
@@ -2138,7 +2143,7 @@ begin
   else if Fuera then
     // de fuera no se dice ni si existe: nada se abre alli
     Plantilla := MsgText(SN_UNIT_REMOVED_FUERA_FMT)
-  else if not TFile.Exists(APasPath) then
+  else if not TFile.Exists(Pas) then
   begin
     // ...y si el proyecto la listaba por OTRA ruta que SI existe, es esa la
     // que sigue en disco y se nombra, con la dada entera al lado: CFG-112
@@ -2148,7 +2153,7 @@ begin
     if TFile.Exists(Listado) then
     begin
       Plantilla := MsgText(SN_UNIT_REMOVED_OTRA_RUTA_FMT);
-      Dado := TPath.GetFullPath(APasPath);
+      Dado := Pas;
     end
     else
       Plantilla := MsgText(SN_UNIT_REMOVED_SIN_FICHERO_FMT);

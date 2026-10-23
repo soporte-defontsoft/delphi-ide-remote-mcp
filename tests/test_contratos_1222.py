@@ -38,6 +38,10 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
   F9 set Edit1: el del form, y el del frame se queda
   L1 delphi_list con la raiz dentro de una papelera: todas sus entradas son copias (ROJO contra r1222g: las del dia
      contaban como vivas, LIST-008; Opus en Hermes)
+  K2 delphi_create con un parametro de otro kind: CREATE-035 nombra los kinds de verdad (ROJO contra r1222h:
+     "goes with: form", que no es un kind; Opus en Hermes)
+  U1 delphi_config remove-unit con la entrada relativa (Lib\ULibRel.pas), dentro: quitada, sin decir que esta fuera
+     de lo legible (ROJO contra r1222h: la juzgaba desde la carpeta del servidor, CFG-125; Opus en Hermes)
 
 Menores medidos sobre la 1.22.1 (Opus en Hermes y dos agentes de medida, 23-oct-2026), cada uno ROJO contra ella:
   G1 delphi_git en una carpeta sin repo: GIT-082 NOT_FOUND (decia GIT-036 DENIED)
@@ -295,6 +299,22 @@ try:
     j = mc.como_json(r)
     check('L1 list con la raiz DENTRO de la papelera: todas sus entradas son copias, ninguna viva',
           j.get('total', 0) > 0 and j.get('shownTrash', 0) + j.get('shownMarkers', 0) == j.get('total'), r[:500])
+    # remove-unit con la entrada como la lista el proyecto (relativa): desde su .dpr, no desde el servidor
+    udir = os.path.join(JAIL, 'quita')
+    srv.call('delphi_create', {'kind': 'project-vcl', 'name': 'Quita', 'dir': udir})
+    uproj = os.path.join(udir, 'Quita.dproj')
+    r = srv.call('delphi_create', {'kind': 'unit', 'name': 'ULibRel', 'dir': 'Lib', 'project': uproj})
+    check('U0 fixture: ULibRel en Lib, en el proyecto', not mc.fallo(r) and 'ULibRel' in lee(os.path.join(udir, 'Quita.dpr')),
+          r[:300])
+    r = srv.call('delphi_config', {'project': uproj, 'command': 'remove-unit', 'path': 'Lib\\ULibRel.pas'})
+    check('U1 remove-unit Lib\\ULibRel.pas (relativa, dentro): quitada y SIN decir que esta fuera de lo legible',
+          mc.es(r, 'SN_UNIT_REMOVED_FMT') and not mc.es(r, 'SN_UNIT_REMOVED_FUERA_FMT')
+          and 'ULibRel' not in lee(os.path.join(udir, 'Quita.dpr')), r[:400])
+    # CREATE-035 nombra los kinds de verdad con los que va el parametro, no la familia ('form' no es un kind)
+    r = srv.call('delphi_create', {'kind': 'unit', 'name': 'UFn', 'project': uproj, 'formname': 'X'})
+    check('K2 formname con kind=unit: CREATE-035 y "goes with" nombra form-vcl...datamodule, no "form"',
+          mc.es(r, 'SR_CREATE_NO_VA_CON_KIND_FMT') and 'form-vcl' in r and 'datamodule' in r
+          and 'goes with: form.' not in r, r[:400])
 
     plano = os.path.join(JAIL, 'plano')
     os.makedirs(plano)
