@@ -10,6 +10,29 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`get-sdk` no longer pulls on top of an SDK it did not bring, and nothing in
+  the IDE's registry is changed without a copy.** Its guard against two
+  distributions in one sysroot only acted when the folder had its record
+  (`mcp-sdk.json`) and both distributions were known: with a folder without it
+  (made by the IDE, by hand, or left by a pull that failed half-way), a target
+  whose `/etc/os-release` could not be read, or a record with no distribution,
+  paclient pulled on top - and an `.sdk` file or an SDK Manager seat of that
+  name that `get-sdk` had not made was overwritten. Now an SDK is `get-sdk`'s
+  only when its record says so, and anything else with that name is refused
+  (`PAS-064`); a target whose distribution cannot be read is refused before
+  anything is created (`PAS-065`), where it fell back to the profile's name;
+  the record is written before the first pull, so a pull that fails is retried
+  in its own folder; and the connection is checked first. `reseat-sdk` leaves
+  an SDK without a record to the SDK Manager (`PAS-066`). The registry: the SDK
+  and profile seats that `get-sdk`, `reseat-sdk`, `remove-sdk`, `add-profile`
+  and `remove-profile` write or delete, and `Default_Linux64` with
+  `active=yes`, were changed without a copy, unlike the files beside them. Now
+  one door exports the key first with `reg.exe` - opening the copy puts it
+  back - and leaves alone one that already says the same
+  (`previousIdeSeatCopy`, `previousIdeDefaultCopy`, `removedSeatCopy`,
+  `PAS-067`; `PAS-068` and `PAS-070`
+  when it cannot). `add-profile` answered `ideRegistered: true` even when the
+  seat was not written; now it says so (`tests/test_get_sdk_1230.py`).
 - **A text form saved in UTF-16 or UTF-32 is no longer passed off as one the
   IDE opens.** The IDE's code editor lets a `.dfm` or `.fmx` be saved in
   UTF-16 or UTF-32, but its designer does not load it again ("Invalid stream

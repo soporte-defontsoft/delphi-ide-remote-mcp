@@ -37,7 +37,15 @@ SCRATCH = os.environ['MCP_STUB_SCRATCH']
 
 
 def rel(p):
-    return os.path.join(SCRATCH, p.replace('/', os.sep))
+    # una ruta ABSOLUTA del destino (/etc/os-release, la de get-sdk) cae tambien
+    # dentro de la scratch: os.path.join con '\\etc' se iba a la raiz del disco
+    return os.path.join(SCRATCH, p.lstrip('/').replace('/', os.sep))
+
+
+# quien quiera saber que se le pidio (MCP_STUB_LOG): una linea por llamada
+if os.environ.get('MCP_STUB_LOG'):
+    with open(os.environ['MCP_STUB_LOG'], 'a', encoding='utf-8') as _log:
+        _log.write(' '.join(sys.argv[1:]) + '\n')
 
 
 def ejecutar(lanzador):
@@ -150,8 +158,29 @@ for arg in sys.argv[1:]:
         spec = arg[len('--get='):]
         for one in spec.split(';'):
             parts = one.split(',')
-            src = rel(parts[0])
             destdir = parts[1] if len(parts) > 1 else '.'
+            # lo de get-sdk: un arbol (<base>/**/*) o los ficheros de una carpeta
+            # (<base>/*), recreados bajo destdir, con el recuento que imprime
+            # paclient ("Total file(s) copied: N file(s)  B bytes"); una base que
+            # el destino no tiene sale con 1, como una variante de distro ausente
+            if parts[0].endswith('/**/*') or parts[0].endswith('/*'):
+                recursivo = parts[0].endswith('/**/*')
+                base = rel(parts[0][:-len('/**/*')] if recursivo else parts[0][:-len('/*')])
+                if not os.path.isdir(base):
+                    sys.exit(1)
+                n = b = 0
+                for raiz, dirs, fichs in os.walk(base):
+                    if not recursivo:
+                        dirs[:] = []
+                    d = os.path.join(destdir, os.path.relpath(raiz, base))
+                    for f in fichs:
+                        os.makedirs(d, exist_ok=True)
+                        shutil.copy(os.path.join(raiz, f), os.path.join(d, f))
+                        n += 1
+                        b += os.path.getsize(os.path.join(raiz, f))
+                print('Total file(s) copied: %d file(s)  %d bytes' % (n, b))
+                continue
+            src = rel(parts[0])
             if not os.path.isfile(src):
                 sys.exit(1)   # not there yet -> non-zero, like paclient
             os.makedirs(destdir, exist_ok=True)

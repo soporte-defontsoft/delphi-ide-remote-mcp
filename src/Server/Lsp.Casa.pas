@@ -135,6 +135,13 @@ function CarpetasDeLaCasa: TArray<string>;
   fichero, de la mas vieja a la mas nueva. }
 function CopiaDelIde(const APath: string): string;
 function CopiasDelIde(const APath: string): TArray<string>;
+{ El NOMBRE de una clave del registro del IDE en esas copias: la de
+  SOFTWARE\Embarcadero\BDS\<AVersion>\<ASubclave> es <AVersion>\<ASubclave
+  con '-' por '\'>.reg, como un fichero de la carpeta de esa version (la de
+  los .sdk y los .profile): CopiaDelIde le pone su carpeta y su sello, y
+  CopiasDelIde la purga, igual que a un fichero (V10, 24-oct-2026: el
+  registro del IDE se tocaba sin copia). }
+function FicheroDeClaveDelIde(const AVersion, ASubclave: string): string;
 
 { LA clave corta de una carpeta, por su ruta CANONICA (larga, sin barra
   final, en minusculas): la misma carpeta escrita en 8.3 o con otras
@@ -330,6 +337,11 @@ function CopiaDelIde(const APath: string): string;
 begin
   Result := TPath.Combine(CarpetaDeCopiasDelIde(APath),
     SelloUnico + '-' + TPath.GetFileName(APath));
+end;
+
+function FicheroDeClaveDelIde(const AVersion, ASubclave: string): string;
+begin
+  Result := TPath.Combine(AVersion, ASubclave.Replace('\', '-') + '.reg');
 end;
 
 function CopiasDelIde(const APath: string): TArray<string>;

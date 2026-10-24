@@ -308,8 +308,9 @@ begin
 end;
 
 { Que distro es el target, por su /etc/os-release y por el mismo transporte que
-  el resto del SDK: 'zorin18', 'fedora44', 'ubuntu2404'. '' si no se puede leer
-  (no es motivo para no traerse el sysroot: se cae al nombre del perfil). }
+  el resto del SDK: 'zorin18', 'fedora44', 'ubuntu2404'. '' si no se puede leer,
+  y entonces get-sdk se niega (PAS-065): se caia al nombre del perfil y se
+  bajaba encima de lo que hubiera en esa carpeta (V10). }
 function EtiquetaDelTarget(const APaClient, AProfName: string): string;
 var
   Tmp, F, L, Id, Ver, Salida: string;
@@ -737,41 +738,22 @@ end;
   perfiles del MCP funcionaron un mes por linea de comandos siendo
   invisibles en el IDE. Estos helpers escriben el asiento gemelo: la
   contrasena va CIFRADA y es la misma cadena en fichero y registro
-  (verificado byte a byte), o sea que se copia tal cual. }
-procedure RegistrarPerfilEnIde(const AVersion, AName, APlat, AHost: string;
-  APort: Integer; const APasswordCifrada: string);
-var
-  R: TRegistry;
+  (verificado byte a byte), o sea que se copia tal cual. Por LA puerta del
+  registro del IDE (Lsp.Patch): el asiento que ya estaba se exporta antes y
+  se devuelve esa copia; se pisaba y se borraba sin ella (V10). Lanzan si
+  no se pudo. }
+function RegistrarPerfilEnIde(const AVersion, AName, APlat, AHost: string;
+  APort: Integer; const APasswordCifrada: string): string;
 begin
-  R := TRegistry.Create(KEY_WRITE);
-  try
-    R.RootKey := HKEY_CURRENT_USER;
-    if R.OpenKey('\' + ClaveDelIde(AVersion, 'RemoteProfiles\' + AName), True) then
-    begin
-      R.WriteString('Platform', APlat);
-      R.WriteString('HostName', AHost);
-      R.WriteInteger('PortNumber', APort);
-      R.WriteString('Password', APasswordCifrada);
-      R.WriteString('LocalRoot', '');
-      R.WriteInteger('PathCount', 0);
-      R.CloseKey;
-    end;
-  finally
-    R.Free;
-  end;
+  Result := EscribeClaveDelIde(AVersion, 'RemoteProfiles\' + AName, [
+    ValorDeTexto('Platform', APlat), ValorDeTexto('HostName', AHost),
+    ValorEntero('PortNumber', APort), ValorDeTexto('Password', APasswordCifrada),
+    ValorDeTexto('LocalRoot', ''), ValorEntero('PathCount', 0)]);
 end;
 
-procedure BorrarPerfilDelIde(const AVersion, AName: string);
-var
-  R: TRegistry;
+function BorrarPerfilDelIde(const AVersion, AName: string): string;
 begin
-  R := TRegistry.Create(KEY_WRITE);
-  try
-    R.RootKey := HKEY_CURRENT_USER;
-    R.DeleteKey('\' + ClaveDelIde(AVersion, 'RemoteProfiles\' + AName));
-  finally
-    R.Free;
-  end;
+  Result := BorraClaveDelIde(AVersion, 'RemoteProfiles\' + AName);
 end;
 
 { El gemelo del SDK en el SDK Manager del IDE: PlatformSDKs\Linux64.sdk
@@ -779,89 +761,79 @@ end;
   y los objetos crt NO van clavados aqui: se leen del
   bin\Linux64.defaultsdkpaths que trae CADA instalacion de Delphi (David,
   2026-09-19: cada Delphi tiene su lista), igual que hace el asistente.
-  Devuelve True si escribio el asiento; el Default_Linux64 solo se pone si
-  faltaba (la eleccion del operador no se roba). }
+  Devuelve True si el asiento queda con sus rutas; el Default_Linux64 solo
+  se pone si se pide (la eleccion del operador no se roba). Por LA puerta del
+  registro del IDE (Lsp.Patch): lo que ya estaba se exporta antes, y las
+  copias salen en ACopiaAsiento y ACopiaDefault ('' si no hubo); se pisaba
+  sin copia (V10). Lanza si no se pudo. }
 function RegistrarSdkEnIde(const AVersion, ARootDir, ASysRoot,
-  ASdkName: string; AFijarDefault: Boolean): Boolean;
+  ASdkName: string; AFijarDefault: Boolean; out ACopiaAsiento, ACopiaDefault: string): Boolean;
 var
-  R: TRegistry;
-  Fichero, Xml, Clave: string;
+  Fichero, Xml: string;
   I: Integer;
+  Valores: TArray<TValorDelIde>;
 begin
   Result := False;
+  ACopiaAsiento := '';
+  ACopiaDefault := '';
   Fichero := TPath.Combine(TPath.Combine(
     SinBarraFinal(ARootDir), 'bin'), PLATAFORMA_DE_GETSDK + '.defaultsdkpaths');
   if not TFile.Exists(Fichero) then
     Exit;
   Xml := LeeTexto(Fichero, [ltIde]);
-  R := TRegistry.Create(KEY_WRITE);
-  try
-    R.RootKey := HKEY_CURRENT_USER;
-    // OJO con la barra: sin ella la clave sale "BDS37.0\PlatformSDKs", que no
-    // la lee nadie. Estuvo asi desde que se escribio get-sdk (visto
-    // 2026-09-20 al comparar con las otras cuatro claves de esta unidad, que
-    // si la llevan): el SDK quedaba perfecto para msbuild - que solo mira el
-    // fichero .sdk - y jamas aparecia en el SDK Manager del IDE.
-    Clave := '\' + ClaveDelIde(AVersion, 'PlatformSDKs');
-    if not R.OpenKey(Clave + '\' + NombreDeSdk(ASdkName), True) then
-      Exit;
-    R.WriteString('SDKName', NombreDeSdk(ASdkName));
-    R.WriteString('SDKDisplayName', PLATAFORMA_DE_GETSDK + ' ' + ASdkName + ' (MCP get-sdk)');
-    R.WriteString('PlatformName', PLATAFORMA_DE_GETSDK);
-    R.WriteString('Version', '');
-    R.WriteString('SystemRoot', PrefijoSinBarra(ASysRoot));
-    R.WriteString('SDKStartupObj', TagValue(Xml, 'Profile_startupobj'));
-    R.WriteString('SDKEndCodeObj', TagValue(Xml, 'Profile_endcodeobj'));
-    R.WriteString('SDKStartupObjS', TagValue(Xml, 'Profile_startupobjS'));
-    R.WriteString('SDKEndCodeObjS', TagValue(Xml, 'Profile_endcodeobjS'));
-    I := 0;
-    // las rutas de cabeceras y bibliotecas, en orden de documento, por EL
-    // analisis (era una regex cuyo .*? se llevaba la FileMask de la entrada
-    // siguiente si a una le faltaba)
-    var Cabeceras := TramosDeEtiqueta(Xml, 'ProfileInclude');
-    var Bibliotecas := TramosDeEtiqueta(Xml, 'ProfileLibrary');
-    var C := 0;
-    var B := 0;
-    while (C <= High(Cabeceras)) or (B <= High(Bibliotecas)) do
+  // OJO con la clave: sin la barra salia "BDS37.0\PlatformSDKs", que no la
+  // lee nadie (visto 2026-09-20): el SDK quedaba perfecto para msbuild - que
+  // solo mira el fichero .sdk - y jamas aparecia en el SDK Manager del IDE.
+  // La compone ahora EL compositor de la puerta (ClaveDelIde).
+  Valores := [ValorDeTexto('SDKName', NombreDeSdk(ASdkName)),
+    ValorDeTexto('SDKDisplayName', PLATAFORMA_DE_GETSDK + ' ' + ASdkName + ' (MCP get-sdk)'),
+    ValorDeTexto('PlatformName', PLATAFORMA_DE_GETSDK),
+    ValorDeTexto('Version', ''),
+    ValorDeTexto('SystemRoot', PrefijoSinBarra(ASysRoot)),
+    ValorDeTexto('SDKStartupObj', TagValue(Xml, 'Profile_startupobj')),
+    ValorDeTexto('SDKEndCodeObj', TagValue(Xml, 'Profile_endcodeobj')),
+    ValorDeTexto('SDKStartupObjS', TagValue(Xml, 'Profile_startupobjS')),
+    ValorDeTexto('SDKEndCodeObjS', TagValue(Xml, 'Profile_endcodeobjS'))];
+  I := 0;
+  // las rutas de cabeceras y bibliotecas, en orden de documento, por EL
+  // analisis (era una regex cuyo .*? se llevaba la FileMask de la entrada
+  // siguiente si a una le faltaba)
+  var Cabeceras := TramosDeEtiqueta(Xml, 'ProfileInclude');
+  var Bibliotecas := TramosDeEtiqueta(Xml, 'ProfileLibrary');
+  var C := 0;
+  var B := 0;
+  while (C <= High(Cabeceras)) or (B <= High(Bibliotecas)) do
+  begin
+    var EsBiblioteca := (C > High(Cabeceras)) or
+      ((B <= High(Bibliotecas)) and (Bibliotecas[B].Abre < Cabeceras[C].Abre));
+    var E: TTramoXml;
+    if EsBiblioteca then
     begin
-      var EsBiblioteca := (C > High(Cabeceras)) or
-        ((B <= High(Bibliotecas)) and (Bibliotecas[B].Abre < Cabeceras[C].Abre));
-      var E: TTramoXml;
-      if EsBiblioteca then
-      begin
-        E := Bibliotecas[B];
-        Inc(B);
-      end
-      else
-      begin
-        E := Cabeceras[C];
-        Inc(C);
-      end;
-      R.WriteString('Path' + IntToStr(I), AtributoDeTramo(Xml, E, '', 'Include'));
-      R.WriteString('Mask' + IntToStr(I), ValorDentro(Xml, 'FileMask', E));
-      if SameText(ValorDentro(Xml, 'SubDirs', E), 'True') then
-        R.WriteString('IncludeSubDir' + IntToStr(I), '1')
-      else
-        R.WriteString('IncludeSubDir' + IntToStr(I), '0');
-      R.WriteInteger('Type' + IntToStr(I), Ord(EsBiblioteca));
-      Inc(I);
-    end;
-    R.WriteInteger('PathCount', I);
-    R.CloseKey;
-    if R.OpenKey(Clave, False) then
+      E := Bibliotecas[B];
+      Inc(B);
+    end
+    else
     begin
-      // El SDK "activo" de la plataforma: la negrita de la lista del SDK
-      // Manager, y lo que usa un proyecto que no diga nada. SOLO se toca si
-      // lo piden (David, 20-sep): traerse un sysroot no es decidir con que
-      // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
-      if AFijarDefault then
-        R.WriteString(ValorDeSdkPorDefecto(PLATAFORMA_DE_GETSDK), NombreDeSdk(ASdkName));
-      R.CloseKey;
+      E := Cabeceras[C];
+      Inc(C);
     end;
-    Result := I > 0;
-  finally
-    R.Free;
+    Valores := Valores + [ValorDeTexto('Path' + IntToStr(I), AtributoDeTramo(Xml, E, '', 'Include')),
+      ValorDeTexto('Mask' + IntToStr(I), ValorDentro(Xml, 'FileMask', E)),
+      ValorDeTexto('IncludeSubDir' + IntToStr(I),
+        IfThen(SameText(ValorDentro(Xml, 'SubDirs', E), 'True'), '1', '0')),
+      ValorEntero('Type' + IntToStr(I), Ord(EsBiblioteca))];
+    Inc(I);
   end;
+  Valores := Valores + [ValorEntero('PathCount', I)];
+  ACopiaAsiento := EscribeClaveDelIde(AVersion, 'PlatformSDKs\' + NombreDeSdk(ASdkName), Valores);
+  // El SDK "activo" de la plataforma: la negrita de la lista del SDK
+  // Manager, y lo que usa un proyecto que no diga nada. SOLO se toca si
+  // lo piden (David, 20-sep): traerse un sysroot no es decidir con que
+  // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
+  if AFijarDefault then
+    ACopiaDefault := EscribeClaveDelIde(AVersion, 'PlatformSDKs',
+      [ValorDeTexto(ValorDeSdkPorDefecto(PLATAFORMA_DE_GETSDK), NombreDeSdk(ASdkName))]);
+  Result := I > 0;
 end;
 
 { El perfil que nombra el agente, por EL juez de la lista del IDE
@@ -930,10 +902,19 @@ begin
     ProfName, Output, 30000));
   if (ExitCode = 0) and TFile.Exists(ProfileFile) then
   begin
-    // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient
-    RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host,
-      StrToIntDef(Port, 64211),
-      CamposDePerfil(LeeTexto(ProfileFile, [ltIde])).Password);
+    // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient;
+    // uno viejo con ese nombre (sin .profile) se exporta antes, y si no se
+    // pudo escribir se dice: ideRegistered era True pasara lo que pasara
+    var CopiaAsiento := '';
+    var SinAsiento := '';
+    try
+      CopiaAsiento := RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host,
+        StrToIntDef(Port, 64211),
+        CamposDePerfil(LeeTexto(ProfileFile, [ltIde])).Password);
+    except
+      on E: Exception do
+        SinAsiento := E.Message;
+    end;
     Return := TJSONObject.Create;
     try
       Return.AddPair('profile', ProfName);
@@ -942,7 +923,11 @@ begin
       Return.AddPair('port', Port);
       Return.AddPair('platform', Plat);
       Return.AddPair('delphiVersion', Info.Version);
-      Return.AddPair('ideRegistered', TJSONBool.Create(True));
+      Return.AddPair('ideRegistered', TJSONBool.Create(SinAsiento = ''));
+      if SinAsiento <> '' then
+        Return.AddPair('ideSeatError', SinAsiento);
+      if CopiaAsiento <> '' then
+        Return.AddPair('previousIdeSeatCopy', CopiaAsiento);
       if AvisoDup <> '' then
         Return.AddPair('warning', AvisoDup);
       Return.AddPair('note', MsgText(SN_PASERVER_PROFILE_OK));
@@ -1046,6 +1031,18 @@ begin
     Exit;
   ProfName := DelIde;
   ProfileFile := RutaDePerfil(Info.Version, ProfName);
+  // el asiento del IDE PRIMERO, por la puerta del registro: se exporta antes
+  // a la casa (se borraba sin copia, V10), y si no se puede, no se toca nada
+  var CopiaAsiento := '';
+  try
+    CopiaAsiento := BorrarPerfilDelIde(Info.Version, ProfName);
+  except
+    on E: Exception do
+      Exit(MsgEnvuelve(SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT, E.Message));
+  end;
+  var DeLaCopia := '';
+  if CopiaAsiento <> '' then
+    DeLaCopia := MsgFmt(SN_PAS_COPIA_DEL_ASIENTO_FMT, [CopiaAsiento]);
   // por la puerta, con el IDE como lugar: se copia antes en la casa del
   // servidor (se borraba sin copia, irrecuperable: medida M3)
   var Copia := '';
@@ -1053,12 +1050,12 @@ begin
     Copia := BorraFichero(ProfileFile, ltIde);
   except
     on E: Exception do
-      Exit(MsgEnvuelve(SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT, E.Message));
+      Exit(MsgEnvuelve(SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT, E.Message) + DeLaCopia);
   end;
-  BorrarPerfilDelIde(Info.Version, ProfName);
   Result := MsgFmt(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
   if Copia <> '' then
     Result := Result + MsgFmt(SN_PAS_COPIA_DEL_IDE_FMT, [Copia]);
+  Result := Result + DeLaCopia;
   // paclient deja una carpeta VACIA con el nombre del perfil en el directorio
   // de SDKs del IDE al crearlo, y nadie la recogia: medido el 2026-09-22, diez
   // carpetas huerfanas de perfiles de prueba en la maquina del operador.
@@ -1327,6 +1324,53 @@ begin
   end;
 end;
 
+{ EL juez de "este SDK lo trajo get-sdk": SU ficha en el sysroot, y en ADistro
+  la distro que dice ('' si no la dice). Un sysroot sin ficha lo hizo el IDE,
+  alguien a mano o un get-sdk de antes de la ficha, y no es de esta tool: ni
+  get-sdk lo pisa ni reseat-sdk le reescribe el asiento (V10, 24-oct-2026). }
+function SysrootDeGetSdk(const ASysRoot: string; out ADistro: string): Boolean;
+var
+  Ficha: TJSONObject;
+begin
+  ADistro := '';
+  Ficha := FichaDeSysroot(ASysRoot);
+  Result := Assigned(Ficha);
+  if Result then
+    try
+      // EL lector de un campo de texto: un "distro": {} lanzaba (C6 del cierre)
+      ADistro := CampoDeTexto(Ficha, 'distro');
+    finally
+      Ficha.Free;
+    end;
+end;
+
+{ LA guarda de get-sdk: si puede escribir el SDK ANombre (su sysroot en
+  ASysRoot) con lo que trae un destino de la distro ADistro. '' si no hay nada
+  con ese nombre, o si es suyo y de esa distro; si no, la negativa. Solo
+  miraba la ficha con las DOS distros conocidas: sin ficha (una carpeta del
+  IDE, los restos de un pull a medias), sin os-release o con la distro vacia,
+  paclient bajaba encima y el .sdk y el asiento ajenos se pisaban (V10). }
+function SdkQueNoSePisa(const AVersion, ANombre, ASysRoot, ADistro: string): string;
+var
+  Suya: string;
+begin
+  Result := '';
+  if SysrootDeGetSdk(ASysRoot, Suya) then
+  begin
+    if SameText(Suya, ADistro) then
+      Exit;
+    // Una distro NO se superpone a otra: dos libc.so.6 y dos arboles de gcc
+    // en la misma carpeta, con las rutas de ambos en el Profile_LibraryPath
+    // que ve el linker
+    if Suya <> '' then
+      Exit(MsgFmt(SR_PASERVER_SDK_OTRA_FMT, [NombreDeSdk(ANombre), Suya, ADistro, ADistro]));
+  end
+  else if not ((TDirectory.Exists(ASysRoot) and not TDirectory.IsEmpty(ASysRoot)) or
+    TFile.Exists(RutaDeSdk(AVersion, ANombre)) or AsientoDeSdkExiste(AVersion, ANombre)) then
+    Exit; // nada con ese nombre: es nuevo
+  Result := MsgFmt(SR_PASERVER_SDK_AJENO_FMT, [NombreDeSdk(ANombre), ADistro]);
+end;
+
 { get-sdk: provision the platform SDK/sysroot locally from the live PAServer
   of a profile, then register it so delphi_build links. Mirrors what the
   IDE's SDK Manager does, measured piece by piece (2026-08-21):
@@ -1344,8 +1388,7 @@ var
   Info: TRadStudioInfo;
   PaClient, ProfName, ProfileFile, ProfXml, Plat, SysRoot: string;
   Output, Pattern, DestDir, GccVer, SdkFile, D: string;
-  SdkName, Etiqueta, Otra, Glibc: string;
-  Ficha: TJSONObject;
+  SdkName, Etiqueta, Glibc: string;
   ExitCode: Cardinal;
   Pull: TSdkPull;
   Return, PullObj: TJSONObject;
@@ -1375,39 +1418,41 @@ begin
   if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
     Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [PLATAFORMA_DE_GETSDK, ProfName, Plat]));
 
-  // UNA CARPETA POR SDK, igual que el IDE hace con los de Android: el nombre
-  // sale de la DISTRO del target (zorin18, fedora44...), del parametro "sdk"
-  // cuando el operador quiere imponerlo, o del perfil como ultimo recurso.
-  Etiqueta := EtiquetaDelTarget(PaClient, ProfName);
-  SdkName := SoloAlfanumerico(Params.Sdk);
-  if SdkName = '' then
-    SdkName := Etiqueta;
-  if SdkName = '' then
-    SdkName := SoloAlfanumerico(ProfName);
-  SysRoot := CarpetaDeSdk(Info.Version, SdkName);
-  // Una distro NO se superpone a otra. Eso es exactamente lo que dejaba dos
-  // libc.so.6 y dos arboles de gcc en la misma carpeta, con las rutas de
-  // ambos en el Profile_LibraryPath que ve el linker.
-  Ficha := FichaDeSysroot(SysRoot);
-  if Assigned(Ficha) then
-    try
-      Otra := '';
-      // EL lector de un campo de texto: un "distro": {} lanzaba (C6 del cierre)
-      Otra := CampoDeTexto(Ficha, 'distro');
-      if (Otra <> '') and (Etiqueta <> '') and not SameText(Otra, Etiqueta) then
-        Exit(MsgFmt(SR_PASERVER_SDK_OTRA_FMT,
-          [NombreDeSdk(SdkName), Otra, Etiqueta, Etiqueta]));
-    finally
-      Ficha.Free;
-    end;
-  // El destino contesta? ANTES de crear nada: con el PAServer apagado cada
+  // El destino contesta? ANTES de nada: con el PAServer apagado cada
   // descarga salia "skipped (not on this target)" y el final culpaba a la
-  // distro (PAS-030; sexta revision). paclient solo con el perfil conecta y
-  // se autentica, como test-connection.
+  // distro (PAS-030; sexta revision); y antes de leer su os-release, que con
+  // el destino apagado no se lee y no es culpa de la distro (V10). paclient
+  // solo con el perfil conecta y se autentica, como test-connection.
   ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=20', ProfName, Output, 45000));
   if ExitCode <> 0 then
     Exit(MsgFmt(SR_FETCHTARGET_FAIL_FMT, [ExitCode, Output.Trim]));
+  // UNA CARPETA POR SDK Y POR DISTRO, igual que el IDE hace con los de
+  // Android: el nombre sale de la DISTRO del target (zorin18, fedora44...), o
+  // del parametro "sdk" cuando el operador quiere imponerlo. Sin la distro no
+  // hay carpeta propia: se caia al nombre del perfil y se bajaba encima de lo
+  // que hubiera, con la distro de la ficha vacia (V10).
+  Etiqueta := EtiquetaDelTarget(PaClient, ProfName);
+  if Etiqueta = '' then
+    Exit(MsgFmt(SR_PASERVER_SDK_SIN_DISTRO_FMT, [ProfName]));
+  SdkName := SoloAlfanumerico(Params.Sdk);
+  if SdkName = '' then
+    SdkName := Etiqueta;
+  SysRoot := CarpetaDeSdk(Info.Version, SdkName);
+  Result := SdkQueNoSePisa(Info.Version, SdkName, SysRoot, Etiqueta);
+  if Result <> '' then
+    Exit;
   CrearCarpeta(SysRoot);
+  // La ficha va ANTES de bajar nada: los restos de un pull que falla a medias
+  // dicen de que distro son, y el reintento entra; sin ella, la guarda los
+  // tomaria por ajenos (V10). Una que ya estaba es de esta distro (la guarda)
+  // y se rehace al final, con la glibc y el gcc de lo traido.
+  if not TFile.Exists(TPath.Combine(SysRoot, SDK_FICHA)) then
+  begin
+    var Reclamo: string;
+    EscribirFicha(SysRoot, SdkName, Etiqueta, '', '', ProfName, '', Reclamo);
+    if Reclamo <> '' then
+      Exit(MsgFmt(SR_PASERVER_SDK_SIN_FICHA_FMT, [SysRoot, Reclamo]));
+  end;
 
   Return := TJSONObject.Create;
   Pulls := TJSONArray.Create;
@@ -1556,10 +1601,21 @@ begin
       else if HabiaSdk then
         Return.AddPair('sdkFileUnchanged', TJSONBool.Create(True));
       // y el asiento del SDK Manager del IDE, leyendo la tabla del
-      // defaultsdkpaths de ESTA instalacion (nada clavado)
-      if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot, SdkName,
-        MatchText(Params.Active.Trim, ['si', 'yes', 'true', '1'])) then
-        Return.AddPair('ideSdkRegistered', TJSONBool.Create(True));
+      // defaultsdkpaths de ESTA instalacion (nada clavado), por la puerta del
+      // registro: lo que pisa se exporta antes (V10), y si no pudo se dice
+      try
+        var CopiaAsiento, CopiaDefault: string;
+        if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot, SdkName,
+          MatchText(Params.Active.Trim, ['si', 'yes', 'true', '1']), CopiaAsiento, CopiaDefault) then
+          Return.AddPair('ideSdkRegistered', TJSONBool.Create(True));
+        if CopiaAsiento <> '' then
+          Return.AddPair('previousIdeSeatCopy', CopiaAsiento);
+        if CopiaDefault <> '' then
+          Return.AddPair('previousIdeDefaultCopy', CopiaDefault);
+      except
+        on E: Exception do
+          Return.AddPair('ideSeatError', E.Message);
+      end;
     finally
       Sb.Free;
       LibDirs.Free;
@@ -1684,7 +1740,17 @@ begin
         end;
         Puerto := StrToIntDef(Campos.Puerto, 64211);
         Pwd := Campos.Password; { ya viene cifrada: se copia tal cual }
-        RegistrarPerfilEnIde(Info.Version, Nombre, Plat, Host, Puerto, Pwd);
+        // un asiento que no se pudo escribir se dice con lo demas que no se
+        // sembro (la puerta del registro lanza: V10)
+        try
+          RegistrarPerfilEnIde(Info.Version, Nombre, Plat, Host, Puerto, Pwd);
+        except
+          on E: Exception do
+          begin
+            Saltados := Saltados + [E.Message];
+            Continue;
+          end;
+        end;
         Sembrados.Add(Nombre);
       end;
     end;
@@ -1710,9 +1776,10 @@ var
   Nombre, Fichero, Xml, Raiz: string;
   Return: TJSONObject;
   Hechos: TJSONArray;
-  Ficheros, Saltados: TArray<string>;
+  Ficheros, Saltados, CopiasHechas: TArray<string>;
 begin
   Saltados := nil;
+  CopiasHechas := nil;
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_PASERVER_NO_PACLIENT));
@@ -1771,12 +1838,38 @@ begin
           [TPath.GetFileName(Fichero), Raiz])];
         Continue;
       end;
-      if RegistrarSdkEnIde(Info.Version, Info.RootDir, Raiz,
-           NombreSinSdk(TPath.GetFileName(Fichero)), False) then
-        Hechos.Add(NombreSinSdk(TPath.GetFileName(Fichero)));
+      // y solo los que trajo get-sdk (EL juez, su ficha): el asiento de un
+      // SDK del IDE es del SDK Manager y se reescribia con lo nuestro (V10)
+      var Distro: string;
+      if not SysrootDeGetSdk(Raiz, Distro) then
+      begin
+        Saltados := Saltados + [MsgFmt(SN_PASERVER_SDK_RESEAT_AJENO_FMT,
+          [TPath.GetFileName(Fichero)])];
+        Continue;
+      end;
+      // por la puerta del registro: lo que pisa se exporta antes, y lo que no
+      // pudo se dice con lo demas que no se asento
+      try
+        var CopiaAsiento, CopiaDefault: string;
+        if RegistrarSdkEnIde(Info.Version, Info.RootDir, Raiz,
+             NombreSinSdk(TPath.GetFileName(Fichero)), False, CopiaAsiento, CopiaDefault) then
+          Hechos.Add(NombreSinSdk(TPath.GetFileName(Fichero)));
+        if CopiaAsiento <> '' then
+          CopiasHechas := CopiasHechas + [CopiaAsiento];
+      except
+        on E: Exception do
+          Saltados := Saltados + [E.Message];
+      end;
     end;
     if Length(Saltados) > 0 then
       Return.AddPair('skipped', string.Join(#10, Saltados));
+    if Length(CopiasHechas) > 0 then
+    begin
+      var Lista := TJSONArray.Create;
+      Return.AddPair('previousIdeSeatCopies', Lista);
+      for var Cp in CopiasHechas do
+        Lista.Add(Cp);
+    end;
     Return.AddPair('note', MsgText(SN_PASERVER_SDK_RESEAT));
     Result := Return.ToJSON;
   finally
@@ -1792,7 +1885,6 @@ function RemoveSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
   Nombre, Fichero, Xml, Raiz, CopiaSdk: string;
-  R: TRegistry;
   Return: TJSONObject;
 begin
   // el SDK lo nombra "sdk" (ver reseat-sdk)
@@ -1819,8 +1911,8 @@ begin
   // nombre, los de Android de GetIt incluidos (B de la 1.18.4, por lectura:
   // no se mide destruyendo el SDK real del operador)
   var Plat := '';
-  if TFile.Exists(Fichero) then
-  begin
+  var HayFichero := TFile.Exists(Fichero);
+  if HayFichero then
     try
       Xml := LeeTexto(Fichero, [ltIde]);
       Plat := CamposDePerfil(Xml).Plataforma;
@@ -1830,45 +1922,43 @@ begin
       Raiz := SysrootDeSdk(Info.Version, Xml);
     except
       Raiz := '';
-    end;
-    // una plataforma que no se lee CIERRA, como en la rama del asiento (C5):
-    // aqui la condicion era "hay plataforma y no es Linux64", y un .sdk sin
-    // ella se borraba (gemelo de C5, triaje de Hermes del 15-oct-2026)
-    if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
-      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT,
-        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown'), PLATAFORMA_DE_GETSDK]));
-    // por la puerta, con el IDE como lugar: se copia antes en la casa
+    end
+  else if not AsientoDeSdkExiste(Info.Version, Nombre) then
+    Exit(MsgFmt(SR_PASERVER_SDK_NOFILE_FMT, [Nombre]))
+  else
+    Plat := PlataformaDelAsiento(Info.Version, Nombre);
+  // una plataforma que no se lee CIERRA, la del fichero y la del asiento (C5
+  // del cierre de la 1.19.0; los .sdk y asientos reales si la traen): la del
+  // fichero era "hay plataforma y no es Linux64", y un .sdk sin ella se
+  // borraba (gemelo de C5, triaje de Hermes del 15-oct-2026)
+  if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
+    Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT,
+      [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown'), PLATAFORMA_DE_GETSDK]));
+  // el asiento PRIMERO, por la puerta del registro: se exporta antes a la
+  // casa (se borraba sin copia, V10), y si no se puede, no se toca nada
+  var CopiaAsiento := '';
+  try
+    CopiaAsiento := BorraClaveDelIde(Info.Version, 'PlatformSDKs\' + NombreDeSdk(Nombre));
+  except
+    on E: Exception do
+      Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_FMT, [NombreDeSdk(Nombre), E.Message]));
+  end;
+  // por la puerta, con el IDE como lugar: se copia antes en la casa
+  if HayFichero then
     try
       CopiaSdk := BorraFichero(Fichero, ltIde);
     except
       on E: Exception do
-        Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_FMT,
-          [TPath.GetFileName(Fichero), E.Message]));
+        Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_FMT, [TPath.GetFileName(Fichero), E.Message]) +
+          IfThen(CopiaAsiento <> '', MsgFmt(SN_PAS_COPIA_DEL_ASIENTO_FMT, [CopiaAsiento]), ''));
     end;
-  end
-  else if not AsientoDeSdkExiste(Info.Version, Nombre) then
-    Exit(MsgFmt(SR_PASERVER_SDK_NOFILE_FMT, [Nombre]))
-  else
-  begin
-    Plat := PlataformaDelAsiento(Info.Version, Nombre);
-    // sin plataforma legible no se quita nada: la puerta cierra, no abre
-    // (C5 del cierre de la 1.19.0; los .sdk y asientos reales si la traen)
-    if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
-      Exit(MsgFmt(SR_PASERVER_SDK_NO_ES_NUESTRO_FMT,
-        [NombreDeSdk(Nombre), IfThen(Plat <> '', Plat, 'unknown'), PLATAFORMA_DE_GETSDK]));
-  end;
-  R := TRegistry.Create(KEY_WRITE);
-  try
-    R.RootKey := HKEY_CURRENT_USER;
-    R.DeleteKey('\' + ClaveDelIde(Info.Version, 'PlatformSDKs\' + NombreDeSdk(Nombre)));
-  finally
-    R.Free;
-  end;
   Return := TJSONObject.Create;
   try
     Return.AddPair('removed', NombreDeSdk(Nombre));
     if CopiaSdk <> '' then
       Return.AddPair('removedCopy', CopiaSdk);
+    if CopiaAsiento <> '' then
+      Return.AddPair('removedSeatCopy', CopiaAsiento);
     if Raiz <> '' then
     begin
       Return.AddPair('sysrootLeftBehind', Raiz);

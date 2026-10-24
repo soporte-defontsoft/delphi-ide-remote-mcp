@@ -1954,17 +1954,18 @@ const
     'IS declaring where this machine may connect. An existing name is ' +
     'refused, never overwritten; the profile shows in the IDE too) | ' +
     'remove-profile (that profile, from the IDE too; profiles live outside the ' +
-    'workspace, so there is no trash: a copy of its file is kept first in the ' +
-    'server''s own folder and the answer says where) | test-connection (with profile: full ' +
+    'workspace, so there is no trash: its file and seat are copied first and ' +
+    'the answer says where) | test-connection (with profile: full ' +
     'handshake; with host+port and no profile: raw TCP probe, same host rule) ' +
     '| get-sdk (pull the sysroot from the PAServer of "profile" into ' +
     'a folder of its own named after the target distro, registered for ' +
-    'delphi_build AND the IDE SDK Manager; minutes. An .sdk file or SDK ' +
-    'record it replaces is copied first and the answer says where: ' +
-    'previousSdkCopy, previousSdkRecordCopy; the last 10 per file are kept; ' +
-    'one that says the same is not rewritten) | reseat-sdk (rewrite ' +
-    'the IDE seat of an SDK already on disk, no network; "sdk" names one, ' +
-    'none = all) | remove-sdk (its .sdk file - copied first: removedCopy - and IDE seat; the sysroot ' +
+    'delphi_build AND the IDE SDK Manager; minutes. Never over an SDK it ' +
+    'did not bring. What it replaces is copied first (previousSdkCopy, ' +
+    'previousSdkRecordCopy, previousIdeSeatCopy; 10 kept per file); what ' +
+    'says the same is not rewritten) | reseat-sdk (rewrite ' +
+    'the IDE seat of an SDK get-sdk brought, no network; "sdk" names one, ' +
+    'none = all) | remove-sdk (its .sdk file and IDE seat, copied first: removedCopy, ' +
+    'removedSeatCopy; the sysroot ' +
     'stays on disk and the answer says where) | remote-run (run what THAT ' +
     'project deployed on the target of "profile" - nothing else - and ' +
     'return exit code and output; nothing to install, PAServer runs it. On ' +
@@ -2313,11 +2314,14 @@ const
     '[PAS-060] %s not seated: its sysroot (%s) is not under the IDE''s SDK ' +
     'folder, and this tool only registers what lives there.';
 
-  { la ficha del sysroot que no se pudo escribir: se tragaba, y la siguiente
-    llamada se quedaba sin la guarda de distro }
+  { la ficha del sysroot que no se pudo rehacer al final: se tragaba, y la
+    siguiente llamada se quedaba sin la guarda de distro; desde V10 la ficha
+    se pone antes de bajar (PAS-069 si no se puede), asi que aqui solo se
+    pierden la glibc y el gcc de este pull }
   SN_PASERVER_SDK_FICHA_NO_ESCRITA_FMT =
-    '[PAS-061] The SDK record (mcp-sdk.json) could not be written (%s): the ' +
-    'next get-sdk into this folder cannot check it is the same distro.';
+    '[PAS-061] The SDK record (mcp-sdk.json) could not be updated (%s): it ' +
+    'still names the distro of this folder, but not the glibc and gcc of ' +
+    'this pull.';
 
   { un get-sdk que falla a medias deja lo bajado (gigas) donde nadie lo ve }
   SN_PASERVER_SDK_RESTOS_FMT =
@@ -2344,6 +2348,40 @@ const
     'folder leave two libc and two gcc trees, and the linker ends up ' +
     'mixing them without warning. Run get-sdk without "sdk" (it will be ' +
     'called %s) or give me another name.';
+
+  { V10 (24-oct-2026): un SDK que no trajo get-sdk -su carpeta sin ficha, o
+    su .sdk o su asiento del SDK Manager- se pisaba con lo que se bajara, y
+    una ficha sin distro dejaba bajar encima. %s = SDK, %s = distro }
+  SR_PASERVER_SDK_AJENO_FMT =
+    '[PAS-064 DENIED] The SDK "%s" already exists and nothing says it is ' +
+    'from %s: its folder has no record of the distro get-sdk pulled into ' +
+    'it (mcp-sdk.json), so it was made by the IDE, by hand or by an older ' +
+    'get-sdk. I do NOT pull on top of it nor overwrite its .sdk or its SDK ' +
+    'Manager seat. Give me another name in "sdk".';
+
+  { sin la distro del destino no hay carpeta propia: con el os-release sin
+    leer se caia al nombre del perfil, se bajaba encima de lo que hubiera y
+    la ficha quedaba con la distro vacia (V10). %s = perfil }
+  SR_PASERVER_SDK_SIN_DISTRO_FMT =
+    '[PAS-065 DENIED] I could not read /etc/os-release from the target of ' +
+    'profile "%s", so I do not know which distro it is: every SDK goes to ' +
+    'a folder of its own distro, and without it I cannot keep this one ' +
+    'apart from another. Nothing was created. Check that the target has ' +
+    'that file and its PAServer can read it, then repeat.';
+
+  { la ficha se escribe ANTES de bajar nada: sin ella los restos de un pull
+    a medias no dirian de que distro son (V10). %s = carpeta, %s = motivo }
+  SR_PASERVER_SDK_SIN_FICHA_FMT =
+    '[PAS-069 INTERNAL] The SDK record (mcp-sdk.json) could not be written ' +
+    'in %s (%s): without it nothing would say which distro that folder ' +
+    'holds, so nothing was pulled.';
+
+  { reseat-sdk solo asienta lo que trajo get-sdk: el asiento de un SDK del
+    IDE es suyo y se reescribia con lo nuestro (V10). %s = el .sdk }
+  SN_PASERVER_SDK_RESEAT_AJENO_FMT =
+    '[PAS-066] %s not seated: its sysroot has no record of a get-sdk ' +
+    '(mcp-sdk.json), so it is the IDE''s or older, and its seat belongs to ' +
+    'the SDK Manager.';
 
   SN_PASERVER_SDK_GENERIC_FMT =
     '[PAS-012] This sysroot has glibc %s. The rule to have ONE SINGLE ' +
@@ -7173,7 +7211,7 @@ const
   SN_PASERVER_PROFILE_REMOVED_FMT =
     '[PAS-032] DELETED the connection profile "%s". NOTE: profiles live ' +
     'outside the workspace (where the IDE keeps them), so this has NO ' +
-    'trash: there is no way back except creating it again with ' +
+    'trash: the way back is the copy below, or creating it again with ' +
     'add-profile.';
 
   SR_PASERVER_HOST_DENIED_FMT =
@@ -8951,8 +8989,24 @@ const
     puerta de escribir, Lsp.Patch; David, 9-oct-2026). %s = la copia. }
   SN_PAS_COPIA_DEL_IDE_FMT =
     ' [PAS-058] A copy of it was kept first at %s: the server itself never ' +
-    'deletes or overwrites a file of the IDE without one (what paclient ' +
-    'brings into a sysroot is paclient''s).';
+    'deletes or overwrites a file or a registry key of the IDE without one ' +
+    '(what paclient brings into a sysroot is paclient''s).';
+
+  { lo que se borra del registro del IDE se exporta antes (V10). %s = la copia }
+  SN_PAS_COPIA_DEL_ASIENTO_FMT =
+    ' [PAS-067] Its seat in the IDE (the registry key the IDE lists it ' +
+    'from) was exported first to %s: opening that .reg puts it back.';
+
+  { la puerta del registro del IDE (Lsp.Patch.EscribeClaveDelIde y
+    BorraClaveDelIde): sin copia no se toca. %s = la clave, %s = el motivo }
+  SR_IDE_CLAVE_SIN_COPIA_FMT =
+    '[PAS-068 INTERNAL] Nothing was changed in the IDE''s registry: I could ' +
+    'not export %s first (%s), and without a copy I do not touch it.';
+
+  { ...y la que se exporto pero no se dejo escribir o borrar. %s = la clave }
+  SR_IDE_CLAVE_NO_ESCRITA_FMT =
+    '[PAS-070 INTERNAL] The IDE''s registry did not let me change %s (if ' +
+    'it was there, what it said was exported first).';
 
   SN_PAS_TOTALFILES_TOTALBYTES_COUNT =
     '[PAS-044] totalFiles/totalBytes count what was copied in THIS run. ' +

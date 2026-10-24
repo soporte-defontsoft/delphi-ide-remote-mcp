@@ -59,7 +59,9 @@ REGLAS = [
       # (con y sin contenedor), el lanzador del AppContainer, el del motor LSP
       # (DelphiLSP.exe) y el ayudante de remote-run que arranca lo pedido
       ('Lsp.BuildRunner.pas', 'RunCore'), ('Lsp.Sandbox.pas', 'CreateProcessEnContenedor'),
-      ('Lsp.Transport.Process.pas', 'TLspProcessTransport.Start'), ('McpRunJob.dpr', 'Arrancar')],
+      ('Lsp.Transport.Process.pas', 'TLspProcessTransport.Start'), ('McpRunJob.dpr', 'Arrancar'),
+      # reg.exe export: la copia de una clave del IDE antes de tocarla (V10 de la 1.23)
+      ('Lsp.Patch.pas', 'ExportaClaveDelIde')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
     ('lanzar el conversor de estilos', LANZA + r""".*'"' \+ A?Exe \+""",
      [('Lsp.Styles.pas', 'CorreStyleConvert')],
@@ -415,6 +417,15 @@ REGLAS = [
      [('Lsp.Discovery.pas', 'ArmaVigia')],
      'ArmaVigia (Lsp.Discovery): VigilaClave abre y arma, CambioLaClave pregunta y rearma; quien cachea '
      'algo del registro del IDE pregunta a su vigia, ni relee por llamada ni cachea para siempre'),
+    # los asientos de SDKs y perfiles se pisaban y se borraban sin copia, cada uno con su
+    # TRegistry de escribir en Mcp.Tools.PAServer (V10 de la 1.23, 24-oct-2026)
+    ('escribir el registro', r'\bTRegistry\.Create\s*\([^)]*KEY_(?:WRITE|ALL_ACCESS)|\.DeleteKey\s*\(|'
+                             r'\bReg(?:SetValue|DeleteKey|DeleteValue|CreateKey)\w*\s*\(',
+     [('Lsp.Patch.pas', 'EscribeClaveDelIde'), ('Lsp.Patch.pas', 'BorraClaveDelIde'),
+      # la clave del propio servicio al instalarlo (la del operador, con permisos de admin)
+      ('Lsp.Service.pas', 'TDelphiLspMcpService.ServiceAfterInstall')],
+     'EscribeClaveDelIde y BorraClaveDelIde (Lsp.Patch): LA puerta del registro del IDE, que exporta '
+     'antes lo que pisa o borra (reg.exe) y no reescribe lo que ya dice lo mismo'),
     ('la forma de los atomos del RTL', r"'(?:ControlOfs|WndProcPtr|FIREMONKEY%|Delphi%\.8X)'",
      [('Lsp.AtomosRtl.pas', '*')],
      'Lsp.AtomosRtl: los atomos globales que deja un proceso VCL/FMX muerto sin finalizar (llena la tabla, '
@@ -1204,6 +1215,7 @@ PLANTADO = {
     'una DCCReference compuesta a mano': "  R := '        <DCCReference ' + XmlAtributo('Include', I) + '/>';",
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
+    'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",
     'lanzar el conversor de estilos': "  Out := RunCapturedIn('\"' + Exe + '\" tobin', Dir, 1000, C);",
