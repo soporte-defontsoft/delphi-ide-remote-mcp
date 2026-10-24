@@ -1669,30 +1669,54 @@ end;
   van en Size). La regla es la de la RTL (TypInfo.IsStoredPropRTTI: un
   StoredProc sin nada por encima del byte bajo es una constante, y ese byte su
   valor); un stored con metodo depende de la instancia - el valor por defecto -
-  y no entra. Separadas por coma. }
+  y no entra. Separadas por coma. Tambien las de sus SUBOBJETOS, por su ruta:
+  TWriter escribe en linea un TPersistent que no es un componente
+  (TextSettings.Font), y la TFont de FMX guarda Style como StyleExt
+  (DefineProperties) - se decia "no se guarda" de lo que el IDE escribio
+  (Fable sobre la 1.22.2, B2). Un componente al que apunta una propiedad es
+  una referencia, no un subobjeto: no se baja. }
 function NuncaGuardadas(AObj: TPersistent): string;
 var
-  Lista: PPropList;
-  N: Integer;
-begin
-  Result := '';
-  N := GetTypeData(AObj.ClassInfo)^.PropCount;
-  if N = 0 then
-    Exit;
-  GetMem(Lista, N * SizeOf(Pointer));
-  try
-    GetPropInfos(AObj.ClassInfo, Lista);
-    for var I := 0 to N - 1 do
-    begin
-      if Lista^[I] = nil then
-        Break;
-      var Guarda := UIntPtr(Lista^[I]^.StoredProc);
-      if ((Guarda and not NativeUInt($FF)) = 0) and ((Guarda and $FF) = 0) then
-        Result := Result + (if Result <> '' then ',' else '') + GetPropName(Lista^[I]);
+  Juntas: string;
+
+  procedure Junta(AO: TPersistent; const APrefijo: string; ANivel: Integer);
+  var
+    Lista: PPropList;
+    N: Integer;
+  begin
+    N := GetTypeData(AO.ClassInfo)^.PropCount;
+    if N = 0 then
+      Exit;
+    GetMem(Lista, N * SizeOf(Pointer));
+    try
+      GetPropInfos(AO.ClassInfo, Lista);
+      for var I := 0 to N - 1 do
+      begin
+        if Lista^[I] = nil then
+          Break;
+        var Nombre := APrefijo + GetPropName(Lista^[I]);
+        var Guarda := UIntPtr(Lista^[I]^.StoredProc);
+        if ((Guarda and not NativeUInt($FF)) = 0) and ((Guarda and $FF) = 0) then
+          Juntas := Juntas + (if Juntas <> '' then ',' else '') + Nombre
+        // tres niveles bastan (TextSettings.Font.Style) y cortan un ciclo
+        else if (ANivel < 3) and (Lista^[I]^.PropType^.Kind = tkClass) then
+        try
+          var Sub := GetObjectProp(AO, Lista^[I]);
+          if (Sub is TPersistent) and not (Sub is TComponent) then
+            Junta(TPersistent(Sub), Nombre + '.', ANivel + 1);
+        except
+          // un getter que no se deja leer: de ese subobjeto no se sabe
+        end;
+      end;
+    finally
+      FreeMem(Lista);
     end;
-  finally
-    FreeMem(Lista);
   end;
+
+begin
+  Juntas := '';
+  Junta(AObj, '', 0);
+  Result := Juntas;
 end;
 
 procedure EscribeComoElIde(ARaiz: TComponent);

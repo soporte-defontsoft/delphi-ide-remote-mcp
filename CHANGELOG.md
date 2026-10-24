@@ -17,6 +17,26 @@ the MCP `initialize` response (`serverInfo.version`).
   written without that mark: the answer was `DESK-018`, "the node did not say
   why", when it had. The line now has one writer in the node (`NoPude`),
   watched by `tests/test_paisaje.py`.
+- **Answers that misled about what the server or the IDE does, each measured
+  first (the 1.22.2 reviews).** `delphi_designer set` of FMX
+  `TextSettings.Font.Style` said the IDE does not store it (`DSGN-165`), and
+  the IDE writes it as `TextSettings.Font.StyleExt`: the properties a class
+  never stores by name are now read from its sub-objects too, so the answer
+  says `storedIn`. `delphi_diagnostics` of a `.inc` stayed "in progress" for
+  good (measured: six minutes with three lines): an include file is refused at
+  once (`LSP-051`) - lint the unit that includes it. `delphi_config
+  add-searchpath` judged `%2E%2E\Lib` as typed (`CFG-018`, "does not exist")
+  while msbuild reads `..\Lib`: it is judged unescaped, as the build reads it -
+  the jail and the characters too, so a `%3B` (a `;` that splits the list) is
+  refused. `delphi_search` took one mask and `delphi_list` several separated
+  by `;`: one reader for both, several masks in each and every one checked (a
+  piece naming a folder was silently ignored by list). `BUILD-008` named a
+  package once per unit (`vcl` twenty times). `STYLE-003` said the server
+  cannot read a `.bin.style` - it is `delphi_styles` that works on the text
+  one; `DESK-008` said the activities overview was open after Super, which
+  closes it when it was open; `ADB-005`, given for a device the command does
+  not even use, says to leave it out; the `mode` of `delphi_symbols` promised
+  to say when the tree is the full one (`tests/test_textos_1230.py`).
 
 - **An inherited component with no block in the descendant form can be read
   and changed.** The IDE writes in a descendant form only what differs from

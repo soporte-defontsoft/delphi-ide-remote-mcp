@@ -1626,6 +1626,11 @@ begin
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
     raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
+  // un .inc no es una unidad: el motor lo compila dentro de la que lo
+  // incluye, y de el solo no publica nunca (medido el 24-oct-2026: tres
+  // lineas junto a su .dproj, "in-progress" seis minutos)
+  if SameText(TPath.GetExtension(FullPath), '.inc') then
+    raise ELspSession.Create(MsgFmt(SR_LSP_LINT_INCLUDE_FMT, [AFilePath]));
   // Sin ajustes de proyecto el motor no publica NUNCA (medido 2026-10-06,
   // ver SR_LSP_LINT_SIN_AJUSTES_FMT): se dice aqui, antes de arrancar un
   // motor para nada, y no tras 40 s de "in-progress" en bucle. La misma

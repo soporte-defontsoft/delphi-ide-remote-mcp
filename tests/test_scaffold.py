@@ -5,7 +5,7 @@ scaffolded form must leave the project still compiling.
 
 Usage:  python tests/test_scaffold.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -133,6 +133,12 @@ try:
     check('package: build quiet en verde pero con implicitImports', d['success'] and 'Vcl.Dialogs' in d.get('implicitImports', []), out[:300])
     check('package: requiresSuggested trae vcl y dbrtl (leido de los BPL)', {'vcl', 'dbrtl'} <= set(d.get('requiresSuggested', [])), d.get('requiresSuggested'))
     check('package: requiresNote con la orden add-requires', 'add-requires' in d.get('requiresNote', ''), d.get('requiresNote', '')[:200])
+    # la frase nombraba un paquete una vez por cada unit suya ('vcl' x20; Fable sobre la 1.22.2, B3)
+    _req = re.search(r'requires="([^"]*)"', d.get('requiresNote', ''))
+    _lista = _req.group(1).split(';') if _req else []
+    check('package: BUILD-008 nombra cada paquete UNA vez (requires="vcl;dbrtl", no vcl x N)',
+          bool(_lista) and len(_lista) == len(set(_lista)) and set(_lista) == set(d.get('requiresSuggested', [])),
+          d.get('requiresNote', '')[:400])
     check('package: en quiet sigue sin warnings[]', 'warnings' not in d, list(d.keys()))
     _sug = ';'.join(d.get('requiresSuggested', []))
     _bpl_gordo = d.get('outputSize', 0)

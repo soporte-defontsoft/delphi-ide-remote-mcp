@@ -2578,6 +2578,9 @@ begin
         Implicitas.Sorted := True; Implicitas.Duplicates := dupIgnore;
         Sugeridos.Sorted := True; Sugeridos.Duplicates := dupIgnore;
         SinPaquete.Sorted := True; SinPaquete.Duplicates := dupIgnore;
+        // la frase de BUILD-008 nombraba vcl una vez por cada unit suya (x20;
+        // Fable sobre la 1.22.2, B3)
+        DeBpl.Sorted := True; DeBpl.Duplicates := dupIgnore;
         // por el CODIGO y el primer '...' (un dcc traducido no dice "implicitly imported")
         for var MI in TRegEx.Matches(Output, 'W1033:?[^'']*''([^'']+)''', [roIgnoreCase]) do
         begin

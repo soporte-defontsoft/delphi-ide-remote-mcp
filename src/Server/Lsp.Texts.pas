@@ -324,8 +324,8 @@ const
   SN_SEARCH_MASK_NO_MATCH_FMT =
     '[SEARCH-002] The mask "%s" matched no file here, so nothing was ' +
     'searched: "total 0" does NOT mean the text is not there. pattern ' +
-    'takes ONE mask (*.pas, *.dfm); without pattern, the Delphi sources ' +
-    'are searched.';
+    'takes ONE mask (*.pas) or several separated by ";" (*.pas;*.dfm); ' +
+    'without pattern, the Delphi sources are searched.';
 
   SR_CREATE_SUBDIR_REL_FMT =
     '[CREATE-001 INVALID_PARAM] "dir"="%s" is not valid for creating INSIDE a ' +
@@ -566,8 +566,8 @@ const
     'For a FILE only: summary = the skeleton (each section with its ' +
     'members and line; containers say how many they hold) | full = the LSP ' +
     'tree with its ranges, minus what repeats. Empty = full if the tree is ' +
-    'small, summary if large (the answer says which, and how big the full ' +
-    'one was).';
+    'small, summary if large (a summary says so, and how big the full one ' +
+    'was).';
 
   SP_SYMBOLS_FILTER =
     'For a file: only the symbols whose name contains this ' +
@@ -692,6 +692,16 @@ const
     'answers - nothing was linted. Put it in a project (delphi_config ' +
     'command=add-unit, or add-searchpath to its folder) or create one ' +
     '(delphi_create), and lint it again.';
+
+  { ...y un .inc, que no es una unidad: el motor lo compila DENTRO de la que
+    lo incluye, y de el solo no publica nunca (medido el 24-oct-2026: tres
+    lineas junto a su .dproj, "in-progress" seis minutos; Fable sobre la
+    1.22.2, B5). Se dice antes de arrancar el motor, como LSP-035 }
+  SR_LSP_LINT_INCLUDE_FMT =
+    '[LSP-051 INVALID_PARAM] %s is an include file: the engine compiles it ' +
+    'inside the unit that includes it ({$I}), and on its own it never ' +
+    'publishes a lint - nothing was linted. Lint that unit (delphi_search ' +
+    'finds which one includes it), or build the project.';
 
   { La ruta existe, pero es de otro tipo - que no es lo mismo que no existir.
     Medido 2026-09-20: delphi_read sobre la raiz del repo contestaba "no
@@ -2737,13 +2747,17 @@ const
     'the list even though the capture shows them: for those, look at the ' +
     'image and use region. To crop to one of the list: screenshot ' +
     'window=<part of its title>.';
+  { Super ABRE la vista general, o la CIERRA si ya estaba abierta: el
+    segundo overview la cerro y esto decia que estaba abierta (Opus sobre la
+    1.22.2, u). Quien lo sabe es GNOME Shell (OverviewActive): eso, a la 1.24 }
   SN_DESKTOP_OVERVIEW_LINUX =
-    '[DESK-008] This capture was taken 0.8 s after pressing Super: it is ' +
-    'the ACTIVITIES OVERVIEW, with each window drawn REDUCED and its ' +
-    'application icon below it (with two windows they show almost at ' +
-    'real size, side by side). Press on one to bring it to the front and ' +
-    'leave the overview, or key code=1 (Escape) to close it without ' +
-    'choosing. The "windows" list of this answer carries the REAL ' +
+    '[DESK-008] This capture was taken 0.8 s after pressing Super, which ' +
+    'OPENS the activities overview - or closes it if it was already open: ' +
+    'the image says which. In the overview each window is drawn REDUCED ' +
+    'with its application icon below it (with two windows they show ' +
+    'almost at real size, side by side). Press on one to bring it to the ' +
+    'front and leave the overview, or key code=1 (Escape) to close it ' +
+    'without choosing. The "windows" list of this answer carries the REAL ' +
     'positions of the windows (the X11 ones), not where the overview ' +
     'draws them: to press one here, measure on the image.';
   SR_ADBLINUX_WINDOW_NOMATCH_FMT =
@@ -2937,11 +2951,15 @@ const
     '[ADB-004 INVALID_PARAM] "%s" is not an allowed key. Use back | home | ' +
     'enter | appswitch | wakeup | up | down | left | right | tab.';
 
+  { la puerta juzga TODO device y address que llega, use o no la orden el
+    suyo: con devices o discover, que no usan ninguno, la salida es quitarlo
+    (Opus sobre la 1.22.2, m) }
   SR_ADB_ALLOWLIST_FMT =
     '[ADB-005 DENIED] The device "%s" is not in the allowed list of this ' +
     'workspace (AdbAllowedDevices= in its section of settings.ini; ' +
     'absent = none). Outside that list, nothing. The operator extends it ' +
-    'if appropriate.';
+    'if appropriate. This check judges every device and address given: if ' +
+    'the command you called does not use one, leave it out.';
 
   SR_ADB_ALLOWLIST_DEVICE =
     '[ADB-006 INVALID_PARAM] Devices go by the workspace list ' +
@@ -3938,13 +3956,15 @@ const
     '[STYLE-042] %s is a file: lint and build work on a whole styles ' +
     'folder, so they ran on its folder, %s.';
 
+  { decia "this server cannot READ it", y un .bin.style es una cabecera
+    FMX_STYLE y un flujo TPF0 que el servidor si lee en un .dfm (medido el
+    24-oct; Opus sobre la 1.22.2, t): es ESTA tool la que no lo lee }
   SR_STYLES_BINARY_FMT =
     '[STYLE-003 DENIED] %s is BINARY (a compiled style, the product of ' +
-    'command=build, or a binary resource), and this server cannot READ ' +
-    'it: the format is a compiled DFM, not text, so I cannot even list ' +
-    'its StyleNames for you. Work on the text .style it comes from (same ' +
-    'name without the .bin) and run command=build again. If your only ' +
-    'copy is the binary, say so with delphi_report.';
+    'command=build, or a binary resource): delphi_styles reads and edits ' +
+    'the TEXT .style it comes from (same name without the .bin) - work on ' +
+    'that one and run command=build again. If your only copy is the ' +
+    'binary, say so with delphi_report.';
 
   SR_STYLES_NEED_STYLE =
     '[STYLE-031 INVALID_PARAM] Missing "style": the StyleName of the ' +
@@ -8512,9 +8532,12 @@ const
     '[VAULT-025] MODIFIED %s (1 replacement). Backup copy in %s.';
 
   // Mensajes que estaban en linea en Mcp.Tools.Workspace.pas (paso 3c, 27-sep-2026)
+  // (el pattern de delphi_list y el de delphi_search, UN lector desde el
+  // 24-oct-2026: search pedia una y list tomaba varias; Opus sobre la 1.22.2, v)
   SR_WS_PATTERN_DEBE_SER_MASCARA =
-    '[WS-005 INVALID_PARAM] pattern must be ONE simple mask (*.style, *.ini, ' +
-    'MyApp*.rc).';
+    '[WS-005 INVALID_PARAM] pattern takes file-name masks: ONE (*.style, ' +
+    '*.ini, MyApp*.rc) or several separated by ";" (*.pas;*.dfm) - letters, ' +
+    'digits, spaces and * ? . - _ only, no folders.';
 
   SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION =
     '[WS-006 INVALID_PARAM] pattern does not accept braces {a,b} (shell ' +
@@ -10448,14 +10471,15 @@ const
     'true = match whole identifiers only (word boundaries)';
 
   SP_WS_PATTERN =
-    'Optional file mask to search instead of the Delphi set, e.g. ' +
-    '*.style, *.ini, *.md, *.rc (one mask)';
+    'Optional mask(s) instead of the Delphi set: *.style, *.md, *.rc or ' +
+    '*.pas;*.dfm';
 
   SP_WS_ROOT_2 =
     'Directory to list recursively';
 
   SP_WS_PATTERN_2 =
-    'Filename mask, e.g. *.pas (default: Delphi source and project files)';
+    'Filename mask(s): *.pas or *.pas;*.dfm (default: Delphi source and ' +
+    'project files)';
 
   SP_WS_DIRS =
     'true = list SUBDIRECTORIES of root (one level, explorer-style) ' +

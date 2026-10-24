@@ -274,6 +274,32 @@ begin
   Result := MascarasDe(SOURCE_EXTS) + MascarasDe(DESIGNER_EXTS) + MascarasDe(PROJECT_EXTS);
 end;
 
+{ EL lector del "pattern" de delphi_list y delphi_search: una mascara de
+  nombre de fichero, o varias separadas por ';' (*.pas;*.dfm). Search pedia
+  UNA y list partia por ';' sin mirar los trozos (Opus sobre la 1.22.2, v):
+  dos hermanas, una gramatica. Cada trozo, con letras de cualquier alfabeto
+  (hay units acentuadas), digitos, espacios (list los tomaba: My Unit*.pas)
+  y * ? . - _; las llaves de una expansion de la shell, WS-006 (no casaban
+  nada, en silencio). '' y AMascaras, o la negativa. }
+function MascarasDelPatron(const APatron: string; out AMascaras: TArray<string>): string;
+begin
+  Result := '';
+  AMascaras := [];
+  if APatron.Contains('{') or APatron.Contains('}') then
+    Exit(MsgText(SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION));
+  for var Trozo in APatron.Split([';']) do
+  begin
+    var M := Trozo.Trim;
+    if M = '' then
+      Continue;
+    if not TRegEx.IsMatch(M, '\A(?:' + PATRON_CAR_IDENT + '|[*?.\- ])+\z') then
+      Exit(MsgText(SR_WS_PATTERN_DEBE_SER_MASCARA));
+    AMascaras := AMascaras + [M];
+  end;
+  if Length(AMascaras) = 0 then
+    Result := MsgText(SR_WS_PATTERN_DEBE_SER_MASCARA);
+end;
+
 { La carpeta que NOMBRA quien llama y que no es una: un fichero (LIST-002,
   con la tool ATool, que anda carpetas) o nada (ANoEsta, el texto de cada
   tool). '' si es una carpeta. Eran tres copias: list y package decian LIST-002
@@ -364,11 +390,10 @@ begin
     var Masks: TArray<string> := MascarasPorDefecto;
     if Params.Pattern.Trim <> '' then
     begin
-      // una mascara de nombre de fichero: letras de cualquier alfabeto (hay
-      // units acentuadas: UArbol con su tilde*.pas se negaba), digitos y * ? . - _
-      if not TRegEx.IsMatch(Params.Pattern.Trim, '\A(?:' + PATRON_CAR_IDENT + '|[*?.\-])+\z') then
-        Exit(MsgText(SR_WS_PATTERN_DEBE_SER_MASCARA));
-      Masks := [Params.Pattern.Trim];
+      // EL lector del pattern, el de delphi_list (MascarasDelPatron)
+      var MalPatron := MascarasDelPatron(Params.Pattern, Masks);
+      if MalPatron <> '' then
+        Exit(MalPatron);
       // con UN fichero por raiz que la mascara no elige se buscaba en el igual,
       // en silencio (Opus en Hermes, 1.22.1); si lo elige, por el MISMO juez
       // que el paseo (GetFiles, la mascara de Windows), vale
@@ -376,15 +401,16 @@ begin
       begin
         var Elegido := False;
         try
-          for var Elegible in TDirectory.GetFiles(TPath.GetDirectoryName(Params.Root), Masks[0],
-            TSearchOption.soTopDirectoryOnly) do
-            if SameText(TPath.GetFileName(Elegible), TPath.GetFileName(Params.Root)) then
-              Elegido := True;
+          for var Mk in Masks do
+            for var Elegible in TDirectory.GetFiles(TPath.GetDirectoryName(Params.Root), Mk,
+              TSearchOption.soTopDirectoryOnly) do
+              if SameText(TPath.GetFileName(Elegible), TPath.GetFileName(Params.Root)) then
+                Elegido := True;
         except
           // una carpeta que no se deja listar: la mascara no lo elige
         end;
         if not Elegido then
-          Exit(MsgFmt(SR_SEARCH_PATTERN_CON_FICHERO_FMT, [Masks[0], Params.Root]));
+          Exit(MsgFmt(SR_SEARCH_PATTERN_CON_FICHERO_FMT, [Params.Pattern.Trim, Params.Root]));
       end;
     end;
     var Targets: TArray<string> := [];
@@ -583,8 +609,15 @@ begin
     Exit;
   // Shell-style brace expansion is NOT a mask: *.{pas,dfm} matched nothing
   // silently (field 2026-08-22). Say so instead of returning an empty list.
-  if Params.Pattern.Contains('{') or Params.Pattern.Contains('}') then
-    Exit(MsgText(SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION));
+  // EL lector del pattern, el de delphi_search (MascarasDelPatron): aqui se
+  // partia por ';' sin mirar los trozos
+  Masks := MascarasPorDefecto;
+  if Params.Pattern.Trim <> '' then
+  begin
+    Result := MascarasDelPatron(Params.Pattern, Masks);
+    if Result <> '' then
+      Exit;
+  end;
 
   // lo que no va con lo que se lista se dice (Lsp.Guard.ParametroQueNoVa),
   // como en las tools de varios comandos: pattern con dirs=true se ignoraba en
@@ -670,13 +703,6 @@ begin
     end;
     Exit;
   end;
-  if Params.Pattern <> '' then
-    Masks := Params.Pattern.Split([';'])
-  else
-  begin
-    Masks := MascarasPorDefecto;
-  end;
-
   Return := TJSONObject.Create;
   // la carpeta una vez y debajo sus ficheros (el organizador): la ruta
   // repetida en cada entrada era el 42% de una pagina (6-oct-2026)

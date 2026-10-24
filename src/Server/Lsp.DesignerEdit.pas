@@ -1851,8 +1851,9 @@ begin
             Length(LeadingWhite(DocE.Lines[OE.StartLine - 1]));
           // lo que el escritor guarda y no estaba tal cual en lo compuesto: lo que
           // escribe por una stored False (el Size.Width de un Width en FMX)
+          // (cada una con la propiedad suya: DeCambiada)
           var Cambiadas: TArray<string> := [];
-          var PrimeraCambiada := '';
+          var DeCambiada: TArray<string> := [];
           for var S in Suyas do
             for var K := S.Ini to S.Fin do
             begin
@@ -1863,8 +1864,7 @@ begin
               if not Estaba then
               begin
                 Cambiadas := Cambiadas + [DocE.Lines[K].Trim];
-                if PrimeraCambiada = '' then
-                  PrimeraCambiada := S.Prop;
+                DeCambiada := DeCambiada + [S.Prop];
               end;
             end;
           for var S in Suyas do
@@ -1913,14 +1913,30 @@ begin
               // FMX, Width y Height van en Size) no es "el valor que ya da la
               // clase": lo que el form guarda de ella es lo que el escritor
               // escribe por ella (completo de Opus de la 1.22.1: DSGN-165 con el
-              // Size.Width escrito)
-              if MatchText(ArribaDe(N.Prop), R.NuncaGuardadas) then
+              // Size.Width escrito). La del componente o la de uno de sus
+              // subobjetos, por su ruta: TextSettings.Font.Style de FMX la guarda
+              // TFont como StyleExt (DefineProperties), y DSGN-165 decia "no se
+              // guarda" de lo que el IDE escribio (Fable sobre la 1.22.2, B2)
+              if MatchText(N.Prop, R.NuncaGuardadas) or MatchText(ArribaDe(N.Prop), R.NuncaGuardadas) then
               begin
+                // ...en lo que escribe SU dueno: una de un subobjeto la escribe
+                // el DefineProperties de ese subobjeto, con su ruta delante; una
+                // del componente, cualquiera suya (FMX: Width en Size.Width)
+                var Dueno := '';
+                if N.Prop.LastIndexOf('.') > 0 then
+                  Dueno := N.Prop.Substring(0, N.Prop.LastIndexOf('.') + 1);
                 var EnOtras := Default(TGuardadaComo);
                 EnOtras.Prop := N.Prop;
-                EnOtras.Valor := string.Join('; ', Cambiadas);
                 EnOtras.EnOtras := True;
-                EnOtras.Donde := PrimeraCambiada;
+                var Suyas_: TArray<string> := [];
+                for var K := 0 to High(Cambiadas) do
+                  if (Dueno = '') or DeCambiada[K].StartsWith(Dueno, True) then
+                  begin
+                    Suyas_ := Suyas_ + [Cambiadas[K]];
+                    if EnOtras.Donde = '' then
+                      EnOtras.Donde := DeCambiada[K];
+                  end;
+                EnOtras.Valor := string.Join('; ', Suyas_);
                 AOtras := AOtras + [EnOtras];
               end
               else

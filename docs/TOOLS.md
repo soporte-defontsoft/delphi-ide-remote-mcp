@@ -45,7 +45,7 @@ Document symbol tree of a Delphi unit (classes, methods, properties, sections) w
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | A Delphi file (.pas/.dpr) for its symbols - or a FOLDER: at once, what each unit in it OFFERS (its interface: types, classes, routines, properties, uses), without bodies - ONE call to find your way around code you did not write. |
-| `mode` | string | optional | For a FILE only: summary = the skeleton (each section with its members and line; containers say how many they hold) \| full = the LSP tree with its ranges, minus what repeats. Empty = full if the tree is small, summary if large (the answer says which, and how big the full one was). |
+| `mode` | string | optional | For a FILE only: summary = the skeleton (each section with its members and line; containers say how many they hold) \| full = the LSP tree with its ranges, minus what repeats. Empty = full if the tree is small, summary if large (a summary says so, and how big the full one was). |
 | `filter` | string | optional | For a file: only the symbols whose name contains this (case-insensitive), with kind, declaration as written (decl), line and container. Ignores mode. The cheap way to find a method without the whole tree. |
 <!-- /contract -->
 
@@ -193,7 +193,7 @@ Search Delphi sources recursively for a text (case-insensitive; literal, or a re
 | `maxresults` | integer | optional | Hits PER PAGE (default 100, cap 500) - not a global limit: offset walks the whole list. |
 | `offset` | integer | optional | Pagination: skip the first N hits of the FULL list - pass the previous answer's nextOffset; walking it until hasMore=false reaches every hit. |
 | `wholeword` | boolean | optional | true = match whole identifiers only (word boundaries) |
-| `pattern` | string | optional | Optional file mask to search instead of the Delphi set, e.g. *.style, *.ini, *.md, *.rc (one mask) |
+| `pattern` | string | optional | Optional mask(s) instead of the Delphi set: *.style, *.md, *.rc or *.pas;*.dfm |
 | `regex` | boolean | optional | true = query is a regular expression (PCRE, case-insensitive), matched line by line: ^ and $ are the ends of a line; \w and \b only see ASCII letters. |
 <!-- /contract -->
 
@@ -208,7 +208,7 @@ List Delphi files under a directory recursively (sources and project files, or a
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `root` | string | **yes** | Directory to list recursively |
-| `pattern` | string | optional | Filename mask, e.g. *.pas (default: Delphi source and project files) |
+| `pattern` | string | optional | Filename mask(s): *.pas or *.pas;*.dfm (default: Delphi source and project files) |
 | `dirs` | boolean | optional | true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files |
 | `includetrash` | boolean | optional | true = also show the recoverable trash (__delphi-patch). Default false. |
 | `maxresults` | integer | optional | Entries PER PAGE (default and cap 500). |

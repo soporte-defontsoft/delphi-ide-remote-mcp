@@ -801,6 +801,13 @@ begin
     if Expanded.Contains('$(') then
       Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
   end;
+  // como msbuild, que expande y DESPUES desescapa (EL desescapador,
+  // Lsp.Dproj): %2E%2E es .., y CFG-018 decia que no existia una carpeta que
+  // el build si lee (Opus sobre la 1.22.2, w). La jaula, la existencia y los
+  // caracteres, sobre lo que leera el build: un %3B es un ';' que parte la lista
+  Expanded := DesescapaDeMsbuild(Expanded);
+  if CaracterVetado(Expanded, True) then
+    Exit(MsgText(SR_CONFIG_PATH_CHARS));
   Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), Expanded, ARaw, AShow);
   if Result <> '' then
     Exit;

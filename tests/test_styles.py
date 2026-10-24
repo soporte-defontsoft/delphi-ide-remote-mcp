@@ -430,8 +430,15 @@ d = json.loads(out)
 check('search pattern=*.style: encuentra', d['total'] >= 1 and d['filesScanned'] >= 1, out[:200])
 out = call('delphi_search', {"root": STY, "query": "cardstyle", "maxresults": 5})
 check('search sin pattern: sigue sin barrer .style', json.loads(out)['filesScanned'] == 0, out[:200])
+# el pattern de search es el de delphi_list desde el 24-oct-2026 (UN lector: varias
+# mascaras separadas por ';'); se niega un trozo que no es una mascara
+solo = json.loads(call('delphi_search', {"root": STY, "query": "x", "pattern": "*.style"}))['filesScanned']
 out = call('delphi_search', {"root": STY, "query": "x", "pattern": "*.style;*.ini"})
-check('search pattern compuesto rechazado', mc.rechazado(out) and mc.es(out, 'SR_WS_PATTERN_DEBE_SER_MASCARA'), out[:200])
+check('search pattern compuesto (*.style;*.ini): barre los .style y los .ini, como list',
+      not mc.fallo(out) and json.loads(out)['filesScanned'] >= solo, out[:200])
+out = call('delphi_search', {"root": STY, "query": "x", "pattern": "*.style;..\\x.ini"})
+check('search pattern con un trozo que no es mascara: rechazado', mc.rechazado(out)
+      and mc.es(out, 'SR_WS_PATTERN_DEBE_SER_MASCARA'), out[:200])
 
 # ---- delete ----
 out = call('delphi_styles', {"path": S, "command": "delete", "style": "cardstyle_alt"})
