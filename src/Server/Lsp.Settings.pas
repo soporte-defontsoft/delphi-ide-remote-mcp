@@ -992,7 +992,7 @@ procedure AvisaDeSoloLecturaFuera(const ADonde, AClaveDeFuera: string;
     Result := IncludeTrailingPathDelimiter(ASitio);
     if ClaseDeLetra(LetraDeRuta(ASitio)) = clLocal then
     try
-      Result := IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(ASitio)));
+      Result := IncludeTrailingPathDelimiter(RealDeLugar(SinBarraFinal(ASitio)));
     except
       // la que no se resuelve se compara por el texto
     end;

@@ -729,15 +729,17 @@ const
     auditor: un junction dentro del root apuntando a
     C:\Windows\System32\drivers\etc hacia que delphi_list listara ese sitio y
     delphi_read devolviera el hosts de la maquina - y se podia plantar un
-    fichero fuera. }
+    fichero fuera. Y uno que el servidor no puede seguir (una ACE le quita los
+    atributos) tambien: no se sabe adonde lleva (V4 de la 1.23). }
   SR_JAIL_LINK_FMT =
     '[GUARD-001 DENIED] "%s" looks like it is inside the allowed ' +
     'workspaces, but some part of the path is a LINK (junction or ' +
-    'symlink) that leads outside them, and the jail is measured on the ' +
-    'real target, not on the name. You did not mistype the path: that ' +
-    'folder is not what it looks like. If the link should be allowed, it ' +
-    'is the operator who adds its TARGET to Roots= of your ' +
-    '[Workspace.<name>].';
+    'symlink) that leads outside them, or one the server is not allowed ' +
+    'to follow, and the jail is measured on the real target, not on the ' +
+    'name. You did not mistype the path: that folder is not what it looks ' +
+    'like. If the link should be allowed, it is the operator who adds its ' +
+    'TARGET to Roots= of your [Workspace.<name>] (or, for one the server ' +
+    'cannot follow, lets its account read the link).';
 
   // P4-a de la 1.18.0: la carpeta en la que de verdad se escribiria (por un
   // enlace del camino) no es de escritura; vale para los cuatro motivos

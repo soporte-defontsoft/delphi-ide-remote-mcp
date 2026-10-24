@@ -10,6 +10,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A link the server cannot follow is judged closed.** A junction inside the
+  roots whose attributes the service's account may not read (a deny ACE on it
+  and on its folder) cannot be opened, so its target could not be resolved -
+  but Windows still goes through it. The jail kept the path as written, inside
+  the roots, and let it pass: creating, editing, uploading, moving, copying,
+  deleting and reading through such a link were stopped only because the RTL
+  failed to create or find the folder, with an `INTERNAL` error (measured on
+  2026-10-24 with the production build, on folders of the test's own). The
+  real path of such a link is now outside every root, and the jail refuses it
+  (`GUARD-001`, whose text now says so); a folder that cannot be opened but is
+  not a link is judged as before, and a protected place keeps being compared
+  by what it says (`tests/test_enlace_ilegible_1230.py`).
 - **The id of a changeset can no longer be predicted from another one.** The
   id is a capability - whoever knows it can commit or roll back that batch,
   and `status` shows every open one without its secret tail - and the tail

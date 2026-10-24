@@ -37,6 +37,13 @@ function LongCanonical(const APath: string): string;
   clave de visitados que corta un ciclo de enlaces, un "esta dentro de" -,
   nunca para decidir un permiso por tu cuenta: eso es de las puertas. }
 function RealPath(const APath: string): string;
+{ La ruta real de un LUGAR declarado con el que compara una lista NEGRA (un
+  lugar protegido, un sitio que avisa): RealPath, o su texto si RealPath no
+  puede seguir un enlace de su camino (el prefijo \\?\ del fallo cerrado).
+  Con ese prefijo el lugar no casaria con nada y la lista dejaria de negar;
+  con el texto niega lo que negaba (V4 de la 1.23). Una lista BLANCA usa
+  RealPath: lo que no se resuelve no entra. }
+function RealDeLugar(const ALugar: string): string;
 
 { La forma con la que se COMPARA un sitio con otro: la canonica LARGA, con
   separador final. Una raiz declarada con nombres cortos (DFONTA~1) y una
@@ -267,7 +274,10 @@ end;
   Si la ruta NO existe todavia (crear un fichero nuevo, por ejemplo), se
   resuelve el ANTECESOR existente mas cercano y se le vuelve a pegar el resto:
   lo que importa es que ningun tramo del camino salte fuera. Si no existe
-  nada del camino, se queda la normalizacion textual, que es lo que habia. }
+  nada del camino, se queda la normalizacion textual, que es lo que habia.
+  Un ENLACE del camino que no se deja seguir sale con prefijo de dispositivo
+  (\\?\...), fuera de toda raiz: fallo cerrado (V4 de la 1.23). Una lista
+  NEGRA no compara sus lugares con esto: RealDeLugar. }
 { El DESTINO de un enlace (junction o symlink) por lo que guarda el propio
   enlace - lo que contesta Windows de su punto de reanalisis
   (FSCTL_GET_REPARSE_POINT) -, exista o no ese destino: NombreFinal tiene
@@ -416,12 +426,32 @@ begin
         else if Result then
           ASalida := SinBarraFinal(RealPathHasta(Destino, ANivel - 1));
       end;
+      // un ENLACE que no se deja seguir (ni abrirlo ni leer lo que guarda: una
+      // ACE que le quita los atributos a la cuenta del servicio) lleva igual
+      // adonde apunte, porque Windows lo atraviesa; quedarse con su texto era
+      // fallar ABIERTA, y solo un fallo de la RTL al crear la carpeta impedia
+      // escribir detras (V4 de la 1.23, medido: test_enlace_ilegible_1230).
+      // Fuera de toda raiz, como un destino de dispositivo. Una carpeta normal
+      // que no se abre sigue subiendo: su texto es su ruta real
+      if not Result and (A <> INVALID_FILE_ATTRIBUTES) and
+         ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+      begin
+        ASalida := '\\?\' + SinBarraFinal(ADir);
+        Result := True;
+      end;
     end);
 end;
 
 function RealPath(const APath: string): string;
 begin
   Result := RealPathHasta(APath, ENLACES_QUE_SIGUE_WINDOWS);
+end;
+
+function RealDeLugar(const ALugar: string): string;
+begin
+  Result := RealPath(ALugar);
+  if EsPrefijoDeDispositivo(Result) and not EsPrefijoDeDispositivo(ALugar) then
+    Result := ALugar;
 end;
 
 function LongCanonical(const APath: string): string;

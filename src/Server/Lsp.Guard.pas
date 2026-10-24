@@ -3178,7 +3178,8 @@ begin
   begin
     if P.Trim = '' then
       Continue;
-    PReal := SinBarraFinal(RealPath(P.Trim));
+    // una lista NEGRA: un lugar que RealPath no sabe seguir, por su texto
+    PReal := SinBarraFinal(RealDeLugar(P.Trim));
     if ASoloDentro and SameText(SinBarraFinal(AReal), PReal) then
       Continue;
     if StartsText(IncludeTrailingPathDelimiter(AReal), IncludeTrailingPathDelimiter(PReal)) then
