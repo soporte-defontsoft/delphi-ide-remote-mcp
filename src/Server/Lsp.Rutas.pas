@@ -385,7 +385,7 @@ begin
   Result := CanonicalSubiendo(Base,
     function(const ADir: string; out ASalida: string): Boolean
     var
-      A: Cardinal;
+      A, Err: Cardinal;
     begin
       // Un fichero NORMAL no se abre: solo un enlace redirige, y su ruta real
       // es la real de su carpeta mas su nombre largo (LongCanonical no abre
@@ -395,6 +395,10 @@ begin
       // atomico fallido" y una edicion perdida en test_concurrencia (A y C,
       // 25-sep-2026, al crecer las comparaciones por ruta real).
       A := GetFileAttributes(PChar(ADir));
+      if A = INVALID_FILE_ATTRIBUTES then
+        Err := GetLastError
+      else
+        Err := 0;
       if (A <> INVALID_FILE_ATTRIBUTES) and
          ((A and (FILE_ATTRIBUTE_DIRECTORY or FILE_ATTRIBUTE_REPARSE_POINT)) = 0) then
       begin
@@ -435,6 +439,23 @@ begin
       // que no se abre sigue subiendo: su texto es su ruta real
       if not Result and (A <> INVALID_FILE_ATTRIBUTES) and
          ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+      begin
+        ASalida := '\\?\' + SinBarraFinal(ADir);
+        Result := True;
+      end;
+      // Si ni los atributos del tramo se dejan leer (una ACE que se los quita a
+      // la cuenta del servicio: GetFileAttributes da ACCESS_DENIED), no se sabe
+      // si es un enlace y Windows lo atraviesa igual: fuera de toda raiz, fallo
+      // CERRADO. Pasa cuando el PADRE tampoco se puede listar (la forma del
+      // ataque); una carpeta normal con su padre listable SI lee sus atributos
+      // y no cae aqui. Cierra SOLO ante ACCESS_DENIED, el unico caso MEDIDO de
+      // un enlace atravesable que no se deja leer; cualquier OTRO error sube y
+      // se queda con el texto: no-encontrado (2, 3) porque el tramo aun no
+      // existe (crear un fichero nuevo), y los demas para no negar una ruta
+      // legitima por un fallo transitorio (V4 de la 1.23, variante atributos
+      // ilegibles, medida en D:\SandBox-lsp; en C:\...\Temp las ACE de
+      // capacidad heredadas dejaban leer los atributos)
+      if not Result and (A = INVALID_FILE_ATTRIBUTES) and (Err = ERROR_ACCESS_DENIED) then
       begin
         ASalida := '\\?\' + SinBarraFinal(ADir);
         Result := True;

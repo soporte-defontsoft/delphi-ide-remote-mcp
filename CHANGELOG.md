@@ -17,7 +17,11 @@ the MCP `initialize` response (`serverInfo.version`).
   the roots, and let it pass: creating, editing, uploading, moving, copying,
   deleting and reading through such a link were stopped only because the RTL
   failed to create or find the folder, with an `INTERNAL` error (measured on
-  2026-10-24 with the production build, on folders of the test's own). The
+  2026-10-24 with the production build, on folders of the test's own). This
+  covers both a link whose attributes read but that neither opens nor yields
+  what it stores and one whose attributes cannot be read at all
+  (`ACCESS_DENIED`, when its folder cannot be listed either - seen only on a
+  volume without the inherited capability ACEs a temp folder carries). The
   real path of such a link is now outside every root, and the jail refuses it
   (`GUARD-001`, whose text now says so); a folder that cannot be opened but is
   not a link is judged as before, and a protected place keeps being compared
