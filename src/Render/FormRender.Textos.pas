@@ -49,6 +49,17 @@ const
     '[RENDER-010] The ancestor %s has no form file in the folder: read ' +
     'without it.';
 
+  // ...y si en la carpeta hay forms que el lector del IDE no toma por texto
+  // (TestStreamFormat: un UTF-16 o un UTF-32, que el editor del IDE deja
+  // guardar y su disenador no reabre; A28 de la 1.23), el ancestro puede ser
+  // uno de ellos: "no tiene fichero" era falso. %s = el ancestro, %s = esos
+  // ficheros
+  SN_RENDER_ANCESTRO_NO_CARGA_FMT =
+    '[RENDER-023] The ancestor %s is not among the forms of the folder that ' +
+    'the IDE''s form reader loads: it does not take %s for a text form (one ' +
+    'saved in UTF-16 or UTF-32, usually; delphi_designer command=to-text ' +
+    'turns that into the text the IDE writes). Read without it.';
+
   SR_RENDER_ESTADO_SIN_COMPONENTE_FMT =
     '[RENDER-011 NOT_FOUND] state: there is no component %s.';
 

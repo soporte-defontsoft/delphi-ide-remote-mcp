@@ -5077,9 +5077,9 @@ const
     'layout (WHERE things end up on a VCL .dfm: resolves Align and returns ' +
     'every control''s rectangle plus those of size zero, outside their ' +
     'container, overlapping or clipped by the bands around them - a form ' +
-    'can bind perfectly and still be unusable) | to-text (a BINARY .dfm ' +
-    'becomes text on disk, the IDE''s own conversion, backup first - ' +
-    'reading never needs it) | to-binary (the way back, the ' +
+    'can bind perfectly and still be unusable) | to-text (a BINARY .dfm, ' +
+    'or a UTF-16/32 text form the IDE won''t load, becomes the IDE''s text, ' +
+    'backup first; reading never needs it) | to-binary (the way back, the ' +
     'resource-wrapped form the IDE writes) | preview (a PNG of what the IDE ' +
     'designer shows for the .dfm/.fmx, in this answer: built in design mode ' +
     'with the IDE''s installed packages, no code run and nothing on any ' +
@@ -5266,8 +5266,9 @@ const
     sin su maestro salia en blanco y "no abrira"; 18-oct-2026). %s: lo que falto }
   SN_DESIGNER_PREVIEW_IGNORADAS_PARCIAL_FMT =
     '[DSGN-156] The form was read WITHOUT one of its ancestors (%s: no .pas next ' +
-    'to it says which class it inherits from, or that class has no file in this ' +
-    'folder): what was skipped may be just what that ancestor brings, not a ' +
+    'to it says which class it inherits from, or no form of this folder that ' +
+    'the IDE loads has that class - warnings says which): what was skipped ' +
+    'may be just what that ancestor brings, not a ' +
     'defect of this form. The IDE opens it with its ancestors: preview the ' +
     'ancestor, or put the .pas that declares the class next to it (an FMX ' +
     'view, <unit>.<View>.fmx, is read on top of <unit>.fmx when that unit''s ' +
@@ -5940,9 +5941,25 @@ const
     'fly, but it is not edited until it is converted back to text.';
   SN_DESIGNER_ALREADY_FMT =
     '[DSGN-012] %s is already %s: nothing to do.';
+  { to-text de un form de TEXTO que el IDE no carga (UTF-16 o UTF-32, A28 de
+    la 1.23): decodificado, leido por el parser del IDE y escrito por SU
+    conversor, como lo deja el IDE al guardarlo (David, 24-oct-2026: tras
+    "Save", sus dos forms quedaron en ASCII). La unidad no se toca. %s = el
+    fichero, %s = su codificacion, %s = SF_DSGN_TOTEXT_ASCII o
+    SF_DSGN_TOTEXT_UTF8BOM, %d = las lineas, %s = la copia. }
+  SN_DESIGNER_TOTEXT_ANCHO_FMT =
+    '[DSGN-170] CONVERTED %s, a text form in %s that the IDE''s form ' +
+    'reader does not load, to the text the IDE writes (%s): %d lines. ' +
+    'Backup: %s. The IDE opens it now and the designer commands work on ' +
+    'it; its unit was not touched.';
+  SF_DSGN_TOTEXT_ASCII =
+    'ASCII, a character outside it as #N';
+  SF_DSGN_TOTEXT_UTF8BOM =
+    'UTF-8 with a BOM, for a name outside ASCII';
   SR_DESIGNER_FMX_ALWAYS_TEXT =
     '[DSGN-013 DENIED] A .fmx is always text (FireMonkey has no binary ' +
-    'format): to-text and to-binary are only for .dfm.';
+    'format): to-binary is only for .dfm, and to-text takes a .fmx only ' +
+    'when it is saved in UTF-16 or UTF-32, which the IDE does not load.';
   SN_READ_BINARY_DESIGNER =
     '[READ-004] BINARY DFM on disk, shown as text (the IDE''s own ' +
     'conversion, "View as Text"). What you read is faithful, but it is ' +
@@ -10680,10 +10697,11 @@ const
     'as #N, so it would be saved as that half and loaded back as that half, ' +
     'which no encoding can write or show. Nothing was written.';
 
-  { ...y el que YA trae un form UTF-16 que se pasa a binario (to-binary): el
-    parser lo lee en UTF-8 y lo escribia como U+FFFD, otro caracter, sin
-    decirlo (R7 del revisor propio del punto 4 de la 1.18.2). %s =
-    SF_EDIT_SUSTITUTO_SUELTO_FMT, %d = la linea. }
+  { ...y el que YA trae un form UTF-16 que to-text convierte (pasa por el
+    binario: el parser lo lee en UTF-8 y lo escribia como U+FFFD, otro
+    caracter, sin decirlo; R7 del revisor propio del punto 4 de la 1.18.2,
+    entonces en to-binary, que ya no lee un form ancho - A28 de la 1.23). %s
+    = SF_EDIT_SUSTITUTO_SUELTO_FMT, %d = la linea. }
   SR_DSGN_FORM_SUELTO_BINARIO_FMT =
     '[DSGN-147 DENIED] %s, on line %d of the form. In binary it would become ' +
     'U+FFFD, a different character, so nothing was converted: put the whole ' +
@@ -11389,23 +11407,33 @@ const
     'as UTF-8 from the IDE, or rename it with ASCII letters, to convert ' +
     'it. Nothing was written.';
   { Un form de TEXTO en UTF-16 o UTF-32 (lo deja guardar el selector de
-    codificacion del editor del IDE): dcc no lo compila - RLINK32 toma su
-    FF FE por un recurso de 16 bits, o no lo abre: E2161 con los cuatro
-    (medido el 9-oct-2026, r5 de la 1.18.0) -; si UTF-8 con BOM, ANSI o el
-    binario. El renderizador lee el UTF-16 (lo pasa a UTF-8 para el parser
-    de forms), el UTF-32 no. %s = el fichero, %s = su codificacion. }
+    codificacion del editor del IDE) NO lo carga el IDE: al reabrirlo, su
+    disenador dice "Error creating form in Unit2.dfm: Invalid stream format"
+    (medido por David el 24-oct-2026 con UTF-16 LE, UTF-16 BE y UTF-32), y
+    dcc lo niega (RLINK32, E2161 con los cuatro, medido el 9-oct). La RTL lo
+    dice por construccion: TestStreamFormat toma un $FF inicial por binario
+    y FE FF / 00 00 FE FF por desconocido, y TParser niega todo BOM que no
+    sea el de UTF-8. Decia "The IDE opens it": el servidor convertia el form
+    antes de preguntar al parser (A28 de la 1.23). La nota, de quien escribe
+    el TEXTO (delphi_edit, la tanda, el changeset), que es como se arregla a
+    mano; los comandos del disenador lo niegan (DSGN-122). %s = el fichero,
+    %s = su codificacion. }
   SN_DSGN_FORM_ANCHO_FMT =
-    '[DSGN-121] NOTE: %s is a text form in %s. The IDE opens it, but the ' +
-    'compiler does not build it (RLINK32 refuses a text form in UTF-16 or ' +
-    'UTF-32: E2161, measured). Save it from the IDE as UTF-8 (the IDE adds ' +
-    'the BOM) or ANSI before building.';
-  SR_DSGN_FORM_UTF32_FMT =
-    '[DSGN-122 DENIED] %s is a text form in %s: the renderer reads forms ' +
-    'the way the IDE''s form parser takes them (ANSI, UTF-8 with a BOM, or ' +
-    'UTF-16, which it converts first), and the compiler does not build a ' +
-    'UTF-32 form either (E2161, measured). Save it from the IDE as UTF-8 or ' +
-    'ANSI; delphi_read, tree and lint read it as it is. Nothing was ' +
-    'rendered.';
+    '[DSGN-121] NOTE: %s is a text form in %s, which the IDE''s form ' +
+    'reader does not load: its designer answers "Invalid stream format" ' +
+    'and the compiler refuses it too (E2161), both measured. delphi_designer ' +
+    'command=to-text turns it into the text the IDE writes, backup first.';
+  { ...y la negativa de los comandos del disenador que necesitan que el IDE
+    lo cargue (lint, preview, to-binary, insert, set, delete): lo ha negado
+    EL parser con sus bytes tal cual. %s = el fichero, %s = su codificacion,
+    %s = lo que dijo el parser. }
+  SR_DSGN_FORM_ANCHO_NO_CARGA_FMT =
+    '[DSGN-122 DENIED] %s is a text form in %s, which the IDE''s form ' +
+    'reader does not load ("%s"; its designer answers "Invalid stream ' +
+    'format" and the compiler refuses it too, E2161 - both measured). ' +
+    'Nothing was done: delphi_designer command=to-text turns it into the ' +
+    'text the IDE writes, backup first; delphi_read and delphi_edit read ' +
+    'and edit it as it is.';
 
   // 8.10 y 9.B de la 1.18.0: lo que dice EL parser del IDE
   // (Lsp.DesignerForma.ErrorDelParserDeForm), no una gramatica propia

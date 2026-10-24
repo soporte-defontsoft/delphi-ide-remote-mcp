@@ -11,7 +11,10 @@
   TestStreamFormat de la RTL no vale para esto: llama binario a todo lo que
   empieza por $FF, el texto UTF-16 incluido, y TReader no se salta la
   cabecera del recurso ("Invalid stream format" en preview de un .dfm binario
-  del IDE: medido el 7-oct-2026, revision de la 1.17.0). }
+  del IDE: medido el 7-oct-2026, revision de la 1.17.0). SI vale para la otra
+  pregunta, si el lector de forms del IDE lo toma por un form de texto: es
+  el que da ese "Invalid stream format" al reabrir un .dfm de texto en UTF-16
+  o UTF-32 (medido el 24-oct-2026, A28 de la 1.23): ElIdeNoLoTomaPorForm. }
 
 interface
 
@@ -23,25 +26,21 @@ type
 
 { La forma por sus primeros bytes (con menos de cuatro, texto) }
 function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
+{ Si un designer de TEXTO (DesignerShapeOf) es uno que el lector de forms del
+  IDE no toma por texto, por sus primeros bytes: lo dice la RTL
+  (TestStreamFormat, el juez de la forma del flujo): un $FF inicial lo toma
+  por binario, y FE FF o 00 00 FE FF por desconocido - un UTF-16 o un UTF-32,
+  que el editor del IDE deja guardar y su disenador no reabre (A28 de la
+  1.23). Con menos de cuatro bytes, o uno binario, False. Lo pregunta el
+  renderizador al buscar un ancestro en la carpeta. }
+function ElIdeNoLoTomaPorForm(const ABytes: TArray<Byte>): Boolean;
 
 { El form como el flujo TPF0 que lee TReader, sea cual sea su forma en disco:
   AEntrada entera (desde el principio) se escribe en ASalida desde su
-  posicion. Un texto pasa por ObjectTextToBinary (el de UTF-16, en UTF-8 con
-  BOM: TParser no lee otra cosa); lo que no es un form sale
+  posicion. Un texto pasa TAL CUAL por ObjectTextToBinary, como en el IDE: un
+  UTF-16 o un UTF-32 lo niega (A28 de la 1.23); lo que no es un form sale
   con su excepcion. }
 procedure DesignerAFlujo(AEntrada, ASalida: TStream);
-
-{ LOS BYTES de un designer de TEXTO como los lee el parser del IDE (TParser):
-  un UTF-16 (FF FE / FE FF), en UTF-8 con BOM - TParser no lee otro BOM -; lo
-  demas, tal cual (sin BOM, en la ANSI de la maquina; con el de UTF-8, en
-  UTF-8). EL alimentador del parser: DesignerAFlujo (lint, los escritores, el
-  renderizador) y to-binary (Lsp.DesignerBin). to-binary tenia su camino
-  propio - recodificaba a ANSI lo que el agente le daba ya decodificado - y
-  negaba (DSGN-045) un form en UTF-8 con BOM que lint daba por limpio (M2,
-  punto 4 de la 1.18.2; medido en produccion el 13-oct). Un UTF-32 NO: la RTL
-  (GetBufferEncoding) toma FF FE 00 00 por UTF-16 y no conoce 00 00 FE FF;
-  el servidor lo da antes en UTF-16 (Lsp.DesignerBin.KindParaElParser). }
-function FormParaElParser(const ABytes: TArray<Byte>): TArray<Byte>;
 
 { Lo que dice EL parser del IDE (ObjectTextToBinary, por DesignerAFlujo) de un
   designer de TEXTO, dados sus BYTES como estan (o estaran) en disco - con su
@@ -139,25 +138,25 @@ begin
     Exit(dsTpf0);
 end;
 
-function FormParaElParser(const ABytes: TArray<Byte>): TArray<Byte>;
+function ElIdeNoLoTomaPorForm(const ABytes: TArray<Byte>): Boolean;
 var
-  Cod: TEncoding;
-  Bom: Integer;
+  S: TBytesStream;
 begin
-  Cod := nil;
-  Bom := TEncoding.GetBufferEncoding(ABytes, Cod);
-  if (Cod = TEncoding.Unicode) or (Cod = TEncoding.BigEndianUnicode) then
-    Result := TEncoding.UTF8.GetPreamble +
-      TEncoding.UTF8.GetBytes(Cod.GetString(ABytes, Bom, Length(ABytes) - Bom))
-  else
-    Result := ABytes;
+  Result := False;
+  if (Length(ABytes) < 4) or (DesignerShapeOf(ABytes) <> dsText) then
+    Exit;
+  S := TBytesStream.Create(Copy(ABytes, 0, 4));
+  try
+    Result := not (TestStreamFormat(S) in [sofText, sofUTF8Text]);
+  finally
+    S.Free;
+  end;
 end;
 
 procedure DesignerAFlujo(AEntrada, ASalida: TStream);
 var
-  Cabeza, Todo: TArray<Byte>;
+  Cabeza: TArray<Byte>;
   Resto: Int64;
-  Texto: TBytesStream;
 begin
   SetLength(Cabeza, 4);
   AEntrada.Position := 0;
@@ -176,29 +175,16 @@ begin
       ASalida.CopyFrom(AEntrada, 0);
   else
     begin
-      // TParser solo lee ASCII, ANSI o UTF-8 con BOM (System.Classes,
-      // TParser.Create: SAnsiUTF8Expected con otro BOM): un texto que el
-      // editor del IDE guardo en UTF-16 (FF FE / FE FF) se le da en UTF-8 con
-      // BOM. Solo por el BOM, que lee la RTL; lo demas, como lo lee TParser,
-      // el del IDE (segunda revision de la 1.17.0: un frame UTF-16 tumbaba el
-      // preview; el lector del BOM de la casa vive en Lsp.Codificacion, que
-      // arrastra Lsp.Texts y no se enlaza aqui). Sin BOM los bytes van tal cual
-      // al parser, que los lee en la ANSI de la maquina: la misma de la casa
-      // (Lsp.Codificacion.PaginaAnsi), y aqui no se define ninguna - era
-      // TEncoding.Default, sin uso (r5 de la 1.18.0). Un form en UTF-32 (que
-      // GetBufferEncoding toma por UTF-16) no llega asi: el servidor lo da en
-      // UTF-16 (KindParaElParser, en lint y to-binary) o lo niega antes de
-      // lanzar el renderizador (DSGN-122), y dcc no lo compila (E2161)
-      SetLength(Todo, AEntrada.Size);
-      if Length(Todo) > 0 then
-        AEntrada.ReadBuffer(Todo[0], Length(Todo));
-      AEntrada.Position := 0;
-      Texto := TBytesStream.Create(FormParaElParser(Todo));
-      try
-        ObjectTextToBinary(Texto, ASalida);
-      finally
-        Texto.Free;
-      end;
+      // los bytes TAL CUAL a TParser, el parser del IDE: lee ASCII, la ANSI de
+      // la maquina (sin BOM; la misma de la casa, Lsp.Codificacion.PaginaAnsi)
+      // o UTF-8 con BOM, y niega cualquier otro BOM (System.Classes,
+      // TParser.Create: SAnsiUTF8Expected). Un texto que el editor del IDE
+      // guardo en UTF-16 se le daba antes en UTF-8 (segunda revision de la
+      // 1.17.0: un frame UTF-16 tumbaba el preview), y el IDE NO lo carga: su
+      // disenador dice "Invalid stream format" (medido el 24-oct-2026, A28 de
+      // la 1.23). El servidor lo niega antes, con la causa (DSGN-122); aqui,
+      // lo que diga TParser
+      ObjectTextToBinary(AEntrada, ASalida);
     end;
   end;
 end;

@@ -505,9 +505,14 @@ REGLAS = [
     ('la unidad de un form', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.?pas'\s*\)",
      [('Lsp.DesignerForma.pas', 'UnidadDeDesigner')],
      'UnidadDeDesigner (revision de la 1.17.0: cuatro a mano, uno en el renderizador)'),
-    ('la forma de un designer', r'\bTestStreamFormat\s*\(', [],
+    ('la forma de un designer', r'\bTestStreamFormat\s*\(',
+     # SI es el juez de otra pregunta: si el lector de forms del IDE toma un designer de
+     # texto por texto - el del "Invalid stream format" al reabrir un .dfm en UTF-16 o
+     # UTF-32 (medido el 24-oct-2026, A28 de la 1.23) -, en UNA casa
+     [('Lsp.DesignerForma.pas', 'ElIdeNoLoTomaPorForm')],
      'DesignerShapeOf / DesignerAFlujo (Lsp.DesignerForma): TestStreamFormat llama binario al texto '
-     'UTF-16 y no salta la cabecera del recurso (preview de un .dfm binario, revision de la 1.17.0)'),
+     'UTF-16 y no salta la cabecera del recurso (preview de un .dfm binario, revision de la 1.17.0); '
+     'si el IDE lo carga como form, ElIdeNoLoTomaPorForm'),
     ('leer la linea de objeto de un form',
      r"object\|inherited\|inline|'[^']*\^(?:\\s\*)?\(?(?:\?i\))?(?:object|inherited|inline)\b"
      r"|StartsWith\(\s*'(?:object|inherited|inline)\b",
@@ -582,13 +587,11 @@ REGLAS = [
      # (EncodeText escribe el BOM byte a byte, una forma que esta regla no ve: 2.1g)
      # (EL lector del BOM del principio, KindDeBom, lo preguntan DetectEnc y el
      # lector de settings.ini, que no puede usar Patch: 9.2 de la 1.18.0)
-     [('Lsp.Codificacion.pas', 'KindDeBom'), ('Lsp.Codificacion.pas', 'BomUtf8En'),
-      # deuda declarada (2.1g de la 1.18.0): un detector suelto, el de los renderizadores,
-      # que no enlazan la casa (Lsp.Codificacion arrastra Lsp.Texts); solo puede encoger.
-      # (el de la ayuda se fue en r5: pregunta BomUtf8En y CodecDeCharset)
-      # Desde M2 (punto 4 de la 1.18.2) es EL alimentador del parser de forms,
-      # FormParaElParser, que usan DesignerAFlujo y to-binary: la misma deuda
-      ('Lsp.DesignerForma.pas', 'FormParaElParser')],
+     [('Lsp.Codificacion.pas', 'KindDeBom'), ('Lsp.Codificacion.pas', 'BomUtf8En')],
+     # (la deuda declarada de 2.1g de la 1.18.0 - el detector suelto de los renderizadores,
+     # desde M2 de la 1.18.2 FormParaElParser, que pasaba un UTF-16 a UTF-8 para el parser -
+     # se pago en A28 de la 1.23: el IDE no carga ese form, y el parser lo lee tal cual. El
+     # de la ayuda se fue en r5: pregunta BomUtf8En y CodecDeCharset)
      'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
      'escribe): nadie mas mira unos bytes para decidir que son (24-sep-2026: dos detectores; 1.18.0: '
      'los codecs salen a Lsp.Codificacion y la decision se queda en Patch). KindDeBom es GRAMATICA '
@@ -614,9 +617,9 @@ REGLAS = [
       # sin codificacion (LecturaCambiada); no escribe nada
       ('Lsp.Patch.pas', 'EncAlEscribir'),
       # el texto de un form en los bytes que se le dan al parser del IDE, para
-      # PREGUNTARLE si lo lee (9.B de la 1.18.0) o para convertir un UTF-32 a
-      # binario (R1 del punto 4 de la 1.18.2); no escribe nada. Una casa: lint y
-      # to-binary la tenian cada uno (run_all de la 1.18.2 lo cazo)
+      # PREGUNTARLE si lo lee (9.B de la 1.18.0) o para que lea en UTF-8 el texto
+      # de un form ancho que to-text convierte (A28 de la 1.23); no escribe nada.
+      # Una casa: lint y to-binary la tenian cada uno (run_all de la 1.18.2 lo cazo)
       ('Lsp.DesignerBin.pas', 'TextoParaElParser'),
       # el volcado de logcat a un out= del agente: texto del DISPOSITIVO, laxo, en
       # UTF-8 con BOM, antes de colocarlo con ColocaContenido (la puerta del

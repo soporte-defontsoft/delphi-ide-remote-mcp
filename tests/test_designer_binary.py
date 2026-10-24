@@ -226,8 +226,12 @@ U16 = os.path.join(BASE, 'Utf16.dfm')
 open(U16, 'wb').write("object FormU: TFormU\r\n  Caption = 'u'\r\n  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n".encode('utf-16'))
 check('fixture UTF-16 LE empieza por FF FE', open(U16, 'rb').read()[:2] == b'\xff\xfe', '')
 r = call('delphi_designer', {'command': 'to-text', 'path': U16})
-check('texto UTF-16 NO se toma por binario (to-text: ya es texto)', mc.abre(r, 'SN_DESIGNER_ALREADY_FMT'), r[:160])
-check('...y el fichero no se toco', open(U16, 'rb').read()[:2] == b'\xff\xfe', '')
+# (A28 de la 1.23) el IDE no carga un form de texto en UTF-16: to-text lo deja
+# como lo escribe el IDE, en ASCII; NO lo toma por binario (no dice DSGN-044)
+check('texto UTF-16 NO se toma por binario: to-text lo deja en el texto que escribe el IDE (DSGN-170)',
+      mc.abre(r, 'SN_DESIGNER_TOTEXT_ANCHO_FMT'), r[:160])
+check('...y en disco queda en ASCII, sin el BOM de UTF-16',
+      open(U16, 'rb').read().startswith(b'object FormU: TFormU\r\n'), open(U16, 'rb').read()[:20])
 
 # ---- and a UTF-16 text form is READ, EDITED and WRITTEN BACK as UTF-16 by ONE
 # detector (Lsp.Patch.DetectEnc). Until 24-sep two detectors lived side by
@@ -244,18 +248,19 @@ check('delphi_edit edita el UTF-16 LE', mc.abre(r, 'SK_EDIT_ESCRITO_EN_FMT') and
 b = open(U16, 'rb').read()
 check('...y en disco sigue UTF-16 LE con BOM, CRLF, acento y el cambio', b[:2] == b'\xff\xfe' and b[2:].decode('utf-16-le') == "object FormU: TFormU\r\n  Caption = 'acento: c\u00f3digo'\r\n  ClientHeight = 11\r\n  ClientWidth = 10\r\nend\r\n", b[:60].hex())
 r = call('delphi_designer', {'command': 'lint', 'path': U16})
-check('delphi_designer lint sobre el UTF-16: limpio', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:200])
-# (r5 de la 1.18.0) ...pero dcc no compila un form de texto en UTF-16 ni en UTF-32
-# (RLINK32, E2161: medido el 9-oct-2026): lint lo dice; uno ANSI no lleva la nota
-check('...con la nota de que dcc no lo compila (DSGN-121)', mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
+# (A28 de la 1.23) el IDE no carga un form de texto en UTF-16 ni en UTF-32 (su
+# disenador: "Invalid stream format", medido el 24-oct-2026) y dcc no lo compila
+# (E2161, 9-oct): lint lo niega con la salida; daba CLEAN porque lo convertia
+check('delphi_designer lint sobre el UTF-16: DSGN-122 con la salida (command=to-text), no CLEAN',
+      mc.abre(r, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and 'command=to-text' in r, r[:400])
 U32 = os.path.join(BASE, 'FormU32.dfm')
 open(U32, 'wb').write(b'\x00\x00\xfe\xff' + "object FormV: TFormV\r\n  Caption = 'c\u00f3digo'\r\nend\r\n".encode('utf-32-be'))
 r = call('delphi_designer', {'command': 'lint', 'path': U32})
-check('...lint de un form UTF-32 BE: se lee y lleva la misma nota', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT') and
-      mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT') and 'utf32-be' in r, r[:400])
+check('...lint de un form UTF-32 BE: la misma negativa, con su codificacion',
+      mc.abre(r, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and 'utf32-be' in r, r[:400])
 r = call('delphi_designer', {'command': 'preview', 'path': U32})
 check('...y preview lo niega antes de buscar el renderizador (DSGN-122)',
-      mc.rechazado(r) and mc.es(r, 'SR_DSGN_FORM_UTF32_FMT'), r[:400])
+      mc.rechazado(r) and mc.abre(r, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT'), r[:400])
 FA = os.path.join(BASE, 'FormAnsi.dfm')
 open(FA, 'wb').write(b"object FormA: TFormA\r\n  Caption = 'c\xf3digo'\r\nend\r\n")
 r = call('delphi_designer', {'command': 'lint', 'path': FA})

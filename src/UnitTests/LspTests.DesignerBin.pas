@@ -23,6 +23,7 @@ type
     [Test] procedure SinBomSeLeeEnAnsiComoEnDcc;
     [Test] procedure BinarioDanadoDaMotivo;
     [Test] procedure CadaFormaLlegaATReader;
+    [Test] procedure ElIdeNoTomaPorFormUnAncho;
     [Test]
     procedure LaLineaDeUnObjeto;
     [Test]
@@ -221,12 +222,40 @@ begin
   Assert.AreEqual(FORM_TXT, TextoDelFlujo(TEncoding.ASCII.GetBytes(FORM_TXT)), 'el texto');
   Assert.AreEqual(FORM_TXT, TextoDelFlujo(Tpf0), 'el flujo TPF0');
   Assert.AreEqual(FORM_TXT, TextoDelFlujo(Bin), 'el recurso que escribe el IDE en disco');
-  // un texto que el editor del IDE guardo en UTF-16: TParser no lo lee
-  // (SAnsiUTF8Expected) y tumbaba el preview (segunda revision de la 1.17.0)
-  Assert.AreEqual(FORM_TXT, TextoDelFlujo(TEncoding.Unicode.GetPreamble +
-    TEncoding.Unicode.GetBytes(FORM_TXT)), 'el texto en UTF-16 LE');
-  Assert.AreEqual(FORM_TXT, TextoDelFlujo(TEncoding.BigEndianUnicode.GetPreamble +
-    TEncoding.BigEndianUnicode.GetBytes(FORM_TXT)), 'el texto en UTF-16 BE');
+  // un texto que el editor del IDE guardo en UTF-16 NO lo carga el IDE: su
+  // disenador dice "Invalid stream format" (medido el 24-oct-2026). TParser lo
+  // niega tal cual (SAnsiUTF8Expected); se le daba convertido a UTF-8 (segunda
+  // revision de la 1.17.0), y lint y preview decian lo contrario que el IDE
+  // (A28 de la 1.23)
+  Assert.WillRaise(
+    procedure
+    begin
+      TextoDelFlujo(TEncoding.Unicode.GetPreamble + TEncoding.Unicode.GetBytes(FORM_TXT));
+    end, EParserError, 'el texto en UTF-16 LE');
+  Assert.WillRaise(
+    procedure
+    begin
+      TextoDelFlujo(TEncoding.BigEndianUnicode.GetPreamble + TEncoding.BigEndianUnicode.GetBytes(FORM_TXT));
+    end, EParserError, 'el texto en UTF-16 BE');
+end;
+
+procedure TDesignerBinTests.ElIdeNoTomaPorFormUnAncho;
+begin
+  // el juez de la casa (TestStreamFormat): un texto en UTF-16 o UTF-32 no lo
+  // toma por un form de texto, como el disenador del IDE (A28 de la 1.23)
+  Assert.IsTrue(ElIdeNoLoTomaPorForm(TEncoding.Unicode.GetPreamble +
+    TEncoding.Unicode.GetBytes(FORM_TXT)), 'UTF-16 LE');
+  Assert.IsTrue(ElIdeNoLoTomaPorForm(TEncoding.BigEndianUnicode.GetPreamble +
+    TEncoding.BigEndianUnicode.GetBytes(FORM_TXT)), 'UTF-16 BE');
+  Assert.IsTrue(ElIdeNoLoTomaPorForm(B([$FF, $FE, 0, 0, Ord('o'), 0, 0, 0])), 'UTF-32 LE');
+  Assert.IsTrue(ElIdeNoLoTomaPorForm(B([0, 0, $FE, $FF, 0, 0, 0, Ord('o')])), 'UTF-32 BE');
+  // ...y lo que si carga, o no es de texto, no
+  Assert.IsFalse(ElIdeNoLoTomaPorForm(TEncoding.ASCII.GetBytes(FORM_TXT)), 'ASCII');
+  Assert.IsFalse(ElIdeNoLoTomaPorForm(TEncoding.UTF8.GetPreamble +
+    TEncoding.UTF8.GetBytes(FORM_TXT)), 'UTF-8 con BOM');
+  Assert.IsFalse(ElIdeNoLoTomaPorForm(B([$FF, $0A, $00, Ord('T')])), 'el binario del IDE (recurso)');
+  Assert.IsFalse(ElIdeNoLoTomaPorForm(B([Ord('T'), Ord('P'), Ord('F'), Ord('0')])), 'el flujo TPF0');
+  Assert.IsFalse(ElIdeNoLoTomaPorForm(B([$FF, $FE])), 'menos de cuatro bytes');
 end;
 
 procedure TDesignerBinTests.LaLineaDeUnObjeto;

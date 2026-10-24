@@ -68,6 +68,7 @@ type
     FFramePendiente: string;      // el fichero del frame inline que toca crear
     FClaseFrame: string;          // y la clase con la que lo escribe el fichero
     FPorClase: TDictionary<string, string>; // clase raiz -> fichero, en la carpeta
+    FNoCargan: TStringList;       // los de la carpeta que el lector del IDE no toma por texto (A28 de la 1.23)
     // lo creado con OTRA clase que la escrita (un sustituto, un frame inline):
     // la escrita, la que el agente conoce (ClaseEscrita)
     FEscritas: TDictionary<TComponent, string>;
@@ -129,6 +130,7 @@ type
   TCabecera = record
     Palabra, Nombre, Clase: string;
     Binario: Boolean;
+    NoLaCargaElIde: Boolean; // no la toma por texto: un UTF-16 o un UTF-32 (A28 de la 1.23)
   end;
 
 var
@@ -751,6 +753,16 @@ begin
   Lineas := TStringList.Create;
   try
     Bytes := TFile.ReadAllBytes(AFichero);
+    // uno que el lector de forms del IDE no toma por texto (un UTF-16 o un
+    // UTF-32: el juez de la casa, Lsp.DesignerForma) no tiene raiz que leer, y
+    // quien indexa la carpeta lo nombra. TStringList si lee el UTF-16: el
+    // ancestro se cargaba convertido, o en UTF-32 salia "sin fichero en la
+    // carpeta" (A28 de la 1.23)
+    if ElIdeNoLoTomaPorForm(Bytes) then
+    begin
+      Result.NoLaCargaElIde := True;
+      Exit;
+    end;
     // la forma por el lector de la casa (Lsp.DesignerForma): el binario del
     // IDE lleva cabecera de recurso, y un texto UTF-16 empieza por FF FE
     if DesignerShapeOf(Bytes) <> dsText then
@@ -1403,12 +1415,14 @@ begin
   FNoAplicados.Sorted := True;
   FNoAplicados.Duplicates := dupIgnore;
   FPorClase := TDictionary<string, string>.Create;
+  FNoCargan := TStringList.Create;
   FEscritas := TDictionary<TComponent, string>.Create;
 end;
 
 destructor TCargador.Destroy;
 begin
   FEscritas.Free;
+  FNoCargan.Free;
   FPorClase.Free;
   FNoAplicados.Free;
   FLeidos.Free;
@@ -1427,12 +1441,17 @@ begin
     Exit;
   FCarpeta := ACarpeta;
   FPorClase.Clear;
+  FNoCargan.Clear;
   Ext := ExtractFileExt(GPeticion.Path);
   for var F in TDirectory.GetFiles(ACarpeta, '*' + Ext) do
   if not EsEnlace(F) then // un hermano enlazado no se lee: ver EsEnlace
   try
+    // uno que el lector del IDE no carga no es el ancestro de nadie: se
+    // anota, y si falta uno, el aviso lo nombra (A28 de la 1.23)
     var C := Cabecera(F);
-    if (C.Clase <> '') and not FPorClase.ContainsKey(C.Clase.ToUpper) then
+    if C.NoLaCargaElIde then
+      FNoCargan.Add(ExtractFileName(F))
+    else if (C.Clase <> '') and not FPorClase.ContainsKey(C.Clase.ToUpper) then
       FPorClase.Add(C.Clase.ToUpper, F);
   except
     // un fichero que no se deja leer no es de este renderizador
@@ -1771,7 +1790,11 @@ begin
       begin
         if not DelMarco(Ancestro) then
         begin
-          FAvisos.Add(MsgFmt(SN_RENDER_ANCESTRO_SIN_FICHERO_FMT, [Ancestro]));
+          if FNoCargan.Count > 0 then
+            FAvisos.Add(MsgFmt(SN_RENDER_ANCESTRO_NO_CARGA_FMT, [Ancestro,
+              string.Join(', ', FNoCargan.ToStringArray)]))
+          else
+            FAvisos.Add(MsgFmt(SN_RENDER_ANCESTRO_SIN_FICHERO_FMT, [Ancestro]));
           FSinLeer.Add(Ancestro);
         end;
         Break;

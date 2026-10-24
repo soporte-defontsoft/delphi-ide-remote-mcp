@@ -521,23 +521,23 @@ try:
     check('P1 ...y lo PINTADO es la form: el panel con su color (por pixel)',
           cerca(pixel_de(png('p1.png'), 30, 150), CIELO), pixel_de(png('p1.png'), 30, 150))
     # ------------------------------------------------------------------ P1u
-    # (r5 de la 1.18.0) un form de TEXTO en UTF-16 se dibuja (el renderizador lo
-    # pasa a UTF-8, como lo abre el IDE), con la nota de que dcc no lo compila
-    # (E2161, medido); uno en UTF-32 no lo lee el renderizador: se niega antes
+    # (A28 de la 1.23) un form de TEXTO en UTF-16 o UTF-32 no lo carga el IDE (su
+    # disenador: "Invalid stream format", medido el 24-oct-2026): se niega antes
+    # de lanzar el renderizador, con la salida. El UTF-16 se dibujaba convertido
     _FU = "object FormAncha: TForm\r\n  Caption = 'c\u00f3digo'\r\n  ClientHeight = 50\r\n  ClientWidth = 80\r\nend\r\n"
     _u16 = os.path.join(JAIL, 'FormU16.dfm')
     open(_u16, 'wb').write(b'\xff\xfe' + _FU.encode('utf-16-le'))
     # (variables propias: los checks de P1 que siguen leen r y j de P1)
     _ru = preview(path=_u16)
     _ju = J(_ru)
-    check('P1u un form UTF-16 se dibuja y dice que dcc no lo compila (DSGN-121)',
-          (_ju.get('root') or {}).get('name') == 'FormAncha' and
-          mc.es(_ju.get('encodingNote', ''), 'SN_DSGN_FORM_ANCHO_FMT'), _ru[:500])
+    check('P1u un form UTF-16 se niega antes de lanzar el renderizador (DSGN-122), con la salida',
+          mc.rechazado(_ru) and mc.abre(_ru, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and 'command=to-text' in _ru,
+          _ru[:500])
     _u32 = os.path.join(JAIL, 'FormU32.dfm')
     open(_u32, 'wb').write(b'\xff\xfe\x00\x00' + _FU.encode('utf-32-le'))
     _ru = preview(path=_u32)
-    check('P1u ...uno UTF-32 se niega antes de lanzar el renderizador (DSGN-122), no con un error de sintaxis',
-          mc.rechazado(_ru) and mc.es(_ru, 'SR_DSGN_FORM_UTF32_FMT'), _ru[:400])
+    check('P1u ...uno UTF-32 tambien (DSGN-122), no con un error de sintaxis',
+          mc.rechazado(_ru) and mc.abre(_ru, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT'), _ru[:400])
     # (revisor de baterias, 18-oct-2026) "sin la nota" sobre un preview en
     # error pasaba: que se dibuje (su raiz) y no la lleve
     _ra = J(preview(path=PRUEBA))

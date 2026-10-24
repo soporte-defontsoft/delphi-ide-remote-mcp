@@ -835,12 +835,23 @@ function OtroModoConFragmento(AHasOld: Boolean; const AOldLine: string; ADelete:
   '' si no es el caso o no se puede leer. }
 function NotaDeUtf8SinBomDe(const APath: string): string;
 { LA nota de codificacion de un form en disco (encodingNote): la de uno ANCHO
-  (UTF-16/32, DSGN-121: el IDE lo abre y dcc no lo compila) o, si no, la de
-  uno SIN BOM cuyos bytes son UTF-8 (READ-009: el IDE y dcc lo leen en ANSI);
-  '' si nada que decir o no se puede leer. La componian tres emisores (lint y
-  los escritores del disenador, preview y el lint de delphi_edit/tanda/
-  changeset) y dos sin READ-009 (W9 del revisor de cierre de la 1.18.2). }
+  (UTF-16/32, DSGN-121: el IDE no lo carga ni dcc lo compila, y la salida es
+  to-text) o, si no, la de uno SIN BOM cuyos bytes son UTF-8 (READ-009: el IDE
+  y dcc lo leen en ANSI); '' si nada que decir o no se puede leer. La
+  componian tres emisores (lint y los escritores del disenador, preview y el
+  lint de delphi_edit/tanda/changeset) y dos sin READ-009 (W9 del revisor de
+  cierre de la 1.18.2). La del ancho la dicen ya solo quienes escriben el
+  TEXTO; el disenador lo niega (FormAnchoQueNoCarga). }
 function NotaDeCodificacionDeForm(const APath: string): string;
+{ LA negativa de los comandos del disenador que necesitan que el IDE cargue
+  el form (lint, preview, to-binary, insert, set, delete): si APath es un form
+  de texto ancho (Lsp.DesignerBin.FormAncho) y EL parser lo niega con sus
+  bytes tal cual, leidos por la puerta (LeeBytes), DSGN-122 con lo que dijo;
+  si no, ''. El parser decide (norma 6) y el BOM solo dice la causa.
+  Convertirlo antes de preguntar era lo que hacia que lint diera CLEAN y
+  preview dibujara lo que el IDE no abre (A28 de la 1.23). Lo que la puerta
+  no deja leer no se niega aqui: lo dice el comando que sigue. }
+function FormAnchoQueNoCarga(const APath: string): string;
 { Mientras dure (True ... False, anidable, de ESTE hilo: las llamadas HTTP van
   a la vez), los escritores no juzgan el form en cada edicion: el juicio es
   del fichero ENTERO, como la estructura, y lo hace quien agrupa sobre lo que
@@ -4103,6 +4114,23 @@ begin
       Result := NotaDeUtf8SinBomDe(APath);
   except
     Result := ''; // una nota no tumba nada
+  end;
+end;
+
+function FormAnchoQueNoCarga(const APath: string): string;
+var
+  K: TEncKind;
+  Linea: Integer;
+begin
+  Result := '';
+  if not FormAncho(APath, K) then
+    Exit;
+  try
+    var Dijo := ErrorDelParserDeForm(LeeBytes(APath, [ltJaula]), Linea);
+    if Dijo <> '' then
+      Result := MsgFmt(SR_DSGN_FORM_ANCHO_NO_CARGA_FMT, [ExtractFileName(APath), EncName(K), Dijo]);
+  except
+    Result := ''; // lo que la puerta no deja leer lo dice el comando que sigue
   end;
 end;
 

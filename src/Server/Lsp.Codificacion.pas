@@ -63,7 +63,7 @@ function HayByteAlto(const B: TArray<Byte>): Boolean;
   delata). Lo pregunta el escritor que elige la codificacion de un fuente
   que no tenia ninguna (Lsp.Patch.EncAlEscribir: el primer caracter no
   ASCII). to-binary ya no: da los bytes de disco al parser del IDE
-  (FormParaElParser, M2 del punto 4 de la 1.18.2). }
+  (DesignerAFlujo, tal cual; M2 del punto 4 de la 1.18.2). }
 function CabeEnAnsi(const S: string): Boolean;
 { El siguiente sustituto de S que esta SIN su pareja, desde I (que avanza
   detras de el); #0 si no quedan. La pareja la reconoce la RTL. EL lector del

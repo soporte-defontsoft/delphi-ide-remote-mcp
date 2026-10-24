@@ -1189,6 +1189,7 @@ var
   Ruta, Texto, Err, Copia: string;
   B, Bin: TBytes;
   Forma: TDesignerShape;
+  K: TEncKind;
 begin
   Result := WriteTargetDenied(APath);
   if Result <> '' then
@@ -1198,15 +1199,25 @@ begin
     Exit(NoEsFichero(Ruta, MsgFmt(SR_NO_EXISTE_FMT, [Ruta])));
   if not EsRutaDeDesigner(Ruta) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
-  if EsDesignerFmx(Ruta) then
-    Exit(MsgText(SR_DESIGNER_FMX_ALWAYS_TEXT));
   B := TFile.ReadAllBytes(Ruta);
   Forma := DesignerShapeOf(B);
+  // un form de TEXTO en UTF-16 o UTF-32, que el IDE no carga (A28 de la 1.23)
+  var Ancho := (Forma = dsText) and KindDeBom(B, K) and (K in ENC_ANCHAS);
+  // un .fmx es texto siempre; uno ancho si se convierte, al texto que escribe
+  // el IDE: es la salida que da DSGN-122, tambien para un .fmx
+  if EsDesignerFmx(Ruta) and not (AToText and Ancho) then
+    Exit(MsgText(SR_DESIGNER_FMX_ALWAYS_TEXT));
   if AToText then
   begin
-    if Forma = dsText then
+    if (Forma = dsText) and not Ancho then
       Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), MsgText(SF_DSGN_TEXTO)]));
-    Err := DesignerBinaryToText(B, Texto);
+    // el binario, por EL conversor del IDE; el ancho, leido en UTF-8 por su
+    // parser y escrito por ese mismo conversor: la salida que dice DSGN-122
+    // (David, 24-oct-2026: un form asi ya no lo abre el IDE para arreglarlo)
+    if Ancho then
+      Err := TextoDeFormAncho(B, Texto)
+    else
+      Err := DesignerBinaryToText(B, Texto);
     if Err <> '' then
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
     // el fichero ENTERO cambia de forma: su contenido actual, sellado
@@ -1222,6 +1233,14 @@ begin
       PatchSaveText(Ruta, Texto, EncName(ekUtf8), False, True)
     else
       PatchSaveText(Ruta, Texto, EncName(ekUtf8Bom), False, True);
+    if Ancho then
+    begin
+      var Como := MsgText(SF_DSGN_TOTEXT_UTF8BOM);
+      if IsAscii(Texto) then
+        Como := MsgText(SF_DSGN_TOTEXT_ASCII);
+      Exit(MsgFmt(SN_DESIGNER_TOTEXT_ANCHO_FMT, [TPath.GetFileName(Ruta), EncName(K), Como,
+        Length(LineasDelTexto(Texto)), Copia]));
+    end;
     Result := MsgFmt(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
       Length(LineasDelTexto(Texto)), Copia]);
   end
@@ -1229,12 +1248,19 @@ begin
   begin
     if Forma <> dsText then
       Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), MsgText(SF_DSGN_BINARIO)]));
+    // un form que el IDE no carga no se convierte: se convertia pasandolo antes
+    // a UTF-8 o a UTF-16 (A28 de la 1.23)
+    if Ancho then
+    begin
+      Err := FormAnchoQueNoCarga(Ruta);
+      if Err <> '' then
+        Exit(Err);
+    end;
     // la regla de ida y vuelta de los escritores (ReescrituraDenegada): un
     // form roto -un BOM de UTF-8 con el cuerpo en CP1252- se convertiria, con
     // el lector tolerante, con U+FFFD donde estan sus acentos; con el estricto
     // de la 1.17 reventaba (SYS-006). Revisor propio de la 4.1. Los bytes ya
     // leidos, sin leer otra vez
-    var K: TEncKind;
     Err := ReescrituraDenegada(Ruta, B, K);
     if Err <> '' then
       Exit(Err);
@@ -1249,10 +1275,11 @@ begin
   end;
 end;
 
-{ Lo que lint no ve en el texto y dcc si (DSGN-121): un form de texto en UTF-16
-  o UTF-32 lo abre el IDE y no lo compila dcc. La nota va en la respuesta de
-  lint y en la de cada escritura del disenador (insert, set, delete), que la
-  conservan; una respuesta que es un fallo se queda como esta. }
+{ La nota de codificacion de un form en la respuesta de lint y en la de cada
+  escritura del disenador (insert, set, delete): la de uno SIN BOM cuyos bytes
+  son UTF-8 (READ-009). Un form de texto en UTF-16 o UTF-32 ya no llega aqui:
+  lo niegan antes (DSGN-122, A28 de la 1.23). Una respuesta que es un fallo se
+  queda como esta. }
 function ConNotaDeFormAncho(const AResult, APath: string): string;
 begin
   Result := AResult;
@@ -1294,8 +1321,7 @@ var
   Return, Raiz, Ms: TJSONObject;
   NoVis: TJSONArray;
   RX, RY, RW, RH, AnchoOrig, AltoOrig, OX, OY: Integer;
-  Recortada, Ancho: Boolean;
-  KAncha: TEncKind;
+  Recortada: Boolean;
   Estados: TArray<string>;
   Recorte: TArray<Byte>;
 
@@ -1329,11 +1355,12 @@ begin
     Exit(Fallo);
   if not TFile.Exists(Ruta) then
     Exit(NoEsFichero(Ruta, MsgFmt(SR_NO_EXISTE_FMT, [Ruta])));
-  // un form de texto en UTF-32 no lo lee el renderizador ni lo compila dcc:
-  // se dice antes de lanzar nada; uno en UTF-16 se dibuja, con la nota
-  Ancho := FormAncho(Ruta, KAncha);
-  if Ancho and (KAncha in [ekUtf32LE, ekUtf32BE]) then
-    Exit(MsgFmt(SR_DSGN_FORM_UTF32_FMT, [TPath.GetFileName(Ruta), EncName(KAncha)]));
+  // un form de texto en UTF-16 o UTF-32 no lo carga el IDE (lo niega su
+  // parser): se dice antes de lanzar nada, con la causa y la salida (A28 de
+  // la 1.23; un UTF-16 se dibujaba convertido)
+  Fallo := FormAnchoQueNoCarga(Ruta);
+  if Fallo <> '' then
+    Exit(Fallo);
   // EL parser del IDE antes de lanzar nada (8.10 de la 1.18.0): un form que no
   // lee no se dibuja, y se dice la linea que nombra - DSGN-061 decia "the
   // renderer could not draw" con su "Identifier expected on line 2" y nada
@@ -1736,7 +1763,15 @@ begin
     else if Cmd = 'tree' then
       Result := TreeOf(Params.Path, Params.MaxDepth) // (un negativo lo niega la capa de parametros, SYS-016)
     else if Cmd = 'lint' then
-      Result := ConNotaDeFormAncho(LintForm(Params.Path), Params.Path)
+    begin
+      // un form que el IDE no carga, antes que nada - tras la puerta de leer:
+      // fuera de ella lo dice LintForm (A28 de la 1.23)
+      Result := '';
+      if ReadPathDenied(TPath.GetFullPath(Params.Path)) = '' then
+        Result := FormAnchoQueNoCarga(TPath.GetFullPath(Params.Path));
+      if Result = '' then
+        Result := ConNotaDeFormAncho(LintForm(Params.Path), Params.Path);
+    end
     else if Params.Component.Trim = '' then
       Result := MsgText(SR_DESIGNER_NEED_COMPONENT)
     else
@@ -1757,6 +1792,15 @@ begin
     // editar el form y su unidad como el IDE (Lsp.DesignerEdit, 1.17.0)
     if Params.Path.Trim = '' then
       Exit(MsgText(SR_DESIGNER_NEED_PATH));
+    // un form que el IDE no carga no se edita con el disenador (A28 de la
+    // 1.23: se escribia, con una nota que decia que el IDE lo abria). Tras la
+    // puerta de leer: fuera de ella lo dice el escritor
+    if ReadPathDenied(TPath.GetFullPath(Params.Path)) = '' then
+    begin
+      Result := FormAnchoQueNoCarga(TPath.GetFullPath(Params.Path));
+      if Result <> '' then
+        Exit;
+    end;
     if Cmd = 'insert' then
       Result := ConFueraDelPadre(InsertaComponente(Params.Path, Params.ClassName_,
         Params.Component, Params.Parent, Params.Props), Params.Path)
@@ -1766,8 +1810,8 @@ begin
         Params.After, Params.Index), Params.Path)
     else
       Result := BorraComponente(Params.Path, Params.Component);
-    // ...y lo mismo que lint tras escribir: el form sigue en UTF-16/32, que dcc
-    // no compila (r5-L3 de la 1.18.0: solo lo decian lint y preview)
+    // ...y la nota de codificacion que dice lint, tras escribir (r5-L3 de la
+    // 1.18.0: solo la decian lint y preview)
     Result := ConNotaDeFormAncho(Result, Params.Path);
   end
   else

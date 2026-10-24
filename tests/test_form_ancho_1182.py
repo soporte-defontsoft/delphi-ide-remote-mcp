@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Un form de TEXTO en UTF-16 o UTF-32 lo abre el IDE y dcc no lo compila
-(RLINK32, E2161, medido el 9-oct-2026): DSGN-121. Lo decian lint y los
+"""Un form de TEXTO en UTF-16 o UTF-32: dcc no lo compila (RLINK32, E2161,
+medido el 9-oct-2026) y el IDE NO lo carga ("Invalid stream format", medido
+el 24-oct-2026; decia que lo abria: A28 de la 1.23): DSGN-121. Lo decian lint y los
 escritores del disenador (insert/set/delete) y preview; delphi_edit, su tanda
 (edits) y el changeset escriben el mismo form y lo callaban (1.18.2, punto 4,
 B1; medido en produccion el 13-oct: delphi_edit sobre un .dfm UTF-16 escribia
@@ -13,7 +14,7 @@ escritores genericos (Lsp.Patch.DesignerLint).
   W3 delphi_changeset que edita el .dfm: igual
   W4 delphi_edit sobre un .dfm UTF-32 LE: igual
   W5 el control: delphi_edit sobre un .dfm UTF-8 con BOM no la dice
-  W6 designer set la sigue diciendo (el compositor de antes, ahora el helper)
+  W6 designer set: desde A28 de la 1.23 lo niega (DSGN-122) y no escribe
 
 Y lo del revisor propio del punto 4 (13-oct):
   W7 una tanda que deja el parser quejandose (una cadena sin cerrar) dice la
@@ -93,8 +94,8 @@ try:
     p = par('UW6', 'utf16')
     r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'FormW', 'prop': 'Caption',
                                      'value': "'Ancho6'"})
-    check('W6 designer set sobre un .dfm UTF-16 la sigue diciendo (encodingNote)',
-          not mc.rechazado(r) and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
+    check('W6 designer set sobre un .dfm UTF-16: DSGN-122 (el IDE no lo carga) y no escribe',
+          mc.abre(r, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and "'Ancho6'" not in lee(p, 'utf16'), r[:400])
 
     # W7 la tanda con avisos *** en cada entrada: la nota una vez
     p = par('UW7', 'utf16')

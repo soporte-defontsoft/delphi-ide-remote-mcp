@@ -13,8 +13,8 @@ decia CLEAN y solo preview (el IDE) lo rechazaba: "Identifier expected on line
       bueno: "un bloque cerrado"): DSGN-124 y el .style no cambia
   P5  los controles: el form arreglado se lee (lint sin DSGN-123, preview sin
       DSGN-126) y un set de un valor bueno en el estilo se escribe
-  P6  r5-L3: un set sobre un form de texto en UTF-16 lo escribe (en UTF-16,
-      como estaba) y dice DSGN-121 - dcc no lo compila -, como ya lo decia lint
+  P6  un set sobre un form de texto en UTF-16: DSGN-122 y no escribe - el IDE
+      no lo carga (A28 de la 1.23; lo escribia y decia que el IDE lo abria) -
   P7  revisor 2 de la noche, M-B: delphi_edit que mete un // en un .fmx dice
       DSGN-123 (su lint no preguntaba al parser: la puerta del 8-oct)
   P8  B-8: la tanda (edits) lo lleva en su resumen, con lo que va debajo
@@ -87,16 +87,16 @@ try:
     check('P5 ...y un set bueno en el estilo se escribe', not mc.fallo(r) and b'Opacity = 0.5' in open(STYLE, 'rb').read(),
           r[:300])
 
-    # P6: un form de texto en UTF-16 (FF FE): set lo escribe y avisa como lint
+    # P6: un form de texto en UTF-16 (FF FE): set lo niega, como lint (A28 de la 1.23)
     _f16 = os.path.join(JAIL, 'UAncho.fmx')
     open(_f16, 'wb').write(b'\xff\xfe' + ROTO.replace(b'  // un comentario que el parser del IDE no lee\r\n', b'')
                            .decode('ascii').encode('utf-16-le'))
     r = srv.call('delphi_designer', {'command': 'set', 'path': _f16, 'component': 'Button1', 'prop': 'Text',
                                      'value': 'Ancho'}, t=200)
     _b16 = open(_f16, 'rb').read()
-    check('P6 set en un form UTF-16: se escribe en UTF-16 y avisa DSGN-121 (dcc no lo compila)',
-          not mc.fallo(r) and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT') and _b16.startswith(b'\xff\xfe') and
-          'Ancho' in _b16[2:].decode('utf-16-le'), r[:400])
+    check('P6 set en un form UTF-16: DSGN-122 (el IDE no lo carga) y el form intacto',
+          mc.abre(r, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and _b16.startswith(b'\xff\xfe') and
+          'Ancho' not in _b16[2:].decode('utf-16-le'), r[:400])
 
     # P7: delphi_edit sobre el form arreglado de P5, metiendo un //
     r = srv.call('delphi_edit', {'path': FMX, 'old': 'object Form1: TForm1',

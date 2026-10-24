@@ -3,7 +3,7 @@
 punto 4, M2). Tenia su camino propio: el texto ya decodificado, recodificado a
 ANSI. Negaba (DSGN-045) un UTF-8 o UTF-16 con BOM que lint daba por limpio y
 que dcc compila entero. Ahora le da los BYTES de disco al parser por el
-alimentador de lint (FormParaElParser) y el binario es el que compila dcc de
+alimentador de lint (DesignerAFlujo, tal cual) y el binario es el que compila dcc de
 ese fichero. Rojo contra produccion (cfea828): B1, B4 y B6; B2, B3 y B5 ya
 pasaban (el llamador decodificaba un form sin BOM en ANSI, como dcc): son
 GUARDAS de que el camino nuevo no cambia lo que estaba bien.
@@ -17,19 +17,17 @@ con la ó partida en dos letras (C3 B3 leidos en la ANSI 1252).
   B2 UTF-8 SIN BOM con una o con tilde: el Caption es el de dcc (C3 83 C2 B3,
      solo en una maquina 1252)
   B3 ANSI con la o con tilde en crudo (F3): 'Configuración' entero
-  B4 UTF-16 LE con BOM fuera de la ANSI: lint limpio Y to-binary convierte
+  B4 UTF-16 LE con BOM: desde A28 de la 1.23 el IDE no lo carga, y lint y
+     to-binary lo niegan los dos (DSGN-122, el form intacto); convertia
   B5 un NOMBRE con letra fuera de ASCII en un form ANSI: el parser no lo lee y
      la negativa dice cual y en que linea (DSGN, el mensaje claro de antes)
   B6 la regla de M2 en todos: lint limpio <=> to-binary convierte
 
 Y lo del revisor propio del punto 4 (13-oct):
-  B7 UTF-32 LE con 'Configuración': convierte, entero (R1: la RTL toma su BOM
-     por el de UTF-16 y el camino nuevo daba DSGN-046; produccion lo convertia,
-     por ANSI: GUARDA contra produccion, ROJO contra el arbol sin R1)
-  B8 UTF-32 BE fuera de la ANSI: convierte, entero (rojo en produccion,
-     DSGN-045, y sin R1)
-  B9 UTF-16 con medio caracter: DSGN-147 y el form intacto (R7: salia U+FFFD
-     sin decir nada). Fuera de B6: lint no mira sueltos, lo dice to-binary
+  B7 UTF-32 LE / B8 UTF-32 BE: lo mismo que B4 (convertian, por UTF-16)
+  B9 UTF-16 con medio caracter: DSGN-122 tambien y el form intacto (R7: salia
+     U+FFFD sin decir nada; el suelto lo niega ahora to-text, DSGN-147, que es
+     quien lo convierte: test_form_ancho_1230 T3)
   B10 UTF-8 con BOM, nombre no ASCII en la linea 2 y una cadena sin cerrar en
      la 3: el error del parser, no DSGN-120 (R2: con BOM el parser lee el nombre)
   B11 ANSI, cadena sin cerrar en la 2 y nombre no ASCII en la 4: el error del
@@ -110,10 +108,11 @@ try:
 
     # B4 UTF-16 LE con BOM
     txt = CABEZA + "  Caption = 'ok ✔ Ж'\r\n" + PIE
-    p, rl, rb = prueba('B4.dfm', b'\xff\xfe' + txt.encode('utf-16-le'))
-    t, c = caption_del_binario(p)
-    check('B4 UTF-16 con BOM fuera de la ANSI: lint limpio y to-binary convierte, Caption entero',
-          'DSGN-020' in rl and not mc.rechazado(rb) and c == 'ok ✔ Ж'.encode('utf-8'), (rl[:120], rb[:200], t, c))
+    antes = b'\xff\xfe' + txt.encode('utf-16-le')
+    p, rl, rb = prueba('B4.dfm', antes)
+    check('B4 UTF-16 con BOM: lint y to-binary lo niegan (DSGN-122, el IDE no lo carga) y el form intacto',
+          mc.abre(rl, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and mc.abre(rb, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and
+          open(p, 'rb').read() == antes, (rl[:120], rb[:200]))
 
     # B5 un NOMBRE fuera de ASCII en un form ANSI: el mensaje claro
     if ACP == 1252:
@@ -126,28 +125,27 @@ try:
 
     # B7 UTF-32 LE dentro de la ANSI
     txt = CABEZA + "  Caption = 'Configuración'\r\n" + PIE
-    p, rl, rb = prueba('B7.dfm', b'\xff\xfe\x00\x00' + txt.encode('utf-32-le'))
-    t, c = caption_del_binario(p)
-    check('B7 UTF-32 LE: lint limpio y to-binary convierte, Caption entero',
-          'DSGN-020' in rl and not mc.rechazado(rb) and c == 'Configuración'.encode('utf-8'),
-          (rl[:120], rb[:200], t, c))
+    antes = b'\xff\xfe\x00\x00' + txt.encode('utf-32-le')
+    p, rl, rb = prueba('B7.dfm', antes)
+    check('B7 UTF-32 LE: lint y to-binary lo niegan (DSGN-122) y el form intacto',
+          mc.abre(rl, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and mc.abre(rb, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and
+          open(p, 'rb').read() == antes, (rl[:120], rb[:200]))
 
     # B8 UTF-32 BE fuera de la ANSI
     txt = CABEZA + "  Caption = 'ok ✔ Ж'\r\n" + PIE
-    p, rl, rb = prueba('B8.dfm', b'\x00\x00\xfe\xff' + txt.encode('utf-32-be'))
-    t, c = caption_del_binario(p)
-    check('B8 UTF-32 BE fuera de la ANSI: lint limpio y to-binary convierte, Caption entero',
-          'DSGN-020' in rl and not mc.rechazado(rb) and c == 'ok ✔ Ж'.encode('utf-8'),
-          (rl[:120], rb[:200], t, c))
+    antes = b'\x00\x00\xfe\xff' + txt.encode('utf-32-be')
+    p, rl, rb = prueba('B8.dfm', antes)
+    check('B8 UTF-32 BE: lint y to-binary lo niegan (DSGN-122) y el form intacto',
+          mc.abre(rl, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and mc.abre(rb, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and
+          open(p, 'rb').read() == antes, (rl[:120], rb[:200]))
 
-    # B9 UTF-16 con medio caracter: negado, el form intacto (fuera de B6)
+    # B9 UTF-16 con medio caracter: negado por ancho, el form intacto (fuera de B6)
     txt = CABEZA + "  Caption = 'a\ud800b'\r\n" + PIE
     antes = b'\xff\xfe' + txt.encode('utf-16-le', 'surrogatepass')
     p = form('B9.dfm', antes)
     rb = srv.call('delphi_designer', {'path': p, 'command': 'to-binary'})
-    check('B9 UTF-16 con medio caracter: DSGN-147 (no U+FFFD callado), con su linea, y el form intacto',
-          mc.abre(rb, 'SR_DSGN_FORM_SUELTO_BINARIO_FMT') and 'D800' in rb and 'line 4' in rb
-          and open(p, 'rb').read() == antes, rb[:300])
+    check('B9 UTF-16 con medio caracter: DSGN-122 (no U+FFFD callado) y el form intacto',
+          mc.abre(rb, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and open(p, 'rb').read() == antes, rb[:300])
 
     # B10 con BOM: el error de otra linea no lo tapa un nombre no ASCII
     txt = "object FormA: TFormA\r\n  object BotónÑ: TButton\r\n    Caption = 'abc\r\n  end\r\nend\r\n"

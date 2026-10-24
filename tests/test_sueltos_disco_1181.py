@@ -15,10 +15,11 @@ UTF-16: el lector de los demas nunca da un suelto (lee U+FFFD).
   S2  ...y lo mismo con delphi_textedit, adduses y una tanda (edits)
   S3  el changeset aplica un edit en ese fichero
   S4  delphi_move de la unit: la cabecera se reescribe y el suelto se queda
-  S5  designer set en un .dfm UTF-16 con un suelto en el Caption; y lo que
-      pregunta al juez del orden (set before=, insert): su copia temporal
-      se codificaba estricta y daba EDIT-078 "nothing written" (revisor
-      propio de la 1.18.1)
+  S5  designer set en un .dfm UTF-16 con un suelto en el Caption: desde A28
+      de la 1.23 el disenador no edita un form que el IDE no carga (DSGN-122),
+      y to-text, que si lo lee, niega el suelto (DSGN-147); el fichero, intacto.
+      (Antes: se escribia, y el juez del orden - set before=, insert - daba
+      EDIT-078 con su copia temporal estricta; revisor propio de la 1.18.1)
   S6  el texto NUEVO sigue negandose: un segundo suelto igual, y uno
       distinto, EDIT-078 sin escribir nada
   S7  control: un UTF-8 con BOM y una secuencia CESU (se lee U+FFFD) sigue
@@ -117,21 +118,12 @@ try:
                 'var\n  Form1: TForm1;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
     r = srv.call('delphi_designer', {'command': 'set', 'path': F, 'component': 'Form1',
                                      'prop': 'Left', 'value': '10'}, t=400)
-    t = de16(lee(F))
-    check('S5 designer set en un .dfm UTF-16 con un suelto en el Caption: se escribe y el suelto se queda',
-          not mc.fallo(r) and 'Left = 10' in t and "Caption = 'ab" + D800 + "cd'" in t, r[:400])
-    r = srv.call('delphi_designer', {'command': 'set', 'path': F, 'component': 'Label1', 'before': 'Label0'}, t=400)
-    t = de16(lee(F))
-    check('S5 ...set before= (pregunta al juez del orden): se reordena, sin EDIT-078, y el suelto se queda',
-          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT')
-          and t.find('object Label1') < t.find('object Label0') and D800 in t, r[:400])
-    r = srv.call('delphi_designer', {'command': 'insert', 'path': F, 'classname': 'TButton'}, t=400)
-    t = de16(lee(F))
-    # ...y que el juez CONTESTO: sin DSGN-145 ("el juez no contesto, va el ultimo"),
-    # que pasaba tambien sin los renderizadores (segunda ronda de la 1.18.1)
-    check('S5 ...insert: se escribe, el juez del orden contesta (sin DSGN-145 ni EDIT-078) y el suelto se queda',
-          not mc.fallo(r) and not mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and not mc.es(r, 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT')
-          and 'TButton' in t and D800 in t, r[:400])
+    check('S5 designer set en un .dfm UTF-16 con un suelto en el Caption: DSGN-122 (el IDE no lo carga) '
+          'y el fichero intacto, el suelto incluido',
+          mc.abre(r, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and lee(F) == u16(FORM), r[:400])
+    r = srv.call('delphi_designer', {'command': 'to-text', 'path': F}, t=400)
+    check('S5 ...y to-text, que si lo convierte: DSGN-147 por el suelto y el fichero intacto',
+          mc.abre(r, 'SR_DSGN_FORM_SUELTO_BINARIO_FMT') and 'D800' in r and lee(F) == u16(FORM), r[:400])
 
     # ---- S6 ----
     antes = lee(DOS)

@@ -10,6 +10,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A text form saved in UTF-16 or UTF-32 is no longer passed off as one the
+  IDE opens.** The IDE's code editor lets a `.dfm` or `.fmx` be saved in
+  UTF-16 or UTF-32, but its designer does not load it again ("Invalid stream
+  format", measured on 2026-10-24 with UTF-16 LE, UTF-16 BE and UTF-32), and
+  the compiler refuses it too (`E2161`). The RTL says so by construction:
+  `TestStreamFormat` takes a leading `$FF` for a binary form and `FE FF` or
+  `00 00 FE FF` for nothing it knows, and its form parser refuses any BOM but
+  UTF-8's. The server converted such a form to UTF-8 or UTF-16 before asking
+  that parser, so `lint` called it clean, `preview` drew it, `insert`, `set`
+  and `delete` wrote it, `to-binary` converted it, and the note (`DSGN-121`)
+  said "The IDE opens it". Now the parser gets the bytes as they are: those
+  commands refuse the form (`DSGN-122`, with what the parser said), and the
+  way out is `to-text`, which turns it into the text the IDE writes (ASCII,
+  an accent as `#N`; UTF-8 with a BOM when a name needs it), backup first, its
+  unit untouched (`DSGN-170`) - for a `.fmx` too, which `to-text` refused
+  outright (`DSGN-013`: FireMonkey has no binary form). A half character in
+  such a form is refused there (`DSGN-147`). A form whose ancestor is one of
+  them is drawn without it, and
+  the warning names that file (`RENDER-023`) instead of saying the ancestor
+  has no file; `delphi_edit` keeps editing it as text, and its note now says
+  how to fix it (`tests/test_form_ancho_1230.py`).
 - **A link the server cannot follow is judged closed.** A junction inside the
   roots whose attributes the service's account may not read (a deny ACE on it
   and on its folder) cannot be opened, so its target could not be resolved -
