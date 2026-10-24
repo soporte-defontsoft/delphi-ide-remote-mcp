@@ -51,6 +51,8 @@ del frame, cuando el IDE los cambia en el form, en su bloque inherited.
      solo con los ficheros anadidos (clase File; nombraba los de otras clases con una nota falsa); sin
      <BorlandProject>, CFG-143 y ni el manifiesto generado ni su Import se quedan (todo o nada); una seccion
      <Deployment/> auto-cerrada se abre con la entrada
+  DF13 (V49 de la 1.23, T4 de Fable) un fichero en OTRA unidad (una letra de subst sobre la jaula): la entrada
+     absoluta, la unica forma (IncludeFor); el mismo otra vez, CFG-029; y remove la quita de los dos
   CF1 UN juez de la configuracion (ConfigDelBuild) para build, test y config: sin configuraciones declaradas,
      add-deployfile config=Release vale como en el build (ROJO: CFG-116 "(none)"); una que no declara, CFG-107
      tambien en config
@@ -112,6 +114,7 @@ Uso:  python tests/test_contratos_1222.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
 import re
+import subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -455,6 +458,42 @@ try:
           ' una nota que de la otra clase es falsa)',
           'solo\\\\manual.txt' in solo and 'otra.dll' not in solo and mc.es(r, 'SN_CONFIG_DEPLOY_SOLO_MANIFIESTO'),
           solo[:400])
+    # en OTRA unidad no hay forma relativa: la entrada va absoluta, como la escribe el Deployment Manager
+    # con un fichero de otra letra (IncludeFor). Una letra de subst sobre una carpeta de la jaula, y RAIZ de
+    # un servidor suyo (una letra que no es raiz es de fuera para la jaula: GUARD-002, srv0:); quitada al acabar
+    otra_dir = os.path.join(JAIL, 'otraunidad')
+    os.makedirs(otra_dir)
+    open(os.path.join(otra_dir, 'lejano.txt'), 'w').write('lejano\n')
+    letra = mc.letras_libres(1)[0]
+    lejano = letra + ':\\lejano.txt'
+    puesta = subprocess.run(['subst', letra + ':', otra_dir], capture_output=True, text=True).returncode == 0
+    s13 = None
+    try:
+        check('DF13 fixture: una letra de subst (%s:) sobre una carpeta de la jaula' % letra,
+              puesta and os.path.isfile(lejano), letra)
+        s13 = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL + ';' + letra + ':\\'}), nombre='c1222-df13', t=600)
+        r = s13.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                       'path': lejano}, 240)
+        t, m = lee(dproj), lee(dmani)
+        check('DF13 un fichero en OTRA unidad: la entrada absoluta (no hay forma relativa), en el .dproj y en el'
+              ' .deployproj',
+              mc.es(r, 'SN_CONFIG_DEPLOY_ADDED_FMT')
+              and ('<DeployFile LocalName="%s" Configuration="Debug" Class="File">' % lejano) in t
+              and m.count('Include="%s"' % lejano) == 1, r[:400])
+        antes = (open(dproj, 'rb').read(), open(dmani, 'rb').read())
+        r = s13.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                       'path': lejano}, 240)
+        check('DF13 ...el mismo otra vez: CFG-029 y nada escrito', mc.es(r, 'SN_CONFIG_DEPLOY_PRESENT_FMT')
+              and (open(dproj, 'rb').read(), open(dmani, 'rb').read()) == antes, r[:300])
+        r = s13.call('delphi_config', {'project': dproj, 'command': 'remove-deployfile', 'platform': 'Win64',
+                                       'path': lejano}, 240)
+        t, m = lee(dproj), lee(dmani)
+        check('DF13 ...y remove la quita de los dos', mc.es(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT')
+              and lejano not in t and lejano not in m, r[:400])
+    finally:
+        if s13:
+            s13.cierra()
+        subprocess.run(['subst', letra + ':', '/d'], capture_output=True)
     # sin <BorlandProject> (CFG-143) y SIN .deployproj: el que se genera y su <Import> se van con el fallo
     d3dir = os.path.join(JAIL, 'dep3')
     srv.call('delphi_create', {'kind': 'project-console', 'name': 'Dep3', 'dir': d3dir})
