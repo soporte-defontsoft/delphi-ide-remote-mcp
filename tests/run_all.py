@@ -82,11 +82,19 @@ rows, total_ok, total_bad, failed = [], 0, 0, []
 # lo que una bateria dice que NO midio (NOTA/SKIP): una verde con su nucleo
 # saltado no se distinguia de una verde de verdad (revision 27-sep-2026)
 notas = []
+# QUIEN deja los atomos: la foto de antes y despues de CADA bateria. La cuenta
+# global decia cuantos y no de quien: el 24-oct-2026 quedaron 3 de un proceso
+# VCL muerto (Delphi00000D54) y ninguna bateria sola los volvia a dejar
+atomos_de = []
 for b in batteries:
     name = os.path.basename(b)[:-3]
     t0 = time.time()
+    atomos_b = mc.atomos_rtl_nombres()
     r = subprocess.run([sys.executable, b, EXE], capture_output=True,
                        text=True, encoding='utf-8', errors='replace', cwd=REPO)
+    dejados_b = mc.atomos_rtl_dejados(atomos_b)
+    if dejados_b:
+        atomos_de.append('%s (%s)' % (name, ', '.join(dejados_b[:3])))
     out = (r.stdout or '') + (r.stderr or '')
     ok = sum(1 for line in out.splitlines() if line.lstrip().startswith('PASS'))  # misma regla que FAIL: test_styles indenta sus PASS y contaban 0
     # .lstrip(): test_messages indenta sus FAIL con dos espacios, asi que el
@@ -185,5 +193,8 @@ if atomos_dejados:
           '(un servidor matado en vez de parado, un renderizador muerto por plazo sin limpiar): '
           'la tabla de la sesion se llena y la maquina deja de arrancar procesos. Los primeros: %s'
           % (len(atomos_dejados), ', '.join(atomos_dejados[:6])))
+    # los de cada bateria (uno que muere tras su bateria cae en la siguiente)
+    print('    los dejo: %s' % ('; '.join(atomos_de) if atomos_de else
+                             'ninguna bateria entre su principio y su final'))
     failed.append(('atomos', '', 0))
 sys.exit(1 if failed else 0)
