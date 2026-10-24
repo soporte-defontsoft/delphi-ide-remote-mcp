@@ -16,6 +16,9 @@ dejan nada:
      cierra() y mata() tampoco (mata() mataba a pelo: 3 atomos por servidor
      en 62 sitios de tests/, medido el 19-oct-2026). Lo que el arnes mata de
      verdad, lo recoge (mc.atomos_rtl_recoge: A4 lo usa con el control).
+  C. con la CPU llena (la pone la bateria), un servidor recien arrancado se
+     para en menos de 2 s: su generador de tablas, a prioridad baja, no la
+     retiene (Lsp.DesignerMetaGen le sube la prioridad al cerrar).
 
 (El plazo del servidor sobre un renderizador colgado - 75 s - no se provoca
 aqui: lo cubren la prueba DUnitX de Lsp.AtomosRtl y la regla de test_paisaje
@@ -151,6 +154,29 @@ check('B5 kill() de un servidor sin consola: muere enseguida, sin esperar el CTR
       'colgado=%s %.1f s rc=%s' % (colgado, dt, proc.poll()))
 check('B6 ...y lo que deja matado, el arnes lo recoge (sin atomos)',
       not mc.atomos_rtl_dejados(antes) and not suyos(pid, antes), (mc.atomos_rtl_dejados(antes), suyos(pid, antes)))
+
+# ---- C. la parada no espera a un hilo hambriento: el generador de tablas va a
+# tpLower y, con la CPU llena, no le llegaba tiempo ni para ver que se cerraba;
+# la finalizacion de Lsp.DesignerMetaGen lo esperaba sus 5 s enteros (B1 rojo
+# dos veces en run_all, 24 y 25-oct-2026; medido: 5,3 s con la CPU llena, 13
+# de 13). Ahora le sube la prioridad al cerrar. La carga la pone la bateria,
+# dos procesos por nucleo, y se quitan por su propio handle
+QUEMADORES = [subprocess.Popen([sys.executable, '-c', 'while True: pass'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+              for _ in range(2 * (os.cpu_count() or 2))]
+tiempos = []
+try:
+    for _ in range(3):
+        proc = mc.lanza_http(EXE, mc.puerto_libre(), mc.entorno({'DELPHI_MCP_ROOTS': JAIL}))
+        t0 = time.time()
+        proc.kill()
+        tiempos.append((round(time.time() - t0, 1), proc.returncode))
+finally:
+    for q in QUEMADORES:
+        q.kill()
+        q.wait(10)
+check('C1 con la CPU llena, proc.kill() de un servidor recien arrancado sale limpio en menos de 2 s (antes 5,3)',
+      len(tiempos) == 3 and all(rc == 0 and dt < 2 for dt, rc in tiempos), tiempos)
 
 mc.borra(BASE)
 mc.fin('atomos battery')

@@ -3132,6 +3132,15 @@ finalization
     proceso al terminar. }
   GCerrando := True;
   if GHilo <> nil then
+  begin
+    // a prioridad NORMAL antes de esperarlo: el generador va a tpLower y, con
+    // la CPU llena, Windows no le daba tiempo ni para ver GCerrando hasta que
+    // rescataba al hilo hambriento (unos 4 s): la parada se comia los 5 s
+    // (B1 de test_atomos_1202, rojo dos veces en run_all; medido el
+    // 25-oct-2026 con 12 procesos quemando CPU: 5,3 s, y 0,1 s con esto).
+    // SetThreadPriority y no TThread.Priority, que lanza si el hilo ya acabo
+    SetThreadPriority(GHilo.Handle, THREAD_PRIORITY_NORMAL);
     WaitForSingleObject(GHilo.Handle, 5000);
+  end;
 
 end.

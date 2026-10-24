@@ -39,6 +39,14 @@ the MCP `initialize` response (`serverInfo.version`).
   the image to form units and is taken by no command. Each tool now puts its
   own head before the common rule, as `out` already did; `tools/list` is 209
   characters lighter.
+- **The server stops at once on a busy machine.** At startup it warms the
+  designer tables in a low-priority thread, and on the way out it waited up
+  to 5 s for that thread: with every core busy, Windows did not give it the
+  time to see that the server was closing, and every stop took the 5 s
+  (measured with twelve processes burning CPU: 5.3 s, 13 times out of 13; a
+  full battery run twice saw a stop go past the harness's 15 s). The thread
+  is raised to normal priority before the wait: 0.1 s
+  (`tests/test_atomos_1202.py`, C1).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the
