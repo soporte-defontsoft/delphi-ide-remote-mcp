@@ -2039,25 +2039,28 @@ try:
     else:
         check('E147 fixture: mklink /J crea la junction rota', False, ROTA)
 
-    # E148 EDIT-078 no aconseja un literal Pascal en un fichero de TEXTO
-    T148 = os.path.join(D147, 'ansi.txt')
-    open(T148, 'wb').write('canción\r\n'.encode('cp1252'))
-    t = rechazo('E148 textedit con un caracter que no cabe en CP1252: EDIT-078', 'delphi_textedit',
-                {'path': T148, 'old': 'canción', 'new': '日本'}, 'DENIED',
-                'SR_EDIT_CARACTERES_NO_CABEN_FMT')
-    check('E148 ...sin el consejo del literal Pascal (era para los fuentes)', '#$' not in t and 'ChrW' not in t,
-          t[:300])
-    # E148b ...y en un FUENTE, un emoji (fuera del BMP): la negativa lo nombra ENTERO
-    # y propone su PAR de sustitutos; nombraba U+D83D y proponia ese literal suelto
-    # (r5-L1 de la 1.18.0)
-    P148 = os.path.join(D147, 'UAnsi148.pas')
-    open(P148, 'wb').write('unit UAnsi148;\r\ninterface\r\nconst C = \'canción\';\r\nimplementation\r\nend.\r\n'.encode('cp1252'))
-    t = rechazo('E148b delphi_edit con un emoji en un fuente CP1252: EDIT-078', 'delphi_edit',
-                {'path': P148, 'old': "const C = 'canción';", 'new': "const C = 'canción \U0001F600';"}, 'DENIED',
-                'SR_EDIT_CARACTERES_NO_CABEN_FMT')
-    check('E148b ...nombra U+1F600 y propone #$D83D#$DE00 (no el sustituto alto suelto)',
-          'U+1F600' in t and '#$D83D#$DE00' in t and 'ConvertFromUtf32($1F600)' in t and 'U+D83D' not in t,
-          t[:500])
+    # E148 EDIT-078 no aconseja un literal Pascal en un fichero de TEXTO (en
+    # otra ANSI el ancla con la o con tilde no casa, y el "sin consejo" pasaria
+    # por la negativa equivocada: el bloque entero es de la 1252)
+    if mc.en_la_1252('E148 y E148b, un fichero CP1252 con su o con tilde'):
+        T148 = os.path.join(D147, 'ansi.txt')
+        open(T148, 'wb').write('canción\r\n'.encode('cp1252'))
+        t = rechazo('E148 textedit con un caracter que no cabe en CP1252: EDIT-078', 'delphi_textedit',
+                    {'path': T148, 'old': 'canción', 'new': '日本'}, 'DENIED',
+                    'SR_EDIT_CARACTERES_NO_CABEN_FMT')
+        check('E148 ...sin el consejo del literal Pascal (era para los fuentes)', '#$' not in t and 'ChrW' not in t,
+              t[:300])
+        # E148b ...y en un FUENTE, un emoji (fuera del BMP): la negativa lo nombra ENTERO
+        # y propone su PAR de sustitutos; nombraba U+D83D y proponia ese literal suelto
+        # (r5-L1 de la 1.18.0)
+        P148 = os.path.join(D147, 'UAnsi148.pas')
+        open(P148, 'wb').write('unit UAnsi148;\r\ninterface\r\nconst C = \'canción\';\r\nimplementation\r\nend.\r\n'.encode('cp1252'))
+        t = rechazo('E148b delphi_edit con un emoji en un fuente CP1252: EDIT-078', 'delphi_edit',
+                    {'path': P148, 'old': "const C = 'canción';", 'new': "const C = 'canción \U0001F600';"}, 'DENIED',
+                    'SR_EDIT_CARACTERES_NO_CABEN_FMT')
+        check('E148b ...nombra U+1F600 y propone #$D83D#$DE00 (no el sustituto alto suelto)',
+              'U+1F600' in t and '#$D83D#$DE00' in t and 'ConvertFromUtf32($1F600)' in t and 'U+D83D' not in t,
+              t[:500])
 
     # E148c ...y un sustituto SUELTO (medio emoji) no se escribe en ninguna
     # codificacion: UTF-8 lo escribia como EF BF BD, UTF-32 como U+FFFD y UTF-16
@@ -2449,16 +2452,17 @@ try:
     # tres reglas del commit y le faltaban las demas: decia Clean y el commit caia)
     D169 = os.path.join(JAIL, 'e169')
     os.makedirs(D169)
-    A169 = os.path.join(D169, 'ansi.txt')
-    open(A169, 'wb').write('canción\r\n'.encode('cp1252'))
-    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
-    c169 = mc.id_changeset(t)
-    llama('delphi_changeset', {'command': 'stage', 'id': c169, 'kind': 'edit', 'path': A169,
-                               'old': 'canción', 'new': '日本'})
-    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c169})
-    check('E169 preview de un new que NO CABE en cp1252: no sale limpio (EDIT-078)',
-          mc.como_json(t).get('unresolved') == 1 and 'EDIT-078' in t, t[:300])
-    llama('delphi_changeset', {'command': 'rollback', 'id': c169})
+    if mc.en_la_1252('E169 un fichero CP1252 con su o con tilde'):
+        A169 = os.path.join(D169, 'ansi.txt')
+        open(A169, 'wb').write('canción\r\n'.encode('cp1252'))
+        res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+        c169 = mc.id_changeset(t)
+        llama('delphi_changeset', {'command': 'stage', 'id': c169, 'kind': 'edit', 'path': A169,
+                                   'old': 'canción', 'new': '日本'})
+        res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c169})
+        check('E169 preview de un new que NO CABE en cp1252: no sale limpio (EDIT-078)',
+              mc.como_json(t).get('unresolved') == 1 and 'EDIT-078' in t, t[:300])
+        llama('delphi_changeset', {'command': 'rollback', 'id': c169})
     R169 = os.path.join(D169, 'ro.txt')
     open(R169, 'w', newline='\n').write('uno\ndos\n')
     with mc.solo_lectura(R169):

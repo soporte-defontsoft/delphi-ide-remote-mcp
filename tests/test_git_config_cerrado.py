@@ -137,15 +137,15 @@ try:
         if tool=='delphi_move': params.update(dest=desttree,copy=copy)
         out=srv.call(tool,params)
         if copy:
-            check('copy del padre niega metadatos','[GUARD-' in out and 'delphi_git' in out,out[:350])
+            check('copy del padre niega metadatos',mc.es(out,'SR_GUARD_GIT_METADATA_FMT') and 'delphi_git' in out,out[:350])
             check('copy conserva hashes',os.path.isdir(tree) and snap(tree)==before)
             check('no aparece copia de metadatos',not os.path.exists(desttree))
         elif tool=='delphi_move':
-            check('move del padre permitido','[MOVE-013]' in out and os.path.isdir(desttree),out[:350])
+            check('move del padre permitido',mc.es(out,'SK_MOVE_MOVIDO_FMT') and os.path.isdir(desttree),out[:350])
             check('move conserva hashes',os.path.isdir(desttree) and snap(desttree)==before)
         else:
             copias=mc.copias(JAIL,'padre',cajon='CAJON_BORRADOS')
-            check('delete del padre permitido','[FILE-021]' in out and not os.path.exists(tree),out[:350])
+            check('delete del padre permitido',mc.es(out,'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(tree),out[:350])
             check('papelera conserva hashes',len(copias)==1 and snap(copias[0])==before,copias)
         mc.borra(tree); mc.borra(desttree)
     # delphi_package de una carpeta con un .git: lo que la puerta de leer no
@@ -164,13 +164,13 @@ try:
             nombres = z.namelist()
     check('package de una carpeta con .git: el zip lleva lo demas y nada del .git (WS-024)',
           'App.txt' in nombres and not any('.git' in n.lower().split('/') for n in nombres)
-          and mc.tiene(out, 'WS-024'), (nombres, out[:300]))
+          and mc.es(out, 'SN_WS_FUERA_DEL_PAQUETE_FMT'), (nombres, out[:300]))
     mc.borra(pk); mc.borra(pzip)
     ptr = os.path.join(JAIL, 'ficha')
     os.makedirs(ptr)
     open(os.path.join(ptr,'.git'),'w').write('gitdir: '+META+'\n')
     out = srv.call('delphi_read', {'path':os.path.join(ptr,'.git')})
-    check('.git fichero tampoco se lee', '[GUARD-' in out and 'delphi_git' in out, out)
+    check('.git fichero tampoco se lee', mc.es(out, 'SR_GUARD_GIT_METADATA_FMT') and 'delphi_git' in out, out)
     for key, stanza in (
         ('core.askpass', '[core]\n askPass = '+private+'\n'),
         ('merge.dummy.driver', '[merge "dummy"]\n driver = '+private+'\n'),
@@ -182,7 +182,7 @@ try:
     ):
         open(CFG,'w').write(normal+'\n'+stanza)
         out = call('status')
-        check('config niega '+key+' sin enseñar valor', '[GIT-051 DENIED]' in out and key in out.lower()
+        check('config niega '+key+' sin enseñar valor', mc.es(out, 'SR_GIT_CONFIG_PROGRAMA_FMT') and key in out.lower()
               and private not in out, out[:350])
     # Claves de repo normales (booleanas/enum, sin programa ni ruta de lectura):
     # status NO debe romper (revisor 1.18.0, M3 -- longpaths, fscache,
@@ -200,7 +200,7 @@ try:
     wt = os.path.join(META,'config.worktree')
     open(wt,'w').write('[dummy]\n unknown = '+private+'\n')
     out = call('status')
-    check('worktree config aplica la misma lista', '[GIT-051 DENIED]' in out and
+    check('worktree config aplica la misma lista', mc.es(out, 'SR_GIT_CONFIG_PROGRAMA_FMT') and
           'dummy.unknown' in out and private not in out, out)
     os.remove(wt)
     open(CFG,'w').write(normal+'\n[remote "no"]\n url = http://localhost:%d/DUMMY\n'%http.server_port)
@@ -222,11 +222,11 @@ try:
                                 (('-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si','--sign') if cmd=='tag' else ('-aS','-sS','-nS','-asS','-vsS'))):
             args = '--allow-empty '+flag if cmd=='commit' else flag+' dummy-sign-'+str(i)
             out=call(cmd,args,'DUMMY')
-            check(cmd+' args '+flag+': GIT-068, no llega a git', 'GIT-068' in out and
+            check(cmd+' args '+flag+': GIT-068, no llega a git', mc.es(out, 'SR_GIT_ARGS_RETIRADO') and
                   not mc.llego_a_git(out), out[:350])
             if cmd=='tag':
                 out=call('tag',name=flag,message='DUMMY')
-                check('tag name='+flag+': GIT-071, no es un nombre', 'GIT-071' in out and
+                check('tag name='+flag+': GIT-071, no es un nombre', mc.es(out, 'SR_GIT_NOMBRE_NO_VALE_FMT') and
                       not mc.llego_a_git(out), out[:350])
     check('la firma pedida no hizo nada: HEAD igual y sin tags dummy-sign',
           raw('rev-parse','HEAD').strip()==antes_firma and 'dummy-sign' not in raw('tag'))
@@ -235,7 +235,7 @@ try:
     # firma ni de Signed-off-by: la forma vieja contesta GIT-068 y no hace nada.
     for flag in ('--signoff','--sign','-s'):
         out=call('commit','--allow-empty '+flag,'DUMMY signoff')
-        check('commit args '+flag+': GIT-068, nada hecho','GIT-068' in out and
+        check('commit args '+flag+': GIT-068, nada hecho',mc.es(out,'SR_GIT_ARGS_RETIRADO') and
               not mc.llego_a_git(out),out[:300])
     # Control positivo (revisor 1.18.0, A1): una S que es un VALOR no es la
     # firma. 1.19.0: sin args, el valor que queda es el mensaje: "-S" en
@@ -265,7 +265,7 @@ try:
     n = len(hits)
     out=call('ls-remote',remote='http://127.0.0.1:%d/DUMMY'%http.server_port)
     check('ls-remote remote=<URL>: GIT-049, no es un remoto del repo',
-          'GIT-049' in out and len(hits)==n, out[:350])
+          mc.es(out, 'SR_GIT_REMOTO_NO_ESTA_FMT') and len(hits)==n, out[:350])
     # ...y el 401 propio, por un remoto del repo con esa direccion
     open(CFG,'w').write(normal+'\n[remote "dummy"]\n url = http://127.0.0.1:%d/DUMMY\n'%http.server_port)
     start=time.monotonic()

@@ -87,7 +87,7 @@ try:
     check('V1 vault_read de una nota en CP1252 no muere',
           'EEncodingError' not in r and 'No mapping' not in r and
           mc.abre(r, 'SN_VAULT_CABECERA_NOTA_FMT') and 'vieja.md' in r.split('\n', 1)[0] and '1|# Nota vieja' in r, r[:240])
-    check('V2 ...y los acentos llegan bien, no como U+FFFD',
+    mc.check_1252('V2 ...y los acentos llegan bien, no como U+FFFD',
           'camión' in r and '�' not in r, r[:240])
     r = call('vault_search', {'pattern': 'lleva', 'target': 'content'})
     check('V3 vault_search por contenido tampoco muere, y la encuentra',

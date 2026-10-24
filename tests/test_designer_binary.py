@@ -144,18 +144,19 @@ for nombre, enc in (('utf8', 'utf-8'), ('utf8bom', 'utf-8-sig'), ('cp1252', 'cp1
     check('acento en crudo (%s): to-binary acepta' % nombre, mc.abre(r, 'SN_DESIGNER_TOBINARY_FMT'), r[:160])
     r = call('delphi_designer', {'command': 'to-text', 'path': RAW})
     t = open(RAW, 'rb').read()
-    check('acento en crudo (%s): vuelve como %s (lo que compila dcc), ASCII puro' % (nombre, ESPERADO[nombre].decode()),
-          ESPERADO[nombre] in t and all(x < 128 for x in t), t[:120])
+    (check if nombre == 'utf8bom' else mc.check_1252)(
+        'acento en crudo (%s): vuelve como %s (lo que compila dcc), ASCII puro' % (nombre, ESPERADO[nombre].decode()),
+        ESPERADO[nombre] in t and all(x < 128 for x in t), t[:120])
 # ...y se LEE como lo lee dcc, y un acento nuevo se escribe como el IDE
 SINBOM = os.path.join(BASE, 'SinBom.dfm')
 open(SINBOM, 'wb').write("object FormS: TFormS\r\n  Caption = 'Configuración'\r\n  Hint = 'nada'\r\nend\r\n".encode('utf-8'))
 r = call('delphi_read', {'path': SINBOM})
-check('un .dfm de texto UTF-8 SIN BOM se lee en ANSI, como dcc: encoding=cp1252 y ...Ã³n',
+mc.check_1252('un .dfm de texto UTF-8 SIN BOM se lee en ANSI, como dcc: encoding=cp1252 y ...Ã³n',
       'encoding=cp1252' in r and "Configuraci\u00c3\u00b3n" in r, r[:300])
 ASCIIDFM = os.path.join(BASE, 'SoloAscii.dfm')
 open(ASCIIDFM, 'wb').write(b"object FormA: TFormA\r\n  Caption = 'nada'\r\nend\r\n")
 r = call('delphi_edit', {'path': ASCIIDFM, 'old': "  Caption = 'nada'", 'new': "  Caption = 'Acción'"})
-check('un acento nuevo en un .dfm ASCII sin BOM va en CP1252 crudo, sin BOM, como lo guarda el IDE',
+mc.check_1252('un acento nuevo en un .dfm ASCII sin BOM va en CP1252 crudo, sin BOM, como lo guarda el IDE',
       open(ASCIIDFM, 'rb').read() == b"object FormA: TFormA\r\n  Caption = 'Acci\xf3n'\r\nend\r\n",
       (r[:200], open(ASCIIDFM, 'rb').read()))
 # lo que YA esta se escribe con sus mismos bytes, tambien los que en ANSI
@@ -168,7 +169,7 @@ HUECOS_B = ("object FormH: TFormH\r\n  Caption = 'Árbol Índice ”fin'\r\n"
             "  Hint = 'nada'\r\nend\r\n").encode('utf-8')
 open(HUECOS, 'wb').write(HUECOS_B)
 r = call('delphi_edit', {'path': HUECOS, 'old': "  Hint = 'nada'", 'new': "  Hint = 'otra'"})
-check('un .dfm UTF-8 sin BOM con una A acentuada (C3 81): editar OTRA linea escribe, y lo demas byte a byte',
+mc.check_1252('un .dfm UTF-8 sin BOM con una A acentuada (C3 81): editar OTRA linea escribe, y lo demas byte a byte',
       open(HUECOS, 'rb').read() == HUECOS_B.replace(b"'nada'", b"'otra'"), (r[:200], open(HUECOS, 'rb').read()[:80]))
 # ...y el mismo hueco en un form CP1252 de siempre (un 81 crudo): este no
 # depende de leer los forms en ANSI, y es el que cae sin el arreglo del codec
@@ -177,7 +178,7 @@ HUECO_ANSI = os.path.join(BASE, 'HuecoAnsi.dfm')
 HUECO_ANSI_B = b"object FormG: TFormG\r\n  Caption = 'Gesti\xf3n \x81'\r\n  Hint = 'nada'\r\nend\r\n"
 open(HUECO_ANSI, 'wb').write(HUECO_ANSI_B)
 r = call('delphi_edit', {'path': HUECO_ANSI, 'old': "  Hint = 'nada'", 'new': "  Hint = 'otra'"})
-check('un .dfm CP1252 con un byte 81 (de los que la pagina no define): editar OTRA linea escribe, byte a byte',
+mc.check_1252('un .dfm CP1252 con un byte 81 (de los que la pagina no define): editar OTRA linea escribe, byte a byte',
       open(HUECO_ANSI, 'rb').read() == HUECO_ANSI_B.replace(b"'nada'", b"'otra'"), (r[:200], open(HUECO_ANSI, 'rb').read()[:80]))
 # (CON BOM: sin el, un form es ANSI - 4.1 de la 1.18.0 - y esos mismos bytes
 # son 'ok âœ”', que si cabe y es lo que compila dcc). M2 (punto 4 de la 1.18.2,
@@ -195,8 +196,7 @@ check('UTF-8 con BOM con un caracter fuera de ANSI: to-binary convierte, como dc
 # la RTL no lo lee (su EParserError 'Identifier expected on line 3') y dcc si,
 # en UTF-8: se dice cual, en que linea y que hacer, y no se escribe. Solo en
 # una maquina 1252 (la letra tiene que caber en la ANSI)
-import ctypes
-if ctypes.windll.kernel32.GetACP() == 1252:
+if mc.en_la_1252('un nombre de componente no ASCII en un form ANSI'):
     NOASCII = os.path.join(BASE, 'NombreNoAscii.dfm')
     NOASCII_B = ("object FormN: TFormN\r\n  ClientHeight = 10\r\n  object BotónÑ: TButton\r\n    Left = 8\r\n"
                  "  end\r\nend\r\n").encode('cp1252')
@@ -205,8 +205,6 @@ if ctypes.windll.kernel32.GetACP() == 1252:
     check('un nombre de componente no ASCII en un form ANSI: to-binary DSGN-120 con el nombre y su linea, sin escribir',
           mc.abre(r, 'SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT') and 'BotónÑ (line 3)' in r and
           open(NOASCII, 'rb').read() == NOASCII_B, r[:300])
-else:
-    print('NOTA: la ANSI de esta maquina no es 1252: el nombre no ASCII en un form ANSI no se mide')
 # ...y el mismo nombre CON BOM: el parser si lo lee, y dcc lo compila con el
 # nombre en UTF-8 (medido el 13-oct: el TPF0 de to-binary es el de dcc byte a
 # byte). Lo negaba el camino propio de to-binary (M2)
@@ -310,7 +308,7 @@ check('to-text de un binario danado: RECHAZADO (DSGN-044), fichero intacto',
 # medido el 9-oct): vigila que nuestro escritor no se aparte del IDE.
 import glob, shutil
 for rel in (r'DUnit\Contrib\XPGen\xpmain.dfm', r'DUnit\examples\embeddable\EmbeddableGUITestRunner.dfm'):
-    orig = sorted(glob.glob(os.path.join(r'C:\Program Files (x86)\Embarcadero\Studio', '*', 'source', rel)))
+    orig = glob.glob(os.path.join(mc.raiz_ide(call), 'source', rel))
     if not orig:
         print('NOTA: %s no esta en esta instalacion; T7 saltado para el' % rel)
         continue

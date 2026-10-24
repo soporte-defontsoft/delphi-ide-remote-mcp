@@ -54,9 +54,7 @@ NO_INCLUIDA = mc.catalogo()['SF_CFG_VERSION_NO_INCLUIDA'].strip()[:40]
 INCLUIDA = mc.catalogo()['SF_CFG_VERSION_INCLUIDA_FMT'].split('%')[0]
 
 # donde esta la instalacion: lo dice el servidor, no se supone
-inst = mc.como_json(S.call('delphi_installs', {})) or {}
-activa = next((i for i in inst.get('installs', []) if i.get('active')), {})
-RAIZ = mc.real(activa.get('rootdir', '')).rstrip('\\')
+RAIZ = mc.raiz_ide(S.call)
 REPOS = os.path.join(RAIZ, 'ObjRepos', 'en')
 check('la instalacion activa trae sus plantillas (ObjRepos)', os.path.isdir(REPOS), RAIZ)
 

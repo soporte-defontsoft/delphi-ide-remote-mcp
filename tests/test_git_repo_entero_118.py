@@ -33,20 +33,20 @@ try:
     for tool,params in [('delphi_read',{'path':os.path.join(R,'.git','HEAD')}),
                         ('delphi_textedit',{'path':os.path.join(R,'.git','HEAD'),'old':'ref: refs/heads/DUMMY-branch','new':'DUMMY'})]:
         out=srv.call(tool,params)
-        mc.check(tool+' no obtiene permiso del lector interno','[GUARD-033 DENIED]' in out,out[:300])
+        mc.check(tool+' no obtiene permiso del lector interno',mc.es(out,'SR_GUARD_GIT_METADATA_FMT'),out[:300])
         mc.check(tool+' HEAD intacto',snap(R)==src)
     dest=os.path.join(JAIL,'moved')
     out=srv.call('delphi_move',{'path':R,'dest':dest})
-    mc.check('move repo entero permitido','[MOVE-013]' in out and os.path.isdir(dest),out[:350])
+    mc.check('move repo entero permitido',mc.es(out,'SK_MOVE_MOVIDO_FMT') and os.path.isdir(dest),out[:350])
     mc.check('move viaja byte a byte',os.path.isdir(dest) and snap(dest)==src)
     actual=dest if os.path.isdir(dest) else R
     out=srv.call('delphi_delete',{'path':actual})
-    mc.check('repo entero va a papelera','[FILE-021]' in out and not os.path.exists(actual),out[:350])
+    mc.check('repo entero va a papelera',mc.es(out,'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(actual),out[:350])
     copies=mc.copias(JAIL,os.path.basename(actual),cajon='CAJON_BORRADOS')
     mc.check('papelera contiene el repo intacto',len(copies)==1 and snap(copies[0])==src,copies)
     if len(copies)==1:
         out=srv.call('delphi_move',{'path':copies[0],'dest':actual})
-        mc.check('repo se devuelve desde papelera','[MOVE-013]' in out and os.path.isdir(actual),out[:350])
+        mc.check('repo se devuelve desde papelera',mc.es(out,'SK_MOVE_MOVIDO_FMT') and os.path.isdir(actual),out[:350])
         mc.check('repo restaurado byte a byte',os.path.isdir(actual) and snap(actual)==src)
     else:mc.check('repo se devuelve desde papelera',False)
     # Arbol sin proyecto: copiar sus metadatos se sigue negando.
@@ -54,7 +54,7 @@ try:
     open(os.path.join(plain,'.git','DUMMY'),'w').write('DUMMY')
     before=snap(plain);copied=os.path.join(JAIL,'copy')
     out=srv.call('delphi_move',{'path':plain,'dest':copied,'copy':True})
-    mc.check('copy del arbol con .git sigue negado','[GUARD-033 DENIED]' in out and not os.path.exists(copied),out[:300])
+    mc.check('copy del arbol con .git sigue negado',mc.es(out,'SR_GUARD_GIT_METADATA_FMT') and not os.path.exists(copied),out[:300])
     mc.check('copy no altera fuente',snap(plain)==before)
     for nested in (False,True):
         tree=os.path.join(JAIL,'linked-'+str(nested));os.makedirs(tree)
@@ -65,9 +65,9 @@ try:
         dest_link=tree+'-moved'
         out=srv.call('delphi_move',{'path':tree,'dest':dest_link})
         mc.check('move niega enlace exterior '+str(nested),
-            '[GUARD-033 DENIED]' in out and not os.path.exists(dest_link),out[:300])
+            mc.es(out,'SR_GUARD_GIT_METADATA_FMT') and not os.path.exists(dest_link),out[:300])
         out=srv.call('delphi_delete',{'path':tree if os.path.isdir(tree) else dest_link})
-        mc.check('delete niega enlace exterior '+str(nested),'[GUARD-033 DENIED]' in out,out[:300])
+        mc.check('delete niega enlace exterior '+str(nested),mc.es(out,'SR_GUARD_GIT_METADATA_FMT'),out[:300])
         mc.check('destino exterior intacto '+str(nested),snap(OUT)==outside_before)
     out=srv.call('delphi_move',{'path':REFERENCE,'dest':os.path.join(JAIL,'reference-copy'),'copy':True})
     mc.check('copy proyecto de referencia explica nunca en dos sitios',

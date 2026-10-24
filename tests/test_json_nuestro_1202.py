@@ -88,9 +88,7 @@ def servidor():
 S = servidor()
 
 # la plantilla del IDE, donde delphi_installs dice que esta la instalacion
-inst = mc.como_json(S.call('delphi_installs', {})) or {}
-activa = next((i for i in inst.get('installs', []) if i.get('active')), {})
-SDI = os.path.join(mc.real(activa.get('rootdir', '')).rstrip('\\'), 'ObjRepos', 'en', 'DelphiWin32', 'SDIApp')
+SDI = os.path.join(mc.raiz_ide(S.call), 'ObjRepos', 'en', 'DelphiWin32', 'SDIApp')
 check('la plantilla VCL del IDE esta (ObjRepos\\en\\DelphiWin32\\SDIApp)',
       os.path.isfile(os.path.join(SDI, 'SDIAPP.dproj')), SDI)
 

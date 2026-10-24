@@ -57,6 +57,18 @@ type
     [Test] procedure LasPalabrasDeUnaRutina;
   end;
 
+  // LA cabecera y LOS end. de un fuente (Lsp.Pascal): eran cinco lectores de
+  // la cabecera y siete del end. (inventario del 10-oct-2026), y no tenian
+  // prueba propia (B6 del revisor de la cabecera y el end).
+  [TestFixture]
+  TCabeceraYEndTests = class
+  public
+    [Test] procedure LaCabeceraComoLaLeeDcc;
+    [Test] procedure LoQueNoEsUnNombreTalCual;
+    [Test] procedure SinCabeceraOSinCerrar;
+    [Test] procedure LosEndConPuntoComoLosLeeDcc;
+  end;
+
 implementation
 
 uses
@@ -398,9 +410,94 @@ begin
   Assert.IsTrue(Length(DirectivasPascal('{%CLASSGROUP ''X''}')) = 0, 'con $ no se lee');
 end;
 
+{ La cabecera como la lee dcc: la palabra en minusculas, el nombre con sus
+  puntos y sin blancos ('unit A . B;' compila y es A.B) y sus posiciones en el
+  texto: Ini en la palabra, NombreIni y NombreLen en lo ESCRITO, Fin detras
+  del punto y coma. }
+procedure TCabeceraYEndTests.LaCabeceraComoLaLeeDcc;
+const
+  T = '{ cabecera }'#13#10'Unit Vcl.Forms;'#13#10'interface';
+var
+  C: TCabeceraFuente;
+begin
+  Assert.IsTrue(CabeceraDeFuente(CodigoPascal(T), C));
+  Assert.AreEqual('unit', C.Palabra, 'la palabra, en minusculas');
+  Assert.AreEqual('Vcl.Forms', C.Nombre);
+  Assert.AreEqual(Pos('Unit', T), C.Ini, 'la palabra, detras del comentario');
+  Assert.AreEqual(Pos('Vcl.Forms', T), C.NombreIni, 'donde empieza el nombre');
+  Assert.AreEqual(Length('Vcl.Forms'), C.NombreLen);
+  Assert.AreEqual(Pos(';', T) + 1, C.Fin, 'detras de su punto y coma');
+  // los blancos de alrededor de un punto no son del nombre; lo escrito si
+  Assert.IsTrue(CabeceraDeFuente('unit A . B;', C));
+  Assert.AreEqual('A.B', C.Nombre);
+  Assert.AreEqual(Length('A . B'), C.NombreLen, 'lo escrito, con sus blancos');
+  // ni el parentesis de un program ni una directiva de detras (B4 del revisor)
+  Assert.IsTrue(CabeceraDeFuente('program P(Input, Output);', C));
+  Assert.AreEqual('program', C.Palabra);
+  Assert.AreEqual('P', C.Nombre);
+  Assert.IsTrue(CabeceraDeFuente('unit U platform;', C));
+  Assert.AreEqual('U', C.Nombre);
+  Assert.IsTrue(CabeceraDeFuente('library Galatea.Año;', C), 'un nombre con acentos');
+  Assert.AreEqual('Galatea.Año', C.Nombre);
+  Assert.IsTrue(CabeceraDeFuente('package P;', C));
+  Assert.AreEqual('package', C.Palabra);
+end;
+
+{ Lo escrito que no es un nombre, entero hasta el primer blanco: quien lo usa
+  dice por que no vale (cortado en el guion, 'U-Mal' era 'U' y add-unit daba
+  otra causa, CFG-038). }
+procedure TCabeceraYEndTests.LoQueNoEsUnNombreTalCual;
+var
+  C: TCabeceraFuente;
+begin
+  Assert.IsTrue(CabeceraDeFuente('unit U-Mal;', C));
+  Assert.AreEqual('U-Mal', C.Nombre);
+  Assert.IsTrue(CabeceraDeFuente('unit 1U;', C));
+  Assert.AreEqual('1U', C.Nombre, 'con un digito delante');
+end;
+
+procedure TCabeceraYEndTests.SinCabeceraOSinCerrar;
+var
+  C: TCabeceraFuente;
+begin
+  Assert.IsFalse(CabeceraDeFuente('', C), 'vacio');
+  Assert.IsFalse(CabeceraDeFuente('interface'#13#10'end.', C), 'sin cabecera');
+  Assert.IsFalse(CabeceraDeFuente('unit U', C), 'sin su punto y coma');
+  Assert.IsFalse(CabeceraDeFuente(CodigoPascal('// unit Vieja;'#13#10'begin'), C), 'comentada');
+  Assert.IsFalse(CabeceraDeFuente('units U;', C), 'otra palabra');
+end;
+
+{ Los end. como los lee dcc: la palabra, blancos (tambien saltos) y el punto,
+  en orden; no un &end ni un end dentro de otro nombre, y en la vista del
+  codigo ni el de un comentario ni el de una cadena. }
+procedure TCabeceraYEndTests.LosEndConPuntoComoLosLeeDcc;
+const
+  T = 'program P; begin end.';
+  DOS = '{$IFDEF X}'#13#10'end.'#13#10'{$ELSE}'#13#10'end'#13#10'  .'#13#10'{$ENDIF}';
+var
+  E: TArray<TEndPunto>;
+begin
+  E := EndsConPunto(T);
+  Assert.IsTrue(Length(E) = 1, 'uno: ' + IntToStr(Length(E)));
+  Assert.AreEqual(Pos('end.', T), E[0].Ini, 'donde empieza su end');
+  Assert.AreEqual(Length(T) + 1, E[0].Fin, 'detras de su punto');
+  // las dos ramas de un IFDEF, y el punto dos lineas abajo: los dos, en orden
+  E := EndsConPunto(CodigoPascal(DOS));
+  Assert.IsTrue(Length(E) = 2, 'dos: ' + IntToStr(Length(E)));
+  Assert.IsTrue(E[0].Ini < E[1].Ini, 'en orden');
+  Assert.AreEqual(Length(DOS) - Length(#13#10'{$ENDIF}') + 1, E[1].Fin, 'el segundo acaba en su punto');
+  Assert.IsTrue(Length(EndsConPunto('&end.')) = 0, 'un &end es un identificador');
+  Assert.IsTrue(Length(EndsConPunto('Weekend.')) = 0, 'dentro de otro nombre');
+  Assert.IsTrue(Length(EndsConPunto('Señend.')) = 0, 'tambien detras de un acento');
+  Assert.IsTrue(Length(EndsConPunto(CodigoPascal('{ end. }'#13#10'S := ''end.'';'#13#10'// end.'))) = 0,
+    'ni comentado ni en una cadena');
+  Assert.IsTrue(Length(EndsConPunto('END .')) = 1, 'con cualquier mayuscula y un blanco');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TDirectivasTests);
   TDUnitX.RegisterTestFixture(TLexicoTests);
   TDUnitX.RegisterTestFixture(TIdentificadorTests);
+  TDUnitX.RegisterTestFixture(TCabeceraYEndTests);
 
 end.

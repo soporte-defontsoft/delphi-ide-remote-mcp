@@ -907,7 +907,7 @@ end
     # ------------------------------------------------------------------ P12
     # un .vsf del IDE (Redist\styles\vcl): se copia a la jaula, que es donde
     # la bateria sabe que se puede leer
-    vsf = sorted(glob.glob(r'C:\Program Files (x86)\Embarcadero\Studio\*\Redist\styles\vcl\*.vsf'))
+    vsf = sorted(glob.glob(os.path.join(mc.raiz_ide(call), 'Redist', 'styles', 'vcl', '*.vsf')))
     if vsf:
         estilo = shutil.copy(vsf[0], os.path.join(JAIL, 'Estilo.vsf'))
         r = preview(path=PRUEBA, style=estilo, out=png('p12.png'), inline='false')

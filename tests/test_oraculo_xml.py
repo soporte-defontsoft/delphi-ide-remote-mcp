@@ -47,10 +47,10 @@ check('X1 el oraculo compila (delphi_build)', ok, errores)
 BIN = os.path.join(os.path.dirname(ORACULO), 'Win64', 'Debug', 'OraculoXml.exe')
 
 # donde esta la instalacion: lo dice el servidor, no se supone
-inst = mc.como_json(call('delphi_installs', {})) or {}
-activa = next((i for i in inst.get('installs', []) if i.get('active')), {})
-RAIZ = mc.real(activa.get('rootdir', '')).rstrip('\\')
+activa = mc.instalacion_activa(call)
+RAIZ = mc.raiz_de_instalacion(activa)
 VERSION = activa.get('version', '')
+SAMPLES = os.path.join(mc.variable_de_rsvars(call, 'BDSCOMMONDIR'), 'Samples')
 srv.cierra()
 
 
@@ -94,8 +94,7 @@ if ok:
     out, r = corre([PLANTADO], crudo=True)
     check('X3 mutante --crudo (el lector sin decodificar): el plantado discrepa', r == (1, 1, 1), out[-1500:])
 
-    PUBLIC = os.environ.get('PUBLIC', r'C:\Users\Public')
-    carpetas = [os.path.join(PUBLIC, 'Documents', 'Embarcadero', 'Studio', VERSION, 'Samples')] + \
+    carpetas = [SAMPLES] + \
         [os.path.join(RAIZ, x) for x in ('ObjRepos', 'source', 'bin')] + \
         [os.path.join(os.environ.get('APPDATA', ''), 'Embarcadero', 'BDS', VERSION), REPO] + \
         [x for x in os.environ.get('ORACULO_EXTRA', '').split(';') if x.strip()]

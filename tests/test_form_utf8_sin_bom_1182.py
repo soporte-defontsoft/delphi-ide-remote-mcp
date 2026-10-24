@@ -27,6 +27,10 @@ import os
 import mcp_cliente as mc
 from mcp_cliente import check
 
+# lo que mide es como se leen en la 1252 los bytes de un form sin BOM (la o
+# partida, el C9 85 que casa con UTF-8): en otra ANSI no mide (r5-L4)
+mc.bateria_de_la_1252('form UTF-8 sin BOM 1182')
+
 BASE = mc.carpeta('form_utf8_sin_bom_1182')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)

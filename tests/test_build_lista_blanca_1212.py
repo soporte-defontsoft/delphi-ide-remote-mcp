@@ -51,7 +51,7 @@ BASE = mc.carpeta('build-lista-blanca')
 FUERA = mc.carpeta('build-lista-blanca-fuera')
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='lb', t=600)
-IDE_ICONO = r'C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\delphi_PROJECTICON.ico'
+IDE_ICONO = os.path.join(mc.raiz_ide(srv.call), 'bin', 'delphi_PROJECTICON.ico')
 N = 0
 
 

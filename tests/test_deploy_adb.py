@@ -345,9 +345,7 @@ if os.path.isfile(FDEPLOY):
           and 'ic_launcher.png' in m, m[:300])
     # (revisor de baterias, 18-oct-2026) 0 == 0 pasaba sin stubs: si la
     # instalacion los trae, tienen que estar
-    _inst = next((i for i in (mc.como_json(srv.call('delphi_installs', {})) or {}).get('installs', [])
-                  if i.get('active')), {})
-    _so = os.path.join(mc.real(_inst.get('rootdir', '')).rstrip('\\'), 'lib', 'android', 'debug',
+    _so = os.path.join(mc.raiz_ide(srv.call), 'lib', 'android', 'debug',
                        'armeabi-v7a', 'libnative-activity.so')
     if os.path.isfile(_so):
         check('deployproj Android: los stubs libnative salen de $(BDS), no inventados (y estan)',

@@ -136,8 +136,7 @@ finally:
     srv.cierra()
 
 # --------- Q7, Q8 y C2: el CONTENIDO con acentos, en la ANSI de la maquina y en UTF-8
-import ctypes
-ANSI = 'cp%d' % ctypes.windll.kernel32.GetACP()  # la de la maquina, preguntada a Windows
+ANSI = 'cp%d' % mc.ANSI  # la de la maquina (mcp_cliente la pregunta a Windows)
 ANTES, DESPUES = "const S = 'año ñu á';", "const S = 'año ñu á ó';"
 try:
     ANTES.encode(ANSI)
@@ -170,7 +169,7 @@ try:
         check('Q7 diff de un fuente ANSI (%s) y uno UTF-8 a la vez: los dos con sus letras' % ANSI,
               ('-' + ANTES) in r and ('+' + DESPUES) in r and "+const T = 'Ñandú 😀 ü';" in r, r[:600])
     else:
-        print('  -- Q7 no se mide: la ANSI de esta maquina (%s) no tiene estas letras' % ANSI)
+        print('NOTA Q7 y Q8 no se miden: la ANSI de esta maquina (%s) no tiene estas letras' % ANSI)
     check('C2 control: lo UTF-8 del diff sale como siempre', "-const T = 'Ñandú 😀';" in r, r[:600])
     git_c('commit', '-qam', 'cambio')
     r = srv.call('delphi_git', {'repo': repo, 'command': 'show', 'patch': True})

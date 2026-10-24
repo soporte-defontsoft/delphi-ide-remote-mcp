@@ -23,6 +23,9 @@ import os
 import mcp_cliente as mc
 from mcp_cliente import check
 
+# su fixture es CP1252, con su acento en las anclas: en otra ANSI no mide (r5-L4)
+mc.bateria_de_la_1252('un edit suelto con un ancla de varias lineas es un bloque 120 (EDIT-001)')
+
 BASE = mc.carpeta('ancla_bloque_120')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)

@@ -223,8 +223,7 @@ try:
           mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'Colorr' in r, r[:400])
 
     # -------------------------------------------------- Samples, si los hay
-    SAM = os.path.join(os.environ.get('PUBLIC', r'C:\Users\Public'), 'Documents', 'Embarcadero', 'Studio',
-                       str(mc.como_json(S.call('delphi_workspace', {})).get('activeDelphi') or ''), 'Samples')
+    SAM = os.path.join(mc.variable_de_rsvars(S.call, 'BDSCOMMONDIR'), 'Samples')
     DEL = os.path.join(SAM, 'Object Pascal', 'Multi-Device Samples', 'User Interface', 'ListCollections',
                        'ListExpressionsSampleFormUnit1.SmXhdpiPh.fmx')
     if os.path.isfile(DEL):

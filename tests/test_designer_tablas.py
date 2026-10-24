@@ -32,7 +32,7 @@ the vault. This battery checks what an agent sees.
 
 Usage:  python tests/test_designer_tablas.py [path-to-DelphiLspMcp.exe]
 """
-import glob, json, os, re, time
+import glob, json, os, re, shutil, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -287,5 +287,76 @@ r = srv.call('delphi_designer', {'command': 'info', 'classname': 'TLabel', 'fram
 check('...recordada: la siguiente contesta DSGN-053 en el acto (%.1f s)' % (time.time() - t0),
       mc.tiene(r, 'DSGN-053') and time.time() - t0 < 5, r[:400])
 srv.cierra()
+
+# 12) lo que espera un gesto del disenador va FUERA del cerrojo de escritura
+# (Mcp.Tools.Designer; 7.1 de la 1.17.0 y A1 del revisor del 17f4edd, que lo
+# midio por HTTP): sin tabla, set la espera hasta 30 s; insert pregunta al
+# renderizador donde va el bloque. Mientras, una edicion de OTRO fichero no
+# espera. Por HTTP, un servidor y dos llamadas a la vez: por stdio serian dos
+# procesos, cada uno con su cerrojo (mc.a_la_vez)
+TOKEN = 'designer-tablas'
+OTRO = os.path.join(BASE, 'otro.txt')
+
+
+def servidor_http(nombre, appdata):
+    d = os.path.join(BASE, nombre)
+    exe = mc.copia_exe(d, con_render=True)
+    with open(os.path.join(d, 'settings.ini'), 'w') as f:
+        f.write('[Workspace.Tablas]\nToken=%s\nRoots=%s\n' % (TOKEN, BASE))
+    puerto = mc.puerto_libre()
+    proc = mc.lanza_http(exe, puerto, mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1', 'LOCALAPPDATA': appdata}))
+    cli = mc.Http(puerto, TOKEN, t=180)
+    cli.session(nombre)
+    return proc, cli
+
+
+def no_espero(cli, etiqueta, gesto, args, nuevo):
+    """El gesto y, medio segundo despues, un textedit de OTRO fichero, que
+    vuelve MIENTRAS el gesto sigue y en menos de la mitad de lo que el gesto
+    dura despues de el (como el K1 de test_lector_cerrojo_120). Un gesto de
+    menos de un segundo no deja ver si el textedit le espero: no se mide (lo
+    dice; la primera version de 12b, con un form pequeno, daba NOTA con el
+    insert dentro del cerrojo y verde fuera, por azar). Devuelve la respuesta
+    del gesto."""
+    open(OTRO, 'w').write('uno\n')
+    (rg, tg), (rt, tt), seguia = mc.a_la_vez(
+        cli.call, ('delphi_designer', args, 300), ('delphi_textedit', {'path': OTRO, 'old': 'uno', 'new': nuevo}))
+    if tg < 1:
+        print('NOTA %s no se mide: %s acabo en %.1f s, sin dar tiempo a esperarle' % (etiqueta, gesto, tg))
+        return rg
+    check('%s mientras %s espera (%.0f s), un textedit de OTRO fichero no espera con el (%.1f s)'
+          % (etiqueta, gesto, tg, tt),
+          seguia and tt < (tg - 0.5) / 2 and open(OTRO).read() == nuevo + '\n', (rt[:200], rg[:200]))
+    return rg
+
+
+# 12a) set con la tabla por generar (su cache, vacia): la espera va fuera
+APPDATA3 = os.path.join(BASE, 'appdata-espera')
+os.makedirs(APPDATA3, exist_ok=True)
+proc, cli = servidor_http('dt-espera', APPDATA3)
+try:
+    no_espero(cli, '12a', 'set', {'command': 'set', 'path': DFM0, 'component': 'FormPrimera', 'prop': 'Caption',
+                                  'value': 'tres'}, 'dos')
+finally:
+    proc.kill()
+# 12b) insert pregunta al renderizador donde va el bloque (con la tabla ya
+# hecha: la cache de 1-2), en un form que tarda en cargar: la Sample de 2,5 MB
+# con paquetes de diseno de test_lector_cerrojo_120 (segundos)
+proc, cli = servidor_http('dt-insert', APPDATA)
+try:
+    PESADA = os.path.join(mc.variable_de_rsvars(cli.call, 'BDSCOMMONDIR'), 'Samples', 'Object Pascal',
+                          'LiveBindings', 'bindgridlink', 'vcl')
+    if not os.path.isfile(os.path.join(PESADA, 'GridLinkFormUnit1.dfm')):
+        print('NOTA 12b no se mide: no esta la Sample de RAD Studio (bindgridlink\\vcl)')
+    else:
+        for ext in ('.pas', '.dfm'):
+            shutil.copy(os.path.join(PESADA, 'GridLinkFormUnit1' + ext), BASE)
+        CONC = os.path.join(BASE, 'GridLinkFormUnit1.dfm')
+        rg = no_espero(cli, '12b', 'insert', {'command': 'insert', 'path': CONC, 'classname': 'TButton'}, 'tres')
+        check('12b ...y el insert se escribe', bool(J(rg).get('inserted')) and
+              'object %s: TButton' % J(rg).get('inserted') in open(CONC, encoding='utf-8-sig', errors='replace').read(),
+              rg[:300])
+finally:
+    proc.kill()
 mc.borra(BASE)
 mc.fin('designer-tablas battery')

@@ -154,7 +154,7 @@ try:
           open(PAS, 'rb').read() == pas0.replace(b'68', b'69'), r[:240])
     r = call('delphi_edit', {'path': PAS, 'fragment': 'camión',
                              'new': 'camión grande', 'atline': 6})
-    check('E2 ...tambien cuando el trozo LLEVA el acento (un byte, no dos)',
+    mc.check_1252('E2 ...tambien cuando el trozo LLEVA el acento (un byte, no dos)',
           open(PAS, 'rb').read() == pas0.replace(b'68', b'69').replace(
               'camión'.encode('cp1252'),
               'camión grande'.encode('cp1252')), r[:240])
@@ -164,14 +164,15 @@ try:
     r = call('delphi_edit', {'path': PAS, 'edits': json.dumps([
         {'fragment': '69', 'new': '70', 'atline': 6},
         {'fragment': 'camión grande', 'new': 'camión', 'atline': 6}])})
-    check('E2b tanda de delphi_edit: dos trozos de la MISMA linea en orden, el CP1252 intacto',
+    mc.check_1252('E2b tanda de delphi_edit: dos trozos de la MISMA linea en orden, el CP1252 intacto',
           mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and open(PAS, 'rb').read() == pas1.replace(b'69', b'70').replace(
               'camión grande'.encode('cp1252'), 'camión'.encode('cp1252')), r[:240])
     pas2 = open(PAS, 'rb').read()
     r = call('delphi_edit', {'path': PAS, 'edits': json.dumps([
         {'fragment': '70', 'new': '71', 'atline': 6},
         {'fragment': 'no-esta', 'new': 'x', 'atline': 6}])})
-    check('E2c ...y si una falla, todo o nada: el .pas vuelve byte a byte',
+    # (E2c parte de lo que dejo E2b: en otra ANSI fallaria ya el primer trozo)
+    mc.check_1252('E2c ...y si una falla, todo o nada: el .pas vuelve byte a byte',
           mc.es(r, 'SR_PATCH_EDITS_ROLLED_FMT') and open(PAS, 'rb').read() == pas2, r[:240])
     open(PAS, 'wb').write(pas1)   # lo de abajo parte de E2
     r = call('delphi_edit', {'path': PAS, 'fragment': '69', 'new': '70',

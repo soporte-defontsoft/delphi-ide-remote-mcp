@@ -342,7 +342,7 @@ srv_wl.mata()
 env_lz = dict(env); env_lz['DELPHI_MCP_LIBRARY_ZONE'] = '0'
 srv_lz = mc.Stdio(EXE, env_lz, nombre='lz')
 call_lz = srv_lz.call
-RTL = r'C:\Program Files (x86)\Embarcadero\Studio\37.0\source\rtl\sys\System.SysUtils.pas'
+RTL = os.path.join(mc.raiz_ide(call), 'source', 'rtl', 'sys', 'System.SysUtils.pas')
 r = call_lz('delphi_read', {'path': RTL, 'fromline': 1, 'toline': 2})
 check('LibraryZone=0: la RTL deja de ser legible', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:200])
 r = call_lz('delphi_workspace', {})

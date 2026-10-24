@@ -238,9 +238,7 @@ try:
     # primera browsingPath, que era <inst>\source\rtl\common con la lista a mano
     # de antes de la 1.20.2; con el Browsing Path del IDE la primera es OCX\Servers
     # y la unidad elegida salia de la instalacion (revisor de baterias, 18-oct-2026)
-    _act = next((i for i in (mc.como_json(call('delphi_installs', {})) or {}).get('installs', [])
-                 if i.get('active')), {})
-    inst = mc.real(_act.get('rootdir', '')).rstrip('\\') + '\\'
+    inst = mc.raiz_ide(call) + '\\'
     check('F8b preparacion: la carpeta de la instalacion activa (delphi_installs)', os.path.isdir(inst), inst)
     unidad = ''
     for d in rutas:

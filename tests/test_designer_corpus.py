@@ -65,8 +65,8 @@ def J(t):
 
 
 version = str(J(call('delphi_workspace', {})).get('activeDelphi') or '')
-SAMPLES = os.path.join(os.environ.get('PUBLIC', r'C:\Users\Public'), 'Documents', 'Embarcadero',
-                       'Studio', version, 'Samples')
+# los Samples cuelgan del BDSCOMMONDIR que pone el rsvars.bat del IDE (r5-L4: se componia a mano)
+SAMPLES = os.path.join(mc.variable_de_rsvars(call, 'BDSCOMMONDIR'), 'Samples')
 if not os.path.isdir(SAMPLES):
     print('NOTA: no hay Samples de RAD Studio %s en %s: nada que medir' % (version, SAMPLES))
     para()

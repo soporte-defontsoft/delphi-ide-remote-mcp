@@ -48,8 +48,7 @@ try:
         # (revisor de baterias, 18-oct-2026) sin items salia SIN CHECKS y run_all
         # la daba por buena: unos ajustes del motor inservibles (lo que cambio la
         # 1.20.2) caian justo ahi. Neutra solo sin RAD Studio; con el, roja
-        _inst = (mc.como_json(srv.call('delphi_installs', {})) or {}).get('installs', [])
-        if not any(i.get('active') for i in _inst):
+        if not mc.instalacion_activa(srv.call):
             SKIP = 'no hay RAD Studio activo en esta maquina: %s' % r[:200]
         else:
             check('P0 la completion contesta con items (hay RAD Studio: sin ellos, el motor no tiene buenos ajustes)',

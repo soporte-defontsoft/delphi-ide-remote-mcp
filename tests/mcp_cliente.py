@@ -740,6 +740,17 @@ def lanza_http(exe, puerto=None, env=None, args=(), segundos=30, espera=True, **
 P = F = 0
 
 
+def imprime(linea):
+    """Una linea a la consola, tambien si no cabe en su pagina: un detalle con
+    un caracter de fuera (un 日本 con la salida redirigida en CP1252, una o con
+    tilde en una 1251) reventaba la bateria justo en la linea que tenia que
+    contar, y lo de despues no se veia (E148 contra la novena)."""
+    try:
+        print(linea)
+    except UnicodeEncodeError:
+        print(linea.encode('ascii', 'backslashreplace').decode('ascii'))
+
+
 def check(name, ok, detail=''):
     """PASS/FAIL con el formato que cuenta run_all (una linea por check)."""
     global P, F
@@ -750,14 +761,7 @@ def check(name, ok, detail=''):
         F += 1
         # en UNA linea: un detalle con saltos partiria el FAIL, y una linea suya
         # que empezara por PASS/FAIL le cambiaria la cuenta a run_all
-        linea = '  FAIL %s | %s' % (name, ' '.join(str(detail).splitlines())[:300])
-        # un detalle que no cabe en la pagina de la consola (un 日本 con la salida
-        # redirigida en CP1252) reventaba la bateria justo en el FAIL que tenia que
-        # contar, y los checks de despues no se veian (E148 contra la novena)
-        try:
-            print(linea)
-        except UnicodeEncodeError:
-            print(linea.encode('ascii', 'backslashreplace').decode('ascii'))
+        imprime('  FAIL %s | %s' % (name, ' '.join(str(detail).splitlines())[:300]))
     return ok
 
 
@@ -844,6 +848,40 @@ def fin(titulo, sin_checks=None):
     print()
     print('== %s: %d PASS / %d FAIL ==' % (titulo, P, F))
     sys.exit(1 if F else 0)
+
+
+# ------------------------------------------------------------ la pagina ANSI
+# LA pagina ANSI de esta maquina, preguntada a Windows: en la que el servidor
+# lee y escribe un fuente sin BOM (Lsp.Codificacion.PaginaAnsi). Tres
+# baterias la preguntaban cada una por su cuenta.
+ANSI = ctypes.windll.kernel32.GetACP()
+
+
+def en_la_1252(que):
+    """True si esta maquina lee en la 1252. Si no, dice que QUE no se mide
+    (SKIP, que run_all lista): sus bytes o lo que espera son de la 1252 y en
+    otra pagina daria un rojo falso (r5-L4). Las otras paginas las miden los
+    DUnitX (UsaPaginaAnsi). Medido el 24-oct-2026 con una copia del exe en la
+    1251 (activeCodePage en su manifiesto): 44 checks de 13 baterias."""
+    if ANSI == 1252:
+        return True
+    imprime('SKIP %s: sus bytes o lo que espera son de la pagina 1252, y esta maquina lee en la %d'
+            % (que, ANSI))
+    return False
+
+
+def check_1252(name, ok, detail=''):
+    """check() de lo que solo vale en la 1252 (en_la_1252)."""
+    return check(name, ok, detail) if en_la_1252(name) else True
+
+
+def bateria_de_la_1252(titulo):
+    """Al empezar una bateria cuyos fixtures y lo que espera son de la 1252 de
+    punta a punta (partirla check a check dejaba verdes vacios: un ancla que
+    no casa da otra negativa, y "sin el consejo" pasaba igual): en otra pagina
+    lo dice y sale sin checks."""
+    if not en_la_1252(titulo):
+        fin(titulo, sin_checks='sus fixtures y lo que espera son de la pagina 1252')
 
 
 # ---------------------------------------------------------------- respuestas
@@ -973,6 +1011,61 @@ def ids(t):
 def tiene(t, msg_id):
     """True si el texto trae el mensaje con ese id ('CFG-007')."""
     return msg_id in ids(t)
+
+
+def instalacion_activa(call):
+    """La instalacion de Delphi que usa el servidor bajo prueba, como la dice su
+    delphi_installs (que la lee del registro): {} si no hay ninguna. Estaba a
+    mano en seis baterias, y otras cinco componian Program Files (r5-L4)."""
+    return next((i for i in (como_json(call('delphi_installs', {})) or {}).get('installs', [])
+                 if i.get('active')), {})
+
+
+def raiz_de_instalacion(inst):
+    """La carpeta de una instalacion de delphi_installs, real y sin barra final."""
+    return real(inst.get('rootdir', '')).rstrip('\\')
+
+
+def raiz_ide(call):
+    """La carpeta de la instalacion activa ('' si no hay)."""
+    return raiz_de_instalacion(instalacion_activa(call))
+
+
+def variable_de_rsvars(call, nombre):
+    """Lo que el rsvars.bat de la instalacion activa pone en una variable
+    (BDSCOMMONDIR, de la que cuelga el CatalogRepository): el fichero del IDE,
+    el mismo que lee el servidor. '' si no la pone."""
+    try:
+        with open(os.path.join(raiz_ide(call), 'bin', 'rsvars.bat'), encoding='mbcs', errors='replace') as fh:
+            texto = fh.read()
+    except OSError:
+        return ''
+    m = re.search(r'(?im)^\s*@?SET\s+%s=(.*)$' % re.escape(nombre), texto)
+    return m.group(1).strip() if m else ''
+
+
+def a_la_vez(call, primera, segunda, retraso=0.5):
+    """La llamada PRIMERA, (tool, args[, plazo]), en un hilo y, RETRASO segundos
+    despues, la SEGUNDA, por el MISMO servidor: el call de un Http (por stdio
+    serian dos procesos, cada uno con su cerrojo). Para medir que una no
+    espera a la otra. ((respuesta, segundos) de la primera, (respuesta,
+    segundos) de la segunda, y si la primera seguia cuando volvio la segunda).
+    Estaba en test_lector_cerrojo_120 y lo pidio test_designer_tablas."""
+    res = {}
+
+    def lanza():
+        t0 = time.time()
+        res['r'] = call(*primera)
+        res['t'] = time.time() - t0
+    hilo = threading.Thread(target=lanza)
+    hilo.start()
+    time.sleep(retraso)
+    t0 = time.time()
+    r = call(*segunda)
+    t = time.time() - t0
+    seguia = hilo.is_alive()
+    hilo.join(600)
+    return (res.get('r', ''), res.get('t', 0)), (r, t), seguia
 
 
 def espera_tablas(call, tope=240):

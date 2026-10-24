@@ -422,8 +422,8 @@ for _verbo, _args in (('vault_append', {"content": "- x\n"}),
 CPN = os.path.join(IDA, 'cp.md')
 open(CPN, 'wb').write(b'# Cp\n\ngesti\xf3n\n')
 out = s.call('vault_append', {"path": "ida-y-vuelta/cp.md", "content": "- acción\n"})
-check('ida y vuelta: ...y una nota en CP1252 bien formada se reescribe entera en UTF-8, con sus acentos',
-      open(CPN, 'rb').read() == '# Cp\n\ngestión\n- acción\n'.encode('utf-8'), (out[:200], open(CPN, 'rb').read()))
+mc.check_1252('ida y vuelta: ...y una nota en CP1252 bien formada se reescribe entera en UTF-8, con sus acentos',
+              open(CPN, 'rb').read() == '# Cp\n\ngestión\n- acción\n'.encode('utf-8'), (out[:200], open(CPN, 'rb').read()))
 mc.borra(IDA)
 
 # ===========================================================================

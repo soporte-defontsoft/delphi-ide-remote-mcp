@@ -8,7 +8,7 @@ checks the server tells them apart, with numbers.
 
 Usage:  python tests/test_delphi_test.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import glob, json, os, threading, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -207,7 +207,7 @@ check('...con el error contado y NOMBRADO', j.get('errored') == 1 and j.get('fai
 # ...y su mensaje, con acentos, como lo escribio el test (1.22.1): el runner de Delphi escribe a
 # la tuberia en la ANSI de la maquina (su RTL) y el servidor lo leia en la OEM, la de una consola:
 # i, n con tilde, euro y C cedilla llegaban como Y con tilde, +-, C cedilla y A con tilde
-check('...con su mensaje con acentos intacto (i n euro C de la 1252, no leidos en la OEM)',
+mc.check_1252('...con su mensaje con acentos intacto (i n euro C de la 1252, no leidos en la OEM)',
       any('a proposito: í ñ € Ç' in f for f in j.get('failures', [])), str(j.get('failures'))[:300])
 
 # ---- cuentas en verde y el runner saliendo con error: manda el exit code ----
@@ -266,6 +266,62 @@ open(ROJO, 'w', encoding='utf-8-sig', newline='').write(_txt)
 j = J(B.call('delphi_test', {'command': 'run', 'project': ROJO}, t=900))
 check('suite que no compila: result=build-failed con los errores',
       j.get('result') == 'build-failed' and bool(j.get('build')), str(j)[:300])
+
+# ---- C2 de 4.8: enlaces en la carpeta del test hacia una victima de FUERA (la
+# carpeta de la bateria no es una raiz). Ni la copia lleva al contenedor lo de
+# detras de uno de la carpeta de salida (CopiaArbol sigue solo lo que la sesion
+# lee), ni la limpieza (BorraArbol) cruza uno que aparece DENTRO de la carpeta
+# del test mientras corre, el que plantaria el codigo del agente. Lo planta la
+# bateria: la carpeta es de la casa de su copia del servidor, y el test duerme
+VICT = mc.carpeta('dtest-victima')
+open(os.path.join(VICT, 'secreto.txt'), 'w').write('SECRETO')
+r = A.call('delphi_create', {'kind': 'project-console', 'name': 'EnlaceTest', 'dir': os.path.join(BASE, 'EnlaceTest')})
+ENLACE = os.path.join(BASE, 'EnlaceTest', 'EnlaceTest.dpr')
+open(ENLACE, 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""program EnlaceTest;
+
+{$APPTYPE CONSOLE}
+
+uses
+  Winapi.Windows, System.SysUtils;
+
+begin
+  Sleep(8000);
+  if FileExists(ExtractFilePath(ParamStr(0)) + 'Fuera\\secreto.txt') then
+  begin
+    Writeln('FAIL lo de detras del enlace de la salida llego al contenedor');
+    ExitCode := 1;
+  end
+  else
+    Writeln('PASS lo de detras del enlace de la salida no llego');
+end.
+""")
+j = J(B.call('delphi_test', {'command': 'run', 'project': ENLACE}, t=900))
+check('C2 control: sin enlaces el test corre y pasa', j.get('result') == 'pass' and bool(j.get('binary')), str(j)[:300])
+SALIDA = os.path.dirname(mc.real(j.get('binary') or ''))
+check('C2 fixture: un junction en la carpeta de salida hacia la victima de fuera',
+      os.path.isdir(SALIDA) and mc.junction(os.path.join(SALIDA, 'Fuera'), VICT), SALIDA)
+CASA_TEST = os.path.join(BASE, mc.TEMPORALES, 'test-*')
+antes = set(glob.glob(CASA_TEST))
+corrida = {}
+hilo = threading.Thread(target=lambda: corrida.update(
+    j=J(B.call('delphi_test', {'command': 'run', 'project': ENLACE}, t=900))))
+hilo.start()
+plantado = None
+while hilo.is_alive() and not plantado:
+    for d in set(glob.glob(CASA_TEST)) - antes:
+        if os.path.isfile(os.path.join(d, 'EnlaceTest.exe')) and mc.junction(os.path.join(d, 'Plantado'), VICT):
+            plantado = os.path.join(d, 'Plantado')
+    time.sleep(0.2)
+hilo.join(900)
+j = corrida.get('j', {})
+check('C2 fixture: la bateria planto un junction DENTRO de la carpeta del test mientras corria', bool(plantado), plantado)
+check('C2 la copia no llevo al contenedor lo de detras del junction de la salida (el test pasa) ni lo lista',
+      j.get('result') == 'pass' and j.get('passed') == 1 and 'secreto' not in json.dumps(j), str(j)[:400])
+check('C2 ...y la limpieza de la carpeta del test no cruzo el junction plantado: la victima intacta',
+      os.listdir(VICT) == ['secreto.txt'] and open(os.path.join(VICT, 'secreto.txt')).read() == 'SECRETO'
+      and not (plantado and os.path.lexists(plantado)), (os.listdir(VICT), plantado))
+mc.borra(VICT)
 
 A.mata(); B.mata()
 mc.fin('delphi_test battery')

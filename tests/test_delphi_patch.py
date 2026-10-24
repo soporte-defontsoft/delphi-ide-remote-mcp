@@ -11,6 +11,10 @@ import json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
+# sus fixtures son CP1252 (gestoría, el 0xF3 del IDE, lo que cabe y lo que no):
+# en otra ANSI lo dice y no mide (r5-L4); las otras paginas, LspTests.Encodings
+mc.bateria_de_la_1252('delphi_edit battery')
+
 BASE = mc.carpeta('patch')
 # su propia copia del servidor (antes corria el compilado EN SU SITIO: sus
 # logs y su __delphi-temp caian en la carpeta de build), fuera de la jaula

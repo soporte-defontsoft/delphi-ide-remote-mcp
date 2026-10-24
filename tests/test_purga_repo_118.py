@@ -193,7 +193,7 @@ try:
     check('P7 el dia con el repo del enlace hacia fuera se QUEDA y la victima sigue',
           os.path.isfile(os.path.join(cajon(E7), 'repo7', '.git', 'HEAD')) and victima_intacta())
     check('P7b ...y lo dice en el log UNA vez, con su motivo, aunque la purga pase dos',
-          avisos(E7) == 1 and any(E7 in l and 'GUARD-033' in l for l in srv.errores),
+          avisos(E7) == 1 and any(E7 in l and mc.es(l, 'SR_GUARD_GIT_METADATA_FMT') for l in srv.errores),
           [l for l in srv.errores if 'trash' in l][-3:])
 finally:
     srv.cierra()

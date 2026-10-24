@@ -4,9 +4,10 @@ Sin skip-smudge, sin credenciales, endpoints exclusivamente propios.
 LFS_SMUDGE_ONLY=1 mide el smudge por fichero: retirar la fijacion del endpoint
 debe poner rojo el switch. Con filter-process ese caso es una GUARDA.
 Otros mutantes: EndpointLfsDenegado sin juez; clone sin --no-checkout.
-Claude ejecuta las dos variantes; run_all usa filter-process.
+La bateria corre las dos: la del smudge, en un hijo con LFS_SMUDGE_ONLY=1, y sus checks
+cuentan aqui (C3 de 4.8: run_all solo corria la de filter-process).
 """
-import atexit,hashlib,http.server,json,os,subprocess,threading
+import atexit,hashlib,http.server,json,os,subprocess,sys,threading
 import mcp_cliente as mc
 BASE=mc.carpeta('git-lfs-118');atexit.register(mc.borra,BASE);JAIL=os.path.join(BASE,'jail');os.makedirs(JAIL)
 EMPTY=os.path.join(BASE,'empty.config');open(EMPTY,'w').close()
@@ -117,4 +118,15 @@ try:
 finally:
     srv.cierra();http.shutdown();http.server_close();mc.borra(BASE)
 mc.check('BASE borrada con el exe',not os.path.exists(BASE))
+if os.environ.get('LFS_SMUDGE_ONLY')!='1':
+    # la otra variante, despues de borrar BASE (el hijo usa la misma carpeta)
+    hijo=subprocess.run([sys.executable,os.path.abspath(__file__)]+sys.argv[1:],
+        env=dict(os.environ,LFS_SMUDGE_ONLY='1',PYTHONIOENCODING='utf-8'),capture_output=True,
+        text=True,encoding='utf-8',errors='replace',timeout=900)
+    lineas=[l.strip() for l in hijo.stdout.splitlines() if l.lstrip().startswith(('PASS','FAIL'))]
+    for l in lineas:
+        nombre,_,detalle=l[5:].partition(' | ')
+        mc.check('smudge por fichero: '+nombre,l.startswith('PASS'),detalle)
+    mc.check('smudge por fichero: la variante corrio entera',hijo.returncode==0 and len(lineas)>=20,
+             (hijo.returncode,len(lineas),(hijo.stdout+hijo.stderr)[-400:]))
 mc.fin('git LFS 118')

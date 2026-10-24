@@ -35,7 +35,7 @@ Y lo del revisor propio del punto 4 (13-oct):
 
 Uso:  python tests/test_to_binary_1182.py [ruta-a-DelphiLspMcp.exe]
 """
-import ctypes, os
+import os
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -43,7 +43,7 @@ BASE = mc.carpeta('to_binary_1182')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
-ACP = ctypes.windll.kernel32.GetACP()
+ACP = mc.ANSI
 
 CABEZA = 'object FormA: TFormA\r\n  Left = 0\r\n  Top = 0\r\n'
 PIE = '  ClientHeight = 100\r\n  ClientWidth = 200\r\nend\r\n'

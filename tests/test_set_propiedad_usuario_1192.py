@@ -31,6 +31,9 @@ se niega diciendo por que, y una ruta dentro de una (Modo.X) tambien.
   S15 Modo.X=1: negado, no sigue una ruta (ROJO)
   S16 lint con todo lo escrito: CLEAN
   S17 preview: las publicadas por la base en ignored, con la nota DSGN-152 (ROJO: sin nota)
+  S18 Dato='Accion' con su o con tilde (un Variant: un literal en una propiedad que no es una
+      cadena): escrito como el IDE, 'Acci'#243'n' (la rama de PonEnMemoria que no tenia check rojo,
+      7.1 de la 1.17.0; ROJO contra el mutante sin ella: crudo)
 
 Uso:  python tests/test_set_propiedad_usuario_1192.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -50,6 +53,7 @@ UBASE = ('unit UB_Base;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.Controls, Vcl.Gra
          '  TTono = (toClaro, toOscuro);\n  TTonos = set of TTono;\n  TCosa = class(TObject)\n  end;\n\n'
          '  TBaseForm = class(TForm)\n  private\n    FModo: Integer;\n    FNombre: string;\n    FActivo: Boolean;\n'
          '    FLado: TAlign;\n    FTono: TTono;\n    FTonos: TTonos;\n    FTinte: TColor;\n    FCosa: TCosa;\n'
+         '    FDato: Variant;\n'
          '  published\n    property Modo: Integer read FModo write FModo;\n'
          '    property Nombre: string read FNombre write FNombre;\n'
          '    property Activo: Boolean read FActivo write FActivo;\n'
@@ -57,7 +61,8 @@ UBASE = ('unit UB_Base;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.Controls, Vcl.Gra
          '    property Tono: TTono read FTono write FTono;\n'
          '    property Tonos: TTonos read FTonos write FTonos;\n'
          '    property Tinte: TColor read FTinte write FTinte;\n'
-         '    property Cosa: TCosa read FCosa write FCosa;\n  end;\n\nimplementation\n\nend.\n')
+         '    property Cosa: TCosa read FCosa write FCosa;\n'
+         '    property Dato: Variant read FDato write FDato;\n  end;\n\nimplementation\n\nend.\n')
 
 
 def pon(prop, valor):
@@ -126,6 +131,9 @@ try:
     r = pon('Modo.X', '1')
     check('S15 Modo.X=1: negado, set no sigue una ruta dentro de una propiedad de la base',
           negado(r, 'DSGN-087', 'path', 'delphi_edit') and 'does not exist in TForm' not in r, r[:400])
+    r = pon('Dato', "'Acción'")
+    check("S18 Dato='Acción' (un Variant: no es una cadena): escrito como el IDE, 'Acci'#243'n'",
+          escrito(r, "Dato = 'Acci'#243'n'"), (r[:400], mc.lee(DFM)[-200:]))
     r = s.call('delphi_designer', {'command': 'lint', 'path': DFM}, t=300)
     check('S16 lint con todo lo escrito: CLEAN', mc.es(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:400])
 

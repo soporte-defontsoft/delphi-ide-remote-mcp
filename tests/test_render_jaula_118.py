@@ -28,7 +28,7 @@ def ok(out):
     try:return json.loads(out).get('framework') in ('vcl','fmx')
     except:return False
 def denied(n,out,prop):
-    mc.check(n+' se niega antes del ayudante','[DSGN-115 DENIED]' in out and prop in out,out[:400])
+    mc.check(n+' se niega antes del ayudante',mc.es(out,'SR_DESIGNER_LITERAL_FUERA_FMT') and prop in out,out[:400])
     mc.check(n+' no muestra valor',avi not in mc.real(out) and 'DUMMY-outside' not in out,out[:400])
 try:
     template=open(os.path.join(FIX,'DUMMY-path.dfm'),encoding='utf-8-sig').read()
@@ -78,18 +78,18 @@ try:
     with open(child,'w',encoding='ascii') as file:
         file.write('object Child: TDummyChild\n Caption = '+literal('X'*(16*1024*1024))+'\nend\n')
     out=preview('budget-sibling')
-    mc.check('presupuesto previo del hermano','[DSGN-117 DENIED]' in out,out[:350])
+    mc.check('presupuesto previo del hermano',mc.es(out,'SR_DESIGNER_LITERAL_TOPE_FMT'),out[:350])
     os.remove(child)
     other=os.path.join(JAIL,'DUMMY-other.dfm')
     for sibling in (child,other):
         with open(sibling,'w',encoding='ascii') as file:
             file.write('object Child: TDummyChild\n Caption = '+literal('X'*(9*1024*1024))+'\nend\n')
     out=preview('budget-total')
-    mc.check('presupuesto suma hermanos individualmente menores','[DSGN-117 DENIED]' in out,out[:350])
+    mc.check('presupuesto suma hermanos individualmente menores',mc.es(out,'SR_DESIGNER_LITERAL_TOPE_FMT'),out[:350])
     os.remove(child);os.remove(other)
     write(form(' object Image1: TImage\n Picture.Data = {\n'+('00'*64+'\n')*131072+'}\n end'))
     out=preview('budget-blob')
-    mc.check('presupuesto previo de la form','[DSGN-117 DENIED]' in out,out[:350])
+    mc.check('presupuesto previo de la form',mc.es(out,'SR_DESIGNER_LITERAL_TOPE_FMT'),out[:350])
     write(form(" Caption = 'DUMMY control'"))
     mc.check('control pequeno despues de rechazos',ok(preview('budget-after')))
     mc.check('servidor vivo',not mc.fallo(srv.call('delphi_list',{'root':JAIL})))

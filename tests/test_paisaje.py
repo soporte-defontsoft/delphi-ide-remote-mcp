@@ -1784,6 +1784,17 @@ REGLAS_PY = [
     ('la fuga de una letra real leida a mano', r"srv\[a-z\]:|\(\?<!srv\)",
      [('mcp_cliente.py', 'def fuga_de_letra')],
      'mc.fuga_de_letra: crudo o escapado en JSON, tras un \\n escapado, en URL, con o sin barra'),
+    # (r5-L4, 24-oct-2026: tres baterias preguntaban la pagina, cada una a su manera)
+    ('la pagina ANSI de la maquina leida a mano', r"\bGetACP\b",
+     [('mcp_cliente.py', 'ANSI =')],
+     'mc.ANSI, y en_la_1252 / check_1252 / bateria_de_la_1252 para lo que es de la 1252'),
+    # (r5-L4: seis baterias buscaban la instalacion activa a mano, y seis
+    # componian Program Files o Public Documents con su version)
+    ('la carpeta del IDE compuesta a mano', r"""Embarcadero(?:[\\/]+|['"]\s*,\s*['"])Studio""", [],
+     'mc.raiz_ide (delphi_installs) o mc.variable_de_rsvars (BDSCOMMONDIR...)'),
+    ('la instalacion activa buscada a mano', r"""get\(\s*['"]active['"]\s*\)""",
+     [('mcp_cliente.py', 'def instalacion_activa')],
+     'mc.instalacion_activa'),
 ]
 
 
@@ -1831,6 +1842,9 @@ PLANTADO_PY = {
     'la carpeta de los temporales a mano': "    t = os.path.join(raiz, '__delphi-temp', 'agente')",
     'la carpeta de los informes a mano': "    r = mc.buzon(os.path.join(srv, 'reports'))",
     'la fuga de una letra real leida a mano': "    low = re.sub('srv[a-z]:', '', raw.lower())",
+    'la pagina ANSI de la maquina leida a mano': "    acp = ctypes.windll.kernel32.GetACP()",
+    'la carpeta del IDE compuesta a mano': "    rtl = r'C:\\Program Files (x86)\\Embarcadero\\Studio\\37.0\\source'",
+    'la instalacion activa buscada a mano': "    act = next(i for i in inst['installs'] if i.get('active'))",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]

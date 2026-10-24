@@ -69,7 +69,7 @@ try:
             if os.path.isfile(path):pids.append(int(mc.lee(path)))
     worker.join(100);elapsed=time.monotonic()-start
     mc.check('limite exterior real entre 74 y 90 segundos',not worker.is_alive() and 74<elapsed<90,str(elapsed))
-    mc.check('rechazo etiquetado del vigia exterior','[DSGN-062 DENIED]' in result.get('out',''),result)
+    mc.check('rechazo etiquetado del vigia exterior',mc.es(result.get('out',''),'SR_DESIGNER_RENDER_TIEMPO_FMT'),result)
     last=tick(counter) if counter else None;time.sleep(.7);after=tick(counter) if counter else None
     mc.check('contador se detiene',last is not None and after==last,(last,after))
     mc.check('fixture identifica padre e hijo',len(pids)==2,pids)

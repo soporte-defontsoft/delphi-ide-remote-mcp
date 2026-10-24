@@ -56,7 +56,7 @@ def main():
             before=time.monotonic()
             out=preview('Dummy.Caption='+value if caso=='state' else '')
             elapsed=time.monotonic()-before
-            mc.check(caso+' niega por propiedad','[DSGN-115 DENIED]' in out and 'Caption' in out,out[:250])
+            mc.check(caso+' niega por propiedad',mc.es(out,'SR_DESIGNER_LITERAL_FUERA_FMT') and 'Caption' in out,out[:250])
             mc.check(caso+' responde antes de 2 s',elapsed<2,elapsed)
             mc.check(caso+' no revela valor',ip not in out and 'share' not in out,out[:250])
             if caso=='hermano':os.remove(child)

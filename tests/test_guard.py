@@ -381,12 +381,9 @@ check('fetch: dentro permitido', 'chunkBase64' in out, out[:120])
 
 # --- library read zone: RTL/component sources are READABLE despite the jail,
 #     but NEVER writable ---
-RTL = None
-for cand in (r'C:\Program Files (x86)\Embarcadero\Studio\37.0\source\rtl\sys\System.SysUtils.pas',
-             r'C:\Program Files (x86)\Embarcadero\Studio\23.0\source\rtl\sys\System.SysUtils.pas'):
-    if os.path.exists(cand):
-        RTL = cand
-        break
+RTL = os.path.join(mc.raiz_ide(call), 'source', 'rtl', 'sys', 'System.SysUtils.pas')
+if not os.path.exists(RTL):
+    RTL = None
 if RTL:
     out = call('delphi_read', {"path": RTL, "fromline": 1, "toline": 5})
     check('lib: leer fuente RTL permitido pese a la jaula', not denied(out) and '|' in out
@@ -403,12 +400,9 @@ else:
 # --- GetIt packages / catalog repository: the library zone must cover them
 #     (the Library Search Path uses $(BDSCatalogRepository*) macros, and the
 #     useful material - sources, SDKs - hangs off the repository root) ---
-CAT = None
-for cand in (r'C:\Users\Public\Documents\Embarcadero\Studio\37.0\CatalogRepository',
-             r'C:\Users\Public\Documents\Embarcadero\Studio\23.0\CatalogRepository'):
-    if os.path.isdir(cand):
-        CAT = cand
-        break
+CAT = os.path.join(mc.variable_de_rsvars(call, 'BDSCOMMONDIR'), 'CatalogRepository')
+if not os.path.isdir(CAT):
+    CAT = None
 if CAT:
     out = call('delphi_list', {"root": CAT, "pattern": "*"})
     check('lib: repositorio de catalogo (paquetes GetIt) legible',

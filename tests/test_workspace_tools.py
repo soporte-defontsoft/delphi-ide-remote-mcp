@@ -84,7 +84,7 @@ for _nom, _ruta, _esperado, _aguja in (
         ('cp1252 legacy', _cp, _CP, 'accion')):
     _d = json.loads(call('delphi_search', {"root": _ruta, "query": _aguja}))
     _hit = (mc.aciertos(_d) or [{}])[0].get('text', '')
-    check('search: devuelve el texto real de un fichero %s' % _nom,
+    (mc.check_1252 if _ruta == _cp else check)('search: devuelve el texto real de un fichero %s' % _nom,
           _hit == _esperado, '%r != %r' % (_hit[:70], _esperado[:70]))
 
 d = json.loads(out)
