@@ -9309,12 +9309,6 @@ const
     SL_MARCA_AVISO +
     ': checking the drive letters of the declared places failed: %s: %s';
 
-  SL_NET_PURGA_FMT =
-    'Temporary folders under %s, on a network drive, were cleaned apart ' +
-    'from the startup: %d found, in %d ms. What was created or written ' +
-    'there in the last hour is left: a server on another machine may be ' +
-    'using it.';
-
   SR_GUARD_RUTA_INVALIDA_FMT =
     '[GUARD-011 INVALID_PARAM] Invalid path: %s';
 

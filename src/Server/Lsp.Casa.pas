@@ -146,7 +146,7 @@ function FicheroDeClaveDelIde(const AVersion, ASubclave: string): string;
 { LA clave corta de una carpeta, por su ruta CANONICA (larga, sin barra
   final, en minusculas): la misma carpeta escrita en 8.3 o con otras
   mayusculas da la misma clave, el MD5 en hexadecimal (32). La usan quien
-  reclama una carpeta mientras vive (TemporalEsMia, SoyLaPrimeraInstancia)
+  reclama una carpeta mientras vive (SoyLaPrimeraInstancia, la presencia)
   y la marca de los contenedores de delphi_test (Lsp.Sandbox). Estaba
   compuesta de tres formas, dos sin canonizar (revision de la 1.11.0). }
 function ClaveDeCarpeta(const ADir: string): string;

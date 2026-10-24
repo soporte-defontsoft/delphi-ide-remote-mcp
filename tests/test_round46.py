@@ -62,12 +62,15 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'ReadOnlyPaths=%s' % os.path.join(JAIL, 'vendor'), '']))
 
 # Los dos junctions, ANTES de arrancar: el de lectura bajo el ReadOnlyPath
-# (el perdon), y el de la purga dentro de __delphi-temp.
-TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)
-os.makedirs(os.path.join(TEMP_JAULA, 'normal'))
-open(os.path.join(TEMP_JAULA, 'normal', 'basura.txt'), 'w').write('x')
+# (el perdon), y el de la purga dentro de __delphi-temp: la de la CASA del
+# servidor, junto a su exe, la que la purga del arranque vacia (hasta la 1.23
+# era la de la raiz, que ya no se toca: V31)
+TEMP_CASA = os.path.join(EXEDIR, mc.TEMPORALES)
+TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)  # la de la raiz: T5 y el zip de delphi_package
+os.makedirs(os.path.join(TEMP_CASA, 'normal'))
+open(os.path.join(TEMP_CASA, 'normal', 'basura.txt'), 'w').write('x')
 HAY_J1 = junction(os.path.join(JAIL, 'vendor', 'out'), SECRETO)
-HAY_J2 = junction(os.path.join(TEMP_JAULA, 'trampa'), VICTIMA)
+HAY_J2 = junction(os.path.join(TEMP_CASA, 'trampa'), VICTIMA)
 
 
 def arranca(puerto):
@@ -216,15 +219,15 @@ try:
         # purga, la victima seguia ahi igual
         check('J2 el fichero al OTRO LADO del junction sobrevive a la purga',
               os.path.exists(os.path.join(VICTIMA, 'vive.txt')) and
-              not os.path.exists(os.path.join(TEMP_JAULA, 'normal')),
+              not os.path.exists(os.path.join(TEMP_CASA, 'normal')),
               'la purga cruzo el enlace y borro la victima, o no hubo purga')
         check('J2b el junction mismo si se quita de la carpeta',
-              not os.path.exists(os.path.join(TEMP_JAULA, 'trampa')),
+              not os.path.exists(os.path.join(TEMP_CASA, 'trampa')),
               'el enlace sigue plantado')
     else:
         print('NOTA: mklink /J fallo; J2/J2b no se miden.')
     check('J2c y la purga normal sigue purgando',
-          not os.path.exists(os.path.join(TEMP_JAULA, 'normal')),
+          not os.path.exists(os.path.join(TEMP_CASA, 'normal')),
           'quedo __delphi-temp\\normal')
 
     print('NOTA: sin medir aqui y apuntado en el CHANGELOG: la caida CESU-8 '
@@ -239,7 +242,7 @@ finally:
     # Los junctions se quitan como ENTRADA antes del rmtree, por la misma
     # razon que la purga: no vaya a cruzarlos alguien.
     for j in (os.path.join(JAIL, 'vendor', 'out'),
-              os.path.join(TEMP_JAULA, 'trampa')):
+              os.path.join(TEMP_CASA, 'trampa')):
         try:
             os.rmdir(j)
         except OSError:

@@ -30,16 +30,12 @@ vivos en la 1.14.0, medidos el 6-oct-2026 antes de tocar nada.
       carpeta de las copias primero); recorrer nextOffset llega a TODOS sin
       repetir; maxresults=50 da 50; un offset pasado el final, 0 y sin mas
   P8  ...y el modo dirs=true igual: 510 carpetas, 500 + 10, LIST-013
-  P9  la purga del arranque recorre cada SITIO una vez: la misma raiz de red
-      declarada en dos workspaces (una con barra final) da UNA linea de
-      purga, no dos (lo vio el log de la VM 13.2 el 6-oct-2026 con
-      N:\\CodeSandBox en Claude y Hermes). Necesita DELPHI_MCP_TEST_NETDIR
-      (una carpeta de una unidad de red conectada); sin ella, NOTA
+  (P9, la purga del arranque de una raiz de red repetida en dos workspaces,
+      salio con esa purga en la 1.23: V31, el arranque no toca las raices)
 
 Usage:  python tests/test_paredes_1141.py [path-to-DelphiLspMcp.exe]
 """
 import os, subprocess, time
-import random
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -187,39 +183,5 @@ finally:
     proc.kill()
 proc.wait(10)
 salida.close()
-
-# ---------------------------------------------------------------------- P9
-NETDIR = os.environ.get('DELPHI_MCP_TEST_NETDIR', '').strip().rstrip('\\')
-if NETDIR:
-    # una carpeta PROPIA de esta pasada, que se borra al acabar
-    NETBASE = os.path.join(NETDIR, 'paredes1141-%d-%d' % (os.getpid(), random.randint(1000, 9999)))
-    os.makedirs(os.path.join(NETBASE, mc.TEMPORALES))
-    try:
-        with open(os.path.join(EXEDIR, 'settings.ini'), 'w') as f:
-            f.write('\n'.join(['[Workspace.Uno]', 'Token=uno-1141', 'Roots=%s' % NETBASE,
-                               '[Workspace.Dos]', 'Token=dos-1141', 'Roots=%s\\' % NETBASE, '']))
-        salida2 = open(os.path.join(BASE, 'servidor-red.txt'), 'wb')
-        proc2 = mc.lanza_http(EXE, mc.puerto_libre(), env, stdout=salida2, stderr=subprocess.STDOUT)
-        try:
-            def purgas():
-                with open(os.path.join(BASE, 'servidor-red.txt'), encoding='utf-8', errors='replace') as fh:
-                    return [l for l in fh.read().splitlines()
-                            if 'Temporary folders under' in l and os.path.basename(NETBASE) in l]
-            fin = time.time() + 60
-            while time.time() < fin and not purgas():
-                time.sleep(0.5)
-            time.sleep(5)  # la segunda, si la hubiera, sale detras de la primera
-            ps = purgas()
-            check('P9 la misma raiz de red en dos workspaces: UNA purga, no dos', len(ps) == 1, ps)
-        finally:
-            proc2.kill()
-            proc2.wait(10)
-            salida2.close()
-    finally:
-        mc.borra(NETBASE)
-    check('P9 ...y la carpeta de prueba no queda en la unidad de red', not os.path.exists(NETBASE), NETBASE)
-else:
-    print('NOTA P9: sin DELPHI_MCP_TEST_NETDIR (una carpeta de una unidad de red conectada) no se '
-          'mide la purga de una raiz de red repetida')
 
 mc.fin('paredes 1.14.1 battery')

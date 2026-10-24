@@ -727,7 +727,8 @@ REGLAS = [
       ('Lsp.Guard.pas', 'ArgPathOutsideDenied'),
       # (NegativaDeUnc salio el 23-oct-2026: su lista de raices es la de RaicesDisponibles)
       ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'),
-      ('Lsp.Guard.pas', 'LugaresProtegidos'), ('Lsp.Guard.pas', 'PurgeServerTemp'),
+      # (PurgeServerTemp salio el 24-oct-2026 con la purga de las raices: V31 de la 1.23)
+      ('Lsp.Guard.pas', 'LugaresProtegidos'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
       ('Lsp.Guard.pas', 'RootItselfDenied'),

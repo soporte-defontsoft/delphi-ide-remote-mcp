@@ -8,6 +8,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Removed
+
+- **The startup purge no longer touches the workspace roots.** Since 1.18.2
+  nothing of the server lives in a root - the captures went to its own home -
+  and emptying every `__delphi-temp` under each root only took away what
+  earlier versions left there: the server deleting inside a workspace, which
+  is not its home, and on a root two machines share, what the other machine's
+  server had in flight (hence the one-hour cut of the network roots). Its own
+  comment said to retire it in 1.19. The server's home is still emptied at
+  startup, by the only live instance of the exe; whatever an earlier version
+  left in a root is the operator's to delete, hidden from every listing and
+  refused for writing (`tests/test_purga_temporales.py`).
+
 ### Fixed
 
 - **A Deploy with no profile anywhere is refused before it builds.** With no

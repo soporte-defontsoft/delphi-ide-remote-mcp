@@ -89,18 +89,16 @@ type
     [Test] procedure LaFormaLargaDeUnaUnidadEsSuRaiz;
   end;
 
-  { La purga de una temporal con CORTE - la de una raiz en una unidad de red,
-    donde el servidor de otra maquina puede estar usandola y no hay cerrojo
-    que cruce -: se va lo anterior al corte y se queda lo que tenga algo
-    reciente, entero. Sin corte, todo, como siempre. }
+  { La purga de una temporal (la de la casa del servidor al arrancar): se
+    vacia entera y se queda la carpeta. Su corte por horas era de la purga
+    de una raiz de red, y se fue con ella (V31 de la 1.23). }
   [TestFixture]
-  TPurgaConCorteTests = class
+  TPurgaDeTemporalTests = class
   private
     FBase, FTemp: string;
   public
     [Setup] procedure Prepara;
     [TearDown] procedure Recoge;
-    [Test] procedure ConCorteSeQuedaLoReciente;
     [Test] procedure SinCorteSeVaTodo;
   end;
 
@@ -111,7 +109,6 @@ uses
   System.SysUtils,
   System.Classes,
   System.IOUtils,
-  System.DateUtils,
   Lsp.Guard,
   Lsp.Texts,
   Lsp.Rutas,
@@ -728,68 +725,29 @@ begin
     end);
 end;
 
-{ TPurgaConCorteTests }
+{ TPurgaDeTemporalTests }
 
-procedure Envejece(const ARuta: string);
-var
-  Antes: TDateTime;
-begin
-  Antes := IncHour(Now, -2);
-  if TDirectory.Exists(ARuta) then
-  begin
-    TDirectory.SetCreationTime(ARuta, Antes);
-    TDirectory.SetLastWriteTime(ARuta, Antes);
-  end
-  else
-  begin
-    TFile.SetCreationTime(ARuta, Antes);
-    TFile.SetLastWriteTime(ARuta, Antes);
-  end;
-end;
-
-procedure TPurgaConCorteTests.Prepara;
+procedure TPurgaDeTemporalTests.Prepara;
 begin
   FBase := ExtractFilePath(ParamStr(0)) + 'purga-prueba';
   if TDirectory.Exists(FBase) then
     TDirectory.Delete(FBase, True);
   FTemp := TPath.Combine(FBase, TempFolderName);
-  // de hace dos horas: un fichero, y una carpeta con todo lo suyo
+  // un fichero, una carpeta con lo suyo y otro fichero TRES niveles dentro
   ForceDirectories(TPath.Combine(FTemp, 'vieja'));
   TFile.WriteAllText(TPath.Combine(FTemp, 'viejo.txt'), 'x');
   TFile.WriteAllText(TPath.Combine(FTemp, 'vieja\x.txt'), 'x');
-  // de ahora: un fichero, y otro TRES niveles dentro de carpetas viejas
   ForceDirectories(TPath.Combine(FTemp, 'mixta\dentro\hondo'));
-  TFile.WriteAllText(TPath.Combine(FTemp, 'nuevo.txt'), 'x');
-  TFile.WriteAllText(TPath.Combine(FTemp, 'mixta\viejo.txt'), 'x');
   TFile.WriteAllText(TPath.Combine(FTemp, 'mixta\dentro\hondo\nuevo.txt'), 'x');
-  Envejece(TPath.Combine(FTemp, 'viejo.txt'));
-  Envejece(TPath.Combine(FTemp, 'vieja\x.txt'));
-  Envejece(TPath.Combine(FTemp, 'vieja'));
-  Envejece(TPath.Combine(FTemp, 'mixta\viejo.txt'));
-  Envejece(TPath.Combine(FTemp, 'mixta\dentro\hondo'));
-  Envejece(TPath.Combine(FTemp, 'mixta\dentro'));
-  Envejece(TPath.Combine(FTemp, 'mixta'));
 end;
 
-procedure TPurgaConCorteTests.Recoge;
+procedure TPurgaDeTemporalTests.Recoge;
 begin
   if TDirectory.Exists(FBase) then
     TDirectory.Delete(FBase, True);
 end;
 
-procedure TPurgaConCorteTests.ConCorteSeQuedaLoReciente;
-begin
-  VaciaDesechable(FTemp, CorteDePurga(1));
-  Assert.IsFalse(TFile.Exists(TPath.Combine(FTemp, 'viejo.txt')), 'el fichero de hace dos horas se va');
-  Assert.IsFalse(TDirectory.Exists(TPath.Combine(FTemp, 'vieja')), 'la carpeta de hace dos horas se va');
-  Assert.IsTrue(TFile.Exists(TPath.Combine(FTemp, 'nuevo.txt')), 'el fichero de ahora se queda');
-  Assert.IsTrue(TFile.Exists(TPath.Combine(FTemp, 'mixta\dentro\hondo\nuevo.txt')),
-    'lo reciente de dentro de carpetas viejas se queda');
-  Assert.IsTrue(TFile.Exists(TPath.Combine(FTemp, 'mixta\viejo.txt')),
-    'la carpeta con algo reciente debajo se queda ENTERA');
-end;
-
-procedure TPurgaConCorteTests.SinCorteSeVaTodo;
+procedure TPurgaDeTemporalTests.SinCorteSeVaTodo;
 begin
   VaciaDesechable(FTemp);
   Assert.IsTrue(TDirectory.Exists(FTemp), 'la temporal se vacia, no se borra');
@@ -799,6 +757,6 @@ end;
 initialization
   TDUnitX.RegisterTestFixture(TLetrasDeRedTests);
   TDUnitX.RegisterTestFixture(TBarraFinalTests);
-  TDUnitX.RegisterTestFixture(TPurgaConCorteTests);
+  TDUnitX.RegisterTestFixture(TPurgaDeTemporalTests);
 
 end.

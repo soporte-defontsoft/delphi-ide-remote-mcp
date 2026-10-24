@@ -135,11 +135,11 @@ try:
 
     # ------------------------------------------------------------------ T7
     # "__delphi-temp puede limpiarse entero en cada arranque del server"
-    # (David). Las DOS casas se vacian en el arranque: la del servidor y la
-    # de cada workspace del settings.ini - los declara LoadSecurity, no
-    # hace falta ninguno "activo"; la version de "en el primer uso" se
-    # probo y se descarto, y este comentario la describia como vigente
-    # (auditoria 21-sep). Solo purga la PRIMERA instancia viva del exe: un
+    # (David). La casa del servidor se vacia en el arranque; la de cada
+    # workspace tambien hasta la 1.23, cuando su purga salio (V31: nada
+    # nuestro vive en las raices desde la 1.18.2, y la mide
+    # test_purga_temporales). La version de "en el primer uso" se
+    # probo y se descarto (auditoria 21-sep). Solo purga la PRIMERA instancia viva del exe: un
     # stdio del mismo binario no borra lo que el servicio tiene en vuelo.
     # Lo que se mide es el efecto: lo de la vez anterior no sobrevive.
     # Sin depender del nodo: lo que se mide es el ARRANQUE, y ya no hace
@@ -147,22 +147,22 @@ try:
     # dependencia era justo el fallo del primer intento.
     if True:
         # Una captura de la vez anterior, PLANTADA donde las deja el servidor
-        # (__delphi-temp\<agente>\desktop): desde 1.0.16 esta bateria no
+        # (su casa, desde la 1.18.2): desde 1.0.16 esta bateria no
         # captura, "antes" salia vacia y T7b pasaba sin medir nada.
-        cap = os.path.join(TEMP_JAULA, 'r44', 'desktop', 'captura-vieja.png')
+        cap = os.path.join(mc.casa_de_capturas(EXEDIR), 'r44', 'desktop', 'captura-vieja.png')
         os.makedirs(os.path.dirname(cap), exist_ok=True)
         open(cap, 'wb').write(b'\x89PNG\r\n\x1a\n')
-        antes = pngs(TEMP_JAULA)
-        check('T7b fixture: hay una captura de la vez anterior', bool(antes), TEMP_JAULA)
+        antes = pngs(TEMP_SERVIDOR)
+        check('T7b fixture: hay una captura de la vez anterior', bool(antes), TEMP_SERVIDOR)
         proc.kill()
         time.sleep(1.5)
         # Una migaja de la "ejecucion anterior" que tiene que desaparecer.
-        os.makedirs(TEMP_JAULA, exist_ok=True)
-        vieja = os.path.join(TEMP_JAULA, 'de-la-vez-anterior.txt')
+        os.makedirs(TEMP_SERVIDOR, exist_ok=True)
+        vieja = os.path.join(TEMP_SERVIDOR, 'de-la-vez-anterior.txt')
         open(vieja, 'w').write('x')
         proc = mc.lanza_http(EXE, PORT, mc.entorno())
         cli.session('r44')
-        check('T7 al rearrancar, la carpeta del workspace se vacia entera',
+        check('T7 al rearrancar, la casa del servidor se vacia entera',
               not os.path.exists(vieja),
               'sobrevivio %s' % vieja)
         check('T7b ...y las capturas de la vez anterior tampoco sobreviven',

@@ -405,16 +405,9 @@ function BorradoDenegado(const ADir: string): string;
   borrarla, por el borrador con guard. Nunca una que sea un enlace (seria
   vaciar lo de detras) ni una de otro nombre. Nunca lanza. EL vaciador: la
   purga del arranque y la copia de carpetas (que no se lleva la papelera del
-  origen) pasan por aqui (25-sep-2026).
-  ACorte (CorteDePurga; 0 = todo): se deja lo que tenga algo creado o
-  escrito desde ese momento - un fichero, o una carpeta con CUALQUIER cosa
-  reciente debajo, entera. Es la purga de una raiz en una unidad de red,
-  donde el servidor de OTRA maquina puede estar usando esa temporal y no
-  hay cerrojo que cruce de una maquina a otra (1.9.0). }
-procedure VaciaDesechable(const ADir: string; ACorte: UInt64 = 0);
-{ El momento de hace AHoras, en la forma en que Windows guarda las fechas de
-  un fichero (FILETIME, UTC): el corte de VaciaDesechable. }
-function CorteDePurga(AHoras: Integer): UInt64;
+  origen) pasan por aqui (25-sep-2026). Su corte por horas (1.9.0) era de la
+  purga de una raiz de red, y se fue con ella (V31 de la 1.23). }
+procedure VaciaDesechable(const ADir: string);
 
 type
   { Lo que el copiador NO copia, lo dice quien llama: True = fuera (un
@@ -794,11 +787,10 @@ function RutaRelativaDenegada(const APath: string): string;
   llamada en vuelo del otro (el -F de un commit, una salida de remoterun).
   Nunca lanza: un temporal que no se deja borrar no es motivo para no
   arrancar.
-  Y de las temporales de las RAICES, solo las que no son de OTRO servidor
-  vivo (TemporalEsMia): el cerrojo de arriba va por la carpeta del exe, y
-  un servidor con otro exe y la misma raiz -una bateria sobre el repo, con
-  el servicio sirviendo ese repo- vaciaba las del otro con llamadas en
-  vuelo (visto al revisar las baterias, 26-sep-2026). }
+  Las __delphi-temp de las RAICES no se tocan (V31 de la 1.23): desde la
+  1.18.2 nada nuestro vive en ellas, y su purga borraba dentro del
+  workspace, que no es la casa del servidor, lo que dejaron versiones
+  anteriores. Lo que quede es del operador. }
 procedure PurgeServerTemp;
 
 { Whether APath is inside the knowledge vault. The vault belongs to the
@@ -4016,50 +4008,9 @@ begin
   end;
 end;
 
-function CorteDePurga(AHoras: Integer): UInt64;
-var
-  FT: TFileTime;
-begin
-  GetSystemTimeAsFileTime(FT);
-  Result := (UInt64(FT.dwHighDateTime) shl 32) or FT.dwLowDateTime;
-  Result := Result - UInt64(AHoras) * 36000000000; // 1 h en unidades de 100 ns
-end;
-
-{ True si AEntrada - un fichero, o una carpeta con todo lo de debajo, sin
-  cruzar enlaces - tiene algo creado o escrito desde ACorte. En la duda (no
-  se puede mirar), True: lo que no se sabe viejo no se borra. }
-function TieneAlgoDesde(const AEntrada: string; ACorte: UInt64): Boolean;
-var
-  FD: TWin32FileAttributeData;
-  E: string;
-
-  function Momento(const F: TFileTime): UInt64;
-  begin
-    Result := (UInt64(F.dwHighDateTime) shl 32) or F.dwLowDateTime;
-  end;
-
-begin
-  if not GetFileAttributesEx(PChar(AEntrada), GetFileExInfoStandard, @FD) then
-    Exit(True);
-  if (Momento(FD.ftLastWriteTime) >= ACorte) or (Momento(FD.ftCreationTime) >= ACorte) then
-    Exit(True);
-  if (FD.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY = 0) or EsEnlace(AEntrada) then
-    Exit(False); // un fichero, o un enlace: lo de detras no se mira
-  Result := False;
-  try
-    // la que no se deja listar lanza, y en la duda, True (2g de la 1.18.x:
-    // la RTL la daba por vacia, "nada nuevo")
-    for E in EntradasDeCarpeta(AEntrada) do
-      if TieneAlgoDesde(E, ACorte) then
-        Exit(True);
-  except
-    Result := True;
-  end;
-end;
-
 { (la nota, en la interface) Nunca lanza: no poder tirar un temporal no es
   motivo para que falle lo que lo pedia. }
-procedure VaciaDesechable(const ADir: string; ACorte: UInt64);
+procedure VaciaDesechable(const ADir: string);
 var
   E: string;
 begin
@@ -4078,14 +4029,12 @@ begin
       Exit;
     for E in TDirectory.GetFiles(ADir) do
       try
-        if (ACorte = 0) or not TieneAlgoDesde(E, ACorte) then
-          TFile.Delete(E);
+        TFile.Delete(E);
       except
       end;
     for E in TDirectory.GetDirectories(ADir) do
       try
-        if (ACorte = 0) or not TieneAlgoDesde(E, ACorte) then
-          BorraArbol(E);
+        BorraArbol(E);
       except
       end;
   except
@@ -4095,13 +4044,13 @@ end;
 var
   GPrimera: THandle = 0;
   GPresencia: THandle = 0; // ApuntaPresencia: esta instancia, viva
-  GTemporalesMias: TStringList = nil; // claves de las temporales de ESTE proceso
 
 { Reclama AClave para ESTE proceso mientras viva: un mutex global que se
   queda abierto de por vida. False si otro proceso vivo ya la tiene, o si
   no se pudo crear (otra cuenta, otro fallo): en la duda no es nuestra, y
   no purgar es la opcion sin peligro. LA regla de "de quien es esto
-  mientras vive": la usan la casa del servidor y las temporales de raiz. }
+  mientras vive": la usan la casa del servidor y la presencia de cada
+  instancia. }
 function ReclamaNombre(const AClave: string; out AHandle: THandle): Boolean;
 begin
   AHandle := CreateMutex(nil, False, PChar(NombreDeMutex(AClave)));
@@ -4111,25 +4060,6 @@ begin
     AHandle := 0;
   end;
   Result := AHandle <> 0;
-end;
-
-{ La temporal ADir es de ESTE proceso: si ningun otro servidor vivo la ha
-  reclamado, la reclama (hasta morir) y True. La clave sale de la ruta
-  canonica, asi que la misma carpeta escrita en 8.3 o con otras mayusculas
-  es la misma temporal; va resumida porque un nombre de mutex es corto. }
-function TemporalEsMia(const ADir: string): Boolean;
-var
-  Clave: string;
-  H: THandle;
-begin
-  Clave := 'tmp-' + ClaveDeCarpeta(ADir);
-  if not Assigned(GTemporalesMias) then
-    GTemporalesMias := TStringList.Create;
-  if GTemporalesMias.IndexOf(Clave) >= 0 then
-    Exit(True);
-  Result := ReclamaNombre(Clave, H);
-  if Result then
-    GTemporalesMias.Add(Clave);
 end;
 
 { True si este proceso es la PRIMERA instancia viva de ESTE exe (esta
@@ -4201,116 +4131,7 @@ begin
   end;
 end;
 
-{ TODAS las __delphi-temp bajo una raiz, la de arriba y las anidadas. Antes
-  la purga solo vaciaba <raiz>\__delphi-temp, y una anidada guardo 90
-  capturas (66 MB) de Hermes a traves de todos los reinicios del 25-sep.
-  Sin cruzar enlaces (un junction dentro de la raiz que apunte fuera no se
-  recorre: lo de fuera no es nuestro), sin entrar en .git, sin bajar dentro
-  de una temporal ya encontrada, y sin tocar lo PROTEGIDO: lo de solo
-  lectura de la raiz (ReadOnlyPaths), todo proyecto de referencia
-  (ReadOnlyRoots, de cualquier workspace) y el vault. }
-function TemporalesBajo(const ARoot: string;
-  const AProtegidas: TArray<string>): TArray<string>;
-var
-  Acc: TStringList;
-
-  function Protegida(const D: string): Boolean;
-  var
-    P: string;
-  begin
-    Result := False;
-    for P in AProtegidas do
-      if EnLugar(D, P) then // una referencia declarada en 8.3 tambien
-        Exit(True);
-  end;
-
-  procedure Baja(const D: string; ANivel: Integer);
-  var
-    Sub, Nombre: string;
-    A: Cardinal;
-  begin
-    if ANivel > 16 then
-      Exit; // tope de profundidad: un arbol patologico no para el arranque
-    try
-      for Sub in TDirectory.GetDirectories(D) do
-      begin
-        A := GetFileAttributes(PChar(Sub));
-        if (A = INVALID_FILE_ATTRIBUTES) or EsEnlace(Sub) then
-          Continue; // un enlace: no se sigue
-        Nombre := TPath.GetFileName(Sub);
-        if SameText(Nombre, '.git') or Protegida(Sub) then
-          Continue;
-        if SameText(Nombre, TempFolderName) then
-        begin
-          Acc.Add(Sub);
-          Continue;
-        end;
-        Baja(Sub, ANivel + 1);
-      end;
-    except
-      // una carpeta ilegible: se sigue con las demas
-    end;
-  end;
-
-begin
-  Acc := TStringList.Create;
-  try
-    if (ARoot.Trim <> '') and TDirectory.Exists(ARoot.Trim) and
-       not Protegida(ARoot.Trim) then
-      Baja(SinBarraFinal(ARoot.Trim), 0);
-    Result := Acc.ToStringArray;
-  finally
-    Acc.Free;
-  end;
-end;
-
-{ Las temporales bajo UNA raiz, vaciadas (con ACorte, lo anterior a el:
-  VaciaDesechable). Devuelve cuantas ha encontrado que son de este proceso. }
-function PurgaRaiz(const ARaiz: string; const ANoSeTocan: TArray<string>;
-  ACorte: UInt64): Integer;
-var
-  T: string;
-begin
-  Result := 0;
-  TemporalEsMia(TPath.Combine(ARaiz, TempFolderName));
-  for T in TemporalesBajo(ARaiz, ANoSeTocan) do
-    if TemporalEsMia(T) then
-    begin
-      VaciaDesechable(T, ACorte);
-      Inc(Result);
-    end;
-end;
-
-{ Las raices de la purga, cada SITIO una vez: la misma raiz declarada en dos
-  workspaces se purgaba dos veces - en la VM 13.2, N:\CodeSandBox de Claude y
-  de Hermes daba dos recorridos por el NAS y dos lineas en el log (6-oct-2026).
-  Comparadas en la forma larga (FormaLarga, la de toda comparacion de sitio);
-  como la forma larga pregunta al disco, las de RED se pasan aqui DENTRO de su
-  hilo, no en el arranque. }
-function RaicesSinRepetir(const ARaices: TArray<string>): TArray<string>;
-var
-  Vistas: TArray<string>;
-begin
-  Result := nil;
-  Vistas := nil;
-  for var R in ARaices do
-  begin
-    var Larga: string;
-    try
-      Larga := FormaLarga(R);
-    except
-      Larga := IncludeTrailingPathDelimiter(R); // una raiz no se pierde por no canonizarse
-    end;
-    if IndexText(Larga, Vistas) >= 0 then
-      Continue;
-    Vistas := Vistas + [Larga];
-    Result := Result + [R];
-  end;
-end;
-
 procedure PurgeServerTemp;
-var
-  R: string;
 begin
   // toda instancia se apunta como viva ANTES de decidir nada
   ApuntaPresencia;
@@ -4318,7 +4139,7 @@ begin
     Exit;
   // ...y la primera purga solo si es la UNICA viva de esta casa: el servicio
   // que rearranca es la primera aunque una instancia stdio del mismo exe siga
-  // con un test, la -F de un commit o una temporal de raiz a medias. Lo que
+  // con un test o la -F de un commit a medias. Lo que
   // queda se lo lleva el siguiente arranque a solas.
   if HayOtraInstanciaViva then
     Exit;
@@ -4329,74 +4150,13 @@ begin
   // Aqui y no antes del if: un arranque stdio del mismo exe no borra los del
   // servicio en marcha, como no borra sus temporales.
   PurgaContenedoresHuerfanos;
-  // ...Y LA DE CADA WORKSPACE, que desde la 1.18.2 (2af) ya no recibe nada
-  // nuestro - las capturas viven en la casa del servidor (Lsp.Casa) -: se
-  // queda para llevarse las que dejaron las versiones anteriores, y las que
-  // deje un servidor mas viejo con una raiz compartida (la VM de Hermes en
-  // N:). Retirarla en la 1.19. Primer intento: se vaciaba en el primer uso
-  // de AgentTempDir, porque "al arrancar no hay workspace activo" - los
-  // roots los elige el token de quien llama. Falso: los workspaces ESTAN
-  // declarados en el settings.ini y LoadSecurity los tiene desde el
-  // arranque; lo que no hay es uno ACTIVO, que no es lo mismo. Lo canto la
-  // suite: con el nodo del escritorio ocupado por otra bateria nadie llamaba
-  // a AgentTempDir, nadie purgaba, y la migaja de la ejecucion anterior
-  // sobrevivia. "Se limpia en el primer uso" no es "se limpia al arrancar",
-  // que es lo que se prometio (David, 2026-09-21).
-  // Todas las temporales bajo cada raiz de escritura, las anidadas tambien
-  // (TemporalesBajo, arriba). Protegido: lo de solo lectura de ESE
-  // workspace, cualquier proyecto de referencia y el vault.
-  try
-    LoadSecurity;
-    // lo que no se toca de NINGUN workspace (SitiosQueNoSeTocan)
-    var NoSeTocan := SitiosQueNoSeTocan;
-    // Solo lo que es de ESTE proceso (TemporalEsMia): la temporal de cada
-    // raiz se reclama aunque aun no exista -las llamadas la crearan-, y una
-    // que ya es de otro servidor vivo no se toca.
-    var Raices: TArray<string> := RaicesDeLosWorkspaces;
-    Raices := Raices + RaicesDelModoLocal; // modo local de lanzamiento (baterias)
-    // La raiz en una unidad de RED, aparte (1.9.0). Buscar sus temporales
-    // es recorrer el arbol entero por la red - 2,6 ms por carpeta medidos
-    // en el servicio de produccion con una raiz que es un recurso de un
-    // NAS: el arranque esperaba a eso, y crece con el recurso -, y el
-    // cerrojo de TemporalEsMia es de ESTA maquina: el servidor de otra, con
-    // una raiz en el mismo recurso, se quedaba sin lo que tuviese a medias.
-    // Va en un hilo, despues de las locales (nadie mas toca la lista de
-    // TemporalEsMia), y deja lo de la ultima hora (VaciaDesechable).
-    var DeRed: TArray<string> := nil;
-    var Locales: TArray<string> := nil;
-    for R in Raices do
-      // (tambien la letra que AUN no esta: si la conecta el reintento
-      // mientras tanto, se recorre igual de aparte y con el mismo corte)
-      if ClaseDeLetra(LetraDeRuta(R)) <> clLocal then
-        DeRed := DeRed + [R]
-      else
-        Locales := Locales + [R];
-    for R in RaicesSinRepetir(Locales) do
-      PurgaRaiz(R, NoSeTocan, 0);
-    if Length(DeRed) > 0 then
-      TThread.CreateAnonymousThread(
-        procedure
-        var
-          Rd: string;
-          T0: UInt64;
-          N: Integer;
-        begin
-          // (cada sitio una vez: aqui, que la forma larga pregunta a la red)
-          for Rd in RaicesSinRepetir(DeRed) do
-            try
-              if not TDirectory.Exists(Rd) then
-                Continue; // la letra sigue sin estar: nada que limpiar ni que decir
-              T0 := GetTickCount64;
-              N := PurgaRaiz(Rd, NoSeTocan, CorteDePurga(1));
-              NotaAlLog(MsgFmt(SL_NET_PURGA_FMT, [SinBarraFinal(Rd), N,
-                Integer(GetTickCount64 - T0)]));
-            except
-              // limpiar nunca tumba nada
-            end;
-        end).Start;
-  except
-    // limpiar no puede impedir arrancar
-  end;
+  // Las __delphi-temp de las RAICES ya no (V31 de la 1.23; su comentario
+  // decia "Retirarla en la 1.19"): desde la 1.18.2 (2af) nada nuestro vive en
+  // ellas -las capturas, en la casa (Lsp.Casa)- y su purga solo se llevaba lo
+  // que dejaron versiones anteriores: un proceso interno del servidor
+  // borrando DENTRO del workspace, y con una raiz compartida por dos
+  // maquinas, lo que el servidor de la otra tuviera a medias. Lo que quede es
+  // del operador: oculto en los listados y negado para escribir.
 end;
 
 { Optional per-agent write confinement (OFF by default). When on, an identified

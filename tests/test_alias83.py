@@ -9,8 +9,6 @@ A2  una carpeta que CONTIENE un ReadOnlyPaths, por su alias: no se borra
 A3  el vault dentro de la raiz, por su alias: ni se edita ni se borra
 A4  borrar una unit por su alias 8.3 la saca de su proyecto (el .dpr seguia
     listandola: F1026 en el build)
-A5  una referencia (ReadOnlyRoots) declarada en 8.3: la purga del arranque
-    no vacia su __delphi-temp
 B1  changeset delete tras dos ediciones del dia: la papelera guarda lo
     ULTIMO (la copia diaria era la de la manana)
 B2  upload sobre un fichero editado hoy: la copia sellada es la de antes
@@ -22,8 +20,6 @@ A8  una ruta en 8.3 con punto final o ::$DATA: la negativa de la anomalia,
     y nada creado (alargarla le quitaba el punto y creaba "$DATA")
 A9  el vault de OTRO workspace, anidado en esta raiz: ni se edita ni se
     borra con este token (solo se miraba el vault del activo)
-A10 la purga del arranque no vacia el __delphi-temp de un vault ni el de
-    un ReadOnlyPaths de OTRO workspace anidado en esta raiz
 A11 las tools vault_* por el alias 8.3: el fichero de gobierno y la
     carpeta excluida siguen siendolo
 A12 copy=true y delphi_package de una carpeta con el vault de OTRO
@@ -32,8 +28,9 @@ A13 una raiz declarada por su ruta de red (UNC) NO se carga, aunque el recurso
     exista y responda: su token da 403 SYS-034, cerrado (desde la 1.9.0 un sitio se declara con
     su letra; antes se leia por su forma larga y por la corta, y \\\\srvhost\\
     volvia a su host); y el UNC de una carpeta de MI raiz sigue fuera
-A5 y A10 llevan su control: una temporal normal SI se purgo (sin el, un
-    arranque que no purgara nada los dejaba en verde)
+(A5 y A10, la purga del arranque y las __delphi-temp de una referencia, de
+    un vault y de un ReadOnlyPaths, salieron con esa purga en la 1.23: V31;
+    test_purga_temporales mide que el arranque no toca las de una raiz)
 
 Si el volumen no da nombres 8.3, los A se dicen NOTA y no se miden.
 
@@ -71,11 +68,7 @@ for d in (OTRA, OTRA2, VENDOR, VAULT, REF):
     os.makedirs(d)
     open(os.path.join(d, 'dato.txt'), 'w').write('no me borres\n')
 open(os.path.join(VAULT, 'AGENTS-VAULT.md'), 'w').write('# reglas\n')
-TEMP_REF = os.path.join(REF, mc.TEMPORALES)
-os.makedirs(TEMP_REF)
-MIGA_REF = os.path.join(TEMP_REF, 'de-la-referencia.txt')
-open(MIGA_REF, 'w').write('de la referencia\n')
-# A9/A10: el vault de OTRO workspace y un ReadOnlyPaths suyo, anidados aqui
+# A9: el vault de OTRO workspace y un ReadOnlyPaths suyo, anidados aqui
 CONOTRO = os.path.join(JAIL, 'conotro')                   # A12: la carpeta que lo contiene
 VAULT_OTRO = os.path.join(CONOTRO, 'vaultdeotro')
 os.makedirs(VAULT_OTRO)
@@ -83,16 +76,7 @@ open(os.path.join(CONOTRO, 'propio.txt'), 'w').write('propio\n')
 open(os.path.join(VAULT_OTRO, 'AGENTS-VAULT.md'), 'w').write('# de otro\n')
 RO_OTRO = os.path.join(OTRA, 'soloconsulta')
 os.makedirs(RO_OTRO)
-MIGAS = []
-for _d in (VAULT, VAULT_OTRO, RO_OTRO):
-    os.makedirs(os.path.join(_d, mc.TEMPORALES), exist_ok=True)
-    MIGAS.append(os.path.join(_d, mc.TEMPORALES, 'miga.txt'))
-    open(MIGAS[-1], 'w').write('no me purgues\n')
 os.makedirs(os.path.join(VAULT, '.obsidian'))  # A11: la carpeta excluida
-# el CONTROL de A5/A10: una temporal normal, anidada, que la purga SI vacia
-PURGAME = os.path.join(JAIL, 'normal', mc.TEMPORALES, 'purgame.txt')
-os.makedirs(os.path.dirname(PURGAME))
-open(PURGAME, 'w').write('purgame\n')
 
 
 def unc(p):
@@ -154,7 +138,7 @@ def niega(nombre, tool, args, constante, sigue):
 
 try:
     if not HAY83:
-        print('NOTA: A1-A5 sin medir: este volumen no da nombres 8.3')
+        print('NOTA: A1-A3 y A11 sin medir: este volumen no da nombres 8.3')
     else:
         # A1 la raiz de otro workspace: declarada larga y nombrada corta...
         niega('A1 la raiz de OTRO workspace por su alias 8.3 no se borra',
@@ -176,11 +160,6 @@ try:
               open(os.path.join(VAULT, 'AGENTS-VAULT.md')).read() == '# reglas\n', t[:220])
         niega('A3 ...ni se borra', 'delphi_delete', {'path': corta(VAULT)}, 'SR_VAULT_NOT_CODE',
               os.path.join(VAULT, 'AGENTS-VAULT.md'))
-        # A5 la purga del arranque ya paso: la referencia declarada en 8.3
-        check('A5 la purga del arranque no vacio el __delphi-temp de una referencia declarada en 8.3',
-              os.path.exists(MIGA_REF), TEMP_REF)
-        check('A5 ...control: la purga SI corrio (una temporal normal quedo vacia)',
-              not os.path.exists(PURGAME), PURGAME)
         # A11 las tools vault_* por el alias 8.3: comparaban el TEXTO
         AVC = os.path.basename(corta(os.path.join(VAULT, 'AGENTS-VAULT.md')))
         res, sc, t = llama('vault_append', {'path': AVC, 'content': 'intruso'})
@@ -249,12 +228,6 @@ try:
         niega('A9 ...ni se borra por su alias', 'delphi_delete', {'path': VOC}, 'SR_VAULT_NOT_CODE', AVO)
     else:
         print('NOTA: A9 por alias sin medir: el vault de otro no tiene alias 8.3 (%r)' % VOC)
-    # A10 la purga del arranque ya paso
-    check('A10 la purga del arranque no vacio los temporales de los vaults ni de un '
-          'ReadOnlyPaths de otro workspace', all(os.path.exists(m) for m in MIGAS),
-          [m for m in MIGAS if not os.path.exists(m)])
-    check('A10 ...control: la purga SI corrio (una temporal normal quedo vacia)',
-          not os.path.exists(PURGAME), PURGAME)
 
     # A12 copiar o empaquetar la carpeta que contiene el vault de OTRO
     # workspace: lo propio va, el vault no (octava revision)

@@ -1,6 +1,8 @@
-"""E2E battery: the startup purge empties the temporaries (the server's house,
-the temp folder of every root, and the delphi_test containers of the house)
-only when this is the ONLY live instance of the exe.
+"""E2E battery: the startup purge empties the temporaries (the server's house
+and the delphi_test containers of the house) only when this is the ONLY live
+instance of the exe. (The temp folder of every root was purged too until
+1.23, V31: nothing of the server lives in a root, and test_purga_temporales
+measures that the startup leaves them alone.)
 
 Pending point 2 of 1.11.0: the purge ran in the FIRST instance (a mutex keyed
 by the exe's folder). A stdio instance started while the service ran was not
@@ -11,9 +13,9 @@ stdio instance had in flight (a test's copy, a commit's message file).
 
 This battery reproduces it with a copy of the exe: instance A (the service)
 and instance B (stdio, same exe); something "in flight" of B is planted in
-the house and in a root's temp; A is killed and restarted with B alive. What
+the house; A is killed and restarted with B alive. What
 B had must survive. The control: with B gone, a lone start DOES purge - so the
-first two checks cannot pass because the purge simply does nothing.
+first check cannot pass because the purge simply does nothing.
 
 Usage:  python tests/test_purga_instancias.py [path-to-DelphiLspMcp.exe]
 """
@@ -32,17 +34,14 @@ with open(os.path.join(SRV, 'settings.ini'), 'w') as f:
     f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n' % PORT +
             '[Workspace.Purga]\nToken=%s\nRoots=%s\n' % (TOKEN, JAIL))
 CASA = os.path.join(SRV, mc.TEMPORALES)
-RAIZ_TMP = os.path.join(JAIL, mc.TEMPORALES)
 VIVO_CASA = os.path.join(CASA, 'vivo-de-la-stdio.txt')
-VIVO_RAIZ = os.path.join(RAIZ_TMP, 'vivo-de-la-stdio.txt')
 env = mc.entorno()
 
 
 def planta():
-    for d, f in ((CASA, VIVO_CASA), (RAIZ_TMP, VIVO_RAIZ)):
-        os.makedirs(d, exist_ok=True)
-        with open(f, 'w') as h:
-            h.write('en vuelo')
+    os.makedirs(CASA, exist_ok=True)
+    with open(VIVO_CASA, 'w') as h:
+        h.write('en vuelo')
 
 
 def para(p):
@@ -64,8 +63,6 @@ try:
     A2 = mc.lanza_http(EXE, PORT, env=env)
     check('P1 el servicio que rearranca con otra instancia VIVA del mismo exe no vacia la casa',
           os.path.exists(VIVO_CASA), VIVO_CASA)
-    check('P2 ...ni la temporal de una raiz (lo que la viva tenia en vuelo sigue)',
-          os.path.exists(VIVO_RAIZ), VIVO_RAIZ)
     # control: sin la stdio, un arranque a solas SI purga
     B.mata()
     B = None
@@ -74,8 +71,6 @@ try:
     A3 = mc.lanza_http(EXE, PORT, env=env)
     check('P3 control: a solas, el arranque SI vacia la casa (P1 no pasa porque la purga no haga nada)',
           not os.path.exists(VIVO_CASA), VIVO_CASA)
-    check('P4 control: a solas, el arranque SI vacia la temporal de la raiz',
-          not os.path.exists(VIVO_RAIZ), VIVO_RAIZ)
 finally:
     if B is not None:
         B.mata()

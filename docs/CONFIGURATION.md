@@ -607,9 +607,11 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   included: it is not trash, nothing is restored from it. Before 1.0.12 these files went to
   the MACHINE's `%TEMP%` (56.4 MB measured, forgotten there for two days); from 1.0.12 to
   1.18.1 the captures went to `<root>\__delphi-temp\<agent>\`, inside the workspace, because
-  `delphi_fetch` checked the jail - and the jail then judged the server's own work. The
-  server still empties the `__delphi-temp` it finds in the workspace roots at startup, to
-  take away what those versions left.
+  `delphi_fetch` checked the jail - and the jail then judged the server's own work. Since
+  1.23 the server no longer empties at startup the `__delphi-temp` those versions left in a
+  workspace root: that was the server deleting inside a workspace, which is not its home.
+  What is left there is the operator's to delete - hidden from every listing, refused for
+  writing.
   THIS SERVER declares it in the tool's own source (`[RutaDelServidor]`), and since 1.0.14 the
   gate in front of every `tools/call` READS that declaration: an absolute path in a marked
   argument must fall inside what the workspace may read, before the tool even starts. It is a
