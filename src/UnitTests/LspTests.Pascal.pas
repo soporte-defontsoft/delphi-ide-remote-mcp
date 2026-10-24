@@ -22,6 +22,7 @@ type
     [Test] procedure LosTrozosDeUnaDeFichero;
     [Test] procedure ElGrupoDeClasesDelIde;
     [Test] procedure UnNombreNuevoNoEsPalabraReservada;
+    [Test] procedure UnPaqueteLoEsPorSuCabecera;
   end;
 
   // EL lexico (Lsp.Pascal): que es codigo, cadena, comentario y directiva.
@@ -370,6 +371,17 @@ begin
   Assert.IsFalse(EsNombreNuevo('Begin'), 'una palabra reservada, con cualquier mayuscula');
   Assert.IsFalse(EsNombreNuevo('2Form'), 'no empieza por un digito');
   Assert.IsFalse(EsNombreNuevo('A.B'), 'un nombre de form no lleva puntos');
+end;
+
+{ Un paquete por su CABECERA, como lo compila dcc (A30 de la 1.23): un .dpr
+  que empieza por package da un .bpl. Un comentario delante no es cabecera. }
+procedure TDirectivasTests.UnPaqueteLoEsPorSuCabecera;
+begin
+  Assert.IsTrue(EsFuenteDePaquete('package P;'#13#10'requires rtl;'#13#10'end.'));
+  Assert.IsTrue(EsFuenteDePaquete('{ comentario }'#13#10'Package P;'#13#10'end.'), 'con cualquier mayuscula y un comentario delante');
+  Assert.IsFalse(EsFuenteDePaquete('program P;'#13#10'begin'#13#10'end.'));
+  Assert.IsFalse(EsFuenteDePaquete('// package Viejo;'#13#10'program P;'#13#10'begin'#13#10'end.'), 'un package comentado no cuenta');
+  Assert.IsFalse(EsFuenteDePaquete('unit U;'#13#10'interface'#13#10'implementation'#13#10'end.'));
 end;
 
 procedure TDirectivasTests.ElGrupoDeClasesDelIde;

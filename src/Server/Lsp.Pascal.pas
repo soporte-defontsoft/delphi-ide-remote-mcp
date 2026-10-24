@@ -266,6 +266,11 @@ type
     Ini, NombreIni, NombreLen, Fin: Integer;
   end;
 function CabeceraDeFuente(const ACodigo: string; out ACab: TCabeceraFuente): Boolean;
+{ El fuente ATexto es un PAQUETE: su cabecera dice package. Lo decide la
+  cabecera, no la extension: dcc compila un .dpr que empieza por package en un
+  .bpl y un .dpk que empieza por program en un .exe (medido el 24-oct-2026).
+  Tres sitios lo preguntaban por la extension .dpk (A30 de la 1.23). }
+function EsFuenteDePaquete(const ATexto: string): Boolean;
 
 { LOS 'end.' de un fuente, leidos en ACodigo (la vista del codigo, como la
   cabecera), en orden: donde empieza su 'end' (Ini) y donde acaba, detras de
@@ -745,6 +750,13 @@ begin
   for var K := 1 to Min(APos, Length(ATexto) + 1) - 1 do
     if (ATexto[K] = #10) or ((ATexto[K] = #13) and ((K = Length(ATexto)) or (ATexto[K + 1] <> #10))) then
       Inc(Result);
+end;
+
+function EsFuenteDePaquete(const ATexto: string): Boolean;
+var
+  Cab: TCabeceraFuente;
+begin
+  Result := CabeceraDeFuente(CodigoPascal(ATexto), Cab) and (Cab.Palabra = 'package');
 end;
 
 function CabeceraDeFuente(const ACodigo: string; out ACab: TCabeceraFuente): Boolean;

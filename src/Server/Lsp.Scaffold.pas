@@ -947,7 +947,11 @@ begin
     // real thing to do, but never silently.
     // (un paquete no tiene Application ni lo necesita: su form lo crea quien
     // lo usa)
-    if (Have = '') and not SameText(TPath.GetExtension(DprDe(ADprPath)), '.dpk') then
+    // un paquete por su cabecera, como lo compila dcc (EsFuenteDePaquete,
+    // A30); sin fuente que leer no hay nota: el registro dira lo suyo
+    var EncDpr: string;
+    if (Have = '') and TFile.Exists(DprDe(ADprPath)) and
+       not EsFuenteDePaquete(PatchLoadText(DprDe(ADprPath), EncDpr)) then
       FrameworkNote := MsgText(SN_CREATE_CONSOLE_FORM);
   end;
   FormName := AFormName.Trim;

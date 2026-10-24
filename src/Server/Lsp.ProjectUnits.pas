@@ -1884,7 +1884,8 @@ begin
     Text := ReplaceUses(Text, U, Entries);
   // un paquete no lleva CreateForm (no tiene programa principal): se
   // intentaba, contestaba CFG-046 y el mensaje decia "+ CreateForm" (P9)
-  EsPaquete := SameText(TPath.GetExtension(Dpr), '.dpk');
+  // ...y lo es por su cabecera, como lo compila dcc (EsFuenteDePaquete, A30)
+  EsPaquete := EsFuenteDePaquete(Text);
   // ...ni el de un programa sin Application.Run ni otro CreateForm (una
   // consola): el mensaje dice lo que QUEDO en el .dpr, no lo que el form
   // pediria. Anunciaba "+ Application.CreateForm" y CFG-046 lo desmentia en
@@ -2356,8 +2357,6 @@ begin
   Result := ResolveProjectPair(AProject, Dpr, Dproj);
   if Result <> '' then
     Exit;
-  if not SameText(TPath.GetExtension(Dpr), '.dpk') then
-    Exit(MsgFmt(SR_REQUIRES_NOT_PACKAGE_FMT, [TPath.GetFileName(Dpr)]));
   Nombres := TStringList.Create;
   Nuevos := TStringList.Create;
   try
@@ -2373,6 +2372,10 @@ begin
     EnterFileEdit;
     try
       Text := PatchLoadText(Dpr, Enc);
+      // un paquete por su cabecera, como lo compila dcc, no por ser un .dpk
+      // (EsFuenteDePaquete, A30 de la 1.23)
+      if not EsFuenteDePaquete(Text) then
+        Exit(MsgFmt(SR_REQUIRES_NOT_PACKAGE_FMT, [TPath.GetFileName(Dpr)]));
       NL := SaltoDominante(Text);
       // EL lector y EL escritor de las clausulas (FindUses / ReplaceUses, los
       // de contains): se reescribia entera, un nombre por linea, y se perdian
@@ -2435,13 +2438,12 @@ end;
 function ClausulaRequires(const ATexto: string; out ANombres: TArray<string>;
   out AIni, ALargo: Integer): Boolean;
 var
-  Cab: TCabeceraFuente;
   U: TUsesClause;
 begin
   ANombres := [];
   AIni := 0;
   ALargo := 0;
-  if not CabeceraDeFuente(CodigoPascal(ATexto), Cab) or (Cab.Palabra <> 'package') then
+  if not EsFuenteDePaquete(ATexto) then
     Exit(False);
   // EL lector de las clausulas (FindUses, el de contains): lo PRIMERO detras
   // de la cabecera, con sus comentarios y sus ramas; los nombres, de todas.

@@ -165,6 +165,15 @@ the MCP `initialize` response (`serverInfo.version`).
   BOM, and anything else UTF-8 without one, in `delphi_create`, the changeset
   and both edit tools. The `eol` a create asks for is read by one reader too
   (`tests/test_nacer_1230.py`).
+- **A source is a package because it says `package`, as the compiler reads
+  it.** `dcc` compiles a `.dpr` that starts with `package` into a `.bpl` and a
+  `.dpk` that starts with `program` into an `.exe` (measured on 2026-10-24),
+  but `delphi_config add-requires`, the `CreateForm` of a unit added to a
+  project and the note about a form in a console project decided it by the
+  `.dpk` extension: a package written in a `.dpr` was refused its `requires`
+  (`CFG-049`), and a program written in a `.dpk` was given one - a
+  `requires vcl` inside a program, which then no longer compiled. They ask the
+  source's own header now (`tests/test_paquete_1230.py`).
 - **`delphi_projects` given a file says it is a file.** It answered `PROJ-003`,
   "does not exist... there is nothing there", for a file that was there;
   `delphi_package` said `LIST-002` naming `delphi_list`. The three tools that

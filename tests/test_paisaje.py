@@ -245,6 +245,11 @@ REGLAS = [
     ('la carpeta que es un fichero dicha a mano', r"\bSR_LIST_IS_FILE_FMT\b",
      [('Mcp.Tools.Workspace.pas', 'CarpetaQueNoEs')],
      'CarpetaQueNoEs (Mcp.Tools.Workspace, A17 de la 1.23)'),
+    # "es un paquete" por la extension: dcc decide por la cabecera (un .dpr que empieza por package da un
+    # .bpl, medido el 24-oct-2026); tres sitios miraban '.dpk' y un programa .dpk recibia un requires (A30)
+    ('un paquete juzgado por su extension', r"(?i)SameText\([^;]*GetExtension\([^;]*\)\s*,\s*'\.dpk'\s*\)",
+     [],
+     'EsFuenteDePaquete (Lsp.Pascal, A30 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1236,6 +1241,7 @@ PLANTADO = {
     'la codificacion de un fichero nuevo elegida a mano': "  Enc := NewFileEncName;",
     'el salto que pide el agente traducido a mano': "  if SameText(A.Eol, 'lf') then",
     'la carpeta que es un fichero dicha a mano': "      Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Dir]))",
+    'un paquete juzgado por su extension': "  EsPaquete := SameText(TPath.GetExtension(Dpr), '.dpk');",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

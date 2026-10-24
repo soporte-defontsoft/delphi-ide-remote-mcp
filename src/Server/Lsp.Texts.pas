@@ -3580,11 +3580,12 @@ const
   SN_UNIT_NO_DPROJ =
     '[CFG-048] The project has no .dproj: only the .dpr was updated.';
 
-  { add-requires: la clausula requires de un .dpk, lo que el IDE ofrece tras
-    un build con W1033. }
+  { add-requires: la clausula requires de un paquete, lo que el IDE ofrece tras
+    un build con W1033. Un paquete por su cabecera, como lo compila dcc: un
+    programa en un .dpk recibia un requires y dejaba de compilar (A30). }
   SR_REQUIRES_NOT_PACKAGE_FMT =
-    '[CFG-049 INVALID_PARAM] %s is not a package (.dpk): the requires clause ' +
-    'only exists in packages.';
+    '[CFG-049 INVALID_PARAM] %s is not a package (its source does not start ' +
+    'with "package"): the requires clause only exists in packages.';
   SR_REQUIRES_BAD_NAME_FMT =
     '[CFG-050 INVALID_PARAM] "%s" is not a package name (a Pascal identifier, ' +
     'dots allowed, as in the IDE: vcl, dbrtl, fmx, IndyCore).';
