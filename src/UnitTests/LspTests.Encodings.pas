@@ -64,6 +64,8 @@ type
     procedure UnSustitutoSueltoQueYaEstabaSeEscribeComoEstaba;
     [Test]
     procedure UbicacionDeLspLeeLasFormasDelMotor;
+    [Test]
+    procedure ElMojibakeDeLatin1SeVeEnCualquierPagina;
   end;
 
   { Los pares que COMPONEN y LEEN un formato, y la inversa de cada uno: la
@@ -1102,6 +1104,28 @@ begin
   finally
     V.Free;
   end;
+end;
+
+{ El mojibake de un texto nuevo (Lsp.Patch.MojibakeLines): UTF-8 leido en la
+  ANSI de la maquina, o en Latin-1, como lo lee la herramienta de un agente.
+  Fuera de la 1252 la o con tilde leida en Latin-1 (C3 B3: U+00C3 U+00B3) no
+  tiene byte ANSI y no se veia (medido el 24-oct-2026 con el servidor en la
+  1251). }
+procedure TEncodingTests.ElMojibakeDeLatin1SeVeEnCualquierPagina;
+const
+  LATIN1 = 'S := ''gestor' + #$00C3#$00B3 + 'n'';';
+  EN_1251 = 'S := ''gestor' + #$0413#$0456 + 'n'';'; // C3 B3 leidos en la 1251
+  RUSO = 'S := ''' + #$043F#$0440#$0438#$0432#$0435#$0442 + ''';';
+begin
+  for var P in [1252, 1251, 1253] do
+  begin
+    UsaPaginaAnsi(P);
+    Assert.IsTrue(Length(MojibakeLines(LATIN1)) = 1, 'el de Latin-1 en la ' + IntToStr(P));
+  end;
+  UsaPaginaAnsi(1251);
+  Assert.IsTrue(Length(MojibakeLines(EN_1251)) = 1, 'el de la propia 1251');
+  Assert.IsTrue(Length(MojibakeLines(RUSO)) = 0, 'un texto ruso no lo es');
+  Assert.IsTrue(Length(MojibakeLines('S := ''gesti' + #$00F3 + 'n'';')) = 0, 'una o con tilde no lo es');
 end;
 
 procedure TNombradorTests.ColumnaDelMotorYSuInversa;

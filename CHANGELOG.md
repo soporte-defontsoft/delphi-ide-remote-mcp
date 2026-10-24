@@ -23,6 +23,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The mojibake warning sees UTF-8 read as Latin-1 on every code page.** New
+  text carrying UTF-8 read as Latin-1 or CP1252 (`Ã³` for `ó`, what an agent's
+  tools make of a UTF-8 file) was warned about only where the machine's ANSI
+  page is 1252: on any other, those characters have no ANSI byte and the
+  detector did not read them (measured with the server running in code page
+  1251). Every character from U+0080 to U+00FF now counts as the Latin-1 byte
+  it comes from, as U+0080 to U+009F already did; on a 1252 machine nothing
+  changes.
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

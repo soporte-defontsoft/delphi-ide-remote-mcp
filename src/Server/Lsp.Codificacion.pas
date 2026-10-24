@@ -159,7 +159,7 @@ function ValidUtf8(const B: TArray<Byte>; AOffset: Integer): Boolean;
   hay (no cabe, o en una pagina de varios bytes va en dos): el mismo codec
   que EncodeText, leido y escrito byte a byte al fijar la pagina. Lo
   pregunta el que busca mojibake (Lsp.Patch.MojibakeLines), que para
-  U+0080..U+009F mira ademas la lectura Latin-1. }
+  U+0080..U+00FF mira ademas la lectura Latin-1. }
 function ByteCp(C: Char): Integer;
 
 type

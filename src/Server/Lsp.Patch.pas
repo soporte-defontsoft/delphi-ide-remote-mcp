@@ -251,6 +251,10 @@ function SplitToLines(const T: string): TArray<string>;
   fichero de CR sueltos era UNA linea y no se reescribia (novena revision). }
 function SplitToLinesConSalto(const T: string; out ASaltos: TArray<string>): TArray<string>;
 function UneConSusSaltos(const ALineas, ASaltos: TArray<string>): string;
+{ Las lineas (desde 1) con la firma de un mojibake: UTF-8 leido como ANSI o
+  como Latin-1. Lo pregunta el aviso de un texto nuevo que lo trae; en la
+  interfaz para el DUnitX, que la mide en otras paginas. }
+function MojibakeLines(const T: string): TArray<Integer>;
 { ATexto con ACuantas lineas desde ALinea (0-based, las de SplitToLines)
   cambiadas por ANuevas, y cada linea de fuera BYTE A BYTE, con su salto: una
   edicion no reescribe lo que no toca (1.18.2; medido el 10-oct-2026: textedit
@@ -1406,13 +1410,16 @@ var
 
   // De que byte pudo salir C al leer mal UTF-8: su byte ANSI (la regla
   // del codificador, ByteCp) y, si no tiene, el de la lectura Latin-1, que
-  // da U+0080..U+009F tal cual (la E acentuada mayuscula es U+00C3 U+0089;
+  // da cada byte de 80 a FF tal cual (la E acentuada mayuscula es U+00C3 U+0089;
   // la tipografia E2 80 xx, U+00E2 U+0080 ...). Son dos preguntas: unirlas en ByteCp
-  // dejo de ver ese mojibake (revisor propio, 9-oct-2026)
+  // dejo de ver ese mojibake (revisor propio, 9-oct-2026). Hasta FF: en una
+  // maquina que no es 1252 la o con tilde leida en Latin-1 (U+00C3 U+00B3) no
+  // tiene byte ANSI y se escribia sin aviso (medido el 24-oct-2026 con el
+  // servidor en la 1251); en la 1252, de A0 a FF las dos dan el mismo byte
   function ByteLeido(C: Char): Integer;
   begin
     Result := ByteCp(C);
-    if (Result < 0) and (Ord(C) >= $80) and (Ord(C) <= $9F) then
+    if (Result < 0) and (Ord(C) >= $80) and (Ord(C) <= $FF) then
       Result := Ord(C);
   end;
 
