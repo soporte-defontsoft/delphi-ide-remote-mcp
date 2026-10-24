@@ -304,8 +304,9 @@ function AdbTargetAllowed(const ATarget: string): Boolean;
 
 { Las raices de ESCRITURA de todos los workspaces declarados, en el orden
   del settings.ini, y las del modo local de lanzamiento: lo que entra en la
-  lista de lugares protegidos y lo que recorre la purga del arranque, que
-  son de TODO lo declarado y no de la sesion (eso es WorkspaceRoots). }
+  lista de lugares protegidos (y lo que recorria la purga del arranque hasta
+  la 1.23, V31), que son de TODO lo declarado y no de la sesion (eso es
+  WorkspaceRoots). }
 function RaicesDeLosWorkspaces: TArray<string>;
 function RaicesDelModoLocal: TArray<string>;
 { Lo que vale para ESTA sesion: los proyectos que remote-run puede ejecutar
@@ -1980,11 +1981,12 @@ begin
 end;
 
 { Lo que no se toca de NINGUN workspace: sus referencias, sus ReadOnlyPaths
-  y sus vaults (y los del modo local). UNA lista para la purga del arranque
-  y para los lugares protegidos: la purga protegia solo lo del workspace
-  que recorria y el vault global, y vacio el __delphi-temp del vault de un
-  workspace y el de las ReadOnlyPaths de OTRO anidadas en su raiz
-  (septima revision, medido). }
+  y sus vaults (y los del modo local). UNA lista para los lugares
+  protegidos, y lo era tambien para la purga del arranque de las raices
+  hasta que salio en la 1.23 (V31): esa purga protegia solo lo del
+  workspace que recorria y el vault global, y vacio el __delphi-temp del
+  vault de un workspace y el de las ReadOnlyPaths de OTRO anidadas en su
+  raiz (septima revision, medido). }
 function SitiosQueNoSeTocan: TArray<string>;
 var
   W: TWorkspaceDef;

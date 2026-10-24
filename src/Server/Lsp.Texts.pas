@@ -7171,15 +7171,14 @@ const
     'folder.';
 
   { Ni papelera ni copia muerta: la carpeta donde el servidor dejaba LO SUYO
-    dentro de una raiz (hasta la 1.18.2: hoy lo suyo vive en su casa, y lo
-    que quede se purga al arrancar). Se puede borrar entera en cualquier
-    momento, que es justo por lo que no se escribe codigo dentro: lo que
-    pongas ahi no tiene por que seguir estando. }
+    dentro de una raiz (hasta la 1.18.2: hoy lo suyo vive en su casa, que se
+    vacia al arrancar; lo que quede en una raiz ya no se purga desde la 1.23,
+    V31, y es del operador). Se sigue negando: no es sitio de trabajo. }
   SR_GUARD_DEAD_TEMP =
-    '[GUARD-006 DENIED] __delphi-temp\ is the server''s temporary folder, ' +
-    'not a place to work. What is there is put there by the server and ' +
-    'can be wiped entirely at any moment, so a file of yours in there is ' +
-    'a file you are going to lose. Write your work in the workspace.';
+    '[GUARD-006 DENIED] __delphi-temp\ is the name of the server''s ' +
+    'temporary folder, not a place to work: the server''s own empties ' +
+    'itself at every start, and one inside the workspace is what an ' +
+    'earlier version left there. Write your work in the workspace.';
 
   SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT =
     '[FILE-008 DENIED] Inside that folder there are %d copy(ies) that ' +
@@ -7209,9 +7208,9 @@ const
     '[FILE-012] DELETED %s, without a copy: it is a server temporary ' +
     '(__delphi-temp), and nothing is restored from a temporary.';
   SR_FILE_DELETE_TEMP_ROOT_FMT =
-    '[FILE-013 DENIED] %s is the server''s WHOLE temporary folder: it ' +
-    'belongs to all its agents and empties itself at startup. Delete ' +
-    'what is yours inside it (your subfolder, a capture).';
+    '[FILE-013 DENIED] %s is a WHOLE server temporary folder (the one in ' +
+    'the workspace is what an earlier version left there). Delete what is ' +
+    'inside it, one entry at a time.';
 
   SN_FILE_PURGED_FMT =
     '[FILE-014] PURGED %s. There is no way back from this: it was a copy ' +
