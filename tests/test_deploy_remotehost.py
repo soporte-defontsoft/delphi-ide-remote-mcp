@@ -17,12 +17,10 @@ lista y esta caido (un deploy no envia nada). Control: 192.168.1.177 es el
       solo miraba el argumento: E0003 contra 192.168.1.177)
   D6  sin perfil en la llamada ni en el proyecto: el que el IDE tiene para la
       plataforma (como el IDE; 24-oct-2026), juzgado por la misma puerta; sin
-      ninguno, msbuild recibe /p:Profile= vacio (global: EnvOptions no le pone
-      otro) y para con su propio error
-  D6b la respuesta dice target "Deploy", lo que se pidio (1.20.1: decia
-      "Build;Deploy", que la entrada niega con BUILD-004), y el Deploy compilo
-      ANTES (el binario existe aunque el deploy pare: un /t:Deploy solo
-      reenvia el binario de antes)
+      ninguno, BUILD-058 antes de compilar (V15 de la 1.23: msbuild recibia
+      /p:Profile= vacio y paraba con "Missing profile name" tras 41 s). El D6b
+      de antes (la respuesta dice target "Deploy" y compilo antes) vive en el
+      Deploy de Android de test_deploy_adb, el que llega a msbuild sin perfil
   D7  remote-run y D8 delphi_desktop con un perfil que NO existe y argumentos
       validos: negados con su motivo (punto 2, la puerta falla cerrado)
   D9  un entorno del IDE con perfil POR DEFECTO para Linux64 (DefaultProfile
@@ -76,8 +74,8 @@ try:
     # plataforma (RemoteProfiles\Default_Linux64: como despliega el IDE, UNO para todos
     # sus proyectos; David, 24-oct-2026), y JUZGADO como cualquiera: aqui apunta fuera de
     # RemoteHosts y la puerta lo niega antes de compilar, sin marcar. Sin ninguno en el
-    # registro (el mismo que ve este servidor), msbuild recibe /p:Profile= vacio (global:
-    # el del entorno no entra) y para con SU error, sin marcar ni rechazar la linea (MSB1006)
+    # registro (el mismo que ve este servidor), se niega antes de compilar (BUILD-058): el del
+    # entorno no entra, y msbuild paraba con SU error tras 41 s
     import winreg
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Embarcadero\BDS\37.0\RemoteProfiles') as k:
@@ -91,16 +89,11 @@ try:
         check('D6 deploy sin perfil en la llamada ni en el proyecto: toma el del IDE (%s) y la puerta lo juzga, '
               'sin marcar' % DEL_IDE,
               mc.rechazado(out) and 'Missing profile name' not in out and not marco_host, out[:400])
-        print('NOTA: D6b (la respuesta de un Deploy dice "Deploy" y compilo antes) no se mide aqui: el IDE de esta '
-              'cuenta tiene perfil para Linux64 (%s) y la puerta lo niega antes de compilar' % DEL_IDE)
     else:
-        check('D6 deploy sin perfil en ningun sitio: msbuild para con "Missing profile name", sin marcar',
-              'Missing profile name' in out and HOST_PERFIL not in out and 'MSB1006' not in out, out[:400])
         BINARIO = os.path.join(JAIL, 'DeployTest', 'Linux64', 'Debug', 'DeployTest')
-        check('D6b ...la respuesta dice target "Deploy" (lo que se pidio, lo que la entrada acepta)',
-              J(out).get('target') == 'Deploy', (J(out).get('target'), out[:300]))
-        check('D6b ...y compilo antes de desplegar: el binario Linux64 de un proyecto recien creado existe',
-              os.path.isfile(BINARIO), BINARIO)
+        check('D6 deploy sin perfil en ningun sitio: BUILD-058 antes de compilar, sin marcar ni msbuild',
+              mc.abre(out, 'SR_BUILD_DEPLOY_SIN_PERFIL_FMT') and 'Missing profile name' not in out
+              and not marco_host and not os.path.isfile(BINARIO), out[:400])
 
     # D2: el deploy al perfil de host no permitido
     out = srv.call('delphi_build', {'project': DPROJ, 'platform': 'Linux64',

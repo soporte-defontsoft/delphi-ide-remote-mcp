@@ -85,6 +85,7 @@ type
     [Test] procedure ZonaDelCambioMueveLoDeDebajo;
     [Test] procedure UriDelMotorYSuInversa;
     [Test] procedure CompositorConservaLosSaltosDeFuera;
+    [Test] procedure ElTextoEnteroConLaReglaDeQuienCambiaLineas;
     [Test]
     procedure ColumnaDelMotorYSuInversa;
   end;
@@ -1018,6 +1019,49 @@ begin
     begin
       CambiaLineasEnSuTexto('a'#10, 2, 0, ['x'], #13#10);
     end, EArgumentOutOfRangeException, 'detras de la fantasma no es un sitio');
+end;
+
+procedure TNombradorTests.ElTextoEnteroConLaReglaDeQuienCambiaLineas;
+const
+  MIXTO = 'a'#13#10'b'#10'c'#13#10;
+
+  function Lista(const A: TArray<Integer>): string;
+  begin
+    Result := '';
+    for var I in A do
+    begin
+      if Result <> '' then
+        Result := Result + ',';
+      Result := Result + I.ToString;
+    end;
+  end;
+
+begin
+  // LineasQueSeQuedan: el cambio mas corto, por contenido
+  Assert.AreEqual('0,-1,2,3,-1', Lista(LineasQueSeQuedan(['a', 'b', 'c', 'd'], ['a', 'x', 'c', 'd', 'y'])),
+    'una cambiada en medio y una al final');
+  Assert.AreEqual('-1,0,1', Lista(LineasQueSeQuedan(['a', 'b', 'c'], ['c', 'a', 'b'])),
+    'una que se mueve: se quedan las dos que siguen en orden');
+  // ReescribeConSusSaltos (V35 de la 1.23), lo medido: un .dproj LF con una
+  // linea CRLF y un bloque insertado con sLineBreak detras de "c"
+  Assert.AreEqual('a'#10'B'#13#10'c'#10'x'#10'd'#10,
+    ReescribeConSusSaltos('a'#10'B'#13#10'c'#10'd'#10, 'a'#10'B'#13#10'c'#13#10'x'#10'd'#10),
+    'la de delante del bloque conserva su LF y lo nuevo toma el dominante');
+  Assert.AreEqual('a'#10'X'#10'b'#13#10'c'#10'd'#10'Y'#10'e'#10,
+    ReescribeConSusSaltos('a'#10'b'#13#10'c'#10'd'#10'e'#10,
+      'a'#13#10'X'#10'b'#13#10'c'#10'd'#13#10'Y'#10'e'#10),
+    'dos bloques lejos: lo de entre ellos, byte a byte (la CRLF de b sigue)');
+  Assert.AreEqual(MIXTO, ReescribeConSusSaltos(MIXTO, 'a'#13#10'b'#13#10'c'#13#10),
+    'las mismas lineas con otro salto: nada cambia');
+  Assert.AreEqual('a'#13#10'B'#10'c'#13#10, ReescribeConSusSaltos(MIXTO, 'a'#13#10'B'#13#10'c'#13#10),
+    'la linea cambiada conserva su salto, como en CambiaLineasEnSuTexto');
+  Assert.AreEqual('a'#13#10'x'#13#10'b'#13#10, ReescribeConSusSaltos('a'#13#10'b'#13#10, 'a'#13#10'x'#13#10'b'#13#10),
+    'un fichero CRLF, como siempre');
+  Assert.AreEqual('a'#10'b'#10, ReescribeConSusSaltos('a'#10'b', 'a'#10'b'#13#10),
+    'el salto final, como lo deja el nuevo: lo gana con el del fichero');
+  Assert.AreEqual('a'#10'b', ReescribeConSusSaltos('a'#10'b'#10, 'a'#10'b'), '...y lo pierde');
+  Assert.AreEqual('x'#13#10, ReescribeConSusSaltos('', 'x'#13#10), 'un fichero vacio, el nuevo tal cual');
+  Assert.AreEqual('', ReescribeConSusSaltos(MIXTO, ''), 'todo fuera');
 end;
 
 procedure TEncodingTests.UbicacionDeLspLeeLasFormasDelMotor;

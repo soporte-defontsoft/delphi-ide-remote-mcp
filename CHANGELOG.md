@@ -10,6 +10,33 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A Deploy with no profile anywhere is refused before it builds.** With no
+  `profile=`, no `<Profile>` in the project and no profile the IDE keeps for
+  the platform, `delphi_build target=Deploy` ran msbuild, which built and then
+  stopped with its own "Missing profile name" (41 s on Linux64; on Win64 the
+  same with a deployment manifest, and `MSB4057` "the target Deploy does not
+  exist" without one - none of them saying that a profile is missing). It is
+  now refused before anything runs (`BUILD-058`), naming the profiles that
+  deploy that platform; `CFG-028` and `CFG-032` say so.
+- **A project file with mixed line endings keeps the ones a writer did not
+  touch.** The `.dproj` and `.deployproj` writers compose the whole file with
+  `sLineBreak`, and the saver gave the new lines the file's ending only when
+  the file had no CRLF at all: in an LF file with one CRLF line,
+  `add-searchpath` left the LF line before its block in CRLF. The saver now
+  follows the rule of every line editor - what was not touched stays byte for
+  byte, what is new takes the file's dominant ending - finding what stayed
+  with a bounded line diff and changing each stretch through the same
+  composer (`CambiaLineasEnSuTexto`).
+- **A build for another platform says it left the version resource empty.**
+  The project's `.res` (icon, version info, manifest) is one for every
+  platform that shares its folder, and `BuildVersionResource` rewrites it for
+  the platform of each build - but on a Make only when the `.dproj` is newer
+  (`CodeGear.Common.Targets`). Measured: a Linux64 build leaves it with no
+  resources (32 bytes), a Win64 Make keeps that one and the exe ships without
+  icon or version info (155,136 bytes smaller), a Build restores it. The build
+  that empties it now says so once (`BUILD-059`, `resNote`), and so does a
+  Windows Make that finds it empty (`BUILD-060`) (Hermes, 2026-10-22)
+  (`tests/test_evidente_1230.py`).
 - **A desktop node that cannot reach the session's bus says so.** Every way
   the node fails writes its reason on the line the server reads
   (`Could not capture: <reason>`), and the server passes it on - except

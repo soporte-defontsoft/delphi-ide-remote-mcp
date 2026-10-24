@@ -271,6 +271,20 @@ function CambiaLineasEnSuTexto(const ATexto: string; ALinea, ACuantas: Integer;
   quien cambia un trozo y no lineas (vault_patch, vault_append). }
 function EmpalmaEnSuTexto(const ATexto: string; ADesde, ALargo: Integer;
   const ANuevo, ASalto: string): string;
+{ Que linea de AAntes es cada una de ADespues en el cambio mas corto (Myers,
+  por contenido; lo igual delante y detras, sin buscar): su indice, o -1 si
+  es nueva. Para quien recibe el texto ENTERO que compuso un escritor y tiene
+  que saber que se quedo. Con mas de 1000 cambios en medio, el medio entero
+  sale nuevo: eso ya es reescribir. }
+function LineasQueSeQuedan(const AAntes, ADespues: TArray<string>): TArray<Integer>;
+{ ANuevo, el texto ENTERO que un escritor compuso sobre AAntes, con la regla
+  de quien cambia lineas: cada tramo que cambia (LineasQueSeQuedan), por
+  CambiaLineasEnSuTexto con el salto dominante de AAntes; lo que se queda,
+  byte a byte, y el final como lo deja ANuevo. Para PatchSaveConSuSalto, que
+  pasaba lo nuevo al dominante solo si el fichero no tenia NINGUN CRLF: en
+  uno mixto, un bloque insertado con sLineBreak dejaba en CRLF la linea LF de
+  delante (V35 de la 1.23, medido el 24-oct-2026). }
+function ReescribeConSusSaltos(const AAntes, ANuevo: string): string;
 { El texto con TODOS sus saltos (CRLF, LF o CR suelto) como ASalto: UN
   normalizador para quien crea o inserta texto. Estaba escrito seis veces,
   y el create del changeset solo miraba CRLF y LF: "uno\rdos\r" salia
@@ -620,10 +634,10 @@ procedure OlvidaOrigenes(AEnLlamada: Boolean);
   DUnitX pruebe la cadena de escrituras de una llamada sin tocar el disco. }
 procedure ApuntaEscritoEnLaLlamada(const APath: string; const B: TArray<Byte>);
 { PatchSaveText para quien EDITA un texto insertando bloques compuestos con
-  sLineBreak (los escritores del .dproj): si el fichero en disco no tiene
-  ningun CRLF, los CRLF del texto nuevo solo pueden ser los insertados, y
-  toman el salto del fichero. Un .dproj en LF quedaba mezclado (octava
-  revision). No es para una copia, que va con los bytes de su origen. }
+  sLineBreak (los escritores del .dproj): lo que no toco se queda byte a
+  byte y lo nuevo toma el salto dominante del fichero (ReescribeConSusSaltos).
+  Un .dproj en LF quedaba mezclado (octava revision), y uno mixto tambien
+  (V35 de la 1.23). No es para una copia, que va con los bytes de su origen. }
 procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
 { Lo que el parser del IDE (MSXML 6, el que carga un proyecto) dice de un
   texto XML: '' si lo carga, o su error (linea y motivo) si no. EL juez de
@@ -2100,6 +2114,143 @@ begin
   Result := CambiaLineasEnSuTexto(ATexto, Ini, Fin - Ini + 1, Nuevas, ASalto);
 end;
 
+function LineasQueSeQuedan(const AAntes, ADespues: TArray<string>): TArray<Integer>;
+const
+  MAX_CAMBIOS = 1000; // mas que esto en medio es reescribir: el medio, nuevo
+var
+  N, M, Pre, Suf, NA, NB, MaxD, Off, D, DFin, K, X, Y, KAntes, XAntes, YAntes: Integer;
+  V, Vd: TArray<Integer>;
+  Trazas: TArray<TArray<Integer>>;
+begin
+  N := Length(AAntes);
+  M := Length(ADespues);
+  SetLength(Result, M);
+  for var I := 0 to M - 1 do
+    Result[I] := -1;
+  // lo igual delante y detras, sin buscar
+  Pre := 0;
+  while (Pre < N) and (Pre < M) and (AAntes[Pre] = ADespues[Pre]) do
+  begin
+    Result[Pre] := Pre;
+    Inc(Pre);
+  end;
+  Suf := 0;
+  while (Suf < N - Pre) and (Suf < M - Pre) and (AAntes[N - 1 - Suf] = ADespues[M - 1 - Suf]) do
+  begin
+    Result[M - 1 - Suf] := N - 1 - Suf;
+    Inc(Suf);
+  end;
+  // el medio: AAntes[Pre .. Pre+NA-1] contra ADespues[Pre .. Pre+NB-1]
+  NA := N - Pre - Suf;
+  NB := M - Pre - Suf;
+  if (NA = 0) or (NB = 0) then
+    Exit; // solo entraron lineas, o solo se fueron
+  // Myers (1986): V[K + Off] es la X mas lejana de la diagonal K con D cambios.
+  // La de antes de cada paso se guarda, de -(D+1) a D+1, para volver por el camino
+  MaxD := NA + NB;
+  if MaxD > MAX_CAMBIOS then
+    MaxD := MAX_CAMBIOS;
+  Off := MaxD + 1;
+  SetLength(V, 2 * MaxD + 3);
+  Trazas := nil;
+  DFin := -1;
+  D := 0;
+  while (DFin < 0) and (D <= MaxD) do
+  begin
+    Trazas := Trazas + [Copy(V, Off - D - 1, 2 * D + 3)];
+    K := -D;
+    while (DFin < 0) and (K <= D) do
+    begin
+      if (K = -D) or ((K <> D) and (V[K - 1 + Off] < V[K + 1 + Off])) then
+        X := V[K + 1 + Off] // desde la diagonal de arriba: una linea que entra
+      else
+        X := V[K - 1 + Off] + 1; // desde la de abajo: una que se va
+      Y := X - K;
+      while (X < NA) and (Y < NB) and (AAntes[Pre + X] = ADespues[Pre + Y]) do
+      begin
+        Inc(X);
+        Inc(Y);
+      end;
+      V[K + Off] := X;
+      if (X >= NA) and (Y >= NB) then
+        DFin := D;
+      Inc(K, 2);
+    end;
+    Inc(D);
+  end;
+  if DFin < 0 then
+    Exit; // demasiados cambios: el medio entero, nuevo
+  // de vuelta, de (NA, NB) al principio: las diagonales son las que se quedan
+  X := NA;
+  Y := NB;
+  for D := DFin downto 0 do
+  begin
+    Vd := Trazas[D]; // V[J] de antes del paso D en Vd[J + D + 1]
+    K := X - Y;
+    if (K = -D) or ((K <> D) and (Vd[K + D] < Vd[K + D + 2])) then
+      KAntes := K + 1
+    else
+      KAntes := K - 1;
+    XAntes := Vd[KAntes + D + 1];
+    YAntes := XAntes - KAntes;
+    while (X > XAntes) and (Y > YAntes) do
+    begin
+      Dec(X);
+      Dec(Y);
+      Result[Pre + Y] := Pre + X;
+    end;
+    X := XAntes;
+    Y := YAntes;
+  end;
+end;
+
+function ReescribeConSusSaltos(const AAntes, ANuevo: string): string;
+var
+  LA, LN, CA, CN: TArray<string>;
+  Siguen: TArray<Integer>;
+  Salto: string;
+  I, J, IDebajo, JDebajo: Integer;
+begin
+  // un texto vacio no tiene lineas que conservar (y SplitToLines no le da
+  // ninguna, donde el compositor ve una)
+  if AAntes = '' then
+    Exit(ANuevo);
+  // las lineas de CambiaLineasEnSuTexto, con la fantasma del salto final
+  LA := SplitToLines(AAntes);
+  LN := SplitToLines(ANuevo);
+  // la ultima de cada uno solo casa con la ultima del otro: es la que decide el
+  // salto final, y un tramo detras de la fantasma no es un sitio
+  CA := Copy(LA);
+  CN := Copy(LN);
+  if Length(CA) > 0 then
+    CA[High(CA)] := #0 + CA[High(CA)];
+  if Length(CN) > 0 then
+    CN[High(CN)] := #0 + CN[High(CN)];
+  Siguen := LineasQueSeQuedan(CA, CN);
+  Salto := SaltoDominante(AAntes);
+  Result := AAntes;
+  // cada tramo entre dos que se quedan, de abajo arriba (lo de encima no se
+  // mueve), por EL compositor de quien cambia lineas
+  IDebajo := Length(LN);
+  JDebajo := Length(LA);
+  for I := High(LN) downto -1 do
+  begin
+    if I >= 0 then
+    begin
+      J := Siguen[I];
+      if J < 0 then
+        Continue;
+    end
+    else
+      J := -1;
+    if (IDebajo - I > 1) or (JDebajo - J > 1) then
+      Result := CambiaLineasEnSuTexto(Result, J + 1, JDebajo - J - 1,
+        Copy(LN, I + 1, IDebajo - I - 1), Salto);
+    IDebajo := I;
+    JDebajo := J;
+  end;
+end;
+
 function TieneSalto(const AText: string): Boolean;
 begin
   Result := (Pos(#10, AText) > 0) or (Pos(#13, AText) > 0);
@@ -3030,15 +3181,13 @@ end;
 
 procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
 var
-  Enc, Antes, Texto: string;
+  Enc, Texto: string;
 begin
+  // lo que el escritor no toco, con su salto; lo nuevo, con el del fichero
+  // (ReescribeConSusSaltos: la regla de quien cambia lineas)
   Texto := AText;
-  if TFile.Exists(APath) and (Pos(#13#10, Texto) > 0) then
-  begin
-    Antes := PatchLoadText(APath, Enc);
-    if Pos(#13#10, Antes) = 0 then
-      Texto := Texto.Replace(#13#10, SaltoDominante(Antes));
-  end;
+  if TFile.Exists(APath) then
+    Texto := ReescribeConSusSaltos(PatchLoadText(APath, Enc), Texto);
   // (el parser del IDE sobre lo compuesto, la segunda barrera del escaner, lo
   // pregunta el escritor de abajo: PatchSaveText, para todo fichero de XML del IDE)
   PatchSaveText(APath, Texto, AEncName);

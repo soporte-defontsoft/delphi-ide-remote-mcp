@@ -3491,8 +3491,8 @@ const
     '__delphi-patch. To ' +
     'actually deploy you need an IDE CONNECTION PROFILE: delphi_build ' +
     'target=Deploy platform=%s takes profile=, else the project''s, else ' +
-    'the one the IDE keeps for that platform - with none of them msbuild ' +
-    'answers "Missing profile name", even for Win32. The IDE keeps the ' +
+    'the one the IDE keeps for that platform - with none of them it is ' +
+    'refused before building (BUILD-058), even for Win32. The IDE keeps the ' +
     'file, as it is in the Deployment section it regenerates the ' +
     '.deployproj from.';
 
@@ -3536,8 +3536,8 @@ const
     'and in the .deployproj msbuild deploys from, which it writes if ' +
     'missing. Note that RUNNING a deployment needs an IDE connection ' +
     'profile on this machine - profile=, the project''s, or the one the IDE ' +
-    'keeps for the platform: with none, delphi_build target=Deploy fails ' +
-    'with "Missing profile name" even for Win32.';
+    'keeps for the platform: with none, delphi_build target=Deploy refuses ' +
+    'it (BUILD-058) even for Win32.';
 
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 
@@ -9935,6 +9935,32 @@ const
   SF_BUILD_PERFIL_DEL_PROYECTO_FMT =
     ' (%s is the profile the project sets for %s - command=set-profile; ' +
     'pass profile= to choose another)';
+
+  { un Deploy sin perfil de ningun sitio, negado antes de msbuild (V15 de la
+    1.23): compilaba -41 s en Linux64- para parar en "Missing profile name", y
+    Win64 igual (medido el 24-oct-2026). %s = la plataforma (dos veces), %s =
+    los perfiles que la despliegan }
+  SR_BUILD_DEPLOY_SIN_PERFIL_FMT =
+    '[BUILD-058 INVALID_PARAM] Nothing was built: a Deploy for %s needs a ' +
+    'connection profile and none applies - not profile=, not the ' +
+    'project''s (delphi_config command=set-profile), not one the IDE keeps ' +
+    'for the platform. Profiles that deploy %s: %s (delphi_paserver ' +
+    'profiles lists them, add-profile creates one).';
+
+  { el .res de version que un build de otra plataforma deja sin recursos y un
+    Make de Windows no rehace (V16 de la 1.23: Hermes, 22-oct-2026; medido el
+    24-oct). %s = el .res, %s = la plataforma; el de Make, solo el .res }
+  SN_BUILD_RES_SIN_RECURSOS_FMT =
+    '[BUILD-059] This build left %s, the project''s version resource (one ' +
+    'for every platform that shares its folder), WITHOUT resources: the ' +
+    'icon, the version info and the manifest are Windows'' and %s has ' +
+    'none. The next Windows build has to be target=Build: a Make rewrites ' +
+    'it only when the .dproj is newer, and that exe would ship without icon ' +
+    'or version info.';
+  SN_BUILD_RES_SIN_RECURSOS_MAKE_FMT =
+    '[BUILD-060] %s has NO resources (a build for another platform left it ' +
+    'so, and a Make rewrites it only when the .dproj is newer): this exe ' +
+    'has no icon and no version info. target=Build rewrites it.';
 
   SP_BUILD_PROFILE =
     'target=Deploy on a PAServer platform: the connection profile ' +

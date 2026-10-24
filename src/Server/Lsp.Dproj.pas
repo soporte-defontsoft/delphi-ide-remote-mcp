@@ -1028,6 +1028,14 @@ function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<T
   compila (RcCompile). Siempre los de la carpeta del proyecto: con la carpeta
   declarada, uno de mas es prudencia. Rutas completas. }
 function BuildResourceFiles(const ADprojPath: string): TArray<string>;
+{ El .res de version que el build APlatform/AConfig reescribe:
+  $(BRCC_OutputDir)$(MSBuildProjectName).res (BuildVersionResource,
+  CodeGear.Common.Targets), en la BRCC_OutputDir que declara o junto al
+  .dproj; '' si la declarada no se sabe resolver. UNO para las plataformas
+  que comparten carpeta, y cada build lo rehace con lo suyo -icono, version y
+  manifiesto en Windows, nada en Linux64-, pero solo si es mas viejo que el
+  .dproj o el build es completo: un Make no lo toca (medido el 24-oct-2026). }
+function ResDeVersion(const ADprojPath, APlatform, AConfig: string): string;
 
 { Las carpetas de salida que este proyecto NO declara PARA ESTE BUILD
   (APlatform/AConfig: cada plataforma y config puede tener la suya o heredar
@@ -3506,6 +3514,15 @@ begin
   end;
 end;
 
+{ EL nombre del .res de version en una carpeta: <carpeta>\<proyecto>.res,
+  el $(BRCC_OutputDir)$(MSBuildProjectName).res de los targets; para la
+  puerta de lo que escribe un build (BuildResourceFiles, siempre la carpeta
+  del proyecto) y para ResDeVersion (la que declara el build) }
+function ResDeVersionEn(const ADir, ADprojPath: string): string;
+begin
+  Result := TPath.Combine(ADir, TPath.GetFileNameWithoutExtension(ADprojPath) + '.res');
+end;
+
 function BuildResourceFiles(const ADprojPath: string): TArray<string>;
 var
   Dir, Base: string;
@@ -3515,11 +3532,24 @@ begin
     Exit;
   Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
-  Result := [TPath.Combine(Dir, Base + '.res'), TPath.Combine(Dir, Base + '.vrc')];
+  Result := [ResDeVersionEn(Dir, ADprojPath), TPath.Combine(Dir, Base + '.vrc')];
   for var Xml in ProjectXmlChain(ADprojPath) do
     for var R in AllTagAttr(Xml, 'RcCompile', 'Include') do
       if R.Trim <> '' then
         Result := Result + [TPath.Combine(Dir, TPath.GetFileNameWithoutExtension(R.Trim) + '.res')];
+end;
+
+function ResDeVersion(const ADprojPath, APlatform, AConfig: string): string;
+var
+  Dir: string;
+begin
+  Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
+  for var S in BuildOutputDirs(ADprojPath, APlatform, AConfig) do
+    if SameText(S.Tag, 'BRCC_OutputDir') then
+      Dir := S.Dir; // '' si no se sabe resolver
+  if Dir = '' then
+    Exit('');
+  Result := ResDeVersionEn(Dir, ADprojPath);
 end;
 
 { La clave (Cfg_N) con la que el .dproj nombra una configuracion:

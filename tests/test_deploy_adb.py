@@ -328,6 +328,13 @@ out = srv.call('delphi_build', {"project": os.path.join(FDIR, 'DeployFmx.dproj')
 FDEPLOY = os.path.join(FDIR, 'DeployFmx.deployproj')
 check('deploy Android: genera el .deployproj con el mapa de staging completo',
       os.path.isfile(FDEPLOY), out[:250])
+# (el D6b de test_deploy_remotehost, que sin perfil ya no llega a msbuild: V15 de la
+# 1.23) la respuesta dice target "Deploy", lo que se pidio (1.20.1: decia "Build;Deploy",
+# que la entrada niega con BUILD-004), y el Deploy compilo ANTES: un /t:Deploy solo
+# reenvia el binario de antes
+check('deploy Android: la respuesta dice target "Deploy" (lo que se pidio) y compilo antes (el .so existe)',
+      mc.como_json(out).get('target') == 'Deploy' and os.path.isfile(
+          os.path.join(FDIR, 'Android64', 'Debug', 'libDeployFmx.so')), out[:300])
 if os.path.isfile(FDEPLOY):
     m = open(FDEPLOY, encoding='utf-8-sig').read()
     check('deployproj Android: UTF-8 con UN BOM, como el del IDE',

@@ -2023,6 +2023,30 @@ begin
   end;
 end;
 
+{ Un .res SIN recursos: solo la entrada nula con que empieza todo fichero de
+  recursos de Windows (DataSize 0 y nada detras de su cabecera, HeaderSize =
+  el fichero), el formato que escriben rc y brcc32. Lo deja asi un build de
+  Linux64 (32 bytes, medido el 24-oct-2026); uno de Windows siempre le deja
+  algo (el RCDATA de las plataformas: 96 bytes en una consola sin icono ni
+  version). False si no esta o no se lee. }
+function ResSinRecursos(const APath: string): Boolean;
+var
+  B: TArray<Byte>;
+begin
+  Result := False;
+  if (APath = '') or not TFile.Exists(APath) then
+    Exit;
+  try
+    // por LA puerta de leer: es del proyecto, en la jaula que aprobo el build
+    B := LeeBytes(APath, [ltJaula]);
+  except
+    Exit; // uno que no se lee no dice nada
+  end;
+  // DataSize y HeaderSize, los dos primeros DWORD de la primera entrada
+  Result := (Length(B) >= 8) and (PCardinal(@B[0])^ = 0) and
+    (PCardinal(@B[4])^ = Cardinal(Length(B)));
+end;
+
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer;
   const ASdk, AVerbosity: string): TJSONObject;
@@ -2175,8 +2199,8 @@ begin
   // profile= y con <Profile> en el .dproj, E0003 contra un host fuera de
   // RemoteHosts). msbuild lo recibe EXPLICITO, tambien vacio: /p:Profile= es
   // una propiedad global, y ni el proyecto ni el $(DefaultProfile) de
-  // EnvOptions.proj pueden ponerle otro que nadie juzgo. Sin perfil, un
-  // destino remoto para con "Missing profile name" de msbuild.
+  // EnvOptions.proj pueden ponerle otro que nadie juzgo. Sin perfil, se niega
+  // antes de compilar (BUILD-058, abajo).
   var Perfil := AProfile.Trim;
   // Android no despliega por PAServer: en un Deploy, un profile= se niega, y
   // el <Profile> que el proyecto lleve (set-profile lo escribia hasta la
@@ -2208,6 +2232,13 @@ begin
     if Perfil <> '' then
       FuenteDelPerfil := 'ide-default';
   end;
+  // ...y sin NINGUNO, se niega aqui: msbuild recibe /p:Profile= vacio y no
+  // despliega nada; compilaba antes (41 s en Linux64) para parar en "Missing
+  // profile name", y un Win64 igual con su manifiesto, o en MSB4057 sin el
+  // (medido el 24-oct-2026). Con los perfiles que despliegan la plataforma
+  if Target.Contains('Deploy') and not SinPAServer and (Perfil = '') then
+    raise Exception.Create(MsgFmt(SR_BUILD_DEPLOY_SIN_PERFIL_FMT, [Plat, Plat,
+      ONinguno(string.Join(', ', PerfilesDePlataforma(Info.Version, Plat)))]));
   // la negativa de un perfil que el agente no nombro dice de donde salio
   var DeDonde := '';
   if FuenteDelPerfil = 'ide-default' then
@@ -2268,6 +2299,8 @@ begin
   var ReintentosBloqueo := 0; // builds repetidos por un .exe en uso (F2039)
   var EnlacesDev := 0;        // nombres -dev completados en el sysroot
   var EnlacesNota := '';      // lo hecho, y lo que no se pudo
+  var ResVersion := '';       // el .res de version (ResDeVersion)...
+  var ResVacioAntes := False; // ...y si ya estaba sin recursos
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
@@ -2431,6 +2464,10 @@ begin
   // esta en las raices y la aprobo la puerta de salida. Ya no se busca nada en
   // ella: msbuild va por su ruta (con cmd, un msbuild.bat de ahi ganaba)
   var Cwd := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+  // el .res de version de antes: si este build lo deja sin recursos, se dice
+  // (resNote, abajo)
+  ResVersion := ResDeVersion(ADprojPath, Plat, Cfg);
+  ResVacioAntes := ResSinRecursos(ResVersion);
   Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode, EntornoMsBuild);
   // F2039 = el .exe que este build va a escribir esta ABIERTO, casi siempre
   // porque delphi_test lo esta ejecutando ahora mismo: el
@@ -2819,6 +2856,25 @@ begin
           // decir "no se envio nada" era falso (medido 2026-09-23: deploy a
           // Windows correcto y sin deployedFiles).
           Result.AddPair('deployedFilesNote', MsgText(SN_BUILD_QUIET_DEPLOYED));
+      end;
+      // El .res de version (ResDeVersion), uno para las plataformas que
+      // comparten carpeta: un build de otra plataforma lo deja SIN recursos y
+      // un Make de Windows no lo rehace mientras el .dproj sea mas viejo, asi
+      // que el exe sale sin icono ni version (Hermes, 22-oct-2026; medido el
+      // 24-oct: 154.792 -> 32 bytes con Linux64, y el Make de Win64, 155.136
+      // bytes menos). Uno de Windows siempre le deja algo: sin recursos, lo
+      // dejo otra plataforma
+      if ResSinRecursos(ResVersion) then
+      begin
+        if SistemaDePlataforma(Plat) <> spWindows then
+        begin
+          if not ResVacioAntes then // el que lo deja asi, una vez
+            Result.AddPair('resNote', MsgFmt(SN_BUILD_RES_SIN_RECURSOS_FMT,
+              [TPath.GetFileName(ResVersion), Plat]));
+        end
+        else if SameText(Target, 'Make') then
+          Result.AddPair('resNote', MsgFmt(SN_BUILD_RES_SIN_RECURSOS_MAKE_FMT,
+            [TPath.GetFileName(ResVersion)]));
       end;
     end;
     // Un Deploy que no pudo reescribir la carpeta del target porque el vigia
