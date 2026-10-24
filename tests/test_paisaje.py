@@ -426,6 +426,14 @@ REGLAS = [
       ('Lsp.Service.pas', 'TDelphiLspMcpService.ServiceAfterInstall')],
      'EscribeClaveDelIde y BorraClaveDelIde (Lsp.Patch): LA puerta del registro del IDE, que exporta '
      'antes lo que pisa o borra (reg.exe) y no reescribe lo que ya dice lo mismo'),
+    # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
+    # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
+    # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
+    ('la linea de fallo del nodo', r'\bNODO_NO_PUDE\b',
+     [('McpDesktopNode.dpr', 'NoPude'),            # EL escritor
+      ('Lsp.RemoteRun.pas', 'MotivoDelNodo')],     # EL lector
+     'NoPude (McpDesktopNode): toda salida del nodo que no pudo escribe su motivo con la marca que lee '
+     'MotivoDelNodo; la que no la lleve, el servidor la cuenta como un nodo que no dijo por que'),
     ('la forma de los atomos del RTL', r"'(?:ControlOfs|WndProcPtr|FIREMONKEY%|Delphi%\.8X)'",
      [('Lsp.AtomosRtl.pas', '*')],
      'Lsp.AtomosRtl: los atomos globales que deja un proceso VCL/FMX muerto sin finalizar (llena la tabla, '
@@ -1216,6 +1224,7 @@ PLANTADO = {
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
+    'la linea de fallo del nodo': "      Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",
     'lanzar el conversor de estilos': "  Out := RunCapturedIn('\"' + Exe + '\" tobin', Dir, 1000, C);",

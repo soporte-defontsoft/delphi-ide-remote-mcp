@@ -10,6 +10,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A desktop node that cannot reach the session's bus says so.** Every way
+  the node fails writes its reason on the line the server reads
+  (`Could not capture: <reason>`), and the server passes it on - except
+  `NODE-028` ("no desktop to talk to", when the session bus does not answer),
+  written without that mark: the answer was `DESK-018`, "the node did not say
+  why", when it had. The line now has one writer in the node (`NoPude`),
+  watched by `tests/test_paisaje.py`.
+
 - **An inherited component with no block in the descendant form can be read
   and changed.** The IDE writes in a descendant form only what differs from
   its ancestor (measured in the IDE on 2026-10-24: changing the form's

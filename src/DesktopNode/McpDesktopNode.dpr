@@ -55,6 +55,16 @@ begin
   Result := ParamStr(1) = NODE_KEY;
 end;
 
+{ La linea que el servidor lee como el motivo de un fallo
+  (Lsp.RemoteRun.MotivoDelNodo): toda salida del nodo que no pudo, por aqui.
+  Estaba a mano en cinco sitios y el sexto, NODE-028 (sin bus de sesion), se
+  escribia sin la marca: el servidor contestaba DESK-018 "el nodo no dijo por
+  que" (C13 de los revisores de la 1.19.0; V26 de la 1.23). }
+procedure NoPude(const AMotivo: string);
+begin
+  Writeln('  ', NODO_NO_PUDE, ' ', AMotivo);
+end;
+
 {$IFDEF MSWINDOWS}
 { ------------------------------------------------------------- WINDOWS --- }
 procedure EjecutarWindows;
@@ -92,7 +102,7 @@ var
       end;
     end
     else
-      Writeln('  ', NODO_NO_PUDE, ' ', Escritorio.Error);
+      NoPude(Escritorio.Error);
   end;
 
 begin
@@ -398,7 +408,7 @@ begin
     Sesion := SesionGrafica;
     if not Sesion.Hay then
     begin
-      Writeln('  ', NODO_NO_PUDE, ' ', Sesion.Motivo);
+      NoPude(Sesion.Motivo);
       Exit;
     end;
     { Con la sesion BLOQUEADA el portal contesta "code 2" a secas y el
@@ -413,7 +423,7 @@ begin
       try
         if Bus.Conectar(True) and Bus.SesionBloqueada(Sesion.Id, Bloqueada) and Bloqueada then
         begin
-          Writeln('  ', NODO_NO_PUDE, ' ', MsgFmt(SF_NODE_SESION_BLOQUEADA_FMT, [Sesion.Usuario]));
+          NoPude(MsgFmt(SF_NODE_SESION_BLOQUEADA_FMT, [Sesion.Usuario]));
           Exit;
         end;
       finally
@@ -424,7 +434,7 @@ begin
     try
       if not Bus.Conectar then
       begin
-        Writeln(MsgFmt(SN_NODE_NO_HAY_ESCRITORIO_FMT, [Bus.Error]));
+        NoPude(MsgFmt(SN_NODE_NO_HAY_ESCRITORIO_FMT, [Bus.Error]));
         Exit;
       end;
 
@@ -440,7 +450,7 @@ begin
       begin
         if Length(Pantallas) = 0 then
         begin
-          Writeln('  ', NODO_NO_PUDE, ' ', MsgFmt(SF_NODE_SIN_MONITOR_FMT, [Sesion.Usuario]));
+          NoPude(MsgFmt(SF_NODE_SIN_MONITOR_FMT, [Sesion.Usuario]));
           Exit;
         end;
         Escala := Pantallas[0].Escala;
@@ -456,7 +466,7 @@ begin
       end
       else
       begin
-        Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);
+        NoPude(Bus.Error);
         Exit;
       end;
       Writeln;
