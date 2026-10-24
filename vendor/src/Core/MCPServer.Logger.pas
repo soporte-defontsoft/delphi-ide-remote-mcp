@@ -20,35 +20,29 @@ type
     class var FLock: TCriticalSection;
     
     FLogToConsole: Boolean;
-    FLogToFile: Boolean;
-    FLogFile: TStreamWriter;
-    FLogFileName: string;
+    // [local change] no log file of its own: the server's log is written by
+    // Lsp.LogSink through OnLogMessage, in the server's home. This one went
+    // to ParamStr(0) + '.log' with no gate and nobody turned it on (V47 of
+    // 1.23: test_paisaje did not look into vendor)
     FMinLogLevel: TLogLevel;
     FOnLogMessage: TLogMessageProc;
     FUseStdErr: Boolean;
     
     class procedure SetLogToConsole(const Value: Boolean); static;
-    class procedure SetLogToFile(const Value: Boolean); static;
-    class procedure SetLogFileName(const Value: string); static;
     class procedure SetMinLogLevel(const Value: TLogLevel); static;
     class procedure SetOnLogMessage(const Value: TLogMessageProc); static;
     class procedure SetUseStdErr(const Value: Boolean); static;
 
     class function GetLogToConsole: Boolean; static;
-    class function GetLogToFile: Boolean; static;
-    class function GetLogFileName: string; static;
     class function GetMinLogLevel: TLogLevel; static;
     class function GetOnLogMessage: TLogMessageProc; static;
     class function GetUseStdErr: Boolean; static;
     
     constructor CreateInstance;
     procedure DoWriteLog(const Level: TLogLevel; const Message: string);
-    procedure EnsureLogFile;
-    procedure DoCloseLogFile;
   public
     class constructor Create;
     class destructor Destroy;
-    destructor Destroy; override;
     
     class function Instance: TLogger;
     
@@ -66,8 +60,6 @@ type
     class procedure Error(const Exception: Exception); overload;
     
     class property LogToConsole: Boolean read GetLogToConsole write SetLogToConsole;
-    class property LogToFile: Boolean read GetLogToFile write SetLogToFile;
-    class property LogFileName: string read GetLogFileName write SetLogFileName;
     class property MinLogLevel: TLogLevel read GetMinLogLevel write SetMinLogLevel;
     class property OnLogMessage: TLogMessageProc read GetOnLogMessage write SetOnLogMessage;
     class property UseStdErr: Boolean read GetUseStdErr write SetUseStdErr;
@@ -145,15 +137,7 @@ constructor TLogger.CreateInstance;
 begin
   inherited Create;
   FLogToConsole := False;
-  FLogToFile := False;
-  FLogFileName := ChangeFileExt(ParamStr(0), '.log');
   FMinLogLevel := TLogLevel.Info;
-end;
-
-destructor TLogger.Destroy;
-begin
-  DoCloseLogFile;
-  inherited;
 end;
 
 class function TLogger.Instance: TLogger;
@@ -169,27 +153,6 @@ begin
     end;
   end;
   Result := FInstance;
-end;
-
-
-procedure TLogger.EnsureLogFile;
-begin
-  if FLogToFile and not Assigned(FLogFile) then
-  begin
-    FLogFile := TStreamWriter.Create(FLogFileName, True, TEncoding.UTF8);
-    FLogFile.AutoFlush := True;
-  end;
-end;
-
-procedure TLogger.DoCloseLogFile;
-begin
-  FLock.Enter;
-  try
-    if Assigned(FLogFile) then
-      FreeAndNil(FLogFile);
-  finally
-    FLock.Leave;
-  end;
 end;
 
 procedure TLogger.DoWriteLog(const Level: TLogLevel; const Message: string);
@@ -220,7 +183,7 @@ begin
 
       // [local change 2026-09-28] un cliente que cierra el stderr (o una
       // consola que no esta) no tumba el servidor al arrancar: el log de
-      // consola se apaga y el de fichero sigue (octava revision)
+      // consola se apaga y el de Lsp.LogSink (OnLogMessage) sigue (octava revision)
       try
         if FUseStdErr then
           WriteLn(ErrOutput, LogLine)
@@ -235,19 +198,6 @@ begin
       {$ENDIF}
     end;
       
-    if FLogToFile then
-    begin
-      EnsureLogFile;
-      if Assigned(FLogFile) then
-      begin
-        FLogFile.WriteLine(LogLine);
-        // [local change] flush per line: the tray host has no console and
-        // never closes the writer on Stop-Process, so a buffered log showed
-        // nothing of the last hours (field 2026-08-23, 11:54 -> 14:00 blank).
-        FLogFile.Flush;
-      end;
-    end;
-    
     if Assigned(FOnLogMessage) then
       FOnLogMessage(LogLine);
   finally
@@ -305,15 +255,6 @@ begin
   Result := Instance.FLogToConsole;
 end;
 
-class function TLogger.GetLogToFile: Boolean;
-begin
-  Result := Instance.FLogToFile;
-end;
-
-class function TLogger.GetLogFileName: string;
-begin
-  Result := Instance.FLogFileName;
-end;
 
 class function TLogger.GetMinLogLevel: TLogLevel;
 begin
@@ -334,33 +275,6 @@ begin
     lInstance.FLogToConsole := Value;
 end;
 
-class procedure TLogger.SetLogToFile(const Value: Boolean);
-var
-  lInstance: TLogger;
-begin
-  lInstance := Instance;
-  if Assigned(lInstance) then
-    lInstance.FLogToFile := Value;
-end;
-
-class procedure TLogger.SetLogFileName(const Value: string);
-var
-  lInstance: TLogger;
-begin
-  FLock.Enter;
-  try
-    lInstance := Instance;
-    if lInstance = nil then
-      Exit;
-
-    lInstance.FLogFileName := Value;
-
-    if Assigned(lInstance.FLogFile) then
-      FreeAndNil(lInstance.FLogFile);
-  finally
-    FLock.Leave;
-  end;
-end;
 
 class procedure TLogger.SetMinLogLevel(const Value: TLogLevel);
 var

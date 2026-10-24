@@ -280,7 +280,9 @@ REGLAS = [
      [('Lsp.Casa.pas', '*')],
      'BuzonDeInformes / BuzonDeMensajes: la carpeta del workspace la pone el token (8.5 de la 1.18.0, '
      'David: "la misma estructura separada por workspace"); quien usa la raiz ve lo de todos'),
-    ('la raiz de los informes o del correo compuesta a mano', r"ServerDir\(\s*'(?:reports|messages)'",
+    # (y por Combine sobre la casa: V47 de la 1.23, la forma que no veia)
+    ('la raiz de los informes o del correo compuesta a mano',
+     r"ServerDir\(\s*'(?:reports|messages)'|Combine\(\s*ServerDir\b[^;]*'(?:reports|messages)'",
      [('Lsp.Casa.pas', 'CarpetaDeMensajes'), ('Lsp.Casa.pas', 'CarpetaDeInformes')],
      'CarpetaDeInformes / CarpetaDeMensajes, y por encima el buzon del workspace'),
     # (tambien como mascara, '*.by': MascaraDeMarcas; revisor de 9a9c4cc)
@@ -754,7 +756,10 @@ REGLAS = [
     r"TIniFile\.Create\s*\(|TStreamReader\.Create\s*\(|"
     # y los BYTES (P2 de la 1.18.0): un flujo que no se abre para escribir es para leer
     r"TFile\.(?:ReadAllBytes|OpenRead|Open)\b|\bTFileStream\.Create\s*\((?![^;]*\bfm(?:Create|OpenWrite|OpenReadWrite)\b)|"
-    r"\bFileOpen\s*\(|\bCreateFile\w*\s*\([^;]*GENERIC_READ",
+    r"\bFileOpen\s*\(|\bCreateFile\w*\s*\([^;]*GENERIC_READ|"
+    # y lo que Windows abre por la RUTA para leer sus recursos (V47 de la 1.23): un
+    # modulo como DATOS y el recurso de version de un exe
+    r"\bLoadLibraryEx\w*\s*\([^;]*LOAD_LIBRARY_AS_(?:DATAFILE|IMAGE_RESOURCE)|\bGetFileVersionInfo\w*\s*\(",
      # excepciones DECLARADAS, cada una con su motivo; solo pueden encoger
      [# settings.ini: su lector es Lsp.Settings y no es lugar de ninguna puerta (C1)
       ('Lsp.Settings.pas', 'ComprobarDuplicadosIni'), ('Lsp.Settings.pas', 'LoadSecurity'),
@@ -800,7 +805,13 @@ REGLAS = [
      ('Lsp.LogSink.pas', 'LineasDe'), ('Lsp.RemoteRun.pas', 'Sha256DeFichero'),
      ('Mld.Sesion.pas', 'SesionGrafica'), ('McpDesktopNode.dpr', 'EjecutarLinux'),
      ('McpRunJob.dpr', 'LanzarYVigilar'), ('McpDesktopNode.dpr', 'TamanoPng'),
-     ('McpRunJob.dpr', 'EsBinarioNativo'), ('McpRunJob.dpr', 'Arrancar')],
+     ('McpRunJob.dpr', 'EsBinarioNativo'), ('McpRunJob.dpr', 'Arrancar'),
+     # lo de la INSTALACION del IDE, por la ruta que da su RootDir (el registro), no el
+     # agente: los BPL de su bin como DATOS (el mapa de paquetes; el icono de una clase en
+     # el renderizador, otro programa) y el recurso de version de bds.exe. LoadLibraryEx y
+     # GetFileVersionInfo piden la ruta, no unos bytes: no caben en LeeBytes (V47 de la 1.23)
+     ('Lsp.PackageMap.pas', 'CargaMapa'), ('Lsp.Discovery.pas', 'InfoDelExe'),
+     ('FormRender.Comun.pas', 'IconoPngDeClase')],
     'LeeTexto y LeeBytes (Lsp.Patch): LA puerta de leer, con el LUGAR por parametro (jaula, IDE, '
      'casa, temporal, vault), por la ruta REAL y con EL detector. 41 lecturas iban por su cuenta '
      '(inventario del 9-oct-2026, bloque de las puertas de la 1.18.0): el escaner de peligros leia un '
@@ -1132,11 +1143,31 @@ REGLAS = [
 ]
 
 
+def fuera(f):
+    return any(('\\%s\\' % x) in f or ('/%s/' % x) in f for x in FUERA)
+
+
+def unidades_de_vendor():
+    """Las unidades de vendor/ que compila el servidor: las que nombra un .dpr de src (su
+    juez). V47 de la 1.23: fuentes() no las recorria, y van dentro del binario."""
+    vistas = set()
+    for dpr in glob.glob(os.path.join(SRC, '**', '*.dpr'), recursive=True):
+        if fuera(dpr):
+            continue
+        texto = open(dpr, encoding='utf-8-sig', errors='replace').read()
+        for m in re.finditer(r"\bin\s+'([^']*\\vendor\\[^']*\.pas)'", texto, re.I):
+            f = os.path.normpath(os.path.join(os.path.dirname(dpr), m.group(1)))
+            if f.lower() not in vistas and os.path.isfile(f):
+                vistas.add(f.lower())
+                yield f
+
+
 def fuentes():
     for f in glob.glob(os.path.join(SRC, '**', '*.pas'), recursive=True) + \
             glob.glob(os.path.join(SRC, '**', '*.dpr'), recursive=True):
-        if not any(('\\%s\\' % x) in f or ('/%s/' % x) in f for x in FUERA):
+        if not fuera(f):
             yield f
+    yield from unidades_de_vendor()
 
 
 def codigo(texto):
@@ -1216,6 +1247,11 @@ def casas_sin_uso(regla, ficheros_texto):
 
 
 TEXTOS = [(f, open(f, encoding='utf-8-sig', errors='replace').read()) for f in fuentes()]
+# (V47 de la 1.23) lo de vendor que compila el servidor entra en el recorrido: sin esto, una
+# regla que lo mirase pasaria en verde sin haber visto nada
+VENDOR = [f for f, _ in TEXTOS if '\\vendor\\' in f.lower() or '/vendor/' in f.lower()]
+check('fuentes(): las unidades de vendor que nombra un .dpr del servidor entran (%d), MCPServer.ToolsManager '
+      'entre ellas' % len(VENDOR), any(os.path.basename(f) == 'MCPServer.ToolsManager.pas' for f in VENDOR), VENDOR[:5])
 check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', len(TEXTOS) >= 70, len(TEXTOS))
 
 # el MUTANTE de cada regla: una copia plantada, fuera de su casa, que la
@@ -1511,7 +1547,9 @@ for forma in ("  L := TFile.ReadAllLines(F);", "  Ini := TMemIniFile.Create(F, T
               "  S := TFileStream.Create(F, fmOpenRead or fmShareDenyNone);",
               "  S := TFileStream.Create(F, fmShareDenyWrite);", "  S := TFile.OpenRead(F);",
               "  S := TFile.Open(F, TFileMode.fmOpen, TFileAccess.faRead);", "  H := FileOpen(F, fmOpenRead);",
-              "  H := CreateFile(PChar(F), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, 0, 0);"):
+              "  H := CreateFile(PChar(F), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, 0, 0);",
+              "  H := LoadLibraryEx(PChar(F), 0, LOAD_LIBRARY_AS_DATAFILE);",
+              "  if GetFileVersionInfo(PChar(F), 0, N, @B[0]) then X := 1;"):
     cazados = leer_plantado(forma)
     check('mutante "%s": tambien %s' % (REGLA_LEER[0], forma.strip()), len(cazados) == 1, cazados)
 NO_CAZADO = leer_plantado("  Ini := TMemIniFile.Create('');")
@@ -1520,6 +1558,12 @@ for forma in ("  S := TFileStream.Create(F, fmCreate);", "  S := TFileStream.Cre
     NO_CAZADO = leer_plantado(forma)
     check('...y un TFileStream para ESCRIBIR no es una lectura (lo caza la regla de escribir): %s'
           % forma.strip(), not NO_CAZADO, NO_CAZADO)
+
+# la otra forma de la raiz de los informes: Combine sobre la casa (V47 de la 1.23)
+REGLA_INF = next(r for r in REGLAS if r[0] == 'la raiz de los informes o del correo compuesta a mano')
+cazados = fuera_de_casa(REGLA_INF, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                     "RaizAMano;\nbegin\n  D := TPath.Combine(ServerDir, 'messages');\nend;\nend.\n")])
+check('mutante "%s": tambien por Combine sobre la casa' % REGLA_INF[0], len(cazados) == 1, cazados)
 
 # las otras formas de escribir por su cuenta (y una apertura para LEER, que no)
 REGLA_ESCRIBIR = next(r for r in REGLAS if r[0] == 'escribir sin la puerta')

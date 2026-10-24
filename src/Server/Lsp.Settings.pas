@@ -116,6 +116,24 @@ function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
 function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
 
+{ Lo que el transporte HTTP lee del settings.ini - [Server] Port, Host y
+  Endpoint, [CORS] Enabled y AllowedOrigins, [SSL] Enabled, CertFile, KeyFile
+  y RootCertFile -, leido por LoadSecurity con todo lo demas, con TIniFile y
+  los valores de fabrica del transporte si falta. Hasta la 1.23 lo leia
+  MCPServer.Settings (vendor) abriendo el fichero por su cuenta: el ultimo
+  lector suelto del ini (V47: test_paisaje no miraba vendor). Lo usa
+  TMcpHost.CreateHttpServer. }
+type
+  TTransporteDelIni = record
+    Port: Integer;
+    Host, Endpoint: string;
+    CorsEnabled: Boolean;
+    CorsAllowedOrigins: string;
+    SslEnabled: Boolean;
+    SslCertFile, SslKeyFile, SslRootCertFile: string;
+  end;
+function TransporteDelIni: TTransporteDelIni;
+
 { La version de RAD Studio de ESTE servidor: [Server] DelphiVersion=37.0 de
   su settings.ini, y de nada mas (David, 5-oct-2026: "o hay version en el
   ini o cogemos la mas nueva instalada, punto"). '' = la mas nueva con
@@ -155,16 +173,16 @@ function ServerDelphiUpdate: string;
 function SettingsIniMasNuevoQueElCargado(out AFecha: TDateTime): Boolean;
 
 { Un settings.ini con el BOM de UTF-8 delante de una cabecera de seccion NO
-  arranca (6-oct-2026). Lo lee la API de los ini de Windows - aqui (TIniFile)
-  y en MCPServer.Settings, que lee el Port -, y esa API toma el BOM por texto
+  arranca (6-oct-2026). Lo lee la API de los ini de Windows - aqui (TIniFile),
+  el Port del transporte tambien desde la 1.23 -, y esa API toma el BOM por texto
   de esa linea: no ve la cabecera y pierde la seccion entera. Medido con un
   [Server] primero: su Port y su BindIP no se leian (el servidor en el 3000
   y en TODAS las interfaces) y DelphiVersion se escribia en un [Server]
   nuevo al final. Con un comentario delante el BOM se queda en el comentario
   y todo se lee: eso pasa. Lo decide LoadSecurity, el lector, antes de leer
   nada (y entonces no lee); esto lo lanza, y lo llama TMcpHost.Wire lo
-  primero. Leerlo de otra manera seria un segundo lector, y el del Port ni
-  siquiera es nuestro. Lo mismo uno en UTF-16 big endian (FE FF): esa API
+  primero. Leerlo de otra manera seria un segundo lector. Lo mismo uno en
+  UTF-16 big endian (FE FF): esa API
   no lo lee y no veia ninguna seccion (9.2 de la 1.18.0). }
 procedure ExigeSettingsIniLegible;
 
@@ -394,6 +412,7 @@ var
   GAuthToken: string;
   GSessionTimeoutMin: Double = -1; // -1 = sin leer todavia
   GIniBindIP: string;              // [Server] BindIP
+  GIniTransporte: TTransporteDelIni; // [Server] Port/Host/Endpoint, [CORS], [SSL]
   GIniSessionTimeout: string;      // [Server] SessionTimeoutMinutes, sin parsear
   GIniEngineIdle: string;          // [Server] EngineIdleMinutes, sin parsear
   GEngineIdleMin: Double = -1;     // -1 = sin leer todavia
@@ -1186,6 +1205,14 @@ const
     (Clave: 'AllowDesktopControl'; Desde: '1.0.16'), // la tool local, con su interruptor
     (Clave: 'AllowRun'; Desde: '1.1.1'));            // delphi_run
 
+const
+  { lo que el transporte HTTP toma sin ini o sin la clave: los valores de
+    fabrica que tenia MCPServer.Settings (vendor) en su LoadDefaults }
+  TRANSPORTE_DE_FABRICA: TTransporteDelIni = (Port: 3000; Host: 'localhost'; Endpoint: '/mcp';
+    CorsEnabled: True;
+    CorsAllowedOrigins: 'http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1';
+    SslEnabled: False; SslCertFile: ''; SslKeyFile: ''; SslRootCertFile: '');
+
 procedure LoadSecurity;
 var
   IniPath: string;
@@ -1276,6 +1303,8 @@ begin
     else if KindDeBom(IniBytes, IniBom) and (IniBom in [ekUtf16BE, ekUtf32LE, ekUtf32BE]) then
       GIniIlegible := MsgFmt(SE_GUARD_INI_CODIFICACION_FMT, [IniPath, EncName(IniBom)]);
   end;
+  // lo del transporte que el ini no traiga (o sin ini), el de fabrica
+  GIniTransporte := TRANSPORTE_DE_FABRICA;
   if TFile.Exists(IniPath) and (GIniIlegible = '') and (GIniSinLeer = '') then
   begin
     // (la fecha, arriba, ANTES de leerlo: si lo tocan mientras, se avisa de
@@ -1295,6 +1324,19 @@ begin
       // 26-sep BindIP, SessionTimeoutMinutes y el [Log] de la bandeja
       // abrian el fichero cada uno por su cuenta (tres lectores mas).
       GIniBindIP := Ini.ReadString('Server', 'BindIP', '');
+      // ...y el transporte HTTP (TransporteDelIni), con las MISMAS lecturas de
+      // TIniFile que hacia MCPServer.Settings por su cuenta (V47 de la 1.23)
+      GIniTransporte.Port := Ini.ReadInteger('Server', 'Port', GIniTransporte.Port);
+      GIniTransporte.Host := Ini.ReadString('Server', 'Host', GIniTransporte.Host);
+      GIniTransporte.Endpoint := Ini.ReadString('Server', 'Endpoint', GIniTransporte.Endpoint);
+      GIniTransporte.CorsEnabled := Ini.ReadBool('CORS', 'Enabled', GIniTransporte.CorsEnabled);
+      GIniTransporte.CorsAllowedOrigins := Ini.ReadString('CORS', 'AllowedOrigins',
+        GIniTransporte.CorsAllowedOrigins);
+      GIniTransporte.SslEnabled := Ini.ReadBool('SSL', 'Enabled', GIniTransporte.SslEnabled);
+      GIniTransporte.SslCertFile := Ini.ReadString('SSL', 'CertFile', GIniTransporte.SslCertFile);
+      GIniTransporte.SslKeyFile := Ini.ReadString('SSL', 'KeyFile', GIniTransporte.SslKeyFile);
+      GIniTransporte.SslRootCertFile := Ini.ReadString('SSL', 'RootCertFile',
+        GIniTransporte.SslRootCertFile);
       GIniSessionTimeout := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
       GIniEngineIdle := Ini.ReadString('Server', 'EngineIdleMinutes', '').Trim;
       GIniMaxEngines := Ini.ReadString('Server', 'MaxEngines', '').Trim;
@@ -1665,6 +1707,12 @@ begin
     Exit;
   LoadSecurity;
   Result := GIniBindIP;
+end;
+
+function TransporteDelIni: TTransporteDelIni;
+begin
+  LoadSecurity;
+  Result := GIniTransporte;
 end;
 
 function ServerDelphiVersion: string;

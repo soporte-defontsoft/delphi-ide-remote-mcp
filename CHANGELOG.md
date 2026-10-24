@@ -23,6 +23,16 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
+  `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
+  settings class with a `TIniFile` of its own, which could also compose the
+  file's path from the executable and create or overwrite it - the last of
+  the loose readers the server's own reader took in on 2026-09-26. They are
+  read now with everything else, with the same calls and defaults, and the
+  class only holds the values; the vendored logger loses its file writer,
+  which nobody turned on (the log is the server's own). Found when
+  `tests/test_paisaje.py` started to walk the vendored units the server
+  compiles, which it never did.
 - **A Deploy with no profile anywhere is refused before it builds.** With no
   `profile=`, no `<Profile>` in the project and no profile the IDE keeps for
   the platform, `delphi_build target=Deploy` ran msbuild, which built and then

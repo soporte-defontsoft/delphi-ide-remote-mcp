@@ -125,9 +125,10 @@ begin
   // parallel load.
   SetErrorMode(GetErrorMode or SEM_FAILCRITICALERRORS);
   StartLogSink; // first: everything from here on reaches the disk
-  // no settings.ini side effects; y EL nombre del fichero, el de Lsp.Settings: el
-  // vendor componia el suyo (revision del 6-oct-2026)
-  FSettings := TMCPSettings.Create(SettingsIniPath, False);
+  // solo un contenedor: lo que el transporte lee del settings.ini lo pone
+  // CreateHttpServer desde EL lector (Lsp.Settings.TransporteDelIni). El de
+  // vendor abria el fichero por su cuenta (V47 de la 1.23)
+  FSettings := TMCPSettings.Create;
   FSettings.ServerName := SERVER_NAME;
   FSettings.ServerVersion := SERVER_VERSION;
   // serverInfo.host: two servers of the same name and version (a 13.1 and a
@@ -367,6 +368,17 @@ end;
 function TMcpHost.CreateHttpServer(APort: Integer): TMCPIdHTTPServer;
 begin
   TServerStatusResource.Initialize;
+  // el transporte, de EL lector del settings.ini (Wire ya lo exigio legible)
+  var T := TransporteDelIni;
+  FSettings.Port := T.Port;
+  FSettings.Host := T.Host;
+  FSettings.Endpoint := T.Endpoint;
+  FSettings.CorsEnabled := T.CorsEnabled;
+  FSettings.CorsAllowedOrigins := T.CorsAllowedOrigins;
+  FSettings.SSLEnabled := T.SslEnabled;
+  FSettings.SSLCertFile := T.SslCertFile;
+  FSettings.SSLKeyFile := T.SslKeyFile;
+  FSettings.SSLRootCertFile := T.SslRootCertFile;
   if APort > 0 then
     FSettings.Port := APort;
   Result := TMCPIdHTTPServer.Create(nil);
