@@ -172,8 +172,11 @@ for f, fuente in LIMPIAS.items():
 # y va en "error" (tercera revision, 27-sep-2026).
 # isError es el campo del PROTOCOLO y firstError el primer error del
 # compilador en el resultado de un build (success=false no es un fallo de la
-# llamada)
-CAMPOS_ERROR_DECLARADOS = {'screenshotError', 'isError', 'firstError'}
+# llamada). ideSeatError, el gemelo de screenshotError en delphi_paserver
+# (V10 de la 1.23): el perfil escrito o el SDK traido cuyo asiento en el
+# registro del IDE no se pudo escribir - lo hecho si se hizo, y ideRegistered
+# / ideSdkRegistered lo dicen al lado (run_all del 24-oct-2026)
+CAMPOS_ERROR_DECLARADOS = {'screenshotError', 'isError', 'firstError', 'ideSeatError'}
 for f, fuente in LIMPIAS.items():
     for m in re.finditer(r"(?:AddPair|PonResultado)\('(\w*[Ee]rror)'", fuente):
         if m.group(1) != 'error' and m.group(1) not in CAMPOS_ERROR_DECLARADOS:
