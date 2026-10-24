@@ -69,7 +69,7 @@ try:
     dpr, lin, col = proyecto(srv, 'Emo\U0001F600')
     r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('E1 definition bajo una carpeta con emoji: LSP-043 (el motor pierde la carpeta), no LSP-038',
-          'LSP-043' in r and 'LSP-038' not in r, r[:300])
+          'LSP-043' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
     r = srv.call('delphi_references', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('E2 references del mismo: LSP-043', 'LSP-043' in r, r[:300])
     r = diagnostics_con_error(srv, dpr)
@@ -81,7 +81,7 @@ try:
           not mc.rechazado(r) and 'UEmo.pas' in r and 'LSP-04' not in r, r[:300])
     r = diagnostics_con_error(srv, dpr)
     check('E5 control: el mismo E2003 sin emoji se lintea (errors=1, E2003)',
-          '"errors":1' in r and 'E2003' in r and 'LSP-045' not in r, r[:300])
+          '"errors":1' in r and 'E2003' in r and not mc.es(r, 'SR_LSP_LINT_MOTOR_PIERDE_FMT'), r[:300])
 finally:
     srv.cierra()
 

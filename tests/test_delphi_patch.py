@@ -351,7 +351,7 @@ for _fw, _r in mc.espera_tablas(call):
     # (un INTERNAL -DSGN-050/053/054, el fallo recordado del generador- o un
     # timeout tampoco es "lista": mc.fallo los cuenta, rechazado no)
     check('tablas del disenador listas antes del lint (%s)' % _fw,
-          not mc.tiene(_r, 'DSGN-051') and not mc.fallo(_r), _r[:300])
+          mc.tabla_lista(_r), _r[:300])
 FMX = os.path.join(DIR, 'Lint.fmx')
 with open(FMX, 'wb') as f:
     f.write(('object FormMain: TFormMain\r\n'

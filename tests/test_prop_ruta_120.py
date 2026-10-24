@@ -81,7 +81,7 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='prop-ruta', 
 try:
     # la pista pregunta a la tabla del OTRO marco sin esperar: tienen que estar
     for fw, r in mc.espera_tablas(srv.call):
-        check('P0 la tabla %s esta lista' % fw, not mc.tiene(r, 'DSGN-051') and not mc.fallo(r), r[:200])
+        check('P0 la tabla %s esta lista' % fw, mc.tabla_lista(r), r[:200])
 
     pf = os.path.join(JAIL, 'UF.fmx')
     open(pf, 'wb').write(b'\xef\xbb\xbf' + FMX.encode('utf-8'))
@@ -94,7 +94,7 @@ try:
 
     r = prop('TLabel', 'vcl', 'Font.Size')
     check('P2 prop TLabel vcl Font.Size: la hoja, no DSGN-016',
-          not mc.fallo(r) and not mc.tiene(r, 'DSGN-016') and '"property":"Font.Size"' in r, r[:500])
+          not mc.fallo(r) and not mc.es(r, 'SR_DESIGNER_PROP_FMT') and '"property":"Font.Size"' in r, r[:500])
 
     r = prop('TLabel', 'fmx', 'TextSettings')
     check('P3 prop TLabel fmx TextSettings: un objeto, con el enlace a info de su clase',
@@ -138,7 +138,7 @@ try:
 
     r = prop('TButton', 'vcl', 'PopupMenu')
     check('P11 prop TButton vcl PopupMenu: una referencia, sin el enlace de los objetos (DSGN-155)',
-          not mc.fallo(r) and '"kind":"class"' in r and not mc.tiene(r, 'DSGN-155') and 'dotted' not in r,
+          not mc.fallo(r) and '"kind":"class"' in r and not mc.es(r, 'SN_DESIGNER_PROP_CLASE_FMT') and 'dotted' not in r,
           r[:500])
 
     def info(clase, fw, filtro=None):
@@ -150,7 +150,7 @@ try:
     r = info('TLabel', 'fmx', 'Horz')
     check('P12 info TLabel fmx filter=Horz: TextSettings.HorzAlign por dentro, sin DSGN-048',
           '{"name":"TextSettings.HorzAlign","kind":"enum","type":"TTextAlign"}' in r
-          and not mc.tiene(r, 'DSGN-048'), r[:700])
+          and not mc.es(r, 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT'), r[:700])
 
     r = info('TButton', 'vcl', 'AutoPopup')
     check('P13 info TButton vcl filter=AutoPopup: PopupMenu es una referencia y no se abre',
@@ -166,7 +166,7 @@ try:
 
     r = info('TTextSettings', 'fmx', 'color')
     check('P16 info TTextSettings fmx filter=color: FontColor de su familia, sin DSGN-048',
-          '"name":"FontColor"' in r and not mc.tiene(r, 'DSGN-048') and 'descendantsPublish' in r, r[:700])
+          '"name":"FontColor"' in r and not mc.es(r, 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT') and 'descendantsPublish' in r, r[:700])
 
     # 1.20.1: prop de un entero con constantes dice lo que toma, con EL texto
     # que da set al negar (LoQueToma). Decia solo el tipo y Flash tuvo que

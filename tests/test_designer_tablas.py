@@ -78,7 +78,7 @@ check('cache vacia: la edicion se escribe', "Caption = 'dos'" in open(DFM0, enco
 check('cache vacia: la edicion dice que no valido (DSGN-052) y que no se repita',
       mc.tiene(r, 'DSGN-052') and 'do not repeat it' in r, r[:600])
 check('cache vacia: la nota no va bajo la cabecera de avisos del disenador (EDIT-076)',
-      not mc.tiene(r, 'EDIT-076'), r[:600])
+      not mc.es(r, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT'), r[:600])
 
 # 2) info espera a la que se esta generando y contesta del fuente
 r = espera_info(call, {'command': 'info', 'classname': 'TButton', 'framework': 'vcl', 'filter': 'Caption'},
@@ -265,7 +265,7 @@ if actual:
         check('una tabla que no se puede leer: DSGN-054 con el motivo', mc.tiene(r, 'DSGN-054'), r[:300])
         r = srv.call('delphi_designer', {'command': 'lint', 'path': DFM})
         check('...y el lint no juzga: dice lo mismo, sin avisos', mc.tiene(r, 'DSGN-054') and
-              not mc.tiene(r, 'DSGN-038'), r[:300])
+              not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT'), r[:300])
         srv.cierra()
     finally:
         fh.seek(0)

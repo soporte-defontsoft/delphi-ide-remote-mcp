@@ -62,7 +62,7 @@ def plano(r):
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='valor-32-bits', t=240)
 try:
     for fw, r in mc.espera_tablas(srv.call):
-        check('T0 la tabla %s esta lista' % fw, not mc.tiene(r, 'DSGN-051') and not mc.fallo(r), r[:200])
+        check('T0 la tabla %s esta lista' % fw, mc.tabla_lista(r), r[:200])
 
     pf = fmx('UF')
     pv = vcl('UV')

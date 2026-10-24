@@ -87,7 +87,7 @@ def escribe(ruta, texto):
 
 try:
     check('preparacion: las tablas del disenador estan',
-          all(not mc.tiene(r, 'DSGN-051') and not mc.fallo(r) for _, r in mc.espera_tablas(S.call)))
+          all(mc.tabla_lista(r) for _, r in mc.espera_tablas(S.call)))
     # ---------------------------------------------------------------- vistas
     PF = os.path.join(JAIL, 'fmx')
     r = S.call('delphi_create', {'kind': 'project-fmx', 'name': 'PVista', 'dir': PF})

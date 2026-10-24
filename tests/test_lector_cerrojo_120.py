@@ -60,7 +60,7 @@ for ext in ('.pas', '.dfm'):
 open(os.path.join(JAIL, 'notas.txt'), 'wb').write(b'uno\r\ndos\r\n')
 try:
     for fw, r in mc.espera_tablas(cli.call):
-        check('K0 la tabla %s esta lista' % fw, not mc.tiene(r, 'DSGN-051') and not mc.fallo(r), r[:200])
+        check('K0 la tabla %s esta lista' % fw, mc.tabla_lista(r), r[:200])
     dfm = os.path.join(JAIL, 'GridLinkFormUnit1.dfm')
     txt = os.path.join(JAIL, 'notas.txt')
     # el lector en caliente (la primera carga de los paquetes, fria, no cuenta)

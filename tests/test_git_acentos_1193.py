@@ -113,7 +113,7 @@ srv = arranca(ro_paths=os.path.join(repo, 'vendor', 'Café.dfm'))
 try:
     r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b2'})
     check('Q4 switch b2 que cambia el protegido vendor/Café.dfm: GIT-065 nombrandolo, intacto',
-          mc.rechazado(r) and 'GIT-065' in r and 'vendor/Café.dfm' in r and 'SYS-011' not in r
+          mc.rechazado(r) and 'GIT-065' in r and 'vendor/Café.dfm' in r and not mc.es(r, 'SR_ERROR_FMT')
           and lee(repo, 'vendor/Café.dfm') == 'EN_MAIN', r[:400])
     r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b3'})
     check('Q5 switch b3 que solo cambia src/Año.txt (no protegido): se hace',
@@ -130,7 +130,7 @@ srv = arranca(ro_roots=os.path.join(repo, 'vendor'))
 try:
     r = srv.call('delphi_git', {'repo': repo, 'command': 'stash', 'action': 'pop'})
     check('Q6 ReadOnlyRoots=vendor, stash pop que devolveria vendor/Café.dfm: GIT-065, intacto',
-          mc.rechazado(r) and 'GIT-065' in r and 'vendor/Café.dfm' in r and 'SYS-011' not in r
+          mc.rechazado(r) and 'GIT-065' in r and 'vendor/Café.dfm' in r and not mc.es(r, 'SR_ERROR_FMT')
           and lee(repo, 'vendor/Café.dfm') == 'EN_MAIN', r[:400])
 finally:
     srv.cierra()

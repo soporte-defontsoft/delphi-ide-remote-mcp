@@ -38,7 +38,7 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='test-hermana
 try:
     r1 = srv.call('delphi_projects', {'root': FICH})
     check('H1 delphi_projects con un fichero: LIST-002 con su nombre, no "no existe"',
-          es_fichero(r1, 'delphi_projects') and 'PROJ-003' not in r1, r1[:300])
+          es_fichero(r1, 'delphi_projects') and not mc.es(r1, 'SR_PROJECTS_NO_ROOT_FMT'), r1[:300])
     r2 = srv.call('delphi_package', {'dir': FICH})
     check('H2 delphi_package con un fichero: LIST-002 con SU nombre',
           es_fichero(r2, 'delphi_package') and 'delphi_list' not in r2, r2[:300])

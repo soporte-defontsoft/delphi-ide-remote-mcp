@@ -67,7 +67,7 @@ for nombre, cuerpo in (('array', '[]'), ('settings_texto', '{"settings": "x"}'),
     r = call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
     # y contesta: no vale cualquier otro fallo (un timeout, otro INTERNAL)
     check('R1 un .delphilsp.json %s no es un INTERNAL: el hover contesta' % nombre,
-          not mc.tiene(r, 'SYS-006') and 'typecast' not in r and not mc.fallo(r), r[:200])
+          not mc.es(r, 'SR_SYS_TOOL_FAILED_FMT') and 'typecast' not in r and not mc.fallo(r), r[:200])
     d1 = mc.como_json(call('delphi_diagnostics', {'path': dpr}, 300)) or {}
     check('R1 ...y se linta con el .dproj del proyecto, no con ese json',
           os.path.normcase(mc.larga(mc.real(d1.get('project', '')))) == os.path.normcase(mc.larga(_)),

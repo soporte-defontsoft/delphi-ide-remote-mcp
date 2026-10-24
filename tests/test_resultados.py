@@ -2658,7 +2658,7 @@ try:
     with mc.solo_lectura(DPR177):
         res, sc, t = llama('delphi_move', {'path': U177, 'dest': N177})
     check('E177 el segundo proyecto no se deja: MOVE-019 y la unit vuelve BYTE A BYTE (cabecera y comentario)',
-          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and 'SYS-018' not in t and
+          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and not mc.es(t, 'SR_FOTO_NO_VOLVIO_FMT') and
           os.path.exists(U177) and not os.path.exists(N177) and
           [open(f, 'rb').read() for f in (U177, os.path.join(D177, 'Pq.dpr'), DPQ, os.path.join(D177, 'Pr.dpr'), DPR177)] == ANT177,
           '%s | %r' % (t[:300], open(U177, 'rb').read()[:60] if os.path.exists(U177) else None))

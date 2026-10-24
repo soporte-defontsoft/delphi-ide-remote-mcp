@@ -94,7 +94,7 @@ try:
         p = ancho(d, 'U' + enc, bom, codec)
         r = dsg(command='lint', path=p)
         check('L %s: lint no da CLEAN y dice la salida (%s)' % (enc, SALIDA),
-              'DSGN-020' not in r and SALIDA in r, r[:400])
+              not mc.es(r, 'SN_DESIGNER_LINT_OK_FMT') and SALIDA in r, r[:400])
         out = os.path.join(d, 'png')
         os.makedirs(out)
         r = dsg(command='preview', path=p, out=out + '\\')

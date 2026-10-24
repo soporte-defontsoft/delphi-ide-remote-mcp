@@ -310,7 +310,7 @@ try:
     t = lee(fdfm)
     check('F7 set Frame11.Edit1 con un Edit1 en el form: cambia el del frame y no el del form',
           not mc.fallo(r) and "    inherited Edit1: TEdit\r\n      Text = 'tres'" in t and "Text = 'propio'" in t
-          and '[DSGN-032]' not in r,  # el fixture vale: la clase del form sigue en su unidad
+          and not mc.es(r, 'SN_DESIGNER_BINDING_NOCLASS_FMT'),  # el fixture vale: la clase del form sigue en su unidad
           r[:400] + ' | ' + t[:900])
     r = dsg(command='get', component='Edit1')
     check('F8 get Edit1 con uno en el form: el del form', not mc.fallo(r) and "Text = 'propio'" in r, r[:400])
@@ -621,7 +621,7 @@ try:
     r = srv.call('delphi_components', {'platform': 'Win64', 'filter': 'algo'}, 120)
     check('K1 components con platform y filter: COMP-011 INVALID_PARAM y sin contestar a medias',
           mc.es(r, 'SR_COMPONENTS_NO_VA_CON_MODO_FMT') and mc.resultado(r) == 'INVALID_PARAM' and
-          '[COMP-002]' not in r, r[:300])
+          not mc.es(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT'), r[:300])
 
     ldir = os.path.join(JAIL, 'lsp')
     r = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Lsp', 'dir': ldir})

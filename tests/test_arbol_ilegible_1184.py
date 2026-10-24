@@ -34,7 +34,7 @@ def arbol(nombre):
 
 
 def dice_ilegible(r):
-    return 'GUARD-040' in r and 'GUARD-033' not in r
+    return 'GUARD-040' in r and not mc.es(r, 'SR_GUARD_GIT_METADATA_FMT')
 
 
 s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='arbol-ilegible', t=120)

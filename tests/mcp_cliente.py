@@ -1071,9 +1071,16 @@ def a_la_vez(call, primera, segunda, retraso=0.5):
 def espera_tablas(call, tope=240):
     """Las tablas del disenador VCL y FMX, listas: [(marco, respuesta)]. Para
     las baterias que validan contra ellas (el bloque estaba escrito igual en
-    dos). Quien llama comprueba: not tiene(r, 'DSGN-051') and not fallo(r)."""
+    dos). Quien llama comprueba: tabla_lista(r)."""
     return [(fw, espera_info(call, {'command': 'info', 'classname': cls, 'framework': fw}, tope=tope))
             for fw, cls in (('vcl', 'TButton'), ('fmx', 'TLabel'))]
+
+
+def tabla_lista(r):
+    """La respuesta de espera_info / espera_tablas dice que la tabla del
+    disenador esta lista: ni se esta generando ni ha fallado. Estaba escrito
+    igual en diecisiete baterias, con el id a mano (V56)."""
+    return not es(r, 'SR_DESIGNER_GENERANDOSE_FMT') and not fallo(r)
 
 
 def build_ok(call, dproj):
@@ -1116,7 +1123,7 @@ def espera_info(call, args, cond=lambda r: False, tope=240):
     t0, r = time.time(), ''
     while time.time() - t0 < tope:
         r = call('delphi_designer', args, t=120)
-        if cond(r) or not tiene(r, 'DSGN-051'):
+        if cond(r) or not es(r, 'SR_DESIGNER_GENERANDOSE_FMT'):
             return r
         time.sleep(2)
     return r

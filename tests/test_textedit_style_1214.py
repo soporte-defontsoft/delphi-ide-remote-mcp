@@ -36,13 +36,13 @@ try:
           not mc.rechazado(r) and os.path.isfile(sty) and mc.es(r, 'SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT'), r[:400])
     r = srv.call('delphi_textedit', {'path': sty, 'old': "    TextSettings.FontColor = $FFFF0000",
                                      'new': "    TextSettings.FontColor = xFFFF0000"})
-    check('T2 edit que lo arregla: escrito y sin la nota', not mc.rechazado(r) and 'STYLE-055' not in r, r[:300])
+    check('T2 edit que lo arregla: escrito y sin la nota', not mc.rechazado(r) and not mc.es(r, 'SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT'), r[:300])
     r = srv.call('delphi_textedit', {'path': sty, 'edits': [{'old': "    TextSettings.FontColor = xFFFF0000",
                                                              'new': "    TextSettings.FontColor = $FFFF0000"}]})
     check('T3 edits (la tanda) que lo rompe otra vez: la nota', not mc.rechazado(r) and 'STYLE-055' in r, r[:300])
     txt = os.path.join(BASE, 'Roto.txt')
     r = srv.call('delphi_textedit', {'path': txt, 'create': True, 'content': MALO})
-    check('T4 control: un .txt con lo mismo no pregunta a FMX', not mc.rechazado(r) and 'STYLE-055' not in r, r[:200])
+    check('T4 control: un .txt con lo mismo no pregunta a FMX', not mc.rechazado(r) and not mc.es(r, 'SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT'), r[:200])
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -70,7 +70,7 @@ def props(fichero, nombre):
 try:
     listas = mc.espera_tablas(lambda tool, args, t=120: s.call(tool, args, t=t))
     check('fixture: las tablas del disenador estan listas',
-          all(not mc.tiene(r, 'DSGN-051') and not mc.fallo(r) for _, r in listas), str(listas)[:300])
+          all(mc.tabla_lista(r) for _, r in listas), str(listas)[:300])
     s.call('delphi_create', {'kind': 'project-vcl', 'name': 'Ide', 'dir': VCL})
     DFM = os.path.join(VCL, 'UMain.dfm')
     PAS = os.path.join(VCL, 'UMain.pas')

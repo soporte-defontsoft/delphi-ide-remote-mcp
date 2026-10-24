@@ -170,7 +170,7 @@ try:
     lee1 = a1.call('delphi_messages', {'command': 'read'})
     check('W8 el correo de un workspace no lo ve ni lo consume otro (check, read, PENDING)',
           'para-uno' in chk and 'para-vm' not in chk
-          and mc.tiene(pend2, 'MSGS-001') and not mc.tiene(pend3, 'MSGS-001')
+          and mc.tiene(pend2, 'MSGS-001') and not mc.es(pend3, 'SN_MESSAGES_PENDING_FMT')
           and 'PARA-UNO' in lee1 and 'PARA-VM' not in lee1
           and not md(M1) and len(md(M2)) == 1, (chk[:200], pend2[-200:], pend3[-200:], lee1[:200]))
 

@@ -51,7 +51,7 @@ try:
     r = git(command='status', paths=['C01.TXT'])
     check('K1 status paths=["C01.TXT"]: " M c01.txt", no un limpio falso', ' M c01.txt' in r, r[:200])
     r = git(command='diff', paths=['C01.TXT'])
-    check('K2 diff paths=["C01.TXT"]: el cambio, no GIT-001', 'cambio' in r and 'GIT-001' not in r, r[:300])
+    check('K2 diff paths=["C01.TXT"]: el cambio, no GIT-001', 'cambio' in r and not mc.es(r, 'SN_GIT_DIFF_CLEAN'), r[:300])
     r = git(command='log', paths=['C01.TXT'])
     check('K3 log paths=["C01.TXT"]: el commit que lo creo', 'base' in r, r[:200])
     a = git(command='add', paths=['C01.TXT'])

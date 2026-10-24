@@ -72,7 +72,7 @@ try:
           all('403' in x and 'SYS-034' in x and '[Workspace.W]' in x for x in (r, fuera)), (r[:300], fuera[:300]))
     otro = intenta(puerto, 'no-es-de-nadie-0123456789', os.path.join(jail, 'c.txt'))
     check('V4 control: un token que no es de nadie sigue siendo 401 SYS-017',
-          '401' in otro and 'SYS-017' in otro and 'SYS-034' not in otro, otro[:300])
+          '401' in otro and 'SYS-017' in otro and not mc.es(otro, 'SR_SYS_WORKSPACE_CERRADO_FMT'), otro[:300])
 finally:
     proc.kill()
 check('V2 el aviso del arranque dice que es la forma virtual de los agentes',

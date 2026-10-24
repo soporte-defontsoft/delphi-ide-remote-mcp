@@ -50,7 +50,7 @@ try:
     check('B4 la unidad virtual con / escribe tambien', not mc.rechazado(r) and '// B4' in open(U, encoding='utf-8-sig').read(), r[:300])
     r = S.call('delphi_textedit', {'path': barra(os.path.join(FUERA, 'x.txt')), 'create': True, 'content': 'x'})
     check('B5 control: con / FUERA de la jaula sigue negada como fuera',
-          mc.rechazado(r) and not os.path.exists(os.path.join(FUERA, 'x.txt')) and 'GUARD-037' not in r, r[:300])
+          mc.rechazado(r) and not os.path.exists(os.path.join(FUERA, 'x.txt')) and not mc.es(r, 'SR_SUSTITUCION_CARPETA_REAL_FMT'), r[:300])
     r = S.call('delphi_read', {'path': barra(U)})
     check('B6 control: delphi_read con / lee', 'unit UBarra' in r, r[:300])
 finally:

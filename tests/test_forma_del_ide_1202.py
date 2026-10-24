@@ -116,7 +116,7 @@ try:
     # ------------------------------------------------------------------ F8
     r = call('delphi_edit', {'path': DFM, 'old': '    Height = 20', 'new': '    Height = 20\r\n    Height = 30'})
     check('F8 delphi_edit escribe un segundo Height: forma del IDE, sin aviso de forma',
-          not mc.fallo(r) and 'DSGN-161' not in r and 'DSGN-162' not in r, r[-400:])
+          not mc.fallo(r) and not mc.es(r, 'SN_DSGN_FORMA_DISTINTA_FMT') and not mc.es(r, 'SN_DSGN_DETRAS_DE_LA_RAIZ_FMT'), r[-400:])
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
                                  'prop': 'Height', 'value': '40'})
     texto = lee(DFM)
@@ -158,7 +158,7 @@ try:
     open(STY, 'w', encoding='utf-8', newline='').write(
         MAL.replace(' Width = ', '\r\n    Width = '))
     r = call('delphi_styles', {'command': 'view', 'path': STY})
-    check('F7 control: bien escrito, view lo lee', not mc.fallo(r) and "uno" in r and 'DSGN-160' not in r, r[:300])
+    check('F7 control: bien escrito, view lo lee', not mc.fallo(r) and "uno" in r and not mc.es(r, 'SR_DSGN_FORMA_DISTINTA_FMT'), r[:300])
 finally:
     srv.cierra()
 

@@ -97,7 +97,7 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='con-quien-va
 try:
     # la pista pregunta a la tabla del OTRO marco sin esperar: tienen que estar
     for fw, r in mc.espera_tablas(srv.call):
-        check('V0 la tabla %s esta lista' % fw, not mc.tiene(r, 'DSGN-051') and not mc.fallo(r), r[:200])
+        check('V0 la tabla %s esta lista' % fw, mc.tabla_lista(r), r[:200])
 
     pf = fmx('UF')
     pv = vcl('UV')

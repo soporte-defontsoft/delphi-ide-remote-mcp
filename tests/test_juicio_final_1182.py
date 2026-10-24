@@ -113,7 +113,7 @@ try:
     check('J3 changeset que solo le quita el campo al .pas: DSGN-021 (el enlace roto desde la unidad)',
           not mc.rechazado(r) and dsgn021(r) == 1, r[:600])
     check('J6 ...y no dice EDIT-084 ("edited") del .dfm, que el lote no toco',
-          not mc.rechazado(r) and 'EDIT-084' not in r, r[:600])
+          not mc.rechazado(r) and not mc.es(r, 'SN_EDIT_DESIGNER_FORMATO_TEXTO'), r[:600])
 
     pas, dfm = par('j7')
     r = srv.call('delphi_edit', {'path': pas, 'old': '    Panel1: TPanel;', 'new': '    // sin campo'}, t=240)
@@ -139,7 +139,7 @@ try:
         {'old': "  Caption = 'Form1'", 'new': "  Caption = 'Form1'"},
         {'old': '    Top = 40', 'new': '    Top = 40'}]}, t=240)
     check('J10 una tanda SIN cambios sobre un form ya roto: dice que no cambio nada y no lo juzga',
-          'EDIT-114' in r and 'EDIT-084' not in r and dsgn021(r) == 0 and open(dfm, 'rb').read() == antes,
+          'EDIT-114' in r and not mc.es(r, 'SN_EDIT_DESIGNER_FORMATO_TEXTO') and dsgn021(r) == 0 and open(dfm, 'rb').read() == antes,
           r[:600])
 
     pas, dfm = par_roto('j11')

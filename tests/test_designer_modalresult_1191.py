@@ -35,7 +35,7 @@ def d(**kw):
 try:
     listas = mc.espera_tablas(lambda tool, args, t=120: s.call(tool, args, t=t))
     check('fixture: las tablas del disenador estan listas',
-          all(not mc.tiene(r, 'DSGN-051') and not mc.fallo(r) for _, r in listas), str(listas)[:300])
+          all(mc.tabla_lista(r) for _, r in listas), str(listas)[:300])
     s.call('delphi_create', {'kind': 'project-vcl', 'name': 'Modal', 'dir': JAIL})
     DFM = os.path.join(JAIL, 'UMain.dfm')
     d(command='insert', path=DFM, classname='TButton', component='BtnOk')

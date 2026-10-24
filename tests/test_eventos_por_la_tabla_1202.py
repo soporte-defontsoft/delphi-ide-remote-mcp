@@ -72,7 +72,7 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='eventos-tabl
 try:
     # el juez es la tabla: tiene que estar
     for fw, r in mc.espera_tablas(srv.call):
-        check('E0 la tabla %s esta lista' % fw, not mc.tiene(r, 'DSGN-051') and not mc.fallo(r), r[:200])
+        check('E0 la tabla %s esta lista' % fw, mc.tabla_lista(r), r[:200])
 
     p = form('UE1')
     d = mc.como_json(srv.call('delphi_designer', {'command': 'check-binding', 'path': p}))

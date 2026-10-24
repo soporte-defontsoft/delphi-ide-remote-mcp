@@ -156,7 +156,7 @@ def compila_y_cuadra(etiqueta, dproj, form):
 try:
     for fw, r in mc.espera_tablas(call):
         check('T0 la tabla del disenador %s esta lista' % fw,
-              not mc.tiene(r, 'DSGN-051') and not mc.fallo(r), r[:200])
+              mc.tabla_lista(r), r[:200])
 
     # =================================================================== VCL
     VDIR = os.path.join(JAIL, 'EdVcl')

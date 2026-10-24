@@ -295,7 +295,7 @@ for args, que, cual in (({'config': 'Inventada'}, 'una configuracion que no decl
     r = S.call('delphi_config', a)
     # la negativa de set-active, no la de un comando o un parametro que no existe
     check('J6 set-active con %s: negado (%s)' % (que, cual or 'la regla del framework'),
-          mc.rechazado(r) and not mc.tiene(r, 'CFG-084') and not mc.tiene(r, 'SYS-015')
+          mc.rechazado(r) and not mc.es(r, 'SR_CFG_COMMAND_DEBE_SER_VIEW') and not mc.es(r, 'SR_SYS_UNKNOWN_PARAM_FMT')
           and mc.tiene(r, cual), r[:300])
     check('J6 ...y no escribio nada', open(dproj3, 'rb').read() == antes)
 # la regla del framework, y no la de una plataforma que no declara (la plantilla

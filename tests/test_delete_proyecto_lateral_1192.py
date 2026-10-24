@@ -47,7 +47,7 @@ try:
 
     r = srv.call('delphi_delete', {'path': os.path.join(scratch, 'UDef.pas')}, t=120)
     check('D1 delete de una unidad listada por el .dpr de una carpeta HERMANA: FILE-035 nombra P.dpr',
-          'FILE-035' in r and 'P.dpr' in r and 'FILE-002' not in r, r[:500])
+          'FILE-035' in r and 'P.dpr' in r and not mc.es(r, 'SN_FILE_PROJECTS_NONE'), r[:500])
     check('D2 ...y el .dpr ya no lista UDef', 'UDef' not in dpr_texto(dpr), dpr_texto(dpr))
 
     r = srv.call('delphi_delete', {'path': os.path.join(core, 'UDeep.pas')}, t=120)
@@ -56,7 +56,7 @@ try:
 
     r = srv.call('delphi_move', {'path': os.path.join(scratch, 'UMov.pas'), 'dest': os.path.join(scratch, 'UMov2.pas')},
                  t=120)
-    check('M1 move de una unidad listada por el .dpr hermano: FILE-035', 'FILE-035' in r and 'FILE-002' not in r, r)
+    check('M1 move de una unidad listada por el .dpr hermano: FILE-035', 'FILE-035' in r and not mc.es(r, 'SN_FILE_PROJECTS_NONE'), r)
     check('M2 ...y el .dpr apunta a UMov2', "UMov2 in '..\\scratch\\UMov2.pas'" in dpr_texto(dpr)
           and "UMov in '..\\scratch\\UMov.pas'" not in dpr_texto(dpr), dpr_texto(dpr))
 

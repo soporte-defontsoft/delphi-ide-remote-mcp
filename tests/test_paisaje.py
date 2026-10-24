@@ -1751,6 +1751,9 @@ check('la tabla de accesos (ConstruyeAccesos) declara TODAS las tools registrada
 # reglas y mutantes SON los formatos) y release_check (el arnes del ritual,
 # que no importa mcp_cliente: anotado para David).
 FUERA_PY = ('test_paisaje.py', 'release_check.py')
+# las areas de los ids del catalogo (CFG, GIT, DSGN...): la regla de los ids a mano
+# mira solo esas; una marca de un fixture ('ROTA-000', 'DENTRO-1211') no es un id
+AREAS_PY = '|'.join(sorted({i.split('-')[0] for tx in mc.catalogo().values() for i in mc.ids(tx)[:1]}))
 REGLAS_PY = [
     ('el nombre de la papelera a mano', r"""(['"])__delphi-patch\1""",
      # fija a proposito la constante del fuente del servidor
@@ -1795,6 +1798,12 @@ REGLAS_PY = [
     ('la instalacion activa buscada a mano', r"""get\(\s*['"]active['"]\s*\)""",
      [('mcp_cliente.py', 'def instalacion_activa')],
      'mc.instalacion_activa'),
+    # (V56, 25-oct-2026: 67 en 40 baterias y espera_info) una AUSENCIA con el id del mensaje a
+    # mano pasa en verde si el id cambia o el mensaje se retira
+    ('la ausencia de un mensaje por su id a mano',
+     r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+not\s+in\b|\bnot\s+(?:mc\.)?tiene\(\s*[^,()]+,\s*(['"])(?:%s)-\d{3}\2"""
+     % (AREAS_PY, AREAS_PY), [],
+     'not mc.es(r, CONSTANTE) o mc.tabla_lista: el id sale del catalogo y revienta si la constante desaparece'),
 ]
 
 
@@ -1845,6 +1854,7 @@ PLANTADO_PY = {
     'la pagina ANSI de la maquina leida a mano': "    acp = ctypes.windll.kernel32.GetACP()",
     'la carpeta del IDE compuesta a mano': "    rtl = r'C:\\Program Files (x86)\\Embarcadero\\Studio\\37.0\\source'",
     'la instalacion activa buscada a mano': "    act = next(i for i in inst['installs'] if i.get('active'))",
+    'la ausencia de un mensaje por su id a mano': "    ok = 'CFG-043' not in r",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]
@@ -1854,6 +1864,24 @@ for regla in REGLAS_PY:
           len(cazados) == 1 and ':3 ' in cazados[0], cazados)
     malos = fuera_de_casa_py(regla, TEXTOS_PY)
     check('"%s" en ninguna bateria - %s' % (nombre, regla[3]), not malos, malos)
+# la regla de los ids (V56): su otra forma se caza y una marca de un fixture no. Las
+# positivas ('X-NNN' in r, mc.tiene) se ponen rojas si el id cambia, pero leen el id a
+# mano: deuda declarada que solo puede encoger (la que se toque, a mc.es / mc.abre)
+check('las areas de los ids se leen del catalogo (al menos 10)', AREAS_PY.count('|') >= 9, AREAS_PY)
+_IDS = next(r for r in REGLAS_PY if r[0] == 'la ausencia de un mensaje por su id a mano')
+_c = fuera_de_casa_py(_IDS, [('plantado.py', "a = not mc.tiene(r, 'GIT-067')\nb = 'ROTA-000' not in lee(VIVO)\n"
+                                              "c = '[GIT-051 DENIED]' not in r\n")])
+check('mutante py de los ids: not mc.tiene con el id a mano se caza, y una marca de fixture no',
+      [x.split(' ')[0] for x in _c] == ['plantado.py:1', 'plantado.py:3'], _c)
+POSITIVOS = re.compile(r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+in\b|(?<!not )(?<![\w.])(?:mc\.)?tiene\(\s*[^,()]+,\s*(['"])(?:%s)-\d{3}\2"""
+                       % (AREAS_PY, AREAS_PY))
+check('mutante de los ids positivos: se cuentan las dos formas, y las negativas no',
+      len(POSITIVOS.findall("x = 'CFG-043' in r and mc.tiene(r, 'GIT-067') and not mc.tiene(r, 'GIT-001') "
+                            "and 'GIT-002' not in r and '[GIT-051 DENIED]' in r")) == 3)
+IDS_POSITIVOS_TOPE = 210  # medido el 25-oct-2026 (V56)
+_n = sum(len(POSITIVOS.findall(l)) for _, t in TEXTOS_PY for l in codigo_py(t))
+check('los ids positivos a mano: %d, el tope declarado (solo puede encoger: si baja, se baja el tope)' % _n,
+      _n == IDS_POSITIVOS_TOPE, IDS_POSITIVOS_TOPE)
 # ---- LAS GLOBALES DEL BUILD (revisor E, 21-oct-2026): cada /p:Nombre que la orden de
 # msbuild lleva (Lsp.BuildRunner) esta en GLOBALES_DE_LA_ORDEN, lo que la puerta da por
 # dudoso al evaluar las Condition del .dproj: una global gana a lo escrito aun definida

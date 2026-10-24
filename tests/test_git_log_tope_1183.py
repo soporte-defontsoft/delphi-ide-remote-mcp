@@ -58,14 +58,14 @@ try:
     check('L1 un rango de 29 commits sin count: 20 lineas y GIT-067 (hay mas, y como verlos)',
           len(lineas(r)) == 20 and 'GIT-067' in r, (len(lineas(r)), r[-300:]))
     r = log(count=40, ref=PRIMERO, to='HEAD')
-    check('L2 el mismo rango con count=40: los 29, sin GIT-067', len(lineas(r)) == 29 and 'GIT-067' not in r,
+    check('L2 el mismo rango con count=40: los 29, sin GIT-067', len(lineas(r)) == 29 and not mc.es(r, 'SN_GIT_LOG_HAY_MAS_FMT'),
           (len(lineas(r)), r[-200:]))
     r = log(ref='HEAD~5', to='HEAD')
-    check('L3 control: un rango de 5: los 5, sin GIT-067', len(lineas(r)) == 5 and 'GIT-067' not in r,
+    check('L3 control: un rango de 5: los 5, sin GIT-067', len(lineas(r)) == 5 and not mc.es(r, 'SN_GIT_LOG_HAY_MAS_FMT'),
           (len(lineas(r)), r[-200:]))
     r = log(count=20, ref=PRIMERO, to='HEAD')
     check('L4 count=20 explicito con 29 detras: 20 y SIN GIT-067 (pidio 20)',
-          len(lineas(r)) == 20 and 'GIT-067' not in r, (len(lineas(r)), r[-200:]))
+          len(lineas(r)) == 20 and not mc.es(r, 'SN_GIT_LOG_HAY_MAS_FMT'), (len(lineas(r)), r[-200:]))
     # 1.19.0: log no tiene --stat; format=full tambien da varias lineas por commit
     r = log(format='full', ref=PRIMERO, to='HEAD')
     check('L5 con format=full (varias lineas por commit) y sin count: GIT-067 igual', 'GIT-067' in r, r[-300:])

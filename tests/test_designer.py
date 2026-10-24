@@ -74,7 +74,7 @@ open(RESBIN, 'wb').write(b'\xff\x0a\x00FORMBIN\x00\x00\x00\x00'
 # espera un rato): con la cache fria esta bateria dependia de que otra se la
 # hubiera dejado caliente (4-oct-2026)
 for _fw, _r in mc.espera_tablas(call):
-    check('tablas del disenador listas (%s)' % _fw, not mc.tiene(_r, 'DSGN-051') and not mc.fallo(_r), _r[:300])
+    check('tablas del disenador listas (%s)' % _fw, mc.tabla_lista(_r), _r[:300])
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TButton', 'framework': 'vcl'}))
 props = [p['name'] for p in j.get('properties', [])]
 check('info TButton (VCL): Caption y TabOrder publicados', 'Caption' in props and 'TabOrder' in props, str(j)[:250])

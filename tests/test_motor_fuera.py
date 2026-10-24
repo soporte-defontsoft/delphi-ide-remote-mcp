@@ -161,7 +161,7 @@ def motor(tool, args, tope=180):
     t0, r = time.time(), ''
     while time.time() - t0 < tope:
         r = call(tool, args, t=120) or ''
-        if not mc.tiene(r, 'LSP-025'):
+        if not mc.es(r, 'SR_LSP_WARMING'):
             return r
         time.sleep(3)
     return r
@@ -186,7 +186,7 @@ def fugas(r):
 # sueltan nada tampoco, y los checks de solo ausencia pasaban con ellos
 # (revisor de version de la 1.18.0)
 def contesta(r):
-    return bool(r) and not mc.sin_respuesta(r) and not mc.tiene(r, 'LSP-025')
+    return bool(r) and not mc.sin_respuesta(r) and not mc.es(r, 'SR_LSP_WARMING')
 
 
 try:
@@ -194,10 +194,10 @@ try:
     # F8 primero (calienta el motor): lo de dentro y la RTL contestan
     r = motor('delphi_definition', {'path': U1, 'line': 5, 'character': 10})
     check('F8 definition de un simbolo de DENTRO: contesta con su ruta',
-          'UDentro.pas' in r and not mc.tiene(r, 'LSP-038'), r[:300])
+          'UDentro.pas' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
     r = motor('delphi_hover', {'path': U1, 'line': 7, 'character': 13})
     check('F8 hover de Length (la RTL, zona de biblioteca APAGADA): contesta su firma',
-          'Length' in r and not mc.tiene(r, 'LSP-038'), r[:300])
+          'Length' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
 
     r = motor('delphi_definition', {'path': U1, 'line': 8, 'character': 14})
     check('F1 definition de un simbolo de una unit del search path de FUERA: nada de alli, y la nota LSP-037',
@@ -217,7 +217,7 @@ try:
           contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r), (fugas(r), r[:300]))
     r = call('delphi_diagnostics', {'path': U1}, t=120) or ''
     for _ in range(20):
-        if not mc.tiene(r, 'LSP-024') and 'in progress' not in r:
+        if not mc.es(r, 'SN_LSP_HINT_HOVER_USAGES') and 'in progress' not in r:
             break
         time.sleep(3)
         r = call('delphi_diagnostics', {'path': U1}, t=120) or ''
@@ -253,7 +253,7 @@ try:
         escribe(UB, 'unit UBib;\ninterface\nuses %s;\nimplementation\nend.\n' % unidad)
         r = motor('delphi_definition', {'path': UB, 'line': 2, 'character': 6})
         check('F8b definition de una unit de la Library Search Path fuera de la instalacion (zona APAGADA): contesta',
-              (unidad + '.pas').lower() in r.lower() and not mc.tiene(r, 'LSP-038'), (unidad, r[:300]))
+              (unidad + '.pas').lower() in r.lower() and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), (unidad, r[:300]))
     else:
         print('NOTA: F8b no se mide: esta maquina no tiene carpetas de la Library Search Path '
               'fuera de la instalacion')
@@ -286,7 +286,7 @@ try:
             break
         time.sleep(3)
     check('F8d references de una rutina de la RTL (zona APAGADA): su uso de dentro, no LSP-014',
-          not mc.tiene(r, 'LSP-014') and 'UDecl.pas' in r, r[:300])
+          not mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT') and 'UDecl.pas' in r, r[:300])
 
     # F6: unos ajustes "del IDE" al lado, que FUNCIONAN y nombran la carpeta de
     # fuera: los que el servidor fabrico para P1 (de su cache), con ese proyecto

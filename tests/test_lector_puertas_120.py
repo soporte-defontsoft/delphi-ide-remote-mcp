@@ -90,7 +90,7 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='lector-puert
 try:
     # la auditoria de una edicion no espera a las tablas: tienen que estar
     for fw, r in mc.espera_tablas(srv.call):
-        check('L0 la tabla %s esta lista' % fw, not mc.tiene(r, 'DSGN-051') and not mc.fallo(r), r[:200])
+        check('L0 la tabla %s esta lista' % fw, mc.tabla_lista(r), r[:200])
 
     p = form('UL1')
     r = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 0\r\n' + MALO}, t=240)
@@ -101,12 +101,12 @@ try:
 
     r = srv.call('delphi_designer', {'path': p, 'command': 'lint'}, t=240)
     check('L2 lint de ese form: no CLEAN, el lector con su linea',
-          not mc.tiene(r, 'DSGN-020') and mc.tiene(r, 'DSGN-038') and ('line %d:' % n) in r and LECTOR in r,
+          not mc.es(r, 'SN_DESIGNER_LINT_OK_FMT') and mc.tiene(r, 'DSGN-038') and ('line %d:' % n) in r and LECTOR in r,
           r[:600])
 
     r = srv.call('delphi_designer', {'path': p, 'command': 'preview', 'maxwidth': 200}, t=240)
     check('L3 preview: DSGN-153 (el fichero), no DSGN-061 INTERNAL, con lo que dijo el lector y su linea',
-          mc.abre(r, 'SR_DESIGNER_NO_CARGA_FMT') and not mc.tiene(r, 'DSGN-061') and LECTOR in r
+          mc.abre(r, 'SR_DESIGNER_NO_CARGA_FMT') and not mc.es(r, 'SR_DESIGNER_RENDER_FALLO_FMT') and LECTOR in r
           and ('line %d:' % n) in r, r[:600])
 
     p = form('UL4', dentro='    TextSettings.FontColor = $FF00A152\r\n')

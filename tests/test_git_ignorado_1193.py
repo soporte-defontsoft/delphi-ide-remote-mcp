@@ -122,13 +122,13 @@ try:
 
     r = git(command='add', paths=['noexiste.txt'])
     check('C1 control: add de uno que no existe: fallo, sin GIT-078',
-          mc.rechazado(r) and 'GIT-078' not in r, r[:600])
+          mc.rechazado(r) and not mc.es(r, 'SN_GIT_ADD_IGNORADO_FMT'), r[:600])
 
     escribe('t.bak', b'cambio\r\n')
     r = git(command='add', paths=['t.bak'])
     st = git(command='status')
     check('C2 control: add de un rastreado que casa con un patron: bien, sin GIT-078',
-          not mc.rechazado(r) and 'GIT-078' not in r and 'M  t.bak' in st, (r[:300], st[:300]))
+          not mc.rechazado(r) and not mc.es(r, 'SN_GIT_ADD_IGNORADO_FMT') and 'M  t.bak' in st, (r[:300], st[:300]))
 finally:
     s.cierra()
 

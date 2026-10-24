@@ -72,11 +72,11 @@ try:
           'LSP-046' in r and '"project"' in r and 'P.dproj' in r, r[:400])
     r = diagnostics(srv, os.path.join(d, 'UJunto.pas'))
     check('C1 control: en la carpeta del proyecto, W1036 y H2077, sin LSP-046 y con "project"',
-          todo(r) and 'LSP-046' not in r and '"project"' in r and 'P.dproj' in r, r[:400])
+          todo(r) and not mc.es(r, 'SN_LSP_DEBAJO_DEL_PROYECTO') and '"project"' in r and 'P.dproj' in r, r[:400])
     # antes de S2: con Raiz.dproj en la raiz, la hermana subiria hasta el
     r = diagnostics(srv, os.path.join(hermana, 'UHermana.pas'))
     check('C2 control: en una carpeta HERMANA del proyecto, W1036 y H2077, sin LSP-046',
-          todo(r) and 'LSP-046' not in r, r[:400])
+          todo(r) and not mc.es(r, 'SN_LSP_DEBAJO_DEL_PROYECTO'), r[:400])
 
     # el caso de Hermes: una raiz con su .dproj y, mucho mas abajo, una unidad
     # que no lista nadie; FindDproj sube hasta el de la raiz
