@@ -58,6 +58,8 @@ type
     EnSusLineas: Boolean;       // la declaracion y la implementacion ocupan sus lineas solas
     Linea: Integer;      // 1-based, la que se ensena (la implementacion, o la declaracion)
     SeBorra: Boolean;    // lo quita el delete (vacio y exclusivo)
+    Sobrecargado: Boolean; // hay mas de uno con su nombre: no se sabe de cual se habla
+    Nuevo: string;       // el nombre que le da el renombrado, como el IDE; '' = se queda
   end;
 
   { Si la propiedad AProp de AObj guarda un componente: lo sabe la tabla del
@@ -670,7 +672,8 @@ begin
           if MismoIdentificador(C.Nombre, Clase.Nombre + '.' + R.Nombre) then
             Impls := Impls + [C];
         // uno sobrecargado ni se toca ni se juzga: no se sabe de cual se habla
-        if (NDecl > 1) or (Length(Impls) > 1) then
+        MP.Sobrecargado := (NDecl > 1) or (Length(Impls) > 1);
+        if MP.Sobrecargado then
           MP.Compartido := MsgText(SF_DESIGNER_SOBRECARGADO)
         else if Fuera.TryGetValue(ClaveDeIdentificador(R.Nombre), Quien) then
           MP.Compartido := MsgFmt(SF_DESIGNER_LO_ATA_FMT, [Quien]);
@@ -852,6 +855,21 @@ begin
   end;
 end;
 
+{ El nombre que da el IDE al manejador del evento AEvento de AComponente: su
+  Name y el evento sin un On delante, sin mirar mayusculas - la regla de SU
+  editor de metodos (DesignEditors.TMethodProperty.GetFormMethodName y
+  GetTrimmedEventName, leidos en las fuentes de la ToolsAPI el 24-oct-2026),
+  que vive en el IDE y no se le puede preguntar: gramatica nuestra, UNA, con
+  su fuente. No juzga si AEvento es un evento: eso ya lo dijo la tabla. (A la
+  raiz el IDE la nombra por su clase sin la T: la raiz no se renombra aqui.) }
+function NombreDelManejadorDelIde(const AComponente, AEvento: string): string;
+begin
+  Result := AEvento;
+  if (Length(Result) >= 2) and CharInSet(Result[1], ['O', 'o']) and CharInSet(Result[2], ['N', 'n']) then
+    Delete(Result, 1, 2);
+  Result := AComponente + Result;
+end;
+
 function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
   const ANuevo, APasTexto, APasNombre: string; const ATextos: TArray<string>;
   out AImp: TImpacto; out ADfm, APas: string; AJuez: TJuezDeReferencia = nil;
@@ -866,8 +884,46 @@ var
 begin
   Result := '';
   AImp := AnalizaImpacto(ADoc, AObj, True, APasTexto, APasNombre, AJuez, ATabla);
+  // los manejadores que el IDE nombro por el componente - el nombre que da a
+  // un evento suyo: Button1 + Click por OnClick - pasan al nombre nuevo, como
+  // en el IDE: su declaracion, su cabecera y las lineas del form que los
+  // atan; el codigo no se toca (medido en el IDE con David el 24-oct-2026:
+  // Button1Click paso a BtnOkClick, Entrando, con nombre propio, se quedo, y
+  // la llamada Button1Click(nil) de FormCreate tambien, sin compilar; DSGN-103
+  // decia que el IDE no los renombra). Uno sobrecargado no se sabe cual es, y
+  // uno cuyo nombre nuevo ya nombra algo de la unidad no se toca
+  var CodigoPas := CodigoPascal(APasTexto);
+  var HayManejadores := False;
+  for var K := 0 to High(AImp.Metodos) do
+  begin
+    var Mt := AImp.Metodos[K];
+    var PEv := Mt.Atado.LastIndexOf('.');
+    if (PEv < 0) or Mt.Sobrecargado then
+      Continue;
+    var Ev := Mt.Atado.Substring(PEv + 1);
+    var NuevoM := NombreDelManejadorDelIde(ANuevo, Ev);
+    if not MismoIdentificador(Mt.Nombre, NombreDelManejadorDelIde(AObj.ObjName, Ev)) or
+       TRegEx.IsMatch(CodigoPas, PatronIdentEntero(NuevoM), [roIgnoreCase]) then
+      Continue;
+    AImp.Metodos[K].Nuevo := NuevoM;
+    HayManejadores := True;
+  end;
   Lineas := Copy(ADoc.Lines);
   Form := LineasDeForm(ADoc.Lines);
+  // ...en las lineas del form que los atan, del suyo o de otro (si no, el
+  // form no carga), por EL lector de eventos, como el analizador
+  if HayManejadores then
+  begin
+    var ClasesDelForm := ClasesDeLasLineas(Form, JuezDeLaRaiz(ATabla, Form, UnidadDeDesigner(ADoc.Path), APasTexto));
+    for I := 0 to High(Lineas) do
+    begin
+      var Ev, Met: string;
+      if (Form[I].Clase = clfPropiedad) and EventoDeObjeto(ATabla, ClasesDelForm[I], ADoc.Lines[I], Ev, Met) then
+        for var Mt in AImp.Metodos do
+          if (Mt.Nuevo <> '') and MismoIdentificador(Met, Mt.Nombre) then
+            Lineas[I] := LineasDePropiedad(LeadingWhite(Lineas[I]), Form[I].Prop, [Mt.Nuevo])[0];
+    end;
+  end;
   // la cabecera: solo el nombre, por EL lector y EL compositor de esa linea;
   // lo de detras de la clase como esta (un [2]). Aqui habia una regex propia
   I := AObj.StartLine - 1;
@@ -932,6 +988,32 @@ begin
       APas := UneConSusSaltos(PasLineas, PasSaltos);
       Break;
     end;
+  // los manejadores renombrados: su nombre en su declaracion y en la cabecera
+  // de su implementacion (en el codigo de la linea, como el campo), nada mas
+  var Viejos: TArray<string> := [];
+  for var Mt in AImp.Metodos do
+    if Mt.Nuevo <> '' then
+    begin
+      Viejos := Viejos + [Mt.Nombre];
+      PasLineas := SplitToLinesConSalto(APas, PasSaltos);
+      var CodigoL := SplitToLines(CodigoPascal(APas));
+      var Suyas: TArray<Integer> := [Mt.DeclIni, Mt.ImplIni];
+      for var L in Suyas do
+        if (L >= 0) and (L <= High(PasLineas)) and (L <= High(CodigoL)) then
+        begin
+          M := TRegEx.Match(CodigoL[L], PatronIdentEntero(Mt.Nombre), [roIgnoreCase]);
+          if M.Success then
+            PasLineas[L] := Copy(PasLineas[L], 1, M.Index - 1) + Mt.Nuevo +
+              Copy(PasLineas[L], M.Index + M.Length, MaxInt);
+        end;
+      APas := UneConSusSaltos(PasLineas, PasSaltos);
+    end;
+  // ...y el codigo que los llama sigue con el nombre viejo, como en el IDE: se
+  // dice con los demas usos (no compila hasta cambiarlo)
+  if Length(Viejos) > 0 then
+    for var U in UsosEnCodigo(APas, APasNombre, Viejos, nil) do
+      if IndexStr(U, AImp.Usos) < 0 then
+        AImp.Usos := AImp.Usos + [U];
 end;
 
 { ---- abrir, comprobar y escribir ---- }
@@ -3164,9 +3246,16 @@ begin
       for var I in Imp.Referencias do
         Lista := Lista + [Donde(F.DfmNombre, I + 1)];
       PonLista(Ret, 'referencesRenamed', Lista);
+      // los manejadores que el IDE nombro por el, con el nombre nuevo; los que
+      // llevan el viejo y no eran suyos se quedan
       Lista := [];
       for var Mt in Imp.Metodos do
-        if Mt.PorNombre then
+        if Mt.Nuevo <> '' then
+          Lista := Lista + [Mt.Nombre + ' -> ' + Mt.Nuevo + ' (' + Donde(F.PasNombre, Mt.Linea) + ')'];
+      PonLista(Ret, 'methodsRenamed', Lista);
+      Lista := [];
+      for var Mt in Imp.Metodos do
+        if Mt.PorNombre and (Mt.Nuevo = '') then
           Lista := Lista + [Mt.Nombre + ' (' + Donde(F.PasNombre, Mt.Linea) + ')'];
       PonLista(Ret, 'methodsWithOldName', Lista);
       PonLista(Ret, 'usesInCode', Imp.Usos);

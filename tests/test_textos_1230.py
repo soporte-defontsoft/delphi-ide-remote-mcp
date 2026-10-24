@@ -18,8 +18,11 @@ Cada caso, medido en produccion antes de arreglarlo (24-oct-2026):
       DSGN-165 "no se guarda")
   T9  delphi_diagnostics de un .inc: LSP-051 al momento (se quedaba en "in-progress": medido
       seis minutos con tres lineas)
+  T10 set Name renombra los manejadores que el IDE nombro por el componente (Button1Click),
+      no los de nombre propio ni el codigo que los llama - medido en el IDE con David; DSGN-103
+      decia que el IDE no los renombra
 
-Mutante: produccion antes de este bloque (r1222ar): T1-T9 rojos.
+Mutante: produccion antes de este bloque (r1222ar): T1-T9 rojos; antes de T10 (r1222as): T10.
 
 Uso:  python tests/test_textos_1230.py [exe]
 """
@@ -121,6 +124,40 @@ try:
     r = srv.call('delphi_diagnostics', {'path': INC})
     check('T9 diagnostics de un .inc junto a su .dproj: LSP-051 al momento (no "in-progress")',
           mc.abre(r, 'SR_LSP_LINT_INCLUDE_FMT'), r[:300])
+
+    # --- T10 -----------------------------------------------------------------------
+    # medido en el IDE con David (24-oct-2026), Button1 -> BtnOk en el Object Inspector:
+    # Button1Click paso a BtnOkClick (declaracion, cabecera, OnClick del .dfm), Entrando
+    # se quedo, y la llamada Button1Click(nil) de FormCreate tambien (no compila)
+    MDIR = os.path.join(JAIL, 'manejador')
+    escribe(os.path.join(MDIR, 'UManejador.pas'), (
+        'unit UManejador;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls;\r\n\r\n'
+        'type\r\n  TFormManejador = class(TForm)\r\n    Button1: TButton;\r\n'
+        '    procedure Button1Click(Sender: TObject);\r\n    procedure Entrando(Sender: TObject);\r\n'
+        '    procedure FormCreate(Sender: TObject);\r\n  end;\r\n\r\nvar\r\n  FormManejador: TFormManejador;\r\n\r\n'
+        'implementation\r\n\r\n{$R *.dfm}\r\n\r\nprocedure TFormManejador.Button1Click(Sender: TObject);\r\nbegin\r\n'
+        "  Caption := 'hola';\r\nend;\r\n\r\nprocedure TFormManejador.Entrando(Sender: TObject);\r\nbegin\r\n"
+        "  Caption := 'entra';\r\nend;\r\n\r\nprocedure TFormManejador.FormCreate(Sender: TObject);\r\nbegin\r\n"
+        '  Button1Click(nil);\r\nend;\r\n\r\nend.\r\n').encode('ascii'))
+    MDFM = escribe(os.path.join(MDIR, 'UManejador.dfm'), (
+        "object FormManejador: TFormManejador\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'M'\r\n"
+        "  ClientHeight = 200\r\n  ClientWidth = 300\r\n  OnCreate = FormCreate\r\n  object Button1: TButton\r\n"
+        "    Left = 8\r\n    Top = 8\r\n    Width = 75\r\n    Height = 25\r\n    Caption = 'Button1'\r\n"
+        "    TabOrder = 0\r\n    OnClick = Button1Click\r\n    OnEnter = Entrando\r\n  end\r\nend\r\n").encode('ascii'))
+    r = srv.call('delphi_designer', {'command': 'set', 'path': MDFM, 'component': 'Button1', 'prop': 'Name',
+                                     'value': 'BtnOk'}, t=300)
+    pas = open(os.path.join(MDIR, 'UManejador.pas'), 'rb').read().decode('ascii')
+    dfm = open(MDFM, 'rb').read().decode('ascii')
+    j = mc.como_json(r)
+    check('T10 set Name Button1 -> BtnOk renombra Button1Click como el IDE: declaracion, cabecera y OnClick',
+          not mc.fallo(r) and 'procedure BtnOkClick(Sender: TObject);' in pas
+          and 'procedure TFormManejador.BtnOkClick(Sender: TObject);' in pas
+          and 'OnClick = BtnOkClick' in dfm and 'Button1Click -> BtnOkClick' in str(j.get('methodsRenamed')),
+          (r[:500], pas[-400:]))
+    check('T10 ...Entrando (nombre propio) se queda, y la llamada del codigo tambien, dicha en usesInCode',
+          'OnEnter = Entrando' in dfm and 'procedure Entrando(Sender: TObject);' in pas
+          and '  Button1Click(nil);' in pas and 'Button1Click(nil)' in str(j.get('usesInCode')),
+          (j.get('usesInCode'), j.get('methodsWithOldName')))
 finally:
     srv.cierra()
     print('atomos RTL nuevos de procesos muertos:', mc.atomos_rtl_dejados(antes_atomos))

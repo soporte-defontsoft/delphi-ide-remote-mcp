@@ -4307,8 +4307,8 @@ const
     'renaming a published member breaks the form''s binding (the IDE only ' +
     'repairs it interactively). For a COMPONENT of the form, delphi_designer ' +
     'command=set prop=Name renames it as the IDE does - the component, its ' +
-    'field and the form lines that name it - and lists the uses left in the ' +
-    'code (usesInCode).';
+    'field, the handlers named after it and the form lines that name it - ' +
+    'and lists the uses left in the code (usesInCode).';
 
   SR_RENAME_STRINGS_FMT =
     '[RENAME-020 DENIED] %d occurrences inside string literals ' +
@@ -5157,7 +5157,8 @@ const
     'or storedIn say when that is not the value given; parent= ' +
     'alone moves the component; before=, ' +
     'after= or index= alone reorders it among its siblings; prop=Name ' +
-    'renames it, its field and the form lines that name it) | delete (the ' +
+    'renames it, its field, its default-named handlers and the form lines ' +
+    'that name it) | delete (the ' +
     'component and what is inside it, the references to it in the form, its ' +
     'field and its EMPTY handlers; refused while a method of its own has ' +
     'code - the answer lists them with their line, to clean first). ' +
@@ -5949,11 +5950,19 @@ const
     'that still name a deleted component: the compiler stops there (E2003) - ' +
     'fix them with delphi_edit.';
 
+  { decia que el IDE no renombra sus metodos; los que el IDE nombro por el
+    (Button1Click) los renombra: su declaracion, su cabecera y su linea del
+    form, y el codigo no lo toca (medido en el IDE con David, 24-oct-2026) }
   SN_DESIGNER_RENAME_NOTE =
-    '[DSGN-103] Renamed in the form - every line of it that names the ' +
-    'component included - and in its field. Its methods keep their names, as ' +
-    'in the IDE (methodsWithOldName); usesInCode are lines of the unit that ' +
-    'still use the old name and will not compile until changed (delphi_edit).';
+    '[DSGN-103] Renamed as the IDE renames it: in the form - every line of ' +
+    'it that names the component included -, in its field, and the handlers ' +
+    'the IDE named after it (Button1Click -> BtnOkClick: their declaration, ' +
+    'their header and the form lines that bind them; methodsRenamed). The ' +
+    'code is not touched, as in the IDE: usesInCode are lines of the unit ' +
+    'that still use an old name - the component, or a renamed handler called ' +
+    'from code - and will not compile until changed (delphi_edit). ' +
+    'methodsWithOldName carry the old name but were not the IDE''s own: they ' +
+    'keep it.';
 
   SN_DESIGNER_IMPACTO_SIN_CLASE_FMT =
     '[DSGN-104] The class %s is not in %s: its code was not looked at.';

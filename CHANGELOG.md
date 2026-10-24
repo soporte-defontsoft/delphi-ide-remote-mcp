@@ -36,7 +36,14 @@ the MCP `initialize` response (`serverInfo.version`).
   one; `DESK-008` said the activities overview was open after Super, which
   closes it when it was open; `ADB-005`, given for a device the command does
   not even use, says to leave it out; the `mode` of `delphi_symbols` promised
-  to say when the tree is the full one (`tests/test_textos_1230.py`).
+  to say when the tree is the full one. And `delphi_designer set prop=Name`
+  said the IDE keeps the names of a component's handlers (`DSGN-103`):
+  measured in the IDE, renaming `Button1` to `BtnOk` renames the handlers it
+  named after it (`Button1Click` -> `BtnOkClick`: declaration, header and the
+  form lines that bind them), keeps one with a name of its own and leaves the
+  code that calls them - and so does the server now (`methodsRenamed`), with
+  those calls in `usesInCode`, as they no longer compile
+  (`tests/test_textos_1230.py`).
 
 - **An inherited component with no block in the descendant form can be read
   and changed.** The IDE writes in a descendant form only what differs from
