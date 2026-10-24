@@ -165,6 +165,15 @@ the MCP `initialize` response (`serverInfo.version`).
   BOM, and anything else UTF-8 without one, in `delphi_create`, the changeset
   and both edit tools. The `eol` a create asks for is read by one reader too
   (`tests/test_nacer_1230.py`).
+- **`delphi_projects` given a file says it is a file.** It answered `PROJ-003`,
+  "does not exist... there is nothing there", for a file that was there;
+  `delphi_package` said `LIST-002` naming `delphi_list`. The three tools that
+  take a folder now say `LIST-002` with their own name, and `LIST-011`, a
+  second code `delphi_list` had for the same thing and never reached, is gone
+  (`tests/test_hermanas_1230.py`). The README no longer promises that a more
+  restricted token (LPAC) for the resource compiler of `delphi_styles build`
+  closes what it reads under `C:\Windows` and `Program Files`: those folders
+  grant read to restricted application packages too (measured on 2026-10-24).
 - **Rules that lived twice now live once** (`tests/test_bloque3_1230.py`):
   - `delphi_designer get` of a component that is not in the form answers
     `DSGN-078`, with the form's names, as `set`, `delete` and the other

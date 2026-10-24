@@ -927,10 +927,14 @@ const
     '[LIST-015 INVALID_PARAM] "%s" does not go with %s (it would be ' +
     'ignored). Nothing was listed: %s takes %s.%s';
 
+  { Lo dicen list, projects y package (Mcp.Tools.Workspace.CarpetaQueNoEs),
+    cada una con su nombre: el texto nombraba siempre a delphi_list, y
+    projects decia de un fichero que "no existe" (W1, A17 de la 1.23). }
   SR_LIST_IS_FILE_FMT =
-    '[LIST-002 INVALID_PARAM] %s is a FILE, not a folder. delphi_list ' +
-    'walks folders; to read it use delphi_read, and to search INSIDE it, ' +
-    'delphi_search root=<that file> (it accepts a single file as root).';
+    '[LIST-002 INVALID_PARAM] %s is a FILE, not a folder: %s walks ' +
+    'folders. To read it use delphi_read, to search INSIDE it delphi_search ' +
+    'root=<that file> (it accepts a single file as root); for its folder, ' +
+    'pass the folder.';
 
   SR_LSP_IS_FOLDER_FMT =
     '[LSP-016 INVALID_PARAM] %s is a FOLDER, not a file. To see what it ' +
@@ -1406,10 +1410,9 @@ const
     'byFolder says where they are, and one of those folders as root (or a ' +
     'pattern, *.pas) narrows it down.';
 
-  SR_LIST_ROOT_IS_FILE_FMT =
-    '[LIST-011 INVALID_PARAM] "%s" is a FILE, not a folder, so there is nothing ' +
-    'to list. To see inside it use delphi_read; for its folder, pass the ' +
-    'folder.';
+  // LIST-011 ("es un fichero", la segunda de delphi_list) se retiro en la
+  // 1.23: no se alcanzaba (LIST-002 sale antes) y era el mismo hecho con otro
+  // codigo (A17)
 
   // BUILD-002 (recoger el binario con delphi_package + delphi_fetch) iba en
   // cada build correcto; se retiro el 4-oct-2026: lo dice delphi_package.

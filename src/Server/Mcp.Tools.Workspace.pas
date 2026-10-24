@@ -274,6 +274,21 @@ begin
   Result := MascarasDe(SOURCE_EXTS) + MascarasDe(DESIGNER_EXTS) + MascarasDe(PROJECT_EXTS);
 end;
 
+{ La carpeta que NOMBRA quien llama y que no es una: un fichero (LIST-002,
+  con la tool ATool, que anda carpetas) o nada (ANoEsta, el texto de cada
+  tool). '' si es una carpeta. Eran tres copias: list y package decian LIST-002
+  con el nombre de list, y projects contestaba de un fichero que "no existe"
+  (W1, A17 de la 1.23). }
+function CarpetaQueNoEs(const ADir, ATool, ANoEsta: string): string;
+begin
+  Result := '';
+  if TDirectory.Exists(ADir) then
+    Exit;
+  if TFile.Exists(ADir) then
+    Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [ADir, ATool]));
+  Result := ANoEsta;
+end;
+
 { TDelphiSearchTool }
 
 constructor TDelphiSearchTool.Create;
@@ -560,22 +575,17 @@ begin
   except
     Root := Params.Root;
   end;
-  if not TDirectory.Exists(Root) then
-  begin
-    // "No esta" y "no es una carpeta" no son lo mismo, y contestar la primera
-    // cuando pasa la segunda manda al agente a buscar un fichero que tiene
-    // delante (medido 2026-09-20 sobre README.md).
-    if TFile.Exists(Root) then
-      Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Root]));
-    Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Root]));
-  end;
+  // "No esta" y "no es una carpeta" no son lo mismo, y contestar la primera
+  // cuando pasa la segunda manda al agente a buscar un fichero que tiene
+  // delante (medido 2026-09-20 sobre README.md).
+  Result := CarpetaQueNoEs(Root, FName, MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Root]));
+  if Result <> '' then
+    Exit;
   // Shell-style brace expansion is NOT a mask: *.{pas,dfm} matched nothing
   // silently (field 2026-08-22). Say so instead of returning an empty list.
   if Params.Pattern.Contains('{') or Params.Pattern.Contains('}') then
     Exit(MsgText(SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION));
 
-  if TFile.Exists(Root) then
-    Exit(MsgFmt(SR_LIST_ROOT_IS_FILE_FMT, [TPath.GetFileName(Root)]));
   // lo que no va con lo que se lista se dice (Lsp.Guard.ParametroQueNoVa),
   // como en las tools de varios comandos: pattern con dirs=true se ignoraba en
   // silencio (test completo de Opus de la 1.22.0). El modo, como se pide
@@ -1281,7 +1291,7 @@ begin
     if (RootDir.Trim <> '') and not TDirectory.Exists(RootDir.Trim) then
     begin
       if Params.Root <> '' then
-        Exit(MsgFmt(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim]));
+        Exit(CarpetaQueNoEs(RootDir.Trim, FName, MsgFmt(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim])));
       if Saltadas <> '' then
         Saltadas := Saltadas + ', ';
       Saltadas := Saltadas + SinBarraFinal(RootDir.Trim);
@@ -1887,11 +1897,9 @@ begin
   Result := PathDenied(Dir);
   if Result <> '' then
     Exit;
-  if not TDirectory.Exists(Dir) then
-    if TFile.Exists(Dir) then
-      Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Dir]))
-    else
-      Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Dir]));
+  Result := CarpetaQueNoEs(Dir, FName, MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Dir]));
+  if Result <> '' then
+    Exit;
 
   if Params.OutFile <> '' then
     OutZip := TPath.GetFullPath(Params.OutFile)

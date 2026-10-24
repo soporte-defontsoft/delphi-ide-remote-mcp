@@ -240,6 +240,11 @@ REGLAS = [
     ('el salto que pide el agente traducido a mano', r"(?i)SameText\([^;]*Eol[^;]*'lf'\s*\)",
      [('Lsp.Patch.pas', 'SaltoPedido')],
      'SaltoPedido junto a EolDesconocido (Lsp.Patch, A38 de la 1.23)'),
+    # la carpeta que nombra quien llama y es un fichero: list y package lo decian a mano con el nombre de
+    # list, y projects contestaba que no existia (W1, A17 de la 1.23)
+    ('la carpeta que es un fichero dicha a mano', r"\bSR_LIST_IS_FILE_FMT\b",
+     [('Mcp.Tools.Workspace.pas', 'CarpetaQueNoEs')],
+     'CarpetaQueNoEs (Mcp.Tools.Workspace, A17 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1230,6 +1235,7 @@ PLANTADO = {
     'la palabra que quita un valor a mano': "  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default');",
     'la codificacion de un fichero nuevo elegida a mano': "  Enc := NewFileEncName;",
     'el salto que pide el agente traducido a mano': "  if SameText(A.Eol, 'lf') then",
+    'la carpeta que es un fichero dicha a mano': "      Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Dir]))",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",
