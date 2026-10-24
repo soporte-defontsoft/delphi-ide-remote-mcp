@@ -872,8 +872,10 @@ end;
   C:\Windows, Program Files - el AppContainer SI lo lee, como cualquiera. Por
   un absoluto, un #define o un .. que sube desde la etapa ya no llega: la
   segunda barrera exige que todo quede dentro de la carpeta de estilos (H1 de
-  la 1.20.2, CHAPUZA TEMPORAL); lo que el preprocesador componga por su
-  cuenta lo cerrara un token mas restringido (LPAC, 1.22).
+  la 1.20.2; nacio temporal y es LA barrera: una LPAC no la sustituia, esas
+  carpetas conceden lectura tambien a los paquetes restringidos - medido el
+  24-oct, V5 de la 1.23). Lo que el preprocesador componga por su cuenta
+  queda dentro de ese limite, declarado en el README.
   Y cierra la carrera: compila la COPIA, que el agente no puede cambiar entre
   la puerta y brcc32 (la copia se hace DESPUES del juicio de RcPathsDenied:
   los escritores del MCP van en serie por el cerrojo, y un escritor ajeno -el

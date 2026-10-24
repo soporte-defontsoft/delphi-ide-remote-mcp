@@ -7126,9 +7126,10 @@ const
     'paths must stay inside the styles folder, relative to it.';
 
   { Lo que un .rc nombra dentro de la jaula pero FUERA de su carpeta de
-    estilos: brcc32 compila una COPIA de esa carpeta y nada mas. CHAPUZA
-    TEMPORAL de la 1.20.2 (David, 18-oct-2026), hasta el token LPAC de la
-    1.22: ver Mcp.Tools.Styles.RcPathsDenied. }
+    estilos: brcc32 compila una COPIA de esa carpeta y nada mas. LA barrera
+    de lo que un .rc nombra desde la 1.20.2 (David, 18-oct-2026; nacio como
+    temporal y no lo es: una LPAC no la sustituia, V5 de la 1.23): ver
+    Mcp.Tools.Styles.RcPathsDenied. }
   SR_STYLES_RC_FUERA_DE_CARPETA_FMT =
     '[STYLE-052 DENIED] The entry %s of %s points outside the styles ' +
     'folder. build compiles a copy of that folder alone, so nothing ' +

@@ -1440,8 +1440,10 @@ var
         Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
       if ReadPathDenied(Cand) <> '' then
         Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
-      // CHAPUZA TEMPORAL (David, 18-oct-2026), hasta el token LPAC de la
-      // 1.22: delphi_styles build compila una COPIA de la carpeta de estilos
+      // LA barrera de lo que un .rc NOMBRA (David, 18-oct-2026; nacio como
+      // temporal hasta un token LPAC, y no lo es: la LPAC no cerraba esto,
+      // medido el 24-oct - V5 de la 1.23): delphi_styles build compila una
+      // COPIA de la carpeta de estilos
       // (la etapa de CompilaRcEnContenedor) y fuera de ella no funciona
       // nada; un .. que desde la jaula se quedaba dentro subia desde la
       // etapa, y un fichero que el SO deja leer a todos los paquetes
