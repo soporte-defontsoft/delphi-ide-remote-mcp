@@ -61,6 +61,9 @@ function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
   con el lector del build, EffectiveProperty). }
 function ProyectoDeclaraSdk(const ADproj, APlat, AConfig: string; out ASdk: string): Boolean;
 function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
+{ ...y el perfil que el IDE tiene para esa plataforma: UNO para todos sus
+  proyectos (el IDE no guarda un perfil por proyecto) }
+function PerfilPorDefectoDelIde(const AVersion, APlat: string): string;
 
 { Lanza ACmdLine FUERA del job object de la llamada y espera a que el proceso
   lanzado termine (hasta ATimeoutMs), sin capturar nada. Solo para demonios
@@ -1429,7 +1432,17 @@ function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
 begin
   // por EL lector de la configuracion del IDE y EL nombre del valor (Lsp.Discovery):
   // era el mismo lector reescrito, con el nombre compuesto a mano (P7)
-  Result := IdeConfigValue(AVersion, 'PlatformSDKs', ValorDeSdkPorDefecto(APlat)).Trim;
+  Result := IdeConfigValue(AVersion, 'PlatformSDKs', ValorPorDefectoDePlataforma(APlat)).Trim;
+end;
+
+{ El perfil que el IDE tiene para la plataforma (Default_<Plataforma> de
+  RemoteProfiles): el que su Project Manager ensena y con el que despliega,
+  UNO para todos sus proyectos - el IDE no guarda un perfil por proyecto
+  (medido en el IDE con David el 24-oct-2026: cambiarlo no toca ni el .dproj
+  ni el .dproj.local). El gemelo de SdkPorDefectoDelIde. }
+function PerfilPorDefectoDelIde(const AVersion, APlat: string): string;
+begin
+  Result := IdeConfigValue(AVersion, 'RemoteProfiles', ValorPorDefectoDePlataforma(APlat)).Trim;
 end;
 
 { Lo que EL PROYECTO declara para un build (PlatformSDK, Profile: las

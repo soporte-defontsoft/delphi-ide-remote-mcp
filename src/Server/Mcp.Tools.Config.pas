@@ -260,12 +260,24 @@ var
     // Android va por adb y no tiene perfil que fijar
     if SistemaDelPAServer(APlat) = spDesconocido then
       Exit;
+    // el del proyecto (el que lee msbuild), o el que el IDE tiene para la
+    // plataforma: UNO para todos sus proyectos, el que ensena su Project
+    // Manager (decia none teniendolo; medido en el IDE con David, 24-oct-2026)
     V := EffectiveProperty(Xml, 'Profile', APlat, Cfg);
-    AObj.AddPair('profile', V);
     if V <> '' then
-      AObj.AddPair('profileSource', 'project')
+    begin
+      AObj.AddPair('profile', V);
+      AObj.AddPair('profileSource', 'project');
+    end
     else
-      AObj.AddPair('profileSource', 'none');
+    begin
+      V := PerfilPorDefectoDelIde(Rad.Version, APlat);
+      AObj.AddPair('profile', V);
+      if V <> '' then
+        AObj.AddPair('profileSource', 'ide-default')
+      else
+        AObj.AddPair('profileSource', 'none');
+    end;
   end;
 
 begin
@@ -1793,12 +1805,15 @@ begin
     Exit(MensajeDeFalta(Falta, Xml, APlatform, '', 'Profile'));
 
   PatchSaveConSuSalto(ADproj, Xml, Enc);
+  // el que el IDE tiene para la plataforma, UNO para todos sus proyectos:
+  // lo que ensena su Project Manager, no este (medido con David, 24-oct-2026)
+  var DelIde := ONinguno(PerfilPorDefectoDelIde(Info.Version, APlatform));
   if Quitar then
     Result := MsgFmt(SN_CONFIG_PROFILE_QUITADO_FMT,
-      [APlatform, ONinguno(Antes), Disponibles])
+      [APlatform, ONinguno(Antes), DelIde, Disponibles])
   else
     Result := MsgFmt(SN_CONFIG_PROFILE_PUESTO_FMT,
-      [APlatform, Perfil, ONinguno(Antes)]);
+      [APlatform, Perfil, ONinguno(Antes), DelIde]);
 end;
 
 { La pareja que el proyecto compila mientras nadie pide otra: sus dos

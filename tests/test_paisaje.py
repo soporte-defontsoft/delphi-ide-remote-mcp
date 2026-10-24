@@ -121,10 +121,12 @@ REGLAS = [
      'NombreSinSdk es la inversa; "es un .sdk" se pregunta al nombrador'),
     # sin la comilla de cierre: 'Default_Linux64' entero (el ESCRITOR de get-sdk) no lo cazaba la forma
     # con la comilla pegada, y se quedo fuera del nombrador (Fable, revision de la 1.22.2)
-    ('el SDK por defecto del IDE a mano', r"^(?!\s*PREFIJO_SDK_POR_DEFECTO\s*=).*'Default_",
+    # (el mismo nombre de valor es el del perfil por defecto en RemoteProfiles: 24-oct-2026)
+    ('el SDK por defecto del IDE a mano', r"^(?!\s*PREFIJO_POR_DEFECTO\s*=).*'Default_",
      [],
-     'ValorDeSdkPorDefecto y PlataformaDeValorDeSdk (Lsp.Discovery, 1.22.2): el nombre del valor de '
-     'PlatformSDKs se componia en el build y se leia con otro StartsWith en paserver (P7 de Opus 5.5)'),
+     'ValorPorDefectoDePlataforma y PlataformaDeValorPorDefecto (Lsp.Discovery, 1.22.2): el nombre del '
+     'valor de lo que el IDE tiene por defecto para una plataforma (PlatformSDKs, RemoteProfiles) se '
+     'componia en el build y se leia con otro StartsWith en paserver (P7 de Opus 5.5)'),
     # las subclaves de una clave del registro: la del IDE por SU lector; la enumeracion de las versiones
     # (una vista de cada colmena) y los contenedores de delphi_test (otra clave, no del IDE), aparte
     ('las subclaves de una clave a mano', r'\.GetKeyNames\s*\(',

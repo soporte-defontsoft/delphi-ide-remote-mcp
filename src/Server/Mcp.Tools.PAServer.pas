@@ -473,7 +473,7 @@ begin
   begin
     var Plat: string;
     // por EL lector del nombre (Lsp.Discovery), la inversa de su compositor
-    if PlataformaDeValorDeSdk(V.Nombre, Plat) then
+    if PlataformaDeValorPorDefecto(V.Nombre, Plat) then
       Result := Result + [Plat + ' = ' + V.Dato];
   end;
 end;
@@ -832,7 +832,7 @@ begin
   // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
   if AFijarDefault then
     ACopiaDefault := EscribeClaveDelIde(AVersion, 'PlatformSDKs',
-      [ValorDeTexto(ValorDeSdkPorDefecto(PLATAFORMA_DE_GETSDK), NombreDeSdk(ASdkName))]);
+      [ValorDeTexto(ValorPorDefectoDePlataforma(PLATAFORMA_DE_GETSDK), NombreDeSdk(ASdkName))]);
   Result := I > 0;
 end;
 

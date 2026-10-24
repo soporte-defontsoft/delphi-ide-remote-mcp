@@ -22,7 +22,12 @@ Cada caso, medido en produccion antes de arreglarlo (24-oct-2026):
       no los de nombre propio ni el codigo que los llama - medido en el IDE con David; DSGN-103
       decia que el IDE no los renombra
 
-Mutante: produccion antes de este bloque (r1222ar): T1-T9 rojos; antes de T10 (r1222as): T10.
+  T11 view: el perfil que el IDE tiene para una plataforma (UNO para todos sus proyectos,
+      RemoteProfiles\Default_<plataforma>; medido en el IDE con David) sale como ide-default;
+      decia none
+
+Mutante: produccion antes de este bloque (r1222ar): T1-T9 rojos; antes de T10 (r1222as): T10;
+antes de T11 (r1222at): T11.
 
 Uso:  python tests/test_textos_1230.py [exe]
 """
@@ -158,6 +163,27 @@ try:
           'OnEnter = Entrando' in dfm and 'procedure Entrando(Sender: TObject);' in pas
           and '  Button1Click(nil);' in pas and 'Button1Click(nil)' in str(j.get('usesInCode')),
           (j.get('usesInCode'), j.get('methodsWithOldName')))
+
+    # --- T11 -----------------------------------------------------------------------
+    # medido en el IDE con David (24-oct-2026): el perfil de una plataforma en el Project
+    # Manager no se guarda en el proyecto; es UNO por plataforma para todos los proyectos,
+    # RemoteProfiles\Default_<plataforma>. view decia profileSource none; el juez del valor,
+    # el mismo registro que ve este servidor (el mismo contexto que esta bateria)
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Embarcadero\BDS\37.0\RemoteProfiles') as k:
+            del_ide = winreg.QueryValueEx(k, 'Default_Linux64')[0]
+    except OSError:
+        del_ide = ''
+    # el FMX de T8, con Linux64 (sin <Profile>: add-platform sin profile=)
+    FXP = os.path.join(FDIR, 'Fx.dproj')
+    srv.call('delphi_config', {'command': 'add-platform', 'project': FXP, 'platform': 'Linux64'})
+    r = srv.call('delphi_config', {'command': 'view', 'project': FXP, 'section': 'platforms'})
+    lin = next((p for p in mc.como_json(r).get('platforms', []) if p.get('name') == 'Linux64'), {})
+    check('T11 view: Linux64 sin <Profile> en el proyecto dice el perfil que el IDE tiene para la plataforma '
+          '(ide-default, %s)' % (del_ide or 'ninguno en este registro'),
+          (lin.get('profileSource') == 'ide-default' and lin.get('profile') == del_ide) if del_ide
+          else lin.get('profileSource') == 'none', (lin, del_ide, r[:300]))
 finally:
     srv.cierra()
     print('atomos RTL nuevos de procesos muertos:', mc.atomos_rtl_dejados(antes_atomos))

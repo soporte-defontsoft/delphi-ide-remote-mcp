@@ -248,8 +248,11 @@ try:
     flat = out.replace(' ', '')
     check('view platforms: Linux64 ensena el SDK del proyecto y su procedencia',
           '"sdk":"uno.sdk"' in flat and '"sdkSource":"project"' in flat, out[out.find('Linux64')-20:][:600])
-    check('view platforms: sin perfil fijado lo dice y apunta a set-profile',
-          '"profile":""' in flat and 'set-profile' in out, out[:400])
+    # sin <Profile> en el proyecto, el del IDE para la plataforma (UNO para todos sus
+    # proyectos: ide-default) o ninguno - nunca "project" (24-oct-2026: decia "" teniendolo)
+    pl = {p.get('name'): p for p in json.loads(out).get('platforms', [])}.get('Linux64', {})
+    check('view platforms: sin perfil fijado dice de donde sale el que hay (el del IDE, o ninguno) y apunta '
+          'a set-profile', pl.get('profileSource') in ('ide-default', 'none') and 'set-profile' in out, pl)
     out = srv.call('delphi_config', {"project": dproj, "command": "view"})
     check('view summary: remoteTargets resume las remotas activas',
           '"remoteTargets"' in out and 'uno.sdk' in out, out[:400])

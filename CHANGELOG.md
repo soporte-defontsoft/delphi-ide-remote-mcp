@@ -42,8 +42,15 @@ the MCP `initialize` response (`serverInfo.version`).
   named after it (`Button1Click` -> `BtnOkClick`: declaration, header and the
   form lines that bind them), keeps one with a name of its own and leaves the
   code that calls them - and so does the server now (`methodsRenamed`), with
-  those calls in `usesInCode`, as they no longer compile
-  (`tests/test_textos_1230.py`).
+  those calls in `usesInCode`, as they no longer compile. And `delphi_config
+  set-profile` called itself "the twin of set-sdk: in the IDE a target gets
+  both": measured in the IDE, choosing a platform's profile in its Project
+  Manager writes nothing in the project - the IDE keeps ONE profile per
+  platform for all its projects - so the `<Profile>` set-profile writes is
+  read by msbuild and not shown by the IDE (which is what lets two projects
+  deploy to two machines); its texts say so, `view` shows the IDE's one as
+  `profileSource: ide-default` (it said `none`), and removing the pin no
+  longer claims a deploy will fall back to it (`tests/test_textos_1230.py`).
 
 - **An inherited component with no block in the descendant form can be read
   and changed.** The IDE writes in a descendant form only what differs from

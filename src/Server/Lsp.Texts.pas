@@ -3136,12 +3136,14 @@ const
     'to that default. add-platform takes it too, in the same call (all or ' +
     'nothing).';
 
+  { decia "the twin of set-sdk: in the IDE a target gets both", y el IDE no
+    guarda un perfil por proyecto: tiene UNO por plataforma para todos
+    (RemoteProfiles\Default_<plataforma>; medido en su IDE con David, 24-oct-2026) }
   SP_CONFIG_PROFILE =
-    'set-profile: the PAServer profile this PROJECT deploys and runs that ' +
-    'platform with (delphi_paserver command=profiles lists them) - the ' +
-    'twin of set-sdk: in the IDE a target gets both. "none" = back to the ' +
-    'platform''s active profile. add-platform takes it too, in the same ' +
-    'call (all or nothing).';
+    'set-profile: the PAServer profile delphi_build target=Deploy uses for ' +
+    'that platform in THIS project (<Profile>, read by msbuild; the IDE ' +
+    'keeps ONE per platform for all projects and shows its own). "none" ' +
+    'removes it. add-platform takes it too (all or nothing).';
 
   SR_CONFIG_PROFILE_LOCAL_FMT =
     '[CFG-012 INVALID_PARAM] %s is compiled and run ON this machine, so it ' +
@@ -3316,15 +3318,24 @@ const
   { un trozo de SN_CFG_SET_ACTIVE_YA_FMT: "config Debug" }
   SF_CFG_SET_ACTIVE_ACTUAL_FMT = '%s %s';
 
+  { %s = plataforma, perfil, el de antes, el que el IDE tiene para la
+    plataforma (el que ensena su Project Manager) }
   SN_CONFIG_PROFILE_PUESTO_FMT =
     '[CFG-014] The project will deploy and run %s through profile %s ' +
     '(before: %s). It is the Profile property, the one msbuild reads, so ' +
-    'target=Deploy no longer needs to be told the profile on every call. ' +
-    'Backup of the .dproj in __delphi-patch.';
+    'delphi_build target=Deploy no longer needs to be told the profile on ' +
+    'every call. The IDE does not show it: it keeps ONE profile per platform ' +
+    'for all its projects (%s), so this lets two projects deploy to two ' +
+    'machines. Backup of the .dproj in __delphi-patch.';
 
+  { decia "it will use the active one of the platform again", y
+    delphi_build no despliega sin perfil: msbuild recibe /p:Profile= vacio a
+    proposito (el de EnvOptions.proj no lo juzgo nadie). %s = plataforma, el
+    de antes, el del IDE para la plataforma, los registrados }
   SN_CONFIG_PROFILE_QUITADO_FMT =
     '[CFG-015] The project no longer pins a profile for %s (before: %s): ' +
-    'it will use the active one of the platform again. Registered: %s.';
+    'delphi_build target=Deploy needs profile= again, and the IDE deploys ' +
+    'it with the one it keeps for the platform (%s). Registered: %s.';
 
   SP_CONFIG_PATH =
     'add/remove-searchpath: the folder where the compiler looks for ' +
@@ -6421,10 +6432,12 @@ const
     'SDK of the SDK Manager; set it with delphi_config command=set-sdk) ' +
     '| none (there is no SDK: for Linux64, delphi_paserver command=get-sdk ' +
     'and then set-sdk; Android, macOS and iOS SDKs come from the IDE''s SDK ' +
-    'Manager). profileSource: project | none (the project does not set ' +
-    'PAServer: delphi_build target=Deploy takes it from profile=, or set ' +
-    'it with command=set-profile). Android takes no profile: it deploys ' +
-    'through delphi_adb.';
+    'Manager). profileSource: project (the .dproj sets it, what msbuild ' +
+    'reads) | ide-default (the ONE profile the IDE keeps for the platform, ' +
+    'for all its projects - what its Project Manager shows and deploys ' +
+    'with; delphi_build target=Deploy does not take it: profile= or ' +
+    'command=set-profile) | none (no profile at all). Android takes no ' +
+    'profile: it deploys through delphi_adb.';
 
   SN_BUILD_DEVLINK_DONE_FMT =
     '[BUILD-034] The linker asked for a DEVELOPMENT name (libX.so) that ' +
