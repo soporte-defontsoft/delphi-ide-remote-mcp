@@ -383,10 +383,9 @@ begin
       end;
     opCreate:
       begin
-        if EsDelMotorPascal(Op.Path) then
-          Enc := NewFileEncName
-        else
-          Enc := 'utf8';
+        // la codificacion en que nace, la de todo el que crea (Lsp.Patch.
+        // EncDeFicheroNuevo, A21): aqui un .dproj nacia SIN BOM
+        Enc := EncDeFicheroNuevo(Op.Path);
         // un form nuevo, en una codificacion que EL parser del IDE lea, la
         // misma regla que delphi_create (Lsp.Patch.EncDeFormNuevo; el create
         // de un changeset la saltaba: revisor 3 de la noche, M-3); si no lo

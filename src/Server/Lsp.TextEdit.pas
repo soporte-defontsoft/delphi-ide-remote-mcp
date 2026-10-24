@@ -109,19 +109,15 @@ begin
     CrearCarpeta(Dir);
   // Line endings are explicit: the JSON channel often delivers LF-only text,
   // so CRLF (the Windows default here) is applied unless 'lf' is asked for.
-  // el normalizador de todos (Lsp.Patch.ConSalto): un CR suelto tambien
-  if SameText(A.Eol, 'lf') then
-  begin
-    Text := ConSalto(A.Content, #10);
-    EolName := 'LF';
-  end
-  else
-  begin
-    Text := ConSalto(A.Content, #13#10);
-    EolName := 'CRLF';
-  end;
-  // New text files are UTF-8 without BOM.
-  PatchSaveText(A.Path, Text, 'utf8');
+  // el normalizador de todos (Lsp.Patch.ConSalto): un CR suelto tambien; el
+  // salto pedido, por su lector (SaltoPedido, A38)
+  Text := ConSalto(A.Content, SaltoPedido(A.Eol));
+  EolName := NombreDelSalto(SaltoPedido(A.Eol));
+  // la codificacion en que nace, la de todo el que crea (Lsp.Patch.
+  // EncDeFicheroNuevo, A21): un texto, UTF-8 sin BOM; un manifiesto del IDE,
+  // con el
+  var Enc := EncDeFicheroNuevo(A.Path);
+  PatchSaveText(A.Path, Text, Enc);
   // Report the encoding as a later delphi_read will DETECT it: pure ASCII
   // content is indistinguishable from ANSI (no high bytes to tell them
   // apart), and claiming "utf8" there confused agents in the field test.
@@ -136,7 +132,7 @@ begin
   // (medido 2026-09-21, bateria test_round40).
   Result := MsgFmt(SK_TEXT_CREADO_ENCODING_FINALES_FMT,
     [MaskDriveText('', A.Path),
-     IfThen(IsAscii(Text), MsgText(SF_TEXT_ASCII_COMPATIBLES), 'utf8'),
+     IfThen(IsAscii(Text) and (Enc = 'utf8'), MsgText(SF_TEXT_ASCII_COMPATIBLES), Enc),
      EolName, Length(TFile.ReadAllBytes(A.Path))]);
 end;
 

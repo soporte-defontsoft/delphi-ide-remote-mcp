@@ -624,6 +624,10 @@ procedure LeaveFileEdit;
   no, la negativa. UNA regla para delphi_textedit y delphi_edit createunit: la
   segunda aceptaba "mac" y creaba en CRLF (tercera revision, 27-sep-2026). }
 function EolDesconocido(const AEol: string): string;
+{ ...y su inversa: el salto que ese "eol" pide (#10 con lf; #13#10 con crlf o
+  vacio). Los dos create lo traducian a mano en cinco sitios, cada uno con su
+  SameText(..., 'lf') (S1, A38 de la 1.23); su nombre, NombreDelSalto. }
+function SaltoPedido(const AEol: string): string;
 
 { Lo escrito, releido del disco para el eco de verificacion. Si otro proceso
   lo coge justo despues y no se puede releer, la escritura YA se hizo: se
@@ -664,6 +668,15 @@ function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string): string;
   the machine's ANSI page (EncName(ekAnsi), 'cp1252' on a Western Windows)
   when ANSI. }
 function NewFileEncName: string;
+{ La codificacion en que NACE un fichero, la de todo el que crea uno: un
+  fuente o un form, la del IDE (NewFileEncName; un form la ajusta
+  EncDeFormNuevo, y una ANSI que no cabe, EncAlEscribir al escribir); el XML
+  del IDE (EsXmlDelIde: proyecto, grupo, manifiesto), UTF-8 con BOM, como lo
+  escriben el IDE y nuestro generador del manifiesto; lo demas, UTF-8 sin BOM
+  (git no quita un BOM: un .gitignore con el romperia su primera regla). Eran
+  tres reglas: delphi_create, el create de un changeset - que escribia un
+  .dproj SIN BOM - y los de delphi_edit y delphi_textedit (A21 de la 1.23). }
+function EncDeFicheroNuevo(const APath: string): string;
 
 { Makes a recoverable copy of a file into __delphi-patch\<date>\ before it is
   overwritten (once per file per day). Returns a note / the backup path.
@@ -1003,6 +1016,16 @@ begin
     Result := 'utf8-bom'
   else
     Result := EncName(ekAnsi);
+end;
+
+function EncDeFicheroNuevo(const APath: string): string;
+begin
+  if EsDelMotorPascal(APath) then
+    Result := NewFileEncName
+  else if EsXmlDelIde(APath) then
+    Result := 'utf8-bom'
+  else
+    Result := 'utf8';
 end;
 
 function LeadingWhite(const S: string): string;
@@ -1434,6 +1457,14 @@ begin
   Result := '';
   if (AEol <> '') and not MatchText(AEol, ['crlf', 'lf']) then
     Result := MsgFmt(SR_TEXT_EOL_FMT, [AEol]);
+end;
+
+function SaltoPedido(const AEol: string): string;
+begin
+  if SameText(AEol.Trim, 'lf') then
+    Result := #10
+  else
+    Result := #13#10;
 end;
 
 const
@@ -4361,9 +4392,9 @@ begin
           // have beats a create + N anchored patches). EOL normalized to
           // CRLF - the JSON channel often arrives LF-only - and the result
           // is audited below like any other write.
-          Skel := ConSalto(A.Content, IfThen(SameText(A.Eol, 'lf'), #10, #13#10));
+          Skel := ConSalto(A.Content, SaltoPedido(A.Eol));
           if not Skel.EndsWith(#10) then
-            if SameText(A.Eol, 'lf') then Skel := Skel + #10 else Skel := Skel + #13#10;
+            Skel := Skel + SaltoPedido(A.Eol);
           Note := MsgText(SF_EDIT_CONTENIDO_APORTADO);
         end
         else
@@ -4372,8 +4403,7 @@ begin
             'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
           // eol=lf tambien sin content: decia "LF" y escribia CRLF
           // (verificacion de la tercera ronda)
-          if SameText(A.Eol, 'lf') then
-            Skel := Skel.Replace(#13#10, #10);
+          Skel := ConSalto(Skel, SaltoPedido(A.Eol));
           Note := MsgText(SF_EDIT_ESQUELETO_ESTANDAR_IDE);
         end;
         CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
@@ -4381,7 +4411,7 @@ begin
         // (NewFileEncName, la regla de todos: aqui habia otra copia), y si
         // esa es la ANSI y el contenido no cabe, UTF-8 con BOM, como el IDE
         // al guardar (EncAlEscribir; 4.1 de la 1.18.0)
-        var NewK := EncAlEscribir(A.Path, EncKindOf(NewFileEncName), nil, False, Skel);
+        var NewK := EncAlEscribir(A.Path, EncKindOf(EncDeFicheroNuevo(A.Path)), nil, False, Skel);
         var CreadoBytes: TArray<Byte> := nil;
         try
           CreadoBytes := EncodeText(Skel, NewK);
@@ -4405,7 +4435,7 @@ begin
         var CM := Measure(RelecturaDe(A.Path, CreadoBytes, NotaCreada));
         Exit(ConAvisosDeLlaves(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
           [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
-           IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Auditoria(CM)]) +
+           NombreDelSalto(SaltoPedido(A.Eol)), Auditoria(CM)]) +
           IfThen(NotaCreada <> '', #10 + NotaCreada, ''), A.Path, Skel));
       end;
 

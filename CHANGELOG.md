@@ -54,7 +54,7 @@ the MCP `initialize` response (`serverInfo.version`).
   form's `FindComponent` reads it: with an `Edit1` in the form and another in
   a frame, `get Edit1` gave the frame's and `set Edit1` changed the form's
   (Claude Opus 5.5 through Hermes, 2026-10-23); a bare name that is only
-  inside a frame is now refused with its path (`DSGN-017`, `DSGN-078`), and
+  inside a frame is now refused with its path (`DSGN-078`), and
   `get` heads a frame's component with its path. Those refusals speak of
   inline frames only in a form that has them (`tests/test_contratos_1222.py`).
 - **`delphi_designer insert` adds a page to a `TPageControl`.** A
@@ -145,6 +145,14 @@ the MCP `initialize` response (`serverInfo.version`).
   and another the name the `.apk` loads it by (`lib<project>.so`, as the
   targets say); an iOS build is looked for without extension, as its
   targets compose it (`tests/test_deploy_adb.py`).
+- **A new file is born in one encoding, whoever creates it.** A `.dproj`
+  created by a `delphi_changeset` was written in UTF-8 without a BOM, while
+  `delphi_create` writes it with one, as the IDE does: there were three rules,
+  one per creator. Now a source or a form takes the IDE's configured encoding,
+  the IDE's own XML (a project, a group, a deployment manifest) UTF-8 with a
+  BOM, and anything else UTF-8 without one, in `delphi_create`, the changeset
+  and both edit tools. The `eol` a create asks for is read by one reader too
+  (`tests/test_nacer_1230.py`).
 - **Rules that lived twice now live once** (`tests/test_bloque3_1230.py`):
   - `delphi_designer get` of a component that is not in the form answers
     `DSGN-078`, with the form's names, as `set`, `delete` and the other

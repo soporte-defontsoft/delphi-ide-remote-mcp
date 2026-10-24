@@ -230,6 +230,16 @@ REGLAS = [
      r"(?i)(?:SameText|MatchText)\([^;]*'none'[^;]*'default'|(?:SameText|MatchText)\([^;]*'default'[^;]*'reset'",
      [('Mcp.Tools.Config.pas', 'EsPalabraQueQuita')],
      'EsPalabraQueQuita (Mcp.Tools.Config, A37 de la 1.23)'),
+    # la codificacion de un fichero nuevo elegida a mano: tres reglas (delphi_create, el create de un
+    # changeset - que escribia un .dproj SIN BOM - y los de las dos tools de edicion); A21 de la 1.23. La
+    # respuesta de delphi_create la nombra, no la elige
+    ('la codificacion de un fichero nuevo elegida a mano', r"\bNewFileEncName\b",
+     [('Lsp.Patch.pas', 'EncDeFicheroNuevo'), ('Lsp.Scaffold.pas', 'CreateDelphiProject')],
+     'EncDeFicheroNuevo (Lsp.Patch, A21 de la 1.23)'),
+    # el salto que pide el agente traducido a mano: cinco SameText(..., 'lf') en los dos create (S1, A38)
+    ('el salto que pide el agente traducido a mano', r"(?i)SameText\([^;]*Eol[^;]*'lf'\s*\)",
+     [('Lsp.Patch.pas', 'SaltoPedido')],
+     'SaltoPedido junto a EolDesconocido (Lsp.Patch, A38 de la 1.23)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1218,6 +1228,8 @@ PLANTADO = {
     'un booleano de msbuild comparado a mano':
         "  if SameText(EffectiveProperty(Xml, 'UsePackages', P, C), 'true') then",
     'la palabra que quita un valor a mano': "  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default');",
+    'la codificacion de un fichero nuevo elegida a mano': "  Enc := NewFileEncName;",
+    'el salto que pide el agente traducido a mano': "  if SameText(A.Eol, 'lf') then",
     'StyleName o StyleLookup leidos con una regex': r"  M := TRegEx.Match(L, 'StyleName\s*=\s*''([^'']+)''');",
     'el nombre de la carpeta de un dia': "  D := FormatDateTime('yyyymmdd', Now);",
     'reconocer la carpeta de un dia': "  if TRegEx.IsMatch(N, '^\\d{8}$') then",

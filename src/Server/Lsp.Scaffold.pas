@@ -77,29 +77,23 @@ end;
 
 procedure WriteNewFile(const APath, AText: string);
 var
-  Enc, Ext: string;
+  Enc: string;
 begin
   if TFile.Exists(APath) then
     raise Exception.Create(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT, [APath]));
   CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(APath)));
-  Ext := LowerCase(TPath.GetExtension(APath));
-  if Ext = '.dproj' then
-    Enc := 'utf8-bom' // MSBuild XML declares utf-8: not subject to IDE taste
-  else if TPath.GetFileName(APath).ToLower = '.gitignore' then
-    Enc := 'utf8'     // git does NOT strip a BOM: it would break the 1st rule
-  else
-  begin
-    // sources honour the IDE's configured default; un form, solo en una
-    // codificacion que EL parser del IDE lea (Lsp.Patch.EncDeFormNuevo): una
-    // plantilla nuestra que no lee es un fallo nuestro y no se escribe
-    var Error: string;
-    var Linea: Integer;
-    var Cita: string;
-    Enc := EncDeFormNuevo(APath, AText, NewFileEncName, Error, Linea, Cita);
-    if Error <> '' then
-      raise Exception.Create(MsgFmt(SR_DSGN_PARSER_NO_ESCRIBE_FMT,
-        [TPath.GetFileName(APath), Error, Linea, Cita]));
-  end;
+  // la codificacion en que nace, la de todo el que crea (Lsp.Patch.
+  // EncDeFicheroNuevo, A21: un .dproj con BOM, un .gitignore sin el, un
+  // fuente en la del IDE); un form, solo en una que EL parser del IDE lea
+  // (EncDeFormNuevo): una plantilla nuestra que no lee es un fallo nuestro y
+  // no se escribe
+  var Error: string;
+  var Linea: Integer;
+  var Cita: string;
+  Enc := EncDeFormNuevo(APath, AText, EncDeFicheroNuevo(APath), Error, Linea, Cita);
+  if Error <> '' then
+    raise Exception.Create(MsgFmt(SR_DSGN_PARSER_NO_ESCRIBE_FMT,
+      [TPath.GetFileName(APath), Error, Linea, Cita]));
   PatchSaveText(APath, AText, Enc);
 end;
 
