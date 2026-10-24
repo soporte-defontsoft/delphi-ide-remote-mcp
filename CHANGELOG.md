@@ -10,6 +10,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **An inherited component with no block in the descendant form can be read
+  and changed.** The IDE writes in a descendant form only what differs from
+  its ancestor (measured in the IDE on 2026-10-24: changing the form's
+  `Caption` leaves `Button1` and `Button2` of its `Panel1` without a block;
+  changing `Button1.Left` writes `inherited Panel1` with `inherited Button1`
+  inside and only its `Left`), so a component nobody has touched has no
+  lines in the file - and `delphi_designer get`, `set`, `delete` and `insert
+  parent=` answered `DSGN-078` ("there is no component Button1") with no way
+  forward, while `preview` found it. Now `set`, and `insert` or `set parent=`
+  into such a container, first write its `inherited` block and those of its
+  missing parents, each where the IDE's writer puts it among its siblings
+  (`DSGN-171`, `inheritedNote`); `get` says what it is and shows it as the
+  IDE's form reader loads it (`DSGN-172`); `delete` and a rename answer the
+  refusal for an inherited component (`DSGN-084`). One inside an inline
+  frame is still named by its path (`tests/test_heredado_sin_bloque_1230.py`).
 - **`get-sdk` no longer pulls on top of an SDK it did not bring, and nothing in
   the IDE's registry is changed without a copy.** Its guard against two
   distributions in one sysroot only acted when the folder had its record

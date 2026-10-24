@@ -585,9 +585,16 @@ begin
       Exit(MsgText(SR_DESIGNER_EMPTY));
     O := Doc.ObjetoDeNombre(AName.Trim);
     if O = nil then
+    begin
+      // uno que llega del ancestro sin bloque aqui: lo que es, como lo carga
+      // el IDE (decia que no estaba: A16-G1 de la 1.23)
+      Result := HeredadoParaGet(Doc, APath, AName);
+      if Result <> '' then
+        Exit;
       // LA negativa de los comandos que escriben, con los nombres del form
       // (ComponenteQueNoEsta): get decia otra, DSGN-017 (A16 de la 1.23)
       Exit(ComponenteQueNoEsta(Doc, AName, TPath.GetFileName(APath)));
+    end;
     // por su ruta si es de un frame en linea, la que se le dio (decia el Name
     // a secas: rondas de Opus de la 1.22.2)
     Result := MsgFmt(SF_DSGN_BLOQUE_LINEAS_FMT,
