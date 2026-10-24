@@ -3328,14 +3328,14 @@ const
     'for all its projects (%s), so this lets two projects deploy to two ' +
     'machines. Backup of the .dproj in __delphi-patch.';
 
-  { decia "it will use the active one of the platform again", y
-    delphi_build no despliega sin perfil: msbuild recibe /p:Profile= vacio a
-    proposito (el de EnvOptions.proj no lo juzgo nadie). %s = plataforma, el
-    de antes, el del IDE para la plataforma, los registrados }
+  { sin perfil en el proyecto, delphi_build despliega con el del IDE para la
+    plataforma, como el IDE (David, 24-oct-2026: "hazlo como el IDE"). %s =
+    plataforma, el de antes, el del IDE para la plataforma, los registrados }
   SN_CONFIG_PROFILE_QUITADO_FMT =
     '[CFG-015] The project no longer pins a profile for %s (before: %s): ' +
-    'delphi_build target=Deploy needs profile= again, and the IDE deploys ' +
-    'it with the one it keeps for the platform (%s). Registered: %s.';
+    'like the IDE, delphi_build target=Deploy deploys it again with the ' +
+    'one the IDE keeps for the platform (%s), unless profile= names ' +
+    'another. Registered: %s.';
 
   SP_CONFIG_PATH =
     'add/remove-searchpath: the folder where the compiler looks for ' +
@@ -3490,11 +3490,11 @@ const
     'writes) and in its .deployproj (what msbuild deploys). %sBackups in ' +
     '__delphi-patch. To ' +
     'actually deploy you need an IDE CONNECTION PROFILE: delphi_build ' +
-    'target=Deploy platform=%s only works if the user of this server has ' +
-    'one configured (otherwise msbuild answers "Missing profile name" ' +
-    'even for Win32). Remotely, delphi_build target=Deploy ' +
-    'profile=<name> does the real deployment; the IDE keeps the file, as ' +
-    'it is in the Deployment section it regenerates the .deployproj from.';
+    'target=Deploy platform=%s takes profile=, else the project''s, else ' +
+    'the one the IDE keeps for that platform - with none of them msbuild ' +
+    'answers "Missing profile name", even for Win32. The IDE keeps the ' +
+    'file, as it is in the Deployment section it regenerates the ' +
+    '.deployproj from.';
 
   SF_CONFIG_DEPLOY_GENERATED =
     'The project had no deployment manifest: the standard one (the ' +
@@ -3535,9 +3535,9 @@ const
     'section, the IDE''s Deployment Manager): add-deployfile adds one there ' +
     'and in the .deployproj msbuild deploys from, which it writes if ' +
     'missing. Note that RUNNING a deployment needs an IDE connection ' +
-    'profile on this machine: without one, delphi_build target=Deploy ' +
-    'fails with "Missing profile name" even for Win32. delphi_build ' +
-    'target=Deploy with a profile is what deploys remotely.';
+    'profile on this machine - profile=, the project''s, or the one the IDE ' +
+    'keeps for the platform: with none, delphi_build target=Deploy fails ' +
+    'with "Missing profile name" even for Win32.';
 
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 
@@ -6435,8 +6435,8 @@ const
     'Manager). profileSource: project (the .dproj sets it, what msbuild ' +
     'reads) | ide-default (the ONE profile the IDE keeps for the platform, ' +
     'for all its projects - what its Project Manager shows and deploys ' +
-    'with; delphi_build target=Deploy does not take it: profile= or ' +
-    'command=set-profile) | none (no profile at all). Android takes no ' +
+    'with, and so does delphi_build target=Deploy without profile=) | none ' +
+    '(no profile at all: profile= or command=set-profile). Android takes no ' +
     'profile: it deploys through delphi_adb.';
 
   SN_BUILD_DEVLINK_DONE_FMT =
@@ -9927,11 +9927,20 @@ const
     'project in RemoteRunProjects), or packages the app for Android). After ' +
     'switching platforms use Build.';
 
+  { la negativa de un perfil de deploy que el agente no nombro: de donde salio
+    (24-oct-2026). %s = el perfil, %s = la plataforma }
+  SF_BUILD_PERFIL_DEL_IDE_FMT =
+    ' (%s is the profile the IDE keeps for %s, taken because neither ' +
+    'profile= nor the project names one: pass profile= to choose another)';
+  SF_BUILD_PERFIL_DEL_PROYECTO_FMT =
+    ' (%s is the profile the project sets for %s - command=set-profile; ' +
+    'pass profile= to choose another)';
+
   SP_BUILD_PROFILE =
     'target=Deploy on a PAServer platform: the connection profile ' +
-    '(delphi_paserver command=profiles). The files land on the target ' +
-    'under its PAServer scratch dir, in <windows user>-<profile>/<project ' +
-    'name>/.';
+    '(delphi_paserver profiles); omitted, the project''s, else the IDE''s ' +
+    'for the platform. Files land under its PAServer scratch dir, in ' +
+    '<windows user>-<profile>/<project name>/.';
 
   SP_BUILD_SDK =
     'The platform SDK to link against, by name (delphi_paserver ' +

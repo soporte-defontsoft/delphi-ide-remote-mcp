@@ -26,8 +26,11 @@ Cada caso, medido en produccion antes de arreglarlo (24-oct-2026):
       RemoteProfiles\Default_<plataforma>; medido en el IDE con David) sale como ide-default;
       decia none
 
+  T12 delphi_build target=Deploy sin profile= ni <Profile>: el del IDE para la plataforma, juzgado
+      (David: "hazlo como el IDE"); paraba con "Missing profile name" tras compilar
+
 Mutante: produccion antes de este bloque (r1222ar): T1-T9 rojos; antes de T10 (r1222as): T10;
-antes de T11 (r1222at): T11.
+antes de T11 (r1222at): T11; antes de T12 (r1222au): T12.
 
 Uso:  python tests/test_textos_1230.py [exe]
 """
@@ -184,6 +187,18 @@ try:
           '(ide-default, %s)' % (del_ide or 'ninguno en este registro'),
           (lin.get('profileSource') == 'ide-default' and lin.get('profile') == del_ide) if del_ide
           else lin.get('profileSource') == 'none', (lin, del_ide, r[:300]))
+
+    # --- T12 -----------------------------------------------------------------------
+    # David: "hazlo como el IDE" - sin profile= ni <Profile>, el deploy usa el perfil que el
+    # IDE tiene para la plataforma y lo pasa por los MISMOS jueces: aqui su host no esta en
+    # RemoteHosts y la puerta lo niega antes de compilar. Paraba con "Missing profile name"
+    # (tras compilar)
+    if del_ide:
+        r = srv.call('delphi_build', {'project': FXP, 'platform': 'Linux64', 'target': 'Deploy'}, t=900)
+        check('T12 Deploy de Linux64 sin perfil: toma el del IDE (%s) y lo juzga (su host, negado aqui), '
+              'no "Missing profile name"' % del_ide,
+              mc.rechazado(r) and 'Missing profile name' not in r and 'RemoteHosts' in r
+              and 'the profile the IDE keeps for Linux64' in r, r[:600])
 finally:
     srv.cierra()
     print('atomos RTL nuevos de procesos muertos:', mc.atomos_rtl_dejados(antes_atomos))

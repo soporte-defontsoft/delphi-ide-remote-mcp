@@ -49,8 +49,12 @@ the MCP `initialize` response (`serverInfo.version`).
   platform for all its projects - so the `<Profile>` set-profile writes is
   read by msbuild and not shown by the IDE (which is what lets two projects
   deploy to two machines); its texts say so, `view` shows the IDE's one as
-  `profileSource: ide-default` (it said `none`), and removing the pin no
-  longer claims a deploy will fall back to it (`tests/test_textos_1230.py`).
+  `profileSource: ide-default` (it said `none`), and `delphi_build
+  target=Deploy` with no `profile=` and no `<Profile>` deploys, like the IDE,
+  with the IDE's profile for the platform, judged by the same gates as any
+  other (it stopped with "Missing profile name"; the answer's
+  `profileSource` says where the one used came from)
+  (`tests/test_textos_1230.py`, `tests/test_deploy_remotehost.py`).
 
 - **An inherited component with no block in the descendant form can be read
   and changed.** The IDE writes in a descendant form only what differs from

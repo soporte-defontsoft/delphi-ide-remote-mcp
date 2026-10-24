@@ -2187,8 +2187,33 @@ begin
   var SinPAServer := SistemaDelPAServer(Plat) = spDesconocido;
   if Target.Contains('Deploy') and SinPAServer and (Perfil <> '') then
     raise Exception.Create(MsgFmt(SR_CONFIG_PROFILE_SIN_PASERVER_FMT, [Plat]));
+  // de donde sale el que se usa: la llamada, el proyecto o el IDE (la respuesta lo dice)
+  var FuenteDelPerfil := IfThen(Perfil <> '', 'call', '');
   if Target.Contains('Deploy') and not SinPAServer and (Perfil = '') then
+  begin
     Perfil := PropiedadDelProyecto(ADprojPath, Plat, Cfg, 'Profile');
+    if Perfil <> '' then
+      FuenteDelPerfil := 'project';
+  end;
+  // ...y si el proyecto tampoco lo dice, el que el IDE tiene para la
+  // plataforma, como despliega el IDE: UNO para todos sus proyectos
+  // (RemoteProfiles\Default_<plataforma>; medido con David el 24-oct-2026, y
+  // David: "hazlo como el IDE"). Paraba con "Missing profile name". Pasa por los
+  // mismos jueces de abajo y va EXPLICITO a /p:Profile=: lo que EnvOptions.proj le
+  // daria a msbuild (el IDE escribe alli el mismo, un <Profile> con condicion,
+  // medido) sigue sin llegar sin juez
+  if Target.Contains('Deploy') and not SinPAServer and (Perfil = '') then
+  begin
+    Perfil := PerfilPorDefectoDelIde(Info.Version, Plat);
+    if Perfil <> '' then
+      FuenteDelPerfil := 'ide-default';
+  end;
+  // la negativa de un perfil que el agente no nombro dice de donde salio
+  var DeDonde := '';
+  if FuenteDelPerfil = 'ide-default' then
+    DeDonde := MsgFmt(SF_BUILD_PERFIL_DEL_IDE_FMT, [Perfil, Plat])
+  else if FuenteDelPerfil = 'project' then
+    DeDonde := MsgFmt(SF_BUILD_PERFIL_DEL_PROYECTO_FMT, [Perfil, Plat]);
   // El perfil, venga de la llamada o del .dproj, es UNO de los que el IDE
   // declara (PerfilDelIde, el juez de set-profile), con su nombre, el de la
   // lista. El del .dproj llegaba a /p:Profile= sin juez; lo que teclea el
@@ -2199,7 +2224,7 @@ begin
     if PerfilIde = '' then
       // con el texto de la casa del deploy (PAS-053, el de ProfileHostDenied):
       // un hecho, un texto
-      raise Exception.Create(MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [Perfil]));
+      raise Exception.Create(MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [Perfil]) + DeDonde);
     Perfil := PerfilIde;
   end;
   if Target.Contains('Deploy') and (Perfil <> '') then
@@ -2208,10 +2233,10 @@ begin
     // Windows no despliega un Linux64), antes de marcar su host
     var NoSirve := PerfilQueNoSirve(Info.Version, Perfil, Plat);
     if NoSirve <> '' then
-      raise Exception.Create(NoSirve);
+      raise Exception.Create(NoSirve + DeDonde);
     var HostDenegado := ProfileHostDenied(Perfil);
     if HostDenegado <> '' then
-      raise Exception.Create(HostDenegado);
+      raise Exception.Create(HostDenegado + DeDonde);
     // ...y un proyecto que el operador deja ejecutar en un destino (SU lista,
     // RemoteRunProjects, por LA puerta de remote-run): el deploy lo deja en
     // <usuario>-<perfil>/<Nombre>/, donde remote-run ejecuta lo que haya, y
@@ -2782,6 +2807,8 @@ begin
         Result.AddPair('deployNote', MsgFmt(SN_BUILD_DEPLOYED_FMT,
           [Perfil, GetEnvironmentVariable('USERNAME'), Perfil,
            TPath.GetFileNameWithoutExtension(ADprojPath)]));
+        // de donde salio: call | project | ide-default (los de delphi_config view)
+        Result.AddPair('profileSource', FuenteDelPerfil);
         if Output.Contains('Local file "" not found') then
           Result.AddPair('deployWarning', MsgText(SN_BUILD_DEPLOY_EMPTY_ENTRY));
         if Shipped > 0 then
