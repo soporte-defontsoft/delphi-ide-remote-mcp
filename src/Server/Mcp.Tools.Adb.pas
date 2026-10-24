@@ -70,9 +70,9 @@ type
     property Filter: string read FFilter write FFilter;
     [SchemaDescription(SP_ADB_LINES)]
     property Lines: string read FLines write FLines;
-    [SchemaDescription(SP_CAPTURE_INLINE)]
+    [SchemaDescription(SP_ADB_INLINE)]
     property Inline_: Boolean read FInline write FInline;
-    [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
+    [SchemaDescription(SP_ADB_MAXWIDTH)]
     property MaxWidth: Integer read FMaxWidth write FMaxWidth;
     [SchemaDescription(SP_CAPTURE_FRAME)]
     property Frame: string read FFrame write FFrame;

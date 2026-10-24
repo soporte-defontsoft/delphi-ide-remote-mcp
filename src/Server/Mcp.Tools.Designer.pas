@@ -95,9 +95,9 @@ type
     property Style: string read FStyle write FStyle;
     [SchemaDescription(SP_DESIGNER_NONVISUAL)]
     property NonVisual: Boolean read FNonVisual write FNonVisual;
-    [SchemaDescription(SP_CAPTURE_INLINE)]
+    [SchemaDescription(SP_DESIGNER_INLINE)]
     property Inline_: Boolean read FInline write FInline;
-    [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
+    [SchemaDescription(SP_DESIGNER_MAXWIDTH)]
     property MaxWidth: Integer read FMaxWidth write FMaxWidth;
     [SchemaDescription(SP_DESIGNER_OUT)]
     [RutaDelServidor]

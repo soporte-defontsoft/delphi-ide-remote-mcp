@@ -88,9 +88,9 @@ type
     property Region: string read FRegion write FRegion;
     [SchemaDescription(SP_ADBLINUX_WINDOW)]
     property Window: string read FWindow write FWindow;
-    [SchemaDescription(SP_CAPTURE_INLINE)]
+    [SchemaDescription(SP_ADBLINUX_INLINE)]
     property Inline_: Boolean read FInline write FInline;
-    [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
+    [SchemaDescription(SP_ADBLINUX_MAXWIDTH)]
     property MaxWidth: Integer read FMaxWidth write FMaxWidth;
     [SchemaDescription(SP_CAPTURE_FRAME)]
     property Frame: string read FFrame write FFrame;

@@ -31,6 +31,14 @@ the MCP `initialize` response (`serverInfo.version`).
   1251). Every character from U+0080 to U+00FF now counts as the Latin-1 byte
   it comes from, as U+0080 to U+009F already did; on a 1252 machine nothing
   changes.
+- **`delphi_adb` and `delphi_designer` describe only the captures they
+  make.** `inline` and `maxwidth` had one text for the three tools that
+  capture, naming a screenshot, a gesture's capture and a preview in all of
+  them, and a frame to pass to `tap` or `type`: `delphi_adb`'s `tap` returns
+  no image, and `delphi_designer` only draws in `preview`, whose frame maps
+  the image to form units and is taken by no command. Each tool now puts its
+  own head before the common rule, as `out` already did; `tools/list` is 209
+  characters lighter.
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

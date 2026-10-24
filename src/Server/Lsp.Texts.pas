@@ -2609,18 +2609,23 @@ const
     'whole desktop.';
   // Lsp.InlineImages: la entrega de una captura, la misma en toda tool que capture.
   // tambien la de un gesto (8.6 de la 1.18.0, Hermes: no sabia que tap la traia)
-  SP_CAPTURE_INLINE =
-    'Default true: the capture (a screenshot, a gesture''s, a preview) comes ' +
-    'IN this answer as an image scaled to maxwidth; no file is kept. false = ' +
-    'a one-use download link (no vision, or you want the bytes); over stdio ' +
-    'there is none: use out=.';
+  // UNA regla y la cabeza de cada tool, que nombra SOLO sus capturas (V47 de la
+  // 1.23: la comun nombraba pantalla, gesto y preview en las tres; el tap de
+  // delphi_adb no captura y delphi_designer solo dibuja en preview)
+  SP_CAPTURE_INLINE_RULE =
+    ' comes IN this answer as an image scaled to maxwidth; no file is ' +
+    'kept. false = a one-use download link (no vision, or you want the ' +
+    'bytes); over stdio there is none: use out=.';
+  SP_ADBLINUX_INLINE =
+    'Default true: the capture (a screenshot, an overview, or the one each ' +
+    'gesture returns)' + SP_CAPTURE_INLINE_RULE;
 
-  SP_CAPTURE_MAXWIDTH =
+  SP_CAPTURE_MAXWIDTH_RULE =
     'Inline only: the widest the image travels (0 = 1280); a wider capture ' +
     'is scaled down, a narrower one never enlarged. Divide what you measure ' +
-    'on it by the answer''s inlineScale for capture pixels, or pass its frame ' +
-    '(tap and delphi_desktop''s type take it; preview''s converts to form ' +
-    'units).';
+    'on it by the answer''s inlineScale for capture pixels';
+  SP_ADBLINUX_MAXWIDTH =
+    SP_CAPTURE_MAXWIDTH_RULE + ', or pass its frame to tap or type.';
 
   SN_CAPTURE_INLINE_NOTE_FMT =
     '[CAPT-001] The image is IN this answer (scaled %s of the capture). ' +
@@ -2864,6 +2869,10 @@ const
     SP_CAPTURE_OUT_RULE +
     ' logcat: an optional .txt/.log FILE to dump into instead of answering ' +
     'inline - read it in ranges with delphi_read.';
+  SP_ADB_INLINE =
+    'screenshot, default true: the capture' + SP_CAPTURE_INLINE_RULE;
+  SP_ADB_MAXWIDTH =
+    SP_CAPTURE_MAXWIDTH_RULE + ', or pass its frame to tap.';
   SP_ADB_X =
     'tap: X measured on a screenshot; pass its frame and the server ' +
     'converts to display pixels. Without frame, X is display pixels ' +
@@ -5219,8 +5228,9 @@ const
     'children';
 
   { preview (RenderForm, 1.17.0): el estado de vista, el estilo, los no
-    visuales y donde cae el PNG. inline y maxwidth son los de la familia de
-    captura (SP_CAPTURE_INLINE / SP_CAPTURE_MAXWIDTH). }
+    visuales y donde cae el PNG. inline y maxwidth: la cabeza del disenador
+    y la regla de la familia de captura (SP_CAPTURE_INLINE_RULE y
+    SP_CAPTURE_MAXWIDTH_RULE). }
   SP_DESIGNER_STATE =
     'preview optional: a VIEW state applied before drawing, never written ' +
     'to the file - Component.Property=Value (inside an inline frame, ' +
@@ -5252,6 +5262,11 @@ const
 
   SP_DESIGNER_OUT =
     'preview: where the PNG lands' + SP_CAPTURE_OUT_RULE;
+  SP_DESIGNER_INLINE =
+    'preview, default true: the PNG' + SP_CAPTURE_INLINE_RULE;
+  SP_DESIGNER_MAXWIDTH =
+    SP_CAPTURE_MAXWIDTH_RULE + ' (form units), or convert with the ' +
+    'answer''s frame.';
 
   { insert / set (1.17.0) }
   SP_DESIGNER_PARENT =
