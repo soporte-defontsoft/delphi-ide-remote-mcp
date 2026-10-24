@@ -2235,8 +2235,15 @@ begin
   // ...y sin NINGUNO, se niega aqui: msbuild recibe /p:Profile= vacio y no
   // despliega nada; compilaba antes (41 s en Linux64) para parar en "Missing
   // profile name", y un Win64 igual con su manifiesto, o en MSB4057 sin el
-  // (medido el 24-oct-2026). Con los perfiles que despliegan la plataforma
-  if Target.Contains('Deploy') and not SinPAServer and (Perfil = '') then
+  // (medido el 24-oct-2026). Con los perfiles que despliegan la plataforma.
+  // La regla es la del juez, el target del IDE al que espera todo Deploy
+  // (_VerifyProfile, CodeGear.Profiles.Targets): perfil para todo menos
+  // Android y menos Windows con BT_BuildType=AppStore, el paquete de la Store,
+  // que no va a ninguna maquina (David pregunto si Win32/Win64 lo necesitaban:
+  // ese caso se negaba aqui y el IDE lo hace)
+  if Target.Contains('Deploy') and not SinPAServer and (Perfil = '') and
+     not ((SistemaDePlataforma(Plat) = spWindows) and
+          SameText(PropiedadDelProyecto(ADprojPath, Plat, Cfg, 'BT_BuildType').Trim, 'AppStore')) then
     raise Exception.Create(MsgFmt(SR_BUILD_DEPLOY_SIN_PERFIL_FMT, [Plat, Plat,
       ONinguno(string.Join(', ', PerfilesDePlataforma(Info.Version, Plat)))]));
   // la negativa de un perfil que el agente no nombro dice de donde salio

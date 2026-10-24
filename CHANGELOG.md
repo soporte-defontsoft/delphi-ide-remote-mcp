@@ -30,7 +30,10 @@ the MCP `initialize` response (`serverInfo.version`).
   same with a deployment manifest, and `MSB4057` "the target Deploy does not
   exist" without one - none of them saying that a profile is missing). It is
   now refused before anything runs (`BUILD-058`), naming the profiles that
-  deploy that platform; `CFG-028` and `CFG-032` say so.
+  deploy that platform, by the rule of the IDE's own target (`_VerifyProfile`
+  in `CodeGear.Profiles.Targets`): a profile for every platform but Android
+  and a Windows `BT_BuildType=AppStore` package, which goes to no machine;
+  `CFG-028` and `CFG-032` say so.
 - **A project file with mixed line endings keeps the ones a writer did not
   touch.** The `.dproj` and `.deployproj` writers compose the whole file with
   `sLineBreak`, and the saver gave the new lines the file's ending only when

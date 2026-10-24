@@ -3492,7 +3492,8 @@ const
     'actually deploy you need an IDE CONNECTION PROFILE: delphi_build ' +
     'target=Deploy platform=%s takes profile=, else the project''s, else ' +
     'the one the IDE keeps for that platform - with none of them it is ' +
-    'refused before building (BUILD-058), even for Win32. The IDE keeps the ' +
+    'refused before building (BUILD-058), even for Win32 (only a Windows ' +
+    'BT_BuildType=AppStore package takes none, as in the IDE). The IDE keeps the ' +
     'file, as it is in the Deployment section it regenerates the ' +
     '.deployproj from.';
 
@@ -3537,7 +3538,8 @@ const
     'missing. Note that RUNNING a deployment needs an IDE connection ' +
     'profile on this machine - profile=, the project''s, or the one the IDE ' +
     'keeps for the platform: with none, delphi_build target=Deploy refuses ' +
-    'it (BUILD-058) even for Win32.';
+    'it (BUILD-058) even for Win32 (only a Windows BT_BuildType=AppStore ' +
+    'package takes none, as in the IDE).';
 
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 

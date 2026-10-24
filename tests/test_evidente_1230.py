@@ -8,6 +8,11 @@ antes de arreglarlo (24-oct-2026):
       profile name" de msbuild (en Linux64, tras 41 s compilando)...
   E1b ...y sin manifiesto, en MSB4057 "The target Deploy does not exist", que no dice que
       falta un perfil
+  E1c ...pero Windows con BT_BuildType=AppStore (el paquete de la Store) no pide perfil en el
+      juez (_VerifyProfile de CodeGear.Profiles.Targets; CodeGear.Deployment.Targets incluso lo
+      VACIA y empaqueta un MSIX en local): ni BUILD-058 ni la negativa de _VerifyProfile (David:
+      "Win32 y 64 no necesitan profile?"; rojo contra r1222ay, que lo negaba). Lo que pase despues
+      es el empaquetado (aqui, PAClient E0002 sin MakeAppxPath en el IDE), no la puerta
   E2  V35: un escritor del .dproj (add-searchpath) en un .dproj MIXTO (LF con una linea
       CRLF): lo que no toca, byte a byte, y lo nuevo con el dominante. Dejaba en CRLF la
       linea LF de delante del bloque insertado (PatchSaveConSuSalto pasaba lo nuevo al
@@ -70,6 +75,15 @@ try:
               mc.abre(r, 'SR_BUILD_DEPLOY_SIN_PERFIL_FMT') and 'Missing profile name' not in r
               and 'Profiles that deploy Win64:' in r
               and tam(os.path.join(DDIR, 'Win64', 'Debug', 'Dm.exe')) < 0, r[:400])
+        r = srv.call('delphi_config', {'command': 'set-property', 'project': DDPROJ, 'name': 'BT_BuildType',
+                                       'value': 'AppStore', 'platform': 'Win64'})
+        check('E1c previo: BT_BuildType=AppStore en Win64', not mc.fallo(r), r[:300])
+        r = srv.call('delphi_build', {'project': DDPROJ, 'platform': 'Win64', 'config': 'Debug',
+                                      'target': 'Deploy'}, t=600)
+        check('E1c Deploy Win64 AppStore sin perfil: como el juez del IDE, sin negativa de perfil '
+              '(ni BUILD-058 ni la de _VerifyProfile)',
+              not mc.abre(r, 'SR_BUILD_DEPLOY_SIN_PERFIL_FMT')
+              and 'Unable to get a valid profile' not in r and '"target":"Deploy"' in r, r[:400])
 
     # --- E2 ------------------------------------------------------------------------
     XDIR = os.path.join(JAIL, 'mixto')
