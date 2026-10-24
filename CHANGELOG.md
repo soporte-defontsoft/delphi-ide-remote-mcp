@@ -23,8 +23,16 @@ the MCP `initialize` response (`serverInfo.version`).
   missing parents, each where the IDE's writer puts it among its siblings
   (`DSGN-171`, `inheritedNote`); `get` says what it is and shows it as the
   IDE's form reader loads it (`DSGN-172`); `delete` and a rename answer the
-  refusal for an inherited component (`DSGN-084`). One inside an inline
-  frame is still named by its path (`tests/test_heredado_sin_bloque_1230.py`).
+  refusal for an inherited component (`DSGN-084`). The same for a component
+  of a frame placed inline, which the IDE's writer also skips when it does not
+  differ from the frame - and `DSGN-083` promised its properties could be set
+  here, by its path: `set Marco1.Dentro` now writes `inherited PanelF` >
+  `inherited Dentro` inside `inline Marco1`, `get` names the frame it comes
+  from, and `delete` answers the frame's refusal (`DSGN-083`). And `set
+  before=` / `after=` takes such a sibling as its reference (it answered
+  `DSGN-078` too): the IDE's writer judges the order with it where the
+  ancestor creates it, and no block is written for it, as the IDE writes none
+  for what does not differ (`tests/test_heredado_sin_bloque_1230.py`).
 - **`get-sdk` no longer pulls on top of an SDK it did not bring, and nothing in
   the IDE's registry is changed without a copy.** Its guard against two
   distributions in one sysroot only acted when the folder had its record

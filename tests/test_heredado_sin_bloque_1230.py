@@ -24,7 +24,26 @@ negativa de lo heredado (DSGN-084).
   H9  control: un nombre que no existe: DSGN-078 en get y en set
   H10 set parent=Panel1 de un Label9 propio: inherited Panel1 y el Label9 dentro
 
-Mutante: produccion antes de A16-G1 (r1222ao): H1-H8 y H10 rojos.
+Lo mismo en un frame puesto en linea: el escritor se salta tambien un hijo suyo que no
+difiere del frame (TWriter.WriteData), y DSGN-083 prometia poner aqui sus propiedades
+por su ruta (Marco1.Dentro), que decia DSGN-078. Medido el 24-oct: el juez escribe
+inline Marco1 con sus hijos dentro, y los encuentra por esa ruta.
+
+  H11 set Marco1.Dentro Left=20: inline Marco1 > inherited PanelF > inherited Dentro > Left = 20
+  H12 get Marco1.Fuera sin bloque: DSGN-172 del frame, con sus lineas
+  H13 delete Marco1.Dentro sin bloque: DSGN-083, como con su bloque
+  H14 insert parent=Marco1.PanelF sin bloque: DSGN-083
+
+Y before=/after= con un heredado sin bloque de referencia (decia DSGN-078): el juez lo
+ve donde lo crea el ancestro, y su bloque no se escribe (el IDE no escribe uno que no
+difiere, y sin [n] no cambia nada al cargar: TReader.ReadComponent).
+
+  H15 Button7 before=Panel1: DSGN-136 con el orden del IDE (lo heredado se crea antes)
+  H16 Label9 before=Panel1: ya esta (los graficos antes), en la 1 de 2 del FICHERO
+  H17 Button8 after=Panel1: delante de Button7, sin bloque de Panel1, index 1 de 2
+
+Mutante: produccion antes de A16-G1 (r1222ao): H1-H8 y H10 rojos; antes de los
+hermanos (r1222ap): H11-H17 rojos, menos los dos lint, que miran un fichero sin tocar.
 
 Uso:  python tests/test_heredado_sin_bloque_1230.py [exe]
 """
@@ -51,6 +70,16 @@ CON_LABEL = ("  object Label9: TLabel\r\n    Left = 240\r\n    Top = 8\r\n    Wi
              "    Caption = 'Label9'\r\n  end\r\n")
 CON_BOTON = ("  object Button7: TButton\r\n    Left = 220\r\n    Top = 40\r\n    Width = 75\r\n    Height = 25\r\n"
              "    Caption = 'Button7'\r\n    TabOrder = 1\r\n  end\r\n")
+CON_BOTON8 = ("  object Button8: TButton\r\n    Left = 220\r\n    Top = 80\r\n    Width = 75\r\n    Height = 25\r\n"
+              "    Caption = 'Button8'\r\n    TabOrder = 2\r\n  end\r\n")
+MARCO_DFM = ("object Marco: TMarco\r\n  Left = 0\r\n  Top = 0\r\n  Width = 200\r\n  Height = 120\r\n  TabOrder = 0\r\n"
+             "  object PanelF: TPanel\r\n    Left = 0\r\n    Top = 0\r\n    Width = 200\r\n    Height = 60\r\n"
+             "    TabOrder = 0\r\n"
+             "    object Dentro: TButton\r\n      Left = 8\r\n      Top = 8\r\n      TabOrder = 0\r\n    end\r\n  end\r\n"
+             "  object Fuera: TButton\r\n    Left = 8\r\n    Top = 70\r\n    TabOrder = 1\r\n  end\r\nend\r\n")
+MARCO_PAS = ("unit UMarco;\r\n\r\ninterface\r\n\r\nuses\r\n" + USES + ";\r\n\r\n"
+             "type\r\n  TMarco = class(TFrame)\r\n    PanelF: TPanel;\r\n    Dentro: TButton;\r\n"
+             "    Fuera: TButton;\r\n  end;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n")
 
 
 def escribe(p, texto):
@@ -59,19 +88,38 @@ def escribe(p, texto):
     return p
 
 
-def caso(nombre, cuerpo='', con_label=False, con_boton=False):
-    """Una carpeta con la base y una hija SIN bloques inherited (con su Label9
-    o su Button7 propios si se piden): el form de la hija."""
+def caso(nombre, cuerpo='', con_label=False, con_boton=False, con_boton8=False):
+    """Una carpeta con la base y una hija SIN bloques inherited (con su Label9,
+    su Button7 o su Button8 propios si se piden): el form de la hija."""
     d = os.path.join(JAIL, nombre)
     escribe(os.path.join(d, 'UBase.dfm'), BASE_DFM)
     escribe(os.path.join(d, 'UBase.pas'), BASE_PAS)
-    campos = ('    Label9: TLabel;\r\n' if con_label else '') + ('    Button7: TButton;\r\n' if con_boton else '')
+    campos = (('    Label9: TLabel;\r\n' if con_label else '') + ('    Button7: TButton;\r\n' if con_boton else '')
+              + ('    Button8: TButton;\r\n' if con_boton8 else ''))
     escribe(os.path.join(d, 'UHija.pas'),
             "unit UHija;\r\n\r\ninterface\r\n\r\nuses\r\n%s, UBase;\r\n\r\ntype\r\n  TFormHija = class(TFormBase)\r\n"
             "%s  end;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n" % (USES, campos))
     return escribe(os.path.join(d, 'UHija.dfm'),
-                   "inherited FormHija: TFormHija\r\n  Caption = 'Hija'\r\n%s%s%send\r\n"
-                   % (cuerpo, CON_LABEL if con_label else '', CON_BOTON if con_boton else ''))
+                   "inherited FormHija: TFormHija\r\n  Caption = 'Hija'\r\n%s%s%s%send\r\n"
+                   % (cuerpo, CON_LABEL if con_label else '', CON_BOTON if con_boton else '',
+                      CON_BOTON8 if con_boton8 else ''))
+
+
+def caso_marco(nombre):
+    """Una form (no heredada) con el frame Marco1 en linea y SIN bloques de sus
+    hijos, como la escribe el IDE si nadie los toca: el form."""
+    d = os.path.join(JAIL, nombre)
+    escribe(os.path.join(d, 'UMarco.dfm'), MARCO_DFM)
+    escribe(os.path.join(d, 'UMarco.pas'), MARCO_PAS)
+    escribe(os.path.join(d, 'UFormF.pas'),
+            "unit UFormF;\r\n\r\ninterface\r\n\r\nuses\r\n%s, UMarco;\r\n\r\ntype\r\n  TFormF = class(TForm)\r\n"
+            "    Label1: TLabel;\r\n    Marco1: TMarco;\r\n  end;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\n"
+            "end.\r\n" % USES)
+    return escribe(os.path.join(d, 'UFormF.dfm'),
+                   "object FormF: TFormF\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'F'\r\n  ClientHeight = 300\r\n"
+                   "  ClientWidth = 300\r\n  object Label1: TLabel\r\n    Left = 8\r\n    Top = 8\r\n    Width = 30\r\n"
+                   "    Height = 15\r\n    Caption = 'L'\r\n  end\r\n  inline Marco1: TMarco\r\n    Left = 8\r\n"
+                   "    Top = 40\r\n    Width = 200\r\n    Height = 120\r\n    TabOrder = 0\r\n  end\r\nend\r\n")
 
 
 def lineas(p):
@@ -187,6 +235,57 @@ try:
     ls = lineas(H)
     check('H10 set parent=Panel1 de un Label9 propio: inherited Panel1 y el Label9 dentro',
           not mc.fallo(r) and dentro(ls, 'inherited Panel1: TPanel', 'object Label9: TLabel'), (r[:400], ls))
+
+    # --- H11-H14: los de un frame en linea, sin bloque ---------------------------
+    M = caso_marco('h11')
+    r = dsg(command='set', path=M, component='Marco1.Dentro', prop='Left', value='20')
+    ls = lineas(M)
+    check('H11 set Marco1.Dentro Left=20 sin bloque: inline Marco1 > inherited PanelF > inherited Dentro > '
+          'Left = 20 (DSGN-171, que nombra el frame)',
+          not mc.fallo(r) and mc.es(r, 'SN_DESIGNER_BLOQUES_HEREDADOS_FMT') and 'frame Marco1' in r
+          and dentro(ls, 'inline Marco1: TMarco', 'inherited PanelF: TPanel')
+          and dentro(ls, 'inherited PanelF: TPanel', 'inherited Dentro: TButton')
+          and dentro(ls, 'inherited Dentro: TButton', 'Left = 20'), (r[:400], ls))
+    r = dsg(command='lint', path=M)
+    check('H11 ...y el lector del IDE lo carga (lint CLEAN)', mc.es(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
+    M = caso_marco('h12')
+    a = open(M, 'rb').read()
+    r = dsg(command='get', path=M, component='Marco1.Fuera')
+    check('H12 get Marco1.Fuera sin bloque: DSGN-172 del frame, con sus lineas como lo carga el IDE (Top = 70)',
+          not mc.fallo(r) and mc.es(r, 'SN_DESIGNER_HEREDADO_SIN_BLOQUE_FMT') and 'frame Marco1' in r
+          and re.search(r'Top = 70\b', r) is not None and open(M, 'rb').read() == a, r[:400])
+    r = dsg(command='delete', path=M, component='Marco1.Dentro')
+    check('H13 delete Marco1.Dentro sin bloque: DSGN-083 (se borra en el frame), como con su bloque; nada escrito',
+          mc.abre(r, 'SR_DESIGNER_DENTRO_DE_INLINE_FMT') and open(M, 'rb').read() == a, r[:300])
+    r = dsg(command='insert', path=M, classname='TButton', component='Button9', parent='Marco1.PanelF')
+    check('H14 insert parent=Marco1.PanelF sin bloque: DSGN-083, nada escrito',
+          mc.abre(r, 'SR_DESIGNER_DENTRO_DE_INLINE_FMT') and open(M, 'rb').read() == a, r[:300])
+
+    # --- H15-H17: before=/after= con un heredado sin bloque de referencia --------
+    H = caso('h15', con_label=True, con_boton=True)
+    a = open(H, 'rb').read()
+    r = dsg(command='set', path=H, component='Button7', before='Panel1')
+    check('H15 Button7 before=Panel1 (heredado sin bloque): DSGN-136 con el orden del IDE (lo heredado se crea '
+          'antes), no DSGN-078; nada escrito',
+          mc.abre(r, 'SR_DESIGNER_ORDEN_EL_IDE_FMT') and 'Label9, Panel1, Button7' in r
+          and open(H, 'rb').read() == a, r[:400])
+    r = dsg(command='set', path=H, component='Label9', before='Panel1')
+    check('H16 Label9 before=Panel1: ya esta (los graficos antes que las ventanas), en la 1 de 2 del FICHERO '
+          '(DSGN-141); nada escrito',
+          mc.es(r, 'SN_DESIGNER_ORDEN_YA_ESTA_FMT') and 'position 1 of 2' in r and open(H, 'rb').read() == a,
+          r[:300])
+    H = caso('h17', con_boton=True, con_boton8=True)
+    r = dsg(command='set', path=H, component='Button8', after='Panel1')
+    ls = lineas(H)
+    j = mc.como_json(r)
+    check('H17 Button8 after=Panel1: delante de Button7 (el primero de los propios va justo detras de lo '
+          'heredado), SIN bloque de Panel1 (el IDE no escribe uno que no difiere), index 1 de 2 y su linea',
+          not mc.fallo(r) and antes(ls, 'object Button8: TButton', 'object Button7: TButton')
+          and not any(l.strip().startswith('inherited Panel1') for l in ls)
+          and j.get('index') == 1 and j.get('of') == 2 and 0 < j.get('line', 0) <= len(ls)
+          and ls[j.get('line', 0) - 1].strip() == 'object Button8: TButton', (r[:400], ls))
+    r = dsg(command='lint', path=H)
+    check('H17 ...y el lector del IDE lo carga (lint CLEAN)', mc.es(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
 finally:
     srv.cierra()
     print('atomos RTL nuevos de procesos muertos:', mc.atomos_rtl_dejados(antes_atomos))

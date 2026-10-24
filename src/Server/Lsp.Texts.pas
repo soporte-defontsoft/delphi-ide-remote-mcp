@@ -5566,27 +5566,36 @@ const
     'deleted, renamed or moved in the ancestor''s file. Its properties can ' +
     'be set here.';
 
-  { A16-G1 de la 1.23: el IDE solo escribe en una form heredada lo que difiere
-    del ancestro (medido el 24-oct-2026), y set / insert parent= de un
-    heredado sin bloque decian DSGN-078. %s = el componente, %s = los bloques }
+  { A16-G1 de la 1.23: el IDE solo escribe en una form heredada -y en un frame
+    puesto en ella- lo que difiere del ancestro (medido el 24-oct-2026; el
+    escritor se lo salta: TWriter.WriteData), y set / insert parent= de un
+    heredado sin bloque decian DSGN-078. %s = el componente, %s = de donde
+    llega (SF_DESIGNER_DEL_ANCESTRO o SF_DESIGNER_DE_SU_FRAME_FMT), %s = los
+    bloques }
   SN_DESIGNER_BLOQUES_HEREDADOS_FMT =
-    '[DSGN-171] %s comes from the ancestor and this form had no block for ' +
-    'it (the IDE writes one only for what differs from the ancestor): it ' +
-    'has one now, as the IDE writes it - %s, each where the IDE puts it ' +
-    'among its siblings.';
-  { get de uno de esos. %s = componente, %s = clase, %s = fichero, %s = sus
-    lineas como las carga el lector del IDE }
+    '[DSGN-171] %s comes from %s and this form had no block for it (the IDE ' +
+    'writes one only for what differs from it): it has one now, as the IDE ' +
+    'writes it - %s, each where the IDE puts it among its siblings.';
+  { get de uno de esos. %s = componente, %s = clase, %s = de donde llega,
+    %s = fichero, %s = sus lineas como las carga el lector del IDE }
   SN_DESIGNER_HEREDADO_SIN_BLOQUE_FMT =
-    '[DSGN-172] %s (%s) comes from the ancestor and %s has no block for it: ' +
-    'nothing here differs from the ancestor. set writes its block here when ' +
-    'one of its properties changes. As the IDE''s form reader loads it:'#10'%s';
+    '[DSGN-172] %s (%s) comes from %s and %s has no block for it: nothing ' +
+    'here differs from it. set writes its block here when one of its ' +
+    'properties changes. As the IDE''s form reader loads it:'#10'%s';
   { ...y uno cuya clase el lector del IDE no cargo: su sustituto no es la
-    clase de verdad. %s = componente, %s = clase, %s = el de la cadena }
+    clase de verdad. %s = componente, %s = de donde llega, %s = clase, %s = el
+    de la cadena }
   SR_DESIGNER_HEREDADO_SIN_CLASE_FMT =
-    '[DSGN-173 DENIED] %s comes from the ancestor, but the IDE''s form ' +
-    'reader could not load the class %s of %s (it used a stand-in), so its ' +
-    'block would name a class the reader does not know. Nothing was ' +
-    'written: preview says why that class did not load.';
+    '[DSGN-173 DENIED] %s comes from %s, but the IDE''s form reader could ' +
+    'not load the class %s of %s (it used a stand-in), so its block would ' +
+    'name a class the reader does not know. Nothing was written: preview ' +
+    'says why that class did not load.';
+  // de donde llega uno de esos: del ancestro de la form...
+  SF_DESIGNER_DEL_ANCESTRO =
+    'the ancestor form';
+  // ...o del frame en linea que lo trae (%s = el frame, %s = su clase)
+  SF_DESIGNER_DE_SU_FRAME_FMT =
+    'the frame %s placed in this form (%s)';
 
   SR_DESIGNER_RAIZ_FMT =
     '[DSGN-085 INVALID_PARAM] %s is the form itself: delete, rename and ' +

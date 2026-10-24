@@ -1140,75 +1140,96 @@ function Resangra(const S: string; ADelta: Integer): string; forward;
   ni Button2 de su Panel1; tocando Button1.Left, inherited Panel1 con
   inherited Button1 dentro y solo su Left). get, set, delete e insert parent=
   de un heredado asi decian DSGN-078 - "no hay ningun Button1" - y el agente
-  no tenia camino; preview, que carga los ancestros, si lo encontraba. }
+  no tenia camino; preview, que carga los ancestros, si lo encontraba. Lo
+  mismo en un frame puesto en linea: el escritor se salta tambien un hijo
+  suyo que no difiere del frame (TWriter.WriteData), y DSGN-083 prometia
+  poner aqui las propiedades de Marco1.Dentro. }
 
 type
-  { Uno de la cadena que falta en el texto: su Name y su clase, como los
-    carga el lector del IDE }
+  { Uno de la cadena que falta en el texto, como lo carga el lector del IDE:
+    su Name, su ruta (NombreDe: Marco1.Dentro en un frame en linea) y su clase }
   TEslabonHeredado = record
-    Nombre, Clase: string;
+    Nombre, Ruta, Clase: string;
+  end;
+
+  { Lo que dice el lector del IDE de un componente que el texto no tiene }
+  TLoHeredado = record
+    Cadena: TArray<TEslabonHeredado>; // los que faltan, de fuera a dentro, hasta el
+    Ancla: string;   // la ruta del primero de sus padres que SI esta (la form, si ninguno)
+    Frame: string;   // el frame en linea que lo trae ('' si llega del ancestro de la form)
+    Origen: string;  // de donde llega, para los mensajes (DSGN-171/172/173)
+    Bloque, Sustituidas: TArray<string>; // sus lineas como lo carga; las clases que no cargo
+    Leidos: TArray<TLeidoPorElJuez>;
   end;
 
 { ANombre, que el texto de ADoc no tiene: si el lector del IDE (el juez de
-  ComoLoEscribeElIde, que carga el form con sus ancestros) lo carga, llega del
-  ANCESTRO sin bloque aqui. ACadena: los que faltan de su cadena de padres, de
-  fuera a dentro, hasta el (Panel1, Button1); AAncla, el Name del primero que
-  SI esta en el texto (el de la form, si ninguno); ABloque, sus lineas como lo
-  carga el IDE; ASustituidas, las clases que el juez no cargo; ALeidos, lo que
-  leyo. False si el juez no lo carga o no se le pudo preguntar. }
-function HeredadoSegunElIde(ADoc: TStyleDoc; const ADfm, ANombre: string;
-  out ACadena: TArray<TEslabonHeredado>; out AAncla: string; out ABloque, ASustituidas: TArray<string>;
-  out ALeidos: TArray<TLeidoPorElJuez>): Boolean;
+  ComoLoEscribeElIde, que carga el form con sus ancestros y sus frames) lo
+  carga, llega del ANCESTRO -o del frame en linea que lo trae- sin bloque
+  aqui; AH, lo que dijo. Por la ruta, como lo nombra el agente (NombreDe y su
+  inversa, ObjetoPorNombre). False si el juez no lo carga o no se le pudo
+  preguntar. }
+function HeredadoSegunElIde(ADoc: TStyleDoc; const ADfm, ANombre: string; out AH: TLoHeredado): Boolean;
 var
   Escrito, ErrorAyudante: string;
   Avisos, SinLeer: TArray<string>;
   Parada: TIgnorada;
   Suyo: TStyleDoc;
-  AlReves: TArray<TEslabonHeredado>;
   E: TEslabonHeredado;
 begin
   Result := False;
-  ACadena := [];
-  AAncla := '';
-  ABloque := [];
-  ASustituidas := [];
-  ALeidos := [];
+  AH := Default(TLoHeredado);
   if (ADoc = nil) or (ADoc.Root = nil) or (ANombre.Trim = '') then
     Exit;
-  if ComoLoEscribeElIde(ADfm, ADoc.TextoDe(ADoc.Lines), ADoc.Encoding, Escrito, ASustituidas, Avisos,
-    SinLeer, ALeidos, ErrorAyudante, Parada) <> '' then
+  if ComoLoEscribeElIde(ADfm, ADoc.TextoDe(ADoc.Lines), ADoc.Encoding, Escrito, AH.Sustituidas, Avisos,
+    SinLeer, AH.Leidos, ErrorAyudante, Parada) <> '' then
     Exit;
   Suyo := TStyleDoc.DeTexto(Escrito);
   try
+    // la raiz es la form, no algo de un ancestro
     var O := ObjetoPorNombre(Suyo, ANombre.Trim);
-    // la raiz es la form, no algo de un ancestro; y lo de un frame en linea
-    // es del frame, que se nombra por su ruta (Marco1.Nuevo: DSGN-078)
-    if (O = nil) or (O = Suyo.Root) or (InlineQueLoContiene(O) <> nil) then
+    if (O = nil) or (O = Suyo.Root) then
       Exit;
-    ABloque := Copy(Suyo.Lines, O.StartLine - 1, O.EndLine - O.StartLine + 1);
-    AlReves := [];
+    AH.Bloque := Copy(Suyo.Lines, O.StartLine - 1, O.EndLine - O.StartLine + 1);
+    // los que faltan, de dentro a fuera. Uno sin Name no se compone (ni se
+    // busca: NombreDe daria su clase), ni un frame en linea de dentro de otro:
+    // el IDE lo escribe como inherited y con eso su ruta ya no seria esa
     var P := O;
-    while (P <> nil) and (P <> Suyo.Root) and (ObjetoPorNombre(ADoc, P.ObjName) = nil) do
+    while (P <> nil) and (P <> Suyo.Root) do
     begin
+      if P.ObjName = '' then
+        Exit;
+      if ObjetoPorNombre(ADoc, NombreDe(P)) <> nil then
+        Break;
+      if P.Clave = 'inline' then
+        Exit;
       E.Nombre := P.ObjName;
+      E.Ruta := NombreDe(P);
       E.Clase := P.ClassName_;
-      AlReves := AlReves + [E];
+      AH.Cadena := [E] + AH.Cadena;
       P := P.Parent;
     end;
     if P = nil then
       Exit;
-    // ...tambien si el juez no lo escribe como inline: el ancla del texto lo dice
-    var Ancla := IfThen(P = Suyo.Root, '', P.ObjName);
-    if Ancla <> '' then
+    // el primero que esta, de la misma clase de bloque en los dos: un frame en
+    // linea en el texto que el juez no escribe como inline no es el mismo
+    var EnTexto := ADoc.Root;
+    if P <> Suyo.Root then
+      EnTexto := ObjetoPorNombre(ADoc, NombreDe(P));
+    if (EnTexto = nil) or ((EnTexto.Clave = 'inline') <> (P.Clave = 'inline')) then
+      Exit;
+    AH.Ancla := NombreDe(EnTexto);
+    // de donde llega: el frame, con su clase del texto (el juez lo carga
+    // como TFrame, medido el 24-oct)
+    AH.Origen := MsgText(SF_DESIGNER_DEL_ANCESTRO);
+    var Fr := InlineQueLoContiene(O);
+    if Fr <> nil then
     begin
-      var EnTexto := ObjetoPorNombre(ADoc, Ancla);
-      if (EnTexto = nil) or (EnTexto.Clave = 'inline') or (InlineQueLoContiene(EnTexto) <> nil) then
-        Exit;
+      AH.Frame := NombreDe(Fr);
+      var FrTexto := ObjetoPorNombre(ADoc, AH.Frame);
+      AH.Origen := MsgFmt(SF_DESIGNER_DE_SU_FRAME_FMT, [AH.Frame,
+        (if FrTexto <> nil then FrTexto.ClassName_ else Fr.ClassName_)]);
     end;
-    for var I := High(AlReves) downto 0 do
-      ACadena := ACadena + [AlReves[I]];
-    AAncla := IfThen(P = Suyo.Root, NombreDe(ADoc.Root), P.ObjName);
-    Result := Length(ACadena) > 0;
+    Result := Length(AH.Cadena) > 0;
   finally
     Suyo.Free;
   end;
@@ -1218,18 +1239,19 @@ end;
   (delete, el renombrado, set parent= y el orden de el): si el form no lo
   tiene pero llega del ancestro, la negativa de lo heredado (DSGN-084: se
   borra, se renombra o se mueve en el ancestro), no la de que no esta
-  (DSGN-078, que decia de un heredado sin bloque: A16-G1). }
+  (DSGN-078, que decia de un heredado sin bloque: A16-G1); si lo trae un
+  frame en linea, la del frame (DSGN-083), como con su bloque (QueNoSeToca). }
 function BuscaElQueSeToca(const F: TFormEnEdicion; const AName: string; out AObj: TStyleObj): string;
 var
-  Cadena: TArray<TEslabonHeredado>;
-  Ancla: string;
-  Bloque, Sustituidas: TArray<string>;
-  Leidos: TArray<TLeidoPorElJuez>;
+  H: TLoHeredado;
 begin
   Result := BuscaComponente(F, AName, AObj);
-  if (Result <> '') and HeredadoSegunElIde(F.Doc, F.Dfm, AName, Cadena, Ancla, Bloque, Sustituidas,
-    Leidos) then
-    Result := MsgFmt(SR_DESIGNER_HEREDADO_FMT, [AName.Trim]);
+  if (Result = '') or not HeredadoSegunElIde(F.Doc, F.Dfm, AName, H) then
+    Exit;
+  if H.Frame <> '' then
+    Result := MsgFmt(SR_DESIGNER_DENTRO_DE_INLINE_FMT, [H.Cadena[High(H.Cadena)].Ruta, H.Frame])
+  else
+    Result := MsgFmt(SR_DESIGNER_HEREDADO_FMT, [H.Cadena[High(H.Cadena)].Ruta]);
 end;
 
 { El componente en el que se ESCRIBE (set) o dentro del que se pone otro
@@ -1242,64 +1264,62 @@ end;
 function BuscaOPonHeredado(var F: TFormEnEdicion; const AName: string; out AObj: TStyleObj;
   out ANota: string): string;
 var
-  Cadena: TArray<TEslabonHeredado>;
-  Ancla, NotaOrden, Notas: string;
-  Bloque, Sustituidas, Lineas, Puestos: TArray<string>;
-  Leidos: TArray<TLeidoPorElJuez>;
+  H: TLoHeredado;
+  NotaOrden, Notas: string;
+  Lineas, Puestos: TArray<string>;
   Ini, Tab: Integer;
 begin
   ANota := '';
   Result := BuscaComponente(F, AName, AObj);
   if Result = '' then
     Exit;
-  if not HeredadoSegunElIde(F.Doc, F.Dfm, AName, Cadena, Ancla, Bloque, Sustituidas, Leidos) then
+  if not HeredadoSegunElIde(F.Doc, F.Dfm, AName, H) then
     Exit; // no esta, tampoco para el lector del IDE
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
-  F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
+  F.LeidoPorElJuez := F.LeidoPorElJuez + H.Leidos;
   // una clase que el juez no cargo la escribio su sustituto: ese nombre no
   // es el de la clase de verdad
-  for var E in Cadena do
-    if IndexText(E.Clase, Sustituidas) >= 0 then
-      Exit(MsgFmt(SR_DESIGNER_HEREDADO_SIN_CLASE_FMT, [AName.Trim, E.Clase, E.Nombre]));
-  var Padre := ObjetoPorNombre(F.Doc, Ancla);
+  for var E in H.Cadena do
+    if IndexText(E.Clase, H.Sustituidas) >= 0 then
+      Exit(MsgFmt(SR_DESIGNER_HEREDADO_SIN_CLASE_FMT, [AName.Trim, H.Origen, E.Clase, E.Nombre]));
+  var Padre := ObjetoPorNombre(F.Doc, H.Ancla);
   if Padre = nil then
     Padre := F.Doc.Root;
   Puestos := [];
   Notas := '';
-  for var E in Cadena do
+  for var E in H.Cadena do
   begin
-    // ultimo hijo de su padre, y de ahi donde lo deja el IDE (como insert)
+    // ultimo hijo de su padre, y de ahi donde lo deja el IDE (como insert);
+    // padre e hijo por su ruta, la de dentro de un frame tambien
     var Ind := SangriaDeNivel(Padre.Depth + 1);
     var NomPadre := NombreDe(Padre);
     Lineas := Copy(F.Doc.Lines);
     Ini := Padre.EndLine - 1;
     Insert([Ind + ComponeLineaDeObjeto('inherited', E.Nombre, E.Clase), Ind + 'end'], Lineas, Ini);
-    Lineas := DondeLoDejaElIde(F, Lineas, E.Nombre, NomPadre, Ini, 2, False, NotaOrden, Tab);
+    Lineas := DondeLoDejaElIde(F, Lineas, E.Ruta, NomPadre, Ini, 2, False, NotaOrden, Tab);
     if NotaOrden <> '' then
       Notas := Notas + ' ' + NotaOrden;
     F.Doc.SetLines(Lineas);
     F.Doc.Reparsea;
     Puestos := Puestos + [ComponeLineaDeObjeto('inherited', E.Nombre, E.Clase)];
-    Padre := ObjetoPorNombre(F.Doc, E.Nombre);
+    Padre := ObjetoPorNombre(F.Doc, E.Ruta);
     if Padre = nil then
       Exit(ComponenteQueNoEsta(F.Doc, AName, F.DfmNombre));
   end;
   AObj := Padre;
   Result := '';
-  ANota := MsgFmt(SN_DESIGNER_BLOQUES_HEREDADOS_FMT, [AName.Trim, string.Join(' > ', Puestos)]) + Notas;
+  ANota := MsgFmt(SN_DESIGNER_BLOQUES_HEREDADOS_FMT, [H.Cadena[High(H.Cadena)].Ruta, H.Origen,
+    string.Join(' > ', Puestos)]) + Notas;
 end;
 
 function HeredadoParaGet(ADoc: TStyleDoc; const ADfm, ANombre: string): string;
 var
-  Cadena: TArray<TEslabonHeredado>;
-  Ancla: string;
-  Bloque, Sustituidas: TArray<string>;
-  Leidos: TArray<TLeidoPorElJuez>;
+  H: TLoHeredado;
 begin
   Result := '';
-  if HeredadoSegunElIde(ADoc, ADfm, ANombre, Cadena, Ancla, Bloque, Sustituidas, Leidos) then
-    Result := MsgFmt(SN_DESIGNER_HEREDADO_SIN_BLOQUE_FMT, [Cadena[High(Cadena)].Nombre,
-      Cadena[High(Cadena)].Clase, TPath.GetFileName(ADfm), string.Join(#10, Bloque)]);
+  if HeredadoSegunElIde(ADoc, ADfm, ANombre, H) then
+    Result := MsgFmt(SN_DESIGNER_HEREDADO_SIN_BLOQUE_FMT, [H.Cadena[High(H.Cadena)].Ruta,
+      H.Cadena[High(H.Cadena)].Clase, H.Origen, TPath.GetFileName(ADfm), string.Join(#10, H.Bloque)]);
 end;
 
 { P puede recibir un control: el form, o en VCL un control con ventana
@@ -3452,7 +3472,13 @@ begin
           SuyoP := SuyoP + [N];
           Break;
         end;
-    var PS := NombreEn(SuyoP, ANomObj);
+    // el hijo, por su clave entre los hermanos: su Name, no su ruta (el de
+    // dentro de un frame en linea llega como Marco1.Dentro: A16 de la 1.23)
+    var ClaveObj := ANomObj;
+    var OP := ObjetoPorNombre(Doc, ANomObj);
+    if (OP <> nil) and (OP.Parent = P) then
+      ClaveObj := ClaveDeHijo(P, OP);
+    var PS := NombreEn(SuyoP, ClaveObj);
     if (PS < 0) or (PS = High(SuyoP)) then
       Exit; // el IDE tambien lo deja el ultimo de los que estan: donde ya esta
     var NomAncla := SuyoP[(if PS > 0 then PS - 1 else 1)];
@@ -3565,7 +3591,9 @@ end;
   sus botones, una form heredada coloca por su [n], FMX deja al final lo que
   no es TFmxObject... y eso lo dice el juez (norma 6; revisor 4 de la noche,
   M5: la primera version imitaba al juez con una lista y ya se desviaba en
-  tres sitios). La sangria no cambia (mismo padre), el TabOrder tampoco. }
+  tres sitios). La sangria no cambia (mismo padre), el TabOrder tampoco. Un
+  hermano heredado sin bloque en este form vale de before=/after=: el juez lo
+  ve donde lo crea el ancestro (A16 de la 1.23). }
 function OrdenaComponente(const APath, AComponente, ABefore, AAfter: string;
   AIndex: Integer): string;
 var
@@ -3573,11 +3601,31 @@ var
   Obj, Ref, Padre: TStyleObj;
   Hermanos, Resto: TArray<TStyleObj>;
   Lineas: TArray<string>;
-  Ini, Largo, Dest, Pos0, Nuevo: Integer;
-  NomObj, NomPadre, NomRef, Donde, Texto: string;
+  Ini, Largo, Dest, Pos0, Nuevo, PosEnFichero, EnFichero: Integer;
+  NomObj, NomPadre, NomRef, Donde, Texto, NotaHeredado: string;
   Original, Nuestro, Suyo: TArray<string>;
   Antes, AntesPas: TArray<Byte>;
   Ret: TJSONObject;
+
+  // los hijos de Padre por su orden en el texto, y el sitio de Obj entre ellos
+  procedure CuentaHermanos;
+  begin
+    Hermanos := [];
+    Original := [];
+    for var H in Padre.Children do
+    begin
+      Hermanos := Hermanos + [H];
+      Original := Original + [ClaveDeHijo(Padre, H)];
+    end;
+    Pos0 := -1;
+    Resto := [];
+    for var I := 0 to High(Hermanos) do
+      if Hermanos[I] = Obj then
+        Pos0 := I
+      else
+        Resto := Resto + [Hermanos[I]];
+  end;
+
 begin
   // los bytes que se juzgan, leidos con el cerrojo (el juez corre sin el)
   Result := AbreFormParaJuzgar(APath, False, False, F, Antes, AntesPas);
@@ -3597,22 +3645,14 @@ begin
     // nombre se buscaba por su clase y salia DSGN-143 "without TPanel" (B3 rev6)
     if Padre.ObjName = '' then
       Exit(MsgFmt(SR_DESIGNER_ORDEN_PADRE_SIN_NOMBRE_FMT, [NomObj, Padre.ClassName_, Padre.StartLine]));
-    Hermanos := [];
-    Original := [];
-    for var H in Padre.Children do
-    begin
-      Hermanos := Hermanos + [H];
-      Original := Original + [ClaveDeHijo(Padre, H)];
-    end;
-    Pos0 := -1;
-    Resto := [];
-    for var I := 0 to High(Hermanos) do
-      if Hermanos[I] = Obj then
-        Pos0 := I
-      else
-        Resto := Resto + [Hermanos[I]];
+    CuentaHermanos;
+    // su sitio en el FICHERO, el que dice DSGN-141: abajo puede entrar en
+    // memoria el bloque de un heredado
+    PosEnFichero := Pos0;
+    EnFichero := Length(Hermanos);
     // la posicion nueva, contada entre los DEMAS hermanos
     NomRef := '';
+    NotaHeredado := '';
     if (ABefore.Trim <> '') or (AAfter.Trim <> '') then
     begin
       // '(unnamed X #n)' es la clave de un hijo SIN Name en las listas del
@@ -3620,9 +3660,21 @@ begin
       // DSGN-078 lo mandaba a la lista de nombres (D5 de los revisores de cierre)
       if EsClaveSinNombre(ABefore.Trim + AAfter.Trim) then
         Exit(MsgFmt(SR_DESIGNER_ORDEN_REF_SIN_NOMBRE_FMT, [(ABefore + AAfter).Trim, NomObj]));
-      Result := BuscaComponente(F, ABefore.Trim + AAfter.Trim, Ref);
+      // un heredado sin bloque (A16 de la 1.23; decia DSGN-078): su bloque, en
+      // memoria y donde lo deja el IDE entre sus hermanos, para que el juez
+      // compare con el; no se escribe (abajo)
+      Result := BuscaOPonHeredado(F, ABefore.Trim + AAfter.Trim, Ref, NotaHeredado);
       if Result <> '' then
         Exit;
+      if NotaHeredado <> '' then
+      begin
+        // reescribir el form en memoria libera lo leido: el que se ordena, otra vez
+        Obj := ObjetoPorNombre(F.Doc, NomObj);
+        if Obj = nil then
+          Exit(ComponenteQueNoEsta(F.Doc, NomObj, F.DfmNombre));
+        Padre := Obj.Parent;
+        CuentaHermanos;
+      end;
       NomRef := NombreDe(Ref);
       if Ref = Obj then
         Exit(MsgFmt(SR_DESIGNER_ORDEN_SI_MISMO_FMT, [NomObj]));
@@ -3649,7 +3701,7 @@ begin
       Donde := MsgFmt(SF_DESIGNER_ORDEN_EN_LA_POSICION_FMT, [AIndex]);
     end;
     if Nuevo = Pos0 then
-      Exit(MsgFmt(SN_DESIGNER_ORDEN_YA_ESTA_FMT, [NomObj, Pos0 + 1, Length(Hermanos), NomPadre]));
+      Exit(MsgFmt(SN_DESIGNER_ORDEN_YA_ESTA_FMT, [NomObj, PosEnFichero + 1, EnFichero, NomPadre]));
     // el bloque, delante del que ocupara su sitio o detras del ultimo hermano
     Ini := Obj.StartLine - 1;
     Largo := Obj.EndLine - Obj.StartLine + 1;
@@ -3666,6 +3718,20 @@ begin
       Exit;
     if not MismaPosicion(NomObj, NomRef, Original, Nuestro, Suyo) then
       Exit(MsgFmt(SR_DESIGNER_ORDEN_EL_IDE_FMT, [NomObj, Donde, NomPadre, string.Join(', ', Suyo)]));
+    // el bloque del heredado que se puso para juzgar no se escribe: el IDE no
+    // escribe uno que no difiere del ancestro (TWriter.WriteData), y sin [n]
+    // no cambia nada al cargar (TReader.ReadComponent)
+    if NotaHeredado <> '' then
+    begin
+      var D := TStyleDoc.DeTexto(F.Doc.TextoDe(Lineas));
+      try
+        var R := ObjetoPorNombre(D, NomRef);
+        if R <> nil then
+          Delete(Lineas, R.StartLine - 1, R.EndLine - R.StartLine + 1);
+      finally
+        D.Free;
+      end;
+    end;
     // con el cerrojo, solo releer y escribir: el fichero tiene que ser el que
     // se juzgo (revisor 5 de la noche, A3)
     EnterFileEdit;
@@ -3680,6 +3746,11 @@ begin
     end;
     if Result <> '' then
       Exit;
+    // su sitio y sus lineas, del arbol releido al guardar: sin el bloque que
+    // se puso para juzgar no son los de la propuesta
+    Obj := ObjetoPorNombre(F.Doc, NomObj);
+    if Obj = nil then
+      Exit(ComponenteQueNoEsta(F.Doc, NomObj, F.DfmNombre));
     Ret := TJSONObject.Create;
     try
       Ret.AddPair('ordered', NomObj);
@@ -3688,11 +3759,11 @@ begin
       else if AAfter.Trim <> '' then
         Ret.AddPair('after', NomRef);
       Ret.AddPair('parent', NomPadre);
-      Ret.AddPair('index', TJSONNumber.Create(Nuevo + 1));
-      Ret.AddPair('of', TJSONNumber.Create(Length(Hermanos)));
+      Ret.AddPair('index', TJSONNumber.Create(Obj.Parent.Children.IndexOf(Obj) + 1));
+      Ret.AddPair('of', TJSONNumber.Create(Obj.Parent.Children.Count));
       Ret.AddPair('file', F.DfmNombre);
-      Ret.AddPair('line', TJSONNumber.Create(Dest + 1));
-      Ret.AddPair('endLine', TJSONNumber.Create(Dest + Largo));
+      Ret.AddPair('line', TJSONNumber.Create(Obj.StartLine));
+      Ret.AddPair('endLine', TJSONNumber.Create(Obj.EndLine));
       Ret.AddPair('note', MsgText(SN_DESIGNER_ORDEN_NOTA));
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
