@@ -219,6 +219,25 @@ check('S4 ...y no viene ni una palabra del fichero de fuera',
       'SECRETO_UNO' not in r, r[:250])
 check('S4 ...y es un RECHAZO, no un "Error executing tool"',
       mc.resultado(r) != 'INTERNAL', r[:120])
+# S4b: {$R a.res a.rc} - el .rc del que sale el .res es la SEGUNDA ruta de la
+# directiva, y brcc32 tambien lo abre con los permisos del servidor (V2 de la
+# 1.23: la puerta solo juzgaba la primera hasta el 26-sep-2026; aqui no la
+# vigilaba nadie). Y el control: la misma forma con el .rc DENTRO no se niega
+RC_FUERA = os.path.join(TOP, 'FUERA-R11.rc')
+open(RC_FUERA, 'w', encoding='utf-8').write('1 RCDATA "FUERA-R11.inc"\n')
+open(os.path.join(PF, 'dentro.rc'), 'w', encoding='utf-8').write('1 RCDATA "dentro.rc"\n')
+for rc, fuera in ((RC_FUERA, True), ('dentro.rc', False)):
+    open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
+        "program Incl;\n\n{$APPTYPE CONSOLE}\n{$R *.res}\n{$R Recurso.res '" + rc + "'}\n\n"
+        "begin\nend.\n")
+    r = A.call('delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
+                                 'platform': 'Win64', 'config': 'Debug'}, t=900)
+    if fuera:
+        check('S4b un {$R a.res a.rc} con el .rc FUERA de la jaula: no se compila',
+              mc.rechazado(r) and mc.es(r, 'SR_BUILD_INCLUDE_OUTSIDE_FMT') and 'FUERA-R11.rc' in r, r[:250])
+    else:
+        check('S4b ...y con el .rc DENTRO la puerta lo deja pasar',
+              not mc.es(r, 'SR_BUILD_INCLUDE_OUTSIDE_FMT'), r[:250])
 # lo normal sigue compilando: {$R *.res} y un include de dentro
 open(os.path.join(PF, 'dentro.inc'), 'w', encoding='utf-8', newline='\r\n').write(
     'SECRETO_UNO = 1;\n')
