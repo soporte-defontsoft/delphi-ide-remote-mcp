@@ -142,6 +142,9 @@ P4 = proyecto('Proy4', '11111111-2222-3333-4444-555555555504', '', 'UDentro4', U
               '<DCCReference Include="..\\..\\fuera\\UFuera2.pas"/>\n    <DCCReference Include="UDentro4.pas"/>')
 
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+# un intermedio de un escritor de ajustes que murio a medias y uno de uno vivo:
+# la purga de los ajustes no los veia (empiezan por '.'; V17 de la 1.23)
+VIEJO, FRESCO = mc.planta_intermedios(mc.cache_servidor('configs', LOCAL))
 # la zona de biblioteca APAGADA: la RTL no es de la jaula, y aun asi el motor
 # tiene que poder hablar de ella (F8)
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ, 'DELPHI_MCP_LIBRARY_ZONE': '0',
@@ -195,6 +198,8 @@ try:
     r = motor('delphi_definition', {'path': U1, 'line': 5, 'character': 10})
     check('F8 definition de un simbolo de DENTRO: contesta con su ruta',
           'UDentro.pas' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
+    check('F0 al fabricar los ajustes, la purga quita el intermedio de un escritor muerto y deja el de uno vivo',
+          not os.path.exists(VIEJO) and os.path.exists(FRESCO), os.listdir(os.path.dirname(VIEJO)))
     r = motor('delphi_hover', {'path': U1, 'line': 7, 'character': 13})
     check('F8 hover de Length (la RTL, zona de biblioteca APAGADA): contesta su firma',
           'Length' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])

@@ -13,7 +13,8 @@ the battery: with the real one, a check could pass on a table another exe
 left); whoever asks never generates (an edit says it did not check, DSGN-052,
 apart from the EDIT-076 header and without "try again"); while a new table
 is generated the previous one answers; the purge deletes what is old, the
-leftover .tmp and the tables of an uninstalled Delphi, and keeps what is
+leftover intermediates of a writer that died and the tables of an
+uninstalled Delphi, and keeps what is
 recent and what a NEWER server wrote; what a class streams by code
 (DefineProperties: Left/Top, Explicit*) and the root object of a form are
 not warned about; info says what a class streams by code and, for one that
@@ -41,6 +42,8 @@ EXE = mc.copia_exe(BASE)
 APPDATA = os.path.join(BASE, 'appdata')
 os.makedirs(APPDATA, exist_ok=True)
 CACHE = mc.cache_servidor('designer', APPDATA)
+# un intermedio de un escritor que murio a medias y uno de uno vivo (V17 de la 1.23)
+VIEJO, FRESCO = mc.planta_intermedios(CACHE)
 # la zona de biblioteca APAGADA, como en un workspace con nombre que no la declara:
 # el generador lee las fuentes de la VCL y la FMX de la instalacion por la puerta
 # con los lugares del MOTOR (el IDE y su biblioteca), no por la jaula. Con la zona
@@ -106,6 +109,10 @@ check('cache: la cabecera dice de que build salio y que servidor la genero',
       'by DelphiLspMcp' in cab, cab[:250])
 check('cache: la cabecera dice con que plataforma se leyo el fuente (la del IDE)',
       re.search(r'compiler [\d.]+, Win(32|64)\)', cab) is not None, cab[:250])
+# la purga de la cache, al generar, quita el intermedio viejo por SU lector (buscaba
+# '.tmp', que ya no escribe nadie) y deja el de un escritor vivo (V17 de la 1.23)
+check('cache: la purga quita el intermedio de un escritor muerto y deja el de uno vivo',
+      not os.path.exists(VIEJO) and os.path.exists(FRESCO), os.listdir(CACHE))
 
 # 4) lo que antes no estaba: los componentes de datos del propio RAD Studio
 r = call('delphi_designer', {'command': 'info', 'classname': 'TDataSource', 'framework': 'vcl'})
@@ -202,7 +209,8 @@ srv.cierra()
 # huella de AHORA (se queda: otro proceso puede estar usandola, y es la que
 # contesta mientras se genera la nueva), una de una generacion MAS NUEVA
 # vieja (es de otro servidor: se queda), la de un Delphi que no esta (se
-# borra al arrancar) y un .tmp viejo (se borra)
+# borra al arrancar). Los intermedios de un escritor muerto, en el 3: aqui se
+# plantaba un .tmp, que no escribe nadie desde el escritor atomico (V17 de la 1.23)
 for f in glob.glob(os.path.join(CACHE, 'tabla_%s_*.txt' % version)):
     os.remove(f)
 hace2h = time.time() - 7200
@@ -221,7 +229,6 @@ vieja = planta('tabla_%s_%s_vcl_aaaaaaaaaaaa_g%d.txt' % (version, build, gen), F
 reciente = planta('tabla_%s_%s_vcl_bbbbbbbbbbbb_g%d.txt' % (version, build, gen), FALSA, False)
 nueva = planta('tabla_%s_%s_vcl_cccccccccccc_g%d.txt' % (version, build, gen + 97), FALSA, True)
 otro = planta('tabla_99.0_99.0.1.1_vcl_dddddddddddd_g%d.txt' % gen, FALSA, True)
-tmp = planta('tabla_%s_%s_vcl_eeeeeeeeeeee_g%d.txt.123.tmp' % (version, build, gen), 'medio', True)
 srv = mc.Stdio(EXE, env, nombre='dt2')
 call = srv.call
 r = call('delphi_designer', {'command': 'info', 'classname': 'TButton', 'framework': 'vcl', 'filter': 'Marca'})
@@ -237,7 +244,6 @@ check('purga: la de otra huella de hace dos horas se borra', vieja not in hay, s
 check('purga: la de otra huella de ahora se queda', reciente in hay, str(hay)[:500])
 check('purga: la de una generacion mas nueva (otro servidor) se queda', nueva in hay, str(hay)[:500])
 check('purga: la de un Delphi que no esta se borra', otro not in hay, str(hay)[:500])
-check('purga: el .tmp viejo de un escritor que murio se borra', tmp not in hay, str(hay)[:500])
 r = call('delphi_designer', {'command': 'info', 'classname': 'TButton', 'framework': 'vcl', 'filter': 'Marca'})
 # contesta, y sin Marca: el filtro vacio con su pista (DSGN-048); un info en
 # error daba {} y "sin Marca" pasaba (revisor de baterias, 18-oct-2026)

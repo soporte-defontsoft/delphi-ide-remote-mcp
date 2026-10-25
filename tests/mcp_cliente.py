@@ -243,6 +243,22 @@ def cache_servidor(sub='', appdata=None):
     return os.path.join(appdata or CACHE_BATERIAS, 'DelphiLspMcp', sub)
 
 
+def planta_intermedios(carpeta):
+    """Dos intermedios del escritor atomico ('.<nombre>.<8 hex>' + su extension,
+    Lsp.Patch.TemporalDeSustitucion) en carpeta: uno de hace dos horas (un
+    escritor que murio a medias: la purga de la casa lo quita) y uno de ahora
+    (uno vivo: se queda). (viejo, fresco). V17 de la 1.23: las purgas de las
+    tablas del disenador y de los ajustes del motor no los veian."""
+    os.makedirs(carpeta, exist_ok=True)
+    viejo = os.path.join(carpeta, '.muerto.txt.0123abcd' + TEMPORAL_SUSTITUCION_EXT)
+    fresco = os.path.join(carpeta, '.vivo.txt.89abcdef' + TEMPORAL_SUSTITUCION_EXT)
+    for p in (viejo, fresco):
+        open(p, 'wb').write(b'x')
+    hace = time.time() - 2 * 3600
+    os.utime(viejo, (hace, hace))
+    return viejo, fresco
+
+
 def limpia_caches_lsp():
     """Las caches .delphilsp.json de proyectos de las BATERIAS (bajo RAIZ) que
     hayan caido en la cache REAL del usuario (%LOCALAPPDATA%\\DelphiLspMcp\\configs):

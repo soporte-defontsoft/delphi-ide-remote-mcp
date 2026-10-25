@@ -2744,7 +2744,7 @@ end;
 { Lo que hay que borrar de la cache del disenador: de esa instalacion, las
   tablas que no son las de ahora (otra huella, otra build, una generacion MAS
   VIEJA - la de un servidor mas nuevo no es de este) con mas de una hora, y
-  los .tmp de un escritor que murio a medias. }
+  los intermedios de un escritor que murio a medias. }
 procedure PurgaTablasViejas(const ADir, AVersion: string; const AVigentes: array of string);
 var
   V, B, H: string;
@@ -2753,16 +2753,15 @@ var
   Vigente: Boolean;
   Edad: TDateTime;
 begin
+  // los intermedios de un escritor que murio a medias, por SU lector (aqui
+  // se buscaba '.tmp', que ya no escribe nadie: el escritor atomico deja
+  // .<nombre>.<8 hex>.delphi-patch-tmp)
+  PurgaIntermediosViejos(ADir);
   try
     for var F in TDirectory.GetFiles(ADir) do
     begin
       if not FileAge(F, Edad) or (Now - Edad < EDAD_PURGA) then
         Continue;
-      if SameText(ExtractFileExt(F), '.tmp') then
-      begin
-        QuitaDeLaCache(F);
-        Continue;
-      end;
       if not LeeNombreDeTabla(F, V, B, M, H, G) or not SameText(V, AVersion) or
          (G > GENERACION_TABLAS) then
         Continue;

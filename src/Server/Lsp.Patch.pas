@@ -770,6 +770,13 @@ function ColocacionDenegada(const ADestino: string; ALugar: TLugarDeTexto = ltJa
   de CUALQUIER llamada, no solo el suyo. }
 function TemporalDeSustitucion(const APath: string): string;
 function EsTemporalDeSustitucion(const ANombre: string): Boolean;
+{ ...y la purga de los que se quedaron: los intermedios de ADir (no de sus
+  subcarpetas) con mas de una hora - de un escritor que murio a medias -, por
+  la puerta de borrar de ALugar. La piden las casas del servidor que
+  reescriben sus ficheros (las tablas del disenador, los ajustes del motor):
+  sus purgas buscaban '.tmp', que ya no escribe nadie, o no los veian (lote 6
+  del censo de jueces; V17 de la 1.23). Limpiar nunca tumba nada. }
+procedure PurgaIntermediosViejos(const ADir: string; ALugar: TLugarDeTexto = ltCasa);
 
 type
   { EL lint de un form de texto, sus cinco partes; cada llamador lo presenta a
@@ -1550,6 +1557,26 @@ function EsTemporalDeSustitucion(const ANombre: string): Boolean;
 begin
   Result := TRegEx.IsMatch(ANombre, '^\..+\.' + FRAGMENTO_UNICO_PATRON +
     TRegEx.Escape(TEMPORAL_DE_SUSTITUCION_EXT) + '$', [roIgnoreCase]);
+end;
+
+procedure PurgaIntermediosViejos(const ADir: string; ALugar: TLugarDeTexto);
+const
+  EDAD_MINIMA = 1 / 24; // una hora: un escritor vivo acaba en segundos
+var
+  Edad: TDateTime;
+begin
+  try
+    for var F in EntradasDeCarpeta(ADir) do
+      if EsTemporalDeSustitucion(TPath.GetFileName(F)) and FileAge(F, Edad) and
+         (Now - Edad > EDAD_MINIMA) then
+        try
+          BorraFichero(F, ALugar);
+        except
+          // lo que no se deja borrar se queda
+        end;
+  except
+    // limpiar nunca tumba nada
+  end;
 end;
 
 { APath sustituido por ATmp de un solo gesto (MoveFileEx con REPLACE); si no

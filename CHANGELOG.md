@@ -74,6 +74,14 @@ the MCP `initialize` response (`serverInfo.version`).
   of a unit, is still refused. The same rule and note serve
   `delphi_create`, `delphi_edit` creating a unit and `delphi_move` renaming
   one (`tests/test_round10.py`, B2).
+- **What a writer that died leaves in the server's caches is purged.** The
+  designer tables and the engine settings are rewritten through the atomic
+  writer, whose intermediate is `.<name>.<8 hex>.delphi-patch-tmp`. The
+  purge of the tables deleted `.tmp` files, which nothing writes since that
+  writer took over, and the purge of the settings did not see them: an
+  intermediate left by a process killed mid-write stayed for good. Both
+  purges now ask the writer's own reader and remove the ones older than an
+  hour (`tests/test_designer_tablas.py`, `tests/test_motor_fuera.py` F0).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

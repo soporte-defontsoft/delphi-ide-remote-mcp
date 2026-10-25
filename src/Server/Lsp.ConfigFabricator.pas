@@ -599,6 +599,7 @@ begin
     CrearCarpeta(CacheDir);
     EscribeEnCasaDelServidor(CacheFile, Contenido);
     PurgaGeneracionesViejas(CacheDir, Prefijo);
+    PurgaIntermediosViejos(CacheDir); // los de un escritor que murio a medias
   finally
     System.TMonitor.Exit(GFabLock);
   end;
