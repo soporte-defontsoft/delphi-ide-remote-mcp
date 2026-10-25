@@ -43,6 +43,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The build refuses a `.deployproj` deploy command.** A `DeployFile` in a
+  deploy manifest can carry a `<LocalCommand>` (run on the build machine) or a
+  `<RemoteCommand>` (run on the target through PAServer) - a free command line
+  handed to an executor. The ones the server writes are empty, and
+  `delphi_config add-deployfile` can only write them empty, but an agent could
+  fill them another way (an edit, an upload); the compile-only gate scanned the
+  imported `.deployproj` for tasks and foreign imports and did not flag these.
+  Now a non-empty `<LocalCommand>` or `<RemoteCommand>` is refused at the gate,
+  however the file got there, by the same rule as a build event or a free
+  compiler option - an agent asks for operations, it does not hand a command to
+  an executor (`tests/test_build_imports.py`).
+
 - **The build refuses a project source that is a link leading outside the
   roots.** The build's gate walks the project folder for hard links and
   directives, but a file in the tree that is a symlink or junction whose real

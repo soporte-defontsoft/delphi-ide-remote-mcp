@@ -80,6 +80,27 @@ try:
              mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and 'not there to be checked (cond.targets)' in r,
              r[:400])
 
+    # V1 (1.23): un LocalCommand/RemoteCommand de un DeployFile es una linea de
+    # ordenes LIBRE que el Deploy entrega a un ejecutor (local, o el destino por
+    # PAServer). HazardScan los niega si no estan vacios; los que genera el
+    # servidor van vacios (plantilla). ROJO contra el build sin el arreglo.
+    con_import(IDE_DEP)
+    DEP_H = '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"><ItemGroup><DeployFile Include="Fixture.exe">'
+    DEP_T = '</DeployFile></ItemGroup></Project>'
+    for tag in ('LocalCommand', 'RemoteCommand'):
+        with open(dep, 'w', encoding='utf-8') as f:
+            f.write(DEP_H + '<%s>cmd /c echo marca</%s>' % (tag, tag) + DEP_T)
+        r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+        mc.check('cond: un <%s> no vacio de un DeployFile se niega (V1)' % tag,
+                 mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and tag in r, r[:400])
+    # guarda: los comandos VACIOS (lo que genera el servidor) NO se niegan
+    with open(dep, 'w', encoding='utf-8') as f:
+        f.write(DEP_H + '<LocalCommand/><RemoteCommand/>' + DEP_T)
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('cond: un DeployFile con LocalCommand/RemoteCommand VACIOS compila (V1 guarda)',
+             mc.como_json(r).get('success') is True, mc.como_json(r).get('firstError') or r[:400])
+    os.remove(dep)
+
     # Un Import de un fichero FUERA de las raices, INOCUO a proposito: la puerta
     # de leer no lo deja leer (bloque de las puertas de la 1.18.0) y el build lo
     # cargaria de alli. Hasta 22c83e1 el escaner lo leia, lo veia limpio y

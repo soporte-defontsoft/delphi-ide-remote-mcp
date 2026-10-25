@@ -2288,6 +2288,12 @@ const
     juzga: HazardScan las niega si no estan vacias. }
   OPCIONES_LIBRES: array [0 .. 2] of string =
     ('DCC_AdditionalSwitches', 'BRCC_UserSuppliedOptions', 'BRCC_ResponseFilename');
+  { LocalCommand/RemoteCommand de un DeployFile del .deployproj: el Deploy los
+    entrega a un ejecutor (en local, o en la maquina destino por PAServer). Son
+    una linea de ordenes LIBRE del agente hacia un ejecutor; como las opciones
+    y los eventos, HazardScan las niega si no estan vacias. Lo que generamos va
+    vacio (plantilla, Lsp.Dproj:3015-3016). V1 de la 1.23. }
+  DEPLOY_COMANDOS: array [0 .. 1] of string = ('LocalCommand', 'RemoteCommand');
 
 function EsTextoLibreDelBuild(const ANombre: string): Boolean;
 begin
@@ -4513,6 +4519,16 @@ begin
     for var T in TramosDeEtiqueta(AXml, Tag, False, True) do
       if Copy(AXml, T.Ini, T.Fin - T.Ini).Trim <> '' then
         Exit(MsgFmt(SF_CFG_HAZARD_OPCIONES_FMT, [Tag]));
+
+  // LocalCommand/RemoteCommand de un DeployFile (.deployproj, que el .dproj
+  // importa y este escaner recorre): una linea de ordenes libre que el Deploy
+  // entrega a un ejecutor (local, o el destino por PAServer). Como los eventos
+  // y las opciones: el texto ESCRITO, tambien dentro de un comentario. Lo
+  // nuestro va vacio (plantilla); un agente que lo llene, negado (V1 de la 1.23)
+  for var Tag in DEPLOY_COMANDOS do
+    for var T in TramosDeEtiqueta(AXml, Tag, False, True) do
+      if Copy(AXml, T.Ini, T.Fin - T.Ini).Trim <> '' then
+        Exit(MsgFmt(SF_CFG_HAZARD_DEPLOY_CMD_FMT, [Tag]));
 
   // <Import> brings in another MSBuild file, which carries its own targets -
   // so the payload can sit one file away from the project. Being macro-based

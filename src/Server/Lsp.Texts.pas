@@ -11519,6 +11519,15 @@ const
   SF_CFG_HAZARD_OPCIONES_FMT =
     'a non-empty <%s> (free text handed to the compiler''s command line)';
 
+  { LocalCommand/RemoteCommand de un DeployFile del .deployproj: una linea de
+    ordenes que el Deploy entrega a un ejecutor (en local, o en la maquina
+    destino por PAServer). Texto libre del agente hacia un ejecutor: HazardScan
+    la niega si no esta vacia (V1 de la 1.23; el agente pide operaciones, nunca
+    ejecuta). Lo que generamos va vacio (plantilla del manifiesto). }
+  SF_CFG_HAZARD_DEPLOY_CMD_FMT =
+    'a non-empty <%s> (a command the deploy hands to an executor: locally, or ' +
+    'on the target machine through PAServer)';
+
   // Textos que estaban en linea en Lsp.ProjectUnits.pas (el resto, 27-sep-2026)
   SF_USES_EL_FICHERO =
     '(the file)';
