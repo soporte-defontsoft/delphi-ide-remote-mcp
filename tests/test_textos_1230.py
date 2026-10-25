@@ -9,7 +9,8 @@ Cada caso, medido en produccion antes de arreglarlo (24-oct-2026):
   T3  delphi_search pattern=*.pas;*.dfm busca en los dos (decia WS-005: una sola mascara),
       como delphi_list: UN lector del pattern
   T4  ...y un trozo que no es mascara se niega en los dos (list lo tomaba sin mirar), y las
-      llaves de una expansion, WS-006 en los dos
+      llaves de una expansion, WS-006 en los dos; un nombre que Windows da por bueno -
+      parentesis, comilla - vale (lo juzga la RTL, como GetFiles; V17: rojo contra r1222bj)
   T5  add-searchpath %2E%2E\<carpeta que existe>: se anade (CFG-018 decia que no existia: se
       juzgaba sin desescapar, y msbuild lee ..)
   T6  ...lo desescapado pasa por la jaula: %2E%2E hacia fuera de las raices se niega por ella
@@ -93,6 +94,14 @@ try:
     r2 = srv.call('delphi_list', {'root': BUS, 'pattern': 'My Unit*.pas'})
     check('T4 ...una mascara con espacio (My Unit*.pas) vale en los dos',
           mc.como_json(r).get('total') == 1 and mc.como_json(r2).get('total') == 1, (r[:200], r2[:200]))
+    # el juez de una mascara es el de quien la usa, TDirectory.GetFiles (V17 de la
+    # 1.23): la gramatica de la casa negaba nombres que Windows da por buenos
+    escribe(os.path.join(BUS, 'Unit1 (copia).pas'), b'unit Unit1;\r\n// MARCA_T3\r\ninterface\r\nimplementation\r\nend.\r\n')
+    escribe(os.path.join(BUS, "O'Brien.pas"), b'unit OBrien;\r\n// MARCA_T3\r\ninterface\r\nimplementation\r\nend.\r\n')
+    r = srv.call('delphi_search', {'query': 'MARCA_T3', 'path': BUS, 'pattern': "Unit1 (copia)*.pas;O'Brien*.pas"})
+    r2 = srv.call('delphi_list', {'root': BUS, 'pattern': "Unit1 (copia)*.pas;O'Brien*.pas"})
+    check("T4 ...y una con parentesis o comilla (Unit1 (copia)*.pas;O'Brien*.pas), en los dos",
+          mc.como_json(r).get('total') == 2 and mc.como_json(r2).get('total') == 2, (r[:200], r2[:200]))
 
     # --- T5, T6, T7 ----------------------------------------------------------------
     PDIR = os.path.join(JAIL, 'proy')

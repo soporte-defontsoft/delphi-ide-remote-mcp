@@ -277,10 +277,15 @@ end;
 { EL lector del "pattern" de delphi_list y delphi_search: una mascara de
   nombre de fichero, o varias separadas por ';' (*.pas;*.dfm). Search pedia
   UNA y list partia por ';' sin mirar los trozos (Opus sobre la 1.22.2, v):
-  dos hermanas, una gramatica. Cada trozo, con letras de cualquier alfabeto
-  (hay units acentuadas), digitos, espacios (list los tomaba: My Unit*.pas)
-  y * ? . - _; las llaves de una expansion de la shell, WS-006 (no casaban
-  nada, en silencio). '' y AMascaras, o la negativa. }
+  dos hermanas, una gramatica. Cada trozo lo juzga el juez de quien lo usa,
+  TDirectory.GetFiles, con su misma pregunta (TPath.HasValidFileNameChars
+  con comodines: sin carpeta ni unidad, ni < > | "); WalkFiles se traga su
+  excepcion carpeta a carpeta, y por eso se pregunta antes. La gramatica de
+  la casa (letras, digitos, espacios y * ? . - _) negaba nombres que Windows
+  da por buenos: Unit1 (copia).pas, O'Brien.pas (V17 de la 1.23). Las llaves
+  de una expansion de la shell, WS-006: son legales en un nombre, pero un
+  agente que las escribe pide otra cosa (varias extensiones), y no casaban
+  nada, en silencio. '' y AMascaras, o la negativa. }
 function MascarasDelPatron(const APatron: string; out AMascaras: TArray<string>): string;
 begin
   Result := '';
@@ -292,7 +297,7 @@ begin
     var M := Trozo.Trim;
     if M = '' then
       Continue;
-    if not TRegEx.IsMatch(M, '\A(?:' + PATRON_CAR_IDENT + '|[*?.\- ])+\z') then
+    if not TPath.HasValidFileNameChars(M, True) then
       Exit(MsgText(SR_WS_PATTERN_DEBE_SER_MASCARA));
     AMascaras := AMascaras + [M];
   end;

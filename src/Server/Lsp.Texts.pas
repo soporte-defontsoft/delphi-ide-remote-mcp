@@ -8584,8 +8584,8 @@ const
   // 24-oct-2026: search pedia una y list tomaba varias; Opus sobre la 1.22.2, v)
   SR_WS_PATTERN_DEBE_SER_MASCARA =
     '[WS-005 INVALID_PARAM] pattern takes file-name masks: ONE (*.style, ' +
-    '*.ini, MyApp*.rc) or several separated by ";" (*.pas;*.dfm) - letters, ' +
-    'digits, spaces and * ? . - _ only, no folders.';
+    '*.ini, MyApp*.rc) or several separated by ";" (*.pas;*.dfm) - a file ' +
+    'name with * and ?, no folder: \ / : < > | " do not go in a mask.';
 
   SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION =
     '[WS-006 INVALID_PARAM] pattern does not accept braces {a,b} (shell ' +

@@ -99,6 +99,13 @@ the MCP `initialize` response (`serverInfo.version`).
   it, searched in the order the compiler uses; what cannot be followed is
   still left unjudged. The tables move to generation 16
   (`tests/test_designer_modalresult_1191.py` H1).
+- **A `pattern` of `delphi_list` and `delphi_search` takes any name Windows
+  takes.** Each mask was checked against a grammar of our own - letters,
+  digits, spaces and `* ? . - _` - that refused real file names such as
+  `Unit1 (copia)*.pas` or `O'Brien*.pas` (`WS-005`). It is now asked what
+  the file walk itself asks, `TPath.HasValidFileNameChars` with wildcards:
+  no folder, no drive, none of `< > | "`. Braces `{a,b}` are still refused
+  (`WS-006`) (`tests/test_textos_1230.py` T4).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the
