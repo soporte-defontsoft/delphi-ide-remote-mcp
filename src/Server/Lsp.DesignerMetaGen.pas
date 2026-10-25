@@ -84,8 +84,11 @@ const
     constante con nombre lo dice su valor (THelpContext = -MaxInt..MaxInt, el
     HelpContext de todos los controles; TWidth = ColumnHeaderWidth..MaxInt):
     sin base, set escribia HelpContext = abc (lint lo veia por el lector del
-    IDE; V17). }
-  GENERACION_TABLAS = 16; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+    IDE; V17).
+    17 (1.23): los cuerpos de lo guardado por codigo, por EL lector, y la
+    cabecera de un DefineProperty no es una llamada: la de TReader daba un
+    '*' a quien nombra TReader en su DefineProperties (THeaderStrings; V17). }
+  GENERACION_TABLAS = 17; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
   // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
   // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
@@ -437,54 +440,71 @@ begin
     Result := [Nombre];
 end;
 
-function PropiedadesDefinidasPorCodigo(const ATexto: string): TArray<string>;
+{ PropiedadesDefinidasPorCodigo sobre un texto activo y su lector: cada
+  DefineProperties, y la rutina de cada llamada de fuera, los da EL lector
+  (TUnidadPas.Cuerpos). Un cuerpo acababa en la siguiente rutina de la
+  COLUMNA 0: una vecina sangrada, o la seccion type de detras (el TOpenReader
+  de FMX TImage), pasaba a ser suya (V17-5a de la 1.23) }
+function DefinidasDeUnidad(const ATexto: string; ADecl: TUnidadPas): TArray<string>;
 var
   Lista: TList<string>;
-  Fin: TRegEx;
-  Sig: TMatch;
-  Clase, Cuerpo, E: string;
-  Ini, Hasta, P: Integer;
-  Cuerpos: TList<TPair<Integer, Integer>>; // los de los DefineProperties
+  Clase, Rutina, Cuerpo: string;
+  Base, P: Integer;
   Dentro: Boolean;
-  Cabeceras: TMatchCollection;
   Nombres: TArray<string>;
+  Cab: TMatch;
+
+  procedure Anade(const AEntrada: string);
+  begin
+    if not Lista.Contains(AEntrada) then
+      Lista.Add(AEntrada);
+  end;
+
+  // la CABECERA de un DefineProperty no es una llamada (TReader y TWriter lo
+  // implementan en System.Classes; una rutina local se llama asi en FMX): su
+  // "argumento" es un parametro, y daba un '*' a quien nombra TReader en su
+  // DefineProperties (THeaderStrings, if Filer is TReader). AIdx: donde
+  // empieza el nombre; delante, la palabra de rutina (Lsp.Pascal) y quiza
+  // la clase
+  function EsCabecera(AIdx: Integer): Boolean;
+  var
+    Desde: Integer;
+  begin
+    Desde := Max(1, AIdx - 200);
+    Result := TRegEx.IsMatch(Copy(ATexto, Desde, AIdx - Desde), '(?i)' + PATRON_NO_IDENT_ANTES +
+      PatronPalabraDeRutina + '\s+(?:' + PATRON_IDENT_PUNTOS + '\s*\.\s*)?$');
+  end;
+
+  function EsDefineProperties(const AC: TCuerpoPas): Boolean;
+  begin
+    Result := (Pos('.', AC.Nombre) > 0) and MismoIdentificador(UltimoTrozo(AC.Nombre), 'DefineProperties');
+  end;
+
 begin
   Lista := TList<string>.Create;
-  Cuerpos := TList<TPair<Integer, Integer>>.Create;
   try
-    // el cuerpo de un metodo acaba en la siguiente rutina de la COLUMNA 0: las
-    // locales van sangradas (TCustomForm.DefineProperties tiene la suya)
-    Fin := TRegEx.Create('(?im)^(?:(?:class\s+)?' + PatronPalabraDeRutina +
-      '\s|initialization\b|finalization\b)');
-    // y el ultimo, en el end. final, por EL lector (Lsp.Pascal; era un end.
-    // en la columna 0 de esta regex)
-    var EndsU := EndsConPunto(CodigoPascal(ATexto));
-    var FinUnidad := Length(ATexto) + 1;
-    if Length(EndsU) > 0 then
-      FinUnidad := EndsU[0].Ini;
-    for var Mt in TRegEx.Matches(ATexto,
-      '(?im)^\s*(?:class\s+)?procedure\s+(' + PATRON_IDENT_PUNTOS + ')\.DefineProperties\s*\(') do
+    for var C in ADecl.Cuerpos do
     begin
-      Clase := Mt.Groups[1].Value;
-      Ini := Mt.Index + Mt.Length;
-      Sig := Fin.Match(ATexto, Ini);
-      if Sig.Success then
-        Hasta := Min(Sig.Index, FinUnidad)
-      else
-        Hasta := FinUnidad;
-      Cuerpo := Copy(ATexto, Ini, Hasta - Ini);
-      Cuerpos.Add(TPair<Integer, Integer>.Create(Ini, Hasta));
-      for var C in TRegEx.Matches(Cuerpo, '(?i)' + PATRON_NO_IDENT_ANTES + 'Define(?:Binary)?Property\s*\(\s*') do
+      if not EsDefineProperties(C) then
+        Continue;
+      Clase := Copy(C.Nombre, 1, C.Nombre.LastIndexOf('.'));
+      // la rutina entera tras su nombre: sus locales (las constantes de un
+      // nombre, una rutina local que llama al Filer) y su cuerpo
+      Rutina := Copy(ATexto, C.PosIni, C.PosFin - C.PosIni + 1);
+      Cab := TRegEx.Match(Rutina, '(?i)' + PATRON_NO_IDENT_ANTES + 'DefineProperties' + PATRON_NO_IDENT_DESPUES);
+      if not Cab.Success then
+        Continue;
+      Cuerpo := Copy(Rutina, Cab.Index + Cab.Length, MaxInt);
+      Base := C.PosIni + Cab.Index + Cab.Length - 1; // Cuerpo[1] en ATexto
+      for var M in TRegEx.Matches(Cuerpo, '(?i)' + PATRON_NO_IDENT_ANTES + 'Define(?:Binary)?Property\s*\(\s*') do
       begin
-        Nombres := NombresDelArgumento(Cuerpo, C.Index + C.Length, Cuerpo);
+        if EsCabecera(Base + M.Index - 1) then
+          Continue;
+        Nombres := NombresDelArgumento(Cuerpo, M.Index + M.Length, Cuerpo);
         if Length(Nombres) = 0 then
           Nombres := ['*']; // un nombre que se construye al vuelo
         for var N in Nombres do
-        begin
-          E := Clase + ' ' + N;
-          if not Lista.Contains(E) then
-            Lista.Add(E);
-        end;
+          Anade(Clase + ' ' + N);
       end;
       // los tipos que nombra: un ayudante que lee por ella (FMX:
       // TTextControl.DefineProperties crea un TTextSettingsInfo.TTextPropLoader)
@@ -492,13 +512,9 @@ begin
       // True o TextHeight como si fueran tipos; ruido, revision de la 1.12.0).
       // La mayuscula y lo de detras, de cualquier alfabeto (EL identificador,
       // Lsp.Pascal)
-      for var C in TRegEx.Matches(Cuerpo, PATRON_NO_IDENT_ANTES + PATRON_NOMBRE_TIPO + PATRON_CAR_IDENT +
+      for var M in TRegEx.Matches(Cuerpo, PATRON_NO_IDENT_ANTES + PATRON_NOMBRE_TIPO + PATRON_CAR_IDENT +
         '*(?:\.' + PATRON_NOMBRE_TIPO + PATRON_CAR_IDENT + '*)*' + PATRON_NO_IDENT_DESPUES) do
-      begin
-        E := '>' + Clase + ' ' + C.Value;
-        if not Lista.Contains(E) then
-          Lista.Add(E);
-      end;
+        Anade('>' + Clase + ' ' + M.Value);
     end;
     // los nombres FUERA de esos cuerpos: los lee un AYUDANTE, en un metodo de
     // su clase ('~Ayudante Nombre'); a que clases sirve lo dice quien lo
@@ -506,25 +522,25 @@ begin
     // En una rutina suelta, de alguna clase ('* Nombre'): antes no contaba
     // como cabecera y sus literales iban a la clase del metodo de antes
     // (Data.Bind.Components ReadBufferProperties; revision)
-    Cabeceras := TRegEx.Matches(ATexto,
-      '(?im)^(?:class\s+)?' + PatronPalabraDeRutina + '\s+(' + PATRON_IDENT_PUNTOS + ')');
-    for var C in TRegEx.Matches(ATexto, '(?i)' + PATRON_NO_IDENT_ANTES + 'Define(?:Binary)?Property\s*\(\s*') do
+    for var M in TRegEx.Matches(ATexto, '(?i)' + PATRON_NO_IDENT_ANTES + 'Define(?:Binary)?Property\s*\(\s*') do
     begin
-      P := C.Index + C.Length;
+      if EsCabecera(M.Index) then
+        Continue;
+      P := M.Index + M.Length;
+      // la rutina de la llamada, por EL lector; la de un DefineProperties ya
+      // se conto arriba
+      Clase := '';
       Dentro := False;
-      for var Cu in Cuerpos do
-        if (P >= Cu.Key) and (P < Cu.Value) then
-          Dentro := True;
+      for var C in ADecl.Cuerpos do
+        if (P >= C.PosIni) and (P <= C.PosFin) then
+        begin
+          Dentro := EsDefineProperties(C);
+          if Pos('.', C.Nombre) > 0 then
+            Clase := Copy(C.Nombre, 1, C.Nombre.LastIndexOf('.'));
+          Break;
+        end;
       if Dentro then
         Continue;
-      Clase := '';
-      for var H in Cabeceras do
-        if H.Index < P then
-          Clase := H.Groups[1].Value;
-      if Clase.Contains('.') then
-        Clase := Clase.Substring(0, Clase.LastIndexOf('.'))
-      else
-        Clase := '';
       Nombres := NombresDelArgumento(ATexto, P, ATexto);
       if Length(Nombres) = 0 then
       begin
@@ -535,19 +551,26 @@ begin
         Nombres := ['*'];
       end;
       for var N in Nombres do
-      begin
         if Clase <> '' then
-          E := '~' + Clase + ' ' + N
+          Anade('~' + Clase + ' ' + N)
         else
-          E := '* ' + N;
-        if not Lista.Contains(E) then
-          Lista.Add(E);
-      end;
+          Anade('* ' + N);
     end;
     Result := Lista.ToArray;
   finally
-    Cuerpos.Free;
     Lista.Free;
+  end;
+end;
+
+function PropiedadesDefinidasPorCodigo(const ATexto: string): TArray<string>;
+var
+  D: TUnidadPas;
+begin
+  D := LeeFuentePascal(ATexto);
+  try
+    Result := DefinidasDeUnidad(ATexto, D);
+  finally
+    D.Free;
   end;
 end;
 
@@ -1292,7 +1315,7 @@ begin
             begin
               Result := TextoDeInclude(N, Dir);
             end, True);
-          U.Definidas := PropiedadesDefinidasPorCodigo(ConCadenas);
+          U.Definidas := DefinidasDeUnidad(ConCadenas, Decl);
           // y lo que registra en la paleta (quien se queda un nombre)
           U.Registra := RegistradosEnPaleta(ConCadenas);
           // y lo que registra al ejecutar (hecho R: TReader lo crea sin campo)

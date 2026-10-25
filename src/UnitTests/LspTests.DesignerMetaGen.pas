@@ -989,6 +989,18 @@ begin
       // un nombre que no se lee: en un ayudante, para quien lo nombre; suelto, nada
       'procedure TAyuda.Lee; begin Filer.DefineProperty(Prefijo + ''Rect'', L, E, True); end;'#13#10 +
       'procedure SueltoRaro; begin Filer.DefineProperty(Prefijo + ''X'', L, E, True); end;'#13#10 +
+      // la CABECERA de un DefineProperty no es una llamada (System.Classes:
+      // TReader y TWriter lo implementan; V17-5a de la 1.23)
+      'procedure TLector.DefineProperty(const Name: string; R: TReaderProc; W: TWriterProc; H: Boolean);'#13#10 +
+      'begin if SameText(Name, FPropName) then R(Self); end;'#13#10 +
+      // el cuerpo acaba donde lo dice EL lector, aunque la rutina de detras vaya sangrada
+      'procedure TUno.DefineProperties(Filer: TFiler);'#13#10 +
+      'begin Filer.DefineProperty(''DeUno'', L, E, True); end;'#13#10 +
+      '  procedure TDos.Carga; begin Filer.DefineProperty(''DeDos'', L, E, True); end;'#13#10 +
+      // ...y antes de una seccion type que la sigue (FMX TImage: su TOpenReader)
+      'procedure TImagen.DefineProperties(Filer: TFiler);'#13#10 +
+      'begin Filer.DefineBinaryProperty(''Bitmap.PNG'', L, nil, False); end;'#13#10 +
+      'type TAbierto = class(TLector) end;'#13#10 +
       'end.', S, nil, True));
   finally
     S.Free;
@@ -1011,6 +1023,13 @@ begin
   Assert.DoesNotContain(Todo, '|TScroll *|', 'lo que se lee no es un *');
   Assert.Contains(Todo, '|~TAyuda *|', 'uno que no se lee en un ayudante: para quien lo nombre');
   Assert.DoesNotContain(Todo, '|* *|', 'suelto, para nadie');
+  Assert.DoesNotContain(Todo, 'TLector', 'la cabecera de TReader/TWriter.DefineProperty no es una llamada: ' + Todo);
+  Assert.Contains(Todo, '|TUno DeUno|');
+  Assert.DoesNotContain(Todo, '|TUno DeDos|', 'el cuerpo acaba donde lo dice el lector, no en la columna 0: ' + Todo);
+  Assert.Contains(Todo, '|~TDos DeDos|', '...y lo de la rutina de detras es de su clase: ' + Todo);
+  Assert.Contains(Todo, '|TImagen Bitmap.PNG|');
+  Assert.IsFalse(Todo.Contains('|>TImagen TLector|') or Todo.Contains('|>TImagen TAbierto|'),
+    'el type de detras no es del cuerpo: ' + Todo);
 end;
 
 { Lo que lee un AYUDANTE es de quien lo nombra en su DefineProperties (FMX:

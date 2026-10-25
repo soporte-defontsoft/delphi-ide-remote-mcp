@@ -143,6 +143,18 @@ the MCP `initialize` response (`serverInfo.version`).
   gets (an IDE project, UTF-8 with a BOM); a source keeps its own rule, and
   a form or a text `.style`, both read by the IDE's form parser, stay as
   they are (`LspTests.Encodings`).
+- **`delphi_designer lint` no longer lets any property through on seven
+  classes.** What a class stores by code (`Filer.DefineProperty`) is read
+  from its source. The declarations of `TReader.DefineProperty` and
+  `TWriter.DefineProperty` in `System.Classes` were read as calls whose name
+  could not be told, so a class whose `DefineProperties` names `TReader`
+  (`THeaderStrings`, several JVCL classes) was taken to store any name. And
+  a body ran on to the next routine in column 0, past a `type` section in
+  between, so `TImage` (FMX) and `TCustomDSRESTServerTransport` "named" the
+  `TReader` subclass declared after them. A misspelt property on any of them
+  passed the lint. Bodies now come from the source reader, and a
+  declaration is not a call; those classes keep the names they really store
+  (designer tables, generation 17).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the
