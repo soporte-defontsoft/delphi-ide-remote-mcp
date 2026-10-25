@@ -356,7 +356,7 @@ var
   NoCarga: string;
 begin
   Result := '';
-  if EsFallo(AResultado) or not SameText(TPath.GetExtension(APath), '.style') then
+  if EsFallo(AResultado) or not EsRutaDeEstilo(APath) then
     Exit;
   if IgnoradoPorFmx(APath, Ignorado, NoCarga) and (NoCarga <> '') then
     Result := #10 + MsgFmt(SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT, [NoCarga]);

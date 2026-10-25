@@ -385,8 +385,9 @@ begin
 end;
 
 { La codificacion en que se ESCRIBE (4.1 de la 1.18.0): un fuente sin
-  ninguna (solo ASCII) la elige con su primer caracter no ASCII; lo demas
-  conserva la suya. Rutas que no existen: la decision no mira el disco. }
+  ninguna (solo ASCII) la elige con su primer caracter no ASCII; un texto que
+  no es fuente ni form, como uno NUEVO de su clase (M4); lo demas conserva la
+  suya. Rutas que no existen: la decision no mira el disco. }
 procedure TEncodingTests.EncAlEscribirLaTablaDeUnFuente;
 const
   ACENTO = 'Acci' + Chr(243) + 'n';
@@ -421,7 +422,19 @@ begin
   Assert.AreEqual('cp1252', Es('C:\nada\U1.pas', ekAnsi, nil, False, ACENTO),
     'uno nuevo en CP1252 donde cabe: CP1252');
   Assert.AreEqual('utf8', Es('C:\nada\leeme.md', ekUtf8, Ascii, True, OMEGA),
-    'lo que no es un fuente, tal cual');
+    'un .md ASCII leido como UTF-8 y una Omega: UTF-8, como nace un .md');
+  // M4 (V37 de la 1.23): AK = ekAnsi es como se lee su ASCII con el IDE en
+  // ANSI; la preferencia del IDE es de los fuentes, no de un .md o un .dproj
+  Assert.AreEqual('utf8', Es('C:\nada\leeme.md', ekAnsi, Ascii, True, ACENTO),
+    'un .md ASCII leido como ANSI y una vocal acentuada: UTF-8, como nace un .md');
+  Assert.AreEqual('utf8-bom', Es('C:\nada\P1.dproj', ekAnsi, Ascii, True, ACENTO),
+    'un .dproj ASCII y un acento: UTF-8 con BOM, como nace un proyecto');
+  Assert.AreEqual('cp1252', Es('C:\nada\leeme.md', ekAnsi, B([Ord('a'), $E9]), True, ACENTO),
+    'un .md con un byte alto ANSI ya tiene codificacion: se conserva');
+  Assert.AreEqual('cp1252', Es('C:\nada\leeme.md', ekAnsi, Ascii, True, 'solo ascii'),
+    'un .md al que solo llega ASCII no elige nada');
+  Assert.AreEqual('cp1252', Es('C:\nada\e1.style', ekAnsi, Ascii, True, ACENTO),
+    'un .style de texto lo lee TParser, como un form: se queda en la suya');
   Assert.AreEqual('cp1252', Es('C:\nada\F1.dfm', ekAnsi, Ascii, True, OMEGA),
     'un form no es un fuente: se queda en la suya (como fuente, la Omega lo pasaria a UTF-8 con BOM)');
   // una E acentuada seguida de una comilla tipografica: en CP1252 son C9 94, un

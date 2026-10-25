@@ -134,6 +134,15 @@ the MCP `initialize` response (`serverInfo.version`).
   service, a stop with a request in flight would have stayed in
   `STOP_PENDING`). The HTTP stop now has 3 s; past them it is logged and
   the service goes on closing (`tests/test_atomos_1202.py` C1).
+- **A text file that was pure ASCII gets its first accent in UTF-8, as a new
+  one is born.** `delphi_textedit` creates a `.md`, a `.py` or a `.json` in
+  UTF-8, but editing one that held only ASCII followed the IDE's default
+  encoding for sources: with that set to ANSI, a `.md` came out in the
+  machine's ANSI code page, which Python, JSON readers and a Git web view
+  do not read. Such a text now takes the encoding a new one of its kind
+  gets (an IDE project, UTF-8 with a BOM); a source keeps its own rule, and
+  a form or a text `.style`, both read by the IDE's form parser, stay as
+  they are (`LspTests.Encodings`).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

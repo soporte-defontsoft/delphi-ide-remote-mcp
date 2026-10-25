@@ -9534,7 +9534,8 @@ const
     'fit and to UTF-8 with a BOM when one does not, as the IDE saves it; a ' +
     'form stays ANSI (the ' +
     'IDE would write #NNN codes, which the compiler reads the same); any ' +
-    'other file follows the IDE''s setting.)';
+    'other text is written as a new one of its kind is (UTF-8; an IDE ' +
+    'project with a BOM).)';
 
   SN_EDIT_ACENTOS_FUERA_CUADRO_FMT =
     '[EDIT-081] *** ACCENTS OUT OF BALANCE: expected %d high bytes and ' +

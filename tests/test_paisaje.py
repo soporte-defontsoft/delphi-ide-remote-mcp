@@ -691,6 +691,13 @@ REGLAS = [
      [('Lsp.Patch.pas', 'EsRutaDeDesigner'), ('Lsp.Patch.pas', 'DesignersDeUnidad')],
      'DESIGNER_EXTS, EsRutaDeDesigner y DesignersDeUnidad (Lsp.Patch): la lista estaba escrita a mano en '
      'nueve sitios, y el detector necesita saber si un fichero es un form (4.1 de la 1.18.0)'),
+    ('la extension de un estilo a mano',
+     # la pregunta "es un .style?" sobre la extension de una ruta; una mascara
+     # ('*.style') o el nombre de un producto ('.bin.style') son otras
+     r"GetExtension\s*\([^;]*'\.style'",
+     [('Lsp.Patch.pas', 'EsRutaDeEstilo')],
+     'EsRutaDeEstilo (Lsp.Patch): estaba comparada a mano en Lsp.TextEdit y Mcp.Tools.Styles, y el '
+     'escritor necesita saber si un texto lo lee TParser (M4 de la 1.23)'),
     ('las extensiones de un proyecto del IDE a mano',
      # la lista de lo que mantiene el IDE (.dproj, .groupproj) salvo la declaracion de
      # PROJECT_EXTS, o el predicado reescrito con ella: el changeset llevaba la suya CON el
@@ -1273,6 +1280,7 @@ PLANTADO = {
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
     'listar la carpeta de perfiles del IDE a mano': "  for F in TDirectory.GetFiles(IdeProfilesDir(AVersion), '*.x') do",
+    'la extension de un estilo a mano': "  if SameText(TPath.GetExtension(P), '.style') then X := 1;",
     'listar una carpeta sin saber si se dejo': "  for E in TDirectory.GetFileSystemEntries(Dir) do",
     'listar ficheros o carpetas sin saber si se dejo': "  for F in TDirectory.GetFiles(Dir, '*.pas') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",

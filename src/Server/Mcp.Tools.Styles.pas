@@ -1148,7 +1148,7 @@ begin
   if MatchText(Cmd, ['view', 'get', 'set', 'clone', 'delete']) then
   begin
     if TDirectory.Exists(Params.Path) or
-       not SameText(TPath.GetExtension(Params.Path), '.style') then
+       not EsRutaDeEstilo(Params.Path) then
       Exit(MsgText(SR_STYLES_NEED_FILE)); // un .txt daba un view vacio "correcto"
     if IsBinaryStyle(Params.Path) then
       Exit(MsgFmt(SR_STYLES_BINARY_FMT, [TPath.GetFileName(Params.Path)]));

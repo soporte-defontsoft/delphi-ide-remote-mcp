@@ -332,6 +332,11 @@ function DesignersDeUnidad(const AUnidad: string): TArray<string>;
   de texto o binario. EL predicado: estaba escrito a mano con su lista en
   nueve sitios (4.1 de la 1.18.0, al pasarselo al detector). }
 function EsRutaDeDesigner(const APath: string): Boolean;
+{ Si APath es un estilo de FMX por su extension (.style), de texto o
+  binario: el de texto lo lee el parser de los forms (TParser). EL
+  predicado: estaba comparado a mano en Lsp.TextEdit y Mcp.Tools.Styles, y
+  el escritor necesita saberlo (M4 de la 1.23). }
+function EsRutaDeEstilo(const APath: string): Boolean;
 { Si APath es un FUENTE por su extension (SOURCE_EXTS: .pas, .dpr, .dpk,
   .inc): lo que lee dcc, cada uno con su propio BOM (medido el 9-oct-2026,
   tambien un .inc incluido desde un .pas sin BOM). EL predicado, como
@@ -622,7 +627,12 @@ function LecturaCambiada(const APath: string; const AB: TArray<Byte>; AK: TEncKi
   del IDE, y si esa es la ANSI y no cabe, en UTF-8 con BOM; nunca en UTF-8
   sin BOM (el IDE lo cura al guardar). Lo que ya tenia codificacion conserva
   la del ORIGEN.
-  Lo que no es un fuente, tal cual. La preguntan los dos escritores (DoEdit,
+  Un texto que no es un fuente ni un form y no tiene ninguna, la de uno NUEVO
+  de su clase (EncDeFicheroNuevo: un .md, un .py o un .json en UTF-8, un
+  proyecto del IDE con BOM): la preferencia del IDE con que se leyo su ASCII
+  es de los fuentes, y con la ANSI un .md salia en 1252 (M4, V37 de la 1.23).
+  Un form o un estilo, tal cual: los lee TParser, que sin BOM lee la ANSI
+  (su regla). La preguntan los dos escritores (DoEdit,
   PatchSaveText), la creacion de una unit y el nombre de un componente
   (DSGN-111: en que codificacion quedara su unidad).
   Lo que cuenta es lo que el fichero tenia ANTES DE LA LLAMADA, no antes de
@@ -1154,7 +1164,7 @@ begin
   // Pure ASCII without BOM is ambiguous: honour the encoding the IDE is
   // configured to use (Tools > Options > Editor). Guessing the other way
   // writes the first new accent in the wrong codec and the IDE shows
-  // mojibake - in BOTH directions (measured). Para un FUENTE esto es solo
+  // mojibake - in BOTH directions (measured). Para un FUENTE o un texto (M4) esto es solo
   // como se lee: en que se ESCRIBE su primer caracter no ASCII lo decide
   // EncAlEscribir, como el IDE al guardar (4.1 de la 1.18.0)
   if not HayByteAlto(B) then
@@ -1303,7 +1313,15 @@ var
 begin
   Result := AK;
   if not EsRutaDeFuente(APath) then
+  begin
+    // M4: sin codificacion (ni BOM ni byte alto) y con su primer caracter no
+    // ASCII, la de uno nuevo de su clase; un form o un estilo, que lee
+    // TParser (sin BOM, en ANSI), se quedan en la suya
+    if not EsRutaDeDesigner(APath) and not EsRutaDeEstilo(APath) and not HayByteAlto(AAntes) and
+       not IsAscii(ATexto) then
+      Result := EncKindOf(EncDeFicheroNuevo(APath));
     Exit;
+  end;
   // lo de antes de la LLAMADA, apuntado tambien cuando este texto es ASCII:
   // la entrada siguiente de la tanda puede no serlo
   OrigenDeLaLlamada(APath, AAntes, AExiste, Existia, TeniaCodificacion, Codificacion);
@@ -1850,6 +1868,11 @@ end;
 function EsRutaDeDesigner(const APath: string): Boolean;
 begin
   Result := MatchText(TPath.GetExtension(APath), DESIGNER_EXTS);
+end;
+
+function EsRutaDeEstilo(const APath: string): Boolean;
+begin
+  Result := SameText(TPath.GetExtension(APath), '.style');
 end;
 
 function EsRutaDeFuente(const APath: string): Boolean;
