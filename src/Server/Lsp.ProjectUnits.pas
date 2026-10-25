@@ -107,18 +107,9 @@ function AddProjectUnit(const AProject, APasPath: string;
 function RemoveProjectUnit(const AProject, APasPath: string;
   AFileGoesToo: Boolean = False): string;
 
-{ Re-points an existing entry to a new path/name (the file was already moved
-  or renamed by the caller; the new file's header decides the unit name). }
+{ Re-points an existing entry to where its file is now (fix-references: the
+  file found by its name; the file's header decides the unit name). }
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
-
-{ Lo que un RENAME de unit reescribe ademas del .dpr/.dpk y su .dproj: cada
-  unit que el proyecto lista (sus uses y sus UnitVieja.X) y la unit en su
-  sitio nuevo, en absoluto y sin repetir; en ANoEscritos, lo que no puede
-  escribir (una ruta que nadie resuelve, fuera de las raices) y que la
-  respuesta nombra. UNA lista: la foto del todo-o-nada (la del propio rename
-  y la del move que lo llama) y el bucle que reescribe miran la misma. }
-function FicherosDelRename(const AProject, ANewPasPath: string;
-  out ANoEscritos: TArray<string>): TArray<string>;
 
 { Anade nombres de paquete a la clausula requires de un .dpk (la crea antes
   de contains / end. si no existe). Idempotente: los que ya estan no se
@@ -141,10 +132,11 @@ function ProjectUnits(const AProject: string; ANeedDproj: Boolean): TArray<TProj
 { Adds a "units" array to AReturn (for delphi_config view). }
 procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
 
-{ Projects (.dproj paths) in ADir and its parent that list APasPath. For the
-  file tools: delete/move a unit keeps the projects that use it consistent. }
-{ AAlsoDir: una segunda carpeta desde la que subir (la de DESTINO de un move). }
-function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string = ''): TArray<string>;
+{ Los proyectos (.dpr/.dpk) que listan APasPath por su ruta, subiendo desde su
+  carpeta hasta el borde de la jaula y en las carpetas de al lado de cada
+  nivel (SitiosDeProyectos). Lo pregunta RegistroDelIde (el <DCCReference> de
+  un designer); hasta V19 tambien delete y move, para re-apuntarlos. }
+function ProjectsUsingUnit(const APasPath: string): TArray<string>;
 { True si el .dpr o el .dpk de AProyecto (un .dproj se mira por su fuente
   principal) nombra APasPath por su RUTA (in '...'): la unidad es de ese
   proyecto. EL juez de ProjectsUsingUnit y el de que proyecto sirve a una
@@ -192,8 +184,6 @@ function UsesConUnidades(var AText: string; const ANames: TArray<string>;
 function RemoveUsesFromUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
 
-function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
-
 { La ruta de APas vista desde la carpeta de ADpr, en la forma que escribe el
   IDE (Sub\X.pas, ..\..\shared\X.pas; absoluta solo en otra unidad). EL
   nombrador de rutas relativas: las units de un proyecto, los proyectos de
@@ -227,7 +217,8 @@ type
   end;
 
 { Las directivas $I/$INCLUDE, $R/$RESOURCE y $L/$LINK de un fuente, sin
-  comodines (R *.res) ni interruptores; de R a.res a.rc solo la primera. EL
+  comodines (R *.res) ni interruptores; de R a.res a.rc las dos (el .rc es la
+  segunda). EL
   lector: la jaula del build (Lsp.BuildRunner) y la mudanza lo comparten. }
 function DirectivasDeFichero(const ATexto: string): TArray<TDirectivaFichero>;
 
@@ -260,15 +251,22 @@ function QuitaProyectoDeGrupo(const AGroup, AProject: string): string;
   buscar. }
 function ArreglaReferencias(const AProject: string): string;
 
-{ La mudanza de AViejo a ANuevo (una carpeta o un fichero; delphi_move, o su
-  copia): re-apunta toda ruta RELATIVA que cruza el borde de lo movido,
-  porque un relativo que sale de ahi deja de apuntar a lo mismo. DENTRO de
-  lo nuevo: las units de fuera que lista cada proyecto (.dpr/.dpk y
-  DCCReference), las rutas de busqueda y de salida del .dproj, las
-  directivas $I/$R/$L y los proyectos de cada grupo. Y si no es copia,
-  FUERA, en todo el workspace: las directivas, units, rutas y grupos que
-  apuntaban dentro. '' si no habia nada que re-apuntar. }
-function ReubicaArbol(const AViejo, ANuevo: string; ACopia: Boolean): string;
+type
+  { Que hizo el operador con lo que se nombro (V19): la nota informativa mira
+    dentro de lo movido o copiado y, en un move o un borrado, fuera. }
+  TMudanza = (mzMueve, mzCopia, mzBorra);
+
+{ LA NOTA de un move, una copia o un borrado como un operador (V19 de la 1.23;
+  David, 17-oct-2026: "nosotros como mucho informamos de lo que hemos
+  detectado en la respuesta para que lo sepa"), la de delphi_move,
+  delphi_delete y el commit de delphi_changeset: NO re-apunta ni lleva nada.
+  Cada AViejos[I] (una carpeta o un fichero) esta ahora en ANuevos[I] (en un
+  borrado, su copia de la papelera). Dice el par partido (una unit que se fue
+  sin su .dfm/.fmx, o al reves, con la salida del comodin) y lo que cruza el
+  borde de lo movido, copiado o borrado; de lo que salio de la papelera, solo
+  lo primero. Cada parte con su salto delante; '' si no hay nada que decir. }
+function NotaDeMudanza(const AViejos, ANuevos: TArray<string>;
+  AMudanza: TMudanza): string;
 
 implementation
 
@@ -2372,8 +2370,7 @@ begin
   end;
 end;
 
-function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string;
-  const AFicheros, ANoEscritos: TArray<string>): string;
+function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string): string;
 var
   Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude: string;
   U: TUsesClause;
@@ -2428,97 +2425,26 @@ begin
     end;
     PatchSaveConSuSalto(Dproj, Text, Enc);
   end;
-  // Las OTRAS units del proyecto y el propio .dpr: sus uses y toda referencia
-  // CUALIFICADA (UnitVieja.Identificador) seguian nombrando la unit vieja y
-  // el build caia con E2003 (Hermes, 2026-09-22, test 19). Se reescribe el
-  // nombre como identificador entero, fuera de cadenas, en cada fichero que
-  // el proyecto lista, y la respuesta cuenta cuantas y donde.
-  var NRefs := 0;
-  var NFich := 0;
-  // Mismo nombre (move de carpeta sin renombrar): no hay nada que reescribir
-  // y la cuenta decia "1 en 1 fichero" por sustituir X por X (medido en
-  // vivo, 2026-09-23). La lista, y lo que no se escribe, las da
-  // FicherosDelRename: la misma que fotografio el todo-o-nada
-  if not MismoIdentificador(OldName, Info.UnitName) then
-    for var Fich in AFicheros do
-    begin
-      var N := RenombrarIdentificadorUnit(Fich, OldName, Info.UnitName);
-      if N > 0 then
-      begin
-        Inc(NRefs, N);
-        Inc(NFich);
-      end;
-    end;
+  // (un RENAME reescribia ademas los uses y los UnitVieja.X de las otras
+  // units: ninguna tool renombra una unit desde V19, y fix-references
+  // re-apunta por el MISMO nombre)
   Result := MsgFmt(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
-    TPath.GetFileName(Dpr), U.Keyword, NRefs, NFich]);
-  if Length(ANoEscritos) > 0 then
-    Result := Result + #10 + MsgFmt(SN_UNIT_RENAME_NOT_WRITTEN_FMT,
-      [Length(ANoEscritos), string.Join(', ', ANoEscritos)]);
+    TPath.GetFileName(Dpr), U.Keyword]);
   if NotaDeRaiz(Info) <> '' then
     Result := Result + #10 + NotaDeRaiz(Info);
 end;
 
-function FicherosDelRename(const AProject, ANewPasPath: string;
-  out ANoEscritos: TArray<string>): TArray<string>;
-var
-  Dpr, Dproj: string;
-  Todos: TArray<string>;
-begin
-  Result := [];
-  ANoEscritos := [];
-  if ResolveProjectPair(AProject, Dpr, Dproj) <> '' then
-    Exit; // el rename dira lo que no cuadra
-  Todos := [Dpr];
-  for var PU in ProjectUnits(AProject, False) do
-    if PU.Include <> '' then
-    begin
-      // lo que no se resuelve no se abre: se dice, como lo que nadie toca
-      var Ruta := RutaDeInclude(Dpr, PU.Include);
-      if Ruta = '' then
-        ANoEscritos := ANoEscritos + [TPath.GetFileName(PU.Include)]
-      else
-        Todos := Todos + [Ruta];
-    end;
-  // la unit en su sitio nuevo: el .dpr todavia la lista por el viejo (que ya
-  // no existe y no entra)
-  Todos := Todos + [TPath.GetFullPath(ANewPasPath)];
-  for var Fich in Todos do
-    // lo que el .dpr nombra y nadie resuelve (un UNC ajeno): ni se mira si
-    // existe, que era SMB hacia ese host (novena revision)
-    if RutaSinTocarElDisco(Fich) then
-      ANoEscritos := ANoEscritos + [TPath.GetFileName(Fich)]
-    else if TFile.Exists(Fich) and (IndexText(Fich, Result) < 0) then
-      // El .dpr puede listar ficheros de FUERA (../Common, una referencia):
-      // se reescribe solo lo que esta sesion puede escribir, y lo demas se
-      // dice. El escritor tambien lo comprueba (EscrituraDenegada): esto es
-      // para contestarlo en vez de lanzar a mitad (auditoria 25-sep-2026)
-      if EscrituraDenegada(Fich) <> '' then
-        ANoEscritos := ANoEscritos + [TPath.GetFileName(Fich)]
-      else
-        Result := Result + [Fich];
-end;
-
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
-var
-  Ficheros, NoEscritos: TArray<string>;
 begin
   EnterFileEdit;
   try
     // TODO O NADA, como registrar y quitar (ProyectoTodoONada): con el .dproj
     // en +R el .dpr quedaba re-apuntado y el DCCReference no, y la respuesta
-    // decia "nothing was written" (medido en vivo, 28-sep-2026). En la foto,
-    // ademas del par, lo que un RENAME reescribe (las units del proyecto y
-    // la propia en su sitio nuevo); un move sin renombrar no las toca
-    Ficheros := [];
-    NoEscritos := [];
-    if not MismoIdentificador(TPath.GetFileNameWithoutExtension(AOldPasPath),
-                    TPath.GetFileNameWithoutExtension(ANewPasPath)) then
-      Ficheros := FicherosDelRename(AProject, ANewPasPath, NoEscritos);
-    Result := ProyectoTodoONada(AProject, Ficheros,
+    // decia "nothing was written" (medido en vivo, 28-sep-2026)
+    Result := ProyectoTodoONada(AProject,
       function: string
       begin
-        Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath,
-          Ficheros, NoEscritos);
+        Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath);
       end);
   finally
     LeaveFileEdit;
@@ -3266,7 +3192,7 @@ begin
       Exit(True);
 end;
 
-function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string): TArray<string>;
+function ProjectsUsingUnit(const APasPath: string): TArray<string>;
 var
   Dir, D, F: string;
   Dirs: TArray<string>;
@@ -3283,14 +3209,8 @@ begin
   // workspace puede leer - y un tope de niveles para el modo sin jaula, que
   // si no subiria hasta la raiz del disco. Cada nivel es UN listado de *.dpr
   // sin recursion: barato.
-  // Y la misma subida desde la carpeta de DESTINO de un move: la unit
-  // volvia a la carpeta de su paquete desde la de arriba, y el .dpk que la
-  // lista vive ABAJO, donde el origen no mira (Hermes, 2026-09-23). Un solo
-  // buscador con dos puntos de partida, no dos buscadores.
   Dirs := [];
   SubeCarpetas(Dir, Dirs);
-  if AAlsoDir <> '' then
-    SubeCarpetas(TPath.GetFullPath(AAlsoDir), Dirs);
   // ...y las carpetas de al lado de cada nivel (SitiosDeProyectos): el .dpr
   // de app\ que lista ..\scratch\U.pas no esta en la subida desde scratch\
   for D in SitiosDeProyectos(Dirs) do
@@ -3300,124 +3220,6 @@ begin
         if ProyectoListaUnidad(F, APasPath) then // the .dpr decides; no .dproj read
           Result := Result + [F];
   end;
-end;
-
-{ Reescribe el NOMBRE de una unit como identificador entero en un fuente: las
-  entradas de sus uses (interface e implementation) y las referencias
-  cualificadas UnitVieja.Identificador. Solo en el CODIGO, segun el lexico:
-  ni en cadenas ni en comentarios (David, 2-oct-2026; hasta entonces los
-  comentarios si, "que un comentario que nombra la unit vieja tambien
-  miente", y las cadenas se contaban por comillas impares en la linea, que
-  un apostrofo dentro de un comentario de llave despistaba: la referencia de
-  detras se quedaba sin renombrar y el build caia con E2003, medido con la
-  sonda del lexico). La cabecera "unit X;" no se toca: la reescribe el que mueve
-  el fichero. Devuelve cuantas ocurrencias cambio (0 = fichero intacto, no se
-  reescribe). Medido por Hermes el 2026-09-22 (test 19): tras el rename el
-  .dpr conservaba UBatHelper.Bat11Sum y el build caia con E2003. }
-function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
-var
-  Enc, Texto, Linea: string;
-  Lineas, Saltos, Vistas, SaltosVista: TArray<string>;
-  Re: TRegEx;
-  M: TMatch;
-  I, Ultimo: Integer;
-  Partes: TStringBuilder;
-begin
-  Result := 0;
-  Texto := PatchLoadText(APath, Enc);
-  Re := TRegEx.Create('(?<!\.)' + PatronIdentEntero(AViejo), [roIgnoreCase]);
-  // cada linea con SU salto, que vuelve intacto (Lsp.Patch.SplitToLinesConSalto):
-  // troceaba solo por LF, y un fichero de CR sueltos era UNA linea que empezaba
-  // por "unit" y no se reescribia (MOVED y el build caia; novena revision)
-  Lineas := SplitToLinesConSalto(Texto, Saltos);
-  // el nombre se busca en la vista del codigo (mismo largo y mismos saltos:
-  // sus lineas son las del texto) y se cambia en el texto, en esa posicion
-  var VistaTexto := CodigoPascal(Texto);
-  Vistas := SplitToLinesConSalto(VistaTexto, SaltosVista);
-  // el NOMBRE de la cabecera no se toca (lo cambia quien mueve): su sitio,
-  // por EL lector de la cabecera (Lsp.Pascal), tambien partida en varias; lo
-  // demas de sus lineas, si. Se miraba si la linea empezaba por 'unit ' (con
-  // un tabulador detras, no), y despues se saltaban las lineas enteras: un
-  // uses en la linea de la cabecera se quedaba con el nombre viejo (revisor 8,
-  // 10-oct-2026)
-  var NomIni := 0;
-  var NomFin := 0;
-  var Cab: TCabeceraFuente;
-  var HayCab := CabeceraDeFuente(VistaTexto, Cab);
-  if HayCab and (Cab.Palabra = 'unit') then
-  begin
-    NomIni := Cab.NombreIni;
-    NomFin := Cab.NombreIni + Cab.NombreLen;
-  end;
-  // donde el nombre ES la unit: una entrada de sus clausulas (los uses de
-  // interface e implementation; el uses o contains de un programa o un
-  // paquete, con sus ramas), y fuera de ellas delante de un punto (Vieja.X).
-  // Se cambiaba TODO identificador igual: un campo o una variable con el
-  // nombre de la unit pasaban a llamarse como la nueva, y el build caia con
-  // E2003 y la tool decia MOVED (medido el 18-oct-2026). Por EL lector de
-  // las clausulas (FindUses) y EL de la seccion (FinDeSeccion)
-  var Clausulas: TArray<TUsesClause> := [];
-  if HayCab and (Cab.Palabra = 'unit') then
-  begin
-    for var Sec in TArray<string>.Create('interface', 'implementation') do
-    begin
-      var PosSec := FinDeSeccion(VistaTexto, Sec);
-      if PosSec > 0 then
-      begin
-        var U := FindUses(Texto, PosSec);
-        if U.Found then
-          Clausulas := Clausulas + [U];
-      end;
-    end;
-  end
-  else
-  begin
-    var U := FindUses(Texto);
-    if U.Found then
-      Clausulas := Clausulas + [U];
-  end;
-  var IniLinea := 1; // donde empieza la linea I en el texto (1-based)
-  for I := 0 to High(Lineas) do
-  begin
-    if I > 0 then
-      Inc(IniLinea, Length(Vistas[I - 1]) + Length(SaltosVista[I - 1]));
-    Linea := Lineas[I];
-    Partes := TStringBuilder.Create;
-    try
-      Ultimo := 0; // 0-based: hasta donde se ha copiado ya la linea
-      for M in Re.Matches(Vistas[I]) do
-      begin
-        var PosAbs := IniLinea + M.Index - 1; // en el texto, 1-based
-        if (PosAbs >= NomIni) and (PosAbs < NomFin) then
-          Continue;
-        var EnClausula := False;
-        for var U in Clausulas do
-          if (PosAbs >= U.StartPos) and (PosAbs <= U.FinRamas) then
-            EnClausula := True;
-        // delante de un punto (y no de un rango: '..'), en la vista del codigo
-        var J := PosAbs + M.Length;
-        while (J <= Length(VistaTexto)) and VistaTexto[J].IsWhiteSpace do
-          Inc(J);
-        var Punto := (J < Length(VistaTexto)) and (VistaTexto[J] = '.') and (VistaTexto[J + 1] <> '.');
-        // en una clausula, la entrada (Vieja.Algo seria OTRA unit, con
-        // puntos); fuera, solo la cualificada
-        if EnClausula = Punto then
-          Continue;
-        Partes.Append(Linea.Substring(Ultimo, M.Index - 1 - Ultimo));
-        Partes.Append(ANuevo);
-        Ultimo := M.Index - 1 + M.Length;
-        Inc(Result);
-      end;
-      if Ultimo = 0 then
-        Continue;
-      Partes.Append(Linea.Substring(Ultimo));
-      Lineas[I] := Partes.ToString;
-    finally
-      Partes.Free;
-    end;
-  end;
-  if Result > 0 then
-    PatchSaveText(APath, UneConSusSaltos(Lineas, Saltos), Enc);
 end;
 
 { ================================================ rutas que cruzan un borde }
@@ -3508,8 +3310,8 @@ begin
   // Una directiva cuyo fichero NO esta donde dice su ruta la resolvio el
   // compilador por el include/resource path: no se toca. {$I jedi.inc}
   // se reescribia a ..\jedi.inc y el build moria con F1026 (revision
-  // del 26-sep-2026).
-  if ADebeExistir and not (TFile.Exists(Nuevo) or TDirectory.Exists(Nuevo)) then
+  // del 26-sep-2026). Lo que esta sesion no lee ni se pregunta (ExisteYSeLee)
+  if ADebeExistir and not ExisteYSeLee(Nuevo, True) then
     Exit;
   Result := IncludeFor(AFicheroNuevo, Nuevo);
   if Barra then
@@ -3571,9 +3373,11 @@ end;
   en el .dproj y en el grupo (revision 26-sep-2026), sobre quince regex que
   pedian el atributo el primero y entre comillas dobles, y veian lo que hay
   en un comentario; ahora por EL analisis (TramosDeEtiqueta,
-  AtributosDeTramo). Devuelve cuantas rutas cambio. }
+  AtributosDeTramo). Devuelve cuantas rutas cambio. ASoloMirar: las cuenta
+  y no escribe nada (la nota informativa de V19; fix-references si escribe). }
 function ReapuntaSitios(const AFichero, ABaseVieja: string;
-  const ASitios: TArray<TSitioDeRutas>; const AMapa: TFunc<string, string>): Integer;
+  const ASitios: TArray<TSitioDeRutas>; const AMapa: TFunc<string, string>;
+  ASoloMirar: Boolean = False): Integer;
 var
   Enc, Texto: string;
   Cambios: TArray<TCambioTexto>;
@@ -3616,7 +3420,7 @@ begin
               for var E in RutasDeExists(Copy(Texto, At.Ini, At.Fin - At.Ini)) do
                 Reapunta(At.Ini + E.Ini - 1, At.Ini + E.Fin - 1, S.Extension, #0);
   Result := Cuenta;
-  if Result > 0 then
+  if (Result > 0) and not ASoloMirar then
     PatchSaveText(AFichero, AplicaCambios(Texto, Cambios), Enc);
 end;
 
@@ -3639,57 +3443,45 @@ begin
     Sitio('Import', 'Condition', '.optset', True)];
 end;
 
-function ReapuntaDirectivas(const AFichero, ABaseVieja: string;
+{ Las directivas $I/$R/$L de AFichero cuya ruta cruza el borde (AMapa) y que
+  el compilador lee donde dicen (el fichero estaba alli): las CUENTA, no
+  escribe (V19: era ReapuntaDirectivas, que las reescribia). }
+function DirectivasQueCruzan(const AFichero, ABaseVieja: string;
   const AMapa: TFunc<string, string>): Integer;
 var
-  Enc, Texto: string;
-  Cambios: TArray<TCambioTexto>;
+  Enc: string;
 begin
   Result := 0;
-  Texto := PatchLoadText(AFichero, Enc);
-  Cambios := [];
-  for var D in DirectivasDeFichero(Texto) do
-  begin
-    var R := RutaReapuntada(D.Ruta, ABaseVieja, AFichero, AMapa, True);
-    if R <> '' then
-    begin
-      var C: TCambioTexto;
-      C.Inicio := D.Inicio;
-      C.Largo := D.Largo;
-      C.Texto := R;
-      // sin comillas, una ruta nueva con un espacio no se leeria entera
-      if (D.Comilla = #0) and R.Contains(' ') then
-        C.Texto := '''' + R + '''';
-      Cambios := Cambios + [C];
+  for var D in DirectivasDeFichero(PatchLoadText(AFichero, Enc)) do
+    if RutaReapuntada(D.Ruta, ABaseVieja, AFichero, AMapa, True) <> '' then
       Inc(Result);
-    end;
-  end;
-  if Result > 0 then
-    PatchSaveText(AFichero, AplicaCambios(Texto, Cambios), Enc);
 end;
 
 { Los proyectos de un grupo viven en TRES sitios del fichero: el Include de
   su <Projects>, el Projects= del MSBuild de sus targets y las
   <Dependencies> de los que dependen de el (esas no se re-apuntaban). }
 function ReapuntaGrupo(const AGroup, ABaseVieja: string;
-  const AMapa: TFunc<string, string>): Integer;
+  const AMapa: TFunc<string, string>; ASoloMirar: Boolean = False): Integer;
 begin
   Result := ReapuntaSitios(AGroup, ABaseVieja, [Sitio('Projects', 'Include'),
-    Sitio('MSBuild', 'Projects'), Sitio('Dependencies')], AMapa);
+    Sitio('MSBuild', 'Projects'), Sitio('Dependencies')], AMapa, ASoloMirar);
 end;
 
-{ Las units que lista un proyecto y cuyo destino dice AMapa: por
-  RenameProjectUnit, que re-apunta el .dpr/.dpk y el DCCReference a la vez. }
 { Si RenameProjectUnit dice que LO HIZO (su respuesta empieza como
-  SN_UNIT_RENAMED_FMT). Lo preguntan la mudanza y fix-references: los dos
-  contaban el intento como hecho (revision 26-sep-2026). }
+  SN_UNIT_RENAMED_FMT). Lo pregunta fix-references: contaba el intento como
+  hecho (revision 26-sep-2026). }
 function Reapuntada(const AResp: string): Boolean;
 begin
   Result := EsMsg(AResp, SN_UNIT_RENAMED_FMT);
 end;
 
-function ReapuntaUnits(const AProyecto, ABaseVieja: string;
-  const AMapa: TFunc<string, string>; var AFallos: TArray<string>): Integer;
+{ Las units que lista un proyecto (su in '...') cuya ruta cruza el borde
+  (AMapa) y llevan a un fichero que existe: las CUENTA, no re-apunta (V19:
+  era ReapuntaUnits, por RenameProjectUnit). Lo que cae fuera de lo que esta
+  sesion lee no se mira: ni se cuenta ni se pregunta si existe (la lectura
+  escondida de la mudanza, medida M1). }
+function UnitsQueCruzan(const AProyecto, ABaseVieja: string;
+  const AMapa: TFunc<string, string>): Integer;
 begin
   Result := 0;
   for var PU in ProjectUnits(AProyecto, False) do
@@ -3699,27 +3491,8 @@ begin
       if R = '' then
         Continue;
       var Nuevo := TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(AProyecto), R));
-      if not TFile.Exists(Nuevo) then
-        Continue;
-      // la ruta la da el .dpr y puede salir de lo movido (..\..\Shared\X.pas):
-      // fuera de las raices ni se lee ni se re-apunta, y se dice (la lectura
-      // escondida de la mudanza: medida M1)
-      var Fuera := ReadPathDenied(Nuevo);
-      if Fuera <> '' then
-      begin
-        AFallos := AFallos + [TPath.GetFileName(AProyecto) + ': ' + PrimerTrozo(Fuera, [#10])];
-        Continue;
-      end;
-      // La ruta VIEJA de verdad: RenameProjectUnit busca en el .dpr por el
-      // nombre que sale de ella, y en un rename no es el nuevo. Se pasaba la
-      // nueva dos veces: el rename no encontraba nada y se contaba como hecho
-      // (revision 26-sep-2026). Solo cuenta lo que dice REAPUNTADA.
-      var Viejo := TPath.GetFullPath(TPath.Combine(ABaseVieja, PU.Include));
-      var Resp := RenameProjectUnit(AProyecto, Viejo, Nuevo);
-      if Reapuntada(Resp) then
-        Inc(Result)
-      else
-        AFallos := AFallos + [TPath.GetFileName(AProyecto) + ': ' + PrimerTrozo(Resp, [#10])];
+      if ExisteYSeLee(Nuevo) then
+        Inc(Result);
     end;
 end;
 
@@ -3805,23 +3578,34 @@ end;
 
 function BordeDesde(const ADir: string): string; forward;
 
-{ Lo que el build de AFichero, un .dproj ya re-apuntado, sigue leyendo donde
-  ESTABA lo movido (AViejo, que ahora es ANuevo): un trozo de un sitio de ruta
-  que la mudanza no re-apunta (RutaReapuntada) - el que llega por una
-  propiedad del documento ($(My-Path): una propiedad puede ser cualquier cosa
-  y no se reescribe) o el escrito absoluto -. Cada valor, expandido como lo
-  tiene msbuild donde lo lee (ValoresQueLeeElBuild, EL expansor de la puerta
-  del build) en cada build que el proyecto declara, antes (AXmlAntes, desde
-  ABaseVieja) y despues (desde su carpeta de ahora): lo que llevaba a un sitio
-  que existe y ya no lleva a donde ese sitio esta ahora. Se NOMBRA, uno por
-  valor (Opus en Hermes, 22-oct-2026: tras mover lib, un $(My-Path)=lib daba
-  F2613 sin pista y la descripcion prometia nombrar lo que no re-apunta). }
+{ Lo que el build de AFichero, un .dproj, sigue leyendo donde ESTABA lo movido
+  (AViejo, que ahora es ANuevo) y la nota de MOVE-023 no cuenta: un trozo de un
+  sitio de ruta que RutaReapuntada se salta - el que llega por una propiedad
+  del documento ($(My-Path): una propiedad puede ser cualquier cosa) o el
+  escrito absoluto -. Lo ESCRITO relativo no: ese lo cuenta ya MOVE-023
+  (ReapuntaSitios, que desde V19 no reescribe), una ruta en una nota. Cada
+  valor, expandido como lo tiene msbuild donde lo lee (ValoresQueLeeElBuild,
+  EL expansor de la puerta del build) en cada build que el proyecto declara,
+  antes (AXmlAntes, desde ABaseVieja) y despues (desde su carpeta de ahora):
+  lo que llevaba a un sitio que existe (y esta sesion lee: ExisteYSeLee) y ya
+  no lleva a donde ese sitio esta
+  ahora. Se NOMBRA, uno por valor (Opus en Hermes, 22-oct-2026: tras mover
+  lib, un $(My-Path)=lib daba F2613 sin pista). }
 function RutasQueYaNoLlegan(const AFichero, AXmlAntes, ABaseVieja, AViejo,
   ANuevo: string): TArray<string>;
 var
   Enc, XmlAhora, BaseNueva, Mal: string;
-  Propiedades, Items, Plataformas, Configs: TArray<string>;
+  Propiedades, Items, Plataformas, Configs, Definidas: TArray<string>;
   Info: TDprojInfo;
+
+  // la propiedad por la que empieza un trozo ($(X)...), '' si no empieza asi
+  function PropiedadDelTrozo(const T: string): string;
+  begin
+    Result := '';
+    var Q := Pos(')', T);
+    if T.StartsWith('$(') and (Q > 3) then
+      Result := Copy(T, 3, Q - 3);
+  end;
 
   // un trozo ya expandido, resuelto desde ABase; '' si no se sabe a donde
   // lleva (lo que el documento no sabe queda escrito como $(X))
@@ -3837,11 +3621,11 @@ var
   // si algun sitio de ruta lleva un trozo que RutaReapuntada se salta: uno
   // absoluto o uno que empieza por una propiedad que el documento define (no
   // la del propio elemento: $(DCC_UnitSearchPath), la herencia que escribe el
-  // IDE). Lo demas lo re-apunto ella; sin esto no se evalua nada
+  // IDE). Lo demas lo cuenta MOVE-023; sin esto no se evalua nada
   function HayQueMirar: Boolean;
   var
     Els: TArray<TElementoXml>;
-    Definidas, Valores: TArray<string>;
+    Valores: TArray<string>;
   begin
     Result := False;
     Els := ElementosDe(AXmlAntes, Mal);
@@ -3862,13 +3646,9 @@ var
         begin
           if TPath.IsPathRooted(T) then
             Exit(True);
-          var Q := Pos(')', T);
-          if T.StartsWith('$(') and (Q > 3) then
-          begin
-            var Nombre := Copy(T, 3, Q - 3);
-            if not SameText(Nombre, E.Escrito) and MatchText(Nombre, Definidas) then
-              Exit(True);
-          end;
+          var Nombre := PropiedadDelTrozo(T);
+          if (Nombre <> '') and not SameText(Nombre, E.Escrito) and MatchText(Nombre, Definidas) then
+            Exit(True);
         end;
     end;
   end;
@@ -3907,6 +3687,16 @@ begin
       // la reescritura no quita ni pone valores: si no casan, no se compara
       if Length(Antes) <> Length(Ahora) then
         Continue;
+      // los trozos ESCRITOS relativos de los sitios de ruta de este build: los
+      // cuenta MOVE-023, aqui no (con una propiedad o una absoluta en el
+      // documento salian en las dos notas); de TODOS sus valores, porque la
+      // herencia del IDE ($(DCC_UnitSearchPath)) los repite expandidos en otros
+      var Escritos: TArray<string> := [];
+      for var V in Antes do
+        if MatchText(V.Elemento, Propiedades + Items) then
+          for var W in TrozosDeLista(DesescapaDeMsbuild(V.Escrito)) do
+            if (W.Trim <> '') and not W.Trim.StartsWith('$(') and not TPath.IsPathRooted(W.Trim) then
+              Escritos := Escritos + [W.Trim];
       for var I := 0 to High(Antes) do
       begin
         if not SameText(Antes[I].Elemento, Ahora[I].Elemento) or
@@ -3922,6 +3712,8 @@ begin
         end;
         for var T in TrozosDeLista(DesescapaDeMsbuild(Antes[I].Expandido)) do
         begin
+          if MatchText(T.Trim, Escritos) then
+            Continue;
           var R := Resuelto(T, ABaseVieja);
           if R = '' then
             Continue;
@@ -3929,10 +3721,29 @@ begin
           var Destino := R;
           if DentroDe(R, AViejo) then
             Destino := ANuevo + R.Substring(Length(AViejo));
-          if MatchText(Destino, Leidas) or not (TDirectory.Exists(Destino) or TFile.Exists(Destino)) then
+          if MatchText(Destino, Leidas) or not ExisteYSeLee(Destino, True) then
             Continue;
-          var Item := MsgFmt(SF_REUBICA_NO_LLEGA_ITEM_FMT, [TPath.GetFileName(AFichero),
-            Antes[I].Elemento, Antes[I].Escrito, R, Destino]);
+          // si lo que leia no se movio, el que se movio es este .dproj y su
+          // propiedad relativa lleva ahora a otro sitio: no es "which is now"
+          var Item: string;
+          if SameText(Destino, R) then
+            Item := MsgFmt(SF_REUBICA_NO_LLEGA_QUIETO_FMT, [AFichero, Antes[I].Elemento,
+              Antes[I].Escrito, R])
+          else
+            Item := MsgFmt(SF_REUBICA_NO_LLEGA_ITEM_FMT, [AFichero,
+              Antes[I].Elemento, Antes[I].Escrito, R, Destino]);
+          // la PROPIEDAD por la que llega, si la define el documento: la que
+          // hay que cambiar (Opus sobre la 1.22.2: MOVE-021 no la decia)
+          for var Escrito in TrozosDeLista(Antes[I].Escrito) do
+          begin
+            var Nombre := PropiedadDelTrozo(Escrito.Trim);
+            if (Nombre <> '') and not SameText(Nombre, Antes[I].Elemento) and
+               MatchText(Nombre, Definidas) then
+            begin
+              Item := Item + MsgFmt(SF_REUBICA_NO_LLEGA_PROPIEDAD_FMT, [Nombre]);
+              Break;
+            end;
+          end;
           if not MatchText(Item, Result) then
             Result := Result + [Item];
         end;
@@ -3940,116 +3751,119 @@ begin
     end;
 end;
 
-function ReubicaArbol(const AViejo, ANuevo: string; ACopia: Boolean): string;
+{ Lo que cruza el borde, para NotaDeMudanza: DENTRO de lo movido o copiado,
+  las rutas RELATIVAS que cruzan su borde y ahora llevan a otro sitio (una
+  copia a la misma altura no avisa de nada); FUERA, en un move o un borrado,
+  lo que apuntaba dentro: las units que lista un proyecto (.dpr/.dpk y
+  DCCReference), las rutas del .dproj, las directivas $I/$R/$L y los
+  proyectos de un grupo, cada fichero con su ruta entera; y lo que el build
+  lee por una propiedad ($(X)) o escrito absoluto, con la propiedad que hay
+  que cambiar (MOVE-021). '' si todo queda dentro. }
+function ReferenciasQueCruzan(const AViejos, ANuevos: TArray<string>;
+  AMudanza: TMudanza): string;
+const
+  TOPE = 10;
 var
-  Viejo, Nuevo: string;
-  NUnits, NRutas, NDirect, NGrupos, NFuera: Integer;
-  Tocados, Fallos, Saltadas, NoLlegan: TArray<string>;
+  Viejos, Nuevos, Lineas, Saltadas, NoLlegan, Bordes, Ilegibles: TArray<string>;
   EsDeMudanza: TFunc<string, Boolean>;
 
-  procedure Anota(const AFichero: string; ACuantos: Integer; var ASuma: Integer);
+  // lo de DENTRO de AViejo que apunta FUERA: su destino no se movio y es el
+  // relativo el que ya no llega (un parametro de valor: la funcion anonima no
+  // puede capturar las variables de la rutina de fuera, y la del bucle la
+  // capturaria por referencia)
+  function FueraDe(AViejo: string): TFunc<string, string>;
   begin
-    if ACuantos <= 0 then
-      Exit;
-    Inc(ASuma, ACuantos);
-    // por la ruta entera: dos App.dproj de carpetas distintas son dos
-    if not MatchText(AFichero, Tocados) then
-      Tocados := Tocados + [AFichero];
+    Result :=
+      function(A: string): string
+      begin
+        if DentroDe(A, AViejo) then
+          Result := ''
+        else
+          Result := A;
+      end;
   end;
 
-  procedure Falla(const AFichero: string; E: Exception);
-  begin
-    Fallos := Fallos + [TPath.GetFileName(AFichero) + ': ' + E.Message];
-  end;
-
-  { UN reparto por formato, el mismo dentro y fuera (estaba escrito dos
-    veces), y cada reescritura en su try: un fallo en una no se lleva las
-    demas del mismo fichero. }
-  procedure Reapunta(const AFichero, ABase: string; const AMapa: TFunc<string, string>;
-    var AUnits, ARutas, ADirect, AGrupos: Integer);
+  { Lo que cruza en UN fichero, contado por formato, a su linea de la nota
+    ("<ruta> (2 units, 1 path)"); y lo que su build lee por una propiedad o
+    absoluto, del par AIndice (-1: de todos). Una nota, no una operacion: lo
+    que no se deja leer no se cuenta: se NOMBRA con su motivo (un .dpr que
+    otro proceso tiene abierto no es "ninguno lo lista", E131). }
+  procedure Mira(const AFichero, ABase: string; const AMapa: TFunc<string, string>;
+    AIndice: Integer);
   var
-    Ext, EncAntes, Antes: string;
+    NUnits, NRutas, NDirect, NGrupos: Integer;
+    Partes: TArray<string>;
+    Enc, Ext: string;
   begin
+    NUnits := 0; NRutas := 0; NDirect := 0; NGrupos := 0;
     Ext := LowerCase(TPath.GetExtension(AFichero));
-    if EsFuentePrincipal(AFichero) then // EL predicado (octava pasada de Fable)
-      try
-        Anota(AFichero, ReapuntaUnits(AFichero, ABase, AMapa, Fallos), AUnits);
-      except
-        on E: Exception do
-          Falla(AFichero, E);
+    try
+      if EsFuentePrincipal(AFichero) then // EL predicado (octava pasada de Fable)
+        NUnits := UnitsQueCruzan(AFichero, ABase, AMapa);
+      if Ext = '.dproj' then
+      begin
+        NRutas := ReapuntaSitios(AFichero, ABase, SitiosDeDproj, AMapa, True);
+        if AMudanza = mzMueve then
+          for var I := 0 to High(Viejos) do
+            if (AIndice < 0) or (AIndice = I) then
+              for var N in RutasQueYaNoLlegan(AFichero, PatchLoadText(AFichero, Enc), ABase,
+                Viejos[I], Nuevos[I]) do
+                if not MatchText(N, NoLlegan) then
+                  NoLlegan := NoLlegan + [N];
       end;
-    if Ext = '.dproj' then
-    begin
-      Antes := '';
-      try
-        // el de antes, para lo que el build lee por una propiedad o absoluto
-        Antes := PatchLoadText(AFichero, EncAntes);
-        Anota(AFichero, ReapuntaSitios(AFichero, ABase, SitiosDeDproj, AMapa), ARutas);
-      except
-        on E: Exception do
-          Falla(AFichero, E);
-      end;
-      if (Antes <> '') and not ACopia then
-        try
-          for var N in RutasQueYaNoLlegan(AFichero, Antes, ABase, Viejo, Nuevo) do
-            if not MatchText(N, NoLlegan) then
-              NoLlegan := NoLlegan + [N];
-        except
-          // una nota, no una reescritura: si no se puede evaluar no hay nota,
-          // y lo re-apuntado queda como esta (no es un fallo de la mudanza)
-        end;
+      if EsManifiesto(AFichero) then
+        Inc(NRutas, ReapuntaSitios(AFichero, ABase, [Sitio('DeployFile', 'Include')], AMapa, True));
+      if EsRutaDeFuente(AFichero) then // EL predicado (era SOURCE_EXTS a mano)
+        NDirect := DirectivasQueCruzan(AFichero, ABase, AMapa);
+      if Ext = '.groupproj' then
+        NGrupos := ReapuntaGrupo(AFichero, ABase, AMapa, True);
+    except
+      on E: Exception do
+        Ilegibles := Ilegibles + [MsgFmt(SF_CRUZA_FICHERO_FMT, [AFichero, PrimerTrozo(E.Message, [#10])])];
     end;
-    if EsManifiesto(AFichero) then
-      try
-        Anota(AFichero, ReapuntaSitios(AFichero, ABase,
-          [Sitio('DeployFile', 'Include')], AMapa), ARutas);
-      except
-        on E: Exception do
-          Falla(AFichero, E);
-      end;
-    if EsRutaDeFuente(AFichero) then // EL predicado (era SOURCE_EXTS a mano)
-      try
-        Anota(AFichero, ReapuntaDirectivas(AFichero, ABase, AMapa), ADirect);
-      except
-        on E: Exception do
-          Falla(AFichero, E);
-      end;
-    if Ext = '.groupproj' then
-      try
-        Anota(AFichero, ReapuntaGrupo(AFichero, ABase, AMapa), AGrupos);
-      except
-        on E: Exception do
-          Falla(AFichero, E);
-      end;
+    Partes := [];
+    if NUnits > 0 then
+      Partes := Partes + [MsgFmt(SF_CRUZA_CUENTA_FMT, [NUnits, MsgText(SF_CRUZA_UNITS)])];
+    if NRutas > 0 then
+      Partes := Partes + [MsgFmt(SF_CRUZA_CUENTA_FMT, [NRutas, MsgText(SF_CRUZA_RUTAS)])];
+    if NDirect > 0 then
+      Partes := Partes + [MsgFmt(SF_CRUZA_CUENTA_FMT, [NDirect, MsgText(SF_CRUZA_DIRECTIVAS)])];
+    if NGrupos > 0 then
+      Partes := Partes + [MsgFmt(SF_CRUZA_CUENTA_FMT, [NGrupos, MsgText(SF_CRUZA_GRUPOS)])];
+    // por la ruta entera: dos App.dproj de carpetas distintas son dos
+    if Length(Partes) > 0 then
+      Lineas := Lineas + [MsgFmt(SF_CRUZA_FICHERO_FMT, [AFichero, string.Join(', ', Partes)])];
+  end;
+
+  function DentroDeAlguno(const F: string; const ALista: TArray<string>): Boolean;
+  begin
+    Result := False;
+    for var L in ALista do
+      if DentroDe(F, L) then
+        Exit(True);
   end;
 
 begin
   Result := '';
-  Viejo := PrefijoSinBarra(TPath.GetFullPath(AViejo));
-  Nuevo := PrefijoSinBarra(TPath.GetFullPath(ANuevo));
-  NUnits := 0; NRutas := 0; NDirect := 0; NGrupos := 0; NFuera := 0;
-  Tocados := [];
-  Fallos := [];
+  Viejos := [];
+  Nuevos := [];
+  for var I := 0 to High(AViejos) do
+  begin
+    Viejos := Viejos + [PrefijoSinBarra(TPath.GetFullPath(AViejos[I]))];
+    Nuevos := Nuevos + [PrefijoSinBarra(TPath.GetFullPath(ANuevos[I]))];
+  end;
+  Lineas := [];
   Saltadas := [];
   NoLlegan := [];
-  // Lo de DENTRO que apunta FUERA: su destino no se ha movido, y es el
-  // relativo el que ya no llega. Lo de dentro que apunta dentro viaja con el.
-  var Fuera: TFunc<string, string> :=
-    function(A: string): string
-    begin
-      if DentroDe(A, Viejo) then
-        Result := ''
-      else
-        Result := A;
-    end;
-  // Lo de FUERA que apuntaba DENTRO: su destino SI se ha movido.
+  Ilegibles := [];
+  // Lo de FUERA que apuntaba DENTRO: su destino SI se ha movido (o se borro).
   var Traslada: TFunc<string, string> :=
     function(A: string): string
     begin
-      if DentroDe(A, Viejo) then
-        Result := Nuevo + TPath.GetFullPath(A).Substring(Length(Viejo))
-      else
-        Result := '';
+      Result := '';
+      for var K := 0 to High(Viejos) do
+        if DentroDe(A, Viejos[K]) then
+          Exit(Nuevos[K] + TPath.GetFullPath(A).Substring(Length(Viejos[K])));
     end;
   EsDeMudanza :=
     function(F: string): Boolean
@@ -4057,45 +3871,102 @@ begin
       // los fuentes, los proyectos y el manifiesto, por SUS predicados
       Result := EsRutaDeFuente(F) or EsRutaDeProyecto(F) or EsManifiesto(F);
     end;
-
-  // Con el cerrojo de las ediciones: la misma carrera que perdia cambios en
-  // delphi_edit (medido: 6 de 12) la tenia la mudanza, que lee, cambia y
-  // guarda proyectos y grupos que otra llamada puede estar tocando.
-  EnterFileEdit;
-  try
-    for var F in FicherosBajo(Nuevo, EsDeMudanza, 0, Saltadas) do
-      Reapunta(F, TPath.GetDirectoryName(Viejo + F.Substring(Length(Nuevo))), Fuera,
-        NUnits, NRutas, NDirect, NGrupos);
-    // Y si no es copia, FUERA, todo lo que apuntaba DENTRO de lo movido: un
-    // {$I} de una unit de fuera, un proyecto de una carpeta HERMANA... Se
-    // recorre desde el borde escribible (BordeDeMudanza) con el mismo
-    // recorredor y el mismo reparto.
-    if not ACopia then
-      for var F in FicherosBajo(BordeDeMudanza(TPath.GetDirectoryName(Viejo)),
-        EsDeMudanza, 0, Saltadas) do
-        if not DentroDe(F, Nuevo) then
-          Reapunta(F, TPath.GetDirectoryName(F), Traslada, NFuera, NFuera, NFuera, NFuera);
-  finally
-    LeaveFileEdit;
-  end;
-
-  if NUnits + NRutas + NDirect + NGrupos + NFuera > 0 then
+  // DENTRO de lo movido o copiado: lo que sale de su borde
+  if AMudanza in [mzMueve, mzCopia] then
+    for var I := 0 to High(Nuevos) do
+      for var F in FicherosBajo(Nuevos[I], EsDeMudanza, 0, Saltadas) do
+        Mira(F, TPath.GetDirectoryName(Viejos[I] + F.Substring(Length(Nuevos[I]))), FueraDe(Viejos[I]), I);
+  // ...y FUERA, en un move o un borrado, lo que apuntaba dentro: desde el
+  // borde escribible (BordeDeMudanza), una vez por borde
+  if AMudanza in [mzMueve, mzBorra] then
   begin
-    var Nombres: TArray<string> := [];
-    for var T in Tocados do
-      Nombres := Nombres + [TPath.GetFileName(T)];
-    Result := MsgFmt(SN_REUBICA_FMT, [NUnits, NRutas, NDirect, NGrupos, NFuera,
-      string.Join(', ', Nombres)]);
+    Bordes := [];
+    for var V in Viejos do
+    begin
+      var B := BordeDeMudanza(TPath.GetDirectoryName(V));
+      if not MatchText(B, Bordes) then
+        Bordes := Bordes + [B];
+    end;
+    for var B in Bordes do
+      for var F in FicherosBajo(B, EsDeMudanza, 0, Saltadas) do
+        if not DentroDeAlguno(F, Nuevos) then
+          Mira(F, TPath.GetDirectoryName(F), Traslada, -1);
   end;
-  if Length(Fallos) > 0 then
-    Result := Result + IfThen(Result <> '', #10, '') +
-      MsgFmt(SN_REUBICA_FALLOS_FMT, [string.Join('; ', Fallos)]);
+  if Length(Lineas) > 0 then
+  begin
+    var Texto := string.Join('; ', Copy(Lineas, 0, TOPE));
+    if Length(Lineas) > TOPE then
+      Texto := Texto + MsgFmt(SF_FILE_Y_MAS_FMT, [Length(Lineas) - TOPE]);
+    if AMudanza = mzBorra then
+      Result := MsgFmt(SN_REFERENCIAS_A_LO_BORRADO_FMT, [Texto])
+    else
+      Result := MsgFmt(SN_REFERENCIAS_CRUZAN_FMT, [Texto]);
+  end;
   if Length(Saltadas) > 0 then
     Result := Result + IfThen(Result <> '', #10, '') +
       MsgFmt(SN_REUBICA_SALTADAS_FMT, [string.Join('; ', Saltadas)]);
   if Length(NoLlegan) > 0 then
     Result := Result + IfThen(Result <> '', #10, '') +
       MsgFmt(SN_REUBICA_NO_LLEGA_FMT, [string.Join('; ', NoLlegan)]);
+  if Length(Ilegibles) > 0 then
+  begin
+    var Texto := string.Join('; ', Copy(Ilegibles, 0, TOPE));
+    if Length(Ilegibles) > TOPE then
+      Texto := Texto + MsgFmt(SF_FILE_Y_MAS_FMT, [Length(Ilegibles) - TOPE]);
+    Result := Result + IfThen(Result <> '', #10, '') + MsgFmt(SN_REFERENCIAS_ILEGIBLES_FMT, [Texto]);
+  end;
+end;
+
+{ El AVISO del par (V19; David, 25-oct-2026: "hablamos de avisar como mucho y
+  de permitir form.*"): una unit que se fue sin su .dfm/.fmx, o un designer sin
+  su unit (el IDE los lee lado a lado: la directiva R de la unit), con la
+  salida: el comodin. AHechos: lo que se movio, se copio o se borro; AVerbo,
+  que se le hizo. }
+function AvisosDelPar(const AHechos: TArray<string>; const AVerbo: string): string;
+begin
+  Result := '';
+  for var F in AHechos do
+  begin
+    var Otros: TArray<string> := [];
+    if SameText(TPath.GetExtension(F), '.pas') then
+      Otros := DesignersDeUnidad(F)
+    else if EsRutaDeDesigner(F) then
+      Otros := [UnidadDeDesigner(F)];
+    for var O in Otros do
+      if TFile.Exists(O) and not MatchText(O, AHechos) then
+        Result := Result + #10 + MsgFmt(SN_FILE_PAR_PARTIDO_FMT, [TPath.GetFileName(F), AVerbo,
+          TPath.GetFileName(O), TPath.GetDirectoryName(O),
+          TPath.Combine(TPath.GetDirectoryName(F), TPath.GetFileNameWithoutExtension(F) + '.*')]);
+  end;
+end;
+
+function NotaDeMudanza(const AViejos, ANuevos: TArray<string>;
+  AMudanza: TMudanza): string;
+var
+  Verbo, Nota: string;
+  Viejos, Nuevos: TArray<string>;
+begin
+  case AMudanza of
+    mzMueve: Verbo := MsgText(SF_PAR_MOVIDO);
+    mzCopia: Verbo := MsgText(SF_PAR_COPIADO);
+  else
+    Verbo := MsgText(SF_PAR_BORRADO);
+  end;
+  Result := AvisosDelPar(AViejos, Verbo);
+  // lo que sale de la papelera era una copia: no hay proyecto que la liste
+  Viejos := [];
+  Nuevos := [];
+  for var I := 0 to High(AViejos) do
+    if not EnPapelera(AViejos[I]) then
+    begin
+      Viejos := Viejos + [AViejos[I]];
+      Nuevos := Nuevos + [ANuevos[I]];
+    end;
+  if Length(Viejos) = 0 then
+    Exit;
+  Nota := ReferenciasQueCruzan(Viejos, Nuevos, AMudanza);
+  if Nota <> '' then
+    Result := Result + #10 + Nota;
 end;
 
 { ======================================================= grupos de proyectos }

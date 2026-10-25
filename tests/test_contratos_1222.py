@@ -8,7 +8,8 @@ F2613 sin pista. Ahora MOVE-021 lo nombra, con el valor expandido como lo lee ms
   M1 un proyecto con My-Path=lib y DCC_UnitSearchPath=$(My-Path): mover lib a lib2 nombra My-Path en MOVE-021
      (ROJO contra la 1.22.1: callaba)
   M1b ...y es lo que rompe: el build da F2613 hasta que set-property My-Path=lib2, y entonces compila
-  M2 control: una ruta relativa ESCRITA (lib3) se re-apunta (MOVE-005) y no sale en MOVE-021
+  M2 control: una ruta relativa ESCRITA (lib3) no se reescribe: la cuenta MOVE-023, y no sale tambien en
+     MOVE-021 aunque el .dproj tenga propiedades y una absoluta (V19: salia en las dos)
   M3 una ruta absoluta del DCC_IncludePath a lo movido: nombrada (ROJO igual)
   M4 control: mover una carpeta Data no nombra el DCC_Namespace (Data.Win no es una ruta que lea el build)
   M5 control: el proyecto entero renombrado en el mismo nivel: su $(Comun)=..\comun sigue llegando, nada que decir
@@ -185,9 +186,9 @@ try:
     check('M1b ...y con set-property My-Path=lib2 compila', mc.como_json(r).get('success') is True, r[:400])
 
     r = srv.call('delphi_move', {'path': os.path.join(app, 'lib3'), 'dest': os.path.join(app, 'lib4')})
-    check('M2 control: lib3, escrita, se re-apunta (MOVE-005) y MOVE-021 no la nombra',
-          mc.es(r, 'SN_REUBICA_FMT') and ';lib4;' in lee(dproj) and not mc.es(r, 'SN_REUBICA_NO_LLEGA_FMT'),
-          r[:900])
+    check('M2 control: lib3, escrita, no se reescribe; la cuenta MOVE-023 y MOVE-021 no la nombra',
+          mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT') and ';lib3;' in lee(dproj) and
+          not mc.es(r, 'SN_REUBICA_NO_LLEGA_FMT'), r[:900])
 
     r = srv.call('delphi_move', {'path': os.path.join(app, 'inc'), 'dest': os.path.join(app, 'inc2')})
     check('M3 una ruta ABSOLUTA del DCC_IncludePath a lo movido: nombrada en MOVE-021',

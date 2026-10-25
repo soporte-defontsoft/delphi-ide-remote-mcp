@@ -25,7 +25,9 @@ su categoria por la jerarquia de la tabla. Lo que no se sabe, se dice (CFG-122).
      form (ROJO: sin nota)
   P6 el registro del IDE: la base que el IDE nombra en un .dproj (TBaseDM) pasa
      al otro proyecto que la registra (ROJO: TDataModule o nada)
-  P7 ...y un rename dentro del proyecto la conserva (ROJO: se perdia)
+  P7 ...y un rename de la unidad no la pierde: desde V19 (1.23) un move es el
+     del operador y no toca el .dproj (antes se re-apuntaba, y en la 1.20.2 la
+     perdia); la nota nombra el proyecto y el .dfm que se quedo atras
   P8 preview de P2: el ayudante lo lee en un FRAME (root.kind) (ROJO: form)
   P9 check-binding del TWebModule con un componente sin campo: completo, lo
      nombra (ROJO: TWebModule no estaba en la lista; a medias y callado)
@@ -147,10 +149,15 @@ try:
           '<DesignClass>TBaseDM</DesignClass>' in entrada_dproj(DPROJ2, '..\\vcl\\UDatos.pas'),
           r[:300] + entrada_dproj(DPROJ2, '..\\vcl\\UDatos.pas'))
 
-    # P7: un rename dentro de PRaiz conserva lo que registro el IDE
+    # P7: un rename de la unidad, como un operador: el .dproj no se toca (lo que registro el
+    # IDE se queda donde estaba) y la nota lo dice, con el .dfm que se quedo atras
+    antes7 = open(DPROJ, 'rb').read()
     r = S.call('delphi_move', {'path': os.path.join(PV, 'UDatos.pas'), 'dest': os.path.join(PV, 'UDatosB.pas')})
-    check('P7 rename: el .dproj conserva <DesignClass>TBaseDM',
-          '<DesignClass>TBaseDM</DesignClass>' in entrada_dproj(DPROJ, 'UDatosB.pas'), r[:400] + entrada_dproj(DPROJ, 'UDatosB.pas'))
+    check('P7 rename: el .dproj byte a byte (con su <DesignClass>TBaseDM), la nota nombra el proyecto y el .dfm',
+          open(DPROJ, 'rb').read() == antes7 and
+          '<DesignClass>TBaseDM</DesignClass>' in entrada_dproj(DPROJ, 'UDatos.pas') and
+          (mc.virtual(mc.larga(DPR)) + ' (1 ').lower() in r.lower() and
+          mc.es(r, 'SN_FILE_PAR_PARTIDO_FMT') and 'UDatos.dfm' in r, r[-800:])
 
     # P8: el --root del preview, por el mismo juez
     r = S.call('delphi_designer', {'command': 'preview', 'path': os.path.join(PV, 'UMarcoHijo.dfm')}, t=300)

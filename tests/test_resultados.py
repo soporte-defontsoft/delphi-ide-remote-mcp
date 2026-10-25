@@ -94,7 +94,8 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E56 modos de delphi_edit que no combinan: INVALID_PARAM
   E57 createunit con un content que no casa: INVALID_PARAM, nada creado
   E58 delphi_create con un proyecto que no se deja registrar: nada creado
-  E59 borrar una unit con un proyecto que no se deja tocar: la unit sigue
+  E59 borrar una unit con un proyecto que no se deja tocar: se borra, porque desde
+      V19 (1.23) un borrado es el del operador y no toca el proyecto; la nota lo dice
   E60 styles lint con un project que no existe: NOT_FOUND
   E61 leer un fichero vacio es un exito; sin linea fantasma al final
   E62 delphi_list includetrash con mascaras solapadas: cada fichero una vez
@@ -166,10 +167,10 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
       (una regla para HTTP y stdio) y lo mal formado, -32600
   E115 una sesion muerta no vuelve en la cabecera; el GET sin flujo, 404
   E116 un recurso que no existe: -32002; E117 los enteros, integer
-  E118 un .dproj en LF sigue en LF; E119 deshacer el borrado de una unit
-      no deja la copia del form; E120 LIST-008 cuenta las marcas aparte
+  E118 un .dproj en LF sigue en LF; E119 un borrado que falla no deja
+      copias en la papelera; E120 LIST-008 cuenta las marcas aparte
   E121 project-test en ingles; E122 el zip sin la papelera
-  E123 mover una unit con su form: todo o nada (MOVE-017)
+  E123 mover una unit con su form por un comodin: todo o nada (V19)
   E124 / E125 el destino de un move y el create de un changeset con
       separador final: GUARD-025
   E127 la sesion cerrada para hacer sitio: SYS-033
@@ -177,30 +178,30 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   Novena revision:
   E128 REGRESION de la octava: un new de varias lineas en un fichero CRLF
       metia LF; E129 add-unit / create con project en un .dproj LF
-  E130 renombrar una unit con usuarios en CR sueltos; E131 un proyecto
-      bloqueado no es "ninguno la lista" (unit y carpeta)
-  E132 un UNC con prefijo de dispositivo en un .dpr, sin SMB; E133 .dfm y .fmx, todo o nada;
-      E134 renombrar una unit +R se dice antes; E135 / E136 un move o una
-      copia que fallan no dejan carpetas ni copia a medias; E137 restaurar
-      con el form bloqueado conserva la marca; E138 la copia de seguridad
+  E130 renombrar una unit con usuarios en CR sueltos no los toca; E131 un proyecto
+      bloqueado no es "ninguno la lista" (unit y carpeta): la nota lo dice, MOVE-024
+  E132 un UNC con prefijo de dispositivo en un .dpr, sin SMB; E133 borrar .pas, .dfm y .fmx por un comodin, todo o nada;
+      E134 renombrar una unit +R se hace y el +R viaja; E135 / E136 un move o una
+      copia que fallan no dejan carpetas ni copia a medias; E137 restaurar por un comodin
+      con el form bloqueado conserva las marcas; E138 la copia de seguridad
       no sigue enlaces; E139 occurrence con la regla del motor; E140 el
       create de un changeset con CR sueltos; E141 el preview avisa del +R
       de un edit; E142 GROUP-005 dice lo que falta; E92b la regla del commit
   Decima revision:
   E143 el commit de un changeset mueve el atline solo por lo cambiado ENCIMA
       (borraba o editaba la linea equivocada con COMMIT COMPLETE); E144 el
-      rename en un .dproj LF; E145 el +R de un delete-line en el preview; E146
-      renombrar una unit con su .dpr bloqueado; E147 una junction rota sobrevive a
+      rename no toca un .dproj LF; E145 el +R de un delete-line en el preview; E146
+      renombrar una unit con su .dpr bloqueado lo dice; E147 una junction rota sobrevive a
       un move que falla; E148 EDIT-078 sin consejo Pascal en un fichero de texto
   E149-E151 los deshaceres quitan lo suyo aunque traiga el +R del original, y
       el original vuelve con su +R (changeset, copy=true, la copia de seguridad);
       E152 la ultima unit de un .dpk/.dpr se va con su clausula, y add-unit la
-      estrena; E153 una cabecera con directivas se reescribe, y MOVE-018 si no
-      esta; E154 SYS-018 no dice "the unit is back"
+      estrena; E153 renombrar no toca la cabecera, y add-unit lee una con
+      directivas (E154, el deshacer del par automatico, salio con el en V19)
   1.7.1 (la lista de la decima, medida contra la 1.7.0 en produccion):
   E155 un bloque hasta la ultima linea no anade el salto final; E156 un old de
-      varias lineas se niega al apilar; E157 SYS-029 sin copia diaria; E158 la
-      nota nombra .dfm y .fmx; E159 textedit old sin new dice BLANKED; E160 la
+      varias lineas se niega al apilar; E157 SYS-029 sin copia diaria; E158 el
+      aviso del par nombra .dfm y .fmx; E159 textedit old sin new dice BLANKED; E160 la
       copia de un +R es del agente; E161 bearer en minusculas; E162 nombres
       reservados (GUARD-027); E163 rutina-global repetida avisa (EDIT-116); E164
       delphi_edit de un .pas con NUL; E165 minimum 0 en el esquema; E167 junction
@@ -833,10 +834,10 @@ try:
         ANT_DPR = open(DPR_PAN, 'rb').read()
         with mc.solo_lectura(DPROJ_PAN):
             res, sc, t = llama('delphi_delete', {'path': UDEL})
-        check('E59 borrar una unit con un proyecto que no se deja tocar: fallo y la unit sigue',
-              res.get('isError') is True and mc.abre(t, 'SR_FILE_UNIT_DESHECHO_FMT') and
-              os.path.exists(UDEL) and open(DPR_PAN, 'rb').read() == ANT_DPR,
-              '%s | %s' % (json.dumps(sc)[:100], t[:250]))
+        check('E59 borrar una unit con un proyecto de solo lectura: borrada, el .dpr igual y la nota (FILE-046)',
+              not res.get('isError') and mc.abre(t, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(UDEL) and
+              open(DPR_PAN, 'rb').read() == ANT_DPR and mc.es(t, 'SN_REFERENCIAS_A_LO_BORRADO_FMT'),
+              '%s | %s' % (json.dumps(sc)[:100], t[-400:]))
 
     rechazo('E60 styles lint con un project que no existe: NOT_FOUND',
             'delphi_styles', {'command': 'lint', 'path': JAIL, 'project': os.path.join(JAIL, 'nada.dproj')},
@@ -1617,7 +1618,8 @@ try:
           not res.get('isError') and b'DCC_UnitSearchPath' in b118 and b'\r\n' not in b118,
           '%s | %r' % (t[:160], b118[:300]))
 
-    # E119 deshacer el borrado de una unit no deja la copia de su form en deleted\
+    # E119 un borrado que falla no deja copias en deleted\ (nacio cuando el borrado de una
+    # unit se llevaba su form y deshacia los dos; desde V19 el par no va solo)
     D119 = os.path.join(JAIL, 'e119')
     os.makedirs(D119)
     P119 = os.path.join(D119, 'UFo.pas')
@@ -1627,9 +1629,10 @@ try:
     ANT119 = open(F119, 'rb').read()
     with mc.bloqueado(P119, lectura=True): # leer si; mover no
         res, sc, t = llama('delphi_delete', {'path': P119})
-    check('E119 borrar una unit cuyo .pas no se deja mover: el form vuelve y SIN su copia',
-          res.get('isError') is True and mc.es(t, 'SR_FILE_UNIT_DESHECHO_FMT') and mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and os.path.exists(P119) and open(F119, 'rb').read() == ANT119 and
-          not mc.copias(D119, 'UFo.dfm') and not os.path.exists(os.path.join(D119, PAP['BACKUP_SUB'])),
+    check('E119 borrar una unit cuyo .pas no se deja mover: fallo, el form ni se toca y SIN copias',
+          res.get('isError') is True and mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and os.path.exists(P119) and
+          open(F119, 'rb').read() == ANT119 and not mc.copias(D119, 'UFo.dfm') and not mc.copias(D119, 'UFo.pas') and
+          not os.path.exists(os.path.join(D119, PAP['BACKUP_SUB'])),
           '%s | %s' % (t[:250], os.listdir(D119)))
 
     # E121 lo que genera project-test, en ingles
@@ -1657,7 +1660,9 @@ try:
           not res.get('isError') and any(n.endswith('a.txt') for n in nombres) and
           not any(PAP['BACKUP_SUB'] in n for n in nombres), '%s | %s' % (t[:160], nombres))
 
-    # E123 mover una unit cuyo form no se deja mover: todo o nada (MOVE-017)
+    # E123 mover una unit con su form: el par va por un comodin (desde V19 el .pas no se
+    # lleva su form solo) y todo o nada: si el .dfm no se deja mover, NADA movido. Era
+    # MOVE-017, el del par automatico
     D123 = os.path.join(JAIL, 'e123')
     os.makedirs(D123)
     P123 = os.path.join(D123, 'UMv.pas')
@@ -1665,10 +1670,10 @@ try:
     open(P123, 'w').write('unit UMv;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
     open(F123, 'w').write('object Mv: TMv\nend\n')
     with mc.bloqueado(F123, lectura=True): # leer si; mover no
-        res, sc, t = llama('delphi_move', {'path': P123, 'dest': os.path.join(D123, 'sub', 'UMv.pas')})
-    check('E123 mover una unit cuyo .dfm no se deja: MOVE-017 y NADA movido',
-          res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and os.path.exists(P123) and
-          os.path.exists(F123) and not os.path.exists(os.path.join(D123, 'sub', 'UMv.pas')),
+        res, sc, t = llama('delphi_move', {'path': os.path.join(D123, 'UMv.*'), 'dest': os.path.join(D123, 'sub')})
+    check('E123 mover UMv.* con el .dfm que no se deja: SYS-027 que lo nombra y NADA movido (ni la carpeta sub)',
+          res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and 'UMv.dfm' in t and
+          os.path.exists(P123) and os.path.exists(F123) and not os.path.exists(os.path.join(D123, 'sub')),
           '%s | %s' % (t[:250], os.listdir(D123)))
     check('E123 ...y sin copia de seguridad en la papelera', not mc.copias(D123),
           mc.copias(D123))
@@ -1732,8 +1737,9 @@ try:
     else:
         check('E129 fixture: el proyecto se crea', False, t[:200])
 
-    # E130 renombrar una unit cuyos usuarios estan en CR sueltos reescribe sus
-    # referencias (troceaba solo por LF: MOVED y el build caia)
+    # E130 renombrar una unit cuyos usuarios estan en CR sueltos: nacio cuando el rename
+    # reescribia sus referencias (troceaba solo por LF: MOVED y el build caia). Desde V19
+    # nada se reescribe: UUno queda byte a byte y la nota nombra el proyecto que la lista
     D130 = os.path.join(JAIL, 'e130')
     res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Cr130', 'dir': D130})
     DPROJ130 = os.path.join(D130, 'Cr130.dproj')
@@ -1744,16 +1750,18 @@ try:
         b'unit UUno;\rinterface\ruses UDos;\rimplementation\rprocedure Q;\rbegin\r  UDos.P;\rend;\rend.\r')
     for u in ('UDos.pas', 'UUno.pas'):
         llama('delphi_config', {'command': 'add-unit', 'project': DPROJ130, 'path': os.path.join(D130, u)})
+    antes130 = open(UUNO, 'rb').read()
     res, sc, t = llama('delphi_move', {'path': os.path.join(D130, 'UDos.pas'),
                                        'dest': os.path.join(D130, 'UTres.pas')})
     b130 = open(UUNO, 'rb').read()
-    check('E130 renombrar UDos con usuarios en CR sueltos: UUno pasa a UTres, byte a byte',
-          not res.get('isError') and b130 == b130.replace(b'UDos', b'UTres') and
-          b'uses UTres;\r' in b130 and b'  UTres.P;\r' in b130 and b'\n' not in b130,
-          '%s | %r' % (t[:200], b130))
+    check('E130 renombrar UDos con usuarios en CR sueltos: UUno byte a byte y la nota nombra el .dpr',
+          not res.get('isError') and b130 == antes130 and mc.es(t, 'SN_REFERENCIAS_CRUZAN_FMT') and
+          'Cr130.dpr (' in t, '%s | %r' % (t[-400:], b130))
 
-    # E131 un proyecto que otro proceso tiene abierto NO es "ninguno la lista":
-    # la unit suelta (.dpr bloqueado) y la carpeta (.dproj bloqueado)
+    # E131 un proyecto que otro proceso tiene abierto NO es "ninguno la lista": la unit
+    # suelta (.dpr bloqueado) y la carpeta (.dproj bloqueado). Nacio cuando borrar
+    # re-apuntaba el proyecto (y se negaba, CFG-111); desde V19 el borrado es el del
+    # operador y no lo toca, y la nota dice que no lo pudo leer (MOVE-024: V19 lo callaba)
     D131 = os.path.join(JAIL, 'e131')
     res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Lk131', 'dir': D131})
     DPR131 = os.path.join(D131, 'Lk131.dpr')
@@ -1763,17 +1771,16 @@ try:
     ANT131 = open(DPR131, 'rb').read()
     with mc.bloqueado(DPR131): # sin compartir
         res, sc, t = llama('delphi_delete', {'path': os.path.join(D131, 'UUnaSuelta.pas')})
-    check('E131 borrar una unit con su .dpr bloqueado: CFG-111 con SYS-027 y la unit sigue (decia "ningun .dpr la lista")',
-          res.get('isError') is True and mc.abre(t, 'SR_PROYECTO_NO_LEIDO_AL_BUSCAR_FMT') and
-          mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and
-          os.path.exists(os.path.join(D131, 'UUnaSuelta.pas')) and open(DPR131, 'rb').read() == ANT131,
-          t[:250])
+    check('E131 borrar una unit con su .dpr bloqueado: borrada, el .dpr igual y la nota dice que no lo pudo leer',
+          not res.get('isError') and not os.path.exists(os.path.join(D131, 'UUnaSuelta.pas')) and
+          open(DPR131, 'rb').read() == ANT131 and mc.es(t, 'SN_REFERENCIAS_ILEGIBLES_FMT') and
+          'Lk131.dpr (' in t, t[-500:])
     with mc.bloqueado(DPROJ131):
         res, sc, t = llama('delphi_delete', {'path': os.path.join(D131, 'mods')})
-    check('E131 ...y una carpeta con el .dproj bloqueado: SYS-027 y nada tocado (decia DELETED)',
-          res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and
-          os.path.exists(os.path.join(D131, 'mods', 'UEnMods.pas')) and
-          open(DPR131, 'rb').read() == ANT131, t[:250])
+    check('E131 ...y una carpeta con el .dproj bloqueado: borrada, la nota con el .dpr que la lista y el .dproj que no leyo',
+          not res.get('isError') and not os.path.exists(os.path.join(D131, 'mods')) and
+          open(DPR131, 'rb').read() == ANT131 and mc.es(t, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and
+          mc.es(t, 'SN_REFERENCIAS_ILEGIBLES_FMT') and 'Lk131.dproj (' in t, t[-600:])
 
     # E132 un \\?\UNC\ leido de un .dpr no se resuelve en el disco (21 s de SMB)
     D132 = os.path.join(JAIL, 'e132')
@@ -1792,32 +1799,34 @@ try:
           not mc.fallo(t) and not res.get('isError') and dt < 5 and os.path.isfile(os.path.join(D132, 'ULocal2.pas')),
           t[:200])
 
-    # E133 una unit con .dfm Y .fmx: si el .fmx no se deja mover, el .dfm vuelve
-    # (se quedaba en el destino) y la carpeta de destino que se creo, tambien fuera
+    # E133 borrar una unit con .dfm Y .fmx por un comodin, con el .fmx que no se deja: todo
+    # o nada, ninguno a la papelera (nacio con el par automatico del move: el .dfm se
+    # quedaba en el destino)
     D133 = os.path.join(JAIL, 'e133')
     os.makedirs(D133)
     for ext, txt in (('.pas', 'unit UF;\ninterface\nimplementation\n{$R *.dfm}\nend.\n'),
                      ('.dfm', 'object F: TF\nend\n'), ('.fmx', 'object F: TF\nend\n')):
         open(os.path.join(D133, 'UF' + ext), 'w').write(txt)
     with mc.bloqueado(os.path.join(D133, 'UF.fmx'), lectura=True):
-        res, sc, t = llama('delphi_move', {'path': os.path.join(D133, 'UF.pas'),
-                                           'dest': os.path.join(D133, 'sub', 'VF.pas')})
-    check('E133 .dfm y .fmx con el .fmx bloqueado: MOVE-017, los tres en su sitio y sin carpeta sub',
-          res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and
+        res, sc, t = llama('delphi_delete', {'path': os.path.join(D133, 'UF.*')})
+    check('E133 borrar UF.* con el .fmx bloqueado: SYS-027 que lo nombra, los tres en su sitio y sin copias',
+          res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and 'UF.fmx' in t and
           all(os.path.exists(os.path.join(D133, 'UF' + e)) for e in ('.pas', '.dfm', '.fmx')) and
-          not os.path.exists(os.path.join(D133, 'sub')), '%s | %s' % (t[:250], os.listdir(D133)))
+          not mc.copias(D133), '%s | %s' % (t[:250], os.listdir(D133)))
 
-    # E134 renombrar una unit +R: se dice ANTES de mover (MOVED con "unit UOld;")
+    # E134 renombrar una unit +R: nacio cuando el rename reescribia la cabecera (se decia
+    # ANTES de mover, SYS-029). Desde V19 se renombra como en el sistema, y el +R viaja
     D134 = os.path.join(JAIL, 'e134')
     os.makedirs(D134)
     P134 = os.path.join(D134, 'URo.pas')
     open(P134, 'w').write('unit URo;\ninterface\nimplementation\nend.\n')
+    P134b = os.path.join(D134, 'URo2.pas')
     with mc.solo_lectura(P134):
-        rechazo('E134 renombrar una unit +R: SYS-029 y nada movido', 'delphi_move',
-                {'path': P134, 'dest': os.path.join(D134, 'URo2.pas')}, 'DENIED',
-                'SR_SOLO_LECTURA_ATRIBUTO_FMT')
-        check('E134 ...sigue donde estaba', os.path.exists(P134) and
-              not os.path.exists(os.path.join(D134, 'URo2.pas')), os.listdir(D134))
+        res, sc, t = llama('delphi_move', {'path': P134, 'dest': P134b})
+        check('E134 renombrar una unit +R: MOVED, y la renombrada sigue +R',
+              mc.abre(t, 'SK_MOVE_MOVIDO_FMT') and not os.path.exists(P134) and os.path.exists(P134b) and
+              not os.access(P134b, os.W_OK), '%s | %s' % (t[:200], os.listdir(D134)))
+    mc.solo_lectura_quita(P134b)
 
     # E135 un move que falla no deja las carpetas de destino que creo
     D135 = os.path.join(JAIL, 'e135')
@@ -1841,23 +1850,26 @@ try:
     check('E136 copy=true que falla a mitad: sin la copia a medias (el "repite" daba FILE-025)',
           res.get('isError') is True and mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and not os.path.exists(os.path.join(D136, 'dst')), t[:200])
 
-    # E137 restaurar una unit de la papelera con su form bloqueado: MOVE-017 y
-    # la copia conserva su marca de dueno (otro agente podia purgarla)
+    # E137 restaurar de la papelera una unit y su form por un comodin, con la copia del form
+    # bloqueada: todo o nada, y las copias CONSERVAN su marca de dueno (otro agente podia
+    # purgarlas). Era MOVE-017, el del par automatico
     D137 = os.path.join(JAIL, 'e137')
     os.makedirs(D137)
     open(os.path.join(D137, 'UFicha.pas'), 'w').write('unit UFicha;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
     open(os.path.join(D137, 'UFicha.dfm'), 'w').write('object Ficha: TFicha\nend\n')
-    llama('delphi_delete', {'path': os.path.join(D137, 'UFicha.pas')})
+    llama('delphi_delete', {'path': os.path.join(D137, 'UFicha.*')})
     CP137 = mc.copias(D137, 'UFicha.pas', 'CAJON_BORRADOS')
     CF137 = mc.copias(D137, 'UFicha.dfm', 'CAJON_BORRADOS')
     if CP137 and CF137 and os.path.exists(mc.marca_dueno(CP137[0])):
+        CAJON137 = os.path.dirname(CP137[0])
         with mc.bloqueado(CF137[0], lectura=True):
-            res, sc, t = llama('delphi_move', {'path': CP137[0], 'dest': os.path.join(D137, 'UFicha.pas')})
-        check('E137 restaurar con el form bloqueado: MOVE-017 y la copia CON su marca de dueno',
-              res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and
-              os.path.exists(CP137[0]) and os.path.exists(mc.marca_dueno(CP137[0])), t[:250])
+            res, sc, t = llama('delphi_move', {'path': os.path.join(CAJON137, 'UFicha.*'), 'dest': D137})
+        check('E137 restaurar UFicha.* con la copia del form bloqueada: SYS-027, nada restaurado y las copias CON su marca',
+              res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and
+              not os.path.exists(os.path.join(D137, 'UFicha.pas')) and
+              all(os.path.exists(c) and os.path.exists(mc.marca_dueno(c)) for c in CP137 + CF137), t[:250])
     else:
-        check('E137 fixture: el borrado deja las dos copias con su marca', False, (CP137, CF137))
+        check('E137 fixture: el borrado de UFicha.* deja las dos copias con su marca', False, (CP137, CF137))
 
     # E138 la copia de seguridad de un move de carpeta no sigue sus enlaces (una
     # junction a la raiz dentro: MOVE-012 "nombre demasiado largo")
@@ -1982,13 +1994,14 @@ try:
           not res.get('isError') and b143b == 'a\nx = 2\nb\nx = 1\nc\nfin\nmas1\nmas2\n',
           '%s | %r' % (t[:160], b143b))
 
-    # E144 renombrar una unit en un .dproj LF lo deja en LF (el tercer escritor)
+    # E144 renombrar una unit de un .dproj LF: nacio cuando el rename re-apuntaba el .dproj
+    # (el tercer escritor, que lo pasaba a CRLF). Desde V19 no lo toca: byte a byte
     if os.path.exists(DPROJ129) and os.path.exists(os.path.join(D129, 'UOtra.pas')):
+        antes144 = open(DPROJ129, 'rb').read()
         res, sc, t = llama('delphi_move', {'path': os.path.join(D129, 'UOtra.pas'),
                                            'dest': os.path.join(D129, 'UOtraBis.pas')})
-        b144 = open(DPROJ129, 'rb').read()
-        check('E144 renombrar una unit en un .dproj LF: sigue en LF',
-              not res.get('isError') and b'UOtraBis' in b144 and b'\r\n' not in b144, t[:200])
+        check('E144 renombrar una unit de un .dproj LF: el .dproj byte a byte',
+              not res.get('isError') and open(DPROJ129, 'rb').read() == antes144, t[:200])
 
     # E145 el preview avisa del +R tambien para un delete-line
     P145 = os.path.join(D143, 'ro145.txt')
@@ -2005,17 +2018,18 @@ try:
               mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
         llama('delphi_changeset', {'command': 'rollback', 'id': c145})
 
-    # E146 mover (renombrar) una unit con su .dpr bloqueado: SYS-027 y nada movido
-    U146 = os.path.join(D131, 'UUnaSuelta.pas')
+    # E146 renombrar una unit con su .dpr bloqueado: nacio cuando el rename lo re-apuntaba
+    # (CFG-111 con SYS-027). Desde V19 se renombra, y la nota dice que no pudo leer el .dpr
+    llama('delphi_create', {'kind': 'unit', 'name': 'UOtraSuelta', 'project': DPROJ131})
+    U146 = os.path.join(D131, 'UOtraSuelta.pas')
     if os.path.exists(U146):
         with mc.bloqueado(DPR131):
-            res, sc, t = llama('delphi_move', {'path': U146, 'dest': os.path.join(D131, 'UUnaSuelta2.pas')})
-        # decima: la negativa dice que se LEIA el .dpr para saber si lista la unit
-        # (CFG-111) y lleva la causa (SYS-027); salia el SYS-027 pelado
-        check('E146 renombrar una unit con su .dpr bloqueado: CFG-111 con SYS-027 dentro, y sigue donde estaba',
-              res.get('isError') is True and mc.abre(t, 'SR_PROYECTO_NO_LEIDO_AL_BUSCAR_FMT') and
-              mc.es(t, 'SR_FICHERO_OCUPADO_FMT') and os.path.exists(U146) and
-              not os.path.exists(os.path.join(D131, 'UUnaSuelta2.pas')), t[:250])
+            res, sc, t = llama('delphi_move', {'path': U146, 'dest': os.path.join(D131, 'UOtraSuelta2.pas')})
+        check('E146 renombrar una unit con su .dpr bloqueado: MOVED y la nota dice que no pudo leer el .dpr',
+              mc.abre(t, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(os.path.join(D131, 'UOtraSuelta2.pas')) and
+              mc.es(t, 'SN_REFERENCIAS_ILEGIBLES_FMT') and 'Lk131.dpr (' in t, t[-500:])
+    else:
+        check('E146 fixture: la unit se crea', False, os.listdir(D131))
 
     # E147 un move que falla no quita una junction ROTA del usuario (el deshacer
     # la tomaba por carpeta creada: TDirectory.Exists dice False de ella)
@@ -2118,49 +2132,49 @@ try:
             if os.path.exists(f):
                 os.chmod(f, stat.S_IREAD | stat.S_IWRITE)
 
-    # E150 copy=true de una unit +R cuyo .dfm no se deja leer: MOVE-017 y la copia
-    # fuera (la copia de un +R es +R: TFile.Delete fallaba, SYS-018 y se quedaba)
+    # E150 copy=true de una unit y su form +R por un comodin, con la unit que no se deja
+    # leer: todo o nada, ni copia ni carpeta sub (la copia de un +R era +R: TFile.Delete
+    # fallaba, SYS-018 y se quedaba). Era MOVE-017, el del par automatico; el +R va en el
+    # .dfm, que va PRIMERO, para que el deshacer tenga algo que quitar
     D150 = os.path.join(JAIL, 'e150')
     os.makedirs(D150)
     P150 = os.path.join(D150, 'URc.pas')
     F150 = os.path.join(D150, 'URc.dfm')
     open(P150, 'w').write('unit URc;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
     open(F150, 'w').write('object Rc: TRc\nend\n')
-    os.chmod(P150, stat.S_IREAD)
-    with mc.bloqueado(F150): # ni leer
-        res, sc, t = llama('delphi_move', {'path': P150, 'dest': os.path.join(D150, 'sub', 'URc.pas'),
+    os.chmod(F150, stat.S_IREAD)
+    with mc.bloqueado(P150): # ni leer
+        res, sc, t = llama('delphi_move', {'path': os.path.join(D150, 'URc.*'), 'dest': os.path.join(D150, 'sub'),
                                            'copy': True})
     try:
-        check('E150 copy=true de una unit +R con el .dfm bloqueado: MOVE-017 y ni copia ni carpeta sub',
-              res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and
+        check('E150 copy=true de URc.* (el .dfm +R) con la unit bloqueada: SYS-027 que la nombra, ni copia ni carpeta sub',
+              res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and 'URc.pas' in t and
               not os.path.exists(os.path.join(D150, 'sub')), '%s | %s' % (t[:300], os.listdir(D150)))
     finally:
-        os.chmod(P150, stat.S_IREAD | stat.S_IWRITE)
-        if os.path.exists(os.path.join(D150, 'sub', 'URc.pas')):
-            os.chmod(os.path.join(D150, 'sub', 'URc.pas'), stat.S_IREAD | stat.S_IWRITE)
+        mc.solo_lectura_quita(F150, os.path.join(D150, 'sub', 'URc.dfm'))
 
-    # E151 mover dos veces una unit +R cuyo .dfm no se deja mover: ninguna copia
-    # en la papelera (la copia de seguridad era +R y cada reintento dejaba una)
+    # E151 mover dos veces una unit y su form +R por un comodin, con la unit que no se deja
+    # mover: ninguna copia en la papelera (la copia de seguridad era +R y cada reintento
+    # dejaba una). Era MOVE-017, el del par automatico; el +R va en el .dfm, que va PRIMERO
     D151 = os.path.join(JAIL, 'e151')
     os.makedirs(D151)
     P151 = os.path.join(D151, 'URm.pas')
     F151 = os.path.join(D151, 'URm.dfm')
     open(P151, 'w').write('unit URm;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
     open(F151, 'w').write('object Rm: TRm\nend\n')
-    os.chmod(P151, stat.S_IREAD)
-    with mc.bloqueado(F151, lectura=True): # leer si; mover no
+    os.chmod(F151, stat.S_IREAD)
+    with mc.bloqueado(P151, lectura=True): # leer si; mover no
         for _ in range(2):
-            res, sc, t = llama('delphi_move', {'path': P151, 'dest': os.path.join(D151, 'sub', 'URm.pas')})
+            res, sc, t = llama('delphi_move', {'path': os.path.join(D151, 'URm.*'), 'dest': os.path.join(D151, 'sub')})
     try:
-        check('E151 mover dos veces una unit +R con el .dfm bloqueado: MOVE-017 y sin copias en la papelera',
-              res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and os.path.exists(P151) and
-              not mc.copias(D151), '%s | %s' % (t[:250], mc.copias(D151)))
-        check('E151 ...y la unit sigue en su sitio con su +R', os.path.exists(P151) and
-              not os.access(P151, os.W_OK), os.listdir(D151))
+        check('E151 mover dos veces URm.* (el .dfm +R) con la unit bloqueada: SYS-027 y sin copias en la papelera',
+              res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and os.path.exists(P151) and
+              not mc.copias(D151) and not os.path.exists(os.path.join(D151, 'sub')),
+              '%s | %s' % (t[:250], mc.copias(D151)))
+        check('E151 ...y el form sigue en su sitio con su +R', os.path.exists(F151) and
+              not os.access(F151, os.W_OK), os.listdir(D151))
     finally:
-        os.chmod(P151, stat.S_IREAD | stat.S_IWRITE)
-        for f in mc.copias(D151):
-            os.chmod(f, stat.S_IREAD | stat.S_IWRITE)
+        mc.solo_lectura_quita(F151, os.path.join(D151, 'sub', 'URm.dfm'), *mc.copias(D151))
 
     # E152 quitar la ULTIMA unit de un paquete o de un programa quita la clausula
     # entera (dejaba la palabra sola: no compila, con OK); y add-unit la vuelve a
@@ -2191,54 +2205,31 @@ try:
           b152 == "program PrSola;\r\n\r\nuses\r\n  USola in 'USola.pas';\r\n\r\nbegin\r\nend.\r\n",
           '%s | %r' % (t[:200], b152))
 
-    # E153 renombrar una unit con directivas en la cabecera ("unit X platform;")
-    # la reescribe, y add-unit la lee; si la cabecera no dice el nombre, MOVE-018
-    # y no "rewritten" (MOVE-015 lo decia sin cambiar nada: el build daba E1038)
+    # E153 renombrar una unit no toca su cabecera (V19 de la 1.23; antes se reescribia,
+    # MOVE-015, y MOVE-018 si no decia el nombre): la cabecera la arregla el agente, y
+    # add-unit lee una con directivas ("unit X platform;": decia que no tenia cabecera)
     D153 = os.path.join(JAIL, 'e153')
     os.makedirs(D153)
     P153 = os.path.join(D153, 'UPlat.pas')
     Q153 = os.path.join(D153, 'UPlat2.pas')
     open(P153, 'w', newline='\r\n').write('unit UPlat platform;\n\ninterface\n\nimplementation\n\nend.\n')
+    antes153 = open(P153, 'rb').read()
     res, sc, t = llama('delphi_move', {'path': P153, 'dest': Q153})
-    b153 = open(Q153, newline='').read() if os.path.exists(Q153) else ''
-    check('E153 renombrar "unit UPlat platform;": la cabecera sigue al fichero (MOVE-015 sin hacerlo)',
-          not res.get('isError') and b153.startswith('unit UPlat2 platform;\r\n') and
-          mc.es(t, 'SN_MOVE_CABECERA_REESCRITA_FMT'), '%s | %r' % (t[:300], b153[:60]))
-    P153b = os.path.join(D153, 'UMal.pas')
-    Q153b = os.path.join(D153, 'UMal2.pas')
-    open(P153b, 'w', newline='\r\n').write('unit OtroNombre;\n\ninterface\n\nimplementation\n\nend.\n')
-    res, sc, t = llama('delphi_move', {'path': P153b, 'dest': Q153b})
-    b153 = open(Q153b, newline='').read() if os.path.exists(Q153b) else ''
-    check('E153 ...una cabecera que no dice el nombre: MOVE-018, sin "rewritten" y sin tocarla',
-          mc.es(t, 'SN_MOVE_CABECERA_NO_ENCONTRADA_FMT') and not mc.es(t, 'SN_MOVE_CABECERA_REESCRITA_FMT') and
-          b153.startswith('unit OtroNombre;\r\n'), '%s | %r' % (t[:300], b153[:60]))
+    check('E153 renombrar "unit UPlat platform;": la cabecera no se toca (byte a byte)',
+          not res.get('isError') and os.path.exists(Q153) and open(Q153, 'rb').read() == antes153, t[:300])
     DPR153 = os.path.join(D153, 'Pl.dpr')
     open(DPR153, 'w', newline='\r\n').write('program Pl;\n\nuses\n  System.SysUtils;\n\nbegin\nend.\n')
-    res, sc, t = llama('delphi_config', {'project': DPR153, 'command': 'add-unit', 'path': Q153})
-    check('E153 ...y add-unit lee "unit UPlat2 platform;" (decia que no tenia cabecera)',
+    res, sc, t = llama('delphi_config', {'command': 'add-unit', 'project': DPR153, 'path': Q153})
+    check('E153 ...add-unit con la cabecera vieja: CFG-039, que la lee con su directiva (UPlat)',
+          res.get('isError') is True and mc.abre(t, 'SR_UNIT_HEADER_MISMATCH_FMT') and '"unit UPlat;"' in t, t[:300])
+    llama('delphi_edit', {'path': Q153, 'old': 'unit UPlat platform;', 'new': 'unit UPlat2 platform;'})
+    res, sc, t = llama('delphi_config', {'command': 'add-unit', 'project': DPR153, 'path': Q153})
+    check('E153 ...y con la cabecera arreglada, add-unit lee "unit UPlat2 platform;" (decia que no tenia cabecera)',
           not res.get('isError') and "UPlat2 in 'UPlat2.pas'" in open(DPR153).read(), t[:200])
 
-    # E154 el SYS-018 de un move cuyo form no va Y cuyo deshacer no pudo con todo
-    # no dice debajo "the unit is back... Nothing was done": lleva la causa sola.
-    # Que falle la VUELTA no se puede provocar de forma determinista desde aqui
-    # (haria falta bloquear lo recien movido entre dos llamadas del servidor):
-    # se mira el catalogo y quien lo compone
-    TXT154 = open(os.path.join(mc.REPO, 'src', 'Server', 'Lsp.Texts.pas'), encoding='utf-8').read()
-    FO154 = open(os.path.join(mc.REPO, 'src', 'Server', 'Mcp.Tools.FileOps.pas'), encoding='utf-8').read()
-    m154 = re.search(r"SF_MOVE_FORM_NO_VA_FMT\s*=\s*'([^']*)'", TXT154)
-    check('E154 la causa de MOVE-017 dentro de SYS-018 no dice que la unit volvio',
-          bool(m154) and 'back' not in m154.group(1) and 'Nothing' not in m154.group(1) and
-          re.search(r'SR_FOTO_NO_VOLVIO_FMT, \[NoVolvio, ACausa\]', FO154) is not None and
-          re.search(r'DeshaceMove\(MsgFmt\(SR_MOVE_FORM_NO_VA_FMT, [^;]*MsgFmt\(SF_MOVE_FORM_NO_VA_FMT',
-                    FO154, re.S) is not None,
-          m154.group(1) if m154 else 'sin SF_MOVE_FORM_NO_VA_FMT')
-    # ...y la de MOVE-019, por el MISMO deshacer (DeshaceMove)
-    m170 = re.search(r"SF_MOVE_PROYECTO_NO_VA_FMT\s*=\s*'([^']*)'", TXT154)
-    check('E170 la causa de MOVE-019 dentro de SYS-018 tampoco dice que la unit volvio (el mismo deshacer)',
-          bool(m170) and 'back' not in m170.group(1) and 'Nothing' not in m170.group(1) and
-          re.search(r'DeshaceMove\(MsgFmt\(SR_MOVE_PROYECTO_NO_VA_FMT, [^;]*MsgFmt\(SF_MOVE_PROYECTO_NO_VA_FMT',
-                    FO154, re.S) is not None,
-          m170.group(1) if m170 else 'sin SF_MOVE_PROYECTO_NO_VA_FMT')
+    # (E154 y E170 miraban la causa de MOVE-017 y MOVE-019 dentro del SYS-018 de
+    # DeshaceMove: el par automatico y el re-apuntado salieron con V19 de la 1.23, y con
+    # ellos sus textos y ese deshacer)
 
     # ------------------------------------------------------------ 1.7.1
     # E155 un bloque que llega a la ULTIMA linea de un fichero SIN salto final no
@@ -2291,17 +2282,22 @@ try:
         check('E157 ...edits= igual: rechazado y sin copia diaria', res.get('isError') is True and 'SYS-029' in t and
               not copias_diarias(D155, 'URo.pas'), '%s | %s' % (t[:120], copias_diarias(D155, 'URo.pas')))
 
-    # E158 con .dfm Y .fmx la nota del move nombra a los DOS (nombraba solo el ultimo)
+    # E158 una unit con .dfm Y .fmx que se mueve sola: el aviso del par nombra a los DOS (la
+    # nota del par automatico nombraba solo el ultimo); y el comodin se los lleva luego
     D158 = os.path.join(JAIL, 'e158')
     os.makedirs(D158)
     open(os.path.join(D158, 'UDos.pas'), 'w').write('unit UDos;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
     open(os.path.join(D158, 'UDos.dfm'), 'w').write('object Dos: TDos\nend\n')
     open(os.path.join(D158, 'UDos.fmx'), 'w').write('object Dos: TDos\nend\n')
     res, sc, t = llama('delphi_move', {'path': os.path.join(D158, 'UDos.pas'), 'dest': os.path.join(D158, 'sub', 'UDos.pas')})
-    check('E158 move de una unit con .dfm y .fmx: la nota nombra los dos designers',
-          not res.get('isError') and 'UDos.dfm' in t and 'UDos.fmx' in t and
+    check('E158 move de una unit con .dfm y .fmx: el aviso del par (FILE-051) nombra los dos designers',
+          not res.get('isError') and mc.es(t, 'SN_FILE_PAR_PARTIDO_FMT') and 'UDos.dfm' in t and 'UDos.fmx' in t,
+          t[-600:])
+    res, sc, t = llama('delphi_move', {'path': os.path.join(D158, 'UDos.*'), 'dest': os.path.join(D158, 'sub')})
+    check('E158 ...y UDos.* se los lleva con ella, sin aviso del par',
+          not res.get('isError') and not mc.es(t, 'SN_FILE_PAR_PARTIDO_FMT') and
           os.path.exists(os.path.join(D158, 'sub', 'UDos.dfm')) and os.path.exists(os.path.join(D158, 'sub', 'UDos.fmx')),
-          t[:400])
+          t[-400:])
 
     # E159 textedit con old y SIN new deja la linea en blanco y lo DICE (TEXT-016,
     # como delphi_edit EDIT-089; contestaba "OK line")
@@ -2321,9 +2317,9 @@ try:
     with mc.solo_lectura(P160):
         res, sc, t = llama('delphi_move', {'path': P160, 'dest': os.path.join(D160, 'URc2.pas'), 'copy': True})
         C160 = os.path.join(D160, 'URc2.pas')
-        check('E160 copy=true de una unit +R a OTRO nombre: COPIED, cabecera reescrita y la copia escribible',
-              not res.get('isError') and mc.es(t, 'SN_MOVE_CABECERA_REESCRITA_FMT') and os.path.exists(C160) and
-              os.access(C160, os.W_OK) and open(C160, 'rb').read().startswith(b'unit URc2;'), t[:300])
+        check('E160 copy=true de una unit +R a OTRO nombre: COPIED byte a byte (V19) y la copia escribible',
+              not res.get('isError') and os.path.exists(C160) and os.access(C160, os.W_OK) and
+              open(C160, 'rb').read() == open(P160, 'rb').read(), t[:300])
         res, sc, t = llama('delphi_move', {'path': P160, 'dest': os.path.join(D160, 'sub', 'URc.pas'), 'copy': True})
         C160b = os.path.join(D160, 'sub', 'URc.pas')
         check('E160 ...y al MISMO nombre: la copia sale sin el +R', not res.get('isError') and os.path.exists(C160b) and
@@ -2494,10 +2490,10 @@ try:
           open(os.path.join(D169, 'mv2.txt'), 'rb').read() == b'UNO\ndos\n', t[:200])
 
     # ------------------------------------------------------------ 1.7.2
-    # E170 mover una unit cuyo proyecto no se deja re-apuntar: TODO O NADA
-    # (MOVE-019), como su form (MOVE-017) y como borrarla (FILE-039). Salia
-    # MOVED con el .dpr re-apuntado, el .dproj no y "nothing was written" en
-    # una nota (medido en vivo, 28-sep-2026)
+    # E170 mover una unit cuyo proyecto no se deja tocar (+R): nacio cuando el move re-apuntaba
+    # el proyecto (TODO O NADA, MOVE-019; salia MOVED con el .dpr re-apuntado, el .dproj no y
+    # "nothing was written" en una nota, 28-sep-2026). Desde V19 el move es el del operador:
+    # se hace, los proyectos ni se tocan y la nota los nombra
     D170 = os.path.join(JAIL, 'e170')
     llama('delphi_create', {'kind': 'project-console', 'name': 'Pm', 'dir': D170})
     DPR170 = os.path.join(D170, 'Pm.dpr')
@@ -2507,48 +2503,32 @@ try:
     check('E170 fixture: un proyecto con una unit registrada',
           os.path.exists(U170) and os.path.exists(DPROJ170), t[:200])
     ANT170 = [open(f, 'rb').read() for f in (DPR170, DPROJ170, U170)]
-    COPIAS170 = mc.copias(D170, 'UMov.pas', 'CAJON_BORRADOS')
     N170 = os.path.join(D170, 'sub', 'UNuevo.pas')
     with mc.solo_lectura(DPROJ170):
         res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
-    check('E170 move con el .dproj +R: MOVE-019 y NADA movido (la unit en su sitio, con su cabecera)',
-          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and
-          os.path.exists(U170) and not os.path.exists(N170) and
-          open(U170, 'rb').read() == ANT170[2], '%s | %s' % (t[:300], os.listdir(D170)))
-    check('E170 ...y el .dpr y el .dproj como estaban (el .dpr quedaba re-apuntado)',
-          [open(f, 'rb').read() for f in (DPR170, DPROJ170)] == ANT170[:2], t[:200])
-    check('E170 ...sin carpeta sub y sin copia nueva en la papelera',
-          not os.path.exists(os.path.join(D170, 'sub')) and
-          mc.copias(D170, 'UMov.pas', 'CAJON_BORRADOS') == COPIAS170, os.listdir(D170))
-    # con el .dpr +R falla el primer escritor: lo mismo
-    with mc.solo_lectura(DPR170):
-        res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
-    check('E170 ...con el .dpr +R: MOVE-019, la unit en su sitio y el par intacto',
-          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and
-          os.path.exists(U170) and not os.path.exists(N170) and
-          [open(f, 'rb').read() for f in (DPR170, DPROJ170, U170)] == ANT170, t[:300])
+    check('E170 move con el .dproj +R: MOVED byte a byte, el .dpr y el .dproj como estaban y la nota nombra el .dpr',
+          mc.abre(t, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(N170) and not os.path.exists(U170) and
+          open(N170, 'rb').read() == ANT170[2] and
+          [open(f, 'rb').read() for f in (DPR170, DPROJ170)] == ANT170[:2] and
+          mc.es(t, 'SN_REFERENCIAS_CRUZAN_FMT') and 'Pm.dpr (' in t, '%s | %s' % (t[-500:], os.listdir(D170)))
+    llama('delphi_move', {'path': N170, 'dest': U170})  # de vuelta, para E171
 
-    # E171 DOS proyectos la listan y el segundo no se deja: el primero vuelve
-    # (la foto del move cubre todos), y sin el +R el rename va con los dos
+    # E171 DOS proyectos la listan y el segundo es +R: nacio con el re-apuntado (el primero
+    # volvia, la foto del move cubria los dos). Desde V19: MOVED, los dos como estaban y la
+    # nota nombra los DOS
     llama('delphi_create', {'kind': 'project-console', 'name': 'Pn', 'dir': D170})
     DPR171 = os.path.join(D170, 'Pn.dpr')
     DPROJ171 = os.path.join(D170, 'Pn.dproj')
     res, sc, t = llama('delphi_config', {'command': 'add-unit', 'project': DPROJ171, 'path': U170})
-    check('E171 fixture: la unit en dos proyectos', not res.get('isError') and
+    check('E171 fixture: la unit en dos proyectos', not res.get('isError') and os.path.exists(U170) and
           b'UMov' in open(DPR171, 'rb').read(), t[:200])
-    ANT171 = [open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171, U170)]
+    ANT171 = [open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171)]
     with mc.solo_lectura(DPROJ171):
         res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
-    check('E171 el segundo proyecto no se deja: MOVE-019 y los DOS proyectos como estaban',
-          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and
-          os.path.exists(U170) and not os.path.exists(N170) and
-          [open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171, U170)] == ANT171,
-          t[:300])
-    res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
-    check('E171 ...sin +R el rename va y los dos proyectos la listan por el nombre nuevo',
-          not res.get('isError') and os.path.exists(N170) and not os.path.exists(U170) and
-          all(b'UNuevo' in open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171)) and
-          open(N170, 'rb').read().startswith(b'\xef\xbb\xbfunit UNuevo;'), t[:300])
+    check('E171 el segundo proyecto +R: MOVED, los DOS proyectos como estaban y la nota los nombra',
+          mc.abre(t, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(N170) and not os.path.exists(U170) and
+          [open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171)] == ANT171 and
+          'Pm.dpr (' in t and 'Pn.dpr (' in t, t[-600:])
 
     # E173 (1.7.2) 1.0 es un entero (JSON Schema): se rechazaba con SYS-016;
     # 1.5 sigue sin serlo. Y changeset status no lleva id (su tabla decia que
@@ -2639,10 +2619,11 @@ try:
     check('E174c editar un fichero de %d caracteres va (la carpeta del dia pasa de 232)' % len(P174d),
           not res.get('isError') and open(P174d).read() == 'dos\n', t[:200])
 
-    # E177 MOVE-019 con DOS proyectos y una unit que se NOMBRA a si misma (un
-    # comentario "UMv"): el rename del primero reescribe la unit por segunda
-    # vez y, si el segundo falla, el deshacer la tomaba por cambiada "por otro"
-    # y dejaba la unit vieja con la cabecera nueva (undecima revision, r11a H3)
+    # E177 una unit que se NOMBRA a si misma (un comentario "UMv") y la listan DOS proyectos,
+    # el segundo +R: nacio con el re-apuntado (el rename del primero reescribia la unit por
+    # segunda vez y, si el segundo fallaba, el deshacer dejaba la unit vieja con la cabecera
+    # nueva; undecima revision, r11a H3). Desde V19: MOVED, la unit byte a byte (cabecera y
+    # comentario) y los proyectos como estaban
     D177 = os.path.join(JAIL, 'e177')
     llama('delphi_create', {'kind': 'project-console', 'name': 'Pq', 'dir': D177})
     llama('delphi_create', {'kind': 'project-console', 'name': 'Pr', 'dir': D177})
@@ -2651,17 +2632,17 @@ try:
                                          'content': 'unit UMv;\n\n{ UMv: helpers; see UMv.Foo }\n\ninterface\n\nimplementation\n\nend.\n'})
     U177 = os.path.join(D177, 'UMv.pas')
     llama('delphi_config', {'command': 'add-unit', 'project': DPR177, 'path': U177})
-    ANT177 = [open(f, 'rb').read() for f in (U177, os.path.join(D177, 'Pq.dpr'), DPQ, os.path.join(D177, 'Pr.dpr'), DPR177)]
+    PROY177 = (os.path.join(D177, 'Pq.dpr'), DPQ, os.path.join(D177, 'Pr.dpr'), DPR177)
+    ANT177 = [open(f, 'rb').read() for f in (U177,) + PROY177]
     check('E177 fixture: la unit se nombra a si misma y la listan dos proyectos',
           b'see UMv.Foo' in ANT177[0] and b'UMv' in ANT177[3], ANT177[0][:80])
     N177 = os.path.join(D177, 'UMw.pas')
     with mc.solo_lectura(DPR177):
         res, sc, t = llama('delphi_move', {'path': U177, 'dest': N177})
-    check('E177 el segundo proyecto no se deja: MOVE-019 y la unit vuelve BYTE A BYTE (cabecera y comentario)',
-          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and not mc.es(t, 'SR_FOTO_NO_VOLVIO_FMT') and
-          os.path.exists(U177) and not os.path.exists(N177) and
-          [open(f, 'rb').read() for f in (U177, os.path.join(D177, 'Pq.dpr'), DPQ, os.path.join(D177, 'Pr.dpr'), DPR177)] == ANT177,
-          '%s | %r' % (t[:300], open(U177, 'rb').read()[:60] if os.path.exists(U177) else None))
+    check('E177 el segundo proyecto +R: MOVED, la unit BYTE A BYTE (cabecera y comentario) y los proyectos como estaban',
+          mc.abre(t, 'SK_MOVE_MOVIDO_FMT') and not os.path.exists(U177) and os.path.exists(N177) and
+          [open(f, 'rb').read() for f in (N177,) + PROY177] == ANT177,
+          '%s | %r' % (t[-400:], open(N177, 'rb').read()[:60] if os.path.exists(N177) else None))
 
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian

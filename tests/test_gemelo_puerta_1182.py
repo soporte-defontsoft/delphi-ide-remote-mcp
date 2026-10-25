@@ -1,25 +1,26 @@
 # -*- coding: utf-8 -*-
 """El gemelo designer de una unit, por la puerta (1.18.2, punto 2c).
 
-delphi_move y delphi_delete de una unit se llevan su .dfm/.fmx con ella. La
-puerta juzgaba la UNIT (PathDenied, WriteTargetDenied, EntradaDenegada) y el
-gemelo se movia, se copiaba o iba a la papelera sin preguntar nada: un
-TFile.Move crudo a un nombre derivado (CLAUDE.md: "un primitivo crudo corre
-solo sobre la ruta que la puerta acaba de aprobar"). Comparten carpeta, asi
-que la diferencia esta en lo que la puerta dice de ESE fichero: aqui, una
-entrada de ReadOnlyPaths que lo nombra a el solo.
+Hasta la 1.22 delphi_move y delphi_delete de una unit se llevaban su .dfm/.fmx
+con ella, y la puerta juzgaba solo la UNIT: el gemelo se movia, se copiaba o iba
+a la papelera sin preguntar nada (2c). Desde V19 (1.23) el par no viaja solo:
+se nombra con un comodin (U.*), y CADA entrada que case pasa SU puerta. Comparten
+carpeta, asi que la diferencia esta en lo que la puerta dice de ESE fichero:
+aqui, una entrada de ReadOnlyPaths que lo nombra a el solo.
 
   G0  control: la puerta niega editar y mover el .dfm de solo lectura
-  G1  mover la unit no se lleva su .dfm de solo lectura: se niega (FILE-043)
-      y todo queda como estaba
-  G2  borrar la unit no manda a la papelera su .dfm de solo lectura; y sin
-      la pregunta de antes, la hace el escritor (MoveToTrash) y todo queda
-  G3  control: COPIAR la unit si (leer lo de solo lectura es libre), con su
-      .dfm, y el original intacto
-  G4  mover una unit a un sitio donde su .dfm caeria en solo lectura: se niega
-  G5  COPIAR una unit a un sitio donde su .dfm caeria en solo lectura: se niega
-  ("todo queda": ni el original movido, ni copia en la papelera, ni la
-  carpeta de destino creada: los destinos son carpetas que aun no existen)
+  G1  mover U.* con su .dfm de solo lectura: se niega y todo queda (ni la unit
+      movida, ni copia en la papelera, ni la carpeta de destino creada)
+  G1c ...y la unit sola SI se mueve (el par no viaja solo): el .dfm se queda y
+      la respuesta avisa del par partido (FILE-051)
+  G2  borrar D.* con su .dfm de solo lectura: se niega, todo o nada
+  G2c ...y la unit sola SI va a la papelera, con el aviso del par
+  G3  control: COPIAR C.* si (leer lo de solo lectura es libre), y el original
+      intacto
+  G4  mover W.* adonde su .dfm caeria en solo lectura: se niega
+  G5  COPIAR Z.* adonde su .dfm caeria en solo lectura: se niega
+  (los destinos son carpetas que aun no existen: un move que no se hace no las
+  crea)
 
 Y su segundo emisor, una CARPETA entera (2r, revisor del 2c): lo que lleva
 dentro llega al destino sin que nadie pregunte por ello, y la puerta solo
@@ -40,11 +41,10 @@ Y restaurar desde la papelera (1.18.3; la bateria que faltaba): la unit y su
 designer vuelven con delphi_move desde sus copias de __delphi-patch, y el sitio
 de vuelta del designer es de solo lectura.
 
-  R1  restaurar la unit y su .dfm adonde el .dfm es de solo lectura: el .dfm
-      NO se escribe alli - la unit se lleva su designer de la papelera y la
-      puerta lo frena (FILE-043); el .dfm solo, GUARD-012 - y su copia sigue en
-      la papelera para otro intento. Es una GUARDA (verde ya en la 1.18.2: la
-      puerta del gemelo, 2c, y la de destino lo cubren); vigila que siga asi
+  R0  control: borrar R.* manda la unit y su .dfm a la papelera
+  R1  restaurar los dos adonde el .dfm es de solo lectura: la unit vuelve, el
+      .dfm NO se escribe alli (GUARD-012) y su copia sigue en la papelera para
+      otro intento
 
 Uso:  python tests/test_gemelo_puerta_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -118,7 +118,7 @@ REAL6, J6 = os.path.join(JAIL, 'real6'), os.path.join(JAIL, 'J6')
 os.makedirs(REAL6)
 assert mc.junction(J6, REAL6), 'no se pudo crear el junction J6'
 # solo lectura: los .dfm de U, D y C, y los .dfm que tendria W en nuevo4\ y nuevo5\
-SOLO = ';'.join([U_DFM, D_DFM, C_DFM, os.path.join(NUEVO4, 'X.dfm'), os.path.join(NUEVO5, 'Y.dfm'),
+SOLO = ';'.join([U_DFM, D_DFM, C_DFM, os.path.join(NUEVO4, 'W.dfm'), os.path.join(NUEVO5, 'Z.dfm'),
                  # y lo que llegaria con una carpeta (F1, F2)
                  os.path.join(NUEVOF, 'F', 'U.dfm'), os.path.join(NUEVOG, 'G', 'U.dfm'),
                  os.path.join(NUEVOK, 'K', 'U.dfm'), os.path.join(REAL6, 'A', 'U.dfm'),
@@ -156,43 +156,52 @@ try:
           mc.es(r, 'SR_READONLY_PATH_FMT') and mc.es(r2, 'SR_READONLY_PATH_FMT') and intacto(U_DFM),
           (r[:300], r2[:300]))
 
-    # (el %s de FILE-043, no la ruta que cita la negativa de dentro)
-    r = srv.call('delphi_move', {'path': U_PAS, 'dest': os.path.join(NUEVO1, 'V.pas')})
-    check('G1a mover la unit con su .dfm de solo lectura: FILE-043, que nombra el designer',
-          mc.abre(r, 'SR_GEMELO_DENEGADO_FMT') and 'designer U.dfm goes along' in r, r[:400])
+    r = srv.call('delphi_move', {'path': os.path.join(JAIL, 'U.*'), 'dest': NUEVO1})
+    check('G1a mover U.* con su .dfm de solo lectura: lo niega la puerta de ESA entrada (GUARD-012)',
+          mc.es(r, 'SR_READONLY_PATH_FMT') and 'U.dfm' in r, r[:400])
     check('G1b ...y todo queda: nada movido, nada en la papelera, ninguna carpeta creada',
           intacto(U_PAS, U_DFM) and not os.path.exists(NUEVO1) and not en_papelera('U.'),
           (os.path.exists(NUEVO1), en_papelera('U.')))
 
-    r = srv.call('delphi_delete', {'path': D_PAS})
-    check('G2a borrar la unit con su .dfm de solo lectura: FILE-043, antes de tocar nada',
-          mc.abre(r, 'SR_GEMELO_DENEGADO_FMT') and 'designer D.dfm goes along' in r, r[:400])
-    # (sin la pregunta de antes, la hace el escritor - MoveToTrash - y esto sigue en pie)
+    r = srv.call('delphi_delete', {'path': os.path.join(JAIL, 'D.*')})
+    check('G2a borrar D.* con su .dfm de solo lectura: lo niega su puerta, antes de tocar nada',
+          mc.rechazado(r) and mc.es(r, 'SR_READONLY_PATH_FMT') and 'D.dfm' in r, r[:400])
     check('G2b ...y todo queda: ni la unit ni su .dfm en la papelera',
-          mc.rechazado(r) and intacto(D_PAS, D_DFM) and not en_papelera('D.dfm') and not en_papelera('D.pas'),
+          intacto(D_PAS, D_DFM) and not en_papelera('D.dfm') and not en_papelera('D.pas'),
           (r[:400], en_papelera('D.')))
 
     # que C.dfm ES de solo lectura (si no, el control no mide nada)
     r = srv.call('delphi_edit', {'path': C_DFM, 'old': "  Caption = 'FormC'", 'new': "  Caption = 'Otro'"})
     check('G3a control: C.dfm es de solo lectura de verdad (no se edita)', mc.es(r, 'SR_READONLY_PATH_FMT'), r[:300])
-    COPIA = os.path.join(JAIL, 'copia', 'C2.pas')
-    r = srv.call('delphi_move', {'path': C_PAS, 'dest': COPIA, 'copy': True})
-    check('G3 control: COPIAR la unit si, con su .dfm (leer lo de solo lectura es libre), y el original intacto',
-          not mc.fallo(r) and os.path.isfile(COPIA) and os.path.isfile(os.path.join(JAIL, 'copia', 'C2.dfm')) and
-          intacto(C_PAS, C_DFM), r[:400])
+    COPIA = os.path.join(JAIL, 'copia')
+    r = srv.call('delphi_move', {'path': os.path.join(JAIL, 'C.*'), 'dest': COPIA, 'copy': True})
+    check('G3 control: COPIAR C.* si, la unit y su .dfm (leer lo de solo lectura es libre), y el original intacto',
+          not mc.fallo(r) and os.path.isfile(os.path.join(COPIA, 'C.pas')) and
+          os.path.isfile(os.path.join(COPIA, 'C.dfm')) and intacto(C_PAS, C_DFM), r[:400])
 
-    r = srv.call('delphi_move', {'path': W_PAS, 'dest': os.path.join(NUEVO4, 'X.pas')})
-    check('G4a mover una unit adonde su .dfm caeria en solo lectura: FILE-043, con la ruta negada',
-          mc.abre(r, 'SR_GEMELO_DENEGADO_FMT') and 'designer W.dfm goes along' in r and 'X.dfm' in r, r[:400])
+    r = srv.call('delphi_move', {'path': os.path.join(JAIL, 'otra', 'W.*'), 'dest': NUEVO4})
+    check('G4a mover W.* adonde su .dfm caeria en solo lectura: lo niega la puerta de ese destino',
+          mc.es(r, 'SR_READONLY_PATH_FMT') and 'W.dfm' in r, r[:400])
     check('G4b ...y todo queda: nada movido, nada en la papelera, ninguna carpeta creada',
           intacto(W_PAS, W_DFM) and not os.path.exists(NUEVO4) and not en_papelera('W.'),
           (os.path.exists(NUEVO4), en_papelera('W.')))
 
-    r = srv.call('delphi_move', {'path': Z_PAS, 'dest': os.path.join(NUEVO5, 'Y.pas'), 'copy': True})
-    check('G5a COPIAR una unit adonde su .dfm caeria en solo lectura: FILE-043, con la ruta negada',
-          mc.abre(r, 'SR_GEMELO_DENEGADO_FMT') and 'designer Z.dfm goes along' in r and 'Y.dfm' in r, r[:400])
+    r = srv.call('delphi_move', {'path': os.path.join(JAIL, 'otra', 'Z.*'), 'dest': NUEVO5, 'copy': True})
+    # (la decision de la copia lo dice antes que la puerta de escribir: MOVE-020)
+    check('G5a COPIAR Z.* adonde su .dfm caeria en solo lectura: lo niega la decision de la copia (MOVE-020)',
+          mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT') and 'Z.dfm' in r, r[:400])
     check('G5b ...y no queda ni la copia ni su carpeta, y el original intacto',
           intacto(Z_PAS, Z_DFM) and not os.path.exists(NUEVO5), os.path.exists(NUEVO5))
+
+    # la unit SOLA, nombrada por su nombre: el par no viaja solo (V19)
+    r = srv.call('delphi_move', {'path': U_PAS, 'dest': os.path.join(NUEVO1, 'V.pas')})
+    check('G1c la unit sola SI se mueve: su .dfm de solo lectura se queda, y FILE-051 avisa del par',
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and os.path.isfile(os.path.join(NUEVO1, 'V.pas')) and
+          intacto(U_DFM) and mc.es(r, 'SN_FILE_PAR_PARTIDO_FMT'), r[:500])
+    r = srv.call('delphi_delete', {'path': D_PAS})
+    check('G2c ...y borrar la unit sola SI la manda a la papelera: el .dfm se queda, con el aviso',
+          mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(D_PAS) and intacto(D_DFM)
+          and mc.es(r, 'SN_FILE_PAR_PARTIDO_FMT'), r[:500])
 
     # ------------------------------------------------------------- F (2r)
     # (el estado primero: contra la 1.18.1 la clave nueva no esta en el catalogo)
@@ -218,19 +227,20 @@ try:
           os.path.isfile(os.path.join(SRC, 'M', 'U.dfm')) and not os.path.exists(os.path.join(REAL6, 'A')) and
           mc.abre(r, 'SR_MUDANZA_DESTINO_PROTEGIDO_FMT'), r[:400])
     # ------------------------------------------------------------- R (1.18.3)
-    r = srv.call('delphi_delete', {'path': R_PAS})
+    r = srv.call('delphi_delete', {'path': os.path.join(JAIL, 'rest', 'R.*')})
     cp_pas = [c for c in en_papelera('R.pas') if os.path.isfile(c)]
     cp_dfm = [c for c in en_papelera('R.dfm') if os.path.isfile(c)]
-    check('R0 control: borrar R.pas manda la unit y su .dfm a la papelera',
-          not mc.fallo(r) and cp_pas and cp_dfm and not os.path.exists(R_PAS), (r[:300], cp_pas, cp_dfm))
+    check('R0 control: borrar R.* manda la unit y su .dfm a la papelera',
+          not mc.fallo(r) and cp_pas and cp_dfm and not os.path.exists(R_PAS) and not os.path.exists(R_DFM),
+          (r[:300], cp_pas, cp_dfm))
     VUELTA = os.path.join(JAIL, 'vuelta')
     r1 = srv.call('delphi_move', {'path': cp_pas[0], 'dest': os.path.join(VUELTA, 'R.pas')}) if cp_pas else ''
     r2 = srv.call('delphi_move', {'path': cp_dfm[0], 'dest': os.path.join(VUELTA, 'R.dfm')}) if cp_dfm else ''
-    check('R1 restaurar la unit y su .dfm adonde el .dfm es de solo lectura: el .dfm no se escribe alli y su '
-          'copia sigue en la papelera',
+    check('R1 restaurar la unit y su .dfm adonde el .dfm es de solo lectura: la unit vuelve, el .dfm no se '
+          'escribe alli y su copia sigue en la papelera',
+          mc.abre(r1, 'SK_MOVE_MOVIDO_FMT') and os.path.isfile(os.path.join(VUELTA, 'R.pas')) and
           not os.path.exists(os.path.join(VUELTA, 'R.dfm')) and cp_dfm and os.path.isfile(cp_dfm[0]) and
-          mc.abre(r1, 'SR_GEMELO_DENEGADO_FMT') and 'R.dfm' in r1 and mc.abre(r2, 'SR_READONLY_PATH_FMT'),
-          (r1[:300], r2[:300]))
+          mc.abre(r2, 'SR_READONLY_PATH_FMT'), (r1[:300], r2[:300]))
     check('el servidor sigue vivo', not mc.fallo(srv.call('delphi_list', {'root': JAIL})))
 finally:
     srv.cierra()

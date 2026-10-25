@@ -6,7 +6,9 @@ session may write and asserts it comes out untouched:
 
   H1  renaming a unit rewrote every file its .dpr lists - including one
       OUTSIDE the roots (measured live against 1.3.1: rewritten, plus a
-      __delphi-patch folder created next to it).
+      __delphi-patch folder created next to it). Since V19 (1.23) a move
+      rewrites nothing at all: the outside file and the reference stay, and
+      the note names only what this session can see.
   B   a junction inside a root pointing to a reference declared INSIDE the
       root, or to a ReadOnlyPaths folder, made it writable (the gate compared
       the text path).
@@ -99,11 +101,12 @@ check('H1 rename: MOVIDO', mc.abre(out, 'SK_MOVE_MOVIDO_FMT'), out[:300])
 check('H1 el fichero de FUERA sigue byte a byte', open(SHARED, 'rb').read() == antes_out, open(SHARED).read()[:120])
 check('H1 ...y sin __delphi-patch creado fuera', os.listdir(OUT) == ['Shared.pas'], os.listdir(OUT))
 check('H1 el fichero de la REFERENCIA sigue byte a byte', open(REFSH, 'rb').read() == antes_ref, open(REFSH).read()[:120])
-# ('Shared.pas' a secas es parte de 'RefShared.pas': el de FUERA, sin el Ref
-# delante; revisor de baterias, 18-oct-2026)
-check('H1 la respuesta dice cuales NO se reescribieron', mc.es(out, 'SN_UNIT_RENAME_NOT_WRITTEN_FMT')
-      and re.search(r'(?<!Ref)Shared\.pas', out) is not None and 'RefShared.pas' in out, out[-400:])
-check('H1 lo propio SI se reescribe (el .dpr nombra UNew)', 'UNew' in open(os.path.join(APP, 'App.dpr'), encoding='utf-8-sig').read(), '')
+# desde V19 (1.23) nada se reescribe: la nota nombra el .dpr que la lista y
+# nada de fuera ni de la referencia ('Shared.pas' cubre tambien RefShared.pas)
+check('H1 la nota nombra el .dpr que la lista (MOVE-023) y nada de fuera ni de la referencia',
+      mc.es(out, 'SN_REFERENCIAS_CRUZAN_FMT') and 'App.dpr' in out and 'Shared.pas' not in out, out[-600:])
+check('H1 ...y lo propio tampoco se reescribe: el .dpr sigue nombrando UOld (V19)',
+      'UOld in' in open(os.path.join(APP, 'App.dpr'), encoding='utf-8-sig').read(), '')
 
 # ---- B: a junction inside the root does not make a read-only place writable
 subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(MINE, 'aNest'), NEST], capture_output=True)

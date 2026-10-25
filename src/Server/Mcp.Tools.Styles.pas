@@ -684,7 +684,7 @@ begin
           // desde la carpeta del .rc, por EL resolutor ("\x" y "X:y" se
           // miraban en la unidad del PROCESO); lo que no se resuelve, no esta
           var Ruta := RutaDesde(TPath.GetDirectoryName(F), Entrada.Fichero);
-          Esta := (Ruta <> '') and (ReadPathDenied(Ruta) = '') and TFile.Exists(Ruta);
+          Esta := ExisteYSeLee(Ruta);
         except
           // una ruta que no es ruta: no esta
         end;

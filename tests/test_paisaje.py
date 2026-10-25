@@ -103,7 +103,7 @@ REGLAS = [
      [(u, '*') for u in ('Lsp.BuildRunner.pas', 'Lsp.Casa.pas', 'Lsp.DesignerMetaGen.pas',
                          'Lsp.Discovery.pas', 'Lsp.Guard.pas', 'Lsp.LogSink.pas', 'Lsp.PackageMap.pas',
                          'Lsp.Patch.pas', 'Lsp.ProjectUnits.pas', 'Lsp.Session.pas', 'Lsp.Styles.pas',
-                         'Mcp.Tools.FileOps.pas', 'Mcp.Tools.Messages.pas', 'Mcp.Tools.PAServer.pas',
+                         'Mcp.Tools.Messages.pas', 'Mcp.Tools.PAServer.pas',
                          'Mcp.Tools.Report.pas', 'Mcp.Tools.Styles.pas', 'Mcp.Tools.Vault.pas',
                          'Mcp.Tools.Workspace.pas', 'Mcp.Vault.Seed.pas', 'Mld.Sesion.pas', 'Mld.X11.pas',
                          'FormRender.Comun.pas', 'McpRunJob.dpr')],
@@ -876,6 +876,12 @@ REGLAS = [
       ('Lsp.Guard.pas', 'CopiaNuestra'), ('Lsp.Guard.pas', 'CopiaArbol'),
       ('Lsp.Guard.pas', 'MueveArbol'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
       ('Mcp.Tools.FileOps.pas', 'MoveToTrash'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
+      # el mezclador de una carpeta que ya esta en el destino y su deshacer (V19: la
+      # puerta del arbol antes, MovidoDenegado; entrada a entrada, un enlace como
+      # enlace) y la vuelta de un borrado con comodin que no pudo ir entero: lo que
+      # esa misma operacion acaba de mover
+      ('Lsp.Guard.pas', 'MezclaArbol'), ('Lsp.Guard.pas', 'DeshazMezcla'),
+      ('Mcp.Tools.FileOps.pas', 'BorrarNucleo'),
       # la copia de la regla 11 dentro del vault (DentroDelVault antes) y la subida por
       # trozos de delphi_upload (la puerta de la jaula a la entrada; no atomica)
       ('Mcp.Tools.Vault.pas', 'VaultBackup'), ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
@@ -914,6 +920,8 @@ REGLAS = [
       ('Lsp.Guard.pas', 'BorraLoNuestro'), ('Lsp.Guard.pas', 'ConsumeAgentCapture'),
       ('Lsp.Guard.pas', 'BorraArbolDentro'), ('Lsp.Guard.pas', 'VaciaDesechable'),
       ('Lsp.Guard.pas', 'QuitaCarpetasCreadas'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
+      # la carpeta del origen que la mezcla acaba de vaciar (RemoveDir: solo vacia)
+      ('Lsp.Guard.pas', 'MezclaArbol'),
       ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
       ('Mcp.Tools.FileOps.pas', 'QuitaMarcaDeDueno'), ('Mcp.Tools.FileOps.pas', 'QuitaCopiaDeSeguridad'),
       ('Mcp.Tools.FileOps.pas', 'BorraDeVerdad'), ('Mcp.Tools.FileOps.pas', 'RecogeVacias'),
@@ -945,6 +953,23 @@ REGLAS = [
      [('Lsp.Guard.pas', 'CrearCarpeta')],
      'CrearCarpeta (Lsp.Guard): crear una carpeta tolerando la carrera, detras de la puerta de quien la '
      'pide; otra que la creara por su cuenta seria otra puerta'),
+    # (V19 de la 1.23) la marca hace que la entrada juzgue la CARPETA de la ruta y no la ruta: solo
+    # donde la tool expande el comodin ella misma y juzga cada entrada que case
+    ('un parametro de ruta que acepta un comodin en el nombre', r"\[ComodinEnNombre\]",
+     [('Mcp.Tools.FileOps.pas', '*')],
+     '[ComodinEnNombre] (Lsp.Attributes): con un comodin en el nombre, el suelo de la jaula y la forma '
+     'larga miran su carpeta (CarpetaDelComodin). Solo el path de delphi_move y delphi_delete, que '
+     'expanden el comodin y pasan cada entrada por su puerta; en otro parametro, la ruta con * llegaria '
+     'a una tool que no la expande'),
+    # (V19 de la 1.23, 25-oct-2026) estaba a mano en seis sitios, y en dos sin la puerta delante
+    ('preguntar si existe lo que se va a leer, a mano',
+     r"\(ReadPathDenied\([^()]*\)\s*=\s*''\)\s*and\s*\(?T(?:File|Directory)\.Exists\s*\(|"
+     r"T(?:File|Directory)\.Exists\s*\([^()]*\)\s*and\s*\(ReadPathDenied\([^()]*\)\s*=\s*''\)|"
+     r"\(ReadPathDenied\([^()]*\)\s*<>\s*''\)\s*or\s*not\s*\(?T(?:File|Directory)\.Exists\s*\(",
+     [],
+     'ExisteYSeLee (Lsp.Guard): la puerta de leer PRIMERO y despues si existe; lo de fuera ni se '
+     'pregunta. La nota de una mudanza contaba un $I y una propiedad que salian de la raiz solo si lo de '
+     'fuera existia (25-oct-2026): decia a quien no lo lee si estaba'),
     ('atributos o fechas sin la puerta',
      r"\bSetFileAttributes\w*\s*\(|TFile\.SetAttributes\s*\(|\bSetFileTime\s*\(|"
      r"TFile\.Set(?:CreationTime|LastWriteTime|LastAccessTime)\w*\s*\(",
@@ -1414,6 +1439,10 @@ PLANTADO = {
     'borrar sin la puerta': "  TFile.Delete(Ruta);",
     'mover o copiar un arbol con la RTL': "  TDirectory.Move(Origen, Destino);",
     'crear una carpeta sin la puerta': "  ForceDirectories(Dir);",
+    'un parametro de ruta que acepta un comodin en el nombre': "    [ComodinEnNombre]",
+    # la de Mcp.Tools.Styles hasta el 25-oct-2026
+    'preguntar si existe lo que se va a leer, a mano':
+        "  Esta := (Ruta <> '') and (ReadPathDenied(Ruta) = '') and TFile.Exists(Ruta);",
     'atributos o fechas sin la puerta': "  SetFileAttributes(PChar(Ruta), FILE_ATTRIBUTE_NORMAL);",
     'la cabecera de un PNG': "  W := (B[16] shl 24) or (B[17] shl 16) or (B[18] shl 8) or B[19];",
     # la linea del build de hasta la 1.18.1
@@ -1491,6 +1520,14 @@ for forma in ("  else if Name.EndsWith('DataModule', True) then",
     cazados = fuera_de_casa(REGLA_RAIZ, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                           'RaizAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (REGLA_RAIZ[0], forma.strip()), len(cazados) == 1, cazados)
+# las otras dos formas de la pregunta de existir a mano: al reves (Lsp.DesignerEdit) y negada
+# (Lsp.DesignerMeta), hasta el 25-oct-2026
+REGLA_EXISTE = next(r for r in REGLAS if r[0] == 'preguntar si existe lo que se va a leer, a mano')
+for forma in ("  F.HayPas := TFile.Exists(F.Pas) and (ReadPathDenied(F.Pas) = '');",
+              "    if (ReadPathDenied(APas) <> '') or not TFile.Exists(APas) then"):
+    cazados = fuera_de_casa(REGLA_EXISTE, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                            'ExisteAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_EXISTE[0], forma.strip()), len(cazados) == 1, cazados)
 # la otra forma del mensaje del lector a mano: su formato del RTL fuera de su casa
 REGLA_LECTOR = next(r for r in REGLAS if r[0] == 'el mensaje del lector de forms partido a mano')
 cazados = fuera_de_casa(REGLA_LECTOR, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
@@ -1909,7 +1946,7 @@ POSITIVOS = re.compile(r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+in\b|(?<!no
 check('mutante de los ids positivos: se cuentan las dos formas, y las negativas no',
       len(POSITIVOS.findall("x = 'CFG-043' in r and mc.tiene(r, 'GIT-067') and not mc.tiene(r, 'GIT-001') "
                             "and 'GIT-002' not in r and '[GIT-051 DENIED]' in r")) == 3)
-IDS_POSITIVOS_TOPE = 210  # medido el 25-oct-2026 (V56)
+IDS_POSITIVOS_TOPE = 201  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es)
 _n = sum(len(POSITIVOS.findall(l)) for _, t in TEXTOS_PY for l in codigo_py(t))
 check('los ids positivos a mano: %d, el tope declarado (solo puede encoger: si baja, se baja el tope)' % _n,
       _n == IDS_POSITIVOS_TOPE, IDS_POSITIVOS_TOPE)

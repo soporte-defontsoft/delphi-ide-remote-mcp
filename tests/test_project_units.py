@@ -5,9 +5,10 @@ project, done by the server so the agent never edits .dpr/.dproj by hand):
 - delphi_create form-vcl now writes the <DCCReference> with Form/FormType;
 - delphi_config add-unit / remove-unit on an EXISTING .pas (idempotent,
   file stays on disk, view lists units);
-- delphi_delete of a unit: designer pair trashed + projects updated;
-- delphi_move rename of a unit: designer pair moved, header rewritten,
-  projects re-pointed;
+- delphi_delete and delphi_move of a unit, as an operator (V19 of 1.23): the
+  file only - its designer, its header and the projects stay - and the note
+  names what still points at it; fix-references re-points the entry (with
+  its form, its trailing directive and its //), remove-unit drops it;
 - refusals: header/file mismatch, non-.pas, missing path, jail.
 Every structural step is proven by a real MSBuild build.
 
@@ -211,9 +212,12 @@ for _u in ('UnitA', 'UnitB', 'DebugU'):
 pon_uses(DDPR, "uses\r\n  System.SysUtils,\r\n  UnitA in 'UnitA.pas' {$IFDEF DEBUG},\r\n"
                "  DebugU in 'DebugU.pas' {$ENDIF},\r\n  UnitB {$IFDEF DEBUG},\r\n"
                "  DebugU2 {$ENDIF};")
-out = call('delphi_move', {"path": os.path.join(DDIR, 'UnitA.pas'), "dest": os.path.join(DDIR, 'UnitZ.pas')})
-check('move rename: la directiva de DETRAS de la entrada se queda',
-      mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and "UnitZ in 'UnitZ.pas' {$IFDEF DEBUG},\r\n" in rd(DDPR),
+# (desde V19 un move no re-apunta: la entrada la reescribe fix-references, por el
+# MISMO escritor, RenameProjectUnit)
+out = call('delphi_move', {"path": os.path.join(DDIR, 'UnitA.pas'), "dest": os.path.join(DDIR, 'sub', 'UnitA.pas')})
+out = call('delphi_config', {"project": os.path.join(DDIR, 'PDir.dproj'), "command": "fix-references"})
+check('fix-references: la directiva de DETRAS de la entrada re-apuntada se queda',
+      mc.abre(out, 'SN_ARREGLA_FMT') and "UnitA in 'sub\\UnitA.pas' {$IFDEF DEBUG},\r\n" in rd(DDPR),
       out[:200] + ' | ' + rd(DDPR))
 out = call('delphi_config', {"project": os.path.join(DDIR, 'PDir.dproj'), "command": "add-unit",
                              "path": os.path.join(DDIR, 'UnitB.pas')})
@@ -224,7 +228,7 @@ check('add-unit: completar una entrada conserva la directiva de detras',
 pon_uses(DDPR, rd(DDPR)[rd(DDPR).index('uses'):].split(';')[0].replace(
     "  UnitB in 'UnitB.pas' {$IFDEF DEBUG},\r\n  DebugU2 {$ENDIF}", "  UnitB in 'UnitB.pas'") + ';')
 ok, err = build_ok(os.path.join(DDIR, 'PDir.dproj'))
-check('build: la renombrada con su condicional COMPILA', ok, err + ' | ' + rd(DDPR))
+check('build: la re-apuntada con su condicional COMPILA', ok, err + ' | ' + rd(DDPR))
 # el CreateForm se escribe y se quita en el CODIGO del .dpr: un
 # Application.Run comentado encima del de verdad se lo llevaba DENTRO del
 # comentario, uno comentado de la misma clase pasaba por "ya esta", y quitar
@@ -375,106 +379,105 @@ check('add-unit form existente: uses + CreateForm de vuelta',
       "{FormUClientes}" in dpr and 'CreateForm(TFormUClientes, FormUClientes)' in dpr, dpr)
 check('add-unit form existente: DCCReference con Form', '<Form>FormUClientes</Form>' in rd(DPROJ), '')
 
-# ---- delphi_delete of a unit: pair + projects ----
+# ---- delphi_delete of a unit, as an operator (V19): the file only ----
+antes_dpr = rd(DPR)
 out = call('delphi_delete', {"path": os.path.join(VDIR, 'UClientes.pas')})
 check('delete unit: BORRADO', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT'), out[:300])
-check('delete unit: designer a la papelera tambien', 'UClientes.dfm' in out and not os.path.exists(os.path.join(VDIR, 'UClientes.dfm')), out)
-check('delete unit: proyecto actualizado (1)', mc.es(out, 'SN_FILE_PROJECTS_UPDATED_FMT') and mc.ids(out).count(mc.id_de('SN_UNIT_REMOVED_GONE_FMT')) == 1, out)
+check('delete unit: su designer se queda, y FILE-051 lo dice con la salida (UClientes.*)',
+      os.path.exists(os.path.join(VDIR, 'UClientes.dfm')) and mc.es(out, 'SN_FILE_PAR_PARTIDO_FMT') and
+      'UClientes.*' in out, out)
+check('delete unit: el .dpr sigue igual, y FILE-046 lo nombra', rd(DPR) == antes_dpr and
+      mc.es(out, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and 'App.dpr' in out, out)
+out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": os.path.join(VDIR, 'UClientes.pas')})
 dpr = rd(DPR)
-check('delete unit: sin rastro en el .dpr', 'UClientes' not in dpr, dpr)
-check('delete unit: sin rastro en el .dproj', 'UClientes' not in rd(DPROJ), '')
+check('remove-unit de la borrada: sin rastro en el .dpr ni en el .dproj',
+      mc.abre(out, 'SN_UNIT_REMOVED_SIN_FICHERO_FMT') and 'UClientes' not in dpr and 'UClientes' not in rd(DPROJ), out[:300] + dpr)
 ok, err = build_ok(DPROJ)
-check('build: tras delete COMPILA', ok, err)
-# a unit nobody lists: plain delete, note says so
+check('build: tras delete + remove-unit COMPILA', ok, err)
+# a unit nobody lists: plain delete, nothing to say
 out = call('delphi_delete', {"path": hand})
-check('delete unit suelta: nota "ningun .dpr"', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and mc.es(out, 'SN_FILE_PROJECTS_NONE'), out[:300])
+check('delete unit suelta: sin nota (nadie la lista, no tiene par)', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and
+      not mc.es(out, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and not mc.es(out, 'SN_FILE_PAR_PARTIDO_FMT'), out[:300])
 
-# ---- delphi_move rename of a unit ----
+# ---- delphi_move of a unit, as an operator (V19 of 1.23) ----
 out = call('delphi_create', {"kind": "form-vcl", "name": "UVenta", "project": DPR})
 check('create form UVenta', mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT'), out[:200])
-# a unit that USES UVenta and names it qualified: both must follow the rename
-# (Hermes, 2026-09-22, test 19: the .dpr kept UBatHelper.Bat11Sum and the
-# build died with E2003). A 'UVenta.' inside a string literal must NOT move.
+# a unit that USES UVenta and names it qualified, and one with the header and its
+# uses on ONE line: a move rewrites none of them (renaming a unit is the agent's,
+# David 17-oct-2026; until 1.22 the move did, Hermes 2026-09-22 test 19)
 usa = os.path.join(VDIR, 'UUsaVenta.pas')
 open(usa, 'wb').write(b"unit UUsaVenta;\r\n\r\ninterface\r\n\r\nuses\r\n  UVenta;\r\n\r\nfunction HayVenta: string;\r\n\r\nimplementation\r\n\r\nfunction HayVenta: string;\r\nbegin\r\n  { it's } Result := UVenta.FormUVenta.Name; // de UVenta\r\n  if UVenta.FormUVenta <> nil then\r\n    Result := 'UVenta.FormUVenta'\r\n  else\r\n    Result := '';\r\nend;\r\n\r\nend.\r\n")
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": usa})
 check('unit que usa UVenta anadida al proyecto', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
-# y una con la cabecera y su uses en UNA linea: el uses tambien sigue el rename (se
-# saltaban las lineas enteras de la cabecera; ahora solo su NOMBRE: revisor 8, B3)
 cabusa = os.path.join(VDIR, 'UCabUsa.pas')
 open(cabusa, 'wb').write(b"unit UCabUsa; interface uses UVenta; implementation end.\r\n")
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": cabusa})
 check('unit con la cabecera y el uses de UVenta en una linea anadida', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
-# y una con un CAMPO y una VARIABLE que se llaman como la unit: no son la unit, y se
-# renombraban con ella (el build caia con E2003 y la tool decia MOVED; 18-oct-2026)
-campo = os.path.join(VDIR, 'UCampoVenta.pas')
-open(campo, 'wb').write(b"unit UCampoVenta;\r\n\r\ninterface\r\n\r\nuses\r\n  UVenta;\r\n\r\ntype\r\n  TFila = record\r\n"
-                        b"    UVenta: Integer;\r\n  end;\r\n\r\nfunction Cuenta(const F: TFila): Integer;\r\n\r\n"
-                        b"implementation\r\n\r\nfunction Cuenta(const F: TFila): Integer;\r\nvar\r\n  UVenta: Integer;\r\n"
-                        b"begin\r\n  UVenta := F.UVenta;\r\n  Result := UVenta;\r\nend;\r\n\r\nend.\r\n")
-out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": campo})
-check('unit con un campo y una variable que se llaman UVenta anadida', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
-# un // detras de la coma de UVenta es suyo y la sigue con su nombre nuevo (la
-# entrada se cambia EN SU SITIO: 1.10.0, la duena del // ya no se busca por el
-# nombre, que el rename cambia)
+# un // detras de la coma de UVenta es suyo: la entrada re-apuntada lo conserva
+# (la entrada se cambia EN SU SITIO: 1.10.0)
 _b = open(DPR, 'rb').read()
 _bom = b'\xef\xbb\xbf' if _b.startswith(b'\xef\xbb\xbf') else b''
 _t = _b[len(_bom):].decode('utf-8')
 _n = _t.count("UVenta in 'UVenta.pas' {FormUVenta},")
 open(DPR, 'wb').write(_bom + _t.replace("UVenta in 'UVenta.pas' {FormUVenta},",
                                         "UVenta in 'UVenta.pas' {FormUVenta}, // la venta", 1).encode('utf-8'))
-check('move rename: la prueba del // parte de UVenta en medio de la clausula', _n == 1, _t)
+check('la prueba del // parte de UVenta en medio de la clausula', _n == 1, _t)
+antes = {p: rd(p) for p in (DPR, DPROJ, usa, cabusa)}
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UVenta.pas'), "dest": os.path.join(VDIR, 'UVentas.pas')})
-check('move rename: MOVIDO', mc.abre(out, 'SK_MOVE_MOVIDO_FMT'), out[:400])
-check('move rename: designer movido', os.path.exists(os.path.join(VDIR, 'UVentas.dfm')) and not os.path.exists(os.path.join(VDIR, 'UVenta.dfm')), out)
-src = rd(os.path.join(VDIR, 'UVentas.pas'))
-check('move rename: cabecera reescrita', 'unit UVentas;' in src, src[:80])
-check('move rename: proyecto reapuntado', mc.es(out, 'SN_FILE_PROJECTS_UPDATED_FMT') and mc.ids(out).count(mc.id_de('SN_UNIT_RENAMED_FMT')) == 1, out)
+check('move rename: MOVIDA la unit sola; su designer se queda',
+      mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(os.path.join(VDIR, 'UVentas.pas')) and
+      os.path.exists(os.path.join(VDIR, 'UVenta.dfm')) and not os.path.exists(os.path.join(VDIR, 'UVentas.dfm')), out[:400])
+check('move rename: nada se reescribe (su cabecera, el .dpr, el .dproj, quien la usa)',
+      'unit UVenta;' in rd(os.path.join(VDIR, 'UVentas.pas')) and all(rd(p) == t for p, t in antes.items()), out[:400])
+check('move rename: la nota nombra el .dpr (MOVE-023) y el par partido con su salida (FILE-051, UVenta.*)',
+      mc.es(out, 'SN_REFERENCIAS_CRUZAN_FMT') and 'App.dpr' in out and mc.es(out, 'SN_FILE_PAR_PARTIDO_FMT') and
+      'UVenta.*' in out, out)
+# de vuelta a su nombre, y CON su form a una subcarpeta: lo que la nota dice
+out = call('delphi_move', {"path": os.path.join(VDIR, 'UVentas.pas'), "dest": os.path.join(VDIR, 'UVenta.pas')})
+check('move de vuelta a su nombre: MOVIDA', mc.abre(out, 'SK_MOVE_MOVIDO_FMT'), out[:300])
+VENTAS = os.path.join(VDIR, 'ventas')
+out = call('delphi_move', {"path": os.path.join(VDIR, 'UVenta.*'), "dest": VENTAS})
+check('move UVenta.* a una subcarpeta: la unit y su form juntos, sin aviso del par',
+      mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(os.path.join(VENTAS, 'UVenta.pas')) and
+      os.path.exists(os.path.join(VENTAS, 'UVenta.dfm')) and not mc.es(out, 'SN_FILE_PAR_PARTIDO_FMT'), out[:400])
+out = call('delphi_config', {"project": DPROJ, "command": "fix-references"})
 dpr = rd(DPR)
-check('move rename: uses nuevo con form', "UVentas in 'UVentas.pas' {FormUVenta}" in dpr and "UVenta in" not in dpr, dpr)
-check('move rename: el // de la renombrada se queda con ella',
-      "UVentas in 'UVentas.pas' {FormUVenta}, // la venta" in dpr, dpr)
-check('move rename: CreateForm intacto (la clase no cambia)', 'CreateForm(TFormUVenta, FormUVenta)' in dpr, dpr)
+check('fix-references: la entrada re-apuntada con su form', "UVenta in 'ventas\\UVenta.pas' {FormUVenta}" in dpr
+      and "UVenta in 'UVenta.pas'" not in dpr, out[:300] + ' | ' + dpr)
+check('fix-references: el // de la entrada se queda con ella',
+      "UVenta in 'ventas\\UVenta.pas' {FormUVenta}, // la venta" in dpr, dpr)
+check('fix-references: CreateForm intacto', 'CreateForm(TFormUVenta, FormUVenta)' in dpr, dpr)
 xml = rd(DPROJ)
-check('move rename: DCCReference nuevo, viejo fuera', 'Include="UVentas.pas"' in xml and 'Include="UVenta.pas"' not in xml, '')
-usa_src = rd(usa)
-check('move rename: el uses de OTRA unit sigue el rename', '  UVentas;' in usa_src and '  UVenta;' not in usa_src, usa_src)
-check('move rename: el calificador UVenta.X sigue el rename', 'if UVentas.FormUVenta' in usa_src, usa_src)
-_cab = rd(cabusa)
-check('move rename: el uses de la linea de la cabecera tambien, y su nombre no',
-      _cab.startswith('unit UCabUsa; interface uses UVentas;'), _cab)
+check('fix-references: DCCReference nuevo con su Form, el viejo fuera',
+      'Include="ventas\\UVenta.pas"' in xml and 'Include="UVenta.pas"' not in xml and '<Form>FormUVenta</Form>' in xml, '')
 # ...y adduses en su implementation, que no tiene uses: nace pegado a la palabra, en su
 # linea (la seccion solo se buscaba a principio de linea y se negaba; encontrada en
 # medio, debajo de la linea caia detras del end. final; 18-oct-2026)
-# (en su propia variable: los checks de abajo leen el out del move)
 _ad = call('delphi_edit', {"path": cabusa, "adduses": "System.Classes", "section": "implementation"})
 _cab = rd(cabusa)
 check('adduses en la implementation de una unit de una linea: la clausula nace detras de la palabra',
       not mc.fallo(_ad) and 'implementation uses System.Classes; end.' in _cab, _ad[:300] + ' | ' + _cab)
-check('move rename: dentro de una cadena NO se toca', "'UVenta.FormUVenta'" in usa_src, usa_src)
-_campo = rd(campo)
-check('move rename: un campo y una variable que se llaman como la unit NO son la unit (su uses si)',
-      '  UVentas;' in _campo and _campo.count('  UVenta: Integer;') == 2 and 'UVenta := F.UVenta;' in _campo, _campo)
-# una referencia detras de un comentario de llave con un apostrofo se quedaba
-# sin renombrar (E2003) y el // que nombra la unit si se renombraba; ahora
-# solo el CODIGO (sonda del lexico y David, 2-oct-2026)
-check('move rename: la referencia detras de un comentario con apostrofo SI, el comentario NO',
-      "{ it's } Result := UVentas.FormUVenta.Name; // de UVenta\r\n" in usa_src, usa_src)
-check('move rename: la respuesta cuenta las referencias reescritas', mc.es(out, 'SN_UNIT_RENAMED_FMT'), out)
 ok, err = build_ok(DPROJ)
-check('build: tras rename COMPILA', ok, err)
-# move into a subfolder keeps the name
+check('build: tras el move y fix-references COMPILA', ok, err)
+# a una subcarpeta conservando el nombre: tampoco se re-apunta; fix-references si
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UOtra.pas'), "dest": os.path.join(sub, 'UOtra.pas')})
-check('move a subcarpeta: MOVIDO + reapuntado', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and mc.es(out, 'SN_UNIT_RENAMED_FMT'), out[:300])
-check('move a subcarpeta: sin renombrar no reescribe referencias (cuenta 0)', mc.es(out, 'SN_UNIT_RENAMED_FMT') and 'References rewritten: 0 in 0 file(s)' in out, out[:300])
-check('move a subcarpeta: include relativo', "UOtra in 'src\\UOtra.pas'" in rd(DPR), rd(DPR))
+check('move a subcarpeta: MOVIDA, el .dpr igual y nombrado (MOVE-023)', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and
+      "UOtra in 'UOtra.pas'" in rd(DPR) and mc.es(out, 'SN_REFERENCIAS_CRUZAN_FMT'), out[:400])
+out = call('delphi_config', {"project": DPROJ, "command": "fix-references"})
+check('move a subcarpeta: fix-references, include relativo', "UOtra in 'src\\UOtra.pas'" in rd(DPR), out[:300] + rd(DPR))
+# un .pas a otra extension o a un nombre que no es identificador: como el operador
+# (eran MOVE-010 y FILE-026, que nacieron para la cabecera que el move reescribia)
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UUtil.pas'), "dest": os.path.join(VDIR, 'UUtil.txt')})
-check('move unit a .txt rechazado', mc.rechazado(out) and mc.es(out, 'SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT'), out)
-out = call('delphi_move', {"path": os.path.join(VDIR, 'UUtil.pas'), "dest": os.path.join(VDIR, '2Mal.pas')})
-check('move unit a identificador invalido rechazado', mc.rechazado(out) and mc.es(out, 'SR_FILE_IDENTIFICADOR_UNIT_FMT'), out)
-# move HACIA la carpeta de un proyecto que vive DEBAJO de la unit: el .dpr/.dpk
-# que la lista esta en el destino, no encima del origen (Hermes, 2026-09-23:
-# la unit volvia a la carpeta de su paquete y la contains se quedaba vieja)
+check('move de una unit a .txt: MOVIDA (era MOVE-010)', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and
+      os.path.exists(os.path.join(VDIR, 'UUtil.txt')), out[:300])
+out = call('delphi_move', {"path": os.path.join(VDIR, 'UUtil.txt'), "dest": os.path.join(VDIR, '2Mal.pas')})
+check('move a un nombre que no es identificador: MOVIDA (era FILE-026)', mc.abre(out, 'SK_MOVE_MOVIDO_FMT'), out[:300])
+out = call('delphi_move', {"path": os.path.join(VDIR, '2Mal.pas'), "dest": os.path.join(VDIR, 'UUtil.pas')})
+check('...y de vuelta a su nombre', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(os.path.join(VDIR, 'UUtil.pas')),
+      out[:300])
+# move HACIA la carpeta de un proyecto que vive DEBAJO de la unit: la nota mira
+# desde el borde y nombra el del destino (Hermes, 2026-09-23: la unit volvia a la
+# carpeta de su paquete y la contains se quedaba vieja)
 abajo = os.path.join(VDIR, 'abajo')
 out = call('delphi_create', {"kind": "project-console", "dir": abajo, "name": "Abajo"})
 check('move hacia abajo: proyecto creado', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out[:200])
@@ -484,10 +487,11 @@ out = call('delphi_config', {"project": os.path.join(abajo, 'Abajo.dproj'), "com
 check('move hacia abajo: unit de ARRIBA registrada en el proyecto de abajo',
       mc.abre(out, 'SN_UNIT_ADDED_FMT') and "..\\UArriba.pas" in rd(os.path.join(abajo, 'Abajo.dpr')), out[:200])
 out = call('delphi_move', {"path": arriba, "dest": os.path.join(abajo, 'UArriba.pas')})
-check('move hacia abajo: REAPUNTADA (el proyecto vive en el destino, no encima del origen)',
-      mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and mc.es(out, 'SN_UNIT_RENAMED_FMT'), out[:300])
-check('move hacia abajo: include nuevo sin ..\\', "UArriba in 'UArriba.pas'" in rd(os.path.join(abajo, 'Abajo.dpr')),
-      rd(os.path.join(abajo, 'Abajo.dpr')))
+check('move hacia abajo: la nota nombra el proyecto de abajo (vive en el destino, no encima del origen)',
+      mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and mc.es(out, 'SN_REFERENCIAS_CRUZAN_FMT') and 'Abajo.dpr' in out, out[:400])
+out = call('delphi_config', {"project": os.path.join(abajo, 'Abajo.dproj'), "command": "fix-references"})
+check('move hacia abajo: fix-references, include nuevo sin ..\\',
+      "UArriba in 'UArriba.pas'" in rd(os.path.join(abajo, 'Abajo.dpr')), rd(os.path.join(abajo, 'Abajo.dpr')))
 ok, err = build_ok(DPROJ)
 check('build: final COMPILA', ok, err)
 
@@ -519,20 +523,29 @@ check('datamodule: CreateForm SI', 'Application.CreateForm(TDMDatos, DMDatos);' 
 check('datamodule: DCCReference con DesignClass TDataModule', '<DesignClass>TDataModule</DesignClass>' in rd(DPROJ), '')
 ok, err = build_ok(DPROJ)
 check('build: frame + datamodule COMPILAN', ok, err)
-# rename a frame: DesignClass preserved, still no CreateForm
-out = call('delphi_move', {"path": os.path.join(VDIR, 'UFrameLista.pas'), "dest": os.path.join(VDIR, 'UFrameListado.pas')})
-check('move frame: reapuntado con DesignClass', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and mc.es(out, 'SN_UNIT_RENAMED_FMT'), out[:300])
+# a frame WITH its form to a subfolder, and fix-references: DesignClass kept, still no CreateForm
+out = call('delphi_move', {"path": os.path.join(VDIR, 'UFrameLista.*'), "dest": os.path.join(VDIR, 'frames')})
+check('move frame UFrameLista.*: MOVIDOS los dos', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and
+      os.path.exists(os.path.join(VDIR, 'frames', 'UFrameLista.dfm')), out[:300])
+out = call('delphi_config', {"project": DPROJ, "command": "fix-references"})
 dpr = rd(DPR)
-check('move frame: uses nuevo {FrameUFrameLista: TFrame}', "UFrameListado in 'UFrameListado.pas' {FrameUFrameLista: TFrame}" in dpr, dpr)
-check('move frame: sigue sin CreateForm',
-      "UFrameListado in 'UFrameListado.pas'" in dpr and 'CreateForm(TFrameUFrameLista' not in dpr, dpr)
-# delete the data module: CreateForm goes too
-out = call('delphi_delete', {"path": os.path.join(VDIR, 'UDatos.pas')})
-check('delete datamodule: BORRADO + proyecto', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and mc.es(out, 'SN_FILE_PROJECTS_UPDATED_FMT') and mc.ids(out).count(mc.id_de('SN_UNIT_REMOVED_GONE_FMT')) == 1, out[:300])
+check('fix-references del frame: {FrameUFrameLista: TFrame} con la ruta nueva',
+      "UFrameLista in 'frames\\UFrameLista.pas' {FrameUFrameLista: TFrame}" in dpr, out[:300] + dpr)
+check('fix-references del frame: sigue sin CreateForm y con su DesignClass',
+      'CreateForm(TFrameUFrameLista' not in dpr and re.search(
+          r'<DCCReference Include="frames\\UFrameLista.pas">\s*<Form>FrameUFrameLista</Form>\s*<FormType>dfm</FormType>'
+          r'\s*<DesignClass>TFrame</DesignClass>', rd(DPROJ)) is not None, rd(DPROJ)[-1500:])
+# delete the data module WITH its form: the project keeps listing it, and the note says so
+out = call('delphi_delete', {"path": os.path.join(VDIR, 'UDatos.*')})
+check('delete datamodule UDatos.*: BORRADOS los dos, y FILE-046 nombra el .dpr',
+      mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(os.path.join(VDIR, 'UDatos.pas')) and
+      not os.path.exists(os.path.join(VDIR, 'UDatos.dfm')) and mc.es(out, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and
+      'App.dpr' in out, out[:600])
+out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": os.path.join(VDIR, 'UDatos.pas')})
 dpr = rd(DPR)
-check('delete datamodule: sin uses ni CreateForm', 'UDatos' not in dpr and 'DMDatos' not in dpr, dpr)
+check('remove-unit del datamodule borrado: sin uses ni CreateForm', 'UDatos' not in dpr and 'DMDatos' not in dpr, dpr)
 ok, err = build_ok(DPROJ)
-check('build: tras frame rename + dm delete COMPILA', ok, err)
+check('build: tras frame movido + dm borrado COMPILA', ok, err)
 
 # ---- FMX project: frame-fmx, datamodule (FMX classgroup), form-fmx ----
 FDIR = os.path.join(BASE, 'Movil')
@@ -645,8 +658,11 @@ open(DPR, 'wb').write(dpr.encode('utf-8-sig'))
 PDPR = os.path.join(VDIR, 'Padre.dpr')
 open(PDPR, 'wb').write(("program Padre;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils,\r\n  UOtra in 'src\\UOtra.pas';\r\n\r\nbegin\r\nend.\r\n").encode('utf-8-sig'))
 out = call('delphi_delete', {"path": os.path.join(sub, 'UOtra.pas')})
-check('padre dentro de la jaula: proyectos actualizados (2)', mc.es(out, 'SN_FILE_PROJECTS_UPDATED_FMT') and mc.ids(out).count(mc.id_de('SN_UNIT_REMOVED_GONE_FMT')) == 2, out[:400])
-check('padre dentro de la jaula: Padre.dpr limpio', 'UOtra' not in rd(PDPR), rd(PDPR))
+check('padre dentro de la jaula: FILE-046 nombra los dos proyectos que la listan',
+      mc.es(out, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and 'App.dpr' in out and 'Padre.dpr' in out, out[:600])
+for _p in (DPROJ, PDPR):
+    call('delphi_config', {"project": _p, "command": "remove-unit", "path": os.path.join(sub, 'UOtra.pas')})
+check('padre: remove-unit en los dos, limpios', 'UOtra' not in rd(PDPR) and 'UOtra' not in rd(DPR), rd(PDPR))
 ok, err = build_ok(DPROJ)
 check('build: tras las correcciones COMPILA', ok, err)
 
@@ -654,7 +670,8 @@ check('build: tras las correcciones COMPILA', ok, err)
 txt = os.path.join(VDIR, 'notas.txt')
 open(txt, 'wb').write(b'x')
 out = call('delphi_delete', {"path": txt})
-check('delete fichero normal: sin notas de proyecto', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and not mc.es(out, 'SN_FILE_PROJECTS_UPDATED_FMT') and not mc.es(out, 'SN_FILE_PROJECTS_NONE'), out)
+check('delete fichero normal: sin notas de proyecto', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and
+      not mc.es(out, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and not mc.es(out, 'SN_FILE_PAR_PARTIDO_FMT'), out)
 
 print()
 # ---- delphi_move copy=true: the same door, a different last step (1.2.2) ----
@@ -664,9 +681,13 @@ open(os.path.join(cdir, 'UOrig.pas'), 'wb').write(b'unit UOrig;\r\n\r\ninterface
 open(os.path.join(cdir, 'UOrig.dfm'), 'wb').write(b'object FormOrig: TFormOrig\r\nend\r\n')
 out = call('delphi_move', {"path": os.path.join(cdir, 'UOrig.pas'), "dest": os.path.join(cdir, 'UCopia.pas'), "copy": True})
 check('copy unit: COPIADO y el origen sigue', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(cdir, 'UOrig.pas')), out[:300])
-check('copy unit: cabecera de la copia reescrita', 'unit UCopia;' in rd(os.path.join(cdir, 'UCopia.pas')) and 'unit UOrig;' in rd(os.path.join(cdir, 'UOrig.pas')), out[:300])
-check('copy unit: designer copiado, el original sigue', os.path.exists(os.path.join(cdir, 'UCopia.dfm')) and os.path.exists(os.path.join(cdir, 'UOrig.dfm')) and mc.es(out, 'SN_FILE_DESIGNER_TOO_FMT') and mc.catalogo()['SF_MOVE_COPIADO_CON_UNIT'] in out, out[:300])
-check('copy unit: ningun proyecto reapuntado, y la respuesta lo dice', not mc.es(out, 'SN_UNIT_RENAMED_FMT') and mc.es(out, 'SN_FILE_COPY_NO_PROJECT') and 'add-unit' in out and not mc.es(out, 'SN_FILE_COPIA_SEGURIDAD_EN_FMT'), out[:400])
+check('copy unit: como la del operador, su cabecera igual (V19)', 'unit UOrig;' in rd(os.path.join(cdir, 'UCopia.pas'))
+      and 'unit UOrig;' in rd(os.path.join(cdir, 'UOrig.pas')), out[:300])
+check('copy unit: el designer no viaja solo (UOrig.* lo llevaria), y FILE-051 lo dice',
+      not os.path.exists(os.path.join(cdir, 'UCopia.dfm')) and mc.es(out, 'SN_FILE_PAR_PARTIDO_FMT') and
+      'UOrig.*' in out, out[:400])
+check('copy unit: ningun proyecto tocado y sin copia de seguridad',
+      not mc.es(out, 'SN_UNIT_RENAMED_FMT') and not mc.es(out, 'SN_FILE_COPIA_SEGURIDAD_EN_FMT'), out[:400])
 out = call('delphi_move', {"path": cdir, "dest": os.path.join(BASE, 'Copia2'), "copy": True})
 check('copy carpeta: COPIADO, las dos existen, sin la papelera del origen', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(BASE, 'Copia2', 'UCopia.pas')) and os.path.isdir(cdir) and not os.path.isdir(os.path.join(BASE, 'Copia2', mc.PAPELERA)), out[:300])
 out = call('delphi_move', {"path": VDIR, "dest": os.path.join(BASE, 'AppCopia'), "copy": True})

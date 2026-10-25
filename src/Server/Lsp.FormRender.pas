@@ -1054,7 +1054,7 @@ begin
   // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
   // lo adivinaba con su regex. Sin .pas legible, o sin saberlo, que mire el
   var Pas := UnidadDeDesigner(APath);
-  if TFile.Exists(Pas) and (ReadPathDenied(Pas) = '') then
+  if ExisteYSeLee(Pas) then
     Result.Raiz := RaizParaElRender(APath);
 end;
 

@@ -22,6 +22,53 @@ the MCP `initialize` response (`serverInfo.version`).
   `core.worktree` outside, or a repository reached through a link the copy
   follows is refused with `MOVE-022`, saying where that git lives
   (`tests/test_ficheros_operador_1230.py`, G1-G7).
+- **`delphi_move` and `delphi_delete` do what an operator does, and say what
+  they saw.** Moving, renaming or deleting a unit re-pointed every project that
+  listed it (`.dpr`, `.dproj`, groups, `{$I}`/`{$R}`/`{$L}`), rewrote its
+  `unit X;` header and the uses of the other units, took its `.dfm`/`.fmx`
+  along, and refused the whole operation when a project could not be
+  rewritten (`MOVE-019`, `FILE-039`): surgery on files the agent did not name.
+  Now they touch only what is named, as the system's own move, copy and delete
+  do, and the answer carries a note: the files whose paths cross the border of
+  what moved and now lead elsewhere, each by its full path with what it counts
+  (`MOVE-023`; `FILE-046` for what still points at something deleted), what
+  the build reads through a property or an absolute path that no longer leads
+  where it did (`MOVE-021`, with the property to change), and the files it
+  could not read to look (`MOVE-024`). Fixing is the agent's:
+  `delphi_config fix-references`, `remove-unit` / `add-unit`, `delphi_edit`
+  for a header. The commit of `delphi_changeset` gives the same note for what
+  it moved and deleted, and its `CHSET-033` refusal is gone
+  (`tests/test_mudanza.py`, `test_round50.py`, `test_contratos_1222.py`,
+  `test_resultados.py`, `test_changeset_unidad_1192.py`).
+- **A wildcard in the name: `UFicha.*`, `*.pas`.** `delphi_move` (moving and
+  copying) and `delphi_delete` take a wildcard in the last part of `path`,
+  matched in that folder as Windows matches it (`*.pas` does not match
+  `b.pas2`); with a wildcard, `dest` is the folder the matches go into. All or
+  nothing: one file another process holds stops the whole operation, and its
+  `SYS-027` names it. A unit and its form travel by their own names -
+  `form.*` takes both - and a unit that goes without its form, or the
+  reverse, gets a note (`FILE-051`). The jail judges the wildcard's folder at
+  the entry and every match by its own gate; a wildcard in a folder is still
+  `GUARD-024`, and the new refusals say what is wrong: nothing matches
+  (`FILE-047`), `dest` is a file (`FILE-048`), a wildcard in the trash or with
+  `purge` (`FILE-050`) (`tests/test_ficheros_operador_1230.py`, W1-W7;
+  `test_round37.py`; `test_resultados.py`, E123-E151).
+- **A move into a folder that exists merges into it, and nothing is ever
+  overwritten.** Before the first byte, `delphi_move` looks at everything it
+  would write: a file that already exists is refused with the list of every
+  clash and nothing written (`FILE-025`), the longest path it would write has
+  to fit (`GUARD-028`, naming it; it failed halfway with `MOVE-012`), and the
+  drive has to keep a margin free (`GUARD-044`). A folder whose destination
+  exists merges into it and is undone whole if an entry fails; renaming a file
+  or a folder to change only its case works (it was refused as already there)
+  (`tests/test_ficheros_operador_1230.py`, C1-C5; DUnitX
+  `TMudanzaDeOperadorTests`).
+- **A move is a rename on its own drive, a file too.** A file moved to another
+  drive was copied and deleted by the RTL, following a symlink; now it is
+  refused like a folder with `MOVE-002`, which says the way: `copy=true`, then
+  `delphi_delete` (`tests/test_readonly_roots.py`).
+- **The task map of `delphi_help` says how to rename a file**: "delete / move
+  (rename) a file", next to "rename a symbol".
 - **`delphi_docs read` pages a long page like every list.** A chunk of a
   page came with `length`, `offset` and `nextOffset`, written by hand and
   without `hasMore`, so a client that walks "until `hasMore` is false", as
@@ -52,9 +99,28 @@ the MCP `initialize` response (`serverInfo.version`).
   startup, by the only live instance of the exe; whatever an earlier version
   left in a root is the operator's to delete, hidden from every listing and
   refused for writing (`tests/test_purga_temporales.py`).
+- **The unit rename, and the texts only it used.** Rewriting a renamed unit's
+  header, the uses of the other units and their `UnitOld.X` references had no
+  caller left once a move stopped re-pointing (`fix-references` re-points by
+  the same name). Retired ids: `CFG-057`, `CHSET-033`, `FILE-002` to
+  `FILE-006`, `FILE-019`, `FILE-026`, `FILE-027`, `FILE-035`, `FILE-039`,
+  `FILE-043`, `MOVE-005`, `MOVE-006`, `MOVE-010`, `MOVE-015` to `MOVE-019`
+  (`tests/test_catalogo.py`, C11: no constant of the catalogues goes unused).
 
 ### Fixed
 
+- **The note of a move never says whether something outside the roots
+  exists.** An `{$I}` or a `.dproj` property leading out of the roots was
+  counted (`MOVE-023`, `MOVE-021`) only when what it led to existed, telling
+  an agent that cannot read it whether it is there (measured). Whether a path
+  exists is now asked after the read gate, by one helper (`ExisteYSeLee`);
+  it was written by hand in six places, two of them without the gate
+  (`tests/test_puerta_leer.py`, L4; `test_paisaje.py`).
+- **`MOVE-021` says the right thing when the project itself moved.** When
+  what moved was the `.dproj` and its relative property led to what stayed,
+  it said "led to X, which is now X" under a header ("the build still reads
+  these where what moved used to be") that was false: it now says "which did
+  not move", under a header true both ways (`tests/test_puerta_leer.py`, L4).
 - **A copy no longer brings git metadata through a link.** A folder holding
   a link to a repository was copied with that repository's `.git` behind the
   link (measured against the current release), although the copy promised

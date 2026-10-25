@@ -216,6 +216,19 @@ type
     [Test] procedure SoloElQueElIdeLista;
   end;
 
+  { Lo de V19 de la 1.23 que se mide sin servidor: el sitio en disco antes de
+    copiar o mover (EspacioDenegado, con su MARGEN_DISCO_LIBRE) y el comodin
+    solo en el NOMBRE (TieneComodin, CarpetaDelComodin). El espacio se mide
+    con lo que Windows dice libre en la casa del ejecutor, nunca escribiendo
+    ni un fichero disperso: un mutante destructivo jamas llena un disco real. }
+  [TestFixture]
+  TMudanzaDeOperadorTests = class
+  public
+    [Test] procedure ElSitioPideSuMargen;
+    [Test] procedure UnaCarpetaQueNoExisteMideLaDeArriba;
+    [Test] procedure ElComodinSoloEnElNombre;
+  end;
+
 implementation
 
 uses
@@ -1271,6 +1284,66 @@ begin
   end;
 end;
 
+{ TMudanzaDeOperadorTests }
+
+// lo que Windows dice libre para esta cuenta en la unidad de ACarpeta; -1 si no
+function LibreEn(const ACarpeta: string): Int64;
+var
+  Total: Int64;
+begin
+  if not GetDiskFreeSpaceEx(PChar(IncludeTrailingPathDelimiter(ACarpeta)), Result, Total, nil) then
+    Result := -1;
+end;
+
+procedure TMudanzaDeOperadorTests.ElSitioPideSuMargen;
+begin
+  var Casa := ServerTempDir('espacio-' + FragmentoUnico);
+  ForceDirectories(Casa);
+  try
+    var Libre := LibreEn(Casa);
+    Assert.IsTrue(Libre > 0, 'Windows dice cuanto hay libre en la casa del ejecutor');
+    Assert.AreEqual('', EspacioDenegado(Casa, 0), 'nada que escribir, nada que pedir');
+    // cabe en el disco, pero no deja el margen: se niega (el mutante sin
+    // margen lo daria por bueno)
+    var R := EspacioDenegado(Casa, Libre - MARGEN_DISCO_LIBRE div 2);
+    Assert.IsTrue(R.StartsWith('[GUARD-044'), 'dentro del margen se niega: ' + R);
+    Assert.IsTrue(EspacioDenegado(Casa, Libre).StartsWith('[GUARD-044'), 'todo lo libre se niega');
+    if Libre > 2 * MARGEN_DISCO_LIBRE then
+      Assert.AreEqual('', EspacioDenegado(Casa, 1024 * 1024), 'un mega con el margen de sobra cabe')
+    else
+      Assert.Pass('la unidad de la casa tiene menos de dos margenes libres: lo que cabe no se mide');
+  finally
+    RemoveDir(Casa);
+  end;
+end;
+
+procedure TMudanzaDeOperadorTests.UnaCarpetaQueNoExisteMideLaDeArriba;
+begin
+  var Casa := ServerTempDir('espacio-' + FragmentoUnico);
+  ForceDirectories(Casa);
+  try
+    // la que se va a crear la juzga la unidad donde caera: su primer
+    // antepasado que existe; y preguntar no crea nada
+    var Honda := TPath.Combine(TPath.Combine(Casa, 'no'), 'existe');
+    Assert.IsTrue(EspacioDenegado(Honda, LibreEn(Casa)).StartsWith('[GUARD-044'),
+      'todo lo libre, tambien desde una carpeta que no existe');
+    Assert.IsFalse(TDirectory.Exists(TPath.Combine(Casa, 'no')), 'preguntar no crea la carpeta');
+  finally
+    RemoveDir(Casa);
+  end;
+end;
+
+procedure TMudanzaDeOperadorTests.ElComodinSoloEnElNombre;
+begin
+  Assert.IsTrue(TieneComodin('C:\p\UFicha.*'));
+  Assert.IsTrue(TieneComodin('C:\p\U?.pas'));
+  Assert.IsFalse(TieneComodin('C:\p\UFicha.pas'));
+  // en una CARPETA no es del nombre: lo niega el suelo de la jaula (GUARD-024)
+  Assert.IsFalse(TieneComodin('C:\p*\UFicha.pas'));
+  Assert.AreEqual('C:\p', CarpetaDelComodin('C:\p\*.pas'));
+  Assert.AreEqual('C:\p', CarpetaDelComodin('C:\p\*\'), 'la barra final no cuenta');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
@@ -1284,5 +1357,6 @@ initialization
   TDUnitX.RegisterTestFixture(TFormaDeTextoTests);
   TDUnitX.RegisterTestFixture(TAncestrosTests);
   TDUnitX.RegisterTestFixture(TPerfilPorLaListaTests);
+  TDUnitX.RegisterTestFixture(TMudanzaDeOperadorTests);
 
 end.

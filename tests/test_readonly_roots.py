@@ -158,7 +158,13 @@ check('move en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
 # everything stays outside
 out = call('delphi_move', {'path': REF_PAS, 'dest': os.path.join(MINE, 'UCopia.pas'), 'copy': True})
 check('copy DESDE la referencia a mis roots: COPIADO (copiar solo LEE el origen)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(MINE, 'UCopia.pas')), out[:200])
-check('...la copia es mia: cabecera renombrada', os.path.exists(os.path.join(MINE, 'UCopia.pas')) and 'unit UCopia;' in open(os.path.join(MINE, 'UCopia.pas')).read(), out[:200])
+# la copia es la del operador (V19: no se reescribe su cabecera) y es MIA: se edita
+UCOPIA = os.path.join(MINE, 'UCopia.pas')
+check('...la copia trae los bytes del origen (su cabecera, como un operador)',
+      os.path.exists(UCOPIA) and open(UCOPIA, 'rb').read() == open(REF_PAS, 'rb').read(), out[:200])
+out = call('delphi_edit', {'path': UCOPIA, 'old': 'unit URefUtil;', 'new': 'unit UCopia;'})
+check('...y es mia: su cabecera se edita', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT') and
+      'unit UCopia;' in open(UCOPIA, encoding='utf-8-sig').read(), out[:200])
 out = call('delphi_move', {'path': os.path.join(REF, 'Ref'), 'dest': os.path.join(MINE, 'RefCopia'), 'copy': True})
 check('copy del PROYECTO de referencia entero, un repo con su git dentro: COPIADO (V19)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(MINE, 'RefCopia', 'Ref.dproj')) and os.path.isfile(os.path.join(MINE, 'RefCopia', '.git', 'HEAD')), out[:200])
 if os.path.isdir(os.path.join(MINE, 'RefCopia')):
@@ -277,6 +283,12 @@ if HAY_OTRA:
     check('...y no se ha movido ni copiado nada', os.path.exists(os.path.join(VIA, 'v.txt')) and not os.path.exists(os.path.join(OTRA, 'viajera')), '')
     out = call('delphi_move', {'path': VIA, 'dest': os.path.join(OTRA, 'viajera'), 'copy': True})
     check('copy=true a otra unidad: COPIADO (el camino legitimo)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(OTRA, 'viajera', 'v.txt')), out[:200])
+    # ...y un FICHERO igual (V19 de la 1.23: un move es un rename en su unidad; hasta
+    # la 1.22, TFile.Move lo copiaba y lo borraba, siguiendo un symlink)
+    VF = os.path.join(MINE, 'viajero.txt')
+    open(VF, 'w').write('v')
+    out = call('delphi_move', {'path': VF, 'dest': os.path.join(OTRA, 'viajero.txt')})
+    check('move de un FICHERO a OTRA unidad: RECHAZADO con el camino, y sigue en su sitio (V19)', mc.rechazado(out) and mc.es(out, 'SR_MUDANZA_OTRA_UNIDAD_FMT') and os.path.exists(VF) and not os.path.exists(os.path.join(OTRA, 'viajero.txt')), out[:300])
 else:
     print('NOTA: sin otra unidad en esta maquina: el rechazo entre unidades no se mide')
 

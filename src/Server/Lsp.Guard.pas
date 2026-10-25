@@ -151,6 +151,23 @@ function PathDenied(const APath: string; APermiteGit: Boolean = False): string;
   cual, mas la pista de la zona de biblioteca en la negativa de fuera. }
 function ReadPathDenied(const APath: string; APermiteGit: Boolean = False): string;
 
+{ LA pregunta "existe ARuta?" de quien no la va a escribir: la puerta de
+  leer PRIMERO y, solo si esta sesion la lee, si existe (un fichero; con
+  ACarpeta, tambien una carpeta). Lo que la jaula no deja leer ni se
+  pregunta: contestar distinto segun existiera diria a quien no lo lee si
+  esta (medido el 25-oct-2026 en la nota de una mudanza: un $I y una
+  propiedad que salian de la raiz se contaban solo si lo de fuera existia;
+  la pregunta estaba escrita a mano en seis sitios, en dos con la puerta). }
+function ExisteYSeLee(const ARuta: string; ACarpeta: Boolean = False): Boolean;
+
+{ LA causa de un rename o un movimiento que Windows nego con ACodigo, con el
+  NOMBRE de lo que no se movio, por la regla de todas (MotivoDelSistema:
+  ocupado SYS-027, acceso denegado SYS-028); otro codigo, con el texto de
+  Windows. Se decia "otro proceso lo tiene" de CUALQUIER codigo (septima
+  revision). Era de Lsp.Patch; el move y la mezcla lanzaban RaiseLastOSError
+  y el SYS-027 de un comodin no decia cual estaba cogido (25-oct-2026). }
+function MotivoDeRenombre(const APath: string; ACodigo: Cardinal): string;
+
 { La pregunta de la puerta de leer sobre los OTROS nombres de un fichero (un
   enlace duro: GUARD-041/042), para quien lee sus BYTES por su cuenta - las
   copias de la papelera, la de un move, la de una carpeta -. ReadPathDenied
@@ -559,6 +576,42 @@ function WalkFiles(const ADir, AMask: string;
   papelera de delphi_delete pasan por aqui. Lanza si no debe o no puede. }
 procedure MueveArbol(const AOrigen, ADestino: string);
 
+type
+  { Un paso hecho de una mezcla (MezclaArbol): De se renombro a A o, con A
+    vacio, la carpeta De se quito. Para deshacerla al reves. }
+  TPasoDeMezcla = record
+    De, A: string;
+  end;
+
+{ EL mezclador: mete el contenido de AOrigen en la carpeta ADestino, que YA
+  existe, entrada a entrada (V19 de la 1.23; David, 25-oct-2026: "carpeta
+  vacia o no da igual; lo que no queremos es sobrescribir ficheros"). Un
+  fichero o un enlace se renombra (el enlace viaja como enlace: MoveFile
+  renombra la entrada y lo de detras ni se mira); una carpeta, entera si en el
+  destino no esta y mezclada si esta; AOrigen, vacia al final, se quita. Quien
+  llama ya miro que ningun fichero se pisa (MoveFile sin reemplazar falla
+  igual si alguno aparece entre medias). Antes de tocar nada, MovidoDenegado,
+  como MueveArbol. Cada paso hecho va a AHechos; lanza al primer fallo, y
+  quien llama deshace (DeshazMezcla). }
+procedure MezclaArbol(const AOrigen, ADestino: string; var AHechos: TArray<TPasoDeMezcla>);
+
+{ Deshace una mezcla al reves (las carpetas quitadas vuelven, cada entrada a su
+  sitio). '' si todo volvio; si no, lo que no, una linea por entrada. }
+function DeshazMezcla(const AHechos: TArray<TPasoDeMezcla>): string;
+
+const
+  { Lo que se deja LIBRE en el disco al copiar o al mover (con su copia de
+    seguridad): una POLITICA con nombre, sin juez (David, 17-oct-2026:
+    "comprobar si tenemos espacio suficiente y con margen"), para no llenar el
+    disco de todos: el servicio, msbuild, el IDE; el NAS es compartido. }
+  MARGEN_DISCO_LIBRE = Int64(512) * 1024 * 1024;
+
+{ Si ABytes caben en el disco de ACarpeta (o de su primer ancestro que existe)
+  dejando MARGEN_DISCO_LIBRE, lo que Windows da como libre PARA ESTA CUENTA
+  (GetDiskFreeSpaceEx: con cuotas y recursos de red). '' si caben o si Windows
+  no lo dice (lo dira la escritura); si no, GUARD-044. }
+function EspacioDenegado(const ACarpeta: string; ABytes: Int64): string;
+
 { Lo que ESTE SERVIDOR tiene abierto bajo una carpeta se suelta antes de
   mudarla. El mudador no sabe quien lo tiene. Hoy, los motores DelphiLSP, uno
   por proyecto: al cargar la configuracion del proyecto el motor cambia SU
@@ -600,6 +653,14 @@ procedure YaNoSeQuita(const ACarpeta: string);
   si una ruta no se puede resolver. }
 function DentroDeSiMismo(const AOrigen, ADestino: string;
   AOrigenEsElEnlace: Boolean = False): Boolean;
+
+{ ADestino es AOrigen MISMO con otra grafia (otras mayusculas): la misma
+  entrada del disco, mirada donde ESTA cada una (un enlace, el enlace). Un move
+  a ella es un RENOMBRADO de las mayusculas, que Windows hace de un golpe, y no
+  "dentro de si mismo" (MOVE-009) ni algo que ya esta (FILE-025, la mezcla):
+  medido el 25-oct-2026, r1222ce lo negaba con FILE-025 y V19 con MOVE-009
+  (punto 4 de Fable). Nunca lanza: lo que no se resuelve no es la misma. }
+function MismaEntrada(const AOrigen, ADestino: string): Boolean;
 
 { Las dos mitades de DentroDeSiMismo, para quien tiene que comparar con un
   cerrojo cogido: RutaParaComparar RESUELVE (pregunta al disco; con
@@ -819,6 +880,14 @@ function InVault(const APath: string): Boolean;
   the vault governance files in round 9), so the rule lives here once instead
   of being re-derived per toolset. '' = the name is fine. }
 function PathAnomaly(const APath: string): string;
+
+{ EL juez del comodin de una ruta (V19 de la 1.23, [ComodinEnNombre]): si su
+  NOMBRE, el ultimo tramo, lleva * o ?. Lo preguntan la entrada (el suelo y la
+  forma larga) y delphi_move / delphi_delete. }
+function TieneComodin(const APath: string): Boolean;
+{ ...y LA carpeta de esa ruta, la que se juzga en su lugar y donde se busca lo
+  que case. }
+function CarpetaDelComodin(const APath: string): string;
 
 { Dead copies are not a scratchpad. The recoverable trash, and the IDE's own
   __history/__recovery, hold the LAST GOOD version of somebody's work - the
@@ -1886,6 +1955,9 @@ type
     // [NombreSiComando]: con estos valores de "command" (separados por coma)
     // la ruta es lo que el proyecto DICE, y el suelo no la juzga
     NombreSi: TDictionary<string, string>;
+    // [ComodinEnNombre]: su nombre puede llevar un comodin, y la entrada
+    // juzga y alarga su carpeta (V19)
+    ConComodin: TDictionary<string, Boolean>;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -1897,6 +1969,7 @@ begin
   DeContenido := TDictionary<string, Boolean>.Create;
   DeLista := TDictionary<string, Boolean>.Create;
   NombreSi := TDictionary<string, string>.Create;
+  ConComodin := TDictionary<string, Boolean>.Create;
 end;
 
 destructor TMarcasDeParams.Destroy;
@@ -1905,6 +1978,7 @@ begin
   DeContenido.Free;
   DeLista.Free;
   NombreSi.Free;
+  ConComodin.Free;
   inherited;
 end;
 
@@ -1958,6 +2032,7 @@ begin
         var EsContenido := False;
         var EsLista := False;
         var NombreSi := '';
+        var EsComodin := False;
         for Attr in Prop.GetAttributes do
           if Attr is RutaDelServidorAttribute then
             EsRuta := True
@@ -1965,6 +2040,8 @@ begin
             AceptaRelativa := True
           else if Attr is NombreSiComandoAttribute then
             NombreSi := NombreSiComandoAttribute(Attr).Comandos
+          else if Attr is ComodinEnNombreAttribute then
+            EsComodin := True
           else if Attr is ContenidoAttribute then
             EsContenido := True
           else if (Attr is JsonComoTextoAttribute) and
@@ -1974,6 +2051,8 @@ begin
           Marcas.Rutas.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), AceptaRelativa);
         if EsRuta and (NombreSi <> '') then
           Marcas.NombreSi.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), NombreSi);
+        if EsRuta and EsComodin then
+          Marcas.ConComodin.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
         if EsContenido then
           Marcas.DeContenido.AddOrSetValue(ClaveDeParam(Nombre, Prop.Name), True);
         if EsLista then
@@ -2096,6 +2175,16 @@ begin
   Result := (Cmd.Trim <> '') and MatchText(Cmd.Trim, Comandos.Split([',']));
 end;
 
+{ Lo que el suelo juzga de una ruta marcada: ella o, con un comodin en el
+  NOMBRE de un parametro [ComodinEnNombre], su carpeta (la tool juzga despues
+  cada entrada que case; un comodin en la carpeta lo niega PathAnomaly). }
+function RutaQueSeJuzga(const AClave, AValor: string): string;
+begin
+  Result := AValor;
+  if MarcasDeParams.ConComodin.ContainsKey(AClave) and TieneComodin(AValor) then
+    Result := CarpetaDelComodin(AValor);
+end;
+
 { Las DOS pasadas del suelo, una funcion: ARelativas=False mira las rutas
   absolutas y va en su sitio de siempre; ARelativas=True mira las que no lo
   son y va la ultima. Las dos preguntan lo que preguntaria la tool
@@ -2106,7 +2195,7 @@ function ArgPathOutsideDenied(const AToolName: string;
 var
   I: Integer;
   P: TJSONPair;
-  V, Que: string;
+  V, Que, R: string;
   Mapa: TDictionary<string, Boolean>;
 begin
   Result := '';
@@ -2135,6 +2224,7 @@ begin
     // un parametro opcional vacio no es una ruta: si falta, lo dice la tool
     if V.Trim = '' then
       Continue;
+    R := RutaQueSeJuzga(Clave, V);
     if EsRutaAbsoluta(V) = ARelativas then
       Continue;
     // Una relativa que la tool resuelve contra una base suya, o que explica
@@ -2147,9 +2237,9 @@ begin
     // quien ESCRIBE, la jaula a secas: una pista de lectura en la negativa
     // de un textedit create despistaba (duodecima revision, r12c)
     if LlamadaLee(AToolName, AArguments, Que) then
-      Result := ReadPathDenied(V, SameText(AToolName, 'delphi_git'))
+      Result := ReadPathDenied(R, SameText(AToolName, 'delphi_git'))
     else
-      Result := JaulaDenegada(V, SameText(AToolName, 'delphi_git'));
+      Result := JaulaDenegada(R, SameText(AToolName, 'delphi_git'));
     if Result <> '' then
       Exit;
     // Dentro, pero en una raiz cuya LETRA no esta conectada en el servidor:
@@ -2161,12 +2251,49 @@ begin
     // tool que crea podria crearla.
     if not ARelativas then
     begin
-      Result := RaizEnLetraNoConectada(V);
+      Result := RaizEnLetraNoConectada(R);
       if Result <> '' then
         Exit;
     end;
     end;
   end;
+end;
+
+{ La forma de UNA ruta absoluta de la entrada (la regla, en AlargaRutas). }
+function AlargaUna(const AValor: string): string;
+begin
+  Result := AValor;
+  // Alargar NUNCA cambia a que fichero se refiere la llamada. La forma
+  // canonica de Windows quita el punto o el espacio final y deshace un
+  // ::$DATA: "X.pas." pasaba a ser "X.pas" y "X.pas::$DATA" otra ruta,
+  // que se CREABA (medido, test_guard B0c). Una ruta con anomalia sigue
+  // tal cual y su negativa (PathAnomaly) la ve como vino.
+  if PathAnomaly(AValor) <> '' then
+    Exit;
+  // ...y el separador de Windows: '/' vale para el sistema, pero no para
+  // ExtractFileDir y los suyos, que solo ven '\'. Con "D:/a/x.pas" la
+  // carpeta real del escritor salia "D:" y la escritura se negaba como si
+  // hubiera un ENLACE (GUARD-037) despues de que read leyera la misma
+  // ruta (Hermes, validacion de la 1.21.1; medido en produccion). UNA
+  // forma, aqui, para todas las tools
+  Result := ConBarrasDeWindows(AValor);
+  if Result.IndexOf('~') < 0 then
+    Exit;
+  try
+    Result := LongCanonical(Result);
+  except
+    Exit(ConBarrasDeWindows(AValor)); // una ruta que no parsea sigue a su negativa
+  end;
+  // ...y el NOMBRE final como lo escribio quien llama si solo cambian las
+  // mayusculas: alargar resuelve un alias, no renombra (el dest ABC.txt de un
+  // move de abc.txt llegaba como abc.txt; 25-oct-2026)
+  var Dado := ExtractFileName(SinBarraFinal(ConBarrasDeWindows(AValor)));
+  var Largo := ExtractFileName(SinBarraFinal(Result));
+  if (Dado <> Largo) and SameText(Dado, Largo) then
+    Result := ExtractFilePath(SinBarraFinal(Result)) + Dado;
+  // la separacion final, como venia: una carpeta se nombra igual
+  if AValor.EndsWith('\') or AValor.EndsWith('/') then
+    Result := IncludeTrailingPathDelimiter(Result);
 end;
 
 { Una ruta marcada [RutaDelServidor] que trae un nombre corto 8.3 (~) llega a
@@ -2181,10 +2308,11 @@ end;
   o de la negativa GUARD-021. }
 procedure AlargaRutas(const AToolName: string; const AArguments: TJSONObject);
 var
-  Mapa: TDictionary<string, Boolean>;
+  Mapa, Comodines: TDictionary<string, Boolean>;
   Tool: string;
 begin
   Mapa := RutasNuestras;
+  Comodines := MarcasDeParams.ConComodin;
   Tool := AToolName; // la clave la compone ClaveDeParam
   ReescribeCadenas(AArguments,
     function(const ANombre, AValor: string): string
@@ -2193,30 +2321,14 @@ begin
       if ((AValor.IndexOf('~') < 0) and (AValor.IndexOf('/') < 0)) or not EsRutaAbsoluta(AValor) or
          not Mapa.ContainsKey(ClaveDeParam(Tool, ANombre)) then
         Exit;
-      // Alargar NUNCA cambia a que fichero se refiere la llamada. La forma
-      // canonica de Windows quita el punto o el espacio final y deshace un
-      // ::$DATA: "X.pas." pasaba a ser "X.pas" y "X.pas::$DATA" otra ruta,
-      // que se CREABA (medido, test_guard B0c). Una ruta con anomalia sigue
-      // tal cual y su negativa (PathAnomaly) la ve como vino.
-      if PathAnomaly(AValor) <> '' then
-        Exit;
-      // ...y el separador de Windows: '/' vale para el sistema, pero no para
-      // ExtractFileDir y los suyos, que solo ven '\'. Con "D:/a/x.pas" la
-      // carpeta real del escritor salia "D:" y la escritura se negaba como si
-      // hubiera un ENLACE (GUARD-037) despues de que read leyera la misma
-      // ruta (Hermes, validacion de la 1.21.1; medido en produccion). UNA
-      // forma, aqui, para todas las tools
-      Result := ConBarrasDeWindows(AValor);
-      if Result.IndexOf('~') < 0 then
-        Exit;
-      try
-        Result := LongCanonical(Result);
-      except
-        Exit(ConBarrasDeWindows(AValor)); // una ruta que no parsea sigue a su negativa
-      end;
-      // la separacion final, como venia: una carpeta se nombra igual
-      if AValor.EndsWith('\') or AValor.EndsWith('/') then
-        Result := IncludeTrailingPathDelimiter(Result);
+      // con un comodin en el NOMBRE de un parametro [ComodinEnNombre] (V19) se
+      // alarga su CARPETA y el nombre vuelve detras tal cual: entera, la
+      // negaria PathAnomaly y la tool la recibiria corta
+      var Win := ConBarrasDeWindows(AValor);
+      if Comodines.ContainsKey(ClaveDeParam(Tool, ANombre)) and TieneComodin(Win) then
+        Exit(IncludeTrailingPathDelimiter(AlargaUna(CarpetaDelComodin(Win))) +
+          ExtractFileName(SinBarraFinal(Win)));
+      Result := AlargaUna(AValor);
     end);
 end;
 
@@ -2794,6 +2906,16 @@ begin
     if LetraNoConectada(R) and EnLugar(APath, R) then
       Exit(MsgFmt(SR_WS_RAIZ_NO_DISPONIBLE_FMT, [SinBarraFinal(R),
         MotivoRaizNoDisponible(R), RaicesDisponibles]));
+end;
+
+function TieneComodin(const APath: string): Boolean;
+begin
+  Result := ExtractFileName(SinBarraFinal(APath)).IndexOfAny(['*', '?']) >= 0;
+end;
+
+function CarpetaDelComodin(const APath: string): string;
+begin
+  Result := ExtractFileDir(SinBarraFinal(APath));
 end;
 
 { Windows silently strips trailing dots/spaces from a file name, so a path
@@ -3680,6 +3802,15 @@ begin
     RutaParaComparar(ADestino));
 end;
 
+function MismaEntrada(const AOrigen, ADestino: string): Boolean;
+begin
+  try
+    Result := SameText(RutaParaComparar(AOrigen, True), RutaParaComparar(ADestino, True));
+  except
+    Result := False;
+  end;
+end;
+
 { LA regla de seguir un enlace al COPIAR, para el copiador (CopiaArbol) y
   para quien mira antes lo que se va a copiar (CopiaDenegada): legible, y que
   no lleve al DESTINO - una junction a un antepasado del destino copiaba la
@@ -4020,7 +4151,8 @@ begin
   Result := ProtegidoDenegado(ADestino, True);
   if Result <> '' then
     Exit;
-  if DentroDeSiMismo(AOrigen, ADestino, True) then
+  // (el mismo con otras mayusculas no esta dentro: es renombrarlo)
+  if DentroDeSiMismo(AOrigen, ADestino, True) and not MismaEntrada(AOrigen, ADestino) then
     Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   // la unidad REAL de cada lado: un junction en el camino no la disfraza
   try
@@ -4092,6 +4224,89 @@ begin
   finally
     YaNoSeQuita(AOrigen);
   end;
+end;
+
+procedure MezclaArbol(const AOrigen, ADestino: string; var AHechos: TArray<TPasoDeMezcla>);
+
+  procedure Anota(const ADe, AA: string);
+  var
+    P: TPasoDeMezcla;
+  begin
+    P.De := ADe;
+    P.A := AA;
+    AHechos := AHechos + [P];
+  end;
+
+  procedure Mezcla(const O, D: string);
+  begin
+    for var E in EntradasDeCarpeta(O) do
+    begin
+      var N := TPath.Combine(D, TPath.GetFileName(E));
+      // una carpeta (no un enlace) que tambien esta en el destino se mezcla;
+      // lo demas se renombra de un golpe
+      if TDirectory.Exists(E) and not EsEnlace(E) and TDirectory.Exists(N) and not EsEnlace(N) then
+        Mezcla(E, N)
+      else
+      begin
+        if not MoveFile(PChar(E), PChar(N)) then
+          raise Exception.Create(MotivoDeRenombre(E, GetLastError));
+        Anota(E, N);
+      end;
+    end;
+    // vacia ya: RemoveDir solo quita una carpeta vacia
+    if not RemoveDir(O) then
+      RaiseLastOSError;
+    Anota(O, '');
+  end;
+
+var
+  Motivo: string;
+begin
+  Motivo := MovidoDenegado(AOrigen, ADestino);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+  SueltaLoNuestroBajo(AOrigen);
+  try
+    Mezcla(SinBarraFinal(AOrigen), SinBarraFinal(ADestino));
+  finally
+    YaNoSeQuita(AOrigen);
+  end;
+end;
+
+function DeshazMezcla(const AHechos: TArray<TPasoDeMezcla>): string;
+begin
+  Result := '';
+  for var I := High(AHechos) downto 0 do
+    try
+      if AHechos[I].A = '' then
+      begin
+        CrearCarpeta(AHechos[I].De) // la que la mezcla vacio y quito
+      end
+      else if not MoveFile(PChar(AHechos[I].A), PChar(AHechos[I].De)) then
+        RaiseLastOSError;
+    except
+      on E: Exception do
+        Result := Result + IfThen(Result <> '', #10) + '  ' +
+          IfThen(AHechos[I].A <> '', AHechos[I].A, AHechos[I].De) + ': ' + E.Message.Trim;
+    end;
+end;
+
+function EspacioDenegado(const ACarpeta: string; ABytes: Int64): string;
+const
+  MEGA = 1024 * 1024;
+var
+  Libre, Total: Int64;
+begin
+  Result := '';
+  if ABytes <= 0 then
+    Exit;
+  var Carpeta := PrimerAncestroQueExiste(ACarpeta);
+  if (Carpeta = '') or not GetDiskFreeSpaceEx(PChar(IncludeTrailingPathDelimiter(Carpeta)),
+       Libre, Total, nil) then
+    Exit;
+  if Libre < ABytes + MARGEN_DISCO_LIBRE then
+    Result := MsgFmt(SR_GUARD_SIN_ESPACIO_FMT, [(ABytes + MEGA - 1) div MEGA, Carpeta,
+      Libre div MEGA, MARGEN_DISCO_LIBRE div MEGA]);
 end;
 
 { (la nota, en la interface) Nunca lanza: no poder tirar un temporal no es
@@ -4778,6 +4993,20 @@ begin
   // escritor atomico pone un fichero nuevo en su sitio. Sin jaula no hay fuera
   if Result = '' then
     Result := EnlaceDuroIlegible(APath);
+end;
+
+function ExisteYSeLee(const ARuta: string; ACarpeta: Boolean): Boolean;
+begin
+  Result := (ARuta <> '') and (ReadPathDenied(ARuta) = '') and
+    (TFile.Exists(ARuta) or (ACarpeta and TDirectory.Exists(ARuta)));
+end;
+
+function MotivoDeRenombre(const APath: string; ACodigo: Cardinal): string;
+begin
+  Result := MotivoDelSistema(TPath.GetFileName(APath) + ': ' + SysErrorMessage(ACodigo));
+  if Result = '' then
+    Result := MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
+      [TPath.GetFileName(APath), ACodigo, SysErrorMessage(ACodigo).Trim]);
 end;
 
 function MotivoToolOculta(const AToolName: string): TMotivoOculta;

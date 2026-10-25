@@ -8,11 +8,12 @@ seguia apuntando al sitio viejo, sin una tool que editara un grupo. Aqui:
 
   G  delphi_config add-project / remove-project en un .groupproj: lo que
      escribe "Add existing project" del IDE (item, tres targets, agregados)
-  M  delphi_move de la carpeta de un proyecto un nivel mas adentro: toda ruta
-     relativa que cruzaba el borde, re-apuntada (unit de fuera, {$I}, search
-     path, salida, el grupo de fuera); lo de dentro, intacto; y COMPILA
-  C  la copia de una carpeta de units: sus directivas re-apuntadas, el
-     original intacto (un PROYECTO no se copia: nunca vive en dos sitios)
+  M  delphi_move de la carpeta de un proyecto un nivel mas adentro, como un
+     operador (V19 de la 1.23): NADA se re-apunta y la nota nombra cada
+     fichero que cruza el borde, dentro y fuera, con lo que cruza (MOVE-023);
+     lo que la nota manda (fix-references, corregir el {$I}) y COMPILA
+  C  la copia de una carpeta: tampoco re-apunta, lo dice; un proyecto se
+     copia como cualquier carpeta
   F  fix-references: lo movido por fuera de las tools se busca por su nombre;
      una coincidencia se re-apunta, varias se dicen y no se adivina
 
@@ -54,6 +55,22 @@ def reapuntadas(r):
     leido en SU mensaje (el de su etiqueta); None si no lo trae."""
     m = re.search(r'\[%s\] fix-references of .*?: (\d+) re-pointed,' % mc.id_de('SN_ARREGLA_FMT'), r or '')
     return int(m.group(1)) if m else None
+
+
+CAT = mc.catalogo()
+
+
+def cruza(r, *p):
+    """Lo que la nota (MOVE-023 / FILE-046) cuenta de un fichero: el parentesis
+    detras de su ruta entera, como la ensena el servidor; None si no lo nombra."""
+    m = re.search(re.escape(mc.virtual(mc.larga(ruta(*p)))) + r' \((.*?)\)(?=; |\. |$)', r or '', re.I | re.S)
+    return m.group(1) if m else None
+
+
+def cuenta(*pares):
+    """Lo que la nota dice de un fichero, compuesto con los trozos del catalogo:
+    cuenta((1, 'SF_CRUZA_UNITS'), (1, 'SF_CRUZA_DIRECTIVAS'))."""
+    return ', '.join('%d %s' % (n, CAT[k]) for n, k in pares)
 
 
 GRUPO_VACIO = (
@@ -177,37 +194,44 @@ try:
           r[:200] + ' | ' + g7[-500:])
 
     # ------------------------------------------------------------ M: la mudanza
+    # Como un operador (V19 de la 1.23; David, 17-oct-2026): lo nombrado se muda
+    # y NADA se re-apunta; la respuesta dice, fichero a fichero y con su ruta
+    # entera, lo que cruza el borde (MOVE-023). Hasta la 1.22 este move
+    # re-apuntaba todo y el proyecto compilaba solo.
+    FUERA_ANTES = {p: bytes_de(*p) for p in (('Todo.groupproj',), ('fuera', 'UFuera.pas'),
+                                             ('hermano', 'Hermano.dpr'), ('hermano', 'Hermano.dproj'))}
+    DENTRO_ANTES = {p: bytes_de('app', p) for p in ('App.dpr', 'App.dproj')}
     r = call('delphi_move', {'path': APP, 'dest': ruta('src', 'app')})
     NUEVO = ruta('src', 'app')
-    dpr = leer('src', 'app', 'App.dpr')
-    dproj = leer('src', 'app', 'App.dproj')
-    check('M la respuesta dice que re-apunto las rutas que cruzaban el borde',
-          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.es(r, 'SN_REUBICA_FMT'), r[:400])
-    check('M1 la unit de FUERA: ..\\..\\lib en el .dpr; la de dentro, intacta',
-          "'..\\..\\lib\\ULib.pas'" in dpr and "'UDentro.pas'" in dpr, dpr[:400])
-    check('M1b ...y en el DCCReference del .dproj',
-          'Include="..\\..\\lib\\ULib.pas"' in dproj and 'Include="UDentro.pas"' in dproj,
-          dproj[:200])
-    check('M2 {$I} re-apuntado; el resto del .dpr, intacto',
-          '{$I ..\\..\\inc\\comun.inc}' in dpr and '{$APPTYPE CONSOLE}' in dpr, dpr[:300])
-    check('M3 search path y salida que salian: re-apuntados; la de las dcu (dentro): intacta',
-          '>..\\..\\lib;' in dproj and '..\\..\\bin\\$(Platform)\\$(Config)' in dproj and
-          '.\\$(Platform)\\$(Config)\\dcu' in dproj, dproj[:200])
-    g = leer('Todo.groupproj')
-    check('M4 el grupo de FUERA sigue al proyecto (item y targets)',
-          g.count('src\\app\\App.dproj') == 4 and 'app\\App.dproj"' not in g.replace('src\\app\\App.dproj"', ''),
-          g[:400])
+    check('M la carpeta se muda y la respuesta dice lo que cruza el borde (MOVE-023)',
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT'), r[:400])
+    check('M1 nada se reescribe: el .dpr y el .dproj que se mudaron, y lo de fuera, byte a byte',
+          all(bytes_de('src', 'app', p) == b for p, b in DENTRO_ANTES.items()) and
+          all(bytes_de(*p) == b for p, b in FUERA_ANTES.items()), r[:300])
+    check('M2 DENTRO: el .dpr con su unit de fuera y su {$I}, el .dproj con su salida y su search path',
+          cruza(r, 'src', 'app', 'App.dpr') == cuenta((1, 'SF_CRUZA_UNITS'), (1, 'SF_CRUZA_DIRECTIVAS')) and
+          cruza(r, 'src', 'app', 'App.dproj') == cuenta((2, 'SF_CRUZA_RUTAS')), r[:1200])
+    check('M3 FUERA, con su ruta entera: el grupo (item y tres targets), la unit con un {$I} que apuntaba '
+          'dentro y el proyecto hermano (su unit y su search path)',
+          cruza(r, 'Todo.groupproj') == cuenta((4, 'SF_CRUZA_GRUPOS')) and
+          cruza(r, 'fuera', 'UFuera.pas') == cuenta((1, 'SF_CRUZA_DIRECTIVAS')) and
+          cruza(r, 'hermano', 'Hermano.dpr') == cuenta((1, 'SF_CRUZA_UNITS')) and
+          cruza(r, 'hermano', 'Hermano.dproj') == cuenta((1, 'SF_CRUZA_RUTAS')), r[:1200])
+    check('M4 lo de dentro que apunta dentro no se nombra: UDentro.pas no cruza nada',
+          cruza(r, 'src', 'app', 'UDentro.pas') is None, r[:1200])
+    # M5 lo que la nota manda hacer, y compila: fix-references re-apunta la unit
+    # de fuera (la encuentra por su nombre) y el {$I} se corrige con delphi_edit
+    r = call('delphi_config', {'project': os.path.join(NUEVO, 'App.dproj'), 'command': 'fix-references'})
+    check('M5 fix-references re-apunta la unit que la nota nombraba, por su nombre',
+          mc.abre(r, 'SN_ARREGLA_FMT') and reapuntadas(r) == 1 and
+          r"'..\..\lib\ULib.pas'" in leer('src', 'app', 'App.dpr') and
+          r'Include="..\..\lib\ULib.pas"' in leer('src', 'app', 'App.dproj'), r[:300])
+    call('delphi_edit', {'path': os.path.join(NUEVO, 'App.dpr'), 'old': r'{$I ..\inc\comun.inc}',
+                         'new': r'{$I ..\..\inc\comun.inc}'})
     b = mc.como_json(call('delphi_build', {'project': os.path.join(NUEVO, 'App.dproj'),
                                            'platform': 'Win32'}, t=600))
-    check('M5 y COMPILA en su sitio nuevo (con la unit de fuera y el .inc)',
+    check('M5b ...y con el {$I} corregido, COMPILA en su sitio nuevo (con la unit de fuera y el .inc)',
           b.get('success') is True, str(b)[:300])
-    check('M6 una unit de FUERA con un {$I} que apuntaba dentro: re-apuntado',
-          '{$I ..\\src\\app\\dentro.inc}' in leer('fuera', 'UFuera.pas'), leer('fuera', 'UFuera.pas'))
-    check('M7 un proyecto HERMANO: su unit de dentro y su search path siguen a lo movido',
-          "'..\\src\\app\\UDentro.pas'" in leer('hermano', 'Hermano.dpr') and
-          'Include="..\\src\\app\\UDentro.pas"' in leer('hermano', 'Hermano.dproj') and
-          '>..\\src\\app;' in leer('hermano', 'Hermano.dproj'),
-          leer('hermano', 'Hermano.dpr')[:300])
 
     # ------------------------------------------------------------ C: la copia
     # Un PROYECTO se copia como cualquier carpeta (V19 de la 1.23: era MOVE-004,
@@ -222,9 +246,10 @@ try:
     open(ruta('modulos', 'UMod.pas'), 'w', newline='\r\n').write(
         'unit UMod;\n\ninterface\n\n{$I ..\\inc\\comun.inc}\n\nimplementation\n\nend.\n')
     r = call('delphi_move', {'path': ruta('modulos'), 'dest': ruta('src', 'modulos2'), 'copy': True})
-    check('C2 la copia de una carpeta de units re-apunta SU {$I}; el original, intacto',
-          '{$I ..\\..\\inc\\comun.inc}' in leer('src', 'modulos2', 'UMod.pas') and
-          '{$I ..\\inc\\comun.inc}' in leer('modulos', 'UMod.pas'), r[:300])
+    check('C2 la copia de una carpeta de units NO re-apunta su {$I}, lo dice (MOVE-023); el original, intacto',
+          mc.abre(r, 'SK_MOVE_COPIADO_FMT') and leer('src', 'modulos2', 'UMod.pas') == leer('modulos', 'UMod.pas') and
+          r'{$I ..\inc\comun.inc}' in leer('modulos', 'UMod.pas') and
+          cruza(r, 'src', 'modulos2', 'UMod.pas') == cuenta((1, 'SF_CRUZA_DIRECTIVAS')), r[:400])
 
     # ------------------------------------------------------------ F: fix-references
     os.makedirs(ruta('lib2'))
@@ -301,16 +326,25 @@ try:
         'unit UComun;\n\ninterface\n\nimplementation\n\nend.\n')
     r = call('delphi_config', {'project': DP, 'command': 'add-searchpath',
                                'path': '..\\..\\comun'})
+    antes_dp = bytes_de('src', 'app', 'App.dproj')
     r = call('delphi_move', {'path': ruta('comun'), 'dest': ruta('R&D', 'comun')})
+    check('X4 una carpeta del search path se muda a R&D: el .dproj no se toca y la nota lo nombra',
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and bytes_de('src', 'app', 'App.dproj') == antes_dp and
+          cruza(r, 'src', 'app', 'App.dproj') == cuenta((1, 'SF_CRUZA_RUTAS')), r[:400])
+    r = call('delphi_config', {'project': DP, 'command': 'fix-references'})
+    check('X5 fix-references da por perdido ese search path (no hay nombre que buscar)',
+          mc.es(r, 'SN_ARREGLA_RUTAS_FMT') and r'..\..\comun' in r, r[:400])
+    call('delphi_config', {'project': DP, 'command': 'remove-searchpath', 'path': r'..\..\comun'})
+    r = call('delphi_config', {'project': DP, 'command': 'add-searchpath', 'path': r'..\..\R&D\comun'})
     j = mc.como_json(call('delphi_config', {'project': DP, 'section': 'searchpaths'}))
     rutas = [p for v in (j.get('searchPaths') or {}).values() for p in v]
-    check('X4 una carpeta del search path se muda a R&D: el .dproj sigue siendo XML y view da la ruta de verdad',
-          xml_valido(DP) and 'R&amp;D\\comun' in leer('src', 'app', 'App.dproj') and
-          '..\\..\\R&D\\comun' in rutas, r[:200] + ' | ' + str(rutas))
+    check('X5b ...re-apuntado con remove/add-searchpath: el .dproj sigue siendo XML (R&amp;D) y view da la ruta',
+          xml_valido(DP) and r'R&amp;D\comun' in leer('src', 'app', 'App.dproj') and
+          r'..\..\R&D\comun' in rutas, r[:200] + ' | ' + str(rutas))
     r = call('delphi_config', {'project': DP, 'command': 'fix-references'})
-    check('X5 ...y fix-references no la da por perdida (su lector desescapa)',
-          mc.abre(r, 'SN_ARREGLA_FMT') and not mc.es(r, 'SN_ARREGLA_RUTAS_FMT') and
-          'R&amp;D' not in r, r[:300])
+    check('X5c ...y fix-references ya no la da por perdida (su lector desescapa)',
+          mc.abre(r, 'SN_ARREGLA_FMT') and 'R&D' not in r and 'R&amp;D' not in r and
+          r'..\..\comun' not in r, r[:300])
     # add-deployfile rechaza & en la ruta (por esa puerta no entra); lo que
     # se prueba es el LECTOR: una entrada con &amp; como la escribe el IDE
     open(os.path.join(NUEVO, 'datos.txt'), 'w').write('x')
@@ -338,36 +372,43 @@ try:
 
     UNIT = 'unit %s;\n\ninterface\n\n%s\n\nimplementation\n\nend.\n'
     # R1 {$I jedi.inc} que el compilador encuentra por el include path (no esta
-    #    junto a la unit): no se toca; se reescribia a ..\jedi.inc (F1026)
+    #    junto a la unit): ni se toca ni se nombra; la mudanza lo reescribia a
+    #    ..\jedi.inc (F1026) y la nota no debe gritar por el
     escribe('// jedi\n', 'r1', 'incs', 'jedi.inc')
     escribe(UNIT % ('UJedi', '{$I jedi.inc}'), 'r1', 'src', 'UJedi.pas')
+    antes = bytes_de('r1', 'src', 'UJedi.pas')
     r = call('delphi_move', {'path': ruta('r1', 'src', 'UJedi.pas'),
                              'dest': ruta('r1', 'src', 'sub', 'UJedi.pas')})
-    check('R1 {$I jedi.inc} resuelto por el include path: no se reescribe al mover la unit',
-          '{$I jedi.inc}' in leer('r1', 'src', 'sub', 'UJedi.pas'), r[:300])
+    check('R1 {$I jedi.inc} resuelto por el include path: ni se reescribe ni la nota lo nombra',
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and bytes_de('r1', 'src', 'sub', 'UJedi.pas') == antes and
+          not mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT'), r[:300])
 
-    # R2 una unit con FORM que lista un proyecto HERMANO (no de encima): al
-    #    moverla, el hermano conserva el form (la mudanza iba antes que el .dfm)
+    # R2 una unit con FORM que listan su proyecto y un HERMANO: con el comodin
+    #    viajan las dos (V19: el par ya no va solo), nadie se re-apunta y la nota
+    #    nombra a los dos proyectos
     call('delphi_create', {'kind': 'project-vcl', 'name': 'Base2', 'dir': ruta('r2', 'app')})
     call('delphi_create', {'kind': 'form-vcl', 'name': 'UFicha', 'project': ruta('r2', 'app', 'Base2.dpr')})
     call('delphi_create', {'kind': 'project-console', 'name': 'Herm2', 'dir': ruta('r2', 'herm')})
     H2 = ruta('r2', 'herm', 'Herm2.dproj')
     call('delphi_config', {'project': H2, 'command': 'add-unit', 'path': ruta('r2', 'app', 'UFicha.pas')})
-    r = call('delphi_move', {'path': ruta('r2', 'app', 'UFicha.pas'),
-                             'dest': ruta('r2', 'app', 'forms', 'UFicha.pas')})
+    herm_antes = {p: bytes_de('r2', 'herm', p) for p in ('Herm2.dpr', 'Herm2.dproj')}
+    r = call('delphi_move', {'path': ruta('r2', 'app', 'UFicha.*'), 'dest': ruta('r2', 'app', 'forms')})
+    check('R2 UFicha.* a una carpeta: viajan la unit y su form, el hermano queda byte a byte y la nota '
+          'nombra a los dos proyectos que la listan',
+          os.path.isfile(ruta('r2', 'app', 'forms', 'UFicha.pas')) and
+          os.path.isfile(ruta('r2', 'app', 'forms', 'UFicha.dfm')) and
+          all(bytes_de('r2', 'herm', p) == b for p, b in herm_antes.items()) and
+          cruza(r, 'r2', 'herm', 'Herm2.dpr') == cuenta((1, 'SF_CRUZA_UNITS')) and
+          cruza(r, 'r2', 'app', 'Base2.dpr') == cuenta((1, 'SF_CRUZA_UNITS')) and
+          not mc.es(r, 'SN_FILE_PAR_PARTIDO_FMT'), r[:800])
+    # R3 lo que la nota manda: fix-references en el hermano la encuentra por su
+    #    nombre y la re-apunta CON su form (la mudanza iba antes que el .dfm)
+    r = call('delphi_config', {'project': H2, 'command': 'fix-references'})
     linea = [l for l in leer('r2', 'herm', 'Herm2.dpr').split('\n') if 'UFicha in' in l]
-    check('R2 unit con form de un proyecto HERMANO: re-apuntada y con su form (.dpr y DCCReference)',
-          len(linea) == 1 and "forms\\UFicha.pas'" in linea[0] and '{' in linea[0] and
-          '<Form>' in leer('r2', 'herm', 'Herm2.dproj') and not mc.es(r, 'SN_REUBICA_FALLOS_FMT') and not mc.es(r, 'SN_REUBICA_SALTADAS_FMT'),
-          str(linea) + ' | ' + r[:300])
-    # R3 y un RENAME de esa unit: el hermano pasa a la nueva (se buscaba por el
-    #    nombre NUEVO en su .dpr, no se encontraba y se contaba como hecho)
-    r = call('delphi_move', {'path': ruta('r2', 'app', 'forms', 'UFicha.pas'),
-                             'dest': ruta('r2', 'app', 'forms', 'UFichaNueva.pas')})
-    check('R3 rename de una unit de un proyecto HERMANO: el hermano lista la nueva',
-          'UFichaNueva in' in leer('r2', 'herm', 'Herm2.dpr') and
-          'UFicha in' not in leer('r2', 'herm', 'Herm2.dpr') and not mc.es(r, 'SN_REUBICA_FALLOS_FMT') and not mc.es(r, 'SN_REUBICA_SALTADAS_FMT'),
-          leer('r2', 'herm', 'Herm2.dpr')[:400] + ' | ' + r[:300])
+    check('R3 fix-references del hermano: la unit re-apuntada y con su form (.dpr y DCCReference)',
+          mc.abre(r, 'SN_ARREGLA_FMT') and reapuntadas(r) == 1 and len(linea) == 1 and
+          r"forms\UFicha.pas'" in linea[0] and '{' in linea[0] and
+          '<Form>' in leer('r2', 'herm', 'Herm2.dproj'), str(linea) + ' | ' + r[:300])
 
     # R4 grupos con DEPENDENCIAS, como las escribe el IDE: DependsOnTargets en
     #    los targets del que depende y <Dependencies> en su item
@@ -406,11 +447,13 @@ try:
           mc.abre(r, 'SN_GRUPO_QUITADO_FMT') and 'Pkg4' not in gb and '<Dependencies/>' in gb and
           'Name="App4">' in gb and xml_valido(GB), r[:200] + ' | ' + gb[-700:])
     GC = grupo_con_deps('C.groupproj')
+    gc_antes = bytes_de('r4', 'C.groupproj')
     r = call('delphi_move', {'path': ruta('r4', 'pkg'), 'dest': ruta('r4', 'libs', 'pkg')})
-    gc = open(GC, encoding='utf-8-sig').read()
-    check('R4c mover la carpeta de la dependencia: sus <Dependencies> tambien siguen a lo movido',
-          '<Dependencies>libs\\pkg\\Pkg4.dproj</Dependencies>' in gc and 'Include="libs\\pkg\\Pkg4.dproj"' in gc,
-          gc[:900])
+    check('R4c mover la carpeta de la dependencia: el grupo que la lista, byte a byte y nombrado (item, tres '
+          'targets y la <Dependencies> de App4); el que ya no la lista (B), no',
+          bytes_de('r4', 'C.groupproj') == gc_antes and cruza(r, 'r4', 'C.groupproj') == cuenta((5, 'SF_CRUZA_GRUPOS'))
+          and cruza(r, 'r4', 'A.groupproj') == cuenta((4, 'SF_CRUZA_GRUPOS'))
+          and cruza(r, 'r4', 'B.groupproj') is None, r[:900])
 
     # R5 un proyecto con & en el NOMBRE: add-project escribia Name= y Targets=
     #    a mano y el grupo dejaba de ser XML
@@ -427,21 +470,25 @@ try:
     check('R5b ...y remove-project lo quita entero', mc.abre(r, 'SN_GRUPO_QUITADO_FMT') and 'Rd&amp;x' not in
           open(G5, encoding='utf-8-sig').read() and xml_valido(G5), r[:200])
 
-    # R6 una directiva SIN comillas cuya ruta nueva lleva un espacio: con comillas
+    # R6 una directiva SIN comillas que, movida, lleva a una ruta con un espacio:
+    #    no se reescribe (la mudanza la ponia entre comillas) y la nota la cuenta
     escribe('// x\n', 'r6', 'a b', 'x.inc')
-    escribe(UNIT % ('UEsp', '{$I ..\\x.inc}'), 'r6', 'a b', 'src', 'UEsp.pas')
+    escribe(UNIT % ('UEsp', r'{$I ..\x.inc}'), 'r6', 'a b', 'src', 'UEsp.pas')
+    antes = bytes_de('r6', 'a b', 'src', 'UEsp.pas')
     r = call('delphi_move', {'path': ruta('r6', 'a b', 'src', 'UEsp.pas'), 'dest': ruta('r6', 'UEsp.pas')})
-    check("R6 {$I ..\\x.inc} movida a donde la ruta nueva lleva un espacio: {$I 'a b\\x.inc'}",
-          "{$I 'a b\\x.inc'}" in leer('r6', 'UEsp.pas'), leer('r6', 'UEsp.pas')[:200] + ' | ' + r[:200])
+    check(r'R6 {$I ..\x.inc} movida adonde su ruta lleva un espacio: igual byte a byte, y la nota la cuenta',
+          bytes_de('r6', 'UEsp.pas') == antes and cruza(r, 'r6', 'UEsp.pas') == cuenta((1, 'SF_CRUZA_DIRECTIVAS')),
+          r[:400])
 
-    # R7 {$R a.res a.rc}: el .rc (segunda ruta) tambien se re-apunta
+    # R7 {$R a.res a.rc}: el .rc (segunda ruta) tambien cruza, y la nota cuenta las dos
     escribe('', 'r7', 'res', 'a.res')
     escribe('', 'r7', 'res', 'a.rc')
-    escribe(UNIT % ('URes', '{$R ..\\res\\a.res ..\\res\\a.rc}'), 'r7', 'src', 'URes.pas')
+    escribe(UNIT % ('URes', r'{$R ..\res\a.res ..\res\a.rc}'), 'r7', 'src', 'URes.pas')
+    antes = bytes_de('r7', 'src', 'URes.pas')
     r = call('delphi_move', {'path': ruta('r7', 'src', 'URes.pas'), 'dest': ruta('r7', 'src', 'sub', 'URes.pas')})
-    check('R7 {$R a.res a.rc}: las DOS rutas re-apuntadas',
-          '{$R ..\\..\\res\\a.res ..\\..\\res\\a.rc}' in leer('r7', 'src', 'sub', 'URes.pas'),
-          leer('r7', 'src', 'sub', 'URes.pas')[:200])
+    check('R7 {$R a.res a.rc}: las DOS rutas contadas, el fichero igual',
+          bytes_de('r7', 'src', 'sub', 'URes.pas') == antes and
+          cruza(r, 'r7', 'src', 'sub', 'URes.pas') == cuenta((2, 'SF_CRUZA_DIRECTIVAS')), r[:400])
 
     # R8 (D3) el icono, un fichero desplegado y un .optset importado del .dproj
     call('delphi_create', {'kind': 'project-console', 'name': 'App8', 'dir': ruta('r8', 'app')})
@@ -453,12 +500,11 @@ try:
         '    <ItemGroup><DeployFile LocalName="..\\data\\x.db" Configuration="Release" Class="File"/></ItemGroup>\r\n'
         '    <Import Project="..\\opts\\r.optset" Condition="Exists(\'..\\opts\\r.optset\')"/>\r\n</Project>')
     open(D8, 'w', encoding='utf-8-sig', newline='').write(d8)
+    antes = bytes_de('r8', 'app', 'App8.dproj')
     r = call('delphi_move', {'path': ruta('r8', 'app'), 'dest': ruta('r8', 'sub', 'app')})
-    d8 = leer('r8', 'sub', 'app', 'App8.dproj')
-    check('R8 icono, DeployFile y .optset del .dproj siguen a lo que queda fuera',
-          '<Icon_MainIcon>..\\..\\res\\app.ico<' in d8 and 'LocalName="..\\..\\data\\x.db"' in d8 and
-          'Project="..\\..\\opts\\r.optset"' in d8 and "Exists('..\\..\\opts\\r.optset')" in d8 and xml_valido(ruta('r8', 'sub', 'app', 'App8.dproj')),
-          d8[-500:] + ' | ' + r[:200])
+    check('R8 el icono, el DeployFile y el .optset (su Project y su Exists) del .dproj: contados, el .dproj igual',
+          bytes_de('r8', 'sub', 'app', 'App8.dproj') == antes and
+          cruza(r, 'r8', 'sub', 'app', 'App8.dproj') == cuenta((4, 'SF_CRUZA_RUTAS')), r[:400])
 
     # R9 fix-references de un grupo no dice si EXISTE algo fuera de la jaula
     FUERA9 = os.path.join(BASE, 'fuera9')
@@ -479,10 +525,11 @@ try:
     d10 = open(D10, encoding='utf-8-sig', newline='').read().replace('</Project>',
         '    <PropertyGroup><DCC_UnitSearchPath>..\\lib10;C:\\x&#38;y;$(DCC_UnitSearchPath)</DCC_UnitSearchPath></PropertyGroup>\r\n</Project>')
     open(D10, 'w', encoding='utf-8-sig', newline='').write(d10)
+    antes = bytes_de('r10', 'app', 'App10.dproj')
     r = call('delphi_move', {'path': ruta('r10', 'app'), 'dest': ruta('r10', 'sub', 'app')})
-    d10 = leer('r10', 'sub', 'app', 'App10.dproj')
-    check('R10 un trozo con &#38; que no se toca queda como estaba (se re-escapaba la lista entera)',
-          '>..\\..\\lib10;C:\\x&#38;y;$(DCC_UnitSearchPath)<' in d10 and '&amp;#38;' not in d10, d10[-300:])
+    check('R10 una lista con un trozo &#38; absoluto: el .dproj igual, y la nota cuenta solo el relativo',
+          bytes_de('r10', 'sub', 'app', 'App10.dproj') == antes and
+          cruza(r, 'r10', 'sub', 'app', 'App10.dproj') == cuenta((1, 'SF_CRUZA_RUTAS')), r[:400])
 
     # R11 mover un JUNCTION a una victima de fuera: lo de detras no se recorre
     #     ni se intenta reescribir (antes lo paraba solo el escritor, y lo decia)
@@ -505,7 +552,7 @@ try:
         check('R11 mover un junction que sale de las raices: negado por el enlace (GUARD-001), sigue donde estaba y la victima intacta',
               mc.es(r, 'SR_JAIL_LINK_FMT') and os.path.isjunction(ruta('r11', 'enlace')) and
               not os.path.lexists(ruta('r11', 'enlace2')) and
-              open(os.path.join(VIC, 'victima', 'UVic.pas'), 'rb').read() == antes11 and not mc.es(r, 'SN_REUBICA_FALLOS_FMT') and not mc.es(r, 'SN_REUBICA_SALTADAS_FMT'),
+              open(os.path.join(VIC, 'victima', 'UVic.pas'), 'rb').read() == antes11,
               r[:300])
     finally:
         for j in (ruta('r11', 'enlace'), ruta('r11', 'enlace2')):
@@ -574,10 +621,11 @@ try:
     # directiva COMENTADA (tambien con //) contaba (David, 27-sep: "incluso //")
     escribe('// x\n', 'r12', 'x.inc')
     escribe(UNIT % ('UCom', '// {$I ..\\viejo.inc}\n{$I ..\\x.inc}'), 'r12', 'src', 'UCom.pas')
+    antes = bytes_de('r12', 'src', 'UCom.pas')
     r = call('delphi_move', {'path': ruta('r12', 'src', 'UCom.pas'), 'dest': ruta('r12', 'src', 'sub', 'UCom.pas')})
-    ucom = leer('r12', 'src', 'sub', 'UCom.pas')
-    check('R12 una directiva COMENTADA con // no se re-apunta; la de verdad si',
-          '// {$I ..\\viejo.inc}' in ucom and '{$I ..\\..\\x.inc}' in ucom, ucom[:250])
+    check('R12 una directiva COMENTADA con // no cuenta; la de verdad si (una), y el fichero igual',
+          bytes_de('r12', 'src', 'sub', 'UCom.pas') == antes and
+          cruza(r, 'r12', 'src', 'sub', 'UCom.pas') == cuenta((1, 'SF_CRUZA_DIRECTIVAS')), r[:400])
     call('delphi_create', {'kind': 'project-console', 'name': 'Plano', 'dir': ruta('w', 'plano')})
     for u in ('UA', 'UB'):
         call('delphi_create', {'kind': 'unit', 'name': u, 'dir': ruta('w', 'plano')})

@@ -10,8 +10,9 @@ UN tope, NIVELES_DE_SUBIDA (12 carpetas, la de partida incluida).
      ajustes, no LSP-035 (ROJO hasta la 1.23: el motor subia 8)
   S2 (guarda) una unidad a 3 carpetas, igual
   S3 (guarda) a 13 carpetas, fuera del tope: LSP-035 - el tope es uno y se cumple
-  S4 (guarda) delete de la unidad a 10 la quita del .dpr: el mismo proyecto para
-     todas las tools
+  S4 (guarda) delete de la unidad a 10: la nota nombra el .dpr que la lista, el
+     mismo proyecto que ven las demas tools (desde V19 el borrado no lo toca; antes
+     la quitaba del .dpr)
 
 Uso:  python tests/test_subida_1230.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -67,8 +68,9 @@ try:
     antes = open(DPR, encoding='utf-8-sig').read()
     r = srv.call('delphi_delete', {'path': honda}, t=120)
     despues = open(DPR, encoding='utf-8-sig').read()
-    check('S4 (guarda) delete de la unidad a 10 la quita del .dpr: el mismo proyecto para todas las tools',
-          'UHonda' in antes and 'UHonda' not in despues, (r[:200], 'UHonda' in antes, 'UHonda' in despues))
+    check('S4 (guarda) delete de la unidad a 10: la nota nombra el .dpr, que no se toca',
+          'UHonda' in antes and despues == antes and not os.path.exists(honda) and
+          mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and 'P.dpr (' in r, r[-500:])
 finally:
     srv.cierra()
 

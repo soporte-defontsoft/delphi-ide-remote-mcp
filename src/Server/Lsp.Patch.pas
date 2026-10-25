@@ -1625,17 +1625,8 @@ end;
 { APath sustituido por ATmp de un solo gesto (MoveFileEx con REPLACE); si no
   se puede, ATmp se borra y se lanza con la causa. El final de AtomicWrite y
   de ColocaProducto. }
-{ La causa de un rename o un movimiento que Windows nego con ACodigo, por la
-  regla de todas (MotivoDelSistema: ocupado SYS-027, acceso denegado
-  SYS-028); otro codigo, con el texto de Windows. Se decia "otro proceso lo
-  tiene" de CUALQUIER codigo (septima revision). }
-function MotivoDeRenombre(const APath: string; ACodigo: DWORD): string;
-begin
-  Result := MotivoDelSistema(TPath.GetFileName(APath) + ': ' + SysErrorMessage(ACodigo));
-  if Result = '' then
-    Result := MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
-      [TPath.GetFileName(APath), ACodigo, SysErrorMessage(ACodigo).Trim]);
-end;
+// MotivoDeRenombre (la causa de un rename que Windows nego) vive en Lsp.Guard
+// desde la 1.23 (V19): la usan tambien el move y la mezcla
 
 { La fecha de creacion de APath, un fichero que la operacion acaba de dejar;
   nunca lanza (si no se puede, se queda la que tiene) y no sigue un enlace. }

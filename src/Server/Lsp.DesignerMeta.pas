@@ -1442,7 +1442,7 @@ begin
   if Texto = '' then
   try
     // por la puerta de leer
-    if (ReadPathDenied(APas) <> '') or not TFile.Exists(APas) then
+    if not ExisteYSeLee(APas) then
       Exit;
     Texto := PatchLoadText(APas, Enc);
   except

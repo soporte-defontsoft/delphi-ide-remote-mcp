@@ -23,6 +23,8 @@ traducir sin romper nada.
   C8  un SR_ no va en un campo JSON que no sea "error": ahi nadie lo lee y
       la respuesta sale como exito (upload, rename, captura: 27-sep)
   C9  todo uso de una constante del catalogo pasa por su helper
+  C11 ninguna constante de los catalogos se queda sin uso: al retirar un
+      mensaje se quita, y su id queda en un comentario (V19 de la 1.23)
 
 Usage:  python tests/test_catalogo.py
 """
@@ -227,4 +229,34 @@ for lista in ('NODO_RUTINA', 'NODO_USO'):
           [(i, ID_A_CONST.get(i)) for i in malas_de(ids or [])])
 check('C10 ...y el comprobador sabe fallar (un id que no existe, una accion SK_)',
       malas_de(['NODE-999', 'NODE-014']) == ['NODE-999', 'NODE-014'], malas_de(['NODE-999', 'NODE-014']))
+
+# C11 (V19 de la 1.23): ninguna constante de un catalogo se queda sin uso. Un
+# texto que nadie dice es un texto que nadie mantiene: al retirar un mensaje se
+# quita, y su id queda en un comentario para que no se reutilice. Usada =
+# nombrada en algun fuente (sin comentarios; los .dpr y los .inc tambien: el
+# arranque del servidor dice los SL_SYS_ desde su .dpr) o, dentro de su
+# catalogo, por otra constante. Medido el 25-oct-2026: 23 sin uso, 22 de los
+# que V19 dejo y SF_PAS_SIN_NAME, que nadie decia desde hacia semanas.
+INCS = [f for f in glob.glob(os.path.join(mc.REPO, 'src', '**', '*.inc'), recursive=True) +
+        glob.glob(os.path.join(mc.REPO, 'src', '**', '*.dpr'), recursive=True) if '__' not in f]
+NOMBRADAS = set()
+for fuente in list(LIMPIAS.values()) + [mc.pascal_sin_comentarios(
+        open(f, encoding='utf-8-sig', errors='replace').read()) for f in INCS]:
+    NOMBRADAS.update(re.findall(r'\b[A-Z][A-Z0-9_]+\b', fuente))
+
+
+def sin_uso(consts, propio):
+    """Las constantes de un catalogo {NOMBRE: texto} que nadie nombra."""
+    cuenta = Counter(re.findall(r'\b[A-Z][A-Z0-9_]+\b', mc.pascal_sin_comentarios(propio)))
+    return sorted(n for n in consts if n not in NOMBRADAS and cuenta[n] < 2)
+
+
+huerfanas = (sin_uso(constantes(src), src) +
+             [n + '@nodo' for n in sin_uso(CN, open(MLD, encoding='utf-8-sig').read())] +
+             [n + '@render' for n in sin_uso(CR, open(REN, encoding='utf-8-sig').read())])
+check('C11 ninguna constante de los catalogos se queda sin uso', not huerfanas, huerfanas[:10])
+PLANTADO = "  SR_NADIE_LO_DICE_FMT =\n    '[X-1 DENIED] %s';\n  SN_LO_DICE_OTRA = '[X-2] ' + SF_DENTRO;\n  SF_DENTRO = 'x';\n"
+check('C11 ...y el comprobador sabe fallar (una plantada que nadie nombra; la usada dentro, no)',
+      sin_uso(constantes(PLANTADO), PLANTADO) == ['SN_LO_DICE_OTRA', 'SR_NADIE_LO_DICE_FMT'],
+      sin_uso(constantes(PLANTADO), PLANTADO))
 fin('catalogo')

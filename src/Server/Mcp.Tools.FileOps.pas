@@ -24,6 +24,7 @@ type
     [SchemaDescription(SP_FILE_PATH)]
     [Required]
     [RutaDelServidor]
+    [ComodinEnNombre]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_DELETE_PURGE)]
     property Purge: Boolean read FPurge write FPurge;
@@ -38,6 +39,7 @@ type
     [SchemaDescription(SP_FILE_PATH_2)]
     [Required]
     [RutaDelServidor]
+    [ComodinEnNombre]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_FILE_DEST)]
     [Required]
@@ -68,19 +70,14 @@ uses
   System.Classes,
   System.IOUtils,
   System.StrUtils,
-  System.RegularExpressions,
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.Patch,
   Lsp.ProjectUnits,
-  Lsp.Dproj,     // DprojDe: el .dproj de un .dpr/.dpk, un solo nombrador
   Lsp.NetDrives,
-  Lsp.Pascal,
-  Lsp.Scaffold,
   Lsp.Rutas,
   Lsp.Casa,
-  Lsp.Identidad,
-  Lsp.TodoONada;
+  Lsp.Identidad;
 
 function IsBackupPath(const APath: string): Boolean;
 begin
@@ -99,39 +96,200 @@ begin
   Result := EnPapelera(APath, EsLaCarpeta) and EsLaCarpeta;
 end;
 
-{ El gemelo designer de una unit: al lado, si es un fichero vivo; y buscando
-  por el nombre ORIGINAL si venimos de la papelera, donde cada copia lleva SU
-  propio sello de hora - el del .dfm no es el del .pas, se guardaron con
-  milisegundos distintos (medido: .pas-215825250 junto a .dfm-215825248). Por
-  eso aqui no vale calcular el nombre: hay que buscarlo. '' si no hay gemelo.
-  AForm es el candidato de al lado (DesignersDeUnidad, Lsp.Patch). }
-function DesignerJunto(const AForm, AStem: string;
-  ADesdePapelera: Boolean): string;
+type
+  { Un paso de una operacion como la del operador (V19 de la 1.23): lo que se
+    toca (Origen) y adonde va (Destino). }
+  TPaso = record
+    Origen, Destino: string;
+  end;
+
+function Paso(const AOrigen, ADestino: string): TPaso;
+begin
+  Result.Origen := AOrigen;
+  Result.Destino := ADestino;
+end;
+
+{ Las entradas de la carpeta de APath que casan con su nombre, por EL juez del
+  pattern de delphi_list y delphi_search (TDirectory, sobre el nombre LARGO:
+  medido el 25-oct-2026, *.pas no casa b.pas2 aunque su nombre 8.3 si), sin
+  la papelera ni las marcas de dueno. '' con AEntradas, o la negativa. }
+function EntradasDelComodin(const APath: string; out AEntradas: TArray<string>): string;
 var
-  Dir, Mejor: string;
+  Carpeta, Mascara: string;
+  Todas: TArray<string>;
 begin
   Result := '';
-  if not ADesdePapelera then
-  begin
-    if TFile.Exists(AForm) then
-      Result := AForm;
-    Exit;
-  end;
-  Dir := TPath.GetDirectoryName(AForm);
-  Mejor := '';
+  AEntradas := [];
+  Carpeta := CarpetaDelComodin(APath);
+  Mascara := ExtractFileName(SinBarraFinal(APath));
+  // el comodin va en el NOMBRE, en su carpeta: nunca recorre carpetas
+  if Carpeta.IndexOfAny(['*', '?']) >= 0 then
+    Exit(MsgFmt(SR_FILE_COMODIN_SOLO_EN_NOMBRE_FMT, [APath]));
+  if not TDirectory.Exists(Carpeta) then
+    Exit(MsgFmt(SR_FILE_NO_EXISTE_ORIGEN_FMT, [Carpeta]));
+  // lo que no se deja listar se dice (GUARD-040): TDirectory lo daria vacio
   try
-    for var F in TDirectory.GetFiles(Dir, AStem + TPath.GetExtension(AForm) + '-*') do
-    begin
-      // ".by" es el marcador de quien lo tiro, no el fichero
-      if EsMarcaDeDueno(F) then
-        Continue;
-      if (Mejor = '') or (TFile.GetLastWriteTime(F) > TFile.GetLastWriteTime(Mejor)) then
-        Mejor := F;
-    end;
+    Todas := EntradasDeCarpeta(Carpeta);
   except
-    Exit('');
+    on E: Exception do
+      Exit(E.Message);
   end;
-  Result := Mejor;
+  // la mascara, con LA pregunta que TDirectory le hace a cada nombre
+  // (System.IOUtils, WalkThroughDirectory: DoMatchesPattern sobre el nombre
+  // de FindFirst, con las mayusculas de la plataforma), medido en su fuente
+  for var E in Todas do
+    if TPath.MatchesPattern(TPath.GetFileName(E), Mascara) and
+       not SameText(TPath.GetFileName(E), TrashFolderName) and not EsMarcaDeDueno(E) then
+      AEntradas := AEntradas + [E];
+  if Length(AEntradas) = 0 then
+    Result := MsgFmt(SR_FILE_COMODIN_NADA_FMT, [Carpeta, Mascara]);
+end;
+
+{ El nombre con el que una entrada de un comodin llega a su carpeta: el suyo,
+  o el ORIGINAL si viene de la papelera (sus copias llevan el sello detras:
+  "UFicha.pas-215825250"; restaurar es volver al nombre de antes). }
+function NombreDeDestino(const AEntrada: string; ADesdePapelera: Boolean): string;
+begin
+  Result := TPath.GetFileName(SinBarraFinal(AEntrada));
+  if ADesdePapelera then
+  begin
+    var Original := TrashOriginalName(Result);
+    if Original <> '' then
+      Result := Original;
+  end;
+end;
+
+{ LA MIRADA PREVIA de un move o una copia (V19), antes del primer byte: que
+  ningun FICHERO del destino se pise (David, 25-oct-2026: "carpeta vacia o no
+  da igual; lo que no queremos es sobrescribir ficheros": una carpeta que existe
+  se mezcla; el mismo fichero con otras mayusculas es un renombrado), que la
+  ruta mas larga quepa (GUARD-028: fallaba a mitad, con N ficheros ya copiados;
+  Fable 5) y que haya sitio (David, 17-oct: "espacio suficiente y con margen":
+  la copia en su destino, la copia de seguridad de un move en su papelera).
+  Lo que se mira es lo que se va a escribir: la copia, por EL copiador sin
+  escribir (AAlListar); el move, renombrando, tal cual (los enlaces como
+  enlaces). '' o la negativa (con la lista de lo que choca). }
+function MiradaPrevia(const APasos: TArray<TPaso>; ACopia, ADesdePapelera: Boolean): string;
+const
+  TOPE = 20;
+var
+  Choques, Vistos, NoSeg: TArray<string>;
+  Larga: string;
+  Bytes: Int64;
+  Mide: TProc<string, Int64>;
+  Choca: TProc<string>;
+begin
+  Result := '';
+  Choques := [];
+  Vistos := [];
+  Larga := '';
+  Bytes := 0;
+  Mide :=
+    procedure(D: string; ATamano: Int64)
+    begin
+      if Length(D) > Length(Larga) then
+        Larga := D;
+      Inc(Bytes, ATamano);
+    end;
+  Choca :=
+    procedure(D: string)
+    begin
+      if not MatchText(D, Choques) then
+        Choques := Choques + [D];
+    end;
+  for var P in APasos do
+  begin
+    var Origen := SinBarraFinal(TPath.GetFullPath(P.Origen));
+    var Destino := SinBarraFinal(TPath.GetFullPath(P.Destino));
+    // dos al MISMO destino (dos copias de la papelera del mismo original, con
+    // un comodin) chocan entre si
+    if MatchText(Destino, Vistos) then
+      Choca(Destino);
+    Vistos := Vistos + [Destino];
+    if not TDirectory.Exists(Origen) or EsEnlace(Origen) then
+    begin
+      // un fichero o un enlace (viaja como enlace): no se pisa nada; el mismo
+      // con otras mayusculas es un renombrado (MismaEntrada, punto 4 de Fable)
+      // al MOVER; copiarse encima, no (lo niega antes CopiaDenegada: MOVE-009)
+      if (TDirectory.Exists(Destino) or TFile.Exists(Destino)) and
+         (ACopia or not MismaEntrada(Origen, Destino)) then
+        Choca(Destino);
+      if TFile.Exists(Origen) and not EsEnlace(Origen) then
+        Mide(Destino, TFile.GetSize(Origen))
+      else
+        Mide(Destino, 0);
+      Continue;
+    end;
+    if TFile.Exists(Destino) then
+    begin
+      Choca(Destino);
+      Continue;
+    end;
+    // la carpeta misma con otras mayusculas no se mezcla consigo: se renombra
+    var Mezcla := TDirectory.Exists(Destino) and (ACopia or not MismaEntrada(Origen, Destino));
+    if ACopia then
+      CopiaArbol(Origen, Destino, False, NoSeg, True, nil,
+        function(const O, D: string; AEsCarpeta, ADetras: Boolean): Boolean
+        begin
+          Result := True;
+          if AEsCarpeta then
+          begin
+            if Mezcla and TFile.Exists(D) then
+            begin
+              Choca(D);
+              Result := False;
+            end;
+            Mide(D, 0);
+          end
+          else
+          begin
+            if Mezcla and (TFile.Exists(D) or TDirectory.Exists(D)) then
+              Choca(D);
+            Mide(D, TFile.GetSize(O));
+          end;
+        end)
+    else
+      RecorreSinEnlaces(Origen,
+        procedure(const E: string)
+        begin
+          var D := Destino + E.Substring(Length(Origen));
+          if TDirectory.Exists(E) then
+          begin
+            if Mezcla and TFile.Exists(D) then
+              Choca(D);
+            Mide(D, 0);
+          end
+          else
+          begin
+            if Mezcla and (TFile.Exists(D) or TDirectory.Exists(D)) then
+              Choca(D);
+            Mide(D, TFile.GetSize(E)); // lo que ocupara su copia de seguridad
+          end;
+        end,
+        procedure(const E: string)
+        begin
+          var D := Destino + E.Substring(Length(Origen));
+          if Mezcla and (TFile.Exists(D) or TDirectory.Exists(D)) then
+            Choca(D);
+          Mide(D, 0);
+        end);
+  end;
+  if Length(Choques) > 0 then
+  begin
+    var Lista := string.Join(', ', Copy(Choques, 0, TOPE));
+    if Length(Choques) > TOPE then
+      Lista := Lista + MsgFmt(SF_FILE_Y_MAS_FMT, [Length(Choques) - TOPE]);
+    Exit(MsgFmt(SR_FILE_DESTINO_YA_EXISTE_FMT, [Lista]));
+  end;
+  Result := RutaLargaDenegada(Larga);
+  if Result <> '' then
+    Exit(Result + MsgFmt(SF_FILE_RUTA_MAS_LARGA_FMT, [Larga]));
+  if Length(APasos) = 0 then
+    Exit;
+  if ACopia then
+    Result := EspacioDenegado(TPath.GetDirectoryName(SinBarraFinal(TPath.GetFullPath(APasos[0].Destino))), Bytes)
+  else if not ADesdePapelera then
+    Result := EspacioDenegado(TPath.GetDirectoryName(SinBarraFinal(TPath.GetFullPath(APasos[0].Origen))), Bytes);
 end;
 
 { LA PUERTA de un movimiento: la que pasa la unit y la que pasa cada designer
@@ -425,39 +583,45 @@ end;
 
 function BorrarNucleo(const Params: TDelphiDeleteParams): string;
 var
-  Denied, Trash, ProjNote, DesignerNote, P, R: string;
-  Projects: TArray<string>;
-  // borrar una UNIT es todo o nada: sus proyectos, su form y ella
-  FotoUnit: TFotoDeFicheros;
-  HayFotoUnit: Boolean;
-  // las copias del form en la papelera y desde donde crearon carpetas
-  CopiasForm, AncestrosForm: TArray<string>;
+  Denied, Trash, Ancestro, Puerta: string;
+  Rutas, Copias, Ancestros: TArray<string>;
+  Comodin: Boolean;
 
-  { Lo que ya habia cambiado vuelve, y la respuesta lo dice con la causa. }
-  function DeshaceUnit(const ACausa: string): string;
-  var
-    NoVolvio: string;
-    I: Integer;
+  { Lo ya mandado a la papelera vuelve a su sitio (todo o nada con un
+    comodin), sin sus marcas ni los cajones que se crearon. '' si todo volvio;
+    si no, lo que no, una linea por entrada (SYS-018). }
+  function Devuelve: string;
   begin
-    NoVolvio := FotoUnit.Restaura;
-    // algo no volvio: la copia de la papelera se queda, puede ser la unica
-    if NoVolvio <> '' then
-      Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, ACausa]));
-    // el form volvio de la foto: su copia en la papelera sobra (se
-    // quedaba suelta en deleted\; octava revision)
-    for I := 0 to High(CopiasForm) do
-      QuitaCopiaDeSeguridad(CopiasForm[I], AncestrosForm[I]);
-    Result := MsgConCausa(SR_FILE_UNIT_DESHECHO_FMT, ACausa,
-      [TPath.GetFileName(Params.Path), ACausa]);
+    Result := '';
+    for var I := High(Copias) downto 0 do
+      try
+        if TDirectory.Exists(Copias[I]) and not EsEnlace(Copias[I]) then
+          MueveArbol(Copias[I], Rutas[I])
+        else if not MoveFile(PChar(Copias[I]), PChar(SinBarraFinal(Rutas[I]))) then
+          RaiseLastOSError;
+        QuitaMarcaDeDueno(Copias[I]);
+        QuitaCarpetasCreadas(TPath.GetDirectoryName(Copias[I]), Ancestros[I]);
+      except
+        on E: Exception do
+          Result := Result + IfThen(Result <> '', #10) + '  ' + Rutas[I] + ': ' + E.Message.Trim;
+      end;
   end;
 
 begin
-  HayFotoUnit := False;
-  CopiasForm := [];
-  AncestrosForm := [];
-  Denied := PathDenied(Params.Path);
+  Rutas := [];
+  Copias := [];
+  Ancestros := [];
+  // con un comodin en el nombre (V19), la puerta es la de su carpeta y cada
+  // entrada que case pasa despues la suya
+  Comodin := TieneComodin(Params.Path);
+  Puerta := IfThen(Comodin, CarpetaDelComodin(Params.Path), Params.Path);
+  Denied := PathDenied(Puerta);
   if Denied <> '' then
     Exit(Denied);
+  // un comodin manda a la PAPELERA, y desde fuera de ella y de las temporales:
+  // dentro, cada cosa se purga o se borra por su nombre
+  if Comodin and (Params.Purge or IsBackupPath(Puerta) or EnTemporal(Puerta)) then
+    Exit(MsgFmt(SR_FILE_COMODIN_PAPELERA_FMT, [Params.Path]));
   // PURGE: the one way anything leaves for good, and it only reaches INSIDE
   // the trash. The rule that a live file always goes to the recoverable copy
   // first is what makes every other write safe, so it does not bend; but an
@@ -526,7 +690,7 @@ begin
   // temporales misma no: es de todos los agentes del servidor y se vacia
   // sola al arrancar.
   var EsLaTemporal: Boolean;
-  if EnTemporal(Params.Path, EsLaTemporal) then
+  if not Comodin and EnTemporal(Params.Path, EsLaTemporal) then
   begin
     if EsLaTemporal then
       Exit(MsgFmt(SR_FILE_DELETE_TEMP_ROOT_FMT, [Params.Path]));
@@ -538,32 +702,42 @@ begin
     Exit(MsgFmt(SN_FILE_DELETE_TEMP_FMT,
       [TPath.GetFileName(SinBarraFinal(Params.Path))]));
   end;
-  if IsBackupPath(Params.Path) then
-    Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [TrashFolderName]));
-  if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
-    Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
-  // Una carpeta a la papelera se lleva TODO lo de dentro: ni ser ni contener
-  // una raiz, una referencia o una carpeta de solo lectura. La puerta de
-  // arriba solo mira la ruta que le pasan (2026-09-25). Tambien la vacia:
-  // una raiz de otro workspace sin nada dentro sigue siendo suya.
-  if TDirectory.Exists(Params.Path) then
+  if Comodin then
   begin
-    Denied := ProtegidoDenegado(Params.Path);
+    Denied := EntradasDelComodin(Params.Path, Rutas);
+    if Denied <> '' then
+      Exit(Denied);
+  end
+  else
+  begin
+    if IsBackupPath(Params.Path) then
+      Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [TrashFolderName]));
+    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
+      Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
+    Rutas := [Params.Path];
+  end;
+  for var P in Rutas do
+  begin
+    // Una carpeta a la papelera se lleva TODO lo de dentro: ni ser ni contener
+    // una raiz, una referencia o una carpeta de solo lectura. La puerta solo
+    // mira la ruta que le pasan (2026-09-25). Tambien la vacia: una raiz de
+    // otro workspace sin nada dentro sigue siendo suya.
+    if TDirectory.Exists(P) then
+    begin
+      Denied := ProtegidoDenegado(P);
+      if Denied <> '' then
+        Exit(Denied);
+    end;
+    // borrar QUITA una entrada de su carpeta: la carpeta REAL que la contiene
+    // tambien (EntradaDenegada; revisor 4.8 de la 1.18.0, M2)
+    Denied := PuertaDelBorrado(P);
     if Denied <> '' then
       Exit(Denied);
   end;
-  // borrar QUITA una entrada de su carpeta: la carpeta REAL que la contiene
-  // tambien (EntradaDenegada). La ruta real sola dejaba pasar un enlace de
-  // vuelta dentro en una carpeta que es una union afuera, y la papelera se lo
-  // llevaba de la de fuera (revisor 4.8 de la 1.18.0, M2, la forma del
-  // changeset)
-  Denied := PuertaDelBorrado(Params.Path);
-  if Denied <> '' then
-    Exit(Denied);
   // An empty folder needs no copy: retrying a half-finished delete used to
   // dump the (empty) tree into the trash again on every attempt.
   // (vacia DE VERDAD: una que no se deja listar no lo es; 2g de la 1.18.x)
-  if CarpetaVacia(Params.Path) then
+  if not Comodin and CarpetaVacia(Params.Path) then
   begin
     // la carpeta VACIA no pasa por el mudador: lo NUESTRO se suelta aqui. Una
     // carpeta que algo de fuera vacio (git, al cambiar de rama) con el motor
@@ -587,228 +761,53 @@ begin
     Exit(MsgFmt(SR_FILE_DELETE_STUCK_FMT,
       [TPath.GetFileName(SinBarraFinal(Params.Path))]));
   end;
-  ProjNote := '';
-  DesignerNote := '';
-  if TFile.Exists(Params.Path) and (TPath.GetExtension(Params.Path).ToLower = '.pas') then
-  begin
-    // a unit: take it out of the projects that list it (while the .pas is
-    // still readable, so the form class/variable are known), then trash the
-    // designer pair with it.
-    // Su designer, por la MISMA puerta que la unit (PuertaDelBorrado) y
-    // antes de tocar nada: iba a la papelera sin preguntar (1.18.2, 2c)
-    for var Form in DesignersDeUnidad(Params.Path) do
-      if TFile.Exists(Form) then
-      begin
-        Denied := PuertaDelBorrado(Form);
-        if Denied <> '' then
-          Exit(MsgFmt(SR_GEMELO_DENEGADO_FMT, [TPath.GetFileName(Form), Denied]));
-      end;
-    Projects := ProjectsUsingUnit(Params.Path);
-    // TODO O NADA (quinta revision): un .dproj que otro proceso tenia abierto
-    // dejaba el .dpr cambiado y la unit borrada, con un exito que escondia el
-    // error. La foto: cada proyecto (.dpr/.dpk y su .dproj) y el form.
-    var RutasFoto: TArray<string> := [];
-    for P in Projects do
-      RutasFoto := RutasFoto + [P, DprojDe(P)];
-    RutasFoto := RutasFoto + DesignersDeUnidad(Params.Path);
-    FotoUnit.Toma(RutasFoto);
-    HayFotoUnit := True;
-    for P in Projects do
-    begin
-      if PathDenied(P) <> '' then
-      begin
-        ProjNote := ProjNote + #10 + MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
-        Continue;
-      end;
-      try
-        FotoUnit.Vigila(P);
-        R := RemoveProjectUnit(P, Params.Path, True);
-      except
-        on E: Exception do
-          Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
-      end;
-      if EsFallo(R) then
-        Exit(DeshaceUnit(R));
-      FotoUnit.Anota(P);
-      FotoUnit.Anota(DprojDe(P));
-      ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
-    end;
-    if Length(Projects) > 0 then
-      ProjNote := MsgFmt(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
-        string.Join(', ', Projects)]) + ProjNote
-    else
-      ProjNote := MsgText(SN_FILE_PROJECTS_NONE);
-    for var Form in DesignersDeUnidad(Params.Path) do
-      if TFile.Exists(Form) then
-      try
-        var AncestroForm: string;
-        MoveToTrash(Form, Trash, AncestroForm);
-        CopiasForm := CopiasForm + [Trash];
-        AncestrosForm := AncestrosForm + [AncestroForm];
-        FotoUnit.Anota(Form);
-        DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-          [TPath.GetFileName(Form), MsgText(SF_FILE_TAMBIEN_A_PAPELERA)]);
-      except
-        on E: Exception do
-          Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
-      end;
-  end
-  else if TDirectory.Exists(Params.Path) then
-  begin
-    // UNA CARPETA ENTERA: cada unit de dentro sale de los proyectos que la
-    // listan, igual que una unit suelta. Se borraba la carpeta, se contestaba
-    // "BORRADO" y el .dpr seguia listando units que ya no estaban: build roto
-    // con F1026 y una respuesta de exito (medido en vivo el 2026-09-21, el
-    // gemelo de lo que le pasaba a delphi_move). Un proyecto que vive DENTRO
-    // de la carpeta se va con ella: no se toca.
-    var Raiz := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
-    var Cuantas := 0;
-    // TODO O NADA, como la unit suelta (sexta revision): las units salian de
-    // sus proyectos y, si luego no se podia mover la carpeta, la respuesta
-    // decia "no he tocado NADA" con los .dpr/.dproj ya cambiados. Primero se
-    // ven TODOS los pares proyecto-unit, se toma la foto de cada proyecto, y
-    // un fallo en cualquiera lo deshace todo.
-    var ProyPares, UnitPares: TArray<string>;
-    var UnitsDentro: TArray<string> := [];
-    // las units que SE VAN: las del arbol SIN cruzar enlaces, las mismas que
-    // quita BorraArbol (GetFiles soAllDirectories cruzaba un junction y sacaba
-    // de su proyecto una unit de detras que no se borraba; B3 del cierre de
-    // la 1.19.0). Una subcarpeta ilegible no impide borrar: se miran las que
-    // se ven
-    RecorreSinEnlaces(Params.Path,
-      procedure(const APath: string)
-      begin
-        if SameText(TPath.GetExtension(APath), '.pas') then
-          UnitsDentro := UnitsDentro + [APath];
-      end);
-    var Fotos := TStringList.Create;
+  // A la papelera, todo o nada: con un comodin, lo que ya fue vuelve si uno no
+  // puede ir. Como un operador (V19): una unit no sale de sus proyectos ni se
+  // lleva su form; se AVISA de los dos
+  for var P in Rutas do
     try
-      try
-        Fotos.Sorted := True;
-        Fotos.Duplicates := dupIgnore;
-        for var U in UnitsDentro do
-        begin
-          if IsBackupPath(U) then
-            Continue;
-          for P in ProjectsUsingUnit(U) do
-          begin
-            if StartsText(Raiz, IncludeTrailingPathDelimiter(
-                 TPath.GetDirectoryName(TPath.GetFullPath(P)))) then
-              Continue;
-            ProyPares := ProyPares + [P];
-            UnitPares := UnitPares + [U];
-            Fotos.Add(P);
-            Fotos.Add(DprojDe(P));
-          end;
-        end;
-        FotoUnit.Toma(Fotos.ToStringArray);
-        HayFotoUnit := True;
-      except
-        // un proyecto que no se deja leer (otro proceso lo tiene) NO es
-        // "ningun proyecto la lista": el except de fuera se lo tragaba, se
-        // decia BORRADO y el .dpr seguia listando la unit (novena revision).
-        // Todavia no se ha tocado nada
-        on E: Exception do
-          Exit(MsgExcepcion(E.ClassName, E.Message));
-      end;
-    finally
-      Fotos.Free;
-    end;
-    for var I := 0 to High(ProyPares) do
-    begin
-      P := ProyPares[I];
-      if PathDenied(P) <> '' then
-        R := MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)])
-      else
+      MoveToTrash(P, Trash, Ancestro);
+      Copias := Copias + [Trash];
+      Ancestros := Ancestros + [Ancestro];
+    except
+      on E: Exception do
       begin
-        try
-          FotoUnit.Vigila(P);
-          R := RemoveProjectUnit(P, UnitPares[I], True);
-        except
-          on E: Exception do
-            Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
-        end;
-        if EsFallo(R) then
-          Exit(DeshaceUnit(R));
-        FotoUnit.Anota(P);
-        FotoUnit.Anota(DprojDe(P));
-      end;
-      Inc(Cuantas);
-      ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
-    end;
-    if Cuantas > 0 then
-      ProjNote := MsgFmt(SN_FILE_UNITS_CARPETA_QUITADAS_FMT,
-        [Cuantas]) + ProjNote;
-  end;
-  try
-    MoveToTrash(Params.Path, Trash);
-  except
-    on E: Exception do
-    begin
-      // A locked FOLDER move fails as a whole and leaves the tree intact: say so
-      // plainly, because "error" used to read as "and who knows what it did".
-      if TDirectory.Exists(Params.Path) then
-      begin
-        // ...y los proyectos de fuera que ya soltaron sus units vuelven a
-        // listarlas: "no he tocado NADA" tiene que ser verdad
-        if HayFotoUnit then
+        var NoVolvio := Devuelve;
+        if NoVolvio <> '' then
+          Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, E.Message]));
+        // A locked FOLDER move fails as a whole and leaves the tree intact: say
+        // so plainly. La CAUSA manda: una negativa con etiqueta sale tal cual;
+        // "algo la tiene abierta" solo si Windows dijo eso (septima revision)
+        if TDirectory.Exists(P) then
         begin
-          var NoVolvio := FotoUnit.Restaura;
-          if NoVolvio <> '' then
-            Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, E.Message]));
+          if EsFallo(E.Message) then
+            Exit(E.Message);
+          if MotivoDelSistema(E.Message) <> '' then
+            Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
+              [TPath.GetFileName(SinBarraFinal(P)), E.Message]));
+          Exit(MsgFmt(SR_FILE_CARPETA_NO_MOVIDA_FMT,
+            [TPath.GetFileName(SinBarraFinal(P)), E.Message]));
         end;
-        // la CAUSA manda, como en sus gemelas (el fichero suelto, delphi_move):
-        // una negativa con etiqueta (la papelera enlazada, un enlace a un
-        // antepasado) sale tal cual; "algo la tiene abierta" solo si Windows
-        // dijo eso; otro fallo, con su texto. Se decia "cierralo y repite" de
-        // todo, tambien de una ruta demasiado larga (septima revision)
-        if EsFallo(E.Message) then
-          Exit(E.Message);
-        if MotivoDelSistema(E.Message) <> '' then
-          Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
-            [TPath.GetFileName(SinBarraFinal(Params.Path)),
-             E.Message]));
-        Exit(MsgFmt(SR_FILE_CARPETA_NO_MOVIDA_FMT,
-          [TPath.GetFileName(SinBarraFinal(Params.Path)),
-           E.Message]));
+        Exit(MsgEnvuelve(SR_FILE_ERROR_MOVER_PAPELERA_FMT, E.Message));
       end;
-      // una unit: sus proyectos y su form vuelven (todo o nada)
-      if HayFotoUnit then
-        Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
-      if (ProjNote <> '') or (DesignerNote <> '') then
-        Exit(MsgFmt(SR_FILE_PARTIAL_FMT, [MsgText(SF_FILE_AL_MOVER_PAPELERA), E.Message,
-          #10 + DesignerNote + #10 + ProjNote]));
-      Exit(MsgEnvuelve(SR_FILE_ERROR_MOVER_PAPELERA_FMT, E.Message));
     end;
-  end;
-  // Say BORRADO only if it is gone. An auditor working through MCP found a
-  // folder still standing after a cheerful "BORRADO ... movido a la papelera"
-  // (2026-08-25): the copy had been made, the original had not gone, and
-  // nothing in the answer said so. A delete that half-happened must read as a
-  // delete that half-happened.
-  if StillThere(Params.Path) then
+  // Say BORRADO only if it is gone (an auditor found a folder still standing
+  // after a cheerful "BORRADO", 2026-08-25): a delete that half-happened must
+  // read as one, and say which of the two it is (the empty shell, or more)
+  if not Comodin and StillThere(Params.Path) then
   begin
-    // "the original could NOT be taken away" read as "nothing happened",
-    // while in fact the whole content had already moved out and only the
-    // empty shell was left (measured 2026-08-25). Say which of the two it is.
     if CarpetaVacia(Params.Path) then
-      Result := MsgFmt(SN_FILE_DELETE_EMPTY_SHELL_FMT,
-        [TPath.GetFileName(SinBarraFinal(Params.Path)), Trash])
-    else
-      Result := MsgFmt(SR_FILE_DELETE_PARTIAL_FMT,
-        [TPath.GetFileName(SinBarraFinal(Params.Path)), Trash]);
-    if DesignerNote <> '' then
-      Result := Result + #10 + DesignerNote;
-    if ProjNote <> '' then
-      Result := Result + #10 + ProjNote;
-    Exit;
+      Exit(MsgFmt(SN_FILE_DELETE_EMPTY_SHELL_FMT,
+        [TPath.GetFileName(SinBarraFinal(Params.Path)), Copias[0]]));
+    Exit(MsgFmt(SR_FILE_DELETE_PARTIAL_FMT,
+      [TPath.GetFileName(SinBarraFinal(Params.Path)), Copias[0]]));
   end;
-  Result := MsgFmt(SK_FILE_BORRADO_PAPELERA_FMT,
-    [TPath.GetFileName(SinBarraFinal(Params.Path)), Trash]);
-  if DesignerNote <> '' then
-    Result := Result + #10 + DesignerNote;
-  if ProjNote <> '' then
-    Result := Result + #10 + ProjNote;
+  Result := '';
+  for var I := 0 to High(Rutas) do
+    Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_FILE_BORRADO_PAPELERA_FMT,
+      [TPath.GetFileName(SinBarraFinal(Rutas[I])), Copias[I]]);
+  // el par partido y lo que aun apunta a lo borrado, como informacion (V19)
+  Result := Result + NotaDeMudanza(Rutas, Copias, mzBorra);
 end;
 
 { TDelphiMoveTool }
@@ -840,497 +839,373 @@ begin
 end;
 
 function MoverNucleo(const Params: TDelphiMoveParams): string;
+const
+  // la forma de un paso hecho, para deshacerlo
+  FM_FICHERO = 0;        // un fichero (o un enlace) renombrado
+  FM_CARPETA = 1;        // una carpeta renombrada entera
+  FM_MEZCLA = 2;         // una carpeta mezclada en otra que ya estaba
+  FM_COPIA_FICHERO = 3;
+  FM_COPIA_CARPETA = 4;  // una carpeta copiada a un sitio nuevo
+  FM_COPIA_MEZCLA = 5;   // ...o mezclada, desde su bajada, en una que estaba
 var
-  Denied, BackupNote, Enc, Src, OldStem, NewStem, ProjNote, P, R, PairNote: string;
-  Projects, NoSeguidos, NoSegCopia: TArray<string>;
-  IsUnit: Boolean;
-  AncestroCopia, CarpetaDestino, AncestroDestino: string;
-  // los designers ya movidos (de, a) y la foto de lo que se reescribe: mover
-  // una UNIT es todo o nada, como borrarla
-  DisenosDe, DisenosA: TArray<string>;
-  // los designers que la puerta APROBO (de, a): los que viajan, y solo esos
-  GemelosDe, GemelosA: TArray<string>;
-  FotoUnit: TFotoDeFicheros;
-  // la copia diaria que deja la reescritura de la cabecera: si el move se
-  // deshace, se va con el (un move que no se hizo no deja copias; la
-  // carpeta de destino se quedaba por ella)
-  CopiaCabecera, AncestroCabecera: string;
-  HabiaCopiaCabecera: Boolean;
+  Denied, Puerta: string;
+  Comodin, DesdePapelera: Boolean;
+  Pasos: TArray<TPaso>;
+  NoSeguidos, NoSegCopia: TArray<string>;
+  // lo hecho, en su orden, para deshacerlo todo o nada: cada paso con su
+  // forma, su mezcla y su bajada; las copias de seguridad y las carpetas de
+  // destino que se crearon
+  Hechos: TArray<TPaso>;
+  Formas: TArray<Integer>;
+  Mezclas: TArray<TArray<TPasoDeMezcla>>;
+  Bajadas, Copias, AncestrosCopia, CarpetasCreadas, AncestrosCreadas: TArray<string>;
 
-  { La mudanza de las rutas relativas (ReubicaArbol), AL FINAL: con el
-    designer ya junto a la unit y la cabecera reescrita, que es lo que
-    RenameProjectUnit lee. Iba antes: un proyecto HERMANO perdia el nombre
-    del form, y un rename fallaba y se contaba como hecho (revision del
-    26-sep-2026). Es tambien lo que re-apunta las units de una CARPETA en
-    los proyectos de fuera: aqui habia un recorrido propio, y eran dos. }
-  function Reubicacion(ADesdePapelera: Boolean): string;
+  procedure Anota(const AOrigen, ADestino: string; AForma: Integer;
+    const AMezcla: TArray<TPasoDeMezcla>; const ABajada: string);
   begin
-    Result := '';
-    if ADesdePapelera or not (TDirectory.Exists(Params.Dest) or TFile.Exists(Params.Dest)) then
-      Exit;
-    var Reubica := ReubicaArbol(Params.Path, Params.Dest, Params.Copy);
-    if Reubica <> '' then
-      Result := #10 + Reubica;
+    Hechos := Hechos + [Paso(AOrigen, ADestino)];
+    Formas := Formas + [AForma];
+    Mezclas := Mezclas + [AMezcla];
+    Bajadas := Bajadas + [ABajada];
   end;
 
-  { TODO O NADA: lo que el move ya reescribio vuelve de la foto (la cabecera
-    en el destino, los proyectos), los designers ya movidos y la unit vuelven
-    (o sus copias se quitan), y la respuesta es el rechazo. Lo que NO vuelve
-    se dice (SYS-018) con la causa sola. Era el deshacer del form (MOVE-017)
-    en linea; un proyecto que no se dejaba re-apuntar no deshacia nada. }
-  function DeshaceMove(const ARechazo, ACausa: string): string;
-  var
-    NoVolvio: string;
+  { Lo hecho, al reves: cada fichero y carpeta a su sitio, lo copiado fuera
+    (es nuestro: la mirada previa dijo que no habia nada alli), y las copias
+    de seguridad y las carpetas que se crearon, tambien fuera (un move que no
+    se hizo no deja copias por reintento; octava revision). '' si todo volvio;
+    si no, lo que no (SYS-018). }
+  function DeshazTodo: string;
   begin
-    NoVolvio := FotoUnit.Restaura;
-    for var K := High(DisenosA) downto 0 do
+    Result := '';
+    for var I := High(Hechos) downto 0 do
       try
-        if Params.Copy then
-          BorraLoNuestro(DisenosA[K]) // la copia de un +R es +R
-        else
-          TFile.Move(DisenosA[K], DisenosDe[K]);
+        case Formas[I] of
+          FM_FICHERO:
+            if not MoveFile(PChar(Hechos[I].Destino), PChar(Hechos[I].Origen)) then
+              RaiseLastOSError;
+          FM_CARPETA:
+            MueveArbol(Hechos[I].Destino, Hechos[I].Origen);
+          FM_MEZCLA, FM_COPIA_MEZCLA:
+            begin
+              var Queda := DeshazMezcla(Mezclas[I]);
+              if Queda <> '' then
+                raise Exception.Create(Queda);
+              // lo de la copia vuelve a su bajada (la volvio a crear), y fuera
+              if Formas[I] = FM_COPIA_MEZCLA then
+                BorraArbol(Bajadas[I]);
+            end;
+          FM_COPIA_FICHERO:
+            BorraLoNuestro(Hechos[I].Destino); // la copia de un +R es +R
+          FM_COPIA_CARPETA:
+            begin
+              // a una bajada nueva y de alli fuera: el borrador solo quita
+              // dentro de una carpeta desechable
+              var Bajada := NuevaCarpetaDescarga(TPath.GetDirectoryName(SinBarraFinal(Hechos[I].Destino)));
+              MueveArbol(Hechos[I].Destino, Bajada);
+              BorraArbol(Bajada);
+            end;
+        end;
       except
-        on E2: Exception do
-          NoVolvio := NoVolvio + IfThen(NoVolvio <> '', #10) + '  ' +
-            DisenosA[K] + ': ' + E2.Message.Trim;
+        on E: Exception do
+          Result := Result + IfThen(Result <> '', #10) + '  ' + Hechos[I].Destino + ': ' + E.Message.Trim;
       end;
-    try
-      if Params.Copy then
-        BorraLoNuestro(Params.Dest)
+    for var I := 0 to High(Copias) do
+      QuitaCopiaDeSeguridad(Copias[I], AncestrosCopia[I]);
+    for var I := High(CarpetasCreadas) downto 0 do
+      QuitaCarpetasCreadas(CarpetasCreadas[I], AncestrosCreadas[I]);
+  end;
+
+  { Lo que se movio o se copio DE VERDAD, para la nota: un paso entero o, en
+    una mezcla, cada entrada que entro. Lo que ya estaba en el destino no se
+    movio, y la nota lo contaba como movido (medido el 25-oct-2026: el .dproj
+    que ya estaba en la carpeta de destino salia en MOVE-023). De una copia
+    mezclada, cada entrada por su ORIGEN, no por su bajada. }
+  procedure LoMovido(out AViejos, ANuevos: TArray<string>);
+  begin
+    AViejos := [];
+    ANuevos := [];
+    for var I := 0 to High(Hechos) do
+      if (Formas[I] = FM_MEZCLA) or (Formas[I] = FM_COPIA_MEZCLA) then
+      begin
+        for var M in Mezclas[I] do
+          if M.A <> '' then // '' es una carpeta que la mezcla vacio y quito
+          begin
+            if Formas[I] = FM_COPIA_MEZCLA then
+              AViejos := AViejos + [SinBarraFinal(Hechos[I].Origen) +
+                M.De.Substring(Length(SinBarraFinal(Bajadas[I])))]
+            else
+              AViejos := AViejos + [M.De];
+            ANuevos := ANuevos + [M.A];
+          end;
+      end
       else
-        TFile.Move(Params.Dest, Params.Path);
+      begin
+        AViejos := AViejos + [Hechos[I].Origen];
+        ANuevos := ANuevos + [Hechos[I].Destino];
+      end;
+  end;
+
+  { Una carpeta del origen copiada por EL copiador a una bajada (__tmp-) de
+    ACarpeta: una copia que falla a mitad se quita ENTERA y no se queda a
+    medias en el destino (novena revision); lo que no se deja quitar, se dice
+    (decima revision). }
+  function CopiaABajada(const AOrigen, ACarpeta: string): string;
+  var
+    NoSeg: TArray<string>;
+  begin
+    Result := NuevaCarpetaDescarga(ACarpeta);
+    try
+      CopiaArbol(AOrigen, Result, False, NoSeg);
+      NoSeguidos := NoSeguidos + NoSeg;
     except
-      on E2: Exception do
-        NoVolvio := NoVolvio + IfThen(NoVolvio <> '', #10) + '  ' +
-          Params.Dest + ': ' + E2.Message.Trim;
+      on E: Exception do
+      begin
+        var Queda := '';
+        try
+          BorraArbol(Result);
+        except
+          Queda := Result;
+        end;
+        if TDirectory.Exists(Result) then
+          Queda := Result;
+        if Queda <> '' then
+          raise Exception.Create(E.Message.TrimRight + #10 + MsgFmt(SF_MOVE_BAJADA_QUEDA_FMT, [Queda]));
+        raise;
+      end;
     end;
-    QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
-    if (CopiaCabecera <> '') and not HabiaCopiaCabecera then
-      QuitaCopiaDeSeguridad(CopiaCabecera, AncestroCabecera);
-    if NoVolvio <> '' then
-      Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, ACausa]));
-    QuitaCarpetasCreadas(CarpetaDestino, AncestroDestino);
-    Result := ARechazo;
   end;
 
 begin
+  Hechos := [];
+  Formas := [];
+  Mezclas := [];
+  Bajadas := [];
+  Copias := [];
+  AncestrosCopia := [];
+  CarpetasCreadas := [];
+  AncestrosCreadas := [];
+  NoSeguidos := [];
+  NoSegCopia := [];
+  Pasos := [];
   if Params.Dest.Trim = '' then
     Exit(MsgText(SR_FILE_DELPHI_MOVE_NECESITA_DEST));
+  // Con un comodin en el nombre (V19; David: "permitir form1.*") la puerta del
+  // origen es la de su carpeta, y cada entrada que case pasa despues la suya
+  Comodin := TieneComodin(Params.Path);
+  Puerta := IfThen(Comodin, CarpetaDelComodin(Params.Path), Params.Path);
   // El ORIGEN: mover lo quita de su sitio, asi que pasa la puerta de
   // ESCRITURA; copiar solo lo LEE, asi que pasa la de LECTURA: tus raices,
-  // tus ReadOnlyRoots, la zona de biblioteca. Traer algo de un proyecto de
-  // referencia es justo para lo que existen (David, 25-sep-2026); el
-  // original no se toca y un proyecto entero sigue sin poder duplicarse.
+  // tus ReadOnlyRoots, la zona de biblioteca (David, 25-sep-2026)
   if Params.Copy then
-    Denied := ReadPathDenied(Params.Path)
+    Denied := ReadPathDenied(Puerta)
   else
-    Denied := PathDenied(Params.Path);
+    Denied := PathDenied(Puerta);
   if Denied <> '' then
     Exit(Denied);
   // El destino no cae en temporales, __history ni papelera (aprobado por
-  // David, 25-sep-2026). Sacar algo de ahi (restaurar, guardar una captura)
-  // es el ORIGEN, y ese sigue siendo libre dentro de la jaula.
+  // David, 25-sep-2026). Sacar algo de ahi es el ORIGEN, libre en la jaula.
   Denied := WriteTargetDenied(Params.Dest);
   if Denied <> '' then
     Exit(Denied);
-  // Moving an item OUT of the trash is a RESTORE - allowed (what delphi_delete
-  // tells the agent to do). What is refused: moving the trash FOLDER itself,
-  // and moving anything INTO the trash by hand.
-  if IsBackupRoot(Params.Path) then
+  // Sacar algo de la papelera es RESTAURAR (lo que dice delphi_delete); lo que
+  // no: mover la papelera misma, o meter algo en ella a mano
+  if not Comodin and IsBackupRoot(Params.Path) then
     Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_MUEVE_FMT, [TrashFolderName]));
   if IsBackupPath(Params.Dest) then
     Exit(MsgFmt(SR_FILE_NO_MUEVAS_DENTRO_PAPELERA_FMT, [TrashFolderName]));
-  if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
-    Exit(MsgFmt(SR_FILE_NO_EXISTE_ORIGEN_FMT, [Params.Path]));
-  if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then
-    Exit(MsgFmt(SR_FILE_DESTINO_YA_EXISTE_FMT, [Params.Dest]));
-  // un FICHERO que va a una ruta con separador final: esa ruta nombra una
-  // CARPETA, y dest es el NUEVO nombre (GUARD-025). Se creaba la carpeta, se
-  // dejaba una copia en la papelera y fallaba INTERNAL (octava revision)
-  if TFile.Exists(Params.Path) and (CarpetaEnVezDeFichero(Params.Dest) <> '') then
-    Exit(CarpetaEnVezDeFichero(Params.Dest));
-  // UNA CARPETA se mueve renombrandola o nada (MueveArbol, Lsp.Guard). Se
-  // pregunta ANTES de la copia de seguridad: un rechazo no deja copias de
-  // algo que no se va a mover.
-  if TDirectory.Exists(Params.Path) and not Params.Copy then
+  DesdePapelera := IsBackupPath(Puerta);
+  // desde la papelera se RESTAURA (move), no se copia
+  if Params.Copy and DesdePapelera then
+    Exit(MsgText(SR_MOVE_COPY_FROM_TRASH));
+  if Comodin then
   begin
-    Denied := MovidoDenegado(Params.Path, Params.Dest);
+    var Entradas: TArray<string>;
+    Denied := EntradasDelComodin(Params.Path, Entradas);
+    if Denied <> '' then
+      Exit(Denied);
+    // con un comodin, dest es la CARPETA adonde van
+    if TFile.Exists(Params.Dest) then
+      Exit(MsgFmt(SR_FILE_COMODIN_DEST_FICHERO_FMT, [Params.Dest]));
+    for var E in Entradas do
+      Pasos := Pasos + [Paso(E, TPath.Combine(Params.Dest, NombreDeDestino(E, DesdePapelera)))];
+  end
+  else
+  begin
+    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
+      Exit(MsgFmt(SR_FILE_NO_EXISTE_ORIGEN_FMT, [Params.Path]));
+    // un FICHERO que va a una ruta con separador final: esa ruta nombra una
+    // CARPETA, y dest es el NUEVO nombre (GUARD-025; octava revision)
+    if TFile.Exists(Params.Path) and (CarpetaEnVezDeFichero(Params.Dest) <> '') then
+      Exit(CarpetaEnVezDeFichero(Params.Dest));
+    Pasos := [Paso(Params.Path, Params.Dest)];
+  end;
+  // Cada paso por SU puerta. Un move renombra en su unidad, fichero o carpeta
+  // (una carpeta tambien mezclandola), nunca copiando por debajo
+  // (MovidoDenegado: ni ser ni contener un lugar protegido, ni otra unidad; un
+  // fichero cruzaba de unidad copiando y borrando, TFile.Move, hasta V19); una
+  // copia, por su decision (Lsp.Guard: un destino dentro del origen o
+  // protegido, el git de dentro); y la puerta entera de lo que se quita y se
+  // pone (PuertaDelMovimiento)
+  for var P in Pasos do
+  begin
+    if not Params.Copy then
+    begin
+      Denied := MovidoDenegado(P.Origen, P.Destino);
+      if Denied <> '' then
+        Exit(Denied);
+    end;
+    if Params.Copy then
+    begin
+      Denied := CopiaDenegada(P.Origen, P.Destino);
+      if Denied <> '' then
+        Exit(Denied);
+    end;
+    Denied := PuertaDelMovimiento(P.Origen, P.Destino, Params.Copy);
     if Denied <> '' then
       Exit(Denied);
   end;
-  // copy=true: misma puerta, dos rechazos mas. Desde la papelera se RESTAURA
-  // (move), no se copia; y un repo de dentro se copia entero solo con su git
-  // dentro (V19: un proyecto se copia como cualquier carpeta; MOVE-004 se fue).
-  if Params.Copy then
-  begin
-    if IsBackupPath(Params.Path) then
-      Exit(MsgText(SR_MOVE_COPY_FROM_TRASH));
-    // La decision de la copia, en Lsp.Guard: un destino dentro del origen (se
-    // copiaria sin fin), uno protegido, y el git de lo que CopiaArbol VA a
-    // copiar (enlaces con su regla).
-    Denied := CopiaDenegada(Params.Path, Params.Dest);
-    if Denied <> '' then
-      Exit(Denied);
+  // LA MIRADA PREVIA, antes del primer byte: ningun fichero se pisa, la ruta
+  // mas larga cabe y hay sitio. Lo que no se deja mirar (GUARD-040) no se toca
+  try
+    Denied := MiradaPrevia(Pasos, Params.Copy, DesdePapelera);
+  except
+    on E: Exception do
+      Denied := IfThen(EsFallo(E.Message), E.Message, MsgEnvuelve(SR_MOVE_ERROR_AL_MOVER_FMT, E.Message));
   end;
-  // mover QUITA una entrada de su carpeta y la PONE en otra: las dos carpetas
-  // REALES (EntradaDenegada; revisor 4.8 de la 1.18.0, M2). Copiar solo pone.
-  // La puerta entera, la que pasan tambien sus designers (PuertaDelMovimiento):
-  // la jaula y el destino ya se preguntaron arriba, ANTES de mirar si existe
-  Denied := PuertaDelMovimiento(Params.Path, Params.Dest, Params.Copy);
   if Denied <> '' then
     Exit(Denied);
-  // Una copia de la papelera se llama "UFicha.pas-215825250": su extension
-  // REAL esta detras del sello de hora. Sin esto, restaurar un formulario
-  // dejaba el .dfm dentro de la papelera y la unit fuera, sin designer.
-  var DesdePapelera := IsBackupPath(Params.Path);
-  var NombreReal := TPath.GetFileName(SinBarraFinal(Params.Path));
-  if DesdePapelera then
-  begin
-    var Orig := TrashOriginalName(NombreReal);
-    if Orig <> '' then
-      NombreReal := Orig;
-  end;
-  IsUnit := TFile.Exists(Params.Path) and
-    (TPath.GetExtension(NombreReal).ToLower = '.pas');
-  Projects := [];
-  OldStem := TPath.GetFileNameWithoutExtension(NombreReal);
-  NewStem := TPath.GetFileNameWithoutExtension(Params.Dest);
-  if IsUnit then
-  begin
-    if TPath.GetExtension(Params.Dest).ToLower <> '.pas' then
-      Exit(MsgFmt(SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT, [TPath.GetFileName(Params.Dest)]));
-    if not EsIdentificador(NewStem, True) then // EL identificador (Lsp.Pascal)
-      Exit(MsgFmt(SR_FILE_IDENTIFICADOR_UNIT_FMT, [NewStem]));
-    // un nombre NUEVO, la regla entera (Lsp.Scaffold): renombrar a Begin o a
-    // System pasaba; mover una unit que ya se llama asi, no se toca
-    if not MismoIdentificador(OldStem, NewStem) and (BadUnitName(NewStem) <> '') then
-      Exit(BadUnitName(NewStem));
-    for var Form in DesignersDeUnidad(Params.Dest) do
-      if TFile.Exists(Form) then
-        Exit(MsgFmt(SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT, [Form]));
-    // ...y cada designer que viaja con ella, por la MISMA puerta y antes de
-    // tocar nada: comparten carpeta, no nombre (una entrada de ReadOnlyPaths
-    // puede nombrar el .dfm solo; se movia sin preguntar, 1.18.2, 2c)
-    var DisenosOrigen := DesignersDeUnidad(Params.Path);
-    var DisenosDestino := DesignersDeUnidad(Params.Dest);
-    for var K := 0 to High(DisenosOrigen) do
-    begin
-      var Suyo := DesignerJunto(DisenosOrigen[K], OldStem, DesdePapelera);
-      if Suyo = '' then
-        Continue;
-      Denied := PuertaDelMovimiento(Suyo, DisenosDestino[K], Params.Copy);
-      if Denied <> '' then
-        Exit(MsgFmt(SR_GEMELO_DENEGADO_FMT, [TPath.GetFileName(Suyo), Denied]));
-      GemelosDe := GemelosDe + [Suyo];
-      GemelosA := GemelosA + [DisenosDestino[K]];
-    end;
-    // renombrarla es reescribir su cabecera (unit X;): con el atributo +R no
-    // se puede, y se movia igual - MOVED con "unit UOld;" en UNew.pas y el
-    // proyecto roto. Se dice ANTES de mover (novena revision)
-    if not Params.Copy and not MismoIdentificador(OldStem, NewStem) and (SoloLecturaDenegado(Params.Path) <> '') then
-      Exit(SoloLecturaDenegado(Params.Path));
-    if not Params.Copy then
-      Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
-  end;
-  // la carpeta que YA existia por encima de la copia de seguridad: lo que se
-  // cree debajo se quita si el move falla (octava revision)
-  AncestroCopia := '';
-  CopiaCabecera := '';
-  HabiaCopiaCabecera := False;
-  // ...y la que ya existia por encima del destino: un move que falla quita
-  // las que creo para el (se quedaban vacias; novena revision)
-  CarpetaDestino := TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest));
-  AncestroDestino := PrimerAncestroQueExiste(CarpetaDestino);
   try
-    // La carpeta de destino PRIMERO: si no se puede (GUARD-019, un fichero en
-    // el camino) no se ha movido nada y tampoco debe quedar una copia del
-    // origen en la papelera (quinta revision).
-    CrearCarpeta(CarpetaDestino);
-    // Safety copy of the source into the trash before relocating... salvo que
-    // el origen YA sea una copia de la papelera. Hacer una copia de una copia
-    // dejaba una papelera DENTRO de la papelera, con el sello doblado, y cada
-    // restauracion anadia otra capa (medido 2026-09-20). Lo que se restaura no
-    // necesita red: la red es el.
-    if Params.Copy then
-      BackupNote := ''
-    else if DesdePapelera then
-      BackupNote := '' // su nota es otra (SN_FILE_SIN_COPIA_DESDE_PAPELERA)
-    else if EsEnlace(SinBarraFinal(Params.Path)) then
-      // un ENLACE se mueve como enlace y lo de detras no se toca: nada que
-      // guardar, y copiarlo era copiar su destino (una junction a un
-      // antepasado copiaba la jaula en su papelera y fallaba; octava revision)
-      BackupNote := ''
-    else if EnlaceDuroIlegible(Params.Path) <> '' then
-      // ...y un ENLACE DURO con un nombre que la sesion no lee, igual: el move
-      // lleva ESTE nombre y el otro no se toca; copiarlo era leer el de fuera
-      // (medido el 20-oct-2026: la copia de la papelera salia con sus bytes)
-      BackupNote := ''
-    else
+    for var P in Pasos do
     begin
-      BackupNote := TrashPathFor(Params.Path, CAJON_BORRADOS);
-      AncestroCopia := PrimerAncestroQueExiste(TPath.GetDirectoryName(BackupNote));
-      CrearCarpeta(TPath.GetDirectoryName(BackupNote));
-      if TDirectory.Exists(Params.Path) then
-        // EL copiador, SIN seguir enlaces: el move los lleva como enlaces, y
-        // copiar lo de detras metia una junction a la raiz en su propia
-        // papelera (MOVE-012). En su lista: no es lo que el agente copia
-        // (su FILE-032 se leia como del move; novena revision)
-        CopiaArbol(Params.Path, BackupNote, True, NoSegCopia, False)
-      else
-        TFile.Copy(Params.Path, BackupNote);
-    end;
-    if Params.Copy then
-    begin
-      if TDirectory.Exists(Params.Path) then
+      // la carpeta de destino PRIMERO: si no se puede (GUARD-019, un fichero
+      // en el camino) no se ha movido nada ni hay copia que quitar (quinta)
+      var Carpeta := TPath.GetDirectoryName(TPath.GetFullPath(SinBarraFinal(P.Destino)));
+      if not MatchText(Carpeta, CarpetasCreadas) then
       begin
-        // EL copiador (Lsp.Guard): sin la papelera del origen (no es
-        // contenido: ni se copia ni hay que borrarla despues) y sin seguir un
-        // enlace a lo que este workspace no puede leer (25-sep-2026). A una
-        // carpeta de descarga (__tmp-) y luego su nombre: una copia que falla
-        // a mitad se quita ENTERA (el borrador la acepta: la acaba de crear
-        // el servidor) y no se queda a medias en el destino, donde el
-        // "repite" del mensaje daba FILE-025 (novena revision)
-        var Bajada := NuevaCarpetaDescarga(CarpetaDestino);
-        try
-          CopiaArbol(Params.Path, Bajada, False, NoSeguidos);
-          MueveArbol(Bajada, Params.Dest); // renombrar o nada
-        except
-          on E: Exception do
+        CarpetasCreadas := CarpetasCreadas + [Carpeta];
+        AncestrosCreadas := AncestrosCreadas + [PrimerAncestroQueExiste(Carpeta)];
+        CrearCarpeta(Carpeta);
+      end;
+      // un ENLACE de carpeta se mueve como enlace (un fichero mas); en una
+      // copia se lee a traves de el, como siempre
+      var EsCarpeta := TDirectory.Exists(P.Origen) and not EsEnlace(SinBarraFinal(P.Origen));
+      var Mezcla := TDirectory.Exists(P.Origen) and TDirectory.Exists(P.Destino) and
+        not MismaEntrada(P.Origen, P.Destino);
+      if Params.Copy then
+      begin
+        if not TDirectory.Exists(P.Origen) then
+        begin
+          CopiaNuestra(P.Origen, P.Destino); // la copia es del agente: sin el +R del original
+          Anota(P.Origen, P.Destino, FM_COPIA_FICHERO, nil, '');
+        end
+        else
+        begin
+          var Bajada := CopiaABajada(P.Origen, Carpeta);
+          if Mezcla then
           begin
-            var Queda := '';
+            var Pasados: TArray<TPasoDeMezcla> := [];
             try
-              BorraArbol(Bajada);
-            except
-              Queda := Bajada;
+              MezclaArbol(Bajada, P.Destino, Pasados);
+            finally
+              Anota(P.Origen, P.Destino, FM_COPIA_MEZCLA, Pasados, Bajada);
             end;
-            if TDirectory.Exists(Bajada) then
-              Queda := Bajada;
-            // lo que se queda, se dice (decima revision)
-            if Queda <> '' then
-              raise Exception.Create(E.Message.TrimRight + #10 +
-                MsgFmt(SF_MOVE_BAJADA_QUEDA_FMT, [Queda]));
-            raise;
+          end
+          else
+          begin
+            try
+              MueveArbol(Bajada, P.Destino); // renombrar o nada
+            except
+              BorraArbol(Bajada);
+              raise;
+            end;
+            Anota(P.Origen, P.Destino, FM_COPIA_CARPETA, nil, '');
           end;
+        end;
+        Continue;
+      end;
+      // La copia de seguridad en la papelera ANTES de mover, salvo que el
+      // origen YA sea una copia de la papelera (la red es el: una copia de una
+      // copia doblaba el sello; 20-sep-2026), un ENLACE (viaja como enlace y lo
+      // de detras no se toca; octava revision) o un enlace duro con un nombre
+      // que la sesion no lee (copiarlo era leer el de fuera; 20-oct-2026)
+      if not DesdePapelera and not EsEnlace(SinBarraFinal(P.Origen)) and
+         (EnlaceDuroIlegible(P.Origen) = '') then
+      begin
+        var Copia := TrashPathFor(P.Origen, CAJON_BORRADOS);
+        Copias := Copias + [Copia];
+        AncestrosCopia := AncestrosCopia + [PrimerAncestroQueExiste(TPath.GetDirectoryName(Copia))];
+        CrearCarpeta(TPath.GetDirectoryName(Copia));
+        if TDirectory.Exists(P.Origen) then
+          // EL copiador, SIN seguir enlaces: el move los lleva como enlaces
+          // (MOVE-012), y sin las papeleras de dentro (V21)
+          CopiaArbol(P.Origen, Copia, True, NoSegCopia, False)
+        else
+          TFile.Copy(P.Origen, Copia);
+      end;
+      if not EsCarpeta then
+      begin
+        // renombrar: con otras mayusculas, el mismo fichero (punto 4 de Fable)
+        if not MoveFile(PChar(SinBarraFinal(P.Origen)), PChar(SinBarraFinal(P.Destino))) then
+          raise Exception.Create(MotivoDeRenombre(P.Origen, GetLastError));
+        Anota(P.Origen, P.Destino, FM_FICHERO, nil, '');
+      end
+      else if Mezcla then
+      begin
+        var Pasados: TArray<TPasoDeMezcla> := [];
+        try
+          MezclaArbol(P.Origen, P.Destino, Pasados);
+        finally
+          Anota(P.Origen, P.Destino, FM_MEZCLA, Pasados, '');
         end;
       end
       else
-        CopiaNuestra(Params.Path, Params.Dest); // la copia es del agente: sin el +R del original
-    end
-    else if TDirectory.Exists(Params.Path) then
-      MueveArbol(Params.Path, Params.Dest) // renombrar o nada
-    else
-      TFile.Move(Params.Path, Params.Dest);
-    // Restoring a copy OUT of the trash leaves its owner marker behind with
-    // nothing to mark: sweep it, so the agent that restores can leave the
-    // trash clean instead of a litter of .by files only the operator can lift.
-    // (la de una UNIT, despues de su form: si el form falla vuelve a la
-    // papelera, y sin su marca la purgaba otro agente; novena revision)
-    if IsBackupPath(Params.Path) and not IsUnit then
-      QuitaMarcaDeDueno(Params.Path);
+      begin
+        MueveArbol(P.Origen, P.Destino); // renombrar o nada
+        Anota(P.Origen, P.Destino, FM_CARPETA, nil, '');
+      end;
+    end;
   except
     on E: Exception do
     begin
-      // un move que no se hizo no deja su copia de seguridad ni su cajon:
-      // cada reintento dejaba otra (octava revision). Ni la copia a medias
-      // de un copy=true (el destino no existia: es suya) ni las carpetas
-      // de destino que creo (novena revision)
-      QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
-      // (la de una carpeta la quita su propia bajada. La de un FICHERO no se
-      // borra: CopyFile ya quita lo suyo, y copy=true va sin cerrojo - si
-      // falla porque el destino YA existe, es de otro; se borraba, decima)
-      QuitaCarpetasCreadas(CarpetaDestino, AncestroDestino);
-      Exit(IfThen(Params.Copy, MsgEnvuelve(SR_MOVE_ERROR_AL_COPIAR_FMT, E.Message), MsgEnvuelve(SR_MOVE_ERROR_AL_MOVER_FMT, E.Message)));
+      // TODO O NADA: lo hecho vuelve; lo que no, se dice con la causa
+      var NoVolvio := DeshazTodo;
+      if NoVolvio <> '' then
+        Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, E.Message]));
+      if Params.Copy then
+        Exit(MsgEnvuelve(SR_MOVE_ERROR_AL_COPIAR_FMT, E.Message));
+      Exit(MsgEnvuelve(SR_MOVE_ERROR_AL_MOVER_FMT, E.Message));
     end;
   end;
-  Result := IfThen(Params.Copy, MsgFmt(SK_MOVE_COPIADO_FMT, [Params.Path, Params.Dest]),
-    MsgFmt(SK_MOVE_MOVIDO_FMT, [Params.Path, Params.Dest]));
+  // Lo que sale de la papelera deja su marca de dueno sin nada que marcar:
+  // fuera, y la papelera queda limpia sin el operador
+  if DesdePapelera then
+    for var P in Pasos do
+      QuitaMarcaDeDueno(P.Origen);
+  Result := '';
+  for var P in Pasos do
+    if Params.Copy then
+      Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_MOVE_COPIADO_FMT, [P.Origen, P.Destino])
+    else
+      Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_MOVE_MOVIDO_FMT, [P.Origen, P.Destino]);
   if Length(NoSeguidos) > 0 then
     Result := Result + #10 + MsgFmt(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);
-  // una copia no necesita red: el origen sigue ahi. Y lo que sale de la
-  // papelera tampoco: salia "(backup in (the source was already...))"
+  // una copia no necesita red: el origen sigue ahi; y lo que sale de la
+  // papelera tampoco
   if not Params.Copy then
     if DesdePapelera then
       Result := Result + #10 + MsgText(SN_FILE_SIN_COPIA_DESDE_PAPELERA)
-    else if BackupNote <> '' then // un enlace no lleva copia (lo de detras no se toca)
-      Result := Result + #10 + MsgFmt(SN_FILE_COPIA_SEGURIDAD_EN_FMT, [BackupNote]);
-  if not IsUnit then
-    Exit(Result + Reubicacion(DesdePapelera));
-
-  // TODO O NADA desde aqui, como borrarla (FILE-039): la foto de lo que el
-  // move va a REESCRIBIR - la unit en su sitio nuevo (su cabecera) y cada
-  // proyecto que la lista (.dpr, .dproj y, en un rename, las units que
-  // reescribe: la lista de FicherosDelRename, la misma del propio rename).
-  // Los designers no: van y vuelven por su nombre (DeshaceMove). Un
-  // proyecto que no se dejaba re-apuntar salia MOVED con el proyecto roto
-  // (medido en vivo, 28-sep-2026)
-  var RutasFoto := TStringList.Create;
-  try
-    RutasFoto.Sorted := True;
-    RutasFoto.Duplicates := dupIgnore;
-    RutasFoto.Add(Params.Dest);
-    for P in Projects do
-      if PathDenied(P) = '' then
-      begin
-        RutasFoto.Add(P);
-        RutasFoto.Add(DprojDe(P));
-        if not MismoIdentificador(OldStem, NewStem) then
-        begin
-          var NoEscritos: TArray<string>;
-          RutasFoto.AddStrings(FicherosDelRename(P, Params.Dest, NoEscritos));
-        end;
-      end;
-    try
-      FotoUnit.Toma(RutasFoto.ToStringArray);
-    except
-      // un proyecto que no se deja LEER (otro proceso lo tiene) no se va a
-      // poder re-apuntar: la unit vuelve, y se dice cual (por su nombre,
-      // como los otros dos emisores de MOVE-019; r11b H7)
-      on E: Exception do
-      begin
-        var Nombres := '';
-        for var Q in Projects do
-          Nombres := Nombres + IfThen(Nombres <> '', ', ') + TPath.GetFileName(Q);
-        Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [Nombres,
-          E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT,
-          [Nombres, E.Message.Trim])));
-      end;
-    end;
-  finally
-    RutasFoto.Free;
-  end;
-
-  // the designer pair travels with the unit
-  PairNote := '';
-  // los designers ya movidos (de, a): si falla el siguiente vuelven (con
-  // .dfm y .fmx, el .dfm se quedaba en el destino; novena revision)
-  // los que la puerta APROBO arriba, en su orden (GemelosDe/GemelosA): se
-  // buscaban otra vez, y uno que apareciese en medio viajaba sin que nadie
-  // lo mirase (revisor del 2c de la 1.18.2)
-  for var K := 0 to High(GemelosDe) do
-  begin
-    var Gemelo := GemelosDe[K];
-    try
-      if Params.Copy then
-        CopiaNuestra(Gemelo, GemelosA[K])
-      else
-        TFile.Move(Gemelo, GemelosA[K]);
-      DisenosDe := DisenosDe + [Gemelo];
-      DisenosA := DisenosA + [GemelosA[K]];
-      // una nota por designer: con .dfm Y .fmx solo se nombraba el ultimo (decima)
-      PairNote := PairNote + IfThen(PairNote <> '', #10) + MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-        [TPath.GetFileName(GemelosA[K]),
-         IfThen(Params.Copy, MsgText(SF_MOVE_COPIADO_CON_UNIT), MsgText(SF_MOVE_MOVIDO_CON_UNIT))]);
-    except
-      on E: Exception do
-        // TODO O NADA: una unit sin su form es un proyecto roto que decia
-        // MOVED. Los designers ya movidos y la unit vuelven (o sus copias
-        // se quitan) y ningun proyecto se toca: todavia no se ha
-        // re-apuntado ninguno (octava revision). Lo que NO vuelve se dice
-        // (SYS-018): decia "the unit is back" aunque no volviera (novena)
-        Exit(DeshaceMove(MsgFmt(SR_MOVE_FORM_NO_VA_FMT, [TPath.GetFileName(Gemelo),
-          E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_FORM_NO_VA_FMT,
-          [TPath.GetFileName(Gemelo), E.Message.Trim])));
-    end;
-  end;
-  if PairNote <> '' then
-    Result := Result + #10 + PairNote;
-
-  // a rename: the header must follow the file name. La encuentra SU lector
-  // (con directivas detras: "unit X platform;"); si no esta o dice otro
-  // nombre, no se toca y se DICE - MOVE-015 decia "rewritten" sin mirar si la
-  // regex habia cambiado algo, y el build caia en E1038 (decima revision)
-  if not MismoIdentificador(OldStem, NewStem) then
-  try
-    Src := PatchLoadText(Params.Dest, Enc);
-    var Cab: string;
-    var Ini, Largo: Integer;
-    // (lo ESCRITO se cambia entero: Largo, no el nombre, que no lleva los
-    // blancos de 'unit A . B;')
-    if CabeceraDeUnit(Src, Cab, Ini, Largo) and MismoIdentificador(Cab, OldStem) then
-    begin
-      Src := Copy(Src, 1, Ini - 1) + NewStem + Copy(Src, Ini + Largo, MaxInt);
-      CopiaCabecera := CopiaDiariaDe(Params.Dest);
-      HabiaCopiaCabecera := TFile.Exists(CopiaCabecera);
-      AncestroCabecera := PrimerAncestroQueExiste(TPath.GetDirectoryName(CopiaCabecera));
-      PatchSaveText(Params.Dest, Src, Enc);
-      FotoUnit.Anota(Params.Dest); // lo que dejo el move: el deshacer lo devuelve
-      // El respaldo que acaba de hacer el escritor guarda la cabecera VIEJA: es
-      // un paso nuestro de la copia o la mudanza, no un estado que el agente
-      // tuviera nunca. Si no habia copia del dia, se quita: la primera sera la
-      // de su siguiente cambio, con la cabecera nueva. Con ella, un restore
-      // devolvia "unit UOrig;" dentro de UCopia.pas y el audit decia clean
-      // (Hermes, 15-oct-2026). Lo de antes de una mudanza sigue en la papelera
-      // con el nombre viejo
-      if not HabiaCopiaCabecera then
-        QuitaCopiaDeSeguridad(CopiaCabecera, AncestroCabecera);
-      Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]) +
-        NotaDeNombreTapado(NewStem); // el nombre nuevo, como al crearlo (V33)
-    end
     else
-      Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_NO_ENCONTRADA_FMT, [OldStem, NewStem]);
-  except
-    on E: Exception do
-      Result := Result + #10 + MsgFmt(SN_MOVE_ERROR_REESCRIBIR_CABECERA_FMT, [OldStem, E.Message]);
-  end;
-
-  ProjNote := '';
-  for P in Projects do
-  begin
-    if PathDenied(P) <> '' then
-    begin
-      ProjNote := ProjNote + #10 + MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
-      Continue;
-    end;
-    // TODO O NADA, como su form (MOVE-017): un proyecto que no se deja
-    // re-apuntar (su .dpr o su .dproj en +R, abierto sin compartir) salia
-    // MOVED con la unit en su sitio nuevo y el proyecto apuntando al viejo,
-    // "ERROR" en una nota que decia "nothing was written" con el .dpr ya
-    // reescrito (medido en vivo, 28-sep-2026)
-    try
-      FotoUnit.Vigila(P);
-      R := RenameProjectUnit(P, Params.Path, Params.Dest);
-    except
-      on E: Exception do
-        Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P),
-          E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT,
-          [TPath.GetFileName(P), E.Message.Trim])));
-    end;
-    if EsFallo(R) then
-      Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P), R,
-        Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P), R])));
-    FotoUnit.Anota(P);
-    FotoUnit.Anota(DprojDe(P));
-    // ...y todo lo que ese rename pudo reescribir (las units del proyecto y
-    // la propia en su sitio nuevo): sin anotar, el deshacer las tomaba por
-    // cambiadas "por otro" y dejaba la unit vieja con la cabecera nueva
-    // (undecima revision, r11a: dos proyectos y una unit que se nombra)
-    if not MismoIdentificador(OldStem, NewStem) then
-    begin
-      var NoEsc: TArray<string>;
-      for var Fr in FicherosDelRename(P, Params.Dest, NoEsc) do
-        FotoUnit.Anota(Fr);
-    end;
-    ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
-  end;
-  // lo restaurado ya no vuelve a la papelera: fuera sus marcas (la de la
-  // unit y las de sus designers). AL FINAL: quitadas antes del bucle de
-  // proyectos, un MOVE-019 devolvia la copia a la papelera sin dueno y otro
-  // agente podia purgarla (r11a H4)
-  if DesdePapelera then
-  begin
-    QuitaMarcaDeDueno(Params.Path);
-    for var K := 0 to High(DisenosDe) do
-      QuitaMarcaDeDueno(DisenosDe[K]);
-  end;
-  if Length(Projects) > 0 then
-    ProjNote := MsgFmt(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
-      string.Join(', ', Projects)]) + ProjNote
-  else if Params.Copy then
-    ProjNote := MsgText(SN_FILE_COPY_NO_PROJECT)
+      for var C in Copias do
+        Result := Result + #10 + MsgFmt(SN_FILE_COPIA_SEGURIDAD_EN_FMT, [C]);
+  // como un operador (V19): ni la cabecera, ni el par, ni los proyectos; se
+  // AVISA del par partido y de lo que cruza el borde, de lo que se movio
+  var Viejos, Nuevos: TArray<string>;
+  LoMovido(Viejos, Nuevos);
+  if Params.Copy then
+    Result := Result + NotaDeMudanza(Viejos, Nuevos, mzCopia)
   else
-    ProjNote := MsgText(SN_FILE_PROJECTS_NONE);
-  Result := Result + #10 + ProjNote + Reubicacion(DesdePapelera);
+    Result := Result + NotaDeMudanza(Viejos, Nuevos, mzMueve);
 end;
 
 initialization

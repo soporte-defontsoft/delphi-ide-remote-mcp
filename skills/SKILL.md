@@ -322,20 +322,18 @@ in frame. Do the gesture you came for and nothing else.
   IDE, without it - the answer says so).
 - **The folder layout is yours**: inside a project, `dir=` is a SUBFOLDER
   of the project (relative, as deep as you like - no drive, no `..`); the
-  unit is born there and registered with its relative path. Moving or
-  deleting a whole FOLDER with `delphi_move` / `delphi_delete` re-points
-  or removes the units inside it in the `.dpr`/`.dproj`.
+  unit is born there and registered with its relative path.
 - **Project membership is the server's job, never a hand edit of the
   `.dpr`/`.dproj`**: an existing `.pas` joins with `delphi_config
   command=add-unit path=<.pas>` (forms get their `CreateForm`, frames do
   not), `remove-unit` drops it from the project and keeps the file (even an entry whose file is gone or lies outside what you can read: the way out of a `BUILD-050` on a `<DCCReference>`),
-  `delphi_delete` on a unit trashes its designer pair and updates the
-  projects that list it, `delphi_move` renames/moves a unit with its pair,
-  header and project entries; with `copy=true` it copies instead (header
-  and pair too, no project re-pointed: `add-unit` when you want it in
-  one). `view` lists the project's `units`. A Delphi file never moves or
-  goes away as a loose file of a `delphi_changeset` (`CHSET-033`): those
-  two tools do it whole.
+  `delphi_move`, `delphi_delete` and a `delphi_changeset` move, copy and
+  delete files as an operator does: what you name goes (`Form1.*` takes a
+  unit and its form), and NO project, header or path is rewritten - the
+  answer names each file that still points across (`MOVE-023`, `FILE-046`)
+  and a pair split in two (`FILE-051`). Then re-point it yourself:
+  `add-unit` / `remove-unit`, or `fix-references` for a whole project.
+  `view` lists the project's `units`.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).
@@ -502,8 +500,8 @@ for bypasses (there are none).
 
 A workspace may also declare `ReadOnlyRoots`: reference projects outside
 your roots that you can read, search and navigate to learn how things are
-done in this house, never write (bring a unit or a folder in with
-`delphi_move copy=true`; a whole project stays where it is) -
+done in this house, never write (bring a unit, a folder or a whole project
+in with `delphi_move copy=true`; a repository with its git, when its git is inside) -
 `delphi_workspace` lists them and `delphi_projects` flags them `readOnly`.
 
 You always work inside ONE workspace: what its declaration grants is ALL

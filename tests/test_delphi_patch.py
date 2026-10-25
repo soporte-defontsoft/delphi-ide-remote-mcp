@@ -930,7 +930,8 @@ check('insert en una unit con begin..end. de inicializacion: delante de su begin
       mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT') and -1 not in _p and _p[0] < _p[1] < _p[2],
       out[:300] + ' | ' + _src)
 # 'unit A . B;' compila y es A.B (medido con dcc): el nombre de la cabecera sin los
-# blancos de alrededor del punto; create lo negaba (CREATE-019) y move no la veia
+# blancos de alrededor del punto; create lo negaba (CREATE-019). Move la reescribia
+# entera hasta V19 (1.23); ahora mueve el fichero como el operador y no la toca
 PASD = os.path.join(DIR, 'UPunto.Dos.pas')
 out = call('delphi_edit', {"path": PASD, "createunit": True,
                             "content": "unit UPunto . Dos;\n\ninterface\n\nimplementation\n\nend.\n"})
@@ -939,9 +940,8 @@ check('cabecera "unit UPunto . Dos;": create la toma (es UPunto.Dos, como la lee
 if os.path.exists(PASD):
     out = call('delphi_move', {"path": PASD, "dest": os.path.join(DIR, 'UTres.pas')})
     _src = open(os.path.join(DIR, 'UTres.pas'), 'rb').read().decode('utf-8-sig') if os.path.exists(os.path.join(DIR, 'UTres.pas')) else ''
-    check('...y move la reescribe ENTERA, con sus blancos: "unit UTres;"',
-          mc.es(out, 'SN_MOVE_CABECERA_REESCRITA_FMT') and _src.startswith('unit UTres;') and 'Dos' not in _src,
-          out[:300] + ' | ' + _src[:80])
+    check('...y move NO la reescribe (V19, como el operador): UTres.pas sigue diciendo "unit UPunto . Dos;"',
+          mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and _src.startswith('unit UPunto . Dos;'), out[:300] + ' | ' + _src[:80])
 
 # --- lo que encontro el revisor de codigo de la 1.10.0, cada caso medido
 # antes con una sonda contra el exe de entonces ---

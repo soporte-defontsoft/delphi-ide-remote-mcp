@@ -102,6 +102,19 @@ type
 
   NombreSiComando = NombreSiComandoAttribute;
 
+  { Una ruta DEL SERVIDOR cuyo NOMBRE, el ultimo tramo, puede llevar un
+    comodin (* o ?): toma lo que case en su carpeta (V19 de la 1.23; David,
+    17-oct-2026: "debemos permitir comodin form1.*"). La lleva el path de
+    delphi_move y delphi_delete. Con un comodin en el nombre, la entrada juzga
+    y alarga la CARPETA (CarpetaDelComodin, Lsp.Guard) y la tool juzga despues
+    cada entrada que case; uno en una carpeta sigue siendo GUARD-024. Sin la
+    marca, el suelo de la jaula negaba el comodin antes de llegar a la tool
+    (medido el 25-oct-2026: test_mudanza R2, GUARD-024). }
+  ComodinEnNombreAttribute = class(TCustomAttribute)
+  end;
+
+  ComodinEnNombre = ComodinEnNombreAttribute;
+
   { Marca un parametro de TEXTO que acepta un JSON (array u objeto) como
     valor: el deserializador se lo pasa como su texto JSON. Sin la marca, un
     array o un objeto donde va un texto es INVALID_PARAM: new=["a","b"] se

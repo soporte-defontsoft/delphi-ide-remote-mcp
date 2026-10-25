@@ -4,7 +4,7 @@ unit Lsp.Changeset;
   single-file engine could not give: when one operation touches five files
   and the fifth fails, files one to four must not stay changed (today the
   project tools can only REPORT a partial change; measured origin:
-  SR_FILE_PARTIAL_FMT). A changeset makes the whole batch land or none of it.
+  FILE-005, retired in 1.23). A changeset makes the whole batch land or none of it.
 
   Life cycle (delphi_changeset):
 
@@ -75,7 +75,8 @@ uses
   Lsp.TodoONada,
   Lsp.Casa, // FragmentoUnico: la cola del id, de un GUID
   Lsp.Mascara,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.ProjectUnits;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -310,8 +311,9 @@ end;
   dio (los *** de la auditoria: estructura, acentos, una llave dentro de un
   comentario...) y los de llaves del fuente que crea: el commit los descartaba
   con el resultado y no llegaban al agente (revisor de la noche del 10-oct,
-  M-6: EDIT-091 desde un changeset salia COMPLETE sin aviso). }
-function ApplyOneConAvisos(const Op: TStagedOp; out AError, AAvisos: string;
+  M-6: EDIT-091 desde un changeset salia COMPLETE sin aviso). En ACopia, la
+  copia de lo que se lleva un delete: la nota de lo que aun apunta a el (V19). }
+function ApplyOneConAvisos(const Op: TStagedOp; out AError, AAvisos, ACopia: string;
   AEnsayo: Boolean = False): Boolean;
 var
   A: TPatchArgs;
@@ -320,6 +322,7 @@ var
 begin
   AError := '';
   AAvisos := '';
+  ACopia := '';
   Result := False;
   // La puerta OTRA VEZ al aplicar, para cada operacion: entre stage y
   // commit pasan hasta 30 minutos, y un camino puede haber cambiado (un
@@ -443,7 +446,7 @@ begin
         AError := SoloLecturaDenegado(Op.Path);
         if AError <> '' then
           Exit;
-        GuardaContenidoActual(Op.Path, CAJON_BORRADOS);
+        ACopia := GuardaContenidoActual(Op.Path, CAJON_BORRADOS);
         TFile.Delete(Op.Path);
         Result := True;
       end;
@@ -512,9 +515,9 @@ end;
 
 function ApplyOne(const Op: TStagedOp; out AError: string; AEnsayo: Boolean = False): Boolean;
 var
-  Avisos: string;
+  Avisos, Copia: string;
 begin
-  Result := ApplyOneConAvisos(Op, AError, Avisos, AEnsayo);
+  Result := ApplyOneConAvisos(Op, AError, Avisos, Copia, AEnsayo);
 end;
 
 { Walks the staged operations in order, keeping the virtual state in mind,
@@ -753,17 +756,6 @@ begin
       // que el commit lo habria negado)
       if EsRutaDeProyecto(Op.Path) and (Op.Kind in [opEdit, opDeleteLine]) then
         Exit(MsgFmt(SR_CHANGESET_PROJECT_FILE_FMT, [TPath.GetFileName(Op.Path)]));
-      // ...y un fichero de Delphi se mueve o se borra ENTERO (su .dfm/.fmx, su
-      // cabecera, los proyectos que lo listan, las rutas relativas que
-      // cruzan): eso lo hacen delphi_move y delphi_delete. Aqui era una
-      // operacion de fichero suelto, COMMIT COMPLETE y el proyecto roto
-      // (Hermes, 15-oct-2026; B de la 1.19.2). Un move tambien por su destino:
-      // restaurar UFicha.pas de la papelera es de delphi_move, que trae su form.
-      // (El delete, en el preview: borrar y volver a crear el MISMO fichero es
-      // un plan que vale, y aqui no se ve lo que se apile despues)
-      if (Op.Kind = opMove) and (EsFicheroDeDelphi(Op.Path) or EsFicheroDeDelphi(ADest)) then
-        Exit(MsgFmt(SR_CHANGESET_FICHERO_DELPHI_FMT, [MsgFmt(SF_CHSET_FICHERO_DELPHI_FMT,
-          [TPath.GetFileName(Op.Path), 'delphi_move'])]));
       case Op.Kind of
         opEdit:
           begin
@@ -932,25 +924,6 @@ begin
             Inc(N);
             Continue;
           end;
-          // un fichero de Delphi que se BORRA y ninguna operacion posterior del
-          // lote vuelve a crear: eso es delphi_delete (su .dfm/.fmx, los
-          // proyectos que lo listan); aqui dejaba el form huerfano y el .dpr
-          // roto con COMMIT COMPLETE (B de la 1.19.2). Borrarlo y crearlo otra
-          // vez es reescribirlo entero en su sitio, y vale (test_round8 M1)
-          if (Op.Kind = opDelete) and EsFicheroDeDelphi(Op.Path) then
-          begin
-            var Vuelve := False;
-            for var J := I + 1 to C.Ops.Count - 1 do
-              if (C.Ops[J].Kind = opCreate) and SameText(C.Ops[J].Path, Op.Path) then
-                Vuelve := True;
-            if not Vuelve then
-            begin
-              Obj.AddPair('anchor', MsgFmt(SF_CHSET_FICHERO_DELPHI_FMT,
-                [TPath.GetFileName(Op.Path), 'delphi_delete']));
-              Inc(N);
-              Continue;
-            end;
-          end;
           // delete-line: el preview dice lo que el commit va a rechazar (una
           // linea que no existe, o que no es la de old); decia "clean" y el
           // commit deshacia la tanda entera (septima revision)
@@ -1104,6 +1077,8 @@ begin
           Lineas[I] := C.Ops[I].AtLine;
         // los avisos del motor de cada paso, con su fichero (M-6)
         var AvisosTodos := '';
+        // lo que el lote movio y lo que borro de verdad, para su nota (V19)
+        var Movidos, MovidosA, Borrados, CopiasB: TArray<string>;
         // el juicio de los forms es del lote entero: los pasos no lo hacen, y
         // se hace una vez al final (H6, abajo)
         AplazaJuicioDeForm(True);
@@ -1125,8 +1100,8 @@ begin
                 Foto.Vigila(Op.Dest);
               var AntesL := LineasDeFichero(Op.Path);
               Before := Length(AntesL);
-              var AvisosPaso: string;
-              Ok := ApplyOneConAvisos(Op, Err, AvisosPaso);
+              var AvisosPaso, CopiaPaso: string;
+              Ok := ApplyOneConAvisos(Op, Err, AvisosPaso, CopiaPaso);
               if Ok and (AvisosPaso <> '') then
                 for var LA in AvisosPaso.Split([#10]) do
                   AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
@@ -1141,6 +1116,25 @@ begin
                 Foto.Anota(Op.Path);
                 if Op.Kind = opMove then
                   Foto.Anota(Op.Dest);
+                if Op.Kind = opMove then
+                begin
+                  Movidos := Movidos + [Op.Path];
+                  MovidosA := MovidosA + [Op.Dest];
+                end
+                else if Op.Kind = opDelete then
+                begin
+                  // borrarlo y volver a crearlo en el lote es reescribirlo en
+                  // su sitio, y vale (test_round8 M1): no es un borrado
+                  var Vuelve := False;
+                  for var J := I + 1 to C.Ops.Count - 1 do
+                    if (C.Ops[J].Kind = opCreate) and SameText(C.Ops[J].Path, Op.Path) then
+                      Vuelve := True;
+                  if not Vuelve then
+                  begin
+                    Borrados := Borrados + [Op.Path];
+                    CopiasB := CopiasB + [CopiaPaso];
+                  end;
+                end;
                 var DespuesL := LineasDeFichero(Op.Path);
                 After := Length(DespuesL);
                 if After <> Before then
@@ -1277,6 +1271,10 @@ begin
         Result := MsgFmt(SN_CHANGESET_COMMITTED_FMT, [OpCount, FileCount, AuditText]);
         if AvisosTodos <> '' then
           Result := Result + #10 + MsgFmt(SN_CHANGESET_AVISOS_FMT, [AvisosTodos]);
+        // como delphi_move y delphi_delete (V19): un fichero se mueve o se borra
+        // como el operador, y se dice el par partido y lo que aun apunta a el
+        Result := Result + NotaDeMudanza(Movidos, MovidosA, mzMueve) +
+          NotaDeMudanza(Borrados, CopiasB, mzBorra);
         Exit;
       finally
         LeaveFileEdit;

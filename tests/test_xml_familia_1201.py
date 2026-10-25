@@ -13,8 +13,9 @@ review of the diff found in the new core before any commit.
   F4  add-deployfile adds the manifest's <Import> to a .dproj whose
       CodeGear.Delphi.Targets import has its Condition first
   F5  remove-unit takes out a DCCReference written in single quotes
-  F6  moving a folder re-points a path in a single-quoted attribute, and not
-      one inside a comment
+  F6  moving a folder sees a path in a single-quoted attribute, and not one
+      inside a comment: since V19 (1.23) a move re-points nothing and the note
+      COUNTS them (MOVE-023: one path, the attribute; it used to rewrite it)
   F7  add-project appends to the group's aggregate target written "build",
       not a second "Build"
   F8  a build event behind an unclosed tag inside a comment is still seen:
@@ -136,14 +137,14 @@ open(os.path.join(D6, 'shared', 'R.rc'), 'w').write('// rc\r\n')
 reescribe(P6, lambda x: x.replace('    <ItemGroup>',
                                   "    <!-- <PropertyGroup><DCC_IncludePath>..\\shared</DCC_IncludePath></PropertyGroup> -->\r\n"
                                   "    <ItemGroup>\r\n        <RcCompile Include='..\\shared\\R.rc'><Form>R.res</Form></RcCompile>", 1))
+antes6 = open(P6, 'rb').read()
 r = S.call('delphi_move', {'path': os.path.join(D6, 'P'), 'dest': os.path.join(D6, 'sub', 'P')})
 P6N = os.path.join(D6, 'sub', 'P', 'Fam6.dproj')
-x = mc.lee(P6N) if os.path.isfile(P6N) else ''
-check('F6 la carpeta se mueve', os.path.isfile(P6N), r[:300])
-check("F6 la ruta del atributo en comillas simples se re-apunta (..\\..\\shared\\R.rc)",
-      "<RcCompile Include='..\\..\\shared\\R.rc'>" in x, re.findall(r'<RcCompile[^>]*>', x))
-check('F6 ...y la del comentario NO se toca', '<DCC_IncludePath>..\\shared</DCC_IncludePath></PropertyGroup> -->' in x,
-      re.findall(r'<!--.*?-->', x))
+check('F6 la carpeta se mueve, con el .dproj byte a byte', os.path.isfile(P6N) and open(P6N, 'rb').read() == antes6,
+      r[:300])
+check('F6 la nota cuenta UNA ruta: la del atributo en comillas simples, no la del comentario',
+      mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT') and ('Fam6.dproj (1 %s)' % mc.catalogo()['SF_CRUZA_RUTAS']) in r,
+      r[-500:])
 
 # ---- F7 el agregado del grupo escrito "build" ----
 D7 = os.path.join(BASE, 'f7')

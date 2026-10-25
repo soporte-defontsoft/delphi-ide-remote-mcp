@@ -2690,11 +2690,10 @@ const
 
   SR_MUDANZA_OTRA_UNIDAD_FMT =
     '[MOVE-002 DENIED] "%s" and "%s" are on different drives, and a ' +
-    'folder only moves by RENAMING it on the same drive: whole or ' +
-    'nothing. Across drives it would have to copy and delete file by ' +
-    'file, which is left half-done if something fails, and crosses the ' +
-    'links. To take it there: delphi_move copy=true and then ' +
-    'delphi_delete of the source.';
+    'move is a RENAME on its own drive: whole or nothing. Across drives it ' +
+    'would have to copy and delete file by file, which is left half-done ' +
+    'if something fails, and crosses the links. To take it there: ' +
+    'delphi_move copy=true and then delphi_delete of the source.';
 
   { ...y lo que es un VAULT (de las tools vault_*, de cualquier workspace):
     se copiaba el de OTRO workspace (octava revision). }
@@ -3640,7 +3639,7 @@ const
     '[CFG-038 DENIED] The header of %s says "unit %s;", and that is not a ' +
     'unit name: a Pascal identifier (an ASCII letter, _ or any non-ASCII ' +
     'character, then also digits), or several joined by dots. Fix the header ' +
-    '(delphi_edit) or rename the unit and its file (delphi_move).';
+    'with delphi_edit (renaming the file with delphi_move does not touch it).';
 
   SR_UNIT_HEADER_MISMATCH_FMT =
     '[CFG-039 DENIED] The header says "unit %s;" but the file is named ' +
@@ -3858,11 +3857,8 @@ const
     '[CFG-056] Unit %s is not in project %s. See the units with ' +
     'command=view.';
 
-  SN_UNIT_RENAME_NOT_WRITTEN_FMT =
-    '  [CFG-057] %d project file(s) NOT rewritten because this workspace ' +
-    'cannot write them (outside its roots, in a reference or read-only): ' +
-    '%s. They still name the old unit; if they are yours in another ' +
-    'workspace, change them there.';
+  // CFG-057 (los ficheros del proyecto que un RENAME de unit no podia
+  // reescribir) se retiro en la 1.23 (V19): ya ninguna tool renombra una unit
 
   SR_BUILD_SDK_NAME_FMT =
     '[BUILD-026 INVALID_PARAM] sdk "%s" is not an SDK name: only letters, ' +
@@ -3870,22 +3866,12 @@ const
 
   SN_UNIT_RENAMED_FMT =
     '[CFG-058] RE-POINTED unit %s (%s) -> %s (%s) in project %s (%s ' +
-    'clause + DCCReference in the .dproj). References rewritten: %d in ' +
-    '%d file(s) (uses of the other units and OldUnit.X qualifiers).';
+    'clause + DCCReference in the .dproj).';
 
-  SN_FILE_PROJECTS_UPDATED_FMT =
-    '  [FILE-035] projects that list it (%d): %s';
-
-  SN_FILE_PROJECTS_NONE =
-    '  [FILE-002] (no .dpr or .dpk listed it, looking from its folder - ' +
-    'and in a move, also from the destination one - upward to the edge ' +
-    'of the workspace, and in the folders right under each level on the ' +
-    'way; a project nested deeper than that still lists it: take it out ' +
-    'with delphi_config command=remove-unit)';
-
-  SN_FILE_COPY_NO_PROJECT =
-    '  [FILE-003] (a COPY is a new unit that no project lists yet: ' +
-    'delphi_config command=add-unit when you want it in one)';
+  // FILE-035, FILE-002 y FILE-003 (los proyectos que la mudanza re-apuntaba o
+  // que no la listaban, y la copia que ninguno lista) y FILE-004 (un proyecto
+  // fuera de la jaula) se retiraron en la 1.23 (V19): mover, copiar o borrar
+  // no toca ningun proyecto; lo que apunta fuera lo dicen MOVE-023 y FILE-046
 
   SR_MOVE_COPY_FROM_TRASH =
     '[MOVE-003 DENIED] Not copy=true from the trash: to recover a copy ' +
@@ -3914,19 +3900,16 @@ const
   SF_MOVE_GIT_DETRAS_DE_ENLACE = 'git metadata, reached through a link,';
 
   SP_MOVE_COPY =
-    'true = COPY instead of move: the source stays untouched, no trash ' +
-    'copy, and NO project is re-pointed (the copy is a new unit nobody ' +
-    'lists yet - delphi_config add-unit). A unit copied under another name ' +
-    'gets its "unit X;" header rewritten and its .dfm/.fmx copied along. ' +
-    'The source only has to be READABLE (your roots, ReadOnlyRoots, the ' +
-    'library zone): the way to bring a file in from a reference project. ' +
-    'A project copies like any folder; a repository, whole with its git, ' +
-    'when its git stays inside. Refused for anything inside the trash.';
-
-  SN_FILE_PROJECT_DENIED_FMT =
-    '    [FILE-004] %s: outside the allowed workspaces, NOT touched ' +
-    '(remove the unit with delphi_config command=remove-unit from a ' +
-    'project inside the jail).';
+    'true = COPY instead of move: the source stays untouched and only has ' +
+    'to be READABLE (your roots, ReadOnlyRoots, the library zone): the way ' +
+    'to bring files in from a reference project. A plain copy: no project ' +
+    'lists it, its "unit X;" header and its paths stay as they were (the ' +
+    'answer says what crosses its border), and it is yours: the read-only ' +
+    'attribute does not come along. A link is copied only when you can read ' +
+    'what is behind it (FILE-032 names the rest); a knowledge vault and the ' +
+    'trash of the source are not content. A project copies like any folder; ' +
+    'a repository, whole with its git, when its git stays inside (MOVE-022). ' +
+    'Refused for anything inside the trash (MOVE-003).';
 
   { Una carpeta que no se pudo llevar a la papelera por otra cosa que un
     bloqueo (una ruta demasiado larga para la papelera...): FILE-036 lo
@@ -3955,20 +3938,10 @@ const
     'processes on this machine: someone may be working on the other ' +
     'side.)';
 
-  SR_FILE_PARTIAL_FMT =
-    '[FILE-005 INTERNAL] Failed %s: %s'#10 +
-    'WARNING: before the failure these changes had already been applied ' +
-    '(backups in __delphi-patch):%s';
-
-  SN_FILE_DESIGNER_TOO_FMT =
-    '  [FILE-006] designer %s: %s';
-  { El designer de una unit viaja con ella (delphi_move, delphi_delete) y
-    pasa la MISMA puerta que la unit, por su nombre: una entrada de
-    ReadOnlyPaths puede nombrarlo a el solo. Se movia y se borraba sin
-    preguntar (1.18.2, punto 2c). }
-  SR_GEMELO_DENEGADO_FMT =
-    '[FILE-043 DENIED] The unit''s designer %s goes along with it, and the ' +
-    'gate refuses that: %s Nothing was changed.';
+  // FILE-005 (lo que ya se habia aplicado antes del fallo), FILE-006 (el
+  // designer que viajaba con la unit) y FILE-043 (la puerta negaba ese
+  // designer) se retiraron en la 1.23 (V19): cada fichero viaja por su nombre,
+  // y un move o un borrado son todo o nada
 
   // ---- delphi_diagnostics ----
 
@@ -4653,7 +4626,7 @@ const
     '  change text that is not Pascal ..... delphi_textedit'#10 +
     '  several files ALL-OR-NOTHING ....... delphi_changeset'#10 +
     '  create project/unit/form/frame ..... delphi_create'#10 +
-    '  delete / move a file ............... delphi_delete, delphi_move'#10 +
+    '  delete / move (rename) a file ...... delphi_delete, delphi_move'#10 +
     '  upload a binary or a chunk ......... delphi_upload'#10 +
     '  rename a symbol .................... delphi_rename_symbol ' +
     '(preview, then mode=apply)'#10#10 +
@@ -6930,30 +6903,57 @@ const
   SN_ARREGLA_RUTAS_FMT =
     '  [CFG-071] search paths that do not exist (there is no name to ' +
     'look for: remove-searchpath and add-searchpath): %s';
-  { La mudanza de delphi_move (1.6.0): las rutas relativas que cruzan el borde. }
-  SN_REUBICA_FMT =
-    '  [MOVE-005] relative paths that crossed the edge of what was ' +
-    'moved, re-pointed: %d units from outside in their projects, %d ' +
-    'search or output paths of the .dproj, %d {$I}/{$R}/{$L} directives, ' +
-    '%d projects in groups inside and %d references from outside that ' +
-    'pointed inside (directives, units, paths and groups, in what this ' +
-    'session can write). In: %s.';
-  SN_REUBICA_FALLOS_FMT =
-    '  [MOVE-006] NOTE, I could not re-point in: %s. Check it with ' +
-    'delphi_config command=fix-references.';
+  // MOVE-005 (lo que la mudanza re-apunto) y MOVE-006 (lo que no pudo) se
+  // retiraron en la 1.23 (V19): un move, una copia o un borrado como un
+  // operador no re-apuntan nada, lo dicen (MOVE-023, FILE-046)
+  { La NOTA INFORMATIVA de V19 (Lsp.ProjectUnits.ReferenciasQueCruzan): lo
+    que cruza el borde de lo movido o copiado, o apunta a lo borrado. }
+  SN_REFERENCIAS_CRUZAN_FMT =
+    '  [MOVE-023] NOTE, nothing was re-pointed (an operator does not): ' +
+    'these files hold paths that cross the border of what you moved or ' +
+    'copied, and now lead somewhere else - from inside it to what stayed ' +
+    'outside, or from outside to where it used to be: %s. Fix what needs ' +
+    'it: delphi_config command=fix-references for the units a project ' +
+    'lists, remove-unit and add-unit with the path when there are copies, ' +
+    'or edit the path or the directive.';
+  SN_REFERENCIAS_A_LO_BORRADO_FMT =
+    '  [FILE-046] NOTE, these files still point at what you deleted, so ' +
+    'their build will miss it: %s. Take it out where it is listed ' +
+    '(delphi_config remove-unit or remove-searchpath) or bring it back ' +
+    'from the trash with delphi_move.';
+  { ...y lo que no pudo leer para mirarlo, con su motivo: callarlo era decir
+    "ninguno lo lista" de un .dpr que otro proceso tiene abierto (E131 de la
+    novena revision; V19 lo habia vuelto a callar, 25-oct-2026). }
+  SN_REFERENCIAS_ILEGIBLES_FMT =
+    '  [MOVE-024] NOTE, I could not read these files to look at what they ' +
+    'point to, so the note may miss them: %s. Look at them once they can be ' +
+    'read (another process may have them open).';
+  SF_CRUZA_FICHERO_FMT = '%s (%s)';
+  SF_CRUZA_CUENTA_FMT = '%d %s';
+  SF_CRUZA_UNITS = 'unit(s) it lists';
+  SF_CRUZA_RUTAS = 'path(s)';
+  SF_CRUZA_DIRECTIVAS = '{$I}/{$R}/{$L} directive(s)';
+  SF_CRUZA_GRUPOS = 'group entry(ies)';
   SN_REUBICA_SALTADAS_FMT =
     '  [MOVE-007] NOTE, I did not look inside these folders, which are ' +
     'named like an IDE output (Win32, Debug...) but contain sources: %s. ' +
     'If something there pointed to what was moved, check it with ' +
     'delphi_config command=fix-references.';
-  { Lo que el build sigue leyendo donde estaba lo movido (1.22.2): una
-    propiedad ($(X)) o una ruta absoluta, que la mudanza no re-apunta. }
+  { Lo que el build lee por una propiedad ($(X)) o escrito absoluto y ya no
+    llega a donde llegaba (1.22.2): lo de fuera que leia lo movido, o lo
+    movido que lee por una propiedad relativa lo que se quedo (la cabecera
+    decia "still reads where what moved used to be", falso en ese sentido, y
+    el item "led to X, which is now X": 25-oct-2026); con la propiedad que
+    hay que cambiar cuando llega por una (1.23). }
   SN_REUBICA_NO_LLEGA_FMT =
-    '  [MOVE-021] NOTE, the build still reads these where what moved used ' +
-    'to be - through a property ($(X)) or written absolute, which I do not ' +
-    're-point: %s. Point them at the new place with delphi_config ' +
-    'set-property (a search path: remove-searchpath and add-searchpath).';
+    '  [MOVE-021] NOTE, the build reads these through a property or an ' +
+    'absolute path, and they no longer lead where they did: %s. Point each ' +
+    'at the right place: delphi_config set-property for the property it ' +
+    'names, or remove-searchpath and add-searchpath for a search path.';
   SF_REUBICA_NO_LLEGA_ITEM_FMT = '%s: %s = %s led to %s, which is now %s';
+  SF_REUBICA_NO_LLEGA_QUIETO_FMT = '%s: %s = %s led to %s, which did not move';
+  SF_REUBICA_NO_LLEGA_PROPIEDAD_FMT =
+    ' (it comes through $(%s): that is the property to point at the new place)';
 
   SR_CONFIG_NO_DPROJ_FMT =
     '[CFG-072 NOT_FOUND] %s is the .dpr (the source), and the project''s ' +
@@ -7810,10 +7810,11 @@ const
 
   SP_CHANGESET_KIND =
     'stage: edit (replace ONE line by anchor) | create (new file, never ' +
-    'overwrites) | delete (a WHOLE file; a Delphi one: delphi_delete) | ' +
-    'delete-line (remove ONE line by atline: a BLANK one, which has no ' +
-    'usable anchor, or with old the line you name) | move (to a free name; ' +
-    'a Delphi file: delphi_move)';
+    'overwrites) | delete (a WHOLE file) | delete-line (remove ONE line by ' +
+    'atline: a BLANK one, which has no usable anchor, or with old the line ' +
+    'you name) | move (a file, to a free name). delete and move touch that ' +
+    'file only, as delphi_delete and delphi_move do: the commit names what ' +
+    'still points at it';
 
   SP_CHANGESET_PATH =
     'stage: the file the operation touches (inside the workspace roots)';
@@ -7907,21 +7908,10 @@ const
     'away your whole batch. To touch the project use delphi_config ' +
     '(add-unit, remove-unit, add-platform, add-searchpath, set-output).';
 
-  { B de la 1.19.2 (Hermes, medido el 15-oct): el changeset movia y borraba
-    una unidad como un fichero suelto - COMMIT COMPLETE con la cabecera vieja,
-    el .dfm huerfano y el .dpr apuntando a lo que ya no existe. Se dice al
-    apilar (el move) o en el preview (el delete que nada vuelve a crear), como
-    CHSET-018. El texto, UNO: el fragmento va en el anchor del preview, y el
-    rechazo del apilado lo envuelve con su etiqueta. %s = el fichero; %s = la
-    tool que lo hace entero }
-  SF_CHSET_FICHERO_DELPHI_FMT =
-    '%s is a Delphi file: a changeset moves and deletes files alone, and a ' +
-    'unit, a form or a project goes whole - its .dfm/.fmx, its unit header, ' +
-    'the projects that list it, the relative paths that cross -, which is ' +
-    'what %s does, all or nothing. Use it before or after this changeset; ' +
-    'the edits stay here';
-  SR_CHANGESET_FICHERO_DELPHI_FMT =
-    '[CHSET-033 DENIED] %s.';
+  // CHSET-033 (un fichero de Delphi no se movia ni se borraba por changeset:
+  // delphi_move y delphi_delete lo hacian entero; B de la 1.19.2) se retiro en
+  // la 1.23 (V19): las tres mueven y borran como el operador y dan la misma
+  // nota (Lsp.ProjectUnits.NotaDeMudanza)
 
   SN_CHANGESET_STATUS_NOTE =
     '[CHSET-019] The ids are shown cut short on purpose: changesets can ' +
@@ -8228,7 +8218,8 @@ const
   SR_GUARD_COMODIN_FMT =
     '[GUARD-024 INVALID_PARAM] "%s" has a wildcard (* or ?): a path names ' +
     'ONE file or folder. To match several, use the mask parameter of the ' +
-    'tool (pattern) where it has one.';
+    'tool (pattern) where it has one; delphi_move and delphi_delete take a ' +
+    'wildcard in the NAME only (Form1.*), never in a folder.';
 
   { Un FICHERO con separador final (x.txt\): se leia como el fichero y fallaba
     dentro de Windows (INTERNAL), o se CREABA una carpeta con su nombre
@@ -9473,6 +9464,13 @@ const
     'its long form) and this server writes up to %d (Windows MAX_PATH minus ' +
     'the atomic writer''s temporary suffix). Reading it is fine; to write, ' +
     'use a shorter path.';
+  { El sitio antes de copiar o mover (V19; David, 17-oct-2026: "espacio
+    suficiente y con margen"): el margen es MARGEN_DISCO_LIBRE (Lsp.Guard). }
+  SR_GUARD_SIN_ESPACIO_FMT =
+    '[GUARD-044 DENIED] Nothing was written: this needs %d MB on the drive of ' +
+    '"%s" and %d MB are free for this account, and the server keeps %d MB ' +
+    'free so the disk is not filled for everything else (the service, ' +
+    'msbuild, the IDE). Free some space, or copy less.';
 
   // Mensajes que estaban en linea en Lsp.BuildRunner.pas (paso 3c a mano, 27-sep-2026)
   SL_BUILD_DELPHI_BUILD_REFUSED_FMT =
@@ -9739,16 +9737,14 @@ const
     'is not deleted from here (to really delete copies that are yours: ' +
     'delphi_delete purge=true on them).';
 
-  SN_FILE_UNITS_CARPETA_QUITADAS_FMT =
-    '  [FILE-019] units of the folder removed from their projects (%d):';
+  // FILE-019 (las units de la carpeta borrada, quitadas de sus proyectos) se
+  // retiro en la 1.23 (V19): borrar no toca los proyectos (FILE-046 lo dice)
 
   SR_FILE_ERROR_MOVER_PAPELERA_FMT =
     '[FILE-020 INTERNAL] Moving to the trash failed: %s';
 
-  SR_FILE_UNIT_DESHECHO_FMT =
-    '[FILE-039 DENIED] %s could not be deleted, and what had already ' +
-    'changed (its projects, its form) was put back: NOTHING was changed. ' +
-    'The cause: %s';
+  // FILE-039 (el borrado de una unit deshecho con sus proyectos y su form) se
+  // retiro en la 1.23 (V19), por lo mismo
 
   SK_FILE_BORRADO_PAPELERA_FMT =
     '[FILE-021] DELETED %s (moved to the recoverable trash).'#10 +
@@ -9767,16 +9763,44 @@ const
   SR_FILE_NO_EXISTE_ORIGEN_FMT =
     '[FILE-024 NOT_FOUND] The source %s does not exist';
 
+  { LA negativa de un choque (V19; David, 25-oct-2026: "renombrar no
+    destruye"): con la lista de lo que ya esta y las salidas, antes de
+    escribir nada. }
   SR_FILE_DESTINO_YA_EXISTE_FMT =
-    '[FILE-025 DENIED] The destination already exists: %s (not ' +
-    'overwriting).';
-
-  SR_FILE_IDENTIFICADOR_UNIT_FMT =
-    '[FILE-026 INVALID_PARAM] ''%s'' is not a valid unit identifier (the file ' +
-    'name is the unit name).';
-
-  SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT =
-    '[FILE-027 DENIED] %s already exists (not overwriting).';
+    '[FILE-025 DENIED] Nothing was written: these already exist where it ' +
+    'would go, and a file is never overwritten: %s. Rename what is there ' +
+    '(delphi_move), send it to the trash (delphi_delete) or choose another ' +
+    'dest, and repeat. (dest is the final path; with a wildcard, the folder ' +
+    'they go into, and a folder that exists takes them in.)';
+  { El comodin de move, copy y delete (V19; David, 17-oct-2026: "debemos
+    permitir comodin form1.*"). }
+  SR_FILE_COMODIN_NADA_FMT =
+    '[FILE-047 NOT_FOUND] Nothing in "%s" matches "%s" (a wildcard matches ' +
+    'the names in that folder only; the trash is not matched).';
+  SR_FILE_COMODIN_DEST_FICHERO_FMT =
+    '[FILE-048 INVALID_PARAM] With a wildcard, dest is the FOLDER the ' +
+    'matches go into, and "%s" is a file.';
+  SR_FILE_COMODIN_SOLO_EN_NOMBRE_FMT =
+    '[FILE-049 INVALID_PARAM] A wildcard (* or ?) goes only in the name, in ' +
+    'its own folder: "%s".';
+  SR_FILE_COMODIN_PAPELERA_FMT =
+    '[FILE-050 INVALID_PARAM] A wildcard deletes to the trash, so it is not ' +
+    'taken inside the trash or a temp, nor with purge: there, name each one ' +
+    '(%s).';
+  { El aviso del par (V19; David, 25-oct-2026: "avisar como mucho y permitir
+    form.*"): una unit y su form viajan cada uno por su nombre. }
+  SN_FILE_PAR_PARTIDO_FMT =
+    '  [FILE-051] NOTE, %s was %s without %s, which stays in %s: a unit and ' +
+    'its form are read side by side. To take both, name them with a ' +
+    'wildcard: path=%s.';
+  SF_PAR_MOVIDO = 'moved';
+  SF_PAR_COPIADO = 'copied';
+  SF_PAR_BORRADO = 'deleted';
+  SF_FILE_RUTA_MAS_LARGA_FMT = ' The longest path it would write: %s.';
+  // FILE-027 (el .dfm de la unit ya estaba en el destino) y FILE-026 (el nombre
+  // nuevo no era un identificador de unit) se retiraron en la 1.23 (V19): el par
+  // ya no viaja solo y la cabecera no se reescribe; un choque es FILE-025, con
+  // su lista
 
   SN_FILE_COPIA_SEGURIDAD_EN_FMT =
     '  [FILE-028] (backup in %s)';
@@ -10354,62 +10378,55 @@ const
   // Descripciones que estaban en linea en Mcp.Tools.FileOps.pas (paso 3d, 27-sep-2026)
   SP_FILE_PATH =
     'Absolute path of the file or folder to delete (inside the workspace ' +
-    'roots). Moved to a recoverable trash, not hard-deleted';
+    'roots); a wildcard (* ?) in the NAME takes every match in its folder ' +
+    '(Form1.*). Moved to a recoverable trash, not hard-deleted';
 
   SP_FILE_PATH_2 =
-    'Absolute path of the file or folder to move (inside the workspace ' +
-    'roots)';
+    'Absolute path of the file or folder to move or copy; a wildcard (* ?) ' +
+    'in the NAME takes every match in its folder (Form1.*)';
 
   SP_FILE_DEST =
-    'Destination absolute path (inside the workspace roots). Parent ' +
-    'folders are created. Renames when the parent is the same';
+    'The final absolute path (inside the workspace roots); with a wildcard ' +
+    'in path, the FOLDER the matches go into. Parent folders are created; a ' +
+    'folder that exists takes the entries in, a file is never overwritten. ' +
+    'Renames when the parent is the same';
 
   SD_FILE_DELETE =
-    'Delete a file or folder inside the workspace - NOT a hard delete: it ' +
-    'goes to a recoverable trash (__delphi-patch\<date>\deleted\ next to ' +
-    'it), so a mistake can be undone. The exception is a ' +
-    '__delphi-temp: nothing is restored from a temp, so a delete there is ' +
-    'for good (the temp folder itself is refused). ' +
-    'Jailed to the workspace roots, refused in read-only mode; a folder ' +
-    'that is or holds a workspace root, a reference project or a read-only ' +
-    'folder is refused (it would go along). Use it to clean up stray files ' +
-    'and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and ' +
-    'takes it out of every project that lists it (uses, CreateForm, ' +
-    'DCCReference), looked for from its folder up to the edge of the ' +
-    'workspace. To keep the file but drop it from a project: delphi_config ' +
-    'remove-unit.';
+    'Delete files or folders inside the workspace as an operator would - ' +
+    'NOT a hard delete: they go to a recoverable trash ' +
+    '(__delphi-patch\<date>\deleted\ next to them), so a mistake can be ' +
+    'undone with delphi_move. A wildcard in the name (Form1.*) takes every ' +
+    'match: all of them go, or none. The exception is a __delphi-temp: ' +
+    'nothing is restored from a temp, so a delete there is for good (the ' +
+    'temp folder itself is refused). Jailed to the workspace roots, refused ' +
+    'in read-only mode; a folder that is or holds a workspace root, a ' +
+    'reference project or a read-only folder is refused (it would go ' +
+    'along). Nothing else is touched: a project that lists what you deleted ' +
+    'still lists it, and the answer names each file that points at it ' +
+    '(FILE-046) and a unit whose form stays behind, or the reverse ' +
+    '(FILE-051). To drop a unit from a project: delphi_config remove-unit.';
 
   SD_FILE_MOVE =
-    'Move or rename a file or folder inside the workspace, or COPY it with ' +
-    'copy=true (how something is brought in from a reference project). The ' +
-    'destination must be inside the workspace roots, and so must the ' +
-    'source of a move; parent folders are created; a move copies the ' +
-    'source to the recoverable trash first. Jailed, refused in read-only ' +
-    'mode. A FOLDER moves only as a rename on the same drive, whole or not ' +
-    'at all (links inside travel as links); to another drive, copy=true ' +
-    'and then delphi_delete. A folder that is or holds a root, a reference ' +
-    'or a read-only folder is refused, and so is a destination that would ' +
-    'hold one (a folder lands there with everything inside it, MOVE-020). ' +
-    'Moving or renaming a unit (.pas) ' +
-    'takes its .dfm/.fmx along, rewrites its "unit X;" header on a rename ' +
-    'and re-points every project that lists it (the .dpr uses and ' +
-    'DCCReference, the uses of the project''s other units and their ' +
-    'qualified UnitOld.X references), looked for from its folder up to the ' +
-    'edge of the workspace - all or nothing: a project that cannot be ' +
-    're-pointed (read-only, open elsewhere) refuses the whole move with ' +
-    'nothing changed (MOVE-019). A FOLDER re-points every unit inside it ' +
-    'the same way: reorganise freely, the projects follow. Every RELATIVE ' +
-    'path that crosses the border of what moved is re-pointed in the same ' +
-    'call: inside it (the units from outside each project lists, the ' +
-    '.dproj search/output paths, icon, manifest, .rc, deployed files and ' +
-    '.optset, {$I}/{$R}/{$L} - only if the file was where the directive ' +
-    'says -, the projects and dependencies of a .groupproj) and outside ' +
-    'it, in everything this session can write (a sibling project, an {$I} ' +
-    'from another unit, a group): a project moved one level deeper still ' +
-    'compiles. What it could not re-point is named, with the tool that ' +
-    'fixes it. A copy re-points only its OWN relative paths that ' +
-    'cross its border, so it compiles where it lands, and touches no ' +
-    'project that lists the source (see copy).';
+    'Move or rename files or folders inside the workspace, or COPY them with ' +
+    'copy=true (how something is brought in from a reference project), as ' +
+    'an operator would: what you name goes, and nothing is rewritten. dest ' +
+    'is the final path; with a wildcard in the name of path (Form1.* for a ' +
+    'unit and its form), the folder they go into. A folder that already ' +
+    'exists at dest takes the entries in, one by one; a FILE is never ' +
+    'overwritten: if anything would land on one, nothing is written and the ' +
+    'answer lists them (FILE-025). Before the first byte it also checks the ' +
+    'longest path and the free disk space. A move copies the source to the ' +
+    'recoverable trash first; a rename that only changes case is a rename. ' +
+    'Jailed: dest inside the workspace roots, and so the source of a move; ' +
+    'refused in read-only mode. A move is a rename on its own drive (to ' +
+    'another: copy=true, then delphi_delete); links go as links. A folder ' +
+    'that is or holds a root, a reference or a read-only folder is refused, ' +
+    'and so is a dest that would hold one (MOVE-020). All or nothing. No ' +
+    'project, header or path is re-pointed: the answer names each file ' +
+    'whose paths cross the border of what moved (MOVE-023), the property to ' +
+    'change when the build reaches it through one (MOVE-021), and a unit ' +
+    'that left its form behind or the reverse (FILE-051); delphi_config ' +
+    'fix-references re-points a project.';
 
   // Descripciones que estaban en linea en Mcp.Tools.Messages.pas (paso 3d, 27-sep-2026)
   SP_MSGS_COMMAND =
@@ -11121,9 +11138,6 @@ const
 
   SF_PAS_STATUS_NEEDS_PROFILE_SDK =
     'needs a PAServer profile + SDK (see command=packages)';
-
-  SF_PAS_SIN_NAME =
-    '(no name)';
 
   SF_PAS_PULL_ALREADY_UP_TO_DATE =
     'already up to date';
@@ -12013,41 +12027,10 @@ const
     'by some process - an engine of this server lets go on its own after ' +
     'EngineIdleMinutes]';
 
-  SF_FILE_TAMBIEN_A_PAPELERA =
-    'also moved to the trash';
-
-  SF_FILE_AL_MOVER_PAPELERA =
-    'while moving to the trash';
-
-  { Una unit cuyo form no se pudo mover: salia MOVED con la unit en su sitio
-    nuevo, el form en el viejo y el .dpr re-apuntado (octava revision). }
-  SR_MOVE_FORM_NO_VA_FMT =
-    '[MOVE-017 DENIED] Its form %s could not go with the unit (%s): the unit ' +
-    'is back at %s and no project was touched. Nothing was done.';
-
-  { La causa de un MOVE-017 cuando el deshacer NO pudo devolverlo todo: va
-    dentro de SYS-018, que dice que no todo volvio - el MOVE-017 entero
-    decia "the unit is back... Nothing was done" debajo (decima revision). }
-  SF_MOVE_FORM_NO_VA_FMT =
-    'Its form %s could not go with the unit (%s).';
-
-  { Un proyecto que no se deja re-apuntar (su .dpr o su .dproj en +R, abierto
-    sin compartir): salia MOVED con la unit en su sitio nuevo y el proyecto
-    apuntando al viejo, "ERROR" en una nota (medido en vivo, 28-sep-2026).
-    Todo o nada, como su form (MOVE-017) y como borrarla (FILE-039). }
-  SR_MOVE_PROYECTO_NO_VA_FMT =
-    '[MOVE-019 DENIED] Project %s could not be re-pointed (%s): the unit ' +
-    'is back at %s with its header and its designer file, and every ' +
-    'project is as it was. Nothing was done.';
-
-  { La causa de un MOVE-019 cuando el deshacer NO pudo devolverlo todo: va
-    dentro de SYS-018, que dice lo que no volvio. }
-  SF_MOVE_PROYECTO_NO_VA_FMT =
-    'Project %s could not be re-pointed (%s).';
-
-  SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT =
-    '[MOVE-010 INVALID_PARAM] A .pas unit can only be moved to another .pas ' +
-    'name (%s).';
+  // MOVE-017 (el form que no podia ir con la unit), MOVE-019 (el proyecto que
+  // no se dejaba re-apuntar) y MOVE-010 (una unit solo a otro .pas) se
+  // retiraron en la 1.23 (V19), con sus trozos: un move no re-apunta ni lleva
+  // el par, y un fichero se renombra como lo haria el operador
 
   SN_FILE_SIN_COPIA_DESDE_PAPELERA =
     '  [FILE-040] (no backup: the source was already in the trash, and a ' +
@@ -12079,24 +12062,8 @@ const
     '  from: %s'#10 +
     '  to:   %s';
 
-  SF_MOVE_COPIADO_CON_UNIT =
-    'copied with the unit';
-
-  SF_MOVE_MOVIDO_CON_UNIT =
-    'moved with the unit';
-
-  SN_MOVE_CABECERA_REESCRITA_FMT =
-    '  [MOVE-015] header rewritten: unit %s;';
-
-  SN_MOVE_ERROR_REESCRIBIR_CABECERA_FMT =
-    '  [MOVE-016] ERROR rewriting the header (it still says unit %s;): %s';
-
-  { La cabecera no se encontro (o ya decia otro nombre): no se toca y se
-    dice. MOVE-015 decia "rewritten" sin mirar si cambio algo (decima). }
-  SN_MOVE_CABECERA_NO_ENCONTRADA_FMT =
-    '  [MOVE-018] header NOT rewritten: I did not find "unit %s" at the ' +
-    'head of the file. Make it "unit %s;" with delphi_edit, or the build ' +
-    'stops with E1038.';
+  // MOVE-015, MOVE-016 y MOVE-018 (la cabecera "unit X;" reescrita, o no) se
+  // retiraron en la 1.23 (V19): un move o una copia no reescriben el fichero
 
   // Textos que estaban en linea en Lsp.Guard.pas (el resto, 27-sep-2026)
   SL_GUARD_WORKSPACE_JAIL_ROOTS_FMT =

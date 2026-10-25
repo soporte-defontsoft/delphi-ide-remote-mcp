@@ -12,6 +12,11 @@ un agente cualquiera, y que ninguna de las 69 baterias veia:
      habia nada, con respuesta de exito.
   B  borrar una CARPETA entera, lo mismo: el proyecto dejaba de compilar.
 
+Desde V19 (1.23) move y delete son los del operador y no re-apuntan nada: P, M
+y B miden la NOTA (el proyecto, a tres carpetas, con la cuenta de lo que lista)
+y el camino del agente para arreglarlo - fix-references tras mover, remove-unit
+tras borrar -, hasta que compila.
+
 "dir" es una subcarpeta RELATIVA al proyecto y pasa por la misma lista blanca
 que set-output (ValidOutputFolder): ni absolutas, ni unidad, ni "..".
 
@@ -136,38 +141,47 @@ try:
 
     # ------------------------------------------------------------------- P
     dto = os.path.join(PROY, 'Nucleo', 'Modelos', 'Dto')
+    antes = proyecto()
     r = call('delphi_move', {'path': os.path.join(dto, 'UCliente.pas'),
                              'dest': os.path.join(dto, 'UClienteDto.pas')})
-    dpr, dproj = proyecto()
-    check('P1 renombrar una unit a TRES carpetas del .dpr encuentra su proyecto',
-          'UClienteDto.pas' in dpr and 'UClienteDto.pas' in dproj and
-          rel not in dpr, r[:240])
+    check('P1 renombrar una unit a TRES carpetas del .dpr: la nota encuentra su proyecto, sin tocarlo',
+          mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT') and
+          ('Tienda.dpr (1 %s)' % mc.catalogo()['SF_CRUZA_UNITS']) in r and proyecto() == antes, r[-500:])
     call('delphi_move', {'path': os.path.join(dto, 'UClienteDto.pas'),
                          'dest': os.path.join(dto, 'UCliente.pas')})
     ok, det = compila()
     check('P2 ...y de vuelta a su nombre, compila', ok, det)
 
     # ------------------------------------------------------------------- M
+    antes = proyecto()
     r = call('delphi_move', {'path': os.path.join(PROY, 'Nucleo'),
                              'dest': os.path.join(PROY, 'Dominio')})
+    check('M1 mover una CARPETA: el proyecto sin tocar y la nota con las DOS units que lista',
+          proyecto() == antes and mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT') and
+          ('Tienda.dpr (2 %s)' % mc.catalogo()['SF_CRUZA_UNITS']) in r, r[-500:])
+    r = call('delphi_config', {'command': 'fix-references', 'project': DPROJ})
     dpr, dproj = proyecto()
-    check('M1 mover una CARPETA re-apunta las units de dentro (.dpr y .dproj)',
+    check('M2 ...fix-references las re-apunta por su nombre (.dpr y .dproj)',
           SEP.join(['Dominio', 'Modelos', 'Dto', 'UCliente.pas']) in dpr and
-          ('Include="%s"' % SEP.join(['Dominio', 'Modelos', 'UProducto.pas']))
-          in dproj and
-          ('Nucleo' + SEP) not in dpr and ('Nucleo' + SEP) not in dproj,
-          r[:300])
+          ('Include="%s"' % SEP.join(['Dominio', 'Modelos', 'UProducto.pas'])) in dproj and
+          ('Nucleo' + SEP) not in dpr and ('Nucleo' + SEP) not in dproj, r[:300])
     ok, det = compila()
-    check('M2 ...y el proyecto sigue compilando', ok, det)
+    check('M3 ...y el proyecto compila', ok, det)
 
     # ------------------------------------------------------------------- B
+    antes = proyecto()
     r = call('delphi_delete', {'path': os.path.join(PROY, 'Dominio')})
+    check('B1 borrar una CARPETA: el proyecto sin tocar y la nota (FILE-046) con las DOS units',
+          proyecto() == antes and mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and
+          ('Tienda.dpr (2 %s)' % mc.catalogo()['SF_CRUZA_UNITS']) in r, r[-500:])
+    for u in (SEP.join(['Dominio', 'Modelos', 'Dto', 'UCliente.pas']), SEP.join(['Dominio', 'Modelos', 'UProducto.pas'])):
+        r = call('delphi_config', {'command': 'remove-unit', 'project': DPROJ, 'path': os.path.join(PROY, u)})
     dpr, dproj = proyecto()
-    check('B1 borrar una CARPETA saca del proyecto las units de dentro',
+    check('B2 ...remove-unit las saca del .dpr y del .dproj',
           'UCliente' not in dpr and 'UProducto' not in dpr and
           'UCliente' not in dproj and 'UProducto' not in dproj, r[:300])
     ok, det = compila()
-    check('B2 ...y el proyecto sigue compilando', ok, det)
+    check('B3 ...y el proyecto compila', ok, det)
 finally:
     try:
         proc.kill()

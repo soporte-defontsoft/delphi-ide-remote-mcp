@@ -10,11 +10,12 @@ extension -"UFicha.pas-215825250"-, y nadie sabia quitarselo.
       (ensenaba las copias de seguridad, que conservan su nombre, y escondia
       justo lo borrado, que es lo unico que ese flag promete)
   T2  ...sin ensenar los marcadores .by, que no son ficheros del usuario
-  T3  restaurar una unit de formulario se lleva su .dfm
-      (el camino de "esto es una unit" miraba la extension, leia
-      ".pas-215825250" y no entraba: quedaba una unit sin designer, que el
-      IDE ya no abre)
-  T4  ...y lo dice en la respuesta
+  T3  restaurar una unit de formulario se lleva su .dfm: desde V19 (1.23) el
+      par va por un comodin, UFicha.* desde su cajon (antes el .pas se lo
+      llevaba solo, y el camino de "esto es una unit" miraba la extension,
+      leia ".pas-215825250" y no entraba: quedaba una unit sin designer, que
+      el IDE ya no abre)
+  T4  ...y lo dice en la respuesta: los dos MOVED, sin aviso del par
   T5  restaurar NO deja una papelera dentro de la papelera
       (hacia copia de la copia, con el sello doblado, y cada restauracion
       anadia otra capa)
@@ -68,7 +69,7 @@ try:
     check('setup: el form y su designer existen',
           os.path.exists(pas) and os.path.exists(dfm))
 
-    borrado = call('delphi_delete', {'path': pas})
+    borrado = call('delphi_delete', {'path': os.path.join(PROY, 'UFicha.*')})
     check('setup: borrado a la papelera', mc.abre(borrado, 'SK_FILE_BORRADO_PAPELERA_FMT') and
           not os.path.exists(pas) and not os.path.exists(dfm), borrado[:200])
 
@@ -106,12 +107,13 @@ try:
             if x.startswith('UFicha.pas-') and not mc.es_marca_dueno(x):
                 copia = os.path.join(r_, x)
     check('setup: la copia de la unit esta en la papelera', bool(copia), PROY)
-    rest = call('delphi_move', {'path': copia, 'dest': pas}) if copia else \
-        '(no se encontro la copia)'
+    rest = call('delphi_move', {'path': os.path.join(os.path.dirname(copia), 'UFicha.*'), 'dest': PROY}) \
+        if copia else '(no se encontro la copia)'
     check('T3 la unit vuelve', os.path.exists(pas), rest[:200])
     check('T3b y su .dfm vuelve CON ella', os.path.exists(dfm), rest[:260])
-    check('T4 ...y la respuesta lo dice',
-          mc.es(rest, 'SN_FILE_DESIGNER_TOO_FMT'), rest[:260])
+    check('T4 ...y la respuesta lo dice: los dos MOVED, sin aviso del par',
+          mc.abre(rest, 'SK_MOVE_MOVIDO_FMT') and mc.ids(rest).count(mc.id_de('SK_MOVE_MOVIDO_FMT')) == 2 and
+          'UFicha.pas' in rest and 'UFicha.dfm' in rest and not mc.es(rest, 'SN_FILE_PAR_PARTIDO_FMT'), rest[:500])
 
     # ------------------------------------------------------------------ T5
     anidada = []

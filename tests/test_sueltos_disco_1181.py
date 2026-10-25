@@ -14,7 +14,9 @@ UTF-16: el lector de los demas nunca da un suelto (lee U+FFFD).
       linea
   S2  ...y lo mismo con delphi_textedit, adduses y una tanda (edits)
   S3  el changeset aplica un edit en ese fichero
-  S4  delphi_move de la unit: la cabecera se reescribe y el suelto se queda
+  S4  delphi_move de la unit: llega byte a byte (desde V19 de la 1.23 un move no
+      reescribe la cabecera; antes la reescribia, y con el suelto daba MOVE-016),
+      y su cabecera se edita despues con delphi_edit, con el suelto en su sitio
   S5  designer set en un .dfm UTF-16 con un suelto en el Caption: desde A28
       de la 1.23 el disenador no edita un form que el IDE no carga (DSGN-122),
       y to-text, que si lo lee, niega el suelto (DSGN-147); el fichero, intacto.
@@ -100,9 +102,13 @@ try:
 
     # ---- S4 ----
     DOS = os.path.join(JAIL, 'Dos16.pas')
+    antes = lee(U)
     r = srv.call('delphi_move', {'path': U, 'dest': DOS})
+    check('S4 delphi_move de la unit: llega byte a byte, con el suelto',
+          not mc.fallo(r) and os.path.exists(DOS) and lee(DOS) == antes, r[:300])
+    r = srv.call('delphi_edit', {'path': DOS, 'old': 'unit U16;', 'new': 'unit Dos16;'})
     t = de16(lee(DOS)) if os.path.exists(DOS) else ''
-    check('S4 delphi_move de la unit: la cabecera dice unit Dos16 y el suelto se queda (daba MOVE-016)',
+    check('S4 ...y su cabecera se edita: unit Dos16 y el suelto se queda',
           not mc.fallo(r) and t.startswith('unit Dos16;') and D800 in t, r[:300])
 
     # ---- S5 ----

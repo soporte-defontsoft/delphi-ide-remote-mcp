@@ -7,9 +7,11 @@ mismo fichero en el lote es un plan valido, y al apilar no se ve lo que viene
 despues - y su entrada nombra delphi_delete, pero el resumen le recetaba anclas y
 atline. Lo mismo con los de delete-line (una linea que no existe, que no es la
 nombrada). Ahora el resumen dice que cada entrada da su causa, y las nombra.
+(Desde V19, 1.23, un .pas se borra por changeset como cualquier fichero: la causa
+que no es el ancla en K1 es ahora un fichero de solo lectura.)
 
-  K1 delete de un .pas: la entrada nombra delphi_delete y el resumen remite a la causa
-     de cada entrada, sin culpar al ancla (ROJO en produccion)
+  K1 delete de un fichero +R: la entrada da SU causa (el atributo) y el resumen
+     remite a la causa de cada entrada, sin culpar al ancla (ROJO en produccion)
   K2 delete-line con atline fuera del fichero: lo mismo (ROJO)
   C1 control: un edit con un ancla que no esta sigue sin resolver y el resumen sigue
      diciendo como apilarla bien (unstage, atline)
@@ -53,10 +55,13 @@ def abre():
 
 try:
     cid = abre()
-    cs(command='stage', id=cid, kind='delete', path=UNIDAD)
-    r = cs(command='preview', id=cid)
-    check('K1 delete de un .pas: la entrada nombra delphi_delete y el resumen remite a la causa de cada entrada',
-          mc.es(r, 'SN_CHANGESET_PREVIEW_BAD') and 'delphi_delete' in ancla(r) and NUEVO in r, r[:900])
+    with mc.solo_lectura(UNIDAD):
+        cs(command='stage', id=cid, kind='delete', path=UNIDAD)
+        r = cs(command='preview', id=cid)
+    check('K1 delete de un fichero +R: la entrada da su causa (el atributo) y el resumen remite a la causa '
+          'de cada entrada',
+          mc.es(r, 'SN_CHANGESET_PREVIEW_BAD') and mc.abre(ancla(r), 'SR_SOLO_LECTURA_ATRIBUTO_FMT')
+          and NUEVO in r, r[:900])
     cs(command='rollback', id=cid)
 
     cid = abre()

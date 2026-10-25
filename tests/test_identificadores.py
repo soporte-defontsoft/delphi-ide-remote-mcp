@@ -15,7 +15,9 @@ through the real server:
   "already there" looks searched for a routine A and the second insert
   wrote a duplicate;
 - a unit with an accented name: refused by add-unit (CFG-038), and its
-  entry in the .dpr, rewritten by a move, kept the tail of the old name;
+  entry in the .dpr, rewritten by a move, kept the tail of the old name
+  (since V19 a move rewrites nothing: the entry is rewritten by
+  fix-references, through the same writer, RenameProjectUnit);
 - delphi_search wholeword: a piece of a name followed by an accented
   letter counted as a whole word;
 - check-binding: an accented handler was never read;
@@ -144,26 +146,31 @@ check('I3 create unit acentuada: creada y dada de alta en el .dpr (CFG-038 la ne
       "%s in '%s.pas'" % (ARBOL, ARBOL) in dpr, r[:300] + ' | ' + dpr)
 r = call('delphi_edit', {'path': UTEXTO, 'adduses': ARBOL, 'section': 'implementation'})
 check('I3b adduses de la unit acentuada', mc.abre(r, 'SN_ADDUSES_ADDED_FMT') and ARBOL in rd(UTEXTO), r[:300])
-NUEVO = ARBOL + 'Nuevo'
-r = call('delphi_move', {'path': os.path.join(PRJ, ARBOL + '.pas'), 'dest': os.path.join(PRJ, NUEVO + '.pas')})
+# desde V19 (1.23) un move no reescribe nada (como el operador): la nota nombra el
+# .dpr, y la entrada la reescribe fix-references, por el MISMO escritor
+# (RenameProjectUnit) que la dejaba con la cola de la vieja
+SUB = os.path.join(PRJ, 'sub')
+dpr_antes, cab_antes = rd(DPR), rd(os.path.join(PRJ, ARBOL + '.pas'))
+r = call('delphi_move', {'path': os.path.join(PRJ, ARBOL + '.pas'), 'dest': os.path.join(SUB, ARBOL + '.pas')})
+check('I3c move a una subcarpeta: nada reescrito (el .dpr y la cabecera) y la nota nombra el .dpr',
+      mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and rd(DPR) == dpr_antes and
+      rd(os.path.join(SUB, ARBOL + '.pas')) == cab_antes and mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT') and
+      'Ident.dpr' in r, r[:600])
+r = call('delphi_config', {'project': DPROJ, 'command': 'fix-references'})
 dpr = rd(DPR)
-entrada = [l.strip() for l in dpr.split('\n') if NUEVO in l]
-check('I3c move: la entrada del .dpr es la nueva entera, sin la cola de la vieja pegada',
-      mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and len(entrada) == 1 and
-      re.fullmatch(r"%s in '%s\.pas'[,;]" % (NUEVO, NUEVO), entrada[0]) is not None, r[:300] + ' | ' + dpr)
-check('I3d move: la cabecera y el uses de quien la usa, renombrados',
-      rd(os.path.join(PRJ, NUEVO + '.pas')).lstrip().startswith('unit %s;' % NUEVO) and
-      re.search(r'\b%s\b' % NUEVO, rd(UTEXTO)) is not None and
-      re.search(r'%s(?!Nuevo)' % ARBOL, rd(UTEXTO)) is None, rd(UTEXTO)[-300:])
+entrada = [l.strip() for l in dpr.split('\n') if ARBOL in l]
+check('I3d fix-references: la entrada del .dpr es la nueva ENTERA, sin la cola de la vieja pegada',
+      mc.abre(r, 'SN_ARREGLA_FMT') and len(entrada) == 1 and
+      re.fullmatch(r"%s in 'sub\\%s\.pas'[,;]" % (ARBOL, ARBOL), entrada[0]) is not None, r[:300] + ' | ' + dpr)
 ok, err = build_ok(DPROJ)
 check('I3e ...y el proyecto COMPILA', ok, err)
 # la MISMA unit escrita con otra caja de su acento (dcc la toma por la misma,
 # medido): adduses no la vuelve a anadir (con SameText, solo A-Z, la anadia y
 # el build caia con E2004)
-r = call('delphi_edit', {'path': UTEXTO, 'adduses': 'U\u00e1RBOLNUEVO', 'section': 'implementation'})
+r = call('delphi_edit', {'path': UTEXTO, 'adduses': 'UáRBOL', 'section': 'implementation'})
 u = rd(UTEXTO)
 check('I3f adduses de la misma unit con otra caja del acento: no se duplica',
-      u.casefold().count(NUEVO.casefold()) == 1 and not mc.fallo(r), r[:300] + ' | ' + u[-300:])
+      len(re.findall(r'\b%s\b' % ARBOL.casefold(), u.casefold())) == 1 and not mc.fallo(r), r[:300] + ' | ' + u[-300:])
 
 # ---- I4 delphi_search wholeword ----
 j = J(call('delphi_search', {'root': PRJ, 'query': 'Tama', 'wholeword': True}))

@@ -7,8 +7,13 @@ A1  la raiz de OTRO workspace anidada en la mia, por su alias corto: no se
     8.3 y nombrada larga
 A2  una carpeta que CONTIENE un ReadOnlyPaths, por su alias: no se borra
 A3  el vault dentro de la raiz, por su alias: ni se edita ni se borra
-A4  borrar una unit por su alias 8.3 la saca de su proyecto (el .dpr seguia
-    listandola: F1026 en el build)
+A4  borrar una unit por su alias 8.3: como un operador, el .dpr queda igual, y
+    la nota (FILE-046) nombra su proyecto por la ruta larga igual que si se
+    hubiera nombrado larga (antes de V19 la sacaba; el .dpr seguia listandola
+    por el alias: F1026 en el build)
+A34 un proyecto de un ReadOnlyPaths DENTRO de la raiz que lista una unit mia:
+    borrarla o moverla lo nombra en la nota (FILE-046, MOVE-023) y no lo toca;
+    el paseo de la nota baja tambien por lo que solo se lee
 B1  changeset delete tras dos ediciones del dia: la papelera guarda lo
     ULTIMO (la copia diaria era la de la manana)
 B2  upload sobre un fichero editado hoy: la copia sellada es la de antes
@@ -176,7 +181,7 @@ try:
         else:
             print('NOTA: A11 .obsidian sin medir: no tiene alias 8.3 (%r)' % OBC)
 
-    # A4 una unit por su alias 8.3 sale de su proyecto
+    # A4 una unit por su alias 8.3: su proyecto sale en la nota, no se toca
     PROY = os.path.join(JAIL, 'proy')
     res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'App', 'dir': PROY})
     DPR = os.path.join(PROY, 'App.dpr')
@@ -185,14 +190,51 @@ try:
     UNIT = os.path.join(PROY, 'UProveedorModelo.pas')
     check('A4 fixture: la unit se crea y el .dpr la lista',
           os.path.exists(UNIT) and 'UProveedorModelo' in open(DPR).read(), t[:200])
+    # lo que la nota dice del proyecto: su .dpr por la ruta larga y la unit que lista (el
+    # proyecto se cuenta una vez, por su .dpr: remove-unit arregla tambien el .dproj)
+    NOTA_DPR = ('%s (1 %s)' % (mc.virtual(mc.larga(DPR)), mc.catalogo()['SF_CRUZA_UNITS'])).lower()
     UC = corta(UNIT)
     if os.path.exists(UNIT) and UC and os.path.basename(UC).lower() != 'uproveedormodelo.pas':
+        antes = open(DPR, 'rb').read()
         res, sc, t = llama('delphi_delete', {'path': UC})
-        check('A4 borrar una unit por su alias 8.3 la saca del .dpr',
+        check('A4 borrar una unit por su alias 8.3: borrada, el .dpr igual y la nota nombra el .dpr por su ruta larga',
               not res.get('isError') and not os.path.exists(UNIT) and
-              'UProveedorModelo' not in open(DPR).read(), '%s | %s' % (t[:200], open(DPR).read()[:300]))
+              open(DPR, 'rb').read() == antes and mc.tiene(t, mc.id_de('SN_REFERENCIAS_A_LO_BORRADO_FMT')) and
+              NOTA_DPR in t.lower(), t[-900:])
     else:
         print('NOTA: A4 sin medir: la unit no tiene alias 8.3 (%r)' % UC)
+    # A4 control: otra unit del mismo proyecto, borrada por su nombre LARGO
+    res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'UProveedorLargo',
+                                          'project': os.path.join(PROY, 'App.dproj')})
+    UNIT2 = os.path.join(PROY, 'UProveedorLargo.pas')
+    antes = open(DPR, 'rb').read()
+    res, sc, t = llama('delphi_delete', {'path': UNIT2})
+    check('A4 control: por su nombre largo, lo mismo',
+          not res.get('isError') and not os.path.exists(UNIT2) and
+          open(DPR, 'rb').read() == antes and mc.tiene(t, mc.id_de('SN_REFERENCIAS_A_LO_BORRADO_FMT')) and
+          NOTA_DPR in t.lower(), t[-900:])
+
+    # A34 un .dpr del ReadOnlyPaths (VENDOR, dentro de la raiz) lista una unit mia por relativa:
+    # la nota baja tambien por lo que solo se lee. El .dpr lo planta la bateria (la tool no
+    # escribe ahi) y queda byte a byte
+    VDPR = os.path.join(VENDOR, 'Vendor.dpr')
+    for n in ('UParaVendor', 'UParaVendor2'):
+        open(os.path.join(PROY, n + '.pas'), 'w').write('unit %s;\ninterface\nimplementation\nend.\n' % n)
+    open(VDPR, 'w').write("program Vendor;\nuses\n  UParaVendor in '..\\..\\proy\\UParaVendor.pas',\n"
+                          "  UParaVendor2 in '..\\..\\proy\\UParaVendor2.pas';\nbegin\nend.\n")
+    antes = open(VDPR, 'rb').read()
+    NOTA_VDPR = ('%s (1 %s)' % (mc.virtual(mc.larga(VDPR)), mc.catalogo()['SF_CRUZA_UNITS'])).lower()
+    res, sc, t = llama('delphi_delete', {'path': os.path.join(PROY, 'UParaVendor.pas')})
+    check('A34 borrar una unit que lista un proyecto de un ReadOnlyPaths: la nota lo nombra y queda igual',
+          not res.get('isError') and not os.path.exists(os.path.join(PROY, 'UParaVendor.pas')) and
+          mc.tiene(t, mc.id_de('SN_REFERENCIAS_A_LO_BORRADO_FMT')) and NOTA_VDPR in t.lower() and
+          open(VDPR, 'rb').read() == antes, t[-900:])
+    res, sc, t = llama('delphi_move', {'path': os.path.join(PROY, 'UParaVendor2.pas'),
+                                        'dest': os.path.join(JAIL, 'UParaVendor2.pas')})
+    check('A34 ...y moverla: MOVE-023 lo nombra y queda igual',
+          not res.get('isError') and os.path.exists(os.path.join(JAIL, 'UParaVendor2.pas')) and
+          mc.tiene(t, mc.id_de('SN_REFERENCIAS_CRUZAN_FMT')) and NOTA_VDPR in t.lower() and
+          open(VDPR, 'rb').read() == antes, t[-900:])
 
     # A8 alargar una ruta NUNCA cambia a que fichero se refiere: la forma
     # canonica quita el punto final y deshace ::$DATA. En .txt, para que no

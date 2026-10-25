@@ -249,8 +249,8 @@ switch and its own allowlist; it will not arrive by accident.
 | [`delphi_desktop`](docs/TOOLS.md#delphi_desktop) | **The desktop of a PAServer target** - Linux (GNOME), Windows, or this server's own: screenshot, tap, type, key and the window list, through a node the server deploys and updates by itself |
 | [`delphi_components`](docs/TOOLS.md#delphi_components) | What the server's RAD Studio has installed to program with (design packages, any install channel); per platform, the porting matrix |
 | [`delphi_test`](docs/TOOLS.md#delphi_test) | **Does it WORK, not just compile**: discover the test projects, build and run one in a Windows container of its own, answer total/passed/failed with the failing lines; its own opt-in (`AllowTests`) |
-| [`delphi_delete`](docs/TOOLS.md#delphi_delete) | Delete into a **recoverable trash** next to the file, dropping a unit from its projects; `purge=true` deletes for real, only inside the trash and only your own copies |
-| [`delphi_move`](docs/TOOLS.md#delphi_move) | Move or rename inside the workspace - a unit renamed everywhere it is referenced; out of the trash is a restore; `copy=true` copies |
+| [`delphi_delete`](docs/TOOLS.md#delphi_delete) | Delete into a **recoverable trash** next to the file, as an operator would (`Form1.*` takes a unit and its form; the answer names what still points at it); `purge=true` deletes for real, only inside the trash and only your own copies |
+| [`delphi_move`](docs/TOOLS.md#delphi_move) | Move or rename inside the workspace as an operator would - nothing is rewritten, the answer names what crosses the border; out of the trash is a restore; `copy=true` copies |
 | [`delphi_package`](docs/TOOLS.md#delphi_package) | Zip a build output folder for download |
 | [`delphi_styles`](docs/TOOLS.md#delphi_styles) | **FMX styles by `StyleName`**: view/get/set/clone/delete, `lint`, and `build` the binary the app loads |
 | [`delphi_messages`](docs/TOOLS.md#delphi_messages) | The agents' mailbox: notes from the operator, delivered once |

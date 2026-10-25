@@ -1076,7 +1076,7 @@ begin
     F.HayPas := True;
   end
   else
-    F.HayPas := TFile.Exists(F.Pas) and (ReadPathDenied(F.Pas) = '');
+    F.HayPas := ExisteYSeLee(F.Pas);
   if F.HayPas then
   begin
     F.PasTexto := PatchLoadText(F.Pas, F.PasEnc);
