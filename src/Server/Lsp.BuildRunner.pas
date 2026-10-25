@@ -250,10 +250,20 @@ begin
   // evaluation (E2099) even though $C0000000 fits NativeUInt fine - the
   // first external user issue (GitHub #1, limelect, Delphi 13 Win32 Debug).
   Ext.ProcessMemoryLimit := NativeUInt($C0000000);
-  SetInformationJobObject(Result, JobObjectExtendedLimitInformation, @Ext, SizeOf(Ext));
   Ui.UIRestrictionsClass := JOB_OBJECT_UILIMIT_EXITWINDOWS or
     JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS or JOB_OBJECT_UILIMIT_DISPLAYSETTINGS;
-  SetInformationJobObject(Result, JobObjectBasicUIRestrictions, @Ui, SizeOf(Ui));
+  // Un job sin sus limites no confina nada (ni kill-on-close, ni el tope de
+  // memoria, ni el de procesos): cuenta como un job que no se pudo crear. Un
+  // test no corre (fail-closed, ETestNoConfinado); build y git siguen sin job,
+  // como cuando CreateJobObject falla. Se ignoraba lo que devolvia (1.5 de la
+  // lista de medidas, V51 de la 1.23; el fallo no se puede provocar sin
+  // inyectarlo: el tope de 3 GiB SI se midio, negado dentro y libre fuera)
+  if not SetInformationJobObject(Result, JobObjectExtendedLimitInformation, @Ext, SizeOf(Ext)) or
+     not SetInformationJobObject(Result, JobObjectBasicUIRestrictions, @Ui, SizeOf(Ui)) then
+  begin
+    CloseHandle(Result);
+    Result := 0;
+  end;
 end;
 
 { Strict UTF-8 scanner over the captured bytes: only well-formed multi-byte

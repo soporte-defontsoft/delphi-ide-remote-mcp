@@ -54,6 +54,14 @@ the MCP `initialize` response (`serverInfo.version`).
   the only one that differs just in case - and what reaches the device is
   that name. A package that is not installed is refused before anything
   runs (ADB-029).
+- **A test never runs in a job without its limits.** `delphi_test` runs a
+  test inside a Job Object (kill-on-close, a cap of 3 GiB per process and
+  one on processes) and refuses to run it when the job cannot be created;
+  but when Windows refused to SET those limits, the test still ran, in a
+  job that limited nothing. A job whose limits cannot be set now counts as
+  one that could not be created (TEST-032); the build and git, which run
+  without a job when it cannot be had, keep doing so. The cap itself was
+  measured: 3.5 GB is refused inside a test and granted outside.
 - **The mojibake warning sees UTF-8 read as Latin-1 on every code page.** New
   text carrying UTF-8 read as Latin-1 or CP1252 (`Ã³` for `ó`, what an agent's
   tools make of a UTF-8 file) was warned about only where the machine's ANSI
