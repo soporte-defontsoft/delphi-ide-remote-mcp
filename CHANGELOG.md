@@ -54,7 +54,6 @@ the MCP `initialize` response (`serverInfo.version`).
   however the file got there, by the same rule as a build event or a free
   compiler option - an agent asks for operations, it does not hand a command to
   an executor (`tests/test_build_imports.py`).
-
 - **The build refuses a project source that is a link leading outside the
   roots.** The build's gate walks the project folder for hard links and
   directives, but a file in the tree that is a symlink or junction whose real
