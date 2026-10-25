@@ -41,7 +41,7 @@ def Server(extra_args=(), env=None):
          # .dproj (RUN-022): los dos proyectos que esta bateria despliega a Linux64. Sin ella, cuatro checks del
          # deploy salian con RUN-009 desde c871556
          'DELPHI_MCP_REMOTE_RUN_PROJECTS': ';'.join(os.path.join(BASE, n, n + '.dproj')
-                                                    for n in ('DeployCli', 'DeployProd'))}
+                                                    for n in ('DeployCli', 'DeployProd', 'DeploySal', 'DeploySinCfg'))}
     e.update(env or {})
     return mc.Stdio(EXE, mc.entorno(e), nombre='deploy-adb-battery', args=extra_args)
 
@@ -322,6 +322,42 @@ check('deploy config=Prod: el manifiesto generado lleva el grupo de Prod (y los 
       "'Prod'" in _m and "'Debug'" in _m and "'Release'" in _m and 'Linux64\\Prod\\DeployProd' in _m,
       _m[:600] or out[:300])
 
+# A19 de la 1.23: el manifiesto MINIMO de un PAServer toma la carpeta de salida del build (set-output Compiled ->
+# Compiled\Linux64\Debug), por el mismo compositor que el de un manifiesto que ya existia; la escribia a mano en
+# Linux64\Debug
+SDIR = os.path.join(BASE, 'DeploySal')
+srv.call('delphi_create', {"kind": "project-console", "dir": SDIR, "name": "DeploySal"})
+SDPROJ = os.path.join(SDIR, 'DeploySal.dproj')
+srv.call('delphi_config', {"command": "add-platform", "platform": "Linux64", "project": SDPROJ})
+srv.call('delphi_config', {"command": "set-output", "project": SDPROJ, "output": "Compiled"})
+out = srv.call('delphi_build', {"project": SDPROJ, "platform": "Linux64", "config": "Debug",
+                                "target": "Deploy", "profile": "mcp-e2e-noprof"}, t=600)
+_ms = open(os.path.join(SDIR, 'DeploySal.deployproj'), encoding='utf-8-sig').read() \
+    if os.path.isfile(os.path.join(SDIR, 'DeploySal.deployproj')) else ''
+check('A19 deploy Linux64 con set-output: el manifiesto minimo despliega desde Compiled\\Linux64\\Debug (ROJO contra '
+      'r1222ca: Linux64\\Debug)', 'Compiled\\Linux64\\Debug\\DeploySal' in _ms and
+      'Include="Linux64\\Debug\\DeploySal"' not in _ms, _ms[:600] or out[:300])
+
+# A35 de la 1.23: un proyecto que NO declara configuraciones compila cualquiera (ConfigDelBuild), y su manifiesto solo
+# traia Debug y Release: un Deploy de otra no enviaba nada. Ahora lleva tambien la del build
+NDIR = os.path.join(BASE, 'DeploySinCfg')
+srv.call('delphi_create', {"kind": "project-console", "dir": NDIR, "name": "DeploySinCfg"})
+NDPROJ = os.path.join(NDIR, 'DeploySinCfg.dproj')
+srv.call('delphi_config', {"command": "add-platform", "platform": "Linux64", "project": NDPROJ})
+import re as _re
+_x = open(NDPROJ, encoding='utf-8-sig').read()
+_x = _re.sub(r'\s*<BuildConfiguration Include="[^"]*">.*?</BuildConfiguration>', '', _x, flags=_re.S)
+open(NDPROJ, 'w', encoding='utf-8-sig', newline='').write(_x)
+_v = mc.como_json(srv.call('delphi_config', {"command": "view", "project": NDPROJ}))
+check('fixture A35: el proyecto no declara configuraciones', not (_v.get('configurations') or []), _v.get('configurations'))
+out = srv.call('delphi_build', {"project": NDPROJ, "platform": "Linux64", "config": "Otra",
+                                "target": "Deploy", "profile": "mcp-e2e-noprof"}, t=600)
+_mn = open(os.path.join(NDIR, 'DeploySinCfg.deployproj'), encoding='utf-8-sig').read() \
+    if os.path.isfile(os.path.join(NDIR, 'DeploySinCfg.deployproj')) else ''
+check('A35 deploy config=Otra de un proyecto sin configuraciones: el manifiesto lleva su grupo (y los de siempre) '
+      '(ROJO contra r1222ca)', "'Otra'" in _mn and "'Debug'" in _mn and "'Release'" in _mn and
+      'Linux64\\Otra\\DeploySinCfg' in _mn, _mn[:600] or out[:300])
+
 # ====================== deploy Android: full staging generation ===========
 # con la zona de biblioteca APAGADA (un workspace con nombre que no la declara):
 # la semilla de ObjRepos es de la instalacion del IDE y se lee por la puerta con
@@ -402,6 +438,23 @@ check('config: OutputExt=mx en Android64 Debug', mc.abre(out, 'SN_CFG_PROPERTY_P
 out = srv.call('delphi_build', {"project": FDPROJ, "platform": "Android64", "config": "Debug"}, t=600)
 check('build Android con OutputExt=mx: output es libDeployFmx.mx, el que deja el compilador (ROJO contra r1222r: '
       'no daba output)', (mc.como_json(out).get('output') or '').endswith('\\libDeployFmx.mx'), out[:300])
+
+# A19 de la 1.23: con set-output Compiled el build de Android lo deja TODO (AndroidManifest.xml, sus .xml de
+# recursos, lib<p>.so) en Compiled\Android64\Debug, y el manifiesto generado lo buscaba en Android64\Debug: el Deploy
+# fallaba con "Required local file Android64\Debug\AndroidManifest.xml not found" (medido contra r1222ca)
+ADIR = os.path.join(BASE, 'DeployAndOut')
+srv.call('delphi_create', {"kind": "project-fmx", "dir": ADIR, "name": "DeployAndOut"})
+ADPROJ = os.path.join(ADIR, 'DeployAndOut.dproj')
+srv.call('delphi_config', {"command": "add-platform", "project": ADPROJ, "platform": "Android64"})
+srv.call('delphi_config', {"command": "set-output", "project": ADPROJ, "output": "Compiled"})
+out = srv.call('delphi_build', {"project": ADPROJ, "platform": "Android64", "config": "Debug",
+                                "target": "Deploy"}, t=600)
+_ma = open(os.path.join(ADIR, 'DeployAndOut.deployproj'), encoding='utf-8-sig').read() \
+    if os.path.isfile(os.path.join(ADIR, 'DeployAndOut.deployproj')) else ''
+check('A19 deploy Android con set-output: el manifiesto toma la carpeta del build y el Deploy encuentra su '
+      'AndroidManifest.xml (ROJO contra r1222ca)',
+      'Compiled\\Android64\\Debug\\AndroidManifest.xml' in _ma and 'Compiled\\Android64\\Debug\\libDeployAndOut.so' in _ma
+      and 'Required local file' not in out, (_ma[:400], out[:300]))  # (en el JSON la comilla va escapada)
 
 # 2ai de la 1.18.2: por stdio no hay enlace de descarga, y una captura con
 # inline=false sin out= se quedaba en nuestra casa sin nadie que la recogiera.

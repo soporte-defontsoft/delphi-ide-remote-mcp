@@ -1068,6 +1068,17 @@ function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): TA
   Nunca pisa un valor declarado: solo se pregunta por lo que falta. }
 function BuildOutputDefault(const ADprojPath, APlatform, AConfig: string): TBuildOutputDir;
 
+{ LA carpeta del binario de ESTE build (plataforma y config) como la declara
+  el .dproj ADprojXml: su DCC_ExeOutput efectivo, IDE_OUTPUT_DEFAULT si no lo
+  declara, con sus macros por EL expansor (ADir, la carpeta del proyecto; ABase,
+  su nombre). Relativa si el .dproj la da relativa ('.\Compiled\Android64\Debug').
+  Ahi deja el build todo lo que se despliega: en Android tambien su
+  AndroidManifest.xml y sus .xml de recursos (medido el 25-oct-2026). La
+  componian BuildOutputDefault y el manifiesto de un despliegue cada uno, y los
+  generadores minimo y de Android la escribian a mano como $(Platform)\$(Config):
+  con una carpeta propia el Deploy no encontraba nada (A19 de la 1.23). }
+function SalidaDelBinario(const ADprojXml, ADir, ABase, APlatform, AConfig: string): string;
+
 { True si el build APlatform/AConfig de ADprojPath enlaza con paquetes en
   tiempo de ejecucion (UsePackages=true en su valor EFECTIVO, en el .dproj o
   en lo que importa del proyecto): el exe cargara .bpl de fuera al
@@ -4052,9 +4063,17 @@ begin
     Result.Value := IDE_OUTPUT_DEFAULT;
   Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
-  Cand := ExpandOutputMacros(Result.Value, Dir, Base, APlatform, AConfig).Trim;
+  Cand := SalidaDelBinario(Chain[0], Dir, Base, APlatform, AConfig); // EL compositor (A19)
   if Cand <> '' then
     Result.Dir := ResuelveSalida(Cand, Result.Value, Result.Value, Dir);
+end;
+
+function SalidaDelBinario(const ADprojXml, ADir, ABase, APlatform, AConfig: string): string;
+begin
+  Result := EffectiveProperty(ADprojXml, 'DCC_ExeOutput', APlatform, AConfig).Trim;
+  if Result = '' then
+    Result := IDE_OUTPUT_DEFAULT;
+  Result := ExpandOutputMacros(Result, ADir, ABase, APlatform, AConfig).Trim;
 end;
 
 function UsaPaquetesEnEjecucion(const ADprojPath, APlatform, AConfig: string): Boolean;

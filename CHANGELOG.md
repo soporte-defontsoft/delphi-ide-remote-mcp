@@ -133,6 +133,20 @@ the MCP `initialize` response (`serverInfo.version`).
   `delphi_textedit` reports the encoding of what it left on disk, not the one
   it read: the first accent of an ASCII text is written in that of a new file
   of its class. No byte changes (`tests/test_delphi_patch.py`).
+- **A deployment manifest the server generates looks for the build where the
+  build left it.** With an output folder of its own (`delphi_config
+  set-output Compiled`), an Android build leaves everything - its
+  `AndroidManifest.xml`, its resource `.xml` files and `lib<project>.so` -
+  in `Compiled\Android64\Debug`, and the generated manifest looked for them
+  in `Android64\Debug`: the Deploy failed with "Required local file
+  Android64\Debug\AndroidManifest.xml not found" (measured). The minimal
+  manifest of a PAServer platform had the same folder written by hand. The
+  output folder of a build has one composer (`Lsp.Dproj.SalidaDelBinario`),
+  shared by the build's own output and the three manifest generators, and the
+  minimal one writes the same entry as one added to an existing manifest.
+  And a project that declares no configurations - which builds any - gets
+  the group of the configuration it deploys, not only Debug and Release
+  (`tests/test_deploy_adb.py`).
 - **A test never runs in a job without its limits.** `delphi_test` runs a
   test inside a Job Object (kill-on-close, a cap of 3 GiB per process and
   one on processes) and refuses to run it when the job cannot be created;

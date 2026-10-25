@@ -46,9 +46,12 @@ function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: strin
 { Generates the deployment manifest (.deployproj + its import line in the
   .dproj) when the project has none - minimal for PAServer platforms, the full
   staging map for Android; never touches an existing one. Exposed for
-  delphi_config add-deployfile, which needs a manifest to add entries to. }
+  delphi_config add-deployfile, which needs a manifest to add entries to.
+  AConfig: la del build que lo pide (delphi_build); un proyecto que no declara
+  configuraciones compila cualquiera, y su manifiesto la tiene que llevar
+  (A35 de la 1.23). }
 procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
-  out AGenerated: Boolean);
+  out AGenerated: Boolean; const AConfig: string = '');
 
 { Los <nombre>.sdk que el IDE tiene registrados para una plataforma. Expuesto
   porque delphi_config lo necesita para validar el SDK que se fija en un
@@ -852,19 +855,35 @@ end;
   fuego en los tres generadores: con otra (Prod) el deploy no enviaba nada y
   msbuild decia exito tras limpiar la carpeta del destino (medido el
   20-oct-2026 contra el Zorin). Un .dproj que no declara ninguna (anterior a
-  las configuraciones) se queda con las dos de siempre. }
-function ConfigsDelManifiesto(const ADprojXml: string): TArray<string>;
+  las configuraciones) se queda con las dos de siempre, y la del build que lo
+  pide (AConfig): ConfigDelBuild le deja compilar cualquiera, y sin su grupo el
+  deploy no enviaba nada (A35 de la 1.23). }
+function ConfigsDelManifiesto(const ADprojXml: string; const AConfig: string = ''): TArray<string>;
 begin
   Result := InfoDeDproj(ADprojXml).Compilables;
   if Length(Result) = 0 then
+  begin
     Result := ['Debug', 'Release'];
+    if (AConfig <> '') and (IndexText(AConfig, Result) < 0) then
+      Result := Result + [AConfig];
+  end;
 end;
 
-function AndroidDeployXml(const ADprojXml, AName, APlat, ABdsRoot: string;
+{ La carpeta del binario de ESTE build relativa al proyecto, como la escribe
+  el IDE en un DeployFile: EL compositor (Lsp.Dproj.SalidaDelBinario) sin el
+  '.\' de delante. La de los tres manifiestos (A19 de la 1.23). }
+function CarpetaDelDespliegue(const ADprojXml, ADir, AName, APlat, ACfg: string): string;
+begin
+  Result := SalidaDelBinario(ADprojXml, ADir, AName, APlat, ACfg);
+  if Result.StartsWith('.\') then
+    Result := Result.Substring(2);
+end;
+
+function AndroidDeployXml(const ADprojXml, ADir, AName, APlat, ABdsRoot: string;
   const AConfigs: TArray<string>): string;
 var
   SB: TStringBuilder;
-  Cfg, Libs, OutName, Entradas, Bin: string;
+  Cfg, Libs, OutName, Entradas, Bin, Salida: string;
   E: TApkEntry;
 
   procedure Add(const AInclude, ADir, AFile, ACls: string; ARequired: Boolean);
@@ -881,14 +900,18 @@ begin
     begin
       Entradas := '';
       // lo que deja el build por EL nombrador, como los otros manifiestos, y
-      // dentro del apk con el nombre que carga (LibreriaDelApk)
+      // dentro del apk con el nombre que carga (LibreriaDelApk). Todo en la
+      // carpeta de salida de ESE build (CarpetaDelDespliegue): con
+      // $(Platform)\$(Config) a mano, un set-output dejaba el Deploy sin
+      // AndroidManifest.xml (A19 de la 1.23, medido)
       Bin := LibreriaDelApk(AName);
-      Add(APlat + '\' + Cfg + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
+      Salida := CarpetaDelDespliegue(ADprojXml, ADir, AName, APlat, Cfg);
+      Add(Salida + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
         'ProjectAndroidManifest', True);
-      Add(APlat + '\' + Cfg + '\' + NombreDelBinario(ADprojXml, AName, APlat, Cfg), Libs, Bin,
+      Add(Salida + '\' + NombreDelBinario(ADprojXml, AName, APlat, Cfg), Libs, Bin,
         'ProjectOutput', True);
       for E in APK_RES do
-        Add(APlat + '\' + Cfg + '\' + E.Src, E.Dir, E.Name, E.Cls, False);
+        Add(Salida + '\' + E.Src, E.Dir, E.Name, E.Cls, False);
       for E in APK_BDS do
         if TFile.Exists(TPath.Combine(ABdsRoot, E.Src)) then
         begin
@@ -925,16 +948,11 @@ function OutputDeployEntry(const ADprojXml, ADir, APlat, ACfg, AName: string): s
 var
   OutDir, Ext, Include: string;
 begin
-  // la carpeta de salida de ESTE build (EffectiveProperty) y sus macros por
-  // EL expansor (ExpandOutputMacros): mezclaba los DCC_ExeOutput de TODOS los
-  // grupos (MergeProperty) y expandia a mano, y un proyecto con carpeta propia
-  // en otra plataforma podia desplegar desde esa (revisor del 21-oct-2026)
-  OutDir := EffectiveProperty(ADprojXml, 'DCC_ExeOutput', APlat, ACfg);
-  if OutDir.Trim = '' then
-    OutDir := IDE_OUTPUT_DEFAULT; // el '.\' se quita abajo
-  OutDir := ExpandOutputMacros(OutDir, ADir, AName, APlat, ACfg).Trim;
-  if OutDir.StartsWith('.\') then
-    OutDir := OutDir.Substring(2);
+  // la carpeta de salida de ESTE build, por EL compositor (CarpetaDelDespliegue):
+  // mezclaba los DCC_ExeOutput de TODOS los grupos (MergeProperty) y
+  // expandia a mano, y un proyecto con carpeta propia en otra plataforma podia
+  // desplegar desde esa (revisor del 21-oct-2026)
+  OutDir := CarpetaDelDespliegue(ADprojXml, ADir, AName, APlat, ACfg);
   // el nombre del binario por EL nombrador (OutputExt de esa plataforma y
   // config, como lo escribe el IDE en el DeployFile: App.x64.exe)
   Ext := NombreDelBinario(ADprojXml, AName, APlat, ACfg);
@@ -945,7 +963,7 @@ end;
 { Adds the ProjectOutput entries for APlat to an existing manifest that has
   none for it (empty or missing platform group). True when it changed. }
 function EnsurePlatformOutputEntries(const ADeployProj, ADprojPath, APlat,
-  AName: string): Boolean;
+  AName, AConfig: string): Boolean;
 var
   Enc, Xml, DprojXml, Entries: string;
   Cfg: string;
@@ -961,7 +979,7 @@ begin
           Exit;
   DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
-  for Cfg in ConfigsDelManifiesto(DprojXml) do
+  for Cfg in ConfigsDelManifiesto(DprojXml, AConfig) do
     Entries := Entries + OutputDeployEntry(DprojXml, ExtractFileDir(ADprojPath), APlat, Cfg, AName);
   // en el grupo de la plataforma, como lo deja el IDE (Lsp.Dproj)
   Xml := ConEntradasEnSuGrupo(Xml, APlat, Entries);
@@ -972,7 +990,7 @@ begin
 end;
 
 procedure EnsureDeployManifestNucleo(const ADprojPath, APlat, ABdsRoot: string;
-  out AGenerated: Boolean);
+  out AGenerated: Boolean; const AConfig: string);
 const
   // The exact line the IDE writes into every .dproj it saves. Projects
   // scaffolded by delphi_create (and some hand-written ones) lack it, and
@@ -983,7 +1001,7 @@ const
   // el Import que hace de ancla, por su Project
   ANCHOR_PROJECT = '$(BDS)\Bin\CodeGear.Delphi.Targets';
 var
-  F, N, Ext, Xml: string;
+  F, N, Xml: string;
   Cfg: string;
   Ancla: TTramoXml;
 begin
@@ -1074,7 +1092,7 @@ begin
   if TFile.Exists(F) then
   begin
     if SistemaDePlataforma(APlat) <> spAndroid then
-      AGenerated := EnsurePlatformOutputEntries(F, ADprojPath, APlat, N);
+      AGenerated := EnsurePlatformOutputEntries(F, ADprojPath, APlat, N, AConfig);
     Exit;
   end;
   if SistemaDePlataforma(APlat) = spAndroid then
@@ -1082,19 +1100,19 @@ begin
     // como lo escribe el IDE (el juez: UTF-8 con BOM, medido en sus
     // .deployproj): en ASCII un nombre de proyecto no ASCII salia con '?' en
     // el Include (P3-L1 de la 1.18.0)
-    EscribeTexto(F, AndroidDeployXml(Dproj, N, APlat, ABdsRoot, ConfigsDelManifiesto(Dproj)), ltJaula, ekUtf8Bom);
+    EscribeTexto(F, AndroidDeployXml(Dproj, ExtractFileDir(ADprojPath), N, APlat, ABdsRoot,
+      ConfigsDelManifiesto(Dproj, AConfig)), ltJaula, ekUtf8Bom);
     AGenerated := True;
     Exit;
   end;
   Xml := CabeceraDeManifiesto;
-  for Cfg in ConfigsDelManifiesto(Dproj) do
-  begin
-    // el nombre del binario de CADA config por EL nombrador (OutputExt)
-    Ext := NombreDelBinario(Dproj, N, APlat, Cfg);
-    // EL escritor del grupo de una plataforma y config (Lsp.Dproj)
+  for Cfg in ConfigsDelManifiesto(Dproj, AConfig) do
+    // EL escritor del grupo de una plataforma y config (Lsp.Dproj) con LA
+    // entrada del binario (OutputDeployEntry: su carpeta de salida y su nombre
+    // por sus compositores); se escribia aqui a mano en $(Platform)\$(Config)
+    // y sin su Configuration (A19 de la 1.23)
     Xml := Xml + '    ' + XmlGrupoDeDespliegue(DeployGroupCondition(APlat, Cfg),
-      XmlDeployFile(APlat + '\' + Cfg + '\' + Ext, '', N + '\', Ext, 'ProjectOutput', 1, True)) + #13#10;
-  end;
+      OutputDeployEntry(Dproj, ExtractFileDir(ADprojPath), APlat, Cfg, N)) + #13#10;
   Xml := Xml + '</Project>'#13#10;
   EscribeTexto(F, Xml, ltJaula, ekUtf8Bom); // como el de Android, arriba
   AGenerated := True;
@@ -1104,11 +1122,11 @@ end;
   escribe: el build lo tomaba solo con el suyo, y un delphi_edit del .dproj
   a la vez se pisaba con el import que se anade aqui (quinta revision). }
 procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
-  out AGenerated: Boolean);
+  out AGenerated: Boolean; const AConfig: string);
 begin
   EnterFileEdit;
   try
-    EnsureDeployManifestNucleo(ADprojPath, APlat, ABdsRoot, AGenerated);
+    EnsureDeployManifestNucleo(ADprojPath, APlat, ABdsRoot, AGenerated, AConfig);
   finally
     LeaveFileEdit;
   end;
@@ -2411,7 +2429,7 @@ begin
   begin
     ManifestFilled := TFile.Exists(ManifiestoDe(TPath.GetFullPath(ADprojPath)));
     EnsureDeployManifest(TPath.GetFullPath(ADprojPath), Plat, Info.RootDir,
-      ManifestNew);
+      ManifestNew, Cfg); // la config del build (A35)
     ManifestFilled := ManifestFilled and ManifestNew;
   end;
   // /p:DeviceId= reaches the deployment targets, but measured they only
