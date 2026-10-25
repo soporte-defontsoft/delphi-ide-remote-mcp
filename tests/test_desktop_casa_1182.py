@@ -11,7 +11,9 @@ temporal del servidor esta fuera de las raices. Medido contra el Zorin el
 11-oct-2026: DESK-019 en los dos (con GUARD-015 y GUARD-002 dentro).
 
 Necesita el Zorin encendido (perfil zorin-desktop, 192.168.1.177) con una
-sesion grafica: si no contesta, la bateria lo dice (NOTA) y solo mide D0c.
+sesion grafica, y que se pida (MCP_BATERIAS_DESTINO_REAL=1, V52 de la 1.23:
+una bateria no despliega su nodo en un destino real salvo que se le pida):
+si no se pide o no contesta, la bateria lo dice (NOTA) y solo mide D0c.
 Solo captura: nunca pulsa ni teclea en su escritorio. Por stdio la captura
 sin out= viaja EN LINEA (2ai): se mide por la respuesta (consumed) y por la
 carpeta del agente en nuestra casa.
@@ -108,7 +110,9 @@ try:
     r0 = srv.call('delphi_desktop', {'command': 'screenshot', 'profile': 'zz-no-existe', 'inline': False}, t=60)
     check('D0c inline=false sin out= por stdio, sin destino: CAPT-012 ANTES de la puerta de control remoto (2ai)',
           mc.abre(r0, 'SR_CAPTURE_SIN_SALIDA'), r0[:300])
-    st = srv.call('delphi_desktop', {'command': 'status', 'profile': PERFIL}, t=120)
+    # contra el Zorin, que recibiria el nodo de ESTE servidor, solo si se pide (V52)
+    pedido = mc.destino_real_pedido()
+    st = srv.call('delphi_desktop', {'command': 'status', 'profile': PERFIL}, t=120) if pedido else ''
     # vivo = su status dice reachable (desde la 1.22.1 un destino caido es reachable=false, no un fallo)
     vivo = mc.como_json(st).get('reachable') is True
     if vivo:
@@ -134,6 +138,10 @@ try:
 finally:
     srv.cierra()
 
+if not pedido:
+    print('NOTA no se mide contra el Zorin: una bateria no despliega su nodo en un destino real salvo que '
+          'se le pida (%s=1, V52); solo D0c' % mc.DESTINO_REAL)
+    mc.fin('desktop casa 1182', sin_checks='destino real no pedido (%s)' % mc.DESTINO_REAL)
 if not vivo:
     print('NOTA el Zorin (%s, %s) no contesta: la bateria no mide nada. %s' % (PERFIL, HOST, st[:200]))
     mc.fin('desktop casa 1182', sin_checks='el Zorin no contesta (perfil %s)' % PERFIL)

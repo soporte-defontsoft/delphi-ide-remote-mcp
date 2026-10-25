@@ -794,6 +794,16 @@ def check(name, ok, detail=''):
 # si lo hay: ni se busca el adb.exe ni se matan procesos por nombre.
 ADB_PUERTO = int(os.environ.get('ANDROID_ADB_SERVER_PORT') or 5037)
 SUITE = 'MCP_BATERIAS_SUITE'  # lo pone run_all: la suite limpia al final
+# V52 (25-oct-2026): una bateria NUNCA despliega lo suyo (el nodo, un proyecto) en un destino REAL -el Zorin
+# de David, un PAServer de verdad- salvo que quien la corre lo pida con esta variable a '1'. Dos veces una
+# bateria con un perfil real empujo SU nodo al Zorin, y produccion, que mira el sello una vez por sesion,
+# siguio con el nodo ajeno sin saberlo
+DESTINO_REAL = 'MCP_BATERIAS_DESTINO_REAL'
+
+
+def destino_real_pedido():
+    """True si quien corre la bateria pide medir contra un destino real (DESTINO_REAL=1)."""
+    return os.environ.get(DESTINO_REAL, '') == '1'
 
 
 def adb_vivo():
