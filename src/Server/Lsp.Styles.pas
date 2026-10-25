@@ -310,8 +310,14 @@ function LeeRc(const ATexto: string): TLecturaRc;
   compila una COPIA de la carpeta de estilos y fuera de ella no hay nada).
   '' = limpio. La escribio delphi_styles (Mcp.Tools.Styles.RcPathsDenied,
   25-ago-2026, medido con win.ini y el settings.ini del servidor dentro de un
-  .res); el build pregunta por el .rc de cada RcCompile con ella (1.21.2). }
-function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string = ''): string;
+  .res); el build pregunta por el .rc de cada RcCompile con ella (1.21.2).
+  ATextoTope: si va, es el texto del .rc TOPE ya en memoria (no se relee de
+  ARc); ARc solo da la carpeta base y el nombre. Lo usa CompilaRcEnContenedor
+  para juzgar el .rc que COMPONE el servidor (RcCompuesto) antes de compilarlo
+  -lo que de verdad ve brcc32-, sin una tercera lectura del original que abriria
+  una carrera (revisor V54, TOCTOU). }
+function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string = '';
+  const ATextoTope: string = ''): string;
 
 { EL escritor del .rc que compila brcc32 en delphi_styles: la inversa de LeeRc,
   una linea de lista (NOMBRE TIPO [banderas] fichero-entre-comillas) por cada
@@ -1460,7 +1466,8 @@ begin
   end;
 end;
 
-function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string): string;
+function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string;
+  const ATextoTope: string): string;
 var
   Seen: TStringList;
 
@@ -1483,11 +1490,16 @@ var
     if ReadPathDenied(AFile) <> '' then
       Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT,
         [TPath.GetFileName(AFile), TPath.GetFileName(ARc)]));
-    try
-      Txt := PatchLoadText(AFile, Enc);
-    except
-      Exit(MsgFmt(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
-    end;
+    // el TOPE ya leido en memoria (ATextoTope) no se relee: asi se juzga el
+    // texto que de verdad se va a compilar, no una lectura distinta (TOCTOU)
+    if (ADepth = 0) and (ATextoTope <> '') then
+      Txt := ATextoTope
+    else
+      try
+        Txt := PatchLoadText(AFile, Enc);
+      except
+        Exit(MsgFmt(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
+      end;
     Base := TPath.GetDirectoryName(TPath.GetFullPath(AFile));
     // EL lector del .rc (LeeRc), por tokens como brcc32: la regex de linea
     // de antes no veia 'X RCDATA DISCARDABLE "f"', un fichero en la linea de

@@ -1384,7 +1384,12 @@ begin
         // fuera. El gate de la ruta del proyecto no veia estos; los de IN ya
         // van por ReadPathDenied (V14), y uno a DENTRO (real en la jaula) no
         // cae aqui (V3 de la 1.23)
-        if ReadPathDenied(SF) <> '' then
+        // ReadPathDenied resuelve la ruta REAL (coste): solo hace falta para un
+        // ENLACE, lo unico del arbol que puede salir -WalkFiles ya garantiza que
+        // un fichero normal esta dentro de las raices, y el enlace duro lo vio la
+        // linea de arriba-. Asi el gate no paga RealPath por cada .pas de un
+        // arbol grande (revisor V3)
+        if EsEnlace(SF) and (ReadPathDenied(SF) <> '') then
           Exit(MsgFmt(SR_BUILD_FUENTE_ENLACE_FUERA_FMT, [TPath.GetFileName(SF)]));
         if EsRutaDeFuente(SF) and not Files.Contains(SF) then
           Files.Add(SF);

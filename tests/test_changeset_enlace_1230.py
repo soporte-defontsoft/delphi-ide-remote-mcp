@@ -14,10 +14,11 @@ de resolver el enlace). Borrar un enlace COMO enlace es del operador
 
 Necesita modo desarrollador (crear un symlink de fichero); si no, NOTA.
 
-  A1 (A18-M1) changeset delete de un symlink a FUERA: NO se compromete (GUARD-001
-     al apilar) y el contenido de fuera NO entra en la papelera   [vigila lo cerrado]
+  A1 (A18-M1) changeset delete de un symlink a FUERA: el STAGE lo niega (GUARD-001,
+     SR_JAIL_LINK_FMT) y el contenido de fuera NO entra en la papelera   [vigila lo cerrado]
   A2 (guarda) changeset delete de un .txt NORMAL: se compromete
-  A3 (guarda) changeset delete de un symlink a un .txt de DENTRO: se compromete
+  A3 (guarda) changeset delete de un symlink a un .txt de DENTRO: se compromete y
+     su DESTINO (dentro-real.txt) sigue (borrar el enlace no toca su objetivo)
 
 Uso:  python tests/test_changeset_enlace_1230.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -42,11 +43,11 @@ def cs(**kw):
 
 def borra_cs(path):
     i = mc.id_changeset(cs(command='begin'))
-    cs(command='stage', id=i, kind='delete', path=path)
+    st = cs(command='stage', id=i, kind='delete', path=path)
     cs(command='preview', id=i)
     cm = cs(command='commit', id=i)
     cs(command='rollback', id=i)  # no-op si ya se commiteo; limpia si fallo
-    return cm
+    return st, cm
 
 
 def fuga_en_papelera():
@@ -72,21 +73,25 @@ try:
     if not puede_symlink(link, os.path.join(FUERA, 'secret.txt')):
         print('NOTA: no se puede crear un symlink de fichero (modo desarrollador apagado): A18-M1 no se mide')
     else:
-        cm = borra_cs(link)
-        check('A1 (A18-M1) changeset delete de un symlink a FUERA: no se compromete y nada de fuera en la papelera',
-              'CHSET-025' not in cm and not fuga_en_papelera() and os.path.lexists(link), cm[:300])
+        st, cm = borra_cs(link)
+        # el STAGE lo niega por GUARD-001 (el enlace real sale): afirmarlo, no
+        # solo "no se commiteo" (revisor A18-M1)
+        check('A1 (A18-M1) delete de un symlink a FUERA: el STAGE lo niega (GUARD-001), nada de fuera en la papelera, el enlace sigue',
+              mc.abre(st, 'SR_JAIL_LINK_FMT') and not fuga_en_papelera() and os.path.lexists(link), st[:300])
         normal = os.path.join(JAIL, 'normal.txt')
         open(normal, 'w').write('contenido normal\n')
-        cm = borra_cs(normal)
+        st, cm = borra_cs(normal)
         check('A2 (guarda) changeset delete de un .txt normal: se compromete',
-              'CHSET-025' in cm and not os.path.exists(normal), cm[:300])
+              mc.es(cm, 'SN_CHANGESET_COMMITTED_FMT') and not os.path.exists(normal), cm[:300])
         dentro = os.path.join(JAIL, 'dentro-real.txt')
         open(dentro, 'w').write('dentro\n')
         linkdentro = os.path.join(JAIL, 'enlace-dentro.txt')
         os.symlink(dentro, linkdentro)
-        cm = borra_cs(linkdentro)
-        check('A3 (guarda) changeset delete de un symlink a DENTRO: se compromete',
-              'CHSET-025' in cm and not os.path.lexists(linkdentro), cm[:300])
+        st, cm = borra_cs(linkdentro)
+        # borrar el ENLACE no toca su destino: dentro-real.txt sigue (revisor A18-M1)
+        check('A3 (guarda) delete de un symlink a DENTRO: se compromete y su DESTINO (dentro-real.txt) sigue',
+              mc.es(cm, 'SN_CHANGESET_COMMITTED_FMT') and not os.path.lexists(linkdentro)
+              and os.path.exists(dentro), cm[:300])
 finally:
     s.cierra()
 mc.borra(BASE)

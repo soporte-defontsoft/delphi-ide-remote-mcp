@@ -927,12 +927,30 @@ begin
       end);
     // V54: brcc32 compila el .rc que ESCRIBE el servidor desde la lista leida
     // (RcCompuesto), no el texto del agente: a su preprocesador no le llega nada
-    // suyo. La lista ya la verifico DerivadosDenegados / el lint (RcNoEsLista).
+    // suyo. Se lee el original UNA vez y se compone; lo COMPUESTO -lo que de
+    // verdad compila brcc32- se pasa por LA puerta del .rc (RcLecturasDenegadas
+    // sobre ESE texto, no una tercera lectura), asi ninguna entrada que
+    // RcCompuesto emita llega a brcc32 sin juzgar. Cierra la carrera de releer
+    // el original tras el juicio de DerivadosDenegados: la puerta vale para lo
+    // que se COMPILA, no para lo que se miro (revisor V54, TOCTOU).
     var EncRc: string;
-    // por LA puerta de escritura (ltTemporal, la casa del servidor) y en la ANSI
-    // MEDIDA (ekAnsi: PaginaAnsi, la que lee brcc32), no a pelo (norma 6, paisaje)
-    EscribeTexto(TPath.Combine(Etapa, TPath.GetFileName(ARc)),
-      RcCompuesto(LeeRc(PatchLoadText(ARc, EncRc))), ltTemporal, ekAnsi);
+    var RcEtapa := TPath.Combine(Etapa, TPath.GetFileName(ARc));
+    var Compuesto := RcCompuesto(LeeRc(PatchLoadText(ARc, EncRc)));
+    var NegRc := RcLecturasDenegadas(ARc, ADir, Compuesto);
+    if NegRc <> '' then
+      Exit(NegRc);
+    try
+      // por LA puerta de escritura (ltTemporal, la casa del servidor) y en la
+      // ANSI MEDIDA (ekAnsi: PaginaAnsi, la que lee brcc32), no a pelo (norma 6)
+      EscribeTexto(RcEtapa, Compuesto, ltTemporal, ekAnsi);
+    except
+      // un NOMBRE o ruta que el .rc lista con un caracter que la pagina ANSI de
+      // la maquina no guarda: brcc32 lee el .rc en esa pagina, asi que no cabe.
+      // Su mensaje ya es la negativa entera con codigo (como la tanda y el
+      // changeset): DENIED, no el INTERNAL del catch-all de GestoDeEstilos
+      on E: ECaracterNoCabe do
+        Exit(E.Message);
+    end;
     ResEtapa := TPath.Combine(Etapa, 'r.res');
     try
       // rutas RELATIVAS a la etapa (el cwd del proceso): brcc32 solo ve la
