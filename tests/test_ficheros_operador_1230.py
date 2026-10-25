@@ -46,10 +46,16 @@ test_contratos_1222, test_puerta_leer y test_resultados):
   C7  la nota de una MEZCLA (move y copy) cuenta lo que entro y no lo que ya
       estaba: un .dproj del destino con una ruta que sale de el no se movio
       (salia en MOVE-023; medido el 25-oct-2026, sonda_mezcla_nota)
+  C8  renombrar una unit cambiando solo las mayusculas, con su form al lado: el
+      par no se parte y no hay FILE-051 (r1222cf decia que se iba sin su .dfm;
+      medido en vivo el 26-oct-2026); otro nombre en la misma carpeta, si, y
+      nombra el form como esta en el disco (UFicha.dfm, no UFICHA.dfm)
 
 Mutante: produccion r1222ce, 11 rojos: W1-W5 y W7 (GUARD-024 a todo comodin), C1
 (GUARD-024), C2-C4 (FILE-025: ni mezcla ni mayusculas) y C5 (MOVE-012 INTERNAL a
 mitad). W6 y C6 son guardas: GUARD-024 ya era asi, y la copia es de la fase 2.
+C8 y su control, rojos contra r1222cf: el FILE-051 de mas, y el form nombrado
+UFICHA.dfm, compuesto desde la unit (sonda_par_nombre).
 
 Uso:  python tests/test_ficheros_operador_1230.py [exe]
 """
@@ -225,6 +231,19 @@ try:
           mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.abre(r2, 'SK_MOVE_MOVIDO_FMT') and
           sorted(n for n in os.listdir(os.path.join(C, 'may')) if n != mc.PAPELERA) == ['ABC.txt', 'CARPETA'] and
           os.listdir(os.path.join(C, 'may', 'CARPETA')) == ['dentro.txt'], (r[:200], r2[:200]))
+    escribe(os.path.join(C, 'par', 'UFicha.pas'), 'unit UFicha;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
+    escribe(os.path.join(C, 'par', 'UFicha.dfm'), 'object FormUFicha: TFormUFicha\nend\n')
+    r = srv.call('delphi_move', {'path': os.path.join(C, 'par', 'UFicha.pas'),
+                                 'dest': os.path.join(C, 'par', 'UFICHA.pas')})
+    check('C8 renombrar una unit cambiando solo las mayusculas, con su form al lado: sin FILE-051',
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and not mc.tiene(r, mc.id_de('SN_FILE_PAR_PARTIDO_FMT')) and
+          sorted(n for n in os.listdir(os.path.join(C, 'par')) if n != mc.PAPELERA) == ['UFICHA.pas', 'UFicha.dfm'],
+          r[:600])
+    r = srv.call('delphi_move', {'path': os.path.join(C, 'par', 'UFICHA.pas'),
+                                 'dest': os.path.join(C, 'par', 'UOtra.pas')})
+    check('C8 control: a otro nombre en la misma carpeta, el form se queda y FILE-051 lo dice',
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.tiene(r, mc.id_de('SN_FILE_PAR_PARTIDO_FMT')) and
+          'UFicha.dfm' in r, r[:600])
     hondo = os.path.join(C, 'h', 'x' * 60, 'y' * 60)
     escribe(os.path.join(hondo, 'z' * 40 + '.txt'))
     largo = os.path.join(C, 'destino' + 'q' * 90)

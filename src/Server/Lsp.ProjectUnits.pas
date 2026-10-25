@@ -3920,22 +3920,38 @@ end;
 { El AVISO del par (V19; David, 25-oct-2026: "hablamos de avisar como mucho y
   de permitir form.*"): una unit que se fue sin su .dfm/.fmx, o un designer sin
   su unit (el IDE los lee lado a lado: la directiva R de la unit), con la
-  salida: el comodin. AHechos: lo que se movio, se copio o se borro; AVerbo,
-  que se le hizo. }
-function AvisosDelPar(const AHechos: TArray<string>; const AVerbo: string): string;
+  salida: el comodin. AHechos: lo que se movio, se copio o se borro; ADestinos,
+  adonde llego cada uno (vacio en un borrado); AVerbo, que se le hizo. El par no
+  se parte si el que se queda es el MISMO que lo que llego lee a su lado: un
+  renombrado de solo mayusculas (medido en vivo con r1222cf el 26-oct-2026:
+  UFicha.pas -> UFICHA.pas decia que se iba sin su UFicha.dfm). }
+function AvisosDelPar(const AHechos, ADestinos: TArray<string>; const AVerbo: string): string;
 begin
   Result := '';
-  for var F in AHechos do
+  for var I := 0 to High(AHechos) do
   begin
+    var F := AHechos[I];
+    // el otro del par donde estaba y el que leera a su lado lo que llego (EL
+    // nombrador del par: DesignersDeUnidad / UnidadDeDesigner, en su orden)
     var Otros: TArray<string> := [];
+    var Alli: TArray<string> := [];
     if SameText(TPath.GetExtension(F), '.pas') then
-      Otros := DesignersDeUnidad(F)
+    begin
+      Otros := DesignersDeUnidad(F);
+      if I < Length(ADestinos) then
+        Alli := DesignersDeUnidad(ADestinos[I]);
+    end
     else if EsRutaDeDesigner(F) then
+    begin
       Otros := [UnidadDeDesigner(F)];
-    for var O in Otros do
-      if TFile.Exists(O) and not MatchText(O, AHechos) then
+      if I < Length(ADestinos) then
+        Alli := [UnidadDeDesigner(ADestinos[I])];
+    end;
+    for var K := 0 to High(Otros) do
+      if TFile.Exists(Otros[K]) and not MatchText(Otros[K], AHechos) and
+         not ((K < Length(Alli)) and MismaEntrada(Otros[K], Alli[K])) then
         Result := Result + #10 + MsgFmt(SN_FILE_PAR_PARTIDO_FMT, [TPath.GetFileName(F), AVerbo,
-          TPath.GetFileName(O), TPath.GetDirectoryName(O),
+          TPath.GetFileName(ComoEnDisco(Otros[K])), TPath.GetDirectoryName(Otros[K]),
           TPath.Combine(TPath.GetDirectoryName(F), TPath.GetFileNameWithoutExtension(F) + '.*')]);
   end;
 end;
@@ -3952,7 +3968,10 @@ begin
   else
     Verbo := MsgText(SF_PAR_BORRADO);
   end;
-  Result := AvisosDelPar(AViejos, Verbo);
+  if AMudanza = mzBorra then
+    Result := AvisosDelPar(AViejos, [], Verbo)
+  else
+    Result := AvisosDelPar(AViejos, ANuevos, Verbo);
   // lo que sale de la papelera era una copia: no hay proyecto que la liste
   Viejos := [];
   Nuevos := [];

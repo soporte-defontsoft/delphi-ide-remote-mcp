@@ -337,6 +337,11 @@ const
   mano, extension a extension, Mcp.Tools.FileOps (el borrado, el mover y su
   gemelo) y Lsp.ProjectUnits (2.2 de la 1.18.0). }
 function DesignersDeUnidad(const AUnidad: string): TArray<string>;
+{ APath con el nombre de su ultimo trozo como lo tiene el DISCO (las
+  mayusculas con que se creo); APath tal cual si no existe. Lo pregunta
+  tambien la nota del par, que nombraba UFICHA.dfm (compuesto desde la unit)
+  un UFicha.dfm del disco (26-oct-2026). }
+function ComoEnDisco(const APath: string): string;
 { Si APath es un designer por su extension (DESIGNER_EXTS: .dfm, .fmx), sea
   de texto o binario. EL predicado: estaba escrito a mano con su lista en
   nueve sitios (4.1 de la 1.18.0, al pasarselo al detector). }
