@@ -1375,10 +1375,17 @@ begin
     // la pregunta del enlace duro es de cada fichero (.pas, .inc, .res,
     // .ico...), y de los fuentes, ademas, sus directivas
     if TDirectory.Exists(Base) then
-      for var SF in WalkFiles(Base, '*') do
+      for var SF in WalkFiles(Base, ['*'], False, True, nil, True) do
       begin
         if EnlaceDuroIlegible(SF) <> '' then
           Exit(MsgFmt(SR_BUILD_ENLACE_DURO_FMT, [TPath.GetFileName(SF)]));
+        // ...y un fichero del arbol que es un ENLACE cuyo destino REAL sale de
+        // las raices (un symlink o una junction): dcc lo sigue y leeria el de
+        // fuera. El gate de la ruta del proyecto no veia estos; los de IN ya
+        // van por ReadPathDenied (V14), y uno a DENTRO (real en la jaula) no
+        // cae aqui (V3 de la 1.23)
+        if ReadPathDenied(SF) <> '' then
+          Exit(MsgFmt(SR_BUILD_FUENTE_ENLACE_FUERA_FMT, [TPath.GetFileName(SF)]));
         if EsRutaDeFuente(SF) and not Files.Contains(SF) then
           Files.Add(SF);
       end;

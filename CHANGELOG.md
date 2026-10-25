@@ -37,6 +37,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The build refuses a project source that is a link leading outside the
+  roots.** The build's gate walks the project folder for hard links and
+  directives, but a file in the tree that is a symlink or junction whose real
+  target is outside the roots was skipped by the walker (it drops links it
+  cannot read), so the gate never saw it - while `dcc`, which follows the link,
+  would compile that outside file into the binary (measured: a unit used by
+  `uses` that was a symlink to an outside `.pas` compiled with the server's
+  permissions). The `in` path of the `.dpr` is already judged; now the folder
+  walk also hands such links to the gate, and a source whose real target is
+  outside is refused (`BUILD-060`). A link whose target is inside the roots
+  still compiles (`tests/test_build_symlink_1230.py`).
+
 - **`delphi_styles build` compiles a resource script the server wrote, not the
   agent's.** The `.rc` that names the compiled style resources went to `brcc32`
   as the agent wrote it, and `brcc32` has a preprocessor (`#define`, `##`) that

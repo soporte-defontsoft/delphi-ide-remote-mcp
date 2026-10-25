@@ -6491,6 +6491,12 @@ const
     'this server lets you read: the compiler would read it through this ' +
     'name. Replace it with a copy of something you can read.';
 
+  SR_BUILD_FUENTE_ENLACE_FUERA_FMT =
+    '[BUILD-060 DENIED] I will not build this. %s, in the project''s folder, ' +
+    'is a LINK (a symlink or a junction) whose real target is OUTSIDE what ' +
+    'this server lets you read: the compiler follows the link and would read ' +
+    'that file. Replace it with a copy of something you can read.';
+
   SN_BUILD_LOCKED_OUTPUT =
     '[BUILD-032] F2039 "Could not create output file" is almost never a ' +
     'fault in your code: the binary this build wants to write is OPEN. ' +

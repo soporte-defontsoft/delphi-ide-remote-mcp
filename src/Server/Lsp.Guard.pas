@@ -531,7 +531,8 @@ function EnlaceAjenoEn(const ADir: string; AEscribe: Boolean;
   sella antes de mirar: lo que cambie despues mueve el sello). }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
   AConPapelera: Boolean = False; ARecursivo: Boolean = True;
-  const AAlEntrar: TVisitaRuta = nil): TArray<string>; overload;
+  const AAlEntrar: TVisitaRuta = nil;
+  AIncluyeEnlacesFuera: Boolean = False): TArray<string>; overload;
 function WalkFiles(const ADir, AMask: string;
   AConPapelera: Boolean = False): TArray<string>; overload;
 
@@ -3529,7 +3530,8 @@ end;
   classic limit and killed an entire delphi_list. One bad folder must never
   hide the rest of the tree. }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
-  AConPapelera, ARecursivo: Boolean; const AAlEntrar: TVisitaRuta): TArray<string>;
+  AConPapelera, ARecursivo: Boolean; const AAlEntrar: TVisitaRuta;
+  AIncluyeEnlacesFuera: Boolean): TArray<string>;
 var
   Acc: TStringList;
   Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
@@ -3562,7 +3564,10 @@ var
       // lectura no deja leer (auditoria 25-sep-2026).
       for var Mascara in AMasks do
         for F in TDirectory.GetFiles(D, Mascara, TSearchOption.soTopDirectoryOnly) do
-          if not EsEnlace(F) or EnlaceLegible(F) then
+          // AIncluyeEnlacesFuera: la puerta del build quiere VER un fichero que
+          // es un enlace cuyo destino sale (dcc lo seguiria), no saltarlo como
+          // el copiador; lo juzga quien llama (ReadPathDenied). V3 de la 1.23
+          if not EsEnlace(F) or EnlaceLegible(F) or AIncluyeEnlacesFuera then
             Anade(F);
     except
       // unreadable folder: skip its files, still try its children
