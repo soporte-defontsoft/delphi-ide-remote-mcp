@@ -120,6 +120,16 @@ try:
     check('W1b ...y NO crea nada fuera de la jaula (ni la carpeta del out=)',
           nada_en(FUERA),
           'hay algo bajo %s: %s' % (FUERA, os.listdir(FUERA)))
+    # W1c (V6 de la 1.23): la pre-comprobacion del out= era la jaula a secas
+    # (PathDenied): uno dentro de la PAPELERA la pasaba, el gesto iba al
+    # destino y la negativa llegaba despues (un agente que reintenta toca dos
+    # veces). Ahora pregunta lo que CaptureTarget (WriteTargetDenied), antes
+    # del perfil
+    t0 = time.time()
+    a = call('delphi_desktop', {'command': 'tap', 'x': '1', 'y': '1', 'profile': 'x',
+                                'out': os.path.join(JAIL, mc.PAPELERA, 'capturas') + os.sep})
+    check('W1c delphi_desktop niega un out= en la papelera ANTES del gesto (sin ir al perfil)',
+          mc.es(a, 'SR_GUARD_DEAD_TRASH') and time.time() - t0 < 10, '%.1f s %s' % (time.time() - t0, a[:280]))
 
     # ------------------------------------------------------------------ W2
     # (El alias delphi_adb_linux ya no existe; W1 cubre la unica tool.)

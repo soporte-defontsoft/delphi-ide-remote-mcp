@@ -47,6 +47,17 @@ the MCP `initialize` response (`serverInfo.version`).
   full battery run twice saw a stop go past the harness's 15 s). The thread
   is raised to normal priority before the wait: 0.1 s
   (`tests/test_atomos_1202.py`, C1).
+- **An agent's `out=` is judged by one question, before anything runs.**
+  `delphi_desktop` checked its `out=` with the jail alone before the gesture:
+  one inside the trash passed, the tap or the typing reached the target, and
+  the refusal came afterwards. `delphi_adb logcat` let its `out=` write into
+  an old `__delphi-temp` left in a root, which every other writer refuses
+  since 1.18.2. Both, the captures and `delphi_git worktree` now ask the one
+  gate for a destination the agent names (`WriteTargetDenied`, which now
+  includes the read-only mode the mixed tools added by hand), and the writer
+  that places a product asks it too, so a caller that forgets cannot place
+  anything in a dead folder (`tests/test_round43.py` W1c,
+  `tests/test_deploy_adb.py`).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

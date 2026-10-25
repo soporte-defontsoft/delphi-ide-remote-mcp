@@ -308,21 +308,13 @@ begin
     // out= vetted BEFORE touching adb (fail fast)
     if Params.Out.Trim <> '' then
     begin
-      // out= ESCRIBE: la puerta de escribir (solo lectura incluida), no la de
-      // la jaula a secas (tercera revision, 27-sep-2026)
-      Denied := EscrituraDenegada(Params.Out);
-      // ...y nunca dentro de la papelera ni de las copias del IDE (lo muerto
-      // que NO es temporal): la temporal si vale, es sitio para volcados
-      // (sexta revision: se podia escribir dentro de __delphi-patch)
-      if (Denied = '') and not EnTemporal(Params.Out) then
-        Denied := DeadCopyWriteDenied(Params.Out);
-      // ...y lo que EL escritor (ColocaContenido) negaria al colocar, por SU
-      // pregunta y no tras el logcat: una CARPETA donde va el fichero, la
-      // carpeta, el atributo de solo lectura, una ruta que con su temporal no
-      // cabe (revisor de P4; era una copia a mano y sin la carpeta: 2s de la
-      // 1.18.2)
-      if Denied = '' then
-        Denied := ColocacionDenegada(Params.Out.Trim);
+      // out= ESCRIBE: lo que EL escritor (ColocaContenido) negaria al colocar,
+      // por SU pregunta y no tras el logcat - la puerta de escribir (solo
+      // lectura incluida), las carpetas muertas, una CARPETA donde va el
+      // fichero, el atributo de solo lectura, una ruta que con su temporal no
+      // cabe (revisor de P4; 2s de la 1.18.2). Se componia aqui a mano y
+      // admitia la temporal vieja de una raiz (V6 de la 1.23)
+      Denied := ColocacionDenegada(Params.Out.Trim);
       if Denied <> '' then
         Exit(Denied);
       if not (Params.Out.Trim.ToLower.EndsWith('.txt') or

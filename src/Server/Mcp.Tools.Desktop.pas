@@ -307,10 +307,13 @@ begin
     que falla rapido y no hace falta un destino vivo para verlo fallar.
     Justo debajo se comprueba "project" con esta misma llamada desde siempre:
     era uno de dos. Su gemela de Windows tenia el mismo hueco (2026-09-21), y
-    delphi_adb -misma idea, mismo nombre de parametro- si lo comprobaba. }
+    delphi_adb -misma idea, mismo nombre de parametro- si lo comprobaba.
+    Era la jaula a secas (PathDenied): un out= en la papelera la pasaba, el
+    gesto iba al destino y la negativa llegaba despues. Ahora la pregunta de
+    CaptureTarget, la de todo destino del agente (V6 de la 1.23). }
   if Params.Out_.Trim <> '' then
   begin
-    Result := PathDenied(Params.Out_.Trim);
+    Result := WriteTargetDenied(Params.Out_.Trim);
     if Result <> '' then
       Exit;
   end;

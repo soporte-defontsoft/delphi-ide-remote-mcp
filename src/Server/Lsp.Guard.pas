@@ -855,15 +855,20 @@ const
 
 function EnCopiaDelIde(const APath: string): Boolean;
 
-{ EL gate de DESTINO de escritura: la jaula (PathDenied) y las carpetas
-  muertas (DeadCopyWriteDenied), en ese orden. Todo escritor que cree o
-  reescriba un fichero en una ruta que elige el agente pasa por aqui. Hasta
-  el 25-sep-2026 cada escritor escribia el par a mano (cuatro copias) y dos
-  no lo hacian: el out= de las capturas (90 capturas, 66 MB acumulados en
-  una __delphi-temp anidada que la purga no alcanza) y el destino de
-  delphi_move. El proximo escritor llama a esta y ya esta. Queda fuera a
-  proposito el out= del logcat de adb: su sitio natural ES un temporal, y
-  rechazarlo empujaria los volcados dentro del proyecto (David, 25-sep-2026). }
+{ EL gate de DESTINO de escritura: la puerta de escribir con el modo de solo
+  lectura (EscrituraDenegada), las carpetas muertas (DeadCopyWriteDenied) y
+  la medida del escritor, en ese orden. Todo escritor que cree o reescriba un
+  fichero en una ruta que elige el agente pasa por aqui. Hasta el 25-sep-2026
+  cada escritor escribia el par a mano (cuatro copias) y dos no lo hacian: el
+  out= de las capturas (90 capturas, 66 MB acumulados en una __delphi-temp
+  anidada que la purga no alcanza) y el destino de delphi_move. El proximo
+  escritor llama a esta y ya esta. El modo de solo lectura, desde el
+  25-oct-2026 (V6 de la 1.23): las tools mixtas (capturas, git worktree) lo
+  sumaban a mano delante, y la pre-comprobacion de delphi_desktop no lo
+  preguntaba. El out= del logcat ya no queda fuera: su excepcion (David,
+  25-sep-2026: su sitio natural era un temporal) es de cuando la temporal era
+  la del agente en su raiz; desde el 2af de la 1.18.2 es un resto que todo
+  escritor niega. }
 function WriteTargetDenied(const APath: string): string;
 
 { Crea una carpeta (y sus padres) TOLERANDO que otro hilo la este creando a la
@@ -1046,7 +1051,7 @@ end;
 
 function WriteTargetDenied(const APath: string): string;
 begin
-  Result := PathDenied(APath);
+  Result := EscrituraDenegada(APath);
   if Result = '' then
     Result := DeadCopyWriteDenied(APath);
   // ...y la medida del escritor atomico (GUARD-028), sobre el destino que
@@ -3080,11 +3085,9 @@ begin
   end;
   if O <> '' then
   begin
-    // la puerta de ESCRIBIR, la de todas (solo lectura incluida): una sesion
-    // de solo lectura pisaba un .png con out= (tercera revision)
-    Result := EscrituraDenegada(AFile);
-    if Result = '' then
-      Result := WriteTargetDenied(AFile);
+    // la puerta de ESCRIBIR, la de todas (solo lectura incluida: una sesion
+    // de solo lectura pisaba un .png con out=, tercera revision)
+    Result := WriteTargetDenied(AFile);
     // Una captura no se guarda en los temporales del servidor: 90 capturas y
     // 66 MB de Hermes en una __delphi-temp anidada que la purga del arranque
     // no alcanza (25-sep-2026). Se omite out y llega en la respuesta (David:

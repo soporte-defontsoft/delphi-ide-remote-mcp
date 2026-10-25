@@ -1679,10 +1679,13 @@ begin
   if ALugar = ltJaula then
   begin
     Result := EscrituraDenegada(TPath.GetDirectoryName(ADestino));
+    // el destino que nombra el agente: su puerta (solo lectura incluida),
+    // las carpetas muertas y la medida del escritor (V6 de la 1.23: las
+    // muertas las sumaba cada llamador a su modo, y el logcat no)
+    if Result = '' then
+      Result := WriteTargetDenied(ADestino);
     if Result = '' then
       Result := SustitucionDenegada(ADestino);
-    if Result = '' then
-      Result := RutaLargaDenegada(ADestino);
     // lo que se sustituye se copia antes (GuardaContenidoActual): es leerlo,
     // y quien pregunta antes de lanzar nada (styles build) lo sabe aqui
     if Result = '' then

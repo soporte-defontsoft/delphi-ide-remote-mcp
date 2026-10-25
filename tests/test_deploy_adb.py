@@ -174,6 +174,18 @@ LARGA = os.path.join(BASE, 'L' * (240 - len(BASE) - 1 - 4) + '.txt')
 out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE", "out": LARGA})
 check('adb logcat out= de %d caracteres (no cabe con su temporal): GUARD-028 a la entrada' % len(LARGA),
       mc.rechazado(out) and mc.es(out, 'SR_GUARD_RUTA_LARGA_FMT'), out[:200])
+# ...y nunca en una carpeta muerta, tampoco en la temporal vieja de una raiz:
+# el logcat la admitia (su excepcion EnTemporal, de cuando era la temporal del
+# agente; desde el 2af de la 1.18.2 es un resto que todo otro escritor niega).
+# V6 de la 1.23: la pregunta vive en el escritor (ColocacionDenegada). La
+# papelera, el control: ya se negaba
+for carpeta, msg in ((mc.TEMPORALES, 'SR_GUARD_DEAD_TEMP'), (mc.PAPELERA, 'SR_GUARD_DEAD_TRASH')):
+    MUERTA = os.path.join(BASE, carpeta)
+    os.makedirs(MUERTA, exist_ok=True)
+    out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE",
+                                  "out": os.path.join(MUERTA, 'volcado.txt')})
+    check('adb logcat out= dentro de %s: negado a la entrada' % carpeta,
+          mc.rechazado(out) and mc.es(out, msg), out[:200])
 
 # ====================== gate: the device-token rule (both sinks) ==========
 out = srv.call('delphi_adb', {"command": "connect", "address": "10.0.0.1:5555; rm -rf /"})

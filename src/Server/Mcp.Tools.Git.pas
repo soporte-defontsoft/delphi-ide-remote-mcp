@@ -2016,9 +2016,7 @@ begin
       Destino := SinBarraFinal(TPath.GetFullPath(Params.Path.Trim));
       // Crear o quitar una copia de trabajo es ESCRIBIR alli: la pregunta de
       // todo escritor, por la ruta real, y nunca en una carpeta muerta.
-      Result := EscrituraDenegada(Destino);
-      if Result = '' then
-        Result := WriteTargetDenied(Destino);
+      Result := WriteTargetDenied(Destino);
       // ...y que el destino no CONTENGA un lugar protegido: worktree add hace
       // un checkout que escribe el arbol dentro, y un ReadOnlyPaths que nombre
       // un fichero de ahi se escribia (2v de la 1.18.2, medido; el 3.er emisor
