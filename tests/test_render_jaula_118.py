@@ -41,6 +41,19 @@ try:
     mc.check('control AVI relativo junto al form: se dibuja (el cwd del ayudante es la carpeta del form)',ok(r),r[:400])
     write(template.replace('DUMMY.avi',avi))
     denied('AVI exterior',preview('outside'),'FileName')
+    # ...y el mismo form en BINARIO (1.5 de la lista de medidas, V51 de la
+    # 1.23): la puerta lo lee por el lector existente (TStyleDoc, tambien el
+    # binario) y lo niega igual; de control, el binario con el AVI propio
+    for n,ruta,niega in (('binario exterior',avi,True),('binario propio',inside,False)):
+        write(template.replace('DUMMY.avi',ruta))
+        conv=srv.call('delphi_designer',dict(command='to-binary',path=f))
+        # en disco va con la envoltura de recurso que escribe el IDE: TPF0 en la cabecera, no en el byte 0
+        mc.check(n+' (fixture): el form paso a binario',b'TPF0' in open(f,'rb').read(64),conv[:300])
+        out=preview(n.replace(' ','-'))
+        if niega:
+            denied(n,out,'FileName')
+        else:
+            mc.check('control '+n+': el binario con el AVI propio se dibuja',ok(out),out[:400])
     for n,v in [('absoluto',literal(avi)),
                 ('escapes',''.join('#'+str(ord(c)) for c in avi)),
                 ('relativo',literal(os.path.relpath(avi,JAIL))),
