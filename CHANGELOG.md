@@ -37,6 +37,23 @@ the MCP `initialize` response (`serverInfo.version`).
   that does not read as one, USES-026), and those units' directives are
   judged like the project folder's (BUILD-028). `delphi_config remove-unit`
   takes such an entry out (`tests/test_build_in_fuera_1230.py`).
+- **A connection profile is read only if the IDE lists it, and
+  `delphi_desktop` checks its name at the gate.** `delphi_desktop` did not
+  hold its `profile` to the name rule of `delphi_build` and
+  `delphi_paserver` (letters, digits, `_`, `-`), which the parameter's
+  description promises for all three, and the reader of a profile composed
+  the path of its `.profile` from the name as typed: with `..` in it, it
+  looked at any `.profile` on the disk, outside the workspace, and the
+  refusal told whether one existed (PAS-054, "could not read") or not
+  (PAS-053). The reader now opens only the file of a profile the IDE lists,
+  by its name in the list, and `delphi_desktop` refuses a bad name with
+  PAS-015 like its siblings (`tests/test_perfil_por_lista_1230.py`).
+- **`delphi_adb run` launches a package the device lists.** The app name
+  went to `am start` as typed; it is now chosen among the packages the
+  device's package manager lists (`pm list packages`) - the exact name, or
+  the only one that differs just in case - and what reaches the device is
+  that name. A package that is not installed is refused before anything
+  runs (ADB-029).
 - **The mojibake warning sees UTF-8 read as Latin-1 on every code page.** New
   text carrying UTF-8 read as Latin-1 or CP1252 (`Ã³` for `ó`, what an agent's
   tools make of a UTF-8 file) was warned about only where the machine's ANSI

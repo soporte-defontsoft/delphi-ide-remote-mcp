@@ -206,15 +206,17 @@ type
 function CamposDePerfil(const AXml: string): TCamposDePerfil;
 
 { EL host (Profile_host) de un perfil, leido del MISMO fichero que compone
-  RutaDePerfil. La version con AMotivo dice por que no hay host (no existe / no
-  se lee / sin Profile_host): la puerta niega con ese motivo; quien solo quiere
-  el host usa la otra. '' si no hay. }
+  RutaDePerfil, y solo de un perfil que el IDE LISTA (PerfilDelIde: lo que
+  no esta en la lista no existe). La version con AMotivo dice por que no hay
+  host (no existe / no se lee / sin Profile_host): la puerta niega con ese
+  motivo; quien solo quiere el host usa la otra. '' si no hay. }
 function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string; overload;
 function HostDePerfil(const AVersion, AName: string): string; overload;
 
 { La plataforma para la que se creo un perfil del IDE (su Profile_platform:
-  Linux64, Win64, OSX64...), leida del MISMO fichero que compone RutaDePerfil;
-  '' si no existe o no se lee. El nombre del perfil no significa nada. }
+  Linux64, Win64, OSX64...), leida del MISMO fichero que compone RutaDePerfil,
+  de un perfil que el IDE lista; '' si no esta, no existe o no se lee. El
+  nombre del perfil no significa nada. }
 function PlataformaDePerfil(const AVersion, AName: string): string;
 
 { Los perfiles del IDE que pueden desplegar APlatform: los de un PAServer del
@@ -1234,14 +1236,30 @@ begin
   Result.Password := TagValue(AXml, 'Profile_password');
 end;
 
+{ El fichero de un perfil QUE EL IDE LISTA, por su nombre de la lista
+  (PerfilDelIde); '' si no esta. Lo que teclea el agente solo ELIGE: la ruta
+  no se compone con su texto. Con un '..' en el nombre, TFile.Exists miraba
+  cualquier .profile del disco, fuera de la jaula, y la negativa distinguia
+  "no existe" (PAS-053) de "no se lee" (PAS-054): un oraculo de existencia
+  (V8 de la 1.23, medido contra produccion con delphi_desktop). }
+function FicheroDePerfilListado(const AVersion, AName: string): string;
+var
+  Nombre: string;
+begin
+  Nombre := PerfilDelIde(AVersion, AName);
+  if Nombre = '' then
+    Exit('');
+  Result := RutaDePerfil(AVersion, Nombre);
+end;
+
 function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string;
 var
   Ruta, Xml: string;
 begin
   AMotivo := '';
   Result := '';
-  Ruta := RutaDePerfil(AVersion, AName);
-  if not TFile.Exists(Ruta) then
+  Ruta := FicheroDePerfilListado(AVersion, AName);
+  if (Ruta = '') or not TFile.Exists(Ruta) then
   begin
     AMotivo := MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [AName.Trim]);
     Exit;
@@ -1269,8 +1287,8 @@ var
   Ruta: string;
 begin
   Result := '';
-  Ruta := RutaDePerfil(AVersion, AName);
-  if not TFile.Exists(Ruta) then
+  Ruta := FicheroDePerfilListado(AVersion, AName);
+  if (Ruta = '') or not TFile.Exists(Ruta) then
     Exit;
   try
     Result := CamposDePerfil(LeeTexto(Ruta, [ltIde])).Plataforma.Trim;

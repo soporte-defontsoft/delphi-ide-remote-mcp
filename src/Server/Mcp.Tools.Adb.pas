@@ -216,6 +216,32 @@ const
     'KEYCODE_DPAD_UP', 'KEYCODE_DPAD_DOWN', 'KEYCODE_DPAD_LEFT',
     'KEYCODE_DPAD_RIGHT', 'KEYCODE_TAB');
 
+{ El paquete APedido entre los que lista el dispositivo (la salida de "pm
+  list packages": una linea "package:<nombre>" por paquete), con el nombre
+  que da el: el exacto, o el UNICO que solo difiere en mayusculas (Android las
+  distingue, y am start tambien). '' si no esta o hay mas de uno. Lo tecleado
+  solo elige (V8 de la 1.23). }
+function PaqueteInstalado(const ALista, APedido: string): string;
+var
+  Parecidos: TArray<string>;
+begin
+  Result := '';
+  Parecidos := nil;
+  for var L in ALista.Split([#13#10, #10]) do
+  begin
+    var P := L.Trim;
+    if not P.StartsWith('package:') then
+      Continue;
+    P := P.Substring(Length('package:')).Trim;
+    if P = APedido then
+      Exit(P);
+    if SameText(P, APedido) then
+      Parecidos := Parecidos + [P];
+  end;
+  if Length(Parecidos) = 1 then
+    Result := Parecidos[0];
+end;
+
 function TDelphiAdbTool.ExecuteWithParams(const Params: TDelphiAdbParams): string;
 var
   Cmd, Adb, Args, Output, L, Denied, DevArg: string;
@@ -441,7 +467,16 @@ begin
     // every Delphi app's activity (the AndroidManifest template names it).
     // This executes on the DEVICE, sandboxed by Android - nothing runs on
     // the server machine. Vetted at the gate.
-    Output := RunAdb(Adb, DevArg + 'shell am start -n ' + Params.App.Trim +
+    // Y el paquete, ELEGIDO entre los instalados (PaqueteInstalado): a am
+    // start va el nombre que da el dispositivo, nunca lo tecleado (V8 de la
+    // 1.23; era deuda declarada en el CLAUDE.md del repo)
+    Output := RunAdb(Adb, DevArg + 'shell pm list packages', 30000, ExitCode);
+    if ExitCode <> 0 then
+      Exit(ResultadoAdb(Output, ExitCode));
+    var App := PaqueteInstalado(Output, Params.App.Trim);
+    if App = '' then
+      Exit(MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [Params.App.Trim]));
+    Output := RunAdb(Adb, DevArg + 'shell am start -n ' + App +
       '/com.embarcadero.firemonkey.FMXNativeActivity', 30000, ExitCode);
     Result := ResultadoAdb(Output, ExitCode);
   end

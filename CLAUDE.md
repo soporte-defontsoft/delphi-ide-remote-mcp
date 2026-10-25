@@ -250,7 +250,10 @@ shrink (measured 2026-10-13): msbuild through cmd.exe (removed by 2an of
 server), `delphi_git`'s free `args` (removed in 1.19.0: each command takes
 its own fields - paths, ref, branch, remote, action... - and the server
 composes the line choosing from what git reports), the app name in adb's
-`shell am start`, the profile on paclient's line. The judges that exist today
+`shell am start` (removed in 1.23: chosen among the packages the device
+lists, `pm list packages`), the profile on paclient's line (removed in 1.23:
+chosen among the profiles the IDE lists, and only a listed one's `.profile`
+is ever opened). The judges that exist today
 stay, as a second barrier; where a judge lost its input (the option deny list
 of git, with `args` gone), the new shape keeps one of its own (no value of
 `delphi_git` that goes alone on the line may start with `-`).

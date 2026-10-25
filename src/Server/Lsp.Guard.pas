@@ -1350,6 +1350,18 @@ begin
         Exit(True);
 end;
 
+{ LA regla del nombre de un perfil en la puerta, con su negativa ('' =
+  limpio): el "profile" de delphi_build, delphi_paserver y delphi_desktop,
+  que llega a la linea de paclient o de msbuild. Estaba escrita dos veces y
+  a delphi_desktop le faltaba, aunque la descripcion de "profile" la promete
+  para los tres (V8 de la 1.23). }
+function PerfilDeLaLlamadaDenegado(const V: string): string;
+begin
+  Result := '';
+  if (V.Trim <> '') and BadProfileName(V.Trim) then
+    Result := MsgFmt(SR_PASERVER_NAME_FMT, [V.Trim]);
+end;
+
 { The identifier rule for a device address or serial (adb's ip:port or a
   serial like emulator-5554 / R58M...): what adb itself prints. ONE
   definition - AdbArgDenied (address/device) and BuildArgDenied (deviceid)
@@ -1449,10 +1461,10 @@ begin
   end;
   // "profile" is a PAServer profile name reaching the msbuild command line
   // (/p:Profile=) - the same identifier rule as delphi_paserver's "profile",
-  // ONE definition for both mouths.
-  V := ArgStr(AArguments, 'profile').Trim;
-  if (V <> '') and BadProfileName(V) then
-    Exit(MsgFmt(SR_PASERVER_NAME_FMT, [V]));
+  // ONE definition for every mouth (PerfilDeLaLlamadaDenegado).
+  Result := PerfilDeLaLlamadaDenegado(ArgStr(AArguments, 'profile'));
+  if Result <> '' then
+    Exit;
   // "deviceid" is an adb serial reaching msbuild (/p:DeviceId=) - the same
   // rule as delphi_adb's address/device.
   V := ArgStr(AArguments, 'deviceid').Trim;
@@ -1495,9 +1507,9 @@ begin
   // test_paserver, 7-oct-2026). Las dos claves, por si el orden cambia.
   for var Clave in ['profile', 'name'] do
   begin
-    V := ArgStr(AArguments, Clave).Trim;
-    if (V <> '') and BadProfileName(V) then
-      Exit(MsgFmt(SR_PASERVER_NAME_FMT, [V]));
+    Result := PerfilDeLaLlamadaDenegado(ArgStr(AArguments, Clave));
+    if Result <> '' then
+      Exit;
   end;
   V := ArgStr(AArguments, 'host').Trim;
   if V <> '' then
@@ -2640,6 +2652,15 @@ begin
   if SameText(AToolName, 'delphi_paserver') then
   begin
     Result := PAServerArgDenied(AArguments);
+    if Result <> '' then
+      Exit;
+  end;
+  // ...y el perfil de delphi_desktop, que llega a la misma linea de paclient
+  // con LA misma regla: no se miraba, y un '..' en el nombre componia la ruta
+  // del .profile fuera de la carpeta de perfiles (V8 de la 1.23, medido)
+  if SameText(AToolName, 'delphi_desktop') then
+  begin
+    Result := PerfilDeLaLlamadaDenegado(ArgStr(AArguments, 'profile'));
     if Result <> '' then
       Exit;
   end;

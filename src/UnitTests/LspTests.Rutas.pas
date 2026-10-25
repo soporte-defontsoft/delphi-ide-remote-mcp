@@ -204,6 +204,18 @@ type
     [Test] procedure LoQueNoEsRuta;
   end;
 
+  { El fichero de un perfil (Lsp.Discovery.HostDePerfil, PlataformaDePerfil)
+    solo se abre si el IDE lista ese perfil, por su nombre de la lista: con
+    un '..' en el nombre se miraba cualquier .profile del disco, y la negativa
+    distinguia "no existe" de "no se lee" (V8 de la 1.23, medido contra
+    produccion por delphi_desktop). La puerta de la llamada, aparte: la mide
+    test_perfil_por_lista_1230. }
+  [TestFixture]
+  TPerfilPorLaListaTests = class
+  public
+    [Test] procedure SoloElQueElIdeLista;
+  end;
+
 implementation
 
 uses
@@ -1215,6 +1227,50 @@ begin
   Assert.AreEqual('C:\a|b\c', string.Join('|', Ancestros('C:\a|b\c')));
 end;
 
+{ TPerfilPorLaListaTests }
+
+procedure TPerfilPorLaListaTests.SoloElQueElIdeLista;
+const
+  VER = '99.0'; // una version que no es de nadie: la carpeta es la de prueba
+var
+  Base, AppData, Perfiles, Fuera, Antes, Motivo: string;
+begin
+  // en el temporal del ejecutor, que es su casa (como las puertas de arriba)
+  Base := ServerTempDir('perfil-' + FragmentoUnico);
+  AppData := TPath.Combine(Base, 'ad');
+  Perfiles := TPath.Combine(TPath.Combine(TPath.Combine(AppData, 'Embarcadero'), 'BDS'), VER);
+  Fuera := TPath.Combine(Base, 'fuera');
+  ForceDirectories(Perfiles);
+  ForceDirectories(Fuera);
+  TFile.WriteAllText(TPath.Combine(Fuera, 'sonda.profile'),
+    '<Profile_host>192.0.2.1</Profile_host><Profile_platform>Linux64</Profile_platform>');
+  TFile.WriteAllText(TPath.Combine(Perfiles, 'Listado.profile'),
+    '<Profile_host>192.0.2.2</Profile_host><Profile_platform>Win64</Profile_platform>');
+  Antes := GetEnvironmentVariable('APPDATA');
+  SetEnvironmentVariable('APPDATA', PChar(AppData));
+  try
+    // de la carpeta de perfiles a Base: 99.0, BDS, Embarcadero, ad
+    HostDePerfil(VER, '..\..\..\..\fuera\sonda', Motivo);
+    Assert.IsTrue(Motivo.StartsWith('[PAS-053'), 'un .profile de fuera no existe: ' + Motivo);
+    HostDePerfil(VER, '..\..\..\..\fuera\nada', Motivo);
+    Assert.IsTrue(Motivo.StartsWith('[PAS-053'), 'y uno que no hay, lo mismo: ' + Motivo);
+    Assert.AreEqual('', PlataformaDePerfil(VER, '..\..\..\..\fuera\sonda'));
+    // el control: el que lista el IDE se ve, con otras mayusculas, por su
+    // nombre. Que su fichero SI se lee no se mide aqui: la puerta de leer
+    // (ltIde) no sigue a un APPDATA cambiado en caliente (medido); lo mide P4
+    // de test_perfil_por_lista_1230, con el APPDATA de prueba desde el arranque
+    Assert.AreEqual('Listado', PerfilDelIde(VER, 'LISTADO'));
+  finally
+    SetEnvironmentVariable('APPDATA', PChar(Antes));
+    for var F in [TPath.Combine(Fuera, 'sonda.profile'), TPath.Combine(Perfiles, 'Listado.profile')] do
+      if TFile.Exists(F) then
+        TFile.Delete(F);
+    for var D in [Perfiles, TPath.GetDirectoryName(Perfiles),
+      TPath.GetDirectoryName(TPath.GetDirectoryName(Perfiles)), AppData, Fuera, Base] do
+      RemoveDir(D);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
@@ -1227,5 +1283,6 @@ initialization
   TDUnitX.RegisterTestFixture(TRutaDesdeTests);
   TDUnitX.RegisterTestFixture(TFormaDeTextoTests);
   TDUnitX.RegisterTestFixture(TAncestrosTests);
+  TDUnitX.RegisterTestFixture(TPerfilPorLaListaTests);
 
 end.

@@ -3037,6 +3037,14 @@ const
     '[ADB-014 INVALID_PARAM] "%s" is not valid as an Android package name. ' +
     'Letters, digits, ".", "_" and "-" (e.g. com.embarcadero.MyApp).';
 
+  { run: el paquete se ELIGE entre los que el dispositivo tiene instalados
+    (pm list packages) y a am start va el nombre que da el dispositivo: lo
+    tecleado no viaja (V8 de la 1.23). %s = lo pedido. }
+  SR_ADB_APP_NO_INSTALADA_FMT =
+    '[ADB-029 NOT_FOUND] "%s" is not installed on that device: its package ' +
+    'manager does not list it. Install the .apk with command=install, or name ' +
+    'the package as the build and install results declare it.';
+
   SR_ADB_NO_SDK =
     '[ADB-015 INTERNAL] This server has no Android SDK configured ' +
     '(there is no .sdk with SDKAdbPath). It is installed once with the ' +
