@@ -34,7 +34,7 @@ DENTRO = 'unit Dentro;\r\ninterface\r\nimplementation\r\nend.\r\n'
 # no solo de que la puerta no nego (el .pas suelto en la carpeta no bastaba)
 # uses Fuera SIN "in 'Fuera.pas'": asi no lo juzga V14 (LecturasDelIn, el `in`
 # del .dpr -> BUILD-061); dcc encuentra Fuera.pas en la carpeta del proyecto (el
-# symlink) y es LA barrera de V3 (el recorrido de la carpeta -> BUILD-060) la
+# symlink) y es LA barrera de V3 (el recorrido de la carpeta -> BUILD-063) la
 # que tiene que negarlo. Sin V3, dcc compila el symlink y lee fuera.
 DPR = ("program Fixture;\r\n{$APPTYPE CONSOLE}\r\nuses\r\n  System.SysUtils,\r\n"
        "  Fuera;\r\nbegin\r\n  Writeln(SECRETO_V3);\r\nend.\r\n")
@@ -86,7 +86,7 @@ try:
         # la ruta REAL del exe (no el campo output, que viene en notacion del
         # servidor srvc:\...): salida por defecto de un console Win64 Debug
         exe_fx = os.path.join(carpeta, 'Win64', 'Debug', 'Fixture.exe')
-        check('V1 (V3) un .pas del arbol symlink a FUERA: la puerta lo niega (BUILD-060) y dcc no lee fuera',
+        check('V1 (V3) un .pas del arbol symlink a FUERA: la puerta lo niega (BUILD-063) y dcc no lee fuera',
               mc.abre(r, 'SR_BUILD_FUENTE_ENLACE_FUERA_FMT') and not compila(r)
               and not marca_en(exe_fx), r[:400])
         c2, p2 = fixture('dentro')

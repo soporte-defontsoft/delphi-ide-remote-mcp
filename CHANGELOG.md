@@ -46,7 +46,7 @@ the MCP `initialize` response (`serverInfo.version`).
   `uses` that was a symlink to an outside `.pas` compiled with the server's
   permissions). The `in` path of the `.dpr` is already judged; now the folder
   walk also hands such links to the gate, and a source whose real target is
-  outside is refused (`BUILD-060`). A link whose target is inside the roots
+  outside is refused (`BUILD-063`). A link whose target is inside the roots
   still compiles (`tests/test_build_symlink_1230.py`).
 - **`delphi_styles build` compiles a resource script the server wrote, not the
   agent's.** The `.rc` that names the compiled style resources went to `brcc32`

@@ -21,8 +21,10 @@ fichero en otra linea, dos recursos en una. Ninguna de las dos lo veia.
      existe y build lo niega (STYLE-052): el lint lo dice (refused), el MISMO
      juez que build (revisor de la 1.20.2: lo daba por bueno)
   R7 lint y build: '#include "inc.rc" // comentario': el fichero es inc.rc,
-     no el texto con el comentario (STYLE-025 en build, 'missing' en lint); y
-     brcc32 admite el comentario detras (medido aqui)
+     no el texto con el comentario ('missing' en lint). Desde V54 de la 1.23
+     el .rc de delphi_styles es una LISTA: build lo niega (STYLE-056) y el lint
+     lo dice, sin dar por perdido ningun fichero (antes: brcc32 admitia el
+     comentario detras y compilaba)
 
 Uso:  python tests/test_rc_lector_1202.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -106,11 +108,13 @@ try:
     open(os.path.join(STY, 'inc.rc'), 'w', encoding='utf-8', newline='\r\n').write('UNO RCDATA "Uno.bin.style"\n')
     escribe_rc('#include "inc.rc" // el estilo embebido\n')
     r = call('delphi_styles', {'command': 'lint', 'path': STY}, t=180)
-    check('R7 lint: #include con un comentario detras: el fichero es inc.rc y nada falta',
-          not faltan(r) and not mc.como_json(r).get('rcMissingFiles'), r[:300])
-    r = call('delphi_styles', {'command': 'build', 'path': STY}, t=300)
-    check('R7 build: brcc32 admite el comentario detras del #include y compila', mc.como_json(r).get('rcOk') is True,
+    _rc = mc.como_json(r).get('rcMissingFiles') or []
+    check('R7 lint: #include con un comentario detras: el fichero es inc.rc, nada falta, y no es una lista (STYLE-056)',
+          not [e for e in _rc if e.get('missing')] and any(mc.es(e.get('refused', ''), 'SR_STYLES_RC_NO_LISTA_FMT') for e in _rc),
           r[:300])
+    r = call('delphi_styles', {'command': 'build', 'path': STY}, t=300)
+    check('R7 build: un #include no es una entrada de lista: STYLE-056 (V54 de la 1.23; antes compilaba)',
+          mc.abre(r, 'SR_STYLES_RC_NO_LISTA_FMT') and '#include' in r, r[:300])
 finally:
     srv.cierra()
 

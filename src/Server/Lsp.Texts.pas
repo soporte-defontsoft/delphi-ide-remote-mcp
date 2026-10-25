@@ -6492,7 +6492,7 @@ const
     'name. Replace it with a copy of something you can read.';
 
   SR_BUILD_FUENTE_ENLACE_FUERA_FMT =
-    '[BUILD-060 DENIED] I will not build this. %s, in the project''s folder, ' +
+    '[BUILD-063 DENIED] I will not build this. %s, in the project''s folder, ' +
     'is a LINK (a symlink or a junction) whose real target is OUTSIDE what ' +
     'this server lets you read: the compiler follows the link and would read ' +
     'that file. Replace it with a copy of something you can read.';

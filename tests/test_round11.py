@@ -291,8 +291,10 @@ open(os.path.join(ST2, 'inner.txt'), 'w', encoding='utf-8', newline='\r\n').writ
 open(os.path.join(ST2, 'b.rc'), 'w', encoding='utf-8', newline='\r\n').write(
     'LEGIT RCDATA "b.bin.style"\r\n#include "inner.txt"\r\n')
 r = A.call('delphi_styles', {'command': 'build', 'path': ST2}, t=300)
+# (desde V54 de la 1.23 el .rc de delphi_styles es una LISTA: el #include lo para antes el juez de lista,
+# STYLE-056; la segunda barrera, STYLE-023, sigue detras)
 check('S5 un #include que trae una ruta de fuera: RECHAZADO',
-      mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') and 'inner.txt' in r, r[:300])
+      (mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') or mc.abre(r, 'SR_STYLES_RC_NO_LISTA_FMT')) and 'inner.txt' in r, r[:300])
 check('S5 ...y no queda .res con nada dentro',
       not os.path.exists(os.path.join(ST2, 'b.res')), os.listdir(ST2))
 
