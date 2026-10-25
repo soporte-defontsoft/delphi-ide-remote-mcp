@@ -185,6 +185,19 @@ begin
     L.Contains('waiting for device');
 end;
 
+{ EL fallo de una orden de adb: sin dispositivo (adb lo dice con sus
+  palabras), ADB-007 con el camino de vuelta; si no, ADB-027 con su salida.
+  Lo llaman ResultadoAdb y los que YA decidieron que fallo aunque adb saliera
+  con 0 (el get-state previo del logcat, el screencap, la captura que no
+  llego): por ResultadoAdb, un exit 0 volvia a salir como EXITO (V63 de la
+  1.23). }
+function FalloDeAdb(const AOutput: string; AExitCode: Integer): string;
+begin
+  if DeviceGone(AOutput) then
+    Exit(MsgFmt(SR_ADB_GONE_FMT, [AOutput.Trim]));
+  Result := MsgFmt(SR_ADB_FALLO_FMT, [AExitCode, AOutput.Trim]);
+end;
+
 { LO que contesta una orden de adb: si el dispositivo no esta (adb lo dice
   con sus palabras) o adb acabo con error, un FALLO con su salida detras;
   si no, AExito (o la salida tal cual). Un sitio: GoneHint pegaba una NOTA a
@@ -196,14 +209,33 @@ begin
   // solo con adb acabado en ERROR: las siete frases de DeviceGone sobre toda
   // la salida ganaban a un exit 0 (una linea de logcat con "offline" daba un
   // falso "dispositivo perdido"; lote 4 del censo de jueces, 18-oct-2026)
-  if (AExitCode <> 0) and DeviceGone(AOutput) then
-    Exit(MsgFmt(SR_ADB_GONE_FMT, [AOutput.Trim]));
   if AExitCode <> 0 then
-    Exit(MsgFmt(SR_ADB_FALLO_FMT, [AExitCode, AOutput.Trim]));
+    Exit(FalloDeAdb(AOutput, AExitCode));
   if AExito <> '' then
     Result := AExito
   else
     Result := AOutput.Trim;
+end;
+
+{ Si adb dice con SUS palabras que NO hizo lo pedido aunque saliera con 0. Su
+  codigo miente en dos ordenes (medido con adb 37.0.0, V63 de la 1.23):
+  connect sale con 0 sin conectar ("cannot connect to <ip:port>: ...") y am
+  start sin arrancar ("Error type 3", "Error: Activity class ... does not
+  exist."); disconnect no (sale con 1) y lo juzga su codigo. Ahi no hay otro
+  juez que sus palabras: esta es LA gramatica nuestra de ellas, y la siguiente
+  orden que mienta va aqui. connect: lo hizo solo si dice "connected to"
+  (tambien "already connected to"); am start: no lo hizo si una linea empieza
+  por "Error" (un "Warning: Activity not started..." de una app que ya corre
+  es exito). Las demas ordenes: lo dice su codigo. }
+function NoLoHizoConCero(const AOrden, AOutput: string): Boolean;
+begin
+  Result := False;
+  if AOrden = 'connect' then
+    Exit(not AOutput.Contains('connected to'));
+  if AOrden = 'am start' then
+    for var L in AOutput.Split([#13#10, #10]) do
+      if L.TrimLeft.StartsWith('Error') then
+        Exit(True);
 end;
 
 const
@@ -353,8 +385,10 @@ begin
     if DevArg <> '' then
     begin
       Output := RunAdb(Adb, DevArg + 'get-state', 10000, ExitCode);
+      // lo decide AQUI: con exit 0 tambien es un fallo (por ResultadoAdb salia
+      // como respuesta buena; V63 de la 1.23)
       if DeviceGone(Output) or (ExitCode <> 0) then
-        Exit(ResultadoAdb(Output, ExitCode));
+        Exit(FalloDeAdb(Output, ExitCode));
     end;
     Output := RunAdb(Adb, DevArg + 'logcat -d -v time -t ' + IntToStr(N),
       45000, ExitCode);
@@ -444,6 +478,10 @@ begin
       Exit(MsgText(SR_ADB_NEED_ADDRESS));
     // adb's own output line already says connected/failed - pass it through
     Output := RunAdb(Adb, Cmd + ' ' + Params.Address.Trim, 30000, ExitCode);
+    // ...pero connect sale con 0 aunque no conecte: lo dicen sus palabras
+    // (NoLoHizoConCero), y la negativa da el camino de Android 11+ (V63)
+    if (ExitCode = 0) and NoLoHizoConCero(Cmd, Output) then
+      Exit(MsgFmt(SR_ADB_CONNECT_FALLO_FMT, [Params.Address.Trim, Output.Trim]));
     Result := ResultadoAdb(Output, ExitCode);
   end
   else if Cmd = 'install' then
@@ -478,6 +516,10 @@ begin
       Exit(MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [Params.App.Trim]));
     Output := RunAdb(Adb, DevArg + 'shell am start -n ' + App +
       '/com.embarcadero.firemonkey.FMXNativeActivity', 30000, ExitCode);
+    // am start sale con 0 aunque no arranque (la actividad no existe: no es
+    // una app Delphi FMX): lo dicen sus palabras (NoLoHizoConCero, V63)
+    if (ExitCode = 0) and NoLoHizoConCero('am start', Output) then
+      Exit(MsgFmt(SR_ADB_RUN_FALLO_FMT, [App, Output.Trim]));
     Result := ResultadoAdb(Output, ExitCode);
   end
   else if Cmd = 'screenshot' then
@@ -519,16 +561,17 @@ begin
     Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
       ExitCode);
     if (ExitCode <> 0) or DeviceGone(Output) then
-      Exit(ResultadoAdb(Output, ExitCode));
+      Exit(FalloDeAdb(Output, ExitCode)); // tambien con exit 0 (V63)
     Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
       Destino + '"', 60000, ExitCode);
-    RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitCode);
+    // el rm, con su propio codigo: pisaba el del pull, y el fallo de abajo
+    // decia el exit del rm junto a la salida del pull (V63 de la 1.23)
+    var ExitRm: Cardinal;
+    RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitRm);
+    // no hay captura: es un fallo aunque adb dijera 0, con el exit de verdad
+    // (se ponia un 1 a mano para que ResultadoAdb lo viera)
     if not TFile.Exists(Destino) then
-    begin
-      if ExitCode = 0 then
-        ExitCode := 1; // no hay captura: es un fallo aunque adb dijera 0
-      Exit(ResultadoAdb(Output, ExitCode));
-    end;
+      Exit(FalloDeAdb(Output, ExitCode));
     if Destino <> Propia then
       try
         ColocaProducto(Destino, Propia);

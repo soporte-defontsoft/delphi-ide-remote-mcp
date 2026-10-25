@@ -580,7 +580,7 @@ The launcher also takes care of the **graphical environment** of the target. On 
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Android devices for remote development: phones/tablets hang off THIS server (USB or wifi adb) while you program from anywhere. Each subcommand is in "command"; discover gives the ip:port of what announces wireless debugging (no address to know up front), and connect makes the device ask for authorization the first time. The adb used is the one of the IDE's own Android SDK. Building the .apk is delphi_build target=Deploy (the deployment manifest is generated if missing). screenshot (the screen, in this answer), tap and key are your eyes and hands on the device, and logcat shows what the app did. Typical flow: discover -> connect -> devices -> delphi_build target=Deploy -> install -> run -> screenshot -> tap -> logcat.
+Android devices for remote development: phones/tablets hang off THIS server (USB or wifi adb) while you program from anywhere. Each subcommand is in "command"; discover gives the ip:port of what announces wireless debugging (no address to know up front), and connect attaches it (Android 11+: pair it once first). The adb used is the one of the IDE's own Android SDK. Building the .apk is delphi_build target=Deploy (the deployment manifest is generated if missing). screenshot (the screen, in this answer), tap and key are your eyes and hands on the device, and logcat shows what the app did. Typical flow: discover -> connect -> devices -> delphi_build target=Deploy -> install -> run -> screenshot -> tap -> logcat.
 
 *Access: mixed (`command` discover / devices / logcat / screenshot read-only; logcat only without out=; screenshot only without out=; every other command read-write, refused to a read-only credential).*
 
@@ -1011,7 +1011,7 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 
 ### Deploy and drive an app on an Android device (the device hangs off the server)
 1. `delphi_adb {command:"discover"}` — devices announcing wireless debugging on the server's network, each with its ip:port (or the developer reads it off the device screen and hands it to you).
-2. `delphi_adb {command:"connect", address:"192.168.1.163:5556"}` — attach it (the device asks to authorize the first time); `{command:"devices"}` lists what is attached.
+2. `delphi_adb {command:"connect", address:"192.168.1.163:5556"}` — attach it (Android 11+ has to be paired with the server once first: on the device, Wireless debugging > Pair device with pairing code, and the server's operator runs `adb pair` with that dialog's ip:port and code - a failed connect, `ADB-030`, says so); `{command:"devices"}` lists what is attached.
 3. `delphi_config {project, command:"add-platform", platform:"Android64"}` then `delphi_build {project, platform:"Android64", config:"Debug", target:"Deploy"}` — the server generates the deployment manifest if the project has none and the result declares the built `.apk`.
 4. `delphi_adb {command:"install", apk:"...\bin\App.apk", device:"..."}` → `{command:"run", app:"com.embarcadero.App", device:"..."}` — the IDE's "Deploy and Run", by tools.
 5. `delphi_adb {command:"screenshot", device:"..."}` (the screen comes back in the answer), `{command:"tap", x, y, device:"..."}`, `{command:"key", key:"back", device:"..."}`, `{command:"logcat", filter:"MyApp", device:"..."}` — your remote eyes and hands to drive and debug it.

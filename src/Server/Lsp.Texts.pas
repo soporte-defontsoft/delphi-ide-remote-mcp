@@ -2846,7 +2846,7 @@ const
     'server (USB or wifi adb) while you program from anywhere. Each ' +
     'subcommand is in "command"; discover gives the ip:port of what ' +
     'announces wireless debugging (no address to know up front), and ' +
-    'connect makes the device ask for authorization the first time. The ' +
+    'connect attaches it (Android 11+: pair it once first). The ' +
     'adb used is the one of the IDE''s own Android SDK. Building the .apk ' +
     'is delphi_build target=Deploy (the deployment manifest is generated ' +
     'if missing). screenshot (the screen, in this answer), tap and key are ' +
@@ -3003,6 +3003,35 @@ const
     'follows and says why:'#10 +
     '%s';
 
+  { connect: adb sale con 0 aunque no conecte (medido con adb 37.0.0: "cannot
+    connect to <ip:port>: ... (10061)"); lo que no conecta lo dicen sus
+    palabras (NoLoHizoConCero, V63 de la 1.23). El codigo de emparejamiento
+    nunca viaja por la tool: lo teclea el operador. %s = la direccion, %s =
+    lo que dijo adb. }
+  SR_ADB_CONNECT_FALLO_FMT =
+    '[ADB-030 DENIED] connect did not attach %s. On the device, wireless ' +
+    'debugging has to be ON and this ip:port the one its screen shows now ' +
+    '(command=discover finds it; the port changes every time it is ' +
+    're-enabled). Android 11+ also has to be PAIRED with this server once: ' +
+    'on the device, Wireless debugging > Pair device with pairing code, and ' +
+    'the operator of this server runs adb pair there with the ip:port and ' +
+    'the code of THAT dialog (its port is not the one connect takes) - a ' +
+    'pairing code never goes through this tool.'#10 +
+    'adb said:'#10 +
+    '%s';
+
+  // run: am start sale con 0 aunque no arranque nada (medido con adb 37.0.0:
+  // "Error type 3" / "Error: Activity class (el componente) does not exist."):
+  // lo dicen sus palabras (NoLoHizoConCero, V63 de la 1.23). %s = el paquete,
+  // %s = lo que dijo am.
+  SR_ADB_RUN_FALLO_FMT =
+    '[ADB-031 DENIED] %s is installed but did not start. run launches a ' +
+    'Delphi FMX app by its activity (com.embarcadero.firemonkey.' +
+    'FMXNativeActivity): an app that is not a Delphi FMX one has none, and ' +
+    'the device''s answer says why it did not start.'#10 +
+    'adb said:'#10 +
+    '%s';
+
   SR_ADB_OUT_LOG =
     '[ADB-008 INVALID_PARAM] The logcat "out" must end in .txt or .log.';
 
@@ -3073,8 +3102,9 @@ const
 
   SN_ADB_DISCOVER =
     '[ADB-020] Devices announcing wireless debugging on the server''s ' +
-    'network. Take an ip:port and command=connect to it (the device ' +
-    'shows an authorize prompt the first time). Nothing here means none ' +
+    'network. Take an ip:port and command=connect to it (Android 11+ has ' +
+    'to be paired with this server once first: a failed connect says ' +
+    'how). Nothing here means none ' +
     'is announcing - the device''s wireless-debugging screen must be ' +
     'OPEN, or the developer can read the ip:port off it and give it to ' +
     'you directly.';

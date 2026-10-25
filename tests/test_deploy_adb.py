@@ -120,6 +120,15 @@ out = srv.call('delphi_adb', {"command": "connect"})
 check('adb connect sin address: rechazo con formato ip:puerto',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_NEED_ADDRESS') and 'address' in out, out[:250])
 
+# V63 de la 1.23: adb connect sale con 0 aunque no conecte (medido con adb 37.0.0: "cannot connect to
+# 127.0.0.1:1: ... (10061)" y exit 0), y el servidor lo devolvia como EXITO. 127.0.0.1 esta en la lista
+# de esta bateria y en su puerto 1 no escucha nadie
+out = srv.call('delphi_adb', {"command": "connect", "address": "127.0.0.1:1"}, t=60)
+check('adb connect que no conecta: ADB-030 con lo que dijo adb y el emparejamiento de Android 11+ '
+      '(ROJO contra r1222bt: salia como exito)',
+      mc.abre(out, 'SR_ADB_CONNECT_FALLO_FMT') and '127.0.0.1:1' in out and 'cannot connect' in out
+      and 'adb pair' in out, out[:300])
+
 out = srv.call('delphi_adb', {"command": "install", "device": "ZZZ-NO-EXISTE"})
 check('adb install sin apk: rechazo con camino (delphi_build)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_NEED_APK') and 'apk' in out and 'delphi_build' in out, out[:250])

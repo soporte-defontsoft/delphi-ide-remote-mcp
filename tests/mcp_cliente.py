@@ -1383,8 +1383,10 @@ def llego_a_adb(t):
     la puerta, ni fue un timeout. Desde el 27-sep un dispositivo que no esta
     o un adb que acaba con error son FALLOS con su etiqueta (SR_ADB_GONE_FMT,
     SR_ADB_FALLO_FMT); antes salian como exito con una nota. Estaba copiado
-    a mano en dos baterias."""
-    return abre(t, 'SR_ADB_GONE_FMT') or abre(t, 'SR_ADB_FALLO_FMT') or not fallo(t)
+    a mano en dos baterias. Desde la 1.23 (V63), tambien un connect o un am
+    start que adb dio por buenos (exit 0) y sus palabras dicen que no."""
+    return (abre(t, 'SR_ADB_GONE_FMT') or abre(t, 'SR_ADB_FALLO_FMT') or abre(t, 'SR_ADB_CONNECT_FALLO_FMT')
+            or abre(t, 'SR_ADB_RUN_FALLO_FMT') or not fallo(t))
 
 
 def llego_a_git(t):

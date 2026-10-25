@@ -54,6 +54,20 @@ the MCP `initialize` response (`serverInfo.version`).
   the only one that differs just in case - and what reaches the device is
   that name. A package that is not installed is refused before anything
   runs (ADB-029).
+- **`delphi_adb` no longer reports a failed `connect` or `run` as done.**
+  `adb` exits with 0 when `connect` does not attach ("cannot connect to
+  ...") and when `am start` starts nothing ("Error: Activity class ... does
+  not exist."), measured with the IDE's adb 37.0.0, and the answer came back
+  as a success. Both are now judged by adb's own words: a `connect` that
+  does not say "connected to" is refused with the way to attach - on
+  Android 11+, pairing the device with the server once, which its operator
+  does with `adb pair` (ADB-030) -, and a `run` whose activity does not
+  exist says the app is not a Delphi FMX one (ADB-031). The `logcat`
+  pre-check and the `screenshot` steps that had already decided a failure
+  no longer turn it into a success when adb exited with 0, and a capture
+  that did not arrive reports adb's real exit code. The tool description
+  and the `discover` note no longer promise an authorization prompt on the
+  first connect (`tests/test_deploy_adb.py`).
 - **A test never runs in a job without its limits.** `delphi_test` runs a
   test inside a Job Object (kill-on-close, a cap of 3 GiB per process and
   one on processes) and refuses to run it when the job cannot be created;
