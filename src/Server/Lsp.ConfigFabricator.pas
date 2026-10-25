@@ -180,9 +180,9 @@ const
   motor lo dicen: delphi_symbols parsea como el compilador de Windows). }
 function PlataformaDelMotor(const AProyecto: TDprojInfo): string;
 begin
-  Result := AProyecto.PlataformaPorDefecto;
-  if not SameText(Result, 'Win32') and not SameText(Result, 'Win64') then
-    Result := 'Win32';
+  // la tabla de las plataformas lo dice (Lsp.Dproj): eran dos literales aqui
+  // (P9 de la revision de la 1.22.0)
+  Result := PlataformaParaElMotor(AProyecto.PlataformaPorDefecto);
 end;
 
 { The IDE's global Library Search Path (registry), cleaned: INSTALLED

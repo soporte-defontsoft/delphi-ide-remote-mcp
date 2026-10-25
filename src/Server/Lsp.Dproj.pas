@@ -746,6 +746,13 @@ type
   natively on this Windows host): las de Windows. }
 function IsLocalPlatform(const APlatform: string): Boolean;
 
+{ La plataforma que se le da al motor para un proyecto que tiene APlatform
+  seleccionada: la misma si la tabla dice que el motor la sirve (Win32,
+  Win64); si no, Win32 - Code Insight es un front-end de Windows, y
+  delphi_symbols parsea como el compilador de Windows. Por su nombre en la
+  tabla. }
+function PlataformaParaElMotor(const APlatform: string): string;
+
 { El sistema de APlatform; spDesconocido si no es una plataforma de Delphi. }
 function SistemaDePlataforma(const APlatform: string): TSistemaDePlataforma;
 
@@ -2082,6 +2089,11 @@ type
     Sistema: TSistemaDePlataforma;
     Maquina: Word; // IMAGE_FILE_MACHINE_* de un binario de Windows; 0 en el resto
     Abi: string;   // la carpeta library\lib\<abi> del .apk; '' fuera de Android
+    // la que se le da tal cual al motor (DelphiLSP): las demas, como Win32.
+    // POLITICA de la casa, no medida contra el motor para Win64x y
+    // WinARM64EC (P9 de la revision de la 1.22.0: eran dos literales en el
+    // fabricante de sus ajustes)
+    DelMotor: Boolean;
   end;
 
 const
@@ -2093,19 +2105,19 @@ const
     de Delphi: su lib\ trae .dcu. WinARM64EC es la maquina ARM64 (un binario
     ARM64EC solo corre en un Windows ARM64). }
   PLATAFORMAS: array [0 .. 12] of TPlataformaConocida = (
-    (Nombre: 'Win32'; Sistema: spWindows; Maquina: $014C; Abi: ''),
-    (Nombre: 'Win64'; Sistema: spWindows; Maquina: $8664; Abi: ''),
-    (Nombre: 'Win64x'; Sistema: spWindows; Maquina: $8664; Abi: ''),
-    (Nombre: 'WinARM64EC'; Sistema: spWindows; Maquina: $AA64; Abi: ''),
-    (Nombre: 'OSX64'; Sistema: spMacOS; Maquina: 0; Abi: ''),
-    (Nombre: 'OSXARM64'; Sistema: spMacOS; Maquina: 0; Abi: ''),
-    (Nombre: 'Linux64'; Sistema: spLinux; Maquina: 0; Abi: ''),
-    (Nombre: 'Android'; Sistema: spAndroid; Maquina: 0; Abi: 'armeabi-v7a'),
-    (Nombre: 'Android64'; Sistema: spAndroid; Maquina: 0; Abi: 'arm64-v8a'),
-    (Nombre: 'iOSDevice32'; Sistema: spIOS; Maquina: 0; Abi: ''),
-    (Nombre: 'iOSDevice64'; Sistema: spIOS; Maquina: 0; Abi: ''),
-    (Nombre: 'iOSSimARM64'; Sistema: spIOS; Maquina: 0; Abi: ''),
-    (Nombre: 'iOSSimulator'; Sistema: spIOS; Maquina: 0; Abi: ''));
+    (Nombre: 'Win32'; Sistema: spWindows; Maquina: $014C; Abi: ''; DelMotor: True),
+    (Nombre: 'Win64'; Sistema: spWindows; Maquina: $8664; Abi: ''; DelMotor: True),
+    (Nombre: 'Win64x'; Sistema: spWindows; Maquina: $8664; Abi: ''; DelMotor: False),
+    (Nombre: 'WinARM64EC'; Sistema: spWindows; Maquina: $AA64; Abi: ''; DelMotor: False),
+    (Nombre: 'OSX64'; Sistema: spMacOS; Maquina: 0; Abi: ''; DelMotor: False),
+    (Nombre: 'OSXARM64'; Sistema: spMacOS; Maquina: 0; Abi: ''; DelMotor: False),
+    (Nombre: 'Linux64'; Sistema: spLinux; Maquina: 0; Abi: ''; DelMotor: False),
+    (Nombre: 'Android'; Sistema: spAndroid; Maquina: 0; Abi: 'armeabi-v7a'; DelMotor: False),
+    (Nombre: 'Android64'; Sistema: spAndroid; Maquina: 0; Abi: 'arm64-v8a'; DelMotor: False),
+    (Nombre: 'iOSDevice32'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False),
+    (Nombre: 'iOSDevice64'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False),
+    (Nombre: 'iOSSimARM64'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False),
+    (Nombre: 'iOSSimulator'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False));
 
 { La fila de APlatform en PLATAFORMAS, sin mirar mayusculas. }
 function DatosDePlataforma(const APlatform: string; out AFila: TPlataformaConocida): Boolean;
@@ -2132,6 +2144,16 @@ end;
 function IsLocalPlatform(const APlatform: string): Boolean;
 begin
   Result := SistemaDePlataforma(APlatform) = spWindows;
+end;
+
+function PlataformaParaElMotor(const APlatform: string): string;
+var
+  P: TPlataformaConocida;
+begin
+  if DatosDePlataforma(APlatform, P) and P.DelMotor then
+    Result := P.Nombre
+  else
+    Result := 'Win32';
 end;
 
 function SistemaDelPAServer(const APlatform: string): TSistemaDePlataforma;

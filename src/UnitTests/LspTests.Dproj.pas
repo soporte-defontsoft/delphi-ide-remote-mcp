@@ -81,6 +81,8 @@ type
     [Test] procedure LasRutasDeExists;
     [Test] procedure ElEscritorDelDeployFileEsElDelIde;
     [Test] procedure XmlEscapeEnSuComilla;
+    [Test]
+    procedure LaPlataformaDelMotorLaDiceLaTabla;
   end;
 
 implementation
@@ -1221,6 +1223,18 @@ begin
   // medida fina: GetTickCount tiene 16 ms de grano y una maquina cargada
   // (una regresion corriendo) multiplica lo medido (revisor C, 21-oct-2026)
   Assert.IsTrue(Ms < 2000, Format('%d ms para cinco lecturas', [Ms]));
+end;
+
+procedure TXmlNucleoTests.LaPlataformaDelMotorLaDiceLaTabla;
+begin
+  // P9 de la revision de la 1.22.0: Win32 y Win64 tal cual, con el nombre de
+  // la tabla; el resto como Win32, tambien las de Windows que no se dan al
+  // motor (era un SameText con dos literales en Lsp.ConfigFabricator)
+  Assert.AreEqual('Win32', PlataformaParaElMotor('Win32'));
+  Assert.AreEqual('Win64', PlataformaParaElMotor('win64'));
+  Assert.AreEqual('Win32', PlataformaParaElMotor('WinARM64EC'));
+  Assert.AreEqual('Win32', PlataformaParaElMotor('Linux64'));
+  Assert.AreEqual('Win32', PlataformaParaElMotor('NoExiste'));
 end;
 
 initialization
