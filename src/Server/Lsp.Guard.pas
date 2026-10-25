@@ -2084,7 +2084,7 @@ begin
     Exit;
   // Sin jaula configurada no hay nada que hacer cumplir (modo local de
   // confianza): el suelo no se inventa una.
-  if Length(WorkspaceRoots) = 0 then
+  if not HayJaula then
     Exit;
   Mapa := RutasNuestras;
   for I := 0 to AArguments.Count - 1 do
@@ -2681,8 +2681,7 @@ begin
     Exit;
   end;
   for R in WorkspaceReadOnlyRoots do
-    if StartsText(FormaLarga(R), Full) or
-       StartsText(IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(R))), Real) then
+    if StartsText(FormaLarga(R), Full) or EnLugar(Real, RealPath(SinBarraFinal(R)), False) then
       Exit(SinBarraFinal(R));
 end;
 
@@ -3177,7 +3176,7 @@ begin
     PReal := SinBarraFinal(RealDeLugar(P.Trim));
     if ASoloDentro and SameText(SinBarraFinal(AReal), PReal) then
       Continue;
-    if StartsText(IncludeTrailingPathDelimiter(AReal), IncludeTrailingPathDelimiter(PReal)) then
+    if EnLugar(PReal, AReal, False) then
       Exit(SinBarraFinal(P.Trim));
   end;
 end;
@@ -4244,9 +4243,9 @@ begin
   // back, skipping its automatic backup and its protected governance files.
   if InVault(APath) then
     Exit(MsgText(SR_VAULT_NOT_CODE));
-  Roots := WorkspaceRoots;
-  if Length(Roots) = 0 then
+  if not HayJaula then
     Exit; // no jail configured
+  Roots := WorkspaceRoots;
   try
     Full := TPath.GetFullPath(APath);
   except
@@ -4259,8 +4258,7 @@ begin
   var Ref := ReadOnlyRootOf(APath);
   if Ref <> '' then
   begin
-    if StartsText(IncludeTrailingPathDelimiter(RealPath(Ref)),
-         IncludeTrailingPathDelimiter(RealPath(APath))) then
+    if EnLugar(RealPath(APath), RealPath(Ref), False) then
       Exit('');
     Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
   end;
@@ -4285,8 +4283,7 @@ begin
       var Verdad := IncludeTrailingPathDelimiter(RealPath(APath));
       var DentroDeVerdad := False;
       for var RR in Roots do
-        if StartsText(IncludeTrailingPathDelimiter(
-             RealPath(SinBarraFinal(RR))), Verdad) then
+        if EnLugar(Verdad, RealPath(SinBarraFinal(RR)), False) then
         begin
           DentroDeVerdad := True;
           Break;
@@ -4474,9 +4471,9 @@ begin
     if Result <> '' then
       Exit;
   end;
-  Roots := WorkspaceRoots;
-  if Length(Roots) = 0 then
+  if not HayJaula then
     Exit; // no jail configured: tampoco reglas de escritura
+  Roots := WorkspaceRoots;
   Full := TPath.GetFullPath(APath); // ya no lanza: la jaula lo comprobo
   // Un proyecto de REFERENCIA (ReadOnlyRoots) manda sobre Roots: una
   // carpeta declarada en los dos sitios, o una raiz que caiga dentro de una
@@ -4649,13 +4646,13 @@ begin
   // sin jaula no hay "fuera"; el modo local CERRADO no tiene sitios, y todo
   // UNC lo esta: se llegaba al host que nombrase el agente antes de negarlo
   // (1,3 s medidos con uno que no existe; tercera revision de la 1.9.0)
-  if Length(WorkspaceRoots) = 0 then
+  if not HayJaula then
     Exit(NegativaDeCierre <> '');
   Lugares := LugaresDeclarados; // ya sin blancos y con barras de Windows
   P := IncludeTrailingPathDelimiter(P);
   for L in Lugares do
   begin
-    if (L <> '') and StartsText(IncludeTrailingPathDelimiter(L), P) then
+    if EnLugar(P, L, False) then
       Exit(False);
     // ...y por la forma LARGA de un sitio declarado en 8.3: la entrada ya
     // alargo la ruta del agente y un sitio UNC declarado con ~ lo negaba

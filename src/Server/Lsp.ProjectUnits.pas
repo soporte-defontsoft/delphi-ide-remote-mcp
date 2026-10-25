@@ -282,7 +282,8 @@ uses
   Lsp.Rutas,
   Lsp.Settings,
   Lsp.TodoONada,
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Lugares;
 
 { TUnitInfo }
 
@@ -3734,7 +3735,7 @@ var
   Padre: string;
 begin
   Result := ADir;
-  if Length(WorkspaceRoots) = 0 then
+  if not HayJaula then
   begin
     Padre := TPath.GetDirectoryName(ADir);
     if Padre <> '' then

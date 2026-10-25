@@ -698,6 +698,12 @@ REGLAS = [
      [('Lsp.Patch.pas', 'EsRutaDeEstilo')],
      'EsRutaDeEstilo (Lsp.Patch): estaba comparada a mano en Lsp.TextEdit y Mcp.Tools.Styles, y el '
      'escritor necesita saber si un texto lo lee TParser (M4 de la 1.23)'),
+    ('la jaula a mano',
+     # "hay jaula?" (raices de escritura) escrito a mano en vez de preguntarlo
+     r"Length\s*\(\s*WorkspaceRoots\s*\)\s*(?:=|<>|>|<|>=|<=)\s*[01]\b",
+     [('Lsp.Lugares.pas', 'HayJaula'), ('Lsp.Settings.pas', 'IsReadOnlyNow')],
+     'HayJaula (Lsp.Lugares): LA pregunta de si hay raices de escritura; estaba a mano en ocho sitios (V30 de la '
+     '1.23); IsReadOnlyNow (Lsp.Settings), de donde sale WorkspaceRoots, tiene la suya'),
     ('las extensiones de un proyecto del IDE a mano',
      # la lista de lo que mantiene el IDE (.dproj, .groupproj) salvo la declaracion de
      # PROJECT_EXTS, o el predicado reescrito con ella: el changeset llevaba la suya CON el
@@ -737,7 +743,7 @@ REGLAS = [
       # deuda declarada (2.1c de la 1.18.0): quien recorre los sitios por su cuenta
       # recalcula sus formas en cada llamada; se va con el cache de formas y el
       # comparador unico de Lsp.Lugares. Por (fichero, funcion): solo puede encoger
-      ('Lsp.Guard.pas', 'ArgPathOutsideDenied'),
+      # (ArgPathOutsideDenied y BordeDeMudanza salieron el 25-oct-2026: preguntan HayJaula, V30 de la 1.23)
       # (NegativaDeUnc salio el 23-oct-2026: su lista de raices es la de RaicesDisponibles)
       ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'),
       # (PurgeServerTemp salio el 24-oct-2026 con la purga de las raices: V31 de la 1.23)
@@ -746,7 +752,7 @@ REGLAS = [
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
       ('Lsp.Guard.pas', 'RootItselfDenied'),
       ('Lsp.Mascara.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
-      ('Lsp.BuildRunner.pas', 'UnitSourceFolders'), ('Lsp.ProjectUnits.pas', 'BordeDeMudanza'),
+      ('Lsp.BuildRunner.pas', 'UnitSourceFolders'),
       ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.FindDproj'),
       ('Mcp.Tools.Workspace.pas', 'TDelphiWorkspaceTool.ExecuteWithParams'),
       ('Mcp.Tools.Workspace.pas', 'TDelphiProjectsTool.ExecuteWithParams')],
@@ -1281,6 +1287,7 @@ PLANTADO = {
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
     'listar la carpeta de perfiles del IDE a mano': "  for F in TDirectory.GetFiles(IdeProfilesDir(AVersion), '*.x') do",
     'la extension de un estilo a mano': "  if SameText(TPath.GetExtension(P), '.style') then X := 1;",
+    'la jaula a mano': "  if Length(WorkspaceRoots) = 0 then Exit;",
     'listar una carpeta sin saber si se dejo': "  for E in TDirectory.GetFileSystemEntries(Dir) do",
     'listar ficheros o carpetas sin saber si se dejo': "  for F in TDirectory.GetFiles(Dir, '*.pas') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",

@@ -1233,7 +1233,7 @@ function UnitSourceFolders(const AUnit: string; out ACualificadas: TArray<string
 begin
   ACualificadas := [];
   var Sesion: TArray<string> := [];
-  if Length(WorkspaceRoots) > 0 then
+  if HayJaula then
     Sesion := WorkspaceRoots + WorkspaceReadOnlyRoots;
   Result := Busca(Sesion);
   for var D in Busca(LibraryReadRoots) do

@@ -181,8 +181,10 @@ function HostUncDeclarado: string;
   peticion o las del modo local). Sin ellas no hay reglas de escritura ni
   carpeta del agente: es el modo local de confianza, que es de solo lectura
   (IsReadOnlyNow). LA pregunta: se escribia a mano como
-  Length(WorkspaceRoots) = 0 en seis sitios (14-oct-2026; la usa
-  ProgramaDelOperador, y los otros cinco se migran a ella). }
+  Length(WorkspaceRoots) = 0 en seis sitios (14-oct-2026), y aun en ocho el
+  25-oct (V30 de la 1.23): todos la preguntan; la regla de test_paisaje
+  vigila que nadie la reescriba. IsReadOnlyNow (Lsp.Settings), de donde sale
+  WorkspaceRoots, tiene la suya. }
 function HayJaula: Boolean;
 { Las raices y referencias de una letra de red, con su ruta de red (por
   indice): las leen FormaDeclarada y el enmascarador (MaskDriveText). }
@@ -391,7 +393,7 @@ var
   I: Integer;
 begin
   Result := '';
-  if Length(WorkspaceRoots) = 0 then
+  if not HayJaula then
     Exit;
   for L in LugaresDeclarados do
   begin
@@ -861,7 +863,7 @@ end;
 
 function EscribibleDeVerdad(const AReal: string): Boolean;
 begin
-  if Length(WorkspaceRoots) = 0 then
+  if not HayJaula then
     Exit(True);
   // TODOS los vaults, como InVault (Lsp.Guard): el de otro workspace que caiga
   // en esta raiz tampoco se escribe por aqui (revisor de la noche, M-2: uno
