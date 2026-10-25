@@ -74,6 +74,9 @@ type
     FOnFileRequest: TRouteEvent; // [local change] GET handler for FFilesRoute
     FSettings: TMCPSettings;
     FEventIDCounter: Int64;
+    // [local change 2026-10-25] Indy did not finish stopping within its time:
+    // FHTTPServer is left to the process exit (see Stop)
+    FAbandoned: Boolean;
     procedure ConfigureSSL;
     procedure HandleQuerySSLPort(APort: Word; var VUseSSL: Boolean);
     procedure HandleHTTPRequest(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
@@ -133,6 +136,7 @@ uses
   Lsp.Identidad, // [local change] per-session agent identity and the session registry
   Lsp.Texts, // [local change] the 404 texts of a dead session
   Lsp.Settings, // [local change] tokens, BindIP and the session timeout (settings.ini)
+  Winapi.Windows, // [local change 2026-10-25] WaitForSingleObject: the stop with a time limit
   MCPServer.Logger;
 
 { [local change 2026-09-28] LA puerta de la sesion muerta, para el POST y el
@@ -362,7 +366,12 @@ destructor TMCPIdHTTPServer.Destroy;
 begin
   if FActive then
     Stop;
-  FHTTPServer.Free;
+  // [local change 2026-10-25] an abandoned Indy server is still inside its
+  // own stop, in another thread: it is neither freed here nor by the owner
+  if FAbandoned then
+    RemoveComponent(FHTTPServer)
+  else
+    FHTTPServer.Free;
   if Assigned(FSSLHandler) then
     FSSLHandler.Free;
   FJsonRpcProcessor.Free;
@@ -418,11 +427,38 @@ begin
 end;
 
 procedure TMCPIdHTTPServer.Stop;
+const
+  // [local change 2026-10-25] what Indy gets to close its connections: a
+  // normal stop under full CPU took up to 1.7 s (measured)
+  STOP_SECONDS = 3;
+var
+  Stopper: TThread;
 begin
   if not FActive then
     Exit;
-    
-  FHTTPServer.Active := False;
+
+  // [local change 2026-10-25] TIdScheduler.TerminateAllYarns has no time
+  // limit (Indy's own "TODO: Put terminate timeout check back"): a
+  // connection that crossed the stop left a yarn nobody removes, with no
+  // thread behind it, and Active := False spun for ever - measured with cdb
+  // on a hung server (V58 of 1.23); as a service, a stop with a request in
+  // flight stays in STOP_PENDING. The stop runs in a thread of its own; past
+  // its time it is logged and left to the process exit, which ends that
+  // thread (Indy's finalization waits for none of its threads).
+  Stopper := TThread.CreateAnonymousThread(
+    procedure
+    begin
+      FHTTPServer.Active := False;
+    end);
+  Stopper.FreeOnTerminate := False;
+  Stopper.Start;
+  if WaitForSingleObject(Stopper.Handle, STOP_SECONDS * 1000) = WAIT_OBJECT_0 then
+    Stopper.Free
+  else
+  begin
+    FAbandoned := True;
+    TLogger.Warning(MsgFmt(SL_SYS_HTTP_PARADA_CON_PLAZO_FMT, [STOP_SECONDS]));
+  end;
   FActive := False;
   TLogger.Info('MCP Server stopped');
 end;

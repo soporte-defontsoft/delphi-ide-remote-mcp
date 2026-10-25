@@ -127,6 +127,13 @@ the MCP `initialize` response (`serverInfo.version`).
   it; a clause where something is not an entry is refused (`USES-026`) by
   every tool that rewrites one; and a `CreateForm` split over two lines
   goes with its unit (`tests/test_dpr_entradas_1230.py`).
+- **The server stops even when a connection crosses the stop.** Indy's HTTP
+  server waits, with no limit, for every connection to end, and one that
+  arrived just as the server stopped could be left with nothing to end it:
+  the stop spun for ever (measured with a debugger on a hung server; as a
+  service, a stop with a request in flight would have stayed in
+  `STOP_PENDING`). The HTTP stop now has 3 s; past them it is logged and
+  the service goes on closing (`tests/test_atomos_1202.py` C1).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

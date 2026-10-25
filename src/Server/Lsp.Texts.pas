@@ -12058,6 +12058,14 @@ const
   SL_SYS_PARADO_FMT =
     '%s v%s: stopped';
 
+  // La parada del HTTP con plazo (V58 de la 1.23): TerminateAllYarns de Indy
+  // espera sin limite a una conexion que se cruzo con la parada, y la parada
+  // se colgaba para siempre (medido con cdb). %d = los segundos del plazo
+  SL_SYS_HTTP_PARADA_CON_PLAZO_FMT =
+    'The HTTP server did not finish stopping in %d s (Indy waits without a ' +
+    'limit for a connection that crossed the stop): the service goes on ' +
+    'closing without it.';
+
   SF_LOG_BASE64_FMT =
     '[base64: %d chars]';
 
