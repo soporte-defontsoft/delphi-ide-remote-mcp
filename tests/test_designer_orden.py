@@ -537,7 +537,7 @@ try:
         vista = False
         tope = time.time() + 120
         while hilo.is_alive() and time.time() < tope:
-            if glob.glob(os.path.join(tmp, '**', '__tmp-*'), recursive=True):
+            if glob.glob(os.path.join(tmp, '**', mc.DESCARGA_PREFIJO + '*'), recursive=True):
                 vista = True
                 break
             time.sleep(0.005)
@@ -699,7 +699,7 @@ try:
           and _t.index('object EditN') < _t.index('object ButtonX'), (r[:300], _t))
 
     # B5: la carpeta de cada llamada del juez se borra siempre (en el temporal del SERVIDOR)
-    quedan = glob.glob(os.path.join(os.path.dirname(EXE), mc.TEMPORALES, '**', '__tmp-*'), recursive=True)
+    quedan = glob.glob(os.path.join(os.path.dirname(EXE), mc.TEMPORALES, '**', mc.DESCARGA_PREFIJO + '*'), recursive=True)
     check('O15 no queda ninguna carpeta __tmp- del juez en el temporal del servidor (B5)', not quedan, quedan)
 finally:
     srv.cierra()

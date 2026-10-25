@@ -1808,6 +1808,9 @@ REGLAS_PY = [
      'mc.TEMPORALES, leido de TempFolderName'),
     ('la carpeta de los informes a mano', r"""(['"])reports\1""", [],
      'mc.INFORMES, leido de CarpetaDeInformes'),
+    # (V22, 25-oct-2026: cinco comprobaciones de que no queda, en tres baterias)
+    ('el prefijo de la carpeta de descarga a mano', r"""(['"])__tmp-""", [],
+     'mc.DESCARGA_PREFIJO, leido de DESCARGA_PREFIJO (Lsp.Casa)'),
     # (revisor de baterias, 18-oct-2026: siete baterias con su lector, cada una
     # con su ceguera) quitar la mascara a mano para buscar letras, o mirar
     # solo lo que no va tras 'srv'
@@ -1877,6 +1880,7 @@ PLANTADO_PY = {
     'la casa de capturas a mano': "    c = os.path.join(srv, mc.TEMPORALES, 'captures', '_local')",
     'la carpeta de los temporales a mano': "    t = os.path.join(raiz, '__delphi-temp', 'agente')",
     'la carpeta de los informes a mano': "    r = mc.buzon(os.path.join(srv, 'reports'))",
+    'el prefijo de la carpeta de descarga a mano': "    q = glob.glob(os.path.join(tmp, '**', '__tmp-*'))",
     'la fuga de una letra real leida a mano': "    low = re.sub('srv[a-z]:', '', raw.lower())",
     'la pagina ANSI de la maquina leida a mano': "    acp = ctypes.windll.kernel32.GetACP()",
     'la carpeta del IDE compuesta a mano': "    rtl = r'C:\\Program Files (x86)\\Embarcadero\\Studio\\37.0\\source'",

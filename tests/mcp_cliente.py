@@ -107,7 +107,7 @@ def _papelera():
     if not _PAPELERA:
         for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT',
                                                   'BUZON_SIN_WORKSPACE', 'BUZON_PREFIJO_WORKSPACE',
-                                                  'IDE_COPIAS_SUB', 'CAPTURAS_SUB')),
+                                                  'IDE_COPIAS_SUB', 'CAPTURAS_SUB', 'DESCARGA_PREFIJO')),
                                 ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
                                                    'CAJON_SUSTITUIDOS', 'CAJON_CORRUPTOS',
                                                    'TEMPORAL_DE_SUSTITUCION_EXT'))):
@@ -147,6 +147,9 @@ TEMPORAL_SUSTITUCION_EXT = _papelera()['TEMPORAL_DE_SUSTITUCION_EXT']
 TEMPORALES = _papelera()['TempFolderName']
 IDE_COPIAS = _papelera()['IDE_COPIAS_SUB']
 INFORMES = _papelera()['CarpetaDeInformes']
+# ...y el prefijo de la carpeta de cada llamada (NuevaCarpetaDescarga): tres
+# baterias lo escribian a mano en sus comprobaciones de que no queda (V22)
+DESCARGA_PREFIJO = _papelera()['DESCARGA_PREFIJO']
 
 
 def marca_dueno(copia):

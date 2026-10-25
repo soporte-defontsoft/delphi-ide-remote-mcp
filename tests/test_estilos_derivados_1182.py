@@ -283,7 +283,7 @@ try:
     temporal = glob.glob(os.path.join(SRVDIR, mc.TEMPORALES, '**', '*'), recursive=True)
     check('S7 nada del proceso se queda: ni temporales en la carpeta ni en la temporal del servidor',
           not restos and not [p for p in temporal if p.lower().endswith(('.bin.style', '.res')) or
-                              os.path.basename(p).startswith('__tmp-')], (restos, temporal))
+                              os.path.basename(p).startswith(mc.DESCARGA_PREFIJO)], (restos, temporal))
 
     # --------------------------- S8: el .style que se lee, por la puerta de leer
     FUERA = os.path.join(VICTIMA, 'Fuera.style')
@@ -311,7 +311,7 @@ try:
     temporal = glob.glob(os.path.join(SRVDIR, mc.TEMPORALES, '**', '*'), recursive=True)
     check('S12 un estilo que no convierte es un fallo, y en la temporal del servidor no queda la carpeta de la llamada',
           mc.como_json(r).get('ok') is False and
-          not [p for p in temporal if os.path.basename(p).startswith('__tmp-')], (r[:300], temporal))
+          not [p for p in temporal if os.path.basename(p).startswith(mc.DESCARGA_PREFIJO)], (r[:300], temporal))
 finally:
     srv.cierra()
 

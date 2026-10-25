@@ -98,7 +98,7 @@ TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)
 def bajadas():
     # las carpetas de descarga (Lsp.Casa: '__tmp-' + 8 hex) que se hubieran quedado
     return [p for base in (JAIL, os.path.join(BASE, 'srv'), SOLO)
-            for p in glob.glob(os.path.join(base, '**', '__tmp-*'), recursive=True)]
+            for p in glob.glob(os.path.join(base, '**', mc.DESCARGA_PREFIJO + '*'), recursive=True)]
 
 # ------------------------------------------- servidor A: raiz escribible
 srv = mc.Stdio(EXE, entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='ana', t=240)

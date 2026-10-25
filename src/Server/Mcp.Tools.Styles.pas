@@ -453,8 +453,6 @@ var
 begin
   Dir := StylesDirOf(APath);
   Files := TextStylesIn(Dir);
-  if TFile.Exists(APath) and not IsBinaryStyle(APath) and (Length(Files) = 0) then
-    Files := [TPath.GetFullPath(APath)];
   if Length(Files) = 0 then
     Exit(MsgFmt(SR_STYLES_NO_TEXT_FMT, [Dir]));
   if AProject.Trim <> '' then
@@ -1002,8 +1000,6 @@ begin
   if Exe = '' then
     Exit(MsgText(SR_STYLES_NO_CONVERTER));
   Files := TextStylesIn(Dir);
-  if TFile.Exists(APath) and not IsBinaryStyle(APath) then
-    Files := [TPath.GetFullPath(APath)];
   if Length(Files) = 0 then
     Exit(MsgFmt(SR_STYLES_NO_TEXT_FMT, [Dir]));
   Rc := '';
