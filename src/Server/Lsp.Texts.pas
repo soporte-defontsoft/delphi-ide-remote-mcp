@@ -8011,8 +8011,10 @@ const
     'fails with F2613 (then delphi_config add-searchpath to the Source ' +
     'folder).';
 
-  SR_COMPONENTS_PLATFORM_FMT =
-    '[COMP-008 INVALID_PARAM] Platform "%s" not recognized. Valid: %s.';
+  // COMP-008 (una plataforma que no es de Delphi, en delphi_components) se
+  // retiro en la 1.23: era el mismo hecho y la misma lista que BUILD-003, LA
+  // negativa de toda tool (NegativaDePlataforma; A36). TEST-001 se queda: dice
+  // las que se pueden EJECUTAR aqui, a proposito desde la 1.18
 
   SN_COMPONENTS_PLATFORM_HEAD_FMT =
     '[COMP-002] IDE Library Search Path for %s (RAD Studio %s): %d ' +

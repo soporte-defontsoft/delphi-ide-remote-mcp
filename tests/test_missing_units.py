@@ -41,7 +41,7 @@ check('platform view never shows the IDE own documents tree as a candidate',
       and (CAND in r or not mc.es(r, 'SN_COMPONENTS_PLATFORM_MISSING_FMT')), r)
 r = call('delphi_components', {'platform': 'Marte'})
 check('unknown platform refused with the list',
-      mc.es(r, 'SR_COMPONENTS_PLATFORM_FMT') and 'Linux64' in r, r)
+      mc.es(r, 'SR_PLATAFORMA_NO_VALIDA_FMT') and 'Linux64' in r, r)  # LA negativa de toda tool (A36 de la 1.23)
 r = call('delphi_components', {'platform': 'win64'})
 check('platform is canonicalized (win64 -> Win64)',
       mc.abre(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT') and ' Win64 ' in r.split('\n')[0], r)

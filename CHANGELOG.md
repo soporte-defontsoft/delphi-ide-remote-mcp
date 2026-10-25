@@ -21,6 +21,12 @@ the MCP `initialize` response (`serverInfo.version`).
   `delphi_projects` and `delphi_docs` (`Lsp.Listas`, `TPagina`); the one of
   `delphi_docs` now says how many characters came, of how many
   (`tests/test_delphi_docs.py`).
+- **`delphi_components` refuses an unknown platform like every other tool.**
+  A name that is not a Delphi platform got its own `COMP-008` with the same
+  list of valid ones that `BUILD-003` gives in the build, its gate and
+  `delphi_config`; it now gets `BUILD-003`. `delphi_test` keeps its
+  `TEST-001`, which lists the platforms that can RUN on this machine
+  (`tests/test_missing_units.py`).
 
 ### Removed
 

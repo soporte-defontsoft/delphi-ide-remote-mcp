@@ -301,7 +301,7 @@ try:
             'delphi_config', {'command': 'add-searchpath', 'project': DPROJ}, 'INVALID_PARAM',
             'SR_CONFIG_NEED_PATH')
     rechazo('E5 delphi_components con una plataforma inventada es un error INVALID_PARAM',
-            'delphi_components', {'platform': 'Amiga500'}, 'INVALID_PARAM', 'SR_COMPONENTS_PLATFORM_FMT')
+            'delphi_components', {'platform': 'Amiga500'}, 'INVALID_PARAM', 'SR_PLATAFORMA_NO_VALIDA_FMT')
 
     res, sc, t = llama('delphi_styles', {'command': 'view', 'path': ESTILO})
     # (revisor de baterias, 18-oct-2026) con CONTENIDO: un exito en prosa no

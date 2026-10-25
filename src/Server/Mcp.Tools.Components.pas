@@ -131,7 +131,7 @@ var
 begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
-    Exit(MsgFmt(SR_COMPONENTS_PLATFORM_FMT, [ARawPlatform, KnownPlatformsList]));
+    Exit(NegativaDePlataforma(ARawPlatform)); // LA de toda tool (A36 de la 1.23: era COMP-008, el mismo hecho)
   Mine := IdePlatformLibraryPaths(AInfo, Plat);
   UserDocs := PrefijoSinBarra(BdsUserDir(AInfo));
   CommonDocs := PrefijoSinBarra(BdsCommonDir(AInfo));
