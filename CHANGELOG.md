@@ -48,7 +48,6 @@ the MCP `initialize` response (`serverInfo.version`).
   walk also hands such links to the gate, and a source whose real target is
   outside is refused (`BUILD-060`). A link whose target is inside the roots
   still compiles (`tests/test_build_symlink_1230.py`).
-
 - **`delphi_styles build` compiles a resource script the server wrote, not the
   agent's.** The `.rc` that names the compiled style resources went to `brcc32`
   as the agent wrote it, and `brcc32` has a preprocessor (`#define`, `##`) that
@@ -64,7 +63,6 @@ the MCP `initialize` response (`serverInfo.version`).
   and the `.res` carries the same resources; the project build still takes a
   full `.rc`, and `lint` now reports a non-list `.rc`
   (`tests/test_styles_rc_lista_1230.py`).
-
 - **The build no longer reads a unit from outside through the main source's
   `in`.** The build's gate judged the `{$I}`/`{$R}` directives and everything
   the `.dproj` reads, but not the path of `uses X in '...'` in a `.dpr` (or
