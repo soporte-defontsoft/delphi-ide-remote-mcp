@@ -58,6 +58,22 @@ the MCP `initialize` response (`serverInfo.version`).
   that places a product asks it too, so a caller that forgets cannot place
   anything in a dead folder (`tests/test_round43.py` W1c,
   `tests/test_deploy_adb.py`).
+- **A new unit name is judged by the library the compiler resolves.** The
+  rule against hijacking a library unit was two lists by hand (28 units, 14
+  namespaces): `Generics.Collections` passed (it is
+  `System.Generics.Collections` through the `System` unit scope), and so did
+  the unit of any installed component (`IdHTTP`). It is now the `.dcu` and
+  `.pas` files of the IDE's Search Path for Win32 and Win64, where `dcc`
+  looks: a unit's exact name is refused (`CREATE-009`), and so is hanging a
+  name from one of the library's namespaces, directly or through a unit
+  scope (`CREATE-010`). A short name that only reaches a library unit
+  through the scopes of a project the IDE creates (`SysUtils`, `Consts`) is
+  created with a note that says so (`CREATE-037`): it only affects code that
+  writes that name unqualified. Most of the old list (`SysUtils`, `Forms`,
+  `Windows`...) was refused and now gets the note; `System`, the exact name
+  of a unit, is still refused. The same rule and note serve
+  `delphi_create`, `delphi_edit` creating a unit and `delphi_move` renaming
+  one (`tests/test_round10.py`, B2).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

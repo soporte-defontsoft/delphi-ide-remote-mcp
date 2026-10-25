@@ -408,6 +408,18 @@ function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: s
   la escribian cada una (depuracion de la 1.23). }
 function ComponentRootOf(const APath: string): string;
 
+{ LAS UNIDADES DE LA BIBLIOTECA que resuelve dcc: los nombres (en minusculas,
+  sin extension, ordenados) de los .dcu y .pas de las carpetas de la Search
+  Path de Win32 y Win64 del Delphi del servidor - donde las busca el
+  compilador, sin bajar a subcarpetas (FuentesBajo baja: no es la misma
+  pregunta): la RTL, la VCL, FMX y los componentes registrados. EL juez de
+  "ese nombre ya es de la biblioteca" (Lsp.Scaffold.BadUnitName: hasta el
+  25-oct-2026 dos listas a mano, 28 unidades y 14 espacios de nombres, sin
+  los componentes y con Generics.Collections colandose; V33 de la 1.23).
+  Medido: 1900 .dcu en 2 ms. Se mide de nuevo cada minuto (un componente
+  que se instala entra en el siguiente). Sin Delphi, vacio. }
+function UnidadesDeLaBiblioteca: TArray<string>;
+
 { Expands $(NAME) macros with the IDE's environment table (AVars as
   NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
   path vetting of delphi_config: a path with macros must resolve before the
@@ -1458,6 +1470,55 @@ begin
   Result := TPath.GetDirectoryName(PrefijoSinBarra(APath));
   if (Length(Result) <= 3) or (TPath.GetDirectoryName(Result) = '') then
     Result := '';
+end;
+
+var
+  GUnidades: TArray<string>;
+  GUnidadesTick: UInt64;
+
+function UnidadesDeLaBiblioteca: TArray<string>;
+const
+  VIDA_MS = 60000;
+var
+  Vistas: TDictionary<string, Boolean>;
+  Sr: TSearchRec;
+  Ext: string;
+begin
+  TMonitor.Enter(GDelphiCandado);
+  try
+    if (GUnidadesTick <> 0) and (GetTickCount64 - GUnidadesTick < VIDA_MS) then
+      Exit(GUnidades);
+  finally
+    TMonitor.Exit(GDelphiCandado);
+  end;
+  Vistas := TDictionary<string, Boolean>.Create;
+  try
+    for var Plat in ['Win32', 'Win64'] do
+      for var C in IdePlatformLibraryPaths(DiscoverRadStudio, Plat) do
+        if FindFirst(TPath.Combine(C, '*'), faAnyFile, Sr) = 0 then
+        try
+          repeat
+            if (Sr.Attr and faDirectory) <> 0 then
+              Continue;
+            Ext := LowerCase(ExtractFileExt(Sr.Name));
+            if (Ext = '.dcu') or (Ext = '.pas') then
+              Vistas.AddOrSetValue(LowerCase(ChangeFileExt(Sr.Name, '')), True);
+          until FindNext(Sr) <> 0;
+        finally
+          System.SysUtils.FindClose(Sr); // el de Winapi.Windows, detras en los uses, toma un THandle
+        end;
+    Result := Vistas.Keys.ToArray;
+    TArray.Sort<string>(Result);
+  finally
+    Vistas.Free;
+  end;
+  TMonitor.Enter(GDelphiCandado);
+  try
+    GUnidades := Result;
+    GUnidadesTick := GetTickCount64;
+  finally
+    TMonitor.Exit(GDelphiCandado);
+  end;
 end;
 
 initialization

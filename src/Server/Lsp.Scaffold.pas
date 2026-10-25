@@ -26,12 +26,19 @@ function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
 function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
 
 { LA regla de un nombre de unit NUEVO: un identificador (con puntos), y
-  ningun tramo palabra reservada, ni una unit de la RTL, ni colgando de un
-  espacio de nombres de Embarcadero. '' si vale; si no, la negativa. La usan
-  delphi_create, la creacion de units de delphi_edit y el move que renombra
-  una unit: los dos ultimos solo miraban que fuera un identificador, y
-  'Begin.pas' o 'System.pas' pasaban (revision de paisaje del 4-oct-2026). }
+  ningun tramo palabra reservada, ni el nombre de una unit de la biblioteca
+  que resuelve dcc, ni colgando de uno de sus espacios de nombres (el juez,
+  Lsp.Discovery.UnidadesDeLaBiblioteca, no una lista: V33 de la 1.23). '' si
+  vale; si no, la negativa. La usan delphi_create, la creacion de units de
+  delphi_edit y el move que renombra una unit: los dos ultimos solo miraban
+  que fuera un identificador, y 'Begin.pas' o 'System.pas' pasaban
+  (revision de paisaje del 4-oct-2026). }
 function BadUnitName(const AName: string): string;
+{ ...y lo que no se niega (David, 25-oct-2026: nota, no negativa): un nombre
+  corto que dcc tambien encuentra por un ambito de unidad de un proyecto del
+  IDE (Consts es Vcl.Consts). '' si no; si si, la nota con un salto delante,
+  para ponerla detras de la respuesta de quien crea el nombre. }
+function NotaDeNombreTapado(const AName: string): string;
 
 implementation
 
@@ -54,10 +61,20 @@ uses
   Lsp.TodoONada,
   Lsp.Args,
   Lsp.Rutas,
-  Lsp.DesignerMeta; // TRaizDeDiseno: lo que es la raiz que se crea
+  Lsp.DesignerMeta, // TRaizDeDiseno: lo que es la raiz que se crea
+  System.Generics.Collections,
+  Lsp.Discovery;
 
 const
   CRLF = #13#10;
+  // los ambitos de unidad de un proyecto nuevo, como los reparte el IDE (la
+  // nota, en el .dproj de abajo; medidos en los Samples de la 37.0): los de
+  // todas las plataformas, los de la VCL y los de Windows (Win32 con Bde).
+  // UNA lista para el .dproj que se crea y para el juez de un nombre de unit
+  AMBITOS_BASE = 'System;Xml;Data;Datasnap;Web;Soap;';
+  AMBITOS_VCL = 'Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;';
+  AMBITOS_WIN64 = 'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;';
+  AMBITOS_WIN32 = AMBITOS_WIN64 + 'Bde;';
   // El ProjectVersion que escribe el IDE de la casa al crear un proyecto (13.1
   // = 20.4; el 13.2 escribe 20.5 y sube el 20.4 al abrir, quitando ademas las
   // plataformas Apple). SIN JUEZ medible (21-oct-2026): los .targets no lo
@@ -151,9 +168,9 @@ begin
   // 'uses Dialogs' sin calificar compilaba contra Vcl.Dialogs en Win32 y no
   // en Linux64 (RetoFMX de Hermes), y la consola, el paquete y el DUnitX que
   // crea el IDE tampoco los llevan (medido el 18-oct-2026).
-  Ambitos := 'System;Xml;Data;Datasnap;Web;Soap;';
+  Ambitos := AMBITOS_BASE;
   if EsVcl then
-    Ambitos := Ambitos + 'Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;';
+    Ambitos := Ambitos + AMBITOS_VCL;
   // La informacion de version de Windows, como la escribe el IDE en un
   // proyecto nuevo (medido el 17-oct-2026 con proyectos que el IDE de la 37.0
   // acababa de crear, uno de cada tipo: estas claves en cada grupo de una
@@ -306,10 +323,10 @@ begin
       '        <DCC_Namespace>' + Ambitos + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
       BaseProps) +
     GrupoDeValores('Win32', 'Base',
-      '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      '        <DCC_Namespace>' + AMBITOS_WIN32 + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
       VerInfoWin + Win32Props) +
     GrupoDeValores('Win64', 'Base',
-      '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      '        <DCC_Namespace>' + AMBITOS_WIN64 + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
       VerInfoWin + Win64Props) +
     Valores +
     '    <ItemGroup>' + CRLF +
@@ -513,28 +530,41 @@ begin
     'end' + CRLF;
 end;
 
+{ Los ambitos de unidad que reparte el IDE en un proyecto nuevo, todos (los
+  de todas las plataformas, los de la VCL y los de Windows), los mismos que
+  escribe el .dproj de aqui: con ellos dcc encuentra Consts como Vcl.Consts. }
+function AmbitosDeProyectoNuevo: TArray<string>;
+begin
+  Result := (AMBITOS_BASE + AMBITOS_VCL + AMBITOS_WIN32).Split([';'], TStringSplitOptions.ExcludeEmpty);
+end;
+
+{ ACabeza (el primer tramo de un nombre con puntos) es un espacio de nombres
+  de la biblioteca: alguna de sus unidades cuelga de el, directamente
+  (Vcl.Forms) o por un ambito (System.Generics.Collections, para Generics). }
+function EsEspacioDeLaBiblioteca(const AUnidades: TArray<string>; const ACabeza: string): Boolean;
+var
+  Prefijos: TArray<string>;
+begin
+  Prefijos := [ACabeza.ToLower + '.'];
+  for var S in AmbitosDeProyectoNuevo do
+    Prefijos := Prefijos + [S.ToLower + '.' + ACabeza.ToLower + '.'];
+  for var U in AUnidades do
+    for var P in Prefijos do
+      if U.StartsWith(P) then
+        Exit(True);
+  Result := False;
+end;
+
 { Why a syntactically valid identifier can still be a terrible unit name.
   Measured, field round 8: `delphi_create kind=unit name=begin` was accepted
   and the next build died with 17 cascading errors on the .dpr; `name=System`
   was accepted and quietly hijacked the RTL's own unit. The old check only
   asked "is this an identifier", which both of those pass. }
 function BadUnitName(const AName: string): string;
-const
-  // Units of the RTL/VCL/FMX habitually reached unqualified. A file with one
-  // of these names next to the project shadows the real one, and the error
-  // the compiler then gives points anywhere but here.
-  RTL: array [0 .. 27] of string = ('System', 'SysUtils', 'Classes', 'Types',
-    'Variants', 'Math', 'Windows', 'Messages', 'Forms', 'Controls',
-    'Graphics', 'Dialogs', 'StdCtrls', 'ExtCtrls', 'ComCtrls', 'Menus',
-    'Buttons', 'DB', 'IniFiles', 'Registry', 'StrUtils', 'DateUtils',
-    'IOUtils', 'Character', 'Generics', 'Threading', 'JSON', 'Contnrs');
-  // The namespaces the compiler itself owns: anything under them belongs to
-  // Embarcadero, and a file of ours with that name wins over theirs.
-  NAMESPACES: array [0 .. 13] of string = ('System', 'Vcl', 'FMX', 'Data',
-    'Datasnap', 'Web', 'Soap', 'Xml', 'Bde', 'IBX', 'REST', 'Winapi',
-    'Posix', 'FireDAC');
 var
-  W, Head: string;
+  Unidades: TArray<string>;
+  Head: string;
+  Ix: Integer;
 begin
   Result := '';
   // Ident(.Ident)*: dotted namespaces are legal Delphi (MyApp.Forms.Main);
@@ -546,19 +576,32 @@ begin
   for Head in AName.Split(['.']) do
     if EsPalabraReservada(Head) then
       Exit(MsgFmt(SR_CREATE_RESERVED_FMT, [Head, AName]));
-  for W in RTL do
-    if SameText(AName, W) then
-      Exit(MsgFmt(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
-  // "a namespaced name shadows nothing" was wrong, and the refusal above even
-  // RECOMMENDED adding a dot: `name=System.SysUtils` was accepted and planted
-  // an empty System.SysUtils.pas next to the .dpr, after which `Exception`
-  // stopped existing (measured 2026-08-25). A first segment that IS an RTL
-  // namespace is the same hijack with more letters.
+  // El juez es la biblioteca que resuelve dcc (Lsp.Discovery), no una lista
+  // (eran dos a mano, 28 unidades y 14 espacios, sin los componentes; V33 de
+  // la 1.23): su nombre EXACTO - System, System.SysUtils, IdHTTP - tapa la
+  // suya junto al proyecto...
+  Unidades := UnidadesDeLaBiblioteca;
+  if TArray.BinarySearch<string>(Unidades, AName.ToLower, Ix) then
+    Exit(MsgFmt(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
+  // ...y colgar de uno de sus espacios de nombres es el mismo secuestro con
+  // mas letras: name=System.SysUtils planto un System.SysUtils.pas vacio y
+  // Exception dejo de existir (2026-08-25); Generics.Collections pasaba, por
+  // el ambito System
   Head := PrimerTrozo(AName, ['.']);
-  if AName.Contains('.') then
-    for W in NAMESPACES do
-      if SameText(Head, W) then
-        Exit(MsgFmt(SR_CREATE_RTLNS_FMT, [AName, Head, Head]));
+  if AName.Contains('.') and EsEspacioDeLaBiblioteca(Unidades, Head) then
+    Exit(MsgFmt(SR_CREATE_RTLNS_FMT, [AName, Head, Head]));
+end;
+
+function NotaDeNombreTapado(const AName: string): string;
+var
+  Unidades: TArray<string>;
+  Ix: Integer;
+begin
+  Result := '';
+  Unidades := UnidadesDeLaBiblioteca;
+  for var S in AmbitosDeProyectoNuevo do
+    if TArray.BinarySearch<string>(Unidades, (S + '.' + AName).ToLower, Ix) then
+      Exit(#10 + MsgFmt(SN_CREATE_NOMBRE_TAPADO_FMT, [AName, S + '.' + AName, AName, S + '.' + AName]));
 end;
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
@@ -809,7 +852,7 @@ begin
     Result := MsgFmt(SK_CREATE_CREADO_PROYECTO_FMT,
       [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName,
        IfThen(Kind = 'package', #10 + MsgText(SN_CREATE_PACKAGE_NOTE),
-         IfThen(Kind = 'test', #10 + MsgFmt(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]);
+         IfThen(Kind = 'test', #10 + MsgFmt(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]) + NotaDeNombreTapado(AName);
   finally
     Files.Free;
   end;
@@ -1066,7 +1109,7 @@ begin
     Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
       [IfThen(Kind.StartsWith('frame'), MsgText(SF_CREATE_CLASE_FRAME), IfThen(Kind = 'datamodule', MsgText(SF_CREATE_CLASE_DATA_MODULE), MsgText(SF_CREATE_CLASE_FORM))),
        AUnitName, FormName, Kind, AUnitName + DesignerExt, Result,
-       IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]);
+       IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]) + NotaDeNombreTapado(AUnitName);
 end;
 
 { El fuente de una unit: el content del agente, comprobado (su `unit X;` es
@@ -1140,7 +1183,7 @@ begin
       Exit;
     // el content es del agente: lo audita el mismo aviso que delphi_edit
     Exit(ConAvisosDeLlaves(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT,
-      [AUnitName, PasPath, Length(LineasDelTexto(Body))]), PasPath, Body));
+      [AUnitName, PasPath, Length(LineasDelTexto(Body))]), PasPath, Body) + NotaDeNombreTapado(AUnitName));
   end;
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
@@ -1186,7 +1229,7 @@ begin
   end
   else
     Result := ConAvisosDeLlaves(MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
-      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]), PasPath, Body);
+      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]), PasPath, Body) + NotaDeNombreTapado(AUnitName);
 end;
 
 function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;

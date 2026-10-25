@@ -6890,20 +6890,30 @@ const
     'either: the segment must be clean).';
 
   SR_CREATE_RTLNAME_FMT =
-    '[CREATE-009 DENIED] "%s" is the name of an RTL/VCL unit. A file ' +
-    'with that name next to the project HIJACKS the real one, and the ' +
-    'errors that come afterwards point anywhere but here. Give it a ' +
-    'prefix of your own (U%s) or a namespace of YOUR OWN (MyApp.%s): ' +
-    'what is not valid is hanging it from one of Embarcadero''s (System., ' +
-    'Vcl., FMX., Data...).';
+    '[CREATE-009 DENIED] "%s" is the name of a unit the compiler finds in ' +
+    'the library of this server''s Delphi (the RTL, the VCL, FMX or an ' +
+    'installed component). A file with that name next to the project ' +
+    'HIJACKS the real one, and the errors that come afterwards point ' +
+    'anywhere but here. Give it a prefix of your own (U%s) or a namespace ' +
+    'of YOUR OWN (MyApp.%s): what is not valid is hanging it from one of ' +
+    'the library''s (System., Vcl., FMX., Data...).';
 
   SR_CREATE_RTLNS_FMT =
-    '[CREATE-010 DENIED] "%s" hangs from "%s", which is an Embarcadero ' +
-    'namespace. Creating a unit of yours there hijacks the compiler''s ' +
+    '[CREATE-010 DENIED] "%s" hangs from "%s", a namespace of the library ' +
+    'of this server''s Delphi (directly, or through a unit scope name such ' +
+    'as System). Creating a unit of yours there hijacks the compiler''s ' +
     'one exactly like using the bare name: as soon as it exists, theirs ' +
     'can no longer be found, and the error you see is that something as ' +
     'basic as Exception has disappeared. Use a namespace of your own ' +
     '(not MyApp.%s, but MyCompany.MyApp.Whatever).';
+
+  { V33 de la 1.23 (David, 25-oct-2026: nota, no negativa): un nombre corto
+    que dcc tambien encuentra por un ambito de unidad }
+  SN_CREATE_NOMBRE_TAPADO_FMT =
+    '[CREATE-037] "%s" is also %s through the unit scope names of a ' +
+    'project the IDE creates: code that writes "uses %s" meaning the ' +
+    'library''s unit gets this one instead. Code that names it in full ' +
+    '(%s), as the IDE writes it, is not affected.';
 
   SR_CREATE_PROJECT_KIND =
     '[CREATE-011 INVALID_PARAM] I can only make five kinds of project: ' +

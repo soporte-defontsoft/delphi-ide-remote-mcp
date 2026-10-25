@@ -1264,7 +1264,8 @@ begin
       // con el nombre viejo
       if not HabiaCopiaCabecera then
         QuitaCopiaDeSeguridad(CopiaCabecera, AncestroCabecera);
-      Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]);
+      Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]) +
+        NotaDeNombreTapado(NewStem); // el nombre nuevo, como al crearlo (V33)
     end
     else
       Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_NO_ENCONTRADA_FMT, [OldStem, NewStem]);

@@ -4785,7 +4785,7 @@ begin
         Exit(ConAvisosDeLlaves(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
           [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
            NombreDelSalto(SaltoPedido(A.Eol)), Auditoria(CM)]) +
-          IfThen(NotaCreada <> '', #10 + NotaCreada, ''), A.Path, Skel));
+          IfThen(NotaCreada <> '', #10 + NotaCreada, '') + NotaDeNombreTapado(UnitName), A.Path, Skel));
       end;
 
       if not TFile.Exists(A.Path) then

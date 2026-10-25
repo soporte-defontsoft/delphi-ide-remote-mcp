@@ -101,13 +101,32 @@ r = A.call('delphi_create', {'kind': 'project-console', 'name': 'App', 'dir': PR
 assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 DPROJ = os.path.join(PRJ, 'App.dproj')
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'System.SysUtils', 'project': DPROJ})
-check('B2 un nombre CUALIFICADO de la RTL: RECHAZADO',
-      mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNS_FMT') and not os.path.exists(os.path.join(PRJ, 'System.SysUtils.pas')),
+check('B2 un nombre CUALIFICADO de la RTL: RECHAZADO (es el de una unidad de la biblioteca)',
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNAME_FMT') and not os.path.exists(os.path.join(PRJ, 'System.SysUtils.pas')),
       r[:250])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'Vcl.Forms', 'project': DPROJ})
-check('B2 ...y cualquier otro espacio de Embarcadero', mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNS_FMT'), r[:200])
+check('B2 ...y cualquier otra unidad de la biblioteca', mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNAME_FMT'), r[:200])
+# V33 de la 1.23: el juez es la biblioteca que resuelve dcc (las .dcu de su
+# Search Path), no dos listas a mano: colgar de uno de sus espacios se niega
+# aunque la unidad no exista, tambien por un ambito (Generics.Collections es
+# System.Generics.Collections: pasaba), y una unidad de un componente
+# registrado (Indy) es tan de la biblioteca como la RTL (pasaba)
+for nombre, msg in (('Vcl.NoExisteNunca', 'SR_CREATE_RTLNS_FMT'), ('Generics.Collections', 'SR_CREATE_RTLNS_FMT'),
+                    ('IdHTTP', 'SR_CREATE_RTLNAME_FMT')):
+    r = A.call('delphi_create', {'kind': 'unit', 'name': nombre, 'project': DPROJ})
+    check('B2 %s: RECHAZADO (%s)' % (nombre, msg), mc.rechazado(r) and mc.es(r, msg)
+          and not os.path.exists(os.path.join(PRJ, nombre + '.pas')), r[:250])
+# ...y un nombre corto que solo tapa por un AMBITO (SysUtils es System.SysUtils,
+# Consts es Vcl.Consts) se crea con una NOTA, no se niega (David, 25-oct-2026):
+# solo afecta a codigo que escriba el nombre sin cualificar. SysUtils se negaba
+for nombre in ('SysUtils', 'Consts'):
+    r = A.call('delphi_create', {'kind': 'unit', 'name': nombre, 'project': DPROJ})
+    check('B2 %s: se crea con la nota de lo que tapa por un ambito' % nombre,
+          mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and mc.es(r, 'SN_CREATE_NOMBRE_TAPADO_FMT')
+          and os.path.exists(os.path.join(PRJ, nombre + '.pas')), r[:400])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'MiEmpresa.Datos', 'project': DPROJ})
-check('B2 un espacio de nombres PROPIO sigue valiendo', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT'), r[:200])
+check('B2 un espacio de nombres PROPIO sigue valiendo, y sin nota', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT')
+      and not mc.es(r, 'SN_CREATE_NOMBRE_TAPADO_FMT'), r[:200])
 r = A.call('delphi_create', {'kind': 'project-web', 'name': 'X', 'dir': os.path.join(BASE, 'X')})
 check('B4 un kind de proyecto inventado nombra los que existen',
       'project-console' in r and 'project-vcl' in r, r[:250])
