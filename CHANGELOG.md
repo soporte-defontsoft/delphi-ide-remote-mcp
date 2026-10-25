@@ -122,6 +122,17 @@ the MCP `initialize` response (`serverInfo.version`).
   header (an optional `class` and the routine word) is now one pattern
   (`Lsp.Pascal.PatronInicioDeRutina`), shared by the five places that wrote
   it by hand (`tests/test_lector_clases.py`).
+- **A file with no BOM and no accent is labelled `ascii (utf8/ansi
+  compatible)`, not `utf8`.** `delphi_read` said `encoding=utf8` of a unit
+  that the IDE opens as ANSI: with nothing but ASCII, UTF-8 and the ANSI page
+  read it alike, and the detector follows the IDE's preference for NEW files
+  (which still decides how a source born in the same call is written). The
+  label of `delphi_read`, `delphi_edit` and `delphi_textedit` now has one
+  composer (`Lsp.Patch.EtiquetaDeCodificacion`); `delphi_textedit create`
+  already said it this way with a rule of its own. And an edit of
+  `delphi_textedit` reports the encoding of what it left on disk, not the one
+  it read: the first accent of an ASCII text is written in that of a new file
+  of its class. No byte changes (`tests/test_delphi_patch.py`).
 - **A test never runs in a job without its limits.** `delphi_test` runs a
   test inside a Job Object (kill-on-close, a cap of 3 GiB per process and
   one on processes) and refuses to run it when the job cannot be created;

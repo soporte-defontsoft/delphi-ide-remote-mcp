@@ -1461,6 +1461,27 @@ for _nom, _eds, _como in (('UOrdAO.pas', [_EA, _EO], 'la vocal y luego la Omega'
     check('...y un changeset con %s: el commit hace lo que dijo su preview (UTF-8 con BOM)' % _como,
           open(_p, 'rb').read() == _final(_o), (_r[:300], open(_p, 'rb').read()[:60]))
 
+# A41 de la 1.23: la ETIQUETA de un fuente solo ASCII y sin BOM. El detector lo lee en la preferencia del IDE para
+# los ficheros nuevos y READ-005 decia encoding=utf8 de una unit que el IDE abre como ANSI (David, 24-oct); las dos
+# lo leen igual, y se dice asi en toda tool (EtiquetaDeCodificacion). Con su primer acento, la del escritor
+_ETQ = 'encoding=' + mc.catalogo()['SF_TEXT_ASCII_COMPATIBLES'] + '  '
+_pa = os.path.join(DIR, 'UEtiqAscii.pas')
+open(_pa, 'wb').write(b"unit UEtiqAscii;\r\n\r\ninterface\r\n\r\nconst\r\n  A = 'Cana';\r\n\r\n"
+                      b"implementation\r\n\r\nend.\r\n")
+_out = call('delphi_read', {'path': _pa})
+check('A41 delphi_read de un fuente ASCII sin BOM: encoding=ascii (utf8/ansi compatible), no utf8 (ROJO contra '
+      'r1222bz)', _ETQ in _out, _out[:200])
+_out = call('delphi_edit', {'path': _pa, 'old': "  A = 'Cana';", 'new': "  A = 'Canas';"})
+check('A41 ...una edicion que lo deja ASCII lo dice igual en el eco de delphi_edit', _ETQ in _out, _out[:300])
+_out = call('delphi_edit', {'path': _pa, 'old': "  A = 'Canas';", 'new': "  A = 'Cañas';"})
+_b = open(_pa, 'rb').read()
+check('A41 ...y con su primer acento, la del escritor (ANSI sin BOM, como el IDE al guardar), no la etiqueta ASCII',
+      _ETQ not in _out and b'\xf1' in _b and not _b.startswith(b'\xef\xbb\xbf'), (_out[:300], _b[:80]))
+_ta = os.path.join(DIR, 'etiq_ascii.md')
+open(_ta, 'wb').write(b'# titulo\r\nlinea uno\r\n')
+_out = call('delphi_textedit', {'path': _ta, 'old': 'linea uno', 'new': 'linea dos'})
+check('A41 ...y delphi_textedit, al editar un texto que sigue ASCII (era solo su create)', _ETQ in _out, _out[:300])
+
 # (r5 de la 1.18.0, regla 5 de David) un FUENTE en UTF-8 sin BOM con acentos se
 # lee y se escribe como UTF-8 (sus bytes), y al LEERLO READ-008 dice que dcc lo
 # compilara como ANSI y que la salida es guardarlo en el IDE (le pone el BOM).

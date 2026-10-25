@@ -67,6 +67,15 @@ type
   BOM se ejecuta como 'AcciÃ³n'); el servidor lo leia como UTF-8 (4.1 de la
   1.18.0, David: un parametro del detector, no un segundo detector). }
 function DetectEnc(const B: TArray<Byte>; AEsDesigner: Boolean = False): TEncKind;
+{ LA etiqueta que se ENSENA de la codificacion de un fichero (encoding= de
+  delphi_read, delphi_edit y delphi_textedit): su EncName, salvo la de uno sin
+  BOM y sin ningun byte alto (AEsAscii), que leen igual el UTF-8 y la ANSI:
+  'ascii (utf8/ansi compatible)'. El detector lee ese ASCII en la preferencia
+  del IDE para los ficheros NUEVOS (la cuenta EncAlEscribir para un fuente que
+  nace en la llamada), y delphi_read decia utf8 de una unit que el IDE abre
+  como ANSI (A41 de la 1.23, David 24-oct); el create de delphi_textedit ya lo
+  decia asi, con su propia regla. Solo la etiqueta: los bytes no cambian. }
+function EtiquetaDeCodificacion(K: TEncKind; AEsAscii: Boolean): string;
 { La sangria (espacios y tabuladores) del principio de S. }
 function LeadingWhite(const S: string): string;
 { La sangria de la linea de ATexto en la que esta la posicion APos (1-based):
@@ -1147,6 +1156,14 @@ begin
   for I := 0 to High(Result) do
     if Result[I] <> '' then
       Result[I] := Sangria + Result[I];
+end;
+
+function EtiquetaDeCodificacion(K: TEncKind; AEsAscii: Boolean): string;
+begin
+  if AEsAscii and (K in [ekUtf8, ekAnsi]) then
+    Result := MsgText(SF_TEXT_ASCII_COMPATIBLES)
+  else
+    Result := EncName(K);
 end;
 
 function DetectEnc(const B: TBytes; AEsDesigner: Boolean): TEncKind;
@@ -4587,12 +4604,13 @@ begin
   // INVALID_PARAM ("from=1 is past the end") (quinta revision)
   if (Length(Lines) = 0) and (AFrom <= 1) then
     Exit(NotaBin + NotaVuelta + MsgFmt(SK_EDIT_LECTURA_VACIO_FMT,
-      [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M)]));
+      [TPath.GetFileName(APath), EtiquetaDeCodificacion(K, not HayByteAlto(B)), Eol, Auditoria(M)]));
   IniL := AFrom;
   if IniL < 1 then IniL := 1;
   if IniL > Length(Lines) then
     Exit(MsgFmt(SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT,
-      [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M), Length(Lines), IniL]));
+      [TPath.GetFileName(APath), EtiquetaDeCodificacion(K, not HayByteAlto(B)), Eol, Auditoria(M),
+       Length(Lines), IniL]));
   FinL := ATo;
   if (FinL <= 0) or (FinL > Length(Lines)) then FinL := Length(Lines);
   // A range that runs backwards used to answer with a header and an EMPTY
@@ -4615,7 +4633,7 @@ begin
     Sb.Free;
   end;
   Result := NotaBin + NotaVuelta + MsgFmt(SK_EDIT_LECTURA_NUMERADA_FMT,
-    [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M), IniL, FinL,
+    [TPath.GetFileName(APath), EtiquetaDeCodificacion(K, not HayByteAlto(B)), Eol, Auditoria(M), IniL, FinL,
      Length(Lines), Body, Cut]);
 end;
 
@@ -6358,8 +6376,9 @@ begin
     else if Replacement = '' then
       Accion := MsgFmt(SK_EDIT_BLANQUEADA_LINEA_FMT,
         [HitIdx + 1, TPath.GetFileName(APath)]);
+    // la etiqueta, la de lo que quedo en el disco (After, lo releido)
     Result := MsgFmt(SF_EDIT_ECO_ESCRITURA_FMT,
-      [Accion, EncName(K), Eol, CopyNote, AuditoriaAntesYDespues(M, D), Ctx]);
+      [Accion, EtiquetaDeCodificacion(K, not HayByteAlto(After)), Eol, CopyNote, AuditoriaAntesYDespues(M, D), Ctx]);
     if Warnings.Count > 0 then
       Result := Result + #10 + Warnings.Text.TrimRight;
     if NotaRelectura <> '' then

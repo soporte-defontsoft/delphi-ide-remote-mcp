@@ -132,7 +132,7 @@ begin
   // (medido 2026-09-21, bateria test_round40).
   Result := MsgFmt(SK_TEXT_CREADO_ENCODING_FINALES_FMT,
     [MaskDriveText('', A.Path),
-     IfThen(IsAscii(Text) and (Enc = 'utf8'), MsgText(SF_TEXT_ASCII_COMPATIBLES), Enc),
+     EtiquetaDeCodificacion(EncKindOf(Enc), IsAscii(Text)), // LA etiqueta (Lsp.Patch, A41)
      EolName, Length(TFile.ReadAllBytes(A.Path))]);
 end;
 
@@ -234,25 +234,32 @@ begin
   end;
   if A.Ensayo then
     Exit(''); // nada escrito: nada que ensenar
+  // la etiqueta de lo que QUEDO en el disco, por EL detector y EL nombrador
+  // (un ASCII sin BOM no es utf8 ni ansi: las dos lo leen igual; A41 de la
+  // 1.23). Decia la codificacion LEIDA, y el primer acento de un texto ASCII lo
+  // escribe EncAlEscribir en la de uno nuevo de su clase, que puede ser otra
+  var Escritos := TFile.ReadAllBytes(A.Path);
+  var Etiqueta := EtiquetaDeCodificacion(DetectEnc(Escritos, EsRutaDeDesigner(A.Path)),
+    not HayByteAlto(Escritos));
 
   if Cuantas > 1 then
     Exit(MsgFmt(SK_TEXT_RANGO_VERIFICACION_FMT,
       [Format(IfThen(A.DeleteLine, MsgText(SN_RANGE_DELETED_FMT), MsgText(SN_RANGE_REPLACED_FMT)),
          [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
-       EncNm, TrashFolderName,
+       Etiqueta, TrashFolderName,
        EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]));
   if A.DeleteLine then
     Exit(MsgFmt(SK_TEXT_OK_BORRADA_LINEA_FMT,
-      [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
+      [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
        EcoNumerado(A.Path, Target, Target + 2)]));
   // old sin new deja la linea en blanco: se dice, como delphi_edit (EDIT-089);
   // contestaba "OK line N" (decima revision)
   if (Length(NewLines) = 1) and (NewLines[0] = '') then
     Exit(MsgFmt(SK_TEXT_BLANQUEADA_LINEA_FMT,
-      [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
+      [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
        EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]));
   Result := MsgFmt(SK_TEXT_OK_LINEA_FMT,
-    [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
+    [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
      EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]);
 end;
 
