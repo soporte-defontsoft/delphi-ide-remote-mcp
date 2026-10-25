@@ -149,14 +149,19 @@ check('X ...y no ha creado nada', not os.path.exists(os.path.join(CASA, 'sub', '
 out = call('delphi_move', {'path': CASA, 'dest': os.path.join(CASA, 'sub', 'movida')})
 check('X move dentro de si misma: RECHAZADO con el motivo', mc.rechazado(out) and mc.es(out, 'SR_COPIA_DENTRO_DE_SI_FMT'), out[:200])
 
-# ---- P: a project never lives in two places - a loose project file neither
+# ---- P: un proyecto se copia como cualquier fichero o carpeta (V19 de la 1.23: era MOVE-004,
+# "un proyecto nunca vive en dos sitios", una regla de nuestro flujo de promocion)
 out = call('delphi_move', {'path': os.path.join(APP, 'App.dproj'), 'dest': os.path.join(MINE, 'Otra.dproj'), 'copy': True})
-check('P copy de un .dproj SUELTO: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(os.path.join(MINE, 'Otra.dproj')), out[:200])
+check('P copy de un .dproj SUELTO: COPIADO (V19)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(MINE, 'Otra.dproj')), out[:200])
+if os.path.exists(os.path.join(MINE, 'Otra.dproj')):
+    os.remove(os.path.join(MINE, 'Otra.dproj'))
 SOLODPR = os.path.join(MINE, 'solodpr')
 os.makedirs(SOLODPR, exist_ok=True)
 open(os.path.join(SOLODPR, 'P.dpr'), 'w').write('program P;\nbegin\nend.\n')
 out = call('delphi_move', {'path': SOLODPR, 'dest': os.path.join(MINE, 'solodpr2'), 'copy': True})
-check('P copy de una carpeta con solo un .dpr: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(os.path.join(MINE, 'solodpr2')), out[:200])
+check('P copy de una carpeta con solo un .dpr: COPIADA (V19)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(MINE, 'solodpr2', 'P.dpr')), out[:200])
+if os.path.isdir(os.path.join(MINE, 'solodpr2')):
+    mc.borra(os.path.join(MINE, 'solodpr2'))
 out = call('delphi_move', {'path': os.path.join(APP, 'UNew.pas'), 'dest': os.path.join(MINE, 'UCopia.pas'), 'copy': True})
 check('P una unit suelta SI se copia', mc.abre(out, 'SK_MOVE_COPIADO_FMT'), out[:200])
 

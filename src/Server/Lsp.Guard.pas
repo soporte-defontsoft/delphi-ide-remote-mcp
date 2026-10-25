@@ -416,6 +416,13 @@ type
     que si): quien cuenta lo copiado lo cuenta aqui, y puede lanzar para
     cortar la copia entera - un tope de tamano. }
   TOmiteAlCopiar = reference to function(const APath: string): Boolean;
+  { Lo que el copiador COPIARIA, sin escribir nada (AAlListar de CopiaArbol):
+    cada entrada con su destino, por las MISMAS reglas (enlaces, papelera,
+    vault, AOmite, bucles); ADetrasDeEnlace = se llega a ella por un enlace
+    que la copia sigue. Para una carpeta, False = no bajar. Lo usa quien mira
+    ANTES de copiar (la copia de un repo, V19): un recorredor, no dos. }
+  TListaCopia = reference to function(const AOrigen, ADestino: string;
+    AEsCarpeta, ADetrasDeEnlace: Boolean): Boolean;
 
 { EL copiador de arboles: copia AOrigen en ADestino SIN FUGAS DE LECTURA. Un
   enlace (junction o symlink, de carpeta o de fichero) se sigue SOLO si su
@@ -436,18 +443,19 @@ type
   enlaces; una junction a la raiz dentro de la carpeta metia la copia en su
   propia papelera y el move fallaba (novena revision). AOmite (opcional):
   lo que quien llama deja fuera - delphi_test no se lleva los .dcu a la
-  carpeta de su contenedor. Un parametro del copiador, no otro copiador. }
+  carpeta de su contenedor. AAlListar (opcional): no escribe NADA, dice lo
+  que copiaria (TListaCopia). Un parametro del copiador, no otro copiador. }
 procedure CopiaArbol(const AOrigen, ADestino: string; AConservaAtributos: Boolean;
   out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean = True;
-  const AOmite: TOmiteAlCopiar = nil);
+  const AOmite: TOmiteAlCopiar = nil; const AAlListar: TListaCopia = nil);
 
 { La decision de copy=true, sola: '' = se puede copiar AOrigen en ADestino.
-  No, si ADestino cae DENTRO de AOrigen (se copiaria sin fin), ni si lo que
-  se va a copiar ES o CONTIENE un proyecto (.dproj, .dpk, .dpr): un proyecto
-  nunca vive en dos sitios (David, 24-sep-2026). Se mira lo que la copia VA
-  a copiar: los enlaces con la misma regla que CopiaArbol (EnlaceLegible),
-  sin la papelera, y un fichero suelto tambien (un .dproj copiado solo se
-  colaba; el .dpr ni se contaba - auditoria 25-sep-2026). Y ADestino no
+  No, si ADestino cae DENTRO de AOrigen (se copiaria sin fin), si AOrigen es
+  metadato de git, ni si un repo de dentro tiene su git FUERA de lo que se
+  copia (GitDeLaCopiaDenegado). Un proyecto se copia como cualquier carpeta
+  (V19 de la 1.23; David, 17-oct-2026: "copiar, mover, borrar carpetas y su
+  contenido o ficheros, punto, como haria el operador"; era MOVE-004, "un
+  proyecto nunca vive en dos sitios", del flujo de promocion). Y ADestino no
   puede SER ni CONTENER un lugar protegido (ProtegidoDenegado con
   AComoDestino): lo copiado llega alli entero (1.18.2, 2r). }
 function CopiaDenegada(const AOrigen, ADestino: string): string;
@@ -999,6 +1007,12 @@ function BadProfileName(const V: string): Boolean;
 var
   DameGitDirDeCarpeta: function(const ACarpeta: string;
     out AGitDir, AComun: string): Boolean;
+  { ...y la MISMA pregunta SIN cache y con la raiz del arbol de trabajo
+    (ARaiz: '' en un repo bare), para una decision que un "no es repo" de
+    antes de un init no puede contestar: la copia de un arbol con su git
+    dentro (V19). La pone Mcp.Tools.Git (DondeViveElRepo). }
+  DameRepoDeCarpeta: function(const ACarpeta: string;
+    out AGitDir, AComun, ARaiz: string): Boolean;
 
 implementation
 
@@ -3679,7 +3693,7 @@ end;
 
 procedure CopiaArbol(const AOrigen, ADestino: string; AConservaAtributos: Boolean;
   out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean;
-  const AOmite: TOmiteAlCopiar);
+  const AOmite: TOmiteAlCopiar; const AAlListar: TListaCopia);
 var
   Vistos: TStringList;
   NoSeg: TStringList;
@@ -3691,7 +3705,7 @@ var
       NoSeg.Add(P);
   end;
 
-  procedure Copia(const O, D: string);
+  procedure Copia(const O, D: string; ADetras: Boolean);
   var
     E, Nombre: string;
   begin
@@ -3699,7 +3713,8 @@ var
     if Vistos.IndexOf(LowerCase(RealPath(O))) >= 0 then
       Exit;
     Vistos.Add(LowerCase(RealPath(O)));
-    CrearCarpeta(D);
+    if not Assigned(AAlListar) then
+      CrearCarpeta(D);
     // por EL lector que distingue "vacia" de "no se deja listar"
     // (EntradasDeCarpeta, 2g de la 1.18.4): GetFiles/GetDirectories daban
     // VACIA una carpeta que Windows no deja listar y la copia la dejaba vacia
@@ -3715,9 +3730,11 @@ var
           NoSeg.Add(E)
         else if (not EsEnlace(E) or SeSigue(E)) and
            (not Assigned(AOmite) or not AOmite(E)) then
+          if Assigned(AAlListar) then
+            AAlListar(E, TPath.Combine(D, TPath.GetFileName(E)), False, ADetras or EsEnlace(E))
           // la de seguridad de un move conserva los atributos; la del agente
           // (copy=true) va sin el +R heredado
-          if AConservaAtributos then
+          else if AConservaAtributos then
             TFile.Copy(E, TPath.Combine(D, TPath.GetFileName(E)), False)
           else
             CopiaNuestra(E, TPath.Combine(D, TPath.GetFileName(E)));
@@ -3738,8 +3755,10 @@ var
           Continue;
         end;
         if (not EsEnlace(E) or SeSigue(E)) and
-           (not Assigned(AOmite) or not AOmite(E)) then
-          Copia(E, TPath.Combine(D, Nombre));
+           (not Assigned(AOmite) or not AOmite(E)) and
+           (not Assigned(AAlListar) or
+            AAlListar(E, TPath.Combine(D, Nombre), True, ADetras or EsEnlace(E))) then
+          Copia(E, TPath.Combine(D, Nombre), ADetras or EsEnlace(E));
       end;
   end;
 
@@ -3752,7 +3771,7 @@ begin
   NoSeg := TStringList.Create;
   try
     Vistos.Sorted := True;
-    Copia(SinBarraFinal(AOrigen), SinBarraFinal(ADestino));
+    Copia(SinBarraFinal(AOrigen), SinBarraFinal(ADestino), EsEnlace(SinBarraFinal(AOrigen)));
     ANoSeguidos := NoSeg.ToStringArray;
   finally
     NoSeg.Free;
@@ -3760,35 +3779,83 @@ begin
   end;
 end;
 
-function CopiaDenegada(const AOrigen, ADestino: string): string;
+{ "Git dentro" (V19; David, 17-oct-2026: "se copia TODO, git incluido, la
+  historia sigue en ese proyecto, siempre y cuando su git este dentro de la
+  carpeta del proyecto a copiar"): cada repo de lo que se copia -una carpeta
+  con su .git, carpeta o fichero- tiene su gitdir, su comun y su arbol de
+  trabajo DENTRO de AOrigen. Un worktree o un submodulo suelto (su .git es un
+  fichero que apunta a los metadatos de OTRO repo) o un core.worktree que sale
+  dejarian dos carpetas trabajando sobre lo mismo. El juez es git
+  (DameRepoDeCarpeta, sin cache); sin el, o si no lo reconoce, un .git no se
+  copia (GUARD-033). Lo que se mira es lo que CopiaArbol copiaria (AAlListar,
+  las mismas reglas): un .git al que se llega por un enlace que la copia sigue
+  no esta dentro. '' = se puede. }
+function GitDeLaCopiaDenegado(const AOrigen, ADestino: string): string;
 var
-  Vistos: TStringList;
-  Hallado: string;
+  Origen, OrigenReal, Motivo: string;
+  Repos, NoSeg: TArray<string>;
 
-  procedure Busca(const O: string);
-  var
-    E: string;
+  function Dentro(const ADir: string): Boolean;
   begin
-    if (Hallado <> '') or (Vistos.IndexOf(LowerCase(RealPath(O))) >= 0) then
-      Exit;
-    Vistos.Add(LowerCase(RealPath(O)));
-    for E in TDirectory.GetFiles(O) do
-      if EsProyectoOSuFuente(E) and (not EsEnlace(E) or SeSigueAlCopiar(E, ADestino)) then
-      begin
-        Hallado := E;
-        Exit;
-      end;
-    for E in TDirectory.GetDirectories(O) do
-      if not SameText(TPath.GetFileName(E), TrashFolderName) and
-         (MetadatosGitDenegados(E) = '') and
-         (not EsEnlace(E) or SeSigueAlCopiar(E, ADestino)) then
-        Busca(E);
+    Result := EnLugar(ADir, Origen) or EnLugar(ADir, OrigenReal);
   end;
 
 begin
+  Result := '';
+  if not TDirectory.Exists(AOrigen) then
+    Exit;
+  Origen := SinBarraFinal(TPath.GetFullPath(AOrigen));
+  OrigenReal := SinBarraFinal(RealPath(Origen));
+  Motivo := '';
+  Repos := [];
+  // las reglas de la copia del agente (copy=true en delphi_move): sin
+  // atributos y siguiendo los enlaces legibles
+  CopiaArbol(Origen, ADestino, False, NoSeg, True, nil,
+    function(const O, D: string; AEsCarpeta, ADetras: Boolean): Boolean
+    begin
+      Result := Motivo = '';
+      if not Result then
+        Exit;
+      // un .git (carpeta o fichero) es un repo: se apunta y no se baja; detras
+      // de un enlace que la copia sigue, no esta dentro
+      if SameText(TPath.GetFileName(O), '.git') then
+      begin
+        if ADetras then
+          Motivo := MsgFmt(SR_MOVE_COPIA_GIT_FUERA_FMT, [TPath.GetDirectoryName(O),
+            MsgText(SF_MOVE_GIT_DETRAS_DE_ENLACE), RealPath(O)])
+        else
+          Repos := Repos + [TPath.GetDirectoryName(O)];
+        Exit(False);
+      end;
+      // ...y un enlace que lleva DENTRO de unos metadatos (su ruta real tiene
+      // un .git): GUARD-033, como siempre
+      if ADetras and (MetadatosGitDenegados(O) <> '') then
+      begin
+        Motivo := MetadatosGitDenegados(O);
+        Exit(False);
+      end;
+    end);
+  if Motivo <> '' then
+    Exit(Motivo);
+  for var R in Repos do
+  begin
+    var GitDir, Comun, Raiz: string;
+    if not Assigned(DameRepoDeCarpeta) or not DameRepoDeCarpeta(R, GitDir, Comun, Raiz) then
+      Exit(MsgFmt(SR_GUARD_GIT_METADATA_FMT, [TPath.Combine(R, '.git')]));
+    if not Dentro(GitDir) then
+      Exit(MsgFmt(SR_MOVE_COPIA_GIT_FUERA_FMT, [R, MsgText(SF_MOVE_GIT_METADATOS), GitDir]));
+    if not Dentro(Comun) then
+      Exit(MsgFmt(SR_MOVE_COPIA_GIT_FUERA_FMT, [R, MsgText(SF_MOVE_GIT_METADATOS), Comun]));
+    if (Raiz <> '') and not Dentro(Raiz) then
+      Exit(MsgFmt(SR_MOVE_COPIA_GIT_FUERA_FMT, [R, MsgText(SF_MOVE_GIT_ARBOL), Raiz]));
+  end;
+end;
+
+function CopiaDenegada(const AOrigen, ADestino: string): string;
+begin
   if DentroDeSiMismo(AOrigen, ADestino) then
     Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
-  // El acceso directo a metadatos sigue cerrado antes de buscar proyectos.
+  // lo que ES metadato de git (o esta dentro de un .git) no se copia
   Result := MetadatosGitDenegados(AOrigen);
   if Result <> '' then
     Exit;
@@ -3797,27 +3864,13 @@ begin
   Result := ProtegidoDenegado(ADestino, True);
   if Result <> '' then
     Exit;
-  Hallado := '';
-  if TFile.Exists(AOrigen) then
-  begin
-    if EsProyectoOSuFuente(AOrigen) then
-      Hallado := AOrigen;
-  end
-  else if TDirectory.Exists(AOrigen) then
-  begin
-    Vistos := TStringList.Create;
-    try
-      Vistos.Sorted := True;
-      Busca(SinBarraFinal(AOrigen));
-    finally
-      Vistos.Free;
-    end;
+  try
+    Result := GitDeLaCopiaDenegado(AOrigen, ADestino);
+  except
+    // lo que no se deja listar (GUARD-040) no se copia: con SU negativa
+    on E: Exception do
+      Result := IfThen(EsFallo(E.Message), E.Message, MsgFmt(SR_GUARD_GIT_METADATA_FMT, [AOrigen]));
   end;
-  // Un proyecto nunca se duplica: ese motivo explica tambien la referencia.
-  if Hallado <> '' then
-    Result := MsgFmt(SR_MOVE_COPY_PROJECT_FMT, [Hallado])
-  else
-    Result := MetadatosGitEnArbolDenegados(AOrigen);
 end;
 
 procedure PurgaAlPasar(const ATrashDir: string);

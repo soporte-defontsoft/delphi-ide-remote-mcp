@@ -746,6 +746,23 @@ begin
   end;
 end;
 
+{ El gancho SIN cache (Lsp.Guard.DameRepoDeCarpeta): el gitdir, el comun y la
+  raiz del arbol de una carpeta, por DondeViveElRepo, para decidir si la copia
+  de un arbol lleva su git dentro (V19). Sin cache: un "no es repo" de antes
+  de un init se quedaria para siempre (como en RamaDelRepo). False si git no
+  lo reconoce o no esta (GIT-050). }
+function RepoDeCarpeta(const ACarpeta: string; out AGitDir, AComun, ARaiz: string): Boolean;
+var
+  Salida: string;
+  Codigo: Cardinal;
+begin
+  try
+    Result := DondeViveElRepo(ACarpeta, AGitDir, AComun, ARaiz, Salida, Codigo);
+  except
+    Result := False;
+  end;
+end;
+
 { Los trozos que no son opciones de un texto con forma de linea, en su orden.
   Desde la 1.19.0 la llamada no trae ninguno: solo los lee el juez de lo que
   un remote.<n>.push de la CONFIGURACION del repo enviaria
@@ -2359,11 +2376,13 @@ initialization
   GCacheGitDir := TDictionary<string, string>.Create;
   // la puerta de escritura (baja) pregunta a git por aqui (9.A)
   Lsp.Guard.DameGitDirDeCarpeta := GitDirDeCarpeta;
+  Lsp.Guard.DameRepoDeCarpeta := RepoDeCarpeta;
   TMCPRegistry.RegisterTool('delphi_git',
     function: IMCPTool begin Result := TDelphiGitTool.Create; end);
 
 finalization
   Lsp.Guard.DameGitDirDeCarpeta := nil;
+  Lsp.Guard.DameRepoDeCarpeta := nil;
   GCacheGitDir.Free;
   GCacheGitDirLock.Free;
 

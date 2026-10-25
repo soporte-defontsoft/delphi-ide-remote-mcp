@@ -959,15 +959,15 @@ begin
       Exit(Denied);
   end;
   // copy=true: misma puerta, dos rechazos mas. Desde la papelera se RESTAURA
-  // (move), no se copia; y una carpeta con proyecto dentro no se duplica: un
-  // proyecto nunca vive en dos sitios (David, 24-sep-2026).
+  // (move), no se copia; y un repo de dentro se copia entero solo con su git
+  // dentro (V19: un proyecto se copia como cualquier carpeta; MOVE-004 se fue).
   if Params.Copy then
   begin
     if IsBackupPath(Params.Path) then
       Exit(MsgText(SR_MOVE_COPY_FROM_TRASH));
-    // La decision de la copia, en Lsp.Guard: mira lo que CopiaArbol VA a
-    // copiar (fichero suelto incluido, .dpr incluido, enlaces con su regla),
-    // y un destino dentro del origen (se copiaria sin fin).
+    // La decision de la copia, en Lsp.Guard: un destino dentro del origen (se
+    // copiaria sin fin), uno protegido, y el git de lo que CopiaArbol VA a
+    // copiar (enlaces con su regla).
     Denied := CopiaDenegada(Params.Path, Params.Dest);
     if Denied <> '' then
       Exit(Denied);

@@ -70,8 +70,9 @@ try:
         mc.check('delete niega enlace exterior '+str(nested),mc.es(out,'SR_GUARD_GIT_METADATA_FMT'),out[:300])
         mc.check('destino exterior intacto '+str(nested),snap(OUT)==outside_before)
     out=srv.call('delphi_move',{'path':REFERENCE,'dest':os.path.join(JAIL,'reference-copy'),'copy':True})
-    mc.check('copy proyecto de referencia explica nunca en dos sitios',
-        mc.es(out,'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(os.path.join(JAIL,'reference-copy')),out[:350])
+    # V19 de la 1.23: un repo se copia entero con su git cuando su git esta dentro (era MOVE-004)
+    mc.check('copy del repo de referencia entero: COPIADO con su git',
+        mc.es(out,'SK_MOVE_COPIADO_FMT') and os.path.isfile(os.path.join(JAIL,'reference-copy','.git','HEAD')),out[:350])
     mc.check('referencia intacta',snap(REFERENCE)==ref_before)
 finally:
     srv.cierra();mc.borra(BASE)

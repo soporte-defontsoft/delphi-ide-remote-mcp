@@ -3897,12 +3897,21 @@ const
     'moved inside itself (it would copy without end). Choose a ' +
     'destination outside it.';
 
-  SR_MOVE_COPY_PROJECT_FMT =
-    '[MOVE-004 DENIED] That is or contains a project (%s), and a project ' +
-    'never lives in two places. To start a project from another one, ' +
-    'delphi_create; to take it somewhere else in your workspace, ' +
-    'delphi_move without copy. A REFERENCE project is read where it is: ' +
-    'from it you copy units or folders without a project.';
+  // MOVE-004 (copiar una carpeta con un proyecto: "un proyecto nunca vive en
+  // dos sitios") se retiro en la 1.23 (V19): un proyecto se copia como
+  // cualquier carpeta, como el operador; era una regla de NUESTRO flujo de
+  // promocion, no del producto (David, 17-oct-2026)
+
+  SR_MOVE_COPIA_GIT_FUERA_FMT =
+    '[MOVE-022 DENIED] The repository in "%s" keeps its %s at "%s", outside ' +
+    'what you are copying, so the copy would share it with that place. A ' +
+    'repository is copied whole, its git included, only when its git stays ' +
+    'inside the copy: copy the folder that holds it all (the main repository, ' +
+    'for a worktree or a submodule), or copy what you need from it without ' +
+    'its .git.';
+  SF_MOVE_GIT_METADATOS = 'git metadata';
+  SF_MOVE_GIT_ARBOL = 'working tree (core.worktree)';
+  SF_MOVE_GIT_DETRAS_DE_ENLACE = 'git metadata, reached through a link,';
 
   SP_MOVE_COPY =
     'true = COPY instead of move: the source stays untouched, no trash ' +
@@ -3911,8 +3920,8 @@ const
     'gets its "unit X;" header rewritten and its .dfm/.fmx copied along. ' +
     'The source only has to be READABLE (your roots, ReadOnlyRoots, the ' +
     'library zone): the way to bring a file in from a reference project. ' +
-    'Refused for a folder that holds a .dproj/.dpk (a project never lives ' +
-    'in two places) and for anything inside the trash.';
+    'A project copies like any folder; a repository, whole with its git, ' +
+    'when its git stays inside. Refused for anything inside the trash.';
 
   SN_FILE_PROJECT_DENIED_FMT =
     '    [FILE-004] %s: outside the allowed workspaces, NOT touched ' +
@@ -8889,8 +8898,9 @@ const
     '[GUARD-033 DENIED] "%s" is Git metadata (.git), or contains it. ' +
     'Only delphi_git may access repository metadata; file tools cannot read, ' +
     'write or copy it, including through links. A whole repository folder ' +
-    'may move or go to recoverable trash inside the workspace, provided its ' +
-    'metadata links stay inside the allowed locations.';
+    'may move, be copied or go to recoverable trash inside the workspace, ' +
+    'provided its git stays inside it and its metadata links stay inside the ' +
+    'allowed locations.';
 
   { Una carpeta que Windows no deja listar (EntradasDeCarpeta, Lsp.Guard): la
     RTL la daba por VACIA, y la puerta de los metadatos la pasaba; luego la
@@ -10399,8 +10409,7 @@ const
     'compiles. What it could not re-point is named, with the tool that ' +
     'fixes it. A copy re-points only its OWN relative paths that ' +
     'cross its border, so it compiles where it lands, and touches no ' +
-    'project that lists the source (see copy); to start a project from ' +
-    'another, delphi_create.';
+    'project that lists the source (see copy).';
 
   // Descripciones que estaban en linea en Mcp.Tools.Messages.pas (paso 3d, 27-sep-2026)
   SP_MSGS_COMMAND =

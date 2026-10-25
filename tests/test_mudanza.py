@@ -210,12 +210,14 @@ try:
           leer('hermano', 'Hermano.dpr')[:300])
 
     # ------------------------------------------------------------ C: la copia
-    # Un PROYECTO no se copia (nunca vive en dos sitios: regla de la casa); lo
-    # que si se copia es una carpeta de units, y sus directivas que salen
-    # tienen que seguir llegando desde la copia.
+    # Un PROYECTO se copia como cualquier carpeta (V19 de la 1.23: era MOVE-004,
+    # "nunca vive en dos sitios", una regla de nuestro flujo de promocion); y una
+    # carpeta de units, con sus directivas que salen.
     r = call('delphi_move', {'path': NUEVO, 'dest': ruta('copia'), 'copy': True})
-    check('C1 copiar la carpeta de un PROYECTO sigue RECHAZADO (nunca en dos sitios)',
-          mc.rechazado(r) and mc.es(r, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(ruta('copia')), r[:200])
+    check('C1 copiar la carpeta de un PROYECTO: COPIADA como cualquier carpeta (V19)',
+          mc.abre(r, 'SK_MOVE_COPIADO_FMT') and os.path.exists(ruta('copia', 'App.dproj')), r[:200])
+    if os.path.isdir(ruta('copia')):
+        shutil.rmtree(ruta('copia'))
     os.makedirs(ruta('modulos'))
     open(ruta('modulos', 'UMod.pas'), 'w', newline='\r\n').write(
         'unit UMod;\n\ninterface\n\n{$I ..\\inc\\comun.inc}\n\nimplementation\n\nend.\n')

@@ -670,7 +670,9 @@ check('copy unit: ningun proyecto reapuntado, y la respuesta lo dice', not mc.es
 out = call('delphi_move', {"path": cdir, "dest": os.path.join(BASE, 'Copia2'), "copy": True})
 check('copy carpeta: COPIADO, las dos existen, sin la papelera del origen', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(BASE, 'Copia2', 'UCopia.pas')) and os.path.isdir(cdir) and not os.path.isdir(os.path.join(BASE, 'Copia2', mc.PAPELERA)), out[:300])
 out = call('delphi_move', {"path": VDIR, "dest": os.path.join(BASE, 'AppCopia'), "copy": True})
-check('copy carpeta con .dproj: RECHAZADO (un proyecto nunca en dos sitios)', mc.rechazado(out) and mc.es(out, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(os.path.join(BASE, 'AppCopia')), out[:300])
+check('copy carpeta con .dproj: COPIADA como cualquier carpeta (V19; era MOVE-004)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.isdir(os.path.join(BASE, 'AppCopia')), out[:300])
+if os.path.isdir(os.path.join(BASE, 'AppCopia')):
+    mc.borra(os.path.join(BASE, 'AppCopia'))
 out = call('delphi_move', {"path": os.path.join(cdir, 'UOrig.pas'), "dest": os.path.join(cdir, 'UCopia.pas'), "copy": True})
 check('copy sobre destino existente: RECHAZADO, no sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_FILE_DESTINO_YA_EXISTE_FMT'), out[:200])
 

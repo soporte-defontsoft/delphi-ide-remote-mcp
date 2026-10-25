@@ -10,6 +10,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- **`delphi_move copy=true` copies a project, and a whole repository, like
+  any folder.** A copy of a folder holding a project, or of a loose `.dproj`,
+  was refused (`MOVE-004`, "a project never lives in two places"), a rule of
+  how this repository is worked, not of the product; and a folder with a
+  `.git` inside was refused whole. Now a project copies like any folder, and
+  a repository is copied with its git when its git stays inside what is
+  copied: git itself says where each repository inside keeps its metadata, its
+  common directory and its working tree. A linked worktree or a submodule (its
+  `.git` is a file pointing at another repository's metadata), a
+  `core.worktree` outside, or a repository reached through a link the copy
+  follows is refused with `MOVE-022`, saying where that git lives
+  (`tests/test_ficheros_operador_1230.py`, G1-G7).
 - **`delphi_docs read` pages a long page like every list.** A chunk of a
   page came with `length`, `offset` and `nextOffset`, written by hand and
   without `hasMore`, so a client that walks "until `hasMore` is false", as
@@ -43,6 +55,22 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A copy no longer brings git metadata through a link.** A folder holding
+  a link to a repository was copied with that repository's `.git` behind the
+  link (measured against the current release), although the copy promised
+  that file tools never copy git metadata, links included. What the copy will
+  copy is now listed first by the copier itself, with its own rules, and a
+  repository reached through a link it follows is refused (`MOVE-022`).
+- **The build's import scan reads a nested `<Import>` where msbuild reads
+  it.** `$(MSBuildProjectDirectory)`, `$(ProjectDir)` and
+  `$(MSBuildProjectName)` were expanded from the file that writes the
+  `<Import>`; msbuild fixes them to the project being compiled across the
+  whole import chain (measured with msbuild; only
+  `$(MSBuildThisFileDirectory)` follows the current file). A nested import
+  through one of them was scanned in one folder and loaded by msbuild from
+  another, so the scan could judge a harmless file while msbuild imported a
+  task; both walkers now expand them from the compiled project
+  (`tests/test_build_imports.py`, a39).
 - **A folder move no longer copies the folder's own trash into its safety
   copy.** Before moving a folder, `delphi_move` copies it to the recoverable
   trash, and that copy took the folder's `__delphi-patch` along: a trash inside

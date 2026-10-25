@@ -154,12 +154,15 @@ check('create en la referencia: RECHAZADO', refused_as_reference(out), out[:200]
 out = call('delphi_move', {'path': REF_PAS, 'dest': os.path.join(REF, 'Ref', 'UOtra.pas')})
 check('move en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
 # copy only READS its source (David, 2026-09-25): a unit comes in from a
-# reference, a whole project does not, and outside everything stays outside
+# reference, a whole project too (V19 of 1.23: it was MOVE-004), and outside
+# everything stays outside
 out = call('delphi_move', {'path': REF_PAS, 'dest': os.path.join(MINE, 'UCopia.pas'), 'copy': True})
 check('copy DESDE la referencia a mis roots: COPIADO (copiar solo LEE el origen)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(MINE, 'UCopia.pas')), out[:200])
 check('...la copia es mia: cabecera renombrada', os.path.exists(os.path.join(MINE, 'UCopia.pas')) and 'unit UCopia;' in open(os.path.join(MINE, 'UCopia.pas')).read(), out[:200])
 out = call('delphi_move', {'path': os.path.join(REF, 'Ref'), 'dest': os.path.join(MINE, 'RefCopia'), 'copy': True})
-check('copy del PROYECTO de referencia entero: RECHAZADO (nunca en dos sitios)', mc.rechazado(out) and mc.es(out, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(os.path.join(MINE, 'RefCopia')), out[:200])
+check('copy del PROYECTO de referencia entero, un repo con su git dentro: COPIADO (V19)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(MINE, 'RefCopia', 'Ref.dproj')) and os.path.isfile(os.path.join(MINE, 'RefCopia', '.git', 'HEAD')), out[:200])
+if os.path.isdir(os.path.join(MINE, 'RefCopia')):
+    mc.borra(os.path.join(MINE, 'RefCopia'))
 out = call('delphi_move', {'path': os.path.join(OUT, 'Fuera.pas'), 'dest': os.path.join(MINE, 'UFuera.pas'), 'copy': True})
 check('copy desde FUERA de todo: RECHAZADO (no se puede leer)', mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(MINE, 'UFuera.pas')), out[:200])
 out = call('delphi_delete', {'path': REF_PAS})
