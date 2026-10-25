@@ -426,15 +426,18 @@ type
   copiaba DENTRO de la jaula lo que la jaula no deja leer (25-sep-2026;
   David: 'solo se puede escribir en tu workspace, incluye copiar', y leer
   fuera es lo que el operador declara, 'ReadOnlyRoots es para eso').
-  AConPapelera: si copia tambien las papeleras (__delphi-patch) que haya
-  dentro. Un bucle de enlaces se corta por la ruta real ya visitada. Lanza si
+  Una papelera (__delphi-patch) de dentro no se copia nunca: no es contenido,
+  y la de seguridad de un move la duplicaba (viaja con la carpeta en el
+  renombre; V21). AConservaAtributos: la copia de seguridad de un move los
+  conserva; la del agente (copy=true) va sin el +R heredado. Un bucle de
+  enlaces se corta por la ruta real ya visitada. Lanza si
   no puede copiar. ASigueEnlaces=False: un enlace de DENTRO no se sigue (va
   a ANoSeguidos): la copia de seguridad de un move, que los lleva como
   enlaces; una junction a la raiz dentro de la carpeta metia la copia en su
   propia papelera y el move fallaba (novena revision). AOmite (opcional):
   lo que quien llama deja fuera - delphi_test no se lleva los .dcu a la
   carpeta de su contenedor. Un parametro del copiador, no otro copiador. }
-procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
+procedure CopiaArbol(const AOrigen, ADestino: string; AConservaAtributos: Boolean;
   out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean = True;
   const AOmite: TOmiteAlCopiar = nil);
 
@@ -3674,7 +3677,7 @@ begin
   Result := EnlaceLegible(P) and not DentroDeSiMismo(P, ADestino);
 end;
 
-procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
+procedure CopiaArbol(const AOrigen, ADestino: string; AConservaAtributos: Boolean;
   out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean;
   const AOmite: TOmiteAlCopiar);
 var
@@ -3712,9 +3715,9 @@ var
           NoSeg.Add(E)
         else if (not EsEnlace(E) or SeSigue(E)) and
            (not Assigned(AOmite) or not AOmite(E)) then
-          // la copia CON papelera es la de seguridad de un move (conserva los
-          // atributos); la otra es la del agente (copy=true): sin el +R heredado
-          if AConPapelera then
+          // la de seguridad de un move conserva los atributos; la del agente
+          // (copy=true) va sin el +R heredado
+          if AConservaAtributos then
             TFile.Copy(E, TPath.Combine(D, TPath.GetFileName(E)), False)
           else
             CopiaNuestra(E, TPath.Combine(D, TPath.GetFileName(E)));
@@ -3722,8 +3725,10 @@ var
       else
       begin
         Nombre := TPath.GetFileName(E);
-        if not AConPapelera and SameText(Nombre, TrashFolderName) then
-          Continue; // la papelera del origen no es contenido
+        // una papelera de dentro no es contenido: tampoco en la copia de
+        // seguridad de un move, que la duplicaba (viaja con la carpeta; V21)
+        if SameText(Nombre, TrashFolderName) then
+          Continue;
         // un VAULT (de cualquier workspace) es de las tools vault_*: no se
         // copia, y se dice con lo no seguido (el de OTRO workspace salia
         // entero en la copia; octava revision)

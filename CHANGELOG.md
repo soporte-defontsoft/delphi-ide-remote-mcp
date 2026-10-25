@@ -43,6 +43,13 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A folder move no longer copies the folder's own trash into its safety
+  copy.** Before moving a folder, `delphi_move` copies it to the recoverable
+  trash, and that copy took the folder's `__delphi-patch` along: a trash inside
+  the trash, with every earlier copy duplicated on each move (measured). The
+  folder's trash travels with it - a move is a rename - so the safety copy now
+  leaves every trash inside the folder out, as `copy=true` already did
+  (`tests/test_evidente_1230.py`, E4).
 - **The build refuses a `.deployproj` deploy command.** A `DeployFile` in a
   deploy manifest can carry a `<LocalCommand>` (run on the build machine) or a
   `<RemoteCommand>` (run on the target through PAServer) - a free command line

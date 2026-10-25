@@ -21,12 +21,15 @@ antes de arreglarlo (24-oct-2026):
       carpeta: un Build de Linux64 lo deja sin recursos (32 bytes) y lo dice, BUILD-059,
       una vez; un Make de Win64 no lo rehace (el exe sin icono ni version) y lo dice,
       BUILD-060; un Build lo rehace y calla. Callaba
+  E4  V21 (25-oct): un move de una carpeta con su papelera dentro: la papelera viaja con
+      ella (el move es un renombre) y la copia de seguridad del move no la duplica. Salia
+      una papelera DENTRO de la papelera, con las copias de la carpeta otra vez
 
-Mutante: produccion antes de este bloque (r1222av): E1, E1b, E2 y E3 rojos.
+Mutante: produccion antes de este bloque (r1222av): E1, E1b, E2 y E3 rojos; E4, contra r1222cc.
 
 Uso:  python tests/test_evidente_1230.py [exe]
 """
-import os
+import glob, os
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -132,10 +135,29 @@ try:
     r = build('Win64', 'Build')
     check('E3 Build Win64: lo rehace (con recursos) y calla',
           J(r).get('success') is True and tam(RES) > 32 and 'resNote' not in J(r), (tam(RES), r[:400]))
+
+    # --- E4 ------------------------------------------------------------------------
+    MDIR = os.path.join(JAIL, 'conpapelera')
+    os.makedirs(MDIR)
+    open(os.path.join(MDIR, 'a.txt'), 'w', encoding='utf-8').write('uno\n')
+    srv.call('delphi_textedit', {'path': os.path.join(MDIR, 'a.txt'), 'old': 'uno', 'new': 'dos'})
+    propia = glob.glob(os.path.join(MDIR, mc.PAPELERA, '**', 'a.txt'), recursive=True)
+    check('E4 previo: la carpeta tiene su papelera, con la copia de a.txt', len(propia) == 1, propia)
+    DEST = os.path.join(JAIL, 'movida', 'conpapelera')
+    r = srv.call('delphi_move', {'path': MDIR, 'dest': DEST})
+    SEGURIDAD = os.path.join(JAIL, mc.PAPELERA)
+    copia = glob.glob(os.path.join(SEGURIDAD, '**', 'a.txt'), recursive=True)
+    anidadas = [d for d, _, _ in os.walk(SEGURIDAD)
+                if d != SEGURIDAD and os.path.basename(d).lower() == mc.PAPELERA.lower()]
+    check('E4 move de una carpeta con su papelera dentro: la papelera viaja con ella, la copia de '
+          'seguridad tiene a.txt y ninguna papelera dentro (salia la de la carpeta otra vez)',
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and len(copia) == 1 and not anidadas
+          and len(glob.glob(os.path.join(DEST, mc.PAPELERA, '**', 'a.txt'), recursive=True)) == 1,
+          (r[:300], copia, anidadas))
 finally:
     srv.cierra()
     print('atomos RTL nuevos de procesos muertos:', mc.atomos_rtl_dejados(antes_atomos))
     try:
-        mc.fin('arreglos evidentes pequenos 1230 (V15, V35, V16)')
+        mc.fin('arreglos evidentes pequenos 1230 (V15, V35, V16, V21)')
     finally:
         mc.borra(BASE)
