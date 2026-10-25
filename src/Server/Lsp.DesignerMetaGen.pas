@@ -76,8 +76,11 @@ const
   { Sube cuando cambian las reglas del generador: una tabla de otra
     generacion no se reutiliza aunque el fuente sea el mismo.
     14 (1.20.2): lo que registra cada unidad al ejecutar (hecho R): check-binding
-    no avisa de un componente sin campo cuya clase se registra. }
-  GENERACION_TABLAS = 14; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+    no avisa de un componente sin campo cuya clase se registra.
+    15 (1.23): lo guardado por codigo y lo registrado se buscan en el texto
+    ACTIVO, con sus includes: un DefineProperties o un Register de un .inc no
+    se veia (V17). }
+  GENERACION_TABLAS = 15; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
   // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
   // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
@@ -1260,11 +1263,14 @@ begin
     if ContainsText(Act, 'ControlStyle') then
       U.Estilos := EstilosDeUnidad(Act, Decl);
     // lo que guarda por codigo (Filer.DefineProperty): otra pasada que deja
-    // las cadenas, solo en las que lo nombran (unas cien de 4.000)
-    if ContainsText(Txt, 'DefineProperty') or ContainsText(Txt, 'DefineBinaryProperty') or
-       ContainsText(Txt, 'RegisterComponents') or ContainsText(Txt, 'RegisterNoIcon') or
-       ContainsText(Txt, 'RegisterClass') or ContainsText(Txt, 'RegisterFmxClasses') or
-       ContainsText(Txt, 'RegisterIntegerConsts') or ContainsText(Txt, 'IdentToInt') then
+    // las cadenas, solo en las que lo nombran (unas cien de 4.000). Se
+    // pregunta al texto ACTIVO, con sus includes y sin comentarios, como lo
+    // que se lee despues: con el crudo, un DefineProperties o un Register de
+    // un .inc no se veia (lote 5 del censo de jueces; V17 de la 1.23)
+    if ContainsText(Act, 'DefineProperty') or ContainsText(Act, 'DefineBinaryProperty') or
+       ContainsText(Act, 'RegisterComponents') or ContainsText(Act, 'RegisterNoIcon') or
+       ContainsText(Act, 'RegisterClass') or ContainsText(Act, 'RegisterFmxClasses') or
+       ContainsText(Act, 'RegisterIntegerConsts') or ContainsText(Act, 'IdentToInt') then
     begin
       Sim := FBase.Copia;
       try
@@ -1280,7 +1286,7 @@ begin
           // y lo que registra al ejecutar (hecho R: TReader lo crea sin campo)
           U.RegistraEjecucion := RegistradasAlEjecutar(ConCadenas);
           // y las constantes con nombre de sus tipos enteros (hecho I)
-          if ContainsText(Txt, 'RegisterIntegerConsts') or ContainsText(Txt, 'IdentToInt') then
+          if ContainsText(Act, 'RegisterIntegerConsts') or ContainsText(Act, 'IdentToInt') then
             U.Constantes := ConstantesDeUnidad(ConCadenas, Decl);
         except
           U.Definidas := nil; // lo que no se sabe leer no tumba la tabla

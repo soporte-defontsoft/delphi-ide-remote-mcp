@@ -82,6 +82,13 @@ the MCP `initialize` response (`serverInfo.version`).
   intermediate left by a process killed mid-write stayed for good. Both
   purges now ask the writer's own reader and remove the ones older than an
   hour (`tests/test_designer_tablas.py`, `tests/test_motor_fuera.py` F0).
+- **The designer tables see what a unit streams or registers from an
+  include.** The generator decides whether to read what a unit stores by
+  code (`DefineProperties`) or registers (`RegisterComponents`...) by looking
+  for those words in the raw file, without its includes, while the reading
+  that follows does expand them: a `DefineProperties` or a `Register` in a
+  `.inc` was never read. It now looks at the same active text, includes in
+  and comments out. The tables move to generation 15 and are rebuilt once.
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

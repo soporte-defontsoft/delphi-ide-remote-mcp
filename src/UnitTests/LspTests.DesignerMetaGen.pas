@@ -65,6 +65,8 @@ type
     [Test] procedure UnaInstalacionSinFuente;
     [Test]
     procedure LoPublicadoAntesQueLoGuardado;
+    [Test]
+    procedure LoGuardadoPorCodigoEnUnInclude;
   end;
 
   { EL lector de clases de los que trabajan por lineas (LeeFuentePascal):
@@ -1647,6 +1649,29 @@ begin
   finally
     U.Free;
   end;
+end;
+
+procedure TDesignerMetaGenTests.LoGuardadoPorCodigoEnUnInclude;
+var
+  V: TArray<string>;
+begin
+  // V17 de la 1.23 (lote 5 del censo de jueces): la puerta que decide leer lo
+  // guardado por codigo miraba el texto CRUDO, sin sus includes, y la lectura
+  // de despues si los lee: un DefineProperties en un .inc no se veia
+  Escribe('System.pas', 'unit System; interface type TObject = class end; implementation end.');
+  Escribe('System.Classes.pas', 'unit System.Classes; interface type'#13#10 +
+    'TPersistent = class(TObject) end; TComponent = class(TPersistent) end; implementation end.');
+  TFile.WriteAllText(TPath.Combine(FDir, 'cajas.inc'),
+    'procedure TCajaInc.DefineProperties(Filer: TFiler);'#13#10 +
+    'begin Filer.DefineProperty(''Oculta'', L, E, True); end;');
+  Escribe('Vcl.Cajas.pas', 'unit Vcl.Cajas; interface uses System.Classes; type'#13#10 +
+    'TCajaInc = class(TComponent) protected procedure DefineProperties(Filer: TFiler); override;'#13#10 +
+    'published property Ancho: Integer; end;'#13#10 +
+    'implementation'#13#10 + '{$I cajas.inc}'#13#10 + 'end.');
+  V := GeneraTablasDeFuente([FDir], '37.0', 'Z:\no-es-bds').Hechos[mdVcl];
+  Assert.IsTrue(Hechos(V, 'P Vcl.Cajas:TCajaInc Ancho o Integer'), 'la clase esta: ' + string.Join(' | ', V));
+  Assert.IsTrue(Hechos(V, 'D Vcl.Cajas:TCajaInc Oculta'), 'y lo que guarda por codigo en su include: ' +
+    string.Join(' | ', V));
 end;
 
 initialization
