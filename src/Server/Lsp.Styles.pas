@@ -269,7 +269,9 @@ type
     Clase: TClaseRc;
     Linea: Integer;
     Nombre, Tipo, Fichero: string;
+    Banderas: TArray<string>; // las de memoria (DISCARDABLE...) de una entrada de lista
     PorMacro: Boolean;
+    Citado: Boolean; // el fichero vino entre comillas (lista), no como macro o palabra
   end;
   TLecturaRc = record
     Entradas: TArray<TEntradaRc>;
@@ -277,6 +279,13 @@ type
       cadena o palabra con forma de ruta - la puerta de leer no apuesta por
       la gramatica: la de brcc32 es mas rica que esta }
     Rutas: TArray<string>;
+    { La primera cosa que NO es una entrada de lista (NOMBRE TIPO [banderas] mas
+      un fichero entre comillas): una directiva, un #include o RCINCLUDE, un
+      bloque, LANGUAGE...; o un recurso cuyo fichero es una macro o no va entre
+      comillas. '' si todo el .rc es una lista. Solo lo mira delphi_styles (V54,
+      lista blanca); el build de un proyecto admite un .rc completo. }
+    Rechazo: string;
+    RechazoLinea: Integer;
   end;
 
 { LA lectura de un .rc: la de la segunda barrera de delphi_styles build
@@ -303,6 +312,11 @@ function LeeRc(const ATexto: string): TLecturaRc;
   25-ago-2026, medido con win.ini y el settings.ini del servidor dentro de un
   .res); el build pregunta por el .rc de cada RcCompile con ella (1.21.2). }
 function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string = ''): string;
+
+{ EL escritor del .rc que compila brcc32 en delphi_styles: la inversa de LeeRc,
+  una linea de lista (NOMBRE TIPO [banderas] fichero-entre-comillas) por cada
+  entrada. V54 de la 1.23. }
+function RcCompuesto(const ALectura: TLecturaRc): string;
 
 implementation
 
@@ -1274,7 +1288,7 @@ var
   end;
 
   procedure Entrada(AClase: TClaseRc; ALinea: Integer; const ANombre, ATipo, AFichero: string;
-    APorMacro: Boolean = False);
+    APorMacro: Boolean; const ABanderas: TArray<string>; ACitado: Boolean);
   var
     E: TEntradaRc;
   begin
@@ -1284,7 +1298,20 @@ var
     E.Tipo := ATipo;
     E.Fichero := AFichero;
     E.PorMacro := APorMacro;
+    E.Banderas := ABanderas;
+    E.Citado := ACitado;
     Lectura.Entradas := Lectura.Entradas + [E];
+  end;
+
+  // La primera cosa que NO es una entrada de lista (V54): se recuerda la
+  // primera, para el juicio de delphi_styles (lista blanca del .rc del agente).
+  procedure Rechaza(ALinea: Integer; const AQue: string);
+  begin
+    if Lectura.Rechazo = '' then
+    begin
+      Lectura.Rechazo := AQue;
+      Lectura.RechazoLinea := ALinea;
+    end;
   end;
 
 begin
@@ -1295,6 +1322,7 @@ begin
   begin
     if T[I].Clase = ctrDirectiva then
     begin
+      Rechaza(T[I].Linea, T[I].Texto);
       // '#include "x"', '#include <x>' (con -x, de su carpeta), '# include'; lo
       // demas del preprocesador (#define, #if, #pragma) no se sigue aqui, pero
       // lo que nombra (#define F "C:\...") lo juzga la puerta igual (H1 de la
@@ -1312,7 +1340,7 @@ begin
           F := Toks[0].Texto;
         if (F.Length >= 2) and (F[1] = '<') and F.EndsWith('>') then
           F := Copy(F, 2, F.Length - 2);
-        Entrada(crInclude, T[I].Linea, '', '#include', F);
+        Entrada(crInclude, T[I].Linea, '', '#include', F, False, nil, False);
       end
       else
       begin
@@ -1328,6 +1356,7 @@ begin
     end;
     if T[I].Clase = ctrSigno then
     begin
+      Rechaza(T[I].Linea, T[I].Texto);
       // un bloque suelto, o la coma de un LANGUAGE x, y
       if Abre(I) then
         I := SaltaBloque(I)
@@ -1337,8 +1366,9 @@ begin
     end;
     if Es(I, 'RCINCLUDE') then
     begin
+      Rechaza(T[I].Linea, 'RCINCLUDE');
       if I < High(T) then
-        Entrada(crInclude, T[I].Linea, '', 'RCINCLUDE', T[I + 1].Texto);
+        Entrada(crInclude, T[I].Linea, '', 'RCINCLUDE', T[I + 1].Texto, False, nil, False);
       Inc(I, 2);
       Continue;
     end;
@@ -1346,6 +1376,7 @@ begin
     // CHARACTERISTICS n; STRINGTABLE [banderas] y su bloque
     if Es(I, 'LANGUAGE') then
     begin
+      Rechaza(T[I].Linea, 'LANGUAGE');
       Inc(I, 2);
       while Signo(I, ',') do
         Inc(I, 2);
@@ -1353,29 +1384,46 @@ begin
     end;
     if Es(I, 'VERSION') or Es(I, 'CHARACTERISTICS') then
     begin
+      Rechaza(T[I].Linea, T[I].Texto);
       Inc(I, 2);
       Continue;
     end;
     if Es(I, 'STRINGTABLE') then
     begin
+      Rechaza(T[I].Linea, 'STRINGTABLE');
       I := SaltaBloque(I + 1);
       Continue;
     end;
     // NOMBRE TIPO [banderas] FICHERO, o un recurso de bloque
     if I = High(T) then
+    begin
+      Rechaza(T[I].Linea, T[I].Texto);
       Break;
+    end;
     J := I + 2;
     while (J <= High(T)) and (T[J].Clase = ctrPalabra) and MatchText(T[J].Texto, BANDERAS_RC) do
       Inc(J);
     if MatchText(T[I + 1].Texto, TIPOS_DE_BLOQUE_RC) or Abre(J) then
     begin
+      Rechaza(T[I].Linea, T[I + 1].Texto);
       I := SaltaBloque(J);
       Continue;
     end;
     if J > High(T) then
+    begin
+      Rechaza(T[I].Linea, T[I].Texto);
       Break;
-    Entrada(crRecurso, T[I].Linea, T[I].Texto, T[I + 1].Texto, T[J].Texto,
-      (T[J].Clase = ctrPalabra) and (IndexStr(T[J].Texto, Macros) >= 0));
+    end;
+    var Bnd: TArray<string> := nil;
+    for var K := I + 2 to J - 1 do
+      Bnd := Bnd + [T[K].Texto];
+    var EsMacro := (T[J].Clase = ctrPalabra) and (IndexStr(T[J].Texto, Macros) >= 0);
+    var Citado := T[J].Clase = ctrCadena;
+    Entrada(crRecurso, T[I].Linea, T[I].Texto, T[I + 1].Texto, T[J].Texto, EsMacro, Bnd, Citado);
+    // una entrada de lista es NOMBRE TIPO [banderas] con el fichero ENTRE
+    // COMILLAS (no una macro ni una palabra): si no, el .rc no es lista (V54)
+    if (T[I].Clase <> ctrPalabra) or (T[I + 1].Clase <> ctrPalabra) or EsMacro or not Citado then
+      Rechaza(T[I].Linea, T[I].Texto);
     I := J + 1;
   end;
   for var E in Lectura.Entradas do
@@ -1384,6 +1432,32 @@ begin
     if (T[K].Clase in [ctrCadena, ctrPalabra]) and PareceRutaDeRc(T[K].Texto) then
       Lectura.Rutas := Lectura.Rutas + [T[K].Texto];
   Result := Lectura;
+end;
+
+{ EL escritor del .rc que compila brcc32 en delphi_styles: una linea
+  NOMBRE TIPO [banderas] fichero-entre-comillas por cada entrada de lista de
+  ALectura (la inversa de LeeRc). Al preprocesador de brcc32 no le llega texto
+  del agente, solo esta lista, ya verificada como tal (Rechazo vacio). Una
+  comilla dentro del nombre se dobla, como la lee TokensDeRc. V54 de la 1.23. }
+function RcCompuesto(const ALectura: TLecturaRc): string;
+var
+  SB: TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for var E in ALectura.Entradas do
+    begin
+      if (E.Clase <> crRecurso) or not E.Citado then
+        Continue;
+      SB.Append(E.Nombre).Append(' ').Append(E.Tipo);
+      for var B in E.Banderas do
+        SB.Append(' ').Append(B);
+      SB.Append(' ').Append(#34).Append(E.Fichero.Replace(#34, #34#34)).Append(#34).Append(#13#10);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
 end;
 
 function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string): string;

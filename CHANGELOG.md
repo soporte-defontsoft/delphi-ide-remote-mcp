@@ -37,6 +37,22 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_styles build` compiles a resource script the server wrote, not the
+  agent's.** The `.rc` that names the compiled style resources went to `brcc32`
+  as the agent wrote it, and `brcc32` has a preprocessor (`#define`, `##`) that
+  composes file paths the server's second-barrier reader could not see - only
+  the AppContainer stopped them, and it still reads what the OS grants every
+  application package (Windows, Program Files; the V5 residue). Now the `.rc`
+  of `delphi_styles` must be a plain list of `NAME TYPE [flags] FILE` entries
+  (the file name in quotes); anything else - a `#define`, an
+  `#include`/`RCINCLUDE`, a block, `LANGUAGE`... - is refused (`STYLE-056`), and
+  the server composes the script it compiles from that list
+  (`Lsp.Styles.RcCompuesto`, the inverse of `LeeRc`), so its preprocessor never
+  runs on the agent's text. A `.rc` that is already a list compiles as before
+  and the `.res` carries the same resources; the project build still takes a
+  full `.rc`, and `lint` now reports a non-list `.rc`
+  (`tests/test_styles_rc_lista_1230.py`).
+
 - **The build no longer reads a unit from outside through the main source's
   `in`.** The build's gate judged the `{$I}`/`{$R}` directives and everything
   the `.dproj` reads, but not the path of `uses X in '...'` in a `.dpr` (or

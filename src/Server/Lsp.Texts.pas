@@ -7375,6 +7375,15 @@ const
     '[STYLE-026 DENIED] I cannot read the .rc (%s) to check which files ' +
     'it points to, so I do not compile it.';
 
+  SR_STYLES_RC_NO_LISTA_FMT =
+    '[STYLE-056 DENIED] The .rc of delphi_styles build must be a plain list ' +
+    'of NAME TYPE [flags] FILE entries (the file name in quotes): the server ' +
+    'writes the resource script that brcc32 compiles, so its preprocessor ' +
+    'never sees the agent text. %s on line %d of %s is not such an entry ' +
+    '(a directive, an #include or RCINCLUDE, a block, LANGUAGE..., or a file ' +
+    'given by a macro or without quotes). The project build still takes a ' +
+    'full .rc; delphi_styles takes a plain list.';
+
   // PAS-031 (un nombre de perfil CON punto) retirado el 9-oct-2026:
   // set-profile y remove-profile contestan PAS-015, la regla de la puerta
   // (Lsp.Guard.BadProfileName)

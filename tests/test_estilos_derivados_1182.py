@@ -208,8 +208,11 @@ try:
         open(RC, 'w', encoding='utf-8').write(linea + '\n')
         r = build(srv)
         fuga = os.path.exists(RES) and b'SECRETO-2AL' in open(RES, 'rb').read()
-        check('%s a la CASA: la ve la segunda barrera (STYLE-023) y el .res NO la lleva' % clave,
-              mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not fuga, (r[:200], fuga))
+        # S13 (lista con bandera) la para la segunda barrera; S14 (#define) ya no
+        # es lista y la para antes el juez de lista blanca (V54): sin fuga en el .res
+        check('%s a la CASA del servidor: negado y el .res NO la lleva' % clave,
+              (mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') or mc.abre(r, 'SR_STYLES_RC_NO_LISTA_FMT')) and not fuga,
+              (r[:200], fuga))
     os.remove(SECRETO)
     # H1 (residuo del 2al): un fichero que el SO concede a TODOS LOS PAQUETES DE
     # APLICACIONES (C:\Windows) el AppContainer SI lo lee -> por un #define
@@ -224,7 +227,8 @@ try:
         r = build(srv)
         entra = os.path.exists(RES) and marca in open(RES, 'rb').read()  # su contenido REAL en el .res
         check('H1 un #define a un fichero world-readable del SO (etc\\hosts): la segunda barrera lo niega '
-              '(STYLE-023) y el .res NO lo lleva', mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not entra,
+              'negado y el .res NO lo lleva',
+              (mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') or mc.abre(r, 'SR_STYLES_RC_NO_LISTA_FMT')) and not entra,
               (r[:200], entra))
 
     # S15: el CONTENEDOR, solo: un absoluto a un fichero de la PROPIA carpeta -

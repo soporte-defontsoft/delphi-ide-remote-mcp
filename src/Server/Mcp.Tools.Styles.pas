@@ -85,7 +85,8 @@ uses
   Lsp.Mascara,
   Lsp.Casa,
   Lsp.Sandbox,
-  Lsp.Rutas;        // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.Codificacion;
 
 constructor TDelphiStylesTool.Create;
 begin
@@ -424,6 +425,7 @@ begin
 end;
 
 function RcPathsDenied(const ARc: string): string; forward; // la segunda barrera de build: el lint le pregunta tambien
+function RcNoEsLista(const ARc: string): string; forward; // V54: el .rc de delphi_styles debe ser una lista blanca
 
 { ---- lint ---- }
 
@@ -708,6 +710,15 @@ begin
         Issue.AddPair('refused', Negado);
         Rc.AddElement(Issue);
       end;
+      // V54: y que sea una LISTA blanca (lo exige build; el lint lo dice)
+      var NoLista := RcNoEsLista(F);
+      if NoLista <> '' then
+      begin
+        Issue := TJSONObject.Create;
+        Issue.AddPair('rc', TPath.GetFileName(F));
+        Issue.AddPair('refused', NoLista);
+        Rc.AddElement(Issue);
+      end;
     end;
     // lo que FMX se traga al cargar cada fichero (IgnoradoPorFmx): una
     // propiedad que la clase no publica, un valor que no lee, una clase que
@@ -854,6 +865,12 @@ begin
     Exit;
   if not TFile.Exists(ABrcc) then
     Exit(MsgFmt(SR_STYLE_BRCC_NO_ENCONTRADO_FMT, [ABrcc]));
+  // V54: el .rc del agente debe ser una lista blanca; asi el servidor compone
+  // el que compila brcc32 (CompilaRcEnContenedor) y su preprocesador no corre
+  // sobre texto del agente. La segunda barrera (RcPathsDenied) se queda detras.
+  Result := RcNoEsLista(ARc);
+  if Result <> '' then
+    Exit;
   Result := RcPathsDenied(ARc);
   if Result = '' then
     Result := ColocacionDenegada(ARes);
@@ -908,6 +925,14 @@ begin
       begin
         Result := SameText(TPath.GetExtension(P), '.res');
       end);
+    // V54: brcc32 compila el .rc que ESCRIBE el servidor desde la lista leida
+    // (RcCompuesto), no el texto del agente: a su preprocesador no le llega nada
+    // suyo. La lista ya la verifico DerivadosDenegados / el lint (RcNoEsLista).
+    var EncRc: string;
+    // por LA puerta de escritura (ltTemporal, la casa del servidor) y en la ANSI
+    // MEDIDA (ekAnsi: PaginaAnsi, la que lee brcc32), no a pelo (norma 6, paisaje)
+    EscribeTexto(TPath.Combine(Etapa, TPath.GetFileName(ARc)),
+      RcCompuesto(LeeRc(PatchLoadText(ARc, EncRc))), ltTemporal, ekAnsi);
     ResEtapa := TPath.Combine(Etapa, 'r.res');
     try
       // rutas RELATIVAS a la etapa (el cwd del proceso): brcc32 solo ve la
@@ -1105,6 +1130,27 @@ begin
   // pregunta por cada RcCompile), con la carpeta de estilos de la etapa: la
   // de este .rc, la que brcc32 ve copiada (CompilaRcEnContenedor)
   Result := RcLecturasDenegadas(ARc, TPath.GetDirectoryName(TPath.GetFullPath(ARc)));
+end;
+
+{ El .rc de delphi_styles debe ser una LISTA blanca de entradas NOMBRE TIPO
+  [banderas] fichero-en-comillas (V54): asi el servidor compone el .rc que
+  compila brcc32 y a su preprocesador no le llega texto del agente. '' si es
+  una lista; si no, el motivo (la primera cosa que no lo es, LeeRc.Rechazo).
+  Solo delphi_styles: el build de un proyecto admite un .rc completo. }
+function RcNoEsLista(const ARc: string): string;
+var
+  Txt, Enc: string;
+  L: TLecturaRc;
+begin
+  Result := '';
+  try
+    Txt := PatchLoadText(ARc, Enc);
+  except
+    Exit; // no se puede leer: lo dice RcPathsDenied (STYLE-026)
+  end;
+  L := LeeRc(Txt);
+  if L.Rechazo <> '' then
+    Result := MsgFmt(SR_STYLES_RC_NO_LISTA_FMT, [L.Rechazo, L.RechazoLinea, TPath.GetFileName(ARc)]);
 end;
 
 { ---- dispatcher ---- }

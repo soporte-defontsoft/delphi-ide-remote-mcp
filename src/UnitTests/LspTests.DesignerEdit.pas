@@ -40,6 +40,7 @@ type
     [Test] procedure LineasDelFormComoLasEscribeElIde;
     [Test] procedure FormaDeLasLineasSuJuez;
     [Test] procedure ElRcPorSusTokens;
+    [Test] procedure ElRcCompuestoEsLista;
     [Test] procedure ReferenciaSoloSiGuardaUnComponente;
     [Test] procedure NombresDelFrameEnLinea;
     [Test] procedure MetodoPorSusBordes;
@@ -1275,6 +1276,34 @@ begin
   Assert.IsTrue(EnRutas(L, 'local.h') and not EnRutas(L, '<local.h>'), 'un #include <x>, por su entrada');
   for var E in L.Entradas do
     Assert.IsTrue((E.Linea = 21) = E.PorMacro, Format('PorMacro de la linea %d', [E.Linea]));
+end;
+
+{ V54: una lista blanca (NOMBRE TIPO [banderas] fichero entre comillas) tiene
+  Rechazo vacio y RcCompuesto la reproduce (la inversa de LeeRc); algo que NO es
+  una lista (un #define) deja en Rechazo la primera cosa que no lo es, y
+  RcCompuesto solo emite las entradas de lista. }
+procedure TDesignerEditTests.ElRcCompuestoEsLista;
+const
+  LISTA =
+    'LOGO RCDATA DISCARDABLE ' + #34 + 'falta1.png' + #34 + CRLF +
+    'FONDO RCDATA ' + #34 + 'fondo.png' + #34 + CRLF +
+    'A RCDATA PRELOAD MOVEABLE ' + #34 + 'a.bin' + #34 + CRLF;
+  NO_LISTA =
+    'FONDO RCDATA ' + #34 + 'fondo.png' + #34 + CRLF +
+    '#define F ' + #34 + 'x.png' + #34 + CRLF +
+    'X RCDATA F' + CRLF;
+var
+  L: TLecturaRc;
+begin
+  L := LeeRc(LISTA);
+  Assert.AreEqual('', L.Rechazo, 'una lista pura no tiene nada que rechazar');
+  Assert.AreEqual(LISTA, RcCompuesto(L), 'RcCompuesto es la inversa de LeeRc para una lista');
+  Assert.AreEqual('DISCARDABLE', string.Join(' ', L.Entradas[0].Banderas), 'las banderas de la 1a entrada');
+  Assert.AreEqual('PRELOAD MOVEABLE', string.Join(' ', L.Entradas[2].Banderas), 'las banderas de la 3a entrada');
+  L := LeeRc(NO_LISTA);
+  Assert.IsTrue(L.Rechazo.StartsWith('#define'), 'el #define se rechaza: ' + L.Rechazo);
+  Assert.AreEqual('FONDO RCDATA ' + #34 + 'fondo.png' + #34 + CRLF, RcCompuesto(L),
+    'RcCompuesto solo emite las entradas de lista (fuera el #define y la macro)');
 end;
 
 { Una linea es una referencia si su propiedad guarda un componente (la
