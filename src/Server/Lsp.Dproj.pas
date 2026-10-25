@@ -3392,18 +3392,21 @@ end;
   ACarpetaDelBuild: la del .dproj que se compila, en la que corre msbuild: un
   "\x" o un "X:y" se lee desde ella aunque lo escriba un Import de otra
   carpeta; lo relativo, desde la del fichero que lo escribe. }
-function ResolveImportPath(const APath, AProjectFile, ACarpetaDelBuild: string): string;
+function ResolveImportPath(const APath, AProjectFile, ACarpetaDelBuild, ANombreRaiz: string): string;
 var
-  Dir, Name: string;
+  Dir: string;
 begin
   Dir := ExtractFileDir(AProjectFile);
-  Name := TPath.GetFileNameWithoutExtension(AProjectFile);
+  // $(MSBuildProjectDirectory), $(ProjectDir) y $(MSBuildProjectName) los fija
+  // msbuild al PROYECTO QUE COMPILA, constantes en toda la cadena de Import
+  // (medido con el oraculo de msbuild, A39): se expanden con el raiz, no con el
+  // fichero que importa. Solo $(MSBuildThisFileDirectory) sigue a ESTE fichero.
   Result := APath;
-  Result := Result.Replace('$(MSBuildProjectDirectory)', Dir, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(MSBuildProjectDirectory)', ACarpetaDelBuild, [rfReplaceAll, rfIgnoreCase]);
   Result := Result.Replace('$(MSBuildThisFileDirectory)',
     IncludeTrailingPathDelimiter(Dir), [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(MSBuildProjectName)', Name, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(ProjectDir)', Dir, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(MSBuildProjectName)', ANombreRaiz, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(ProjectDir)', ACarpetaDelBuild, [rfReplaceAll, rfIgnoreCase]);
   if Result.Contains('$(') then
     Exit(''); // still macro-based: not resolvable here
   // como lo lee msbuild (EL resolutor): se juzgaba en la unidad del PROCESO
@@ -3464,7 +3467,7 @@ end;
 function ProjectXmlChain(const ADprojPath: string; out AFicheros: TArray<string>): TArray<string>;
 var
   List, Files: TList<string>;
-  CarpetaDelBuild: string;
+  CarpetaDelBuild, NombreRaiz: string;
 
   procedure Lee(const AFile: string; ADepth: Integer);
   var
@@ -3484,7 +3487,7 @@ var
     begin
       if IsStockImport(LowerCase(V.Trim)) then
         Continue;
-      Resolved := ResolveImportPath(V.Trim, AFile, CarpetaDelBuild);
+      Resolved := ResolveImportPath(V.Trim, AFile, CarpetaDelBuild, NombreRaiz);
       if (Resolved <> '') and TFile.Exists(Resolved) then
         Lee(Resolved, ADepth + 1);
     end;
@@ -3496,6 +3499,7 @@ begin
   if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
     Exit;
   CarpetaDelBuild := ExtractFileDir(TPath.GetFullPath(ADprojPath));
+  NombreRaiz := TPath.GetFileNameWithoutExtension(ADprojPath);
   List := TList<string>.Create;
   Files := TList<string>.Create;
   try
@@ -4439,12 +4443,12 @@ begin
 end;
 
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
-  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild: string): string; forward;
+  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild, ANombreRaiz: string): string; forward;
 
 function DprojBuildHazard(const AXml, AProjectPath: string;
   AIgnoreBuildEvents: Boolean): string;
 begin
-  Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents, ExtractFileDir(AProjectPath));
+  Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents, ExtractFileDir(AProjectPath), TPath.GetFileNameWithoutExtension(AProjectPath));
 end;
 
 { LISTA BLANCA (1.21.2): lo que un build compile-only entiende, y nada mas
@@ -4454,7 +4458,7 @@ end;
   de una tarea conocida. No es un interprete de MSBuild; AllowBuildScripts lo
   decide el operador. }
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
-  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild: string): string;
+  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild, ANombreRaiz: string): string;
 var
   Low, V, Resolved, Imported: string;
 begin
@@ -4562,7 +4566,7 @@ begin
       Continue;
     if ADepth >= 4 then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_PROFUNDO_FMT, [V]));
-    Resolved := ResolveImportPath(V, AProjectFile, ACarpetaDelBuild);
+    Resolved := ResolveImportPath(V, AProjectFile, ACarpetaDelBuild, ANombreRaiz);
     if Resolved = '' then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT, [V]));
     if not TFile.Exists(Resolved) then
@@ -4589,7 +4593,7 @@ begin
     except
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT, [V]));
     end;
-    Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents, ACarpetaDelBuild);
+    Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents, ACarpetaDelBuild, ANombreRaiz);
     if Result <> '' then
       Exit(MsgFmt(SF_CFG_HAZARD_POR_IMPORT_FMT, [Result, V]));
   end;

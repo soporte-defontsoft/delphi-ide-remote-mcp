@@ -130,6 +130,39 @@ try:
     r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
     mc.check('fuera: ...y el mismo Import con el fichero dentro de la raiz compila',
              mc.como_json(r).get('success') is True, mc.como_json(r).get('firstError') or r[:400])
+
+    # A39 (1.23): un <Import> ANIDADO que usa $(MSBuildProjectDirectory) /
+    # $(ProjectDir) / $(MSBuildProjectName). msbuild los fija al PROYECTO que
+    # compila (constantes en toda la cadena, medido con el oraculo de msbuild);
+    # el escaner los expandia con el fichero que IMPORTA, asi que resolvia y
+    # escaneaba OTRO fichero que el que msbuild importa. Exploit: un benigno
+    # donde miraba el escaner (carpeta del .targets anidado) y el hazard donde
+    # lo importa msbuild (carpeta del proyecto). ROJO contra produccion (sin A39).
+    carpeta = os.path.join(BASE, 'a39')
+    salida = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fixture', 'dir': carpeta})
+    mc.check('a39: fixture creada', mc.abre(salida, 'SK_CREATE_CREADO_PROYECTO_FMT'), salida[:200])
+    proyecto = os.path.join(carpeta, 'Fixture.dproj')
+    sub = os.path.join(carpeta, 'sub')
+    os.makedirs(sub, exist_ok=True)
+    NS = '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
+    # el .targets anidado importa via $(MSBuildProjectDirectory): msbuild -> la
+    # carpeta del PROYECTO (carpeta\evil.targets); el escaner con el bug -> la
+    # del fichero que importa (carpeta\sub\evil.targets)
+    with open(os.path.join(sub, 'mid.targets'), 'w', encoding='utf-8') as f:
+        f.write(NS + '<Import Project="$(MSBuildProjectDirectory)\\evil.targets"/></Project>')
+    # donde lo importa msbuild: el HAZARD (un <Exec>)
+    with open(os.path.join(carpeta, 'evil.targets'), 'w', encoding='utf-8') as f:
+        f.write(NS + '<Target Name="X" BeforeTargets="Build"><Exec Command=""/></Target></Project>')
+    # donde miraba el escaner con el bug: INOCUO (sin tarea que ejecute)
+    with open(os.path.join(sub, 'evil.targets'), 'w', encoding='utf-8') as f:
+        f.write(NS + '<Target Name="Y" BeforeTargets="Build"><Message Text="ok"/></Target></Project>')
+    with open(proyecto, encoding='utf-8-sig') as f:
+        xml = f.read()
+    with open(proyecto, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(xml.replace('</Project>', '<Import Project="sub\\mid.targets"/></Project>'))
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('a39: el <Exec> del fichero que msbuild importa via $(MSBuildProjectDirectory) se escanea y se niega (rojo sin el fix)',
+             mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and 'a <exec> task' in r, r[:400])
 finally:
     srv.cierra()
     mc.borra(BASE)
