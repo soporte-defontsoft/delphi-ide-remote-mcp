@@ -79,8 +79,13 @@ const
     no avisa de un componente sin campo cuya clase se registra.
     15 (1.23): lo guardado por codigo y lo registrado se buscan en el texto
     ACTIVO, con sus includes: un DefineProperties o un Register de un .inc no
-    se veia (V17). }
-  GENERACION_TABLAS = 15; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+    se veia (V17).
+    16 (1.23): un limite de subrango con signo es un numero, y uno que es una
+    constante con nombre lo dice su valor (THelpContext = -MaxInt..MaxInt, el
+    HelpContext de todos los controles; TWidth = ColumnHeaderWidth..MaxInt):
+    sin base, set escribia HelpContext = abc (lint lo veia por el lector del
+    IDE; V17). }
+  GENERACION_TABLAS = 16; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
   // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
   // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
@@ -932,6 +937,9 @@ type
     Orden: Integer;     // el de su carpeta en la lista
     Decl: TUnidadPas;
     UsesI, UsesImpl: TArray<string>; // claves de las unidades resueltas
+    // donde se busca lo que no declara (Prepara): [False] desde su interface,
+    // [True] desde su implementation
+    Usadas: array[Boolean] of TArray<string>;
     TiposI, TiposImpl, Anidados: TDictionary<string, TTipoPas>;
     MarcosEstado: Integer; // 0 sin mirar, 1 mirandose (un ciclo), 2 hecho
     Marcos: TMarcosDisenador;
@@ -986,6 +994,10 @@ type
       AContexto: TTipoPas; AEnImpl: Boolean; AProf: Integer = 0): TInfoTipo;
     function MiembrosDeBase(ATipo: TTipoPas; AUnidad: TUnidadLeida;
       AProf: Integer): TArray<string>;
+    function ValorDeConstante(const ANombre: string; AUnidad: TUnidadLeida;
+      AEnImpl: Boolean; out AValor: string; out ADonde: TUnidadLeida): Boolean;
+    function BaseDeLimite(const ALimite: string; AUnidad: TUnidadLeida;
+      AContexto: TTipoPas; AEnImpl: Boolean; AProf: Integer): string;
     function MarcosDe(AUnidad: TUnidadLeida): TMarcosDisenador;
     function IdDeClase(ATipo: TTipoPas): string;
     function EsRaiz(const ACadena: TArray<TTipoPas>): Boolean;
@@ -1389,6 +1401,19 @@ begin
     SetLength(U.UsesImpl, Length(U.Decl.UsesImplementation));
     for var I := 0 to High(U.Decl.UsesImplementation) do
       U.UsesImpl[I] := ResuelveUnidad(U.Decl.UsesImplementation[I]);
+    // donde se busca lo que no declara, en el orden del compilador: los uses
+    // del implementation (desde alli), los del interface, del ultimo al
+    // primero (el ultimo gana), y System. Lo leen ResuelveTipo y
+    // ValorDeConstante: un orden, una casa
+    U.Usadas[False] := nil;
+    for var I := High(U.UsesI) downto 0 do
+      U.Usadas[False] := U.Usadas[False] + [U.UsesI[I]];
+    if U.Clave <> 'system' then
+      U.Usadas[False] := U.Usadas[False] + ['system'];
+    U.Usadas[True] := nil;
+    for var I := High(U.UsesImpl) downto 0 do
+      U.Usadas[True] := U.Usadas[True] + [U.UsesImpl[I]];
+    U.Usadas[True] := U.Usadas[True] + U.Usadas[False];
   end;
   // los miembros de los enumerados, para los subrangos de enumerado
   // (TBorderStyle = bsNone..bsSingle): primero los de la instalacion
@@ -1531,15 +1556,10 @@ begin
       Exit;
     C := ContenedorDe(C);
   end;
-  if AEnImpl then
-    for var I := High(AUnidad.UsesImpl) downto 0 do
-      if EnUnidad(AUnidad.UsesImpl[I]) then
-        Exit(C);
-  for var I := High(AUnidad.UsesI) downto 0 do
-    if EnUnidad(AUnidad.UsesI[I]) then
+  // y en las que usa, en el orden del compilador (Usadas)
+  for var Clave in AUnidad.Usadas[AEnImpl] do
+    if EnUnidad(Clave) then
       Exit(C);
-  if (AUnidad.Clave <> 'system') and EnUnidad('system') then
-    Exit(C);
   Result := nil;
 end;
 
@@ -1713,6 +1733,22 @@ begin
   AMiembros := I.Miembros;
 end;
 
+{ Los dos limites de un subrango (o de la base de un conjunto escrita como
+  uno, set of 1..10: la lleva entera en Base) }
+procedure LimitesDeSubrango(ATipo: TTipoPas; out ABajo, AAlto: string);
+begin
+  if ATipo.Base.Contains('..') then
+  begin
+    ABajo := Trim(ATipo.Base.Substring(0, ATipo.Base.IndexOf('..')));
+    AAlto := Trim(ATipo.Base.Substring(ATipo.Base.IndexOf('..') + 2));
+  end
+  else
+  begin
+    ABajo := Trim(ATipo.Base);
+    AAlto := Trim(ATipo.Alto);
+  end;
+end;
+
 { Los miembros del enumerado de la base de un conjunto (o de un subrango
   de enumerado): los de su enumerado en linea, los de su base resuelta, o
   los que van de un miembro a otro. }
@@ -1726,16 +1762,8 @@ begin
   Result := nil;
   if Length(ATipo.Miembros) > 0 then
     Exit(ATipo.Miembros);
-  if ATipo.Base.Contains('..') then
-  begin
-    Bajo := Trim(ATipo.Base.Substring(0, ATipo.Base.IndexOf('..')));
-    Alto := Trim(ATipo.Base.Substring(ATipo.Base.IndexOf('..') + 2));
-  end
-  else if ATipo.Clase = ctSubrango then
-  begin
-    Bajo := Trim(ATipo.Base);
-    Alto := Trim(ATipo.Alto);
-  end
+  if ATipo.Base.Contains('..') or (ATipo.Clase = ctSubrango) then
+    LimitesDeSubrango(ATipo, Bajo, Alto)
   else
   begin
     Result := Clasifica(ATipo.Base, AUnidad, ContenedorDe(ATipo),
@@ -1755,6 +1783,81 @@ begin
   end;
   if (I >= 0) and (J >= I) then
     Result := Copy(E.Miembros, I, J - I + 1);
+end;
+
+{ El valor de la constante ANombre escrita en AUnidad, buscada como un tipo
+  (ResuelveTipo): en la unidad y en las que usa (Usadas) o, con puntos, en
+  la unidad que la nombra (Unidad.Constante); ADonde, la que la declara. Las
+  del interface, las que guarda el lector (TUnidadPas.Constantes). }
+function TGenerador.ValorDeConstante(const ANombre: string; AUnidad: TUnidadLeida;
+  AEnImpl: Boolean; out AValor: string; out ADonde: TUnidadLeida): Boolean;
+var
+  L: string;
+  K: Integer;
+begin
+  AValor := '';
+  ADonde := nil;
+  if AUnidad = nil then
+    Exit(False);
+  L := ClaveDeIdentificador(ANombre);
+  K := L.LastIndexOf('.');
+  if K > 0 then
+  begin
+    Result := FUnidades.TryGetValue(ResuelveUnidad(L.Substring(0, K)), ADonde) and
+      ADonde.Decl.Constantes.TryGetValue(L.Substring(K + 1), AValor);
+    if not Result then
+      ADonde := nil;
+    Exit;
+  end;
+  if AUnidad.Decl.Constantes.TryGetValue(L, AValor) then
+  begin
+    ADonde := AUnidad;
+    Exit(True);
+  end;
+  for var Clave in AUnidad.Usadas[AEnImpl] do
+    if FUnidades.TryGetValue(Clave, ADonde) and ADonde.Decl.Constantes.TryGetValue(L, AValor) then
+      Exit(True);
+  ADonde := nil;
+  Result := False;
+end;
+
+{ La base de un subrango por uno de sus limites, ALimite, escrito en
+  AUnidad: 'integer' si es un numero - un literal; uno con signo, que solo
+  va delante de un numero (THelpContext = -MaxInt..MaxInt); Low(T) o High(T)
+  de un entero -, 'char' si es un caracter (el texto activo deja las cadenas
+  en blanco: 'a'..'z' llega con el limite vacio) y, si es una constante con
+  nombre, lo que diga su valor en la unidad que la declara (TWidth =
+  ColumnHeaderWidth..MaxInt, de Vcl.ComCtrls: ColumnHeaderWidth =
+  LVSCW_AUTOSIZE_USEHEADER, y esa -2 en Winapi.CommCtrl). '' si no se sabe:
+  nada se adivina, y un enumerado lo dicen sus miembros (MiembrosDeBase). }
+function TGenerador.BaseDeLimite(const ALimite: string; AUnidad: TUnidadLeida;
+  AContexto: TTipoPas; AEnImpl: Boolean; AProf: Integer): string;
+var
+  Valor: string;
+  Donde: TUnidadLeida;
+  Limite: TMatch;
+begin
+  Result := '';
+  if AProf > 16 then
+    Exit;
+  if TRegEx.IsMatch(ALimite, '^(?:[-+]|\$[0-9A-Fa-f]|\d)') then
+    Exit('integer');
+  if (ALimite = '') or ALimite.StartsWith('#') or ALimite.StartsWith('''') then
+    Exit('char');
+  // Low(T)..High(T) (TModalResult = Low(Integer)..High(Integer),
+  // System.UITypes): la base la dice T, preguntada al MISMO clasificador. Sin
+  // ella el tipo quedaba sin base y set y lint dejaban pasar "mrOK", que el
+  // cargador rechaza (Hermes, 15-oct-2026: DSGN-114 en el preview, el form no
+  // abre)
+  Limite := TRegEx.Match(ALimite, '^(?i:low|high)\s*\(\s*(' + PATRON_IDENT + ')\s*\)\s*$');
+  if Limite.Success then
+  begin
+    if Clasifica(Limite.Groups[1].Value, AUnidad, AContexto, AEnImpl, AProf + 1).Base = 'integer' then
+      Result := 'integer';
+  end
+  else if TRegEx.IsMatch(ALimite, '^' + PATRON_IDENT + '(?:\.' + PATRON_IDENT + ')*$') and
+          ValorDeConstante(ALimite, AUnidad, AEnImpl, Valor, Donde) then
+    Result := BaseDeLimite(Valor, Donde, nil, False, AProf + 1);
 end;
 
 { Que es un tipo escrito como ATexto, como lo diria su informacion de
@@ -1801,29 +1904,12 @@ begin
         else
         begin
           // uno de numeros (TColor, TCursor) es un entero, uno de
-          // caracteres un caracter (el texto activo deja las cadenas en
-          // blanco: 'a'..'z' llega con el limite vacio); uno que empieza
-          // por una constante con nombre no se adivina
-          var Bajo := T.Base;
-          if Bajo.Contains('..') then
-            Bajo := Bajo.Substring(0, Bajo.IndexOf('..'));
-          Bajo := Trim(Bajo);
-          if TRegEx.IsMatch(Bajo, '^[-+]?\s*(?:\$[0-9A-Fa-f]|\d)') then
-            Result.Base := 'integer'
-          else if (Bajo = '') or Bajo.StartsWith('#') or Bajo.StartsWith('''') then
-            Result.Base := 'char'
-          else
-          begin
-            // Low(T)..High(T) (TModalResult = Low(Integer)..High(Integer),
-            // System.UITypes): la base la dice T, preguntada al MISMO
-            // clasificador. Sin ella el tipo quedaba sin base y set y lint
-            // dejaban pasar "mrOK", que el cargador rechaza (Hermes,
-            // 15-oct-2026: DSGN-114 en el preview, el form no abre)
-            var Limite := TRegEx.Match(Bajo, '^(?i:low|high)\s*\(\s*(' + PATRON_IDENT + ')\s*\)\s*$');
-            if Limite.Success and (Clasifica(Limite.Groups[1].Value, UT, ContenedorDe(T),
-                 T.EnImplementation, AProf + 1).Base = 'integer') then
-              Result.Base := 'integer';
-          end;
+          // caracteres un caracter: lo dice cualquiera de sus dos limites
+          var Bajo, Alto: string;
+          LimitesDeSubrango(T, Bajo, Alto);
+          Result.Base := BaseDeLimite(Bajo, UT, ContenedorDe(T), T.EnImplementation, AProf);
+          if Result.Base = '' then
+            Result.Base := BaseDeLimite(Alto, UT, ContenedorDe(T), T.EnImplementation, AProf);
         end;
       end;
     ctAlias:

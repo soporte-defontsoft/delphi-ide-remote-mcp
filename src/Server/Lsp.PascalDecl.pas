@@ -159,8 +159,10 @@ type
     UsesInterface: TArray<string>;
     UsesImplementation: TArray<string>;
     Tipos: TObjectList<TTipoPas>;   // todos: interface, implementation, anidados
-    // las del interface con un valor simple (un numero, True, False): las
-    // que puede preguntar un IF de otra unidad (RTLVersion131 = True)
+    // las constantes sin tipo del interface con su valor, los tokens juntos
+    // como la base de un tipo ('High(Integer)', '-2'), por la clave de su
+    // nombre: lo que puede preguntar un IF de otra unidad (RTLVersion131 =
+    // True) y el limite de un subrango de las tablas del disenador
     Constantes: TDictionary<string, string>;
     // un programa o una biblioteca: su nombre (Nombre se queda en '': no es
     // una unidad); sus tipos se leen igual
@@ -1160,7 +1162,7 @@ end;
 
 procedure TLectorPas.LeeSeccionConst(AGuarda: Boolean);
 var
-  Nombre: string;
+  Nombre, Valor: string;
   Ini: Integer;
 begin
   while not Fin do
@@ -1178,9 +1180,16 @@ begin
       Toma;
       Ini := FI;
       SaltaHastaPuntoYComa;
-      // un valor simple: un token (numero, True, False) y su ';'
-      if AGuarda and (FI - Ini = 2) and (Texto(FI - 1) = ';') then
-        FUnidad.Constantes.AddOrSetValue(Nombre, Texto(Ini));
+      // su valor, hasta su ';' (antes solo el de un token: el -2 de
+      // LVSCW_AUTOSIZE_USEHEADER, donde acaba el limite de TWidth =
+      // ColumnHeaderWidth..MaxInt, no llegaba; V17 de la 1.23)
+      if AGuarda and (Texto(FI - 1) = ';') then
+      begin
+        Valor := '';
+        for var K := Ini to FI - 2 do
+          Valor := Valor + Texto(K);
+        FUnidad.Constantes.AddOrSetValue(ClaveDeIdentificador(Nombre), Valor);
+      end;
     end
     else
       SaltaHastaPuntoYComa; // con tipo: no es de las que mira un IF

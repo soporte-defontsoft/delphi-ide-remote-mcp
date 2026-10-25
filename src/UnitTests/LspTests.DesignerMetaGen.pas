@@ -101,7 +101,8 @@ uses
   Lsp.DesignerMetaGen,
   Lsp.DesignerMeta,
   Lsp.Discovery,
-  System.RegularExpressions;
+  System.RegularExpressions,
+  Lsp.Pascal;
 
 function Codigo(const S: string): string;
 begin
@@ -402,13 +403,17 @@ var
 begin
   U := LeeUnidadPascal(
     'unit System; interface const RTLVersion = 37.00; RTLVersion131 = True;'#13#10 +
-    'CompilerVersion = 0.0; Raro: Integer = 3; MaxX = -1;'#13#10 +
+    'CompilerVersion = 0.0; Raro: Integer = 3; MaxX = -1; Tope = High(Integer);'#13#10 +
     'implementation const Privada = 1; end.');
   try
-    Assert.AreEqual('37.00', U.Constantes['RTLVersion']);
-    Assert.AreEqual('True', U.Constantes['RTLVersion131']);
-    Assert.IsFalse(U.Constantes.ContainsKey('Raro'), 'una con tipo no');
-    Assert.IsFalse(U.Constantes.ContainsKey('Privada'), 'las del implementation no');
+    Assert.AreEqual('37.00', U.Constantes[ClaveDeIdentificador('RTLVersion')]);
+    Assert.AreEqual('True', U.Constantes[ClaveDeIdentificador('RTLVERSION131')],
+      'por la clave de su nombre: Pascal no distingue mayusculas');
+    // las de mas de un token tambien: el limite de un subrango (V17 de la 1.23)
+    Assert.AreEqual('-1', U.Constantes[ClaveDeIdentificador('MaxX')]);
+    Assert.AreEqual('High(Integer)', U.Constantes[ClaveDeIdentificador('Tope')]);
+    Assert.IsFalse(U.Constantes.ContainsKey(ClaveDeIdentificador('Raro')), 'una con tipo no');
+    Assert.IsFalse(U.Constantes.ContainsKey(ClaveDeIdentificador('Privada')), 'las del implementation no');
   finally
     U.Free;
   end;
@@ -633,8 +638,9 @@ end;
 { Lo que delphi_designer set mira de un valor, sacado del fuente (David,
   7-oct-2026: "comprobar tipos realmente"): la base de cada tipo 'o' (B) -
   un subrango de numeros es un entero, uno de caracteres un caracter, un
-  alias fuerte la de su destino, uno que empieza por una constante con
-  nombre no se sabe - y las constantes con nombre de los enteros (I), por el
+  alias fuerte la de su destino, uno con una constante con nombre lo que
+  diga su valor desde su unidad, y si no se ve no se sabe - y las
+  constantes con nombre de los enteros (I), por el
   marco de la unidad que las registra: las del mapa, siguiendo a quien
   llama a otra; '*' si su IdentTo hace mas que buscar. }
 procedure TDesignerMetaGenTests.LasBasesYLasConstantesDelFuente;
@@ -642,10 +648,19 @@ var
   T: TTablasDeFuente;
   V, F: TArray<string>;
 begin
-  Escribe('System.pas', 'unit System; interface type TObject = class end; implementation end.');
-  Escribe('System.UITypes.pas', 'unit System.UITypes; interface type'#13#10 +
+  // MaxInt es del compilador, no de System.pas: en -MaxInt basta el signo
+  Escribe('System.pas', 'unit System; interface const TopeDeCosas = High(Integer);'#13#10 +
+    'type TObject = class end; implementation end.');
+  // una constante que es otra de una unidad que se usa (el TWidth de
+  // Vcl.ComCtrls: ColumnHeaderWidth = LVSCW_AUTOSIZE_USEHEADER = -2)
+  Escribe('Winapi.Cosas.pas', 'unit Winapi.Cosas; interface const'#13#10 +
+    'ANCHO_AUTO = -1; ANCHO_AUTO_CABECERA = -2; implementation end.');
+  Escribe('System.UITypes.pas', 'unit System.UITypes; interface uses Winapi.Cosas;'#13#10 +
+    'const AnchoCabecera = ANCHO_AUTO_CABECERA; AnchoTexto = ANCHO_AUTO;'#13#10 +
+    'type'#13#10 +
     'TColor = -$7FFFFFFF-1..$7FFFFFFF; TCursor = -32768..32767; TAlphaColor = type Cardinal;'#13#10 +
     'TLetra = ''a''..''z''; TRaro = MinCosa..MaxCosa;'#13#10 +
+    'THelpContext = -MaxInt..MaxInt; TAncho = AnchoCabecera..AnchoTexto; TArriba = Ninguna..TopeDeCosas;'#13#10 +
     'implementation end.');
   Escribe('System.Classes.pas', 'unit System.Classes; interface uses System.UITypes; type'#13#10 +
     'TCaption = type string; TImageIndex = type Integer;'#13#10 +
@@ -658,6 +673,8 @@ begin
     '  property Titulo: TCaption read FT; property Indice: TImageIndex read FX;'#13#10 +
     '  property Dato: Variant read FD; property Grande: Int64 read FG;'#13#10 +
     '  property Rango: TRaro read FR; property Opacidad: Single read FO;'#13#10 +
+    '  property Ayuda: THelpContext read FH; property Ancho: TAncho read FA;'#13#10 +
+    '  property Arriba: TArriba read FB;'#13#10 +
     '  public constructor Create(AOwner: TComponent); override; end;'#13#10 +
     'TBoton = class(TCosa) public constructor Create(AOwner: TComponent); override; end;'#13#10 +
     'implementation'#13#10 +
@@ -693,7 +710,9 @@ begin
     '  RegisterIntegerConsts(TypeInfo(TCursor), IdentToCursor, CursorToIdent);'#13#10 +
     '  RegisterIntegerConsts(TypeInfo(TAlphaColor), IdentToAlphaColor, AlphaColorToIdent);'#13#10 +
     'end.');
+  // las de TRaro existen, pero System.UITypes no usa esta unidad
   Escribe('Vcl.Controls.pas', 'unit Vcl.Controls; interface uses System.UITypes;'#13#10 +
+    'const MinCosa = 0; MaxCosa = 9;'#13#10 +
     'implementation uses System.UIConsts;'#13#10 +
     'function IdentToCursor(const Ident: string; var Cursor: Longint): Boolean;'#13#10 +
     'begin Result := System.UIConsts.IdentToCursor(Ident, Cursor); end;'#13#10 +
@@ -712,8 +731,13 @@ begin
     Hechos(V, 'B Variant variant') and Hechos(V, 'B Int64 int64'), 'los del compilador');
   Assert.IsTrue(Hechos(V, 'B TCaption string') and Hechos(V, 'B TImageIndex integer'),
     'los alias fuertes del lenguaje');
+  Assert.IsTrue(Hechos(V, 'B THelpContext integer'), 'un signo solo va delante de un numero (-MaxInt)');
+  Assert.IsTrue(Hechos(V, 'B TAncho integer'),
+    'una constante con nombre, por su valor, y este por el de la unidad que la declara');
+  Assert.IsTrue(Hechos(V, 'B TArriba integer'),
+    'el otro limite, si el primero no se sabe: TopeDeCosas = High(Integer), de System');
   for var H in V do
-    Assert.IsFalse(H.StartsWith('B TRaro '), 'uno que empieza por una constante con nombre no se sabe: ' + H);
+    Assert.IsFalse(H.StartsWith('B TRaro '), 'unas constantes que su unidad no ve no se saben: ' + H);
   Assert.IsTrue(Hechos(V, 'I TColor clBlack,clRed'), 'las de su mapa');
   Assert.IsTrue(Hechos(V, 'I TCursor crDefault,crHandPoint'),
     'el de Vcl.Controls llama al de System.UIConsts: las mismas');

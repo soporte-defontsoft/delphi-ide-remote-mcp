@@ -14,6 +14,15 @@ abre). El IDE escribe el numero.
   M3 lint de un form con "ModalResult = mrOK" escrito a mano: no CLEAN, lo nombra
   M4 control: Color=clRed (TColor, subrango con constantes registradas) sigue valiendo
 
+Y el mismo hueco con una constante con nombre en el limite (V17 de la 1.23):
+THelpContext = -MaxInt..MaxInt (System.Classes), el HelpContext de todos los
+controles, quedaba sin base y set escribia cualquier cosa. Rojo contra r1222bi: H1
+(H3 es el control: lint ya preguntaba al lector de forms del IDE, que lo niega).
+
+  H1 set HelpContext=abc: negado como entero (DSGN-093), nada escrito
+  H2 set HelpContext=7: escrito
+  H3 control: lint de un form con "HelpContext = abc" escrito a mano: no CLEAN, lo nombra
+
 Uso:  python tests/test_designer_modalresult_1191.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -58,6 +67,16 @@ try:
     r = d(command='set', path=DFM, component='FormMain', prop='Color', value='clRed')
     check('M4 control: Color=clRed (TColor con sus constantes) sigue valiendo',
           not mc.fallo(r) and 'Color = clRed' in mc.lee(DFM), r[:300])
+    antes = mc.lee(DFM)
+    r = d(command='set', path=DFM, component='BtnOk', prop='HelpContext', value='abc')
+    check('H1 set HelpContext=abc: negado como entero (DSGN-093) y nada escrito',
+          mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_SET_TIPO_FMT') and mc.lee(DFM) == antes, r[:300])
+    r = d(command='set', path=DFM, component='BtnOk', prop='HelpContext', value='7')
+    check('H2 set HelpContext=7: escrito', not mc.fallo(r) and 'HelpContext = 7' in mc.lee(DFM), r[:300])
+    s.call('delphi_edit', {'path': DFM, 'old': 'HelpContext = 7', 'new': 'HelpContext = abc'})
+    r = d(command='lint', path=DFM)
+    check('H3 control: lint con "HelpContext = abc" escrito a mano: no CLEAN, y lo nombra',
+          not mc.es(r, 'SN_DESIGNER_LINT_OK_FMT') and 'HelpContext' in r, r[:400])
 finally:
     s.cierra()
 

@@ -89,6 +89,16 @@ the MCP `initialize` response (`serverInfo.version`).
   that follows does expand them: a `DefineProperties` or a `Register` in a
   `.inc` was never read. It now looks at the same active text, includes in
   and comments out. The tables move to generation 15 and are rebuilt once.
+- **`delphi_designer set` judges `HelpContext` as the integer it is.** A
+  subrange whose bound is a named constant got no base type in the designer
+  tables: `THelpContext = -MaxInt..MaxInt`, the `HelpContext` of every VCL
+  and FMX control, and `TWidth = ColumnHeaderWidth..MaxInt` of a list view
+  column. `set HelpContext=abc` was written, and only `lint`, through the
+  IDE's form reader, said the form would not load. A signed bound is now a
+  number, and a named one is followed to its value in the unit that declares
+  it, searched in the order the compiler uses; what cannot be followed is
+  still left unjudged. The tables move to generation 16
+  (`tests/test_designer_modalresult_1191.py` H1).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the
