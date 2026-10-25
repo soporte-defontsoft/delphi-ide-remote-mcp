@@ -570,6 +570,23 @@ check('C14d digest: un enum de doce miembros y una funcion de diez parametros, u
       any(x.get('decl', '').startswith('TColorLargo') and 'cl12' in x.get('decl', '') for x in dl) and
       any(x.get('decl', '').startswith('function Muchos') and x.get('decl', '').endswith('): Boolean;') for x in dl),
       str(dl)[:600])
+# C14e (A26 de la 1.23): un fuente con TABULADORES. Las regex del digest con [ ] perdian class<TAB>procedure, la
+# constante MAXTAB<TAB>=<TAB>1 y la variable VTab<TAB>:<TAB>Integer (medido contra r1222bv); el tipo (por el
+# lector) y procedure<TAB>X ya salian. En su carpeta: el tope del digest no lo deja fuera
+DIGT = os.path.join(BASE, 'DigTab')
+os.makedirs(DIGT)
+escribe(os.path.join(DIGT, 'UDigTab.pas'),
+        'unit UDigTab;\n\ninterface\n\ntype\n\tTTab = class\n\tpublic\n\t\tclass\tprocedure Clase;\n'
+        '\t\tprocedure Normal;\n\tend;\n\nconst\n\tMAXTAB\t=\t1;\n\nvar\n\tVTab\t:\tInteger;\n\n'
+        'procedure\tSuelta;\n\nimplementation\n\nclass procedure TTab.Clase;\nbegin\nend;\n\n'
+        'procedure TTab.Normal;\nbegin\nend;\n\nprocedure Suelta;\nbegin\nend;\n\nend.\n')
+d = J(call('delphi_symbols', {'path': DIGT}))
+dt = [x.get('decl', '') for u_ in mc.ficheros(d, 'units') if u_.get('unit') == 'UDigTab' for x in u_.get('declares', [])]
+check('C14e digest de un fuente con tabuladores: class<TAB>procedure, la constante y la variable salen (ROJO '
+      'contra r1222bx), y lo que ya salia sigue',
+      'class\tprocedure Clase;' in dt and any(x.startswith('MAXTAB') for x in dt) and
+      any(x.startswith('VTab') for x in dt) and any(x.startswith('TTab') for x in dt) and
+      'procedure\tSuelta;' in dt, dt)
 
 # C15: un class var no es el campo de un componente (el streaming busca campos
 # de la instancia): el lector no marcaba los campos de un 'class var'. En la

@@ -108,6 +108,14 @@ the MCP `initialize` response (`serverInfo.version`).
   that did not arrive reports adb's real exit code. The tool description
   and the `discover` note no longer promise an authorization prompt on the
   first connect (`tests/test_deploy_adb.py`).
+- **The folder digest of `delphi_symbols` sees a unit written with tabs.**
+  What each unit of a folder declares is read as text, and those rules took
+  only spaces between words: in a source indented and aligned with tabs,
+  `class<TAB>procedure`, a constant `MAX<TAB>=<TAB>1` and a variable
+  `V<TAB>:<TAB>Integer` were missing from the digest. The start of a routine
+  header (an optional `class` and the routine word) is now one pattern
+  (`Lsp.Pascal.PatronInicioDeRutina`), shared by the five places that wrote
+  it by hand (`tests/test_lector_clases.py`).
 - **A test never runs in a job without its limits.** `delphi_test` runs a
   test inside a Job Object (kill-on-close, a cap of 3 GiB per process and
   one on processes) and refuses to run it when the job cannot be created;

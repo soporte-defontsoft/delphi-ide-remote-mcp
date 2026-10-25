@@ -195,6 +195,12 @@ const
 // PALABRAS_DE_RUTINA como patron, sin grupo: (?:procedure|function|...)
 function PatronPalabraDeRutina: string;
 
+// EL principio de una cabecera de rutina: un 'class' opcional y la palabra
+// (AConProperty: o property), sin grupo y sin ancla. Estaba escrito en seis
+// regex, y la del digest de delphi_symbols, con [ ]+, no veia class<TAB>
+// procedure (A26 de la 1.23, medido)
+function PatronInicioDeRutina(AConProperty: Boolean = False): string;
+
 // La misma regla caracter a caracter, para los que recorren un texto: el
 // primero (letra ASCII, '_' o no ASCII) y los demas (tambien un digito)
 function EsLetraDeIdent(C: Char): Boolean;
@@ -300,6 +306,14 @@ begin
   Result := '(?:' + string.Join('|', PALABRAS_DE_RUTINA) + ')';
 end;
 
+function PatronInicioDeRutina(AConProperty: Boolean): string;
+begin
+  Result := '(?:class\s+)?(?:' + string.Join('|', PALABRAS_DE_RUTINA);
+  if AConProperty then
+    Result := Result + '|property';
+  Result := Result + ')';
+end;
+
 function EsLetraDeIdent(C: Char): Boolean;
 begin
   Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']) or ((Ord(C) >= $80) and not C.IsSurrogate);
@@ -333,7 +347,7 @@ begin
   // 'class' delante (class procedure, class operator, class property): sin
   // el, las cabeceras de un metodo de clase no eran cabeceras y references
   // las contaba como llamadas (M2 del revisor de cierre de la 1.18.2, medido)
-  M := TRegEx.Match(ALinea, '^\s*(?:class\s+)?(?:' + PatronPalabraDeRutina + '|property)\s+(?:' +
+  M := TRegEx.Match(ALinea, '^\s*' + PatronInicioDeRutina(True) + '\s+(?:' +
     PATRON_NIVEL_DE_CABECERA + '\s*\.\s*)*&?(' + PATRON_IDENT + ')', [roIgnoreCase]);
   if M.Success then
     Result := M.Groups[1].Index - 1 // TMatch es 1-based; las columnas del LSP, 0-based

@@ -1156,13 +1156,15 @@ begin
     Dueno := U.TipoEnLinea(I, [ctClase, ctRegistro, ctInterfaz, ctAyudante, ctOtro], True);
     J := I;
     // la cabecera de un tipo, del lector: la de un generico (TFoo<T: class,
-    // constructor> = class) no casaba con las regex y no salia
+    // constructor> = class) no casaba con las regex y no salia. Los blancos,
+    // \s: con [ ] un fuente con tabuladores perdia class<TAB>procedure y
+    // X<TAB>=<TAB>1 (A26 de la 1.23, medido)
     if (U.TipoQueEmpiezaEn(I) <> nil) or
-       TRegEx.IsMatch(L, '(?i)^(class[ ]+)?(?:' + PatronPalabraDeRutina + '|property)\b') or
-       TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*=[ ]*(class|record|interface|packed|\()') or
-       TRegEx.IsMatch(L, '(?i)^' + PATRON_IDENT + '[ ]*=[ ]*') or
+       TRegEx.IsMatch(L, '(?i)^' + PatronInicioDeRutina(True) + '\b') or
+       TRegEx.IsMatch(L, '^' + PATRON_IDENT + '\s*=\s*(class|record|interface|packed|\()') or
+       TRegEx.IsMatch(L, '(?i)^' + PATRON_IDENT + '\s*=\s*') or
        (((Dueno <> nil) or MatchText(Seccion, ['const', 'var', 'threadvar', 'resourcestring'])) and
-        TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*:[ ]*' + PATRON_IDENT)) then
+        TRegEx.IsMatch(L, '^' + PATRON_IDENT + '\s*:\s*' + PATRON_IDENT)) then
     begin
       Inc(Kept);
       if Arr.Count < 300 then

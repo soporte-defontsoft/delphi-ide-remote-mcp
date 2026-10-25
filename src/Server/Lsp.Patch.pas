@@ -5367,7 +5367,7 @@ begin
           // un metodo) se AVISA, no se niega: dcc dira si es la misma, y no
           // somos la ninera (David, 23-sep). Se insertaba a ciegas (decima)
           var YaEsta := '';
-          var RutinaRe := TRegEx.Create('^\s*(class\s+)?' + PatronPalabraDeRutina + '\s+' +
+          var RutinaRe := TRegEx.Create('^\s*' + PatronInicioDeRutina + '\s+' +
             TRegEx.Escape(MF.Groups[3].Value) + '\s*[(;:]', [roIgnoreCase]);
           for I := 0 to High(Codigo) do
             if RutinaRe.IsMatch(Codigo[I]) then
@@ -5508,7 +5508,7 @@ begin
             IDeclExiste := R.Linea;
             Break;
           end;
-        var ImplRe := TRegEx.Create('^\s*(class\s+)?' + PatronPalabraDeRutina + '\s+' +
+        var ImplRe := TRegEx.Create('^\s*' + PatronInicioDeRutina + '\s+' +
           PatronClase + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
         var IImplExiste := -1;
         for I := 0 to High(Codigo) do
@@ -6310,7 +6310,7 @@ begin
         begin
           if (Idx < 0) or (Idx + J > High(AfterVista)) then
             Break;
-          if not TRegEx.IsMatch(AfterVista[Idx + J], '^(?:class\s+)?' + PatronPalabraDeRutina + '\b', [roIgnoreCase]) then
+          if not TRegEx.IsMatch(AfterVista[Idx + J], '^' + PatronInicioDeRutina + '\b', [roIgnoreCase]) then
             Continue;
           if Lector = nil then
             Lector := LeeFuentePascal(AfterText);
