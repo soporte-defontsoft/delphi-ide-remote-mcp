@@ -382,6 +382,18 @@ const
     'that platform. Add, remove or rename it with delphi_edit in the ' +
     'right branch. Nothing was changed.';
 
+  // Una clausula que no se lee como una lista de entradas: una comilla sin
+  // cerrar (la de una ruta con apostrofo que nadie doblo) deja el ';' de la
+  // clausula mas abajo, y reescribirla se llevaba el codigo de detras
+  // (medido el 25-oct-2026: remove-unit borro el begin y Application.
+  // Initialize de un .dpr diciendo REMOVED). %s = uses / contains, el
+  // fichero, la entrada
+  SR_USES_ENTRADA_ILEGIBLE_FMT =
+    '[USES-026 DENIED] The %s clause of %s does not read as a list of ' +
+    'units: "%s" is not an entry (a quote left open, or code after a ' +
+    'unit), so where the clause ends cannot be told. Nothing was changed: ' +
+    'fix that line with delphi_edit.';
+
   { Un parametro que no va con el modo (Lsp.Guard.ParametroQueNoVa, como las
     hermanas; era una nota y la tool contestaba igual, 1.22.2) }
   SR_COMPONENTS_NO_VA_CON_MODO_FMT =

@@ -49,6 +49,15 @@ type
     InDproj: Boolean;    // has its <DCCReference>
   end;
 
+// EL escritor de una entrada del uses de un programa (o del contains de un
+// paquete), como la escribe el IDE: Unidad in 'ruta', con su comentario
+// {Form} o {Form: Clase} si AForm no es ''; la ruta con sus comillas
+// dobladas. Su lector es LeeEntradaDeUses.
+function EntradaDelUses(const AUnidad, AInclude, AForm, ADesignClass: string): string;
+{ EL escritor de la sentencia que crea un form al arrancar:
+  Application.CreateForm(TForm1, Form1); su lector es CreateFormsDe. }
+function LineaCreateForm(const AClase, AVariable: string): string;
+
 { Resolves a .dpr or .dproj to the pair (both absolute). Either may be given.
   Returns '' when OK, else a refusal text. }
 function ResolveProjectPair(const AProject: string; out ADpr, ADproj: string): string;
@@ -1046,59 +1055,130 @@ begin
   ACore := Copy(Entry, I, MaxInt).Trim;
 end;
 
-function EntryUnitName(const Entry: string): string;
+type
+  // Una entrada de una clausula uses o contains, como la escribe
+  // EntradaDelUses: Unidad in 'ruta' {Form: Clase}
+  TEntradaDeUses = record
+    Prefijo: string;     // comentarios y directivas de delante (SplitEntryPrefix)
+    Nombre: string;      // la unit, con sus puntos; '' si no empieza por una
+    Include: string;     // la ruta del in, con sus comillas ya sin doblar
+    Form: string;        // el comentario del IDE detras de la ruta
+    DesignClass: string;
+    Resto: string;       // lo que va detras de todo eso
+    // detras de lo suyo solo hay comentarios, directivas o blancos. Una
+    // comilla sin cerrar deja codigo aqui: el ';' de la clausula no era el
+    // suyo, y lo de detras (begin...) caia dentro de la entrada
+    Legible: Boolean;
+  end;
+
+{ EL lector de una entrada, el inverso de EntradaDelUses. Eran cuatro regex
+  (EntryUnitName, EntryInclude, EntryFormName y la de EntradaReescrita), y
+  '[^'']+' cortaba la ruta en su primera comilla: la de 'David''s units'
+  salia 'David', y remove-unit dejaba su DCCReference en el .dproj (medido
+  el 25-oct-2026). La cadena la mide el lexico de la casa (QuoteLen: dos
+  comillas son una suya, y una sin cerrar acaba en su linea). }
+function LeeEntradaDeUses(const AEntrada: string): TEntradaDeUses;
 var
+  Core: string;
+  I, J, N: Integer;
   M: TMatch;
-  Prefix, Core: string;
 begin
-  SplitEntryPrefix(Entry, Prefix, Core);
-  M := TRegEx.Match(Core, '^(' + PATRON_IDENT_PUNTOS + ')');
+  Result := Default(TEntradaDeUses);
+  SplitEntryPrefix(AEntrada, Result.Prefijo, Core);
+  I := 1;
+  M := TRegEx.Match(Core, '^' + PATRON_IDENT_PUNTOS);
   if M.Success then
-    Result := M.Groups[1].Value
-  else
-    Result := Core;
+  begin
+    Result.Nombre := M.Value;
+    I := M.Length + 1;
+    J := I;
+    while (J <= Length(Core)) and Core[J].IsWhiteSpace do
+      Inc(J);
+    if SameText(Copy(Core, J, 2), 'in') and
+       ((J + 2 > Length(Core)) or not EsCaracterDeIdent(Core[J + 2])) then
+    begin
+      Inc(J, 2);
+      while (J <= Length(Core)) and Core[J].IsWhiteSpace do
+        Inc(J);
+      N := QuoteLen(Core, J);
+      if (N >= 2) and (Core[J + N - 1] = '''') then
+      begin
+        Result.Include := Copy(Core, J + 1, N - 2).Replace('''''', '''');
+        I := J + N;
+        M := TRegEx.Match(Copy(Core, I, MaxInt), '^\s*\{\s*(' + PATRON_IDENT + ')\s*(?::\s*(' +
+          PATRON_IDENT_PUNTOS + ')\s*)?\}');
+        if M.Success then
+        begin
+          Result.Form := M.Groups[1].Value;
+          if (M.Groups.Count > 2) and M.Groups[2].Success then
+            Result.DesignClass := M.Groups[2].Value;
+          Inc(I, M.Length);
+        end;
+      end;
+    end;
+  end;
+  Result.Resto := Copy(Core, I, MaxInt);
+  Result.Legible := CodigoPascal(Result.Resto).Trim = '';
+end;
+
+function EntryUnitName(const Entry: string): string;
+begin
+  var E := LeeEntradaDeUses(Entry);
+  Result := IfThen(E.Nombre <> '', E.Nombre, E.Resto);
 end;
 
 function EntryInclude(const Entry: string): string;
-var
-  M: TMatch;
 begin
-  M := TRegEx.Match(Entry, '^\s*' + PATRON_IDENT_PUNTOS + '\s+in\s*''([^'']+)''', [roIgnoreCase]);
-  if not M.Success then
-  begin
-    var Prefix, Core: string;
-    SplitEntryPrefix(Entry, Prefix, Core);
-    M := TRegEx.Match(Core, '^' + PATRON_IDENT_PUNTOS + '\s+in\s*''([^'']+)''', [roIgnoreCase]);
-  end;
-  if M.Success then
-    Result := M.Groups[1].Value
-  else
-    Result := '';
+  Result := LeeEntradaDeUses(Entry).Include;
 end;
 
 function EntryFormName(const Entry: string): string;
-var
-  M: TMatch;
-  Prefix, Core: string;
 begin
-  SplitEntryPrefix(Entry, Prefix, Core);
-  M := TRegEx.Match(Core, '''\s*\{\s*(' + PATRON_IDENT + ')');
-  if M.Success then
-    Result := M.Groups[1].Value
-  else
-    Result := '';
+  Result := LeeEntradaDeUses(Entry).Form;
+end;
+
+function EntradaDelUses(const AUnidad, AInclude, AForm, ADesignClass: string): string;
+begin
+  // la ruta con sus comillas dobladas, como el lexico la lee: sin doblar,
+  // 'David's units\UFicha.pas' no compilaba (E2052) y add-unit decia ADDED
+  // (medido el 25-oct-2026)
+  Result := AUnidad + ' in ' + QuotedStr(AInclude);
+  if AForm <> '' then
+  begin
+    if ADesignClass <> '' then
+      Result := Result + ' {' + AForm + ': ' + ADesignClass + '}'
+    else
+      Result := Result + ' {' + AForm + '}';
+  end;
 end;
 
 function BuildEntry(const AInfo: TUnitInfo; const AInclude: string): string;
 begin
-  Result := AInfo.UnitName + ' in ''' + AInclude + '''';
-  if AInfo.IsDesigner and (AInfo.FormName <> '') then
-  begin
-    if AInfo.DesignClass <> '' then
-      Result := Result + ' {' + AInfo.FormName + ': ' + AInfo.DesignClass + '}'
-    else
-      Result := Result + ' {' + AInfo.FormName + '}';
-  end;
+  if AInfo.IsDesigner then
+    Result := EntradaDelUses(AInfo.UnitName, AInclude, AInfo.FormName, AInfo.DesignClass)
+  else
+    Result := EntradaDelUses(AInfo.UnitName, AInclude, '', '');
+end;
+
+{ Lo que impide reescribir la clausula U de AFichero, o '': partida en ramas
+  (la unit caeria en la que no toca) o con algo que no se lee como una
+  entrada (LeeEntradaDeUses: una comilla sin cerrar deja el ';' de la
+  clausula mas abajo, y reescribirla se llevaba el codigo de detras -
+  remove-unit borro el begin de un .dpr diciendo REMOVED, medido el
+  25-oct-2026 -). UNA pregunta: los llamadores la hacen con su fichero y el
+  escritor (ReplaceUses) otra vez, la segunda barrera. }
+function ClausulaQueNoSeReescribe(const U: TUsesClause; const AFichero: string): string;
+begin
+  Result := '';
+  if U.EnRamas then
+    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, AFichero]));
+  for var E in U.Entries do
+    if not LeeEntradaDeUses(E).Legible then
+    begin
+      var Prefijo, Core: string;
+      SplitEntryPrefix(E, Prefijo, Core);
+      Exit(MsgFmt(SR_USES_ENTRADA_ILEGIBLE_FMT, [U.Keyword, AFichero, SplitToLines(Core)[0].Trim]));
+    end;
 end;
 
 // La entrada AEntrada reescrita con ANueva (renombrada; completada con su
@@ -1109,22 +1189,13 @@ end;
 // {$IFDEF DEBUG}," perdia el IFDEF: el .dpr no compilaba y la tool decia
 // que si (revision de la 1.10.0, medido con delphi_move y con add-unit)
 function EntradaReescrita(const AEntrada, ANueva: string): string;
-var
-  Prefix, Core: string;
-  M: TMatch;
 begin
-  SplitEntryPrefix(AEntrada, Prefix, Core);
-  Result := ANueva;
-  // con EL identificador (Lsp.Pascal): con [A-Za-z_][\w.]* el nombre de una
-  // unit con acento casaba hasta el acento, y lo de detras (el resto del
-  // nombre y su in) se pegaba a la entrada nueva (censo del 4-oct-2026)
-  M := TRegEx.Match(Core, '^\s*' + PATRON_IDENT_PUNTOS + '(\s+in\s*''[^'']*''(\s*\{\s*' + PATRON_IDENT +
-    '\s*(:\s*' + PATRON_IDENT_PUNTOS + '\s*)?\})?)?',
-    [roIgnoreCase]);
-  if M.Success then
-    Result := Result + Copy(Core, M.Length + 1, MaxInt);
-  if Prefix <> '' then
-    Result := Prefix + #10 + Result;
+  // lo de detras de lo suyo, por EL lector de la entrada (antes una regex
+  // propia, la cuarta)
+  var E := LeeEntradaDeUses(AEntrada);
+  Result := ANueva + E.Resto;
+  if E.Prefijo <> '' then
+    Result := E.Prefijo + #10 + Result;
 end;
 
 { Rewrites the clause with AEntries, keeping the text before/after intact.
@@ -1404,9 +1475,11 @@ var
 begin
   // EL escritor pregunta el mismo, como AtomicWrite: una clausula partida en
   // ramas no se reescribe - la unit caeria en la rama que no toca, o la
-  // clausula perderia su forma. Los llamadores lo dicen antes, con el fichero.
-  if U.EnRamas then
-    raise Exception.Create(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, MsgText(SF_USES_EL_FICHERO)]));
+  // clausula perderia su forma -, ni una que no se lee como una lista
+  // (ClausulaQueNoSeReescribe). Los llamadores lo dicen antes, con el fichero.
+  var NoSe := ClausulaQueNoSeReescribe(U, MsgText(SF_USES_EL_FICHERO));
+  if NoSe <> '' then
+    raise Exception.Create(NoSe);
   // sin entradas no hay clausula: la palabra sola no compila, y quitar la
   // ULTIMA unit de un .dpr/.dpk la dejaba asi diciendo OK (decima revision).
   // Se va entera con los saltos que la seguian; removeuses lo hacia a mano.
@@ -1572,9 +1645,53 @@ begin
   Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, Resto, MaxInt);
 end;
 
+function LineaCreateForm(const AClase, AVariable: string): string;
+begin
+  Result := 'Application.CreateForm(' + AClase + ', ' + AVariable + ');';
+end;
+
 function CreateFormLine(const AInfo: TUnitInfo): string;
 begin
-  Result := 'Application.CreateForm(' + AInfo.ClassName + ', ' + AInfo.FormName + ');';
+  Result := LineaCreateForm(AInfo.ClassName, AInfo.FormName);
+end;
+
+type
+  TCreateFormLeido = record
+    Ini, Lon: Integer;    // la sentencia en el texto (1-based), con su ';'
+    Clase, Variable: string;
+  end;
+
+{ Los CreateForm(Clase, Variable) del CODIGO de ATexto, en orden, aunque
+  vayan partidos en varias lineas: EL lector de lo que escribe
+  LineaCreateForm. Eran cuatro regex linea a linea en InsertCreateForm y
+  RemoveCreateForm, y uno partido no se quitaba: remove-unit lo dejaba y el
+  .dpr no compilaba (medido el 25-oct-2026). Lo de detras del ')' solo en
+  su linea: con un \s* que cruzaba el salto, quitar la sentencia pegaba la
+  linea siguiente. }
+function CreateFormsDe(const ATexto: string): TArray<TCreateFormLeido>;
+var
+  C: TCreateFormLeido;
+begin
+  Result := [];
+  for var M in TRegEx.Matches(CodigoPascal(ATexto), '(?:' + PATRON_NO_IDENT_ANTES + 'Application\s*\.\s*)?' +
+    PATRON_NO_IDENT_ANTES + 'CreateForm\s*\(\s*(' + PATRON_IDENT_PUNTOS + ')\s*,\s*(' + PATRON_IDENT +
+    ')\s*\)[ \t]*;?', [roIgnoreCase]) do
+  begin
+    C.Ini := M.Index;
+    C.Lon := M.Length;
+    C.Clase := M.Groups[1].Value;
+    C.Variable := M.Groups[2].Value;
+    Result := Result + [C];
+  end;
+end;
+
+// Donde empieza (1-based) la linea de ATexto en la que esta APos: un salto
+// es CRLF, LF o un CR suelto, como en LineaDePosicion
+function InicioDeLaLinea(const ATexto: string; APos: Integer): Integer;
+begin
+  Result := APos;
+  while (Result > 1) and not CharInSet(ATexto[Result - 1], [#10, #13]) do
+    Dec(Result);
 end;
 
 { Inserts the CreateForm after the last existing CreateForm, else right
@@ -1586,24 +1703,29 @@ end;
 function InsertCreateForm(var Dpr: string; const AInfo: TUnitInfo): Boolean;
 var
   Lines, Vista: TArray<string>;
+  Leidos: TArray<TCreateFormLeido>;
   I, Last, RunAt: Integer;
   NL, Indent: string;
 begin
   Result := False;
-  if TRegEx.IsMatch(CodigoPascal(Dpr), PATRON_NO_IDENT_ANTES + 'CreateForm\s*\(\s*' + PatronIdentEntero(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
-    Exit(True); // already there
+  Leidos := CreateFormsDe(Dpr);
+  for var C in Leidos do
+    if MismoIdentificador(C.Clase, AInfo.ClassName) then
+      Exit(True); // already there
   NL := SaltoDominante(Dpr);
   Lines := SplitToLines(Dpr); // el troceador del motor: un CR suelto es salto
   Vista := SplitToLines(CodigoPascal(Dpr));
+  // la linea donde ACABA el ultimo: uno partido en dos acaba en la segunda
   Last := -1;
+  if Length(Leidos) > 0 then
+    Last := LineaDePosicion(Dpr, Leidos[High(Leidos)].Ini + Leidos[High(Leidos)].Lon - 1) - 1;
   RunAt := -1;
   for I := 0 to High(Lines) do
-  begin
-    if TRegEx.IsMatch(Vista[I], '^\s*Application\.CreateForm\s*\(', [roIgnoreCase]) then
-      Last := I;
-    if (RunAt = -1) and TRegEx.IsMatch(Vista[I], '^\s*Application\.Run\b', [roIgnoreCase]) then
+    if TRegEx.IsMatch(Vista[I], '^\s*Application\.Run\b', [roIgnoreCase]) then
+    begin
       RunAt := I;
-  end;
+      Break;
+    end;
   if (Last = -1) and (RunAt = -1) then
     Exit;
   // La linea entra con el compositor de todos (CambiaLineasEnSuTexto): las
@@ -1627,49 +1749,51 @@ begin
   Result := True;
 end;
 
-{ Drops every Application.CreateForm line naming AClass or AVar - del
-  CODIGO: uno comentado se queda, y de una linea que lleva algo mas (el
-  cierre de un comentario de encima) se va la sentencia sola: la llave que
-  cerraba el comentario detras de un CreateForm se iba con el, y el
-  comentario quedaba abierto hasta el final (revision de la 1.10.0, medido
-  con remove-unit). }
+{ Drops every Application.CreateForm naming AClass or AVar - del CODIGO
+  (CreateFormsDe): uno comentado se queda; uno partido en varias lineas se
+  va entero; y de una linea que lleva algo mas (el cierre de un comentario
+  de encima) se va la sentencia sola: la llave que cerraba el comentario
+  detras de un CreateForm se iba con el, y el comentario quedaba abierto
+  hasta el final (revision de la 1.10.0, medido con remove-unit). }
 function RemoveCreateForm(var Dpr: string; const AClassName, AFormName: string): Integer;
 var
-  Lines, Vista: TArray<string>;
-  M: TMatch;
-  I: Integer;
+  Leidos: TArray<TCreateFormLeido>;
+  Lines: TArray<string>;
   NL: string;
-  Pat: string;
 begin
   Result := 0;
-  NL := SaltoDominante(Dpr);
-  Lines := SplitToLines(Dpr);
-  Vista := SplitToLines(CodigoPascal(Dpr));
-  if AClassName <> '' then
-    Pat := '^\s*(Application\.CreateForm\s*\(\s*' + TRegEx.Escape(AClassName) + '\s*,[^)]*\)\s*;?)'
-  else if AFormName <> '' then
-    Pat := '^\s*(Application\.CreateForm\s*\(\s*' + PATRON_IDENT + '\s*,\s*' + TRegEx.Escape(AFormName) + '\s*\)\s*;?)'
-  else
+  if (AClassName = '') and (AFormName = '') then
     Exit;
-  // De abajo arriba: cambiar una linea no mueve las de encima, que son las
-  // que quedan por mirar. Cada una con el compositor de todos
-  // (CambiaLineasEnSuTexto): las demas, con SU salto. Unidas todas al
+  NL := SaltoDominante(Dpr);
+  Leidos := CreateFormsDe(Dpr);
+  // De abajo arriba: quitar una sentencia no mueve lo de delante, donde
+  // estan las que quedan por mirar. Cada una con el compositor de todos
+  // (CambiaLineasEnSuTexto): las demas lineas, con SU salto. Unidas todas al
   // dominante, un .dpr mixto salia entero a ese salto (1.18.2)
-  for I := High(Lines) downto 0 do
+  for var K := High(Leidos) downto 0 do
   begin
-    M := TRegEx.Match(Vista[I], Pat, [roIgnoreCase]);
-    if not M.Success then
+    var C := Leidos[K];
+    if AClassName <> '' then
+    begin
+      if not MismoIdentificador(C.Clase, AClassName) then
+        Continue;
+    end
+    else if not MismoIdentificador(C.Variable, AFormName) then
       Continue;
     Inc(Result);
-    // la sentencia sola (el grupo): lo de delante en la vista son blancos,
-    // y entre ellos puede ir el cierre del comentario de encima (medido:
-    // con el match entero se iba la llave)
-    var G := M.Groups[1];
-    var Resto := Copy(Lines[I], 1, G.Index - 1) + Copy(Lines[I], G.Index + G.Length, MaxInt);
+    // la sentencia sola: lo de delante en su primera linea y lo de detras en
+    // la ultima se quedan (entre ello puede ir el cierre del comentario de
+    // encima: con la linea entera se iba la llave)
+    var Fin := C.Ini + C.Lon - 1;
+    var L1 := LineaDePosicion(Dpr, C.Ini) - 1;
+    var L2 := LineaDePosicion(Dpr, Fin) - 1;
+    Lines := SplitToLines(Dpr);
+    var Resto := Copy(Lines[L1], 1, C.Ini - InicioDeLaLinea(Dpr, C.Ini)) +
+      Copy(Lines[L2], Fin - InicioDeLaLinea(Dpr, Fin) + 2, MaxInt);
     if Resto.Trim <> '' then
-      Dpr := CambiaLineasEnSuTexto(Dpr, I, 1, [Resto.TrimRight], NL)
+      Dpr := CambiaLineasEnSuTexto(Dpr, L1, L2 - L1 + 1, [Resto.TrimRight], NL)
     else
-      Dpr := CambiaLineasEnSuTexto(Dpr, I, 1, nil, NL);
+      Dpr := CambiaLineasEnSuTexto(Dpr, L1, L2 - L1 + 1, nil, NL);
   end;
 end;
 
@@ -1851,8 +1975,9 @@ begin
     if not U.Found then
       Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
   end;
-  if U.EnRamas then
-    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+  var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
+  if NoSe <> '' then
+    Exit(NoSe);
   Present := False;
   Completada := False;
   Entries := U.Entries;
@@ -2109,8 +2234,9 @@ begin
   U := FindUses(Text);
   if not U.Found then
     Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
-  if U.EnRamas then
-    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+  var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
+  if NoSe <> '' then
+    Exit(NoSe);
   InDpr := LocateEntry(U, UnitName, Entry);
   Include := IncludeFor(Dpr, Pas);
   if InDpr then
@@ -2220,8 +2346,9 @@ begin
   U := FindUses(Text);
   if not U.Found then
     Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
-  if U.EnRamas then
-    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+  var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
+  if NoSe <> '' then
+    Exit(NoSe);
   Found := LocateEntry(U, OldName, Entry);
   if not Found then
     Exit(MsgFmt(SN_UNIT_ABSENT_FMT, [OldName, TPath.GetFileName(Dpr)]));
@@ -2383,8 +2510,9 @@ begin
       // vcl{$ENDIF}' vcl pasaba a ser de todas las plataformas (medido el
       // 18-oct-2026). Partida en ramas no se toca, como contains
       U := FindUses(Text, 0, 'requires');
-      if U.EnRamas then
-        Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+      var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
+      if NoSe <> '' then
+        Exit(NoSe);
       Entradas := U.Entries;
       for N in Nombres do
       begin
@@ -2622,8 +2750,12 @@ begin
     Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [ASec, AFichero]));
   NL := SaltoDominante(AText);
   U := FindUses(AText, PosSec);
-  if U.Found and U.EnRamas then
-    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, AFichero]));
+  if U.Found then
+  begin
+    var NoSe := ClausulaQueNoSeReescribe(U, AFichero);
+    if NoSe <> '' then
+      Exit(NoSe);
+  end;
   Entries := U.Entries;
   // La OTRA seccion tambien cuenta: una unit no puede ir en interface e
   // implementation a la vez (E2004 Identifier redeclared; Hermes lo midio
@@ -2714,8 +2846,9 @@ begin
       Exit(NoEsFichero(ADpr, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [ADpr])));
     Text := PatchLoadText(ADpr, Enc);
     U := FindUses(Text);
-    if U.EnRamas then
-      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(ADpr)]));
+    var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(ADpr));
+    if NoSe <> '' then
+      Exit(NoSe);
     Faltan := [];
     YaEstan := [];
     for var N in ANames do
@@ -2839,8 +2972,9 @@ begin
     U := FindUses(Text);
     if not U.Found then
       Exit(MsgFmt(SN_REMOVEUSES_NO_CLAUSE_FMT, ['program', TPath.GetFileName(ADpr)]));
-    if U.EnRamas then
-      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(ADpr)]));
+    var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(ADpr));
+    if NoSe <> '' then
+      Exit(NoSe);
     Entries := U.Entries;
     Quitadas := [];
     NoEstaban := [];
@@ -2937,8 +3071,9 @@ begin
     if not U.Found then
       Exit(MsgFmt(SN_REMOVEUSES_NO_CLAUSE_FMT, [Sec, TPath.GetFileName(APasPath)]) +
         EnLaOtra(Names));
-    if U.EnRamas then
-      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
+    var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(APasPath));
+    if NoSe <> '' then
+      Exit(NoSe);
     Entries := U.Entries;
     Quitadas := [];
     NoEstaban := [];

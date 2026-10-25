@@ -726,7 +726,7 @@ begin
         '  System.SysUtils,' + CRLF +
         '  DUnitX.TestFramework,' + CRLF +
         '  DUnitX.Loggers.Console,' + CRLF +
-        '  ' + MainUnit + ' in ''' + MainUnit + '.pas'';' + CRLF + CRLF +
+        '  ' + EntradaDelUses(MainUnit, MainUnit + '.pas', '', '') + ';' + CRLF + CRLF +
         'var' + CRLF +
         '  Runner: ITestRunner;' + CRLF +
         '  Logger: ITestLogger;' + CRLF +
@@ -785,12 +785,12 @@ begin
           'program ' + AName + ';' + CRLF + CRLF +
           'uses' + CRLF +
           '  Vcl.Forms,' + CRLF +
-          '  ' + MainUnit + ' in ''' + MainUnit + '.pas'' {' + MainForm + '};' + CRLF + CRLF +
+          '  ' + EntradaDelUses(MainUnit, MainUnit + '.pas', MainForm, '') + ';' + CRLF + CRLF +
           '{$R *.res}' + CRLF + CRLF +
           'begin' + CRLF +
           '  Application.Initialize;' + CRLF +
           '  Application.MainFormOnTaskbar := True;' + CRLF +
-          '  Application.CreateForm(T' + MainForm + ', ' + MainForm + ');' + CRLF +
+          '  ' + LineaCreateForm('T' + MainForm, MainForm) + CRLF +
           '  Application.Run;' + CRLF +
           'end.' + CRLF);
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.pas'), VclFormPas(MainUnit, MainForm));
@@ -805,11 +805,11 @@ begin
           'uses' + CRLF +
           '  System.StartUpCopy,' + CRLF +
           '  FMX.Forms,' + CRLF +
-          '  ' + MainUnit + ' in ''' + MainUnit + '.pas'' {' + MainForm + '};' + CRLF + CRLF +
+          '  ' + EntradaDelUses(MainUnit, MainUnit + '.pas', MainForm, '') + ';' + CRLF + CRLF +
           '{$R *.res}' + CRLF + CRLF +
           'begin' + CRLF +
           '  Application.Initialize;' + CRLF +
-          '  Application.CreateForm(T' + MainForm + ', ' + MainForm + ');' + CRLF +
+          '  ' + LineaCreateForm('T' + MainForm, MainForm) + CRLF +
           '  Application.Run;' + CRLF +
           'end.' + CRLF);
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.pas'), FmxFormPas(MainUnit, MainForm));

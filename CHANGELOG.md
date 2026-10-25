@@ -115,6 +115,18 @@ the MCP `initialize` response (`serverInfo.version`).
   IDE's version written in (`ide370` would have stopped matching with the
   next RAD Studio) (`tests/test_designer_preview.py` P8b, where JVCL is
   installed).
+- **A unit in a folder with an apostrophe joins and leaves a project cleanly,
+  and a uses clause that does not read as a list is never rewritten.**
+  `add-unit` wrote `in 'David's units\UFicha.pas'` without doubling the
+  quote: the `.dpr` did not compile (`E2052`) and the tool said `ADDED`.
+  `remove-unit` read that path up to the quote and left its `DCCReference`
+  in the `.dproj`. With a quote left open, the clause reader did not see its
+  `;`, and rewriting the clause took the `begin` and the first statements of
+  the program with it, while the tool said `REMOVED`. An entry is now
+  written and read by one pair, with the path quoted as the compiler reads
+  it; a clause where something is not an entry is refused (`USES-026`) by
+  every tool that rewrites one; and a `CreateForm` split over two lines
+  goes with its unit (`tests/test_dpr_entradas_1230.py`).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the
