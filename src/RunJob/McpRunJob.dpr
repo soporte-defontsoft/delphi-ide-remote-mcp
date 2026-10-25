@@ -67,6 +67,7 @@ uses
   System.IOUtils,
   Mld.Textos in '..\DesktopNode\Mld.Textos.pas', // EL catalogo de mensajes, el del nodo
   Lsp.ErrorMode in '..\Server\Lsp.ErrorMode.pas', // NoErrorDialogs: el mismo que usa el servidor con sus hijos
+  Lsp.NombresDeTrabajo in '..\Server\Lsp.NombresDeTrabajo.pas', // LOS nombres de un trabajo, los del servidor
   System.Classes;
 
 {$IFDEF MSWINDOWS}
@@ -103,7 +104,7 @@ end;
   quien lo borra (el vigia) y quien lo lee (@kill). }
 function FicheroPid(const ASalida: string): string;
 begin
-  Result := ChangeFileExt(ASalida, '.pid');
+  Result := TPath.Combine(ExtractFileDir(ASalida), NombreDelPid(TrabajoDeLaSalida(ASalida)));
 end;
 
 procedure EscribePid(const ASalida: string; APid: Int64);
@@ -130,24 +131,22 @@ end;
   antes de rendirse, pero no puede borrar el vigia mientras vive (el exe esta
   en uso), asi que el pid sobrevive ahi donde el .pid no, y @kill lo
   encuentra. Medido 2026-09-23 en 192.168.1.10: GUI huerfana dos veces. Un
-  solo nombrador (NombreVigia) y su inversa (PidDelVigia). }
+  solo nombrador y su inversa, los de Lsp.NombresDeTrabajo (NombreDelVigia,
+  PidDelNombreDeVigia), que comparte el servidor. }
 function NombreVigia(const ACarpeta, AJobId: string; APid: DWORD): string;
 begin
-  Result := ACarpeta + '\' + AJobId + '.wait.' + IntToStr(APid) + '.exe';
+  Result := ACarpeta + '\' + Lsp.NombresDeTrabajo.NombreDelVigia(AJobId, APid);
 end;
 
 function PidDelVigia(const ACarpeta, AJobId: string): Int64;
 var
   SR: TSearchRec;
-  Prefijo: string;
 begin
   Result := 0;
-  Prefijo := AJobId + '.wait.';
-  if FindFirst(ACarpeta + '\' + Prefijo + '*.exe', faAnyFile, SR) = 0 then
+  if FindFirst(ACarpeta + '\' + MascaraDeLosVigiasDe(AJobId), faAnyFile, SR) = 0 then
   try
     repeat
-      if SameText(Copy(SR.Name, 1, Length(Prefijo)), Prefijo) then
-        Result := StrToInt64Def(ChangeFileExt(Copy(SR.Name, Length(Prefijo) + 1, MaxInt), ''), 0);
+      Result := PidDelNombreDeVigia(AJobId, SR.Name);
     until (Result > 0) or (FindNext(SR) <> 0);
   finally
     FindClose(SR);
@@ -161,18 +160,6 @@ begin
   Result := 0;
 end;
 {$ENDIF}
-
-{ Un id de trabajo tal como lo compone el servidor: fecha-hora-fragmento,
-  solo [0-9a-f-]. Cualquier otra cosa no es un id y no se mira. }
-function IdDeTrabajoValido(const AId: string): Boolean;
-var
-  C: Char;
-begin
-  Result := (AId <> '') and (Length(AId) <= 64);
-  for C in AId do
-    if not CharInSet(C, ['0'..'9', 'a'..'f', 'A'..'F', '-']) then
-      Exit(False);
-end;
 
 { Anade texto (UTF-8) al final del fichero de salida, compartiendolo: el
   programa lanzado escribe en el mismo fichero y paclient lo lee mientras.
@@ -659,7 +646,7 @@ end;
 {$ENDIF}
 
 var
-  Propio, Carpeta, Nombre, JobId, JobFile, Exe, Salida: string;
+  Propio, Carpeta, JobId, JobFile, Exe, Salida: string;
   Args: TArray<string>;
   Lineas: TStringList;
   I: Integer;
@@ -675,13 +662,11 @@ begin
 {$ENDIF}
     Propio := ParamStr(0);
     Carpeta := ExtractFileDir(Propio);
-    Nombre := ChangeFileExt(ExtractFileName(Propio), '');
-    if not Nombre.StartsWith('run-', True) then
-    begin
-      Exit; // no se usa a mano: lo sube el servidor como run-<trabajo>
-    end;
-    JobId := Nombre.Substring(4);
-    JobFile := TPath.Combine(Carpeta, Nombre + '.job');
+    // no se usa a mano: lo sube el servidor como run-<trabajo>
+    JobId := TrabajoDelLanzador(Propio);
+    if JobId = '' then
+      Exit;
+    JobFile := TPath.Combine(Carpeta, NombreDelTrabajo(JobId));
     if not FileExists(JobFile) then
     begin
       Exit; // sin .job no hay trabajo
@@ -718,15 +703,15 @@ begin
     // no hay nada que matar, y un id que no sea de los nuestros no se mira.
     if SameText(Exe, '@kill') then
     begin
-      if (Length(Args) < 1) or not IdDeTrabajoValido(Args[0].Trim) then
+      if (Length(Args) < 1) or not EsIdDeTrabajo(Args[0].Trim) then
         Anade(Salida, MsgText(SR_JOB_KILL_NECESITA_ID) + LineaRC(2))
       else
       begin
         var Pid: Int64 := 0;
         var Origen := '.pid';
-        if FileExists(TPath.Combine(Carpeta, Args[0].Trim + '.pid')) then
+        if FileExists(TPath.Combine(Carpeta, NombreDelPid(Args[0].Trim))) then
         try
-          Pid := StrToInt64Def(TFile.ReadAllText(TPath.Combine(Carpeta, Args[0].Trim + '.pid')).Trim, 0);
+          Pid := StrToInt64Def(TFile.ReadAllText(TPath.Combine(Carpeta, NombreDelPid(Args[0].Trim))).Trim, 0);
         except
           Pid := 0;
         end;
@@ -750,7 +735,7 @@ begin
           else
             Anade(Salida, MsgFmt(SR_JOB_NO_PUDE_MATAR_FMT, [Args[0].Trim,
               Pid, Como, SysErrorMessage(GetLastError)]) + LineaRC(1));
-          BorraPid(TPath.Combine(Carpeta, Args[0].Trim + '.out'));
+          BorraPid(TPath.Combine(Carpeta, NombreDeLaSalida(Args[0].Trim)));
         end;
       end;
       Exit;

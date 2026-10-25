@@ -90,6 +90,8 @@ type
     [Test] procedure ElTextoEnteroConLaReglaDeQuienCambiaLineas;
     [Test]
     procedure ColumnaDelMotorYSuInversa;
+    [Test]
+    procedure LosNombresDeUnTrabajoYSusInversas;
   end;
 
 implementation
@@ -106,7 +108,8 @@ uses
   Lsp.DesignerBin,
   Lsp.Client,
   System.JSON,
-  Lsp.References;
+  Lsp.References,
+  Lsp.NombresDeTrabajo;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin
@@ -1172,6 +1175,32 @@ begin
   Assert.AreEqual(-1, TLspClient.ColumnaAlMotor(L, -1), 'negativa');
   Assert.AreEqual(0, TLspClient.ColumnaDelMotor('', 0), 'linea vacia');
   Assert.AreEqual(4, TLspClient.ColumnaDelMotor('', 4), 'sin linea');
+end;
+
+procedure TNombradorTests.LosNombresDeUnTrabajoYSusInversas;
+const
+  JOB = '20261025-101724592-c2822c85';
+begin
+  // los que compone el servidor y lee el lanzador, cada uno con su inversa
+  // (V38-P5 de la 1.23: estaban a mano en siete sitios)
+  Assert.AreEqual('run-' + JOB + '.exe', NombreDelLanzador(JOB, True));
+  Assert.AreEqual('run-' + JOB, NombreDelLanzador(JOB, False));
+  Assert.AreEqual(JOB, TrabajoDelLanzador(NombreDelLanzador(JOB, True)), 'Windows, con su .exe');
+  // (por su ruta en ESTE sistema: ExtractFileName parte por el PathDelim de
+  // quien lo compila, y el lanzador de Linux corre en Linux)
+  Assert.AreEqual(JOB, TrabajoDelLanzador('C:\s\P\' + NombreDelLanzador(JOB, False)), 'el de Linux, por su ruta');
+  Assert.AreEqual('', TrabajoDelLanzador('McpRunJob.exe'), 'a mano no es un lanzador');
+  Assert.AreEqual('run-' + JOB + '.job', NombreDelTrabajo(JOB));
+  Assert.AreEqual(JOB, TrabajoDeLaSalida('C:\s\P\' + NombreDeLaSalida(JOB)));
+  Assert.AreEqual('', TrabajoDeLaSalida(NombreDelPid(JOB)), 'un .pid no es una salida');
+  Assert.AreEqual(JOB + '.pid', NombreDelPid(JOB));
+  Assert.AreEqual(Int64(2692), PidDelNombreDeVigia(JOB, NombreDelVigia(JOB, 2692)));
+  Assert.AreEqual(Int64(0), PidDelNombreDeVigia(JOB, NombreDelVigia('20261025-000000000-00000000', 2692)),
+    'el vigia de OTRO trabajo no da su pid');
+  Assert.AreEqual(JOB + '.wait.*.exe', MascaraDeLosVigiasDe(JOB));
+  // el id: lo que compone SelloUnico, y nada mas (eran dos gemelos, uno sin tope)
+  Assert.IsTrue(EsIdDeTrabajo(JOB) and EsIdDeTrabajo(SelloUnico));
+  Assert.IsFalse(EsIdDeTrabajo('') or EsIdDeTrabajo('..\x') or EsIdDeTrabajo(StringOfChar('a', 65)));
 end;
 
 initialization

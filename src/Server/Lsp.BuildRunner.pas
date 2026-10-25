@@ -137,7 +137,8 @@ uses
   Lsp.AtomosRtl,
   Lsp.Styles, // RcLecturasDenegadas: EL juez del .rc (el de delphi_styles build)
   Lsp.NetDrives,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.NombresDeTrabajo;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -2951,8 +2952,9 @@ begin
     if (ExitCode <> 0) and Target.Contains('Deploy') and Output.Contains('E0017') then
     begin
       // el id del trabajo por el patron de su nombrador (Lsp.Casa.SelloUnico)
-      var MLock := TRegEx.Match(Output, '(' + SELLO_UNICO_PATRON +
-        ')\.wait(?:\.[0-9]+)?\.exe', [roIgnoreCase]);
+      // y el del vigia, por SU nombrador (Lsp.NombresDeTrabajo)
+      var MLock := TRegEx.Match(Output, '(' + SELLO_UNICO_PATRON + ')' +
+        PATRON_DEL_VIGIA_TRAS_EL_ID, [roIgnoreCase]);
       if MLock.Success then
         Result.AddPair('deployLockedNote', MsgFmt(SN_BUILD_DEPLOY_LOCKED_FMT,
           [MLock.Groups[1].Value, Perfil, ADprojPath, MLock.Groups[1].Value]));

@@ -179,7 +179,8 @@ uses
   Lsp.ProcessLaunch, // TrocearArgs: el argv que remote-run da al programa
   Lsp.Dproj,         // ExtensionDeEjecutable, SistemaDePlataforma: lo que es cada plataforma
   Lsp.Rutas,         // FormaLarga: el proyecto dueno de un trabajo, por su ruta larga
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.NombresDeTrabajo;
 
 var
   GNodoLock: TCriticalSection;
@@ -477,19 +478,6 @@ begin
     AObj.AddPair('error', PrimerTrozo(ASalida.TrimLeft, [#10]).Trim);
 end;
 
-{ Un id de trabajo lo compone ESTE servidor (fecha-hora-fragmento): otra
-  cosa no es un id, y el lanzador lo usa para nombrar un fichero. Lo
-  comprueban kill y output. }
-function JobIdValido(const AJobId: string): Boolean;
-var
-  C: Char;
-begin
-  Result := AJobId <> '';
-  for C in AJobId do
-    if not CharInSet(C, ['0'..'9', 'a'..'f', 'A'..'F', '-']) then
-      Exit(False);
-end;
-
 // el dueno de un trabajo: su perfil y la ruta larga de su proyecto
 function DuenoDeTrabajo(const AProfile, ADprojPath: string): string;
 begin
@@ -530,10 +518,10 @@ var
   OutFile, Ops, Output: string;
 begin
   Result := False;
-  OutFile := TPath.Combine(ATmpDir, AJobId + '.out');
+  OutFile := TPath.Combine(ATmpDir, NombreDeLaSalida(AJobId));
   if TFile.Exists(OutFile) then
     BorraFichero(OutFile, ltTemporal); // por la puerta de borrar, con su lugar
-  Ops := Format('"--get=%s/%s.out,%s"', [ADeployRel, AJobId, ATmpDir]);
+  Ops := Format('"--get=%s/%s,%s"', [ADeployRel, NombreDeLaSalida(AJobId), ATmpDir]);
   if (Paclient(APc, Ops, AProfile, Output) <> 0) or not TFile.Exists(OutFile) then
     Exit;
   // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
@@ -615,17 +603,17 @@ begin
   if SistemaDePlataforma(Plataforma) = spWindows then
   begin
     Flag := 5;
-    RemotoLanzador := 'run-' + JobId + '.exe';
+    RemotoLanzador := NombreDelLanzador(JobId, True);
   end
   else
   begin
     Flag := 3;
-    RemotoLanzador := 'run-' + JobId;
+    RemotoLanzador := NombreDelLanzador(JobId, False);
   end;
-  GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.job');
+  GuionFile := TPath.Combine(TmpDir, NombreDelTrabajo(JobId));
   // el .job: LF y sin BOM, que lo lee un programa nuestro en los dos
   // sistemas; por la puerta de escribir, con el temporal como lugar
-  EscribeTexto(GuionFile, TrabajoDeEjecucion(ExeLeaf, JobId + '.out', AArgv),
+  EscribeTexto(GuionFile, TrabajoDeEjecucion(ExeLeaf, NombreDeLaSalida(JobId), AArgv),
     ltTemporal, ekUtf8);
   // El .job va en un put PROPIO, antes del lanzador. En el MISMO --put, el
   // PAServer de Windows arrancaba el lanzador (flag 5) sin tener escrito aun
@@ -634,7 +622,7 @@ begin
   // arranco. Medido 2026-09-23 contra 192.168.1.10 con paclient a pelo: 6/6
   // fallos en un solo put, 6/6 bien en dos. Un viaje mas (~0,1 s) y ningun
   // orden que adivinar.
-  Ops := Format('"--put=%s,%s,0,run-%s.job"', [GuionFile, DeployRel, JobId]);
+  Ops := Format('"--put=%s,%s,0,%s"', [GuionFile, DeployRel, NombreDelTrabajo(JobId)]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
   if Rc = 0 then
   begin
@@ -713,11 +701,11 @@ begin
   // perdia (2026-09-26: el AV de Galatea solo se veia en el journal de
   // Zorin). Un nombre que no exista no es un error que importe.
   if Terminado or not AGuardaSiSigue then
-    Ops := Format('"--Remove=%s/%s.out;%s/%s;%s/*.wait*.exe"',
-      [DeployRel, JobId, DeployRel, RemotoLanzador, DeployRel])
+    Ops := Format('"--Remove=%s/%s;%s/%s;%s/%s"',
+      [DeployRel, NombreDeLaSalida(JobId), DeployRel, RemotoLanzador, DeployRel, MASCARA_DE_LOS_VIGIAS])
   else
-    Ops := Format('"--Remove=%s/%s;%s/*.wait*.exe"',
-      [DeployRel, RemotoLanzador, DeployRel]);
+    Ops := Format('"--Remove=%s/%s;%s/%s"',
+      [DeployRel, RemotoLanzador, DeployRel, MASCARA_DE_LOS_VIGIAS]);
   Paclient(Pc, Ops, AProfile, Output);
 
   Result.AddPair('note', MsgText(SN_REMOTERUN_NOTE));
@@ -733,11 +721,11 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 var
   Rc: Integer;
 begin
-  if not JobIdValido(AJobId) or not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
+  if not EsIdDeTrabajo(AJobId) or not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
   begin
     Result := TJSONObject.Create;
     Result.AddPair('success', TJSONBool.Create(False));
-    if JobIdValido(AJobId) then
+    if EsIdDeTrabajo(AJobId) then
       Result.AddPair('error', MsgFmt(SR_REMOTERUN_JOB_AJENO_FMT, [AJobId]))
     else
       Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
@@ -763,7 +751,7 @@ var
 begin
   Result := TJSONObject.Create;
   try
-  if not JobIdValido(AJobId) then
+  if not EsIdDeTrabajo(AJobId) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
@@ -812,7 +800,7 @@ begin
     PonFalloDelLanzador(Result, Salida, Codigo);
     // leida ENTERA = borrada, como el buzon y las capturas: en el target
     // no se acumula nada que alguien ya tiene
-    Ops := Format('"--Remove=%s/%s.out"', [DeployRel, AJobId]);
+    Ops := Format('"--Remove=%s/%s"', [DeployRel, NombreDeLaSalida(AJobId)]);
     Paclient(Pc, Ops, AProfile, Output);
     Result.AddPair('note', MsgText(SN_REMOTERUN_OUTPUT_DONE));
   end

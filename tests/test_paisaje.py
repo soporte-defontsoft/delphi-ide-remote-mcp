@@ -698,6 +698,14 @@ REGLAS = [
      [('Lsp.Patch.pas', 'EsRutaDeEstilo')],
      'EsRutaDeEstilo (Lsp.Patch): estaba comparada a mano en Lsp.TextEdit y Mcp.Tools.Styles, y el '
      'escritor necesita saber si un texto lo lee TParser (M4 de la 1.23)'),
+    ('los nombres de un trabajo remoto a mano',
+     # run-<job>[.exe], run-<job>.job, <job>.out, <job>.pid, <job>.wait.<pid>.exe: los
+     # trozos de su formato escritos como literal, fuera de su nombrador
+     r"'run-'|'\.wait\.'|'\.job'|\.wait\(\?:",
+     [('Lsp.NombresDeTrabajo.pas', '*')],
+     'Lsp.NombresDeTrabajo: los compone el servidor (Lsp.RemoteRun), los lee el lanzador '
+     '(McpRunJob, Linux y Windows) y la nota de un deploy bloqueado busca el del vigia; estaban a '
+     'mano en siete sitios y leidos de tres formas (V38-P5 de la 1.23)'),
     ('la jaula a mano',
      # "hay jaula?" (raices de escritura) escrito a mano en vez de preguntarlo
      r"Length\s*\(\s*WorkspaceRoots\s*\)\s*(?:=|<>|>|<|>=|<=)\s*[01]\b",
@@ -1288,6 +1296,7 @@ PLANTADO = {
     'listar la carpeta de perfiles del IDE a mano': "  for F in TDirectory.GetFiles(IdeProfilesDir(AVersion), '*.x') do",
     'la extension de un estilo a mano': "  if SameText(TPath.GetExtension(P), '.style') then X := 1;",
     'la jaula a mano': "  if Length(WorkspaceRoots) = 0 then Exit;",
+    'los nombres de un trabajo remoto a mano': "  F := 'run-' + JobId + '.job';",
     'listar una carpeta sin saber si se dejo': "  for E in TDirectory.GetFileSystemEntries(Dir) do",
     'listar ficheros o carpetas sin saber si se dejo': "  for F in TDirectory.GetFiles(Dir, '*.pas') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",
