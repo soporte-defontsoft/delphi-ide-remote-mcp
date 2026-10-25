@@ -27,6 +27,9 @@ pedir uno corto (lo dice una NOTA).
       plataforma del designer y la que no existe (RENDER-017)
   P7  nonvisual=true dibuja el icono donde lo guarda el dfm
   P8  una clase que ningun paquete registra: substituted y su nota
+  P8b un paquete de diseno con 'wizard' en el nombre no es un experto: TJvWizard (JVCL,
+      donde esta instalado) se registra y no sale sustituido (V17 de la 1.23; rojo
+      contra r1222bj)
   P9  entrega: inline (imagen en la respuesta, temporal consumido) y out=
       que ya existe (lo de antes, sellado en la papelera)
   P10 rechazos antes de lanzar nada: una comilla que intentaba colar otro
@@ -364,6 +367,22 @@ CONFRAMEF = escribe('ConFrameF.fmx', """object FormConFrameF: TFormConFrameF
     inherited RectF: TRectangle
       Fill.Color = xFFFFFF80
     end
+  end
+end
+""")
+
+# P8b: la clase de un paquete de diseno con 'wizard' en el nombre (JVCL)
+ASISTENTE = escribe('Asistente.dfm', """object FormAsistente: TFormAsistente
+  Left = 0
+  Top = 0
+  Caption = 'Asistente'
+  ClientHeight = 200
+  ClientWidth = 300
+""" + FONT + """  object JvWizard1: TJvWizard
+    Left = 0
+    Top = 0
+    Width = 300
+    Height = 200
   end
 end
 """)
@@ -809,6 +828,16 @@ end
           mc.es(j.get('substitutedNote', ''), 'SN_DESIGNER_SUSTITUIDAS'), r[:500])
     check('P8 ...despues de buscarla en los paquetes del IDE (packages ya no es 0/0)',
           str(j.get('packages', '0/0')).split('/')[0] not in ('', '0'), j.get('packages'))
+    # la lista de expertos del renderizador saltaba todo bpl con 'wizard', y con
+    # el el paquete de diseno de TJvWizard: el form salia con cajas rosas y la
+    # nota decia que el paquete no estaba instalado. Solo donde JVCL lo esta
+    if 'JvWizardsDesign' in call('delphi_components', {'filter': 'JvWizardsDesign'}):
+        r = preview(path=ASISTENTE)
+        j = J(r)
+        check('P8b TJvWizard (JvWizardsDesign, wizard en el nombre): registrado, no sustituido',
+              not mc.fallo(r) and 'TJvWizard' not in (j.get('substituted') or []), r[:500])
+    else:
+        mc.imprime('SKIP P8b: JVCL (JvWizardsDesign) no esta instalado en este RAD Studio')
 
     # ------------------------------------------------------------------ P13
     # lo que el lector se salta, como objetos que guian: componente,

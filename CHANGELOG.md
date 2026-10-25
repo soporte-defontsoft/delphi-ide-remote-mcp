@@ -106,6 +106,15 @@ the MCP `initialize` response (`serverInfo.version`).
   the file walk itself asks, `TPath.HasValidFileNameChars` with wildcards:
   no folder, no drive, none of `< > | "`. Braces `{a,b}` are still refused
   (`WS-006`) (`tests/test_textos_1230.py` T4).
+- **`delphi_designer preview` loads a design package with "wizard" in its
+  name.** The renderer skips the IDE's experts by the name of their `.bpl`,
+  and "wizard" also matched `JvWizardsDesign`, the design package of JVCL's
+  `TJvWizard`: a form using it came out as pink boxes, and the note said the
+  package was not installed. That pattern caught no expert the others miss,
+  and is gone; the version-control experts are now matched without the
+  IDE's version written in (`ide370` would have stopped matching with the
+  next RAD Studio) (`tests/test_designer_preview.py` P8b, where JVCL is
+  installed).
 - **`settings.ini` has one reader.** The HTTP transport's keys (`[Server]`
   `Port`, `Host` and `Endpoint`, `[CORS]`, `[SSL]`) were read by the vendored
   settings class with a `TIniFile` of its own, which could also compose the

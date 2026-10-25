@@ -1095,8 +1095,17 @@ end;
 
 procedure CargaPaquetesDelIde(const ABds: string; out ACargados, AConocidos: Integer);
 const
-  // expertos del IDE: no registran componentes y tocan BorlandIDEServices
-  EXPERTOS = '(?i)(ide370|expert|wizard|explorer|visualizer|applet|quickedit|emacsedit|smpedit|mlwiz|netwiz|styledesigner|^svn)';
+  // expertos del IDE: no registran componentes y tocan BorlandIDEServices.
+  // Una lista de la casa por el nombre del bpl: no hay juez sin cargarlo
+  // (el registro no los distingue, Known IDE Packages no tiene ninguno de
+  // estos; medido el 25-oct-2026). Las integraciones de control de
+  // versiones (gitide, hgide, svnide) por 'ide' y su version, sin clavarla:
+  // 'ide370' dejaba de casar con el IDE siguiente. Sin 'wizard': solo casaba
+  // JvWizardsDesign370, el paquete de diseno de TJvWizard (sus forms salian
+  // sustituidos), y MobileWizardExpert370, que ya casa 'expert' (V17 de la
+  // 1.23). El juez seria cargar solo los paquetes que registran las clases
+  // que faltan (apuntado para la 1.24)
+  EXPERTOS = '(?i)(ide\d+\.bpl$|expert|explorer|visualizer|applet|quickedit|emacsedit|smpedit|mlwiz|netwiz|styledesigner|^svn)';
 var
   H: HMODULE;
   Antes: Integer;
