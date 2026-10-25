@@ -11,7 +11,7 @@ and what each tool does, in the [README](../README.md) and [TOOLS.md](TOOLS.md).
 | A local client to spawn it | `DelphiLspMcp.exe` | No switch: MCP over stdio. |
 | The remote server, in a terminal | `DelphiLspMcp.exe --http 3000` | Ctrl+C stops it. Good for trying things out. |
 | The remote server, permanently | `DelphiLspMcp.exe -install` | **How you should actually deploy it**: a Windows Service. Needs an elevated prompt; `-uninstall` removes it. It must then be told to **log on as the user who installed and uses RAD Studio** — see right below, this one is not optional. |
-| An eye on it while you work | `DelphiLspMcp.exe -gui` | Tray app: starts iconized, double-click for the live log. |
+| An eye on it while you work | `DelphiLspMcp.exe -gui` | Tray app: starts iconized, double-click for the live log. The exe is a console program, so Windows flashes its console window for a moment when it starts (20-30 ms, measured 2026-09-30); a shortcut to `conhost.exe --headless DelphiLspMcp.exe -gui` starts it with no window at all. |
 
 Each switch is accepted as `/x`, `-x` or `--x`. The service reads the same `settings.ini` next to the executable as every other mode — including its port, so the service and the tray cannot both run: it is one or the other.
 
