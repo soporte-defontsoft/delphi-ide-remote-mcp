@@ -205,6 +205,16 @@ function IncludeFor(const ADpr, APas: string): string;
   otra unidad, lo que no es una ruta); "\x" es de la unidad del .dpr, la de
   la carpeta en la que corre el compilador. }
 function RutaDeInclude(const ADpr, AInclude: string): string;
+{ Lo que el compilador LEE por el in '...' de la fuente principal de un
+  proyecto (el uses de un .dpr, el contains de un .dpk), en TODAS sus ramas:
+  por cada unidad, su nombre (AUnidades), la ruta como va escrita (AEscritas)
+  y como la abre dcc (ARutas, RutaDeInclude; '' si no se resuelve: una "X:y"
+  de otra unidad). '' o la negativa de una clausula con una entrada que no se
+  lee (USES-026: su ';' no es el suyo, y lo que dcc lea no se sabe). EL
+  lector de las entradas (LeeEntradaDeUses), el de los que las escriben; la
+  pregunta de la puerta del build (V14 de la 1.23: un uses X in 'fuera.pas'
+  compilaba). Lanza si el fichero no se lee. }
+function LecturasDelIn(const AFuente: string; out AUnidades, AEscritas, ARutas: TArray<string>): string;
 
 type
   { Una directiva que mete un FICHERO en el build, con la posicion (1-based)
@@ -1161,6 +1171,19 @@ begin
     Result := EntradaDelUses(AInfo.UnitName, AInclude, '', '');
 end;
 
+// '' o USES-026 para la entrada AEntrada de la clausula AKeyword de AFichero:
+// la de quien la reescribe y la de la puerta del build (LecturasDelIn)
+function NegativaDeEntradaIlegible(const AKeyword, AFichero, AEntrada: string): string;
+var
+  Prefijo, Core: string;
+begin
+  Result := '';
+  if LeeEntradaDeUses(AEntrada).Legible then
+    Exit;
+  SplitEntryPrefix(AEntrada, Prefijo, Core);
+  Result := MsgFmt(SR_USES_ENTRADA_ILEGIBLE_FMT, [AKeyword, AFichero, SplitToLines(Core)[0].Trim]);
+end;
+
 { Lo que impide reescribir la clausula U de AFichero, o '': partida en ramas
   (la unit caeria en la que no toca) o con algo que no se lee como una
   entrada (LeeEntradaDeUses: una comilla sin cerrar deja el ';' de la
@@ -1174,12 +1197,40 @@ begin
   if U.EnRamas then
     Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, AFichero]));
   for var E in U.Entries do
-    if not LeeEntradaDeUses(E).Legible then
-    begin
-      var Prefijo, Core: string;
-      SplitEntryPrefix(E, Prefijo, Core);
-      Exit(MsgFmt(SR_USES_ENTRADA_ILEGIBLE_FMT, [U.Keyword, AFichero, SplitToLines(Core)[0].Trim]));
-    end;
+  begin
+    Result := NegativaDeEntradaIlegible(U.Keyword, AFichero, E);
+    if Result <> '' then
+      Exit;
+  end;
+end;
+
+function LecturasDelIn(const AFuente: string; out AUnidades, AEscritas, ARutas: TArray<string>): string;
+var
+  Enc: string;
+  U: TUsesClause;
+  L: TEntradaDeUses;
+begin
+  Result := '';
+  AUnidades := nil;
+  AEscritas := nil;
+  ARutas := nil;
+  U := FindUses(PatchLoadText(AFuente, Enc));
+  if not U.Found then
+    Exit;
+  // las de todas las ramas: dcc lee la que este activa, y la puerta no sabe
+  // cual sera (una rama partida no se reescribe, pero se compila)
+  for var E in U.Entries + U.OtrasRamas do
+  begin
+    Result := NegativaDeEntradaIlegible(U.Keyword, TPath.GetFileName(AFuente), E);
+    if Result <> '' then
+      Exit;
+    L := LeeEntradaDeUses(E);
+    if L.Include = '' then
+      Continue; // una de la biblioteca: la busca dcc en sus rutas, juzgadas aparte
+    AUnidades := AUnidades + [L.Nombre];
+    AEscritas := AEscritas + [L.Include];
+    ARutas := ARutas + [RutaDeInclude(AFuente, L.Include)];
+  end;
 end;
 
 // La entrada AEntrada reescrita con ANueva (renombrada; completada con su

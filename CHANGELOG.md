@@ -23,6 +23,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The build no longer reads a unit from outside through the main source's
+  `in`.** The build's gate judged the `{$I}`/`{$R}` directives and everything
+  the `.dproj` reads, but not the path of `uses X in '...'` in a `.dpr` (or
+  `contains` in a `.dpk`): `uses X in 'C:\anywhere\X.pas'` compiled, with the
+  server's permissions, and what the compiler reads comes back out inside
+  the binary and quoted in its errors. Nor were the directives of a unit of
+  the workspace that lies outside the project's folder judged - one reached
+  by such an `in`, or by a search path or include path of the workspace -,
+  so its `{$I}` of a file outside was read too. Each `in` path is now
+  judged, whether the file exists or not (BUILD-061; one relative to the
+  current folder of another drive cannot be checked, BUILD-062; an entry
+  that does not read as one, USES-026), and those units' directives are
+  judged like the project folder's (BUILD-028). `delphi_config remove-unit`
+  takes such an entry out (`tests/test_build_in_fuera_1230.py`).
 - **The mojibake warning sees UTF-8 read as Latin-1 on every code page.** New
   text carrying UTF-8 read as Latin-1 or CP1252 (`Ã³` for `ó`, what an agent's
   tools make of a UTF-8 file) was warned about only where the machine's ANSI

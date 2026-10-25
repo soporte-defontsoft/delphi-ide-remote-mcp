@@ -489,7 +489,11 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   project — the icon, the manifest, the search paths, a `.rc` and the files it names, a
   deployment file — has to lie where the session may read (the workspace, the IDE and its
   library zone), whether it exists or not (`BUILD-050` to `BUILD-053`; a hard link in the
-  project's tree to a file outside is refused too). The project's **pre/post build events**
+  project's tree to a file outside is refused too). So has every unit the main source names
+  with `in` (`uses X in '...'`, `contains` in a package: `BUILD-061`), and the `{$I}`/`{$R}`
+  directives of every source the build reads from the workspace - the project's folder, a
+  unit reached by such an `in`, the workspace folders of its search and include paths
+  (`BUILD-028`). The project's **pre/post build events**
   (signing, copies, EurekaLog) are not
   refused either: the build runs with them emptied and says so (`buildEventsSkipped`) -
   the binary is for working and testing in the agent's workspace; the final, signed one is

@@ -6329,6 +6329,26 @@ const
     'names: a path the build reads that cannot be checked is not ' +
     'approved. Write it relative to the source''s folder, or complete.';
 
+  // Lo que la fuente principal nombra con IN (el uses de un .dpr, el contains
+  // de un .dpk): dcc lo abre como un $I. Nadie lo juzgaba: un uses X in
+  // 'fuera.pas' compilaba (V14 de la 1.23, Lsp.BuildRunner.IncludeDirectivesDenied).
+  // %s = la unidad, %s = la ruta como va escrita, %s = el .dpr o el .dpk
+  SR_BUILD_IN_FUERA_FMT =
+    '[BUILD-061 DENIED] I will not build this. %s in ''%s'', in %s, is a ' +
+    'unit the build READS from OUTSIDE what this server lets you read (the ' +
+    'workspace, the IDE and its library zone). The compiler opens it with ' +
+    'the server''s permissions, and what goes in comes back out (inside the ' +
+    'binary, quoted in the errors). Point it at a file inside the ' +
+    'workspace, or take it out of the project: delphi_config remove-unit ' +
+    'takes the entry as the project lists it, even one that points outside.';
+
+  SR_BUILD_IN_NO_VERIFICABLE_FMT =
+    '[BUILD-062 DENIED] I will not build this. %s in ''%s'', in %s, names a ' +
+    'path relative to the current folder of another drive, and which file ' +
+    'the compiler opens depends on that folder, which nothing names: a path ' +
+    'the build reads that cannot be checked is not approved. Write it ' +
+    'relative to the project''s folder, or complete.';
+
   SR_BUILD_OUTPUT_DENIED_FMT =
     '[BUILD-029 DENIED] I will not build this. The project puts its ' +
     'output in %s = %s, and this session cannot write there: %s. A build ' +

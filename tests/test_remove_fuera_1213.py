@@ -11,7 +11,9 @@ se lee ni se escribe, el nucleo no la abre si esta fuera, y la entrada se va
 del .dpr y del .dproj; add-unit sigue pidiendo un .pas legible.
 
   R0  fixture: el proyecto lista una unidad de FUERA (uses in '...' +
-      DCCReference): el build la niega (BUILD-050)
+      DCCReference): el build la niega por el in de su .dpr, que se juzga
+      antes que el .dproj (BUILD-061; V14 de la 1.23 - era BUILD-050, la
+      DCCReference: el in no lo juzgaba nadie)
   R1  remove-unit con esa ruta (existe, fuera): QUITADA (CFG-125), fuera del
       .dpr y del .dproj, el fichero de fuera intacto y su contenido sin citar
   R2  ...y el build compila
@@ -91,8 +93,8 @@ try:
     carpeta, dpr, dproj = fixture('r1')
     lista_unidad(dpr, dproj, 'UFuera', victima)
     r = build(dproj)
-    check('R0 el proyecto lista una unidad de FUERA: el build la niega (BUILD-050)',
-          mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT') and 'UFuera' in r, r[:300])
+    check('R0 el proyecto lista una unidad de FUERA: el build la niega por el in del .dpr (BUILD-061)',
+          mc.rechazado(r) and mc.es(r, 'SR_BUILD_IN_FUERA_FMT') and 'UFuera' in r, r[:300])
     r = srv.call('delphi_config', {'project': dproj, 'command': 'remove-unit', 'path': victima})
     check('R1 remove-unit con la ruta de fuera: QUITADA (CFG-125), no GUARD-002',
           not mc.rechazado(r) and mc.es(r, 'SN_UNIT_REMOVED_FUERA_FMT'), r[:300])

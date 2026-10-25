@@ -1266,13 +1266,62 @@ end;
 // path they name is resolved and checked against the read jail BEFORE msbuild
 // starts. Wildcards ({$R *.res}, {$R *.dfm}) and relative names that stay
 // inside are untouched - that is what an ordinary project uses.
+//
+// And the main source's IN (uses X in '...' of a .dpr, contains of a .dpk): dcc
+// opens it like an {$I}, and nobody judged it - a uses X in 'C:\outside\X.pas'
+// compiled (V14 of 1.23, measured live). Nor were the directives of a unit it
+// reaches outside the project's folder: they are judged now like the folder's.
+
+// Las directivas de AFichero que meten un fichero en el build ($I, $R), cada
+// una donde la abre dcc (lo relativo desde la carpeta del fuente; "\x" y "X:y"
+// desde ACarpetaDelBuild, la de dcc) y por la puerta de leer: '' o la negativa
+// (BUILD-028, o BUILD-057 si no se sabe que fichero es). Lo que no se deja leer
+// no se juzga: tampoco lo abre dcc. La pregunta de cada fuente que el build
+// lee: los de la carpeta del proyecto, los que alcanza su in y los de las
+// carpetas de la jaula de sus search paths (V14 de la 1.23).
+function DirectivasDenegadas(const AFichero, ACarpetaDelBuild: string): string;
+var
+  Txt, Enc, Cand, Base: string;
+begin
+  Result := '';
+  try
+    Txt := PatchLoadText(AFichero, Enc);
+  except
+    Exit;
+  end;
+  Base := TPath.GetDirectoryName(AFichero);
+  // EL lector de estas directivas es Lsp.ProjectUnits.DirectivasDeFichero:
+  // lo comparte con la mudanza de delphi_move, que las re-apunta.
+  for var D in DirectivasDeFichero(Txt) do
+  begin
+    // como la abre dcc (EL resolutor): lo relativo desde la carpeta del
+    // fuente, "\x" y "X:y" desde la suya. Se juzgaban en la unidad del
+    // PROCESO del servidor (A9b de la 1.23, medido). Una "X:y" de otra
+    // unidad dcc la abre desde una carpeta que no nombra nadie: se niega
+    Cand := RutaDesde(Base, D.Ruta, ACarpetaDelBuild);
+    if Cand = '' then
+    begin
+      if EsRutaAMedias(D.Ruta) then
+        Exit(MsgFmt(SR_BUILD_INCLUDE_NO_VERIFICABLE_FMT,
+          [D.Texto.Trim, TPath.GetFileName(AFichero)]));
+      Continue; // no es una ruta: dcc tampoco la abre
+    end;
+    if ReadPathDenied(Cand) <> '' then
+      Exit(MsgFmt(SR_BUILD_INCLUDE_OUTSIDE_FMT,
+        [D.Texto.Trim, TPath.GetFileName(AFichero)]));
+  end;
+end;
+
 function IncludeDirectivesDenied(const ADprojPath: string): string;
 var
-  Dpr, Txt, Enc, Cand, Base, CarpetaDelBuild: string;
+  Dpr, Base, CarpetaDelBuild: string;
   Files: TList<string>;
+  Unidades, Escritas, Rutas: TArray<string>;
 begin
   Result := '';
   Dpr := DprDe(ADprojPath);
+  // la carpeta en la que corre dcc (msbuild arranca en la del .dproj)
+  CarpetaDelBuild := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
   Files := TList<string>.Create;
   try
     if TFile.Exists(Dpr) then
@@ -1282,13 +1331,33 @@ begin
       if EnlaceDuroIlegible(Dpr) <> '' then
         Exit(MsgFmt(SR_BUILD_ENLACE_DURO_FMT, [TPath.GetFileName(Dpr)]));
       Files.Add(Dpr);
+      // lo que nombra con IN, por EL lector de sus entradas y en todas sus
+      // ramas: la ruta se juzga exista o no (decir "existe" de una de fuera
+      // seria un oraculo), y la de dentro, ademas, por sus directivas. Una
+      // clausula que no se lee no se aprueba (USES-026). La que no se deja
+      // leer no la juzga nadie: tampoco el bucle de abajo, ni la abre dcc
+      try
+        Result := LecturasDelIn(Dpr, Unidades, Escritas, Rutas);
+      except
+        Result := '';
+        Rutas := nil;
+      end;
+      if Result <> '' then
+        Exit;
+      for var I := 0 to High(Rutas) do
+      begin
+        if Rutas[I] = '' then
+          Exit(MsgFmt(SR_BUILD_IN_NO_VERIFICABLE_FMT, [Unidades[I], Escritas[I], TPath.GetFileName(Dpr)]));
+        if ReadPathDenied(Rutas[I]) <> '' then
+          Exit(MsgFmt(SR_BUILD_IN_FUERA_FMT, [Unidades[I], Escritas[I], TPath.GetFileName(Dpr)]));
+        if not Files.Contains(Rutas[I]) then
+          Files.Add(Rutas[I]);
+      end;
     end;
     // Everything the compiler could reach from the project's own folder. Not
     // the .dproj's unit list: a unit can be pulled in by a search path and
     // still carry a directive, and this check is cheap enough to be broad.
-    Base := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
-    // la carpeta en la que corre dcc (msbuild arranca en la del .dproj)
-    CarpetaDelBuild := Base;
+    Base := CarpetaDelBuild;
     // por EL recorredor (WalkFiles): solo sigue los enlaces que esta sesion
     // puede leer (TDirectory con soAllDirectories cruzaba una union y leia
     // lo de detras: medida M1). TODO el arbol, no solo los fuentes (1.21.2):
@@ -1304,32 +1373,9 @@ begin
       end;
     for var F in Files do
     begin
-      try
-        Txt := PatchLoadText(F, Enc);
-      except
-        Continue;
-      end;
-      Base := TPath.GetDirectoryName(F);
-      // EL lector de estas directivas es Lsp.ProjectUnits.DirectivasDeFichero:
-      // lo comparte con la mudanza de delphi_move, que las re-apunta.
-      for var D in DirectivasDeFichero(Txt) do
-      begin
-        // como la abre dcc (EL resolutor): lo relativo desde la carpeta del
-        // fuente, "\x" y "X:y" desde la suya. Se juzgaban en la unidad del
-        // PROCESO del servidor (A9b de la 1.23, medido). Una "X:y" de otra
-        // unidad dcc la abre desde una carpeta que no nombra nadie: se niega
-        Cand := RutaDesde(Base, D.Ruta, CarpetaDelBuild);
-        if Cand = '' then
-        begin
-          if EsRutaAMedias(D.Ruta) then
-            Exit(MsgFmt(SR_BUILD_INCLUDE_NO_VERIFICABLE_FMT,
-              [D.Texto.Trim, TPath.GetFileName(F)]));
-          Continue; // no es una ruta: dcc tampoco la abre
-        end;
-        if ReadPathDenied(Cand) <> '' then
-          Exit(MsgFmt(SR_BUILD_INCLUDE_OUTSIDE_FMT,
-            [D.Texto.Trim, TPath.GetFileName(F)]));
-      end;
+      Result := DirectivasDenegadas(F, CarpetaDelBuild);
+      if Result <> '' then
+        Exit;
     end;
   finally
     Files.Free;
@@ -1815,6 +1861,19 @@ var
         [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo,
          IfThen(SameText(ATrozo.Trim, AValor.Escrito.Trim), '',
            MsgFmt(SF_BUILD_LECTURA_ESCRITA_FMT, [AValor.Escrito]))]));
+    // una carpeta de unidades o de includes de la JAULA (la biblioteca es la
+    // instalacion): dcc lee sus fuentes, y sus directivas se juzgan como las
+    // de la carpeta del proyecto. Una unidad de un search path de la jaula
+    // traia un $I de fuera (V14 de la 1.23, medido): aqui el trozo ya va
+    // expandido como lo lee msbuild, y un $(X) que lleva a ella tambien
+    if MatchText(AValor.Elemento, ['DCC_UnitSearchPath', 'DCC_IncludePath']) and
+       (LugarDeLecturaDenegado(Cand, [ltJaula]) = '') and TDirectory.Exists(Cand) then
+      for var F in WalkFiles(Cand, MascarasDe(SOURCE_EXTS), False, False) do
+      begin
+        Result := DirectivasDenegadas(F, Dir);
+        if Result <> '' then
+          Exit;
+      end;
     // el .rc que compila brcc32: cada fichero que nombra, por EL lector. Solo
     // el guion de un RcCompile: un RcItem es un FICHERO de recurso (el .gif o
     // .png que el IDE mete como RCDATA por el .rc que genera el mismo) y ya
