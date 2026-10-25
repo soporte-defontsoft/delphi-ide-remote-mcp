@@ -918,20 +918,11 @@ end;
 function IsBinaryStyle(const APath: string): Boolean;
 var
   B: TBytes;
-  S: TFileStream;
 begin
-  Result := False;
-  if not TFile.Exists(APath) then
-    Exit;
-  S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(B, 9);
-    if S.Size < 9 then
-      Exit;
-    S.ReadBuffer(B[0], 9);
-  finally
-    S.Free;
-  end;
+  // su cabecera por EL lector de cabeceras (Lsp.DesignerForma)
+  B := PrimerosBytes(APath, 9);
+  if Length(B) < 9 then
+    Exit(False);
   // La forma la dice DesignerShapeOf (la cabecera de recurso FF 0A 00, el
   // flujo TPF0): solo $FF tomaba por binario un .style de TEXTO guardado en
   // UTF-16 (FF FE), y un TPF0 a pelo por texto (2.2 de la 1.18.0). FMX_STYLE

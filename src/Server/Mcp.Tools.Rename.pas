@@ -82,17 +82,16 @@ begin
   // preview solo lee; apply escribe, asi que pasa por la puerta de escritura
   // (jaula + credencial de solo lectura) ANTES de calcular nada. Cada
   // fichero que apply toque vuelve a pasar por ella al apilarse.
+  Result := '';
   if Mode = 'apply' then
-    Result := PathDenied(Params.Path)
-  else
-    Result := ReadPathDenied(Params.Path);
+    Result := PathDenied(Params.Path);
   if Result = '' then
     // La sexta y ultima de la familia. Sin esto, una linea que no existe
     // salia como excepcion cruda en ingles en vez del mensaje que dice
     // cuantas lineas tiene el fichero - y en un rename, que es la tool mas
     // destructiva del lote, saber que te has equivocado de posicion importa
     // mas que en ninguna.
-    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+    Result := PosicionQueNoSePregunta(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   try

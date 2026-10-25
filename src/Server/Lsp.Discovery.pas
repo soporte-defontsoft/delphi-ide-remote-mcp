@@ -1143,26 +1143,35 @@ begin
   Result := TPath.GetFileNameWithoutExtension(APath);
 end;
 
-function PerfilesDelIde(const AVersion: string): TArray<string>;
+{ Los ficheros AMascara de la carpeta de perfiles del IDE, ordenados y sin
+  repetidos (sin mirar mayusculas); vacio si no hay carpeta. LA lista de esa
+  carpeta: PerfilesDelIde y SdksDelIde eran el mismo cuerpo dos veces (W2 de
+  la auditoria de duplicados del 16-oct; V34 de la 1.23). }
+function FicherosDePerfilesDelIde(const AVersion, AMascara: string): TArray<string>;
 var
-  Dir: string;
   L: TStringList;
 begin
   Result := nil;
-  Dir := IdeProfilesDir(AVersion);
-  if not TDirectory.Exists(Dir) then
+  if not TDirectory.Exists(IdeProfilesDir(AVersion)) then
     Exit;
   L := TStringList.Create;
   try
     L.Sorted := True;
     L.Duplicates := dupIgnore;
     L.CaseSensitive := False;
-    for var F in TDirectory.GetFiles(Dir, '*.profile') do
-      L.Add(NombreDePerfil(F));
+    for var F in TDirectory.GetFiles(IdeProfilesDir(AVersion), AMascara) do
+      L.Add(F);
     Result := L.ToStringArray;
   finally
     L.Free;
   end;
+end;
+
+function PerfilesDelIde(const AVersion: string): TArray<string>;
+begin
+  Result := FicherosDePerfilesDelIde(AVersion, '*.profile');
+  for var I := 0 to High(Result) do
+    Result[I] := NombreDePerfil(Result[I]);
 end;
 
 function PerfilDelIde(const AVersion, APedido: string): string;
@@ -1181,25 +1190,8 @@ begin
 end;
 
 function SdksDelIde(const AVersion: string): TArray<string>;
-var
-  Dir: string;
-  L: TStringList;
 begin
-  Result := nil;
-  Dir := IdeProfilesDir(AVersion);
-  if not TDirectory.Exists(Dir) then
-    Exit;
-  L := TStringList.Create;
-  try
-    L.Sorted := True;
-    L.Duplicates := dupIgnore;
-    L.CaseSensitive := False;
-    for var F in TDirectory.GetFiles(Dir, '*.sdk') do
-      L.Add(F);
-    Result := L.ToStringArray;
-  finally
-    L.Free;
-  end;
+  Result := FicherosDePerfilesDelIde(AVersion, '*.sdk');
 end;
 
 function NombreDeSdk(const ANombre: string): string;

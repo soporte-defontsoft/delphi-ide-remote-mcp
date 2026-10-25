@@ -68,16 +68,20 @@ REGLAS = [
      'CorreStyleConvert (1.16.0: defaults y tobin componian la orden a mano)'),
     ('nombre de un .profile', r"\+\s*'\.profile'",
      [('Lsp.Discovery.pas', 'RutaDePerfil')], 'RutaDePerfil, y NombreDePerfil su inversa (1.16.0)'),
-    ('listar los perfiles a mano', r"GetFiles\s*\([^)]*'\*\.profile'",
+    ('listar los perfiles a mano', r"(?:GetFiles|FicherosDePerfilesDelIde)\s*\([^)]*'\*\.profile'",
      [('Lsp.Discovery.pas', 'PerfilesDelIde')],
      'PerfilesDelIde: LA lista de perfiles del IDE, y PerfilDelIde elige de ella (2an de la 1.18.2: '
      'cuatro listados a mano en set-profile, profiles, add-profile y reseat; el build pasaba a msbuild '
      'el perfil del .dproj sin juez)'),
-    ('listar los SDK a mano', r"GetFiles\s*\([^)]*'\*\.sdk'",
+    ('listar los SDK a mano', r"(?:GetFiles|FicherosDePerfilesDelIde)\s*\([^)]*'\*\.sdk'",
      [('Lsp.Discovery.pas', 'SdksDelIde')],
      'SdksDelIde: LA lista de los .sdk del IDE (punto 4 de la 1.18.2: seis GetFiles a mano en el '
      'build, adb, profiles, seat-sdk, HasProfileFor y los sysroots de la puerta; HasProfileFor '
      'buscaba el nombre de la plataforma en todo el texto en vez de su Profile_platform)'),
+    ('listar la carpeta de perfiles del IDE a mano', r"GetFiles\s*\(\s*IdeProfilesDir\s*\(",
+     [('Lsp.Discovery.pas', 'FicherosDePerfilesDelIde')],
+     'FicherosDePerfilesDelIde: LA lista de esa carpeta, por mascara (PerfilesDelIde y SdksDelIde eran '
+     'el mismo cuerpo dos veces: W2 del 16-oct, V34 de la 1.23)'),
     ('leer un designer binario a mano', r"(?<!function )DesignerFileToText\s*\(",
      [('Lsp.Patch.pas', 'TextoDeDesigner')],
      'TextoDeDesigner: EL texto de un designer, binario o de texto, por la puerta de leer (W4 del '
@@ -770,7 +774,6 @@ REGLAS = [
      # BYTES de la jaula que la tool ya comprobo (delphi_fetch, el zip de delphi_package,
      # la descarga). La captura y su recorte ya van por la puerta (1.18.2, 2b)
      ('Mcp.Tools.Workspace.pas', 'TDelphiFetchTool.ExecuteWithParams'),
-     ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
       ('Lsp.Files.pas', 'ServeFile'),
       # el RECLAMO de una captura nuestra antes de entregarla por su enlace: apertura
       # EXCLUSIVA (CreateFile GENERIC_READ, sin compartir, borrado al cerrar) y lectura
@@ -784,12 +787,11 @@ REGLAS = [
       ('FormRender.Comun.pas', 'MaestroDeVista'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
       ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Entrada'),
-     # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (4 bytes de un designer o
-     # de un estilo, el BOM de un form; el tamano de un PNG ya sale de sus bytes, 2b)
-     ('Lsp.DesignerBin.pas', 'IsBinaryDesignerFile'), ('Lsp.Styles.pas', 'IsBinaryStyle'),
-     # (FormAncho bajo a Lsp.DesignerBin en B1 de la 1.18.2: la usan tambien la tanda y
-     # el changeset, sobre forms que ya pasaron su puerta; la misma, no una mas)
-     ('Lsp.DesignerBin.pas', 'FormAncho'),
+     # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (la forma de un designer o
+     # de un estilo, el BOM de un form, la firma ELF de un paquete; el tamano de un PNG ya
+     # sale de sus bytes, 2b), por EL lector de cabeceras: eran cuatro TFileStream a mano en
+     # IsBinaryDesignerFile, FormAncho, IsBinaryStyle y delphi_package (V34 de la 1.23)
+     ('Lsp.DesignerForma.pas', 'PrimerosBytes'),
      # el MOTOR de edicion de la jaula: lo que la tool ya paso por la puerta de la jaula
      # (delphi_read, delphi_edit, delphi_textedit, delphi_changeset, el disenador)
      ('Lsp.Patch.pas', 'RelecturaDe'), ('Lsp.Patch.pas', 'PatchSaveText'),
@@ -1270,6 +1272,7 @@ PLANTADO = {
     'nombre de un .profile': "  F := TPath.Combine(Dir, Nombre + '.profile');",
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
+    'listar la carpeta de perfiles del IDE a mano': "  for F in TDirectory.GetFiles(IdeProfilesDir(AVersion), '*.x') do",
     'listar una carpeta sin saber si se dejo': "  for E in TDirectory.GetFileSystemEntries(Dir) do",
     'listar ficheros o carpetas sin saber si se dejo': "  for F in TDirectory.GetFiles(Dir, '*.pas') do",
     'nombre de un .sdk': "  F := TPath.Combine(Dir, Nombre + '.sdk');",

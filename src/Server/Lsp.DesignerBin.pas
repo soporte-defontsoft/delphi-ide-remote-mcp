@@ -1445,23 +1445,10 @@ begin
 end;
 
 function IsBinaryDesignerFile(const APath: string): Boolean;
-var
-  S: TFileStream;
-  B: TBytes;
 begin
-  Result := False;
-  if not TFile.Exists(APath) then
-    Exit;
-  S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    if S.Size < 4 then
-      Exit;
-    SetLength(B, 4);
-    S.ReadBuffer(B[0], 4);
-  finally
-    S.Free;
-  end;
-  Result := IsBinaryDesignerBytes(B);
+  // su cabecera por EL lector de cabeceras (con menos de cuatro bytes, o sin
+  // poder abrirlo, texto: DesignerShapeOf)
+  Result := IsBinaryDesignerBytes(PrimerosBytes(APath, 4));
 end;
 
 function DesignerBinaryToText(const ABytes: TBytes; out AText: string): string;
@@ -1489,26 +1476,11 @@ begin
 end;
 
 function FormAncho(const APath: string; out AK: TEncKind): Boolean;
-var
-  S: TFileStream;
-  Cabeza: TArray<Byte>;
 begin
-  Result := False;
   AK := ekAnsi;
-  try
-    // los cuatro primeros bytes bastan, el BOM mas largo (el de UTF-32): leer
-    // el fichero entero eran dos lecturas completas en lint (revisor propio de r5)
-    S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-    try
-      SetLength(Cabeza, 4);
-      SetLength(Cabeza, S.Read(Cabeza[0], 4));
-    finally
-      S.Free;
-    end;
-    Result := KindDeBom(Cabeza, AK) and (AK in ENC_ANCHAS);
-  except
-    Result := False;
-  end;
+  // los cuatro primeros bytes bastan, el BOM mas largo (el de UTF-32): leer
+  // el fichero entero eran dos lecturas completas en lint (revisor propio de r5)
+  Result := KindDeBom(PrimerosBytes(APath, 4), AK) and (AK in ENC_ANCHAS);
 end;
 
 function NotaDeFormAncho(const ANombre, AEnc: string): string;

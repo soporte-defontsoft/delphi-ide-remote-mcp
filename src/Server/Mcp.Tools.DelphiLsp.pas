@@ -1351,9 +1351,7 @@ var
   Settings, Kind: string;
   Resp: TJSONObject;
 begin
-  Result := NotDelphiSource(Params.Path);
-  if Result = '' then
-    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  Result := PosicionQueNoSePregunta(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   Kind := Params.Kind.Trim.ToLower;
@@ -1491,9 +1489,7 @@ begin
   // 519 lineas contestaba el hint de "pon el cursor dentro de los parentesis"
   // - un diagnostico FALSO: el problema no era el parentesis, era que la
   // linea no existe. Medido 2026-09-20 por un agente auditor.
-  Result := NotDelphiSource(Params.Path);
-  if Result = '' then
-    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  Result := PosicionQueNoSePregunta(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   // la firma de una rutina de FUERA salia entera (medido el 9-oct-2026)
@@ -1552,9 +1548,7 @@ var
   Resp: TJSONObject;
   V: TJSONValue;
 begin
-  Result := NotDelphiSource(Params.Path);
-  if Result = '' then
-    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  Result := PosicionQueNoSePregunta(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
@@ -1602,9 +1596,7 @@ begin
   // ejemplo dandole el numero 1-based de delphi_read a una tool 0-based)
   // recibia una lista con pinta de buena en vez del error que le habria
   // dicho donde se equivoco. Medido 2026-09-20 por un agente auditor.
-  Result := NotDelphiSource(Params.Path);
-  if Result = '' then
-    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  Result := PosicionQueNoSePregunta(Params.Path, Params.Line, Params.Character);
   // los nombres - y el VALOR de una constante - de una unit de FUERA salian
   // (medido el 9-oct-2026)
   if Result = '' then

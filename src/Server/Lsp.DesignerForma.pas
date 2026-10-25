@@ -26,6 +26,13 @@ type
 
 { La forma por sus primeros bytes (con menos de cuatro, texto) }
 function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
+{ Los ACuantos primeros bytes de APath (menos si es mas corto; ninguno si no
+  se puede abrir): EL lector de los que reconocen un fichero por su
+  cabecera - la forma de un designer, su BOM, la firma de un estilo FMX, la
+  de un binario ELF -. Eran cuatro TFileStream a mano, dos que se rendian
+  con un fichero corto y dos dentro de un try (V11 y V34 de la 1.23). Sin
+  puerta: la pasa antes quien llama. }
+function PrimerosBytes(const APath: string; ACuantos: Integer): TArray<Byte>;
 { Si un designer de TEXTO (DesignerShapeOf) es uno que el lector de forms del
   IDE no toma por texto, por sus primeros bytes: lo dice la RTL
   (TestStreamFormat, el juez de la forma del flujo): un $FF inicial lo toma
@@ -121,6 +128,26 @@ uses
   System.RTLConsts,   // SParseError: el formato del mensaje del parser
   System.RegularExpressions,
   Lsp.Pascal;         // GrupoDeClasesDe: el {%CLASSGROUP} de un modulo de datos
+
+function PrimerosBytes(const APath: string; ACuantos: Integer): TArray<Byte>;
+var
+  S: TFileStream;
+begin
+  Result := nil;
+  if ACuantos <= 0 then
+    Exit;
+  try
+    S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+    try
+      SetLength(Result, ACuantos);
+      SetLength(Result, S.Read(Result[0], ACuantos));
+    finally
+      S.Free;
+    end;
+  except
+    Result := nil;
+  end;
+end;
 
 function DesignerShapeOf(const ABytes: TArray<Byte>): TDesignerShape;
 begin

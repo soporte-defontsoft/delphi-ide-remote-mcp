@@ -849,6 +849,23 @@ begin
     Result := MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [APedido.Trim]);
 end;
 
+{ El preambulo de una operacion sobre un perfil que ya existe (test-connection,
+  get-sdk): el paclient del IDE (AInfo, APaClient), el perfil por EL juez de
+  la lista (PerfilElegido: su nombre en ANombre) y su host por la puerta de
+  red (ProfileHostDenied). '' o la negativa. Estaba escrito igual en las dos
+  (W5 de la auditoria de duplicados del 16-oct; V34 de la 1.23). }
+function PerfilParaOperar(const APedido: string; out AInfo: TRadStudioInfo;
+  out APaClient, ANombre: string): string;
+begin
+  ANombre := '';
+  APaClient := FindPaClient(AInfo);
+  if APaClient = '' then
+    Exit(MsgText(SR_PASERVER_NO_PACLIENT));
+  Result := PerfilElegido(AInfo.Version, APedido, ANombre);
+  if Result = '' then
+    Result := ProfileHostDenied(ANombre);
+end;
+
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -1086,16 +1103,11 @@ begin
     end;
     Exit(MsgText(SR_PASERVER_NEED_NAME));
   end;
-  PaClient := FindPaClient(Info);
-  if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   var DelIde: string;
-  Result := PerfilElegido(Info.Version, ProfName, DelIde);
+  Result := PerfilParaOperar(ProfName, Info, PaClient, DelIde);
   if Result <> '' then
     Exit;
   ProfName := DelIde;
-  Result := ProfileHostDenied(ProfName);
-  if Result <> '' then
-    Exit;
   ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=20', ProfName, Output, 45000));
   Return := TJSONObject.Create;
   try
@@ -1402,17 +1414,12 @@ begin
   ProfName := Params.Profile.Trim;
   if ProfName = '' then
     Exit(MsgText(SR_PASERVER_NEED_NAME));
-  PaClient := FindPaClient(Info);
-  if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   var DelIde: string;
-  Result := PerfilElegido(Info.Version, ProfName, DelIde);
+  Result := PerfilParaOperar(ProfName, Info, PaClient, DelIde);
   if Result <> '' then
     Exit;
   ProfName := DelIde;
   ProfileFile := RutaDePerfil(Info.Version, ProfName);
-  Result := ProfileHostDenied(ProfName);
-  if Result <> '' then
-    Exit;
   ProfXml := LeeTexto(ProfileFile, [ltIde]);
   Plat := CamposDePerfil(ProfXml).Plataforma;
   if not SameText(Plat, PLATAFORMA_DE_GETSDK) then

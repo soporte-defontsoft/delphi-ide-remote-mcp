@@ -257,7 +257,8 @@ uses
   Lsp.Settings,
   Lsp.Identidad,
   Lsp.Lugares,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.DesignerForma;
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
@@ -2025,21 +2026,15 @@ begin
       // Linux64 (un ELF, sin extension) sale del unzip sin el bit de
       // ejecucion y "no arranca" sin decir por que. Se cuentan para
       // avisarlo en la respuesta.
-      if (TPath.GetExtension(F) = '') or SameText(TPath.GetExtension(F), '.so') then
-        try
-          var Fs := TFileStream.Create(F, fmOpenRead or fmShareDenyNone);
-          try
-            var Cab: array[0..3] of Byte;
-            if (Fs.Read(Cab, 4) = 4) and (Cab[0] = $7F) and (Cab[1] = Ord('E')) and
-               (Cab[2] = Ord('L')) and (Cab[3] = Ord('F')) and
-               (TPath.GetExtension(F) = '') then
-              Inc(Elfs);
-          finally
-            Fs.Free;
-          end;
-        except
-          // no se pudo mirar: el aviso es una ayuda, no una condicion
-        end;
+      // Su firma, por EL lector de cabeceras (Lsp.DesignerForma); uno que no
+      // se pudo mirar no cuenta: el aviso es una ayuda, no una condicion.
+      if TPath.GetExtension(F) = '' then
+      begin
+        var Cab := PrimerosBytes(F, 4);
+        if (Length(Cab) = 4) and (Cab[0] = $7F) and (Cab[1] = Ord('E')) and
+           (Cab[2] = Ord('L')) and (Cab[3] = Ord('F')) then
+          Inc(Elfs);
+      end;
       Inc(Count);
       Inc(TotalBytes, TFile.GetSize(F));
     end;

@@ -189,6 +189,14 @@ function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
   una excepcion cruda en ingles. Duplicarla en cada unidad habria sido repetir
   el fallo; se mueve al sitio donde ya miran todas. }
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
+{ Lo que impide preguntar por la posicion ALine:AChar de APath: la puerta de
+  lectura (ReadPathDenied: sin ruta, GUARD-018) y PositionOutOfRange (que
+  sea un fuente Delphi y que la posicion exista). '' si se puede. EL
+  preambulo de las seis tools de posicion: cuatro lo escribian con
+  NotDelphiSource delante, que repetia la pregunta del fuente, y dos con la
+  puerta a mano (W7 de la auditoria de duplicados del 16-oct; V34 de la
+  1.23). delphi_rename_symbol pasa antes la de escritura si escribe. }
+function PosicionQueNoSePregunta(const APath: string; ALine, AChar: Integer): string;
 
 { Las LINEAS de un texto, como las cuenta delphi_read: los tres saltos
   (CRLF, LF, CR) son uno, y el salto final CIERRA la ultima linea, no abre
@@ -4361,6 +4369,13 @@ begin
   else if AChar > Length(Lines[ALine]) then
     Exit(MsgFmt(SR_LSP_CHAR_RANGE_FMT,
       [AChar, ALine, ALine + 1, Length(Lines[ALine]), Lines[ALine].Trim]));
+end;
+
+function PosicionQueNoSePregunta(const APath: string; ALine, AChar: Integer): string;
+begin
+  Result := ReadPathDenied(APath);
+  if Result = '' then
+    Result := PositionOutOfRange(APath, ALine, AChar);
 end;
 
 { READ-007 entero: que unos bytes no cuadran con su codificacion, con la
