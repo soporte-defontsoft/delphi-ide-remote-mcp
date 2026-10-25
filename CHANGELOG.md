@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Changed
+
+- **`delphi_docs read` pages a long page like every list.** A chunk of a
+  page came with `length`, `offset` and `nextOffset`, written by hand and
+  without `hasMore`, so a client that walks "until `hasMore` is false", as
+  `delphi_list`, `delphi_search` and `delphi_projects` say, could not walk
+  it. It now answers with the page of the lists: `total` (the characters of
+  the page; it was `length`), `shown` (those of this chunk), `offset`,
+  `hasMore` and `nextOffset`. The note that says a list was cut is
+  composed in one place for `delphi_list` (files and folders),
+  `delphi_projects` and `delphi_docs` (`Lsp.Listas`, `TPagina`); the one of
+  `delphi_docs` now says how many characters came, of how many
+  (`tests/test_delphi_docs.py`).
+
 ### Removed
 
 - **The startup purge no longer touches the workspace roots.** Since 1.18.2

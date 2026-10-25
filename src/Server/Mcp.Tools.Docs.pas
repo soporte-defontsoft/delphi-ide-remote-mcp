@@ -66,7 +66,8 @@ uses
   Lsp.Discovery,
   Lsp.Mascara,  // MaskDriveText
   Lsp.Docs,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.Listas;   // TPagina: la pagina de un trozo, la de las listas
 
 const
   // lo que se da de una pagina de una vez, unos 2.000 tokens (medido: la
@@ -185,11 +186,10 @@ begin
     Ret.AddPair('id', IdDePagina(Corto, Pagina, Eco(Ancla)));
     Ret.AddPair('title', Pag.Titulo);
     Ret.AddPair('text', Pag.Texto.Substring(Desde, Hasta - Desde));
-    Ret.AddPair('length', TJSONNumber.Create(Total));
-    if Desde > 0 then
-      Ret.AddPair('offset', TJSONNumber.Create(Desde));
-    if Hasta < Total then
-      Ret.AddPair('nextOffset', TJSONNumber.Create(Hasta));
+    // la pagina del trozo, la de las listas (total, shown, offset, hasMore,
+    // nextOffset): aqui iban length, offset y nextOffset a mano (A24 de la 1.23)
+    var Trozo := PaginaDeTexto(Desde, Hasta, Total);
+    Trozo.Report(Ret);
     // sus secciones, solo el ancla, que se lee como el titulo; repetir el id
     // de la pagina y el titulo en cada una era un tercio del primer trozo
     // (3.300 de 11.300 caracteres en Declarations and Statements, medido el
@@ -231,8 +231,8 @@ begin
       Nota := MsgFmt(SN_DOCS_SIN_SECCION_FMT, [Eco(Ancla)]) + ' ' + Nota;
     if Length(Pag.Subsecciones) > 0 then
       Nota := MsgText(SN_DOCS_SUBSECCIONES) + ' ' + Nota;
-    if Hasta < Total then
-      Nota := Nota + ' ' + MsgFmt(SN_DOCS_SIGUE_FMT, [Hasta, Total, Hasta]);
+    if Trozo.HayMas then
+      Nota := Nota + ' ' + Trozo.NotaDeRecorte(SN_DOCS_SIGUE_FMT);
     Ret.AddPair('note', Nota);
     Result := Ret.ToJSON;
   finally

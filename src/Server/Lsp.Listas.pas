@@ -27,6 +27,10 @@ type
     { total, shown, offset (si no es 0), hasMore y nextOffset (si hay mas):
       lo que hace falta para pedir la siguiente sin adivinar }
     procedure Report(AObj: TJSONObject);
+    { la nota del recorte: AFmt con (mostrados, total, siguiente) si hay mas,
+      '' si no. delphi_list (ficheros y carpetas), delphi_projects y la
+      lectura de delphi_docs la componian a mano (A17-W5 de la 1.23) }
+    function NotaDeRecorte(const AFmt: string): string;
   end;
 
   { DONDE esta una lista que no cabe, no solo cuanto: la carpeta de cada
@@ -110,6 +114,13 @@ procedure AgrupaPorCarpeta(AObj: TJSONObject; const ACampo: string);
   es positivo es APorDefecto y uno mayor que ATope es ATope. }
 function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
 
+{ La pagina de un TEXTO que se lee por trozos (delphi_docs read): los
+  caracteres de ADesde a AHasta de ATotal. Su Report es el de las listas
+  (total, shown, offset, hasMore, nextOffset): docs escribia length, offset y
+  nextOffset a mano y sin hasMore, y quien recorre "hasta hasMore=false" no
+  podia con el (A24 de la 1.23). }
+function PaginaDeTexto(ADesde, AHasta, ATotal: Integer): TPagina;
+
 implementation
 
 uses
@@ -117,7 +128,8 @@ uses
   System.IOUtils,
   System.StrUtils,
   Lsp.NetDrives, // SinBarraFinal
-  Lsp.Mascara;   // MaskDriveText
+  Lsp.Mascara,   // MaskDriveText
+  Lsp.Texts;     // MsgFmt: la nota del recorte
 
 { TPagina }
 
@@ -131,6 +143,15 @@ begin
   if AMax > ATope then
     AMax := ATope;
   Result.Max := AMax;
+end;
+
+function PaginaDeTexto(ADesde, AHasta, ATotal: Integer): TPagina;
+begin
+  Result := Default(TPagina);
+  Result.Desde := ADesde;
+  Result.Total := ATotal;
+  Result.Mostrados := AHasta - ADesde;
+  Result.Max := Result.Mostrados;
 end;
 
 function TPagina.Entra: Boolean;
@@ -163,6 +184,13 @@ begin
   AObj.AddPair('hasMore', TJSONBool.Create(HayMas));
   if HayMas then
     AObj.AddPair('nextOffset', TJSONNumber.Create(Siguiente));
+end;
+
+function TPagina.NotaDeRecorte(const AFmt: string): string;
+begin
+  Result := '';
+  if HayMas then
+    Result := MsgFmt(AFmt, [Mostrados, Total, Siguiente]);
 end;
 
 { TPorCarpeta }

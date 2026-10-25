@@ -4522,9 +4522,11 @@ const
     '[DOCS-010] There is no section "%s" in this page: this is the page ' +
     'from its start (a long one, its introduction and its sections).';
 
-  { %d: lo dado, el total, por donde seguir }
+  { %d: los caracteres de este trozo, el total, por donde seguir: los de
+    TPagina.NotaDeRecorte, la nota de recorte de toda lista (decia "hasta el
+    caracter N", con N el siguiente; A24 de la 1.23) }
   SN_DOCS_SIGUE_FMT =
-    '[DOCS-011] It goes on: up to character %d of %d. The rest: the same ' +
+    '[DOCS-011] It goes on: %d characters here, of %d. The rest: the same ' +
     'id with offset=%d.';
 
   { una seccion de la que cuelga el resto de la pagina (Description en las

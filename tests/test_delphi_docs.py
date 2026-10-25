@@ -229,23 +229,31 @@ try:
         LARGA = 'topics:Declarations_and_Statements_(Delphi).htm'
         r = mc.como_json(docs({'id': LARGA}))
         secciones = r.get('sections', [])
-        total = r.get('length', 0)
+        # A24 de la 1.23: la pagina de un trozo es la de las listas (total, shown, hasMore, nextOffset); antes
+        # 'length' y sin hasMore
+        total = r.get('total', 0)
         check('D5 una pagina larga: primero su entrada, corta, y sus secciones',
               len(secciones) > 10 and 0 < len(r.get('text', '')) < 2000 and r.get('nextOffset'),
-              {k: r.get(k) for k in ('length', 'nextOffset')})
+              {k: r.get(k) for k in ('total', 'nextOffset')})
+        check('D5 la pagina del trozo es la de las listas: shown = el trozo, hasMore, sin length (A24)',
+              r.get('shown') == len(r.get('text', '')) and r.get('hasMore') is True and 'length' not in r,
+              {k: r.get(k) for k in ('total', 'shown', 'hasMore', 'length')})
         check('D5 la nota dice por donde sigue', mc.es(r.get('note', ''), 'SN_DOCS_SIGUE_FMT'),
               r.get('note', '')[-200:])
         if secciones:
             s = mc.como_json(docs({'id': LARGA + '#' + secciones[0]}))
             check('D5 <id>#<seccion> da esa seccion sola, con su titulo',
-                  s.get('text', '').startswith('#') and 0 < s.get('length', 0) < total
+                  s.get('text', '').startswith('#') and 0 < s.get('total', 0) < total
                   and 'sections' not in s, str(s)[:200])
-        trozos, offset, vueltas = [], 0, 0
+        trozos, offset, vueltas, ultimo = [], 0, 0, {}
         while offset is not None and vueltas < 50:
             p = mc.como_json(docs({'id': LARGA, 'offset': offset}))
             trozos.append((p.get('offset', 0), p.get('text', '')))
             offset = p.get('nextOffset')
             vueltas += 1
+            ultimo = p
+        check('D5 el ultimo trozo dice hasMore=false, como una lista (A24)', ultimo.get('hasMore') is False,
+              {k: ultimo.get(k) for k in ('total', 'shown', 'offset', 'hasMore')})
         seguidos = all(trozos[k + 1][0] == trozos[k][0] + len(trozos[k][1]) for k in range(len(trozos) - 1))
         check('D5 siguiendo nextOffset se lee la pagina entera, sin perder ni repetir',
               seguidos and sum(len(x[1]) for x in trozos) == total and len(trozos) > 2,

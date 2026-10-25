@@ -689,8 +689,7 @@ begin
       PagDirs.Report(Return);
       // el recorte se dice, como en el modo ficheros (callaba)
       if PagDirs.HayMas then
-        Return.AddPair('shownNote', MsgFmt(SN_LIST_DIRS_CAPPED_FMT,
-          [PagDirs.Mostrados, PagDirs.Total, PagDirs.Siguiente]));
+        Return.AddPair('shownNote', PagDirs.NotaDeRecorte(SN_LIST_DIRS_CAPPED_FMT));
       // ninguna subcarpeta y si ficheros: se dice (total:0 a secas parecia
       // una carpeta vacia; Flash, 1.20)
       if PagDirs.Total = 0 then
@@ -791,8 +790,7 @@ begin
     // "shownNote" en el mismo objeto (revision 27-sep-2026)
     if Pag.HayMas then
     begin
-      Return.AddPair('shownNote', MsgFmt(SN_LIST_CAPPED_FMT,
-        [Pag.Mostrados, Pag.Total, Pag.Siguiente]));
+      Return.AddPair('shownNote', Pag.NotaDeRecorte(SN_LIST_CAPPED_FMT));
       PorCarpeta.Report(Return);
     end;
     // Say WHICH, because "42 hidden" plus the wrong reason sends the reader
@@ -1408,8 +1406,7 @@ begin
     Pag.Report(Return);
     if Pag.HayMas then
     begin
-      Return.AddPair('note', MsgFmt(SN_PROJECTS_PAGE_FMT,
-        [Pag.Mostrados, Pag.Total, Pag.Siguiente]));
+      Return.AddPair('note', Pag.NotaDeRecorte(SN_PROJECTS_PAGE_FMT));
       // Las 10 carpetas que mas acumulan, ordenadas: con esto el agente elige
       // "root" y deja de pasear paginas de cosas que no son suyas.
       PorCarpeta.Report(Return);
