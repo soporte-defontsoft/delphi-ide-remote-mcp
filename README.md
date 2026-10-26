@@ -1,6 +1,6 @@
 # Delphi IDE Remote MCP Server
 
-[![Latest release](https://img.shields.io/badge/download-v1.22.1-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v1.23.0-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ![Delphi IDE Remote MCP — RAD Studio as a remote backend for AI programming agents: any MCP client on one side, Windows/Linux/Android test targets on the other, one workspace-jailed server in the middle](docs/media/hero.webp)
@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: latest 1.22.1 (published today, validated by its batteries and, before the release, by Claude Opus 5.5 and Qwen3.8 Flash Next through Hermes on a second machine: a directed test of what is new, a full test of every tool, a free exploration of the whole server and three rounds over what was fixed); stable 1.22.0.** Covered by 272 end-to-end batteries — 6,893 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: latest 1.23.0 (published today, validated by its batteries and, before the release, through Hermes on a second machine by Claude Opus 5.5 - a full test of every tool - and Qwen3.8 Flash Next - a directed test of what is new); stable 1.22.1.** Covered by 298 end-to-end batteries — 7,452 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 

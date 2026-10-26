@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-23 (current release v1.22.1; 42 tools).
+Status page as of 2026-10-26 (current release v1.23.0; 42 tools).
 
 ## Delivered
 
@@ -21,15 +21,15 @@ Status page as of 2026-10-23 (current release v1.22.1; 42 tools).
 - `rename_symbol mode=apply` (1.0.17)
 - HTTP session TTL (1.0.17)
 - Bounded per-client notification queue (200)
-- Dead keys and key modifiers on the desktop node; the `delphi_adb_linux` alias retired; unit rename follows into every unit and qualified reference; DUnitX failures listed; the engine's warm-up told apart from "not a symbol" (1.1.0)
+- Dead keys and key modifiers on the desktop node; the `delphi_adb_linux` alias retired; unit rename follows into every unit and qualified reference (superseded in 1.23: the unit rename is retired - a move touches only what is named, and `fix-references` re-points); DUnitX failures listed; the engine's warm-up told apart from "not a symbol" (1.1.0)
 - Designer binary `.dfm` read on the fly, and `to-text` / `to-binary` conversion (1.1.2)
 - `delphi_create kind=project-test` and the engine's own DUnitX suite (1.2.0)
 - Reference projects: `[Workspace.<name>] ReadOnlyRoots=` (1.3.0)
 - `delphi_git worktree` (1.4.0)
 - `delphi_paserver command=output` for a `remote-run` job (1.5.0)
-- `delphi_move` re-points relative paths across the border; `delphi_config` on a `.groupproj` (`add-project` / `remove-project`); `fix-references`; standalone sources in `delphi_create` (1.6.0)
+- `delphi_move` re-points relative paths across the border (superseded in 1.23: it moves as an operator does and the answer names what crosses the border, `MOVE-023`); `delphi_config` on a `.groupproj` (`add-project` / `remove-project`); `fix-references`; standalone sources in `delphi_create` (1.6.0)
 - Every message tagged with its outcome from one catalog, the server in English, and ten review rounds of all or nothing, the jail and the contract (1.7.0)
-- The changeset preview rehearses with the engines; a unit move whose project cannot be re-pointed is all or nothing (`MOVE-019`); `docs/TOOLS.md` contract blocks generated from `tools/list`; one access table that the gate consults and `tools/list` announces (`annotations.readOnlyHint`, `_meta.access`); `clean` for domain verdicts; long paths refused honestly (1.7.1-1.7.3)
+- The changeset preview rehearses with the engines; a unit move whose project cannot be re-pointed is all or nothing (`MOVE-019`; superseded in 1.23 with the re-pointing itself); `docs/TOOLS.md` contract blocks generated from `tools/list`; one access table that the gate consults and `tools/list` announces (`annotations.readOnlyHint`, `_meta.access`); `clean` for domain verdicts; long paths refused honestly (1.7.1-1.7.3)
 
 - The life of the engines: asked to `shutdown` before their input is closed and launched so that no child can open an error dialog (1.7.10); stopped when nobody uses them for `[Server] EngineIdleMinutes`, and stopped and replaced when they hang (1.8.0)
 - `delphi_docs`: the RAD Studio help installed with Delphi, searched and read in pieces - the list of help files is the IDE's own (1.10.0)
@@ -55,6 +55,8 @@ Status page as of 2026-10-23 (current release v1.22.1; 42 tools).
 - A project of the IDE builds through the server the way the IDE builds it: the build gate judging only what the requested platform and configuration read, evaluating the groups of the `.dproj` as msbuild does, and a macro that expands to a list judged piece by piece (a real FMX project with an Android keystore outside the roots and the IDE's package list built for Windows and Linux on two machines); `delphi_config set-property` / `remove-property` / `get-property`, one property of the `.dproj` by name in the group of a build, written where the IDE writes it, on one reader and one writer of a project property; and a search path written with Windows' extended-path prefix judged like any other (1.22.0)
 
 - The patch of 1.22: accents wherever an agent reads or points - the position tools on a line with accents, the failure messages of `delphi_test`, `delphi_git diff`/`show` of a source in the machine's ANSI code page -; `delphi_designer insert`/`set` writing what the IDE's own writer stores, and saying when it is not what was given; the build gate resolving a search path the way msbuild and `dcc` do; and a new project property written where the IDE writes it (1.22.1)
+
+- The cleanup of 1.23: one rule where there were several. Files move, copy and delete as an operator does (only what is named, never overwriting, a folder that exists merged into, `Form1.*`), with a note of what crosses the border instead of rewriting projects; the jail comparing paths as the filesystem does; holes of the published 1.22.1 closed (a unit read through the main source's `in`, a profile and a move's note telling what exists outside the roots, a deploy command reaching the build); the server's house cleaning up a folder a test left locked; a copy taking a project and a whole repository
 
 ## Next
 
