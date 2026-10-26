@@ -880,7 +880,7 @@ begin
         var DD := IncludeTrailingPathDelimiter(TPath.GetFullPath(D));
         var Covered := False;
         for var K in Dirs do
-          if StartsText(K, DD) then
+          if RutaDentroDe(K, DD) then // EL juez de rutas (H1 de la 1.23)
           begin
             Covered := True;
             Break;
@@ -899,7 +899,7 @@ begin
         var SD := IncludeTrailingPathDelimiter(TPath.GetFullPath(Sib));
         var Have := False;
         for var K in Dirs do
-          if StartsText(K, SD) then
+          if RutaDentroDe(K, SD) then
           begin
             Have := True;
             Break;

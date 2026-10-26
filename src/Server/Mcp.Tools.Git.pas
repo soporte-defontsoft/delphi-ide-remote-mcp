@@ -209,7 +209,8 @@ begin
     except
       Ruta := '';
     end;
-    if (Ruta = '') or not StartsText(Base, IncludeTrailingPathDelimiter(Ruta)) then
+    // dentro del repo, por EL juez de rutas (el del sistema de ficheros, H1 de la 1.23)
+    if (Ruta = '') or not RutaDentroDe(Base, Ruta) then
       Exit(MsgFmt(SR_GIT_STASH_RUTA_FMT, [AComando, ALista[I], ARepo]));
     // Devolver un fichero a HEAD es ESCRIBIRLO: la pregunta de todo
     // escritor, por la ruta real de cada uno.
@@ -1071,7 +1072,7 @@ begin
     // con raiz (C:\..., \\servidor, \...) es de dentro solo si cuelga del arbol
     if ((Length(Fuente) >= 2) and (Fuente[2] = ':')) or Fuente.StartsWith('\') then
     begin
-      if StartsText(IncludeTrailingPathDelimiter(ARaiz), Fuente) then
+      if RutaDentroDe(ARaiz, Fuente) then
         Fuente := Fuente.Substring(Length(IncludeTrailingPathDelimiter(ARaiz)))
       else
         Fuente := '';
@@ -2058,8 +2059,7 @@ begin
         var RaizReal := SinBarraFinal(RealPath(Raiz));
         var DestinoReal := SinBarraFinal(RealPath(Destino));
         if (Raiz <> '') and
-           (SameText(DestinoReal, RaizReal) or
-            StartsText(IncludeTrailingPathDelimiter(RaizReal), DestinoReal)) then
+           RutaDentroDe(RaizReal, DestinoReal) then // dentro o el mismo (H1 de la 1.23)
           Exit(MsgFmt(SR_GIT_WORKTREE_INSIDE_FMT, [Raiz]));
         // por el compositor de la casa, los dos: una revision con un blanco
         // que rev-parse admite se partia en dos argumentos (A2 del cierre)

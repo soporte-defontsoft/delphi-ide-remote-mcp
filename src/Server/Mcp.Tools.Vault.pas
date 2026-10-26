@@ -304,7 +304,9 @@ begin
     Exit(MsgText(SR_VAULT_JAIL));
   end;
   // Belt and braces: whatever the input did, the result must live in the vault.
-  if not StartsText(IncludeTrailingPathDelimiter(Root), Full) then
+  // por EL juez de rutas (el del sistema de ficheros, H1 de la 1.23), DENTRO y no
+  // la raiz misma: el juez dice "dentro o es", y una nota no es la carpeta del vault
+  if not RutaDentroDe(Root, Full) or SameFileName(SinBarraFinal(Full), SinBarraFinal(Root)) then
     Exit(MsgText(SR_VAULT_JAIL));
   // ...y por la ruta REAL: un enlace dentro del vault no saca la nota fuera.
   // Nada fuera de su sitio se escribe, por ningun camino (norma de David,
@@ -322,7 +324,7 @@ begin
       var RaizLarga := IncludeTrailingPathDelimiter(
         LongCanonical(SinBarraFinal(Root)));
       var Largo := LongCanonical(Full);
-      if not StartsText(RaizLarga, Largo) then
+      if not RutaDentroDe(RaizLarga, Largo) or SameFileName(SinBarraFinal(Largo), SinBarraFinal(RaizLarga)) then
         Exit(MsgText(SR_VAULT_JAIL));
       Rel := Largo.Substring(Length(RaizLarga));
       Full := IncludeTrailingPathDelimiter(Root) + Rel;

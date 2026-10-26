@@ -55,7 +55,8 @@ uses
   Lsp.Discovery,
   Lsp.Dproj,
   Lsp.Guard, // ParametroQueNoVa: lo que no va con el modo, como en las hermanas
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Rutas;
 
 { Apunta que la carpeta AClave la registra la plataforma APlat (las
   plataformas, 'Win32, Win64'). La vista por plataforma lo escribia a mano y
@@ -123,7 +124,7 @@ var
     M: string;
   begin
     for M in Mine do
-      if StartsText(IncludeTrailingPathDelimiter(M), IncludeTrailingPathDelimiter(ARoot)) then
+      if RutaDentroDe(M, ARoot) then // EL juez de rutas (H1 de la 1.23)
         Exit(True);
     Result := False;
   end;
@@ -164,8 +165,8 @@ begin
         // the IDE's own trees (install, user and common documents) are not
         // components, and a root already under one of THIS platform's
         // registered folders is already reachable
-        if StartsText(IncludeTrailingPathDelimiter(AInfo.RootDir), Root) or
-           SameText(Root, UserDocs) or SameText(Root, CommonDocs) or
+        if RutaDentroDe(AInfo.RootDir, Root) or
+           SameFileName(Root, UserDocs) or SameFileName(Root, CommonDocs) or
            UnderMine(Root) then
           Continue;
         AnotaPlataforma(Missing, Root, Other);

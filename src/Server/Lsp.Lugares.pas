@@ -780,7 +780,12 @@ begin
   for var R in Raices do
     for var FR in FormasDeUnaRuta(R) do
       for var F in Casa do
-        if (Length(FR) > Length(F)) and RutaDentroDe(F, FR) then
+        // un prefijo de TEXTO, a proposito: el enmascarador cambia prefijos de
+        // texto, y una raiz que EMPIEZA como la casa ('srvv x' junto a 'srvv') es
+        // aguja de si misma. Comparado como el sistema de ficheros (SameFileName
+        // sobre el trozo), no con la barra de RutaDentroDe, que la dejaba fuera
+        // y la raiz vecina salia '<server> x' (C6 de test_mascara_casa_1182)
+        if (Length(FR) > Length(F)) and SameFileName(Copy(FR, 1, Length(F)), F) then
         begin
           ADeSiMismas := ADeSiMismas + [FR];
           Break;

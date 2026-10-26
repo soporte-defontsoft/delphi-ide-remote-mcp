@@ -129,7 +129,8 @@ uses
   System.StrUtils,
   Lsp.NetDrives, // SinBarraFinal
   Lsp.Mascara,   // MaskDriveText
-  Lsp.Texts;     // MsgFmt: la nota del recorte
+  Lsp.Texts,     // MsgFmt: la nota del recorte
+  Lsp.Rutas;
 
 { TPagina }
 
@@ -202,11 +203,12 @@ var
 begin
   Carpeta := SinBarraFinal(TPath.GetDirectoryName(AFichero));
   Raiz := SinBarraFinal(ARaiz);
-  if SameText(Carpeta, Raiz) then
+  // por EL juez de rutas (el del sistema de ficheros, H1 de la 1.23)
+  if SameFileName(Carpeta, Raiz) then
     // en la propia raiz: decia la raiz recortada a dos segmentos y parecia
     // OTRA carpeta
     Rel := '.'
-  else if StartsText(IncludeTrailingPathDelimiter(Raiz), Carpeta) then
+  else if RutaDentroDe(Raiz, Carpeta) then
   begin
     Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(Raiz)));
     var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);

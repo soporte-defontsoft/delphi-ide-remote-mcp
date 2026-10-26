@@ -1283,7 +1283,7 @@ begin
     U.Clave := ClaveDeIdentificador(Decl.Nombre);
     U.Ruta := C.Ruta;
     U.Orden := C.Orden;
-    if StartsText(FRaizBds, C.Ruta) then
+    if RutaDentroDe(FRaizBds, C.Ruta) then // EL juez de rutas (H1 de la 1.23)
       U.Prioridad := 0
     else
       U.Prioridad := 1;

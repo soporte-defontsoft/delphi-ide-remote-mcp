@@ -829,7 +829,7 @@ begin
   if Common = '' then
     Exit;
   Shared := PrefijoSinBarra(TPath.GetSharedDocumentsPath);
-  if StartsText(IncludeTrailingPathDelimiter(Shared), Common) then
+  if RutaDentroDe(Shared, Common) then // EL juez de rutas (H1 de la 1.23)
     Result := TPath.Combine(TPath.GetDocumentsPath,
       Common.Substring(Length(Shared) + 1));
 end;

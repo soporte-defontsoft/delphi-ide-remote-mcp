@@ -1129,7 +1129,7 @@ begin
         var Full := IncludeTrailingPathDelimiter(R);
         var Found := -1;
         for var I := 0 to Tops.Count - 1 do
-          if StartsText(Tops[I], Full) then
+          if RutaDentroDe(Tops[I], Full) then // EL juez de rutas (H1 de la 1.23)
           begin
             Found := I;
             Break;
@@ -1140,7 +1140,7 @@ begin
         begin
           // a new candidate may itself be the parent of already-listed ones
           for var I := Tops.Count - 1 downto 0 do
-            if StartsText(Full, Tops[I]) then
+            if RutaDentroDe(Full, Tops[I]) then
             begin
               Counts[Tops.Count - 1] := 0; // placeholder, fixed below
               Tops.Delete(I);
@@ -1312,7 +1312,7 @@ begin
     begin
       var Dentro := False;
       for var Rz in Unicas do // solo las raices que siguen vivas: una en los dos sitios entra como referencia
-        if StartsText(IncludeTrailingPathDelimiter(Rz), IncludeTrailingPathDelimiter(Rf)) then
+        if RutaDentroDe(Rz, Rf) then // EL juez de rutas (H1 de la 1.23)
           Dentro := True;
       if not Dentro then
         Unicas := Unicas + [Rf];

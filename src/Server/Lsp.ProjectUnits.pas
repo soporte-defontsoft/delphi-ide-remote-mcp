@@ -3280,8 +3280,8 @@ end;
 
 function DentroDe(const ARuta, AArbol: string): Boolean;
 begin
-  Result := StartsText(IncludeTrailingPathDelimiter(NormPath(AArbol)),
-    IncludeTrailingPathDelimiter(NormPath(ARuta)));
+  // por EL juez de rutas (el del sistema de ficheros, H1 de la 1.23)
+  Result := RutaDentroDe(NormPath(AArbol), NormPath(ARuta));
 end;
 
 { La ruta nueva de AValor (relativa a ABaseVieja, visto desde AFicheroNuevo)

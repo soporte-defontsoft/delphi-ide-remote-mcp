@@ -234,11 +234,12 @@ try:
           mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.abre(r2, 'SK_MOVE_MOVIDO_FMT') and
           sorted(n for n in os.listdir(os.path.join(C, 'may')) if n != mc.PAPELERA) == ['ABC.txt', 'CARPETA'] and
           os.listdir(os.path.join(C, 'may', 'CARPETA')) == ['dentro.txt'], (r[:200], r2[:200]))
-    escribe(os.path.join(C, 'may', 'niño.txt'))
-    r3 = srv.call('delphi_move', {'path': os.path.join(C, 'may', 'niño.txt'),
-                                  'dest': os.path.join(C, 'may', 'NIÑO.txt')})
+    # (con escapes: el fichero sigue en ASCII)
+    escribe(os.path.join(C, 'may', 'ni\xf1o.txt'))
+    r3 = srv.call('delphi_move', {'path': os.path.join(C, 'may', 'ni\xf1o.txt'),
+                                  'dest': os.path.join(C, 'may', 'NI\xd1O.txt')})
     check('C4 con tilde: renombrar solo la caja de una letra acentuada (ene con tilde): MOVED, no FILE-025/MOVE-009 (SameText no plegaba la acentuada; ROJO contra r1222ci)',
-          mc.abre(r3, 'SK_MOVE_MOVIDO_FMT') and 'NIÑO.txt' in os.listdir(os.path.join(C, 'may')), r3[:300])
+          mc.abre(r3, 'SK_MOVE_MOVIDO_FMT') and 'NI\xd1O.txt' in os.listdir(os.path.join(C, 'may')), r3[:300])
     escribe(os.path.join(C, 'par', 'UFicha.pas'), 'unit UFicha;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
     escribe(os.path.join(C, 'par', 'UFicha.dfm'), 'object FormUFicha: TFormUFicha\nend\n')
     r = srv.call('delphi_move', {'path': os.path.join(C, 'par', 'UFicha.pas'),
