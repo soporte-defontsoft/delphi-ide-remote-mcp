@@ -1409,6 +1409,9 @@ const
     '[LIST-007] %d are folders of other tools (.vs, .github, ' +
     '.idea...), which dirs mode does not show: pass one as root to ' +
     'see inside';
+  SN_HIDDEN_VAULT_FMT =
+    '[LIST-016] %d are notes of the knowledge vault: vault_read and ' +
+    'vault_search show them';
 
   { Las marcas de dueno (.by) se cuentan aparte: la nota las llamaba
     "live files" (octava revision). }
@@ -10861,7 +10864,7 @@ const
 
   SP_WS_DIR =
     'Directory to package (e.g. the build output Win64\Debug). ' +
-    'Recursive; *.dcu and dcu\ intermediates excluded';
+    'Recursive; *.dcu, dcu\ and the IDE''s __history/__recovery excluded';
 
   SP_WS_OUTFILE =
     'Optional zip path, ending in .zip (default: sibling of dir, named ' +
@@ -10947,7 +10950,7 @@ const
 
   SD_WS_PACKAGE =
     'Zip a build-output directory ON the server into a single deploy ' +
-    'artifact (recursive, *.dcu intermediates excluded), ready to ' +
+    'artifact (recursive; *.dcu and the IDE''s __history excluded), ready to ' +
     'download with ONE delphi_fetch. The standard way to bring a GUI app ' +
     'to the client machine: delphi_build -> delphi_package -> ' +
     'delphi_fetch.';

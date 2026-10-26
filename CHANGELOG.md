@@ -123,6 +123,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A dangling link can be deleted and moved.** A junction whose target was
+  gone answered `SYS-012` "does not exist" to `delphi_delete` and `FILE-024`
+  to `delphi_move` - existence was asked by following the link - and no tool
+  could remove it; only the purge of the trash knew (2y of 1.18.2). Whether an
+  entry is there is now asked of the name itself, a dangling link too, in one
+  place, and the link goes to the trash or to its new name as a link
+  (`tests/test_purga_enlace_colgante_1182.py`, Y3-Y4).
+- **`delphi_list` and `delphi_search` count the vault notes they hide.** A
+  knowledge vault inside a root was skipped without a word, although the
+  description says hidden entries are counted (`delphi_projects` already did):
+  now `hiddenVault` and `LIST-016`, which names the tools that show them
+  (`tests/test_vault.py`).
+- **`delphi_package` leaves out the IDE's `__history` and `__recovery`.** Old
+  versions of the sources went into the deliverable; the description now says
+  so too (`tests/test_round17.py`, R7b).
 - **A folder a test leaves born locked no longer stays undeletable in the
   server's house.** A test can create a folder with an empty, protected DACL in
   the `CreateDirectory` call itself (no `WRITE_DAC` needed), which denies

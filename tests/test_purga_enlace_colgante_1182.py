@@ -9,6 +9,10 @@ siempre. El juez es el atributo del propio nombre (EsEnlace).
   Y1 purgar el enlace colgante de la papelera: se va (ROJO en produccion: SYS-012)
   Y2 control: purgar un enlace VIVO de la papelera quita el enlace y NO toca lo
      de detras (el fichero del destino sigue)
+  Y3 borrar un enlace colgante que NO esta en la papelera: va a ella como
+     enlace (SYS-012 "does not exist" y se quedaba: H10 de la revision del
+     paisaje de Fable, 26-oct-2026, ROJO contra r1222ch)
+  Y4 ...y moverlo: se renombra el enlace (FILE-024, ROJO contra r1222ch)
 
 Uso:  python tests/test_purga_enlace_colgante_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -51,6 +55,21 @@ try:
         check('Y2 control: purgar un enlace VIVO quita el enlace y NO toca lo de detras',
               mc.abre(r, 'SN_FILE_PURGED_FMT') and c2 is not None and not os.path.lexists(c2) and
               os.path.exists(os.path.join(JAIL, 'd2', 'x.txt')), (r[:200], c2))
+        # Y3/Y4: colgantes VIVOS (fuera de la papelera), su destino ya borrado
+        for n in ('J3', 'J4'):
+            os.makedirs(os.path.join(JAIL, 'd' + n))
+            mc.junction(os.path.join(JAIL, n), os.path.join(JAIL, 'd' + n))
+            os.rmdir(os.path.join(JAIL, 'd' + n))
+        r = srv.call('delphi_delete', {'path': os.path.join(JAIL, 'J3')})
+        c3 = copia_de(r)
+        check('Y3 borrar un enlace COLGANTE vivo: a la papelera como enlace (no SYS-012)',
+              mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.lexists(os.path.join(JAIL, 'J3')) and
+              c3 is not None and os.path.lexists(c3) and not os.path.exists(c3), (r[:200], c3))
+        r = srv.call('delphi_move', {'path': os.path.join(JAIL, 'J4'), 'dest': os.path.join(JAIL, 'J4b')})
+        check('Y4 ...y moverlo: se renombra el enlace (no FILE-024)',
+              mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and not os.path.lexists(os.path.join(JAIL, 'J4')) and
+              os.path.lexists(os.path.join(JAIL, 'J4b')) and not os.path.exists(os.path.join(JAIL, 'dJ4')),
+              r[:200])
 finally:
     srv.cierra()
 

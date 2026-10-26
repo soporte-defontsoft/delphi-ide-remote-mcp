@@ -322,38 +322,8 @@ begin
     Result := EntradaDenegada(APath);
 end;
 
-{ La copia en la papelera de algo que al final no se hizo (un move que
-  fallo, el form de un borrado de unit que se deshizo), fuera: es nuestra y
-  recien hecha, y dejarla sumaba una copia por reintento; con su marca de
-  dueno y las carpetas que se crearon para ella (octava revision). Nunca
-  lanza. }
-{ Quita la marca de dueno (.by) de una copia de la papelera, si la tiene.
-  Nunca lanza: una marca que se queda es inofensiva. UNO: estaba a mano en
-  cuatro sitios (novena revision). }
-procedure QuitaMarcaDeDueno(const ACopia: string);
-begin
-  try
-    if TFile.Exists(MarcaDeDueno(ACopia)) then
-      TFile.Delete(MarcaDeDueno(ACopia));
-  except
-  end;
-end;
-
-procedure QuitaCopiaDeSeguridad(const ACopia, AAncestro: string);
-begin
-  if ACopia = '' then
-    Exit;
-  try
-    if TDirectory.Exists(ACopia) then
-      BorraArbol(ACopia)
-    else if TFile.Exists(ACopia) then
-      BorraLoNuestro(ACopia); // la copia de un +R es +R (decima revision)
-  except
-    // se queda: es una copia en la papelera, no hace dano
-  end;
-  QuitaMarcaDeDueno(ACopia);
-  QuitaCarpetasCreadas(ExtractFileDir(ACopia), AAncestro);
-end;
+// QuitaMarcaDeDueno y QuitaCopiaDeSeguridad viven en Lsp.Guard desde la 1.23:
+// Lsp.Patch las necesitaba y escribia la segunda a mano (H7 de Fable)
 
 procedure MoveToTrash(const APath: string; out ATrash, AAncestro: string); overload;
 var
@@ -384,6 +354,14 @@ begin
       // aqui solo: delphi_move siguio un mes con TDirectory.Move y se trajo a
       // la jaula y BORRO lo de detras de un junction (2026-09-25).
       MueveArbol(APath, ATrash)
+    else if EsEnlace(SinBarraFinal(APath)) then
+    begin
+      // un enlace COLGANTE (su destino se borro): se renombra su NOMBRE, como
+      // viaja todo enlace; TFile.Move preguntaba si existe SIGUIENDOLO y
+      // fallaba (H10 de la revision del paisaje de Fable). La puerta, arriba
+      if not MoveFile(PChar(SinBarraFinal(APath)), PChar(ATrash)) then
+        raise Exception.Create(MotivoDeRenombre(APath, GetLastError));
+    end
     else
       TFile.Move(APath, ATrash);
   except
@@ -459,10 +437,22 @@ begin
   end;
 end;
 
-{ Whether anything is still standing where the caller asked us to delete. }
+{ Whether anything is still standing where the caller names: a file, a folder
+  or a LINK, a dangling one too (its target went: it exists as a NAME, and the
+  judge is the name's own attribute, EsEnlace). EL juez de "esta la entrada"
+  de delphi_delete y delphi_move: la purga lo escribia a mano (2y de la 1.18.2)
+  y el borrado y el move, sin el enlace, contestaban SYS-012 / FILE-024 de una
+  junction colgante que asi no habia forma de quitar (H10 de la revision del
+  paisaje de Fable, medido el 26-oct-2026). }
 function StillThere(const APath: string): Boolean;
 begin
   Result := TFile.Exists(APath) or TDirectory.Exists(APath);
+  if not Result then
+    try
+      Result := EsEnlace(SinBarraFinal(TPath.GetFullPath(APath)));
+    except
+      Result := False; // un texto que no es ruta no nombra nada
+    end;
 end;
 
 { Lo que queda dentro de una carpeta que no se dejo borrar, para decirlo:
@@ -650,8 +640,7 @@ begin
     // existencia se preguntaba siguiendo el enlace, contestaba SYS-012 y el
     // enlace se quedaba en la papelera para siempre (2y de la 1.18.2, medido
     // en produccion). El juez es el atributo del propio nombre (EsEnlace)
-    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path) or
-            EsEnlace(SinBarraFinal(TPath.GetFullPath(Params.Path)))) then
+    if not StillThere(Params.Path) then
       Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
     var CanonPurge := LongCanonical(Params.Path);
     if EsMarcaDeDueno(CanonPurge) then
@@ -712,7 +701,7 @@ begin
   begin
     if IsBackupPath(Params.Path) then
       Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [TrashFolderName]));
-    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
+    if not StillThere(Params.Path) then // tambien un enlace colgante (H10)
       Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
     Rutas := [Params.Path];
   end;
@@ -1031,7 +1020,7 @@ begin
   end
   else
   begin
-    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
+    if not StillThere(Params.Path) then // tambien un enlace colgante (H10)
       Exit(MsgFmt(SR_FILE_NO_EXISTE_ORIGEN_FMT, [Params.Path]));
     // un FICHERO que va a una ruta con separador final: esa ruta nombra una
     // CARPETA, y dest es el NUEVO nombre (GUARD-025; octava revision)

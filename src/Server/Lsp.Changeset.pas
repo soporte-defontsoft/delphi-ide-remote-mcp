@@ -327,7 +327,10 @@ begin
   // La puerta OTRA VEZ al aplicar, para cada operacion: entre stage y
   // commit pasan hasta 30 minutos, y un camino puede haber cambiado (un
   // junction nuevo, las raices). Solo las ediciones lo volvian a mirar
-  // (auditoria 25-sep-2026). La misma pregunta que los escritores.
+  // (auditoria 25-sep-2026). Se repite lo que DEPENDE DEL DISCO (la jaula sobre
+  // la ruta real, la carpeta real de una entrada); lo que se juzga por el TEXTO
+  // de la ruta (las carpetas muertas, la ruta larga: WriteTargetDenied al
+  // apilar) no cambia entre apilar y aplicar, y no se repite (H3 de Fable).
   // borrar y mover quitan o ponen una ENTRADA: la carpeta real que la contiene
   // (EntradaDenegada); la ruta real del fichero sola dejaba pasar un enlace de
   // vuelta dentro en una carpeta que es una union afuera, y TFile.Delete/Move

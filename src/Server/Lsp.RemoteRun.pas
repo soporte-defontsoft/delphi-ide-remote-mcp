@@ -195,6 +195,9 @@ var
 
 const
   POLL_MS = 1500;
+  // la subcarpeta de la casa del servidor de los guiones de remote-run: UNA,
+  // estaba a mano en tres sitios (H9 de la revision del paisaje de Fable)
+  REMOTERUN_SUB = 'remoterun';
 
 function PaClientPath: string;
 var
@@ -586,7 +589,7 @@ begin
   ApuntaTrabajo(JobId, AProfile, ADprojPath);
   // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a
   // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Casa).
-  TmpDir := ServerTempDir('remoterun');
+  TmpDir := ServerTempDir(REMOTERUN_SUB);
   CrearCarpeta(TmpDir);
   // El lanzador del sistema del destino, con el nombre del trabajo: PAServer
   // arranca un ELF con flag 3 y un PE con flag 5 (y en Windows lo borra al
@@ -772,7 +775,7 @@ begin
   end;
   // la misma carpeta que deriva remote-run: la del proyecto, nunca otra
   DeployRel := TPath.GetFileNameWithoutExtension(ADprojPath);
-  TmpDir := ServerTempDir('remoterun');
+  TmpDir := ServerTempDir(REMOTERUN_SUB);
   CrearCarpeta(TmpDir);
   Texto := '';
   Entorno := '';
@@ -881,7 +884,7 @@ begin
   // (node.ver), asi que con un destino comun la comprobacion de un perfil se
   // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
   // sello del contrario (analisis de concurrencia 2026-09-20).
-  TmpDir := TPath.Combine(ServerTempDir('remoterun'), 'ver-' +
+  TmpDir := TPath.Combine(ServerTempDir(REMOTERUN_SUB), 'ver-' +
     FragmentoUnico);
   CrearCarpeta(TmpDir);
   // el sello del target: ausente = nodo de antes de los sellos (o ninguno)

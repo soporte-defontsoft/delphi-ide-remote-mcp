@@ -427,7 +427,10 @@ REGLAS = [
      'algo del registro del IDE pregunta a su vigia, ni relee por llamada ni cachea para siempre'),
     # los asientos de SDKs y perfiles se pisaban y se borraban sin copia, cada uno con su
     # TRegistry de escribir en Mcp.Tools.PAServer (V10 de la 1.23, 24-oct-2026)
-    ('escribir el registro', r'\bTRegistry\.Create\s*\([^)]*KEY_(?:WRITE|ALL_ACCESS)|\.DeleteKey\s*\(|'
+    # un TRegistry.Create sin acceso abre con KEY_ALL_ACCESS (el de la RTL): tambien escribe (H13 de
+    # la revision del paisaje de Fable, 26-oct-2026)
+    ('escribir el registro', r'\bTRegistry\.Create\s*\([^)]*KEY_(?:WRITE|ALL_ACCESS)|\bTRegistry\.Create\s*(?:;|\(\s*\))|'
+                             r'\.DeleteKey\s*\(|'
                              r'\bReg(?:SetValue|DeleteKey|DeleteValue|CreateKey)\w*\s*\(',
      [('Lsp.Patch.pas', 'EscribeClaveDelIde'), ('Lsp.Patch.pas', 'BorraClaveDelIde'),
       # la clave del propio servicio al instalarlo (la del operador, con permisos de admin)
@@ -437,15 +440,22 @@ REGLAS = [
     # escribir la seguridad de un fichero vive en UNA casa, ReclamaDaclHeredada: le da -como UN
     # objeto, SIN propagar (SetFileSecurity, no SetNamedSecurityInfo, que recorreria el arbol)- una
     # DACL protegida con una sola ACE para el dueno; el barrido de la casa la borra (V9 de la 1.23)
-    ('escribir la seguridad de un fichero',
-     r'\b(?:SetFileSecurity|SetNamedSecurityInfo|SetKernelObjectSecurity|SetSecurityInfo)\w*\s*\(',
+    # (la familia entera, tambien la que recorre el arbol -Tree*- y la de los objetos de USER y del
+    # nucleo: H13 de la revision del paisaje de Fable, 26-oct-2026)
+    ('escribir la seguridad de un objeto',
+     r'\b(?:SetFileSecurity|SetNamedSecurityInfo|SetKernelObjectSecurity|SetSecurityInfo|'
+     r'TreeSetNamedSecurityInfo|TreeResetNamedSecurityInfo|SetUserObjectSecurity|'
+     r'SetPrivateObjectSecurity|NtSetSecurityObject)\w*\s*\(',
      [('Lsp.Guard.pas', 'ReclamaDaclHeredada'),
       # el SDDL del contenedor de delphi_test, otro escritor de seguridad conocido (ya existia)
-      ('Lsp.Sandbox.pas', 'PonDescriptor')],
+      ('Lsp.Sandbox.pas', 'PonDescriptor'),
+      # el permiso del contenedor sobre la estacion y el escritorio (USER), al lanzarlo
+      ('Lsp.Sandbox.pas', 'ActualizaPermisoDeVentanas')],
      'ReclamaDaclHeredada (Lsp.Guard, V9): el reclamo de una carpeta nacida cerrada en la casa, UNA '
      'ACE para el dueno, SIN propagar (SetFileSecurity, no SetNamedSecurityInfo, que recorre el arbol). '
-     'Y PonDescriptor (Lsp.Sandbox): el SDDL del contenedor de delphi_test. Son los dos unicos sitios '
-     'que escriben la seguridad de un fichero; uno nuevo se revisa aqui'),
+     'Y en Lsp.Sandbox, PonDescriptor (el SDDL del contenedor de delphi_test) y ActualizaPermisoDeVentanas '
+     '(su permiso sobre la estacion y el escritorio). Son los tres unicos sitios que escriben la '
+     'seguridad de un objeto; uno nuevo se revisa aqui'),
     # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
     # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
     # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
@@ -935,7 +945,9 @@ REGLAS = [
       # la carpeta del origen que la mezcla acaba de vaciar (RemoveDir: solo vacia)
       ('Lsp.Guard.pas', 'MezclaArbol'),
       ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
-      ('Mcp.Tools.FileOps.pas', 'QuitaMarcaDeDueno'), ('Mcp.Tools.FileOps.pas', 'QuitaCopiaDeSeguridad'),
+      # la copia recien hecha que no se uso y su marca: UNA, en Lsp.Guard desde la 1.23 (vivia en
+      # FileOps y Lsp.Patch la escribia a mano: H7 de la revision del paisaje de Fable)
+      ('Lsp.Guard.pas', 'QuitaMarcaDeDueno'), ('Lsp.Guard.pas', 'QuitaCopiaDeSeguridad'),
       ('Mcp.Tools.FileOps.pas', 'BorraDeVerdad'), ('Mcp.Tools.FileOps.pas', 'RecogeVacias'),
       ('Mcp.Tools.FileOps.pas', 'BorrarNucleo'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
       # la cuarentena de una subida y el zip a medias de delphi_package: de la jaula,
@@ -1323,7 +1335,7 @@ PLANTADO = {
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
-    'escribir la seguridad de un fichero': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
+    'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'la linea de fallo del nodo': "      Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",

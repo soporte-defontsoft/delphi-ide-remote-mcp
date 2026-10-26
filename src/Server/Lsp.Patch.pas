@@ -1819,16 +1819,9 @@ begin
     try
       SustituyePorRenombre(Tmp, ADestino); // si falla, borra el temporal
     except
-      // la copia sellada de algo que no se sustituyo no se queda
-      if Copia <> '' then
-      begin
-        try
-          BorraLoNuestro(Copia);
-          if TFile.Exists(MarcaDeDueno(Copia)) then
-            BorraLoNuestro(MarcaDeDueno(Copia));
-        except
-        end;
-      end;
+      // la copia sellada de algo que no se sustituyo no se queda (EL
+      // quitador de Lsp.Guard, con su marca; H7 de Fable)
+      QuitaCopiaDeSeguridad(Copia, '');
       raise;
     end;
     Tmp := '';

@@ -488,13 +488,13 @@ TESTS: the difference between "it compiles" and "it works". discover (path = a f
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Zip a build-output directory ON the server into a single deploy artifact (recursive, *.dcu intermediates excluded), ready to download with ONE delphi_fetch. The standard way to bring a GUI app to the client machine: delphi_build -> delphi_package -> delphi_fetch.
+Zip a build-output directory ON the server into a single deploy artifact (recursive; *.dcu and the IDE's __history excluded), ready to download with ONE delphi_fetch. The standard way to bring a GUI app to the client machine: delphi_build -> delphi_package -> delphi_fetch.
 
 *Access: read-write (refused to a read-only credential).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `dir` | string | **yes** | Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu and dcu\ intermediates excluded |
+| `dir` | string | **yes** | Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu, dcu\ and the IDE's __history/__recovery excluded |
 | `outfile` | string | optional | Optional zip path, ending in .zip (default: sibling of dir, named \<dirname>-deploy.zip). An existing .zip there is replaced. Must be inside the workspace roots |
 <!-- /contract -->
 

@@ -29,7 +29,7 @@
 
 Usage:  python tests/test_round17.py [path-to-DelphiLspMcp.exe]
 """
-import json, time, os
+import json, time, os, zipfile
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -178,6 +178,11 @@ check('R6b search.offset dice que recorre la lista COMPLETA',
 sub = os.path.join(BASE, 'paquete')
 os.makedirs(sub)
 open(os.path.join(sub, 'a.txt'), 'w').write('x' * 100)
+# R7b: las copias muertas del IDE (__history, __recovery) no van en un entregable
+# (entraban en el zip: H11 de la revision del paisaje de Fable, 26-oct-2026)
+for muerta in ('__history', '__recovery'):
+    os.makedirs(os.path.join(sub, muerta))
+    open(os.path.join(sub, muerta, 'a.txt.~1~'), 'w').write('vieja\n')
 r = call('delphi_package', {'dir': sub})
 body = json.loads(r.get('content', [{}])[0].get('text', '{}'))
 nc = body.get('nextCall', {})
@@ -185,6 +190,12 @@ check('R7 package devuelve nextCall exacto para delphi_fetch',
       nc.get('tool') == 'delphi_fetch' and
       nc.get('arguments', {}).get('path') == body.get('zip') and
       body.get('zip', '').endswith('-deploy.zip'), body)
+try:
+    nombres = zipfile.ZipFile(mc.real(body.get('zip', ''))).namelist()
+except Exception as e:
+    nombres = ['ERROR %s' % e]
+check('R7b package deja fuera las copias muertas del IDE (__history, __recovery)',
+      'a.txt' in nombres and not any('__history' in n or '__recovery' in n for n in nombres), nombres)
 
 srv.mata()
 mc.fin('round-17 battery')

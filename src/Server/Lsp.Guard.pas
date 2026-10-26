@@ -844,6 +844,20 @@ procedure QuitaSoloLectura(const APath: string);
   TFile.Delete; quien llama ya paso la puerta de escritura. }
 procedure BorraLoNuestro(const APath: string);
 
+{ Quita la marca de dueno (.by) de una copia de la papelera, si la tiene.
+  Nunca lanza: una marca que se queda es inofensiva. UNO: estaba a mano en
+  cuatro sitios (novena revision). }
+procedure QuitaMarcaDeDueno(const ACopia: string);
+
+{ La copia en la papelera de algo que al final no se hizo (un move que
+  fallo, el producto que no se sustituyo), fuera: es nuestra y recien hecha,
+  y dejarla sumaba una copia por reintento; con su marca de dueno y las
+  carpetas que se crearon para ella hasta AAncestro ('' = ninguna; octava
+  revision). Nunca lanza. UNA: vivia en Mcp.Tools.FileOps y Lsp.Patch
+  (ColocaProducto) la escribia a mano, sin las carpetas (H7 de la revision del
+  paisaje de Fable, 26-oct-2026). }
+procedure QuitaCopiaDeSeguridad(const ACopia, AAncestro: string);
+
 { Copia un fichero PARA el agente (copy=true de una unit, de su designer o
   de una carpeta): la copia es suya y no hereda el atributo de solo lectura
   del original - heredado, la reescritura de la cabecera caia en SYS-029 y
@@ -1880,6 +1894,31 @@ end;
 procedure BorraLoNuestro(const APath: string);
 begin
   BorraNombre(APath);
+end;
+
+procedure QuitaMarcaDeDueno(const ACopia: string);
+begin
+  try
+    if TFile.Exists(MarcaDeDueno(ACopia)) then
+      BorraLoNuestro(MarcaDeDueno(ACopia));
+  except
+  end;
+end;
+
+procedure QuitaCopiaDeSeguridad(const ACopia, AAncestro: string);
+begin
+  if ACopia = '' then
+    Exit;
+  try
+    if TDirectory.Exists(ACopia) then
+      BorraArbol(ACopia)
+    else if TFile.Exists(ACopia) then
+      BorraLoNuestro(ACopia); // la copia de un +R es +R (decima revision)
+  except
+    // se queda: es una copia en la papelera, no hace dano
+  end;
+  QuitaMarcaDeDueno(ACopia);
+  QuitaCarpetasCreadas(ExtractFileDir(ACopia), AAncestro);
 end;
 
 procedure CopiaNuestra(const AOrigen, ADestino: string);

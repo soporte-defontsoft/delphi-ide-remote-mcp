@@ -639,6 +639,16 @@ out = s7.call('delphi_list', {"root": WORK, "pattern": "*.md"})
 check('dentro-del-root: delphi_list no sirve notas del vault',
       mc.como_json(out).get('total') == 0 and mc.como_json(out).get('folders') == []
       and 'idea.md' not in out, out[:250])
+# ...pero las CUENTA, como todo lo que esconde: el vault se tragaba sin decirlo y
+# la descripcion de list promete contar lo escondido (H6 de la revision del
+# paisaje de Fable, 26-oct-2026; ROJO contra r1222ch). Y search, igual
+check('dentro-del-root: delphi_list cuenta las notas del vault que esconde (LIST-016)',
+      (mc.como_json(out).get('hiddenVault') or 0) > 0 and mc.tiene(out, mc.id_de('SN_HIDDEN_VAULT_FMT')),
+      out[:300])
+out = s7.call('delphi_search', {"root": WORK, "query": "contenido original", "pattern": "*.md"})
+check('dentro-del-root: delphi_search tampoco las sirve, y las cuenta (LIST-016)',
+      mc.como_json(out).get('total') == 0 and (mc.como_json(out).get('hiddenVault') or 0) > 0 and
+      mc.tiene(out, mc.id_de('SN_HIDDEN_VAULT_FMT')), out[:300])
 # ...y a traves de una JUNCTION de la raiz que apunte al vault: ni list ni
 # search entran, y copy=true / package no se lo llevan. La lista de la 1.7.1
 # lo tenia como SOSPECHA sin medir (hacia falta una junction en las raices):

@@ -440,8 +440,12 @@ begin
     var Grandes: TArray<string> := [];
     for F in Targets do
       begin
+        // el vault es de las tools vault_*: se esconde CONTADO (H6 de Fable)
         if not SingleFile and InVault(F) then
+        begin
+          Ocultos.Add(SKIP_VAULT);
           Continue;
+        end;
         if not SingleFile and not RaizEnArtefactos then
         begin
           var Motivo := SkipReason(RelToRoot(F, Params.Root), False);
@@ -658,7 +662,10 @@ begin
       for F in TDirectory.GetDirectories(Root) do
       begin
         if InVault(F) then
+        begin
+          Ocultos.Add(SKIP_VAULT); // contado, como lo demas (H6 de Fable)
           Continue;
+        end;
         // These were skipped WITHOUT being counted, so a folder holding .git
         // and __delphi-patch answered "total: 1" and said nothing about the
         // other two (measured 2026-08-25). Silence is not the same as saying
@@ -731,9 +738,13 @@ begin
       for F in WalkFiles(Root, Limpias, Params.IncludeTrash) do
       begin
         // The vault is the vault_* tools' business, even when it sits inside a
-        // root: listing its notes would invite edits behind its back.
+        // root: listing its notes would invite edits behind its back. Counted,
+        // like everything else that is hidden (H6 de Fable)
         if InVault(F) then
+        begin
+          Ocultos.Add(SKIP_VAULT);
           Continue;
+        end;
         // The advice was "pass that folder as root", and it only worked for
         // the DEEPEST one: asking for Win64 still hid everything, because the
         // path relative to the root still said "\debug\". If the caller
@@ -1998,6 +2009,11 @@ begin
       // y un enlace aparcado en ella hacia que el zip se leyera a si mismo
       // (SYS-027 "repite" para siempre; octava revision)
       if EnPapelera(F) then
+        Continue;
+      // ...ni las copias muertas del IDE (__history, __recovery: versiones
+      // viejas de las fuentes), por SU reconocedor; entraban en el zip (H11 de
+      // la revision del paisaje de Fable, 26-oct-2026)
+      if EnCopiaDelIde(F) then
         Continue;
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;

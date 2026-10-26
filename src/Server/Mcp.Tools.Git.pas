@@ -1796,8 +1796,10 @@ begin
     // escribe quien llama. Vivia en el %TEMP% de la MAQUINA, fuera de toda
     // jaula; se borra siempre (mas abajo), pero mientras existe no tiene por
     // que estar donde lo vea cualquiera. Por el nombrador (Lsp.Casa).
-    CrearCarpeta(ServerTempDir('git'));
+    // la carpeta, la del nombre que da EL nombrador (su subcarpeta de la casa
+    // vivia a mano aqui y en el tag: H9 de Fable)
     MsgFile := NombreDeMensajeGit;
+    CrearCarpeta(ExtractFileDir(MsgFile));
     // por la puerta de escribir, con el temporal como lugar: UTF-8 sin BOM
     EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
     GitArgs := 'commit -F ' + EnComillas(MsgFile);
@@ -2005,8 +2007,8 @@ begin
       if Params.Message.Trim <> '' then
       begin
         // -F makes it annotated (like -m) and keeps quotes byte-exact
-        CrearCarpeta(ServerTempDir('git'));
         MsgFile := NombreDeMensajeGit;
+        CrearCarpeta(ExtractFileDir(MsgFile));
         EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
         GitArgs := 'tag -F ' + EnComillas(MsgFile);
       end;

@@ -88,6 +88,11 @@ const
   { No sale de SkipReason: son las carpetas de otras herramientas (.vs,
     .github) que solo esconde el modo dirs de delphi_list. }
   SKIP_FOLDERS = 'folders';
+  { No sale de SkipReason: el vault dentro de una raiz es de las tools vault_*
+    (InVault); delphi_list y delphi_search lo escondian SIN contarlo, y la
+    descripcion de list promete contar lo escondido (revision del paisaje de
+    Fable, H6, 26-oct-2026). }
+  SKIP_VAULT = 'vault';
 
 type
   { Lo que un recorrido NO ensena, contado POR MOTIVO (los SKIP_*), y UNA
@@ -98,7 +103,7 @@ type
     ningun cajon; y delphi_search escondia lo mismo sin decirlo (revision
     de baterias, 26-sep-2026). Se empieza con Default(THiddenCount). }
   THiddenCount = record
-    Artifacts, Temp, Git, Trash, Folders: Integer;
+    Artifacts, Temp, Git, Trash, Folders, Vault: Integer;
     procedure Add(const AReason: string);
     function Total: Integer;
     { hidden, un campo por cada motivo que no sea cero y la nota que dice
@@ -321,6 +326,8 @@ begin
     Inc(Trash)
   else if AReason = SKIP_FOLDERS then
     Inc(Folders)
+  else if AReason = SKIP_VAULT then
+    Inc(Vault)
   else
     // Un motivo nuevo en SkipReason sin su cajon aqui se perderia de la
     // cuenta en silencio: mejor que se vea en la primera bateria.
@@ -329,7 +336,7 @@ end;
 
 function THiddenCount.Total: Integer;
 begin
-  Result := Artifacts + Temp + Git + Trash + Folders;
+  Result := Artifacts + Temp + Git + Trash + Folders + Vault;
 end;
 
 procedure THiddenCount.Report(AObj: TJSONObject);
@@ -353,6 +360,7 @@ begin
   Motivo(Git, 'hiddenGitInternals', MsgText(SN_HIDDEN_GIT_FMT));
   Motivo(Trash, 'hiddenTrash', MsgText(SN_HIDDEN_TRASH_FMT));
   Motivo(Folders, 'hiddenToolFolders', MsgText(SN_HIDDEN_FOLDERS_FMT));
+  Motivo(Vault, 'hiddenVault', MsgText(SN_HIDDEN_VAULT_FMT));
   AObj.AddPair('note', MsgFmt(SN_HIDDEN_HEAD_FMT, [Total]) + ' ' +
     string.Join('; ', Partes) + '.');
 end;
