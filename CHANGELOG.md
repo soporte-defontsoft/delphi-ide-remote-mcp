@@ -116,13 +116,17 @@ the MCP `initialize` response (`serverInfo.version`).
   neither the startup purge nor `delphi_test`'s between-runs sweep could remove
   it and it lived on as admin-only junk in the server's own temp. The two house
   sweeps now reclaim such a folder first (`ReclamaArbol`): as its owner the
-  server resets it to an empty UNPROTECTED DACL - never `pDacl=nil` - so it
-  inherits from the house and the server regains access, and `BorraArbol` then
-  deletes it. Only inside the server's house (`ServerTempDir`), never across a
-  link, and never in the general `BorraArbol` - the agent's jail still answers
-  `GUARD-040` for a folder it cannot list (`tests/test_casa_ilegible_1230.py`;
-  `LspTests.ReclamaArbol`, measured directly; `test_paisaje.py`, the
-  `SetNamedSecurityInfo` namer).
+  server gives it, as ONE object and without propagating, a protected DACL with
+  a single ACE for its own account - just enough to list and delete it - and
+  `BorraArbol` then removes it. The write is `SetFileSecurity`, not
+  `SetNamedSecurityInfo`: the latter propagates inheritance down the subtree, a
+  tree walk reserved for the guard's own walkers (measured: it does not follow a
+  junction inside, but the server still must not walk a tree it was not asked
+  to). Only inside the server's house (`ServerTempDir`), never across a link
+  (`RecorreSinEnlaces` skips them), and never in the general `BorraArbol` - the
+  agent's jail still answers `GUARD-040` for a folder it cannot list
+  (`tests/test_casa_ilegible_1230.py`; `LspTests.ReclamaArbol`, measured
+  directly; `test_paisaje.py`, the write-security namer).
 - **The note of a move never says whether something outside the roots
   exists.** An `{$I}` or a `.dproj` property leading out of the roots was
   counted (`MOVE-023`, `MOVE-021`) only when what it led to existed, telling

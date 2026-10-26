@@ -370,10 +370,11 @@ function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
 procedure BorraArbol(const ADir: string);
 
 { Reclama, SOLO dentro de la casa del servidor (ServerTempDir, su nombrador),
-  cada carpeta de ADir que esta sesion no puede LISTAR: le pone una DACL vacia
-  no protegida (SetNamedSecurityInfo) para que herede de la casa y el servidor
-  -su dueno- recupere el acceso. Nunca cruza un enlace (tocar la DACL de un
-  junction etiquetaria su destino). Para el barrido de la casa cuando un test
+  cada carpeta de ADir que esta sesion no puede LISTAR: le da -como UN objeto y
+  SIN propagar- una DACL protegida con UNA sola ACE para el dueno (el servidor),
+  con SetFileSecurity, para recuperar el acceso. Nunca cruza un enlace: el
+  recorredor no entra en uno y el reclamo no recorre el arbol (SetNamedSecurityInfo
+  si lo haria, y su recorrido podria tocar lo de detras de uno). Para el barrido de la casa cuando un test
   dejo una carpeta nacida cerrada (V9): despues, BorraArbol la borra. Lo que ni
   asi se reclama (un ACE OWNER_RIGHTS que le quita el WRITE_DAC al dueno) se
   queda y BorraArbol lo dice, como hoy. Fuera de la casa no hace nada. }
@@ -1103,8 +1104,6 @@ implementation
 uses
   Winapi.Windows,
   Winapi.TlHelp32,      // HayOtraInstanciaViva: los procesos por su nombre, sin abrirlos
-  Winapi.AccCtrl,       // SE_FILE_OBJECT: el reclamo de la DACL de una carpeta de la casa
-  Winapi.AclAPI,        // SetNamedSecurityInfo: idem (ReclamaArbol, V9)
   System.SysUtils,
   System.StrUtils,
   System.IOUtils,
@@ -4101,24 +4100,58 @@ begin
   end;
 end;
 
-{ Le pone a ADir una DACL vacia NO protegida: se quita el flag protegido y la
-  carpeta hereda de su padre (la casa), con lo que el dueno (el servidor)
-  recupera el acceso. Medido: deja D:AI(...SY)(...BA)(...OW), heredada, sin
-  Everyone (v9_reclamo_dacl). No lanza: lo que no se pueda reclamar
-  (un OWNER_RIGHTS sin WRITE_DAC) lo dira BorraArbol despues. }
+{ Le da a ADir, como UN objeto y SIN propagar, una DACL PROTEGIDA con UNA sola
+  ACE de permitir para la cuenta del servidor (el SID de su token): lo justo
+  para que su casa se liste y se borre (list, traverse, read-attributes,
+  delete-child, DELETE, SYNCHRONIZE). Nada para Todos, nada heredable.
+  SetFileSecurity fija ESTE objeto y NO recorre el arbol -al reves que
+  SetNamedSecurityInfo, que propaga la herencia a los hijos: un recorrido de
+  Windows que ademas podria tocar lo de detras de un enlace-; los arboles solo
+  los recorre RecorreSinEnlaces, que nunca cruza un enlace, y ADir aqui nunca es
+  uno. Medido 26-oct-2026: deja D:P(A;;0x1100e1;;;<dueno>), listable y borrable,
+  sin Everyone y sin propagar (no cruza una junction de dentro, medido). No
+  lanza: lo que no se pueda (un OWNER_RIGHTS que le quita el WRITE_DAC al dueno)
+  lo dira BorraArbol despues. }
 procedure ReclamaDaclHeredada(const ADir: string);
 const
-  UNPROTECTED_DACL = DWORD($20000000); // UNPROTECTED_DACL_SECURITY_INFORMATION
   ACL_REVISION = 2;
+  // lo justo para que el servidor liste y borre lo suyo (medido: sin SYNCHRONIZE
+  // la RTL no abre ni para listar ni para borrar) = $1100E1
+  RECLAMO_MASK = FILE_LIST_DIRECTORY or FILE_TRAVERSE or FILE_READ_ATTRIBUTES or
+    FILE_DELETE_CHILD or $00010000 {DELETE} or SYNCHRONIZE;
 var
-  Acl: array[0 .. 63] of Byte;
+  Tok: THandle;
+  Tam: DWORD;
+  Buf: TBytes;
+  SD: TSecurityDescriptor;
+  Acl: array[0 .. 127] of Byte;
 begin
+  // el SID de la cuenta del servidor (dueno de lo que dejo delphi_test en la casa)
+  if not OpenProcessToken(GetCurrentProcess, TOKEN_QUERY, Tok) then
+    Exit;
+  try
+    Tam := 0;
+    GetTokenInformation(Tok, TokenUser, nil, 0, Tam); // pide el tamano
+    if Tam = 0 then
+      Exit;
+    SetLength(Buf, Tam);
+    if not GetTokenInformation(Tok, TokenUser, @Buf[0], Tam, Tam) then
+      Exit;
+  finally
+    CloseHandle(Tok);
+  end;
   if not InitializeAcl(PACL(@Acl)^, SizeOf(Acl), ACL_REVISION) then
     Exit;
-  // ACL VACIA (0 ACEs) + UNPROTECTED: NUNCA pDacl=nil (seria control total a
-  // todos). Con UNPROTECTED se quita SE_DACL_PROTECTED y entra la herencia.
-  SetNamedSecurityInfoW(PChar(ADir), SE_FILE_OBJECT,
-    DACL_SECURITY_INFORMATION or UNPROTECTED_DACL, nil, nil, PACL(@Acl), nil);
+  // UNA ACE de permitir para el dueno; NUNCA una DACL nula (control total a
+  // todos) ni una para Todos, NUNCA heredable
+  if not AddAccessAllowedAce(PACL(@Acl)^, ACL_REVISION, RECLAMO_MASK,
+    PTokenUser(@Buf[0])^.User.Sid) then
+    Exit;
+  InitializeSecurityDescriptor(@SD, SECURITY_DESCRIPTOR_REVISION);
+  SetSecurityDescriptorDacl(@SD, True, PACL(@Acl), False);
+  SetSecurityDescriptorControl(@SD, SE_DACL_PROTECTED, SE_DACL_PROTECTED);
+  // SetFileSecurity, NO SetNamedSecurityInfo: fija ESTE objeto, no recorre el arbol
+  SetFileSecurityW(PChar(ADir), DACL_SECURITY_INFORMATION, @SD);
 end;
 
 procedure ReclamaArbol(const ADir: string);
