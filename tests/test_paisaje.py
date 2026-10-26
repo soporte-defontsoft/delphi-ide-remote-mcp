@@ -434,6 +434,14 @@ REGLAS = [
       ('Lsp.Service.pas', 'TDelphiLspMcpService.ServiceAfterInstall')],
      'EscribeClaveDelIde y BorraClaveDelIde (Lsp.Patch): LA puerta del registro del IDE, que exporta '
      'antes lo que pisa o borra (reg.exe) y no reescribe lo que ya dice lo mismo'),
+    # el reclamo de la DACL de una carpeta nacida cerrada en la casa del servidor: UNA casa,
+    # ReclamaDaclHeredada, le pone una DACL vacia NO protegida para que herede y el dueno
+    # recupere el acceso (nunca pDacl=nil); el barrido de la casa la borra despues (V9 de la 1.23)
+    ('escribir la seguridad de un fichero', r'\bSetNamedSecurityInfo\w*\s*\(',
+     [('Lsp.Guard.pas', 'ReclamaDaclHeredada')],
+     'ReclamaDaclHeredada (Lsp.Guard, V9 de la 1.23): EL unico sitio que escribe la seguridad de una '
+     'carpeta - el reclamo de la DACL de una nacida cerrada en la casa del servidor, DACL vacia NO '
+     'protegida para que herede, nunca pDacl=nil -; el barrido de la casa (ReclamaArbol) la llama'),
     # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
     # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
     # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
@@ -1311,6 +1319,7 @@ PLANTADO = {
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
+    'escribir la seguridad de un fichero': "  SetNamedSecurityInfoW(PChar(D), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nil, nil, @A, nil);",
     'la linea de fallo del nodo': "      Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",

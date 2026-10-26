@@ -109,6 +109,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A folder a test leaves born locked no longer stays undeletable in the
+  server's house.** A test can create a folder with an empty, protected DACL in
+  the `CreateDirectory` call itself (no `WRITE_DAC` needed), which denies
+  everyone, the owner included: the tree walker then raises `GUARD-040`, so
+  neither the startup purge nor `delphi_test`'s between-runs sweep could remove
+  it and it lived on as admin-only junk in the server's own temp. The two house
+  sweeps now reclaim such a folder first (`ReclamaArbol`): as its owner the
+  server resets it to an empty UNPROTECTED DACL - never `pDacl=nil` - so it
+  inherits from the house and the server regains access, and `BorraArbol` then
+  deletes it. Only inside the server's house (`ServerTempDir`), never across a
+  link, and never in the general `BorraArbol` - the agent's jail still answers
+  `GUARD-040` for a folder it cannot list (`tests/test_casa_ilegible_1230.py`;
+  `LspTests.ReclamaArbol`, measured directly; `test_paisaje.py`, the
+  `SetNamedSecurityInfo` namer).
 - **The note of a move never says whether something outside the roots
   exists.** An `{$I}` or a `.dproj` property leading out of the roots was
   counted (`MOVE-023`, `MOVE-021`) only when what it led to existed, telling

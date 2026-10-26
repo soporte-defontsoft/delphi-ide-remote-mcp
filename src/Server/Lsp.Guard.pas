@@ -369,6 +369,16 @@ function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
   por BorradoDenegado (abajo). No hay otra forma de borrar un arbol. }
 procedure BorraArbol(const ADir: string);
 
+{ Reclama, SOLO dentro de la casa del servidor (ServerTempDir, su nombrador),
+  cada carpeta de ADir que esta sesion no puede LISTAR: le pone una DACL vacia
+  no protegida (SetNamedSecurityInfo) para que herede de la casa y el servidor
+  -su dueno- recupere el acceso. Nunca cruza un enlace (tocar la DACL de un
+  junction etiquetaria su destino). Para el barrido de la casa cuando un test
+  dejo una carpeta nacida cerrada (V9): despues, BorraArbol la borra. Lo que ni
+  asi se reclama (un ACE OWNER_RIGHTS que le quita el WRITE_DAC al dueno) se
+  queda y BorraArbol lo dice, como hoy. Fuera de la casa no hace nada. }
+procedure ReclamaArbol(const ADir: string);
+
 { Tira las carpetas de dia caducadas (RETENTION_DAYS) de UNA papelera. Coste
   medido cuando no hay nada que tirar, que es casi siempre: 0,012 ms - leer
   una carpeta de tres entradas y comparar nombres. Nunca lanza.
@@ -511,10 +521,15 @@ type
   AAlEnlace (opcional) recibe cada enlace que se encuentra, sin entrar
   en el: para quien necesita SABER que hay uno antes de hacer algo que
   si lo cruzaria (quitar un worktree: git lo atraviesa, medido el
-  26-sep-2026). Un parametro del recorredor, no otro recorredor. }
+  26-sep-2026). Un parametro del recorredor, no otro recorredor.
+
+  AAlIlegible (opcional): ante una carpeta que no se deja listar, se llama con
+  ella y se reintenta el listado UNA vez - para quien, en SU casa, puede
+  reclamarla antes de seguir (ReclamaArbol, V9). Sin el, nada cambia: se salta
+  o lanza segun AFallaSiIlegible. }
 procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
   const AAlEnlace: TVisitaRuta = nil; const AOmite: TOmiteAlCopiar = nil;
-  AFallaSiIlegible: Boolean = False);
+  AFallaSiIlegible: Boolean = False; const AAlIlegible: TVisitaRuta = nil);
 
 { LAS entradas de una carpeta (un nivel), o la negativa si Windows no deja
   listarla (GUARD-040, lanzada). TDirectory.GetFileSystemEntries devuelve
@@ -1088,6 +1103,8 @@ implementation
 uses
   Winapi.Windows,
   Winapi.TlHelp32,      // HayOtraInstanciaViva: los procesos por su nombre, sin abrirlos
+  Winapi.AccCtrl,       // SE_FILE_OBJECT: el reclamo de la DACL de una carpeta de la casa
+  Winapi.AclAPI,        // SetNamedSecurityInfo: idem (ReclamaArbol, V9)
   System.SysUtils,
   System.StrUtils,
   System.IOUtils,
@@ -3543,7 +3560,7 @@ end;
 
 procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
   const AAlEnlace: TVisitaRuta; const AOmite: TOmiteAlCopiar;
-  AFallaSiIlegible: Boolean);
+  AFallaSiIlegible: Boolean; const AAlIlegible: TVisitaRuta);
 var
   Entradas: TArray<string>;
   E: string;
@@ -3551,9 +3568,28 @@ begin
   try
     Entradas := EntradasDeCarpeta(ADir);
   except
-    if AFallaSiIlegible then
-      raise;
-    Exit; // quien no pide cierre tolera ramas ilegibles
+    // una carpeta que no se deja listar: quien puede reclamarla (en su casa)
+    // lo hace aqui y se reintenta UNA vez; si no, se salta o se lanza
+    if Assigned(AAlIlegible) then
+    begin
+      try
+        AAlIlegible(ADir);
+      except
+      end;
+      try
+        Entradas := EntradasDeCarpeta(ADir);
+      except
+        if AFallaSiIlegible then
+          raise;
+        Exit;
+      end;
+    end
+    else
+    begin
+      if AFallaSiIlegible then
+        raise;
+      Exit; // quien no pide cierre tolera ramas ilegibles
+    end;
   end;
   for E in Entradas do
   begin
@@ -3576,7 +3612,7 @@ begin
       // una entrada que no se deja tocar no para las demas
     end;
     if TDirectory.Exists(E) and (not Assigned(AOmite) or not AOmite(E)) then
-      RecorreSinEnlaces(E, AVisita, AAlEnlace, AOmite, AFallaSiIlegible);
+      RecorreSinEnlaces(E, AVisita, AAlEnlace, AOmite, AFallaSiIlegible, AAlIlegible);
   end;
 end;
 
@@ -4065,6 +4101,46 @@ begin
   end;
 end;
 
+{ Le pone a ADir una DACL vacia NO protegida: se quita el flag protegido y la
+  carpeta hereda de su padre (la casa), con lo que el dueno (el servidor)
+  recupera el acceso. Medido: deja D:AI(...SY)(...BA)(...OW), heredada, sin
+  Everyone (v9_reclamo_dacl). No lanza: lo que no se pueda reclamar
+  (un OWNER_RIGHTS sin WRITE_DAC) lo dira BorraArbol despues. }
+procedure ReclamaDaclHeredada(const ADir: string);
+const
+  UNPROTECTED_DACL = DWORD($20000000); // UNPROTECTED_DACL_SECURITY_INFORMATION
+  ACL_REVISION = 2;
+var
+  Acl: array[0 .. 63] of Byte;
+begin
+  if not InitializeAcl(PACL(@Acl)^, SizeOf(Acl), ACL_REVISION) then
+    Exit;
+  // ACL VACIA (0 ACEs) + UNPROTECTED: NUNCA pDacl=nil (seria control total a
+  // todos). Con UNPROTECTED se quita SE_DACL_PROTECTED y entra la herencia.
+  SetNamedSecurityInfoW(PChar(ADir), SE_FILE_OBJECT,
+    DACL_SECURITY_INFORMATION or UNPROTECTED_DACL, nil, nil, PACL(@Acl), nil);
+end;
+
+procedure ReclamaArbol(const ADir: string);
+begin
+  // SOLO la casa del servidor, por su nombrador (no la jaula del agente): el
+  // reclamo ESCRIBE seguridad, y solo sobre lo nuestro. test_paisaje lo vigila.
+  if not EnLugarSinEnlaces(ADir, ServerTempDir('')) then
+    Exit;
+  RecorreSinEnlaces(ADir,
+    procedure(const APath: string)
+    begin
+    end,
+    nil, nil, False,
+    procedure(const APath: string)
+    begin
+      // nunca un enlace (SetNamedSecurityInfo sobre un junction etiquetaria su
+      // destino): el recorredor ya no entra en enlaces, y aqui tambien se mira
+      if not EsEnlace(APath) then
+        ReclamaDaclHeredada(APath);
+    end);
+end;
+
 procedure BorraArbol(const ADir: string);
 var
   Motivo: string;
@@ -4335,6 +4411,7 @@ begin
       end;
     for E in TDirectory.GetDirectories(ADir) do
       try
+        ReclamaArbol(E); // V9: una carpeta nacida cerrada que dejo un test, recuperada antes de borrar
         BorraArbol(E);
       except
       end;

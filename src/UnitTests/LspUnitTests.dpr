@@ -30,7 +30,8 @@ uses
   Mld.Textos in '..\DesktopNode\Mld.Textos.pas',
   Mld.Captura in '..\DesktopNode\Mld.Captura.pas',
   LspTests.AtomosRtl in 'LspTests.AtomosRtl.pas',
-  LspTests.Vigia in 'LspTests.Vigia.pas';
+  LspTests.Vigia in 'LspTests.Vigia.pas',
+  LspTests.ReclamaArbol in 'LspTests.ReclamaArbol.pas';
 
 var
   Runner: ITestRunner;

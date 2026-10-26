@@ -587,6 +587,7 @@ begin
     Antes.Free;
     BorraContenedor(AC);
     try
+      ReclamaArbol(Etapa); // V9: recupera una carpeta nacida cerrada que dejo el test antes de borrar
       BorraArbol(Etapa);
     except
       // una copia huerfana se va con la temporal en el proximo arranque, y
