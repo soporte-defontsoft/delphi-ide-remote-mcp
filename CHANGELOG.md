@@ -123,6 +123,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The all-or-nothing restore never writes in place through a hard link.** When
+  an operation fails, `TFotoDeFicheros` puts each file back through the jail's
+  atomic writer - a temp beside it and a rename, which breaks a hard link and
+  never writes outside. A path too long to fit that temp (`GUARD-028`) is
+  restored by a direct in-place write instead, and that write did not ask whether
+  the file had other names: a hard link would change the bytes under all of them,
+  and one can be outside the jail (`GUARD-043`). The direct restore now refuses a
+  hard link and reports it, instead of writing in place. It is a second barrier -
+  the atomic writer already refuses a long path, so no tool modifies one and a
+  delete or move breaks the link; the unit test drives the snapshot directly
+  (`src/UnitTests/LspTests.RestauraEnlaceDuro.pas`).
 - **Paths inside the jail are compared the way the filesystem compares them,
   not the way a language does.** "Is this path inside a root?" and "is this the
   root, a protected place, the same entry?" were answered with `StartsText` and

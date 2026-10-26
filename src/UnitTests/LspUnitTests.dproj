@@ -194,6 +194,7 @@
         <DCCReference Include="LspTests.Vigia.pas"/>
         <DCCReference Include="LspTests.ReclamaArbol.pas"/>
         <DCCReference Include="LspTests.RutasOrdinal.pas"/>
+        <DCCReference Include="LspTests.RestauraEnlaceDuro.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -318,17 +318,31 @@ var
       QuitaCarpetasNuevas(AIx);
       Exit;
     end;
+    // una ruta tan larga que no cabe con su temporal (GUARD-028: anade 27
+    // caracteres) se restaura con una escritura DIRECTA: la operacion ya se
+    // llevo el original y no devolverlo es peor (revisor de la noche, A-1 y
+    // M-1); la puerta ya la aprobo arriba (Veto). Pero un ENLACE DURO no se
+    // escribe en sitio: los bytes cambiarian bajo TODOS sus nombres y uno puede
+    // estar fuera de la jaula (GUARD-043, el escritor atomico de abajo rompe el
+    // enlace con su renombre, pero la directa no); se dice y no se toca -ni el
+    // +R, por eso ANTES de QuitaSoloLectura-. Segunda barrera: el escritor que
+    // acorta (AtomicWrite) ya niega la ruta larga (GUARD-028), asi que la unica
+    // escritura directa de una larga es esta.
+    var Larga := RutaLargaDenegada(FRutas[AIx]) <> '';
+    if Larga then
+    begin
+      var Dura := EscrituraEnElFicheroDenegada(FRutas[AIx]);
+      if Dura <> '' then
+        Exit(Dura);
+    end;
     QuitaSoloLectura(FRutas[AIx]);
     try
       // entero o nada, por EL escritor de la jaula (el temporal al lado y el
       // renombre, con su puerta y su cerrojo): WriteAllBytes truncaba y
       // escribia encima, y un fallo a medias (disco lleno, otro proceso)
       // dejaba a medias justo el fichero que se queria devolver (P4 de la
-      // 1.18.0). Una ruta que no cabe con su temporal (GUARD-028: anade 27
-      // caracteres) se escribe directa, como antes: la operacion ya se llevo
-      // el original, y no devolverlo es peor (revisor de la noche, A-1 y M-1);
-      // la puerta ya la aprobo arriba (Veto)
-      if RutaLargaDenegada(FRutas[AIx]) <> '' then
+      // 1.18.0). La larga, directa (ya aprobada arriba y sin enlace duro)
+      if Larga then
         TFile.WriteAllBytes(FRutas[AIx], FBytes[AIx])
       else
         EscribeBytes(FRutas[AIx], FBytes[AIx], ltJaula);
