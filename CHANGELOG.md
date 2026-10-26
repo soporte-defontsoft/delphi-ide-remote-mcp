@@ -15,10 +15,15 @@ the MCP `initialize` response (`serverInfo.version`).
   `\??\`) is now decided by `EsUnc` / `EsPrefijoDeDispositivo` (`Lsp.Rutas`), not
   by a hand-written "starts with two backslashes" that a device prefix fools (it
   starts that way yet is not a UNC). Routed the stragglers through the judges:
-  the persistent network resource read from the registry (`Lsp.NetDrives`) and
-  the build's refusal of an `<Import>` from a UNC path (`Lsp.Dproj`), which stays
-  broad - a UNC and a device/NT-prefix import are refused alike, now via both
-  judges (`tests/test_build_imports.py`).
+  the persistent network resource read from the registry (`Lsp.NetDrives`), the
+  whole-unit/resource check that forbids deleting a drive or share root
+  (`BorradoDenegado`), a network-letter site (`EsSitioDeLetraDeRed`,
+  `Lsp.Lugares`) and the build's refusal of an `<Import>` from a UNC path
+  (`Lsp.Dproj`), which stays broad - a UNC and a device/NT-prefix import are
+  refused alike, now via both judges. And the format now has its one composer:
+  `ConPrefijoDeDispositivo` writes the `\\?\` extended-length prefix (its reader
+  is `SinPrefijoDeDispositivo`), replacing three hand-built copies in `Lsp.Rutas`
+  (`tests/test_build_imports.py`).
 - **`delphi_move copy=true` copies a project, and a whole repository, like
   any folder.** A copy of a folder holding a project, or of a loose `.dproj`,
   was refused (`MOVE-004`, "a project never lives in two places"), a rule of

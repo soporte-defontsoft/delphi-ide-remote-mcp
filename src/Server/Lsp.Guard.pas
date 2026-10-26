@@ -3441,7 +3441,9 @@ begin
   except
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_RUTA_INVALIDA)]));
   end;
-  if (Length(Full) <= 3) or (Full.StartsWith('\\') and
+  // una unidad entera o un recurso UNC entero: "es UNC o prefijo de dispositivo"
+  // por los jueces, no por "empieza por dos barras" (A25)
+  if (Length(Full) <= 3) or ((EsUnc(Full) or EsPrefijoDeDispositivo(Full)) and
      (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_UNIDAD_O_RECURSO_ENTERO)]));
   // la ruta REAL del padre + el nombre (ver la nota de la interface)

@@ -419,7 +419,7 @@ end;
   final y con barras de Windows. }
 function EsSitioDeLetraDeRed(const ADecl, AReal: string): Boolean;
 begin
-  Result := (ADecl <> '') and not ADecl.StartsWith('\\') and
+  Result := (ADecl <> '') and not EsUnc(ADecl) and
     EsUnc(AReal);
 end;
 

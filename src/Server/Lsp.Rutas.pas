@@ -131,6 +131,11 @@ function EsPrefijoDeDispositivo(const APath: string): Boolean;
   search path: dcc abre una carpeta por ese prefijo, medido el 21-oct-2026, y
   la puerta del build lo juzga sin el). Sin prefijo, tal cual. }
 function SinPrefijoDeDispositivo(const APath: string): string;
+{ ...y la inversa, el prefijo PUESTO: APath -> \\?\APath, el formato de ruta
+  extendida (para una ruta larga, o para marcar un destino de dispositivo fuera
+  de toda raiz). EL compositor del prefijo; su lector es SinPrefijoDeDispositivo.
+  No normaliza APath: quien llama le da la ruta ya lista. }
+function ConPrefijoDeDispositivo(const APath: string): string;
 
 { Un UNC de verdad (\\host\...), no un prefijo de dispositivo (\\?\, \\.\).
   Con cualquiera de las dos barras (//host/x tambien lo es: A40 de la 1.23,
@@ -349,7 +354,7 @@ begin
     if EsRutaAbsoluta(S) then
       Result := S
     else
-      Result := '\\?\' + S.TrimLeft(['\']);
+      Result := ConPrefijoDeDispositivo(S.TrimLeft(['\']));
   except
     Result := ''; // un relativo que no se deja componer: Windows tampoco lo sigue
   end;
@@ -440,7 +445,7 @@ begin
       if not Result and (A <> INVALID_FILE_ATTRIBUTES) and
          ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
       begin
-        ASalida := '\\?\' + SinBarraFinal(ADir);
+        ASalida := ConPrefijoDeDispositivo(SinBarraFinal(ADir));
         Result := True;
       end;
       // Si ni los atributos del tramo se dejan leer (una ACE que se los quita a
@@ -457,7 +462,7 @@ begin
       // capacidad heredadas dejaban leer los atributos)
       if not Result and (A = INVALID_FILE_ATTRIBUTES) and (Err = ERROR_ACCESS_DENIED) then
       begin
-        ASalida := '\\?\' + SinBarraFinal(ADir);
+        ASalida := ConPrefijoDeDispositivo(SinBarraFinal(ADir));
         Result := True;
       end;
     end);
@@ -619,6 +624,11 @@ begin
     Result := '\\' + Result.Substring(8)
   else
     Result := Result.Substring(4);
+end;
+
+function ConPrefijoDeDispositivo(const APath: string): string;
+begin
+  Result := '\\?\' + APath; // el formato de ruta extendida; su inversa, SinPrefijoDeDispositivo
 end;
 
 function EsUnc(const APath: string): Boolean;
