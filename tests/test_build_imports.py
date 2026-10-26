@@ -101,6 +101,26 @@ try:
              mc.como_json(r).get('success') is True, mc.como_json(r).get('firstError') or r[:400])
     os.remove(dep)
 
+    # A25 (1.23): el deny de un <Import> UNC pasa por los jueces EsUnc /
+    # EsPrefijoDeDispositivo, SIN estrecharse: un UNC (dos barras) o un prefijo
+    # de dispositivo/NT se niegan igual que antes; una letra no cae por aqui.
+    # Rojo contra un mutante que solo mirase EsUnc (dejaria pasar el prefijo).
+    bs = chr(92)  # barra invertida sin teclearla (evita escapes en el anclaje)
+    for forma in (bs * 2 + 'host' + bs + 'x.targets',
+                  '//host/x.targets',
+                  bs * 2 + '?' + bs + 'UNC' + bs + 'host' + bs + 'x.targets',
+                  bs * 2 + '.' + bs + 'x.targets'):
+        con_import('<Import Project="%s"/>' % forma)
+        r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+        mc.check('cond: un <Import> %r se niega como UNC (A25, no se debilita)' % forma,
+                 mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and
+                 'an <Import> from a UNC path' in r, r[:400])
+    # una letra FUERA de las raices NO cae por el deny UNC (se niega por 'fuera')
+    con_import('<Import Project="%s"/>' % ('C:' + bs + 'fuera' + bs + 'x.targets'))
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('cond: un <Import> con letra no cae por el deny UNC (A25)',
+             'an <Import> from a UNC path' not in r, r[:400])
+
     # Un Import de un fichero FUERA de las raices, INOCUO a proposito: la puerta
     # de leer no lo deja leer (bloque de las puertas de la 1.18.0) y el build lo
     # cargaria de alli. Hasta 22c83e1 el escaner lo leia, lo veia limpio y

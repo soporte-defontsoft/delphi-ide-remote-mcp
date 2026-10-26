@@ -147,7 +147,8 @@ uses
   System.SyncObjs,
   System.Win.Registry,
   MCPServer.Logger,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Rutas;            // EsUnc: un recurso persistente de red es un UNC de verdad
 
 function LetraDeRuta(const ARuta: string): Char;
 begin
@@ -222,7 +223,9 @@ begin
     // un valor que no es un texto, una clave que no se deja leer: no hay mapeo
     Result := '';
   end;
-  if not Result.StartsWith('\\') then
+  // un recurso persistente es un UNC de verdad, no un prefijo de dispositivo ni
+  // otra cosa: por el juez EsUnc, no por una comparacion a mano
+  if not EsUnc(Result) then
     Result := '';
 end;
 

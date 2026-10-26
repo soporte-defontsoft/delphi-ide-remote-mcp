@@ -4560,7 +4560,9 @@ begin
     if not ConProject then
       Continue;
     V := Importado.Trim;
-    if V.StartsWith('\\') or V.StartsWith('//') then
+    // deny AMPLIO por los jueces (sin estrecharse): un UNC o un prefijo de
+    // dispositivo o NT en un <Import> se niegan igual (SF_CFG_HAZARD_IMPORT_UNC)
+    if EsUnc(V) or EsPrefijoDeDispositivo(V) then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_UNC_FMT, [V]));
     if IsStockImport(LowerCase(V)) then
       Continue;

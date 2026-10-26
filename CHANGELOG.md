@@ -10,6 +10,15 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- **A UNC or device/NT path is recognized through its one judge.** Whether a
+  path is a UNC share or a device / NT extended-length prefix (`\\?\`, `\\.\`,
+  `\??\`) is now decided by `EsUnc` / `EsPrefijoDeDispositivo` (`Lsp.Rutas`), not
+  by a hand-written "starts with two backslashes" that a device prefix fools (it
+  starts that way yet is not a UNC). Routed the stragglers through the judges:
+  the persistent network resource read from the registry (`Lsp.NetDrives`) and
+  the build's refusal of an `<Import>` from a UNC path (`Lsp.Dproj`), which stays
+  broad - a UNC and a device/NT-prefix import are refused alike, now via both
+  judges (`tests/test_build_imports.py`).
 - **`delphi_move copy=true` copies a project, and a whole repository, like
   any folder.** A copy of a folder holding a project, or of a loose `.dproj`,
   was refused (`MOVE-004`, "a project never lives in two places"), a rule of
