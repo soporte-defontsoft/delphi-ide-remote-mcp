@@ -31,7 +31,8 @@ uses
   Mld.Captura in '..\DesktopNode\Mld.Captura.pas',
   LspTests.AtomosRtl in 'LspTests.AtomosRtl.pas',
   LspTests.Vigia in 'LspTests.Vigia.pas',
-  LspTests.ReclamaArbol in 'LspTests.ReclamaArbol.pas';
+  LspTests.ReclamaArbol in 'LspTests.ReclamaArbol.pas',
+  LspTests.RutasOrdinal in 'LspTests.RutasOrdinal.pas';
 
 var
   Runner: ITestRunner;

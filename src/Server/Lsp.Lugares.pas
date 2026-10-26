@@ -780,7 +780,7 @@ begin
   for var R in Raices do
     for var FR in FormasDeUnaRuta(R) do
       for var F in Casa do
-        if (Length(FR) > Length(F)) and StartsText(F, FR) then
+        if (Length(FR) > Length(F)) and RutaDentroDe(F, FR) then
         begin
           ADeSiMismas := ADeSiMismas + [FR];
           Break;
@@ -900,7 +900,7 @@ begin
   for var R in WorkspaceRoots do
   begin
     var Larga := FormaLarga(R);
-    if StartsText(Larga, Full) and (Length(Larga) > Length(Result) + 1) then
+    if RutaDentroDe(Larga, Full) and (Length(Larga) > Length(Result) + 1) then
       Result := SinBarraFinal(Larga);
   end;
 end;

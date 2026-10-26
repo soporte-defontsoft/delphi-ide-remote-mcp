@@ -193,6 +193,7 @@
         <DCCReference Include="LspTests.AtomosRtl.pas"/>
         <DCCReference Include="LspTests.Vigia.pas"/>
         <DCCReference Include="LspTests.ReclamaArbol.pas"/>
+        <DCCReference Include="LspTests.RutasOrdinal.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

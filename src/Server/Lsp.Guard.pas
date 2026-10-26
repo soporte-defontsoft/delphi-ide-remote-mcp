@@ -1324,13 +1324,13 @@ begin
       Ruta := DprojDe(E.Trim);
       if SameText(TPath.GetExtension(Ruta), '.dproj') then
         Ruta := ChangeFileExt(Ruta, '');
-      if SameText(FormaLarga(Ruta), FormaLarga(ChangeFileExt(Full, ''))) then
+      if SameFileName(FormaLarga(Ruta), FormaLarga(ChangeFileExt(Full, ''))) then
         Exit;
     end;
   // un NOMBRE a secas que es el de este proyecto: el operador queria este o
   // un homonimo de otra carpeta, y eso solo lo dice una ruta
   for E in Lista do
-    if not EsRutaAbsoluta(E.Trim) and SameText(E.Trim, Name) then
+    if not EsRutaAbsoluta(E.Trim) and SameFileName(E.Trim, Name) then
       Exit(MsgFmt(SR_REMOTERUN_ENTRADA_A_SECAS_FMT, [E.Trim, Full]));
   Result := MsgFmt(SR_REMOTERUN_PROJECT_DENIED_FMT,
     [Name, string.Join(', ', Lista)]);
@@ -1341,7 +1341,7 @@ var
   E: string;
 begin
   for E in RemoteProjectsNow do
-    if EsComodinDeLista(E) or SameText(E.Trim, ANodo) then
+    if EsComodinDeLista(E) or SameFileName(E.Trim, ANodo) then
       Exit(True);
   Result := False;
 end;
@@ -1663,7 +1663,7 @@ begin
   end;
   var FullLargo := FormaLarga(Full);
   for R in WorkspaceRoots do
-    if SameText(R, Full) or SameText(FormaLarga(R), FullLargo) then
+    if SameFileName(R, Full) or SameFileName(FormaLarga(R), FullLargo) then
       Exit(MsgFmt(SR_ROOT_ITSELF_FMT, [SinBarraFinal(R)]));
 end;
 
@@ -2344,7 +2344,7 @@ begin
   // move de abc.txt llegaba como abc.txt; 25-oct-2026)
   var Dado := ExtractFileName(SinBarraFinal(ConBarrasDeWindows(AValor)));
   var Largo := ExtractFileName(SinBarraFinal(Result));
-  if (Dado <> Largo) and SameText(Dado, Largo) then
+  if (Dado <> Largo) and SameFileName(Dado, Largo) then
     Result := ExtractFilePath(SinBarraFinal(Result)) + Dado;
   // la separacion final, como venia: una carpeta se nombra igual
   if AValor.EndsWith('\') or AValor.EndsWith('/') then
@@ -2416,7 +2416,7 @@ begin
   if Result <> '' then
     Exit;
   Declarada := FormaDeclarada(APath);
-  AEsFormaDeRed := not SameText(Declarada, APath);
+  AEsFormaDeRed := not SameFileName(Declarada, APath);
   if AEsFormaDeRed then
     Result := MsgFmt(SR_JAIL_FORMA_DE_RED_FMT, [Declarada])
   else
@@ -2887,7 +2887,7 @@ begin
     Exit;
   end;
   for R in WorkspaceReadOnlyRoots do
-    if StartsText(FormaLarga(R), Full) or EnLugar(Real, RealPath(SinBarraFinal(R)), False) then
+    if RutaDentroDe(FormaLarga(R), Full) or EnLugar(Real, RealPath(SinBarraFinal(R)), False) then
       Exit(SinBarraFinal(R));
 end;
 
@@ -2923,7 +2923,7 @@ begin
       Continue;
     var Ya := False;
     for var Dicha in Result do
-      if SameText(Dicha.Raiz, Una.Raiz) then
+      if SameFileName(Dicha.Raiz, Una.Raiz) then
         Ya := True;
     if not Ya then
       Result := Result + [Una];
@@ -2943,7 +2943,7 @@ begin
     begin
       if Result <> '' then
         Result := Result + ', ';
-      if MatchText(R, WorkspaceReadOnlyRoots) then
+      if RutaEnLista(R, WorkspaceReadOnlyRoots) then
         Result := Result + MsgFmt(SF_JAIL_SOLO_LECTURA_FMT, [SinBarraFinal(R)])
       else
         Result := Result + SinBarraFinal(R);
@@ -3390,7 +3390,7 @@ begin
       Continue;
     // una lista NEGRA: un lugar que RealPath no sabe seguir, por su texto
     PReal := SinBarraFinal(RealDeLugar(P.Trim));
-    if ASoloDentro and SameText(SinBarraFinal(AReal), PReal) then
+    if ASoloDentro and SameFileName(SinBarraFinal(AReal), PReal) then
       Continue;
     if EnLugar(PReal, AReal, False) then
       Exit(SinBarraFinal(P.Trim));
@@ -3549,7 +3549,7 @@ begin
   try
     Lugar := FormaLarga(ALugar.Trim); // con su separador final
     P := SinBarraFinal(LongCanonical(APath.Trim));
-    if not StartsText(Lugar, IncludeTrailingPathDelimiter(P)) then
+    if not RutaDentroDe(Lugar, P) then
       Exit;
     // de APath hacia arriba hasta el lugar, sin el
     for var D in Ancestros(P) do
@@ -3868,7 +3868,7 @@ end;
 
 function CaeDentro(const AOrigenResuelto, ADestinoResuelto: string): Boolean;
 begin
-  Result := StartsText(AOrigenResuelto, ADestinoResuelto);
+  Result := RutaDentroDe(AOrigenResuelto, ADestinoResuelto);
 end;
 
 function DentroDeSiMismo(const AOrigen, ADestino: string;
@@ -3881,7 +3881,7 @@ end;
 function MismaEntrada(const AOrigen, ADestino: string): Boolean;
 begin
   try
-    Result := SameText(RutaParaComparar(AOrigen, True), RutaParaComparar(ADestino, True));
+    Result := SameFileName(RutaParaComparar(AOrigen, True), RutaParaComparar(ADestino, True));
   except
     Result := False;
   end;
@@ -4714,8 +4714,8 @@ begin
   end;
   var FullLargo := FormaLarga(Full);
   for R in Roots do
-    if StartsText(R, IncludeTrailingPathDelimiter(Full)) or
-       StartsText(FormaLarga(R), FullLargo) then
+    if RutaDentroDe(R, Full) or
+       RutaDentroDe(FormaLarga(R), FullLargo) then
     begin
       // Dentro POR EL TEXTO (el declarado o el largo, FormaLarga). Falta que
       // lo este DE VERDAD: un junction o un
@@ -4760,7 +4760,7 @@ begin
   // en cada lectura (David, 1-oct: la biblioteca en red se lee).
   if LibraryZoneEnabled then
     for R in LugaresDeLaBiblioteca do
-      if StartsText(R, FullLargo) then
+      if RutaDentroDe(R, FullLargo) then
       begin
         var VerdadLib := RealPath(APath);
         if EnLugar(VerdadLib, RealPath(R)) or
@@ -4934,8 +4934,8 @@ begin
     Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
   var FullLargo := FormaLarga(Full);
   for R in Roots do
-    if StartsText(R, IncludeTrailingPathDelimiter(Full)) or
-       StartsText(FormaLarga(R), FullLargo) then
+    if RutaDentroDe(R, Full) or
+       RutaDentroDe(FormaLarga(R), FullLargo) then
     begin
       // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
       // LECTURA: un vendor/, un submodulo, un clon de referencia con su
@@ -5108,7 +5108,7 @@ begin
     // alargo la ruta del agente y un sitio UNC declarado con ~ lo negaba
     // TODO (octava revision). La E/S es sobre el sitio del operador, no
     // sobre lo que manda el agente.
-    if (L.IndexOf('~') >= 0) and StartsText(FormaLarga(L), P) then
+    if (L.IndexOf('~') >= 0) and RutaDentroDe(FormaLarga(L), P) then
       Exit(False);
     // ...y una ruta del agente con segmentos en 8.3 (C$\Users\DAVID~1\...\largo):
     // se alarga ELLA, pero solo si su recurso (\\servidor\recurso) es el de
@@ -5117,7 +5117,7 @@ begin
     // test_alias83 con una raiz UNC, hasta la 1.8.2)
     if (P.IndexOf('~') >= 0) and
        SameText(ExtractFileDrive(P), ExtractFileDrive(L)) and
-       StartsText(FormaLarga(L), FormaLarga(P)) then
+       RutaDentroDe(FormaLarga(L), FormaLarga(P)) then
       Exit(False);
   end;
   Result := True;

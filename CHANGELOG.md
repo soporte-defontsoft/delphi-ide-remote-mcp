@@ -123,6 +123,28 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **Paths inside the jail are compared the way the filesystem compares them,
+  not the way a language does.** "Is this path inside a root?" and "is this the
+  root, a protected place, the same entry?" were answered with `StartsText` and
+  `SameText` (and one `MatchText`), which fold with the user's locale: they
+  called two names the SAME - the German sharp s in its two cases (U+00DF and
+  U+1E9E), or two forms of the "dz" digraph (U+01C5 and U+01C4) - while NTFS
+  keeps them as different entries. With a root named with the lowercase sharp s,
+  an outside sibling named with the uppercase one was read AND written through
+  the jail - measured against production r1222ci, and against published 1.22.1
+  (the hole predates it). The comparison now goes through one ordinal judge, the
+  filesystem's own: `RutaDentroDe` for "inside or is" and `RutaEnLista` for a
+  path against a list (`Lsp.Rutas`), both on the same engine as the RTL's
+  `SameFileName` (`CompareStringOrdinal`, ignore-case), and the equality sites
+  call `SameFileName`. It only ever errs toward "outside" / "different": it
+  denies more, never less. The same fix lets a case-only rename of an accented
+  name through, which `SameText`, folding only a-z, used to refuse as a move
+  "into itself" (`EnLugar`, `CaeDentro`, `MismaEntrada`, `RootItselfDenied`,
+  `RemoteRunProjectDenied`, `LugarProtegidoEn` and the root and place prefixes in
+  `Lsp.Guard`; `EnLugar` in `Lsp.Rutas`; two sites in `Lsp.Lugares`). The judge
+  is measured against the disk itself (`src/UnitTests/LspTests.RutasOrdinal.pas`:
+  it creates the pairs and asks NTFS whether they are the same entry) and
+  watched by `test_paisaje`.
 - **A dangling link can be deleted and moved.** A junction whose target was
   gone answered `SYS-012` "does not exist" to `delphi_delete` and `FILE-024`
   to `delphi_move` - existence was asked by following the link - and no tool

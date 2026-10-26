@@ -68,6 +68,18 @@ function FormaLarga(const APath: string): string;
 function EnLugar(const APath, ALugar: string;
   AResuelveAlias: Boolean = True): Boolean;
 
+{ La comparacion de rutas tal como la hace el SISTEMA DE FICHEROS: ordinal
+  (CompareStringOrdinal con IgnoreCase), la de NTFS y la de SameFileName de la
+  RTL (su fuente: AnsiCompareFileName con CheckVolumeCase=False). StartsText,
+  SameText y MatchText pliegan con el LOCALE del usuario (lingueistica): dan por
+  IGUALES dos nombres que NTFS trata como entradas DISTINTAS -la eszett y "ss",
+  las tres grafias de la "dz"- y por ahi se leia y se escribia fuera de la jaula
+  (H1, medido contra r1222ci). La IGUALDAD de dos rutas es SameFileName; "esta
+  dentro de AContenedor o es el", RutaDentroDe; contra una LISTA, RutaEnLista.
+  Solo yerran hacia "fuera" / "distintas": niegan de mas, nunca de menos. }
+function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
+function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+
 { AReal (una ruta REAL, RealPath) esta en alguno de ALugares, cada uno por
   SU ruta real: la comparacion de los lugares de las puertas (Lsp.Patch) y de
   la zona de biblioteca de la jaula (Lsp.Guard.JaulaDecide, que la juzgaba
@@ -531,10 +543,37 @@ begin
       Ruta := FormaLarga(APath.Trim);
       Lugar := FormaLarga(ALugar.Trim);
     end;
-    Result := StartsText(Lugar, Ruta);
+    Result := RutaDentroDe(Lugar, Ruta);
   except
     Result := False; // una ruta que no parsea no esta en ningun sitio
   end;
+end;
+
+function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
+var
+  C, R: string;
+begin
+  Result := False;
+  if (AContenedor.Trim = '') or (ARuta.Trim = '') then
+    Exit;
+  C := IncludeTrailingPathDelimiter(AContenedor.Trim);
+  R := IncludeTrailingPathDelimiter(ARuta.Trim);
+  // el prefijo de R, del largo de C, comparado como el disco: AnsiCompareFileName
+  // con CheckVolumeCase por defecto (False) = CompareStringOrdinal(IgnoreCase),
+  // el MISMO motor que SameFileName. La barra final en los dos: "casa\" no es
+  // prefijo de "casa2\".
+  Result := (Length(R) >= Length(C)) and
+    (AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0);
+end;
+
+function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+var
+  L: string;
+begin
+  for L in ALista do
+    if SameFileName(ARuta, L) then
+      Exit(True);
+  Result := False;
 end;
 
 function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;

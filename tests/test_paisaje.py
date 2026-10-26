@@ -456,6 +456,21 @@ REGLAS = [
      'Y en Lsp.Sandbox, PonDescriptor (el SDDL del contenedor de delphi_test) y ActualizaPermisoDeVentanas '
      '(su permiso sobre la estacion y el escritorio). Son los tres unicos sitios que escriben la '
      'seguridad de un objeto; uno nuevo se revisa aqui'),
+    # H1 (revision del paisaje de Fable, 26-oct-2026): comparar rutas como el
+    # SISTEMA DE FICHEROS -ordinal, CompareStringOrdinal/AnsiCompareFileName- vive
+    # en UN sitio, RutaDentroDe. StartsText/SameText linguisticos daban por dentro
+    # o iguales lo que NTFS distingue (la eszett y "ss", las tres grafias de la
+    # "dz") y se leia y escribia fuera de la jaula (medido contra r1222ci)
+    ('comparar rutas como el sistema de ficheros',
+     r'\b(?:AnsiCompareFileName|CompareStringOrdinal)\w*\s*\(',
+     [('Lsp.Rutas.pas', 'RutaDentroDe')],
+     'RutaDentroDe (Lsp.Rutas, H1): el "dentro de o es" de dos rutas por la '
+     'comparacion ORDINAL del sistema de ficheros (AnsiCompareFileName con '
+     'CheckVolumeCase=False = CompareStringOrdinal, el motor de SameFileName). '
+     'La IGUALDAD de rutas es SameFileName (RTL) y contra una lista RutaEnLista, '
+     'las dos por el mismo motor; el prefijo, aqui. StartsText/SameText pliegan '
+     'con el locale y daban por dentro o iguales lo que NTFS separa: se leia y '
+     'escribia fuera de la jaula (medido contra r1222ci)'),
     # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
     # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
     # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
@@ -1336,6 +1351,8 @@ PLANTADO = {
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
+    'comparar rutas como el sistema de ficheros':
+        "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",
     'la linea de fallo del nodo': "      Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",
