@@ -40,7 +40,8 @@ test_contratos_1222, test_puerta_leer y test_resultados):
       la de origen se va
   C3  ...y con un fichero de dentro cogido: SYS-027 que lo nombra, y todo vuelve
   C4  renombrar cambiando solo las mayusculas, un fichero y una carpeta (r1222ce
-      daba FILE-025, el destino "ya existia"; V19, MOVE-009)
+      daba FILE-025, el destino "ya existia"; V19, MOVE-009); y uno con una
+      letra acentuada (la ene con tilde): MOVED, que SameText no plegaba (H1)
   C5  MAX_PATH: GUARD-028 con la ruta mas larga que escribiria, y nada escrito
   C6  dos copias del mismo proyecto, y las dos compilan
   C7  la nota de una MEZCLA (move y copy) cuenta lo que entro y no lo que ya
@@ -55,7 +56,9 @@ Mutante: produccion r1222ce, 11 rojos: W1-W5 y W7 (GUARD-024 a todo comodin), C1
 (GUARD-024), C2-C4 (FILE-025: ni mezcla ni mayusculas) y C5 (MOVE-012 INTERNAL a
 mitad). W6 y C6 son guardas: GUARD-024 ya era asi, y la copia es de la fase 2.
 C8 y su control, rojos contra r1222cf: el FILE-051 de mas, y el form nombrado
-UFICHA.dfm, compuesto desde la unit (sonda_par_nombre).
+UFICHA.dfm, compuesto desde la unit (sonda_par_nombre). C4 con tilde (renombrar
+solo la caja de la ene con tilde), roja contra r1222ci: FILE-025, porque
+MismaEntrada con SameText no plegaba la acentuada (H1).
 
 Uso:  python tests/test_ficheros_operador_1230.py [exe]
 """
@@ -231,6 +234,11 @@ try:
           mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.abre(r2, 'SK_MOVE_MOVIDO_FMT') and
           sorted(n for n in os.listdir(os.path.join(C, 'may')) if n != mc.PAPELERA) == ['ABC.txt', 'CARPETA'] and
           os.listdir(os.path.join(C, 'may', 'CARPETA')) == ['dentro.txt'], (r[:200], r2[:200]))
+    escribe(os.path.join(C, 'may', 'niño.txt'))
+    r3 = srv.call('delphi_move', {'path': os.path.join(C, 'may', 'niño.txt'),
+                                  'dest': os.path.join(C, 'may', 'NIÑO.txt')})
+    check('C4 con tilde: renombrar solo la caja de una letra acentuada (ene con tilde): MOVED, no FILE-025/MOVE-009 (SameText no plegaba la acentuada; ROJO contra r1222ci)',
+          mc.abre(r3, 'SK_MOVE_MOVIDO_FMT') and 'NIÑO.txt' in os.listdir(os.path.join(C, 'may')), r3[:300])
     escribe(os.path.join(C, 'par', 'UFicha.pas'), 'unit UFicha;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
     escribe(os.path.join(C, 'par', 'UFicha.dfm'), 'object FormUFicha: TFormUFicha\nend\n')
     r = srv.call('delphi_move', {'path': os.path.join(C, 'par', 'UFicha.pas'),
