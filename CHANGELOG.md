@@ -134,6 +134,16 @@ the MCP `initialize` response (`serverInfo.version`).
   description and `RUN-004`/`RUN-005`/`RUN-006` no longer promise the whole
   output, and `output` no longer claims to bring only what was written "since
   its answer": it brings everything from the start.
+- **`delphi_git` no longer shows the trash as untracked after `stash pop`, nor
+  when a `commit` has nothing staged.** `status` and `add` leave the trash
+  (`__delphi-patch`) out, but in these two cases git prints its own status,
+  and that status listed `Untracked files: __delphi-patch/`. In the commit
+  case it added "nothing added to commit but untracked files present", which
+  invites adding it. Now `stash pop` runs quiet and is followed by the same
+  status `command=status` gives (`GIT-083`). A conflict still shows there as
+  `UU`, and the stash is kept. A commit that git refuses because nothing is
+  staged (git itself says so: `diff --cached --quiet`) answers `GIT-084` with
+  that status.
 
 ## [1.23.0] - 2026-10-26
 

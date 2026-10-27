@@ -252,6 +252,16 @@ begin
     ' ' + EnComillas(':(exclude,glob)**/' + TempFolderName + '/**');
 end;
 
+{ LA orden de estado de esta tool: porcelana con la rama y LO NUESTRO fuera.
+  La usan command=status y lo que se ensena del arbol tras un stash pop o un
+  commit que no hizo nada: el status que git imprime solo en esos dos no
+  pasa por LoNuestroFuera y listaba la papelera como "Untracked files" (V66
+  de la 1.23.1). ACola: ' --' o las rutas, con el suyo. }
+function OrdenDeEstado(const ACola: string): string;
+begin
+  Result := 'status --porcelain=v1 -b' + ACola + LoNuestroFuera;
+end;
+
 { EL git del servidor, por su RUTA COMPLETA: git.exe en el PATH con el que
   arranco el proceso del servidor (el del operador) y SOLO ahi
   (ProgramaEnPath: ni la carpeta actual ni la del exe). Se lanzaba por su
@@ -1726,7 +1736,7 @@ begin
       Exit;
   end;
   if Cmd = 'status' then
-    GitArgs := 'status --porcelain=v1 -b' + Cola + LoNuestroFuera
+    GitArgs := OrdenDeEstado(Cola)
   else if Cmd = 'diff' then
   begin
     var Forma := '';
@@ -1929,7 +1939,11 @@ begin
       GitArgs := 'stash ' + Accion;
       // list solo ENSENA; pop reescribe el arbol con lo aparcado
       if Accion = 'pop' then
+      begin
+        // sin el status que git imprime solo: detras va el nuestro (V66)
+        GitArgs := GitArgs + ' --quiet';
         SeQuitan := [Raiz];
+      end;
     end
     else if Accion = 'push' then
     begin
@@ -2205,6 +2219,28 @@ begin
           IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch', 'ls-remote']), 600000, 60000),
           ExitCode);
         GitCorrio := True;
+        // V66 de la 1.23.1: el estado que git imprime por su cuenta no pasa
+        // por LoNuestroFuera. Tras un stash pop (ya --quiet), el NUESTRO; y un
+        // commit que no hizo nada porque no habia nada preparado - lo dice
+        // git, diff --cached --quiet; su "nada que confirmar" sale con 1 -
+        // contesta con el nuestro en vez del suyo
+        if (Cmd = 'stash') and SameText(Params.Action.Trim, 'pop') then
+        begin
+          var CodigoEstado: Cardinal;
+          var Estado := GitCorre(Repo, Fijado, OrdenDeEstado(' --'), 60000, CodigoEstado);
+          Output := Output.TrimRight;
+          if Output <> '' then
+            Output := Output + #10;
+          Output := Output + MsgFmt(SN_GIT_ESTADO_TRAS_POP_FMT, [Estado.TrimRight]);
+        end
+        else if (Cmd = 'commit') and (ExitCode = 1) then
+        begin
+          var CodigoPreparado, CodigoEstado: Cardinal;
+          GitCorre(Repo, Fijado, 'diff --cached --quiet', 60000, CodigoPreparado);
+          if CodigoPreparado = 0 then
+            Output := MsgFmt(SN_GIT_COMMIT_SIN_NADA_FMT,
+              [GitCorre(Repo, Fijado, OrdenDeEstado(' --'), 60000, CodigoEstado).TrimRight]);
+        end;
         // log sin count se queda en LOG_POR_DEFECTO commits y no se decia: 20
         // de 30, y offset=20 daba GIT-054 (D7 de los revisores de cierre de la
         // 1.18.2). Si hay MAS lo dice git: la misma orden con un commit mas de

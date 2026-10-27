@@ -507,6 +507,18 @@ const
     'undone): the working tree keeps its changes. To discard a file''s ' +
     'changes: command=stash with its paths - they go back to HEAD and the ' +
     'change stays in the stash.';
+  { El estado que git imprime POR SU CUENTA no pasa por la exclusion de la
+    papelera (V66 de la 1.23.1): stash pop va con --quiet y detras NUESTRO
+    estado, el de command=status. %s = ese estado }
+  SN_GIT_ESTADO_TRAS_POP_FMT =
+    '[GIT-083] The working tree now, as command=status shows it:'#10'%s';
+  { ...y un commit sin nada preparado (lo dice git: diff --cached --quiet)
+    imprimia ese status con la papelera y "nothing added to commit but
+    untracked files present", que invita a anadirla. %s = NUESTRO estado }
+  SN_GIT_COMMIT_SIN_NADA_FMT =
+    '[GIT-084] Nothing is staged, so nothing was committed: add the files ' +
+    'first (command=add with their paths). The working tree, as ' +
+    'command=status shows it:'#10'%s';
   { untrack acaba en silencio (--quiet) y solo toca el indice: se dice que
     hizo y que viene despues (1.21.4). }
   SN_GIT_UNTRACK_SOLO_INDICE =
