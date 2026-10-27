@@ -91,13 +91,18 @@ the MCP `initialize` response (`serverInfo.version`).
   redeclared`. There were three rules for the same question: `adduses`,
   `add-unit`, `remove-unit`, `removeuses` and the rename compared the exact
   name, the `.dpr` had a loop of its own, and `insert` and `check-binding`
-  took the last part of any scoped name. Now one judge answers all of them, as
-  dcc resolves a name: as written when that unit exists (a unit of the project
-  or of the library), otherwise with the first of the project's unit scope
-  names (`DCC_Namespace`) that finds it. So a project with its own `Messages`
-  unit can still add `Messages` beside `Winapi.Messages` (dcc compiles it,
-  measured). Two names of the same unit in one `adduses` go in once, and
-  `removeuses=Forms` removes the `Vcl.Forms` that is there.
+  took the last part of any scoped name. Now one judge answers the names an
+  agent writes, as dcc resolves them: as written when that unit exists (one
+  the project lists, one dcc finds by its name in the project's folder or in
+  its search path, or one of the library), otherwise with the first of the
+  project's unit scope names (`DCC_Namespace`) that finds it. So a project
+  with its own `Messages` unit can still add `Messages` beside
+  `Winapi.Messages`, and a `Graphics.pas` next to the `.dpr` is `Graphics`,
+  not `Vcl.Graphics` (dcc compiles both, measured). Two names of the same
+  unit in one `adduses` go in once, and `removeuses=Forms` removes the
+  `Vcl.Forms` that is there. A unit named by its file (`add-unit`,
+  `remove-unit`, the rename) is that file's unit, never one found through a
+  scope.
 - **`add-unit` writes the path of a unit that lives in another folder, and the
   walkers skip only what hangs from the root.** The path a project lists for a
   unit (`IncludeFor`) and the part of a path below a root (`RelToRoot`) were

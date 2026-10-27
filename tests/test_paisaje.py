@@ -544,6 +544,13 @@ REGLAS = [
      [('Lsp.FormRender.pas', 'PeticionDeRender')],
      'PeticionDeRender (Lsp.FormRender): lo comun de una peticion al ayudante - framework, ruta, la version '
      'del IDE, la raiz -; quien la usa anade lo suyo (Salida, Convierte...)'),
+    # que es una unidad en una carpeta que dcc mira: la biblioteca y, desde V107 de la 1.23.1, la
+    # carpeta y el search path del proyecto (el juez de V79 no los miraba y adduses decia que
+    # Graphics era Vcl.Graphics con un Graphics.pas al lado del .dpr)
+    ('las unidades de una carpeta a mano', r"'\.dcu'.*'\.pas'|'\.pas'.*'\.dcu'",
+     [('Lsp.Discovery.pas', 'UnidadesEnCarpetas')],
+     'UnidadesEnCarpetas (Lsp.Discovery): los .dcu y .pas de una carpeta, por la clave con que se buscan '
+     '(ClaveDeIdentificador), sin bajar a subcarpetas: lo que dcc encuentra por su nombre'),
     # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
     # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
     # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
@@ -1443,6 +1450,7 @@ PLANTADO = {
     'la clave de una ruta real a mano': "  Vistos.Add(LowerCase(RealPath(Sub)));",
     'buscar en la lista de la biblioteca a mano': "  if TArray.BinarySearch<string>(Unidades, AName.ToLower, Ix) then X := 1;",
     'una peticion de render compuesta a mano': "  Pet := Default(TPeticionRender);",
+    'las unidades de una carpeta a mano': "  if MatchText(TPath.GetExtension(F), ['.pas', '.dcu']) then X := 1;",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",

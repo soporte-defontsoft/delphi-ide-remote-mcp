@@ -427,6 +427,13 @@ function ComponentRootOf(const APath: string): string;
   Medido: 1900 .dcu en 2 ms. Se mide de nuevo cada minuto (un componente
   que se instala entra en el siguiente). Sin Delphi, vacio. }
 function UnidadesDeLaBiblioteca: TArray<string>;
+{ Las CLAVES de las unidades (ClaveDeIdentificador del nombre sin extension,
+  ordenadas, cada una una vez) de los .dcu y .pas que hay EN cada carpeta de
+  ACarpetas, sin bajar a subcarpetas: lo que dcc encuentra por su nombre en
+  una carpeta que mira. EL listador: de la biblioteca (UnidadesDeLaBiblioteca)
+  y de la carpeta y el search path de un proyecto (Lsp.ProjectUnits.
+  ResolutorDeUnidades, V107 de la 1.23.1). Lo que no se lista no cuenta. }
+function UnidadesEnCarpetas(const ACarpetas: TArray<string>): TArray<string>;
 { Si ANombre (una unidad, con sus puntos) es de AUnidades - lo que dio
   UnidadesDeLaBiblioteca -, por la MISMA clave con la que se escribieron
   (ClaveDeIdentificador: sin el idioma del usuario). EL lector: cuatro
@@ -1514,13 +1521,39 @@ var
   GUnidades: TArray<string>;
   GUnidadesTick: UInt64;
 
-function UnidadesDeLaBiblioteca: TArray<string>;
-const
-  VIDA_MS = 60000;
+function UnidadesEnCarpetas(const ACarpetas: TArray<string>): TArray<string>;
 var
   Vistas: TDictionary<string, Boolean>;
   Sr: TSearchRec;
   Ext: string;
+begin
+  Vistas := TDictionary<string, Boolean>.Create;
+  try
+    for var C in ACarpetas do
+      if FindFirst(TPath.Combine(C, '*'), faAnyFile, Sr) = 0 then
+      try
+        repeat
+          if (Sr.Attr and faDirectory) <> 0 then
+            Continue;
+          Ext := LowerCase(ExtractFileExt(Sr.Name));
+          if (Ext = '.dcu') or (Ext = '.pas') then
+            Vistas.AddOrSetValue(ClaveDeIdentificador(ChangeFileExt(Sr.Name, '')), True);
+        until FindNext(Sr) <> 0;
+      finally
+        System.SysUtils.FindClose(Sr); // el de Winapi.Windows, detras en los uses, toma un THandle
+      end;
+    Result := Vistas.Keys.ToArray;
+    TArray.Sort<string>(Result);
+  finally
+    Vistas.Free;
+  end;
+end;
+
+function UnidadesDeLaBiblioteca: TArray<string>;
+const
+  VIDA_MS = 60000;
+var
+  Carpetas: TArray<string>;
 begin
   TMonitor.Enter(GDelphiCandado);
   try
@@ -1529,27 +1562,10 @@ begin
   finally
     TMonitor.Exit(GDelphiCandado);
   end;
-  Vistas := TDictionary<string, Boolean>.Create;
-  try
-    for var Plat in ['Win32', 'Win64'] do
-      for var C in IdePlatformLibraryPaths(DiscoverRadStudio, Plat) do
-        if FindFirst(TPath.Combine(C, '*'), faAnyFile, Sr) = 0 then
-        try
-          repeat
-            if (Sr.Attr and faDirectory) <> 0 then
-              Continue;
-            Ext := LowerCase(ExtractFileExt(Sr.Name));
-            if (Ext = '.dcu') or (Ext = '.pas') then
-              Vistas.AddOrSetValue(ClaveDeIdentificador(ChangeFileExt(Sr.Name, '')), True);
-          until FindNext(Sr) <> 0;
-        finally
-          System.SysUtils.FindClose(Sr); // el de Winapi.Windows, detras en los uses, toma un THandle
-        end;
-    Result := Vistas.Keys.ToArray;
-    TArray.Sort<string>(Result);
-  finally
-    Vistas.Free;
-  end;
+  Carpetas := nil;
+  for var Plat in ['Win32', 'Win64'] do
+    Carpetas := Carpetas + IdePlatformLibraryPaths(DiscoverRadStudio, Plat);
+  Result := UnidadesEnCarpetas(Carpetas);
   TMonitor.Enter(GDelphiCandado);
   try
     GUnidades := Result;

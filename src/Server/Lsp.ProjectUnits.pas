@@ -169,9 +169,10 @@ function CabeceraDeUnit(const ASrc: string; out ANombre: string;
 
 type
   { EL juez de "es la misma unidad" en un uses, como lo resuelve dcc (V79 de
-    la 1.23.1): un nombre TAL CUAL si esa unidad existe - del proyecto (su
-    fuente principal la lista) o de la biblioteca (Lsp.Discovery.
-    UnidadesDeLaBiblioteca) -; si no, con el primero de los ambitos del
+    la 1.23.1): un nombre TAL CUAL si esa unidad existe - del proyecto (la
+    lista su fuente principal, o esta en su carpeta o en su search path: V107)
+    o de la biblioteca (Lsp.Discovery.UnidadesDeLaBiblioteca) -; si no, con
+    el primero de los ambitos del
     proyecto (su DCC_Namespace, ConfigFabricator.AmbitosDelProyecto) con el
     que exista: en un proyecto VCL StdCtrls es Vcl.StdCtrls. Medido con dcc:
     adduses=StdCtrls sobre un uses con Vcl.StdCtrls daba E2004 "Identifier
@@ -182,7 +183,9 @@ type
     ambito (UnidadEnUses: insert y check-binding). }
   TResolutorDeUnidades = record
     Ambitos: TArray<string>;
-    Propias: TArray<string>; // las del proyecto, por su clave (ClaveDeIdentificador)
+    // las que dcc encuentra en el proyecto, por su clave (ClaveDeIdentificador):
+    // las que lista su fuente principal y las de su carpeta y su search path
+    Propias: TArray<string>;
     Biblioteca: TArray<string>; // las de la biblioteca (UnidadesDeLaBiblioteca)
     { El nombre con el que dcc la encuentra; tal cual si no la encuentra }
     function Resuelve(const ANombre: string): string;
@@ -194,8 +197,10 @@ type
 { El juez para el fuente AFuente (un .pas, o la fuente principal de un
   proyecto): los ambitos y las unidades de SU proyecto (FindDproj de la
   sesion; el .dproj de al lado para un .dpr o un .dpk); sin proyecto, los
-  ambitos del compilador. No lanza: lo que no se lee no cuenta. }
-function ResolutorDeUnidades(const AFuente: string): TResolutorDeUnidades;
+  ambitos del compilador. ADeUnFichero: la unidad de un FICHERO que se nombra
+  (remove-unit, el renombrado), que existe - es ese fichero - y no se resuelve
+  por los ambitos. No lanza: lo que no se lee no cuenta. }
+function ResolutorDeUnidades(const AFuente: string; const ADeUnFichero: string = ''): TResolutorDeUnidades;
 
 { adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
   implementation) de un .pas; la clausula la escribe el motor. }
@@ -2233,13 +2238,18 @@ begin
   Result := False;
 end;
 
-function ResolutorDeUnidades(const AFuente: string): TResolutorDeUnidades;
+function ResolutorDeUnidades(const AFuente: string; const ADeUnFichero: string): TResolutorDeUnidades;
 var
   Dproj, Xml: string;
 begin
   Result := Default(TResolutorDeUnidades);
   Result.Ambitos := DEFAULT_NAMESPACES.Split([';'], TStringSplitOptions.ExcludeEmpty);
   Result.Biblioteca := UnidadesDeLaBiblioteca;
+  // la de un fichero es ESE fichero: Graphics.pas es Graphics, nunca
+  // Vcl.Graphics (V107: remove-unit de un Graphics.pas que no listaba nadie
+  // quitaba Vcl.Graphics del .dpr y decia "REMOVED unit Graphics")
+  if ADeUnFichero <> '' then
+    Result.Propias := [ClaveDeIdentificador(ADeUnFichero)];
   try
     if EsProyectoOSuFuente(AFuente) then
       Dproj := DprojDe(AFuente)
@@ -2257,6 +2267,18 @@ begin
     if LecturasDelIn(DprDe(Dproj), Unidades, Escritas, Rutas) = '' then
       for var N in Unidades do
         Result.Propias := Result.Propias + [ClaveDeIdentificador(N)];
+    // y las que dcc encuentra por su NOMBRE sin que nadie las liste: las de la
+    // carpeta del proyecto y las de su search path (medido con dcc, V107: un
+    // Graphics.pas sin listar al lado del .dpr, o en una carpeta del search
+    // path, es Graphics y no Vcl.Graphics - "uses Vcl.Graphics, Graphics"
+    // compila -; un .dcu en la carpeta del proyecto cuenta; en una subcarpeta
+    // que no esta en el search path, o al lado de la unidad que lo usa, no lo
+    // encuentra, ni un .dcu viejo en la carpeta de salida). Lo que el motor no
+    // puede ensenar no se mira: el build lo niega (BUILD-050)
+    var Dentro, Fuera: TArray<string>;
+    CarpetasDelProyecto(Xml, TPath.GetDirectoryName(Dproj), Info.PlataformaPorDefecto, Info.ConfigPorDefecto,
+      DiscoverRadStudio, Dentro, Fuera);
+    Result.Propias := Result.Propias + UnidadesEnCarpetas([TPath.GetDirectoryName(Dproj)] + Dentro);
   except
     // lo que no se lee no cuenta: se queda lo que ya se sabe
   end;
@@ -2388,7 +2410,7 @@ begin
   var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
   if NoSe <> '' then
     Exit(NoSe);
-  InDpr := LocateEntry(U, UnitName, ResolutorDeUnidades(Dpr), Entry);
+  InDpr := LocateEntry(U, UnitName, ResolutorDeUnidades(Dpr, UnitName), Entry);
   Include := IncludeFor(Dpr, Pas);
   if InDpr then
   begin
@@ -2500,7 +2522,7 @@ begin
   var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
   if NoSe <> '' then
     Exit(NoSe);
-  Found := LocateEntry(U, OldName, ResolutorDeUnidades(Dpr), Entry);
+  Found := LocateEntry(U, OldName, ResolutorDeUnidades(Dpr, OldName), Entry);
   if not Found then
     Exit(MsgFmt(SN_UNIT_ABSENT_FMT, [OldName, TPath.GetFileName(Dpr)]));
   OldInclude := EntryInclude(Entry);
@@ -3042,8 +3064,16 @@ var
   Entries, Quitadas, NoEstaban: TArray<string>;
 begin
   // el arbol se recorre FUERA del cerrojo, como en adduses; y solo cuenta
-  // para las que estan en el uses: la que no esta es USES-017, no remove-unit
-  var Propias := UnidadesDelProyecto(ADpr, ANames);
+  // para las que estan en el uses: la que no esta es USES-017, no remove-unit.
+  // Se mira la unidad que dcc toma por ese nombre - la de la entrada que se
+  // encuentra -, no el nombre dicho: removeuses=Graphics sobre un Vcl.Graphics,
+  // con un Graphics.pas en una subcarpeta que dcc no mira, mandaba a
+  // remove-unit una unidad de la biblioteca (V107)
+  var R := ResolutorDeUnidades(ADpr);
+  var Resueltas: TArray<string> := nil;
+  for var N in ANames do
+    Resueltas := Resueltas + [R.Resuelve(N)];
+  var Propias := UnidadesDelProyecto(ADpr, Resueltas);
   EnterFileEdit;
   try
     if not TFile.Exists(ADpr) then
@@ -3058,7 +3088,6 @@ begin
     Entries := U.Entries;
     Quitadas := [];
     NoEstaban := [];
-    var R := ResolutorDeUnidades(ADpr);
     for var I := 0 to High(ANames) do
       if LocateEntry(U, ANames[I], R, E) then
       begin

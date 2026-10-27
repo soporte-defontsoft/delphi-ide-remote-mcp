@@ -80,6 +80,13 @@ function FabricateSettings(const ADprojPath: string;
   como siempre). EL juez de lo que se recorta de los ajustes del motor y de
   lo que las tools del motor niegan (LSP-038, LSP-039). }
 function MotorPuedeEnsenar(const APath: string): Boolean;
+{ Las carpetas del search path (DCC_UnitSearchPath) de un proyecto (AXml, su
+  .dproj en ADprojDir) para el build APlat/ACfg, por EL evaluador, partidas en
+  las que el motor puede ensenar (ADentro) y las que no (AFuera). Las leen los
+  ajustes del motor y el juez de que unidad es un nombre en un uses
+  (Lsp.ProjectUnits.ResolutorDeUnidades, V107 de la 1.23.1). }
+procedure CarpetasDelProyecto(const AXml, ADprojDir, APlat, ACfg: string;
+  const AInfo: TRadStudioInfo; out ADentro, AFuera: TArray<string>);
 { Las units que el .dpr del proyecto nombra con ruta (in '...') FUERA de lo
   que esta sesion puede leer, por su nombre. No se pueden recortar (son el
   proyecto): completion y signature, que contestan nombres sin decir de
