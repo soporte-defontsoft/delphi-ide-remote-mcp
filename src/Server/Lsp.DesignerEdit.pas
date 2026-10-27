@@ -2852,14 +2852,15 @@ begin
   begin
     // una stored False: lo que el IDE escribe por ella (DSGN-167)
     AObj.AddPair('storedIn', ContenidoTalCual(AInfo.GuardadaEn));
+    // la nota remite a los campos: un valor repetido dentro de la frase lo
+    // estropeaba el enmascarador, que solo respeta lineas enteras (V103)
     AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT, [AInfo.Prop, ANombre,
-      IfThen(AInfo.GuardadaEn = '', MsgText(SF_DESIGNER_IDE_NADA_CAMBIA), AInfo.GuardadaEn)]));
+      MsgText(IfThen(AInfo.GuardadaEn = '', SF_DESIGNER_IDE_NADA_CAMBIA, SF_DESIGNER_IDE_VER_STOREDIN))]));
   end
   else if AInfo.GuardadaComo <> '' then
   begin
     AObj.AddPair('storedAs', ContenidoTalCual(AInfo.GuardadaComo));
-    AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_OTRO_FMT, [AInfo.Prop, ANombre,
-      AInfo.GuardadaComo, AInfo.Valor]));
+    AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_OTRO_FMT, [AInfo.Prop, ANombre]));
   end;
 end;
 

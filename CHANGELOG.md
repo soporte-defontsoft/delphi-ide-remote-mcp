@@ -177,6 +177,12 @@ the MCP `initialize` response (`serverInfo.version`).
   Turkish, `IOUtils` did not match `System.IOUtils`, so `adduses` could add a
   unit that was already there, and a library unit with a non-ASCII name was
   never found. Both sides now use the same language-independent key.
+- **The designer's note on how the IDE stores a value no longer repeats it.**
+  When the IDE stores a property differently from what was given, the answer
+  carries the values in `value`, `storedAs` and `storedIn`, exactly as the form
+  holds them. The note beside them (`DSGN-166`, `DSGN-167`) repeated those
+  values inside a sentence, where text that looked like a drive letter could
+  be masked. The note now points to those fields instead.
 
 ### Changed
 

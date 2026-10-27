@@ -126,6 +126,11 @@ try:
     check('S5 set Left de un TStatusBar alineado: el del IDE (0) escrito, y storedAs con DSGN-166',
           not mc.fallo(r) and j.get('storedAs') == '0' and mc.es(j.get('storedNote', ''), 'SN_DESIGNER_IDE_GUARDA_OTRO_FMT')
           and '    Left = 20\r\n' not in mc.lee(DFM), (props(DFM, 'SbUno'), r[:400]))
+    # V103 de la 1.23.1: la nota remite a storedAs/value, que van tal cual; el valor repetido dentro de la
+    # frase lo estropeaba el enmascarador (Contraseña: salia Contrasesrv0:)
+    nota = j.get('storedNote', '')
+    check('S5c la nota remite a storedAs y no repite los valores (V103)',
+          'storedAs' in nota and 'not 20' not in nota, nota)
     # (el 20 lo guarda el IDE como ExplicitLeft, lo de antes de alinear: su
     # DefineProperties, detras de las publicadas)
     check('S5 ...y el 20 queda como ExplicitLeft, detras de las publicadas, como el IDE',
@@ -152,6 +157,9 @@ try:
     check('S6 FMX set Width (stored False): ni notStored ni linea 0, storedIn con Size.Width = 120 y DSGN-167',
           not mc.fallo(r) and 'notStored' not in j and 'Size.Width = 120' in str(j.get('storedIn'))
           and mc.tiene(r, 'DSGN-167') and (j.get('line') or 0) > 0, r[:500])
+    nota = j.get('storedNote', '')
+    check('S6c ...y storedNote remite a storedIn sin repetir lo que escribe el IDE (V103)',
+          'storedIn' in nota and 'Size.Width' not in nota, nota)
     check('S6 ...y el fichero lleva el Size.Width que guarda el IDE',
           'Size.Width = 120.000000000000000000' in mc.lee(FMXF), mc.lee(FMXF)[-400:])
 finally:

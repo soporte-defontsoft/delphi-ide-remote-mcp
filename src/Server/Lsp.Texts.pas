@@ -6038,9 +6038,11 @@ const
     'that value.';
 
   { Lo que el agente puso y el IDE guarda con OTRO valor: el componente lo
-    cambia al cargarse (1.22.1). Lleva [prop, nombre, el guardado, el dado]. }
+    cambia al cargarse (1.22.1). Lleva [prop, nombre]: los dos valores van en
+    storedAs y value, tal cual (ContenidoTalCual); repetidos dentro de esta
+    frase los estropeaba el enmascarador (V103 de la 1.23.1). }
   SN_DESIGNER_IDE_GUARDA_OTRO_FMT =
-    '[DSGN-166] The IDE stores %s of %s as %s, not %s: the component itself ' +
+    '[DSGN-166] The IDE stores %s of %s as storedAs says, not as value: the component itself ' +
     'turns the value into that when the form loads (an Align that places ' +
     'it, a date without its time, the name of the same color...), so that is ' +
     'what is written and what the form loads with.';
@@ -6049,14 +6051,17 @@ const
     el IDE no la guarda nunca por su nombre y lo que el form guarda de ella va
     en otras (en FMX, Width y Height van en Size). Decia DSGN-165, "el valor de
     la clase", con Size.Width escrito (completo de Opus de la 1.22.1). Lleva
-    [prop, nombre, lo que escribe por ella: SF_DESIGNER_IDE_NADA_CAMBIA si no
-    cambio nada de lo que guarda]. }
+    [prop, nombre, SF_DESIGNER_IDE_VER_STOREDIN, o SF_DESIGNER_IDE_NADA_CAMBIA si
+    no cambio nada de lo que guarda]: lo que escribe por ella va en storedIn,
+    tal cual, y no repetido aqui (V103 de la 1.23.1). }
   SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT =
     '[DSGN-167] The IDE never stores %s of %s by that name (its class declares ' +
     'it stored False): the form keeps it in the properties the IDE writes for ' +
     'it - here: %s.';
   SF_DESIGNER_IDE_NADA_CAMBIA =
     'nothing it stores changed';
+  SF_DESIGNER_IDE_VER_STOREDIN =
+    'the ones storedIn shows';
 
   SN_DESIGNER_YA_ESTA_FMT =
     '[DSGN-101] %s is already inside %s: nothing to move.';
