@@ -108,7 +108,6 @@ uses
   System.JSON,
   System.IOUtils,
   System.StrUtils,
-  System.Win.Registry,
   Winapi.Windows,
   System.RegularExpressions,
   Lsp.RemoteRun,
@@ -517,23 +516,10 @@ end;
   '' si no hay asiento o no la dice. Para remove-sdk sin fichero: el asiento
   de un SDK que no es de PAServer no se toca. }
 function PlataformaDelAsiento(const AVersion, ANombre: string): string;
-var
-  R: TRegistry;
 begin
-  Result := '';
-  R := TRegistry.Create(KEY_READ);
-  try
-    R.RootKey := HKEY_CURRENT_USER;
-    if R.OpenKeyReadOnly('\' + ClaveDelIde(AVersion, 'PlatformSDKs\' + NombreDeSdk(ANombre))) then
-    try
-      if R.ValueExists('PlatformName') then
-        Result := R.ReadString('PlatformName');
-    finally
-      R.CloseKey;
-    end;
-  finally
-    R.Free;
-  end;
+  // por EL lector de un valor del IDE (Lsp.Discovery), con su except de un
+  // valor que no es texto: estaba reescrito aqui (V83 de la 1.23.1)
+  Result := IdeConfigValue(AVersion, 'PlatformSDKs\' + NombreDeSdk(ANombre), 'PlatformName');
 end;
 
 { Un SDK registrado, con lo que se sabe de el: nombre, sysroot, y -si lo
@@ -1690,7 +1676,6 @@ var
   Nombre, Plat, Host, Pwd: string;
   Puerto: Integer;
   Texto: string;
-  Reg: TRegistry;
   YaEstaba: Boolean;
   Return: TJSONObject;
   Sembrados, Intactos: TJSONArray;
@@ -1708,15 +1693,13 @@ begin
     Info := DiscoverRadStudio;
     if Info.Found then
     begin
+      // los asientos que ya tiene, por EL lector de las subclaves del IDE, UNA
+      // vez (un KeyExists a mano por perfil; V83 de la 1.23.1). El registro no
+      // distingue mayusculas en los nombres de clave: MatchText
+      var Asientos := IdeSubclaves(Info.Version, 'RemoteProfiles');
       for Nombre in PerfilesDelIde(Info.Version) do
       begin
-        Reg := TRegistry.Create(KEY_READ);
-        try
-          Reg.RootKey := HKEY_CURRENT_USER;
-          YaEstaba := Reg.KeyExists('\' + ClaveDelIde(Info.Version, 'RemoteProfiles\' + Nombre));
-        finally
-          Reg.Free;
-        end;
+        YaEstaba := MatchText(Nombre, Asientos);
         if YaEstaba then
         begin
           Intactos.Add(Nombre);

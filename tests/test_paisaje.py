@@ -444,6 +444,16 @@ REGLAS = [
      'Lsp.ShaCache: CachedFileSha256 (el de un fichero, con su cache por fecha y tamano) y Sha256DeBytes '
      '(el de unos bytes, para quien no puede fiarse de esa cache): un THashSHA2 montado a mano es otro '
      'formato de huella y otro lector del disco'),
+    # LEER la clave del IDE vive en sus lectores (Lsp.Discovery: IdeConfigValue, IdeSubclaves...);
+    # Mcp.Tools.PAServer abria la clave a mano dos veces (V83 de la 1.23.1). La fila de
+    # escribir el registro, arriba, solo mira escrituras
+    ('la clave del IDE leida sin su lector', r'\bClaveDelIde\(',
+     [('Lsp.Discovery.pas', '*'),
+      # los dos escritores, que componen la clave que exportan antes de tocarla
+      ('Lsp.Patch.pas', 'EscribeClaveDelIde'), ('Lsp.Patch.pas', 'BorraClaveDelIde')],
+     'Lsp.Discovery compone la clave del IDE (ClaveDelIde) y la lee (IdeConfigValue, IdeSubclaves, '
+     'IdeValoresDeClave...): un TRegistry abierto a mano sobre ella es otro lector, sin el except de un '
+     'valor que no es texto'),
     # escribir la seguridad de un fichero vive en UNA casa, ReclamaDaclHeredada: le da -como UN
     # objeto, SIN propagar (SetFileSecurity, no SetNamedSecurityInfo, que recorreria el arbol)- una
     # DACL protegida con una sola ACE para el dueno; el barrido de la casa la borra (V9 de la 1.23)
@@ -1383,6 +1393,7 @@ PLANTADO = {
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
     'el SHA-256 fuera de su casa': "  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);",
+    'la clave del IDE leida sin su lector': "  if R.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",

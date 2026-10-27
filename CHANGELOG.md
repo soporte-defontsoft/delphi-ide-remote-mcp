@@ -161,6 +161,12 @@ the MCP `initialize` response (`serverInfo.version`).
   hash. The second hashes the bytes with the shared function but without its
   cache, because it must catch a change of the same size made within the same
   tick. `test_paisaje` keeps the hasher in its one unit.
+- **The IDE's registry key is read only by its readers.** Two places in
+  `delphi_paserver` opened the key by hand: the platform an SDK's seat names,
+  and whether a profile already has its seat. The first now uses the IDE value
+  reader, which also copes with a value that is not text. The second asks once
+  for the list of seats instead of opening a key per profile. `test_paisaje`
+  keeps reads of that key in their unit.
 
 ## [1.23.0] - 2026-10-26
 
