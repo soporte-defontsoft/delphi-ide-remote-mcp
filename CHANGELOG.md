@@ -84,6 +84,20 @@ the MCP `initialize` response (`serverInfo.version`).
   `DSGN-165`), and `Opacity=` is refused by its type in its entry. `DSGN-090`,
   for a `set` without `value`, now says how an empty string goes: `value=''`,
   or `Prop=` in `props`.
+- **`adduses` no longer writes a uses clause that does not compile: "already
+  in the uses" is decided as dcc decides it, with the project's unit scope
+  names.** `adduses=StdCtrls` on a unit that already used `Vcl.StdCtrls`
+  answered `USES-013` ADDED, and the build failed with `E2004 Identifier
+  redeclared`. There were three rules for the same question: `adduses`,
+  `add-unit`, `remove-unit`, `removeuses` and the rename compared the exact
+  name, the `.dpr` had a loop of its own, and `insert` and `check-binding`
+  took the last part of any scoped name. Now one judge answers all of them, as
+  dcc resolves a name: as written when that unit exists (a unit of the project
+  or of the library), otherwise with the first of the project's unit scope
+  names (`DCC_Namespace`) that finds it. So a project with its own `Messages`
+  unit can still add `Messages` beside `Winapi.Messages` (dcc compiles it,
+  measured). Two names of the same unit in one `adduses` go in once, and
+  `removeuses=Forms` removes the `Vcl.Forms` that is there.
 
 ## [1.23.0] - 2026-10-26
 

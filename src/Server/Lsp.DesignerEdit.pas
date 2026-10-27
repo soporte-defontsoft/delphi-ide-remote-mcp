@@ -1672,8 +1672,8 @@ begin
     end;
 end;
 
-// (UnidadEnUses, si una unidad ya esta en un uses, vive en Lsp.Pascal: la
-// usa tambien check-binding, V69)
+// (si una unidad ya esta en un uses lo dice EL juez de dcc,
+// Lsp.ProjectUnits.TResolutorDeUnidades: lo usa tambien check-binding, V79)
 
 
 function BloqueNumerado(const ALineas: TArray<string>; AIni, AFin: Integer): TArray<string>;
@@ -2160,17 +2160,20 @@ begin
       if EsIdDeTipo(ClsId) then
         Unidades := [UnidadDeIdDeTipo(F.Tabla.IdEscrito[ClsId])] + F.Tabla.UnidadesDePresentacion(ClsId);
       var Pedidas: TArray<string> := [];
+      // "ya esta" por EL juez de dcc, con los ambitos de SU proyecto (V79): el
+      // ultimo trozo de cualquier ambito era otra regla
+      var Resolutor := ResolutorDeUnidades(F.Pas);
       for Unidad in Unidades do
-        if (Unidad <> '') and not UnidadEnUses(UPas.UsesInterface, Unidad) then
+        if (Unidad <> '') and not Resolutor.EnUses(UPas.UsesInterface, Unidad) then
         begin
-          if UnidadEnUses(UPas.UsesImplementation, Unidad) then
+          if Resolutor.EnUses(UPas.UsesImplementation, Unidad) then
             UsesNota := (UsesNota + ' ' + MsgFmt(SF_DESIGNER_USES_EN_IMPL_FMT, [Unidad, F.PasNombre])).Trim
           else
             Pedidas := Pedidas + [Unidad];
         end;
       if Length(Pedidas) > 0 then
       begin
-        Result := UsesConUnidades(PasNuevo, Pedidas, 'interface', F.PasNombre,
+        Result := UsesConUnidades(PasNuevo, Pedidas, 'interface', F.PasNombre, Resolutor,
           Faltan, YaEstan, EnOtra, Creada);
         if Result <> '' then
           Exit(Result + MsgFmt(SF_DESIGNER_INSERT_TRAS_USES_FMT, [string.Join(', ', Pedidas)]));

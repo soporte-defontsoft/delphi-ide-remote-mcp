@@ -46,6 +46,13 @@ const
     'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;' +
     'System;Xml;Data;Datasnap;Web;Soap';
 
+{ LOS AMBITOS de unidad con los que compila un proyecto (AXml, su .dproj) en
+  APlat/ACfg: su DCC_Namespace efectivo, separado por ';', o los del
+  compilador si no dice ninguno (DEFAULT_NAMESPACES). EL lector: lo leia a
+  mano el fabricante de ajustes del motor, y lo pregunta tambien el juez de
+  "es la misma unidad" de un uses (Lsp.ProjectUnits, V79 de la 1.23.1). }
+function AmbitosDelProyecto(const AXml, APlat, ACfg: string): string;
+
 { The project (main source, a path) a settings file names in
   settings.project; '' when the file cannot be read or names none. The
   inverse of what FabricateSettings writes there. The engine makes THAT
@@ -518,9 +525,7 @@ begin
     Defines := Defines + ';FRAMEWORK_' + Marco;
   Defines := ListaDeNombres(Defines);
 
-  Namespaces := ListaDeNombres(EffectiveProperty(Xml, 'DCC_Namespace', Plat, Cfg));
-  if Namespaces = '' then
-    Namespaces := DEFAULT_NAMESPACES;
+  Namespaces := AmbitosDelProyecto(Xml, Plat, Cfg);
 
   PathsJoined := string.Join(';', UnitPaths);
   Opts := '--no-config -A' + STANDARD_ALIASES;
@@ -604,6 +609,13 @@ begin
     System.TMonitor.Exit(GFabLock);
   end;
   Result := CacheFile;
+end;
+
+function AmbitosDelProyecto(const AXml, APlat, ACfg: string): string;
+begin
+  Result := ListaDeNombres(EffectiveProperty(AXml, 'DCC_Namespace', APlat, ACfg));
+  if Result = '' then
+    Result := DEFAULT_NAMESPACES;
 end;
 
 initialization

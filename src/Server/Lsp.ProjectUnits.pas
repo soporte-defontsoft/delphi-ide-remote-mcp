@@ -167,6 +167,36 @@ function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<st
 function CabeceraDeUnit(const ASrc: string; out ANombre: string;
   out AInicio, ALargo: Integer): Boolean;
 
+type
+  { EL juez de "es la misma unidad" en un uses, como lo resuelve dcc (V79 de
+    la 1.23.1): un nombre TAL CUAL si esa unidad existe - del proyecto (su
+    fuente principal la lista) o de la biblioteca (Lsp.Discovery.
+    UnidadesDeLaBiblioteca) -; si no, con el primero de los ambitos del
+    proyecto (su DCC_Namespace, ConfigFabricator.AmbitosDelProyecto) con el
+    que exista: en un proyecto VCL StdCtrls es Vcl.StdCtrls. Medido con dcc:
+    adduses=StdCtrls sobre un uses con Vcl.StdCtrls daba E2004 "Identifier
+    redeclared" (26-oct), y un proyecto con SU unidad Messages compila "uses
+    Winapi.Messages, Messages" (27-oct): el nombre tal cual va primero. Habia
+    tres reglas: el nombre exacto (LocateEntry: adduses, add-unit, removeuses,
+    el renombrado), un bucle propio en el .dpr y el ultimo trozo de CUALQUIER
+    ambito (UnidadEnUses: insert y check-binding). }
+  TResolutorDeUnidades = record
+    Ambitos: TArray<string>;
+    Propias: TArray<string>; // las del proyecto, en minusculas
+    Biblioteca: TArray<string>; // las de la biblioteca (UnidadesDeLaBiblioteca)
+    { El nombre con el que dcc la encuentra; tal cual si no la encuentra }
+    function Resuelve(const ANombre: string): string;
+    function MismaUnidad(const A, B: string): Boolean;
+    { AUnidad ya esta en esa lista de un uses (o de nombres) }
+    function EnUses(const AUses: TArray<string>; const AUnidad: string): Boolean;
+  end;
+
+{ El juez para el fuente AFuente (un .pas, o la fuente principal de un
+  proyecto): los ambitos y las unidades de SU proyecto (FindDproj de la
+  sesion; el .dproj de al lado para un .dpr o un .dpk); sin proyecto, los
+  ambitos del compilador. No lanza: lo que no se lee no cuenta. }
+function ResolutorDeUnidades(const AFuente: string): TResolutorDeUnidades;
+
 { adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
   implementation) de un .pas; la clausula la escribe el motor. }
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
@@ -176,9 +206,12 @@ function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
   sale con la clausula reescrita. '' = hecho, o la negativa (sin esa
   seccion, una clausula en ramas IFDEF). AFaltan entran; AYaEstan ya
   estaban; AEnOtra estan en la otra seccion y no entran (E2004); ACreada,
-  la clausula nacio. AFichero, solo para los mensajes. }
+  la clausula nacio. AFichero, solo para los mensajes. "Ya esta" lo dice
+  AResolutor, el juez de dcc (V79): StdCtrls ya esta si esta Vcl.StdCtrls,
+  y dos nombres de la misma unidad en ANames entran una vez. }
 function UsesConUnidades(var AText: string; const ANames: TArray<string>;
-  const ASec, AFichero: string; out AFaltan, AYaEstan, AEnOtra: TArray<string>;
+  const ASec, AFichero: string; const AResolutor: TResolutorDeUnidades;
+  out AFaltan, AYaEstan, AEnOtra: TArray<string>;
   out ACreada: Boolean): string;
 { removeuses de delphi_edit: la inversa; la clausula se va entera si queda vacia. }
 function RemoveUsesFromUnit(const APasPath: string; const ANames: TArray<string>;
@@ -291,7 +324,10 @@ uses
   Lsp.Settings,
   Lsp.TodoONada,
   Lsp.Args,
-  Lsp.Lugares;
+  Lsp.Lugares,
+  Lsp.ConfigFabricator, // AmbitosDelProyecto y los del compilador: el juez de un uses
+  Lsp.Discovery,        // UnidadesDeLaBiblioteca: la que existe tal cual
+  Lsp.Session;          // FindDproj: el proyecto de un fuente
 
 { TUnitInfo }
 
@@ -2163,14 +2199,77 @@ begin
   end;
 end;
 
+function TResolutorDeUnidades.Resuelve(const ANombre: string): string;
+
+  function Existe(const N: string): Boolean;
+  var
+    Ix: Integer;
+  begin
+    var L := N.ToLower;
+    Result := (IndexStr(L, Propias) >= 0) or TArray.BinarySearch<string>(Biblioteca, L, Ix);
+  end;
+
+begin
+  Result := ANombre;
+  if Existe(ANombre) then
+    Exit;
+  for var S in Ambitos do
+    if Existe(S + '.' + ANombre) then
+      Exit(S + '.' + ANombre);
+end;
+
+function TResolutorDeUnidades.MismaUnidad(const A, B: string): Boolean;
+begin
+  Result := MismoIdentificador(A, B) or MismoIdentificador(Resuelve(A), Resuelve(B));
+end;
+
+function TResolutorDeUnidades.EnUses(const AUses: TArray<string>; const AUnidad: string): Boolean;
+begin
+  for var E in AUses do
+    if MismaUnidad(E, AUnidad) then
+      Exit(True);
+  Result := False;
+end;
+
+function ResolutorDeUnidades(const AFuente: string): TResolutorDeUnidades;
+var
+  Dproj, Xml: string;
+begin
+  Result := Default(TResolutorDeUnidades);
+  Result.Ambitos := DEFAULT_NAMESPACES.Split([';'], TStringSplitOptions.ExcludeEmpty);
+  Result.Biblioteca := UnidadesDeLaBiblioteca;
+  try
+    if EsProyectoOSuFuente(AFuente) then
+      Dproj := DprojDe(AFuente)
+    else
+      Dproj := TLspSession.Instance.FindDproj(AFuente);
+    if (Dproj = '') or not TFile.Exists(Dproj) then
+      Exit;
+    // lo que compila el IDE mientras nadie pide otra cosa (sus selectores)
+    Xml := LeeTexto(Dproj, [ltJaula]);
+    var Info := InfoDeDproj(Xml);
+    Result.Ambitos := AmbitosDelProyecto(Xml, Info.PlataformaPorDefecto, Info.ConfigPorDefecto).Split([';'],
+      TStringSplitOptions.ExcludeEmpty);
+    // las que lista su fuente principal, por EL lector de sus entradas
+    var Unidades, Escritas, Rutas: TArray<string>;
+    if LecturasDelIn(DprDe(Dproj), Unidades, Escritas, Rutas) = '' then
+      for var N in Unidades do
+        Result.Propias := Result.Propias + [N.ToLower];
+  except
+    // lo que no se lee no cuenta: se queda lo que ya se sabe
+  end;
+end;
+
 { The entry and the .dproj include for a unit, by unit name or by file stem
-  (the .pas may already be gone when delete calls us). }
-function LocateEntry(const U: TUsesClause; const AUnitName: string; out AEntry: string): Boolean;
+  (the .pas may already be gone when delete calls us): the SAME unit, as dcc
+  resolves it (TResolutorDeUnidades, V79 de la 1.23.1). }
+function LocateEntry(const U: TUsesClause; const AUnitName: string; const AResolutor: TResolutorDeUnidades;
+  out AEntry: string): Boolean;
 var
   E: string;
 begin
   for E in U.Entries do
-    if MismoIdentificador(EntryUnitName(E), AUnitName) then
+    if AResolutor.MismaUnidad(EntryUnitName(E), AUnitName) then
     begin
       AEntry := E;
       Exit(True);
@@ -2287,7 +2386,7 @@ begin
   var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
   if NoSe <> '' then
     Exit(NoSe);
-  InDpr := LocateEntry(U, UnitName, Entry);
+  InDpr := LocateEntry(U, UnitName, ResolutorDeUnidades(Dpr), Entry);
   Include := IncludeFor(Dpr, Pas);
   if InDpr then
   begin
@@ -2295,7 +2394,8 @@ begin
       Include := EntryInclude(Entry);
     if FormName = '' then
       FormName := EntryFormName(Entry);
-    Entries := EntriesWithout(U.Entries, UnitName);
+    // la entrada que se encontro, como esta escrita
+    Entries := EntriesWithout(U.Entries, EntryUnitName(Entry));
     Text := ReplaceUses(Text, U, Entries);
     // the .pas gone: only the {Form} variable is known, match on it
     N := RemoveCreateForm(Text, ClassName, FormName);
@@ -2398,7 +2498,7 @@ begin
   var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
   if NoSe <> '' then
     Exit(NoSe);
-  Found := LocateEntry(U, OldName, Entry);
+  Found := LocateEntry(U, OldName, ResolutorDeUnidades(Dpr), Entry);
   if not Found then
     Exit(MsgFmt(SN_UNIT_ABSENT_FMT, [OldName, TPath.GetFileName(Dpr)]));
   OldInclude := EntryInclude(Entry);
@@ -2709,7 +2809,8 @@ end;
   ella, y el insert de delphi_designer escribe la unidad JUNTO con su form,
   todo o nada (1.17.0). }
 function UsesConUnidades(var AText: string; const ANames: TArray<string>;
-  const ASec, AFichero: string; out AFaltan, AYaEstan, AEnOtra: TArray<string>;
+  const ASec, AFichero: string; const AResolutor: TResolutorDeUnidades;
+  out AFaltan, AYaEstan, AEnOtra: TArray<string>;
   out ACreada: Boolean): string;
 var
   Blank, OtraSec, NL, Nombre, E: string;
@@ -2740,9 +2841,9 @@ begin
   // el 2026-09-23 con UPkgA en las dos).
   UOtra := UsesDeLaOtraSeccion(AText, Blank, ASec, OtraSec);
   for Nombre in ANames do
-    if U.Found and LocateEntry(U, Nombre, E) then
+    if (U.Found and LocateEntry(U, Nombre, AResolutor, E)) or AResolutor.EnUses(AFaltan, Nombre) then
       AYaEstan := AYaEstan + [Nombre]
-    else if UOtra.Found and LocateEntry(UOtra, Nombre, E) then
+    else if UOtra.Found and LocateEntry(UOtra, Nombre, AResolutor, E) then
       AEnOtra := AEnOtra + [Nombre]
     else
     begin
@@ -2829,16 +2930,12 @@ begin
       Exit(NoSe);
     Faltan := [];
     YaEstan := [];
+    // "ya esta" por EL juez de dcc (V79): tenia su propio bucle, el nombre exacto
+    var R := ResolutorDeUnidades(ADpr);
     for var N in ANames do
     begin
-      var Esta := False;
-      for var E in U.Entries do
-        if MismoIdentificador(EntryUnitName(E), N) then
-          Esta := True;
-      for var F in Faltan do
-        if MismoIdentificador(F, N) then
-          Esta := True;
-      if Esta then
+      var E: string;
+      if (U.Found and LocateEntry(U, N, R, E)) or R.EnUses(Faltan, N) then
         YaEstan := YaEstan + [N]
       else
         Faltan := Faltan + [N];
@@ -2902,7 +2999,7 @@ begin
     if not TFile.Exists(APasPath) then
       Exit(NoEsFichero(APasPath, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath])));
     Text := PatchLoadText(APasPath, Enc);
-    Result := UsesConUnidades(Text, Names, Sec, TPath.GetFileName(APasPath),
+    Result := UsesConUnidades(Text, Names, Sec, TPath.GetFileName(APasPath), ResolutorDeUnidades(APasPath),
       Faltan, YaEstan, EnOtra, Creada);
     if Result <> '' then
       Exit;
@@ -2956,8 +3053,9 @@ begin
     Entries := U.Entries;
     Quitadas := [];
     NoEstaban := [];
+    var R := ResolutorDeUnidades(ADpr);
     for var I := 0 to High(ANames) do
-      if LocateEntry(U, ANames[I], E) then
+      if LocateEntry(U, ANames[I], R, E) then
       begin
         // del proyecto: con su in '...' aunque el .pas viva fuera del arbol,
         // o con su .pas en el
@@ -2966,7 +3064,8 @@ begin
         if Propias[I] <> '' then
           Exit(MsgFmt(SR_REMOVEUSES_UNIDAD_DEL_PROYECTO_FMT, [ANames[I], Propias[I]]));
         Quitadas := Quitadas + [ANames[I]];
-        Entries := EntriesWithout(Entries, ANames[I]);
+        // la entrada que se encontro, como esta escrita (Forms quita Vcl.Forms)
+        Entries := EntriesWithout(Entries, EntryUnitName(E));
       end
       else
         NoEstaban := NoEstaban + [ANames[I]];
@@ -2994,6 +3093,7 @@ var
   U: TUsesClause;
   Names, Entries, Quitadas, NoEstaban: TArray<string>;
   PosSec: Integer;
+  Resolutor: TResolutorDeUnidades; // EL juez de "es la misma unidad" (V79)
 
   // lo de ANombres que esta en la uses de la OTRA seccion, dicho con la
   // section que lo quita; '' si alli no esta nada (Hermes, 1.18.0). Lee Text
@@ -3010,7 +3110,7 @@ var
       Exit;
     Estan := [];
     for N in ANombres do
-      if LocateEntry(UO, N, Ent) then
+      if LocateEntry(UO, N, Resolutor, Ent) then
         Estan := Estan + [N];
     if Length(Estan) > 0 then
       Result := MsgFmt(SN_REMOVEUSES_EN_LA_OTRA_FMT, [string.Join(', ', Estan), Otra, Otra]);
@@ -3036,6 +3136,7 @@ begin
     Sec := 'implementation';
   if not MatchText(Sec, ['interface', 'implementation']) then
     Exit(MsgFmt(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
+  Resolutor := ResolutorDeUnidades(APasPath);
   EnterFileEdit;
   try
     if not TFile.Exists(APasPath) then
@@ -3056,10 +3157,11 @@ begin
     Quitadas := [];
     NoEstaban := [];
     for Nombre in Names do
-      if LocateEntry(U, Nombre, E) then
+      if LocateEntry(U, Nombre, Resolutor, E) then
       begin
         Quitadas := Quitadas + [Nombre];
-        Entries := EntriesWithout(Entries, Nombre);
+        // la entrada que se encontro, como esta escrita (Forms quita Vcl.Forms)
+        Entries := EntriesWithout(Entries, EntryUnitName(E));
       end
       else
         NoEstaban := NoEstaban + [Nombre];

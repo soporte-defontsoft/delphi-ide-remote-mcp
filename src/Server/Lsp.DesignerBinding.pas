@@ -74,6 +74,7 @@ uses
   System.Generics.Collections,
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
+  Lsp.ProjectUnits, // ResolutorDeUnidades: EL juez de "es la misma unidad" (V79)
   Lsp.Json;
 
 const
@@ -353,6 +354,8 @@ begin
     finally
       UL.Free;
     end;
+    // ...juzgados como dcc, con los ambitos de SU proyecto (V79)
+    var Resolutor := ResolutorDeUnidades(Pas);
 
     // Anything the class could not be read from makes the two "missing" lists
     // unsafe: what looks absent may simply live where we cannot see.
@@ -401,7 +404,7 @@ begin
         var IdP: string;
         if (Tabla <> nil) and Tabla.ClaseDeNombre(UltimoTrozo(Cl2), IdP) then
           for var UP in Tabla.UnidadesDePresentacion(IdP) do
-            if not UnidadEnUses(UsosDeLaUnidad, UP) then
+            if not Resolutor.EnUses(UsosDeLaUnidad, UP) then
               SinPresentacion.Add(MsgFmt(SF_DSGN_SIN_UNIDAD_DE_PRESENTACION_FMT,
                 [IfThen(Nm = '', Cl2, Nm), Cl2, I + 1, UP, TPath.GetFileName(Pas), UP]));
         if OClave = 'inline' then
