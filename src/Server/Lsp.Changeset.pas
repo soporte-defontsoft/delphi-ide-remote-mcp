@@ -64,7 +64,6 @@ uses
   System.Classes,
   System.IOUtils,
   System.StrUtils,
-  System.Hash,
   System.DateUtils,
   System.SyncObjs,
   System.Generics.Collections,
@@ -76,7 +75,8 @@ uses
   Lsp.Casa, // FragmentoUnico: la cola del id, de un GUID
   Lsp.Mascara,
   Lsp.Rutas,
-  Lsp.ProjectUnits;
+  Lsp.ProjectUnits,
+  Lsp.ShaCache;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -132,17 +132,14 @@ begin
 end;
 
 function FingerprintBytes(const APath: string): string;
-var
-  S: TBytesStream;
 begin
   if not TFile.Exists(APath) then
     Exit('');
-  S := TBytesStream.Create(TFile.ReadAllBytes(APath));
-  try
-    Result := THashSHA2.GetHashString(S, SHA256);
-  finally
-    S.Free;
-  end;
+  // el SHA-256 de unos bytes de la casa (Lsp.ShaCache; V84 de la 1.23.1),
+  // SIN su cache de fichero: esta huella es la que ve un cambio entre
+  // preparar y confirmar, y la cache por (fecha, tamano) se tragaria uno del
+  // mismo tamano en el mismo tic
+  Result := Sha256DeBytes(TFile.ReadAllBytes(APath));
 end;
 
 procedure Prune;

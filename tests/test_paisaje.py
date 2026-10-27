@@ -437,6 +437,13 @@ REGLAS = [
       ('Lsp.Service.pas', 'TDelphiLspMcpService.ServiceAfterInstall')],
      'EscribeClaveDelIde y BorraClaveDelIde (Lsp.Patch): LA puerta del registro del IDE, que exporta '
      'antes lo que pisa o borra (reg.exe) y no reescribe lo que ya dice lo mismo'),
+    # el SHA-256 vive en UNA casa, Lsp.ShaCache: Lsp.RemoteRun y Lsp.Changeset montaban su
+    # propio THashSHA2, uno leyendo el binario a mano (V84 de la 1.23.1)
+    ('el SHA-256 fuera de su casa', r'\bTHashSHA2\b',
+     [('Lsp.ShaCache.pas', '*')],
+     'Lsp.ShaCache: CachedFileSha256 (el de un fichero, con su cache por fecha y tamano) y Sha256DeBytes '
+     '(el de unos bytes, para quien no puede fiarse de esa cache): un THashSHA2 montado a mano es otro '
+     'formato de huella y otro lector del disco'),
     # escribir la seguridad de un fichero vive en UNA casa, ReclamaDaclHeredada: le da -como UN
     # objeto, SIN propagar (SetFileSecurity, no SetNamedSecurityInfo, que recorreria el arbol)- una
     # DACL protegida con una sola ACE para el dueno; el barrido de la casa la borra (V9 de la 1.23)
@@ -884,8 +891,8 @@ REGLAS = [
      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Toma'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Anota'),
      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Vigila'), ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
      ('Lsp.TodoONada.pas', 'TFotoDeFicheros.CambioEn'),  # la de Cambiados, movida (W2 de la 1.18.2)
-     # su propio log (C5) y los binarios del propio servidor (el hash de lo que sube remote-run)
-     ('Lsp.LogSink.pas', 'LineasDe'), ('Lsp.RemoteRun.pas', 'Sha256DeFichero'),
+     # su propio log (C5); el hash de lo que sube remote-run ya es el de Lsp.ShaCache (V84 de la 1.23.1)
+     ('Lsp.LogSink.pas', 'LineasDe'),
      ('Mld.Sesion.pas', 'SesionGrafica'), ('McpDesktopNode.dpr', 'EjecutarLinux'),
      ('McpRunJob.dpr', 'LanzarYVigilar'), ('McpDesktopNode.dpr', 'TamanoPng'),
      ('McpRunJob.dpr', 'EsBinarioNativo'), ('McpRunJob.dpr', 'Arrancar'),
@@ -1375,6 +1382,7 @@ PLANTADO = {
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
+    'el SHA-256 fuera de su casa': "  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",

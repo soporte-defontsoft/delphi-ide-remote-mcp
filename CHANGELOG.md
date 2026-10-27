@@ -153,6 +153,15 @@ the MCP `initialize` response (`serverInfo.version`).
   picked up too, and then it is not offered. `delphi_list`'s description now
   says that `hidden` counts only the hidden entries that match the mask.
 
+### Changed
+
+- **One SHA-256 for the whole server.** Two places built their own hasher:
+  the hash that decides whether the desktop node is uploaded again, and the
+  changeset's fingerprint of each file. The first now uses the server's file
+  hash. The second hashes the bytes with the shared function but without its
+  cache, because it must catch a change of the same size made within the same
+  tick. `test_paisaje` keeps the hasher in its one unit.
+
 ## [1.23.0] - 2026-10-26
 
 A cleanup release: one rule where there were several, and the holes they

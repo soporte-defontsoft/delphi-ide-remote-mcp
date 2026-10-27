@@ -165,7 +165,6 @@ uses
   System.StrUtils,
   System.Diagnostics,
   System.SyncObjs,
-  System.Hash,
   System.RegularExpressions,
   Lsp.Settings,   // PaclientDeEntorno: el paclient que pone la bateria
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
@@ -181,7 +180,8 @@ uses
   Lsp.Rutas,         // FormaLarga: el proyecto dueno de un trabajo, por su ruta larga
   Lsp.Args,
   Lsp.Listas,        // ColaDeSalida: EL recorte de una salida en la respuesta
-  Lsp.NombresDeTrabajo;
+  Lsp.NombresDeTrabajo,
+  Lsp.ShaCache;
 
 var
   GNodoLock: TCriticalSection;
@@ -899,14 +899,6 @@ begin
   Result := BundledNodePath('');
 end;
 
-function Sha256DeFichero(const APath: string): string;
-var
-  H: THashSHA2;
-begin
-  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);
-  H.Update(TFile.ReadAllBytes(APath));
-  Result := H.HashAsString.ToLower;
-end;
 
 { El trabajo; EnsureNodeCurrent lo envuelve en el cerrojo del nodo. }
 function EnsureNodeCurrentNucleo(const AProfile: string;
@@ -928,7 +920,9 @@ begin
   Pc := PaClientPath;
   if Pc = '' then
     Exit(MsgText(SR_REMOTERUN_NO_PACLIENT));
-  LocalSha := Sha256DeFichero(Bin);
+  // el SHA-256 de fichero de la casa (Lsp.ShaCache): tenia su propio THashSHA2
+  // y leia el binario a mano (V84 de la 1.23.1)
+  LocalSha := CachedFileSha256(Bin).ToLower;
   // Carpeta PROPIA de esta comprobacion: el sello baja con su nombre remoto
   // (node.ver), asi que con un destino comun la comprobacion de un perfil se
   // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
