@@ -33,6 +33,7 @@ type
     [Test] procedure LaMasParecida;
     [Test] procedure TextoSigueAlNombreDelFuente;
     [Test] procedure RegistradaAlEjecutarDelFuente;
+    [Test] procedure PresentacionEstiladaDelFuente;
     [Test] procedure LineaCompartidaNoSeBorra;
     [Test] procedure DosCamposDeUnaLinea;
     [Test] procedure ConstantesDelFuente;
@@ -1218,6 +1219,49 @@ begin
   end;
 end;
 
+{ La presentacion ESTILADA que una unidad registra al ejecutar
+  (Lsp.DesignerMetaGen.PresentacionesEstiladas, hecho U; V69 de la 1.23.1): la
+  de TPresentationProxyFactory.Current.Register(<clase>, TControlType.Styled,
+  ...) de su initialization; no la Platform (FMX.Grid.iOS), ni una de un
+  Register de diseno. Y en la tabla, de ELLA sola: el nombre de la
+  presentacion es el de su clase (DefinePresentationName), no se hereda. }
+procedure TDesignerEditTests.PresentacionEstiladaDelFuente;
+const
+  FUENTE =
+    'unit Medida;' + CRLF + 'interface' + CRLF + 'implementation' + CRLF +
+    'procedure Register;' + CRLF + 'begin' + CRLF +
+    '  TPresentationProxyFactory.Current.Register(TDeDiseno, TControlType.Styled, TP<TX>);' + CRLF +
+    'end;' + CRLF +
+    'initialization' + CRLF +
+    '  TPresentationProxyFactory.Current.Register(TCustomGrid, TControlType.Styled, TStyledPresentationProxy<TStyledGrid>);' + CRLF +
+    '  TPresentationProxyFactory.Current.Register(TStringGrid, TControlType.Styled, TStyledPresentationProxy<TStyledGrid>);' + CRLF +
+    '  TPresentationProxyFactory.Current.Register(TPlataforma, TControlType.Platform, TWinPresentationProxy<TW>);' + CRLF +
+    'end.' + CRLF;
+var
+  M: TMetaTable;
+  Id: string;
+begin
+  Assert.AreEqual('TCustomGrid|TStringGrid', string.Join('|', PresentacionesEstiladas(FUENTE)));
+  Assert.AreEqual('', string.Join('|', PresentacionesEstiladas(
+    'unit M2;' + CRLF + 'interface' + CRLF + 'implementation' + CRLF + 'procedure Register;' + CRLF +
+    'begin' + CRLF + '  TPresentationProxyFactory.Current.Register(TDeDiseno, TControlType.Styled, TP<TX>);' +
+    CRLF + 'end;' + CRLF + 'end.' + CRLF)), 'sin initialization, nada');
+  M := TMetaTable.Create([
+    'C FMX.Grid:TStringGrid', 'U FMX.Grid:TStringGrid FMX.Grid.Style',
+    'C Mio:TMiGrid', 'H Mio:TMiGrid FMX.Grid:TStringGrid',
+    'C FMX.SpinBox:TSpinBox']);
+  try
+    Assert.IsTrue(M.ClaseDeNombre('TStringGrid', Id), 'TStringGrid');
+    Assert.AreEqual('FMX.Grid.Style', string.Join('|', M.UnidadesDePresentacion(Id)));
+    Assert.IsTrue(M.ClaseDeNombre('TMiGrid', Id) and (Length(M.UnidadesDePresentacion(Id)) = 0),
+      'una hija no la hereda');
+    Assert.IsTrue(M.ClaseDeNombre('TSpinBox', Id) and (Length(M.UnidadesDePresentacion(Id)) = 0),
+      'sin hecho U (su unidad ya la arrastra), nada');
+  finally
+    M.Free;
+  end;
+end;
+
 (* EL lector de un .rc (Lsp.Styles.LeeRc, 3c del censo de jueces): la
   gramatica de brcc32 medida el 18-oct-2026, por tokens. Las banderas de
   memoria delante del fichero (la regex de RcPathsDenied y la del lint no lo
@@ -1632,6 +1676,12 @@ begin
   Assert.IsTrue(Tiene(RegistradasAlEjecutar(Lee('fmx\FMX.ListBox.pas')), 'TListBoxGroupHeader'),
     'FMX.ListBox registra TListBoxGroupHeader');
   Assert.IsTrue(Length(RegistradasAlEjecutar(Lee('vcl\Vcl.StdCtrls.pas'))) = 0, 'Vcl.StdCtrls no registra ninguna');
+  // la presentacion estilada que registran (hecho U): FMX.Grid.Style la de los
+  // grids; la de FMX.Grid.iOS es Platform; FMX.Grid no registra ninguna
+  Assert.IsTrue(Tiene(PresentacionesEstiladas(Lee('fmx\FMX.Grid.Style.pas')), 'TStringGrid'),
+    'FMX.Grid.Style registra TStringGrid');
+  Assert.IsTrue(Length(PresentacionesEstiladas(Lee('fmx\FMX.Grid.iOS.pas'))) = 0, 'la de iOS es Platform');
+  Assert.IsTrue(Length(PresentacionesEstiladas(Lee('fmx\FMX.Grid.pas'))) = 0, 'FMX.Grid ninguna');
   A := '';
   for var L in ConstantesDeTexto(Lee('rtl\common\System.UIConsts.pas')) do
     if L.StartsWith('A IdentToAlphaColor ') then

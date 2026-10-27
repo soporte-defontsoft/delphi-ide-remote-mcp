@@ -5189,8 +5189,9 @@ const
     '- a class not in the table, or ambiguous - go apart as notes) | ' +
     'check-binding (does the .dfm agree with the class in the .pas: ' +
     'components with no published field, events naming a method that is ' +
-    'not published, published fields with no component, duplicate names - ' +
-    'all of which COMPILE and then throw when the form is created) | ' +
+    'not published, published fields with no component, duplicate names, an ' +
+    'FMX control whose styled presentation unit the .pas does not use - ' +
+    'all of which COMPILE and then fail when the form is created) | ' +
     'layout (WHERE things end up on a VCL .dfm: resolves Align and returns ' +
     'every control''s rectangle plus those of size zero, outside their ' +
     'container, overlapping or clipped by the bands around them - a form ' +
@@ -5208,7 +5209,9 @@ const
     'siblings (its own writer is asked; the last one, with orderNote, when ' +
     'it cannot be), its properties as the IDE''s writer stores them (ideNote ' +
     'says when it cannot be asked), with its published ' +
-    'field in the form''s class and its unit in the uses; the answer is its ' +
+    'field in the form''s class and its unit in the uses (in FMX also the one ' +
+    'that registers its styled presentation, FMX.Grid.Style for a grid); the ' +
+    'answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
     'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
@@ -6753,8 +6756,9 @@ const
     'message that does not point here: an event whose method does not exist ' +
     'or is not published makes the form fail to load, a component whose ' +
     'class no published field names loads only if that class is registered, ' +
-    'and a published field with no object ends up nil. Fix what the lists ' +
-    'say before calling anything done.';
+    'a published field with no object ends up nil, and an FMX control whose ' +
+    'styled presentation unit is missing shows a warning instead of itself. ' +
+    'Fix what the lists say before calling anything done.';
 
   SN_DESIGNER_SET_NOTE =
     '[DSGN-036] It is a SET: in the .dfm/.fmx it is written in square ' +
@@ -11972,6 +11976,20 @@ const
     'that class when it runs (RegisterClass, RegisterClasses, ' +
     'RegisterFmxClasses): loading the form raises EClassNotFound unless the ' +
     'program registers it itself';
+
+  { Un componente FMX cuya presentacion ESTILADA registra una unidad que la
+    del form no usa (hecho U de la tabla: la initialization que hace
+    TPresentationProxyFactory.Current.Register(TStringGrid, TControlType.Styled,
+    ...), y que la unidad de la clase no arrastra). Compila y carga, y FMX
+    pinta su aviso en lugar del control (FMX.Grid.pas: "Maybe it is necessary
+    to add the FMX.Grid.Style module"; V69 de la 1.23.1). %s nombre, %s clase,
+    %d linea, %s la unidad, %s el .pas, %s la unidad otra vez }
+  SF_DSGN_SIN_UNIDAD_DE_PRESENTACION_FMT =
+    '%s: %s (line %d of the form file) is drawn by the styled presentation ' +
+    'that %s registers, and %s does not use that unit: the form compiles and ' +
+    'loads, and FMX shows its warning in place of the control. Add it with ' +
+    'delphi_edit adduses=%s, as the IDE does when the control is dropped, ' +
+    'unless another unit of the program already uses it';
 
   SF_DSGN_QUEDADO_SIN_VALOR_FMT =
     '"%s" (line %d of the form file) has been left without a value: the form ' +

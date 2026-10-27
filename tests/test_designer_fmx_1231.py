@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """delphi_designer insert en FMX escribe lo que guarda el IDE al soltar un
-control: ALINEADO, y con el TabOrder que le da su padre (1.23.1, V68 y V72).
+control: ALINEADO, con el TabOrder que le da su padre y con la unidad que
+registra su presentacion estilada en el uses (1.23.1, V68, V72 y V69).
 
 Medido el 27-oct-2026 con el juez (el renderizador en --writeback): la VCL
 alinea al cargar; FMX no alinea lo que cuelga del form hasta que algo lo
@@ -22,6 +23,12 @@ TabOrder = 0 junto al 0 del heredado (la VCL da 1).
      10,10 (la VCL alineaba al cargar; la nota mentia ya en la 1.23.0)
   T1 form heredado: un boton nuevo en el panel heredado, TabOrder = 1 (tras el
      BtnCerrar heredado, 0)
+  P1 insert TStringGrid: FMX.Grid.Style al uses (la unidad que registra su
+     presentacion estilada; FMX.Grid no la usa: sin ella compila y FMX pinta
+     su aviso en lugar del grid - V69)
+  P2 control: insert TSpinBox no anade FMX.SpinBox.Style (FMX.SpinBox ya la usa)
+  P3 check-binding sin FMX.Grid.Style: presentationUnitsMissing lo dice
+  P4 control: con ella, la lista vacia
   T2 control: un boton escrito a mano DENTRO de un panel y SIN linea TabOrder
      sigue sin ella tras un set (solo el que se suelta entra en el tabulador:
      FMX no mete en el de un control al que lee sin ella, y el IDE tampoco se
@@ -231,8 +238,29 @@ try:
     p = props(F, 'BtnSinTab')
     check('T2 control: uno escrito sin TabOrder sigue sin el tras un set (solo el soltado entra)',
           not mc.fallo(r) and p.get('Text') == "'Otro'" and 'TabOrder' not in p, (p, r[:400]))
+
+    # V69: la unidad que registra la presentacion estilada (hecho U de la tabla)
+    PAS = os.path.join(FMX, 'UMain.pas')
+    r = d(command='insert', path=F, classname='TStringGrid', component='GrdDatos', parent='LayCentro')
+    j = mc.como_json(r) or {}
+    check('P1 insert TStringGrid: FMX.Grid.Style al uses, como lo anade el IDE al soltarlo',
+          not mc.fallo(r) and 'FMX.Grid.Style' in str(j.get('usesAdded')) and 'FMX.Grid.Style' in mc.lee(PAS),
+          (j.get('usesAdded'), r[:300]))
+    r = d(command='insert', path=F, classname='TSpinBox', component='SpnUno', parent='LayCentro')
+    pas = mc.lee(PAS)
+    check('P2 control: insert TSpinBox anade FMX.SpinBox y NO FMX.SpinBox.Style (FMX.SpinBox ya la usa)',
+          not mc.fallo(r) and 'FMX.SpinBox' in pas and 'FMX.SpinBox.Style' not in pas, r[:300])
+    s.call('delphi_edit', {'path': PAS, 'removeuses': 'FMX.Grid.Style', 'section': 'interface'})
+    r = d(command='check-binding', path=F)
+    falta = (mc.como_json(r) or {}).get('presentationUnitsMissing') or []
+    check('P3 check-binding sin FMX.Grid.Style: lo dice, con el grid y la unidad',
+          len(falta) == 1 and 'GrdDatos' in falta[0] and 'FMX.Grid.Style' in falta[0], r[:600])
+    s.call('delphi_edit', {'path': PAS, 'adduses': 'FMX.Grid.Style', 'section': 'interface'})
+    r = d(command='check-binding', path=F)
+    check('P4 control: con ella en el uses, la lista vacia',
+          (mc.como_json(r) or {}).get('presentationUnitsMissing') == [], r[:600])
 finally:
     s.cierra()
 
 mc.borra(BASE)
-mc.fin('designer FMX como al soltarlo en el IDE 1.23.1 (V68, V72)')
+mc.fin('designer FMX como al soltarlo en el IDE 1.23.1 (V68, V69, V72)')

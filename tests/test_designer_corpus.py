@@ -123,6 +123,15 @@ check('corpus: las tablas VCL y FMX del Delphi activo estan', listo, (a + ' | ' 
 # preguntar (DSGN-154) se cuenta por su motivo, nunca por falta de
 # renderizador (este arnes los pone)
 LINEA_N = re.compile(r'\s*line (\d+): (.*?)\s+->\s+(.*)$')
+# los avisos VERDADEROS, medidos: un Sample que de verdad falla (el form, y lo
+# que tiene que decir su aviso). Si uno deja de salir, se quita de aqui.
+#  - FireDAC InterBase Admin (2015): un TStringGrid y ninguna unidad del
+#    proyecto usa FMX.Grid.Style. Compilado tal cual, el exe no lleva TStyledGrid
+#    (0) y con la unidad si (31): FMX pinta su aviso en lugar del grid (V69 de
+#    la 1.23.1, medido el 27-oct-2026)
+VERDADEROS = {os.path.join('Object Pascal', 'Database', 'FireDAC', 'Samples', 'DBMS Specific', 'InterBase',
+                           'Admin', 'AdminUtility.fmx'): 'FMX.Grid.Style'}
+vistos_verdaderos = set()
 falsos, familia, notas, ejemplos, sin_lint = 0, 0, 0, [], []
 sin_lector, sin_render = {}, []
 # t=300: un lint puede preguntar al lector mas de una vez, y el lector tiene 75
@@ -155,6 +164,9 @@ for dst, r in zip(copiados, respuestas):
         if not l.startswith(' '):
             bloque = 'bad' if mc.abre(l, 'SN_DESIGNER_LINT_BAD_FMT') else 'otro'
         elif bloque == 'bad' and l.strip() and not LINEA_N.match(l):
+            if rel in VERDADEROS and VERDADEROS[rel] in l:
+                vistos_verdaderos.add(rel)
+                continue
             falsos += 1
             ejemplos.append('%s aviso sin linea: %s' % (rel, l.strip()[:160]))
     if mc.es(r, 'SN_DSGN_PARSER_FMT'):
@@ -186,6 +198,8 @@ for e in ejemplos:
     print('AVISO: ' + e)
 check('corpus: ni un aviso sobre los forms que el IDE escribio (%d forms; %d avisos, arriba)' % (len(copiados), falsos),
       falsos == 0, ' || '.join(ejemplos[:3]))
+check('corpus: los avisos VERDADEROS medidos siguen saliendo (%d)' % len(VERDADEROS),
+      vistos_verdaderos == set(VERDADEROS), sorted(set(VERDADEROS) - vistos_verdaderos))
 if familia:
     print('NOTA: corpus: %d avisos de familia (clases que registra un paquete sin fuente: politica pendiente)' % familia)
 print('NOTA: corpus: %d notas de clase sin fuente o ambigua (no juzgan)' % notas)

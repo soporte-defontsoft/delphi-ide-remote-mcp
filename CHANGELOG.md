@@ -45,6 +45,22 @@ the MCP `initialize` response (`serverInfo.version`).
   that its `Align` places an aligned control instead of "it lands at 10,10",
   which it said in VCL too. The `Viewport` the IDE writes for a grid stays 0:
   FMX reads it and throws it away (`FMX.ScrollBox`), so it changes nothing.
+- **An FMX grid inserted with `delphi_designer` brings `FMX.Grid.Style` to the
+  uses, and `check-binding` says when a form lacks it.** An FMX control is drawn
+  by the styled presentation that some unit registers when it runs
+  (`TPresentationProxyFactory.Current.Register(TStringGrid, TControlType.Styled,
+  ...)`), and `FMX.Grid` does not use the unit that registers the grid's:
+  insert added only `FMX.Grid`, the project built, `lint` and `check-binding`
+  said clean, and at run time FMX drew "A descendant of TStyledPresentationProxy
+  has not been registered for class TStringGrid" where the grid should be. The
+  designer tables now record, from the library's own source, the unit whose
+  initialization registers a class's styled presentation when the class's unit
+  does not already bring it through its uses (in Delphi 13.1's FMX that is
+  `FMX.Grid.Style`, for `TGrid`, `TStringGrid` and `TCustomGrid`; a third-party
+  library is read the same way). `insert` adds that unit as the IDE does when
+  the control is dropped, and `check-binding` (and the warnings after a form is
+  written) lists every control whose unit is missing in `presentationUnitsMissing`.
+  The tables move to generation 18 and are rebuilt on first use.
 
 ## [1.23.0] - 2026-10-26
 

@@ -163,7 +163,7 @@ function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: str
 var
   L, Nm, Cl2, Ev, Handler, RootClass, Chain, OClave: string;
   Ret: TJSONObject;
-  Miss, MissEv, NotPub, Extra, Dups, Empty: TJSONArray;
+  Miss, MissEv, NotPub, Extra, Dups, Empty, SinPresentacion: TJSONArray;
   Fields, PubMethods, AnyMethods, Seen, Objetos: TStringList;
   I, Depth, SkipBelow: Integer;
   AncestorOutside, ClassFound, Complete: Boolean;
@@ -171,6 +171,7 @@ var
   Clases: TArray<string>; // la clase de cada linea: la que juzga sus eventos
   Tabla: TMetaTable;
   FaltaTabla: TFaltaTabla;
+  UsosDeLaUnidad: TArray<string>; // los dos uses de la unidad del form
 
   { Los campos y metodos publicados de UNA clase, del lector de clases
     (Lsp.PascalDecl): lo que va antes de cualquier palabra de visibilidad es
@@ -342,6 +343,16 @@ begin
     Ret.AddPair('duplicateNames', Dups);
     Empty := TJSONArray.Create;
     Ret.AddPair('eventsWithNoHandler', Empty);
+    SinPresentacion := TJSONArray.Create;
+    Ret.AddPair('presentationUnitsMissing', SinPresentacion);
+    // sus dos uses: la unidad que registra la presentacion estilada de un
+    // componente tiene que estar en el programa (V69)
+    var UL := LeeFuentePascal(APasTexto);
+    try
+      UsosDeLaUnidad := UL.UsesInterface + UL.UsesImplementation;
+    finally
+      UL.Free;
+    end;
 
     // Anything the class could not be read from makes the two "missing" lists
     // unsafe: what looks absent may simply live where we cannot see.
@@ -385,6 +396,14 @@ begin
              not ClaseRegistrada(Cl2) then
             Miss.Add(MsgFmt(SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT, [Nm, Cl2, I + 1, Cl2]));
         end;
+        // la presentacion estilada de su clase, de una unidad que esta no usa
+        // (hecho U): compila, carga, y FMX pinta su aviso en su lugar (V69)
+        var IdP: string;
+        if (Tabla <> nil) and Tabla.ClaseDeNombre(UltimoTrozo(Cl2), IdP) then
+          for var UP in Tabla.UnidadesDePresentacion(IdP) do
+            if not UnidadEnUses(UsosDeLaUnidad, UP) then
+              SinPresentacion.Add(MsgFmt(SF_DSGN_SIN_UNIDAD_DE_PRESENTACION_FMT,
+                [IfThen(Nm = '', Cl2, Nm), Cl2, I + 1, UP, TPath.GetFileName(Pas), UP]));
         if OClave = 'inline' then
           SkipBelow := Depth;
         Continue;
@@ -430,7 +449,7 @@ begin
     // fue bien" en toda tool: dos significados en un campo (novena revision)
     Ret.AddPair('clean', TJSONBool.Create(ClassFound and (Miss.Count = 0) and
       (MissEv.Count = 0) and (NotPub.Count = 0) and (Extra.Count = 0) and
-      (Dups.Count = 0) and (Empty.Count = 0)));
+      (Dups.Count = 0) and (Empty.Count = 0) and (SinPresentacion.Count = 0)));
     if not ClassFound then
       Ret.AddPair('note', MsgFmt(SN_DESIGNER_BINDING_NOCLASS_FMT,
         [RootClass, TPath.GetFileName(Pas)]))
@@ -441,7 +460,8 @@ begin
           [Chain]));
       Ret.AddPair('note', IfThen((Miss.Count = 0) and (MissEv.Count = 0) and
         (NotPub.Count = 0) and (Extra.Count = 0) and (Dups.Count = 0) and
-        (Empty.Count = 0), MsgText(SN_DESIGNER_BINDING_OK), MsgText(SN_DESIGNER_BINDING_BAD)));
+        (Empty.Count = 0) and (SinPresentacion.Count = 0), MsgText(SN_DESIGNER_BINDING_OK),
+        MsgText(SN_DESIGNER_BINDING_BAD)));
     end;
     Result := Ret.ToJSON;
   finally
@@ -507,7 +527,8 @@ begin
   Res := TStringList.Create;
   try
     for Nombre in ['eventsWithMethodNotPublished', 'eventsWithoutMethod',
-                   'eventsWithNoHandler', 'componentsWithoutField', 'duplicateNames'] do
+                   'eventsWithNoHandler', 'componentsWithoutField', 'duplicateNames',
+                   'presentationUnitsMissing'] do
       if O.TryGetValue<TJSONArray>(Nombre, Arr) then
         for I := 0 to Arr.Count - 1 do
           Res.Add('  ' + Arr.Items[I].Value);

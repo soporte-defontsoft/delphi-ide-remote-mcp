@@ -1672,16 +1672,9 @@ begin
     end;
 end;
 
-// AUnidad ya esta en esa lista del uses: igual, o sin su ambito ('StdCtrls'
-// de un proyecto con los nombres de ambito del IDE)
-function UnidadEnUses(const AUses: TArray<string>; const AUnidad: string): Boolean;
-begin
-  for var E in AUses do
-    if MismoIdentificador(E, AUnidad) or
-       ((Pos('.', E) = 0) and MismoIdentificador(E, UltimoTrozo(AUnidad))) then
-      Exit(True);
-  Result := False;
-end;
+// (UnidadEnUses, si una unidad ya esta en un uses, vive en Lsp.Pascal: la
+// usa tambien check-binding, V69)
+
 
 function BloqueNumerado(const ALineas: TArray<string>; AIni, AFin: Integer): TArray<string>;
 begin
@@ -2160,21 +2153,28 @@ begin
       // las demas con su salto, la nueva con el dominante
       PasNuevo := CambiaLineasEnSuTexto(F.PasTexto, Detras + 1, 0,
         [Sangria + Nombre + ': ' + Clase + ';'], SaltoDominante(F.PasTexto));
-      Unidad := '';
+      // la de su clase y las que registran su presentacion estilada si la suya
+      // no las arrastra, como al soltarlo en el IDE: sin FMX.Grid.Style un
+      // TStringGrid compila y FMX pinta su aviso en su lugar (V69)
+      var Unidades: TArray<string> := [];
       if EsIdDeTipo(ClsId) then
-        Unidad := UnidadDeIdDeTipo(F.Tabla.IdEscrito[ClsId]);
-      if (Unidad <> '') and not UnidadEnUses(UPas.UsesInterface, Unidad) then
-      begin
-        if UnidadEnUses(UPas.UsesImplementation, Unidad) then
-          UsesNota := MsgFmt(SF_DESIGNER_USES_EN_IMPL_FMT, [Unidad, F.PasNombre])
-        else
+        Unidades := [UnidadDeIdDeTipo(F.Tabla.IdEscrito[ClsId])] + F.Tabla.UnidadesDePresentacion(ClsId);
+      var Pedidas: TArray<string> := [];
+      for Unidad in Unidades do
+        if (Unidad <> '') and not UnidadEnUses(UPas.UsesInterface, Unidad) then
         begin
-          Result := UsesConUnidades(PasNuevo, [Unidad], 'interface', F.PasNombre,
-            Faltan, YaEstan, EnOtra, Creada);
-          if Result <> '' then
-            Exit(Result + MsgFmt(SF_DESIGNER_INSERT_TRAS_USES_FMT, [Unidad]));
-          UsesAnadida := Unidad;
+          if UnidadEnUses(UPas.UsesImplementation, Unidad) then
+            UsesNota := (UsesNota + ' ' + MsgFmt(SF_DESIGNER_USES_EN_IMPL_FMT, [Unidad, F.PasNombre])).Trim
+          else
+            Pedidas := Pedidas + [Unidad];
         end;
+      if Length(Pedidas) > 0 then
+      begin
+        Result := UsesConUnidades(PasNuevo, Pedidas, 'interface', F.PasNombre,
+          Faltan, YaEstan, EnOtra, Creada);
+        if Result <> '' then
+          Exit(Result + MsgFmt(SF_DESIGNER_INSERT_TRAS_USES_FMT, [string.Join(', ', Pedidas)]));
+        UsesAnadida := string.Join(', ', Pedidas);
       end;
     finally
       UPas.Free;

@@ -236,6 +236,10 @@ function EsNombreNuevo(const S: string): Boolean;
 // en mayusculas llama a Tamano); SameText, CompareText y LowerCase solo
 // pliegan A-Z. Para nombres de unit, de clase, de metodo: esta.
 function MismoIdentificador(const A, B: string): Boolean;
+// AUnidad ya esta en esa lista de un uses: igual, o sin su ambito ('StdCtrls'
+// de un proyecto con los nombres de ambito del IDE). La de insert y la de
+// check-binding (estaba en Lsp.DesignerEdit; V69 de la 1.23.1)
+function UnidadEnUses(const AUses: TArray<string>; const AUnidad: string): Boolean;
 // La CLAVE de un identificador para un diccionario o un conjunto: dos tienen
 // la misma clave si son el mismo (MismoIdentificador es su lector)
 function ClaveDeIdentificador(const S: string): string;
@@ -424,6 +428,15 @@ end;
 function MismoIdentificador(const A, B: string): Boolean;
 begin
   Result := (Length(A) = Length(B)) and (ClaveDeIdentificador(A) = ClaveDeIdentificador(B));
+end;
+
+function UnidadEnUses(const AUses: TArray<string>; const AUnidad: string): Boolean;
+begin
+  for var E in AUses do
+    if MismoIdentificador(E, AUnidad) or
+       ((Pos('.', E) = 0) and MismoIdentificador(E, UltimoTrozo(AUnidad))) then
+      Exit(True);
+  Result := False;
 end;
 
 function EsPalabraReservada(const S: string): Boolean;

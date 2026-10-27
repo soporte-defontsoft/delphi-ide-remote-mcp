@@ -84,6 +84,9 @@ type
     // clase lower -> su unidad la registra al ejecutar (R): TReader la crea
     // aunque ningun campo publicado la nombre
     Registradas: TDictionary<string, Boolean>;
+    // clase lower -> las unidades que registran su presentacion estilada y que
+    // la de la clase no arrastra, separadas por ',' (U)
+    Presentaciones: TDictionary<string, string>;
     // tipo 'o' lower -> su base: integer, int64, char, single, float, string
     // o variant (B, Lsp.DesignerMetaGen: lo que TReader mira de un valor)
     Bases: TDictionary<string, string>;
@@ -153,6 +156,12 @@ type
       TReader la crea sin campo publicado (GetClass). De ELLA, no de su cadena:
       el registro va por nombre de clase. Lo que pregunta check-binding. }
     function RegistradaAlEjecutar(const AClase: string): Boolean;
+    { Las unidades que registran la presentacion ESTILADA de AClase y que su
+      unidad no arrastra (hecho U, Lsp.DesignerMetaGen.PresentacionesEstiladas):
+      sin ellas en el programa, FMX pinta su aviso en lugar del control
+      (FMX.Grid.Style de un TStringGrid). De ELLA, no de su cadena: el registro
+      va por su clase. Lo que anade insert y lo que pregunta check-binding. }
+    function UnidadesDePresentacion(const AClase: string): TArray<string>;
     { El valor ABandera (0 csAcceptsControls, 1 csSetCaption) del ControlStyle
       de AClase: lo dice el constructor mas cercano de su cadena que lo toca
       (hecho K); '.' si ninguno, '?' si no se sabe. }
@@ -589,6 +598,7 @@ begin
   Ambiguas := TDictionary<string, string>.Create;
   TextoEsNombre := TDictionary<string, Boolean>.Create;
   Registradas := TDictionary<string, Boolean>.Create;
+  Presentaciones := TDictionary<string, string>.Create;
   Bases := TDictionary<string, string>.Create;
   Constantes := TDictionary<string, string>.Create;
   ConstantesShow := TDictionary<string, string>.Create;
@@ -644,6 +654,14 @@ begin
       TextoEsNombre.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2] = '1')
     else if (P[0] = 'R') and (Length(P) >= 2) then
       Registradas.AddOrSetValue(ClaveDeIdentificador(P[1]), True)
+    else if (P[0] = 'U') and (Length(P) >= 3) then
+    begin
+      var Antes: string;
+      if Presentaciones.TryGetValue(ClaveDeIdentificador(P[1]), Antes) then
+        Presentaciones[ClaveDeIdentificador(P[1])] := Antes + ',' + P[2]
+      else
+        Presentaciones.Add(ClaveDeIdentificador(P[1]), P[2]);
+    end
     else if (P[0] = 'B') and (Length(P) >= 3) then
       Bases.AddOrSetValue(ClaveDeIdentificador(P[1]), LowerCase(P[2]))
     else if (P[0] = 'I') and (Length(P) >= 3) then
@@ -694,6 +712,7 @@ begin
   Constantes.Free;
   Bases.Free;
   TextoEsNombre.Free;
+  Presentaciones.Free;
   Registradas.Free;
   Ambiguas.Free;
   Definidas.Free;
@@ -851,6 +870,16 @@ end;
 function TMetaTable.RegistradaAlEjecutar(const AClase: string): Boolean;
 begin
   Result := Registradas.ContainsKey(ClaveDeIdentificador(AClase));
+end;
+
+function TMetaTable.UnidadesDePresentacion(const AClase: string): TArray<string>;
+var
+  L: string;
+begin
+  if Presentaciones.TryGetValue(ClaveDeIdentificador(AClase), L) then
+    Result := L.Split([','])
+  else
+    Result := [];
 end;
 
 function TMetaTable.EstiloDe(const AClase: string; ABandera: Integer): Char;

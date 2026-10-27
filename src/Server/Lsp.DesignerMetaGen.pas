@@ -87,8 +87,11 @@ const
     IDE; V17).
     17 (1.23): los cuerpos de lo guardado por codigo, por EL lector, y la
     cabecera de un DefineProperty no es una llamada: la de TReader daba un
-    '*' a quien nombra TReader en su DefineProperties (THeaderStrings; V17). }
-  GENERACION_TABLAS = 17; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+    '*' a quien nombra TReader en su DefineProperties (THeaderStrings; V17).
+    18 (1.23.1): la unidad que registra la presentacion estilada de una clase
+    y que la de la clase no arrastra (hecho U): insert la anade al uses y
+    check-binding avisa si falta (FMX.Grid.Style de un TStringGrid; V69). }
+  GENERACION_TABLAS = 18; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
   // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
   // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
@@ -162,6 +165,16 @@ function RegistradosEnPaleta(const ATexto: string): TArray<string>;
   un programa no lo ejecuta. Hecho R de la tabla; el juez de verdad es la
   clase cargada en el ayudante (lote 5 del censo de jueces). }
 function RegistradasAlEjecutar(const ATexto: string): TArray<string>;
+
+{ Las clases cuya presentacion ESTILADA registra ATexto al ejecutar -
+  TPresentationProxyFactory.Current.Register(TStringGrid, TControlType.Styled,
+  ...) de su initialization -: la que carga un control FMX con su estilo. Su
+  DefinePresentationName es el nombre de SU clase (el registro no se hereda:
+  FMX.Controls.Presentation, LoadPresentation). Sin ella el programa compila,
+  carga el form y FMX pinta su aviso en lugar del control (FMX.Grid: "Maybe it
+  is necessary to add the FMX.Grid.Style module"). Hecho U de la tabla (V69 de
+  la 1.23.1). }
+function PresentacionesEstiladas(const ATexto: string): TArray<string>;
 
 { Las clases de ATexto (un texto ACTIVO) que sobrescriben SetName, como
   'TClase 1' si con su SetName el Text sigue al nombre (el TTextControl y el
@@ -349,17 +362,38 @@ begin
   Result := NombresRegistrados(ATexto, 'Register(?:Components|NoIcon)');
 end;
 
-function RegistradasAlEjecutar(const ATexto: string): TArray<string>;
+// ATexto desde su initialization, lo que corre al arrancar el programa: un
+// Register dentro de un Register (de diseno) no corre en el. '' sin ella. EL
+// recorte de RegistradasAlEjecutar y de PresentacionesEstiladas
+function DesdeInitialization(const ATexto: string): string;
 var
   Mi: TMatch;
 begin
-  // desde su initialization: un RegisterClass dentro de un Register (de
-  // diseno) no corre en el programa
   Mi := TRegEx.Match(ATexto, '(?im)^\s*initialization\b');
   if Mi.Success then
-    Result := NombresRegistrados(ATexto.Substring(Mi.Index - 1), 'Register(?:Fmx)?Class(?:es)?')
+    Result := ATexto.Substring(Mi.Index - 1)
+  else
+    Result := '';
+end;
+
+function RegistradasAlEjecutar(const ATexto: string): TArray<string>;
+begin
+  var Ini := DesdeInitialization(ATexto);
+  if Ini <> '' then
+    Result := NombresRegistrados(Ini, 'Register(?:Fmx)?Class(?:es)?')
   else
     Result := nil; // sin initialization nada corre al arrancar: callar seria tapar un EClassNotFound
+end;
+
+function PresentacionesEstiladas(const ATexto: string): TArray<string>;
+begin
+  Result := [];
+  // la del tipo Styled: la Platform (Windows, iOS...) es otra presentacion
+  for var M in TRegEx.Matches(DesdeInitialization(ATexto), '(?i)' + PATRON_NO_IDENT_ANTES +
+    'TPresentationProxyFactory\s*\.\s*Current\s*\.\s*Register\s*\(\s*(' + PATRON_IDENT_PUNTOS +
+    ')\s*,\s*TControlType\s*\.\s*Styled\s*,') do
+    if not MatchText(M.Groups[1].Value, Result) then
+      Result := Result + [M.Groups[1].Value];
 end;
 
 { Los nombres que da el primer argumento de un Filer.DefineProperty, que
@@ -969,6 +1003,7 @@ type
     Definidas: TArray<string>; // PropiedadesDefinidasPorCodigo: 'TClase Nombre'
     Registra: TArray<string>;  // RegistradosEnPaleta: los nombres, sin resolver
     RegistraEjecucion: TArray<string>; // RegistradasAlEjecutar: los nombres (hecho R)
+    Presenta: TArray<string>;  // PresentacionesEstiladas: los nombres (hecho U)
     SetNames: TArray<string>;  // SetNamesDeUnidad: 'TClase 1' / 'TClase 0'
     Estilos: TArray<string>;   // EstilosDeUnidad: 'TClase AS' (hecho K)
     Constantes: TArray<string>; // ConstantesDeTexto: 'R Tipo Funcion' / 'L ...' / 'D ...'
@@ -998,6 +1033,10 @@ type
     FIncluidos: TDictionary<string, string>; // TextoDeInclude: carpeta|nombre -> texto
     FEnCarpetas: TDictionary<string, string>; // include con subcarpeta -> su ruta
     FRegistradas: TDictionary<TTipoPas, Boolean>; // en la paleta (RegisterComponents)
+    // clase -> las unidades (claves) que registran su presentacion estilada (U)
+    FPresentadas: TDictionary<TTipoPas, TArray<string>>;
+    // unidad -> las que arrastra: sus uses, de las dos partes, hasta el fondo
+    FAlcance: TObjectDictionary<string, TDictionary<string, Boolean>>;
     procedure Indexa(const ACarpetas: TArray<string>);
     function TextoDeInclude(const ANombre, ADir: string): string;
     function LeeFuente(const ARuta: string): string;
@@ -1025,6 +1064,8 @@ type
     function IdDeClase(ATipo: TTipoPas): string;
     function EsRaiz(const ACadena: TArray<TTipoPas>): Boolean;
     procedure ResuelveRegistradas;
+    procedure ResuelvePresentaciones;
+    function Arrastra(const ADesde, AUnidad: string): Boolean;
     procedure ResuelveAyudantes;
     function HechosDeClase(ATipo: TTipoPas; const ACadena: TArray<TTipoPas>;
       AEnums, ASets: TDictionary<string, TArray<string>>;
@@ -1075,10 +1116,14 @@ begin
   FIncluidos := TDictionary<string, string>.Create;
   FEnCarpetas := TDictionary<string, string>.Create;
   FRegistradas := TDictionary<TTipoPas, Boolean>.Create;
+  FPresentadas := TDictionary<TTipoPas, TArray<string>>.Create;
+  FAlcance := TObjectDictionary<string, TDictionary<string, Boolean>>.Create([doOwnsValues]);
 end;
 
 destructor TGenerador.Destroy;
 begin
+  FAlcance.Free;
+  FPresentadas.Free;
   FRegistradas.Free;
   FEnCarpetas.Free;
   FIncluidos.Free;
@@ -1297,6 +1342,9 @@ begin
     // disenador, y csSetCaption (revision de la 1.17.0)
     if ContainsText(Act, 'ControlStyle') then
       U.Estilos := EstilosDeUnidad(Act, Decl);
+    // y la presentacion estilada que registra al ejecutar (hecho U, V69)
+    if ContainsText(Act, 'TPresentationProxyFactory') then
+      U.Presenta := PresentacionesEstiladas(Act);
     // lo que guarda por codigo (Filer.DefineProperty): otra pasada que deja
     // las cadenas, solo en las que lo nombran (unas cien de 4.000). Se
     // pregunta al texto ACTIVO, con sus includes y sin comentarios, como lo
@@ -2072,6 +2120,58 @@ begin
     end;
 end;
 
+{ Las clases cuya presentacion estilada registra cada unidad (hecho U),
+  resueltas desde la unidad que las registra, como las de la paleta }
+procedure TGenerador.ResuelvePresentaciones;
+var
+  T: TTipoPas;
+  UX: TUnidadLeida;
+  L: TArray<string>;
+begin
+  for var U in FUnidades.Values do
+    for var N in U.Presenta do
+    begin
+      T := ResuelveTipo(N, U, nil, True, UX);
+      if (T = nil) or (T.Clase <> ctClase) then
+        Continue;
+      if not FPresentadas.TryGetValue(T, L) then
+        L := nil;
+      if not MatchText(U.Clave, L) then
+        FPresentadas.AddOrSetValue(T, L + [U.Clave]);
+    end;
+end;
+
+{ ADesde arrastra AUnidad: la usa, por su interface o por su implementation,
+  ella o alguna de las que usa - lo que el compilador enlaza con ella -. Por
+  clave; el cierre de cada unidad se calcula una vez }
+function TGenerador.Arrastra(const ADesde, AUnidad: string): Boolean;
+var
+  Cierre: TDictionary<string, Boolean>;
+  Pila: TStack<string>;
+  U: TUnidadLeida;
+begin
+  if not FAlcance.TryGetValue(ADesde, Cierre) then
+  begin
+    Cierre := TDictionary<string, Boolean>.Create;
+    FAlcance.Add(ADesde, Cierre);
+    Pila := TStack<string>.Create;
+    try
+      Pila.Push(ADesde);
+      while Pila.Count > 0 do
+        if FUnidades.TryGetValue(Pila.Pop, U) then
+          for var K in U.UsesI + U.UsesImpl do
+            if (K <> '') and not Cierre.ContainsKey(K) then
+            begin
+              Cierre.Add(K, True);
+              Pila.Push(K);
+            end;
+    finally
+      Pila.Free;
+    end;
+  end;
+  Result := Cierre.ContainsKey(AUnidad);
+end;
+
 { Lo que lee un AYUDANTE ('~Ayudante Nombre', PropiedadesDefinidasPorCodigo)
   es de las clases que lo nombran en su DefineProperties ('>Clase Tipo'),
   con lo de los ayudantes de los que hereda (FMX: TText usa un
@@ -2390,7 +2490,7 @@ var
   Enums, Sets: array [TMarcoDisenador] of TDictionary<string, TArray<string>>;
   Bases, Consts: array [TMarcoDisenador] of TDictionary<string, string>;
   Ms: TMarcosDisenador;
-  Hechos: TArray<string>;
+  Hechos, Pres: TArray<string>;
   Cad: TArray<TTipoPas>;
   K, Id, Nombre, Amb: string;
   Pri: TPrimera;
@@ -2403,6 +2503,7 @@ begin
   LeeUnidades;
   Prepara;
   ResuelveRegistradas;
+  ResuelvePresentaciones;
   ResuelveAyudantes;
   Result.Unidades := FUnidades.Count;
   Orden := TList<TUnidadLeida>.Create;
@@ -2486,6 +2587,13 @@ begin
             for var Rg in U.RegistraEjecucion do
               if MismoIdentificador(Rg, T.NombreCompleto) then
                 Hechos := Hechos + ['R ' + Id];
+            // y la unidad que registra su presentacion estilada, si la suya no
+            // la arrastra: sin ella FMX no lo pinta (FMX.Grid.Style de un
+            // TStringGrid; hecho U, en ELLA sola: el registro es por su clase)
+            if FPresentadas.TryGetValue(T, Pres) then
+              for var V in Pres do
+                if (V <> U.Clave) and not Arrastra(U.Clave, V) then
+                  Hechos := Hechos + ['U ' + Id + ' ' + FUnidades[V].Decl.Nombre];
             Lineas[M].AddRange(Hechos);
             Emitidas[M].Add(K, True);
             // ...pero un form escribe el NOMBRE ('object X: TScrollBar'):
