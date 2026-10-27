@@ -468,7 +468,7 @@ begin
   Recorte := '';
   if Length(ProjFuera) > 0 then
     Recorte := Format(RECORTE_FMT, [Length(ProjFuera),
-      THashFNV1a32.GetHashValue(string.Join(';', ProjFuera).ToLower)]);
+      THashFNV1a32.GetHashValue(ClaveDeRuta(string.Join(';', ProjFuera)))]);
 
   // Cache: <name>-<pathhash>.delphilsp.json under LOCALAPPDATA, made again
   // EVERY time (the .dproj is not all it depends on: the IDE's library, the
@@ -476,7 +476,7 @@ begin
   CacheDir := ServerCacheDir('configs');
   SalidaDelMotor := ServerCacheDir(SALIDA_DEL_MOTOR_SUB);
   Prefijo := Format('%s-%x-', [TPath.GetFileNameWithoutExtension(ADprojPath),
-    THashFNV1a32.GetHashValue(TPath.GetFullPath(ADprojPath).ToLower)]);
+    THashFNV1a32.GetHashValue(ClaveDeRuta(TPath.GetFullPath(ADprojPath)))]);
   CacheFile := TPath.Combine(CacheDir, Prefijo + Format('%s%s-g%d.delphilsp.json',
     [AInfo.Version.Replace('.', '_'), Recorte, FABRICATOR_GEN]));
 
@@ -518,14 +518,14 @@ begin
     Depuracion := IdePlatformLibraryPaths(AInfo, Plat, 'Debug DCU Path', Cfg);
   UnitPaths := nil;
   for P in Depuracion + ProjDentro + [Lib] + IdePaths do
-    if IndexText(P, UnitPaths) < 0 then
+    if not RutaEnLista(P, UnitPaths) then
       UnitPaths := UnitPaths + [P];
   // las de fuente: las del proyecto que se pueden leer y las del IDE, sin
   // repetir (el orden de siempre: primero el proyecto); las del proyecto que
   // no, fuera
   Fuentes := nil;
   for P in ProjDentro + IdePaths do
-    if IndexText(P, Fuentes) < 0 then
+    if not RutaEnLista(P, Fuentes) then
       Fuentes := Fuentes + [P];
 
   // Los defines de ESA configuracion (EL evaluador: DEBUG;$(DCC_Define) es lo
@@ -572,7 +572,7 @@ begin
     var Ensena, Sabido: Boolean;
     System.TMonitor.Enter(GNavegable);
     try
-      Sabido := GNavegable.TryGetValue(P.ToLower, Ensena);
+      Sabido := GNavegable.TryGetValue(ClaveDeRuta(P), Ensena);
     finally
       System.TMonitor.Exit(GNavegable);
     end;
@@ -581,7 +581,7 @@ begin
       Ensena := LugarDeLecturaDenegado(P, [ltIde, ltBiblioteca]) = '';
       System.TMonitor.Enter(GNavegable);
       try
-        GNavegable.AddOrSetValue(P.ToLower, Ensena);
+        GNavegable.AddOrSetValue(ClaveDeRuta(P), Ensena);
       finally
         System.TMonitor.Exit(GNavegable);
       end;
@@ -591,7 +591,7 @@ begin
   end;
   Navegacion := nil;
   for P in Ensenables + Fuentes do
-    if (IndexText(P, Navegacion) < 0) and TDirectory.Exists(P) then
+    if not RutaEnLista(P, Navegacion) and TDirectory.Exists(P) then
       Navegacion := Navegacion + [P];
 
   Root := TJSONObject.Create;

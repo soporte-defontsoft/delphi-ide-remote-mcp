@@ -301,17 +301,19 @@ var
   B, Low: string;
 begin
   Result := '';
-  Low := APath.ToLower;
-  if Low.Contains('\.git\') then
+  // las carpetas por su nombre, con la clave del disco en los dos lados
+  // (ClaveDeRuta): con .ToLower y el turco, \WIN32\ no era Win32 (V105)
+  Low := ClaveDeRuta(APath);
+  if Low.Contains(ClaveDeRuta('\.git\')) then
     Exit(SKIP_GIT);
-  if Low.Contains(CARPETA_TEMPORAL) then
+  if Low.Contains(ClaveDeRuta(CARPETA_TEMPORAL)) then
     Exit(SKIP_TEMP);
   for B in CARPETAS_ARTEFACTO do
-    if Low.Contains(B) then
+    if Low.Contains(ClaveDeRuta(B)) then
       Exit(SKIP_ARTIFACTS);
   if not AAllowTrash then
     for B in CARPETAS_PAPELERA do
-      if Low.Contains(B) then
+      if Low.Contains(ClaveDeRuta(B)) then
         Exit(SKIP_TRASH);
 end;
 
@@ -759,7 +761,7 @@ begin
     begin
       Result := False;
       for var A in AllFiles do
-        if SameText(A, AFile) then
+        if SameFileName(A, AFile) then
           Exit(True);
     end;
   // lo que abre en el motor se anota con lo de los candidatos, sin contar en
@@ -767,10 +769,10 @@ begin
   Cadena.Abre :=
     procedure(AFile: string)
     begin
-      if not OpenedFiles.ContainsKey(AFile.ToLower) then
+      if not OpenedFiles.ContainsKey(ClaveDeRuta(AFile)) then
       begin
         Session.AbreEn(Client, AFile);
-        OpenedFiles.Add(AFile.ToLower, True);
+        OpenedFiles.Add(ClaveDeRuta(AFile), True);
       end;
     end;
   TargetPath := TLspClient.UriToPath(TargetUri);
@@ -1034,7 +1036,7 @@ begin
           Unverified.Add(UObj);
           Continue;
         end;
-        if not OpenedFiles.ContainsKey(Cand.Path.ToLower) then
+        if not OpenedFiles.ContainsKey(ClaveDeRuta(Cand.Path)) then
         begin
           if FilesOpened >= AMaxFiles then
           begin
@@ -1045,7 +1047,7 @@ begin
           // el del candidato, y una unidad compartida arrancaba el de otro
           // proyecto para nada (menor de la ronda 16, medido)
           Session.AbreEn(Client, Cand.Path);
-          OpenedFiles.Add(Cand.Path.ToLower, True);
+          OpenedFiles.Add(ClaveDeRuta(Cand.Path), True);
           Inc(FilesOpened);
         end;
         // con LA correccion: la cabecera de una anidada resuelve a si misma, y
@@ -1194,7 +1196,7 @@ begin
       var UnidadesConUsos: TArray<string> := [TLspClient.UriToPath(TargetUri)];
       for var V in Confirmed do
         if (V is TJSONObject) and (TJSONObject(V).GetValue('path') <> nil) and
-           (IndexText(TJSONObject(V).GetValue('path').Value, UnidadesConUsos) < 0) then
+           not RutaEnLista(TJSONObject(V).GetValue('path').Value, UnidadesConUsos) then
           UnidadesConUsos := UnidadesConUsos + [TJSONObject(V).GetValue('path').Value];
       var IlegiblesDeForms: TArray<string>;
       var EnForms := UsosEnDisenadores(FullPath, Ident, UnidadesConUsos, IlegiblesDeForms);
@@ -1218,7 +1220,7 @@ begin
         // dice cuantos son
         var Distintos: TArray<string> := [];
         for var Ile in Ilegibles do
-          if IndexText(Ile, Distintos) < 0 then
+          if not RutaEnLista(Ile, Distintos) then
             Distintos := Distintos + [Ile];
         for var Ile in Distintos do
           if IleArr.Count < 25 then

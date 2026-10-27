@@ -1185,8 +1185,11 @@ function EnCarpetaLlamada(const APath, ANombre: string;
 var
   P, T: string;
 begin
-  P := SinBarraFinal(LongCanonical(APath)).ToLower;
-  T := '\' + ANombre.ToLower;
+  // por la clave del disco (ClaveDeRuta), no por .ToLower: con el turco
+  // __DELPHI-PATCH no era la papelera, y con la I con punto una carpeta que
+  // NTFS separa lo era (V105 de la 1.23.1)
+  P := ClaveDeRuta(SinBarraFinal(LongCanonical(APath)));
+  T := '\' + ClaveDeRuta(ANombre);
   AEsLaCarpeta := P.EndsWith(T);
   Result := AEsLaCarpeta or P.Contains(T + '\');
 end;
@@ -1238,7 +1241,7 @@ begin
   // leaking into Delphi) and the whole guard matched nothing while looking
   // perfectly correct - the ".by" rule passed only because it has no slash.
   // canonical first: an 8.3 alias like __DELP~1 IS the trash
-  P := LongCanonical(APath).ToLower;
+  P := LongCanonical(APath);
   if EsMarcaDeDueno(P) then // la marca de dueno (Lsp.Casa)
     Exit(MsgText(SR_GUARD_OWNER_MARKER));
   if EnPapelera(APath) then
@@ -3079,7 +3082,7 @@ begin
   end;
   Result := SameText(TPath.GetExtension(Full), CAPTURE_EXT) and
     EnTemporal(Full) and
-    MatchText(TPath.GetFileName(TPath.GetDirectoryName(Full)),
+    RutaEnLista(TPath.GetFileName(TPath.GetDirectoryName(Full)),
       [CAPTURE_SUB_DESKTOP, CAPTURE_SUB_ANDROID, CAPTURE_SUB_DESIGNER]);
 end;
 
@@ -3138,7 +3141,7 @@ begin
         procedure(const F: string)
         begin
           try
-            if not SameText(F, AFile) and TFile.Exists(F) and CapturaConsumible(F) then
+            if not SameFileName(F, AFile) and TFile.Exists(F) and CapturaConsumible(F) then
             begin
               var T := TFile.GetLastWriteTime(F);
               if T < Limite then
@@ -3223,7 +3226,7 @@ begin
   RecorreSinEnlaces(CasaDeCapturas,
     procedure(const P: string)
     begin
-      if (Hallada = '') and SameText(TPath.GetFileName(P), Nombre) and
+      if (Hallada = '') and SameFileName(TPath.GetFileName(P), Nombre) and
          TFile.Exists(P) and CapturaConsumible(P) then
         Hallada := P;
     end);
@@ -3511,7 +3514,7 @@ begin
     // nombre normal, o una ruta mal calculada, no habilita nada.
     if not Seg.StartsWith('__') then
       Continue;
-    if (I < High(Segs)) and MatchText(Seg, CarpetasDesechables) then
+    if (I < High(Segs)) and RutaEnLista(Seg, CarpetasDesechables) then
       Desechable := True // DENTRO de una desechable, nunca la carpeta misma
     else if EsCarpetaDescarga(Seg) then
       Desechable := True;
@@ -3835,7 +3838,7 @@ var
           Vistos.Add(RealSub, True);
         end;
         // La papelera se purga solo despues de admitir la lectura del enlace.
-        if SameText(TPath.GetFileName(Sub), TrashFolderName) then
+        if SameFileName(TPath.GetFileName(Sub), TrashFolderName) then
           PurgaAlPasar(Sub);
         Recurse(Sub);
       end;
@@ -4039,7 +4042,7 @@ begin
         Exit;
       // un .git (carpeta o fichero) es un repo: se apunta y no se baja; detras
       // de un enlace que la copia sigue, no esta dentro
-      if SameText(TPath.GetFileName(O), '.git') then
+      if SameFileName(TPath.GetFileName(O), '.git') then
       begin
         if ADetras then
           Motivo := MsgFmt(SR_MOVE_COPIA_GIT_FUERA_FMT, [TPath.GetDirectoryName(O),
@@ -4483,7 +4486,7 @@ begin
   // lista central de desechables, y con el __ delante. Una ruta mal
   // calculada nunca vacia otra cosa.
   var Nombre := TPath.GetFileName(SinBarraFinal(ADir));
-  if not (Nombre.StartsWith('__') and MatchText(Nombre, CarpetasDesechables)) then
+  if not (Nombre.StartsWith('__') and RutaEnLista(Nombre, CarpetasDesechables)) then
     Exit;
   // ...y si la propia temporal es un ENLACE, lo de detras no es nuestro:
   // enumerarla seria vaciar el destino (25-sep-2026).
@@ -4585,7 +4588,7 @@ begin
     E.dwSize := SizeOf(E);
     if Process32First(Snap, E) then
       repeat
-        if (E.th32ProcessID <> GetCurrentProcessId) and SameText(string(E.szExeFile), Mio) then
+        if (E.th32ProcessID <> GetCurrentProcessId) and SameFileName(string(E.szExeFile), Mio) then
         begin
           if not ReclamaNombre(ClaveDePresencia(E.th32ProcessID), H) then
             Exit(True);
@@ -5130,7 +5133,7 @@ begin
     // a uno que nombre el agente (octava revision; lo media el A13 de
     // test_alias83 con una raiz UNC, hasta la 1.8.2)
     if (P.IndexOf('~') >= 0) and
-       SameText(ExtractFileDrive(P), ExtractFileDrive(L)) and
+       SameFileName(ExtractFileDrive(P), ExtractFileDrive(L)) and
        RutaDentroDe(FormaLarga(L), FormaLarga(P)) then
       Exit(False);
   end;

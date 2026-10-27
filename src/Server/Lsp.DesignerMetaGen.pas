@@ -1023,7 +1023,7 @@ type
     FRaizBds: string;
     FCarpetas: TArray<string>;
     FCandidatas: TList<TCandidata>;
-    FFicheros: TDictionary<string, string>;  // nombre de fichero (minusculas) -> ruta
+    FFicheros: TDictionary<string, string>;  // nombre de fichero (ClaveDeRuta) -> ruta
     FTextos: TDictionary<string, string>;    // includes ya leidos, por ruta
     FUnidades: TObjectDictionary<string, TUnidadLeida>;
     FDueno: TDictionary<TTipoPas, TUnidadLeida>;
@@ -1155,7 +1155,8 @@ begin
     end;
     for var F in Ficheros do
     begin
-      N := AnsiLowerCase(ExtractFileName(F));
+      // por la clave del disco: AnsiLowerCase junta lo que NTFS separa (V105)
+      N := ClaveDeRuta(ExtractFileName(F));
       if FFicheros.ContainsKey(N) then
         Continue; // la misma unidad (o include) en otra carpeta: gana la primera
       FFicheros.Add(N, F);
@@ -1192,7 +1193,7 @@ begin
   Result := '';
   // lo ya buscado desde esa carpeta: jedi\jedi.inc lo piden cientos de
   // unidades, y cada busqueda son decenas de FileExists
-  Clave := AnsiLowerCase(ADir) + '|' + AnsiLowerCase(ANombre);
+  Clave := ClaveDeRuta(ADir) + '|' + ClaveDeRuta(ANombre);
   if FIncluidos.TryGetValue(Clave, Result) then
     Exit;
   try
@@ -1209,31 +1210,31 @@ begin
       // depende de quien la pide: una vez por nombre
       if ExtractFilePath(ANombre) <> '' then
       begin
-        if not FEnCarpetas.TryGetValue(AnsiLowerCase(ANombre), Ruta) then
+        if not FEnCarpetas.TryGetValue(ClaveDeRuta(ANombre), Ruta) then
         begin
           Ruta := '';
           for var C in FCarpetas do
             for var X in [TPath.Combine(C, ANombre), TPath.Combine(C, ANombre + '.inc')] do
               if (Ruta = '') and FileExists(X) then
                 Ruta := X;
-          FEnCarpetas.Add(AnsiLowerCase(ANombre), Ruta);
+          FEnCarpetas.Add(ClaveDeRuta(ANombre), Ruta);
         end;
         if Ruta <> '' then
           Candidatos := Candidatos + [Ruta];
       end;
     end;
-    if FFicheros.TryGetValue(AnsiLowerCase(ExtractFileName(ANombre)), Ruta) then
+    if FFicheros.TryGetValue(ClaveDeRuta(ExtractFileName(ANombre)), Ruta) then
       Candidatos := Candidatos + [Ruta];
-    if FFicheros.TryGetValue(AnsiLowerCase(ExtractFileName(ANombre)) + '.inc', Ruta) then
+    if FFicheros.TryGetValue(ClaveDeRuta(ExtractFileName(ANombre) + '.inc'), Ruta) then
       Candidatos := Candidatos + [Ruta];
     for var C in Candidatos do
     begin
-      if FTextos.TryGetValue(AnsiLowerCase(C), Result) then
+      if FTextos.TryGetValue(ClaveDeRuta(C), Result) then
         Break;
       if FileExists(C) then
       begin
         Result := LeeFuente(C);
-        FTextos.Add(AnsiLowerCase(C), Result);
+        FTextos.Add(ClaveDeRuta(C), Result);
         Break;
       end;
     end;
@@ -1253,7 +1254,7 @@ var
   U: TUnidadPas;
   V: Double;
 begin
-  if not FFicheros.TryGetValue('system.pas', Ruta) then
+  if not FFicheros.TryGetValue(ClaveDeRuta('System.pas'), Ruta) then
     Exit;
   Sim := FBase.Copia;
   try
@@ -2729,9 +2730,9 @@ begin
     for var Valor in ['Search Path', 'Browsing Path'] do
       for var Plat in ['Win32', 'Win64'] do
         for var C in IdePlatformLibraryPaths(AInfo, Plat, Valor) do
-          if not Vistas.ContainsKey(AnsiLowerCase(C)) and TDirectory.Exists(C) then
+          if not Vistas.ContainsKey(ClaveDeRuta(C)) and TDirectory.Exists(C) then
           begin
-            Vistas.Add(AnsiLowerCase(C), True);
+            Vistas.Add(ClaveDeRuta(C), True);
             Lista.Add(C);
           end;
     Result := Lista.ToArray;
@@ -2807,6 +2808,8 @@ begin
       finally
         FindClose(Sr);
       end;
+      // (la HUELLA de lo leido, no una comparacion de rutas: AnsiLowerCase se
+      // queda a proposito, cambiarlo regeneraria todas las tablas; V105)
       Sb.Append(AnsiLowerCase(C)).Append('|').Append(N).Append('|').Append(Tam)
         .Append('|').Append(Ultima).Append(#10);
     end;
@@ -2990,7 +2993,7 @@ begin
         Continue;
       Vigente := False;
       for var X in AVigentes do
-        if SameText(ExtractFileName(F), ExtractFileName(X)) then
+        if SameFileName(ExtractFileName(F), ExtractFileName(X)) then
           Vigente := True;
       if not Vigente then
         QuitaDeLaCache(F);

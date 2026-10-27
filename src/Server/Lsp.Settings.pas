@@ -1057,7 +1057,7 @@ begin
         end;
       end;
     // (una relativa que sale al mismo sitio desde dos raices, una vez)
-    if not Dentro and (IndexText(PC, Dichas) < 0) then
+    if not Dentro and not RutaEnLista(PC, Dichas) then
     begin
       Dichas := Dichas + [PC];
       GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(SL_GUARD_SOLO_LECTURA_FUERA_FMT,

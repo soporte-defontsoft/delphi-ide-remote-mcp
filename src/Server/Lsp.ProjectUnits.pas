@@ -356,9 +356,11 @@ begin
   // dice un .dpr, y alargarla abria SMB hacia ese host (octava revision)
   // ...ni uno con prefijo de dispositivo (\\?\UNC\host\...): la pregunta de
   // todos (Lsp.Guard.RutaSinTocarElDisco; novena revision)
+  // ...y por la clave del disco (ClaveDeRuta): .ToLower junta lo que NTFS
+  // separa (V105 de la 1.23.1)
   if RutaSinTocarElDisco(P) then
-    Exit(P.ToLower);
-  Result := LongCanonical(P).ToLower;
+    Exit(ClaveDeRuta(P));
+  Result := ClaveDeRuta(LongCanonical(P));
 end;
 
 function ResolveProjectPair(const AProject: string; out ADpr, ADproj: string): string;
@@ -398,7 +400,7 @@ begin
   // P<Kelvin>, que es otra carpeta (V81 de la 1.23.1, medido)
   if RutaDentroDe(Base, Full) then
     Result := Full.Substring(Length(Base))
-  else if SameText(TPath.GetPathRoot(Full), TPath.GetPathRoot(Base)) then
+  else if SameFileName(TPath.GetPathRoot(Full), TPath.GetPathRoot(Base)) then
     Result := ExtractRelativePath(Base, Full) // ..\..\shared\X.pas, the IDE's form
   else
     Result := Full; // another drive: no relative form exists
@@ -1911,12 +1913,12 @@ begin
     Result := '        <DCCReference ' + XmlAtributo('Include', AInclude) + '/>' + CRLF;
 end;
 
-{ LA clave con la que se comparan dos Include (de un .dproj o de un uses): sin
-  mayusculas y con barras de Windows. El IDE escribe '\', y un agente o una
-  herramienta pueden escribir '/' (estaba a mano en cuatro sitios). }
+{ LA clave con la que se comparan dos Include (de un .dproj o de un uses): la
+  del disco (ClaveDeRuta) y con barras de Windows. El IDE escribe '\', y un
+  agente o una herramienta pueden escribir '/' (estaba a mano en cuatro sitios). }
 function ClaveDeInclude(const AInclude: string): string;
 begin
-  Result := ConBarrasDeWindows(AInclude).ToLower;
+  Result := ClaveDeRuta(ConBarrasDeWindows(AInclude));
 end;
 
 { Finds the element for AInclude (path compared case-insensitively with / and
@@ -2920,7 +2922,7 @@ begin
   begin
     Result[I] := '';
     for var F in Pas do
-      if SameText(TPath.GetFileNameWithoutExtension(F), ANames[I]) and not SkipBajoLaRaiz(F, Dir) then
+      if SameFileName(TPath.GetFileNameWithoutExtension(F), ANames[I]) and not SkipBajoLaRaiz(F, Dir) then
       begin
         Result[I] := ExtractRelativePath(IncludeTrailingPathDelimiter(Dir), F);
         Break;
@@ -3227,7 +3229,7 @@ begin
   begin
     if ReadPathDenied(D) <> '' then
       Break;
-    if not MatchText(D, ADirs) then
+    if not RutaEnLista(D, ADirs) then
       ADirs := ADirs + [D];
   end;
 end;
@@ -3274,7 +3276,7 @@ begin
       // una subcarpeta que la jaula no deja leer (un enlace a fuera) no se
       // mira: se leian sus .dpk de detras (medida M1)
       for var Sub in TDirectory.GetDirectories(D) do
-        if not MatchText(Sub, ADirs) and (ReadPathDenied(Sub) = '') then
+        if not RutaEnLista(Sub, ADirs) and (ReadPathDenied(Sub) = '') then
           Result := Result + [Sub];
     except
       // una carpeta que no se deja listar no es motivo para no mirar el resto
@@ -3295,7 +3297,7 @@ begin
   begin
     for F in TDirectory.GetFiles(D, '*.dpk') do
     begin
-      if SameText(TPath.GetFullPath(F), TPath.GetFullPath(ADpkPath)) then
+      if SameFileName(TPath.GetFullPath(F), TPath.GetFullPath(ADpkPath)) then
         Continue;
       for P in UnitsParaBuscar(F, AUnitName) do // el .dpk decide; sin leer .dproj
         if MismoIdentificador(P.UnitName, AUnitName) then
@@ -3857,12 +3859,12 @@ begin
           var Destino := R;
           if DentroDe(R, AViejo) then
             Destino := ANuevo + R.Substring(Length(AViejo));
-          if MatchText(Destino, Leidas) or not ExisteYSeLee(Destino, True) then
+          if RutaEnLista(Destino, Leidas) or not ExisteYSeLee(Destino, True) then
             Continue;
           // si lo que leia no se movio, el que se movio es este .dproj y su
           // propiedad relativa lleva ahora a otro sitio: no es "which is now"
           var Item: string;
-          if SameText(Destino, R) then
+          if SameFileName(Destino, R) then
             Item := MsgFmt(SF_REUBICA_NO_LLEGA_QUIETO_FMT, [AFichero, Antes[I].Elemento,
               Antes[I].Escrito, R])
           else
@@ -4084,7 +4086,7 @@ begin
         Alli := [UnidadDeDesigner(ADestinos[I])];
     end;
     for var K := 0 to High(Otros) do
-      if TFile.Exists(Otros[K]) and not MatchText(Otros[K], AHechos) and
+      if TFile.Exists(Otros[K]) and not RutaEnLista(Otros[K], AHechos) and
          not ((K < Length(Alli)) and MismaEntrada(Otros[K], Alli[K])) then
         Result := Result + #10 + MsgFmt(SN_FILE_PAR_PARTIDO_FMT, [TPath.GetFileName(F), AVerbo,
           TPath.GetFileName(ComoEnDisco(Otros[K])), TPath.GetDirectoryName(Otros[K]),
@@ -4138,8 +4140,7 @@ end;
 function MismoProyecto(const AGroup, AInclude, AAbs: string): Boolean;
 begin
   try
-    Result := SameText(NormPath(TPath.Combine(TPath.GetDirectoryName(AGroup), AInclude)),
-      NormPath(AAbs));
+    Result := NormPath(TPath.Combine(TPath.GetDirectoryName(AGroup), AInclude)) = NormPath(AAbs);
   except
     Result := False;
   end;
@@ -4425,7 +4426,7 @@ begin
   Result :=
     function(F: string): Boolean
     begin
-      Result := SameText(TPath.GetFileName(F), ANombre);
+      Result := SameFileName(TPath.GetFileName(F), ANombre);
     end;
 end;
 

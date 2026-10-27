@@ -139,7 +139,7 @@ begin
   // de FindFirst, con las mayusculas de la plataforma), medido en su fuente
   for var E in Todas do
     if TPath.MatchesPattern(TPath.GetFileName(E), Mascara) and
-       not SameText(TPath.GetFileName(E), TrashFolderName) and not EsMarcaDeDueno(E) then
+       not SameFileName(TPath.GetFileName(E), TrashFolderName) and not EsMarcaDeDueno(E) then
       AEntradas := AEntradas + [E];
   if Length(AEntradas) = 0 then
     Result := MsgFmt(SR_FILE_COMODIN_NADA_FMT, [Carpeta, Mascara]);
@@ -1107,7 +1107,7 @@ begin
       // la carpeta de destino PRIMERO: si no se puede (GUARD-019, un fichero
       // en el camino) no se ha movido nada ni hay copia que quitar (quinta)
       var Carpeta := TPath.GetDirectoryName(TPath.GetFullPath(SinBarraFinal(P.Destino)));
-      if not MatchText(Carpeta, CarpetasCreadas) then
+      if not RutaEnLista(Carpeta, CarpetasCreadas) then
       begin
         CarpetasCreadas := CarpetasCreadas + [Carpeta];
         AncestrosCreadas := AncestrosCreadas + [PrimerAncestroQueExiste(Carpeta)];

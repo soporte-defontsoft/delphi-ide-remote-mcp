@@ -101,6 +101,7 @@ uses
   System.JSON,
   Lsp.Session,
   Lsp.Pascal,          // CodigoPascal: la vista del codigo
+  Lsp.Rutas,           // ClaveDeRuta: la clave de una ruta
   Lsp.ConfigFabricator, // MotorPuedeEnsenar: EL juez de "fuera" de lo que dice el motor
   Lsp.References;      // UbicacionDeLsp: EL lector de una ubicacion del motor
 
@@ -157,7 +158,8 @@ end;
 
 function TCadenaPorElMotor.LineasDe(const APath: string): TStringList;
 begin
-  if not FTextos.TryGetValue(APath.ToLower, Result) then
+  // por la clave del disco (ClaveDeRuta): .ToLower junta lo que NTFS separa (V105)
+  if not FTextos.TryGetValue(ClaveDeRuta(APath), Result) then
   begin
     Result := TStringList.Create;
     try
@@ -165,16 +167,16 @@ begin
     except
       FIlegibles := FIlegibles + [APath];
     end;
-    FTextos.Add(APath.ToLower, Result);
+    FTextos.Add(ClaveDeRuta(APath), Result);
   end;
 end;
 
 function TCadenaPorElMotor.UnidadDe(const APath: string): TUnidadPas;
 begin
-  if not FUnidades.TryGetValue(APath.ToLower, Result) then
+  if not FUnidades.TryGetValue(ClaveDeRuta(APath), Result) then
   begin
     Result := LeeFuentePascal(LineasDe(APath).Text);
-    FUnidades.Add(APath.ToLower, Result);
+    FUnidades.Add(ClaveDeRuta(APath), Result);
   end;
 end;
 
@@ -185,9 +187,9 @@ end;
 
 procedure TCadenaPorElMotor.AbreEnElMotor(const AFile: string);
 begin
-  if FAbiertos.ContainsKey(AFile.ToLower) then
+  if FAbiertos.ContainsKey(ClaveDeRuta(AFile)) then
     Exit;
-  FAbiertos.Add(AFile.ToLower, True);
+  FAbiertos.Add(ClaveDeRuta(AFile), True);
   if Assigned(FAbre) then
     FAbre(AFile)
   else
@@ -222,7 +224,7 @@ begin
   Result := False;
   AFile2 := '';
   ALinea2 := -1;
-  Clave := AFile.ToLower + '|' + ALinea.ToString;
+  Clave := ClaveDeRuta(AFile) + '|' + ALinea.ToString;
   if FSaltos.TryGetValue(Clave, Guardado) then
   begin
     if Guardado = SIN_ANCESTRO then

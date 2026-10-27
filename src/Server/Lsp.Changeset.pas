@@ -273,12 +273,12 @@ begin
   Result := TFile.Exists(APath);
   for Op in C.Ops do
   begin
-    if SameText(Op.Path, APath) then
+    if SameFileName(Op.Path, APath) then
       case Op.Kind of
         opCreate: Result := True;
         opDelete, opMove: Result := False;
       end;
-    if (Op.Kind = opMove) and SameText(Op.Dest, APath) then
+    if (Op.Kind = opMove) and SameFileName(Op.Dest, APath) then
       Result := True;
   end;
 end;
@@ -295,9 +295,9 @@ begin
   Result := APath;
   for J := AIndice - 1 downto 0 do
   begin
-    if (C.Ops[J].Kind = opMove) and SameText(C.Ops[J].Dest, Result) then
+    if (C.Ops[J].Kind = opMove) and SameFileName(C.Ops[J].Dest, Result) then
       Result := C.Ops[J].Path
-    else if (C.Ops[J].Kind = opCreate) and SameText(C.Ops[J].Path, Result) then
+    else if (C.Ops[J].Kind = opCreate) and SameFileName(C.Ops[J].Path, Result) then
       Exit('');
   end;
   if not TFile.Exists(Result) then
@@ -1119,7 +1119,7 @@ begin
                   // su sitio, y vale (test_round8 M1): no es un borrado
                   var Vuelve := False;
                   for var J := I + 1 to C.Ops.Count - 1 do
-                    if (C.Ops[J].Kind = opCreate) and SameText(C.Ops[J].Path, Op.Path) then
+                    if (C.Ops[J].Kind = opCreate) and SameFileName(C.Ops[J].Path, Op.Path) then
                       Vuelve := True;
                   if not Vuelve then
                   begin
@@ -1132,14 +1132,14 @@ begin
                 if After <> Before then
                 begin
                   var Acc := 0;
-                  Deltas2.TryGetValue(Op.Path.ToLower, Acc);
-                  Deltas2.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
+                  Deltas2.TryGetValue(ClaveDeRuta(Op.Path), Acc);
+                  Deltas2.AddOrSetValue(ClaveDeRuta(Op.Path), Acc + (After - Before));
                   // las siguientes de ESTE fichero: solo lo que queda por
                   // debajo de lo que cambio este paso se mueve
                   var Desde, Delta: Integer;
                   ZonaDelCambio(AntesL, DespuesL, Desde, Delta);
                   for var J := I + 1 to C.Ops.Count - 1 do
-                    if SameText(C.Ops[J].Path, Op.Path) then
+                    if SameFileName(C.Ops[J].Path, Op.Path) then
                       Lineas[J] := LineaTrasCambio(Lineas[J], Desde, Delta);
                 end;
               end;
@@ -1178,14 +1178,15 @@ begin
         Audit := TStringBuilder.Create;
         Seen := TStringList.Create;
         try
-          Seen.CaseSensitive := False;
+          // cada fichero una vez, por el juez del disco (RutaEnLista): un
+          // TStringList sin mayusculas compara con el locale (V105)
           for Op in C.Ops do
           begin
-            if Seen.IndexOf(Op.Path) < 0 then
+            if not RutaEnLista(Op.Path, Seen.ToStringArray) then
               Seen.Add(Op.Path);
             // ...y el DESTINO de un move: el form que queda en disco es ese,
             // y no se juzgaba (W10 del revisor de cierre)
-            if (Op.Kind = opMove) and (Seen.IndexOf(Op.Dest) < 0) then
+            if (Op.Kind = opMove) and not RutaEnLista(Op.Dest, Seen.ToStringArray) then
               Seen.Add(Op.Dest);
           end;
           // lo que el lote ESCRIBIO de verdad: solo eso se juzga, y solo eso
@@ -1204,10 +1205,10 @@ begin
           begin
             var Kinds := '';
             for Op in C.Ops do
-              if SameText(Op.Path, FPath) or ((Op.Kind = opMove) and SameText(Op.Dest, FPath)) then
+              if SameFileName(Op.Path, FPath) or ((Op.Kind = opMove) and SameFileName(Op.Dest, FPath)) then
                 Kinds := Kinds + IfThen(Kinds <> '', ' + ', '') + KindName(Op.Kind);
             var D := 0;
-            Deltas2.TryGetValue(FPath.ToLower, D);
+            Deltas2.TryGetValue(ClaveDeRuta(FPath), D);
             Audit.AppendLine(Format('  %s: %s%s',
               [MaskDriveText('', FPath), Kinds,
                IfThen(D = 0, MsgText(SF_CHSET_MISMO_NUMERO_LINEAS),

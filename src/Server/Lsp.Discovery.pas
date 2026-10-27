@@ -918,10 +918,10 @@ end;
 function IdeKnownPackages(const AVersion: string): TArray<TIdePackage>;
 var
   Map: TDictionary<string, TIdePackage>;
-  Off: TDictionary<string, Boolean>; // a set: filename(lower) -> present
+  Off: TDictionary<string, Boolean>; // a set: ClaveDeRuta(filename) -> present
   List: TList<TIdePackage>;
 
-  // One registry key's values into Map/Off as filename(lower) -> entry.
+  // One registry key's values into Map/Off as ClaveDeRuta(filename) -> entry.
   // AsNames=True collects only the file names (the Disabled set).
   procedure Collect(const ASubKey: string; AConMaquina, AsNames: Boolean);
   var
@@ -937,15 +937,15 @@ var
       if FileKey = '' then
         Continue;
       if AsNames then
-        Off.AddOrSetValue(FileKey.ToLower, True)
-      else if not Map.ContainsKey(FileKey.ToLower) then
+        Off.AddOrSetValue(ClaveDeRuta(FileKey), True)
+      else if not Map.ContainsKey(ClaveDeRuta(FileKey)) then
       begin
         P.Description := V.Dato.Trim;
         if P.Description = '' then
           P.Description := FileKey;
         P.BplFile := FileKey;
         P.Disabled := False;
-        Map.Add(FileKey.ToLower, P);
+        Map.Add(ClaveDeRuta(FileKey), P);
       end;
     end;
   end;
@@ -1195,7 +1195,9 @@ begin
   try
     L.Sorted := True;
     L.Duplicates := dupIgnore;
-    L.CaseSensitive := False;
+    // exacta: sin mayusculas compara con el locale y juntaba dos ficheros que
+    // el disco separa (V105); una carpeta no tiene dos que solo difieran en eso
+    L.CaseSensitive := True;
     for var F in TDirectory.GetFiles(IdeProfilesDir(AVersion), AMascara) do
       L.Add(F);
     Result := L.ToStringArray;

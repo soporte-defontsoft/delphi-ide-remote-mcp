@@ -505,7 +505,7 @@ begin
   if Pedido = '' then
     Exit;
   for var F in SdksDelIde(AVersion) do
-    if SameText(NombreSinSdk(TPath.GetFileName(F)), Pedido) then
+    if SameFileName(NombreSinSdk(TPath.GetFileName(F)), Pedido) then
       Exit(NombreSinSdk(TPath.GetFileName(F)));
   for var A in AsientosDeSdk(AVersion) do
     if SameText(NombreSinSdk(A), Pedido) then

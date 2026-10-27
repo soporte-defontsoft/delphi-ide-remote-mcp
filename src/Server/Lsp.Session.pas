@@ -1099,7 +1099,9 @@ var
 
   procedure Sella(const ADproj: string);
   begin
-    Marca(PARTE_PROYECTO + ADproj.ToLower);
+    // por la clave del disco (ClaveDeRuta), como todas las de esta busqueda:
+    // .ToLower junta lo que NTFS separa (V105 de la 1.23.1)
+    Marca(PARTE_PROYECTO + ClaveDeRuta(ADproj));
   end;
 
   // Los dos jueces de que un proyecto sirve a la unidad. LA LISTA: su .dpr/.dpk
@@ -1110,7 +1112,7 @@ var
   // guarda (NoLeido).
   function Lista(const ADproj: string): Boolean;
   begin
-    if Juzgados.TryGetValue(ADproj.ToLower, Result) then
+    if Juzgados.TryGetValue(ClaveDeRuta(ADproj), Result) then
       Exit;
     Result := False;
     if LugarDeLecturaDenegado(ADproj, [ltJaula]) = '' then
@@ -1120,7 +1122,7 @@ var
     except
       NoLeido := True;
     end;
-    Juzgados.Add(ADproj.ToLower, Result);
+    Juzgados.Add(ClaveDeRuta(ADproj), Result);
   end;
 
   // ...y LA ALCANZA: su search path es la carpeta de la unidad (Lsp.Dproj).
@@ -1173,7 +1175,7 @@ begin
         Break;
       // la carpeta, sellada antes de listarla: un .dproj que aparezca en ella
       // cambia la respuesta
-      Marca(PARTE_CARPETA + Dir.ToLower);
+      Marca(PARTE_CARPETA + ClaveDeRuta(Dir));
       Matches := TDirectory.GetFiles(Dir, '*.dproj');
       if Length(Matches) = 1 then
         Exit(Elige(Matches[0], True));
@@ -1186,7 +1188,7 @@ begin
           if Alcanza(C) then
             Exit(Elige(C, True));
         for C in Matches do
-          if SameText(TPath.GetFileNameWithoutExtension(C), TPath.GetFileName(Dir)) then
+          if SameFileName(TPath.GetFileNameWithoutExtension(C), TPath.GetFileName(Dir)) then
             Exit(Elige(C, False));
         Exit(Elige(Matches[0], False));
       end;
@@ -1203,14 +1205,14 @@ begin
         for C in WalkFiles(Dir, ['*.dproj'], False, True,
           procedure(const ACarpeta: string)
           begin
-            var K := PARTE_CARPETA + ACarpeta.ToLower;
+            var K := PARTE_CARPETA + ClaveDeRuta(ACarpeta);
             if not Sellos.ContainsKey(K) then
             begin
               Sellos.Add(K, SelloDeParte(K));
               Orden.Add(K);
             end;
           end) do
-          if not Juzgados.ContainsKey(C.ToLower) then
+          if not Juzgados.ContainsKey(ClaveDeRuta(C)) then
           begin
             if Lista(C) then
               Exit(Elige(C, True));
@@ -1244,7 +1246,7 @@ begin
   // fijaba SU proyecto para todos los demas - el token ancho le regalaba al
   // estrecho una raiz que su jaula le prohibe (auditoria 2026-09-21). The
   // stamps are asked of the disk with no lock held.
-  Key := string.Join(';', WorkspaceRoots).ToLower + '|' + TPath.GetFullPath(AFilePath).ToLower;
+  Key := ClaveDeRuta(string.Join(';', WorkspaceRoots)) + '|' + ClaveDeRuta(TPath.GetFullPath(AFilePath));
   FTables.Enter;
   try
     Found := FSettingsCache.TryGetValue(Key, E);
@@ -1337,9 +1339,9 @@ begin
   // Hoy hay una por servidor, pero la clave no tiene que saberlo.
   var Ver := DiscoverRadStudio.Version;
   if ASettingsUsed <> '' then
-    Result := Prefix[ALinter] + Ver + '|' + ASettingsUsed.ToLower
+    Result := Prefix[ALinter] + Ver + '|' + ClaveDeRuta(ASettingsUsed)
   else
-    Result := Prefix[ALinter] + Ver + '|(nosettings)' + ARootDir.ToLower;
+    Result := Prefix[ALinter] + Ver + '|(nosettings)' + ClaveDeRuta(ARootDir);
 end;
 
 function TLspSession.OpenDocuments(const AFilePath: string): Integer;
@@ -1568,7 +1570,7 @@ var
   Nuevo: Boolean;
 begin
   var Mine := AClient as TSessionClient;
-  DocKey := AFullPath.ToLower;
+  DocKey := ClaveDeRuta(AFullPath);
   // The lock of THIS client's documents: the engine is written to with it
   // held, and one that stops reading keeps whoever comes for ITS project.
   Mine.FDocLock.Enter;
@@ -1650,7 +1652,7 @@ begin
   var Stamp := DiskStamp(FullPath);
   Text := TLspClient.LoadSourceText(FullPath);
   var Mine := Client as TSessionClient;
-  DocKey := FullPath.ToLower;
+  DocKey := ClaveDeRuta(FullPath);
   Mine.FDocLock.Enter;
   try
     // retired between GetClient and here: see AcquireFor

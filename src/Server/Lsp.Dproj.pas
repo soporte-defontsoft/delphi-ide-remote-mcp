@@ -3361,9 +3361,11 @@ begin
   Result := False;
   if ADir = '' then
     Exit;
-  Target := IncludeTrailingPathDelimiter(TPath.GetFullPath(ADir)).ToLower;
+  // la misma carpeta, como la da el disco (SameFileName; .ToLower junta lo
+  // que NTFS separa: V105 de la 1.23.1)
+  Target := IncludeTrailingPathDelimiter(TPath.GetFullPath(ADir));
   for var R in RutasDeBusqueda(ADprojPath, AXml) do
-    if (R.Carpeta <> '') and (IncludeTrailingPathDelimiter(R.Carpeta).ToLower = Target) then
+    if (R.Carpeta <> '') and SameFileName(IncludeTrailingPathDelimiter(R.Carpeta), Target) then
       Exit(True);
 end;
 

@@ -54,7 +54,7 @@ uses
 
 var
   GLock: TCriticalSection;
-  // full path (lower) -> (stamp, sha)
+  // full path (la clave del disco, la de Lsp.Rutas.ClaveDeRuta) -> (stamp, sha)
   GCache: TDictionary<string, TPair<string, string>>;
 
 // el sello de lo que GetFileAttributesEx no pudo preguntar, por su error: no
@@ -127,7 +127,11 @@ var
   Hit: TPair<string, string>;
 begin
   Full := TPath.GetFullPath(APath);
-  Key := Full.ToLower;
+  // la clave de Lsp.Rutas.ClaveDeRuta (las mayusculas invariantes), escrita
+  // aqui a proposito: esta unidad la comparten los renderizadores, que no
+  // llevan Lsp.Rutas ni lo que arrastra; .ToLower juntaba lo que NTFS separa
+  // y dos ficheros con el mismo sello daban el SHA del otro (V105)
+  Key := Full.ToUpperInvariant;
   Stamp := DiskStamp(Full);
   if HasStamp(Stamp) then
   begin

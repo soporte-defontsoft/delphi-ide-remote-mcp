@@ -260,13 +260,13 @@ begin
   end
   else
     Rel := Carpeta;
-  if (Ultima < Length(Carpetas)) and SameText(Carpetas[Ultima], Rel) then
+  if (Ultima < Length(Carpetas)) and SameFileName(Carpetas[Ultima], Rel) then
   begin
     Inc(Cuentas[Ultima]);
     Exit;
   end;
   for I := 0 to High(Carpetas) do
-    if SameText(Carpetas[I], Rel) then
+    if SameFileName(Carpetas[I], Rel) then
     begin
       Inc(Cuentas[I]);
       Ultima := I;
@@ -335,7 +335,9 @@ function TListaDeFicheros.Grupo(const ADir: string): TJSONArray;
 var
   Clave: string;
 begin
-  Clave := ADir.ToLower;
+  // la carpeta una vez, por la clave del disco (.ToLower junta lo que NTFS
+  // separa: V105 de la 1.23.1)
+  Clave := ClaveDeRuta(ADir);
   if FIndice.TryGetValue(Clave, Result) then
     Exit;
   var G := TJSONObject.Create;
@@ -358,10 +360,10 @@ end;
 
 function TListaDeFicheros.Fichero(const AFichero: string): TJSONObject;
 begin
-  if FFicheros.TryGetValue(AFichero.ToLower, Result) then
+  if FFicheros.TryGetValue(ClaveDeRuta(AFichero), Result) then
     Exit;
   Result := Add(AFichero);
-  FFicheros.Add(AFichero.ToLower, Result);
+  FFicheros.Add(ClaveDeRuta(AFichero), Result);
 end;
 
 { La entrada de una lista plana trae la ruta que la agrupa: un 'path' que

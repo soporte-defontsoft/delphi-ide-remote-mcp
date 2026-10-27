@@ -233,7 +233,7 @@ begin
     // carpeta eran dos avisos, uno detras de otro)
     if not TDirectory.Exists(Ruta) then
       Ruta := ExtractFileDir(Ruta);
-    if not MatchText(Ruta, ACarpetas) then
+    if not RutaEnLista(Ruta, ACarpetas) then
       ACarpetas := ACarpetas + [Ruta];
   end;
 end;
@@ -408,7 +408,7 @@ end;
   del repo ya los juzgo por su sitio real: DondeViveElRepo + PathDenied). }
 function EsCarpetaGit(const APath: string): Boolean;
 begin
-  Result := SameText(TPath.GetFileName(SinBarraFinal(APath)), '.git');
+  Result := SameFileName(TPath.GetFileName(SinBarraFinal(APath)), '.git');
 end;
 
 function ConfiguracionGitDenegada(const ARepo, ARaiz: string;

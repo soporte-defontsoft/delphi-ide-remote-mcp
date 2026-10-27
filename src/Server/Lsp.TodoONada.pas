@@ -178,7 +178,7 @@ var
   I: Integer;
 begin
   for I := 0 to High(FRutas) do
-    if SameText(FRutas[I], ARuta) then
+    if SameFileName(FRutas[I], ARuta) then
     try
       FAnotado[I] := False;
       FExisteNuestro[I] := TFile.Exists(FRutas[I]);
@@ -199,7 +199,7 @@ var
   Ahora, Sabido: TArray<Byte>;
 begin
   for I := 0 to High(FRutas) do
-    if SameText(FRutas[I], ARuta) and not FAjeno[I] then
+    if SameFileName(FRutas[I], ARuta) and not FAjeno[I] then
     try
       // lo ultimo que se sabe de ella: lo que dejo el paso anterior, o la foto
       if FAnotado[I] then

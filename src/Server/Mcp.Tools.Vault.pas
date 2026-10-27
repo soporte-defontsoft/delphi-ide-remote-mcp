@@ -229,11 +229,13 @@ function VaultExcluded(const ARel: string): Boolean;
 var
   Low, D: string;
 begin
-  Low := ConBarrasDeWindows(ARel).ToLower;
-  if Low.Contains('.bak') then
+  // las carpetas por su nombre, con la clave del disco en los dos lados
+  // (ClaveDeRuta): .ToLower junta lo que NTFS separa (V105 de la 1.23.1)
+  Low := ClaveDeRuta(ConBarrasDeWindows(ARel));
+  if Low.Contains(ClaveDeRuta('.bak')) then
     Exit(True);
   for D in VAULT_EXCLUIDAS do
-    if Low.StartsWith(D) or Low.Contains('\' + D) then
+    if Low.StartsWith(ClaveDeRuta(D)) or Low.Contains('\' + ClaveDeRuta(D)) then
       Exit(True);
   Result := False;
 end;

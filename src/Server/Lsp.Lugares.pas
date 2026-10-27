@@ -401,7 +401,7 @@ begin
     if (L = #0) or (L = Letra) then
       Continue;
     var Candidata := Copy(S, 1, 2) + Cola;
-    if RutaDentroDe(S, Candidata) and not MatchText(Candidata, Result) then
+    if RutaDentroDe(S, Candidata) and not RutaEnLista(Candidata, Result) then
       Result := Result + [Candidata];
   end;
 end;
@@ -783,7 +783,7 @@ begin
     except
       F := '';
     end;
-    if (F <> '') and not MatchText(F, Result) then
+    if (F <> '') and not RutaEnLista(F, Result) then
       Result := Result + [F];
   end;
 end;

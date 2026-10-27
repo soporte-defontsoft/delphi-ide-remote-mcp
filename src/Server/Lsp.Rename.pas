@@ -62,6 +62,7 @@ uses
   Lsp.Session,
   Lsp.Texts,
   Lsp.Pascal,
+  Lsp.Rutas, // ClaveDeRuta: la clave de una ruta
   Lsp.Json;
 
 function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
@@ -194,7 +195,7 @@ begin
           // definicion casaba por accidente y entonces la fila NO se anadia -
           // que es exactamente el E2065 que el comentario de arriba dice
           // haber arreglado. Un off-by-one que fallaba en los dos sentidos.
-          if SameText(Item.GetValue('path').Value, DefPath) and
+          if SameFileName(Item.GetValue('path').Value, DefPath) and
              (Item.GetValue('line0').GetValue<Integer> = DefLine) then
           begin
             HasDef := True;
@@ -338,7 +339,7 @@ begin
     begin
       P := EnForms[I].Path;
       N := 0;
-      while (I < Length(EnForms)) and SameText(EnForms[I].Path, P) do
+      while (I < Length(EnForms)) and SameFileName(EnForms[I].Path, P) do
       begin
         Inc(N);
         Inc(I);
@@ -454,7 +455,9 @@ begin
   Textos := TDictionary<string, TArray<string>>.Create;
   Vistas := TDictionary<string, TArray<string>>.Create;
   try
-    Hechas.CaseSensitive := False;
+    // exacta, sobre la clave del disco (ClaveDeRuta): sin mayusculas compara
+    // con el locale y juntaba dos ficheros que NTFS separa (V105)
+    Hechas.CaseSensitive := True;
     Id := ChangesetBegin;
     if Id = '' then
     begin
@@ -467,17 +470,17 @@ begin
       Chg := Changes.Items[I] as TJSONObject;
       P := TPath.GetFullPath(Chg.GetValue('path').Value);
       L0 := Chg.GetValue('line0').GetValue<Integer>;
-      if Hechas.IndexOf(P + '|' + IntToStr(L0)) >= 0 then
+      if Hechas.IndexOf(ClaveDeRuta(P) + '|' + IntToStr(L0)) >= 0 then
         Continue;
-      Hechas.Add(P + '|' + IntToStr(L0));
-      if not Textos.TryGetValue(P.ToLower, Lineas) then
+      Hechas.Add(ClaveDeRuta(P) + '|' + IntToStr(L0));
+      if not Textos.TryGetValue(ClaveDeRuta(P), Lineas) then
       begin
         var Fuente := PatchLoadText(P, EncName);
         Lineas := SplitToLines(Fuente);
-        Textos.Add(P.ToLower, Lineas);
-        Vistas.Add(P.ToLower, SplitToLines(CodigoPascal(Fuente)));
+        Textos.Add(ClaveDeRuta(P), Lineas);
+        Vistas.Add(ClaveDeRuta(P), SplitToLines(CodigoPascal(Fuente)));
       end;
-      Vista := Vistas[P.ToLower];
+      Vista := Vistas[ClaveDeRuta(P)];
       if (L0 < 0) or (L0 >= Length(Lineas)) then
       begin
         Fallo(MsgFmt(SR_RENAME_LINE_GONE_FMT, [L0 + 1, P]));

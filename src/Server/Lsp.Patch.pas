@@ -1282,7 +1282,7 @@ begin
     Exit;
   Ahora := HuellaDeOrigen(AExisteAhora, AAhora);
   for I := 0 to High(GOrigenes) do
-    if SameText(GOrigenes[I].Ruta, APath) then
+    if SameFileName(GOrigenes[I].Ruta, APath) then
     begin
       if GOrigenes[I].Esperado <> Ahora then
       begin
@@ -1314,7 +1314,7 @@ begin
   if not GEnLlamada then
     Exit;
   for I := 0 to High(GOrigenes) do
-    if SameText(GOrigenes[I].Ruta, APath) then
+    if SameFileName(GOrigenes[I].Ruta, APath) then
     begin
       GOrigenes[I].Esperado := HuellaDeOrigen(True, B);
       Break; // una entrada por ruta
@@ -1789,7 +1789,7 @@ begin
   // servidor o de la carpeta del destino (la que aprueba la puerta). Una
   // carpeta de descarga DENTRO del destino ya no: delphi_desktop baja
   // siempre a la casa de capturas desde la 1.18.2 (2z/2af)
-  Nuestro := (ALocal = '') or EnTemporal(ALocal) or SameText(DirLocal, Dir);
+  Nuestro := (ALocal = '') or EnTemporal(ALocal) or SameFileName(DirLocal, Dir);
   if not Nuestro then
     raise Exception.Create(MsgFmt(SR_COLOCA_PRODUCTO_AJENO_FMT, [ALocal, ADestino]));
   // Todo, bajo el cerrojo, de la puerta al rename: un delphi_move (que escribe
@@ -1805,7 +1805,7 @@ begin
     // lo que se cree para colocarlo se quita si al final no se coloca
     Ancestro := PrimerAncestroQueExiste(Dir);
     CrearCarpeta(Dir);
-    if SameText(DirLocal, Dir) then
+    if SameFileName(DirLocal, Dir) then
       Tmp := ALocal // ya junto al destino (el zip en proceso): un solo rename, con sus reintentos
     else
     begin

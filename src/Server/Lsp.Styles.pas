@@ -1484,9 +1484,10 @@ var
     Result := '';
     if ADepth > 8 then
       Exit(MsgText(SR_STYLES_RC_DEEP));
-    if Seen.IndexOf(AFile.ToLower) >= 0 then
+    // por la clave del disco (ClaveDeRuta): .ToLower junta lo que NTFS separa (V105)
+    if Seen.IndexOf(ClaveDeRuta(AFile)) >= 0 then
       Exit; // already checked (and it stops an include cycle dead)
-    Seen.Add(AFile.ToLower);
+    Seen.Add(ClaveDeRuta(AFile));
     if ReadPathDenied(AFile) <> '' then
       Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT,
         [TPath.GetFileName(AFile), TPath.GetFileName(ARc)]));
@@ -1558,6 +1559,7 @@ var
 begin
   Seen := TStringList.Create;
   try
+    Seen.CaseSensitive := True; // las claves ya son las del disco: exactas
     Result := Walk(TPath.GetFullPath(ARc), 0);
   finally
     Seen.Free;

@@ -536,6 +536,9 @@ begin
     // 2026-08-26, P2.9), under a lock
     TMonitor.Enter(GMetaLock);
     try
+      // (AnsiLowerCase y no ClaveDeRuta, a proposito: las claves son NUESTROS
+      // ficheros de tablas, con nombres ASCII de su nombrador, y JubilaLocked las
+      // vuelve a leer con LeeNombreDeTabla; ninguna ruta del agente pasa por aqui)
       if not GTablas.TryGetValue(AnsiLowerCase(Fichero), Result) then
       begin
         Result := TMetaTable.DeFichero(Fichero);

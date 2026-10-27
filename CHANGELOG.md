@@ -182,6 +182,21 @@ the MCP `initialize` response (`serverInfo.version`).
   Turkish, `IOUtils` did not match `System.IOUtils`, so `adduses` could add a
   unit that was already there, and a library unit with a non-ASCII name was
   never found. Both sides now use the same language-independent key.
+- **Every comparison of two paths is now the disk's.** About a hundred places
+  compared paths, or kept them as keys, with the user's language rules
+  (`.ToLower`, `MatchText`, a case-insensitive list) or with a comparison
+  that only folds A-Z. The language rules join names that NTFS keeps apart
+  and, in Turkish, part names that NTFS joins: Windows' own functions lower
+  `__DELPHI-PATCH` to `__delphı-patch` there, so the trash, the temp folder
+  and the build-output folders were not always recognised by name. Measured
+  against the previous build: a folder `__DELPHİ-PATCH` (dotted capital I),
+  which NTFS keeps apart from the trash, was refused as if it were the trash;
+  a folder `WİN32` was hidden from `delphi_search` as build output; and
+  `delphi_list` showed `Pk` and `P<Kelvin>` as one folder holding both files.
+  The same keys ran the engine's documents and settings, the project lookup
+  of a unit, the changeset audit and the SHA-256 cache. They all go through
+  the four judges of `Lsp.Rutas` now: one for equality, one for a list, one
+  for "inside of" and one for the key of a table.
 - **The designer's note on how the IDE stores a value no longer repeats it.**
   When the IDE stores a property differently from what was given, the answer
   carries the values in `value`, `storedAs` and `storedIn`, exactly as the form

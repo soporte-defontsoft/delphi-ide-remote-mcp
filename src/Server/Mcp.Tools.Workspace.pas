@@ -410,7 +410,7 @@ begin
           for var Mk in Masks do
             for var Elegible in TDirectory.GetFiles(TPath.GetDirectoryName(Params.Root), Mk,
               TSearchOption.soTopDirectoryOnly) do
-              if SameText(TPath.GetFileName(Elegible), TPath.GetFileName(Params.Root)) then
+              if SameFileName(TPath.GetFileName(Elegible), TPath.GetFileName(Params.Root)) then
                 Elegido := True;
         except
           // una carpeta que no se deja listar: la mascara no lo elige
@@ -2017,10 +2017,10 @@ begin
         Continue;
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;
-      if F.ToLower.Contains('\dcu\') then
+      if ClaveDeRuta(F).Contains(ClaveDeRuta('\dcu\')) then // la clave del disco (V105)
         Continue;
       // ni el zip ni ningun intermedio: el suyo y el de otra llamada a la vez
-      if SameText(TPath.GetFullPath(F), OutZip) or
+      if SameFileName(TPath.GetFullPath(F), OutZip) or
          EsTemporalDeSustitucion(TPath.GetFileName(F)) then
         Continue;
       // lo que la puerta de leer no admite no va en un paquete: los metadatos

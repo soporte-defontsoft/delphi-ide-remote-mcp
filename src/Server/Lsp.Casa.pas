@@ -450,7 +450,14 @@ end;
 function ClaveDeCarpeta(const ADir: string): string;
 begin
   // AnsiLowerCase y no LowerCase: la de la RTL solo pliega A-Z, y 'C:\Ñ' y
-  // 'C:\ñ' son la misma carpeta (revision de la 1.11.0)
+  // 'C:\ñ' son la misma carpeta (revision de la 1.11.0). Y NO ClaveDeRuta, a
+  // proposito (V105 de la 1.23.1): esta clave NOMBRA cosas de fuera del
+  // proceso - el mutex de la primera instancia y la marca de los contenedores
+  // del sandbox (Lsp.Sandbox.MarcaDeEstaCasa), que la purga busca por ella -, y
+  // cambiarla dejaria sin purgar los contenedores de la marca vieja. Lo que el
+  // locale junta y NTFS separa solo cuenta con dos servidores en carpetas que
+  // difieran en eso: compartirian la primera instancia (el segundo no purga la
+  // temporal) y la marca de sus contenedores (WATCH)
   Result := LowerCase(THashMD5.GetHashString(
     AnsiLowerCase(SinBarraFinal(LongCanonical(ADir)))));
 end;

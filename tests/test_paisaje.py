@@ -547,6 +547,27 @@ REGLAS = [
     # que es una unidad en una carpeta que dcc mira: la biblioteca y, desde V107 de la 1.23.1, la
     # carpeta y el search path del proyecto (el juez de V79 no los miraba y adduses decia que
     # Graphics era Vcl.Graphics con un Graphics.pas al lado del .dpr)
+    # ...y TODA ruta con el pliegue del idioma (V105 de la 1.23.1, la clase de V82 ampliada): unos 100
+    # sitios guardaban o comparaban rutas con .ToLower (LCMAP_LINGUISTIC_CASING: en turco la I es la i
+    # sin punto y __DELPHI-PATCH no era la papelera; en es-ES la I con punto es la i y el signo Kelvin
+    # la k, que NTFS separa), AnsiLowerCase, MatchText/IndexText o AnsiSameText. Gramatica PROPIA y
+    # declarada (no hay juez de "esta variable es una ruta"): por el NOMBRE de lo que se pliega. Las
+    # casas son las que se quedan a proposito, cada una con su razon en el fuente
+    ('una ruta con el pliegue del idioma',
+     r'\bAnsi(?:Lower|Upper)Case\(|\b\w*(?:Path|Ruta|Dir|Carpeta|Fichero|File|Full|Dproj)\w*(?:\.Trim)?\.ToLower\b|'
+     r'\b(?:MatchText|IndexText|AnsiSameText)\(\s*\w*(?:Path|Ruta|Dir|Carpeta|Fichero|Full)\w*\s*,',
+     [('Lsp.Casa.pas', 'ClaveDeCarpeta'),         # nombra el mutex y la marca de los contenedores
+      ('Lsp.Casa.pas', 'CarpetaDeWorkspace'),     # el NOMBRE de un workspace (su seccion del ini)
+      ('Lsp.DesignerMeta.pas', 'MetaTable'),      # nuestros ficheros de tablas, releidos por su nombre
+      ('Lsp.DesignerMetaGen.pas', 'HuellaDeCarpetas')],  # una huella, no una comparacion
+     'los jueces del disco (Lsp.Rutas): SameFileName la igualdad, RutaEnLista una lista, RutaDentroDe el '
+     '"dentro de" y ClaveDeRuta la clave de un diccionario o de un hash (V105 de la 1.23.1)'),
+    # ...y la forma de esa clave, escrita en un sitio mas a proposito: Lsp.ShaCache la comparten los
+    # renderizadores, que no llevan Lsp.Rutas ni lo que arrastra (V105)
+    ('la clave de una ruta del disco a mano', r'\.ToUpperInvariant\b',
+     [('Lsp.Rutas.pas', 'ClaveDeRuta'), ('Lsp.ShaCache.pas', 'CachedFileSha256')],
+     'ClaveDeRuta (Lsp.Rutas): las mayusculas invariantes son la clave de una ruta; escrita a mano en otro '
+     'sitio se separa de la que leen los demas'),
     ('las unidades de una carpeta a mano', r"'\.dcu'.*'\.pas'|'\.pas'.*'\.dcu'",
      [('Lsp.Discovery.pas', 'UnidadesEnCarpetas')],
      'UnidadesEnCarpetas (Lsp.Discovery): los .dcu y .pas de una carpeta, por la clave con que se buscan '
@@ -1451,6 +1472,8 @@ PLANTADO = {
     'buscar en la lista de la biblioteca a mano': "  if TArray.BinarySearch<string>(Unidades, AName.ToLower, Ix) then X := 1;",
     'una peticion de render compuesta a mano': "  Pet := Default(TPeticionRender);",
     'las unidades de una carpeta a mano': "  if MatchText(TPath.GetExtension(F), ['.pas', '.dcu']) then X := 1;",
+    'una ruta con el pliegue del idioma': "  Clave := AFichero.ToLower;",
+    'la clave de una ruta del disco a mano': "  K := ARuta.ToUpperInvariant;",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",

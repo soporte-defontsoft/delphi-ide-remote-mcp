@@ -1267,7 +1267,7 @@ begin
     Sesion := WorkspaceRoots + WorkspaceReadOnlyRoots;
   Result := Busca(Sesion);
   for var D in Busca(LibraryReadRoots) do
-    if IndexText(D, Result) < 0 then
+    if not RutaEnLista(D, Result) then
       Result := Result + [D];
   if Length(Result) > 6 then
     SetLength(Result, 6);

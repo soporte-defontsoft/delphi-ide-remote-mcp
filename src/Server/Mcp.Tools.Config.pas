@@ -862,9 +862,9 @@ var
   function Listada(const APath: string): Boolean;
   begin
     for var A in Actuales do
-      if SameText(XmlUnescape(A), APath) then
+      if SameFileName(XmlUnescape(A), APath) then
         Exit(True);
-    Result := IndexText(APath, Nuevos) >= 0;
+    Result := RutaEnLista(APath, Nuevos);
   end;
 
 begin
@@ -1002,7 +1002,7 @@ begin
         else
           Keep.Add(P);
     for var R in ARawPaths do
-      if (IndexText(R.Trim, Quitadas) < 0) and (IndexText(R.Trim, NoEstaban) < 0) then
+      if not RutaEnLista(R.Trim, Quitadas) and not RutaEnLista(R.Trim, NoEstaban) then
         NoEstaban := NoEstaban + [R.Trim];
     if Length(Quitadas) = 0 then
     begin
@@ -1177,8 +1177,8 @@ begin
   // la que no se resuelve se compara como esta escrita
   var Full := RutaDeInclude(AProyecto, AInclude.Trim);
   if Full = '' then
-    Exit(SameText(AInclude, AFullPath));
-  Result := SameText(Full, AFullPath);
+    Exit(SameFileName(AInclude, AFullPath));
+  Result := SameFileName(Full, AFullPath);
 end;
 
 { Every DeployFile element of the manifest whose Include matches AFile

@@ -1299,7 +1299,7 @@ var
   function Vista(const AFichero: string): Boolean;
   begin
     for var X in Hechas do
-      if SameText(X.Fichero, AFichero) then
+      if SameFileName(X.Fichero, AFichero) then
         Exit(True);
     Result := False;
   end;

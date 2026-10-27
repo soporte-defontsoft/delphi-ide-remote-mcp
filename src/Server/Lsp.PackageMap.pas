@@ -100,7 +100,8 @@ begin
     Exit;
   GLock.Enter;
   try
-    if not AnsiSameText(GRoot, ARootDir) then // una ruta: tambien la Ñ
+    // una ruta, como el disco: tambien la Ñ, y no lo que el locale junta (V105)
+    if not SameFileName(GRoot, ARootDir) then
       CargaMapa(ARootDir);
     if not GMapa.TryGetValue(ClaveDeIdentificador(AUnit), Result) then
       Result := '';
