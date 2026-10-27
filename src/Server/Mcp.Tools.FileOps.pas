@@ -545,6 +545,40 @@ begin
   end;
 end;
 
+{ La llamada que recupera un LOTE entero (V67 de la 1.23.1): las copias de un
+  comodin caen en UN cajon de la papelera, y su patron - la mascara + '-*', que
+  delphi_move devuelve a su nombre (NombreDeDestino) - las recoge de una vez si
+  recoge EXACTAMENTE esas: lo pregunta EL lector de los comodines
+  (EntradasDelComodin), el mismo que usara el move. Si recogeria otras copias
+  del dia, o no se deja listar, '' y valen las de cada copia. }
+function NotaDeRecuperarLote(const APath: string; const ACopias: TArray<string>): string;
+var
+  Cajon, Patron: string;
+  Entradas: TArray<string>;
+begin
+  Result := '';
+  if Length(ACopias) < 2 then
+    Exit;
+  Cajon := TPath.GetDirectoryName(ACopias[0]);
+  for var C in ACopias do
+    if not SameFileName(TPath.GetDirectoryName(C), Cajon) then
+      Exit;
+  Patron := TPath.Combine(Cajon, ExtractFileName(SinBarraFinal(APath)) + '-*');
+  if (EntradasDelComodin(Patron, Entradas) <> '') or (Length(Entradas) <> Length(ACopias)) then
+    Exit;
+  for var E in Entradas do
+  begin
+    var Es := False;
+    for var C in ACopias do
+      if SameFileName(TPath.GetFileName(E), TPath.GetFileName(C)) then
+        Es := True;
+    if not Es then
+      Exit;
+  end;
+  Result := #10 + MsgFmt(SN_FILE_RECUPERA_LOTE_FMT,
+    [Length(ACopias), Patron, CarpetaDelComodin(APath)]);
+end;
+
 { TDelphiDeleteTool }
 
 constructor TDelphiDeleteTool.Create;
@@ -795,6 +829,9 @@ begin
   for var I := 0 to High(Rutas) do
     Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_FILE_BORRADO_PAPELERA_FMT,
       [TPath.GetFileName(SinBarraFinal(Rutas[I])), Copias[I]]);
+  // un lote, de una llamada (V67)
+  if Comodin then
+    Result := Result + NotaDeRecuperarLote(Params.Path, Copias);
   // el par partido y lo que aun apunta a lo borrado, como informacion (V19)
   Result := Result + NotaDeMudanza(Rutas, Copias, mzBorra);
 end;

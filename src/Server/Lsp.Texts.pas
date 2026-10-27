@@ -9808,6 +9808,13 @@ const
     '  copy: %s'#10 +
     '  To recover it: delphi_move with path=that copy and dest=wherever ' +
     'you want it (restoring from the trash is allowed).';
+  { ...y un LOTE (un comodin) de UNA llamada, cuando el patron de su cajon
+    recoge exactamente sus copias (V67 de la 1.23.1; lo sugirio el dirigido
+    de Qwen3.8 Flash Next en Hermes). %d = cuantas, %s = el patron, %s = la
+    carpeta de donde salieron }
+  SN_FILE_RECUPERA_LOTE_FMT =
+    '[FILE-052] To recover all %d in one call: delphi_move path=%s ' +
+    'dest=%s (each goes back with its original name).';
 
   SR_FILE_PAPELERA_NO_SE_MUEVE_FMT =
     '[FILE-022 DENIED] %s\ is the trash folder; it is not moved as a ' +
@@ -10942,7 +10949,8 @@ const
     'List Delphi files under a directory recursively (sources and project ' +
     'files, or a mask), skipping IDE artifacts BELOW the root (naming a ' +
     'build-output folder - Win32/Win64/Debug/Release... - as root lists ' +
-    'inside it; hidden entries are counted). Each folder once with its ' +
+    'inside it; the hidden entries that match the mask are counted). Each ' +
+    'folder once with its ' +
     'files by name, size and last-write time: folders = [{dir, files = ' +
     '[{name, size, modified}]}]; 500 entries per page (offset walks the ' +
     'rest; a page that starts inside a folder names it again). dirs=true lists ' +

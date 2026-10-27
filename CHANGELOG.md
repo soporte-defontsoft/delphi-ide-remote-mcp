@@ -144,6 +144,14 @@ the MCP `initialize` response (`serverInfo.version`).
   `UU`, and the stash is kept. A commit that git refuses because nothing is
   staged (git itself says so: `diff --cached --quiet`) answers `GIT-084` with
   that status.
+- **A `delphi_delete` with a wildcard says how to bring the whole batch back in
+  one call.** Each copy said "To recover it: delphi_move with path=that copy",
+  so a batch took one call per file. Now `FILE-052` gives one `delphi_move`
+  whose wildcard path in the trash brings them all back, each with its own
+  name. It is offered only when that pattern picks up exactly the copies of
+  this delete: an older copy from the same day that matches the mask would be
+  picked up too, and then it is not offered. `delphi_list`'s description now
+  says that `hidden` counts only the hidden entries that match the mask.
 
 ## [1.23.0] - 2026-10-26
 
