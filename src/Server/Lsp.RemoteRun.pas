@@ -101,10 +101,14 @@ function Paclient(const APaclient, AOps, AProfile: string;
   AGuardaSiSigue: True (remote-run, que devuelve el jobId al agente) deja
   en el target la salida de un programa que SIGUE vivo al volver, para
   leer despues lo que escriba con RemoteOutput; False (un gesto del nodo,
-  el @kill: nadie tiene su id) la borra siempre. }
+  el @kill: nadie tiene su id) la borra siempre. ACola: True (lo que se da
+  al AGENTE) recorta la salida con la cola de la casa (PonSalida); False (el
+  nodo de delphi_desktop, que lee de ella SU protocolo) la deja entera: con un
+  escritorio de muchas ventanas la linea CAPTURE= se caia de la cola (V99 de
+  la 1.23.1). }
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   const AArgv: TArray<string>; ATimeoutMs: Integer;
-  AGuardaSiSigue: Boolean = False): TJSONObject;
+  AGuardaSiSigue: Boolean = False; ACola: Boolean = True): TJSONObject;
 
 { Mata el programa que un remote-run anterior dejo corriendo en el target:
   el trabajo AJobId, de ESE proyecto, en ESE perfil. Viaja como un trabajo
@@ -595,7 +599,16 @@ end;
 
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   const AArgv: TArray<string>; ATimeoutMs: Integer;
-  AGuardaSiSigue: Boolean): TJSONObject;
+  AGuardaSiSigue, ACola: Boolean): TJSONObject;
+
+  // la salida: recortada para el agente, entera para quien la lee dentro
+  procedure Pon(AObj: TJSONObject; const ATexto: string; ATamano: Int64);
+  begin
+    if ACola then
+      PonSalida(AObj, ATexto, ATamano)
+    else
+      AObj.AddPair('output', ATexto);
+  end;
 var
   ProjName, DeployRel, ARemoteExe, ExeLeaf: string;
   Pc, JobId, TmpDir, GuionFile, Ops, Output, Texto, Salida: string;
@@ -730,7 +743,7 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
-    PonSalida(Result, Salida, Tamano);
+    Pon(Result, Salida, Tamano);
     PonFalloDelLanzador(Result, Salida, Codigo);
   end
   else
@@ -747,7 +760,7 @@ begin
     if AGuardaSiSigue then
       Result.AddPair('outputNote', MsgFmt(SN_REMOTERUN_OUTPUT_FMT, [AProfile, JobId]));
     if Texto <> '' then
-      PonSalida(Result, Texto, Tamano);
+      Pon(Result, Texto, Tamano);
   end;
 
   // Limpieza remota: el lanzador de este trabajo (en Linux flag 3 lo deja;

@@ -470,7 +470,9 @@ begin
     delante de la orden, igual que en el escritorio local. Un nodo ya
     desplegado por un servidor viejo no la pide, pero EnsureNodeCurrent lo
     habra sustituido antes de llegar aqui. }
-  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000);
+  // la salida ENTERA: de ella se lee el protocolo del nodo (CAPTURE=, sus
+  // ventanas, WINERR=); la cola es de lo que se da al agente (V99)
+  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000, False, False);
   try
     Salida := '';
     if Res.GetValue('output') <> nil then
