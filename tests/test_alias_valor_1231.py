@@ -9,6 +9,9 @@ siendo inocuo.
   A1 delphi_search root=A path=B: negado (GUARD-045) con los dos nombres, nada buscado
   A2 delphi_search root=A path=A: busca, como siempre
   A3 delphi_list root=A dir=B: negado igual (otra tool, otro alias)
+  A4 delphi_search root=A path=null: busca en A (null es "no viene" para la puerta
+     y el binder; la comparacion miraba el texto 'null' y lo negaba: V100, de la
+     pasada del paisaje del diff)
 
 Uso:  python tests/test_alias_valor_1231.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -36,6 +39,9 @@ try:
     r = srv.call('delphi_list', {'root': A, 'dir': B})
     check('A3 delphi_list root=A dir=B: negado igual (otra tool, otro alias)',
           mc.abre(r, 'SR_ARG_ALIAS_OTRO_VALOR_FMT') and 'dir' in r, r[:400])
+    r = srv.call('delphi_search', {'root': A, 'path': None, 'query': 'MARCA_'})
+    check('A4 delphi_search root=A path=null: busca en A, null no es otro valor (ROJO contra V93 sin V100)',
+          not mc.fallo(r) and 'UA.pas' in r, r[:400])
 finally:
     srv.cierra()
 mc.borra(BASE)

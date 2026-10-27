@@ -1742,8 +1742,11 @@ begin
     if ArgStr(AArguments, Aliases[I, 2]) <> '' then
     begin
       // the real name is there: with the SAME value the alias is dropped; with
-      // another, one of the two would be ignored without a word (V93)
-      if P.JsonValue.Value.Trim <> ArgStr(AArguments, Aliases[I, 2]).Trim then
+      // another, one of the two would be ignored without a word (V93). El
+      // valor del alias por EL lector (ArgStr): un null es "no viene", y su
+      // .Value es el texto 'null' (V100 de la 1.23.1)
+      var DelAlias := ArgStr(AArguments, Aliases[I, 1]).Trim;
+      if (DelAlias <> '') and (DelAlias <> ArgStr(AArguments, Aliases[I, 2]).Trim) then
         Exit(MsgFmt(SR_ARG_ALIAS_OTRO_VALOR_FMT, [P.JsonString.Value, Aliases[I, 2], AToolName,
           Aliases[I, 2]]));
       AArguments.RemovePair(P.JsonString.Value).Free;
