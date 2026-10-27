@@ -174,6 +174,10 @@ the MCP `initialize` response (`serverInfo.version`).
   unknown. The node now sends Windows' error code in its protocol next to its
   message, and the server judges access denied by that code. An older node on
   a target is replaced on its own, because its hash changes.
+- **A new project's settings are written by one helper.** The project that
+  `delphi_create` writes composed sixteen of its settings by hand and six more
+  by copying the helper's body; all of them now go through that helper. The
+  five kinds of project come out byte for byte as before.
 
 ## [1.23.0] - 2026-10-26
 

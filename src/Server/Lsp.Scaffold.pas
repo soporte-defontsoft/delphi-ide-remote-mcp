@@ -126,6 +126,9 @@ var
   BaseProps, Win32Props, Win64Props, Uwp, Dpi, Definidores, Valores: string;
   EsVcl, EsFmx, EsVisual, EsConsola: Boolean;
 
+  // un elemento de un grupo de propiedades, por EL escritor (Lsp.Dproj), con
+  // su sangria y su salto: la UNICA forma aqui (V89 de la 1.23.1: el cuerpo se
+  // repetia a mano seis veces y dieciseis elementos se escribian sin el)
   function Prop(const ATag, AValor: string): string;
   begin
     Result := '        ' + XmlElemento(ATag, AValor) + CRLF;
@@ -181,13 +184,12 @@ begin
   // la clave FileVersion.
   VerInfoWin := '';
   if not SameText(AAppType, 'Console') then
-    VerInfoWin := '        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>' + CRLF;
-  VerInfoWin := VerInfoWin +
-    '        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);' +
+    VerInfoWin := Prop('VerInfo_IncludeVerInfo', 'true');
+  VerInfoWin := VerInfoWin + Prop('VerInfo_Keys',
+    'CompanyName=;FileDescription=$(MSBuildProjectName);' +
     'FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;' +
     'OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);' +
-    'ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=' +
-    '</VerInfo_Keys>' + CRLF;
+    'ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=');
   // Un paquete se diferencia en cuatro cosas, medidas contra un .dproj de
   // paquete del IDE (FMXDefontsoft, 2026-09-23): el fuente principal es el
   // .dpk, AppType/ProjectType = Package, GenDll+GenPackage+AppFileExt=bpl,
@@ -201,12 +203,8 @@ begin
   begin
     MainExt := '.dpk';
     ProjectType := 'Package';
-    PkgProps :=
-      '        <DCC_BplOutput>' + IDE_OUTPUT_DEFAULT + '</DCC_BplOutput>' + CRLF +
-      '        <DCC_DcpOutput>' + IDE_OUTPUT_DEFAULT + '</DCC_DcpOutput>' + CRLF +
-      '        <GenDll>true</GenDll>' + CRLF +
-      '        <GenPackage>true</GenPackage>' + CRLF +
-      '        <AppFileExt>bpl</AppFileExt>' + CRLF;
+    PkgProps := Prop('DCC_BplOutput', IDE_OUTPUT_DEFAULT) + Prop('DCC_DcpOutput', IDE_OUTPUT_DEFAULT) +
+      Prop('GenDll', 'true') + Prop('GenPackage', 'true') + Prop('AppFileExt', 'bpl');
   end;
   // la base: los interruptores E N S F K (todos los tipos), los permisos de
   // Android de un FMX (el IDE los pone en la base aunque no active Android),
@@ -298,16 +296,16 @@ begin
   Result :=
     '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">' + CRLF +
     '    <PropertyGroup>' + CRLF +
-    '        ' + XmlElemento('ProjectGuid', AGuid) + CRLF +
-    '        ' + XmlElemento('MainSource', AName + MainExt) + CRLF +
-    '        <Base>True</Base>' + CRLF +
+    Prop('ProjectGuid', AGuid) +
+    Prop('MainSource', AName + MainExt) +
+    Prop('Base', 'True') +
     // los selectores, por SU escritor (Lsp.Dproj; SelectorDe los lee)
     '        ' + XmlSelector('Config', 'Debug') + CRLF +
     '        ' + XmlSelector('ProjectName', AName) + CRLF +
-    '        <TargetedPlatforms>3</TargetedPlatforms>' + CRLF +
-    '        ' + XmlElemento('AppType', AAppType) + CRLF +
-    '        ' + XmlElemento('FrameworkType', AFramework) + CRLF +
-    '        ' + XmlElemento('ProjectVersion', PROJECT_VERSION_DEL_IDE) + CRLF +
+    Prop('TargetedPlatforms', '3') +
+    Prop('AppType', AAppType) +
+    Prop('FrameworkType', AFramework) +
+    Prop('ProjectVersion', PROJECT_VERSION_DEL_IDE) +
     '        ' + XmlSelector('Platform', 'Win64') + CRLF +
     '    </PropertyGroup>' + CRLF +
     DefinidorDeConfig('Base', 'Base') +
@@ -316,17 +314,17 @@ begin
     Definidores +
     GrupoDeValores('', 'Base',
       Prop('SanitizedProjectName', AName) +
-      '        <DCC_ExeOutput>' + IDE_OUTPUT_DEFAULT + '</DCC_ExeOutput>' + CRLF +
-      '        <DCC_DcuOutput>' + IDE_OUTPUT_DEFAULT + '\dcu</DCC_DcuOutput>' + CRLF +
+      Prop('DCC_ExeOutput', IDE_OUTPUT_DEFAULT) +
+      Prop('DCC_DcuOutput', IDE_OUTPUT_DEFAULT + '\dcu') +
       PkgProps +
-      '        <VerInfo_Locale>1033</VerInfo_Locale>' + CRLF +
-      '        <DCC_Namespace>' + Ambitos + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      Prop('VerInfo_Locale', '1033') +
+      Prop('DCC_Namespace', Ambitos + '$(DCC_Namespace)') +
       BaseProps) +
     GrupoDeValores('Win32', 'Base',
-      '        <DCC_Namespace>' + AMBITOS_WIN32 + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      Prop('DCC_Namespace', AMBITOS_WIN32 + '$(DCC_Namespace)') +
       VerInfoWin + Win32Props) +
     GrupoDeValores('Win64', 'Base',
-      '        <DCC_Namespace>' + AMBITOS_WIN64 + '$(DCC_Namespace)</DCC_Namespace>' + CRLF +
+      Prop('DCC_Namespace', AMBITOS_WIN64 + '$(DCC_Namespace)') +
       VerInfoWin + Win64Props) +
     Valores +
     '    <ItemGroup>' + CRLF +
@@ -347,8 +345,8 @@ begin
     '        </BuildConfiguration>' + CRLF +
     '    </ItemGroup>' + CRLF +
     '    <ProjectExtensions>' + CRLF +
-    '        <Borland.Personality>Delphi.Personality.12</Borland.Personality>' + CRLF +
-    '        ' + XmlElemento('Borland.ProjectType', ProjectType) + CRLF +
+    Prop('Borland.Personality', 'Delphi.Personality.12') +
+    Prop('Borland.ProjectType', ProjectType) +
     '        <BorlandProject>' + CRLF +
     '            <Delphi.Personality>' + CRLF +
     '                <Source>' + CRLF +
