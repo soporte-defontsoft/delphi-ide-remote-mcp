@@ -320,7 +320,10 @@ type
   luego letras, digitos, _ y - (medido el 21-oct-2026 con msbuild: un '.' es
   MSB5016 "caracter no valido", un '-' compila). Gramatica propia, UNA: la
   del nombre de una propiedad que escribe set-property y la de la clave de
-  una configuracion con la que se compone un definidor. }
+  una configuracion con la que se compone un definidor. Mas estricta que
+  EsNombreDeMacro a proposito: DEFINIR (un elemento) no es REFERENCIAR (un
+  $()) - medido el 27-oct-2026, V86 de la 1.23.1 -, y una letra no ASCII es
+  MSB5016 tambien. }
 function EsNombreDeEtiqueta(const ANombre: string): Boolean;
 
 { La clave con la que el .dproj nombra el build de AConfig: Base sin config,
@@ -461,11 +464,14 @@ function VeredictosDeElementos(const AXml, APlatform, AConfig: string;
 function VeredictosDeElementos(const AXml, APlatform, AConfig: string;
   const AElementos: TArray<TElementoXml>; const AExternas, AGlobales: TArray<string>;
   out AExpandidos, ADudosos: TArray<string>): TArray<TVeredicto>; overload;
-{ True si ANombre es un nombre de propiedad de msbuild (letras, cifras, _ y -,
-  como EsNombreDeEtiqueta): lo unico que vale dentro de un $() de un valor que el
-  build lee (la lista blanca de la puerta, Lsp.BuildRunner.LecturasDelBuildDenegadas;
-  1.22.0). msbuild acepta el '-' en un nombre (medido el 22-oct-2026: $(My-Path)
-  se expande), asi que la puerta no lo niega (H9). }
+{ True si ANombre es un nombre de propiedad de msbuild (letras ASCII, cifras, _
+  y -): lo unico que vale dentro de un $() de un valor que el build lee (la lista
+  blanca de la puerta, Lsp.BuildRunner.LecturasDelBuildDenegadas; 1.22.0).
+  msbuild acepta el '-' en un nombre (medido el 22-oct-2026: $(My-Path) se
+  expande), asi que la puerta no lo niega (H9). NO es EsNombreDeEtiqueta: una
+  cifra o un '-' DELANTE valen en una referencia - $(1x) y $(-x) se expanden, a
+  vacio, porque ningun elemento puede definirlos - y no en un elemento (medido
+  el 27-oct-2026 con msbuild, V86 de la 1.23.1: dos preguntas, dos jueces). }
 function EsNombreDeMacro(const ANombre: string): Boolean;
 { Los %XX de una cadena de msbuild como el caracter que nombran (%2E = '.'):
   msbuild desescapa un valor tras expandirlo, y la puerta de lecturas juzga lo
