@@ -121,7 +121,9 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 
 { La negativa de Windows a CUALQUIER captura con la sesion bloqueada,
-  desconectada o sin escritorio, en la salida del nodo. }
+  desconectada o sin escritorio, en la salida del nodo: por el CODIGO que el
+  nodo dice (NODO_CODIGO_WIN = ERROR_ACCESS_DENIED), no por la frase, que sale
+  en el idioma del destino (V85 de la 1.23.1). }
 function CapturaDenegada(const ASalida: string): Boolean;
 
 { Por que una respuesta del nodo de escritorio vino SIN captura, cuando
@@ -159,6 +161,7 @@ function FetchFromTarget(const AProfile, ADprojPath, ARelPath, ADestDir: string;
 implementation
 
 uses
+  Winapi.Windows, // ERROR_ACCESS_DENIED: la negativa de Windows, por su codigo (V85)
   System.SysUtils,
   System.Classes,
   System.IOUtils,
@@ -275,8 +278,13 @@ end;
 
 function CapturaDenegada(const ASalida: string): Boolean;
 begin
-  Result := ASalida.Contains('Acceso denegado') or
-    ASalida.Contains('Access is denied');
+  // decidia por dos frases ('Acceso denegado' / 'Access is denied'): un
+  // destino en otro idioma salia "ninguno" (regla 6: el juez es el codigo)
+  Result := False;
+  for var L in LineasDelTexto(ASalida) do
+    if L.Trim.StartsWith(NODO_CODIGO_WIN) and
+       (StrToIntDef(L.Trim.Substring(Length(NODO_CODIGO_WIN)).Trim, 0) = ERROR_ACCESS_DENIED) then
+      Exit(True);
 end;
 
 function MotivoDelNodo(const ASalida, AEntorno: string): string;

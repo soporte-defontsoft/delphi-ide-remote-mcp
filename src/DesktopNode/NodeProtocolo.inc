@@ -5,6 +5,10 @@
   26-sep-2026). }
   NODO_CAPTURA = 'CAPTURE=';           // CAPTURE=<ruta del png>
   NODO_NO_PUDE = 'Could not capture:'; // Could not capture: <motivo>
+  { ...y detras, si fue Windows quien dijo que no, SU codigo: el servidor
+    juzga por el (ERROR_ACCESS_DENIED = sesion bloqueada o sin escritorio),
+    no por la frase, que sale en el idioma del destino (V85 de la 1.23.1) }
+  NODO_CODIGO_WIN = 'WINERR=';         // '  WINERR=<codigo de Windows>'
   NODO_VENTANAS = 'visible windows:';  // '  <n> visible windows:' abre la lista
   NODO_VENTANA = 'WINDOW ';             // '  WINDOW x y ancho alto <titulo>'
   { Lo que el nodo dice en CADA arranque, por su id del catalogo (Mld.Textos,

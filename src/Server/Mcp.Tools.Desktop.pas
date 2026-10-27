@@ -510,7 +510,8 @@ begin
     if ParaElAgente <> '' then
       Return.AddPair('nodeOutput', ParaElAgente);
     { Un Windows con la sesion bloqueada, desconectada o sin escritorio
-      contesta "Acceso denegado" a cualquier captura: se nombra, que despista.
+      niega cualquier captura (ERROR_ACCESS_DENIED, que el nodo dice por su
+      codigo y no por la frase de su idioma: V85 de la 1.23.1): se nombra, que despista.
       Solo cuando NO hubo captura: desde 1.0.16 el nodo tiene un respaldo
       (PrintWindow) y su linea RESPALDO cita el mismo error con captura hecha. }
     if (RutaDeCaptura(Salida) = '') and CapturaDenegada(Salida) then

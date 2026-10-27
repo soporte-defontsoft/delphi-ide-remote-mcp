@@ -30,6 +30,7 @@ type
     [Test] procedure BorradoNuncaUnidadNiSistema;
     [Test] procedure DescargaTemporalNombradorYLector;
     [Test] procedure SinCapturaDiceElMotivo;
+    [Test] procedure DenegadaPorElCodigoNoPorLaFrase;
     [Test] procedure TamanoSaleDeLaCabecera;
     [Test] procedure CabeceraPngLectorInversoDelEscritor;
     [Test] procedure EscritorDelNodoLoLeeElDecodificador;
@@ -352,7 +353,7 @@ begin
   // no dijo donde dejo la captura", hasta la 1.5.2).
   R := MotivoSinCaptura('', SN_REMOTERUN_ENV_NONE);
   Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_SIN_SESION), 'sin sesion: ' + R);
-  R := MotivoSinCaptura('  Error: Acceso denegado.', '');
+  R := MotivoSinCaptura('  ' + NODO_CODIGO_WIN + '5', '');
   Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_DENEGADA), 'Windows bloqueado: ' + R);
   R := MotivoSinCaptura('-- 2. la pantalla'#10 +
     '  ' + NODO_NO_PUDE + ' org.freedesktop.DBus.Error.NoReply: no reply'#10,
@@ -366,6 +367,17 @@ begin
   R := MotivoSinCaptura('nodo listo', '');
   Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_NINGUNO), 'sin motivo: ' + R);
   Assert.IsTrue(EsMsg(R, SR_DESKTOP_SIN_CAPTURA_FMT), 'el motivo va en su mensaje: ' + R);
+end;
+
+procedure TImageTests.DenegadaPorElCodigoNoPorLaFrase;
+begin
+  // V85 de la 1.23.1: Windows niega en SU idioma ("Acces refuse" en un destino
+  // frances, y la frase salia "ninguno"); el nodo dice el codigo y se juzga el
+  Assert.IsTrue(CapturaDenegada('  ' + NODO_NO_PUDE + ' the screen copy failed (Acces refuse [5])'#10 +
+    '  ' + NODO_CODIGO_WIN + '5'#10), 'el 5 es la negativa, diga lo que diga la frase');
+  Assert.IsFalse(CapturaDenegada('  ' + NODO_NO_PUDE + ' x'#10'  ' + NODO_CODIGO_WIN + '6'#10),
+    'otro codigo no');
+  Assert.IsFalse(CapturaDenegada('  Error: Acceso denegado.'), 'la frase sola ya no decide');
 end;
 
 procedure TImageTests.TamanoSaleDeLaCabecera;

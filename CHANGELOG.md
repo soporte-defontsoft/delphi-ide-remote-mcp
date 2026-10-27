@@ -167,6 +167,13 @@ the MCP `initialize` response (`serverInfo.version`).
   reader, which also copes with a value that is not text. The second asks once
   for the list of seats instead of opening a key per profile. `test_paisaje`
   keeps reads of that key in their unit.
+- **A screenshot refused by Windows is told by its code, not by its
+  wording.** When the desktop node could not take a screenshot, the server
+  decided whether access was denied by looking for the phrase in Spanish or
+  English, so a target in another language answered as if the cause were
+  unknown. The node now sends Windows' error code in its protocol next to its
+  message, and the server judges access denied by that code. An older node on
+  a target is replaced on its own, because its hash changes.
 
 ## [1.23.0] - 2026-10-26
 

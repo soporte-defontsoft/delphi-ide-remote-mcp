@@ -35,6 +35,7 @@ type
     FIzq, FSup, FAncho, FAlto: Integer;   { escritorio virtual, en pixeles }
     FEscala: Double;
     FRespaldo: string;                    { como se hizo la ultima captura si BitBlt fallo }
+    FCodigo: DWORD;                       { el codigo de Windows del ultimo fallo de captura (0 = ninguno) }
     procedure MedirPantalla;
     function ComponerPorVentanas(ADestino: HDC): Integer;
     function EnviarEntradas(var AEntradas: array of TInput): Boolean;
@@ -56,6 +57,10 @@ type
     { '' = la captura salio por BitBlt del escritorio; si no, el camino de
       respaldo que se uso y por que. }
     property Respaldo: string read FRespaldo;
+    { El codigo de Windows de la copia de pantalla que fallo, para el
+      protocolo (NODO_CODIGO_WIN): el servidor juzga por el, no por la frase
+      del idioma del destino (V85 de la 1.23.1). 0 si no lo hubo. }
+    property Codigo: DWORD read FCodigo;
     property Ancho: Integer read FAncho;
     property Alto: Integer read FAlto;
   end;
@@ -252,6 +257,7 @@ begin
   Result := False;
   FError := '';
   FRespaldo := '';
+  FCodigo := 0;
   DCPantalla := GetDC(0);
   if DCPantalla = 0 then
   begin
@@ -305,6 +311,7 @@ begin
                  FIzq, FSup, SRCCOPY) then
             begin
               Cod := GetLastError;
+              FCodigo := Cod;
               FError := MsgFmt(SF_NODE_COPIA_PANTALLA_FALLO_FMT,
                 [FError, SysErrorMessage(Cod), Cod, EstadoDelEscritorio]);
               { RESPALDO: el DC de pantalla niega la copia a ratos (medido
@@ -321,6 +328,7 @@ begin
               FRespaldo := MsgFmt(SF_NODE_PRINTWINDOW_PORQUE_FMT, [FError]);
             end;
             FError := '';
+            FCodigo := 0;
           end;
         finally
           SelectObject(DCMemoria, Previo);

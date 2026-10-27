@@ -59,10 +59,14 @@ end;
   (Lsp.RemoteRun.MotivoDelNodo): toda salida del nodo que no pudo, por aqui.
   Estaba a mano en cinco sitios y el sexto, NODE-028 (sin bus de sesion), se
   escribia sin la marca: el servidor contestaba DESK-018 "el nodo no dijo por
-  que" (C13 de los revisores de la 1.19.0; V26 de la 1.23). }
-procedure NoPude(const AMotivo: string);
+  que" (C13 de los revisores de la 1.19.0; V26 de la 1.23). Y si fue Windows
+  quien dijo que no, su codigo detras (NODO_CODIGO_WIN): el servidor juzga por
+  el y no por la frase, que sale en el idioma del destino (V85 de la 1.23.1). }
+procedure NoPude(const AMotivo: string; ACodigo: Cardinal = 0);
 begin
   Writeln('  ', NODO_NO_PUDE, ' ', AMotivo);
+  if ACodigo <> 0 then
+    Writeln('  ', NODO_CODIGO_WIN, ACodigo);
 end;
 
 {$IFDEF MSWINDOWS}
@@ -102,7 +106,7 @@ var
       end;
     end
     else
-      NoPude(Escritorio.Error);
+      NoPude(Escritorio.Error, Escritorio.Codigo);
   end;
 
 begin
