@@ -3182,6 +3182,12 @@ const
     '(RTL/VCL/FMX sources and those of installed components), the ' +
     'install root of each component (one level up: Library, Redist, ' +
     'Examples) and their subfolders. delphi_workspace lists them.';
+  // ...y si la misma ruta bajo OTRA unidad cae en un sitio que esta sesion
+  // lee, cual (V92 de la 1.23.1: Hermes escribio srvn:\Program Files (x86)\...
+  // con la zona en srvc:). La de un sitio que lista delphi_workspace, que pasa
+  // la puerta y existe (Lsp.Guard.MismaRutaEnOtraUnidad). %s = esa ruta
+  SN_READ_OTRA_UNIDAD_FMT =
+    '[READ-011] The same path on another drive is readable here: %s.';
 
   // ---- delphi_config: search paths ----
 

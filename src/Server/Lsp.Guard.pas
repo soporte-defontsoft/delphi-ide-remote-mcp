@@ -5133,6 +5133,27 @@ begin
   Result := True;
 end;
 
+{ La misma ruta bajo OTRA unidad, si cae en un sitio que esta sesion lee y su
+  puerta la deja leer: la que nombra la negativa (V92 de la 1.23.1: Hermes
+  escribio srvn:\Program Files (x86)\... con sus raices en srvn: y la zona de
+  biblioteca en srvc:, y la negativa no decia cual). Las candidatas, de
+  Lsp.Lugares (MismaRutaEnOtrasUnidades: la ruta bajo la letra de cada lugar
+  declarado que la contiene); la buena pasa la puerta y EXISTE - medido en
+  vivo: una raiz que es una unidad entera (srvn:\) contiene
+  por texto cualquier ruta, y la pista nombraba una que no estaba -. Mirarla
+  despues de la puerta no es un oraculo: es una ruta que la sesion ya lee.
+  '' si no hay. }
+function MismaRutaEnOtraUnidad(const APath: string; APermiteGit: Boolean): string;
+var
+  Fuera: Boolean;
+begin
+  Result := '';
+  for var Candidata in MismaRutaEnOtrasUnidades(APath) do
+    if (JaulaDenegada(Candidata, Fuera, APermiteGit) = '') and
+       (FileExists(Candidata) or DirectoryExists(Candidata)) then
+      Exit(Candidata);
+end;
+
 function ReadPathDenied(const APath: string; APermiteGit: Boolean): string;
 var
   Fuera: Boolean;
@@ -5148,6 +5169,13 @@ begin
   // las rutas invalidas (revision 27-sep-2026)
   if (Result <> '') and Fuera and LibraryZoneEnabled then
     Result := Result + ' ' + MsgText(SN_READ_ZONE_HINT);
+  // ...y si solo se equivoco de unidad, la buena (V92)
+  if (Result <> '') and Fuera then
+  begin
+    var Otra := MismaRutaEnOtraUnidad(APath, APermiteGit);
+    if Otra <> '' then
+      Result := Result + ' ' + MsgFmt(SN_READ_OTRA_UNIDAD_FMT, [Otra]);
+  end;
   // ...y un fichero con otro nombre que esta sesion no lee: leerlo es leer
   // ese (un enlace duro). Solo al LEER - aqui pregunta la puerta de leer
   // (LeeTexto/LeeBytes) -: quitar o mover ESTE nombre no toca el otro, y el

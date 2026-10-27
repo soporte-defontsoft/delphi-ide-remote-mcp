@@ -174,6 +174,11 @@ function GeneracionDeLaBiblioteca: Integer;
   (Lsp.Guard). Sin blancos y con barras de Windows: quien la lee compara el
   texto tal cual. }
 function LugaresDeclarados: TArray<string>;
+{ La misma ruta bajo la letra de cada lugar declarado de OTRA unidad que la
+  contiene por su ruta, sin repetir; nil si APath no lleva letra. Las
+  candidatas de la negativa de leer que nombra la buena (V92 de la 1.23.1):
+  Lsp.Guard.MismaRutaEnOtraUnidad las pasa por su puerta. }
+function MismaRutaEnOtrasUnidades(const APath: string): TArray<string>;
 { El host UNC de los lugares declarados si es UNO solo: lo que \\srvhost\
   significa al volver del agente (ExpandDriveValue, Lsp.Mascara). }
 function HostUncDeclarado: string;
@@ -378,6 +383,27 @@ begin
   SetLength(Result, Length(Todos));
   for I := 0 to High(Todos) do
     Result[I] := ConBarrasDeWindows(Todos[I].Trim);
+end;
+
+function MismaRutaEnOtrasUnidades(const APath: string): TArray<string>;
+var
+  Letra: Char;
+  Cola: string;
+begin
+  Result := nil;
+  Letra := LetraDeRuta(APath);
+  if Letra = #0 then
+    Exit; // un UNC o algo sin letra: no hay "otra unidad"
+  Cola := Copy(APath, 3, MaxInt);
+  for var S in LugaresDeclarados do
+  begin
+    var L := LetraDeRuta(S);
+    if (L = #0) or (L = Letra) then
+      Continue;
+    var Candidata := Copy(S, 1, 2) + Cola;
+    if RutaDentroDe(S, Candidata) and not MatchText(Candidata, Result) then
+      Result := Result + [Candidata];
+  end;
 end;
 
 function HayJaula: Boolean;

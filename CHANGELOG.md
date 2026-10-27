@@ -112,6 +112,14 @@ the MCP `initialize` response (`serverInfo.version`).
   and said nothing about B: the alias was discarded whenever the declared name
   was present. Now two different values answer `GUARD-045`, naming both and the
   declared one; the same value under both names still works.
+- **A read refused because the path names the wrong drive now names the right
+  one.** An agent with its roots on `srvn:` and the library zone on `srvc:`
+  asked for `srvn:\Program Files (x86)\...\System.Classes.pas` and got
+  `GUARD-002` with no word of where the file was. Now a refused read adds
+  `READ-011` with the same path on another drive, when a declared site there
+  contains it, this session may read it, and it exists (a root that is a whole
+  drive contains any path by its text, so the hint is checked on disk after
+  the gate).
 
 ## [1.23.0] - 2026-10-26
 
