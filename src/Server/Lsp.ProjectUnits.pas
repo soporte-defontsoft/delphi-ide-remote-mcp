@@ -2508,7 +2508,10 @@ begin
     OldInclude := IncludeFor(Dpr, TPath.GetFullPath(AOldPasPath));
   Entries := U.Entries;
   for I := 0 to High(Entries) do
-    if MismoIdentificador(EntryUnitName(Entries[I]), OldName) then
+    // la entrada que encontro el resolutor, como esta escrita (como sus
+    // hermanas): con OldName, una entrada que casa por un ambito no se
+    // reescribia y se anadia un DCCReference (V104 de la 1.23.1)
+    if MismoIdentificador(EntryUnitName(Entries[I]), EntryUnitName(Entry)) then
     begin
       Entries[I] := EntradaReescrita(Entries[I], BuildEntry(Info, NewInclude));
     end;
