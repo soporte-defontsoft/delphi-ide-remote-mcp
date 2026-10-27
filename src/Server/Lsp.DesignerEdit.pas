@@ -2258,8 +2258,10 @@ begin
     DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras);
     for var I := 0 to High(Infos) do
       MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
-    // y si guardo su posicion: sin ella no hay 10,10 que decir (una pagina)
+    // y si guardo su posicion: sin ella no hay 10,10 que decir (una pagina);
+    // y su Align, que lo coloca (V68)
     var ConSitio := True;
+    var Alineado := '';
     var DocI := TStyleDoc.DeTexto(F.Doc.TextoDe(DfmLineas));
     try
       var Puesto := ObjetoPorNombre(DocI, Nombre);
@@ -2268,6 +2270,10 @@ begin
         Ini := Puesto.StartLine - 1;
         FinBloque := Puesto.EndLine - 1;
         DocI.ValorDe(Puesto, IfThen(F.EsFmx, 'Position.X', 'Left'), ConSitio);
+        var HayAlign: Boolean;
+        var ValorAlign := DocI.ValorDe(Puesto, 'Align', HayAlign);
+        if HayAlign then
+          Alineado := ValorAlign;
       end;
     finally
       DocI.Free;
@@ -2325,13 +2331,16 @@ begin
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(DfmLineas)));
       // la nota, por lo que guardo su escritor; una pagina dice ademas cual abre
       var Nota: string;
-      if ConSitio then
+      if ConSitio or (Alineado <> '') then
       begin
-        // el 10,10, salvo que props le diera su sitio
+        // el 10,10, salvo que props le diera su sitio o que lo coloque su Align
+        // (decia 10,10 de un alineado: V68)
         var Sitio := MsgText(SF_DESIGNER_INSERT_EN_10_10);
         for var P in Props do
           if MatchText(P.Trim, ['Left', 'Top', 'Position.X', 'Position.Y']) then
             Sitio := '';
+        if Alineado <> '' then
+          Sitio := MsgFmt(SF_DESIGNER_INSERT_ALINEADO_FMT, [Alineado]);
         Nota := MsgFmt(SN_DESIGNER_INSERT_FMT, [Sitio]);
       end
       else
@@ -3449,9 +3458,10 @@ end;
   una clase que el ayudante no cargo (el padre o un hermano: su sustituto no
   sabe donde lo dejaria el IDE) o un hijo que no escribio. Estaba dentro de
   set before=/after=/index=, que niega con eso; insert y set parent= dejan el
-  componente donde lo dejaria el IDE, o el ultimo si no se sabe. }
+  componente donde lo dejaria el IDE, o el ultimo si no se sabe. ASoltado: el
+  que se acaba de soltar, que el juez deja como el disenador (V72). }
 function JuezDelOrden(var F: TFormEnEdicion; const ATexto, ANomObj, ANomPadre: string;
-  out ANuestro, ASuyo: TArray<string>; out AEscrito: string): string;
+  out ANuestro, ASuyo: TArray<string>; out AEscrito: string; const ASoltado: string = ''): string;
 var
   Escrito, ErrorAyudante: string;
   Sustituidas, Avisos, SinLeer, Faltan: TArray<string>;
@@ -3464,7 +3474,7 @@ begin
   ASuyo := [];
   AEscrito := '';
   Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer,
-    Leidos, ErrorAyudante, Parada);
+    Leidos, ErrorAyudante, Parada, ASoltado);
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
   F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
   if Result <> '' then
@@ -3535,7 +3545,10 @@ begin
   var Texto := F.Doc.TextoDe(ALineas);
   if ASinTabOrder then
     Texto := SinSuTabOrder(Texto, ANomObj);
-  var Motivo := JuezDelOrden(F, Texto, ANomObj, ANomPadre, Nuestro, Suyo, Escrito);
+  // ...y como el que se acaba de soltar: sin su linea, FMX no lo mete en el
+  // tabulador de su padre al leerlo y su escritor no le daba ninguno (V72)
+  var Motivo := JuezDelOrden(F, Texto, ANomObj, ANomPadre, Nuestro, Suyo, Escrito,
+    (if ASinTabOrder then ANomObj else ''));
   if Motivo <> '' then
   begin
     ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre, Motivo.Trim]);

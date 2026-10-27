@@ -44,6 +44,10 @@ type
   TSustituto = class(TRectangle)
   end;
 
+  // Realign y GetTabStopController son protegidos: los del juez son los de FMX
+  TFormCrack = class(TCustomForm);
+  TControlCrack = class(TControl);
+
   TCargadorFmx = class(TCargador)
   protected
     function ClaseSustituto: TComponentClass; override;
@@ -341,6 +345,37 @@ begin
   end;
 end;
 
+{ El form leido como lo tiene el disenador, antes de que lo escriba su
+  TWriter:
+  - ALINEADO: la VCL alinea al cargar; FMX no alinea lo que cuelga del form
+    hasta que algo lo realinea (la preview, al pintar), y un TPanel
+    Align=Bottom se escribia en 10,10 sin su tamano y al cargar se estiraba
+    (V68). TCustomForm.Realign da lo que pinta la preview y lo que escribe el
+    IDE (Mobile Tasks, FormMain.fmx:94-99; medido el 27-oct-2026). Lo de
+    dentro de un control ya lo alinea el suyo al cargar.
+  - el SOLTADO (--dropped: insert, set parent=) EN EL TABULADOR de su padre:
+    FMX solo mete un hijo en esa lista fuera de la lectura
+    (TControl.DoAddObject, not csReading), y el servidor lo pregunta sin su
+    linea TabOrder (SinSuTabOrder) para que el IDE le de la suya: sin lista no
+    habia TabOrder que escribir y valia el respaldo, que no ve los hermanos de
+    un ancestro - 0 junto al 0 heredado (V72). Lo que hace soltarlo en el
+    disenador: TabList.Add, el ultimo. Solo el soltado: uno que ya estaba sin
+    TabOrder (un form escrito a mano) lo sigue guardando sin el, como el IDE. }
+procedure ComoLoTieneElDisenador(AForm: TForm; ARaiz: TComponent);
+var
+  Controlador: ITabStopController;
+begin
+  TFormCrack(AForm).Realign;
+  if GPeticion.Soltado = '' then
+    Exit;
+  var C := ComponenteDeRuta(ARaiz, GPeticion.Soltado);
+  if not (C is TControl) then
+    Exit;
+  Controlador := TControlCrack(C).GetTabStopController;
+  if (Controlador <> nil) and (Controlador.TabList.GetTabOrder(TControl(C)) < 0) then
+    Controlador.TabList.Add(TControl(C));
+end;
+
 function Main: Integer;
 var
   Uso, Error: string;
@@ -407,9 +442,11 @@ begin
       YaLeido := True;
       // los no visuales, SIEMPRE: se dibujen o no, el agente sabe que estan
       Responde(FR_NONVISUALS, ListaDeNoVisuales(NoVisualesDe(Raiz, TControl)));
-      // el juez de lo que guarda el IDE (3.11): escrito por TWriter, sin pintar
+      // el juez de lo que guarda el IDE (3.11): escrito por TWriter, sin pintar,
+      // con el form como lo tiene el disenador (V68, V72)
       if GPeticion.Escribe then
       begin
+        ComoLoTieneElDisenador(F, Raiz);
         EscribeComoElIde(Raiz);
         Exit;
       end;

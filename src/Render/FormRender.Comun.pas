@@ -45,6 +45,10 @@ type
     // ancestros - y su .pas salen de ahi)
     Escribe: Boolean;
     Carpeta: string;
+    // --dropped <Nombre>: el que se acaba de soltar (insert, set parent=): el
+    // juez lo deja como lo deja el disenador al soltarlo (FMX: el ultimo de
+    // la lista de tabulacion de su padre, V72)
+    Soltado: string;
   end;
 
   { El lector comun de un .dfm/.fmx, texto o binario, sobre una instancia ya
@@ -477,6 +481,7 @@ begin
         GPeticion.Escribe := (V = 'on') or (V = 'true') or (V = '1');
       end
       else if P = '--folder' then GPeticion.Carpeta := Valor
+      else if P = '--dropped' then GPeticion.Soltado := Valor
       else if P = '--timeout' then GPeticion.TiempoMs := StrToInt(Valor)
       else if P = '--verbose' then GPeticion.Verbose := True
       else

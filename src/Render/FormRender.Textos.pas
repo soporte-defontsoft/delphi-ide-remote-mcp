@@ -143,6 +143,7 @@ const
     '[--packages auto|none|all] [--root auto|form|frame] ' +
     '[--fidelity auto|window|print] [--bds 37.0] [--timeout ms] [--verbose] | ' +
     '%s --path <dfm|fmx> --writeback on [--folder <dir of the real form>] ' +
+    '[--component Name] [--dropped Name] ' +
     '[--packages ...] [--root ...] [--bds] [--timeout ms]';
 
 function MsgText(const AMsg: string): string;

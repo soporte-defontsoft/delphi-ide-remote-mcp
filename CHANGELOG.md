@@ -28,6 +28,23 @@ the MCP `initialize` response (`serverInfo.version`).
   it is:` followed by `N|text`) instead of a quote written by hand. The
   commit and the preview of a `delete-line` now ask one rule
   (`DeleteLineDenegado`) instead of two copies of it.
+- **An FMX control inserted with `delphi_designer` is written as the IDE
+  writes it when you drop it: aligned, and with the tab order its parent
+  gives it.** The judge that asks the IDE's own writer loaded the form and
+  wrote it without realigning it - FMX aligns what hangs from a form only when
+  something realigns it, as painting the preview does - so a `TPanel` with
+  `Align=Bottom` was written at 10,10 with no size and stretched when the form
+  loaded, pushing what is anchored to its right out of sight (the IDE writes
+  `Position.Y` and the aligned `Size`, as in the Mobile Tasks sample). The judge
+  now realigns the form before writing it. And FMX puts a child in its parent's
+  tab list only outside reading, so a new button in an inherited panel came
+  out with `TabOrder = 0` beside the inherited one's 0 (VCL gives 1): the judge
+  now does with the control just dropped (`insert`, `set parent=`) what dropping
+  it in the designer does, and only with that one - a control that a
+  hand-written form leaves without `TabOrder` keeps none. The insert note says
+  that its `Align` places an aligned control instead of "it lands at 10,10",
+  which it said in VCL too. The `Viewport` the IDE writes for a grid stays 0:
+  FMX reads it and throws it away (`FMX.ScrollBox`), so it changes nothing.
 
 ## [1.23.0] - 2026-10-26
 

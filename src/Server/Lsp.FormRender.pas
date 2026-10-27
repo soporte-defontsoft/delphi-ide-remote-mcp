@@ -47,6 +47,9 @@ type
     // cuando Path es una propuesta escrita en otra (sus hermanos y su .pas)
     Escribe: Boolean;
     Carpeta: string;
+    // con Escribe, el que se acaba de soltar (insert, set parent=): el juez lo
+    // deja como el disenador al soltarlo (FMX: el ultimo de su tabulador, V72)
+    Soltado: string;
   end;
 
   { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
@@ -218,10 +221,11 @@ function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
   si no, el fallo, en AError el ERROR= del ayudante tal cual y, si lo que
   fallo fue el lector (NOTLOADED=), en AParada su error en partes. La
   propuesta se escribe en una carpeta de descarga del temporal del disenador
-  y se borra siempre. }
+  y se borra siempre. ASoltado: el componente que se acaba de soltar en el
+  form (TPeticionRender.Soltado). }
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
-  out AError: string; out AParada: TIgnorada): string;
+  out AError: string; out AParada: TIgnorada; const ASoltado: string = ''): string;
 
 { EL JUEZ de las propiedades de UN componente (1.22.1): ATexto, un form
   PROPUESTO para APath, cargado y escrito como lo guarda el IDE (el de
@@ -387,6 +391,8 @@ begin
       AOrden := AOrden + Arg('--state', E);
   if APeticion.Componente <> '' then
     AOrden := AOrden + Arg('--component', APeticion.Componente);
+  if APeticion.Escribe and (APeticion.Soltado <> '') then
+    AOrden := AOrden + Arg('--dropped', APeticion.Soltado);
   if (APeticion.Raiz = 'form') or (APeticion.Raiz = 'frame') then
     AOrden := AOrden + ' --root ' + APeticion.Raiz;
   if APeticion.Estilo <> '' then
@@ -1063,7 +1069,8 @@ end;
   el form como lo carga el designer, sin pintar): lo que contesto, con Fallo
   si ni se pudo escribir. La carpeta se borra siempre. EL juez de
   ComoLoEscribeElIde y de LoQueNoCargaElIde. }
-function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = ''): TRespuestaRender;
+function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = '';
+  const ASoltado: string = ''): TRespuestaRender;
 var
   Pet: TPeticionRender;
   Dir, Cand: string;
@@ -1099,6 +1106,7 @@ begin
     Pet.Carpeta := TPath.GetDirectoryName(APath);
     Pet.Escribe := True;
     Pet.Componente := AComponente; // con el, tambien su orden (ORDER=)
+    Pet.Soltado := ASoltado;
     Result := CorreRender(Pet);
   finally
     try
@@ -1111,14 +1119,14 @@ end;
 
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
-  out AError: string; out AParada: TIgnorada): string;
+  out AError: string; out AParada: TIgnorada; const ASoltado: string): string;
 begin
   AEscrito := '';
   ASustituidas := [];
   AAvisos := [];
   ASinLeer := [];
   ALeidos := [];
-  var R := JuezDelIde(APath, ATexto, AEnc);
+  var R := JuezDelIde(APath, ATexto, AEnc, '', ASoltado);
   AError := R.Error;
   AParada := R.Parada;
   Result := R.Fallo;

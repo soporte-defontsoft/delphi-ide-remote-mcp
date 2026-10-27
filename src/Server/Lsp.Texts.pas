@@ -5203,7 +5203,8 @@ const
     'screen; nonVisual lists the non-visual components, fidelity says how ' +
     'it was painted) | insert (a NEW visual control: classname; component, ' +
     'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
-    'form by default; placed at 10,10 where the IDE keeps it among its ' +
+    'form by default; placed at 10,10 (an aligned one, where its Align puts ' +
+    'it) where the IDE keeps it among its ' +
     'siblings (its own writer is asked; the last one, with orderNote, when ' +
     'it cannot be), its properties as the IDE''s writer stores them (ideNote ' +
     'says when it cannot be asked), with its published ' +
@@ -5934,6 +5935,11 @@ const
   SF_DESIGNER_INSERT_EN_10_10 =
     ' It lands at 10,10 even when something is already there: place it with ' +
     'set Left/Top (Position.X/Position.Y in FMX).';
+  // ...y si lo coloca su Align, ni 10,10 ni sitio que poner (V68 de la 1.23.1:
+  // FMX lo escribia sin alinear; la VCL ya alineaba, y la nota decia 10,10)
+  SF_DESIGNER_INSERT_ALINEADO_FMT =
+    ' Its Align (%s) places it: its position and size are the ones that ' +
+    'alignment gives, as the IDE stores them.';
 
   // ...y de lo que su escritor guarda SIN posicion (una pagina llena su
   // control de paginas: medido, solo Caption), que no tiene 10,10 que decir
