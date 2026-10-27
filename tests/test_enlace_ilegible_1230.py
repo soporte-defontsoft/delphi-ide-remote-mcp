@@ -76,7 +76,7 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
 
 def icacls(*a):
-    return subprocess.run(['icacls'] + list(a), capture_output=True, text=True).returncode
+    return mc.consola(['icacls'] + list(a)).returncode
 
 
 def foto():

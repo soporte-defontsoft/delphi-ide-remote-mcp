@@ -249,7 +249,7 @@ real = os.path.join(BASE, 'real')
 d8, dpr8, c8 = proyecto('Ocho', real)
 h = hover(dpr8)
 enlace = os.path.join(BASE, 'enlace')
-mk = subprocess.run(['cmd', '/c', 'mklink', '/J', enlace, real], capture_output=True, text=True)
+mk = mc.consola(['cmd', '/c', 'mklink', '/J', enlace, real])
 antes = motores()
 r = call('delphi_delete', {'path': enlace}, t=60)
 check('D11 borrar un ENLACE a una carpeta con un proyecto caliente: se va el enlace y NO se para nada',

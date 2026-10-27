@@ -39,7 +39,7 @@ SERVICIO = 'DelphiLspMcp'
 URL = os.environ.get('DELPHI_MCP_URL', 'http://127.0.0.1:3131/mcp')
 TOK = os.environ.get('DELPHI_MCP_TOKEN', '')
 
-q = subprocess.run(['sc.exe', 'query', SERVICIO], capture_output=True, text=True)
+q = mc.consola(['sc.exe', 'query', SERVICIO])
 # 1060 = el servicio no existe: solo eso es "aqui no se mide". Otro fallo del
 # SCM (5 acceso denegado, 1722...) salia verde como si no hubiera servicio.
 if q.returncode == 1060:

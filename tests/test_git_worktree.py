@@ -18,7 +18,7 @@ BASE = os.path.join(mc.RAIZ, 'git-worktree')
 
 def quita_enlaces(base):
     # junctions first, with rmdir (removes the LINK, never its target)
-    r = subprocess.run(['cmd', '/c', 'dir', '/AL', '/S', '/B', base], capture_output=True, text=True)
+    r = mc.consola(['cmd', '/c', 'dir', '/AL', '/S', '/B', base])
     for j in sorted(r.stdout.split('\n'), key=len, reverse=True):
         j = j.strip()
         if j and os.path.isdir(j):

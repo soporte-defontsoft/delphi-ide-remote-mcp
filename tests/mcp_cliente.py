@@ -411,6 +411,15 @@ def pid_vivo(pid):
         k.CloseHandle(h)
 
 
+def consola(args, **kw):
+    """Un programa de CONSOLA de Windows (sc, icacls, cmd /c dir, mklink...) con
+    su salida leida en SU pagina, la OEM, y no en UTF-8: con -X utf8 una tilde
+    de su texto ("INFORMACION", "Accion") reventaba el hilo lector y stdout
+    llegaba None (27-oct-2026: test_service_smoke con sc query, y
+    test_delphi_test_contenedor con tasklist). Lo demas, como subprocess.run."""
+    return subprocess.run(args, capture_output=True, encoding='oem', errors='replace', **kw)
+
+
 def memoria_pico(pid):
     """Los bytes PRIVADOS que el proceso pid ha llegado a tener (PeakPagefileUsage
     de GetProcessMemoryInfo): lo que mide si un servidor leyo entero algo que
