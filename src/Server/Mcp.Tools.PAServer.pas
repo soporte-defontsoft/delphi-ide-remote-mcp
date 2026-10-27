@@ -329,7 +329,7 @@ begin
       Exit;
     Id := '';
     Ver := '';
-    for L in LeeTexto(F, [ltTemporal]).Replace(#13#10, #10).Split([#10]) do
+    for L in LineasDelTexto(LeeTexto(F, [ltTemporal])) do
     begin
       if L.StartsWith('ID=') then
         Id := L.Substring(3).Trim(['"', ' ']);
@@ -1149,7 +1149,7 @@ var
 begin
   AFiles := 0;
   ABytes := 0;
-  for L in AOutput.Split([#13#10, #10]) do
+  for L in LineasDelTexto(AOutput) do
     if L.Contains('Total file(s) copied:') then
     begin
       Parts := L.Split([' '], TStringSplitOptions.ExcludeEmpty);

@@ -295,7 +295,7 @@ begin
   // Lo que dijo el NODO primero: es quien ha mirado, con el mismo detector
   // de sesion que el lanzador (Mld.Sesion). El entorno del lanzador tapaba
   // el motivo real del nodo (revision del 26-sep-2026).
-  for L in ASalida.Split([#10]) do
+  for L in LineasDelTexto(ASalida) do
     if (Result = '') and L.Trim.StartsWith(NODO_NO_PUDE) then
       Result := MsgFmt(SN_DESKTOP_MOTIVO_NODO_FMT,
         [L.Trim.Substring(Length(NODO_NO_PUDE)).Trim]);
@@ -336,7 +336,7 @@ begin
   Quedan := TStringList.Create;
   try
     EnUso := False;
-    for var L in ASalida.Replace(#13, '').Split([#10]) do
+    for var L in LineasDelTexto(ASalida) do
     begin
       var T := L.Trim;
       var Id := IdDe(L);

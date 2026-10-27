@@ -243,7 +243,7 @@ begin
     var Rojos := TStringList.Create;
     try
       var EnFallos := False;
-      for L in AOutput.Replace(#13#10, #10).Split([#10]) do
+      for L in LineasDelTexto(AOutput) do
       begin
         var T := L.Trim;
         if not EnFallos then
@@ -284,7 +284,7 @@ begin
     // "FAILED seis" scored NOTHING, so a red suite came back green (measured
     // 2026-08-25 - the only place this server called broken code working).
     // A word boundary still protects PASSABLE and OKAY from counting.
-    for L in AOutput.Replace(#13#10, #10).Split([#10]) do
+    for L in LineasDelTexto(AOutput) do
     begin
       if TRegEx.IsMatch(L, '(?i)^\s*(PASS|PASSED|OK)\b') then
         Inc(Passed)

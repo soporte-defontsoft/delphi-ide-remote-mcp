@@ -3477,13 +3477,10 @@ begin
 end;
 
 function LineasDeNew(const ANew: string): TArray<string>;
-var
-  S: string;
 begin
-  S := ConSalto(ANew, #10);
-  if S.EndsWith(#10) then
-    S := S.Substring(0, S.Length - 1);
-  Result := S.Split([#10]);
+  // las de delphi_read: el salto final cierra la ultima linea (V87 de la
+  // 1.23.1: se troceaba aqui a mano con la misma regla)
+  Result := LineasDelTexto(ANew);
   if Length(Result) = 0 then
     Result := [''];  // '' es una linea vacia, no ninguna
 end;
@@ -5721,7 +5718,7 @@ begin
         // (revision de la 1.10.0, medido; la rutina-global ya lo llevaba)
         var LineaFront := FrontIdx + 1;
         if IDeclExiste < 0 then
-          Inc(LineaFront, Length(DeclLinea.Split([#10])));
+          Inc(LineaFront, Length(LineasDelTexto(DeclLinea)));
         var R2 := '';
         try
           FotoMet.Vigila(A.Path);
@@ -5811,7 +5808,7 @@ function AvisosDelMotor(const ARespuesta: string): TArray<string>;
 begin
   Result := [];
   var Dentro := False;
-  for var L in ARespuesta.Split([#10]) do
+  for var L in LineasDelTexto(ARespuesta) do
   begin
     var T := L.Trim;
     if not Dentro and MsgCuerpo(T).StartsWith('***') then

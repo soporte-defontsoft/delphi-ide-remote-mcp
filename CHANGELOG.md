@@ -193,6 +193,13 @@ the MCP `initialize` response (`serverInfo.version`).
   check and the routine-placement check. Now it splits once. In two of those
   places a line left blank counted as nothing written; it now counts as the
   one line it is.
+- **A program's output is read line by line in one way.** About twenty-five
+  places split a text into lines by hand, most of them the output of git, adb,
+  msbuild, the test runner or the desktop node, in five slightly different
+  ways. Some kept the carriage return of a Windows line and each one cleaned
+  it off on its own. They now use the same reader as `delphi_read`.
+  The few that keep their own rule say why, and `test_paisaje` keeps the rest
+  in that reader.
 
 ## [1.23.0] - 2026-10-26
 

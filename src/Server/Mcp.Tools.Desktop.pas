@@ -148,7 +148,7 @@ begin
   AHay := False;
   // La lista de la ULTIMA captura: el nodo imprime una detras de cada
   // CAPTURA= (24-sep), y la que describe la imagen devuelta es la ultima
-  Lineas := ASalida.Split([#10]);
+  Lineas := LineasDelTexto(ASalida);
   Desde := 0;
   for I := 0 to High(Lineas) do
     if Lineas[I].Contains(NODO_VENTANAS) then
@@ -229,7 +229,7 @@ var
   L: string;
 begin
   Result := '';
-  for L in ASalida.Split([#10]) do
+  for L in LineasDelTexto(ASalida) do
     if L.TrimLeft.StartsWith(NODO_CAPTURA) then
       Result := L.Trim.Substring(Length(NODO_CAPTURA));
 end;
@@ -484,7 +484,7 @@ begin
       nodeOutput (segunda revision, 27-sep-2026). Si RemoteRun ya trae su
       "error", manda ese (una sola clave). }
     if Res.GetValue('error') = nil then
-      for var L in Salida.Replace(#13, '').Split([#10]) do
+      for var L in LineasDelTexto(Salida) do
         if EsFallo(L.Trim) then
         begin
           Return.AddPair('error', L.Trim);

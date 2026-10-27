@@ -2619,7 +2619,7 @@ begin
   YaDicho := TStringList.Create;
   YaDicho.Sorted := True;
   YaDicho.Duplicates := dupIgnore;
-  Lines := Output.Split([#13#10, #10]);
+  Lines := LineasDelTexto(Output);
   // msbuild cierra cada aviso y cada error con " [<ruta del .dproj>]": la
   // MISMA ruta en cada linea, cerca del 40% de un aviso (medido el
   // 6-oct-2026 compilando este repo). Fuera aqui, una vez, antes de

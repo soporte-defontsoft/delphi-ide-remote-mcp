@@ -2304,7 +2304,7 @@ begin
             Pega := MsgExcepcion(E.ClassName, E.Message);
         end;
         var Rechazo := '';
-        for var L in Pega.Replace(sLineBreak, #10).Split([#10]) do
+        for var L in LineasDelTexto(Pega) do
           // EsFallo, no EsRechazo: un INTERNAL (sin RAD Studio para el
           // SDK) dejaba la plataforma anadida sin deshacer (revision
           // 27-sep-2026)

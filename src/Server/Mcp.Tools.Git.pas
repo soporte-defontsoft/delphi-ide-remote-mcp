@@ -628,7 +628,7 @@ begin
   Salida := GitCorre(ARepo, AFijado, 'lfs env', 60000, Codigo);
   if Codigo <> 0 then Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
   Endpoint := '';
-  for var Linea in Salida.Split([#10]) do
+  for var Linea in LineasDelTexto(Salida) do
     if Linea.StartsWith('Endpoint') then
     begin
       var P := Pos('=', Linea);
@@ -674,7 +674,7 @@ begin
   ASalida := GitCorre(ARepo, '', 'rev-parse --absolute-git-dir ' +
     '--git-common-dir --show-toplevel', 60000, ACodigo);
   Carpetas := nil;
-  for Linea in ASalida.Split([#10]) do
+  for Linea in LineasDelTexto(ASalida) do
   begin
     Ruta := ConBarrasDeWindows(Linea.Trim);
     if Ruta = '' then
@@ -912,7 +912,7 @@ begin
   Salida := GitCorre(ARepo, AFijado, APregunta, 60000, Codigo);
   Result := Codigo = 0;
   if Result then
-    for Linea in Salida.Split([#10]) do
+    for Linea in LineasDelTexto(Salida) do
     if Linea.Trim <> '' then
         ALineas := ALineas + [Linea.Trim];
 end;
@@ -2087,7 +2087,7 @@ begin
         var Listado := False;
         var DestinoReal := SinBarraFinal(RealPath(Destino));
         var Primero := True;
-        for var Linea in Copias.Split([#10]) do
+        for var Linea in LineasDelTexto(Copias) do
           if Linea.StartsWith('worktree ') then
           begin
             // por la ruta real, como arriba: git lista nombres largos

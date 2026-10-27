@@ -1508,7 +1508,7 @@ var
   begin
     var Quedan: TArray<string> := [];
     var Quitada := False;
-    for var L in ConSalto(AEntrada, #10).Split([#10]) do
+    for var L in SplitToLines(AEntrada) do
       if not Quitada and (L.Trim = ALinea) then
         Quitada := True
       else

@@ -1095,7 +1095,7 @@ begin
               var AvisosPaso, CopiaPaso: string;
               Ok := ApplyOneConAvisos(Op, Err, AvisosPaso, CopiaPaso);
               if Ok and (AvisosPaso <> '') then
-                for var LA in AvisosPaso.Split([#10]) do
+                for var LA in LineasDelTexto(AvisosPaso) do
                   AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
                     Format('  %s: %s', [MaskDriveText('', Op.Path), LA]);
               // contar las lineas de DESPUES tambien lee el fichero, y otro

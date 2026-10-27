@@ -454,6 +454,27 @@ REGLAS = [
      'Lsp.Discovery compone la clave del IDE (ClaveDelIde) y la lee (IdeConfigValue, IdeSubclaves, '
      'IdeValoresDeClave...): un TRegistry abierto a mano sobre ella es otro lector, sin el except de un '
      'valor que no es texto'),
+    # partir un texto en lineas vive en Lsp.Patch: habia ~30 troceos a mano con cinco semanticas,
+    # casi todos de la SALIDA de un proceso (V87 de la 1.23.1). Los que se quedan, con su porque
+    ('partir en lineas a mano', r'\.Split\(\s*\[\s*(?:#13#10|#10|#13|sLineBreak|CRLF)\b',
+     [('Lsp.Patch.pas', 'SplitToLines'),
+      # el inverso exacto de su Join(#10) de lineas sin CR: una ultima en blanco es una linea
+      ('Lsp.Patch.pas', 'DoEdit'),
+      # las lineas como las cuenta TParser, el juez de un form: solo un LF parte
+      ('Lsp.DesignerBin.pas', 'ParserDeForm'),
+      # transforman texto y lo vuelven a unir byte a byte; el enmascarador parte igual sus dos mitades
+      ('Lsp.Docs.pas', 'HtmlATexto'), ('Lsp.Mascara.pas', 'EnmascaraLineas'),
+      ('Lsp.Mascara.pas', 'ContenidoTalCual'),
+      # la pagina de una salida de git conserva el CR de un diff CRLF: sin el, un cambio de solo
+      # finales de linea pareceria vacio
+      ('Mcp.Tools.Git.pas', 'PaginaDeSalidaGit'),
+      # cuenta las lineas NO vacias de un log (ExcludeEmpty): otra pregunta
+      ('Mcp.Tools.Git.pas', 'TDelphiGitTool.ExecuteWithParams'),
+      # la cabecera del protocolo LSP: CRLF por su especificacion
+      ('Lsp.Transport.Process.pas', 'TLspProcessTransport.ReaderLoop')],
+     'LineasDelTexto (las de delphi_read: CRLF, LF y CR suelto son un salto, y el final cierra la ultima) '
+     'y SplitToLines (con la fantasma, para volver a unir): un Split a mano por salto es otra semantica - '
+     'el CR de un CRLF pegado a la linea, un CR de progreso, una ultima vacia de mas'),
     # escribir la seguridad de un fichero vive en UNA casa, ReclamaDaclHeredada: le da -como UN
     # objeto, SIN propagar (SetFileSecurity, no SetNamedSecurityInfo, que recorreria el arbol)- una
     # DACL protegida con una sola ACE para el dueno; el barrido de la casa la borra (V9 de la 1.23)
@@ -1394,6 +1415,7 @@ PLANTADO = {
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
     'el SHA-256 fuera de su casa': "  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);",
     'la clave del IDE leida sin su lector': "  if R.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then",
+    'partir en lineas a mano': "  for L in AOutput.Split([#13#10, #10]) do X := 1;",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",

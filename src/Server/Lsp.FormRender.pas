@@ -462,7 +462,7 @@ var
 begin
   Result := Default(TRespuestaRender);
   Result.Sesion := -1;
-  for var Linea in ASalida.Replace(#13, '').Split([#10]) do
+  for var Linea in LineasDelTexto(ASalida) do
   begin
     L := Linea;
     if (L = '') or L.StartsWith('#') then

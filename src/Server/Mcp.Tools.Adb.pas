@@ -111,7 +111,7 @@ var
   L: string;
 begin
   Result := '';
-  for L in ASalida.Split([#10]) do
+  for L in LineasDelTexto(ASalida) do
     if L.Trim.StartsWith(AClave + ':', True) then
       Exit(L.Trim.Substring(Length(AClave) + 1).Trim);
 end;
@@ -234,7 +234,7 @@ begin
   if AOrden = 'connect' then
     Exit(not AOutput.Contains('connected to'));
   if AOrden = 'am start' then
-    for var L in AOutput.Split([#13#10, #10]) do
+    for var L in LineasDelTexto(AOutput) do
       if L.TrimLeft.StartsWith('Error') then
         Exit(True);
 end;
@@ -260,7 +260,7 @@ var
 begin
   Result := '';
   Parecidos := nil;
-  for var L in ALista.Split([#13#10, #10]) do
+  for var L in LineasDelTexto(ALista) do
   begin
     var P := L.Trim;
     if not P.StartsWith('package:') then
@@ -322,7 +322,7 @@ begin
     Devices := TJSONArray.Create;
     Return.AddPair('discovered', Devices);
     try
-      for L in Output.Split([#13#10, #10]) do
+      for L in LineasDelTexto(Output) do
         if L.Contains('_adb') and L.Contains(':') then
           Devices.Add(L.Trim);
       Return.AddPair('note', MsgText(SN_ADB_DISCOVER));
@@ -338,7 +338,7 @@ begin
     Devices := TJSONArray.Create;
     Return.AddPair('devices', Devices);
     try
-      for L in Output.Split([#13#10, #10]) do
+      for L in LineasDelTexto(Output) do
         if (L.Trim <> '') and not L.StartsWith('List of devices') and
            not L.Contains('daemon') then
           Devices.Add(L.Trim);
@@ -407,7 +407,7 @@ begin
     begin
       var Filtered := TStringBuilder.Create;
       try
-        for L in Output.Split([#13#10, #10]) do
+        for L in LineasDelTexto(Output) do
           if L.Contains(Params.Filter.Trim) then
             Filtered.AppendLine(L.TrimRight);
         Txt := Filtered.ToString.TrimRight;
