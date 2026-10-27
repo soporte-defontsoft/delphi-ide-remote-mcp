@@ -410,8 +410,8 @@ function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: s
   la escribian cada una (depuracion de la 1.23). }
 function ComponentRootOf(const APath: string): string;
 
-{ LAS UNIDADES DE LA BIBLIOTECA que resuelve dcc: los nombres (en minusculas,
-  sin extension, ordenados) de los .dcu y .pas de las carpetas de la Search
+{ LAS UNIDADES DE LA BIBLIOTECA que resuelve dcc: las CLAVES de sus nombres
+  (ClaveDeIdentificador, sin extension, ordenadas) de los .dcu y .pas de las carpetas de la Search
   Path de Win32 y Win64 del Delphi del servidor - donde las busca el
   compilador, sin bajar a subcarpetas (FuentesBajo baja: no es la misma
   pregunta): la RTL, la VCL, FMX y los componentes registrados. EL juez de
@@ -421,6 +421,14 @@ function ComponentRootOf(const APath: string): string;
   Medido: 1900 .dcu en 2 ms. Se mide de nuevo cada minuto (un componente
   que se instala entra en el siguiente). Sin Delphi, vacio. }
 function UnidadesDeLaBiblioteca: TArray<string>;
+{ Si ANombre (una unidad, con sus puntos) es de AUnidades - lo que dio
+  UnidadesDeLaBiblioteca -, por la MISMA clave con la que se escribieron
+  (ClaveDeIdentificador: sin el idioma del usuario). EL lector: cuatro
+  montaban la clave con .ToLower, que lleva el casing del idioma (con el
+  turco, 'IOUtils' es 'ioutils' con la i sin punto) frente al LowerCase del
+  escritor, y una unidad no ASCII no se encontraba (V98 de la 1.23.1, de la
+  pasada del paisaje del diff). }
+function EnLaBiblioteca(const AUnidades: TArray<string>; const ANombre: string): Boolean;
 
 { Expands $(NAME) macros with the IDE's environment table (AVars as
   NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
@@ -447,7 +455,8 @@ uses
   // si los midiese leyendo por la puerta, se preguntaria a si misma
   Lsp.Patch,
   Lsp.Settings, // ServerDelphiVersion: la version que fija el settings.ini
-  Lsp.Rutas;    // RutaDesde: EL resolutor de una ruta leida
+  Lsp.Rutas,    // RutaDesde: EL resolutor de una ruta leida
+  Lsp.Pascal;
 
 function TRadStudioInfo.Found: Boolean;
 begin
@@ -1512,7 +1521,7 @@ begin
               Continue;
             Ext := LowerCase(ExtractFileExt(Sr.Name));
             if (Ext = '.dcu') or (Ext = '.pas') then
-              Vistas.AddOrSetValue(LowerCase(ChangeFileExt(Sr.Name, '')), True);
+              Vistas.AddOrSetValue(ClaveDeIdentificador(ChangeFileExt(Sr.Name, '')), True);
           until FindNext(Sr) <> 0;
         finally
           System.SysUtils.FindClose(Sr); // el de Winapi.Windows, detras en los uses, toma un THandle
@@ -1529,6 +1538,13 @@ begin
   finally
     TMonitor.Exit(GDelphiCandado);
   end;
+end;
+
+function EnLaBiblioteca(const AUnidades: TArray<string>; const ANombre: string): Boolean;
+var
+  Ix: Integer;
+begin
+  Result := TArray.BinarySearch<string>(AUnidades, ClaveDeIdentificador(ANombre), Ix);
 end;
 
 initialization

@@ -182,7 +182,7 @@ type
     ambito (UnidadEnUses: insert y check-binding). }
   TResolutorDeUnidades = record
     Ambitos: TArray<string>;
-    Propias: TArray<string>; // las del proyecto, en minusculas
+    Propias: TArray<string>; // las del proyecto, por su clave (ClaveDeIdentificador)
     Biblioteca: TArray<string>; // las de la biblioteca (UnidadesDeLaBiblioteca)
     { El nombre con el que dcc la encuentra; tal cual si no la encuentra }
     function Resuelve(const ANombre: string): string;
@@ -2204,12 +2204,11 @@ end;
 
 function TResolutorDeUnidades.Resuelve(const ANombre: string): string;
 
+  // por la clave con que se escribieron (Lsp.Discovery.EnLaBiblioteca): .ToLower
+  // lleva el casing del idioma y con el turco no casaba (V98 de la 1.23.1)
   function Existe(const N: string): Boolean;
-  var
-    Ix: Integer;
   begin
-    var L := N.ToLower;
-    Result := (IndexStr(L, Propias) >= 0) or TArray.BinarySearch<string>(Biblioteca, L, Ix);
+    Result := (IndexStr(ClaveDeIdentificador(N), Propias) >= 0) or EnLaBiblioteca(Biblioteca, N);
   end;
 
 begin
@@ -2257,7 +2256,7 @@ begin
     var Unidades, Escritas, Rutas: TArray<string>;
     if LecturasDelIn(DprDe(Dproj), Unidades, Escritas, Rutas) = '' then
       for var N in Unidades do
-        Result.Propias := Result.Propias + [N.ToLower];
+        Result.Propias := Result.Propias + [ClaveDeIdentificador(N)];
   except
     // lo que no se lee no cuenta: se queda lo que ya se sabe
   end;

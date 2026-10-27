@@ -543,9 +543,10 @@ function EsEspacioDeLaBiblioteca(const AUnidades: TArray<string>; const ACabeza:
 var
   Prefijos: TArray<string>;
 begin
-  Prefijos := [ACabeza.ToLower + '.'];
+  // las claves de la biblioteca son ClaveDeIdentificador (V98 de la 1.23.1)
+  Prefijos := [ClaveDeIdentificador(ACabeza) + '.'];
   for var S in AmbitosDeProyectoNuevo do
-    Prefijos := Prefijos + [S.ToLower + '.' + ACabeza.ToLower + '.'];
+    Prefijos := Prefijos + [ClaveDeIdentificador(S + '.' + ACabeza) + '.'];
   for var U in AUnidades do
     for var P in Prefijos do
       if U.StartsWith(P) then
@@ -562,7 +563,6 @@ function BadUnitName(const AName: string): string;
 var
   Unidades: TArray<string>;
   Head: string;
-  Ix: Integer;
 begin
   Result := '';
   // Ident(.Ident)*: dotted namespaces are legal Delphi (MyApp.Forms.Main);
@@ -579,7 +579,7 @@ begin
   // la 1.23): su nombre EXACTO - System, System.SysUtils, IdHTTP - tapa la
   // suya junto al proyecto...
   Unidades := UnidadesDeLaBiblioteca;
-  if TArray.BinarySearch<string>(Unidades, AName.ToLower, Ix) then
+  if EnLaBiblioteca(Unidades, AName) then
     Exit(MsgFmt(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
   // ...y colgar de uno de sus espacios de nombres es el mismo secuestro con
   // mas letras: name=System.SysUtils planto un System.SysUtils.pas vacio y
@@ -593,12 +593,11 @@ end;
 function NotaDeNombreTapado(const AName: string): string;
 var
   Unidades: TArray<string>;
-  Ix: Integer;
 begin
   Result := '';
   Unidades := UnidadesDeLaBiblioteca;
   for var S in AmbitosDeProyectoNuevo do
-    if TArray.BinarySearch<string>(Unidades, (S + '.' + AName).ToLower, Ix) then
+    if EnLaBiblioteca(Unidades, S + '.' + AName) then
       Exit(#10 + MsgFmt(SN_CREATE_NOMBRE_TAPADO_FMT, [AName, S + '.' + AName, AName, S + '.' + AName]));
 end;
 

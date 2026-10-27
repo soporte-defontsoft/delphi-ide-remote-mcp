@@ -531,6 +531,13 @@ REGLAS = [
      'ClaveDeRuta (Lsp.Rutas): la clave que junta lo que junta el disco (las mayusculas invariantes), '
      'comparada exacta; un LowerCase separa la ene de su mayuscula y un TStringList sin mayusculas junta '
      'ss y la eszett (V82 de la 1.23.1)'),
+    # ...y la de una UNIDAD de la biblioteca (V98 de la 1.23.1): el escritor (UnidadesDeLaBiblioteca)
+    # las guardaba con LowerCase y cuatro lectores las buscaban con .ToLower, que lleva el casing del
+    # idioma: con el turco, IOUtils no casaba con System.IOUtils y volvia el E2004 de V79
+    ('buscar en la lista de la biblioteca a mano', r'\bBinarySearch<string>\(\s*\w*(?:Unidades|Biblioteca)\b',
+     [('Lsp.Discovery.pas', 'EnLaBiblioteca')],
+     'EnLaBiblioteca (Lsp.Discovery): busca por la MISMA clave con la que UnidadesDeLaBiblioteca escribe '
+     '(ClaveDeIdentificador, sin el idioma del usuario); una busqueda a mano monta otra clave'),
     # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
     # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
     # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
@@ -1428,6 +1435,7 @@ PLANTADO = {
     'la clave del IDE leida sin su lector': "  if R.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then",
     'partir en lineas a mano': "  for L in AOutput.Split([#13#10, #10]) do X := 1;",
     'la clave de una ruta real a mano': "  Vistos.Add(LowerCase(RealPath(Sub)));",
+    'buscar en la lista de la biblioteca a mano': "  if TArray.BinarySearch<string>(Unidades, AName.ToLower, Ix) then X := 1;",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",

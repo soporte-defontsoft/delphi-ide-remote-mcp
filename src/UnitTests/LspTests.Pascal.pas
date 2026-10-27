@@ -55,6 +55,7 @@ type
     [Test] procedure ElMismoIdentificadorTambienConAcentos;
     [Test] procedure ElUltimoTrozoYLasReservadas;
     [Test] procedure LasPalabrasDeUnaRutina;
+    [Test] procedure LaClaveNoLlevaElIdiomaDelUsuario;
   end;
 
   // LA cabecera y LOS end. de un fuente (Lsp.Pascal): eran cinco lectores de
@@ -76,7 +77,8 @@ uses
   System.StrUtils,
   Lsp.Pascal,
   Lsp.ProjectUnits,
-  System.RegularExpressions;
+  System.RegularExpressions,
+  Lsp.Discovery;
 
 procedure TDirectivasTests.SoloLasDeVerdad;
 var
@@ -492,6 +494,22 @@ begin
   Assert.IsTrue(Length(EndsConPunto(CodigoPascal('{ end. }'#13#10'S := ''end.'';'#13#10'// end.'))) = 0,
     'ni comentado ni en una cadena');
   Assert.IsTrue(Length(EndsConPunto('END .')) = 1, 'con cualquier mayuscula y un blanco');
+end;
+
+procedure TIdentificadorTests.LaClaveNoLlevaElIdiomaDelUsuario;
+begin
+  // V98 de la 1.23.1: las claves de la biblioteca (Lsp.Discovery) se escribian
+  // con LowerCase y sus lectores las montaban con .ToLower, que lleva el casing
+  // del idioma (LCMAP_LINGUISTIC_CASING): con el turco 'IOUtils' no es 'ioutils'
+  // y el resolutor del uses no veia System.IOUtils (el E2004 de V79 otra vez). La
+  // clave es invariante, y la consulta (EnLaBiblioteca) usa la misma
+  Assert.AreEqual('system.ioutils', ClaveDeIdentificador('System.IOUtils'), 'la clave, invariante');
+  Assert.AreNotEqual('system.ioutils', 'System.IOUtils'.ToLower($041F), 'el turco: .ToLower da la i sin punto');
+  Assert.IsTrue(EnLaBiblioteca([ClaveDeIdentificador('System.IOUtils'), ClaveDeIdentificador('UÁrbol')], 'uáRBOL'),
+    'una unidad no ASCII se encuentra con otra caja');
+  Assert.IsTrue(EnLaBiblioteca([ClaveDeIdentificador('System.IOUtils'), ClaveDeIdentificador('UÁrbol')], 'SYSTEM.IOUTILS'),
+    'y una ASCII');
+  Assert.AreNotEqual(ClaveDeIdentificador('UÁrbol'), LowerCase('UÁrbol'), 'el LowerCase del escritor de antes no la plegaba');
 end;
 
 initialization

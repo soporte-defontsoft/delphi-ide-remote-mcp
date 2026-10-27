@@ -171,6 +171,12 @@ the MCP `initialize` response (`serverInfo.version`).
   and `delphi_move copy=true` answered COPIED without copying it. Those keys now
   join exactly what the disk joins. `delphi_move` also stopped taking two such
   destinations for the same one.
+- **A library unit is found by its name whatever the language of Windows.**
+  The list of the library's units was written with one key and looked up
+  with another that follows the user's language rules. On a Windows in
+  Turkish, `IOUtils` did not match `System.IOUtils`, so `adduses` could add a
+  unit that was already there, and a library unit with a non-ASCII name was
+  never found. Both sides now use the same language-independent key.
 
 ### Changed
 
