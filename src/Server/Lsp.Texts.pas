@@ -5784,7 +5784,9 @@ const
 
   SR_DESIGNER_SET_SIN_VALOR =
     '[DSGN-090 INVALID_PARAM] "value" is missing: set writes prop = value ' +
-    '(or moves the component with parent=, alone).';
+    '(or moves the component with parent=, alone). An empty string goes as ' +
+    'the form writes it, two quotes: value=''''; in props, Prop= alone is ' +
+    'the empty value.';
 
   SR_DESIGNER_SET_VALOR_LINEA =
     '[DSGN-091 INVALID_PARAM] value is one line: a form property holds no ' +

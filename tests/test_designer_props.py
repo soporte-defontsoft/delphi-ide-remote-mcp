@@ -16,6 +16,10 @@ nada -, y el resultado pasa por el parser del IDE (9.B).
       no se cierra, DSGN-134 y nada escrito
   Q8  B-3: solo nil sobre referencias que no estan no reescribe el form
       (DSGN-112, como set de una); insert con un nil lo dice en su entrada
+  Q9  V73 (1.23.1): en props, X= explicito es el valor VACIO y lo juzga su tipo:
+      Text= es la cadena vacia (como Text=''), Opacity= lo niega su tipo (no
+      DSGN-090 "value is missing"); y DSGN-090 de un set sin valor dice que la
+      cadena vacia va como ''
 
 Uso:  python tests/test_designer_props.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -123,6 +127,21 @@ try:
     check('Q8 ...insert con un nil que no hay que quitar: su entrada lo dice (DSGN-112), no value nil',
           not mc.fallo(r) and len(props) == 1 and 'value' not in props[0] and
           mc.es(props[0].get('note', ''), 'SN_DESIGNER_NADA_QUE_QUITAR_FMT'), r[:500])
+
+    # V73: Text= en props era DSGN-090 "value is missing", y Text='' pasaba
+    r = dsg({'command': 'set', 'component': 'Button1', 'props': 'Text=;Opacity=0.4'})
+    f = bytes_de(FMX)
+    check("Q9 props con Text= vacio: la cadena vacia, como Text='' (era DSGN-090), y la otra entrada tambien",
+          not mc.fallo(r) and not mc.es(r, 'SR_DESIGNER_SET_SIN_VALOR') and b"Don'#39't save" not in f and
+          b'Opacity = 0.4' in f, r[:400])
+    antes = bytes_de(FMX)
+    r = dsg({'command': 'set', 'component': 'Button1', 'props': 'Opacity=;Text=Tres'})
+    check('Q9 ...Opacity= vacio lo niega su TIPO en su entrada (no DSGN-090), y nada escrito',
+          mc.abre(r, 'SR_DESIGNER_PROPS_ENTRADA_FMT') and 'entry 1' in r and
+          not mc.es(r, 'SR_DESIGNER_SET_SIN_VALOR') and bytes_de(FMX) == antes, r[:400])
+    r = dsg({'command': 'set', 'component': 'Button1', 'prop': 'Text', 'value': ''})
+    check("Q9 ...set de una sin value: DSGN-090, que dice que la cadena vacia va como ''",
+          mc.abre(r, 'SR_DESIGNER_SET_SIN_VALOR') and "''" in r and bytes_de(FMX) == antes, r[:400])
 finally:
     srv.cierra()
 mc.borra(BASE)

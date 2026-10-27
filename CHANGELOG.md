@@ -77,6 +77,13 @@ the MCP `initialize` response (`serverInfo.version`).
   bytes, so a folder of binary forms is converted once per form, not once per
   read. A binary form now needs the helper, as `preview` does: without it the
   answer is `DSGN-060`, and `DSGN-174` when it fails to answer.
+- **In `delphi_designer` `props`, `Prop=` with nothing after it is the empty
+  value, judged by its type.** `props=Text=;...` answered `DSGN-090` "value is
+  missing" while `Text=''` passed. Now `Text=` is the empty string, written as
+  the IDE writes it (or not stored when it is the class's own value,
+  `DSGN-165`), and `Opacity=` is refused by its type in its entry. `DSGN-090`,
+  for a `set` without `value`, now says how an empty string goes: `value=''`,
+  or `Prop=` in `props`.
 
 ## [1.23.0] - 2026-10-26
 

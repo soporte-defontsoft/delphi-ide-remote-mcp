@@ -2933,7 +2933,8 @@ end;
 { Los pares 'Prop=valor' de una lista de props (TrozosDeEstado: EL lector de
   esa sintaxis), cada uno con lo que set mira antes de abrir nada. '' si
   valen; si no, la negativa con el numero de la entrada. Name no entra (se
-  renombra solo: toca la unidad) ni una propiedad dos veces. }
+  renombra solo: toca la unidad) ni una propiedad dos veces. 'Prop=' sin
+  nada detras es el valor VACIO (V73). }
 function ParesDeProps(const AProps: string; out AProps_, AValores: TArray<string>): string;
 begin
   Result := '';
@@ -2952,6 +2953,12 @@ begin
       Exit(MsgFmt(SR_DESIGNER_PROPS_PAR_FMT, [I + 1, Trozos[I]]));
     var Prop := Copy(Trozos[I], 1, P - 1).Trim;
     var Valor := Copy(Trozos[I], P + 1, MaxInt).Trim;
+    // 'Prop=' con nada detras es el valor VACIO, dicho a proposito: en el form,
+    // la cadena vacia - su literal, '' -, y lo juzga su tipo como a cualquier
+    // otro (Opacity= lo niega el suyo). Salia DSGN-090 "value is missing" y
+    // Text='' pasaba (V73 de la 1.23.1). El literal, por SU compositor
+    if Valor = '' then
+      Valor := TrozosDeLiteral('')[0];
     var Mal := PropiedadQueNoVa(Prop, Valor);
     if Mal <> '' then
       Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Prop, Mal]));
