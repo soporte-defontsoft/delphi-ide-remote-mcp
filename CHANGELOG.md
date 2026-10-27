@@ -107,6 +107,11 @@ the MCP `initialize` response (`serverInfo.version`).
   `P<Kelvin>` was written as `UKa in 'UKa.pas'`, and the build answered
   `F1026 File not found`. Both now ask the server's path judge (`RutaDentroDe`),
   which compares as the file system does.
+- **A parameter alias that arrives with its real name and a different value is
+  refused, not dropped in silence.** `delphi_search root=A path=B` searched A
+  and said nothing about B: the alias was discarded whenever the declared name
+  was present. Now two different values answer `GUARD-045`, naming both and the
+  declared one; the same value under both names still works.
 
 ## [1.23.0] - 2026-10-26
 

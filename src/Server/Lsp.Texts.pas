@@ -1468,6 +1468,15 @@ const
     '"_" do not make it different). Send each parameter ONCE, with the ' +
     'exact name tools/list gives in "inputSchema".';
 
+  // Un alias y su nombre real a la vez con valores distintos: se descartaba
+  // el alias en silencio (V93 de la 1.23.1; delphi_search root=A path=B
+  // buscaba en A sin decir nada de B). Con el mismo valor sigue valiendo.
+  // %s = el alias, %s = el nombre declarado, %s = la tool, %s = el declarado
+  SR_ARG_ALIAS_OTRO_VALOR_FMT =
+    '[GUARD-045 INVALID_PARAM] "%s" and "%s" are the same parameter of %s, and ' +
+    'they came with different values: one would be ignored. Send it once, as ' +
+    '"%s" (the name tools/list declares). Nothing was done.';
+
   // delphi_build composed a cmd.exe line (rsvars.bat && msbuild ...) until
   // 2an of 1.18.2 and platform/config/target travelled through it UNQUOTED:
   // a metacharacter there WAS a shell. msbuild runs with no shell now; this

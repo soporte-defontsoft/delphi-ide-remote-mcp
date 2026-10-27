@@ -1673,7 +1673,10 @@ end;
 // next tool (measured 2026-08-23: three in a 25-minute session). Never an
 // alias that the tool already declares with another meaning (delphi_search
 // has both query and pattern). The declared name stays the documented one.
-procedure ApplyArgAliases(const AToolName: string; AArguments: TJSONObject);
+// An alias that comes WITH its real name: the same value is dropped; another
+// value is refused, naming both - it was dropped in silence (V93 de la 1.23.1).
+// '' = applied.
+function ApplyArgAliases(const AToolName: string; AArguments: TJSONObject): string;
 const
   // tool, alias, real
   Aliases: array [0 .. 25, 0 .. 2] of string = (
@@ -1719,6 +1722,7 @@ var
   I: Integer;
   P: TJSONPair;
 begin
+  Result := '';
   if not Assigned(AArguments) then
     Exit;
   for I := Low(Aliases) to High(Aliases) do
@@ -1737,7 +1741,11 @@ begin
       Continue;
     if ArgStr(AArguments, Aliases[I, 2]) <> '' then
     begin
-      // the real name is there: it wins; the alias is dropped, not refused
+      // the real name is there: with the SAME value the alias is dropped; with
+      // another, one of the two would be ignored without a word (V93)
+      if P.JsonValue.Value.Trim <> ArgStr(AArguments, Aliases[I, 2]).Trim then
+        Exit(MsgFmt(SR_ARG_ALIAS_OTRO_VALOR_FMT, [P.JsonString.Value, Aliases[I, 2], AToolName,
+          Aliases[I, 2]]));
       AArguments.RemovePair(P.JsonString.Value).Free;
       Continue;
     end;
@@ -2753,7 +2761,9 @@ begin
   // server paths before any check or any tool - by the DECLARED name, so a
   // [Contenido] mark covers its aliases too (body/text of delphi_report were
   // expanded while message was not; B-9, 10-oct-2026).
-  ApplyArgAliases(AToolName, AArguments);
+  Result := ApplyArgAliases(AToolName, AArguments);
+  if Result <> '' then
+    Exit;
   // una lista de textos, en UNA forma (el array) antes de que la traduccion,
   // el suelo y la pasada de UNC miren sus rutas (1.19.0)
   NormalizaListas(AToolName, AArguments);
