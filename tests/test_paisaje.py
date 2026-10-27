@@ -538,9 +538,18 @@ REGLAS = [
     ('convertir un designer con la RTL',
      r"\b(?:Object(?:Resource|Binary)ToText|ObjectTextTo(?:Resource|Binary))\s*\(|\.ReadResHeader\b",
      [('Lsp.DesignerForma.pas', 'DesignerAFlujo'), ('Lsp.DesignerForma.pas', 'DesignerBinarioATexto'),
-      ('Lsp.DesignerBin.pas', 'DesignerTextToBinary')],
-     'DesignerAFlujo / DesignerBinarioATexto (Lsp.DesignerForma) y DesignerTextToBinary: el servidor y el '
+      ('Lsp.DesignerForma.pas', 'DesignerTextoARecurso')],
+     'DesignerAFlujo / DesignerBinarioATexto / DesignerTextoARecurso (Lsp.DesignerForma): el servidor y el '
      'renderizador convertian cada uno con su llamada a la RTL (P10 de la segunda revision de la 1.17.0)'),
+    # ...y ese conversor lo corre SOLO un proceso de 32 bits, el ayudante: el
+    # servidor se lo pide (V71 de la 1.23.1)
+    ('el conversor de forms fuera del ayudante de 32 bits',
+     r"\bDesignerBinarioATexto\s*\(|\bDesignerTextoARecurso\s*\(",
+     [('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'EscribeComoElIde'),
+      ('FormRender.Comun.pas', 'ConvierteComoElIde')],
+     'ConversionDelIde (Lsp.FormRender): en el servidor, Win64, Extended es Double y un flotante convertido '
+     'salia con otras cifras - to-text con 17 decimales, to-binary con otros bytes (V71, medido con '
+     'convert.exe el 27-oct-2026)'),
     ('la clave del nombre de un estilo', r"\.StyleName\.ToLower|SameText\(\s*[\w.\[\]]*\.StyleName\b", [],
      'ClaveDeEstilo (Lsp.Styles), la de FMX: ToLowerInvariant (P7 de la segunda revision de la 1.17.0: '
      'SameText en FindStyle y Child, ToLower en el lint)'),
@@ -845,6 +854,8 @@ REGLAS = [
       ('FormRender.Comun.pas', 'MaestroDeVista'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
       ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Entrada'),
+      # (la copia que el servidor le da a convertir en su temporal, V71)
+      ('FormRender.Comun.pas', 'ConvierteComoElIde'),
      # los OLFATEADORES: la cabecera de lo que la tool ya juzgo (la forma de un designer o
      # de un estilo, el BOM de un form, la firma ELF de un paquete; el tamano de un PNG ya
      # sale de sus bytes, 2b), por EL lector de cabeceras: eran cuatro TFileStream a mano en
@@ -933,6 +944,8 @@ REGLAS = [
       # comprobado, o en el destino
       ('Mld.Captura.pas', 'GuardarPNG'), ('McpDesktopNode.dpr', 'RecogerCaptura'),
       ('FormRender.Fmx.pas', 'Main'), ('FormRender.Vcl.pas', 'GuardaPng'),
+      # (lo convertido, en el --out que le da el servidor en su temporal, V71)
+      ('FormRender.Comun.pas', 'ConvierteComoElIde'),
       ('McpRunJob.dpr', 'EscribePid'), ('McpRunJob.dpr', 'LanzarYVigilar'),
       ('McpRunJob.dpr', 'Anade'), ('McpRunJob.dpr', 'Arrancar'),
       ('DelphiStyleConvert.dpr', 'Convert'), ('DelphiStyleConvert.dpr', 'Defaults')],
@@ -1446,6 +1459,7 @@ PLANTADO = {
     'la cadena de clases de la tabla': "  while Padres.TryGetValue(C, P) do",
     'la clave del nombre de un estilo': "  if SameText(O.StyleName, AStyleName) then",
     'convertir un designer con la RTL': "  ObjectBinaryToText(Bin, Texto);",
+    'el conversor de forms fuera del ayudante de 32 bits': "  AText := DesignerBinarioATexto(ABytes);",
     'la sangria de un nivel de un designer': "  I := StringOfChar(' ', (Obj.Depth + 1) * 2);",
     'de que marco es un designer': "  if APath.EndsWith('.fmx', True) then",
     'el designer de una unidad': "  F := ChangeFileExt(Pas, '.dfm');",

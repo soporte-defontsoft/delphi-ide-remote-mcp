@@ -9,7 +9,10 @@ first. Editing a binary directly stays refused, pointing at to-text.
 
 The binary fixture is made by the server itself (to-binary of a text form),
 so the battery measures the RTL path both ways without convert.exe; the
-second to-binary must reproduce the first byte for byte.
+second to-binary must reproduce the first byte for byte. V71 (1.23.1) does
+compare with convert.exe, the IDE's own 32-bit converter: what the server
+writes and reads has to be its bytes (the server is Win64, where a float
+converted in-process lost its last digits).
 
 Usage:  python tests/test_designer_binary.py [path-to-DelphiLspMcp.exe]
 """
@@ -18,7 +21,7 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('designer-binary')
-EXE = mc.copia_exe(BASE)
+EXE = mc.copia_exe(BASE, con_render=True)  # el conversor del IDE es el ayudante de 32 bits (V71)
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='dgb')
 call = srv.call
@@ -347,6 +350,84 @@ _b = open(NOMB, 'rb').read()
 check('to-text de un binario con un nombre no ASCII: UTF-8 CON BOM, como el IDE (era EDIT-122)',
       mc.abre(r, 'SN_DESIGNER_TOTEXT_FMT') and _b.startswith(b'\xef\xbb\xbfobject Bot\xc3\xb3n: TForm'),
       (r[:200], _b[:40]))
+
+# ---- V71 (1.23.1): to-text, to-binary y la lectura al vuelo, como el IDE de
+# 32 bits. El conversor (ObjectBinaryToText / ObjectTextToResource) corria EN
+# EL SERVIDOR, Win64, donde Extended es Double: to-text escribia 17 decimales y
+# otras cifras (0.40000000596046440 donde el IDE escribe 0.400000005960464500) y
+# to-binary otros bytes (el valor redondeado a Double). Medido el 27-oct con
+# convert.exe, el conversor del propio IDE, que aqui es el oraculo: lo que
+# escribe y lo que lee el servidor tiene que ser byte a byte lo suyo.
+import subprocess
+CONV = os.path.join(mc.raiz_ide(call), 'bin', 'convert.exe')
+if not os.path.isfile(CONV):
+    print('NOTA: sin convert.exe en esta instalacion; V71 saltado')
+else:
+    def convert(flag, ruta):
+        p = subprocess.run([CONV, '-i', flag, ruta], capture_output=True, text=True)
+        return p.returncode == 0
+
+    def form_flotantes(simple):
+        return ('object FormF: TFormF\r\n  Left = 0\r\n  Exacto = 16.000000000000000000\r\n'
+                '  Simple = %s\r\n  Tercio = 0.333333333333333333\r\n'
+                '  Largo = 1234.567890123456789000\r\nend\r\n' % simple).encode('ascii')
+
+    V71_TXT = form_flotantes('0.400000005960464500')
+    _bin = os.path.join(BASE, 'V71ide-bin.dfm')
+    open(_bin, 'wb').write(V71_TXT)
+    _ok = convert('-b', _bin)
+    V71_BIN = open(_bin, 'rb').read()
+    _txt = os.path.join(BASE, 'V71ide-txt.dfm')
+    open(_txt, 'wb').write(V71_BIN)
+    _ok = convert('-t', _txt) and _ok
+    V71_IDE = open(_txt, 'rb').read()
+    check('V71 oraculo: convert.exe convierte en los dos sentidos, con 18 decimales',
+          _ok and V71_BIN[:3] == b'\xff\x0a\x00' and b'Simple = 0.400000005960464500' in V71_IDE,
+          (_ok, V71_BIN[:8], V71_IDE[:200]))
+
+    p = os.path.join(BASE, 'V71a.dfm')
+    open(p, 'wb').write(V71_BIN)
+    r = call('delphi_designer', {'command': 'to-text', 'path': p})
+    check('V71 to-text: el texto que escribe el IDE de 32 bits, byte a byte',
+          mc.abre(r, 'SN_DESIGNER_TOTEXT_FMT') and open(p, 'rb').read() == V71_IDE,
+          (r[:150], open(p, 'rb').read()[:300]))
+
+    p = os.path.join(BASE, 'V71b.dfm')
+    open(p, 'wb').write(V71_TXT)
+    r = call('delphi_designer', {'command': 'to-binary', 'path': p})
+    check('V71 to-binary: los bytes que escribe el IDE de 32 bits',
+          mc.abre(r, 'SN_DESIGNER_TOBINARY_FMT') and open(p, 'rb').read() == V71_BIN,
+          (r[:150], open(p, 'rb').read().hex(' ')))
+
+    # un form ANCHO (texto UTF-16) va del parser al conversor: el mismo texto
+    p = os.path.join(BASE, 'V71e.dfm')
+    open(p, 'wb').write(b'\xff\xfe' + V71_TXT.decode('ascii').encode('utf-16-le'))
+    r = call('delphi_designer', {'command': 'to-text', 'path': p})
+    check('V71 to-text de un form ancho (UTF-16): tambien el texto del IDE de 32 bits',
+          mc.abre(r, 'SN_DESIGNER_TOTEXT_ANCHO_FMT') and open(p, 'rb').read() == V71_IDE,
+          (r[:150], open(p, 'rb').read()[:300]))
+
+    # la lectura al vuelo, por EL mismo conversor: lo que ensena el IDE
+    p = os.path.join(BASE, 'V71c.dfm')
+    open(p, 'wb').write(V71_BIN)
+    r = call('delphi_read', {'path': p})
+    check('V71 delphi_read de un binario: los flotantes como los ensena el IDE',
+          '|  Simple = 0.400000005960464500' in r and '|  Largo = 1234.567890123457000000' in r, r[:500])
+    r = call('delphi_designer', {'command': 'get', 'path': p, 'component': 'FormF'})
+    check('V71 get de un binario: los mismos', 'Simple = 0.400000005960464500' in r, r[:400])
+    r = call('delphi_search', {'path': BASE, 'query': 'Simple = 0.400000005960464500'})
+    check('V71 delphi_search los encuentra dentro del binario', 'V71c.dfm' in r, r[:400])
+
+    # dos binarios que solo se diferencian en un flotante (mismo tamano, misma
+    # cabecera): cada uno con el suyo. La cache del texto va por sus bytes
+    p2 = os.path.join(BASE, 'V71d.dfm')
+    open(p2, 'wb').write(form_flotantes('0.250000000000000000'))
+    convert('-b', p2)
+    r1 = call('delphi_read', {'path': p})
+    r2 = call('delphi_read', {'path': p2})
+    check('V71 dos binarios que difieren en un flotante: cada uno lee el suyo',
+          len(open(p2, 'rb').read()) == len(V71_BIN) and '|  Simple = 0.400000005960464500' in r1 and
+          '|  Simple = 0.250000000000000000' in r2, (r1[:300], r2[:300]))
 
 srv.mata()
 mc.fin('designer-binary battery')

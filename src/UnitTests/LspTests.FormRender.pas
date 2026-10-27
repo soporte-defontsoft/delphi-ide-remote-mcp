@@ -62,7 +62,7 @@ uses
   System.Classes,
   System.IOUtils,
   Winapi.Windows,
-  Lsp.DesignerBin,   // DesignerTextToBinary: el binario que escribe el IDE
+  Lsp.DesignerForma, // DesignerTextoARecurso: el binario que escribe el IDE
   Lsp.FormRender,
   Lsp.Guard,
   Lsp.Texts,
@@ -466,7 +466,7 @@ begin
   C := Cabecera(F);
   Assert.AreEqual('TFichaDirecci'#$F3'n', C.Clase, 'el nombre entero, con su acento');
   // el binario que escribe el IDE en disco: el recurso, con su cabecera
-  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes('object FormB: TFormB'#13#10'end'#13#10), Bin));
+  Bin := DesignerTextoARecurso(TEncoding.ASCII.GetBytes('object FormB: TFormB'#13#10'end'#13#10));
   F := TPath.Combine(FDir, 'Binario.dfm');
   TFile.WriteAllBytes(F, Bin);
   C := Cabecera(F);

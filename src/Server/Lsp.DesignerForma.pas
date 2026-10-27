@@ -70,8 +70,16 @@ function LineaDeErrorDelParser(const AMensaje: string): Integer;
   normaliza el IDE. EL conversor: lo escribian el servidor
   (DesignerBinaryToText, que le pone sus mensajes) y el renderizador
   (Cabecera), cada uno con su llamada a la RTL (P10 de la segunda revision
-  de la 1.17.0). }
+  de la 1.17.0). Lo corre SOLO un proceso de 32 bits, como el IDE: en Win64
+  Extended es Double, y un flotante salia con otras cifras (V71 de la
+  1.23.1). El servidor se lo pide al renderizador (--convert). }
 function DesignerBinarioATexto(const ABytes: TArray<Byte>): string;
+{ ...y la vuelta: los BYTES de un designer de texto, tal cual (el parser los
+  lee como el IDE: ASCII, la ANSI de la maquina o UTF-8 con BOM), como el
+  binario que escribe el IDE en disco, con su cabecera de recurso. Lanza lo
+  que diga el parser. Tambien solo en 32 bits: el valor de un flotante,
+  redondeado a Double, eran otros bytes (V71). }
+function DesignerTextoARecurso(const ABytes: TArray<Byte>): TArray<Byte>;
 
 { LA linea RAIZ de un designer de texto: la primera que no esta en blanco,
   si es una linea de objeto (LineaDeObjeto); si no, False - un fichero que
@@ -277,6 +285,26 @@ begin
   finally
     Texto.Free;
     Flujo.Free;
+    Entrada.Free;
+  end;
+end;
+
+function DesignerTextoARecurso(const ABytes: TArray<Byte>): TArray<Byte>;
+var
+  Entrada: TBytesStream;
+  Salida: TMemoryStream;
+begin
+  Entrada := TBytesStream.Create(ABytes);
+  Salida := TMemoryStream.Create;
+  try
+    // los bytes TAL CUAL al parser, como DesignerAFlujo, y el envoltorio de
+    // recurso que escribe el IDE (FF 0A 00, el nombre de la clase, TPF0)
+    ObjectTextToResource(Entrada, Salida);
+    SetLength(Result, Salida.Size);
+    if Salida.Size > 0 then
+      Move(Salida.Memory^, Result[0], Salida.Size);
+  finally
+    Salida.Free;
     Entrada.Free;
   end;
 end;

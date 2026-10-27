@@ -399,6 +399,9 @@ begin
     Writeln(ErrOutput, Uso);
     Exit(FR_RC_USAGE);
   end;
+  // el conversor del IDE no carga ningun form (V71)
+  if GPeticion.Convierte <> '' then
+    Exit(ConvierteComoElIde);
   Result := FR_RC_OK;
   ArrancaVigia(GPeticion.TiempoMs);
   Cargador := TCargadorFmx.Create;

@@ -105,7 +105,7 @@ uses
   Lsp.Codificacion,
   Lsp.Casa,
   System.Character,
-  Lsp.DesignerBin,
+  Lsp.DesignerForma, // DesignerTextoARecurso: el binario de un form
   Lsp.Client,
   System.JSON,
   Lsp.References,
@@ -888,8 +888,9 @@ begin
   // abre un par de dos bytes y el 00 no lo cierra (medido: con un form sin un
   // byte asi, el binario SI vuelve en 932); una posicion o un tamano entre 129
   // y 159, o entre 224 y 252, es lo normal en un form de verdad
-  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes('object FormX: TFormX'#13#10 +
-    '  Left = 129'#13#10'  Caption = ''Hola'''#13#10'end'#13#10), Bin), 'el binario del form');
+  // el binario del form, por EL conversor (el que corre el ayudante, V71)
+  Bin := DesignerTextoARecurso(TEncoding.ASCII.GetBytes('object FormX: TFormX'#13#10 +
+    '  Left = 129'#13#10'  Caption = ''Hola'''#13#10'end'#13#10));
   UsaPaginaAnsi(1252);
   Assert.AreEqual('', ReescrituraDenegada('C:\nada\UX.dfm', Bin, K), 'en 1252 los bytes del binario vuelven');
   UsaPaginaAnsi(932);

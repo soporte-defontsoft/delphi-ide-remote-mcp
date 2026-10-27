@@ -42,7 +42,7 @@ from mcp_cliente import check
 BASE = mc.carpeta('to_binary_1182')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # el conversor es el ayudante de 32 bits (V71)
 ACP = mc.ANSI
 
 CABEZA = 'object FormA: TFormA\r\n  Left = 0\r\n  Top = 0\r\n'

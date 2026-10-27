@@ -50,7 +50,7 @@ from mcp_cliente import check
 BASE = mc.carpeta('juicio_final_1182')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # J12: to-binary es el ayudante de 32 bits (V71)
 
 BLOQUE_P = '  object Panel1: TPanel\n    Left = 8\n    Top = 8\n  end'
 BLOQUE_L = '  object Label1: TLabel\n    Left = 8\n    Top = 40\n  end'

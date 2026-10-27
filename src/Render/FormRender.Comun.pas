@@ -49,6 +49,9 @@ type
     // juez lo deja como lo deja el disenador al soltarlo (FMX: el ultimo de
     // la lista de tabulacion de su padre, V72)
     Soltado: string;
+    // --convert text|binary: EL conversor del IDE, sin cargar el form (V71):
+    // los bytes de --path en la otra forma, escritos en --out
+    Convierte: string;
   end;
 
   { El lector comun de un .dfm/.fmx, texto o binario, sobre una instancia ya
@@ -189,6 +192,13 @@ function SesionActual: Cardinal;
   por TWriter (WriteComponent + ObjectBinaryToText, lo que hace el IDE al
   guardar) y devuelta linea a linea en WRITTEN= }
 procedure EscribeComoElIde(ARaiz: TComponent);
+{ --convert: los bytes de --path por EL conversor de la casa
+  (Lsp.DesignerForma) en ESTE proceso de 32 bits, el del IDE - el servidor es
+  Win64, donde Extended es Double, y un flotante convertido alli perdia sus
+  ultimas cifras (V71 de la 1.23.1) -, escritos en --out. Lo que no convierte
+  es el contenido: LINE= y NOTLOADED=, con ERROR=. Devuelve el codigo de
+  salida. Sin form, sin paquetes y sin ventanas. }
+function ConvierteComoElIde: Integer;
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
   SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
@@ -418,9 +428,9 @@ end;
 
 function TextoDeUso(const AExe: string): string;
 begin
-  // dos formas de uso, cada una con el nombre del programa: con uno solo
+  // tres formas de uso, cada una con el nombre del programa: con uno solo
   // salia "%s --path ..." y el "(No argument for format)" de MsgFmt
-  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe, AExe]);
+  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe, AExe, AExe]);
 end;
 
 function ParseaArgumentos(out AUso: string): string;
@@ -482,6 +492,7 @@ begin
       end
       else if P = '--folder' then GPeticion.Carpeta := Valor
       else if P = '--dropped' then GPeticion.Soltado := Valor
+      else if P = '--convert' then GPeticion.Convierte := Entre(Valor, ['text', 'binary'])
       else if P = '--timeout' then GPeticion.TiempoMs := StrToInt(Valor)
       else if P = '--verbose' then GPeticion.Verbose := True
       else
@@ -1765,6 +1776,45 @@ begin
   finally
     Lineas.Free;
     Bin.Free;
+  end;
+end;
+
+function ConvierteComoElIde: Integer;
+var
+  Bytes, Salida: TBytes;
+begin
+  Result := FR_RC_OK;
+  ArrancaVigia(GPeticion.TiempoMs);
+  try
+    try
+      Bytes := TFile.ReadAllBytes(GPeticion.Path);
+      try
+        if GPeticion.Convierte = 'text' then
+          Salida := TEncoding.UTF8.GetBytes(DesignerBinarioATexto(Bytes))
+        else
+          Salida := DesignerTextoARecurso(Bytes);
+      except
+        on E: Exception do
+        begin
+          // el conversor solo lee esos bytes: lo que lanza es del contenido,
+          // y la linea la dice el formato de ESTE proceso (su idioma)
+          Responde(FR_LINE, IntToStr(LineaDeErrorDelParser(E.Message)));
+          Responde(FR_NOT_LOADED, E.ClassName + FR_PARTES_SEP + LecturaEnPartes(E.Message));
+          Responde(FR_ERROR, E.ClassName + ': ' + E.Message);
+          Exit(FR_RC_ERROR);
+        end;
+      end;
+      TFile.WriteAllBytes(GPeticion.Salida, Salida);
+    except
+      on E: Exception do
+      begin
+        // leer --path o escribir --out: del ayudante, no del form
+        Responde(FR_ERROR, E.ClassName + ': ' + E.Message);
+        Result := FR_RC_ERROR;
+      end;
+    end;
+  finally
+    ParaVigia;
   end;
 end;
 

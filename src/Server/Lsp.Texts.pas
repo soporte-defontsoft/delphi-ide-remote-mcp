@@ -5363,14 +5363,22 @@ const
   SR_DESIGNER_SIN_RENDER_FMT =
     '[DSGN-060 INTERNAL] The form renderer %s is not next to the server ' +
     '(%s). It ships in the release zip beside DelphiLspMcp.exe; the ' +
-    'operator copies it there. tree, get, lint and layout read the form ' +
-    'without it.';
+    'operator copies it there. tree, get, lint and layout read a text form ' +
+    'without it (a binary one, it converts as the IDE does).';
 
   SR_DESIGNER_RENDER_FALLO_FMT =
     '[DSGN-061 INTERNAL] The renderer could not draw %s: %s. The usual ' +
     'causes: a design package the form needs failed while loading, or a ' +
     'component failed while painting (that takes the renderer down, never ' +
     'the server). tree and layout read the file without loading anything.';
+  { El conversor del IDE - el ayudante de 32 bits con --convert, como el IDE
+    (V71 de la 1.23.1) - no contesto, o fallo por lo suyo: lo que no
+    convierte el CONTENIDO lo dicen DSGN-044 y DSGN-046. %s = el ayudante,
+    %s = por que }
+  SR_DSGN_CONVERSOR_FALLO_FMT =
+    '[DSGN-174 INTERNAL] The IDE''s form converter (%s, which converts in 32 ' +
+    'bits as the IDE does) could not convert the form: %s. Nothing was ' +
+    'written.';
   { El LECTOR del IDE no carga el form (NOTLOADED= del ayudante): es el
     fichero, no el renderizador - antes salia como DSGN-061 INTERNAL, y con un
     valor que el Ignore se saltaba, solo "Stream read error" (DSGN-061 de la

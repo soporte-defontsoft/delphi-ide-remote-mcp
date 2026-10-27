@@ -10,7 +10,7 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('designer')
-EXE = mc.copia_exe(BASE)
+EXE = mc.copia_exe(BASE, con_render=True)  # un binario lo convierte el ayudante de 32 bits (V71)
 
 env = mc.entorno({'DELPHI_MCP_ROOTS': BASE})
 srv = mc.Stdio(EXE, env, nombre='dg')

@@ -61,6 +61,22 @@ the MCP `initialize` response (`serverInfo.version`).
   the control is dropped, and `check-binding` (and the warnings after a form is
   written) lists every control whose unit is missing in `presentationUnitsMissing`.
   The tables move to generation 18 and are rebuilt on first use.
+- **`delphi_designer` `to-text` and `to-binary` write what the IDE writes, to
+  the last digit, and a binary form is read with the IDE's own digits.** The
+  conversion ran inside the server, a 64-bit process, where `Extended` is a
+  `Double`, so a float lost its last digits on the way. `to-text` wrote
+  `0.40000000596046440` and `1234.56789012345700000` where the IDE writes
+  `0.400000005960464500` and `1234.567890123457000000`, and `to-binary` wrote
+  other bytes for the same value. `delphi_read`, `get`, `delphi_search` and
+  every other reading of a binary `.dfm` showed those digits while saying "what
+  the IDE shows in View as Text". The conversion now runs in the 32-bit form
+  helper that already ships beside the server, the IDE's bitness
+  (`DelphiFormRenderVcl.exe --convert`). Its output is byte for byte what the
+  IDE's own `convert.exe` writes, in both directions, and the batteries compare
+  against it. The text of each binary form is kept by the fingerprint of its
+  bytes, so a folder of binary forms is converted once per form, not once per
+  read. A binary form now needs the helper, as `preview` does: without it the
+  answer is `DSGN-060`, and `DSGN-174` when it fails to answer.
 
 ## [1.23.0] - 2026-10-26
 

@@ -50,7 +50,11 @@
   FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>|<su mensaje EN PARTES>, antes del ERROR=:
                                  // lo que fallo fue el LECTOR mientras cargaba el form (EFilerError o
                                  // EParserError, lo dice la jerarquia de la RTL): es el contenido del
-                                 // fichero, no el ayudante ni un paquete al pintar (DSGN-061 de la 1.20)
+                                 // fichero, no el ayudante ni un paquete al pintar (DSGN-061 de la 1.20).
+                                 // Con --convert, lo que el conversor no convirtio: el contenido (V71)
+  FR_LINE = 'LINE=';             // LINE=<n> con --convert, antes del NOTLOADED=: la linea que nombra el error
+                                 // del parser, leida con SParseError de ESTE proceso (en su idioma, como
+                                 // LecturaEnPartes); 0 si no nombra ninguna
   // un mensaje del lector EN PARTES: <Componente>|<Propiedad>|<Motivo>|<texto tal cual>, partido por el
   // ayudante con EL formato que lo compuso (SPropertyException, en el idioma de ese proceso: el RTL lo
   // traduce por el de Windows, medido el 18-oct-2026); '|||<texto>' si no tiene esa forma. Lo compone

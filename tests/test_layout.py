@@ -29,7 +29,7 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('layout')
-EXE = mc.copia_exe(BASE)
+EXE = mc.copia_exe(BASE, con_render=True)  # un binario lo convierte el ayudante de 32 bits (V71)
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='layout-battery', t=60)
 

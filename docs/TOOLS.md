@@ -751,7 +751,10 @@ was painted - `window` (the real painting, an interactive session: the tray),
 their own way come out native-looking), `canvas` (FMX, always its own canvas).
 The answer lists `nonVisual` always, `substituted` for classes no installed
 package registers (a named box at their place), `ignored` and `warnings` from
-the reader, and `ms`.
+the reader, and `ms`. The same 32-bit helper converts a binary `.dfm` (1.23.1):
+`to-text`, `to-binary` and every reading of a binary form run the RTL's form
+converter in the IDE's bitness, so a float keeps the IDE's digits, byte for byte
+what the IDE's `convert.exe` writes.
 
 `insert`, `delete` and a rename (`set prop=Name`) (1.17.0) write the form and
 its unit together, all or nothing; any other `set` writes the form only

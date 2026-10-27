@@ -2,7 +2,11 @@
 
 { La forma de un designer (texto, flujo TPF0, recurso en disco) y la ida y
   vuelta binario <-> texto por la RTL, que es lo que hace el IDE en "Ver como
-  texto" y al guardar. Un solo nombrador de la forma: antes habia cuatro. }
+  texto" y al guardar. Un solo nombrador de la forma: antes habia cuatro. La
+  ida y vuelta, por EL conversor de la casa (Lsp.DesignerForma) en proceso:
+  el servidor se lo pide al ayudante de 32 bits, que corre ese mismo codigo
+  (V71), y lo que contesta el servidor lo mide test_designer_binary contra
+  convert.exe. }
 
 interface
 
@@ -106,9 +110,9 @@ var
   Bin: TBytes;
   Txt: string;
 begin
-  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes(FORM_TXT), Bin), 'texto -> binario sin error');
+  Bin := DesignerTextoARecurso(TEncoding.ASCII.GetBytes(FORM_TXT));
   Assert.IsTrue(DesignerShapeOf(Bin) = dsResource, 'lo que escribe to-binary es la forma de disco del IDE');
-  Assert.AreEqual('', DesignerBinaryToText(Bin, Txt), 'binario -> texto sin error');
+  Txt := DesignerBinarioATexto(Bin);
   Assert.AreEqual(FORM_TXT, Txt, 'la ida y vuelta devuelve el mismo texto');
 end;
 
@@ -118,9 +122,9 @@ var
   Txt: string;
   I: Integer;
 begin
-  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes(
-    'object FormA: TFormA'#13#10'  Caption = ''Configuraci''#243''n'''#13#10'end'#13#10), Bin));
-  Assert.AreEqual('', DesignerBinaryToText(Bin, Txt));
+  Bin := DesignerTextoARecurso(TEncoding.ASCII.GetBytes(
+    'object FormA: TFormA'#13#10'  Caption = ''Configuraci''#243''n'''#13#10'end'#13#10));
+  Txt := DesignerBinarioATexto(Bin);
   Assert.IsTrue(Pos('''Configuraci''#243''n''', Txt) > 0, 'el acento vuelve como #243: ' + Txt);
   for I := 1 to Length(Txt) do
     Assert.IsTrue(Ord(Txt[I]) < 128, 'el texto convertido es ASCII puro');
@@ -136,10 +140,10 @@ begin
   // 'ok ✔ Ж' como vaUTF8String) y lint lo da por limpio; to-binary lo negaba
   // (DSGN-045) porque lo recodificaba a ANSI. Ahora entra, y vuelve como lo
   // escribe el IDE: #10004 y #1046
-  Assert.AreEqual('', DesignerTextToBinary(TEncoding.UTF8.GetPreamble + TEncoding.UTF8.GetBytes(
-    'object FormA: TFormA'#13#10'  Caption = ''ok ' + Chr($2714) + ' ' + Chr($0416) + ''''#13#10'end'#13#10), Bin),
-    'un UTF-8 con BOM fuera de la ANSI entra en el binario, como en dcc');
-  Assert.AreEqual('', DesignerBinaryToText(Bin, Txt));
+  // un UTF-8 con BOM fuera de la ANSI entra en el binario, como en dcc
+  Bin := DesignerTextoARecurso(TEncoding.UTF8.GetPreamble + TEncoding.UTF8.GetBytes(
+    'object FormA: TFormA'#13#10'  Caption = ''ok ' + Chr($2714) + ' ' + Chr($0416) + ''''#13#10'end'#13#10));
+  Txt := DesignerBinarioATexto(Bin);
   Assert.IsTrue(Pos('''ok ''#10004'' ''#1046', Txt) > 0, 'el texto entero, como #N: ' + Txt);
 end;
 
@@ -159,20 +163,23 @@ begin
     Assert.Pass('la ANSI de esta maquina no es 1252');
     Exit;
   end;
-  Assert.AreEqual('', DesignerTextToBinary(TEncoding.UTF8.GetBytes(
-    'object FormA: TFormA'#13#10'  Caption = ''Configuraci' + Chr($F3) + 'n'''#13#10'end'#13#10), Bin));
-  Assert.AreEqual('', DesignerBinaryToText(Bin, Txt));
+  Bin := DesignerTextoARecurso(TEncoding.UTF8.GetBytes(
+    'object FormA: TFormA'#13#10'  Caption = ''Configuraci' + Chr($F3) + 'n'''#13#10'end'#13#10));
+  Txt := DesignerBinarioATexto(Bin);
   Assert.IsTrue(Pos('''Configuraci''#195#179''n''', Txt) > 0, 'los dos bytes, como ANSI (como dcc): ' + Txt);
 end;
 
 procedure TDesignerBinTests.BinarioDanadoDaMotivo;
-var
-  Txt: string;
 begin
-  Assert.AreNotEqual('', DesignerBinaryToText(
-    B([$FF, $0A, $00, Ord('T'), Ord('R'), Ord('O'), Ord('T'), Ord('O'), 0, $30, $10, $10, 0, 0, 0,
-       Ord('T'), Ord('P'), Ord('F'), Ord('0'), Ord('b'), Ord('a'), Ord('s'), Ord('u'), Ord('r'), Ord('a')]), Txt),
-    'un binario roto devuelve el motivo, no una excepcion');
+  // el conversor lanza; el motivo (DSGN-044) lo pone el servidor con lo que
+  // contesta el ayudante, y lo mide test_designer_binary
+  Assert.WillRaiseAny(
+    procedure
+    begin
+      DesignerBinarioATexto(
+        B([$FF, $0A, $00, Ord('T'), Ord('R'), Ord('O'), Ord('T'), Ord('O'), 0, $30, $10, $10, 0, 0, 0,
+           Ord('T'), Ord('P'), Ord('F'), Ord('0'), Ord('b'), Ord('a'), Ord('s'), Ord('u'), Ord('r'), Ord('a')]));
+    end, 'un binario roto lanza en el conversor');
 end;
 
 // el texto que sale de DesignerAFlujo leido como lo leeria TReader
@@ -207,7 +214,7 @@ begin
   // El renderizador le daba a TReader el binario del IDE tal cual:
   // TestStreamFormat lo llama binario y nadie se saltaba la cabecera del
   // recurso ("Invalid stream format" en preview, 7-oct-2026)
-  Assert.AreEqual('', DesignerTextToBinary(TEncoding.ASCII.GetBytes(FORM_TXT), Bin));
+  Bin := DesignerTextoARecurso(TEncoding.ASCII.GetBytes(FORM_TXT));
   S := TMemoryStream.Create;
   try
     S.WriteBuffer(Bin[0], Length(Bin));

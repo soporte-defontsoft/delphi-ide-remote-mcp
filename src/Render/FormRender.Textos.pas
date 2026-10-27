@@ -144,7 +144,8 @@ const
     '[--fidelity auto|window|print] [--bds 37.0] [--timeout ms] [--verbose] | ' +
     '%s --path <dfm|fmx> --writeback on [--folder <dir of the real form>] ' +
     '[--component Name] [--dropped Name] ' +
-    '[--packages ...] [--root ...] [--bds] [--timeout ms]';
+    '[--packages ...] [--root ...] [--bds] [--timeout ms] | ' +
+    '%s --path <dfm|fmx> --convert text|binary --out <file> [--timeout ms]';
 
 function MsgText(const AMsg: string): string;
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;

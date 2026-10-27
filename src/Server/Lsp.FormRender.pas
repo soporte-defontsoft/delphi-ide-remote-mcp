@@ -50,6 +50,10 @@ type
     // con Escribe, el que se acaba de soltar (insert, set parent=): el juez lo
     // deja como el disenador al soltarlo (FMX: el ultimo de su tabulador, V72)
     Soltado: string;
+    // EL conversor del IDE (V71): text (binario -> texto) o binary (texto ->
+    // binario), los bytes de Path escritos en Salida; sin form ni paquetes.
+    // Lo pone ConversionDelIde
+    Convierte: string;
   end;
 
   { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
@@ -87,6 +91,8 @@ type
     // fichero, no el ayudante (DSGN-061 de la 1.20)
     NoCarga: Boolean;
     Parada: TIgnorada;         // ...y el error con el que paro, en sus partes
+    ClaseDeLaParada: string;   // ...y la clase de su excepcion (NOTLOADED=)
+    LineaDeLaParada: Integer;  // LINE=: con --convert, la linea que nombra el parser (0, ninguna)
     Codigo: Cardinal;          // su codigo de salida
     Captura: string;           // CAPTURE=
     Ancho, Alto: Integer;      // SIZE=
@@ -260,6 +266,20 @@ function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: s
   B3); el resto (salida, estado, estilo...) lo pone cada uno. }
 function PeticionDeRender(const APath, AFramework: string): TPeticionRender;
 
+{ EL CONVERSOR del IDE (V71 de la 1.23.1): ABytes, un form binario (AATexto)
+  o de texto, en la otra forma - el texto que ensena "Ver como texto" (sus
+  bytes en UTF-8, sin BOM) o el binario de disco con su cabecera de recurso -
+  por el ayudante de 32 bits (--convert), como el IDE: el servidor es Win64,
+  donde Extended es Double, y un flotante convertido aqui perdia sus ultimas
+  cifras (to-text escribia 17 decimales y otras cifras, to-binary otros
+  bytes; medido con convert.exe el 27-oct-2026). '' si se le pudo preguntar:
+  con ASalida, o con AClase, AMensaje y ALinea (la que nombra el parser, 0 si
+  ninguna) si el CONTENIDO no se convierte; si no (sin ayudante, el tiempo),
+  el fallo. Los bytes van y vuelven por una carpeta de descarga de ESTA
+  llamada en el temporal del servidor, que se borra siempre. Nunca lanza. }
+function ConversionDelIde(const ABytes: TArray<Byte>; AATexto: Boolean; out ASalida: TArray<Byte>;
+  out AClase, AMensaje: string; out ALinea: Integer): string;
+
 implementation
 
 uses
@@ -373,8 +393,12 @@ begin
     if not ValorDeArgumento(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
   AOrden := '"' + AExe + '"' + Arg('--path', APeticion.Path);
+  // el conversor (V71) ni carga ni pinta: los bytes de --path, en --out
+  if APeticion.Convierte <> '' then
+    AOrden := AOrden + ' --convert ' + (if APeticion.Convierte = 'text' then 'text' else 'binary') +
+      Arg('--out', APeticion.Salida)
   // el juez no pinta: sin --out (3.11)
-  if APeticion.Escribe then
+  else if APeticion.Escribe then
   begin
     AOrden := AOrden + ' --writeback on';
     if APeticion.Carpeta <> '' then
@@ -568,8 +592,13 @@ begin
       Result.NoCarga := True;
       P := V.IndexOf(FR_PARTES_SEP);
       if P > 0 then
+      begin
+        Result.ClaseDeLaParada := V.Substring(0, P);
         Result.Parada := PartesDeLectura(V.Substring(P + 1));
-    end;
+      end;
+    end
+    else if Es(FR_LINE) then
+      Result.LineaDeLaParada := StrToIntDef(V, 0);
   end;
 end;
 
@@ -949,10 +978,27 @@ var
   Exe, Nombre, Orden, Salida, Fallo, CwdPropio: string;
   Codigo: Cardinal;
   Reloj: TStopwatch;
+
+  // el fallo del ayudante con su por que: no dibujo el form o, con --convert,
+  // no lo convirtio (V71: ahi el form es una copia nuestra, y se nombra el
+  // ayudante); uno que ya lleva etiqueta sale tal cual
+  function FalloDelAyudante(const APorQue: string): string;
+  begin
+    if APeticion.Convierte <> '' then
+      Result := MsgEnvuelve(SR_DSGN_CONVERSOR_FALLO_FMT, APorQue, [Nombre, APorQue])
+    else
+      Result := MsgEnvuelve(SR_DESIGNER_RENDER_FALLO_FMT, APorQue, [TPath.GetFileName(APeticion.Path), APorQue]);
+  end;
+
 begin
   Result := Default(TRespuestaRender);
   CwdPropio := '';
-  Result.Fallo := LiteralesDeRenderDenegados(APeticion);
+  // el conversor (V71) no carga el form: ningun literal suyo se resuelve, y
+  // juzgarlos leeria la copia por TStyleDoc, que de un binario le pregunta a
+  // el mismo - medido con el mutante: una recursion de cientos de carpetas de
+  // descarga hasta el plazo
+  if APeticion.Convierte = '' then
+    Result.Fallo := LiteralesDeRenderDenegados(APeticion);
   if Result.Fallo <> '' then
     Exit;
   Exe := FormRenderExe(APeticion.Framework, Nombre);
@@ -1014,6 +1060,10 @@ begin
   // Ignore se saltaba, solo "Stream read error" (DSGN-061 de la 1.20, Hermes)
   if Result.NoCarga then
   begin
+    // con --convert, lo que no se convirtio es el contenido: lo dice quien la
+    // pidio, con la clase, el mensaje y la linea (ConversionDelIde)
+    if APeticion.Convierte <> '' then
+      Exit;
     var Doc: TStyleDoc := nil;
     try
       try
@@ -1037,16 +1087,15 @@ begin
   end
   else if Result.Error <> '' then
     // con etiqueta (un estado que no existe, el vigia) sale tal cual
-    Result.Fallo := MsgEnvuelve(SR_DESIGNER_RENDER_FALLO_FMT, Result.Error,
-      [TPath.GetFileName(APeticion.Path), Result.Error])
+    Result.Fallo := FalloDelAyudante(Result.Error)
   else if (Codigo = STATUS_DLL_NOT_FOUND_) or (Codigo = STATUS_ENTRYPOINT_NOT_FOUND_) or
     (Codigo = STATUS_INVALID_IMAGE_FORMAT_) then
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_SIN_BPL_FMT, [Nombre, APeticion.Bds, Codigo])
   else if Result.MsTotal >= RENDER_TIEMPO_MS then
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_TIEMPO_FMT, [Nombre, RENDER_TIEMPO_MS div 1000])
   else
-    Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_FALLO_FMT, [TPath.GetFileName(APeticion.Path),
-      MsgFmt(SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT, [Codigo, Copy(Salida.Trim, 1, 300)])]);
+    Result.Fallo := FalloDelAyudante(MsgFmt(SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT,
+      [Codigo, Copy(Salida.Trim, 1, 300)]));
 end;
 
 function PeticionDeRender(const APath, AFramework: string): TPeticionRender;
@@ -1062,6 +1111,56 @@ begin
   var Pas := UnidadDeDesigner(APath);
   if ExisteYSeLee(Pas) then
     Result.Raiz := RaizParaElRender(APath);
+end;
+
+function ConversionDelIde(const ABytes: TArray<Byte>; AATexto: Boolean; out ASalida: TArray<Byte>;
+  out AClase, AMensaje: string; out ALinea: Integer): string;
+var
+  Pet: TPeticionRender;
+  Dir: string;
+  R: TRespuestaRender;
+begin
+  Result := '';
+  ASalida := nil;
+  AClase := '';
+  AMensaje := '';
+  ALinea := 0;
+  // una carpeta de descarga de ESTA llamada en el temporal del servidor (EL
+  // nombrador, como la propuesta del juez): los bytes los da quien llama, ya
+  // leidos por su puerta, y el ayudante solo ve esta copia
+  Dir := NuevaCarpetaDescarga(ServerTempDir(CAPTURE_SUB_DESIGNER));
+  try
+    try
+      CrearCarpeta(Dir);
+      Pet := Default(TPeticionRender);
+      // el conversor es la RTL de 32 bits, la misma en los dos ayudantes
+      Pet.Framework := 'vcl';
+      Pet.Path := TPath.Combine(Dir, 'form.dfm');
+      Pet.Salida := TPath.Combine(Dir, 'convertido');
+      Pet.Convierte := (if AATexto then 'text' else 'binary');
+      EscribeBytes(Pet.Path, ABytes, ltTemporal);
+      R := CorreRender(Pet);
+      if R.NoCarga then
+      begin
+        AClase := R.ClaseDeLaParada;
+        AMensaje := R.Parada.Texto;
+        ALinea := R.LineaDeLaParada;
+        Exit;
+      end;
+      if R.Fallo <> '' then
+        Exit(R.Fallo);
+      ASalida := LeeBytes(Pet.Salida, [ltTemporal]);
+    except
+      on E: Exception do
+        Result := MsgExcepcion(E.ClassName, E.Message);
+    end;
+  finally
+    try
+      BorraArbol(Dir); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
+    except
+      // limpiar no puede tumbar la respuesta
+    end;
+  end;
 end;
 
 { La propuesta ATexto para APath, escrita en una carpeta de descarga de ESTA

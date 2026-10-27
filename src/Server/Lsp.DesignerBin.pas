@@ -2,8 +2,10 @@
 
 { Un .dfm BINARIO, y el camino de ida y vuelta a texto que usa el propio IDE
   ("Ver como texto" y guardar): las funciones de System.Classes que Delphi
-  trae de serie, sin procesos ni ficheros temporales. Los .fmx son siempre
-  texto: esto es solo VCL.
+  trae de serie, corridas en el ayudante de 32 bits como en el IDE - en este
+  servidor, Win64, un flotante perdia sus ultimas cifras (V71 de la 1.23.1;
+  Lsp.FormRender.ConversionDelIde) -. Los .fmx son siempre texto: esto es
+  solo VCL.
 
   Dos formas binarias, medidas con convert.exe (2026-09-24):
     - el fichero REAL en disco envuelve el flujo en una cabecera de recurso de
@@ -34,12 +36,15 @@ function IsBinaryDesignerBytes(const ABytes: TBytes): Boolean;
 function IsBinaryDesignerFile(const APath: string): Boolean;
 { Binario (cualquiera de las dos formas) -> texto, como "Ver como texto" del
   IDE. Devuelve '' si bien; si no, el motivo (fichero danado, no es un
-  designer). El texto sale ASCII con CRLF, que es lo que escribe convert.exe. }
+  designer, o no se le pudo preguntar al conversor). El texto sale ASCII con
+  CRLF, byte a byte lo que escribe convert.exe: lo convierte el ayudante de
+  32 bits (V71), y cada texto se guarda por la huella de sus bytes. }
 function DesignerBinaryToText(const ABytes: TBytes; out AText: string): string;
 function DesignerFileToText(const APath: string; out AText: string): string;
 { Texto -> binario CON envoltorio de recurso (la forma en disco del IDE).
   ATexto son los BYTES del form de texto tal como estan en disco, y el parser
-  los lee TAL CUAL, como el IDE (DesignerAFlujo): el binario sale como el que
+  los lee TAL CUAL, como el IDE, en el ayudante de 32 bits (V71: el valor de
+  un flotante redondeado a Double eran otros bytes): el binario sale como el que
   compila dcc de ese mismo fichero (medido el 13-oct: un UTF-8 con BOM con
   caracteres fuera de la ANSI entra entero; uno SIN BOM lo lee en la ANSI de
   la maquina, tambien dcc). Un form de texto en UTF-16 o UTF-32 no lo lee, y
@@ -276,10 +281,28 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.RegularExpressions,
+  System.SyncObjs,
   System.Generics.Collections,
   Lsp.Pascal, // EL identificador: la linea de una propiedad
   Lsp.DesignerForma, // la forma del fichero: texto, TPF0 o recurso
+  Lsp.FormRender, // ConversionDelIde: EL conversor, en el ayudante de 32 bits
+  Lsp.ShaCache, // Sha256DeBytes: la huella de un binario ya convertido
   Lsp.Texts;
+
+const
+  // lo que guardan los textos de binario ya convertidos, en caracteres: al
+  // pasarlo se vacia entera
+  TOPE_TEXTOS_DE_BINARIO = 32 * 1024 * 1024;
+
+var
+  // EL texto de cada binario ya convertido, por la huella de sus bytes: la
+  // conversion es funcion de ellos, y cada una lanza el ayudante (~0,1 s). La
+  // puerta de literales del juez lee todos los hermanos de un form en cada
+  // insert, set o preview: en una carpeta de forms binarios se pagaba uno por
+  // hermano y llamada (V71)
+  GTextosDeBinario: TDictionary<string, string>;
+  GTextosTamano: Int64;
+  GTextosLock: TCriticalSection;
 
 function SangriaDeNivel(ANivel: Integer): string;
 begin
@@ -1452,18 +1475,45 @@ begin
 end;
 
 function DesignerBinaryToText(const ABytes: TBytes; out AText: string): string;
+var
+  Huella, Clase, Mensaje: string;
+  Salida: TBytes;
+  Linea: Integer;
 begin
   Result := '';
   AText := '';
   if DesignerShapeOf(ABytes) = dsText then
     Exit(MsgText(SR_DSGN_NO_ES_DESIGNER_BINARIO));
-  // EL conversor de la casa (Lsp.DesignerForma), el del renderizador tambien;
-  // aqui, sus mensajes
+  Huella := Sha256DeBytes(ABytes);
+  GTextosLock.Enter;
   try
-    AText := DesignerBinarioATexto(ABytes);
-  except
-    on E: Exception do
-      Exit(MsgFmt(SR_DSGN_BINARIO_DANADO_FMT, [E.ClassName, E.Message]));
+    if GTextosDeBinario.TryGetValue(Huella, AText) then
+      Exit;
+  finally
+    GTextosLock.Leave;
+  end;
+  // EL conversor de la casa (Lsp.DesignerForma) en el ayudante de 32 bits, el
+  // proceso del IDE (V71); aqui, sus mensajes
+  Result := ConversionDelIde(ABytes, True, Salida, Clase, Mensaje, Linea);
+  if Result <> '' then
+    Exit;
+  if (Clase <> '') or (Mensaje <> '') then
+    Exit(MsgFmt(SR_DSGN_BINARIO_DANADO_FMT, [Clase, Mensaje]));
+  AText := TEncoding.UTF8.GetString(Salida);
+  GTextosLock.Enter;
+  try
+    if GTextosTamano + Length(AText) > TOPE_TEXTOS_DE_BINARIO then
+    begin
+      GTextosDeBinario.Clear;
+      GTextosTamano := 0;
+    end;
+    if not GTextosDeBinario.ContainsKey(Huella) then
+    begin
+      GTextosDeBinario.Add(Huella, AText);
+      Inc(GTextosTamano, Length(AText));
+    end;
+  finally
+    GTextosLock.Leave;
   end;
 end;
 
@@ -1523,12 +1573,11 @@ end;
 
 function DesignerTextToBinary(const ATexto: TBytes; out ABytes: TBytes): string;
 var
-  Entrada: TBytesStream;
-  Salida: TMemoryStream;
   Lineas: TStringList;
   K: TEncKind;
+  Clase, Mensaje: string;
+  LineaDelError: Integer;
 begin
-  Result := '';
   ABytes := nil;
   // Los BYTES de disco, TAL CUAL, al parser del IDE: el decide (norma 6). Aqui
   // habia un camino propio - el texto ya decodificado, recodificado a ANSI -
@@ -1538,63 +1587,58 @@ begin
   // 'Configuración' SIN BOM sale con la ó partida en dos letras -C3 B3 leidos
   // como ANSI-, como ya salia por el servidor). Un form ancho (UTF-16 /
   // UTF-32) se pasaba antes a UTF-8 o a UTF-16 y se convertia, y el IDE no lo
-  // carga: lo niega quien llama (FormAnchoQueNoCarga; A28 de la 1.23)
-  Entrada := TBytesStream.Create(ATexto);
-  Salida := TMemoryStream.Create;
+  // carga: lo niega quien llama (FormAnchoQueNoCarga; A28 de la 1.23). Y en
+  // el ayudante de 32 bits, el proceso del IDE: aqui el valor de un flotante,
+  // redondeado a Double, eran otros bytes (V71)
+  Result := ConversionDelIde(ATexto, False, ABytes, Clase, Mensaje, LineaDelError);
+  if (Result <> '') or ((Clase = '') and (Mensaje = '')) then
+    Exit;
+  // si no lo lee y es por un NOMBRE con letras fuera de ASCII (BotonÑ, de un
+  // objeto, de su clase o de una propiedad) en un form que el parser lee en
+  // ANSI - salia su 'Identifier expected', y dcc si lo lee guardandolo en
+  // UTF-8 (medido 9-oct, 4.1 de la 1.18.0) -, se dice cual, donde y por que.
+  // Solo cuando el parser ya dijo que no: antes se miraba primero y se negaba
+  // lo que el parser si lee (un UTF-8 con BOM). Y solo SIN BOM y con el
+  // nombre en la linea que el parser nombra (la da el ayudante, leida con el
+  // formato del mensaje en SU idioma): con BOM el parser lee esos nombres
+  // (TParser en UTF-8), y un error de otra linea (una cadena sin cerrar)
+  // quedaba tapado por DSGN-120 (R2 del revisor propio del punto 4 de la
+  // 1.18.2). Decodificado como lo lee el parser: la ANSI de la maquina
+  if KindDeBom(ATexto, K) or (LineaDelError <= 0) then
+    Exit(MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [Clase, Mensaje]));
+  Lineas := TStringList.Create;
   try
     try
-      ObjectTextToResource(Entrada, Salida);
+      Lineas.Text := DecodeBytes(ATexto, ekAnsi);
     except
-      on E: Exception do
-      begin
-        // si no lo lee y es por un NOMBRE con letras fuera de ASCII (BotonÑ,
-        // de un objeto, de su clase o de una propiedad) en un form que el
-        // parser lee en ANSI - salia su 'Identifier expected', y dcc si lo
-        // lee guardandolo en UTF-8 (medido 9-oct, 4.1 de la 1.18.0) -, se
-        // dice cual, donde y por que. Solo cuando el parser ya dijo que no:
-        // antes se miraba primero y se negaba lo que el parser si lee (un
-        // UTF-8 con BOM). Y solo SIN BOM y con el nombre en la linea que el
-        // parser nombra: con BOM el parser lee esos nombres (TParser en
-        // UTF-8), y un error de otra linea (una cadena sin cerrar) quedaba
-        // tapado por DSGN-120 (R2 del revisor propio del punto 4 de la
-        // 1.18.2). Decodificado como lo lee el parser: la ANSI de la maquina
-        var LineaDelError := LineaDeErrorDelParser(E.Message);
-        if KindDeBom(ATexto, K) or (LineaDelError <= 0) then
-          Exit(MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
-        Lineas := TStringList.Create;
-        try
-          try
-            Lineas.Text := DecodeBytes(ATexto, ekAnsi);
-          except
-            Lineas.Clear; // lo que no se decodifica no nombra nada: el mensaje del parser
-          end;
-          var Fm := LineasDeForm(Lineas.ToStringArray);
-          var I := LineaDelError - 1;
-          if I <= High(Fm) then
-          begin
-            var Nombre := '';
-            if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].Nombre) then
-              Nombre := Fm[I].Nombre
-            else if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].ClaseObj) then
-              Nombre := Fm[I].ClaseObj
-            else if (Fm[I].Clase = clfPropiedad) and not IsAscii(Fm[I].Prop) then
-              Nombre := Fm[I].Prop;
-            if Nombre <> '' then
-              Exit(MsgFmt(SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT, [Nombre, I + 1]));
-          end;
-        finally
-          Lineas.Free;
-        end;
-        Exit(MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
-      end;
+      Lineas.Clear; // lo que no se decodifica no nombra nada: el mensaje del parser
     end;
-    SetLength(ABytes, Salida.Size);
-    if Salida.Size > 0 then
-      Move(Salida.Memory^, ABytes[0], Salida.Size);
+    var Fm := LineasDeForm(Lineas.ToStringArray);
+    var I := LineaDelError - 1;
+    if I <= High(Fm) then
+    begin
+      var Nombre := '';
+      if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].Nombre) then
+        Nombre := Fm[I].Nombre
+      else if (Fm[I].Clase = clfObjeto) and not IsAscii(Fm[I].ClaseObj) then
+        Nombre := Fm[I].ClaseObj
+      else if (Fm[I].Clase = clfPropiedad) and not IsAscii(Fm[I].Prop) then
+        Nombre := Fm[I].Prop;
+      if Nombre <> '' then
+        Exit(MsgFmt(SR_DSGN_NOMBRE_NO_ASCII_BINARIO_FMT, [Nombre, I + 1]));
+    end;
   finally
-    Entrada.Free;
-    Salida.Free;
+    Lineas.Free;
   end;
+  Result := MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [Clase, Mensaje]);
 end;
+
+initialization
+  GTextosDeBinario := TDictionary<string, string>.Create;
+  GTextosLock := TCriticalSection.Create;
+
+finalization
+  GTextosLock.Free;
+  GTextosDeBinario.Free;
 
 end.
