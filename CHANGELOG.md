@@ -188,6 +188,11 @@ the MCP `initialize` response (`serverInfo.version`).
   `delphi_create` writes composed sixteen of its settings by hand and six more
   by copying the helper's body; all of them now go through that helper. The
   five kinds of project come out byte for byte as before.
+- **An edit's new lines are split once.** `delphi_edit` split the new text
+  into lines six times over, for the duplicate-line note, the echo, the brace
+  check and the routine-placement check. Now it splits once. In two of those
+  places a line left blank counted as nothing written; it now counts as the
+  one line it is.
 
 ## [1.23.0] - 2026-10-26
 

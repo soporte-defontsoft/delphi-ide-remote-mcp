@@ -3664,9 +3664,7 @@ begin
   Result := MsgFmt(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
   // el fichero que queda, y lo escrito en el: las lineas nuevas desde Hit (un
   // new vacio quita el bloque: solo la juntura)
-  var Escritas := Length(NewLines);
-  if (Escritas = 1) and (NewLines[0] = '') then
-    Escritas := 0;
+  var Escritas := Length(Nuevas);
   for var Aviso in AvisosDeLlaves(APath, Joined, Hit, Escritas) do
     Result := Result + #10 + Aviso;
   // (el form lo juzga quien agrupa, una vez, sobre lo que quedo escrito: su
@@ -6149,17 +6147,21 @@ begin
     var Nuevas: TArray<string> := nil;
     if not ADelete then
     begin
+      // un Replacement vacio deja la linea EN BLANCO (borrarla es delete);
+      // ''.Split da un array vacio, que el compositor tomaria por borrar.
+      // Partido UNA vez: el aviso de duplicada, el eco, las llaves y la
+      // insercion en un metodo cuentan de aqui (V88 de la 1.23.1: se partia
+      // seis veces, y en dos una linea en blanco escrita contaba cero)
+      if Replacement = '' then
+        Nuevas := ['']
+      else
+        Nuevas := Replacement.Split([#10]);
       // An insert that repeats the line above or below is almost always the
       // anchor line sent twice by mistake: it compiles, it is invisible, and
       // it cost an agent eight calls to find and undo (field round 10).
       if not ADelete and (Replacement <> '') then
       begin
-        var LastNew := Replacement;
-        if Replacement.Contains(#10) then
-        begin
-          var Parts := Replacement.Split([#10]);
-          LastNew := Parts[High(Parts)];
-        end;
+        var LastNew := Nuevas[High(Nuevas)];
         if (HitIdx > 0) and (Lines[HitIdx - 1].Trim <> '') and
            not EsSoloEstructura(NewFirst) and
            (Lines[HitIdx - 1].Trim = NewFirst.Trim) then
@@ -6172,14 +6174,8 @@ begin
            not EsSoloEstructura(LastNew) and
            (Lines[HitIdx + 1].Trim = LastNew.Trim) then
           Warnings.Add(MsgFmt(SN_EDIT_DUP_BELOW_FMT,
-            [HitIdx + Length(Replacement.Split([#10])) + 1, LastNew.Trim]));
+            [HitIdx + Length(Nuevas) + 1, LastNew.Trim]));
       end;
-      // un Replacement vacio deja la linea EN BLANCO (borrarla es delete);
-      // ''.Split da un array vacio, que el compositor tomaria por borrar
-      if Replacement = '' then
-        Nuevas := ['']
-      else
-        Nuevas := Replacement.Split([#10]);
     end;
 
     var Joined: string;
@@ -6280,7 +6276,7 @@ begin
       // insercion de diez lineas se verificaba viendo tres.
       var FinC := Idx + 2;
       if Replacement <> '' then
-        FinC := Idx + Length(Replacement.Split([#10])) + 1;
+        FinC := Idx + Length(Nuevas) + 1;
       if FinC > High(AfterLines) then FinC := High(AfterLines);
       var SbC := TStringBuilder.Create;
       try
@@ -6319,9 +6315,7 @@ begin
       Warnings.Add(MsgText(SN_EDIT_FIRMA_MOJIBAKE_NUEVO));
     // en el fichero ESCRITO (AfterText), lo que toca lo escrito: las lineas de
     // Replacement desde HitIdx, o la juntura si la edicion solo quito
-    var Escritas := Length(Replacement.Split([#10]));
-    if ADelete then
-      Escritas := 0;
+    var Escritas := Length(Nuevas); // con delete no hay: la juntura
     for var Aviso in AvisosDeLlaves(APath, AfterText, HitIdx, Escritas) do
       Warnings.Add(Aviso);
     // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6).
@@ -6345,10 +6339,9 @@ begin
       // declaraciones seguidas en un interface (la de arriba acaba en ');')
       // avisaban (medido el 18-oct-2026)
       var AfterVista := LineasDelTexto(CodigoPascal(AfterText));
-      var NewLines := Replacement.Split([#10]);
       var Lector: TUnidadPas := nil;
       try
-        for var J := 0 to High(NewLines) do
+        for var J := 0 to High(Nuevas) do
         begin
           if (Idx < 0) or (Idx + J > High(AfterVista)) then
             Break;
@@ -6375,7 +6368,7 @@ begin
             Donde := MsgText(SF_EDIT_TRAS_LAS_DECLARACIONES);
           if Donde <> '' then
           begin
-            Warnings.Add(MsgFmt(SN_EDIT_POSIBLE_INSERCION_METODO_FMT, [Copy(NewLines[J], 1, 60), Donde]));
+            Warnings.Add(MsgFmt(SN_EDIT_POSIBLE_INSERCION_METODO_FMT, [Copy(Nuevas[J], 1, 60), Donde]));
             Break;
           end;
         end;
