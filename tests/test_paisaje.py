@@ -471,6 +471,17 @@ REGLAS = [
      'las dos por el mismo motor; el prefijo, aqui. StartsText/SameText pliegan '
      'con el locale y daban por dentro o iguales lo que NTFS separa: se leia y '
      'escribia fuera de la jaula (medido contra r1222ci)'),
+    # ...y su forma ESCRITA a mano, la que esa fila no veia (V81 de la 1.23.1): dos
+    # rutas pasadas a minusculas y comparadas por prefijo. ToLower lleva el signo
+    # Kelvin (U+212A) a 'k' y NTFS no: IncludeFor escribia 'U.pas' de una unidad de
+    # otra carpeta y RelToRoot quitaba una raiz que no era la suya (medido). Un
+    # prefijo de TEXTO contra un literal ('file:///') no es esto
+    ('un "dentro de" de dos rutas por texto',
+     r'\.ToLower\.StartsWith\(\s*[\w.\[\]()]+\.ToLower\s*\)|LowerCase\([^)]*\)\.StartsWith\(\s*LowerCase\(|'
+     r'\.ToUpper\.StartsWith\(\s*[\w.]+\.ToUpper',
+     [],
+     'RutaDentroDe (Lsp.Rutas): el "dentro de" de dos rutas es el del sistema de ficheros; '
+     'IncludeFor y RelToRoot lo hacian con .ToLower.StartsWith (V81 de la 1.23.1)'),
     # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
     # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
     # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
@@ -1366,6 +1377,7 @@ PLANTADO = {
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",
+    'un "dentro de" de dos rutas por texto': "  if Full.ToLower.StartsWith(Base.ToLower) then X := 1;",
     'la linea de fallo del nodo': "      Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",

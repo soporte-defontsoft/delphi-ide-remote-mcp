@@ -98,6 +98,15 @@ the MCP `initialize` response (`serverInfo.version`).
   unit can still add `Messages` beside `Winapi.Messages` (dcc compiles it,
   measured). Two names of the same unit in one `adduses` go in once, and
   `removeuses=Forms` removes the `Vcl.Forms` that is there.
+- **`add-unit` writes the path of a unit that lives in another folder, and the
+  walkers skip only what hangs from the root.** The path a project lists for a
+  unit (`IncludeFor`) and the part of a path below a root (`RelToRoot`) were
+  decided by lower-casing both paths and comparing the text. Lower-casing turns
+  the Kelvin sign (U+212A) into `k`, while NTFS keeps a folder named with it
+  apart from one named with `k`. So a unit of `Pk` added to a project of
+  `P<Kelvin>` was written as `UKa in 'UKa.pas'`, and the build answered
+  `F1026 File not found`. Both now ask the server's path judge (`RutaDentroDe`),
+  which compares as the file system does.
 
 ## [1.23.0] - 2026-10-26
 

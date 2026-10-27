@@ -32,6 +32,7 @@ type
     [Test] procedure ElDentroDeEsElDelDisco;
     [Test] procedure LosLinguisticosNoSonElDisco;
     [Test] procedure ElDentroDeRespetaElLimite;
+    [Test] procedure LosDentroDePorTextoSonElDisco;
   end;
 
 implementation
@@ -42,6 +43,8 @@ uses
   System.StrUtils,     // StartsText, SameText (los lingueisticos que se miden)
   Winapi.Windows,
   Lsp.Rutas,           // RutaDentroDe (el juez nuevo); SameFileName es de la RTL
+  Lsp.ProjectUnits,    // IncludeFor: la ruta que se escribe en el .dpr (V81)
+  Lsp.References,      // RelToRoot: lo que cuelga de una raiz (V81)
   Lsp.Casa;            // FragmentoUnico
 
 type
@@ -183,6 +186,30 @@ begin
   ForceDirectories(Sub);
   Assert.IsTrue(RutaDentroDe(Raiz, Sub), 'sub SI esta dentro de root');
   Assert.IsTrue(RutaDentroDe(Raiz, Raiz), 'una ruta esta dentro de si misma (o es ella)');
+end;
+
+procedure TRutasDelDiscoTests.LosDentroDePorTextoSonElDisco;
+var
+  Kelvin, Ka: string;
+begin
+  // V81 de la 1.23.1: dos "dentro de" que quedaron por TEXTO (.ToLower.StartsWith),
+  // fuera de la jaula. Medido el 27-oct: el signo Kelvin (U+212A) lo pasa ToLower a
+  // 'k', y para el disco P<Kelvin> y Pk son DOS carpetas - aqui el texto se equivoca
+  // hacia DENTRO -
+  Kelvin := TPath.Combine(FBase, 'P' + Letra($212A));
+  Ka := TPath.Combine(FBase, 'Pk');
+  ForceDirectories(Kelvin);
+  ForceDirectories(Ka);
+  Assert.IsFalse(MismaEntradaDisco(Kelvin, Ka), 'el disco: P<Kelvin> y Pk son dos carpetas');
+  // IncludeFor escribia 'U.pas' (al lado del .dpr) de una unidad que esta en otra
+  Assert.AreNotEqual('U.pas', IncludeFor(TPath.Combine(Kelvin, 'Amb.dpr'), TPath.Combine(Ka, 'U.pas')),
+    'IncludeFor: la unidad de Pk no esta junto al .dpr de P<Kelvin>');
+  // RelToRoot quitaba la raiz de una ruta que no cuelga de ella
+  Assert.AreEqual(TPath.Combine(Ka, 'Win32\a.pas'), RelToRoot(TPath.Combine(Ka, 'Win32\a.pas'), Kelvin),
+    'RelToRoot: lo de Pk no cuelga de P<Kelvin>');
+  // ...y lo que si cuelga, igual que antes
+  Assert.AreEqual('Sub\U.pas', IncludeFor(TPath.Combine(Ka, 'Amb.dpr'), TPath.Combine(Ka, 'Sub\U.pas')));
+  Assert.AreEqual('\Win32\a.pas', RelToRoot(TPath.Combine(Ka, 'Win32\a.pas'), Ka));
 end;
 
 initialization

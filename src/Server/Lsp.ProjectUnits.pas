@@ -388,7 +388,10 @@ var
 begin
   Base := IncludeTrailingPathDelimiter(TPath.GetDirectoryName(TPath.GetFullPath(ADpr)));
   Full := TPath.GetFullPath(APas);
-  if Full.ToLower.StartsWith(Base.ToLower) then
+  // "dentro de" por EL juez de rutas (Lsp.Rutas, el del disco): con
+  // .ToLower.StartsWith la unidad de Pk se escribia 'U.pas' junto a un .dpr de
+  // P<Kelvin>, que es otra carpeta (V81 de la 1.23.1, medido)
+  if RutaDentroDe(Base, Full) then
     Result := Full.Substring(Length(Base))
   else if SameText(TPath.GetPathRoot(Full), TPath.GetPathRoot(Base)) then
     Result := ExtractRelativePath(Base, Full) // ..\..\shared\X.pas, the IDE's form
