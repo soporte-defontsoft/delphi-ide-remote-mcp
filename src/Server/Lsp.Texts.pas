@@ -6112,6 +6112,11 @@ const
 
   SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT =
     'exit code %d and no answer (%s)';
+  { el conversor (V71) que no contesta a tiempo: no carga el form, asi que
+    "algo del form espera" (DSGN-062) no es su causa (V102 de la 1.23.1).
+    %d = los segundos }
+  SF_DSGN_CONVERSOR_TIEMPO_FMT =
+    'it did not answer in %d s and was stopped';
 
   SR_DESIGNER_FRAMEWORK =
     '[DSGN-002 INVALID_PARAM] framework must be vcl or fmx.';

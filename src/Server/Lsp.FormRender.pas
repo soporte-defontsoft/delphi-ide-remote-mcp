@@ -1091,6 +1091,9 @@ begin
   else if (Codigo = STATUS_DLL_NOT_FOUND_) or (Codigo = STATUS_ENTRYPOINT_NOT_FOUND_) or
     (Codigo = STATUS_INVALID_IMAGE_FORMAT_) then
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_SIN_BPL_FMT, [Nombre, APeticion.Bds, Codigo])
+  else if (Result.MsTotal >= RENDER_TIEMPO_MS) and (APeticion.Convierte <> '') then
+    // el conversor no carga el form: "algo del form espera" no es su causa (V102)
+    Result.Fallo := FalloDelAyudante(MsgFmt(SF_DSGN_CONVERSOR_TIEMPO_FMT, [RENDER_TIEMPO_MS div 1000]))
   else if Result.MsTotal >= RENDER_TIEMPO_MS then
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_TIEMPO_FMT, [Nombre, RENDER_TIEMPO_MS div 1000])
   else
@@ -1132,10 +1135,11 @@ begin
   try
     try
       CrearCarpeta(Dir);
-      Pet := Default(TPeticionRender);
-      // el conversor es la RTL de 32 bits, la misma en los dos ayudantes
-      Pet.Framework := 'vcl';
-      Pet.Path := TPath.Combine(Dir, 'form.dfm');
+      // la peticion por SU nombrador (PeticionDeRender): compuesta a mano iba sin
+      // la version del IDE, y DSGN-063 salia sin ella (V102 de la 1.23.1). El
+      // conversor es la RTL de 32 bits, la misma en los dos ayudantes; junto a
+      // la copia no hay .pas que leer
+      Pet := PeticionDeRender(TPath.Combine(Dir, 'form.dfm'), 'vcl');
       Pet.Salida := TPath.Combine(Dir, 'convertido');
       Pet.Convierte := (if AATexto then 'text' else 'binary');
       EscribeBytes(Pet.Path, ABytes, ltTemporal);
