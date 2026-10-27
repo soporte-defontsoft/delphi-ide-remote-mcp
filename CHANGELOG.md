@@ -162,6 +162,15 @@ the MCP `initialize` response (`serverInfo.version`).
   is the folder where compiled units go (`-NU`), which the IDE gives and we did
   not. We now give one, an empty folder that belongs to the server and never
   the project's. The engine writes nothing in it.
+- **A folder reached through a link is no longer skipped for having a name
+  like another's.** Listing, searching and copying a tree kept the real paths
+  of the links already followed in a list compared with the user's language
+  rules, which take "ss" and "ß", or "k" and the Kelvin sign, for the same
+  name, while NTFS keeps them as different folders. With two links to two such
+  folders, `delphi_list` and `delphi_search` skipped the second without a word,
+  and `delphi_move copy=true` answered COPIED without copying it. Those keys now
+  join exactly what the disk joins. `delphi_move` also stopped taking two such
+  destinations for the same one.
 
 ### Changed
 

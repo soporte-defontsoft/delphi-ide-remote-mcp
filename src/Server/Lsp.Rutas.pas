@@ -79,6 +79,18 @@ function EnLugar(const APath, ALugar: string;
   Solo yerran hacia "fuera" / "distintas": niegan de mas, nunca de menos. }
 function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+{ LA CLAVE de una ruta en un diccionario o en un conjunto de "ya visto": dos
+  rutas tienen la misma si y solo si el sistema de ficheros las da por la
+  misma entrada (el juez de RutaDentroDe y SameFileName). Se compara EXACTA
+  (un TDictionary; nunca un TStringList sin mayusculas, que vuelve a comparar
+  con el locale). Medido el 27-oct-2026 contra 35 nombres (V82 de la 1.23.1):
+  AnsiCompareText - el de un TStringList sin mayusculas, IndexText, MatchText -
+  da por iguales 22 pares que NTFS separa (ss y la eszett, k y el signo
+  Kelvin, Ae y la ae ligada): WalkFiles se saltaba en silencio la segunda de
+  dos carpetas enlazadas asi, y CopiaArbol no la copiaba. LowerCase (solo
+  ASCII) separa lo que NTFS junta (la ene y su mayuscula). Las mayusculas
+  invariantes coinciden con el disco en los 35. }
+function ClaveDeRuta(const ARuta: string): string;
 
 { AReal (una ruta REAL, RealPath) esta en alguno de ALugares, cada uno por
   SU ruta real: la comparacion de los lugares de las puertas (Lsp.Patch) y de
@@ -574,6 +586,12 @@ begin
     if SameFileName(ARuta, L) then
       Exit(True);
   Result := False;
+end;
+
+function ClaveDeRuta(const ARuta: string): string;
+begin
+  // LCMapString con LOCALE_INVARIANT y sin casing de ningun idioma
+  Result := ARuta.ToUpperInvariant;
 end;
 
 function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;

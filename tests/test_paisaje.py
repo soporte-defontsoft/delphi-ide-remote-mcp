@@ -520,6 +520,17 @@ REGLAS = [
      [],
      'RutaDentroDe (Lsp.Rutas): el "dentro de" de dos rutas es el del sistema de ficheros; '
      'IncludeFor y RelToRoot lo hacian con .ToLower.StartsWith (V81 de la 1.23.1)'),
+    # ...y la CLAVE de una ruta real escrita a mano (V82 de la 1.23.1): los tres recorredores de
+    # Lsp.Guard guardaban LowerCase(RealPath(..)) en un TStringList sin mayusculas, que compara con
+    # el locale y daba ss y la eszett por la misma: WalkFiles se saltaba la segunda carpeta y
+    # CopiaArbol no la copiaba (medido). La clave es ClaveDeRuta, en un TDictionary
+    ('la clave de una ruta real a mano',
+     r'\b(?:Ansi)?(?:Lower|Upper)Case\(\s*(?:SinBarraFinal\(\s*)?RealPath\(|'
+     r'\bRealPath\([^()]*\)\)?\.To(?:Lower|Upper)\b',
+     [],
+     'ClaveDeRuta (Lsp.Rutas): la clave que junta lo que junta el disco (las mayusculas invariantes), '
+     'comparada exacta; un LowerCase separa la ene de su mayuscula y un TStringList sin mayusculas junta '
+     'ss y la eszett (V82 de la 1.23.1)'),
     # la linea "  Could not capture: <motivo>" del nodo estaba a mano en cinco sitios y la sexta
     # salida (NODE-028, sin bus de sesion) no la llevaba: el servidor decia DESK-018 "el nodo no
     # dijo por que" (C13 de los revisores de la 1.19.0; V26 de la 1.23, 24-oct-2026)
@@ -1416,6 +1427,7 @@ PLANTADO = {
     'el SHA-256 fuera de su casa': "  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);",
     'la clave del IDE leida sin su lector': "  if R.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then",
     'partir en lineas a mano': "  for L in AOutput.Split([#13#10, #10]) do X := 1;",
+    'la clave de una ruta real a mano': "  Vistos.Add(LowerCase(RealPath(Sub)));",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",

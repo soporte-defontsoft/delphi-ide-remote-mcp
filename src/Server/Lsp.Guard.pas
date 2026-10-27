@@ -3679,7 +3679,8 @@ end;
 function EnlaceAjenoEn(const ADir: string; AEscribe: Boolean;
   const AOmite: TOmiteAlCopiar): string;
 var
-  Vistos: TStringList; // rutas REALES ya recorridas: corta los ciclos de enlaces
+  // rutas REALES ya recorridas, por ClaveDeRuta: corta los ciclos de enlaces
+  Vistos: TDictionary<string, Boolean>;
   Ajeno, Fallo: string;
   // una variable, no una rutina anidada: la captura el aviso de enlace del
   // recorredor (E2555) y por ella se llama a si misma detras de un enlace
@@ -3687,10 +3688,9 @@ var
 begin
   Ajeno := '';
   Fallo := '';
-  Vistos := TStringList.Create;
+  Vistos := TDictionary<string, Boolean>.Create;
   try
-    Vistos.Sorted := True;
-    Vistos.Add(LowerCase(SinBarraFinal(RealPath(ADir))));
+    Vistos.Add(ClaveDeRuta(SinBarraFinal(RealPath(ADir))), True);
     Recorre :=
       procedure(D: string)
       begin
@@ -3726,10 +3726,10 @@ begin
             // detras de un enlace admitido puede haber otro: se mira tambien.
             // El recorredor se traga lo que lance este aviso: un GUARD-040 de
             // ahi dentro se guarda y se relanza al final
-            Real := LowerCase(SinBarraFinal(RealPath(APath)));
-            if TDirectory.Exists(Real) and (Vistos.IndexOf(Real) < 0) then
+            Real := SinBarraFinal(RealPath(APath));
+            if TDirectory.Exists(Real) and not Vistos.ContainsKey(ClaveDeRuta(Real)) then
             begin
-              Vistos.Add(Real);
+              Vistos.Add(ClaveDeRuta(Real), True);
               try
                 Recorre(Real);
               except
@@ -3759,7 +3759,10 @@ function WalkFiles(const ADir: string; const AMasks: TArray<string>;
   AIncluyeEnlacesFuera: Boolean): TArray<string>;
 var
   Acc: TStringList;
-  Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
+  // rutas REALES de los enlaces ya seguidos, por ClaveDeRuta: corta ciclos. Era
+  // un TStringList sin mayusculas (AnsiCompareText): tomaba por la misma dos
+  // carpetas que NTFS separa (ss y la eszett) y se saltaba la segunda (V82)
+  Vistos: TDictionary<string, Boolean>;
   // Cada fichero UNA vez: dos mascaras que se solapan ("*;*.pas") o la
   // pasada de la papelera (mascara + '-*', que "*" ya cubre) lo contaban dos
   // veces - total 7 para 3 ficheros (quinta revision). Acc guarda el orden
@@ -3769,9 +3772,9 @@ var
 
   procedure Anade(const F: string);
   begin
-    if not Unicos.ContainsKey(LowerCase(F)) then
+    if not Unicos.ContainsKey(ClaveDeRuta(F)) then
     begin
-      Unicos.Add(LowerCase(F), True);
+      Unicos.Add(ClaveDeRuta(F), True);
       Acc.Add(F);
     end;
   end;
@@ -3823,10 +3826,10 @@ var
         begin
           if not EnlaceLegible(Sub) then
             Continue;
-          var RealSub := LowerCase(RealPath(Sub));
-          if Vistos.IndexOf(RealSub) >= 0 then
+          var RealSub := ClaveDeRuta(RealPath(Sub));
+          if Vistos.ContainsKey(RealSub) then
             Continue; // un ciclo de enlaces
-          Vistos.Add(RealSub);
+          Vistos.Add(RealSub, True);
         end;
         // La papelera se purga solo despues de admitir la lectura del enlace.
         if SameText(TPath.GetFileName(Sub), TrashFolderName) then
@@ -3842,11 +3845,10 @@ begin
   if ReadPathDenied(ADir) <> '' then
     Exit(nil);
   Acc := TStringList.Create;
-  Vistos := TStringList.Create;
+  Vistos := TDictionary<string, Boolean>.Create;
   Unicos := TDictionary<string, Boolean>.Create;
   try
-    Vistos.Sorted := True;
-    Vistos.Add(LowerCase(RealPath(ADir)));
+    Vistos.Add(ClaveDeRuta(RealPath(ADir)), True);
     Recurse(ADir);
     Result := Acc.ToStringArray;
   finally
@@ -3912,7 +3914,7 @@ procedure CopiaArbol(const AOrigen, ADestino: string; AConservaAtributos: Boolea
   out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean;
   const AOmite: TOmiteAlCopiar; const AAlListar: TListaCopia);
 var
-  Vistos: TStringList;
+  Vistos: TDictionary<string, Boolean>; // las rutas REALES ya copiadas, por ClaveDeRuta
   NoSeg: TStringList;
 
   function SeSigue(const P: string): Boolean;
@@ -3927,9 +3929,9 @@ var
     E, Nombre: string;
   begin
     // la ruta REAL ya copiada no se vuelve a copiar: corta un bucle de enlaces
-    if Vistos.IndexOf(LowerCase(RealPath(O))) >= 0 then
+    if Vistos.ContainsKey(ClaveDeRuta(RealPath(O))) then
       Exit;
-    Vistos.Add(LowerCase(RealPath(O)));
+    Vistos.Add(ClaveDeRuta(RealPath(O)), True);
     if not Assigned(AAlListar) then
       CrearCarpeta(D);
     // por EL lector que distingue "vacia" de "no se deja listar"
@@ -3984,10 +3986,9 @@ begin
   // en el listado del origen, con una ruta real nueva en cada vuelta.
   if DentroDeSiMismo(AOrigen, ADestino) then
     raise Exception.Create(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
-  Vistos := TStringList.Create;
+  Vistos := TDictionary<string, Boolean>.Create;
   NoSeg := TStringList.Create;
   try
-    Vistos.Sorted := True;
     Copia(SinBarraFinal(AOrigen), SinBarraFinal(ADestino), EsEnlace(SinBarraFinal(AOrigen)));
     ANoSeguidos := NoSeg.ToStringArray;
   finally

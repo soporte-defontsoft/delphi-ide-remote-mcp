@@ -33,6 +33,7 @@ type
     [Test] procedure LosLinguisticosNoSonElDisco;
     [Test] procedure ElDentroDeRespetaElLimite;
     [Test] procedure LosDentroDePorTextoSonElDisco;
+    [Test] procedure LaClaveEsLaDelDisco;
   end;
 
 implementation
@@ -210,6 +211,37 @@ begin
   // ...y lo que si cuelga, igual que antes
   Assert.AreEqual('Sub\U.pas', IncludeFor(TPath.Combine(Ka, 'Amb.dpr'), TPath.Combine(Ka, 'Sub\U.pas')));
   Assert.AreEqual('\Win32\a.pas', RelToRoot(TPath.Combine(Ka, 'Win32\a.pas'), Ka));
+end;
+
+procedure TRutasDelDiscoTests.LaClaveEsLaDelDisco;
+
+  function ParDe(const A, B, E: string): TPar;
+  begin
+    Result.A := A;
+    Result.B := B;
+    Result.Etiqueta := E;
+  end;
+
+var
+  Par: TPar;
+  FullA, FullB: string;
+begin
+  // V82 de la 1.23.1: la clave de un "ya visto" (ClaveDeRuta) junta lo que junta
+  // el disco y nada mas. Un TStringList sin mayusculas (AnsiCompareText) daba ss y
+  // la eszett por la misma, y WalkFiles se saltaba la segunda de dos carpetas
+  for Par in Pares + [ParDe('ss', Letra($00DF), 'ss / eszett'),
+    ParDe('Pk', 'P' + Letra($212A), 'k / Kelvin'), ParDe('Ae', Letra($00C6), 'Ae / ligadura AE'),
+    ParDe('a' + Letra($00D1), 'aN' + Letra($0303), 'ene / N con tilde combinante')] do
+  begin
+    CreaPar(FBase, Par, FullA, FullB);
+    Assert.AreEqual(MismaEntradaDisco(FullA, FullB), ClaveDeRuta(FullA) = ClaveDeRuta(FullB),
+      'ClaveDeRuta tiene que juntar lo que el disco (' + Par.Etiqueta + ')');
+  end;
+  // el agujero, medido: el comparador de un TStringList sin mayusculas
+  // (AnsiCompareText: CompareString con NORM_IGNORECASE; AnsiSameText no, que
+  // tiene su atajo por la longitud) las junta
+  Assert.AreEqual(0, AnsiCompareText('ss', Letra($00DF)),
+    'AnsiCompareText da ss = eszett: por ahi WalkFiles se saltaba una carpeta');
 end;
 
 initialization

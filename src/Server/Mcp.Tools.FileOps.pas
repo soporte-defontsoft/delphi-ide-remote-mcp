@@ -194,7 +194,7 @@ begin
   Choca :=
     procedure(D: string)
     begin
-      if not MatchText(D, Choques) then
+      if not RutaEnLista(D, Choques) then
         Choques := Choques + [D];
     end;
   for var P in APasos do
@@ -202,8 +202,9 @@ begin
     var Origen := SinBarraFinal(TPath.GetFullPath(P.Origen));
     var Destino := SinBarraFinal(TPath.GetFullPath(P.Destino));
     // dos al MISMO destino (dos copias de la papelera del mismo original, con
-    // un comodin) chocan entre si
-    if MatchText(Destino, Vistos) then
+    // un comodin) chocan entre si: el mismo para el DISCO (RutaEnLista), no para
+    // el locale - MatchText daba por iguales ss y la eszett (V82 de la 1.23.1)
+    if RutaEnLista(Destino, Vistos) then
       Choca(Destino);
     Vistos := Vistos + [Destino];
     if not TDirectory.Exists(Origen) or EsEnlace(Origen) then

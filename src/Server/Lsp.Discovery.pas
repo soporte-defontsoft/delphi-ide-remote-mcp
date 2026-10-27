@@ -1005,7 +1005,7 @@ begin
   begin
     A.Nombre := V.Nombre;
     A.Fichero := V.Dato.Trim;
-    if (A.Fichero = '') or (IndexText(A.Fichero, Vistos) >= 0) then
+    if (A.Fichero = '') or RutaEnLista(A.Fichero, Vistos) then
       Continue;
     Vistos := Vistos + [A.Fichero];
     Result := Result + [A];
