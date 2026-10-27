@@ -17,7 +17,7 @@ import ctypes
 import glob
 import hashlib
 import json, os, queue, re, shutil, signal, socket, stat, subprocess, sys, tempfile, threading, time
-import urllib.error, urllib.request
+import urllib.error, urllib.parse, urllib.request
 import string, winreg
 import concurrent.futures
 
@@ -244,6 +244,28 @@ def cache_servidor(sub='', appdata=None):
     Sin appdata, la de las BATERIAS (CACHE_BATERIAS, la que da entorno). El
     compositor de esa ruta: estaba a mano en mcp_cliente y en una bateria."""
     return os.path.join(appdata or CACHE_BATERIAS, 'DelphiLspMcp', sub)
+
+
+def ajustes_fabricados(dpr, appdata=None):
+    """El .delphilsp.json que fabrico el servidor para ese .dpr (su cache de
+    configuraciones), por la ruta LARGA y entera: la bateria la tiene corta
+    (8.3, del %TEMP%) y el servidor la escribe larga; comparar solo la cola
+    cruzaba las dos formas en las carpetas cortas (j3, j9 de json_nuestro,
+    18-oct-2026). '' si no hay. Vivia en test_json_nuestro_1202: la segunda
+    bateria que lo necesito (V91 de la 1.23.1) lo trajo aqui."""
+    quiero = os.path.normcase(larga(dpr))
+    carpeta = cache_servidor('configs', appdata)
+    for f in (os.listdir(carpeta) if os.path.isdir(carpeta) else []):
+        p = os.path.join(carpeta, f)
+        try:
+            proj = json.load(open(p, encoding='utf-8-sig'))['settings']['project']
+        except Exception:
+            continue
+        ruta = (urllib.parse.unquote(urllib.parse.urlparse(proj).path).lstrip('/')
+                if proj.startswith('file:') else real(proj))
+        if os.path.normcase(larga(ruta)) == quiero:
+            return p
+    return ''
 
 
 def planta_intermedios(carpeta):

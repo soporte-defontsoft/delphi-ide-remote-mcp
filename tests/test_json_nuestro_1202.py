@@ -70,7 +70,6 @@ first version of this step (two judges at one level, the main source lost).
 Usage:  python tests/test_json_nuestro_1202.py [path-to-DelphiLspMcp.exe]
 """
 import ctypes, json, os, re, shutil
-from urllib.parse import unquote, urlparse
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -165,21 +164,9 @@ def lineas_build(dproj, config=None, platform=None):
 
 
 def fabricado(dpr):
-    """El .delphilsp.json que fabrico el servidor para ese .dpr (su cache), por
-    la ruta LARGA y entera: la bateria la tiene corta (8.3, del %TEMP%) y el
-    servidor la escribe larga; comparar solo la cola cruzaba las dos formas en
-    las carpetas cortas (j3, j9: la primera pasada del 18-oct-2026)."""
-    quiero = os.path.normcase(mc.larga(dpr))
-    for f in os.listdir(mc.cache_servidor('configs', APPDATA)):
-        p = os.path.join(mc.cache_servidor('configs', APPDATA), f)
-        try:
-            proj = json.load(open(p, encoding='utf-8-sig'))['settings']['project']
-        except Exception:
-            continue
-        ruta = unquote(urlparse(proj).path).lstrip('/') if proj.startswith('file:') else mc.real(proj)
-        if os.path.normcase(mc.larga(ruta)) == quiero:
-            return p
-    return ''
+    """El .delphilsp.json que fabrico el servidor para ese .dpr: EL lector de
+    mcp_cliente (vivia aqui; V91 de la 1.23.1 lo necesito tambien)."""
+    return mc.ajustes_fabricados(dpr, APPDATA)
 
 
 def de_la_copia(r, carpeta):

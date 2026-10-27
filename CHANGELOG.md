@@ -152,6 +152,16 @@ the MCP `initialize` response (`serverInfo.version`).
   this delete: an older copy from the same day that matches the mask would be
   picked up too, and then it is not offered. `delphi_list`'s description now
   says that `hidden` counts only the hidden entries that match the mask.
+- **The engine resolves a Win32 program that uses LockBox, as the IDE does.**
+  With Win32 as its platform, the engine answered nothing at all - no hover,
+  no definition, no completion - in a program that used LockBox
+  (`uTPLb_Codec`), while the IDE's Code Insight resolved the same code.
+  A project with a non-Windows platform selected was hit too, since the engine
+  then runs as Win32. The engine was measured on its own, with the settings
+  the IDE writes and with ours: of all their differences, the one that decides
+  is the folder where compiled units go (`-NU`), which the IDE gives and we did
+  not. We now give one, an empty folder that belongs to the server and never
+  the project's. The engine writes nothing in it.
 
 ### Changed
 

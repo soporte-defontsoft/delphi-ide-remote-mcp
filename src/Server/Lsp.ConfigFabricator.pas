@@ -172,8 +172,12 @@ const
   // rule are otherwise reused as long as they are newer than the .dproj.
   // 2 = GetIt catalog macros expanded (v0.42.2); 3 = the selected
   // configuration and platform, by the build's evaluator (1.20.2); 4 = the
-  // library as msbuild puts it and the IDE's macro table (1.20.2, review)
-  FABRICATOR_GEN = 4;
+  // library as msbuild puts it and the IDE's macro table (1.20.2, review);
+  // 5 = la salida de las unidades (-NU) en la casa (V91 de la 1.23.1)
+  FABRICATOR_GEN = 5;
+  // la carpeta de la cache del servidor que el motor recibe como salida de
+  // las unidades (-NU): nuestra, y vacia (el motor no escribe en ella)
+  SALIDA_DEL_MOTOR_SUB = 'lsp-dcu';
   // la marca del recorte en el nombre de unos ajustes: -r<cuantas>x<huella>,
   // antes de la generacion. La huella separa dos sesiones que no ven lo mismo
   // (cada una sus ajustes, y por ellos su motor: Lsp.Session.ClientKey)
@@ -426,7 +430,7 @@ var
   Defines, Namespaces, Recorte, Marco, Prefijo, Contenido: string;
   UnitPaths, Fuentes, IdePaths, ProjDentro, ProjFuera, Depuracion, Ensenables,
     Navegacion: TArray<string>;
-  CacheDir, CacheFile: string;
+  CacheDir, CacheFile, SalidaDelMotor: string;
   Proyecto: TDprojInfo;
   Root, Settings: TJSONObject;
   Browsing: TJSONArray;
@@ -463,6 +467,7 @@ begin
   // EVERY time (the .dproj is not all it depends on: the IDE's library, the
   // jail) and written below only when its bytes change
   CacheDir := ServerCacheDir('configs');
+  SalidaDelMotor := ServerCacheDir(SALIDA_DEL_MOTOR_SUB);
   Prefijo := Format('%s-%x-', [TPath.GetFileNameWithoutExtension(ADprojPath),
     THashFNV1a32.GetHashValue(TPath.GetFullPath(ADprojPath).ToLower)]);
   CacheFile := TPath.Combine(CacheDir, Prefijo + Format('%s%s-g%d.delphilsp.json',
@@ -534,6 +539,13 @@ begin
   Opts := Opts + ' -NS' + Namespaces + ';';
   Opts := Opts + Format(' -U"%s" -O"%s" -R"%s" -I"%s"',
     [PathsJoined, PathsJoined, PathsJoined, PathsJoined]);
+  // la salida de las unidades, como la da el IDE a su motor: sin ella el motor
+  // en Win32 no resolvia NADA de un programa que usa LockBox, y el IDE si.
+  // Medido el 27-oct-2026 con el motor a pelo y los ajustes del IDE: de todo lo
+  // que los diferencia decide -NU, basta una carpeta VACIA y el motor no
+  // escribe en ella (V91 de la 1.23.1). La nuestra, no la del proyecto: el
+  // motor es proceso del servidor y no apunta al workspace
+  Opts := Opts + Format(' -NU"%s"', [SalidaDelMotor]);
 
   // Las carpetas de navegacion (el fuente que el motor ensena de lo que solo
   // esta compilado): las del IDE, su Browsing Path del registro (EL lector,
@@ -602,6 +614,7 @@ begin
   System.TMonitor.Enter(GFabLock);
   try
     CrearCarpeta(CacheDir);
+    CrearCarpeta(SalidaDelMotor);
     EscribeEnCasaDelServidor(CacheFile, Contenido);
     PurgaGeneracionesViejas(CacheDir, Prefijo);
     PurgaIntermediosViejos(CacheDir); // los de un escritor que murio a medias
