@@ -45,9 +45,14 @@ try: j = json.loads(r)
 except Exception: j = {}
 check('list alias filter->pattern', j.get('total') == 1 and mc.ficheros(j)[0]['path'].endswith('U1.pas'), r[:200])
 r = call('delphi_list', {'root': BASE, 'filter': '*.pas', 'pattern': '*.dfm'})
+# hasta la 1.23.0 el alias se descartaba en silencio y mandaba el nombre real; desde
+# V93 de la 1.23.1 los dos con valores distintos se niegan (GUARD-045): uno se perdia
+check('alias with another value than the real name: refused, it is not silently dropped (GUARD-045)',
+      mc.rechazado(r) and mc.es(r, 'SR_ARG_ALIAS_OTRO_VALOR_FMT'), r[:200])
+r = call('delphi_list', {'root': BASE, 'filter': '*.dfm', 'pattern': '*.dfm'})
 try: j = json.loads(r)
 except Exception: j = {}
-check('alias never overrides the real name', j.get('total') == 1 and mc.ficheros(j)[0]['path'].endswith('U1.dfm'), r[:200])
+check('...and with the same value it still works', j.get('total') == 1 and mc.ficheros(j)[0]['path'].endswith('U1.dfm'), r[:200])
 
 # --- delphi_read aliases
 r = call('delphi_read', {'path': os.path.join(BASE, 'Big.dproj'), 'startline': 602, 'endline': 602})
