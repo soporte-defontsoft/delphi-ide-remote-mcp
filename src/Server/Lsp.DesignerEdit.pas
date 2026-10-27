@@ -145,7 +145,7 @@ uses
   System.Generics.Collections,
   Lsp.Texts,
   Lsp.Guard,           // WriteTargetDenied
-  Lsp.Mascara,         // CitaDeLinea
+  Lsp.Mascara,         // CitaDeLinea y ContenidoTalCual: el texto del form, tal cual en la respuesta
   Lsp.Patch,           // PatchLoadText/PatchSaveText y los troceadores
   Lsp.Codificacion,    // EncKindOf/EncName: la codificacion de la unidad
   Lsp.Pascal,          // EL identificador, CodigoPascal, LineaDePosicion
@@ -2822,9 +2822,11 @@ begin
     AObj.AddPair('note', MsgFmt(SN_DESIGNER_NADA_QUE_QUITAR_FMT, [ANombre, AInfo.Prop]));
     Exit;
   end;
-  AObj.AddPair('value', AInfo.Valor);
+  // lo que dice el form, tal cual (ContenidoTalCual): salia enmascarado, y
+  // 'Contrase'#241'a:' volvia 'Contrase'#241'srv0:' (V70)
+  AObj.AddPair('value', ContenidoTalCual(AInfo.Valor));
   if AInfo.HabiaAntes then
-    AObj.AddPair('previous', AInfo.Antes);
+    AObj.AddPair('previous', ContenidoTalCual(AInfo.Antes));
   if AInfo.Comillas then
     AObj.AddPair('quoted', TJSONBool.Create(True));
   if AInfo.Quitada then
@@ -2837,13 +2839,13 @@ begin
   else if AInfo.GuardadaEnOtras then
   begin
     // una stored False: lo que el IDE escribe por ella (DSGN-167)
-    AObj.AddPair('storedIn', AInfo.GuardadaEn);
+    AObj.AddPair('storedIn', ContenidoTalCual(AInfo.GuardadaEn));
     AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT, [AInfo.Prop, ANombre,
       IfThen(AInfo.GuardadaEn = '', MsgText(SF_DESIGNER_IDE_NADA_CAMBIA), AInfo.GuardadaEn)]));
   end
   else if AInfo.GuardadaComo <> '' then
   begin
-    AObj.AddPair('storedAs', AInfo.GuardadaComo);
+    AObj.AddPair('storedAs', ContenidoTalCual(AInfo.GuardadaComo));
     AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_OTRO_FMT, [AInfo.Prop, ANombre,
       AInfo.GuardadaComo, AInfo.Valor]));
   end;

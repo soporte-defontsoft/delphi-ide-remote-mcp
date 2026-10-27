@@ -67,13 +67,22 @@ procedure OlvidaSalidaHecha;
   esas: adivinaba por la forma ('^\s*\d+\|'), y en las negativas de las tools
   de eco pasaba sin mascara toda linea que lo pareciera, la escribiera quien
   la escribiera; las de las demas tools se enmascaraban, y una pista de
-  delphi_changeset no servia de ancla (revision del 4-oct-2026). }
+  delphi_changeset no servia de ancla (revision del 4-oct-2026). Tambien
+  dentro de un JSON, cadena a cadena: la respuesta entera es UNA linea y sus
+  citas salian enmascaradas (el block de delphi_designer, V70, 27-oct-2026). }
 function CitaDeLinea(N: Integer; const ATexto: string): string;
+{ El CONTENIDO del disco que una tool pone en su respuesta sin ser una cita:
+  el valor de una propiedad como lo escribe el form (value, previous,
+  storedAs y storedIn de delphi_designer). Lo apunta como las citas - el
+  filtro de salida lo deja tal cual en ESTA llamada, en una linea o en una
+  cadena de un JSON - y lo devuelve. Salia enmascarado: 'Contrase'#241'a:'
+  volvia 'Contrase'#241'srv0:' (V70, 27-oct-2026). }
+function ContenidoTalCual(const ATexto: string): string;
 { Para la tool que devuelve JSON con CONTENIDO de un fichero en algunos
   campos (references y rename_symbol: "text" y "anchor", la linea tal cual;
-  symbols: las declaraciones; signature y completion: la documentacion; NO
-  delphi_designer: su get devuelve las lineas del .dfm como texto, por el
-  filtro general):
+  symbols: las declaraciones; signature y completion: la documentacion: lo
+  que dice el MOTOR, que el servidor no compone; lo que el servidor compone
+  del disco va por CitaDeLinea y ContenidoTalCual, como en delphi_designer):
   enmascara todas las demas cadenas y deja esos campos, con todo lo que cuelga
   de ellos, como estan; el filtro de salida de ESTA llamada deja pasar el
   resultado. Lo que no se nombra se enmascara: un campo nuevo no se escapa.
@@ -150,7 +159,7 @@ uses
 
 threadvar
   TSalidaHecha: string; // lo que la tool de ESTA llamada ya enmascaro (EnmascaraSalvoContenido)
-  TCitasHechas: string; // las citas (CitaDeLinea) de ESTA llamada, cada una seguida de #0
+  TCitasHechas: string; // las citas (CitaDeLinea) y el contenido (ContenidoTalCual) de ESTA llamada, cada uno seguido de #0
 
 const
   { El host con el que sale enmascarado el de una ruta de red (\\srvhost\...):
@@ -373,6 +382,88 @@ begin
   TCitasHechas := TCitasHechas + Result + #0;
 end;
 
+function ContenidoTalCual(const ATexto: string): string;
+begin
+  Result := ATexto;
+  // cada linea como la mira EsCitaHecha: sin su sangria ni su CR
+  for var L in ATexto.Split([#10]) do
+  begin
+    var S := L.TrimLeft;
+    if S.EndsWith(#13) then
+      S := S.Substring(0, S.Length - 1);
+    if S <> '' then
+      TCitasHechas := TCitasHechas + S + #0;
+  end;
+end;
+
+// una cadena de una respuesta, enmascarada: linea a linea salvo lo que
+// compuso ESTA llamada (EsCitaHecha); sin nada compuesto, entera
+function EnmascaraCadena(const ATexto: string): string;
+begin
+  if TCitasHechas = '' then
+    Exit(MaskDriveText('', ATexto));
+  Result := EnmascaraLineas(ATexto, EsCitaHecha);
+end;
+
+// una copia de AValor con sus cadenas enmascaradas (EnmascaraCadena), salvo
+// lo que cuelga de un campo de AClaves (que se copia tal cual). Las CLAVES
+// tambien: antes de esto el texto entero pasaba por la mascara y las cubria,
+// y un objeto con rutas por clave (los changes de un WorkspaceEdit) saldria
+// con la letra real (revision de la 1.13.0). EL recorredor de
+// EnmascaraJsonSalvo y del filtro de salida ante un JSON
+function CopiaEnmascarada(AValor: TJSONValue; const AClaves: TArray<string>): TJSONValue;
+begin
+  if AValor is TJSONObject then
+  begin
+    var O := TJSONObject.Create;
+    for var P in TJSONObject(AValor) do
+      if MatchText(P.JsonString.Value, AClaves) then
+        O.AddPair(P.JsonString.Value, TJSONValue(P.JsonValue.Clone))
+      else
+        O.AddPair(MaskDriveText('', P.JsonString.Value), CopiaEnmascarada(P.JsonValue, AClaves));
+    Result := O;
+  end
+  else if AValor is TJSONArray then
+  begin
+    var A := TJSONArray.Create;
+    for var E in TJSONArray(AValor) do
+      A.AddElement(CopiaEnmascarada(E, AClaves));
+    Result := A;
+  end
+  // (un TJSONNumber ES un TJSONString en el RTL)
+  else if (AValor is TJSONString) and not (AValor is TJSONNumber) then
+    Result := TJSONString.Create(EnmascaraCadena(TJSONString(AValor).Value))
+  else
+    Result := TJSONValue(AValor.Clone);
+end;
+
+// la respuesta de una llamada que compuso contenido (citas, valores del
+// disco): un JSON, cadena a cadena - es UNA linea, y la cita de dentro no
+// casaba con ninguna (V70) -; lo demas, linea a linea
+function EnmascaraConCitas(const ATexto: string): string;
+var
+  V, T: TJSONValue;
+begin
+  V := nil;
+  if ATexto.StartsWith('{') or ATexto.StartsWith('[') then
+    V := TJSONObject.ParseJSONValue(ATexto);
+  try
+    // lo que no es UN JSON entero va por lineas, como iba: ParseJSONValue
+    // niega el que lleva algo pegado detras (una nota), que si no se
+    // perderia al reescribirlo (medido con un mutante, LspTests.Rutas)
+    if V = nil then
+      Exit(EnmascaraLineas(ATexto, EsCitaHecha));
+    T := CopiaEnmascarada(V, []);
+    try
+      Result := T.ToJSON;
+    finally
+      T.Free;
+    end;
+  finally
+    V.Free;
+  end;
+end;
+
 { LA CASA DEL SERVIDOR en la salida (2ag de la 1.18.2; David, 12-oct-2026:
   "nuestros procesos internos y nuestro temp, los agentes no deben ni
   olerlo"). Ninguna respuesta nombra la carpeta del exe ni la cache: su
@@ -576,10 +667,11 @@ begin
   // (rutas del guard, mensajes) se enmascara linea a linea. Una pista
   // enmascarada no servia de ancla (novena revision, M5a). Solo las
   // compuestas: se adivinaba por la forma ('^\s*\d+\|') y pasaba cualquier
-  // linea que lo pareciera (revision del 4-oct-2026)
+  // linea que lo pareciera (revision del 4-oct-2026). Y en un JSON, cadena a
+  // cadena (V70)
   if (AToolName <> '') and (TCitasHechas <> '') then
   begin
-    Result := EnmascaraLineas(AText, EsCitaHecha);
+    Result := EnmascaraConCitas(AText);
     TCitasHechas := '';
     Exit;
   end;
@@ -794,39 +886,6 @@ function EnmascaraJsonSalvo(const AJson: string; const AClaves: array of string;
   const ADetras: string): string;
 var
   Claves: TArray<string>;
-
-  // una copia de AValor con sus cadenas enmascaradas, salvo lo que cuelga de
-  // un campo de Claves (que se copia tal cual). Las CLAVES tambien: antes de
-  // esto el texto entero pasaba por la mascara y las cubria, y un objeto con
-  // rutas por clave (los changes de un WorkspaceEdit) saldria con la letra
-  // real (revision de la 1.13.0)
-  function Transforma(AValor: TJSONValue): TJSONValue;
-  begin
-    if AValor is TJSONObject then
-    begin
-      var O := TJSONObject.Create;
-      for var P in TJSONObject(AValor) do
-        if MatchText(P.JsonString.Value, Claves) then
-          O.AddPair(P.JsonString.Value, TJSONValue(P.JsonValue.Clone))
-        else
-          O.AddPair(MaskDriveText('', P.JsonString.Value), Transforma(P.JsonValue));
-      Result := O;
-    end
-    else if AValor is TJSONArray then
-    begin
-      var A := TJSONArray.Create;
-      for var E in TJSONArray(AValor) do
-        A.AddElement(Transforma(E));
-      Result := A;
-    end
-    // (un TJSONNumber ES un TJSONString en el RTL)
-    else if (AValor is TJSONString) and not (AValor is TJSONNumber) then
-      Result := TJSONString.Create(MaskDriveText('', TJSONString(AValor).Value))
-    else
-      Result := TJSONValue(AValor.Clone);
-  end;
-
-var
   V, T: TJSONValue;
 begin
   V := TJSONObject.ParseJSONValue(AJson);
@@ -836,7 +895,7 @@ begin
     Claves := [];
     for var C in AClaves do
       Claves := Claves + [C];
-    T := Transforma(V);
+    T := CopiaEnmascarada(V, Claves);
     try
       Result := T.ToJSON;
     finally

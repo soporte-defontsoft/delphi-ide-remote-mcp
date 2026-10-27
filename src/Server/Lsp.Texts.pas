@@ -11381,8 +11381,10 @@ const
   SF_CHSET_LINEA_NO_EXISTE_FMT =
     'line %d does not exist (%s has %d)';
 
+  // %s: la linea que hay, citada (Lsp.Mascara.CitaDeLinea): el agente la
+  // copia, y entre comillas a mano salia enmascarada en el JSON del preview
   SF_CHSET_LINEA_NO_ESPERADA_FMT =
-    'line %d is not the expected one (it is "%s")';
+    'line %d is not the expected one; it is:'#10'  %s';
 
   { una operacion que ancla en la linea que escribe otra anterior del mismo
     fichero (Hermes, 15-oct-2026: el preview decia limpio y el commit

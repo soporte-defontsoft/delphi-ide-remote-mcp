@@ -8,6 +8,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **What an answer quotes from the disk comes back as the disk has it, also
+  inside a JSON answer.** The outbound filter leaves the citations a call
+  composed (`N|text`, `Lsp.Mascara.CitaDeLinea`) untouched and masks the rest,
+  but it recognised them line by line, and a JSON answer is one line: every
+  citation inside one was masked, and a `<letter>:` in it became `srv0:`. The
+  echo of `delphi_designer` insert, set and delete lied about what it had just
+  written - `Caption = 'Contrase'#241'a:'` came back as
+  `'Contrase'#241'srv0:'` in `block`, `value` and `previous`, with the form
+  right on disk - and so did the line a `delphi_changeset` preview quotes when
+  a `delete-line` names a line that is not the one in `old`. The filter now
+  walks a JSON answer string by string, with the walker `EnmascaraJsonSalvo`
+  already used; the values `delphi_designer` takes from the form (`value`,
+  `previous`, `storedAs`, `storedIn`) are marked as content where they are
+  composed (`ContenidoTalCual`, beside `CitaDeLinea`); and the changeset's
+  quoted line is a citation on its own line (`line N is not the expected one;
+  it is:` followed by `N|text`) instead of a quote written by hand. The
+  commit and the preview of a `delete-line` now ask one rule
+  (`DeleteLineDenegado`) instead of two copies of it.
+
 ## [1.23.0] - 2026-10-26
 
 A cleanup release: one rule where there were several, and the holes they

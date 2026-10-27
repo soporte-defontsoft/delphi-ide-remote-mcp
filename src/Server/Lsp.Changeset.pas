@@ -307,6 +307,32 @@ begin
     Result := '';
 end;
 
+{ Lo que niega un delete-line en la linea que nombra, de las lineas de su
+  fichero (como delphi_read): una que no existe, una que no es la de old -
+  citada (CitaDeLinea), que el agente la copia: iba entre comillas, a mano, y
+  en el JSON del preview salia enmascarada (V70) - o, sin old, una que no esta
+  en blanco. '' si se puede borrar. LA regla del commit y del preview, que la
+  tenian escrita cada uno }
+function DeleteLineDenegado(const ALs: TArray<string>; const Op: TStagedOp): string;
+begin
+  if (Op.AtLine < 1) or (Op.AtLine > Length(ALs)) then
+    Exit(MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
+      [Op.AtLine, TPath.GetFileName(Op.Path), Length(ALs)]));
+  // la linea de un delete-line es la de old, por la regla de los motores
+  // (LineaEsLaDelAncla): se comparaba exacta (octava revision)
+  if Op.OldLine <> '' then
+  begin
+    if not LineaEsLaDelAncla(ALs[Op.AtLine - 1], Op.OldLine) then
+      Exit(MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
+        [Op.AtLine, CitaDeLinea(Op.AtLine, ALs[Op.AtLine - 1])]));
+    Exit('');
+  end;
+  // sin old, solo una linea EN BLANCO: LA regla de delphi_edit y
+  // delphi_textedit (P3-L9; revisor de la noche, M-4: aqui se borraba
+  // cualquiera, y nacio para las lineas en blanco)
+  Result := LineaEnBlancoDenegada(ALs, Length(ALs), Op.AtLine, TPath.GetFileName(Op.Path));
+end;
+
 { ApplyOne y, en AAvisos (uno por linea), los avisos del motor que la edicion
   dio (los *** de la auditoria: estructura, acentos, una llave dentro de un
   comentario...) y los de llaves del fuente que crea: el commit los descartaba
@@ -466,30 +492,9 @@ begin
         var Txt := PatchLoadText(Op.Path, Enc);
         var Eol := SaltoDominante(Txt);
         var Ls := LineasDelTexto(Txt);
-        if (Op.AtLine < 1) or (Op.AtLine > Length(Ls)) then
-        begin
-          AError := MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
-            [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]);
+        AError := DeleteLineDenegado(Ls, Op);
+        if AError <> '' then
           Exit;
-        end;
-        // la linea de un delete-line es la de old, por la regla de los motores
-        // (LineaEsLaDelAncla): se comparaba exacta (octava revision)
-        if (Op.OldLine <> '') and not LineaEsLaDelAncla(Ls[Op.AtLine - 1], Op.OldLine) then
-        begin
-          AError := MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
-            [Op.AtLine, Ls[Op.AtLine - 1]]);
-          Exit;
-        end;
-        // sin old, solo una linea EN BLANCO: LA regla de delphi_edit y
-        // delphi_textedit (P3-L9; revisor de la noche, M-4: aqui se borraba
-        // cualquiera, y nacio para las lineas en blanco)
-        if Op.OldLine = '' then
-        begin
-          AError := LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
-            TPath.GetFileName(Op.Path));
-          if AError <> '' then
-            Exit;
-        end;
         // la linea se va con su salto y las demas con el suyo (el compositor
         // de todos, CambiaLineasEnSuTexto; unidas al dominante, un fichero
         // mixto salia entero a ese salto: 1.18.2). El salto final, el que tenia
@@ -934,24 +939,11 @@ begin
           begin
             var Ls := LineasDelTexto(PatchLoadText(Op.Path, EncName));
             Obj.AddPair('atline', TJSONNumber.Create(Op.AtLine));
-            if Op.AtLine > Length(Ls) then
+            // lo que el commit va a negar, con su misma regla (M-4)
+            var Negado := DeleteLineDenegado(Ls, Op);
+            if Negado <> '' then
             begin
-              Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
-                [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]));
-              Inc(N);
-            end
-            else if (Op.OldLine <> '') and not LineaEsLaDelAncla(Ls[Op.AtLine - 1], Op.OldLine) then
-            begin
-              Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
-                [Op.AtLine, Ls[Op.AtLine - 1]]));
-              Inc(N);
-            end
-            // sin old, solo una linea en blanco (lo que el commit niega, M-4)
-            else if (Op.OldLine = '') and (LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
-              TPath.GetFileName(Op.Path)) <> '') then
-            begin
-              Obj.AddPair('anchor', LineaEnBlancoDenegada(Ls, Length(Ls), Op.AtLine,
-                TPath.GetFileName(Op.Path)));
+              Obj.AddPair('anchor', Negado);
               Inc(N);
             end
             else if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, Op.AtLine)) then

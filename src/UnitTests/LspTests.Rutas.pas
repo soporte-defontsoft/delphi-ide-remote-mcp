@@ -71,6 +71,7 @@ type
     [Test] procedure ElUncExtendidoYElHostRaroSeEnmascaran;
     [Test] procedure LasClavesDeUnJsonTambienSeEnmascaran;
     [Test] procedure LaFilaDeUnaTandaDejaElDiscoComoEsta;
+    [Test] procedure LasCitasDeUnJsonVanComoEstan;
     [Test] procedure LosControlesSonAnomaliasPorSiMismos;
   end;
 
@@ -244,7 +245,8 @@ uses
   Lsp.Rutas,          // EsRutaAbsoluta, RutaDesde
   LspTests.FormRender, // CreaUnion
   Lsp.Mascara,
-  System.RegularExpressions;
+  System.RegularExpressions,
+  System.JSON;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -681,6 +683,61 @@ begin
   S := MaskDriveText('delphi_changeset', '[CHSET-0 NOT_FOUND] ' + Letra + ':\f.pas'#10'  ' + Cita1);
   Assert.Contains(S, '  ' + Cita1, 'la pista de changeset, tal cual: ' + S);
   Assert.Contains(S, Virtual + '\f.pas', 'su ruta, enmascarada: ' + S);
+end;
+
+{ V70 (27-oct-2026): una respuesta JSON es UNA linea y el filtro miraba las
+  citas linea a linea: el block de un insert de delphi_designer, sus value y
+  previous y la linea citada del preview de delphi_changeset salian
+  enmascarados ('Contrase'#241'a:' volvia 'Contrase'#241'srv0:'). Ante un JSON
+  que la tool escribio con ToJSON, cadena a cadena: lo que compuso esta
+  llamada (CitaDeLinea, ContenidoTalCual) va tal cual, tambien como una linea
+  de un mensaje, y lo demas - las claves tambien - se enmascara. Uno con algo
+  pegado detras no se reescribe (se perderia): va por lineas, como iba - lo
+  niega ParseJSONValue, y esta prueba mide que lo siga negando. }
+procedure TBarridoDeUnidadesTests.LasCitasDeUnJsonVanComoEstan;
+var
+  O, R: TJSONObject;
+  A: TJSONArray;
+  J, S, Cita, Cita9, Valor: string;
+begin
+  OlvidaSalidaHecha; // nada de otra prueba de este hilo
+  O := TJSONObject.Create;
+  try
+    A := TJSONArray.Create;
+    Cita := CitaDeLinea(26, '    Caption = ''Ruta ' + Letra + ':\x''');
+    A.Add(Cita);
+    A.Add('27|' + Letra + ':\parece una cita');
+    O.AddPair('block', A);
+    Valor := ContenidoTalCual('''Ruta ' + Letra + ':\x''');
+    O.AddPair('value', Valor);
+    Cita9 := CitaDeLinea(9, '  R := ''' + Letra + ':\y'';');
+    O.AddPair('anchor', 'line 9 is not the expected one; it is:'#10'  ' + Cita9);
+    O.AddPair('note', 'en ' + Letra + ':\nota');
+    O.AddPair(Letra + ':\clave', 'x');
+    J := O.ToJSON;
+  finally
+    O.Free;
+  end;
+  S := MaskDriveText('delphi_designer', J);
+  R := TJSONObject.ParseJSONValue(S) as TJSONObject;
+  Assert.IsNotNull(R, 'sigue siendo JSON: ' + S);
+  try
+    A := R.GetValue('block') as TJSONArray;
+    Assert.AreEqual(Cita, A.Items[0].Value, 'la cita del block, tal cual');
+    Assert.AreEqual('27|' + Virtual + '\parece una cita', A.Items[1].Value,
+      'lo que solo PARECE una cita se enmascara');
+    Assert.AreEqual(Valor, R.GetValue('value').Value, 'el valor del form, tal cual');
+    Assert.AreEqual('line 9 is not the expected one; it is:'#10'  ' + Cita9,
+      R.GetValue('anchor').Value, 'la cita como linea de un mensaje, tal cual');
+    Assert.AreEqual('en ' + Virtual + '\nota', R.GetValue('note').Value, 'lo nuestro, enmascarado');
+    Assert.IsNotNull(R.GetValue(Virtual + '\clave'), 'la clave, enmascarada: ' + S);
+  finally
+    R.Free;
+  end;
+  // un JSON con una nota pegada detras no se reescribe: no se pierde nada
+  Cita := CitaDeLinea(3, 'X := 1;');
+  S := MaskDriveText('delphi_designer', '{"block":["' + Cita + '"]} nota');
+  Assert.EndsWith(' nota', S, 'lo de detras sigue: ' + S);
 end;
 
 procedure TBarridoDeUnidadesTests.LosControlesSonAnomaliasPorSiMismos;
