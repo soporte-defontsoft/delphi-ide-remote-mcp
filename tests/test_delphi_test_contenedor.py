@@ -663,8 +663,10 @@ j19 = J(out)
 pid19 = next((l.strip().lstrip('.').split()[1] for l in (j19.get('outputTail') or '').splitlines()
               if l.strip().lstrip('.').startswith('CHILDPID')), '0')
 time.sleep(0.3)
-vivo19 = pid19 not in ('0', '') and pid19 in subprocess.run(
-    ['tasklist', '/fi', 'PID eq ' + pid19], capture_output=True, text=True).stdout
+# vivo, por el PROCESO (mc.pid_vivo): la salida de tasklist sale en la pagina OEM
+# ("INFORMACION" con su tilde cuando el hijo ya murio) y leida como UTF-8 el hilo
+# lector reventaba y stdout era None (27-oct-2026, con -X utf8)
+vivo19 = pid19.isdigit() and int(pid19) > 0 and mc.pid_vivo(int(pid19))
 check('K19 un hijo persistente del test acaba muerto y su copia borrada (job + EsperaJobVacio)',
       j19.get('result') == 'pass' and not vivo19 and not copias(),
       'pid=%s vivo=%s copias=%s log=%s' % (pid19, vivo19, copias(), log_de_la_copia(srv)))

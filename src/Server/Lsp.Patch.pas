@@ -509,6 +509,12 @@ function TextoDeBytes(const B: TArray<Byte>; AEsDesigner: Boolean; out AEncName:
   texto (lo que deja un test en su contenedor) o no lee texto (la version de
   la glibc de un sysroot): la misma pregunta y la misma negativa. }
 function LeeBytes(const APath: string; ALugares: TLugaresDeTexto): TArray<Byte>;
+{ ...y un TROZO de ellos, para lo que puede ser de gigas y solo se ensena en
+  parte (la salida de un programa, V80 de la 1.23.1: remote-run la leia
+  entera): hasta AMax bytes desde ADesde, los que haya; ATamano, el tamano
+  del fichero entero. La misma pregunta y la misma negativa. }
+function LeeTrozoDeBytes(const APath: string; ALugares: TLugaresDeTexto;
+  ADesde: Int64; AMax: Integer; out ATamano: Int64): TArray<Byte>;
 
 { LA PUERTA DE ESCRIBIR, su pregunta: '' si APath se puede escribir en el
   lugar ALugar; si no, su negativa. La jaula, lo que pregunta su escritor
@@ -2849,6 +2855,35 @@ function LeeBytes(const APath: string; ALugares: TLugaresDeTexto): TArray<Byte>;
 begin
   ExigeLugarDeLectura(APath, ALugares);
   Result := TFile.ReadAllBytes(APath);
+end;
+
+function LeeTrozoDeBytes(const APath: string; ALugares: TLugaresDeTexto;
+  ADesde: Int64; AMax: Integer; out ATamano: Int64): TArray<Byte>;
+var
+  F: TFileStream;
+  N: Int64;
+begin
+  ExigeLugarDeLectura(APath, ALugares);
+  // como TFile.ReadAllBytes: quien escribe no puede, quien lee si
+  F := TFileStream.Create(APath, fmOpenRead or fmShareDenyWrite);
+  try
+    ATamano := F.Size;
+    if ADesde < 0 then
+      ADesde := 0;
+    if ADesde > ATamano then
+      ADesde := ATamano;
+    N := ATamano - ADesde;
+    if N > AMax then
+      N := AMax;
+    if N < 0 then
+      N := 0;
+    SetLength(Result, N);
+    F.Position := ADesde;
+    if N > 0 then
+      F.ReadBuffer(Result[0], N);
+  finally
+    F.Free;
+  end;
 end;
 
 function LeeTexto(const APath: string; ALugares: TLugaresDeTexto): string;

@@ -180,6 +180,7 @@ uses
   Lsp.Dproj,         // ExtensionDeEjecutable, SistemaDePlataforma: lo que es cada plataforma
   Lsp.Rutas,         // FormaLarga: el proyecto dueno de un trabajo, por su ruta larga
   Lsp.Args,
+  Lsp.Listas,        // ColaDeSalida: EL recorte de una salida en la respuesta
   Lsp.NombresDeTrabajo;
 
 var
@@ -513,12 +514,15 @@ end;
   lo que escribio el programa y, si TERMINO, su codigo. EL lector de ese
   fichero: remote-run mientras espera y output despues. False si no se
   pudo traer (no esta, o paclient fallo); los var solo cambian si se
-  trajo. La copia local se borra al leerla. }
+  trajo. La copia local se borra al leerla. ATamano: los bytes del fichero
+  traido, que no se lee entero si pasa de lo que llena una cola. }
 function TraeSalida(const APc, AProfile, ADeployRel, AJobId, ATmpDir: string;
   var ATexto, AEntorno, ASalida: string; var ACodigo: Integer;
-  var ATerminado: Boolean): Boolean;
+  var ATerminado: Boolean; var ATamano: Int64): Boolean;
 var
-  OutFile, Ops, Output: string;
+  OutFile, Ops, Output, Enc: string;
+  Cabeza, Final: TArray<Byte>;
+  P: Integer;
 begin
   Result := False;
   OutFile := TPath.Combine(ATmpDir, NombreDeLaSalida(AJobId));
@@ -529,15 +533,56 @@ begin
     Exit;
   // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
   // leida en estricto un solo byte suelto mataba el run entero. Por la
-  // puerta de leer, con el temporal como lugar, y EL detector.
+  // puerta de leer, con el temporal como lugar, y EL detector. Y sin
+  // traerla entera (V80 de la 1.23.1: 64 MB de salida subian 1,2 GB el
+  // pico del servidor): si pasa de lo que llena una cola, su primera linea
+  // -la del entorno, que escribe el lanzador- y su final, con '...' donde
+  // empieza lo leido
   try
-    ATexto := LeeTexto(OutFile, [ltTemporal]);
+    Cabeza := LeeTrozoDeBytes(OutFile, [ltTemporal], 0, BYTES_DE_COLA, ATamano);
+    if ATamano > BYTES_DE_COLA then
+    begin
+      P := 0;
+      while (P < Length(Cabeza)) and (Cabeza[P] <> 10) do
+        Inc(P);
+      if (P < Length(Cabeza)) and (P >= Length(JOB_ENV)) and
+         (TEncoding.ASCII.GetString(Cabeza, 0, Length(JOB_ENV)) = JOB_ENV) then
+        SetLength(Cabeza, P + 1)
+      else
+        Cabeza := nil;
+      Final := LeeTrozoDeBytes(OutFile, [ltTemporal], ATamano - BYTES_DE_COLA,
+        BYTES_DE_COLA, ATamano);
+      // sin empezar en medio de un caracter UTF-8 (sus bytes de continuacion)
+      P := 0;
+      while (P < 3) and (P < Length(Final)) and (Final[P] and $C0 = $80) do
+        Inc(P);
+      ATexto := TextoDeBytes(Cabeza + TEncoding.ASCII.GetBytes('...') +
+        Copy(Final, P, MaxInt), False, Enc);
+    end
+    else
+      ATexto := TextoDeBytes(Cabeza, False, Enc);
   finally
     BorraFichero(OutFile, ltTemporal);
   end;
   AEntorno := PartirEntorno(ATexto);
   ATerminado := PartirSalida(ATexto, ASalida, ACodigo);
   Result := True;
+end;
+
+{ La salida de un trabajo en la respuesta, por EL recorte de la casa
+  (ColaDeSalida, V80 de la 1.23.1): sus ultimas lineas, todas las que
+  escribio el programa, vacias tambien; si no va entera, outputTruncated y
+  RUN-023 con los bytes de su fichero (ATamano: lo que no se leyo tampoco
+  va). La ponen remote-run y output, que la devolvian entera. }
+procedure PonSalida(AObj: TJSONObject; const ASalida: string; ATamano: Int64);
+begin
+  var Cola := ColaDeSalida(ASalida, LINEAS_DE_SALIDA);
+  AObj.AddPair('output', Cola.Texto);
+  if Cola.Cortada or (ATamano > BYTES_DE_COLA) then
+  begin
+    AObj.AddPair('outputTruncated', TJSONBool.Create(True));
+    AObj.AddPair('outputTruncatedNote', MsgFmt(SN_REMOTERUN_COLA_FMT, [ATamano, Cola.Mostradas]));
+  end;
 end;
 
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
@@ -551,6 +596,7 @@ var
   Rc, Codigo, Espera: Integer;
   Sw: TStopwatch;
   Terminado: Boolean;
+  Tamano: Int64;
 begin
   Result := TJSONObject.Create;
   try
@@ -644,6 +690,7 @@ begin
   // y trae el centinela cuando termina
   Texto := '';
   Terminado := False;
+  Tamano := 0;
   Codigo := -1;
   Salida := '';
   EntornoNota := '';
@@ -661,7 +708,7 @@ begin
     if Espera > POLL_MS then
       Espera := POLL_MS;
     TraeSalida(Pc, AProfile, DeployRel, JobId, TmpDir, Texto, EntornoNota,
-      Salida, Codigo, Terminado);
+      Salida, Codigo, Terminado, Tamano);
   until Terminado or (Sw.ElapsedMilliseconds > ATimeoutMs);
 
   Result.AddPair('jobId', JobId);
@@ -675,7 +722,7 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
-    Result.AddPair('output', Salida);
+    PonSalida(Result, Salida, Tamano);
     PonFalloDelLanzador(Result, Salida, Codigo);
   end
   else
@@ -692,7 +739,7 @@ begin
     if AGuardaSiSigue then
       Result.AddPair('outputNote', MsgFmt(SN_REMOTERUN_OUTPUT_FMT, [AProfile, JobId]));
     if Texto <> '' then
-      Result.AddPair('output', Texto);
+      PonSalida(Result, Texto, Tamano);
   end;
 
   // Limpieza remota: el lanzador de este trabajo (en Linux flag 3 lo deja;
@@ -751,6 +798,7 @@ var
   Pc, DeployRel, TmpDir, Texto, Entorno, Salida, Ops, Output: string;
   Codigo: Integer;
   Terminado: Boolean;
+  Tamano: Int64;
 begin
   Result := TJSONObject.Create;
   try
@@ -785,8 +833,9 @@ begin
   Result.AddPair('jobId', AJobId);
   Result.AddPair('profile', AProfile);
   Result.AddPair('project', DeployRel);
+  Tamano := 0;
   if not TraeSalida(Pc, AProfile, DeployRel, AJobId, TmpDir, Texto, Entorno,
-    Salida, Codigo, Terminado) then
+    Salida, Codigo, Terminado, Tamano) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_OUTPUT_FMT, [AJobId]));
@@ -799,10 +848,10 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
-    Result.AddPair('output', Salida);
+    PonSalida(Result, Salida, Tamano);
     PonFalloDelLanzador(Result, Salida, Codigo);
-    // leida ENTERA = borrada, como el buzon y las capturas: en el target
-    // no se acumula nada que alguien ya tiene
+    // leida = borrada, como el buzon y las capturas: en el target no se
+    // acumula nada que alguien ya tiene
     Ops := Format('"--Remove=%s/%s"', [DeployRel, NombreDeLaSalida(AJobId)]);
     Paclient(Pc, Ops, AProfile, Output);
     Result.AddPair('note', MsgText(SN_REMOTERUN_OUTPUT_DONE));
@@ -811,7 +860,7 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('exitCode', TJSONNumber.Create(-1));
-    Result.AddPair('output', Texto);
+    PonSalida(Result, Texto, Tamano);
     Result.AddPair('note', MsgFmt(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
   end;
   except

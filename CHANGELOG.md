@@ -120,6 +120,20 @@ the MCP `initialize` response (`serverInfo.version`).
   contains it, this session may read it, and it exists (a root that is a whole
   drive contains any path by its text, so the hint is checked on disk after
   the gate).
+- **`remote-run` and `output` return the last lines of a long output, not all
+  of it, and the server no longer reads it whole.** A program that printed
+  5000 lines came back with all of them, a single 2 MB line came back whole,
+  and 64 MB of output raised the server's private memory peak by 1.2 GB in one
+  call. Now the answer carries the last 400 lines and at most 64K characters
+  (the end of a line that alone does not fit), with `outputTruncated` and
+  `RUN-023` giving the size of the output. Of the output file, the server reads
+  only its first line (the launcher's) and its end. The build tail,
+  `delphi_test`'s and the inline logcat of `delphi_adb` each cut their output
+  their own way; they now share this one cut. Each still keeps its own number
+  of lines, and the character cap is new for all of them. `output`'s
+  description and `RUN-004`/`RUN-005`/`RUN-006` no longer promise the whole
+  output, and `output` no longer claims to bring only what was written "since
+  its answer": it brings everything from the start.
 
 ## [1.23.0] - 2026-10-26
 

@@ -141,7 +141,8 @@ uses
   Lsp.Styles, // RcLecturasDenegadas: EL juez del .rc (el de delphi_styles build)
   Lsp.NetDrives,
   Lsp.Rutas,
-  Lsp.NombresDeTrabajo;
+  Lsp.NombresDeTrabajo,
+  Lsp.Listas;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -2158,9 +2159,9 @@ var
   EsPaquete: Boolean;
   EventosSaltados: Boolean; // eventos pre/post build vaciados en este build
   YaDicho: TStringList; // lo que ya va en errors[]/warnings[]: la cola no lo repite
-  Tail: TStringBuilder;
+  Cola: string;
   Lines: TArray<string>;
-  I, TailFrom: Integer;
+  LineasDeCola: Integer;
 begin
   // Un .dpr/.dpk se compila por su .dproj, como lo resuelven delphi_config y
   // delphi_test (DprojDe): aqui contestaba BUILD-016 "no es un proyecto"
@@ -2647,42 +2648,40 @@ begin
   // come el contexto del agente (medido el 2026-09-20 usando este servidor
   // como agente). Se queda lo unico que se mira de ella -el --sysroot, que
   // dice con QUE SDK enlazo- y el recuento de las rutas.
-  // Keep the last ~25 lines as raw context (summary, timings).
-  Tail := TStringBuilder.Create;
+  // La cola: las 25 ultimas lineas que dicen algo (120 en verbose), el
+  // resumen y los tiempos, por EL recorte de la casa (ColaDeSalida, V80 de
+  // la 1.23.1), sobre las lineas ya sin la ruta del .dproj.
+  LineasDeCola := 25;
+  if SameText(AVerbosity, 'verbose') then
+    LineasDeCola := 120;
   try
-    TailFrom := Length(Lines) - 25;
-    if SameText(AVerbosity, 'verbose') then
-      TailFrom := Length(Lines) - 120;
-    if TailFrom < 0 then
-      TailFrom := 0;
-    for I := TailFrom to High(Lines) do
-      if Lines[I].Trim <> '' then
+    Cola := ColaDeSalida(string.Join(#10, Lines), LineasDeCola,
+      function(var ALinea: string): Boolean
       begin
         // Lo que ya va en errors[] o warnings[] NO se repite aqui: la cola
         // los traia OTRA VEZ enteros, y en un proyecto con quince avisos eso
         // son 2-3 KB duplicados en CADA build, pagados por el contexto del
         // agente (visto el 2026-09-20 compilando este mismo repo por el MCP
         // una y otra vez). La cola es el resumen y los tiempos.
-        if YaDicho.IndexOf(Lines[I].Trim) >= 0 then
-          Continue;
-        var Linea := Lines[I].TrimRight;
-        if Linea.Contains('Linker command line:') and
+        if (ALinea.Trim = '') or (YaDicho.IndexOf(ALinea.Trim) >= 0) then
+          Exit(False);
+        if ALinea.Contains('Linker command line:') and
            not SameText(AVerbosity, 'verbose') and
-           (TRegEx.Matches(Linea, '(?:^|\s)-L\s*\S+').Count >= 4) then
+           (TRegEx.Matches(ALinea, '(?:^|\s)-L\s*\S+').Count >= 4) then
         begin
-          var MSys := TRegEx.Match(Linea, '--sysroot\s+(\S+)');
+          var MSys := TRegEx.Match(ALinea, '--sysroot\s+(\S+)');
           // IfThen evalua los DOS brazos: con un linker sin --sysroot (Android)
           // Groups[1] lanzaba "Index out of bounds (1)" y tumbaba la respuesta
           // entera del build con verbosity=normal (medido 2026-09-23, G.23).
           var Sysroot := MsgText(SF_NINGUNO);
           if MSys.Success then
             Sysroot := MSys.Groups[1].Value;
-          Linea := MsgFmt(SF_BUILD_LINKER_RESUMIDA_FMT,
+          ALinea := MsgFmt(SF_BUILD_LINKER_RESUMIDA_FMT,
             [Sysroot,
-             TRegEx.Matches(Linea, '(?:^|\s)-L\s*\S+').Count]);
+             TRegEx.Matches(ALinea, '(?:^|\s)-L\s*\S+').Count]);
         end;
-        Tail.AppendLine(Linea);
-      end;
+        Result := True;
+      end).Texto;
 
     Result := TJSONObject.Create;
     try
@@ -2900,8 +2899,8 @@ begin
     // dar un recuento: no va la clave (nunca un 0 inventado). Lo dice la
     // descripcion de verbosity; la nota BUILD-001 iba en CADA build quiet
     // (revisor de tokens, 4-oct-2026). La cola, solo si dice algo.
-    if Tail.Length > 0 then
-      Result.AddPair('outputTail', Tail.ToString);
+    if Cola <> '' then
+      Result.AddPair('outputTail', Cola);
     // A stateless protocol means the agent only knows what each result tells
     // it: say WHERE the artifact landed, or it has to hunt the disk for it
     // (measured in the field: 20 calls chasing a fresh exe that delphi_list
@@ -3024,7 +3023,6 @@ begin
     end;
   finally
     YaDicho.Free;
-    Tail.Free;
   end;
 end;
 

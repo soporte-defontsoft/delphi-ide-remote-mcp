@@ -121,12 +121,55 @@ function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
   podia con el (A24 de la 1.23). }
 function PaginaDeTexto(ADesde, AHasta, ATotal: Integer): TPagina;
 
+{ LA COLA DE UNA SALIDA en una respuesta (V80 de la 1.23.1): lo que escribe un
+  programa -msbuild, un test, el logcat de un dispositivo, lo que corre
+  remote-run- puede ser de megas, y al agente le va su final. El tope por su
+  contexto estaba escrito a mano tres veces, cada una a su manera (el build
+  25 o 120 lineas crudas y luego filtradas, delphi_test 40, el logcat de adb
+  400 ya filtradas), y remote-run devolvia la salida entera. }
+const
+  { las lineas de una salida que ES la respuesta: el logcat de adb y lo que
+    escribio un programa en remote-run }
+  LINEAS_DE_SALIDA = 400;
+  { los caracteres de CUALQUIER cola: una linea sola puede ser de megas }
+  CARACTERES_DE_COLA = 64 * 1024;
+  { lo que basta leer del FINAL de un fichero para llenar una cola: un
+    caracter ocupa como mucho cuatro bytes (UTF-8, UTF-16 o UTF-32) }
+  BYTES_DE_COLA = CARACTERES_DE_COLA * 4;
+
+type
+  { si una linea de la salida (ya sin el blanco del final) va en la cola:
+    False la salta; puede cambiarla }
+  TLineaDeCola = reference to function(var ALinea: string): Boolean;
+  TColaDeSalida = record
+    Texto: string;
+    Total, Mostradas: Integer; // las lineas que pasan y las que van
+    { falta algo: lineas de antes o el principio de la mas nueva (una linea
+      sola de megas va entera en la cuenta y cortada en el texto) }
+    Cortada: Boolean;
+  end;
+
+{ Las ultimas AMaxLineas lineas de ATexto que ALinea deja pasar (todas sin
+  ella; cada una sin el blanco del final y como ALinea la deja), por EL
+  troceador (LineasDelTexto), unidas por saltos y con CARACTERES_DE_COLA como
+  mucho: si la mas nueva sola no cabe, su final (FinalDeTexto). Que lineas
+  sobran lo dice quien llama: el build y delphi_test saltan las vacias, y el
+  logcat y remote-run, cuya salida ES la respuesta, no. }
+function ColaDeSalida(const ATexto: string; AMaxLineas: Integer;
+  const ALinea: TLineaDeCola = nil): TColaDeSalida;
+{ Los AMax ultimos caracteres de ATexto con '...' delante si no caben (el
+  texto tal cual si caben), sin partir un par sustituto: el final de la linea
+  mas nueva de una cola, y el del informe que guarda delphi_report. }
+function FinalDeTexto(const ATexto: string; AMax: Integer): string;
+
 implementation
 
 uses
   System.SysUtils,
   System.IOUtils,
   System.StrUtils,
+  System.Character, // los pares de sustitutos
+  Lsp.Patch,     // LineasDelTexto, EL troceador
   Lsp.NetDrives, // SinBarraFinal
   Lsp.Mascara,   // MaskDriveText
   Lsp.Texts,     // MsgFmt: la nota del recorte
@@ -403,6 +446,77 @@ begin
   // carpeta actual; lo vigila test_raiz_unidad)
   Grupo(TPath.GetDirectoryName(SinBarraFinal(ARuta))).Add(
     TPath.GetFileName(SinBarraFinal(ARuta)));
+end;
+
+function FinalDeTexto(const ATexto: string; AMax: Integer): string;
+var
+  P: Integer;
+begin
+  if Length(ATexto) <= AMax then
+    Exit(ATexto);
+  P := Length(ATexto) - AMax + 1;
+  if (AMax > 0) and ATexto[P].IsLowSurrogate then
+    Inc(P); // no partir un par UTF-16
+  Result := '...' + Copy(ATexto, P, MaxInt);
+end;
+
+function ColaDeSalida(const ATexto: string; AMaxLineas: Integer;
+  const ALinea: TLineaDeCola): TColaDeSalida;
+var
+  Dicen: TList<string>;
+  L: string;
+  Desde, Caben: Integer;
+  Sb: TStringBuilder;
+begin
+  Result := Default(TColaDeSalida);
+  Dicen := TList<string>.Create;
+  try
+    for var Cruda in LineasDelTexto(ATexto) do
+    begin
+      L := Cruda.TrimRight;
+      if Assigned(ALinea) and not ALinea(L) then
+        Continue;
+      Dicen.Add(L);
+    end;
+    Result.Total := Dicen.Count;
+    // de la mas nueva hacia atras, mientras quepan (cada una con su salto)
+    Caben := CARACTERES_DE_COLA;
+    Desde := Dicen.Count;
+    while (Desde > 0) and (Dicen.Count - Desde < AMaxLineas) do
+    begin
+      L := Dicen[Desde - 1];
+      if Length(L) > Caben then
+      begin
+        // la mas nueva sola no cabe: su final; una mas vieja ya no entra
+        if Desde = Dicen.Count then
+        begin
+          Dicen[Desde - 1] := FinalDeTexto(L, Caben - 3);
+          Result.Cortada := True;
+          Dec(Desde);
+        end;
+        Break;
+      end;
+      Dec(Caben, Length(L) + Length(sLineBreak));
+      Dec(Desde);
+    end;
+    Result.Mostradas := Dicen.Count - Desde;
+    if Result.Mostradas < Result.Total then
+      Result.Cortada := True;
+    Sb := TStringBuilder.Create;
+    try
+      for var I := Desde to Dicen.Count - 1 do
+      begin
+        if I > Desde then
+          Sb.Append(sLineBreak);
+        Sb.Append(Dicen[I]);
+      end;
+      Result.Texto := Sb.ToString;
+    finally
+      Sb.Free;
+    end;
+  finally
+    Dicen.Free;
+  end;
 end;
 
 end.

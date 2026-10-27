@@ -11,7 +11,7 @@ delphi_workspace ya lista: no pregunta al disco (no es un oraculo).
      como raiz de solo lectura: negado, y la negativa nombra la de D:
   O2 una ruta cuya cola no esta en ningun sitio: la negativa de siempre, sin pista
   O3 una raiz que es una unidad ENTERA contiene por texto cualquier ruta (medido
-     en vivo: la pista nombraba srvn:\Program Files... que no existe): la pista
+     en vivo: la pista nombraba srvn:\\Program Files... que no existe): la pista
      nombra la que EXISTE
 
 Uso:  python tests/test_otra_unidad_1231.py [ruta-a-DelphiLspMcp.exe]

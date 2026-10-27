@@ -613,9 +613,7 @@ var
   Ficheros: TJSONArray;
   Fuera: Integer;
   DuracionMs: Int64;
-  Tail: TArray<string>;
-  I, From: Integer;
-  Sb: TStringBuilder;
+  Cola: TColaDeSalida;
 begin
   Result := TJSONObject.Create;
   try
@@ -839,24 +837,19 @@ begin
         Result.AddPair('filterNote', MsgFmt(SN_TEST_FILTRO_SIN_TESTS_FMT, [AFilter]));
     end;
   end;
-  Tail := Output.Replace(#13#10, #10).Split([#10]);
-  From := Length(Tail) - 40;
-  if From < 0 then
-    From := 0;
-  Sb := TStringBuilder.Create;
-  try
-    for I := From to High(Tail) do
+  // la cola, por EL recorte de la casa (ColaDeSalida, V80 de la 1.23.1): las
+  // 40 ultimas que dicen algo
+  Cola := ColaDeSalida(Output, 40,
+    function(var ALinea: string): Boolean
+    begin
       // el recuadro de DUnitX (copyright y licencia, '*' a los dos lados)
       // iba en cada cola: cinco lineas que no dicen nada del resultado
       // (revisor de tokens, 4-oct-2026)
-      if (Tail[I].Trim <> '') and not ((K = tkDUnitX) and Tail[I].Trim.StartsWith('*') and
-         Tail[I].Trim.EndsWith('*')) then
-        Sb.AppendLine(Tail[I].TrimRight);
-    Result.AddPair('outputTail', Sb.ToString.TrimRight);
-  finally
-    Sb.Free;
-  end;
-  if Length(Tail) > 40 then
+      Result := (ALinea.Trim <> '') and not ((K = tkDUnitX) and
+        ALinea.Trim.StartsWith('*') and ALinea.Trim.EndsWith('*'));
+    end);
+  Result.AddPair('outputTail', Cola.Texto);
+  if Cola.Cortada then
     Result.AddPair('outputTruncated', TJSONBool.Create(True));
   // TEST-024 (de donde sale el veredicto, el contenedor) iba en CADA
   // ejecucion: lo dice la descripcion de la tool, y el tiempo agotado y el

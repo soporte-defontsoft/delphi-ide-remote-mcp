@@ -82,7 +82,6 @@ uses
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
   Lsp.Patch,      // EscribeTexto: la puerta de escribir, con la casa como lugar
   Lsp.Codificacion, // ekUtf8Bom
-  System.Character,
   Lsp.Listas,     // TListaDeFicheros: el organizador de las listas de ficheros
   Lsp.Casa,
   Lsp.NetDrives;
@@ -403,15 +402,7 @@ begin
   // cortado a 4.000 caracteres por SU lado (validacion de la 1.16.0) y la
   // respuesta solo decia "guardado"; viendo el final, el corte se ve.
   var Guardado := Params.Message.TrimRight;
-  var Cola := Guardado;
-  if Length(Cola) > 60 then
-  begin
-    Cola := Copy(Cola, Length(Cola) - 59, 60);
-    if (Cola <> '') and Cola[1].IsLowSurrogate then // no partir un par UTF-16
-      Delete(Cola, 1, 1);
-    Cola := '...' + Cola;
-  end;
-  Cola := Cola.Replace(#13, ' ').Replace(#10, ' ');
+  var Cola := FinalDeTexto(Guardado, 60).Replace(#13, ' ').Replace(#10, ' ');
   Result := MsgFmt(SN_REPORT_OK_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path),
      SERVER_VERSION, Length(Guardado), Cola]) + KindNote;

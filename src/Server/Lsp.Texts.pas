@@ -2002,13 +2002,14 @@ const
     'removedSeatCopy; the sysroot ' +
     'stays on disk and the answer says where) | remote-run (run what THAT ' +
     'project deployed on the target of "profile" - nothing else - and ' +
-    'return exit code and output; nothing to install, PAServer runs it. On ' +
+    'return exit code and output (a long one as its last lines, with ' +
+    'outputTruncated); nothing to install, PAServer runs it. On ' +
     'timeout it is NOT killed: a program with a window stays up, you get ' +
     'its partial output and stillRunning=true) | kill (stop a job a ' +
     'remote-run left running: profile, project and its job id; only a job of ' +
-    'THAT project on THAT machine) | output (what a running job wrote ' +
-    'SINCE its answer: so far while it lives; once it ended, all of it ' +
-    'with its exit code, and then it is deleted on the target; same profile, ' +
+    'THAT project on THAT machine) | output (what a job has written, cut ' +
+    'as remote-run cuts it: so far while it lives; once it ended, with its ' +
+    'exit code, and then it is deleted on the target; same profile, ' +
     'project and job as kill)';
   SP_PASERVER_PROJECT =
     'remote-run, kill, output: the ABSOLUTE path of the .dproj (or its .dpr) whose ' +
@@ -2103,20 +2104,26 @@ const
     '[RUN-004] What it writes from now on -an error on closing, its exit ' +
     'code- you read with delphi_paserver command=output profile=%s ' +
     'project=<the same .dproj> job=%s: while it lives, what it has so ' +
-    'far; once it ends, all of it and its code, and then it is deleted ' +
+    'far; once it ends, its output and its code, and then it is deleted ' +
     'from the target.';
   SN_REMOTERUN_OUTPUT_ALIVE_FMT =
     '[RUN-005] Still alive: this is what it has written so far. Ask ' +
-    'again whenever you want; once it ends it brings everything and its ' +
+    'again whenever you want; once it ends it brings its output and its ' +
     'exit code, and then it is deleted from the target. To stop it: ' +
     'command=kill profile=%s project=<the same .dproj> job=%s.';
   SN_REMOTERUN_OUTPUT_DONE =
-    '[RUN-006] Finished: its whole output and its exit code. Read in ' +
-    'full, it has been deleted from the target (like a mailbox): asking ' +
+    '[RUN-006] Finished: its output and its exit code. Once read, it ' +
+    'has been deleted from the target (like a mailbox): asking ' +
     'for it again brings nothing.';
+  { La salida de un programa que no cabe en una respuesta: sus ultimas
+    lineas (ColaDeSalida, V80 de la 1.23.1). %d = los bytes de su fichero de
+    salida en el destino, %d = las lineas que van }
+  SN_REMOTERUN_COLA_FMT =
+    '[RUN-023] Its output on the target is %d bytes; this answer ' +
+    'carries its last %d lines.';
   SR_REMOTERUN_NO_OUTPUT_FMT =
     '[RUN-018 NOT_FOUND] There is no output of job %s on the target: ' +
-    'either it was already read in full (a finished output is deleted ' +
+    'either it was already read (a finished output is deleted ' +
     'when read), or it ended before its remote-run returned (and you ' +
     'already had it in its answer), or that job does not belong to this ' +
     'project on that machine.';

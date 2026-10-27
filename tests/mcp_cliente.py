@@ -411,6 +411,37 @@ def pid_vivo(pid):
         k.CloseHandle(h)
 
 
+def memoria_pico(pid):
+    """Los bytes PRIVADOS que el proceso pid ha llegado a tener (PeakPagefileUsage
+    de GetProcessMemoryInfo): lo que mide si un servidor leyo entero algo que
+    no debia (test_cola_salida_1231, V80 de la 1.23.1)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class _Cuentas(ctypes.Structure):
+        _fields_ = [('cb', wintypes.DWORD), ('PageFaultCount', wintypes.DWORD)] + [
+            (n, ctypes.c_size_t) for n in (
+                'PeakWorkingSetSize', 'WorkingSetSize', 'QuotaPeakPagedPoolUsage', 'QuotaPagedPoolUsage',
+                'QuotaPeakNonPagedPoolUsage', 'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage')]
+    k = ctypes.WinDLL('kernel32', use_last_error=True)
+    k.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    k.OpenProcess.restype = ctypes.c_void_p
+    k.CloseHandle.argtypes = [ctypes.c_void_p]
+    p = ctypes.WinDLL('psapi', use_last_error=True)
+    p.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32]
+    h = k.OpenProcess(0x1000 | 0x0010, 0, pid)            # QUERY_LIMITED_INFORMATION | VM_READ
+    if not h:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        c = _Cuentas()
+        c.cb = ctypes.sizeof(c)
+        if not p.GetProcessMemoryInfo(h, ctypes.byref(c), c.cb):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return c.PeakPagefileUsage
+    finally:
+        k.CloseHandle(h)
+
+
 def etiqueta_de_integridad(ruta):
     """El SID de la etiqueta de integridad de ruta, preguntado a WINDOWS (su
     SACL, GetNamedSecurityInfo): 'S-1-16-4096' Low, 'S-1-16-8192' Medium...;

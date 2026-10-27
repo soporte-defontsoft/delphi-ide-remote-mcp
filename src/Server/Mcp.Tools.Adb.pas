@@ -100,7 +100,8 @@ uses
   Lsp.Png,       // TamanoPngBytes: LA cabecera de un PNG
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner,
-  Lsp.Codificacion;
+  Lsp.Codificacion,
+  Lsp.Listas;
 
 { El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
   density` ("Physical size: 1080x1920", "Override density: 320"); '' si no
@@ -453,23 +454,14 @@ begin
     end
     else
     begin
-      // inline: never more than the newest 400 lines - protecting the
-      // client's context is the server's job too
-      var Ls := Txt.Split([#13#10, #10]);
-      if Length(Ls) > 400 then
-      begin
-        var Tail := TStringBuilder.Create;
-        try
-          Tail.AppendLine(MsgFmt(SN_ADB_TAIL_FMT, [Length(Ls), 400]));
-          for var I := Length(Ls) - 400 to High(Ls) do
-            Tail.AppendLine(Ls[I].TrimRight);
-          Result := Tail.ToString.TrimRight;
-        finally
-          Tail.Free;
-        end;
-      end
-      else
-        Result := Txt;
+      // inline: never more than the newest lines - protecting the client's
+      // context is the server's job too. Por EL recorte de la casa
+      // (ColaDeSalida, V80 de la 1.23.1: el tope estaba escrito a mano aqui,
+      // en el build y en delphi_test), que acota tambien los caracteres
+      var Cola := ColaDeSalida(Txt, LINEAS_DE_SALIDA);
+      Result := Cola.Texto;
+      if Cola.Cortada then
+        Result := MsgFmt(SN_ADB_TAIL_FMT, [Cola.Total, Cola.Mostradas]) + sLineBreak + Result;
     end;
   end
   else if (Cmd = 'connect') or (Cmd = 'disconnect') then

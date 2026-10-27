@@ -4,7 +4,8 @@
 // MsgIds, MsgTag, HasMsg, MsgOutcome, EsMsg, MsgEnvuelve). Una etiqueta es
 // [AREA-NNN] o [AREA-NNN RESULTADO] al PRINCIPIO del mensaje (David, 27-sep):
 // lo que no tiene esa forma exacta no es una etiqueta, y un mensaje sin
-// etiqueta no coincide con nada.
+// etiqueta no coincide con nada. Y la cola de una salida en una respuesta
+// (Lsp.Listas.ColaDeSalida y FinalDeTexto, V80 de la 1.23.1).
 
 interface
 
@@ -24,10 +25,22 @@ type
     [Test] procedure ElEnvoltorioRespetaLaCausa;
   end;
 
+  [TestFixture]
+  TColaDeSalidaTests = class
+  public
+    [Test] procedure LasUltimasYLaCuenta;
+    [Test] procedure SinFiltroVanLasVacias;
+    [Test] procedure ElFiltroSaltaYCambia;
+    [Test] procedure LosCaracteresAcotan;
+    [Test] procedure UnaLineaEnormeVaSuFinalYSeDice;
+    [Test] procedure ElFinalNoParteUnPar;
+  end;
+
 implementation
 
 uses
   System.SysUtils,
+  Lsp.Listas,
   Lsp.Texts;
 
 const
@@ -160,7 +173,87 @@ begin
   Assert.AreEqual(Causa, MsgEnvuelve(INTERNO, Causa, ['ELspSession', Causa]));
 end;
 
+{ TColaDeSalidaTests }
+
+function Lineas(ADesde, AHasta: Integer): string;
+begin
+  Result := '';
+  for var I := ADesde to AHasta do
+    Result := Result + 'L' + IntToStr(I) + #10;
+end;
+
+procedure TColaDeSalidaTests.LasUltimasYLaCuenta;
+begin
+  var C := ColaDeSalida(Lineas(1, 10), 3);
+  Assert.AreEqual('L8'#13#10'L9'#13#10'L10', C.Texto);
+  Assert.AreEqual(10, C.Total);
+  Assert.AreEqual(3, C.Mostradas);
+  Assert.IsTrue(C.Cortada, 'faltan siete');
+  // las que caben van todas, sin la fantasma del salto final
+  C := ColaDeSalida(Lineas(1, 3), 3);
+  Assert.AreEqual('L1'#13#10'L2'#13#10'L3', C.Texto);
+  Assert.IsFalse(C.Cortada, 'enteras');
+end;
+
+procedure TColaDeSalidaTests.SinFiltroVanLasVacias;
+begin
+  // la salida que ES la respuesta (logcat, remote-run) va como salio
+  var C := ColaDeSalida('a'#13#10#13#10'b  '#13'c', 10);
+  Assert.AreEqual('a'#13#10#13#10'b'#13#10'c', C.Texto, 'la vacia va; el blanco final no; el CR suelto es salto');
+  Assert.AreEqual(4, C.Total);
+end;
+
+procedure TColaDeSalidaTests.ElFiltroSaltaYCambia;
+begin
+  var C := ColaDeSalida('a'#10#10'x'#10'b', 2,
+    function(var ALinea: string): Boolean
+    begin
+      if ALinea = 'x' then
+        ALinea := 'X';
+      Result := ALinea <> '';
+    end);
+  Assert.AreEqual('X'#13#10'b', C.Texto);
+  Assert.AreEqual(3, C.Total, 'la vacia no cuenta');
+  Assert.IsTrue(C.Cortada);
+end;
+
+procedure TColaDeSalidaTests.LosCaracteresAcotan;
+var
+  S: string;
+begin
+  S := '';
+  for var I := 1 to 200 do
+    S := S + StringOfChar('x', 999) + IntToStr(I mod 10) + #10;
+  var C := ColaDeSalida(S, LINEAS_DE_SALIDA);
+  Assert.IsTrue(Length(C.Texto) <= CARACTERES_DE_COLA, IntToStr(Length(C.Texto)));
+  Assert.IsTrue((C.Mostradas > 0) and (C.Mostradas < 200) and C.Cortada, IntToStr(C.Mostradas));
+  Assert.IsTrue(C.Texto.EndsWith('x0'), 'la mas nueva al final');
+  Assert.IsFalse(C.Texto.StartsWith('...'), 'lineas enteras: ninguna a medias');
+end;
+
+procedure TColaDeSalidaTests.UnaLineaEnormeVaSuFinalYSeDice;
+begin
+  var C := ColaDeSalida('vieja'#10 + StringOfChar('A', 200000) + 'FIN', LINEAS_DE_SALIDA);
+  Assert.IsTrue(Length(C.Texto) <= CARACTERES_DE_COLA, IntToStr(Length(C.Texto)));
+  Assert.IsTrue(C.Texto.StartsWith('...') and C.Texto.EndsWith('FIN'), Copy(C.Texto, 1, 10));
+  Assert.AreEqual(1, C.Mostradas, 'la mas nueva, a medias');
+  Assert.IsTrue(C.Cortada, 'y se dice');
+  // sola: la cuenta cuadra (1 de 1) y aun asi falta su principio
+  C := ColaDeSalida(StringOfChar('A', 200000), LINEAS_DE_SALIDA);
+  Assert.IsTrue((C.Total = 1) and (C.Mostradas = 1) and C.Cortada, 'una sola linea cortada');
+end;
+
+procedure TColaDeSalidaTests.ElFinalNoParteUnPar;
+begin
+  Assert.AreEqual('abc', FinalDeTexto('abc', 5), 'cabe: tal cual');
+  Assert.AreEqual('...bc', FinalDeTexto('abc', 2));
+  // los 3 ultimos empezarian por la segunda mitad del emoji: va sin ella
+  Assert.AreEqual('...cd', FinalDeTexto('ab'#$D83D#$DE00'cd', 3));
+  Assert.AreEqual('...'#$D83D#$DE00'cd', FinalDeTexto('ab'#$D83D#$DE00'cd', 4));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TEtiquetasTests);
+  TDUnitX.RegisterTestFixture(TColaDeSalidaTests);
 
 end.
