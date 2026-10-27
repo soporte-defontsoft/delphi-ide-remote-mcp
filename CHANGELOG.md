@@ -189,9 +189,9 @@ the MCP `initialize` response (`serverInfo.version`).
 - **The IDE's registry key is read only by its readers.** Two places in
   `delphi_paserver` opened the key by hand: the platform an SDK's seat names,
   and whether a profile already has its seat. The first now uses the IDE value
-  reader, which also copes with a value that is not text. The second asks once
-  for the list of seats instead of opening a key per profile. `test_paisaje`
-  keeps reads of that key in their unit.
+  reader, which also copes with a value that is not text. The second asks the
+  registry whether the profile's key exists, through a new reader in the same
+  unit. `test_paisaje` keeps reads of that key in their unit.
 - **A screenshot refused by Windows is told by its code, not by its
   wording.** When the desktop node could not take a screenshot, the server
   decided whether access was denied by looking for the phrase in Spanish or

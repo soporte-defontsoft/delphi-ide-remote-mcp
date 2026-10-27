@@ -1693,13 +1693,13 @@ begin
     Info := DiscoverRadStudio;
     if Info.Found then
     begin
-      // los asientos que ya tiene, por EL lector de las subclaves del IDE, UNA
-      // vez (un KeyExists a mano por perfil; V83 de la 1.23.1). El registro no
-      // distingue mayusculas en los nombres de clave: MatchText
-      var Asientos := IdeSubclaves(Info.Version, 'RemoteProfiles');
+      // si ya tiene asiento lo contesta EL REGISTRO, por su lector
+      // (IdeExisteSubclave; era un KeyExists a mano, V83 de la 1.23.1): buscar
+      // el nombre en la lista con MatchText lo juzgaba el idioma del usuario
+      // (V101 de la 1.23.1)
       for Nombre in PerfilesDelIde(Info.Version) do
       begin
-        YaEstaba := MatchText(Nombre, Asientos);
+        YaEstaba := IdeExisteSubclave(Info.Version, 'RemoteProfiles\' + Nombre);
         if YaEstaba then
         begin
           Intactos.Add(Nombre);

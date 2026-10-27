@@ -62,6 +62,12 @@ function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
   perfiles remotos. EL lector: estaba a mano en cuatro sitios de dos unidades
   (Fable, revision de la 1.22.2). Vacia si la clave no esta. }
 function IdeSubclaves(const AVersion, ASubKey: string): TArray<string>;
+{ Si la clave ASubKey de la configuracion del IDE de esa version existe: lo
+  contesta EL REGISTRO (KeyExists), que compara los nombres con la tabla de
+  mayusculas del sistema. Buscar el nombre en IdeSubclaves con MatchText lo
+  juzgaba el idioma del usuario, que junta nombres que el registro separa
+  (V101 de la 1.23.1, de la pasada del paisaje del diff). }
+function IdeExisteSubclave(const AVersion, ASubKey: string): Boolean;
 
 { Generic reader of the IDE's per-user configuration (HKCU\...\BDS\<ver>\...).
   ASubKey is relative to the version key (e.g. 'Editor', 'PlatformSDKs',
@@ -885,6 +891,19 @@ begin
     Result := Keys.ToStringArray;
   finally
     Keys.Free;
+    Reg.Free;
+  end;
+end;
+
+function IdeExisteSubclave(const AVersion, ASubKey: string): Boolean;
+var
+  Reg: TRegistry;
+begin
+  Reg := TRegistry.Create(KEY_READ);
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    Result := Reg.KeyExists(ClaveDelIde(AVersion, ASubKey));
+  finally
     Reg.Free;
   end;
 end;
