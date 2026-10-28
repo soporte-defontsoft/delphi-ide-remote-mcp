@@ -2,17 +2,17 @@
 r"""Un StyleLookup que ningun estilo define (V75 de la 1.23.1): designer set lo escribia, el lint
 del disenador decia CLEAN y preview lo dibujaba con el estilo de su clase (medido el 28-oct). El
 juez ya existia en delphi_styles lint: el estilo por defecto de la plataforma
-(PlatformDefaultStyleNames). Ahora lo pregunta tambien el disenador, como NOTA (DSGN-173): FMX
+(PlatformDefaultStyleNames). Ahora lo pregunta tambien el disenador, como NOTA (DSGN-175): FMX
 no revienta, dibuja el estilo de la clase, y un estilo que el proyecto cargue en ejecucion solo
 lo ve delphi_styles lint con su carpeta.
 
-  L1 lint de un form con StyleLookup = 'estiloquenoexiste': NO dice CLEAN y la nota DSGN-173
+  L1 lint de un form con StyleLookup = 'estiloquenoexiste': NO dice CLEAN y la nota DSGN-175
      nombra el componente y el lookup (ROJA contra 464c4cc: CLEAN)
   L2 control: StyleLookup = 'buttonstyle' (del estilo por defecto): CLEAN
   L3 control: StyleLookup = '' (el estilo de su clase): CLEAN
-  L4 designer set StyleLookup=otroquenoexiste: la respuesta lleva DSGN-173 (roja)
-  L5 delphi_edit que escribe un StyleLookup que no existe: sus avisos llevan DSGN-173 (roja)
-  L6 con un TStyleBook en el form (sus estilos van en binario y no se leen): sin DSGN-173
+  L4 designer set StyleLookup=otroquenoexiste: la respuesta lleva DSGN-175 (roja)
+  L5 delphi_edit que escribe un StyleLookup que no existe: sus avisos llevan DSGN-175 (roja)
+  L6 con un TStyleBook en el form (sus estilos van en binario y no se leen): sin DSGN-175
 
 Uso:  python tests/test_lookup_sin_estilo_1231.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -60,7 +60,7 @@ try:
     con('estiloquenoexiste')
     r = lint(fmx)
     check('L1 un lookup que no existe: el lint NO dice CLEAN', not limpio(r), r[:300])
-    check('L1 ...y la nota DSGN-173 nombra Boton1 y el lookup', nota(r, 'estiloquenoexiste'), r[:500])
+    check('L1 ...y la nota DSGN-175 nombra Boton1 y el lookup', nota(r, 'estiloquenoexiste'), r[:500])
 
     con('buttonstyle')
     r = lint(fmx)
@@ -73,18 +73,18 @@ try:
     con('buttonstyle')
     r = srv.call('delphi_designer', {'command': 'set', 'path': fmx, 'component': 'Boton1',
                                      'prop': 'StyleLookup', 'value': 'otroquenoexiste'})
-    check('L4 designer set de un lookup que no existe: lo escribe y lleva DSGN-173',
+    check('L4 designer set de un lookup que no existe: lo escribe y lleva DSGN-175',
           'error' not in mc.como_json(r) and nota(r, 'otroquenoexiste'), r[:500])
 
     con('buttonstyle')
     r = srv.call('delphi_edit', {'path': fmx, 'old': "    StyleLookup = 'buttonstyle'",
                                  'new': "    StyleLookup = 'tercero'"})
-    check('L5 delphi_edit que escribe un lookup que no existe: sus avisos llevan DSGN-173',
+    check('L5 delphi_edit que escribe un lookup que no existe: sus avisos llevan DSGN-175',
           nota(r, 'tercero'), r[:500])
 
     con('estiloquenoexiste', '  object StyleBook1: TStyleBook\r\n    Left = 40\r\n    Top = 40\r\n  end\r\n')
     r = lint(fmx)
-    check('L6 con un TStyleBook en el form: no se juzga (sin DSGN-173)',
+    check('L6 con un TStyleBook en el form: no se juzga (sin DSGN-175)',
           not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT'), r[:500])
 finally:
     srv.cierra()

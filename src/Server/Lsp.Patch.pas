@@ -836,7 +836,7 @@ type
     Lector: TArray<string>;
     SinLector: string;
     // los StyleLookup de un form FMX que ningun estilo que ve define: una
-    // nota (DSGN-173), no un aviso (V75 de la 1.23.1)
+    // nota (DSGN-175), no un aviso (V75 de la 1.23.1)
     Lookups: TArray<string>;
   end;
 

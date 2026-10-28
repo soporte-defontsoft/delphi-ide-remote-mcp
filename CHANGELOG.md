@@ -220,7 +220,7 @@ the MCP `initialize` response (`serverInfo.version`).
   `lint` answered CLEAN, and `preview` drew the control with its class's own
   style. `delphi_styles lint` already knew it, but only with a folder of
   styles. Now the designer asks the same judge (the platform's default
-  style): `lint`, `set` and an edit of the form add a note (`DSGN-173`)
+  style): `lint`, `set` and an edit of the form add a note (`DSGN-175`)
   naming the component and the line. It is a note, not an error: FMX draws
   the default, and a style the project loads at run time is only checked by
   `delphi_styles lint` against its folder. A form with a `StyleBook` is not

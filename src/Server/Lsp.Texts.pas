@@ -5220,9 +5220,8 @@ const
     'component''s block, verbatim) | lint (first what the IDE''s own form ' +
     'parser says, then properties the class does not publish and values ' +
     'their type does not take, as set judges them; objects it could not check ' +
-    '- a class not in the table, or ambiguous - go apart as notes, and so ' +
-    'does an FMX StyleLookup that no style the form sees defines, as set and ' +
-    'an edit of the form also say) | ' +
+    '- a class not in the table, or ambiguous - go apart as notes, as do ' +
+    'unknown StyleLookups) | ' +
     'check-binding (does the .dfm agree with the class in the .pas: ' +
     'components with no published field, events naming a method that is ' +
     'not published, published fields with no component, duplicate names, an ' +
@@ -6644,13 +6643,14 @@ const
     lo pinta preview). Va como nota, en el lint, en designer set y tras una
     edicion, con lo que lo juzgaria entero }
   SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT =
-    '[DSGN-173] %s: %d StyleLookup value(s) that no style this form sees ' +
+    '[DSGN-175] %s: %d StyleLookup value(s) that no style this form sees ' +
     'defines - not the platform''s default style, and the form has no ' +
     'StyleBook. FMX then draws the control with its class''s own style, as ' +
     'preview shows. If the project loads a style of its own, delphi_styles ' +
     'lint with path=<its styles folder> checks them against it:';
-  { %0:s: el componente; %1:s: su StyleLookup; %2:d: su linea }
-  SN_DESIGNER_LOOKUP_SIN_ESTILO_FMT = '  %0:s: StyleLookup = ''%1:s'' (line %2:d)';
+  { %0:s: el componente; %1:s: su StyleLookup; %2:d: su linea (una linea de
+    la nota DSGN-175, sin etiqueta propia) }
+  SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT = '  %0:s: StyleLookup = ''%1:s'' (line %2:d)';
 
   { lint (b) sin el lector: la tabla no encontro nada, pero hay lineas que
     la clase guarda por codigo y el lector del IDE no se pudo preguntar (sin

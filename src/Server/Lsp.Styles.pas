@@ -262,7 +262,7 @@ function ClaveDeEstilo(const ANombre: string): string;
   estilos que ve: los StyleLookup que ninguno define, ni el estilo por defecto
   de la plataforma (PlatformDefaultStyleNames, el juez de delphi_styles lint)
   ni un TStyleBook del form (con uno no se juzga: sus estilos van en binario).
-  Su nota entera (DSGN-173 y una linea por lookup), o [] si no hay ninguno, si
+  Su nota entera (DSGN-175 y una linea por lookup), o [] si no hay ninguno, si
   no hay juez (sin el conversor) o si ningun StyleLookup lleva valor (entonces
   ni se le pregunta). AFichero: el nombre que da la nota. V75 de la 1.23.1. }
 function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas: TArray<string>): TArray<string>;
@@ -1127,7 +1127,7 @@ begin
     else if LineaDePropiedad(ALineas[I], Prop, Valor) and SameText(Prop, 'StyleLookup') and
        LeeLiteralDeForm(Valor, Lookup) and (Lookup <> '') then
     begin
-      Textos := Textos + [MsgFmt(SN_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [Componente, Lookup, I + 1])];
+      Textos := Textos + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [Componente, Lookup, I + 1])];
       Claves := Claves + [ClaveDeEstilo(Lookup)];
     end;
   if Length(Claves) = 0 then
