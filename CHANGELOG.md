@@ -389,6 +389,15 @@ the MCP `initialize` response (`serverInfo.version`).
   `edits`) and `delphi_changeset` now compare with the form as it was before
   the edit; `delphi_designer lint` still lists them all, and an upload, which
   brings the whole file, is judged whole.
+- **The vault hides only what is not knowledge.** What the vault does not
+  serve was decided on the path as one string: `.bak` anywhere in it and a
+  `backups` folder at any depth, so `x.bakery.md` and
+  `projects/nas/backups/strategy.md` were refused by `vault_read` (`VAULT-012`)
+  and missing from `vault_search`. It is now judged piece by piece: the
+  server's copies only in the `backups` folder at the root, where it writes
+  them; git and tool metadata (`.git`, `.obsidian`, `.claude`, `.trash`) at
+  any depth; and a `.bak` copy by its name (`notes.bak.md`,
+  `progress.md.bak-20260605`), not by a word that starts with those letters.
 
 ### Changed
 

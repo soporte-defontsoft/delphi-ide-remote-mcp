@@ -178,7 +178,8 @@ uses
   Lsp.Listas, // TPagina: la pagina de una lista, como delphi_list y delphi_search
   Lsp.Rutas,
   Lsp.Settings,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  System.Character;
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K
@@ -208,35 +209,59 @@ var
 
 { ---------------------------------------------------------------- helpers -- }
 
-{ Folders that are never part of the knowledge: the server's own backups, git
-  and tool metadata. Takes a vault-relative path with backslashes. }
+{ Las carpetas de metadatos de git y de las herramientas: nunca son
+  conocimiento, a cualquier profundidad. Las copias del servidor son otra
+  regla: BACKUP_SUB, solo en la raiz (VaultExcluded). }
 const
-  VAULT_EXCLUIDAS: array [0 .. 4] of string = ('backups\', '.git\', '.obsidian\',
-    '.claude\', '.trash\');
+  VAULT_METADATOS: array [0 .. 3] of string = ('.git', '.obsidian', '.claude', '.trash');
 
 { La negativa de lo excluido, con las carpetas de la lista que lo decide. }
 function MsgExcluida(const ARel: string): string;
 var
   Nombres: string;
 begin
-  Nombres := '';
-  for var D in VAULT_EXCLUIDAS do
-    Nombres := Nombres + IfThen(Nombres <> '', ', ') + D.TrimRight(['\']);
+  Nombres := BACKUP_SUB;
+  for var D in VAULT_METADATOS do
+    Nombres := Nombres + ', ' + D;
   Result := MsgFmt(SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT, [ARel, Nombres]);
 end;
 
+{ Una copia .bak por su nombre: un trozo ".bak" que no sigue con una letra
+  (notas.bak.md, progress.md.bak-20260605 como las deja el vault, viejo.bak,
+  a.bak1.md); x.bakery.md no lo es. }
+function EsCopiaBak(const ANombre: string): Boolean;
+begin
+  var P := ANombre.IndexOf(ClaveDeRuta('.bak'));
+  while P >= 0 do
+  begin
+    var Tras := P + Length('.bak');
+    if (Tras >= ANombre.Length) or not ANombre.Chars[Tras].IsLetter then
+      Exit(True);
+    P := ANombre.IndexOf(ClaveDeRuta('.bak'), P + 1);
+  end;
+  Result := False;
+end;
+
+{ Lo que el vault no sirve, por TROZOS de la ruta y con la clave del disco en
+  los dos lados (ClaveDeRuta: .ToLower junta lo que NTFS separa, V105 de la
+  1.23.1): las copias del servidor (BACKUP_SUB en la raiz, donde las escribe
+  VaultBackup), los metadatos (VAULT_METADATOS) y una copia .bak. Era una
+  SUBCADENA: x.bakery.md y projects\nas\backups\estrategia.md quedaban ocultos
+  a read y a search (V127 de la 1.23.1, medido). Gramatica propia: que no es
+  conocimiento lo dice la casa, no un juez. }
 function VaultExcluded(const ARel: string): Boolean;
 var
-  Low, D: string;
+  Trozos: TArray<string>;
 begin
-  // las carpetas por su nombre, con la clave del disco en los dos lados
-  // (ClaveDeRuta): .ToLower junta lo que NTFS separa (V105 de la 1.23.1)
-  Low := ClaveDeRuta(ConBarrasDeWindows(ARel));
-  if Low.Contains(ClaveDeRuta('.bak')) then
-    Exit(True);
-  for D in VAULT_EXCLUIDAS do
-    if Low.StartsWith(ClaveDeRuta(D)) or Low.Contains('\' + ClaveDeRuta(D)) then
+  Trozos := ClaveDeRuta(ConBarrasDeWindows(ARel)).Split(['\'], TStringSplitOptions.ExcludeEmpty);
+  for var I := 0 to High(Trozos) do
+  begin
+    if ((I = 0) and (Trozos[I] = ClaveDeRuta(BACKUP_SUB))) or EsCopiaBak(Trozos[I]) then
       Exit(True);
+    for var D in VAULT_METADATOS do
+      if Trozos[I] = ClaveDeRuta(D) then
+        Exit(True);
+  end;
   Result := False;
 end;
 
