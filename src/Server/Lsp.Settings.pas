@@ -674,15 +674,54 @@ begin
   Result := GSharedFolders;
 end;
 
-{ 1 / 0 when the key is present in the section, -1 (inherit) when absent. }
-function ReadTriState(AIni: TIniFile; const ASection, AKey: string): Integer;
+{ LA gramatica de un ajuste de si/no, del entorno y del settings.ini: es
+  nuestra (no hay juez: el formato lo define el servidor) y es UNA: 1/0,
+  true/false, yes/no, on/off, sin mayusculas y sin espacios alrededor. Era el
+  ReadBool de la RTL - ReadInteger + StrToIntDef: 'true' y 'false' escritos
+  con letras se leian como el DEFECTO, y [CORS] Enabled=false dejaba CORS
+  encendido - y '= 1' / '<> 0' en las variables de entorno
+  (DELPHI_MCP_LIBRARY_ZONE=false la dejaba encendida; V110 de la 1.23.1,
+  medido con la fuente de la RTL). False si el texto no es de la gramatica. }
+function LeeSiNo(const ATexto: string; out AValor: Boolean): Boolean;
+var
+  T: string;
+begin
+  T := SinMayusculas(ATexto.Trim);
+  AValor := MatchStr(T, ['1', 'true', 'yes', 'on']);
+  Result := AValor or MatchStr(T, ['0', 'false', 'no', 'off']);
+end;
+
+{ Un si/no que esta escrito: el suyo si es de la gramatica; si no, ACerrado
+  (el lado que cierra: menos capacidad, mas proteccion) y se dice al arrancar
+  (David: "cerrado y nunca callado"). ADonde nombra la clave en la nota. }
+function SiNoCerrado(const ATexto, ADonde: string; ACerrado: Boolean): Boolean;
+begin
+  if LeeSiNo(ATexto, Result) then
+    Exit;
+  Result := ACerrado;
+  GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(SL_GUARD_SINO_ILEGIBLE_FMT,
+    [ADonde, ATexto.Trim, IfThen(ACerrado, '1', '0')])];
+end;
+
+{ Una variable de entorno de si/no: ADefecto si no esta (o esta vacia). }
+function EnvSiNo(const AVariable: string; ADefecto, ACerrado: Boolean): Boolean;
+var
+  V: string;
+begin
+  V := GetEnvironmentVariable(AVariable);
+  if V.Trim = '' then
+    Exit(ADefecto);
+  Result := SiNoCerrado(V, AVariable, ACerrado);
+end;
+
+{ 1 / 0 when the key is present in the section, -1 (inherit) when absent;
+  present and not a yes/no value: ACerrado (1 or 0), said at startup. }
+function ReadTriState(AIni: TIniFile; const ASection, AKey: string; ACerrado: Integer): Integer;
 begin
   if not AIni.ValueExists(ASection, AKey) then
     Exit(-1);
-  if AIni.ReadBool(ASection, AKey, False) then
-    Result := 1
-  else
-    Result := 0;
+  Result := Ord(SiNoCerrado(AIni.ReadString(ASection, AKey, ''), '[' + ASection + '] ' + AKey,
+    ACerrado = 1));
 end;
 
 procedure SetRequestWorkspace(AIx: Integer);
@@ -1229,16 +1268,17 @@ begin
   ParseAdbDevices(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'));
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
-  GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
-  GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
-  GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
+  // los si/no por SU gramatica (EnvSiNo): el defecto y el lado que cierra
+  GAllowRemoteRun := EnvSiNo('DELPHI_MCP_ALLOW_REMOTE_RUN', False, False);
+  GLibraryZone := EnvSiNo('DELPHI_MCP_LIBRARY_ZONE', True, False);
+  GAllowTests := EnvSiNo('DELPHI_MCP_ALLOW_TESTS', False, False);
   GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
   GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
   GRemoteProjects := GetEnvironmentVariable('DELPHI_MCP_REMOTE_RUN_PROJECTS')
     .Split([';'], TStringSplitOptions.ExcludeEmpty);
   GVaultPath := GetEnvironmentVariable('DELPHI_MCP_VAULT_PATH');
-  GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
-  GAgentConfinement := GetEnvironmentVariable('DELPHI_MCP_AGENT_CONFINEMENT') = '1';
+  GAllowBuildScripts := EnvSiNo('DELPHI_MCP_ALLOW_BUILD_SCRIPTS', False, False);
+  GAgentConfinement := EnvSiNo('DELPHI_MCP_AGENT_CONFINEMENT', False, True);
   GToolsProfile := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_PROFILE').Trim);
   if GToolsProfile = '' then
     GToolsProfile := 'full';
@@ -1275,7 +1315,8 @@ begin
   end;
   // El entorno gana en AMBOS sentidos para el vault del modo local (las
   // baterias fuerzan un vault de solo lectura por encima de cualquier ini).
-  GVaultEnvWritable := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY') = '0';
+  // (sin ella, solo lectura; solo un 'no' de la gramatica lo abre)
+  GVaultEnvWritable := not EnvSiNo('DELPHI_MCP_VAULT_READONLY', True, True);
   IniPath := SettingsIniPath;
   // un BOM de UTF-8 delante de una seccion: Windows la pierde entera, y nada
   // de lo que se leyera seria lo que escribio el operador. No se lee, y el
@@ -1330,10 +1371,16 @@ begin
       GIniTransporte.Port := Ini.ReadInteger('Server', 'Port', GIniTransporte.Port);
       GIniTransporte.Host := Ini.ReadString('Server', 'Host', GIniTransporte.Host);
       GIniTransporte.Endpoint := Ini.ReadString('Server', 'Endpoint', GIniTransporte.Endpoint);
-      GIniTransporte.CorsEnabled := Ini.ReadBool('CORS', 'Enabled', GIniTransporte.CorsEnabled);
+      // los si/no por SU gramatica: el ReadBool de la RTL leia 'false' como el
+      // defecto (V110); CORS cierra apagado, SSL encendido (en claro abriria)
+      if Ini.ValueExists('CORS', 'Enabled') then
+        GIniTransporte.CorsEnabled := SiNoCerrado(Ini.ReadString('CORS', 'Enabled', ''),
+          '[CORS] Enabled', False);
       GIniTransporte.CorsAllowedOrigins := Ini.ReadString('CORS', 'AllowedOrigins',
         GIniTransporte.CorsAllowedOrigins);
-      GIniTransporte.SslEnabled := Ini.ReadBool('SSL', 'Enabled', GIniTransporte.SslEnabled);
+      if Ini.ValueExists('SSL', 'Enabled') then
+        GIniTransporte.SslEnabled := SiNoCerrado(Ini.ReadString('SSL', 'Enabled', ''),
+          '[SSL] Enabled', True);
       GIniTransporte.SslCertFile := Ini.ReadString('SSL', 'CertFile', GIniTransporte.SslCertFile);
       GIniTransporte.SslKeyFile := Ini.ReadString('SSL', 'KeyFile', GIniTransporte.SslKeyFile);
       GIniTransporte.SslRootCertFile := Ini.ReadString('SSL', 'RootCertFile',
@@ -1385,11 +1432,11 @@ begin
               SinProteccion := True;
             W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
             // capability overrides; absent key = inherit the default
-            W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests');
-            W.OvAllowRemoteRun := ReadTriState(Ini, S, 'AllowRemoteRun');
-            W.OvAllowBuildScripts := ReadTriState(Ini, S, 'AllowBuildScripts');
-            W.OvLibraryZone := ReadTriState(Ini, S, 'LibraryZone');
-            W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement');
+            W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests', 0);
+            W.OvAllowRemoteRun := ReadTriState(Ini, S, 'AllowRemoteRun', 0);
+            W.OvAllowBuildScripts := ReadTriState(Ini, S, 'AllowBuildScripts', 0);
+            W.OvLibraryZone := ReadTriState(Ini, S, 'LibraryZone', 0);
+            W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement', 1);
             W.GitRemotes := Ini.ReadString(S, 'GitRemotes', '').Trim;
             W.RemoteHosts := Ini.ReadString(S, 'RemoteHosts', '').Trim;
             W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
@@ -1402,7 +1449,7 @@ begin
               W.VaultPath := '';
               SinProteccion := True;
             end;
-            W.OvVaultReadOnly := ReadTriState(Ini, S, 'VaultReadOnly');
+            W.OvVaultReadOnly := ReadTriState(Ini, S, 'VaultReadOnly', 1);
             W.AdbDevices := Ini.ReadString(S, 'AdbAllowedDevices', '')
               .Split([';'], TStringSplitOptions.ExcludeEmpty);
             W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');

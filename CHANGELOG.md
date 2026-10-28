@@ -289,6 +289,15 @@ the MCP `initialize` response (`serverInfo.version`).
   (`AgentConfinement=1`) and it could purge anyone's copies in the trash.
   Such a session now gets an identity of its own (`session-` and eight
   hexadecimal characters). The operator's console over stdio is unchanged.
+- **A yes/no setting reads `true` and `false` as written.** The yes/no keys
+  of `settings.ini` were read by the runtime library as numbers, so `false`
+  or `true` written as words became the default: `[CORS] Enabled=false`
+  left CORS on, `[SSL] Enabled=true` left SSL off, and `AllowTests=true` in
+  a workspace left tests off. The environment variables were read as `1` or
+  not `0`, so `DELPHI_MCP_LIBRARY_ZONE=false` left the library zone on. Both
+  now take one grammar: `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`. A
+  value outside it is read as the closed side - the capability off, the
+  protection on, SSL on - and the startup log says so.
 
 ### Changed
 

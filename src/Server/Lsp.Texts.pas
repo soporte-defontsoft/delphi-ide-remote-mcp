@@ -9394,6 +9394,13 @@ const
     SL_MARCA_AVISO +
     ': [%s] %s= is no longer read (gone in %s): it does nothing - remove it.';
 
+  { un ajuste de si/no que no es de la gramatica (Lsp.Settings.LeeSiNo):
+    %s la clave, %s lo escrito, %s el valor cerrado con que se lee (V110) }
+  SL_GUARD_SINO_ILEGIBLE_FMT =
+    SL_MARCA_AVISO +
+    ': %s=%s is not a yes/no value (1/0, true/false, yes/no, on/off): it is ' +
+    'read as %s, the closed side.';
+
   { [Server] DelphiUpdate= con otra forma que numero.numero: se ignora. }
   SL_GUARD_DELPHIUPDATE_MAL_FMT =
     SL_MARCA_AVISO +
