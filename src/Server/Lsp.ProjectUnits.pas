@@ -1902,11 +1902,11 @@ begin
   if AInfo.IsDesigner and (AInfo.FormName <> '') then
   begin
     Result := '        <DCCReference ' + XmlAtributo('Include', AInclude) + '>' + CRLF +
-      '            ' + XmlElemento('Form', AInfo.FormName) + CRLF;
+      LineaXml('            ', 'Form', AInfo.FormName);
     if AInfo.FormType <> '' then
-      Result := Result + '            ' + XmlElemento('FormType', AInfo.FormType) + CRLF;
+      Result := Result + LineaXml('            ', 'FormType', AInfo.FormType);
     if AInfo.DesignClass <> '' then
-      Result := Result + '            ' + XmlElemento('DesignClass', AInfo.DesignClass) + CRLF;
+      Result := Result + LineaXml('            ', 'DesignClass', AInfo.DesignClass);
     Result := Result + '        </DCCReference>' + CRLF;
   end
   else

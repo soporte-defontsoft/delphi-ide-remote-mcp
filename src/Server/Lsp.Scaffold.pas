@@ -126,12 +126,13 @@ var
   BaseProps, Win32Props, Win64Props, Uwp, Dpi, Definidores, Valores: string;
   EsVcl, EsFmx, EsVisual, EsConsola: Boolean;
 
-  // un elemento de un grupo de propiedades, por EL escritor (Lsp.Dproj), con
-  // su sangria y su salto: la UNICA forma aqui (V89 de la 1.23.1: el cuerpo se
-  // repetia a mano seis veces y dieciseis elementos se escribian sin el)
+  // un elemento de un grupo de propiedades, por EL compositor de la linea
+  // (Lsp.Dproj.LineaXml), a su sangria: la UNICA forma aqui (V89 de la 1.23.1:
+  // el cuerpo se repetia a mano seis veces y dieciseis elementos se escribian
+  // sin el)
   function Prop(const ATag, AValor: string): string;
   begin
-    Result := '        ' + XmlElemento(ATag, AValor) + CRLF;
+    Result := LineaXml('        ', ATag, AValor);
   end;
 
   // un grupo de VALORES, por EL escritor (Lsp.Dproj), con su salto
@@ -336,11 +337,11 @@ begin
     '            <Key>Base</Key>' + CRLF +
     '        </BuildConfiguration>' + CRLF +
     '        <BuildConfiguration Include="Debug">' + CRLF +
-    '            <Key>' + CFG_DEBUG + '</Key>' + CRLF +
+    LineaXml('            ', 'Key', CFG_DEBUG) +
     '            <CfgParent>Base</CfgParent>' + CRLF +
     '        </BuildConfiguration>' + CRLF +
     '        <BuildConfiguration Include="Release">' + CRLF +
-    '            <Key>' + CFG_RELEASE + '</Key>' + CRLF +
+    LineaXml('            ', 'Key', CFG_RELEASE) +
     '            <CfgParent>Base</CfgParent>' + CRLF +
     '        </BuildConfiguration>' + CRLF +
     '    </ItemGroup>' + CRLF +

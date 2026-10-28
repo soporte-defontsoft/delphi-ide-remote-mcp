@@ -1551,14 +1551,15 @@ begin
       Sb.AppendLine('<?xml version="1.0" encoding="utf-8"?>');
       Sb.AppendLine('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="">');
       Sb.AppendLine('  <PropertyGroup>');
+      // cada linea de elemento por su compositor (Lsp.Dproj.LineaXml, V97)
       // la plataforma que juzgan reseat-sdk y remove-sdk al leerlo: la misma constante
-      Sb.AppendLine('    ' + XmlElemento('Profile_platform', PLATAFORMA_DE_GETSDK));
-      Sb.AppendLine('    ' + XmlElemento('Profile_host', CamposDePerfil(ProfXml).Host));
-      Sb.AppendLine('    ' + XmlElemento('Profile_port', CamposDePerfil(ProfXml).Puerto));
-      Sb.AppendLine('    ' + XmlElemento('Profile_sdkname', NombreDeSdk(SdkName)));
-      Sb.AppendLine('    ' + XmlElemento('Profile_displayname', PLATAFORMA_DE_GETSDK + ' ' + SdkName +
+      Sb.Append(LineaXml('    ', 'Profile_platform', PLATAFORMA_DE_GETSDK));
+      Sb.Append(LineaXml('    ', 'Profile_host', CamposDePerfil(ProfXml).Host));
+      Sb.Append(LineaXml('    ', 'Profile_port', CamposDePerfil(ProfXml).Puerto));
+      Sb.Append(LineaXml('    ', 'Profile_sdkname', NombreDeSdk(SdkName)));
+      Sb.Append(LineaXml('    ', 'Profile_displayname', PLATAFORMA_DE_GETSDK + ' ' + SdkName +
         ' (delphi_paserver get-sdk, profile ' + ProfName + ')'));
-      Sb.AppendLine('    ' + XmlElemento('Profile_sysroot', SysRoot));
+      Sb.Append(LineaXml('    ', 'Profile_sysroot', SysRoot));
       Sb.AppendLine('    <Profile_startupobj>crt1.o;crti.o;crtbegin.o</Profile_startupobj>');
       Sb.AppendLine('    <Profile_endcodeobj>crtend.o;crtn.o</Profile_endcodeobj>');
       Sb.AppendLine('    <Profile_startupobjS>crti.o;crtbeginS.o</Profile_startupobjS>');
@@ -1569,9 +1570,9 @@ begin
       // build-time target, Cpp side). Without this property the link dies
       // with "cannot find -lgcc_s" even though the .sdk imports fine
       // (measured against the first live sysroot).
-      Sb.AppendLine('    ' + XmlElemento('Profile_LibraryPath', string.Join(';', LibDirs.ToStringArray)));
+      Sb.Append(LineaXml('    ', 'Profile_LibraryPath', string.Join(';', LibDirs.ToStringArray)));
       if CamposDePerfil(ProfXml).Password <> '' then
-        Sb.AppendLine('    ' + XmlElemento('Profile_password', CamposDePerfil(ProfXml).Password));
+        Sb.Append(LineaXml('    ', 'Profile_password', CamposDePerfil(ProfXml).Password));
       Sb.AppendLine('  </PropertyGroup>');
       Sb.AppendLine('  <ItemGroup>');
       for D in LibDirs do

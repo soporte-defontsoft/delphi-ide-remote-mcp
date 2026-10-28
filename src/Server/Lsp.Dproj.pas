@@ -120,6 +120,12 @@ function XmlAtributo(const ANombre, AValor: string): string;
   (26-sep-2026). Sus lectores (AllTagValues, TagValue, PlatformProperty)
   devuelven el valor ya desescapado. }
 function XmlElemento(const ATag, AValor: string): string;
+{ UNA linea de elemento: la sangria, el elemento por su escritor
+  (XmlElemento) y el salto. Se componia a mano en seis sitios de cuatro
+  unidades con tres saltos distintos (V97 de la 1.23.1); lo que se inserta en
+  un fichero que ya existe, su escritor lo deja con el salto del fichero
+  (medido: un .dproj en LF sigue en LF). }
+function LineaXml(const ASangria, ATag, AValor: string): string;
 
 type
   { Una <Tag> que FijaPropiedadParaTodos ha reescrito: la Condition del
@@ -1737,6 +1743,11 @@ begin
   Result := '<' + ATag + '>' + XmlEscape(AValor) + '</' + ATag + '>';
 end;
 
+function LineaXml(const ASangria, ATag, AValor: string): string;
+begin
+  Result := ASangria + XmlElemento(ATag, AValor) + sLineBreak;
+end;
+
 function FijaPropiedadParaTodos(var AXml: string; const ATag, AValor: string;
   out ACambios: TArray<TValorReescrito>): Boolean;
 var
@@ -2381,20 +2392,19 @@ end;
 function XmlGrupoDefinidor(const APlatform, AClave: string): string;
 begin
   Result := '    <PropertyGroup ' + XmlAtributo('Condition', DefinerCondition(APlatform, AClave)) + '>' + sLineBreak +
-    '        ' + XmlElemento(AClave + '_' + APlatform, 'true') + sLineBreak +
-    '        ' + XmlElemento('CfgParent', AClave) + sLineBreak;
+    LineaXml('        ', AClave + '_' + APlatform, 'true') +
+    LineaXml('        ', 'CfgParent', AClave);
   if not SameText(AClave, 'Base') then
-    Result := Result + '        ' + XmlElemento(AClave, 'true') + sLineBreak;
-  Result := Result + '        <Base>true</Base>' + sLineBreak + '    </PropertyGroup>';
+    Result := Result + LineaXml('        ', AClave, 'true');
+  Result := Result + LineaXml('        ', 'Base', 'true') + '    </PropertyGroup>';
 end;
 
 function XmlGrupoDefinidorDeConfig(const AConfig, AClave: string): string;
 begin
   Result := '    <PropertyGroup ' + XmlAtributo('Condition', ConfigDefinerCondition(AConfig, AClave)) + '>' + sLineBreak;
   if not SameText(AClave, 'Base') then
-    Result := Result + '        ' + XmlElemento(AClave, 'true') + sLineBreak +
-      '        ' + XmlElemento('CfgParent', 'Base') + sLineBreak;
-  Result := Result + '        <Base>true</Base>' + sLineBreak + '    </PropertyGroup>';
+    Result := Result + LineaXml('        ', AClave, 'true') + LineaXml('        ', 'CfgParent', 'Base');
+  Result := Result + LineaXml('        ', 'Base', 'true') + '    </PropertyGroup>';
 end;
 
 function XmlGrupoDeValores(const APlatform, AClave, AProps: string): string;
@@ -3031,15 +3041,15 @@ begin
   if AConfig <> '' then
     Result := Result + ' ' + XmlAtributo('Condition', ConfigCondition(AConfig));
   Result := Result + '>' + sLineBreak +
-    '            ' + XmlElemento('RemoteDir', ARemoteDir) + sLineBreak +
-    '            ' + XmlElemento('RemoteName', ARemoteName) + sLineBreak +
-    '            ' + XmlElemento('DeployClass', AClase) + sLineBreak +
-    '            ' + XmlElemento('Operation', AOperacion.ToString) + sLineBreak +
+    LineaXml('            ', 'RemoteDir', ARemoteDir) +
+    LineaXml('            ', 'RemoteName', ARemoteName) +
+    LineaXml('            ', 'DeployClass', AClase) +
+    LineaXml('            ', 'Operation', AOperacion.ToString) +
     '            <LocalCommand/>' + sLineBreak +
     '            <RemoteCommand/>' + sLineBreak +
-    '            ' + XmlElemento('Overwrite', 'True') + sLineBreak;
+    LineaXml('            ', 'Overwrite', 'True');
   if ARequerido then
-    Result := Result + '            ' + XmlElemento('Required', 'True') + sLineBreak;
+    Result := Result + LineaXml('            ', 'Required', 'True');
   Result := Result + '        </DeployFile>' + sLineBreak;
 end;
 
@@ -3135,9 +3145,9 @@ begin
     XmlAtributo('Configuration', AConfig) + ' ' + XmlAtributo('Class', AClase) + '>' + sLineBreak +
     ASangria + '    <Platform ' + XmlAtributo('Name', APlataforma) + '>' + sLineBreak;
   if ARemoteDir <> '' then
-    Result := Result + ASangria + '        ' + XmlElemento('RemoteDir', ARemoteDir) + sLineBreak;
-  Result := Result + ASangria + '        ' + XmlElemento('RemoteName', ARemoteName) + sLineBreak +
-    ASangria + '        ' + XmlElemento('Overwrite', 'true') + sLineBreak +
+    Result := Result + LineaXml(ASangria + '        ', 'RemoteDir', ARemoteDir);
+  Result := Result + LineaXml(ASangria + '        ', 'RemoteName', ARemoteName) +
+    LineaXml(ASangria + '        ', 'Overwrite', 'true') +
     ASangria + '    </Platform>' + sLineBreak +
     ASangria + '</DeployFile>';
 end;

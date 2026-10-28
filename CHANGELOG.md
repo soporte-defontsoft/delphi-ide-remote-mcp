@@ -250,6 +250,15 @@ the MCP `initialize` response (`serverInfo.version`).
   it off on its own. They now use the same reader as `delphi_read`.
   The few that keep their own rule say why, and `test_paisaje` keeps the rest
   in that reader.
+- **A line of a project file's element is composed by one helper.** The
+  groups a platform or a configuration adds, the deployment entries, a
+  form's `DCCReference`, a new project's settings and the `.sdk` that
+  `get-sdk` writes each joined an indent, the element and a line break by
+  hand, in six places with three kinds of line break, and two keys of the new
+  project's template did not even go through the element's writer. They all
+  use one helper now. Projects created and edited before and after the change
+  come out byte for byte the same, apart from their GUID, and a project
+  file with LF line endings keeps them.
 
 ## [1.23.0] - 2026-10-26
 

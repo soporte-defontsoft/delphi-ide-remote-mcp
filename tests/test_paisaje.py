@@ -1220,6 +1220,17 @@ REGLAS = [
      'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
      'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
      'del motor'),
+    # una LINEA de elemento -la sangria, el elemento, el salto- fuera de su compositor (V97 de la
+    # 1.23.1): se componia a mano en seis sitios de cuatro unidades con tres saltos (sLineBreak, CRLF,
+    # AppendLine), y dos <Key> de la plantilla iban sin el escritor del elemento. Tres formas: una
+    # sangria literal delante de XmlElemento, un AppendLine de un XmlElemento y un elemento con su
+    # valor entre la etiqueta y su cierre escritos a mano. Config lleva el salto del fichero que edita
+    # (otra forma, sin sangria literal) y XmlSelector es otro escritor
+    ('una linea de elemento XML a mano',
+     r"'\s+'\s*\+\s*XmlElemento\s*\(|\bAppendLine\s*\([^;]*\bXmlElemento\s*\(|'\s*<(\w+)>'\s*\+[^']*\+\s*'</\1>'",
+     [],
+     'LineaXml (Lsp.Dproj): la sangria, el elemento por XmlElemento (escapado) y el salto; lo que se '
+     'inserta en un fichero que ya existe, su escritor lo deja con el salto del fichero (medido, MideV97)'),
     # la Condition de un grupo o de un elemento del .dproj escrita o leida a mano:
     # '$(Base_X)'!='', '$(Cfg_N)'!='', '$(Platform)'=='X', '$(Config)'=='Y'. Los
     # nombradores y sus inversas viven en Lsp.Dproj, y la puerta del build las
@@ -1476,6 +1487,7 @@ PLANTADO = {
     'elegir el grupo de un build a mano': "  if GrupoConCondicion(Xml, GroupCondition(Plat), G) then",
     'un ItemGroup de despliegue compuesto a mano': "  B := '    <ItemGroup ' + XmlAtributo('Condition', C) + '>';",
     'una DCCReference compuesta a mano': "  R := '        <DCCReference ' + XmlAtributo('Include', I) + '/>';",
+    'una linea de elemento XML a mano': "  R := R + '            ' + XmlElemento('Form', N) + CRLF;",
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
@@ -1668,6 +1680,15 @@ for regla in REGLAS:
     cazados = fuera_de_casa(regla, [('Plantado.pas', planta)])
     check('mutante "%s": la copia plantada se caza (y el comentario no)' % nombre,
           len(cazados) == 1 and ':6 ' in cazados[0], cazados)
+
+# las otras dos formas de una linea de elemento a mano (V97): el AppendLine del .sdk de get-sdk y la
+# <Key> de la plantilla de Scaffold, hasta el 28-oct-2026
+REGLA_LINEA = next(r for r in REGLAS if r[0] == 'una linea de elemento XML a mano')
+for forma in ("  Sb.AppendLine('    ' + XmlElemento('Profile_host', H));",
+              "    '            <Key>' + CFG_DEBUG + '</Key>' + CRLF +"):
+    cazados = fuera_de_casa(REGLA_LINEA, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                          'LineaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_LINEA[0], forma.strip()), len(cazados) == 1, cazados)
 
 # ...y la forma con SinMayusculas de cinco reglas (V108 de la 1.23.1): el pliegue de lo que no es
 # una ruta cambio de forma, y las reglas que buscaban .ToLower dejaron de ver su copia (la casa de

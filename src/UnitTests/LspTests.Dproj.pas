@@ -83,6 +83,8 @@ type
     [Test] procedure XmlEscapeEnSuComilla;
     [Test]
     procedure LaPlataformaDelMotorLaDiceLaTabla;
+    [Test]
+    procedure LasLineasDeElementoComoAntes;
   end;
 
 implementation
@@ -1235,6 +1237,44 @@ begin
   Assert.AreEqual('Win32', PlataformaParaElMotor('WinARM64EC'));
   Assert.AreEqual('Win32', PlataformaParaElMotor('Linux64'));
   Assert.AreEqual('Win32', PlataformaParaElMotor('NoExiste'));
+end;
+
+{ V97 de la 1.23.1: las lineas de elemento -sangria, el elemento por su
+  escritor, el salto- de los definidores y de la entrada del Deployment, byte
+  a byte las que escribia el servidor antes de componerlas en UN sitio;
+  medidas en proyectos creados con produccion (MideV97) }
+procedure TXmlNucleoTests.LasLineasDeElementoComoAntes;
+const
+  S8 = '        ';
+begin
+  // el compositor: la sangria, el elemento escapado y el salto de la casa
+  Assert.AreEqual('    <X>R&amp;D</X>' + sLineBreak, LineaXml('    ', 'X', 'R&D'), 'la linea de un elemento');
+  Assert.AreEqual('    <PropertyGroup Condition="(''$(Platform)''==''Linux64'' and ''$(Cfg_2)''==''true'') or ' +
+    '''$(Cfg_2_Linux64)''!=''''">' + sLineBreak +
+    S8 + '<Cfg_2_Linux64>true</Cfg_2_Linux64>' + sLineBreak +
+    S8 + '<CfgParent>Cfg_2</CfgParent>' + sLineBreak +
+    S8 + '<Cfg_2>true</Cfg_2>' + sLineBreak +
+    S8 + '<Base>true</Base>' + sLineBreak +
+    '    </PropertyGroup>', XmlGrupoDefinidor('Linux64', 'Cfg_2'), 'el definidor de una plataforma');
+  Assert.AreEqual('    <PropertyGroup Condition="''$(Config)''==''Release'' or ''$(Cfg_2)''!=''''">' + sLineBreak +
+    S8 + '<Cfg_2>true</Cfg_2>' + sLineBreak +
+    S8 + '<CfgParent>Base</CfgParent>' + sLineBreak +
+    S8 + '<Base>true</Base>' + sLineBreak +
+    '    </PropertyGroup>', XmlGrupoDefinidorDeConfig('Release', 'Cfg_2'), 'el definidor de una configuracion');
+  Assert.AreEqual('    <PropertyGroup Condition="''$(Config)''==''Base'' or ''$(Base)''!=''''">' + sLineBreak +
+    S8 + '<Base>true</Base>' + sLineBreak +
+    '    </PropertyGroup>', XmlGrupoDefinidorDeConfig('Base', 'Base'), 'el de la base, sin clave ni padre');
+  Assert.AreEqual(S8 + S8 + '<DeployFile LocalName="R&amp;D.inc" Configuration="Debug" Class="File">' + sLineBreak +
+    S8 + S8 + '    <Platform Name="Linux64">' + sLineBreak +
+    S8 + S8 + S8 + '<RemoteDir>.\datos\</RemoteDir>' + sLineBreak +
+    S8 + S8 + S8 + '<RemoteName>R&amp;D.inc</RemoteName>' + sLineBreak +
+    S8 + S8 + S8 + '<Overwrite>true</Overwrite>' + sLineBreak +
+    S8 + S8 + '    </Platform>' + sLineBreak +
+    S8 + S8 + '</DeployFile>',
+    XmlDeployFileDelProyecto('R&D.inc', 'Debug', 'File', 'Linux64', '.\datos\', 'R&D.inc', S8 + S8),
+    'la entrada del Deployment del proyecto, con lo escapado');
+  Assert.IsFalse(XmlDeployFileDelProyecto('A.inc', 'Debug', 'File', 'Linux64', '', 'A.inc', '').Contains(
+    'RemoteDir'), 'sin carpeta, sin RemoteDir');
 end;
 
 initialization
