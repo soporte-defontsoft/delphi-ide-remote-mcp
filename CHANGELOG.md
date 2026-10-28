@@ -398,6 +398,17 @@ the MCP `initialize` response (`serverInfo.version`).
   them; git and tool metadata (`.git`, `.obsidian`, `.claude`, `.trash`) at
   any depth; and a `.bak` copy by its name (`notes.bak.md`,
   `progress.md.bak-20260605`), not by a word that starts with those letters.
+- **An operator list means what it says, with or without a blank after the
+  separator.** The lists of `settings.ini` and of the environment were split
+  five ways: `GitRemotes` and `RemoteHosts` by `,` and `;`, `AdbAllowedDevices`
+  and `RemoteRunProjects` by `;` only, and `[Tools] Only=`, `SharedFolders`
+  and the workspace's `AdbAllowedDevices` without trimming. `Only=delphi_read,
+  delphi_list` advertised only `delphi_read`, and
+  `AdbAllowedDevices=192.0.2.1, 192.0.2.2` was one entry that matched neither
+  (`ADB-005`): what the operator declared was denied, and nothing said why.
+  One reader now serves every list: a list of names takes `;` or `,`, a list
+  of paths only `;` (a path may hold a comma), and blanks and quotes around an
+  entry are ignored.
 
 ### Changed
 

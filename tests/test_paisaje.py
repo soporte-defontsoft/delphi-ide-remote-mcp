@@ -1827,6 +1827,22 @@ for forma, cuenta in (("  if SkipIdeArtifacts(F) then Continue;", 1),
     check('mutante "%s": %s %s' % (REGLA_PASEO[0], 'caza' if cuenta else 'no confunde', forma.strip()),
           len(cazados) == cuenta, cazados)
 
+# una lista del operador (settings.ini o el entorno) se trocea por EL lector, EntradasDeLista (V128
+# de la 1.23.1): eran cinco troceados y tres no recortaban ('a, b' dejaba ' b', que no casaba
+# nunca). Solo en Lsp.Settings: fuera de ella un Split de ';' o ',' es de otros formatos (rutas de
+# busqueda, conjuntos de un form...)
+REGLA_LISTAS = ('una lista del operador troceada a mano', r"\.Split\(\s*\[\s*'[,;]'", [],
+                'EntradasDeLista (Lsp.Settings): sin blancos ni comillas ni vacias, la coma solo en una lista '
+                'de nombres; un troceado a mano dejaba la entrada " b" de "a, b" (V128, medido)')
+SETTINGS = [(f, t) for f, t in TEXTOS if os.path.basename(f) == 'Lsp.Settings.pas']
+check('la regla "%s": ninguno en Lsp.Settings' % REGLA_LISTAS[0],
+      len(SETTINGS) == 1 and not fuera_de_casa(REGLA_LISTAS, SETTINGS), fuera_de_casa(REGLA_LISTAS, SETTINGS))
+cazados = fuera_de_casa(REGLA_LISTAS, [('Lsp.Settings.pas', "unit Lsp.Settings;\nimplementation\nprocedure "
+                                        "LeeAMano;\nbegin\n  // X := A.Split([';']);\n"
+                                        "  X := A.Split([';'], TStringSplitOptions.ExcludeEmpty);\nend;\nend.\n")])
+check('mutante "%s": la copia plantada se caza (y el comentario no)' % REGLA_LISTAS[0],
+      len(cazados) == 1 and ':6 ' in cazados[0], cazados)
+
 # las otras formas de lanzar: los lanzadores con nombre propio (fuera de su casa) y
 # los otros interpretes (revisor de baterias, 18-oct-2026)
 REGLA_LANZA = next(r for r in REGLAS if r[0] == 'lanzar un programa')

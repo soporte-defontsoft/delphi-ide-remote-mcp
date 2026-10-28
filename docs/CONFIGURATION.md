@@ -465,7 +465,10 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   close a port-scanning primitive. In any of the four lists - `RemoteHosts`, `GitRemotes`,
   `RemoteRunProjects` and `AdbAllowedDevices` - an entry `*` (or `all`, or `0.0.0.0`) declares
   "anything" on purpose. Where each workspace may talk to is its own declaration, like
-  everything else.
+  everything else. A list of NAMES (`GitRemotes`, `RemoteHosts`, `AdbAllowedDevices`,
+  `SharedFolders`, `[Tools] Only`) takes `;` or `,` between its entries; a list of PATHS
+  (`Roots`, `ReadOnlyPaths`, `ReadOnlyRoots`, `RemoteRunProjects`) only `;`, since a path may
+  hold a comma. Blanks and quotes around an entry are ignored in both.
 - **`[Tools]` profiles**: `full` / `coder` / `reader` (or an explicit `Only=` allowlist) trim
   what `tools/list` advertises — ~15k tokens of schemas drown a small model. Listing only:
   hidden tools stay callable, permissions live in the layers above. A workspace can carry its
@@ -532,7 +535,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   either way. The copy of the original `.dproj` is in the `__delphi-patch` trash
   (`delphi_delete` the probe, then `delphi_move` the copy back).
 - **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
-  `AdbAllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers whatever
+  `AdbAllowedDevices=192.168.1.163;SERIAL123` (a `;` or `,` list; an IP entry covers whatever
   port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the
   workspace's list are refused at **both** access levels, every device-addressing command
   must name its `device` explicitly (an implicit target could be an unlisted device that

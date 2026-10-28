@@ -259,11 +259,22 @@ function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
   del workspace activo (v0.98; medido que el perfil ajeno marcaba igual). }
 function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
 
-{ Los hosts de una de esas dos listas: separados por coma o punto y coma, sin
-  blancos alrededor ni entradas vacias. UN troceador para las dos: la puerta
-  de git (GitRemoteDenied) y la del sondeo (ProbeHostDenied) troceaban cada
-  una por su cuenta, con la misma forma escrita dos veces. }
-function HostsDeLista(const ALista: string): TArray<string>;
+{ LA lectura de una lista del operador (del settings.ini o del entorno): sus
+  entradas separadas por ';' - y por ',' con AConComa, en una lista de
+  NOMBRES (hosts, dispositivos, carpetas compartidas, tools); nunca en una de
+  rutas (Roots, ReadOnlyPaths, ReadOnlyRoots, RemoteRunProjects), que pueden
+  llevarla -, sin blancos ni comillas alrededor y sin entradas vacias. Eran
+  cinco troceados: dos listas cortaban por coma y dos no, y el Only= de
+  [Tools], SharedFolders y el AdbAllowedDevices del ini no recortaban: 'a, b'
+  dejaba ' b', que no casaba nunca, y lo declarado se negaba en silencio
+  (V128 de la 1.23.1, medido). Gramatica nuestra: el formato es del servidor. }
+function EntradasDeLista(const ALista: string; AConComa: Boolean): TArray<string>;
+
+{ Si ANombre esta en la lista blanca AEntradas (EntradasDeLista): una entrada
+  igual sin mayusculas, o el comodin (EsComodinDeLista). LA pregunta de la
+  puerta de git (GitRemoteDenied), la del sondeo (ProbeHostDenied) y la de
+  los dispositivos de adb, que escribian cada una su bucle. }
+function NombreEnLaLista(const ANombre: string; const AEntradas: TArray<string>): Boolean;
 
 { LA entrada comodin de una lista blanca del operador: '*' (y las que cada
   lista ya admitia: 'all' en RemoteRunProjects, '0.0.0.0' en RemoteHosts) =
@@ -601,15 +612,14 @@ function ParseReadOnlyList(const ARaw: string;
   const ARoots: TArray<string>; var ARechazadas: TArray<string>): TArray<string>;
 var
   List: TStringList;
-  E, R, V: string;
+  R, V: string;
 begin
   List := TStringList.Create;
   try
-    for E in ARaw.Split([';']) do
+    // por EL lector de una lista del operador (EntradasDeLista: sin blancos
+    // ni comillas, sin vacias)
+    for V in EntradasDeLista(ARaw, False) do
     begin
-      V := E.Trim.Trim(['"']).Trim;
-      if V = '' then
-        Continue;
       try
         if not EntradaDeSitio(V, True) then
           ARechazadas := ARechazadas + [V]
@@ -641,15 +651,12 @@ function ParseRootsList(const ARaw: string;
   var ARechazadas: TArray<string>): TArray<string>;
 var
   List: TStringList;
-  R, V: string;
+  V: string;
 begin
   List := TStringList.Create;
   try
-    for R in ARaw.Split([';']) do
+    for V in EntradasDeLista(ARaw, False) do
     begin
-      V := R.Trim.Trim(['"']).Trim;
-      if V = '' then
-        Continue;
       // una raiz es siempre absoluta: la rama de EntradaAbsolutaDeSitio (D5)
       EntradaAbsolutaDeSitio(V, False, List, ARechazadas);
     end;
@@ -866,17 +873,6 @@ begin
     // se puede MIRAR todo el codigo pero no tocar nada. Solo alcanzable en
     // stdio: todo HTTP entra con token de workspace o recibe 401 antes.
     Result := (TWorkspaceIx1 = 0) and (Length(WorkspaceRoots) = 0);
-end;
-
-procedure ParseAdbDevices(const ARaw: string);
-var
-  E: string;
-begin
-  if ARaw.Trim = '' then
-    Exit;
-  for E in ARaw.Split([';']) do
-    if E.Trim <> '' then
-      GAdbDevices := GAdbDevices + [E.Trim];
 end;
 
 { Un copia-pega futuro puede dejar el MISMO token en dos [Workspace.*], la
@@ -1265,7 +1261,7 @@ var
 begin
   if GSecLoaded then
     Exit;
-  ParseAdbDevices(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'));
+  GAdbDevices := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'), True);
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   // los si/no por SU gramatica (EnvSiNo): el defecto y el lado que cierra
@@ -1274,18 +1270,15 @@ begin
   GAllowTests := EnvSiNo('DELPHI_MCP_ALLOW_TESTS', False, False);
   GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
   GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
-  GRemoteProjects := GetEnvironmentVariable('DELPHI_MCP_REMOTE_RUN_PROJECTS')
-    .Split([';'], TStringSplitOptions.ExcludeEmpty);
+  GRemoteProjects := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_REMOTE_RUN_PROJECTS'), False);
   GVaultPath := GetEnvironmentVariable('DELPHI_MCP_VAULT_PATH');
   GAllowBuildScripts := EnvSiNo('DELPHI_MCP_ALLOW_BUILD_SCRIPTS', False, False);
   GAgentConfinement := EnvSiNo('DELPHI_MCP_AGENT_CONFINEMENT', False, True);
   GToolsProfile := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_PROFILE').Trim);
   if GToolsProfile = '' then
     GToolsProfile := 'full';
-  GToolsOnly := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_ONLY'))
-    .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
-  GSharedFolders := LowerCase(GetEnvironmentVariable('DELPHI_MCP_SHARED_FOLDERS'))
-    .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+  GToolsOnly := EntradasDeLista(LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_ONLY')), True);
+  GSharedFolders := EntradasDeLista(LowerCase(GetEnvironmentVariable('DELPHI_MCP_SHARED_FOLDERS')), True);
   // Las claves de JAULA del modo local, aqui con las demas: hasta el
   // 25-sep-2026 Roots, ReadOnlyPaths, ReadOnlyRoots y VaultReadOnly se
   // leian cada una en su primer uso, con su propia cache - cuatro
@@ -1360,8 +1353,7 @@ begin
       if GToolsProfile = 'full' then
         GToolsProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
       if Length(GToolsOnly) = 0 then
-        GToolsOnly := LowerCase(Ini.ReadString('Tools', 'Only', ''))
-          .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+        GToolsOnly := EntradasDeLista(LowerCase(Ini.ReadString('Tools', 'Only', '')), True);
       // La fontaneria de [Server] y [Log], aqui con las demas: hasta el
       // 26-sep BindIP, SessionTimeoutMinutes y el [Log] de la bandeja
       // abrian el fichero cada uno por su cuenta (tres lectores mas).
@@ -1439,8 +1431,7 @@ begin
             W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement', 1);
             W.GitRemotes := Ini.ReadString(S, 'GitRemotes', '').Trim;
             W.RemoteHosts := Ini.ReadString(S, 'RemoteHosts', '').Trim;
-            W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
-              .Split([';'], TStringSplitOptions.ExcludeEmpty);
+            W.RemoteProjects := EntradasDeLista(Ini.ReadString(S, 'RemoteRunProjects', ''), False);
             W.VaultPath := Ini.ReadString(S, 'VaultPath', '').Trim;
             if VaultSinLetra(W.VaultPath) then
             begin
@@ -1450,12 +1441,10 @@ begin
               SinProteccion := True;
             end;
             W.OvVaultReadOnly := ReadTriState(Ini, S, 'VaultReadOnly', 1);
-            W.AdbDevices := Ini.ReadString(S, 'AdbAllowedDevices', '')
-              .Split([';'], TStringSplitOptions.ExcludeEmpty);
+            W.AdbDevices := EntradasDeLista(Ini.ReadString(S, 'AdbAllowedDevices', ''), True);
             W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');
             if W.OvSharedSet then
-              W.OvSharedFolders := LowerCase(Ini.ReadString(S, 'SharedFolders', ''))
-                .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+              W.OvSharedFolders := EntradasDeLista(LowerCase(Ini.ReadString(S, 'SharedFolders', '')), True);
             if W.Invalid then
               GWorkspaceNotes := GWorkspaceNotes +
                 [MsgFmt(SL_GUARD_ROOTS_NO_PARSEA_FMT, [W.Name])];
@@ -1704,12 +1693,28 @@ begin
   Result := GRemoteHosts.Trim;
 end;
 
-function HostsDeLista(const ALista: string): TArray<string>;
+function EntradasDeLista(const ALista: string; AConComa: Boolean): TArray<string>;
+var
+  Separadores: TArray<Char>;
 begin
   Result := [];
-  for var H in ALista.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
-    if H.Trim <> '' then
-      Result := Result + [H.Trim];
+  Separadores := [';'];
+  if AConComa then
+    Separadores := Separadores + [','];
+  for var E in ALista.Split(Separadores) do
+  begin
+    var V := E.Trim.Trim(['"']).Trim;
+    if V <> '' then
+      Result := Result + [V];
+  end;
+end;
+
+function NombreEnLaLista(const ANombre: string; const AEntradas: TArray<string>): Boolean;
+begin
+  for var E in AEntradas do
+    if SameText(E, ANombre) or EsComodinDeLista(E) then
+      Exit(True);
+  Result := False;
 end;
 
 function PaclientDeEntorno: string;
@@ -1734,9 +1739,9 @@ begin
   if H = '' then
     Exit;
   Allowed := RemoteProbeHosts;
-  for var A in HostsDeLista(Allowed) do
-    if SameText(A, H) or EsComodinDeLista(A) then
-      Exit; // el comodin: el operador declaro CUALQUIER host
+  // el comodin: el operador declaro CUALQUIER host
+  if NombreEnLaLista(H, EntradasDeLista(Allowed, True)) then
+    Exit;
   Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim, ONinguno(Allowed)]);
 end;
 
@@ -1989,10 +1994,9 @@ end;
 function AdbTargetAllowed(const ATarget: string): Boolean;
 var
   Lista: TArray<string>;
-  E, Host: string;
+  Host: string;
   P: Integer;
 begin
-  Result := False;
   LoadSecurity;
   if HasActiveWS then
     Lista := ActiveWS.AdbDevices
@@ -2002,9 +2006,7 @@ begin
   P := Pos(':', ATarget);
   if P > 0 then
     Host := Copy(ATarget, 1, P - 1);
-  for E in Lista do
-    if SameText(E.Trim, ATarget) or SameText(E.Trim, Host) or EsComodinDeLista(E) then
-      Exit(True);
+  Result := NombreEnLaLista(ATarget, Lista) or NombreEnLaLista(Host, Lista);
 end;
 
 function EsComodinDeLista(const AEntrada: string): Boolean;

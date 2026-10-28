@@ -75,7 +75,7 @@ uses
   System.RegularExpressions,
   Lsp.ProcessLaunch,    // TrocearArgs: el troceador de la linea, y su inversa EnComillas
   Lsp.Texts,
-  Lsp.Settings,         // GitRemoteHosts y HostsDeLista: los remotos que declara el workspace
+  Lsp.Settings,         // GitRemoteHosts, EntradasDeLista y NombreEnLaLista: los remotos que declara el workspace
   Lsp.Casa,             // ServerTempDir y FragmentoUnico: el mensaje de un commit, en la casa
   Lsp.Pascal;           // SinMayusculas: EL pliegue de lo que no es una ruta
 
@@ -235,7 +235,6 @@ function GitRemoteDenied(const AText: string; AScpCorto: Boolean;
   ADelRepo: Boolean): string;
 var
   Tok, Host, Allowed: string;
-  Ok: Boolean;
 begin
   Result := '';
   for Tok in TrocearArgs(AText) do
@@ -251,15 +250,9 @@ begin
         Exit(MsgFmt(SR_GIT_REMOTE_DEL_REPO_OFF_FMT, [Host]))
       else
         Exit(MsgFmt(SR_GIT_REMOTE_OFF_FMT, [Host]));
-    Ok := False;
-    // el comodin de las listas blancas, el de las cuatro (EsComodinDeLista)
-    for var H in HostsDeLista(Allowed) do
-      if SameText(H, Host) or EsComodinDeLista(H) then
-      begin
-        Ok := True;
-        Break;
-      end;
-    if not Ok then
+    // por LA pregunta de las listas blancas (NombreEnLaLista: el comodin de
+    // las cuatro, EsComodinDeLista, incluido)
+    if not NombreEnLaLista(Host, EntradasDeLista(Allowed, True)) then
       Exit(MsgFmt(SR_GIT_REMOTE_HOST_FMT, [Host, Allowed]));
   end;
 end;
